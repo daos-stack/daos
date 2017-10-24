@@ -703,35 +703,31 @@ pool_svc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 	ABT_mutex_unlock(svc->ps_mutex);
 }
 
+static void pool_svc_get(struct pool_svc *svc);
+static void pool_svc_put(struct pool_svc *svc);
+static void pool_svc_stop(struct pool_svc *svc);
+
 static void
 pool_svc_stopper(void *arg)
 {
-	uuid_t *uuid = arg;
+	struct pool_svc *svc = arg;
 
-	ds_pool_svc_stop(*uuid);
-	D__FREE(uuid, sizeof(uuid_t));
+	pool_svc_stop(svc);
+	pool_svc_put(svc);
 }
 
 static void
 pool_svc_stop_cb(struct rdb *db, int err, void *arg)
 {
 	struct pool_svc	       *svc = arg;
-	uuid_t		       *uuid;
 	int			rc;
 
-	D__ALLOC(uuid, sizeof(uuid_t));
-	if (uuid == NULL) {
-		D__ERROR(DF_UUID": failed to allocate UUID buffer\n",
-			DP_UUID(svc->ps_uuid));
-		return;
-	}
-	uuid_copy(*uuid, svc->ps_uuid);
-
-	rc = dss_ult_create(pool_svc_stopper, uuid, -1, NULL);
+	pool_svc_get(svc);
+	rc = dss_ult_create(pool_svc_stopper, svc, -1, NULL);
 	if (rc != 0) {
 		D__ERROR(DF_UUID": failed to create pool service stopper: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
-		D__FREE(uuid, sizeof(uuid_t));
+		pool_svc_put(svc);
 	}
 }
 
@@ -977,6 +973,14 @@ out_lock:
 }
 
 static void
+pool_svc_get(struct pool_svc *svc)
+{
+	ABT_mutex_lock(pool_svc_hash_lock);
+	dhash_rec_addref(&pool_svc_hash, &svc->ps_entry);
+	ABT_mutex_unlock(pool_svc_hash_lock);
+}
+
+static void
 pool_svc_put(struct pool_svc *svc)
 {
 	ABT_mutex_lock(pool_svc_hash_lock);
@@ -1122,24 +1126,19 @@ err_lock:
 	return rc;
 }
 
-void
-ds_pool_svc_stop(const uuid_t uuid)
+static void
+pool_svc_stop(struct pool_svc *svc)
 {
-	struct pool_svc	       *svc;
-	int			rc;
-
-	rc = pool_svc_lookup(uuid, &svc);
-	if (rc != 0)
-		return;
-
 	ABT_mutex_lock(svc->ps_mutex);
 
 	if (svc->ps_stop) {
-		D__DEBUG(DF_DSMS, DF_UUID": already stopping\n", DP_UUID(uuid));
+		D__DEBUG(DF_DSMS, DF_UUID": already stopping\n",
+			 DP_UUID(svc->ps_uuid));
 		ABT_mutex_unlock(svc->ps_mutex);
 		return;
 	}
-	D__DEBUG(DF_DSMS, DF_UUID": stopping pool service\n", DP_UUID(uuid));
+	D__DEBUG(DF_DSMS, DF_UUID": stopping pool service\n",
+		 DP_UUID(svc->ps_uuid));
 	svc->ps_stop = true;
 
 	if (svc->ps_state == POOL_SVC_UP ||
@@ -1159,9 +1158,20 @@ ds_pool_svc_stop(const uuid_t uuid)
 	ABT_mutex_unlock(svc->ps_mutex);
 
 	ABT_mutex_lock(pool_svc_hash_lock);
-	dhash_rec_delete(&pool_svc_hash, uuid, sizeof(uuid_t));
+	dhash_rec_delete_at(&pool_svc_hash, &svc->ps_entry);
 	ABT_mutex_unlock(pool_svc_hash_lock);
+}
 
+void
+ds_pool_svc_stop(const uuid_t uuid)
+{
+	struct pool_svc	       *svc;
+	int			rc;
+
+	rc = pool_svc_lookup(uuid, &svc);
+	if (rc != 0)
+		return;
+	pool_svc_stop(svc);
 	pool_svc_put(svc);
 }
 
@@ -1254,14 +1264,14 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 
 	/*
 	 * Simply serialize this whole RPC with pool_svc_step_{up,down}_cb()
-	 * and ds_pool_svc_stop().
+	 * and pool_svc_stop().
 	 */
 	ABT_mutex_lock(svc->ps_mutex);
 
 	if (svc->ps_stop) {
 		D__DEBUG(DB_MD, DF_UUID": pool service already stopping\n",
 			DP_UUID(svc->ps_uuid));
-		D__GOTO(out, rc = -DER_CANCELED);
+		D__GOTO(out_mutex, rc = -DER_CANCELED);
 	}
 
 	rc = rdb_tx_begin(svc->ps_db, RDB_NIL_TERM, &tx);
@@ -2278,7 +2288,7 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 	if (!pool_svc_up(svc))
 		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
-	ds_pool_svc_stop(svc->ps_uuid);
+	pool_svc_stop(svc);
 
 out_svc:
 	ds_pool_set_hint(svc->ps_db, &out->pso_op.po_hint);
