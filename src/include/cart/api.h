@@ -330,7 +330,7 @@ crt_reply_get(crt_rpc_t *rpc)
  * \return                      zero on success, negative value if error
  *                              If the RPC has been sent out by crt_req_send,
  *                              the completion callback will be called with
- *                              DER_CANCELED set to crt_cb_info::dci_rc for a
+ *                              DER_CANCELED set to crt_cb_info::cci_rc for a
  *                              successful aborting.
  */
 int
@@ -347,9 +347,15 @@ int
 crt_ep_abort(crt_endpoint_t *ep);
 
 /**
- * Dynamically register an RPC at client-side.
+ * Dynamically register an RPC with features at client-side.
  *
  * \param opc [IN]              unique opcode for the RPC
+ * \param flags [IN]		feature bits, now only supports
+ *				CRT_RPC_FEAT_NO_REPLY - disables reply when set,
+ *					re-enables reply when unset.
+ *				CRT_RPC_FEAT_NO_TIMEOUT - if it's set, the
+ *					elapsed time is reset to 0 on RPC
+ *					timeout
  * \param drf [IN]		pointer to the request format, which
  *                              describe the request format and provide
  *                              callback to pack/unpack each items in the
@@ -357,13 +363,19 @@ crt_ep_abort(crt_endpoint_t *ep);
  * \return                      zero on success, negative value if error
  */
 int
-crt_rpc_register(crt_opcode_t opc, struct crt_req_format *drf);
+crt_rpc_register(crt_opcode_t opc, uint32_t flags, struct crt_req_format *drf);
 
 /**
- * Dynamically register an RPC at server-side.
+ * Dynamically register an RPC with features at server-side.
  *
  * \param opc [IN]		unique opcode for the RPC
- * \param drf [IN]		pointer to the request format, which
+ * \param flags [IN]		feature bits, now only supports
+ *				CRT_RPC_FEAT_NO_REPLY - disables reply when set,
+ *					re-enables reply when unset.
+ *				CRT_RPC_FEAT_NO_TIMEOUT - if it's set, the
+ *					elapsed time is reset to 0 on RPC
+ *					timeout
+ * \param crf [IN]		pointer to the request format, which
  *				describe the request format and provide
  *				callback to pack/unpack each items in the
  *				request.
@@ -375,35 +387,9 @@ crt_rpc_register(crt_opcode_t opc, struct crt_req_format *drf);
  * \return			zero on success, negative value if error
  */
 int
-crt_rpc_srv_register(crt_opcode_t opc, struct crt_req_format *drf,
+crt_rpc_srv_register(crt_opcode_t opc, uint32_t flags,
+		     struct crt_req_format *crf,
 		     crt_rpc_cb_t rpc_handler);
-
-/**
- * Set feature bits of a registered RPC.
- *
- * Now only one feature bit defined to disable/enable the reply of a RPC.
- * By default one RPC needs to be replied (by calling crt_reply_send within RPC
- * handler at target-side) to complete the RPC request at origin-side.
- * One-way RPC is a special type that the RPC request need not to be replied,
- * the RPC request is treated as completed after being sent out.
- *
- * \param opc [IN]		unique opcode for the RPC
- * \param feats [IN]		feature bits, now only supports
- *				CRT_RPC_FEAT_NO_REPLY -
- *				1 to disable, 0 to re-enable.
- *
- * Notes for one-way RPC:
- * 1) Need not reply for one-way RPC, calling crt_reply_send() will fail with
- *    -DER_PROTO.
- * 2) For one-way RPC, user needs to disable the reply on both origin and target
- *    side, or undefined result is expected.
- * 3) Corpc musted be replied, disabling the reply of corpc will lead to
- *    undefined result.
- *
- * \return			zero on success, negative value if error
- */
-int
-crt_rpc_set_feats(crt_opcode_t opc, uint64_t feats);
 
 /******************************************************************************
  * CRT bulk APIs.

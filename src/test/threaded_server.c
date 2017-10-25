@@ -129,7 +129,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	crt_rpc_srv_register(RPC_ID, &fmt, rpc_handler);
+	crt_rpc_srv_register(RPC_ID, 0, &fmt, rpc_handler);
 
 	crt_context_create(NULL, &crt_ctx);
 	for (rc = 0; rc < NUM_THREADS; rc++)

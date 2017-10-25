@@ -51,7 +51,8 @@ int crt_opc_map_create(unsigned int bits);
 void crt_opc_map_destroy(struct crt_opc_map *map);
 struct crt_opc_info *crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc,
 				    int locked);
-int crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *drf,
+int crt_rpc_reg_internal(crt_opcode_t opc, uint32_t flags,
+			 struct crt_req_format *drf,
 			 crt_rpc_cb_t rpc_handler,
 			 struct crt_corpc_ops *co_ops);
 

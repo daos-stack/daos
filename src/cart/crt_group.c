@@ -2531,6 +2531,7 @@ int
 crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
+	crt_endpoint_t		 tgt_ep;
 	int			 rc = 0;
 
 	if (!crt_initialized()) {
@@ -2581,6 +2582,15 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 
 out_cb:
 	crt_exec_eviction_cb(&grp_priv->gp_pub, rank);
+	tgt_ep.ep_grp = grp;
+	tgt_ep.ep_rank = rank;
+	/* ep_tag is not used in crt_ep_abort() */
+	tgt_ep.ep_tag = 0;
+	rc = crt_ep_abort(&tgt_ep);
+	if (rc != 0)
+		D_ERROR("crt_ep_abort(grp %p, rank %d) failed, rc: %d.\n", grp,
+			rank, rc);
+
 out:
 	return rc;
 }

@@ -169,8 +169,8 @@ enum {
 
 struct crt_req_format {
 	const char		*crf_name;
-	uint32_t		crf_idx;
-	struct crf_field	crf_fields[2];
+	uint32_t		 crf_idx;
+	struct crf_field	 crf_fields[2];
 };
 
 struct crt_array {
@@ -230,7 +230,30 @@ typedef enum {
 } crt_bulk_op_t;
 
 /* CRT RPC feature bits definitions */
-#define CRT_RPC_FEAT_NO_REPLY	(1ULL << 1)
+
+/**
+ * Disable/enable the reply of a RPC.  By default one RPC needs to be replied
+ * (by calling crt_reply_send within RPC handler at target-side) to complete the
+ * RPC request at origin-side.  One-way RPC is a special type that the RPC
+ * request need not to be replied, the RPC request is treated as completed after
+ * being sent out.
+ *
+ * Notes for one-way RPC:
+ * 1) Need not reply for one-way RPC, calling crt_reply_send() will fail with
+ *    -DER_PROTO.
+ * 2) For one-way RPC, user needs to disable the reply on both origin and target
+ *    side, or undefined result is expected.
+ * 3) Corpc musted be replied, disabling the reply of corpc will lead to
+ *    undefined result.
+ */
+#define CRT_RPC_FEAT_NO_REPLY		(1U << 1)
+
+/**
+ * Do not fail RPC with -CER_TIMEDOUT. Callback is only invoked on errors,
+ * completion, or target eviction. This differs from an RPC with an infinite
+ * timeout as the internal timer is still used to check for target eviction.
+ */
+#define CRT_RPC_FEAT_NO_TIMEOUT		(1U << 2)
 
 typedef void *crt_bulk_opid_t;
 

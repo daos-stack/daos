@@ -261,35 +261,37 @@ echo_init(int server, bool tier2)
 	 * the same crt_rpc_srv_register.
 	 */
 	if (server == 0) {
-		rc = crt_rpc_register(ECHO_OPC_NOOP, &CQF_ECHO_NOOP);
+		rc = crt_rpc_register(ECHO_OPC_NOOP, 0, &CQF_ECHO_NOOP);
 		assert(rc == 0);
-		rc = crt_rpc_register(ECHO_OPC_CHECKIN, &CQF_ECHO_PING_CHECK);
+		rc = crt_rpc_register(ECHO_OPC_CHECKIN, 0,
+				      &CQF_ECHO_PING_CHECK);
 		assert(rc == 0);
-		rc = crt_rpc_register(ECHO_OPC_BULK_TEST, &CQF_ECHO_BULK_TEST);
+		rc = crt_rpc_register(ECHO_OPC_BULK_TEST, 0,
+				      &CQF_ECHO_BULK_TEST);
 		assert(rc == 0);
-		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, NULL);
-		assert(rc == 0);
-		rc = crt_rpc_set_feats(ECHO_OPC_SHUTDOWN,
-				       CRT_RPC_FEAT_NO_REPLY);
+		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN,
+					    CRT_RPC_FEAT_NO_REPLY,
+					    NULL);
 		assert(rc == 0);
 	} else {
 		rc = crt_rpc_srv_register(ECHO_OPC_NOOP,
+					  0,
 					  &CQF_ECHO_NOOP,
 					  echo_srv_noop);
 		assert(rc == 0);
 		rc = crt_rpc_srv_register(ECHO_OPC_CHECKIN,
+					  0,
 					  &CQF_ECHO_PING_CHECK,
 					  echo_srv_checkin);
 		assert(rc == 0);
 		rc = crt_rpc_srv_register(ECHO_OPC_BULK_TEST,
+					  0,
 					  &CQF_ECHO_BULK_TEST,
 					  echo_srv_bulk_test);
 		assert(rc == 0);
-		rc = crt_rpc_srv_register(ECHO_OPC_SHUTDOWN, NULL,
+		rc = crt_rpc_srv_register(ECHO_OPC_SHUTDOWN,
+					  CRT_RPC_FEAT_NO_REPLY, NULL,
 					  echo_srv_shutdown);
-		assert(rc == 0);
-		rc = crt_rpc_set_feats(ECHO_OPC_SHUTDOWN,
-				       CRT_RPC_FEAT_NO_REPLY);
 		assert(rc == 0);
 		rc = crt_corpc_register(ECHO_CORPC_EXAMPLE,
 					&CQF_ECHO_CORPC_EXAMPLE,

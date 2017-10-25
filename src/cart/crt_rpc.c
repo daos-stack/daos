@@ -498,7 +498,8 @@ crt_internal_rpc_register(void)
 	/* walk through the handler list and register each individual RPC */
 	for (rpc = crt_internal_rpcs; rpc->ir_opc != 0; rpc++) {
 		D_ASSERT(rpc->ir_hdlr != NULL);
-		rc = crt_rpc_reg_internal(rpc->ir_opc, rpc->ir_req_fmt,
+		rc = crt_rpc_reg_internal(rpc->ir_opc, 0 /* feats */,
+					  rpc->ir_req_fmt,
 					  rpc->ir_hdlr, rpc->ir_co_ops);
 		if (rc) {
 			D_ERROR("opcode %#x registration failed, rc: %d.\n",

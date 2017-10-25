@@ -1086,7 +1086,12 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		state = RPC_STATE_COMPLETED;
 		break;
 	case HG_CANCELED:
-		if (crt_req_timedout(rpc_pub)) {
+		if (crt_rank_evicted(rpc_pub->cr_ep.ep_grp,
+				     rpc_pub->cr_ep.ep_rank)) {
+			D_DEBUG("request target evicted, opc: %#x.\n",
+				opc);
+			rc = -DER_EVICTED;
+		} else if (crt_req_timedout(rpc_pub)) {
 			D_DEBUG("request timedout, opc: %#x.\n", opc);
 			rc = -DER_TIMEDOUT;
 		} else {

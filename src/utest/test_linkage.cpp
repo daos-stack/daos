@@ -86,7 +86,7 @@ test_crt_api_linkage(void **state)
 	assert_int_equal(rc, 0);
 
 	/* test RPC register */
-	rc = crt_rpc_register(LINKAGE_TEST_OPC, &CRF_TEST_RPC);
+	rc = crt_rpc_register(LINKAGE_TEST_OPC, 0, &CRF_TEST_RPC);
 	assert_int_equal(rc, 0);
 
 }

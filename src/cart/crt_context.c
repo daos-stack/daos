@@ -519,6 +519,64 @@ crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_timeout_rwlock);
 }
 
+static inline uint64_t
+crt_get_timeout(struct crt_rpc_priv *rpc_priv)
+{
+	uint32_t	timeout_sec;
+
+	timeout_sec = rpc_priv->crp_timeout_sec > 0 ?
+		      rpc_priv->crp_timeout_sec : crt_gdata.cg_timeout;
+
+	return d_timeus_secdiff(timeout_sec);
+}
+
+
+static bool
+crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
+{
+	struct crt_opc_info	*opc_info;
+	struct crt_context	*crt_ctx;
+	crt_endpoint_t		*tgt_ep;
+	bool			 is_evicted;
+	int			 rc;
+
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
+	opc_info = rpc_priv->crp_opc_info;
+	D_ASSERT(opc_info != NULL);
+
+	if (opc_info->coi_reset_timer == 0) {
+		D_DEBUG("rpc_priv %p reset_timer not enabled.\n", rpc_priv);
+		return false;
+	}
+	if (rpc_priv->crp_state == RPC_STATE_CANCELED ||
+		rpc_priv->crp_state == RPC_STATE_COMPLETED) {
+		D_DEBUG("rpc_priv %p state %#x, not reseting timer.\n",
+			rpc_priv, rpc_priv->crp_state);
+		return false;
+	}
+
+	tgt_ep = &rpc_priv->crp_pub.cr_ep;
+	is_evicted = crt_rank_evicted(tgt_ep->ep_grp, tgt_ep->ep_rank);
+	if (is_evicted) {
+		D_DEBUG("rpc_priv %p grp %p, rank %d already evicted.\n",
+			rpc_priv, tgt_ep->ep_grp, tgt_ep->ep_rank);
+		return false;
+	}
+	D_DEBUG("rpc_priv %p reset_timer enabled.\n", rpc_priv);
+
+	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
+	pthread_mutex_lock(&crt_ctx->cc_mutex);
+	rc = crt_req_timeout_track(&rpc_priv->crp_pub);
+	pthread_mutex_unlock(&crt_ctx->cc_mutex);
+	if (rc != 0) {
+		D_ERROR("crt_req_timeout_track(opc: %#x) failed, rc: %d.\n",
+			rpc_priv->crp_pub.cr_opc, rc);
+		return false;
+	}
+
+	return true;
+}
+
 static inline void
 crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 {
@@ -526,6 +584,12 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	crt_endpoint_t			*tgt_ep;
 	crt_rpc_t			*ul_req;
 	struct crt_uri_lookup_in	*ul_in;
+
+	if (crt_req_timeout_reset(rpc_priv)) {
+		D_DEBUG("rpc_opc: %#x reached timeout. Renewed for "
+			"another cycle.\n", rpc_priv->crp_pub.cr_opc);
+		return;
+	};
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	if (tgt_ep->ep_grp == NULL)
@@ -612,17 +676,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
 	}
-}
-
-static inline uint64_t
-crt_get_timeout(struct crt_rpc_priv *rpc_priv)
-{
-	uint32_t	timeout_sec;
-
-	timeout_sec = rpc_priv->crp_timeout_sec > 0 ?
-		      rpc_priv->crp_timeout_sec : crt_gdata.cg_timeout;
-
-	return d_timeus_secdiff(timeout_sec);
 }
 
 /*

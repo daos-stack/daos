@@ -259,26 +259,23 @@ test_group_init(void)
 
 	/* register RPCs */
 	if (test.tg_is_service) {
-		rc = crt_rpc_srv_register(ECHO_OPC_CHECKIN,
-				&CQF_ECHO_PING_CHECK, echo_checkin_handler);
+		rc = crt_rpc_srv_register(ECHO_OPC_CHECKIN, 0,
+					  &CQF_ECHO_PING_CHECK,
+					  echo_checkin_handler);
 		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
 			  rc);
-		rc = crt_rpc_srv_register(ECHO_OPC_SHUTDOWN, NULL,
-				echo_shutdown_handler);
+		rc = crt_rpc_srv_register(ECHO_OPC_SHUTDOWN,
+					  CRT_RPC_FEAT_NO_REPLY, NULL,
+					  echo_shutdown_handler);
 		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
 			  rc);
-		rc = crt_rpc_set_feats(ECHO_OPC_SHUTDOWN,
-				       CRT_RPC_FEAT_NO_REPLY);
-		D_ASSERTF(rc == 0, "crt_rpc_set_feats() failed. rc: %d\n", rc);
 	} else {
-		rc = crt_rpc_register(ECHO_OPC_CHECKIN, &CQF_ECHO_PING_CHECK);
+		rc = crt_rpc_register(ECHO_OPC_CHECKIN, 0,
+				      &CQF_ECHO_PING_CHECK);
 		D_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
-		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, NULL);
+		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, CRT_RPC_FEAT_NO_REPLY,
+				      NULL);
 		D_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
-		rc = crt_rpc_set_feats(ECHO_OPC_SHUTDOWN,
-				       CRT_RPC_FEAT_NO_REPLY);
-		D_ASSERTF(rc == 0, "crt_rpc_set_feats() failed. rc: %d\n",
-			  rc);
 	}
 
 	for (i = 0; i < test.tg_ctx_num; i++) {

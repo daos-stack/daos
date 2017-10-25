@@ -205,7 +205,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	crt_rpc_register(RPC_ID, &fmt);
+	crt_rpc_register(RPC_ID, 0, &fmt);
 
 	pthread_create(&progress_thread, NULL, progress, &status);
 	while (status != STARTED)

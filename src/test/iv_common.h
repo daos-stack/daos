@@ -126,10 +126,10 @@ struct crt_msg_field *arg_set_ivns_out[] = {
 
 #ifdef _SERVER
 #define RPC_REGISTER(name) \
-	crt_rpc_srv_register(name, &DQF_##name, DQF_FUNC_##name)
+	crt_rpc_srv_register(name, 0, &DQF_##name, DQF_FUNC_##name)
 #else
 #define RPC_REGISTER(name) \
-	crt_rpc_register(name, &DQF_##name)
+	crt_rpc_register(name, 0, &DQF_##name)
 #endif
 
 #ifdef _SERVER

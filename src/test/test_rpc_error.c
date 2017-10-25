@@ -213,10 +213,10 @@ rpc_err_init(void)
 	rc = crt_context_create(NULL, &rpc_err.re_crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 
-	rc = crt_rpc_srv_register(RPC_ERR_OPC_NOREPLY, &CQF_RPC_ERR_NOREPLY,
+	rc = crt_rpc_srv_register(RPC_ERR_OPC_NOREPLY, 0, &CQF_RPC_ERR_NOREPLY,
 				  rpc_err_noreply_hdlr);
 	D_ASSERTF(rc == 0, "crt_rpc_serv_register() failed, rc: %d\n", rc);
-	rc = crt_rpc_srv_register(RPC_ERR_OPC_SHUTDOWN, NULL,
+	rc = crt_rpc_srv_register(RPC_ERR_OPC_SHUTDOWN, 0, NULL,
 				  rpc_err_shutdown_hdlr);
 	D_ASSERTF(rc == 0, "crt_rpc_serv_register() failed, rc: %d\n", rc);
 

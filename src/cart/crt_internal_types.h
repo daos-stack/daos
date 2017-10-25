@@ -215,7 +215,8 @@ struct crt_opc_info {
 	unsigned int		 coi_proc_init:1,
 				 coi_rpccb_init:1,
 				 coi_coops_init:1,
-				 coi_no_reply:1; /* flag of one-way RPC */
+				 coi_no_reply:1, /* flag of one-way RPC */
+				 coi_reset_timer:1; /* reset timer on timeout */
 
 	crt_rpc_cb_t		 coi_rpc_cb;
 	struct crt_corpc_ops	*coi_co_ops;
