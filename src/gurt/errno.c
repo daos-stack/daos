@@ -38,22 +38,18 @@
 /**
  * This file is part of GURT.
  */
-#include <gurt/errno.h>
+#include "gurt/errno.h"
 
 #define D_DEFINE_GURT_ERRSTR(name, value) #name,
-
-/* Compile time assertion.  Used to ensure ranges are contiguous */
-#define D_STATIC_ASSERT(cond, msg)					\
-	typedef char static_assertion_##msg[(cond) ? 1 : -1]
 
 #define D_DEFINE_COMP_ERRSTR(name, base)				\
 	static const char * const g_##name##_errstr[] = {		\
 		D_FOREACH_##name##_ERR(D_DEFINE_GURT_ERRSTR)		\
 	};								\
-	D_STATIC_ASSERT((sizeof(g_##name##_errstr) /			\
+	_Static_assert((sizeof(g_##name##_errstr) /			\
 			 sizeof(g_##name##_errstr[0])) ==		\
 	      ((DER_ERR_##name##_LIMIT - DER_ERR_##name##_BASE - 1)),	\
-		      name##_err_non_contiguous);
+			#name "is not contiguous");
 
 D_FOREACH_ERR_RANGE(D_DEFINE_COMP_ERRSTR)
 
