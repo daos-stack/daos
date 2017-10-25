@@ -48,6 +48,60 @@ vos_get_obj_cache(void)
 #endif
 }
 
+int
+vos_csum_enabled(void)
+{
+#ifdef VOS_STANDALONE
+	return vsa_imems_inst->vis_enable_checksum;
+#else
+	return vos_tls_get()->vtl_imems_inst.vis_enable_checksum;
+#endif
+}
+
+int
+vos_csum_compute(daos_sg_list_t *sgl, daos_csum_buf_t *csum)
+{
+	int	i;
+	int	rc;
+#ifdef VOS_STANDALONE
+	mchecksum_object_t *checksum = &vsa_imems_inst->vis_checksum;
+#else
+	mchecksum_object_t *checksum =
+		&vos_tls_get()->vtl_imems_inst.vis_checksum;
+#endif
+
+	if (!sgl->sg_iovs)
+		return 0;
+
+	rc = mchecksum_reset(*checksum);
+	if (rc <= 0) {
+		D__ERROR("Error in resetting checksum: %d\n", rc);
+		D__GOTO(failed, rc = -DER_IO);
+	}
+
+	for (i = 0; i < sgl->sg_nr.num_out; i++) {
+		if (!sgl->sg_iovs[i].iov_buf ||
+		    !sgl->sg_iovs[i].iov_len)
+			continue;
+
+		/* accumulates a partial checksum of the input data */
+		rc = mchecksum_update(*checksum, sgl->sg_iovs[i].iov_buf,
+				      sgl->sg_iovs[i].iov_len);
+		if (rc <= 0) {
+			D__ERROR("Error in updating checksum: %d\n", rc);
+			D__GOTO(failed, rc = -DER_IO);
+		}
+	}
+	rc = 0;
+	csum->cs_len = mchecksum_get_size(*checksum);
+	D__ASSERT(csum->cs_buf_len >= csum->cs_len);
+
+	/* get checksum result */
+	mchecksum_get(*checksum, csum->cs_csum, csum->cs_buf_len,
+		      MCHECKSUM_FINALIZE /* Unused for crc64 */);
+failed:
+	return rc;
+}
 /**
  * VOS in-memory structure creation.
  * Handle-hash:
@@ -80,7 +134,8 @@ vos_imem_strts_destroy(struct vos_imem_strts *imem_inst)
 static inline int
 vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 {
-	int rc = 0;
+	char *env;
+	int   rc;
 
 	rc = vos_obj_cache_create(LRU_CACHE_BITS,
 				  &imem_inst->vis_ocache);
@@ -101,6 +156,20 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 	if (rc) {
 		D__ERROR("Error in creating CONT ref hash: %d\n", rc);
 		goto failed;
+	}
+
+	env = getenv("VOS_CHECKSUM");
+	if (daos_csum_supported(env)) {
+		rc = mchecksum_init(env, &imem_inst->vis_checksum);
+		if (!rc) {
+			D__ERROR("Error in initializing checksum\n");
+			goto failed;
+		}
+
+		D__DEBUG(DB_IO, "Enable VOS checksum=%s\n", env);
+		imem_inst->vis_enable_checksum = 1;
+	} else {
+		imem_inst->vis_enable_checksum = 0;
 	}
 
 	return 0;

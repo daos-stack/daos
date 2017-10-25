@@ -181,13 +181,33 @@ iobuf_zc_fetch(struct iod_buf *iobuf, daos_iov_t *iov)
 static int
 iobuf_fetch(struct iod_buf *iobuf, daos_iov_t *iov)
 {
+	int	rc;
+
 	if (iobuf_sgl_empty(iobuf))
 		return 0; /* size fetch */
 
 	if (iobuf->db_zc)
-		return iobuf_zc_fetch(iobuf, iov);
+		rc = iobuf_zc_fetch(iobuf, iov);
 	else
-		return iobuf_cp_fetch(iobuf, iov);
+		rc = iobuf_cp_fetch(iobuf, iov);
+
+	if (rc)
+		D__GOTO(out, rc);
+
+	if (vos_csum_enabled()) {
+		daos_csum_buf_t	cbuf;
+		uint64_t	csum;
+
+		/* XXX This is just for performance evaluation, checksum is
+		 * not verified becausre the original checksum is not stored.
+		 */
+		daos_csum_set(&cbuf, &csum, sizeof(csum));
+		rc = vos_csum_compute(&iobuf->db_sgl, &cbuf);
+		if (rc != 0)
+			D_ERROR("Checksum compute error: %d\n", rc);
+	}
+out:
+	return rc;
 }
 
 /**
@@ -241,6 +261,7 @@ static int
 iobuf_zc_update(struct iod_buf *iobuf)
 {
 	D__ASSERT(iobuf->db_iov_off == 0);
+
 	iobuf->db_mmids[iobuf->db_at] = UMMID_NULL; /* taken over by tree */
 	iobuf->db_at++;
 	return 0;
@@ -249,6 +270,19 @@ iobuf_zc_update(struct iod_buf *iobuf)
 static int
 iobuf_update(struct iod_buf *iobuf, daos_iov_t *iov)
 {
+	int	rc;
+
+	if (vos_csum_enabled()) {
+		daos_csum_buf_t	 cbuf;
+		uint64_t	 csum;
+
+		/* XXX: checksum is not stored for now */
+		daos_csum_set(&cbuf, &csum, sizeof(csum));
+		rc = vos_csum_compute(&iobuf->db_sgl, &cbuf);
+		if (rc != 0)
+			D_ERROR("Checksum compute error: %d\n", rc);
+	}
+
 	if (iobuf->db_zc)
 		return iobuf_zc_update(iobuf); /* iov is ignored */
 	else

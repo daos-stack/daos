@@ -38,6 +38,7 @@
 #include <daos_srv/daos_server.h>
 #include <vos_layout.h>
 #include <vos_obj.h>
+#include <mchecksum.h>
 
 extern struct dss_module_key vos_module_key;
 extern umem_class_id_t vos_mem_class;
@@ -105,7 +106,11 @@ struct vos_imem_strts {
 	/** (container/pool, etc.,) */
 	struct dhash_table	*vis_pool_hhash;
 	struct dhash_table	*vis_cont_hhash;
+	int			vis_enable_checksum;
+	mchecksum_object_t	vis_checksum;
+
 };
+
 
 /* in-memory structures standalone instance */
 struct vos_imem_strts	*vsa_imems_inst;
@@ -237,28 +242,6 @@ vos_pool_decref(struct vos_pool *pool)
 	daos_uhash_link_decref(vos_pool_hhash_get(), &pool->vp_hlink);
 }
 
-/**
- * Generate CRC64 hash for any key
- *
- * \param key	[IN]	Key for generating hash
- * \param size	[IN]	Size of the key
- *
- * \return		64-bit Hash value for the
- *			key
-*/
-uint64_t
-vos_generate_crc64(void *key, uint64_t size);
-
-/**
- * Generate Jump Consistent Hash for a key
- *
- * \param key		[IN]	64-bit hash of a key
- * \param num_buckets	[IN]	number of buckets
- *
- * \return			Bucket id
- */
-int32_t
-vos_generate_jch(uint64_t key, uint32_t num_buckets);
 
 PMEMobjpool *vos_coh2pop(daos_handle_t coh);
 
@@ -268,6 +251,15 @@ PMEMobjpool *vos_coh2pop(daos_handle_t coh);
  */
 struct daos_lru_cache *vos_get_obj_cache(void);
 
+/**
+ * Check if checksum is enabled
+ */
+int vos_csum_enabled(void);
+
+/**
+ * compute checksum for a sgl using CRC64
+ */
+int vos_csum_compute(daos_sg_list_t *sgl, daos_csum_buf_t *csum);
 /**
  * Register btree class for container table, it is called within vos_init()
  *

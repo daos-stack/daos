@@ -10,9 +10,12 @@ if PREREQS is None:
     config = Configure(env)
     if config.CheckHeader('libpmemobj.h'):
         env.Append(LIBS='libpmemobj')
+    if config.CheckHeader('mchecksum.h'):
+        env.Append(LIBS='libmchecksum')
     config.Finish()
 else:
     PREREQS.require(env, 'nvml')
+    PREREQS.require(env, 'mercury', mercury_libs=['mchecksum'])
 
 denv = env.Clone()
 
