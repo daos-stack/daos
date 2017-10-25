@@ -63,15 +63,14 @@ void crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
 extern struct crt_corpc_ops crt_rank_evict_co_ops;
 extern void crt_hdlr_memb_sample(crt_rpc_t *rpc_req);
 
+/* RPC flags, these are sent over the wire as part of the protocol so can
+ * be set at the origin and read by the target
+ */
 enum crt_rpc_flags_internal {
 	/* flag of collective RPC (bcast) */
 	CRT_RPC_FLAG_COLL		= (1U << 16),
-	/* flag of incast variable */
-	CRT_RPC_FLAG_INCAST		= (1U << 17),
 	/* flag of targeting primary group */
-	CRT_RPC_FLAG_PRIMARY_GRP	= (1U << 18),
-	/* group members piggyback */
-	CRT_RPC_FLAG_MEMBS_INLINE	= (1U << 19),
+	CRT_RPC_FLAG_PRIMARY_GRP	= (1U << 17),
 };
 
 struct crt_corpc_hdr {
@@ -97,7 +96,7 @@ struct crt_common_hdr {
 	uint32_t	cch_version; /* RPC version */
 	uint32_t	cch_opc;
 	uint32_t	cch_cksum;
-	/* RPC request flag, see enum crt_rpc_flags/crt_rpc_flags_internal */
+	/* RPC request flag, see enum crt_rpc_flags_internal */
 	uint32_t	cch_flags;
 	/* gid and rank identify the rpc request sender */
 	d_rank_t	cch_rank;
