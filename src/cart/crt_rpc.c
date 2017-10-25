@@ -1555,7 +1555,13 @@ crt_handle_rpc(void *arg)
 	D_ASSERT(rpc_priv->crp_opc_info->coi_rpc_cb != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
 	rpc_priv->crp_opc_info->coi_rpc_cb(rpc_pub);
-	crt_req_decref(rpc_pub);
+	/*
+	 * Correspond to crt_rpc_handler_common -> crt_rpc_priv_init's set
+	 * refcount as 1. "rpc_priv->crp_srv" is to differentiate from calling
+	 * path of crt_req_send -> crt_corpc_req_hdlr -> crt_rpc_common_hdlr.
+	 */
+	if (rpc_priv->crp_srv)
+		crt_req_decref(rpc_pub);
 }
 
 int
