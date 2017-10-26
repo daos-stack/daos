@@ -63,6 +63,16 @@ docker run --rm --name "${job_real_name}_${BUILD_NUMBER}_${matrix}" \
            ${scons_local_dir}/utils/docker/docker_build_components.sh \
           ${DEFAULT_REQUIRES} ${SCONS_OPTIONS} 2>&1 | tee docker_build.log
 
+# Sometimes a docker script exits normally, but the docker container is not
+# automatically deleted.  This attempts to force a cleanup.
+sleep 1
+set +e
+docker ps | grep "${job_real_name}_${BUILD_NUMBER}_${matrix}"
+if [ $? -eq 0 ]; then
+  docker rm -f "${job_real_name}_${BUILD_NUMBER}_${matrix}"
+fi
+set -e
+
 docker_exit_status=0
 # Some jobs used to not need artifacts based on JOB_SUFFIX.
 # Review jobs feeding maloo need artifacts.
