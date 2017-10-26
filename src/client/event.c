@@ -592,7 +592,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 		}
 	}
 
-	/** pass the timeout to crt_progress() with a conditional callback */
+	/* pass the timeout to crt_progress() with a conditional callback */
 	rc = crt_progress(evx->evx_ctx, timeout, ev_progress_cb, &epa);
 
 	/** drop ref grabbed in daos_eq_lookup() */
@@ -729,10 +729,10 @@ daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout,
 	epa.wait_running = wait_running;
 	epa.count	= 0;
 
-	/** pass the timeout to crt_progress() with a conditional callback */
+	/* pass the timeout to crt_progress() with a conditional callback */
 	rc = crt_progress(epa.eqx->eqx_ctx, timeout, eq_progress_cb, &epa);
 
-	/** drop ref grabbed in daos_eq_lookup() */
+	/* drop ref grabbed in daos_eq_lookup() */
 	daos_eq_putref(epa.eqx);
 
 	if (rc != 0 && rc != -DER_TIMEDOUT) {
@@ -1160,7 +1160,8 @@ daos_event_abort(struct daos_event *ev)
 int
 daos_event_priv_get(daos_event_t **ev)
 {
-	int rc;
+	struct daos_event_private *evx = daos_ev2evx(&ev_thpriv);
+	int			   rc;
 
 	D_ASSERT(*ev == NULL);
 
@@ -1171,6 +1172,10 @@ daos_event_priv_get(daos_event_t **ev)
 		ev_thpriv_is_init = true;
 	}
 
+	if (evx->evx_status != DAOS_EVS_READY) {
+		D_CRIT("private event is inuse, status=%d\n",
+		       evx->evx_status);
+	}
 	*ev = &ev_thpriv;
 	return 0;
 }
@@ -1194,10 +1199,15 @@ daos_event_priv_wait()
 	epa.eqx = NULL;
 
 	/* Wait on the event to complete */
-	rc = crt_progress(evx->evx_ctx, DAOS_EQ_WAIT, ev_progress_cb, &epa);
-	if (rc == 0)
-		rc = ev_thpriv.ev_error;
+	while (evx->evx_status != DAOS_EVS_READY) {
+		rc = crt_progress(evx->evx_ctx, DAOS_EQ_WAIT,
+				  ev_progress_cb, &epa);
+		if (rc == 0)
+			rc = ev_thpriv.ev_error;
 
+		if (rc)
+			break;
+	}
 	return rc;
 }
 
