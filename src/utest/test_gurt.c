@@ -46,6 +46,7 @@
 #include "gurt/list.h"
 #include "gurt/heap.h"
 #include "gurt/dlog.h"
+#include "gurt/hash.h"
 
 static char *__cwd;
 static char *__root;
@@ -416,15 +417,21 @@ void test_create_subdirs(void **state)
 static int
 init_tests(void **state)
 {
-	char	*tmp;
+	char		*tmp;
+	unsigned int	 seed;
 
 	__root = strdup("/tmp/XXXXXX");
 	tmp = mkdtemp(__root);
 
 	if (tmp != __root) {
-		fprintf(stderr, "Could not create tmp dir");
+		fprintf(stderr, "Could not create tmp dir\n");
 		return -1;
 	}
+
+	/* Seed the random number generator once per test run */
+	seed = time(NULL);
+	fprintf(stdout, "Seeding this test run with seed=%u\n", seed);
+	srand(seed);
 
 	__cwd = d_getcwd();
 
@@ -933,6 +940,137 @@ test_log(void **state)
 	d_log_fini();
 }
 
+#define TEST_GURT_HASH_NUM_BITS (16)
+#define TEST_GURT_HASH_NUM_ENTRIES (1 << TEST_GURT_HASH_NUM_BITS)
+#define TEST_GURT_HASH_KEY_LEN (65L)
+
+struct test_hash_entry {
+	d_list_t	tl_link;
+	unsigned char	tl_key[TEST_GURT_HASH_KEY_LEN];
+};
+
+static struct test_hash_entry *
+test_gurt_hash_link2ptr(d_list_t *link)
+{
+	return container_of(link, struct test_hash_entry, tl_link);
+}
+
+static bool
+test_gurt_hash_op_key_cmp(struct d_chash_table *thtab, d_list_t *link,
+			  const void *key, unsigned int ksize)
+{
+	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
+
+	assert_int_equal(ksize, TEST_GURT_HASH_KEY_LEN);
+	return !memcmp(tlink->tl_key, key, ksize);
+}
+
+static d_chash_table_ops_t th_ops = {
+	.hop_key_cmp    = test_gurt_hash_op_key_cmp,
+};
+
+int
+test_gurt_hash_empty_traverse_cb(d_list_t *rlink, void *arg)
+{
+	/* No nodes should exist for empty table */
+	assert_true(0);
+
+	return 0;
+}
+
+static struct test_hash_entry **
+test_gurt_hash_alloc_items(int num_entries)
+{
+	struct test_hash_entry	**entries;
+	int			  i;
+	ssize_t			  j;
+
+	D_ALLOC_ARRAY(entries, num_entries);
+	assert_non_null(entries);
+
+	/* Allocate each member of the array */
+	for (i = 0; i < num_entries; i++) {
+		D_ALLOC_PTR(entries[i]);
+		assert_non_null(entries[i]);
+
+		/* Generate a random key */
+		j = 0;
+		while (j < TEST_GURT_HASH_KEY_LEN) {
+			entries[i]->tl_key[j] = rand() & 0xFF;
+			j++;
+		}
+
+		/*
+		 * Last four bytes are used for key index to make sure
+		 * keys are unique (little-endian)
+		 */
+		entries[i]->tl_key[TEST_GURT_HASH_KEY_LEN - 4] = (i & 0xFF);
+		entries[i]->tl_key[TEST_GURT_HASH_KEY_LEN - 3] =
+			((i >> 8) & 0xFF);
+		entries[i]->tl_key[TEST_GURT_HASH_KEY_LEN - 2] =
+			((i >> 16) & 0xFF);
+		entries[i]->tl_key[TEST_GURT_HASH_KEY_LEN - 1] =
+			((i >> 24) & 0xFF);
+	}
+
+	return entries;
+}
+
+static void
+test_gurt_hash_free_items(struct test_hash_entry **entries, int num_entries)
+{
+	int i;
+
+	if (entries == NULL)
+		return;
+
+	for (i = 0; i < num_entries; i++)
+		D_FREE(entries[i]);
+
+	D_FREE(entries);
+}
+
+static void
+test_gurt_hash_empty(void **state)
+{
+	/* Just test the minimum-size hash table */
+	const int		  num_bits = 1;
+	struct d_chash_table	 *thtab;
+	int			  rc;
+	struct test_hash_entry	**entries;
+	d_list_t		 *test;
+	int			  i;
+
+	/* Allocate test entries to use */
+	entries = test_gurt_hash_alloc_items(TEST_GURT_HASH_NUM_ENTRIES);
+	assert_non_null(entries);
+
+	/* Create a minimum-size hash table */
+	rc = d_chash_table_create(0, num_bits, NULL, &th_ops, &thtab);
+	assert_int_equal(rc, 0);
+
+	/* Traverse the empty hash table and look for entries */
+	rc = d_chash_table_traverse(thtab, test_gurt_hash_empty_traverse_cb,
+				    NULL);
+	assert_int_equal(rc, 0);
+
+	/* Get the first element in the table, which should be NULL */
+	assert_null(d_chash_rec_first(thtab));
+
+	/* Try to look up the random entries and make sure they fail */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
+		test = d_chash_rec_find(thtab, entries[i]->tl_key,
+					TEST_GURT_HASH_KEY_LEN);
+		assert_null(test);
+	}
+
+	/* Destroy the hash table, force = false (should fail if not empty) */
+	rc = d_chash_table_destroy(thtab, 0);
+	assert_int_equal(rc, 0);
+
+	/* Free the temporary keys */
+	test_gurt_hash_free_items(entries, TEST_GURT_HASH_NUM_ENTRIES);
+}
 int
 main(int argc, char **argv)
 {
@@ -947,6 +1085,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_hlist),
 		cmocka_unit_test(test_binheap),
 		cmocka_unit_test(test_log),
+		cmocka_unit_test(test_gurt_hash_empty),
 	};
 
 	return cmocka_run_group_tests(tests, init_tests, fini_tests);
