@@ -212,7 +212,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	for (number = 5, key_nr = 0; !daos_hash_is_eof(&hash_out);
 	     number = 5) {
 		memset(buf, 0, 512);
-		enumerate_dkey(0, &number, kds, &hash_out, buf, 512, &req);
+		enumerate_dkey(epoch, &number, kds, &hash_out, buf, 512, &req);
 		if (number == 0)
 			continue;
 
