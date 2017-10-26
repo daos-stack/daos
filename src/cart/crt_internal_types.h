@@ -46,7 +46,8 @@
 #define CRT_CONTEXT_NULL         (NULL)
 #define CRT_BULK_NULL            (NULL)
 
-#include <pthread.h>
+#include <arpa/inet.h>
+#include <ifaddrs.h>
 
 #include <gurt/list.h>
 #include <gurt/hash.h>

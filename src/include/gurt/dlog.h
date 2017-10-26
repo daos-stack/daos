@@ -67,6 +67,8 @@
 
 #ifndef _DLOG_H_
 #define _DLOG_H_
+
+#include <inttypes.h>
 #include <stdarg.h>
 
 /* clog open flavor */

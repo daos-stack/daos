@@ -39,7 +39,11 @@
 #ifndef __GURT_DEBUG_H__
 #define __GURT_DEBUG_H__
 
+#include <stddef.h>
+#include <assert.h>
+
 #include <gurt/dlog.h>
+#include <gurt/errno.h>
 
 #define DD_FAC(name)	(d_##name##_logfac)
 

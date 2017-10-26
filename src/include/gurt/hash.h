@@ -39,7 +39,12 @@
 #ifndef __GURT_HASH_H__
 #define __GURT_HASH_H__
 
+#include <inttypes.h>
+#include <pthread.h>
+#include <stdbool.h>
+
 #include <gurt/list.h>
+#include <gurt/common.h> /* for d_uuid */
 
 #define D_HASH_DEBUG	0
 

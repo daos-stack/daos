@@ -38,6 +38,9 @@
  */
 #ifndef __GURT_PATH_H__
 #define __GURT_PATH_H__
+
+#include <stdbool.h>
+
 #include <gurt/errno.h>
 
 #if defined(__cplusplus)

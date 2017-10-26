@@ -43,29 +43,10 @@
 #ifndef __CRT_INTERNAL_H__
 #define __CRT_INTERNAL_H__
 
-#include <ctype.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <stddef.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <uuid/uuid.h>
-#include <dirent.h>
-#include <arpa/inet.h>
-#include <ifaddrs.h>
-
 #include "crt_debug.h"
-#include <cart/api.h>
+
 #include <gurt/common.h>
+#include <cart/api.h>
 
 #include "crt_hg.h"
 #include "crt_internal_types.h"

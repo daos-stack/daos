@@ -39,55 +39,30 @@
 #ifndef __GURT_COMMON_H__
 #define __GURT_COMMON_H__
 
-#include <sys/time.h>
-#include <sys/types.h>
-#include <stdint.h>
-#include <inttypes.h>
+#include <uuid/uuid.h>
 #include <unistd.h>
 #include <stdbool.h>
 #include <string.h>
-#include <ctype.h>
 #include <errno.h>
-#include <assert.h>
+#include <inttypes.h>
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
+
 #include <gurt/errno.h>
 #include <gurt/debug.h>
-#ifdef __APPLE__
-#include <mach/clock.h>
-#include <mach/mach.h>
-
-/* Get the current time using a monotonic timer
- * param[out] ts A timespec structure for the result
- */
-static inline int _gurt_gettime(struct timespec *ts)
-{
-	clock_serv_t cclock;
-	mach_timespec_t mts;
-
-	host_get_clock_service(mach_host_self(), SYSTEM_CLOCK, &cclock);
-	clock_get_time(cclock, &mts);
-	mach_port_deallocate(mach_task_self(), cclock);
-	ts->tv_sec = mts.tv_sec;
-	ts->tv_nsec = mts.tv_nsec;
-	return 0;
-}
-#else
-#include <time.h>
-/* Get the current time using a monotonic timer
- * param[out] ts A timespec structure for the result
- */
-#define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
-#endif
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-#include <uuid/uuid.h>
+/* Get the current time using a monotonic timer
+ * param[out] ts A timespec structure for the result
+ */
+#define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
+
 /**
  * hide the dark secret that uuid_t is an array not a structure.
  */

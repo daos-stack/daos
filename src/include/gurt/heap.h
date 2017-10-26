@@ -41,9 +41,12 @@
 #ifndef __GURT_HEAP_H__
 #define __GURT_HEAP_H__
 
+#include <pthread.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
+
+#include <gurt/common.h>
 
 #if defined(__cplusplus)
 extern "C" {
