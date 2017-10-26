@@ -177,13 +177,11 @@ int
 ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 		     crt_group_t **group)
 {
-	uuid_t			uuid;
-	char			id[DAOS_UUID_STR_SIZE];
+	char		id[DAOS_UUID_STR_SIZE];
 	d_rank_list_t	ranks;
-	int			rc;
+	int		rc;
 
-	uuid_generate(uuid);
-	uuid_unparse_lower(uuid, id);
+	uuid_unparse_lower(pool_uuid, id);
 
 	D__DEBUG(DF_DSMS, DF_UUID": creating pool group %s\n",
 		DP_UUID(pool_uuid), id);

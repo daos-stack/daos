@@ -241,7 +241,7 @@ dss_srv_handler(void *arg)
 	/* Prepare the scheduler */
 	rc = tse_sched_init(&dmi->dmi_sched, NULL, dmi->dmi_ctx);
 	if (rc != 0) {
-		D__ERROR("failed to init the seduler\n");
+		D__ERROR("failed to init the scheduler\n");
 		D__GOTO(destroy, rc);
 	}
 

@@ -237,12 +237,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	D__ASSERTF(rc == 0, "%d\n", rc);
 
 	if (arg->pca_need_group) {
-#if 0
-		D__ASSERT(pool->sp_map != NULL);
-		rc = ds_pool_group_create(key, pool->sp_map, &pool->sp_group);
-		if (rc != 0)
-			D__GOTO(err_collective, rc);
-#else
 		char id[DAOS_UUID_STR_SIZE];
 
 		uuid_unparse_lower(key, id);
@@ -252,7 +246,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 				DP_UUID(key));
 			D__GOTO(err_collective, rc = -DER_NONEXIST);
 		}
-#endif
 	}
 
 	*link = &pool->sp_entry;

@@ -403,9 +403,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 		   int ndomains, const int *domains,
 		   d_rank_list_t *svc_addrs)
 {
-	d_rank_list_t       *ranks;
-	char			id[DAOS_UUID_STR_SIZE];
-	crt_group_t	       *g;
+	d_rank_list_t	       *ranks;
 	struct rsvc_client	client;
 	struct dss_module_info *info = dss_get_module_info();
 	crt_endpoint_t		ep;
@@ -422,17 +420,11 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	if (rc != 0)
 		D__GOTO(out, rc);
 
-	D__DEBUG(DB_MD, DF_UUID": creating pool group\n", DP_UUID(pool_uuid));
-	uuid_unparse_lower(pool_uuid, id);
-	rc = dss_group_create(id, (d_rank_list_t *)target_addrs, &g);
-	if (rc != 0)
-		D__GOTO(out_ranks, rc);
-
 	/* Use the pool UUID as the RDB UUID. */
 	rc = rdb_dist_start(pool_uuid, pool_uuid, ranks, true /* create */,
 			    get_md_cap());
 	if (rc != 0)
-		D__GOTO(out_group, rc);
+		D__GOTO(out_ranks, rc);
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
@@ -489,9 +481,6 @@ out_client:
 out_creation:
 	if (rc != 0)
 		rdb_dist_stop(pool_uuid, pool_uuid, ranks, true /* destroy */);
-out_group:
-	if (rc != 0)
-		dss_group_destroy(g);
 out_ranks:
 	daos_rank_list_free(ranks);
 out:
@@ -530,6 +519,30 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 }
 
 static int
+pool_svc_create_group(struct pool_svc *svc, struct pool_map *map)
+{
+	char		id[DAOS_UUID_STR_SIZE];
+	crt_group_t    *group;
+	int		rc;
+
+	/* Check if the pool group exists locally. */
+	uuid_unparse_lower(svc->ps_uuid, id);
+	group = crt_group_lookup(id);
+	if (group != NULL)
+		return 0;
+
+	/* Attempt to create the pool group. */
+	rc = ds_pool_group_create(svc->ps_uuid, map, &group);
+	if (rc != 0) {
+		D__ERROR(DF_UUID": failed to create pool group: %d\n",
+			 DP_UUID(svc->ps_uuid), rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+static int
 pool_svc_step_up(struct pool_svc *svc)
 {
 	struct rdb_tx			tx;
@@ -559,6 +572,13 @@ pool_svc_step_up(struct pool_svc *svc)
 		return rc;
 	}
 	map_version = pool_map_get_version(map);
+
+	/* Create the pool group. */
+	rc = pool_svc_create_group(svc, map);
+	if (rc != 0) {
+		pool_map_decref(map);
+		return rc;
+	}
 
 	/* Create or revalidate svc->ps_pool with map and map_version. */
 	D__ASSERT(svc->ps_pool == NULL);
@@ -1173,6 +1193,73 @@ ds_pool_svc_stop(const uuid_t uuid)
 		return;
 	pool_svc_stop(svc);
 	pool_svc_put(svc);
+}
+
+/*
+ * Try to start a pool's pool service if its RDB exists. Continue the iteration
+ * upon errors as other pools may still be able to work.
+ */
+static int
+start_one(const uuid_t uuid, void *arg)
+{
+	char   *path;
+	int	rc;
+
+	/*
+	 * Check if an RDB file exists and we can access it, to avoid
+	 * unnecessary error messages from the ds_pool_svc_start() call.
+	 */
+	path = ds_pool_rdb_path(uuid, uuid);
+	if (path == NULL) {
+		D__ERROR(DF_UUID": failed allocate rdb path\n", DP_UUID(uuid));
+		return 0;
+	}
+	rc = access(path, R_OK | W_OK);
+	free(path);
+	if (rc != 0) {
+		D__DEBUG(DB_MD, DF_UUID": cannot find or access rdb: %d\n",
+			DP_UUID(uuid), errno);
+		return 0;
+	}
+
+	rc = ds_pool_svc_start(uuid);
+	if (rc != 0) {
+		D__ERROR("not starting pool service "DF_UUID": %d\n",
+			DP_UUID(uuid), rc);
+		return 0;
+	}
+
+	D__DEBUG(DB_MD, "started pool service "DF_UUID"\n", DP_UUID(uuid));
+	return 0;
+}
+
+void
+pool_svc_start_all(void *arg)
+{
+	int rc;
+
+	/* Scan the storage and start all pool services. */
+	rc = ds_mgmt_tgt_pool_iterate(start_one, NULL /* arg */);
+	if (rc != 0)
+		D__ERROR("failed to scan all pool services: %d\n", rc);
+}
+
+/* Note that this function is currently called from the main xstream. */
+int
+ds_pool_svc_start_all(void)
+{
+	ABT_thread	thread;
+	int		rc;
+
+	/* Create a ULT to call ds_pool_svc_start() in xstream 0. */
+	rc = dss_ult_create(pool_svc_start_all, NULL, 0, &thread);
+	if (rc != 0) {
+		D__ERROR("failed to create pool service start ULT: %d\n", rc);
+		return rc;
+	}
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+	return 0;
 }
 
 struct ult {

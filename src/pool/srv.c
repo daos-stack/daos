@@ -79,7 +79,7 @@ fini(void)
 static int
 setup(void)
 {
-	return 0;
+	return ds_pool_svc_start_all();
 }
 
 static int

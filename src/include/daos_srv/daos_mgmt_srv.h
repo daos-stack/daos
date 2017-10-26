@@ -37,11 +37,11 @@
 #define	DSM_META_FILE	"meta"
 #define RDB_FILE	"rdb-"
 
-/**
- * Generate path to a target file for pool \a pool_uuid with a filename set to
- * \a fname and suffixed by \a idx. \a idx can be NULL.
- */
 int
 ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
 		 char **fpath);
+
+int
+ds_mgmt_tgt_pool_iterate(int (*cb)(const uuid_t uuid, void *arg), void *arg);
+
 #endif /* __MGMT_SRV_H__ */

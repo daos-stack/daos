@@ -29,6 +29,7 @@
 #include <fcntl.h>
 #include <sys/sysinfo.h>
 #include <ftw.h>
+#include <dirent.h>
 
 #include "srv_internal.h"
 
@@ -201,6 +202,68 @@ ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
 		 char **fpath)
 {
 	return path_gen(pool_uuid, storage_path, fname, idx, fpath);
+}
+
+/**
+ * Iterate pools that have targets on this node by scanning the storage. \a cb
+ * will be called with the UUID of each pool. When \a cb returns an rc,
+ *
+ *   - if rc == 0, the iteration continues;
+ *   - if rc == 1, the iteration stops and returns 0;
+ *   - otherwise, the iteration stops and returns rc.
+ *
+ * \param[in]	cb	callback called for each pool
+ * \param[in]	arg	argument passed to each \a cb call
+ */
+int
+ds_mgmt_tgt_pool_iterate(int (*cb)(const uuid_t uuid, void *arg), void *arg)
+{
+	DIR    *storage;
+	int	rc;
+	int	rc_tmp;
+
+	storage = opendir(storage_path);
+	if (storage == NULL) {
+		D_ERROR("failed to open %s: %d\n", storage_path, errno);
+		return daos_errno2der(errno);
+	}
+
+	for (;;) {
+		struct dirent  *entry;
+		uuid_t		uuid;
+
+		rc = 0;
+		errno = 0;
+		entry = readdir(storage);
+		if (entry == NULL) {
+			if (errno != 0) {
+				D_ERROR("failed to read %s: %d\n", storage_path,
+					errno);
+				rc = daos_errno2der(errno);
+			}
+			break;
+		}
+
+		/* A pool directory must have a valid UUID as its name. */
+		rc = uuid_parse(entry->d_name, uuid);
+		if (rc != 0)
+			continue;
+
+		rc = cb(uuid, arg);
+		if (rc != 0) {
+			if (rc == 1)
+				rc = 0;
+			break;
+		}
+	}
+
+	rc_tmp = closedir(storage);
+	if (rc_tmp != 0) {
+		D_ERROR("failed to close %s: %d\n", storage_path, errno);
+		rc_tmp = daos_errno2der(errno);
+	}
+
+	return rc == 0 ? rc_tmp : rc;
 }
 
 static int
