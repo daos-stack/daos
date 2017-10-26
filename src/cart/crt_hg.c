@@ -892,9 +892,9 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 
 	D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
 	if (rpc_priv == NULL) {
-		crt_hg_reply_error_send(&rpc_tmp, -DER_NOMEM);
+		crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
 		crt_hg_unpack_cleanup(proc);
-		D_GOTO(out, hg_ret = HG_NOMEM_ERROR);
+		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 	crt_hg_header_copy(&rpc_tmp, rpc_priv);
 	rpc_pub = &rpc_priv->crp_pub;
