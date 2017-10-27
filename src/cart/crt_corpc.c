@@ -165,18 +165,20 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	bulk_desc = cb_info->bci_bulk_desc;
 	rpc_req = bulk_desc->bd_rpc;
 	bulk_buf = cb_info->bci_arg;
-	assert(rpc_req != NULL && bulk_buf != NULL);
+	D_ASSERT(rpc_req != NULL && bulk_buf != NULL);
+
+	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
+
 	local_bulk_hdl = bulk_desc->bd_local_hdl;
-	assert(local_bulk_hdl != NULL);
+	D_ASSERT(local_bulk_hdl != NULL);
 
 	if (rc != 0) {
 		D_ERROR("crt_corpc_chained_bulk_cb, bulk failed, rc: %d, "
 			"opc: %#x.\n", rc, rpc_req->cr_opc);
-		free(bulk_buf);
+		D_FREE(bulk_buf);
 		D_GOTO(out, rc);
 	}
 
-	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
 	rpc_priv->crp_pub.cr_co_bulk_hdl = local_bulk_hdl;
 	rc = crt_corpc_initiate(rpc_priv);
 	if (rc != 0)
@@ -184,7 +186,7 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 			rc, rpc_req->cr_opc);
 
 out:
-	crt_req_decref(rpc_req);
+	RPC_DECREF(rpc_priv);
 	return rc;
 }
 
@@ -297,15 +299,15 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		bulk_desc.bd_local_off = 0;
 		bulk_desc.bd_len = bulk_len;
 
-		crt_req_addref(&rpc_priv->crp_pub);
+		RPC_ADDREF(rpc_priv);
 
 		rc = crt_bulk_transfer(&bulk_desc, crt_corpc_chained_bulk_cb,
 				       bulk_iov.iov_buf, NULL);
 		if (rc != 0) {
 			D_ERROR("crt_bulk_transfer failed, rc: %d,opc: %#x.\n",
 				rc, rpc_priv->crp_pub.cr_opc);
-			free(bulk_iov.iov_buf);
-			crt_req_decref(&rpc_priv->crp_pub);
+			D_FREE(bulk_iov.iov_buf);
+			RPC_DECREF(rpc_priv);
 		}
 		D_GOTO(out, rc);
 	} else {
@@ -428,7 +430,6 @@ corpc_add_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 	crt_rpc_t		*child_rpc;
 	struct crt_corpc_info	*co_info;
 	struct crt_corpc_hdr	*parent_co_hdr, *child_co_hdr;
-	int			 rc = 0;
 
 	D_ASSERT(parent_rpc_priv != NULL);
 	D_ASSERT(child_rpc_priv != NULL);
@@ -465,10 +466,7 @@ corpc_add_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 
 	co_info = parent_rpc_priv->crp_corpc_info;
 
-	rc = crt_req_addref(&child_rpc_priv->crp_pub);
-	if (rc != 0)
-		D_ERROR("crt_req_addref failed, opc: %#x.\n, rc: %d.",
-			child_rpc_priv->crp_pub.cr_opc, rc);
+	RPC_ADDREF(child_rpc_priv);
 
 	pthread_spin_lock(&parent_rpc_priv->crp_lock);
 	d_list_add_tail(&child_rpc_priv->crp_parent_link,
@@ -480,8 +478,6 @@ static inline void
 corpc_del_child_rpc_locked(struct crt_rpc_priv *parent_rpc_priv,
 			   struct crt_rpc_priv *child_rpc_priv)
 {
-	int	rc;
-
 	D_ASSERT(parent_rpc_priv != NULL);
 	D_ASSERT(child_rpc_priv != NULL);
 	D_ASSERT(parent_rpc_priv->crp_coll == 1 &&
@@ -489,10 +485,7 @@ corpc_del_child_rpc_locked(struct crt_rpc_priv *parent_rpc_priv,
 
 	d_list_del_init(&child_rpc_priv->crp_parent_link);
 	/* decref corresponds to the addref in corpc_add_child_rpc */
-	rc = crt_req_decref(&child_rpc_priv->crp_pub);
-	if (rc != 0)
-		D_ERROR("crt_req_addref failed, opc: %#x.\n, rc: %d.",
-			child_rpc_priv->crp_pub.cr_opc, rc);
+	RPC_DECREF(child_rpc_priv);
 }
 
 static inline void
@@ -683,7 +676,7 @@ bypass_aggregate:
 	am_root = (myrank == co_info->co_root);
 	if (am_root) {
 		crt_rpc_complete(parent_rpc_priv, co_info->co_rc);
-		crt_req_decref(&parent_rpc_priv->crp_pub); /* destroy */
+		RPC_DECREF(parent_rpc_priv); /* destroy */
 	} else {
 		if (co_info->co_rc != 0)
 			crt_corpc_fail_parent_rpc(parent_rpc_priv,
@@ -709,7 +702,7 @@ bypass_aggregate:
 		parent_rpc_priv->crp_coreq_hdr.coh_bulk_hdl = NULL;
 	}
 	/* correspond to addref in crt_corpc_req_hdlr */
-	crt_req_decref(&parent_rpc_priv->crp_pub);
+	RPC_DECREF(parent_rpc_priv);
 
 out:
 	return;
@@ -735,7 +728,7 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 	am_root = (grp_rank == co_info->co_root);
 
 	/* corresponds to decref in crt_corpc_reply_hdlr */
-	crt_req_addref(&rpc_priv->crp_pub);
+	RPC_ADDREF(rpc_priv);
 
 	rc = crt_tree_get_children(co_info->co_grp_priv, co_info->co_grp_ver,
 				   co_info->co_excluded_ranks,
@@ -810,14 +803,14 @@ forward_failed:
 		if (co_info->co_child_num == 0 && co_info->co_root_excluded) {
 			D_WARN("rpc: %#x, NOOP bcast (no child and "
 			       "root excluded.\n", req->cr_opc);
-			crt_req_decref(&rpc_priv->crp_pub); /* destroy */
+			RPC_DECREF(rpc_priv); /* destroy */
 		} else {
 			D_ASSERT(rc != 0);
 			D_ERROR("rpc: %#x failed, rc: %d.\n", req->cr_opc, rc);
 		}
 		crt_rpc_complete(rpc_priv, rc);
 		/* roll back the add ref above */
-		crt_req_decref(&rpc_priv->crp_pub);
+		RPC_DECREF(rpc_priv);
 		D_GOTO(out, rc);
 	}
 

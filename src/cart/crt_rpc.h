@@ -307,6 +307,36 @@ struct crt_internal_rpc {
 	struct crt_corpc_ops	*ir_co_ops;
 };
 
+/* Internal macros for crt_req_(add|dec)ref from within cart.  These take
+ * a crt_internal_rpc pointer and provide better logging than the public
+ * functions however only work when a private pointer is held.
+ */
+#define RPC_ADDREF(RPC) do {						\
+		int __ref;						\
+		pthread_spin_lock(&(RPC)->crp_lock);			\
+		__ref = ++(RPC)->crp_refcount;				\
+		pthread_spin_unlock(&(RPC)->crp_lock);			\
+		d_log((DD_FAC(rpc) | DLOG_DBG),				\
+			"%s:%d %s() rpc_priv %p (opc: %#x), addref to %d.\n", \
+			__FILE__, __LINE__, __func__,			\
+			(RPC), (RPC)->crp_pub.cr_opc, __ref);		\
+	} while (0)
+
+#define RPC_DECREF(RPC) do {						\
+		int __ref;						\
+		pthread_spin_lock(&(RPC)->crp_lock);			\
+		__ref = --(RPC)->crp_refcount;				\
+		pthread_spin_unlock(&(RPC)->crp_lock);			\
+		d_log((DD_FAC(rpc) | DLOG_DBG),				\
+			"%s:%d %s() rpc_priv %p (opc: %#x), decref to %d.\n", \
+			__FILE__, __LINE__, __func__,			\
+			(RPC), (RPC)->crp_pub.cr_opc, __ref);		\
+		if (__ref == 0)						\
+			crt_req_destroy(RPC);				\
+	} while (0)
+
+void crt_req_destroy(struct crt_rpc_priv *rpc_priv);
+
 static inline void
 crt_common_hdr_init(struct crt_common_hdr *hdr, crt_opcode_t opc)
 {

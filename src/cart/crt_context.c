@@ -305,7 +305,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		epi->epi_req_wait_num--;
 		crt_rpc_complete(rpc_priv, -DER_CANCELED);
 		/* corresponds to ref taken when adding to waitq */
-		crt_req_decref(&rpc_priv->crp_pub);
+		RPC_DECREF(rpc_priv);
 	}
 
 	/* abort RPCs in inflight queue */
@@ -456,7 +456,7 @@ crt_req_timeout_track(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
 	/* add to binheap for timeout tracking */
-	crt_req_addref(req); /* decref in crt_req_timeout_untrack */
+	RPC_ADDREF(rpc_priv); /* decref in crt_req_timeout_untrack */
 	rc = d_binheap_insert(&crt_ctx->cc_bh_timeout,
 			      &rpc_priv->crp_timeout_bp_node);
 	if (rc == 0) {
@@ -465,7 +465,7 @@ crt_req_timeout_track(crt_rpc_t *req)
 		D_ERROR("rpc_priv %p (opc %#x), d_binheap_insert "
 			"failed, rc: %d.\n", rpc_priv,
 			rpc_priv->crp_pub.cr_opc, rc);
-		crt_req_decref(req);
+		RPC_DECREF(rpc_priv);
 	}
 
 	return rc;
@@ -487,7 +487,7 @@ crt_req_timeout_untrack(crt_rpc_t *req)
 		rpc_priv->crp_in_binheap = 0;
 		d_binheap_remove(&crt_ctx->cc_bh_timeout,
 				 &rpc_priv->crp_timeout_bp_node);
-		crt_req_decref(req); /* addref in crt_req_timeout_track */
+		RPC_DECREF(rpc_priv); /* addref in crt_req_timeout_track */
 	}
 }
 
@@ -590,7 +590,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 			break;
 
 		/* +1 to prevent it from being released in timeout_untrack */
-		crt_req_addref(&rpc_priv->crp_pub);
+		RPC_ADDREF(rpc_priv);
 		crt_req_timeout_untrack(&rpc_priv->crp_pub);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
@@ -610,7 +610,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_exec_timeout_cb(rpc_priv);
 		d_list_del_init(&rpc_priv->crp_tmp_link);
 		crt_req_timeout_hdlr(rpc_priv);
-		crt_req_decref(&rpc_priv->crp_pub);
+		RPC_DECREF(rpc_priv);
 	}
 }
 
@@ -698,7 +698,7 @@ crt_context_req_track(crt_rpc_t *req)
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
 	rpc_priv->crp_epi = epi;
-	crt_req_addref(req);
+	RPC_ADDREF(rpc_priv);
 	if (crt_gdata.cg_credit_ep_ctx != 0 &&
 	    (epi->epi_req_num - epi->epi_reply_num) >=
 	     crt_gdata.cg_credit_ep_ctx) {
@@ -719,7 +719,7 @@ crt_context_req_track(crt_rpc_t *req)
 		} else {
 			D_ERROR("crt_req_timeout_track failed, rc: %d.\n", rc);
 			/* roll back the addref above */
-			crt_req_decref(req);
+			RPC_DECREF(rpc_priv);
 		}
 	}
 
@@ -781,7 +781,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 	}
 
 	/* decref corresponding to addref in crt_context_req_track */
-	crt_req_decref(req);
+	RPC_DECREF(rpc_priv);
 
 	/* done if flow control disabled */
 	if (crt_gdata.cg_credit_ep_ctx == 0) {
@@ -828,14 +828,14 @@ crt_context_req_untrack(crt_rpc_t *req)
 		if (rc == 0)
 			continue;
 
-		crt_req_addref(&rpc_priv->crp_pub);
+		RPC_ADDREF(rpc_priv);
 		D_ERROR("crt_req_send_internal failed, rc: %d, opc: %#x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 		rpc_priv->crp_state = RPC_STATE_INITED;
 		crt_context_req_untrack(&rpc_priv->crp_pub);
 		/* for error case here */
 		crt_rpc_complete(rpc_priv, rc);
-		crt_req_decref(&rpc_priv->crp_pub);
+		RPC_DECREF(rpc_priv);
 	}
 }
 

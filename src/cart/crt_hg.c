@@ -935,9 +935,7 @@ decref:
 	/* if ABT enabled and the ULT created successfully, the crt_handle_rpc
 	 * will decref it. */
 	if (rc != 0 || crt_ctx->cc_pool == NULL) {
-		rc = crt_req_decref(rpc_pub);
-		if (rc != 0)
-			D_ERROR("crt_req_decref failed, rc: %d.\n", rc);
+		RPC_DECREF(rpc_priv);
 	}
 out:
 	return hg_ret;
@@ -1020,7 +1018,7 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 			struct crt_context	*ctx;
 			struct crt_hg_context	*hg_ctx;
 
-			ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
+			ctx = rpc_priv->crp_pub.cr_ctx;
 			hg_ctx = &ctx->cc_hg_ctx;
 			rc = crt_hg_pool_put(hg_ctx, rpc_priv);
 			if (rc == 0) {
@@ -1126,9 +1124,7 @@ out:
 	crt_context_req_untrack(rpc_pub);
 
 	/* corresponding to the refcount taken in crt_rpc_priv_init(). */
-	rc = crt_req_decref(rpc_pub);
-	if (rc != 0)
-		D_ERROR("crt_req_decref failed, rc: %d, opc: %#x.\n", rc, opc);
+	RPC_DECREF(rpc_priv);
 
 	return hg_ret;
 }
@@ -1183,7 +1179,6 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 	struct crt_rpc_priv	*rpc_priv = hg_cbinfo->arg;
 	hg_return_t		hg_ret;
 	crt_opcode_t		opc;
-	int			rc;
 
 	D_ASSERT(rpc_priv != NULL);
 
@@ -1196,9 +1191,7 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 		D_WARN("hg_cbinfo->ret: %d, opc: %#x.\n", hg_ret, opc);
 
 	/* corresponding to the crt_req_addref in crt_hg_reply_send */
-	rc = crt_req_decref(&rpc_priv->crp_pub);
-	if (rc != 0)
-		D_ERROR("crt_req_decref failed, rc: %d, opc: %#x.\n", rc, opc);
+	RPC_DECREF(rpc_priv);
 
 	return hg_ret;
 }
@@ -1211,24 +1204,17 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL);
 
-	rc = crt_req_addref(&rpc_priv->crp_pub);
-	if (rc != 0) {
-		D_ERROR("crt_req_addref(rpc_priv: %p) failed, rc: %d.\n",
-			rpc_priv, rc);
-		D_GOTO(out, rc);
-	}
+	RPC_ADDREF(rpc_priv);
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Respond failed, hg_ret: %d, opc: %#x.\n",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
 		/* should success as addref above */
-		rc = crt_req_decref(&rpc_priv->crp_pub);
-		D_ASSERT(rc == 0);
+		RPC_DECREF(rpc_priv);
 		rc = (hg_ret == HG_PROTOCOL_ERROR) ? -DER_PROTO : -DER_HG;
 	}
 
-out:
 	return rc;
 }
 

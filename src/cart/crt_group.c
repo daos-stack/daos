@@ -760,8 +760,7 @@ gc_add_child_rpc(struct crt_grp_priv *grp_priv, crt_rpc_t *gc_rpc)
 	D_INIT_LIST_HEAD(&gc_req_item->gc_link);
 	gc_req_item->gc_rpc = gc_rpc;
 
-	rc = crt_req_addref(gc_rpc);
-	D_ASSERT(rc == 0);
+	crt_req_addref(gc_rpc);
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
 	d_list_add_tail(&gc_req_item->gc_link, &grp_priv->gp_child_rpcs);

@@ -714,6 +714,29 @@ out:
 	return rc;
 }
 
+/* Called from a decref() call when the count drops to zero */
+void
+crt_req_destroy(struct crt_rpc_priv *rpc_priv)
+{
+	int rc;
+
+	if (rpc_priv->crp_reply_pending == 1) {
+		D_WARN("no reply sent for rpc_priv %p (opc: %#x).\n",
+		       rpc_priv, rpc_priv->crp_pub.cr_opc);
+		/* We have executed the user RPC handler, but the user
+		 * handler forgot to call crt_reply_send(). We send a
+		 * CART level error message to notify the client
+		 */
+		crt_hg_reply_error_send(rpc_priv, -DER_NOREPLY);
+	}
+
+	rc = crt_hg_req_destroy(rpc_priv);
+	if (rc != 0)
+		D_ERROR("crt_hg_req_destroy failed, rc: %d, "
+			"rpc_priv %p(opc: %#x).\n",
+			rc, rpc_priv, rpc_priv->crp_pub.cr_opc);
+}
+
 int
 crt_req_addref(crt_rpc_t *req)
 {
@@ -726,11 +749,7 @@ crt_req_addref(crt_rpc_t *req)
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
-	pthread_spin_lock(&rpc_priv->crp_lock);
-	rpc_priv->crp_refcount++;
-	D_DEBUG("rpc_priv %p (opc: %#x), addref to %d.\n",
-		rpc_priv, req->cr_opc, rpc_priv->crp_refcount);
-	pthread_spin_unlock(&rpc_priv->crp_lock);
+	RPC_ADDREF(rpc_priv);
 
 out:
 	return rc;
@@ -740,7 +759,7 @@ int
 crt_req_decref(crt_rpc_t *req)
 {
 	struct crt_rpc_priv	*rpc_priv;
-	int			rc = 0, destroy = 0;
+	int			rc = 0;
 
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
@@ -748,31 +767,7 @@ crt_req_decref(crt_rpc_t *req)
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
-	pthread_spin_lock(&rpc_priv->crp_lock);
-	rpc_priv->crp_refcount--;
-	if (rpc_priv->crp_refcount == 0)
-		destroy = 1;
-	D_DEBUG("rpc_priv %p (opc: %#x), decref to %d.\n",
-		rpc_priv, req->cr_opc, rpc_priv->crp_refcount);
-	pthread_spin_unlock(&rpc_priv->crp_lock);
-
-	if (destroy == 1) {
-		if (rpc_priv->crp_reply_pending == 1) {
-			D_WARN("no reply sent for rpc_priv %p (opc: %#x).\n",
-			       rpc_priv, req->cr_opc);
-			/* We have executed the user RPC handler, but the user
-			 * handler forgot to call crt_reply_send(). We send a
-			 * CART level error message to notify the client
-			 */
-			crt_hg_reply_error_send(rpc_priv, -DER_NOREPLY);
-		}
-
-		rc = crt_hg_req_destroy(rpc_priv);
-		if (rc != 0)
-			D_ERROR("crt_hg_req_destroy failed, rc: %d, "
-				"rpc_priv %p(opc: %#x).\n",
-				rc, rpc_priv, req->cr_opc);
-	}
+	RPC_DECREF(rpc_priv);
 
 out:
 	return rc;
@@ -820,10 +815,10 @@ out:
 	if (rc != 0) {
 		crt_context_req_untrack(&rpc_priv->crp_pub);
 		crt_rpc_complete(rpc_priv, rc);
-		crt_req_decref(&rpc_priv->crp_pub); /* destroy */
+		RPC_DECREF(rpc_priv); /* destroy */
 	}
 	/* addref in crt_req_hg_addr_lookup */
-	crt_req_decref(&rpc_priv->crp_pub);
+	RPC_DECREF(rpc_priv);
 	return rc;
 }
 
@@ -910,14 +905,14 @@ out:
 	if (rc != 0) {
 		crt_context_req_untrack(&rpc_priv->crp_pub);
 		crt_rpc_complete(rpc_priv, rc);
-		crt_req_decref(&rpc_priv->crp_pub); /* destroy */
+		RPC_DECREF(rpc_priv); /* destroy */
 	}
 
 	/* addref in crt_req_uri_lookup_psr */
 	crt_req_decref(rpc_priv->crp_ul_req);
 	rpc_priv->crp_ul_req = NULL;
 	/* addref in crt_req_uri_lookup_psr */
-	crt_req_decref(&rpc_priv->crp_pub);
+	RPC_DECREF(rpc_priv);
 }
 
 /*
@@ -956,7 +951,7 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 	/* decref in crt_req_uri_lookup_psr_cb */
 	crt_req_addref(ul_req);
 	/* decref in crt_req_uri_lookup_psr_cb */
-	crt_req_addref(&rpc_priv->crp_pub);
+	RPC_ADDREF(rpc_priv);
 	rpc_priv->crp_ul_req = ul_req;
 	ul_in = crt_req_get(ul_req);
 	ul_out = crt_reply_get(ul_req);
@@ -970,7 +965,7 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 			ul_in->ul_grp_id, ul_in->ul_rank, psr_ep.ep_rank,
 			rc, rpc_priv->crp_pub.cr_opc);
 		crt_req_decref(ul_req); /* rollback addref above */
-		crt_req_decref(&rpc_priv->crp_pub); /* rollback addref above */
+		RPC_DECREF(rpc_priv); /* rollback addref above */
 	}
 
 out:
@@ -1134,14 +1129,14 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 
 	crt_ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
 	/* decref at crt_req_hg_addr_lookup_cb */
-	crt_req_addref(&rpc_priv->crp_pub);
+	RPC_ADDREF(rpc_priv);
 	rc = crt_hg_addr_lookup(&crt_ctx->cc_hg_ctx, rpc_priv->crp_tgt_uri,
 				crt_req_hg_addr_lookup_cb, rpc_priv);
 	if (rc != 0) {
 		D_ERROR("crt_addr_lookup() failed, rc %d, opc: %#x..\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 		/* rollback above addref */
-		crt_req_decref(&rpc_priv->crp_pub);
+		RPC_DECREF(rpc_priv);
 	}
 	return rc;
 }
@@ -1333,7 +1328,7 @@ out:
 			if (complete_cb != NULL)
 				rc = 0;
 		}
-		crt_req_decref(req);
+		RPC_DECREF(rpc_priv);
 	}
 	return rc;
 }
@@ -1561,7 +1556,7 @@ crt_handle_rpc(void *arg)
 	 * path of crt_req_send -> crt_corpc_req_hdlr -> crt_rpc_common_hdlr.
 	 */
 	if (rpc_priv->crp_srv)
-		crt_req_decref(rpc_pub);
+		RPC_DECREF(rpc_priv);
 }
 
 int

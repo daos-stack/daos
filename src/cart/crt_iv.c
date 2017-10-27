@@ -331,8 +331,7 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 		}
 
 		/* addref done in crt_hdlr_iv_fetch */
-		rc = crt_req_decref(rpc);
-		D_ASSERT(rc == 0);
+		crt_req_decref(rpc);
 	} else {
 		iv_info->ifc_comp_cb(iv_info->ifc_ivns_internal,
 					iv_info->ifc_class_id,
@@ -791,9 +790,7 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	if (rc != 0)
 		D_ERROR("crt_bulk_free() failed; rc = %d\n", rc);
 
-	rc = crt_req_decref(rpc);
-	if (rc != 0)
-		D_ERROR("crt_req_decref() failed; rc = %d\n", rc);
+	crt_req_decref(rpc);
 
 	D_FREE_PTR(cb_info);
 
@@ -835,8 +832,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 		size += iv_value->sg_iovs[i].iov_buf_len;
 
 	/* crt_req_decref done in crt_ivf_bulk_transfer_done_cb */
-	rc = crt_req_addref(rpc);
-	D_ASSERT(rc == 0);
+	crt_req_addref(rpc);
 
 	memset(&bulk_desc, 0x0, sizeof(struct crt_bulk_desc));
 
@@ -870,8 +866,7 @@ cleanup:
 		rc = crt_reply_send(rpc);
 		D_ASSERT(rc == 0);
 
-		rc = crt_req_decref(rpc);
-		D_ASSERT(rc == 0);
+		crt_req_decref(rpc);
 
 		crt_bulk_free(bulk_hdl);
 		D_FREE(cb_info);
@@ -1182,11 +1177,10 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 			D_GOTO(send_error, rc = -DER_NOMEM);
 
 		cb_info->ifc_child_rpc = rpc_req;
-		cb_info->ifc_child_bulk = input->ifi_value_bulk,
+		cb_info->ifc_child_bulk = input->ifi_value_bulk;
 
 		/* crt_req_decref done in crt_ivf_finalize */
-		rc = crt_req_addref(rpc_req);
-		D_ASSERT(rc == 0);
+		crt_req_addref(rpc_req);
 
 		cb_info->ifc_iv_value = iv_value;
 		cb_info->ifc_iv_key = input->ifi_key;
@@ -1795,8 +1789,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		rc = crt_reply_send(iv_info->uci_child_rpc);
 		D_ASSERT(rc == 0);
 
-		rc = crt_req_decref(iv_info->uci_child_rpc);
-		D_ASSERT(rc == 0);
+		crt_req_decref(iv_info->uci_child_rpc);
 	} else {
 		d_sg_list_t *tmp_iv_value;
 		void *priv;
