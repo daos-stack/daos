@@ -208,8 +208,9 @@ server_init()
 
 	crt_group_rank(NULL, &rank);
 	crt_group_size(NULL, &size);
-	D__PRINT("DAOS server (v%s) started on rank %u (out of %u) with %u "
-		"xstream(s)\n", DAOS_VERSION, rank, size, dss_nxstreams);
+	D__PRINT("DAOS server (v%s) process %u started on rank %u (out of %u) "
+		"with %u xstream(s)\n", DAOS_VERSION, getpid(), rank, size,
+		dss_nxstreams);
 
 	return 0;
 exit_srv_init:
