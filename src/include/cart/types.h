@@ -207,6 +207,22 @@ DEFINE_CRT_REQ_FMT_ARRAY((name), (crt_in),				\
 	cmf_proc :	(crt_proc_cb_t)(proc)				\
 }
 
+#define DEFINE_CRT_PROTO_FMT(name, ver, crf_array)		\
+	{						\
+		.cpf_name = (name),			\
+		.cpf_ver = (ver),			\
+		.cpf_crf = (crf_array)			\
+	}
+
+struct crt_proto_format {
+	const char		*cpf_name;
+	int			 ver;
+	/* number of RPCs in this protocol, i.e. size of cpf_crf */
+	int			 count;
+	/* array of req formats for member RPCs */
+	struct crt_req_format	*cpf_crf[];
+};
+
 /* Common request format type */
 extern struct crt_msg_field CMF_UUID;
 extern struct crt_msg_field CMF_GRP_ID;

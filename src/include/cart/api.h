@@ -1136,6 +1136,110 @@ int
 crt_lm_attach(crt_group_t *tgt_grp, crt_lm_attach_cb_t completion_cb,
 	      void *arg);
 
+/**
+ * A protocol is a set of RPCs. A protocol has a base opcode and a version,
+ * member RPCs have opcodes that are contiguous numbers starting from
+ * (base opcode | version) + 1. For example, if the protocol has
+ *
+ * base opcode:    0x00005000
+ * version number: 0x00000300,
+ *
+ * its member RPCs will have opcode
+ *                 0x00005301
+ *                 0x00005302
+ *                 0x00005303 and so on
+ *
+ * base opcode mask    0x0000F000UL
+ * version number mask 0x00000F00UL
+ * This gives 16 protocols, 16 versions for each protocol
+ *
+ * Mode of operation:
+ *
+ * The client and server have knowledge of all possibly supported protocols.
+ * The protocol negotiation is just to let a client find out which ones are
+ * actually registered on the server.
+ *
+ * 1) A server registers a protocol with base opcode MY_BASE_OPC and version
+ * number MY_VER, with member RPC opcodes
+ *		MY_OPC_1 = (MY_BASE_OPC | MY_VER) + 1,
+ *		MY_OPC_2 = (MY_BASE_OPC | MY_VER) + 2,
+ *		MY_OPC_3 = (MY_BASE_OPC | MY_VER) + 3,
+ * 2) A client queries the server if MY_BASE_OPC with version number is
+ *    registered, the server replies Yes.
+ *
+ * 3) The client registers MY_BASE_OPC with version number MY_VER, then starts
+ *    sending RPCs using it's member opcodes.
+ */
+
+
+/**
+ * 1) define crf for each member RPC. my_rpc_crf_1, my_rpc_crf_2
+ *
+ * 2) req_format array for member RPCs:
+ * struct crt_req_format *my_crf_array[] = {
+ *		&my_crf_1,
+ *		&my_crf_2,
+ *    };
+ *
+ * rpc handler array for member RPCs, one handler for each RPC:
+ *	crt_rpc_cb_t hdlr[] = {
+ *		my_hdlr_1,
+ *		my_hdlr_2,
+ *	};
+ *
+ * 3) define crt_proto_format.
+ * struct crt_proto_format my_proto_fmt =
+ *	DEFINE_CRT_PROTO_FMT("my-proto", ver, my_crf_array);
+ *
+ * which expands to:
+ * {
+ *	.cpf_name = "my-proto";
+ *	.cpf_ver = ver;
+ *	.cpf_crf = {
+ *		&my_crf_1,
+ *		&my_crf_2,
+ *	 };
+ *	 .cpf_hdlr = {
+ *		my_hdlr_1,
+ *		my_hdlr_2,
+ *	 };
+ * }
+ *
+ */
+
+/**
+ * Register a protocol. Can be called on a server or a client. This
+ * function calls crt_rpc_register() to register each member RPC.
+ *
+ * \param base_opc [IN]		protocol base opcode
+ * \param cpf [IN]		array of crt_proto_formats. Each
+ *				crt_proto_format specifies a version
+ *
+ * \return			DER_SUCCESS on success, negative value
+ *				on failure.
+ */
+int
+crt_proto_register(crt_opcode_t base_opc, struct crt_proto_format *cpf);
+
+/**
+ * query tgt_ep if it has registered base_opc with version
+ *
+ * \param tgt_ep [IN]		the service rank to query
+ * \param base_opc [IN]		the base opcode for the protocol
+ * \param ver [IN]		array of protocol version
+ * \param count [IN]		number of elements in ver
+ * \param high_ver [OUT]	the highest protocol version supported by the
+ *				target
+ *
+ * \return			DER_SUCCESS on success, negative value
+ *				on failure.
+ */
+int
+crt_proto_registered(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, int *ver,
+		     int count, int *high_ver);
+
+
+
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_crt_rank_t		crt_proc_uint32_t
 #define crt_proc_int			crt_proc_int32_t

@@ -91,4 +91,8 @@ crt_bulk_desc_dup(struct crt_bulk_desc *bulk_desc_new,
 	*bulk_desc_new = *bulk_desc;
 }
 
+/* local operation, query if base_opc with version number ver is registered. */
+int
+crt_proto_registered_local(crt_opcode_t base_opc, int ver);
+
 #endif /* __CRT_INTERNAL_FNS_H__ */
