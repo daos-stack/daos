@@ -909,7 +909,7 @@ out:
 	}
 
 	/* addref in crt_req_uri_lookup_psr */
-	crt_req_decref(rpc_priv->crp_ul_req);
+	RPC_PUB_DECREF(rpc_priv->crp_ul_req);
 	rpc_priv->crp_ul_req = NULL;
 	/* addref in crt_req_uri_lookup_psr */
 	RPC_DECREF(rpc_priv);
@@ -949,7 +949,7 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 		D_GOTO(out, rc);
 	}
 	/* decref in crt_req_uri_lookup_psr_cb */
-	crt_req_addref(ul_req);
+	RPC_PUB_ADDREF(ul_req);
 	/* decref in crt_req_uri_lookup_psr_cb */
 	RPC_ADDREF(rpc_priv);
 	rpc_priv->crp_ul_req = ul_req;
@@ -964,7 +964,7 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 			"request send failed, rc: %d opc: %#x.\n",
 			ul_in->ul_grp_id, ul_in->ul_rank, psr_ep.ep_rank,
 			rc, rpc_priv->crp_pub.cr_opc);
-		crt_req_decref(ul_req); /* rollback addref above */
+		RPC_PUB_DECREF(ul_req); /* rollback addref above */
 		RPC_DECREF(rpc_priv); /* rollback addref above */
 	}
 

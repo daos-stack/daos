@@ -760,7 +760,7 @@ gc_add_child_rpc(struct crt_grp_priv *grp_priv, crt_rpc_t *gc_rpc)
 	D_INIT_LIST_HEAD(&gc_req_item->gc_link);
 	gc_req_item->gc_rpc = gc_rpc;
 
-	crt_req_addref(gc_rpc);
+	RPC_PUB_ADDREF(gc_rpc);
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
 	d_list_add_tail(&gc_req_item->gc_link, &grp_priv->gp_child_rpcs);
@@ -774,7 +774,6 @@ static inline void
 gc_del_child_rpc(struct crt_grp_priv *grp_priv, crt_rpc_t *gc_rpc)
 {
 	struct gc_req	*gc, *gc_next;
-	int		rc = 0;
 
 	D_ASSERT(grp_priv != NULL);
 	D_ASSERT(gc_rpc != NULL);
@@ -786,8 +785,7 @@ gc_del_child_rpc(struct crt_grp_priv *grp_priv, crt_rpc_t *gc_rpc)
 			d_list_del_init(&gc->gc_link);
 			/* decref corresponds to the addref in
 			 * gc_add_child_rpc */
-			rc = crt_req_decref(gc_rpc);
-			D_ASSERT(rc == 0);
+			RPC_PUB_DECREF(gc_rpc);
 			D_FREE_PTR(gc);
 			break;
 		}

@@ -184,7 +184,7 @@ crt_hdlr_barrier_enter(crt_rpc_t *rpc_req)
 		/* Local node hasn't arrived yet */
 		ab->b_enter_rpc = rpc_req;
 		/* decref in crt_barrier */
-		crt_req_addref(rpc_req);
+		RPC_PUB_ADDREF(rpc_req);
 		pthread_mutex_unlock(&barrier_info->bi_lock);
 		return;
 	}
@@ -595,7 +595,7 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg)
 		crt_reply_send(rpc_req);
 
 		/* addref in crt_hdlr_barrier_enter_cb */
-		crt_req_decref(rpc_req);
+		RPC_PUB_DECREF(rpc_req);
 	}
 
 	if (barrier_info->bi_master_pri_rank == grp_priv->gp_self)

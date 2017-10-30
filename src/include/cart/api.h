@@ -1127,7 +1127,7 @@ crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand);
  * \param tgt_grp [IN]		the remote group
  * \param completion_cb [IN]	callback which will be called when
  *				crt_lm_attach completes.
- * \param arg [IN]		user data pointer which is availabe in
+ * \param arg [IN]		user data pointer which is available in
  *				completion_cb. See the definition of
  *				struct crt_lm_attach_cb_info.
  *

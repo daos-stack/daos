@@ -335,6 +335,20 @@ struct crt_internal_rpc {
 			crt_req_destroy(RPC);				\
 	} while (0)
 
+#define RPC_PUB_ADDREF(RPC) do {					\
+		struct crt_rpc_priv *_rpc_priv;				\
+		D_ASSERT((RPC) != NULL);				\
+		_rpc_priv = container_of((RPC), struct crt_rpc_priv, crp_pub); \
+		RPC_ADDREF(_rpc_priv);					\
+	} while (0)
+
+#define RPC_PUB_DECREF(RPC) do {					\
+		struct crt_rpc_priv *_rpc_priv;				\
+		D_ASSERT((RPC) != NULL);				\
+		_rpc_priv = container_of((RPC), struct crt_rpc_priv, crp_pub); \
+		RPC_DECREF(_rpc_priv);					\
+	} while (0)
+
 void crt_req_destroy(struct crt_rpc_priv *rpc_priv);
 
 static inline void
