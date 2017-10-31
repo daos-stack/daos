@@ -716,7 +716,7 @@ out:
 	return rc;
 }
 
-static inline void
+void
 crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 {
 	if (grp_priv == NULL)

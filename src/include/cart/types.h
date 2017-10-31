@@ -120,17 +120,9 @@ typedef void *crt_bulk_t; /* abstract bulk handle */
 #define CRT_MAX_INPUT_SIZE	(0x4000000)
 #define CRT_MAX_OUTPUT_SIZE	(0x4000000)
 
-#define CRT_RPC_FLAGS_PUB_BITS	(2)
-#define CRT_RPC_FLAGS_PUB_MASK	((1U << CRT_RPC_FLAGS_PUB_BITS) - 1)
 enum crt_rpc_flags {
-	/*
-	 * ignore timedout. Default behavior (no this flags) is resending
-	 * request when timeout.
-	 */
-	CRT_RPC_FLAG_IGNORE_TIMEOUT	= (1U << 0),
-	/* destroy group when the bcast RPC finishes, only valid for corpc */
-	CRT_RPC_FLAG_GRP_DESTROY	= (1U << 1),
-	/* All other bits, are reserved for internal usage. */
+	/* destroy subgroup when the bcast RPC finishes, only valid for corpc */
+	CRT_RPC_FLAG_GRP_DESTROY	= (1U << 0),
 };
 
 struct crt_rpc;
@@ -140,8 +132,6 @@ typedef struct crt_rpc {
 	crt_context_t		cr_ctx; /* CRT context of the RPC */
 	crt_endpoint_t		cr_ep; /* endpoint ID */
 	crt_opcode_t		cr_opc; /* opcode of the RPC */
-	/* user passed in flags, \see enum crt_rpc_flags */
-	enum crt_rpc_flags	cr_flags;
 	crt_rpc_input_t		cr_input; /* input parameter struct */
 	crt_rpc_output_t	cr_output; /* output parameter struct */
 	size_t			cr_input_size; /* size of input struct */

@@ -640,8 +640,8 @@ crt_group_lookup(crt_group_id_t grp_id);
 
 /*
  * Destroy a CRT group. Can either call this function or pass a special flag -
- * CRT_RPC_FLAG_GRP_DESTROY to a broadcast RPC to destroy the group. Can only be
- * called on the server side.
+ * CRT_RPC_FLAG_GRP_DESTROY to a broadcast RPC to destroy the subgroup. Can only
+ * be called on the server side.
  *
  * \param grp [IN]		group handle to be destroyed.
  * \param grp_destroy_cb [IN]	optional completion callback.
@@ -734,8 +734,8 @@ crt_group_detach(crt_group_t *attached_grp);
  *				will be passed to crt_corpc_ops::co_aggregate as
  *				2nd parameter.
  * \param flags [IN]		collective RPC flags for example taking
- *				CRT_RPC_FLAG_GRP_DESTROY to destroy the group
- *				when this bcast RPC finished.
+ *				CRT_RPC_FLAG_GRP_DESTROY to destroy the subgroup
+ *				when this bcast RPC successfully finished.
  * \param tree_topo[IN]		tree topology for the collective propagation,
  *				can be calculated by crt_tree_topo().
  *				/see enum crt_tree_type, /see crt_tree_topo().

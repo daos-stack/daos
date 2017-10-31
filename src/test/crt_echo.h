@@ -70,6 +70,7 @@ struct gecho {
 	bool		server;
 	bool		multi_tier_test;
 	bool		singleton_test;
+	bool		grp_destroy_piggyback;
 	sem_t		token_to_proceed;
 };
 
@@ -169,7 +170,7 @@ parse_options(int argc, char *argv[])
 	int rc;
 
 	for (;;) {
-		ch = getopt(argc, argv, "mp:s");
+		ch = getopt(argc, argv, "mp:sg");
 		if (ch == -1)
 			break;
 		switch (ch) {
@@ -186,12 +187,17 @@ parse_options(int argc, char *argv[])
 		case 's':
 			gecho.singleton_test = true;
 			break;
+		case 'g':
+			gecho.grp_destroy_piggyback = true;
+			break;
 		default:
 			printf("Usage: %s [OPTIONS]\n", argv[0]);
 			printf("OPTIONS:\n");
 			printf("	-m		multi tier test\n");
 			printf("	-p <dir>	path to attach file\n");
 			printf("	-s		singleton attach\n");
+			printf("	-g		piggyback grp "
+			       "destroy\n");
 			exit(-1);
 		}
 	}

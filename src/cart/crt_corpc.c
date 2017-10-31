@@ -85,10 +85,10 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	co_hdr = &rpc_priv->crp_coreq_hdr;
 	if (init_hdr) {
 		rpc_priv->crp_flags |= CRT_RPC_FLAG_COLL;
-		if (flags & CRT_RPC_FLAG_GRP_DESTROY)
-			rpc_priv->crp_flags |= CRT_RPC_FLAG_GRP_DESTROY;
 		if (co_info->co_grp_priv->gp_primary)
 			rpc_priv->crp_flags |= CRT_RPC_FLAG_PRIMARY_GRP;
+		else if (flags & CRT_RPC_FLAG_GRP_DESTROY)
+			rpc_priv->crp_flags |= CRT_RPC_FLAG_GRP_DESTROY;
 
 		co_hdr->coh_int_grpid = grp_priv->gp_int_grpid;
 		co_hdr->coh_excluded_ranks = co_info->co_excluded_ranks;
@@ -496,8 +496,55 @@ crt_corpc_fail_parent_rpc(struct crt_rpc_priv *parent_rpc_priv, int failed_rc)
 	crt_group_rank(NULL, &myrank);
 
 	parent_rpc_priv->crp_reply_hdr.cch_rc = failed_rc;
+	parent_rpc_priv->crp_corpc_info->co_rc = failed_rc;
 	D_ERROR("myrank %d, set parent rpc (opc %#x) as failed, rc: %d.\n",
 		myrank, parent_rpc_priv->crp_pub.cr_opc, failed_rc);
+}
+
+static inline void
+crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
+{
+	struct crt_corpc_info	*co_info;
+	d_rank_t		 myrank;
+	bool			 am_root;
+	int			 rc;
+
+	co_info = rpc_priv->crp_corpc_info;
+	D_ASSERT(co_info != NULL);
+
+	myrank = co_info->co_grp_priv->gp_self;
+	am_root = (myrank == co_info->co_root);
+	if (am_root) {
+		crt_rpc_complete(rpc_priv, co_info->co_rc);
+		RPC_DECREF(rpc_priv); /* destroy */
+	} else {
+		if (co_info->co_rc != 0)
+			crt_corpc_fail_parent_rpc(rpc_priv, co_info->co_rc);
+		rc = crt_hg_reply_send(rpc_priv);
+		if (rc != 0)
+			D_ERROR("crt_hg_reply_send failed, rc: %d,opc: %#x.\n",
+				rc, rpc_priv->crp_pub.cr_opc);
+		/*
+		 * on root node, don't need to free chained bulk handle as it is
+		 * created and passed in by user.
+		 */
+		rc = crt_corpc_free_chained_bulk(
+			rpc_priv->crp_coreq_hdr.coh_bulk_hdl);
+		if (rc != 0)
+			D_ERROR("crt_corpc_free_chainded_bulk failed, rc: %d, "
+				"opc: %#x.\n", rc, rpc_priv->crp_pub.cr_opc);
+		/*
+		 * reset it to NULL to avoid crt_proc_corpc_hdr->
+		 * crt_proc_crt_bulk_t free the bulk handle again.
+		 */
+		rpc_priv->crp_coreq_hdr.coh_bulk_hdl = NULL;
+	}
+	if (co_info->co_rc == 0 && co_info->co_root_excluded == 0 &&
+	    (rpc_priv->crp_flags & CRT_RPC_FLAG_GRP_DESTROY))
+		crt_grp_priv_destroy(co_info->co_grp_priv);
+
+	/* correspond to addref in crt_corpc_req_hdlr */
+	RPC_DECREF(rpc_priv);
 }
 
 static inline void
@@ -532,7 +579,7 @@ crt_corpc_fail_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 	pthread_spin_unlock(&parent_rpc_priv->crp_lock);
 
 	if (req_done == true)
-		crt_rpc_complete(parent_rpc_priv, co_info->co_rc);
+		crt_corpc_complete(parent_rpc_priv);
 }
 
 void
@@ -544,9 +591,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 	crt_rpc_t		*child_req;
 	struct crt_opc_info	*opc_info;
 	struct crt_corpc_ops	*co_ops;
-	d_rank_t		 myrank;
 	bool			 req_done = false;
-	bool			 am_root = false;
 	uint32_t		 wait_num, done_num;
 	int			 rc = 0;
 
@@ -588,7 +633,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 		if (parent_rpc_priv != child_rpc_priv)
 			corpc_del_child_rpc_locked(parent_rpc_priv,
 						   child_rpc_priv);
-		goto bypass_aggregate;
+		goto aggregate_done;
 	}
 
 	if (parent_rpc_priv == child_rpc_priv) {
@@ -660,7 +705,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 			parent_rpc_priv, child_rpc_priv);
 	}
 
-bypass_aggregate:
+aggregate_done:
 	done_num = co_info->co_child_ack_num + co_info->co_child_failed_num;
 	D_ASSERT(wait_num >= done_num);
 	if (wait_num == done_num)
@@ -668,43 +713,9 @@ bypass_aggregate:
 
 	pthread_spin_unlock(&parent_rpc_priv->crp_lock);
 
-	if (req_done == false)
-		D_GOTO(out, rc);
+	if (req_done)
+		crt_corpc_complete(parent_rpc_priv);
 
-	/* corpc handling finished on this node */
-	myrank = co_info->co_grp_priv->gp_self;
-	am_root = (myrank == co_info->co_root);
-	if (am_root) {
-		crt_rpc_complete(parent_rpc_priv, co_info->co_rc);
-		RPC_DECREF(parent_rpc_priv); /* destroy */
-	} else {
-		if (co_info->co_rc != 0)
-			crt_corpc_fail_parent_rpc(parent_rpc_priv,
-						  co_info->co_rc);
-		rc = crt_hg_reply_send(parent_rpc_priv);
-		if (rc != 0)
-			D_ERROR("crt_hg_reply_send failed, rc: %d,opc: %#x.\n",
-				rc, parent_rpc_priv->crp_pub.cr_opc);
-		/*
-		 * on root node, don't need to free chained bulk handle as it is
-		 * created and passed in by user.
-		 */
-		rc = crt_corpc_free_chained_bulk(
-			parent_rpc_priv->crp_coreq_hdr.coh_bulk_hdl);
-		if (rc != 0)
-			D_ERROR("crt_corpc_free_chainded_bulk failed, rc: %d, "
-				"opc: %#x.\n", rc,
-				parent_rpc_priv->crp_pub.cr_opc);
-		/*
-		 * reset it to NULL to avoid crt_proc_corpc_hdr->
-		 * crt_proc_crt_bulk_t free the bulk handle again.
-		 */
-		parent_rpc_priv->crp_coreq_hdr.coh_bulk_hdl = NULL;
-	}
-	/* correspond to addref in crt_corpc_req_hdlr */
-	RPC_DECREF(parent_rpc_priv);
-
-out:
 	return;
 }
 
@@ -715,8 +726,6 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 	d_rank_list_t		*children_rank_list = NULL;
 	d_rank_t		 grp_rank;
 	struct crt_rpc_priv	*rpc_priv, *child_rpc_priv;
-	bool			 child_req_sent = false;
-	bool			 get_children_failed = false, am_root;
 	int			 i, rc = 0;
 
 	D_ASSERT(req != NULL);
@@ -725,9 +734,8 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 	D_ASSERT(co_info != NULL);
 
 	grp_rank = co_info->co_grp_priv->gp_self;
-	am_root = (grp_rank == co_info->co_root);
 
-	/* corresponds to decref in crt_corpc_reply_hdlr */
+	/* corresponds to decref in crt_corpc_complete */
 	RPC_ADDREF(rpc_priv);
 
 	rc = crt_tree_get_children(co_info->co_grp_priv, co_info->co_grp_ver,
@@ -740,8 +748,9 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 			"rc: %d.\n", co_info->co_grp_priv->gp_pub.cg_grpid,
 			req->cr_opc, rc);
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
-		get_children_failed = true;
-		D_GOTO(forward_failed, rc);
+		if (co_info->co_root_excluded)
+			crt_corpc_complete(rpc_priv);
+		D_GOTO(forward_done, rc);
 	}
 
 	co_info->co_child_num = (children_rank_list == NULL) ? 0 :
@@ -766,7 +775,7 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 				"rc: %d.\n", req->cr_opc, tgt_ep.ep_rank, rc);
 			crt_corpc_fail_child_rpc(rpc_priv,
 				co_info->co_child_num - i, rc);
-			D_GOTO(forward_failed, rc);
+			D_GOTO(forward_done, rc);
 		}
 		D_ASSERT(child_rpc != NULL);
 		D_ASSERT(child_rpc->cr_output_size == req->cr_output_size);
@@ -791,29 +800,15 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 			if (i != (co_info->co_child_num - 1))
 				crt_corpc_fail_child_rpc(rpc_priv,
 					co_info->co_child_num - i - 1, rc);
-			D_GOTO(forward_failed, rc);
+			D_GOTO(forward_done, rc);
 		}
-		child_req_sent =  true;
 	}
 
-forward_failed:
-	if (am_root && (get_children_failed ||
-		(co_info->co_child_num > 0 && child_req_sent == false) ||
-		(co_info->co_child_num == 0 && co_info->co_root_excluded))) {
-		if (co_info->co_child_num == 0 && co_info->co_root_excluded) {
-			D_WARN("rpc: %#x, NOOP bcast (no child and "
-			       "root excluded.\n", req->cr_opc);
-			RPC_DECREF(rpc_priv); /* destroy */
-		} else {
-			D_ASSERT(rc != 0);
-			D_ERROR("rpc: %#x failed, rc: %d.\n", req->cr_opc, rc);
-		}
-		crt_rpc_complete(rpc_priv, rc);
-		/* roll back the add ref above */
-		RPC_DECREF(rpc_priv);
-		D_GOTO(out, rc);
-	}
+	/* NOOP bcast (no child and root excluded) */
+	if (co_info->co_child_num == 0 && co_info->co_root_excluded)
+		crt_corpc_complete(rpc_priv);
 
+forward_done:
 	/* invoke RPC handler on local node */
 	if (co_info->co_root_excluded == 0) {
 		rc = crt_rpc_common_hdlr(rpc_priv);
@@ -822,7 +817,6 @@ forward_failed:
 				"rc: %d.\n", req->cr_opc, rc);
 	}
 
-out:
 	if (children_rank_list != NULL)
 		d_rank_list_free(children_rank_list);
 

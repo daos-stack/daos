@@ -318,5 +318,6 @@ struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);
 int crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank,
 			      const char *uri);
 bool crt_rank_evicted(crt_group_t *grp, d_rank_t rank);
+void crt_grp_priv_destroy(struct crt_grp_priv *grp_priv);
 
 #endif /* __CRT_GROUP_H__ */

@@ -125,6 +125,7 @@ static int run_echo_srver(void)
 	if (mysize >= 8 && myrank == 4) {
 		crt_rpc_t				*corpc_req;
 		struct crt_echo_corpc_example_req	*corpc_in;
+		uint32_t				 flags;
 
 		rc = crt_group_create(grp_id, &grp_membs, 0, grp_create_cb,
 				      &myrank);
@@ -132,9 +133,11 @@ static int run_echo_srver(void)
 		/* make sure grp is populated */
 		echo_sem_timedwait(&gecho.token_to_proceed, 61, __LINE__);
 
+		flags = gecho.grp_destroy_piggyback ?
+			CRT_RPC_FLAG_GRP_DESTROY : 0;
 		rc = crt_corpc_req_create(gecho.crt_ctx, example_grp_hdl,
 					  &excluded_membs, ECHO_CORPC_EXAMPLE,
-					  NULL, NULL, 0,
+					  NULL, NULL, flags,
 					  crt_tree_topo(CRT_TREE_KNOMIAL, 4),
 					  &corpc_req);
 		D_ASSERT(rc == 0 && corpc_req != NULL);
@@ -147,9 +150,12 @@ static int run_echo_srver(void)
 		/* make sure corpc has been handled */
 		echo_sem_timedwait(&gecho.token_to_proceed, 61, __LINE__);
 
-		rc = crt_group_destroy(example_grp_hdl, grp_destroy_cb,
-				       &myrank);
-		printf("crt_group_destroy rc: %d, arg %p.\n", rc, &myrank);
+		if (!gecho.grp_destroy_piggyback) {
+			rc = crt_group_destroy(example_grp_hdl, grp_destroy_cb,
+					       &myrank);
+			printf("crt_group_destroy rc: %d, arg %p.\n",
+				rc, &myrank);
+		}
 	}
 
 	/* ==================================== */
