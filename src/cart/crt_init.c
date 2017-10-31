@@ -363,20 +363,21 @@ crt_finalize(void)
 		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
-	if (crt_gdata.cg_ctx_num > 0) {
-		D_ASSERT(!crt_context_empty(CRT_LOCKED));
-		D_ERROR("cannot finalize, current ctx_num(%d).\n",
-			crt_gdata.cg_ctx_num);
-		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
-		D_GOTO(out, rc = -DER_NO_PERM);
-	} else {
-		D_ASSERT(crt_context_empty(CRT_LOCKED));
-	}
-
 	crt_lm_finalize();
 
 	crt_gdata.cg_refcount--;
 	if (crt_gdata.cg_refcount == 0) {
+		if (crt_gdata.cg_ctx_num > 0) {
+			D_ASSERT(!crt_context_empty(CRT_LOCKED));
+			D_ERROR("cannot finalize, current ctx_num(%d).\n",
+				crt_gdata.cg_ctx_num);
+			crt_gdata.cg_refcount++;
+			pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+			D_GOTO(out, rc = -DER_NO_PERM);
+		} else {
+			D_ASSERT(crt_context_empty(CRT_LOCKED));
+		}
+
 		rc = crt_grp_fini();
 		if (rc != 0) {
 			D_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
