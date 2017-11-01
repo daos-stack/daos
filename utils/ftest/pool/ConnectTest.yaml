@@ -1,0 +1,10 @@
+tests:
+   setnames: !mux
+      validsetname:
+          setname:
+             - daos_server
+             - PASS
+      badsetname:
+          setname:
+             - complete_rubbish
+             - FAIL

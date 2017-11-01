@@ -1,0 +1,14 @@
+files:
+   hostfile: /mnt/shared/test/hostfile1
+   urifile: /mnt/shared/test/urifile
+tests:
+   modes:
+      modeall:
+          mode:
+             - 511
+             - PASS
+   setnames:
+      validsetname:
+          setname:
+             - daos_server
+             - PASS
