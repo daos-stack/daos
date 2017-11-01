@@ -173,10 +173,14 @@ struct dss_module {
 	uint64_t		  sm_facs;
 	/* key of local thread storage */
 	struct dss_module_key	*sm_key;
-	/* Setup function, invoked just after successful load */
+	/* Initialization function, invoked just after successful load */
 	int			(*sm_init)(void);
-	/* Teardown function, invoked just before module unload */
+	/* Finalization function, invoked just before module unload */
 	int			(*sm_fini)(void);
+	/* Setup function, invoked after starting progressing */
+	int			(*sm_setup)(void);
+	/* Cleanup function, invoked before stopping progressing */
+	int			(*sm_cleanup)(void);
 	/* Array of RPC definition for request sent by client nodes, last entry
 	 * of the array must be empty */
 	struct daos_rpc		 *sm_cl_rpcs;

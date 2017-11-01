@@ -1175,6 +1175,65 @@ ds_pool_svc_stop(const uuid_t uuid)
 	pool_svc_put(svc);
 }
 
+struct ult {
+	daos_list_t	u_entry;
+	ABT_thread	u_thread;
+};
+
+static int
+stop_one(daos_list_t *entry, void *arg)
+{
+	struct pool_svc	       *svc = pool_svc_obj(entry);
+	daos_list_t	       *list = arg;
+	struct ult	       *ult;
+	int			rc;
+
+	D__ALLOC_PTR(ult);
+	if (ult == NULL)
+		return -DER_NOMEM;
+
+	dhash_rec_addref(&pool_svc_hash, &svc->ps_entry);
+	rc = dss_ult_create(pool_svc_stopper, svc, 0, &ult->u_thread);
+	if (rc != 0) {
+		dhash_rec_decref(&pool_svc_hash, &svc->ps_entry);
+		D__FREE_PTR(ult);
+		return rc;
+	}
+
+	daos_list_add(&ult->u_entry, list);
+	return 0;
+}
+
+/*
+ * Note that this function is currently called from the main xstream to save
+ * one ULT creation.
+ */
+int
+ds_pool_svc_stop_all(void)
+{
+	daos_list_t	list = DAOS_LIST_HEAD_INIT(list);
+	struct ult     *ult;
+	struct ult     *ult_tmp;
+	int		rc;
+
+	/* Create a stopper ULT for each pool service. */
+	ABT_mutex_lock(pool_svc_hash_lock);
+	rc = dhash_table_traverse(&pool_svc_hash, stop_one, &list);
+	ABT_mutex_unlock(pool_svc_hash_lock);
+
+	/* Wait for the stopper ULTs to return. */
+	daos_list_for_each_entry_safe(ult, ult_tmp, &list, u_entry) {
+		daos_list_del_init(&ult->u_entry);
+		ABT_thread_join(ult->u_thread);
+		ABT_thread_free(&ult->u_thread);
+		D__FREE_PTR(ult);
+	}
+
+	if (rc != 0)
+		D__ERROR("failed to stop all pool services: %d\n", rc);
+	return rc;
+}
+
 static int
 bcast_create(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opcode,
 	     crt_rpc_t **rpc)

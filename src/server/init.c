@@ -193,6 +193,7 @@ server_init()
 	/* load modules */
 	rc = modules_load(&dss_mod_facs);
 	if (rc)
+		/* Some modules may have been loaded successfully. */
 		D__GOTO(exit_mod_loaded, rc);
 	D__INFO("Module %s successfully loaded\n", modules);
 
@@ -211,6 +212,11 @@ server_init()
 		D__INFO("Client stack enabled\n");
 	}
 
+	rc = dss_module_setup_all();
+	if (rc != 0)
+		D__GOTO(exit_daos_fini, rc);
+	D__INFO("Modules successfully set up\n");
+
 	crt_group_rank(NULL, &rank);
 	crt_group_size(NULL, &size);
 	D__PRINT("DAOS server (v%s) process %u started on rank %u (out of %u) "
@@ -218,6 +224,10 @@ server_init()
 		dss_nxstreams);
 
 	return 0;
+
+exit_daos_fini:
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+		daos_fini();
 exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
@@ -236,13 +246,15 @@ static void
 server_fini(bool force)
 {
 	D__INFO("Service is shutting down\n");
+	dss_module_cleanup_all();
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();
 	dss_srv_fini(force);
-	dss_module_fini(force);
+	dss_module_unload_all();
 	ds_iv_fini();
 	crt_finalize();
-	dss_module_unload_all();
+	dss_module_fini(force);
+	daos_debug_fini();
 }
 
 static void

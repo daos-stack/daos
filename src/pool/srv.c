@@ -69,11 +69,23 @@ err:
 static int
 fini(void)
 {
+	ds_pool_iv_fini();
 	ds_pool_hdl_hash_fini();
 	ds_pool_cache_fini();
 	ds_pool_svc_hash_fini();
-	ds_pool_iv_fini();
 	return 0;
+}
+
+static int
+setup(void)
+{
+	return 0;
+}
+
+static int
+cleanup(void)
+{
+	return ds_pool_svc_stop_all();
 }
 
 /* Note: the rpc input/output parameters is defined in daos_rpc */
@@ -166,6 +178,8 @@ struct dss_module pool_module =  {
 	.sm_ver		= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,
+	.sm_setup	= setup,
+	.sm_cleanup	= cleanup,
 	.sm_cl_rpcs	= pool_rpcs,
 	.sm_srv_rpcs	= pool_srv_rpcs,
 	.sm_handlers	= pool_handlers,

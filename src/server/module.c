@@ -229,6 +229,52 @@ dss_module_unload(const char *modname)
 }
 
 int
+dss_module_setup_all(void)
+{
+	struct loaded_mod      *mod;
+	int			rc = 0;
+
+	pthread_mutex_lock(&loaded_mod_list_lock);
+	daos_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
+		struct dss_module *m = mod->lm_dss_mod;
+
+		if (m->sm_setup == NULL)
+			continue;
+		rc = m->sm_setup();
+		if (rc != 0) {
+			D__ERROR("failed to set up module %s: %d\n", m->sm_name,
+				 rc);
+			break;
+		}
+	}
+	pthread_mutex_unlock(&loaded_mod_list_lock);
+	return rc;
+}
+
+int
+dss_module_cleanup_all(void)
+{
+	struct loaded_mod      *mod;
+	int			rc = 0;
+
+	pthread_mutex_lock(&loaded_mod_list_lock);
+	daos_list_for_each_entry_reverse(mod, &loaded_mod_list, lm_lk) {
+		struct dss_module *m = mod->lm_dss_mod;
+
+		if (m->sm_cleanup == NULL)
+			continue;
+		rc = m->sm_cleanup();
+		if (rc != 0) {
+			D__ERROR("failed to clean up module %s: %d\n",
+				 m->sm_name, rc);
+			break;
+		}
+	}
+	pthread_mutex_unlock(&loaded_mod_list_lock);
+	return rc;
+}
+
+int
 dss_module_init(void)
 {
 	return 0;

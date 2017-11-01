@@ -31,6 +31,8 @@ int dss_module_fini(bool force);
 int dss_module_load(const char *modname, uint64_t *mod_facs);
 int dss_module_unload(const char *modname);
 void dss_module_unload_all(void);
+int dss_module_setup_all(void);
+int dss_module_cleanup_all(void);
 
 /* srv.c */
 int dss_srv_init(int);
