@@ -30,11 +30,10 @@ extern "C" {
 #include <daos_types.h>
 
 /**
- * Create a pool with \a uuid and \a mode.
+ * Create a pool spanning \a tgts in \a grp. Upon successful completion, report
+ * back the pool UUID in \a uuid and the pool service rank(s) in \a svc, which
+ * are required by daos_pool_connect() to establish a pool connection.
  *
- * \a grp and \a tgts pass in the address of each target and the total
- * number of targets. The fault domains among the targets are retrieved
- * automatically from external sources.
  * Targets are assumed to share the same \a dev and \a size.
  *
  * \param mode	[IN]	Capabilities permitted for the pool. May contain these
@@ -55,14 +54,18 @@ extern "C" {
  *			If set to NULL, create the pool over all the ranks
  *			available in the service group.
  * \param dev	[IN]	String identifying the target devices to use
- * \param size	[IN]	Target sizes (i.e., maximum amounts of storage space
- *			targets can consume) in bytes. Passing 0 will use the
- *			minimal supported target size.
- * \param svc	[IN]	Must be pre-allocated by the caller. svc->rl_nr.num
- *			indicates how many pool service replicas shall be
- *			created.
- *		[OUT]	Return a list of ranks where the pool service was
- *			initialized
+ * \param size	[IN]	Target sizes in bytes (i.e., maximum amounts of storage
+ *			space targets can consume) in bytes. Passing 0 will use
+ *			the minimal supported target size.
+ * \param svc	[IN]	Number of desired pool service replicas. Callers must
+ *			speicfy svc->rl_nr.num and allocate a matching
+ *			svc->rl_ranks; svc->rl_nr.num_out and svc->rl_ranks
+ *			content are ignored.
+ *		[OUT]	List of actual pool service replicas. svc->rl_nr.num_out
+ *			is the number of actual pool service replicas, which
+ *			shall be equal to or smaller than the desired number.
+ *			The first svc->rl_nr.num_out elements of svc->rl_ranks
+ *			shall be the list of pool service ranks.
  * \param uuid	[OUT]	UUID of the pool created
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.

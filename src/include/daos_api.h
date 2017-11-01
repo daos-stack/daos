@@ -50,9 +50,8 @@ daos_fini(void);
  *
  * \param uuid	[IN]	UUID to identify a pool.
  * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param svc	[IN]	Optional, indicates potential targets of the pool
- *			service	replicas. If not aware of the ranks of the pool
- *			service	replicas, the caller may pass in NULL.
+ * \param svc	[IN]	Pool service replica ranks, as reported by
+ *			daos_pool_create().
  * \param flags	[IN]	Connect mode represented by the DAOS_PC_ bits.
  * \param poh	[OUT]	Returned open handle.
  * \param info	[OUT]	Returned pool info.
