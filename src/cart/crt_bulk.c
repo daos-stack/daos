@@ -104,7 +104,7 @@ crt_bulk_desc_valid(struct crt_bulk_desc *bulk_desc)
 			return false;
 		}
 		D_ERROR("invalid parameter of bulk_desc (remote_hdl:%p,"
-			"local_hdl:%p, bulk_op:%d, len: "CF_U64".\n",
+			"local_hdl:%p, bulk_op:%d, len: "DF_U64".\n",
 			bulk_desc->bd_remote_hdl,
 			bulk_desc->bd_local_hdl,
 			bulk_desc->bd_bulk_op, bulk_desc->bd_len);

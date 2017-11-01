@@ -279,8 +279,8 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	wait = flags & CRT_EPI_ABORT_WAIT;
 	if (force == 0) {
 		D_ERROR("cannot abort endpoint (idx %d, rank %d, req_wait_num "
-			CF_U64", req_num "CF_U64", reply_num "CF_U64", "
-			"inflight "CF_U64", with force == 0.\n", ctx->cc_idx,
+			DF_U64", req_num "DF_U64", reply_num "DF_U64", "
+			"inflight "DF_U64", with force == 0.\n", ctx->cc_idx,
 			epi->epi_ep.ep_rank, epi->epi_req_wait_num,
 			epi->epi_req_num, epi->epi_reply_num,
 			epi->epi_req_num - epi->epi_reply_num);
@@ -294,7 +294,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		D_ASSERT(epi->epi_req_wait_num > 0);
 		if (msg_logged == false) {
 			D_DEBUG("destroy context (idx %d, rank %d, "
-				"req_wait_num "CF_U64").\n", ctx->cc_idx,
+				"req_wait_num "DF_U64").\n", ctx->cc_idx,
 				epi->epi_ep.ep_rank, epi->epi_req_wait_num);
 			msg_logged = true;
 		}
@@ -315,8 +315,8 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		D_ASSERT(epi->epi_req_num > epi->epi_reply_num);
 		if (msg_logged == false) {
 			D_DEBUG("destroy context (idx %d, rank %d, "
-				"epi_req_num "CF_U64", epi_reply_num "
-				""CF_U64", inflight "CF_U64").\n",
+				"epi_req_num "DF_U64", epi_reply_num "
+				""DF_U64", inflight "DF_U64").\n",
 				ctx->cc_idx, epi->epi_ep.ep_rank,
 				epi->epi_req_num, epi->epi_reply_num,
 				epi->epi_req_num - epi->epi_reply_num);

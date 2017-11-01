@@ -125,7 +125,7 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 	} else {
 		grp_priv = crt_grp_lookup_int_grpid(co_hdr->coh_int_grpid);
 		if (grp_priv == NULL) {
-			D_ERROR("crt_grp_lookup_int_grpid "CF_X64" failed.\n",
+			D_ERROR("crt_grp_lookup_int_grpid "DF_X64" failed.\n",
 				co_hdr->coh_int_grpid);
 			D_GOTO(out, rc = -DER_INVAL);
 		}

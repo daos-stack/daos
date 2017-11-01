@@ -54,6 +54,7 @@ extern int DD_FAC(mem);
 #define D_LOGFAC	DD_FAC(misc)
 #endif
 
+#define DFATAL		(D_LOGFAC | DLOG_EMERG)
 #define DCRIT		(D_LOGFAC | DLOG_CRIT)
 #define DERR		(D_LOGFAC | DLOG_ERR)
 #define DWARN		(D_LOGFAC | DLOG_WARN)
@@ -116,6 +117,10 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
 	d_log(DDBG, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
 	     ##__VA_ARGS__)
 
+#define D_INFO(fmt, ...)						\
+	d_log(DINFO, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
+	     ##__VA_ARGS__)
+
 #define D_WARN(fmt, ...)						\
 	d_log(DWARN, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
 	     ##__VA_ARGS__)
@@ -124,8 +129,12 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
 	d_log(DERR, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
 	     ##__VA_ARGS__)
 
-#define D_FATAL(fmt, ...)						\
+#define D_CRIT(fmt, ...)						\
 	d_log(DCRIT, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
+	     ##__VA_ARGS__)
+
+#define D_FATAL(fmt, ...)						\
+	d_log(DFATAL, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
 	     ##__VA_ARGS__)
 
 #define D_ASSERT(e)	assert(e)
@@ -140,7 +149,7 @@ do {									\
 #define D_CASSERT(cond)							\
 	do {switch (1) {case (cond): case 0: break; } } while (0)
 
-#define CF_U64		"%" PRIu64
-#define CF_X64		"%" PRIx64
+#define DF_U64		"%" PRIu64
+#define DF_X64		"%" PRIx64
 
 #endif /* __GURT_DEBUG_H__ */

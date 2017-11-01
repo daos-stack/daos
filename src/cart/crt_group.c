@@ -863,7 +863,7 @@ out:
 			rc, rpc_req->cr_opc);
 	else if (gc_out->gc_rc == 0)
 		D_DEBUG("pri_rank %d created subgrp (%s), internal group id 0x"
-			CF_X64", gp_size %d, gp_self %d.\n", pri_rank,
+			DF_X64", gp_size %d, gp_self %d.\n", pri_rank,
 			grp_priv->gp_pub.cg_grpid, grp_priv->gp_int_grpid,
 			grp_priv->gp_size, grp_priv->gp_self);
 }

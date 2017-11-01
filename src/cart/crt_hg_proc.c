@@ -347,7 +347,7 @@ crt_proc_crt_iov_t(crt_proc_t proc, d_iov_t *div)
 		return -DER_HG;
 
 	if (div->iov_buf_len < div->iov_len) {
-		D_ERROR("invalid iov buf len "CF_U64" < iov len "CF_U64"\n",
+		D_ERROR("invalid iov buf len "DF_U64" < iov len "DF_U64"\n",
 			div->iov_buf_len, div->iov_len);
 		return -DER_HG;
 	}

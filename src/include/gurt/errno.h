@@ -151,7 +151,9 @@
 	/** Event queue is busy */					\
 	ACTION(DER_EQ_BUSY,		(DER_ERR_DAOS_BASE + 15))	\
 	/** Domain of cluster component can't match */			\
-	ACTION(DER_DOMAIN,		(DER_ERR_DAOS_BASE + 16))
+	ACTION(DER_DOMAIN,		(DER_ERR_DAOS_BASE + 16))	\
+	/** Service should shut down */					\
+	ACTION(DER_SHUTDOWN,		(DER_ERR_DAOS_BASE + 17))
 
 #define D_FOREACH_ERR_RANGE(ACTION)	\
 	ACTION(GURT,	1000)		\

@@ -221,13 +221,13 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
 			*/
 			if (info->coi_input_size != input_size) {
 				D_DEBUG("opc %#x, update input_size "
-					"from "CF_U64" to "CF_U64".\n", opc,
+					"from "DF_U64" to "DF_U64".\n", opc,
 					info->coi_input_size, input_size);
 				info->coi_input_size = input_size;
 			}
 			if (info->coi_output_size != output_size) {
 				D_DEBUG("opc %#x, update output_size "
-					"from "CF_U64" to "CF_U64".\n", opc,
+					"from "DF_U64" to "DF_U64".\n", opc,
 					info->coi_output_size, output_size);
 				info->coi_output_size = output_size;
 			}
@@ -330,7 +330,7 @@ crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *crf,
 
 	if (input_size > CRT_MAX_INPUT_SIZE ||
 	    output_size > CRT_MAX_OUTPUT_SIZE) {
-		D_ERROR("input_size "CF_U64" or output_size "CF_U64" "
+		D_ERROR("input_size "DF_U64" or output_size "DF_U64" "
 			"too large.\n", input_size, output_size);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
