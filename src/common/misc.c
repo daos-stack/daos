@@ -171,7 +171,7 @@ daos_rank_list_parse(const char *str, const char *sep)
 {
 	d_rank_t	       *buf;
 	int			cap = 8;
-	d_rank_list_t       *ranks;
+	d_rank_list_t	       *ranks;
 	char		       *s;
 	char		       *p;
 	int			n = 0;

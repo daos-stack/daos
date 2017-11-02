@@ -101,6 +101,7 @@ create_hdlr(int argc, char *argv[])
 		{"group",	required_argument,	NULL,	'G'},
 		{"mode",	required_argument,	NULL,	'm'},
 		{"size",	required_argument,	NULL,	's'},
+		{"target",	required_argument,	NULL,	't'},
 		{"svcn",	required_argument,	NULL,	'v'},
 		{"uid",		required_argument,	NULL,	'u'},
 		{NULL,		0,			NULL,	0}
@@ -110,8 +111,10 @@ create_hdlr(int argc, char *argv[])
 	unsigned int		gid = getegid();
 	daos_size_t		size = tobytes(default_size);
 	const char	       *group = default_group;
+	const char	       *targets_str = NULL;
+	d_rank_list_t	       *targets = NULL;
 	d_rank_t		ranks[max_svc_nreplicas];
-	d_rank_list_t	svc = {};
+	d_rank_list_t		svc = {};
 	uuid_t			pool_uuid;
 	int			i;
 	int			rc;
@@ -138,6 +141,9 @@ create_hdlr(int argc, char *argv[])
 				return 2;
 			}
 			break;
+		case 't':
+			targets_str = optarg;
+			break;
 		case 'u':
 			gid = atoi(optarg);
 			break;
@@ -149,14 +155,26 @@ create_hdlr(int argc, char *argv[])
 		}
 	}
 
+	if (targets_str != NULL) {
+		targets = daos_rank_list_parse(targets_str, ":");
+		if (targets == NULL) {
+			fprintf(stderr, "failed to parse target ranks\n");
+			return 2;
+		}
+	}
+
 	if (svc.rl_nr.num < 1 || svc.rl_nr.num > ARRAY_SIZE(ranks)) {
-		fprintf(stderr, "--svc must be in [1, %lu]\n",
+		fprintf(stderr, "--svcn must be in [1, %lu]\n",
 			ARRAY_SIZE(ranks));
+		if (targets != NULL)
+			daos_rank_list_free(targets);
 		return 2;
 	}
 
-	rc = daos_pool_create(mode, uid, gid, group, NULL /* tgts */, "pmem",
-			      size, &svc, pool_uuid, NULL /* ev */);
+	rc = daos_pool_create(mode, uid, gid, group, targets, "pmem", size,
+			      &svc, pool_uuid, NULL /* ev */);
+	if (targets != NULL)
+		daos_rank_list_free(targets);
 	if (rc != 0) {
 		fprintf(stderr, "failed to create pool: %d\n", rc);
 		return rc;
@@ -624,6 +642,8 @@ create options:\n\
   --size=BYTES	target size in bytes (%s)\n\
 		supports K (KB), M (MB), G (GB), T (TB) and P (PB) suffixes\n\
   --svcn=N	number of pool service replicas (\"%u\")\n\
+  --target=RANKS\n\
+		pool targets like 0:1:2:3:4 (whole group)\n\
   --uid=UID	pool UID (geteuid())\n", default_group, default_mode,
 	       default_size, default_svc_nreplicas);
 	printf("\
