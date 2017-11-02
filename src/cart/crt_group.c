@@ -805,7 +805,6 @@ crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 	D_ASSERT(rpc_req != NULL);
 	gc_in = crt_req_get(rpc_req);
 	gc_out = crt_reply_get(rpc_req);
-	D_ASSERT(gc_in != NULL && gc_out != NULL);
 
 	rc = crt_group_rank(NULL, &pri_rank);
 	D_ASSERT(rc == 0);
@@ -873,22 +872,16 @@ gc_rpc_cb(const struct crt_cb_info *cb_info)
 {
 	struct crt_grp_priv		*grp_priv;
 	crt_rpc_t			*gc_req;
-	struct crt_grp_create_in	*gc_in;
 	struct crt_grp_create_out	*gc_out;
-	d_rank_t			 my_rank;
 	bool				 gc_done = false;
-	int				 rc = 0;
 
 	gc_req = cb_info->cci_rpc;
-	gc_in = crt_req_get(gc_req);
 	gc_out = crt_reply_get(gc_req);
-	rc = cb_info->cci_rc;
 	grp_priv = cb_info->cci_arg;
-	D_ASSERT(grp_priv != NULL && gc_in != NULL && gc_out != NULL);
+	D_ASSERT(grp_priv != NULL);
 
-	crt_group_rank(NULL, &my_rank);
-	if (rc != 0)
-		D_ERROR("RPC error, rc: %d.\n", rc);
+	if (cb_info->cci_rc != 0)
+		D_ERROR("RPC error, rc: %d.\n", cb_info->cci_rc);
 	if (gc_out->gc_rc)
 		D_ERROR("group create failed at rank %d, rc: %d.\n",
 			gc_out->gc_rank, gc_out->gc_rc);
@@ -896,8 +889,10 @@ gc_rpc_cb(const struct crt_cb_info *cb_info)
 	/* TODO error handling */
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
-	if (rc != 0 || gc_out->gc_rc != 0)
-		grp_priv->gp_rc = (rc == 0) ? gc_out->gc_rc : rc;
+	if (cb_info->cci_rc != 0)
+		grp_priv->gp_rc = cb_info->cci_rc;
+	else if (gc_out->gc_rc != 0)
+		grp_priv->gp_rc = gc_out->gc_rc;
 	grp_priv->gp_child_ack_num++;
 	D_ASSERT(grp_priv->gp_child_ack_num <= grp_priv->gp_child_num);
 	if (grp_priv->gp_child_ack_num == grp_priv->gp_child_num)
@@ -907,7 +902,7 @@ gc_rpc_cb(const struct crt_cb_info *cb_info)
 	gc_del_child_rpc(grp_priv, gc_req);
 
 	if (!gc_done)
-		D_GOTO(out, rc);
+		D_GOTO(out, 0);
 
 	if (grp_priv->gp_create_cb != NULL)
 		grp_priv->gp_create_cb(&grp_priv->gp_pub, grp_priv->gp_priv,
@@ -1037,7 +1032,6 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 		}
 
 		gc_in = crt_req_get(gc_rpc);
-		D_ASSERT(gc_in != NULL);
 		gc_in->gc_grp_id = grp_priv->gp_pub.cg_grpid;
 		gc_in->gc_int_grpid = grp_priv->gp_int_grpid;
 		gc_in->gc_membs = grp_priv->gp_membs;
@@ -1137,7 +1131,6 @@ crt_hdlr_grp_destroy(crt_rpc_t *rpc_req)
 	D_ASSERT(rpc_req != NULL);
 	gd_in = crt_req_get(rpc_req);
 	gd_out = crt_reply_get(rpc_req);
-	D_ASSERT(gd_in != NULL && gd_out != NULL);
 
 	pthread_rwlock_rdlock(&crt_grp_list_rwlock);
 	grp_priv = crt_grp_lookup_locked(gd_in->gd_grp_id);
@@ -1168,29 +1161,25 @@ gd_rpc_cb(const struct crt_cb_info *cb_info)
 {
 	struct crt_grp_priv		*grp_priv;
 	crt_rpc_t			*gd_req;
-	struct crt_grp_destroy_in	*gd_in;
 	struct crt_grp_destroy_out	*gd_out;
-	d_rank_t			 my_rank;
 	bool				 gd_done = false;
-	int				 rc = 0;
 
 	gd_req = cb_info->cci_rpc;
-	gd_in = crt_req_get(gd_req);
 	gd_out = crt_reply_get(gd_req);
-	rc = cb_info->cci_rc;
 	grp_priv = cb_info->cci_arg;
-	D_ASSERT(grp_priv != NULL && gd_in != NULL && gd_out != NULL);
+	D_ASSERT(grp_priv != NULL);
 
-	crt_group_rank(NULL, &my_rank);
-	if (rc != 0)
-		D_ERROR("RPC error, rc: %d.\n", rc);
+	if (cb_info->cci_rc != 0)
+		D_ERROR("RPC error, rc: %d.\n", cb_info->cci_rc);
 	if (gd_out->gd_rc)
 		D_ERROR("group create failed at rank %d, rc: %d.\n",
 			gd_out->gd_rank, gd_out->gd_rc);
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
-	if (rc != 0 || gd_out->gd_rc != 0)
-		grp_priv->gp_rc = (rc == 0) ? gd_out->gd_rc : rc;
+	if (cb_info->cci_rc != 0)
+		grp_priv->gp_rc = cb_info->cci_rc;
+	else if (gd_out->gd_rc != 0)
+		grp_priv->gp_rc = gd_out->gd_rc;
 	grp_priv->gp_child_ack_num++;
 	D_ASSERT(grp_priv->gp_child_ack_num <= grp_priv->gp_child_num);
 	if (grp_priv->gp_child_ack_num == grp_priv->gp_child_num)
@@ -1200,7 +1189,7 @@ gd_rpc_cb(const struct crt_cb_info *cb_info)
 	gc_del_child_rpc(grp_priv, gd_req);
 
 	if (!gd_done)
-		D_GOTO(out, rc);
+		D_GOTO(out, 0);
 
 	if (grp_priv->gp_destroy_cb != NULL)
 		grp_priv->gp_destroy_cb(grp_priv->gp_destroy_cb_arg,
@@ -1283,7 +1272,6 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 		}
 
 		gd_in = crt_req_get(gd_rpc);
-		D_ASSERT(gd_in != NULL);
 		gd_in->gd_grp_id = grp->cg_grpid;
 		crt_group_rank(NULL, &gd_in->gd_initiate_rank);
 
@@ -1568,7 +1556,6 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	D_ASSERT(rpc_req != NULL);
 	ul_in = crt_req_get(rpc_req);
 	ul_out = crt_reply_get(rpc_req);
-	D_ASSERT(ul_in != NULL && ul_out != NULL);
 
 	if (!crt_is_service()) {
 		D_ERROR("crt_hdlr_uri_lookup invalid on client.\n");
