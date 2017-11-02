@@ -1549,13 +1549,22 @@ crt_handle_rpc(void *arg)
 	D_ASSERT(rpc_priv->crp_opc_info != NULL);
 	D_ASSERT(rpc_priv->crp_opc_info->coi_rpc_cb != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
+	/*
+	 * for user initiated corpc if it delivered to itself, in user's RPC
+	 * handler after sending reply the refcount possibly be dropped at
+	 * crt_corpc_reply_hdlr's corpc completion, take a ref here to ensure
+	 * its safe to access the rpc before RPC handler returns.
+	 */
+	if (rpc_priv->crp_coll && !rpc_priv->crp_srv)
+		RPC_ADDREF(rpc_priv);
 	rpc_priv->crp_opc_info->coi_rpc_cb(rpc_pub);
 	/*
 	 * Correspond to crt_rpc_handler_common -> crt_rpc_priv_init's set
 	 * refcount as 1. "rpc_priv->crp_srv" is to differentiate from calling
 	 * path of crt_req_send -> crt_corpc_req_hdlr -> crt_rpc_common_hdlr.
+	 * Or to dec the ref taken above.
 	 */
-	if (rpc_priv->crp_srv)
+	if (rpc_priv->crp_srv || (rpc_priv->crp_coll && !rpc_priv->crp_srv))
 		RPC_DECREF(rpc_priv);
 }
 
@@ -1577,7 +1586,12 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 				       crt_handle_rpc, rpc_priv,
 				       ABT_THREAD_ATTR_NULL, NULL);
 	} else {
+		/* Take ref for corpc same as above ABT case */
+		if (rpc_priv->crp_coll && !rpc_priv->crp_srv)
+			RPC_ADDREF(rpc_priv);
 		rpc_priv->crp_opc_info->coi_rpc_cb(&rpc_priv->crp_pub);
+		if (rpc_priv->crp_coll && !rpc_priv->crp_srv)
+			RPC_DECREF(rpc_priv);
 	}
 
 	return rc;
