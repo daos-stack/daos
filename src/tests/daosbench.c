@@ -224,12 +224,13 @@ alloc_buffers(struct test *test, int nios)
  *   - r_index
  */
 static void
-ioreq_init_basic(struct a_ioreq *ioreq)
+ioreq_init_basic(struct a_ioreq *ioreq, daos_iod_type_t iod_type)
 {
 	int rc;
 
 	memset(ioreq, 0, sizeof(*ioreq));
 
+	ioreq->iod.iod_type = iod_type;
 	ioreq->rex.rx_nr = 1;
 
 	ioreq->csum.cs_csum = &ioreq->csum_buf;
@@ -279,12 +280,14 @@ ioreq_init_value(struct a_ioreq *ioreq, void *buf, size_t size)
 static void
 ioreq_init(struct a_ioreq *ioreq, struct test *test, int counter)
 {
-	ioreq_init_basic(ioreq);
+	int iod_type;
 
 	if (!strcmp(test->t_type->tt_name, "kv-idx-update"))
-		ioreq->iod.iod_type = DAOS_IOD_ARRAY;
+		iod_type = DAOS_IOD_ARRAY;
 	else
-		ioreq->iod.iod_type = DAOS_IOD_SINGLE;
+		iod_type = DAOS_IOD_SINGLE;
+
+	ioreq_init_basic(ioreq, iod_type);
 
 	ioreq_init_dkey(ioreq, dkbuf + test->t_dkey_size * counter,
 			test->t_dkey_size);
@@ -1362,7 +1365,8 @@ kv_simul_rw_step(struct test *test, int rw, int *step)
 {
 	struct a_ioreq	ioreq;
 
-	ioreq_init_basic(&ioreq);
+	ioreq_init_basic(&ioreq, DAOS_IOD_SINGLE);
+
 	ioreq_init_dkey(&ioreq, (void *)kv_simul_meta_dkey,
 			sizeof(kv_simul_meta_dkey));
 	ioreq_init_akey(&ioreq, (void *)kv_simul_meta_step_akey,

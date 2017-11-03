@@ -326,20 +326,34 @@ obj_shard_io_check(unsigned int nr, daos_iod_t *iods)
 			/* XXX checksum & eprs should not be mandatory */
 			return false;
 
-		if (iods[i].iod_type == DAOS_IOD_ARRAY &&
-		    iods[i].iod_recxs == NULL) {
-			D__ERROR("ARRAY iod type should have valid iod_recxs\n");
+		switch (iods[i].iod_type) {
+		default:
+			D__ERROR("Unknown iod type=%d\n", iods[i].iod_type);
 			return false;
-		}
 
-		if (iods[i].iod_type == DAOS_IOD_SINGLE &&
-		    iods[i].iod_nr != 1) {
-			D__ERROR("SINGLE iod type iod_nr %d != 1\n",
-				iods[i].iod_nr);
+		case DAOS_IOD_NONE:
+			if (!iods[i].iod_recxs && iods[i].iod_nr == 0)
+				continue;
+
+			D__ERROR("IOD_NONE ignores value iod_nr=%d, recx=%p\n",
+				 iods[i].iod_nr, iods[i].iod_recxs);
+			return false;
+
+		case DAOS_IOD_ARRAY:
+			if (iods[i].iod_recxs)
+				continue;
+
+			D__ERROR("IOD_ARRAY should have valid iod_recxs\n");
+			return false;
+
+		case DAOS_IOD_SINGLE:
+			if (iods[i].iod_nr == 1)
+				continue;
+
+			D__ERROR("IOD_SINGLE iod_nr %d != 1\n", iods[i].iod_nr);
 			return false;
 		}
 	}
-
 	return true;
 }
 
