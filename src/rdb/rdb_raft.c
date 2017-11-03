@@ -54,7 +54,7 @@ static inline int
 rdb_raft_rc(int raft_rc)
 {
 	/* See the file comment. */
-	D_CASSERT(-DER_ERR_FIRST < RAFT_ERR_LAST);
+	D_CASSERT(-DER_ERR_GURT_BASE < RAFT_ERR_LAST);
 	if (raft_rc >= 0 || raft_rc < RAFT_ERR_LAST)
 		return raft_rc;
 	switch (raft_rc) {

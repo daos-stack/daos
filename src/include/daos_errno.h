@@ -33,21 +33,6 @@ extern "C" {
 
 #include <gurt/errno.h>
 
-typedef enum {
-	/**
-	 * Common error codes
-	 */
-	/** First DAOS error	 (1000) */
-	DER_ERR_FIRST		= DER_ERR_GURT_BASE,
-
-	/**
-	 * DAOS-specific error codes
-	 */
-	/** Service should shut down */
-	DER_SHUTDOWN		= (DER_ERR_DAOS_BASE + 100),
-} daos_errno_t;
-
-const char *daos_errstr(daos_errno_t errno);
 
 #if defined(__cplusplus)
 }

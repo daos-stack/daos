@@ -53,9 +53,6 @@ struct daos_uuid {
 	uuid_t	uuid;
 };
 
-#define DF_U64		"%" PRIu64
-#define DF_X64		"%" PRIx64
-
 #define DF_OID		DF_U64"."DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).mid, (o).lo
 
