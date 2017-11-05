@@ -401,8 +401,8 @@ enum vos_tree_class {
 	VOS_BTR_DKEY		= (VOS_BTR_BEGIN + 0),
 	/** attribute key tree */
 	VOS_BTR_AKEY		= (VOS_BTR_BEGIN + 1),
-	/** index + epoch tree */
-	VOS_BTR_IDX		= (VOS_BTR_BEGIN + 2),
+	/** single value + epoch tree */
+	VOS_BTR_SINGV		= (VOS_BTR_BEGIN + 2),
 	/** object index table */
 	VOS_BTR_OBJ_TABLE	= (VOS_BTR_BEGIN + 3),
 	/** container index table */
@@ -422,17 +422,10 @@ int vos_obj_tree_register(void);
  * btree.
  */
 struct vos_key_bundle {
-	enum vos_tree_class	 kb_tclass;
-	/** daos d-key for the I/O operation */
-	daos_key_t		*kb_dkey;
-	/** daos a-key for the I/O operation */
-	daos_key_t		*kb_akey;
 	/** key for the current tree, could be @kb_dkey or @kb_akey */
 	daos_key_t		*kb_key;
 	/** epoch for the I/O operation */
 	daos_epoch_range_t	*kb_epr;
-	/** index of recx */
-	uint64_t		 kb_idx;
 };
 
 /**
@@ -440,6 +433,8 @@ struct vos_key_bundle {
  * to the multi-nested btree.
  */
 struct vos_rec_bundle {
+	/** Optional, externally allocated buffer mmid */
+	umem_id_t		 rb_mmid;
 	/** checksum buffer for the daos key */
 	daos_csum_buf_t		*rb_csum;
 	/**
@@ -448,14 +443,10 @@ struct vos_rec_bundle {
 	 * Output : parameter to return value address.
 	 */
 	daos_iov_t		*rb_iov;
-	/** Optional, externally allocated buffer mmid */
-	umem_id_t		 rb_mmid;
 	/** returned btree root */
 	struct btr_root		*rb_btr;
 	/** returned evtree root */
 	struct evt_root		*rb_evt;
-	/** returned record extent */
-	daos_recx_t		*rb_recx;
 	/**
 	 * update : input record size
 	 * fetch  : return size of records
@@ -464,7 +455,9 @@ struct vos_rec_bundle {
 	/** update cookie of this recx (input for update, output for fetch) */
 	uuid_t			 rb_cookie;
 	/** pool map version */
-	uint32_t		rb_ver;
+	uint32_t		 rb_ver;
+	/** tree class */
+	enum vos_tree_class	 rb_tclass;
 };
 
 #define VOS_SIZE_ROUND		8

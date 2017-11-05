@@ -340,7 +340,6 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 	param.ip_epr		= *epr;
 	param.ip_epc_expr	= expr;
 
-
 	if (iter_fa) {
 		strcpy(&buf[0], UPDATE_AKEY_FIXED);
 		daos_iov_set(&param.ip_akey, &buf[0], strlen(buf));

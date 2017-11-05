@@ -244,6 +244,8 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		vos_obj_evict(obj);
 		vos_obj_release(occ, obj);
 	}
+	D__DEBUG(DB_TRACE, "%s durable object in epoch="DF_U64"\n",
+		no_create ? "find" : "find/create", epoch);
 
 	if (no_create) {
 		rc = vos_oi_find(cont, oid, epoch, &obj->obj_df);

@@ -56,6 +56,8 @@ ds_tier_enum(daos_handle_t coh, struct tier_enum_params *params)
 
 	memset(&vip, 0, sizeof(vip));
 	vip.ip_hdl = coh;
+	vip.ip_epr.epr_lo = 0;
+	vip.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &vip, &hio);
 	if (rc) {
 		D__ERROR("failed to prepare object iter %d\n", rc);
@@ -115,6 +117,8 @@ ds_tier_enum_dkeys(daos_handle_t coh, struct tier_enum_params *params,
 	memset(&vip, 0, sizeof(vip));
 	vip.ip_hdl = coh;
 	vip.ip_oid = oid;
+	vip.ip_epr.epr_lo = 0;
+	vip.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	rc = vos_iter_prepare(VOS_ITER_DKEY, &vip, &hidk);
 	if (rc) {
 		D__ERROR("failed to prepare dkey iter %d\n", rc);
@@ -176,6 +180,8 @@ ds_tier_enum_akeys(daos_handle_t coh, struct tier_enum_params *params,
 	vip.ip_hdl  = coh;
 	vip.ip_oid  = oid;
 	vip.ip_dkey = dkey;
+	vip.ip_epr.epr_lo = 0;
+	vip.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	rc = vos_iter_prepare(VOS_ITER_AKEY, &vip, &hiak);
 	if (rc) {
 		D__ERROR("failed to prepare akey iter %d\n", rc);
@@ -239,7 +245,6 @@ ds_tier_enum_recs(daos_handle_t coh, struct tier_enum_params *params,
 	vip.ip_oid  = oid;
 	vip.ip_dkey = dkey;
 	vip.ip_akey = akey;
-
 	vip.ip_epr.epr_lo = 0;
 	vip.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 

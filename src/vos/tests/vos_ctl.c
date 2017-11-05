@@ -82,7 +82,9 @@ ctl_list(void)
 	int			 rc;
 
 	memset(&param, 0, sizeof(param));
-	param.ip_hdl = ctl_tcx.tc_co_hdl;
+	param.ip_hdl	    = ctl_tcx.tc_co_hdl;
+	param.ip_oid	    = ctl_oid;
+	param.ip_dkey	    = ctl_dkey_iov;
 	param.ip_epr.epr_lo = ctl_epoch;
 	param.ip_epr.epr_hi = ctl_epoch;
 
@@ -94,7 +96,11 @@ ctl_list(void)
 		type = VOS_ITER_AKEY;
 
 	rc = vos_iter_prepare(type, &param, &ih);
-	if (rc) {
+	if (rc == -DER_NONEXIST) {
+		D__PRINT("No matched object or key\n");
+		D__GOTO(out, rc = 0);
+
+	} else if (rc) {
 		opstr = "prepare";
 		D__GOTO(out, rc);
 	}
@@ -123,6 +129,10 @@ ctl_list(void)
 		case VOS_ITER_OBJ:
 			D__PRINT("\t"DF_UOID"\n", DP_UOID(ent.ie_oid));
 			break;
+		case VOS_ITER_DKEY:
+		case VOS_ITER_AKEY:
+			D__PRINT("\t%s\n", (char *)ent.ie_key.iov_buf);
+			break;
 		default:
 			D__PRINT("Unsupported\n");
 			D__GOTO(out, rc = -1);
@@ -142,10 +152,12 @@ out:
 static int
 ctl_cmd_run(char opc, char *args)
 {
-	char	*str;
-	char	 abuf[CTL_BUF_LEN];
-	char	 vbuf[CTL_BUF_LEN];
-	int	 rc;
+	char		*str;
+	daos_key_t	*dkey;
+	daos_key_t	*akey;
+	char		 abuf[CTL_BUF_LEN];
+	char		 vbuf[CTL_BUF_LEN];
+	int		 rc;
 
 	if (args) {
 		strcpy(abuf, args);
@@ -199,22 +211,30 @@ ctl_cmd_run(char opc, char *args)
 		}
 	}
 
-	if (ctl_abits & CTL_ARG_DKEY)
-		daos_iov_set(&ctl_dkey_iov, ctl_dkey, strlen(ctl_dkey));
+	if (ctl_abits & CTL_ARG_DKEY) {
+		daos_iov_set(&ctl_dkey_iov, ctl_dkey, strlen(ctl_dkey) + 1);
+		dkey = &ctl_dkey_iov;
+	} else {
+		dkey = NULL;
+	}
 
 	if (ctl_abits & CTL_ARG_AKEY) {
 		ctl_recx.rx_nr	  = 1;
 
-		daos_iov_set(&ctl_iod.iod_name, ctl_akey, strlen(ctl_akey));
+		daos_iov_set(&ctl_iod.iod_name, ctl_akey, strlen(ctl_akey) + 1);
 		ctl_iod.iod_type  = DAOS_IOD_SINGLE;
 		ctl_iod.iod_size  = -1; /* overwrite by CTL_ARG_VAL */
 		ctl_iod.iod_nr	  = 1;	/* one recx */
 		ctl_iod.iod_recxs = &ctl_recx;
+
+		akey = &ctl_iod.iod_name;
+	} else {
+		akey = NULL;
 	}
 
 	if (ctl_abits & CTL_ARG_VAL) {
-		ctl_iod.iod_size = strlen(ctl_val);
-		daos_iov_set(&ctl_val_iov, ctl_val, strlen(ctl_val));
+		ctl_iod.iod_size = strlen(ctl_val) + 1;
+		daos_iov_set(&ctl_val_iov, ctl_val, strlen(ctl_val) + 1);
 	} else {
 		memset(vbuf, 0, CTL_BUF_LEN);
 		daos_iov_set(&ctl_val_iov, vbuf, CTL_BUF_LEN);
@@ -245,7 +265,7 @@ ctl_cmd_run(char opc, char *args)
 			D__GOTO(failed, rc = -1);
 
 		rc = vos_obj_punch(ctl_tcx.tc_co_hdl, ctl_oid, ctl_epoch,
-				   ctl_cookie, 0, NULL, 0, NULL);
+				   ctl_cookie, 0, dkey, 1, akey);
 		break;
 	case 'l':
 		if (!(ctl_abits & CTL_ARG_EPOCH))
