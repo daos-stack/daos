@@ -742,14 +742,22 @@ static d_chash_table_ops_t th_ops = {
 	.hop_key_cmp    = test_gurt_hash_op_key_cmp,
 };
 
+/**
+ * *arg must be an integer tracking how many times this function is expected
+ * to be called
+ */
 int
-test_gurt_hash_empty_traverse_cb(d_list_t *rlink, void *arg)
+test_gurt_hash_traverse_count_cb(d_list_t *rlink, void *arg)
 {
-	/* No nodes should exist for empty table */
-	assert_true(0);
+	int *expected_count = arg;
+
+	/* Decrement the expected number of entries - if < 0, error */
+	(*expected_count)--;
+	assert_true(*expected_count >= 0);
 
 	return 0;
 }
+
 
 static struct test_hash_entry **
 test_gurt_hash_alloc_items(int num_entries)
@@ -813,6 +821,7 @@ test_gurt_hash_empty(void **state)
 	struct test_hash_entry	**entries;
 	d_list_t		 *test;
 	int			  i;
+	int			  expected_count;
 
 	/* Allocate test entries to use */
 	entries = test_gurt_hash_alloc_items(TEST_GURT_HASH_NUM_ENTRIES);
@@ -823,8 +832,9 @@ test_gurt_hash_empty(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Traverse the empty hash table and look for entries */
-	rc = d_chash_table_traverse(thtab, test_gurt_hash_empty_traverse_cb,
-				    NULL);
+	expected_count = 0;
+	rc = d_chash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
+				    &expected_count);
 	assert_int_equal(rc, 0);
 
 	/* Get the first element in the table, which should be NULL */
@@ -851,6 +861,92 @@ static d_chash_table_ops_t th_ops_ref = {
 	.hop_rec_decref	= test_gurt_hash_op_rec_decref,
 	.hop_rec_free	= test_gurt_hash_op_rec_free,
 };
+
+static void
+test_gurt_hash_insert_lookup_delete(void **state)
+{
+	const int		  num_bits = TEST_GURT_HASH_NUM_BITS;
+	struct d_chash_table	 *thtab;
+	int			  rc;
+	struct test_hash_entry	**entries;
+	d_list_t		 *test;
+	int			  i;
+	int			  expected_count;
+	bool			  deleted;
+
+	/* Allocate test entries to use */
+	entries = test_gurt_hash_alloc_items(TEST_GURT_HASH_NUM_ENTRIES);
+	assert_non_null(entries);
+
+	/* Create a hash table */
+	rc = d_chash_table_create(0, num_bits, NULL, &th_ops, &thtab);
+	assert_int_equal(rc, 0);
+
+	/* Insert the entries and make sure they succeed - exclusive = true */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
+		rc = d_chash_rec_insert(thtab, entries[i]->tl_key,
+					TEST_GURT_HASH_KEY_LEN,
+					&entries[i]->tl_link, 1);
+		assert_int_equal(rc, 0);
+	}
+
+	/* Traverse the hash table and count number of entries */
+	expected_count = TEST_GURT_HASH_NUM_ENTRIES;
+	rc = d_chash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
+				    &expected_count);
+	assert_int_equal(rc, 0);
+	assert_int_equal(expected_count, 0);
+
+	/* Try to look up the random entries and make sure they succeed */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
+		test = d_chash_rec_find(thtab, entries[i]->tl_key,
+					TEST_GURT_HASH_KEY_LEN);
+		/* Make sure the returned pointer is the right one */
+		assert_int_equal(test, &entries[i]->tl_link);
+	}
+
+	/*
+	 * Insert the entries again with unique = 1 and make sure they fail
+	 */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
+		rc = d_chash_rec_insert(thtab, entries[i]->tl_key,
+					TEST_GURT_HASH_KEY_LEN,
+					&entries[i]->tl_link, 1);
+		assert_int_equal(rc, -DER_EXIST);
+	}
+
+	/* Try to destroy the hash table, which should fail (not empty) */
+	rc = d_chash_table_destroy(thtab, 0);
+	assert_int_not_equal(rc, -DER_EXIST);
+
+	/* Remove all entries from the hash table */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
+		deleted = d_chash_rec_delete(thtab, entries[i]->tl_key,
+					     TEST_GURT_HASH_KEY_LEN);
+		/* Make sure something was deleted */
+		assert_true(deleted);
+	}
+
+	/* Lookup test - all should fail */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
+		test = d_chash_rec_find(thtab, entries[i]->tl_key,
+					TEST_GURT_HASH_KEY_LEN);
+		assert_null(test);
+	}
+
+	/* Traverse the hash table and check there are zero entries */
+	expected_count = 0;
+	rc = d_chash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
+				    &expected_count);
+	assert_int_equal(rc, 0);
+
+	/* Destroy the hash table, force = false (should fail if not empty) */
+	rc = d_chash_table_destroy(thtab, 0);
+	assert_int_equal(rc, 0);
+
+	/* Free the temporary keys */
+	test_gurt_hash_free_items(entries, TEST_GURT_HASH_NUM_ENTRIES);
+}
 
 /* Check that addref/decref work with D_HASH_FT_EPHEMERAL
  */
@@ -923,6 +1019,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_binheap),
 		cmocka_unit_test(test_log),
 		cmocka_unit_test(test_gurt_hash_empty),
+		cmocka_unit_test(test_gurt_hash_insert_lookup_delete),
 		cmocka_unit_test(test_gurt_hash_decref),
 	};
 
