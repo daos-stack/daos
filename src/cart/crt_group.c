@@ -428,6 +428,10 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
 	int			 rc = 0;
 
 	D_ASSERT(crt_ctx != NULL);
+
+	if (crt_gdata.cg_share_na == true)
+		tag = 0;
+
 	ctx_idx = crt_ctx->cc_idx;
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	rlink = d_hash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
@@ -487,6 +491,9 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	D_ASSERT(tag < CRT_SRV_CONTEXT_NUM);
 	D_ASSERT(base_addr != NULL || hg_addr != NULL);
 	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
+
+	if (crt_gdata.cg_share_na == true)
+		tag = 0;
 
 	default_grp_priv = grp_priv;
 	if (grp_priv->gp_primary == 0) {
@@ -1174,7 +1181,7 @@ crt_group_lookup(crt_group_id_t grp_id)
 	D_RWLOCK_RDLOCK(&crt_grp_list_rwlock);
 	grp_priv = crt_grp_lookup_locked(grp_id);
 	if (grp_priv == NULL)
-		D_DEBUG(DB_TRACE, "group non-exist.\n");
+		D_DEBUG(DB_TRACE, "group non-exist (%s).\n", grp_id);
 	D_RWLOCK_UNLOCK(&crt_grp_list_rwlock);
 
 out:
@@ -1808,7 +1815,7 @@ crt_get_tag_uri(const char *base_uri, int tag)
 	/* KW #1461 fix */
 	tag_uri[CRT_ADDR_STR_MAX_LEN - 1] = '\0';
 
-	if (tag == 0)
+	if (crt_gdata.cg_share_na == true || tag == 0)
 		D_GOTO(out, 0);
 
 	if (crt_gdata.cg_na_plugin == CRT_NA_SM)

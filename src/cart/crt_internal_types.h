@@ -62,8 +62,12 @@ struct crt_gdata {
 
 	bool			cg_server;
 	bool			cg_singleton; /* true for singleton client */
-	/* multiple NA addr flag, true for server */
-	bool			cg_multi_na;
+	/*
+	 * share NA addr flag, true means all contexts share one NA class, fasle
+	 * means each context has its own NA class.  Each NA class has an
+	 * independent listening address.
+	 */
+	bool			cg_share_na;
 	int			cg_na_plugin; /* NA plugin type */
 
 	/* global timeout value (second) for all RPCs */
@@ -75,6 +79,8 @@ struct crt_gdata {
 	d_list_t		cg_ctx_list;
 	/* actual number of items in CaRT contexts list */
 	int			cg_ctx_num;
+	/* maximum number of contexts user wants to create */
+	uint32_t		cg_ctx_max_num;
 	/* the global opcode map */
 	struct crt_opc_map	*cg_opc_map;
 	/* HG level global data */

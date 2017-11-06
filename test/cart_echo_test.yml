@@ -6,6 +6,8 @@ defaultENV:
     TR_REDIRECT_OUTPUT: "no"
     CRT_PHY_ADDR_STR: "ofi+sockets"
     OFI_INTERFACE: "eth0"
+    CRT_CTX_SHARE_ADDR: "1"
+    CRT_CTX_NUM: "16"
 
 module:
     name: "cart_echo_test"

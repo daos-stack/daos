@@ -549,7 +549,7 @@ crt_hg_log(FILE *stream, const char *fmt, ...)
 	return 0;
 }
 
-/* be called only in crt_init */
+/* to be called only in crt_init */
 int
 crt_hg_init(crt_phy_addr_t *addr, bool server)
 {
@@ -571,19 +571,23 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	hg_log_set_stream_warning((FILE *)(intptr_t)(D_LOGFAC | DLOG_WARN));
 	hg_log_set_stream_error((FILE *)(intptr_t)(D_LOGFAC | DLOG_ERR));
 
-	if (*addr != NULL) {
-		info_string = *addr;
-		D_ASSERT(strncmp(info_string, "bmi+tcp", 7) == 0);
-	} else {
-		rc = crt_get_info_string(&info_string);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
+	D_ASSERTF(*addr == NULL, "Can only be called in crt_init().\n");
+
+	rc = crt_get_info_string(&info_string);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	init_info.na_init_info.progress_mode = NA_DEFAULT;
 	init_info.na_init_info.auth_key = NULL;
 	init_info.na_init_info.max_contexts = 1;
 	init_info.na_class = NULL;
+	if (crt_gdata.cg_share_na == false)
+		/* one context per NA class */
+		init_info.na_init_info.max_contexts = 1;
+	else
+		init_info.na_init_info.max_contexts = crt_gdata.cg_ctx_max_num;
+
+	D_DEBUG(DB_NET, "info_string: %s\n", info_string);
 	na_class = NA_Initialize_opt(info_string, server,
 				     &init_info.na_init_info);
 	if (na_class == NULL) {
@@ -698,23 +702,28 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	D_ASSERT(hg_ctx != NULL);
 	crt_ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
 
-	if (idx == 0 || crt_gdata.cg_multi_na == false) {
-		/* register crt_ctx to get it in crt_rpc_handler_common */
-		hg_ret = HG_Register_data(crt_gdata.cg_hg->chg_hgcla,
-					  CRT_HG_RPCID, crt_ctx, NULL);
-		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Register_data failed, hg_ret: %d.\n",
-				hg_ret);
-			D_GOTO(out, rc = -DER_HG);
-		}
-		hg_context = HG_Context_create(crt_gdata.cg_hg->chg_hgcla);
+	D_DEBUG(DB_NET, "crt_gdata.cg_share_na %d, crt_is_service() %d\n",
+			crt_gdata.cg_share_na, crt_is_service());
+	if (idx == 0 || crt_gdata.cg_share_na == true) {
+		hg_context = HG_Context_create_id(crt_gdata.cg_hg->chg_hgcla,
+						  idx);
 		if (hg_context == NULL) {
 			D_ERROR("Could not create HG context.\n");
 			D_GOTO(out, rc = -DER_HG);
 		}
 
+		/* register crt_ctx to get it in crt_rpc_handler_common */
+		hg_ret = HG_Context_set_data(hg_context, crt_ctx, NULL);
+		if (hg_ret != HG_SUCCESS) {
+			D_ERROR("HG_Context_set_data faileda, ret: %d.\n",
+				hg_ret);
+			HG_Context_destroy(hg_context);
+			D_GOTO(out, rc = -DER_HG);
+		}
+
 		hg_ctx->chc_nacla = crt_gdata.cg_hg->chg_nacla;
 		hg_ctx->chc_hgcla = crt_gdata.cg_hg->chg_hgcla;
+		D_DEBUG(DB_NET, "hg_ctx->chc_hgcla %p\n", hg_ctx->chc_hgcla);
 		hg_ctx->chc_shared_na = true;
 	} else {
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
@@ -772,11 +781,12 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 			D_GOTO(out, rc);
 		}
 
+		D_DEBUG(DB_NET, "crt_gdata.cg_hg->chg_hgcla %p\n",
+			crt_gdata.cg_hg->chg_hgcla);
 		/* register crt_ctx to get it in crt_rpc_handler_common */
-		hg_ret = HG_Register_data(hg_class, CRT_HG_RPCID, crt_ctx,
-					  NULL);
+		hg_ret = HG_Context_set_data(hg_context, crt_ctx, NULL);
 		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Register_data failed, hg_ret: %d.\n",
+			D_ERROR("HG_Context_set_data failed, ret: %d.\n",
 				hg_ret);
 			HG_Context_destroy(hg_context);
 			HG_Finalize(hg_class);
@@ -887,10 +897,10 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
 
-	crt_ctx = (struct crt_context *)HG_Registered_data(
-			hg_info->hg_class, CRT_HG_RPCID);
+	crt_ctx = (struct crt_context *)HG_Context_get_data(
+			hg_info->context);
 	if (crt_ctx == NULL) {
-		D_ERROR("HG_Registered_data failed.\n");
+		D_ERROR("HG_Context_get_data failed.\n");
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
 	hg_ctx = &crt_ctx->cc_hg_ctx;
@@ -1009,6 +1019,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 {
 	hg_id_t		rpcid;
 	hg_return_t	hg_ret = HG_SUCCESS;
+	bool		hg_created = false;
 	int		rc = 0;
 
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_hgcla != NULL &&
@@ -1026,7 +1037,9 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_hdl_reuse == NULL) {
 		hg_ret = HG_Create(hg_ctx->chc_hgctx, rpc_priv->crp_hg_addr,
 				   rpcid, &rpc_priv->crp_hg_hdl);
-		if (hg_ret != HG_SUCCESS) {
+		if (hg_ret == HG_SUCCESS) {
+			hg_created = true;
+		} else {
 			D_ERROR("HG_Create failed, hg_ret: %d, rpc_priv %p, "
 				"opc: %#x.\n",
 				hg_ret, rpc_priv, rpc_priv->crp_pub.cr_opc);
@@ -1040,6 +1053,18 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			rpc_priv->crp_hg_hdl = NULL;
 			D_ERROR("HG_Reset failed, hg_ret: %d, rpc_priv %p, "
 				"opc: %#x.\n",
+				hg_ret, rpc_priv, rpc_priv->crp_pub.cr_opc);
+			rc = -DER_HG;
+		}
+	}
+	if (crt_gdata.cg_share_na == true) {
+		hg_ret = HG_Set_target_id(rpc_priv->crp_hg_hdl,
+					  rpc_priv->crp_pub.cr_ep.ep_tag);
+		if (hg_ret != HG_SUCCESS) {
+			if (hg_created)
+				HG_Destroy(rpc_priv->crp_hg_hdl);
+			D_ERROR("HG_Set_target_id failed, hg_ret: %d, "
+				"rpc_priv %p, opc: %#x.\n",
 				hg_ret, rpc_priv, rpc_priv->crp_pub.cr_opc);
 			rc = -DER_HG;
 		}

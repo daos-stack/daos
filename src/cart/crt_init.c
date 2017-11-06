@@ -51,6 +51,8 @@ static int data_init(crt_init_options_t *opt)
 {
 	uint32_t	timeout;
 	uint32_t	credits;
+	bool		share_addr = false;
+	uint32_t	ctx_num = 1;
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
@@ -74,12 +76,12 @@ static int data_init(crt_init_options_t *opt)
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_addr = NULL;
 	crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
-	crt_gdata.cg_multi_na = false;
+	crt_gdata.cg_share_na = false;
 
 	timeout = 0;
 
-	if (opt && opt->crt_timeout != 0)
-		timeout = opt->crt_timeout;
+	if (opt && opt->cio_crt_timeout != 0)
+		timeout = opt->cio_crt_timeout;
 	else
 		d_getenv_int("CRT_TIMEOUT", &timeout);
 
@@ -107,6 +109,29 @@ static int data_init(crt_init_options_t *opt)
 	}
 	crt_gdata.cg_credit_ep_ctx = credits;
 	D_ASSERT(crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
+
+	if (opt && opt->cio_sep_override) {
+		if (opt->cio_use_sep) {
+			crt_gdata.cg_share_na = true;
+			D_DEBUG(DB_ALL, "crt_gdata.cg_share_na turned on.\n");
+		}
+		crt_gdata.cg_ctx_max_num = opt->cio_ctx_max_num;
+	} else {
+		d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
+		if (share_addr) {
+			crt_gdata.cg_share_na = true;
+			D_DEBUG(DB_ALL, "crt_gdata.cg_share_na turned on.\n");
+		}
+
+		d_getenv_int("CRT_CTX_NUM", &ctx_num);
+		crt_gdata.cg_ctx_max_num = ctx_num;
+	}
+	D_DEBUG(DB_ALL, "set cg_share_na %d, cg_ctx_max_num %d.\n",
+		crt_gdata.cg_share_na, crt_gdata.cg_ctx_max_num);
+	if (crt_gdata.cg_share_na == false && crt_gdata.cg_ctx_max_num > 1)
+		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
+		       "is not set or set to 0\n");
+
 
 	gdata_init_flag = 1;
 exit:
@@ -214,8 +239,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		srandom(seed);
 
 		crt_gdata.cg_server = server;
-		if (server == true)
-			crt_gdata.cg_multi_na = true;
 
 		if ((flags & CRT_FLAG_BIT_SINGLETON) != 0)
 			crt_gdata.cg_singleton = true;
@@ -538,14 +561,14 @@ out:
 
 int crt_na_ofi_config_init(void)
 {
-	char *port_str;
-	char *interface;
-	int port;
-	struct ifaddrs *if_addrs = NULL;
-	struct ifaddrs *ifa = NULL;
-	void *tmp_ptr;
-	const char *ip_str = NULL;
-	int rc = 0;
+	char		*port_str;
+	char		*interface;
+	int		port;
+	struct ifaddrs	*if_addrs = NULL;
+	struct ifaddrs	*ifa = NULL;
+	void		*tmp_ptr;
+	const char	*ip_str = NULL;
+	int		rc = 0;
 
 	interface = getenv("OFI_INTERFACE");
 	if (interface != NULL && strlen(interface) > 0) {

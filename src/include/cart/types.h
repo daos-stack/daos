@@ -67,7 +67,21 @@ typedef struct crt_init_options {
 	 * This field is similar in behavior to setting of CRT_TIMEOUT
 	 * evnironment variable.
 	 */
-	int	crt_timeout;
+	int		cio_crt_timeout;
+	/**
+	 * if cio_sep_override is 0, the two fields following it won't be used.
+	 */
+	uint32_t	cio_sep_override:1,
+			/**
+			 * overrides the value of the environment variable
+			 * CRT_CTX_SHARE_ADDR
+			 */
+			cio_use_sep:1;
+			/**
+			 * overrides the value of the environment variable
+			 * CRT_CTX_NUM
+			 */
+	int		cio_ctx_max_num;
 } crt_init_options_t;
 
 typedef int		 crt_status_t;

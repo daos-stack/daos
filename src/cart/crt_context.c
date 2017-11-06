@@ -187,6 +187,13 @@ crt_context_create(crt_context_t *crt_ctx)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	if (crt_gdata.cg_share_na &&
+	    crt_gdata.cg_ctx_num >= crt_gdata.cg_ctx_max_num) {
+		D_ERROR("Number of active contexts (%d) reached limit (%d).\n",
+			crt_gdata.cg_ctx_num, crt_gdata.cg_ctx_max_num);
+		D_GOTO(out, -DER_AGAIN);
+	}
+
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -199,6 +206,7 @@ crt_context_create(crt_context_t *crt_ctx)
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
+
 
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, crt_gdata.cg_ctx_num);
 	if (rc != 0) {
@@ -695,8 +703,8 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(&rpc_priv->crp_pub);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
-		D_ERROR("rpc_priv %p (status: %d) (opc %#x) timed out, "
-			"tgt rank %d, tag %d.\n",
+		D_ERROR("ctx_id %d, rpc_priv %p (status: %d) (opc %#x) "
+			"timed out, tgt rank %d, tag %d.\n", crt_ctx->cc_idx,
 			rpc_priv, rpc_priv->crp_state,
 			rpc_priv->crp_pub.cr_opc,
 			rpc_priv->crp_pub.cr_ep.ep_rank,

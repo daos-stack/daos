@@ -2,11 +2,13 @@ description: "CART Incast Variables tests"
 
 defaultENV:
     OMPI_MCA_rmaps_base_oversubscribe: "1"
-    D_LOG_MASK: "INFO,MEM=ERR"
+    D_LOG_MASK: "DEBUG,MEM=ERR"
     TR_REDIRECT_OUTPUT: "no"
     CRT_PHY_ADDR_STR: "ofi+sockets"
     OFI_INTERFACE: "eth0"
     CRT_ALLOW_SINGLETON: "1"
+    CRT_CTX_SHARE_ADDR: "1"
+    CRT_CTX_NUM: "16"
 
 module:
     name: "cart_test_iv"
