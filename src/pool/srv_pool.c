@@ -991,7 +991,7 @@ pool_svc_put(struct pool_svc *svc)
 static inline bool
 pool_svc_up(struct pool_svc *svc)
 {
-	return svc->ps_state == POOL_SVC_UP;
+	return !svc->ps_stop && svc->ps_state == POOL_SVC_UP;
 }
 
 /*
