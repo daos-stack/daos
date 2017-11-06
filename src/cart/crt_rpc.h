@@ -314,6 +314,8 @@ struct crt_internal_rpc {
 #define RPC_ADDREF(RPC) do {						\
 		int __ref;						\
 		pthread_spin_lock(&(RPC)->crp_lock);			\
+		D_ASSERTF((RPC)->crp_refcount != 0,			\
+			  "%p addref from zero\n", (RPC));		\
 		__ref = ++(RPC)->crp_refcount;				\
 		pthread_spin_unlock(&(RPC)->crp_lock);			\
 		d_log((DD_FAC(rpc) | DLOG_DBG),				\
@@ -325,6 +327,8 @@ struct crt_internal_rpc {
 #define RPC_DECREF(RPC) do {						\
 		int __ref;						\
 		pthread_spin_lock(&(RPC)->crp_lock);			\
+		D_ASSERTF((RPC)->crp_refcount != 0,			\
+			  "%p decref from zero\n", (RPC));		\
 		__ref = --(RPC)->crp_refcount;				\
 		pthread_spin_unlock(&(RPC)->crp_lock);			\
 		d_log((DD_FAC(rpc) | DLOG_DBG),				\
