@@ -278,10 +278,10 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	int				 ret;
 
 	/* Get pointers to the arguments and response buffers */
-	args = (struct crt_st_session_params *)crt_req_get(rpc_req);
+	args = crt_req_get(rpc_req);
 	D_ASSERT(args != NULL);
 
-	reply_session_id = (int64_t *)crt_reply_get(rpc_req);
+	reply_session_id = crt_reply_get(rpc_req);
 	D_ASSERT(reply_session_id != NULL);
 
 	/* Validate session parameters */
@@ -395,7 +395,7 @@ crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 	int64_t			 session_id;
 	int			 ret;
 
-	args = (int64_t *)crt_req_get(rpc_req);
+	args = crt_req_get(rpc_req);
 	D_ASSERT(args != NULL);
 	session_id = *args;
 
@@ -432,7 +432,7 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 				  struct st_buf_entry *buf_entry,
 				  int do_unlock)
 {
-	d_iov_t			*res;
+	d_iov_t				*res;
 	int				 ret;
 	struct st_session		*session = NULL;
 	struct crt_st_session_params	*params = NULL;
@@ -447,7 +447,7 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 	if (buf_entry != NULL &&
 	    params->reply_type == CRT_SELF_TEST_MSG_TYPE_IOV) {
 		/* Get the IOV reply handle */
-		res = (d_iov_t *)crt_reply_get(rpc_req);
+		res = crt_reply_get(rpc_req);
 		D_ASSERT(res != NULL);
 
 		/* Set the reply buffer */
@@ -500,7 +500,7 @@ int crt_self_test_msg_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	D_ASSERT(cb_info->bci_bulk_desc);
 	D_ASSERT(cb_info->bci_bulk_desc->bd_rpc);
 
-	buf_entry = (struct st_buf_entry *)cb_info->bci_arg;
+	buf_entry = cb_info->bci_arg;
 
 	/* Check for errors and proceed regardless */
 	if (cb_info->bci_rc != 0)
@@ -528,7 +528,7 @@ int crt_self_test_msg_bulk_get_cb(const struct crt_bulk_cb_info *cb_info)
 	if (cb_info->bci_rc != 0)
 		D_ERROR("BULK_GET failed; bci_rc=%d\n", cb_info->bci_rc);
 
-	buf_entry = (struct st_buf_entry *)cb_info->bci_arg;
+	buf_entry = cb_info->bci_arg;
 	bulk_desc_in = cb_info->bci_bulk_desc;
 
 	if (buf_entry->session->params.reply_type ==

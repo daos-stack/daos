@@ -275,7 +275,7 @@ crt_hg_addr_lookup_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_hg_addr_lookup_cb_t			 comp_cb;
 	hg_return_t				 rc = HG_SUCCESS;
 
-	cb_args = (struct crt_hg_addr_lookup_cb_args *)hg_cbinfo->arg;
+	cb_args = hg_cbinfo->arg;
 	comp_cb = cb_args->al_cb;
 
 	rc = comp_cb(hg_cbinfo->info.lookup.addr, cb_args->al_arg);
@@ -319,7 +319,7 @@ out:
 static hg_return_t
 hg_addr_lookup_cb(const struct hg_cb_info *callback_info)
 {
-	hg_addr_t	*addr_ptr = (hg_addr_t *)callback_info->arg;
+	hg_addr_t	*addr_ptr = callback_info->arg;
 	hg_return_t	ret = HG_SUCCESS;
 
 	if (callback_info->ret != HG_SUCCESS) {
@@ -1496,11 +1496,11 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 	int				rc = 0;
 
 	D_ASSERT(hg_cbinfo != NULL);
-	bulk_cbinfo = (struct crt_hg_bulk_cbinfo *)hg_cbinfo->arg;
+	bulk_cbinfo = hg_cbinfo->arg;
 	D_ASSERT(bulk_cbinfo != NULL);
 	bulk_desc = bulk_cbinfo->bci_desc;
 	D_ASSERT(bulk_desc != NULL);
-	ctx = (struct crt_context *)bulk_desc->bd_rpc->cr_ctx;
+	ctx = bulk_desc->bd_rpc->cr_ctx;
 	hg_ctx = &ctx->cc_hg_ctx;
 	D_ASSERT(hg_ctx != NULL);
 	D_ASSERT(hg_cbinfo->type == HG_CB_BULK);
@@ -1556,7 +1556,7 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	D_ASSERT(bulk_desc->bd_bulk_op == CRT_BULK_PUT ||
 		 bulk_desc->bd_bulk_op == CRT_BULK_GET);
 	D_ASSERT(bulk_desc->bd_rpc != NULL);
-	ctx = (struct crt_context *)bulk_desc->bd_rpc->cr_ctx;
+	ctx = bulk_desc->bd_rpc->cr_ctx;
 	hg_ctx = &ctx->cc_hg_ctx;
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkctx != NULL);
 

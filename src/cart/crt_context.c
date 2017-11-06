@@ -358,7 +358,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
-	ctx = (struct crt_context *)crt_ctx;
+	ctx = crt_ctx;
 	rc = crt_grp_ctx_invalid(ctx, false /* locked */);
 	if (rc != 0) {
 		D_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n", rc);
@@ -451,7 +451,7 @@ crt_req_timeout_track(crt_rpc_t *req)
 	struct crt_rpc_priv	*rpc_priv;
 	int			 rc;
 
-	crt_ctx = (struct crt_context *)req->cr_ctx;
+	crt_ctx = req->cr_ctx;
 	D_ASSERT(crt_ctx != NULL);
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
@@ -478,7 +478,7 @@ crt_req_timeout_untrack(crt_rpc_t *req)
 	struct crt_context	*crt_ctx;
 	struct crt_rpc_priv	*rpc_priv;
 
-	crt_ctx = (struct crt_context *)req->cr_ctx;
+	crt_ctx = req->cr_ctx;
 	D_ASSERT(crt_ctx != NULL);
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
@@ -695,7 +695,7 @@ crt_context_req_track(crt_rpc_t *req)
 	int			 rc = 0;
 
 	D_ASSERT(req != NULL);
-	crt_ctx = (struct crt_context *)req->cr_ctx;
+	crt_ctx = req->cr_ctx;
 	D_ASSERT(crt_ctx != NULL);
 
 	if (req->cr_opc == CRT_OPC_URI_LOOKUP) {
@@ -798,7 +798,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 	int			 rc;
 
 	D_ASSERT(req != NULL);
-	crt_ctx = (struct crt_context *)req->cr_ctx;
+	crt_ctx = req->cr_ctx;
 	D_ASSERT(crt_ctx != NULL);
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
@@ -922,7 +922,7 @@ crt_context_idx(crt_context_t crt_ctx, int *ctx_idx)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	ctx = (struct crt_context *)crt_ctx;
+	ctx = crt_ctx;
 	*ctx_idx = ctx->cc_idx;
 
 out:
@@ -1024,7 +1024,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 		D_ERROR("crt_context_idx() failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	ctx = (struct crt_context *)crt_ctx;
+	ctx = crt_ctx;
 	if (timeout == 0 || cond_cb == NULL) { /** fast path */
 		crt_context_timeout_check(ctx);
 		/* check for and execute progress callbacks here */

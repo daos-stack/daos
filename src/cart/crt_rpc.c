@@ -785,7 +785,7 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 	int				 tag;
 	int				 rc = 0;
 
-	rpc_priv = (struct crt_rpc_priv *)arg;
+	rpc_priv = arg;
 	D_ASSERT(rpc_priv != NULL);
 	rank = rpc_priv->crp_pub.cr_ep.ep_rank;
 	tag = rpc_priv->crp_pub.cr_ep.ep_tag;
@@ -795,7 +795,7 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 	else
 		grp_priv = container_of(rpc_priv->crp_pub.cr_ep.ep_grp,
 					struct crt_grp_priv, gp_pub);
-	crt_ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	ctx_idx = crt_ctx->cc_idx;
 
 	rc = crt_grp_lc_addr_insert(grp_priv, crt_ctx, rank, tag, &hg_addr);
@@ -876,7 +876,7 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	else
 		grp_priv = container_of(tgt_ep->ep_grp, struct crt_grp_priv,
 					gp_pub);
-	crt_ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	/* extract uri */
 	ul_out = crt_reply_get(cb_info->cci_rpc);
 	D_ASSERT(ul_out != NULL);
@@ -1077,7 +1077,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	}
 
 	rank = tgt_ep->ep_rank;
-	crt_ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	if (crt_req_is_self(rpc_priv)) {
 		/* rpc is sent to self */
 		uri = strndup(crt_gdata.cg_addr, CRT_ADDR_STR_MAX_LEN);
@@ -1128,7 +1128,7 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	struct crt_context	*crt_ctx;
 	int			 rc = 0;
 
-	crt_ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	/* decref at crt_req_hg_addr_lookup_cb */
 	RPC_ADDREF(rpc_priv);
 	rc = crt_hg_addr_lookup(&crt_ctx->cc_hg_ctx, rpc_priv->crp_tgt_uri,
@@ -1153,7 +1153,7 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	D_ASSERT(rpc_priv->crp_hg_addr != NULL);
 
 	req = &rpc_priv->crp_pub;
-	ctx = (struct crt_context *)req->cr_ctx;
+	ctx = req->cr_ctx;
 	rc = crt_hg_req_create(&ctx->cc_hg_ctx, rpc_priv);
 	if (rc != 0) {
 		D_ERROR("crt_hg_req_create failed, rc: %d, opc: %#x.\n",
@@ -1583,7 +1583,7 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	int			 rc = 0;
 
 	D_ASSERT(rpc_priv != NULL);
-	crt_ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	/* Set the reply pending bit unless this is a one-way OPCODE */
 	if (!rpc_priv->crp_opc_info->coi_no_reply)

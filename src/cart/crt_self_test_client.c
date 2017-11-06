@@ -272,7 +272,7 @@ static void close_sessions(void)
 		D_ASSERTF(new_rpc != NULL,
 			  "crt_req_create succeeded but RPC is NULL\n");
 
-		args = (int64_t *)crt_req_get(new_rpc);
+		args = crt_req_get(new_rpc);
 		D_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
 
 		*args = g_data->endpts[i].session_id;
@@ -628,7 +628,7 @@ open_session_cb(const struct crt_cb_info *cb_info)
 	D_ASSERT(g_data != NULL);
 
 	/* Get the session ID from the response message */
-	session_id = (int64_t *)crt_reply_get(cb_info->cci_rpc);
+	session_id = crt_reply_get(cb_info->cci_rpc);
 	D_ASSERT(session_id != NULL);
 
 	/* If this endpoint returned any kind of error, mark it is evicted */
@@ -712,7 +712,7 @@ static void open_sessions(void)
 		D_ASSERTF(new_rpc != NULL,
 			  "crt_req_create succeeded but RPC is NULL\n");
 
-		args = (struct crt_st_session_params *)crt_req_get(new_rpc);
+		args = crt_req_get(new_rpc);
 		D_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
 
 		/* Copy test parameters */
@@ -814,10 +814,10 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	uint32_t			 endpt_idx;
 
 	/* Get pointers to the arguments and response buffers */
-	args = (struct crt_st_start_params *)crt_req_get(rpc_req);
+	args = crt_req_get(rpc_req);
 	D_ASSERT(args != NULL);
 
-	reply_status = (int32_t *)crt_reply_get(rpc_req);
+	reply_status = crt_reply_get(rpc_req);
 	D_ASSERT(reply_status != NULL);
 
 	/******************** LOCK: g_data_lock ********************/
@@ -1093,11 +1093,11 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 	ret = crt_req_addref(rpc_req);
 	D_ASSERT(ret == 0);
 
-	bulk_hdl_in = (crt_bulk_t *)crt_req_get(rpc_req);
+	bulk_hdl_in = crt_req_get(rpc_req);
 	D_ASSERT(bulk_hdl_in != NULL);
 	D_ASSERT(*bulk_hdl_in != CRT_BULK_NULL);
 
-	res = (struct crt_st_status_req_reply *)crt_reply_get(rpc_req);
+	res = crt_reply_get(rpc_req);
 	D_ASSERT(res != NULL);
 
 	/* Default response values if no test data is available */

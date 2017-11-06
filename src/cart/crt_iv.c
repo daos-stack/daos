@@ -765,7 +765,7 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	/* Something is really bad if info is NULL */
 	D_ASSERT(info != NULL);
 
-	cb_info = (struct crt_ivf_transfer_cb_info *)info->bci_arg;
+	cb_info = info->bci_arg;
 	rpc = info->bci_bulk_desc->bd_rpc;
 
 	output = crt_reply_get(rpc);
@@ -1925,7 +1925,7 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 	int				update_rc;
 	crt_iv_sync_t			*sync_type;
 
-	cb_info = (struct bulk_update_cb_info *)info->bci_arg;
+	cb_info = info->bci_arg;
 
 	input = cb_info->buc_input;
 
