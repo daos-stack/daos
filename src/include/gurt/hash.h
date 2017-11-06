@@ -218,6 +218,8 @@ bool d_chash_rec_delete(struct d_chash_table *htable, const void *key,
 bool d_chash_rec_delete_at(struct d_chash_table *htable, d_list_t *rlink);
 void d_chash_rec_addref(struct d_chash_table *htable, d_list_t *rlink);
 void d_chash_rec_decref(struct d_chash_table *htable, d_list_t *rlink);
+int d_chash_rec_ndecref(struct d_chash_table *htable, int count,
+			d_list_t *rlink);
 bool d_chash_rec_unlinked(d_list_t *rlink);
 d_list_t *d_chash_rec_first(struct d_chash_table *ht);
 

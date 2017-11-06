@@ -945,6 +945,7 @@ test_log(void **state)
 #define TEST_GURT_HASH_KEY_LEN (65L)
 
 struct test_hash_entry {
+	int		tl_ref;
 	d_list_t	tl_link;
 	unsigned char	tl_key[TEST_GURT_HASH_KEY_LEN];
 };
@@ -963,6 +964,32 @@ test_gurt_hash_op_key_cmp(struct d_chash_table *thtab, d_list_t *link,
 
 	assert_int_equal(ksize, TEST_GURT_HASH_KEY_LEN);
 	return !memcmp(tlink->tl_key, key, ksize);
+}
+
+static void
+test_gurt_hash_op_rec_addref(struct d_chash_table *thtab, d_list_t *link)
+{
+	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
+
+	tlink->tl_ref++;
+}
+
+static bool
+test_gurt_hash_op_rec_decref(struct d_chash_table *thtab, d_list_t *link)
+{
+	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
+
+	tlink->tl_ref--;
+
+	return tlink->tl_ref == 0;
+}
+
+static void
+test_gurt_hash_op_rec_free(struct d_chash_table *thtab, d_list_t *link)
+{
+	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
+
+	D_FREE(tlink);
 }
 
 static d_chash_table_ops_t th_ops = {
@@ -1071,6 +1098,74 @@ test_gurt_hash_empty(void **state)
 	/* Free the temporary keys */
 	test_gurt_hash_free_items(entries, TEST_GURT_HASH_NUM_ENTRIES);
 }
+
+static d_chash_table_ops_t th_ops_ref = {
+	.hop_key_cmp	= test_gurt_hash_op_key_cmp,
+	.hop_rec_addref	= test_gurt_hash_op_rec_addref,
+	.hop_rec_decref	= test_gurt_hash_op_rec_decref,
+	.hop_rec_free	= test_gurt_hash_op_rec_free,
+};
+
+/* Check that addref/decref work with D_HASH_FT_EPHEMERAL
+ */
+static void
+test_gurt_hash_decref(void **state)
+{
+	/* Just test the minimum-size hash table */
+	const int		  num_bits = 1;
+	struct d_chash_table	 *thtab;
+	int			  rc;
+	struct test_hash_entry	 *entry;
+	d_list_t		 *test;
+
+	D_ALLOC_PTR(entry);
+
+	/* Create a minimum-size hash table */
+	rc = d_chash_table_create(D_HASH_FT_EPHEMERAL, num_bits, NULL,
+				  &th_ops_ref, &thtab);
+	assert_int_equal(rc, 0);
+
+	rc = d_chash_rec_insert(thtab, entry->tl_key, TEST_GURT_HASH_KEY_LEN,
+				&entry->tl_link, true);
+	assert_int_equal(rc, 0);
+
+	/* No ref should be taken on insert */
+	assert_int_equal(entry->tl_ref, 0);
+
+	/* This insert should fail */
+	rc = d_chash_rec_insert(thtab, entry->tl_key, TEST_GURT_HASH_KEY_LEN,
+				&entry->tl_link, true);
+	assert_int_equal(rc, -DER_EXIST);
+
+	/* One ref should be taken by find */
+	test = d_chash_rec_find(thtab, entry->tl_key, TEST_GURT_HASH_KEY_LEN);
+	assert_non_null(test);
+	assert_ptr_equal(test, &entry->tl_link);
+	assert_int_equal(entry->tl_ref, 1);
+
+	/* Take two more refs */
+	d_chash_rec_addref(thtab, test);
+	assert_int_equal(entry->tl_ref, 2);
+	d_chash_rec_addref(thtab, test);
+	assert_int_equal(entry->tl_ref, 3);
+
+	/* Drop one ref */
+	rc = d_chash_rec_ndecref(thtab, 1, test);
+	assert_int_equal(rc, 0);
+	assert_int_equal(entry->tl_ref, 2);
+
+	/* Drop 20 refs, which should fail but remove and free the descriptor */
+	rc = d_chash_rec_ndecref(thtab, 20, test);
+	assert_int_equal(rc, -DER_INVAL);
+
+	/* Get the first element in the table, which should be NULL */
+	assert_null(d_chash_rec_first(thtab));
+
+	/* Destroy the hash table, force = false (should fail if not empty) */
+	rc = d_chash_table_destroy(thtab, 0);
+	assert_int_equal(rc, 0);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1086,6 +1181,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_binheap),
 		cmocka_unit_test(test_log),
 		cmocka_unit_test(test_gurt_hash_empty),
+		cmocka_unit_test(test_gurt_hash_decref),
 	};
 
 	return cmocka_run_group_tests(tests, init_tests, fini_tests);
