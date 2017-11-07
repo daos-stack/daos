@@ -1277,12 +1277,17 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		}
 	}
 
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	/* Take a reference to ensure rpc_priv is valid for duration of this
+	 * function.  Referenced dropped at end of this function.
+	 */
+	RPC_ADDREF(rpc_priv);
+
 	if (req->cr_ctx == NULL) {
 		D_ERROR("invalid parameter (NULL req->cr_ctx).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	rpc_priv->crp_complete_cb = complete_cb;
 	rpc_priv->crp_arg = arg;
 
@@ -1331,6 +1336,8 @@ out:
 		}
 		RPC_DECREF(rpc_priv);
 	}
+	/* corresponds to RPC_ADDREF in this function */
+	RPC_DECREF(rpc_priv);
 	return rc;
 }
 
