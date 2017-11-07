@@ -153,6 +153,7 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 		  int mod_id)
 {
 	struct daos_rpc	*rpc;
+	uint32_t	 flags;
 	int		 rc;
 
 	if (rpcs == NULL)
@@ -161,6 +162,10 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 	/* walk through the handler list and register each individual RPC */
 	for (rpc = rpcs; rpc->dr_opc != 0; rpc++) {
 		crt_opcode_t opcode;
+
+		flags = 0;
+		if (rpc->dr_flags & DAOS_RPC_NO_REPLY)
+			flags |= CRT_RPC_FEAT_NO_REPLY;
 
 		opcode = DAOS_RPC_OPCODE(rpc->dr_opc, mod_id, rpc->dr_ver);
 		if (handlers != NULL) {
@@ -173,7 +178,7 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 				return rc;
 			}
 			if (handler->dr_corpc_ops.co_aggregate == NULL)
-				rc = crt_rpc_srv_register(opcode,
+				rc = crt_rpc_srv_register(opcode, flags,
 							  rpc->dr_req_fmt,
 							  handler->dr_hdlr);
 			else
@@ -181,10 +186,8 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 							handler->dr_hdlr,
 							&handler->dr_corpc_ops);
 		} else {
-			rc = crt_rpc_register(opcode, rpc->dr_req_fmt);
+			rc = crt_rpc_register(opcode, flags, rpc->dr_req_fmt);
 		}
-		if (rc == 0 && (rpc->dr_flags & DAOS_RPC_NO_REPLY))
-			rc = crt_rpc_set_feats(opcode, CRT_RPC_FEAT_NO_REPLY);
 		if (rc)
 			return rc;
 	}

@@ -180,7 +180,8 @@ server_init()
 	D__INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
-	rc = crt_init(server_group_id, CRT_FLAG_BIT_SERVER);
+	rc = crt_init(server_group_id,
+		      CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE);
 	if (rc)
 		D__GOTO(exit_mod_init, rc);
 	D__INFO("Network successfully initialized\n");
