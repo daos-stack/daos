@@ -1298,7 +1298,7 @@ crt_lm_finalize(void)
 	int				 rc;
 
 	if (crt_lm_gdata.clg_inited == 0) {
-		D_ERROR("cannot finalize before crt_lm_init().\n");
+		D_DEBUG("cannot finalize before crt_lm_init().\n");
 		D_GOTO(out, rc);
 	}
 	pthread_rwlock_wrlock(&crt_lm_gdata.clg_rwlock);

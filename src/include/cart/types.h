@@ -376,10 +376,14 @@ typedef int (*crt_progress_cond_cb_t)(void *arg);
  *	If this bit is set for a multi-ranks server, then undefined result is
  *	expected (as server group rank and size cannot be queried from PMIx, but
  *	they are needed for RPC communication).
+ * CRT_FLAG_BIT_LM_DISABLE -
+ *	when it is true, will not enable the LM module which internally bcast
+ *	RAS failure event to all ranks to evict the failed ranks.
  */
 enum crt_init_flag_bits {
 	CRT_FLAG_BIT_SERVER	= 1U << 0,
-	CRT_FLAG_BIT_SINGLETON	= 1U << 1
+	CRT_FLAG_BIT_SINGLETON	= 1U << 1,
+	CRT_FLAG_BIT_LM_DISABLE	= 1U << 2
 };
 
 #endif /* __CRT_TYPES_H__ */

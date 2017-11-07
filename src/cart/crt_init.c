@@ -269,7 +269,8 @@ do_init:
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
 
 		crt_gdata.cg_inited = 1;
-		crt_lm_init();
+		if ((flags & CRT_FLAG_BIT_LM_DISABLE) == 0)
+			crt_lm_init();
 	} else {
 		if (crt_gdata.cg_server == false && server == true) {
 			D_ERROR("CRT initialized as client, cannot set as "
