@@ -134,10 +134,7 @@ crt_li_destroy(struct crt_lookup_item *li)
 	D_ASSERT(li->li_ref == 0);
 	D_ASSERT(li->li_initialized == 1);
 
-	if (li->li_base_phy_addr != NULL) {
-		free(li->li_base_phy_addr);
-		li->li_base_phy_addr = NULL;
-	}
+	D_FREE(li->li_base_phy_addr);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		if (li->li_tag_addr[i] != NULL)
@@ -232,11 +229,9 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 		D_INIT_LIST_HEAD(&li->li_link);
 		li->li_grp_priv = grp_priv;
 		li->li_rank = rank;
-		li->li_base_phy_addr = strndup(uri, CRT_ADDR_STR_MAX_LEN);
-		if (li->li_base_phy_addr == NULL) {
-			D_ERROR("strndup() failed.\n");
+		D_STRNDUP(li->li_base_phy_addr, uri, CRT_ADDR_STR_MAX_LEN);
+		if (li->li_base_phy_addr == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		}
 		li->li_initialized = 1;
 		li->li_evicted = 0;
 		pthread_mutex_init(&li->li_mutex, NULL);
@@ -264,11 +259,9 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 	D_ASSERT(li->li_initialized != 0);
 	pthread_mutex_lock(&li->li_mutex);
 	if (li->li_base_phy_addr == NULL) {
-		li->li_base_phy_addr = strndup(uri, CRT_ADDR_STR_MAX_LEN);
-		if (li->li_base_phy_addr == NULL) {
-			D_ERROR("strndup() failed.\n");
+		D_STRNDUP(li->li_base_phy_addr, uri, CRT_ADDR_STR_MAX_LEN);
+		if (li->li_base_phy_addr == NULL)
 			rc = -DER_NOMEM;
-		}
 		D_DEBUG("Filling in URI in lookup table. "
 			" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
 			grp_priv, ctx_idx, rank, &li->li_link);
@@ -337,10 +330,7 @@ crt_grp_lc_addr_invalid(d_list_t *rlink, void *arg)
 		li->li_tag_addr[i] = NULL;
 	}
 
-	if (li->li_base_phy_addr != NULL) {
-		free(li->li_base_phy_addr);
-		li->li_base_phy_addr = NULL;
-	}
+	D_FREE(li->li_base_phy_addr);
 
 out:
 	pthread_mutex_unlock(&li->li_mutex);
@@ -642,9 +632,8 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 
 	D_INIT_LIST_HEAD(&grp_priv->gp_link);
 	grp_priv->gp_primary = primary_grp;
-	grp_priv->gp_pub.cg_grpid = strdup(grp_id);
+	D_STRNDUP(grp_priv->gp_pub.cg_grpid, grp_id, CRT_GROUP_ID_MAX_LEN + 1);
 	if (grp_priv->gp_pub.cg_grpid == NULL) {
-		D_ERROR("strdup grp_id (%s) failed.\n", grp_id);
 		D_FREE_PTR(grp_priv);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -2084,18 +2073,11 @@ crt_grp_attach_info_filename(struct crt_grp_priv *grp_priv)
 {
 	crt_group_id_t	 grpid;
 	char		*filename;
-	int		 rc;
 
 	D_ASSERT(grp_priv != NULL);
 	grpid = grp_priv->gp_pub.cg_grpid;
 
-	rc = asprintf(&filename, "%s/%s.attach_info_tmp", crt_attach_prefix,
-		      grpid);
-	if (rc == -1) {
-		D_ERROR("asprintf %s failed (%s).\n", grpid, strerror(errno));
-		filename = NULL;
-	} else
-		D_ASSERT(filename != NULL);
+	D_ASPRINTF(filename, "%s/%s.attach_info_tmp", crt_attach_prefix, grpid);
 
 	return filename;
 }
@@ -2106,19 +2088,15 @@ open_tmp_attach_info_file(char **filename)
 	char		 template[] = "attach-info-XXXXXX";
 	int		 tmp_fd;
 	FILE		*tmp_file;
-	int		 rc;
 
 	if (filename == NULL) {
 		D_ERROR("filename can't be NULL.\n");
 		return NULL;
 	}
 
-	rc = asprintf(filename, "%s/%s", crt_attach_prefix, template);
-	if (rc == -1) {
-		D_ERROR("asprintf %s failed (%s).\n",
-			template, strerror(errno));
+	D_ASPRINTF(*filename, "%s/%s", crt_attach_prefix, template);
+	if (*filename == NULL)
 		return NULL;
-	}
 	D_ASSERT(*filename != NULL);
 
 	tmp_fd = mkstemp(*filename);
@@ -2304,7 +2282,7 @@ out:
 	if (tmp_name != NULL) {
 		if (rc != 0)
 			unlink(tmp_name);
-		free(tmp_name);
+		D_FREE(tmp_name);
 	}
 	if (fp != NULL)
 		fclose(fp);
@@ -2450,7 +2428,7 @@ crt_grp_lc_mark_evicted(struct crt_grp_priv *grp_priv, d_rank_t rank)
 			D_INIT_LIST_HEAD(&li->li_link);
 			li->li_grp_priv = grp_priv;
 			li->li_rank = rank;
-			li->li_base_phy_addr = strdup("evicted");
+			D_STRNDUP(li->li_base_phy_addr, "evicted", 32);
 			li->li_initialized = 1;
 			li->li_evicted = 1;
 			pthread_mutex_init(&li->li_mutex, NULL);

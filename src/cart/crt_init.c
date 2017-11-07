@@ -514,11 +514,9 @@ int crt_na_ofi_config_init(void)
 
 	interface = getenv("OFI_INTERFACE");
 	if (interface != NULL && strlen(interface) > 0) {
-		crt_na_ofi_conf.noc_interface = strdup(interface);
-		if (crt_na_ofi_conf.noc_interface == NULL) {
-			D_ERROR("cannot allocate memory for noc_interface.");
+		D_STRNDUP(crt_na_ofi_conf.noc_interface, interface, 64);
+		if (crt_na_ofi_conf.noc_interface == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		}
 	} else {
 		crt_na_ofi_conf.noc_interface = NULL;
 		D_ERROR("ENV OFI_INTERFACE not set.");
@@ -597,9 +595,6 @@ out:
 
 void crt_na_ofi_config_fini(void)
 {
-	if (crt_na_ofi_conf.noc_interface != NULL) {
-		free(crt_na_ofi_conf.noc_interface);
-		crt_na_ofi_conf.noc_interface = NULL;
-	}
+	D_FREE(crt_na_ofi_conf.noc_interface);
 	crt_na_ofi_conf.noc_port = 0;
 }

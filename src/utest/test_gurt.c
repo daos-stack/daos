@@ -172,7 +172,7 @@ init_tests(void **state)
 	char		*tmp;
 	unsigned int	 seed;
 
-	__root = strdup("/tmp/XXXXXX");
+	D_STRNDUP(__root, "/tmp/XXXXXX", 32);
 	tmp = mkdtemp(__root);
 
 	if (tmp != __root) {
@@ -185,7 +185,7 @@ init_tests(void **state)
 	fprintf(stdout, "Seeding this test run with seed=%u\n", seed);
 	srand(seed);
 
-	return 0;
+	return d_log_init();
 }
 
 static int
@@ -193,6 +193,7 @@ fini_tests(void **state)
 {
 	rmdir(__root);
 	free(__root);
+	d_log_fini();
 
 	return 0;
 }
@@ -566,6 +567,9 @@ test_log(void **state)
 	const char *preset = "D0xF";
 	const char *preset1 = "D0xACF";
 	char retbuf[1024];
+	char *oldmask;
+
+	oldmask = getenv("D_LOG_MASK");
 
 	setenv("D_LOG_MASK", "CLOG=DEBUG,T1=DEBUG", 1);
 	memset(retbuf, 0x00, sizeof(retbuf));
@@ -587,18 +591,17 @@ test_log(void **state)
 
 	/* Alternatively, a component may have its own mask */
 	logmask = getenv("TEST_LOG_MASK");
-	if (logmask == NULL)
-		logmask = allocated_mask = strdup("ERR,T1=DEBUG,CLOG=DEBUG");
+	if (logmask == NULL) {
+		D_STRNDUP(allocated_mask, "ERR,T1=DEBUG,CLOG=DEBUG", 32);
+		logmask = allocated_mask;
+	}
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
 	LOG_DEBUG(logfac1, "rc after 1st setmaks is %x\n", rc);
 	rc = d_log_setmasks(logmask, -1);
 	LOG_DEBUG(logfac1, "rc after 2nd setmasks is %x\n", rc);
-	if (allocated_mask != NULL) {
-		free(allocated_mask);
-		allocated_mask = NULL;
-	}
+	D_FREE(allocated_mask);
 
 	d_log_getmasks(retbuf, 0, 1024, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
@@ -609,7 +612,7 @@ test_log(void **state)
 	LOG_INFO(logfac1, "log1 info test message %d\n", logfac2);
 	LOG_INFO(logfac2, "log2 info test message %d\n", logfac2);
 
-	logmask = allocated_mask = strdup("T1=D10");
+	D_STRNDUP(logmask, "T1=D10", 32);
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
@@ -618,23 +621,17 @@ test_log(void **state)
 
 	rc = d_log_setmasks(logmask, -1);
 	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 10)));
-	if (allocated_mask != NULL) {
-		free(allocated_mask);
-		allocated_mask = NULL;
-	}
+	D_FREE(logmask);
 
 	/* todo add new test here for the new levels */
 	setenv("D_LOG_MASK", "T1=D0", 1);
 	d_log_sync_mask();
-	logmask = allocated_mask = strdup("T1=D0");
+	D_STRNDUP(logmask, "T1=D0", 32);
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
 	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 0)));
-	if (allocated_mask != NULL) {
-		free(allocated_mask);
-		allocated_mask = NULL;
-	}
+	D_FREE(logmask);
 
 	rc = d_log_getmasks(retbuf, 0, 200, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
@@ -647,15 +644,12 @@ test_log(void **state)
 	rc = d_log_getmasks(retbuf, 0, 200, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
-	logmask = allocated_mask = strdup("T1=D4");
+	D_STRNDUP(logmask, "T1=D4", 32);
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
 	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 4)));
-	if (allocated_mask != NULL) {
-		free(allocated_mask);
-		allocated_mask = NULL;
-	}
+	D_FREE(logmask);
 
 	setenv("D_LOG_MASK", "T1=D0xACF", 1);
 	d_log_sync_mask();
@@ -683,6 +677,12 @@ test_log(void **state)
 
 	rc = d_log_str2pri(preset1);
 	assert_int_equal(rc, 0xACF << DLOG_DPRISHIFT);
+
+	if (oldmask)
+		d_log_setmasks(oldmask, -1);
+	else
+		d_log_setmasks("ERR", -1);
+
 	d_log_fini();
 }
 
@@ -1008,6 +1008,61 @@ test_gurt_hash_decref(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static void
+test_gurt_alloc(void **state)
+{
+	const char *str1 = "Hello World1";
+	const char str2[] = "Hello World2";
+	char *testptr;
+	char *newptr;
+	int *testint;
+	int *testarray;
+	char *path;
+	int nr = 10;
+	int rc;
+
+	rc = d_log_init();
+	assert_int_equal(rc, 0);
+
+	D_REALPATH(path, "//////usr/////");
+	assert_non_null(path);
+	assert_string_equal(path, "/usr");
+	D_FREE(path);
+	D_STRNDUP(testptr, str1, 32);
+	assert_non_null(testptr);
+	assert_string_equal(testptr, str1);
+	D_FREE(testptr);
+	assert_null(testptr);
+	D_STRNDUP(testptr, str2, sizeof(str2));
+	assert_non_null(testptr);
+	assert_string_equal(testptr, str2);
+	D_FREE(testptr);
+	assert_null(testptr);
+	D_REALLOC(newptr, testptr, 10);
+	assert_non_null(newptr);
+	assert_null(testptr);
+	D_REALLOC(testptr, newptr, 20);
+	assert_non_null(testptr);
+	assert_null(newptr);
+	D_FREE(testptr);
+	assert_null(testptr);
+	D_ASPRINTF(testptr, "%s", str2);
+	assert_non_null(testptr);
+	assert_string_equal(testptr, str2);
+	D_FREE(testptr);
+	assert_null(testptr);
+	D_ALLOC_ARRAY(testarray, nr);
+	assert_non_null(testarray);
+	D_FREE(testarray);
+	assert_null(testarray);
+	D_ALLOC_PTR(testint);
+	assert_non_null(testint);
+	D_FREE(testint);
+	assert_null(testint);
+
+	d_log_fini();
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1021,6 +1076,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_hash_empty),
 		cmocka_unit_test(test_gurt_hash_insert_lookup_delete),
 		cmocka_unit_test(test_gurt_hash_decref),
+		cmocka_unit_test(test_gurt_alloc),
 	};
 
 	return cmocka_run_group_tests(tests, init_tests, fini_tests);

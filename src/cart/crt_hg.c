@@ -490,21 +490,20 @@ crt_get_info_string(char **string)
 	int	 port;
 	int	 plugin;
 	char	*plugin_str;
-	int	 rc;
 
 	plugin = crt_gdata.cg_na_plugin;
 	D_ASSERT(plugin == na_dict[plugin].nad_type);
 	plugin_str = na_dict[plugin].nad_str;
 
 	if (!na_dict[plugin].nad_port_bind) {
-		rc = asprintf(string, "%s://", plugin_str);
+		D_ASPRINTF(*string, "%s://", plugin_str);
 	} else {
 		port = crt_na_ofi_conf.noc_port;
 		crt_na_ofi_conf.noc_port++;
-		rc = asprintf(string, "%s://%s:%d",
-			      plugin_str, crt_na_ofi_conf.noc_ip_str, port);
+		D_ASPRINTF(*string, "%s://%s:%d", plugin_str,
+			   crt_na_ofi_conf.noc_ip_str, port);
 	}
-	if (rc < 0)
+	if (*string == NULL)
 		return -DER_NOMEM;
 
 	return 0;
@@ -603,9 +602,8 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 			D_GOTO(out, rc = -DER_HG);
 		}
 
-		*addr = strdup(addr_str);
+		D_STRNDUP(*addr, addr_str, CRT_ADDR_STR_MAX_LEN);
 		if (*addr == NULL) {
-			D_ERROR("strdup failed, rc: %d.\n", rc);
 			HG_Finalize(hg_class);
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_HG);

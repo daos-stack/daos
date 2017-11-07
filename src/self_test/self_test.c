@@ -851,13 +851,12 @@ static int run_self_test(struct st_size_params all_params[],
 		 * entries
 		 */
 		if (num_ms_endpts != num_ms_endpts_in) {
-			struct st_master_endpt *realloc_ptr =
-				D_REALLOC(ms_endpts, num_ms_endpts *
-						       sizeof(*ms_endpts));
-			if (realloc_ptr == NULL) {
-				D_ERROR("Failed to shrink ms_endpts array\n");
+			struct st_master_endpt *realloc_ptr;
+
+			D_REALLOC(realloc_ptr, ms_endpts,
+				  num_ms_endpts * sizeof(*ms_endpts));
+			if (realloc_ptr == NULL)
 				D_GOTO(cleanup, ret = -DER_NOMEM);
-			}
 			ms_endpts = realloc_ptr;
 		}
 	}
@@ -1351,8 +1350,8 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 
 	/* Reallocate/expand the endpoints array */
 	*num_endpts += num_ranks * num_tags;
-	realloced_mem = D_REALLOC(*endpts,
-				  sizeof(struct st_endpoint) * (*num_endpts));
+	D_REALLOC(realloced_mem, *endpts,
+		  sizeof(struct st_endpoint) * (*num_endpts));
 	if (realloced_mem == NULL)
 		D_GOTO(cleanup, ret = -DER_NOMEM);
 	*endpts = (struct st_endpoint *)realloced_mem;
@@ -1769,9 +1768,8 @@ int main(int argc, char *argv[])
 		void *realloced_mem;
 
 		/* This should always succeed since the buffer is shrinking.. */
-		realloced_mem = D_REALLOC(all_params,
-					  num_msg_sizes
-					  * sizeof(all_params[0]));
+		D_REALLOC(realloced_mem, all_params,
+			  num_msg_sizes * sizeof(all_params[0]));
 		if (realloced_mem == NULL)
 			D_GOTO(cleanup, ret = -DER_NOMEM);
 		all_params = (struct st_size_params *)realloced_mem;

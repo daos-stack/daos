@@ -46,6 +46,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <time.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -115,54 +116,91 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 /* memory allocating macros */
 
 #define MEM_DBG		(d_mem_logfac | DLOG_DBG)
+#define MEM_ERR		(d_mem_logfac | DLOG_ERR)
+
+#define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
+		      on_error)						\
+	do {								\
+		if (cond) {						\
+			if (count <= 1)					\
+				d_log(MEM_DBG, "%s:%d, alloc(" #func ")"\
+				      " '" name "': %i at %p.\n",	\
+				      __FILE__, __LINE__, (int)(size),	\
+				      (ptr));				\
+			else						\
+				d_log(MEM_DBG, "%s:%d, alloc(" #func ")"\
+				      " '" name "': %i * '" cname	\
+				      "':%i at %p.\n", __FILE__,	\
+				      __LINE__, (int)(size), (count),	\
+				      (ptr));				\
+			break;						\
+		}							\
+		(void)(on_error);					\
+		if (count >= 1)						\
+			d_log(MEM_ERR, "%s:%d, out of memory (tried to "\
+			      #func " '" name "': %i)\n", __FILE__,	\
+			      __LINE__, (int)(size) * (count));		\
+		else							\
+			d_log(MEM_ERR, "%s:%d, out of memory (tried to "\
+			      #func " '" name "')\n", __FILE__,		\
+			      __LINE__);				\
+	} while (0)
 
 #define D_ALLOC_CORE(ptr, size, count)					\
 	do {								\
 		(ptr) = (__typeof__(ptr))calloc(count, (size));		\
-		if ((ptr) != NULL) {					\
-			if (count == 1)					\
-				d_log(MEM_DBG, "%s:%d, alloc '" #ptr	\
-					"': %i at %p.\n",		\
-					__FILE__, __LINE__,		\
-					(int)(size), ptr);		\
-			else						\
-				d_log(MEM_DBG, "%s:%d, alloc '" #ptr	\
-					"': %i * '" #count " ': %i at %p.\n", \
-					__FILE__, __LINE__,		\
-					(int)(size), (count), ptr);	\
-			break;						\
-		}							\
-		D_ERROR("%s:%d, out of memory (tried to alloc '" #ptr	\
-			"': %i)",					\
-			__FILE__, __LINE__, (int)(size) * (count));	\
+		D_CHECK_ALLOC(calloc, (ptr) != NULL, ptr, #ptr, size,	\
+			      count, #count, 0);			\
 	} while (0)
 
-/* TODO: Correct use of #ptr in this function */
-static inline void *
-d_realloc(void *ptrptr, size_t size)
-{
-	void *tmp_ptr;
+#define D_STRNDUP(ptr, s, n)						\
+	do {								\
+		(ptr) = strndup(s, n);					\
+		D_CHECK_ALLOC(strndup, (ptr) != NULL, ptr, #ptr,	\
+			      strnlen(ptr, n + 1) + 1, 0, #ptr, 0);	\
+	} while (0)
 
-	tmp_ptr = realloc(ptrptr, size);
-	if (size == 0 || tmp_ptr != NULL) {
-		d_log(MEM_DBG, "realloc #ptr : %d at %p.\n",
-			(int) size, ptrptr);
+#define D_ASPRINTF(ptr, ...)						\
+	do {								\
+		int rc;							\
+		rc = asprintf(&(ptr), __VA_ARGS__);			\
+		D_CHECK_ALLOC(asprintf, rc != -1 && (ptr) != NULL,	\
+			      ptr, #ptr, rc + 1, 0, #ptr, (ptr) = NULL);\
+	} while (0)
 
-		return tmp_ptr;
-	}
-	D_ERROR("out of memory (tried to realloc \" #ptr \" = %d)",
-		(int)(size));
+#define D_REALPATH(ptr, path)						\
+	do {								\
+		(ptr) = realpath((path), NULL);				\
+		D_CHECK_ALLOC(realpath, (ptr) != NULL, ptr, #ptr,	\
+			      strnlen((ptr), PATH_MAX + 1) + 1, 0, #ptr,\
+			      0);					\
+	} while (0)
 
-	return tmp_ptr;
-}
-/* memory reallocation */
-#define D_REALLOC(ptr, size)						\
-	(__typeof__(ptr)) d_realloc((ptr), (size))
+/* Requires newptr and oldptr to be different variables.  Otherwise
+ * there is no way to tell the difference between successful and
+ * failed realloc.
+ */
+#define D_REALLOC(newptr, oldptr, size)					\
+	do {								\
+		D_ASSERT((void *)&(newptr) != &(oldptr));		\
+		(newptr) =  realloc((oldptr), (size));			\
+		if ((newptr) != NULL) {					\
+			d_log(MEM_DBG, "%s:%d, realloc '"		\
+			      #newptr "': %i at %p (old '" #oldptr	\
+			      "':%p).\n", __FILE__, __LINE__,		\
+			      (int)(size), (newptr), (oldptr));		\
+			(oldptr) = NULL;				\
+			break;						\
+		}							\
+		d_log(MEM_ERR, "%s:%d, out of memory (tried to realloc "\
+		      "'" #newptr "': %i)\n", __FILE__, __LINE__,	\
+		      (int)(size));					\
+	} while (0)
 
-# define D_FREE(ptr)						\
+# define D_FREE(ptr)							\
 	do {								\
 		d_log(MEM_DBG, "%s:%d, free '" #ptr "' at %p.\n",	\
-			__FILE__, __LINE__, (ptr));	\
+			__FILE__, __LINE__, (ptr));			\
 		free(ptr);						\
 		(ptr) = NULL;						\
 	} while (0)
