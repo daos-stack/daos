@@ -310,6 +310,8 @@ crt_plugin_fini(void)
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
 
+	crt_plugin_pmix_fini();
+
 	d_list_for_each_safe(curr_node, tmp_node,
 			     &crt_plugin_gdata.cpg_prog_cbs) {
 		d_list_del(curr_node);
@@ -344,7 +346,6 @@ crt_plugin_fini(void)
 	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_timeout_rwlock);
 	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_event_rwlock);
 	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_eviction_rwlock);
-	crt_plugin_pmix_fini();
 }
 
 int
@@ -373,6 +374,9 @@ crt_finalize(void)
 		} else {
 			D_ASSERT(crt_context_empty(CRT_LOCKED));
 		}
+
+		if (crt_plugin_gdata.cpg_inited == 1)
+			crt_plugin_fini();
 
 		rc = crt_grp_fini();
 		if (rc != 0) {
@@ -411,8 +415,6 @@ crt_finalize(void)
 		gdata_init_once = PTHREAD_ONCE_INIT;
 		gdata_init_flag = 0;
 
-		if (crt_plugin_gdata.cpg_inited == 1)
-			crt_plugin_fini();
 		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS)
 			crt_na_ofi_config_fini();
 	} else {

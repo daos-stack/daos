@@ -41,6 +41,7 @@
 #define D_LOGFAC	DD_FAC(pmix)
 
 #include "crt_internal.h"
+#include "semaphore.h"
 
 int
 crt_pmix_init(void)
@@ -698,19 +699,53 @@ crt_plugin_pmix_init(void)
 static void
 crt_plugin_pmix_errhdlr_dereg_cb(pmix_status_t status, void *cbdata)
 {
+	sem_t	*token_to_proceed;
+	int	 rc;
+
 	D_DEBUG("crt_plugin_pmix_errhdlr_dereg_cb() called with status %d",
 		status);
+
+	D_ASSERT(cbdata != NULL);
+	token_to_proceed = cbdata;
+	rc = sem_post(token_to_proceed);
+	if (rc != 0)
+		D_ERROR("sem_post failed, rc: %d.\n", rc);
+	else
+		D_DEBUG("sem_post succeeded on sem_t %p.\n", token_to_proceed);
 }
 
 void
 crt_plugin_pmix_fini(void)
 {
+	sem_t	token_to_proceed;
+	int	rc;
+
 	if (!crt_is_service() || crt_is_singleton())
 		return;
 
+	rc = sem_init(&token_to_proceed, 0, 0);
+	if (rc != 0) {
+		D_ERROR("sem_init failed, rc: %d.\n", rc);
+		return;
+	}
+
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
 	PMIx_Deregister_event_handler(crt_plugin_gdata.cpg_pmix_errhdlr_ref,
-				      crt_plugin_pmix_errhdlr_dereg_cb, NULL);
+				      crt_plugin_pmix_errhdlr_dereg_cb,
+				      &token_to_proceed);
+
+	D_DEBUG("calling sem_wait on sem_t %p.\n", &token_to_proceed);
+	rc = sem_wait(&token_to_proceed);
+	if (rc != 0) {
+		D_ERROR("sem_wait failed, rc: %d.\n", rc);
+		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+
+		return;
+	}
 	crt_plugin_gdata.cpg_pmix_errhdlr_inited = 0;
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+
+	rc = sem_destroy(&token_to_proceed);
+	if (rc != 0)
+		D_ERROR("sem_destroy failed, rc: %d.\n", rc);
 }
