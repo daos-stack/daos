@@ -279,10 +279,10 @@ int main(int argc, char **argv)
 	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON);
 	assert(rc == 0);
 
-	rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &srv_grp);
+	rc = crt_context_create(NULL, &crt_ctx);
 	assert(rc == 0);
 
-	rc = crt_context_create(NULL, &crt_ctx);
+	rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &srv_grp);
 	assert(rc == 0);
 
 	rc = pthread_create(&progress_thread, 0, progress_function, &crt_ctx);
