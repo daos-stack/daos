@@ -368,6 +368,14 @@ crt_common_hdr_init(struct crt_common_hdr *hdr, crt_opcode_t opc)
 	D_ASSERT(crt_group_rank(0, &hdr->cch_rank) == 0);
 }
 
+static inline bool
+crt_rpc_cb_customized(struct crt_context *crt_ctx,
+		      crt_rpc_t *rpc_pub)
+{
+	return crt_ctx->cc_rpc_cb != NULL &&
+	       !crt_opcode_reserved(rpc_pub->cr_opc);
+}
+
 /* crt_rpc.c */
 int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		       bool forward);

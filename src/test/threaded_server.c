@@ -131,7 +131,7 @@ int main(int argc, char **argv)
 
 	crt_rpc_srv_register(RPC_ID, 0, &fmt, rpc_handler);
 
-	crt_context_create(NULL, &crt_ctx);
+	crt_context_create(&crt_ctx);
 	for (rc = 0; rc < NUM_THREADS; rc++)
 		pthread_create(&thread[rc], NULL, progress, &status);
 

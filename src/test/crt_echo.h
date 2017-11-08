@@ -223,7 +223,7 @@ echo_init(int server, bool tier2)
 
 	assert(rc == 0);
 
-	rc = crt_context_create(NULL, &gecho.crt_ctx);
+	rc = crt_context_create(&gecho.crt_ctx);
 	assert(rc == 0);
 
 	if (server != 0 && tier2 == false && gecho.singleton_test) {
@@ -249,7 +249,7 @@ echo_init(int server, bool tier2)
 					 sizeof(crt_context_t));
 		assert(gecho.extra_ctx != NULL);
 		for (i = 0; i < ECHO_EXTRA_CONTEXT_NUM; i++) {
-			rc = crt_context_create(NULL, &gecho.extra_ctx[i]);
+			rc = crt_context_create(&gecho.extra_ctx[i]);
 			assert(rc == 0);
 		}
 	}

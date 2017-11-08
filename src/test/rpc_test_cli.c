@@ -483,7 +483,7 @@ cli_rpc_init(void)
 	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON);
 	D_ASSERTF(rc == 0, "crt_init failed %d\n", rc);
 
-	crt_context_create(NULL, &rpc_cli.crt_ctx);
+	crt_context_create(&rpc_cli.crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create failed %d\n", rc);
 
 	rc = pthread_create(&rpc_cli.progress_thid, NULL,

@@ -311,7 +311,7 @@ int main(int argc, char **argv)
 	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON);
 	assert(rc == 0);
 
-	rc = crt_context_create(NULL, &g_crt_ctx);
+	rc = crt_context_create(&g_crt_ctx);
 	assert(rc == 0);
 
 	rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &srv_grp);

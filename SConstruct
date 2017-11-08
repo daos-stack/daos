@@ -175,7 +175,7 @@ def scons():
     prereqs.preload(os.path.join(Dir('#').abspath,
                                  'scons_local',
                                  'components.py'),
-                    prebuild=['ompi', 'mercury', 'argobots', 'uuid', 'crypto',
+                    prebuild=['ompi', 'mercury', 'uuid', 'crypto',
                               'pmix'])
     opts.Save(opts_file, env)
     env.Alias('install', '$PREFIX')

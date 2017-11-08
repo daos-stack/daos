@@ -132,7 +132,7 @@ int main(int argc, char **argv)
 	D_ASSERTF(rc == 0, "Failed in crt_init, rc = %d\n", rc);
 
 	printf("Calling crt_context_create()\n");
-	rc = crt_context_create(NULL, &crt_ctx);
+	rc = crt_context_create(&crt_ctx);
 	D_ASSERTF(rc == 0, "Failed in crt_context_create, rc = %d\n", rc);
 
 	printf("Starting progress thread\n");

@@ -210,7 +210,7 @@ rpc_err_init(void)
 	rc = crt_group_rank(NULL, &rpc_err.re_my_rank);
 	D_ASSERTF(rc == 0, "crt_group_rank() failed, rc: %d\n", rc);
 
-	rc = crt_context_create(NULL, &rpc_err.re_crt_ctx);
+	rc = crt_context_create(&rpc_err.re_crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 
 	rc = crt_rpc_srv_register(RPC_ERR_OPC_NOREPLY, 0, &CQF_RPC_ERR_NOREPLY,

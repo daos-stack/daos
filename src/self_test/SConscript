@@ -50,7 +50,7 @@ def scons():
 
     libraries = ['pthread', 'm', 'cart', 'gurt']
     tenv.AppendUnique(LIBS=libraries)
-    prereqs.require(tenv, 'mercury', 'pmix', 'argobots')
+    prereqs.require(tenv, 'mercury', 'pmix')
     tenv.AppendUnique(LIBPATH=['#/src/cart'])
     tenv.AppendUnique(RPATH="$PREFIX/lib")
     tenv.AppendUnique(FLAGS='-pthread')

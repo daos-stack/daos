@@ -41,8 +41,6 @@
 
 #include "crt_internal.h"
 
-#include <abt.h>
-
 /* CRT internal RPC format definitions */
 
 /* group create */
@@ -1548,13 +1546,15 @@ crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv)
 static void
 crt_handle_rpc(void *arg)
 {
-	struct crt_rpc_priv	*rpc_priv = arg;
-	crt_rpc_t		*rpc_pub;
+	crt_rpc_t		*rpc_pub = arg;
+	struct crt_rpc_priv	*rpc_priv;
 
-	D_ASSERT(rpc_priv != NULL);
+	D_ASSERT(rpc_pub != NULL);
+
+	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
 	D_ASSERT(rpc_priv->crp_opc_info != NULL);
 	D_ASSERT(rpc_priv->crp_opc_info->coi_rpc_cb != NULL);
-	rpc_pub = &rpc_priv->crp_pub;
+
 	/*
 	 * for user initiated corpc if it delivered to itself, in user's RPC
 	 * handler after sending reply the refcount possibly be dropped at
@@ -1587,10 +1587,11 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	if (!rpc_priv->crp_opc_info->coi_no_reply)
 		rpc_priv->crp_reply_pending = 1;
 
-	if (crt_ctx->cc_pool != NULL) {
-		rc = ABT_thread_create(*(ABT_pool *)crt_ctx->cc_pool,
-				       crt_handle_rpc, rpc_priv,
-				       ABT_THREAD_ATTR_NULL, NULL);
+	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub)) {
+		rc = crt_ctx->cc_rpc_cb((crt_context_t)crt_ctx,
+					 &rpc_priv->crp_pub,
+					 crt_handle_rpc,
+					 crt_ctx->cc_rpc_cb_arg);
 	} else {
 		rpc_priv->crp_opc_info->coi_rpc_cb(&rpc_priv->crp_pub);
 	}

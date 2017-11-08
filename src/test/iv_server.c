@@ -167,7 +167,7 @@ init_work_contexts(void)
 	int i;
 	int rc;
 
-	rc = crt_context_create(NULL, &g_main_ctx);
+	rc = crt_context_create(&g_main_ctx);
 	assert(rc == 0);
 
 	rc = pthread_create(&g_progress_thread[0], 0,
@@ -175,7 +175,7 @@ init_work_contexts(void)
 	assert(rc == 0);
 
 	for (i = 0; i < NUM_WORK_CTX; i++) {
-		rc = crt_context_create(NULL, &g_work_ctx[i]);
+		rc = crt_context_create(&g_work_ctx[i]);
 		assert(rc == 0);
 
 		rc = pthread_create(&g_progress_thread[i + 1], 0,

@@ -63,7 +63,7 @@ static void *progress(void *arg)
 	int	*status = (int *)arg;
 	int	 rc;
 
-	crt_context_create(NULL, &crt_ctx);
+	crt_context_create(&crt_ctx);
 	__sync_fetch_and_add(status, 1);
 
 	do {

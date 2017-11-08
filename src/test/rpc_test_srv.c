@@ -548,7 +548,7 @@ srv_rpc_init(void)
 	rc = crt_group_size(NULL, &rpc_srv.grp_size);
 	D_ASSERTF(rc == 0, "crt_group_size failed %d\n", rc);
 
-	rc = crt_context_create(NULL, &rpc_srv.crt_ctx);
+	rc = crt_context_create(&rpc_srv.crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create failed %d\n", rc);
 
 	rc = sem_init(&rpc_srv.srv_sem, 0, 0);

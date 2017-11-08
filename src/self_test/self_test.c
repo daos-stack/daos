@@ -134,7 +134,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 			  "crt_group_config_path_set failed, rc = %d\n", ret);
 	}
 
-	ret = crt_context_create(NULL, crt_ctx);
+	ret = crt_context_create(crt_ctx);
 	if (ret != 0) {
 		D_ERROR("crt_context_create failed; ret = %d\n", ret);
 		return ret;

@@ -40,7 +40,6 @@
  */
 #define D_LOGFAC	DD_FAC(rpc)
 
-#include <abt.h>
 #include "crt_internal.h"
 
 static void crt_epi_destroy(struct crt_ep_inflight *epi);
@@ -173,7 +172,7 @@ out:
 }
 
 int
-crt_context_create(void *arg, crt_context_t *crt_ctx)
+crt_context_create(crt_context_t *crt_ctx)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
@@ -208,13 +207,29 @@ crt_context_create(void *arg, crt_context_t *crt_ctx)
 	d_list_add_tail(&ctx->cc_link, &crt_gdata.cg_ctx_list);
 	crt_gdata.cg_ctx_num++;
 
-	ctx->cc_pool = arg;
 	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 
 	*crt_ctx = (crt_context_t)ctx;
 
 out:
 	return rc;
+}
+
+int
+crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
+			      void *arg)
+{
+	struct crt_context *crt_ctx = ctx;
+
+	if (ctx == CRT_CONTEXT_NULL || process_cb == NULL) {
+		D_ERROR("Invalid parameter: ctx %p cb %p\n",
+			ctx, process_cb);
+		return -DER_INVAL;
+	}
+
+	crt_ctx->cc_rpc_cb = process_cb;
+	crt_ctx->cc_rpc_cb_arg = arg;
+	return 0;
 }
 
 void

@@ -161,7 +161,8 @@ struct crt_context {
 	d_list_t		 cc_link; /* link to gdata.cg_ctx_list */
 	int			 cc_idx; /* context index */
 	struct crt_hg_context	 cc_hg_ctx; /* HG context */
-	void			*cc_pool; /* pool for ES on server stack */
+	void			*cc_rpc_cb_arg;
+	crt_rpc_task_t		cc_rpc_cb; /* rpc callback */
 	/* in-flight endpoint tracking hash table */
 	struct d_chash_table	 cc_epi_table;
 	/* binheap for inflight RPC timeout tracking */

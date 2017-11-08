@@ -41,7 +41,6 @@
 #define D_LOGFAC	DD_FAC(hg)
 
 #include "crt_internal.h"
-#include <abt.h>
 
 /*
  * na_dict table should be in the same order of enum crt_na_type, the last one
@@ -950,11 +949,12 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 
 decref:
-	/* if ABT enabled and the ULT created successfully, the crt_handle_rpc
-	 * will decref it. */
-	if (rc != 0 || crt_ctx->cc_pool == NULL) {
+	/* If rpc call back is customized, then it might be handled
+	 * asynchronously, Let's hold the RPC, and the real handler
+	 * (crt_handle_rpc())will release it
+	 */
+	if (rc != 0 || !crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub))
 		RPC_DECREF(rpc_priv);
-	}
 out:
 	return hg_ret;
 }
@@ -1267,14 +1267,12 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 static int
 crt_hg_trigger(struct crt_hg_context *hg_ctx)
 {
-	struct crt_context	*crt_ctx;
 	hg_context_t		*hg_context;
 	hg_return_t		hg_ret = HG_SUCCESS;
 	unsigned int		count = 0;
 
 	D_ASSERT(hg_ctx != NULL);
 	hg_context = hg_ctx->chc_hgctx;
-	crt_ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
 
 	do {
 		hg_ret = HG_Trigger(hg_context, 0, UINT32_MAX, &count);
@@ -1284,13 +1282,6 @@ crt_hg_trigger(struct crt_hg_context *hg_ctx)
 		D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
 		return -DER_HG;
 	}
-
-	/**
-	 * XXX Let's yield to other process anyway, but there
-	 * maybe better strategy when there are more use cases
-	 */
-	if (crt_ctx->cc_pool != NULL)
-		ABT_thread_yield();
 
 	return 0;
 }

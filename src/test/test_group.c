@@ -280,7 +280,7 @@ test_group_init(void)
 
 	for (i = 0; i < test.tg_ctx_num; i++) {
 		test.tg_thread_id[i] = i;
-		rc = crt_context_create(NULL, &test.tg_crt_ctx[i]);
+		rc = crt_context_create(&test.tg_crt_ctx[i]);
 		D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 		rc = pthread_create(&test.tg_tid[i], NULL, progress_thread,
 				    &test.tg_thread_id[i]);

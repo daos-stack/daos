@@ -49,7 +49,7 @@ def scons():
 
     denv.AppendUnique(CPPPATH=['#/src/cart'])
     denv.AppendUnique(LIBS=libraries)
-    prereqs.require(denv, 'mercury', 'pmix', 'argobots')
+    prereqs.require(denv, 'mercury', 'pmix')
     denv.AppendUnique(RPATH=['$PREFIX/lib'])
 
     crt_targets = denv.SharedObject(Glob('*.c'))

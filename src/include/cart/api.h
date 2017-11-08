@@ -80,15 +80,12 @@ crt_init(crt_group_id_t grpid, uint32_t flags);
  * Create CRT transport context. Must be destroyed by crt_context_destroy()
  * before calling crt_finalize().
  *
- * \param arg [IN]		input argument, now the only usage is passing
- *				argobots pool pointer. If user does not use
- *				argobots it should pass in NULL.
  * \param crt_ctx [OUT]		created CRT transport context
  *
  * \return			zero on success, negative value if error
  */
 int
-crt_context_create(void *arg, crt_context_t *crt_ctx);
+crt_context_create(crt_context_t *crt_ctx);
 
 /**
  * Destroy CRT transport context.
@@ -364,6 +361,38 @@ crt_ep_abort(crt_endpoint_t *ep);
  */
 int
 crt_rpc_register(crt_opcode_t opc, uint32_t flags, struct crt_req_format *drf);
+
+/**
+ * The RPC callback for the context, which will be called when the context
+ * receives any RPC. In this callback, the handler can do sth specially for
+ * the RPC on this context, for example create another ULT to handle it,
+ * see DAOS.
+ *
+ * \param ctx [IN]		The cart context.
+ * \param rpc [IN]		RPC received.
+ * \param rpc_hdlr [IN]		Real RPC handler.
+ * \param arg [IN]		The argument for the RPC handler.
+ *
+ * \return			0 for success, negative value if failed.
+ *
+ */
+typedef int (*crt_rpc_task_t) (crt_context_t *ctx, crt_rpc_t *rpc,
+			       void (*rpc_hdlr)(void *), void *arg);
+/**
+ * Register RPC process callback for all RPCs this context received.
+ * This callback enables the thread to modify how the rpc callbacks are
+ * handled for this context. For example DAOS creates another argobot
+ * ULT to handle it.
+ *
+ * \param crt_ctx [IN]		The context to be registered.
+ * \param rpc_cb [IN]		The RPC process callback.
+ * \param arg [IN]		The argument for RPC process callback.
+ *
+ * \return			zero on success, negative value if error.
+ */
+int
+crt_context_register_rpc_task(crt_context_t crt_ctx,
+			      crt_rpc_task_t rpc_cb, void *arg);
 
 /**
  * Dynamically register an RPC with features at server-side.

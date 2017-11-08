@@ -510,7 +510,7 @@ test_init(void)
 	D_ASSERTF(rc == 0, "crt_group_size() failed. rc: %d\n", rc);
 	D_DEBUG("local group size is %d\n", test.t_my_group_size);
 
-	rc = crt_context_create(NULL, &test.t_crt_ctx);
+	rc = crt_context_create(&test.t_crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 
 	rc = crt_corpc_register(TEST_OPC_CORPC_VER_MISMATCH,
