@@ -129,6 +129,7 @@ struct dss_module_info {
 	struct dss_xstream	*dmi_xstream;
 	int			dmi_tid;
 	tse_sched_t		dmi_sched;
+	uint64_t		dmi_tse_ult_created:1;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -192,6 +193,10 @@ struct dss_module {
 	struct daos_rpc_handler	 *sm_handlers;
 };
 
+typedef ABT_pool (*dss_abt_pool_choose_cb_t)(crt_rpc_t *rpc, ABT_pool *pools);
+
+void dss_abt_pool_choose_cb_register(unsigned int mod_id,
+				     dss_abt_pool_choose_cb_t cb);
 int dss_ult_create(void (*func)(void *), void *arg,
 		   int stream_id, ABT_thread *ult);
 int dss_ult_create_all(void (*func)(void *), void *arg);
@@ -271,7 +276,8 @@ dss_thread_collective_reduce(struct dss_coll_ops *ops,
 int dss_task_collective(int (*func)(void *), void *arg);
 int dss_thread_collective(int (*func)(void *), void *arg);
 
-int dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size);
+int dss_sync_task(daos_opc_t opc, void *arg,
+		  unsigned int arg_size, unsigned int priority);
 unsigned int dss_get_threads_number(void);
 
 /* Convert Argobots errno to DAOS ones. */
@@ -291,6 +297,31 @@ int dss_group_create(crt_group_id_t id, d_rank_list_t *ranks,
 int dss_group_destroy(crt_group_t *group);
 
 void dss_sleep(int ms);
+
+/** Different priorities/type of ES pool, there are 4 pools for now
+ *  Three priviate pools
+ *
+ *  DSS_POOL_PRIV_LOW_PRIORITY
+ *  DSS_POOL_PRIV
+ *  DSS_POOL_PRIV_HIGH_PRIORITY
+ *
+ *  when server get a request, it will push the request to one of these
+ *  private pools(by priority), if the request can be handled totally by
+ *  its own xstream, for example object fetch/update RPC handler ULT.
+ *
+ *  DSS_POOL_SHARE
+ *
+ *  If the request can not be handled by the xstream itself, for example
+ *  it needs collective operation, then the handler ULT will be pushed
+ *  the shared pools.
+ */
+enum {
+	DSS_POOL_PRIV_LOW_PRIORITY = 0,
+	DSS_POOL_PRIV,
+	DSS_POOL_SHARE,
+	DSS_POOL_PRIV_HIGH_PRIORITY,
+	DSS_POOL_CNT,
+};
 
 enum iv_key {
 	IV_POOL_MAP = 1,

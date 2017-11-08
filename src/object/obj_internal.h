@@ -28,6 +28,7 @@
 #ifndef __DAOS_OBJ_INTENRAL_H__
 #define __DAOS_OBJ_INTENRAL_H__
 
+#include <abt.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/tse.h>
@@ -183,5 +184,8 @@ obj_shard_hdl2ptr(daos_handle_t hdl);
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
+
+ABT_pool
+ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

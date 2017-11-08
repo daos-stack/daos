@@ -306,7 +306,7 @@ main(int argc, char *argv[])
 
 	rc = crt_init(NULL, 0 /* client-only */);
 	D__ASSERTF(rc == 0, "%d\n", rc);
-	rc = crt_context_create(NULL /* arg */, &context);
+	rc = crt_context_create(&context);
 	D__ASSERTF(rc == 0, "%d\n", rc);
 	rc = daos_rpc_register(rdbt_rpcs, NULL, DAOS_RDBT_MODULE);
 	D__ASSERTF(rc == 0, "%d\n", rc);

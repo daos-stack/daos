@@ -104,7 +104,7 @@ daos_eq_lib_init()
 	}
 
 	/* use a global shared context for all eq for now */
-	rc = crt_context_create(NULL /* arg */, &daos_eq_ctx);
+	rc = crt_context_create(&daos_eq_ctx);
 	if (rc != 0) {
 		D__ERROR("failed to create client context: %d\n", rc);
 		D__GOTO(crt, rc);

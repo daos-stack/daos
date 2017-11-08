@@ -38,14 +38,13 @@
 
 /** Number of started xstreams or cores used */
 unsigned int	dss_nxstreams;
-
 /** Per-xstream configuration data */
 struct dss_xstream {
 	ABT_future	dx_shutdown;
 	daos_list_t	dx_list;
 	hwloc_cpuset_t	dx_cpuset;
 	ABT_xstream	dx_xstream;
-	ABT_pool	dx_pool;
+	ABT_pool	dx_pools[DSS_POOL_CNT];
 	ABT_sched	dx_sched;
 	ABT_xstream	dx_progress;
 	unsigned int	dx_idx;
@@ -90,42 +89,77 @@ dss_sched_init(ABT_sched sched, ABT_sched_config config)
 	return ret;
 }
 
+/**
+ * Choose ULT from the pool. For now, let's always handle the ULT
+ * in private pool(high priority/normal) first, mostly object
+ * I/O request, then the ULT in shared pool, finally the ULT
+ * in the low priority POOL.
+ *
+ * XXX we may change the sequence later once we have more cases.
+ */
+static ABT_unit
+dss_sched_unit_pop(ABT_pool *pools, ABT_pool *pool)
+{
+	ABT_unit	unit;
+
+	ABT_pool_pop(pools[DSS_POOL_PRIV_HIGH_PRIORITY], &unit);
+	if (unit != ABT_UNIT_NULL) {
+		*pool = pools[DSS_POOL_PRIV_HIGH_PRIORITY];
+		return unit;
+	}
+
+	/* incoming I/O request ULT */
+	ABT_pool_pop(pools[DSS_POOL_PRIV], &unit);
+	if (unit != ABT_UNIT_NULL) {
+		*pool = pools[DSS_POOL_PRIV];
+		return unit;
+	}
+
+	/* Collective ULT or created ULT, like rebuild ULT or the
+	 * main crt progress ULT dss_srv_handler
+	 */
+	ABT_pool_pop(pools[DSS_POOL_SHARE], &unit);
+	if (unit != ABT_UNIT_NULL) {
+		*pool = pools[DSS_POOL_SHARE];
+		return unit;
+	}
+
+	ABT_pool_pop(pools[DSS_POOL_PRIV_LOW_PRIORITY], &unit);
+	if (unit != ABT_UNIT_NULL) {
+		*pool = pools[DSS_POOL_PRIV_LOW_PRIORITY];
+		return unit;
+	}
+
+	return ABT_UNIT_NULL;
+}
+
 static void
 dss_sched_run(ABT_sched sched)
 {
-	uint32_t		 work_count = 0;
+	uint32_t		work_count = 0;
 	struct sched_data	*p_data;
-	ABT_pool		 pool;
-	ABT_unit		 unit;
-	int			 ret;
+	ABT_pool		pools[DSS_POOL_CNT];
+	ABT_pool		pool;
+	ABT_unit		unit;
+	int			ret;
 
 	ABT_sched_get_data(sched, (void **)&p_data);
 
-	/* Only one pool for now */
-	ret = ABT_sched_get_pools(sched, 1, 0, &pool);
+	ret = ABT_sched_get_pools(sched, DSS_POOL_CNT, 0, pools);
 	if (ret != ABT_SUCCESS) {
 		D__ERROR("ABT_sched_get_pools");
 		return;
 	}
+
 	while (1) {
 		/* Execute one work unit from the scheduler's pool */
-		ABT_pool_pop(pool, &unit);
+		unit = dss_sched_unit_pop(pools, &pool);
 		if (unit != ABT_UNIT_NULL)
 			ABT_xstream_run_unit(unit, pool);
 
 		if (++work_count >= p_data->event_freq) {
-			ABT_bool stop;
-
-			ret = ABT_sched_has_to_stop(sched, &stop);
-			if (ret != ABT_SUCCESS) {
-				D__ERROR("ABT_sched_has_to_stop fails %d\n",
-					ret);
-				break;
-			}
-			if (stop == ABT_TRUE)
-				break;
-			work_count = 0;
 			ABT_xstream_check_events(sched);
+			break;
 		}
 	}
 }
@@ -175,6 +209,50 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 	return dss_abterr2der(ret);
 }
 
+
+static dss_abt_pool_choose_cb_t abt_pool_choose_cbs[DAOS_MAX_MODULE];
+
+/**
+ * Register abt choose pool callback for each module, so the module
+ * can choose the pools by itself.
+ *
+ * \param mod_id [IN]	module ID.
+ * \param cb [IN]	callback.
+ *
+ * \return		0 if succes, otherwise negative errno.
+ */
+void
+dss_abt_pool_choose_cb_register(unsigned int mod_id,
+				dss_abt_pool_choose_cb_t cb)
+{
+	D__ASSERT(abt_pool_choose_cbs[mod_id] == NULL);
+	abt_pool_choose_cbs[mod_id] = cb;
+}
+
+/**
+ * Process the rpc received, let's create a ABT thread for each request.
+ */
+int
+dss_process_rpc(crt_context_t *ctx, crt_rpc_t *rpc,
+		void (*real_rpc_hdlr)(void *), void *arg)
+{
+	unsigned int	mod_id = opc_get_mod_id(rpc->cr_opc);
+	ABT_pool	*pools = arg;
+	ABT_pool	pool;
+	int		rc;
+
+	if (abt_pool_choose_cbs[mod_id] != NULL)
+		pool = abt_pool_choose_cbs[mod_id](rpc, pools);
+	else
+		pool = pools[DSS_POOL_SHARE];
+
+	rc = ABT_thread_create(pool, real_rpc_hdlr, rpc,
+			       ABT_THREAD_ATTR_NULL, NULL);
+	if (rc != ABT_SUCCESS)
+		rc = dss_abterr2der(rc);
+	return rc;
+}
+
 /**
  *
  * The handling process would like
@@ -209,17 +287,25 @@ dss_srv_handler(void *arg)
 	D__ASSERT(dmi != NULL);
 
 	/* create private transport context */
-	rc = crt_context_create(&dx->dx_pool, &dmi->dmi_ctx);
+	rc = crt_context_create(&dmi->dmi_ctx);
 	if (rc != 0) {
 		D__ERROR("failed to create crt ctxt: %d\n", rc);
 		return;
+	}
+
+	rc = crt_context_register_rpc_task(dmi->dmi_ctx,
+					   dss_process_rpc,
+					   dx->dx_pools);
+	if (rc != 0) {
+		D__ERROR("failed to register process cb %d\n", rc);
+		D_GOTO(destroy, rc);
 	}
 
 	/** Get xtream index from cart */
 	rc = crt_context_idx(dmi->dmi_ctx, &dmi->dmi_tid);
 	if (rc != 0) {
 		D__ERROR("failed to get xtream index: rc %d\n", rc);
-		return;
+		D_GOTO(destroy, rc);
 	}
 
 	/* Prepare the scheduler */
@@ -255,12 +341,12 @@ dss_srv_handler(void *arg)
 			break;
 		}
 
-		tse_sched_progress(&dmi->dmi_sched);
-
 		rc = ABT_future_test(dx->dx_shutdown, &state);
 		D__ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		if (state == ABT_TRUE)
 			break;
+
+		ABT_thread_yield();
 	}
 
 	tse_sched_fini(&dmi->dmi_sched);
@@ -272,7 +358,8 @@ static inline struct dss_xstream *
 dss_xstream_alloc(hwloc_cpuset_t cpus)
 {
 	struct dss_xstream	*dx;
-	int			 rc = 0;
+	int			i;
+	int			rc = 0;
 
 	D__ALLOC_PTR(dx);
 	if (dx == NULL) {
@@ -292,8 +379,10 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 		D__GOTO(err_future, rc = -DER_NOMEM);
 	}
 
+	for (i = 0; i < DSS_POOL_CNT; i++)
+		dx->dx_pools[i] = ABT_POOL_NULL;
+
 	dx->dx_xstream	= ABT_XSTREAM_NULL;
-	dx->dx_pool	= ABT_POOL_NULL;
 	dx->dx_sched	= ABT_SCHED_NULL;
 	dx->dx_progress	= ABT_THREAD_NULL;
 	DAOS_INIT_LIST_HEAD(&dx->dx_list);
@@ -327,36 +416,43 @@ static int
 dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 {
 	struct dss_xstream	*dx;
-	int			 rc = 0;
+	int			rc = 0;
+	int			i;
 
 	/** allocate & init xstream configuration data */
 	dx = dss_xstream_alloc(cpus);
 	if (dx == NULL)
 		return -DER_NOMEM;
 
-	/** create pool */
-	rc = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPSC,
-				   ABT_TRUE, &dx->dx_pool);
-	if (rc != ABT_SUCCESS)
-		D__GOTO(out_dxstream, rc = dss_abterr2der(rc));
+	/** create pools */
+	for (i = 0; i < DSS_POOL_CNT; i++) {
+		ABT_pool_access access;
 
-	rc = dss_sched_create(&dx->dx_pool, 1, &dx->dx_sched);
+		access = i == DSS_POOL_SHARE ?
+			 ABT_POOL_ACCESS_MPSC : ABT_POOL_ACCESS_PRIV;
+
+		rc = ABT_pool_create_basic(ABT_POOL_FIFO, access, ABT_TRUE,
+					   &dx->dx_pools[i]);
+		if (rc != ABT_SUCCESS)
+			D__GOTO(out_pool, rc = dss_abterr2der(rc));
+	}
+
+	rc = dss_sched_create(dx->dx_pools, DSS_POOL_CNT, &dx->dx_sched);
 	if (rc != 0) {
 		D__ERROR("create scheduler fails: %d\n", rc);
 		D__GOTO(out_pool, rc);
 	}
 
 	/** start execution stream, rank must be non-null */
-	rc = ABT_xstream_create_with_rank(dx->dx_sched, idx,
-					  &dx->dx_xstream);
+	rc = ABT_xstream_create_with_rank(dx->dx_sched, idx, &dx->dx_xstream);
 	if (rc != ABT_SUCCESS) {
 		D__ERROR("create xstream fails %d\n", rc);
 		D__GOTO(out_sched, rc = dss_abterr2der(rc));
 	}
 
 	/** start progress ULT */
-	rc = ABT_thread_create(dx->dx_pool, dss_srv_handler,
-			       dx, ABT_THREAD_ATTR_NULL,
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE],
+			       dss_srv_handler, dx, ABT_THREAD_ATTR_NULL,
 			       &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
 		D__ERROR("create xstream failed: %d\n", rc);
@@ -382,8 +478,10 @@ out_xstream:
 out_sched:
 	ABT_sched_free(&dx->dx_sched);
 out_pool:
-	ABT_pool_free(&dx->dx_pool);
-out_dxstream:
+	for (i = 0; i < DSS_POOL_CNT; i++) {
+		if (dx->dx_pools[i] != ABT_POOL_NULL)
+			ABT_pool_free(&dx->dx_pools[i]);
+	}
 	dss_xstream_free(dx);
 	return rc;
 }
@@ -560,8 +658,8 @@ dss_ult_create(void (*func)(void *), void *arg, int stream_id, ABT_thread *ult)
 	if (dx == NULL)
 		return -DER_NONEXIST;
 
-	rc = ABT_thread_create(dx->dx_pool, func, arg, ABT_THREAD_ATTR_NULL,
-			       ult);
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE], func, arg,
+			       ABT_THREAD_ATTR_NULL, ult);
 
 	return dss_abterr2der(rc);
 }
@@ -586,7 +684,7 @@ dss_ult_create_all(void (*func)(void *), void *arg)
 	 * Create ULT for each stream in the target
 	 */
 	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
-		rc = ABT_thread_create(dx->dx_pool, func, arg,
+		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE], func, arg,
 				       ABT_THREAD_ATTR_NULL,
 				       NULL /* new thread */);
 		if (rc != ABT_SUCCESS) {
@@ -769,12 +867,12 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		stream->st_coll_args	= &carg;
 
 		if (create_ult)
-			rc = ABT_thread_create(dx->dx_pool, collective_func,
-					       stream, ABT_THREAD_ATTR_NULL,
-					       NULL);
+			rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE],
+					       collective_func, stream,
+					       ABT_THREAD_ATTR_NULL, NULL);
 		else
-			rc = ABT_task_create(dx->dx_pool, collective_func,
-					     stream, NULL);
+			rc = ABT_task_create(dx->dx_pools[DSS_POOL_SHARE],
+					     collective_func, stream, NULL);
 
 		if (rc != ABT_SUCCESS) {
 			aggregator.at_args.st_rc = dss_abterr2der(rc);
@@ -907,17 +1005,55 @@ dss_task_comp_cb(tse_task_t *task, void *arg)
 	return 0;
 }
 
+static void
+dss_tse_progress_ult(void *arg)
+{
+	struct dss_module_info *dmi = arg;
+
+	while (true) {
+		tse_sched_progress(&dmi->dmi_sched);
+		/* XXX Check if this needs to be stopped */
+		ABT_thread_yield();
+	}
+}
+
+static int
+generate_task_progress_ult(struct dss_module_info *dmi, unsigned int type)
+{
+	int rc;
+
+	if (dmi->dmi_tse_ult_created)
+		return 0;
+
+	D_ASSERT(type < DSS_POOL_CNT);
+	rc = ABT_thread_create(dmi->dmi_xstream->dx_pools[type],
+			       dss_tse_progress_ult, dmi,
+			       ABT_THREAD_ATTR_NULL, NULL);
+	if (rc)
+		return rc;
+
+	dmi->dmi_tse_ult_created = 1;
+	return 0;
+}
+
 /**
  * Call client side API on the server side asynchronously.
  */
 int
-dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
+dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size,
+	      unsigned int type)
 {
 	tse_task_t		*task = NULL;
 	struct async_result	cb_arg;
 	ABT_future		future;
+	struct dss_module_info	*dmi = dss_get_module_info();
 	int			rc;
 	int			ret;
+
+	/* Generate the progress task */
+	rc = generate_task_progress_ult(dmi, type);
+	if (rc)
+		return rc;
 
 	rc = ABT_future_create(1, NULL, &future);
 	if (rc != ABT_SUCCESS)
@@ -926,8 +1062,7 @@ dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 	cb_arg.future = &future;
 	cb_arg.result = 0;
 
-	rc = daos_task_create(opc, &dss_get_module_info()->dmi_sched,
-			      arg, 0, NULL, &task);
+	rc = daos_task_create(opc, &dmi->dmi_sched, arg, 0, NULL, &task);
 	if (rc != 0)
 		D__GOTO(free_future, rc = -DER_NOMEM);
 

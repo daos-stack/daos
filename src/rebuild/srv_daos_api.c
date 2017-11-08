@@ -115,7 +115,8 @@ ds_obj_open(daos_handle_t coh, daos_obj_id_t oid,
 	arg.mode = mode;
 	arg.oh = oh;
 
-	return dss_sync_task(DAOS_OPC_OBJ_OPEN, &arg, sizeof(arg));
+	return dss_sync_task(DAOS_OPC_OBJ_OPEN, &arg, sizeof(arg),
+			     DSS_POOL_PRIV_LOW_PRIORITY);
 }
 
 int
@@ -125,7 +126,8 @@ ds_obj_close(daos_handle_t obj_hl)
 
 	arg.oh = obj_hl;
 
-	return dss_sync_task(DAOS_OPC_OBJ_CLOSE, &arg, sizeof(arg));
+	return dss_sync_task(DAOS_OPC_OBJ_CLOSE, &arg, sizeof(arg),
+			     DSS_POOL_PRIV_LOW_PRIORITY);
 }
 
 int
@@ -142,7 +144,8 @@ ds_obj_single_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
 	arg.sgl = sgl;
 	arg.anchor = anchor;
 
-	return dss_sync_task(DAOS_OPC_OBJ_SHARD_LIST_DKEY, &arg, sizeof(arg));
+	return dss_sync_task(DAOS_OPC_OBJ_SHARD_LIST_DKEY, &arg, sizeof(arg),
+			     DSS_POOL_PRIV_LOW_PRIORITY);
 }
 
 int
@@ -160,7 +163,8 @@ ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	arg.sgl		= sgl;
 	arg.anchor	= anchor;
 
-	return dss_sync_task(DAOS_OPC_OBJ_LIST_AKEY, &arg, sizeof(arg));
+	return dss_sync_task(DAOS_OPC_OBJ_LIST_AKEY, &arg, sizeof(arg),
+			     DSS_POOL_PRIV_LOW_PRIORITY);
 }
 
 int
@@ -179,7 +183,8 @@ ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 	arg.sgls = sgls;
 	arg.maps = maps;
 
-	return dss_sync_task(DAOS_OPC_OBJ_FETCH, &arg, sizeof(arg));
+	return dss_sync_task(DAOS_OPC_OBJ_FETCH, &arg, sizeof(arg),
+			     DSS_POOL_PRIV_LOW_PRIORITY);
 }
 
 int
@@ -205,5 +210,6 @@ ds_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	arg.anchor = anchor;
 	arg.incr_order = incr;
 
-	return dss_sync_task(DAOS_OPC_OBJ_LIST_RECX, &arg, sizeof(arg));
+	return dss_sync_task(DAOS_OPC_OBJ_LIST_RECX, &arg, sizeof(arg),
+			     DSS_POOL_PRIV_LOW_PRIORITY);
 }

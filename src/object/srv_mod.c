@@ -42,6 +42,9 @@ obj_mod_init(void)
 		D__DEBUG(DB_IO, "All bulk data will be dropped\n");
 		srv_bypass_bulk = true;
 	}
+
+	dss_abt_pool_choose_cb_register(DAOS_OBJ_MODULE,
+					ds_obj_abt_pool_choose_cb);
 	return 0;
 }
 

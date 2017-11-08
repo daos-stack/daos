@@ -1190,3 +1190,22 @@ out:
 		ds_cont_hdl_put(cont_hdl);
 	}
 }
+
+/**
+ * Choose abt pools for object RPC. Because dkey enumeration might create ULT
+ * on other xstream pools, so we have to put it to the shared pool. For other
+ * RPC, it can be put to the private pool. XXX we might just instruct the
+ * server create task for inline I/O.
+ */
+ABT_pool
+ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools)
+{
+	ABT_pool pool;
+
+	if (opc_get(rpc->cr_opc) == DAOS_OBJ_DKEY_RPC_ENUMERATE)
+		pool = pools[DSS_POOL_SHARE];
+	else
+		pool = pools[DSS_POOL_PRIV];
+
+	return pool;
+}
