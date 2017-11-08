@@ -918,6 +918,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		/** safe to return here because relevant portion of rpc_tmp is
 		 * already serialized by Mercury. Same for below.
 		 */
+		HG_Destroy(rpc_tmp.crp_hg_hdl);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 	D_ASSERT(proc != NULL);
@@ -933,6 +934,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		 */
 		crt_hg_reply_error_send(&rpc_tmp, -DER_UNREG);
 		crt_hg_unpack_cleanup(proc);
+
+		HG_Destroy(rpc_tmp.crp_hg_hdl);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 	D_ASSERT(opc_info->coi_opc == opc);
@@ -941,6 +944,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	if (rpc_priv == NULL) {
 		crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
 		crt_hg_unpack_cleanup(proc);
+		HG_Destroy(rpc_tmp.crp_hg_hdl);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 	crt_hg_header_copy(&rpc_tmp, rpc_priv);
@@ -961,6 +965,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	if (rc != 0) {
 		D_ERROR("crt_rpc_priv_init rc=%d, opc=%#x\n", rc, opc);
 		crt_hg_reply_error_send(rpc_priv, -DER_MISC);
+		HG_Destroy(rpc_tmp.crp_hg_hdl);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 

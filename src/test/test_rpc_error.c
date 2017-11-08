@@ -51,6 +51,7 @@
 #include <cart/api.h>
 
 #define RPC_ERR_OPC_NOREPLY		(0xA1)
+#define RPC_ERR_OPC_NORPC		(0xA2)
 #define RPC_ERR_OPC_SHUTDOWN		(0x100)
 
 struct rpc_err_t {
@@ -215,10 +216,16 @@ rpc_err_init(void)
 
 	rc = crt_rpc_srv_register(RPC_ERR_OPC_NOREPLY, 0, &CQF_RPC_ERR_NOREPLY,
 				  rpc_err_noreply_hdlr);
-	D_ASSERTF(rc == 0, "crt_rpc_serv_register() failed, rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
+
 	rc = crt_rpc_srv_register(RPC_ERR_OPC_SHUTDOWN, 0, NULL,
 				  rpc_err_shutdown_hdlr);
-	D_ASSERTF(rc == 0, "crt_rpc_serv_register() failed, rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
+
+	if (!rpc_err.re_is_service) {
+		rc = crt_rpc_register(RPC_ERR_OPC_NORPC, 0, NULL);
+		D_ASSERTF(rc == 0, "crt_rpc_register() failed, rc: %d\n", rc);
+	}
 
 	rc = sem_init(&rpc_err.re_all_done, 0, 0);
 	D_ASSERTF(rc == 0, "Could not initialize semaphore\n");
@@ -245,9 +252,10 @@ rpc_err_fini()
 static void
 client_cb(const struct crt_cb_info *cb_info)
 {
-	crt_rpc_t				*rpc_req;
-	struct rpc_err_noreply_in_t		*rpc_req_input;
-	struct rpc_err_noreply_out_t		*rpc_req_output;
+	crt_rpc_t			*rpc_req;
+	struct rpc_err_noreply_in_t	*rpc_req_input;
+	struct rpc_err_noreply_out_t	*rpc_req_output;
+	struct rpc_err_t		*re = cb_info->cci_arg;
 
 	rpc_req = cb_info->cci_rpc;
 
@@ -265,10 +273,16 @@ client_cb(const struct crt_cb_info *cb_info)
 			rpc_req_output->magic,
 			rpc_req_output->magic == rpc_req_input->magic ?
 			"MATCH" : "MISMATCH");
-		sem_post(&rpc_err.re_all_done);
+		sem_post(&re->re_all_done);
+		break;
+	case RPC_ERR_OPC_NORPC:
+		fprintf(stderr, "RPC failed, return code: %d.\n",
+			cb_info->cci_rc);
+		D_ASSERT(cb_info->cci_rc == -DER_UNREG);
+		sem_post(&re->re_all_done);
 		break;
 	case RPC_ERR_OPC_SHUTDOWN:
-		sem_post(&rpc_err.re_all_done);
+		sem_post(&re->re_all_done);
 		break;
 	default:
 		D_ASSERTF(false, "The default case should never occur.\n");
@@ -305,11 +319,32 @@ rpc_err_rpc_issue()
 			rpc_err.re_my_rank, rpc_req_input->magic,
 			server_ep.ep_rank, server_ep.ep_tag);
 
-		rc = crt_req_send(rpc_req, client_cb, NULL);
+		rc = crt_req_send(rpc_req, client_cb, &rpc_err);
 		D_ASSERTF(rc == 0, "crt_req_send() failed, rc %d\n", rc);
+
+		rpc_req = NULL;
+
+		rc = crt_req_create(rpc_err.re_crt_ctx, NULL,
+				    RPC_ERR_OPC_NORPC,
+				    &rpc_req);
+		D_ASSERTF(rc == 0 && rpc_req != NULL,
+			  "crt_req_create() failed, rc: %d rpc_req: %p\n",
+			  rc, rpc_req);
+
+		rc = crt_req_set_endpoint(rpc_req, &server_ep);
+		D_ASSERTF(rc == 0, "crt_set_endpoint() failed, rc %d\n", rc);
+
+		rc = crt_req_send(rpc_req, client_cb, &rpc_err);
+		D_ASSERTF(rc == 0, "crt_req_send() failed, rc %d\n", rc);
+
 	}
 	for (i = 0; i < rpc_err.re_target_group_size; i++) {
-		D_DEBUG(DB_TEST, "Waiting on reply N.O. %d\n", i);
+		/* Wait twice for each target here as two RPCs are sent for
+		 * each target in the loop above.
+		 */
+		D_DEBUG(DB_TEST, "Waiting on reply %d\n", i * 2);
+		sem_wait(&rpc_err.re_all_done);
+		D_DEBUG(DB_TEST, "Waiting on reply %d\n", (i * 2) + 1);
 		sem_wait(&rpc_err.re_all_done);
 	}
 }
@@ -332,7 +367,7 @@ shutdown_cmd_issue()
 		D_ASSERTF(rc == 0 && rpc_req != NULL,
 			  "crt_req_create() failed, rc: %d rpc_req: %p\n",
 			  rc, rpc_req);
-		rc = crt_req_send(rpc_req, client_cb, NULL);
+		rc = crt_req_send(rpc_req, client_cb, &rpc_err);
 		D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 	}
 
