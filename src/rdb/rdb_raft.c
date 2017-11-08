@@ -248,12 +248,6 @@ struct rdb_raft_entry {
 	unsigned char	dre_bytes[];
 };
 
-static inline struct rdb_raft_entry *
-rdb_raft_entry_buf(raft_entry_t *entry)
-{
-	return container_of(entry->data.buf, struct rdb_raft_entry, dre_bytes);
-}
-
 static inline size_t
 rdb_raft_entry_buf_size(raft_entry_t *entry)
 {
@@ -288,18 +282,28 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	daos_iov_set(&key, &i, sizeof(i));
 	daos_iov_set(&value, buf, buf_size);
 	rc = dbtree_update(db->d_log, &key, &value);
+	D__FREE(buf, buf_size);
 	if (rc != 0) {
 		D__ERROR(DF_DB": failed to persist entry buffer: %d\n",
 			DP_DB(db), rc);
-		D__FREE(buf, buf_size);
 		return rc;
 	}
 
-	/*
-	 * Replace the user buffer with ours, as entry will be copied and saved
-	 * by the log module in raft. buf is freed in rdb_raft_cb_log_delete().
-	 */
+	/* Replace the user buffer with the persistent memory address. */
+	daos_iov_set(&value, NULL, 0);
+	rc = dbtree_lookup(db->d_log, &key, &value);
+	if (rc != 0) {
+		D__ERROR(DF_DB": failed to look up entry address: %d\n",
+			 DP_DB(db), rc);
+		dbtree_delete(db->d_log, &key, NULL);
+		return rc;
+	}
+	buf = value.iov_buf;
 	entry->data.buf = buf->dre_bytes;
+
+	D__DEBUG(DB_TRACE, DF_DB": appended entry "DF_U64": term=%d type=%d "
+		 "buf=%p len=%u\n", DP_DB(db), i, entry->term, entry->type,
+		 entry->data.buf, entry->data.len);
 	return 0;
 }
 
@@ -307,12 +311,10 @@ static int
 rdb_raft_cb_log_delete(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		       int index)
 {
-	struct rdb	       *db = arg;
-	uint64_t		i = index;
-	daos_iov_t		key;
-	struct rdb_raft_entry  *buf = rdb_raft_entry_buf(entry);
-	size_t			size = rdb_raft_entry_buf_size(entry);
-	int			rc;
+	struct rdb     *db = arg;
+	uint64_t	i = index;
+	daos_iov_t	key;
+	int		rc;
 
 	daos_iov_set(&key, &i, sizeof(i));
 	rc = dbtree_delete(db->d_log, &key, NULL);
@@ -320,9 +322,9 @@ rdb_raft_cb_log_delete(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		D__ERROR(DF_DB": failed to delete entry: %d\n", DP_DB(db), rc);
 		return rc;
 	}
-
-	/* Free the buffer allocated by rdb_raft_cb_log_offer(). */
-	D__FREE(buf, size);
+	D__DEBUG(DB_TRACE, DF_DB": deleted entry "DF_U64": term=%d type=%d "
+		 "buf=%p len=%u\n", DP_DB(db), i, entry->term, entry->type,
+		 entry->data.buf, entry->data.len);
 	return 0;
 }
 
@@ -740,7 +742,7 @@ rdb_raft_verify_leadership(struct rdb *db)
 }
 
 /* Apply entries up to "index". For now, one NVML TX per entry. */
-static void
+static int
 rdb_apply_to(struct rdb *db, uint64_t index)
 {
 	while (db->d_applied < index) {
@@ -759,12 +761,13 @@ rdb_apply_to(struct rdb *db, uint64_t index)
 
 		rc = rdb_tx_apply(db, i, e->data.buf, e->data.len, result,
 				  &destroyed);
-		if (rc != 0)
-			/*
-			 * TODO: Try to resolve the issue or stop this replica
-			 * eventually.
-			 */
-			break;
+		if (rc != 0) {
+			/* TODO: Attempt to resolve the issue and retry. */
+			D__ERROR(DF_DB": failed to apply entry "DF_U64": %d\n",
+				 DP_DB(db), i, rc);
+			db->d_cbs->dc_stop(db, rc, db->d_arg);
+			return rc;
+		}
 
 		ABT_mutex_lock(db->d_mutex);
 		db->d_applied = i;
@@ -773,13 +776,15 @@ rdb_apply_to(struct rdb *db, uint64_t index)
 		D__DEBUG(DB_ANY, DF_DB": applied to entry "DF_U64"\n",
 			DP_DB(db), i);
 	}
+	return 0;
 }
 
 /* Daemon ULT for applying committed entries */
 static void
 rdb_applyd(void *arg)
 {
-	struct rdb *db = arg;
+	struct rdb     *db = arg;
+	int		rc;
 
 	D__DEBUG(DB_ANY, DF_DB": applyd starting\n", DP_DB(db));
 	for (;;) {
@@ -802,10 +807,12 @@ rdb_applyd(void *arg)
 		ABT_mutex_unlock(db->d_mutex);
 		if (stop)
 			break;
-		rdb_apply_to(db, committed);
+		rc = rdb_apply_to(db, committed);
+		if (rc != 0)
+			break;
 		ABT_thread_yield();
 	}
-	D__DEBUG(DB_ANY, DF_DB": applyd stopping\n", DP_DB(db));
+	D__DEBUG(DB_ANY, DF_DB": applyd stopping: %d\n", DP_DB(db), rc);
 }
 
 /* Generate a random double in [0.0, 1.0]. */
@@ -869,38 +876,51 @@ rdb_raft_log_load_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
 		     void *varg)
 {
 	raft_server_t	       *raft = varg;
+	uint64_t		index;
 	struct rdb_raft_entry  *buf = val->iov_buf;
 	size_t			buf_size;
 	raft_entry_t		entry;
 	int			rc;
 
-	/* Read the header. */
-	if (key->iov_len != sizeof(uint64_t) ||
-	    val->iov_len < sizeof(*buf))
+	/* Read the key. */
+	if (key->iov_len != sizeof(uint64_t)) {
+		D__ERROR("invalid entry key length: "DF_U64"\n", key->iov_len);
 		return -DER_IO;
+	}
+	index = *(uint64_t *)key->iov_buf;
+
+	/* Read the header. */
+	if (val->iov_len < sizeof(*buf)) {
+		D__ERROR("truncated entry "DF_U64" header: "DF_U64" < %zu\n",
+			 index, val->iov_len, sizeof(*buf));
+		return -DER_IO;
+	}
 	entry.term = buf->dre_term;
 	entry.id = buf->dre_id;
 	entry.type = buf->dre_type;
 	entry.data.len = buf->dre_size;
 
-	/* Prepare the buffer and read the bytes. */
-	/* TODO: No chance to free this buffer during raft_clear()! */
+	/* Prepare the buffer. */
 	buf_size = rdb_raft_entry_buf_size(&entry);
-	if (val->iov_len != buf_size)
+	if (val->iov_len != buf_size) {
+		D__ERROR("invalid entry "DF_U64" length: "DF_U64" != %zu\n",
+			 index, val->iov_len, buf_size);
 		return -DER_IO;
-	D__ALLOC(entry.data.buf, buf_size);
-	if (entry.data.buf == NULL)
-		return -DER_NOMEM;
-	memcpy(entry.data.buf, buf, buf_size);
+	}
+	entry.data.buf = buf->dre_bytes;
 
+	/*
+	 * Since rdb_raft_cbs is not registered yet, we won't enter
+	 * rdb_raft_cb_log_offer().
+	 */
 	rc = raft_append_entry(raft, &entry);
 	if (rc != 0) {
-		D__ERROR("failed to load entry "DF_U64": %d\n",
-			*(uint64_t *)key->iov_buf, rc);
-		D__FREE(entry.data.buf, buf_size);
+		D__ERROR("failed to load entry "DF_U64": %d\n", index, rc);
 		return rdb_raft_rc(rc);
 	}
 
+	D__DEBUG(DB_TRACE, "loaded entry "DF_U64": term=%d type=%d len=%u\n",
+		 index, entry.term, entry.type, entry.data.len);
 	return 0;
 }
 
