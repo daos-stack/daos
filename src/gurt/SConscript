@@ -37,7 +37,7 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Build libgurt"""
 
-SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'path.c', 'heap.c', 'errno.c']
+SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c']
 
 def scons():
     """Scons function"""

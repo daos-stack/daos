@@ -42,13 +42,11 @@
 #include <fcntl.h>
 #include "utest_cmocka.h"
 #include "gurt/common.h"
-#include "gurt/path.h"
 #include "gurt/list.h"
 #include "gurt/heap.h"
 #include "gurt/dlog.h"
 #include "gurt/hash.h"
 
-static char *__cwd;
 static char *__root;
 
 static void
@@ -119,76 +117,6 @@ test_time(void **state)
 	assert_int_equal(timeleft, 0);
 }
 
-static void __test_norm_in_place(const char *origin,
-				const char *exp_result)
-{
-	char	*path;
-	int	ret;
-
-	path = strdup(origin);
-
-	assert_non_null(path);
-
-	strcpy(path, origin);
-
-	ret = d_normalize_in_place(path);
-	if (ret != 0)
-		free(path);
-
-	assert_int_equal(ret, 0);
-
-	ret = strcmp(path, exp_result);
-	free(path);
-
-	assert_int_equal(ret, 0);
-}
-
-void test_normalize_in_place(void **state)
-{
-	__test_norm_in_place("/foo/bar/", "/foo/bar/");
-	__test_norm_in_place("/foo/bar", "/foo/bar");
-	__test_norm_in_place("/foo/./", "/foo/");
-	__test_norm_in_place("/foo/../", "/foo/../");
-	__test_norm_in_place("/.foo", "/.foo");
-	__test_norm_in_place("///foo/.//bar/", "/foo/bar/");
-	__test_norm_in_place("/foo/.../", "/foo/.../");
-	__test_norm_in_place("/foo//.//.//.//..", "/foo/..");
-	__test_norm_in_place("foo/bar", "foo/bar");
-	__test_norm_in_place("foo./bar", "foo./bar");
-	__test_norm_in_place("foo/.bar", "foo/.bar");
-	__test_norm_in_place("foo./.bar", "foo./.bar");
-	__test_norm_in_place(".././/////././.foo", "../.foo");
-	__test_norm_in_place("/", "/");
-	__test_norm_in_place("..", "..");
-	__test_norm_in_place("///////", "/");
-	__test_norm_in_place("/././././", "/");
-	__test_norm_in_place("../../../", "../../../");
-	__test_norm_in_place(".././.././.././", "../../../");
-	__test_norm_in_place("../../..", "../../..");
-	__test_norm_in_place("...", "...");
-
-	/* NOTE: we don't test ./foo on purpose. ./ is not normalized
-	 * correctly but relative paths are not supported
-	 */
-}
-
-static char *
-create_string(const char *format, ...)
-{
-	int	ret;
-	char	*str;
-	va_list	ap;
-
-	va_start(ap, format);
-	ret = vasprintf(&str, format, ap);
-	va_end(ap);
-
-	if (ret == -1)
-		return NULL;
-
-	return str;
-}
-
 #define D_CHECK_STRLIMITS(name, base)				\
 	do {							\
 		value = d_errstr(-DER_ERR_##name##_BASE);	\
@@ -238,182 +166,6 @@ void test_d_errstr(void **state)
 	assert_string_equal(value, "DER_STALE");
 }
 
-
-void test_prepend_cwd(void **state)
-{
-	const char	*value;
-	char		*expected;
-	char		*checked;
-	int		ret;
-
-	/* Should return an error */
-	ret = d_prepend_cwd(NULL, &checked);
-
-	assert_int_equal(ret, -DER_INVAL);
-
-	assert_null(checked);
-
-	/* This should be unchanged.   It's already
-	 * a valid prefix path
-	 */
-	value = "////foo bar//fub";
-	ret = d_prepend_cwd(value, &checked);
-	assert_int_equal(ret, 0);
-	assert_null(checked);
-
-	/* The current directory prepended.
-	 */
-	value = "bar/fub";
-	ret = d_prepend_cwd(value, &checked);
-	assert_int_equal(ret, 0);
-	assert_non_null(checked);
-	expected = create_string("%s/%s", __cwd, value);
-	assert_non_null(expected);
-	assert_string_equal(expected, checked);
-	free(checked);
-	free(expected);
-}
-
-void test_check_directory(void **state)
-{
-	int	ret;
-	char	*path;
-	char	*new_path;
-	char	*path2;
-
-	ret = d_check_directory(__root, NULL, false);
-	assert_int_equal(ret, 0);
-
-	ret = d_check_directory("/bar/foo", NULL, false);
-	assert_int_equal(ret, -DER_BADPATH);
-
-	path = create_string("%s/SConstruct", __cwd);
-	assert_non_null(path);
-	ret = d_check_directory(path, NULL, false);
-	assert_int_equal(ret, -DER_NOTDIR);
-
-	ret = d_check_directory(path, NULL, true);
-	assert_int_equal(ret, -DER_NOTDIR);
-	free(path);
-
-	path = create_string("%s/utest/dir1/dir2", __cwd);
-	assert_non_null(path);
-	ret = d_check_directory(path, NULL, true);
-	assert_int_equal(ret, 0);
-	free(path);
-
-	path = create_string("%s////foobar", __root);
-	assert_non_null(path);
-	path2 = create_string("%s/foobar", __root);
-	assert_non_null(path2);
-	rmdir(path);
-	ret = d_check_directory(path, &new_path, true);
-	assert_int_equal(ret, 0);
-	assert_int_equal(rmdir(path), 0);
-	assert_string_equal(path2, new_path);
-	free(path);
-	free(path2);
-	free(new_path);
-}
-
-#define NUM_DIRS 5
-void test_create_subdirs(void **state)
-{
-	int		ret;
-	char		*dir;
-	char		*pos;
-	char		*path;
-	int		i;
-	const char	*dirs[NUM_DIRS] = {"fub", "bob", "long/path/name",
-		"long/path", "long"};
-
-	ret = d_create_subdirs("/usr/lib64/libc.so", "", &path);
-	assert_int_equal(ret, -DER_NOTDIR);
-	assert_null(path);
-
-	ret = d_create_subdirs(__root, "", &path);
-	assert_int_equal(ret, 0);
-	assert_string_equal(path, __root);
-	free(path);
-
-	dir = create_string("%s/foo/bar#               ", __root);
-	assert_non_null(dir);
-	pos = strrchr(dir, '#');
-	*pos = 0;
-
-	/* Remove the directories if they exist */
-	for (i = 0; i < NUM_DIRS; i++) {
-		*pos = '/';
-		strcpy(pos+1, dirs[i]);
-		rmdir(dir);
-	}
-	/* Remove bar and foo if they exist */
-	*pos = 0;
-	rmdir(dir);
-	*(pos - 4) = 0;
-	rmdir(dir);
-	*(pos - 4) = '/';
-
-	*pos = 0;
-	ret = d_create_subdirs(__root, "foo/bar", &path);
-	assert_int_equal(ret, 0);
-	assert_non_null(path);
-	assert_string_equal(path, dir);
-	free(path);
-
-	/* Create the directories */
-	for (i = 0; i < NUM_DIRS; i++) {
-		*pos = 0;
-		ret = d_create_subdirs(dir, dirs[i], &path);
-		assert_int_equal(ret, 0);
-		*pos = '/';
-		strcpy(pos+1, dirs[i]);
-		assert_string_equal(path, dir);
-		free(path);
-	}
-
-	/* Do it one more time */
-	for (i = 0; i < NUM_DIRS; i++) {
-		*pos = 0;
-		ret = d_create_subdirs(dir, dirs[i], &path);
-		assert_int_equal(ret, 0);
-		*pos = '/';
-		strcpy(pos+1, dirs[i]);
-		assert_string_equal(path, dir);
-		free(path);
-	}
-
-	/* Remove the directories */
-	for (i = 0; i < NUM_DIRS; i++) {
-		*pos = '/';
-		strcpy(pos+1, dirs[i]);
-		assert_int_equal(rmdir(dir), 0);
-	}
-
-	/* Create a file */
-	strcpy(pos, "/bob");
-	open(dir, O_CREAT|O_WRONLY, 0600);
-	*pos = 0;
-	ret = d_create_subdirs(dir, "bob", &path);
-	*pos = '/';
-	assert_int_equal(ret, -DER_NOTDIR);
-	assert_null(path);
-	unlink(dir);
-
-	/* Test a directory that user can't write */
-	ret = d_create_subdirs("/usr/lib", "cppr_test_path", &path);
-	assert_int_equal(ret, -DER_NO_PERM);
-	assert_null(path);
-
-	/* Remove bar and foo */
-	*pos = 0;
-	assert_int_equal(rmdir(dir), 0);
-	*(pos - 4) = 0;
-	assert_int_equal(rmdir(dir), 0);
-
-	free(dir);
-}
-
 static int
 init_tests(void **state)
 {
@@ -433,11 +185,6 @@ init_tests(void **state)
 	fprintf(stdout, "Seeding this test run with seed=%u\n", seed);
 	srand(seed);
 
-	__cwd = d_getcwd();
-
-	if (__cwd == NULL)
-		return -1;
-
 	return 0;
 }
 
@@ -445,7 +192,6 @@ static int
 fini_tests(void **state)
 {
 	rmdir(__root);
-	free(__cwd);
 	free(__root);
 
 	return 0;
@@ -1171,11 +917,7 @@ main(int argc, char **argv)
 {
 	const struct CMUnitTest	tests[] = {
 		cmocka_unit_test(test_time),
-		cmocka_unit_test(test_create_subdirs),
-		cmocka_unit_test(test_check_directory),
 		cmocka_unit_test(test_d_errstr),
-		cmocka_unit_test(test_prepend_cwd),
-		cmocka_unit_test(test_normalize_in_place),
 		cmocka_unit_test(test_gurt_list),
 		cmocka_unit_test(test_gurt_hlist),
 		cmocka_unit_test(test_binheap),
