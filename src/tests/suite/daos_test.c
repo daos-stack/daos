@@ -30,7 +30,7 @@
 #include "daos_test.h"
 
 /** All tests in default order ('d' must be the last one) */
-static const char *all_tests = "mpceiACoRdr";
+static const char *all_tests = "mpceiACoROdr";
 
 /** Server crt group ID */
 static const char *server_group;
@@ -397,6 +397,7 @@ print_usage(int rank)
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("daos_test -g|--group GROUP\n");
 	print_message("daos_test -s|--svcn NSVCREPLICAS\n");
+	print_message("daos_test -O|--oid_alloc\n");
 	print_message("daos_test -h|--help\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 }
@@ -466,6 +467,12 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_md_replication_test(rank, size);
 			break;
+		case 'O':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS OID Allocator tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_oid_alloc_test(rank, size);
+			break;
 		case 'd':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS degraded-mode tests..");
@@ -523,6 +530,7 @@ main(int argc, char **argv)
 		{"epoch",	no_argument,		NULL,	'e'},
 		{"erecov",	no_argument,		NULL,	'o'},
 		{"mdr",		no_argument,		NULL,	'R'},
+		{"oid_alloc",	no_argument,		NULL,	'O'},
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
 		{"group",	required_argument,	NULL,	'g'},
@@ -539,7 +547,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "ampcCdiAeoRg:s:u:hr",
+	while ((opt = getopt_long(argc, argv, "ampcCdiAeoROg:s:u:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;

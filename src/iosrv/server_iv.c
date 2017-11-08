@@ -203,7 +203,8 @@ key_equal(struct ds_iv_entry *entry, struct ds_iv_key *key1,
 	    class->iv_class_ops->ivc_key_cmp == NULL)
 		return true;
 
-	return class->iv_class_ops->ivc_key_cmp(key1->key, key2->key) == 0;
+	return class->iv_class_ops->ivc_key_cmp(&key1->key_buf,
+						&key2->key_buf) == true;
 }
 
 static struct ds_iv_entry *
@@ -254,7 +255,7 @@ fetch_iv_value(struct ds_iv_entry *entry, d_sg_list_t *dst,
 	int			rc;
 
 	if (class->iv_class_ops && class->iv_class_ops->ivc_ent_fetch)
-		rc = class->iv_class_ops->ivc_ent_fetch(dst, src, priv);
+		rc = class->iv_class_ops->ivc_ent_fetch(entry, dst, src, priv);
 	else
 		rc = daos_sgl_copy_data(dst, src);
 
@@ -269,7 +270,7 @@ update_iv_value(struct ds_iv_entry *entry, d_sg_list_t *dst,
 	int			rc;
 
 	if (class->iv_class_ops && class->iv_class_ops->ivc_ent_update)
-		rc = class->iv_class_ops->ivc_ent_update(dst, src, priv);
+		rc = class->iv_class_ops->ivc_ent_update(entry, dst, src, priv);
 	else
 		rc = daos_sgl_copy_data(dst, src);
 	return rc;
@@ -277,21 +278,22 @@ update_iv_value(struct ds_iv_entry *entry, d_sg_list_t *dst,
 
 static int
 refresh_iv_value(struct ds_iv_entry *entry, d_sg_list_t *dst,
-		 d_sg_list_t *src, void *priv)
+		 d_sg_list_t *src, int ref_rc, void *priv)
 {
 	struct ds_iv_class	*class = entry->iv_class;
 	int			rc;
 
 	if (class->iv_class_ops && class->iv_class_ops->ivc_ent_refresh)
-		rc = class->iv_class_ops->ivc_ent_refresh(dst, src, priv);
+		rc = class->iv_class_ops->ivc_ent_refresh(dst, src, ref_rc,
+							  priv);
 	else
 		rc = daos_sgl_copy_data(dst, src);
 	return rc;
 }
 
 static int
-iv_entry_alloc(struct ds_iv_class *class, struct ds_iv_key *key,
-	       void *data, struct ds_iv_entry **entryp)
+iv_entry_alloc(struct ds_iv_ns *ns, struct ds_iv_class *class,
+	       struct ds_iv_key *key, void *data, struct ds_iv_entry **entryp)
 {
 	struct ds_iv_entry *entry;
 	int			 rc;
@@ -304,6 +306,7 @@ iv_entry_alloc(struct ds_iv_class *class, struct ds_iv_key *key,
 	if (rc)
 		D_GOTO(free, rc);
 
+	entry->ns = ns;
 	entry->iv_valid = false;
 	entry->iv_class = class;
 	entry->iv_ref = 1;
@@ -340,7 +343,7 @@ iv_entry_lookup_or_create(struct ds_iv_ns *ns, struct ds_iv_key *key,
 	}
 
 	/* Allocate the entry */
-	rc = iv_entry_alloc(class, key, NULL, &entry);
+	rc = iv_entry_alloc(ns, class, key, NULL, &entry);
 	if (rc)
 		return rc;
 
@@ -397,7 +400,7 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 static int
 iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value,
-		      bool invalidate, bool refresh, void *priv)
+		      bool invalidate, bool refresh, int ref_rc, void *priv)
 {
 	struct ds_iv_ns		*ns;
 	struct ds_iv_entry	*entry;
@@ -421,6 +424,7 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	if (iv_value && iv_value->sg_iovs != NULL) {
 		if (refresh)
 			rc = refresh_iv_value(entry, &entry->iv_value, iv_value,
+				      ref_rc,
 				      priv_entry ? priv_entry->priv : NULL);
 		else
 			rc = update_iv_value(entry, &entry->iv_value, iv_value,
@@ -450,7 +454,7 @@ ivc_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	       bool invalidate, int refresh_rc, void *priv)
 {
 	return iv_on_update_internal(ivns, iv_key, iv_ver, iv_value, invalidate,
-				     true, priv);
+				     true, refresh_rc, priv);
 }
 
 /*  update callback will be called when updating leaf to root */
@@ -460,7 +464,7 @@ ivc_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	      void *priv)
 {
 	return iv_on_update_internal(ivns, iv_key, iv_ver, iv_value, false,
-				     false, priv);
+				     false, 0, priv);
 }
 
 static int
@@ -511,14 +515,14 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	D__ALLOC_PTR(priv_entry);
 	if (priv_entry == NULL) {
-		class->iv_class_ops->ivc_ent_put(entry, NULL);
+		class->iv_class_ops->ivc_ent_put(entry, priv);
 		D__GOTO(out, rc);
 	}
 
-	priv_entry->priv = priv;
+	priv_entry->priv = *priv;
 	priv_entry->entry = entry;
-
 	*priv = priv_entry;
+
 out:
 	if (rc && alloc_entry) {
 		d_list_del(&entry->iv_link);
@@ -789,13 +793,11 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 }
 
 static int
-iv_internal(struct ds_iv_ns *ns, unsigned int class_id,
-	    void *key, d_sg_list_t *value, crt_iv_sync_t *sync,
-	    unsigned int shortcut, int opc)
+iv_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv, d_sg_list_t *value,
+	    crt_iv_sync_t *sync, unsigned int shortcut, int opc)
 {
 	struct iv_cb_info	cb_info;
 	ABT_future		future;
-	struct ds_iv_key	key_iv;
 	crt_iv_key_t		key_iov;
 	struct ds_iv_class	*class;
 	int			rc;
@@ -804,20 +806,16 @@ iv_internal(struct ds_iv_ns *ns, unsigned int class_id,
 	if (rc)
 		return rc;
 
-	memset(&key_iv, 0, sizeof(key_iv));
-	key_iv.class_id = class_id;
-	key_iv.rank = ns->iv_master_rank;
-	key_iv.key = key;
-
-	class = iv_class_lookup(class_id);
+	key_iv->rank = ns->iv_master_rank;
+	class = iv_class_lookup(key_iv->class_id);
 	D__ASSERT(class != NULL);
 	D_DEBUG(DB_TRACE, "class_id %d crt class id %d opc %d\n",
-		class_id, class->iv_cart_class_id, opc);
+		key_iv->class_id, class->iv_cart_class_id, opc);
 
-	iv_key_pack(&key_iov, &key_iv);
+	iv_key_pack(&key_iov, key_iv);
 	memset(&cb_info, 0, sizeof(cb_info));
 	cb_info.future = future;
-	cb_info.key = &key_iv;
+	cb_info.key = key_iv;
 	cb_info.value = value;
 	cb_info.opc = opc;
 	cb_info.ns = ns;
@@ -847,7 +845,8 @@ iv_internal(struct ds_iv_ns *ns, unsigned int class_id,
 
 	ABT_future_wait(future);
 	rc = cb_info.result;
-	D_DEBUG(DB_TRACE, "class_id %d opc %d rc %d\n", class_id, opc, rc);
+	D_DEBUG(DB_TRACE, "class_id %d opc %d rc %d\n", key_iv->class_id, opc,
+		rc);
 out:
 	ABT_future_free(&future);
 	return rc;
@@ -857,17 +856,15 @@ out:
  * Fetch the value from the iv_entry, if the entry does not exist, it
  * will create the iv entry locally.
  * param ns[in]		iv namespace.
- * param class_id[in]	constant class id for each user, IV_REBUILD etc.
- * param key[in]	key is void*, which will be explained by IV user.
+ * param key[in]	iv key
  * param value[out]	value to hold the fetch value.
  *
  * return		0 if succeed, otherwise error code.
  */
 int
-ds_iv_fetch(struct ds_iv_ns *ns, unsigned int class_id, void *key,
-	    d_sg_list_t *value)
+ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value)
 {
-	return iv_internal(ns, class_id, key, value, NULL, 0, IV_FETCH);
+	return iv_internal(ns, key, value, NULL, 0, IV_FETCH);
 }
 
 /**
@@ -876,8 +873,7 @@ ds_iv_fetch(struct ds_iv_ns *ns, unsigned int class_id, void *key,
  * local cache entry.
  *
  * param ns[in]		iv namespace.
- * param class_id[in]	constant class id for each user, IV_REBUILD etc.
- * param key[in]	key is void * which will be explained by IV user.
+ * param key[in]	iv key
  * param value[in]	value for update.
  * param shortcut[in]	shortcut hints (see crt_iv_shortcut_t)
  * param sync_mode[in]	syncmode for update (see crt_iv_sync_mode_t)
@@ -886,8 +882,8 @@ ds_iv_fetch(struct ds_iv_ns *ns, unsigned int class_id, void *key,
  * return		0 if succeed, otherwise error code.
  */
 int
-ds_iv_update(struct ds_iv_ns *ns, unsigned int class_id, void *key,
-	     d_sg_list_t *value, unsigned int shortcut, unsigned int sync_mode,
+ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+	     unsigned int shortcut, unsigned int sync_mode,
 	     unsigned int sync_flags)
 {
 	crt_iv_sync_t	iv_sync;
@@ -896,8 +892,7 @@ ds_iv_update(struct ds_iv_ns *ns, unsigned int class_id, void *key,
 	iv_sync.ivs_mode = sync_mode;
 	iv_sync.ivs_flags = sync_flags;
 
-	return iv_internal(ns, class_id, key, value, &iv_sync, shortcut,
-			   IV_UPDATE);
+	return iv_internal(ns, key, value, &iv_sync, shortcut, IV_UPDATE);
 }
 
 /**
@@ -906,8 +901,7 @@ ds_iv_update(struct ds_iv_ns *ns, unsigned int class_id, void *key,
  * retrieve the value from local cache entry.
  *
  * param ns[in]		iv namespace.
- * param class_id[in]	constant class_id for each user, IV_REBUILD etc.
- * param key[in]	key is void *, which will be explained by IV user.
+ * param key[in]	iv key
  * param shortcut[in]	shortcut hints (see crt_iv_shortcut_t)
  * param sync_mode[in]	syncmode for invalid (see crt_iv_sync_mode_t)
  * param sync_flags[in]	sync flags for invalid (see crt_iv_sync_flag_t)
@@ -915,7 +909,7 @@ ds_iv_update(struct ds_iv_ns *ns, unsigned int class_id, void *key,
  * return		0 if succeed, otherwise error code.
  */
 int
-ds_iv_invalidate(struct ds_iv_ns *ns, unsigned int class_id, void *key,
+ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		 unsigned int shortcut, unsigned int sync_mode,
 		 unsigned int sync_flags)
 {
@@ -925,6 +919,5 @@ ds_iv_invalidate(struct ds_iv_ns *ns, unsigned int class_id, void *key,
 	iv_sync.ivs_mode = sync_mode;
 	iv_sync.ivs_flags = sync_flags;
 
-	return iv_internal(ns, class_id, key, NULL, &iv_sync, shortcut,
-			   IV_INVALIDATE);
+	return iv_internal(ns, key, NULL, &iv_sync, shortcut, IV_INVALIDATE);
 }

@@ -53,6 +53,7 @@ struct daos_task_args {
 		daos_cont_attr_list_t	cont_attr_list;
 		daos_cont_attr_get_t	cont_attr_get;
 		daos_cont_attr_set_t	cont_attr_set;
+		daos_cont_oid_alloc_t	cont_oid_alloc;
 		daos_epoch_flush_t	epoch_flush;
 		daos_epoch_discard_t	epoch_discard;
 		daos_epoch_query_t	epoch_query;

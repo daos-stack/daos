@@ -36,12 +36,21 @@
 static int
 init(void)
 {
+	int rc;
+
+	rc = ds_oid_iv_init();
+	if (rc)
+		D_GOTO(err, rc);
 	return 0;
+
+err:
+	return rc;
 }
 
 static int
 fini(void)
 {
+	ds_oid_iv_fini();
 	return 0;
 }
 
@@ -62,6 +71,9 @@ static struct daos_rpc_handler cont_handlers[] = {
 	}, {
 		.dr_opc		= CONT_QUERY,
 		.dr_hdlr	= ds_cont_op_handler
+	}, {
+		.dr_opc		= CONT_OID_ALLOC,
+		.dr_hdlr	= ds_cont_oid_alloc_handler
 	}, {
 		.dr_opc		= CONT_EPOCH_QUERY,
 		.dr_hdlr	= ds_cont_op_handler

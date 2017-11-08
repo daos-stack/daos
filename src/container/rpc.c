@@ -114,6 +114,20 @@ struct crt_msg_field *cont_query_out_fields[] = {
 	&DMF_EPOCH_STATE	/* epoch state */
 };
 
+struct crt_msg_field *cont_oid_alloc_in_fields[] = {
+	&CMF_UUID,	/* op.pool_hdl */
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID,	/* op.hdl */
+	&CMF_UINT64,	/* num_oids */
+};
+
+struct crt_msg_field *cont_oid_alloc_out_fields[] = {
+	&CMF_INT,	/* op.rc */
+	&CMF_UINT32,	/* op.map_version */
+	&DMF_RSVC_HINT,	/* op.hint */
+	&CMF_UINT64,	/* oid value */
+};
+
 struct crt_msg_field *cont_epoch_op_in_fields[] = {
 	&CMF_UUID,	/* op.pool_hdl */
 	&CMF_UUID,	/* op.uuid */
@@ -208,6 +222,10 @@ struct crt_req_format DQF_CONT_QUERY =
 	DEFINE_CRT_REQ_FMT("CONT_QUERY", cont_query_in_fields,
 			   cont_query_out_fields);
 
+struct crt_req_format DQF_CONT_OID_ALLOC =
+	DEFINE_CRT_REQ_FMT("CONT_OID_ALLOC", cont_oid_alloc_in_fields,
+			   cont_oid_alloc_out_fields);
+
 struct crt_req_format DQF_CONT_EPOCH_OP =
 	DEFINE_CRT_REQ_FMT("CONT_EPOCH_OP", cont_epoch_op_in_fields,
 			   cont_epoch_op_out_fields);
@@ -281,6 +299,12 @@ struct daos_rpc cont_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_CONT_QUERY
+	}, {
+		.dr_name	= "CONT_OID_ALLOC",
+		.dr_opc		= CONT_OID_ALLOC,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_OID_ALLOC
 	}, {
 		.dr_name	= "CONT_EPOCH_QUERY",
 		.dr_opc		= CONT_EPOCH_QUERY,

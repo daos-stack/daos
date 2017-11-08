@@ -83,6 +83,12 @@ struct cont {
 	rdb_path_t		c_lhes;		/* LHE KVS */
 };
 
+/* OID range for allocator */
+struct oid_iv_range {
+	uint64_t	oid;
+	daos_size_t	num_oids;
+};
+
 /*
  * srv.c
  */
@@ -93,7 +99,8 @@ struct cont {
 void ds_cont_op_handler(crt_rpc_t *rpc);
 int ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 			 crt_opcode_t opcode, crt_rpc_t **rpc);
-
+int ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
+			  uint64_t num_oids, uint64_t *oid);
 /*
  * srv_epoch.c
  */
@@ -146,5 +153,14 @@ int ds_cont_cache_create(struct daos_lru_cache **cache);
 void ds_cont_cache_destroy(struct daos_lru_cache *cache);
 int ds_cont_hdl_hash_create(struct d_hash_table *hash);
 void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
+void ds_cont_oid_alloc_handler(crt_rpc_t *rpc);
+
+/**
+ * oid_iv.c
+ */
+int ds_oid_iv_init(void);
+int ds_oid_iv_fini(void);
+int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
+		   uint64_t num_oids, d_sg_list_t *value);
 
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

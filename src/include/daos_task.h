@@ -67,6 +67,7 @@ typedef enum {
 	DAOS_OPC_CONT_ATTR_LIST,
 	DAOS_OPC_CONT_ATTR_GET,
 	DAOS_OPC_CONT_ATTR_SET,
+	DAOS_OPC_CONT_OID_ALLOC,
 
 	/** Epoch APIs */
 	DAOS_OPC_EPOCH_FLUSH,
@@ -248,6 +249,12 @@ typedef struct {
 	const void		**values;
 	const size_t		*sizes;
 } daos_cont_attr_set_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	daos_size_t		num_oids;
+	uint64_t		*oid;
+} daos_cont_oid_alloc_t;
 
 typedef struct {
 	daos_handle_t		coh;

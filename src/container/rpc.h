@@ -47,6 +47,7 @@ enum cont_operation {
 	CONT_OPEN		 = 3,
 	CONT_CLOSE		 = 4,
 	CONT_QUERY		 = 5,
+	CONT_OID_ALLOC		 = 6,
 
 	CONT_ATTR_LIST		 = 10,
 	CONT_ATTR_SET		 = 11,
@@ -123,6 +124,16 @@ struct cont_query_out {
 	/* min slipped epoch at all streams */
 	uint64_t		cqo_min_slipped_epoch;
 	daos_epoch_state_t	cqo_epoch_state;
+};
+
+struct cont_oid_alloc_in {
+	struct cont_op_in	coai_op;
+	daos_size_t		num_oids;
+};
+
+struct cont_oid_alloc_out {
+	struct cont_op_out      coao_op;
+	uint64_t		oid;
 };
 
 struct cont_close_in {

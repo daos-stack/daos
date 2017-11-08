@@ -62,6 +62,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_cont_attr_list, sizeof(daos_cont_attr_list_t)},
 	{dc_cont_attr_get, sizeof(daos_cont_attr_get_t)},
 	{dc_cont_attr_set, sizeof(daos_cont_attr_set_t)},
+	{dc_cont_oid_alloc, sizeof(daos_cont_oid_alloc_t)},
 	{dc_epoch_flush, sizeof(daos_epoch_flush_t)},
 	{dc_epoch_discard, sizeof(daos_epoch_discard_t)},
 	{dc_epoch_query, sizeof(daos_epoch_query_t)},

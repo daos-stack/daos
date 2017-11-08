@@ -24,8 +24,8 @@
  * Addons task functions.
  */
 
-#ifndef __DAOS_ADDONS_H__
-#define  __DAOS_ADDONS_H__
+#ifndef __DAOS_ADDONSX_H__
+#define  __DAOS_ADDONSX_H__
 
 /* task functions for array operations */
 int dac_array_create(tse_task_t *task);
@@ -42,4 +42,4 @@ int dac_kv_put(tse_task_t *task);
 int dac_kv_remove(tse_task_t *task);
 int dac_obj_fetch_multi(tse_task_t *task);
 int dac_obj_update_multi(tse_task_t *task);
-#endif /* __DAOS_ADDONS_H__ */
+#endif /* __DAOS_ADDONSX_H__ */

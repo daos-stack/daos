@@ -175,6 +175,7 @@ int run_daos_array_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
 int run_daos_md_replication_test(int rank, int size);
+int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 
@@ -185,6 +186,11 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 void
 daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 		    const d_rank_list_t *svc, d_rank_t rank);
+
+void
+daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
+			 const char *grp, const d_rank_list_t *svc,
+			 d_rank_t rank);
 
 static inline void
 daos_test_print(int rank, char *message)

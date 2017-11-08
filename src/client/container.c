@@ -145,6 +145,28 @@ daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 }
 
 int
+daos_cont_oid_alloc(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid,
+		    daos_event_t *ev)
+{
+	daos_cont_oid_alloc_t	*args;
+	tse_task_t		*task;
+	int                      rc;
+
+	DAOS_API_ARG_ASSERT(*args, CONT_OID_ALLOC);
+
+	rc = dc_task_create(dc_cont_oid_alloc, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->num_oids	= num_oids;
+	args->oid	= oid;
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_cont_attr_list(daos_handle_t coh, char *buf, size_t *size,
 		    daos_event_t *ev)
 {

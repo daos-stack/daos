@@ -386,6 +386,31 @@ daos_cont_attr_set(daos_handle_t coh, int n, const char *const names[],
 		   daos_event_t *ev);
 
 /**
+ * Allocate a unique set of 64 bit unsigned integers to be used for object ID
+ * generation for that container. This is an optional helper function for
+ * applications to use to guarantee unique object IDs on the container when more
+ * than 1 client are accessing objects on the container. The highest used ID is
+ * tracked in the container metadata for future access to that container. This
+ * doesn't guarantee that the IDs allocated are sequential; and several ID
+ * ranges could be discarded at container close.
+ *
+ * \param coh   [IN]    Container open handle.
+ * \param num_oids [IN]	Number of unique IDs requested.
+ * \param oid	[OUT]	starting oid that was allocated up to oid + num_oids.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container open handle
+ *			-DER_UNREACH	Network is unreachable
+ */
+int
+daos_cont_oid_alloc(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid,
+		    daos_event_t *ev);
+
+/**
  * Epoch API
  */
 

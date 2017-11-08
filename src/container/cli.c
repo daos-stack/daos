@@ -860,6 +860,201 @@ err:
 	return rc;
 }
 
+struct cont_oid_alloc_args {
+	struct dc_pool		*coaa_pool;
+	struct dc_cont		*coaa_cont;
+	crt_rpc_t		*rpc;
+	daos_handle_t		hdl;
+	daos_size_t		num_oids;
+	uint64_t		*oid;
+};
+
+static int
+pool_query_cb(tse_task_t *task, void *data)
+{
+	daos_pool_query_t	*args;
+
+	args = dc_task_get_args(task);
+	D__FREE_PTR(args->info);
+	return task->dt_result;
+}
+
+static int
+cont_oid_alloc_complete(tse_task_t *task, void *data)
+{
+	struct cont_oid_alloc_args *arg = (struct cont_oid_alloc_args *)data;
+	struct cont_oid_alloc_out *out = crt_reply_get(arg->rpc);
+	struct dc_pool *pool = arg->coaa_pool;
+	struct dc_cont *cont = arg->coaa_cont;
+	int rc = task->dt_result;
+
+	if (daos_rpc_retryable_rc(rc)) {
+		tse_sched_t *sched = tse_task2sched(task);
+		daos_pool_query_t *pargs;
+		tse_task_t *ptask;
+
+		/** reset task result before retry */
+		task->dt_result = 0;
+
+		/** pool map update task */
+		rc = dc_task_create(dc_pool_query, sched, NULL, &ptask);
+		if (rc != 0)
+			return rc;
+
+		pargs = dc_task_get_args(ptask);
+		pargs->poh = arg->coaa_cont->dc_pool_hdl;
+		D__ALLOC_PTR(pargs->info);
+		if (pargs->info == NULL) {
+			dc_task_decref(ptask);
+			D__GOTO(out, rc = -DER_NOMEM);
+		}
+
+		rc = dc_task_reg_comp_cb(ptask, pool_query_cb, NULL, 0);
+		if (rc != 0) {
+			D__FREE_PTR(pargs->info);
+			dc_task_decref(ptask);
+			D__GOTO(out, rc);
+		}
+
+		rc = dc_task_resched(task);
+		if (rc != 0) {
+			D__FREE_PTR(pargs->info);
+			dc_task_decref(ptask);
+			D__GOTO(out, rc);
+		}
+
+		rc = dc_task_depend(task, 1, &ptask);
+		if (rc != 0) {
+			D__FREE_PTR(pargs->info);
+			dc_task_decref(ptask);
+			D__GOTO(out, rc);
+		}
+
+		/* ignore returned value, error is reported by comp_cb */
+		dc_task_schedule(ptask, true);
+		D__GOTO(out, rc = 0);
+	} else if (rc != 0) {
+		/** error but non retryable RPC */
+		D_ERROR("failed to allocate oids: %d\n", rc);
+		D__GOTO(out, rc);
+	}
+
+	rc = out->coao_op.co_rc;
+	if (rc != 0) {
+		D_ERROR("failed to allocate oids: %d\n", rc);
+		D__GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, DF_CONT": OID ALLOC: using hdl="DF_UUID"\n",
+		 DP_CONT(pool->dp_pool, cont->dc_uuid),
+		 DP_UUID(cont->dc_cont_hdl));
+
+	if (arg->oid)
+		*arg->oid = out->oid;
+
+out:
+	crt_req_decref(arg->rpc);
+	dc_cont_put(cont);
+	dc_pool_put(pool);
+	return rc;
+}
+
+static int
+get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
+{
+	struct pool_target	*tgts = NULL;
+	unsigned int		tgt_cnt;
+	int			rc;
+
+	rc = pool_map_find_up_tgts(pool->dp_map, &tgts, &tgt_cnt);
+	if (rc)
+		return rc;
+
+	if (tgt_cnt == 0 || tgts == NULL)
+		return -DER_INVAL;
+
+	*rank = tgts[rand() % tgt_cnt].ta_comp.co_rank;
+
+	D__FREE(tgts, tgt_cnt * sizeof(*tgts));
+
+	return 0;
+}
+
+int
+dc_cont_oid_alloc(tse_task_t *task)
+{
+	daos_cont_oid_alloc_t		*args;
+	struct cont_oid_alloc_in	*in;
+	struct dc_pool			*pool;
+	struct dc_cont			*cont;
+	crt_endpoint_t			ep;
+	crt_rpc_t			*rpc;
+	struct cont_oid_alloc_args	arg;
+	int				rc;
+
+	args = dc_task_get_args(task);
+	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (args->num_oids == 0 || args->oid == NULL)
+		D__GOTO(err, rc = -DER_INVAL);
+
+	cont = dc_hdl2cont(args->coh);
+	if (cont == NULL)
+		D__GOTO(err, rc = -DER_NO_HDL);
+
+	pool = dc_hdl2pool(cont->dc_pool_hdl);
+	D__ASSERT(pool != NULL);
+
+	D_DEBUG(DF_DSMC, DF_CONT": oid allocate: hdl="DF_UUID"\n",
+		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl));
+
+	/** randomly select a rank from the pool map */
+	ep.ep_grp = pool->dp_group;
+	ep.ep_tag = 0;
+	rc = get_tgt_rank(pool, &ep.ep_rank);
+	if (rc != 0)
+		D__GOTO(err_cont, rc);
+
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OID_ALLOC, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: %d\n", rc);
+		D__GOTO(err_cont, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->coai_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->coai_op.ci_uuid, cont->dc_uuid);
+	uuid_copy(in->coai_op.ci_hdl, cont->dc_cont_hdl);
+	in->num_oids = args->num_oids;
+
+	arg.coaa_pool	= pool;
+	arg.coaa_cont	= cont;
+	arg.rpc		= rpc;
+	arg.hdl		= args->coh;
+	arg.num_oids	= args->num_oids;
+	arg.oid		= args->oid;
+	crt_req_addref(rpc);
+
+	rc = tse_task_register_comp_cb(task, cont_oid_alloc_complete, &arg,
+				       sizeof(arg));
+	if (rc != 0)
+		D__GOTO(err_rpc, rc);
+
+	return daos_rpc_send(rpc, task);
+
+err_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+err_cont:
+	dc_cont_put(cont);
+	dc_pool_put(pool);
+err:
+	tse_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "Failed to allocate OIDs: %d\n", rc);
+	return rc;
+}
+
 #define DC_CONT_GLOB_MAGIC	(0x16ca0387)
 
 /* Structure of global buffer for dc_cont */

@@ -21,11 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * DAOS ARRAY APIs
+ * DAOS ADDONS
  */
 
-#ifndef __DAOS_ARRAY_API_H__
-#define __DAOS_ARRAY_API_H__
+#ifndef __DAOS_ADDONS_H__
+#define __DAOS_ADDONS_H__
 
 #if defined(__cplusplus)
 extern "C" {
@@ -378,4 +378,4 @@ daos_obj_update_multi(daos_handle_t oh, daos_epoch_t epoch,
 }
 #endif
 
-#endif /* __DAOS_ARRAY_API_H__ */
+#endif /* __DAOS_ADDONS_H__ */

@@ -136,19 +136,21 @@ pool_iv_ent_copy(d_sg_list_t *dst, d_sg_list_t *src)
 }
 
 static int
-pool_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
+pool_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst, d_sg_list_t *src,
+		  void **priv)
 {
 	return pool_iv_ent_copy(dst, src);
 }
 
 static int
-pool_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
+pool_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
+		   d_sg_list_t *src, void **priv)
 {
 	return pool_iv_ent_copy(dst, src);
 }
 
 static int
-pool_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
+pool_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc, void **priv)
 {
 	struct pool_iv_entry	*dst_iv = dst->sg_iovs[0].iov_buf;
 	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
@@ -196,10 +198,11 @@ struct ds_iv_class_ops pool_iv_ops = {
 int
 pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv)
 {
-	d_sg_list_t	sgl;
-	daos_iov_t	iov;
-	uint32_t	pool_iv_len;
-	int		rc;
+	d_sg_list_t		sgl;
+	daos_iov_t		iov;
+	uint32_t		pool_iv_len;
+	struct ds_iv_key	key;
+	int			rc;
 
 	pool_iv_len = pool_iv_ent_size(pool_iv->piv_pool_buf.pb_nr);
 	iov.iov_buf = pool_iv;
@@ -209,7 +212,9 @@ pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
-	rc = ds_iv_fetch(ns, IV_POOL_MAP, NULL, &sgl);
+	memset(&key, 0, sizeof(key));
+	key.class_id = IV_POOL_MAP;
+	rc = ds_iv_fetch(ns, &key, &sgl);
 	if (rc)
 		D_ERROR("iv fetch failed %d\n", rc);
 
@@ -220,10 +225,11 @@ int
 pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
 	       unsigned int shortcut, unsigned int sync_mode)
 {
-	d_sg_list_t	sgl;
-	daos_iov_t	iov;
-	uint32_t	pool_iv_len;
-	int		rc;
+	d_sg_list_t		sgl;
+	daos_iov_t		iov;
+	uint32_t		pool_iv_len;
+	struct ds_iv_key	key;
+	int			rc;
 
 	pool_iv_len = pool_iv_ent_size(pool_iv->piv_pool_buf.pb_nr);
 	iov.iov_buf = pool_iv;
@@ -232,7 +238,10 @@ pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
-	rc = ds_iv_update(ns, IV_POOL_MAP, NULL, &sgl, shortcut, sync_mode, 0);
+
+	memset(&key, 0, sizeof(key));
+	key.class_id = IV_POOL_MAP;
+	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0);
 	if (rc)
 		D_ERROR("iv update failed %d\n", rc);
 

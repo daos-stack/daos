@@ -1159,3 +1159,76 @@ close:
 	vos_cont_close(coh);
 	return rc;
 }
+
+static int
+cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
+{
+	struct cont_oid_alloc_in	*in = crt_req_get(rpc);
+	struct cont_oid_alloc_out	*out;
+	d_sg_list_t			sgl;
+	d_iov_t				iov;
+	struct oid_iv_range		rg;
+	int				rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": oid alloc: num_oids="DF_U64"\n",
+		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
+		 in->num_oids);
+
+	out = crt_reply_get(rpc);
+	D__ASSERT(out != NULL);
+
+	daos_iov_set(&iov, &rg, sizeof(rg));
+
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+
+	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns,
+			    in->coai_op.ci_pool_hdl, in->coai_op.ci_uuid,
+			    in->coai_op.ci_hdl, in->num_oids, &sgl);
+	if (rc)
+		D__GOTO(out, rc);
+
+	out->oid = rg.oid;
+
+out:
+	out->coao_op.co_rc = rc;
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
+		 rpc, rc);
+
+	return rc;
+}
+
+void
+ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
+{
+	struct cont_op_in	*in = crt_req_get(rpc);
+	struct cont_op_out	*out = crt_reply_get(rpc);
+	struct ds_pool_hdl	*pool_hdl;
+	crt_opcode_t		opc = opc_get(rpc->cr_opc);
+	int			rc;
+
+	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
+	if (pool_hdl == NULL)
+		D__GOTO(out, rc = -DER_NO_HDL);
+
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" opc=%u\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
+		DP_UUID(in->ci_hdl), opc);
+
+	D__ASSERT(opc == CONT_OID_ALLOC);
+
+	rc = cont_oid_alloc(pool_hdl, rpc);
+
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: hdl="DF_UUID
+		" opc=%u rc=%d\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
+		DP_UUID(in->ci_hdl), opc, rc);
+
+	ds_pool_hdl_put(pool_hdl);
+out:
+	out->co_rc = rc;
+	out->co_map_version = 0;
+	crt_reply_send(rpc);
+}

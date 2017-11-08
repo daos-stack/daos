@@ -65,6 +65,7 @@ extern daos_iov_t ds_cont_attr_ghpce;		/* uint64_t */
 extern daos_iov_t ds_cont_attr_lres;		/* LRE KVS */
 extern daos_iov_t ds_cont_attr_lhes;		/* LHE KVS */
 extern daos_iov_t ds_cont_attr_snapshots;	/* snapshot KVS */
+extern daos_iov_t ds_cont_attr_max_oid;		/* uint64_t */
 
 /*
  * LRE and LHE KVSs (RDB_KVS_INTEGER)

@@ -71,6 +71,7 @@ struct ds_iv_class {
 	struct ds_iv_class_ops	*iv_class_ops;
 };
 
+#define IV_KEY_BUF_SIZE 48
 /*
  * Those callbacks uses ds_iv_key to locate the iv cache entry and class
  * type.
@@ -82,7 +83,7 @@ struct ds_iv_class {
 struct ds_iv_key {
 	d_rank_t	rank;
 	int		class_id;
-	void		*key;
+	char		key_buf[IV_KEY_BUF_SIZE];
 };
 
 /**
@@ -90,6 +91,8 @@ struct ds_iv_key {
  * namespace, which can be located by ds_iv_key.
  */
 struct ds_iv_entry {
+	/* Back pointer to NS */
+	struct ds_iv_ns *ns;
 	/* Cache management ops for the key */
 	struct ds_iv_class	*iv_class;
 	/* key of the IV entry */
@@ -136,9 +139,9 @@ typedef int (*ds_iv_key_unpack_t)(struct ds_iv_class *iv_class,
  * \param key1 [IN]	key1 to compare.
  * \param key2 [IN]	key2 to compare.
  *
- * \return		0 if equal, otherwise non-equal.
+ * \return		true if equal, false if non-equal.
  */
-typedef int (*ds_iv_key_cmp_t)(void *key1, void *key2);
+typedef bool (*ds_iv_key_cmp_t)(void *key1, void *key2);
 
 /**
  * Init class entry.
@@ -190,8 +193,8 @@ typedef int (*ds_iv_ent_destroy_t)(d_sg_list_t *sgl);
  *
  * \return		0 if succeeds, error code otherwise.
  */
-typedef int (*ds_iv_ent_fetch_t)(d_sg_list_t *src, d_sg_list_t *dst,
-				 void **priv);
+typedef int (*ds_iv_ent_fetch_t)(struct ds_iv_entry *entry, d_sg_list_t *src,
+				 d_sg_list_t *dst, void **priv);
 
 /**
  * Update data to the iv_class entry.
@@ -202,8 +205,8 @@ typedef int (*ds_iv_ent_fetch_t)(d_sg_list_t *src, d_sg_list_t *dst,
  *
  * \return		0 if succeeds, error code otherwise.
  */
-typedef int (*ds_iv_ent_update_t)(d_sg_list_t *dst, d_sg_list_t *src,
-				  void **priv);
+typedef int (*ds_iv_ent_update_t)(struct ds_iv_entry *entry, d_sg_list_t *dst,
+				  d_sg_list_t *src, void **priv);
 
 /**
  * Refresh the data to the iv_class entry.
@@ -215,7 +218,7 @@ typedef int (*ds_iv_ent_update_t)(d_sg_list_t *dst, d_sg_list_t *src,
  * \return		0 if succeeds, error code otherwise.
  */
 typedef int (*ds_iv_ent_refresh_t)(d_sg_list_t *dst, d_sg_list_t *src,
-				   void **priv);
+				   int ref_rc, void **priv);
 
 /**
  * allocate the value for cart IV.
@@ -252,22 +255,21 @@ int ds_iv_class_unregister(unsigned int class_id);
 enum iv_key {
 	IV_POOL_MAP = 1,
 	IV_REBUILD,
+	IV_OID,
 };
 
-int ds_iv_fetch(struct ds_iv_ns *ns, unsigned int class_id, void *key,
-		d_sg_list_t *value);
-int ds_iv_update(struct ds_iv_ns *ns, unsigned int class_id, void *key,
+int ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value);
+int ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		 d_sg_list_t *value, unsigned int shortcut,
 		 unsigned int sync_mode, unsigned int sync_flags);
-int ds_iv_invalidate(struct ds_iv_ns *ns, unsigned int class_id, void *key,
+int ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		     unsigned int shortcut, unsigned int sync_mode,
 		     unsigned int sync_flags);
 
-int ds_iv_ns_create(crt_context_t ctx, crt_group_t *grp,
-		    unsigned int *ns_id, daos_iov_t *g_ivns,
-		    struct ds_iv_ns **p_iv_ns);
+int ds_iv_ns_create(crt_context_t ctx, crt_group_t *grp, unsigned int *ns_id,
+		    daos_iov_t *g_ivns, struct ds_iv_ns **p_iv_ns);
 
-int ds_iv_ns_attach(crt_context_t ctx, unsigned int class_id,
+int ds_iv_ns_attach(crt_context_t ctx, unsigned int ns_id,
 		    unsigned int master_rank, daos_iov_t *iv_ctxt,
 		    struct ds_iv_ns **p_iv_ns);
 

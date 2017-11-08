@@ -258,6 +258,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rdb_path_t		kvs;
 	uint64_t		ghce = 0;
 	uint64_t		ghpce = 0;
+	uint64_t		max_oid = 0;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p\n",
@@ -312,6 +313,10 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D__GOTO(out_kvs, rc);
 	daos_iov_set(&value, &ghpce, sizeof(ghpce));
 	rc = rdb_tx_update(tx, &kvs, &ds_cont_attr_ghpce, &value);
+	if (rc != 0)
+		D__GOTO(out_kvs, rc);
+	daos_iov_set(&value, &max_oid, sizeof(max_oid));
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_attr_max_oid, &value);
 	if (rc != 0)
 		D__GOTO(out_kvs, rc);
 
@@ -573,6 +578,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct cont_open_out   *out = crt_reply_get(rpc);
 	daos_iov_t		key;
 	daos_iov_t		value;
+	uint64_t		max_oid;
+	daos_iov_t		oid_value;
 	struct container_hdl	chdl;
 	int			rc;
 
@@ -611,6 +618,16 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	uuid_copy(chdl.ch_pool_hdl, pool_hdl->sph_uuid);
 	uuid_copy(chdl.ch_cont, cont->c_uuid);
 	chdl.ch_capas = in->coi_capas;
+
+	/* Read current max OID */
+	daos_iov_set(&oid_value, &max_oid, sizeof(max_oid));
+	rc = rdb_tx_lookup(tx, &cont->c_attrs, &ds_cont_attr_max_oid,
+			   &oid_value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup MAX_OID: %d\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+		D__GOTO(out, rc);
+	}
 
 	rc = ds_cont_epoch_init_hdl(tx, cont, &chdl, &out->coo_epoch_state);
 	if (rc != 0)
@@ -1180,4 +1197,88 @@ out:
 	crt_reply_send(rpc);
 
 	return;
+}
+
+int
+ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
+		      uint64_t num_oids, uint64_t *oid)
+{
+	struct ds_pool_hdl	*pool_hdl;
+	struct cont_svc		*svc;
+	struct rdb_tx		tx;
+	struct cont		*cont = NULL;
+	daos_iov_t		key;
+	daos_iov_t		value;
+	struct container_hdl	hdl;
+	uint64_t		max_oid;
+	int			rc;
+
+	pool_hdl = ds_pool_hdl_lookup(poh_uuid);
+	if (pool_hdl == NULL)
+		D__GOTO(out, rc = -DER_NO_HDL);
+
+	/*
+	 * TODO: How to map to the correct container service among those
+	 * running of this storage node? (Currently, there is only one, with ID
+	 * 0, colocated with the pool service.)
+	 */
+	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0, &svc, NULL);
+	if (rc != 0)
+		D__GOTO(out_pool_hdl, rc);
+
+	rc = rdb_tx_begin(svc->cs_db, cont_svc_term(svc), &tx);
+	if (rc != 0)
+		D__GOTO(out_svc, rc);
+
+	ABT_rwlock_wrlock(svc->cs_lock);
+
+	rc = cont_lookup(&tx, svc, co_uuid, &cont);
+	if (rc != 0)
+		D__GOTO(out_lock, rc);
+
+	/* Look up the container handle. */
+	daos_iov_set(&key, coh_uuid, sizeof(uuid_t));
+	daos_iov_set(&value, &hdl, sizeof(hdl));
+	rc = rdb_tx_lookup(&tx, &cont->c_svc->cs_hdls, &key, &value);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			rc = -DER_NO_HDL;
+		D__GOTO(out_cont, rc);
+	}
+
+	/* Read the max OID from the container metadata */
+	daos_iov_set(&value, &max_oid, sizeof(max_oid));
+	rc = rdb_tx_lookup(&tx, &cont->c_attrs, &ds_cont_attr_max_oid, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup max_oid: %d\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+		D__GOTO(out_cont, rc);
+	}
+
+	/** Set the oid for the caller */
+	*oid = max_oid;
+	/** Increment the max_oid by how many oids user requested */
+	max_oid += num_oids;
+
+	/* Update the max OID */
+	rc = rdb_tx_update(&tx, &cont->c_attrs, &ds_cont_attr_max_oid, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to update max_oid: %d\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+		D__GOTO(out_cont, rc);
+	}
+
+	rc = rdb_tx_commit(&tx);
+
+out_cont:
+	cont_put(cont);
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	cont_svc_put_leader(svc);
+out_pool_hdl:
+	ds_pool_hdl_put(pool_hdl);
+out:
+	return rc;
 }

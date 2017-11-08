@@ -57,6 +57,7 @@ int dc_cont_query(tse_task_t *task);
 int dc_cont_attr_list(tse_task_t *task);
 int dc_cont_attr_get(tse_task_t *task);
 int dc_cont_attr_set(tse_task_t *task);
+int dc_cont_oid_alloc(tse_task_t *task);
 int dc_epoch_flush(tse_task_t *task);
 int dc_epoch_discard(tse_task_t *task);
 int dc_epoch_query(tse_task_t *task);

@@ -97,7 +97,8 @@ rebuild_iv_ent_destroy(d_sg_list_t *sgl)
 }
 
 static int
-rebuild_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
+rebuild_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst,
+		     d_sg_list_t *src, void **priv)
 {
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
@@ -118,7 +119,8 @@ rebuild_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 
 /* Update the rebuild status from leaves to the master */
 static int
-rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
+rebuild_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
+		      d_sg_list_t *src, void **priv)
 {
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
@@ -168,7 +170,8 @@ rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 
 /* Distribute the rebuild uuid/master rank from master to leaves */
 static int
-rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
+rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc,
+		       void **priv)
 {
 	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
@@ -219,6 +222,7 @@ rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 {
 	d_sg_list_t		sgl;
 	daos_iov_t		iov;
+	struct ds_iv_key	key;
 	int			rc;
 
 	memset(&sgl, 0, sizeof(sgl));
@@ -229,7 +233,9 @@ rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
 
-	rc = ds_iv_fetch(ns, IV_REBUILD, NULL, &sgl);
+	memset(&key, 0, sizeof(key));
+	key.class_id = IV_REBUILD;
+	rc = ds_iv_fetch(ns, &key, &sgl);
 	if (rc)
 		D_ERROR("iv fetch failed %d\n", rc);
 
@@ -240,9 +246,10 @@ int
 rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 		  unsigned int shortcut, unsigned int sync_mode)
 {
-	d_sg_list_t	sgl;
-	daos_iov_t	iov;
-	int		rc;
+	d_sg_list_t		sgl;
+	daos_iov_t		iov;
+	struct ds_iv_key	key;
+	int			rc;
 
 	iov.iov_buf = iv;
 	iov.iov_len = sizeof(*iv);
@@ -250,7 +257,10 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
-	rc = ds_iv_update(ns, IV_REBUILD, NULL, &sgl, shortcut, sync_mode, 0);
+
+	memset(&key, 0, sizeof(key));
+	key.class_id = IV_REBUILD;
+	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0);
 	if (rc)
 		D_ERROR("iv update failed %d\n", rc);
 
