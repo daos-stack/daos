@@ -831,25 +831,28 @@ class PreReqComponent(object):
 
         Keyword arguments:
             headers_only -- if set to True, skip library configuration
+            [comp]_libs --  Override the default libs for a package
         """
         changes = False
         headers_only = kw.get('headers_only', False)
         for comp in comps:
+            if comp not in self.__defined:
+                raise MissingDefinition(comp)
+            comp_def = self.__defined[comp]
+            needed_libs = kw.get('%s_libs' % comp, comp_def.libs)
             if comp in self.__required:
                 if GetOption('help'):
                     continue
                 # checkout and build done previously
-                self.__defined[comp].set_environment(env, headers_only)
+                comp_def.set_environment(env, headers_only, needed_libs)
                 if GetOption('clean'):
                     continue
                 if self.__required[comp]:
                     changes = True
                 continue
-            if comp not in self.__defined:
-                raise MissingDefinition(comp)
             self.__required[comp] = False
-            self.__defined[comp].configure()
-            if self.__defined[comp].build(env, headers_only):
+            comp_def.configure()
+            if comp_def.build(env, headers_only, needed_libs):
                 self.__required[comp] = False
                 changes = True
 
@@ -1243,7 +1246,7 @@ class _Component(object):
             except:
                 pass
 
-    def set_environment(self, env, headers_only):
+    def set_environment(self, env, headers_only, needed_libs):
         """Modify the specified construction environment to build with
            the external component"""
         for path in self.include_path:
@@ -1266,7 +1269,7 @@ class _Component(object):
         for path in self.lib_path:
             env.AppendUnique(LIBPATH=[os.path.join(self.component_prefix,
                                                    path)])
-        for lib in self.libs:
+        for lib in needed_libs:
             env.AppendUnique(LIBS=[lib])
 
     def check_installed_package(self, env):
@@ -1283,14 +1286,14 @@ class _Component(object):
             else:
                 raise MissingTargets(self.name, self.package)
 
-    def check_user_options(self, env, headers_only):
+    def check_user_options(self, env, headers_only, needed_libs):
         """check help and clean options"""
         if GetOption('help'):
             if self.requires:
                 self.prereqs.require(env, *self.requires)
             return True
 
-        self.set_environment(env, headers_only)
+        self.set_environment(env, headers_only, needed_libs)
         if GetOption('clean'):
             return True
 
@@ -1332,7 +1335,7 @@ class _Component(object):
             with open(self.crc_file, 'w') as crcfile:
                 crcfile.write(new_crc)
 
-    def build(self, env, headers_only):
+    def build(self, env, headers_only, needed_libs):
         """Build the component, if necessary
 
         :param env: Scons Environment for building.
@@ -1345,9 +1348,9 @@ class _Component(object):
         changes = False
         envcopy = self.prereqs.system_env.Clone()
 
-        if self.check_user_options(env, headers_only):
+        if self.check_user_options(env, headers_only, needed_libs):
             return True
-        self.set_environment(envcopy, False)
+        self.set_environment(envcopy, False, needed_libs)
         if self.prebuilt_path:
             self.check_installed_package(envcopy)
             return False
@@ -1363,7 +1366,7 @@ class _Component(object):
             if self.requires:
                 changes = self.prereqs.require(envcopy, *self.requires,
                                                headers_only=True)
-                self.set_environment(envcopy, False)
+                self.set_environment(envcopy, False, needed_libs)
 
             if self.has_missing_system_deps(self.prereqs.system_env):
                 raise MissingSystemLibs(self.name)

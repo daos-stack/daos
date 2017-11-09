@@ -39,6 +39,8 @@ def run_test(env, *tests):
 
     return prog
 
+TENV = ENV.Clone()
+
 PROGS = []
 PROGS += run_test(ENV, 'sl_project1')
 PROGS += run_test(ENV, 'sl_project1', 'sl_project2')
@@ -52,3 +54,9 @@ PROGS += run_test(ENV, 'sl_project4', 'openpa2')
 
 TESTS = ENV.RunTests(PROGS)
 AlwaysBuild(TESTS)
+
+# Test library modifier kw.  Use pthread.  A bit of a hack
+# but it should work.
+TENV.Replace(LIBS=[])
+PREREQS.require(TENV, 'sl_project2', sl_project2_libs=['pthread'])
+TENV.Program('pthread_test.c')
