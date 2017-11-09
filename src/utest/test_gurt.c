@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include "utest_cmocka.h"
 #include "gurt/common.h"
 #include "gurt/list.h"
@@ -688,6 +689,9 @@ test_log(void **state)
 
 #define TEST_GURT_HASH_NUM_BITS (16)
 #define TEST_GURT_HASH_NUM_ENTRIES (1 << TEST_GURT_HASH_NUM_BITS)
+#define TEST_GURT_HASH_NUM_THREADS (32)
+#define TEST_GURT_HASH_ENTRIES_PER_THREAD \
+	(TEST_GURT_HASH_NUM_ENTRIES / TEST_GURT_HASH_NUM_THREADS)
 #define TEST_GURT_HASH_KEY_LEN (65L)
 
 struct test_hash_entry {
@@ -1063,6 +1067,242 @@ test_gurt_alloc(void **state)
 	d_log_fini();
 }
 
+struct hash_thread_arg {
+	struct test_hash_entry	**entries;
+	struct d_chash_table	 *thtab;
+	pthread_barrier_t	 *barrier;
+
+	/* Parallel function to test */
+	void *(*fn)(struct hash_thread_arg *);
+
+	int			  thread_idx;
+};
+
+/**
+ * This macro allows a pthread to assert - which would otherwise cause cmocka
+ * to segfault without dumping a list of tests that pass/fail. A pthread that
+ * returns non-null or an error code from pthread_join should trigger a cmocka
+ * assert
+ */
+#define TEST_THREAD_ASSERT(cond) \
+	do { \
+		if (!(cond)) { \
+			fprintf(stderr, "Error in test pthread at %s:%d!" \
+				" Failed condition was (%s)\n", \
+				__func__, __LINE__, #cond); \
+			pthread_exit((void *)1); \
+		} \
+	} while (0) \
+
+static void *
+hash_parallel_insert(struct hash_thread_arg *arg)
+{
+	int i;
+	int rc;
+
+	/* Insert the entries and make sure they succeed - exclusive = true */
+	for (i = (arg->thread_idx * TEST_GURT_HASH_ENTRIES_PER_THREAD);
+	     i < ((arg->thread_idx + 1) * TEST_GURT_HASH_ENTRIES_PER_THREAD);
+	     i++) {
+		rc = d_chash_rec_insert(arg->thtab, arg->entries[i]->tl_key,
+					TEST_GURT_HASH_KEY_LEN,
+					&(arg->entries[i]->tl_link), 1);
+		TEST_THREAD_ASSERT(rc == 0);
+	}
+
+	return NULL;
+}
+
+static void *
+hash_parallel_traverse(struct hash_thread_arg *arg)
+{
+	int rc;
+	int expected_count;
+
+	/* Traverse the hash table and count number of entries */
+	expected_count = TEST_GURT_HASH_NUM_ENTRIES;
+	rc = d_chash_table_traverse(arg->thtab,
+				    test_gurt_hash_traverse_count_cb,
+				    &expected_count);
+	TEST_THREAD_ASSERT(rc == 0);
+	TEST_THREAD_ASSERT(expected_count == 0);
+
+	return NULL;
+}
+
+static void *
+hash_parallel_lookup(struct hash_thread_arg *arg)
+{
+	int i;
+	d_list_t *test;
+
+	/* Try to look up the random entries and make sure they succeed */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
+		test = d_chash_rec_find(arg->thtab, arg->entries[i]->tl_key,
+					TEST_GURT_HASH_KEY_LEN);
+		/* Make sure the returned pointer is the right one */
+		TEST_THREAD_ASSERT(test == &(arg->entries[i]->tl_link));
+	}
+
+	return NULL;
+}
+
+static void *
+hash_parallel_delete(struct hash_thread_arg *arg)
+{
+	int i;
+	bool deleted;
+
+	/* Delete the entries and make sure they succeed */
+	for (i = (arg->thread_idx * TEST_GURT_HASH_ENTRIES_PER_THREAD);
+	     i < ((arg->thread_idx + 1) * TEST_GURT_HASH_ENTRIES_PER_THREAD);
+	     i++) {
+		deleted = d_chash_rec_delete(arg->thtab,
+					     arg->entries[i]->tl_key,
+					     TEST_GURT_HASH_KEY_LEN);
+		/* Make sure something was deleted */
+		TEST_THREAD_ASSERT(deleted);
+	}
+
+	return NULL;
+}
+
+static void *
+hash_parallel_wrapper(void *input)
+{
+	struct hash_thread_arg *arg = (struct hash_thread_arg *)input;
+
+	/*
+	 * Don't use TEST_THREAD_ASSERT here - otherwise the main thread will
+	 * never call join because it never proceeds past the barrier
+	 *
+	 * Better to have the test fail with limited debug info than hang
+	 */
+	assert_non_null(arg);
+	assert_true(arg->thread_idx >= 0);
+	assert_non_null(arg->entries);
+	assert_non_null(arg->thtab);
+	assert_non_null(arg->barrier);
+	assert_non_null(arg->fn);
+
+	/* Wait for all workers to be ready to proceed */
+	pthread_barrier_wait(arg->barrier);
+
+	/* Call the parallel function under test */
+	return arg->fn(arg);
+}
+
+static void
+_test_gurt_hash_threaded_same_operations(void *(*fn)(struct hash_thread_arg *),
+					 struct d_chash_table *thtab,
+					 struct test_hash_entry **entries)
+{
+	pthread_t		 thread_ids[TEST_GURT_HASH_NUM_THREADS];
+	struct hash_thread_arg	 thread_args[TEST_GURT_HASH_NUM_THREADS];
+	pthread_barrier_t	 barrier;
+	int			 i;
+	int			 rc;
+	int			 thread_rc;
+	void			*thread_result;
+
+	/* Use barrier to make sure all threads start at the same time */
+	pthread_barrier_init(&barrier, NULL, TEST_GURT_HASH_NUM_THREADS + 1);
+
+	for (i = 0; i < TEST_GURT_HASH_NUM_THREADS; i++) {
+		thread_args[i].thread_idx = i;
+		thread_args[i].entries = entries;
+		thread_args[i].thtab = thtab;
+		thread_args[i].barrier = &barrier;
+		thread_args[i].fn = fn;
+		rc = pthread_create(&thread_ids[i], NULL,
+				    hash_parallel_wrapper,
+				    &thread_args[i]);
+		assert_int_equal(rc, 0);
+	}
+
+	/* Wait for all threads to be ready */
+	pthread_barrier_wait(&barrier);
+
+	/* Collect all threads */
+	rc = 0;
+	for (i = 0; i < TEST_GURT_HASH_NUM_THREADS; i++) {
+		thread_rc = pthread_join(thread_ids[i], &thread_result);
+
+		/* Accumulate any non-zero bits into rc */
+		rc |= thread_rc;
+
+		/* Thread returns non-null if an assert was tripped in-thread */
+		rc = rc || (thread_result != NULL);
+	}
+
+	assert_int_equal(rc, 0);
+
+	/* Cleanup barrier */
+	pthread_barrier_destroy(&barrier);
+}
+
+static void
+test_gurt_hash_threaded_same_operations(uint32_t ht_feats)
+{
+	const int		  num_bits = TEST_GURT_HASH_NUM_BITS;
+	struct d_chash_table	 *thtab;
+	int			  rc;
+	struct test_hash_entry	**entries;
+	d_list_t		 *test;
+	int			  i;
+	int			  expected_count;
+
+	/* Allocate test entries to use */
+	entries = test_gurt_hash_alloc_items(TEST_GURT_HASH_NUM_ENTRIES);
+	assert_non_null(entries);
+
+	/* Create a hash table */
+	rc = d_chash_table_create(ht_feats, num_bits, NULL, &th_ops, &thtab);
+	assert_int_equal(rc, 0);
+
+	/* Test each operation in parallel */
+	_test_gurt_hash_threaded_same_operations(hash_parallel_insert,
+						 thtab, entries);
+	_test_gurt_hash_threaded_same_operations(hash_parallel_traverse,
+						 thtab, entries);
+	_test_gurt_hash_threaded_same_operations(hash_parallel_lookup,
+						 thtab, entries);
+	_test_gurt_hash_threaded_same_operations(hash_parallel_delete,
+						 thtab, entries);
+
+	/* Lookup test - all should fail */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
+		test = d_chash_rec_find(thtab, entries[i]->tl_key,
+					TEST_GURT_HASH_KEY_LEN);
+		assert_null(test);
+	}
+
+	/* Traverse the hash table and check there are zero entries */
+	expected_count = 0;
+	rc = d_chash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
+				    &expected_count);
+	assert_int_equal(rc, 0);
+
+	/* Destroy the hash table, force = false (should fail if not empty) */
+	rc = d_chash_table_destroy(thtab, 0);
+	assert_int_equal(rc, 0);
+
+	/* Free the temporary keys */
+	test_gurt_hash_free_items(entries, TEST_GURT_HASH_NUM_ENTRIES);
+}
+
+static void
+test_gurt_hash_default_locking(void **state)
+{
+	test_gurt_hash_threaded_same_operations(0);
+}
+
+static void
+test_gurt_hash_reader_writer_locking(void **state)
+{
+	test_gurt_hash_threaded_same_operations(D_HASH_FT_RWLOCK);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1077,6 +1317,8 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_hash_insert_lookup_delete),
 		cmocka_unit_test(test_gurt_hash_decref),
 		cmocka_unit_test(test_gurt_alloc),
+		cmocka_unit_test(test_gurt_hash_default_locking),
+		cmocka_unit_test(test_gurt_hash_reader_writer_locking),
 	};
 
 	return cmocka_run_group_tests(tests, init_tests, fini_tests);
