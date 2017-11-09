@@ -558,7 +558,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	 * body, avoid unpacking two times (which needs to lookup, create the
 	 * proc multiple times).
 	 * The potential risk is mercury possibly will not export those APIs
-	 * later, and the hard-coded method HG_CRC64 used below which maybe
+	 * later, and the hard-coded method HG_CRC32 used below which maybe
 	 * different with future's mercury code change.
 	 */
 	void			*in_buf;
@@ -570,7 +570,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	hg_proc_t		hg_proc = HG_PROC_NULL;
 
 	/* Get input buffer */
-	hg_ret = HG_Core_get_input(handle, &in_buf, &in_buf_size);
+	hg_ret = HG_Get_input_buf(handle, &in_buf, &in_buf_size);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("Could not get input buffer, hg_ret: %d.", hg_ret);
 		D_GOTO(out, rc = -DER_HG);
@@ -581,7 +581,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	hg_ctx = &ctx->cc_hg_ctx;
 	hg_class = hg_ctx->chc_hgcla;
 	hg_ret = hg_proc_create_set(hg_class, in_buf, in_buf_size, HG_DECODE,
-				    HG_CHECKSUM_DEFAULT, &hg_proc);
+				    HG_CRC32, &hg_proc);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("Could not create proc, hg_ret: %d.", hg_ret);
 		D_GOTO(out, rc = -DER_HG);
