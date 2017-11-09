@@ -13,6 +13,11 @@ if PREREQS is not None:
 denv.Program('simple_array', 'simple_array.c', LIBS=libs)
 daosbench = denv.Program('daosbench', 'daosbench.c', LIBS=libs)
 denv.Install('$PREFIX/bin/', daosbench)
+
+daos_perf = denv.Program('daos_perf', 'daos_perf.c',
+                         LIBS=libs + ['vos', 'daos_tests'])
+denv.Install('$PREFIX/bin/', daos_perf)
+
 # tests
 SConscript('suite/SConscript', exports = ['denv'])
 SConscript('tier/SConscript', exports = ['denv'])
