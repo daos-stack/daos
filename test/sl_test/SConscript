@@ -39,7 +39,25 @@ def run_test(env, *tests):
 
     return prog
 
-TENV = ENV.Clone()
+def run_check(env, tname, source, expected=None, headers_only=False):
+    """Check compilation for expected links"""
+    cloned_env = env.Clone()
+
+    if expected is None:
+        expected = []
+
+    cloned_env.Replace(LIBS=[])
+    if headers_only:
+        PREREQS.require(cloned_env, 'sl_project2', headers_only=True)
+    else:
+        PREREQS.require(cloned_env, 'sl_project2', sl_project2_libs=expected)
+    proglist = ['gen_script.sh']
+    proglist += cloned_env.Program(tname, source, OBJSUFFIX=tname)
+    prog = cloned_env.Command("%s.sh" % tname, proglist,
+                              ["$SOURCES %s" % " ".join(expected)])
+
+    return prog
+
 
 PROGS = []
 PROGS += run_test(ENV, 'sl_project1')
@@ -51,12 +69,9 @@ PROGS += run_test(ENV, 'hwloc', 'sl_project3')
 PROGS += run_test(ENV, 'hwloc2', 'sl_project3')
 PROGS += run_test(ENV, 'openpa', 'hwloc')
 PROGS += run_test(ENV, 'sl_project4', 'openpa2')
+PROGS += run_check(ENV, 'pthread_test', 'pthread_test.c', ['pthread'])
+PROGS += run_check(ENV, 'simple1', 'simple.c')
+PROGS += run_check(ENV, 'simple2', 'simple.c', headers_only=True)
 
 TESTS = ENV.RunTests(PROGS)
 AlwaysBuild(TESTS)
-
-# Test library modifier kw.  Use pthread.  A bit of a hack
-# but it should work.
-TENV.Replace(LIBS=[])
-PREREQS.require(TENV, 'sl_project2', sl_project2_libs=['pthread'])
-TENV.Program('pthread_test.c')
