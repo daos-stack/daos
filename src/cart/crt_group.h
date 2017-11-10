@@ -81,7 +81,8 @@ struct crt_grp_priv {
 	uint32_t		 gp_membs_ver;
 	/*
 	 * member ranks that are still alive, should be unique and sorted, each
-	 * member is the rank number within the primary group.
+	 * member is the rank number within the primary group. Only valid for
+	 * the local primary service group.
 	 */
 	d_rank_list_t		*gp_live_ranks;
 	/* failed ranks. a subgroup's list points to its parent's list */

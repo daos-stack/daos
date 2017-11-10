@@ -2613,13 +2613,11 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 	}
 
 	pthread_rwlock_wrlock(grp_priv->gp_rwlock_ft);
-	if (!d_rank_in_rank_list(grp_priv->gp_live_ranks, rank, true)) {
+	if (d_rank_in_rank_list(grp_priv->gp_failed_ranks, rank, true)) {
 		D_DEBUG("Rank %d already evicted.\n", rank);
 		pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
 		D_GOTO(out, rc = -DER_EVICTED);
 	}
-	D_ASSERTF(!d_rank_in_rank_list(grp_priv->gp_failed_ranks, rank, true),
-		  "failed_ranks list inconsistant.\n");
 
 	tmp_rank_list.rl_nr.num = 1;
 	tmp_rank_list.rl_ranks = &rank;
