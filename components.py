@@ -254,7 +254,7 @@ REQS.define('ompi_pmix',
 RETRIEVER = GitRepoRetriever("https://github.com/pmem/nvml")
 
 # Check if this is an ARM platform
-PROCESSOR = platform.processor()
+PROCESSOR = platform.machine()
 ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
 ARM_PLATFORM = None
 for i in xrange(1, len(ARM_LIST)):
