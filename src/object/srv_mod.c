@@ -81,6 +81,35 @@ static struct daos_rpc_handler obj_handlers[] = {
 	}
 };
 
+static void *
+obj_tls_init(const struct dss_thread_local_storage *dtls,
+	     struct dss_module_key *key)
+{
+	struct obj_tls *tls;
+
+	D__ALLOC_PTR(tls);
+	return tls;
+}
+
+static void
+obj_tls_fini(const struct dss_thread_local_storage *dtls,
+	     struct dss_module_key *key, void *data)
+{
+	struct obj_tls *tls = data;
+
+	if (tls->ot_echo_sgl.sg_iovs != NULL)
+		daos_sgl_fini(&tls->ot_echo_sgl, true);
+
+	D__FREE_PTR(tls);
+}
+
+struct dss_module_key obj_module_key = {
+	.dmk_tags = DAOS_SERVER_TAG,
+	.dmk_index = -1,
+	.dmk_init = obj_tls_init,
+	.dmk_fini = obj_tls_fini,
+};
+
 struct dss_module obj_module =  {
 	.sm_name	= "obj",
 	.sm_mod_id	= DAOS_OBJ_MODULE,
@@ -89,4 +118,5 @@ struct dss_module obj_module =  {
 	.sm_fini	= obj_mod_fini,
 	.sm_cl_rpcs	= daos_obj_rpcs,
 	.sm_handlers	= obj_handlers,
+	.sm_key		= &obj_module_key,
 };

@@ -40,33 +40,10 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-/**
- * Free a single entry sgl/iov for server side use.
- **/
-static void
-ds_sgls_free(daos_sg_list_t *sgls, int nr)
+static inline struct obj_tls *
+obj_tls_get()
 {
-	int i;
-	int j;
-
-	if (sgls == NULL)
-		return;
-
-	for (i = 0; i < nr; i++) {
-		if (sgls[i].sg_nr.num == 0 || sgls[i].sg_iovs == NULL)
-			continue;
-
-		for (j = 0; j < sgls[i].sg_nr.num; j++) {
-			if (sgls[i].sg_iovs[j].iov_buf == NULL)
-				continue;
-
-			D__FREE(sgls[i].sg_iovs[j].iov_buf,
-			       sgls[i].sg_iovs[j].iov_buf_len);
-		}
-
-		D__FREE(sgls[i].sg_iovs,
-		       sgls[i].sg_nr.num * sizeof(sgls[i].sg_iovs[0]));
-	}
+	return dss_module_key_get(dss_tls_get(), &obj_module_key);
 }
 
 /**
@@ -495,52 +472,84 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
-	daos_iod_t		*iods;
-	daos_sg_list_t		sgl;
-	daos_sg_list_t		*p_sgl = &sgl;
+	struct obj_tls		*tls;
+	daos_iod_t		*iod;
+	daos_sg_list_t		*p_sgl;
+	crt_bulk_op_t		bulk_op;
 	int			i;
 	int			rc;
 
 	D__DEBUG(DB_TRACE, "opc %d "DF_UOID" tag %d\n", opc_get(rpc->cr_opc),
 		DP_UOID(orw->orw_oid), dss_get_module_info()->dmi_tid);
 
-	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE)
-		D__GOTO(out, rc = 0);
+	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
+		rc = ds_obj_update_sizes_in_reply(rpc);
+		if (rc)
+			D__GOTO(out, rc);
+	}
 
-	rc = ds_obj_update_sizes_in_reply(rpc);
-	if (rc)
-		D__GOTO(out, rc);
-
-	/* Inline fetch */
+	/* Inline fetch/update */
 	if (orw->orw_bulks.da_arrays == NULL && orw->orw_bulks.da_count == 0) {
-		orwo->orw_sgls = orw->orw_sgls;
+		if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH)
+			orwo->orw_sgls = orw->orw_sgls;
 		D__GOTO(out, rc);
 	}
 
-	/* bulk fetch */
-	p_sgl->sg_nr.num_out = 1;
-	p_sgl->sg_nr.num = 1;
-
 	/* Only support 1 iod now */
 	D__ASSERT(orw->orw_iods.da_count == 1);
-	iods = orw->orw_iods.da_arrays;
-	daos_sgl_init(p_sgl, iods->iod_nr);
-	for (i = 0; i < iods->iod_nr; i++) {
-		D__ASSERT(iods->iod_recxs[i].rx_nr != DAOS_REC_ANY);
-		D__ALLOC(p_sgl->sg_iovs[i].iov_buf,
-			iods->iod_recxs[i].rx_nr);
-		if (p_sgl->sg_iovs[i].iov_buf == NULL)
-			D__GOTO(out, rc = -DER_NOMEM);
-		p_sgl->sg_iovs[i].iov_buf_len = iods->iod_recxs[i].rx_nr;
+	iod = orw->orw_iods.da_arrays;
+
+	tls = obj_tls_get();
+	p_sgl = &tls->ot_echo_sgl;
+
+	/* Let's check if tls already have enough buffer */
+	if (p_sgl->sg_nr.num < iod->iod_nr) {
+		daos_sgl_fini(p_sgl, true);
+		rc = daos_sgl_init(p_sgl, iod->iod_nr);
+		if (rc)
+			D_GOTO(out, rc);
+
+		p_sgl->sg_nr.num_out = p_sgl->sg_nr.num;
+	}
+
+	for (i = 0; i < iod->iod_nr; i++) {
+		daos_size_t size = iod->iod_size;
+
+		if (size == DAOS_REC_ANY)
+			size = sizeof(uint64_t);
+
+		if (iod->iod_type == DAOS_IOD_ARRAY) {
+			D__ASSERT(iod->iod_recxs);
+			size *= iod->iod_recxs[i].rx_nr;
+		}
+
+		/* Check each vector */
+		if (p_sgl->sg_iovs[i].iov_buf_len < size) {
+			if (p_sgl->sg_iovs[i].iov_buf != NULL)
+				D__FREE(p_sgl->sg_iovs[i].iov_buf,
+					p_sgl->sg_iovs[i].iov_buf_len);
+
+			D__ALLOC(p_sgl->sg_iovs[i].iov_buf, size);
+			/* obj_tls_fini() will free these buffer */
+			if (p_sgl->sg_iovs[i].iov_buf == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			p_sgl->sg_iovs[i].iov_buf_len = size;
+			p_sgl->sg_iovs[i].iov_len = size;
+		}
 	}
 
 	orwo->orw_sgls.da_count = 0;
 	orwo->orw_sgls.da_arrays = NULL;
-	rc = ds_obj_update_nrs_in_reply(rpc, DAOS_HDL_INVAL, p_sgl);
-	if (rc != 0)
-		D__GOTO(out, rc);
+	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
+		rc = ds_obj_update_nrs_in_reply(rpc, DAOS_HDL_INVAL, p_sgl);
+		if (rc != 0)
+			D__GOTO(out, rc);
+		bulk_op = CRT_BULK_PUT;
+	} else {
+		bulk_op = CRT_BULK_GET;
+	}
 
-	rc = ds_bulk_transfer(rpc, CRT_BULK_PUT, orw->orw_bulks.da_arrays,
+	rc = ds_bulk_transfer(rpc, bulk_op, orw->orw_bulks.da_arrays,
 			      DAOS_HDL_INVAL, &p_sgl, orw->orw_nr);
 	D_EXIT;
 out:
@@ -696,7 +705,7 @@ ds_eu_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 		       oei->oei_nr * sizeof(uint32_t));
 
 	if (oeo->oeo_sgl.sg_iovs != NULL) {
-		ds_sgls_free(&oeo->oeo_sgl, 1);
+		daos_sgl_fini(&oeo->oeo_sgl, true);
 		oeo->oeo_sgl.sg_iovs = NULL;
 	}
 }
@@ -1033,7 +1042,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		/* If the keys will be replied by bulk, then let's empty
 		 * the sgl in the reply to avoid confusing
 		 */
-		ds_sgls_free(sgl, 1);
+		daos_sgl_fini(sgl, true);
 		oeo->oeo_sgl.sg_iovs = NULL;
 		oeo->oeo_sgl.sg_nr.num = 0;
 		oeo->oeo_sgl.sg_nr.num_out = 0;

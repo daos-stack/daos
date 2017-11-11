@@ -128,6 +128,11 @@ enum_anchor_set_tag(daos_hash_out_t *anchor, uint32_t tag)
 	       ENUM_ANCHOR_TAG_LENGTH);
 }
 
+extern struct dss_module_key obj_module_key;
+struct obj_tls {
+	d_sg_list_t	ot_echo_sgl;
+};
+
 int dc_obj_shard_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
 		      unsigned int mode, daos_handle_t *oh);
 int dc_obj_shard_close(daos_handle_t oh);

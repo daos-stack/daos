@@ -531,7 +531,7 @@ io_var_rec_size(void **state)
 }
 
 static void
-io_simple_internal(void **state, daos_obj_id_t oid)
+io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size)
 {
 	test_arg_t	*arg = *state;
 	struct ioreq	 req;
@@ -548,9 +548,9 @@ io_simple_internal(void **state, daos_obj_id_t oid)
 	insert_single(dkey, akey, 0, (void *)rec, strlen(rec), 0, &req);
 
 	/** Lookup */
-	buf = calloc(64, 1);
+	buf = calloc(size, 1);
 	assert_non_null(buf);
-	lookup_single(dkey, akey, 0, buf, 64, 0, &req);
+	lookup_single(dkey, akey, 0, buf, size, 0, &req);
 
 	/** Verify data consistency */
 	print_message("size = %lu\n", req.iod[0].iod_size);
@@ -569,7 +569,7 @@ io_simple(void **state)
 	daos_obj_id_t	 oid;
 
 	oid = dts_oid_gen(dts_obj_class, ((test_arg_t *)state)->myrank);
-	io_simple_internal(state, oid);
+	io_simple_internal(state, oid, 64);
 }
 
 void
@@ -1139,7 +1139,7 @@ io_simple_update_timeout(void **state)
 	arg->fail_value = 5;
 
 	oid = dts_oid_gen(dts_obj_class, arg->myrank);
-	io_simple_internal(state, oid);
+	io_simple_internal(state, oid, 64);
 }
 
 static void
@@ -1152,7 +1152,7 @@ io_simple_fetch_timeout(void **state)
 	arg->fail_value = 5;
 
 	oid = dts_oid_gen(dts_obj_class, arg->myrank);
-	io_simple_internal(state, oid);
+	io_simple_internal(state, oid, 64);
 }
 
 static void
@@ -1164,7 +1164,7 @@ io_simple_update_timeout_single(void **state)
 	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE | DAOS_FAIL_ONCE;
 
 	oid = dts_oid_gen(dts_obj_class, arg->myrank);
-	io_simple_internal(state, oid);
+	io_simple_internal(state, oid, 64);
 }
 
 static void
@@ -1176,7 +1176,7 @@ io_simple_update_crt_error(void **state)
 	arg->fail_loc = DAOS_SHARD_OBJ_RW_CRT_ERROR | DAOS_FAIL_ONCE;
 
 	oid = dts_oid_gen(DAOS_OC_LARGE_RW, arg->myrank);
-	io_simple_internal(state, oid);
+	io_simple_internal(state, oid, 64);
 }
 
 static void
@@ -1188,7 +1188,7 @@ io_simple_update_crt_req_error(void **state)
 	arg->fail_loc = DAOS_OBJ_REQ_CREATE_TIMEOUT | DAOS_FAIL_ONCE;
 
 	oid = dts_oid_gen(DAOS_OC_LARGE_RW, arg->myrank);
-	io_simple_internal(state, oid);
+	io_simple_internal(state, oid, 64);
 }
 
 static void
@@ -1432,7 +1432,10 @@ echo_fetch_update(void **state)
 	daos_obj_id_t	 oid;
 
 	oid = dts_oid_gen(DAOS_OC_ECHO_RW, arg->myrank);
-	io_simple_internal(state, oid);
+	io_simple_internal(state, oid, 64);
+
+	oid = dts_oid_gen(DAOS_OC_ECHO_RW, arg->myrank);
+	io_simple_internal(state, oid, 8192);
 }
 
 static const struct CMUnitTest io_tests[] = {
