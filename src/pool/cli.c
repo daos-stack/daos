@@ -466,8 +466,8 @@ dc_pool_connect(tse_task_t *task)
 	pool = daos_task_get_priv(task);
 
 	if (pool == NULL) {
-		if (uuid_is_null(args->uuid) || !flags_are_valid(args->flags) ||
-		    args->poh == NULL)
+		if (uuid_is_null(args->uuid) || args->svc == NULL ||
+		    !flags_are_valid(args->flags) || args->poh == NULL)
 			D__GOTO(out_task, rc = -DER_INVAL);
 
 		/** allocate and fill in pool connection */
