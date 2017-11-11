@@ -328,10 +328,11 @@ send_barrier_msg(struct crt_grp_priv *grp_priv, int b_num,
 	 * from the broadcast.  Until then, the rank list including
 	 * self will suffice.
 	 */
+	/* TODO: Tree topology changed for now to KARY due to CART-348 */
 	rc = crt_corpc_req_create(crt_ctx, &grp_priv->gp_pub,
 			     grp_priv->gp_barrier_info.bi_exclude_self,
 			     opcode, NULL, NULL, 0,
-			     crt_tree_topo(CRT_TREE_KNOMIAL, 4), &rpc_req);
+			     crt_tree_topo(CRT_TREE_KARY, 4), &rpc_req);
 
 	/* If this fails, we have nothing to do but fail the barrier
 	 * and let the user deal with it
