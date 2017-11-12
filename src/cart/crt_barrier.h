@@ -53,7 +53,7 @@ struct crt_barrier {
 };
 
 struct crt_barrier_info {
-	d_rank_list_t		*bi_exclude_self;    /* rank list for self */
+	d_rank_list_t		 bi_exclude_self;    /* rank list for self */
 	struct crt_grp_priv	*bi_primary_grp;     /* primary group */
 	pthread_mutex_t		 bi_lock;            /* lock for barriers */
 	struct crt_barrier	 bi_barriers[CRT_MAX_BARRIER_INFLIGHT];

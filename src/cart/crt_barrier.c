@@ -77,19 +77,14 @@ crt_barrier_info_init(struct crt_grp_priv *grp_priv)
 	/* Eventually, this will be handled by a flag passed to the corpc
 	 * routine but until then, create a list to exclude self from broadcast
 	 */
-	info->bi_exclude_self = d_rank_list_alloc(1);
-	D_ASSERTF(info->bi_exclude_self != NULL,
-		  "No memory to allocate barrier");
-
-	info->bi_exclude_self->rl_ranks[0] = info->bi_primary_grp->gp_self;
-	info->bi_exclude_self->rl_nr.num = 1;
+	info->bi_exclude_self.rl_nr.num = 1;
+	info->bi_exclude_self.rl_ranks = &info->bi_primary_grp->gp_self;
 }
 
 void
 crt_barrier_info_destroy(struct crt_grp_priv *grp_priv)
 {
 	pthread_mutex_destroy(&grp_priv->gp_barrier_info.bi_lock);
-	d_rank_list_free(grp_priv->gp_barrier_info.bi_exclude_self);
 }
 
 /* Update the master rank.  Returns true if the master has changed since
@@ -249,10 +244,10 @@ crt_hdlr_barrier_exit(crt_rpc_t *rpc_req)
 		D_GOTO(send_reply, rc = 0);
 	}
 
-	D_ASSERTF(in->b_num == (barrier_info->bi_num_exited + 1),
-		  "Barrier exit out of order\n");
+	/* Only record a new number if this isn't a replay */
+	if (in->b_num > barrier_info->bi_num_exited)
+		barrier_info->bi_num_exited = in->b_num;
 
-	barrier_info->bi_num_exited = in->b_num;
 	ab = &barrier_info->bi_barriers[in->b_num % CRT_MAX_BARRIER_INFLIGHT];
 	ab->b_active = false;
 	complete_cb = ab->b_complete_cb;
@@ -322,7 +317,7 @@ send_barrier_msg(struct crt_grp_priv *grp_priv, int b_num,
 	 */
 	crt_ctx = crt_context_lookup(0);
 	D_ASSERT(crt_ctx != CRT_CONTEXT_NULL);
-	D_DEBUG("Sending barrier message for %d\n", b_num);
+	D_DEBUG("Sending barrier message for %d (OPC=%d)\n", b_num, opcode);
 
 	/* TODO: Eventually, there will be a flag to exclude self from
 	 * from the broadcast.  Until then, the rank list including
@@ -330,7 +325,7 @@ send_barrier_msg(struct crt_grp_priv *grp_priv, int b_num,
 	 */
 	/* TODO: Tree topology changed for now to KARY due to CART-348 */
 	rc = crt_corpc_req_create(crt_ctx, &grp_priv->gp_pub,
-			     grp_priv->gp_barrier_info.bi_exclude_self,
+			     &grp_priv->gp_barrier_info.bi_exclude_self,
 			     opcode, NULL, NULL, 0,
 			     crt_tree_topo(CRT_TREE_KARY, 4), &rpc_req);
 
@@ -411,8 +406,6 @@ barrier_exit_cb(const struct crt_cb_info *cb_info)
 	ab = &barrier_info->bi_barriers[in->b_num % CRT_MAX_BARRIER_INFLIGHT];
 
 	pthread_mutex_lock(&barrier_info->bi_lock);
-	D_ASSERTF(barrier_info->bi_num_exited == (in->b_num - 1),
-		  "Barrier exit out of order");
 
 	if (barrier_info->bi_num_exited < in->b_num) {
 		/* otherwise, this is a replay */
