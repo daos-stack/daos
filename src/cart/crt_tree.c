@@ -59,8 +59,6 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 		*grp_size = grp_rank_list->rl_nr.num;
 		D_ASSERT(*grp_size == grp_rank_list->rl_nr.num);
-		*grp_root = root;
-		*grp_self = self;
 		*allocated = false;
 	} else {
 		/* grp_priv->gp_live_ranks/exclude_ranks already sorted
@@ -87,25 +85,25 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 		*allocated = true;
 		*grp_size = grp_rank_list->rl_nr.num;
-		rc = d_idx_in_rank_list(grp_rank_list,
-					grp_priv->gp_membs->rl_ranks[root],
-				       grp_root, true /* input */);
-		if (rc != 0) {
-			D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
-				"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-				root, rc);
-			D_GOTO(out, rc);
-		}
-		rc = d_idx_in_rank_list(grp_rank_list,
-				       grp_priv->gp_membs->rl_ranks[self],
-				       grp_self, true /* input */);
-		if (rc != 0) {
-			D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
-				"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-				self, rc);
-			D_GOTO(out, rc);
-		}
 	}
+
+	rc = d_idx_in_rank_list(grp_rank_list,
+				grp_priv->gp_membs->rl_ranks[root],
+				grp_root, true /* input */);
+	if (rc != 0) {
+		D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
+			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
+			root, rc);
+		D_GOTO(out, rc);
+	}
+	rc = d_idx_in_rank_list(grp_rank_list,
+				grp_priv->gp_membs->rl_ranks[self],
+				grp_self, true /* input */);
+	if (rc != 0)
+		D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
+			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
+			self, rc);
+
 out:
 	if (rc == 0)
 		*result_grp_rank_list = grp_rank_list;
