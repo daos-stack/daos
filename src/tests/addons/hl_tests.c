@@ -215,7 +215,10 @@ simple_multi_io(void **state)
 		assert_non_null(buf_out[i]);
 
 		/** init dkey */
-		asprintf(&keys[i], key_fmt, i);
+		rc = asprintf(&keys[i], key_fmt, i);
+		assert_non_null(keys[i]);
+		assert_int_not_equal(rc, -1);
+
 		daos_iov_set(io_array[i].ioa_dkey, keys[i], strlen(keys[i]));
 		/** init scatter/gather */
 		daos_iov_set(&sg_iov[i], buf[i], buf_size);
