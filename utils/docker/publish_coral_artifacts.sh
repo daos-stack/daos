@@ -20,9 +20,14 @@
 
 set -x
 
-COMMIT_REPO=${1}
-: ${COMMIT_REPO:=${JOB_NAME%%-*}}
+param="${1}"
 
+# if param is not "nosymlink", then it is a git repository name.
+if [ ! "${param}" != "nosymlink" ]; then
+  COMMIT_REPO="${param}"
+fi
+
+: ${COMMIT_REPO:=${JOB_NAME%%-*}}
 
 job_artifact="${CORAL_ARTIFACTS}/${JOB_NAME}"
 
@@ -34,6 +39,11 @@ if [ -n "$(ls -A ${WORKSPACE}/artifacts)"  ];then
 
   cp -r ${WORKSPACE}/artifacts/* ${build_artifact}
   chmod -R u=rwX,g=rwX,o=rX ${build_artifact}
+fi
+
+# If we do not need symbolic links to builds, we are done.
+if [ "${param}" == "nosymlink" ]; then
+  exit 0
 fi
 
 # Update the link to the latest artifact.
@@ -53,4 +63,5 @@ if [ -e ${build_artifact}/${COMMIT_REPO}_git_commit ]; then
   fi
   ln -f -s ${build_artifact} ${job_artifact}/${commit}
 fi
-find -L ${job_artifact} -type l -delete
+find -L ${job_artifact} -maxdepth 2 -type l -delete || true
+
