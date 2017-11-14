@@ -1037,18 +1037,23 @@ exit:
 	return rc;
 }
 
-/* Return next parent of the 'cur_node' */
-static d_rank_t
+/* Returns the parent of 'cur_node' into 'ret_node' on success */
+static int
 crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
-			d_rank_t cur_node, d_rank_t root_node)
+			d_rank_t cur_node, d_rank_t root_node,
+			d_rank_t *ret_node)
 {
 	struct crt_grp_priv	*grp_priv;
 	d_rank_t		 parent_rank;
 	crt_group_t		*group;
 	int			 rc;
 
-	if (cur_node == root_node)
-		return root_node;
+	D_ASSERT(ret_node != NULL);
+
+	if (cur_node == root_node) {
+		*ret_node = root_node;
+		return 0;
+	}
 
 	/* group and grp_priv should never be NULL by the time we get here */
 	group = crt_group_lookup(ivns_internal->cii_gns.gn_grp_id);
@@ -1060,22 +1065,23 @@ crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
 	rc = crt_tree_get_parent(grp_priv, 0, NULL,
 			ivns_internal->cii_gns.gn_tree_topo, root_node,
 			cur_node, &parent_rank);
-	D_ASSERT(rc == 0);
+	if (rc == 0)
+		*ret_node = parent_rank;
 
-	D_DEBUG("parent lookup: current=%d, root=%d, parent=%d\n",
-		cur_node, root_node, parent_rank);
+	D_DEBUG("parent lookup: current=%d, root=%d, parent=%d rc=%d\n",
+		cur_node, root_node, parent_rank, rc);
 
-	return parent_rank;
+	return rc;
 }
 
-/* Return next parent for the current rank and root_node */
-static d_rank_t
+/* Return next parent (in ret_node) for the current rank and root_node */
+static int
 crt_iv_parent_get(struct crt_ivns_internal *ivns_internal,
-		  d_rank_t root_node)
+		  d_rank_t root_node, d_rank_t *ret_node)
 {
 	return crt_iv_ranks_parent_get(ivns_internal,
 				       ivns_internal->cii_local_rank,
-				       root_node);
+				       root_node, ret_node);
 }
 
 /* Internal handler for CRT_OPC_IV_FETCH RPC call*/
@@ -1160,8 +1166,13 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 
 		put_needed = true;
 
-		next_node = crt_iv_parent_get(ivns_internal,
-					input->ifi_root_node);
+		rc = crt_iv_parent_get(ivns_internal, input->ifi_root_node,
+					&next_node);
+		if (rc != 0) {
+			D_DEBUG("crt_iv_parent_get() returned %d\n", rc);
+			D_GOTO(send_error, rc = -DER_OOG);
+		}
+
 		D_ALLOC_PTR(cb_info);
 		if (cb_info == NULL)
 			D_GOTO(send_error, rc = -DER_NOMEM);
@@ -1218,6 +1229,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	int				 rc;
 	d_sg_list_t			*iv_value = NULL;
 	void				*user_priv = NULL;
+	bool				put_needed = false;
 
 	if (iv_key == NULL) {
 		D_ERROR("iv_key is NULL\n");
@@ -1254,6 +1266,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		D_ERROR("ivo_on_get() failed; rc = %d\n", rc);
 		D_GOTO(exit, rc);
 	}
+	put_needed = true;
 
 	rc = iv_ops->ivo_on_fetch(ivns_internal, iv_key, 0,
 				  0, iv_value, user_priv);
@@ -1278,6 +1291,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	/* Return read-only copy and request 'write' version of iv_value */
 	iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
+	put_needed = false;
 
 	rc = iv_ops->ivo_on_get(ivns_internal, iv_key, 0, CRT_IV_PERM_WRITE,
 				iv_value, &user_priv);
@@ -1285,6 +1299,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		D_ERROR("ivo_on_get() failed; rc = %d\n", rc);
 		D_GOTO(exit, rc);
 	}
+	put_needed = true;
 
 	/* If we reached here, means we got DER_IVCB_FORWARD */
 
@@ -1294,7 +1309,13 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		break;
 
 	case CRT_IV_SHORTCUT_NONE:
-		next_node = crt_iv_parent_get(ivns_internal, root_rank);
+		rc = crt_iv_parent_get(ivns_internal, root_rank,
+					&next_node);
+		if (rc != 0) {
+			D_DEBUG("crt_iv_parent_get() returned %d\n", rc);
+			D_GOTO(exit, rc = -DER_OOG);
+		}
+
 		break;
 
 	default:
@@ -1323,6 +1344,11 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 				cb_info);
 exit:
 	if (rc != 0) {
+		fetch_comp_cb(ivns, class_id, iv_key, NULL,
+			      NULL, rc, cb_arg);
+
+		if (put_needed)
+			iv_ops->ivo_on_put(ivns, iv_value, user_priv);
 		D_ERROR("Failed to issue IV fetch; rc = %d\n", rc);
 		D_FREE_PTR(cb_info);
 	}
@@ -1952,8 +1978,12 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 			cb_info->buc_user_priv);
 
 	if (update_rc == -DER_IVCB_FORWARD) {
-		next_rank = crt_iv_parent_get(ivns_internal,
-					input->ivu_root_node);
+		rc = crt_iv_parent_get(ivns_internal,
+					input->ivu_root_node, &next_rank);
+		if (rc != 0) {
+			D_DEBUG("crt_iv_parent_get() returned %d\n", rc);
+			D_GOTO(send_error, rc = -DER_OOG);
+		}
 
 		D_ALLOC_PTR(update_cb_info);
 		if (update_cb_info == NULL)
@@ -2050,8 +2080,12 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 					0, NULL, true, 0, NULL);
 
 		if (rc == -DER_IVCB_FORWARD) {
-			next_rank = crt_iv_parent_get(ivns_internal,
-						input->ivu_root_node);
+			rc = crt_iv_parent_get(ivns_internal,
+					input->ivu_root_node, &next_rank);
+			if (rc != 0) {
+				D_DEBUG("crt_iv_parent_get() rc=%d\n", rc);
+				D_GOTO(send_error, rc = -DER_OOG);
+			}
 
 			D_ALLOC_PTR(update_cb_info);
 			if (update_cb_info == NULL)
@@ -2136,7 +2170,6 @@ exit:
 
 send_error:
 	output->rc = rc;
-
 	crt_reply_send(rpc_req);
 }
 
@@ -2193,9 +2226,14 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 	} else  if (rc == -DER_IVCB_FORWARD) {
 		if (shortcut == CRT_IV_SHORTCUT_TO_ROOT)
 			next_node = root_rank;
-		else if (shortcut == CRT_IV_SHORTCUT_NONE)
-			next_node = crt_iv_parent_get(ivns_internal, root_rank);
-		else {
+		else if (shortcut == CRT_IV_SHORTCUT_NONE) {
+			rc = crt_iv_parent_get(ivns_internal, root_rank,
+					&next_node);
+			if (rc != 0) {
+				D_DEBUG("crt_iv_parent_get() rc=%d\n", rc);
+				D_GOTO(put, rc = -DER_OOG);
+			}
+		} else {
 			D_ERROR("Unknown shortcut argument %d\n", shortcut);
 			D_GOTO(put, rc = -DER_INVAL);
 		}
