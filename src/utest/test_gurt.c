@@ -1076,6 +1076,13 @@ struct hash_thread_arg {
 	void *(*fn)(struct hash_thread_arg *);
 
 	int			  thread_idx;
+
+	/*
+	 * If the result of the operation should be checked
+	 *
+	 * Some tests just want to run the operation and see if it crashes
+	 */
+	bool			  check_result;
 };
 
 /**
@@ -1107,10 +1114,29 @@ hash_parallel_insert(struct hash_thread_arg *arg)
 		rc = d_chash_rec_insert(arg->thtab, arg->entries[i]->tl_key,
 					TEST_GURT_HASH_KEY_LEN,
 					&(arg->entries[i]->tl_link), 1);
-		TEST_THREAD_ASSERT(rc == 0);
+		if (arg->check_result)
+			TEST_THREAD_ASSERT(rc == 0);
 	}
 
 	return NULL;
+}
+
+/**
+ * Parallel thread version which uses the appropriate assert
+ *
+ * *arg must be an integer tracking how many times this function is expected
+ * to be called
+ */
+int
+hash_parallel_traverse_cb(d_list_t *rlink, void *arg)
+{
+	int *expected_count = arg;
+
+	/* Decrement the expected number of entries - if < 0, error */
+	(*expected_count)--;
+	TEST_THREAD_ASSERT(*expected_count >= 0);
+
+	return 0;
 }
 
 static void *
@@ -1122,10 +1148,12 @@ hash_parallel_traverse(struct hash_thread_arg *arg)
 	/* Traverse the hash table and count number of entries */
 	expected_count = TEST_GURT_HASH_NUM_ENTRIES;
 	rc = d_chash_table_traverse(arg->thtab,
-				    test_gurt_hash_traverse_count_cb,
+				    hash_parallel_traverse_cb,
 				    &expected_count);
-	TEST_THREAD_ASSERT(rc == 0);
-	TEST_THREAD_ASSERT(expected_count == 0);
+	if (arg->check_result) {
+		TEST_THREAD_ASSERT(rc == 0);
+		TEST_THREAD_ASSERT(expected_count == 0);
+	}
 
 	return NULL;
 }
@@ -1140,8 +1168,9 @@ hash_parallel_lookup(struct hash_thread_arg *arg)
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
 		test = d_chash_rec_find(arg->thtab, arg->entries[i]->tl_key,
 					TEST_GURT_HASH_KEY_LEN);
-		/* Make sure the returned pointer is the right one */
-		TEST_THREAD_ASSERT(test == &(arg->entries[i]->tl_link));
+		if (arg->check_result)
+			/* Make sure the returned pointer is the right one */
+			TEST_THREAD_ASSERT(test == &(arg->entries[i]->tl_link));
 	}
 
 	return NULL;
@@ -1160,8 +1189,9 @@ hash_parallel_delete(struct hash_thread_arg *arg)
 		deleted = d_chash_rec_delete(arg->thtab,
 					     arg->entries[i]->tl_key,
 					     TEST_GURT_HASH_KEY_LEN);
-		/* Make sure something was deleted */
-		TEST_THREAD_ASSERT(deleted);
+		if (arg->check_result)
+			/* Make sure something was deleted */
+			TEST_THREAD_ASSERT(deleted);
 	}
 
 	return NULL;
@@ -1214,6 +1244,7 @@ _test_gurt_hash_threaded_same_operations(void *(*fn)(struct hash_thread_arg *),
 		thread_args[i].thtab = thtab;
 		thread_args[i].barrier = &barrier;
 		thread_args[i].fn = fn;
+		thread_args[i].check_result = true;
 		rc = pthread_create(&thread_ids[i], NULL,
 				    hash_parallel_wrapper,
 				    &thread_args[i]);
@@ -1234,13 +1265,18 @@ _test_gurt_hash_threaded_same_operations(void *(*fn)(struct hash_thread_arg *),
 		/* Thread returns non-null if an assert was tripped in-thread */
 		rc = rc || (thread_result != NULL);
 	}
-
 	assert_int_equal(rc, 0);
 
 	/* Cleanup barrier */
 	pthread_barrier_destroy(&barrier);
 }
 
+/**
+ * Test insert/traverse/lookup/delete operations in parallel with itself and
+ * check the result is correct
+ *
+ * Each type of operation gets TEST_GURT_HASH_NUM_THREADS threads.
+ */
 static void
 test_gurt_hash_threaded_same_operations(uint32_t ht_feats)
 {
@@ -1291,6 +1327,101 @@ test_gurt_hash_threaded_same_operations(uint32_t ht_feats)
 	test_gurt_hash_free_items(entries, TEST_GURT_HASH_NUM_ENTRIES);
 }
 
+/**
+ * Test insert/traverse/lookup/delete operations in parallel and check for crash
+ *
+ * Each type of operation gets TEST_GURT_HASH_NUM_THREADS threads.
+ */
+static void
+test_gurt_hash_threaded_concurrent_operations(uint32_t ht_feats)
+{
+	const int		  num_bits = TEST_GURT_HASH_NUM_BITS;
+	struct d_chash_table	 *thtab;
+	struct test_hash_entry	**entries;
+	pthread_t		  thread_ids[4][TEST_GURT_HASH_NUM_THREADS];
+	struct hash_thread_arg	  thread_args[4][TEST_GURT_HASH_NUM_THREADS];
+	pthread_barrier_t	  barrier;
+	int			  thread_rc;
+	void			 *thread_result;
+	int			  i;
+	int			  j;
+	int			  rc;
+
+	/* Allocate test entries to use */
+	entries = test_gurt_hash_alloc_items(TEST_GURT_HASH_NUM_ENTRIES);
+	assert_non_null(entries);
+
+	/* Create a hash table */
+	rc = d_chash_table_create(ht_feats, num_bits, NULL, &th_ops, &thtab);
+	assert_int_equal(rc, 0);
+
+
+	/* Use barrier to make sure all threads start at the same time */
+	pthread_barrier_init(&barrier, NULL,
+			     TEST_GURT_HASH_NUM_THREADS * 4 + 1);
+
+	for (j = 0; j < 4; j++) {
+		for (i = 0; i < TEST_GURT_HASH_NUM_THREADS; i++) {
+			thread_args[j][i].thread_idx = i;
+			thread_args[j][i].entries = entries;
+			thread_args[j][i].thtab = thtab;
+			thread_args[j][i].barrier = &barrier;
+			switch (j) {
+			case 0:
+				thread_args[j][i].check_result = true;
+				thread_args[j][i].fn = hash_parallel_insert;
+				break;
+			case 1:
+				thread_args[j][i].check_result = false;
+				thread_args[j][i].fn = hash_parallel_traverse;
+				break;
+			case 2:
+				thread_args[j][i].check_result = false;
+				thread_args[j][i].fn = hash_parallel_lookup;
+				break;
+			case 3:
+				thread_args[j][i].check_result = false;
+				thread_args[j][i].fn = hash_parallel_delete;
+				break;
+			}
+
+			rc = pthread_create(&thread_ids[j][i], NULL,
+					    hash_parallel_wrapper,
+					    &thread_args[j][i]);
+			assert_int_equal(rc, 0);
+		}
+	}
+
+	/* Wait for all threads to be ready */
+	pthread_barrier_wait(&barrier);
+
+	/* Collect all threads */
+	rc = 0;
+	for (j = 0; j < 4; j++) {
+		for (i = 0; i < TEST_GURT_HASH_NUM_THREADS; i++) {
+			thread_rc = pthread_join(thread_ids[j][i],
+						 &thread_result);
+
+			/* Accumulate any non-zero bits into rc */
+			rc |= thread_rc;
+
+			/* Thread returns non-null if an assert was tripped */
+			rc = rc || (thread_result != NULL);
+		}
+	}
+	assert_int_equal(rc, 0);
+
+	/* Cleanup barrier */
+	pthread_barrier_destroy(&barrier);
+
+	/* Destroy the hash table and delete any remaining entries */
+	rc = d_chash_table_destroy(thtab, true);
+	assert_int_equal(rc, 0);
+
+	/* Free the temporary keys */
+	test_gurt_hash_free_items(entries, TEST_GURT_HASH_NUM_ENTRIES);
+}
+
 static void
 test_gurt_hash_default_locking(void **state)
 {
@@ -1301,6 +1432,18 @@ static void
 test_gurt_hash_reader_writer_locking(void **state)
 {
 	test_gurt_hash_threaded_same_operations(D_HASH_FT_RWLOCK);
+}
+
+static void
+test_gurt_hash_concur_default_locking(void **state)
+{
+	test_gurt_hash_threaded_concurrent_operations(0);
+}
+
+static void
+test_gurt_hash_concur_reader_writer_locking(void **state)
+{
+	test_gurt_hash_threaded_concurrent_operations(D_HASH_FT_RWLOCK);
 }
 
 int
@@ -1319,6 +1462,8 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_alloc),
 		cmocka_unit_test(test_gurt_hash_default_locking),
 		cmocka_unit_test(test_gurt_hash_reader_writer_locking),
+		cmocka_unit_test(test_gurt_hash_concur_default_locking),
+		cmocka_unit_test(test_gurt_hash_concur_reader_writer_locking),
 	};
 
 	return cmocka_run_group_tests(tests, init_tests, fini_tests);
