@@ -44,6 +44,10 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 
+/******************************************************************************
+ * Hash functions / supporting routines
+ ******************************************************************************/
+
 /*
  * Each thread has CF_UUID_MAX number of thread-local buffers for UUID strings.
  * Each debug message can have at most this many CP_UUIDs.
@@ -206,9 +210,9 @@ d_hash_murmur64(const unsigned char *key, unsigned int key_len,
 	return mur;
 }
 
-/**
- * Hash tables.
- */
+/******************************************************************************
+ * Generic Hash Table functions / data structures
+ ******************************************************************************/
 
 static void
 ch_lock_init(struct d_chash_table *htable)
@@ -234,14 +238,16 @@ ch_lock_fini(struct d_chash_table *htable)
 		pthread_mutex_destroy(&htable->ht_lock);
 }
 
-/** lock the hash table */
+/**
+ * Lock the hash table
+ *
+ * Note: if hash table is using rwlock, it only takes read lock for
+ * reference-only operations and caller should protect refcount.
+ * see D_HASH_FT_RWLOCK for the details.
+ */
 static void
 ch_lock(struct d_chash_table *htable, bool read_only)
 {
-	/* NB: if hash table is using rwlock, it only takes read lock for
-	 * reference-only operations and caller should protect refcount.
-	 * see D_HASH_FT_RWLOCK for the details.
-	 */
 
 	if (htable->ht_feats & D_HASH_FT_NOLOCK)
 		return;
@@ -419,14 +425,6 @@ ch_rec_del_decref(struct d_chash_table *htable, d_list_t *rlink)
 	return zombie;
 }
 
-/**
- * lookup @key in the hash table, the found chain rlink is returned on
- * success.
- *
- * \param htable	[IN]	Pointer to the hash table
- * \param key		[IN]	The key to search
- * \param ksize		[IN]	Size of the key
- */
 d_list_t *
 d_chash_rec_find(struct d_chash_table *htable, const void *key,
 		 unsigned int ksize)
@@ -447,20 +445,6 @@ d_chash_rec_find(struct d_chash_table *htable, const void *key,
 	return rlink;
 }
 
-/**
- * Insert a new key and its record chain @rlink into the hash table. The hash
- * table holds a refcount on the successfully inserted record, it releases the
- * refcount while deleting the record.
- *
- * If @exclusive is true, it can succeed only if the key is unique, otherwise
- * this function returns error.
- *
- * \param htable	[IN]	Pointer to the hash table
- * \param key		[IN]	The key to be inserted
- * \param ksize		[IN]	Size of the key
- * \param rlink		[IN]	The link chain of the record being inserted
- * \param exclusive	[IN]	The key has to be unique if it is true.
- */
 int
 d_chash_rec_insert(struct d_chash_table *htable, const void *key,
 		   unsigned int ksize, d_list_t *rlink, bool exclusive)
@@ -485,16 +469,6 @@ out:
 	return rc;
 }
 
-/**
- * Lookup @key in the hash table, if there is a matched record, it should be
- * returned, otherwise @rlink will be inserted into the hash table. In the
- * later case, the returned link chain is the input @rlink.
- *
- * \param htable	[IN]	Pointer to the hash table
- * \param key		[IN]	The key to be inserted
- * \param ksize		[IN]	Size of the key
- * \param rlink		[IN]	The link chain of the record being inserted
- */
 d_list_t *
 d_chash_rec_find_insert(struct d_chash_table *htable, const void *key,
 			unsigned int ksize, d_list_t *rlink)
@@ -517,15 +491,7 @@ out:
 	ch_unlock(htable, false);
 	return rlink;
 }
-/**
- * Insert an anonymous record (w/o key) into the hash table.
- * This function calls hop_key_init() to generate a key for the new rlink
- * under the protection of the hash table lock.
- *
- * \param htable	[IN]	Pointer to the hash table
- * \param rlink		[IN]	The link chain of the hash record
- * \param arg		[IN]	Arguments for key generating
- */
+
 int
 d_chash_rec_insert_anonym(struct d_chash_table *htable, d_list_t *rlink,
 			  void *arg)
@@ -550,16 +516,6 @@ d_chash_rec_insert_anonym(struct d_chash_table *htable, d_list_t *rlink,
 	return 0;
 }
 
-/**
- * Delete the record identified by @key from the hash table.
- *
- * \param htable	[IN]	Pointer to the hash table
- * \param key		[IN]	The key of the record being deleted
- * \param ksize		[IN]	Size of the key
- *
- * return		True	Item with @key has been deleted
- *			False	Can't find the record by @key
- */
 bool
 d_chash_rec_delete(struct d_chash_table *htable, const void *key,
 		   unsigned int ksize)
@@ -587,18 +543,6 @@ d_chash_rec_delete(struct d_chash_table *htable, const void *key,
 	return deleted;
 }
 
-/**
- * Delete the record linked by the chain @rlink.
- * This record will be freed if hop_rec_free() is defined and the hash table
- * holds the last refcount.
- *
- * \param htable	[IN]	Pointer to the hash table
- * \param rlink		[IN]	The link chain of the record
- *
- * return		True	Successfully deleted the record
- *			False	The record has already been unlinked from the
- *				hash table
- */
 bool
 d_chash_rec_delete_at(struct d_chash_table *htable, d_list_t *rlink)
 {
@@ -619,12 +563,6 @@ d_chash_rec_delete_at(struct d_chash_table *htable, d_list_t *rlink)
 	return deleted;
 }
 
-/**
- * Increase the refcount of the record.
- *
- * \param htable	[IN]	Pointer to the hash table
- * \param rlink		[IN]	The link chain of the record
- */
 void
 d_chash_rec_addref(struct d_chash_table *htable, d_list_t *rlink)
 {
@@ -633,13 +571,6 @@ d_chash_rec_addref(struct d_chash_table *htable, d_list_t *rlink)
 	ch_unlock(htable, true);
 }
 
-/**
- * Decrease the refcount of the record.
- * The record will be freed if hop_decref() returns true.
- *
- * \param htable	[IN]	Pointer to the hash table
- * \param rlink		[IN]	Chain rlink of the hash record
- */
 void
 d_chash_rec_decref(struct d_chash_table *htable, d_list_t *rlink)
 {
@@ -659,17 +590,6 @@ d_chash_rec_decref(struct d_chash_table *htable, d_list_t *rlink)
 		ch_rec_free(htable, rlink);
 }
 
-/**
- * Decrease the refcount of the record by count.
- * The record will be freed if hop_decref() returns true.
- *
- * \param htable	[IN]	Pointer to the hash table
- * \param int		[IN]	Number of references to drop
- * \param rlink		[IN]	Chain rlink of the hash record
- *
- * \return		0	Success
- *			-DER_INVAL Not enough references were held.
- */
 int
 d_chash_rec_ndecref(struct d_chash_table *htable, int count, d_list_t *rlink)
 {
@@ -697,12 +617,6 @@ d_chash_rec_ndecref(struct d_chash_table *htable, int count, d_list_t *rlink)
 	return rc;
 }
 
-/**
- * The link chain has already been unlinked from the hash table or not.
- *
- * \return	True	Yes
- *		False	No
- */
 bool
 d_chash_rec_unlinked(d_list_t *rlink)
 {
@@ -725,40 +639,19 @@ d_chash_find_single(d_list_t *rlink, void *arg)
 	return 1;
 }
 
-/* Return the first entry in a hash table.  Do this by traversing the table, and
- * returning the first rlink value provided to the callback.
- * Returns rlink on success, or NULL on error or if the hash table is empty.
- *
- * Note this does not take a reference on the returned entry and has no ordering
- * semantics.  It's main use is for draining a hash table before calling
- * destroy()
- */
 d_list_t *
-d_chash_rec_first(struct d_chash_table *ht)
+d_chash_rec_first(struct d_chash_table *htable)
 {
 	d_list_t *rlink = NULL;
 	int rc;
 
-	rc = d_chash_table_traverse(ht, d_chash_find_single, &rlink);
+	rc = d_chash_table_traverse(htable, d_chash_find_single, &rlink);
 	if (rc < 0)
 		return NULL;
 
 	return rlink;
 }
 
-
-/**
- * Initialise an inplace hash table.
- *
- * NB: Please be careful while using rwlock and refcount at the same time,
- * see d_chash_feats for the details.
- *
- * \param feats		[IN]	Feature bits, see D_HASH_FT_*
- * \param bits		[IN]	power2(bits) is the size of hash table
- * \param priv		[IN]	Private data for the hash table
- * \param hops		[IN]	Customized member functions
- * \param htable	[IN]	Hash table to be initialised
- */
 int
 d_chash_table_create_inplace(uint32_t feats, unsigned int bits, void *priv,
 			     d_chash_table_ops_t *hops,
@@ -789,18 +682,6 @@ d_chash_table_create_inplace(uint32_t feats, unsigned int bits, void *priv,
 	return 0;
 }
 
-/**
- * Create a new hash table.
- *
- * NB: Please be careful while using rwlock and refcount at the same time,
- * see d_chash_feats for the details.
- *
- * \param feats		[IN]	Feature bits, see D_HASH_FT_*
- * \param bits		[IN]	power2(bits) is the size of hash table
- * \param priv		[IN]	Private data for the hash table
- * \param hops		[IN]	Customized member functions
- * \param htable_pp	[OUT]	The newly created hash table
- */
 int
 d_chash_table_create(uint32_t feats, unsigned int bits, void *priv,
 		     d_chash_table_ops_t *hops,
@@ -824,18 +705,6 @@ d_chash_table_create(uint32_t feats, unsigned int bits, void *priv,
 	return rc;
 }
 
-/**
- * Traverse a hash table, call the traverse callback function on every item.
- * Break once the callback returns non-zero.
- *
- * \param htable	[IN]	The hash table to be finalised.
- * \param cb		[IN]	Traverse callback, will be called on every item
- *				in the hash table.
- *				\see d_chash_traverse_cb_t.
- * \param arg		[IN]	Arguments for the callback.
- *
- * \return			zero on success, negative value if error.
- */
 int
 d_chash_table_traverse(struct d_chash_table *htable, d_chash_traverse_cb_t cb,
 		       void *arg)
@@ -874,17 +743,6 @@ out:
 	return rc;
 }
 
-/**
- * Finalise a hash table, reset all struct members.
- *
- * \param htable	[IN]	The hash table to be finalised.
- * \param force		[IN]	True:
- *				Finalise the hash table even it is not empty,
- *				all pending items will be deleted.
- *				False:
- *				Finalise the hash table only if it is empty,
- *				otherwise returns error
- */
 int
 d_chash_table_destroy_inplace(struct d_chash_table *htable, bool force)
 {
@@ -912,17 +770,6 @@ d_chash_table_destroy_inplace(struct d_chash_table *htable, bool force)
 	return 0;
 }
 
-/**
- * Destroy a hash table.
- *
- * \param htable	[IN]	The hash table to be destroyed.
- * \param force		[IN]	True:
- *				Destroy the hash table even it is not empty,
- *				all pending items will be deleted.
- *				False:
- *				Destroy the hash table only if it is empty,
- *				otherwise returns error
- */
 int
 d_chash_table_destroy(struct d_chash_table *htable, bool force)
 {
@@ -935,9 +782,6 @@ d_chash_table_destroy(struct d_chash_table *htable, bool force)
 	return 0;
 }
 
-/**
- * Print stats of the hash table.
- */
 void
 d_chash_table_debug(struct d_chash_table *htable)
 {
@@ -947,9 +791,13 @@ d_chash_table_debug(struct d_chash_table *htable)
 #endif
 }
 
-/**
- * daos handle hash table: the first user of d_chash_table
- */
+/******************************************************************************
+ * DAOS Handle Hash Table Wrapper
+ *
+ * Note: These functions are not thread-safe because reference counting
+ * operations are not internally lock-protected. The user must add their own
+ * locking.
+ ******************************************************************************/
 
 struct d_hhash {
 	uint64_t                ch_cookie;
@@ -1189,10 +1037,15 @@ int d_hhash_key_type(uint64_t key)
 	return hh_key_type(&key);
 }
 
-/**
- * uuid hash table
- * Key UUID, val: generic ptr
- */
+/******************************************************************************
+ * UUID Hash Table Wrapper
+ * Key: UUID
+ * Value: generic pointer
+ *
+ * Note: These functions are not thread-safe because reference counting
+ * operations are not internally lock-protected. The user must add their own
+ * locking.
+ ******************************************************************************/
 
 static struct d_ulink *
 uh_link2ptr(d_list_t *link)
