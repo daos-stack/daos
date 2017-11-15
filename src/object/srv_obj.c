@@ -1030,6 +1030,14 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 				break;
 			}
 		}
+
+		/* Check if the buffer is full */
+		if (opc_get(rpc->cr_opc) == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
+		    opc_get(rpc->cr_opc) == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
+			if (task_arg.u.iter_arg.iovs_idx >=
+			    oeo->oeo_sgl.sg_nr.num)
+				break;
+		}
 	}
 
 	enum_anchor_set_tag(&oeo->oeo_anchor, tag);
