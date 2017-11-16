@@ -147,7 +147,17 @@ struct dss_module_key vos_module_key = {
 static int
 vos_mod_init(void)
 {
-	int rc = 0;
+	char	*env;
+	int	 rc = 0;
+
+	/* This is for performance evaluation only, all data will be stored
+	 * in DRAM by setting this.
+	 */
+	env = getenv("VOS_MEM_CLASS");
+	if (env && strcasecmp(env, "DRAM") == 0) {
+		D__WARN("Running in DRAM mode, all data are volatile.\n");
+		vos_mem_class = UMEM_CLASS_VMEM;
+	}
 
 	rc = vos_cont_tab_register();
 	if (rc) {
@@ -196,9 +206,8 @@ struct dss_module vos_srv_module =  {
 int
 vos_init(void)
 {
-	char		*env;
-	int		 rc = 0;
-	static int	 is_init = 0;
+	int		rc = 0;
+	static int	is_init = 0;
 
 	if (is_init) {
 		D__ERROR("Already initialized a VOS instance\n");
@@ -221,10 +230,6 @@ vos_init(void)
 	rc = vos_mod_init();
 	if (rc)
 		D__GOTO(exit, rc);
-
-	env = getenv("VOS_MEM_CLASS");
-	if (env && strcasecmp(env, "vmem") == 0)
-		vos_mem_class = UMEM_CLASS_VMEM;
 
 	is_init = 1;
 exit:
