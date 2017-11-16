@@ -687,9 +687,9 @@ test_log(void **state)
 	d_log_fini();
 }
 
-#define TEST_GURT_HASH_NUM_BITS (16)
+#define TEST_GURT_HASH_NUM_BITS (12)
 #define TEST_GURT_HASH_NUM_ENTRIES (1 << TEST_GURT_HASH_NUM_BITS)
-#define TEST_GURT_HASH_NUM_THREADS (32)
+#define TEST_GURT_HASH_NUM_THREADS (16)
 #define TEST_GURT_HASH_ENTRIES_PER_THREAD \
 	(TEST_GURT_HASH_NUM_ENTRIES / TEST_GURT_HASH_NUM_THREADS)
 #define TEST_GURT_HASH_KEY_LEN (65L)
@@ -1177,6 +1177,30 @@ hash_parallel_lookup(struct hash_thread_arg *arg)
 }
 
 static void *
+hash_parallel_addref(struct hash_thread_arg *arg)
+{
+	int i;
+
+	/* Try to look up the random entries and make sure they succeed */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++)
+		d_chash_rec_addref(arg->thtab, &arg->entries[i]->tl_link);
+
+	return NULL;
+}
+
+static void *
+hash_parallel_decref(struct hash_thread_arg *arg)
+{
+	int i;
+
+	/* Remove references on the random entries */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++)
+		d_chash_rec_decref(arg->thtab, &arg->entries[i]->tl_link);
+
+	return NULL;
+}
+
+static void *
 hash_parallel_delete(struct hash_thread_arg *arg)
 {
 	int i;
@@ -1355,7 +1379,6 @@ test_gurt_hash_threaded_concurrent_operations(uint32_t ht_feats)
 	rc = d_chash_table_create(ht_feats, num_bits, NULL, &th_ops, &thtab);
 	assert_int_equal(rc, 0);
 
-
 	/* Use barrier to make sure all threads start at the same time */
 	pthread_barrier_init(&barrier, NULL,
 			     TEST_GURT_HASH_NUM_THREADS * 4 + 1);
@@ -1423,27 +1446,189 @@ test_gurt_hash_threaded_concurrent_operations(uint32_t ht_feats)
 }
 
 static void
-test_gurt_hash_default_locking(void **state)
+test_gurt_hash_op_rec_addref_locked(struct d_chash_table *thtab, d_list_t *link)
+{
+	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
+
+	/*
+	 * Increment the reference, protected by the spinlock whose reference
+	 * is stored in the hashtable's private data
+	 */
+	TEST_THREAD_ASSERT(thtab->ht_priv != NULL);
+	pthread_spin_lock((pthread_spinlock_t *)thtab->ht_priv);
+
+	tlink->tl_ref++;
+
+	pthread_spin_unlock((pthread_spinlock_t *)thtab->ht_priv);
+}
+
+static bool
+test_gurt_hash_op_rec_decref_locked(struct d_chash_table *thtab, d_list_t *link)
+{
+	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
+	int ref_snapshot;
+
+	/*
+	 * Decrement the reference, protected by the spinlock whose reference
+	 * is stored in the hashtable's private data
+	 */
+	TEST_THREAD_ASSERT(thtab->ht_priv != NULL);
+	pthread_spin_lock((pthread_spinlock_t *)thtab->ht_priv);
+
+	tlink->tl_ref--;
+
+	/* Get a thread-local snapshot of the ref under lock protection */
+	ref_snapshot = tlink->tl_ref;
+
+	pthread_spin_unlock((pthread_spinlock_t *)thtab->ht_priv);
+
+	/* If the reference count goes negative there is a bug */
+	TEST_THREAD_ASSERT(ref_snapshot >= 0);
+
+	return (ref_snapshot == 0);
+}
+
+static d_chash_table_ops_t th_ref_ops = {
+	.hop_key_cmp    = test_gurt_hash_op_key_cmp,
+	.hop_rec_addref	= test_gurt_hash_op_rec_addref_locked,
+	.hop_rec_decref	= test_gurt_hash_op_rec_decref_locked,
+};
+
+/* Check the reference count for all entries is the expected value */
+static void test_gurt_hash_refcount(struct test_hash_entry **entries,
+				    int expected_refcount)
+{
+	int i;
+
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++)
+		assert_int_equal(entries[i]->tl_ref, expected_refcount);
+}
+
+static void
+_test_gurt_hash_parallel_refcounting(uint32_t ht_feats)
+{
+	const int		  num_bits = TEST_GURT_HASH_NUM_BITS;
+	struct d_chash_table	 *thtab;
+	int			  rc;
+	struct test_hash_entry	**entries;
+	d_list_t		 *test;
+	int			  expected_count;
+	int			  i;
+	pthread_spinlock_t	  ref_spin_lock;
+	bool			  ephemeral = (ht_feats & D_HASH_FT_EPHEMERAL);
+	int			  expected_refcount = 0;
+
+	/* Allocate test entries to use */
+	entries = test_gurt_hash_alloc_items(TEST_GURT_HASH_NUM_ENTRIES);
+	assert_non_null(entries);
+
+	/* Create a hash table */
+	rc = d_chash_table_create(ht_feats, num_bits, NULL,
+				  &th_ref_ops, &thtab);
+	assert_int_equal(rc, 0);
+
+	/* Create a spinlock to protect the test's reference counting */
+	rc = pthread_spin_init(&ref_spin_lock, PTHREAD_PROCESS_PRIVATE);
+	assert_int_equal(rc, 0);
+
+	/* Stick a pointer to the spinlock in the hash table's private data */
+	thtab->ht_priv = (void *)&ref_spin_lock;
+
+	/* Insert the records in parallel */
+	_test_gurt_hash_threaded_same_operations(hash_parallel_insert,
+						 thtab, entries);
+	expected_refcount += (ephemeral ? 0 : 1);
+	test_gurt_hash_refcount(entries, expected_refcount);
+
+	/* Look up the records in parallel */
+	_test_gurt_hash_threaded_same_operations(hash_parallel_lookup,
+						 thtab, entries);
+	expected_refcount += TEST_GURT_HASH_NUM_THREADS;
+	test_gurt_hash_refcount(entries, expected_refcount);
+
+	/* Add a ref on the records in parallel */
+	_test_gurt_hash_threaded_same_operations(hash_parallel_addref,
+						 thtab, entries);
+	expected_refcount += TEST_GURT_HASH_NUM_THREADS;
+	test_gurt_hash_refcount(entries, expected_refcount);
+
+	/* Remove a ref on the records in parallel */
+	_test_gurt_hash_threaded_same_operations(hash_parallel_decref,
+						 thtab, entries);
+	expected_refcount -= TEST_GURT_HASH_NUM_THREADS;
+	test_gurt_hash_refcount(entries, expected_refcount);
+
+	/* For non-ephemeral tables, need to remove the records manually */
+	if (!ephemeral) {
+		_test_gurt_hash_threaded_same_operations(hash_parallel_delete,
+							 thtab, entries);
+		expected_refcount -= 1;
+		test_gurt_hash_refcount(entries, expected_refcount);
+	}
+
+	/*
+	 * Remove exactly the remaining reference count on each element
+	 * For ephemeral tables, this should do the deletion instead of above
+	 */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
+		rc = d_chash_rec_ndecref(thtab, expected_refcount,
+					 &entries[i]->tl_link);
+		assert_int_equal(rc, 0);
+	}
+	test_gurt_hash_refcount(entries, 0);
+
+	/* Lookup test - all should fail */
+	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
+		test = d_chash_rec_find(thtab, entries[i]->tl_key,
+					TEST_GURT_HASH_KEY_LEN);
+		assert_null(test);
+	}
+
+	/* Traverse the hash table and check there are zero entries */
+	expected_count = 0;
+	rc = d_chash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
+				    &expected_count);
+	assert_int_equal(rc, 0);
+
+	/* Free the spinlock */
+	pthread_spin_destroy(&ref_spin_lock);
+
+	/* Destroy the hash table, force = false */
+	rc = d_chash_table_destroy(thtab, false);
+	assert_int_equal(rc, 0);
+
+	/* Free the temporary keys */
+	test_gurt_hash_free_items(entries, TEST_GURT_HASH_NUM_ENTRIES);
+}
+
+static void
+test_gurt_hash_parallel_same_operations(void **state)
 {
 	test_gurt_hash_threaded_same_operations(0);
-}
-
-static void
-test_gurt_hash_reader_writer_locking(void **state)
-{
+	test_gurt_hash_threaded_same_operations(D_HASH_FT_EPHEMERAL);
 	test_gurt_hash_threaded_same_operations(D_HASH_FT_RWLOCK);
+	test_gurt_hash_threaded_same_operations(D_HASH_FT_RWLOCK
+						| D_HASH_FT_EPHEMERAL);
 }
 
 static void
-test_gurt_hash_concur_default_locking(void **state)
+test_gurt_hash_parallel_different_operations(void **state)
 {
 	test_gurt_hash_threaded_concurrent_operations(0);
+	test_gurt_hash_threaded_concurrent_operations(D_HASH_FT_EPHEMERAL);
+	test_gurt_hash_threaded_concurrent_operations(D_HASH_FT_RWLOCK);
+	test_gurt_hash_threaded_concurrent_operations(D_HASH_FT_RWLOCK
+						      | D_HASH_FT_EPHEMERAL);
 }
 
 static void
-test_gurt_hash_concur_reader_writer_locking(void **state)
+test_gurt_hash_parallel_refcounting(void **state)
 {
-	test_gurt_hash_threaded_concurrent_operations(D_HASH_FT_RWLOCK);
+	_test_gurt_hash_parallel_refcounting(0);
+	_test_gurt_hash_parallel_refcounting(D_HASH_FT_EPHEMERAL);
+	_test_gurt_hash_parallel_refcounting(D_HASH_FT_RWLOCK);
+	_test_gurt_hash_parallel_refcounting(D_HASH_FT_RWLOCK
+					     | D_HASH_FT_EPHEMERAL);
 }
 
 int
@@ -1460,10 +1645,9 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_hash_insert_lookup_delete),
 		cmocka_unit_test(test_gurt_hash_decref),
 		cmocka_unit_test(test_gurt_alloc),
-		cmocka_unit_test(test_gurt_hash_default_locking),
-		cmocka_unit_test(test_gurt_hash_reader_writer_locking),
-		cmocka_unit_test(test_gurt_hash_concur_default_locking),
-		cmocka_unit_test(test_gurt_hash_concur_reader_writer_locking),
+		cmocka_unit_test(test_gurt_hash_parallel_same_operations),
+		cmocka_unit_test(test_gurt_hash_parallel_different_operations),
+		cmocka_unit_test(test_gurt_hash_parallel_refcounting),
 	};
 
 	return cmocka_run_group_tests(tests, init_tests, fini_tests);
