@@ -260,10 +260,22 @@ server_fini(bool force)
 static void
 usage(char *prog, FILE *out)
 {
-	fprintf(out,
-		"Usage: %s [ -m vos,mgmt,pool,cont,obj,tier ] [-c #cores]"
-		"          [-g server_group_name]\n",
-		prog);
+	fprintf(out, "\
+Usage:\n\
+  %s -h\n\
+  %s [-m modules] [-c ncores] [-g group] [-s path]\n\
+Options:\n\
+  --modules=modules, -m modules\n\
+      List of server modules to load (default \"%s\")\n\
+  --cores=ncores, -c ncores\n\
+      Number of cores to use (default all)\n\
+  --group=group, -g group\n\
+      Server group name (default \"%s\")\n\
+  --storage=path, -s path\n\
+      Storage path (default \"%s\")\n\
+  --help, -h\n\
+      Print this description\n",
+		prog, prog, modules, server_group_id, storage_path);
 }
 
 static int
@@ -274,6 +286,7 @@ parse(int argc, char **argv)
 		{ "cores",	required_argument,	NULL,	'c' },
 		{ "group",	required_argument,	NULL,	'g' },
 		{ "storage",	required_argument,	NULL,	's' },
+		{ "help",	no_argument,		NULL,	'h' },
 		{ NULL,		0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -281,7 +294,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:m:g:s:", opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "c:m:g:s:h", opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
@@ -308,6 +321,9 @@ parse(int argc, char **argv)
 			break;
 		case 's':
 			storage_path = optarg;
+			break;
+		case 'h':
+			usage(argv[0], stdout);
 			break;
 		default:
 			usage(argv[0], stderr);

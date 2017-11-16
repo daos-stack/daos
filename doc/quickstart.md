@@ -88,7 +88,11 @@ DAOS uses orterun(1) for scalable process launch. The list of storage nodes can 
 
 (a) Starting the DAOS server
 
-On each storage node, the DAOS server will use /mnt/daos as the storage backend that must be configured, for the time being, as a tmpfs filesystem. To start the DAOS server, run:
+On each storage node, the DAOS server will use a storage path (specified by --storage or -s) that must be a directory in a tmpfs filesystem, for the time being. If not specified, it is assumed to be /mnt/daos. To configure the storage:
+
+    mount -t tmpfs -o size=<bytes> tmpfs /mnt/daos
+
+To start the DAOS server, run:
 
     orterun -np <num_servers> --hostfile ${hostfile} --enable-recovery --report-uri ${urifile} daos_server
 
