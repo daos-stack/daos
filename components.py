@@ -24,7 +24,6 @@
 from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
 import os
-import platform
 
 if "prereqs" not in globals():
     from prereq_tools import PreReqComponent
@@ -215,6 +214,7 @@ REQS.define('ompi',
                       '--prefix=$OMPI_PREFIX '
                       '--with-pmix=$PMIX_PREFIX '
                       '--disable-mpi-fortran '
+                      '--enable-contrib-no-build=vt '
                       '--with-libevent=external '
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make', 'make install'],
@@ -241,20 +241,8 @@ REQS.define('ompi_pmix',
 
 RETRIEVER = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 
-# Check if this is an ARM platform
-PROCESSOR = platform.machine()
-ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
-ARM_PLATFORM = None
-for i in xrange(1, len(ARM_LIST)):
-    if PROCESSOR.lower() == ARM_LIST[i].lower():
-        ARM_PLATFORM = True
-        break
-
-PMDK_BUILD = ["make \"BUILD_RPMEM=n\" install prefix=$PMDK_PREFIX"]
-if ARM_PLATFORM is True:
-    PMDK_BUILD = ["git am < $PATCH_PREFIX/arm-support-PMDK.patch",
-                  "make \"EXTRA_CFLAGS=-DAARCH64\" \"BUILD_AARCH64=y\" "
-                  " \"DEBUG=0\" \"BUILD_RPMEM=n\" install prefix=$PMDK_PREFIX"]
+PMDK_BUILD = ["make \"BUILD_RPMEM=n\" \"NDCTL_DISABLE=y\" "
+              "install prefix=$PMDK_PREFIX"]
 
 REQS.define('pmdk',
             retriever=RETRIEVER,
