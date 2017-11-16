@@ -943,6 +943,11 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		rc = crt_rpc_common_hdlr(rpc_priv);
 	else
 		rc = crt_corpc_common_hdlr(rpc_priv);
+	if (rc != 0) {
+		D_ERROR("failed to invoke RPC handler, rpc_priv %p, rc: %d, "
+			"opc: %#x.\n", rpc_priv, rc, opc);
+		crt_hg_reply_error_send(rpc_priv, rc);
+	}
 
 decref:
 	/* if ABT enabled and the ULT created successfully, the crt_handle_rpc

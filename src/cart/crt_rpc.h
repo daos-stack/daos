@@ -144,7 +144,9 @@ struct crt_corpc_info {
 	 */
 	uint32_t		 co_local_done:1,
 	/* co_root_excluded is the flag of root in excluded rank list */
-				 co_root_excluded:1;
+				 co_root_excluded:1,
+	/* flag of if refcount taken for co_grp_priv */
+				 co_grp_ref_taken:1;
 	int			 co_rc;
 };
 
@@ -403,6 +405,7 @@ crt_req_aborted(crt_rpc_t *rpc)
 int crt_corpc_req_hdlr(crt_rpc_t *req);
 void crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info);
 int crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
+void crt_corpc_info_fini(struct crt_rpc_priv *rpc_priv);
 
 /* crt_iv.c */
 void crt_hdlr_iv_fetch(crt_rpc_t *rpc_req);

@@ -130,7 +130,7 @@ struct crt_grp_priv {
 				 gp_service:1,
 	/* flag of finalizing/destroying */
 				 gp_finalizing:1;
-	/* group reference count now only used for attach/detach. */
+	/* group reference count */
 	uint32_t		 gp_refcount;
 
 	/* rank map array, only needed for local primary group */
@@ -222,6 +222,7 @@ int crt_validate_grpid(const crt_group_id_t grpid);
 int crt_grp_init(crt_group_id_t grpid);
 int crt_grp_fini(void);
 int crt_grp_failed_ranks_dup(crt_group_t *grp, d_rank_list_t **failed_ranks);
+void crt_grp_priv_destroy(struct crt_grp_priv *grp_priv);
 
 int crt_grp_config_load(struct crt_grp_priv *grp_priv);
 
@@ -281,14 +282,14 @@ crt_grp_priv_addref(struct crt_grp_priv *grp_priv)
 	uint32_t	refcount;
 
 	D_ASSERT(grp_priv != NULL);
-	D_ASSERT(grp_priv->gp_primary == 1);
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
 	refcount = ++grp_priv->gp_refcount;
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 
-	D_DEBUG("service group (%s), refcount increased to %d.\n",
-		grp_priv->gp_pub.cg_grpid, refcount);
+	d_log(DD_FAC(grp) | DLOG_DBG,
+	      "service group (%s), refcount increased to %d.\n",
+	      grp_priv->gp_pub.cg_grpid, refcount);
 }
 
 /*
@@ -299,31 +300,52 @@ static inline int
 crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 {
 	struct crt_grp_gdata	*grp_gdata;
-	int			 rc;
+	bool			 detach = false;
+	int			 rc = 0;
 
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
 	D_ASSERT(grp_priv != NULL);
-	D_ASSERT(grp_priv->gp_primary == 1);
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
 	if (grp_priv->gp_refcount == 0) {
-		rc = -DER_ALREADY;
+		d_log(DD_FAC(grp) | DLOG_ERR,
+		      "group (%s), refcount already dropped to 0.\n",
+		      grp_priv->gp_pub.cg_grpid);
+		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+		D_GOTO(out, rc = -DER_ALREADY);
 	} else {
 		grp_priv->gp_refcount--;
-		rc = grp_priv->gp_refcount;
-		if (rc == 0)
+		d_log(DD_FAC(grp) | DLOG_DBG,
+		      "service group (%s), refcount decreased to %d.\n",
+		      grp_priv->gp_pub.cg_grpid, grp_priv->gp_refcount);
+		if (grp_priv->gp_refcount == 0)
 			grp_priv->gp_finalizing = 1;
+		if (grp_priv->gp_local == 0 && grp_priv->gp_refcount == 1) {
+			detach = true;
+			grp_priv->gp_finalizing = 1;
+		}
 	}
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 
-	if (rc >= 0)
-		D_DEBUG("service group (%s), refcount decreased to %d.\n",
-			grp_priv->gp_pub.cg_grpid, rc);
-	else
-		D_ERROR("service group (%s), refcount already dropped to 0.\n",
-			grp_priv->gp_pub.cg_grpid);
+	if (grp_priv->gp_finalizing == 0)
+		D_GOTO(out, rc);
 
+	if (detach) {
+		D_ASSERT(grp_priv->gp_service == 1 &&
+			 grp_priv->gp_primary == 1);
+		rc = crt_grp_detach(&grp_priv->gp_pub);
+		if (rc == 0 && !crt_is_service() &&
+		    grp_gdata->gg_srv_pri_grp == grp_priv) {
+			grp_gdata->gg_srv_pri_grp = NULL;
+			d_log(DD_FAC(grp) | DLOG_DBG,
+			      "reset grp_gdata->gg_srv_pri_grp as NULL.\n");
+		}
+	} else {
+		crt_grp_priv_destroy(grp_priv);
+	}
+
+out:
 	return rc;
 }
 
@@ -334,6 +356,5 @@ struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);
 int crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank,
 			      const char *uri);
 bool crt_rank_evicted(crt_group_t *grp, d_rank_t rank);
-void crt_grp_priv_destroy(struct crt_grp_priv *grp_priv);
 
 #endif /* __CRT_GROUP_H__ */

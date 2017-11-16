@@ -552,10 +552,8 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv == NULL)
 		return;
 
-	if (rpc_priv->crp_coll && rpc_priv->crp_corpc_info) {
-		d_rank_list_free(rpc_priv->crp_corpc_info->co_excluded_ranks);
-		D_FREE_PTR(rpc_priv->crp_corpc_info);
-	}
+	if (rpc_priv->crp_coll && rpc_priv->crp_corpc_info)
+		crt_corpc_info_fini(rpc_priv);
 
 	if (rpc_priv->crp_uri_free != 0)
 		D_FREE(rpc_priv->crp_tgt_uri);
@@ -1594,12 +1592,7 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 				       crt_handle_rpc, rpc_priv,
 				       ABT_THREAD_ATTR_NULL, NULL);
 	} else {
-		/* Take ref for corpc same as above ABT case */
-		if (rpc_priv->crp_coll && !rpc_priv->crp_srv)
-			RPC_ADDREF(rpc_priv);
 		rpc_priv->crp_opc_info->coi_rpc_cb(&rpc_priv->crp_pub);
-		if (rpc_priv->crp_coll && !rpc_priv->crp_srv)
-			RPC_DECREF(rpc_priv);
 	}
 
 	return rc;

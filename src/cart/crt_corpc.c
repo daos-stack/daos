@@ -43,7 +43,7 @@
 
 static inline int
 crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
-		    struct crt_grp_priv *grp_priv,
+		    struct crt_grp_priv *grp_priv, bool grp_ref_taken,
 		    d_rank_list_t *excluded_ranks, uint32_t grp_ver,
 		    crt_bulk_t co_bulk_hdl, void *priv, uint32_t flags,
 		    int tree_topo, d_rank_t grp_root, bool init_hdr,
@@ -60,7 +60,6 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	if (co_info == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	co_info->co_grp_priv = grp_priv;
 	rc = d_rank_list_dup_sort_uniq(&co_info->co_excluded_ranks,
 				       excluded_ranks, true /* input */);
 	if (rc != 0) {
@@ -68,6 +67,10 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		D_FREE_PTR(co_info);
 		D_GOTO(out, rc);
 	}
+	if (!grp_ref_taken)
+		crt_grp_priv_addref(grp_priv);
+	co_info->co_grp_ref_taken = 1;
+	co_info->co_grp_priv = grp_priv;
 	d_rank_list_filter(co_info->co_grp_priv->gp_membs,
 			   co_info->co_excluded_ranks, true /* input */,
 			   false /* exclude */);
@@ -106,13 +109,24 @@ out:
 	return rc;
 }
 
+void
+crt_corpc_info_fini(struct crt_rpc_priv *rpc_priv)
+{
+	D_ASSERT(rpc_priv->crp_coll && rpc_priv->crp_corpc_info);
+	d_rank_list_free(rpc_priv->crp_corpc_info->co_excluded_ranks);
+	if (rpc_priv->crp_corpc_info->co_grp_ref_taken)
+		crt_grp_priv_decref(rpc_priv->crp_corpc_info->co_grp_priv);
+	D_FREE_PTR(rpc_priv->crp_corpc_info);
+}
+
 static int
 crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_grp_priv	*grp_priv;
 	struct crt_corpc_hdr	*co_hdr;
-	int			rc = 0;
+	bool			 grp_ref_taken = false;
+	int			 rc = 0;
 
 	D_ASSERT(rpc_priv != NULL && (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL));
 	grp_gdata = crt_gdata.cg_grp;
@@ -124,20 +138,26 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 		D_ASSERT(grp_priv != NULL);
 	} else {
 		grp_priv = crt_grp_lookup_int_grpid(co_hdr->coh_int_grpid);
-		if (grp_priv == NULL) {
+		if (grp_priv != NULL) {
+			grp_ref_taken = true;
+		} else {
 			D_ERROR("crt_grp_lookup_int_grpid "DF_X64" failed.\n",
 				co_hdr->coh_int_grpid);
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
 
-	rc = crt_corpc_info_init(rpc_priv, grp_priv, co_hdr->coh_excluded_ranks,
+	rc = crt_corpc_info_init(rpc_priv, grp_priv, grp_ref_taken,
+			co_hdr->coh_excluded_ranks,
 			co_hdr->coh_grp_ver /* grp_ver */,
 			rpc_priv->crp_pub.cr_co_bulk_hdl,
 			NULL /* priv */, rpc_priv->crp_flags,
 			co_hdr->coh_tree_topo, co_hdr->coh_root,
 			false /* init_hdr */, false /* root_excluded */);
 	if (rc != 0) {
+		/* rollback refcount taken in above crt_grp_lookup_int_grpid */
+		if (grp_ref_taken)
+			crt_grp_priv_decref(grp_priv);
 		D_ERROR("crt_corpc_info_init failed, rc: %d, opc: %#x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
@@ -182,9 +202,11 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 
 	rpc_priv->crp_pub.cr_co_bulk_hdl = local_bulk_hdl;
 	rc = crt_corpc_initiate(rpc_priv);
-	if (rc != 0)
-		D_ERROR("crt_corpc_initiate failed, rc: %d, opc: %#x.\n",
-			rc, rpc_req->cr_opc);
+	if (rc != 0) {
+		D_ERROR("crt_corpc_initiate failed, rpc_priv %p, rc: %d, "
+			"opc: %#x.\n", rpc_priv, rc, rpc_req->cr_opc);
+		crt_hg_reply_error_send(rpc_priv, rc);
+	}
 
 out:
 	RPC_DECREF(rpc_priv);
@@ -410,7 +432,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	grp_ver = grp_priv->gp_membs_ver;
 	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
 
-	rc = crt_corpc_info_init(rpc_priv, grp_priv, tobe_excluded_ranks,
+	rc = crt_corpc_info_init(rpc_priv, grp_priv, false, tobe_excluded_ranks,
 				 grp_ver /* grp_ver */, co_bulk_hdl, priv,
 				 flags, tree_topo, grp_root,
 				 true /* init_hdr */, root_excluded);
@@ -548,7 +570,7 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 	}
 	if (co_info->co_rc == 0 && co_info->co_root_excluded == 0 &&
 	    (rpc_priv->crp_flags & CRT_RPC_FLAG_GRP_DESTROY))
-		crt_grp_priv_destroy(co_info->co_grp_priv);
+		crt_grp_priv_decref(co_info->co_grp_priv);
 
 	/* correspond to addref in crt_corpc_req_hdlr */
 	RPC_DECREF(rpc_priv);

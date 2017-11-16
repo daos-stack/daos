@@ -572,28 +572,23 @@ crt_grp_lookup_locked(crt_group_id_t grp_id)
 }
 
 /* lookup by internal subgrp id */
-static inline struct crt_grp_priv *
-crt_grp_lookup_int_grpid_locked(uint64_t int_grpid)
+struct crt_grp_priv *
+crt_grp_lookup_int_grpid(uint64_t int_grpid)
 {
 	struct crt_grp_priv	*grp_priv;
-	bool			found = false;
+	bool			 found = false;
 
+	pthread_rwlock_rdlock(&crt_grp_list_rwlock);
 	d_list_for_each_entry(grp_priv, &crt_grp_list, gp_link) {
 		if (grp_priv->gp_int_grpid == int_grpid) {
 			found = true;
 			break;
 		}
 	}
-	return (found == true) ? grp_priv : NULL;
-}
-
-struct crt_grp_priv *
-crt_grp_lookup_int_grpid(uint64_t int_grpid)
-{
-	struct crt_grp_priv	*grp_priv;
-
-	pthread_rwlock_rdlock(&crt_grp_list_rwlock);
-	grp_priv = crt_grp_lookup_int_grpid_locked(int_grpid);
+	if (found == true)
+		crt_grp_priv_addref(grp_priv);
+	else
+		grp_priv = NULL;
 	pthread_rwlock_unlock(&crt_grp_list_rwlock);
 
 	return grp_priv;
@@ -619,8 +614,8 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 		    d_rank_list_t *membs, crt_grp_create_cb_t grp_create_cb,
 		    void *arg)
 {
-	struct crt_grp_priv *grp_priv;
-	int	rc = 0;
+	struct crt_grp_priv	*grp_priv;
+	int			 rc = 0;
 
 	D_ASSERT(grp_priv_created != NULL);
 	D_ASSERT(grp_id != NULL && strlen(grp_id) > 0 &&
@@ -631,6 +626,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_INIT_LIST_HEAD(&grp_priv->gp_link);
+	grp_priv->gp_local = 1;
 	grp_priv->gp_primary = primary_grp;
 	D_STRNDUP(grp_priv->gp_pub.cg_grpid, grp_id, CRT_GROUP_ID_MAX_LEN + 1);
 	if (grp_priv->gp_pub.cg_grpid == NULL) {
@@ -659,6 +655,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 		grp_priv->gp_create_cb = grp_create_cb;
 	}
 
+	grp_priv->gp_refcount = 1;
 	pthread_rwlock_init(&grp_priv->gp_rwlock, NULL);
 
 	crt_barrier_info_init(grp_priv);
@@ -956,7 +953,7 @@ gc_rpc_cb(const struct crt_cb_info *cb_info)
 
 	if (grp_priv->gp_rc != 0) {
 		D_ERROR("group create failed, rc: %d.\n", grp_priv->gp_rc);
-		crt_grp_priv_destroy(grp_priv);
+		crt_grp_priv_decref(grp_priv);
 	} else {
 		grp_priv->gp_status = CRT_GRP_NORMAL;
 	}
@@ -1106,7 +1103,8 @@ out:
 		if (grp_create_cb != NULL)
 			grp_create_cb(NULL, arg, rc);
 
-		crt_grp_priv_destroy(grp_priv);
+		if (grp_priv)
+			crt_grp_priv_decref(grp_priv);
 	}
 	return rc;
 }
@@ -1204,7 +1202,7 @@ crt_hdlr_grp_destroy(crt_rpc_t *rpc_req)
 	/* for gd_initiate_rank, destroy the group in gd_rpc_cb */
 	if (my_rank != gd_in->gd_initiate_rank) {
 		crt_grp_ras_fini(grp_priv);
-		crt_grp_priv_destroy(grp_priv);
+		crt_grp_priv_decref(grp_priv);
 	}
 
 out:
@@ -1259,7 +1257,7 @@ gd_rpc_cb(const struct crt_cb_info *cb_info)
 		D_ERROR("group destroy failed, rc: %d.\n", grp_priv->gp_rc);
 	} else {
 		crt_grp_ras_fini(grp_priv);
-		crt_grp_priv_destroy(grp_priv);
+		crt_grp_priv_decref(grp_priv);
 	}
 
 out:
@@ -1506,7 +1504,6 @@ crt_primary_grp_init(crt_group_id_t grpid)
 	}
 	D_ASSERT(grp_priv != NULL);
 	grp_priv->gp_status = CRT_GRP_NORMAL;
-	grp_priv->gp_local = 1;
 	grp_priv->gp_service = is_service;
 
 	if (crt_is_singleton()) {
@@ -1567,7 +1564,7 @@ out:
 	} else {
 		D_ERROR("crt_primary_grp_init failed, rc: %d.\n", rc);
 		if (grp_priv != NULL)
-			crt_grp_priv_destroy(grp_priv);
+			crt_grp_priv_decref(grp_priv);
 	}
 
 	return rc;
@@ -1598,7 +1595,7 @@ crt_primary_grp_fini(void)
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
-	crt_grp_priv_destroy(grp_priv);
+	crt_grp_priv_decref(grp_priv);
 
 out:
 	if (rc != 0)
@@ -1726,7 +1723,6 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	struct crt_grp_priv	*grp_priv;
 	crt_group_t		*grp_at = NULL;
 	bool			 is_service;
-	crt_context_t		 crt_ctx;
 	int			 rc = 0;
 
 	if (srv_grpid == NULL) {
@@ -1749,12 +1745,6 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	}
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
-
-	crt_ctx = crt_context_lookup(0);
-	if (crt_ctx == NULL) {
-		D_ERROR("crt_context 0 doesn't exist.\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	is_service = crt_is_service();
 	pthread_rwlock_rdlock(&grp_gdata->gg_rwlock);
@@ -1931,7 +1921,7 @@ out:
 	if (rc != 0) {
 		D_ERROR("crt_grp_attach, failed, rc: %d.\n", rc);
 		if (grp_priv != NULL)
-			crt_grp_priv_destroy(grp_priv);
+			crt_grp_priv_decref(grp_priv);
 	}
 	return rc;
 }
@@ -1962,19 +1952,9 @@ crt_group_detach(crt_group_t *attached_grp)
 	}
 
 	rc = crt_grp_priv_decref(grp_priv);
-	if (rc < 0) {
+	if (rc < 0)
 		D_ERROR("crt_grp_priv_decref (group %s) failed, rc: %d.\n",
 			grp_priv->gp_pub.cg_grpid, rc);
-	} else if (rc > 0) {
-		rc = 0;
-	} else {
-		rc = crt_grp_detach(attached_grp);
-		if (rc == 0 && !crt_is_service() &&
-		    grp_gdata->gg_srv_pri_grp == grp_priv) {
-			grp_gdata->gg_srv_pri_grp = NULL;
-			D_DEBUG("reset grp_gdata->gg_srv_pri_grp as NULL.\n");
-		}
-	}
 
 out:
 	return rc;
@@ -2021,7 +2001,7 @@ crt_grp_detach(crt_group_t *attached_grp)
 	}
 
 	if (grp_priv == grp_gdata->gg_srv_pri_grp) {
-		crt_grp_priv_destroy(grp_priv);
+		crt_grp_priv_decref(grp_priv);
 		grp_gdata->gg_srv_pri_grp = NULL;
 		D_GOTO(out, rc);
 	}
@@ -2041,7 +2021,7 @@ crt_grp_detach(crt_group_t *attached_grp)
 	pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
 
 	if (found == true) {
-		crt_grp_priv_destroy(grp_priv);
+		crt_grp_priv_decref(grp_priv);
 	} else {
 		D_ERROR("group %s not in attached list.\n",
 			attached_grp->cg_grpid);
