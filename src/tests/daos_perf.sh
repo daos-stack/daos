@@ -14,7 +14,7 @@ CREDITS=${CREDITS:-0}
 # misc options, see daos_perf -h
 OPTS=${OPTS:-"-t -z"} # default options: overwite, zero-copy
 
-DAOS_PERF="${DAOS_PATH}/install/bin/daos_perf"
+DAOS_PERF="${DAOS_PATH}/bin/daos_perf"
 TEST_DIR="${HOME}/scripts"
 SRV_URI="${TEST_DIR}/uri.txt"
 CLI_HOSTS="${TEST_DIR}/host.cli.1"
@@ -33,7 +33,7 @@ if (( $# >= 4 )); then	# -s $RSIZE
 	RSIZE=$4	#    value size
 fi
 
-ORTERUN="${DAOS_PATH}/install/bin/orterun"
+ORTERUN="${OMPI_PATH}/bin/orterun"
 
 set -x
 $ORTERUN 				\
