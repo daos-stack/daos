@@ -356,7 +356,8 @@ print_usage(int rank)
 }
 
 static int
-run_specified_tests(const char *tests, int rank, int size)
+run_specified_tests(const char *tests, int rank, int size,
+		    int *sub_tests, int sub_tests_size)
 {
 	int nr_failed = 0;
 
@@ -429,7 +430,9 @@ run_specified_tests(const char *tests, int rank, int size)
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS rebuild tests..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_rebuild_test(rank, size);
+			nr_failed += run_daos_rebuild_test(rank, size,
+							   sub_tests,
+							   sub_tests_size);
 			break;
 		default:
 			D__ASSERT(0);
@@ -446,6 +449,9 @@ main(int argc, char **argv)
 {
 	test_arg_t	*arg;
 	char		 tests[64];
+	char		*sub_tests_str = NULL;
+	int		 sub_tests[1024];
+	int		 sub_tests_idx = 0;
 	int		 ntests = 0;
 	int		 nr_failed;
 	int		 nr_total_failed = 0;
@@ -475,6 +481,7 @@ main(int argc, char **argv)
 		{"rebuild",	no_argument,		NULL,	'r'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"svcn",	required_argument,	NULL,	's'},
+		{"subtests",	required_argument,	NULL,	'u'},
 		{"help",	no_argument,		NULL,	'h'}
 	};
 
@@ -486,7 +493,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "ampcCdiAeoRg:s:hr",
+	while ((opt = getopt_long(argc, argv, "ampcCdiAeoRg:s:u:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
@@ -505,6 +512,9 @@ main(int argc, char **argv)
 		case 's':
 			svc_nreplicas = atoi(optarg);
 			break;
+		case 'u':
+			sub_tests_str = optarg;
+			break;
 		default:
 			daos_test_print(rank, "Unknown Option\n");
 			print_usage(rank);
@@ -518,7 +528,63 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	nr_failed = run_specified_tests(tests, rank, size);
+	if (sub_tests_str != NULL) {
+		/* sub_tests="1,2,3" sub_tests="2-8" */
+		char *ptr = sub_tests_str;
+		char *tmp;
+		int start = -1;
+		int end = -1;
+
+		while (*ptr) {
+			int number = -1;
+
+			while (!isdigit(*ptr) && *ptr)
+				ptr++;
+
+			if (!*ptr)
+				break;
+
+			tmp = ptr;
+			while (isdigit(*ptr))
+				ptr++;
+
+			/* get the current number */
+			number = atoi(tmp);
+			if (*ptr == '-') {
+				if (start != -1) {
+					print_message("str is %s\n",
+						      sub_tests_str);
+					return -1;
+				}
+				start = number;
+				continue;
+			} else {
+				if (start != -1)
+					end = number;
+				else
+					start = number;
+			}
+
+			if (start != -1 || end != -1) {
+				if (end != -1) {
+					int i;
+
+					for (i = start; i <= end; i++) {
+						sub_tests[sub_tests_idx] = i;
+						sub_tests_idx++;
+					}
+				} else {
+					sub_tests[sub_tests_idx] = start;
+					sub_tests_idx++;
+				}
+				start = -1;
+				end = -1;
+			}
+		}
+	}
+
+	nr_failed = run_specified_tests(tests, rank, size,
+					sub_tests, sub_tests_idx);
 
 exit:
 	MPI_Allreduce(&nr_failed, &nr_total_failed, 1, MPI_INT, MPI_SUM,

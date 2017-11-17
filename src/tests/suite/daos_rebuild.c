@@ -549,14 +549,42 @@ rebuild_setup(void **state)
 }
 
 int
-run_daos_rebuild_test(int rank, int size)
+run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
+	void *state;
+	int i;
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS rebuild tests",
-					 rebuild_tests, rebuild_setup,
-					 test_teardown);
+	if (sub_tests_size == 0) {
+		rc = cmocka_run_group_tests_name("DAOS rebuild tests",
+						 rebuild_tests, rebuild_setup,
+						 test_teardown);
+		MPI_Barrier(MPI_COMM_WORLD);
+		return rc;
+	}
+
+	rebuild_setup(&state);
+	for (i = 0; i < sub_tests_size; i++) {
+		int idx = sub_tests[i];
+
+		if (ARRAY_SIZE(rebuild_tests) <= idx) {
+			print_message("No test %d\n", idx);
+			continue;
+		}
+
+		print_message("%s\n", rebuild_tests[idx].name);
+		if (rebuild_tests[idx].setup_func) {
+			if (state != NULL)
+				test_teardown(&state);
+			rebuild_tests[idx].setup_func(&state);
+		}
+		rebuild_tests[idx].test_func(&state);
+		if (rebuild_tests[idx].teardown_func)
+			rebuild_tests[idx].teardown_func(&state);
+	}
+	test_teardown(&state);
 	MPI_Barrier(MPI_COMM_WORLD);
+
 	return rc;
 }

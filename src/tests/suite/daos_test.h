@@ -136,7 +136,7 @@ int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
 int run_daos_md_replication_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
-int run_daos_rebuild_test(int rank, int size);
+int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 
 void
 daos_kill_server(const uuid_t pool_uuid, const char *grp,
