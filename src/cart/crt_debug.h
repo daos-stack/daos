@@ -49,6 +49,7 @@ extern int DD_FAC(lm);
 extern int DD_FAC(hg);
 extern int DD_FAC(pmix);
 extern int DD_FAC(self_test);
+extern int DD_FAC(iv);
 
 int crt_setup_log_fac(void);
 

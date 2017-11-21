@@ -47,6 +47,7 @@ DECLARE_FAC(lm);
 DECLARE_FAC(hg);
 DECLARE_FAC(pmix);
 DECLARE_FAC(self_test);
+DECLARE_FAC(iv);
 
 #define D_INIT_LOG_FAC(name, aname, lname)				\
 	d_init_log_facility(&d_##name##_logfac, aname, lname)
@@ -63,6 +64,7 @@ crt_setup_log_fac(void)
 	D_INIT_LOG_FAC(hg, "HG", "mercury");
 	D_INIT_LOG_FAC(pmix, "PMIX", "pmix");
 	D_INIT_LOG_FAC(self_test, "ST", "self_test");
+	D_INIT_LOG_FAC(iv, "IV", "iv");
 
 	d_log_sync_mask();
 
