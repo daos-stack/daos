@@ -92,7 +92,7 @@ rebuild_iv_ent_destroy(d_sg_list_t *sgl)
 }
 
 static int
-rebuild_iv_ent_copy(d_sg_list_t *dst, d_sg_list_t *src)
+rebuild_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src)
 {
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
@@ -102,48 +102,86 @@ rebuild_iv_ent_copy(d_sg_list_t *dst, d_sg_list_t *src)
 
 	D__ASSERT(src_iv != NULL);
 	D__ASSERT(dst_iv != NULL);
+
+	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	uuid_copy(dst_iv->riv_poh_uuid, src_iv->riv_poh_uuid);
 	uuid_copy(dst_iv->riv_coh_uuid, src_iv->riv_coh_uuid);
-	D__DEBUG(DB_TRACE, "coh/poh "DF_UUID"/"DF_UUID"\n",
-		 DP_UUID(dst_iv->riv_coh_uuid),
-		 DP_UUID(dst_iv->riv_poh_uuid));
+	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
+	D__DEBUG(DB_TRACE, "pool/poh/coh "DF_UUID"/"DF_UUID"/"DF_UUID
+		 " rank %d\n", DP_UUID(dst_iv->riv_pool_uuid),
+		 DP_UUID(dst_iv->riv_poh_uuid), DP_UUID(dst_iv->riv_coh_uuid),
+		 src_iv->riv_master_rank);
 
 	return 0;
 }
 
-static int
-rebuild_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src)
-{
-	return rebuild_iv_ent_copy(dst, src);
-}
-
+/* Update the rebuild status from leaves to the master */
 static int
 rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src)
 {
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
+	struct rebuild_pool_tracker *master_rpt;
+	d_rank_t	  rank;
+	int		  rc;
 
-	if (dst_iv != src_iv) {
-		dst_iv->riv_obj_count += src_iv->riv_obj_count;
-		dst_iv->riv_rec_count += src_iv->riv_rec_count;
-		dst_iv->riv_done += src_iv->riv_done;
-		if (dst_iv->riv_status == 0)
-			dst_iv->riv_status = src_iv->riv_status;
+	rc = crt_group_rank(NULL, &rank);
+	if (rc)
+		return rc;
+
+	D__DEBUG(DB_TRACE, "rank %d master rank %d\n", rank,
+		src_iv->riv_master_rank);
+
+	if (rank != src_iv->riv_master_rank)
+		return 0;
+
+	dst_iv->riv_master_rank = src_iv->riv_master_rank;
+	uuid_copy(dst_iv->riv_poh_uuid, src_iv->riv_poh_uuid);
+	uuid_copy(dst_iv->riv_coh_uuid, src_iv->riv_coh_uuid);
+	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
+
+	/* Gathering the rebuild status here */
+	master_rpt = rebuild_pool_tracker_lookup(src_iv->riv_pool_uuid,
+						 src_iv->riv_ver);
+	if (master_rpt) {
+		/* update the rebuild global status */
+		master_rpt->rt_status.rs_obj_nr += src_iv->riv_obj_count;
+		master_rpt->rt_status.rs_rec_nr += src_iv->riv_rec_count;
+		master_rpt->rt_status.rs_done += src_iv->riv_done;
+		if (master_rpt->rt_status.rs_errno == 0)
+			master_rpt->rt_status.rs_errno = src_iv->riv_status;
+
+		D__DEBUG(DB_TRACE, "update rebuild "DF_UUID"obj/rec/done/status"
+			DF_U64"/"DF_U64"/%d/%d rank %d\n",
+			DP_UUID(master_rpt->rt_pool_uuid),
+			master_rpt->rt_status.rs_obj_nr,
+			master_rpt->rt_status.rs_rec_nr,
+			master_rpt->rt_status.rs_done,
+			master_rpt->rt_status.rs_errno,
+			src_iv->riv_rank);
 	}
 
-	rebuild_gst.rg_obj_count += src_iv->riv_obj_count;
-	rebuild_gst.rg_rec_count += src_iv->riv_rec_count;
-	rebuild_gst.rg_done += src_iv->riv_done;
-	if (rebuild_gst.rg_status.rs_errno == 0)
-		rebuild_gst.rg_status.rs_errno = src_iv->riv_status;
+	D__DEBUG(DB_TRACE, "pool/poh/coh "DF_UUID"/"DF_UUID"/"DF_UUID
+		 " master_rank %d\n", DP_UUID(dst_iv->riv_pool_uuid),
+		 DP_UUID(dst_iv->riv_poh_uuid), DP_UUID(dst_iv->riv_coh_uuid),
+		 dst_iv->riv_master_rank);
 
-	D__DEBUG(DB_TRACE, "rebuild_gst rg_done %d ver %d riv_done %d "
-		 "rank %d obj "DF_U64" rec "DF_U64" rs_errno %d\n",
-		 rebuild_gst.rg_done, rebuild_gst.rg_rebuild_ver,
-		 src_iv->riv_done, src_iv->riv_rank, rebuild_gst.rg_obj_count,
-		 rebuild_gst.rg_rec_count, rebuild_gst.rg_status.rs_errno);
+	return 0;
+}
 
-	return rebuild_iv_ent_copy(dst, src);
+/* Distribute the rebuild uuid/master rank from master to leaves */
+static int
+rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src)
+{
+	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
+	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
+
+	uuid_copy(dst_iv->riv_poh_uuid, src_iv->riv_poh_uuid);
+	uuid_copy(dst_iv->riv_coh_uuid, src_iv->riv_coh_uuid);
+	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
+	dst_iv->riv_master_rank = src_iv->riv_master_rank;
+
+	return 0;
 }
 
 struct ds_iv_entry_ops rebuild_iv_ops = {
@@ -153,6 +191,7 @@ struct ds_iv_entry_ops rebuild_iv_ops = {
 	.iv_ent_destroy	= rebuild_iv_ent_destroy,
 	.iv_ent_fetch	= rebuild_iv_ent_fetch,
 	.iv_ent_update	= rebuild_iv_ent_update,
+	.iv_ent_refresh = rebuild_iv_ent_refresh,
 };
 
 int
@@ -233,12 +272,6 @@ rebuild_iv_ns_handler(crt_rpc_t *rpc)
 		ds_pool_put(pool);
 		D_GOTO(out, rc);
 	}
-
-	ABT_mutex_lock(rebuild_gst.rg_lock);
-	if (rebuild_gst.rg_pool == NULL)
-		rebuild_gst.rg_pool = pool; /* pin it */
-	ABT_mutex_unlock(rebuild_gst.rg_lock);
-
 out:
 	out->ro_status = rc;
 	D__DEBUG(DB_TRACE, "rebuild ns create rc = %d\n", rc);

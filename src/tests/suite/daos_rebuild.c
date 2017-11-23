@@ -169,12 +169,6 @@ rebuild_wait(test_arg_t *arg, d_rank_t failed_rank, bool concurrent_io)
 			print_message("query rebuild status failed: %d\n", rc);
 			break;
 		}
-
-		if (rst->rs_version == 0) {
-			print_message("No more rebuild\n");
-			break;
-		}
-
 		assert_int_equal(rst->rs_errno, 0);
 		if (rst->rs_done) {
 			print_message("Rebuild (ver=%d) is done\n",
@@ -217,6 +211,8 @@ rebuild_targets(test_arg_t *arg, d_rank_t *failed_ranks, int rank_nr,
 	/** exclude the target from the pool */
 	for (i = 0; i < rank_nr; i++) {
 		rebuild_test_exclude_tgt(arg, failed_ranks[i], kill);
+		/* Sleep 5 seconds to make sure the rebuild start */
+		sleep(5);
 		rebuild_wait(arg, failed_ranks[i], concurrent_io);
 	}
 

@@ -42,6 +42,7 @@ typedef int (*ds_iv_ent_put_t)(d_sg_list_t *sgl, struct ds_iv_entry *ent);
 typedef int (*ds_iv_ent_destroy_t)(d_sg_list_t *sgl);
 typedef int (*ds_iv_ent_fetch_t)(d_sg_list_t *dst, d_sg_list_t *src);
 typedef int (*ds_iv_ent_update_t)(d_sg_list_t *dst, d_sg_list_t *src);
+typedef int (*ds_iv_ent_refresh_t)(d_sg_list_t *dst, d_sg_list_t *src);
 
 /* cache management ops */
 struct ds_iv_entry_ops {
@@ -60,6 +61,8 @@ struct ds_iv_entry_ops {
 	ds_iv_ent_fetch_t	iv_ent_fetch;
 	/* Update the value of IV cache entry */
 	ds_iv_ent_update_t	iv_ent_update;
+	/* Refresh the value of IV cache entry */
+	ds_iv_ent_refresh_t	iv_ent_refresh;
 };
 
 /* structure to describe the cache management for

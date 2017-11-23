@@ -236,6 +236,20 @@ update_iv_value(struct ds_iv_entry *entry, d_sg_list_t *dst,
 }
 
 static int
+refresh_iv_value(struct ds_iv_entry *entry, d_sg_list_t *dst,
+		 d_sg_list_t *src)
+{
+	int rc;
+
+	D_ASSERT(entry->ent_ops != NULL);
+	if (entry->ent_ops->iv_ent_refresh != NULL)
+		rc = entry->ent_ops->iv_ent_refresh(dst, src);
+	else
+		rc = copy_iv_value(dst, src);
+	return rc;
+}
+
+static int
 iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	    crt_iv_ver_t *iv_ver, uint32_t flags,
 	    d_sg_list_t *iv_value, void *priv)
@@ -291,7 +305,7 @@ iv_entry_lookup(struct ds_iv_ns *ns, crt_iv_key_t *key)
 static int
 iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value,
-		      bool invalidate, void *priv)
+		      bool invalidate, bool refresh, void *priv)
 {
 	struct ds_iv_ns		*ns;
 	struct ds_iv_entry	*entry = priv;
@@ -308,15 +322,18 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	else
 		rc = -DER_IVCB_FORWARD;
 
-	if (iv_value == NULL) {
+	if (entry == NULL) {
 		entry = iv_entry_lookup(ns, iv_key);
-		if (entry != NULL)
-			entry->valid = false;
-		D_GOTO(out, rc);
+		if (entry == NULL)
+			D__GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (iv_value->sg_iovs != NULL)
-		update_iv_value(entry, &entry->value, iv_value);
+	if (iv_value && iv_value->sg_iovs != NULL) {
+		if (refresh)
+			refresh_iv_value(entry, &entry->value, iv_value);
+		else
+			update_iv_value(entry, &entry->value, iv_value);
+	}
 
 	if (invalidate)
 		entry->valid = false;
@@ -324,8 +341,8 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		entry->valid = true;
 
 out:
-	D__DEBUG(DB_TRACE, "key id %d rank %d myrank %d rc %d entry %p\n",
-		 key->key_id, key->rank, myrank, rc, entry);
+	D__DEBUG(DB_TRACE, "key id %d rank %d myrank %d rc %d\n",
+		 key->key_id, key->rank, myrank, rc);
 	return rc;
 }
 
@@ -337,7 +354,7 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	int rc;
 
 	rc = iv_on_update_internal(ivns, iv_key, iv_ver, iv_value, invalidate,
-				   priv);
+				   true, priv);
 	if (rc == -DER_IVCB_FORWARD)
 		rc = 0;
 
@@ -350,7 +367,7 @@ iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	     void *priv)
 {
 	return iv_on_update_internal(ivns, iv_key, iv_ver, iv_value, false,
-				     priv);
+				     false, priv);
 }
 
 static int

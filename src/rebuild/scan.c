@@ -54,6 +54,7 @@ struct rebuild_send_arg {
 
 struct rebuild_scan_arg {
 	daos_handle_t		rebuild_tree_hdl;
+	struct rebuild_pool_tracker *rpt;
 	struct pl_target_grp	*tgp_failed;
 	d_rank_list_t	*failed_ranks;
 	uint32_t		map_ver;
@@ -140,6 +141,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		     struct rebuild_scan_arg *scan_arg)
 {
 	struct rebuild_objs_in *rebuild_in;
+	struct rebuild_pool_tracker	*rpt = scan_arg->rpt;
 	struct rebuild_send_arg *arg = NULL;
 	daos_unit_oid_t		*oids = NULL;
 	uuid_t			*uuids = NULL;
@@ -185,25 +187,8 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	if (arg->count == 0)
 		D__GOTO(out, rc);
 
-#if 0 /* rework this part */
-	{
-	struct pool_map		*map;
-	struct pool_target	*target;
-
-	map = rebuild_pool_map_get();
-	target = pool_map_find_target_by_rank(map, tgt_id);
-	D__ASSERT(target);
-
-	if (target->ta_comp.co_status == PO_COMP_ST_DOWN ||
-	    target->ta_comp.co_status == PO_COMP_ST_DOWNOUT) {
-		rebuild_pool_map_put(map);
-		D__GOTO(out, rc = 0); /* ignore it */
-	}
-	rebuild_pool_map_put(map);
-	}
-#endif
-	D__DEBUG(DB_TRACE, "send rebuild objects "DF_UUID" to tgt %d count %d\n",
-		DP_UUID(rebuild_gst.rg_pool_uuid), tgt_id, arg->count);
+	D__DEBUG(DB_TRACE, "send rebuild objects "DF_UUID" to tgt %d cnt %d\n",
+		 DP_UUID(rpt->rt_pool_uuid), tgt_id, arg->count);
 
 	tgt_ep.ep_rank = tgt_id;
 	tgt_ep.ep_tag = 0;
@@ -220,7 +205,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	rebuild_in->roi_uuids.da_arrays = uuids;
 	rebuild_in->roi_shards.da_count = arg->count;
 	rebuild_in->roi_shards.da_arrays = shards;
-	uuid_copy(rebuild_in->roi_pool_uuid, rebuild_gst.rg_pool_uuid);
+	uuid_copy(rebuild_in->roi_pool_uuid, rpt->rt_pool_uuid);
 
 	/* Note: if the remote target fails, let's just ignore the
 	 * this object list, because the later rebuild will rebuild
@@ -456,6 +441,7 @@ static int
 placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 {
 	struct rebuild_scan_arg	*arg = data;
+	struct rebuild_pool_tracker *rpt = arg->rpt;
 	struct pl_obj_layout	*layout = NULL;
 	struct pl_map		*map = NULL;
 	struct daos_obj_md	md;
@@ -463,21 +449,21 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 	unsigned int		shard_rebuild;
 	int			rc;
 
-	if (rebuild_gst.rg_abort)
+	if (rpt->rt_abort)
 		return 1;
 
 	dc_obj_fetch_md(oid.id_pub, &md);
 	while (1) {
 		struct pool_map *poolmap;
 
-		map = pl_map_find(rebuild_gst.rg_pool_uuid, oid.id_pub);
+		map = pl_map_find(rpt->rt_pool_uuid, oid.id_pub);
 		if (map == NULL) {
 			D__ERROR(DF_UOID"Cannot find valid placement map\n",
 				DP_UOID(oid));
 			D__GOTO(out, rc = -DER_INVAL);
 		}
 
-		poolmap = rebuild_pool_map_get();
+		poolmap = rebuild_pool_map_get(rpt->rt_pool);
 		if (pl_map_version(map) >= pool_map_get_version(poolmap)) {
 			/* very likely we just break out from here, unless
 			 * there is a cascading failure.
@@ -487,7 +473,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 		}
 		pl_map_decref(map);
 
-		pl_map_update(rebuild_gst.rg_pool_uuid, poolmap, false);
+		pl_map_update(rpt->rt_pool_uuid, poolmap, false);
 		rebuild_pool_map_put(poolmap);
 	}
 
@@ -498,10 +484,10 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 
 	D__DEBUG(DB_PL, "rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
 		" on %d for shard %d\n", DP_UOID(oid), DP_UUID(co_uuid),
-		DP_UUID(rebuild_gst.rg_pool_uuid), tgt_rebuild, shard_rebuild);
+		DP_UUID(rpt->rt_pool_uuid), tgt_rebuild, shard_rebuild);
 
 	rc = rebuild_object_insert(arg, tgt_rebuild, shard_rebuild,
-				   rebuild_gst.rg_pool_uuid, co_uuid, oid);
+				   rpt->rt_pool_uuid, co_uuid, oid);
 	if (rc)
 		D__GOTO(out, rc);
 out:
@@ -523,8 +509,12 @@ int
 rebuild_scanner(void *data)
 {
 	struct rebuild_iter_arg *arg = data;
+	struct rebuild_scan_arg	*scan_arg = arg->arg;
+	struct rebuild_pool_tracker *rpt = scan_arg->rpt;
 
-	return ds_pool_obj_iter(rebuild_gst.rg_pool_uuid, arg->callback,
+	D_ASSERT(rpt != NULL);
+
+	return ds_pool_obj_iter(rpt->rt_pool_uuid, arg->callback,
 				arg->arg);
 }
 
@@ -548,6 +538,7 @@ rebuild_scan_leader(void *data)
 	struct rebuild_scan_arg	  *arg = data;
 	struct pl_target_grp	  *tgp;
 	struct pool_map		  *map;
+	struct rebuild_pool_tracker *rpt;
 	struct rebuild_iter_arg    iter_arg;
 	int			   i;
 	int			   rc;
@@ -556,16 +547,17 @@ rebuild_scan_leader(void *data)
 	D__ASSERT(arg->failed_ranks);
 	D__ASSERT(!daos_handle_is_inval(arg->rebuild_tree_hdl));
 
+	rpt = arg->rpt;
 	/* refresh placement for the server stack */
-	ABT_mutex_lock(rebuild_gst.rg_lock);
-	map = rebuild_pool_map_get();
+	ABT_mutex_lock(rpt->rt_lock);
+	map = rebuild_pool_map_get(rpt->rt_pool);
 	D_ASSERT(map != NULL);
-	rc = pl_map_update(rebuild_gst.rg_pool_uuid, map, false);
+	rc = pl_map_update(rpt->rt_pool_uuid, map, false);
 	if (rc != 0) {
-		ABT_mutex_unlock(rebuild_gst.rg_lock);
+		ABT_mutex_unlock(rpt->rt_lock);
 		D__GOTO(out_map, rc = -DER_NOMEM);
 	}
-	ABT_mutex_unlock(rebuild_gst.rg_lock);
+	ABT_mutex_unlock(rpt->rt_lock);
 
 	/* initialize parameters for scanners */
 	D__ALLOC_PTR(tgp);
@@ -602,7 +594,7 @@ rebuild_scan_leader(void *data)
 		D__GOTO(out_group, rc);
 
 	D__DEBUG(DB_TRACE, "rebuild scan collective "DF_UUID" is done\n",
-		DP_UUID(rebuild_gst.rg_pool_uuid));
+		DP_UUID(rpt->rt_pool_uuid));
 
 	while (!dbtree_is_empty(arg->rebuild_tree_hdl)) {
 		/* walk through the rebuild tree and send the rebuild objects */
@@ -612,23 +604,22 @@ rebuild_scan_leader(void *data)
 			D__GOTO(out_group, rc);
 	}
 
-	ABT_mutex_lock(rebuild_gst.rg_lock);
+	ABT_mutex_lock(rpt->rt_lock);
 	rc = dss_task_collective(rebuild_scan_done, NULL);
-	ABT_mutex_unlock(rebuild_gst.rg_lock);
+	ABT_mutex_unlock(rpt->rt_lock);
 	if (rc) {
 		D__ERROR(DF_UUID" send rebuild object list failed:%d\n",
-			DP_UUID(rebuild_gst.rg_pool_uuid), rc);
+			DP_UUID(rpt->rt_pool_uuid), rc);
 		D__GOTO(out_group, rc);
 	}
 
 	D__DEBUG(DB_TRACE, DF_UUID" sent objects to initiator %d\n",
-		DP_UUID(rebuild_gst.rg_pool_uuid), rc);
+		DP_UUID(rpt->rt_pool_uuid), rc);
 	D_EXIT;
 out_group:
-	if (tgp->tg_targets != NULL) {
+	if (tgp->tg_targets != NULL)
 		D__FREE(tgp->tg_targets,
-		       tgp->tg_target_nr * sizeof(*tgp->tg_targets));
-	}
+			tgp->tg_target_nr * sizeof(*tgp->tg_targets));
 	D__FREE_PTR(tgp);
 out_map:
 	rebuild_pool_map_put(map);
@@ -649,28 +640,39 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_out		*ro;
 	struct rebuild_scan_arg		*scan_arg;
 	struct umem_attr		 uma;
+	struct rebuild_pool_tracker	*rpt;
 	int				 rc;
 
 	rsi = crt_req_get(rpc);
 	D__ASSERT(rsi != NULL);
 
-	if (rsi->rsi_pool_map_ver <= rebuild_gst.rg_rebuild_ver)
-		D_GOTO(out, rc = 0);
-
 	D__DEBUG(DB_TRACE, "%d scan rebuild for "DF_UUID" ver %d\n",
 		 dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
 		 rsi->rsi_pool_map_ver);
 
+	rpt = rebuild_pool_tracker_lookup(rsi->rsi_pool_uuid,
+					  rsi->rsi_pool_map_ver);
+	if (rpt != NULL) {
+		/* Only one pool version can be rebuilt for now */
+		D__ASSERT(rsi->rsi_pool_map_ver == rpt->rt_rebuild_ver);
+
+		if (rpt->rt_prepared) {
+			D__DEBUG(DB_TRACE, DF_UUID" already started\n",
+				 DP_UUID(rsi->rsi_pool_uuid));
+			D__GOTO(out, rc = 0);
+		}
+	}
+
 	rc = rebuild_tgt_prepare(rsi->rsi_pool_uuid, rsi->rsi_svc_list,
-				 rsi->rsi_pool_map_ver);
+				 rsi->rsi_pool_map_ver, &rpt);
 	if (rc)
 		D__GOTO(out, rc);
 
-	rc = ds_pool_tgt_map_update(rebuild_gst.rg_pool);
+	rc = ds_pool_tgt_map_update(rpt->rt_pool);
 	if (rc)
 		D__GOTO(out, rc);
 
-	rc = dss_ult_create(rebuild_tgt_status_check, NULL, -1, NULL);
+	rc = dss_ult_create(rebuild_tgt_status_check, rpt, -1, NULL);
 	if (rc)
 		D__GOTO(out, rc);
 	/* step-1: parameters for scanner */
@@ -699,6 +701,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D__GOTO(out_tree, rc);
 
+	scan_arg->rpt = rpt;
 	scan_arg->map_ver = rsi->rsi_pool_map_ver;
 	/* step-3: start scann leader */
 	rc = dss_ult_create(rebuild_scan_leader, scan_arg, -1, NULL);
@@ -717,9 +720,9 @@ out_arg:
 out:
 	ro = crt_reply_get(rpc);
 	ro->ro_status = rc;
-	if (rc)
-		rebuild_gst.rg_abort = 1;
-
+	D_ASSERT(rpt != NULL);
+	if (rc && rpt)
+		rpt->rt_abort = 1;
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D__ERROR("send reply failed: %d\n", rc);

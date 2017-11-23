@@ -47,6 +47,7 @@ struct rebuild_iter_arg {
 	void			*arg;
 	uuid_t			pool_uuid;
 	uuid_t			cont_uuid;
+	struct rebuild_pool_tracker *rpt;
 	rebuild_obj_iter_cb_t	obj_cb;
 	unsigned int		map_ver;
 	daos_handle_t		root_hdl;
@@ -169,10 +170,11 @@ rebuild_fetch_update(struct rebuild_dkey *rdkey, daos_handle_t oh,
 }
 
 static int
-rebuild_rec(struct rebuild_dkey *rdkey, daos_handle_t oh, daos_key_t *akey,
+rebuild_rec(struct rebuild_pool_tracker *rpt, struct ds_cont *ds_cont,
+	    daos_handle_t oh, struct rebuild_dkey *rdkey, daos_key_t *akey,
 	    unsigned int num, unsigned int type, daos_size_t size,
 	    daos_recx_t *recxs, daos_epoch_range_t *eprs, uuid_t *cookies,
-	    uint32_t *versions, struct ds_cont *ds_cont)
+	    uint32_t *versions)
 {
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	uuid_t			cookie;
@@ -186,18 +188,16 @@ rebuild_rec(struct rebuild_dkey *rdkey, daos_handle_t oh, daos_key_t *akey,
 	start = 0;
 	for (i = 0; i < num; i++) {
 		/* check if the record needs to be rebuilt.*/
-		if (versions[i] >= rebuild_gst.rg_rebuild_ver) {
+		if (versions[i] >= rpt->rt_rebuild_ver) {
 			D__DEBUG(DB_TRACE, "i %d rec ver %d rebuild ver %d "
 				"does not needs to be rebuilt\n",
-				i, versions[i], rebuild_gst.rg_rebuild_ver);
-			if (cnt > 0)
-				goto rebuild_rec;
-			else
+				i, versions[i], rpt->rt_rebuild_ver);
+			if (cnt == 0)
 				goto next;
 		} else {
 			cnt++;
 		}
-rebuild_rec:
+
 		if (i == 0) {
 			uuid_copy(cookie, cookies[0]);
 			version = versions[0];
@@ -236,7 +236,7 @@ next:
 
 	D__DEBUG(DB_TRACE, "rebuild "DF_UOID" ver %d dkey %.*s akey %.*s rc %d"
 		" total %d tag %d\n", DP_UOID(rdkey->rd_oid),
-		rebuild_gst.rg_rebuild_ver, (int)rdkey->rd_dkey.iov_len,
+		rpt->rt_rebuild_ver, (int)rdkey->rd_dkey.iov_len,
 		(char *)rdkey->rd_dkey.iov_buf, (int)akey->iov_len,
 		(char *)akey->iov_buf, rc, total,
 		dss_get_module_info()->dmi_tid);
@@ -248,8 +248,9 @@ next:
 
 #define ITER_COUNT	5
 static int
-rebuild_akey(struct rebuild_dkey *rdkey, daos_handle_t oh, int type,
-	     daos_key_t *akey, struct ds_cont *ds_cont)
+rebuild_akey(struct rebuild_pool_tracker *rpt, struct ds_cont *ds_cont,
+	     daos_handle_t oh, int type, struct rebuild_dkey *rdkey,
+	     daos_key_t *akey)
 {
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	daos_recx_t		recxs[ITER_COUNT];
@@ -266,7 +267,7 @@ rebuild_akey(struct rebuild_dkey *rdkey, daos_handle_t oh, int type,
 		daos_size_t	size;
 		int		i;
 
-		map = rebuild_pool_map_get();
+		map = rebuild_pool_map_get(rpt->rt_pool);
 		dc_pool_update_map(tls->rebuild_pool_hdl, map);
 		rebuild_pool_map_put(map);
 
@@ -286,8 +287,8 @@ rebuild_akey(struct rebuild_dkey *rdkey, daos_handle_t oh, int type,
 		for (i = 0; i < rec_num; i++)
 			eprs[i].epr_hi = DAOS_EPOCH_MAX;
 
-		rc = rebuild_rec(rdkey, oh, akey, rec_num, type, size, recxs,
-				 eprs, cookies, versions, ds_cont);
+		rc = rebuild_rec(rpt, ds_cont, oh, rdkey, akey, rec_num, type,
+				 size, recxs, eprs, cookies, versions);
 		if (rc)
 			break;
 	}
@@ -295,7 +296,7 @@ rebuild_akey(struct rebuild_dkey *rdkey, daos_handle_t oh, int type,
 }
 
 static int
-rebuild_one_dkey(struct rebuild_dkey *rdkey)
+rebuild_one_dkey(struct rebuild_pool_tracker *rpt, struct rebuild_dkey *rdkey)
 {
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	daos_iov_t		akey_iov;
@@ -318,11 +319,11 @@ rebuild_one_dkey(struct rebuild_dkey *rdkey)
 
 	if (daos_handle_is_inval(tls->rebuild_pool_hdl)) {
 		daos_handle_t ph = DAOS_HDL_INVAL;
-		struct pool_map *map = rebuild_pool_map_get();
+		struct pool_map *map = rebuild_pool_map_get(rpt->rt_pool);
 
-		rc = dc_pool_local_open(rebuild_gst.rg_pool_uuid,
+		rc = dc_pool_local_open(rpt->rt_pool_uuid,
 					rebuild_gst.rg_pool_hdl_uuid, 0, NULL,
-					map, rebuild_gst.rg_svc_list, &ph);
+					map, rpt->rt_svc_list, &ph);
 		rebuild_pool_map_put(map);
 		if (rc)
 			D__GOTO(free, rc);
@@ -342,7 +343,7 @@ rebuild_one_dkey(struct rebuild_dkey *rdkey)
 	if (rc)
 		D__GOTO(cont_close, rc);
 
-	rc = ds_cont_lookup(rebuild_gst.rg_pool_uuid, rdkey->rd_cont_uuid,
+	rc = ds_cont_lookup(rpt->rt_pool_uuid, rdkey->rd_cont_uuid,
 			    &rebuild_cont);
 	if (rc)
 		D__GOTO(obj_close, rc);
@@ -373,13 +374,13 @@ rebuild_one_dkey(struct rebuild_dkey *rdkey)
 			akey.iov_len = akey_kds[i].kd_key_len;
 			akey.iov_buf_len = akey_kds[i].kd_key_len;
 
-			rc = rebuild_akey(rdkey, oh, DAOS_IOD_ARRAY, &akey,
-					  rebuild_cont);
+			rc = rebuild_akey(rpt, rebuild_cont, oh, DAOS_IOD_ARRAY,
+					  rdkey, &akey);
 			if (rc < 0)
 				break;
 
-			rc = rebuild_akey(rdkey, oh, DAOS_IOD_SINGLE, &akey,
-					  rebuild_cont);
+			rc = rebuild_akey(rpt, rebuild_cont, oh,
+					  DAOS_IOD_SINGLE, rdkey, &akey);
 			if (rc < 0)
 				break;
 		}
@@ -400,12 +401,13 @@ free:
 static void
 rebuild_dkey_ult(void *arg)
 {
+	struct rebuild_pool_tracker *rpt = arg;
 	struct rebuild_puller	*puller;
 	unsigned int		idx;
 
-	D__ASSERT(rebuild_gst.rg_pullers != NULL);
+	D__ASSERT(rpt->rt_pullers != NULL);
 	idx = dss_get_module_info()->dmi_tid;
-	puller = &rebuild_gst.rg_pullers[idx];
+	puller = &rpt->rt_pullers[idx];
 	puller->rp_ult_running = 1;
 	while (1) {
 		struct rebuild_dkey	*rdkey;
@@ -426,7 +428,7 @@ rebuild_dkey_ult(void *arg)
 
 		daos_list_for_each_entry_safe(rdkey, tmp, &dkey_list, rd_list) {
 			daos_list_del(&rdkey->rd_list);
-			rc = rebuild_one_dkey(rdkey);
+			rc = rebuild_one_dkey(rpt, rdkey);
 			D__DEBUG(DB_TRACE, DF_UOID" rebuild dkey %.*s rc = %d"
 				" tag %d\n", DP_UOID(rdkey->rd_oid),
 				(int)rdkey->rd_dkey.iov_len,
@@ -456,12 +458,12 @@ rebuild_dkey_ult(void *arg)
 		/* check if it should exist */
 		ABT_mutex_lock(puller->rp_lock);
 		if (daos_list_empty(&puller->rp_dkey_list) &&
-		    rebuild_gst.rg_finishing) {
+		    rpt->rt_finishing) {
 			ABT_mutex_unlock(puller->rp_lock);
 			break;
 		}
 
-		if (rebuild_gst.rg_abort) {
+		if (rpt->rt_abort) {
 			ABT_mutex_unlock(puller->rp_lock);
 			break;
 		}
@@ -485,19 +487,20 @@ rebuild_dkey_queue(daos_unit_oid_t oid, daos_epoch_t epoch,
 		   daos_key_t *dkey, struct rebuild_iter_arg *iter_arg)
 {
 	struct rebuild_puller	*puller;
+	struct rebuild_pool_tracker *rpt = iter_arg->rpt;
 	struct rebuild_dkey	*rdkey = NULL;
-	unsigned int		tgt;
+	unsigned int		idx;
 	int			rc;
 
-	tgt = rebuild_get_nstream_idx(dkey);
-	puller = &rebuild_gst.rg_pullers[tgt];
+	idx = rebuild_get_nstream_idx(dkey);
+	puller = &rpt->rt_pullers[idx];
 	if (puller->rp_ult == NULL) {
 		/* Create puller ULT thread, and destroy ULT until
 		 * rebuild finish in rebuild_fini().
 		 */
 		D__ASSERT(puller->rp_ult_running == 0);
-		D__DEBUG(DB_TRACE, "create rebuild dkey ult %d\n", tgt);
-		rc = dss_ult_create(rebuild_dkey_ult, NULL, tgt,
+		D__DEBUG(DB_TRACE, "create rebuild dkey ult %d\n", idx);
+		rc = dss_ult_create(rebuild_dkey_ult, rpt, idx,
 				    &puller->rp_ult);
 		if (rc)
 			D__GOTO(free, rc);
@@ -617,6 +620,7 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		    daos_iov_t *val_iov, void *data)
 {
 	struct rebuild_iter_arg *arg = data;
+	struct rebuild_pool_tracker *rpt = arg->rpt;
 	daos_unit_oid_t		*oid = key_iov->iov_buf;
 	unsigned int		*shard = val_iov->iov_buf;
 	int			rc;
@@ -649,7 +653,7 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	if (rc == -DER_NONEXIST)
 		return 1;
 
-	if (rebuild_gst.rg_abort)
+	if (rpt->rt_abort)
 		return 1;
 
 	return rc;
@@ -661,6 +665,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 {
 	struct rebuild_root	*root = val_iov->iov_buf;
 	struct rebuild_iter_arg *arg = data;
+	struct rebuild_pool_tracker *rpt = arg->rpt;
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	daos_handle_t		coh = DAOS_HDL_INVAL;
 	int rc;
@@ -672,11 +677,11 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	/* Create dc_pool locally */
 	if (daos_handle_is_inval(tls->rebuild_pool_hdl)) {
 		daos_handle_t ph = DAOS_HDL_INVAL;
-		struct pool_map *map = rebuild_pool_map_get();
+		struct pool_map *map = rebuild_pool_map_get(rpt->rt_pool);
 
-		rc = dc_pool_local_open(rebuild_gst.rg_pool_uuid,
+		rc = dc_pool_local_open(rpt->rt_pool_uuid,
 					rebuild_gst.rg_pool_hdl_uuid, 0, NULL,
-					map, rebuild_gst.rg_svc_list, &ph);
+					map, rpt->rt_svc_list, &ph);
 		rebuild_pool_map_put(map);
 		if (rc)
 			return rc;
@@ -731,6 +736,7 @@ rebuild_puller(void *arg)
 {
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	struct rebuild_iter_arg	*iter_arg = arg;
+	struct rebuild_pool_tracker *rpt = iter_arg->rpt;
 	int			rc;
 
 	while (!dbtree_is_empty(iter_arg->root_hdl)) {
@@ -745,32 +751,32 @@ rebuild_puller(void *arg)
 	}
 
 	D__FREE_PTR(iter_arg);
-	rebuild_gst.rg_puller_running = 0;
+	rpt->rt_lead_puller_running = 0;
 }
 
 
 static int
-rebuild_obj_hdl_get(uuid_t pool_uuid, daos_handle_t *hdl)
+rebuild_obj_hdl_get(struct rebuild_pool_tracker *rpt, daos_handle_t *hdl)
 {
 	struct umem_attr	uma;
 	int rc;
 
-	if (!daos_handle_is_inval(rebuild_gst.rg_local_root_hdl)) {
-		*hdl = rebuild_gst.rg_local_root_hdl;
+	if (!daos_handle_is_inval(rpt->rt_local_root_hdl)) {
+		*hdl = rpt->rt_local_root_hdl;
 		return 0;
 	}
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 	rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0, 4, &uma,
-				   &rebuild_gst.rg_local_root,
-				   &rebuild_gst.rg_local_root_hdl);
+				   &rpt->rt_local_root,
+				   &rpt->rt_local_root_hdl);
 	if (rc != 0) {
 		D__ERROR("failed to create rebuild tree: %d\n", rc);
 		return rc;
 	}
 
-	*hdl = rebuild_gst.rg_local_root_hdl;
+	*hdl = rpt->rt_local_root_hdl;
 	return 0;
 }
 
@@ -779,6 +785,7 @@ void
 rebuild_obj_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_objs_in	*rebuild_in;
+	struct rebuild_pool_tracker *rpt = NULL;
 	struct rebuild_out	*rebuild_out;
 	daos_unit_oid_t		*oids;
 	unsigned int		oids_count;
@@ -805,9 +812,17 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		D__GOTO(out, rc = -DER_INVAL);
 	}
 
+	/* If rpt is NULL, it means the target is not prepared for
+	 * rebuilding yet, i.e. it did not receive scan req to
+	 * prepare rebuild yet (see rebuild_tgt_prepare()).
+	 */
+	rpt = rebuild_pool_tracker_lookup(rebuild_in->roi_pool_uuid,
+					  rebuild_in->roi_map_ver);
+	if (rpt == NULL)
+		D__GOTO(out, rc = -DER_AGAIN);
+
 	/* Initialize the local rebuild tree */
-	rc = rebuild_obj_hdl_get(rebuild_in->roi_pool_uuid,
-				 &btr_hdl);
+	rc = rebuild_obj_hdl_get(rpt, &btr_hdl);
 	if (rc)
 		D__GOTO(out, rc);
 
@@ -831,7 +846,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		D__GOTO(out, rc);
 
 	/* Check and create task to iterate the local rebuild tree */
-	if (!rebuild_gst.rg_puller_running) {
+	if (!rpt->rt_lead_puller_running) {
 		struct rebuild_iter_arg *arg;
 
 		D__ALLOC_PTR(arg);
@@ -842,15 +857,16 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		arg->obj_cb = rebuild_obj_iterate_keys;
 		arg->root_hdl = btr_hdl;
 		arg->map_ver = rebuild_in->roi_map_ver;
+		arg->rpt = rpt;
 
-		D__ASSERT(rebuild_gst.rg_pullers != NULL);
+		D__ASSERT(rpt->rt_pullers != NULL);
 
-		rebuild_gst.rg_puller_running = 1;
 		rc = dss_ult_create(rebuild_puller, arg, -1, NULL);
 		if (rc) {
-			rebuild_gst.rg_puller_running = 0;
 			D__FREE_PTR(arg);
+			D__GOTO(out, rc);
 		}
+		rpt->rt_lead_puller_running = 1;
 	}
 	D_EXIT;
 out:
