@@ -1056,15 +1056,15 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	}
 
 	/** Progress with callback and non-null timeout */
-	if (timeout <= 0) {
-		D_ASSERT(timeout < 0);
+	D_ASSERT(timeout != 0);
+	if (timeout < 0) {
 		/**
-		 * For infinite timeout, use a mercury timeout of 1s to avoid
+		 * For infinite timeout, use a mercury timeout of 1 ms to avoid
 		 * being blocked indefinitely if another thread has called
 		 * crt_hg_progress() behind our back
 		 */
-		hg_timeout = 0;
-	} else  {
+		hg_timeout = 1000;
+	} else { /** timeout > 0 */
 		now = d_timeus_secdiff(0);
 		end = now + timeout;
 		/** similarly, probe more frequently if timeout is large */

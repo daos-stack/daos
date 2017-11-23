@@ -1312,14 +1312,10 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 	/**
 	 * Mercury only supports milli-second timeout and uses an unsigned int
 	 */
-	if (timeout < 0) {
+	if (timeout < 0)
 		hg_timeout = UINT32_MAX;
-	} else {
+	else
 		hg_timeout = timeout / 1000;
-		if (hg_timeout == 0)
-			hg_timeout = 1;
-
-	}
 
 	rc = crt_hg_trigger(hg_ctx);
 	if (rc != 0)
