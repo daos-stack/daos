@@ -175,22 +175,6 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 	return dss_abterr2der(ret);
 }
 
-int
-dss_progress_cb(void *arg)
-{
-	ABT_future	*shutdown = (ABT_future *)arg;
-	ABT_bool	 state;
-	int		 rc;
-
-	tse_sched_progress(&dss_get_module_info()->dmi_sched);
-
-	rc = ABT_future_test(*shutdown, &state);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	return state == ABT_TRUE;
-}
-
 /**
  *
  * The handling process would like
@@ -260,15 +244,28 @@ dss_srv_handler(void *arg)
 	ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
-	/* main service loop processing incoming request */
-	rc = crt_progress(dmi->dmi_ctx, -1, dss_progress_cb, &dx->dx_shutdown);
-	if (rc != 0)
-		D__ERROR("failed to progress network context: %d\n", rc);
+	/* main service progress loop */
+	for (;;) {
+		ABT_bool state;
+
+		rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */, NULL, NULL);
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
+			D__ERROR("failed to progress network context: %d\n",
+				 rc);
+			break;
+		}
+
+		tse_sched_progress(&dmi->dmi_sched);
+
+		rc = ABT_future_test(dx->dx_shutdown, &state);
+		D__ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+		if (state == ABT_TRUE)
+			break;
+	}
 
 	tse_sched_fini(&dmi->dmi_sched);
 destroy:
 	crt_context_destroy(dmi->dmi_ctx, true);
-
 }
 
 static inline struct dss_xstream *
