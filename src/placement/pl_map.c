@@ -85,6 +85,7 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 
 	pthread_spin_init(&map->pl_lock, PTHREAD_PROCESS_PRIVATE);
 	map->pl_ref  = 1; /* for the caller */
+	map->pl_connects = 0;
 	map->pl_type = mia->ia_type;
 	map->pl_ops  = dict->pd_ops;
 
@@ -363,9 +364,10 @@ static dhash_table_ops_t pl_hash_ops = {
  *
  * \param	uuid [IN]	uuid of \a pool_map
  * \param	pool_map [IN]	pool_map
+ * \param	connect [IN]	from pool connect or not
  */
 int
-pl_map_update(uuid_t uuid, struct pool_map *pool_map)
+pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 {
 	daos_list_t		*link;
 	struct pl_map		*map;
@@ -400,6 +402,8 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map)
 		tmp = container_of(link, struct pl_map, pl_link);
 		if (pl_map_version(tmp) >= pool_map_get_version(pool_map)) {
 			dhash_rec_decref(&pl_htable, link);
+			if (connect)
+				tmp->pl_connects++;
 			D__GOTO(out, rc = 0);
 		}
 
@@ -410,10 +414,15 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map)
 			D__GOTO(out, rc);
 		}
 
+		/* transfer the pool connection count */
+		map->pl_connects = tmp->pl_connects;
 		/* evict the old placement map for this pool */
 		dhash_rec_delete_at(&pl_htable, link);
 		dhash_rec_decref(&pl_htable, link);
 	}
+
+	if (connect)
+		map->pl_connects++;
 
 	/* insert the new placement map into hash table */
 	uuid_copy(map->pl_uuid, uuid);
@@ -428,14 +437,27 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map)
 }
 
 /**
- * Evit the placement map of the pool identified by \a uuid from the placement
- * map cache.
+ * Drop the pool connection count of pl_map identified by \a uuid, evit it
+ * from the placement map cache when connection count drops to zero.
  */
 void
-pl_map_evict(uuid_t uuid)
+pl_map_disconnect(uuid_t uuid)
 {
+	daos_list_t	*link;
+
 	pthread_rwlock_wrlock(&pl_rwlock);
-	dhash_rec_delete(&pl_htable, uuid, sizeof(uuid_t));
+	link = dhash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
+	if (link) {
+		struct pl_map	*map;
+
+		map = container_of(link, struct pl_map, pl_link);
+		D__ASSERT(map->pl_connects > 0);
+		map->pl_connects--;
+		if (map->pl_connects == 0) {
+			dhash_rec_delete_at(&pl_htable, link);
+			dhash_rec_decref(&pl_htable, link);
+		}
+	}
 	pthread_rwlock_unlock(&pl_rwlock);
 }
 

@@ -487,7 +487,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 		}
 		pl_map_decref(map);
 
-		pl_map_update(rebuild_gst.rg_pool_uuid, poolmap);
+		pl_map_update(rebuild_gst.rg_pool_uuid, poolmap, false);
 		rebuild_pool_map_put(poolmap);
 	}
 
@@ -560,7 +560,7 @@ rebuild_scan_leader(void *data)
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	map = rebuild_pool_map_get();
 	D_ASSERT(map != NULL);
-	rc = pl_map_update(rebuild_gst.rg_pool_uuid, map);
+	rc = pl_map_update(rebuild_gst.rg_pool_uuid, map, false);
 	if (rc != 0) {
 		ABT_mutex_unlock(rebuild_gst.rg_lock);
 		D__GOTO(out_map, rc = -DER_NOMEM);

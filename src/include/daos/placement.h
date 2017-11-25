@@ -86,8 +86,8 @@ void pl_map_destroy(struct pl_map *map);
 void pl_map_print(struct pl_map *map);
 
 struct pl_map *pl_map_find(uuid_t uuid, daos_obj_id_t oid);
-int  pl_map_update(uuid_t uuid, struct pool_map *new_map);
-void pl_map_evict(uuid_t uuid);
+int  pl_map_update(uuid_t uuid, struct pool_map *new_map, bool connect);
+void pl_map_disconnect(uuid_t uuid);
 void pl_map_addref(struct pl_map *map);
 void pl_map_decref(struct pl_map *map);
 uint32_t pl_map_version(struct pl_map *map);

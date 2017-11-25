@@ -43,6 +43,8 @@ struct pl_map {
 	pthread_spinlock_t	 pl_lock;
 	/** refcount */
 	int			 pl_ref;
+	/** pool connections, protected by pl_rwlock */
+	int			 pl_connects;
 	/** type of placement map */
 	pl_map_type_t		 pl_type;
 	/** reference to pool map */

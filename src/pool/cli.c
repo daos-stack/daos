@@ -166,13 +166,13 @@ map_bulk_destroy(crt_bulk_t bulk, struct pool_buf *buf)
 /* Assume dp_map_lock is locked before calling this function */
 static int
 pool_map_update(struct dc_pool *pool, struct pool_map *map,
-		unsigned int map_version)
+		unsigned int map_version, bool connect)
 {
 	int rc;
 
 	D__ASSERT(map != NULL);
 	if (pool->dp_map == NULL) {
-		rc = pl_map_update(pool->dp_pool, map);
+		rc = pl_map_update(pool->dp_pool, map, connect);
 		if (rc != 0)
 			D__GOTO(out, rc);
 
@@ -193,7 +193,7 @@ pool_map_update(struct dc_pool *pool, struct pool_map *map,
 		pool->dp_map == NULL ?
 		0 : pool_map_get_version(pool->dp_map), map_version);
 
-	rc = pl_map_update(pool->dp_pool, map);
+	rc = pl_map_update(pool->dp_pool, map, connect);
 	if (rc != 0) {
 		D__ERROR("Failed to refresh placement map: %d\n", rc);
 		D__GOTO(out, rc);
@@ -216,7 +216,7 @@ out:
 static int
 process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		    uint32_t map_version, uint32_t mode, d_rank_list_t *tgts,
-		    daos_pool_info_t *info)
+		    daos_pool_info_t *info, bool connect)
 {
 	struct pool_map	       *map;
 	int			rc;
@@ -228,7 +228,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	}
 
 	pthread_rwlock_wrlock(&pool->dp_map_lock);
-	rc = pool_map_update(pool, map, map_version);
+	rc = pool_map_update(pool, map, map_version, connect);
 	if (rc)
 		D__GOTO(out_unlock, rc);
 
@@ -340,7 +340,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 	}
 
 	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
-				 pco->pco_mode, NULL /* tgts */, info);
+				 pco->pco_mode, NULL /* tgts */, info, true);
 	if (rc != 0) {
 		/* TODO: What do we do about the remote connection state? */
 		D__ERROR("failed to create local pool map: %d\n", rc);
@@ -371,7 +371,7 @@ dc_pool_local_close(daos_handle_t ph)
 	if (pool == NULL)
 		return 0;
 
-	pl_map_evict(pool->dp_pool);
+	pl_map_disconnect(pool->dp_pool);
 	dc_pool_put(pool);
 	return 0;
 }
@@ -412,7 +412,7 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		D__GOTO(out, rc);
 
 	D__DEBUG(DB_TRACE, "before update "DF_UUIDF"\n", DP_UUID(pool_uuid));
-	rc = pool_map_update(pool, map, pool_map_get_version(map));
+	rc = pool_map_update(pool, map, pool_map_get_version(map), true);
 	if (rc)
 		D__GOTO(out, rc);
 
@@ -441,7 +441,7 @@ dc_pool_update_map(daos_handle_t ph, struct pool_map *map)
 		D__GOTO(out, rc = 0); /* nothing to do */
 
 	pthread_rwlock_wrlock(&pool->dp_map_lock);
-	rc = pool_map_update(pool, map, pool_map_get_version(map));
+	rc = pool_map_update(pool, map, pool_map_get_version(map), false);
 	pthread_rwlock_unlock(&pool->dp_map_lock);
 out:
 	if (pool)
@@ -585,7 +585,7 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 		" master\n", DP_UUID(pool->dp_pool), arg->hdl.cookie,
 		DP_UUID(pool->dp_pool_hdl));
 
-	pl_map_evict(pool->dp_pool);
+	pl_map_disconnect(pool->dp_pool);
 
 	dc_pool_put(pool);
 	arg->hdl.cookie = 0;
@@ -631,7 +631,7 @@ dc_pool_disconnect(tse_task_t *task)
 			DF_UUID" slave\n", DP_UUID(pool->dp_pool),
 			args->poh.cookie, DP_UUID(pool->dp_pool_hdl));
 
-		pl_map_evict(pool->dp_pool);
+		pl_map_disconnect(pool->dp_pool);
 		dc_pool_put(pool);
 		args->poh.cookie = 0;
 		D__GOTO(out_pool, rc);
@@ -894,7 +894,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 		D__GOTO(out, rc);
 	}
 
-	rc = pl_map_update(pool->dp_pool, pool->dp_map);
+	rc = pl_map_update(pool->dp_pool, pool->dp_map, true);
 	if (rc != 0)
 		D__GOTO(out, rc);
 
@@ -1150,8 +1150,8 @@ pool_query_cb(tse_task_t *task, void *data)
 		D__GOTO(out, rc);
 
 	rc = process_query_reply(arg->dqa_pool, arg->dqa_map_buf,
-				 out->pqo_op.po_map_version,
-				 out->pqo_mode, arg->dqa_tgts, arg->dqa_info);
+				 out->pqo_op.po_map_version, out->pqo_mode,
+				 arg->dqa_tgts, arg->dqa_info, false);
 	memcpy(&arg->dqa_info->pi_rebuild_st, &out->pqo_rebuild_st,
 	       sizeof(out->pqo_rebuild_st));
 	D_EXIT;
