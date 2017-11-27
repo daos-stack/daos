@@ -422,11 +422,10 @@ crt_finalize(void)
 	}
 
 out:
-	if (rc != 0)
+	if (rc == 0)
+		d_log_fini(); /* d_log_fini is reference counted */
+	else
 		D_ERROR("crt_finalize failed, rc: %d.\n", rc);
-
-	/* d_log_fini is reference counted */
-	d_log_fini();
 
 	return rc;
 }
