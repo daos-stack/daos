@@ -68,6 +68,9 @@ struct st_session {
 	/** Session ID. Note that session ID's must be unique */
 	int64_t session_id;
 
+	/** Reference count, one session be destroyed when dropped to 0 */
+	int64_t session_refcnt;
+
 	/** Parameters for the session (send size, reply size, etc.) */
 	struct crt_st_session_params	 params;
 
@@ -155,7 +158,32 @@ static void free_session(struct st_session **session)
 		free_entry = (*session)->buf_list;
 	}
 
+	pthread_spin_destroy(&(*session)->buf_list_lock);
+
 	D_FREE_PTR(*session);
+}
+
+static inline void
+addref_session(struct st_session *session)
+{
+	pthread_spin_lock(&session->buf_list_lock);
+	session->session_refcnt++;
+	pthread_spin_unlock(&session->buf_list_lock);
+}
+
+static inline void
+decref_session(struct st_session *session)
+{
+	bool destroy = false;
+
+	pthread_spin_lock(&session->buf_list_lock);
+	session->session_refcnt--;
+	if (session->session_refcnt == 0)
+		destroy = true;
+	pthread_spin_unlock(&session->buf_list_lock);
+
+	if (destroy)
+		free_session(&session);
 }
 
 static int alloc_buf_entry(struct st_buf_entry **const return_entry,
@@ -369,6 +397,8 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 
 		/* Add the new session to the list of open sessions */
 		new_session->next = g_session_list;
+		/* decref in crt_self_test_close_session_handler */
+		addref_session(new_session);
 		g_session_list = new_session;
 	}
 
@@ -417,9 +447,8 @@ crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 	D_ASSERT(ret == 0);
 	/******************* UNLOCK: g_all_session_lock *******************/
 
-	/* At this point this function has the only reference to del_session */
-
-	free_session(&del_session);
+	/* addref in crt_self_test_open_session_handler */
+	decref_session(del_session);
 
 send_rpc:
 
@@ -430,7 +459,7 @@ send_rpc:
 
 void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 				  struct st_buf_entry *buf_entry,
-				  int do_unlock)
+				  int do_decref)
 {
 	d_iov_t				*res;
 	int				 ret;
@@ -476,10 +505,9 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 		/************ UNLOCK: session->buf_list_lock ************/
 	}
 
-	if (do_unlock) {
-		/************** UNLOCK: g_all_session_lock **************/
-		ret = pthread_rwlock_unlock(&g_all_session_lock);
-		D_ASSERT(ret == 0);
+	if (do_decref) {
+		/* addref in crt_self_test_msg_handler */
+		decref_session(session);
 	}
 
 	/*
@@ -614,6 +642,12 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 		crt_self_test_msg_send_reply(rpc_req, NULL, 1);
 		return;
 	}
+
+	/* decref in crt_self_test_msg_send_reply */
+	addref_session(session);
+
+	ret = pthread_rwlock_unlock(&g_all_session_lock);
+	D_ASSERT(ret == 0);
 
 	/* Now that we have the session, do a little more validation */
 	if (session->params.send_type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT ||
