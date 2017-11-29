@@ -86,6 +86,26 @@ pmem_tx_abort(struct umem_instance *umm, int err)
 	return 0;
 }
 
+static umem_id_t
+pmem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size,
+	     unsigned int type_num)
+{
+	return pmemobj_reserve(umm->umm_u.pmem_pool, act, size, type_num);
+}
+
+void
+pmem_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
+{
+	return pmemobj_cancel(umm->umm_u.pmem_pool, actv, actv_cnt);
+}
+
+int
+pmem_tx_publish(struct umem_instance *umm, struct pobj_action *actv,
+		int actv_cnt)
+{
+	return pmemobj_tx_publish(actv, actv_cnt);
+}
+
 static umem_ops_t	pmem_ops = {
 	.mo_addr		= pmem_addr,
 	.mo_equal		= pmem_equal,
@@ -94,6 +114,9 @@ static umem_ops_t	pmem_ops = {
 	.mo_tx_add		= pmem_tx_add,
 	.mo_tx_add_ptr		= pmem_tx_add_ptr,
 	.mo_tx_abort		= pmem_tx_abort,
+	.mo_reserve		= pmem_reserve,
+	.mo_cancel		= pmem_cancel,
+	.mo_tx_publish		= pmem_tx_publish,
 };
 
 int

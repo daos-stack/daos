@@ -75,6 +75,12 @@ typedef struct {
 	uint64_t	off;
 } umem_id_t;
 
+struct pobj_action {
+	int		type;
+	uint64_t	off;
+};
+#define POBJ_MAX_ACTIONS	0
+
 #define UMMID_NULL		((umem_id_t){0})
 #define UMMID_IS_NULL(ummid)	(ummid.off == 0)
 
@@ -161,6 +167,39 @@ typedef struct {
 	int		 (*mo_tx_begin)(struct umem_instance *umm);
 	/** reserved: stop memory transaction */
 	int		 (*mo_tx_end)(struct umem_instance *umm);
+
+	/**
+	 * Reserve space with specified size.
+	 *
+	 * \param umm	[IN]		umem class instance.
+	 * \param act	[IN|OUT]	action used for later cancel/publish.
+	 * \param size	[IN]		size to be reserved.
+	 * \param type_num [IN]		struct type (for nvml)
+	 */
+	umem_id_t	 (*mo_reserve)(struct umem_instance *umm,
+				       struct pobj_action *act, size_t size,
+				       unsigned int type_num);
+
+	/**
+	 * Cancel the reservation.
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param actv	[IN]	action array to be canceled.
+	 * \param actv_cnt [IN]	size of action array.
+	 */
+	void		 (*mo_cancel)(struct umem_instance *umm,
+				      struct pobj_action *actv, int actv_cnt);
+
+	/**
+	 * Publish the reservation (make it persistent).
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param actv	[IN]	action array to be published.
+	 * \param actv_cnt [IN]	size of action array.
+	 */
+	int		 (*mo_tx_publish)(struct umem_instance *umm,
+					  struct pobj_action *actv,
+					  int actv_cnt);
 } umem_ops_t;
 
 /** attributes to initialise an unified memroy class */
@@ -333,5 +372,30 @@ umem_id_equal(struct umem_instance *umm, umem_id_t ummid_1, umem_id_t ummid_2)
 })
 
 #define umem_id_t2u(tmmid)	((tmmid).oid)
+
+static inline umem_id_t
+umem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size)
+{
+	if (umm->umm_ops->mo_reserve)
+		return umm->umm_ops->mo_reserve(umm, act, size,
+						UMEM_TYPE_ANY);
+	return UMMID_NULL;
+}
+
+static inline void
+umem_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
+{
+	if (umm->umm_ops->mo_cancel)
+		return umm->umm_ops->mo_cancel(umm, actv, actv_cnt);
+}
+
+static inline int
+umem_tx_publish(struct umem_instance *umm, struct pobj_action *actv,
+		int actv_cnt)
+{
+	if (umm->umm_ops->mo_tx_publish)
+		return umm->umm_ops->mo_tx_publish(umm, actv, actv_cnt);
+	return 0;
+}
 
 #endif /* __DAOS_MEM_H__ */

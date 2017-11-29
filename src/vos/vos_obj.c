@@ -57,10 +57,15 @@ struct vos_zc_context {
 	daos_epoch_t		 zc_epoch;
 	/** number of descriptors of the I/O */
 	unsigned int		 zc_iod_nr;
+	daos_iod_t		*zc_iods;
 	/** I/O buffers for all descriptors */
 	struct iod_buf		*zc_iobufs;
 	/** reference on the object */
 	struct vos_object	*zc_obj;
+	/** actv fields used for zc buffer reservation */
+	unsigned int		 zc_actv_cnt;
+	unsigned int		 zc_actv_at;
+	struct pobj_action	*zc_actv;
 };
 
 static void vos_zcc_destroy(struct vos_zc_context *zcc, int err);
@@ -262,7 +267,6 @@ iobuf_zc_update(struct iod_buf *iobuf)
 {
 	D__ASSERT(iobuf->db_iov_off == 0);
 
-	iobuf->db_mmids[iobuf->db_at] = UMMID_NULL; /* taken over by tree */
 	iobuf->db_at++;
 	return 0;
 }
@@ -1126,6 +1130,46 @@ vos_zcc2ioh(struct vos_zc_context *zcc)
 	return ioh;
 }
 
+static void
+vos_zcc_reserve_init(struct vos_zc_context *zcc)
+{
+	int total_acts = 0;
+	int i;
+
+	zcc->zc_actv = NULL;
+	zcc->zc_actv_cnt = zcc->zc_actv_at = 0;
+
+	if (!zcc->zc_is_update || POBJ_MAX_ACTIONS == 0)
+		return;
+
+	if (vos_obj2umm(zcc->zc_obj)->umm_ops->mo_reserve == NULL)
+		return;
+
+	for (i = 0; i < zcc->zc_iod_nr; i++) {
+		daos_iod_t *iod = &zcc->zc_iods[i];
+
+		total_acts += iod->iod_nr;
+	}
+
+	if (total_acts > POBJ_MAX_ACTIONS)
+		return;
+
+	D__ALLOC(zcc->zc_actv, total_acts * sizeof(*zcc->zc_actv));
+	if (zcc->zc_actv == NULL)
+		return;
+
+	zcc->zc_actv_cnt = total_acts;
+}
+
+static void
+vos_zcc_reserve_fini(struct vos_zc_context *zcc)
+{
+	if (zcc->zc_actv_cnt == 0)
+		return;
+	D__ASSERT(zcc->zc_actv != NULL);
+	D__FREE(zcc->zc_actv, zcc->zc_actv_cnt * sizeof(*zcc->zc_actv));
+}
+
 /**
  * Create a zero-copy I/O context. This context includes buffers pointers
  * to return to caller which can proceed the zero-copy I/O.
@@ -1148,11 +1192,14 @@ vos_zcc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		D__GOTO(failed, rc);
 
 	zcc->zc_iod_nr = iod_nr;
+	zcc->zc_iods = iods;
 	D__ALLOC(zcc->zc_iobufs, zcc->zc_iod_nr * sizeof(*zcc->zc_iobufs));
 	if (zcc->zc_iobufs == NULL)
 		D__GOTO(failed, rc = -DER_NOMEM);
 
 	zcc->zc_epoch = epoch;
+	zcc->zc_is_update = !read_only;
+	vos_zcc_reserve_init(zcc);
 	*zcc_pp = zcc;
 	return 0;
  failed:
@@ -1165,7 +1212,7 @@ vos_zcc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
  * transactoin, but @zcc has pmem buffers. Otherwise it returns true.
  */
 static int
-vos_zcc_free_iobuf(struct vos_zc_context *zcc, bool has_tx)
+vos_zcc_free_iobuf(struct vos_zc_context *zcc, bool has_tx, int err)
 {
 	struct iod_buf	*iobuf;
 	int		 i;
@@ -1179,6 +1226,14 @@ vos_zcc_free_iobuf(struct vos_zc_context *zcc, bool has_tx)
 
 		for (i = 0; i < iobuf->db_mmid_nr; i++) {
 			umem_id_t mmid = iobuf->db_mmids[i];
+
+			/*
+			 * Don't bother to free the zc buffers if everything
+			 * was done successfully or the buffers were not
+			 * allocated but reserved.
+			 */
+			if (err == 0 || zcc->zc_actv_at != 0)
+				continue;
 
 			if (UMMID_IS_NULL(mmid))
 				continue;
@@ -1206,13 +1261,14 @@ vos_zcc_destroy(struct vos_zc_context *zcc, int err)
 		PMEMobjpool	*pop;
 		bool		 done;
 
-		done = vos_zcc_free_iobuf(zcc, false);
+		D__ASSERT(zcc->zc_obj != NULL);
+
+		done = vos_zcc_free_iobuf(zcc, false, err);
 		if (!done) {
-			D__ASSERT(zcc->zc_obj != NULL);
 			pop = vos_obj2pop(zcc->zc_obj);
 
 			TX_BEGIN(pop) {
-				done = vos_zcc_free_iobuf(zcc, true);
+				done = vos_zcc_free_iobuf(zcc, true, err);
 				D__ASSERT(done);
 
 			} TX_ONABORT {
@@ -1221,26 +1277,35 @@ vos_zcc_destroy(struct vos_zc_context *zcc, int err)
 					"Failed to free zcbuf: %d\n", err);
 			} TX_END
 		}
+
+		if (zcc->zc_actv_at != 0 && err != 0) {
+			D__ASSERT(zcc->zc_actv != NULL);
+			umem_cancel(vos_obj2umm(zcc->zc_obj), zcc->zc_actv,
+						zcc->zc_actv_at);
+			zcc->zc_actv_at = 0;
+		}
 	}
 
 	if (zcc->zc_obj)
 		vos_obj_release(vos_obj_cache_current(), zcc->zc_obj);
+	vos_zcc_reserve_fini(zcc);
 
 	D__FREE_PTR(zcc);
 }
 
 static int
-dkey_zc_fetch_begin(struct vos_object *obj, daos_epoch_t epoch,
-		    daos_key_t *dkey, unsigned int iod_nr,
-		    daos_iod_t *iods, struct vos_zc_context *zcc)
+dkey_zc_fetch_begin(struct vos_zc_context *zcc, daos_epoch_t epoch,
+		    daos_key_t *dkey)
 {
+	daos_iod_t	*iods = zcc->zc_iods;
+	unsigned int	 iod_nr = zcc->zc_iod_nr;
 	int	i;
 	int	rc;
 
 	/* NB: no cleanup in this function, vos_obj_zc_fetch_end will release
 	 * all the resources.
 	 */
-	rc = vos_obj_tree_init(obj);
+	rc = vos_obj_tree_init(zcc->zc_obj);
 	if (rc != 0)
 		return rc;
 
@@ -1260,7 +1325,7 @@ dkey_zc_fetch_begin(struct vos_object *obj, daos_epoch_t epoch,
 		}
 	}
 
-	rc = dkey_fetch(obj, epoch, dkey, iod_nr, iods, NULL, zcc);
+	rc = dkey_fetch(zcc->zc_obj, epoch, dkey, iod_nr, iods, NULL, zcc);
 	if (rc != 0) {
 		D__DEBUG(DB_IO, "Failed to get ZC buffer: %d\n", rc);
 		return rc;
@@ -1291,8 +1356,7 @@ vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
 		for (i = 0; i < iod_nr; i++)
 			iods[i].iod_size = 0;
 	} else {
-		rc = dkey_zc_fetch_begin(zcc->zc_obj, epoch, dkey, iod_nr,
-					 iods, zcc);
+		rc = dkey_zc_fetch_begin(zcc, epoch, dkey);
 		if (rc != 0)
 			D__GOTO(failed, rc);
 	}
@@ -1332,6 +1396,27 @@ vos_recx2irec_size(daos_size_t rsize, daos_csum_buf_t *csum)
 	return vos_irec_size(&rbund);
 }
 
+static umem_id_t
+vos_zc_reserve(struct vos_zc_context *zcc, daos_size_t size)
+{
+	struct vos_object	*obj = zcc->zc_obj;
+	umem_id_t		 mmid;
+	struct pobj_action	*act;
+
+	if (zcc->zc_actv_cnt) {
+		D__ASSERT(zcc->zc_actv_cnt > zcc->zc_actv_at);
+		D__ASSERT(zcc->zc_actv != NULL);
+		act = &zcc->zc_actv[zcc->zc_actv_at];
+		mmid = umem_reserve(vos_obj2umm(obj), act, size);
+		if (!UMMID_IS_NULL(mmid))
+			zcc->zc_actv_at++;
+	} else {
+		mmid = umem_alloc(vos_obj2umm(obj), size);
+	}
+
+	return mmid;
+}
+
 /**
  * Prepare pmem buffers for the zero-copy update.
  *
@@ -1339,9 +1424,11 @@ vos_recx2irec_size(daos_size_t rsize, daos_csum_buf_t *csum)
  * resources.
  */
 static int
-akey_zc_update_begin(struct vos_object *obj, daos_iod_t *iod,
-		     struct iod_buf *iobuf)
+akey_zc_update_begin(struct vos_zc_context *zcc, int iod_idx)
 {
+	struct vos_object	*obj = zcc->zc_obj;
+	daos_iod_t		*iod = &zcc->zc_iods[iod_idx];
+	struct iod_buf		*iobuf = &zcc->zc_iobufs[iod_idx];
 	int	i;
 	int	rc;
 
@@ -1369,7 +1456,7 @@ akey_zc_update_begin(struct vos_object *obj, daos_iod_t *iod,
 
 			size = vos_recx2irec_size(iod->iod_size, NULL);
 
-			mmid = umem_alloc(vos_obj2umm(obj), size);
+			mmid = vos_zc_reserve(zcc, size);
 			if (UMMID_IS_NULL(mmid))
 				return -DER_NOMEM;
 
@@ -1391,7 +1478,8 @@ akey_zc_update_begin(struct vos_object *obj, daos_iod_t *iod,
 				addr = NULL;
 			} else {
 				size *= iod->iod_size;
-				mmid = umem_alloc(vos_obj2umm(obj), size);
+
+				mmid = vos_zc_reserve(zcc, size);
 				if (UMMID_IS_NULL(mmid))
 					return -DER_NOMEM;
 				addr = umem_id2ptr(vos_obj2umm(obj), mmid);
@@ -1409,16 +1497,13 @@ akey_zc_update_begin(struct vos_object *obj, daos_iod_t *iod,
 }
 
 static int
-dkey_zc_update_begin(struct vos_object *obj, daos_key_t *dkey,
-		     unsigned int iod_nr, daos_iod_t *iods,
-		     struct vos_zc_context *zcc)
+dkey_zc_update_begin(struct vos_zc_context *zcc, daos_key_t *dkey)
 {
 	int	i;
 	int	rc;
 
-	D__ASSERT(obj == zcc->zc_obj);
-	for (i = 0; i < iod_nr; i++) {
-		rc = akey_zc_update_begin(obj, &iods[i], &zcc->zc_iobufs[i]);
+	for (i = 0; i < zcc->zc_iod_nr; i++) {
+		rc = akey_zc_update_begin(zcc, i);
 		if (rc != 0)
 			return rc;
 	}
@@ -1444,16 +1529,17 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 	if (rc != 0)
 		return rc;
 
-	zcc->zc_is_update = true;
-	pop = vos_obj2pop(zcc->zc_obj);
-
-	TX_BEGIN(pop) {
-		rc = dkey_zc_update_begin(zcc->zc_obj, dkey, iod_nr, iods,
-					  zcc);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D__DEBUG(DB_IO, "Failed to update object: %d\n", rc);
-	} TX_END
+	if (zcc->zc_actv_cnt != 0) {
+		rc = dkey_zc_update_begin(zcc, dkey);
+	} else {
+		pop = vos_obj2pop(zcc->zc_obj);
+		TX_BEGIN(pop) {
+			rc = dkey_zc_update_begin(zcc, dkey);
+		} TX_ONABORT {
+			rc = umem_tx_errno(rc);
+			D__DEBUG(DB_IO, "Failed to update object: %d\n", rc);
+		} TX_END
+	}
 
 	if (rc != 0)
 		goto failed;
@@ -1491,6 +1577,11 @@ vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
 	pop = vos_obj2pop(zcc->zc_obj);
 
 	TX_BEGIN(pop) {
+		if (zcc->zc_actv_at != 0) {
+			D__DEBUG(DB_IO, "Publish ZC reservation\n");
+			err = umem_tx_publish(vos_obj2umm(zcc->zc_obj),
+					      zcc->zc_actv, zcc->zc_actv_at);
+		}
 		D__DEBUG(DB_IO, "Submit ZC update\n");
 		err = dkey_update(zcc->zc_obj, zcc->zc_epoch, cookie,
 				  pm_ver, dkey, iod_nr, iods, NULL, zcc);
