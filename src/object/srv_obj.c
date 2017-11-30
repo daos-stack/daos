@@ -147,6 +147,47 @@ bulk_complete_cb(const struct crt_bulk_cb_info *cb_info)
 	return rc;
 }
 
+/**
+ * Simulate bulk transfer by memcpy, all data are actually dropped.
+ */
+static int
+bulk_bypass(daos_sg_list_t *sgl, crt_bulk_op_t bulk_op)
+{
+	static const int  dummy_buf_len = 4096;
+	static char	 *dummy_buf;
+	int		  i;
+
+	if (!dummy_buf) {
+		dummy_buf = malloc(dummy_buf_len);
+		if (!dummy_buf)
+			return 0; /* ignore error */
+	}
+
+	for (i = 0; i < sgl->sg_nr.num_out; i++) {
+		char	*buf;
+		int	 total;
+		int	 nob;
+
+		if (sgl->sg_iovs[i].iov_buf == NULL ||
+		    sgl->sg_iovs[i].iov_len == 0)
+			continue;
+
+		buf   = sgl->sg_iovs[i].iov_buf;
+		total = sgl->sg_iovs[i].iov_len;
+		while (total != 0) {
+			nob = min(dummy_buf_len, total);
+			if (bulk_op == CRT_BULK_PUT)
+				memcpy(dummy_buf, buf, nob);
+			else
+				memcpy(buf, dummy_buf, nob);
+
+			total -= nob;
+			buf   += nob;
+		}
+	}
+	return 0;
+}
+
 static int
 ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		 crt_bulk_t *remote_bulks, daos_handle_t ioh,
@@ -188,6 +229,16 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			if (ret)
 				ABT_future_set(future, &ret);
 			D__ASSERT(sgl != NULL);
+		}
+
+		if (srv_bypass_bulk) {
+			/* this mode will bypass network bulk transfer and
+			 * only copy data from/to dummy buffer. This is for
+			 * performance evaluation on low bandwidth network.
+			 */
+			ret = bulk_bypass(sgl, bulk_op);
+			ABT_future_set(future, &ret);
+			continue;
 		}
 
 		/**

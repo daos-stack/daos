@@ -225,6 +225,7 @@ daos2crt_sg(daos_sg_list_t *sgl)
 }
 
 int daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task);
+int daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task);
 
 #define DAOS_DEFAULT_GROUP_ID "daos_server"
 

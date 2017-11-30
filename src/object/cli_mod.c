@@ -32,13 +32,22 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+bool	cli_bypass_rpc;
+
 /**
  * Initialize object interface
  */
 int
 dc_obj_init(void)
 {
-	int rc;
+	char	*env;
+	int	 rc;
+
+	env = getenv(IO_BYPASS_ENV);
+	if (env && !strcasecmp(env, "cli_rpc")) {
+		D__DEBUG(DB_IO, "All client I/O RPCs will be dropped\n");
+		cli_bypass_rpc = true;
+	}
 
 	rc = daos_rpc_register(daos_obj_rpcs, NULL, DAOS_OBJ_MODULE);
 	return rc;

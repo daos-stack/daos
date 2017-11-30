@@ -34,6 +34,24 @@
 #include <daos/placement.h>
 #include <daos_types.h>
 
+/**
+ * This environment is mostly for performance evaluation.
+ */
+#define IO_BYPASS_ENV	"DAOS_IO_BYPASS"
+
+/**
+ * Bypass client I/O RPC, it means the client stack will complete the
+ * fetch/update RPC immediately, nothing will be submitted to remote server.
+ * This mode is for client I/O stack performance benchmark.
+ */
+extern bool	cli_bypass_rpc;
+/**
+ * Bypass bulk transfer on server side, instead data will be copy from/to
+ * dummy buffer.
+ * this mode is for performance evaluation on low bandwidth network.
+ */
+extern bool	srv_bypass_bulk;
+
 /** Client stack object */
 struct dc_object {
 	/**

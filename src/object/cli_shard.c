@@ -585,12 +585,15 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	if (rc != 0)
 		D__GOTO(out_args, rc);
 
-	rc = daos_rpc_send(req, task);
-	if (rc != 0) {
-		D__ERROR("update/fetch rpc failed rc %d\n", rc);
-		D__GOTO(out_args, rc);
+	if (cli_bypass_rpc) {
+		rc = daos_rpc_complete(req, task);
+	} else {
+		rc = daos_rpc_send(req, task);
+		if (rc != 0) {
+			D__ERROR("update/fetch rpc failed rc %d\n", rc);
+			D__GOTO(out_args, rc);
+		}
 	}
-
 	return rc;
 
 out_args:
