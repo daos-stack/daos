@@ -270,3 +270,9 @@ daos_csum_supported(const char *cs_name)
 	D__ERROR("Unsuppprted checksum type: %s\n", cs_name);
 	return false;
 }
+
+bool
+daos_file_is_dax(const char *pathname)
+{
+	return !strncmp(pathname, "/dev/dax", strlen("/dev/dax"));
+}

@@ -330,5 +330,6 @@ static inline int __is_po2(unsigned long long val)
 #define IS_PO2(val)	__is_po2((unsigned long long)(val))
 
 bool daos_csum_supported(const char *cs_name);
+bool daos_file_is_dax(const char *pathname);
 
 #endif /* __DAOS_COMMON_H__ */

@@ -34,11 +34,14 @@
 #include <daos/common.h>
 #include <daos/hash.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/mman.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
 
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 /**
@@ -251,9 +254,37 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	 * NB: no need to explicitly destroy container index table because
 	 * pool file removal will do this for free.
 	 */
-	rc = remove(path);
-	if (rc)
-		D__ERROR("While deleting file from PMEM\n");
+	if (daos_file_is_dax(path)) {
+		int	 fd;
+		int	 len = 2 * (1 << 20UL);
+		void	*addr;
+
+		fd = open(path, O_RDWR);
+		if (fd < 0) {
+			D__ERROR("Failed to open %s\n", path);
+			D__GOTO(exit, rc = fd);
+		}
+
+		addr = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+		if (addr == MAP_FAILED) {
+			close(fd);
+			D__ERROR("Failed to mmap %s, len:%d\n", path, len);
+			D__GOTO(exit, rc = -errno);
+		}
+		memset((char *)addr, 0, len);
+
+		rc = munmap(addr, len);
+		if (rc) {
+			close(fd);
+			D_ERROR("Failed to munmap %s\n", path);
+			D_GOTO(exit, rc = -errno);
+		}
+		close(fd);
+	} else {
+		rc = remove(path);
+		if (rc)
+			D__ERROR("While deleting file from PMEM\n");
+	}
 exit:
 	return rc;
 }

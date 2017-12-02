@@ -33,7 +33,7 @@ int			mpi_size;
  */
 int			 ts_class = DAOS_OC_RAW;
 
-char			*ts_pmem_file	= "/mnt/daos/vos_perf.pmem";
+char			 ts_pmem_file[PATH_MAX];
 daos_size_t		 ts_pool_size	= (2ULL << 30);
 
 unsigned int		 ts_obj_p_cont	= 1;	/* # objects per container */
@@ -354,14 +354,16 @@ ts_vos_prepare(void)
 		return rc;
 	}
 
-	fd = open(ts_pmem_file, O_CREAT | O_TRUNC | O_RDWR, 0666);
-	if (fd < 0) {
-		fprintf(stderr, "Failed to open file\n");
-		return -1;
-	}
+	if (!daos_file_is_dax(ts_pmem_file)) {
+		fd = open(ts_pmem_file, O_CREAT | O_TRUNC | O_RDWR, 0666);
+		if (fd < 0) {
+			fprintf(stderr, "Failed to open file\n");
+			return -1;
+		}
 
-	rc = posix_fallocate(fd, 0, ts_pool_size);
-	D__ASSERTF(!rc, "rc=%d\n", rc);
+		rc = posix_fallocate(fd, 0, ts_pool_size);
+		D__ASSERTF(!rc, "rc=%d\n", rc);
+	}
 
 	rc = vos_pool_create(ts_pmem_file, ts_pool, 0);
 	D__ASSERTF(!rc, "rc=%d\n", rc);
@@ -383,8 +385,10 @@ static void
 ts_vos_finish(void)
 {
 	vos_cont_close(ts_coh);
-	vos_cont_destroy(ts_poh, ts_cont);
-
+	/*
+	 * Don't bother to destroy the container, the pool will be
+	 * destroyed anyway.
+	 */
 	vos_pool_close(ts_poh);
 	vos_pool_destroy(ts_pmem_file, ts_pool);
 
@@ -628,7 +632,7 @@ The options are as follows:\n\
 \n\
 -r number\n\
 	Number of records per akey. The number can have 'k' or 'm' as postfix\n\
-	which stands for kilo or million\n\
+	which stands for kilo or million.\n\
 \n\
 -A	Use array value of akey, single value is selected by default.\n\
 \n\
@@ -640,7 +644,10 @@ The options are as follows:\n\
 \n\
 -t	Instead of using different indices and epochs, all I/Os land to the\n\
 	same extent in the same epoch. This option can reduce usage of\n\
-	storage space.\n");
+	storage space.\n\
+\n\
+-f pathname\n\
+	Full path name of the VOS file.\n");
 }
 
 static struct option ts_ops[] = {
@@ -655,6 +662,7 @@ static struct option ts_ops[] = {
 	{ "size",	required_argument,	NULL,	's' },
 	{ "zcopy",	no_argument,		NULL,	'z' },
 	{ "overwrite",	no_argument,		NULL,	't' },
+	{ "file",	required_argument,	NULL,	'f' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ NULL,		0,			NULL,	0   },
 };
@@ -670,7 +678,8 @@ main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
 
-	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:zth",
+	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
+	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:ztf:h",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -737,6 +746,9 @@ main(int argc, char **argv)
 		case 'z':
 			ts_zero_copy = true;
 			break;
+		case 'f':
+			strncpy(ts_pmem_file, optarg, PATH_MAX - 1);
+			break;
 		case 'h':
 			if (mpi_rank == 0)
 				ts_print_usage();
@@ -753,6 +765,9 @@ main(int argc, char **argv)
 			ts_print_usage();
 		return -1;
 	}
+
+	if (strlen(ts_pmem_file) == 0)
+		strcpy(ts_pmem_file, "/mnt/daos/vos_perf.pmem");
 
 	rc = ts_prepare();
 	if (rc)
@@ -771,7 +786,8 @@ main(int argc, char **argv)
 			"\tvalue type    : %s\n"
 			"\tvalue size    : %u\n"
 			"\tzero copy     : %s\n"
-			"\toverwrite     : %s\n",
+			"\toverwrite     : %s\n"
+			"\tVOS file      : %s\n",
 			ts_class_name(),
 			(unsigned int)(ts_pool_size >> 20),
 			ts_credits_avail,
@@ -783,7 +799,8 @@ main(int argc, char **argv)
 			ts_val_type(),
 			ts_val_size,
 			ts_yes_or_no(ts_zero_copy),
-			ts_yes_or_no(ts_overwrite));
+			ts_yes_or_no(ts_overwrite),
+			ts_pmem_file);
 
 	if (mpi_rank == 0)
 		fprintf(stdout, "Started...\n");
