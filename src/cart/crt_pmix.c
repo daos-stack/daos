@@ -564,33 +564,6 @@ out:
 	return rc;
 }
 
-int
-crt_register_event_cb(crt_event_cb event_handler, void *arg)
-{
-	/* store the event codes, the user event handler function ponter,
-	 * and the user-provided void arg to a list of global sturctures.
-	 */
-	struct crt_event_cb_priv	*event_cb_priv = NULL;
-	int				 rc = 0;
-
-
-	crt_plugin_pmix_init();
-
-	D_ALLOC_PTR(event_cb_priv);
-	if (event_cb_priv == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	event_cb_priv->cecp_func = event_handler;
-	event_cb_priv->cecp_args = arg;
-	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
-	d_list_add_tail(&event_cb_priv->cecp_link,
-			&crt_plugin_gdata.cpg_event_cbs);
-	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
-
-out:
-	return rc;
-
-}
-
 static void
 crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 			      pmix_status_t status,
@@ -626,6 +599,14 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	if (strncmp(source->nspace, pmix_gdata->pg_proc.nspace,
 		    PMIX_MAX_NSLEN)) {
 		D_DEBUG("PMIx event not relevant to my namespace.\n");
+		return;
+	}
+
+	/* This seems to often happen immediatly after the PROC_ABORTED event
+	 * so simply log it and move on.
+	 */
+	if (status == PMIX_ERR_UNREACH) {
+		D_DEBUG("PMIx event is PMIX_ERR_UNREACH %d\n", source->rank);
 		return;
 	}
 
@@ -667,51 +648,74 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 
 static void
 crt_plugin_pmix_errhdlr_reg_cb(pmix_status_t status, size_t errhdlr_ref,
-			       void *cbdata)
+			       void *arg)
 {
+	sem_t *token_to_proceed = arg;
+	int rc;
+
 	D_DEBUG("crt_plugin_pmix_errhdlr_reg_cb() called with status %d, "
-		" ref=%zu.\n", status, errhdlr_ref);
+		"ref=%zu.\n", status, errhdlr_ref);
 	if (status != 0)
 		D_ERROR("crt_plugin_pmix_errhdlr_reg_cb() called with "
 			"status %d\n", status);
 	crt_plugin_gdata.cpg_pmix_errhdlr_ref = errhdlr_ref;
+
+	rc = sem_post(token_to_proceed);
+	if (rc != 0)
+		D_ERROR("sem_post failed, rc: %d.\n", rc);
+
 }
 
-void
+static int
 crt_plugin_pmix_init(void)
 {
+	sem_t	token_to_proceed;
+	int	rc;
+
 	if (!crt_is_service() || crt_is_singleton())
-		return;
+		return -DER_INVAL;
 
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
 	if (crt_plugin_gdata.cpg_pmix_errhdlr_inited == 1) {
 		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
-		return;
+		return -DER_SUCCESS;
+	}
+
+	rc = sem_init(&token_to_proceed, 0, 0);
+	if (rc != 0) {
+		D_ERROR("sem_init failed, rc: %d.\n", rc);
+		return -DER_MISC;
 	}
 
 	PMIx_Register_event_handler(NULL, 0, NULL, 0,
 				    crt_plugin_event_handler_core,
-				    crt_plugin_pmix_errhdlr_reg_cb, NULL);
+				    crt_plugin_pmix_errhdlr_reg_cb,
+				    &token_to_proceed);
+
+	rc = sem_wait(&token_to_proceed);
+	if (rc != 0) {
+		D_ERROR("sem_wait failed, rc: %d.\n", rc);
+		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+		return -DER_MISC;
+	}
+
 	crt_plugin_gdata.cpg_pmix_errhdlr_inited = 1;
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+	return -DER_SUCCESS;
 }
 
 static void
-crt_plugin_pmix_errhdlr_dereg_cb(pmix_status_t status, void *cbdata)
+crt_plugin_pmix_errhdlr_dereg_cb(pmix_status_t status, void *arg)
 {
-	sem_t	*token_to_proceed;
+	sem_t	*token_to_proceed = arg;
 	int	 rc;
 
 	D_DEBUG("crt_plugin_pmix_errhdlr_dereg_cb() called with status %d",
 		status);
 
-	D_ASSERT(cbdata != NULL);
-	token_to_proceed = cbdata;
 	rc = sem_post(token_to_proceed);
 	if (rc != 0)
 		D_ERROR("sem_post failed, rc: %d.\n", rc);
-	else
-		D_DEBUG("sem_post succeeded on sem_t %p.\n", token_to_proceed);
 }
 
 void
@@ -730,6 +734,11 @@ crt_plugin_pmix_fini(void)
 	}
 
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
+	if (!crt_plugin_gdata.cpg_pmix_errhdlr_inited) {
+		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+		return;
+	}
+
 	PMIx_Deregister_event_handler(crt_plugin_gdata.cpg_pmix_errhdlr_ref,
 				      crt_plugin_pmix_errhdlr_dereg_cb,
 				      &token_to_proceed);
@@ -748,4 +757,31 @@ crt_plugin_pmix_fini(void)
 	rc = sem_destroy(&token_to_proceed);
 	if (rc != 0)
 		D_ERROR("sem_destroy failed, rc: %d.\n", rc);
+}
+
+int
+crt_register_event_cb(crt_event_cb event_handler, void *arg)
+{
+	/* store the event codes, the user event handler function ponter,
+	 * and the user-provided void arg to a list of global sturctures.
+	 */
+	struct crt_event_cb_priv *event_cb_priv;
+	int rc;
+
+	rc = crt_plugin_pmix_init();
+	if (rc)
+		D_GOTO(out, rc);
+
+	D_ALLOC_PTR(event_cb_priv);
+	if (event_cb_priv == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	event_cb_priv->cecp_func = event_handler;
+	event_cb_priv->cecp_args = arg;
+	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
+	d_list_add_tail(&event_cb_priv->cecp_link,
+			&crt_plugin_gdata.cpg_event_cbs);
+	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+
+out:
+	return rc;
 }

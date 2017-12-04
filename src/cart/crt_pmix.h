@@ -65,7 +65,6 @@ int crt_pmix_uri_lookup(crt_group_id_t srv_grpid, d_rank_t rank, char **uri);
 int crt_pmix_attach(struct crt_grp_priv *grp_priv);
 void crt_pmix_reg_event_hdlr(struct crt_grp_priv *grp_priv);
 void crt_pmix_dereg_event_hdlr(struct crt_grp_priv *grp_priv);
-void crt_plugin_pmix_init(void);
 void crt_plugin_pmix_fini(void);
 
 #endif /* __CRT_PMIX_H__ */
