@@ -110,13 +110,25 @@ struct rebuild_task {
 	uint32_t	dst_map_ver;
 };
 
-struct rebuild_tls {
+/* Per pool structure in TLS to check pool rebuild status
+ * per xstream.
+ */
+struct rebuild_pool_tls {
+	uuid_t		rebuild_pool_uuid;
 	daos_handle_t	rebuild_pool_hdl;
-	int		rebuild_status;
-	int		rebuild_obj_count;
-	int		rebuild_rec_count;
+	daos_list_t	rebuild_pool_list;
+	uint64_t	rebuild_pool_obj_count;
+	uint64_t	rebuild_pool_rec_count;
+	unsigned int	rebuild_pool_ver;
+	int		rebuild_pool_status;
 
-	unsigned int	rebuild_scanning:1;
+	unsigned int	rebuild_pool_scanning:1;
+};
+
+/* per thread structure to track rebuild status for all pools */
+struct rebuild_tls {
+	/* rebuild_pool_tls will link here */
+	daos_list_t	rebuild_pool_list;
 };
 
 struct rebuild_root {
@@ -154,6 +166,9 @@ rebuild_tls_get()
 {
 	return dss_module_key_get(dss_tls_get(), &rebuild_module_key);
 }
+
+struct rebuild_pool_tls *
+rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver);
 
 struct pool_map *rebuild_pool_map_get(struct ds_pool *pool);
 void rebuild_pool_map_put(struct pool_map *map);

@@ -176,7 +176,7 @@ rebuild_rec(struct rebuild_pool_tracker *rpt, struct ds_cont *ds_cont,
 	    daos_recx_t *recxs, daos_epoch_range_t *eprs, uuid_t *cookies,
 	    uint32_t *versions)
 {
-	struct rebuild_tls	*tls = rebuild_tls_get();
+	struct rebuild_pool_tls	*tls;
 	uuid_t			cookie;
 	int			start;
 	int			i;
@@ -185,6 +185,9 @@ rebuild_rec(struct rebuild_pool_tracker *rpt, struct ds_cont *ds_cont,
 	int			total = 0;
 	int			version = 0;
 
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+				      rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
 	start = 0;
 	for (i = 0; i < num; i++) {
 		/* check if the record needs to be rebuilt.*/
@@ -241,7 +244,7 @@ next:
 		(char *)akey->iov_buf, rc, total,
 		dss_get_module_info()->dmi_tid);
 
-	tls->rebuild_rec_count += total;
+	tls->rebuild_pool_rec_count += total;
 
 	return rc;
 }
@@ -252,7 +255,7 @@ rebuild_akey(struct rebuild_pool_tracker *rpt, struct ds_cont *ds_cont,
 	     daos_handle_t oh, int type, struct rebuild_dkey *rdkey,
 	     daos_key_t *akey)
 {
-	struct rebuild_tls	*tls = rebuild_tls_get();
+	struct rebuild_pool_tls	*tls;
 	daos_recx_t		recxs[ITER_COUNT];
 	daos_epoch_range_t	eprs[ITER_COUNT];
 	uuid_t			cookies[ITER_COUNT];
@@ -260,6 +263,9 @@ rebuild_akey(struct rebuild_pool_tracker *rpt, struct ds_cont *ds_cont,
 	daos_hash_out_t		hash;
 	int			rc = 0;
 
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+				      rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
 	memset(&hash, 0, sizeof(hash));
 	while (!daos_hash_is_eof(&hash)) {
 		struct pool_map	*map;
@@ -298,7 +304,7 @@ rebuild_akey(struct rebuild_pool_tracker *rpt, struct ds_cont *ds_cont,
 static int
 rebuild_one_dkey(struct rebuild_pool_tracker *rpt, struct rebuild_dkey *rdkey)
 {
-	struct rebuild_tls	*tls = rebuild_tls_get();
+	struct rebuild_pool_tls	*tls;
 	daos_iov_t		akey_iov;
 	daos_sg_list_t		akey_sgl;
 	daos_size_t		akey_buf_size = 1024;
@@ -309,6 +315,9 @@ rebuild_one_dkey(struct rebuild_pool_tracker *rpt, struct rebuild_dkey *rdkey)
 	daos_handle_t		oh;
 	int			rc;
 
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+				      rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
 	D__ALLOC(akey_iov.iov_buf, akey_buf_size);
 	if (akey_iov.iov_buf == NULL)
 		D__GOTO(free, rc = -DER_NOMEM);
@@ -401,10 +410,14 @@ free:
 static void
 rebuild_dkey_ult(void *arg)
 {
+	struct rebuild_pool_tls	*tls;
 	struct rebuild_pool_tracker *rpt = arg;
 	struct rebuild_puller	*puller;
 	unsigned int		idx;
 
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+				      rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
 	D__ASSERT(rpt->rt_pullers != NULL);
 	idx = dss_get_module_info()->dmi_tid;
 	puller = &rpt->rt_pullers[idx];
@@ -412,7 +425,6 @@ rebuild_dkey_ult(void *arg)
 	while (1) {
 		struct rebuild_dkey	*rdkey;
 		struct rebuild_dkey	*tmp;
-		struct rebuild_tls	*tls = rebuild_tls_get();
 		daos_list_t		dkey_list;
 		int			rc;
 
@@ -445,8 +457,9 @@ rebuild_dkey_ult(void *arg)
 			 *   (nonexistent)
 			 * This is just a workaround...
 			 */
-			if (tls->rebuild_status == 0 && rc != -DER_NONEXIST)
-				tls->rebuild_status = rc;
+			if (tls->rebuild_pool_status == 0 &&
+			    rc != -DER_NONEXIST)
+				tls->rebuild_pool_status = rc;
 
 			/* XXX If rebuild fails, Should we add this back to
 			 * dkey list
@@ -539,7 +552,7 @@ static int
 rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 {
 	struct rebuild_iter_arg	*arg = data;
-	struct rebuild_tls	*tls = rebuild_tls_get();
+	struct rebuild_pool_tls	*tls;
 	daos_hash_out_t		hash_out;
 	daos_handle_t		oh;
 	daos_epoch_t		epoch = DAOS_EPOCH_MAX;
@@ -548,9 +561,12 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	daos_size_t		dkey_buf_size = 1024;
 	int			rc;
 
-	if (tls->rebuild_status) {
+	tls = rebuild_pool_tls_lookup(arg->rpt->rt_pool_uuid,
+				      arg->rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
+	if (tls->rebuild_pool_status) {
 		D__DEBUG(DB_TRACE, "rebuild status %d\n",
-			 tls->rebuild_status);
+			 tls->rebuild_pool_status);
 		return 1;
 	}
 
@@ -570,7 +586,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	memset(&hash_out, 0, sizeof(hash_out));
 	dc_obj_shard2anchor(&hash_out, shard);
 
-	tls->rebuild_obj_count++;
+	tls->rebuild_pool_obj_count++;
 	while (!daos_hash_is_eof(&hash_out)) {
 		daos_key_desc_t	kds[ITER_COUNT];
 		uint32_t	num = ITER_COUNT;
@@ -663,17 +679,20 @@ static int
 rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		     daos_iov_t *val_iov, void *data)
 {
-	struct rebuild_root	*root = val_iov->iov_buf;
-	struct rebuild_iter_arg *arg = data;
-	struct rebuild_pool_tracker *rpt = arg->rpt;
-	struct rebuild_tls	*tls = rebuild_tls_get();
-	daos_handle_t		coh = DAOS_HDL_INVAL;
+	struct rebuild_root		*root = val_iov->iov_buf;
+	struct rebuild_iter_arg		*arg = data;
+	struct rebuild_pool_tracker	*rpt = arg->rpt;
+	struct rebuild_pool_tls		*tls;
+	daos_handle_t			coh = DAOS_HDL_INVAL;
 	int rc;
 
 	uuid_copy(arg->cont_uuid, *(uuid_t *)key_iov->iov_buf);
 	D__DEBUG(DB_TRACE, "iter cont "DF_UUID"/%"PRIx64" %"PRIx64" start\n",
 		DP_UUID(arg->cont_uuid), ih.cookie, root->root_hdl.cookie);
 
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+				      rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
 	/* Create dc_pool locally */
 	if (daos_handle_is_inval(tls->rebuild_pool_hdl)) {
 		daos_handle_t ph = DAOS_HDL_INVAL;
@@ -699,8 +718,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		rc = dbtree_iterate(root->root_hdl, false,
 				    rebuild_obj_iter_cb, arg);
 		if (rc) {
-			if (tls->rebuild_status == 0)
-				tls->rebuild_status = rc;
+			if (tls->rebuild_pool_status == 0)
+				tls->rebuild_pool_status = rc;
 			D__ERROR("iterate cont "DF_UUID" failed: rc %d\n",
 				DP_UUID(arg->cont_uuid), rc);
 			break;
@@ -734,18 +753,21 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 static void
 rebuild_puller(void *arg)
 {
-	struct rebuild_tls	*tls = rebuild_tls_get();
+	struct rebuild_pool_tls	*tls;
 	struct rebuild_iter_arg	*iter_arg = arg;
 	struct rebuild_pool_tracker *rpt = iter_arg->rpt;
 	int			rc;
 
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+				      rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
 	while (!dbtree_is_empty(iter_arg->root_hdl)) {
 		rc = dbtree_iterate(iter_arg->root_hdl, false,
 				    rebuild_cont_iter_cb, iter_arg);
 		if (rc) {
 			D__ERROR("dbtree iterate fails %d\n", rc);
-			if (tls->rebuild_status == 0)
-				tls->rebuild_status = rc;
+			if (tls->rebuild_pool_status == 0)
+				tls->rebuild_pool_status = rc;
 			break;
 		}
 	}

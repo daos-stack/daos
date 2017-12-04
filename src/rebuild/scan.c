@@ -521,9 +521,14 @@ rebuild_scanner(void *data)
 static int
 rebuild_scan_done(void *data)
 {
-	struct rebuild_tls *tls = rebuild_tls_get();
+	struct rebuild_pool_tracker *rpt = data;
+	struct rebuild_pool_tls *tls;
 
-	tls->rebuild_scanning = 0;
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+				      rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
+
+	tls->rebuild_pool_scanning = 0;
 	return 0;
 }
 
@@ -534,11 +539,11 @@ rebuild_scan_done(void *data)
 static void
 rebuild_scan_leader(void *data)
 {
-	struct rebuild_tls	  *tls = rebuild_tls_get();
 	struct rebuild_scan_arg	  *arg = data;
 	struct pl_target_grp	  *tgp;
 	struct pool_map		  *map;
 	struct rebuild_pool_tracker *rpt;
+	struct rebuild_pool_tls	  *tls;
 	struct rebuild_iter_arg    iter_arg;
 	int			   i;
 	int			   rc;
@@ -605,7 +610,7 @@ rebuild_scan_leader(void *data)
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_task_collective(rebuild_scan_done, NULL);
+	rc = dss_task_collective(rebuild_scan_done, rpt);
 	ABT_mutex_unlock(rpt->rt_lock);
 	if (rc) {
 		D__ERROR(DF_UUID" send rebuild object list failed:%d\n",
@@ -625,8 +630,10 @@ out_map:
 	rebuild_pool_map_put(map);
 	daos_rank_list_free(arg->failed_ranks);
 	dbtree_destroy(arg->rebuild_tree_hdl);
-	if (tls->rebuild_status == 0 && rc != 0)
-		tls->rebuild_status = rc;
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
+	if (tls->rebuild_pool_status == 0 && rc != 0)
+		tls->rebuild_pool_status = rc;
 
 	ABT_mutex_free(&arg->scan_lock);
 	D__FREE_PTR(arg);

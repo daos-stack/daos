@@ -61,6 +61,57 @@ rebuild_pool_map_put(struct pool_map *map)
 	pool_map_decref(map);
 }
 
+struct rebuild_pool_tls *
+rebuild_pool_tls_lookup(uuid_t pool_uuid,
+			unsigned int ver)
+{
+	struct rebuild_tls *tls = rebuild_tls_get();
+	struct rebuild_pool_tls *pool_tls;
+	struct rebuild_pool_tls *found = NULL;
+
+	/* Only 1 thread will access the list, no need lock */
+	daos_list_for_each_entry(pool_tls, &tls->rebuild_pool_list,
+				 rebuild_pool_list) {
+		if (uuid_compare(pool_tls->rebuild_pool_uuid, pool_uuid) == 0 &&
+		    (ver == (unsigned int)(-1) ||
+		     ver == pool_tls->rebuild_pool_ver)) {
+			found = pool_tls;
+			break;
+		}
+	}
+
+	return found;
+}
+
+static struct rebuild_pool_tls *
+rebuild_pool_tls_create(uuid_t pool_uuid, unsigned int ver)
+{
+	struct rebuild_pool_tls *rebuild_pool_tls;
+	struct rebuild_tls *tls = rebuild_tls_get();
+
+	rebuild_pool_tls = rebuild_pool_tls_lookup(pool_uuid, ver);
+	D_ASSERT(rebuild_pool_tls == NULL);
+
+	D_ALLOC_PTR(rebuild_pool_tls);
+	if (rebuild_pool_tls == NULL)
+		return NULL;
+
+	rebuild_pool_tls->rebuild_pool_ver = ver;
+	uuid_copy(rebuild_pool_tls->rebuild_pool_uuid, pool_uuid);
+	/* Only 1 thread will access the list, no need lock */
+	daos_list_add(&rebuild_pool_tls->rebuild_pool_list,
+		      &tls->rebuild_pool_list);
+
+	return rebuild_pool_tls;
+}
+
+static void
+rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
+{
+	daos_list_del(&tls->rebuild_pool_list);
+	D_FREE_PTR(tls);
+}
+
 static void *
 rebuild_tls_init(const struct dss_thread_local_storage *dtls,
 		 struct dss_module_key *key)
@@ -68,6 +119,10 @@ rebuild_tls_init(const struct dss_thread_local_storage *dtls,
 	struct rebuild_tls *tls;
 
 	D__ALLOC_PTR(tls);
+	if (tls == NULL)
+		return NULL;
+
+	DAOS_INIT_LIST_HEAD(&tls->rebuild_pool_list);
 	return tls;
 }
 
@@ -145,23 +200,39 @@ rebuild_tls_fini(const struct dss_thread_local_storage *dtls,
 		 struct dss_module_key *key, void *data)
 {
 	struct rebuild_tls *tls = data;
+	struct rebuild_pool_tls *pool_tls;
+	struct rebuild_pool_tls *tmp;
+
+	daos_list_for_each_entry_safe(pool_tls, tmp, &tls->rebuild_pool_list,
+				      rebuild_pool_list)
+		rebuild_pool_tls_destroy(pool_tls);
 
 	D__FREE_PTR(tls);
 }
 
-int
-dss_rebuild_check_scanning(void *arg)
-{
-	struct rebuild_tls	*tls = rebuild_tls_get();
-	struct rebuild_tgt_query_info	*status = arg;
+struct rebuild_tgt_query_arg {
+	struct rebuild_pool_tracker *rpt;
+	struct rebuild_tgt_query_info *status;
+};
 
+int
+dss_rebuild_check_scanning(void *data)
+{
+	struct rebuild_tgt_query_arg	*arg = data;
+	struct rebuild_pool_tls		*pool_tls;
+	struct rebuild_tgt_query_info	*status = arg->status;
+	struct rebuild_pool_tracker	*rpt = arg->rpt;
+
+	pool_tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+					   rpt->rt_rebuild_ver);
+	D_ASSERT(pool_tls != NULL);
 	ABT_mutex_lock(status->lock);
-	if (tls->rebuild_scanning)
+	if (pool_tls->rebuild_pool_scanning)
 		status->scanning++;
-	if (tls->rebuild_status != 0 && status->status == 0)
-		status->status = tls->rebuild_status;
-	status->rec_count += tls->rebuild_rec_count;
-	status->obj_count += tls->rebuild_obj_count;
+	if (pool_tls->rebuild_pool_status != 0 && status->status == 0)
+		status->status = pool_tls->rebuild_pool_status;
+	status->rec_count += pool_tls->rebuild_pool_rec_count;
+	status->obj_count += pool_tls->rebuild_pool_obj_count;
 	ABT_mutex_unlock(status->lock);
 
 	return 0;
@@ -171,11 +242,15 @@ static int
 rebuild_tgt_query(struct rebuild_pool_tracker *rpt,
 		  struct rebuild_tgt_query_info *status)
 {
-	int	rc;
+	struct rebuild_tgt_query_arg	arg;
+	int				rc;
+
+	arg.rpt = rpt;
+	arg.status = status;
 
 	/* let's check scanning status on every thread*/
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_task_collective(dss_rebuild_check_scanning, status);
+	rc = dss_task_collective(dss_rebuild_check_scanning, &arg);
 	if (rc) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D__GOTO(out, rc);
@@ -731,16 +806,24 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, d_rank_list_t *svc_list)
 static int
 rebuild_fini_one(void *arg)
 {
-	struct rebuild_tls	*tls = rebuild_tls_get();
+	struct rebuild_pool_tracker	*rpt = arg;
+	struct rebuild_pool_tls		*pool_tls;
+
+	pool_tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+					   rpt->rt_rebuild_ver);
+	if (pool_tls == NULL)
+		return 0;
 
 	D__DEBUG(DB_TRACE, "close container/pool "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rebuild_gst.rg_cont_hdl_uuid),
 		DP_UUID(rebuild_gst.rg_pool_hdl_uuid));
 
-	if (!daos_handle_is_inval(tls->rebuild_pool_hdl)) {
-		dc_pool_local_close(tls->rebuild_pool_hdl);
-		tls->rebuild_pool_hdl = DAOS_HDL_INVAL;
+	if (!daos_handle_is_inval(pool_tls->rebuild_pool_hdl)) {
+		dc_pool_local_close(pool_tls->rebuild_pool_hdl);
+		pool_tls->rebuild_pool_hdl = DAOS_HDL_INVAL;
 	}
+
+	rebuild_pool_tls_destroy(pool_tls);
 
 	ds_cont_local_close(rebuild_gst.rg_cont_hdl_uuid);
 
@@ -792,7 +875,7 @@ rebuild_tgt_fini(struct rebuild_pool_tracker *rpt)
 	}
 
 	/* close the rebuild pool/container */
-	rc = dss_task_collective(rebuild_fini_one, NULL);
+	rc = dss_task_collective(rebuild_fini_one, rpt);
 
 	if (!rpt->rt_master)
 		rebuild_pool_tracker_destroy(rpt);
@@ -949,18 +1032,23 @@ static int
 rebuild_prepare_one(void *data)
 {
 	struct rebuild_pool_tracker	*rpt = data;
-	struct rebuild_tls		*tls = rebuild_tls_get();
+	struct rebuild_pool_tls		*pool_tls;
 	int				rc;
 
-	tls->rebuild_scanning = 1;
-	tls->rebuild_rec_count = 0;
-	tls->rebuild_obj_count = 0;
+	pool_tls = rebuild_pool_tls_create(rpt->rt_pool_uuid,
+					   rpt->rt_rebuild_ver);
+	if (pool_tls == NULL)
+		return -DER_NOMEM;
+
+	pool_tls->rebuild_pool_scanning = 1;
+	pool_tls->rebuild_pool_rec_count = 0;
+	pool_tls->rebuild_pool_obj_count = 0;
 
 	/* Create ds_container locally */
 	rc = ds_cont_local_open(rpt->rt_pool_uuid, rebuild_gst.rg_cont_hdl_uuid,
 				NULL, 0, NULL);
 	if (rc)
-		tls->rebuild_status = rc;
+		pool_tls->rebuild_pool_status = rc;
 
 	D__DEBUG(DB_TRACE, "open local container "DF_UUID"/"DF_UUID"\n",
 		 DP_UUID(rpt->rt_pool_uuid),
