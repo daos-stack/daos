@@ -1047,8 +1047,6 @@ static int status_req_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	res->test_duration_ns =
 		d_timediff_ns(&g_data->time_start, &g_data->time_stop);
 	gethostname(hostname, 1024);
-	fprintf(stderr, "host %s finished self_test duration %f S.\n",
-		hostname, (long long int)res->test_duration_ns/1e9);
 	res->status = CRT_ST_STATUS_TEST_COMPLETE;
 
 	if (cb_info->bci_rc != 0) {
