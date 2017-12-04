@@ -39,7 +39,6 @@
  * This is a runtime IV server test that implements IV framework callbacks
  * TODOs:
  * - Randomize size of keys and values
- * - Add RPC to shutdown server & cleanup on shutdown
  * - Return shared buffer instead of a copy during fetch
  */
 #include <stdlib.h>
@@ -51,22 +50,23 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
+#include <gurt/common.h>
 #include <gurt/list.h>
 
 #define _SERVER
 #include "iv_common.h"
 
-static char hostname[100];
+static char g_hostname[100];
 
-static d_rank_t my_rank;
-static uint32_t group_size;
+static d_rank_t g_my_rank;
+static uint32_t g_group_size;
 
-static int verbose_mode;
+static int g_verbose_mode;
 
-#define DBG_PRINT(x...)						\
-	do {							\
-		printf("[%s:%d:SERV]\t", hostname, my_rank);\
-		printf(x);					\
+#define DBG_PRINT(x...)							\
+	do {								\
+		printf("[%s:%d:SERV]\t", g_hostname, g_my_rank);	\
+		printf(x);						\
 	} while (0)
 
 
@@ -77,14 +77,14 @@ static int verbose_mode;
  **/
 #define DBG_ENTRY()						\
 do {								\
-	if (verbose_mode >= 1) {				\
+	if (g_verbose_mode >= 1) {				\
 		DBG_PRINT(">>>> Entered %s\n", __func__);	\
 	}							\
 } while (0)
 
 #define DBG_EXIT()							\
 do {									\
-	if (verbose_mode >= 1) {					\
+	if (g_verbose_mode >= 1) {					\
 		DBG_PRINT("<<<< Exited %s:%d\n\n", __func__, __LINE__);	\
 	}								\
 } while (0)
@@ -98,42 +98,67 @@ struct iv_value_struct {
 };
 
 #define NUM_WORK_CTX 9
-crt_context_t work_ctx[NUM_WORK_CTX];
-crt_context_t main_ctx;
-static int do_shutdown;
-pthread_t progress_thread[NUM_WORK_CTX + 1];
-pthread_t shutdown_thread;
-pthread_mutex_t key_lock = PTHREAD_MUTEX_INITIALIZER;
-#define LOCK_KEYS() pthread_mutex_lock(&key_lock)
-#define UNLOCK_KEYS() pthread_mutex_unlock(&key_lock)
+crt_context_t g_work_ctx[NUM_WORK_CTX];
+crt_context_t g_main_ctx;
+static int g_do_shutdown;
+pthread_t g_progress_thread[NUM_WORK_CTX + 1];
+pthread_mutex_t g_key_lock = PTHREAD_MUTEX_INITIALIZER;
+#define LOCK_KEYS() pthread_mutex_lock(&g_key_lock)
+#define UNLOCK_KEYS() pthread_mutex_unlock(&g_key_lock)
 
 static void *
 progress_function(void *data)
 {
 	crt_context_t *p_ctx = (crt_context_t *)data;
 
-	while (do_shutdown == 0)
+	while (g_do_shutdown == 0)
 		crt_progress(*p_ctx, 1000, NULL, NULL);
 
+	/* Note the first thread cleans up g_main_ctx */
 	crt_context_destroy(*p_ctx, 1);
 
 	return NULL;
 }
 
-void *
-shutdown_threads(void *data)
+static void
+shutdown(void)
 {
 	int i;
 
 	DBG_PRINT("Joining threads\n");
-	do_shutdown = 1;
 
 	for (i = 0; i < NUM_WORK_CTX + 1; i++)
-		pthread_join(progress_thread[i], NULL);
+		pthread_join(g_progress_thread[i], NULL);
 
 	DBG_PRINT("Finished joining all threads\n");
+}
 
-	return NULL;
+/* handler for RPC_SHUTDOWN */
+int
+iv_shutdown(crt_rpc_t *rpc) {
+	struct rpc_shutdown_in	*input;
+	struct rpc_shutdown_out	*output;
+	int			 rc;
+
+	DBG_ENTRY();
+
+	DBG_PRINT("Received shutdown request\n");
+
+	input = crt_req_get(rpc);
+	output = crt_reply_get(rpc);
+
+	assert(input != NULL);
+	assert(output != NULL);
+
+	output->rc = 0;
+
+	rc = crt_reply_send(rpc);
+	assert(rc == 0);
+
+	g_do_shutdown = 1;
+
+	DBG_EXIT();
+	return 0;
 }
 
 static void
@@ -142,29 +167,29 @@ init_work_contexts(void)
 	int i;
 	int rc;
 
-	rc = crt_context_create(NULL, &main_ctx);
+	rc = crt_context_create(NULL, &g_main_ctx);
 	assert(rc == 0);
 
-	rc = pthread_create(&progress_thread[0], 0,
-			progress_function, &main_ctx);
+	rc = pthread_create(&g_progress_thread[0], 0,
+			    progress_function, &g_main_ctx);
 	assert(rc == 0);
 
 	for (i = 0; i < NUM_WORK_CTX; i++) {
-		rc = crt_context_create(NULL, &work_ctx[i]);
+		rc = crt_context_create(NULL, &g_work_ctx[i]);
 		assert(rc == 0);
 
-		rc = pthread_create(&progress_thread[i + 1], 0,
-					progress_function, &work_ctx[i]);
+		rc = pthread_create(&g_progress_thread[i + 1], 0,
+				    progress_function, &g_work_ctx[i]);
 		assert(rc == 0);
 	}
 }
 
 #define NUM_LOCAL_IVS 10
 
-static uint32_t test_user_priv = 0xDEAD1337;
+static uint32_t g_test_user_priv = 0xDEAD1337;
 
 /* TODO: Change to hash table instead of list */
-static D_LIST_HEAD(kv_pair_head);
+static D_LIST_HEAD(g_kv_pair_head);
 
 /* Key-value pair */
 struct kv_pair_entry {
@@ -180,10 +205,10 @@ alloc_key(int root, int key_id)
 	crt_iv_key_t		*key;
 	struct iv_key_struct	*key_struct;
 
-	key = malloc(sizeof(crt_iv_key_t));
+	D_ALLOC_PTR(key);
 	assert(key != NULL);
 
-	key->iov_buf = malloc(sizeof(struct iv_key_struct));
+	D_ALLOC(key->iov_buf, sizeof(struct iv_key_struct));
 	assert(key->iov_buf != NULL);
 
 	key->iov_buf_len = sizeof(struct iv_key_struct);
@@ -212,14 +237,24 @@ verify_key_value_pair(crt_iv_key_t *key, d_sg_list_t *value)
 void
 deinit_iv_storage(void)
 {
-	/* TODO: Implement graceful shutdown + storage freeing in stage2 */
+	struct kv_pair_entry	*entry;
+	struct kv_pair_entry	*temp;
+
+	d_list_for_each_entry_safe(entry, temp, &g_kv_pair_head, link) {
+		d_list_del(&entry->link);
+
+		D_FREE(entry->value.sg_iovs[0].iov_buf);
+		D_FREE(entry->value.sg_iovs);
+		D_FREE(entry->key.iov_buf);
+		D_FREE(entry);
+	}
 }
 
 /* Generate storage for iv keys */
 static void
 init_iv_storage(void)
 {
-	int			i;
+	int			 i;
 	struct kv_pair_entry	*entry;
 	struct iv_key_struct	*key_struct;
 	struct iv_value_struct	*value_struct;
@@ -229,18 +264,18 @@ init_iv_storage(void)
 
 	/* First NUM_LOCAL_IVS are owned by the current rank */
 	for (i = 0; i < NUM_LOCAL_IVS; i++) {
-		entry = malloc(sizeof(struct kv_pair_entry));
+		D_ALLOC_PTR(entry);
 		assert(entry != NULL);
 
 		key = &entry->key;
 		value = &entry->value;
 
-		key->iov_buf = malloc(sizeof(struct iv_key_struct));
+		D_ALLOC(key->iov_buf, sizeof(struct iv_key_struct));
 		assert(key->iov_buf != NULL);
 
 		/* Fill in the key */
 		key_struct = (struct iv_key_struct *)key->iov_buf;
-		key_struct->rank = my_rank;
+		key_struct->rank = g_my_rank;
 		key_struct->key_id = i;
 
 		key->iov_len = sizeof(struct iv_key_struct);
@@ -250,11 +285,11 @@ init_iv_storage(void)
 
 		/* Fill in the value */
 		value->sg_nr.num = 1;
-		value->sg_iovs = malloc(sizeof(d_iov_t));
+		D_ALLOC_PTR(value->sg_iovs);
 		assert(value->sg_iovs != NULL);
 
 		size = sizeof(struct iv_value_struct);
-		value->sg_iovs[0].iov_buf = malloc(size);
+		D_ALLOC(value->sg_iovs[0].iov_buf, size);
 		assert(value->sg_iovs[0].iov_buf != NULL);
 
 		value->sg_iovs[0].iov_len = size;
@@ -263,17 +298,17 @@ init_iv_storage(void)
 		assert(value->sg_iovs[0].iov_buf != NULL);
 
 		value_struct = (struct iv_value_struct *)
-					value->sg_iovs[0].iov_buf;
+			       value->sg_iovs[0].iov_buf;
 
-		value_struct->root_rank = my_rank;
+		value_struct->root_rank = g_my_rank;
 
 		sprintf(value_struct->str_data,
-			"Default value for key %d:%d", my_rank, i);
+			"Default value for key %d:%d", g_my_rank, i);
 
-		d_list_add_tail(&entry->link, &kv_pair_head);
+		d_list_add_tail(&entry->link, &g_kv_pair_head);
 	}
 
-	d_list_for_each_entry(entry, &kv_pair_head, link) {
+	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
 		key = &entry->key;
 		value = &entry->value;
 
@@ -281,7 +316,7 @@ init_iv_storage(void)
 	}
 
 	DBG_PRINT("Default %d keys for rank %d initialized\n",
-		NUM_LOCAL_IVS, my_rank);
+		  NUM_LOCAL_IVS, g_my_rank);
 }
 
 static bool
@@ -294,7 +329,7 @@ keys_equal(crt_iv_key_t *key1, crt_iv_key_t *key2)
 	key_struct2 = (struct iv_key_struct *)key2->iov_buf;
 
 	if ((key_struct1->rank == key_struct2->rank) &&
-		(key_struct1->key_id == key_struct2->key_id)) {
+	    (key_struct1->key_id == key_struct2->key_id)) {
 		return true;
 	}
 
@@ -304,14 +339,14 @@ keys_equal(crt_iv_key_t *key1, crt_iv_key_t *key2)
 static int
 copy_iv_value(d_sg_list_t *dst, d_sg_list_t *src)
 {
-	int i;
+	uint32_t i;
 
 	assert(dst != NULL);
 	assert(src != NULL);
 
 	if (dst->sg_nr.num != src->sg_nr.num) {
 		DBG_PRINT("dst = %d, src = %d\n",
-			dst->sg_nr.num, src->sg_nr.num);
+			  dst->sg_nr.num, src->sg_nr.num);
 
 		assert(dst->sg_nr.num == src->sg_nr.num);
 	}
@@ -322,13 +357,13 @@ copy_iv_value(d_sg_list_t *dst, d_sg_list_t *src)
 		assert(src->sg_iovs[i].iov_buf != NULL);
 
 		memcpy(dst->sg_iovs[i].iov_buf, src->sg_iovs[i].iov_buf,
-			src->sg_iovs[i].iov_buf_len);
+		       src->sg_iovs[i].iov_buf_len);
 
 		assert(dst->sg_iovs[i].iov_buf_len ==
-			src->sg_iovs[i].iov_buf_len);
+		       src->sg_iovs[i].iov_buf_len);
 
 		assert(dst->sg_iovs[i].iov_len ==
-			src->sg_iovs[i].iov_len);
+		       src->sg_iovs[i].iov_len);
 	}
 
 	return 0;
@@ -346,7 +381,7 @@ verify_key(crt_iv_key_t *iv_key)
 static void
 verify_value(d_sg_list_t *iv_value)
 {
-	int size;
+	size_t size;
 
 	size = sizeof(struct iv_value_struct);
 
@@ -363,17 +398,17 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 		bool is_valid_entry)
 {
 	struct kv_pair_entry	*entry;
-	int			size;
-	int			i;
+	int			 size;
+	int			 i;
 
 	/* If we are here it means we don't have this key cached yet */
-	entry = malloc(sizeof(struct kv_pair_entry));
+	D_ALLOC_PTR(entry);
 	assert(entry != NULL);
 
 	entry->valid = is_valid_entry;
 
 	/* Allocate space for iv key and copy it over*/
-	entry->key.iov_buf = malloc(iv_key->iov_buf_len);
+	D_ALLOC(entry->key.iov_buf, iv_key->iov_buf_len);
 	assert(entry->key.iov_buf != NULL);
 
 	memcpy(entry->key.iov_buf, iv_key->iov_buf, iv_key->iov_buf_len);
@@ -383,13 +418,13 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 
 	/* Allocate space for iv value */
 	entry->value.sg_nr.num = 1;
-	entry->value.sg_iovs = malloc(sizeof(d_iov_t));
+	D_ALLOC_PTR(entry->value.sg_iovs);
 	assert(entry->value.sg_iovs != NULL);
 
 	size = sizeof(struct iv_value_struct);
 
 	for (i = 0; i < entry->value.sg_nr.num; i++) {
-		entry->value.sg_iovs[i].iov_buf = malloc(size);
+		D_ALLOC(entry->value.sg_iovs[i].iov_buf, size);
 		assert(entry->value.sg_iovs[i].iov_buf != NULL);
 
 		entry->value.sg_iovs[i].iov_buf_len = size;
@@ -403,7 +438,7 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 		iv_value->sg_iovs = entry->value.sg_iovs;
 	}
 
-	d_list_add_tail(&entry->link, &kv_pair_head);
+	d_list_add_tail(&entry->link, &g_kv_pair_head);
 
 	return 0;
 }
@@ -414,7 +449,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 	struct iv_key_struct *key_struct;
 	struct iv_value_struct *value_struct;
 
-	printf("[%s:%d:SERV]\t", hostname, my_rank);
+	printf("[%s:%d:SERV]\t", g_hostname, g_my_rank);
 
 	printf("%s", hdr);
 
@@ -427,7 +462,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 			printf("key=EMPTY");
 		else
 			printf("key=[%d:%d]", key_struct->rank,
-				key_struct->key_id);
+			       key_struct->key_id);
 	}
 
 	printf(" ");
@@ -437,7 +472,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 	} else {
 
 		value_struct = (struct iv_value_struct *)
-					iv_value->sg_iovs[0].iov_buf;
+			       iv_value->sg_iovs[0].iov_buf;
 
 		if (value_struct == NULL)
 			printf("value=EMPTY");
@@ -453,13 +488,13 @@ dump_all_keys(char *msg)
 {
 	struct kv_pair_entry *entry;
 
-	if (verbose_mode < 2)
+	if (g_verbose_mode < 2)
 		return;
 
 	DBG_PRINT("Dumping keys from %s\n", msg);
 
 	LOCK_KEYS();
-	d_list_for_each_entry(entry, &kv_pair_head, link) {
+	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
 		print_key_value("Entry = ", &entry->key, &entry->value);
 	}
 	UNLOCK_KEYS();
@@ -479,7 +514,7 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	DBG_ENTRY();
 
-	assert(user_priv == &test_user_priv);
+	assert(user_priv == &g_test_user_priv);
 
 	verify_key(iv_key);
 	assert(iv_value != NULL);
@@ -500,7 +535,7 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	dump_all_keys("ON_FETCH");
 
 	LOCK_KEYS();
-	d_list_for_each_entry(entry, &kv_pair_head, link) {
+	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
 
 		if (keys_equal(iv_key, &entry->key) == true) {
 
@@ -514,7 +549,7 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				return 0;
 			}
 
-			if (key_struct->rank == my_rank) {
+			if (key_struct->rank == g_my_rank) {
 				DBG_PRINT("Was my key, but its not valid\n");
 				UNLOCK_KEYS();
 				DBG_EXIT();
@@ -530,9 +565,9 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	UNLOCK_KEYS();
 
 	DBG_PRINT("FETCH: Key [%d:%d] not found\n",
-		key_struct->rank, key_struct->key_id);
+		  key_struct->rank, key_struct->key_id);
 
-	if (key_struct->rank == my_rank) {
+	if (key_struct->rank == g_my_rank) {
 		DBG_EXIT();
 		return -1;
 	}
@@ -544,7 +579,7 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 static int
 iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	     crt_iv_ver_t iv_ver, uint32_t flags, d_sg_list_t *iv_value,
-	void *user_priv)
+	     void *user_priv)
 {
 	struct kv_pair_entry *entry;
 	struct iv_key_struct *key_struct;
@@ -552,7 +587,7 @@ iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	DBG_ENTRY();
 
-	assert(user_priv == &test_user_priv);
+	assert(user_priv == &g_test_user_priv);
 	verify_key(iv_key);
 	verify_value(iv_value);
 
@@ -561,13 +596,13 @@ iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	dump_all_keys("ON_UPDATE");
 	key_struct = (struct iv_key_struct *)iv_key->iov_buf;
 
-	if (key_struct->rank == my_rank)
+	if (key_struct->rank == g_my_rank)
 		rc = 0;
 	else
 		rc = -DER_IVCB_FORWARD;
 
 	LOCK_KEYS();
-	d_list_for_each_entry(entry, &kv_pair_head, link) {
+	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
 		if (keys_equal(iv_key, &entry->key) == true) {
 			copy_iv_value(&entry->value, iv_value);
 			UNLOCK_KEYS();
@@ -590,12 +625,12 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	      int refresh_rc, void *user_priv)
 {
 	struct kv_pair_entry	*entry = NULL;
-	bool			valid;
+	bool			 valid;
 	struct iv_key_struct	*key_struct;
-	int			rc;
+	int			 rc;
 
 	DBG_ENTRY();
-	assert(user_priv == &test_user_priv);
+	assert(user_priv == &g_test_user_priv);
 	valid = invalidate ? false : true;
 
 	verify_key(iv_key);
@@ -604,14 +639,14 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	key_struct = (struct iv_key_struct *)iv_key->iov_buf;
 
-	if (key_struct->rank == my_rank)
+	if (key_struct->rank == g_my_rank)
 		rc = 0;
 	else
 		rc = -DER_IVCB_FORWARD;
 
 
 	LOCK_KEYS();
-	d_list_for_each_entry(entry, &kv_pair_head, link) {
+	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
 
 		if (keys_equal(iv_key, &entry->key) == true) {
 
@@ -667,14 +702,14 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	DBG_ENTRY();
 	dump_all_keys("ON_GETVALUE");
 
-	*user_priv = &test_user_priv;
+	*user_priv = &g_test_user_priv;
 
 	size = sizeof(struct iv_value_struct);
 
-	iv_value->sg_iovs = malloc(sizeof(d_iov_t));
+	D_ALLOC_PTR(iv_value->sg_iovs);
 	assert(iv_value->sg_iovs != NULL);
 
-	iv_value->sg_iovs[0].iov_buf = malloc(size);
+	D_ALLOC(iv_value->sg_iovs[0].iov_buf, size);
 	assert(iv_value->sg_iovs[0].iov_buf != NULL);
 
 	iv_value->sg_iovs[0].iov_len = size;
@@ -691,7 +726,7 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 {
 	DBG_ENTRY();
 
-	assert(user_priv == &test_user_priv);
+	assert(user_priv == &g_test_user_priv);
 
 	free(iv_value->sg_iovs[0].iov_buf);
 	free(iv_value->sg_iovs);
@@ -702,7 +737,7 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 	return 0;
 }
 
-struct crt_iv_ops ivc_ops = {
+struct crt_iv_ops g_ivc_ops = {
 	.ivo_on_fetch = iv_on_fetch,
 	.ivo_on_update = iv_on_update,
 	.ivo_on_refresh = iv_on_refresh,
@@ -711,50 +746,70 @@ struct crt_iv_ops ivc_ops = {
 	.ivo_on_put = iv_on_put,
 };
 
-static crt_iv_namespace_t ivns;
+static crt_iv_namespace_t g_ivns;
 
 static void
 init_iv(void)
 {
-	struct crt_iv_class	iv_class;
-	d_iov_t			g_ivns;
-	crt_endpoint_t		server_ep = {0};
+	struct crt_iv_class	 iv_class;
+	crt_endpoint_t		 server_ep = {0};
 	struct rpc_set_ivns_in	*input;
 	struct rpc_set_ivns_out	*output;
 	int			 rc;
-	int			 rank;
+	uint32_t		 rank;
 	crt_rpc_t		*rpc;
 	int			 tree_topo;
 
+	/*
+	 * This is the IV "global" ivns handle - which is *sent* to other nodes
+	 * It is not consumed on this node outside of this function
+	 */
+	d_iov_t			 s_ivns;
+
 	tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 2);
 
-	if (my_rank == 0) {
+	if (g_my_rank == 0) {
 		iv_class.ivc_id = 0;
 		iv_class.ivc_feats = 0;
-		iv_class.ivc_ops = &ivc_ops;
+		iv_class.ivc_ops = &g_ivc_ops;
 
-		rc = crt_iv_namespace_create(main_ctx, NULL, tree_topo,
-				&iv_class, 1, &ivns, &g_ivns);
+		/*
+		 * Here g_ivns is the "local" handle
+		 * The "global" (to all nodes) handle is s_ivns
+		 */
+		rc = crt_iv_namespace_create(g_main_ctx, NULL, tree_topo,
+					     &iv_class, 1, &g_ivns, &s_ivns);
 		assert(rc == 0);
 
-		for (rank = 1; rank < group_size; rank++) {
-
+		for (rank = 1; rank < g_group_size; rank++) {
 			server_ep.ep_rank = rank;
 
-			rc = prepare_rpc_request(main_ctx, RPC_SET_IVNS,
-					&server_ep, (void *)&input, &rpc);
+			rc = prepare_rpc_request(g_main_ctx, RPC_SET_IVNS,
+						 &server_ep, (void *)&input,
+						 &rpc);
 			assert(rc == 0);
 
-			input->global_ivns_iov.iov_buf = g_ivns.iov_buf;
-			input->global_ivns_iov.iov_buf_len =
-							g_ivns.iov_buf_len;
-			input->global_ivns_iov.iov_len = g_ivns.iov_len;
+			input->global_ivns_iov.iov_buf = s_ivns.iov_buf;
+			input->global_ivns_iov.iov_buf_len = s_ivns.iov_buf_len;
+			input->global_ivns_iov.iov_len = s_ivns.iov_len;
 
-			rc = send_rpc_request(main_ctx, rpc, (void *)&output);
+			rc = send_rpc_request(g_main_ctx, rpc, (void *)&output);
 			assert(rc == 0);
-
 			assert(output->rc == 0);
+
+			rc = crt_req_decref(rpc);
+			assert(rc == 0);
 		}
+	}
+}
+
+static void
+deinit_iv(void) {
+	int rc = 0;
+
+	if (g_ivns != NULL) {
+		rc = crt_iv_namespace_destroy(g_ivns);
+		assert(rc == 0);
 	}
 }
 
@@ -762,10 +817,10 @@ init_iv(void)
 int
 iv_set_ivns(crt_rpc_t *rpc)
 {
-	struct crt_iv_class	iv_class;
+	struct crt_iv_class	 iv_class;
 	struct rpc_set_ivns_in	*input;
 	struct rpc_set_ivns_out	*output;
-	int			rc;
+	int			 rc;
 
 	DBG_ENTRY();
 
@@ -777,10 +832,10 @@ iv_set_ivns(crt_rpc_t *rpc)
 
 	iv_class.ivc_id = 0;
 	iv_class.ivc_feats = 0;
-	iv_class.ivc_ops = &ivc_ops;
+	iv_class.ivc_ops = &g_ivc_ops;
 
-	rc = crt_iv_namespace_attach(main_ctx, &input->global_ivns_iov,
-				&iv_class, 1,  &ivns);
+	rc = crt_iv_namespace_attach(g_main_ctx, &input->global_ivns_iov,
+				     &iv_class, 1, &g_ivns);
 	assert(rc == 0);
 
 	output->rc = 0;
@@ -808,7 +863,7 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	struct iv_key_struct		*expected_key_struct;
 	struct fetch_done_cb_info	*cb_info;
 	struct rpc_test_fetch_iv_out	*output;
-	int				rc;
+	int				 rc;
 
 	cb_info = (struct fetch_done_cb_info *)cb_args;
 	assert(cb_info != NULL);
@@ -905,8 +960,8 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	struct rpc_test_update_iv_in	*input;
 	crt_iv_key_t			*key;
 	struct iv_key_struct		*key_struct;
-	int				rc;
-	d_sg_list_t			iv_value;
+	int				 rc;
+	d_sg_list_t			 iv_value;
 	struct iv_value_struct		*value_struct;
 	struct update_done_cb_info	*update_cb_info;
 	crt_iv_sync_t			*sync;
@@ -919,13 +974,13 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	assert(key != NULL);
 
 	DBG_PRINT("Performing update for %d:%d value=%s\n",
-		key_struct->rank, key_struct->key_id, input->str_value);
+		  key_struct->rank, key_struct->key_id, input->str_value);
 
 	iv_value.sg_nr.num = 1;
-	iv_value.sg_iovs = malloc(sizeof(d_iov_t));
+	D_ALLOC_PTR(iv_value.sg_iovs);
 	assert(iv_value.sg_iovs != NULL);
 
-	iv_value.sg_iovs[0].iov_buf = malloc(sizeof(struct iv_value_struct));
+	D_ALLOC(iv_value.sg_iovs[0].iov_buf, sizeof(struct iv_value_struct));
 	assert(iv_value.sg_iovs[0].iov_buf != NULL);
 
 	iv_value.sg_iovs[0].iov_buf_len = sizeof(struct iv_value_struct);
@@ -939,7 +994,7 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	sync = (crt_iv_sync_t *)input->iov_sync.iov_buf;
 	assert(sync != NULL);
 
-	update_cb_info = malloc(sizeof(struct update_done_cb_info));
+	D_ALLOC_PTR(update_cb_info);
 	assert(update_cb_info != NULL);
 
 	update_cb_info->key = key;
@@ -948,8 +1003,8 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	rc = crt_req_addref(rpc);
 	assert(rc == 0);
 
-	rc = crt_iv_update(ivns, 0, key, 0, &iv_value, 0, *sync, update_done,
-			update_cb_info);
+	rc = crt_iv_update(g_ivns, 0, key, 0, &iv_value, 0, *sync, update_done,
+			   update_cb_info);
 
 	return 0;
 }
@@ -961,7 +1016,7 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 	struct rpc_test_fetch_iv_in	*input;
 	crt_iv_key_t			*key;
 	struct fetch_done_cb_info	*cb_info;
-	int				rc;
+	int				 rc;
 	struct iv_key_struct		*key_struct;
 
 	input = crt_req_get(rpc);
@@ -972,7 +1027,7 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 	key = alloc_key(key_struct->rank, key_struct->key_id);
 	assert(key != NULL);
 
-	cb_info = malloc(sizeof(struct fetch_done_cb_info));
+	D_ALLOC_PTR(cb_info);
 	assert(cb_info != NULL);
 
 	cb_info->key = key;
@@ -981,7 +1036,7 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 	rc = crt_req_addref(rpc);
 	assert(rc == 0);
 
-	rc = crt_iv_fetch(ivns, 0, key, 0, 0, fetch_done, cb_info);
+	rc = crt_iv_fetch(g_ivns, 0, key, 0, 0, fetch_done, cb_info);
 
 	return 0;
 }
@@ -1000,7 +1055,7 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	struct rpc_test_invalidate_iv_out	*output;
 	struct iv_key_struct			*key_struct;
 	struct iv_key_struct			*expect_key_struct;
-	int					rc;
+	int					 rc;
 
 	DBG_ENTRY();
 
@@ -1012,7 +1067,7 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	key_struct = (struct iv_key_struct *)iv_key->iov_buf;
 	expect_key_struct = (struct iv_key_struct *)
-					cb_info->expect_key->iov_buf;
+			    cb_info->expect_key->iov_buf;
 
 	assert(key_struct->rank == expect_key_struct->rank);
 	assert(key_struct->key_id == expect_key_struct->key_id);
@@ -1020,12 +1075,12 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	if (invalidate_rc != 0) {
 		DBG_PRINT("----------------------------------\n");
 		DBG_PRINT("Key = [%d,%d] Failed\n", key_struct->rank,
-			key_struct->key_id);
+			  key_struct->key_id);
 		DBG_PRINT("----------------------------------\n");
 	} else {
 		DBG_PRINT("----------------------------------\n");
 		DBG_PRINT("Key = [%d,%d] PASSED\n", key_struct->rank,
-			key_struct->key_id);
+			  key_struct->key_id);
 		DBG_PRINT("----------------------------------\n");
 	}
 
@@ -1049,8 +1104,8 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	struct iv_key_struct			*key_struct;
 	crt_iv_key_t				*key;
 	struct invalidate_cb_info		*cb_info;
-	crt_iv_sync_t				sync = CRT_IV_SYNC_MODE_NONE;
-	int					rc;
+	crt_iv_sync_t				 sync = CRT_IV_SYNC_MODE_NONE;
+	int					 rc;
 
 	input = crt_req_get(rpc);
 	assert(input != NULL);
@@ -1063,15 +1118,14 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	rc = crt_req_addref(rpc);
 	assert(rc == 0);
 
-	cb_info = malloc(sizeof(struct invalidate_cb_info));
+	D_ALLOC_PTR(cb_info);
 	assert(cb_info != NULL);
 
 	cb_info->rpc = rpc;
 	cb_info->expect_key = key;
 
-
-	rc = crt_iv_invalidate(ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE,
-			sync, invalidate_done, cb_info);
+	rc = crt_iv_invalidate(g_ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE,
+			       sync, invalidate_done, cb_info);
 	return 0;
 }
 
@@ -1087,8 +1141,8 @@ show_usage(char *app_name)
 int main(int argc, char **argv)
 {
 	char	*arg_verbose = NULL;
-	int	c;
-	int	rc;
+	int	 c;
+	int	 rc;
 
 	while ((c = getopt(argc, argv, "v:")) != -1) {
 		switch (c) {
@@ -1103,16 +1157,16 @@ int main(int argc, char **argv)
 	}
 
 	if (arg_verbose == NULL)
-		verbose_mode = 0;
+		g_verbose_mode = 0;
 	else
-		verbose_mode = atoi(arg_verbose);
+		g_verbose_mode = atoi(arg_verbose);
 
-	if (verbose_mode < 0 || verbose_mode > 3) {
+	if (g_verbose_mode < 0 || g_verbose_mode > 3) {
 		printf("-v verbose mode is between 0 and 3\n");
 		return -1;
 	}
 
-	init_hostname(hostname, sizeof(hostname));
+	init_hostname(g_hostname, sizeof(g_hostname));
 
 	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
 	assert(rc == 0);
@@ -1132,18 +1186,28 @@ int main(int argc, char **argv)
 	rc = RPC_REGISTER(RPC_SET_IVNS);
 	assert(rc == 0);
 
-	rc = crt_group_rank(NULL, &my_rank);
+	rc = RPC_REGISTER(RPC_SHUTDOWN);
 	assert(rc == 0);
 
-	rc = crt_group_size(NULL, &group_size);
+	rc = crt_group_rank(NULL, &g_my_rank);
+	assert(rc == 0);
+
+	rc = crt_group_size(NULL, &g_group_size);
 	assert(rc == 0);
 
 	init_work_contexts();
 	init_iv_storage();
 	init_iv();
 
-	while (1)
+	while (!g_do_shutdown)
 		sleep(1);
+
+	shutdown();
+	deinit_iv_storage();
+	deinit_iv();
+
+	rc = crt_finalize();
+	assert(rc == 0);
 
 	return 0;
 }

@@ -46,14 +46,14 @@
 #include <sys/stat.h>
 #include "iv_common.h"
 
-static crt_context_t crt_ctx;
-static crt_endpoint_t server_ep;
-static char hostname[100];
-static bool do_shutdown;
+static crt_context_t	g_crt_ctx;
+static crt_endpoint_t	g_server_ep;
+static char		g_hostname[100];
+static bool		g_do_shutdown;
 
 #define DBG_PRINT(x...)					\
 	do {						\
-		printf("[%s::CLIENT]\t", hostname);	\
+		printf("[%s::CLIENT]\t", g_hostname);	\
 		printf(x);				\
 	} while (0)
 
@@ -61,29 +61,49 @@ static void
 print_usage(const char *err_msg)
 {
 	printf("ERROR: %s\n", err_msg);
-	printf("Usage: ./iv_client <options>\n");
-	printf("<options> are:\n");
-	printf("\t-o <operation> :");
-	printf(" one of fetch, update, invalidate\n");
-	printf("\t-r <rank> :");
-	printf(" Numeric rank to connect to\n");
-	printf("\t-k <key> :");
-	printf(" Key is in form rank:key_id ; e.g. 1:0\n");
-	printf("\t-v <value> :");
-	printf(" Value is string. To be only specified for update operation\n");
-	printf("\t-s <value> :");
-	printf(" 'none', 'eager_update', 'lazy_update', ");
-	printf("'eager_notify', 'lazy_notify'\n");
 
-	printf("\n");
-
-	printf("Example usage: ./iv_client -o fetch -r 0 -k 2:9\n\n");
-	printf("This will initiate fetch of key [2:9] from rank 0. ");
-	printf("Key [2:9] is 9th key on rank = 2\n");
-	printf("Note: Each node has 10 valid keys (0 to 9), ");
-	printf("for which that node is the root\n");
+	printf("Usage: ./iv_client -o <operation> -r <rank> [optional args]\n"
+	       "\n"
+	       "Required arguments:\n"
+	       "\t-o <operation> : One of ['fetch', 'update', 'invalidate', 'shutdown']\n"
+	       "\t-r <rank>      : Numeric rank to send the requested operation to\n"
+	       "\n"
+	       "Optional arguments:\n"
+	       "\t-k <key>       : Key is in form rank:key_id ; e.g. 1:0\n"
+	       "\t-v <value>     : Value is string, only used for update operation\n"
+	       "\t-s <strategy>  : One of ['none', 'eager_update', 'lazy_update', 'eager_notify', 'lazy_notify']\n"
+	       "\n"
+	       "Example usage: ./iv_client -o fetch -r 0 -k 2:9\n"
+	       "\tThis will initiate fetch of key [2:9] from rank 0.\n"
+	       "\tKey [2:9] is 9th key on rank = 2\n"
+	       "\tNote: Each node has 10 valid keys (0 to 9) for which that node is the root\n"
+	       );
 }
 
+static void
+test_iv_shutdown()
+{
+	struct rpc_shutdown_in	*input;
+	struct rpc_shutdown_out	*output;
+	crt_rpc_t		*rpc_req;
+	int			 rc;
+
+	DBG_PRINT("Requesting rank %d shut down\n", g_server_ep.ep_rank);
+
+	prepare_rpc_request(g_crt_ctx, RPC_SHUTDOWN, &g_server_ep,
+			    (void **)&input, &rpc_req);
+
+	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
+
+	if (output->rc == 0)
+		DBG_PRINT("Shutdown of rank %d PASSED\n", g_server_ep.ep_rank);
+	else
+		DBG_PRINT("Shutdown of rank %d FAILED; rc = %u\n",
+			  g_server_ep.ep_rank, output->rc);
+
+	rc = crt_req_decref(rpc_req);
+	assert(rc == 0);
+}
 
 static void
 test_iv_invalidate(struct iv_key_struct *key)
@@ -91,23 +111,23 @@ test_iv_invalidate(struct iv_key_struct *key)
 	struct rpc_test_invalidate_iv_in	*input;
 	struct rpc_test_invalidate_iv_out	*output;
 	crt_rpc_t				*rpc_req;
-	int					rc;
+	int					 rc;
 
 	DBG_PRINT("Attempting to invalidate key[%d:%d]\n",
-		key->rank, key->key_id);
+		  key->rank, key->key_id);
 
-	prepare_rpc_request(crt_ctx, RPC_TEST_INVALIDATE_IV, &server_ep,
+	prepare_rpc_request(g_crt_ctx, RPC_TEST_INVALIDATE_IV, &g_server_ep,
 			    (void **)&input, &rpc_req);
 	d_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
 
-	send_rpc_request(crt_ctx, rpc_req, (void **)&output);
+	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
 
 	if (output->rc == 0)
 		DBG_PRINT("Invalidate of key=[%d:%d] PASSED\n", key->rank,
-			key->key_id);
+			  key->key_id);
 	else
 		DBG_PRINT("Invalidate of key=[%d:%d] FAILED; rc = %ld\n",
-			key->rank, key->key_id, output->rc);
+			  key->rank, key->key_id, output->rc);
 
 	rc = crt_req_decref(rpc_req);
 	assert(rc == 0);
@@ -119,22 +139,22 @@ test_iv_fetch(struct iv_key_struct *key)
 	struct rpc_test_fetch_iv_in	*input;
 	struct rpc_test_fetch_iv_out	*output;
 	crt_rpc_t			*rpc_req;
-	int				rc;
+	int				 rc;
 
 	DBG_PRINT("Attempting fetch for key[%d:%d]\n", key->rank, key->key_id);
 
-	prepare_rpc_request(crt_ctx, RPC_TEST_FETCH_IV, &server_ep,
+	prepare_rpc_request(g_crt_ctx, RPC_TEST_FETCH_IV, &g_server_ep,
 			    (void **)&input, &rpc_req);
 	d_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
 
-	send_rpc_request(crt_ctx, rpc_req, (void **)&output);
+	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
 
 	if (output->rc == 0)
 		DBG_PRINT("Fetch of key=[%d:%d] PASSED\n", key->rank,
-			key->key_id);
+			  key->key_id);
 	else
 		DBG_PRINT("Fetch of key=[%d:%d] FAILED; rc = %ld\n", key->rank,
-			key->key_id, output->rc);
+			  key->key_id, output->rc);
 
 	rc = crt_req_decref(rpc_req);
 	assert(rc == 0);
@@ -146,8 +166,8 @@ test_iv_update(struct iv_key_struct *key, char *str_value, char *arg_sync)
 	struct rpc_test_update_iv_in	*input;
 	struct rpc_test_update_iv_out	*output;
 	crt_rpc_t			*rpc_req;
-	int				rc;
-	crt_iv_sync_t			sync;
+	int				 rc;
+	crt_iv_sync_t			 sync;
 
 	if (arg_sync == NULL) {
 		sync.ivs_mode = 0;
@@ -172,13 +192,13 @@ test_iv_update(struct iv_key_struct *key, char *str_value, char *arg_sync)
 		return -1;
 	}
 
-	prepare_rpc_request(crt_ctx, RPC_TEST_UPDATE_IV, &server_ep,
+	prepare_rpc_request(g_crt_ctx, RPC_TEST_UPDATE_IV, &g_server_ep,
 			    (void **)&input, &rpc_req);
 	d_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
 	d_iov_set(&input->iov_sync, &sync, sizeof(crt_iv_sync_t));
 	input->str_value = str_value;
 
-	send_rpc_request(crt_ctx, rpc_req, (void **)&output);
+	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
 
 	if (output->rc == 0)
 		DBG_PRINT("Update PASSED\n");
@@ -195,6 +215,7 @@ enum op_type {
 	OP_FETCH,
 	OP_UPDATE,
 	OP_INVALIDATE,
+	OP_SHUTDOWN,
 	OP_NONE,
 };
 
@@ -203,7 +224,7 @@ progress_function(void *data)
 {
 	crt_context_t *p_ctx = (crt_context_t *)data;
 
-	while (do_shutdown == 0)
+	while (g_do_shutdown == 0)
 		crt_progress(*p_ctx, 1000, NULL, NULL);
 
 	crt_context_destroy(*p_ctx, 1);
@@ -213,19 +234,19 @@ progress_function(void *data)
 
 int main(int argc, char **argv)
 {
-	struct iv_key_struct	iv_key;
+	struct iv_key_struct	 iv_key;
 	crt_group_t		*srv_grp;
 	char			*arg_rank = NULL;
 	char			*arg_op = NULL;
 	char			*arg_key = NULL;
 	char			*arg_value = NULL;
 	char			*arg_sync = NULL;
-	enum op_type		cur_op = OP_NONE;
-	int			rc = 0;
-	pthread_t		progress_thread;
-	int			c;
+	enum op_type		 cur_op = OP_NONE;
+	int			 rc = 0;
+	pthread_t		 progress_thread;
+	int			 c;
 
-	init_hostname(hostname, sizeof(hostname));
+	init_hostname(g_hostname, sizeof(g_hostname));
 
 	while ((c = getopt(argc, argv, "k:o:r:s:v:")) != -1) {
 		switch (c) {
@@ -251,8 +272,8 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (arg_rank == NULL || arg_op == NULL || arg_key == NULL) {
-		print_usage("Rank/Op/Key should not be NULL");
+	if (arg_rank == NULL || arg_op == NULL) {
+		print_usage("Rank (-r) and Operation (-o) must be specified");
 		return -1;
 	}
 
@@ -271,21 +292,32 @@ int main(int argc, char **argv)
 		}
 	} else if (strcmp(arg_op, "invalidate") == 0) {
 		cur_op = OP_INVALIDATE;
+	} else if (strcmp(arg_op, "shutdown") == 0) {
+		if (arg_key != NULL) {
+			print_usage("Key shouldn't be supplied for shutdown");
+			return -1;
+		}
+		cur_op = OP_SHUTDOWN;
 	} else {
 		print_usage("Unknown operation");
+		return -1;
+	}
+
+	if (arg_key == NULL && cur_op != OP_SHUTDOWN) {
+		print_usage("Key (-k) is required for this operation");
 		return -1;
 	}
 
 	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON);
 	assert(rc == 0);
 
-	rc = crt_context_create(NULL, &crt_ctx);
+	rc = crt_context_create(NULL, &g_crt_ctx);
 	assert(rc == 0);
 
 	rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &srv_grp);
 	assert(rc == 0);
 
-	rc = pthread_create(&progress_thread, 0, progress_function, &crt_ctx);
+	rc = pthread_create(&progress_thread, 0, progress_function, &g_crt_ctx);
 	assert(rc == 0);
 
 	rc = RPC_REGISTER(RPC_TEST_FETCH_IV);
@@ -297,11 +329,15 @@ int main(int argc, char **argv)
 	rc = RPC_REGISTER(RPC_TEST_INVALIDATE_IV);
 	assert(rc == 0);
 
-	server_ep.ep_grp = srv_grp;
-	server_ep.ep_rank = atoi(arg_rank);
-	server_ep.ep_tag = 0;
+	rc = RPC_REGISTER(RPC_SHUTDOWN);
+	assert(rc == 0);
 
-	if (sscanf(arg_key, "%d:%d", &iv_key.rank, &iv_key.key_id) != 2) {
+	g_server_ep.ep_grp = srv_grp;
+	g_server_ep.ep_rank = atoi(arg_rank);
+	g_server_ep.ep_tag = 0;
+
+	if (arg_key != NULL
+	    && sscanf(arg_key, "%d:%d", &iv_key.rank, &iv_key.key_id) != 2) {
 		print_usage("Bad key format, should be rank:id");
 		return -1;
 	}
@@ -312,13 +348,15 @@ int main(int argc, char **argv)
 		test_iv_update(&iv_key, arg_value, arg_sync);
 	else if (cur_op == OP_INVALIDATE)
 		test_iv_invalidate(&iv_key);
+	else if (cur_op == OP_SHUTDOWN)
+		test_iv_shutdown();
 
 	else {
 		print_usage("Unsupported opration");
 		return -1;
 	}
 
-	do_shutdown = true;
+	g_do_shutdown = true;
 	pthread_join(progress_thread, NULL);
 
 	DBG_PRINT("Exiting client\n");

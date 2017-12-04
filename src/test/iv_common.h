@@ -124,6 +124,23 @@ struct crt_msg_field *arg_set_ivns_out[] = {
 	&CMF_UINT32,
 };
 
+/* RPC_SHUTDOWN */
+struct rpc_shutdown_in {
+	uint32_t unused;
+};
+
+struct rpc_shutdown_out {
+	uint32_t rc;
+};
+
+struct crt_msg_field *arg_shutdown_in[] = {
+	&CMF_UINT32,
+};
+
+struct crt_msg_field *arg_shutdown_out[] = {
+	&CMF_UINT32,
+};
+
 #ifdef _SERVER
 #define RPC_REGISTER(name) \
 	crt_rpc_srv_register(name, 0, &DQF_##name, DQF_FUNC_##name)
@@ -135,12 +152,14 @@ struct crt_msg_field *arg_set_ivns_out[] = {
 #ifdef _SERVER
 #define RPC_DECLARE(name, input, output, function)			\
 	struct crt_req_format DQF_##name = DEFINE_CRT_REQ_FMT(#name,	\
-						input, output);		\
+							      input,	\
+							      output);	\
 	static void *DQF_FUNC_##name = (void *)function
 #else
 #define RPC_DECLARE(name, input, output, function)			\
 	struct crt_req_format DQF_##name = DEFINE_CRT_REQ_FMT(#name,	\
-							input, output)
+							      input,	\
+							      output)
 #endif
 
 
@@ -149,6 +168,7 @@ enum {
 	RPC_TEST_UPDATE_IV = 0xB2, /* Client issues update call */
 	RPC_TEST_INVALIDATE_IV = 0xB3, /* Client issues invalidate call */
 	RPC_SET_IVNS, /* send global ivns */
+	RPC_SHUTDOWN, /* Request server shutdown */
 } rpc_id_t;
 
 int iv_test_fetch_iv(crt_rpc_t *rpc);
@@ -156,19 +176,23 @@ int iv_test_update_iv(crt_rpc_t *rpc);
 int iv_test_invalidate_iv(crt_rpc_t *rpc);
 
 int iv_set_ivns(crt_rpc_t *rpc);
+int iv_shutdown(crt_rpc_t *rpc);
 
 RPC_DECLARE(RPC_TEST_FETCH_IV,
-	arg_test_fetch_iv_in, arg_test_fetch_iv_out, iv_test_fetch_iv);
+	    arg_test_fetch_iv_in, arg_test_fetch_iv_out, iv_test_fetch_iv);
 
 RPC_DECLARE(RPC_TEST_UPDATE_IV,
-	arg_test_update_iv_in, arg_test_update_iv_out, iv_test_update_iv);
+	    arg_test_update_iv_in, arg_test_update_iv_out, iv_test_update_iv);
 
 RPC_DECLARE(RPC_TEST_INVALIDATE_IV,
-	arg_test_invalidate_iv_in, arg_test_invalidate_iv_out,
-	iv_test_invalidate_iv);
+	    arg_test_invalidate_iv_in, arg_test_invalidate_iv_out,
+	    iv_test_invalidate_iv);
 
 RPC_DECLARE(RPC_SET_IVNS,
-	arg_set_ivns_in, arg_set_ivns_out, iv_set_ivns);
+	    arg_set_ivns_in, arg_set_ivns_out, iv_set_ivns);
+
+RPC_DECLARE(RPC_SHUTDOWN,
+	    arg_shutdown_in, arg_shutdown_out, iv_shutdown);
 
 void
 rpc_handle_reply(const struct crt_cb_info *info)
@@ -184,7 +208,8 @@ rpc_handle_reply(const struct crt_cb_info *info)
 }
 
 int prepare_rpc_request(crt_context_t crt_ctx, int rpc_id,
-		crt_endpoint_t *server_ep,  void **input, crt_rpc_t **rpc_req)
+			crt_endpoint_t *server_ep, void **input,
+			crt_rpc_t **rpc_req)
 {
 	int rc;
 
