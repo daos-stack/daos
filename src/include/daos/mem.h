@@ -80,6 +80,8 @@ struct pobj_action {
 	uint64_t	off;
 };
 #define POBJ_MAX_ACTIONS	0
+#define POBJ_FLAG_ZERO		(((uint64_t)1) << 0)
+#define POBJ_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
 
 #define UMMID_NULL		((umem_id_t){0})
 #define UMMID_IS_NULL(ummid)	(ummid.off == 0)
@@ -128,18 +130,18 @@ typedef struct {
 	bool		 (*mo_equal)(struct umem_instance *umm,
 				     umem_id_t ummid1, umem_id_t ummid2);
 	/** free ummid */
-	void		 (*mo_free)(struct umem_instance *umm,
-				    umem_id_t ummid);
+	void		 (*mo_tx_free)(struct umem_instance *umm,
+				       umem_id_t ummid);
 	/**
-	 * allocate ummid with the specified size
+	 * allocate ummid with the specified size & flags
 	 *
 	 * \param umm	[IN]	umem class instance.
 	 * \param size	[IN]	size to allocate.
-	 * \param zero	[IN]	zero new allocated buffer.
+	 * \param flags	[IN]	flags like zeroing, noflush (for nvml)
 	 * \param type_num [IN]	struct type (for nvml)
 	 */
-	umem_id_t	 (*mo_alloc)(struct umem_instance *umm, size_t size,
-				     bool zero, unsigned int type_num);
+	umem_id_t	 (*mo_tx_alloc)(struct umem_instance *umm, size_t size,
+					uint64_t flags, unsigned int type_num);
 	/**
 	 * Add the specified range of ummid to current memory transaction.
 	 *
@@ -239,24 +241,27 @@ umem_has_tx(struct umem_instance *umm)
 }
 
 static inline umem_id_t
-umem_alloc_verb(struct umem_instance *umm, bool zero, size_t size)
+umem_alloc_verb(struct umem_instance *umm, uint64_t flags, size_t size)
 {
-	return umm->umm_ops->mo_alloc(umm, size, zero, UMEM_TYPE_ANY);
+	return umm->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY);
 }
 
 #define umem_alloc(umm, size)						\
-	umem_alloc_verb(umm, false, size)
+	umem_alloc_verb(umm, 0, size)
 
 #define umem_zalloc(umm, size)						\
-	umem_alloc_verb(umm, true, size)
+	umem_alloc_verb(umm, POBJ_FLAG_ZERO, size)
+
+#define umem_alloc_noflush(umm, size)					\
+	umem_alloc_verb(umm, POBJ_FLAG_NO_FLUSH, size)
 
 #define									\
-umem_alloc_typed_verb(umm, type, zero, size)				\
+umem_alloc_typed_verb(umm, type, flags, size)				\
 ({									\
 	umem_id_t   __ummid;						\
 	TMMID(type) __tmmid;						\
 									\
-	__ummid = (umm)->umm_ops->mo_alloc(umm, size, zero,		\
+	__ummid = (umm)->umm_ops->mo_tx_alloc(umm, size, flags,		\
 					   TMMID_TYPE_NUM(type));	\
 	D__DEBUG(DB_MEM, "allocate %s mmid "UMMID_PF"\n",		\
 		(umm)->umm_name, UMMID_P(__ummid));			\
@@ -265,16 +270,16 @@ umem_alloc_typed_verb(umm, type, zero, size)				\
 })
 
 #define umem_alloc_typed(umm, type, size)				\
-	umem_alloc_typed_verb(umm, type, false, size)
+	umem_alloc_typed_verb(umm, type, 0, size)
 
 #define umem_zalloc_typed(umm, type, size)				\
-	umem_alloc_typed_verb(umm, type, true, size)
+	umem_alloc_typed_verb(umm, type, POBJ_FLAG_ZERO, size)
 
 #define umem_new_typed(umm, type)					\
-	umem_alloc_typed_verb(umm, type, false, sizeof(type))
+	umem_alloc_typed_verb(umm, type, 0, sizeof(type))
 
 #define umem_znew_typed(umm, type)					\
-	umem_alloc_typed_verb(umm, type, true, sizeof(type))
+	umem_alloc_typed_verb(umm, type, POBJ_FLAG_ZERO, sizeof(type))
 
 static inline void
 umem_free(struct umem_instance *umm, umem_id_t ummid)
@@ -282,7 +287,7 @@ umem_free(struct umem_instance *umm, umem_id_t ummid)
 	D__DEBUG(DB_MEM, "Free %s mmid "UMMID_PF"\n",
 		umm->umm_name, UMMID_P(ummid));
 
-	umm->umm_ops->mo_free(umm, ummid);
+	umm->umm_ops->mo_tx_free(umm, ummid);
 }
 
 #define umem_free_typed(umm, tmmid)					\

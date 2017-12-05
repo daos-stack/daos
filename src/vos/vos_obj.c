@@ -1411,7 +1411,7 @@ vos_zc_reserve(struct vos_zc_context *zcc, daos_size_t size)
 		if (!UMMID_IS_NULL(mmid))
 			zcc->zc_actv_at++;
 	} else {
-		mmid = umem_alloc(vos_obj2umm(obj), size);
+		mmid = umem_alloc_noflush(vos_obj2umm(obj), size);
 	}
 
 	return mmid;

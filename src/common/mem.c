@@ -48,24 +48,20 @@ pmem_equal(struct umem_instance *umm, umem_id_t ummid1, umem_id_t ummid2)
 }
 
 static void
-pmem_free(struct umem_instance *umm, umem_id_t ummid)
+pmem_tx_free(struct umem_instance *umm, umem_id_t ummid)
 {
 	if (!OID_IS_NULL(ummid))
 		pmemobj_tx_free(ummid);
 }
 
 static umem_id_t
-pmem_alloc(struct umem_instance *umm, size_t size, bool zero,
-	   unsigned int type_num)
+pmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
+	      unsigned int type_num)
 {
-	umem_id_t ummid;
-
-	ummid = zero ? pmemobj_tx_zalloc(size, type_num) :
-		       pmemobj_tx_alloc(size, type_num);
-	return ummid;
+	return pmemobj_tx_xalloc(size, type_num, flags);
 }
 
-int
+static int
 pmem_tx_add(struct umem_instance *umm, umem_id_t ummid,
 	    uint64_t offset, size_t size)
 {
@@ -73,13 +69,13 @@ pmem_tx_add(struct umem_instance *umm, umem_id_t ummid,
 }
 
 
-int
+static int
 pmem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 {
 	return pmemobj_tx_add_range_direct(ptr, size);
 }
 
-int
+static int
 pmem_tx_abort(struct umem_instance *umm, int err)
 {
 	pmemobj_tx_abort(err);
@@ -93,13 +89,13 @@ pmem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size,
 	return pmemobj_reserve(umm->umm_u.pmem_pool, act, size, type_num);
 }
 
-void
+static void
 pmem_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
 {
 	return pmemobj_cancel(umm->umm_u.pmem_pool, actv, actv_cnt);
 }
 
-int
+static int
 pmem_tx_publish(struct umem_instance *umm, struct pobj_action *actv,
 		int actv_cnt)
 {
@@ -109,8 +105,8 @@ pmem_tx_publish(struct umem_instance *umm, struct pobj_action *actv,
 static umem_ops_t	pmem_ops = {
 	.mo_addr		= pmem_addr,
 	.mo_equal		= pmem_equal,
-	.mo_free		= pmem_free,
-	.mo_alloc		= pmem_alloc,
+	.mo_tx_free		= pmem_tx_free,
+	.mo_tx_alloc		= pmem_tx_alloc,
 	.mo_tx_add		= pmem_tx_add,
 	.mo_tx_add_ptr		= pmem_tx_add_ptr,
 	.mo_tx_abort		= pmem_tx_abort,
@@ -167,20 +163,21 @@ vmem_free(struct umem_instance *umm, umem_id_t ummid)
 }
 
 umem_id_t
-vmem_alloc(struct umem_instance *umm, size_t size, bool zero,
+vmem_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
 	   unsigned int type_num)
 {
 	umem_id_t ummid = UMMID_NULL;
 
-	ummid.off = (uint64_t)(zero ? calloc(1, size) : malloc(size));
+	ummid.off = (uint64_t)(flags & POBJ_FLAG_ZERO ?
+			       calloc(1, size) : malloc(size));
 	return ummid;
 }
 
 static umem_ops_t	vmem_ops = {
 	.mo_addr	= vmem_addr,
 	.mo_equal	= vmem_equal,
-	.mo_free	= vmem_free,
-	.mo_alloc	= vmem_alloc,
+	.mo_tx_free	= vmem_free,
+	.mo_tx_alloc	= vmem_alloc,
 	.mo_tx_add	= NULL,
 	.mo_tx_abort	= NULL,
 };
