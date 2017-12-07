@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -711,6 +711,7 @@ lm_sample_rpc_cb(const struct crt_cb_info *cb_info)
 	crt_rpc_t				*rpc_req;
 	struct crt_lm_memb_sample_out		*out_data;
 	crt_group_t				*tgt_grp;
+	struct crt_grp_priv			*grp_priv;
 	d_rank_t				*delta;
 	uint32_t				 num_delta;
 	int					 i;
@@ -718,15 +719,16 @@ lm_sample_rpc_cb(const struct crt_cb_info *cb_info)
 	struct lm_grp_priv_t			*lm_grp_priv;
 	int					 rc = 0;
 
+	lm_grp_priv = cb_info->cci_arg;
+	D_ASSERT(lm_grp_priv != NULL);
+	tgt_grp = lm_grp_priv->lgp_grp;
+
 	rpc_req = cb_info->cci_rpc;
 	if (cb_info->cci_rc != 0) {
 		D_ERROR("rpc failed. opc: %#x, cci_rc: %d.\n",
 			rpc_req->cr_opc, cb_info->cci_rc);
 		D_GOTO(out, rc);
 	}
-	lm_grp_priv = cb_info->cci_arg;
-	D_ASSERT(lm_grp_priv != NULL);
-	tgt_grp = lm_grp_priv->lgp_grp;
 	out_data = crt_reply_get(rpc_req);
 	if (out_data->mso_rc != 0) {
 		D_ERROR("sample RPC failed. rc %d\n", out_data->mso_rc);
@@ -774,6 +776,10 @@ lm_sample_rpc_cb(const struct crt_cb_info *cb_info)
 		D_ERROR("lm_update_active_psr() failed. rc: %d\n", rc);
 
 out:
+	grp_priv = container_of(tgt_grp, struct crt_grp_priv, gp_pub);
+	/* addref in lm_sample_rpc() */
+	crt_grp_priv_decref(grp_priv);
+
 	return;
 }
 
@@ -787,13 +793,14 @@ static int
 lm_sample_rpc(crt_context_t ctx, struct lm_grp_priv_t *lm_grp_priv,
 	      d_rank_t tgt_rank)
 {
-	struct crt_lm_memb_sample_in		*in_data;
-	crt_endpoint_t				 tgt_ep;
-	d_rank_t				 grp_self;
-	crt_rpc_t				*rpc_req;
-	crt_group_t				*tgt_grp;
-	uint32_t				 curr_ver;
-	int					 rc = 0;
+	struct crt_lm_memb_sample_in	*in_data;
+	crt_endpoint_t			 tgt_ep;
+	d_rank_t			 grp_self;
+	crt_rpc_t			*rpc_req;
+	crt_group_t			*tgt_grp;
+	struct crt_grp_priv		*grp_priv;
+	uint32_t			 curr_ver;
+	int				 rc = 0;
 
 	D_ASSERT(lm_grp_priv != NULL);
 
@@ -814,11 +821,17 @@ lm_sample_rpc(crt_context_t ctx, struct lm_grp_priv_t *lm_grp_priv,
 		D_ERROR("crt_req_create() failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
+
+	grp_priv = container_of(tgt_grp, struct crt_grp_priv, gp_pub);
+	/* decref in lm_sample_rpc_cb() */
+	crt_grp_priv_addref(grp_priv);
+
 	in_data = crt_req_get(rpc_req);
 	in_data->msi_ver = curr_ver;
 	rc = crt_req_send(rpc_req, lm_sample_rpc_cb, lm_grp_priv);
 	if (rc != 0) {
 		D_ERROR("crt_req_send() failed, rc: %d\n", rc);
+		crt_grp_priv_decref(grp_priv);
 		D_GOTO(out, rc);
 	}
 	D_DEBUG("sample RPC sent to rank %d in group %s.\n",
