@@ -40,6 +40,8 @@
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 
+extern int daos_event_priv_reset(void);
+
 typedef struct {
 	bool			multi_rank;
 	d_rank_t		ranks[13];
@@ -110,7 +112,12 @@ async_overlap(void **state)
 	return 0;
 }
 
-
+static inline int
+test_case_teardown(void **state)
+{
+	assert_int_equal(daos_event_priv_reset(), 0);
+	return 0;
+}
 
 static inline int
 hdl_share_enable(void **state)

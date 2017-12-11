@@ -125,6 +125,18 @@ daos_eqx2eq(struct daos_eq_private *eqx)
 }
 
 /**
+ * Reset the private per-thread event.
+ *
+ * Can be used in failure case after daos_event_launch() called for the
+ * ev_thpriv and before its completion. For example some synchronous test
+ * cases in cmocka may fail in the middle of I/O operation, then in this
+ * test case's teardown func can reset the ev_thpriv to avoid it affects
+ * next test case due to dirty ev_thpriv status.
+ */
+int
+daos_event_priv_reset(void);
+
+/**
  * Retrieve the private per-thread event
  *
  * \param ev [OUT]	per-thread event.

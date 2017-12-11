@@ -96,9 +96,9 @@ pool_create_all(void **state)
 
 static const struct CMUnitTest tests[] = {
 	{ "MGMT1: create/destroy pool on all tgts",
-	  pool_create_all, async_disable, NULL},
+	  pool_create_all, async_disable, test_case_teardown},
 	{ "MGMT2: create/destroy pool on all tgts (async)",
-	  pool_create_all, async_enable, NULL},
+	  pool_create_all, async_enable, test_case_teardown},
 };
 
 static int

@@ -284,15 +284,15 @@ disconnect:
 
 static const struct CMUnitTest pool_tests[] = {
 	{ "POOL1: connect to non-existing pool",
-	  pool_connect_nonexist, NULL, NULL},
+	  pool_connect_nonexist, NULL, test_case_teardown},
 	{ "POOL2: connect/disconnect to pool",
-	  pool_connect, async_disable, NULL},
+	  pool_connect, async_disable, test_case_teardown},
 	{ "POOL3: connect/disconnect to pool (async)",
-	  pool_connect, async_enable, NULL},
+	  pool_connect, async_enable, test_case_teardown},
 	{ "POOL4: pool handle local2global and global2local",
-	  pool_connect, hdl_share_enable, NULL},
+	  pool_connect, hdl_share_enable, test_case_teardown},
 	{ "POOL5: exclusive connection",
-	  pool_connect_exclusively, NULL, NULL},
+	  pool_connect_exclusively, NULL, test_case_teardown},
 	/* Keep this one at the end, as it excludes target rank 1. */
 	{ "POOL6: exclude targets and query pool info",
 	  pool_exclude, async_disable, NULL}

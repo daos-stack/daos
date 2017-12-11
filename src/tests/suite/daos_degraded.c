@@ -285,11 +285,11 @@ io_degraded_enum_demo(void **state)
 /** create a new pool/container for each test */
 static const struct CMUnitTest degraded_tests[] = {
 	{"DEGRADED1: Degraded mode during updates",
-	 io_degraded_update_demo, NULL, NULL},
+	 io_degraded_update_demo, NULL, test_case_teardown},
 	{"DEGRADED2: Degraded mode during lookup",
-	 io_degraded_lookup_demo, NULL, NULL},
+	 io_degraded_lookup_demo, NULL, test_case_teardown},
 	{"DEGRADED3: Degraded mode during enumerate",
-	 io_degraded_enum_demo, NULL, NULL},
+	 io_degraded_enum_demo, NULL, test_case_teardown},
 };
 
 static int

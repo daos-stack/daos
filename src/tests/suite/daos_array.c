@@ -345,21 +345,21 @@ set_size_1mb(void **state)
 }
 static const struct CMUnitTest array_tests[] = {
 	{ "ARRAY1: byte array with buffer on stack",
-	  byte_array_simple_stack, NULL, NULL},
+	  byte_array_simple_stack, NULL, test_case_teardown},
 	{ "ARRAY2: array of uint8_t",
-	  array_simple, set_size_uint8, NULL},
+	  array_simple, set_size_uint8, test_case_teardown},
 	{ "ARRAY3: array of uint16_t",
-	  array_simple, set_size_uint16, NULL},
+	  array_simple, set_size_uint16, test_case_teardown},
 	{ "ARRAY4: array of uint32_t",
-	  array_simple, set_size_uint32, NULL},
+	  array_simple, set_size_uint32, test_case_teardown},
 	{ "ARRAY5: array of uint64_t",
-	  array_simple, set_size_uint64, NULL},
+	  array_simple, set_size_uint64, test_case_teardown},
 	{ "ARRAY6: array of 131071-byte records",
-	  array_simple, set_size_131071, NULL},
+	  array_simple, set_size_131071, test_case_teardown},
 	{ "ARRAY7: array of 1MB records",
-	  array_simple, set_size_1mb, NULL},
+	  array_simple, set_size_1mb, test_case_teardown},
 	{ "ARRAY8: partial I/O on array",
-	  array_partial, NULL, NULL},
+	  array_partial, NULL, test_case_teardown},
 };
 
 int

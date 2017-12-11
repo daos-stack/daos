@@ -204,11 +204,11 @@ pool_evict_discard(void **state)
 
 static const struct CMUnitTest epoch_recovery_tests[] = {
 	{"ERECOV1: container close discards uncommitted data",
-	 cont_close_discard, NULL, NULL},
+	 cont_close_discard, NULL, test_case_teardown},
 	{"ERECOV2: pool disconnect discards uncommitted data",
-	 pool_disconnect_discard, NULL, NULL},
+	 pool_disconnect_discard, NULL, test_case_teardown},
 	{"ERECOV3: pool evict discards uncommitted data",
-	 pool_evict_discard, NULL, NULL}
+	 pool_evict_discard, NULL, test_case_teardown}
 };
 
 static int

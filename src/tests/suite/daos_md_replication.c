@@ -191,9 +191,9 @@ destroy:
 
 static const struct CMUnitTest mdr_tests[] = {
 	{ "MDR1: stop pool service leader",
-	  mdr_stop_pool_svc, NULL, NULL},
+	  mdr_stop_pool_svc, NULL, test_case_teardown},
 	{ "MDR2: stop container service leader",
-	  mdr_stop_cont_svc, NULL, NULL},
+	  mdr_stop_cont_svc, NULL, test_case_teardown},
 };
 
 static int

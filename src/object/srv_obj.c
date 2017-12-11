@@ -532,7 +532,7 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 	daos_sg_list_t		*p_sgl;
 	crt_bulk_op_t		bulk_op;
 	int			i;
-	int			rc;
+	int			rc = 0;
 
 	D__DEBUG(DB_TRACE, "opc %d "DF_UOID" tag %d\n", opc_get(rpc->cr_opc),
 		DP_UOID(orw->orw_oid), dss_get_module_info()->dmi_tid);

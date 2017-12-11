@@ -138,11 +138,11 @@ co_create(void **state)
 
 static const struct CMUnitTest co_tests[] = {
 	{ "CONT1: create/open/close/destroy container",
-	  co_create, async_disable, NULL},
+	  co_create, async_disable, test_case_teardown},
 	{ "CONT2: create/open/close/destroy container (async)",
-	  co_create, async_enable, NULL},
+	  co_create, async_enable, test_case_teardown},
 	{ "CONT3: container handle local2glocal and global2local",
-	  co_create, hdl_share_enable, NULL},
+	  co_create, hdl_share_enable, test_case_teardown},
 };
 
 static int

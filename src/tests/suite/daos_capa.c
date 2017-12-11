@@ -533,19 +533,19 @@ update_ro(void **state)
 
 static const struct CMUnitTest capa_tests[] = {
 	{ "CAPA1: query pool with invalid pool handle",
-	  query, NULL, NULL},
+	  query, NULL, test_case_teardown},
 	{ "CAPA2: create container with invalid pool handle",
-	  create, NULL, NULL},
+	  create, NULL, test_case_teardown},
 	{ "CAPA3: destroy container with invalid pool handle",
-	  destroy, NULL, NULL},
+	  destroy, NULL, test_case_teardown},
 	{ "CAPA4: open container with invalid pool handle",
-	  open, NULL, NULL},
+	  open, NULL, test_case_teardown},
 	{ "CAPA5: update/fetch with invalid pool handle",
-	  io_invalid_poh, NULL, NULL},
+	  io_invalid_poh, NULL, test_case_teardown},
 	{ "CAPA6: update/fetch with invalid container handle",
-	  io_invalid_coh, NULL, NULL},
+	  io_invalid_coh, NULL, test_case_teardown},
 	{ "CAPA7: update with read-only container handle",
-	  update_ro, NULL, NULL},
+	  update_ro, NULL, test_case_teardown},
 };
 
 static int

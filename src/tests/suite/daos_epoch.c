@@ -594,29 +594,29 @@ test_epoch_hold_complex(void **varg)
 
 static const struct CMUnitTest epoch_tests[] = {
 	{ "EPOCH1: initial state when opening a new container",
-	  test_epoch_init, async_disable, NULL},
+	  test_epoch_init, async_disable, test_case_teardown},
 	{ "EPOCH2: epoch_query",
-	  test_epoch_query, async_disable, NULL},
+	  test_epoch_query, async_disable, test_case_teardown},
 	{ "EPOCH3: epoch_query (async)",
-	  test_epoch_query, async_enable, NULL},
+	  test_epoch_query, async_enable, test_case_teardown},
 	{ "EPOCH4: epoch_hold",
-	  test_epoch_hold, async_disable, NULL},
+	  test_epoch_hold, async_disable, test_case_teardown},
 	{ "EPOCH5: epoch_hold (async)",
-	  test_epoch_hold, async_enable, NULL},
+	  test_epoch_hold, async_enable, test_case_teardown},
 	{ "EPOCH6: epoch_commit",
-	  test_epoch_commit, async_disable, NULL},
+	  test_epoch_commit, async_disable, test_case_teardown},
 	{ "EPOCH7: epoch_commit (async)",
-	  test_epoch_commit, async_enable, NULL},
+	  test_epoch_commit, async_enable, test_case_teardown},
 	{ "EPOCH8: epoch_slip",
-	  test_epoch_slip, async_disable, NULL},
+	  test_epoch_slip, async_disable, test_case_teardown},
 	{ "EPOCH9: epoch_slip (async)",
-	  test_epoch_slip, async_enable, NULL},
+	  test_epoch_slip, async_enable, test_case_teardown},
 	{ "EPOCH10: epoch_slip (overlap)",
-	  test_epoch_slip, async_overlap, NULL},
+	  test_epoch_slip, async_overlap, test_case_teardown},
 	{ "EPOCH11: epoch_commit complex (multiple writers)",
-	  test_epoch_commit_complex, async_disable, NULL},
+	  test_epoch_commit_complex, async_disable, test_case_teardown},
 	{ "EPOCH12: epoch_hold complex (multiple writers)",
-	  test_epoch_hold_complex, async_disable, NULL}
+	  test_epoch_hold_complex, async_disable, test_case_teardown}
 };
 
 static int

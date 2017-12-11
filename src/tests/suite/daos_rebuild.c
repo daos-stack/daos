@@ -527,19 +527,19 @@ rebuild_two_failures(void **state)
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec mulitple dkeys",
-	 rebuild_dkeys, NULL, NULL},
+	 rebuild_dkeys, NULL, test_case_teardown},
 	{"REBUILD2: rebuild small rec multiple akeys",
-	 rebuild_akeys, NULL, NULL},
+	 rebuild_akeys, NULL, test_case_teardown},
 	{"REBUILD3: rebuild small rec multiple indexes",
-	 rebuild_indexes, NULL, NULL},
+	 rebuild_indexes, NULL, test_case_teardown},
 	{"REBUILD4: rebuild small rec multiple keys/indexes",
-	 rebuild_multiple, NULL, NULL},
+	 rebuild_multiple, NULL, test_case_teardown},
 	{"REBUILD5: rebuild large rec single index",
-	 rebuild_large_rec, NULL, NULL},
+	 rebuild_large_rec, NULL, test_case_teardown},
 	{"REBUILD6: rebuild multiple objects",
-	 rebuild_objects, NULL, NULL},
+	 rebuild_objects, NULL, test_case_teardown},
 	{"REBUILD7: rebuild with two failures",
-	 rebuild_two_failures, NULL, NULL},
+	 rebuild_two_failures, NULL, test_case_teardown},
 };
 
 int

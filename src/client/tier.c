@@ -152,7 +152,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 		    daos_event_t *ev)
 {
 	int			rc = 0;
-	tse_task_t		*local_conn_task;
+	tse_task_t		*local_conn_task = NULL;
 	struct xconn_arg	*cb_arg;
 	daos_tier_info_t	*pt;
 	struct daos_task_args	*dta;

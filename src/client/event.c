@@ -1158,6 +1158,12 @@ daos_event_abort(struct daos_event *ev)
 }
 
 int
+daos_event_priv_reset(void)
+{
+	return daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
+}
+
+int
 daos_event_priv_get(daos_event_t **ev)
 {
 	struct daos_event_private *evx = daos_ev2evx(&ev_thpriv);
@@ -1166,7 +1172,7 @@ daos_event_priv_get(daos_event_t **ev)
 	D__ASSERT(*ev == NULL);
 
 	if (!ev_thpriv_is_init) {
-		rc = daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
+		rc = daos_event_priv_reset();
 		if (rc)
 			return rc;
 		ev_thpriv_is_init = true;
