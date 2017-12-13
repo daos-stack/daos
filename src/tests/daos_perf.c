@@ -13,13 +13,18 @@
 
 #define DDSUBSYS       DDFAC(tests)
 
+#include <mpi.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
+#include <daos_test.h>
 
 /* unused object class to identify VOS (storage only) test mode */
 #define DAOS_OC_RAW	 0xBEEF
+
+int			mpi_rank;
+int			mpi_size;
 
 /* Test class, can be:
  *	vos  : pure storage
@@ -307,7 +312,7 @@ ts_write_perf(void)
 	int	rc;
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
-		ts_oid = dts_oid_gen(ts_class, 0);
+		ts_oid = dts_oid_gen(ts_class, mpi_rank);
 
 		for (j = 0; j < ts_dkey_p_obj; j++) {
 			if (ts_class != DAOS_OC_RAW) {
@@ -393,7 +398,8 @@ ts_daos_prepare(void)
 	int	 i;
 	int	 rc;
 
-	fprintf(stdout, "Setup DAOS\n");
+	if (mpi_rank == 0)
+		fprintf(stdout, "Setup DAOS\n");
 
 	rc = daos_init();
 	D__ASSERTF(!rc, "rc=%d\n", rc);
@@ -407,25 +413,45 @@ ts_daos_prepare(void)
 		ts_credits_buf[i].tc_evp = &ts_credits_buf[i].tc_ev;
 	}
 
-	ts_svc.rl_ranks  = &rank;
-	ts_svc.rl_nr.num = 1;
+	if (mpi_rank == 0) {
+		ts_svc.rl_ranks  = &rank;
+		ts_svc.rl_nr.num = 1;
 
-	rc = daos_pool_create(0731, geteuid(), getegid(), NULL, NULL,
-			      "pmem", ts_pool_size, &ts_svc, ts_pool, NULL);
-	D__ASSERTF(!rc, "rc=%d\n", rc);
-	ts_svc.rl_nr.num = ts_svc.rl_nr.num_out;
+		rc = daos_pool_create(0731, geteuid(), getegid(), NULL, NULL,
+				      "pmem", ts_pool_size, &ts_svc, ts_pool,
+				      NULL);
+		if (rc != 0)
+			goto bcast;
 
-	rc = daos_pool_connect(ts_pool, NULL, &ts_svc, DAOS_PC_EX,
-			       &ts_poh, NULL, NULL);
-	D__ASSERTF(!rc, "rc=%d\n", rc);
+		ts_svc.rl_nr.num = ts_svc.rl_nr.num_out;
+		rc = daos_pool_connect(ts_pool, NULL, &ts_svc, DAOS_PC_EX,
+				       &ts_poh, NULL, NULL);
+		if (rc != 0)
+			goto bcast;
 
-	/** create container */
-	rc = daos_cont_create(ts_poh, ts_cont, NULL);
-	D__ASSERTF(!rc, "rc=%d\n", rc);
+		/** create container */
+		rc = daos_cont_create(ts_poh, ts_cont, NULL);
+		if (rc != 0)
+			goto bcast;
 
-	/** open container */
-	rc = daos_cont_open(ts_poh, ts_cont, DAOS_COO_RW, &ts_coh, NULL, NULL);
-	D__ASSERTF(!rc, "rc=%d\n", rc);
+		/** open container */
+		rc = daos_cont_open(ts_poh, ts_cont, DAOS_COO_RW, &ts_coh, NULL,
+				    NULL);
+		if (rc != 0)
+			goto bcast;
+	}
+
+bcast:
+	if (mpi_size > 1)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		D__ASSERTF(!rc, "rc=%d\n", rc);
+
+	if (mpi_size > 1) {
+		handle_share(&ts_poh, HANDLE_POOL, mpi_rank, ts_poh, 0);
+		handle_share(&ts_coh, HANDLE_CO, mpi_rank, ts_poh, 0);
+	}
+
 	return 0;
 }
 
@@ -435,8 +461,10 @@ ts_daos_finish(void)
 	int	i;
 	int	rc;
 
-	rc = daos_pool_destroy(ts_pool, NULL, true, NULL);
-	D__ASSERTF(!rc, "rc=%d\n", rc);
+	if (mpi_rank == 0) {
+		rc = daos_pool_destroy(ts_pool, NULL, true, NULL);
+		D__ASSERTF(!rc, "rc=%d\n", rc);
+	}
 
 	for (i = 0; i < ts_credits_avail; i++)
 		daos_event_fini(&ts_credits_buf[i].tc_ev);
@@ -451,14 +479,21 @@ ts_prepare(void)
 	int	i;
 	int	rc;
 
+	if (ts_class == DAOS_OC_RAW && mpi_size > 1) {
+		fprintf(stderr, "VOS only tests can run with 1 rank\n");
+		return -1;
+	}
+
 	rc = daos_debug_init(NULL);
 	if (rc) {
 		fprintf(stderr, "Failed to initialize debug\n");
 		return rc;
 	}
 
-	uuid_generate(ts_pool);
-	uuid_generate(ts_cont);
+	if (mpi_rank == 0 || ts_class == DAOS_OC_RAW) {
+		uuid_generate(ts_pool);
+		uuid_generate(ts_cont);
+	}
 	uuid_generate(ts_cookie);
 
 	for (i = 0; i < TS_CREDITS_MAX; i++) {
@@ -627,8 +662,13 @@ static struct option ts_ops[] = {
 int
 main(int argc, char **argv)
 {
-	double		then;
-	int		rc;
+	double	then;
+	double	now;
+	int	rc;
+
+	MPI_Init(&argc, &argv);
+	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
 
 	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:zth",
 				 ts_ops, NULL)) != -1) {
@@ -652,7 +692,8 @@ main(int argc, char **argv)
 				ts_class = DAOS_OC_RAW;
 
 			} else {
-				ts_print_usage();
+				if (mpi_rank == 0)
+					ts_print_usage();
 				return -1;
 			}
 			break;
@@ -697,7 +738,8 @@ main(int argc, char **argv)
 			ts_zero_copy = true;
 			break;
 		case 'h':
-			ts_print_usage();
+			if (mpi_rank == 0)
+				ts_print_usage();
 			return 0;
 		}
 	}
@@ -707,7 +749,8 @@ main(int argc, char **argv)
 		fprintf(stderr, "Invalid arguments %d/%d/%d/%d\\n",
 			ts_akey_p_dkey, ts_recx_p_akey,
 			ts_recx_p_akey, ts_val_size);
-		ts_print_usage();
+		if (mpi_rank == 0)
+			ts_print_usage();
 		return -1;
 	}
 
@@ -715,62 +758,117 @@ main(int argc, char **argv)
 	if (rc)
 		return -1;
 
-	fprintf(stdout,
-		"Test :\n\t%s\n"
-		"Parameters :\n"
-		"\tpool size     : %u MB\n"
-		"\tcredits       : %d (sync I/O for -ve)\n"
-		"\tobj_per_cont  : %u\n"
-		"\tdkey_per_obj  : %u\n"
-		"\takey_per_dkey : %u\n"
-		"\trecx_per_akey : %u\n"
-		"\tvalue type    : %s\n"
-		"\tvalue size    : %u\n"
-		"\tzero copy     : %s\n"
-		"\toverwrite     : %s\n",
-		ts_class_name(),
-		(unsigned int)(ts_pool_size >> 20),
-		ts_credits_avail,
-		ts_obj_p_cont,
-		ts_dkey_p_obj,
-		ts_akey_p_dkey,
-		ts_recx_p_akey,
-		ts_val_type(),
-		ts_val_size,
-		ts_yes_or_no(ts_zero_copy),
-		ts_yes_or_no(ts_overwrite));
+	if (mpi_rank == 0)
+		fprintf(stdout,
+			"Test :\n\t%s\n"
+			"Parameters :\n"
+			"\tpool size     : %u MB\n"
+			"\tcredits       : %d (sync I/O for -ve)\n"
+			"\tobj_per_cont  : %u x %d (procs)\n"
+			"\tdkey_per_obj  : %u\n"
+			"\takey_per_dkey : %u\n"
+			"\trecx_per_akey : %u\n"
+			"\tvalue type    : %s\n"
+			"\tvalue size    : %u\n"
+			"\tzero copy     : %s\n"
+			"\toverwrite     : %s\n",
+			ts_class_name(),
+			(unsigned int)(ts_pool_size >> 20),
+			ts_credits_avail,
+			ts_obj_p_cont,
+			mpi_size,
+			ts_dkey_p_obj,
+			ts_akey_p_dkey,
+			ts_recx_p_akey,
+			ts_val_type(),
+			ts_val_size,
+			ts_yes_or_no(ts_zero_copy),
+			ts_yes_or_no(ts_overwrite));
 
-	fprintf(stdout, "Started...\n");
+	if (mpi_rank == 0)
+		fprintf(stdout, "Started...\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	then = dts_time_now();
 	/* TODO: add fetch performance test */
 	rc = ts_write_perf();
+	now = dts_time_now();
+
+	if (mpi_size > 1) {
+		int rc_g;
+
+		MPI_Allreduce(&rc, &rc_g, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+		rc = rc_g;
+	}
+
 	if (rc) {
 		fprintf(stderr, "Failed: %d\n", rc);
 	} else {
-		unsigned long	total;
-		double		duration;
-		double		bandwidth;
-		double		latency;
-		double		rate;
+		double		duration, agg_duration;
+		double		first_start;
+		double		last_end;
+		double		duration_max;
+		double		duration_min;
+		double		duration_sum;
 
-		duration  = dts_time_now() - then;
-		total	  = ts_obj_p_cont * ts_dkey_p_obj *
-			    ts_akey_p_dkey * ts_recx_p_akey;
+		duration = now - then;
 
-		rate	  = total / duration;
-		latency	  = (duration * 1000 * 1000) / total;
-		bandwidth = (rate * ts_val_size) / (1024 * 1024);
+		if (mpi_size > 1) {
+			MPI_Reduce(&then, &first_start, 1, MPI_DOUBLE,
+				   MPI_MIN, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&now, &last_end, 1, MPI_DOUBLE,
+				   MPI_MAX, 0, MPI_COMM_WORLD);
+		} else {
+			first_start = then;
+			last_end = now;
+		}
 
-		fprintf(stdout, "Successfully completed:\n"
-			"\tduration : %-10.6f sec\n"
-			"\tbandwith : %-10.3f MB/sec\n"
-			"\trate     : %-10.2f IO/sec\n"
-			"\tlatency  : %-10.3f us (nonsense if credits > 1)\n",
-			duration, bandwidth, rate, latency);
+		agg_duration = last_end - first_start;
+
+		if (mpi_size > 1) {
+			MPI_Reduce(&duration, &duration_max, 1, MPI_DOUBLE,
+				   MPI_MAX, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&duration, &duration_min, 1, MPI_DOUBLE,
+				   MPI_MIN, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&duration, &duration_sum, 1, MPI_DOUBLE,
+				   MPI_SUM, 0, MPI_COMM_WORLD);
+		} else {
+			duration_max = duration_min = duration_sum = duration;
+		}
+
+		if (mpi_rank == 0) {
+			unsigned long	total;
+			double		bandwidth;
+			double		latency;
+			double		rate;
+
+			total = mpi_size * ts_obj_p_cont * ts_dkey_p_obj *
+				ts_akey_p_dkey * ts_recx_p_akey;
+
+			rate = total / agg_duration;
+			latency = (agg_duration * 1000 * 1000) / total;
+			bandwidth = (rate * ts_val_size) / (1024 * 1024);
+
+			fprintf(stdout, "Successfully completed:\n"
+				"\tduration : %-10.6f sec\n"
+				"\tbandwith : %-10.3f MB/sec\n"
+				"\trate     : %-10.2f IO/sec\n"
+				"\tlatency  : %-10.3f us (nonsense if credits > 1)\n",
+				agg_duration, bandwidth, rate, latency);
+
+			fprintf(stdout, "Duration across processes:\n");
+			fprintf(stdout, "MAX duration : %-10.6f sec\n",
+				duration_max);
+			fprintf(stdout, "MIN duration : %-10.6f sec\n",
+				duration_min);
+			fprintf(stdout, "Average duration : %-10.6f sec\n",
+				duration_sum / mpi_size);
+		}
 	}
 
 	ts_finish();
 	daos_debug_fini();
+	MPI_Finalize();
 
 	return 0;
 }
