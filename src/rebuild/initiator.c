@@ -47,7 +47,7 @@ struct rebuild_iter_arg {
 	void			*arg;
 	uuid_t			pool_uuid;
 	uuid_t			cont_uuid;
-	struct rebuild_pool_tracker *rpt;
+	struct rebuild_tgt_pool_tracker *rpt;
 	rebuild_obj_iter_cb_t	obj_cb;
 	unsigned int		map_ver;
 	daos_handle_t		root_hdl;
@@ -170,7 +170,7 @@ rebuild_fetch_update(struct rebuild_dkey *rdkey, daos_handle_t oh,
 }
 
 static int
-rebuild_rec(struct rebuild_pool_tracker *rpt, struct ds_cont *ds_cont,
+rebuild_rec(struct rebuild_tgt_pool_tracker *rpt, struct ds_cont *ds_cont,
 	    daos_handle_t oh, struct rebuild_dkey *rdkey, daos_key_t *akey,
 	    unsigned int num, unsigned int type, daos_size_t size,
 	    daos_recx_t *recxs, daos_epoch_range_t *eprs, uuid_t *cookies,
@@ -251,7 +251,7 @@ next:
 
 #define ITER_COUNT	5
 static int
-rebuild_akey(struct rebuild_pool_tracker *rpt, struct ds_cont *ds_cont,
+rebuild_akey(struct rebuild_tgt_pool_tracker *rpt, struct ds_cont *ds_cont,
 	     daos_handle_t oh, int type, struct rebuild_dkey *rdkey,
 	     daos_key_t *akey)
 {
@@ -302,7 +302,8 @@ rebuild_akey(struct rebuild_pool_tracker *rpt, struct ds_cont *ds_cont,
 }
 
 static int
-rebuild_one_dkey(struct rebuild_pool_tracker *rpt, struct rebuild_dkey *rdkey)
+rebuild_one_dkey(struct rebuild_tgt_pool_tracker *rpt,
+		 struct rebuild_dkey *rdkey)
 {
 	struct rebuild_pool_tls	*tls;
 	daos_iov_t		akey_iov;
@@ -410,10 +411,10 @@ free:
 static void
 rebuild_dkey_ult(void *arg)
 {
-	struct rebuild_pool_tls	*tls;
-	struct rebuild_pool_tracker *rpt = arg;
-	struct rebuild_puller	*puller;
-	unsigned int		idx;
+	struct rebuild_pool_tls		*tls;
+	struct rebuild_tgt_pool_tracker *rpt = arg;
+	struct rebuild_puller		*puller;
+	unsigned int			idx;
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 				      rpt->rt_rebuild_ver);
@@ -499,11 +500,11 @@ static int
 rebuild_dkey_queue(daos_unit_oid_t oid, daos_epoch_t epoch,
 		   daos_key_t *dkey, struct rebuild_iter_arg *iter_arg)
 {
-	struct rebuild_puller	*puller;
-	struct rebuild_pool_tracker *rpt = iter_arg->rpt;
-	struct rebuild_dkey	*rdkey = NULL;
-	unsigned int		idx;
-	int			rc;
+	struct rebuild_puller		*puller;
+	struct rebuild_tgt_pool_tracker *rpt = iter_arg->rpt;
+	struct rebuild_dkey		*rdkey = NULL;
+	unsigned int			idx;
+	int				rc;
 
 	idx = rebuild_get_nstream_idx(dkey);
 	puller = &rpt->rt_pullers[idx];
@@ -635,11 +636,11 @@ static int
 rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		    daos_iov_t *val_iov, void *data)
 {
-	struct rebuild_iter_arg *arg = data;
-	struct rebuild_pool_tracker *rpt = arg->rpt;
-	daos_unit_oid_t		*oid = key_iov->iov_buf;
-	unsigned int		*shard = val_iov->iov_buf;
-	int			rc;
+	struct rebuild_iter_arg		*arg = data;
+	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
+	daos_unit_oid_t			*oid = key_iov->iov_buf;
+	unsigned int			*shard = val_iov->iov_buf;
+	int				rc;
 
 	D__DEBUG(DB_TRACE, "obj rebuild "DF_UUID"/"DF_UOID" %"PRIx64" start\n",
 		 DP_UUID(arg->cont_uuid), DP_UOID(*oid), ih.cookie);
@@ -681,7 +682,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 {
 	struct rebuild_root		*root = val_iov->iov_buf;
 	struct rebuild_iter_arg		*arg = data;
-	struct rebuild_pool_tracker	*rpt = arg->rpt;
+	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 	struct rebuild_pool_tls		*tls;
 	daos_handle_t			coh = DAOS_HDL_INVAL;
 	int rc;
@@ -753,10 +754,10 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 static void
 rebuild_puller(void *arg)
 {
-	struct rebuild_pool_tls	*tls;
-	struct rebuild_iter_arg	*iter_arg = arg;
-	struct rebuild_pool_tracker *rpt = iter_arg->rpt;
-	int			rc;
+	struct rebuild_pool_tls		*tls;
+	struct rebuild_iter_arg		*iter_arg = arg;
+	struct rebuild_tgt_pool_tracker *rpt = iter_arg->rpt;
+	int				rc;
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 				      rpt->rt_rebuild_ver);
@@ -778,7 +779,7 @@ rebuild_puller(void *arg)
 
 
 static int
-rebuild_obj_hdl_get(struct rebuild_pool_tracker *rpt, daos_handle_t *hdl)
+rebuild_obj_hdl_get(struct rebuild_tgt_pool_tracker *rpt, daos_handle_t *hdl)
 {
 	struct umem_attr	uma;
 	int rc;
@@ -806,18 +807,18 @@ rebuild_obj_hdl_get(struct rebuild_pool_tracker *rpt, daos_handle_t *hdl)
 void
 rebuild_obj_handler(crt_rpc_t *rpc)
 {
-	struct rebuild_objs_in	*rebuild_in;
-	struct rebuild_pool_tracker *rpt = NULL;
-	struct rebuild_out	*rebuild_out;
-	daos_unit_oid_t		*oids;
-	unsigned int		oids_count;
-	uuid_t			*co_uuids;
-	unsigned int		co_count;
-	uint32_t		*shards;
-	unsigned int		shards_count;
-	daos_handle_t		btr_hdl;
-	unsigned int		i;
-	int			rc;
+	struct rebuild_objs_in		*rebuild_in;
+	struct rebuild_tgt_pool_tracker *rpt = NULL;
+	struct rebuild_out		*rebuild_out;
+	daos_unit_oid_t			*oids;
+	unsigned int			oids_count;
+	uuid_t				*co_uuids;
+	unsigned int			co_count;
+	uint32_t			*shards;
+	unsigned int			shards_count;
+	daos_handle_t			btr_hdl;
+	unsigned int			i;
+	int				rc;
 
 	rebuild_in = crt_req_get(rpc);
 	oids = rebuild_in->roi_oids.da_arrays;
@@ -838,8 +839,8 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 	 * rebuilding yet, i.e. it did not receive scan req to
 	 * prepare rebuild yet (see rebuild_tgt_prepare()).
 	 */
-	rpt = rebuild_pool_tracker_lookup(rebuild_in->roi_pool_uuid,
-					  rebuild_in->roi_map_ver);
+	rpt = rebuild_tgt_pool_tracker_lookup(rebuild_in->roi_pool_uuid,
+					      rebuild_in->roi_map_ver);
 	if (rpt == NULL)
 		D__GOTO(out, rc = -DER_AGAIN);
 
@@ -852,17 +853,25 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 	for (i = 0; i < oids_count; i++) {
 		rc = rebuild_cont_obj_insert(btr_hdl, co_uuids[i],
 					     oids[i], shards[i]);
-		if (rc == 1)
+		if (rc == 1) {
 			D__DEBUG(DB_TRACE, "insert local "DF_UOID" "DF_UUID
 				" %u hdl %"PRIx64"\n", DP_UOID(oids[i]),
 				DP_UUID(co_uuids[i]), shards[i],
 				btr_hdl.cookie);
-		else if (rc == 0)
+		} else if (rc == 0) {
+			struct rebuild_pool_tls *tls;
+
+			tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+						      rpt->rt_rebuild_ver);
+			D_ASSERT(tls != NULL);
+
+			tls->rebuild_pool_obj_count++;
 			D__DEBUG(DB_TRACE, ""DF_UOID" "DF_UUID" %u exist.\n",
 				DP_UOID(oids[i]), DP_UUID(co_uuids[i]),
 				shards[i]);
-		else if (rc < 0)
+		} else if (rc < 0) {
 			break;
+		}
 	}
 	if (rc < 0)
 		D__GOTO(out, rc);

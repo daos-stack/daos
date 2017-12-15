@@ -26,6 +26,7 @@
 
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/param.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <unistd.h>
@@ -186,6 +187,10 @@ daos_size_t daos_iod_len(daos_iod_t *iod);
 char *daos_str_trimwhite(char *str);
 int daos_iov_copy(daos_iov_t *dst, daos_iov_t *src);
 void daos_iov_free(daos_iov_t *iov);
+
+/* The DAOS BITS is composed by uint32_t[x] */
+#define DAOS_BITS_SIZE  (sizeof(uint32_t) * NBBY)
+int daos_first_unset_bit(uint32_t *bits, unsigned int size);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually

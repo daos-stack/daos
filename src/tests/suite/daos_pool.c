@@ -192,6 +192,13 @@ pool_exclude(void **state)
 	d_rank_t	 rank;
 	int		 rc;
 
+	if (1) {
+		print_message("Skip it for now, because CaRT can't support "
+			      "subgroup membership, excluding a node w/o "
+			      "killing it will cause IV issue.\n");
+		return;
+	}
+
 	if (arg->myrank != 0)
 		return;
 

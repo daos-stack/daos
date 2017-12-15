@@ -54,7 +54,7 @@ struct rebuild_send_arg {
 
 struct rebuild_scan_arg {
 	daos_handle_t		rebuild_tree_hdl;
-	struct rebuild_pool_tracker *rpt;
+	struct rebuild_tgt_pool_tracker *rpt;
 	struct pl_target_grp	*tgp_failed;
 	d_rank_list_t	*failed_ranks;
 	uint32_t		map_ver;
@@ -141,7 +141,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		     struct rebuild_scan_arg *scan_arg)
 {
 	struct rebuild_objs_in *rebuild_in;
-	struct rebuild_pool_tracker	*rpt = scan_arg->rpt;
+	struct rebuild_tgt_pool_tracker	*rpt = scan_arg->rpt;
 	struct rebuild_send_arg *arg = NULL;
 	daos_unit_oid_t		*oids = NULL;
 	uuid_t			*uuids = NULL;
@@ -393,11 +393,11 @@ rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 		      unsigned int shard, uuid_t pool_uuid, uuid_t co_uuid,
 		      daos_unit_oid_t oid)
 {
-	daos_iov_t key_iov;
-	daos_iov_t val_iov;
-	struct rebuild_root *tgt_root;
-	daos_handle_t	toh = arg->rebuild_tree_hdl;
-	int rc;
+	daos_iov_t		key_iov;
+	daos_iov_t		val_iov;
+	struct rebuild_root	*tgt_root;
+	daos_handle_t		toh = arg->rebuild_tree_hdl;
+	int			rc;
 
 	/* look up the target tree */
 	daos_iov_set(&key_iov, &tgt_id, sizeof(tgt_id));
@@ -441,7 +441,7 @@ static int
 placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 {
 	struct rebuild_scan_arg	*arg = data;
-	struct rebuild_pool_tracker *rpt = arg->rpt;
+	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
 	struct pl_obj_layout	*layout = NULL;
 	struct pl_map		*map = NULL;
 	struct daos_obj_md	md;
@@ -510,7 +510,7 @@ rebuild_scanner(void *data)
 {
 	struct rebuild_iter_arg *arg = data;
 	struct rebuild_scan_arg	*scan_arg = arg->arg;
-	struct rebuild_pool_tracker *rpt = scan_arg->rpt;
+	struct rebuild_tgt_pool_tracker *rpt = scan_arg->rpt;
 
 	D_ASSERT(rpt != NULL);
 
@@ -521,7 +521,7 @@ rebuild_scanner(void *data)
 static int
 rebuild_scan_done(void *data)
 {
-	struct rebuild_pool_tracker *rpt = data;
+	struct rebuild_tgt_pool_tracker *rpt = data;
 	struct rebuild_pool_tls *tls;
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
@@ -542,7 +542,7 @@ rebuild_scan_leader(void *data)
 	struct rebuild_scan_arg	  *arg = data;
 	struct pl_target_grp	  *tgp;
 	struct pool_map		  *map;
-	struct rebuild_pool_tracker *rpt;
+	struct rebuild_tgt_pool_tracker *rpt;
 	struct rebuild_pool_tls	  *tls;
 	struct rebuild_iter_arg    iter_arg;
 	int			   i;
@@ -598,8 +598,8 @@ rebuild_scan_leader(void *data)
 	if (rc)
 		D__GOTO(out_group, rc);
 
-	D__DEBUG(DB_TRACE, "rebuild scan collective "DF_UUID" is done\n",
-		DP_UUID(rpt->rt_pool_uuid));
+	D__DEBUG(DB_TRACE, "rebuild scan collective "DF_UUID" done.\n",
+		 DP_UUID(rpt->rt_pool_uuid));
 
 	while (!dbtree_is_empty(arg->rebuild_tree_hdl)) {
 		/* walk through the rebuild tree and send the rebuild objects */
@@ -647,7 +647,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_out		*ro;
 	struct rebuild_scan_arg		*scan_arg;
 	struct umem_attr		 uma;
-	struct rebuild_pool_tracker	*rpt;
+	struct rebuild_tgt_pool_tracker	*rpt;
 	int				 rc;
 
 	rsi = crt_req_get(rpc);
@@ -657,14 +657,21 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		 dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
 		 rsi->rsi_pool_map_ver);
 
-	rpt = rebuild_pool_tracker_lookup(rsi->rsi_pool_uuid,
-					  rsi->rsi_pool_map_ver);
+	/* check if the rebuild is already started */
+	rpt = rebuild_tgt_pool_tracker_lookup(rsi->rsi_pool_uuid,
+					      rsi->rsi_pool_map_ver);
 	if (rpt != NULL) {
-		/* Only one pool version can be rebuilt for now */
-		D__ASSERT(rsi->rsi_pool_map_ver == rpt->rt_rebuild_ver);
+		D__ASSERT(rsi->rsi_pool_map_ver >= rpt->rt_rebuild_ver);
 
-		if (rpt->rt_prepared) {
-			D__DEBUG(DB_TRACE, DF_UUID" already started\n",
+		/* Delete the left over rpt */
+		if (rsi->rsi_pool_map_ver > rpt->rt_rebuild_ver) {
+			D__DEBUG(DB_TRACE, "delete the leftover "
+				 DF_UUID"/%d/%p\n", DP_UUID(rpt->rt_pool_uuid),
+				 rpt->rt_rebuild_ver, rpt);
+			rebuild_tgt_fini(rpt);
+			rpt = NULL;
+		} else if (rsi->rsi_pool_map_ver == rpt->rt_rebuild_ver) {
+			D__DEBUG(DB_TRACE, DF_UUID" already started.\n",
 				 DP_UUID(rsi->rsi_pool_uuid));
 			D__GOTO(out, rc = 0);
 		}
