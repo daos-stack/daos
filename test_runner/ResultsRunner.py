@@ -96,6 +96,15 @@ class SubTestResults():
         self.logger.log(0, "test results update set results: %s",
                         str(self.results_list))
 
+    @staticmethod
+    def fix_duration(result_list):
+        """fix the duration to an int"""
+        for result in result_list:
+            duration = int(float(result['duration']) + 0.499999)
+            result['duration'] = duration
+            if 'SubTests' in result:
+                SubTestResults.fix_duration(result['SubTests'])
+
     def create_test_set_results(self):
         """create and return a test set ojbect"""
         self.logger.log(0, "subtest results: create subtest_results")
@@ -104,6 +113,7 @@ class SubTestResults():
         self.logger.log(0, "subtest results test_data len: %d",
                         len(self.results_list))
         name = "%s/subtest_results.yml" % self.base_dir
+        self.fix_duration(self.results_list)
         with open(name, 'w') as fd:
             dump(self.results_list, fd, Dumper=Dumper, indent=4,
                  default_flow_style=False)
