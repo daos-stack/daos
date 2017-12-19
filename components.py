@@ -323,14 +323,16 @@ REQS.define('daos',
 
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
-            commands=['./makeconf.sh',
-                      './configure --disable-util --prefix=$FUSE_PREFIX',
-                      'make',
-                      'make install'],
+            commands=['meson $FUSE_SRC --prefix=$FUSE_PREFIX',
+                      'meson configure -D udevrulesdir=$FUSE_PREFIX/udev',
+                      'meson configure -D disable-mtab=True',
+                      'ninja-build -v -j1',
+                      'ninja-build install'],
             libs=['fuse3'],
             defines=["FUSE_USE_VERSION=30"],
             required_progs=['libtoolize'],
-            headers=['fuse3/fuse.h'])
+            headers=['fuse3/fuse.h'],
+            out_of_src_build=True)
 
 REQS.define('ofi',
             retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
