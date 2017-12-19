@@ -31,6 +31,11 @@ def run_test(env, *tests):
         if not PREREQS.check_component(test):
             print "Check for component failed"
             raise Exception("Component %s not found" % test)
+        #Try the same test again to ensure check_component works
+        #when called a second time (IOF-768)
+        if not PREREQS.check_component(test):
+            print "Check for component failed"
+            raise Exception("Component %s not found" % test)
     PREREQS.require(cloned_env, *tests)
     target_name = "_".join(my_tests)
     prog = cloned_env.Program(target=target_name,

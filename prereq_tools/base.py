@@ -510,6 +510,7 @@ class PreReqComponent(object):
     def __init__(self, env, variables, config_file=None, arch=None):
         self.__defined = {}
         self.__required = {}
+        self.__errors = {}
         self.__env = env
         self.__opts = variables
         self.configs = None
@@ -839,6 +840,8 @@ class PreReqComponent(object):
         for comp in comps:
             if comp not in self.__defined:
                 raise MissingDefinition(comp)
+            if comp in self.__errors:
+                raise self.__errors[comp]
             comp_def = self.__defined[comp]
             if headers_only:
                 needed_libs = None
@@ -855,10 +858,15 @@ class PreReqComponent(object):
                     changes = True
                 continue
             self.__required[comp] = False
-            comp_def.configure()
-            if comp_def.build(env, needed_libs):
-                self.__required[comp] = False
-                changes = True
+            try:
+                comp_def.configure()
+                if comp_def.build(env, needed_libs):
+                    self.__required[comp] = False
+                    changes = True
+            except Exception as error:
+                # Save the exception in case the component is requested again
+                self.__errors[comp] = error
+                raise error
 
         return changes
 
