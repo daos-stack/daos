@@ -733,7 +733,6 @@ out:
 	D_ASSERT(rpt != NULL);
 	if (rc && rpt)
 		rpt->rt_abort = 1;
-	rc = crt_reply_send(rpc);
-	if (rc != 0)
-		D__ERROR("send reply failed: %d\n", rc);
+
+	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
 }

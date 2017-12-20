@@ -185,3 +185,26 @@ dss_sleep(int ms)
 		ABT_thread_yield();
 	} while (ABT_get_wtime() < t);
 }
+
+/**
+ * Server send reply or drop reply by fail_loc.
+ *
+ * \param[in] rpc	rpc to be replied.
+ * \param[in] fail_loc	Fail_loc to check if it needs to drop reply.
+ *
+ * \return		0 if success, negative errno if failed.
+ */
+int
+dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc)
+{ 
+	int rc;
+
+	if (DAOS_FAIL_CHECK(fail_loc))
+		return 0;
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D__ERROR("send reply failed: %d\n", rc);
+
+	return rc;
+}

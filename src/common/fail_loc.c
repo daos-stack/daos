@@ -32,9 +32,6 @@
 uint64_t daos_fail_loc;
 uint64_t daos_fail_value;
 
-#define DAOS_FAIL_MASK_MOD	0x0000ff00
-#define DAOS_FAIL_MASK_LOC	(DAOS_FAIL_MASK_MOD | 0x000000ff)
-
 void
 daos_reset_fail_loc()
 {

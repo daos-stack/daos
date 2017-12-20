@@ -703,6 +703,7 @@ rebuild_trigger(struct ds_pool *pool, struct rebuild_global_pool_tracker *rgt,
 	/* Send rebuild RPC to all targets of the pool to initialize rebuild.
 	 * XXX this should be idempotent as well as query and fini.
 	 */
+retry:
 	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
 				  pool, DAOS_REBUILD_MODULE,
 				  REBUILD_OBJECTS_SCAN, &rpc, bulk_hdl,
@@ -726,8 +727,16 @@ rebuild_trigger(struct ds_pool *pool, struct rebuild_global_pool_tracker *rgt,
 	rsi->rsi_svc_list = svc_list;
 	crt_group_rank(pool->sp_group,  &rsi->rsi_master_rank);
 	rc = dss_rpc_send(rpc);
-	if (rc != 0)
+	if (rc != 0) {
+		/* If it is network failure or timedout, let's refresh
+		 * failure list and retry
+		 */
+		if (rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) {
+			crt_req_decref(rpc);
+			D__GOTO(retry, rc);
+		}
 		D__GOTO(out_rpc, rc);
+	}
 
 	ro = crt_reply_get(rpc);
 	rc = ro->ro_status;

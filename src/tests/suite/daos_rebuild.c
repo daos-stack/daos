@@ -423,6 +423,43 @@ rebuild_objects(void **state)
 }
 
 static void
+rebuild_drop_scan(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	daos_obj_id_t		oid;
+	struct ioreq		req;
+	int			i;
+	int			j;
+
+	if (!rebuild_runable(arg, 3, false))
+		skip();
+
+	print_message("create %d objects\n", OBJ_NR);
+	for (i = 0; i < OBJ_NR; i++) {
+		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+		/** Insert 1000 records */
+		print_message("Insert %d kv record in object "DF_OID"\n",
+			      KEY_NR, DP_OID(oid));
+		for (j = 0; j < 10; j++) {
+			char	key[16];
+
+			sprintf(key, "%d", j);
+			insert_single(key, "a_key", 0, "data",
+				      strlen("data") + 1, 0, &req);
+		}
+		ioreq_fini(&req);
+	}
+	/* Set drop scan reply on all servers */
+	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
+			     DAOS_REBUILD_DROP_SCAN | DAOS_FAIL_ONCE,
+			     NULL);
+	rebuild_single_target(arg, ranks_to_kill[0], false);
+}
+
+static void
 rebuild_two_failures(void **state)
 {
 	test_arg_t		*arg = *state;
@@ -540,7 +577,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_large_rec, NULL, test_case_teardown},
 	{"REBUILD6: rebuild multiple objects",
 	 rebuild_objects, NULL, test_case_teardown},
-	{"REBUILD7: rebuild with two failures",
+	{"REBUILD7: drop rebuild scan reply",
+	rebuild_drop_scan, NULL, test_case_teardown},
+	{"REBUILD8: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
 };
 
