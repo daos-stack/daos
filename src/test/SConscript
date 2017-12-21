@@ -59,6 +59,8 @@ def scons():
 
     libraries = ['gurt', 'cart', 'pthread']
     tenv.AppendUnique(LIBS=libraries)
+    # Due to the way the tests are written they don't compile without -O2
+    tenv.AppendUnique(CCFLAGS=['-O2'])
 
     prereqs.require(tenv, 'crypto', 'pmix', 'mercury')
 
