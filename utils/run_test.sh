@@ -48,7 +48,8 @@ JENKINS_TEST_LIST=(scripts/cart_echo_test.yml           \
                    scripts/cart_test_singleton.yml      \
                    scripts/cart_rpc_test.yml            \
                    scripts/cart_test_corpc_version.yml  \
-                   scripts/cart_test_cart_ctl.yml)
+                   scripts/cart_test_cart_ctl.yml	\
+                   scripts/cart_test_iv.yml)
 
 # Check for symbol names in the library.
 if [ -d "utils" ]; then

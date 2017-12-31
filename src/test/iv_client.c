@@ -39,6 +39,20 @@
  * This is a runtime test for verifying IV framework. IV Client is used for
  * initiation of tests
  */
+
+/*
+ * TODO:
+ * Jan 23, 2018 - Byron Marohn
+ *
+ * A few things here could use improvement.
+ * - Shutdown sometimes hangs, forcing the caller to forcibly kill the process
+ * - Keys are currently passed all the way back to the caller,
+ *   which is probably unnecessary.
+ * - The scatter-gather list used to transfer IV values back and forth is
+ *   fixed to using just the first IOV buffer, which doesn't cover all the
+ *   potential use cases for IV
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -74,6 +88,7 @@ print_usage(const char *err_msg)
 		"\t-v <value>     : Value is string, only used for update operation\n"
 		"\t-x <value>     : Value as hex string, only used for update operation\n"
 		"\t-s <strategy>  : One of ['none', 'eager_update', 'lazy_update', 'eager_notify', 'lazy_notify']\n"
+		"\t-l <log.txt>   : Print results to log file instead of stdout\n"
 		"\n"
 		"Example usage: ./iv_client -o fetch -r 0 -k 2:9\n"
 		"\tThis will initiate fetch of key [2:9] from rank 0.\n"
@@ -214,47 +229,32 @@ unpack_hex_string_inplace(char *str, size_t *len)
 	return 0;
 }
 
-/**
- * Prints a scatter-gather list as components of a JSON array in hex like:
- *
- * <prefix>"DEADBEEF",
- * <prefix>"FEEDCODE"
- *
- * Prefix should probably be something like "\t\t" for pretty formatting
- */
-static void print_sgl_as_json(d_sg_list_t *sg_list, char *prefix)
-{
-	uint32_t i;
-
-	for (i = 0; i < sg_list->sg_nr; i++) {
-		printf("%s\"", prefix);
-		print_hex(sg_list->sg_iovs[i].iov_buf,
-			  sg_list->sg_iovs[i].iov_buf_len);
-		printf("\"");
-		if (i + 1 < sg_list->sg_nr)
-			printf(",");
-		printf("\n");
-	}
-}
 
 /**
  * Print the result of a fetch as valid JSON
  *
  * This isn't very extensible - would probably need a real
  * JSON library to generalize this
+ *
+ * Only the first 'size' bytes of the first IOV in the sg_list is printed as hex
  */
 static void print_result_as_json(int64_t return_code, d_iov_t *key,
-				 d_sg_list_t *sg_list)
+				 uint64_t size, d_sg_list_t *sg_list,
+				 FILE *log_file)
 {
-	printf("{\n");
-	printf("\t\"return_code\":\"%ld\",\n", return_code);
-	printf("\t\"key\":\"");
-	print_hex(key->iov_buf, key->iov_len);
-	printf("\",\n");
-	printf("\t\"value\":[\n");
-	print_sgl_as_json(sg_list, "\t\t");
-	printf("\t]\n");
-	printf("}\n");
+	assert(sg_list->sg_nr == 1);
+	assert(sg_list->sg_iovs[0].iov_buf_len >= size);
+
+	fprintf(log_file, "{\n");
+	fprintf(log_file, "\t\"return_code\":%ld,\n", return_code);
+	fprintf(log_file, "\t\"key\":\"");
+	print_hex(key->iov_buf, key->iov_len, log_file);
+	fprintf(log_file, "\",\n");
+	fprintf(log_file, "\t\"value\":\"");
+	print_hex(sg_list->sg_iovs[0].iov_buf, size, log_file);
+	fprintf(log_file, "\"\n");
+	fprintf(log_file, "}\n");
+	fflush(log_file);
 }
 
 /**
@@ -263,11 +263,11 @@ static void print_result_as_json(int64_t return_code, d_iov_t *key,
  * using BULK_PUT
  */
 static void
-test_iv_fetch(struct iv_key_struct *key)
+test_iv_fetch(struct iv_key_struct *key, FILE *log_file)
 {
 	struct rpc_test_fetch_iv_in	*input;
 	struct rpc_test_fetch_iv_out	*output;
-	crt_rpc_t			*rpc_req;
+	crt_rpc_t			*rpc_req = NULL;
 	uint8_t				*buf = NULL;
 	d_sg_list_t			 sg_list;
 	crt_bulk_perm_t			 perms = CRT_BULK_RW;
@@ -275,8 +275,9 @@ test_iv_fetch(struct iv_key_struct *key)
 
 	DBG_PRINT("Attempting fetch for key[%d:%d]\n", key->rank, key->key_id);
 
-	prepare_rpc_request(g_crt_ctx, RPC_TEST_FETCH_IV, &g_server_ep,
+	rc = prepare_rpc_request(g_crt_ctx, RPC_TEST_FETCH_IV, &g_server_ep,
 			    (void **)&input, &rpc_req);
+	assert(rc == 0);
 
 	/* Create a temporary buffer to store the result of the fetch */
 	D_ALLOC(buf, MAX_DATA_SIZE);
@@ -302,13 +303,14 @@ test_iv_fetch(struct iv_key_struct *key)
 		DBG_PRINT("Fetch of key=[%d:%d] FAILED; rc = %ld\n", key->rank,
 			  key->key_id, output->rc);
 
-	print_result_as_json(output->rc, &output->key, &sg_list);
+	print_result_as_json(output->rc, &output->key, output->size, &sg_list,
+			     log_file);
 
 	/* Cleanup */
-	rc = crt_req_decref(rpc_req);
+	rc = crt_bulk_free(input->bulk_hdl);
 	assert(rc == 0);
 
-	rc = crt_bulk_free(input->bulk_hdl);
+	rc = crt_req_decref(rpc_req);
 	assert(rc == 0);
 
 	/* Frees the IOV buf also */
@@ -322,7 +324,7 @@ test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 	struct rpc_test_update_iv_in	*input;
 	struct rpc_test_update_iv_out	*output;
 	crt_rpc_t			*rpc_req;
-	crt_iv_sync_t			 sync;
+	crt_iv_sync_t			 sync = {0, 0, 0};
 	size_t				 len;
 	int				 rc;
 
@@ -409,6 +411,8 @@ int main(int argc, char **argv)
 	char			*arg_value = NULL;
 	bool			 arg_value_is_hex = false;
 	char			*arg_sync = NULL;
+	char			*arg_log = NULL;
+	FILE			*log_file = stdout;
 	enum op_type		 cur_op = OP_NONE;
 	int			 rc = 0;
 	pthread_t		 progress_thread;
@@ -416,7 +420,7 @@ int main(int argc, char **argv)
 
 	init_hostname(g_hostname, sizeof(g_hostname));
 
-	while ((c = getopt(argc, argv, "k:o:r:s:v:x:")) != -1) {
+	while ((c = getopt(argc, argv, "k:o:r:s:v:x:l:")) != -1) {
 		switch (c) {
 		case 'r':
 			arg_rank = optarg;
@@ -437,6 +441,9 @@ int main(int argc, char **argv)
 			break;
 		case 's':
 			arg_sync = optarg;
+			break;
+		case 'l':
+			arg_log = optarg;
 			break;
 		default:
 			fprintf(stderr, "Unknown option %d\n", c);
@@ -481,6 +488,16 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	if (arg_log != NULL) {
+		/* Overwrite file, don't append */
+		log_file = fopen(arg_log, "w");
+		if (log_file == NULL) {
+			printf("Error opening file '%s': %s (%d)\n", arg_log,
+			       strerror(errno), errno);
+			return -1;
+		}
+	}
+
 	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON);
 	assert(rc == 0);
 
@@ -516,23 +533,28 @@ int main(int argc, char **argv)
 	}
 
 	if (cur_op == OP_FETCH)
-		test_iv_fetch(&iv_key);
+		test_iv_fetch(&iv_key, log_file);
 	else if (cur_op == OP_UPDATE)
 		test_iv_update(&iv_key, arg_value, arg_value_is_hex, arg_sync);
 	else if (cur_op == OP_INVALIDATE)
 		test_iv_invalidate(&iv_key);
 	else if (cur_op == OP_SHUTDOWN)
 		test_iv_shutdown();
-
 	else {
 		print_usage("Unsupported opration");
 		return -1;
 	}
+
+	crt_group_detach(srv_grp);
 
 	g_do_shutdown = true;
 	pthread_join(progress_thread, NULL);
 
 	DBG_PRINT("Exiting client\n");
 
+	if (log_file != stdout)
+		fclose(log_file);
+
+	crt_finalize();
 	return rc;
 }

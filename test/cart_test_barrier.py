@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2017 Intel Corporation
+# Copyright (C) 2017-2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,7 @@ Usage:
 
 Execute from the install/$arch/TESTING directory.
 
-python3 test_runner srcipts/cart_test_barrier.yml
+python3 test_runner scripts/cart_test_barrier.yml
 
 To use valgrind memory checking
 set TR_USE_VALGRIND in cart_test_barrier.yml to memcheck

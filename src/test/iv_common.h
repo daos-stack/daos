@@ -240,7 +240,6 @@ int send_rpc_request(crt_context_t crt_ctx, crt_rpc_t *rpc_req, void **output)
 		crt_progress(crt_ctx, 10000, NULL, NULL);
 
 	*output = crt_reply_get(rpc_req);
-
 	return rc;
 }
 
@@ -256,9 +255,9 @@ init_hostname(char *hname, int max_size)
 		*ptr = 0;
 }
 
-/** Prints a buffer as hex without any newlines/spaces/etc */
+/** Prints a buffer as hex to a file without any newlines/spaces/etc */
 static inline void
-print_hex(void *buf, size_t len)
+print_hex(void *buf, size_t len, FILE *log_file)
 {
 	uint8_t *bytes = (uint8_t *)buf;
 
@@ -266,7 +265,7 @@ print_hex(void *buf, size_t len)
 		return;
 
 	for (; len > 0; len--) {
-		printf("%02X", *bytes);
+		fprintf(log_file, "%02X", *bytes);
 		bytes++;
 	}
 }

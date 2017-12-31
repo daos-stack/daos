@@ -62,6 +62,13 @@ static d_rank_t g_my_rank;
 static uint32_t g_group_size;
 
 static int g_verbose_mode;
+static bool namespace_attached;
+
+static void wait_for_namespace(void)
+{
+	while (!namespace_attached)
+		sched_yield();
+}
 
 #define DBG_PRINT(x...)							\
 	do {								\
@@ -106,9 +113,20 @@ static void *
 progress_function(void *data)
 {
 	crt_context_t *p_ctx = (crt_context_t *)data;
+	int i;
 
 	while (g_do_shutdown == 0)
 		crt_progress(*p_ctx, 1000, NULL, NULL);
+
+	/*
+	 * Once shutdown begins, progress cart for a short while on the
+	 * main thread to finish processing the shutdown message
+	 *
+	 * This ensures the reply to the shutdown RPC is sent successfully
+	 */
+	if (p_ctx == &g_main_ctx)
+		for (i = 0; i < 1000; i++)
+			crt_progress(*p_ctx, 1000, NULL, NULL);
 
 	/* Note the first thread cleans up g_main_ctx */
 	crt_context_destroy(*p_ctx, 1);
@@ -545,7 +563,11 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	int			 rc;
 
 	DBG_ENTRY();
-	assert(user_priv == &g_test_user_priv);
+
+	/* user_priv can be NULL in invalidate case */
+	if (invalidate == false && iv_value != NULL)
+		assert(user_priv == &g_test_user_priv);
+
 	valid = invalidate ? false : true;
 
 	verify_key(iv_key);
@@ -698,6 +720,8 @@ init_iv(void)
 					     &iv_class, 1, &g_ivns, &s_ivns);
 		assert(rc == 0);
 
+		namespace_attached = true;
+
 		for (rank = 1; rank < g_group_size; rank++) {
 			server_ep.ep_rank = rank;
 
@@ -760,16 +784,19 @@ iv_set_ivns(crt_rpc_t *rpc)
 	rc = crt_reply_send(rpc);
 	assert(rc == 0);
 
+	namespace_attached = true;
+
 	DBG_EXIT();
 	return 0;
 }
 
 static int fetch_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 {
-	crt_rpc_t			*rpc = (crt_rpc_t *)cb_info->bci_arg;
+	crt_rpc_t			*rpc;
 	struct rpc_test_fetch_iv_out	*output;
 	int				 rc;
 
+	rpc = cb_info->bci_bulk_desc->bd_rpc;
 	output = crt_reply_get(rpc);
 	assert(output != NULL);
 
@@ -783,6 +810,9 @@ static int fetch_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	assert(rc == 0);
 
 	rc = crt_req_decref(rpc);
+	assert(rc == 0);
+
+	rc = crt_bulk_free(cb_info->bci_bulk_desc->bd_local_hdl);
 	assert(rc == 0);
 
 	return 0;
@@ -799,6 +829,8 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	crt_bulk_perm_t			 perms = CRT_BULK_RO;
 	crt_bulk_t			 bulk_hdl = NULL;
 	struct crt_bulk_desc		 bulk_desc = {0};
+	struct kv_pair_entry		*entry;
+	bool				 found = false;
 	int				 rc;
 
 	rpc = (crt_rpc_t *)cb_args;
@@ -826,10 +858,25 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 		goto fail_reply;
 	}
 
-	/* Create a local handle to be used to BULK_PUT the fetch result */
-	rc = crt_bulk_create(g_main_ctx, iv_value, perms, &bulk_hdl);
-	assert(rc == 0);
+	/* TODO: fetch test only supports one sglist buffer! */
+	assert(iv_value->sg_nr == 1);
+	assert(iv_value->sg_iovs[0].iov_buf != NULL);
+
+
+	bulk_hdl = NULL;
+	LOCK_KEYS();
+	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
+		if (keys_equal(iv_key, &entry->key) == true) {
+			rc = crt_bulk_create(g_main_ctx, &entry->value,
+						perms, &bulk_hdl);
+			found = true;
+			break;
+		}
+	}
+	UNLOCK_KEYS();
+
 	D_ASSERT(bulk_hdl != NULL);
+	D_ASSERT(found == true);
 
 	/*
 	 * Transfer the IV payload back to the client.
@@ -838,14 +885,14 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	bulk_desc.bd_rpc = rpc;
 	bulk_desc.bd_bulk_op = CRT_BULK_PUT;
 	bulk_desc.bd_remote_hdl = input->bulk_hdl;
+	assert(bulk_desc.bd_remote_hdl != NULL);
 	bulk_desc.bd_remote_off = 0;
 	bulk_desc.bd_local_hdl = bulk_hdl;
 	bulk_desc.bd_local_off = 0;
-	rc = crt_bulk_get_len(bulk_hdl, &bulk_desc.bd_len);
-	assert(rc == 0);
+	bulk_desc.bd_len = MAX_DATA_SIZE;
 
 	/* Transfer the result of the fetch to the client */
-	rc = crt_bulk_transfer(&bulk_desc, fetch_bulk_put_cb, rpc, NULL);
+	rc = crt_bulk_transfer(&bulk_desc, fetch_bulk_put_cb, 0, 0);
 	if (rc != 0) {
 		DBG_PRINT("Bulk transfer of fetch result failed! rc=%d\n", rc);
 
@@ -901,8 +948,12 @@ update_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = crt_req_decref(cb_info->rpc);
 	assert(rc == 0);
 
-	free(cb_info);
+	D_FREE(cb_info);
 
+	D_FREE(iv_value->sg_iovs[0].iov_buf);
+	D_FREE(iv_value->sg_iovs);
+
+	D_FREE(iv_key->iov_buf);
 	DBG_EXIT();
 	return 0;
 }
@@ -919,6 +970,8 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	struct iv_value_struct		*value_struct;
 	struct update_done_cb_info	*update_cb_info;
 	crt_iv_sync_t			*sync;
+
+	wait_for_namespace();
 
 	input = crt_req_get(rpc);
 	assert(input != NULL);
@@ -961,6 +1014,7 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	rc = crt_iv_update(g_ivns, 0, key, 0, &iv_value, 0, *sync, update_done,
 			   update_cb_info);
 
+	D_FREE(key);
 	return 0;
 }
 
@@ -970,6 +1024,8 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 {
 	struct rpc_test_fetch_iv_in	*input;
 	int				 rc;
+
+	wait_for_namespace();
 
 	input = crt_req_get(rpc);
 	assert(input != NULL);
@@ -1033,7 +1089,9 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = crt_req_decref(cb_info->rpc);
 	assert(rc == 0);
 
-	free(cb_info);
+	D_FREE(cb_info->expect_key->iov_buf);
+	D_FREE(cb_info->expect_key);
+	D_FREE(cb_info);
 	DBG_EXIT();
 
 	return 0;
@@ -1048,6 +1106,7 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	crt_iv_sync_t				 sync = CRT_IV_SYNC_MODE_NONE;
 	int					 rc;
 
+	wait_for_namespace();
 	input = crt_req_get(rpc);
 	assert(input != NULL);
 
@@ -1112,6 +1171,7 @@ int main(int argc, char **argv)
 	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
 	assert(rc == 0);
 
+	DBG_PRINT("Server starting\n");
 	rc = crt_group_config_save(NULL, true);
 	assert(rc == 0);
 
@@ -1142,9 +1202,10 @@ int main(int argc, char **argv)
 	while (!g_do_shutdown)
 		sleep(1);
 
-	shutdown();
 	deinit_iv_storage();
 	deinit_iv();
+
+	shutdown();
 
 	rc = crt_finalize();
 	assert(rc == 0);
