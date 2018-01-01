@@ -705,6 +705,7 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	  d_sg_list_t *iv_value, void **user_priv)
 {
 	int size;
+	int rc;
 
 	DBG_ENTRY();
 	dump_all_keys("ON_GETVALUE");
@@ -713,16 +714,16 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	size = sizeof(struct iv_value_struct);
 
-	D_ALLOC_PTR(iv_value->sg_iovs);
-	assert(iv_value->sg_iovs != NULL);
+	if (iv_value != NULL) {
+		rc = d_sgl_init(iv_value, 1);
+		assert(rc == 0);
 
-	D_ALLOC(iv_value->sg_iovs[0].iov_buf, size);
-	assert(iv_value->sg_iovs[0].iov_buf != NULL);
+		D_ALLOC(iv_value->sg_iovs[0].iov_buf, size);
+		assert(iv_value->sg_iovs[0].iov_buf != NULL);
 
-	iv_value->sg_iovs[0].iov_len = size;
-	iv_value->sg_iovs[0].iov_buf_len = size;
-
-	iv_value->sg_nr.num = 1;
+		iv_value->sg_iovs[0].iov_len = size;
+		iv_value->sg_iovs[0].iov_buf_len = size;
+	}
 
 	DBG_EXIT();
 	return 0;
@@ -735,8 +736,9 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 
 	assert(user_priv == &g_test_user_priv);
 
-	free(iv_value->sg_iovs[0].iov_buf);
-	free(iv_value->sg_iovs);
+	/* Frees the IOV buf also */
+	if (iv_value != NULL)
+		d_sgl_fini(iv_value, true);
 
 	dump_all_keys("ON_PUTVALUE");
 	DBG_EXIT();
