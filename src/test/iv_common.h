@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,18 +54,24 @@ struct iv_key_struct {
 
 /* RPC_TEST_FETCH_IV RPC */
 struct rpc_test_fetch_iv_in {
-	d_iov_t iov_key;
+	d_iov_t		key;		/* IV key to fetch */
+	crt_bulk_t	bulk_hdl;	/* Handle to return fetch contents */
 };
 
 struct rpc_test_fetch_iv_out {
-	int64_t rc;
+	d_iov_t		key;	/* IV key returned by fetch callback */
+	uint64_t	size;	/* Length of data written to bulk handle */
+	int64_t		rc;	/* Return code */
 };
 
 struct crt_msg_field *arg_test_fetch_iv_in[] = {
 	&CMF_IOVEC,
+	&CMF_BULK,
 };
 
 struct crt_msg_field *arg_test_fetch_iv_out[] = {
+	&CMF_IOVEC,
+	&CMF_UINT64,
 	&CMF_UINT64,
 };
 

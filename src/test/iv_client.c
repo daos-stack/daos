@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,31 +53,32 @@ static bool		g_do_shutdown;
 
 #define DBG_PRINT(x...)					\
 	do {						\
-		printf("[%s::CLIENT]\t", g_hostname);	\
-		printf(x);				\
+		fprintf(stderr, "[%s::CLIENT]\t", g_hostname);	\
+		fprintf(stderr, x);				\
 	} while (0)
 
 static void
 print_usage(const char *err_msg)
 {
-	printf("ERROR: %s\n", err_msg);
+	fprintf(stderr, "ERROR: %s\n", err_msg);
 
-	printf("Usage: ./iv_client -o <operation> -r <rank> [optional args]\n"
-	       "\n"
-	       "Required arguments:\n"
-	       "\t-o <operation> : One of ['fetch', 'update', 'invalidate', 'shutdown']\n"
-	       "\t-r <rank>      : Numeric rank to send the requested operation to\n"
-	       "\n"
-	       "Optional arguments:\n"
-	       "\t-k <key>       : Key is in form rank:key_id ; e.g. 1:0\n"
-	       "\t-v <value>     : Value is string, only used for update operation\n"
-	       "\t-s <strategy>  : One of ['none', 'eager_update', 'lazy_update', 'eager_notify', 'lazy_notify']\n"
-	       "\n"
-	       "Example usage: ./iv_client -o fetch -r 0 -k 2:9\n"
-	       "\tThis will initiate fetch of key [2:9] from rank 0.\n"
-	       "\tKey [2:9] is 9th key on rank = 2\n"
-	       "\tNote: Each node has 10 valid keys (0 to 9) for which that node is the root\n"
-	       );
+	fprintf(stderr,
+		"Usage: ./iv_client -o <operation> -r <rank> [optional args]\n"
+		"\n"
+		"Required arguments:\n"
+		"\t-o <operation> : One of ['fetch', 'update', 'invalidate', 'shutdown']\n"
+		"\t-r <rank>      : Numeric rank to send the requested operation to\n"
+		"\n"
+		"Optional arguments:\n"
+		"\t-k <key>       : Key is in form rank:key_id ; e.g. 1:0\n"
+		"\t-v <value>     : Value is string, only used for update operation\n"
+		"\t-s <strategy>  : One of ['none', 'eager_update', 'lazy_update', 'eager_notify', 'lazy_notify']\n"
+		"\n"
+		"Example usage: ./iv_client -o fetch -r 0 -k 2:9\n"
+		"\tThis will initiate fetch of key [2:9] from rank 0.\n"
+		"\tKey [2:9] is 9th key on rank = 2\n"
+		"\tNote: Each node has 10 valid keys (0 to 9) for which that node is the root\n"
+		);
 }
 
 static void
@@ -133,20 +134,100 @@ test_iv_invalidate(struct iv_key_struct *key)
 	assert(rc == 0);
 }
 
+/** Prints a buffer as hex without any newlines/spaces/etc */
+static void
+print_hex(void *buf, size_t len)
+{
+	uint8_t *bytes = (uint8_t *)buf;
+
+	if (bytes == NULL)
+		return;
+
+	for (; len > 0; len--) {
+		printf("%02X", *bytes);
+		bytes++;
+	}
+}
+
+/**
+ * Prints a scatter-gather list as components of a JSON array in hex like:
+ *
+ * <prefix>"DEADBEEF",
+ * <prefix>"FEEDCODE"
+ *
+ * Prefix should probably be something like "\t\t" for pretty formatting
+ */
+static void print_sgl_as_json(d_sg_list_t *sg_list, char *prefix)
+{
+	uint32_t i;
+
+	for (i = 0; i < sg_list->sg_nr.num; i++) {
+		printf("%s\"", prefix);
+		print_hex(sg_list->sg_iovs[i].iov_buf,
+			  sg_list->sg_iovs[i].iov_buf_len);
+		printf("\"");
+		if (i + 1 < sg_list->sg_nr.num)
+			printf(",");
+		printf("\n");
+	}
+}
+
+/**
+ * Print the result of a fetch as valid JSON
+ *
+ * This isn't very extensible - would probably need a real
+ * JSON library to generalize this
+ */
+static void print_result_as_json(int64_t return_code, d_iov_t *key,
+				 d_sg_list_t *sg_list)
+{
+	printf("{\n");
+	printf("\t\"return_code\":\"%ld\",\n", return_code);
+	printf("\t\"key\":\"");
+	print_hex(key->iov_buf, key->iov_len);
+	printf("\",\n");
+	printf("\t\"value\":[\n");
+	print_sgl_as_json(sg_list, "\t\t");
+	printf("\t]\n");
+	printf("}\n");
+}
+
+/**
+ * This function initiates a fetch on the specified node for the specified key
+ * index. If that succeeds, the node sends back the results of the fetch
+ * using BULK_PUT
+ */
 static void
 test_iv_fetch(struct iv_key_struct *key)
 {
 	struct rpc_test_fetch_iv_in	*input;
 	struct rpc_test_fetch_iv_out	*output;
 	crt_rpc_t			*rpc_req;
+	uint8_t				*buf = NULL;
+	d_sg_list_t			 sg_list;
+	crt_bulk_perm_t			 perms = CRT_BULK_RW;
 	int				 rc;
 
 	DBG_PRINT("Attempting fetch for key[%d:%d]\n", key->rank, key->key_id);
 
 	prepare_rpc_request(g_crt_ctx, RPC_TEST_FETCH_IV, &g_server_ep,
 			    (void **)&input, &rpc_req);
-	d_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
 
+	/* Create a temporary buffer to store the result of the fetch */
+	D_ALLOC(buf, MAX_DATA_SIZE);
+	assert(buf != NULL);
+	rc = d_sgl_init(&sg_list, 1);
+	assert(rc == 0);
+	d_iov_set(&sg_list.sg_iovs[0], buf, MAX_DATA_SIZE);
+
+	/* Create a local handle to be used to BULK_PUT the fetch result */
+	rc = crt_bulk_create(g_crt_ctx, &sg_list, perms, &input->bulk_hdl);
+	assert(rc == 0);
+	D_ASSERT(input->bulk_hdl != NULL);
+
+	d_iov_set(&input->key, key, sizeof(struct iv_key_struct));
+
+	/* Send the FETCH request to the test server */
 	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
 
 	if (output->rc == 0)
@@ -156,8 +237,17 @@ test_iv_fetch(struct iv_key_struct *key)
 		DBG_PRINT("Fetch of key=[%d:%d] FAILED; rc = %ld\n", key->rank,
 			  key->key_id, output->rc);
 
+	print_result_as_json(output->rc, &output->key, &sg_list);
+
+	/* Cleanup */
 	rc = crt_req_decref(rpc_req);
 	assert(rc == 0);
+
+	rc = crt_bulk_free(input->bulk_hdl);
+	assert(rc == 0);
+
+	/* Frees the IOV buf also */
+	d_sgl_fini(&sg_list, true);
 }
 
 static int
@@ -266,7 +356,7 @@ int main(int argc, char **argv)
 			arg_sync = optarg;
 			break;
 		default:
-			printf("Unknown option %d\n", c);
+			fprintf(stderr, "Unknown option %d\n", c);
 			print_usage("Bad option");
 			return -1;
 		}

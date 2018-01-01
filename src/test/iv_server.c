@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -93,8 +93,15 @@ struct iv_value_struct {
 	/* IV value embeds root rank for verification purposes */
 	d_rank_t	root_rank;
 
-	/* Actual data string */
-	char		str_data[MAX_DATA_SIZE];
+	/*
+	 * Actual data string
+	 * Since the root_rank is takes up sizeof(d_rank_t) space in this
+	 * iv_value, need to reduce the size of str_data to make the overall
+	 * structure MAX_DATA_SIZE bytes
+	 *
+	 * TODO: Remove this when making this value an opaque data blob
+	 */
+	char		str_data[MAX_DATA_SIZE - sizeof(d_rank_t)];
 };
 
 #define NUM_WORK_CTX 9
@@ -399,7 +406,7 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 {
 	struct kv_pair_entry	*entry;
 	int			 size;
-	int			 i;
+	uint32_t		 i;
 
 	/* If we are here it means we don't have this key cached yet */
 	D_ALLOC_PTR(entry);
@@ -847,73 +854,110 @@ iv_set_ivns(crt_rpc_t *rpc)
 	return 0;
 }
 
-struct fetch_done_cb_info {
-	crt_iv_key_t	*key;
-	crt_rpc_t	*rpc;
-};
+static int fetch_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
+{
+	crt_rpc_t			*rpc = (crt_rpc_t *)cb_info->bci_arg;
+	struct rpc_test_fetch_iv_out	*output;
+	int				 rc;
+
+	output = crt_reply_get(rpc);
+	assert(output != NULL);
+
+	output->rc = cb_info->bci_rc;
+	if (output->rc == 0)
+		output->size = cb_info->bci_bulk_desc->bd_len;
+	else
+		output->size = 0;
+
+	rc = crt_reply_send(rpc);
+	assert(rc == 0);
+
+	rc = crt_req_decref(rpc);
+	assert(rc == 0);
+
+	return 0;
+}
 
 static int
 fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	   crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver, d_sg_list_t *iv_value,
 	   int fetch_rc, void *cb_args)
 {
-	struct iv_key_struct		*key_struct;
-	struct iv_value_struct		*value_struct;
-	crt_iv_key_t			*expected_key;
-	struct iv_key_struct		*expected_key_struct;
-	struct fetch_done_cb_info	*cb_info;
+	crt_rpc_t			*rpc;
+	struct rpc_test_fetch_iv_in	*input;
 	struct rpc_test_fetch_iv_out	*output;
+	crt_bulk_perm_t			 perms = CRT_BULK_RO;
+	crt_bulk_t			 bulk_hdl = NULL;
+	struct crt_bulk_desc		 bulk_desc = {0};
 	int				 rc;
 
-	cb_info = (struct fetch_done_cb_info *)cb_args;
-	assert(cb_info != NULL);
+	rpc = (crt_rpc_t *)cb_args;
+	assert(rpc != NULL);
 
-	output = crt_reply_get(cb_info->rpc);
+	DBG_ENTRY();
+
+	output = crt_reply_get(rpc);
 	assert(output != NULL);
 
+	/* When this RPC eventually gets sent back, include the returned key */
+	assert(iv_key->iov_buf != NULL);
+	output->key.iov_buf = iv_key->iov_buf;
+	output->key.iov_buf_len = iv_key->iov_buf_len;
+	output->key.iov_len = iv_key->iov_len;
+
+	input = crt_req_get(rpc);
+	assert(input != NULL);
+
+	/* If the IV fetch call itself failed, return the error */
 	if (fetch_rc != 0) {
-		DBG_PRINT("----------------------------------\n");
-		print_key_value("Fetch failed: ", iv_key, iv_value);
-		DBG_PRINT("----------------------------------\n");
-
 		output->rc = fetch_rc;
-		rc = crt_reply_send(cb_info->rpc);
-		assert(rc == 0);
-
-		rc = crt_req_decref(cb_info->rpc);
-		assert(rc == 0);
-
-		free(cb_info);
-		return 0;
+		output->size = 0;
+		memset(&output->key, 0, sizeof(output->key));
+		goto fail_reply;
 	}
 
-	expected_key = cb_info->key;
-	assert(expected_key != NULL);
+	/* Create a local handle to be used to BULK_PUT the fetch result */
+	rc = crt_bulk_create(g_main_ctx, iv_value, perms, &bulk_hdl);
+	assert(rc == 0);
+	D_ASSERT(bulk_hdl != NULL);
 
-	expected_key_struct = (struct iv_key_struct *)iv_key->iov_buf;
-	assert(expected_key_struct != NULL);
-
-	key_struct = (struct iv_key_struct *)iv_key->iov_buf;
-	value_struct = (struct iv_value_struct *)iv_value->sg_iovs[0].iov_buf;
-
-	assert(key_struct->rank == expected_key_struct->rank);
-	assert(key_struct->key_id == expected_key_struct->key_id);
-	assert(value_struct->root_rank == key_struct->rank);
-
-	DBG_PRINT("----------------------------------\n");
-	print_key_value("Fetch result: ", iv_key, iv_value);
-	DBG_PRINT("----------------------------------\n");
-
-	output->rc = 0;
-
-	rc = crt_reply_send(cb_info->rpc);
+	/*
+	 * Transfer the IV payload back to the client.
+	 * Rely on bulk API to return an error if it can't make the transfer
+	 */
+	bulk_desc.bd_rpc = rpc;
+	bulk_desc.bd_bulk_op = CRT_BULK_PUT;
+	bulk_desc.bd_remote_hdl = input->bulk_hdl;
+	bulk_desc.bd_remote_off = 0;
+	bulk_desc.bd_local_hdl = bulk_hdl;
+	bulk_desc.bd_local_off = 0;
+	rc = crt_bulk_get_len(bulk_hdl, &bulk_desc.bd_len);
 	assert(rc == 0);
 
-	rc = crt_req_decref(cb_info->rpc);
+	/* Transfer the result of the fetch to the client */
+	rc = crt_bulk_transfer(&bulk_desc, fetch_bulk_put_cb, rpc, NULL);
+	if (rc != 0) {
+		DBG_PRINT("Bulk transfer of fetch result failed! rc=%d\n", rc);
+
+		output->rc = rc;
+		output->size = 0;
+		memset(&output->key, 0, sizeof(output->key));
+		goto fail_reply;
+	}
+
+	return 0;
+
+	/* If something goes wrong, still send the error back to the client */
+fail_reply:
+	if (bulk_hdl != NULL)
+		crt_bulk_free(bulk_hdl);
+
+	rc = crt_reply_send(rpc);
 	assert(rc == 0);
 
-	free(cb_info);
-	free(iv_key->iov_buf);
+	rc = crt_req_decref(rpc);
+	assert(rc == 0);
+
 	return 0;
 }
 
@@ -1014,29 +1058,15 @@ int
 iv_test_fetch_iv(crt_rpc_t *rpc)
 {
 	struct rpc_test_fetch_iv_in	*input;
-	crt_iv_key_t			*key;
-	struct fetch_done_cb_info	*cb_info;
 	int				 rc;
-	struct iv_key_struct		*key_struct;
 
 	input = crt_req_get(rpc);
 	assert(input != NULL);
 
-	key_struct = (struct iv_key_struct *)input->iov_key.iov_buf;
-
-	key = alloc_key(key_struct->rank, key_struct->key_id);
-	assert(key != NULL);
-
-	D_ALLOC_PTR(cb_info);
-	assert(cb_info != NULL);
-
-	cb_info->key = key;
-	cb_info->rpc = rpc;
-
 	rc = crt_req_addref(rpc);
 	assert(rc == 0);
 
-	rc = crt_iv_fetch(g_ivns, 0, key, 0, 0, fetch_done, cb_info);
+	rc = crt_iv_fetch(g_ivns, 0, &input->key, 0, 0, fetch_done, rpc);
 
 	return 0;
 }
