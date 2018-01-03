@@ -18,6 +18,11 @@ def scons():
     dc_mgmt_tgts = common + denv.SharedObject([Glob('cli*.c')])
     Export('dc_mgmt_tgts')
 
+    # Temporary hack until we create a SCons Builder for go code and
+    # attach it to the construction environment
+    srv = 'daos_server'
+    denv.Command(srv, Glob('*.go'), "go build -o $TARGET $SOURCES")
+    denv.Install('$PREFIX/bin', srv)
 
     # tests
     SConscript('tests/SConscript', exports='denv')

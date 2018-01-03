@@ -55,8 +55,8 @@ def scons():
     # Build DAOS client library
     SConscript('client/SConscript')
 
-    # Then the DAOS server executable
-    SConscript('server/SConscript')
+    # Then the DAOS I/O server executable
+    SConscript('iosrv/SConscript')
 
     # Build utilities
     SConscript('utils/SConscript')
