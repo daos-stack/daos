@@ -1,0 +1,47 @@
+#
+# Copyright 2018, Intel Corporation
+#
+# 'recipe' for Docker to build an image of centOS-based
+# environment for building the DAOS project.
+#
+
+# Pull base image
+FROM centos:7
+MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
+
+# Install basic tools
+RUN yum install -y epel-release
+RUN yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
+RUN yum install -y libuuid-devel openssl-devel libevent-devel
+RUN yum install -y librdmacm-devel libtool-ltdl-devel
+RUN yum install -y libcmocka libcmocka-devel doxygen pandoc flex patch
+
+# Dependencies
+# Packages for NVML, PMIx, hwloc and OpenMPI exist in CentOS, but are unfortunately
+# outdated. The DAOS build system will rebuilt those packages.
+
+# Create directory for DAOS backend storage
+RUN mkdir /mnt/daos
+RUN chmod o+rwx /mnt/daos
+
+# Add DAOS user
+ENV USER daos
+ENV PASSWD daos
+
+RUN useradd -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+
+# Switch to new user
+USER $USER
+WORKDIR /home/$USER
+
+# Set environment variables
+ENV CRT_PHY_ADDR_STR "ofi+tcp"
+
+# Fetch DAOS code
+RUN git clone https://github.com/daos-stack/daos.git
+WORKDIR /home/$USER/daos
+
+# Build DAOS & dependencies
+RUN git submodule init && git submodule update
+RUN scons --build-deps=yes USE_INSTALLED=all install
