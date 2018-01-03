@@ -31,11 +31,11 @@ case ${distro} in
   el7.2)
     DOCKER_IMAGE="centos_7.2.1511_builder"
     ;;
-  el7.4)
-    DOCKER_IMAGE="centos_7.4.1708_builder"
+  el7.3)
+    DOCKER_IMAGE="centos_7.3.1611_builder"
     ;;
   el7|el7*)
-    DOCKER_IMAGE="centos_7.3.1611_builder"
+    DOCKER_IMAGE="centos_7.4.1708_builder"
     ;;
   sles12sp3)
     DOCKER_IMAGE="sles_12.3_builder"
