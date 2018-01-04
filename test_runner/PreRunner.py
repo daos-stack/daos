@@ -44,7 +44,8 @@ class PreRunner():
                                            default=module.get('hostConfig'))
         print("host list: {!s}".format(str(host_list)))
         if not host_config or host_config['type'] == 'oneToOne':
-            for k in range(0, len(hostkey_list)):
+            listlen = len(hostkey_list)
+            for k in range(0, listlen):
                 self.test_info['defaultENV'][hostkey_list[k]] = host_list[k]
                 self.test_info['passToConfig'][hostkey_list[k]] = host_list[k]
         elif host_config['type'] == 'buildList':
@@ -72,8 +73,7 @@ class PreRunner():
         """ add to default environment """
         module = self.test_info['module']
         key_list = module.get('setKeyFromInfo')
-        for item in range(0, len(key_list)):
-            (k, v, ex) = key_list[item]
+        for (k, v, ex) in key_list:
             self.test_info['defaultENV'][k] = self.info.get_info(v) + ex
 
     def create_append_key_from_info(self, append=False):
@@ -84,8 +84,7 @@ class PreRunner():
             key_list = module.get('appendKeyFromInfo')
         else:
             key_list = module.get('createKeyFromInfo')
-        for var in range(0, len(key_list)):
-            (k, ex, vlist) = key_list[var]
+        for (k, ex, vlist) in key_list:
             if append:
                 save_value = self.test_info['defaultENV'].get(k, (os.getenv(k)))
             new_list = []

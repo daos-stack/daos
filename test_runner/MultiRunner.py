@@ -134,12 +134,13 @@ class MultiRunner(PostRunner.PostRunner):
             if setConfigKeys:
                 configKeys = self.test_info.set_configKeys(setConfigKeys)
             useNodeType = item.get('nodeType', "all")
-            useNodes = item.get('useNodes', "all")
             setTestPhase = item.get('type', "TEST").upper()
             configKeys['TR_TEST_PHASE'] = setTestPhase
             self.nodes.nodes_config(item['name'], useNodeType, configKeys)
             waittime = int(item.get('waittime', "1800"))
-            thisrtn = self.nodes.execute_list(useNodeType, useNodes, waittime)
+            thisrtn = self.nodes.execute_list(useNodeType,
+                                              item.get('useNodes', "all"),
+                                              waittime)
             rtn |= thisrtn
             if thisrtn and toexit.lower() == "yes":
                 break
@@ -219,10 +220,7 @@ class MultiRunner(PostRunner.PostRunner):
             self.test_info.add_default_env()
             self.test_directives = self.test_info.get_test_info('directives',
                                                                 None, {})
-            self.logger.info("***************** " + \
-                             module_name + \
-                             " *********************************"
-                            )
+            self.logger.info("***************** %s *************", module_name)
             self.nodes = ControlTestRunner.ControlTestRunner(
                 self.logdir, self.info, self.test_info)
             self.nodes.nodes_strategy(self.test_directives)

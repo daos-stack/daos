@@ -87,7 +87,7 @@ class NodeCmdRunner:
         self.state = "running"
         if wait:
             return self.wait_for_exit(timeout)
-        return
+        return 0
 
     def dump_data(self, retval):
         """ dump the output to a file """

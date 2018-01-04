@@ -154,10 +154,7 @@ class PythonRunner(PostRunner.PostRunner):
         file_hdlr = logging.FileHandler(logName)
         self.logger.addHandler(file_hdlr)
         file_hdlr.setLevel(logging.DEBUG)
-        self.logger.info("***************** " + \
-                         str(testname) + \
-                         " *********************************"
-                        )
+        self.logger.info("***************** %s ***************", testname)
         self.test_info.setup_default_env()
         self.testModule = self.import_module()
         print("testModule type: {!s}".format(type(self.testModule)))
@@ -175,10 +172,7 @@ class PythonRunner(PostRunner.PostRunner):
             rtn = self.execute_list(results)
         else:
             for i in range(int(loop)):
-                self.logger.info("***************" + \
-                                 str(" loop %d " % i) +\
-                                 "*************************"
-                                )
+                self.logger.info("*************** loop %d ****************", i)
                 logdir = os.path.join(self.logdir, ("loop{!s}".format(i)))
                 try:
                     os.makedirs(logdir)

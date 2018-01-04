@@ -46,7 +46,7 @@ class GrindRunner():
         newdir = self.last_testlogdir
         if not os.path.exists(newdir):
             self.logger.info("Directory not found: %s" % newdir)
-            return
+            return 1
         dirlist = os.listdir(newdir)
         for psdir in dirlist:
             dname = os.path.join(newdir, psdir)

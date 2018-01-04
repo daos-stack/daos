@@ -156,10 +156,8 @@ class NodeControlRunner():
             else:
                 node.process_terminate()
                 rtn |= 1
-            self.logger.debug("************** Results " + \
-                             str(node.node) + " rtn: " +  str(procrtn) + \
-                             " **************"
-                             )
+            self.logger.debug("**** Results %s rtn: %d ****", node.node,
+                              procrtn)
         self.logger.info("execution time remaining: %d", loop_count)
         self.logger.info("%s", ("*" * 40))
         return rtn

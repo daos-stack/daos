@@ -1308,6 +1308,7 @@ class _Component(object):
         self.set_environment(env, needed_libs)
         if GetOption('clean'):
             return True
+        return False
 
     def _rm_old_dir(self, path):
         """remove the old dir"""

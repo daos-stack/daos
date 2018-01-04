@@ -93,10 +93,7 @@ class UnitTestRunner(PostRunner.PostRunner,
         rtn = 0
         test_module = self.test_info.get_module()
         for testrun in self.test_info.get_execStrategy():
-            self.logger.info("************** run " + \
-                             str(testrun['id']) + \
-                             " ******************************"
-                            )
+            self.logger.info("************ run %s *******", testrun['id'])
             self.setenv(testrun)
             self.settestlog(testrun['id'])
             TestLoader = unittest.TestLoader()
@@ -170,10 +167,7 @@ class UnitTestRunner(PostRunner.PostRunner,
                                                      testlog))
         file_hdlr.setLevel(logging.DEBUG)
         self.logger.addHandler(file_hdlr)
-        self.logger.info("***************** " + \
-                         str(testname) + \
-                         " *********************************"
-                        )
+        self.logger.info("***************** %s ***************", testname)
         self.test_info.setup_default_env()
         loop = str(self.test_directives.get('loop', "no"))
         start_time = time()
@@ -194,10 +188,7 @@ class UnitTestRunner(PostRunner.PostRunner,
         else:
             for i in range(1, int(loop) + 1):
                 results_info = {}
-                self.logger.info("***************" + \
-                                 str(" loop %d " % i) +\
-                                 "*************************"
-                                )
+                self.logger.info("*************** loop %d ****************", i)
                 self.loop_number = i
                 results.add_test_set("{!s}_loop{!s}".format(testsetname, i))
                 start_time = time()

@@ -211,10 +211,7 @@ class ScriptsRunner(PostRunner.PostRunner):
         file_hdlr = logging.FileHandler(logName)
         self.logger.addHandler(file_hdlr)
         file_hdlr.setLevel(logging.DEBUG)
-        self.logger.info("***************** " + \
-                         str(testname) + \
-                         " *********************************"
-                        )
+        self.logger.info("***************** %s ***************", testname)
         self.test_info.setup_default_env()
         loop = str(self.test_info.get_directives('loop', "no"))
         results = ResultsRunner.SubTestResults(self.logdir, testsetname)
@@ -223,10 +220,7 @@ class ScriptsRunner(PostRunner.PostRunner):
         else:
             toexit = self.test_info.get_directives('exitLoopOnError', "yes")
             for i in range(1, int(loop) + 1):
-                self.logger.info("***************" + \
-                                 str(" loop %d " % i) +\
-                                 "*************************"
-                                )
+                self.logger.info("*************** loop %d ****************", i)
                 self.logdir = os.path.join(self.logdirbase,
                                            ("loop{!s}".format(i)))
                 try:

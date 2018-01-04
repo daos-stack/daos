@@ -97,7 +97,7 @@ class RemoteTestRunner():
         test_name = self.test_name
         self.logger.info("TestRunner: start %s on %s", test_name, self.node)
         self.connect()
-        self.logger.debug("conf: " + str(self.test_config))
+        self.logger.debug("conf: %s", self.test_config)
         configfile = test_name + "_config"
         log_path = self.test_config['log_base_path']
         self.logger.info("log path: %s", log_path)
@@ -225,4 +225,4 @@ class RemoteTestRunner():
         if directives:
             self.test_config['setDirectiveFromConfig'].update(directives)
         self.test_config['setDirectiveFromConfig']['renameTestRun'] = "no"
-        self.logger.debug("conf: " + str(self.test_config))
+        self.logger.debug("conf: %s", str(self.test_config))

@@ -70,7 +70,7 @@ class ControlTestRunner():
             node.launch_test()
         loop_count = waittime
         running_count = len(run_node_list)
-        self.logger.debug("******* started running count " + str(running_count))
+        self.logger.debug("***** started running count %d", running_count)
         while running_count and loop_count:
             time.sleep(1)
             running_count = len(run_node_list)
@@ -78,7 +78,7 @@ class ControlTestRunner():
             for node in run_node_list:
                 if node.process_state() != "running":
                     running_count = running_count - 1
-        self.logger.debug("******* done running count " + str(running_count))
+        self.logger.debug("***** done running count %d", running_count)
         self.logger.info("********** node Test Runner Results **************")
         for node in run_node_list:
             procrtn = node.process_rtn()
@@ -104,10 +104,8 @@ class ControlTestRunner():
             node_type - is a define type of nodes
             nodes - s a list of indexs into the type list """
         run_node_list = []
-        self.logger.info("********** run Test Runner on node type " + \
-                         str(node_type) + \
-                         " **********"
-                        )
+        self.logger.info("********** run Test Runner on node type %s *********",
+                         node_type)
         if nodes != "all":
             node_index_list = nodes.split(",")
             if node_type == "all":

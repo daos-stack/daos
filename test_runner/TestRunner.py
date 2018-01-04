@@ -122,11 +122,10 @@ class TestRunner(PostRunner.PostRunner):
             else:
                 runner = UnitTestRunner(self.test_info, self.logdir)
             self.test_info.add_default_env()
-            self.logger.info("****************************************\n " + \
-                             "TestRunner: " + \
-                             str(self.test_info.get_test_info('testName')) + \
-                             "\n***************************************"
-                            )
+            self.logger.info("****************************************\n")
+            self.logger.info("TestRunner: %s",
+                             self.test_info.get_test_info('testName'))
+            self.logger.info("\n****************************************")
             (rc, rtn_info) = runner.execute_strategy()
             rtn |= rc
             self.post_testcase(rtn_info)
