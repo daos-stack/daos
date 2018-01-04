@@ -73,8 +73,10 @@ class PythonRunner(PostRunner.PostRunner):
             self.logger.info("%s\n  Method returned: %s \n%s\n",
                              ("=" * 40), rtn, ("=" * 40))
 
+        # If the method does not return an int (zero specifically) then fail
+        # the method.
         if not isinstance(rtn, int):
-            rtn = 0
+            rtn = 1
         return rtn
 
     def execute_setup(self, test):
