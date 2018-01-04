@@ -1063,6 +1063,10 @@ list_recxs_cb(tse_task_t *task, void *data)
 	daos_size_t dkey_num;
 	int ret;
 	int rc = task->dt_result;
+	daos_size_t cur_size;
+	daos_obj_list_recx_t *args;
+
+	args = daos_task_get_args(DAOS_OPC_OBJ_LIST_RECX, task);
 
 #ifdef ARRAY_DEBUG
 	printf("cell size %d recx idx = %d NR = %d\n",
@@ -1072,10 +1076,30 @@ list_recxs_cb(tse_task_t *task, void *data)
 
 	ret = sscanf(params->dkey_str, "%zu", &dkey_num);
 	D__ASSERT(ret == 1);
+	cur_size = dkey_num * params->block_size + params->recx.rx_idx +
+		params->recx.rx_nr;
+	if (*params->size < cur_size)
+		*params->size = cur_size;
+
+	/** if enumeration is not done, re-init this task to continue */
+	if (!daos_hash_is_eof(args->anchor)) {
+		params->nr = 1;
+		rc = tse_task_reinit(task);
+		if (rc != 0) {
+			D__ERROR("FAILED to continue enumrating task\n");
+			D__GOTO(out, rc);
+		}
+
+		tse_task_register_cbs(task, NULL, NULL, 0, list_recxs_cb,
+				      &params, sizeof(params));
+
+		return rc;
+	}
 
 	*params->size = dkey_num * params->block_size + params->recx.rx_idx +
 		params->recx.rx_nr;
 
+out:
 	if (params->dkey_str) {
 		free(params->dkey_str);
 		params->dkey_str = NULL;
@@ -1099,8 +1123,14 @@ get_array_size_cb(tse_task_t *task, void *data)
 	uint32_t	i;
 	int		rc = task->dt_result;
 
+	if (rc != 0) {
+		D__ERROR("Array DKEY enumermation Failed (%d)\n", rc);
+		D__GOTO(out, rc);
+	}
+
 	args = daos_task_get_args(DAOS_OPC_OBJ_LIST_DKEY, task);
 
+	/** track the highest dkey from the ones currently enumerated */
 	for (ptr = props->buf, i = 0; i < props->nr; i++) {
 		daos_size_t dkey_num;
 		int ret;
@@ -1123,6 +1153,7 @@ get_array_size_cb(tse_task_t *task, void *data)
 			props->dkey_num = dkey_num;
 	}
 
+	/** if enumeration is not done, re-init this task to continue */
 	if (!daos_hash_is_eof(args->anchor)) {
 		props->nr = ENUM_DESC_NR;
 		memset(props->buf, 0, ENUM_DESC_BUF);
@@ -1239,6 +1270,7 @@ dac_array_get_size(tse_task_t *task)
 	if (get_size_props == NULL)
 		D__GOTO(err_task, rc = -DER_NOMEM);
 
+	/** List all DKEYS to determine the highest dkey */
 	get_size_props->dkey_num = 0;
 	get_size_props->nr = ENUM_DESC_NR;
 	get_size_props->ptask = task;
@@ -1303,7 +1335,7 @@ struct set_size_props {
 	daos_sg_list_t  sgl;
 	uint32_t	nr;
 	daos_hash_out_t anchor;
-	bool		shrinking;
+	bool		update_dkey;
 	daos_size_t	dkey_num;
 	daos_size_t	size;
 	daos_size_t	cell_size;
@@ -1338,7 +1370,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 	args = daos_task_get_args(DAOS_OPC_OBJ_LIST_DKEY, task);
 
 	if (props->size == 0)
-		props->shrinking = true;
+		props->update_dkey = false;
 
 	for (ptr = props->buf, j = 0; j < props->nr; j++) {
 		daos_size_t dkey_num;
@@ -1366,7 +1398,6 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			 * Punch the entire dkey since it's in a higher dkey
 			 * group than the intended size.
 			 */
-			props->shrinking = true;
 
 			D__ALLOC_PTR(params);
 			if (params == NULL) {
@@ -1385,6 +1416,8 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			p_args.oh = args->oh;
 			p_args.epoch = args->epoch;
 			p_args.dkey = dkey;
+			p_args.akeys = NULL;
+			p_args.akey_nr = 0;
 
 			rc = daos_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS,
 					      tse_task2sched(task), &p_args, 0,
@@ -1418,7 +1451,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			daos_key_t	*dkey;
 			daos_csum_buf_t	null_csum;
 
-			props->shrinking = true;
+			props->update_dkey = false;
 
 			daos_csum_set(&null_csum, NULL, 0);
 
@@ -1510,7 +1543,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 	}
 
 	/** if array is smaller, write a record at the new size */
-	if (!props->shrinking) {
+	if (props->update_dkey) {
 		daos_obj_update_t io_arg;
 		daos_iod_t	*iod;
 		daos_sg_list_t	*sgl;
@@ -1661,7 +1694,7 @@ dac_array_set_size(tse_task_t *task)
 	set_size_props->num_records = num_records;
 	set_size_props->record_i = record_i;
 	set_size_props->block_size = array->block_size;
-	set_size_props->shrinking = false;
+	set_size_props->update_dkey = true;
 	set_size_props->nr = ENUM_DESC_NR;
 	set_size_props->size = args->size;
 	set_size_props->ptask = task;
