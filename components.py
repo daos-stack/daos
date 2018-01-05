@@ -262,7 +262,8 @@ for i in xrange(1, len(ARM_LIST)):
         ARM_PLATFORM = True
         break
 
-NVML_BUILD = ["make \"BUILD_RPMEM=n\" ", "make install prefix=$NVML_PREFIX"]
+NVML_BUILD = ["make \"BUILD_RPMEM=n\"",
+              "make install prefix=$NVML_PREFIX \"BUILD_RPMEM=n\""]
 if ARM_PLATFORM is True:
     NVML_BUILD = ["git am < $PATCH_PREFIX/arm-support-nvml.patch",
                   "make \"EXTRA_CFLAGS=-DAARCH64\" \"BUILD_AARCH64=y\" "
