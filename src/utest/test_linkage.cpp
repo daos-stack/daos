@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -95,12 +95,16 @@ static void
 test_log_linkage(void **state)
 {
 	int	fac;
+	int	rc;
 
 	(void)state;
 
 	fac = d_log_allocfacility("log_link_test",
 				  "Test linkage of crt log API");
 	assert_int_not_equal(fac, -1);
+
+	rc = crt_finalize();
+	assert_int_equal(rc, 0);
 }
 
 static bool

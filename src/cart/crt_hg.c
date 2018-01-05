@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -533,6 +533,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	struct crt_hg_gdata	*hg_gdata;
 	na_class_t		*na_class = NULL;
 	hg_class_t		*hg_class = NULL;
+	struct hg_init_info	 init_info;
 	int			 rc = 0;
 
 	if (crt_initialized()) {
@@ -555,13 +556,19 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 			D_GOTO(out, rc);
 	}
 
-	na_class = NA_Initialize(info_string, server);
+	init_info.na_init_info.progress_mode = NA_DEFAULT;
+	init_info.na_init_info.auth_key = NULL;
+	init_info.na_class = NULL;
+	na_class = NA_Initialize_opt(info_string, server,
+				     &init_info.na_init_info);
 	if (na_class == NULL) {
 		D_ERROR("Could not initialize NA class.\n");
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	hg_class = HG_Init_na(na_class);
+	init_info.na_class = na_class;
+	/* first two args unused because init_info.na_class is not NULL. */
+	hg_class = HG_Init_opt(NULL, server, &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
 		NA_Finalize(na_class);
@@ -659,6 +666,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	hg_class_t		*hg_class = NULL;
 	hg_context_t		*hg_context = NULL;
 	char			*info_string = NULL;
+	struct hg_init_info	 init_info;
 	hg_return_t		 hg_ret;
 	int			 rc = 0;
 
@@ -692,7 +700,11 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		na_class = NA_Initialize(info_string, crt_is_service());
+		init_info.na_init_info.progress_mode = NA_DEFAULT;
+		init_info.na_init_info.auth_key = NULL;
+		init_info.na_class = NULL;
+		na_class = NA_Initialize_opt(info_string, crt_is_service(),
+					     &init_info.na_init_info);
 		if (na_class == NULL) {
 			D_ERROR("Could not initialize NA class.\n");
 			D_GOTO(out, rc = -DER_HG);
@@ -707,7 +719,10 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		D_DEBUG("New context(idx:%d), listen address: %s.\n",
 			idx, addr_str);
 
-		hg_class = HG_Init_na(na_class);
+		init_info.na_class = na_class;
+		/* first two args unused because init_info.na_class is not NULL.
+		 */
+		hg_class = HG_Init_opt(NULL, false, &init_info);
 		if (hg_class == NULL) {
 			D_ERROR("Could not initialize HG class.\n");
 			NA_Finalize(na_class);
