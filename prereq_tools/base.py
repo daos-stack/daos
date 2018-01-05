@@ -32,6 +32,10 @@ import os
 import traceback
 import hashlib
 import subprocess
+try:
+    from subprocess import DEVNULL
+except ImportError:
+    DEVNULL = open(os.devnull, "wb")
 import tarfile
 import re
 import copy
@@ -284,6 +288,20 @@ class Runner(object):
 
 RUNNER = Runner()
 
+def default_libpath():
+    """On debian systems, the default library path can be queried"""
+    if not os.path.isfile('/etc/debian_version'):
+        return []
+    try:
+        pipe = subprocess.Popen(['dpkg-architecture', '-qDEB_HOST_MULTIARCH'],
+                                stdout=subprocess.PIPE, stderr=DEVNULL)
+        (stdo, _) = pipe.communicate()
+        if pipe.returncode == 0:
+            archpath = stdo.decode().strip()
+            return ['lib/' + archpath]
+    except Exception:
+        pass
+    return []
 
 def check_test(target, source, env, mode):
     """Check the results of the test"""
@@ -1046,16 +1064,11 @@ class _Component(object):
         self.name = name
         self.build_commands = kw.get("commands", [])
         self.retriever = kw.get("retriever", None)
-        self.lib_path = ['lib']
+        self.lib_path = ['lib', 'lib64']
         self.include_path = ['include']
-        extra_lib_path = kw.get("extra_lib_path", [])
-        if extra_lib_path:
-            for path in extra_lib_path:
-                self.lib_path.append(path)
-        extra_include_path = kw.get("extra_include_path", [])
-        if extra_include_path:
-            for path in extra_include_path:
-                self.include_path.append(path)
+        self.lib_path.extend(default_libpath())
+        self.lib_path.extend(kw.get("extra_lib_path", []))
+        self.include_path.extend(kw.get("extra_include_path", []))
         self.out_of_src_build = kw.get("out_of_src_build", False)
         self.src_opt = '%s_SRC' % name.upper()
         self.prebuilt_opt = '%s_PREBUILT' % name.upper()
@@ -1261,13 +1274,20 @@ class _Component(object):
     def set_environment(self, env, needed_libs):
         """Modify the specified construction environment to build with
            the external component"""
+        lib_paths = []
         for path in self.include_path:
             env.AppendUnique(CPPPATH=[os.path.join(self.component_prefix,
                                                    path)])
         # The same rules that apply to headers apply to RPATH.   If a build
         # uses a component, that build needs the RPATH of the dependencies.
         for path in self.lib_path:
-            env.AppendUnique(RPATH=[os.path.join(self.component_prefix, path)])
+            if self.component_prefix == '/usr':
+                continue
+            full_path = os.path.join(self.component_prefix, path)
+            if not os.path.exists(full_path):
+                continue
+            lib_paths.append(full_path)
+            env.AppendUnique(RPATH=[full_path])
         # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
         # and this allows LD_LIBRARY_PATH to override RPATH
         env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])
@@ -1278,9 +1298,8 @@ class _Component(object):
         if needed_libs is None:
             return
 
-        for path in self.lib_path:
-            env.AppendUnique(LIBPATH=[os.path.join(self.component_prefix,
-                                                   path)])
+        for path in lib_paths:
+            env.AppendUnique(LIBPATH=[path])
         for lib in needed_libs:
             env.AppendUnique(LIBS=[lib])
 
@@ -1392,6 +1411,8 @@ class _Component(object):
                                        subdir=self.build_path):
                 raise BuildFailure(self.name)
 
+        # set environment one more time as new directories may be present
+        self.set_environment(envcopy, self.libs)
         if self.has_missing_targets(envcopy) and not self.__dry_run:
             raise MissingTargets(self.name, None)
         self._update_crc_file()
