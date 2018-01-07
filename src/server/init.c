@@ -56,6 +56,10 @@ static char	       *server_group_id = DAOS_DEFAULT_GROUP_ID;
 /** Storage path (hack) */
 const char	       *storage_path = "/mnt/daos";
 
+/** attach_info path to support singleton client */
+static bool	        save_attach_info;
+const char	       *attach_info_path;
+
 /** HW topology */
 hwloc_topology_t	dss_topo;
 
@@ -186,6 +190,26 @@ server_init()
 		D__GOTO(exit_mod_init, rc);
 	D__INFO("Network successfully initialized\n");
 
+	crt_group_rank(NULL, &rank);
+	crt_group_size(NULL, &size);
+
+	/* rank 0 save attach info for singleton client if needed */
+	if (save_attach_info && rank == 0) {
+		if (attach_info_path != NULL) {
+			rc = crt_group_config_path_set(attach_info_path);
+			if (rc != 0) {
+				D_ERROR("crt_group_config_path_set(path %s) "
+					"failed, rc: %d.\n", attach_info_path,
+					rc);
+				D_GOTO(exit_mod_init, rc);
+			}
+		}
+		rc = crt_group_config_save(NULL, true);
+		if (rc)
+			D_GOTO(exit_mod_init, rc);
+		D_INFO("server group attach info saved\n");
+	}
+
 	rc = ds_iv_init();
 	if (rc)
 		D_GOTO(exit_crt_init, rc);
@@ -217,8 +241,6 @@ server_init()
 		D__GOTO(exit_daos_fini, rc);
 	D__INFO("Modules successfully set up\n");
 
-	crt_group_rank(NULL, &rank);
-	crt_group_size(NULL, &size);
 	D__PRINT("DAOS server (v%s) process %u started on rank %u (out of %u) "
 		"with %u xstream(s)\n", DAOS_VERSION, getpid(), rank, size,
 		dss_nxstreams);
@@ -273,6 +295,8 @@ Options:\n\
       Server group name (default \"%s\")\n\
   --storage=path, -s path\n\
       Storage path (default \"%s\")\n\
+  --attach_info=path, -apath\n\
+      Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, server_group_id, storage_path);
@@ -282,19 +306,21 @@ static int
 parse(int argc, char **argv)
 {
 	struct	option opts[] = {
-		{ "modules",	required_argument,	NULL,	'm' },
-		{ "cores",	required_argument,	NULL,	'c' },
-		{ "group",	required_argument,	NULL,	'g' },
-		{ "storage",	required_argument,	NULL,	's' },
-		{ "help",	no_argument,		NULL,	'h' },
-		{ NULL,		0,			NULL,	0}
+		{ "modules",		required_argument,	NULL,	'm' },
+		{ "cores",		required_argument,	NULL,	'c' },
+		{ "group",		required_argument,	NULL,	'g' },
+		{ "storage",		required_argument,	NULL,	's' },
+		{ "attach_info",	optional_argument,	NULL,	'a' },
+		{ "help",		no_argument,		NULL,	'h' },
+		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
 	int	c;
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:m:g:s:h", opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "c:m:g:s:a::h", opts, NULL)) !=
+		-1) {
 		switch (c) {
 		case 'm':
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
@@ -324,6 +350,10 @@ parse(int argc, char **argv)
 			break;
 		case 'h':
 			usage(argv[0], stdout);
+			break;
+		case 'a':
+			save_attach_info = true;
+			attach_info_path = optarg;
 			break;
 		default:
 			usage(argv[0], stderr);

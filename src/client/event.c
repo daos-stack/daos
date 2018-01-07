@@ -83,7 +83,9 @@ static tse_sched_t daos_sched_g;
 int
 daos_eq_lib_init()
 {
-	int rc;
+	bool		singleton = false;
+	uint32_t	flags;
+	int		rc;
 
 	pthread_mutex_lock(&daos_eq_lock);
 	if (refcount > 0) {
@@ -97,7 +99,14 @@ daos_eq_lib_init()
 		D__GOTO(unlock, rc);
 	}
 
-	rc = crt_init(NULL, 0 /* client-only */);
+	/*
+	 * If DAOS_SINGLETON_CLI ENV set as non-zero value, then daos client
+	 * works in singleton mode that without cient-side rank but with the
+	 * benefit of independent with PMIx.
+	 */
+	d_getenv_bool("DAOS_SINGLETON_CLI", &singleton);
+	flags = singleton ? CRT_FLAG_BIT_SINGLETON : 0;
+	rc = crt_init(NULL, flags);
 	if (rc != 0) {
 		D__ERROR("failed to initialize crt: %d\n", rc);
 		D__GOTO(hash, rc);
