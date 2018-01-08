@@ -1036,6 +1036,7 @@ struct get_size_props {
 	daos_iov_t	iov;
 	daos_sg_list_t  sgl;
 	uint32_t	nr;
+	bool		found_dkey;
 	daos_hash_out_t anchor;
 	daos_size_t	dkey_num;
 	daos_size_t	*size;
@@ -1096,9 +1097,6 @@ list_recxs_cb(tse_task_t *task, void *data)
 		return rc;
 	}
 
-	*params->size = dkey_num * params->block_size + params->recx.rx_idx +
-		params->recx.rx_nr;
-
 out:
 	if (params->dkey_str) {
 		free(params->dkey_str);
@@ -1145,6 +1143,7 @@ get_array_size_cb(tse_task_t *task, void *data)
 		if (!strcmp(ARRAY_MD_KEY, props->key))
 			continue;
 
+		props->found_dkey = true;
 		/** Keep a record of the highest dkey */
 		ret = sscanf(props->key, "%zu", &dkey_num);
 		D__ASSERT(ret == 1);
@@ -1175,6 +1174,9 @@ get_array_size_cb(tse_task_t *task, void *data)
 #ifdef ARRAY_DEBUG
 	printf("DKEY NUM %zu\n", props->dkey_num);
 #endif
+	if (!props->found_dkey)
+		D__GOTO(out, rc = 0);
+
 	char key[ENUM_KEY_BUF];
 
 	sprintf(key, "%zu", props->dkey_num);
@@ -1190,7 +1192,7 @@ get_array_size_cb(tse_task_t *task, void *data)
 	D__ALLOC_PTR(params);
 	if (params == NULL) {
 		D__ERROR("Failed memory allocation\n");
-		return -DER_NOMEM;
+		D__GOTO(out, rc = -DER_NOMEM);
 	}
 
 	akey = &params->akey;
@@ -1270,8 +1272,11 @@ dac_array_get_size(tse_task_t *task)
 	if (get_size_props == NULL)
 		D__GOTO(err_task, rc = -DER_NOMEM);
 
+	*args->size = 0;
+
 	/** List all DKEYS to determine the highest dkey */
 	get_size_props->dkey_num = 0;
+	get_size_props->found_dkey = false;
 	get_size_props->nr = ENUM_DESC_NR;
 	get_size_props->ptask = task;
 	get_size_props->size = args->size;
@@ -1416,8 +1421,10 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			p_args.oh = args->oh;
 			p_args.epoch = args->epoch;
 			p_args.dkey = dkey;
-			p_args.akeys = NULL;
-			p_args.akey_nr = 0;
+
+#ifdef ARRAY_DEBUG
+			printf("Punching Key %s\n", params->dkey_str);
+#endif
 
 			rc = daos_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS,
 					      tse_task2sched(task), &p_args, 0,
