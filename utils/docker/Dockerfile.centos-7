@@ -20,23 +20,19 @@ RUN yum install -y libcmocka libcmocka-devel doxygen pandoc flex patch
 # Packages for NVML, PMIx, hwloc and OpenMPI exist in CentOS, but are unfortunately
 # outdated. The DAOS build system will rebuilt those packages.
 
-# Create directory for DAOS backend storage
-RUN mkdir /mnt/daos
-RUN chmod o+rwx /mnt/daos
-
 # Add DAOS user
 ENV USER daos
 ENV PASSWD daos
-
-RUN useradd -ms /bin/bash $USER
+RUN useradd -u 1000 -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
+
+# Create directory for DAOS backend storage
+RUN mkdir /mnt/daos
+RUN chown daos.daos /mnt/daos
 
 # Switch to new user
 USER $USER
 WORKDIR /home/$USER
-
-# Set environment variables
-ENV CRT_PHY_ADDR_STR "ofi+tcp"
 
 # Fetch DAOS code
 RUN git clone https://github.com/daos-stack/daos.git
@@ -45,3 +41,16 @@ WORKDIR /home/$USER/daos
 # Build DAOS & dependencies
 RUN git submodule init && git submodule update
 RUN scons --build-deps=yes USE_INSTALLED=all install
+
+# Set environment variables
+ENV PATH=/home/daos/daos/install/bin:$PATH
+ENV LD_LIBRARY_PATH=/home/daos/daos/install/lib:/home/daos/daos/install/lib/daos_srv:$LD_LIBRARY_PATH
+ENV CPATH=/home/daos/daos/install/include:$CPATH
+ENV CCI_CONFIG=/home/daos/daos/install/etc/cci.ini
+ENV ABT_ENV_MAX_NUM_XSTREAMS=100
+ENV ABT_MAX_NUM_XSTREAMS=100
+ENV CRT_PHY_ADDR_STR="ofi+tcp"
+
+# Start DAOS server & run basic tests
+#RUN orterun -H localhost -np 1 --report-uri /tmp/uri.txt ./install/bin/daos_server > /tmp/daos_server.out 2>&1 &
+#RUN orterun -H localhost -np 1 --ompi-server file:/tmp/uri.txt install/bin/daos_test
