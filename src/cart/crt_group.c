@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -2232,6 +2232,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	crt_group_id_t		 grpid;
 	d_rank_t		 rank;
 	crt_phy_addr_t		 addr;
+	bool			 addr_free = false;
 	int			 rc = 0;
 
 
@@ -2249,8 +2250,15 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 		rank = grp_priv->gp_self;
 		addr = crt_gdata.cg_addr;
 	} else {
+		pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
 		rank = grp_priv->gp_psr_rank;
-		addr = grp_priv->gp_psr_phy_addr;
+		D_STRNDUP(addr, grp_priv->gp_psr_phy_addr,
+			  CRT_ADDR_STR_MAX_LEN);
+		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+		if (addr == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		else
+			addr_free = true;
 	}
 
 	grpid = grp_priv->gp_pub.cg_grpid;
@@ -2340,11 +2348,17 @@ out:
 	}
 	if (fp != NULL)
 		fclose(fp);
+	if (addr_free)
+		D_FREE(addr);
 	return rc;
 }
 
+/*
+ * Load psr from singleton config file.
+ * If psr_rank set as "-1", will mod the group rank with group size as psr rank.
+ */
 int
-crt_grp_config_load(struct crt_grp_priv *grp_priv)
+crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 {
 	char		*filename = NULL;
 	FILE		*fp = NULL;
@@ -2352,18 +2366,12 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 	char		all_or_self[8] = {'\0'};
 	char		fmt[64] = {'\0'};
 	crt_phy_addr_t	addr_str = NULL;
-	d_rank_t	rank, psr_rank, idx;
+	d_rank_t	rank, idx;
 	bool		forall;
 	int		rc = 0;
 
-	if (!crt_initialized()) {
-		D_ERROR("CRT not initialized.\n");
-		D_GOTO(out, rc = -DER_UNINIT);
-	}
-	if (grp_priv == NULL) {
-		D_ERROR("Invalid NULL grp_priv pointer.\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
+	D_ASSERT(crt_initialized());
+	D_ASSERT(grp_priv != NULL);
 
 	grpid = grp_priv->gp_pub.cg_grpid;
 	filename = crt_grp_attach_info_filename(grp_priv);
@@ -2420,27 +2428,36 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 	if (addr_str == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	crt_group_rank(NULL, &rank);
-	psr_rank = rank % grp_priv->gp_size;
+	if (psr_rank == -1) {
+		crt_group_rank(NULL, &rank);
+		psr_rank = rank % grp_priv->gp_size;
+	} else {
+		if (psr_rank >= grp_priv->gp_size) {
+			D_ERROR("invalid parameter (psr %d, gp_size %d).\n",
+				psr_rank, grp_priv->gp_size);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
 
 	memset(fmt, 0, 64);
 	snprintf(fmt, 64, "%%d %%%ds", CRT_ADDR_STR_MAX_LEN);
+	rc = -DER_INVAL;
 	for (idx = 0; idx < grp_priv->gp_size; idx++) {
-		rc = fscanf(fp, fmt, &grp_priv->gp_psr_rank, (char *)addr_str);
+		rc = fscanf(fp, fmt, &rank, (char *)addr_str);
 		if (rc == EOF) {
 			D_ERROR("read from file %s failed (%s).\n",
 				filename, strerror(errno));
 			D_GOTO(out, rc = d_errno2der(errno));
 		}
-		grp_priv->gp_psr_phy_addr = addr_str;
-		if (!forall || grp_priv->gp_psr_rank == psr_rank) {
+		if (!forall || rank == psr_rank) {
 			D_DEBUG("grp %s selected psr_rank %d, uri %s.\n",
-				grpid, grp_priv->gp_psr_rank,
-				grp_priv->gp_psr_phy_addr);
+				grpid, rank, addr_str);
+			crt_grp_psr_set(grp_priv, rank, addr_str);
+			rc = 0;
 			break;
 		}
 	}
-	rc = 0;
+
 out:
 	if (fp)
 		fclose(fp);
@@ -2449,9 +2466,31 @@ out:
 	D_FREE(grpname);
 	if (rc != 0) {
 		D_FREE(addr_str);
-		D_ERROR("crt_grp_config_load (grpid %s) failed, rc: %d.\n",
+		D_ERROR("crt_grp_config_psr_load (grpid %s) failed, rc: %d.\n",
 			grpid, rc);
 	}
+	return rc;
+}
+
+int
+crt_grp_config_load(struct crt_grp_priv *grp_priv)
+{
+	int	rc;
+
+	if (!crt_initialized()) {
+		D_ERROR("CRT not initialized.\n");
+		D_GOTO(out, rc = -DER_UNINIT);
+	}
+	if (grp_priv == NULL) {
+		D_ERROR("Invalid NULL grp_priv pointer.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = crt_grp_config_psr_load(grp_priv, -1);
+	if (rc != 0)
+		D_ERROR("crt_grp_config_load failed, rc: %d.\n", rc);
+
+out:
 	return rc;
 }
 
@@ -2698,4 +2737,58 @@ crt_grp_is_local(crt_group_t *grp)
 	D_ASSERT(grp_priv != NULL);
 
 	return grp_priv->gp_local == 1;
+}
+
+int
+crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
+{
+	d_rank_t	psr_rank;
+	crt_phy_addr_t	uri = NULL, psr_phy_addr = NULL;
+	int		rc;
+
+	psr_rank = grp_priv->gp_psr_rank;
+	while (1) {
+		psr_rank = (psr_rank + 1) % grp_priv->gp_size;
+		if (psr_rank == grp_priv->gp_psr_rank) {
+			D_ERROR("group %s no more PSR candidate.\n",
+				grp_priv->gp_pub.cg_grpid);
+			D_GOTO(out, rc = -DER_PROTO);
+		}
+		rc = crt_grp_lc_lookup(grp_priv, 0, psr_rank, 0, &uri, NULL);
+		if (rc == 0) {
+			if (uri == NULL)
+				break;
+
+			D_STRNDUP(psr_phy_addr, uri, CRT_ADDR_STR_MAX_LEN);
+			if (psr_phy_addr == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			crt_grp_psr_set(grp_priv, psr_rank, psr_phy_addr);
+			D_GOTO(out, rc = 0);
+		} else if (rc != -DER_OOG) {
+			/*
+			 * DER_OOG means the psr_rank being evicted then can try
+			 * next one, for other errno just treats as failure.
+			 */
+			D_ERROR("crt_grp_lc_lookup(grp %s, rank %d tag 0) "
+				"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
+				psr_rank, rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	if (crt_is_singleton()) {
+		rc = crt_grp_config_psr_load(grp_priv, psr_rank);
+		if (rc != 0)
+			D_ERROR("crt_grp_config_psr_load(grp %s, psr_rank %d), "
+				"failed, rc: %d.\n",
+				grp_priv->gp_pub.cg_grpid, psr_rank, rc);
+	} else {
+		rc = crt_pmix_psr_load(grp_priv, psr_rank);
+		if (rc != 0)
+			D_ERROR("crt_pmix_psr_load(grp %s, psr_rank %d), "
+				"failed, rc: %d.\n",
+				grp_priv->gp_pub.cg_grpid, psr_rank, rc);
+	}
+out:
+	return rc;
 }

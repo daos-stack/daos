@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -276,6 +276,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	struct crt_rpc_priv	*rpc_priv, *rpc_next;
 	bool			 msg_logged;
 	int			 flags, force, wait;
+	uint64_t		 ts_start, ts_now;
 	int			 rc = 0;
 
 	D_ASSERT(rlink != NULL);
@@ -340,17 +341,34 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 
 		rc = crt_req_abort(&rpc_priv->crp_pub);
 		if (rc != 0) {
-			D_ERROR("crt_req_abort(opc: %#x) failed, rc: %d.\n",
+			D_DEBUG("crt_req_abort(opc: %#x) failed, rc: %d.\n",
 				rpc_priv->crp_pub.cr_opc, rc);
-			break;
+			rc = 0;
+			continue;
 		}
 	}
 
-	if (wait) {
+	ts_start = d_timeus_secdiff(0);
+	while (wait != 0) {
 		/* make sure all above aborting finished */
-		while (!d_list_empty(&epi->epi_req_waitq) ||
-		       !d_list_empty(&epi->epi_req_q))
-			crt_progress(ctx, 1, NULL, NULL);
+		if (d_list_empty(&epi->epi_req_waitq) &&
+		    d_list_empty(&epi->epi_req_q)) {
+			wait = 0;
+		} else {
+			pthread_mutex_unlock(&ctx->cc_mutex);
+			rc = crt_progress(ctx, 1, NULL, NULL);
+			pthread_mutex_lock(&ctx->cc_mutex);
+			if (rc != 0 && rc != -DER_TIMEDOUT) {
+				D_ERROR("crt_progress failed, rc %d.\n", rc);
+				break;
+			}
+			ts_now = d_timeus_secdiff(0);
+			if (ts_now - ts_start > 2 * CRT_DEFAULT_TIMEOUT_US) {
+				D_ERROR("stop progress due to timed out.\n");
+				rc = -DER_TIMEDOUT;
+				break;
+			}
+		}
 	}
 
 out:
@@ -459,7 +477,7 @@ crt_ep_abort(crt_endpoint_t *ep)
 }
 
 /* caller should already hold crt_ctx->cc_mutex */
-static int
+int
 crt_req_timeout_track(crt_rpc_t *req)
 {
 	struct crt_context	*crt_ctx;
@@ -469,6 +487,9 @@ crt_req_timeout_track(crt_rpc_t *req)
 	crt_ctx = req->cr_ctx;
 	D_ASSERT(crt_ctx != NULL);
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+
+	if (rpc_priv->crp_in_binheap == 1)
+		D_GOTO(out, rc = 0);
 
 	/* add to binheap for timeout tracking */
 	RPC_ADDREF(rpc_priv); /* decref in crt_req_timeout_untrack */
@@ -483,11 +504,12 @@ crt_req_timeout_track(crt_rpc_t *req)
 		RPC_DECREF(rpc_priv);
 	}
 
+out:
 	return rc;
 }
 
 /* caller should already hold crt_ctx->cc_mutex */
-static void
+void
 crt_req_timeout_untrack(crt_rpc_t *req)
 {
 	struct crt_context	*crt_ctx;
@@ -533,18 +555,6 @@ crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
 	}
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_timeout_rwlock);
 }
-
-static inline uint64_t
-crt_get_timeout(struct crt_rpc_priv *rpc_priv)
-{
-	uint32_t	timeout_sec;
-
-	timeout_sec = rpc_priv->crp_timeout_sec > 0 ?
-		      rpc_priv->crp_timeout_sec : crt_gdata.cg_timeout;
-
-	return d_timeus_secdiff(timeout_sec);
-}
-
 
 static bool
 crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)

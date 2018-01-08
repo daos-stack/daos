@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -843,6 +843,48 @@ crt_req_get_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 	return rc;
 }
 
+static int
+crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
+			 struct crt_rpc_priv *rpc_priv)
+{
+	struct crt_context	*crt_ctx;
+	crt_rpc_t		*rpc_pub = &rpc_priv->crp_pub;
+	int			 rc;
+
+	/* destroy previous URI_LOOKUP req, addref in crt_req_uri_lookup_psr */
+	RPC_PUB_DECREF(rpc_priv->crp_ul_req);
+	rpc_priv->crp_ul_req = NULL;
+
+	rc = crt_grp_psr_reload(grp_priv);
+	if (rc != 0) {
+		D_ERROR("rpc_priv %p(opc: %#x), crt_grp_psr_reload(grp %s) "
+			"failed, rc: %d.\n", rpc_priv, rpc_pub->cr_opc,
+			grp_priv->gp_pub.cg_grpid, rc);
+		D_GOTO(out, rc);
+	}
+
+	crt_ctx = rpc_pub->cr_ctx;
+
+	pthread_mutex_lock(&crt_ctx->cc_mutex);
+	if (!crt_req_timedout(rpc_pub))
+		crt_req_timeout_untrack(rpc_pub);
+	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
+	rc = crt_req_timeout_track(rpc_pub);
+	pthread_mutex_unlock(&crt_ctx->cc_mutex);
+	if (rc != 0) {
+		D_ERROR("rpc_priv %p(opc: %#x), crt_req_timeout_track "
+			"failed, rc: %d.\n", rpc_priv, rpc_pub->cr_opc,
+			rc);
+		D_GOTO(out, rc);
+	}
+
+	rpc_priv->crp_state = RPC_STATE_INITED;
+	rc = crt_req_send_internal(rpc_priv);
+
+out:
+	return rc;
+}
+
 static void
 crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 {
@@ -853,19 +895,12 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	struct crt_context		*crt_ctx;
 	struct crt_uri_lookup_out	*ul_out;
 	char				*uri = NULL;
+	bool				 ul_retried = false;
 	int				 rc = 0;
 
 	rpc_priv = cb_info->cci_arg;
 	D_ASSERT(rpc_priv->crp_state == RPC_STATE_URI_LOOKUP);
 	D_ASSERT(rpc_priv->crp_ul_req = cb_info->cci_rpc);
-
-	if (cb_info->cci_rc != 0) {
-		D_ERROR("rpc_priv %p(opc: %#x), failed cci_rc: %d.\n",
-			container_of(cb_info->cci_rpc, struct crt_rpc_priv,
-				     crp_pub),
-			cb_info->cci_rpc->cr_opc, cb_info->cci_rc);
-		D_GOTO(out, rc = cb_info->cci_rc);
-	}
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	rank = tgt_ep->ep_rank;
@@ -875,6 +910,21 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 		grp_priv = container_of(tgt_ep->ep_grp, struct crt_grp_priv,
 					gp_pub);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
+
+	if (cb_info->cci_rc != 0) {
+		D_ERROR("rpc_priv %p(opc: %#x), failed cci_rc: %d.\n",
+			container_of(cb_info->cci_rpc, struct crt_rpc_priv,
+				     crp_pub),
+			cb_info->cci_rpc->cr_opc, cb_info->cci_rc);
+		if (rpc_priv->crp_ul_retry++ < CRT_URI_LOOKUP_RETRY_MAX) {
+			rc = crt_req_uri_lookup_retry(grp_priv, rpc_priv);
+			ul_retried = true;
+		} else {
+			rc = cb_info->cci_rc;
+		}
+		D_GOTO(out, rc);
+	}
+
 	/* extract uri */
 	ul_out = crt_reply_get(cb_info->cci_rpc);
 	D_ASSERT(ul_out != NULL);
@@ -907,9 +957,11 @@ out:
 		RPC_DECREF(rpc_priv); /* destroy */
 	}
 
-	/* addref in crt_req_uri_lookup_psr */
-	RPC_PUB_DECREF(rpc_priv->crp_ul_req);
-	rpc_priv->crp_ul_req = NULL;
+	if (!ul_retried && rpc_priv->crp_ul_req != NULL) {
+		/* addref in crt_req_uri_lookup_psr */
+		RPC_PUB_DECREF(rpc_priv->crp_ul_req);
+		rpc_priv->crp_ul_req = NULL;
+	}
 	/* addref in crt_req_uri_lookup_psr */
 	RPC_DECREF(rpc_priv);
 }
@@ -979,6 +1031,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 	crt_rpc_t		*req;
 	crt_endpoint_t		*tgt_ep;
 	struct crt_context	*ctx;
+	crt_phy_addr_t		 uri = NULL;
 	int			 rc = 0;
 
 	req = &rpc_priv->crp_pub;
@@ -999,23 +1052,52 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 		D_GOTO(out, rc);
 	}
 
+	if (base_addr != NULL && *base_addr != NULL &&
+	    rpc_priv->crp_hg_addr == NULL) {
+		rc = crt_req_get_tgt_uri(rpc_priv, *base_addr);
+		if (rc != 0)
+			D_ERROR("crt_req_get_tgt_uri failed, "
+				"opc: %#x.\n", req->cr_opc);
+		D_GOTO(out, rc);
+	}
+
 	/*
 	 * If the target endpoint is the PSR and it's not already in the address
 	 * cache, insert the URI of the PSR to the address cache.
 	 * Did it in crt_grp_attach(), in the case that this context created
 	 * later can insert it here.
 	 */
-	if (*base_addr == NULL && grp_priv->gp_local == 0
-	    && tgt_ep->ep_rank == grp_priv->gp_psr_rank) {
-		*base_addr = grp_priv->gp_psr_phy_addr;
-		rc = crt_grp_lc_uri_insert(grp_priv, ctx->cc_idx,
-					   tgt_ep->ep_rank,
-					   grp_priv->gp_psr_phy_addr);
-		if (rc != 0)
-			D_ERROR("crt_grp_lc_uri_insert() failed. rc: %d\n", rc);
+	if (base_addr != NULL && *base_addr == NULL && !grp_priv->gp_local) {
+		pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
+		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank) {
+			D_STRNDUP(uri, grp_priv->gp_psr_phy_addr,
+				  CRT_ADDR_STR_MAX_LEN);
+			*base_addr = uri;
+			pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+			if (uri == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			rc = crt_grp_lc_uri_insert(grp_priv, ctx->cc_idx,
+						   tgt_ep->ep_rank, uri);
+			if (rc != 0) {
+				D_ERROR("crt_grp_lc_uri_insert() failed, "
+					"rc: %d\n", rc);
+				D_GOTO(out, rc);
+			}
+
+			rc = crt_req_get_tgt_uri(rpc_priv, uri);
+			if (rc != 0) {
+				D_ERROR("crt_req_get_tgt_uri failed, "
+					"opc: %#x.\n", req->cr_opc);
+				D_GOTO(out, rc);
+			}
+		} else {
+			pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+		}
 	}
 
 out:
+	D_FREE(uri);
 	return rc;
 }
 
@@ -1199,12 +1281,6 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			rc = crt_req_send_immediately(rpc_priv);
 		} else if (base_addr != NULL) {
 			/* send addr lookup req */
-			rc = crt_req_get_tgt_uri(rpc_priv, base_addr);
-			if (rc != 0) {
-				D_ERROR("crt_req_get_tgt_uri failed, "
-					"opc: %#x.\n", req->cr_opc);
-				D_GOTO(out, rc);
-			}
 			rpc_priv->crp_state = RPC_STATE_ADDR_LOOKUP;
 			rc = crt_req_hg_addr_lookup(rpc_priv);
 			if (rc != 0)
@@ -1220,7 +1296,7 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 		}
 		break;
 	case RPC_STATE_URI_LOOKUP:
-		rc = crt_req_ep_lc_lookup(rpc_priv, &base_addr);
+		rc = crt_req_ep_lc_lookup(rpc_priv, NULL);
 		if (rc != 0) {
 			D_ERROR("crt_grp_ep_lc_lookup() failed, rc %d, "
 				"opc: %#x\n", rc, req->cr_opc);
@@ -1528,6 +1604,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	rpc_priv->crp_state = RPC_STATE_INITED;
 	rpc_priv->crp_hdl_reuse = NULL;
 	rpc_priv->crp_srv = srv_flag;
+	rpc_priv->crp_ul_retry = 0;
 	/* initialize as 1, so user can cal crt_req_decref to destroy new req */
 	rpc_priv->crp_refcount = 1;
 	pthread_spin_init(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);

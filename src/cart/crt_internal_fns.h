@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -68,6 +68,8 @@ bool crt_context_empty(int locked);
 void crt_context_req_untrack(crt_rpc_t *req);
 crt_context_t crt_context_lookup(int ctx_idx);
 void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
+int crt_req_timeout_track(crt_rpc_t *req);
+void crt_req_timeout_untrack(crt_rpc_t *req);
 
 /** some simple helper functions */
 

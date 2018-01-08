@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -349,6 +349,19 @@ out:
 	return rc;
 }
 
+static inline void
+crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank,
+		crt_phy_addr_t psr_addr)
+{
+	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+	D_FREE(grp_priv->gp_psr_phy_addr);
+	grp_priv->gp_psr_rank = psr_rank;
+	grp_priv->gp_psr_phy_addr = psr_addr;
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	d_log(DD_FAC(grp) | DLOG_DBG, "group %s, set psr rank %d, uri %s.\n",
+		grp_priv->gp_pub.cg_grpid, psr_rank, psr_addr);
+}
+
 bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);
 bool crt_grp_is_local(crt_group_t *grp);
@@ -356,5 +369,7 @@ struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);
 int crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank,
 			      const char *uri);
 bool crt_rank_evicted(crt_group_t *grp, d_rank_t rank);
+int crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank);
+int crt_grp_psr_reload(struct crt_grp_priv *grp_priv);
 
 #endif /* __CRT_GROUP_H__ */

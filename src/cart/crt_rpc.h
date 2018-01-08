@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,6 +54,8 @@
 
 /* uri lookup RPC timeout 500mS */
 #define CRT_URI_LOOKUP_TIMEOUT		(1000 * 500)
+/* uri lookup max retry times */
+#define CRT_URI_LOOKUP_RETRY_MAX	(3)
 
 extern struct d_binheap_ops crt_timeout_bh_ops;
 void crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
@@ -174,6 +176,7 @@ struct crt_rpc_priv {
 	struct crt_hg_hdl	*crp_hdl_reuse; /* reused hg_hdl */
 	crt_phy_addr_t		crp_tgt_uri; /* target uri address */
 	crt_rpc_t		*crp_ul_req; /* uri lookup request */
+	uint32_t		crp_ul_retry; /* uri lookup retry counter */
 
 	/*
 	 * RPC request flag, see enum crt_rpc_flags/crt_rpc_flags_internal,
@@ -396,7 +399,10 @@ crt_req_timedout(crt_rpc_t *rpc)
 	struct crt_rpc_priv *rpc_priv;
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	return rpc_priv->crp_state == RPC_STATE_REQ_SENT &&
+	return (rpc_priv->crp_state == RPC_STATE_REQ_SENT ||
+		rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
+		rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
+		rpc_priv->crp_state == RPC_STATE_TIMEOUT) &&
 	       !rpc_priv->crp_in_binheap;
 }
 
@@ -407,6 +413,17 @@ crt_req_aborted(crt_rpc_t *rpc)
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 	return rpc_priv->crp_state == RPC_STATE_CANCELED;
+}
+
+static inline uint64_t
+crt_get_timeout(struct crt_rpc_priv *rpc_priv)
+{
+	uint32_t	timeout_sec;
+
+	timeout_sec = rpc_priv->crp_timeout_sec > 0 ?
+		      rpc_priv->crp_timeout_sec : crt_gdata.cg_timeout;
+
+	return d_timeus_secdiff(timeout_sec);
 }
 
 /* crt_corpc.c */

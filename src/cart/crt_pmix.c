@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -510,6 +510,26 @@ out:
 	return rc;
 }
 
+int
+crt_pmix_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
+{
+	crt_phy_addr_t	uri = NULL;
+	int		rc;
+
+	D_ASSERT(grp_priv != NULL);
+	D_ASSERT(psr_rank >= 0 && psr_rank < grp_priv->gp_size);
+
+	rc = crt_pmix_uri_lookup(grp_priv->gp_pub.cg_grpid,
+				 psr_rank, &uri);
+	if (rc == 0)
+		crt_grp_psr_set(grp_priv, psr_rank, uri);
+	else
+		D_ERROR("crt_pmix_uri_lookup(grpid: %s, rank %d) failed, "
+			"rc: %d.\n", grp_priv->gp_pub.cg_grpid, psr_rank, rc);
+
+	return rc;
+}
+
 /* PMIx attach to a primary group */
 int
 crt_pmix_attach(struct crt_grp_priv *grp_priv)
@@ -541,19 +561,10 @@ crt_pmix_attach(struct crt_grp_priv *grp_priv)
 	D_ASSERT(grp_gdata != NULL);
 	myrank = crt_is_service() ? grp_gdata->gg_srv_pri_grp->gp_self :
 				    grp_gdata->gg_cli_pri_grp->gp_self;
-	/*
-	 * TODO: always select target rank 0 as PSR now as for demo rank 0
-	 * always alive. Need to select a new one when uri_lookup timeout later.
-	 */
-	grp_priv->gp_psr_rank = myrank % grp_priv->gp_size;
-	grp_priv->gp_psr_rank = 0;
-	rc = crt_pmix_uri_lookup(grp_priv->gp_pub.cg_grpid,
-				 grp_priv->gp_psr_rank,
-				 &grp_priv->gp_psr_phy_addr);
+	rc = crt_pmix_psr_load(grp_priv, myrank % grp_priv->gp_size);
 	if (rc != 0)
-		D_ERROR("crt_pmix_uri_lookup(grpid: %s, rank %d) failed, "
-			"rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-			grp_priv->gp_psr_rank, rc);
+		D_ERROR("crt_pmix_attach (grpid: %s) failed, rc: %d.\n",
+			grp_priv->gp_pub.cg_grpid, rc);
 
 out:
 	if (pdata != NULL)

@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -66,5 +66,6 @@ int crt_pmix_attach(struct crt_grp_priv *grp_priv);
 void crt_pmix_reg_event_hdlr(struct crt_grp_priv *grp_priv);
 void crt_pmix_dereg_event_hdlr(struct crt_grp_priv *grp_priv);
 void crt_plugin_pmix_fini(void);
+int crt_pmix_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank);
 
 #endif /* __CRT_PMIX_H__ */
