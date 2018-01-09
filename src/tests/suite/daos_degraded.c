@@ -44,23 +44,20 @@ enum {
 };
 
 void
-daos_kill_server(const uuid_t pool_uuid, const char *grp,
-		 const d_rank_list_t *svc, daos_handle_t poh,
-		 d_rank_t rank)
+daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
+		 const d_rank_list_t *svc, daos_handle_t poh, d_rank_t rank)
 {
-	daos_pool_info_t	info;
 	d_rank_list_t	targets;
-	int			rc;
-
-	rc = daos_pool_query(poh, NULL, &info, NULL);
-	assert_int_equal(rc, 0);
+	int		rc;
 
 	if (rank == -1)
-		rank = info.pi_ntargets - info.pi_ndisabled - 1;
+		rank = arg->srv_ntgts - arg->srv_disabled_ntgts - 1;
+
+	arg->srv_disabled_ntgts++;
 
 	print_message("\tKilling target %d (total of %d with %d already "
-		      "disabled)!\n", rank, info.pi_ntargets,
-		      info.pi_ndisabled);
+		      "disabled)!\n", rank, arg->srv_ntgts,
+		       arg->srv_disabled_ntgts - 1);
 
 	/** kill server */
 	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
@@ -164,8 +161,8 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of updates is half-way inject fault */
 		if (op_kill == UPDATE && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
-			daos_kill_server(arg->pool_uuid, arg->group, &arg->svc,
-					 arg->poh, -1);
+			daos_kill_server(arg, arg->pool_uuid, arg->group,
+					 &arg->svc, arg->poh, -1);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -193,8 +190,8 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of lookup is half-way inject fault */
 		if (op_kill == LOOKUP && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
-			daos_kill_server(arg->pool_uuid, arg->group, &arg->svc,
-					 arg->poh, -1);
+			daos_kill_server(arg, arg->pool_uuid, arg->group,
+					 &arg->svc, arg->poh, -1);
 	}
 	free(rec_verify);
 
@@ -235,8 +232,8 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of keys enumerated is half-way inject fault */
 		if (op_kill == ENUMERATE && rank == 0 && enum_op &&
 		    g_dkeys > 1 && (key_nr  >= g_dkeys/2)) {
-			daos_kill_server(arg->pool_uuid, arg->group, &arg->svc,
-					 arg->poh, -1);
+			daos_kill_server(arg, arg->pool_uuid, arg->group,
+					 &arg->svc, arg->poh, -1);
 			enum_op = 0;
 		}
 

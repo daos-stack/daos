@@ -127,6 +127,8 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 
 	/** connect to pool */
 	if (arg->myrank == 0) {
+		daos_pool_info_t	info;
+
 		print_message("setup: connecting to pool\n");
 		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
 				       DAOS_PC_RW, &arg->poh, &arg->pool_info,
@@ -136,7 +138,17 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 		else
 			print_message("connected to pool, ntarget=%d\n",
 				      arg->pool_info.pi_ntargets);
+
+		if (rc == 0) {
+			rc = daos_pool_query(arg->poh, NULL, &info, NULL);
+
+			if (rc == 0) {
+				arg->srv_ntgts = info.pi_ntargets;
+				arg->srv_disabled_ntgts = info.pi_ndisabled;
+			}
+		}
 	}
+
 	/** broadcast pool connect result */
 	if (multi_rank)
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);

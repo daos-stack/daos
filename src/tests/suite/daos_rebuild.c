@@ -36,9 +36,8 @@
 #define OBJ_NR		10
 #define OBJ_CLS		DAOS_OC_R3S_RW
 
-#define MAX_KILLS	2
+#define MAX_KILLS	3
 
-static bool detected_ranks;
 static d_rank_t ranks_to_kill[MAX_KILLS];
 
 static bool
@@ -47,16 +46,11 @@ rebuild_runable(test_arg_t *arg, unsigned int required_tgts,
 {
 	daos_pool_info_t info;
 	int		 i;
-	int		 rc;
 	int		 start = 0;
 	bool		 runable = true;
 
 	if (arg->myrank == 0) {
-		rc = daos_pool_query(arg->poh, NULL, &info, NULL);
-		assert_int_equal(rc, 0);
-		print_message("targets (%d/%d)\n", info.pi_ntargets,
-			      info.pi_ndisabled);
-		if (info.pi_ntargets - info.pi_ndisabled < required_tgts) {
+		if (arg->srv_ntgts - arg->srv_disabled_ntgts < required_tgts) {
 			if (arg->myrank == 0)
 				print_message("Not enough targets, skipping "
 					      "(%d/%d)\n", info.pi_ntargets,
@@ -69,12 +63,10 @@ rebuild_runable(test_arg_t *arg, unsigned int required_tgts,
 			ranks_to_kill[0] = 1;
 			start = 1;
 		}
-		if (!detected_ranks) {
-			detected_ranks = true;
-			for (i = start; i < MAX_KILLS; i++)
-				ranks_to_kill[i] = info.pi_ntargets -
-					   info.pi_ndisabled - i - 1;
-		}
+
+		for (i = start; i < MAX_KILLS; i++)
+			ranks_to_kill[i] = arg->srv_ntgts -
+					   arg->srv_disabled_ntgts - i - 1;
 	}
 
 	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -90,8 +82,8 @@ rebuild_test_exclude_tgt(test_arg_t *arg, d_rank_t rank, bool kill)
 
 	if (arg->myrank == 0) {
 		if (kill) {
-			daos_kill_server(arg->pool_uuid, arg->group, &arg->svc,
-					 arg->poh, rank);
+			daos_kill_server(arg, arg->pool_uuid, arg->group,
+					 &arg->svc, arg->poh, rank);
 			sleep(5);
 		} else {
 			/** exclude the target from the pool */
@@ -137,7 +129,7 @@ rebuild_wait(test_arg_t *arg, d_rank_t failed_rank, bool concurrent_io)
 	char			buf[10];
 
 	/* Rebuild rank 0 */
-	if (concurrent_io) {
+	if (concurrent_io && !daos_handle_is_inval(arg->coh)) {
 		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
 		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 		/* Let's do I/O at the same time */
@@ -162,17 +154,44 @@ rebuild_wait(test_arg_t *arg, d_rank_t failed_rank, bool concurrent_io)
 	while (arg->myrank == 0) {
 		daos_pool_info_t	    pinfo;
 		struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
+		bool connect_pool = false;
+
+		if (daos_handle_is_inval(arg->poh)) {
+			rc = daos_pool_connect(arg->pool_uuid, arg->group,
+					       &arg->svc, DAOS_PC_RW,
+					       &arg->poh, &pinfo, NULL);
+			if (rc) {
+				print_message("pool_connect failed, rc: %d\n",
+					      rc);
+				break;
+			}
+			connect_pool = true;
+		}
 
 		memset(&pinfo, 0, sizeof(pinfo));
 		rc = daos_pool_query(arg->poh, NULL, &pinfo, NULL);
 		if (rc != 0) {
 			print_message("query rebuild status failed: %d\n", rc);
+			if (connect_pool) {
+				rc = daos_pool_disconnect(arg->poh, NULL);
+				if (rc)
+					print_message("disconnect failed: %d\n",
+						      rc);
+				arg->poh = DAOS_HDL_INVAL;
+			}
 			break;
 		}
 		assert_int_equal(rst->rs_errno, 0);
 		if (rst->rs_done) {
 			print_message("Rebuild (ver=%d) is done\n",
 				       rst->rs_version);
+			if (connect_pool) {
+				rc = daos_pool_disconnect(arg->poh, NULL);
+				if (rc)
+					print_message("disconnect failed: %d\n",
+						      rc);
+				arg->poh = DAOS_HDL_INVAL;
+			}
 			break;
 		}
 
@@ -183,7 +202,7 @@ rebuild_wait(test_arg_t *arg, d_rank_t failed_rank, bool concurrent_io)
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	if (concurrent_io) {
+	if (concurrent_io && !daos_handle_is_inval(arg->coh)) {
 		for (i = 0; i < KEY_NR; i++) {
 			memset(buf, 0, 10);
 			sprintf(dkey, "rebuild_%d_%d", i, failed_rank);
@@ -460,6 +479,96 @@ rebuild_drop_scan(void **state)
 }
 
 static void
+rebuild_offline(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	int		i;
+	int		j;
+	int		rc;
+
+	if (!rebuild_runable(arg, 3, false))
+		skip();
+
+	print_message("create %d objects\n", OBJ_NR);
+	for (i = 0; i < OBJ_NR; i++) {
+		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+		/** Insert 1000 records */
+		print_message("Insert %d kv record in object "DF_OID"\n",
+			      KEY_NR, DP_OID(oid));
+		for (j = 0; j < 10; j++) {
+			char	key[16];
+
+			sprintf(key, "%d", j);
+			insert_single(key, "a_key", 0, "data",
+				      strlen("data") + 1, 0, &req);
+		}
+		ioreq_fini(&req);
+	}
+
+	/* Close cont and disconnect pool */
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = daos_cont_close(arg->coh, NULL);
+	if (rc) {
+		print_message("failed to close container "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+		return;
+	}
+	arg->coh = DAOS_HDL_INVAL;
+
+	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
+	if (rc) {
+		print_message("failed to disconnect pool "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->pool_uuid), rc);
+		return;
+	}
+	arg->poh = DAOS_HDL_INVAL;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rebuild_targets(arg, ranks_to_kill, 1, true, false);
+
+	/* reconnect the pool again */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
+				       DAOS_PC_RW, &arg->poh, &arg->pool_info,
+				       NULL /* ev */);
+		if (rc) {
+			print_message("daos_pool_connect failed, rc: %d\n", rc);
+			return;
+		}
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** broadcast pool info */
+	if (arg->multi_rank) {
+		MPI_Bcast(&arg->pool_info, sizeof(arg->pool_info), MPI_CHAR, 0,
+			  MPI_COMM_WORLD);
+		handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 0);
+	}
+
+	/** open container */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
+				    &arg->coh, &arg->co_info, NULL);
+		if (rc)
+			print_message("daos_cont_open failed, rc: %d\n", rc);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** broadcast container info */
+	if (arg->multi_rank) {
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 0);
+	}
+}
+
+static void
 rebuild_two_failures(void **state)
 {
 	test_arg_t		*arg = *state;
@@ -579,7 +688,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_objects, NULL, test_case_teardown},
 	{"REBUILD7: drop rebuild scan reply",
 	rebuild_drop_scan, NULL, test_case_teardown},
-	{"REBUILD8: rebuild with two failures",
+	{"REBUILD8: offline rebuild",
+	rebuild_offline, NULL, test_case_teardown},
+	{"REBUILD9: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
 };
 

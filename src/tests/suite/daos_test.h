@@ -67,6 +67,8 @@ typedef struct {
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
+	int			srv_ntgts;
+	int			srv_disabled_ntgts;
 } test_arg_t;
 
 enum {
@@ -146,7 +148,7 @@ int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 
 void
-daos_kill_server(const uuid_t pool_uuid, const char *grp,
+daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		 const d_rank_list_t *svc, daos_handle_t poh,
 		 d_rank_t rank);
 
