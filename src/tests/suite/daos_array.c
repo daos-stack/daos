@@ -343,6 +343,84 @@ set_size_1mb(void **state)
 
 	return 0;
 }
+
+static void
+replicator(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	daos_epoch_t	 epoch = time(NULL);
+	daos_iov_t	 dkey;
+	daos_sg_list_t	 sgl;
+	daos_iov_t	 sg_iov;
+	daos_iod_t	 iod;
+	daos_recx_t	 recx;
+	char		 buf_out[4608];
+	char		 buf[192];
+	int		 rc;
+
+	dts_buf_render(buf, 192);
+
+	/** open object */
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	sgl.sg_nr.num		= 1;
+	sgl.sg_nr.num_out	= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	/** init I/O descriptor */
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
+	iod.iod_size	= 1;
+	recx.rx_idx	= 27136;
+	recx.rx_nr	= sizeof(buf);
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	/** update record */
+	print_message("writing %d bytes in a single recx\n", 192);
+	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	recx.rx_idx     = 30208;
+	iod.iod_recxs	= &recx;
+	print_message("writing %d bytes in a single recx\n", 192);
+	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	recx.rx_idx     = 28672;
+	iod.iod_recxs	= &recx;
+	print_message("writing %d bytes in a single recx\n", 192);
+	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	/** fetch */
+	print_message("reading data back ...\n");
+	memset(buf_out, 0, sizeof(buf_out));
+	daos_iov_set(&sg_iov, buf_out, sizeof(buf_out));
+	recx.rx_idx     = 27136;
+	recx.rx_nr      = sizeof(buf_out);
+	iod.iod_recxs	= &recx;
+	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("all good\n");
+}
+
 static const struct CMUnitTest array_tests[] = {
 	{ "ARRAY1: byte array with buffer on stack",
 	  byte_array_simple_stack, NULL, test_case_teardown},
@@ -360,6 +438,8 @@ static const struct CMUnitTest array_tests[] = {
 	  array_simple, set_size_1mb, test_case_teardown},
 	{ "ARRAY8: partial I/O on array",
 	  array_partial, NULL, test_case_teardown},
+	{ "ARRAY9: segfault replicator",
+	  replicator, NULL, test_case_teardown},
 };
 
 int
