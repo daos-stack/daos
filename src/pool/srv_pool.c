@@ -1551,7 +1551,7 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 
 	D__DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
-	rc = crt_group_rank(NULL, &rank);
+	rc = crt_group_rank(svc->ps_pool->sp_group, &rank);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1722,7 +1722,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 * see pool_free_ref()
 	 */
 	D_ASSERT(svc->ps_pool != NULL);
-	rc = ds_iv_ns_create(rpc->cr_ctx, &iv_ns_id, &iv_iov,
+	rc = ds_iv_ns_create(rpc->cr_ctx, NULL,
+			     &iv_ns_id, &iv_iov,
 			     &svc->ps_pool->sp_iv_ns);
 	if (rc)
 		D_GOTO(out_svc, rc);
@@ -2030,7 +2031,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	 * connect the pool, so we only verify the non-rebuild
 	 * pool.
 	 */
-	if (!is_rebuild_pool(in->pqi_op.pi_hdl)) {
+	if (!is_rebuild_pool(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
 		daos_iov_set(&key, in->pqi_op.pi_hdl, sizeof(uuid_t));
 		daos_iov_set(&value, &hdl, sizeof(hdl));
 		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
@@ -2462,14 +2463,12 @@ out:
  * update pool map to all servers.
  **/
 int
-ds_pool_map_update(const uuid_t uuid, d_rank_list_t *tgts_exclude)
+ds_pool_map_buf_get(const uuid_t uuid, d_iov_t *iov,
+		    uint32_t *map_version)
 {
 	struct pool_svc	*svc;
 	struct rdb_tx	tx;
 	struct pool_buf	*map_buf;
-	d_sg_list_t	sgl;
-	d_iov_t		iov;
-	uint32_t	map_version;
 	int		rc;
 
 	rc = pool_svc_lookup_leader(uuid, &svc, NULL /* hint */);
@@ -2479,29 +2478,18 @@ ds_pool_map_update(const uuid_t uuid, d_rank_list_t *tgts_exclude)
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
 		D__GOTO(out_svc, rc);
-	ABT_rwlock_rdlock(svc->ps_lock);
 
-	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	ABT_rwlock_rdlock(svc->ps_lock);
+	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, map_version);
 	if (rc != 0) {
 		D__ERROR(DF_UUID": failed to read pool map: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
 		D__GOTO(out_lock, rc);
 	}
-
 	D_ASSERT(map_buf != NULL);
-	iov.iov_buf = map_buf;
-	iov.iov_len = pool_buf_size(map_buf->pb_nr);
-	iov.iov_buf_len = pool_buf_size(map_buf->pb_nr);
-
-	sgl.sg_nr.num = 1;
-	sgl.sg_nr.num_out = 0;
-	sgl.sg_iovs = &iov;
-	rc = ds_iv_update(svc->ps_pool->sp_iv_ns, IV_POOL_MAP, &sgl,
-			  CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_LAZY);
-	D__DEBUG(DB_TRACE, "publish pool "DF_UUID" %u/%u/%u/%u  %d\n",
-		 DP_UUID(uuid), map_buf->pb_nr, map_buf->pb_domain_nr,
-		 map_buf->pb_target_nr, map_buf->pb_csum, rc);
-
+	iov->iov_buf = map_buf;
+	iov->iov_len = pool_buf_size(map_buf->pb_nr);
+	iov->iov_buf_len = pool_buf_size(map_buf->pb_nr);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -2511,3 +2499,46 @@ out:
 	return rc;
 }
 
+/* Try to create iv namespace for the pool */
+int
+ds_pool_iv_ns_try_create(struct ds_pool *pool, unsigned int master_rank,
+			 d_iov_t *iv_iov, unsigned int iv_ns_id)
+{
+	struct ds_iv_ns	*ns;
+	int		rc;
+
+	if (pool->sp_iv_ns != NULL &&
+	    pool->sp_iv_ns->iv_master_rank != master_rank) {
+		/* If root has been changed, let's destroy the
+		 * previous IV ns
+		 */
+		ds_iv_ns_destroy(pool->sp_iv_ns);
+		pool->sp_iv_ns = NULL;
+	}
+
+	if (pool->sp_iv_ns != NULL)
+		return 0;
+
+	D_ASSERT(pool->sp_group != NULL);
+	if (iv_iov == NULL) {
+		d_iov_t tmp;
+
+		/* master node */
+		rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx,
+				     pool->sp_group, &iv_ns_id, &tmp, &ns);
+	} else {
+		/* other node */
+		rc = ds_iv_ns_attach(dss_get_module_info()->dmi_ctx,
+				     iv_ns_id, master_rank, iv_iov, &ns);
+	}
+
+	if (rc) {
+		D__ERROR("pool "DF_UUID" iv ns create failed %d\n",
+			 DP_UUID(pool->sp_uuid), rc);
+		return rc;
+	}
+
+	pool->sp_iv_ns = ns;
+
+	return rc;
+}

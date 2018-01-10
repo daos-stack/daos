@@ -116,4 +116,30 @@ ds_iv_key_type_unregister(unsigned int key_id);
 int
 ds_iv_key_type_register(unsigned int key_id, struct ds_iv_entry_ops *ops);
 
+enum iv_key {
+	IV_POOL_MAP = 1,
+	IV_REBUILD,
+};
+
+int ds_iv_fetch(struct ds_iv_ns *ns, unsigned int key_id,
+		d_sg_list_t *value);
+int ds_iv_update(struct ds_iv_ns *ns, unsigned int key_id,
+		 d_sg_list_t *value, unsigned int shortcut,
+		 unsigned int sync_mode);
+int ds_iv_invalidate(struct ds_iv_ns *ns, unsigned int key_id,
+		     unsigned int shortcut, unsigned int sync_mode);
+
+int ds_iv_ns_create(crt_context_t ctx, crt_group_t *grp,
+		    unsigned int *ns_id, daos_iov_t *g_ivns,
+		    struct ds_iv_ns **p_iv_ns);
+
+int ds_iv_ns_attach(crt_context_t ctx, unsigned int class_id,
+		    unsigned int master_rank, daos_iov_t *iv_ctxt,
+		    struct ds_iv_ns **p_iv_ns);
+
+void ds_iv_ns_destroy(void *ns);
+
+unsigned int ds_iv_ns_id_get(void *ns);
+
+void ds_iv_global_ns_get(struct ds_iv_ns *ns, d_iov_t *gl_iov);
 #endif /* __DAOS_SRV_IV_H__ */

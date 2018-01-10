@@ -49,7 +49,6 @@ struct rebuild_iter_arg {
 	uuid_t			cont_uuid;
 	struct rebuild_tgt_pool_tracker *rpt;
 	rebuild_obj_iter_cb_t	obj_cb;
-	unsigned int		map_ver;
 	daos_handle_t		root_hdl;
 	daos_handle_t		cont_hdl;
 };
@@ -331,9 +330,8 @@ rebuild_one_dkey(struct rebuild_tgt_pool_tracker *rpt,
 		daos_handle_t ph = DAOS_HDL_INVAL;
 		struct pool_map *map = rebuild_pool_map_get(rpt->rt_pool);
 
-		rc = dc_pool_local_open(rpt->rt_pool_uuid,
-					rebuild_gst.rg_pool_hdl_uuid, 0, NULL,
-					map, rpt->rt_svc_list, &ph);
+		rc = dc_pool_local_open(rpt->rt_pool_uuid, rpt->rt_poh_uuid,
+					0, NULL, map, rpt->rt_svc_list, &ph);
 		rebuild_pool_map_put(map);
 		if (rc)
 			D__GOTO(free, rc);
@@ -342,8 +340,7 @@ rebuild_one_dkey(struct rebuild_tgt_pool_tracker *rpt,
 	}
 
 	/* Open client dc handle */
-	rc = dc_cont_local_open(rdkey->rd_cont_uuid,
-				rebuild_gst.rg_cont_hdl_uuid,
+	rc = dc_cont_local_open(rdkey->rd_cont_uuid, rpt->rt_coh_uuid,
 				0, tls->rebuild_pool_hdl, &coh);
 	if (rc)
 		D__GOTO(free, rc);
@@ -418,7 +415,7 @@ rebuild_dkey_ult(void *arg)
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 				      rpt->rt_rebuild_ver);
-	D_ASSERT(tls != NULL);
+	D__ASSERT(tls != NULL);
 	D__ASSERT(rpt->rt_pullers != NULL);
 	idx = dss_get_module_info()->dmi_tid;
 	puller = &rpt->rt_pullers[idx];
@@ -531,7 +528,6 @@ rebuild_dkey_queue(daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rdkey->rd_oid = oid;
 	uuid_copy(rdkey->rd_cont_uuid, iter_arg->cont_uuid);
-	rdkey->rd_map_ver = iter_arg->map_ver;
 	rdkey->rd_epoch = epoch;
 
 	ABT_mutex_lock(puller->rp_lock);
@@ -699,9 +695,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		daos_handle_t ph = DAOS_HDL_INVAL;
 		struct pool_map *map = rebuild_pool_map_get(rpt->rt_pool);
 
-		rc = dc_pool_local_open(rpt->rt_pool_uuid,
-					rebuild_gst.rg_pool_hdl_uuid, 0, NULL,
-					map, rpt->rt_svc_list, &ph);
+		rc = dc_pool_local_open(rpt->rt_pool_uuid, rpt->rt_poh_uuid,
+					0, NULL, map, rpt->rt_svc_list, &ph);
 		rebuild_pool_map_put(map);
 		if (rc)
 			return rc;
@@ -709,7 +704,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		tls->rebuild_pool_hdl = ph;
 	}
 
-	rc = dc_cont_local_open(arg->cont_uuid, rebuild_gst.rg_cont_hdl_uuid,
+	rc = dc_cont_local_open(arg->cont_uuid, rpt->rt_coh_uuid,
 				0, tls->rebuild_pool_hdl, &coh);
 	if (rc)
 		return rc;
@@ -840,7 +835,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 	 * prepare rebuild yet (see rebuild_tgt_prepare()).
 	 */
 	rpt = rebuild_tgt_pool_tracker_lookup(rebuild_in->roi_pool_uuid,
-					      rebuild_in->roi_map_ver);
+					      rebuild_in->roi_rebuild_ver);
 	if (rpt == NULL)
 		D__GOTO(out, rc = -DER_AGAIN);
 
@@ -887,7 +882,6 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		uuid_copy(arg->pool_uuid, rebuild_in->roi_pool_uuid);
 		arg->obj_cb = rebuild_obj_iterate_keys;
 		arg->root_hdl = btr_hdl;
-		arg->map_ver = rebuild_in->roi_map_ver;
 		arg->rpt = rpt;
 
 		D__ASSERT(rpt->rt_pullers != NULL);

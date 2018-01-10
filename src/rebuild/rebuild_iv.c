@@ -104,13 +104,9 @@ rebuild_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src)
 	D__ASSERT(dst_iv != NULL);
 
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
-	uuid_copy(dst_iv->riv_poh_uuid, src_iv->riv_poh_uuid);
-	uuid_copy(dst_iv->riv_coh_uuid, src_iv->riv_coh_uuid);
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
-	D__DEBUG(DB_TRACE, "pool/poh/coh "DF_UUID"/"DF_UUID"/"DF_UUID
-		 " rank %d\n", DP_UUID(dst_iv->riv_pool_uuid),
-		 DP_UUID(dst_iv->riv_poh_uuid), DP_UUID(dst_iv->riv_coh_uuid),
-		 src_iv->riv_master_rank);
+	D__DEBUG(DB_TRACE, "pool "DF_UUID" rank %d\n",
+		 DP_UUID(dst_iv->riv_pool_uuid), src_iv->riv_master_rank);
 
 	return 0;
 }
@@ -136,8 +132,6 @@ rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src)
 		return 0;
 
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
-	uuid_copy(dst_iv->riv_poh_uuid, src_iv->riv_poh_uuid);
-	uuid_copy(dst_iv->riv_coh_uuid, src_iv->riv_coh_uuid);
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
 
 	/* Gathering the rebuild status here */
@@ -161,10 +155,8 @@ rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src)
 			src_iv->riv_rank);
 	}
 
-	D__DEBUG(DB_TRACE, "pool/poh/coh "DF_UUID"/"DF_UUID"/"DF_UUID
-		 " master_rank %d\n", DP_UUID(dst_iv->riv_pool_uuid),
-		 DP_UUID(dst_iv->riv_poh_uuid), DP_UUID(dst_iv->riv_coh_uuid),
-		 dst_iv->riv_master_rank);
+	D__DEBUG(DB_TRACE, "pool "DF_UUID" master_rank %d\n",
+		 DP_UUID(dst_iv->riv_pool_uuid), dst_iv->riv_master_rank);
 
 	return 0;
 }
@@ -176,8 +168,6 @@ rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src)
 	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 
-	uuid_copy(dst_iv->riv_poh_uuid, src_iv->riv_poh_uuid);
-	uuid_copy(dst_iv->riv_coh_uuid, src_iv->riv_coh_uuid);
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	dst_iv->riv_global_done = src_iv->riv_global_done;
@@ -249,97 +239,5 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 	if (rc)
 		D__ERROR("iv update failed %d\n", rc);
 
-	return rc;
-}
-
-/**
- * Note: this handler will only handle the off-line rebuild
- * case. As for on-line rebuild, the iv_ns will be created
- * in ds_pool_connect_handler().
- */
-void
-rebuild_iv_ns_handler(crt_rpc_t *rpc)
-{
-	struct rebuild_iv_ns_in		*in;
-	struct rebuild_out		*out;
-	struct ds_pool_create_arg	arg;
-	struct ds_pool			*pool;
-	int				rc;
-
-	in = crt_req_get(rpc);
-	out = crt_reply_get(rpc);
-
-	memset(&arg, 0, sizeof(arg));
-	rc = ds_pool_lookup_create(in->rin_pool_uuid, &arg, &pool);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	if (pool->sp_iv_ns != NULL) {
-		/* Destroy the previous IV ns */
-		ds_iv_ns_destroy(pool->sp_iv_ns);
-		pool->sp_iv_ns = NULL;
-	}
-
-	rc = ds_iv_ns_attach(rpc->cr_ctx, in->rin_ns_id,
-			     in->rin_master_rank, &in->rin_iov,
-			     &pool->sp_iv_ns);
-	if (rc != 0) {
-		ds_pool_put(pool);
-		D_GOTO(out, rc);
-	}
-out:
-	out->ro_status = rc;
-	D__DEBUG(DB_TRACE, "rebuild ns create rc = %d\n", rc);
-	crt_reply_send(rpc);
-}
-
-int
-rebuild_iv_ns_create(struct ds_pool *pool, d_rank_list_t *exclude_tgts,
-		     unsigned int master_rank)
-{
-	struct rebuild_iv_ns_in	*in;
-	struct rebuild_out	*out;
-	unsigned int		iv_ns_id;
-	daos_iov_t		iv_iov;
-	struct ds_iv_ns		*ns;
-	crt_rpc_t		*rpc;
-	int			rc;
-
-	rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx,
-			     &iv_ns_id, &iv_iov, &ns);
-	if (rc) {
-		D__ERROR("pool "DF_UUID" iv ns create failed %d\n",
-			 DP_UUID(pool->sp_uuid), rc);
-		return rc;
-	}
-
-	pool->sp_iv_ns = ns;
-	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
-				  pool, DAOS_REBUILD_MODULE,
-				  REBUILD_IV_NS_CREATE, &rpc, NULL,
-				  exclude_tgts);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	in = crt_req_get(rpc);
-	in->rin_iov = iv_iov;
-	in->rin_ns_id = iv_ns_id;
-	in->rin_master_rank = master_rank;
-	uuid_copy(in->rin_pool_uuid, pool->sp_uuid);
-
-	rc = dss_rpc_send(rpc);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	out = crt_reply_get(rpc);
-	rc = out->ro_status;
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-out_rpc:
-	crt_req_decref(rpc);
-out:
-	if (rc)
-		ds_iv_ns_destroy(ns);
 	return rc;
 }

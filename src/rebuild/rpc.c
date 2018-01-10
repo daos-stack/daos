@@ -30,18 +30,17 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
-static struct crt_msg_field *rebuild_iv_ns_in_fields[] = {
-	&CMF_IOVEC,	/* iv ns context */
-	&CMF_UUID,	/* rebuild pool uuid */
-	&CMF_UINT32,	/* iv ns class id */
-	&CMF_UINT32,	/* iv master rank */
-};
-
 static struct crt_msg_field *rebuild_scan_in_fields[] = {
 	&CMF_UUID,	/* pool uuid */
+	&CMF_UUID,	/* pool hdl uuid */
+	&CMF_UUID,	/* cont hdl uuid */
 	&CMF_RANK_LIST,	/* target failed list */
 	&CMF_RANK_LIST,	/* service list */
+	&CMF_IOVEC,	/* iv ns context */
+	&CMF_UINT32,	/* pool iv ns id */
 	&CMF_UINT32,	/* pool map version */
+	&CMF_UINT32,	/* rebuild version */
+	&CMF_UINT32,	/* master rank */
 };
 
 static struct crt_msg_field *rebuild_out_fields[] = {
@@ -56,10 +55,6 @@ static struct crt_msg_field *rebuild_objs_in_fields[] = {
 	&DMF_UUID_ARRAY, /* cont ids to be rebuilt */
 	&DMF_UINT32_ARRAY, /* obj shards to be rebuilt */
 };
-
-struct crt_req_format DQF_REBUILD_IV_NS_CREATE =
-	DEFINE_CRT_REQ_FMT("REBUILD_IV_NS_CREATE", rebuild_iv_ns_in_fields,
-			   rebuild_out_fields);
 
 struct crt_req_format DQF_REBUILD_OBJECTS_SCAN =
 	DEFINE_CRT_REQ_FMT("REBUILD_OBJECTS_SCAN", rebuild_scan_in_fields,
@@ -82,12 +77,6 @@ rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 struct daos_rpc rebuild_rpcs[] = {
 	{
-		.dr_name	= "REBUILD_IV_NS_CREATE",
-		.dr_opc		= REBUILD_IV_NS_CREATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_REBUILD_IV_NS_CREATE,
-	}, {
 		.dr_name	= "REBUILD_OBJECTS_SCAN",
 		.dr_opc		= REBUILD_OBJECTS_SCAN,
 		.dr_ver		= 1,

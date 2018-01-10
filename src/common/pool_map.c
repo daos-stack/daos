@@ -1679,6 +1679,24 @@ pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 				  tgt_cnt);
 }
 
+/**
+ * Find all targets in DOWN state. Raft leader can use it drive target
+ * rebuild one by one.
+ */
+int
+pool_map_find_up_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+		      unsigned int *tgt_cnt)
+{
+	struct find_tgts_param param;
+
+	memset(&param, 0, sizeof(param));
+	param.ftp_chk_status = 1;
+	param.ftp_status = PO_COMP_ST_UP;
+
+	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
+				  tgt_cnt);
+}
+
 static void
 pool_indent_print(int dep)
 {

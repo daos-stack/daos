@@ -326,27 +326,4 @@ enum {
 	DSS_POOL_CNT,
 };
 
-enum iv_key {
-	IV_POOL_MAP = 1,
-	IV_REBUILD,
-};
-
-int ds_iv_fetch(struct ds_iv_ns *ns, unsigned int key_id,
-		d_sg_list_t *value);
-int ds_iv_update(struct ds_iv_ns *ns, unsigned int key_id,
-		 d_sg_list_t *value, unsigned int shortcut,
-		 unsigned int sync_mode);
-int ds_iv_invalidate(struct ds_iv_ns *ns, unsigned int key_id,
-		     unsigned int shortcut, unsigned int sync_mode);
-
-int ds_iv_ns_create(crt_context_t ctx, unsigned int *class_id,
-		    daos_iov_t *g_ivns, struct ds_iv_ns **p_iv_ns);
-
-int ds_iv_ns_attach(crt_context_t ctx, unsigned int class_id,
-		    unsigned int master_rank, daos_iov_t *iv_ctxt,
-		    struct ds_iv_ns **p_iv_ns);
-
-void ds_iv_ns_destroy(void *ns);
-
-unsigned int ds_iv_ns_id_get(void *ns);
 #endif /* __DSS_API_H__ */

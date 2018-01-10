@@ -41,23 +41,21 @@
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
 enum pool_operation {
-	REBUILD_IV_NS_CREATE	= 1,
-	REBUILD_OBJECTS_SCAN	= 2,
-	REBUILD_OBJECTS		= 3,
+	REBUILD_OBJECTS_SCAN	= 1,
+	REBUILD_OBJECTS		= 2,
 };
 
 struct rebuild_scan_in {
 	uuid_t		rsi_pool_uuid;
+	uuid_t		rsi_pool_hdl_uuid;
+	uuid_t		rsi_cont_hdl_uuid;
 	d_rank_list_t	*rsi_tgts_failed;
 	d_rank_list_t	*rsi_svc_list;
+	daos_iov_t	rsi_ns_iov;
+	uint32_t	rsi_ns_id;
 	uint32_t	rsi_pool_map_ver;
-};
-
-struct rebuild_iv_ns_in {
-	daos_iov_t	rin_iov;
-	uuid_t		rin_pool_uuid;
-	uint32_t	rin_ns_id;
-	uint32_t	rin_master_rank;
+	uint32_t	rsi_rebuild_ver;
+	uint32_t	rsi_master_rank;
 };
 
 struct rebuild_out {
@@ -65,7 +63,7 @@ struct rebuild_out {
 };
 
 struct rebuild_objs_in {
-	uint32_t                roi_map_ver;
+	uint32_t                roi_rebuild_ver;
 	uint32_t                roi_pad;
 	uuid_t			roi_pool_uuid;
 	struct crt_array        roi_oids;

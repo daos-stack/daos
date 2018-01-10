@@ -39,7 +39,6 @@ struct rebuild_dkey {
 	uuid_t		rd_cont_uuid;
 	daos_unit_oid_t	rd_oid;
 	daos_epoch_t	rd_epoch;
-	uint32_t	rd_map_ver;
 };
 
 struct rebuild_puller {
@@ -68,6 +67,10 @@ struct rebuild_tgt_pool_tracker {
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		rt_rebuild_ver;
 
+	/** rebuild pool/container hdl uuid */
+	uuid_t			rt_poh_uuid;
+	uuid_t			rt_coh_uuid;
+
 	/* Link it to the rebuild_global tracker_list */
 	daos_list_t		rt_list;
 	ABT_mutex		rt_lock;
@@ -94,6 +97,10 @@ struct rebuild_global_pool_tracker {
 
 	/* link to rebuild_global.rg_global_tracker_list */
 	daos_list_t	rgt_list;
+
+	/* rebuild cont/pool hdl uuid */
+	uuid_t		rgt_poh_uuid;
+	uuid_t		rgt_coh_uuid;
 
 	/* the pool uuid */
 	uuid_t		rgt_pool_uuid;
@@ -128,10 +135,6 @@ struct rebuild_global {
 	 * Only operated by stream 0, no need lock
 	 */
 	daos_list_t	rg_global_tracker_list;
-
-	/* rebuild pool/container HDL uuid */
-	uuid_t		rg_pool_hdl_uuid;
-	uuid_t		rg_cont_hdl_uuid;
 
 	ABT_mutex	rg_lock;
 	ABT_cond	rg_stop_cond;
@@ -218,23 +221,21 @@ struct pool_map *rebuild_pool_map_get(struct ds_pool *pool);
 void rebuild_pool_map_put(struct pool_map *map);
 
 void rebuild_obj_handler(crt_rpc_t *rpc);
-void rebuild_tgt_prepare_handler(crt_rpc_t *rpc);
 void rebuild_tgt_scan_handler(crt_rpc_t *rpc);
 
-void rebuild_iv_ns_handler(crt_rpc_t *rpc);
 int rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv);
 int rebuild_iv_update(void *ns, struct rebuild_iv *rebuild_iv,
 		      unsigned int shortcut, unsigned int sync_mode);
-int rebuild_iv_ns_create(struct ds_pool *pool, d_rank_list_t *exclude_tgts,
+int rebuild_iv_ns_create(struct ds_pool *pool, uint32_t map_ver,
+			 d_rank_list_t *exclude_tgts,
 			 unsigned int master_rank);
 
 void
 rebuild_tgt_status_check(void *arg);
 
 int
-rebuild_tgt_prepare(uuid_t pool_uuid, d_rank_list_t *svc_list,
-		    unsigned int pmap_ver,
-		    struct rebuild_tgt_pool_tracker **p_rpt);
+rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt);
+
 int
 rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt);
 

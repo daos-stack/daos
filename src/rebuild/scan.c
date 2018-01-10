@@ -57,7 +57,6 @@ struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
 	struct pl_target_grp	*tgp_failed;
 	d_rank_list_t	*failed_ranks;
-	uint32_t		map_ver;
 	ABT_mutex		scan_lock;
 };
 
@@ -198,7 +197,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		D__GOTO(out, rc);
 
 	rebuild_in = crt_req_get(rpc);
-	rebuild_in->roi_map_ver = scan_arg->map_ver;
+	rebuild_in->roi_rebuild_ver = rpt->rt_rebuild_ver;
 	rebuild_in->roi_oids.da_count = arg->count;
 	rebuild_in->roi_oids.da_arrays = oids;
 	rebuild_in->roi_uuids.da_count = arg->count;
@@ -458,8 +457,9 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 
 		map = pl_map_find(rpt->rt_pool_uuid, oid.id_pub);
 		if (map == NULL) {
-			D__ERROR(DF_UOID"Cannot find valid placement map\n",
-				DP_UOID(oid));
+			D__ERROR(DF_UOID"Cannot find valid placement map"
+				 DF_UUID"\n", DP_UOID(oid),
+				 DP_UUID(rpt->rt_pool_uuid));
 			D__GOTO(out, rc = -DER_INVAL);
 		}
 
@@ -557,7 +557,7 @@ rebuild_scan_leader(void *data)
 	ABT_mutex_lock(rpt->rt_lock);
 	map = rebuild_pool_map_get(rpt->rt_pool);
 	D_ASSERT(map != NULL);
-	rc = pl_map_update(rpt->rt_pool_uuid, map, false);
+	rc = pl_map_update(rpt->rt_pool_uuid, map, true);
 	if (rc != 0) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D__GOTO(out_map, rc = -DER_NOMEM);
@@ -567,10 +567,10 @@ rebuild_scan_leader(void *data)
 	/* initialize parameters for scanners */
 	D__ALLOC_PTR(tgp);
 	if (tgp == NULL)
-		D__GOTO(out_map, rc = -DER_NOMEM);
+		D__GOTO(put_plmap, rc = -DER_NOMEM);
 
 	arg->tgp_failed = tgp;
-	tgp->tg_ver = arg->map_ver;
+	tgp->tg_ver = rpt->rt_rebuild_ver;
 	tgp->tg_target_nr = arg->failed_ranks->rl_nr.num;
 
 	D__ALLOC(tgp->tg_targets, tgp->tg_target_nr * sizeof(*tgp->tg_targets));
@@ -626,6 +626,8 @@ out_group:
 		D__FREE(tgp->tg_targets,
 			tgp->tg_target_nr * sizeof(*tgp->tg_targets));
 	D__FREE_PTR(tgp);
+put_plmap:
+	pl_map_disconnect(rpt->rt_pool_uuid);
 out_map:
 	rebuild_pool_map_put(map);
 	daos_rank_list_free(arg->failed_ranks);
@@ -653,36 +655,31 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D__ASSERT(rsi != NULL);
 
-	D__DEBUG(DB_TRACE, "%d scan rebuild for "DF_UUID" ver %d\n",
+	D__DEBUG(DB_TRACE, "%d scan rebuild for "DF_UUID" ver %d/%d\n",
 		 dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
-		 rsi->rsi_pool_map_ver);
+		 rsi->rsi_pool_map_ver, rsi->rsi_rebuild_ver);
 
 	/* check if the rebuild is already started */
 	rpt = rebuild_tgt_pool_tracker_lookup(rsi->rsi_pool_uuid,
-					      rsi->rsi_pool_map_ver);
+					      rsi->rsi_rebuild_ver);
 	if (rpt != NULL) {
-		D__ASSERT(rsi->rsi_pool_map_ver >= rpt->rt_rebuild_ver);
+		D__ASSERT(rsi->rsi_rebuild_ver >= rpt->rt_rebuild_ver);
 
 		/* Delete the left over rpt */
-		if (rsi->rsi_pool_map_ver > rpt->rt_rebuild_ver) {
+		if (rsi->rsi_rebuild_ver > rpt->rt_rebuild_ver) {
 			D__DEBUG(DB_TRACE, "delete the leftover "
 				 DF_UUID"/%d/%p\n", DP_UUID(rpt->rt_pool_uuid),
 				 rpt->rt_rebuild_ver, rpt);
 			rebuild_tgt_fini(rpt);
 			rpt = NULL;
-		} else if (rsi->rsi_pool_map_ver == rpt->rt_rebuild_ver) {
+		} else if (rsi->rsi_rebuild_ver == rpt->rt_rebuild_ver) {
 			D__DEBUG(DB_TRACE, DF_UUID" already started.\n",
 				 DP_UUID(rsi->rsi_pool_uuid));
 			D__GOTO(out, rc = 0);
 		}
 	}
 
-	rc = rebuild_tgt_prepare(rsi->rsi_pool_uuid, rsi->rsi_svc_list,
-				 rsi->rsi_pool_map_ver, &rpt);
-	if (rc)
-		D__GOTO(out, rc);
-
-	rc = ds_pool_tgt_map_update(rpt->rt_pool);
+	rc = rebuild_tgt_prepare(rpc, &rpt);
 	if (rc)
 		D__GOTO(out, rc);
 
@@ -716,7 +713,6 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D__GOTO(out_tree, rc);
 
 	scan_arg->rpt = rpt;
-	scan_arg->map_ver = rsi->rsi_pool_map_ver;
 	/* step-3: start scann leader */
 	rc = dss_ult_create(rebuild_scan_leader, scan_arg, -1, NULL);
 	if (rc != 0)

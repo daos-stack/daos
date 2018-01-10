@@ -631,23 +631,13 @@ ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 }
 
 int
-ds_pool_tgt_map_update(struct ds_pool *pool)
+ds_pool_tgt_map_update(struct ds_pool *pool, d_iov_t *iov)
 {
 	struct pool_map *map;
-	d_sg_list_t	sgl;
-	d_iov_t		iov;
 	struct pool_buf	*buf;
 	int		rc;
 
-	memset(&sgl, 0, sizeof(sgl));
-	memset(&iov, 0, sizeof(iov));
-	sgl.sg_nr.num = 1;
-	sgl.sg_iovs = &iov;
-	rc = ds_iv_fetch(pool->sp_iv_ns, IV_POOL_MAP, &sgl);
-	if (rc)
-		D_GOTO(out, rc);
-
-	buf = iov.iov_buf;
+	buf = iov->iov_buf;
 	rc = pool_map_create(buf, pool->sp_map_version, &map);
 	if (rc != 0) {
 		D_ERROR(DF_UUID"failed to create pool map: %d\n",

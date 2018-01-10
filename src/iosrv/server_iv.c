@@ -515,8 +515,9 @@ struct crt_iv_ops ivc_ops = {
  * be called on master node
  */
 int
-ds_iv_ns_create(crt_context_t ctx, unsigned int *ns_id,
-		daos_iov_t *g_ivns, struct ds_iv_ns **p_iv_ns)
+ds_iv_ns_create(crt_context_t ctx, crt_group_t *grp,
+		unsigned int *ns_id, daos_iov_t *g_ivns,
+		struct ds_iv_ns **p_iv_ns)
 {
 	struct ds_iv_ns		*ns = NULL;
 	struct crt_iv_class	iv_class;
@@ -537,7 +538,7 @@ ds_iv_ns_create(crt_context_t ctx, unsigned int *ns_id,
 	 * which is not supported yet. XXX
 	 */
 	tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
-	rc = crt_iv_namespace_create(ctx, NULL, tree_topo,
+	rc = crt_iv_namespace_create(ctx, grp, tree_topo,
 				     &iv_class, 1, &ns->iv_ns,
 				     (d_iov_t *)g_ivns);
 	if (rc) {
@@ -584,6 +585,15 @@ ds_iv_ns_attach(crt_context_t ctx, unsigned int ns_id,
 	*p_iv_ns = ns;
 out:
 	return rc;
+}
+
+/**
+ * Get IV ns global identifer from cart.
+ */
+void
+ds_iv_global_ns_get(struct ds_iv_ns *ns, d_iov_t *g_ivns)
+{
+	crt_iv_global_namespace_get(ns->iv_ns, g_ivns);
 }
 
 unsigned int

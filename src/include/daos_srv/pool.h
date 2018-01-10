@@ -101,9 +101,10 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
 		     d_rank_list_t *excluded_list);
 int
-ds_pool_map_update(const uuid_t uuid, d_rank_list_t *tgts_exclude);
+ds_pool_map_buf_get(const uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
 
-int ds_pool_tgt_map_update(struct ds_pool *pool);
+int
+ds_pool_tgt_map_update(struct ds_pool *pool, d_iov_t *iov);
 
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, d_rank_list_t *tgts,
 			    d_rank_list_t *tgts_out);
@@ -155,4 +156,7 @@ uint64_t ds_pool_cont_svc_term(struct cont_svc **svcp);
 struct rdb;
 void ds_pool_set_hint(struct rdb *db, struct rsvc_hint *hint);
 
+int
+ds_pool_iv_ns_try_create(struct ds_pool *pool, unsigned int master_rank,
+			 d_iov_t *iv_iov, unsigned int iv_ns_id);
 #endif /* __DAOS_SRV_POOL_H__ */
