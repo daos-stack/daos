@@ -94,9 +94,9 @@ struct crt_msg_field *arg_test_invalidate_iv_out[] = {
 
 /* RPC_TEST_UPDATE_IV RPC */
 struct rpc_test_update_iv_in {
-	d_iov_t	 iov_key;
-	d_iov_t	 iov_sync;
-	char	*str_value;
+	d_iov_t iov_key;
+	d_iov_t iov_sync;
+	d_iov_t iov_value;
 };
 
 struct rpc_test_update_iv_out {
@@ -106,7 +106,7 @@ struct rpc_test_update_iv_out {
 struct crt_msg_field *arg_test_update_iv_in[] = {
 	&CMF_IOVEC,
 	&CMF_IOVEC,
-	&CMF_STRING,
+	&CMF_IOVEC,
 };
 
 struct crt_msg_field *arg_test_update_iv_out[] = {
@@ -254,4 +254,19 @@ init_hostname(char *hname, int max_size)
 
 	if (ptr)
 		*ptr = 0;
+}
+
+/** Prints a buffer as hex without any newlines/spaces/etc */
+static inline void
+print_hex(void *buf, size_t len)
+{
+	uint8_t *bytes = (uint8_t *)buf;
+
+	if (bytes == NULL)
+		return;
+
+	for (; len > 0; len--) {
+		printf("%02X", *bytes);
+		bytes++;
+	}
 }

@@ -72,6 +72,7 @@ print_usage(const char *err_msg)
 		"Optional arguments:\n"
 		"\t-k <key>       : Key is in form rank:key_id ; e.g. 1:0\n"
 		"\t-v <value>     : Value is string, only used for update operation\n"
+		"\t-x <value>     : Value as hex string, only used for update operation\n"
 		"\t-s <strategy>  : One of ['none', 'eager_update', 'lazy_update', 'eager_notify', 'lazy_notify']\n"
 		"\n"
 		"Example usage: ./iv_client -o fetch -r 0 -k 2:9\n"
@@ -134,19 +135,83 @@ test_iv_invalidate(struct iv_key_struct *key)
 	assert(rc == 0);
 }
 
-/** Prints a buffer as hex without any newlines/spaces/etc */
-static void
-print_hex(void *buf, size_t len)
-{
-	uint8_t *bytes = (uint8_t *)buf;
+/**
+ * Takes a single hex character (two ascii digits and a null character) and
+ * parses it as hex, returning the resulting byte into *res
+ *
+ * Checks that input values are valid and works with lowercase/capital letters.
+ *
+ * \return	0 on success, nonzero on error
+ */
+static int
+unpack_hex_byte(char hex[3], char *res) {
+	int x;
 
-	if (bytes == NULL)
-		return;
+	for (x = 0; x < 2; x++) {
+		/* Convert to lower case */
+		if (hex[x] >= 'A' && hex[x] <= 'F')
+			hex[x] = hex[x] + ('a' - 'A');
 
-	for (; len > 0; len--) {
-		printf("%02X", *bytes);
-		bytes++;
+		/* Look for invalid characters */
+		if ((hex[x] < 'a' || hex[x] > 'f') &&
+		    (hex[x] < '0' || hex[x] > '9'))
+			return 1;
 	}
+
+	x = sscanf(hex, "%2hhx", res);
+	if (x != 1)
+		return 1;
+
+	return 0;
+}
+
+/**
+ * Takes a string of hex characters and converts it to a byte buffer of those
+ * specified bytes. The resulting byte array occupies the first half of the
+ * given supplied string, overwriting the ASCII hex 0-9a-f characters in the
+ * first half.
+ *
+ * len is the output length of the byte array, which is always strlen(str) / 2;
+ *
+ * \return	0 on success, nonzero on error
+ */
+static int
+unpack_hex_string_inplace(char *str, size_t *len)
+{
+	size_t slen = strlen(str);
+	size_t offset = 0;
+	int rc;
+
+	*len = 0;
+
+	if (slen % 2 != 0) {
+		/* If the string is odd-length, add a leading 0 */
+		char temp[3] = {'0', str[0], '\0'};
+
+		rc = unpack_hex_byte(temp, &str[0]);
+		if (rc)
+			return rc;
+
+		/* Future math to find hex coordinates is now off by 1 */
+		offset = -1;
+
+		*len = *len + 1;
+		slen -= 1;
+	}
+
+	for (; slen > 0; slen -= 2) {
+		char temp[3] = {str[(*len) * 2 + offset],
+				str[(*len) * 2 + 1 + offset],
+				'\0'};
+
+		rc = unpack_hex_byte(temp, &str[*len]);
+		if (rc)
+			return rc;
+
+		*len = *len + 1;
+	}
+
+	return 0;
 }
 
 /**
@@ -251,13 +316,15 @@ test_iv_fetch(struct iv_key_struct *key)
 }
 
 static int
-test_iv_update(struct iv_key_struct *key, char *str_value, char *arg_sync)
+test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
+	       char *arg_sync)
 {
 	struct rpc_test_update_iv_in	*input;
 	struct rpc_test_update_iv_out	*output;
 	crt_rpc_t			*rpc_req;
-	int				 rc;
 	crt_iv_sync_t			 sync;
+	size_t				 len;
+	int				 rc;
 
 	if (arg_sync == NULL) {
 		sync.ivs_mode = 0;
@@ -286,7 +353,17 @@ test_iv_update(struct iv_key_struct *key, char *str_value, char *arg_sync)
 			    (void **)&input, &rpc_req);
 	d_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
 	d_iov_set(&input->iov_sync, &sync, sizeof(crt_iv_sync_t));
-	input->str_value = str_value;
+
+	if (value_is_hex) {
+		rc = unpack_hex_string_inplace(str_value, &len);
+		if (rc) {
+			fprintf(stderr, "Failed to parse supplied hex value\n");
+			return rc;
+		}
+		d_iov_set(&input->iov_value, str_value, len);
+	} else {
+		d_iov_set(&input->iov_value, str_value, strlen(str_value) + 1);
+	}
 
 	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
 
@@ -330,6 +407,7 @@ int main(int argc, char **argv)
 	char			*arg_op = NULL;
 	char			*arg_key = NULL;
 	char			*arg_value = NULL;
+	bool			 arg_value_is_hex = false;
 	char			*arg_sync = NULL;
 	enum op_type		 cur_op = OP_NONE;
 	int			 rc = 0;
@@ -338,7 +416,7 @@ int main(int argc, char **argv)
 
 	init_hostname(g_hostname, sizeof(g_hostname));
 
-	while ((c = getopt(argc, argv, "k:o:r:s:v:")) != -1) {
+	while ((c = getopt(argc, argv, "k:o:r:s:v:x:")) != -1) {
 		switch (c) {
 		case 'r':
 			arg_rank = optarg;
@@ -351,6 +429,11 @@ int main(int argc, char **argv)
 			break;
 		case 'v':
 			arg_value = optarg;
+			arg_value_is_hex = false;
+			break;
+		case 'x':
+			arg_value = optarg;
+			arg_value_is_hex = true;
 			break;
 		case 's':
 			arg_sync = optarg;
@@ -377,7 +460,7 @@ int main(int argc, char **argv)
 		cur_op = OP_UPDATE;
 
 		if (arg_value == NULL) {
-			print_usage("Value must be specifie for the update");
+			print_usage("Value must be supplied for update");
 			return -1;
 		}
 	} else if (strcmp(arg_op, "invalidate") == 0) {
@@ -435,7 +518,7 @@ int main(int argc, char **argv)
 	if (cur_op == OP_FETCH)
 		test_iv_fetch(&iv_key);
 	else if (cur_op == OP_UPDATE)
-		test_iv_update(&iv_key, arg_value, arg_sync);
+		test_iv_update(&iv_key, arg_value, arg_value_is_hex, arg_sync);
 	else if (cur_op == OP_INVALIDATE)
 		test_iv_invalidate(&iv_key);
 	else if (cur_op == OP_SHUTDOWN)

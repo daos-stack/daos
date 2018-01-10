@@ -90,18 +90,7 @@ do {									\
 } while (0)
 
 struct iv_value_struct {
-	/* IV value embeds root rank for verification purposes */
-	d_rank_t	root_rank;
-
-	/*
-	 * Actual data string
-	 * Since the root_rank is takes up sizeof(d_rank_t) space in this
-	 * iv_value, need to reduce the size of str_data to make the overall
-	 * structure MAX_DATA_SIZE bytes
-	 *
-	 * TODO: Remove this when making this value an opaque data blob
-	 */
-	char		str_data[MAX_DATA_SIZE - sizeof(d_rank_t)];
+	char data[MAX_DATA_SIZE];
 };
 
 #define NUM_WORK_CTX 9
@@ -229,18 +218,6 @@ alloc_key(int root, int key_id)
 	return key;
 }
 
-static void
-verify_key_value_pair(crt_iv_key_t *key, d_sg_list_t *value)
-{
-	struct iv_key_struct	*key_struct;
-	struct iv_value_struct	*value_struct;
-
-	key_struct = (struct iv_key_struct *)key->iov_buf;
-	value_struct = (struct iv_value_struct *)value->sg_iovs[0].iov_buf;
-
-	assert(key_struct->rank == value_struct->root_rank);
-}
-
 void
 deinit_iv_storage(void)
 {
@@ -255,75 +232,6 @@ deinit_iv_storage(void)
 		D_FREE(entry->key.iov_buf);
 		D_FREE(entry);
 	}
-}
-
-/* Generate storage for iv keys */
-static void
-init_iv_storage(void)
-{
-	int			 i;
-	struct kv_pair_entry	*entry;
-	struct iv_key_struct	*key_struct;
-	struct iv_value_struct	*value_struct;
-	crt_iv_key_t		*key;
-	d_sg_list_t		*value;
-	int			 size;
-
-	/* First NUM_LOCAL_IVS are owned by the current rank */
-	for (i = 0; i < NUM_LOCAL_IVS; i++) {
-		D_ALLOC_PTR(entry);
-		assert(entry != NULL);
-
-		key = &entry->key;
-		value = &entry->value;
-
-		D_ALLOC(key->iov_buf, sizeof(struct iv_key_struct));
-		assert(key->iov_buf != NULL);
-
-		/* Fill in the key */
-		key_struct = (struct iv_key_struct *)key->iov_buf;
-		key_struct->rank = g_my_rank;
-		key_struct->key_id = i;
-
-		key->iov_len = sizeof(struct iv_key_struct);
-		key->iov_buf_len = key->iov_len;
-
-		entry->valid = true;
-
-		/* Fill in the value */
-		value->sg_nr.num = 1;
-		D_ALLOC_PTR(value->sg_iovs);
-		assert(value->sg_iovs != NULL);
-
-		size = sizeof(struct iv_value_struct);
-		D_ALLOC(value->sg_iovs[0].iov_buf, size);
-		assert(value->sg_iovs[0].iov_buf != NULL);
-
-		value->sg_iovs[0].iov_len = size;
-		value->sg_iovs[0].iov_buf_len = size;
-
-		assert(value->sg_iovs[0].iov_buf != NULL);
-
-		value_struct = (struct iv_value_struct *)
-			       value->sg_iovs[0].iov_buf;
-
-		value_struct->root_rank = g_my_rank;
-
-		sprintf(value_struct->str_data,
-			"Default value for key %d:%d", g_my_rank, i);
-
-		d_list_add_tail(&entry->link, &g_kv_pair_head);
-	}
-
-	d_list_for_each_entry(entry, &g_kv_pair_head, link) {
-		key = &entry->key;
-		value = &entry->value;
-
-		verify_key_value_pair(key, value);
-	}
-
-	DBG_PRINT("Default %d keys for rank %d initialized\n",
-		  NUM_LOCAL_IVS, g_my_rank);
 }
 
 static bool
@@ -484,7 +392,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 		if (value_struct == NULL)
 			printf("value=EMPTY");
 		else
-			printf("value='%s'", value_struct->str_data);
+			printf("value='%s'", value_struct->data);
 	}
 
 	printf("\n");
@@ -1019,12 +927,12 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	key = alloc_key(key_struct->rank, key_struct->key_id);
 	assert(key != NULL);
 
-	DBG_PRINT("Performing update for %d:%d value=%s\n",
-		  key_struct->rank, key_struct->key_id, input->str_value);
+	DBG_PRINT("Performing update for %d:%d value='%s'\n",
+		  key_struct->rank, key_struct->key_id,
+		  (char *)input->iov_value.iov_buf);
 
-	iv_value.sg_nr.num = 1;
-	D_ALLOC_PTR(iv_value.sg_iovs);
-	assert(iv_value.sg_iovs != NULL);
+	rc = d_sgl_init(&iv_value, 1);
+	assert(rc == 0);
 
 	D_ALLOC(iv_value.sg_iovs[0].iov_buf, sizeof(struct iv_value_struct));
 	assert(iv_value.sg_iovs[0].iov_buf != NULL);
@@ -1033,9 +941,10 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	iv_value.sg_iovs[0].iov_len = sizeof(struct iv_value_struct);
 
 	value_struct = (struct iv_value_struct *)iv_value.sg_iovs[0].iov_buf;
-	value_struct->root_rank = key_struct->rank;
 
-	strncpy(value_struct->str_data, input->str_value, MAX_DATA_SIZE);
+	memcpy(value_struct->data, input->iov_value.iov_buf,
+	       input->iov_value.iov_buf_len > MAX_DATA_SIZE ?
+			MAX_DATA_SIZE : input->iov_value.iov_buf_len);
 
 	sync = (crt_iv_sync_t *)input->iov_sync.iov_buf;
 	assert(sync != NULL);
@@ -1228,7 +1137,6 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	init_work_contexts();
-	init_iv_storage();
 	init_iv();
 
 	while (!g_do_shutdown)
