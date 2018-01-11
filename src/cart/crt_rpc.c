@@ -561,13 +561,26 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	D_FREE(rpc_priv);
 }
 
+static inline void
+crt_rpc_priv_set_ep(struct crt_rpc_priv *rpc_priv, crt_endpoint_t *tgt_ep)
+{
+	if (tgt_ep->ep_grp == NULL) {
+		rpc_priv->crp_pub.cr_ep.ep_grp  =
+			&crt_gdata.cg_grp->gg_srv_pri_grp->gp_pub;
+	} else {
+		rpc_priv->crp_pub.cr_ep.ep_grp = tgt_ep->ep_grp;
+	}
+	rpc_priv->crp_pub.cr_ep.ep_rank = tgt_ep->ep_rank;
+	rpc_priv->crp_pub.cr_ep.ep_tag = tgt_ep->ep_tag;
+	rpc_priv->crp_have_ep = 1;
+}
+
 int
 crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 			crt_opcode_t opc, bool forward, crt_rpc_t **req)
 {
 	struct crt_rpc_priv	*rpc_priv = NULL;
-	crt_rpc_t		*rpc_pub;
-	int			 rc = 0;
+	int			 rc;
 
 	D_ASSERT(crt_ctx != CRT_CONTEXT_NULL && req != NULL);
 
@@ -577,21 +590,12 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(rpc_priv != NULL);
-	rpc_pub = &rpc_priv->crp_pub;
-	if (tgt_ep != NULL) {
-		rpc_pub->cr_ep.ep_rank = tgt_ep->ep_rank;
-		rpc_pub->cr_ep.ep_tag = tgt_ep->ep_tag;
-		rpc_pub->cr_ep.ep_grp = tgt_ep->ep_grp;
-		rpc_priv->crp_have_ep = 1;
-	}
+	if (tgt_ep != NULL)
+		crt_rpc_priv_set_ep(rpc_priv, tgt_ep);
 
 	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */);
-
-	*req = rpc_pub;
-
+	*req = &rpc_priv->crp_pub;
 out:
-	if (rc < 0)
-		crt_rpc_priv_free(rpc_priv);
 	return rc;
 }
 
@@ -606,6 +610,7 @@ static int check_ep(crt_endpoint_t *tgt_ep)
 			D_ERROR("service group not attached yet.\n");
 			D_GOTO(out, rc = -DER_NOTATTACH);
 		}
+
 	} else {
 		grp_priv = container_of(tgt_ep->ep_grp, struct crt_grp_priv,
 					gp_pub);
@@ -681,10 +686,7 @@ crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	req->cr_ep.ep_rank = tgt_ep->ep_rank;
-	req->cr_ep.ep_tag = tgt_ep->ep_tag;
-	req->cr_ep.ep_grp = tgt_ep->ep_grp;
-	rpc_priv->crp_have_ep = 1;
+	crt_rpc_priv_set_ep(rpc_priv, tgt_ep);
 
 	D_DEBUG("rpc_priv %p ep modified %u.%u.\n",
 		rpc_priv, req->cr_ep.ep_rank, req->cr_ep.ep_tag);
