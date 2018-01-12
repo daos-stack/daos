@@ -513,10 +513,11 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 			str = "pulling";
 
 		snprintf(sbuf, RBLD_SBUF_LEN,
-			"Rebuild [%s] (ver=%u, obj="DF_U64", rec= "DF_U64
-			", done %d status %d duration=%d secs)\n",
-			str, map_ver, rs->rs_obj_nr, rs->rs_rec_nr,
-			rs->rs_done, rs->rs_errno, (int)(now - begin));
+			"Rebuild [%s] (pool "DF_UUID" ver=%u, obj="DF_U64
+			", rec= "DF_U64", done %d status %d duration=%d"
+			" secs)\n", str, DP_UUID(pool->sp_uuid), map_ver,
+			rs->rs_obj_nr, rs->rs_rec_nr, rs->rs_done,
+			rs->rs_errno, (int)(now - begin));
 
 		D__DEBUG(DB_TRACE, "%s", sbuf);
 		if (rs->rs_done) {
@@ -852,7 +853,8 @@ rebuild_one(uuid_t pool_uuid, uint32_t map_ver,
 		return rc;
 	}
 
-	D__PRINT("Rebuild [started] (ver=%u)\n", map_ver);
+	D__PRINT("Rebuild [started] (pool "DF_UUID" ver=%u)\n",
+		 DP_UUID(pool_uuid), map_ver);
 	rc = rebuild_internal(pool, map_ver, tgts_failed, svc_list, &rgt);
 	if (rc != 0) {
 		D__ERROR(""DF_UUID" (ver=%u) rebuild failed: rc %d\n",
@@ -982,8 +984,8 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 		return rc;
 	}
 
-	D__PRINT("Rebuild [queued] (ver=%u) failed rank %u\n", map_ver,
-		tgts_failed->rl_ranks[0]);
+	D__PRINT("Rebuild [queued] ("DF_UUID" ver=%u) failed rank %u\n",
+		 DP_UUID(uuid), map_ver, tgts_failed->rl_ranks[0]);
 	daos_list_add_tail(&task->dst_list, &rebuild_task_list);
 
 	if (!rebuild_gst.rg_rebuild_running) {

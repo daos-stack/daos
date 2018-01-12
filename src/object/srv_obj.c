@@ -114,7 +114,6 @@ ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 
 struct ds_bulk_async_args {
 	int		bulks_inflight;
-	int		all_bulks_issued;
 	ABT_eventual	eventual;
 	int		result;
 };
@@ -322,7 +321,6 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		}
 	}
 
-	/* The bulk might already finished or no bulk at all */
 	if (arg.bulks_inflight == 0)
 		ABT_eventual_set(arg.eventual, &rc, sizeof(rc));
 

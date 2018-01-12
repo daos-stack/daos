@@ -75,87 +75,102 @@ rebuild_runable(test_arg_t *arg, unsigned int required_tgts,
 }
 
 static void
-rebuild_test_exclude_tgt(test_arg_t *arg, d_rank_t rank, bool kill)
+rebuild_test_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
+			 bool kill)
 {
-	d_rank_list_t	ranks;
-	int			rc;
+	if (args[0]->myrank == 0) {
+		int i;
 
-	if (arg->myrank == 0) {
 		if (kill) {
-			daos_kill_server(arg, arg->pool_uuid, arg->group,
-					 &arg->svc, arg->poh, rank);
+			daos_kill_server(args[0], args[0]->pool_uuid,
+					 args[0]->group, &args[0]->svc, rank);
 			sleep(5);
-		} else {
-			/** exclude the target from the pool */
-			ranks.rl_nr.num = 1;
-			ranks.rl_nr.num_out = 0;
-			ranks.rl_ranks = &rank;
-			rc = daos_pool_exclude(arg->pool_uuid, arg->group,
-					       &arg->svc, &ranks, NULL);
-			assert_int_equal(rc, 0);
-			print_message("exclude rank %d wait 5 seconds\n", rank);
-			sleep(5); /* Sleep 5 for starting rebuild */
+		}
+
+		for (i = 0; i < arg_cnt; i++) {
+			daos_exclude_server(args[i]->pool_uuid, args[i]->group,
+					    &args[i]->svc, rank);
+			sleep(2);
 		}
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 static void
-rebuild_test_add_tgt(test_arg_t *arg, d_rank_t rank)
+rebuild_test_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank)
 {
 	d_rank_list_t	ranks;
-	int			rc;
+	int		rc;
 
 	/** exclude the target from the pool */
-	if (arg->myrank == 0) {
+	if (args[0]->myrank == 0) {
+		int i;
+
 		ranks.rl_nr.num = 1;
 		ranks.rl_nr.num_out = 0;
 		ranks.rl_ranks = &rank;
-		rc = daos_pool_tgt_add(arg->pool_uuid, arg->group, &arg->svc,
-				       &ranks, NULL);
-		assert_int_equal(rc, 0);
+		for (i = 0; i < args_cnt; i++) {
+			rc = daos_pool_tgt_add(args[i]->pool_uuid,
+					       args[i]->group,
+					       &args[i]->svc, &ranks,
+					       NULL);
+			assert_int_equal(rc, 0);
+		}
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 static int
-rebuild_wait(test_arg_t *arg, d_rank_t failed_rank, bool concurrent_io)
+rebuild_io_internal(test_arg_t *arg, daos_obj_id_t oid,
+		    bool update)
 {
-	struct ioreq		req;
-	daos_obj_id_t		oid;
-	int			rc = 0;
-	int			i;
-	char			dkey[16];
-	char			buf[10];
+	struct ioreq	req;
+	int		i;
+	char		dkey[16];
+	char		buf[10];
 
-	/* Rebuild rank 0 */
-	if (concurrent_io && !daos_handle_is_inval(arg->coh)) {
-		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-		/* Let's do I/O at the same time */
-		print_message("insert %d dkey/rebuild_akey during rebuild\n",
-			      KEY_NR);
-		for (i = 0; i < KEY_NR; i++) {
-			sprintf(dkey, "rebuild_%d_%d", i, failed_rank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/* Let's do I/O at the same time */
+	print_message("insert %d dkey/rebuild_akey during rebuild\n",
+		      KEY_NR);
+	for (i = 0; i < KEY_NR; i++) {
+		sprintf(dkey, "rebuild_%d", i);
+		memset(buf, 0, 10);
+		if (update)
 			insert_single(dkey, "rebuild_akey_in", 0,
 				      "data", strlen("data") + 1,
 				      0, &req);
-
-			memset(buf, 0, 10);
-			lookup_single(dkey, "rebuild_akey_in", 0, buf,
-				      10, 0, &req);
-
-			assert_memory_equal(buf, "data", strlen("data"));
-			assert_int_equal(req.iod[0].iod_size,
-					 strlen("data") + 1);
-		}
+		lookup_single(dkey, "rebuild_akey_in", 0, buf,
+			      10, 0, &req);
+		assert_memory_equal(buf, "data", strlen("data"));
+		assert_int_equal(req.iod[0].iod_size,
+				 strlen("data") + 1);
 	}
+	ioreq_fini(&req);
+	return 0;
+}
 
-	while (arg->myrank == 0) {
-		daos_pool_info_t	    pinfo;
-		struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
-		bool connect_pool = false;
+static void
+rebuild_io(test_arg_t *arg, daos_obj_id_t oid)
+{
+	rebuild_io_internal(arg, oid, true);
+}
 
+static void
+rebuild_io_validate(test_arg_t *arg, daos_obj_id_t oid)
+{
+	rebuild_io_internal(arg, oid, false);
+}
+
+static void
+rebuild_pool_wait(test_arg_t *arg)
+{
+	daos_pool_info_t	   pinfo;
+	struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
+	bool			   connect_pool = false;
+	int			   rc;
+
+	while (1) {
 		if (daos_handle_is_inval(arg->poh)) {
 			rc = daos_pool_connect(arg->pool_uuid, arg->group,
 					       &arg->svc, DAOS_PC_RW,
@@ -170,21 +185,9 @@ rebuild_wait(test_arg_t *arg, d_rank_t failed_rank, bool concurrent_io)
 
 		memset(&pinfo, 0, sizeof(pinfo));
 		rc = daos_pool_query(arg->poh, NULL, &pinfo, NULL);
-		if (rc != 0) {
-			print_message("query rebuild status failed: %d\n", rc);
-			if (connect_pool) {
-				rc = daos_pool_disconnect(arg->poh, NULL);
-				if (rc)
-					print_message("disconnect failed: %d\n",
-						      rc);
-				arg->poh = DAOS_HDL_INVAL;
-			}
-			break;
-		}
-		assert_int_equal(rst->rs_errno, 0);
-		if (rst->rs_done) {
-			print_message("Rebuild (ver=%d) is done\n",
-				       rst->rs_version);
+		if (rst->rs_done || rc != 0 || rst->rs_errno) {
+			print_message("Rebuild (ver=%d) is done %d/%d\n",
+				       rst->rs_version, rc, rst->rs_errno);
 			if (connect_pool) {
 				rc = daos_pool_disconnect(arg->poh, NULL);
 				if (rc)
@@ -200,40 +203,52 @@ rebuild_wait(test_arg_t *arg, d_rank_t failed_rank, bool concurrent_io)
 			      rst->rs_version, rst->rs_obj_nr, rst->rs_rec_nr);
 		sleep(2);
 	}
-
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (concurrent_io && !daos_handle_is_inval(arg->coh)) {
-		for (i = 0; i < KEY_NR; i++) {
-			memset(buf, 0, 10);
-			sprintf(dkey, "rebuild_%d_%d", i, failed_rank);
-			lookup_single(dkey, "rebuild_akey_in", 0, buf,
-				      10, 0, &req);
-			if (strcmp(buf, "data") != 0)
-				print_message("dkey %s\n", dkey);
-
-			assert_memory_equal(buf, "data", strlen("data"));
-			assert_int_equal(req.iod[0].iod_size,
-					 strlen("data") + 1);
-		}
-		ioreq_fini(&req);
-	}
-
-	return rc;
 }
 
 static void
-rebuild_targets(test_arg_t *arg, d_rank_t *failed_ranks, int rank_nr,
-		bool kill, bool concurrent_io)
+rebuild_wait(test_arg_t **args, int args_cnt, d_rank_t failed_rank,
+	     bool concurrent_io)
+{
+	daos_obj_id_t	oid;
+	int		i;
+
+	oid = dts_oid_gen(OBJ_CLS, args[0]->myrank);
+	if (concurrent_io) {
+		for (i = 0; i < args_cnt; i++) {
+			if (!daos_handle_is_inval(args[i]->coh))
+				rebuild_io(args[i], oid);
+		}
+	}
+
+	if (args[0]->myrank == 0) {
+		for (i = 0; i < args_cnt; i++)
+			rebuild_pool_wait(args[i]);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (concurrent_io) {
+		for (i = 0; i < args_cnt; i++) {
+			/* validate the data */
+			if (!daos_handle_is_inval(args[i]->coh))
+				rebuild_io_validate(args[i], oid);
+		}
+	}
+}
+
+static void
+rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
+		int rank_nr, bool kill, bool concurrent_io)
 {
 	int	i;
 
 	/** exclude the target from the pool */
 	for (i = 0; i < rank_nr; i++) {
-		rebuild_test_exclude_tgt(arg, failed_ranks[i], kill);
+		rebuild_test_exclude_tgt(args, args_cnt, failed_ranks[i], kill);
 		/* Sleep 5 seconds to make sure the rebuild start */
 		sleep(5);
-		rebuild_wait(arg, failed_ranks[i], concurrent_io);
 	}
+
+	rebuild_wait(args, args_cnt, failed_ranks[i], concurrent_io);
 
 	/* XXX sigh, we do not support restart service after killing yet */
 	if (kill)
@@ -241,14 +256,22 @@ rebuild_targets(test_arg_t *arg, d_rank_t *failed_ranks, int rank_nr,
 
 	/* Add back those targets for future test */
 	for (i = 0; i < rank_nr; i++)
-		rebuild_test_add_tgt(arg, failed_ranks[i]);
+		rebuild_test_add_tgt(args, args_cnt, failed_ranks[i]);
 }
 
 static void
-rebuild_single_target(test_arg_t *arg, d_rank_t failed_rank,
-		      bool concurrent_io)
+rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
+			   bool concurrent_io)
 {
-	rebuild_targets(arg, &failed_rank, 1, false, concurrent_io);
+	rebuild_targets(&arg, 1, &failed_rank, 1, false, concurrent_io);
+}
+
+static void
+rebuild_pools_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
+		      int ranks_nr, bool concurrent_io)
+{
+	rebuild_targets(args, args_cnt, failed_ranks, ranks_nr, false,
+			concurrent_io);
 }
 
 static void
@@ -276,7 +299,7 @@ rebuild_dkeys(void **state)
 			      strlen("data") + 1, 0, &req);
 	}
 
-	rebuild_single_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
 	ioreq_fini(&req);
 }
 
@@ -305,7 +328,7 @@ rebuild_akeys(void **state)
 			      strlen("data") + 1, 0, &req);
 	}
 
-	rebuild_single_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
 	ioreq_fini(&req);
 }
 
@@ -337,7 +360,7 @@ rebuild_indexes(void **state)
 	}
 
 	/* Rebuild rank 1 */
-	rebuild_single_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
 	ioreq_fini(&req);
 }
 
@@ -374,7 +397,7 @@ rebuild_multiple(void **state)
 		}
 	}
 
-	rebuild_single_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
 	ioreq_fini(&req);
 }
 
@@ -404,7 +427,7 @@ rebuild_large_rec(void **state)
 		insert_single(key, "a_key", 0, buffer, 5000, 0, &req);
 	}
 
-	rebuild_single_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
 	ioreq_fini(&req);
 }
 
@@ -438,7 +461,7 @@ rebuild_objects(void **state)
 		ioreq_fini(&req);
 	}
 
-	rebuild_single_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
 }
 
 static void
@@ -476,7 +499,7 @@ rebuild_drop_scan(void **state)
 	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
 			     NULL);
-	rebuild_single_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
 }
 
 static void
@@ -514,7 +537,38 @@ rebuild_retry_rebuild(void **state)
 	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
 			     NULL);
-	rebuild_single_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+}
+
+static void
+rebuild_multiple_pools(void **state)
+{
+	test_arg_t	*arg = *state;
+	test_arg_t	*args[2];
+	daos_obj_id_t	oid;
+	int		rc;
+
+	if (!rebuild_runable(arg, 3, false))
+		skip();
+
+	args[0] = arg;
+	/* create/connect another pool */
+	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank);
+	if (rc) {
+		print_message("open/connect another pool failed: rc %d\n", rc);
+		return;
+	}
+
+	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
+	rebuild_io(args[0], oid);
+	rebuild_io(args[1], oid);
+
+	rebuild_pools_targets(args, 2, ranks_to_kill, 1, false);
+
+	rebuild_io_validate(args[0], oid);
+	rebuild_io_validate(args[1], oid);
+
+	test_teardown((void **)&args[1]);
 }
 
 static void
@@ -568,7 +622,7 @@ rebuild_offline(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	rebuild_targets(arg, ranks_to_kill, 1, true, false);
+	rebuild_targets(&arg, 1, ranks_to_kill, 1, true, false);
 
 	/* reconnect the pool again */
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -658,7 +712,8 @@ rebuild_two_failures(void **state)
 		}
 		ioreq_fini(&req);
 	}
-	rebuild_targets(arg, ranks_to_kill, 2, true, true);
+
+	rebuild_targets(&arg, 1, ranks_to_kill, 2, true, true);
 
 	/* Verify the data being rebuilt on other target */
 	for (i = 0; i < OBJ_NR; i++) {
@@ -729,9 +784,11 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_drop_scan, NULL, test_case_teardown},
 	{"REBUILD8: retry rebuild",
 	rebuild_retry_rebuild, NULL, test_case_teardown},
-	{"REBUILD9: offline rebuild",
+	{"REBUILD9: rebuild multiple pools",
+	rebuild_multiple_pools, NULL, test_case_teardown},
+	{"REBUILD10: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD10: rebuild with two failures",
+	{"REBUILD11: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
 };
 

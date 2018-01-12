@@ -196,7 +196,7 @@ dss_sleep(int ms)
  */
 int
 dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc)
-{ 
+{
 	int rc;
 
 	if (DAOS_FAIL_CHECK(fail_loc))

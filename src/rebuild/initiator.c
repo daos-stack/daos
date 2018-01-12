@@ -710,7 +710,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 	arg->cont_hdl = coh;
 
-	while (!dbtree_is_empty(root->root_hdl)) {
+	if (!dbtree_is_empty(root->root_hdl)) {
 		rc = dbtree_iterate(root->root_hdl, false,
 				    rebuild_obj_iter_cb, arg);
 		if (rc) {
@@ -718,7 +718,6 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 				tls->rebuild_pool_status = rc;
 			D__ERROR("iterate cont "DF_UUID" failed: rc %d\n",
 				DP_UUID(arg->cont_uuid), rc);
-			break;
 		}
 	}
 
@@ -757,14 +756,13 @@ rebuild_puller(void *arg)
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 				      rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
-	while (!dbtree_is_empty(iter_arg->root_hdl)) {
+	if (!dbtree_is_empty(iter_arg->root_hdl)) {
 		rc = dbtree_iterate(iter_arg->root_hdl, false,
 				    rebuild_cont_iter_cb, iter_arg);
 		if (rc) {
 			D__ERROR("dbtree iterate fails %d\n", rc);
 			if (tls->rebuild_pool_status == 0)
 				tls->rebuild_pool_status = rc;
-			break;
 		}
 	}
 
