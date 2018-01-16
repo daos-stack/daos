@@ -1304,7 +1304,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 {
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;
-	struct iv_fetch_cb_info		*cb_info;
+	struct iv_fetch_cb_info		*cb_info = NULL;
 	d_rank_t			 root_rank;
 	d_rank_t			 next_node = 1;
 	int				 rc;
