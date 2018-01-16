@@ -1,24 +1,24 @@
 #
 # Copyright 2018, Intel Corporation
 #
-# 'recipe' for Docker to build an image of centOS-based
+# 'recipe' for Docker to build an image of Ubuntu-based
 # environment for building the DAOS project.
 #
 
 # Pull base image
-FROM centos:7
+FROM ubuntu:16.04
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
+# Update distribution
+RUN apt-get update
+
 # Install basic tools
-RUN yum install -y epel-release
-RUN yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
-RUN yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
-RUN yum install -y librdmacm-devel libcmocka libcmocka-devel
-RUN yum install -y doxygen pandoc flex patch
+RUN apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
+RUN apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
+RUN apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev
+RUN apt-get install -y curl doxygen pandoc flex patch
 
 # Dependencies
-# Packages for NVML, PMIx, hwloc and OpenMPI exist in CentOS, but are unfortunately
-# outdated. The DAOS build system will rebuilt those packages.
 
 # Add DAOS user
 ENV USER daos
@@ -51,7 +51,3 @@ ENV ABT_ENV_MAX_NUM_XSTREAMS=100
 ENV ABT_MAX_NUM_XSTREAMS=100
 ENV CRT_PHY_ADDR_STR="ofi+sockets"
 ENV OFI_INTERFACE=eth0
-
-# Start DAOS server & run basic tests
-#RUN orterun -H localhost -np 1 --report-uri /tmp/uri.txt ./install/bin/daos_server > /tmp/daos_server.out 2>&1 &
-#RUN orterun -H localhost -np 1 --ompi-server file:/tmp/uri.txt install/bin/daos_test
