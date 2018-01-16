@@ -294,7 +294,7 @@ int
 ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 {
 	struct rebuild_pool_tracker	*rpt;
-	int				rc;
+	int				rc = 0;
 
 	memset(status, 0, sizeof(*status));
 

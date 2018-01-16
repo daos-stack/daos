@@ -8,7 +8,6 @@ libraries = ['daos_common', 'gurt', 'cart', 'daos']
 libraries += ['uuid', 'mpi']
 libraries += ['cmocka']
 
-#if PREREQS is not None:
-#    PREREQS.require(denv, 'ompi')
+#PREREQS.require(denv, 'ompi')
 #
 #denv.Program('dsm_test', Glob('*.c'), LIBS = libraries)

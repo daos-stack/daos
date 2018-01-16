@@ -4,13 +4,7 @@ Import('env', 'PREREQS')
 
 env.AppendUnique(LIBPATH=[Dir('.')])
 
-if PREREQS is None:
-        config = Configure(env)
-        if config.CheckLibWithHeader('pmemobj', 'libpmemobj.h', language='C'):
-                env.Append(LIBS=['pmemobj'])
-        config.Finish()
-else:
-        PREREQS.require(env, 'nvml', 'argobots', 'cart')
+PREREQS.require(env, 'nvml', 'argobots', 'cart')
 
 denv = env.Clone()
 

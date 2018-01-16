@@ -6,8 +6,7 @@ libs = ['daos', 'gurt', 'cart', 'daos_common', 'daos_tier', 'uuid']
 
 denv = env.Clone()
 
-if PREREQS is not None:
-    PREREQS.require(denv, 'ompi')
+PREREQS.require(denv, 'ompi')
 
 dmg   = denv.Program('dmg', 'dmg.c', LIBS=libs)
 dcont = denv.Program('dcont', 'dcont.c', LIBS=libs)

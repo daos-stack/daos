@@ -5,8 +5,7 @@ Import('env', 'PREREQS')
 env.AppendUnique(LIBPATH=[Dir('.')])
 denv = env.Clone()
 
-if PREREQS is not None:
-    PREREQS.require(denv, 'ompi')
+PREREQS.require(denv, 'ompi')
 
 addons_tgts = denv.SharedObject(['dac_array.c', 'dac_hl.c'])
 addons_tgts += denv.SharedObject(['daos_array.c', 'daos_hl.c'])

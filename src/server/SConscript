@@ -8,8 +8,7 @@ libraries = ['daos_common', 'gurt', 'cart', 'vos_srv', 'daos', 'daos_tier']
 libraries += ['dl', 'uuid', 'pthread', 'abt']
 libraries += ['hwloc']
 
-if PREREQS is not None:
-	PREREQS.require(denv, 'hwloc', 'cart', 'argobots')
+PREREQS.require(denv, 'hwloc', 'cart', 'argobots')
 
 # the "-rdynamic" is to allow other dll to refer symbol defined in daos_server
 # such as dss_tls_key etc.

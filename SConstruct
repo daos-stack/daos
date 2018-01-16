@@ -22,49 +22,25 @@ if os.path.exists('scons_local'):
 
 env = Environment()
 
-config = Configure(env)
-for required_lib in ['uuid', 'cmocka']:
-        if not config.CheckLib(required_lib):
-                config.Finish()
-                exit(1)
+OPTS_FILE = os.path.join(Dir('#').abspath, 'daos_m.conf')
+OPTS = Variables(OPTS_FILE)
 
-if not config.CheckLib('crypto'):
-        config.Finish()
-        print ('for libcrypto install openssl-devel package')
-        exit(1)
+COMMITS_FILE = os.path.join(Dir('#').abspath, 'utils/build.config')
+if not os.path.exists(COMMITS_FILE):
+    COMMITS_FILE = None
 
-for required_header in ['openssl/md5.h']:
-        if not config.CheckHeader(required_header):
-                config.Finish()
-                exit(1)
+PREREQS = PreReqComponent(env, OPTS, COMMITS_FILE)
+PREREQS.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
+PREREQS.preload(os.path.join(Dir('#').abspath, 'scons_local', 'components.py'),
+                prebuild=['ompi', 'cart', 'argobots', 'nvml', 'cmocka', 'uuid',
+                          'crypto'])
+OPTS.Save(OPTS_FILE, env)
 
-if have_scons_local:
-        OPTS_FILE = os.path.join(Dir('#').abspath, 'daos_m.conf')
-        OPTS = Variables(OPTS_FILE)
-
-        COMMITS_FILE = os.path.join(Dir('#').abspath, 'utils/build.config')
-        if not os.path.exists(COMMITS_FILE):
-            COMMITS_FILE = None
-
-        PREREQS = PreReqComponent(env, OPTS, COMMITS_FILE)
-        PREREQS.preload(os.path.join(Dir('#').abspath,
-                                     'scons_local',
-                             'components.py'))
-        OPTS.Save(OPTS_FILE, env)
-        # Define this now, and then the individual components can import this
-        # through PREREQS when they need it.
-        env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
-else:
-        PREREQS = None
-        env.Replace(PREFIX=Dir('#build').abspath)
-
-        if config.CheckHeader('libpmemobj.h'):
-                env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
-        else:
-                env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '0'})
+# Define this now, and then the individual components can import this
+# through PREREQS when they need it.
+env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
 
 env.Alias('install', '$PREFIX')
-config.Finish()
 
 DAOS_VERSION = "0.0.2"
 Export('DAOS_VERSION')
@@ -82,12 +58,11 @@ env.Append(CCFLAGS = ['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
 VariantDir('build', '.', duplicate=0)
 SConscript('build/src/SConscript', exports=['env', 'PREREQS'])
 
-if have_scons_local:
-    BUILDINFO = PREREQS.get_build_info()
-    BUILDINFO.gen_script('.build_vars.sh')
-    BUILDINFO.save('.build_vars.json')
-    env.InstallAs("$PREFIX/TESTING/.build_vars.sh", ".build_vars.sh")
-    env.InstallAs("$PREFIX/TESTING/.build_vars.json", ".build_vars.json")
+BUILDINFO = PREREQS.get_build_info()
+BUILDINFO.gen_script('.build_vars.sh')
+BUILDINFO.save('.build_vars.json')
+env.InstallAs("$PREFIX/TESTING/.build_vars.sh", ".build_vars.sh")
+env.InstallAs("$PREFIX/TESTING/.build_vars.json", ".build_vars.json")
 
 # install the test_runner code from scons_local
 SConscript('build/scons_local/test_runner/SConscript', exports=['env', 'PREREQS'])
