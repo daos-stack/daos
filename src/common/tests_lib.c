@@ -31,22 +31,26 @@
 
 #define DTS_OCLASS_DEF		DAOS_OC_REPL_MAX_RW
 
-static uint64_t obj_id_gen	= 1;
+static uint32_t obj_id_gen	= 1;
 static uint64_t int_key_gen	= 1;
 
 daos_obj_id_t
 dts_oid_gen(uint16_t oclass, unsigned seed)
 {
 	daos_obj_id_t	oid;
+	uint64_t	hdr;
 
 	srand(time(NULL));
 
 	if (oclass == 0)
 		oclass = DTS_OCLASS_DEF;
 
-	/* generate an unique and not scary long object ID */
+	hdr = seed;
+	hdr <<= 32;
+
+	/* generate a unique and not scary long object ID */
 	oid.lo	= obj_id_gen++;
-	oid.mid	= seed;
+	oid.lo	|= hdr;
 	oid.hi	= rand() % 100;
 	daos_obj_id_generate(&oid, oclass);
 

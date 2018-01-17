@@ -53,8 +53,8 @@ struct daos_uuid {
 	uuid_t	uuid;
 };
 
-#define DF_OID		DF_U64"."DF_U64"."DF_U64
-#define DP_OID(o)	(o).hi, (o).mid, (o).lo
+#define DF_OID		DF_U64"."DF_U64
+#define DP_OID(o)	(o).hi, (o).lo
 
 #define DF_UOID		DF_OID".%u"
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard

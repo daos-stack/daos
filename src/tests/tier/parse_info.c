@@ -32,7 +32,7 @@ parse_oid(char *p, struct tier_info *pinfo)
 	if (pinfo->oids.ol_oids == NULL)
 		return 0;
 
-	nr = sscanf(p, DF_OID, &oid.hi, &oid.mid, &oid.lo);
+	nr = sscanf(p, DF_OID, &oid.hi, &oid.lo);
 	if (nr == 3) {
 		pinfo->oids.ol_oids[pinfo->oids.ol_nr.num_out] = oid;
 		pinfo->oids.ol_nr.num_out += 1;
@@ -45,7 +45,7 @@ parse_tgt(char *p, struct tier_info *pinfo)
 {
 	int nr;
 
-	nr = sscanf(p, DF_OID, &pinfo->tgt.hi, &pinfo->tgt.mid, &pinfo->tgt.lo);
+	nr = sscanf(p, DF_OID, &pinfo->tgt.hi, &pinfo->tgt.lo);
 	return nr == 3 ? 0 : -1;
 }
 

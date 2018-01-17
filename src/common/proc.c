@@ -30,7 +30,6 @@
 /**
  * typedef struct {
  *	uint64_t lo;
- *	uint64_t mid;
  *	uint64_t hi;
  * } daos_obj_id_t;
  **/
@@ -40,10 +39,6 @@ daos_proc_objid(crt_proc_t proc, daos_obj_id_t *doi)
 	int rc;
 
 	rc = crt_proc_uint64_t(proc, &doi->lo);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &doi->mid);
 	if (rc != 0)
 		return -DER_HG;
 

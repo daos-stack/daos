@@ -761,14 +761,13 @@ ring_oid2ring(struct pl_ring_map *rimap, daos_obj_id_t id)
 static unsigned int
 ring_obj_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid)
 {
-	uint64_t hash = oid.lo ^ oid.mid;
+	uint64_t hash;
 
 	/* mix bits */
 	hash  = oid.lo;
 	hash ^= hash << 39;
 	hash += hash << 9;
 	hash -= hash << 17;
-	hash ^= oid.mid;
 
 	hash  = daos_u64_hash(hash, TARGET_HASH_BITS);
 	hash &= (1ULL << rimap->rmp_target_hbits) - 1;

@@ -86,8 +86,7 @@ obj_df_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 
 	ohash[0] = okey->o_oid.id_pub.lo;
 	/* XXX hash collision? */
-	ohash[1] = daos_hash_murmur64((const unsigned char *)&oid.id_pub.mid,
-				      sizeof(oid.id_pub.mid) +
+	ohash[1] = daos_hash_murmur64((const unsigned char *)&oid.id_pub.hi,
 				      sizeof(oid.id_pub.hi),
 				      oid.id_shard);
 }

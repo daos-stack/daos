@@ -68,7 +68,7 @@ main(int argc, char **argv)
 	int			 nr;
 	int			 rc;
 	struct pool_component	*comp;
-	daos_obj_id_t		 oid = {1, 3, 5};
+	daos_obj_id_t		 oid = {1, 5};
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)

@@ -456,7 +456,7 @@ kill_hdlr(int argc, char *argv[])
 	return 0;
 }
 
-/* oid str: oid_hi.oid_mid.oid_lo */
+/* oid str: oid_hi.oid_lo */
 static int
 daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 {
@@ -464,14 +464,6 @@ daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 
 	/* parse hi */
 	oid->hi = atoll(ptr);
-
-	/* find 1st . to parse mid */
-	ptr = strchr(ptr, '.');
-	if (ptr == NULL)
-		return -1;
-	ptr++;
-
-	oid->mid = atoll(ptr);
 
 	/* find 2nd . to parse lo */
 	ptr = strchr(ptr, '.');

@@ -554,7 +554,6 @@ io_named(void **state)
 	const char    recd[] = "yabba-dabba-dooooo";
 
 	oid.hi  = 55551111;
-	oid.mid = 1;
 	oid.lo  = 0;
 	daos_obj_id_generate(&oid, DAOS_OC_REPL_MAX_RW);
 	fprintf(fp, "TGT:"DF_OID"\n", DP_OID(oid));

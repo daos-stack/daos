@@ -573,12 +573,10 @@ object_open(int t_id, daos_epoch_t epoch, int enum_flag, int declare,
 	int		rc;
 
 	if (enum_flag) {
-		oid.hi = t_id + comm_world_rank + 2;
-		oid.mid = t_id + comm_world_rank + 1;
+		oid.hi = t_id + comm_world_rank + 1;
 		oid.lo = t_id + comm_world_rank;
 	} else {
-		oid.hi = t_id + 2;
-		oid.mid = t_id + 1;
+		oid.hi = t_id + 1;
 		oid.lo = t_id;
 	}
 	daos_obj_id_generate(&oid, obj_class);

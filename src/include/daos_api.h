@@ -610,7 +610,7 @@ daos_obj_class_list(daos_handle_t coh, daos_oclass_list_t *clist,
  * \param oid	[IN]	Object ID with low 160 bits set and unique inside the
  *			container.
  *		[OUT]	Fully populated DAOS object identifier with the the low
- *			160 bits untouched and the DAOS private	bits (the high
+ *			96 bits untouched and the DAOS private	bits (the high
  *			32 bits) encoded.
  * \param cid	[IN]	Class Identifier
  */
@@ -623,7 +623,7 @@ daos_obj_id_generate(daos_obj_id_t *oid, daos_oclass_id_t cid)
 	/**
 	 * | 8-bit version | 8-bit unused |
 	 * | 16-bit object class          |
-	 * | 160-bit for upper layer ...  |
+	 * | 96-bit for upper layer ...  |
 	 */
 	hdr <<= 32;
 	hdr |= 0x1ULL << 56;

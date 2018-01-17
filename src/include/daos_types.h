@@ -352,7 +352,6 @@ typedef struct {
  */
 typedef struct {
 	uint64_t	lo;
-	uint64_t	mid;
 	uint64_t	hi;
 } daos_obj_id_t;
 
@@ -642,7 +641,7 @@ typedef struct {
 static inline bool
 daos_obj_id_is_null(daos_obj_id_t oid)
 {
-	return oid.lo == 0 && oid.mid == 0 && oid.hi == 0;
+	return oid.lo == 0 && oid.hi == 0;
 }
 
 static inline bool
