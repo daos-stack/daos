@@ -610,9 +610,10 @@ out_task:
 }
 
 int
-dc_shard_key_punch(tse_task_t *task, struct tsa_key_punch *args)
+dc_shard_key_punch(tse_task_t *task)
 {
-	daos_obj_punch_key_t	*api_args = args->pa_api_args;
+	struct tsa_key_punch	*args;
+	daos_obj_punch_key_t	*api_args;
 	struct dc_pool		*pool;
 	struct dc_obj_shard	*shard;
 	struct obj_punch_in	*opi;
@@ -621,7 +622,10 @@ dc_shard_key_punch(tse_task_t *task, struct tsa_key_punch *args)
 	crt_endpoint_t		 tgt_ep;
 	int			 rc;
 
+	args = tse_task_buf_embedded(task, sizeof(*args));
+	api_args = args->pa_api_args;
 	shard = args->pa_shard;
+
 	pool = obj_shard_ptr2pool(shard);
 	if (pool == NULL) {
 		obj_shard_decref(shard);

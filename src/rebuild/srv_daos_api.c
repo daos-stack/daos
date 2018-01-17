@@ -35,6 +35,7 @@
 #include <daos/pool.h>
 #include <daos/container.h>
 #include <daos/object.h>
+#include <daos/event.h>
 
 #include <daos_srv/daos_server.h>
 #include "rebuild_internal.h"
@@ -103,31 +104,42 @@ ds_cont_close(daos_handle_t cont_hl)
 #endif
 
 int
-ds_obj_open(daos_handle_t coh, daos_obj_id_t oid,
-	    daos_epoch_t epoch, unsigned int mode,
-	    daos_handle_t *oh)
+ds_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+	    unsigned int mode, daos_handle_t *oh)
 {
-	daos_obj_open_t	arg;
+	tse_task_t	*task;
+	daos_obj_open_t	*arg;
+	int		 rc;
 
-	arg.coh = coh;
-	arg.oid = oid;
-	arg.epoch = epoch;
-	arg.mode = mode;
-	arg.oh = oh;
+	rc = dc_task_create(dc_obj_open, dss_tse_scheduler(), NULL, &task);
+	if (rc)
+		return rc;
 
-	return dss_sync_task(DAOS_OPC_OBJ_OPEN, &arg, sizeof(arg),
-			     DSS_POOL_PRIV_LOW_PRIORITY);
+	arg = dc_task_get_args(task);
+	arg->coh	= coh;
+	arg->oid	= oid;
+	arg->epoch	= epoch;
+	arg->mode	= mode;
+	arg->oh		= oh;
+
+	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
 }
 
 int
 ds_obj_close(daos_handle_t obj_hl)
 {
-	daos_obj_close_t arg;
+	tse_task_t	 *task;
+	daos_obj_close_t *arg;
+	int		  rc;
 
-	arg.oh = obj_hl;
+	rc = dc_task_create(dc_obj_close, dss_tse_scheduler(), NULL, &task);
+	if (rc)
+		return rc;
 
-	return dss_sync_task(DAOS_OPC_OBJ_CLOSE, &arg, sizeof(arg),
-			     DSS_POOL_PRIV_LOW_PRIORITY);
+	arg = dc_task_get_args(task);
+	arg->oh = obj_hl;
+
+	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
 }
 
 int
@@ -135,17 +147,24 @@ ds_obj_single_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
 			      uint32_t *nr, daos_key_desc_t *kds,
 			      daos_sg_list_t *sgl, daos_hash_out_t *anchor)
 {
-	daos_obj_list_dkey_t	arg;
+	tse_task_t	     *task;
+	daos_obj_list_dkey_t *arg;
+	int		      rc;
 
-	arg.oh = oh;
-	arg.epoch = epoch;
-	arg.nr = nr;
-	arg.kds = kds;
-	arg.sgl = sgl;
-	arg.anchor = anchor;
+	rc = dc_task_create(dc_obj_single_shard_list_dkey,
+			     dss_tse_scheduler(), NULL, &task);
+	if (rc)
+		return rc;
 
-	return dss_sync_task(DAOS_OPC_OBJ_SHARD_LIST_DKEY, &arg, sizeof(arg),
-			     DSS_POOL_PRIV_LOW_PRIORITY);
+	arg = dc_task_get_args(task);
+	arg->oh		= oh;
+	arg->epoch	= epoch;
+	arg->nr		= nr;
+	arg->kds	= kds;
+	arg->sgl	= sgl;
+	arg->anchor	= anchor;
+
+	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
 }
 
 int
@@ -153,18 +172,25 @@ ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		 uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		 daos_hash_out_t *anchor)
 {
-	daos_obj_list_akey_t	arg;
+	tse_task_t	     *task;
+	daos_obj_list_akey_t *arg;
+	int		      rc;
 
-	arg.oh		= oh;
-	arg.epoch	= epoch;
-	arg.dkey	= dkey;
-	arg.nr		= nr;
-	arg.kds		= kds;
-	arg.sgl		= sgl;
-	arg.anchor	= anchor;
+	rc = dc_task_create(dc_obj_list_akey, dss_tse_scheduler(),
+			     NULL, &task);
+	if (rc)
+		return rc;
 
-	return dss_sync_task(DAOS_OPC_OBJ_LIST_AKEY, &arg, sizeof(arg),
-			     DSS_POOL_PRIV_LOW_PRIORITY);
+	arg = dc_task_get_args(task);
+	arg->oh		= oh;
+	arg->epoch	= epoch;
+	arg->dkey	= dkey;
+	arg->nr		= nr;
+	arg->kds	= kds;
+	arg->sgl	= sgl;
+	arg->anchor	= anchor;
+
+	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
 }
 
 int
@@ -173,18 +199,24 @@ ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 	     daos_iod_t *iods, daos_sg_list_t *sgls,
 	     daos_iom_t *maps)
 {
-	daos_obj_fetch_t arg;
+	tse_task_t	 *task;
+	daos_obj_fetch_t *arg;
+	int		  rc;
 
-	arg.oh = oh;
-	arg.epoch = epoch;
-	arg.dkey = dkey;
-	arg.nr = nr;
-	arg.iods = iods;
-	arg.sgls = sgls;
-	arg.maps = maps;
+	rc = dc_task_create(dc_obj_fetch, dss_tse_scheduler(), NULL, &task);
+	if (rc)
+		return rc;
 
-	return dss_sync_task(DAOS_OPC_OBJ_FETCH, &arg, sizeof(arg),
-			     DSS_POOL_PRIV_LOW_PRIORITY);
+	arg = dc_task_get_args(task);
+	arg->oh		= oh;
+	arg->epoch	= epoch;
+	arg->dkey	= dkey;
+	arg->nr		= nr;
+	arg->iods	= iods;
+	arg->sgls	= sgls;
+	arg->maps	= maps;
+
+	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
 }
 
 int
@@ -194,22 +226,28 @@ ds_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		uuid_t *cookies, uint32_t *versions, daos_hash_out_t *anchor,
 		bool incr)
 {
-	daos_obj_list_recx_t	arg;
+	tse_task_t		*task;
+	daos_obj_list_recx_t	*arg;
+	int			 rc;
 
-	arg.oh = oh;
-	arg.epoch = epoch;
-	arg.dkey = dkey;
-	arg.akey = akey;
-	arg.type = type;
-	arg.size = size;
-	arg.nr = nr;
-	arg.recxs = recxs;
-	arg.eprs = eprs;
-	arg.cookies = cookies;
-	arg.versions = versions;
-	arg.anchor = anchor;
-	arg.incr_order = incr;
+	rc = dc_task_create(dc_obj_list_rec, dss_tse_scheduler(), NULL, &task);
+	if (rc)
+		return rc;
 
-	return dss_sync_task(DAOS_OPC_OBJ_LIST_RECX, &arg, sizeof(arg),
-			     DSS_POOL_PRIV_LOW_PRIORITY);
+	arg = dc_task_get_args(task);
+	arg->oh		= oh;
+	arg->epoch	= epoch;
+	arg->dkey	= dkey;
+	arg->akey	= akey;
+	arg->type	= type;
+	arg->size	= size;
+	arg->nr		= nr;
+	arg->recxs	= recxs;
+	arg->eprs	= eprs;
+	arg->cookies	= cookies;
+	arg->versions	= versions;
+	arg->anchor	= anchor;
+	arg->incr_order	= incr;
+
+	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
 }

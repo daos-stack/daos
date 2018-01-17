@@ -134,20 +134,6 @@ int
 daos_event_register_comp_cb(struct daos_event *ev,
 			    daos_event_comp_cb_t cb, void *arg);
 
-/* TODO: these task functions should be moved to a different header */
-int
-daos_client_task_prep(void *arg, int arg_size, tse_task_t **taskp,
-		      daos_event_t **evp);
-
-int
-dc_task_create(daos_opc_t opc, void *arg, int arg_size,
-	       tse_task_t **taskp, daos_event_t **evp);
-
-int
-dc_task_new(daos_opc_t opc, daos_event_t *ev, tse_task_t **taskp);
-
-int
-dc_task_schedule(tse_task_t *task);
 
 /**
  * Wait for completion of the private event
@@ -166,17 +152,69 @@ bool
 daos_event_is_priv(daos_event_t *ev);
 
 /**
- * Wait for completion if blocking mode. We always return 0 for asynchronous
- * mode because the application will get the result from event in this case,
- * besides certain failure might be reset anyway see daos_obj_comp_cb().
+ * Create a new task with the input scheduler \a sched, and associate
+ * the task with the input event \a ev.
+ *
+ * If the input scheduler is NULL, the task will attach on the internal
+ * scheduler of event/EQ.
  */
-static inline int
-daos_client_result_wait(daos_event_t *ev)
-{
-	D__ASSERT(ev != NULL);
-	if (daos_event_is_priv(ev)) /* blocking mode */
-		return daos_event_priv_wait();
+int
+dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev,
+	       tse_task_t **taskp);
 
-	return 0;
-}
+/**
+ * Schedule the task created by dc_task_create, this function will execute
+ * the body function instantly if \a instant is true.
+ */
+int
+dc_task_schedule(tse_task_t *task, bool instant);
+
+/** return embedded parameters of task created by dc_task_create */
+void *
+dc_task_get_args(tse_task_t *task);
+
+/* It's a little confusing to use both tse_task_* and dc_task_* at the same
+ * time, we probably want to use macros to wrap all tse_task_* functions?
+ *
+ * NB: There are still a bunch of functions w/o wrappers.
+ */
+#define dc_task_addref(task)					\
+	tse_task_addref(task)
+
+#define dc_task_decref(task)					\
+	tse_task_decref(task)
+
+#define dc_task_set_priv(task, priv)				\
+	tse_task_set_priv(task, priv)
+
+#define dc_task_get_priv(task)					\
+	tse_task_get_priv(task)
+
+#define dc_task_list_add(task, head)				\
+	tse_task_list_add(task, head)
+
+#define dc_task_list_del(task)					\
+	tse_task_list_del(task)
+
+#define dc_task_list_first(head)				\
+	tse_task_list_first(head)
+
+#define dc_task_list_depend(head, task)				\
+	tse_task_list_depend(head, task)
+
+#define dc_task_depend_list(task, head)				\
+	tse_task_depend_list(task, head)
+
+#define dc_task_reg_comp_cb(task, comp_cb, arg, arg_size)	\
+	tse_task_register_comp_cb(task, comp_cb, arg, arg_size)
+
+#define dc_task_depend(task, dep_nr, dep_tasks)			\
+	tse_task_register_deps(task, dep_nr, dep_tasks)
+
+#define dc_task_resched(task)					\
+	tse_task_reinit(task)
+
+void
+dc_task_list_sched(daos_list_t *head, bool instant);
+
 #endif /*  __DAOS_EV_INTERNAL_H__ */

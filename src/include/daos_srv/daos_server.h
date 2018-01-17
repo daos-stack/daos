@@ -135,7 +135,7 @@ struct dss_module_info {
 extern struct dss_module_key	daos_srv_modkey;
 
 static inline struct dss_module_info *
-dss_get_module_info()
+dss_get_module_info(void)
 {
 	struct dss_module_info *dmi;
 	struct dss_thread_local_storage *dtc;
@@ -144,6 +144,12 @@ dss_get_module_info()
 	dmi = (struct dss_module_info *)
 	      dss_module_key_get(dtc, &daos_srv_modkey);
 	return dmi;
+}
+
+static inline tse_sched_t *
+dss_tse_scheduler(void)
+{
+	return &dss_get_module_info()->dmi_sched;
 }
 
 /**
@@ -268,7 +274,13 @@ struct dss_coll_args {
 	struct dss_coll_stream_args	ca_stream_args;
 };
 
-/* Generic dss_collective with custom aggregator */
+/* Generic dss_collective with custom aggregator
+ *
+ * TODO: rename these functions, thread & task are too generic name and
+ * DAOS has already used task for something else.
+ *
+ * These functions should be dss_ult_collective/dss_tlt_collective.
+ */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
 			   struct dss_coll_args *coll_args);
@@ -279,8 +291,7 @@ dss_thread_collective_reduce(struct dss_coll_ops *ops,
 int dss_task_collective(int (*func)(void *), void *arg);
 int dss_thread_collective(int (*func)(void *), void *arg);
 
-int dss_sync_task(daos_opc_t opc, void *arg,
-		  unsigned int arg_size, unsigned int priority);
+int dss_task_run(tse_task_t *task, unsigned int priority);
 unsigned int dss_get_threads_number(void);
 
 /* Convert Argobots errno to DAOS ones. */

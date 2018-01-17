@@ -37,34 +37,44 @@ int
 daos_kv_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 	    daos_size_t buf_size, const void *buf, daos_event_t *ev)
 {
-	daos_kv_put_t	args;
+	daos_kv_put_t	*args;
 	tse_task_t	*task;
+	int		 rc;
 
-	args.oh		= oh;
-	args.epoch	= epoch;
-	args.key	= key;
-	args.buf_size	= buf_size;
-	args.buf	= buf;
+	rc = dc_task_create(dac_kv_put, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_KV_PUT, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->epoch	= epoch;
+	args->key	= key;
+	args->buf_size	= buf_size;
+	args->buf	= buf;
+
+	return dc_task_schedule(task, true);
 }
 
 int
 daos_kv_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 	    daos_size_t *buf_size, void *buf, daos_event_t *ev)
 {
-	daos_kv_get_t	args;
+	daos_kv_get_t	*args;
 	tse_task_t	*task;
+	int		 rc;
 
-	args.oh		= oh;
-	args.epoch	= epoch;
-	args.key	= key;
-	args.buf_size	= buf_size;
-	args.buf	= buf;
+	rc = dc_task_create(dac_kv_get, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_KV_GET, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->epoch	= epoch;
+	args->key	= key;
+	args->buf_size	= buf_size;
+	args->buf	= buf;
+
+	return dc_task_schedule(task, true);
 }
 
 int
@@ -80,20 +90,24 @@ daos_obj_fetch_multi(daos_handle_t oh, daos_epoch_t epoch,
 		     unsigned int num_dkeys, daos_dkey_io_t *io_array,
 		     daos_event_t *ev)
 {
-	daos_obj_multi_io_t	args;
+	daos_obj_multi_io_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
 	if (num_dkeys == 0)
 		return 0;
 
-	args.oh         = oh;
-	args.epoch      = epoch;
-	args.num_dkeys	= num_dkeys;
-	args.io_array	= io_array;
+	rc = dc_task_create(dac_obj_fetch_multi, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_OBJ_FETCH_MULTI, &args, sizeof(args), &task,
-		       &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->epoch	= epoch;
+	args->num_dkeys	= num_dkeys;
+	args->io_array	= io_array;
+
+	return dc_task_schedule(task, true);
 }
 
 int
@@ -101,18 +115,22 @@ daos_obj_update_multi(daos_handle_t oh, daos_epoch_t epoch,
 		      unsigned int num_dkeys, daos_dkey_io_t *io_array,
 		      daos_event_t *ev)
 {
-	daos_obj_multi_io_t	args;
+	daos_obj_multi_io_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
 	if (num_dkeys == 0)
 		return 0;
 
-	args.oh         = oh;
-	args.epoch      = epoch;
-	args.num_dkeys	= num_dkeys;
-	args.io_array	= io_array;
+	rc = dc_task_create(dac_obj_update_multi, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_OBJ_UPDATE_MULTI, &args, sizeof(args), &task,
-		       &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->epoch	= epoch;
+	args->num_dkeys	= num_dkeys;
+	args->io_array	= io_array;
+
+	return dc_task_schedule(task, true);
 }

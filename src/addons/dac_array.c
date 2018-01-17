@@ -170,12 +170,13 @@ create_handle_cb(tse_task_t *task, void *data)
 
 err_obj:
 	{
-		daos_obj_close_t close_args;
+		daos_obj_close_t *close_args;
 		tse_task_t *close_task;
 
-		close_args.oh = *args->oh;
 		daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
-				 &close_args, 0, NULL, &close_task);
+				 0, NULL, &close_task);
+		close_args = daos_task_get_args(close_task);
+		close_args->oh = *args->oh;
 		return rc;
 	}
 }
@@ -248,7 +249,7 @@ write_md_cb(tse_task_t *task, void *data)
 	params->iod.iod_type = DAOS_IOD_ARRAY;
 
 	/** Set the args for the update task */
-	update_args = daos_task_get_args(DAOS_OPC_OBJ_UPDATE, task);
+	update_args = daos_task_get_args(task);
 	update_args->oh = *args->oh;
 	update_args->epoch = args->epoch;
 	update_args->dkey = &params->dkey;
@@ -267,32 +268,31 @@ write_md_cb(tse_task_t *task, void *data)
 int
 dac_array_create(tse_task_t *task)
 {
-	daos_array_create_t	*args;
+	daos_array_create_t	*args = daos_task_get_args(task);
 	tse_task_t		*open_task, *update_task;
-	daos_obj_open_t		open_args;
+	daos_obj_open_t		*open_args;
 	int			rc;
 
-	args = daos_task_get_args(DAOS_OPC_ARRAY_CREATE, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
 	/** Create task to open object */
-	open_args.coh = args->coh;
-	open_args.oid = args->oid;
-	open_args.epoch = args->epoch;
-	open_args.mode = DAOS_OO_RW;
-	open_args.oh = args->oh;
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task),
-			      &open_args, 0, NULL, &open_task);
+			      0, NULL, &open_task);
 	if (rc != 0) {
 		D__ERROR("Failed to create object_open task\n");
 		return rc;
 	}
 
+	open_args = daos_task_get_args(open_task);
+	open_args->coh	 = args->coh;
+	open_args->oid	 = args->oid;
+	open_args->epoch = args->epoch;
+	open_args->mode	 = DAOS_OO_RW;
+	open_args->oh	 = args->oh;
+
 	tse_task_schedule(open_task, false);
 
 	/** Create task to write object metadata */
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
-			      NULL, 1, &open_task, &update_task);
+			      1, &open_task, &update_task);
 	if (rc != 0) {
 		D__ERROR("Failed to create object_update task\n");
 		D__GOTO(err_put1, rc);
@@ -364,12 +364,13 @@ open_handle_cb(tse_task_t *task, void *data)
 
 err_obj:
 	{
-		daos_obj_close_t close_args;
-		tse_task_t *close_task;
+		daos_obj_close_t *close_args;
+		tse_task_t	 *close_task;
 
-		close_args.oh = *args->oh;
 		daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
-				 &close_args, 0, NULL, &close_task);
+				 0, NULL, &close_task);
+		close_args = daos_task_get_args(close_task);
+		close_args->oh = *args->oh;
 		return rc;
 	}
 }
@@ -418,7 +419,7 @@ fetch_md_cb(tse_task_t *task, void *data)
 	params->iod.iod_type = DAOS_IOD_ARRAY;
 
 	/** Set the args for the fetch task */
-	fetch_args = daos_task_get_args(DAOS_OPC_OBJ_FETCH, task);
+	fetch_args = daos_task_get_args(task);
 	fetch_args->oh = *args->oh;
 	fetch_args->epoch = args->epoch;
 	fetch_args->dkey = &params->dkey;
@@ -437,32 +438,31 @@ fetch_md_cb(tse_task_t *task, void *data)
 int
 dac_array_open(tse_task_t *task)
 {
-	daos_array_open_t	*args;
+	daos_array_open_t	*args = daos_task_get_args(task);
 	tse_task_t		*open_task, *fetch_task;
-	daos_obj_open_t		open_args;
+	daos_obj_open_t		*open_args;
 	int			rc;
 
-	args = daos_task_get_args(DAOS_OPC_ARRAY_OPEN, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
 	/** Open task to open object */
-	open_args.coh = args->coh;
-	open_args.oid = args->oid;
-	open_args.epoch = args->epoch;
-	open_args.mode = args->mode;
-	open_args.oh = args->oh;
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task),
-			      &open_args, 0, NULL, &open_task);
+			      0, NULL, &open_task);
 	if (rc != 0) {
 		D__ERROR("Failed to open object_open task\n");
 		return rc;
 	}
 
+	open_args = daos_task_get_args(open_task);
+	open_args->coh	 = args->coh;
+	open_args->oid	 = args->oid;
+	open_args->epoch = args->epoch;
+	open_args->mode	 = args->mode;
+	open_args->oh	 = args->oh;
+
 	tse_task_schedule(open_task, false);
 
 	/** Create task to fetch object metadata */
 	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),
-			      NULL, 1, &open_task, &fetch_task);
+			      1, &open_task, &fetch_task);
 	if (rc != 0) {
 		D__ERROR("Failed to open object_fetch task\n");
 		D__GOTO(err_put1, rc);
@@ -507,27 +507,25 @@ err_put1:
 int
 dac_array_close(tse_task_t *task)
 {
-	daos_array_close_t	*args;
+	daos_array_close_t	*args = daos_task_get_args(task);
 	struct dac_array	*array;
 	tse_task_t		*close_task;
-	daos_obj_close_t	close_args;
+	daos_obj_close_t	*close_args;
 	int			rc;
-
-	args = daos_task_get_args(DAOS_OPC_ARRAY_CLOSE, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	array = array_hdl2ptr(args->oh);
 	if (array == NULL)
 		return -DER_NO_HDL;
 
 	/** Create task to close object */
-	close_args.oh = array->daos_oh;
 	rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
-			      &close_args, 0, NULL, &close_task);
+			      0, NULL, &close_task);
 	if (rc != 0) {
 		D__ERROR("Failed to create object_close task\n");
 		return rc;
 	}
+	close_args = daos_task_get_args(close_task);
+	close_args->oh = array->daos_oh;
 
 	/** The upper task completes when the close task completes */
 	rc = tse_task_register_deps(task, 1, &close_task);
@@ -938,42 +936,44 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 
 		/* issue KV IO to DAOS */
 		if (op_type == DAOS_OPC_ARRAY_READ) {
-			daos_obj_fetch_t io_arg;
-
-			io_arg.oh = oh;
-			io_arg.epoch = epoch;
-			io_arg.dkey = dkey;
-			io_arg.nr = 1;
-			io_arg.iods = iod;
-			io_arg.sgls = sgl;
-			io_arg.maps = NULL;
+			daos_obj_fetch_t *io_arg;
 
 			rc = daos_task_create(DAOS_OPC_OBJ_FETCH,
-					      tse_task2sched(task), &io_arg, 0,
-					      NULL, &io_task);
+					      tse_task2sched(task),
+					      0, NULL, &io_task);
 			if (rc != 0) {
 				D__ERROR("KV Fetch of dkey %s failed (%d)\n",
 					dkey_str, rc);
 				return rc;
 			}
-		} else if (op_type == DAOS_OPC_ARRAY_WRITE) {
-			daos_obj_update_t io_arg;
+			io_arg = daos_task_get_args(io_task);
+			io_arg->oh	= oh;
+			io_arg->epoch	= epoch;
+			io_arg->dkey	= dkey;
+			io_arg->nr	= 1;
+			io_arg->iods	= iod;
+			io_arg->sgls	= sgl;
+			io_arg->maps	= NULL;
 
-			io_arg.oh = oh;
-			io_arg.epoch = epoch;
-			io_arg.dkey = dkey;
-			io_arg.nr = 1;
-			io_arg.iods = iod;
-			io_arg.sgls = sgl;
+		} else if (op_type == DAOS_OPC_ARRAY_WRITE) {
+			daos_obj_update_t *io_arg;
 
 			rc = daos_task_create(DAOS_OPC_OBJ_UPDATE,
-					      tse_task2sched(task), &io_arg, 0,
-					      NULL, &io_task);
+					      tse_task2sched(task),
+					      0, NULL, &io_task);
 			if (rc != 0) {
 				D__ERROR("KV Update of dkey %s failed (%d)\n",
 					dkey_str, rc);
 				return rc;
 			}
+			io_arg = daos_task_get_args(io_task);
+			io_arg->oh	= oh;
+			io_arg->epoch	= epoch;
+			io_arg->dkey	= dkey;
+			io_arg->nr	= 1;
+			io_arg->iods	= iod;
+			io_arg->sgls	= sgl;
+
 		} else {
 			D__ASSERTF(0, "Invalid array operation.\n");
 		}
@@ -1003,10 +1003,7 @@ err_task:
 int
 dac_array_read(tse_task_t *task)
 {
-	daos_array_io_t *args;
-
-	args = daos_task_get_args(DAOS_OPC_ARRAY_READ, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	daos_array_io_t *args = daos_task_get_args(task);
 
 	return dac_array_io(args->oh, args->epoch, args->ranges, args->sgl,
 			    DAOS_OPC_ARRAY_READ, task);
@@ -1015,10 +1012,7 @@ dac_array_read(tse_task_t *task)
 int
 dac_array_write(tse_task_t *task)
 {
-	daos_array_io_t *args;
-
-	args = daos_task_get_args(DAOS_OPC_ARRAY_WRITE, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	daos_array_io_t *args = daos_task_get_args(task);
 
 	return dac_array_io(args->oh, args->epoch, args->ranges, args->sgl,
 			    DAOS_OPC_ARRAY_WRITE, task);
@@ -1060,14 +1054,12 @@ struct list_recxs_params {
 static int
 list_recxs_cb(tse_task_t *task, void *data)
 {
+	daos_obj_list_recx_t *args = daos_task_get_args(task);
 	struct list_recxs_params *params = *((struct list_recxs_params **)data);
 	daos_size_t dkey_num;
 	int ret;
 	int rc = task->dt_result;
 	daos_size_t cur_size;
-	daos_obj_list_recx_t *args;
-
-	args = daos_task_get_args(DAOS_OPC_OBJ_LIST_RECX, task);
 
 #ifdef ARRAY_DEBUG
 	printf("cell size %d recx idx = %d NR = %d\n",
@@ -1114,9 +1106,9 @@ out:
 static int
 get_array_size_cb(tse_task_t *task, void *data)
 {
+	daos_obj_list_dkey_t *args = daos_task_get_args(task);
 	struct get_size_props *props = *((struct get_size_props **)data);
 	struct dac_array *array = props->array;
-	daos_obj_list_dkey_t *args;
 	char		*ptr;
 	uint32_t	i;
 	int		rc = task->dt_result;
@@ -1126,7 +1118,6 @@ get_array_size_cb(tse_task_t *task, void *data)
 		D__GOTO(out, rc);
 	}
 
-	args = daos_task_get_args(DAOS_OPC_OBJ_LIST_DKEY, task);
 
 	/** track the highest dkey from the ones currently enumerated */
 	for (ptr = props->buf, i = 0; i < props->nr; i++) {
@@ -1187,7 +1178,7 @@ get_array_size_cb(tse_task_t *task, void *data)
 	tse_task_t *io_task = NULL;
 	struct list_recxs_params *params = NULL;
 	daos_key_t *dkey, *akey;
-	daos_obj_list_recx_t list_args;
+	daos_obj_list_recx_t *list_args;
 
 	D__ALLOC_PTR(params);
 	if (params == NULL) {
@@ -1207,27 +1198,28 @@ get_array_size_cb(tse_task_t *task, void *data)
 	params->block_size = array->block_size;
 	params->size = props->size;
 
-	list_args.oh = args->oh;
-	list_args.epoch = args->epoch;
-	list_args.dkey = dkey;
-	list_args.akey = akey;
-	list_args.type = DAOS_IOD_ARRAY;
-	list_args.size = &params->cell_size;
-	list_args.nr = &params->nr;
-	list_args.recxs = &params->recx;
-	list_args.eprs = NULL;
-	list_args.cookies = NULL;
-	list_args.incr_order = false;
-	memset(&params->anchor, 0, sizeof(params->anchor));
-	list_args.anchor = &params->anchor;
-	list_args.versions = NULL;
-
 	rc = daos_task_create(DAOS_OPC_OBJ_LIST_RECX, tse_task2sched(task),
-			      &list_args, 0, NULL, &io_task);
+			      0, NULL, &io_task);
 	if (rc != 0) {
 		D__ERROR("punch recs failed (%d)\n", rc);
 		D__GOTO(out, rc);
 	}
+
+	list_args = daos_task_get_args(io_task);
+	list_args->oh		= args->oh;
+	list_args->epoch	= args->epoch;
+	list_args->dkey		= dkey;
+	list_args->akey		= akey;
+	list_args->type		= DAOS_IOD_ARRAY;
+	list_args->size		= &params->cell_size;
+	list_args->nr		= &params->nr;
+	list_args->recxs	= &params->recx;
+	list_args->eprs		= NULL;
+	list_args->cookies	= NULL;
+	list_args->incr_order	= false;
+	list_args->versions	= NULL;
+	list_args->anchor	= &params->anchor;
+	memset(&params->anchor, 0, sizeof(params->anchor));
 
 	rc = tse_task_register_comp_cb(io_task, list_recxs_cb, &params,
 				       sizeof(params));
@@ -1251,16 +1243,13 @@ out:
 int
 dac_array_get_size(tse_task_t *task)
 {
-	daos_array_get_size_t	*args;
-	daos_handle_t		oh;
+	daos_array_get_size_t	*args = daos_task_get_args(task);
 	struct dac_array	*array;
-	daos_obj_list_dkey_t	enum_args;
+	daos_obj_list_dkey_t	*enum_args;
 	struct get_size_props	*get_size_props = NULL;
 	tse_task_t		*enum_task;
+	daos_handle_t		oh;
 	int			rc;
-
-	args = daos_task_get_args(DAOS_OPC_ARRAY_GET_SIZE, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	array = array_hdl2ptr(args->oh);
 	if (array == NULL)
@@ -1288,17 +1277,18 @@ dac_array_get_size(tse_task_t *task)
 	daos_iov_set(&get_size_props->sgl.sg_iovs[0], get_size_props->buf,
 		     ENUM_DESC_BUF);
 
-	enum_args.oh = oh;
-	enum_args.epoch = args->epoch;
-	enum_args.nr = &get_size_props->nr;
-	enum_args.kds = get_size_props->kds;
-	enum_args.sgl = &get_size_props->sgl;
-	enum_args.anchor = &get_size_props->anchor;
-
 	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task),
-			      &enum_args, 0, NULL, &enum_task);
+			      0, NULL, &enum_task);
 	if (rc != 0)
 		D__GOTO(err_task, rc);
+
+	enum_args	  = daos_task_get_args(enum_task);
+	enum_args->oh	  = oh;
+	enum_args->epoch  = args->epoch;
+	enum_args->nr	  = &get_size_props->nr;
+	enum_args->kds	  = get_size_props->kds;
+	enum_args->sgl	  = &get_size_props->sgl;
+	enum_args->anchor = &get_size_props->anchor;
 
 	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0, get_array_size_cb,
 				    &get_size_props, sizeof(get_size_props));
@@ -1364,15 +1354,13 @@ free_props_cb(tse_task_t *task, void *data)
 static int
 adjust_array_size_cb(tse_task_t *task, void *data)
 {
-	struct set_size_props *props = *((struct set_size_props **)data);
-	daos_obj_list_dkey_t *args;
-	char		*ptr;
-	tse_task_t	*io_task = NULL;
-	struct io_params *params = NULL;
-	uint32_t	j;
-	int		rc = task->dt_result;
-
-	args = daos_task_get_args(DAOS_OPC_OBJ_LIST_DKEY, task);
+	daos_obj_list_dkey_t	*args = daos_task_get_args(task);
+	struct set_size_props	*props = *((struct set_size_props **)data);
+	char			*ptr;
+	tse_task_t		*io_task = NULL;
+	struct io_params	*params = NULL;
+	uint32_t		j;
+	int			rc = task->dt_result;
 
 	if (props->size == 0)
 		props->update_dkey = false;
@@ -1396,8 +1384,8 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		D__ASSERT(ret == 1);
 
 		if (props->size == 0 || dkey_num > props->dkey_num) {
-			daos_obj_punch_key_t p_args;
-			daos_key_t *dkey;
+			daos_obj_punch_key_t *p_args;
+			daos_key_t	     *dkey;
 
 			/*
 			 * Punch the entire dkey since it's in a higher dkey
@@ -1417,23 +1405,23 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 				     strlen(params->dkey_str));
 
 			/** Punch this entire dkey */
-			memset(&p_args, 0, sizeof(p_args));
-			p_args.oh = args->oh;
-			p_args.epoch = args->epoch;
-			p_args.dkey = dkey;
-
 #ifdef ARRAY_DEBUG
 			printf("Punching Key %s\n", params->dkey_str);
 #endif
 
 			rc = daos_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS,
-					      tse_task2sched(task), &p_args, 0,
-					      NULL, &io_task);
+					      tse_task2sched(task), 0, NULL,
+					      &io_task);
 			if (rc != 0) {
 				D__ERROR("Punch dkey %s failed (%d)\n",
 					params->dkey_str, rc);
 				D__GOTO(err_out, rc);
 			}
+
+			p_args = daos_task_get_args(io_task);
+			p_args->oh	= args->oh;
+			p_args->epoch	= args->epoch;
+			p_args->dkey	= dkey;
 
 			rc = tse_task_register_comp_cb(io_task,
 						       free_io_params_cb,
@@ -1452,7 +1440,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 				D__GOTO(err_out, rc);
 		} else if (dkey_num == props->dkey_num && props->record_i) {
 			/* punch all records above record_i */
-			daos_obj_update_t io_arg;
+			daos_obj_update_t *io_arg;
 			daos_iod_t	*iod;
 			daos_sg_list_t	*sgl;
 			daos_key_t	*dkey;
@@ -1495,21 +1483,21 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			iod->iod_recxs[0].rx_idx = props->record_i;
 			iod->iod_recxs[0].rx_nr = props->num_records;
 
-			io_arg.oh = args->oh;
-			io_arg.epoch = args->epoch;
-			io_arg.dkey = dkey;
-			io_arg.nr = 1;
-			io_arg.iods = iod;
-			io_arg.sgls = sgl;
-
 			rc = daos_task_create(DAOS_OPC_OBJ_UPDATE,
 					      tse_task2sched(task),
-					      &io_arg, 0, NULL,
-					      &io_task);
+					      0, NULL, &io_task);
 			if (rc != 0) {
 				D__ERROR("punch recs failed (%d)\n", rc);
 				D__GOTO(err_out, rc);
 			}
+
+			io_arg = daos_task_get_args(io_task);
+			io_arg->oh	= args->oh;
+			io_arg->epoch	= args->epoch;
+			io_arg->dkey	= dkey;
+			io_arg->nr	= 1;
+			io_arg->iods	= iod;
+			io_arg->sgls	= sgl;
 
 			rc = tse_task_register_comp_cb(io_task,
 						       free_io_params_cb,
@@ -1551,7 +1539,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 
 	/** if array is smaller, write a record at the new size */
 	if (props->update_dkey) {
-		daos_obj_update_t io_arg;
+		daos_obj_update_t *io_arg;
 		daos_iod_t	*iod;
 		daos_sg_list_t	*sgl;
 		daos_key_t	*dkey;
@@ -1605,21 +1593,20 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		iod->iod_recxs[0].rx_idx = props->record_i;
 		iod->iod_recxs[0].rx_nr = 1;
 
-		io_arg.oh = args->oh;
-		io_arg.epoch = args->epoch;
-		io_arg.dkey = dkey;
-		io_arg.nr = 1;
-		io_arg.iods = iod;
-		io_arg.sgls = sgl;
-
-		rc = daos_task_create(DAOS_OPC_OBJ_UPDATE,
-				      tse_task2sched(task), &io_arg, 0, NULL,
-				      &io_task);
+		rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
+				      0, NULL, &io_task);
 		if (rc != 0) {
 			D__ERROR("KV Update of dkey %s failed (%d)\n",
 				params->dkey_str, rc);
 			D__GOTO(err_out, rc);
 		}
+		io_arg = daos_task_get_args(io_task);
+		io_arg->oh	= args->oh;
+		io_arg->epoch	= args->epoch;
+		io_arg->dkey	= dkey;
+		io_arg->nr	= 1;
+		io_arg->iods	= iod;
+		io_arg->sgls	= sgl;
 
 		rc = tse_task_register_comp_cb(io_task, free_io_params_cb,
 					       &params, sizeof(params));
@@ -1657,14 +1644,12 @@ dac_array_set_size(tse_task_t *task)
 	char			*dkey_str = NULL;
 	daos_size_t		num_records;
 	daos_off_t		record_i;
-	daos_obj_list_dkey_t	enum_args;
+	daos_obj_list_dkey_t	*enum_args;
 	struct set_size_props	*set_size_props = NULL;
 	tse_task_t		*enum_task;
 	int			rc, ret;
 
-	args = daos_task_get_args(DAOS_OPC_ARRAY_SET_SIZE, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
+	args = daos_task_get_args(task);
 	array = array_hdl2ptr(args->oh);
 	if (array == NULL)
 		D__GOTO(err_task, rc = -DER_NO_HDL);
@@ -1713,17 +1698,18 @@ dac_array_set_size(tse_task_t *task)
 	daos_iov_set(&set_size_props->sgl.sg_iovs[0], set_size_props->buf,
 		     ENUM_DESC_BUF);
 
-	enum_args.oh = oh;
-	enum_args.epoch = args->epoch;
-	enum_args.nr = &set_size_props->nr;
-	enum_args.kds = set_size_props->kds;
-	enum_args.sgl = &set_size_props->sgl;
-	enum_args.anchor = &set_size_props->anchor;
-
 	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task),
-			      &enum_args, 0, NULL, &enum_task);
+			      0, NULL, &enum_task);
 	if (rc != 0)
 		return rc;
+
+	enum_args = daos_task_get_args(enum_task);
+	enum_args->oh	  = oh;
+	enum_args->epoch  = args->epoch;
+	enum_args->nr	  = &set_size_props->nr;
+	enum_args->kds	  = set_size_props->kds;
+	enum_args->sgl	  = &set_size_props->sgl;
+	enum_args->anchor = &set_size_props->anchor;
 
 	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0,
 				   adjust_array_size_cb, &set_size_props,

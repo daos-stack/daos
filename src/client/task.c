@@ -36,72 +36,190 @@
 static struct daos_task_args *
 task_ptr2args(tse_task_t *task)
 {
-	return (struct daos_task_args *)tse_task2arg(task);
+	return tse_task_buf_embedded(task, sizeof(struct daos_task_args));
 }
 
-int
-daos_task_create(daos_opc_t opc, tse_sched_t *sched, void *op_args,
-		 unsigned int num_deps, tse_task_t *dep_tasks[],
-		 tse_task_t **taskp)
+static bool
+task_is_valid(tse_task_t *task)
 {
-	struct daos_task_args	*args;
-	tse_task_t		*task;
-	int			 rc;
+	return task_ptr2args(task)->ta_magic == DAOS_TASK_MAGIC;
+}
+
+/*
+ * Task completion CB to complete the high level event. This is used by the
+ * event APIs.
+ */
+static int
+task_comp_event(tse_task_t *task, void *data)
+{
+	D__ASSERT(task_is_valid(task));
+	daos_event_complete(task_ptr2args(task)->ta_ev, task->dt_result);
+	return 0;
+}
+
+/**
+ * Create a new task and associate it with the input event. If the event
+ * is NULL, the private event will be taken.
+ *
+ * NB: task created by this function can only be scheduled by calling
+ * dc_task_sched_ev(), otherwise the event will never be completed.
+ */
+int
+dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev,
+	       tse_task_t **taskp)
+{
+	struct daos_task_args *args;
+	tse_task_t	      *task;
+	int		       rc;
+
+	if (sched == NULL) {
+		if (ev == NULL) {
+			rc = daos_event_priv_get(&ev);
+			if (rc != 0)
+				return rc;
+		}
+		sched = daos_ev2sched(ev);
+	}
+
+	rc = tse_task_create(func, sched, NULL, &task);
+	if (rc)
+		return rc;
+
+	args = task_ptr2args(task);
+	args->ta_magic = DAOS_TASK_MAGIC;
+	if (ev) {
+		/** register a comp cb on the task to complete the event */
+		rc = tse_task_register_comp_cb(task, task_comp_event, NULL, 0);
+		if (rc != 0)
+			D__GOTO(failed, rc);
+		args->ta_ev = ev;
+	}
+
+	*taskp = task;
+	return 0;
+ failed:
+	tse_task_decref(task);
+	return rc;
+}
+
+/**
+ * Schedule \a task created by \a dc_task_create_ev(), if the associated event
+ * of \a task is the private event, this function will wait until completion
+ * of the task, otherwise it returns immediately and its completion will be
+ * found by testing event or polling on EQ.
+ *
+ * The task will be executed immediately if \a instant is true.
+ */
+int
+dc_task_schedule(tse_task_t *task, bool instant)
+{
+	daos_event_t *ev;
+	int	      rc;
+
+	D__ASSERT(task_is_valid(task));
+
+	ev = task_ptr2args(task)->ta_ev;
+	if (ev) {
+		rc = daos_event_launch(ev);
+		if (rc) {
+			tse_task_complete(task, rc);
+			/* error has been reported to event */
+			D__GOTO(out, rc = 0);
+		}
+	}
+
+	rc = tse_task_schedule(task, instant);
+	if (rc) {
+		tse_task_complete(task, rc);
+		D__GOTO(out, rc = 0); /* error has been reported to event */
+	}
+
+	D_EXIT;
+ out:
+	if (daos_event_is_priv(ev)) {
+		daos_event_priv_wait();
+		rc = ev->ev_error;
+	}
+	return rc;
+}
+
+void
+dc_task_list_sched(daos_list_t *head, bool instant)
+{
+	tse_task_t *task;
+
+	while (!daos_list_empty(head)) {
+		task = tse_task_list_first(head);
+		tse_task_list_del(task);
+		dc_task_schedule(task, instant);
+	}
+}
+
+void *
+dc_task_get_args(tse_task_t *task)
+{
+	D__ASSERT(task_is_valid(task));
+	return &task_ptr2args(task)->ta_u;
+}
+
+/***************************************************************************
+ * Task based interface for all DAOS API
+ *
+ * NB: event is not required anymore while using task based DAOS API.
+ ***************************************************************************/
+
+/**
+ * Create a new task for DAOS API
+ */
+int
+daos_task_create(daos_opc_t opc, tse_sched_t *sched, unsigned int num_deps,
+		 tse_task_t *dep_tasks[], tse_task_t **taskp)
+{
+	tse_task_t	*task;
+	int		 rc;
+
+	if (dep_tasks && num_deps == 0)
+		return -DER_INVAL;
+
+	if (!sched || !taskp)
+		return -DER_INVAL;
 
 	if (DAOS_OPC_INVALID >= opc || DAOS_OPC_MAX <= opc)
 		return -DER_NOSYS;
 
-	rc = tse_task_init(dc_funcs[opc].task_func, NULL, 0, sched, &task);
-	if (rc != 0)
+	D__ASSERT(dc_funcs[opc].task_func);
+	rc = dc_task_create(dc_funcs[opc].task_func, sched, NULL, &task);
+	if (rc)
 		return rc;
 
-	args = task_ptr2args(task);
-	args->opc = opc;
-	if (op_args) {
-		D__ASSERT(sizeof(args->op_args) >= dc_funcs[opc].arg_size);
-		memcpy(&args->op_args, op_args, dc_funcs[opc].arg_size);
+	if (dep_tasks) {
+		rc = dc_task_depend(task, num_deps, dep_tasks);
+		if (rc)
+			D__GOTO(failed, rc);
 	}
-
-	if (num_deps && dep_tasks)
-		rc = tse_task_register_deps(task, num_deps, dep_tasks);
-
-	if (rc == 0)
-		*taskp = task;
-
+	*taskp = task;
+	return 0;
+failed:
+	dc_task_decref(task);
 	return rc;
 }
 
 void *
-daos_task_get_args(daos_opc_t opc, tse_task_t *task)
+daos_task_get_args(tse_task_t *task)
 {
-	struct daos_task_args *task_arg;
-
-	task_arg = tse_task_buf_get(task, sizeof(*task_arg));
-
-	if (task_arg->opc != opc) {
-		D__DEBUG(DB_ANY, "OPC does not match task's OPC\n");
-		return NULL;
-	}
-
-	return &task_arg->op_args;
+	return dc_task_get_args(task);
 }
 
 void *
 daos_task_get_priv(tse_task_t *task)
 {
-	struct daos_task_args *task_arg;
-
-	task_arg = tse_task_buf_get(task, sizeof(*task_arg));
-	return task_arg->priv;
+	return dc_task_get_priv(task);
 }
 
-void
+void *
 daos_task_set_priv(tse_task_t *task, void *priv)
 {
-	struct daos_task_args *task_arg;
-
-	task_arg = tse_task_buf_get(task, sizeof(*task_arg));
-	task_arg->priv = priv;
+	return dc_task_set_priv(task, priv);
 }
 
 struct daos_progress_args_t {
@@ -123,6 +241,7 @@ sched_progress_cb(void *data)
 	return 0;
 }
 
+/** Progress all tasks attached on the scheduler */
 int
 daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty)
 {
@@ -143,138 +262,6 @@ daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty)
 	return rc;
 }
 
-/*****************************************************************************
- * Below are DAOS Client (DC) private API, they are built on top of public
- * DAOS task API
- ****************************************************************************/
-
-/*
- * Task completion CB to complete the high level event. This is used by the
- * event APIs.
- */
-static int
-task_comp_cb(tse_task_t *task, void *data)
-{
-	int	rc = task->dt_result;
-
-	daos_event_complete(task_ptr2args(task)->ta_ev, rc);
-	return rc;
-}
-
-/**
- * Deprecated function, create and schedule a task for DAOS API.
- * Please use dc_task_new() and dc_task_schedule() instead of this.
- */
-int
-dc_task_create(daos_opc_t opc, void *arg, int arg_size,
-	       tse_task_t **taskp, daos_event_t **evp)
-{
-	daos_event_t *ev = *evp;
-	tse_task_t *task = NULL;
-	int rc;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-		*evp = ev;
-	}
-
-	rc = daos_task_create(opc, daos_ev2sched(ev), arg, 0, NULL, &task);
-	if (rc != 0)
-		return rc;
-
-	/** register a comp cb on the task to complete the event */
-	rc = tse_task_register_comp_cb(task, task_comp_cb, NULL, 0);
-	if (rc != 0)
-		D__GOTO(err_task, rc);
-
-	task_ptr2args(task)->ta_ev = ev;
-	rc = daos_event_launch(ev);
-	if (rc != 0)
-		D__GOTO(err_task, rc);
-
-	rc = tse_task_schedule(task, true);
-	if (rc != 0)
-		return rc;
-
-	*taskp = task;
-
-	return rc;
-
-err_task:
-	D__FREE_PTR(task);
-	return rc;
-}
-
-/**
- * Create a new task and associate it with the input event. If the event
- * is NULL, the private event will be taken.
- */
-int
-dc_task_new(daos_opc_t opc, daos_event_t *ev, tse_task_t **taskp)
-{
-	tse_task_t *task;
-	int	    rc;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = daos_task_create(opc, daos_ev2sched(ev), NULL, 0, NULL, &task);
-	if (rc)
-		return rc;
-
-	/** register a comp cb on the task to complete the event */
-	rc = tse_task_register_comp_cb(task, task_comp_cb, NULL, 0);
-	if (rc != 0)
-		D__GOTO(failed, rc);
-
-	task_ptr2args(task)->ta_ev = ev;
-	*taskp = task;
-	return 0;
- failed:
-	tse_task_decref(task);
-	return rc;
-}
-
-/**
- * Schedule \a task, if the associated event of \a task is the private event,
- * this function will wait until the completion of the task, otherwise it
- * returns immediately.
- */
-int
-dc_task_schedule(tse_task_t *task)
-{
-	daos_event_t *ev = task_ptr2args(task)->ta_ev;
-	int	      rc;
-
-	rc = daos_event_launch(ev);
-	if (rc)
-		D__GOTO(out, rc);
-
-	rc = tse_task_schedule(task, true);
-	if (rc)
-		D__GOTO(out, rc);
-
-	D_EXIT;
- out:
-	if (rc) {
-		tse_task_complete(task, rc);
-		rc = 0; /* error has been reported via ev_error */
-	}
-
-	if (daos_event_is_priv(ev)) {
-		daos_event_priv_wait();
-		rc = ev->ev_error;
-	}
-	return rc;
-}
-
-/* XXX Functions below should be reviewed and cleaned up */
-
 /** Convert a task to CaRT context */
 crt_context_t *
 daos_task2ctx(tse_task_t *task)
@@ -283,50 +270,4 @@ daos_task2ctx(tse_task_t *task)
 
 	D__ASSERT(sched->ds_udata != NULL);
 	return (crt_context_t *)sched->ds_udata;
-}
-
-/**
- * The daos client internal will use tse_task, this function will
- * initialize the daos task/scheduler from event, and launch
- * event. This is a convenience function used in the event APIs.
- */
-int
-daos_client_task_prep(void *arg, int arg_size, tse_task_t **taskp,
-		      daos_event_t **evp)
-{
-	daos_event_t *ev = *evp;
-	tse_task_t *task = NULL;
-	int rc;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-		*evp = ev;
-	}
-
-	rc = tse_task_init(NULL, arg, arg_size, daos_ev2sched(ev), &task);
-	if (rc != 0)
-		return rc;
-
-	rc = tse_task_register_comp_cb(task, task_comp_cb, &ev,
-				       sizeof(ev));
-	if (rc != 0)
-		D__GOTO(err_task, rc);
-
-	rc = daos_event_launch(ev);
-	if (rc != 0)
-		D__GOTO(err_task, rc);
-
-	rc = tse_task_schedule(task, false);
-	if (rc != 0)
-		return rc;
-
-	*taskp = task;
-
-	return rc;
-
-err_task:
-	D__FREE_PTR(task);
-	return rc;
 }

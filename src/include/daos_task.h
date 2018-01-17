@@ -98,7 +98,6 @@ typedef enum {
 	DAOS_OPC_OBJ_LIST_DKEY,
 	DAOS_OPC_OBJ_LIST_AKEY,
 	DAOS_OPC_OBJ_LIST_RECX,
-	DAOS_OPC_OBJ_SHARD_LIST_DKEY,
 
 	/** Array APIs */
 	DAOS_OPC_ARRAY_CREATE,
@@ -140,7 +139,7 @@ typedef struct {
 	const d_rank_list_t	*tgts;
 	const char		*dev;
 	daos_size_t		size;
-	d_rank_list_t	*svc;
+	d_rank_list_t		*svc;
 	unsigned char		*uuid;
 } daos_pool_create_t;
 
@@ -153,14 +152,14 @@ typedef struct {
 typedef struct {
 	const uuid_t		uuid;
 	const char		*grp;
-	d_rank_list_t	*tgts;
-	d_rank_list_t	*failed;
+	d_rank_list_t		*tgts;
+	d_rank_list_t		*failed;
 } daos_pool_extend_t;
 
 typedef struct {
 	const uuid_t		uuid;
 	const char		*grp;
-	d_rank_list_t	*svc;
+	d_rank_list_t		*svc;
 } daos_pool_evict_t;
 
 typedef struct {
@@ -185,7 +184,7 @@ typedef struct {
 
 typedef struct {
 	daos_handle_t		poh;
-	d_rank_list_t	*tgts;
+	d_rank_list_t		*tgts;
 	daos_pool_info_t	*info;
 } daos_pool_query_t;
 
@@ -508,21 +507,18 @@ typedef struct {
  * \param opc	[IN]	Operation Code to identify the daos op to associate with
  *			the task,
  * \param sched	[IN]	Scheduler / Engine this task will be added to.
- * \param nr	[IN]	Number of tasks this task depends on before it gets
+ * \param num_deps [IN]	Number of tasks this task depends on before it gets
  *			scheduled. No tasks can be in progress.
  * \param dep_tasks [IN]
  *			Array of tasks that new task will wait on completion
  *			before it's scheduled.
- * \param ready	[IN]	Indicate whether the DAOS op can be immediately called
- *			(true) or not (false). If set to true, dep_tasks must be
- *			NULL and user can't register prep callbacks anymore.
  * \param taskp	[OUT]	Pointer to task to be created/initalized with the op.
  *
  * \return		0 if task creation succeeds.
  *			negative errno if it fails.
  */
 int
-daos_task_create(daos_opc_t opc, tse_sched_t *sched, void *args,
+daos_task_create(daos_opc_t opc, tse_sched_t *sched,
 		 unsigned int num_deps, tse_task_t *dep_tasks[],
 		 tse_task_t **taskp);
 
@@ -532,14 +528,12 @@ daos_task_create(daos_opc_t opc, tse_sched_t *sched, void *args,
  * created or in its prepare cb. The task must be created with
  * daos_task_create() and a valid DAOS opc.
  *
- * \param opc	[IN]	OPC that was used to create the task with.
  * \param task	[IN]	Task to retrieve the struct from.
  *
  * \return		Success: Pointer to arguments for the DAOS task
- *			FAIL: NULL, likely because the opc did not match
  */
 void *
-daos_task_get_args(daos_opc_t opc, tse_task_t *task);
+daos_task_get_args(tse_task_t *task);
 
 /**
  * Return a pointer to the DAOS task private state. If no private state has
@@ -555,10 +549,12 @@ daos_task_get_priv(tse_task_t *task);
 /**
  * Set a pointer to the DAOS task private state.
  *
- * \param task	[IN,OUT]	Task to retrieve the private state from
- * \param priv	[IN]		Pointer to the private state
+ * \param task	[IN]	Task to retrieve the private state from
+ * \param priv	[IN]	Pointer to the private state
+ *
+ * \return		private state set by the previous call
  */
-void
+void *
 daos_task_set_priv(tse_task_t *task, void *priv);
 
 /**

@@ -29,8 +29,11 @@
 
 #include <daos_task.h>
 
+#define DAOS_TASK_MAGIC			0xbabeface
+
 struct daos_task_args {
-	daos_opc_t opc;
+	uint32_t			ta_magic;
+	uint32_t			ta_padding;
 	union {
 		daos_svc_rip_t		svc_rip;
 		daos_pool_create_t	pool_create;
@@ -85,9 +88,8 @@ struct daos_task_args {
 		daos_kv_remove_t	obj_remove;
 		daos_obj_multi_io_t	obj_fetch_multi;
 		daos_obj_multi_io_t	obj_update_multi;
-	} op_args;
+	}		 ta_u;
 	daos_event_t	*ta_ev;
-	void		*priv;
 };
 
 struct daos_task_api {

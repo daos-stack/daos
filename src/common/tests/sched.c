@@ -64,7 +64,7 @@ sched_test_1()
 		D__GOTO(out, rc);
 	}
 
-	rc = tse_task_init(NULL, NULL, 0, &sched, &task);
+	rc = tse_task_create(NULL, &sched, NULL, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D__GOTO(out, rc);
@@ -101,7 +101,7 @@ sched_test_1()
 		D__GOTO(out, rc);
 	}
 
-	rc = tse_task_init(NULL, NULL, 0, &sched, &task);
+	rc = tse_task_create(NULL, &sched, NULL, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D__GOTO(out, rc);
@@ -151,7 +151,7 @@ prep_assert_cb(tse_task_t *task, void *data)
 int
 verify_func(tse_task_t *task)
 {
-	int *verify_cnt = *((int **)tse_task2arg(task));
+	int *verify_cnt = tse_task_get_priv(task);
 
 	if (*verify_cnt != 2) {
 		printf("Failed verification of counter\n");
@@ -252,7 +252,7 @@ sched_test_2()
 	}
 
 	printf("Init task and complete it in prep callback with a failure\n");
-	rc = tse_task_init(assert_func, NULL, 0, &sched, &task);
+	rc = tse_task_create(assert_func, &sched, NULL, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D__GOTO(out, rc);
@@ -279,8 +279,7 @@ sched_test_2()
 	D__ALLOC_PTR(verify_cnt);
 	*verify_cnt = 0;
 
-	rc = tse_task_init(verify_func, &verify_cnt, sizeof(int *), &sched,
-			    &task);
+	rc = tse_task_create(verify_func, &sched, verify_cnt, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D__GOTO(out, rc);
@@ -354,7 +353,7 @@ comp_reinit_cb(tse_task_t *task, void *data)
 static int
 incr_count_func(tse_task_t *task)
 {
-	int *counter = *((int **)tse_task2arg(task));
+	int *counter = tse_task_get_priv(task);
 
 	*counter = *counter + 1;
 
@@ -392,8 +391,7 @@ sched_test_3()
 	*counter = 0;
 
 	printf("Init task and add comp cb to re-init it 3M times\n");
-	rc = tse_task_init(incr_count_func, &counter, sizeof(int *), &sched,
-			    &task);
+	rc = tse_task_create(incr_count_func, &sched, counter, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D__GOTO(out, rc);
@@ -429,7 +427,7 @@ out:
 int
 inc_reinit_func(tse_task_t *task)
 {
-	int *counter = *((int **)tse_task2arg(task));
+	int *counter = tse_task_get_priv(task);
 	int rc;
 
 	*counter = *counter + 1;
@@ -512,8 +510,7 @@ sched_test_4()
 	*counter = 0;
 
 	printf("Init task and add prep/comp cbs to re-init it\n");
-	rc = tse_task_init(inc_reinit_func, &counter, sizeof(int *), &sched,
-			    &task);
+	rc = tse_task_create(inc_reinit_func, &sched, counter, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D__GOTO(out, rc);
@@ -570,7 +567,7 @@ out:
 int
 inc_func(tse_task_t *task)
 {
-	int *counter = *((int **)tse_task2arg(task));
+	int *counter = tse_task_get_priv(task);
 
 	*counter = *counter + 1;
 
@@ -580,7 +577,7 @@ inc_func(tse_task_t *task)
 int
 check_func_n(tse_task_t *task)
 {
-	int *verify_cnt = *((int **)tse_task2arg(task));
+	int *verify_cnt = tse_task_get_priv(task);
 
 	if (*verify_cnt != NUM_DEPS) {
 		printf("Failed Task dependencies\n");
@@ -593,7 +590,7 @@ check_func_n(tse_task_t *task)
 int
 check_func_1(tse_task_t *task)
 {
-	int *verify_cnt = *((int **)tse_task2arg(task));
+	int *verify_cnt = tse_task_get_priv(task);
 
 	if (*verify_cnt != 1) {
 		printf("Failed Task dependencies\n");
@@ -626,16 +623,14 @@ sched_test_5()
 	*counter = 0;
 
 	printf("Test N -> 1 dependencies\n");
-	rc = tse_task_init(check_func_n, &counter, sizeof(int *), &sched,
-			    &task);
+	rc = tse_task_create(check_func_n, &sched, counter, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
 	for (i = 0; i < NUM_DEPS; i++) {
-		rc = tse_task_init(inc_func, &counter, sizeof(int *), &sched,
-				    &tasks[i]);
+		rc = tse_task_create(inc_func, &sched, counter, &tasks[i]);
 		if (rc != 0) {
 			printf("Failed to init task: %d\n", rc);
 			D__GOTO(out, rc);
@@ -681,7 +676,7 @@ sched_test_5()
 
 	*counter = 0;
 	printf("Test 1 -> N dependencies\n");
-	rc = tse_task_init(inc_func, &counter, sizeof(int *), &sched, &task);
+	rc = tse_task_create(inc_func, &sched, counter, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D__GOTO(out, rc);
@@ -689,8 +684,7 @@ sched_test_5()
 
 	printf("Init tasks with Dependecies\n");
 	for (i = 0; i < NUM_DEPS; i++) {
-		rc = tse_task_init(check_func_1, &counter, sizeof(int *),
-				    &sched, &tasks[i]);
+		rc = tse_task_create(check_func_1, &sched, counter, &tasks[i]);
 		if (rc != 0) {
 			printf("Failed to init task: %d\n", rc);
 			D__GOTO(out, rc);

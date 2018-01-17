@@ -33,26 +33,30 @@
 
 /**
  * tse_task is used to track single asynchronous operation.
- **/
-typedef struct {
+ * 256 bytes all together.
+ */
+#define TSE_TASK_SIZE		256
+/* 8 bytes for public members */
+#define TSE_PRIV_SIZE		248
+
+typedef struct tse_task {
 	int			dt_result;
+	/** padding bytes */
+	int			dt_pad32;
 	/* daos schedule internal */
 	struct {
-		uint64_t	dt_space[60];
+		char		dt_space[TSE_PRIV_SIZE];
 	}			dt_private;
 } tse_task_t;
 
 /**
  * Track all of the tasks under a scheduler.
- **/
+ */
 typedef struct {
 	int		ds_result;
 
 	/* user data associated with the scheduler (completion cb data, etc.) */
 	void		*ds_udata;
-
-	/* Linked to the executed list */
-	daos_list_t	ds_list;
 
 	/* daos schedule internal */
 	struct {
@@ -71,9 +75,6 @@ typedef int (*tse_task_cb_t)(tse_task_t *, void *arg);
 
 void *
 tse_task2arg(tse_task_t *task);
-
-void *
-tse_task2sp(tse_task_t *task);
 
 tse_sched_t *
 tse_task2sched(tse_task_t *task);
@@ -166,14 +167,11 @@ tse_sched_check_complete(tse_sched_t *sched);
  *
  * \param task_func [input]	the function to be executed when
  *                              the task is executed.
- * \param arg [input]		the task_func argument.
- * \param arg_size [input]	the task_func argument size.
- * \paran ready [input]		Indicate whether the func can be immediately
- *				called. If set to true, the func will be called
- *				and the task will be inserted in the running
- *				list of the scheduler.
  * \param sched [input]		daos scheduler where the daos
  *                              task will be attached to.
+ * \param priv [input]		private data passed into the task, user can
+ *				get it by calling \a tse_task_get_priv, or
+ *				rewrite by calling \a tse_task_set_priv.
  * \param taskp [output]	pointer to tse_task to be allocated and
  *				initialized. The task is freed internally when
  *				complete is called.
@@ -182,21 +180,23 @@ tse_sched_check_complete(tse_sched_t *sched);
  * \return			negative errno if it fails.
  */
 int
-tse_task_init(tse_task_func_t task_func, void *arg, int arg_size,
-	      tse_sched_t *sched, tse_task_t **taskp);
+tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
+		tse_task_t **taskp);
 
 /**
  * Add task to scheduler it was initialized with. If task body function should
- * be called immediately as part of this function, ready should be set to true;
- * otherwise if false task would be in the scheduler init list and progressed
- * when the scheduler is progressed.
+ * be called immediately as part of this function, \a instant should be set to
+ * true; otherwise if false task would be in the scheduler init list and
+ * progressed when the scheduler is progressed.
  *
  * \param task [input]		task to be scheduled.
- * \param ready [input]		flag to indicate whether task should be launched
+ * \param instant [input]	flag to indicate whether task should be
+ *				executed immediately.
  *
  * \return			0 if success negative errno if fail.
  */
-int tse_task_schedule(tse_task_t *task, bool ready);
+int
+tse_task_schedule(tse_task_t *task, bool instant);
 
 /**
  * register complete callback for the task.
@@ -257,10 +257,11 @@ tse_task_result_process(tse_task_t *task, tse_task_result_cb_t callback,
 			void *arg);
 
 /**
- * MSC - I think this can be deprecated. But not sure yet.
- * Get a buffer from task.
+ * Get embedded buffer of a task, user can use it to carry function parameters.
+ * Embedded buffer of task has size limit, this function will return NULL if
+ * \a buf_size is larger than the limit.
  *
- * Get a buffer from task internal buffer pool.
+ * User should use private data by tse_task_set_priv() to pass large parameter.
  *
  * \param task [in] task to get the buffer.
  * \param task [in] task buffer size.
@@ -268,7 +269,21 @@ tse_task_result_process(tse_task_t *task, tse_task_result_cb_t callback,
  * \return	pointer to the buffer.
  **/
 void *
-tse_task_buf_get(tse_task_t *task, int buf_size);
+tse_task_buf_embedded(tse_task_t *task, int buf_size);
+
+/**
+ * Return the private data of the task.
+ * Private data can be set while creating task, or by calling tse_task_set_priv.
+ */
+void *
+tse_task_get_priv(tse_task_t *task);
+
+/**
+ * Set or change the private data of the task. The original private data will
+ * be returned.
+ */
+void *
+tse_task_set_priv(tse_task_t *task, void *priv);
 
 /**
  * Register dependency tasks that will be required to be completed before the
@@ -333,4 +348,49 @@ tse_task_addref(tse_task_t *task);
 
 void
 tse_task_decref(tse_task_t *task);
-#endif
+
+/**
+ * Add a newly created task to a list. It returns error if the task is already
+ * running or completed.
+ */
+int
+tse_task_list_add(tse_task_t *task, daos_list_t *head);
+
+/**
+ * Remove the task from list head.
+ */
+void
+tse_task_list_del(tse_task_t *task);
+
+/**
+ * The first task linked on list \a head, it returns NULL
+ * if the list is empty.
+ */
+tse_task_t *
+tse_task_list_first(daos_list_t *head);
+
+/**
+ * Schedule all tasks attached on list \a head.
+ */
+void
+tse_task_list_sched(daos_list_t *head, bool instant);
+
+/**
+ * Abort all tasks attached on list \a head.
+ */
+void
+tse_task_list_abort(daos_list_t *head, int rc);
+
+/**
+ * All tasks attached on \a head depend on list \a task.
+ */
+int
+tse_task_list_depend(daos_list_t *head, tse_task_t *task);
+
+/**
+ * \a task depends on all tasks attached on list \a head
+ */
+int
+tse_task_depend_list(tse_task_t *task, daos_list_t *head);
+
+#endif /* __TSE_SCHEDULE_H__ */

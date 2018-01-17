@@ -33,42 +33,44 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 
+/* NB: tse_task_private is TSE_PRIV_SIZE = 248 bytes for now */
+#define TSE_TASK_ARG_LEN		128
+
 struct tse_task_private {
-	/* refcount of the task */
-	int			dtp_refcnt;
+	struct tse_sched_private	*dtp_sched;
 
 	/* function for the task */
-	tse_task_func_t		dtp_func;
-	void			*dtp_func_arg;
+	tse_task_func_t			 dtp_func;
 
 	/* links to scheduler */
-	daos_list_t		dtp_list;
+	daos_list_t			 dtp_list;
 
 	/* links to tasks which dependent on it */
-	daos_list_t		dtp_dep_list;
+	daos_list_t			 dtp_dep_list;
 
 	/* daos prepare task callback list */
-	daos_list_t		dtp_prep_cb_list;
+	daos_list_t			 dtp_prep_cb_list;
 
 	/* daos complete task callback list */
-	daos_list_t		dtp_comp_cb_list;
+	daos_list_t			 dtp_comp_cb_list;
 
 	/* daos complete task callback list */
-	daos_list_t		dtp_ret_list;
+	daos_list_t			 dtp_ret_list;
 
-	/* tse_task internal buffer */
-	struct {
-		/*
-		 * MSC - We should change that by making the arguments an
-		 * extension of the task struct allocated with the task.
-		 */
-		uint32_t	dtp_buf_space[50];
-	}			dtp_buf;
-
-	uint32_t		dtp_complete:1,
-				dtp_running:1;
-	int			dtp_dep_cnt;
-	struct tse_sched_private	*dtp_sched;
+	uint32_t			 dtp_complete:1,
+					 dtp_running:1,
+					 dtp_dep_cnt:30;
+	/* refcount of the task */
+	uint32_t			 dtp_refcnt;
+	/**
+	 * task parameter pointer, it can be assigned while creating task,
+	 * or explicitly call API tse_task_priv_set. User can just use
+	 * \a dtp_buf instead of this if parameter structure is enough to
+	 * fit in.
+	 */
+	void				*dtp_priv;
+	/** reserved buffer for user to assign embedded parameters */
+	char				 dtp_buf[TSE_TASK_ARG_LEN];
 };
 
 struct tse_task_cb {

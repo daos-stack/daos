@@ -1018,8 +1018,9 @@ dss_tse_progress_ult(void *arg)
 }
 
 static int
-generate_task_progress_ult(struct dss_module_info *dmi, unsigned int type)
+generate_task_progress_ult(unsigned int type)
 {
+	struct dss_module_info	*dmi = dss_get_module_info();
 	int rc;
 
 	if (dmi->dmi_tse_ult_created)
@@ -1040,18 +1041,15 @@ generate_task_progress_ult(struct dss_module_info *dmi, unsigned int type)
  * Call client side API on the server side asynchronously.
  */
 int
-dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size,
-	      unsigned int type)
+dss_task_run(tse_task_t *task, unsigned int type)
 {
-	tse_task_t		*task = NULL;
 	struct async_result	cb_arg;
 	ABT_future		future;
-	struct dss_module_info	*dmi = dss_get_module_info();
 	int			rc;
 	int			ret;
 
 	/* Generate the progress task */
-	rc = generate_task_progress_ult(dmi, type);
+	rc = generate_task_progress_ult(type);
 	if (rc)
 		return rc;
 
@@ -1060,22 +1058,16 @@ dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size,
 		return dss_abterr2der(rc);
 
 	cb_arg.future = &future;
-	cb_arg.result = 0;
-
-	rc = daos_task_create(opc, &dmi->dmi_sched, arg, 0, NULL, &task);
-	if (rc != 0)
-		D__GOTO(free_future, rc = -DER_NOMEM);
-
 	cb_arg.result = &ret;
-	rc = tse_task_register_comp_cb(task, dss_task_comp_cb, &cb_arg,
-				       sizeof(cb_arg));
+	rc = dc_task_reg_comp_cb(task, dss_task_comp_cb, &cb_arg,
+				 sizeof(cb_arg));
 	if (rc != 0) {
 		D__FREE_PTR(task);
 		D__GOTO(free_future, rc = -DER_NOMEM);
 	}
 
 	/* task will be freed inside scheduler */
-	rc = tse_task_schedule(task, true);
+	rc = dc_task_schedule(task, true);
 	if (rc != 0)
 		D__GOTO(free_future, rc = -DER_NOMEM);
 

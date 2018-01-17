@@ -37,43 +37,6 @@ struct xconn_arg {
 	daos_event_t	*evp;
 };
 
-static int
-tier_task_prep(void *arg, int arg_size, tse_task_t **taskp,
-	       daos_event_t **evp)
-{
-	daos_event_t	*ev = *evp;
-	tse_task_t	*task = NULL;
-	int rc;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = tse_task_init(NULL, arg, arg_size, daos_ev2sched(ev), &task);
-	if (rc != 0)
-		D__GOTO(err_task, rc = -DER_NOMEM);
-
-	rc = daos_event_launch(ev);
-	if (rc != 0)
-		D__GOTO(err_task, rc);
-
-	rc = tse_task_schedule(task, false);
-	if (rc != 0)
-		D__GOTO(err_task, rc);
-
-	*taskp = task;
-	*evp = ev;
-
-	return rc;
-
-err_task:
-	D__FREE_PTR(task);
-	return rc;
-}
-
-
 /*Task Callbacks for cascading and dependent RPCs*/
 static int cross_conn_cb(tse_task_t *task, void *data)
 {
@@ -104,7 +67,7 @@ local_tier_conn_cb(tse_task_t *task, void *data)
 	/*Grab Scheduler of the task*/
 	sched = tse_task2sched(task);
 
-	rc = tse_task_init(NULL, NULL, 0, sched, &cross_conn_task);
+	rc = tse_task_create(NULL, sched, NULL, &cross_conn_task);
 	if (rc != 0)
 		return -DER_NOMEM;
 
@@ -137,13 +100,13 @@ daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	tse_task_t	*task;
 	int		rc;
 
-	rc = daos_client_task_prep(NULL, 0, &task, &ev);
+	rc = dc_task_create(NULL, NULL, ev, &task);
 	if (rc != 0)
 		return rc;
 
+	/* XXX this is a hack and can't work anymore */
 	dc_tier_fetch_cont(poh, cont_id, fetch_ep, obj_list, task);
-
-	return daos_client_result_wait(ev);
+	return dc_task_schedule(task, true);
 }
 
 int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
@@ -155,7 +118,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	tse_task_t		*local_conn_task = NULL;
 	struct xconn_arg	*cb_arg;
 	daos_tier_info_t	*pt;
-	struct daos_task_args	*dta;
+	daos_pool_connect_t	*pc_args;
 
 
 	/*Note CB arg (on task complete) is freed implicitly by scheduler
@@ -174,7 +137,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	cb_arg->poh = poh;
 
 	/*Client prep, plus a manual callback register to  add our CB arg*/
-	rc = tier_task_prep(NULL, 0, &local_conn_task, &ev);
+	rc = dc_task_create(dc_pool_connect, NULL, ev, &local_conn_task);
 	if (rc) {
 		D__ERROR("Error in client task prep: %d\n", rc);
 		return rc;
@@ -195,25 +158,17 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	if (pt == NULL)
 		D__WARN("No client context, connectivity may be limited\n");
 
+	pc_args = dc_task_get_args(local_conn_task);
+	uuid_copy((unsigned char *)pc_args->uuid, uuid);
+	pc_args->grp	= grp;
+	pc_args->svc	= svc;
+	pc_args->flags	= flags;
+	pc_args->poh	= poh;
+	pc_args->info	= info;
 
-	dta = tse_task_buf_get(local_conn_task, sizeof(*dta));
-	dta->opc = DAOS_OPC_POOL_CONNECT;
-	uuid_copy((unsigned char *)dta->op_args.pool_connect.uuid, uuid);
-	dta->op_args.pool_connect.grp = grp;
-	dta->op_args.pool_connect.svc = svc;
-	dta->op_args.pool_connect.flags = flags;
-	dta->op_args.pool_connect.poh = poh;
-	dta->op_args.pool_connect.info = info;
-
-	rc = dc_pool_connect(local_conn_task);
-	if (rc) {
-		D__ERROR("Error from dc_pool_connect: %d\n", rc);
-		return rc;
-	}
-
-
-	/*Annnnd we wait if its a private event complete*/
-	rc = daos_client_result_wait(ev);
+	rc = dc_task_schedule(local_conn_task, true);
+	if (rc)
+		D__ERROR("Error to schedule connect task: %d\n", rc);
 
 	return rc;
 }
@@ -226,13 +181,16 @@ daos_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	int rc;
 	tse_task_t *trc_task;
 
-	rc = daos_client_task_prep(NULL, 0, &trc_task, &ev);
+	rc = dc_task_create(NULL, NULL, ev, &trc_task);
+	if (rc)
+		return rc;
 
+	/* XXX this is a hack and can't work anymore */
 	rc = dc_tier_register_cold(colder_id, colder_grp, tgt_grp, trc_task);
 	if (rc)
 		return rc;
 
-	return daos_client_result_wait(ev);
+	return dc_task_schedule(trc_task, true);
 }
 
 void
@@ -263,11 +221,11 @@ daos_tier_ping(uint32_t ping_val, daos_event_t *ev)
 	tse_task_t	*task;
 	int		rc;
 
-	rc = daos_client_task_prep(NULL, 0, &task, &ev);
+	rc = dc_task_create(NULL, NULL, ev, &task);
 	if (rc != 0)
 		return rc;
 
+	/* XXX this is a hack and can't work anymore */
 	dc_tier_ping(ping_val, task);
-
-	return daos_client_result_wait(ev);
+	return dc_task_schedule(task, true);
 }

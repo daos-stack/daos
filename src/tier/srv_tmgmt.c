@@ -236,17 +236,13 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	daos_event_t			upstream_ev;
 	daos_event_t			downstream_ev;
 	daos_event_t			this_ev;
-	daos_event_t			*upstream_evp = &upstream_ev;
-	daos_event_t			*downstream_evp = &downstream_ev;
-	daos_event_t			*this_evp = &this_ev;
 	int				rc = 0;
 	daos_handle_t			cross_conn_eqh;
 	bool				ev_flag;
 	tse_task_t			*downstream_task;
 	tse_task_t			*upstream_task;
 	tse_task_t			*this_task;
-	struct daos_task_args		*dta;
-
+	daos_pool_connect_t		*pc_args;
 
 	colder_svc.rl_ranks = colder_ranks;
 	colder_svc.rl_nr.num = MAX_RANKS;
@@ -315,28 +311,22 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	}
 
 	/*Initialize tasks affiliated with downstream event*/
-	rc = daos_client_task_prep(NULL, 0, &downstream_task, &downstream_evp);
-
+	rc = dc_task_create(dc_pool_connect, NULL, &downstream_ev,
+			    &downstream_task);
 	if (rc) {
 		D__ERROR("Client Task prep failure: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
-	dta = tse_task_buf_get(downstream_task, sizeof(*dta));
-	dta->opc = DAOS_OPC_POOL_CONNECT;
-	uuid_copy((unsigned char *)dta->op_args.pool_connect.uuid, colder_id);
-	dta->op_args.pool_connect.grp = colder_grp;
-	dta->op_args.pool_connect.svc = &colder_svc;
-	dta->op_args.pool_connect.flags = DAOS_PC_RW;
-	dta->op_args.pool_connect.poh = &colder_poh;
-	dta->op_args.pool_connect.info = &colder_pool_info;
+	pc_args = dc_task_get_args(downstream_task);
+	uuid_copy((unsigned char *)pc_args->uuid, colder_id);
+	pc_args->grp	= colder_grp;
+	pc_args->svc	= &colder_svc;
+	pc_args->flags	= DAOS_PC_RW;
+	pc_args->poh	= &colder_poh;
+	pc_args->info	= &colder_pool_info;
 
-	rc = dc_pool_connect(downstream_task);
-
-	if (rc) {
-		D__WARN("Downstream Tier Connection DC Call Failed: %d\n", rc);
-		D__GOTO(out, rc);
-	}
+	dc_task_schedule(downstream_task, true);
 
 	/*Currently a blocking wait, in future may need to change*/
 	rc = daos_event_test(&downstream_ev, DAOS_EQ_WAIT, &ev_flag);
@@ -357,30 +347,20 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 		colder_grp, DP_UUID(colder_id));
 
 	/*Now we do the work for the local connection*/
-
-	 rc = daos_client_task_prep(NULL, 0, &this_task, &this_evp);
-
+	 rc = dc_task_create(dc_pool_connect, NULL, &this_ev, &this_task);
 	if (rc) {
 		D__ERROR("Client Task prep failure: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
-	dta = tse_task_buf_get(this_task, sizeof(*dta));
-	dta->opc = DAOS_OPC_POOL_CONNECT;
-	uuid_copy((unsigned char *)dta->op_args.pool_connect.uuid,
-		  self_pool_id);
-	dta->op_args.pool_connect.grp = self_srv_grp;
-	dta->op_args.pool_connect.svc = &this_svc;
-	dta->op_args.pool_connect.flags = DAOS_PC_RW;
-	dta->op_args.pool_connect.poh = &this_poh;
-	dta->op_args.pool_connect.info = &this_pool_info;
-
-	rc = dc_pool_connect(this_task);
-
-	if (rc) {
-		D__WARN("Local Tier Connection DC Call Failed: %d\n", rc);
-		D__GOTO(out, rc);
-	}
+	pc_args = dc_task_get_args(this_task);
+	uuid_copy((unsigned char *)pc_args->uuid, self_pool_id);
+	pc_args->grp	= self_srv_grp;
+	pc_args->svc	= &this_svc;
+	pc_args->flags	= DAOS_PC_RW;
+	pc_args->poh	= &this_poh;
+	pc_args->info	= &this_pool_info;
+	dc_task_schedule(this_task, true);
 
 	/*Currently a blocking wait, in future may need to change*/
 	rc = daos_event_test(&this_ev, DAOS_EQ_WAIT, &ev_flag);
@@ -403,13 +383,13 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	/*End of local connection*/
 
 	/*Now we do the task for the upstream (cold to warm) connections*/
-	rc = daos_client_task_prep(NULL, 0, &upstream_task, &upstream_evp);
-
+	rc = dc_task_create(NULL, NULL, &upstream_ev, &upstream_task);
 	if (rc) {
 		D__ERROR("Client Task Prep Error for Upstream Task: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
+	/* XXX this is a hack and can't work anymore */
 	rc = tier_upstream(self_pool_id, self_srv_grp, colder_id,
 			 colder_grp, upstream_task);
 	/*Note, this may change as we might want more informative RC in future
@@ -427,7 +407,6 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	}
 
 	rc = upstream_ev.ev_error;
-
 	if (rc)
 		D__ERROR("Upstream Connection Error: %d\n", rc);
 	else
@@ -458,12 +437,11 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 	struct tier_upstream_out	*out = crt_reply_get(rpc);
 	int				rc;
 	daos_event_t			conn_ev;
-	daos_event_t			*conn_evp = &conn_ev;
 	daos_handle_t			upstream_eqh;
 	bool				ev_flag;
 	struct dc_pool			*pool;
 	tse_task_t			*upstream_task;
-	struct daos_task_args		*dta;
+	daos_pool_connect_t		*pc_args;
 
 	uuid_copy(warmer_id, in->ui_warm_id);
 	if (warmer_grp == NULL) {
@@ -502,30 +480,21 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 		D__GOTO(out, rc);
 	}
 
-	rc = daos_client_task_prep(NULL, 0, &upstream_task, &conn_evp);
-
+	rc = dc_task_create(dc_pool_connect, NULL, &conn_ev, &upstream_task);
 	if (rc) {
 		D__ERROR("Client Task Prep Error: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
-	dta = tse_task_buf_get(upstream_task, sizeof(*dta));
-	dta->opc = DAOS_OPC_POOL_CONNECT;
-	uuid_copy((unsigned char *)dta->op_args.pool_connect.uuid,
-		  in->ui_warm_id);
-	dta->op_args.pool_connect.grp = in->ui_warm_grp;
-	dta->op_args.pool_connect.svc = &warmer_svc;
-	dta->op_args.pool_connect.flags = DAOS_PC_RW;
-	dta->op_args.pool_connect.poh = &warmer_poh;
-	dta->op_args.pool_connect.info = &warmer_pool_info;
-
+	pc_args = dc_task_get_args(upstream_task);
+	uuid_copy((unsigned char *)pc_args->uuid, in->ui_warm_id);
+	pc_args->grp	= in->ui_warm_grp;
+	pc_args->svc	= &warmer_svc;
+	pc_args->flags	= DAOS_PC_RW;
+	pc_args->poh	= &warmer_poh;
+	pc_args->info	= &warmer_pool_info;
 	/*Connect warmer*/
-	rc = dc_pool_connect(upstream_task);
-	if (rc) {
-		D__ERROR("Error in dc_pool_connect: %d\n", rc);
-		D__GOTO(out, rc);
-	}
-
+	dc_task_schedule(upstream_task, true);
 
 	rc = daos_event_test(&conn_ev, DAOS_EQ_WAIT, &ev_flag);
 	if (rc) {
@@ -554,7 +523,6 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 	rc = poh_bcast(rpc->cr_ctx, in->ui_cold_id, WARMER, warmer_poh);
 	if (rc)
 		D__ERROR("Cold Handle Broadcast Error: %d\n", rc);
-
 
 out:
 	out->uo_ret = rc;

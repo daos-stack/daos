@@ -54,9 +54,7 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	struct mgmt_svc_rip_in	*rip_in;
 	int			 rc;
 
-	args = daos_task_get_args(DAOS_OPC_SVC_RIP, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
+	args = dc_task_get_args(task);
 	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
 	if (rc != 0)
 		return rc;
@@ -105,9 +103,7 @@ dc_mgmt_params_set(tse_task_t *task)
 	crt_opcode_t			opc;
 	int				rc;
 
-	args = daos_task_get_args(DAOS_OPC_PARAMS_SET, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
+	args = dc_task_get_args(task);
 	rc = daos_group_attach(args->grp, &ep.ep_grp);
 	if (rc != 0)
 		return rc;

@@ -38,18 +38,23 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		  daos_size_t cell_size, daos_size_t block_size,
 		  daos_handle_t *oh, daos_event_t *ev)
 {
-	daos_array_create_t	args;
+	daos_array_create_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	args.coh	= coh;
-	args.oid	= oid;
-	args.epoch	= epoch;
-	args.cell_size	= cell_size;
-	args.block_size	= block_size;
-	args.oh		= oh;
+	rc = dc_task_create(dac_array_create, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_ARRAY_CREATE, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->coh	 = coh;
+	args->oid	 = oid;
+	args->epoch	 = epoch;
+	args->cell_size	 = cell_size;
+	args->block_size = block_size;
+	args->oh	 = oh;
+
+	return dc_task_schedule(task, true);
 }
 
 int
@@ -57,34 +62,44 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		unsigned int mode, daos_size_t *cell_size,
 		daos_size_t *block_size, daos_handle_t *oh, daos_event_t *ev)
 {
-	daos_array_open_t	args;
+	daos_array_open_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	*cell_size = 0;
-	*block_size = 0;
+	rc = dc_task_create(dac_array_open, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	args.coh	= coh;
-	args.oid	= oid;
-	args.epoch	= epoch;
-	args.mode	= mode;
-	args.cell_size	= cell_size;
-	args.block_size	= block_size;
-	args.oh		= oh;
+	*cell_size	 = 0;
+	*block_size	 = 0;
 
-	dc_task_create(DAOS_OPC_ARRAY_OPEN, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->coh	 = coh;
+	args->oid	 = oid;
+	args->epoch	 = epoch;
+	args->mode	 = mode;
+	args->cell_size	 = cell_size;
+	args->block_size = block_size;
+	args->oh	 = oh;
+
+	return dc_task_schedule(task, true);
 }
 
 int
 daos_array_close(daos_handle_t oh, daos_event_t *ev)
 {
-	daos_array_close_t	args;
+	daos_array_close_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	args.oh         = oh;
+	rc = dc_task_create(dac_array_close, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_ARRAY_CLOSE, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->oh = oh;
+
+	return dc_task_schedule(task, true);
 }
 
 int
@@ -92,17 +107,22 @@ daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
 		daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
 		daos_csum_buf_t *csums, daos_event_t *ev)
 {
-	daos_array_io_t	args;
+	daos_array_io_t	*args;
 	tse_task_t	*task;
+	int		 rc;
 
-	args.oh		= oh;
-	args.epoch	= epoch;
-	args.ranges	= ranges;
-	args.sgl	= sgl;
-	args.csums	= csums;
+	rc = dc_task_create(dac_array_read, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_ARRAY_READ, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->epoch	= epoch;
+	args->ranges	= ranges;
+	args->sgl	= sgl;
+	args->csums	= csums;
+
+	return dc_task_schedule(task, true);
 }
 
 int
@@ -110,47 +130,60 @@ daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
 		 daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
 		 daos_csum_buf_t *csums, daos_event_t *ev)
 {
-	daos_array_io_t	args;
+	daos_array_io_t	*args;
 	tse_task_t	*task;
+	int		 rc;
 
-	args.oh		= oh;
-	args.epoch	= epoch;
-	args.ranges	= ranges;
-	args.sgl	= sgl;
-	args.csums	= csums;
+	rc = dc_task_create(dac_array_write, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_ARRAY_WRITE, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->epoch	= epoch;
+	args->ranges	= ranges;
+	args->sgl	= sgl;
+	args->csums	= csums;
+
+	return dc_task_schedule(task, true);
 }
 
 int
 daos_array_get_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t *size,
 		    daos_event_t *ev)
 {
-	daos_array_get_size_t	args;
+	daos_array_get_size_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	args.oh		= oh;
-	args.epoch	= epoch;
-	args.size	= size;
+	rc = dc_task_create(dac_array_get_size, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_ARRAY_GET_SIZE, &args, sizeof(args), &task,
-		       &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->epoch	= epoch;
+	args->size	= size;
+
+	return dc_task_schedule(task, true);
 } /* end daos_array_get_size */
 
 int
 daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
 		    daos_event_t *ev)
 {
-	daos_array_set_size_t	args;
+	daos_array_set_size_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	args.oh		= oh;
-	args.epoch	= epoch;
-	args.size	= size;
+	rc = dc_task_create(dac_array_set_size, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_ARRAY_SET_SIZE, &args, sizeof(args), &task,
-		       &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->epoch	= epoch;
+	args->size	= size;
+
+	return dc_task_schedule(task, true);
 } /* end daos_array_set_size */

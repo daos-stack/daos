@@ -33,35 +33,43 @@ int
 daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
 		  daos_event_t *ev)
 {
-	daos_svc_rip_t		args;
+	daos_svc_rip_t		*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	DAOS_API_ARG_ASSERT(args, SVC_RIP);
+	DAOS_API_ARG_ASSERT(*args, SVC_RIP);
+	rc = dc_task_create(dc_mgmt_svc_rip, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	args.grp = grp;
-	args.rank = rank;
-	args.force = force;
+	args = dc_task_get_args(task);
+	args->grp	= grp;
+	args->rank	= rank;
+	args->force	= force;
 
-	dc_task_create(DAOS_OPC_SVC_RIP, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	return dc_task_schedule(task, true);
 }
 
 int
 daos_mgmt_params_set(const char *grp, d_rank_t rank, unsigned int key_id,
 		     uint64_t value, daos_event_t *ev)
 {
-	daos_params_set_t	args;
+	daos_params_set_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	DAOS_API_ARG_ASSERT(args, PARAMS_SET);
+	DAOS_API_ARG_ASSERT(*args, PARAMS_SET);
+	rc = dc_task_create(dc_mgmt_params_set, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	args.grp = grp;
-	args.rank = rank;
-	args.key_id = key_id;
-	args.value = value;
+	args = dc_task_get_args(task);
+	args->grp	= grp;
+	args->rank	= rank;
+	args->key_id	= key_id;
+	args->value	= value;
 
-	dc_task_create(DAOS_OPC_PARAMS_SET, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	return dc_task_schedule(task, true);
 }
 
 int
@@ -70,57 +78,69 @@ daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 		 daos_size_t size, d_rank_list_t *svc, uuid_t uuid,
 		 daos_event_t *ev)
 {
-	daos_pool_create_t	args;
+	daos_pool_create_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	DAOS_API_ARG_ASSERT(args, POOL_CREATE);
+	DAOS_API_ARG_ASSERT(*args, POOL_CREATE);
+	rc = dc_task_create(dc_pool_create, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	args.mode = mode;
-	args.uid = uid;
-	args.gid = gid;
-	args.grp = grp;
-	args.tgts = tgts;
-	args.dev = dev;
-	args.size = size;
-	args.svc = svc;
-	args.uuid = uuid;
+	args = dc_task_get_args(task);
+	args->mode	= mode;
+	args->uid	= uid;
+	args->gid	= gid;
+	args->grp	= grp;
+	args->tgts	= tgts;
+	args->dev	= dev;
+	args->size	= size;
+	args->svc	= svc;
+	args->uuid	= uuid;
 
-	dc_task_create(DAOS_OPC_POOL_CREATE, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	return dc_task_schedule(task, true);
 }
 
 int
 daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 		  daos_event_t *ev)
 {
-	daos_pool_destroy_t	args;
+	daos_pool_destroy_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	DAOS_API_ARG_ASSERT(args, POOL_DESTROY);
+	DAOS_API_ARG_ASSERT(*args, POOL_DESTROY);
+	rc = dc_task_create(dc_pool_destroy, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	args.grp = grp;
-	args.force = force;
-	uuid_copy((unsigned char *)args.uuid, uuid);
+	args = dc_task_get_args(task);
+	args->grp	= grp;
+	args->force	= force;
+	uuid_copy((unsigned char *)args->uuid, uuid);
 
-	dc_task_create(DAOS_OPC_POOL_DESTROY, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	return dc_task_schedule(task, true);
 }
 
 int
 daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 		daos_event_t *ev)
 {
-	daos_pool_evict_t	args;
+	daos_pool_evict_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	DAOS_API_ARG_ASSERT(args, POOL_EVICT);
+	DAOS_API_ARG_ASSERT(*args, POOL_EVICT);
+	rc = dc_task_create(dc_pool_evict, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	args.grp = grp;
-	args.svc = (d_rank_list_t *)svc;
-	uuid_copy((unsigned char *)args.uuid, uuid);
+	args = dc_task_get_args(task);
+	args->grp	= grp;
+	args->svc	= (d_rank_list_t *)svc;
+	uuid_copy((unsigned char *)args->uuid, uuid);
 
-	dc_task_create(DAOS_OPC_POOL_EVICT, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	return dc_task_schedule(task, true);
 }
 
 int
@@ -128,16 +148,21 @@ daos_pool_tgt_add(const uuid_t uuid, const char *grp,
 		  const d_rank_list_t *svc, d_rank_list_t *tgts,
 		  daos_event_t *ev)
 {
-	daos_pool_update_t	args;
+	daos_pool_update_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	uuid_copy((void *)args.uuid, uuid);
-	args.grp = grp;
-	args.svc = (d_rank_list_t *)svc;
-	args.tgts = tgts;
+	rc = dc_task_create(dc_pool_add, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_POOL_ADD, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->grp	= grp;
+	args->svc	= (d_rank_list_t *)svc;
+	args->tgts	= tgts;
+	uuid_copy((unsigned char *)args->uuid, uuid);
+
+	return dc_task_schedule(task, true);
 }
 
 int
@@ -145,17 +170,21 @@ daos_pool_exclude_out(const uuid_t uuid, const char *grp,
 		      const d_rank_list_t *svc, d_rank_list_t *tgts,
 		      daos_event_t *ev)
 {
-	daos_pool_update_t	args;
+	daos_pool_update_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	uuid_copy((void *)args.uuid, uuid);
-	args.grp = grp;
-	args.svc = (d_rank_list_t *)svc;
-	args.tgts = tgts;
+	rc = dc_task_create(dc_pool_exclude_out, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_POOL_EXCLUDE_OUT, &args, sizeof(args), &task,
-		       &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->grp	= grp;
+	args->svc	= (d_rank_list_t *)svc;
+	args->tgts	= tgts;
+	uuid_copy((unsigned char *)args->uuid, uuid);
+
+	return dc_task_schedule(task, true);
 }
 
 int
@@ -163,18 +192,23 @@ daos_pool_exclude(const uuid_t uuid, const char *grp,
 		  const d_rank_list_t *svc, d_rank_list_t *tgts,
 		  daos_event_t *ev)
 {
-	daos_pool_update_t	args;
+	daos_pool_update_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	DAOS_API_ARG_ASSERT(args, POOL_EXCLUDE);
+	DAOS_API_ARG_ASSERT(*args, POOL_EXCLUDE);
 
-	uuid_copy((void *)args.uuid, uuid);
-	args.grp = grp;
-	args.svc = (d_rank_list_t *)svc;
-	args.tgts = tgts;
+	rc = dc_task_create(dc_pool_exclude, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_POOL_EXCLUDE, &args, sizeof(args), &task, &ev);
-	return daos_client_result_wait(ev);
+	args = dc_task_get_args(task);
+	args->grp	= grp;
+	args->svc	= (d_rank_list_t *)svc;
+	args->tgts	= tgts;
+	uuid_copy((unsigned char *)args->uuid, uuid);
+
+	return dc_task_schedule(task, true);
 }
 
 int

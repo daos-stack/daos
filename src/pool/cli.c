@@ -306,7 +306,7 @@ static int
 pool_connect_cp(tse_task_t *task, void *data)
 {
 	struct pool_connect_arg *arg = (struct pool_connect_arg *)data;
-	struct dc_pool		*pool = daos_task_get_priv(task);
+	struct dc_pool		*pool = dc_task_get_priv(task);
 	daos_pool_info_t	*info = arg->pca_info;
 	struct pool_buf		*map_buf = arg->pca_map_buf;
 	struct pool_connect_in	*pci = crt_req_get(arg->rpc);
@@ -461,9 +461,8 @@ dc_pool_connect(tse_task_t *task)
 	struct pool_connect_arg	 con_args;
 	int			 rc;
 
-	args = daos_task_get_args(DAOS_OPC_POOL_CONNECT, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-	pool = daos_task_get_priv(task);
+	args = dc_task_get_args(task);
+	pool = dc_task_get_priv(task);
 
 	if (pool == NULL) {
 		if (uuid_is_null(args->uuid) || args->svc == NULL ||
@@ -607,8 +606,7 @@ dc_pool_disconnect(tse_task_t *task)
 	struct pool_disconnect_arg	 disc_args;
 	int				 rc = 0;
 
-	args = daos_task_get_args(DAOS_OPC_POOL_DISCONNECT, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	args = dc_task_get_args(task);
 
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
@@ -956,7 +954,7 @@ struct pool_update_state {
 static int
 pool_tgt_update_cp(tse_task_t *task, void *data)
 {
-	struct pool_update_state	*state = daos_task_get_priv(task);
+	struct pool_update_state	*state = dc_task_get_priv(task);
 	crt_rpc_t			*rpc = *((crt_rpc_t **)data);
 	struct pool_tgt_update_in	*in = crt_req_get(rpc);
 	struct pool_tgt_update_out	*out = crt_reply_get(rpc);
@@ -1008,7 +1006,7 @@ static int
 dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 			int opc)
 {
-	struct pool_update_state	*state = daos_task_get_priv(task);
+	struct pool_update_state	*state = dc_task_get_priv(task);
 	crt_endpoint_t			 ep;
 	crt_rpc_t			*rpc;
 	struct pool_tgt_update_in	*in;
@@ -1084,8 +1082,7 @@ dc_pool_exclude(tse_task_t *task)
 {
 	daos_pool_update_t *args;
 
-	args = daos_task_get_args(DAOS_OPC_POOL_EXCLUDE, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	args = dc_task_get_args(task);
 
 	return dc_pool_update_internal(task, args, POOL_EXCLUDE);
 }
@@ -1095,8 +1092,7 @@ dc_pool_add(tse_task_t *task)
 {
 	daos_pool_update_t *args;
 
-	args = daos_task_get_args(DAOS_OPC_POOL_ADD, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	args = dc_task_get_args(task);
 
 	return dc_pool_update_internal(task, args, POOL_ADD);
 }
@@ -1106,8 +1102,7 @@ dc_pool_exclude_out(tse_task_t *task)
 {
 	daos_pool_update_t *args;
 
-	args = daos_task_get_args(DAOS_OPC_POOL_EXCLUDE_OUT, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	args = dc_task_get_args(task);
 
 	return dc_pool_update_internal(task, args, POOL_EXCLUDE_OUT);
 }
@@ -1190,8 +1185,7 @@ dc_pool_query(tse_task_t *task)
 	struct pool_query_arg		query_args;
 	int				rc;
 
-	args = daos_task_get_args(DAOS_OPC_POOL_QUERY, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	args = dc_task_get_args(task);
 
 	D__ASSERT(args->tgts == NULL); /* TODO */
 
@@ -1263,7 +1257,7 @@ struct pool_evict_state {
 static int
 pool_evict_cp(tse_task_t *task, void *data)
 {
-	struct pool_evict_state	*state = daos_task_get_priv(task);
+	struct pool_evict_state	*state = dc_task_get_priv(task);
 	crt_rpc_t		*rpc = *((crt_rpc_t **)data);
 	struct pool_evict_in	*in = crt_req_get(rpc);
 	struct pool_evict_out	*out = crt_reply_get(rpc);
@@ -1316,9 +1310,8 @@ dc_pool_evict(tse_task_t *task)
 	struct pool_evict_in	*in;
 	int			 rc;
 
-	args = daos_task_get_args(DAOS_OPC_POOL_EVICT, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-	state = daos_task_get_priv(task);
+	args = dc_task_get_args(task);
+	state = dc_task_get_priv(task);
 
 	if (state == NULL) {
 		if (uuid_is_null(args->uuid) || args->svc->rl_nr.num == 0)
@@ -1461,9 +1454,7 @@ dc_pool_svc_stop(tse_task_t *task)
 	struct pool_svc_stop_arg	stop_args;
 	int				rc;
 
-	args = daos_task_get_args(DAOS_OPC_POOL_SVC_STOP, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
+	args = dc_task_get_args(task);
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
 		D__GOTO(out_task, rc = -DER_NO_HDL);

@@ -110,7 +110,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	tse_task_t		*cont_open_task;
 	struct tier_fetch_co_cr_arg co_args;
 	int			*prc;
-	struct daos_task_args   *dta;
+	daos_cont_open_t	*cont_args;
 
 	D__DEBUG(DF_MISC, "Entering tier_fetch_cont()\n");
 
@@ -128,26 +128,23 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	sched = tse_task2sched(task);
 	co_args.prc = prc;
 	*prc = 1;
-	rc = tse_task_init(dc_cont_create, NULL, 0, sched, &cont_open_task);
+	rc = dc_task_create(dc_cont_create, sched, NULL, &cont_open_task);
 	if (rc != 0)
 		return rc;
 
-	rc = tse_task_register_comp_cb(cont_open_task,
-				       tier_fetch_cont_create_cb,
-				       &co_args, sizeof(co_args));
+	rc = dc_task_reg_comp_cb(cont_open_task, tier_fetch_cont_create_cb,
+				 &co_args, sizeof(co_args));
 	if (rc != 0) {
 		D__ERROR("tse_task_register_comp_cb returned %d\n", rc);
 		return rc;
 	}
-	dta = tse_task_buf_get(cont_open_task, sizeof(*dta));
-	dta->opc = DAOS_OPC_CONT_CREATE;
-	dta->priv = NULL;
 
-	dta->op_args.cont_create.poh = poh;
-	uuid_copy((unsigned char *)dta->op_args.cont_create.uuid, cont_id);
+	cont_args = dc_task_get_args(cont_open_task);
+	cont_args->poh = poh;
+	uuid_copy((unsigned char *)cont_args->uuid, cont_id);
 
 	/* Create the local recipient container */
-	rc = tse_task_schedule(cont_open_task, true);
+	rc = dc_task_schedule(cont_open_task, true);
 	if (rc) {
 		D__ERROR(" create local container: %d\n", rc);
 		D__GOTO(out, rc);

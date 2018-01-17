@@ -133,9 +133,7 @@ dc_cont_create(tse_task_t *task)
 	struct cont_args	arg;
 	int			rc;
 
-	args = daos_task_get_args(DAOS_OPC_CONT_CREATE, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
+	args = dc_task_get_args(task);
 	if (uuid_is_null(args->uuid))
 		D__GOTO(err_task, rc = -DER_INVAL);
 
@@ -229,8 +227,7 @@ dc_cont_destroy(tse_task_t *task)
 	struct cont_args	 arg;
 	int			 rc;
 
-	args = daos_task_get_args(DAOS_OPC_CONT_DESTROY, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	args = dc_task_get_args(task);
 
 	/* TODO: Implement "force". */
 	D__ASSERT(args->force != 0);
@@ -482,9 +479,8 @@ dc_cont_open(tse_task_t *task)
 	struct cont_open_args	 arg;
 	int			 rc;
 
-	args = daos_task_get_args(DAOS_OPC_CONT_OPEN, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-	cont = daos_task_get_priv(task);
+	args = dc_task_get_args(task);
+	cont = dc_task_get_priv(task);
 
 	if (uuid_is_null(args->uuid) || args->coh == NULL)
 		D__GOTO(err, rc = -DER_INVAL);
@@ -502,7 +498,7 @@ dc_cont_open(tse_task_t *task)
 			D__GOTO(err_pool, rc = -DER_NOMEM);
 		uuid_generate(cont->dc_cont_hdl);
 		cont->dc_capas = args->flags;
-		daos_task_set_priv(task, cont);
+		dc_task_set_priv(task, cont);
 	}
 
 	D__DEBUG(DF_DSMC, DF_CONT": opening: hdl="DF_UUIDF" flags=%x\n",
@@ -626,7 +622,7 @@ dc_cont_close(tse_task_t *task)
 	struct cont_close_args  arg;
 	int			rc;
 
-	args = daos_task_get_args(DAOS_OPC_CONT_CLOSE, task);
+	args = dc_task_get_args(task);
 	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 	coh = args->coh;
 
@@ -781,7 +777,7 @@ dc_cont_query(tse_task_t *task)
 	struct cont_query_args	 arg;
 	int			 rc;
 
-	args = daos_task_get_args(DAOS_OPC_CONT_QUERY, task);
+	args = dc_task_get_args(task);
 	D__ASSERTF(args != NULL, "Task Argumetn OPC does not match DC OPC\n");
 
 	if (args->info == NULL)
@@ -1227,7 +1223,7 @@ dc_epoch_query(tse_task_t *task)
 {
 	daos_epoch_query_t *args;
 
-	args = daos_task_get_args(DAOS_OPC_EPOCH_QUERY, task);
+	args = dc_task_get_args(task);
 	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return epoch_op(args->coh, CONT_EPOCH_QUERY, NULL, args->state, task);
@@ -1238,7 +1234,7 @@ dc_epoch_hold(tse_task_t *task)
 {
 	daos_epoch_hold_t *args;
 
-	args = daos_task_get_args(DAOS_OPC_EPOCH_HOLD, task);
+	args = dc_task_get_args(task);
 	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return epoch_op(args->coh, CONT_EPOCH_HOLD, args->epoch, args->state,
@@ -1250,7 +1246,7 @@ dc_epoch_slip(tse_task_t *task)
 {
 	daos_epoch_slip_t *args;
 
-	args = daos_task_get_args(DAOS_OPC_EPOCH_SLIP, task);
+	args = dc_task_get_args(task);
 	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return epoch_op(args->coh, CONT_EPOCH_SLIP, &args->epoch, args->state,
@@ -1262,7 +1258,7 @@ dc_epoch_discard(tse_task_t *task)
 {
 	daos_epoch_discard_t *args;
 
-	args = daos_task_get_args(DAOS_OPC_EPOCH_DISCARD, task);
+	args = dc_task_get_args(task);
 	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return epoch_op(args->coh, CONT_EPOCH_DISCARD, &args->epoch,
@@ -1274,7 +1270,7 @@ dc_epoch_commit(tse_task_t *task)
 {
 	daos_epoch_commit_t *args;
 
-	args = daos_task_get_args(DAOS_OPC_EPOCH_COMMIT, task);
+	args = dc_task_get_args(task);
 	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return epoch_op(args->coh, CONT_EPOCH_COMMIT, &args->epoch, args->state,

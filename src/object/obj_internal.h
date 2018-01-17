@@ -199,7 +199,7 @@ struct tsa_key_punch {
 	crt_rpc_t		*pa_rpc;
 };
 
-int dc_shard_key_punch(tse_task_t *task, struct tsa_key_punch *args);
+int dc_shard_key_punch(tse_task_t *task);
 
 struct dc_obj_shard *obj_shard_hdl2ptr(daos_handle_t hdl);
 void obj_shard_decref(struct dc_obj_shard *shard);

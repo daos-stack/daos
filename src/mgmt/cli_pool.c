@@ -77,9 +77,7 @@ dc_pool_create(tse_task_t *task)
 	struct pool_create_arg		create_args;
 	int				rc = 0;
 
-	args = daos_task_get_args(DAOS_OPC_POOL_CREATE, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
+	args = dc_task_get_args(task);
 	if (args->dev == NULL || strlen(args->dev) == 0) {
 		D__ERROR("Invalid parameter of dev (NULL or empty string).\n");
 		D__GOTO(out, rc = -DER_INVAL);
@@ -175,9 +173,7 @@ dc_pool_destroy(tse_task_t *task)
 	struct mgmt_pool_destroy_in	*pd_in;
 	int				 rc = 0;
 
-	args = daos_task_get_args(DAOS_OPC_POOL_DESTROY, task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
+	args = dc_task_get_args(task);
 	if (uuid_is_null(args->uuid)) {
 		D__ERROR("Invalid parameter of uuid (NULL).\n");
 		D__GOTO(out, rc = -DER_INVAL);
