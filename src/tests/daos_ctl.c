@@ -268,7 +268,7 @@ ctl_cmd_run(char opc, char *args)
 	struct dts_io_credit	*cred;
 	char			*dkey = NULL;
 	char			*akey = NULL;
-	char			*val;
+	char			*val = NULL;
 	char			*str;
 	char			 buf[CTL_BUF_LEN];
 	int			 rc;
