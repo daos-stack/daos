@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1186,7 +1186,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	ivns_internal = crt_ivns_internal_lookup(ivns_id);
 	if (ivns_internal == NULL) {
 		D_ERROR("Failed to lookup ivns internal!\n");
-		D_GOTO(send_error, rc = -DER_INVAL);
+		D_GOTO(send_error, rc = -DER_NONEXIST);
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ifi_class_id);
@@ -1323,7 +1323,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	if (ivns_internal == NULL) {
 		D_ERROR("Invalid ivns\n");
-		D_GOTO(exit, rc = -DER_INVAL);
+		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
@@ -1519,7 +1519,20 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 	sync_type = (crt_iv_sync_t *)input->ivs_sync_type.iov_buf;
 
 	ivns_internal = crt_ivns_internal_lookup(ivns_id);
-	D_ASSERT(ivns_internal != NULL);
+
+	/* In some use-cases sync can arrive to a node that hasn't attached
+	* iv namespace yet. Treat such errors as fatal if the flag is set.
+	**/
+	if (ivns_internal == NULL) {
+		D_ERROR("ivns_internal was NULL. ivns_id=%d:%d\n",
+			ivns_id->ii_rank, ivns_id->ii_nsid);
+
+		if (sync_type->ivs_flags & CRT_IV_SYNC_FLAG_NS_ERRORS_FATAL)
+			D_ASSERT(ivns_internal != NULL);
+		else
+			D_GOTO(exit, rc = -DER_NONEXIST);
+	}
+
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ivs_class_id);
 	D_ASSERT(iv_ops != NULL);
@@ -2148,7 +2161,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 
 	if (ivns_internal == NULL) {
 		D_ERROR("Invalid internal ivns\n");
-		D_GOTO(send_error, rc = -DER_INVAL);
+		D_GOTO(send_error, rc = -DER_NONEXIST);
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ivu_class_id);
@@ -2275,7 +2288,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 	ivns_internal = crt_ivns_internal_get(ivns);
 	if (ivns_internal == NULL) {
 		D_ERROR("Invalid ivns specified\n");
-		D_GOTO(exit, rc = -DER_INVAL);
+		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
@@ -2416,7 +2429,7 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 	ivns_internal = crt_ivns_internal_get(ivns);
 	if (ivns_internal == NULL) {
 		D_ERROR("Invalid ivns specified\n");
-		D_GOTO(exit, rc = -DER_INVAL);
+		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 	rc = crt_group_rank(ivns_internal->cii_grp, &self_rank);
 	if (rc != 0) {

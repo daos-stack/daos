@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -458,6 +458,11 @@ typedef enum {
 #define CRT_IV_SYNC_EVENT_UPDATE	(0x01U)
 #define CRT_IV_SYNC_EVENT_NOTIFY	(0x02U)
 
+typedef enum {
+	/* Treat namespace lookup errors as fatal during sync */
+	CRT_IV_SYNC_FLAG_NS_ERRORS_FATAL = 0x1,
+} crt_iv_sync_flag_t;
+
 typedef struct {
 	crt_iv_sync_mode_t	ivs_mode;
 	/*
@@ -470,18 +475,27 @@ typedef struct {
 	 * iv_value parameter. /see crt_iv_on_update_cb_t.
 	 */
 	uint32_t		ivs_event;
+	/*
+	* ivns_flags is OR-ed combination of 0 or more crt_iv_sync_flag_t flags.
+	* Currently only CRT_IV_SYNC_FLAG_IGNORE_NS is supported
+	*/
+	uint32_t		ivs_flags;
 } crt_iv_sync_t;
 
 /* some common crt_iv_sync_t definitions */
-#define CRT_IV_SYNC_MODE_NONE	{0, 0}
-#define CRT_IV_SYNC_UPDATE_EAGER					\
-	(crt_iv_sync_t {CRT_IV_SYNC_EVENT_UPDATE,	CRT_IV_SYNC_EAGER})
-#define CRT_IV_SYNC_UPDATE_LAZY						\
-	(crt_iv_sync_t {CRT_IV_SYNC_EVENT_UPDATE,	CRT_IV_SYNC_LAZY})
-#define CRT_IV_SYNC_NOTIFY_EAGER					\
-	(crt_iv_sync_t {CRT_IV_SYNC_EVENT_NOTIFY,	CRT_IV_SYNC_EAGER})
-#define CRT_IV_SYNC_NOTIFY_LAZY						\
-	(crt_iv_sync_t {CRT_IV_SYNC_EVENT_NOTIFY,	CRT_IV_SYNC_LAZY})
+#define CRT_IV_SYNC_MODE_NONE	{0, 0, 0}
+
+#define CRT_IV_SYNC_UPDATE_EAGER(flags) \
+	((crt_iv_sync_t) {CRT_IV_SYNC_EVENT_UPDATE, CRT_IV_SYNC_EAGER, flags})
+
+#define CRT_IV_SYNC_UPDATE_LAZY(flags) \
+	((crt_iv_sync_t) {CRT_IV_SYNC_EVENT_UPDATE, CRT_IV_SYNC_LAZY, flags})
+
+#define CRT_IV_SYNC_NOTIFY_EAGER(flags) \
+	((crt_iv_sync_t) {CRT_IV_SYNC_EVENT_NOTIFY, CRT_IV_SYNC_EAGER, flags})
+
+#define CRT_IV_SYNC_NOTIFY_LAZY(flags) \
+	((crt_iv_sync_t) {CRT_IV_SYNC_EVENT_NOTIFY, CRT_IV_SYNC_LAZY, flags})
 
 /**
  * Update the value of incast variable.
