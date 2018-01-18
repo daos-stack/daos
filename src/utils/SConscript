@@ -1,14 +1,19 @@
-#!python
+"""Build DAOS utilities"""
 
-Import('env', 'PREREQS')
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
 
-libs = ['daos', 'gurt', 'cart', 'daos_common', 'daos_tier', 'uuid']
+    libs = ['daos', 'gurt', 'cart', 'daos_common', 'daos_tier', 'uuid']
 
-denv = env.Clone()
+    denv = env.Clone()
 
-PREREQS.require(denv, 'ompi')
+    prereqs.require(denv, 'ompi')
 
-dmg   = denv.Program('dmg', 'dmg.c', LIBS=libs)
-dcont = denv.Program('dcont', 'dcont.c', LIBS=libs)
-denv.Install('$PREFIX/bin/', dmg)
-denv.Install('$PREFIX/bin/', dcont)
+    dmg = denv.Program('dmg', 'dmg.c', LIBS=libs)
+    dcont = denv.Program('dcont', 'dcont.c', LIBS=libs)
+    denv.Install('$PREFIX/bin/', dmg)
+    denv.Install('$PREFIX/bin/', dcont)
+
+if __name__ == "SCons.Script":
+    scons()

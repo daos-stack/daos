@@ -1,22 +1,27 @@
-#!python
+"""Build common libraries"""
 
-Import('env', 'PREREQS')
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
 
-env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(LIBPATH=[Dir('.')])
 
-PREREQS.require(env, 'nvml', 'argobots', 'cart')
+    prereqs.require(env, 'nvml', 'argobots', 'cart')
 
-denv = env.Clone()
+    denv = env.Clone()
 
-common_src  = ['debug.c', 'mem.c', 'fail_loc.c', 'hash.c', 'lru.c', 'misc.c']
-common_src += ['pool_map.c', 'proc.c', 'sort.c', 'btree.c', 'btree_class.c']
-common_src += ['tse.c', 'rsvc.c']
-common = denv.SharedLibrary('libdaos_common', common_src)
-denv.Install('$PREFIX/lib/', common)
+    common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'hash.c', 'lru.c',
+                  'misc.c', 'pool_map.c', 'proc.c', 'sort.c', 'btree.c',
+                  'btree_class.c', 'tse.c', 'rsvc.c']
+    common = denv.SharedLibrary('libdaos_common', common_src)
+    denv.Install('$PREFIX/lib/', common)
 
-tests_lib_src = ['tests_lib.c']
-tests_lib = denv.SharedLibrary('libdaos_tests', tests_lib_src)
-denv.Install('$PREFIX/lib/', tests_lib)
+    tests_lib_src = ['tests_lib.c']
+    tests_lib = denv.SharedLibrary('libdaos_tests', tests_lib_src)
+    denv.Install('$PREFIX/lib/', tests_lib)
 
-denv.Append(CPPPATH = ['#/src/common'])
-SConscript('tests/SConscript', exports='denv')
+    denv.Append(CPPPATH=['#/src/common'])
+    SConscript('tests/SConscript', exports='denv')
+
+if __name__ == "SCons.Script":
+    scons()

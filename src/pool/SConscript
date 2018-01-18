@@ -1,20 +1,24 @@
-#!python
+"""Build pool library"""
 
-Import('env', 'PREREQS')
+def scons():
+    """Execute build"""
+    Import('env')
 
-env.AppendUnique(LIBPATH=[Dir('.')])
-denv = env.Clone()
+    env.AppendUnique(LIBPATH=[Dir('.')])
+    denv = env.Clone()
 
-# ds_pool: Pool Server
-ds_pool = denv.SharedLibrary('pool',
-			     ['srv.c', 'srv_pool.c', 'srv_layout.c',
-                              'srv_target.c', 'srv_util.c', 'rpc.c',
-			      'srv_iv.c'])
-denv.Install('$PREFIX/lib/daos_srv', ds_pool)
+    # ds_pool: Pool Server
+    ds_pool = denv.SharedLibrary('pool', ['srv.c', 'srv_pool.c', 'srv_layout.c',
+                                          'srv_target.c', 'srv_util.c', 'rpc.c',
+                                          'srv_iv.c'])
+    denv.Install('$PREFIX/lib/daos_srv', ds_pool)
 
-# dc_pool: Pool Client
-dc_pool_tgts = denv.SharedObject(['cli.c', 'rpc.c'])
-Export('dc_pool_tgts')
+    # dc_pool: Pool Client
+    dc_pool_tgts = denv.SharedObject(['cli.c', 'rpc.c'])
+    Export('dc_pool_tgts')
 
-# tests
-SConscript('tests/SConscript', exports = ['denv', 'PREREQS'])
+    # tests
+    SConscript('tests/SConscript', exports=['denv'])
+
+if __name__ == "SCons.Script":
+    scons()

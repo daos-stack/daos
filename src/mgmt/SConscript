@@ -1,19 +1,24 @@
-#!python
+"""Build management server module"""
 
-Import('env')
+def scons():
+    """Execute build"""
+    Import('env')
 
-env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(LIBPATH=[Dir('.')])
 
-denv = env.Clone()
+    denv = env.Clone()
 
-# Management server module
-mgmt_srv = denv.SharedLibrary('mgmt', ['rpc.c', Glob('srv*.c')])
-denv.Install('$PREFIX/lib/daos_srv', mgmt_srv)
+    # Management server module
+    mgmt_srv = denv.SharedLibrary('mgmt', ['rpc.c', Glob('srv*.c')])
+    denv.Install('$PREFIX/lib/daos_srv', mgmt_srv)
 
-# Management client library
-dc_mgmt_tgts = denv.SharedObject(['rpc.c', Glob('cli*.c')])
-Export('dc_mgmt_tgts')
+    # Management client library
+    dc_mgmt_tgts = denv.SharedObject(['rpc.c', Glob('cli*.c')])
+    Export('dc_mgmt_tgts')
 
 
-# tests
-SConscript('tests/SConscript', exports = 'denv')
+    # tests
+    SConscript('tests/SConscript', exports='denv')
+
+if __name__ == "SCons.Script":
+    scons()

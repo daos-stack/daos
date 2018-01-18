@@ -1,10 +1,15 @@
-#!python
+"""Build mgmt tests"""
 
-Import('denv')
+def scons():
+    """Execute build"""
+    Import('denv')
 
-denv.Append(CPPPATH = ['#/src/dmg', '#/src/server'])
+    denv.Append(CPPPATH=['#/src/dmg', '#/src/server'])
 
-libraries = ['daos_common', 'daos', 'gurt', 'cart']
-libraries += ['uuid', 'cmocka']
+    #libraries = ['daos_common', 'daos', 'gurt', 'cart']
+    #ibraries += ['uuid', 'cmocka']
 
-#denv.Program('dmg_test', 'dmg_test.c', LIBS = libraries)
+    #denv.Program('dmg_test', 'dmg_test.c', LIBS=libraries)
+
+if __name__ == "SCons.Script":
+    scons()

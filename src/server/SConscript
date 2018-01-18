@@ -1,19 +1,24 @@
-#!python
+"""Build DAOS server"""
 
-Import('env', 'PREREQS')
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
 
-denv = env.Clone()
+    denv = env.Clone()
 
-libraries = ['daos_common', 'gurt', 'cart', 'vos_srv', 'daos', 'daos_tier']
-libraries += ['dl', 'uuid', 'pthread', 'abt']
-libraries += ['hwloc']
+    libraries = ['daos_common', 'gurt', 'cart', 'vos_srv', 'daos', 'daos_tier']
+    libraries += ['dl', 'uuid', 'pthread', 'abt']
+    libraries += ['hwloc']
 
-PREREQS.require(denv, 'hwloc', 'cart', 'argobots')
+    prereqs.require(denv, 'hwloc', 'cart', 'argobots')
 
-# the "-rdynamic" is to allow other dll to refer symbol defined in daos_server
-# such as dss_tls_key etc.
-denv.Append(LINKFLAGS = ['-rdynamic'])
+    # the "-rdynamic" is to allow other dll to refer symbol defined in
+    # daos_server such as dss_tls_key etc.
+    denv.AppendUnique(LINKFLAGS=['-rdynamic'])
 
-# Generate server program
-server = denv.Program('daos_server', Glob('*.c'), LIBS=libraries)
-denv.Install('$PREFIX/bin', server)
+    # Generate server program
+    server = denv.Program('daos_server', Glob('*.c'), LIBS=libraries)
+    denv.Install('$PREFIX/bin', server)
+
+if __name__ == "SCons.Script":
+    scons()

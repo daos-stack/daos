@@ -1,13 +1,15 @@
-#!python
+"""Build tier tests"""
 
-Import('denv')
+def scons():
+    """Execute build"""
+    Import('denv')
 
-denv.Append(CPPPATH = ['#/src/tier', '#/src/server'])
+    denv.Append(CPPPATH=['#/src/tier', '#/src/server'])
 
-libraries = ['pthread', 'uuid']
-libraries += ['daos_common', 'daos', 'crt', 'daos_tier']
-libraries += ['cmocka']
+    #libraries = ['pthread', 'uuid', 'daos_common', 'daos', 'crt', 'daos_tier',
+    #             'cmocka']
+    #denv.Program('dct_test', ['dct_ping_test.c', 'dct_test.c'],
+    #            LIBS=[libraries, 'daos_tier'])
 
-
-#denv.Program('dct_test', ['dct_ping_test.c', 'dct_test.c'],
-#            LIBS=[libraries, 'daos_tier'])
+if __name__ == "SCons.Script":
+    scons()

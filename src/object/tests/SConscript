@@ -1,8 +1,13 @@
-#!python
+"""Build object tests"""
 
-Import('denv')
-Import('common_tgts')
+def scons():
+    """Execute build"""
+    Import('denv')
+    Import('common_tgts')
 
-test_tgt = denv.SharedObject('place_obj.c')
-denv.Program('pl_map', test_tgt + common_tgts,
-	     LIBS = ['daos_common', 'gurt', 'cart', 'placement'])
+    test_tgt = denv.SharedObject('place_obj.c')
+    denv.Program('pl_map', test_tgt + common_tgts,
+                 LIBS=['daos_common', 'gurt', 'cart', 'placement'])
+
+if __name__ == "SCons.Script":
+    scons()

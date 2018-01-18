@@ -1,19 +1,24 @@
-#!python
+"""Build container library"""
 
-Import('env', 'PREREQS')
+def scons():
+    """Execute build"""
+    Import('env')
 
-env.AppendUnique(LIBPATH=[Dir('.')])
-denv = env.Clone()
+    env.AppendUnique(LIBPATH=[Dir('.')])
+    denv = env.Clone()
 
-# ds_cont: Container Server
-ds_cont = denv.SharedLibrary('cont',
-			     ['srv.c', 'srv_container.c', 'srv_epoch.c',
-			      'srv_target.c', 'srv_layout.c', 'rpc.c'])
-denv.Install('$PREFIX/lib/daos_srv', ds_cont)
+    # ds_cont: Container Server
+    ds_cont = denv.SharedLibrary('cont',
+                                 ['srv.c', 'srv_container.c', 'srv_epoch.c',
+                                  'srv_target.c', 'srv_layout.c', 'rpc.c'])
+    denv.Install('$PREFIX/lib/daos_srv', ds_cont)
 
-# dc_cont: Container Client
-dc_co_tgts = denv.SharedObject(['cli.c', 'rpc.c'])
-Export('dc_co_tgts')
+    # dc_cont: Container Client
+    dc_co_tgts = denv.SharedObject(['cli.c', 'rpc.c'])
+    Export('dc_co_tgts')
 
-# tests
-SConscript('tests/SConscript', exports = ['denv', 'PREREQS'])
+    # tests
+    SConscript('tests/SConscript', exports=['denv'])
+
+if __name__ == "SCons.Script":
+    scons()

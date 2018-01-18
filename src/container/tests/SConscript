@@ -1,13 +1,19 @@
-#!python
+"""Build container tests"""
 
-Import('denv', 'PREREQS')
+def scons():
+    """Execute build"""
+    Import('denv')
 
-denv.Append(CPPPATH = ['#/src/dsm', '#/src/server'])
+    denv.Append(CPPPATH=['#/src/dsm', '#/src/server'])
 
-libraries = ['daos_common', 'gurt', 'cart', 'daos']
-libraries += ['uuid', 'mpi']
-libraries += ['cmocka']
+    #Import('prereqs')
+    #libraries = ['daos_common', 'gurt', 'cart', 'daos']
+    #libraries += ['uuid', 'mpi']
+    #libraries += ['cmocka']
 
-#PREREQS.require(denv, 'ompi')
-#
-#denv.Program('dsm_test', Glob('*.c'), LIBS = libraries)
+    #prereqs.require(denv, 'ompi')
+    #
+    #denv.Program('dsm_test', Glob('*.c'), LIBS=libraries)
+
+if __name__ == "SCons.Script":
+    scons()

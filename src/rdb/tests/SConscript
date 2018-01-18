@@ -1,10 +1,16 @@
-Import('env')
+"""Build rdb tests"""
+def scons():
+    """Execute build"""
+    Import('denv')
 
-# rdbt server
-librdbt = env.SharedLibrary('rdbt', ['rdb_test.c', 'rpc.c'])
-env.Install('$PREFIX/lib/daos_srv', librdbt)
+    # rdbt server
+    librdbt = denv.SharedLibrary('rdbt', ['rdb_test.c', 'rpc.c'])
+    denv.Install('$PREFIX/lib/daos_srv', librdbt)
 
-# rdbt client
-rdbt = env.Program('rdbt', ['rdbt.c', 'rpc.c'],
-		   LIBS=['cart', 'gurt', 'daos_common', 'uuid'])
-env.Install('$PREFIX/bin', rdbt)
+    # rdbt client
+    rdbt = denv.Program('rdbt', ['rdbt.c', 'rpc.c'],
+                        LIBS=['cart', 'gurt', 'daos_common', 'uuid'])
+    denv.Install('$PREFIX/bin', rdbt)
+
+if __name__ == "SCons.Script":
+    scons()

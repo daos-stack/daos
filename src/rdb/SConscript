@@ -1,20 +1,27 @@
-Import('env')
+"""Build rdb"""
 
-# raft
-SConscript('raft/SConscript', exports = 'env')
+def scons():
+    """Execute build"""
+    Import('env')
 
-# rdb-specific env
-env = env.Clone()
-env.AppendUnique(CPPPATH = ['#/src/rdb/raft/include'])
-env.AppendUnique(LIBPATH = ['raft/src'])
+    # raft
+    SConscript('raft/SConscript')
 
-# rdb
-rdb = env.SharedLibrary('rdb',
-			['rdb_util.c', 'rdb_path.c', 'rdb_layout.c',
-			 'rdb_tree.c', 'rdb_rpc.c', 'rdb_raft.c', 'rdb_tx.c',
-			 'rdb.c', 'rdb_module.c'],
-			LIBS=['raft'])
-env.Install('$PREFIX/lib/daos_srv', rdb)
+    # rdb-specific env
+    denv = env.Clone()
+    denv.AppendUnique(CPPPATH=['#/src/rdb/raft/include'])
+    denv.AppendUnique(LIBPATH=['raft/src'])
 
-# tests
-SConscript('tests/SConscript', exports = 'env')
+    # rdb
+    rdb = denv.SharedLibrary('rdb',
+                             ['rdb_util.c', 'rdb_path.c', 'rdb_layout.c',
+                              'rdb_tree.c', 'rdb_rpc.c', 'rdb_raft.c',
+                              'rdb_tx.c', 'rdb.c', 'rdb_module.c'],
+                             LIBS=['raft'])
+    denv.Install('$PREFIX/lib/daos_srv', rdb)
+
+    # tests
+    SConscript('tests/SConscript', exports='denv')
+
+if __name__ == "SCons.Script":
+    scons()

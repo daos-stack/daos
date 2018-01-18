@@ -1,12 +1,18 @@
-#!python
+"""Build addons"""
 
-Import('env', 'PREREQS')
+def scons():
+    """Execute build"""
 
-env.AppendUnique(LIBPATH=[Dir('.')])
-denv = env.Clone()
+    Import('env', 'prereqs')
 
-PREREQS.require(denv, 'ompi')
+    env.AppendUnique(LIBPATH=[Dir('.')])
+    denv = env.Clone()
 
-addons_tgts = denv.SharedObject(['dac_array.c', 'dac_hl.c'])
-addons_tgts += denv.SharedObject(['daos_array.c', 'daos_hl.c'])
-Export('addons_tgts')
+    prereqs.require(denv, 'ompi')
+
+    addons_tgts = denv.SharedObject(['dac_array.c', 'dac_hl.c'])
+    addons_tgts += denv.SharedObject(['daos_array.c', 'daos_hl.c'])
+    Export('addons_tgts')
+
+if __name__ == "SCons.Script":
+    scons()

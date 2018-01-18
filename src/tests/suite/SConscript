@@ -1,10 +1,15 @@
-#!python
+"""Build test suite"""
 
-Import('denv')
+def scons():
+    """Execute build"""
+    Import('denv')
 
-libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
-libraries += ['daos_tier', 'uuid', 'mpi']
-libraries += ['cmocka']
+    libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
+    libraries += ['daos_tier', 'uuid', 'mpi']
+    libraries += ['cmocka']
 
-test = denv.Program('daos_test', Glob('*.c'), LIBS = libraries)
-denv.Install('$PREFIX/bin/', test)
+    test = denv.Program('daos_test', Glob('*.c'), LIBS=libraries)
+    denv.Install('$PREFIX/bin/', test)
+
+if __name__ == "SCons.Script":
+    scons()

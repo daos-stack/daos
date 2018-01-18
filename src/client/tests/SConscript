@@ -1,7 +1,12 @@
-#!python
+"""Build client tests"""
 
-Import('denv')
+def scons():
+    """Execute build"""
+    Import('denv')
 
-denv.Program('eq_test', Glob('eq_tests.c'),
-	     LIBS=['daos', 'daos_common', 'daos_tier', 'gurt', 'cart',
-                   'pthread'])
+    denv.Program('eq_test', Glob('eq_tests.c'),
+                 LIBS=['daos', 'daos_common', 'daos_tier', 'gurt', 'cart',
+                       'pthread'])
+
+if __name__ == "SCons.Script":
+    scons()

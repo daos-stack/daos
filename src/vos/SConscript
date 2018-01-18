@@ -1,31 +1,37 @@
-#!python
+"""Build versioned object store"""
+import os
 
-Import('env', 'PREREQS', 'srv')
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
 
-env.AppendUnique(LIBPATH=[Dir('.')])
+    build_dir = Dir('.')
+    lib = os.path.basename(build_dir.abspath)
+    env.AppendUnique(LIBPATH=[build_dir])
 
-PREREQS.require(env, 'nvml')
-PREREQS.require(env, 'mercury', mercury_libs=['mchecksum'])
+    prereqs.require(env, 'nvml')
+    prereqs.require(env, 'mercury', mercury_libs=['mchecksum'])
 
-denv = env.Clone()
+    denv = env.Clone()
 
-# Compiler options
-denv.Append(CPPPATH = ['#/src/vos/'])
+    # Compiler options
+    denv.Append(CPPPATH=['#/src/vos/'])
 
-if srv == False:
-	# generate standalone library
-	denv.Append(CPPDEFINES = {'VOS_STANDALONE' : '1'})
-	lib = 'vos'
-	install = 'lib'
-else:
-	# generate DAOS server module
-	lib = 'vos_srv'
-	install = 'lib/daos_srv'
+    if lib == "vos":
+        # generate standalone library
+        denv.Append(CPPDEFINES={'VOS_STANDALONE' : '1'})
+        install = 'lib'
+    else:
+        # generate DAOS server module
+        install = 'lib/daos_srv'
 
-vos = denv.SharedLibrary(lib, Glob('*.c'))
+    vos = denv.SharedLibrary(lib, Glob('*.c'))
 
-denv.Install('$PREFIX/' + install, vos)
+    denv.Install('$PREFIX/' + install, vos)
 
-# Tests
-if srv == False:
-	SConscript('tests/SConscript', exports='denv')
+    # Tests
+    if lib == "vos":
+        SConscript('tests/SConscript', exports='denv')
+
+if __name__ == "SCons.Script":
+    scons()

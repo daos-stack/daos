@@ -1,23 +1,29 @@
-#!python
+"""Build tier modules"""
 
-Import('env')
+def scons():
+    """Execute build"""
+    Import('env')
 
-env.AppendUnique(LIBPATH=[Dir('.')])
-denv = env.Clone()
+    env.AppendUnique(LIBPATH=[Dir('.')])
+    denv = env.Clone()
 
-# generate server module
-ct_srv = denv.SharedLibrary('tier',
-			    ['rpc.c', 'srv.c','srv_ping.c', 'srv_util.c',
-			     'srv_enum.c', 'srv_fetch.c', 'srv_tmgmt.c'])
+    # generate server module
+    ct_srv = denv.SharedLibrary('tier',
+                                ['rpc.c', 'srv.c', 'srv_ping.c', 'srv_util.c',
+                                 'srv_enum.c', 'srv_fetch.c', 'srv_tmgmt.c'])
 
-denv.Install('$PREFIX/lib/daos_srv', ct_srv)
+    denv.Install('$PREFIX/lib/daos_srv', ct_srv)
 
-# generate client library
-ct_client = denv.SharedLibrary('daos_tier',
-			       ['rpc.c', 'cli.c', 'cli_ping.c', 'cli_util.c',
-			        'cli_container.c', 'cli_object.c',
-				'cli_stager.c', 'cli_tmgmt.c'])
-denv.Install('$PREFIX/lib/', ct_client)
+    # generate client library
+    ct_client = denv.SharedLibrary('daos_tier',
+                                   ['rpc.c', 'cli.c', 'cli_ping.c',
+                                    'cli_util.c', 'cli_container.c',
+                                    'cli_object.c', 'cli_stager.c',
+                                    'cli_tmgmt.c'])
+    denv.Install('$PREFIX/lib/', ct_client)
 
-# tests
-SConscript('tests/SConscript', exports = 'denv')
+    # tests
+    SConscript('tests/SConscript', exports='denv')
+
+if __name__ == "SCons.Script":
+    scons()
