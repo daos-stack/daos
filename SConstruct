@@ -78,3 +78,9 @@ env.Command("fixtest", "./utils/bvtest/OrteRunner.py",
 Default('build')
 Depends('install', 'build')
 Depends('fixtest', 'install')
+
+try:
+    #if using SCons 2.4+, provide a more complete help
+    Help(OPTS.GenerateHelpText(env), append=True)
+except TypeError:
+    Help(OPTS.GenerateHelpText(env))

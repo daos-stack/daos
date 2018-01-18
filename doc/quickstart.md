@@ -86,7 +86,7 @@ Invoke scons with the following parameters:
 
     $ scons --build-deps=yes install
 
-By default, all software will be installed under \${daospath}/install. The TARGET\_PREFIX= option can be added to the command line above to specify an alternative installation path.
+The default installation path, modified by adding the PREFIX= option to the above command line is \${daospath}/install.   DAOS and its dependencies are installed here by default.   If TARGET\_PREFIX is added to the above command line, each dependency will be installed in a unique subdirectory at the specified location.
 
 (d) Environment setup
 
