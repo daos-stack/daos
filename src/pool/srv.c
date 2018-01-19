@@ -79,7 +79,12 @@ fini(void)
 static int
 setup(void)
 {
-	return ds_pool_svc_start_all();
+	bool start = true;
+
+	d_getenv_bool("DAOS_START_POOL_SVC", &start);
+	if (start)
+		return ds_pool_svc_start_all();
+	return 0;
 }
 
 static int
