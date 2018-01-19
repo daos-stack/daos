@@ -32,7 +32,7 @@
 #include "daos_iotest.h"
 #include <daos/pool.h>
 
-#define KEY_NR		10
+#define KEY_NR		1000
 #define OBJ_NR		10
 #define OBJ_CLS		DAOS_OC_R3S_RW
 
@@ -121,45 +121,50 @@ rebuild_test_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank)
 }
 
 static int
-rebuild_io_internal(test_arg_t *arg, daos_obj_id_t oid,
+rebuild_io_internal(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 		    bool update)
 {
 	struct ioreq	req;
 	int		i;
+	int		j;
 	char		dkey[16];
 	char		buf[10];
 
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	/* Let's do I/O at the same time */
-	print_message("insert %d dkey/rebuild_akey during rebuild\n",
-		      KEY_NR);
-	for (i = 0; i < KEY_NR; i++) {
-		sprintf(dkey, "rebuild_%d", i);
-		memset(buf, 0, 10);
-		if (update)
-			insert_single(dkey, "rebuild_akey_in", 0,
-				      "data", strlen("data") + 1,
-				      0, &req);
-		lookup_single(dkey, "rebuild_akey_in", 0, buf,
-			      10, 0, &req);
-		assert_memory_equal(buf, "data", strlen("data"));
-		assert_int_equal(req.iod[0].iod_size,
-				 strlen("data") + 1);
+	print_message("insert obj %d rec %d for rebuild test\n",
+		      oids_nr, KEY_NR);
+
+	for (j = 0; j < oids_nr; j++) {
+		ioreq_init(&req, arg->coh, oids[j], DAOS_IOD_ARRAY, arg);
+		/* Let's do I/O at the same time */
+		for (i = 0; i < KEY_NR; i++) {
+			sprintf(dkey, "%d", i);
+			memset(buf, 0, 10);
+			if (update)
+				insert_single(dkey, "rebuild_akey_in", 0,
+					      "data", strlen("data") + 1,
+					      0, &req);
+			lookup_single(dkey, "rebuild_akey_in", 0, buf,
+				      10, 0, &req);
+			assert_memory_equal(buf, "data", strlen("data"));
+			assert_int_equal(req.iod[0].iod_size,
+					 strlen("data") + 1);
+		}
+		ioreq_fini(&req);
 	}
-	ioreq_fini(&req);
+
 	return 0;
 }
 
 static void
-rebuild_io(test_arg_t *arg, daos_obj_id_t oid)
+rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
-	rebuild_io_internal(arg, oid, true);
+	rebuild_io_internal(arg, oids, oids_nr, true);
 }
 
 static void
-rebuild_io_validate(test_arg_t *arg, daos_obj_id_t oid)
+rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
-	rebuild_io_internal(arg, oid, false);
+	rebuild_io_internal(arg, oids, oids_nr, false);
 }
 
 static void
@@ -216,7 +221,7 @@ rebuild_wait(test_arg_t **args, int args_cnt, d_rank_t failed_rank,
 	if (concurrent_io) {
 		for (i = 0; i < args_cnt; i++) {
 			if (!daos_handle_is_inval(args[i]->coh))
-				rebuild_io(args[i], oid);
+				rebuild_io(args[i], &oid, 1);
 		}
 	}
 
@@ -230,7 +235,7 @@ rebuild_wait(test_arg_t **args, int args_cnt, d_rank_t failed_rank,
 		for (i = 0; i < args_cnt; i++) {
 			/* validate the data */
 			if (!daos_handle_is_inval(args[i]->coh))
-				rebuild_io_validate(args[i], oid);
+				rebuild_io_validate(args[i], &oid, 1);
 		}
 	}
 }
@@ -545,7 +550,8 @@ rebuild_multiple_pools(void **state)
 {
 	test_arg_t	*arg = *state;
 	test_arg_t	*args[2];
-	daos_obj_id_t	oid;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
 	int		rc;
 
 	if (!rebuild_runable(arg, 3, false))
@@ -559,14 +565,15 @@ rebuild_multiple_pools(void **state)
 		return;
 	}
 
-	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-	rebuild_io(args[0], oid);
-	rebuild_io(args[1], oid);
+	for (i = 0; i < OBJ_NR; i++)
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+	rebuild_io(args[0], oids, OBJ_NR);
+	rebuild_io(args[1], oids, OBJ_NR);
 
 	rebuild_pools_targets(args, 2, ranks_to_kill, 1, false);
 
-	rebuild_io_validate(args[0], oid);
-	rebuild_io_validate(args[1], oid);
+	rebuild_io_validate(args[0], oids, OBJ_NR);
+	rebuild_io_validate(args[1], oids, OBJ_NR);
 
 	test_teardown((void **)&args[1]);
 }

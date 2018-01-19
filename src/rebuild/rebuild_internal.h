@@ -136,6 +136,15 @@ struct rebuild_global {
 	 */
 	daos_list_t	rg_global_tracker_list;
 
+	/* rebuild running list */
+	daos_list_t	rg_running_list;
+
+	/* rebuild task is queued to this list waiting
+	 * to be scheduled.
+	 */
+	daos_list_t	rg_queue_list;
+
+
 	ABT_mutex	rg_lock;
 	ABT_cond	rg_stop_cond;
 	/* how many pools is being rebuilt */
@@ -191,8 +200,6 @@ struct rebuild_tgt_query_info {
 };
 
 struct rebuild_iv {
-	uuid_t		riv_poh_uuid;
-	uuid_t		riv_coh_uuid;
 	uuid_t		riv_pool_uuid;
 	uint64_t	riv_obj_count;
 	uint64_t	riv_rec_count;
