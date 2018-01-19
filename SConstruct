@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2018 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -32,7 +32,6 @@ def scons():
     reqs = PreReqComponent(env, opts)
     reqs.preload("components.py")
 
-    print reqs.get_defined_components()
     opts.Add(ListVariable("REQUIRES",
                           "List of libraries to build",
                           'mercury,ompi',

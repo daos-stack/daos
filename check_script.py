@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2018 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -58,6 +58,20 @@ class WrapScript(object):
                 new_lineno += self.write_variables(outfile, match.group(1),
                                                    variables)
 
+            match = re.search(r'^(\s*)Export\(.(.*).\)', line)
+            if not match:
+                match = re.search(r'^(\s*).*exports=[.(.*).]', line)
+            if match:
+                if not scons_header:
+                    scons_header = True
+                    self.write_header(outfile)
+                variables = []
+                for var in match.group(2).split():
+                    newvar = var.strip("\",     '")
+                    variables.append(newvar)
+                new_lineno += self.read_variables(outfile, match.group(1),
+                                                  variables)
+
             if not scons_header:
                 if re.search(r"^\"\"\"", line):
                     scons_header = True
@@ -65,6 +79,17 @@ class WrapScript(object):
                     scons_header = True
                 if scons_header:
                     new_lineno += self.write_header(outfile)
+
+    @staticmethod
+    def read_variables(outfile, prefix, variables):
+        """Add code to define fake variables for pylint"""
+        newlines = 2
+        outfile.write("# pylint: disable=invalid-name\n")
+        for variable in variables:
+            outfile.write("%sprint(\"%%s\" %% str(%s))\n" % (prefix, variable))
+            newlines += 1
+        outfile.write("# pylint: enable=invalid-name\n")
+        return newlines
 
     @staticmethod
     def write_variables(outfile, prefix, variables):
@@ -82,7 +107,6 @@ class WrapScript(object):
                 outfile.write("%sscons_temp_opts = Variables()\n" % prefix)
                 outfile.write("%s%s = PreReqComponent(scons_temp_env, "
                               "scons_temp_opts)\n" % (prefix, variable))
-                outfile.write("%sprint %s\n" % (prefix, variable))
                 variables.remove(variable)
         for variable in variables:
             if "ENV" in variable.upper():
@@ -95,7 +119,7 @@ class WrapScript(object):
             elif "PREFIX" in variable.upper():
                 newlines += 1
                 outfile.write("%s%s = ''\n" % (prefix, variable))
-            elif "TARGETS" in variable.upper():
+            elif "TARGETS" in variable.upper() or "TGTS" in variable.upper():
                 newlines += 1
                 outfile.write("%s%s = ['fake']\n" % (prefix, variable))
             else:
@@ -109,6 +133,7 @@ class WrapScript(object):
     def write_header(outfile):
         """write the header"""
         outfile.write("""# pylint: disable=wildcard-import
+from __future__ import print_function
 from SCons.Script import *
 from SCons.Variables import *
 # pylint: enable=wildcard-import\n""")
