@@ -111,23 +111,19 @@ REQS.define('mercury_old',
             commands=['cmake -DMCHECKSUM_USE_ZLIB=1 '
                       '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a '
                       '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
-                      '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s '
-                      '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ '
                       '-DCMAKE_INSTALL_PREFIX=$MERCURY_OLD_PREFIX '
                       '-DBUILD_EXAMPLES=OFF '
                       '-DMERCURY_USE_BOOST_PP=ON '
                       '-DMERCURY_USE_SELF_FORWARD=ON '
                       '-DMERCURY_ENABLE_VERBOSE_ERROR=ON '
                       '-DBUILD_TESTING=ON '
-                      '-DNA_USE_CCI=ON '
-                      '-DNA_CCI_USE_POLL=ON '
                       '-DBUILD_DOCUMENTATION=OFF '
                       '-DBUILD_SHARED_LIBS=ON $MERCURY_OLD_SRC '
                       '-DCMAKE_INSTALL_RPATH=$MERCURY_OLD_PREFIX/lib '
                       '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE'
-                      % (CCI_LIB), 'make', 'make install'],
+                      , 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
-            requires=['openpa', 'cci', 'boost'] + RT,
+            requires=['openpa', 'boost'] + RT,
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
@@ -140,16 +136,12 @@ REQS.define('mercury',
             commands=['cmake -DMCHECKSUM_USE_ZLIB=1 '
                       '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a '
                       '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
-                      '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s '
-                      '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ '
                       '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX '
                       '-DBUILD_EXAMPLES=OFF '
                       '-DMERCURY_USE_BOOST_PP=ON '
                       '-DMERCURY_USE_SELF_FORWARD=ON '
                       '-DMERCURY_ENABLE_VERBOSE_ERROR=ON '
                       '-DBUILD_TESTING=ON '
-                      '-DNA_USE_CCI=ON '
-                      '-DNA_CCI_USE_POLL=ON '
                       '-DNA_USE_OFI=ON '
                       '-DBUILD_DOCUMENTATION=OFF '
                       '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC '
@@ -157,9 +149,9 @@ REQS.define('mercury',
                       '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE '
                       '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
                       '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'
-                      % (CCI_LIB), 'make', 'make install'],
+                      , 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
-            requires=['openpa', 'cci', 'boost', 'ofi'] + RT,
+            requires=['openpa', 'boost', 'ofi'] + RT,
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
@@ -169,16 +161,12 @@ REQS.define('mercury_ofi',
             commands=['cmake -DMCHECKSUM_USE_ZLIB=1 '
                       '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a '
                       '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
-                      '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s '
-                      '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ '
                       '-DCMAKE_INSTALL_PREFIX=$MERCURY_OFI_PREFIX '
                       '-DBUILD_EXAMPLES=OFF '
                       '-DMERCURY_USE_BOOST_PP=ON '
                       '-DMERCURY_USE_SELF_FORWARD=ON '
                       '-DMERCURY_ENABLE_VERBOSE_ERROR=OFF '
                       '-DBUILD_TESTING=ON '
-                      '-DNA_USE_CCI=ON '
-                      '-DNA_CCI_USE_POLL=ON '
                       '-DNA_USE_OFI=ON '
                       '-DBUILD_DOCUMENTATION=OFF '
                       '-DBUILD_SHARED_LIBS=ON $MERCURY_OFI_SRC '
@@ -186,9 +174,9 @@ REQS.define('mercury_ofi',
                       '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE '
                       '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
                       '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'
-                      % (CCI_LIB), 'make', 'make install'],
+                      , 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
-            requires=['openpa', 'cci', 'boost', 'ofi'] + RT,
+            requires=['openpa', 'boost', 'ofi'] + RT,
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
@@ -251,7 +239,7 @@ REQS.define('ompi_pmix',
             headers=['pmix.h'],
             required_progs=['g++', 'flex', 'autoreconf', 'aclocal', 'libtool'])
 
-RETRIEVER = GitRepoRetriever("https://github.com/pmem/nvml")
+RETRIEVER = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
@@ -262,16 +250,15 @@ for i in xrange(1, len(ARM_LIST)):
         ARM_PLATFORM = True
         break
 
-NVML_BUILD = ["make \"BUILD_RPMEM=n\"",
-              "make install prefix=$NVML_PREFIX \"BUILD_RPMEM=n\""]
+PMDK_BUILD = ["make \"BUILD_RPMEM=n\" install prefix=$PMDK_PREFIX"]
 if ARM_PLATFORM is True:
-    NVML_BUILD = ["git am < $PATCH_PREFIX/arm-support-nvml.patch",
+    PMDK_BUILD = ["git am < $PATCH_PREFIX/arm-support-PMDK.patch",
                   "make \"EXTRA_CFLAGS=-DAARCH64\" \"BUILD_AARCH64=y\" "
-                  " \"DEBUG=0\" \"BUILD_RPMEM=n\" install prefix=$NVML_PREFIX"]
+                  " \"DEBUG=0\" \"BUILD_RPMEM=n\" install prefix=$PMDK_PREFIX"]
 
-REQS.define('nvml',
+REQS.define('pmdk',
             retriever=RETRIEVER,
-            commands=NVML_BUILD,
+            commands=PMDK_BUILD,
             libs=["pmemobj"])
 
 RETRIEVER = GitRepoRetriever("http://git.mcs.anl.gov/argo/argobots.git", True)
