@@ -1412,6 +1412,8 @@ class _Component(object):
                 raise BuildFailure(self.name)
 
         # set environment one more time as new directories may be present
+        if self.requires:
+            self.prereqs.require(envcopy, *self.requires, needed_libs=None)
         self.set_environment(envcopy, self.libs)
         if self.has_missing_targets(envcopy) and not self.__dry_run:
             raise MissingTargets(self.name, None)
