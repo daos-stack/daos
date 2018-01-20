@@ -11,7 +11,6 @@ defaultENV:
 module:
     name: "DaosTestMulti"
     setKeyFromInfo:
-       - [CCI_CONFIG, CART_PREFIX, "/etc/cci.ini"]
        - [ORT_PATH, OMPI_PREFIX, "/bin"]
        - ["PREFIX","PREFIX",""]
        - ["CART_PREFIX","CART_PREFIX",""]
@@ -19,7 +18,7 @@ module:
        - [PATH, "/sbin", [PREFIX]]
        - [LD_LIBRARY_PATH, "/lib/daos_srv", [PREFIX]]
        - [LD_LIBRARY_PATH, "/lib", [CART_PREFIX]]
-       - [LD_LIBRARY_PATH, "/../nvml/lib", [PREFIX]]
+       - [LD_LIBRARY_PATH, "/../pmdk/lib", [PREFIX]]
        - [LD_LIBRARY_PATH, "/../mercury/lib", [PREFIX]]
        - [LD_LIBRARY_PATH, "/../argobots/lib", [PREFIX]]
        - [LD_LIBRARY_PATH, "/../hwloc/lib", [PREFIX]]

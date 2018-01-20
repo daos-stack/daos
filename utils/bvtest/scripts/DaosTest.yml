@@ -12,7 +12,6 @@ module:
     name: "DaosTest"
     className: "DaosTest"
     setKeyFromInfo:
-       - [CCI_CONFIG, CART_PREFIX, "/etc/cci.ini"]
        - [ORT_PATH, OMPI_PREFIX, "/bin/"]
        - ["PREFIX","PREFIX",""]
        - ["CART_PREFIX","CART_PREFIX",""]

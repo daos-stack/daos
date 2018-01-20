@@ -32,8 +32,8 @@
 #include <daos/common.h>
 #include <daos/mem.h>
 
-#if DAOS_HAS_NVML
-/** persistent memory operations (depends on nvml) */
+#if DAOS_HAS_PMDK
+/** persistent memory operations (depends on pmdk) */
 
 static void *
 pmem_addr(struct umem_instance *umm, umem_id_t ummid)
@@ -120,7 +120,7 @@ umem_tx_errno(int err)
 {
 	if (err == 0) {
 		err = pmemobj_tx_errno();
-		if (err == ENOMEM) /* nvml returns ENOMEM for out of space */
+		if (err == ENOMEM) /* pmdk returns ENOMEM for out of space */
 			err = ENOSPC;
 	}
 
@@ -133,13 +133,13 @@ umem_tx_errno(int err)
 		if (err < -DER_ERR_GURT_BASE)
 			return err; /* aborted by DAOS */
 
-		D__ERROR("nvml returned negative errno %d\n", err);
+		D__ERROR("pmdk returned negative errno %d\n", err);
 		err = -err;
 	}
 	return daos_errno2der(err);
 }
 
-#endif /* DAOS_HAS_NVML */
+#endif /* DAOS_HAS_PMDK */
 
 /* volatile memroy operations */
 
@@ -196,7 +196,7 @@ static struct umem_class umem_class_defined[] = {
 		.umc_ops	= &vmem_ops,
 		.umc_name	= "vmem",
 	},
-#if DAOS_HAS_NVML
+#if DAOS_HAS_PMDK
 	{
 		.umc_id		= UMEM_CLASS_PMEM,
 		.umc_ops	= &pmem_ops,
@@ -241,7 +241,7 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	umm->umm_id	= umc->umc_id;
 	umm->umm_ops	= umc->umc_ops;
 	umm->umm_name	= umc->umc_name;
-#if DAOS_HAS_NVML
+#if DAOS_HAS_PMDK
 	umm->umm_u.pmem_pool = uma->uma_u.pmem_pool;
 #endif
 	return 0;
@@ -254,7 +254,7 @@ void
 umem_attr_get(struct umem_instance *umm, struct umem_attr *uma)
 {
 	uma->uma_id = umm->umm_id;
-#if DAOS_HAS_NVML
+#if DAOS_HAS_PMDK
 	uma->uma_u.pmem_pool = umm->umm_u.pmem_pool;
 #endif
 }

@@ -43,8 +43,8 @@
  * tmmid	Typedef ummid.
  */
 
-/************************** NVML MACROS **************************************/
-#if DAOS_HAS_NVML
+/************************** PMDK MACROS **************************************/
+#if DAOS_HAS_PMDK
 
 #include <libpmemobj.h>
 
@@ -64,8 +64,8 @@ typedef PMEMoid			umem_id_t;
 
 int umem_tx_errno(int err);
 
-/************************** NON-NVML MACROS **********************************/
-#else /* !DAOS_HAS_NVML */
+/************************** NON-PMDK MACROS **********************************/
+#else /* !DAOS_HAS_PMDK */
 
 #define _mmid_struct
 #define _mmid_union
@@ -101,8 +101,8 @@ TMMID(t)						\
 #define TMMID_NULL(t)		((TMMID(t))UMMID_NULL)
 #define TMMID_IS_NULL(tmmid)	UMMID_IS_NULL((tmmid).oid)
 
-/************************** NVML MACROS END *********************************/
-#endif /* !DAOS_HAS_NVML */
+/************************** PMDK MACROS END *********************************/
+#endif /* !DAOS_HAS_PMDK */
 
 /* print format of ummid and tmmid */
 #define UMMID_PF		DF_X64
@@ -137,8 +137,8 @@ typedef struct {
 	 *
 	 * \param umm	[IN]	umem class instance.
 	 * \param size	[IN]	size to allocate.
-	 * \param flags	[IN]	flags like zeroing, noflush (for nvml)
-	 * \param type_num [IN]	struct type (for nvml)
+	 * \param flags	[IN]	flags like zeroing, noflush (for PMDK)
+	 * \param type_num [IN]	struct type (for PMDK)
 	 */
 	umem_id_t	 (*mo_tx_alloc)(struct umem_instance *umm, size_t size,
 					uint64_t flags, unsigned int type_num);
@@ -176,7 +176,7 @@ typedef struct {
 	 * \param umm	[IN]		umem class instance.
 	 * \param act	[IN|OUT]	action used for later cancel/publish.
 	 * \param size	[IN]		size to be reserved.
-	 * \param type_num [IN]		struct type (for nvml)
+	 * \param type_num [IN]		struct type (for PMDK)
 	 */
 	umem_id_t	 (*mo_reserve)(struct umem_instance *umm,
 				       struct pobj_action *act, size_t size,
@@ -208,7 +208,7 @@ typedef struct {
 struct umem_attr {
 	umem_class_id_t		 uma_id;
 	union {
-#if DAOS_HAS_NVML
+#if DAOS_HAS_PMDK
 		PMEMobjpool	*pmem_pool;
 #endif
 	}			 uma_u;
@@ -219,7 +219,7 @@ struct umem_instance {
 	umem_class_id_t		 umm_id;
 	const char		*umm_name;
 	union {
-#if DAOS_HAS_NVML
+#if DAOS_HAS_PMDK
 		PMEMobjpool	*pmem_pool;
 #endif
 	}			 umm_u;

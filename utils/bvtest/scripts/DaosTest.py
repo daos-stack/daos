@@ -51,8 +51,6 @@ class DaosTest(object):
         envlist = {}
         envlist['LD_LIBRARY_PATH']= \
             self.test_info.get_defaultENV('LD_LIBRARY_PATH')
-        envlist['CCI_CONFIG']= \
-            self.test_info.get_defaultENV('CCI_CONFIG')
         envlist['CRT_PHY_ADDR_STR']= \
             self.test_info.get_defaultENV('CRT_PHY_ADDR_STR', "ofi+sockets")
         envlist['DD_LOG']= \

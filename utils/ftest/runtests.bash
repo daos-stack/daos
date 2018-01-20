@@ -5,9 +5,7 @@
 
 export DAOSPATH=/home/skirvan/daos_m10
 export LD_LIBRARY_PATH=$DAOSPATH/install/lib:$DAOSPATH/install/lib/daos_srv
-export CCI_CONFIG=$DAOSPATH/install/etc/cci.ini
-export CRT_PHY_ADDR_STR="cci+tcp"
-#export CRT_PHY_ADDR_STR="ofi+sockets"
+export CRT_PHY_ADDR_STR="ofi+sockets"
 export DD_LOG=/mnt/shared/test/tmp/daos.log
 export ABT_ENV_MAX_NUM_XSTREAMS=100
 export ABT_MAX_NUM_XSTREAMS=100

@@ -34,13 +34,13 @@ def scons():
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.preload(os.path.join(Dir('#').abspath, 'scons_local',
                                  'components.py'),
-                    prebuild=['ompi', 'cart', 'argobots', 'nvml', 'cmocka',
+                    prebuild=['ompi', 'cart', 'argobots', 'pmdk', 'cmocka',
                               'uuid', 'crypto'])
     opts.Save(opts_file, env)
 
     # Define this now, and then the individual components can import this
     # through prereqs when they need it.
-    env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
+    env.Append(CPPDEFINES={'DAOS_HAS_PMDK' : '1'})
 
     env.Alias('install', '$PREFIX')
 

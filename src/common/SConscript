@@ -6,7 +6,7 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-    prereqs.require(env, 'nvml', 'argobots', 'cart')
+    prereqs.require(env, 'pmdk', 'argobots', 'cart')
 
     denv = env.Clone()
 

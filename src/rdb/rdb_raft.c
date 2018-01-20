@@ -741,7 +741,7 @@ rdb_raft_verify_leadership(struct rdb *db)
 				     NULL /* result */);
 }
 
-/* Apply entries up to "index". For now, one NVML TX per entry. */
+/* Apply entries up to "index". For now, one PMDK TX per entry. */
 static int
 rdb_apply_to(struct rdb *db, uint64_t index)
 {

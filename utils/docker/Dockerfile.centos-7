@@ -46,7 +46,6 @@ RUN scons --build-deps=yes USE_INSTALLED=all install
 ENV PATH=/home/daos/daos/install/bin:$PATH
 ENV LD_LIBRARY_PATH=/home/daos/daos/install/lib:/home/daos/daos/install/lib/daos_srv:$LD_LIBRARY_PATH
 ENV CPATH=/home/daos/daos/install/include:$CPATH
-ENV CCI_CONFIG=/home/daos/daos/install/etc/cci.ini
 ENV ABT_ENV_MAX_NUM_XSTREAMS=100
 ENV ABT_MAX_NUM_XSTREAMS=100
 ENV CRT_PHY_ADDR_STR="ofi+sockets"

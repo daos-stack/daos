@@ -39,7 +39,7 @@ enum {
 static int
 btr_check_tx(struct btr_attr *attr)
 {
-#if DAOS_HAS_NVML
+#if DAOS_HAS_PMDK
 	if (attr->ba_uma.uma_id != UMEM_CLASS_PMEM)
 		return BTR_NO_TX;
 
@@ -154,7 +154,7 @@ destroy_tree(daos_handle_t tree, daos_iov_t *key)
 		if (rc != 0)
 			D__GOTO(out, rc);
 	} else {
-#ifdef DAOS_HAS_NVML
+#ifdef DAOS_HAS_PMDK
 		volatile daos_handle_t	hdl_tmp = hdl;
 		volatile int		rc_tmp = 0;
 

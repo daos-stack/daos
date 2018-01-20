@@ -9,7 +9,7 @@ def scons():
     lib = os.path.basename(build_dir.abspath)
     env.AppendUnique(LIBPATH=[build_dir])
 
-    prereqs.require(env, 'nvml')
+    prereqs.require(env, 'pmdk')
     prereqs.require(env, 'mercury', mercury_libs=['mchecksum'])
 
     denv = env.Clone()

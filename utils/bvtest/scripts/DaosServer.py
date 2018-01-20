@@ -59,8 +59,6 @@ class DaosServer(object):
         envlist = []
         envlist.append(' -x LD_LIBRARY_PATH={!s}'.format(
             self.test_info.get_defaultENV('LD_LIBRARY_PATH')))
-        envlist.append(' -x CCI_CONFIG={!s}'.format(
-            self.test_info.get_defaultENV('CCI_CONFIG')))
         envlist.append(' -x CRT_PHY_ADDR_STR={!s}'.format(
             self.test_info.get_defaultENV('CRT_PHY_ADDR_STR', "ofi+sockets")))
         envlist.append(' -x DD_LOG={!s}'.format(

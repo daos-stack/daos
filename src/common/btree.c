@@ -1431,7 +1431,7 @@ btr_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 static int
 btr_tx_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 {
-#if DAOS_HAS_NVML
+#if DAOS_HAS_PMDK
 	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
@@ -2159,7 +2159,7 @@ btr_delete(struct btr_context *tcx, void *args)
 static int
 btr_tx_delete(struct btr_context *tcx, void *args)
 {
-#if DAOS_HAS_NVML
+#if DAOS_HAS_PMDK
 	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
@@ -2342,7 +2342,7 @@ btr_tree_alloc(struct btr_context *tcx)
 static int
 btr_tx_tree_alloc(struct btr_context *tcx)
 {
-#if DAOS_HAS_NVML
+#if DAOS_HAS_PMDK
 	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
@@ -2422,7 +2422,7 @@ btr_tree_init(struct btr_context *tcx, struct btr_root *root)
 static int
 btr_tx_tree_init(struct btr_context *tcx, struct btr_root *root)
 {
-#if DAOS_HAS_NVML
+#if DAOS_HAS_PMDK
 	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
@@ -2611,7 +2611,7 @@ btr_tree_destroy(struct btr_context *tcx)
 static int
 btr_tx_tree_destroy(struct btr_context *tcx)
 {
-#if DAOS_HAS_NVML
+#if DAOS_HAS_PMDK
 	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 

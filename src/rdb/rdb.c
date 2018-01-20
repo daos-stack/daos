@@ -317,7 +317,7 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 			      &db->d_entry, true /* exclusive */);
 	ABT_mutex_unlock(rdb_hash_lock);
 	if (rc != 0) {
-		/* We have the NVML pool open. */
+		/* We have the PMDK pool open. */
 		D__ASSERT(rc != -DER_EXIST);
 		D__GOTO(err_raft, rc);
 	}

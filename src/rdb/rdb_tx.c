@@ -546,7 +546,7 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, daos_list_t *destroyed)
 
 			/*
 			 * Look up and save victim in destroyed, so that
-			 * we can evict it only if the upper-level NVML TX
+			 * we can evict it only if the upper-level PMDK TX
 			 * commits successfully.
 			 */
 			rc_tmp = rdb_tree_lookup(db, &victim_path, &victim);

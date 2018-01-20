@@ -100,11 +100,10 @@ Once built, the environment must be modified to search for binaries, libraries a
 
 If required, \${daospath}/install must be replaced with the alternative path specified through PREFIX. The network type to use as well the debug log location can be selected as follows:
 
-    CCI_CONFIG=${daospath}/install/etc/cci.ini
     CRT_PHY_ADDR_STR="ofi+sockets",
 	OFI_INTERFACE=eth0, where eth0 is the network device you want to use.
 	for infiniband you could use ib0 or whichever else pointing to IB device.
-    export CCI_CONFIG CRT_PHY_ADDR_STR
+    export CRT_PHY_ADDR_STR
 
 Additionally, one might want to set the following environment variables to work around an Argobot issue:
 
@@ -162,20 +161,19 @@ With this type of installation each individual component is built into a differe
 
     ARGOBOTS=${daos_prefix_path}/opt/argobots
     CART=${daos_prefix_path}/opt/cart
-    CCI=${daos_prefix_path}/opt/cci
     HWLOC=${daos_prefix_path}/opt/hwloc
     MERCURY=${daos_prefix_path}/opt/mercury
-    NVML=${daos_prefix_path}/opt/nvml
+    PMDK=${daos_prefix_path}/opt/pmdk
     OMPI=${daos_prefix_path}/opt/ompi
     OPA=${daos_prefix_path}/opt/openpa
     PMIX=${daos_prefix_path}/opt/pmix
 
-    PATH=$CART/bin/:$CCI/bin/:$HWLOC/bin/:$PATH
-    PATH=$MERCURY/bin/:$NVML/bin/:$OMPI/bin/:$OPA/bin/:$PMIX/bin/:$PATH
+    PATH=$CART/bin/:$HWLOC/bin/:$PATH
+    PATH=$MERCURY/bin/:$PMDK/bin/:$OMPI/bin/:$OPA/bin/:$PMIX/bin/:$PATH
     PATH=${daos_prefix_path}/bin/:$PATH
 
-    LD_LIBRARY_PATH=/usr/lib64/:$ARGOBOTS/lib/:$CART/lib/:$CCI/lib/:$HWLOC/lib/:$LD_LIBRARY_PATH
-    LD_LIBRARY_PATH=$MERCURY/lib/:$NVML/lib/:$OMPI/lib/:$OMPI/lib/openmpi/:$OPA/lib/:$PMIX/lib/:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/usr/lib64/:$ARGOBOTS/lib/:$CART/lib/:$HWLOC/lib/:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=$MERCURY/lib/:$PMDK/lib/:$OMPI/lib/:$OMPI/lib/openmpi/:$OPA/lib/:$PMIX/lib/:$LD_LIBRARY_PATH
     LD_LIBRARY_PATH=${daos_prefix_path}/lib/:${daos_prefix_path}/lib/daos_srv/:$LD_LIBRARY_PATH
 
 With an installation complete with TARGET_PREFIX, the PREBUILT_PREFIX functionality can be used to reuse prebuilt dependencies.
