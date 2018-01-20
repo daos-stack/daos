@@ -515,6 +515,69 @@ class WebRetriever(object):
         self.get(subdir)
 
 
+def check_flag(context, flag):
+    """Helper function to allow checking for compiler flags"""
+
+    cc_name = context.env.get('CC')
+    context.Message("Checking %s %s " % (cc_name, flag))
+    context.env.Replace(CFLAGS=['-Werror', flag])
+    ret = context.TryCompile("""
+int main() {
+    return 0;
+}
+""", ".c")
+    context.Result(ret)
+    return ret
+
+def check_flag_cc(context, flag):
+    """Helper function to allow checking for compiler flags"""
+
+    cc_name = context.env.get('CXX')
+    context.Message("Checking %s %s " % (cc_name, flag))
+    context.env.Replace(CCFLAGS=['-Werror', flag])
+    ret = context.TryCompile("""
+int main() {
+    return 0;
+}
+""", ".cpp")
+    context.Result(ret)
+    return ret
+
+def check_flags(env, config, key, value):
+    """Check and append all supported flags"""
+    checked = []
+    for flag in value:
+        if flag in checked:
+            continue
+        insert = False
+        if not flag.startswith('-W'):
+            insert = True
+        else:
+            if key == "CCFLAGS":
+                if config.CheckFlag(flag) and config.CheckFlagCC(flag):
+                    insert = True
+            elif key == "CFLAGS":
+                if config.CheckFlag(flag):
+                    insert = True
+            elif config.CheckFlagCC(flag):
+                insert = True
+        if insert:
+            env.AppendUnique(**{key : [flag]})
+        checked.append(flag)
+
+def append_if_supported(env, **kwargs):
+    """Check and append flags for construction variables"""
+    cenv = env.Clone()
+    config = Configure(cenv, custom_tests={'CheckFlag' : check_flag,
+                                           'CheckFlagCC' : check_flag_cc})
+    for key, value in kwargs.iteritems():
+        if key not in ["CFLAGS", "CXXFLAGS", "CCFLAGS"]:
+            env.AppendUnique(**{key : value})
+            continue
+        check_flags(env, config, key, value)
+
+    config.Finish()
+
 class PreReqComponent(object):
     """A class for defining and managing external components required
        by a project.
@@ -547,6 +610,7 @@ class PreReqComponent(object):
 
         self.add_options()
         self.__setup_unit_test_builders()
+        self.__env.AddMethod(append_if_supported, "AppendIfSupported")
         self.__env.AddMethod(mocked_tests.build_mock_unit_tests,
                              'BuildMockingUnitTests')
         self.__require_optional = GetOption('require_optional')

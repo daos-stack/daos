@@ -1,4 +1,4 @@
-# Copyright (c) 2016-2017 Intel Corporation
+# Copyright (c) 2016-2018 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -100,5 +100,34 @@ SConscript('build/sl_test/SConscript', exports=['ENV', 'PREREQS'])
 Default('sl_test')
 
 PREREQS.get_build_info().save("sl_test.info")
+
+TEST_ENV = ENV.Clone()
+TEST_ENV.Replace(CFLAGS=[], CCFLAGS=[], CXXFLAGS=[])
+TEST_ENV.AppendIfSupported(CFLAGS=['-Wbad-flag', '-Wall'])
+TEST_ENV.AppendIfSupported(CXXFLAGS=['-Wbad-flag-test2', '-Wall'])
+TEST_ENV.AppendIfSupported(CCFLAGS=['-Wpedantic', '-Wbad-flag-test3',
+                                    '-Wall'])
+TEST_ENV.AppendIfSupported(LIBS=['foobar', 'fub'])
+
+if '-Wbad-flag' in TEST_ENV.get('CFLAGS'):
+    raise Exception("Bad flag added to CFLAGS")
+if '-Wbad-flag-test2' in TEST_ENV.get('CXXFLAGS'):
+    raise Exception("Bad flag added to CFLAGS")
+if '-Wbad-flag-test3' in TEST_ENV.get('CCFLAGS'):
+    raise Exception("Bad flag added to CCFLAGS")
+if '-Wall' not in TEST_ENV.get('CFLAGS'):
+    raise Exception("Expected -Wall in CFLAGS")
+if '-Wall' not in TEST_ENV.get('CCFLAGS'):
+    raise Exception("Expected -Wall in CCFLAGS")
+if '-Wall' not in TEST_ENV.get('CXXFLAGS'):
+    raise Exception("Expected -Wall in CXXFLAGS")
+if '-Wpedantic' not in TEST_ENV.get('CCFLAGS'):
+    raise Exception("Expected -Wpedantic in CCFLAGS")
+# items passed to other construction variables just get appended
+if 'foobar' not in TEST_ENV.get('LIBS'):
+    raise Exception("Expected foobar in LIBS")
+if 'fub' not in TEST_ENV.get('LIBS'):
+    raise Exception("Expected fub in LIBS")
+
 
 Help(OPTS.GenerateHelpText(ENV))
