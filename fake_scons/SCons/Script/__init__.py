@@ -218,6 +218,10 @@ class DefaultEnvironment(object):
         """Fake Append Unique"""
         pass
 
+    def AppendIfSupported(self, *args, **kw):
+        """Fake AppendIfSupported"""
+        pass
+
     def subst(self, val):
         """Fake subst"""
         return val
