@@ -5,6 +5,10 @@ import os
 from SCons.Script import BUILD_TARGETS
 
 BUILD_TARGETS.append('fixtest')
+DESIRED_FLAGS = ['-Wno-gnu-designator',
+                 '-Wno-missing-braces',
+                 '-Wno-gnu-zero-variadic-macro-arguments',
+                 '-Wno-tautological-constant-out-of-range-compare']
 
 
 have_scons_local=False
@@ -50,9 +54,9 @@ if env['PLATFORM'] == 'darwin':
 	env['SHLIBSUFFIX'] = '.so'
 
 # Compiler options
-env.Append(CCFLAGS = ['-g', '-Wall', '-Werror', '-Wno-missing-braces',
-		      '-fpic', '-D_GNU_SOURCE'])
+env.Append(CCFLAGS = ['-g', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
 env.Append(CCFLAGS = ['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+env.AppendIfSupported(CCFLAGS = DESIRED_FLAGS)
 
 # generate targets in specific build dir to avoid polluting the source code
 VariantDir('build', '.', duplicate=0)
