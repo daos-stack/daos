@@ -1,4 +1,5 @@
 """Build container library"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -7,14 +8,15 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
+    common = denv.SharedObject(['rpc.c'])
     # ds_cont: Container Server
-    ds_cont = denv.SharedLibrary('cont',
+    ds_cont = daos_build.library(denv, 'cont',
                                  ['srv.c', 'srv_container.c', 'srv_epoch.c',
-                                  'srv_target.c', 'srv_layout.c', 'rpc.c'])
+                                  'srv_target.c', 'srv_layout.c', common])
     denv.Install('$PREFIX/lib/daos_srv', ds_cont)
 
     # dc_cont: Container Client
-    dc_co_tgts = denv.SharedObject(['cli.c', 'rpc.c'])
+    dc_co_tgts = denv.SharedObject(['cli.c']) + common
     Export('dc_co_tgts')
 
     # tests

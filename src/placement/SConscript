@@ -1,4 +1,5 @@
 """Build placement code"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -12,7 +13,7 @@ def scons():
     common_tgts = denv.SharedObject(['pl_map.c', 'ring_map.c'])
 
     # generate server module
-    srv = denv.SharedLibrary('placement', common_tgts)
+    srv = daos_build.library(denv, 'placement', common_tgts)
     denv.Install('$PREFIX/lib/daos_srv', srv)
 
     # placement client library

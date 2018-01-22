@@ -2,6 +2,7 @@
 import sys
 import os
 from SCons.Script import BUILD_TARGETS
+sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',

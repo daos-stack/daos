@@ -1,4 +1,5 @@
 """Build tests"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -9,25 +10,26 @@ def scons():
 
     denv = env.Clone()
 
+    denv.Append(CPPPATH=['#/src/tests/suite'])
     prereqs.require(denv, 'ompi')
 
-    denv.Program('simple_array', 'simple_array.c', LIBS=libs)
-    daosbench = denv.Program('daosbench', 'daosbench.c', LIBS=libs)
+    daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)
+    daosbench = daos_build.program(denv, 'daosbench', 'daosbench.c', LIBS=libs)
     denv.Install('$PREFIX/bin/', daosbench)
 
     dts_common = denv.Object('dts_common.c')
-    daos_perf = denv.Program('daos_perf', ['daos_perf.c', dts_common],
-                             LIBS=libs + ['vos', 'daos_tests'])
+    daos_perf = daos_build.program(denv, 'daos_perf',
+                                   ['daos_perf.c', dts_common],
+                                   LIBS=libs + ['vos', 'daos_tests'])
     denv.Install('$PREFIX/bin/', daos_perf)
 
-    daos_ctl = denv.Program('daos_ctl', ['daos_ctl.c', dts_common],
-                            LIBS=libs + ['vos', 'daos_tests'])
+    daos_ctl = daos_build.program(denv, 'daos_ctl', ['daos_ctl.c', dts_common],
+                                  LIBS=libs + ['vos', 'daos_tests'])
     denv.Install('$PREFIX/bin/', daos_ctl)
 
     # tests
     SConscript('suite/SConscript', exports=['denv'])
     SConscript('tier/SConscript', exports=['denv'])
-    denv.Append(CPPPATH=['#/src/tests/suite'])
     SConscript('addons/SConscript', exports=['denv'])
 
 if __name__ == "SCons.Script":

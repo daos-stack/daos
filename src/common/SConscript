@@ -1,4 +1,5 @@
 """Build common libraries"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -6,18 +7,23 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-    prereqs.require(env, 'pmdk', 'argobots', 'cart')
+    # Hack alert.   Add pmem to pmdk libs so libpmem is found
+    # in the rpath.   It is normally only included by libpmemobj
+    # but that library doesn't contain the installed location
+    # in the rpath.
+    prereqs.require(env, 'pmdk', 'argobots', 'cart',
+                    pmdk_libs=['pmemobj', 'pmem'])
 
     denv = env.Clone()
 
     common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'hash.c', 'lru.c',
                   'misc.c', 'pool_map.c', 'proc.c', 'sort.c', 'btree.c',
                   'btree_class.c', 'tse.c', 'rsvc.c']
-    common = denv.SharedLibrary('libdaos_common', common_src)
+    common = daos_build.library(denv, 'libdaos_common', common_src)
     denv.Install('$PREFIX/lib/', common)
 
     tests_lib_src = ['tests_lib.c']
-    tests_lib = denv.SharedLibrary('libdaos_tests', tests_lib_src)
+    tests_lib = daos_build.library(denv, 'libdaos_tests', tests_lib_src)
     denv.Install('$PREFIX/lib/', tests_lib)
 
     denv.Append(CPPPATH=['#/src/common'])

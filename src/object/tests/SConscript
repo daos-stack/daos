@@ -1,4 +1,5 @@
 """Build object tests"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -6,8 +7,8 @@ def scons():
     Import('common_tgts')
 
     test_tgt = denv.SharedObject('place_obj.c')
-    denv.Program('pl_map', test_tgt + common_tgts,
-                 LIBS=['daos_common', 'gurt', 'cart', 'placement'])
+    daos_build.program(denv, 'pl_map', test_tgt + common_tgts,
+                       LIBS=['daos_common', 'gurt', 'cart', 'placement'])
 
 if __name__ == "SCons.Script":
     scons()

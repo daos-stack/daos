@@ -39,9 +39,10 @@
 if [ ! -d "scons_local" ];then
   cd ..
 fi
+export PYTHONPATH=`pwd`/utils:${PYTHONPATH}
 
 if [ -z "$*" ]; then
-  flist="-s SConstruct"
+  flist="utils/daos_build.py -s SConstruct"
   #Exclude raft and scons_local
   scripts=`find . -name SConscript | grep -v scons_local| grep -v raft | \
            grep -v _build.external`

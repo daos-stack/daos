@@ -1,4 +1,5 @@
 """Build rebuild library"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -8,7 +9,7 @@ def scons():
     denv = env.Clone()
 
     # rebuild
-    rebuild = denv.SharedLibrary('rebuild',
+    rebuild = daos_build.library(denv, 'rebuild',
                                  ['scan.c', 'srv.c', 'rpc.c', 'initiator.c',
                                   'rebuild_iv.c', "srv_daos_api.c"])
     denv.Install('$PREFIX/lib/daos_srv', rebuild)

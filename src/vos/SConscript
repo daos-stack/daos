@@ -1,5 +1,6 @@
 """Build versioned object store"""
 import os
+import daos_build
 
 def scons():
     """Execute build"""
@@ -25,7 +26,7 @@ def scons():
         # generate DAOS server module
         install = 'lib/daos_srv'
 
-    vos = denv.SharedLibrary(lib, Glob('*.c'))
+    vos = daos_build.library(denv, lib, Glob('*.c'))
 
     denv.Install('$PREFIX/' + install, vos)
 

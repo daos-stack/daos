@@ -1,4 +1,5 @@
 """Build test suite"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -8,7 +9,7 @@ def scons():
     libraries += ['daos_tier', 'uuid', 'mpi']
     libraries += ['cmocka']
 
-    test = denv.Program('daos_test', Glob('*.c'), LIBS=libraries)
+    test = daos_build.program(denv, 'daos_test', Glob('*.c'), LIBS=libraries)
     denv.Install('$PREFIX/bin/', test)
 
 if __name__ == "SCons.Script":

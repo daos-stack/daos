@@ -1,4 +1,5 @@
 """Build tier tests"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -8,10 +9,12 @@ def scons():
     libraries += ['daos_tier', 'uuid', 'mpi']
     libraries += ['cmocka']
 
-    test1 = denv.Program('cross_conn_test', 'cross_conn_test.c', LIBS=libraries)
-    test2 = denv.Program('tier_populate', 'tier_populate.c', LIBS=libraries)
-    test3 = denv.Program('fetch_test', ['fetch_test.c', 'parse_info.c'],
-                         LIBS=libraries)
+    test1 = daos_build.program(denv, 'cross_conn_test', 'cross_conn_test.c',
+                               LIBS=libraries)
+    test2 = daos_build.program(denv, 'tier_populate', 'tier_populate.c',
+                               LIBS=libraries)
+    test3 = daos_build.program(denv, 'fetch_test',
+                               ['fetch_test.c', 'parse_info.c'], LIBS=libraries)
     denv.Install('$PREFIX/bin/', test1)
     denv.Install('$PREFIX/bin/', test2)
     denv.Install('$PREFIX/bin/', test3)

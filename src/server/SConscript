@@ -1,4 +1,5 @@
 """Build DAOS server"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -16,8 +17,12 @@ def scons():
     # daos_server such as dss_tls_key etc.
     denv.AppendUnique(LINKFLAGS=['-rdynamic'])
 
+    # Add runtime paths for daos libraries
+    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib/daos_srv')])
+
     # Generate server program
-    server = denv.Program('daos_server', Glob('*.c'), LIBS=libraries)
+    server = daos_build.program(denv, 'daos_server', Glob('*.c'),
+                                LIBS=libraries)
     denv.Install('$PREFIX/bin', server)
 
 if __name__ == "SCons.Script":

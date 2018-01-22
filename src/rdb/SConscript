@@ -1,4 +1,5 @@
 """Build rdb"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -13,7 +14,7 @@ def scons():
     denv.AppendUnique(LIBPATH=['raft/src'])
 
     # rdb
-    rdb = denv.SharedLibrary('rdb',
+    rdb = daos_build.library(denv, 'rdb',
                              ['rdb_util.c', 'rdb_path.c', 'rdb_layout.c',
                               'rdb_tree.c', 'rdb_rpc.c', 'rdb_raft.c',
                               'rdb_tx.c', 'rdb.c', 'rdb_module.c'],

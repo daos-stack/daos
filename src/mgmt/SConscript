@@ -1,4 +1,5 @@
 """Build management server module"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -8,12 +9,13 @@ def scons():
 
     denv = env.Clone()
 
+    common = denv.SharedObject(['rpc.c'])
     # Management server module
-    mgmt_srv = denv.SharedLibrary('mgmt', ['rpc.c', Glob('srv*.c')])
+    mgmt_srv = daos_build.library(denv, 'mgmt', [common, Glob('srv*.c')])
     denv.Install('$PREFIX/lib/daos_srv', mgmt_srv)
 
     # Management client library
-    dc_mgmt_tgts = denv.SharedObject(['rpc.c', Glob('cli*.c')])
+    dc_mgmt_tgts = common + denv.SharedObject([Glob('cli*.c')])
     Export('dc_mgmt_tgts')
 
 

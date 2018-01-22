@@ -6,12 +6,13 @@ def scons():
 
     denv.Append(CPPPATH=['#/src/dsm', '#/src/server'])
 
+    #Import('prereqs build_program')
     #libraries = ['daos_common', 'daos', 'gurt', 'cart']
     #libraries += ['uuid', 'mpi']
     #libraries += ['cmocka']
 
-    #PREREQS.require(denv, 'ompi')
+    #prereqs.require(denv, 'ompi')
     #
-    #denv.Program('dsm_test', Glob('*.c'), LIBS=libraries)
+    #build_program(denv, 'dsm_test', Glob('*.c'), LIBS=libraries)
 if __name__ == "SCons.Script":
     scons()

@@ -6,10 +6,11 @@ def scons():
 
     denv.Append(CPPPATH=['#/src/dmg', '#/src/server'])
 
+    #Import('build_program')
     #libraries = ['daos_common', 'daos', 'gurt', 'cart']
     #ibraries += ['uuid', 'cmocka']
 
-    #denv.Program('dmg_test', 'dmg_test.c', LIBS=libraries)
+    #build_program(denv, 'dmg_test', 'dmg_test.c', LIBS=libraries)
 
 if __name__ == "SCons.Script":
     scons()
