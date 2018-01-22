@@ -1080,6 +1080,8 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 		gc_in->gc_membs = grp_priv->gp_membs;
 		crt_group_rank(NULL, &gc_in->gc_initiate_rank);
 
+		rc = gc_add_child_rpc(grp_priv, gc_rpc);
+		D_ASSERT(rc == 0);
 		rc = crt_req_send(gc_rpc, gc_rpc_cb, grp_priv);
 		if (rc != 0) {
 			D_ERROR("crt_req_send(CRT_OPC_GRP_CREATE) failed, "
@@ -1087,10 +1089,10 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 			grp_priv->gp_child_ack_num +=
 				grp_priv->gp_child_num - i;
 			grp_priv->gp_rc = rc;
+			/* roll back above gc_add_child_rpc */
+			gc_del_child_rpc(grp_priv, gc_rpc);
 			D_GOTO(out, rc);
 		}
-		rc = gc_add_child_rpc(grp_priv, gc_rpc);
-		D_ASSERT(rc == 0);
 
 		gc_req_sent =  true;
 	}
