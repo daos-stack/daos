@@ -99,7 +99,7 @@ class WrapScript(object):
 
         for variable in variables:
             if variable.upper() == 'PREREQS':
-                newlines += 5
+                newlines += 4
                 outfile.write("%sfrom prereq_tools import PreReqComponent\n"
                               % prefix)
                 outfile.write("%sscons_temp_env = DefaultEnvironment()\n"
@@ -137,7 +137,7 @@ from __future__ import print_function
 from SCons.Script import *
 from SCons.Variables import *
 # pylint: enable=wildcard-import\n""")
-        return 4
+        return 5
 
     def fix_log(self, fname):
         """Get the line number"""
