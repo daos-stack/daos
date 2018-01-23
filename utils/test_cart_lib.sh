@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (C) 2016 Intel Corporation
+# Copyright (C) 2016-2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -51,17 +51,18 @@ RC=0
 echo Checking for symbol names.
 if [ "$os" = "Darwin" ]
 then
-    nm -g ${SL_PREFIX}/lib/cart/libcart.so |
+    nm -g ${SL_PREFIX}/lib/libcart.so |
         grep -v " U " |  grep -v " _crt"
 else
     echo "checking libcart.so"
-    nm -g ${SL_PREFIX}/lib/cart/libcart.so |
+    nm -g ${SL_PREFIX}/lib/libcart.so |
         grep -v " U " |  grep -v " w " |  grep -v " crt_" | grep -v "D CMF_" |
+        grep -v "\bd_\w*_logfac\b" |
         grep -v " D _edata" | grep -v " T _fini" | grep -v " T _init" |
         grep -v " B __bss_start" | grep -v " B _end";
     if [ $? -ne 1 ]; then RC=1; fi
     echo "checking libgurt.so"
-    nm -g ${SL_PREFIX}/lib/gurt/libgurt.so |
+    nm -g ${SL_PREFIX}/lib/libgurt.so |
         grep -v " U " |  grep -v " w " |  grep -v " d_" |
         grep -v " D _edata" | grep -v " T _fini" | grep -v " T _init" |
         grep -v " B __bss_start" | grep -v " B _end" |

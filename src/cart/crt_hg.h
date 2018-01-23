@@ -88,7 +88,7 @@ struct crt_na_dict {
 	bool	nad_port_bind;
 };
 
-extern struct crt_na_dict na_dict[];
+extern struct crt_na_dict crt_na_dict[];
 
 struct crt_hg_hdl {
 	/* link to crt_hg_pool::chp_hg_list */

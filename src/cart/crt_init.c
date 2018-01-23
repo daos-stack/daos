@@ -202,16 +202,15 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 			D_DEBUG("ENV %s not found.\n", CRT_PHY_ADDR_ENV);
 			goto do_init;
 		} else{
-			D_DEBUG("EVN %s: %s.\n",
-				CRT_PHY_ADDR_ENV, addr_env);
+			D_DEBUG("EVN %s: %s.\n", CRT_PHY_ADDR_ENV, addr_env);
 		}
 
-		for (plugin_idx = 0; na_dict[plugin_idx].nad_str != NULL;
+		for (plugin_idx = 0; crt_na_dict[plugin_idx].nad_str != NULL;
 		     plugin_idx++) {
-			if (!strncmp(addr_env, na_dict[plugin_idx].nad_str,
-				     strlen(na_dict[plugin_idx].nad_str))) {
+			if (!strncmp(addr_env, crt_na_dict[plugin_idx].nad_str,
+				     strlen(crt_na_dict[plugin_idx].nad_str))) {
 				crt_gdata.cg_na_plugin =
-					na_dict[plugin_idx].nad_type;
+					crt_na_dict[plugin_idx].nad_type;
 				break;
 			}
 		}

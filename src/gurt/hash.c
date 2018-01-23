@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1144,7 +1144,7 @@ d_ulink_find(struct d_chash_table *htable, void *key, size_t size)
 }
 
 struct d_ulink*
-duhash_link_lookup(struct d_chash_table *uhtab, struct d_uuid *key)
+d_uhash_link_lookup(struct d_chash_table *uhtab, struct d_uuid *key)
 {
 	return d_ulink_find(uhtab, (void *)key, sizeof(struct d_uuid));
 }
@@ -1162,8 +1162,8 @@ d_uhash_link_putref(struct d_chash_table *uhtab, struct d_ulink *ulink)
 }
 
 int
-duhash_link_insert(struct d_chash_table *uhtab, struct d_uuid *key,
-		       struct d_ulink *ulink)
+d_uhash_link_insert(struct d_chash_table *uhtab, struct d_uuid *key,
+		    struct d_ulink *ulink)
 {
 	int	rc = 0;
 

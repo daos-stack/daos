@@ -46,7 +46,7 @@
  * na_dict table should be in the same order of enum crt_na_type, the last one
  * is terminator with NULL nad_str.
  */
-struct crt_na_dict na_dict[] = {
+struct crt_na_dict crt_na_dict[] = {
 	{
 		.nad_type	= CRT_NA_SM,
 		.nad_str	= "sm",
@@ -483,10 +483,10 @@ crt_get_info_string(char **string)
 	char	*plugin_str;
 
 	plugin = crt_gdata.cg_na_plugin;
-	D_ASSERT(plugin == na_dict[plugin].nad_type);
-	plugin_str = na_dict[plugin].nad_str;
+	D_ASSERT(plugin == crt_na_dict[plugin].nad_type);
+	plugin_str = crt_na_dict[plugin].nad_str;
 
-	if (!na_dict[plugin].nad_port_bind) {
+	if (!crt_na_dict[plugin].nad_port_bind) {
 		D_ASPRINTF(*string, "%s://", plugin_str);
 	} else {
 		port = crt_na_ofi_conf.noc_port;
