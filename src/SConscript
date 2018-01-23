@@ -1,5 +1,5 @@
 #!python
-# Copyright (C) 2016-2017 Intel Corporation
+# Copyright (C) 2016-2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,7 @@ HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
 def scons():
     """Scons function"""
 
-    Import('env prereqs')
+    Import('env')
 
     env.Append(CPPPATH=['#src/include'])
     for header in HEADERS:
@@ -56,21 +56,21 @@ def scons():
                     os.path.join('include', 'gurt', header))
 
     # Generate the common libraries used by everyone
-    SConscript('gurt/SConscript', exports=["env", "prereqs"])
-    SConscript('cart/SConscript', exports=["env", "prereqs"])
+    SConscript('gurt/SConscript')
+    SConscript('cart/SConscript')
 
     # Builders
-    SConscript('test/SConscript', exports=["env", "prereqs"])
+    SConscript('test/SConscript')
 
     # Build self test
-    SConscript('self_test/SConscript', exports=["env", "prereqs"])
+    SConscript('self_test/SConscript')
 
     # Build the unit tests
-    SConscript('utest/SConscript', exports=["env", "prereqs"])
+    SConscript('utest/SConscript')
 
     if not env.GetOption('clean'):
 
-        print "Checking local headers can be included"
+        print("Checking local headers can be included")
         broken_includes = False
         config_env = env.Clone()
         config = Configure(config_env)
@@ -83,7 +83,7 @@ def scons():
         config.Finish()
 
         if broken_includes:
-            print "Broken local header files, cannot continue"
+            print("Broken local header files, cannot continue")
             Exit(2)
 
     Default('gurt', 'cart', 'test', 'self_test')

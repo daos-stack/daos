@@ -75,6 +75,8 @@ test_crt_api_linkage(void **state)
 
 	(void)state;
 
+	setenv("OFI_INTERFACE", "lo", 1);
+
 	expect_pmix_get(PMIX_UINT32, 1); /* group size */
 	expect_pmix_get(PMIX_UINT32, 1); /* universe size */
 

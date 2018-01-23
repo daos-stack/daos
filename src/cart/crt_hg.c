@@ -48,14 +48,6 @@
  */
 struct crt_na_dict na_dict[] = {
 	{
-		.nad_type	= CRT_NA_CCI_TCP,
-		.nad_str	= "cci+tcp",
-		.nad_port_bind	= false,
-	}, {
-		.nad_type	= CRT_NA_CCI_VERBS,
-		.nad_str	= "cci+verbs",
-		.nad_port_bind	= false,
-	}, {
 		.nad_type	= CRT_NA_SM,
 		.nad_str	= "sm",
 		.nad_port_bind	= false,

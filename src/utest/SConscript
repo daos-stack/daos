@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2017 Intel Corporation
+# Copyright (C) 2016-2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -56,9 +56,9 @@ def scons():
     prereqs.define('cmocka', headers=[wrap_cmocka], libs=['cmocka'],
                    package='libcmocka-devel')
     if not prereqs.check_component('cmocka'):
-        print "\n**************************************************************"
-        print "libcmocka-devel package must be installed to enable unit tests"
-        print "**************************************************************\n"
+        print("\n***************************************************")
+        print("libcmocka-devel package needed to enable unit tests")
+        print("***************************************************\n")
         # Just returning is the desired behavior here.  The utest target
         # has yet to be defined so the build will just fail.
         return

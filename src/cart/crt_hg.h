@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -67,13 +67,11 @@ struct crt_corpc_hdr;
 
 /** type of NA plugin */
 enum crt_na_type {
-	CRT_NA_CCI_TCP		= 0,
-	CRT_NA_CCI_VERBS	= 1,
-	CRT_NA_SM		= 2,
-	CRT_NA_OFI_SOCKETS	= 3,
-	CRT_NA_OFI_VERBS	= 4,
-	CRT_NA_OFI_GNI		= 5,
-	CRT_NA_OFI_PSM2		= 6
+	CRT_NA_SM		= 0,
+	CRT_NA_OFI_SOCKETS	= 1,
+	CRT_NA_OFI_VERBS	= 2,
+	CRT_NA_OFI_GNI		= 3,
+	CRT_NA_OFI_PSM2		= 4
 };
 
 static inline bool

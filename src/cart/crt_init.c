@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,7 +71,7 @@ static void data_init(void)
 	crt_gdata.cg_refcount = 0;
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_addr = NULL;
-	crt_gdata.cg_na_plugin = CRT_NA_CCI_TCP;
+	crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
 	crt_gdata.cg_multi_na = false;
 
 	timeout = 0;
@@ -215,6 +215,7 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 				break;
 			}
 		}
+do_init:
 		if (crt_na_type_is_ofi(crt_gdata.cg_na_plugin)) {
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
@@ -223,16 +224,6 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 				D_GOTO(out, rc);
 			}
 		}
-
-do_init:
-		/*
-		 * For client unset the CCI_CONFIG ENV, then client-side process
-		 * will use random port number and will not conflict with server
-		 * side. As when using orterun to load both server and client it
-		 * possibly will lead them share the same ENV.
-		 */
-		if (server == false)
-			unsetenv("CCI_CONFIG");
 
 		rc = crt_hg_init(&addr, server);
 		if (rc != 0) {

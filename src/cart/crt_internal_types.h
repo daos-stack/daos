@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -63,7 +63,7 @@ struct crt_gdata {
 
 	bool			cg_server;
 	bool			cg_singleton; /* true for singleton client */
-	/* multiple NA addr flag, true for server when using CCI plugin */
+	/* multiple NA addr flag, true for server */
 	bool			cg_multi_na;
 	int			cg_na_plugin; /* NA plugin type */
 
