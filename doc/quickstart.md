@@ -150,7 +150,7 @@ Include the daos.h header file in your program and link with -Ldaos. Examples ar
 
 ## DAOS for Development
 
-Setting up DAOS for development would be simpler by building with running a separate command using TARGET\_PREFIX for all the dependencies and then using PREFIX PREFIX for your custom DAOS installation from your sandbox and PREBUILT\_PREFIX to point to the same location specified for dependencies. Once the submodule has been initialized and updated,
+Setting up DAOS for development would be simpler by building with running a separate command using TARGET\_PREFIX for all the dependencies and then using PREFIX for your custom DAOS installation from your sandbox and PREBUILT\_PREFIX to point to the same location specified for dependencies. Once the submodule has been initialized and updated, run the following:
 
     $ cd scons_local
     $ scons --build-deps=yes TARGET_PREFIX=${daos_prefix_path}/opt REQUIRES=ompi,pmdk,argobots,cart --build-config=../utils/build.config
