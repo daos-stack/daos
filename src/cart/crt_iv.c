@@ -99,8 +99,8 @@ struct crt_global_ns {
 	/* Associated tree topology */
 	int			gn_tree_topo;
 	/* Associated group ID */
-	/* TODO: user internal group id */
-	crt_group_id_t		gn_grp_id;
+	uint64_t		gn_int_grp_id;
+
 };
 
 /* Structure for iv fetch callback info */
@@ -600,6 +600,7 @@ crt_ivns_internal_create(crt_context_t crt_ctx, crt_group_t *grp,
 		struct crt_iv_class *iv_classes, uint32_t num_class,
 		int tree_topo, struct crt_ivns_id *ivns_id)
 {
+	struct crt_grp_priv		*grp_priv = NULL;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_ivns_id		*internal_ivns_id;
 	uint32_t			next_ns_id;
@@ -651,10 +652,10 @@ crt_ivns_internal_create(crt_context_t crt_ctx, crt_group_t *grp,
 
 	ivns_internal->cii_grp = grp;
 
-	if (grp == NULL)
-		ivns_internal->cii_gns.gn_grp_id = NULL;
-	else
-		ivns_internal->cii_gns.gn_grp_id = grp->cg_grpid;
+	grp_priv = crt_grp_pub2priv(grp);
+	ivns_internal->cii_gns.gn_int_grp_id = grp_priv->gp_int_grpid;
+
+	D_DEBUG("Group id was 0x%lx\n", ivns_internal->cii_gns.gn_int_grp_id);
 
 	pthread_mutex_lock(&ns_list_lock);
 	d_list_add_tail(&ivns_internal->cii_link, &ns_list);
@@ -706,7 +707,7 @@ crt_iv_namespace_attach(crt_context_t crt_ctx, d_iov_t *g_ivns,
 {
 	struct crt_ivns_internal	*ivns_internal = NULL;
 	struct crt_global_ns		*ivns_global = NULL;
-	crt_group_t			*grp;
+	struct crt_grp_priv		*grp_priv;
 	int				rc = 0;
 
 	if (g_ivns == NULL) {
@@ -727,9 +728,18 @@ crt_iv_namespace_attach(crt_context_t crt_ctx, d_iov_t *g_ivns,
 	/* TODO: Need to unflatten the structure */
 	ivns_global = (struct crt_global_ns *)g_ivns->iov_buf;
 
-	grp = crt_group_lookup(ivns_global->gn_grp_id);
+	if ((ivns_global->gn_int_grp_id & 0xFFFFFFFF) == 0x0)
+		grp_priv = crt_grp_pub2priv(NULL);
+	else
+		grp_priv = crt_grp_lookup_int_grpid(ivns_global->gn_int_grp_id);
 
-	ivns_internal = crt_ivns_internal_create(crt_ctx, grp,
+	if (grp_priv == NULL) {
+		D_ERROR("Group lookup failed for 0x%lx\n",
+			ivns_global->gn_int_grp_id);
+		D_GOTO(exit, rc = -DER_NOMEM);
+	}
+
+	ivns_internal = crt_ivns_internal_create(crt_ctx, &grp_priv->gp_pub,
 					iv_classes, num_class,
 					ivns_global->gn_tree_topo,
 					&ivns_global->gn_ivns_id);
@@ -1062,7 +1072,8 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 		D_GOTO(exit, rc);
 	}
 
-	ep.ep_grp = ivns_internal->cii_grp;
+	/* Note: destination node is using global rank already */
+	ep.ep_grp = NULL;
 	ep.ep_rank = dest_node;
 
 	rc = crt_req_create(ivns_internal->cii_ctx, &ep, CRT_OPC_IV_FETCH,
@@ -1125,7 +1136,6 @@ crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
 {
 	struct crt_grp_priv	*grp_priv;
 	d_rank_t		 parent_rank;
-	crt_group_t		*group;
 	int			 rc;
 
 	D_ASSERT(ret_node != NULL);
@@ -1135,11 +1145,13 @@ crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
 		return 0;
 	}
 
-	/* group and grp_priv should never be NULL by the time we get here */
-	group = crt_group_lookup(ivns_internal->cii_gns.gn_grp_id);
-	D_ASSERT(group != NULL);
+	/* grp_priv should never be NULL by the time we get here */
+	if ((ivns_internal->cii_gns.gn_int_grp_id & 0xFFFFFFFF) == 0x0)
+		grp_priv = crt_grp_pub2priv(NULL);
+	else
+		grp_priv = crt_grp_lookup_int_grpid(
+				ivns_internal->cii_gns.gn_int_grp_id);
 
-	grp_priv = container_of(group, struct crt_grp_priv, gp_pub);
 	D_ASSERT(grp_priv != NULL);
 
 	rc = crt_tree_get_parent(grp_priv, 0, NULL,
@@ -1962,7 +1974,8 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 
 	ivns_internal = cb_info->uci_ivns_internal;
 
-	ep.ep_grp = ivns_internal->cii_grp;
+	/* Note: destination node is using global rank already */
+	ep.ep_grp = NULL;
 	ep.ep_rank = dest_rank;
 
 	rc = crt_req_create(ivns_internal->cii_ctx, &ep, CRT_OPC_IV_UPDATE,
