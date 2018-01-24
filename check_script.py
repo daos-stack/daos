@@ -261,6 +261,9 @@ def main():
                                     "-d", "wrong-import-position")
         print "Checking check_script.py"
         error_count += check_script("check_script.py")
+        print "Checking go tool"
+        error_count += check_script("site_tools/go",
+                                    "-d", "too-many-branches")
 
     if args.fname:
         error_count += check_script(args.fname, wrap=args.wrap,

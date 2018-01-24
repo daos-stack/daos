@@ -19,6 +19,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+if [ -n "$*" ]; then
+  ./check_python.sh $*
+  exit $?
+fi
+
 ./check_python.sh -c "components.py" \
                   -s "SConstruct" \
                   -s "test/SConstruct.utest" \
