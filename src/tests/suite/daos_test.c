@@ -453,7 +453,7 @@ main(int argc, char **argv)
 	int		 sub_tests[1024];
 	int		 sub_tests_idx = 0;
 	int		 ntests = 0;
-	int		 nr_failed;
+	int		 nr_failed = 0;
 	int		 nr_total_failed = 0;
 	int		 opt = 0, index = 0;
 	int		 rank;

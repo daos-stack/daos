@@ -195,7 +195,7 @@ credits_fini(struct dts_context *tsc)
 static int
 pool_init(struct dts_context *tsc)
 {
-	daos_handle_t	poh;
+	daos_handle_t	poh = DAOS_HDL_INVAL;
 	int		rc;
 
 	if (tsc->tsc_pool_size == 0)
@@ -276,7 +276,7 @@ pool_fini(struct dts_context *tsc)
 static int
 cont_init(struct dts_context *tsc)
 {
-	daos_handle_t	coh;
+	daos_handle_t	coh = DAOS_HDL_INVAL;
 	int		rc;
 
 	if (tsc->tsc_pmem_file) { /* VOS mode */
