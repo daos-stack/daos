@@ -344,6 +344,17 @@ crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
 			crt_iv_namespace_t *ivns, d_iov_t *g_ivns);
 
 /**
+ * Return global IV namespace from the local IV namespace
+ *
+ * \param ivns [IN]		Local namespace
+ * \param g_ivns [OUT]		Global namespace
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+crt_iv_global_namespace_get(crt_iv_namespace_t *ivns, d_iov_t *g_ivns);
+
+/**
  * Attach to a global IV namespace to get a local handle of the IV namespace.
  *
  * User should call crt_iv_namespace_create on one node within the group of the

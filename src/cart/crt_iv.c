@@ -785,6 +785,32 @@ exit:
 }
 
 int
+crt_iv_global_namespace_get(crt_iv_namespace_t *ivns, d_iov_t *g_ivns)
+{
+	struct crt_ivns_internal	*ivns_internal;
+	int				rc = 0;
+
+	if (g_ivns == NULL) {
+		D_ERROR("NULL g_ivns passed\n");
+		D_GOTO(exit, rc = -DER_INVAL);
+	}
+
+	ivns_internal = crt_ivns_internal_get(ivns);
+	if (ivns_internal == NULL) {
+		D_ERROR("Invalid ivns passed\n");
+		D_GOTO(exit, rc = -DER_INVAL);
+	}
+
+	g_ivns->iov_buf = &ivns_internal->cii_gns;
+	g_ivns->iov_buf_len = sizeof(struct crt_global_ns);
+	g_ivns->iov_len = sizeof(struct crt_global_ns);
+
+exit:
+	return rc;
+}
+
+
+int
 crt_iv_namespace_destroy(crt_iv_namespace_t ivns)
 {
 	struct crt_ivns_internal	*ivns_internal;
