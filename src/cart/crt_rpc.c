@@ -900,7 +900,7 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 
 	rpc_priv = cb_info->cci_arg;
 	D_ASSERT(rpc_priv->crp_state == RPC_STATE_URI_LOOKUP);
-	D_ASSERT(rpc_priv->crp_ul_req = cb_info->cci_rpc);
+	D_ASSERT(rpc_priv->crp_ul_req == cb_info->cci_rpc);
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	rank = tgt_ep->ep_rank;
