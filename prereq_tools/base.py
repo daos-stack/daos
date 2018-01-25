@@ -448,27 +448,39 @@ class GitRepoRetriever(object):
         commands = ['git clone %s %s' % (self.url, subdir)]
         if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)
+        self.get_specific(subdir, **kw)
 
-        # If a branch is initialy specified it should be checked out first
+    def get_specific(self, subdir, **kw):
+        """Checkout the configured commit"""
+        # If the config overrides the branch, use it.  If a branch is
+        # specified, check it out first.
+        branch = kw.get("branch", None)
+        if branch is None:
+            branch = self.branch
+        self.branch = branch
         if self.branch:
             self.commit_sha = self.branch
             self.checkout_commit(subdir)
 
+        # Now checkout the commit_sha if specified
         passed_commit_sha = kw.get("commit_sha", None)
         if passed_commit_sha is not None:
             self.commit_sha = passed_commit_sha
             self.checkout_commit(subdir)
 
+        # Now apply any patches specified
         self.patch = kw.get("patch", None)
         self.apply_patch(subdir)
         self.update_submodules(subdir)
 
-    def update(self, subdir):
+    def update(self, subdir, **kw):
         """ update a repository """
-        commands = ['git pull origin master']
+        #Fetch all changes and then reset head to origin/master
+        commands = ['git fetch --all',
+                    'git reset --hard origin/master']
         if not RUNNER.run_commands(commands, subdir=subdir):
             raise DownloadFailure(self.url, subdir)
-        self.update_submodules(subdir)
+        self.get_specific(subdir, **kw)
 
 
 class WebRetriever(object):
@@ -509,10 +521,10 @@ class WebRetriever(object):
         else:
             raise UnsupportedCompression(subdir)
 
-    def update(self, subdir):
+    def update(self, subdir, **kw):
         """ update the code if the url has changed """
         # Will download the file if the name has changed
-        self.get(subdir)
+        self.get(subdir, **kw)
 
 
 def check_flag(context, flag):
@@ -1158,6 +1170,9 @@ class _Component(object):
         if self.prebuilt_path:
             print 'Using prebuilt binaries for %s' % self.name
             return
+        branch = self.prereqs.get_config("branches", self.name)
+        commit_sha = self.prereqs.get_config("commit_versions", self.name)
+        patch = self.prereqs.get_config("patch_versions", self.name)
         if self.src_exists():
             self.prereqs.update_src_path(self.name, self.src_path)
             print 'Using existing sources at %s for %s' \
@@ -1166,7 +1181,9 @@ class _Component(object):
                 defpath = os.path.join(self.prereqs.get_build_dir(), self.name)
                 # only do this if the source was checked out by this script
                 if self.src_path == defpath:
-                    self.retriever.update(self.src_path)
+                    print "Trying to update cart"
+                    self.retriever.update(self.src_path, commit_sha=commit_sha,
+                                          patch=patch)
             return
         if not self.retriever:
             print 'Using installed version of %s' % self.name
@@ -1179,8 +1196,6 @@ class _Component(object):
 
         print 'Downloading source for %s' % self.name
         self._delete_old_file(self.crc_file)
-        commit_sha = self.prereqs.get_config("commit_versions", self.name)
-        patch = self.prereqs.get_config("patch_versions", self.name)
         self.retriever.get(self.src_path, commit_sha=commit_sha, patch=patch)
 
         self.prereqs.update_src_path(self.name, self.src_path)
