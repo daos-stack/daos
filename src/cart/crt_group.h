@@ -226,6 +226,12 @@ void crt_grp_priv_destroy(struct crt_grp_priv *grp_priv);
 
 int crt_grp_config_load(struct crt_grp_priv *grp_priv);
 
+static inline bool crt_is_subgrp_id(uint64_t grp_id)
+{
+	/* Primary group has lower 32 bits set to 0x0 */
+	return ((grp_id & 0xFFFFFFFF) == 0) ? false : true;
+}
+
 /* some simple helpers */
 
 static inline bool
