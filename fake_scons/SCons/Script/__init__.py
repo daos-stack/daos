@@ -35,7 +35,7 @@ class SConscript(object):
 class DefaultEnvironment(object):
     """Default environment"""
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         pass
 
     def RunTests(self, *args, **kw):

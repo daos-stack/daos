@@ -1183,7 +1183,7 @@ class _Component(object):
                 if self.src_path == defpath:
                     print "Trying to update cart"
                     self.retriever.update(self.src_path, commit_sha=commit_sha,
-                                          patch=patch)
+                                          patch=patch, branch=branch)
             return
         if not self.retriever:
             print 'Using installed version of %s' % self.name
@@ -1196,7 +1196,8 @@ class _Component(object):
 
         print 'Downloading source for %s' % self.name
         self._delete_old_file(self.crc_file)
-        self.retriever.get(self.src_path, commit_sha=commit_sha, patch=patch)
+        self.retriever.get(self.src_path, commit_sha=commit_sha, patch=patch,
+                           branch=branch)
 
         self.prereqs.update_src_path(self.name, self.src_path)
 
