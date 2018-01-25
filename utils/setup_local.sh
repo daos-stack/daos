@@ -37,10 +37,15 @@
 
 echo $PWD
 VARS_FILE=.build_vars-`uname -s`.sh
+VARS_FILE2=.build_vars.sh
 if [ -f ./${VARS_FILE} ]; then
   VARS_LOCAL=./${VARS_FILE}
 elif [ -f "../${VARS_FILE}" ]; then
   VARS_LOCAL=../${VARS_FILE}
+elif [ -f ./${VARS_FILE2} ]; then
+  VARS_LOCAL=./${VARS_FILE2}
+elif [ -f "../${VARS_FILE2}" ]; then
+  VARS_LOCAL=../${VARS_FILE2}
 else
   VARS_LOCAL=""
 fi
