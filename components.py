@@ -311,7 +311,7 @@ REQS.define('daos',
 
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
-            commands=['patch -N -p1 < $PATCH_PREFIX/fuse.patch',
+            commands=['patch -d $FUSE_SRC -N -p1 < $PATCH_PREFIX/fuse.patch',
                       'if [ $? -gt 1 ]; then false; else true; fi;',
                       'meson $FUSE_SRC --prefix=$FUSE_PREFIX',
                       'meson configure -D udevrulesdir=$FUSE_PREFIX/udev',
