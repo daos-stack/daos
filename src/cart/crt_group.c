@@ -578,6 +578,15 @@ crt_grp_lookup_int_grpid(uint64_t int_grpid)
 	struct crt_grp_priv	*grp_priv;
 	bool			 found = false;
 
+	/* Check if the group is primary group or not */
+	if (!crt_grp_is_subgrp_id(int_grpid)) {
+		grp_priv = crt_grp_pub2priv(NULL);
+
+		crt_grp_priv_addref(grp_priv);
+		D_GOTO(exit, 0);
+	}
+
+	/* Lookup subgroup in the list */
 	pthread_rwlock_rdlock(&crt_grp_list_rwlock);
 	d_list_for_each_entry(grp_priv, &crt_grp_list, gp_link) {
 		if (grp_priv->gp_int_grpid == int_grpid) {
@@ -591,6 +600,7 @@ crt_grp_lookup_int_grpid(uint64_t int_grpid)
 		grp_priv = NULL;
 	pthread_rwlock_unlock(&crt_grp_list_rwlock);
 
+exit:
 	return grp_priv;
 }
 

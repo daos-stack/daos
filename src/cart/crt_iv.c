@@ -46,7 +46,6 @@
  * - CRT_IV_CLASS features (crt_iv_class::ivc_feats) not implemented
  * - Use hash table for list of keys in progress
  * - Support of endian-agnostic ivns_internal
- * - Optimize group lookup by using internal group id
  **/
 #define D_LOGFAC	DD_FAC(iv)
 
@@ -165,10 +164,6 @@ struct crt_ivns_internal {
 
 	/* Global namespace identifier */
 	struct crt_global_ns	 cii_gns;
-
-	/* Cached info to avoid cart queries */
-	d_rank_t		 cii_local_rank;
-	uint32_t		 cii_group_size;
 
 	/* Link list of all keys in progress */
 	d_list_t		 cii_keys_in_progress_list;
@@ -603,7 +598,6 @@ crt_ivns_internal_create(crt_context_t crt_ctx, struct crt_grp_priv *grp_priv,
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_ivns_id		*internal_ivns_id;
 	uint32_t			next_ns_id;
-	int				rc = 0;
 
 	D_ALLOC_PTR(ivns_internal);
 	if (ivns_internal == NULL)
@@ -617,14 +611,7 @@ crt_ivns_internal_create(crt_context_t crt_ctx, struct crt_grp_priv *grp_priv,
 
 	D_INIT_LIST_HEAD(&ivns_internal->cii_keys_in_progress_list);
 
-	rc = crt_group_rank(&grp_priv->gp_pub, &ivns_internal->cii_local_rank);
-	D_ASSERT(rc == 0);
-
-	rc = crt_group_size(&grp_priv->gp_pub, &ivns_internal->cii_group_size);
-	D_ASSERT(rc == 0);
-
 	pthread_mutex_init(&ivns_internal->cii_lock, 0);
-
 	internal_ivns_id = &ivns_internal->cii_gns.gn_ivns_id;
 
 	/* If we are not passed an ivns_id, create new one */
@@ -634,7 +621,7 @@ crt_ivns_internal_create(crt_context_t crt_ctx, struct crt_grp_priv *grp_priv,
 		ns_id++;
 		pthread_mutex_unlock(&ns_list_lock);
 
-		internal_ivns_id->ii_rank = ivns_internal->cii_local_rank;
+		internal_ivns_id->ii_rank = grp_priv->gp_self;
 		internal_ivns_id->ii_nsid = next_ns_id;
 	} else {
 		/* We are attaching ivns, created by someone else */
@@ -709,24 +696,6 @@ exit:
 	return rc;
 }
 
-static struct crt_grp_priv *int_grpid_to_grp_priv(uint64_t grp_id)
-{
-	struct crt_grp_priv *grp_priv;
-
-	/* primary group cannot be looked up using grp_id */
-	if (crt_is_subgrp_id(grp_id) == false) {
-		grp_priv = crt_grp_pub2priv(NULL);
-
-		/* decref in crt_iv_namespace_destroy */
-		crt_grp_priv_addref(grp_priv);
-	} else {
-		/* Implicit addref done by lookup function */
-		grp_priv = crt_grp_lookup_int_grpid(grp_id);
-	}
-
-	return grp_priv;
-}
-
 int
 crt_iv_namespace_attach(crt_context_t crt_ctx, d_iov_t *g_ivns,
 			struct crt_iv_class *iv_classes, uint32_t num_class,
@@ -755,7 +724,7 @@ crt_iv_namespace_attach(crt_context_t crt_ctx, d_iov_t *g_ivns,
 	/* TODO: Need to unflatten the structure */
 	ivns_global = (struct crt_global_ns *)g_ivns->iov_buf;
 
-	grp_priv = int_grpid_to_grp_priv(ivns_global->gn_int_grp_id);
+	grp_priv = crt_grp_lookup_int_grpid(ivns_global->gn_int_grp_id);
 
 	if (grp_priv == NULL) {
 		D_ERROR("Group lookup failed for 0x%lx\n",
@@ -776,7 +745,7 @@ crt_iv_namespace_attach(crt_context_t crt_ctx, d_iov_t *g_ivns,
 
 exit:
 	if (rc != 0) {
-		/* addref done in int_grpid_to_grp_priv */
+		/* addref done in crt_grp_lookup_int_grpid */
 		if (grp_priv)
 			crt_grp_priv_decref(grp_priv);
 	}
@@ -826,7 +795,7 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns)
 	d_list_del(&ivns_internal->cii_link);
 	pthread_mutex_unlock(&ns_list_lock);
 
-	/* addref in int_grpid_to_grp_priv or crt_iv_namespace_create */
+	/* addref in crt_grp_lookup_int_grpid or crt_iv_namespace_create */
 	crt_grp_priv_decref(ivns_internal->cii_grp_priv);
 
 	/* TODO: stage2 - wait for all pending requests to be finished*/
@@ -1223,7 +1192,7 @@ crt_iv_parent_get(struct crt_ivns_internal *ivns_internal,
 		  d_rank_t root_node, d_rank_t *ret_node)
 {
 	return crt_iv_ranks_parent_get(ivns_internal,
-				       ivns_internal->cii_local_rank,
+				       ivns_internal->cii_grp_priv->gp_self,
 				       root_node, ret_node);
 }
 
@@ -1284,7 +1253,8 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		d_rank_t next_node;
 		struct iv_fetch_cb_info *cb_info;
 
-		if (ivns_internal->cii_local_rank == input->ifi_root_node) {
+		if (ivns_internal->cii_grp_priv->gp_self ==
+							input->ifi_root_node) {
 			D_ERROR("Forward requested for root node\n");
 			D_GOTO(send_error, rc = -DER_INVAL);
 		}
@@ -1798,7 +1768,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	/* Exclude self from corpc */
 	excluded_list.rl_nr.num = 1;
 	excluded_list.rl_ranks = excluded_ranks;
-	excluded_ranks[0] = ivns_internal->cii_local_rank;
+	excluded_ranks[0] = ivns_internal->cii_grp_priv->gp_self;
 	/* Perform refresh on local node */
 	if (sync_type.ivs_event == CRT_IV_SYNC_EVENT_UPDATE)
 		rc = iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
@@ -2372,7 +2342,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	if (iv_value != NULL)
 		rc = iv_ops->ivo_on_update(ivns, iv_key, 0,
-			(root_rank == ivns_internal->cii_local_rank),
+			(root_rank == ivns_internal->cii_grp_priv->gp_self),
 			iv_value, priv);
 	else
 		rc = iv_ops->ivo_on_refresh(ivns, iv_key, 0, NULL,
@@ -2382,7 +2352,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		/* issue sync. will call completion callback */
 		rc = crt_ivsync_rpc_issue(ivns_internal, class_id, iv_key,
 				iv_ver, iv_value, sync_type,
-				ivns_internal->cii_local_rank,
+				ivns_internal->cii_grp_priv->gp_self,
 				root_rank, update_comp_cb, cb_arg, priv, rc);
 	} else  if (rc == -DER_IVCB_FORWARD) {
 		if (shortcut == CRT_IV_SHORTCUT_TO_ROOT)
@@ -2409,7 +2379,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		cb_info->uci_child_rpc = NULL;
 		cb_info->uci_ivns_internal = ivns_internal;
 		cb_info->uci_class_id = class_id;
-		cb_info->uci_caller_rank = ivns_internal->cii_local_rank;
+		cb_info->uci_caller_rank = ivns_internal->cii_grp_priv->gp_self;
 
 		rc = crt_ivu_rpc_issue(next_node, iv_key, iv_value,
 					&sync_type, root_rank, cb_info);
