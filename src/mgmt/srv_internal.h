@@ -38,6 +38,8 @@
 
 /** srv.c */
 void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
+void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
+void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 
 /** srv_pool.c */
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);

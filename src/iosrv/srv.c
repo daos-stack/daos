@@ -1088,6 +1088,32 @@ free_future:
 	return rc;
 }
 
+/*
+ * Set parameters on the server.
+ *
+ * param key_id [IN]	key id
+ * param value [IN]	the value of the key.
+ *
+ * return	0 if setting succeeds.
+ *              negative errno if fails.
+ */
+int
+dss_parameters_set(unsigned int key_id, uint64_t value)
+{
+	int rc = 0;
+
+	switch (key_id) {
+	case DSS_KEY_FAIL_LOC:
+		daos_fail_loc_set(value);
+		break;
+	default:
+		D__ERROR("invalid key_id %d\n", key_id);
+		rc = -DER_INVAL;
+	}
+
+	return rc;
+}
+
 /**
  * Get nthreads number.
  */

@@ -45,6 +45,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_pool_destroy, sizeof(daos_pool_destroy_t)},
 	{dc_pool_extend, sizeof(daos_pool_extend_t)},
 	{dc_pool_evict, sizeof(daos_pool_evict_t)},
+	{dc_mgmt_params_set, sizeof(daos_params_set_t)},
 	{dc_pool_connect, sizeof(daos_pool_connect_t)},
 	{dc_pool_disconnect, sizeof(daos_pool_disconnect_t)},
 	{dc_pool_exclude, sizeof(daos_pool_update_t)},

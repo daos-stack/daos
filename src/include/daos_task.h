@@ -46,6 +46,7 @@ typedef enum {
 	DAOS_OPC_POOL_DESTROY,
 	DAOS_OPC_POOL_EXTEND,
 	DAOS_OPC_POOL_EVICT,
+	DAOS_OPC_PARAMS_SET,
 
 	/** Pool APIs */
 	DAOS_OPC_POOL_CONNECT,
@@ -123,6 +124,13 @@ typedef struct {
 	d_rank_t		rank;
 	bool			force;
 } daos_svc_rip_t;
+
+typedef struct {
+	const char		*grp;
+	d_rank_t		rank;
+	uint32_t		key_id;
+	uint64_t		value;
+} daos_params_set_t;
 
 typedef struct {
 	unsigned int		mode;

@@ -292,6 +292,14 @@ daos_crt_network_error(int err)
 
 d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
 
+/* the key of various type of parameters, used by DAOS client to set
+ * different parameters globally on all servers.
+ */
+enum {
+	DSS_KEY_FAIL_LOC = 0,
+	DSS_KEY_NUM,
+};
+
 void
 daos_fail_loc_set(uint64_t id);
 void

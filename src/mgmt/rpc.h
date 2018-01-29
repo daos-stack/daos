@@ -43,6 +43,8 @@ enum mgmt_operation {
 	MGMT_TGT_DESTROY	= 5,
 	MGMT_TGT_EXTEND		= 6,
 	MGMT_SVC_RIP		= 7,
+	MGMT_PARAMS_SET		= 8,
+	MGMT_TGT_PARAMS_SET	= 9,
 };
 
 struct mgmt_svc_rip_in {
@@ -96,6 +98,22 @@ struct mgmt_tgt_destroy_out {
 	int			td_rc;
 };
 
+struct mgmt_params_set_in {
+	uint32_t	ps_rank;
+	uint32_t	ps_key_id;
+	uint64_t	ps_value;
+};
+
+struct mgmt_tgt_params_set_in {
+	uint64_t	tps_value;
+	uint32_t	tps_key_id;
+};
+
+struct mgmt_srv_out {
+	int	srv_rc;
+};
+
 extern struct daos_rpc mgmt_rpcs[];
+extern struct daos_rpc mgmt_srv_rpcs[];
 
 #endif /* __MGMT_RPC_H__ */

@@ -79,6 +79,21 @@ struct crt_msg_field *mgmt_svc_rip_in_fields[] = {
 	&CMF_UINT32,		/* rip_flags */
 };
 
+struct crt_msg_field *mgmt_params_set_in_fields[] = {
+	&CMF_UINT32,		/* ps_rank */
+	&CMF_UINT32,		/* ps_key_id */
+	&CMF_UINT64,		/* ps_value */
+};
+
+struct crt_msg_field *mgmt_tgt_params_set_in_fields[] = {
+	&CMF_UINT64,		/* tps_value */
+	&CMF_UINT32,		/* tps_key_id */
+};
+
+struct crt_msg_field *mgmt_out_fields[] = {
+	&CMF_INT,		/* ssp_rc */
+};
+
 struct crt_req_format DQF_MGMT_POOL_CREATE =
 	DEFINE_CRT_REQ_FMT("MGMT_POOL_CREATE", mgmt_pool_create_in_fields,
 			   mgmt_pool_create_out_fields);
@@ -98,6 +113,14 @@ struct crt_req_format DQF_MGMT_TGT_DESTROY =
 struct crt_req_format DQF_MGMT_SVC_RIP =
 	DEFINE_CRT_REQ_FMT("MGMT_SVC_RIP", mgmt_svc_rip_in_fields, NULL);
 
+struct crt_req_format DQF_MGMT_PARAMS_SET =
+	DEFINE_CRT_REQ_FMT("MGMT_PARAMS_SET", mgmt_params_set_in_fields,
+			    mgmt_out_fields);
+
+struct crt_req_format DQF_MGMT_TGT_PARAMS_SET =
+	DEFINE_CRT_REQ_FMT("MGMT_TGT_PARAMS_SET", mgmt_tgt_params_set_in_fields,
+			    mgmt_out_fields);
+
 struct daos_rpc mgmt_rpcs[] = {
 	{
 		.dr_name	= "MGMT_POOL_CREATE",
@@ -112,6 +135,24 @@ struct daos_rpc mgmt_rpcs[] = {
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_MGMT_POOL_DESTROY,
 	}, {
+		.dr_name	= "MGMT_SVC_RIP",
+		.dr_opc		= MGMT_SVC_RIP,
+		.dr_ver		= 1,
+		.dr_flags	= DAOS_RPC_NO_REPLY,
+		.dr_req_fmt	= &DQF_MGMT_SVC_RIP,
+	},  {
+		.dr_name	= "MGMT_PARAMS_SET",
+		.dr_opc		= MGMT_PARAMS_SET,
+		.dr_ver		= 1,
+		.dr_flags	= DAOS_RPC_NO_REPLY,
+		.dr_req_fmt	= &DQF_MGMT_PARAMS_SET,
+	}, {
+		.dr_opc		= 0
+	}
+};
+
+struct daos_rpc mgmt_srv_rpcs[] = {
+	{
 		.dr_name	= "MGMT_TGT_CREATE",
 		.dr_opc		= MGMT_TGT_CREATE,
 		.dr_ver		= 1,
@@ -124,12 +165,13 @@ struct daos_rpc mgmt_rpcs[] = {
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_MGMT_TGT_DESTROY,
 	}, {
-		.dr_name	= "MGMT_SVC_RIP",
-		.dr_opc		= MGMT_SVC_RIP,
+		.dr_name	= "MGMT_TGT_PARAMS_SET",
+		.dr_opc		= MGMT_TGT_PARAMS_SET,
 		.dr_ver		= 1,
-		.dr_flags	= DAOS_RPC_NO_REPLY,
-		.dr_req_fmt	= &DQF_MGMT_SVC_RIP,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_MGMT_TGT_PARAMS_SET,
 	}, {
 		.dr_opc		= 0
 	}
+
 };

@@ -193,6 +193,9 @@ struct dss_module {
 	struct daos_rpc_handler	 *sm_handlers;
 };
 
+int
+dss_parameters_set(unsigned int key_id, uint64_t value);
+
 typedef ABT_pool (*dss_abt_pool_choose_cb_t)(crt_rpc_t *rpc, ABT_pool *pools);
 
 void dss_abt_pool_choose_cb_register(unsigned int mod_id,

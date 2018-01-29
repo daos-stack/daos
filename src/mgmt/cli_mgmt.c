@@ -95,6 +95,63 @@ err_grp:
 	return rc;
 }
 
+int
+dc_mgmt_params_set(tse_task_t *task)
+{
+	daos_params_set_t		*args;
+	struct mgmt_params_set_in	*in;
+	crt_endpoint_t			ep;
+	crt_rpc_t			*rpc = NULL;
+	crt_opcode_t			opc;
+	int				rc;
+
+	args = daos_task_get_args(DAOS_OPC_PARAMS_SET, task);
+	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	rc = daos_group_attach(args->grp, &ep.ep_grp);
+	if (rc != 0)
+		return rc;
+
+	/* if rank == -1 means it will set params on all servers, which we will
+	 * send it to 0 temporarily.
+	 */
+	ep.ep_rank = args->rank == -1 ? 0 : args->rank;
+	ep.ep_tag = 0;
+	opc = DAOS_RPC_OPCODE(MGMT_PARAMS_SET, DAOS_MGMT_MODULE, 1);
+	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
+	if (rc != 0) {
+		D__ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
+			rc);
+		D__GOTO(err_grp, rc);
+	}
+
+	D__ASSERT(rpc != NULL);
+	in = crt_req_get(rpc);
+	D__ASSERT(in != NULL);
+
+	/** fill in request buffer */
+	in->ps_rank = args->rank;
+	in->ps_key_id = args->key_id;
+	in->ps_value = args->value;
+
+	rc = tse_task_register_comp_cb(task, rip_cp, &rpc, sizeof(rpc));
+	if (rc != 0)
+		D__GOTO(err_rpc, rc);
+
+	crt_req_addref(rpc); /** for rip_cp */
+	D__DEBUG(DB_MGMT, "set parameter %d/%u/"DF_U64".\n", args->rank,
+		 args->key_id, args->value);
+
+	/** send the request */
+	return daos_rpc_send(rpc, task);
+
+err_rpc:
+	crt_req_decref(rpc);
+err_grp:
+	daos_group_detach(ep.ep_grp);
+	return rc;
+}
+
 /**
  * Initialize management interface
  */

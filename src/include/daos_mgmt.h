@@ -200,6 +200,20 @@ daos_pool_tgt_add(const uuid_t uuid, const char *grp,
 		  daos_event_t *ev);
 
 /**
+ * Set parameter on servers.
+ *
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank	[IN]	Ranks to set parameter. -1 means setting on all servers.
+ * \param key_id [IN]	key ID of the parameter.
+ * \param value [IN]	value of the parameter.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_mgmt_params_set(const char *grp, d_rank_t rank, unsigned int key_id,
+		     uint64_t value, daos_event_t *ev);
+
+/**
  * Exclude completely a set of storage targets from a pool. Compared with
  * daos_pool_exclude(), this API will mark the targets to be DOWNOUT, i.e.
  * the rebuilding for this target is done, while daos_pool_exclude() only

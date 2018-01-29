@@ -39,6 +39,7 @@ void
 daos_reset_fail_loc()
 {
 	daos_fail_loc = 0;
+	D__DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
 }
 
 int
@@ -68,6 +69,7 @@ void
 daos_fail_loc_set(uint64_t id)
 {
 	daos_fail_loc = id;
+	D__DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
 }
 
 void

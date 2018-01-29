@@ -47,6 +47,24 @@ daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
 }
 
 int
+daos_mgmt_params_set(const char *grp, d_rank_t rank, unsigned int key_id,
+		     uint64_t value, daos_event_t *ev)
+{
+	daos_params_set_t	args;
+	tse_task_t		*task;
+
+	DAOS_API_ARG_ASSERT(args, PARAMS_SET);
+
+	args.grp = grp;
+	args.rank = rank;
+	args.key_id = key_id;
+	args.value = value;
+
+	dc_task_create(DAOS_OPC_PARAMS_SET, &args, sizeof(args), &task, &ev);
+	return daos_client_result_wait(ev);
+}
+
+int
 daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 		 const char *grp, const d_rank_list_t *tgts, const char *dev,
 		 daos_size_t size, d_rank_list_t *svc, uuid_t uuid,

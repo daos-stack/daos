@@ -55,9 +55,126 @@ static struct daos_rpc_handler ds_mgmt_handlers[] = {
 		.dr_opc		= MGMT_SVC_RIP,
 		.dr_hdlr	= ds_mgmt_hdlr_svc_rip,
 	}, {
+		.dr_opc		= MGMT_PARAMS_SET,
+		.dr_hdlr	= ds_mgmt_params_set_hdlr,
+	}, {
+		.dr_opc		= MGMT_TGT_PARAMS_SET,
+		.dr_hdlr	= ds_mgmt_tgt_params_set_hdlr,
+	}, {
 		.dr_opc = 0,
 	}
 };
+
+/**
+ * Set parameter on a single target.
+ */
+void
+ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_tgt_params_set_in	*in;
+	struct mgmt_srv_out		*out;
+	int rc;
+
+	in = crt_req_get(rpc);
+	D__ASSERT(in != NULL);
+
+	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
+	if (rc)
+		D__ERROR("Set parameter failed key_id %d: rc %d\n",
+			 in->tps_key_id, rc);
+
+	out = crt_reply_get(rpc);
+	out->srv_rc = rc;
+	crt_reply_send(rpc);
+}
+
+/**
+ * Set parameter on all of server targets, for testing or other
+ * purpose.
+ */
+void
+ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_params_set_in	*ps_in;
+	crt_opcode_t			opc;
+	int				topo;
+	uuid_t				uuid;
+	char				id[DAOS_UUID_STR_SIZE];
+	d_rank_list_t			rank_list = {0};
+	unsigned int			ranks_size;
+	crt_group_t			*grp = NULL;
+	crt_rpc_t			*tc_req;
+	d_rank_t			*ranks = NULL;
+	struct mgmt_tgt_params_set_in	*tc_in;
+	struct mgmt_srv_out		*out;
+	int				rc;
+	int				i;
+
+	ps_in = crt_req_get(rpc);
+	D__ASSERT(ps_in != NULL);
+	if (ps_in->ps_rank != -1) {
+		/* Only set local parameter */
+		rc = dss_parameters_set(ps_in->ps_key_id, ps_in->ps_value);
+		if (rc)
+			D__ERROR("Set parameter failed key_id %d: rc %d\n",
+				 ps_in->ps_key_id, rc);
+		D__GOTO(out, rc);
+	}
+
+	/* Set parameter on all servers */
+	rc = crt_group_size(NULL, &ranks_size);
+	D__ASSERT(rc == 0);
+	D__ALLOC(ranks, sizeof(*ranks) * ranks_size);
+	if (ranks == NULL)
+		D__GOTO(out, rc = -DER_NOMEM);
+	for (i = 0; i < ranks_size; i++)
+		ranks[i] = i;
+	rank_list.rl_nr.num = ranks_size;
+	rank_list.rl_ranks = ranks;
+
+	uuid_generate(uuid);
+	uuid_unparse_lower(uuid, id);
+	rc = dss_group_create(id, &rank_list, &grp);
+	if (rc != 0)
+		D__GOTO(free, rc);
+
+	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_PARAMS_SET, DAOS_MGMT_MODULE, 1);
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, grp, NULL,
+				  opc, NULL, NULL, 0, topo, &tc_req);
+	if (rc)
+		D__GOTO(free, rc);
+
+	tc_in = crt_req_get(tc_req);
+	D__ASSERT(tc_in != NULL);
+
+	tc_in->tps_key_id = ps_in->ps_key_id;
+	tc_in->tps_value = ps_in->ps_value;
+
+	rc = dss_rpc_send(tc_req);
+	if (rc != 0) {
+		crt_req_decref(tc_req);
+		D__GOTO(free, rc);
+	}
+
+	out = crt_reply_get(tc_req);
+	rc = out->srv_rc;
+	if (rc != 0) {
+		crt_req_decref(tc_req);
+		D__GOTO(free, rc);
+	}
+free:
+	if (ranks != NULL)
+		D__FREE(ranks, sizeof(*ranks) * ranks_size);
+	uuid_clear(uuid);
+	if (grp)
+		dss_group_destroy(grp);
+
+out:
+	out = crt_reply_get(rpc);
+	out->srv_rc = rc;
+	crt_reply_send(rpc);
+}
 
 void
 ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
@@ -122,5 +239,6 @@ struct dss_module mgmt_module = {
 	.sm_init	= ds_mgmt_init,
 	.sm_fini	= ds_mgmt_fini,
 	.sm_cl_rpcs	= mgmt_rpcs,
+	.sm_srv_rpcs	= mgmt_srv_rpcs,
 	.sm_handlers	= ds_mgmt_handlers,
 };
