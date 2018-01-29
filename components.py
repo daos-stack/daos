@@ -309,6 +309,7 @@ REQS.define('daos',
             headers=['daos.h'],
             requires=['cart', 'ompi'])
 
+#pylint: disable=line-too-long
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
             commands=['patch -d $FUSE_SRC -N -p1 < $PATCH_PREFIX/fuse.patch',
@@ -317,12 +318,14 @@ REQS.define('fuse',
                       'meson configure -D udevrulesdir=$FUSE_PREFIX/udev',
                       'meson configure -D disable-mtab=True',
                       'ninja-build -v -j1',
-                      'ninja-build install'],
+                      'ninja-build install',
+                      'mv $FUSE_PREFIX/bin/fusermount3 $FUSE_PREFIX/bin/fusermount3.nosuid'],
             libs=['fuse3'],
             defines=["FUSE_USE_VERSION=30"],
             required_progs=['libtoolize'],
             headers=['fuse3/fuse.h'],
             out_of_src_build=True)
+#pylint: enable=line-too-long
 
 REQS.define('ofi',
             retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
