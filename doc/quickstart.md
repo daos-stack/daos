@@ -171,3 +171,11 @@ With this type of installation each individual component is built into a differe
     PATH=$CART/bin/:$OMPI/bin/:${daos_prefix_path}/bin/:$PATH
 
 With this approach only daos would get built using the prebuilt dependencies in ${daos_prefix_path}/opt and the PREBUILT_PREFIX and PREFIX would get saved for future compilations. So, after the first time, during development, a mere "scons" and "scons install" would suffice for compiling changes to daos source code.
+
+## ARM support
+
+DAOS is also supported on 64-bit ARM platforms. Currently DAOS has been tested on aarch64 architecutres like the ARM-Cortex A53 processor.
+Apart from using a popular linux distribution, no special considerations are necessary to build DAOS on ARM plaforms.
+The same instructions that are used in Xeon are applicable for ARM builds as well, DAOS and its dependencies will make the necessary adjustments
+automatically in their respective build systems for ARM platforms.
+
