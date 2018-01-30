@@ -9,6 +9,12 @@
 FROM centos:7
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
+# Build arguments can be set via -build-arg
+# set NOBUILD to disable git clone & build
+ARG NOBUILD
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
 # Install basic tools
 RUN yum install -y epel-release
 RUN yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
@@ -23,7 +29,7 @@ RUN yum install -y doxygen pandoc flex patch
 # Add DAOS user
 ENV USER daos
 ENV PASSWD daos
-RUN useradd -u 1000 -ms /bin/bash $USER
+RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage
@@ -35,12 +41,12 @@ USER $USER
 WORKDIR /home/$USER
 
 # Fetch DAOS code
-RUN git clone https://github.com/daos-stack/daos.git
+RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/daos.git; fi
 WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
-RUN git submodule init && git submodule update
-RUN scons --build-deps=yes USE_INSTALLED=all install
+RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes USE_INSTALLED=all install; fi
 
 # Set environment variables
 ENV PATH=/home/daos/daos/install/bin:$PATH
@@ -50,7 +56,3 @@ ENV ABT_ENV_MAX_NUM_XSTREAMS=100
 ENV ABT_MAX_NUM_XSTREAMS=100
 ENV CRT_PHY_ADDR_STR="ofi+sockets"
 ENV OFI_INTERFACE=eth0
-
-# Start DAOS server & run basic tests
-#RUN orterun -H localhost -np 1 --report-uri /tmp/uri.txt ./install/bin/daos_server > /tmp/daos_server.out 2>&1 &
-#RUN orterun -H localhost -np 1 --ompi-server file:/tmp/uri.txt install/bin/daos_test

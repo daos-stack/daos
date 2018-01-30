@@ -6,22 +6,22 @@ DAOS runs on both x86 and ARM64 platforms and has been successfully tested on Ce
 
 To build the Docker image, run the following command:
 
-    $ docker build -t daos -f Dockerfile.centos-7 github.com/daos-stack/daos#:utils/docker
+    $ docker build -t daos -f Dockerfile.centos\:7 github.com/daos-stack/daos#:utils/docker
 
 This creates a CentOS7 image and builds the latest DAOS version from GitHub in this environment.
-For Ubuntu, replace "Dockerfile.centos-7" with "Dockerfile.ubuntu-16.04".
+For Ubuntu, replace Dockerfile.centos\:7 with Dockerfile.ubuntu\:16.04.
 
 To run the DAOS server in a new container:
 
     $ docker run --tmpfs /mnt/daos:rw,uid=1000,size=1G -v /tmp/uri:/tmp/uri daos \
-      orterun -H localhost -np 1 --report-uri /tmp/uri/uri.txt install/bin/daos_server
+      orterun -H localhost -np 1 --report-uri /tmp/uri/uri.txt daos_server
 
 This allocates 1GB of DRAM for DAOS storage. The more, the better.
 
 To run the DAOS unit tests:
 
     $ docker run -v /tmp/uri:/tmp/uri daos \
-      orterun -H localhost -np 1 --ompi-server file:/tmp/uri/uri.txt install/bin/daos_test
+      orterun -H localhost -np 1 --ompi-server file:/tmp/uri/uri.txt daos_test
 
 ## DAOS from Scratch
 

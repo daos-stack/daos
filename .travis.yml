@@ -1,13 +1,21 @@
+sudo: required
+
+env:
+ matrix:
+  - DOCKER_IMAGE=ubuntu:16.04
+  - DOCKER_IMAGE=centos:7
+
 language: c
-dist: trusty
-compiler:
-- clang
-- gcc
-before_install:
-- sudo apt-get -qq update
-- sudo apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
-- sudo apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
-- sudo apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev
-- sudo apt-get install -y curl doxygen pandoc flex patch
+
+services:
+ - docker
+
+berfore_install:
+ - echo $DOCKER_IMAGE
+ - git submodule init
+ - git submodule update
+ - docker pull $DOCKER_IMAGE
+
 script:
-- scons --build-deps=yes USE_INSTALLED=all install
+ - docker build -f utils/docker/Dockerfile.$DOCKER_IMAGE -t daos/$DOCKER_IMAGE --build-arg NOBUILD=1 --build-arg UID=$UID .
+ - docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE scons --build-deps=yes USE_INSTALLED=all install

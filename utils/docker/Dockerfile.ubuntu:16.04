@@ -9,6 +9,12 @@
 FROM ubuntu:16.04
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
+# Build arguments can be set via -build-arg
+# set NOBUILD to disable git clone & build
+ARG NOBUILD
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
 # Update distribution
 RUN apt-get update
 
@@ -23,7 +29,7 @@ RUN apt-get install -y curl doxygen pandoc flex patch
 # Add DAOS user
 ENV USER daos
 ENV PASSWD daos
-RUN useradd -u 1000 -ms /bin/bash $USER
+RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage
@@ -35,12 +41,12 @@ USER $USER
 WORKDIR /home/$USER
 
 # Fetch DAOS code
-RUN git clone https://github.com/daos-stack/daos.git
+RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/daos.git; fi
 WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
-RUN git submodule init && git submodule update
-RUN scons --build-deps=yes USE_INSTALLED=all install
+RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes USE_INSTALLED=all install; fi
 
 # Set environment variables
 ENV PATH=/home/daos/daos/install/bin:$PATH
