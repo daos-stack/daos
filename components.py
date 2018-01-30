@@ -309,7 +309,7 @@ REQS.define('fuse',
                       'ninja-build install',
                       'mv $FUSE_PREFIX/bin/fusermount3 $FUSE_PREFIX/bin/fusermount3.nosuid'],
             libs=['fuse3'],
-            defines=["FUSE_USE_VERSION=30"],
+            defines=["FUSE_USE_VERSION=32"],
             required_progs=['libtoolize'],
             headers=['fuse3/fuse.h'],
             out_of_src_build=True)
