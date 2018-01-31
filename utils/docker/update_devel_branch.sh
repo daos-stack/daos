@@ -90,7 +90,7 @@ public_repo_name=(\
   'cci' \
   'fuse' \
   'mercury' \
-  'nvml' \
+  'pmdk' \
   'ofi' \
   'ompi' \
   'openpa' \
@@ -132,7 +132,46 @@ pushd ${TARGET}
   git fetch origin master
   git reset --hard FETCH_HEAD
   git clean -df
+  if [ -d "scons_local" ]; then
+    scons_local_commit_raw=$(git submodule status scons_local)
+    scons_local_commit1="${scons_local_commit_raw#"-"}"
+    scons_local_commit="${scons_local_commit1% *}"
+    branch_name="${TARGET}_${bsx}"
+  fi
 popd
+
+# If the repository has a scons_local submodule, then we want to make
+# sure that there is a tracking branch created for this.
+if [ -n "${scons_local_commit}" ]; then
+  pushd ${SCONS_LOCAL}
+    set +e
+    repo=${TARGET}
+    my_commit=${scons_local_commit}
+    branch_commit="$(git rev-parse origin/${branch_name})"
+    rc=${?}
+    set -e
+    if [ ${rc} -eq 0 ]; then
+      if [ "${my_commit}" != "${branch_commit}" ]; then
+        git branch -d ${branch_name} || true
+        git branch -f ${branch_name} ${my_commit}
+        if [ -n "${update}" ]; then
+          git push -u origin ${branch_name}
+        else
+           # Testing / dry-run mode
+           echo "would git push -u origin ${branch_name} to ${repo}"
+        fi
+      fi
+    else
+      git branch -f ${branch_name} ${my_commit}
+      if [ -n "${update}" ]; then
+        git push -u origin ${branch_name}
+      else
+        # Testing / dry-run mode.
+        echo "would git push -u origin ${branch_name}"
+      fi
+    fi
+  popd
+fi
 
 print_err() { printf "%s\n" "$*" 1>&2; }
 
