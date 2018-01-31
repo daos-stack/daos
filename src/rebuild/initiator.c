@@ -853,6 +853,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 				" %u hdl %"PRIx64"\n", DP_UOID(oids[i]),
 				DP_UUID(co_uuids[i]), shards[i],
 				btr_hdl.cookie);
+			rc = 0;
 		} else if (rc == 0) {
 			struct rebuild_pool_tls *tls;
 
@@ -897,5 +898,5 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 out:
 	rebuild_out = crt_reply_get(rpc);
 	rebuild_out->ro_status = rc;
-	crt_reply_send(rpc);
+	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_OBJ);
 }

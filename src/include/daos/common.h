@@ -285,7 +285,8 @@ daos_crt_network_error(int err)
 {
 	return err == -DER_HG || err == -DER_ADDRSTR_GEN ||
 	       err == -DER_PMIX || err == -DER_UNREG ||
-	       err == -DER_UNREACH || err == -DER_CANCELED;
+	       err == -DER_UNREACH || err == -DER_CANCELED ||
+	       err == -DER_NOREPLY;
 }
 
 #define daos_rank_list_dup		d_rank_list_dup
@@ -354,6 +355,7 @@ daos_fail_check(uint64_t id);
 /* failure for DAOS_REBUILD_MODULE */
 #define DAOS_REBUILD_DROP_SCAN	(DAOS_REBUILD_FAIL_MOD | 0x001)
 #define DAOS_REBUILD_NO_HDL	(DAOS_REBUILD_FAIL_MOD | 0x002)
+#define DAOS_REBUILD_DROP_OBJ	(DAOS_REBUILD_FAIL_MOD | 0x003)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

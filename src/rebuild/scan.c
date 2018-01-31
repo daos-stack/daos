@@ -212,16 +212,20 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	 */
 	while (1) {
 		rc = dss_rpc_send(rpc);
+
 		/* If the remote target is not ready, let's retry */
-		switch (rc) {
-		default: /* real failure */
-			D__GOTO(out, rc);
-		case 0: /* success */
-			D__GOTO(out, rc = 0);
-		case -DER_AGAIN: /* remote side is not ready */
+		if (rc == -DER_AGAIN) {
 			ABT_thread_yield();
 			continue;
 		}
+
+		/* The remote nodes are probably dead, let's ignore it,
+		 * and the next rebuild will handle it anyway
+		 */
+		if (rc == -DER_TIMEDOUT || daos_crt_network_error(rc))
+			rc = 0;
+
+		D__GOTO(out, rc);
 	}
 out:
 	if (oids != NULL)
