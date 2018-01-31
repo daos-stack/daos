@@ -539,12 +539,14 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D__GOTO(out, rc);
 	}
 
-	rc = ds_iv_ns_attach(rpc->cr_ctx, in->tci_iv_ns_id,
-			     in->tci_master_rank, &in->tci_iv_ctxt,
-			     &pool->sp_iv_ns);
-	if (rc != 0) {
-		D_ERROR("attach iv ns failed rc %d\n", rc);
-		D_GOTO(out, rc);
+	if (pool->sp_iv_ns == NULL) {
+		rc = ds_pool_iv_ns_try_create(pool, in->tci_master_rank,
+					      &in->tci_iv_ctxt,
+					      in->tci_iv_ns_id);
+		if (rc) {
+			D__ERROR("attach iv ns failed rc %d\n", rc);
+			D__GOTO(out, rc);
+		}
 	}
 out:
 	out->tco_rc = (rc == 0 ? 0 : 1);
@@ -616,34 +618,6 @@ ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	return 0;
 }
 
-int
-ds_pool_tgt_map_update(struct ds_pool *pool, d_iov_t *iov)
-{
-	struct pool_map *map;
-	struct pool_buf	*buf;
-	int		rc;
-
-	buf = iov->iov_buf;
-	rc = pool_map_create(buf, pool->sp_map_version, &map);
-	if (rc != 0) {
-		D_ERROR(DF_UUID"failed to create pool map: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
-		D_GOTO(out, rc);
-	}
-
-	if (pool->sp_map == NULL) {
-		pool->sp_map = map;
-	} else if (pool_map_get_version(pool->sp_map) <
-		   pool_map_get_version(map)) {
-		pool_map_decref(pool->sp_map);
-		pool->sp_map = map;
-	} else {
-		pool_map_decref(map);
-	}
-out:
-	return rc;
-}
-
 /*
  * Called via dss_collective() to update the pool map version in the
  * ds_pool_child object.
@@ -663,13 +637,68 @@ update_child_map(void *data)
 	return 0;
 }
 
+int
+ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
+		       unsigned int map_version)
+{
+	struct pool_map *map = NULL;
+	int		rc = 0;
+
+	if (buf != NULL) {
+		rc = pool_map_create(buf, map_version, &map);
+		if (rc != 0) {
+			D_ERROR(DF_UUID" failed to create pool map: %d\n",
+				DP_UUID(pool->sp_uuid), rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	ABT_rwlock_wrlock(pool->sp_lock);
+	if (pool->sp_map_version < map_version ||
+	    (pool->sp_map_version == map_version &&
+	     (map != NULL && pool->sp_map == NULL))) {
+		if (map != NULL) {
+			struct pool_map *tmp = pool->sp_map;
+
+			pool->sp_map = map;
+			map = tmp;
+		}
+
+		D__DEBUG(DF_DSMS, DF_UUID
+			": changed cached map version: %u -> %u\n",
+			DP_UUID(pool->sp_uuid), pool->sp_map_version,
+			map_version);
+
+		pool->sp_map_version = map_version;
+		rc = dss_task_collective(update_child_map, pool);
+		D__ASSERT(rc == 0);
+	} else if (pool->sp_map != NULL &&
+		   pool_map_get_version(pool->sp_map) < map_version &&
+		   map != NULL) {
+		struct pool_map *tmp = pool->sp_map;
+
+		/* drop the stale map */
+		pool->sp_map = map;
+		map = tmp;
+	} else {
+		D__WARN("Ignore old map version: cur=%u, input=%u pool %p\n",
+			pool->sp_map_version, map_version, pool);
+	}
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	if (map)
+		pool_map_decref(map);
+
+out:
+	return rc;
+}
+
 void
 ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_update_map_in  *in = crt_req_get(rpc);
 	struct pool_tgt_update_map_out *out = crt_reply_get(rpc);
 	struct ds_pool		       *pool;
-	struct pool_map			*map = NULL;
 	struct pool_buf			*buf = NULL;
 	int				rc = 0;
 
@@ -693,49 +722,11 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
 		if (rc != 0)
 			D__GOTO(out_pool, rc);
-
 		buf = iov.iov_buf;
-		rc = pool_map_create(buf, in->tui_map_version, &map);
-		if (rc != 0) {
-			D__ERROR("failed to create local pool map: %d\n", rc);
-			D__GOTO(out_pool, rc);
-		}
 	}
 
-	ABT_rwlock_wrlock(pool->sp_lock);
-	if (pool->sp_map_version < in->tui_map_version ||
-	    (pool->sp_map_version == in->tui_map_version &&
-	     (map != NULL && pool->sp_map == NULL))) {
-		if (map != NULL) {
-			struct pool_map *tmp = pool->sp_map;
+	rc = ds_pool_tgt_map_update(pool, buf, in->tui_map_version);
 
-			pool->sp_map = map;
-			map = tmp;
-		}
-		D__DEBUG(DF_DSMS, DF_UUID
-			": changed cached map version: %u -> %u\n",
-			DP_UUID(in->tui_uuid), pool->sp_map_version,
-			in->tui_map_version);
-
-		pool->sp_map_version = in->tui_map_version;
-		rc = dss_task_collective(update_child_map, pool);
-		D__ASSERT(rc == 0);
-
-	} else if (pool->sp_map != NULL &&
-		   pool_map_get_version(pool->sp_map) < in->tui_map_version) {
-		struct pool_map *tmp = pool->sp_map;
-
-		/* drop the stale map */
-		pool->sp_map = map;
-		map = tmp;
-	} else {
-		D__WARN("Ignore old map version: cur=%u, input=%u pool %p\n",
-			pool->sp_map_version, in->tui_map_version, pool);
-	}
-	ABT_rwlock_unlock(pool->sp_lock);
-
-	if (map)
-		pool_map_decref(map);
 out_pool:
 	ds_pool_put(pool);
 out:

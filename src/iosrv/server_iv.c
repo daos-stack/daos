@@ -133,7 +133,7 @@ iv_ns_create_internal(unsigned int ns_id, d_rank_t rank,
 	if (ns == NULL)
 		return -DER_NOMEM;
 
-	DAOS_INIT_LIST_HEAD(&ns->iv_key_list);
+	DAOS_INIT_LIST_HEAD(&ns->iv_entry_list);
 	ns->iv_ns_id = ns_id;
 	ns->iv_master_rank = rank;
 	ABT_mutex_create(&ns->iv_lock);
@@ -288,7 +288,7 @@ iv_entry_lookup(struct ds_iv_ns *ns, crt_iv_key_t *key)
 	struct ds_iv_entry *entry;
 
 	ABT_mutex_lock(ns->iv_lock);
-	daos_list_for_each_entry(entry, &ns->iv_key_list, link) {
+	daos_list_for_each_entry(entry, &ns->iv_entry_list, link) {
 		if (key_equal((daos_key_t *)key, &entry->key)) {
 			/* resolve the permission issue later and also
 			 * hold the value XXX
@@ -300,84 +300,6 @@ iv_entry_lookup(struct ds_iv_ns *ns, crt_iv_key_t *key)
 	ABT_mutex_unlock(ns->iv_lock);
 
 	return found;
-}
-
-static int
-iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-		      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value,
-		      bool invalidate, bool refresh, void *priv)
-{
-	struct ds_iv_ns		*ns;
-	struct ds_iv_entry	*entry = priv;
-	struct ds_iv_key	*key;
-	int			rc;
-
-	ns = iv_ns_lookup_by_ivns(ivns);
-	D_ASSERT(ns != NULL);
-
-	key = (struct ds_iv_key *)iv_key->iov_buf;
-
-	if (key->rank == myrank)
-		rc = 0;
-	else
-		rc = -DER_IVCB_FORWARD;
-
-	if (entry == NULL) {
-		entry = iv_entry_lookup(ns, iv_key);
-		if (entry == NULL)
-			D__GOTO(out, rc = -DER_INVAL);
-	}
-
-	if (iv_value && iv_value->sg_iovs != NULL) {
-		if (refresh)
-			refresh_iv_value(entry, &entry->value, iv_value);
-		else
-			update_iv_value(entry, &entry->value, iv_value);
-	}
-
-	if (invalidate)
-		entry->valid = false;
-	else
-		entry->valid = true;
-
-out:
-	D__DEBUG(DB_TRACE, "key id %d rank %d myrank %d rc %d\n",
-		 key->key_id, key->rank, myrank, rc);
-	return rc;
-}
-
-static int
-iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value, bool invalidate,
-	      int refresh_rc, void *priv)
-{
-	int rc;
-
-	rc = iv_on_update_internal(ivns, iv_key, iv_ver, iv_value, invalidate,
-				   true, priv);
-	if (rc == -DER_IVCB_FORWARD)
-		rc = 0;
-
-	return rc;
-}
-
-static int
-iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	     crt_iv_ver_t iv_ver, uint32_t flags, d_sg_list_t *iv_value,
-	     void *priv)
-{
-	return iv_on_update_internal(ivns, iv_key, iv_ver, iv_value, false,
-				     false, priv);
-}
-
-static int
-iv_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
-{
-	struct ds_iv_key *key;
-
-	key = iv_key->iov_buf;
-	*root = key->rank;
-	return 0;
 }
 
 static int
@@ -420,39 +342,29 @@ free:
 }
 
 static int
-iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	  crt_iv_ver_t iv_ver, crt_iv_perm_t permission,
-	  d_sg_list_t *iv_value, void **priv)
+iv_entry_find_or_create(struct ds_iv_ns *ns, crt_iv_key_t *iv_key,
+			struct ds_iv_entry **got)
 {
-	struct ds_iv_ns		*ns;
 	struct ds_iv_entry	*entry;
-	struct ds_iv_entry	*found = NULL;
-	struct ds_iv_key	*key;
+	struct ds_iv_key	*key = iv_key->iov_buf;
 	struct ds_iv_key_type	*type;
 	int			rc;
 
-	ns = iv_ns_lookup_by_ivns(ivns);
-	D_ASSERT(ns != NULL);
-
-	/* Let's find it from cache first */
-	found = iv_entry_lookup(ns, iv_key);
-	if (found != NULL) {
-		found->ref++;
-		*priv = found;
-		if (iv_value != NULL) {
-			D__DEBUG(DB_TRACE, "get entry valid %s\n",
-				 found->valid ? "yes" : "no");
-			rc = found->ent_ops->iv_ent_get(iv_value, found);
-			if (rc)
-				return rc;
-		}
+	entry = iv_entry_lookup(ns, iv_key);
+	if (entry != NULL) {
+		entry->ref++;
+		if (got != NULL)
+			*got = entry;
+		D__DEBUG(DB_TRACE, "Get entry %p/%d key %d\n",
+			 entry, entry->ref, key->key_id);
 		return 0;
 	}
 
-	key = iv_key->iov_buf;
 	type = iv_key_type_lookup(key->key_id);
-	if (type == NULL)
+	if (type == NULL) {
+		D__ERROR("Can not find type %d\n", key->key_id);
 		return -DER_NONEXIST;
+	}
 
 	/* Allocate the entry */
 	rc = iv_entry_alloc(key, type, NULL, &entry);
@@ -461,16 +373,144 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	entry->ref++;
 	ABT_mutex_lock(ns->iv_lock);
-	daos_list_add(&entry->link, &ns->iv_key_list);
+	daos_list_add(&entry->link, &ns->iv_entry_list);
 	ABT_mutex_unlock(ns->iv_lock);
+	*got = entry;
 
-	if (iv_value != NULL) {
-		rc = entry->ent_ops->iv_ent_get(iv_value, entry);
-		if (rc)
+	return 1;
+}
+
+static int
+iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+		      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value,
+		      bool invalidate, bool refresh, void *priv)
+{
+	struct ds_iv_ns		*ns;
+	struct ds_iv_entry	*entry = priv;
+	struct ds_iv_key	*key = iv_key->iov_buf;
+	int			rc;
+
+	ns = iv_ns_lookup_by_ivns(ivns);
+	D_ASSERT(ns != NULL);
+	if (entry == NULL) {
+
+		/* find and prepare entry */
+		rc = iv_entry_find_or_create(ns, iv_key, &entry);
+		if (rc < 0)
 			return rc;
 	}
 
+	if (iv_value && iv_value->sg_iovs != NULL) {
+		if (refresh)
+			rc = refresh_iv_value(entry, &entry->value, iv_value);
+		else
+			rc = update_iv_value(entry, &entry->value, iv_value);
+		if (rc) {
+			D__ERROR("key id %d update failed: rc = %d\n",
+				 key->key_id, rc);
+			return rc;
+		}
+	}
+
+	if (invalidate)
+		entry->valid = false;
+	else
+		entry->valid = true;
+
+	D__DEBUG(DB_TRACE, "key id %d rank %d myrank %d valid %s\n",
+		 key->key_id, key->rank, myrank, invalidate ? "no" : "yes");
+
+	return 0;
+}
+
+/*  update callback will be called when syncing root to leaf */
+static int
+iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+	      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value, bool invalidate,
+	      int refresh_rc, void *priv)
+{
+	return iv_on_update_internal(ivns, iv_key, iv_ver, iv_value, invalidate,
+				     true, priv);
+}
+
+/*  update callback will be called when updating leaf to root */
+static int
+iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+	     crt_iv_ver_t iv_ver, uint32_t flags, d_sg_list_t *iv_value,
+	     void *priv)
+{
+	struct ds_iv_key	*key = iv_key->iov_buf;
+	int			rc;
+
+	rc = iv_on_update_internal(ivns, iv_key, iv_ver, iv_value, false,
+				   false, priv);
+	if (rc)
+		return rc;
+
+	if (key->rank != myrank) {
+		D__DEBUG(DB_TRACE, "Key id %d rank %d myrank %d\n",
+			 key->key_id, key->rank, myrank);
+		return -DER_IVCB_FORWARD;
+	}
+
+	return 0;
+}
+
+static int
+iv_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
+{
+	struct ds_iv_key *key;
+
+	key = iv_key->iov_buf;
+	*root = key->rank;
+	return 0;
+}
+
+static int
+iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+	  crt_iv_ver_t iv_ver, crt_iv_perm_t permission,
+	  d_sg_list_t *iv_value, void **priv)
+{
+	struct ds_iv_ns		*ns;
+	struct ds_iv_entry	*entry;
+	int			rc;
+	bool			alloc_entry = false;
+
+	ns = iv_ns_lookup_by_ivns(ivns);
+	D_ASSERT(ns != NULL);
+
+	/* find and prepare entry */
+	rc = iv_entry_find_or_create(ns, iv_key, &entry);
+	if (rc < 0)
+		return rc;
+
+	if (rc > 0)
+		alloc_entry = true;
+
+	if (iv_value) {
+		struct ds_iv_key *key = iv_key->iov_buf;
+
+		/* XXX Sigh, it should export the entry->value
+		 * here, but it might be changed by cart IV,
+		 * (see cart/crt_iv.c). Maybe the callback
+		 * interface might need change?
+		 */
+		D_ASSERT(entry->ent_ops->iv_ent_alloc != NULL);
+		rc = entry->ent_ops->iv_ent_alloc(key, NULL, iv_value);
+		if (rc)
+			D__GOTO(out, rc);
+	}
+
+	rc = entry->ent_ops->iv_ent_get(entry);
+	if (rc)
+		D__GOTO(out, rc);
+
 	*priv = entry;
+out:
+	if (rc && alloc_entry) {
+		daos_list_del(&entry->link);
+		iv_entry_free(entry);
+	}
 
 	return 0;
 }
@@ -489,13 +529,15 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	    entry->value.sg_iovs[0].iov_buf)
 		daos_sgl_fini((daos_sg_list_t *)iv_value, false);
 
-	rc = entry->ent_ops->iv_ent_put(&entry->value, entry);
+	rc = entry->ent_ops->iv_ent_put(entry);
 	if (rc)
 		return rc;
 
+	D__DEBUG(DB_TRACE, "Put entry %p/%d\n", entry, entry->ref - 1);
 	if (--entry->ref > 0)
 		return 0;
 
+	daos_list_del(&entry->link);
 	iv_entry_free(entry);
 
 	return 0;
@@ -590,10 +632,10 @@ out:
 /**
  * Get IV ns global identifer from cart.
  */
-void
+int
 ds_iv_global_ns_get(struct ds_iv_ns *ns, d_iov_t *g_ivns)
 {
-	crt_iv_global_namespace_get(ns->iv_ns, g_ivns);
+	return crt_iv_global_namespace_get(ns->iv_ns, g_ivns);
 }
 
 unsigned int
@@ -608,7 +650,7 @@ ds_iv_ns_destroy_internal(struct ds_iv_ns *ns)
 	struct ds_iv_entry *entry;
 	struct ds_iv_entry *tmp;
 
-	daos_list_for_each_entry_safe(entry, tmp, &ns->iv_key_list, link) {
+	daos_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, link) {
 		daos_list_del(&entry->link);
 		iv_entry_free(entry);
 	}
@@ -626,6 +668,7 @@ ds_iv_ns_destroy(void *ns)
 	if (iv_ns == NULL)
 		return;
 
+	D__DEBUG(DB_TRACE, "destroy ivns %d\n", iv_ns->iv_ns_id);
 	daos_list_del(&iv_ns->iv_ns_link);
 	ds_iv_ns_destroy_internal(iv_ns);
 }
@@ -779,7 +822,7 @@ int
 ds_iv_update(struct ds_iv_ns *ns, unsigned int key_id, d_sg_list_t *value,
 	     unsigned int shortcut, unsigned int sync_mode)
 {
-	crt_iv_sync_t	iv_sync;
+	crt_iv_sync_t	iv_sync = { 0 };
 
 	iv_sync.ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
 	iv_sync.ivs_mode = sync_mode;

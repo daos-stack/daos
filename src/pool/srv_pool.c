@@ -1722,11 +1722,17 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 * see pool_free_ref()
 	 */
 	D_ASSERT(svc->ps_pool != NULL);
-	rc = ds_iv_ns_create(rpc->cr_ctx, NULL,
-			     &iv_ns_id, &iv_iov,
-			     &svc->ps_pool->sp_iv_ns);
-	if (rc)
-		D_GOTO(out_svc, rc);
+	if (svc->ps_pool->sp_iv_ns == NULL) {
+		rc = ds_iv_ns_create(rpc->cr_ctx, NULL,
+				     &iv_ns_id, &iv_iov,
+				     &svc->ps_pool->sp_iv_ns);
+		if (rc)
+			D__GOTO(out_svc, rc);
+	} else {
+		rc = ds_iv_global_ns_get(svc->ps_pool->sp_iv_ns, &iv_iov);
+		if (rc)
+			D__GOTO(out_svc, rc);
+	}
 
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
@@ -2069,43 +2075,36 @@ out:
 }
 
 static int
-pool_map_ver_update_bcast(crt_context_t ctx, struct pool_svc *svc,
-			  uint32_t map_version, d_rank_list_t *tgts_exclude)
+pool_map_update(crt_context_t ctx, struct pool_svc *svc,
+		uint32_t map_version, struct pool_buf *buf)
 {
-	struct pool_tgt_update_map_in  *in;
-	struct pool_tgt_update_map_out *out;
-	crt_rpc_t		       *rpc;
-	crt_bulk_t			bulk = NULL;
-	int				rc;
+	struct pool_iv_entry	*iv_entry;
+	uint32_t		size;
+	int			rc;
 
-	D__DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
+	D__DEBUG(DF_DSMS, DF_UUID": update ver %d pb_nr %d\n",
+		 DP_UUID(svc->ps_uuid), map_version, buf->pb_nr);
 
-	rc = ds_pool_bcast_create(ctx, svc->ps_pool, DAOS_POOL_MODULE,
-				  POOL_TGT_UPDATE_MAP, &rpc, bulk,
-				  tgts_exclude);
-	if (rc != 0)
-		D__GOTO(out, rc);
+	size = pool_iv_ent_size(buf->pb_nr);
+	D_ALLOC(iv_entry, size);
+	if (iv_entry == NULL)
+		return -DER_NOMEM;
 
-	in = crt_req_get(rpc);
-	uuid_copy(in->tui_uuid, svc->ps_uuid);
-	in->tui_map_version = map_version;
+	crt_group_rank(svc->ps_pool->sp_group, &iv_entry->piv_master_rank);
+	uuid_copy(iv_entry->piv_pool_uuid, svc->ps_uuid);
+	iv_entry->piv_pool_map_ver = map_version;
+	memcpy(&iv_entry->piv_pool_buf, buf, pool_buf_size(buf->pb_nr));
+	rc = pool_iv_update(svc->ps_pool->sp_iv_ns, iv_entry,
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
 
-	rc = dss_rpc_send(rpc);
-	if (rc != 0)
-		D__GOTO(out_rpc, rc);
+	/* Some nodes ivns does not exist, might because of the disconnection,
+	 * let's ignore it
+	 */
+	if (rc == -DER_NONEXIST)
+		rc = 0;
 
-	out = crt_reply_get(rpc);
-	rc = out->tuo_rc;
-	if (rc != 0) {
-		D__ERROR(DF_UUID": failed to update pool map on %d targets\n",
-			DP_UUID(svc->ps_uuid), rc);
-		rc = -DER_IO;
-	}
+	D_FREE(iv_entry);
 
-out_rpc:
-	crt_req_decref(rpc);
-out:
-	D__DEBUG(DF_DSMS, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
 	return rc;
 }
 
@@ -2121,7 +2120,7 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 	struct pool_map	       *map;
 	uint32_t		map_version_before;
 	uint32_t		map_version;
-	struct pool_buf	       *map_buf;
+	struct pool_buf	       *map_buf = NULL;
 	struct pool_map	       *map_tmp;
 	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
@@ -2171,7 +2170,6 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 	if (rc != 0)
 		D__GOTO(out_map, rc);
 	rc = write_map_buf(&tx, &svc->ps_root, map_buf, map_version);
-	pool_buf_free(map_buf);
 	if (rc != 0)
 		D__GOTO(out_map, rc);
 
@@ -2199,13 +2197,17 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 	 * Ignore the return code as we are more about committing a pool map
 	 * change than its dissemination.
 	 */
-	pool_map_ver_update_bcast(info->dmi_ctx, svc, map_version, NULL);
+	pool_map_update(info->dmi_ctx, svc, map_version, map_buf);
 	D_EXIT;
 out_map:
+	if (map_buf != NULL)
+		pool_buf_free(map_buf);
 	pool_map_decref(map);
 out_replicas:
-	if (rc)
+	if (rc) {
 		daos_rank_list_free(*replicasp);
+		*replicasp = NULL;
+	}
 out_map_version:
 	if (pto_op != NULL)
 		pto_op->po_map_version =
@@ -2233,7 +2235,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_update_in	*in = crt_req_get(rpc);
 	struct pool_tgt_update_out	*out = crt_reply_get(rpc);
-	d_rank_list_t		*replicas = NULL;
+	d_rank_list_t			*replicas = NULL;
 	bool				updated;
 	int				rc;
 
@@ -2517,7 +2519,6 @@ ds_pool_iv_ns_try_create(struct ds_pool *pool, unsigned int master_rank,
 	if (pool->sp_iv_ns != NULL)
 		return 0;
 
-	D_ASSERT(pool->sp_group != NULL);
 	if (iv_iov == NULL) {
 		d_iov_t tmp;
 

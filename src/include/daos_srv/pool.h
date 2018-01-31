@@ -101,11 +101,11 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 int
 ds_pool_map_buf_get(const uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
 
-int
-ds_pool_tgt_map_update(struct ds_pool *pool, d_iov_t *iov);
-
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, d_rank_list_t *tgts,
 			    d_rank_list_t *tgts_out);
+
+int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
+			   unsigned int map_version);
 
 /*
  * TODO: Make the following internal functions of ds_pool after merging in

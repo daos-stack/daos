@@ -37,8 +37,8 @@ struct ds_iv_key {
 struct ds_iv_entry;
 typedef int (*ds_iv_ent_alloc_t)(struct ds_iv_key *iv_key, void *data,
 				 d_sg_list_t *sgl);
-typedef int (*ds_iv_ent_get_t)(d_sg_list_t *sgl, struct ds_iv_entry *ent);
-typedef int (*ds_iv_ent_put_t)(d_sg_list_t *sgl, struct ds_iv_entry *ent);
+typedef int (*ds_iv_ent_get_t)(struct ds_iv_entry *ent);
+typedef int (*ds_iv_ent_put_t)(struct ds_iv_entry *ent);
 typedef int (*ds_iv_ent_destroy_t)(d_sg_list_t *sgl);
 typedef int (*ds_iv_ent_fetch_t)(d_sg_list_t *dst, d_sg_list_t *src);
 typedef int (*ds_iv_ent_update_t)(d_sg_list_t *dst, d_sg_list_t *src);
@@ -104,8 +104,8 @@ struct ds_iv_ns {
 
 	/* Protect to the key list */
 	ABT_mutex	iv_lock;
-	/* all of keys under the ns links here */
-	daos_list_t	iv_key_list;
+	/* all of entries under the ns links here */
+	daos_list_t	iv_entry_list;
 	/* Cart IV namespace */
 	crt_iv_namespace_t	iv_ns;
 };
@@ -141,5 +141,5 @@ void ds_iv_ns_destroy(void *ns);
 
 unsigned int ds_iv_ns_id_get(void *ns);
 
-void ds_iv_global_ns_get(struct ds_iv_ns *ns, d_iov_t *gl_iov);
+int ds_iv_global_ns_get(struct ds_iv_ns *ns, d_iov_t *gl_iov);
 #endif /* __DAOS_SRV_IV_H__ */

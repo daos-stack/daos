@@ -215,11 +215,17 @@ int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 			     struct rebuild_iv *iv)
 {
+	D__DEBUG(DB_TRACE, "iv rank %d scan_done %d pull_done %d\n",
+		 iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done);
+
 	if (!iv->riv_scan_done)
 		return 0;
 
-	setbit(rgt->rgt_scan_bits, iv->riv_rank);
 	if (!rgt->rgt_scan_done) {
+		setbit(rgt->rgt_scan_bits, iv->riv_rank);
+		D__DEBUG(DB_TRACE, "rebuild ver %d tgt %d scan is"
+			" done bits %x\n", rgt->rgt_rebuild_ver,
+			 iv->riv_rank, rgt->rgt_scan_bits[0]);
 		if (is_rebuild_global_scan_done(rgt)) {
 			D__DEBUG(DB_TRACE, DF_UUID "pool scan is done\n",
 				 DP_UUID(rgt->rgt_pool_uuid));
@@ -493,7 +499,7 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 			 * each target can reliablly report its pull status
 			 */
 			rc = rebuild_iv_update(pool->sp_iv_ns,
-					       &iv, CRT_IV_SHORTCUT_TO_ROOT,
+					       &iv, CRT_IV_SHORTCUT_NONE,
 					       CRT_IV_SYNC_LAZY);
 		}
 
@@ -876,7 +882,7 @@ rebuild_one_ult(void *arg)
 	iv.riv_global_done = 1;
 
 	rc = rebuild_iv_update(pool->sp_iv_ns,
-			       &iv, CRT_IV_SHORTCUT_TO_ROOT,
+			       &iv, CRT_IV_SHORTCUT_NONE,
 			       CRT_IV_SYNC_LAZY);
 	D_EXIT;
 out:
@@ -1353,30 +1359,12 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	daos_iov_t			iov = { 0 };
 	daos_sg_list_t			sgl;
-	struct pool_map			*map;
-	struct pool_buf			*pool_buf;
 	int				rc;
 
 	/* lookup create the ds_pool first */
 	if (rpc->cr_co_bulk_hdl == NULL) {
 		D__ERROR("No pool map in scan rpc\n");
 		return -DER_INVAL;
-	}
-
-	/* Get the pool map */
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = &iov;
-	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
-	if (rc != 0)
-		return rc;
-
-	pool_buf = iov.iov_buf;
-	rc = pool_map_create(pool_buf, rsi->rsi_pool_map_ver, &map);
-	if (rc != 0) {
-		D__ERROR(DF_UUID"failed to create pool map: %d\n",
-			 DP_UUID(rsi->rsi_pool_uuid), rc);
-		return rc;
 	}
 
 	D__DEBUG(DB_TRACE, "prepare rebuild for "DF_UUID"/%d/%d\n",
@@ -1389,24 +1377,23 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	 * case. So let's do extra checking in the following.
 	 */
 	pc_arg.pca_map_version = rsi->rsi_pool_map_ver;
-	pc_arg.pca_need_group = 1;
-	pc_arg.pca_map = map;
 	rc = ds_pool_lookup_create(rsi->rsi_pool_uuid, &pc_arg, &pool);
 	if (rc != 0) {
-		pool_map_decref(map);
-		D__GOTO(out, rc);
+		D__ERROR("Can not find pool.\n");
+		return rc;
 	}
 
-	/* Let's check sp_map. */
-	if (pool->sp_map == NULL) {
-		pool->sp_map = map;
-	} else if (pool_map_get_version(pool->sp_map) <
-		   pool_map_get_version(map)) {
-		pool_map_decref(pool->sp_map);
-		pool->sp_map = map;
-	} else if (pool->sp_map != map) {
-		pool_map_decref(map);
-	}
+	/* update the pool map */
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
+	if (rc != 0)
+		D__GOTO(out, rc);
+
+	rc = ds_pool_tgt_map_update(pool, iov.iov_buf, rsi->rsi_pool_map_ver);
+	if (rc != 0)
+		D__GOTO(out, rc);
 
 	/* Then check sp_group */
 	if (pool->sp_group == NULL) {

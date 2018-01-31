@@ -51,6 +51,13 @@ pool_tls_get()
 	return tls;
 }
 
+struct pool_iv_entry {
+	uuid_t		piv_pool_uuid;
+	uint32_t	piv_pool_map_ver;
+	uint32_t	piv_master_rank;
+	struct pool_buf	piv_pool_buf;
+};
+
 /*
  * srv_pool.c
  */
@@ -83,7 +90,6 @@ void ds_pool_tgt_update_map_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
 void ds_pool_child_purge(struct pool_tls *tls);
-
 /*
  * srv_util.c
  */
@@ -96,6 +102,10 @@ int ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 /*
  * srv_iv.c
  */
+uint32_t pool_iv_ent_size(int nr);
 int ds_pool_iv_init(void);
 int ds_pool_iv_fini(void);
+int pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
+		   unsigned int shortcut, unsigned int sync_mode);
+int pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv);
 #endif /* __POOL_SRV_INTERNAL_H__ */

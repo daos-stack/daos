@@ -70,16 +70,13 @@ rebuild_iv_ent_alloc(struct ds_iv_key *iv_key, void *data,
 }
 
 static int
-rebuild_iv_ent_get(d_sg_list_t *sgl, struct ds_iv_entry *entry)
+rebuild_iv_ent_get(struct ds_iv_entry *entry)
 {
-	if (sgl->sg_iovs != NULL && sgl->sg_iovs[0].iov_buf != NULL)
-		return 0;
-
-	return rebuild_iv_alloc_internal(sgl);
+	return 0;
 }
 
 static int
-rebuild_iv_ent_put(d_sg_list_t *sgl, struct ds_iv_entry *entry)
+rebuild_iv_ent_put(struct ds_iv_entry *entry)
 {
 	return 0;
 }
