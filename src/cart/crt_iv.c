@@ -1896,6 +1896,107 @@ struct update_cb_info {
 	void				*uci_user_priv;
 };
 
+
+/* Helper function for finalizing of transfer back of the iv_value
+ * from a parent back to the child
+ */
+static void
+finalize_transfer_back(struct update_cb_info *cb_info, int rc)
+{
+	struct crt_ivns_internal	*ivns;
+	struct crt_iv_ops		*iv_ops;
+	struct iv_update_out		*child_output;
+
+	child_output = crt_reply_get(cb_info->uci_child_rpc);
+	child_output->rc = rc;
+
+	ivns = cb_info->uci_ivns_internal;
+
+	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
+	D_ASSERT(iv_ops != NULL);
+
+	iv_ops->ivo_on_put(ivns, &cb_info->uci_iv_value,
+				cb_info->uci_user_priv);
+
+	crt_reply_send(cb_info->uci_child_rpc);
+	/* ADDREF done in crt_hdlr_iv_update */
+	RPC_PUB_DECREF(cb_info->uci_child_rpc);
+	crt_bulk_free(cb_info->uci_bulk_hdl);
+	D_FREE(cb_info);
+}
+
+/* Bulk update completion callback for transferring values back
+ * to the original caller/child.
+ */
+static int
+bulk_update_transfer_back_done(const struct crt_bulk_cb_info *info)
+{
+	finalize_transfer_back(info->bci_arg, info->bci_rc);
+	return 0;
+}
+
+
+/* Helper function to transfer iv_value back to child */
+static
+void transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info)
+{
+	struct crt_bulk_desc		bulk_desc = {0};
+	struct iv_update_in		*child_input;
+	struct crt_ivns_internal	*ivns;
+	struct crt_iv_ops		*iv_ops;
+	int				size = 0;
+	int				i;
+	int				rc = 0;
+
+	ivns = cb_info->uci_ivns_internal;
+
+	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
+	D_ASSERT(iv_ops != NULL);
+
+	rc = iv_ops->ivo_on_refresh(ivns, key, 0, &cb_info->uci_iv_value, false,
+				0, cb_info->uci_user_priv);
+
+	/* No more children -- we are the originator; call update_cb */
+	if (cb_info->uci_child_rpc == NULL) {
+		cb_info->uci_comp_cb(ivns, cb_info->uci_class_id, key, NULL,
+				&cb_info->uci_iv_value, rc,
+				cb_info->uci_cb_arg);
+
+		iv_ops->ivo_on_put(ivns, &cb_info->uci_iv_value,
+				cb_info->uci_user_priv);
+
+		if (cb_info->uci_bulk_hdl != CRT_BULK_NULL)
+			crt_bulk_free(cb_info->uci_bulk_hdl);
+
+		D_FREE(cb_info);
+		return;
+	}
+
+
+	/* Perform bulk transfer back to the child */
+	child_input = crt_req_get(cb_info->uci_child_rpc);
+
+	/* Calculate size of iv value */
+	for (i = 0; i < cb_info->uci_iv_value.sg_nr.num; i++)
+		size += cb_info->uci_iv_value.sg_iovs[i].iov_buf_len;
+
+	bulk_desc.bd_rpc = cb_info->uci_child_rpc;
+	bulk_desc.bd_bulk_op = CRT_BULK_PUT;
+	bulk_desc.bd_remote_hdl = child_input->ivu_iv_value_bulk;
+	bulk_desc.bd_remote_off = 0;
+	bulk_desc.bd_local_hdl = cb_info->uci_bulk_hdl;
+	bulk_desc.bd_local_off = 0;
+	bulk_desc.bd_len = size;
+
+	rc = crt_bulk_transfer(&bulk_desc, bulk_update_transfer_back_done,
+				cb_info, 0);
+	if (rc != 0) {
+		D_ERROR("Failed to transfer data back\n");
+		finalize_transfer_back(cb_info, rc);
+	}
+}
+
+
 /* IV_UPDATE internal rpc response handler */
 static void
 handle_ivupdate_response(const struct crt_cb_info *cb_info)
@@ -1906,6 +2007,13 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	struct iv_update_out	*child_output;
 	struct crt_iv_ops	*iv_ops;
 	int			rc;
+
+
+	/* For bi-directional updates, transfer data back to child */
+	if (iv_info->uci_sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
+		transfer_back_to_child(&input->ivu_key, iv_info);
+		D_GOTO(exit, 0);
+	}
 
 	if (iv_info->uci_child_rpc) {
 
@@ -1935,6 +2043,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		rc = crt_reply_send(iv_info->uci_child_rpc);
 		D_ASSERT(rc == 0);
 
+		/* ADDREF done in crt_hdlr_iv_update */
 		RPC_PUB_DECREF(iv_info->uci_child_rpc);
 	} else {
 		d_sg_list_t *tmp_iv_value;
@@ -1978,6 +2087,8 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		crt_bulk_free(iv_info->uci_bulk_hdl);
 
 	D_FREE_PTR(iv_info);
+exit:
+	return;
 }
 
 /* Helper function to issue IV UPDATE RPC*/
@@ -2108,6 +2219,21 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 			&input->ivu_key, 0, false, &cb_info->buc_iv_value,
 			cb_info->buc_user_priv);
 
+	sync_type = input->ivu_sync_type.iov_buf;
+
+	D_ALLOC_PTR(update_cb_info);
+	if (update_cb_info == NULL)
+		D_GOTO(send_error, rc = -DER_NOMEM);
+
+	update_cb_info->uci_child_rpc = info->bci_bulk_desc->bd_rpc;
+	update_cb_info->uci_ivns_internal = ivns_internal;
+	update_cb_info->uci_class_id = input->ivu_class_id;
+	update_cb_info->uci_caller_rank = input->ivu_caller_node;
+	update_cb_info->uci_sync_type = *sync_type;
+	update_cb_info->uci_user_priv = cb_info->buc_user_priv;
+	update_cb_info->uci_iv_value = cb_info->buc_iv_value;
+	update_cb_info->uci_bulk_hdl = cb_info->buc_bulk_hdl;
+
 	if (update_rc == -DER_IVCB_FORWARD) {
 		rc = crt_iv_parent_get(ivns_internal,
 					input->ivu_root_node, &next_rank);
@@ -2116,27 +2242,20 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 			D_GOTO(send_error, rc = -DER_OOG);
 		}
 
-		D_ALLOC_PTR(update_cb_info);
-		if (update_cb_info == NULL)
-			D_GOTO(send_error, rc = -DER_NOMEM);
-
-		sync_type = input->ivu_sync_type.iov_buf;
-
-		update_cb_info->uci_child_rpc = info->bci_bulk_desc->bd_rpc;
-		update_cb_info->uci_ivns_internal = ivns_internal;
-		update_cb_info->uci_class_id = input->ivu_class_id;
-		update_cb_info->uci_caller_rank = input->ivu_caller_node;
-		update_cb_info->uci_sync_type = *sync_type;
-		update_cb_info->uci_user_priv = cb_info->buc_user_priv;
-
 		crt_ivu_rpc_issue(next_rank, &input->ivu_key,
 				&cb_info->buc_iv_value, sync_type,
 				input->ivu_root_node, update_cb_info);
 	} else if (update_rc == 0) {
+
+		/* If sync was bi-directional - trasnfer value back */
+		if (sync_type->ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
+			transfer_back_to_child(&input->ivu_key, update_cb_info);
+			D_GOTO(exit, rc = update_rc);
+		}
+
 		rc = iv_ops->ivo_on_put(ivns_internal,
 					&cb_info->buc_iv_value,
 					cb_info->buc_user_priv);
-
 		output->rc = rc;
 		rc = crt_reply_send(info->bci_bulk_desc->bd_rpc);
 
@@ -2147,13 +2266,15 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 	}
 
 	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
-	D_FREE_PTR(cb_info);
 
+exit:
+	D_FREE_PTR(cb_info);
 	return rc;
 
 send_error:
 	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
 	D_FREE_PTR(cb_info);
+	D_FREE_PTR(update_cb_info);
 
 	output->rc = rc;
 
@@ -2380,6 +2501,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		cb_info->uci_ivns_internal = ivns_internal;
 		cb_info->uci_class_id = class_id;
 		cb_info->uci_caller_rank = ivns_internal->cii_grp_priv->gp_self;
+		cb_info->uci_user_priv = priv;
 
 		rc = crt_ivu_rpc_issue(next_node, iv_key, iv_value,
 					&sync_type, root_rank, cb_info);

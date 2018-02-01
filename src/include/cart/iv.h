@@ -468,6 +468,15 @@ typedef enum {
 typedef enum {
 	/* Treat namespace lookup errors as fatal during sync */
 	CRT_IV_SYNC_FLAG_NS_ERRORS_FATAL = 0x1,
+
+	/* Bi-directional update. When this flag is set, it causes IV
+	 * framework to propagate IV value in both directions --
+	 * from the caller of crt_iv_update up to the root and from the root
+	 * back to the caller.
+	 * The default behavior is to only propagate IV value from the
+	 * caller up to the root.
+	 */
+	CRT_IV_SYNC_BIDIRECTIONAL = 0x2,
 } crt_iv_sync_flag_t;
 
 typedef struct {
