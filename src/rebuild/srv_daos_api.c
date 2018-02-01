@@ -122,7 +122,7 @@ ds_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	arg->mode	= mode;
 	arg->oh		= oh;
 
-	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
+	return dss_task_run(task, DSS_POOL_REBUILD);
 }
 
 int
@@ -139,7 +139,7 @@ ds_obj_close(daos_handle_t obj_hl)
 	arg = dc_task_get_args(task);
 	arg->oh = obj_hl;
 
-	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
+	return dss_task_run(task, DSS_POOL_REBUILD);
 }
 
 int
@@ -164,7 +164,7 @@ ds_obj_single_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
 	arg->sgl	= sgl;
 	arg->anchor	= anchor;
 
-	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
+	return dss_task_run(task, DSS_POOL_REBUILD);
 }
 
 int
@@ -190,7 +190,7 @@ ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	arg->sgl	= sgl;
 	arg->anchor	= anchor;
 
-	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
+	return dss_task_run(task, DSS_POOL_REBUILD);
 }
 
 int
@@ -216,7 +216,7 @@ ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 	arg->sgls	= sgls;
 	arg->maps	= maps;
 
-	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
+	return dss_task_run(task, DSS_POOL_REBUILD);
 }
 
 int
@@ -249,5 +249,5 @@ ds_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	arg->anchor	= anchor;
 	arg->incr_order	= incr;
 
-	return dss_task_run(task, DSS_POOL_PRIV_LOW_PRIORITY);
+	return dss_task_run(task, DSS_POOL_REBUILD);
 }

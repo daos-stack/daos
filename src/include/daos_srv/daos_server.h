@@ -313,28 +313,17 @@ int dss_group_destroy(crt_group_t *group);
 void dss_sleep(int ms);
 int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
-/** Different priorities/type of ES pool, there are 4 pools for now
- *  Three priviate pools
+/** Different type of ES pools, there are 3 pools for now
  *
- *  DSS_POOL_PRIV_LOW_PRIORITY
- *  DSS_POOL_PRIV
- *  DSS_POOL_PRIV_HIGH_PRIORITY
- *
- *  when server get a request, it will push the request to one of these
- *  private pools(by priority), if the request can be handled totally by
- *  its own xstream, for example object fetch/update RPC handler ULT.
- *
- *  DSS_POOL_SHARE
- *
- *  If the request can not be handled by the xstream itself, for example
- *  it needs collective operation, then the handler ULT will be pushed
- *  the shared pools.
+ *  DSS_POOL_PRIV     Private pool: I/O requests will be added to this pool.
+ *  DSS_POOL_SHARE    Shared pool: Other requests and ULT created during
+ *                    processing rpc.
+ *  DSS_POOL_REBUILD  Private pool: pools specially for rebuild tasks.
  */
 enum {
-	DSS_POOL_PRIV_LOW_PRIORITY = 0,
 	DSS_POOL_PRIV,
 	DSS_POOL_SHARE,
-	DSS_POOL_PRIV_HIGH_PRIORITY,
+	DSS_POOL_REBUILD,
 	DSS_POOL_CNT,
 };
 

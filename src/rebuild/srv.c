@@ -315,9 +315,13 @@ dss_rebuild_check_one(void *data)
 	D__ASSERTF(pool_tls != NULL, DF_UUID" ver %d\n",
 		   DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 
-	D__DEBUG(DB_TRACE, "rec_count "DF_U64" obj_count "DF_U64"\n",
+	D__DEBUG(DB_TRACE, "%d rec_count "DF_U64" obj_count "DF_U64
+		 " scanning %d status %d\n",
+		 dss_get_module_info()->dmi_tid,
 		 pool_tls->rebuild_pool_rec_count,
-		 pool_tls->rebuild_pool_obj_count);
+		 pool_tls->rebuild_pool_obj_count,
+		 pool_tls->rebuild_pool_scanning,
+		 pool_tls->rebuild_pool_status);
 	ABT_mutex_lock(status->lock);
 	if (pool_tls->rebuild_pool_scanning)
 		status->scanning = 1;

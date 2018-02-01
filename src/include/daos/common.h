@@ -306,6 +306,7 @@ d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
  */
 enum {
 	DSS_KEY_FAIL_LOC = 0,
+	DSS_REBUILD_RES_PERCENTAGE,
 	DSS_KEY_NUM,
 };
 

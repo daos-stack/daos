@@ -38,6 +38,9 @@
 
 /** Number of started xstreams or cores used */
 unsigned int	dss_nxstreams;
+
+unsigned int	dss_rebuild_res_percentage = 30;
+
 /** Per-xstream configuration data */
 struct dss_xstream {
 	ABT_future	dx_shutdown;
@@ -89,46 +92,64 @@ dss_sched_init(ABT_sched sched, ABT_sched_config config)
 	return ret;
 }
 
-/**
- * Choose ULT from the pool. For now, let's always handle the ULT
- * in private pool(high priority/normal) first, mostly object
- * I/O request, then the ULT in shared pool, finally the ULT
- * in the low priority POOL.
- *
- * XXX we may change the sequence later once we have more cases.
- */
 static ABT_unit
-dss_sched_unit_pop(ABT_pool *pools, ABT_pool *pool)
+normal_unit_pop(ABT_pool *pools, ABT_pool *pool)
 {
-	ABT_unit	unit;
+	ABT_unit unit;
 
-	ABT_pool_pop(pools[DSS_POOL_PRIV_HIGH_PRIORITY], &unit);
-	if (unit != ABT_UNIT_NULL) {
-		*pool = pools[DSS_POOL_PRIV_HIGH_PRIORITY];
-		return unit;
-	}
-
-	/* incoming I/O request ULT */
+	/* Let's pop I/O request ULT first */
 	ABT_pool_pop(pools[DSS_POOL_PRIV], &unit);
 	if (unit != ABT_UNIT_NULL) {
 		*pool = pools[DSS_POOL_PRIV];
 		return unit;
 	}
 
-	/* Collective ULT or created ULT, like rebuild ULT or the
-	 * main crt progress ULT dss_srv_handler
-	 */
+	/* Other request and ollective ULT or created ULT */
 	ABT_pool_pop(pools[DSS_POOL_SHARE], &unit);
 	if (unit != ABT_UNIT_NULL) {
 		*pool = pools[DSS_POOL_SHARE];
 		return unit;
 	}
 
-	ABT_pool_pop(pools[DSS_POOL_PRIV_LOW_PRIORITY], &unit);
+	return ABT_UNIT_NULL;
+}
+
+static ABT_unit
+rebuild_unit_pop(ABT_pool *pools, ABT_pool *pool)
+{
+	ABT_unit unit;
+
+	ABT_pool_pop(pools[DSS_POOL_REBUILD], &unit);
 	if (unit != ABT_UNIT_NULL) {
-		*pool = pools[DSS_POOL_PRIV_LOW_PRIORITY];
+		*pool = pools[DSS_POOL_REBUILD];
 		return unit;
 	}
+
+	return ABT_UNIT_NULL;
+}
+
+/**
+ * Choose ULT from the pool. Note: the rebuild ULT will be
+ * be choosen by dss_rebuild_res_percentage.
+ *
+ * XXX we may change the sequence later once we have more cases.
+ */
+static ABT_unit
+dss_sched_unit_pop(ABT_pool *pools, ABT_pool *pool)
+{
+	size_t	 rebuild_cnt;
+	int	 rc;
+
+	rc = ABT_pool_get_total_size(pools[DSS_POOL_REBUILD],
+				     &rebuild_cnt);
+	if (rc != ABT_SUCCESS)
+		return ABT_UNIT_NULL;
+
+	if (rebuild_cnt == 0 ||
+	    rand() % 100 > dss_rebuild_res_percentage)
+		return normal_unit_pop(pools, pool);
+	else
+		return rebuild_unit_pop(pools, pool);
 
 	return ABT_UNIT_NULL;
 }
@@ -1097,6 +1118,14 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 	switch (key_id) {
 	case DSS_KEY_FAIL_LOC:
 		daos_fail_loc_set(value);
+		break;
+	case DSS_REBUILD_RES_PERCENTAGE:
+		if (value >= 100 || value == 0) {
+			D__ERROR("invalid value "DF_U64"\n", value);
+			rc = -DER_INVAL;
+			break;
+		}
+		dss_rebuild_res_percentage = value;
 		break;
 	default:
 		D__ERROR("invalid key_id %d\n", key_id);
