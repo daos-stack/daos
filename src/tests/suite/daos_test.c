@@ -267,7 +267,8 @@ int
 test_teardown(void **state)
 {
 	test_arg_t	*arg = *state;
-	int		 rc, rc_reduce = 0;
+	int		 rc = 0;
+	int              rc_reduce = 0;
 
 	if (arg->multi_rank)
 		MPI_Barrier(MPI_COMM_WORLD);
