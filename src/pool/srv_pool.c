@@ -178,6 +178,7 @@ ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 		D__GOTO(err_file, rc = daos_errno2der(errno));
 	}
 
+	free(fpath);
 	return 0;
 
 err_fd:

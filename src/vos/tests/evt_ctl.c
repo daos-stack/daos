@@ -386,8 +386,10 @@ ts_many_add(char *args)
 		return -1;
 
 	seq = dts_rand_iarr_alloc(nr, 0);
-	if (!seq)
+	if (!seq) {
+		free(buf);
 		return -1;
+	}
 
 	for (i = 0; i < nr; i++) {
 		rect.rc_off_lo = offset + seq[i] * size;

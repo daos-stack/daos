@@ -209,6 +209,11 @@ dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	/*Register CB*/
 	rc = tse_task_register_comp_cb(task, dc_tier_register_cold_cb, trc_arg,
 				       sizeof(struct tier_reg_cold_arg));
+	/* Reardless of whether we succeed trc_arg needs to be freed here as a
+	 * copy is made deep in register_cb
+	 **/
+	D__FREE_PTR(trc_arg);
+
 	if (rc)
 		D__GOTO(out, rc);
 

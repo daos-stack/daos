@@ -536,6 +536,7 @@ aio_req_wait(struct test *test, int fetch_flag, uint64_t value)
 			}
 		}
 	}
+	free(valbuf);
 	DBENCH_INFO("Found %d completed AIOs (%d free %d busy)",
 		    rc, naios, test->t_naios - naios);
 }
@@ -1873,6 +1874,7 @@ test_init(struct test *test, int argc, char *argv[])
 static void
 test_fini(struct test *test)
 {
+	free(test->t_pname);
 	if (comm_world_rank == 0) {
 		time_t	t = time(NULL);
 
@@ -1920,6 +1922,7 @@ int main(int argc, char *argv[])
 		DBENCH_CHECK(rc, "Pool %s connect failed\n",
 			     arg.t_pname);
 	}
+
 
 	handle_share(&poh, HANDLE_POOL, comm_world_rank, poh,
 		     verbose ? 1 : 0);

@@ -129,8 +129,10 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	co_args.prc = prc;
 	*prc = 1;
 	rc = dc_task_create(dc_cont_create, sched, NULL, &cont_open_task);
-	if (rc != 0)
+	if (rc != 0) {
+		D__FREE_PTR(prc);
 		return rc;
+	}
 
 	rc = dc_task_reg_comp_cb(cont_open_task, tier_fetch_cont_create_cb,
 				 &co_args, sizeof(co_args));

@@ -73,8 +73,10 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 	arg->coh = DAOS_HDL_INVAL;
 
 	rc = daos_eq_create(&arg->eq);
-	if (rc)
+	if (rc) {
+		free(arg);
 		return rc;
+	}
 
 	if (step == SETUP_EQ)
 		goto out;
@@ -107,8 +109,10 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 	/** broadcast pool create result */
 	if (multi_rank)
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
+	if (rc) {
+		free(arg);
 		return rc;
+	}
 
 	/** broadcast pool UUID and svc addresses */
 	if (multi_rank) {
@@ -150,8 +154,10 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 	/** broadcast pool connect result */
 	if (multi_rank)
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
+	if (rc) {
+		free(arg);
 		return rc;
+	}
 
 	/** broadcast pool info */
 	if (multi_rank)
@@ -198,8 +204,10 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 	/** broadcast container open result */
 	if (multi_rank)
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
+	if (rc) {
+		free(arg);
 		return rc;
+	}
 
 	/** l2g and g2l the container handle */
 	if (multi_rank)

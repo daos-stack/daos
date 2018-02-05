@@ -604,7 +604,7 @@ static int
 sched_test_5()
 {
 	tse_sched_t	sched;
-	tse_task_t	*task;
+	tse_task_t	*task = NULL;
 	tse_task_t	*tasks[NUM_DEPS];
 	int		*counter = NULL;
 	bool		flag;
@@ -727,6 +727,8 @@ sched_test_5()
 	}
 
 out:
+	if (task)
+		tse_task_decref(task);
 	if (counter)
 		D__FREE_PTR(counter);
 	TSE_TEST_EXIT(rc);

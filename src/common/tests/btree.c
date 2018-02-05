@@ -740,7 +740,7 @@ ik_btr_perf(unsigned int key_nr)
 	unsigned int	*arr;
 	char		 buf[64];
 	int		 i;
-	int		 rc;
+	int		 rc = 0;
 	double		 then;
 	double		 now;
 
@@ -765,7 +765,7 @@ ik_btr_perf(unsigned int key_nr)
 		rc = ik_btr_kv_operate(BTR_OPC_UPDATE, buf, false);
 		if (rc != 0) {
 			D__PRINT("update failed: %d\n", rc);
-			return -1;
+			D_GOTO(out, rc = -1);
 		}
 	}
 	now = dts_time_now();
@@ -781,7 +781,7 @@ ik_btr_perf(unsigned int key_nr)
 		rc = ik_btr_kv_operate(BTR_OPC_LOOKUP, buf, false);
 		if (rc != 0) {
 			D__PRINT("lookup failed: %d\n", rc);
-			return -1;
+			D_GOTO(out, rc = -1);
 		}
 	}
 	now = dts_time_now();
@@ -797,13 +797,15 @@ ik_btr_perf(unsigned int key_nr)
 		rc = ik_btr_kv_operate(BTR_OPC_DELETE, buf, false);
 		if (rc != 0) {
 			D__PRINT("delete failed: %d\n", rc);
-			return -1;
+			D_GOTO(out, rc = -1);
 		}
 	}
 	now = dts_time_now();
 	D__PRINT("delete = %10.2f/sec\n", key_nr / (now - then));
 
-	return 0;
+out:
+	free(arr);
+	return rc;
 }
 
 static struct option btr_ops[] = {

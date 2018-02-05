@@ -195,6 +195,7 @@ tf_cont_close(daos_handle_t coh, uuid_t cid, daos_epoch_t epoch)
 	rc = dc_task_create(dc_cont_close, sched, NULL, &task2);
 	if (rc) {
 		D__ERROR("task create returned %d\n", rc);
+		dc_task_decref(task1);
 		D__GOTO(out, rc);
 	}
 	cc_args = dc_task_get_args(task2);
@@ -241,6 +242,7 @@ tf_cont_open(daos_handle_t *pcoh, uuid_t cid, daos_epoch_t *epoch)
 
 	rc = dc_task_create(dc_epoch_hold, sched, NULL, &task2);
 	if (rc) {
+		tse_task_decref(task1);
 		D__ERROR("task create returned %d\n", rc);
 		D__GOTO(out, rc);
 	}
