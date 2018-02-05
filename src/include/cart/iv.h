@@ -120,7 +120,7 @@ typedef enum {
  * \param flags [IN]		OR-ed combination of 0 or more crt_iv_flag_t
  *				flags
  * \param iv_value [OUT]	IV value returned
- * \param priv [IN]		private user data
+ * \param arg [IN]		private user data
  *
  * \return			zero on success handled locally,
  *				-DER_IVCB_FORWARD when cannot handle locally and
@@ -142,7 +142,7 @@ typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
  * \param flags [IN]		OR-ed combination of 0 or more crt_iv_flag_t
  *				flags
  * \param iv_value [IN]		IV value to be update
- * \param priv [IN]		private user data
+ * \param arg [IN]		private user data
  *
  * \return			zero on success handled locally,
  *				-DER_IVCB_FORWARD when cannot handle locally and
@@ -168,12 +168,9 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  * \param invalidate [IN]       true for invalidate the IV in which case the
  *				iv_ver and iv_value can be ignored.
  * \param rc [IN]		Status of the operation.
- * \param priv [IN]		private user data
+ * \param arg [IN]		private user data
  *
- * \return			zero on success handled locally,
- *				-DER_IVCB_FORWARD when cannot handle locally and
- *				need to forward to next hop,
- *				other negative value if error
+ * \return			zero on success, negative value if error
  */
 typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
 				      crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
@@ -184,9 +181,8 @@ typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
  * The hash function to hash one IV's key to a d_rank_t result which is to be
  * the root node of that IV.
  *
- * The root of IV is the node that finally serve the IV fetch/update request if
- * the request cannot be satisfied by intermediate nodes. User can provide a
- * hash function to make it be controllable by itself.
+ * The root of IV is the node that finally serves the IV fetch/update request if
+ * the request cannot be satisfied by intermediate nodes.
  *
  * \param ivns [IN]		the local handle of the IV namespace
  * \param iv_key [IN]		key of the IV
@@ -233,7 +229,7 @@ typedef enum {
  * \param iv_ver [IN]		Version of iv_key
  * \param permission [IN]	crt_iv_perm_t flags
  * \param iv_value [OUT]	Resultant placeholder for iv value buffer
- * \param priv [OUT]		Pointer to the private data
+ * \param arg [OUT]		Pointer to the private data
  *
  * \return			zero on success, negative value if error
  */
@@ -245,12 +241,12 @@ typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
 
 /**
  * Put value function to return buffers retrieved for the specified iv_key
- * Original buffers in iv_value are to be retreived via
+ * Original buffers in iv_value are to be retrieved via
  * crt_iv_on_get_cb_t call.
  *
  * \param ivns [IN]		the local handle to the IV namespace
  * \param iv_value [IN]		iv_value buffers to return
- * \param priv [IN]		private user data
+ * \param arg [IN]		private user data
  *
  * \return			zero on success, negative value if error
  */
@@ -261,7 +257,7 @@ typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
 /**
  * Compares two passed iv keys 'key1' and 'key2' and returns either
  * true or false. This is an optional callback that clients can implement
- * if they do not want default 'memcmp' comparison for keys.
+ * if they do not want a default 'memcmp' comparison for keys.
  *
  * Key comparison is used during fetch aggregation logic. Two requests
  * going for the same key will be aggregated if keys match.
@@ -409,7 +405,7 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns);
 typedef int (*crt_iv_comp_cb_t)(crt_iv_namespace_t ivns, uint32_t class_id,
 				crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
 				d_sg_list_t *iv_value,
-				int rc, void *cb_args);
+				int rc, void *cb_arg);
 
 /**
  * Fetch the value of incast variable.
