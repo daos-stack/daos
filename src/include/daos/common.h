@@ -91,6 +91,8 @@ do {									\
 	}								\
 	D__DEBUG(DB_MEM, "alloc #ptr : %d at %p.\n", (int)(size), ptr);	\
 	if (DD_ALLOC_PADDING != 0) {					\
+		if (!ptr)						\
+			break;						\
 		void *__ptr = (void *)(ptr) + size;			\
 		*(unsigned int *)__ptr = DD_ALLOC_MAGIC;		\
 	}								\
@@ -100,6 +102,8 @@ do {									\
 do {									\
 	D__DEBUG(DB_MEM, "free #ptr : %d at %p.\n", (int)(size), ptr);	\
 	if (DD_ALLOC_PADDING != 0) {					\
+		if (!ptr)						\
+			break;						\
 		void *__ptr = (void *)(ptr) + size;			\
 		D__ASSERT(*(unsigned int *)__ptr == DD_ALLOC_MAGIC);	\
 		if (size <= 2048) {					\
