@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1455,11 +1455,11 @@ test_gurt_hash_op_rec_addref_locked(struct d_chash_table *thtab, d_list_t *link)
 	 * is stored in the hashtable's private data
 	 */
 	TEST_THREAD_ASSERT(thtab->ht_priv != NULL);
-	pthread_spin_lock((pthread_spinlock_t *)thtab->ht_priv);
+	D_SPIN_LOCK((pthread_spinlock_t *)thtab->ht_priv);
 
 	tlink->tl_ref++;
 
-	pthread_spin_unlock((pthread_spinlock_t *)thtab->ht_priv);
+	D_SPIN_UNLOCK((pthread_spinlock_t *)thtab->ht_priv);
 }
 
 static bool
@@ -1473,14 +1473,14 @@ test_gurt_hash_op_rec_decref_locked(struct d_chash_table *thtab, d_list_t *link)
 	 * is stored in the hashtable's private data
 	 */
 	TEST_THREAD_ASSERT(thtab->ht_priv != NULL);
-	pthread_spin_lock((pthread_spinlock_t *)thtab->ht_priv);
+	D_SPIN_LOCK((pthread_spinlock_t *)thtab->ht_priv);
 
 	tlink->tl_ref--;
 
 	/* Get a thread-local snapshot of the ref under lock protection */
 	ref_snapshot = tlink->tl_ref;
 
-	pthread_spin_unlock((pthread_spinlock_t *)thtab->ht_priv);
+	D_SPIN_UNLOCK((pthread_spinlock_t *)thtab->ht_priv);
 
 	/* If the reference count goes negative there is a bug */
 	TEST_THREAD_ASSERT(ref_snapshot >= 0);
@@ -1528,7 +1528,7 @@ _test_gurt_hash_parallel_refcounting(uint32_t ht_feats)
 	assert_int_equal(rc, 0);
 
 	/* Create a spinlock to protect the test's reference counting */
-	rc = pthread_spin_init(&ref_spin_lock, PTHREAD_PROCESS_PRIVATE);
+	rc = D_SPIN_INIT(&ref_spin_lock, PTHREAD_PROCESS_PRIVATE);
 	assert_int_equal(rc, 0);
 
 	/* Stick a pointer to the spinlock in the hash table's private data */
@@ -1591,7 +1591,7 @@ _test_gurt_hash_parallel_refcounting(uint32_t ht_feats)
 	assert_int_equal(rc, 0);
 
 	/* Free the spinlock */
-	pthread_spin_destroy(&ref_spin_lock);
+	D_SPIN_DESTROY(&ref_spin_lock);
 
 	/* Destroy the hash table, force = false */
 	rc = d_chash_table_destroy(thtab, false);

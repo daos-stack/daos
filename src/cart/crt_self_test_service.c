@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -158,7 +158,7 @@ static void free_session(struct st_session **session)
 		free_entry = (*session)->buf_list;
 	}
 
-	pthread_spin_destroy(&(*session)->buf_list_lock);
+	D_SPIN_DESTROY(&(*session)->buf_list_lock);
 
 	D_FREE_PTR(*session);
 }
@@ -166,9 +166,9 @@ static void free_session(struct st_session **session)
 static inline void
 addref_session(struct st_session *session)
 {
-	pthread_spin_lock(&session->buf_list_lock);
+	D_SPIN_LOCK(&session->buf_list_lock);
 	session->session_refcnt++;
-	pthread_spin_unlock(&session->buf_list_lock);
+	D_SPIN_UNLOCK(&session->buf_list_lock);
 }
 
 static inline void
@@ -176,11 +176,11 @@ decref_session(struct st_session *session)
 {
 	bool destroy = false;
 
-	pthread_spin_lock(&session->buf_list_lock);
+	D_SPIN_LOCK(&session->buf_list_lock);
 	session->session_refcnt--;
 	if (session->session_refcnt == 0)
 		destroy = true;
-	pthread_spin_unlock(&session->buf_list_lock);
+	D_SPIN_UNLOCK(&session->buf_list_lock);
 
 	if (destroy)
 		free_session(&session);
@@ -283,10 +283,7 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 
 void crt_self_test_service_init(void)
 {
-	int ret;
-
-	ret = pthread_rwlock_init(&g_all_session_lock, NULL);
-	D_ASSERT(ret == 0);
+	D_RWLOCK_INIT(&g_all_session_lock, NULL);
 }
 
 void crt_self_test_init(void)
@@ -326,7 +323,7 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 		D_GOTO(send_rpc, *reply_session_id = -1);
 
 	/* Initialize the new session */
-	ret = pthread_spin_init(&new_session->buf_list_lock,
+	ret = D_SPIN_INIT(&new_session->buf_list_lock,
 				PTHREAD_PROCESS_PRIVATE);
 	D_ASSERT(ret == 0);
 
@@ -359,8 +356,7 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	}
 
 	/******************** LOCK: g_all_session_lock (w) ********************/
-	ret = pthread_rwlock_wrlock(&g_all_session_lock);
-	D_ASSERT(ret == 0);
+	D_RWLOCK_WRLOCK(&g_all_session_lock);
 
 	/*
 	 * Check session_id's for availability starting with one more than the
@@ -402,8 +398,7 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 		g_session_list = new_session;
 	}
 
-	ret = pthread_rwlock_unlock(&g_all_session_lock);
-	D_ASSERT(ret == 0);
+	D_RWLOCK_UNLOCK(&g_all_session_lock);
 	/******************* UNLOCK: g_all_session_lock *******************/
 
 send_rpc:
@@ -430,8 +425,7 @@ crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 	session_id = *args;
 
 	/******************** LOCK: g_all_session_lock (w) ********************/
-	ret = pthread_rwlock_wrlock(&g_all_session_lock);
-	D_ASSERT(ret == 0);
+	D_RWLOCK_WRLOCK(&g_all_session_lock);
 
 	/* Find the session if it exists */
 	del_session = find_session(session_id, &prev);
@@ -443,8 +437,7 @@ crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 	/* Remove the session from the list of active sessions */
 	*prev = del_session->next;
 
-	ret = pthread_rwlock_unlock(&g_all_session_lock);
-	D_ASSERT(ret == 0);
+	D_RWLOCK_UNLOCK(&g_all_session_lock);
 	/******************* UNLOCK: g_all_session_lock *******************/
 
 	/* addref in crt_self_test_open_session_handler */
@@ -496,12 +489,12 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 	 */
 	if (buf_entry != NULL) {
 		/************* LOCK: session->buf_list_lock *************/
-		pthread_spin_lock(&session->buf_list_lock);
+		D_SPIN_LOCK(&session->buf_list_lock);
 
 		buf_entry->next = session->buf_list;
 		session->buf_list = buf_entry;
 
-		pthread_spin_unlock(&session->buf_list_lock);
+		D_SPIN_UNLOCK(&session->buf_list_lock);
 		/************ UNLOCK: session->buf_list_lock ************/
 	}
 
@@ -633,8 +626,7 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	session_id = *((int64_t *)args);
 
 	/******************** LOCK: g_all_session_lock (r) ********************/
-	ret = pthread_rwlock_rdlock(&g_all_session_lock);
-	D_ASSERT(ret == 0);
+	D_RWLOCK_RDLOCK(&g_all_session_lock);
 
 	session = find_session(session_id, NULL);
 	if (session == NULL) {
@@ -646,8 +638,7 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	/* decref in crt_self_test_msg_send_reply */
 	addref_session(session);
 
-	ret = pthread_rwlock_unlock(&g_all_session_lock);
-	D_ASSERT(ret == 0);
+	D_RWLOCK_UNLOCK(&g_all_session_lock);
 
 	/* Now that we have the session, do a little more validation */
 	if (session->params.send_type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT ||
@@ -667,14 +658,14 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	/* Retrieve the next available buffer from the stack for this session */
 	while (buf_entry == NULL) {
 		/************* LOCK: session->buf_list_lock *************/
-		pthread_spin_lock(&session->buf_list_lock);
+		D_SPIN_LOCK(&session->buf_list_lock);
 
 		/* Retrieve a send buffer from the top of the stack */
 		buf_entry = session->buf_list;
 		if (buf_entry != NULL)
 			session->buf_list = buf_entry->next;
 
-		pthread_spin_unlock(&session->buf_list_lock);
+		D_SPIN_UNLOCK(&session->buf_list_lock);
 		/************ UNLOCK: session->buf_list_lock ************/
 
 		/* No buffers available currently, need to wait */

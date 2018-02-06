@@ -214,16 +214,16 @@ d_hash_murmur64(const unsigned char *key, unsigned int key_len,
  * Generic Hash Table functions / data structures
  ******************************************************************************/
 
-static void
+static int
 ch_lock_init(struct d_chash_table *htable)
 {
 	if (htable->ht_feats & D_HASH_FT_NOLOCK)
-		return;
+		return 0;
 
 	if (htable->ht_feats & D_HASH_FT_RWLOCK)
-		pthread_rwlock_init(&htable->ht_rwlock, NULL);
+		return D_RWLOCK_INIT(&htable->ht_rwlock, NULL);
 	else
-		pthread_mutex_init(&htable->ht_lock, NULL);
+		return D_MUTEX_INIT(&htable->ht_lock, NULL);
 }
 
 static void
@@ -233,9 +233,9 @@ ch_lock_fini(struct d_chash_table *htable)
 		return;
 
 	if (htable->ht_feats & D_HASH_FT_RWLOCK)
-		pthread_rwlock_destroy(&htable->ht_rwlock);
+		D_RWLOCK_DESTROY(&htable->ht_rwlock);
 	else
-		pthread_mutex_destroy(&htable->ht_lock);
+		D_MUTEX_DESTROY(&htable->ht_lock);
 }
 
 /**
@@ -254,12 +254,12 @@ ch_lock(struct d_chash_table *htable, bool read_only)
 
 	if (htable->ht_feats & D_HASH_FT_RWLOCK) {
 		if (read_only)
-			pthread_rwlock_rdlock(&htable->ht_rwlock);
+			D_RWLOCK_RDLOCK(&htable->ht_rwlock);
 		else
-			pthread_rwlock_wrlock(&htable->ht_rwlock);
+			D_RWLOCK_WRLOCK(&htable->ht_rwlock);
 
 	} else {
-		pthread_mutex_lock(&htable->ht_lock);
+		D_MUTEX_LOCK(&htable->ht_lock);
 	}
 }
 
@@ -271,9 +271,9 @@ ch_unlock(struct d_chash_table *htable, bool read_only)
 		return;
 
 	if (htable->ht_feats & D_HASH_FT_RWLOCK)
-		pthread_rwlock_unlock(&htable->ht_rwlock);
+		D_RWLOCK_UNLOCK(&htable->ht_rwlock);
 	else
-		pthread_mutex_unlock(&htable->ht_lock);
+		D_MUTEX_UNLOCK(&htable->ht_lock);
 }
 
 /**
@@ -657,10 +657,10 @@ d_chash_table_create_inplace(uint32_t feats, unsigned int bits, void *priv,
 			     d_chash_table_ops_t *hops,
 			     struct d_chash_table *htable)
 {
-	struct d_chash_bucket *buckets;
-	int		     nr = (1 << bits);
-	int		     i;
-
+	struct d_chash_bucket	*buckets;
+	int			nr = (1 << bits);
+	int			i;
+	int			rc;
 	D_ASSERT(hops != NULL);
 	D_ASSERT(hops->hop_key_cmp != NULL);
 
@@ -677,7 +677,11 @@ d_chash_table_create_inplace(uint32_t feats, unsigned int bits, void *priv,
 		D_INIT_LIST_HEAD(&buckets[i].hb_head);
 
 	htable->ht_buckets = buckets;
-	ch_lock_init(htable);
+	rc = ch_lock_init(htable);
+	if (rc != 0) {
+		D_FREE(buckets);
+		return rc;
+	}
 
 	return 0;
 }

@@ -560,7 +560,7 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_uri_free != 0)
 		D_FREE(rpc_priv->crp_tgt_uri);
 
-	pthread_spin_destroy(&rpc_priv->crp_lock);
+	D_SPIN_DESTROY(&rpc_priv->crp_lock);
 
 	D_FREE(rpc_priv);
 }
@@ -597,7 +597,13 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 	if (tgt_ep != NULL)
 		crt_rpc_priv_set_ep(rpc_priv, tgt_ep);
 
-	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */);
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */);
+	if (rc != 0) {
+		D_ERROR("crt_rpc_priv_init, rc: %d, opc: %#x.\n", rc, opc);
+		crt_rpc_priv_free(rpc_priv);
+		D_GOTO(out, rc);
+	}
+
 	*req = &rpc_priv->crp_pub;
 out:
 	return rc;
@@ -869,12 +875,12 @@ crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
 
 	crt_ctx = rpc_pub->cr_ctx;
 
-	pthread_mutex_lock(&crt_ctx->cc_mutex);
+	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	if (!crt_req_timedout(rpc_pub))
 		crt_req_timeout_untrack(rpc_pub);
 	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
 	rc = crt_req_timeout_track(rpc_pub);
-	pthread_mutex_unlock(&crt_ctx->cc_mutex);
+	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 	if (rc != 0) {
 		D_ERROR("rpc_priv %p(opc: %#x), crt_req_timeout_track "
 			"failed, rc: %d.\n", rpc_priv, rpc_pub->cr_opc,
@@ -1072,12 +1078,12 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 	 * later can insert it here.
 	 */
 	if (base_addr != NULL && *base_addr == NULL && !grp_priv->gp_local) {
-		pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
+		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank) {
 			D_STRNDUP(uri, grp_priv->gp_psr_phy_addr,
 				  CRT_ADDR_STR_MAX_LEN);
 			*base_addr = uri;
-			pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 			if (uri == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1096,7 +1102,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 				D_GOTO(out, rc);
 			}
 		} else {
-			pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 		}
 	}
 
@@ -1591,11 +1597,17 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 	}
 }
 
-void
+int
 crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 		  crt_opcode_t opc, bool srv_flag)
 {
+	int rc;
 	D_ASSERT(rpc_priv != NULL);
+
+	rc = D_SPIN_INIT(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
+	if (rc != 0)
+		D_GOTO(exit, rc);
+
 	D_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
 	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link);
 	D_INIT_LIST_HEAD(&rpc_priv->crp_parent_link);
@@ -1611,12 +1623,13 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	rpc_priv->crp_ul_retry = 0;
 	/* initialize as 1, so user can cal crt_req_decref to destroy new req */
 	rpc_priv->crp_refcount = 1;
-	pthread_spin_init(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
 
 	rpc_priv->crp_pub.cr_opc = opc;
 	rpc_priv->crp_pub.cr_ctx = crt_ctx;
 
 	crt_rpc_inout_buff_init(rpc_priv);
+exit:
+	return rc;
 }
 
 void

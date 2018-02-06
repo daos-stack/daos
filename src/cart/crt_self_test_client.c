@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,18 +45,18 @@
 
 #define ST_SET_NUM_INFLIGHT(newval)					\
 	do {								\
-		pthread_spin_lock(&g_data->ctr_lock);			\
+		D_SPIN_LOCK(&g_data->ctr_lock);				\
 		D_ASSERT(g_data->num_inflight == 0);			\
 		g_data->num_inflight = (newval);			\
-		pthread_spin_unlock(&g_data->ctr_lock);			\
+		D_SPIN_UNLOCK(&g_data->ctr_lock);			\
 	} while (0)
 
 #define ST_DEC_NUM_INFLIGHT()						\
 	do {								\
-		pthread_spin_lock(&g_data->ctr_lock);			\
+		D_SPIN_LOCK(&g_data->ctr_lock);				\
 		D_ASSERT(g_data->num_inflight > 0);			\
 		g_data->num_inflight--;					\
-		pthread_spin_unlock(&g_data->ctr_lock);			\
+		D_SPIN_UNLOCK(&g_data->ctr_lock);			\
 	} while (0)
 
 struct st_test_endpt {
@@ -190,10 +190,7 @@ static pthread_mutex_t g_data_lock;
 
 void crt_self_test_client_init(void)
 {
-	int ret;
-
-	ret = pthread_mutex_init(&g_data_lock, NULL);
-	D_ASSERT(ret == 0);
+	D_MUTEX_INIT(&g_data_lock, NULL);
 }
 
 static void
@@ -333,7 +330,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 	D_ASSERT(g_data->endpts != NULL);
 
 	/******************** LOCK: ctr_lock ********************/
-	pthread_spin_lock(&g_data->ctr_lock);
+	D_SPIN_LOCK(&g_data->ctr_lock);
 
 	/* Only mark completion of an RPC if requested */
 	if (skip_inc_complete == 0)
@@ -344,7 +341,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 	if (g_data->rep_sent_count < g_data->rep_count)
 		g_data->rep_sent_count += 1;
 
-	pthread_spin_unlock(&g_data->ctr_lock);
+	D_SPIN_UNLOCK(&g_data->ctr_lock);
 	/******************* UNLOCK: ctr_lock *******************/
 
 	/* Only send another message if one is left to send */
@@ -364,14 +361,14 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 	 */
 	while (1) {
 		/******************** LOCK: ctr_lock ********************/
-		pthread_spin_lock(&g_data->ctr_lock);
+		D_SPIN_LOCK(&g_data->ctr_lock);
 
 		/* Get the next non-evicted endpoint to send a message to */
 		failed_endpts = 0;
 		do {
 			if (failed_endpts >= g_data->num_endpts) {
 				D_ERROR("No non-evicted endpoints remaining\n");
-				pthread_spin_unlock(&g_data->ctr_lock);
+				D_SPIN_UNLOCK(&g_data->ctr_lock);
 				/************** UNLOCK: ctr_lock **************/
 				D_GOTO(abort, ret = -DER_UNREACH);
 			}
@@ -383,7 +380,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 				g_data->next_endpt_idx = 0;
 		} while (endpt_ptr->evicted != 0);
 
-		pthread_spin_unlock(&g_data->ctr_lock);
+		D_SPIN_UNLOCK(&g_data->ctr_lock);
 		/******************* UNLOCK: ctr_lock *******************/
 
 		local_endpt.ep_grp = g_data->srv_grp;
@@ -821,7 +818,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	D_ASSERT(reply_status != NULL);
 
 	/******************** LOCK: g_data_lock ********************/
-	pthread_mutex_lock(&g_data_lock);
+	D_MUTEX_LOCK(&g_data_lock);
 
 	/* Validate the input */
 	if (((args->endpts.iov_buf_len & 0x7) != 0) ||
@@ -880,7 +877,9 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	g_data->buf_alignment = args->buf_alignment;
 	g_data->reply_type = args->reply_type;
 	g_data->num_endpts = args->endpts.iov_buf_len / 8;
-	pthread_spin_init(&g_data->ctr_lock, PTHREAD_PROCESS_PRIVATE);
+	ret = D_SPIN_INIT(&g_data->ctr_lock, PTHREAD_PROCESS_PRIVATE);
+	if (ret != 0)
+		D_GOTO(fail_cleanup, ret);
 
 	/* Allocate a buffer for the list of endpoints */
 	D_ALLOC_ARRAY(g_data->endpts, g_data->num_endpts);
@@ -1037,7 +1036,7 @@ send_reply:
 	if (ret != 0)
 		D_ERROR("crt_reply_send failed; ret = %d\n", ret);
 
-	pthread_mutex_unlock(&g_data_lock);
+	D_MUTEX_UNLOCK(&g_data_lock);
 	/******************* UNLOCK: g_data_lock *******************/
 }
 
@@ -1070,7 +1069,7 @@ static int status_req_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	if (ret != 0)
 		D_ERROR("crt_req_decref failed; ret=%d\n", ret);
 
-	pthread_mutex_unlock(&g_data_lock);
+	D_MUTEX_UNLOCK(&g_data_lock);
 	/******************* UNLOCK: g_data_lock *******************/
 
 	/* Reply sent successfully - don't need to hang onto results anymore */
@@ -1106,7 +1105,7 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 	res->status = CRT_ST_STATUS_INVAL;
 
 	/******************** LOCK: g_data_lock ********************/
-	pthread_mutex_lock(&g_data_lock);
+	D_MUTEX_LOCK(&g_data_lock);
 
 	/*
 	 * If this thread acquired the lock and g_data is not null, it must have
@@ -1183,6 +1182,6 @@ send_rpc:
 		res->status = ret;
 	}
 
-	pthread_mutex_unlock(&g_data_lock);
+	D_MUTEX_UNLOCK(&g_data_lock);
 	/******************* UNLOCK: g_data_lock *******************/
 }

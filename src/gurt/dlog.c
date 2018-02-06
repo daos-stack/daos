@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -94,6 +94,7 @@
 #include <netinet/in.h>
 
 #include <gurt/dlog.h>
+#include <gurt/common.h>
 
 /* extra tag bytes to alloc for a pid */
 #define DLOG_TAGPAD 16
@@ -129,8 +130,8 @@ static struct clog_state mst;
 static const char *default_fac0name = "CLOG";
 
 #ifdef DLOG_MUTEX
-#define clog_lock()		pthread_mutex_lock(&mst.clogmux)
-#define clog_unlock()		pthread_mutex_unlock(&mst.clogmux)
+#define clog_lock()		D_MUTEX_LOCK(&mst.clogmux)
+#define clog_unlock()		D_MUTEX_UNLOCK(&mst.clogmux)
 #else
 #define clog_lock()
 #define clog_unlock()
@@ -297,7 +298,7 @@ static void dlog_cleanout(void)
 	}
 	clog_unlock();
 #ifdef DLOG_MUTEX
-	pthread_mutex_destroy(&mst.clogmux);
+	D_MUTEX_DESTROY(&mst.clogmux);
 #endif
 }
 
@@ -543,10 +544,10 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		return -1;
 	}
 #ifdef DLOG_MUTEX		/* create lock */
-	if (pthread_mutex_init(&mst.clogmux, NULL) != 0) {
+	if (D_MUTEX_INIT(&mst.clogmux, NULL) != 0) {
 		/* XXX: consider cvt to PTHREAD_MUTEX_INITIALIZER */
 		free(newtag);
-		fprintf(stderr, "d_log_open pthread_mutex_init failed.\n");
+		fprintf(stderr, "d_log_open D_MUTEX_INIT failed.\n");
 		return -1;
 	}
 #endif

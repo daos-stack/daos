@@ -264,10 +264,10 @@ crt_get_subgrp_id()
 	D_ASSERT(grp_priv != NULL);
 	D_ASSERT(grp_priv->gp_primary && grp_priv->gp_local);
 
-	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	subgrp_id = grp_priv->gp_int_grpid + grp_priv->gp_subgrp_idx;
 	grp_priv->gp_subgrp_idx++;
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	D_DEBUG("crt_get_subgrp_id get subgrp_id: "DF_X64".\n", subgrp_id);
 
@@ -281,9 +281,9 @@ crt_grp_priv_addref(struct crt_grp_priv *grp_priv)
 
 	D_ASSERT(grp_priv != NULL);
 
-	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	refcount = ++grp_priv->gp_refcount;
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	d_log(DD_FAC(grp) | DLOG_DBG,
 	      "service group (%s), refcount increased to %d.\n",
@@ -305,12 +305,12 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 	D_ASSERT(grp_gdata != NULL);
 	D_ASSERT(grp_priv != NULL);
 
-	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	if (grp_priv->gp_refcount == 0) {
 		d_log(DD_FAC(grp) | DLOG_ERR,
 		      "group (%s), refcount already dropped to 0.\n",
 		      grp_priv->gp_pub.cg_grpid);
-		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 		D_GOTO(out, rc = -DER_ALREADY);
 	} else {
 		grp_priv->gp_refcount--;
@@ -324,7 +324,7 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 			grp_priv->gp_finalizing = 1;
 		}
 	}
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	if (grp_priv->gp_finalizing == 0)
 		D_GOTO(out, rc);
@@ -351,11 +351,11 @@ static inline void
 crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank,
 		crt_phy_addr_t psr_addr)
 {
-	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	D_FREE(grp_priv->gp_psr_phy_addr);
 	grp_priv->gp_psr_rank = psr_rank;
 	grp_priv->gp_psr_phy_addr = psr_addr;
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 	d_log(DD_FAC(grp) | DLOG_DBG, "group %s, set psr rank %d, uri %s.\n",
 		grp_priv->gp_pub.cg_grpid, psr_rank, psr_addr);
 }

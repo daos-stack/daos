@@ -1,4 +1,4 @@
-/* Copyright (C) 2011,2016-2017 Intel Corporation
+/* Copyright (C) 2011,2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,16 +43,16 @@
 #include <gurt/common.h>
 #include <gurt/heap.h>
 
-static void
+static int
 dbh_lock_init(struct d_binheap *h)
 {
 	if (h->d_bh_feats & DBH_FT_NOLOCK)
-		return;
+		return 0;
 
 	if (h->d_bh_feats & DBH_FT_RWLOCK)
-		pthread_rwlock_init(&h->d_bh_rwlock, NULL);
+		return D_RWLOCK_INIT(&h->d_bh_rwlock, NULL);
 	else
-		pthread_mutex_init(&h->d_bh_mutex, NULL);
+		return D_MUTEX_INIT(&h->d_bh_mutex, NULL);
 }
 
 static void
@@ -64,7 +64,7 @@ dbh_lock_fini(struct d_binheap *h)
 	if (h->d_bh_feats & DBH_FT_RWLOCK)
 		pthread_rwlock_destroy(&h->d_bh_rwlock);
 	else
-		pthread_mutex_destroy(&h->d_bh_mutex);
+		D_MUTEX_DESTROY(&h->d_bh_mutex);
 }
 
 /** lock the bin heap */
@@ -76,11 +76,11 @@ dbh_lock(struct d_binheap *h, bool read_only)
 
 	if (h->d_bh_feats & DBH_FT_RWLOCK) {
 		if (read_only)
-			pthread_rwlock_rdlock(&h->d_bh_rwlock);
+			D_RWLOCK_RDLOCK(&h->d_bh_rwlock);
 		else
-			pthread_rwlock_wrlock(&h->d_bh_rwlock);
+			D_RWLOCK_WRLOCK(&h->d_bh_rwlock);
 	} else {
-		pthread_mutex_lock(&h->d_bh_mutex);
+		D_MUTEX_LOCK(&h->d_bh_mutex);
 	}
 }
 
@@ -92,9 +92,9 @@ dbh_unlock(struct d_binheap *h, bool read_only)
 		return;
 
 	if (h->d_bh_feats & DBH_FT_RWLOCK)
-		pthread_rwlock_unlock(&h->d_bh_rwlock);
+		D_RWLOCK_UNLOCK(&h->d_bh_rwlock);
 	else
-		pthread_mutex_unlock(&h->d_bh_mutex);
+		D_MUTEX_UNLOCK(&h->d_bh_mutex);
 }
 
 /** Grows the capacity of a binary heap */
@@ -215,9 +215,13 @@ d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
 		}
 	}
 
-	dbh_lock_init(h);
+	rc = dbh_lock_init(h);
+	if (rc != 0) {
+		D_ERROR("dbg_lock_init() failed, rc: %d.\n", rc);
+		d_binheap_destroy_inplace(h);
+	}
 
-	return 0;
+	return rc;
 }
 
 int

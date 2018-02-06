@@ -44,6 +44,7 @@
 #define __CRT_RPC_H__
 
 #include <gurt/heap.h>
+#include "gurt/common.h"
 
 #define CRT_RPC_MAGIC			(0xAB0C01EC)
 #define CRT_RPC_VERSION			(0x00000001)
@@ -318,11 +319,11 @@ struct crt_internal_rpc {
  */
 #define RPC_ADDREF(RPC) do {						\
 		int __ref;						\
-		pthread_spin_lock(&(RPC)->crp_lock);			\
+		D_SPIN_LOCK(&(RPC)->crp_lock);				\
 		D_ASSERTF((RPC)->crp_refcount != 0,			\
 			  "%p addref from zero\n", (RPC));		\
 		__ref = ++(RPC)->crp_refcount;				\
-		pthread_spin_unlock(&(RPC)->crp_lock);			\
+		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
 		d_log((DD_FAC(rpc) | DLOG_DBG),				\
 			"%s:%d %s() rpc_priv %p (opc: %#x), addref to %d.\n", \
 			__FILE__, __LINE__, __func__,			\
@@ -331,11 +332,11 @@ struct crt_internal_rpc {
 
 #define RPC_DECREF(RPC) do {						\
 		int __ref;						\
-		pthread_spin_lock(&(RPC)->crp_lock);			\
+		D_SPIN_LOCK(&(RPC)->crp_lock);				\
 		D_ASSERTF((RPC)->crp_refcount != 0,			\
 			  "%p decref from zero\n", (RPC));		\
 		__ref = --(RPC)->crp_refcount;				\
-		pthread_spin_unlock(&(RPC)->crp_lock);			\
+		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
 		d_log((DD_FAC(rpc) | DLOG_DBG),				\
 			"%s:%d %s() rpc_priv %p (opc: %#x), decref to %d.\n", \
 			__FILE__, __LINE__, __func__,			\
@@ -383,7 +384,7 @@ crt_rpc_cb_customized(struct crt_context *crt_ctx,
 int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		       bool forward);
 void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
-void crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
+int crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 		       crt_opcode_t opc, bool srv_flag);
 void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
 int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,

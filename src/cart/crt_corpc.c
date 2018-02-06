@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -400,7 +400,12 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 
 	D_ASSERT(rpc_priv != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
-	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */);
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */);
+	if (rc != 0) {
+		D_ERROR("crt_rpc_priv_init, rc: %d, opc: %#x.\n", rc, opc);
+		D_GOTO(out, rc);
+	}
+
 
 	/* grp_root is logical rank number in this group */
 	grp_root = grp_priv->gp_self;
@@ -428,9 +433,9 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		root_excluded = true;
 	}
 
-	pthread_rwlock_rdlock(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
 	grp_ver = grp_priv->gp_membs_ver;
-	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, false, tobe_excluded_ranks,
 				 grp_ver /* grp_ver */, co_bulk_hdl, priv,
@@ -497,10 +502,10 @@ corpc_add_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 
 	RPC_ADDREF(child_rpc_priv);
 
-	pthread_spin_lock(&parent_rpc_priv->crp_lock);
+	D_SPIN_LOCK(&parent_rpc_priv->crp_lock);
 	d_list_add_tail(&child_rpc_priv->crp_parent_link,
 			&co_info->co_child_rpcs);
-	pthread_spin_unlock(&parent_rpc_priv->crp_lock);
+	D_SPIN_UNLOCK(&parent_rpc_priv->crp_lock);
 }
 
 static inline void
@@ -589,7 +594,7 @@ crt_corpc_fail_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 	co_info = parent_rpc_priv->crp_corpc_info;
 	D_ASSERT(co_info != NULL);
 
-	pthread_spin_lock(&parent_rpc_priv->crp_lock);
+	D_SPIN_LOCK(&parent_rpc_priv->crp_lock);
 
 	wait_num = co_info->co_child_num;
 	/* the extra +1 is for local RPC handler */
@@ -605,7 +610,7 @@ crt_corpc_fail_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 		req_done = true;
 	crt_corpc_fail_parent_rpc(parent_rpc_priv, failed_rc);
 
-	pthread_spin_unlock(&parent_rpc_priv->crp_lock);
+	D_SPIN_UNLOCK(&parent_rpc_priv->crp_lock);
 
 	if (req_done == true)
 		crt_corpc_complete(parent_rpc_priv);
@@ -634,11 +639,11 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 	opc_info = parent_rpc_priv->crp_opc_info;
 	D_ASSERT(opc_info != NULL);
 
-	pthread_spin_lock(&parent_rpc_priv->crp_lock);
+	D_SPIN_LOCK(&parent_rpc_priv->crp_lock);
 	if (parent_rpc_priv == child_rpc_priv &&
 	    child_req->cr_opc == CRT_OPC_RANK_EVICT &&
 	    co_info->co_local_done != 1) {
-		pthread_spin_unlock(&parent_rpc_priv->crp_lock);
+		D_SPIN_UNLOCK(&parent_rpc_priv->crp_lock);
 		D_GOTO(out, rc);
 	}
 
@@ -747,7 +752,7 @@ aggregate_done:
 	if (wait_num == done_num)
 		req_done = true;
 
-	pthread_spin_unlock(&parent_rpc_priv->crp_lock);
+	D_SPIN_UNLOCK(&parent_rpc_priv->crp_lock);
 
 	if (req_done)
 		crt_corpc_complete(parent_rpc_priv);
@@ -872,9 +877,9 @@ forward_done:
 	if (req->cr_opc == CRT_OPC_RANK_EVICT) {
 		struct crt_cb_info	cb_info;
 
-		pthread_spin_lock(&rpc_priv->crp_lock);
+		D_SPIN_LOCK(&rpc_priv->crp_lock);
 		co_info->co_local_done = 1;
-		pthread_spin_unlock(&rpc_priv->crp_lock);
+		D_SPIN_UNLOCK(&rpc_priv->crp_lock);
 
 		cb_info.cci_rpc = &rpc_priv->crp_pub;
 		cb_info.cci_rc = 0;

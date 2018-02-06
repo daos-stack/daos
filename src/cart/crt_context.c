@@ -128,7 +128,7 @@ crt_epi_destroy(struct crt_ep_inflight *epi)
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 	/* crt_list_del_init(&epi->epi_link); */
-	pthread_mutex_destroy(&epi->epi_mutex);
+	D_MUTEX_DESTROY(&epi->epi_mutex);
 
 	D_FREE_PTR(epi);
 }
@@ -143,6 +143,10 @@ crt_context_init(crt_context_t crt_ctx)
 	D_ASSERT(crt_ctx != NULL);
 	ctx = crt_ctx;
 
+	rc = D_MUTEX_INIT(&ctx->cc_mutex, NULL);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	D_INIT_LIST_HEAD(&ctx->cc_link);
 
 	/* create timeout binheap */
@@ -152,6 +156,7 @@ crt_context_init(crt_context_t crt_ctx)
 				      &ctx->cc_bh_timeout);
 	if (rc != 0) {
 		D_ERROR("d_binheap_create_inplace failed, rc: %d.\n", rc);
+		D_MUTEX_DESTROY(&ctx->cc_mutex);
 		D_GOTO(out, rc);
 	}
 
@@ -162,10 +167,10 @@ crt_context_init(crt_context_t crt_ctx)
 	if (rc != 0) {
 		D_ERROR("d_chash_table_create_inplace failed, rc: %d.\n", rc);
 		d_binheap_destroy_inplace(&ctx->cc_bh_timeout);
+		D_MUTEX_DESTROY(&ctx->cc_mutex);
 		D_GOTO(out, rc);
 	}
 
-	pthread_mutex_init(&ctx->cc_mutex, NULL);
 
 out:
 	return rc;
@@ -193,13 +198,13 @@ crt_context_create(crt_context_t *crt_ctx)
 		D_GOTO(out, rc);
 	}
 
-	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
+	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, crt_gdata.cg_ctx_num);
 	if (rc != 0) {
 		D_ERROR("crt_hg_ctx_init failed rc: %d.\n", rc);
 		D_FREE_PTR(ctx);
-		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc);
 	}
 
@@ -207,7 +212,7 @@ crt_context_create(crt_context_t *crt_ctx)
 	d_list_add_tail(&ctx->cc_link, &crt_gdata.cg_ctx_list);
 	crt_gdata.cg_ctx_num++;
 
-	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	*crt_ctx = (crt_context_t)ctx;
 
@@ -355,9 +360,9 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		    d_list_empty(&epi->epi_req_q)) {
 			wait = 0;
 		} else {
-			pthread_mutex_unlock(&ctx->cc_mutex);
+			D_MUTEX_UNLOCK(&ctx->cc_mutex);
 			rc = crt_progress(ctx, 1, NULL, NULL);
-			pthread_mutex_lock(&ctx->cc_mutex);
+			D_MUTEX_LOCK(&ctx->cc_mutex);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("crt_progress failed, rc %d.\n", rc);
 				break;
@@ -399,7 +404,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	}
 
 	flags = (force != 0) ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
-	pthread_mutex_lock(&ctx->cc_mutex);
+	D_MUTEX_LOCK(&ctx->cc_mutex);
 
 	rc = d_chash_table_traverse(&ctx->cc_epi_table, crt_ctx_epi_abort,
 				    &flags);
@@ -407,7 +412,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_DEBUG("destroy context (idx %d, force %d), "
 			"d_chash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
-		pthread_mutex_unlock(&ctx->cc_mutex);
+		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 		D_GOTO(out, rc);
 	}
 
@@ -417,21 +422,21 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_ERROR("destroy context (idx %d, force %d), "
 			"d_chash_table_destroy_inplace failed, rc: %d.\n",
 			ctx->cc_idx, force, rc);
-		pthread_mutex_unlock(&ctx->cc_mutex);
+		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 		D_GOTO(out, rc);
 	}
 
 	d_binheap_destroy_inplace(&ctx->cc_bh_timeout);
 
-	pthread_mutex_unlock(&ctx->cc_mutex);
-	pthread_mutex_destroy(&ctx->cc_mutex);
+	D_MUTEX_UNLOCK(&ctx->cc_mutex);
+	D_MUTEX_DESTROY(&ctx->cc_mutex);
 
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc == 0) {
-		pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
+		D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 		crt_gdata.cg_ctx_num--;
 		d_list_del_init(&ctx->cc_link);
-		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_FREE_PTR(ctx);
 	} else {
 		D_ERROR("crt_hg_ctx_fini failed rc: %d.\n", rc);
@@ -449,11 +454,11 @@ crt_ep_abort(crt_endpoint_t *ep)
 	int			 flags;
 	int			 rc = 0;
 
-	pthread_rwlock_rdlock(&crt_gdata.cg_rwlock);
+	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
 	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
 		rc = 0;
-		pthread_mutex_lock(&ctx->cc_mutex);
+		D_MUTEX_LOCK(&ctx->cc_mutex);
 		rlink = d_chash_rec_find(&ctx->cc_epi_table,
 					 (void *)&ep->ep_rank,
 					 sizeof(ep->ep_rank));
@@ -462,7 +467,7 @@ crt_ep_abort(crt_endpoint_t *ep)
 			rc = crt_ctx_epi_abort(rlink, &flags);
 			d_chash_rec_decref(&ctx->cc_epi_table, rlink);
 		}
-		pthread_mutex_unlock(&ctx->cc_mutex);
+		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 		if (rc != 0) {
 			D_ERROR("context (idx %d), ep_abort (rank %d), "
 				"failed rc: %d.\n",
@@ -471,7 +476,7 @@ crt_ep_abort(crt_endpoint_t *ep)
 		}
 	}
 
-	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	return rc;
 }
@@ -541,19 +546,19 @@ crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
 		D_ERROR("Invalid parameter, rpc_priv == NULL\n");
 		return;
 	}
-	pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
 	d_list_for_each_safe(curr_node, tmp_node,
 			     &crt_plugin_gdata.cpg_timeout_cbs) {
 		timeout_cb_priv =
 			container_of(curr_node, struct crt_timeout_cb_priv,
 				     ctcp_link);
-		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
 		timeout_cb_priv->ctcp_func(rpc_priv->crp_pub.cr_ctx,
 					   &rpc_priv->crp_pub,
 					   timeout_cb_priv->ctcp_args);
-		pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+		D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
 	}
-	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
 }
 
 static bool
@@ -590,9 +595,9 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 	D_DEBUG("rpc_priv %p reset_timer enabled.\n", rpc_priv);
 
 	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
-	pthread_mutex_lock(&crt_ctx->cc_mutex);
+	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	rc = crt_req_timeout_track(&rpc_priv->crp_pub);
-	pthread_mutex_unlock(&crt_ctx->cc_mutex);
+	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 	if (rc != 0) {
 		D_ERROR("crt_req_timeout_track(opc: %#x) failed, rc: %d.\n",
 			rpc_priv->crp_pub.cr_opc, rc);
@@ -668,7 +673,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	D_INIT_LIST_HEAD(&timeout_list);
 	ts_now = d_timeus_secdiff(0);
 
-	pthread_mutex_lock(&crt_ctx->cc_mutex);
+	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	while (1) {
 		bh_node = d_binheap_root(&crt_ctx->cc_bh_timeout);
 		if (bh_node == NULL)
@@ -690,7 +695,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 			rpc_priv->crp_pub.cr_ep.ep_rank,
 			rpc_priv->crp_pub.cr_ep.ep_tag);
 	};
-	pthread_mutex_unlock(&crt_ctx->cc_mutex);
+	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	/* handle the timeout RPCs */
 	d_list_for_each_entry_safe(rpc_priv, next, &timeout_list,
@@ -731,13 +736,13 @@ crt_context_req_track(crt_rpc_t *req)
 	ep_rank = req->cr_ep.ep_rank;
 
 	/* lookup the crt_ep_inflight (create one if not found) */
-	pthread_mutex_lock(&crt_ctx->cc_mutex);
+	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	rlink = d_chash_rec_find(&crt_ctx->cc_epi_table, (void *)&ep_rank,
 				 sizeof(ep_rank));
 	if (rlink == NULL) {
 		D_ALLOC_PTR(epi);
 		if (epi == NULL) {
-			pthread_mutex_unlock(&crt_ctx->cc_mutex);
+			D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 
@@ -754,7 +759,9 @@ crt_context_req_track(crt_rpc_t *req)
 		 * still need to access it, decref before exit this routine. */
 		epi->epi_ref = 1;
 		epi->epi_initialized = 1;
-		pthread_mutex_init(&epi->epi_mutex, NULL);
+		rc = D_MUTEX_INIT(&epi->epi_mutex, NULL);
+		if (rc != 0)
+			D_GOTO(out, rc);
 
 		rc = d_chash_rec_insert(&crt_ctx->cc_epi_table, &ep_rank,
 					sizeof(ep_rank), &epi->epi_link,
@@ -765,14 +772,14 @@ crt_context_req_track(crt_rpc_t *req)
 		epi = epi_link2ptr(rlink);
 		D_ASSERT(epi->epi_ctx == crt_ctx);
 	}
-	pthread_mutex_unlock(&crt_ctx->cc_mutex);
+	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	/* add the RPC req to crt_ep_inflight */
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
-	pthread_mutex_lock(&epi->epi_mutex);
+	D_MUTEX_LOCK(&epi->epi_mutex);
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
 	rpc_priv->crp_epi = epi;
@@ -786,9 +793,9 @@ crt_context_req_track(crt_rpc_t *req)
 		rpc_priv->crp_state = RPC_STATE_QUEUED;
 		rc = CRT_REQ_TRACK_IN_WAITQ;
 	} else {
-		pthread_mutex_lock(&crt_ctx->cc_mutex);
+		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 		rc = crt_req_timeout_track(req);
-		pthread_mutex_unlock(&crt_ctx->cc_mutex);
+		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 		if (rc == 0) {
 			d_list_add_tail(&rpc_priv->crp_epi_link,
 					&epi->epi_req_q);
@@ -801,12 +808,12 @@ crt_context_req_track(crt_rpc_t *req)
 		}
 	}
 
-	pthread_mutex_unlock(&epi->epi_mutex);
+	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* reference taken by d_chash_rec_find or "epi->epi_ref = 1" above */
-	pthread_mutex_lock(&crt_ctx->cc_mutex);
+	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	d_chash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
-	pthread_mutex_unlock(&crt_ctx->cc_mutex);
+	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 out:
 	return rc;
@@ -843,7 +850,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 
 	D_INIT_LIST_HEAD(&submit_list);
 
-	pthread_mutex_lock(&epi->epi_mutex);
+	D_MUTEX_LOCK(&epi->epi_mutex);
 	/* remove from inflight queue */
 	d_list_del_init(&rpc_priv->crp_epi_link);
 	if (rpc_priv->crp_state == RPC_STATE_COMPLETED)
@@ -853,9 +860,9 @@ crt_context_req_untrack(crt_rpc_t *req)
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 	if (!crt_req_timedout(req)) {
-		pthread_mutex_lock(&crt_ctx->cc_mutex);
+		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 		crt_req_timeout_untrack(req);
-		pthread_mutex_unlock(&crt_ctx->cc_mutex);
+		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 	}
 
 	/* decref corresponding to addref in crt_context_req_track */
@@ -863,7 +870,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 
 	/* done if flow control disabled */
 	if (crt_gdata.cg_credit_ep_ctx == 0) {
-		pthread_mutex_unlock(&epi->epi_mutex);
+		D_MUTEX_UNLOCK(&epi->epi_mutex);
 		return;
 	}
 
@@ -878,9 +885,9 @@ crt_context_req_untrack(crt_rpc_t *req)
 		rpc_priv->crp_state = RPC_STATE_INITED;
 		rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
 
-		pthread_mutex_lock(&crt_ctx->cc_mutex);
+		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 		rc = crt_req_timeout_track(&rpc_priv->crp_pub);
-		pthread_mutex_unlock(&crt_ctx->cc_mutex);
+		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 		if (rc != 0)
 			D_ERROR("crt_req_timeout_track failed, rc: %d.\n", rc);
 
@@ -895,7 +902,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &submit_list);
 		credits--;
 	}
-	pthread_mutex_unlock(&epi->epi_mutex);
+	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* re-submit the rpc req */
 	d_list_for_each_entry_safe(rpc_priv, next, &submit_list,
@@ -923,14 +930,14 @@ crt_context_lookup(int ctx_idx)
 	struct crt_context	*ctx;
 	bool			found = false;
 
-	pthread_rwlock_rdlock(&crt_gdata.cg_rwlock);
+	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx) {
 			found = true;
 			break;
 		}
 	}
-	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	return (found == true) ? ctx : NULL;
 }
@@ -972,12 +979,12 @@ crt_context_empty(int locked)
 	bool rc = false;
 
 	if (locked == 0)
-		pthread_rwlock_rdlock(&crt_gdata.cg_rwlock);
+		D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
 	rc = d_list_empty(&crt_gdata.cg_ctx_list);
 
 	if (locked == 0)
-		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	return rc;
 }
@@ -996,17 +1003,17 @@ crt_exec_progress_cb(crt_context_t ctx)
 		D_ERROR("Invalid parameter.\n");
 		return;
 	}
-	pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_prog_rwlock);
+	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
 	d_list_for_each_safe(curr_node, tmp_node,
 			     &crt_plugin_gdata.cpg_prog_cbs) {
 		crt_prog_cb_priv =
 			container_of(curr_node, struct crt_prog_cb_priv,
 				     cpcp_link);
-		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_prog_rwlock);
+		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
 		crt_prog_cb_priv->cpcp_func(ctx, crt_prog_cb_priv->cpcp_args);
-		pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_prog_rwlock);
+		D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
 	}
-	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_prog_rwlock);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
 }
 
 int
@@ -1152,10 +1159,10 @@ crt_register_progress_cb(crt_progress_cb cb, void *arg)
 		D_GOTO(out, rc = -DER_NOMEM);
 	crt_prog_cb_priv->cpcp_func = cb;
 	crt_prog_cb_priv->cpcp_args = arg;
-	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_prog_rwlock);
+	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
 	d_list_add_tail(&crt_prog_cb_priv->cpcp_link,
 			&crt_plugin_gdata.cpg_prog_cbs);
-	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_prog_rwlock);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
 
 out:
 	return rc;
@@ -1178,10 +1185,10 @@ crt_register_timeout_cb(crt_timeout_cb cb, void *arg)
 		D_GOTO(out, rc = -DER_NOMEM);
 	timeout_cb_priv->ctcp_func = cb;
 	timeout_cb_priv->ctcp_args = arg;
-	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
 	d_list_add_tail(&timeout_cb_priv->ctcp_link,
 			&crt_plugin_gdata.cpg_timeout_cbs);
-	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
 
 out:
 	return rc;

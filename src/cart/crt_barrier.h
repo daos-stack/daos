@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -63,7 +63,7 @@ struct crt_barrier_info {
 	int			 bi_num_exited;      /* completion count */
 };
 
-void crt_barrier_info_init(struct crt_grp_priv *grp_priv);
+int crt_barrier_info_init(struct crt_grp_priv *grp_priv);
 void crt_barrier_info_destroy(struct crt_grp_priv *grp_priv);
 void crt_hdlr_barrier_enter(crt_rpc_t *rpc_req);
 void crt_hdlr_barrier_exit(crt_rpc_t *rpc_req);

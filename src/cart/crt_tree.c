@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -146,7 +146,7 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	struct crt_topo_ops	*tops;
 	int			 rc = 0;
 
-	pthread_rwlock_rdlock(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (nchildren == NULL) {
@@ -183,7 +183,7 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 			root, self, rc);
 
 out:
-	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 	if (allocated)
 		d_rank_list_free(grp_rank_list);
 	return rc;
@@ -217,7 +217,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	default_grp_priv = crt_grp_pub2priv(NULL);
 	D_ASSERT(default_grp_priv != NULL);
 
-	pthread_rwlock_rdlock(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
 	if (ver_match != NULL)
 		*ver_match = (grp_ver == default_grp_priv->gp_membs_ver ?
 			      true : false);
@@ -289,7 +289,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	*children_rank_list = result_rank_list;
 
 out:
-	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 	if (allocated)
 		d_rank_list_free(grp_rank_list);
 	return rc;
@@ -308,7 +308,7 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	struct crt_topo_ops	*tops;
 	int			 rc = 0;
 
-	pthread_rwlock_rdlock(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (parent_rank == NULL) {
@@ -347,7 +347,7 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	*parent_rank = grp_rank_list->rl_ranks[tree_parent];
 
 out:
-	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 	if (allocated)
 		d_rank_list_free(grp_rank_list);
 	return rc;

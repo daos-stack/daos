@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -76,10 +76,10 @@ static void *progress(void *arg)
 }
 static void signal_done(void)
 {
-	pthread_mutex_lock(&lock);
+	D_MUTEX_LOCK(&lock);
 	done = 1;
 	pthread_cond_signal(&cond);
-	pthread_mutex_unlock(&lock);
+	D_MUTEX_UNLOCK(&lock);
 }
 
 static void rpc_handler(crt_rpc_t *rpc)
@@ -140,10 +140,10 @@ int main(int argc, char **argv)
 		sched_yield();
 
 	printf("Waiting for stop rpc\n");
-	pthread_mutex_lock(&lock);
+	D_MUTEX_LOCK(&lock);
 	while (done == 0)
 		pthread_cond_wait(&cond, &lock);
-	pthread_mutex_unlock(&lock);
+	D_MUTEX_UNLOCK(&lock);
 
 	status = STOP;
 	printf("Waiting for threads to stop\n");

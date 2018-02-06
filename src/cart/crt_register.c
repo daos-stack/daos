@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,7 +62,7 @@ crt_opc_map_create(unsigned int bits)
 	for (i = 0; i < (1 << bits); i++)
 		D_INIT_LIST_HEAD(&map->com_hash[i]);
 
-	rc = pthread_rwlock_init(&map->com_rwlock, NULL);
+	rc = D_RWLOCK_INIT(&map->com_rwlock, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to create mutex for CaRT opc map.\n");
 		D_GOTO(out, rc = -rc);
@@ -108,7 +108,7 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 
 skip:
 	if (map->com_lock_init && map->com_pid == getpid())
-		pthread_rwlock_destroy(&map->com_rwlock);
+		D_RWLOCK_DESTROY(&map->com_rwlock);
 
 	crt_gdata.cg_opc_map = NULL;
 	D_FREE_PTR(map);
@@ -146,12 +146,12 @@ crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc, int locked)
 	hash = crt_opc_hash(map, opc);
 
 	if (locked == 0)
-		pthread_rwlock_rdlock(&map->com_rwlock);
+		D_RWLOCK_RDLOCK(&map->com_rwlock);
 
 	d_list_for_each_entry(info, &map->com_hash[hash], coi_link) {
 		if (info->coi_opc == opc) {
 			if (locked == 0)
-				pthread_rwlock_unlock(&map->com_rwlock);
+				D_RWLOCK_UNLOCK(&map->com_rwlock);
 			return info;
 		}
 		if (info->coi_opc > opc)
@@ -159,7 +159,7 @@ crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc, int locked)
 	}
 
 	if (locked == 0)
-		pthread_rwlock_unlock(&map->com_rwlock);
+		D_RWLOCK_UNLOCK(&map->com_rwlock);
 
 	return NULL;
 }
@@ -179,7 +179,7 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc, uint32_t flags,
 	hash = crt_opc_hash(map, opc);
 
 	if (locked == 0)
-		pthread_rwlock_wrlock(&map->com_rwlock);
+		D_RWLOCK_WRLOCK(&map->com_rwlock);
 
 	d_list_for_each_entry(info, &map->com_hash[hash], coi_link) {
 		if (info->coi_opc == opc) {
@@ -276,7 +276,7 @@ set:
 
 out:
 	if (locked == 0)
-		pthread_rwlock_unlock(&map->com_rwlock);
+		D_RWLOCK_UNLOCK(&map->com_rwlock);
 	return rc;
 }
 

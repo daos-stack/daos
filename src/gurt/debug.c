@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,7 +57,7 @@ d_log_sync_mask_helper(bool acquire_lock)
 	static char	*log_mask;
 
 	if (acquire_lock)
-		pthread_mutex_lock(&d_log_lock);
+		D_MUTEX_LOCK(&d_log_lock);
 	if (log_mask_init)
 		goto out;
 	log_mask = getenv(D_LOG_MASK_ENV);
@@ -76,7 +76,7 @@ out:
 			" not set, using default mask.\n");
 
 	if (acquire_lock)
-		pthread_mutex_unlock(&d_log_lock);
+		D_MUTEX_UNLOCK(&d_log_lock);
 }
 
 void
@@ -125,7 +125,7 @@ d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 {
 	int	 rc = 0;
 
-	pthread_mutex_lock(&d_log_lock);
+	D_MUTEX_LOCK(&d_log_lock);
 	d_log_refcount++;
 	if (d_log_refcount > 1) /* Already initialized */
 		D_GOTO(out, rc);
@@ -144,7 +144,7 @@ out:
 		D_PRINT_ERR("ddebug_init failed, rc: %d.\n", rc);
 		d_log_refcount--;
 	}
-	pthread_mutex_unlock(&d_log_lock);
+	D_MUTEX_UNLOCK(&d_log_lock);
 	return rc;
 }
 
@@ -178,9 +178,9 @@ void d_log_fini(void)
 {
 	D_ASSERT(d_log_refcount > 0);
 
-	pthread_mutex_lock(&d_log_lock);
+	D_MUTEX_LOCK(&d_log_lock);
 	d_log_refcount--;
 	if (d_log_refcount == 0)
 		d_log_close();
-	pthread_mutex_unlock(&d_log_lock);
+	D_MUTEX_UNLOCK(&d_log_lock);
 }

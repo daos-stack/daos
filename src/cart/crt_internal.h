@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,7 @@
 
 #include "crt_debug.h"
 
-#include <gurt/common.h>
+#include "gurt/common.h"
 #include <cart/api.h>
 
 #include "crt_hg.h"

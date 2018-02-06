@@ -227,7 +227,7 @@ crt_ivf_key_in_progress_find(struct crt_ivns_internal *ivns,
 	}
 
 	if (found) {
-		pthread_mutex_lock(&entry->kip_lock);
+		D_MUTEX_LOCK(&entry->kip_lock);
 		return entry;
 	}
 
@@ -240,13 +240,18 @@ crt_ivf_key_in_progress_set(struct crt_ivns_internal *ivns,
 			crt_iv_key_t *key)
 {
 	struct ivf_key_in_progress	*entry;
+	int				rc;
 
 	D_ALLOC(entry, offsetof(struct ivf_key_in_progress,
 				payload[0]) + key->iov_buf_len);
 	if (entry == NULL)
 		return NULL;
 
-	pthread_mutex_init(&entry->kip_lock, 0);
+	rc = D_MUTEX_INIT(&entry->kip_lock, 0);
+	if (rc != 0) {
+		D_FREE(entry);
+		return NULL;
+	}
 
 	entry->kip_key.iov_buf = entry->payload;
 	entry->kip_key.iov_buf_len = key->iov_buf_len;
@@ -260,7 +265,7 @@ crt_ivf_key_in_progress_set(struct crt_ivns_internal *ivns,
 	/* TODO: Change to hash table */
 	d_list_add_tail(&entry->kip_link, &ivns->cii_keys_in_progress_list);
 
-	pthread_mutex_lock(&entry->kip_lock);
+	D_MUTEX_LOCK(&entry->kip_lock);
 
 	return entry;
 }
@@ -281,8 +286,8 @@ crt_ivf_key_in_progress_unset(struct ivf_key_in_progress *entry)
 	if (entry->kip_refcnt == 0) {
 		d_list_del(&entry->kip_link);
 
-		pthread_mutex_unlock(&entry->kip_lock);
-		pthread_mutex_destroy(&entry->kip_lock);
+		D_MUTEX_UNLOCK(&entry->kip_lock);
+		D_MUTEX_DESTROY(&entry->kip_lock);
 		D_FREE(entry);
 		return true;
 	}
@@ -532,23 +537,23 @@ cleanup:
 	D_DEBUG("Done processing requests for kip_entry=%p\n", kip_entry);
 
 	kip_entry->kip_rpc_in_progress = false;
-	pthread_mutex_unlock(&kip_entry->kip_lock);
+	D_MUTEX_UNLOCK(&kip_entry->kip_lock);
 
 	/* Grab an entry again and make sure RPC hasn't been submitted
 	* by crt_ivf_rpc_issue() logic
 	*/
-	pthread_mutex_lock(&ivns_internal->cii_lock);
-	pthread_mutex_lock(&kip_entry->kip_lock);
+	D_MUTEX_LOCK(&ivns_internal->cii_lock);
+	D_MUTEX_LOCK(&kip_entry->kip_lock);
 	D_DEBUG("kip_entry=%p in_prog=%d\n",
 		kip_entry, kip_entry->kip_rpc_in_progress);
 
 	if (kip_entry->kip_rpc_in_progress == false) {
 		if (crt_ivf_key_in_progress_unset(kip_entry) == false)
-			pthread_mutex_unlock(&kip_entry->kip_lock);
+			D_MUTEX_UNLOCK(&kip_entry->kip_lock);
 	} else {
-		pthread_mutex_unlock(&kip_entry->kip_lock);
+		D_MUTEX_UNLOCK(&kip_entry->kip_lock);
 	}
-	pthread_mutex_unlock(&ivns_internal->cii_lock);
+	D_MUTEX_UNLOCK(&ivns_internal->cii_lock);
 
 
 exit:
@@ -561,16 +566,16 @@ crt_ivns_internal_lookup(struct crt_ivns_id *ivns_id)
 {
 	struct crt_ivns_internal *entry;
 
-	pthread_mutex_lock(&ns_list_lock);
+	D_MUTEX_LOCK(&ns_list_lock);
 	d_list_for_each_entry(entry, &ns_list, cii_link) {
 		if (entry->cii_gns.gn_ivns_id.ii_rank == ivns_id->ii_rank &&
 			entry->cii_gns.gn_ivns_id.ii_nsid == ivns_id->ii_nsid) {
 
-			pthread_mutex_unlock(&ns_list_lock);
+			D_MUTEX_UNLOCK(&ns_list_lock);
 			return entry;
 		}
 	}
-	pthread_mutex_unlock(&ns_list_lock);
+	D_MUTEX_UNLOCK(&ns_list_lock);
 
 	return NULL;
 }
@@ -598,28 +603,35 @@ crt_ivns_internal_create(crt_context_t crt_ctx, struct crt_grp_priv *grp_priv,
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_ivns_id		*internal_ivns_id;
 	uint32_t			next_ns_id;
+	int				rc;
 
 	D_ALLOC_PTR(ivns_internal);
 	if (ivns_internal == NULL)
 		D_GOTO(exit, 0);
 
+	rc = D_MUTEX_INIT(&ivns_internal->cii_lock, 0);
+	if (rc != 0) {
+		D_FREE(ivns_internal);
+		D_GOTO(exit, ivns_internal = NULL);
+	}
+
 	D_ALLOC_ARRAY(ivns_internal->cii_iv_classes, num_class);
 	if (ivns_internal->cii_iv_classes == NULL) {
+		D_MUTEX_DESTROY(&ivns_internal->cii_lock);
 		D_FREE(ivns_internal);
-		D_GOTO(exit, 0);
+		D_GOTO(exit, ivns_internal = NULL);
 	}
 
 	D_INIT_LIST_HEAD(&ivns_internal->cii_keys_in_progress_list);
 
-	pthread_mutex_init(&ivns_internal->cii_lock, 0);
 	internal_ivns_id = &ivns_internal->cii_gns.gn_ivns_id;
 
 	/* If we are not passed an ivns_id, create new one */
 	if (ivns_id == NULL) {
-		pthread_mutex_lock(&ns_list_lock);
+		D_MUTEX_LOCK(&ns_list_lock);
 		next_ns_id = ns_id;
 		ns_id++;
-		pthread_mutex_unlock(&ns_list_lock);
+		D_MUTEX_UNLOCK(&ns_list_lock);
 
 		internal_ivns_id->ii_rank = grp_priv->gp_self;
 		internal_ivns_id->ii_nsid = next_ns_id;
@@ -641,9 +653,9 @@ crt_ivns_internal_create(crt_context_t crt_ctx, struct crt_grp_priv *grp_priv,
 
 	D_DEBUG("Group id was 0x%lx\n", ivns_internal->cii_gns.gn_int_grp_id);
 
-	pthread_mutex_lock(&ns_list_lock);
+	D_MUTEX_LOCK(&ns_list_lock);
 	d_list_add_tail(&ivns_internal->cii_link, &ns_list);
-	pthread_mutex_unlock(&ns_list_lock);
+	D_MUTEX_UNLOCK(&ns_list_lock);
 
 exit:
 	return ivns_internal;
@@ -791,16 +803,16 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns)
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
 
-	pthread_mutex_lock(&ns_list_lock);
+	D_MUTEX_LOCK(&ns_list_lock);
 	d_list_del(&ivns_internal->cii_link);
-	pthread_mutex_unlock(&ns_list_lock);
+	D_MUTEX_UNLOCK(&ns_list_lock);
 
 	/* addref in crt_grp_lookup_int_grpid or crt_iv_namespace_create */
 	crt_grp_priv_decref(ivns_internal->cii_grp_priv);
 
 	/* TODO: stage2 - wait for all pending requests to be finished*/
 	/* TODO: Need refcount on ivns_internal to know when to free it */
-	pthread_mutex_destroy(&ivns_internal->cii_lock);
+	D_MUTEX_DESTROY(&ivns_internal->cii_lock);
 
 	D_FREE_PTR(ivns_internal->cii_iv_classes);
 	D_FREE_PTR(ivns_internal);
@@ -1005,9 +1017,9 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 		crt_bulk_free(iv_info->ifc_bulk_hdl);
 
 
-	pthread_mutex_lock(&ivns->cii_lock);
+	D_MUTEX_LOCK(&ivns->cii_lock);
 	kip_entry = crt_ivf_key_in_progress_find(ivns, iv_ops, &input->ifi_key);
-	pthread_mutex_unlock(&ivns->cii_lock);
+	D_MUTEX_UNLOCK(&ivns->cii_lock);
 
 	/* Finalization of fetch and processing of pending fetches must happen
 	* after ivo_on_refresh() is invoked which would cause value associated
@@ -1058,7 +1070,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	IV_DBG(iv_key, "rpc to be issued to rank=%d\n", dest_node);
 
 	/* Check if RPC for this key has already been submitted */
-	pthread_mutex_lock(&ivns_internal->cii_lock);
+	D_MUTEX_LOCK(&ivns_internal->cii_lock);
 	entry = crt_ivf_key_in_progress_find(ivns_internal, iv_ops, iv_key);
 
 	/* If entry exists, rpc was sent at some point */
@@ -1069,8 +1081,8 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 						entry, cb_info);
 
 			IV_DBG(iv_key, "added to kip_entry=%p\n", entry);
-			pthread_mutex_unlock(&entry->kip_lock);
-			pthread_mutex_unlock(&ivns_internal->cii_lock);
+			D_MUTEX_UNLOCK(&entry->kip_lock);
+			D_MUTEX_UNLOCK(&ivns_internal->cii_lock);
 			return rc;
 		}
 		IV_DBG(iv_key, "kip_entry=%p present\n", entry);
@@ -1078,7 +1090,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 		entry = crt_ivf_key_in_progress_set(ivns_internal, iv_key);
 		if (!entry) {
 			D_ERROR("crt_ivf_key_in_progres_set() failed\n");
-			pthread_mutex_unlock(&ivns_internal->cii_lock);
+			D_MUTEX_UNLOCK(&ivns_internal->cii_lock);
 			return -DER_NOMEM;
 		}
 		IV_DBG(iv_key, "new kip_entry=%p added\n", entry);
@@ -1090,8 +1102,8 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 
 	IV_DBG(iv_key, "kip_entry=%p refcnt=%d\n", entry, entry->kip_refcnt);
 
-	pthread_mutex_unlock(&entry->kip_lock);
-	pthread_mutex_unlock(&ivns_internal->cii_lock);
+	D_MUTEX_UNLOCK(&entry->kip_lock);
+	D_MUTEX_UNLOCK(&ivns_internal->cii_lock);
 
 	rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value, CRT_BULK_RW,
 				&local_bulk);
@@ -1132,7 +1144,7 @@ exit:
 	if (rc != 0) {
 		D_ERROR("Failed to send rpc to remote node = %d\n", dest_node);
 
-		pthread_mutex_lock(&ivns_internal->cii_lock);
+		D_MUTEX_LOCK(&ivns_internal->cii_lock);
 
 		/* Only unset if there are no pending fetches for this key */
 		entry = crt_ivf_key_in_progress_find(ivns_internal,
@@ -1142,13 +1154,13 @@ exit:
 			if (d_list_empty(&entry->kip_pending_fetch_list)) {
 				/* returns false if entry is not destroyed */
 				if (!crt_ivf_key_in_progress_unset(entry))
-					pthread_mutex_unlock(&entry->kip_lock);
+					D_MUTEX_UNLOCK(&entry->kip_lock);
 			} else {
-				pthread_mutex_unlock(&entry->kip_lock);
+				D_MUTEX_UNLOCK(&entry->kip_lock);
 			}
 		}
 
-		pthread_mutex_unlock(&ivns_internal->cii_lock);
+		D_MUTEX_UNLOCK(&ivns_internal->cii_lock);
 		if (local_bulk != CRT_BULK_NULL)
 			crt_bulk_free(local_bulk);
 	}

@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -211,6 +211,43 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 #define D_FREE_PTR(ptr)		D_FREE(ptr)
 
 #define D_GOTO(label, rc)	do { ((void)(rc)); goto label; } while (0)
+
+
+/* Internal helper macros, not to be called directly by the outside caller */
+#define __D_PTHREAD(fn, x)						\
+	({								\
+		int _rc;						\
+		_rc = fn(x);						\
+		D_ASSERTF(_rc == 0, "%s rc=%d\n", #fn, _rc);		\
+		d_errno2der(_rc);					\
+	})
+
+#define __D_PTHREAD_INIT(fn, x, y)					\
+	({								\
+		int _rc;						\
+		_rc = fn(x, y);						\
+		if (_rc != 0) {						\
+			D_ASSERT(_rc != EINVAL);			\
+			D_ERROR("%s failed; rc=%d\n", #fn, _rc);	\
+		}							\
+		d_errno2der(_rc);					\
+	})
+
+
+#define D_SPIN_LOCK(x)		__D_PTHREAD(pthread_spin_lock, x)
+#define D_SPIN_UNLOCK(x)	__D_PTHREAD(pthread_spin_unlock, x)
+#define D_MUTEX_LOCK(x)		__D_PTHREAD(pthread_mutex_lock, x)
+#define D_MUTEX_UNLOCK(x)	__D_PTHREAD(pthread_mutex_unlock, x)
+#define D_RWLOCK_RDLOCK(x)	__D_PTHREAD(pthread_rwlock_rdlock, x)
+#define D_RWLOCK_WRLOCK(x)	__D_PTHREAD(pthread_rwlock_wrlock, x)
+#define D_RWLOCK_UNLOCK(x)	__D_PTHREAD(pthread_rwlock_unlock, x)
+#define D_MUTEX_DESTROY(x)	__D_PTHREAD(pthread_mutex_destroy, x)
+#define D_SPIN_DESTROY(x)	__D_PTHREAD(pthread_spin_destroy, x)
+#define D_RWLOCK_DESTROY(x)	__D_PTHREAD(pthread_rwlock_destroy, x)
+#define D_MUTEX_INIT(x, y)	__D_PTHREAD_INIT(pthread_mutex_init, x, y)
+#define D_SPIN_INIT(x, y)	__D_PTHREAD_INIT(pthread_spin_init, x, y)
+#define D_RWLOCK_INIT(x, y)	__D_PTHREAD_INIT(pthread_rwlock_init, x, y)
+
 
 #define DGOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
 #define DGOLDEN_RATIO_PRIME_32	0x9e370001UL

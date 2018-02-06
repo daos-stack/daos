@@ -99,8 +99,8 @@ crt_context_t g_main_ctx;
 static int g_do_shutdown;
 pthread_t g_progress_thread[NUM_WORK_CTX + 1];
 pthread_mutex_t g_key_lock = PTHREAD_MUTEX_INITIALIZER;
-#define LOCK_KEYS() pthread_mutex_lock(&g_key_lock)
-#define UNLOCK_KEYS() pthread_mutex_unlock(&g_key_lock)
+#define LOCK_KEYS() D_MUTEX_LOCK(&g_key_lock)
+#define UNLOCK_KEYS() D_MUTEX_UNLOCK(&g_key_lock)
 
 static void *
 progress_function(void *data)

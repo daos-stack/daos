@@ -643,16 +643,16 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	crt_rank = grp_priv->gp_rank_map[source->rank].rm_rank;
 	D_DEBUG("received pmix notification about rank %d.\n", crt_rank);
 	/* walk the global list to execute the user callbacks */
-	pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_event_rwlock);
+	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 	d_list_for_each_entry(event_cb_priv,
 			      &crt_plugin_gdata.cpg_event_cbs, cecp_link) {
-		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 		cb_func = event_cb_priv->cecp_func;
 		arg = event_cb_priv->cecp_args;
 		cb_func(crt_rank, arg);
-		pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_event_rwlock);
+		D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 	}
-	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 	if (cbfunc)
 		cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
 }
@@ -686,9 +686,9 @@ crt_plugin_pmix_init(void)
 	if (!crt_is_service() || crt_is_singleton())
 		return -DER_INVAL;
 
-	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
+	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 	if (crt_plugin_gdata.cpg_pmix_errhdlr_inited == 1) {
-		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 		return -DER_SUCCESS;
 	}
 
@@ -706,12 +706,12 @@ crt_plugin_pmix_init(void)
 	rc = sem_wait(&token_to_proceed);
 	if (rc != 0) {
 		D_ERROR("sem_wait failed, rc: %d.\n", rc);
-		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 		return -DER_MISC;
 	}
 
 	crt_plugin_gdata.cpg_pmix_errhdlr_inited = 1;
-	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 	return -DER_SUCCESS;
 }
 
@@ -744,9 +744,9 @@ crt_plugin_pmix_fini(void)
 		return;
 	}
 
-	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
+	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 	if (!crt_plugin_gdata.cpg_pmix_errhdlr_inited) {
-		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 		return;
 	}
 
@@ -758,12 +758,12 @@ crt_plugin_pmix_fini(void)
 	rc = sem_wait(&token_to_proceed);
 	if (rc != 0) {
 		D_ERROR("sem_wait failed, rc: %d.\n", rc);
-		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 
 		return;
 	}
 	crt_plugin_gdata.cpg_pmix_errhdlr_inited = 0;
-	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 
 	rc = sem_destroy(&token_to_proceed);
 	if (rc != 0)
@@ -788,10 +788,10 @@ crt_register_event_cb(crt_event_cb event_handler, void *arg)
 		D_GOTO(out, rc = -DER_NOMEM);
 	event_cb_priv->cecp_func = event_handler;
 	event_cb_priv->cecp_args = arg;
-	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
+	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 	d_list_add_tail(&event_cb_priv->cecp_link,
 			&crt_plugin_gdata.cpg_event_cbs);
-	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 
 out:
 	return rc;

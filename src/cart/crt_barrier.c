@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,16 +41,18 @@
 #define D_LOGFAC	DD_FAC(grp)
 
 #include "crt_internal.h"
-
-void
+int
 crt_barrier_info_init(struct crt_grp_priv *grp_priv)
 {
 	struct crt_barrier_info	*info;
 	crt_group_t		*grp;
+	int			rc;
 
 	info = &grp_priv->gp_barrier_info;
 
-	pthread_mutex_init(&info->bi_lock, NULL);
+	rc = D_MUTEX_INIT(&info->bi_lock, NULL);
+	if (rc != 0)
+		D_GOTO(exit, rc);
 
 	/* Default barrier master is the lowest numbered rank.  At startup,
 	 * it's index 0.  It gets updated in crt_barrier_update_master
@@ -79,12 +81,14 @@ crt_barrier_info_init(struct crt_grp_priv *grp_priv)
 	 */
 	info->bi_exclude_self.rl_nr.num = 1;
 	info->bi_exclude_self.rl_ranks = &info->bi_primary_grp->gp_self;
+exit:
+	return rc;
 }
 
 void
 crt_barrier_info_destroy(struct crt_grp_priv *grp_priv)
 {
-	pthread_mutex_destroy(&grp_priv->gp_barrier_info.bi_lock);
+	D_MUTEX_DESTROY(&grp_priv->gp_barrier_info.bi_lock);
 }
 
 /* Update the master rank.  Returns true if the master has changed since
@@ -103,9 +107,9 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 
 	primary_grp = info->bi_primary_grp;
 
-	pthread_mutex_lock(&info->bi_lock);
+	D_MUTEX_LOCK(&info->bi_lock);
 
-	pthread_rwlock_rdlock(primary_grp->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(primary_grp->gp_rwlock_ft);
 	if (!d_rank_in_rank_list(grp_priv->gp_live_ranks,
 				 info->bi_master_pri_rank, true)) {
 		rank = -1;
@@ -129,8 +133,8 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 		info->bi_master_idx = i;
 	}
 
-	pthread_rwlock_unlock(primary_grp->gp_rwlock_ft);
-	pthread_mutex_unlock(&info->bi_lock);
+	D_RWLOCK_UNLOCK(primary_grp->gp_rwlock_ft);
+	D_MUTEX_UNLOCK(&info->bi_lock);
 
 	return new_master;
 }
@@ -164,7 +168,7 @@ crt_hdlr_barrier_enter(crt_rpc_t *rpc_req)
 
 	barrier_info = &grp_priv->gp_barrier_info;
 
-	pthread_mutex_lock(&barrier_info->bi_lock);
+	D_MUTEX_LOCK(&barrier_info->bi_lock);
 
 	D_DEBUG("barrier enter msg received for %d\n", in->b_num);
 
@@ -180,7 +184,7 @@ crt_hdlr_barrier_enter(crt_rpc_t *rpc_req)
 		ab->b_enter_rpc = rpc_req;
 		/* decref in crt_barrier */
 		RPC_PUB_ADDREF(rpc_req);
-		pthread_mutex_unlock(&barrier_info->bi_lock);
+		D_MUTEX_UNLOCK(&barrier_info->bi_lock);
 		return;
 	}
 
@@ -189,7 +193,7 @@ crt_hdlr_barrier_enter(crt_rpc_t *rpc_req)
 	 */
 send_reply:
 
-	pthread_mutex_unlock(&barrier_info->bi_lock);
+	D_MUTEX_UNLOCK(&barrier_info->bi_lock);
 	out = crt_reply_get(rpc_req);
 	D_ASSERT(out != NULL);
 
@@ -236,7 +240,7 @@ crt_hdlr_barrier_exit(crt_rpc_t *rpc_req)
 	barrier_info = &grp_priv->gp_barrier_info;
 	D_DEBUG("barrier exit msg received for %d\n", in->b_num);
 
-	pthread_mutex_lock(&barrier_info->bi_lock);
+	D_MUTEX_LOCK(&barrier_info->bi_lock);
 
 	if (barrier_info->bi_num_exited >= in->b_num) {
 		/* Duplicate message.  Send reply again */
@@ -257,7 +261,7 @@ crt_hdlr_barrier_exit(crt_rpc_t *rpc_req)
 	ab->b_complete_cb = NULL;
 	ab->b_arg = NULL;
 send_reply:
-	pthread_mutex_unlock(&barrier_info->bi_lock);
+	D_MUTEX_UNLOCK(&barrier_info->bi_lock);
 
 	if (complete_cb != NULL) {
 		/* Execute completion callback */
@@ -355,7 +359,7 @@ handle_error:
 	barrier_info = &grp_priv->gp_barrier_info;
 	D_ERROR("Critical failure in barrier master, rc = %d\n", rc);
 	/* Assume all errors in this function are unrecoverable */
-	pthread_mutex_lock(&barrier_info->bi_lock);
+	D_MUTEX_LOCK(&barrier_info->bi_lock);
 	ab = &barrier_info->bi_barriers[b_num % CRT_MAX_BARRIER_INFLIGHT];
 	ab->b_active = false;
 	cb_info.bci_rc = rc;
@@ -363,7 +367,7 @@ handle_error:
 	b_complete = ab->b_complete_cb;
 	ab->b_complete_cb = NULL;
 	ab->b_arg = NULL;
-	pthread_mutex_unlock(&barrier_info->bi_lock);
+	D_MUTEX_UNLOCK(&barrier_info->bi_lock);
 
 	if (b_complete != NULL)
 		b_complete(&cb_info);
@@ -405,7 +409,7 @@ barrier_exit_cb(const struct crt_cb_info *cb_info)
 	barrier_info = &grp_priv->gp_barrier_info;
 	ab = &barrier_info->bi_barriers[in->b_num % CRT_MAX_BARRIER_INFLIGHT];
 
-	pthread_mutex_lock(&barrier_info->bi_lock);
+	D_MUTEX_LOCK(&barrier_info->bi_lock);
 
 	if (barrier_info->bi_num_exited < in->b_num) {
 		/* otherwise, this is a replay */
@@ -417,20 +421,20 @@ barrier_exit_cb(const struct crt_cb_info *cb_info)
 		ab->b_complete_cb = NULL;
 		ab->b_arg = NULL;
 	}
-	pthread_mutex_unlock(&barrier_info->bi_lock);
+	D_MUTEX_UNLOCK(&barrier_info->bi_lock);
 
 	if (complete_cb != NULL)
 		complete_cb(&info);
 
 	/* Ok, now check if the next barrier is pending_exit */
 	b_num = in->b_num + 1;
-	pthread_mutex_lock(&barrier_info->bi_lock);
+	D_MUTEX_LOCK(&barrier_info->bi_lock);
 	ab = &barrier_info->bi_barriers[b_num % CRT_MAX_BARRIER_INFLIGHT];
 	if (!ab->b_active || !ab->b_pending_exit)
 		ab = NULL;
 	else
 		ab->b_pending_exit = false;
-	pthread_mutex_unlock(&barrier_info->bi_lock);
+	D_MUTEX_UNLOCK(&barrier_info->bi_lock);
 
 	if (ab != NULL) {
 		/* Send exit message for next barrier */
@@ -474,7 +478,7 @@ barrier_enter_cb(const struct crt_cb_info *cb_info)
 
 	barrier_info = &grp_priv->gp_barrier_info;
 	ab = &barrier_info->bi_barriers[in->b_num % CRT_MAX_BARRIER_INFLIGHT];
-	pthread_mutex_lock(&barrier_info->bi_lock);
+	D_MUTEX_LOCK(&barrier_info->bi_lock);
 
 	ab->b_pending_exit = true;
 
@@ -484,7 +488,7 @@ barrier_enter_cb(const struct crt_cb_info *cb_info)
 		ab->b_pending_exit = false;
 	}
 
-	pthread_mutex_unlock(&barrier_info->bi_lock);
+	D_MUTEX_UNLOCK(&barrier_info->bi_lock);
 
 	if (send_exit)
 		send_barrier_msg(grp_priv, in->b_num, barrier_exit_cb,
@@ -558,13 +562,13 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg)
 
 	barrier_info = &grp_priv->gp_barrier_info;
 
-	pthread_mutex_lock(&barrier_info->bi_lock);
+	D_MUTEX_LOCK(&barrier_info->bi_lock);
 	enter_num = barrier_info->bi_num_created + 1;
 
 	ab = &barrier_info->bi_barriers[enter_num % CRT_MAX_BARRIER_INFLIGHT];
 
 	if (ab->b_active) {
-		pthread_mutex_unlock(&barrier_info->bi_lock);
+		D_MUTEX_UNLOCK(&barrier_info->bi_lock);
 		return -DER_BUSY;
 	}
 
@@ -580,7 +584,7 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg)
 
 	barrier_info->bi_num_created = enter_num;
 
-	pthread_mutex_unlock(&barrier_info->bi_lock);
+	D_MUTEX_UNLOCK(&barrier_info->bi_lock);
 
 	if (rpc_req != NULL) {
 		out = crt_reply_get(rpc_req);
@@ -627,10 +631,10 @@ crt_barrier_handle_eviction(struct crt_grp_priv *grp_priv)
 	/* Ok, we are the new master.   We need to replay the last enter
 	 * message and exit messages received.
 	 */
-	pthread_mutex_lock(&barrier_info->bi_lock);
+	D_MUTEX_LOCK(&barrier_info->bi_lock);
 	saved_exited = barrier_info->bi_num_exited;
 	saved_created = barrier_info->bi_num_created;
-	pthread_mutex_unlock(&barrier_info->bi_lock);
+	D_MUTEX_UNLOCK(&barrier_info->bi_lock);
 
 	/* First send the exit message remote ranks may have missed */
 	D_DEBUG("New master sending exit for %d\n", saved_exited);

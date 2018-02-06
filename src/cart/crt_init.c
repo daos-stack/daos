@@ -64,7 +64,7 @@ static void data_init(void)
 
 	D_INIT_LIST_HEAD(&crt_gdata.cg_ctx_list);
 
-	rc = pthread_rwlock_init(&crt_gdata.cg_rwlock, NULL);
+	rc = D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
 	D_ASSERT(rc == 0);
 
 	crt_gdata.cg_ctx_num = 0;
@@ -103,9 +103,11 @@ static void data_init(void)
 	gdata_init_flag = 1;
 }
 
-void
+static int
 crt_plugin_init(void)
 {
+	int rc;
+
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 0);
 
 	/** init the lists */
@@ -113,11 +115,33 @@ crt_plugin_init(void)
 	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_timeout_cbs);
 	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_event_cbs);
 	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_eviction_cbs);
-	pthread_rwlock_init(&crt_plugin_gdata.cpg_prog_rwlock, NULL);
-	pthread_rwlock_init(&crt_plugin_gdata.cpg_timeout_rwlock, NULL);
-	pthread_rwlock_init(&crt_plugin_gdata.cpg_event_rwlock, NULL);
-	pthread_rwlock_init(&crt_plugin_gdata.cpg_eviction_rwlock, NULL);
+	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_prog_rwlock, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_timeout_rwlock, NULL);
+	if (rc != 0) {
+		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock);
+		return rc;
+	}
+
+	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_event_rwlock, NULL);
+	if (rc != 0) {
+		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock);
+		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
+		return rc;
+	}
+
+	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_eviction_rwlock, NULL);
+	if (rc != 0) {
+		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock);
+		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
+		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_event_rwlock);
+		return rc;
+	}
+
 	crt_plugin_gdata.cpg_inited = 1;
+	return 0;
 }
 
 int
@@ -172,7 +196,7 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 	}
 	D_ASSERT(gdata_init_flag == 1);
 
-	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
+	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 	if (crt_gdata.cg_inited == 0) {
 		/* feed a seed for pseudo-random number generator */
 		gettimeofday(&now, NULL);
@@ -237,13 +261,22 @@ do_init:
 		if (rc != 0) {
 			D_ERROR("crt_grp_init failed, rc: %d.\n", rc);
 			crt_hg_fini();
-			free(crt_gdata.cg_addr);
+			D_FREE(crt_gdata.cg_addr);
 			crt_gdata.cg_addr = NULL;
 			D_GOTO(unlock, rc);
 		}
 
-		if (crt_plugin_gdata.cpg_inited == 0)
-			crt_plugin_init();
+		if (crt_plugin_gdata.cpg_inited == 0) {
+			rc = crt_plugin_init();
+			if (rc != 0) {
+				D_ERROR("crt_plugin_init rc: %d.\n", rc);
+				crt_hg_fini();
+				crt_grp_fini();
+				D_FREE(crt_gdata.cg_addr);
+				crt_gdata.cg_addr = NULL;
+				D_GOTO(unlock, rc);
+			}
+		}
 
 		crt_self_test_init();
 
@@ -252,7 +285,7 @@ do_init:
 			D_ERROR("crt_opc_map_create failed rc: %d.\n", rc);
 			crt_hg_fini();
 			crt_grp_fini();
-			free(crt_gdata.cg_addr);
+			D_FREE(crt_gdata.cg_addr);
 			crt_gdata.cg_addr = NULL;
 			D_GOTO(unlock, rc);
 		}
@@ -272,7 +305,7 @@ do_init:
 	crt_gdata.cg_refcount++;
 
 unlock:
-	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 out:
 	if (rc != 0) {
 		D_ERROR("crt_init failed, rc: %d.\n", rc);
@@ -332,10 +365,10 @@ crt_plugin_fini(void)
 		D_FREE_PTR(cb_priv);
 	}
 
-	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_prog_rwlock);
-	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_timeout_rwlock);
-	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_event_rwlock);
-	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_eviction_rwlock);
+	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock);
+	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
+	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_event_rwlock);
+	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_eviction_rwlock);
 }
 
 int
@@ -343,11 +376,11 @@ crt_finalize(void)
 {
 	int rc = 0;
 
-	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
+	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
 	if (!crt_initialized()) {
 		D_ERROR("cannot finalize before initializing.\n");
-		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	crt_lm_finalize();
@@ -359,7 +392,7 @@ crt_finalize(void)
 			D_ERROR("cannot finalize, current ctx_num(%d).\n",
 				crt_gdata.cg_ctx_num);
 			crt_gdata.cg_refcount++;
-			pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 			D_GOTO(out, rc = -DER_NO_PERM);
 		} else {
 			D_ASSERT(crt_context_empty(CRT_LOCKED));
@@ -372,7 +405,7 @@ crt_finalize(void)
 		if (rc != 0) {
 			D_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
 			crt_gdata.cg_refcount++;
-			pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 			D_GOTO(out, rc);
 		}
 
@@ -380,7 +413,7 @@ crt_finalize(void)
 		if (rc != 0) {
 			D_ERROR("crt_hg_fini failed rc: %d.\n", rc);
 			crt_gdata.cg_refcount++;
-			pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 			D_GOTO(out, rc);
 		}
 
@@ -391,12 +424,11 @@ crt_finalize(void)
 
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
 
-		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
-
-		rc = pthread_rwlock_destroy(&crt_gdata.cg_rwlock);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+		rc = D_RWLOCK_DESTROY(&crt_gdata.cg_rwlock);
 		if (rc != 0) {
 			D_ERROR("failed to destroy cg_rwlock, rc: %d.\n", rc);
-			D_GOTO(out, rc = -rc);
+			D_GOTO(out, rc);
 		}
 
 		/* allow the same program to re-initialize */
@@ -408,7 +440,7 @@ crt_finalize(void)
 		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS)
 			crt_na_ofi_config_fini();
 	} else {
-		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 	}
 
 out:

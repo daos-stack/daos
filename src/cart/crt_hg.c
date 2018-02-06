@@ -95,11 +95,11 @@ crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	pthread_spin_lock(&hg_pool->chp_lock);
+	D_SPIN_LOCK(&hg_pool->chp_lock);
 	hg_pool->chp_max_num = max_num;
 	hg_pool->chp_enabled = true;
 	prepost = hg_pool->chp_num < prepost_num;
-	pthread_spin_unlock(&hg_pool->chp_lock);
+	D_SPIN_UNLOCK(&hg_pool->chp_lock);
 
 	while (prepost) {
 		D_ALLOC_PTR(hdl);
@@ -118,14 +118,14 @@ crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
 			break;
 		}
 
-		pthread_spin_lock(&hg_pool->chp_lock);
+		D_SPIN_LOCK(&hg_pool->chp_lock);
 		d_list_add_tail(&hdl->chh_link, &hg_pool->chp_list);
 		hg_pool->chp_num++;
 		D_DEBUG("hg_pool %p, add, chp_num %d.\n",
 			hg_pool, hg_pool->chp_num);
 		if (hg_pool->chp_num >= prepost_num)
 			prepost = false;
-		pthread_spin_unlock(&hg_pool->chp_lock);
+		D_SPIN_UNLOCK(&hg_pool->chp_lock);
 	}
 
 out:
@@ -142,13 +142,13 @@ crt_hg_pool_disable(struct crt_hg_context *hg_ctx)
 
 	D_INIT_LIST_HEAD(&destroy_list);
 
-	pthread_spin_lock(&hg_pool->chp_lock);
+	D_SPIN_LOCK(&hg_pool->chp_lock);
 	hg_pool->chp_num = 0;
 	hg_pool->chp_max_num = 0;
 	hg_pool->chp_enabled = false;
 	d_list_splice_init(&hg_pool->chp_list, &destroy_list);
 	D_DEBUG("hg_pool %p disabled and become empty (chp_num 0).\n", hg_pool);
-	pthread_spin_unlock(&hg_pool->chp_lock);
+	D_SPIN_UNLOCK(&hg_pool->chp_lock);
 
 	d_list_for_each_entry_safe(hdl, next, &destroy_list, chh_link) {
 		D_ASSERT(hdl->chh_hdl != HG_HANDLE_NULL);
@@ -169,7 +169,10 @@ crt_hg_pool_init(struct crt_hg_context *hg_ctx)
 	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
 	int			 rc = 0;
 
-	pthread_spin_init(&hg_pool->chp_lock, PTHREAD_PROCESS_PRIVATE);
+	rc = D_SPIN_INIT(&hg_pool->chp_lock, PTHREAD_PROCESS_PRIVATE);
+	if (rc != 0)
+		D_GOTO(exit, rc);
+
 	hg_pool->chp_num = 0;
 	hg_pool->chp_max_num = 0;
 	hg_pool->chp_enabled = false;
@@ -180,7 +183,7 @@ crt_hg_pool_init(struct crt_hg_context *hg_ctx)
 	if (rc != 0)
 		D_ERROR("crt_hg_pool_enable, hg_ctx %p, failed rc:%d.\n",
 			hg_ctx, rc);
-
+exit:
 	return rc;
 }
 
@@ -190,7 +193,7 @@ crt_hg_pool_fini(struct crt_hg_context *hg_ctx)
 	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
 
 	crt_hg_pool_disable(hg_ctx);
-	pthread_spin_destroy(&hg_pool->chp_lock);
+	D_SPIN_DESTROY(&hg_pool->chp_lock);
 }
 
 static inline struct crt_hg_hdl *
@@ -199,7 +202,7 @@ crt_hg_pool_get(struct crt_hg_context *hg_ctx)
 	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
 	struct crt_hg_hdl	*hdl = NULL, *next;
 
-	pthread_spin_lock(&hg_pool->chp_lock);
+	D_SPIN_LOCK(&hg_pool->chp_lock);
 	if (!hg_pool->chp_enabled || d_list_empty(&hg_pool->chp_list)) {
 		D_DEBUG("hg_pool %p is not enabled or empty, cannot get.\n",
 			hg_pool);
@@ -216,7 +219,7 @@ crt_hg_pool_get(struct crt_hg_context *hg_ctx)
 	}
 
 unlock:
-	pthread_spin_unlock(&hg_pool->chp_lock);
+	D_SPIN_UNLOCK(&hg_pool->chp_lock);
 	return hdl;
 }
 
@@ -240,7 +243,7 @@ crt_hg_pool_put(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		rpc_priv->crp_hdl_reuse = NULL;
 	}
 
-	pthread_spin_lock(&hg_pool->chp_lock);
+	D_SPIN_LOCK(&hg_pool->chp_lock);
 	if (hg_pool->chp_enabled && hg_pool->chp_num < hg_pool->chp_max_num) {
 		d_list_add_tail(&hdl->chh_link, &hg_pool->chp_list);
 		hg_pool->chp_num++;
@@ -253,7 +256,7 @@ crt_hg_pool_put(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			hg_pool->chp_max_num, hg_pool->chp_enabled);
 		rc = -DER_OVERFLOW;
 	}
-	pthread_spin_unlock(&hg_pool->chp_lock);
+	D_SPIN_UNLOCK(&hg_pool->chp_lock);
 
 out:
 	return rc;
@@ -818,7 +821,7 @@ crt_hg_context_lookup(hg_context_t *hg_ctx)
 	struct crt_context	*crt_ctx;
 	int			found = 0;
 
-	pthread_rwlock_rdlock(&crt_gdata.cg_rwlock);
+	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
 	d_list_for_each_entry(crt_ctx, &crt_gdata.cg_ctx_list, cc_link) {
 		if (crt_ctx->cc_hg_ctx.chc_hgctx == hg_ctx) {
@@ -827,7 +830,7 @@ crt_hg_context_lookup(hg_context_t *hg_ctx)
 		}
 	}
 
-	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	return (found == 1) ? crt_ctx : NULL;
 }
@@ -914,7 +917,12 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		" allocated per RPC request received.\n",
 		rpc_priv, rpc_priv->crp_opc_info->coi_opc);
 
-	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, true /* srv_flag */);
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, true /* srv_flag */);
+	if (rc != 0) {
+		D_ERROR("crt_rpc_priv_init rc=%d, opc=%#x\n", rc, opc);
+		crt_hg_reply_error_send(rpc_priv, -DER_MISC);
+		D_GOTO(out, hg_ret = HG_SUCCESS);
+	}
 
 	D_ASSERT(rpc_priv->crp_srv != 0);
 	D_ASSERT(opc_info->coi_input_size == rpc_pub->cr_input_size);
