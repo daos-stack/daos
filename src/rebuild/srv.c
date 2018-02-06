@@ -1338,7 +1338,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	rc = pool_map_create(pool_buf, rsi->rsi_pool_map_ver, &map);
 	if (rc != 0) {
 		D__ERROR(DF_UUID"failed to create pool map: %d\n",
-			 DP_UUID(pool->sp_uuid), rc);
+			 DP_UUID(rsi->rsi_pool_uuid), rc);
 		return rc;
 	}
 
