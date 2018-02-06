@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,26 +21,21 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#define TEST_SUCCESS 0
-#define TEST_FAILED  1
-
-#define POOL_CREATE  "create"
-#define POOL_DESTROY  "destroy"
-#define POOL_CONNECT  "connect"
-#define POOL_DISCONNECT  "discon"
-#define POOL_CREATE_AND_DESTROY  "candd"
-
-#define FLAG_RO "RO"
-#define FLAG_RW "RW"
-#define FLAG_EX "EX"
-
-/**
- * Acquire generic test resources.
- */
-int setup(int argc, char **argv);
+/* generic */
+#include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 
 /**
- * Cleanup generic test resources.
+ * TODO, need to rewrite this, just a placeholder for now.
  */
-int done(void);
+
+int cmd_help(int argc, const char **argv, void *ctx)
+{
+	int rc = 0;
+	return rc;
+}

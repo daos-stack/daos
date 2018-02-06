@@ -28,6 +28,8 @@ import time
 import aexpect
 from avocado.utils import genio
 
+sessions = {}
+
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
 
@@ -36,38 +38,46 @@ class ServerFailed(Exception):
 def printFunc(thestring):
        print "<SERVER>" + thestring
 
-def runServer(hostfile, urifile):
+def runServer(hostfile, urifile, setname, basepath):
 
-    global session
+    global sessions
     try:
         server_count = len(genio.read_all_lines(hostfile))
 
-        initial_cmd = "/bin/bash"
-        server_cmd = "/home/skirvan/daos_m10/install/bin/orterun --np {0} ".format(server_count)
+        initial_cmd = "/bin/sh"
+        server_cmd = basepath + "/install/bin/orterun --np {0} ".format(server_count)
         server_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
-        server_cmd += "--report-uri {0} -x DD_LOG=/mnt/shared/test/tmp/daos.log ".format(urifile)
-        server_cmd += "-x LD_LIBRARY_PATH=/home/skirvan/daos_m10/install/lib:/home/skirvan/daos_m10/install/lib/daos_srv "
-        server_cmd += "/home/skirvan/daos_m10/install/bin/daos_server -g daos_server"
+        server_cmd += "--report-uri {0} -x DD_LOG=".format(urifile)
+        server_cmd += basepath + "/install/tmp/daos.log "
+        server_cmd += "-x LD_LIBRARY_PATH={0}/install/lib:{0}/install/lib/daos_srv ".format(
+            basepath)
+        server_cmd += basepath + "/install/bin/daos_server -g {0}".format(setname)
 
         print "Start CMD>>>>{0}".format(server_cmd)
 
-        session = aexpect.ShellSession(initial_cmd)
-        if (session.is_responsive()):
-            session.sendline(server_cmd)
-            session.read_until_any_line_matches(
+        sessions[setname] = aexpect.ShellSession(initial_cmd)
+        if (sessions[setname].is_responsive()):
+            sessions[setname].sendline(server_cmd)
+            sessions[setname].read_until_any_line_matches(
                 "DAOS server (v0.0.2) started on rank 0*", print_func=printFunc)
             print "<SERVER> server started"
     except Exception as e:
         print "<SERVER> Exception occurred: {0}".format(str(e))
         raise ServerFailed("Server didn't start!")
 
-def stopServer():
+def stopServer(setname=None):
 
-    global session
+    global sessions
     try:
-        session.sendcontrol("c")
-        session.sendcontrol("c")
-        session.close()
+        if setname == None:
+            for k, v in sessions.items():
+                v.sendcontrol("c")
+                v.sendcontrol("c")
+                v.close()
+        else:
+            sessions[setname].sendcontrol("c")
+            sessions[setname].sendcontrol("c")
+            sessions[setname].close()
         print "<SERVER> server stopped"
     except Exception as e:
         print "<SERVER> Exception occurred: {0}".format(str(e))

@@ -1,6 +1,10 @@
+paths:
+   base: daos-repo-path-goes-here
+server:
+   server_group: daos_server
 files:
-   hostfile: /mnt/shared/test/hostfile1
-   urifile: /mnt/shared/test/urifile
+   hostfile: install/tmp/hostfile2
+   urifile: install/tmp/urifile
 tests:
    modes: !mux
       modeall:

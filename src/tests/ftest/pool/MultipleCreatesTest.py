@@ -38,11 +38,12 @@ from aexpect.client import run_bg
 sys.path.append('./util')
 import ServerUtils
 import CheckForPool
+import GetHostsFromFile
 
 def printFunc(thestring):
-       print "<SERVER>" + thestring
+       print "<TESTCLIENT>" + thestring
 
-session = None
+sessions = {}
 hostfile = ""
 urifile = ""
 
@@ -56,19 +57,22 @@ class MultipleCreatesTest(Test):
 
     # super wasteful since its doing this for every variation
     def setUp(self):
-       global session
+       global sessions
        global urifile
        global hostfile
+       global basepath
 
-       hostfile = self.params.get("hostfile",'/files/','rubbish')
-       urifile = self.params.get("urifile",'/files/','rubbish')
+       basepath = self.params.get("base",'/paths/','rubbish')
+       hostfile = basepath + self.params.get("hostfile",'/files/local/','rubbish')
+       urifile = basepath + self.params.get("urifile",'/files/local/','rubbish')
+       server_group = self.params.get("server_group",'/server/','daos_server')
 
-       ServerUtils.runServer(hostfile, urifile)
+       ServerUtils.runServer(hostfile, urifile, server_group, basepath)
        # not sure I need to do this but ... give it time to start
        time.sleep(2)
 
     def tearDown(self):
-       global session
+       global sessions
        ServerUtils.stopServer()
 
     def test_create_one(self):
@@ -76,6 +80,7 @@ class MultipleCreatesTest(Test):
         Test issuing a single  pool create commands at once.
         """
         global urifile
+        global basepath
 
         # Accumulate a list of pass/fail indicators representing what is expected for
         # each parameter then "and" them to determine the expected result of the test
@@ -99,26 +104,30 @@ class MultipleCreatesTest(Test):
                       expected_result = 'FAIL'
                       break
         try:
-               cmd = ('../../install/bin/orterun -np 1 '
-                      '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3} {4} {5}'.format(
-                          urifile, "create", mode, uid, gid, setid))
+               orterun = basepath + 'install/bin/orterun'
+               daosctl = basepath + 'install/bin/daosctl'
+               cmd = ('{0} --np 1 --ompi-server file:{1} '
+                      '{2} create-pool -m {3} -u {4} -g {5} -s {6}'.format(orterun,
+                          urifile, daosctl, mode, uid, gid, setid))
                uuid_str = """{0}""".format(process.system_output(cmd))
                print("uuid is {0}\n".format(uuid_str))
 
-               exists = CheckForPool.checkForPool('vm1', uuid_str)
+               hostfile = basepath + self.params.get("hostfile",'/run/files/local/')
+               host = GetHostsFromFile.getHostsFromFile(hostfile)[0]
+               exists = CheckForPool.checkForPool(host, uuid_str)
                if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str, 'vm1'))
+                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str, host))
 
-               delete_cmd =  ('../../install/bin/orterun -np 1 '
-                              '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3} {4}'.format(
-                                     urifile, "destroy", uuid_str, setid, "1"))
+               delete_cmd =  ('{0} --np 1 --ompi-server file:{1} {2} destroy-pool '
+                              '-i {3} -s {4} -f'.format(orterun, urifile, daosctl,
+                                                        uuid_str, setid))
 
                process.system(delete_cmd)
 
 
-               exists = CheckForPool.checkForPool('vm1', uuid_str)
+               exists = CheckForPool.checkForPool(host, uuid_str)
                if exists == 0:
-                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str, 'vm1'))
+                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str, host))
 
                if expected_result == 'FAIL':
                       self.fail("Expected to fail but passed.\n")
@@ -135,6 +144,7 @@ class MultipleCreatesTest(Test):
         Test issuing multiple pool create commands at once.
         """
         global urifile
+        global basepath
 
         # Accumulate a list of pass/fail indicators representing what is expected for
         # each parameter then "and" them to determine the expected result of the test
@@ -158,39 +168,41 @@ class MultipleCreatesTest(Test):
                       expected_result = 'FAIL'
                       break
         try:
-               cmd = ('../../install/bin/orterun -np 1 '
-                      '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3} {4} {5}'.format(
-                          urifile, "create", mode, uid, gid, setid))
+               orterun = basepath + 'install/bin/orterun'
+               daosctl = basepath + 'install/bin/daosctl'
+               cmd = ('{0} --np 1 --ompi-server file:{1} {2} create-pool'
+                      ' -m {3} -u {4} -g {5} -s {6}'.format(
+                          orterun, urifile, daosctl, mode, uid, gid, setid))
 
                uuid_str_1 = """{0}""".format(process.system_output(cmd))
                uuid_str_2 = """{0}""".format(process.system_output(cmd))
 
-               exists = CheckForPool.checkForPool('vm1', uuid_str_1)
+               hostfile = basepath + self.params.get("hostfile",'/run/files/local/')
+               host = GetHostsFromFile.getHostsFromFile(hostfile)[0]
+               exists = CheckForPool.checkForPool(host, uuid_str_1)
                if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1, 'vm1'))
-               exists = CheckForPool.checkForPool('vm1', uuid_str_2)
+                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1, host))
+               exists = CheckForPool.checkForPool(host, uuid_str_2)
                if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_2, 'vm1'))
+                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_2, host))
 
+               delete_cmd_1 =  ('{0} --np 1 --ompi-server file:{1} {2} destroy-pool '
+                                ' -i {3} -s {4} -f'.format(orterun,
+                                     urifile, daosctl, uuid_str_1, setid))
 
-               delete_cmd_1 =  ('../../install/bin/orterun -np 1 '
-                              '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3} {4}'.format(
-                                     urifile, "destroy", uuid_str_1, setid, "1"))
-
-               delete_cmd_2 =  ('../../install/bin/orterun -np 1 '
-                              '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3} {4}'.format(
-                                     urifile, "destroy", uuid_str_2, setid, "1"))
+               delete_cmd_2 =  ('{0} --np 1 --ompi-server file:{1} {2} destroy-pool '
+                                ' -i {3} -s {4} -f'.format(orterun, urifile, daosctl,
+                                                           uuid_str_2, setid))
 
                process.system(delete_cmd_1)
                process.system(delete_cmd_2)
 
-               exists = CheckForPool.checkForPool('vm1', uuid_str_1)
+               exists = CheckForPool.checkForPool(host, uuid_str_1)
                if exists == 0:
-                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str_1, 'vm1'))
-               exists = CheckForPool.checkForPool('vm1', uuid_str_2)
+                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str_1, host))
+               exists = CheckForPool.checkForPool(host, uuid_str_2)
                if exists == 0:
-                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str_2, 'vm1'))
-
+                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str_2, host))
 
                if expected_result == 'FAIL':
                       self.fail("Expected to fail but passed.\n")
@@ -207,6 +219,7 @@ class MultipleCreatesTest(Test):
         Test issuing multiple pool create commands at once.
         """
         global urifile
+        global basepath
 
         # Accumulate a list of pass/fail indicators representing what is expected for
         # each parameter then "and" them to determine the expected result of the test
@@ -230,50 +243,55 @@ class MultipleCreatesTest(Test):
                       expected_result = 'FAIL'
                       break
         try:
-               cmd = ('../../install/bin/orterun -np 1 '
-                      '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3} {4} {5}'.format(
-                          urifile, "create", mode, uid, gid, setid))
+               orterun = basepath + 'install/bin/orterun'
+               daosctl = basepath + 'install/bin/daosctl'
+
+               cmd = ('{0} --np 1 --ompi-server file:{1} {2} create-pool '
+                      '-m {3} -u {4} -g {5} -s {6}'.format(orterun,
+                              urifile, daosctl, mode, uid, gid, setid))
 
                uuid_str_1 = """{0}""".format(process.system_output(cmd))
                uuid_str_2 = """{0}""".format(process.system_output(cmd))
                uuid_str_3 = """{0}""".format(process.system_output(cmd))
 
-
-               exists = CheckForPool.checkForPool('vm1', uuid_str_1)
+               # TODO: horrible hard-coded hostname needs to be fixed
+               hostfile = basepath + self.params.get("hostfile",'/run/files/local/')
+               host = GetHostsFromFile.getHostsFromFile(hostfile)[0]
+               exists = CheckForPool.checkForPool(host, uuid_str_1)
                if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1, 'vm1'))
-               exists = CheckForPool.checkForPool('vm1', uuid_str_2)
+                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1, host))
+               exists = CheckForPool.checkForPool(host, uuid_str_2)
                if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_2, 'vm1'))
-               exists = CheckForPool.checkForPool('vm1', uuid_str_3)
+                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_2, host))
+               exists = CheckForPool.checkForPool(host, uuid_str_3)
                if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_3, 'vm1'))
+                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_3, host))
 
-               delete_cmd_1 =  ('../../install/bin/orterun -np 1 '
-                              '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3} {4}'.format(
-                                     urifile, "destroy", uuid_str_1, setid, "1"))
+               delete_cmd_1 =  ('{0} --np 1 --ompi-server file:{1} {2} destroy-pool '
+                                '-i {3} -s {4} -f'.format(orterun, urifile, daosctl,
+                                                          uuid_str_1, setid))
 
-               delete_cmd_2 =  ('../../install/bin/orterun -np 1 '
-                              '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3} {4}'.format(
-                                     urifile, "destroy", uuid_str_2, setid, "1"))
+               delete_cmd_2 =  ('{0} --np 1 --ompi-server file:{1} {2} destroy-pool '
+                                '-i {3} -s {4} -f'.format(orterun, urifile, daosctl,
+                                                          uuid_str_2, setid))
 
-               delete_cmd_3 =  ('../../install/bin/orterun -np 1 '
-                              '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3} {4}'.format(
-                                     urifile, "destroy", uuid_str_3, setid, "1"))
+               delete_cmd_3 =  ('{0} --np 1 --ompi-server file:{1} {2} destroy-pool '
+                                '-i {3} -s {4} -f'.format(orterun, urifile, daosctl,
+                                                          uuid_str_3, setid))
 
                process.system(delete_cmd_1)
                process.system(delete_cmd_2)
                process.system(delete_cmd_3)
 
-               exists = CheckForPool.checkForPool('vm1', uuid_str_1)
+               exists = CheckForPool.checkForPool(host, uuid_str_1)
                if exists == 0:
-                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str_1, 'vm1'))
-               exists = CheckForPool.checkForPool('vm1', uuid_str_2)
+                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str_1, host))
+               exists = CheckForPool.checkForPool(host, uuid_str_2)
                if exists == 0:
-                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str_2, 'vm1'))
-               exists = CheckForPool.checkForPool('vm1', uuid_str_3)
+                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str_2, host))
+               exists = CheckForPool.checkForPool(host, uuid_str_3)
                if exists == 0:
-                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str_3, 'vm1'))
+                      self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str_3, host))
 
                if expected_result == 'FAIL':
                       self.fail("Expected to fail but passed.\n")
@@ -333,4 +351,3 @@ class MultipleCreatesTest(Test):
 
 if __name__ == "__main__":
     main()
-

@@ -1,0 +1,22 @@
+paths:
+   base: daos-repo-path-goes-here
+server:
+   server_group: daos_server
+files:
+   local:
+      hostfile: install/tmp/hostfile1
+      urifile: install/tmp/urifile
+   system:
+      hostfile: /mnt/shared/test/hostfile1
+      urifile: /mnt/shared/test/urifile
+tests:
+   modes:
+      modeall:
+          mode:
+             - 511
+             - PASS
+   setnames:
+      validsetname:
+          setname:
+             - daos_server
+             - PASS

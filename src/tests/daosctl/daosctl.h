@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,27 +21,27 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include <stdio.h>
-#include <unistd.h>
-#include <mpi.h>
-#include <uuid/uuid.h>
+#ifndef _DAOSCTL_BUILTIN_H_
+#define _DAOSCTL_BUILTIN_H_
 
-#include "daos.h"
-#include "daos_api.h"
+extern const char daosctl_usage_string[];
+extern const char daosctl_more_info_string[];
 
-#include "test_types.h"
+struct cmd_struct {
+	const char *cmd;
+	int (*fn)(int, const char **, void *ctx);
+};
 
-int
-done()
-{
-	int daos_rc;
-	int test_rc = TEST_SUCCESS;
+int cmd_create_pool(int argc, const char **argv, void *ctx);
+int cmd_destroy_pool(int argc, const char **argv, void *ctx);
+int cmd_evict_pool(int argc, const char **argv, void *ctx);
+int cmd_list(int argc, const char **argv, void *ctx);
+int cmd_help(int argc, const char **argv, void *ctx);
+/* these are test functions that maybe removed later */
+int cmd_connect_pool(int argc, const char **argv, void *ctx);
+int cmd_test_create_pool(int argc, const char **argv, void *ctx);
+int cmd_test_connect_pool(int argc, const char **argv, void *ctx);
+int cmd_test_evict_pool(int argc, const char **argv, void *ctx);
+int cmd_test_query_pool(int argc, const char **argv, void *ctx);
 
-	daos_rc = daos_fini();
-	if (daos_rc)
-		test_rc = TEST_FAILED;
-
-	MPI_Finalize();
-
-	return test_rc;
-}
+#endif /* _DAOSCTL_BUILTIN_H_ */

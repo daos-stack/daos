@@ -38,13 +38,10 @@ from aexpect.client import run_bg
 sys.path.append('./util')
 import ServerUtils
 import CheckForPool
+import GetHostsFromFile
 
-def printFunc(thestring):
-       print "<SERVER>" + thestring
-
-session = None
-hostfile = "/mnt/shared/test/hostfile"
-urifile = "/mnt/shared/test/urifile"
+#def printFunc(thestring):
+#       print "<SERVER>" + thestring
 
 class ConnectTest(Test):
     """
@@ -55,16 +52,21 @@ class ConnectTest(Test):
 
     # super wasteful since its doing this for every variation
     def setUp(self):
-       global session
        global urifile
        global hostfile
+       global basepath
 
-       ServerUtils.runServer(hostfile, urifile)
+       basepath = self.params.get("base",'/paths/','rubbish')
+       hostfile = basepath + self.params.get("hostfile",'/files/','rubbish')
+       urifile = basepath + self.params.get("urifile",'/files/','rubbish')
+       server_group = self.params.get("server_group",'/server/','daos_server')
+
+       ServerUtils.runServer(hostfile, urifile, server_group, basepath)
+
        # not sure I need to do this but ... give it time to start
-       time.sleep(2)
+       time.sleep(1)
 
     def tearDown(self):
-       global session
        ServerUtils.stopServer()
 
     def test_connect(self):
@@ -72,6 +74,7 @@ class ConnectTest(Test):
         Test connecting to a pool.
         """
         global urifile
+        global basepath
 
         # Accumulate a list of pass/fail indicators representing what is expected for
         # each parameter then "and" them to determine the expected result of the test
@@ -91,28 +94,41 @@ class ConnectTest(Test):
                uid = os.geteuid()
                gid = os.getegid()
 
-               create_cmd = ('../../install/bin/orterun -np 1 '
-                      '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3} {4} {5}'.format(
-                          urifile, "create", 0731, uid, gid, setid))
+               # TODO make these params in the yaml
+               orterun = basepath + 'install/bin/orterun'
+               daosctl = basepath + 'install/bin/daosctl'
+
+               hostfile = basepath + self.params.get("hostfile",'/run/files/')
+               host1 = GetHostsFromFile.getHostsFromFile(hostfile)[0]
+               host2 = GetHostsFromFile.getHostsFromFile(hostfile)[1]
+
+               create_cmd = (
+                   '{0} --np 1 --ompi-server file:{1} {2} create-pool '
+                   '-m {3} -u {4} -g {5} -s {6}'.format(orterun,
+                            urifile, daosctl, 0731, uid, gid, setid))
                uuid_str = """{0}""".format(process.system_output(create_cmd))
                print("uuid is {0}\n".format(uuid_str))
 
 
-               exists = CheckForPool.checkForPool('vm1', uuid_str)
+               exists = CheckForPool.checkForPool(host1, uuid_str)
                if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str, 'vm1'))
-               exists = CheckForPool.checkForPool('vm2', uuid_str)
+                      self.fail("Pool {0} not found on host {1}.\n".
+                                format(uuid_str, host1))
+               exists = CheckForPool.checkForPool(host2, uuid_str)
                if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str, 'vm2'))
+                      self.fail("Pool {0} not found on host {1}.\n".
+                                format(uuid_str, host2))
 
-               connect_cmd = ('../../install/bin/orterun -np 1 '
-                      '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3} {4}'.format(
-                          urifile, "connect", uuid_str, setid, "RO"))
+               connect_cmd = (
+                   '{0} --np 1 --ompi-server file:{1} {2} connect-pool '
+                   '-i {3} -s {4} -r'.format(orterun, urifile, daosctl,
+                   uuid_str, setid, "RO"))
                process.system(connect_cmd)
 
-               delete_cmd =  ('../../install/bin/orterun -np 1 '
-                      '--ompi-server file:{0} ./pool/wrapper/SimplePoolTests {1} {2} {3}'.format(
-                             urifile, "destroy", uuid_str, setid, 1))
+               delete_cmd = (
+                   '{0} --np 1 --ompi-server file:{1} {2} destroy-pool '
+                   '-i {3} -s {4} -f'.format(orterun, urifile, daosctl,
+                                                     uuid_str, setid))
 
                if expected_result == 'FAIL':
                       self.fail("Expected to fail but passed.\n")
@@ -125,4 +141,3 @@ class ConnectTest(Test):
 
 if __name__ == "__main__":
     main()
-

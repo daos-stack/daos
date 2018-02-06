@@ -1,0 +1,22 @@
+paths:
+   base: daos-repo-path-goes here
+server:
+   server_group: daos_server
+testparams:
+   urifiles:
+      urifile: install/tmp/urifile
+   other_urifile:
+      urifile: install/tmp/urifile2
+   one_host:
+      hostfile: install/tmp/hostfile1
+   two_hosts:
+      hostfile: install/tmp/hostfile2
+   two_other_hosts:
+      hostfile: install/tmp/hostfile2a
+   three_hosts:
+      hostfile: install/tmp/hostfile3
+   setnames:
+      validsetname:
+          setname: daos_server
+      badsetname:
+          setname: complete_rubbish

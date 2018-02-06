@@ -1,0 +1,22 @@
+"""Build daosctl"""
+
+def scons():
+    """Execute build"""
+
+    Import('env', 'prereqs')
+
+    libs = ['daos', 'gurt', 'daos_common', 'daos_tier', 'mpi', 'uuid',
+        	   'cart', 'pmem', 'pmemobj']
+    sources = ['daosctl.c', 'help.c', 'test-pool.c', 'pool-cmds.c']
+
+    denv = env.Clone()
+    denv.AppendUnique(CFLAGS=['-std=gnu99'])
+    denv.AppendUnique(CPPDEFINES=['TEST'])
+
+    prereqs.require(denv, 'ompi')
+
+    daosctl = denv.Program('daosctl', sources, LIBS=libs)
+    env.Install('$PREFIX/bin/', daosctl)
+
+if __name__ == "SCons.Script":
+    scons()

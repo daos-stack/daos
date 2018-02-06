@@ -1,6 +1,15 @@
+paths:
+   #base: daos-repo-path-goes-here
+   base: /home/skirvan/daos_tool5/
+server:
+   server_group: daos_server
 files:
-   hostfile: /mnt/shared/test/hostfile1
-   urifile: /mnt/shared/test/urifile
+   local:
+      hostfile: install/tmp/hostfile1
+      urifile: install/tmp/urifile
+   system:
+      hostfile: /mnt/shared/test/hostfile1
+      urifile: /mnt/shared/test/urifile
 tests:
    modes: !mux
       modeall:
