@@ -55,6 +55,7 @@ DECLARE_FAC(tier);
 DECLARE_FAC(mgmt);
 DECLARE_FAC(eio);
 DECLARE_FAC(tests);
+DECLARE_FAC(dfs);
 
 uint64_t DB_MD; /* metadata operation */
 uint64_t DB_PL; /* placement */
@@ -104,7 +105,8 @@ static struct d_debug_bit daos_bit_dict[] = {
 	ACTION("tier", d_tier_logfac)			\
 	ACTION("mgmt", d_mgmt_logfac)			\
 	ACTION("tests", d_tests_logfac)			\
-	ACTION("eio", d_eio_logfac)
+	ACTION("eio", d_eio_logfac)			\
+	ACTION("dfs", d_dfs_logfac)
 
 #define DAOS_SETUP_FAC(name, idp)			\
 	DAOS_INIT_LOG_FAC(name, &idp)

@@ -1,0 +1,27 @@
+"""Build FUSE client"""
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
+
+    denv = env.Clone()
+
+    denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
+    prereqs.require(denv, 'fuse')
+
+    libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
+    libraries += ['uuid', 'fuse3']
+
+    dfs_src = ['dfs.c']
+    dfs = daos_build.library(denv, 'dfs', dfs_src)
+    denv.Install('$PREFIX/lib/', dfs)
+
+    denv.AppendUnique(LIBPATH=['#/build/src/dfs'])
+    dfuse_src = ['dfuse.c']
+    libraries += ['dfs']
+    dfuse = daos_build.program(denv, 'dfuse', dfuse_src, LIBS=libraries)
+    denv.Install('$PREFIX/bin/', dfuse)
+
+if __name__ == "SCons.Script":
+    scons()

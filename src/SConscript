@@ -4,7 +4,7 @@ import os
 
 HEADERS = ['daos.h', 'daos_api.h', 'daos_types.h', 'daos_errno.h',
            'daos_event.h', 'daos_mgmt.h', 'daos_tier.h',
-           'daos_types.h', 'daos_addons.h', 'daos_task.h']
+           'daos_types.h', 'daos_addons.h', 'daos_task.h', 'daos_fs.h']
 HEADERS_SRV = ['vos.h', 'vos_types.h']
 
 def scons():
@@ -63,6 +63,9 @@ def scons():
 
     # Build test
     SConscript('tests/SConscript')
+
+    # Build DFS & Fuse Client
+    SConscript('dfs/SConscript')
 
 if __name__ == "SCons.Script":
     scons()
