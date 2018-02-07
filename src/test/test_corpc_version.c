@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,6 +53,7 @@
 #define TEST_OPC_SHUTDOWN			(0xA1)
 #define TEST_OPC_CORPC_VER_MISMATCH		(0x200)
 #define TEST_OPC_RANK_EVICT			(0x201)
+#define TEST_OPC_SUBGRP_PING			(0x202)
 
 struct test_t {
 	crt_group_t		*t_local_group;
@@ -116,6 +117,27 @@ struct rank_evict_in_t {
 
 struct rank_evict_out_t {
 	int		rc;
+};
+
+struct crt_msg_field *subgrp_ping_in_fields[] = {
+	&CMF_UINT32,
+};
+
+struct crt_msg_field *subgrp_ping_out_fields[] = {
+	&CMF_UINT32,
+};
+
+struct crt_req_format CQF_SUBGRP_PING =
+	DEFINE_CRT_REQ_FMT("SUBGRP_PING",
+			subgrp_ping_in_fields,
+			subgrp_ping_out_fields);
+
+struct subgrp_ping_in_t {
+	uint32_t	magic;
+};
+
+struct subgrp_ping_out_t {
+	uint32_t	magic;
 };
 
 static void client_cb(const struct crt_cb_info *cb_info);
@@ -225,6 +247,24 @@ test_shutdown_hdlr(crt_rpc_t *rpc_req)
 	printf("rpc err server sent shutdown response.\n");
 	test.t_shutdown = 1;
 	fprintf(stderr, "server set shutdown flag.\n");
+}
+
+static void
+subgrp_ping_hdlr(crt_rpc_t *rpc_req)
+{
+	struct subgrp_ping_in_t		*rpc_req_input;
+	struct subgrp_ping_out_t	*rpc_req_output;
+	int				 rc = 0;
+
+	rpc_req_input = crt_req_get(rpc_req);
+	D_ASSERT(rpc_req_input != NULL);
+	rpc_req_output = crt_reply_get(rpc_req);
+	D_ASSERT(rpc_req_output != NULL);
+
+	D_DEBUG("Recieved magic number %d\n", rpc_req_input->magic);
+	rpc_req_output->magic = rpc_req_input->magic + 1;
+	rc = crt_reply_send(rpc_req);
+	D_ASSERT(rc == 0);
 }
 
 static void
@@ -395,6 +435,53 @@ corpc_ver_mismatch_cb(crt_rpc_t *rpc_req)
 	return rc;
 }
 
+static int
+eviction_rpc_issue(void)
+{
+	crt_rpc_t		*rpc_req;
+	crt_endpoint_t		 server_ep;
+	struct rank_evict_in_t	*rpc_req_input;
+	int			 rc = 0;
+
+	/* tell rank 4 to evict rank 2 */
+	server_ep.ep_grp = test.t_local_group;
+	server_ep.ep_rank = 4;
+	server_ep.ep_tag = 0;
+	rc = crt_req_create(test.t_crt_ctx, &server_ep, TEST_OPC_RANK_EVICT,
+			    &rpc_req);
+	D_ASSERTF(rc == 0 && rpc_req != NULL,
+		  "crt_req_create() failed, rc: %d rpc_req: %p\n",
+		  rc, rpc_req);
+	rpc_req_input = crt_req_get(rpc_req);
+	D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed. "
+		  "rpc_req_input: %p\n", rpc_req_input);
+	rpc_req_input->rank = 2;
+	rc = crt_req_send(rpc_req, client_cb, NULL);
+	D_ASSERTF(rc == 0, "crt_req_send() failed, rc %d\n", rc);
+
+	return rc;
+}
+
+static int
+subgrp_ping_cb(crt_rpc_t *rpc_req)
+{
+	struct subgrp_ping_in_t		*rpc_req_input;
+	struct subgrp_ping_out_t	*rpc_req_output;
+	int				 rc = 0;
+
+	rpc_req_input = crt_req_get(rpc_req);
+	D_ASSERT(rpc_req_input != NULL);
+	rpc_req_output = crt_reply_get(rpc_req);
+	D_ASSERT(rpc_req_output != NULL);
+
+	D_DEBUG("Received magic number %d\n", rpc_req_output->magic);
+	D_ASSERT(rpc_req_output->magic = rpc_req_input->magic + 1);
+
+	eviction_rpc_issue();
+
+	return rc;
+}
+
 static void
 client_cb(const struct crt_cb_info *cb_info)
 {
@@ -403,6 +490,10 @@ client_cb(const struct crt_cb_info *cb_info)
 	rpc_req = cb_info->cci_rpc;
 
 	switch (cb_info->cci_rpc->cr_opc) {
+	case TEST_OPC_SUBGRP_PING:
+		D_DEBUG("subgrp_ping got reply\n");
+		subgrp_ping_cb(rpc_req);
+		break;
 	case TEST_OPC_CORPC_VER_MISMATCH:
 		fprintf(stderr, "RPC failed, return code: %d.\n",
 			cb_info->cci_rc);
@@ -426,7 +517,7 @@ sub_grp_create_cb(crt_group_t *grp, void *priv, int status)
 {
 	crt_endpoint_t			 server_ep;
 	crt_rpc_t			*rpc_req = NULL;
-	struct rank_evict_in_t		*rpc_req_input;
+	struct subgrp_ping_in_t		*rpc_req_input;
 	int				 rc = 0;
 
 
@@ -435,21 +526,23 @@ sub_grp_create_cb(crt_group_t *grp, void *priv, int status)
 	D_ASSERT(status == 0);
 	test.t_sub_group = grp;
 
-	/* tell rank 4 to evict rank 2 */
-	server_ep.ep_grp = test.t_local_group;
-	server_ep.ep_rank = 4;
+	/* send an RPC to a subgroup rank */
+	server_ep.ep_grp = test.t_sub_group;
+	server_ep.ep_rank = 1;
 	server_ep.ep_tag = 0;
-	rc = crt_req_create(test.t_crt_ctx, &server_ep, TEST_OPC_RANK_EVICT,
+	rc = crt_req_create(test.t_crt_ctx, &server_ep, TEST_OPC_SUBGRP_PING,
 			    &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL,
-			"crt_req_create() failed, rc: %d rpc_req: %p\n",
-			rc, rpc_req);
+		  "crt_req_create() failed, rc: %d rpc_req: %p\n",
+		  rc, rpc_req);
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed. "
 		  "rpc_req_input: %p\n", rpc_req_input);
-	rpc_req_input->rank = 2;
+	rpc_req_input->magic = 1234;
 	rc = crt_req_send(rpc_req, client_cb, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed, rc %d\n", rc);
+
+	D_DEBUG("exiting\n");
 
 	return rc;
 }
@@ -517,14 +610,18 @@ test_init(void)
 				  &CQF_CORPC_VER_MISMATCH,
 				  corpc_ver_mismatch_hdlr,
 				  &corpc_ver_mismatch_ops);
-	D_ASSERTF(rc == 0, "crt_rpc_serv_register() failed, rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
 	rc = crt_rpc_srv_register(TEST_OPC_SHUTDOWN, 0, NULL,
 				  test_shutdown_hdlr);
-	D_ASSERTF(rc == 0, "crt_rpc_serv_register() failed, rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
 
 	rc = crt_rpc_srv_register(TEST_OPC_RANK_EVICT, 0, &CQF_TEST_RANK_EVICT,
 				  test_rank_evict_hdlr);
-	D_ASSERTF(rc == 0, "crt_rpc_serv_register() failed, rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
+
+	rc = crt_rpc_srv_register(TEST_OPC_SUBGRP_PING, 0, &CQF_SUBGRP_PING,
+				  subgrp_ping_hdlr);
+	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
 
 	rc = sem_init(&test.t_all_done, 0, 0);
 	D_ASSERTF(rc == 0, "Could not initialize semaphore\n");

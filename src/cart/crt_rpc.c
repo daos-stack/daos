@@ -624,7 +624,7 @@ static int check_ep(crt_endpoint_t *tgt_ep)
 	} else {
 		grp_priv = container_of(tgt_ep->ep_grp, struct crt_grp_priv,
 					gp_pub);
-		if (grp_priv->gp_primary == 0 || grp_priv->gp_service == 0) {
+		if (grp_priv->gp_service == 0) {
 			D_ERROR("bad parameter tgt_ep->ep_grp: %p (gp_primary: "
 				"%d, gp_service: %d, gp_local: %d.\n",
 				tgt_ep->ep_grp, grp_priv->gp_primary,
@@ -1139,6 +1139,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	d_rank_t		 rank;
 	crt_endpoint_t		*tgt_ep;
 	struct crt_grp_priv	*grp_priv;
+	struct crt_grp_priv	*default_grp_priv;
 	crt_group_id_t		 grp_id;
 	char			*uri = NULL;
 	struct crt_context	*crt_ctx;
@@ -1151,6 +1152,9 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		grp_priv = container_of(tgt_ep->ep_grp, struct crt_grp_priv,
 					gp_pub);
 	D_ASSERT(grp_priv != NULL);
+
+	default_grp_priv = crt_grp_pub2priv(NULL);
+	D_ASSERT(default_grp_priv != NULL);
 
 	/* this is a remote group, contact the PSR */
 	if (grp_priv->gp_local == 0) {
@@ -1166,8 +1170,12 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc);
 	}
 
-	rank = tgt_ep->ep_rank;
+	/* this is a local group */
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
+	rank = tgt_ep->ep_rank;
+	if (grp_priv->gp_primary == 0)
+		rank = grp_priv->gp_membs->rl_ranks[rank];
+
 	if (crt_req_is_self(rpc_priv)) {
 		/* rpc is sent to self */
 		uri = strndup(crt_gdata.cg_addr, CRT_ADDR_STR_MAX_LEN);
@@ -1176,15 +1184,16 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 	} else {
-		/* this is a local group, lookup through PMIx */
-		grp_id = grp_priv->gp_pub.cg_grpid;
+		/* lookup through PMIx */
+		grp_id = default_grp_priv->gp_pub.cg_grpid;
 		rc = crt_pmix_uri_lookup(grp_id, rank, &uri);
 		if (rc != 0) {
 			D_ERROR("crt_pmix_uri_lookup() failed, rc %d.\n", rc);
 			D_GOTO(out, rc);
 		}
 	}
-	rc = crt_grp_lc_uri_insert(grp_priv, crt_ctx->cc_idx, rank, uri);
+	rc = crt_grp_lc_uri_insert(default_grp_priv, crt_ctx->cc_idx,
+				   rank, uri);
 	if (rc != 0) {
 		D_ERROR("crt_grp_lc_uri_insert() failed, rc %d\n", rc);
 		D_GOTO(out, rc);
