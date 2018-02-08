@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,7 +51,7 @@
  */
 #define D_HASH_DEBUG	0
 
-struct d_chash_table;
+struct d_hash_table;
 
 #if defined(__cplusplus)
 extern "C" {
@@ -69,7 +69,7 @@ typedef struct {
 	 * \return	true	The key of the record equals to @key.
 	 *		false	Not match
 	 */
-	bool	 (*hop_key_cmp)(struct d_chash_table *htable, d_list_t *rlink,
+	bool	 (*hop_key_cmp)(struct d_hash_table *htable, d_list_t *rlink,
 				const void *key, unsigned int ksize);
 	/**
 	 * Optional, generate a key for the record @rlink.
@@ -80,7 +80,7 @@ typedef struct {
 	 * \param rlink	[IN]	The link chain of the record to generate key.
 	 * \param arg	[IN]	Input arguments for the key generating.
 	 */
-	void	 (*hop_key_init)(struct d_chash_table *htable,
+	void	 (*hop_key_init)(struct d_hash_table *htable,
 				 d_list_t *rlink, void *arg);
 	/**
 	 * Optional, return the key of record @rlink to @key_pp, and size of
@@ -91,13 +91,13 @@ typedef struct {
 	 *
 	 * \return		size of the key.
 	 */
-	int	 (*hop_key_get)(struct d_chash_table *htable, d_list_t *rlink,
+	int	 (*hop_key_get)(struct d_hash_table *htable, d_list_t *rlink,
 				void **key_pp);
 	/**
 	 * Optional, hash @key to a 32-bit value.
 	 * DJB2 hash is used when this function is abscent.
 	 */
-	uint32_t (*hop_key_hash)(struct d_chash_table *htable, const void *key,
+	uint32_t (*hop_key_hash)(struct d_hash_table *htable, const void *key,
 				 unsigned int ksize);
 	/**
 	 * Optional, increase refcount on the record @rlink
@@ -106,7 +106,7 @@ typedef struct {
 	 *
 	 * \param rlink	[IN]	The record being referenced.
 	 */
-	void	 (*hop_rec_addref)(struct d_chash_table *htable,
+	void	 (*hop_rec_addref)(struct d_hash_table *htable,
 				   d_list_t *rlink);
 	/**
 	 * Optional, release refcount on the record @rlink
@@ -126,7 +126,7 @@ typedef struct {
 	 *			can be freed. If this function can return
 	 *			true, then hop_rec_free() should be defined.
 	 */
-	bool	 (*hop_rec_decref)(struct d_chash_table *htable,
+	bool	 (*hop_rec_decref)(struct d_hash_table *htable,
 				   d_list_t *rlink);
 	/**
 	 * Optional, free the record @rlink
@@ -134,10 +134,10 @@ typedef struct {
 	 *
 	 * \param rlink	[IN]	The record being freed.
 	 */
-	void	 (*hop_rec_free)(struct d_chash_table *htable, d_list_t *rlink);
-} d_chash_table_ops_t;
+	void	 (*hop_rec_free)(struct d_hash_table *htable, d_list_t *rlink);
+} d_hash_table_ops_t;
 
-enum d_chash_feats {
+enum d_hash_feats {
 	/**
 	 * By default, the hash table is protected by pthread_mutex.
 	 */
@@ -176,14 +176,14 @@ enum d_chash_feats {
 	D_HASH_FT_EPHEMERAL		= (1 << 2),
 };
 
-struct d_chash_bucket {
+struct d_hash_bucket {
 	d_list_t		hb_head;
 #if D_HASH_DEBUG
 	unsigned int		hb_dep;
 #endif
 };
 
-struct d_chash_table {
+struct d_hash_table {
 	/** different type of locks based on ht_feats */
 	union {
 		pthread_mutex_t		ht_lock;
@@ -204,9 +204,9 @@ struct d_chash_table {
 	/** private data to pass into customized functions */
 	void			*ht_priv;
 	/** customized member functions */
-	d_chash_table_ops_t	*ht_ops;
+	d_hash_table_ops_t	*ht_ops;
 	/** array of buckets */
-	struct d_chash_bucket	*ht_buckets;
+	struct d_hash_bucket	*ht_buckets;
 };
 
 
@@ -214,7 +214,7 @@ struct d_chash_table {
  * Create a new hash table.
  *
  * Note: Please be careful while using rwlock and refcount at the same time,
- * see d_chash_feats for the details.
+ * see d_hash_feats for the details.
  *
  * \param feats		[IN]	Feature bits, see D_HASH_FT_*
  * \param bits		[IN]	power2(bits) is the size of hash table
@@ -222,9 +222,9 @@ struct d_chash_table {
  * \param hops		[IN]	Customized member functions
  * \param htable_pp	[OUT]	The newly created hash table
  */
-int  d_chash_table_create(uint32_t feats, unsigned int bits,
-			  void *priv, d_chash_table_ops_t *hops,
-			  struct d_chash_table **htable_pp);
+int  d_hash_table_create(uint32_t feats, unsigned int bits,
+			  void *priv, d_hash_table_ops_t *hops,
+			  struct d_hash_table **htable_pp);
 
 /**
  * Initialise an inplace hash table.
@@ -232,7 +232,7 @@ int  d_chash_table_create(uint32_t feats, unsigned int bits,
  * Does not allocate the htable pointer itself
  *
  * Note: Please be careful while using rwlock and refcount at the same time,
- * see d_chash_feats for the details.
+ * see d_hash_feats for the details.
  *
  * \param feats		[IN]	Feature bits, see D_HASH_FT_*
  * \param bits		[IN]	power2(bits) is the size of hash table
@@ -240,11 +240,11 @@ int  d_chash_table_create(uint32_t feats, unsigned int bits,
  * \param hops		[IN]	Customized member functions
  * \param htable	[IN]	Hash table to be initialised
  */
-int  d_chash_table_create_inplace(uint32_t feats, unsigned int bits,
-				  void *priv, d_chash_table_ops_t *hops,
-				  struct d_chash_table *htable);
+int  d_hash_table_create_inplace(uint32_t feats, unsigned int bits,
+				 void *priv, d_hash_table_ops_t *hops,
+				 struct d_hash_table *htable);
 
-typedef int (*d_chash_traverse_cb_t)(d_list_t *rlink, void *arg);
+typedef int (*d_hash_traverse_cb_t)(d_list_t *rlink, void *arg);
 
 /**
  * Traverse a hash table, call the traverse callback function on every item.
@@ -253,13 +253,13 @@ typedef int (*d_chash_traverse_cb_t)(d_list_t *rlink, void *arg);
  * \param htable	[IN]	The hash table to be finalised.
  * \param cb		[IN]	Traverse callback, will be called on every item
  *				in the hash table.
- *				\see d_chash_traverse_cb_t.
+ *				\see d_hash_traverse_cb_t.
  * \param arg		[IN]	Arguments for the callback.
  *
  * \return			zero on success, negative value if error.
  */
-int d_chash_table_traverse(struct d_chash_table *htable,
-			   d_chash_traverse_cb_t cb, void *arg);
+int d_hash_table_traverse(struct d_hash_table *htable,
+			  d_hash_traverse_cb_t cb, void *arg);
 
 /**
  * Destroy a hash table.
@@ -272,7 +272,7 @@ int d_chash_table_traverse(struct d_chash_table *htable,
  *				Destroy the hash table only if it is empty,
  *				otherwise returns error
  */
-int  d_chash_table_destroy(struct d_chash_table *htable, bool force);
+int  d_hash_table_destroy(struct d_hash_table *htable, bool force);
 
 /**
  * Finalise a hash table, reset all struct members.
@@ -287,7 +287,7 @@ int  d_chash_table_destroy(struct d_chash_table *htable, bool force);
  *				Finalise the hash table only if it is empty,
  *				otherwise returns error
  */
-int  d_chash_table_destroy_inplace(struct d_chash_table *htable, bool force);
+int  d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force);
 
 /**
  * lookup @key in the hash table, the found chain rlink is returned on
@@ -297,8 +297,8 @@ int  d_chash_table_destroy_inplace(struct d_chash_table *htable, bool force);
  * \param key		[IN]	The key to search
  * \param ksize		[IN]	Size of the key
  */
-d_list_t *d_chash_rec_find(struct d_chash_table *htable, const void *key,
-			   unsigned int ksize);
+d_list_t *d_hash_rec_find(struct d_hash_table *htable, const void *key,
+			  unsigned int ksize);
 
 /**
  * Lookup @key in the hash table, if there is a matched record, it should be
@@ -310,9 +310,9 @@ d_list_t *d_chash_rec_find(struct d_chash_table *htable, const void *key,
  * \param ksize		[IN]	Size of the key
  * \param rlink		[IN]	The link chain of the record being inserted
  */
-d_list_t *d_chash_rec_find_insert(struct d_chash_table *htable,
-				  const void *key, unsigned int ksize,
-				  d_list_t *rlink);
+d_list_t *d_hash_rec_find_insert(struct d_hash_table *htable,
+				 const void *key, unsigned int ksize,
+				 d_list_t *rlink);
 
 /**
  * Insert a new key and its record chain @rlink into the hash table. The hash
@@ -328,9 +328,9 @@ d_list_t *d_chash_rec_find_insert(struct d_chash_table *htable,
  * \param rlink		[IN]	The link chain of the record being inserted
  * \param exclusive	[IN]	The key has to be unique if it is true.
  */
-int  d_chash_rec_insert(struct d_chash_table *htable, const void *key,
-			unsigned int ksize, d_list_t *rlink,
-			bool exclusive);
+int  d_hash_rec_insert(struct d_hash_table *htable, const void *key,
+		       unsigned int ksize, d_list_t *rlink,
+		       bool exclusive);
 
 /**
  * Insert an anonymous record (w/o key) into the hash table.
@@ -341,7 +341,7 @@ int  d_chash_rec_insert(struct d_chash_table *htable, const void *key,
  * \param rlink		[IN]	The link chain of the hash record
  * \param arg		[IN]	Arguments for key generating
  */
-int  d_chash_rec_insert_anonym(struct d_chash_table *htable, d_list_t *rlink,
+int  d_hash_rec_insert_anonym(struct d_hash_table *htable, d_list_t *rlink,
 			       void *arg);
 
 /**
@@ -354,8 +354,8 @@ int  d_chash_rec_insert_anonym(struct d_chash_table *htable, d_list_t *rlink,
  * return		True	Item with @key has been deleted
  *			False	Can't find the record by @key
  */
-bool d_chash_rec_delete(struct d_chash_table *htable, const void *key,
-			unsigned int ksize);
+bool d_hash_rec_delete(struct d_hash_table *htable, const void *key,
+		       unsigned int ksize);
 
 /**
  * Delete the record linked by the chain @rlink.
@@ -369,7 +369,7 @@ bool d_chash_rec_delete(struct d_chash_table *htable, const void *key,
  *			False	The record has already been unlinked from the
  *				hash table
  */
-bool d_chash_rec_delete_at(struct d_chash_table *htable, d_list_t *rlink);
+bool d_hash_rec_delete_at(struct d_hash_table *htable, d_list_t *rlink);
 
 /**
  * Increase the refcount of the record.
@@ -377,7 +377,7 @@ bool d_chash_rec_delete_at(struct d_chash_table *htable, d_list_t *rlink);
  * \param htable	[IN]	Pointer to the hash table
  * \param rlink		[IN]	The link chain of the record
  */
-void d_chash_rec_addref(struct d_chash_table *htable, d_list_t *rlink);
+void d_hash_rec_addref(struct d_hash_table *htable, d_list_t *rlink);
 
 /**
  * Decrease the refcount of the record.
@@ -387,7 +387,7 @@ void d_chash_rec_addref(struct d_chash_table *htable, d_list_t *rlink);
  * \param htable	[IN]	Pointer to the hash table
  * \param rlink		[IN]	Chain rlink of the hash record
  */
-void d_chash_rec_decref(struct d_chash_table *htable, d_list_t *rlink);
+void d_hash_rec_decref(struct d_hash_table *htable, d_list_t *rlink);
 
 /**
  * Decrease the refcount of the record by count.
@@ -400,8 +400,8 @@ void d_chash_rec_decref(struct d_chash_table *htable, d_list_t *rlink);
  * \return		0	Success
  *			-DER_INVAL Not enough references were held.
  */
-int d_chash_rec_ndecref(struct d_chash_table *htable, int count,
-			d_list_t *rlink);
+int d_hash_rec_ndecref(struct d_hash_table *htable, int count,
+		       d_list_t *rlink);
 
 /**
  * Check if the link chain has already been unlinked from the hash table.
@@ -409,7 +409,7 @@ int d_chash_rec_ndecref(struct d_chash_table *htable, int count,
  * \return	True	Yes
  *		False	No
  */
-bool d_chash_rec_unlinked(d_list_t *rlink);
+bool d_hash_rec_unlinked(d_list_t *rlink);
 
 /**
  * Return the first entry in a hash table.  Do this by traversing the table, and
@@ -425,12 +425,12 @@ bool d_chash_rec_unlinked(d_list_t *rlink);
  * \return		rlink	Pointer to first element in hash table
  *			NULL	Hash table is empty or error occurred
  */
-d_list_t *d_chash_rec_first(struct d_chash_table *htable);
+d_list_t *d_hash_rec_first(struct d_hash_table *htable);
 
 /**
  * If debugging is enabled, prints stats about the hash table
  */
-void d_chash_table_debug(struct d_chash_table *htable);
+void d_hash_table_debug(struct d_hash_table *htable);
 
 /******************************************************************************
  * DAOS Handle Hash Table Wrapper
@@ -509,17 +509,17 @@ struct d_ulink {
 	struct d_ulink_ops	*ul_ops;
 };
 
-int d_uhash_create(int feats, unsigned int bits, struct d_chash_table **uhtab);
-void d_uhash_destroy(struct d_chash_table *uhtab);
+int d_uhash_create(int feats, unsigned int bits, struct d_hash_table **uhtab);
+void d_uhash_destroy(struct d_hash_table *uhtab);
 void d_uhash_ulink_init(struct d_ulink *ulink, struct d_ulink_ops *rl_ops);
 bool d_uhash_link_empty(struct d_ulink *ulink);
 bool d_uhash_link_last_ref(struct d_ulink *ulink);
-void d_uhash_link_addref(struct d_chash_table *uhtab, struct d_ulink *hlink);
-void d_uhash_link_putref(struct d_chash_table *uhtab, struct d_ulink *hlink);
-void d_uhash_link_delete(struct d_chash_table *uhtab, struct d_ulink *hlink);
-int  duhash_link_insert(struct d_chash_table *uhtab, struct d_uuid *key,
+void d_uhash_link_addref(struct d_hash_table *uhtab, struct d_ulink *hlink);
+void d_uhash_link_putref(struct d_hash_table *uhtab, struct d_ulink *hlink);
+void d_uhash_link_delete(struct d_hash_table *uhtab, struct d_ulink *hlink);
+int  duhash_link_insert(struct d_hash_table *uhtab, struct d_uuid *key,
 			struct d_ulink *hlink);
-struct d_ulink *duhash_link_lookup(struct d_chash_table *uhtab,
+struct d_ulink *duhash_link_lookup(struct d_hash_table *uhtab,
 				   struct d_uuid *key);
 
 #if defined(__cplusplus)

@@ -164,7 +164,7 @@ struct crt_context {
 	void			*cc_rpc_cb_arg;
 	crt_rpc_task_t		cc_rpc_cb; /* rpc callback */
 	/* in-flight endpoint tracking hash table */
-	struct d_chash_table	 cc_epi_table;
+	struct d_hash_table	 cc_epi_table;
 	/* binheap for inflight RPC timeout tracking */
 	struct d_binheap	 cc_bh_timeout;
 	/* mutex to protect cc_epi_table and timeout binheap */

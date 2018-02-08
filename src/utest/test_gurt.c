@@ -707,7 +707,7 @@ test_gurt_hash_link2ptr(d_list_t *link)
 }
 
 static bool
-test_gurt_hash_op_key_cmp(struct d_chash_table *thtab, d_list_t *link,
+test_gurt_hash_op_key_cmp(struct d_hash_table *thtab, d_list_t *link,
 			  const void *key, unsigned int ksize)
 {
 	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
@@ -717,7 +717,7 @@ test_gurt_hash_op_key_cmp(struct d_chash_table *thtab, d_list_t *link,
 }
 
 static void
-test_gurt_hash_op_rec_addref(struct d_chash_table *thtab, d_list_t *link)
+test_gurt_hash_op_rec_addref(struct d_hash_table *thtab, d_list_t *link)
 {
 	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
 
@@ -725,7 +725,7 @@ test_gurt_hash_op_rec_addref(struct d_chash_table *thtab, d_list_t *link)
 }
 
 static bool
-test_gurt_hash_op_rec_decref(struct d_chash_table *thtab, d_list_t *link)
+test_gurt_hash_op_rec_decref(struct d_hash_table *thtab, d_list_t *link)
 {
 	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
 
@@ -735,14 +735,14 @@ test_gurt_hash_op_rec_decref(struct d_chash_table *thtab, d_list_t *link)
 }
 
 static void
-test_gurt_hash_op_rec_free(struct d_chash_table *thtab, d_list_t *link)
+test_gurt_hash_op_rec_free(struct d_hash_table *thtab, d_list_t *link)
 {
 	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
 
 	D_FREE(tlink);
 }
 
-static d_chash_table_ops_t th_ops = {
+static d_hash_table_ops_t th_ops = {
 	.hop_key_cmp    = test_gurt_hash_op_key_cmp,
 };
 
@@ -820,7 +820,7 @@ test_gurt_hash_empty(void **state)
 {
 	/* Just test the minimum-size hash table */
 	const int		  num_bits = 1;
-	struct d_chash_table	 *thtab;
+	struct d_hash_table	 *thtab;
 	int			  rc;
 	struct test_hash_entry	**entries;
 	d_list_t		 *test;
@@ -832,34 +832,34 @@ test_gurt_hash_empty(void **state)
 	assert_non_null(entries);
 
 	/* Create a minimum-size hash table */
-	rc = d_chash_table_create(0, num_bits, NULL, &th_ops, &thtab);
+	rc = d_hash_table_create(0, num_bits, NULL, &th_ops, &thtab);
 	assert_int_equal(rc, 0);
 
 	/* Traverse the empty hash table and look for entries */
 	expected_count = 0;
-	rc = d_chash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
+	rc = d_hash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
 				    &expected_count);
 	assert_int_equal(rc, 0);
 
 	/* Get the first element in the table, which should be NULL */
-	assert_null(d_chash_rec_first(thtab));
+	assert_null(d_hash_rec_first(thtab));
 
 	/* Try to look up the random entries and make sure they fail */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
-		test = d_chash_rec_find(thtab, entries[i]->tl_key,
-					TEST_GURT_HASH_KEY_LEN);
+		test = d_hash_rec_find(thtab, entries[i]->tl_key,
+				       TEST_GURT_HASH_KEY_LEN);
 		assert_null(test);
 	}
 
 	/* Destroy the hash table, force = false (should fail if not empty) */
-	rc = d_chash_table_destroy(thtab, 0);
+	rc = d_hash_table_destroy(thtab, 0);
 	assert_int_equal(rc, 0);
 
 	/* Free the temporary keys */
 	test_gurt_hash_free_items(entries, TEST_GURT_HASH_NUM_ENTRIES);
 }
 
-static d_chash_table_ops_t th_ops_ref = {
+static d_hash_table_ops_t th_ops_ref = {
 	.hop_key_cmp	= test_gurt_hash_op_key_cmp,
 	.hop_rec_addref	= test_gurt_hash_op_rec_addref,
 	.hop_rec_decref	= test_gurt_hash_op_rec_decref,
@@ -870,7 +870,7 @@ static void
 test_gurt_hash_insert_lookup_delete(void **state)
 {
 	const int		  num_bits = TEST_GURT_HASH_NUM_BITS;
-	struct d_chash_table	 *thtab;
+	struct d_hash_table	 *thtab;
 	int			  rc;
 	struct test_hash_entry	**entries;
 	d_list_t		 *test;
@@ -883,28 +883,28 @@ test_gurt_hash_insert_lookup_delete(void **state)
 	assert_non_null(entries);
 
 	/* Create a hash table */
-	rc = d_chash_table_create(0, num_bits, NULL, &th_ops, &thtab);
+	rc = d_hash_table_create(0, num_bits, NULL, &th_ops, &thtab);
 	assert_int_equal(rc, 0);
 
 	/* Insert the entries and make sure they succeed - exclusive = true */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
-		rc = d_chash_rec_insert(thtab, entries[i]->tl_key,
-					TEST_GURT_HASH_KEY_LEN,
-					&entries[i]->tl_link, 1);
+		rc = d_hash_rec_insert(thtab, entries[i]->tl_key,
+				       TEST_GURT_HASH_KEY_LEN,
+				       &entries[i]->tl_link, 1);
 		assert_int_equal(rc, 0);
 	}
 
 	/* Traverse the hash table and count number of entries */
 	expected_count = TEST_GURT_HASH_NUM_ENTRIES;
-	rc = d_chash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
-				    &expected_count);
+	rc = d_hash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
+				   &expected_count);
 	assert_int_equal(rc, 0);
 	assert_int_equal(expected_count, 0);
 
 	/* Try to look up the random entries and make sure they succeed */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
-		test = d_chash_rec_find(thtab, entries[i]->tl_key,
-					TEST_GURT_HASH_KEY_LEN);
+		test = d_hash_rec_find(thtab, entries[i]->tl_key,
+				       TEST_GURT_HASH_KEY_LEN);
 		/* Make sure the returned pointer is the right one */
 		assert_int_equal(test, &entries[i]->tl_link);
 	}
@@ -913,39 +913,39 @@ test_gurt_hash_insert_lookup_delete(void **state)
 	 * Insert the entries again with unique = 1 and make sure they fail
 	 */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
-		rc = d_chash_rec_insert(thtab, entries[i]->tl_key,
-					TEST_GURT_HASH_KEY_LEN,
-					&entries[i]->tl_link, 1);
+		rc = d_hash_rec_insert(thtab, entries[i]->tl_key,
+				       TEST_GURT_HASH_KEY_LEN,
+				       &entries[i]->tl_link, 1);
 		assert_int_equal(rc, -DER_EXIST);
 	}
 
 	/* Try to destroy the hash table, which should fail (not empty) */
-	rc = d_chash_table_destroy(thtab, 0);
+	rc = d_hash_table_destroy(thtab, 0);
 	assert_int_not_equal(rc, -DER_EXIST);
 
 	/* Remove all entries from the hash table */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
-		deleted = d_chash_rec_delete(thtab, entries[i]->tl_key,
-					     TEST_GURT_HASH_KEY_LEN);
+		deleted = d_hash_rec_delete(thtab, entries[i]->tl_key,
+					    TEST_GURT_HASH_KEY_LEN);
 		/* Make sure something was deleted */
 		assert_true(deleted);
 	}
 
 	/* Lookup test - all should fail */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
-		test = d_chash_rec_find(thtab, entries[i]->tl_key,
-					TEST_GURT_HASH_KEY_LEN);
+		test = d_hash_rec_find(thtab, entries[i]->tl_key,
+				       TEST_GURT_HASH_KEY_LEN);
 		assert_null(test);
 	}
 
 	/* Traverse the hash table and check there are zero entries */
 	expected_count = 0;
-	rc = d_chash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
-				    &expected_count);
+	rc = d_hash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
+				   &expected_count);
 	assert_int_equal(rc, 0);
 
 	/* Destroy the hash table, force = false (should fail if not empty) */
-	rc = d_chash_table_destroy(thtab, 0);
+	rc = d_hash_table_destroy(thtab, 0);
 	assert_int_equal(rc, 0);
 
 	/* Free the temporary keys */
@@ -959,7 +959,7 @@ test_gurt_hash_decref(void **state)
 {
 	/* Just test the minimum-size hash table */
 	const int		  num_bits = 1;
-	struct d_chash_table	 *thtab;
+	struct d_hash_table	 *thtab;
 	int			  rc;
 	struct test_hash_entry	 *entry;
 	d_list_t		 *test;
@@ -968,48 +968,48 @@ test_gurt_hash_decref(void **state)
 	assert_non_null(entry);
 
 	/* Create a minimum-size hash table */
-	rc = d_chash_table_create(D_HASH_FT_EPHEMERAL, num_bits, NULL,
-				  &th_ops_ref, &thtab);
+	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL, num_bits, NULL,
+				 &th_ops_ref, &thtab);
 	assert_int_equal(rc, 0);
 
-	rc = d_chash_rec_insert(thtab, entry->tl_key, TEST_GURT_HASH_KEY_LEN,
-				&entry->tl_link, true);
+	rc = d_hash_rec_insert(thtab, entry->tl_key, TEST_GURT_HASH_KEY_LEN,
+			       &entry->tl_link, true);
 	assert_int_equal(rc, 0);
 
 	/* No ref should be taken on insert */
 	assert_int_equal(entry->tl_ref, 0);
 
 	/* This insert should fail */
-	rc = d_chash_rec_insert(thtab, entry->tl_key, TEST_GURT_HASH_KEY_LEN,
-				&entry->tl_link, true);
+	rc = d_hash_rec_insert(thtab, entry->tl_key, TEST_GURT_HASH_KEY_LEN,
+			       &entry->tl_link, true);
 	assert_int_equal(rc, -DER_EXIST);
 
 	/* One ref should be taken by find */
-	test = d_chash_rec_find(thtab, entry->tl_key, TEST_GURT_HASH_KEY_LEN);
+	test = d_hash_rec_find(thtab, entry->tl_key, TEST_GURT_HASH_KEY_LEN);
 	assert_non_null(test);
 	assert_ptr_equal(test, &entry->tl_link);
 	assert_int_equal(entry->tl_ref, 1);
 
 	/* Take two more refs */
-	d_chash_rec_addref(thtab, test);
+	d_hash_rec_addref(thtab, test);
 	assert_int_equal(entry->tl_ref, 2);
-	d_chash_rec_addref(thtab, test);
+	d_hash_rec_addref(thtab, test);
 	assert_int_equal(entry->tl_ref, 3);
 
 	/* Drop one ref */
-	rc = d_chash_rec_ndecref(thtab, 1, test);
+	rc = d_hash_rec_ndecref(thtab, 1, test);
 	assert_int_equal(rc, 0);
 	assert_int_equal(entry->tl_ref, 2);
 
 	/* Drop 20 refs, which should fail but remove and free the descriptor */
-	rc = d_chash_rec_ndecref(thtab, 20, test);
+	rc = d_hash_rec_ndecref(thtab, 20, test);
 	assert_int_equal(rc, -DER_INVAL);
 
 	/* Get the first element in the table, which should be NULL */
-	assert_null(d_chash_rec_first(thtab));
+	assert_null(d_hash_rec_first(thtab));
 
 	/* Destroy the hash table, force = false (should fail if not empty) */
-	rc = d_chash_table_destroy(thtab, 0);
+	rc = d_hash_table_destroy(thtab, 0);
 	assert_int_equal(rc, 0);
 }
 
@@ -1070,7 +1070,7 @@ test_gurt_alloc(void **state)
 
 struct hash_thread_arg {
 	struct test_hash_entry	**entries;
-	struct d_chash_table	 *thtab;
+	struct d_hash_table	 *thtab;
 	pthread_barrier_t	 *barrier;
 
 	/* Parallel function to test */
@@ -1112,9 +1112,9 @@ hash_parallel_insert(struct hash_thread_arg *arg)
 	for (i = (arg->thread_idx * TEST_GURT_HASH_ENTRIES_PER_THREAD);
 	     i < ((arg->thread_idx + 1) * TEST_GURT_HASH_ENTRIES_PER_THREAD);
 	     i++) {
-		rc = d_chash_rec_insert(arg->thtab, arg->entries[i]->tl_key,
-					TEST_GURT_HASH_KEY_LEN,
-					&(arg->entries[i]->tl_link), 1);
+		rc = d_hash_rec_insert(arg->thtab, arg->entries[i]->tl_key,
+				       TEST_GURT_HASH_KEY_LEN,
+				       &(arg->entries[i]->tl_link), 1);
 		if (arg->check_result)
 			TEST_THREAD_ASSERT(rc == 0);
 	}
@@ -1148,9 +1148,9 @@ hash_parallel_traverse(struct hash_thread_arg *arg)
 
 	/* Traverse the hash table and count number of entries */
 	expected_count = TEST_GURT_HASH_NUM_ENTRIES;
-	rc = d_chash_table_traverse(arg->thtab,
-				    hash_parallel_traverse_cb,
-				    &expected_count);
+	rc = d_hash_table_traverse(arg->thtab,
+				   hash_parallel_traverse_cb,
+				   &expected_count);
 	if (arg->check_result) {
 		TEST_THREAD_ASSERT(rc == 0);
 		TEST_THREAD_ASSERT(expected_count == 0);
@@ -1167,8 +1167,8 @@ hash_parallel_lookup(struct hash_thread_arg *arg)
 
 	/* Try to look up the random entries and make sure they succeed */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
-		test = d_chash_rec_find(arg->thtab, arg->entries[i]->tl_key,
-					TEST_GURT_HASH_KEY_LEN);
+		test = d_hash_rec_find(arg->thtab, arg->entries[i]->tl_key,
+				       TEST_GURT_HASH_KEY_LEN);
 		if (arg->check_result)
 			/* Make sure the returned pointer is the right one */
 			TEST_THREAD_ASSERT(test == &(arg->entries[i]->tl_link));
@@ -1184,7 +1184,7 @@ hash_parallel_addref(struct hash_thread_arg *arg)
 
 	/* Try to look up the random entries and make sure they succeed */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++)
-		d_chash_rec_addref(arg->thtab, &arg->entries[i]->tl_link);
+		d_hash_rec_addref(arg->thtab, &arg->entries[i]->tl_link);
 
 	return NULL;
 }
@@ -1196,7 +1196,7 @@ hash_parallel_decref(struct hash_thread_arg *arg)
 
 	/* Remove references on the random entries */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++)
-		d_chash_rec_decref(arg->thtab, &arg->entries[i]->tl_link);
+		d_hash_rec_decref(arg->thtab, &arg->entries[i]->tl_link);
 
 	return NULL;
 }
@@ -1211,9 +1211,9 @@ hash_parallel_delete(struct hash_thread_arg *arg)
 	for (i = (arg->thread_idx * TEST_GURT_HASH_ENTRIES_PER_THREAD);
 	     i < ((arg->thread_idx + 1) * TEST_GURT_HASH_ENTRIES_PER_THREAD);
 	     i++) {
-		deleted = d_chash_rec_delete(arg->thtab,
-					     arg->entries[i]->tl_key,
-					     TEST_GURT_HASH_KEY_LEN);
+		deleted = d_hash_rec_delete(arg->thtab,
+					    arg->entries[i]->tl_key,
+					    TEST_GURT_HASH_KEY_LEN);
 		if (arg->check_result)
 			/* Make sure something was deleted */
 			TEST_THREAD_ASSERT(deleted);
@@ -1249,7 +1249,7 @@ hash_parallel_wrapper(void *input)
 
 static void
 _test_gurt_hash_threaded_same_operations(void *(*fn)(struct hash_thread_arg *),
-					 struct d_chash_table *thtab,
+					 struct d_hash_table *thtab,
 					 struct test_hash_entry **entries)
 {
 	pthread_t		 thread_ids[TEST_GURT_HASH_NUM_THREADS];
@@ -1309,7 +1309,7 @@ static void
 test_gurt_hash_threaded_same_operations(uint32_t ht_feats)
 {
 	const int		  num_bits = TEST_GURT_HASH_NUM_BITS;
-	struct d_chash_table	 *thtab;
+	struct d_hash_table	 *thtab;
 	int			  rc;
 	struct test_hash_entry	**entries;
 	d_list_t		 *test;
@@ -1321,7 +1321,7 @@ test_gurt_hash_threaded_same_operations(uint32_t ht_feats)
 	assert_non_null(entries);
 
 	/* Create a hash table */
-	rc = d_chash_table_create(ht_feats, num_bits, NULL, &th_ops, &thtab);
+	rc = d_hash_table_create(ht_feats, num_bits, NULL, &th_ops, &thtab);
 	assert_int_equal(rc, 0);
 
 	/* Test each operation in parallel */
@@ -1336,19 +1336,19 @@ test_gurt_hash_threaded_same_operations(uint32_t ht_feats)
 
 	/* Lookup test - all should fail */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
-		test = d_chash_rec_find(thtab, entries[i]->tl_key,
-					TEST_GURT_HASH_KEY_LEN);
+		test = d_hash_rec_find(thtab, entries[i]->tl_key,
+				       TEST_GURT_HASH_KEY_LEN);
 		assert_null(test);
 	}
 
 	/* Traverse the hash table and check there are zero entries */
 	expected_count = 0;
-	rc = d_chash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
-				    &expected_count);
+	rc = d_hash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
+				   &expected_count);
 	assert_int_equal(rc, 0);
 
 	/* Destroy the hash table, force = false (should fail if not empty) */
-	rc = d_chash_table_destroy(thtab, 0);
+	rc = d_hash_table_destroy(thtab, 0);
 	assert_int_equal(rc, 0);
 
 	/* Free the temporary keys */
@@ -1364,7 +1364,7 @@ static void
 test_gurt_hash_threaded_concurrent_operations(uint32_t ht_feats)
 {
 	const int		  num_bits = TEST_GURT_HASH_NUM_BITS;
-	struct d_chash_table	 *thtab;
+	struct d_hash_table	 *thtab;
 	struct test_hash_entry	**entries;
 	pthread_t		  thread_ids[4][TEST_GURT_HASH_NUM_THREADS];
 	struct hash_thread_arg	  thread_args[4][TEST_GURT_HASH_NUM_THREADS];
@@ -1380,7 +1380,7 @@ test_gurt_hash_threaded_concurrent_operations(uint32_t ht_feats)
 	assert_non_null(entries);
 
 	/* Create a hash table */
-	rc = d_chash_table_create(ht_feats, num_bits, NULL, &th_ops, &thtab);
+	rc = d_hash_table_create(ht_feats, num_bits, NULL, &th_ops, &thtab);
 	assert_int_equal(rc, 0);
 
 	/* Use barrier to make sure all threads start at the same time */
@@ -1442,7 +1442,7 @@ test_gurt_hash_threaded_concurrent_operations(uint32_t ht_feats)
 	pthread_barrier_destroy(&barrier);
 
 	/* Destroy the hash table and delete any remaining entries */
-	rc = d_chash_table_destroy(thtab, true);
+	rc = d_hash_table_destroy(thtab, true);
 	assert_int_equal(rc, 0);
 
 	/* Free the temporary keys */
@@ -1450,7 +1450,7 @@ test_gurt_hash_threaded_concurrent_operations(uint32_t ht_feats)
 }
 
 static void
-test_gurt_hash_op_rec_addref_locked(struct d_chash_table *thtab, d_list_t *link)
+test_gurt_hash_op_rec_addref_locked(struct d_hash_table *thtab, d_list_t *link)
 {
 	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
 
@@ -1467,7 +1467,7 @@ test_gurt_hash_op_rec_addref_locked(struct d_chash_table *thtab, d_list_t *link)
 }
 
 static bool
-test_gurt_hash_op_rec_decref_locked(struct d_chash_table *thtab, d_list_t *link)
+test_gurt_hash_op_rec_decref_locked(struct d_hash_table *thtab, d_list_t *link)
 {
 	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
 	int ref_snapshot;
@@ -1492,7 +1492,7 @@ test_gurt_hash_op_rec_decref_locked(struct d_chash_table *thtab, d_list_t *link)
 	return (ref_snapshot == 0);
 }
 
-static d_chash_table_ops_t th_ref_ops = {
+static d_hash_table_ops_t th_ref_ops = {
 	.hop_key_cmp    = test_gurt_hash_op_key_cmp,
 	.hop_rec_addref	= test_gurt_hash_op_rec_addref_locked,
 	.hop_rec_decref	= test_gurt_hash_op_rec_decref_locked,
@@ -1512,7 +1512,7 @@ static void
 _test_gurt_hash_parallel_refcounting(uint32_t ht_feats)
 {
 	const int		  num_bits = TEST_GURT_HASH_NUM_BITS;
-	struct d_chash_table	 *thtab;
+	struct d_hash_table	 *thtab;
 	int			  rc;
 	struct test_hash_entry	**entries;
 	d_list_t		 *test;
@@ -1527,8 +1527,8 @@ _test_gurt_hash_parallel_refcounting(uint32_t ht_feats)
 	assert_non_null(entries);
 
 	/* Create a hash table */
-	rc = d_chash_table_create(ht_feats, num_bits, NULL,
-				  &th_ref_ops, &thtab);
+	rc = d_hash_table_create(ht_feats, num_bits, NULL,
+				 &th_ref_ops, &thtab);
 	assert_int_equal(rc, 0);
 
 	/* Create a spinlock to protect the test's reference counting */
@@ -1575,30 +1575,30 @@ _test_gurt_hash_parallel_refcounting(uint32_t ht_feats)
 	 * For ephemeral tables, this should do the deletion instead of above
 	 */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
-		rc = d_chash_rec_ndecref(thtab, expected_refcount,
-					 &entries[i]->tl_link);
+		rc = d_hash_rec_ndecref(thtab, expected_refcount,
+					&entries[i]->tl_link);
 		assert_int_equal(rc, 0);
 	}
 	test_gurt_hash_refcount(entries, 0);
 
 	/* Lookup test - all should fail */
 	for (i = 0; i < TEST_GURT_HASH_NUM_ENTRIES; i++) {
-		test = d_chash_rec_find(thtab, entries[i]->tl_key,
-					TEST_GURT_HASH_KEY_LEN);
+		test = d_hash_rec_find(thtab, entries[i]->tl_key,
+				       TEST_GURT_HASH_KEY_LEN);
 		assert_null(test);
 	}
 
 	/* Traverse the hash table and check there are zero entries */
 	expected_count = 0;
-	rc = d_chash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
-				    &expected_count);
+	rc = d_hash_table_traverse(thtab, test_gurt_hash_traverse_count_cb,
+				   &expected_count);
 	assert_int_equal(rc, 0);
 
 	/* Free the spinlock */
 	D_SPIN_DESTROY(&ref_spin_lock);
 
 	/* Destroy the hash table, force = false */
-	rc = d_chash_table_destroy(thtab, false);
+	rc = d_hash_table_destroy(thtab, false);
 	assert_int_equal(rc, 0);
 
 	/* Free the temporary keys */
