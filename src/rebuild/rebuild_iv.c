@@ -122,7 +122,7 @@ rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src)
 	if (rc)
 		return rc;
 
-	D__DEBUG(DB_TRACE, "rank %d master rank %d\n", rank,
+	D__DEBUG(DB_TRACE, "rank %d master rank %d\n", src_iv->riv_rank,
 		src_iv->riv_master_rank);
 
 	if (rank != src_iv->riv_master_rank)

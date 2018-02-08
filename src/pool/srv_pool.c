@@ -2231,6 +2231,14 @@ ds_pool_tgt_exclude_out(uuid_t pool_uuid, d_rank_list_t *tgts,
 				       tgts_out, NULL, NULL, NULL);
 }
 
+int
+ds_pool_tgt_exclude(uuid_t pool_uuid, d_rank_list_t *tgts,
+		    d_rank_list_t *tgts_out)
+{
+	return ds_pool_update_internal(pool_uuid, tgts, POOL_EXCLUDE,
+				       tgts_out, NULL, NULL, NULL);
+}
+
 void
 ds_pool_update_handler(crt_rpc_t *rpc)
 {

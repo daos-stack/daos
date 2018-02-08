@@ -100,6 +100,9 @@ rebuild_fetch_update_inline(struct rebuild_dkey *rdkey, daos_handle_t oh,
 	if (rc)
 		return rc;
 
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
+		return -DER_INVAL;
+
 	rc = vos_obj_update(ds_cont->sc_hdl, rdkey->rd_oid, eprs->epr_lo,
 			    cookie, version, &rdkey->rd_dkey, 1, &iod, &sgl);
 	return rc;
@@ -424,7 +427,7 @@ rebuild_dkey_ult(void *arg)
 		struct rebuild_dkey	*rdkey;
 		struct rebuild_dkey	*tmp;
 		d_list_t		dkey_list;
-		int			rc;
+		int			rc = 0;
 
 		D_INIT_LIST_HEAD(&dkey_list);
 		ABT_mutex_lock(puller->rp_lock);
@@ -432,17 +435,20 @@ rebuild_dkey_ult(void *arg)
 					      rd_list) {
 			d_list_move(&rdkey->rd_list, &dkey_list);
 			puller->rp_inflight++;
-
 		}
 		ABT_mutex_unlock(puller->rp_lock);
 
 		d_list_for_each_entry_safe(rdkey, tmp, &dkey_list, rd_list) {
 			d_list_del(&rdkey->rd_list);
-			rc = rebuild_one_dkey(rpt, rdkey);
-			D__DEBUG(DB_TRACE, DF_UOID" rebuild dkey %.*s rc = %d"
-				" tag %d\n", DP_UOID(rdkey->rd_oid),
-				(int)rdkey->rd_dkey.iov_len,
-				(char *)rdkey->rd_dkey.iov_buf, rc, idx);
+			if (!rpt->rt_abort) {
+				rc = rebuild_one_dkey(rpt, rdkey);
+				D__DEBUG(DB_TRACE, DF_UOID" rebuild dkey %.*s "
+					"rc %d tag %d\n",
+					DP_UOID(rdkey->rd_oid),
+					(int)rdkey->rd_dkey.iov_len,
+					(char *)rdkey->rd_dkey.iov_buf, rc,
+					idx);
+			}
 
 			D__ASSERT(puller->rp_inflight > 0);
 			puller->rp_inflight--;
@@ -455,10 +461,11 @@ rebuild_dkey_ult(void *arg)
 			 *   (nonexistent)
 			 * This is just a workaround...
 			 */
-			if (tls->rebuild_pool_status == 0 &&
-			    rc != -DER_NONEXIST)
+			if (tls->rebuild_pool_status == 0 && rc != 0 &&
+			    rc != -DER_NONEXIST) {
 				tls->rebuild_pool_status = rc;
-
+				rpt->rt_abort = 1;
+			}
 			/* XXX If rebuild fails, Should we add this back to
 			 * dkey list
 			 */
@@ -469,16 +476,10 @@ rebuild_dkey_ult(void *arg)
 		/* check if it should exist */
 		ABT_mutex_lock(puller->rp_lock);
 		if (d_list_empty(&puller->rp_dkey_list) &&
-		    rpt->rt_finishing) {
+		    (rpt->rt_finishing || rpt->rt_abort)) {
 			ABT_mutex_unlock(puller->rp_lock);
 			break;
 		}
-
-		if (rpt->rt_abort) {
-			ABT_mutex_unlock(puller->rp_lock);
-			break;
-		}
-
 		/* XXX exist if rebuild is aborted */
 		ABT_mutex_unlock(puller->rp_lock);
 		ABT_thread_yield();
@@ -561,11 +562,6 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	tls = rebuild_pool_tls_lookup(arg->rpt->rt_pool_uuid,
 				      arg->rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
-	if (tls->rebuild_pool_status) {
-		D__DEBUG(DB_TRACE, "rebuild status %d\n",
-			 tls->rebuild_pool_status);
-		return 1;
-	}
 
 	D__ALLOC(dkey_iov.iov_buf, dkey_buf_size);
 	if (dkey_iov.iov_buf == NULL)
@@ -642,12 +638,14 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		 DP_UUID(arg->cont_uuid), DP_UOID(*oid), ih.cookie);
 	D__ASSERT(arg->obj_cb != NULL);
 
+	/* NB: if rebuild for this object fail, let's continue rebuilding
+	 * other objects, anyway the failure will be remembered in
+	 * tls_pool_status.
+	 */
 	rc = arg->obj_cb(*oid, *shard, arg);
-	if (rc) {
+	if (rc)
 		D__DEBUG(DB_TRACE, "obj "DF_UOID" cb callback rc %d\n",
 			 DP_UOID(*oid), rc);
-		return rc;
-	}
 
 	D__DEBUG(DB_TRACE, "obj rebuild "DF_UUID"/%"PRIx64" end\n",
 		DP_UUID(arg->cont_uuid), ih.cookie);
@@ -877,9 +875,9 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		struct rebuild_iter_arg *arg;
 
 		D__ALLOC_PTR(arg);
-		if (arg == NULL) {
+		if (arg == NULL)
 			D__GOTO(out, rc = -DER_NOMEM);
-		}
+
 		uuid_copy(arg->pool_uuid, rebuild_in->roi_pool_uuid);
 		arg->obj_cb = rebuild_obj_iterate_keys;
 		arg->root_hdl = btr_hdl;

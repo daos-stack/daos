@@ -43,6 +43,11 @@ static struct crt_msg_field *rebuild_scan_in_fields[] = {
 	&CMF_UINT32,	/* master rank */
 };
 
+static struct crt_msg_field *rebuild_scan_out_fields[] = {
+	&CMF_RANK_LIST,	/* failed list */
+	&CMF_INT,	/* status */
+};
+
 static struct crt_msg_field *rebuild_out_fields[] = {
 	&CMF_INT,	/* rebuild status */
 };
@@ -58,7 +63,7 @@ static struct crt_msg_field *rebuild_objs_in_fields[] = {
 
 struct crt_req_format DQF_REBUILD_OBJECTS_SCAN =
 	DEFINE_CRT_REQ_FMT("REBUILD_OBJECTS_SCAN", rebuild_scan_in_fields,
-			   rebuild_out_fields);
+			   rebuild_scan_out_fields);
 
 struct crt_req_format DQF_REBUILD_OBJECTS =
 	DEFINE_CRT_REQ_FMT("REBUILD_OBJS", rebuild_objs_in_fields,

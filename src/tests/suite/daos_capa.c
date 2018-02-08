@@ -551,7 +551,7 @@ static const struct CMUnitTest capa_tests[] = {
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CREATE, true);
+	return test_setup(state, SETUP_CONT_CREATE, true, DEFAULT_POOL_SIZE);
 }
 
 int

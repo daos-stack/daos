@@ -189,7 +189,7 @@ rebuild_pool_wait(test_arg_t *arg)
 
 		memset(&pinfo, 0, sizeof(pinfo));
 		rc = daos_pool_query(arg->poh, NULL, &pinfo, NULL);
-		if (rst->rs_done || rc != 0 || rst->rs_errno) {
+		if (rst->rs_done || rc != 0) {
 			print_message("Rebuild (ver=%d) is done %d/%d\n",
 				       rst->rs_version, rc, rst->rs_errno);
 			if (connect_pool) {
@@ -438,31 +438,16 @@ rebuild_large_rec(void **state)
 static void
 rebuild_objects(void **state)
 {
-	test_arg_t		*arg = *state;
-	daos_obj_id_t		oid;
-	struct ioreq		req;
-	int			i;
-	int			j;
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	int		i;
 
 	if (!rebuild_runable(arg, 3, false))
 		skip();
 
-	print_message("create %d objects\n", OBJ_NR);
 	for (i = 0; i < OBJ_NR; i++) {
 		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-		/** Insert 1000 records */
-		print_message("Insert %d kv record in object "DF_OID"\n",
-			      KEY_NR, DP_OID(oid));
-		for (j = 0; j < 10; j++) {
-			char	key[16];
-
-			sprintf(key, "%d", j);
-			insert_single(key, "a_key", 0, "data",
-				      strlen("data") + 1, 0, &req);
-		}
-		ioreq_fini(&req);
+		rebuild_io(arg, &oid, 1);
 	}
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
@@ -472,31 +457,15 @@ static void
 rebuild_drop_scan(void **state)
 {
 	test_arg_t	*arg = *state;
-
-	daos_obj_id_t		oid;
-	struct ioreq		req;
-	int			i;
-	int			j;
+	daos_obj_id_t	oid;
+	int		i;
 
 	if (!rebuild_runable(arg, 3, false))
 		skip();
 
-	print_message("create %d objects\n", OBJ_NR);
 	for (i = 0; i < OBJ_NR; i++) {
 		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-		/** Insert 1000 records */
-		print_message("Insert %d kv record in object "DF_OID"\n",
-			      10, DP_OID(oid));
-		for (j = 0; j < 10; j++) {
-			char	key[16];
-
-			sprintf(key, "%d", j);
-			insert_single(key, "a_key", 0, "data",
-				      strlen("data") + 1, 0, &req);
-		}
-		ioreq_fini(&req);
+		rebuild_io(arg, &oid, 1);
 	}
 
 	/* Set drop scan fail_loc on server 0 */
@@ -510,31 +479,15 @@ static void
 rebuild_retry_rebuild(void **state)
 {
 	test_arg_t	*arg = *state;
-
-	daos_obj_id_t		oid;
-	struct ioreq		req;
-	int			i;
-	int			j;
+	daos_obj_id_t	oid;
+	int		i;
 
 	if (!rebuild_runable(arg, 3, false))
 		skip();
 
-	print_message("create %d objects\n", OBJ_NR);
 	for (i = 0; i < OBJ_NR; i++) {
 		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-		/** Insert 1000 records */
-		print_message("Insert %d kv record in object "DF_OID"\n",
-			      KEY_NR, DP_OID(oid));
-		for (j = 0; j < 10; j++) {
-			char	key[16];
-
-			sprintf(key, "%d", j);
-			insert_single(key, "a_key", 0, "data",
-				      strlen("data") + 1, 0, &req);
-		}
-		ioreq_fini(&req);
+		rebuild_io(arg, &oid, 1);
 	}
 
 	/* Set no hdl fail_loc on all servers */
@@ -548,35 +501,42 @@ static void
 rebuild_drop_obj(void **state)
 {
 	test_arg_t	*arg = *state;
-
-	daos_obj_id_t		oid;
-	struct ioreq		req;
-	int			i;
-	int			j;
+	daos_obj_id_t	oid;
+	int		i;
 
 	if (!rebuild_runable(arg, 3, false))
 		skip();
 
-	print_message("create %d objects\n", OBJ_NR);
 	for (i = 0; i < OBJ_NR; i++) {
 		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-		/** Insert 1000 records */
-		print_message("Insert %d kv record in object "DF_OID"\n",
-			      10, DP_OID(oid));
-		for (j = 0; j < 10; j++) {
-			char	key[16];
-
-			sprintf(key, "%d", j);
-			insert_single(key, "a_key", 0, "data",
-				      strlen("data") + 1, 0, &req);
-		}
-		ioreq_fini(&req);
+		rebuild_io(arg, &oid, 1);
 	}
+
 	/* Set drop scan reply on all servers */
 	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_DROP_OBJ | DAOS_FAIL_ONCE,
+			     NULL);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+}
+
+static void
+rebuild_update_failed(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	int		i;
+
+	if (!rebuild_runable(arg, 3, false))
+		skip();
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
+		rebuild_io(arg, &oid, 1);
+	}
+
+	/* Set drop scan reply on all servers */
+	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
+			     DAOS_REBUILD_UPDATE_FAIL | DAOS_FAIL_ONCE,
 			     NULL);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
 }
@@ -595,7 +555,8 @@ rebuild_multiple_pools(void **state)
 
 	args[0] = arg;
 	/* create/connect another pool */
-	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank);
+	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank,
+			DEFAULT_POOL_SIZE);
 	if (rc) {
 		print_message("open/connect another pool failed: rc %d\n", rc);
 		return;
@@ -619,30 +580,15 @@ rebuild_offline(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
-	struct ioreq	req;
 	int		i;
-	int		j;
 	int		rc;
 
 	if (!rebuild_runable(arg, 3, false))
 		skip();
 
-	print_message("create %d objects\n", OBJ_NR);
 	for (i = 0; i < OBJ_NR; i++) {
 		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-		/** Insert 1000 records */
-		print_message("Insert %d kv record in object "DF_OID"\n",
-			      KEY_NR, DP_OID(oid));
-		for (j = 0; j < 10; j++) {
-			char	key[16];
-
-			sprintf(key, "%d", j);
-			insert_single(key, "a_key", 0, "data",
-				      strlen("data") + 1, 0, &req);
-		}
-		ioreq_fini(&req);
+		rebuild_io(arg, &oid, 1);
 	}
 
 	/* Close cont and disconnect pool */
@@ -831,16 +777,19 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_drop_obj, NULL, test_case_teardown},
 	{"REBUILD10: rebuild multiple pools",
 	rebuild_multiple_pools, NULL, test_case_teardown},
-	{"REBUILD11: offline rebuild",
+	{"REBUILD11: rebuild update failed",
+	rebuild_update_failed, NULL, test_case_teardown},
+	{"REBUILD12: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD12: rebuild with two failures",
+	{"REBUILD13: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
 };
 
+#define REBUILD_POOL_SIZE	(10ULL << 30)
 int
 rebuild_setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, true);
+	return test_setup(state, SETUP_CONT_CONNECT, true, REBUILD_POOL_SIZE);
 }
 
 int

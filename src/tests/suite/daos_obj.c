@@ -1498,7 +1498,7 @@ obj_setup(void **state)
 	test_arg_t	*arg;
 	int		 rc;
 
-	rc = test_setup(state, SETUP_CONT_CONNECT, true);
+	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE);
 	if (rc != 0)
 		return rc;
 

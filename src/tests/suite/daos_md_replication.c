@@ -196,7 +196,7 @@ static const struct CMUnitTest mdr_tests[] = {
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_EQ, false);
+	return test_setup(state, SETUP_EQ, false, DEFAULT_POOL_SIZE);
 }
 
 int

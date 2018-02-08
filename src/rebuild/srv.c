@@ -33,6 +33,7 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
 #include <daos_srv/iv.h>
+#include <daos_srv/rebuild.h>
 #include "rpc.h"
 #include "rebuild_internal.h"
 
@@ -222,7 +223,7 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 
 	if (!rgt->rgt_scan_done) {
 		setbit(rgt->rgt_scan_bits, iv->riv_rank);
-		D__DEBUG(DB_TRACE, "rebuild ver %d tgt %d scan is"
+		D__DEBUG(DB_TRACE, "rebuild ver %d tgt %d scan"
 			" done bits %x\n", rgt->rgt_rebuild_ver,
 			 iv->riv_rank, rgt->rgt_scan_bits[0]);
 		if (is_rebuild_global_scan_done(rgt)) {
@@ -237,7 +238,7 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 	/* Only trust pull done if scan is done globally */
 	if (iv->riv_pull_done) {
 		setbit(rgt->rgt_pull_bits, iv->riv_rank);
-		D__DEBUG(DB_TRACE, "rebuild ver %d tgt %d pull is"
+		D__DEBUG(DB_TRACE, "rebuild ver %d tgt %d pull"
 			" done bits %x\n", rgt->rgt_rebuild_ver,
 			 iv->riv_rank, rgt->rgt_pull_bits[0]);
 		if (is_rebuild_global_pull_done(rgt))
@@ -312,6 +313,7 @@ dss_rebuild_check_one(void *data)
 	struct rebuild_pool_tls		*pool_tls;
 	struct rebuild_tgt_query_info	*status = arg->status;
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
+	unsigned int idx = dss_get_module_info()->dmi_tid;
 
 	pool_tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 					   rpt->rt_rebuild_ver);
@@ -319,12 +321,12 @@ dss_rebuild_check_one(void *data)
 		   DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 
 	D__DEBUG(DB_TRACE, "%d rec_count "DF_U64" obj_count "DF_U64
-		 " scanning %d status %d\n",
-		 dss_get_module_info()->dmi_tid,
-		 pool_tls->rebuild_pool_rec_count,
+		 " scanning %d status %d inflight %d\n",
+		 idx, pool_tls->rebuild_pool_rec_count,
 		 pool_tls->rebuild_pool_obj_count,
 		 pool_tls->rebuild_pool_scanning,
-		 pool_tls->rebuild_pool_status);
+		 pool_tls->rebuild_pool_status,
+		 rpt->rt_pullers[idx].rp_inflight);
 	ABT_mutex_lock(status->lock);
 	if (pool_tls->rebuild_pool_scanning)
 		status->scanning = 1;
@@ -408,14 +410,25 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		D__GOTO(out, rc = 0);
 	}
 
+	memcpy(status, &rgt->rgt_status, sizeof(*status));
 	status->rs_version = rgt->rgt_rebuild_ver;
-	if (status->rs_version == 0) {
-		D__DEBUG(DB_TRACE, "No rebuild in progress, rebuild_task %s\n",
-			 status->rs_done ? "no" : "yes");
-		D__GOTO(out, rc = 0);
+
+	/* If there are still rebuild task queued for the pool, let's reset
+	 * the done status.
+	 */
+	if (status->rs_done == 1 &&
+	    !d_list_empty(&rebuild_gst.rg_queue_list)) {
+		struct rebuild_task *task;
+
+		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list,
+				      dst_list) {
+			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
+				status->rs_done = 0;
+				break;
+			}
+		}
 	}
 
-	memcpy(status, &rgt->rgt_status, sizeof(*status));
 out:
 	D__DEBUG(DB_TRACE, "rebuild "DF_UUID" done %s rec "DF_U64" obj "
 		 DF_U64" ver %d err %d\n", DP_UUID(pool_uuid),
@@ -477,6 +490,8 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 			int i;
 
 			for (i = 0; i < failed_tgts_cnt; i++) {
+				D__DEBUG(DB_TRACE, "target %d failed\n",
+					 targets[i].ta_comp.co_rank);
 				setbit(rgt->rgt_scan_bits,
 				       targets[i].ta_comp.co_rank);
 				setbit(rgt->rgt_pull_bits,
@@ -500,6 +515,9 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 			rc = rebuild_iv_update(pool->sp_iv_ns,
 					       &iv, CRT_IV_SHORTCUT_NONE,
 					       CRT_IV_SYNC_LAZY);
+			if (rc)
+				D__WARN("rebuild master iv update failed: %d\n",
+					rc);
 		}
 
 		/* query the current rebuild status */
@@ -690,7 +708,7 @@ rebuild_trigger(struct ds_pool *pool, struct rebuild_global_pool_tracker *rgt,
 		uint32_t map_ver, uint32_t rebuild_ver, daos_iov_t *map_buf)
 {
 	struct rebuild_scan_in	*rsi;
-	struct rebuild_out	*ro;
+	struct rebuild_scan_out	*rso;
 	crt_rpc_t		*rpc;
 	d_sg_list_t		sgl;
 	crt_bulk_t		bulk_hdl;
@@ -737,15 +755,51 @@ retry:
 		/* If it is network failure or timedout, let's refresh
 		 * failure list and retry
 		 */
-		if (rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) {
+		if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) &&
+		    !rebuild_gst.rg_abort) {
 			crt_req_decref(rpc);
 			D__GOTO(retry, rc);
 		}
 		D__GOTO(out_rpc, rc);
 	}
 
-	ro = crt_reply_get(rpc);
-	rc = ro->ro_status;
+	rso = crt_reply_get(rpc);
+	if (rso->rso_ranks_list != NULL) {
+		int i;
+
+		/* If the target failed to start rebuild, let's mark the
+		 * the target DOWN, and schedule the rebuild for the
+		 * target
+		 */
+		d_rank_list_dump(rso->rso_ranks_list, "failed starting rebuild",
+				 strlen("failed starting rebuild"));
+
+		for (i = 0; i < rso->rso_ranks_list->rl_nr; i++) {
+			d_rank_list_t fail_rank_list = { 0 };
+
+			fail_rank_list.rl_nr = 1;
+			fail_rank_list.rl_ranks =
+					&rso->rso_ranks_list->rl_ranks[i];
+
+			rc = ds_pool_tgt_exclude(pool->sp_uuid, &fail_rank_list,
+						 NULL);
+			if (rc) {
+				D__ERROR("Can not exclude rank %d\n",
+					 rso->rso_ranks_list->rl_ranks[i]);
+				break;
+			}
+
+			rc = ds_rebuild_schedule(pool->sp_uuid,
+					 pool_map_get_version(pool->sp_map),
+					 &fail_rank_list, svc_list);
+			if (rc != 0) {
+				D__ERROR("rebuild fails rc %d\n", rc);
+				break;
+			}
+		}
+	}
+
+	rc = rso->rso_status;
 	if (rc != 0) {
 		D__ERROR(DF_UUID": failed to start pool rebuild: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
@@ -1212,11 +1266,12 @@ rebuild_tgt_status_check(void *arg)
 		iv.riv_obj_count = status.obj_count;
 		iv.riv_rec_count = status.rec_count;
 		iv.riv_status = status.status;
-		if (status.scanning == 0)
+		if (status.scanning == 0 || rpt->rt_abort)
 			iv.riv_scan_done = 1;
 
 		/* Only global scan is done, then pull is trustable */
-		if (rpt->rt_global_scan_done && !status.rebuilding)
+		if (rpt->rt_global_scan_done &&
+		    (!status.rebuilding || rpt->rt_abort))
 			iv.riv_pull_done = 1;
 
 		/* Once the rebuild is globally done, the target
@@ -1234,11 +1289,9 @@ rebuild_tgt_status_check(void *arg)
 			rc = rebuild_iv_update(rpt->rt_pool->sp_iv_ns,
 					       &iv, CRT_IV_SHORTCUT_TO_ROOT,
 					       CRT_IV_SYNC_NONE);
-			if (rc) {
-				rpt->rt_abort = 1;
-				if (rpt->rt_errno == 0)
-					rpt->rt_errno = rc;
-			}
+			if (rc)
+				D__WARN("rebuild tgt iv update failed: %d\n",
+					rc);
 		}
 
 		D__DEBUG(DB_TRACE, "ver %d obj "DF_U64" rec "DF_U64
@@ -1249,7 +1302,7 @@ rebuild_tgt_status_check(void *arg)
 			 rpt->rt_global_scan_done, rpt->rt_global_done,
 			 iv.riv_status);
 
-		if (rpt->rt_abort || rpt->rt_global_done) {
+		if (rpt->rt_global_done) {
 			rebuild_tgt_fini(rpt);
 			break;
 		}
@@ -1448,7 +1501,10 @@ out:
 static struct daos_rpc_handler rebuild_handlers[] = {
 	{
 		.dr_opc		= REBUILD_OBJECTS_SCAN,
-		.dr_hdlr	= rebuild_tgt_scan_handler
+		.dr_hdlr	= rebuild_tgt_scan_handler,
+		.dr_corpc_ops	= {
+			.co_aggregate	= rebuild_tgt_scan_aggregator,
+		}
 	}, {
 		.dr_opc		= REBUILD_OBJECTS,
 		.dr_hdlr	= rebuild_obj_handler

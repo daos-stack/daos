@@ -39,10 +39,9 @@ static const char *server_group;
 /** Pool service replicas */
 static unsigned int svc_nreplicas = 1;
 
-static daos_size_t pool_size = (4ULL << 30);
-
 int
-test_setup(void **state, unsigned int step, bool multi_rank)
+test_setup(void **state, unsigned int step, bool multi_rank,
+	   daos_size_t pool_size)
 {
 	test_arg_t	*arg;
 	int		 rc;

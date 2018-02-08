@@ -226,7 +226,10 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	collective_arg.pla_map_version = arg->pca_map_version;
 
 	rc = dss_task_collective(pool_child_add_one, &collective_arg);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	if (rc != 0) {
+		D__ERROR("Pool "DF_UUID" invalid: %d\n", DP_UUID(key), rc);
+		D__GOTO(err_lock, rc);
+	}
 
 	if (arg->pca_need_group) {
 		char id[DAOS_UUID_STR_SIZE];
@@ -246,6 +249,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 err_collective:
 	rc_tmp = dss_task_collective(pool_child_delete_one, key);
 	D__ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
+err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_pool:
 	D__FREE_PTR(pool);

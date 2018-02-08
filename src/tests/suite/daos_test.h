@@ -79,10 +79,12 @@ enum {
 	SETUP_CONT_CONNECT,
 };
 
+#define DEFAULT_POOL_SIZE	(4ULL << 30)
 int
 test_teardown(void **state);
 int
-test_setup(void **state, unsigned int step, bool multi_rank);
+test_setup(void **state, unsigned int step, bool multi_rank,
+	   daos_size_t pool_size);
 
 static inline int
 async_enable(void **state)

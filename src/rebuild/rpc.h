@@ -58,6 +58,11 @@ struct rebuild_scan_in {
 	uint32_t	rsi_master_rank;
 };
 
+struct rebuild_scan_out {
+	d_rank_list_t	*rso_ranks_list;
+	int		rso_status;
+};
+
 struct rebuild_out {
 	int	ro_status;
 };

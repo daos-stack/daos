@@ -719,6 +719,7 @@ dss_ult_create_all(void (*func)(void *), void *arg)
 
 struct aggregator_arg_type {
 	struct dss_stream_arg_type	at_args;
+	int				at_rc;
 	void				(*at_reduce)(void *a_args,
 						     void *s_args);
 };
@@ -816,8 +817,12 @@ collective_reduce(void **arg)
 
 	for (i = 1; i < dss_nxstreams + 1; i++) {
 		stream = (struct dss_stream_arg_type *)arg[i];
-		if (stream->st_rc != 0)
+		if (stream->st_rc != 0) {
+			if (aggregator->at_rc == 0)
+				aggregator->at_rc = stream->st_rc;
 			(*nfailed)++;
+		}
+
 		/** optional custom aggregator call provided across streams */
 		if (aggregator->at_reduce)
 			aggregator->at_reduce(aggregator->at_args.st_arg,
@@ -915,7 +920,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	D__FREE(args->ca_stream_args.csa_streams,
 	       (dss_nxstreams) * sizeof(struct dss_stream_arg_type));
 
-	return aggregator.at_args.st_rc;
+	return aggregator.at_rc;
 }
 
 /**
