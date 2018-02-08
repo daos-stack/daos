@@ -911,6 +911,7 @@ class PreReqComponent(object):
         required_libs -- A list of system libraries to be checked for
         defines -- Defines needed to use the component
         package -- Name of package to install
+        patch -- Patch to apply to sources after checkout and before building
         commands -- A list of commands to run to build the component
         retriever -- A retriever object to download component
         extra_lib_path -- Subdirectories to add to dependent component path
@@ -1145,6 +1146,7 @@ class _Component(object):
         requires -- A list of names of required component definitions
         commands -- A list of commands to run to build the component
         package -- Name of package to install
+        patch -- Patch to apply to sources after checkout and before building
         retriever -- A retriever object to download component
         extra_lib_path -- Subdirectories to add to dependent component path
         extra_include_path -- Subdirectories to add to dependent component path
@@ -1174,6 +1176,7 @@ class _Component(object):
         self.defines = kw.get("defines", [])
         self.headers = kw.get("headers", [])
         self.requires = kw.get("requires", [])
+        self.patch = kw.get("patch", None)
         self.prereqs = prereqs
         self.name = name
         self.build_commands = kw.get("commands", [])
@@ -1211,6 +1214,8 @@ class _Component(object):
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
         patch = self.prereqs.get_config("patch_versions", self.name)
+        if patch is None:
+            patch = self.patch
         if self.src_exists():
             self.prereqs.update_src_path(self.name, self.src_path)
             print 'Using existing sources at %s for %s' \
