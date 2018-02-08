@@ -188,18 +188,18 @@ obj_retry_error(int err)
 /**
  * Task Arguments for key punch
  */
-struct tsa_key_punch {
+struct tsa_obj_punch {
 	uint32_t		 pa_opc;
 	uint32_t		 pa_mapv;
 	uuid_t			 pa_coh_uuid;
 	uuid_t			 pa_cont_uuid;
 	struct dc_obj_shard	*pa_shard;
-	daos_obj_punch_key_t	*pa_api_args;
+	daos_obj_punch_t	*pa_api_args;
 	struct dc_object	*pa_obj;
 	crt_rpc_t		*pa_rpc;
 };
 
-int dc_shard_key_punch(tse_task_t *task);
+int dc_shard_punch(tse_task_t *task);
 
 struct dc_obj_shard *obj_shard_hdl2ptr(daos_handle_t hdl);
 void obj_shard_decref(struct dc_obj_shard *shard);

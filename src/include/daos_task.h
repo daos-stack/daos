@@ -343,12 +343,8 @@ typedef struct {
 	daos_handle_t		oh;
 } daos_obj_close_t;
 
-typedef struct {
-	daos_handle_t		oh;
-	daos_epoch_t		epoch;
-} daos_obj_punch_t;
-
 /* NB:
+ * - If @dkey is NULL, it is parameter for object punch.
  * - If @akeys is NULL, it is parameter for dkey punch.
  * - API allows user to punch multiple dkeys, in this case, client module needs
  *   to allocate multiple instances of this data structure.
@@ -359,7 +355,7 @@ typedef struct {
 	daos_key_t		*dkey;
 	daos_key_t		*akeys;
 	unsigned int		 akey_nr;
-} daos_obj_punch_key_t;
+} daos_obj_punch_t;
 
 typedef struct {
 	daos_handle_t		oh;

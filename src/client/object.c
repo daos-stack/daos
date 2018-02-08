@@ -114,6 +114,7 @@ daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
 	args = dc_task_get_args(task);
 	args->epoch	= epoch;
 	args->oh	= oh;
+	/* dkey, akeys are NULL by default */
 
 	return dc_task_schedule(task, true);
 }
@@ -122,13 +123,19 @@ int
 daos_obj_punch_dkeys(daos_handle_t oh, daos_epoch_t epoch, unsigned int nr,
 		     daos_key_t *dkeys, daos_event_t *ev)
 {
-	daos_obj_punch_key_t	*args;
+	daos_obj_punch_t	*args;
 	tse_task_t		*task;
 	int			 rc;
 
-	if (nr != 1) {
+	if (dkeys == NULL) {
+		D__ERROR("NULL dkeys\n");
+		return -DER_INVAL;
+	} else if (nr != 1) {
 		/* TODO: create multiple tasks for punch of multiple dkeys */
 		D__ERROR("Can't punch multiple dkeys for now\n");
+		return -DER_INVAL;
+	} else if (dkeys[0].iov_buf == NULL || dkeys[0].iov_len == 0) {
+		D__ERROR("invalid dkey (NULL iov_buf or zero iov_len.\n");
 		return -DER_INVAL;
 	}
 
@@ -151,9 +158,14 @@ int
 daos_obj_punch_akeys(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		     unsigned int nr, daos_key_t *akeys, daos_event_t *ev)
 {
-	daos_obj_punch_key_t	*args;
+	daos_obj_punch_t	*args;
 	tse_task_t		*task;
 	int			 rc;
+
+	if (dkey == NULL || dkey->iov_buf == NULL || dkey->iov_len == 0) {
+		D_ERROR("NULL or invalid dkey\n");
+		return -DER_INVAL;
+	}
 
 	DAOS_API_ARG_ASSERT(*args, OBJ_PUNCH_AKEYS);
 	rc = dc_task_create(dc_obj_punch_akeys, NULL, ev, &task);

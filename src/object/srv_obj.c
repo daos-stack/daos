@@ -1137,18 +1137,22 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 		D__ERROR("send reply failed: %d\n", rc);
 }
 
-void
-ds_obj_punch_handler(crt_rpc_t *rpc)
-{
+struct obj_punch_args {
 	struct obj_punch_in	*opi;
+	crt_opcode_t		 opc;
+	uint32_t		 map_version;
+};
+
+static int
+ds_obj_punch(void *punch_args)
+{
+	struct obj_punch_args	*args = punch_args;
+	struct obj_punch_in	*opi = args->opi;
 	struct ds_cont_hdl	*cont_hdl = NULL;
 	struct ds_cont		*cont = NULL;
 	uint32_t		 map_version = 0;
 	int			 i;
 	int			 rc;
-
-	opi = crt_req_get(rpc);
-	D__ASSERT(opi != NULL);
 
 	rc = ds_check_container(opi->opi_co_hdl, opi->opi_co_uuid,
 				&cont_hdl, &cont);
@@ -1167,18 +1171,22 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		       opi->opi_map_ver, map_version);
 	}
 
-	for (i = 0; i < opi->opi_dkeys.da_count; i++) {
-		daos_key_t *dkey;
+	switch (opc_get(args->opc)) {
+	default:
+		D__ERROR("opc %#x not supported\n", opc_get(args->opc));
+		D__GOTO(out, rc = -DER_NOSYS);
 
-		dkey = &((daos_key_t *)opi->opi_dkeys.da_arrays)[i];
+	case DAOS_OBJ_RPC_PUNCH:
+		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
+				   opi->opi_epoch, cont_hdl->sch_uuid,
+				   opi->opi_map_ver, NULL, 0, NULL);
+		break;
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+		for (i = 0; i < opi->opi_dkeys.da_count; i++) {
+			daos_key_t *dkey;
 
-		switch (opc_get(rpc->cr_opc)) {
-		default:
-			D__PRINT("Not supported\n");
-			D__GOTO(out, rc = -DER_NOSYS);
-
-		case DAOS_OBJ_RPC_PUNCH_DKEYS:
-		case DAOS_OBJ_RPC_PUNCH_AKEYS:
+			dkey = &((daos_key_t *)opi->opi_dkeys.da_arrays)[i];
 			rc = vos_obj_punch(cont->sc_hdl,
 					   opi->opi_oid,
 					   opi->opi_epoch,
@@ -1188,16 +1196,38 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 					   opi->opi_akeys.da_arrays);
 			if (rc)
 				D__GOTO(out, rc);
-			break;
 		}
+		break;
 	}
+
 out:
-	obj_punch_complete(rpc, rc, map_version);
 	if (cont_hdl) {
 		if (!cont_hdl->sch_cont)
 			ds_cont_put(cont); /* -1 for rebuild container */
 		ds_cont_hdl_put(cont_hdl);
 	}
+	args->map_version = map_version;
+	return rc;
+}
+
+void
+ds_obj_punch_handler(crt_rpc_t *rpc)
+{
+	struct obj_punch_in	*opi;
+	struct obj_punch_args	 args;
+	int			 rc;
+
+	opi = crt_req_get(rpc);
+	D__ASSERT(opi != NULL);
+	args.opi = opi;
+	args.opc = rpc->cr_opc;
+
+	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH)
+		rc = dss_task_collective(ds_obj_punch, &args);
+	else
+		rc = ds_obj_punch(&args);
+
+	obj_punch_complete(rpc, rc, args.map_version);
 }
 
 /**
@@ -1211,7 +1241,8 @@ ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools)
 {
 	ABT_pool pool;
 
-	if (opc_get(rpc->cr_opc) == DAOS_OBJ_DKEY_RPC_ENUMERATE)
+	if (opc_get(rpc->cr_opc) == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
+	    opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH)
 		pool = pools[DSS_POOL_SHARE];
 	else
 		pool = pools[DSS_POOL_PRIV];

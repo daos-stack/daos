@@ -1384,8 +1384,8 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		D__ASSERT(ret == 1);
 
 		if (props->size == 0 || dkey_num > props->dkey_num) {
-			daos_obj_punch_key_t *p_args;
-			daos_key_t	     *dkey;
+			daos_obj_punch_t	*p_args;
+			daos_key_t		*dkey;
 
 			/*
 			 * Punch the entire dkey since it's in a higher dkey

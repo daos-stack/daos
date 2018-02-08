@@ -368,6 +368,10 @@ obj_shard_dkey2tag(struct dc_obj_shard *dobj, daos_key_t *dkey)
 {
 	uint64_t hash;
 
+	/** for NULL dkey return tag 0, for example the usage of obj_punch */
+	if (dkey == NULL)
+		return 0;
+
 	/** XXX hash is calculated twice (see cli_obj_dkey2shard) */
 	hash = daos_hash_murmur64((unsigned char *)dkey->iov_buf,
 				  dkey->iov_len, 5731);
@@ -610,10 +614,10 @@ out_task:
 }
 
 int
-dc_shard_key_punch(tse_task_t *task)
+dc_shard_punch(tse_task_t *task)
 {
-	struct tsa_key_punch	*args;
-	daos_obj_punch_key_t	*api_args;
+	struct tsa_obj_punch	*args;
+	daos_obj_punch_t	*api_args;
 	struct dc_pool		*pool;
 	struct dc_obj_shard	*shard;
 	struct obj_punch_in	*opi;
@@ -656,7 +660,7 @@ dc_shard_key_punch(tse_task_t *task)
 	opi->opi_map_ver	 = args->pa_mapv;
 	opi->opi_epoch		 = api_args->epoch;
 	opi->opi_oid		 = oid;
-	opi->opi_dkeys.da_count  = 1;
+	opi->opi_dkeys.da_count  = (api_args->dkey == NULL) ? 0 : 1;
 	opi->opi_dkeys.da_arrays = api_args->dkey;
 	opi->opi_akeys.da_count	 = api_args->akey_nr;
 	opi->opi_akeys.da_arrays = api_args->akeys;

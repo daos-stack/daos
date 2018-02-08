@@ -399,6 +399,14 @@ obj_dkey2update_grp(struct dc_object *obj, daos_key_t *dkey,
 	return 0;
 }
 
+static void
+obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard,
+	       uint32_t *shard_nr)
+{
+	*start_shard = 0;
+	*shard_nr = obj->cob_layout->ol_nr;
+}
+
 static int
 obj_ptr2poh(struct dc_object *obj, daos_handle_t *ph)
 {
@@ -1134,9 +1142,9 @@ dc_obj_single_shard_list_dkey(tse_task_t *task)
 }
 
 static int
-key_punch_comp_cb(tse_task_t *task, void *data)
+obj_punch_comp_cb(tse_task_t *task, void *data)
 {
-	struct tsa_key_punch	*args;
+	struct tsa_obj_punch	*args;
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
 
@@ -1155,8 +1163,8 @@ key_punch_comp_cb(tse_task_t *task, void *data)
 }
 
 static int
-key_punch(tse_task_t *api_task, enum obj_rpc_opc opc,
-	  daos_obj_punch_key_t *api_args)
+obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
+		   daos_obj_punch_t *api_args)
 {
 	tse_sched_t	   *sched = tse_task2sched(api_task);
 	struct dc_object   *obj;
@@ -1195,10 +1203,15 @@ key_punch(tse_task_t *api_task, enum obj_rpc_opc opc,
 	if (rc)
 		D_GOTO(out_task, rc);
 
-	rc = obj_dkey2update_grp(obj, api_args->dkey, map_ver,
-				 &shard_first, &shard_nr);
-	if (rc != 0)
-		D_GOTO(out_task, rc);
+	if (opc == DAOS_OBJ_RPC_PUNCH) {
+		obj_ptr2shards(obj, &shard_first, &shard_nr);
+	} else {
+		D__ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
+		rc = obj_dkey2update_grp(obj, api_args->dkey, map_ver,
+					 &shard_first, &shard_nr);
+		if (rc != 0)
+			D_GOTO(out_task, rc);
+	}
 
 	D__DEBUG(DB_IO, "punch "DF_OID" start %u cnt %u\n",
 		 DP_OID(obj->cob_md.omd_id), shard_first, shard_nr);
@@ -1206,7 +1219,7 @@ key_punch(tse_task_t *api_task, enum obj_rpc_opc opc,
 	DAOS_INIT_LIST_HEAD(&head);
 	for (i = 0; i < shard_nr; i++) {
 		tse_task_t		*task;
-		struct tsa_key_punch	*args;
+		struct tsa_obj_punch	*args;
 		daos_handle_t		 soh;
 
 		rc = obj_shard_open(obj, shard_first + i, map_ver, &soh);
@@ -1218,7 +1231,7 @@ key_punch(tse_task_t *api_task, enum obj_rpc_opc opc,
 		if (rc != 0)
 			D_GOTO(out_task, rc);
 
-		rc = tse_task_create(dc_shard_key_punch, sched, NULL, &task);
+		rc = tse_task_create(dc_shard_punch, sched, NULL, &task);
 		if (rc != 0)
 			D_GOTO(out_task, rc);
 
@@ -1235,7 +1248,7 @@ key_punch(tse_task_t *api_task, enum obj_rpc_opc opc,
 		uuid_copy(args->pa_cont_uuid, cont_uuid);
 
 		/** Register retry CB */
-		rc = tse_task_register_comp_cb(task, key_punch_comp_cb,
+		rc = tse_task_register_comp_cb(task, obj_punch_comp_cb,
 					       NULL, 0);
 		if (rc != 0) {
 			tse_task_complete(task, rc);
@@ -1268,124 +1281,6 @@ struct obj_punch_args {
 	daos_handle_t	*hdlp;
 };
 
-static int
-dc_punch_cb(tse_task_t *task, void *arg)
-{
-	struct obj_punch_args	*punch_args = (struct obj_punch_args *)arg;
-	struct obj_punch_in	*opi;
-	uint32_t		 opc;
-	int                      ret = task->dt_result;
-	int			 rc = 0;
-
-	opc = opc_get(punch_args->rpc->cr_opc);
-
-	opi = crt_req_get(punch_args->rpc);
-	D__ASSERT(opi != NULL);
-	if (ret != 0) {
-		D__ERROR("RPC %d failed: %d\n", opc, ret);
-		D__GOTO(out, ret);
-	}
-
-	rc = obj_reply_get_status(punch_args->rpc);
-	if (rc != 0) {
-		D__ERROR("rpc %p RPC %d failed: %d\n", punch_args->rpc, opc, rc);
-		D__GOTO(out, rc);
-	}
-
-out:
-	crt_req_decref(punch_args->rpc);
-	dc_pool_put((struct dc_pool *)punch_args->hdlp);
-
-	if (ret == 0 || obj_retry_error(rc))
-		ret = rc;
-	return ret;
-}
-
-static int
-dc_obj_punch_int(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
-		 uint32_t nr_dkeys, daos_key_t *dkeys, uint32_t nr_akeys,
-		 daos_key_t *akeys, tse_task_t *task)
-{
-	crt_endpoint_t		tgt_ep;
-	struct dc_pool		*pool;
-	struct dc_object	*obj;
-	crt_rpc_t		*req;
-	uuid_t			cont_hdl_uuid;
-	uuid_t			cont_uuid;
-	struct obj_punch_in	*opi;
-	struct obj_punch_args	punch_args;
-	unsigned int		map_ver;
-	daos_handle_t		ch;
-	int			rc;
-
-	obj = obj_hdl2ptr(oh);
-	if (!obj)
-		D_GOTO(out_task, rc = -DER_NO_HDL);
-
-	rc = obj_ptr2pm_ver(obj, &map_ver);
-	if (rc)
-		D__GOTO(out_task, rc);
-
-	ch = obj_hdl2cont_hdl(oh);
-	if (daos_handle_is_inval(ch))
-		D__GOTO(out_task, rc = -DER_NO_HDL);
-
-	rc = dc_cont_hdl2uuid(ch, &cont_hdl_uuid, &cont_uuid);
-	if (rc != 0)
-		D__GOTO(out_task, rc);
-
-	pool = dc_hdl2pool(dc_cont_hdl2pool_hdl(ch));
-	if (pool == NULL)
-		D__GOTO(out_task, rc = -DER_NO_HDL);
-
-	tgt_ep.ep_grp = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &tgt_ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
-
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
-	if (rc != 0)
-		D__GOTO(out_pool, rc);
-
-	opi = crt_req_get(req);
-	D__ASSERT(opi != NULL);
-
-	uuid_copy(opi->opi_co_hdl, cont_hdl_uuid);
-	uuid_copy(opi->opi_co_uuid, cont_uuid);
-
-	opi->opi_map_ver	 = map_ver;
-	opi->opi_epoch		 = epoch;
-	opi->opi_dkeys.da_count	 = nr_dkeys;
-	opi->opi_dkeys.da_arrays = dkeys;
-	opi->opi_akeys.da_count	 = nr_akeys;
-	opi->opi_akeys.da_arrays = akeys;
-
-	crt_req_addref(req);
-	punch_args.rpc = req;
-	punch_args.hdlp = (daos_handle_t *)pool;
-	rc = tse_task_register_comp_cb(task, dc_punch_cb, &punch_args,
-				       sizeof(punch_args));
-	if (rc != 0)
-		D__GOTO(out_args, rc);
-
-	rc = daos_rpc_send(req, task);
-	if (rc != 0) {
-		D__ERROR("update/fetch rpc failed rc %d\n", rc);
-		D__GOTO(out_args, rc);
-	}
-
-	return rc;
-
-out_args:
-	crt_req_decref(req);
-	crt_req_decref(req);
-out_pool:
-	dc_pool_put(pool);
-out_task:
-	tse_task_complete(task, rc);
-	return rc;
-}
-
 int
 dc_obj_punch(tse_task_t *task)
 {
@@ -1394,27 +1289,26 @@ dc_obj_punch(tse_task_t *task)
 	args = dc_task_get_args(task);
 	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	return dc_obj_punch_int(args->oh, DAOS_OBJ_RPC_PUNCH, args->epoch,
-				0, NULL, 0, NULL, task);
+	return obj_punch_internal(task, DAOS_OBJ_RPC_PUNCH, args);
 }
 
 int
 dc_obj_punch_dkeys(tse_task_t *task)
 {
-	daos_obj_punch_key_t	*args;
+	daos_obj_punch_t	*args;
 
 	args = dc_task_get_args(task);
 	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	return key_punch(task, DAOS_OBJ_RPC_PUNCH_DKEYS, args);
+	return obj_punch_internal(task, DAOS_OBJ_RPC_PUNCH_DKEYS, args);
 }
 int
 dc_obj_punch_akeys(tse_task_t *task)
 {
-	daos_obj_punch_key_t	*args;
+	daos_obj_punch_t	*args;
 
 	args = dc_task_get_args(task);
 	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	return key_punch(task, DAOS_OBJ_RPC_PUNCH_AKEYS, args);
+	return obj_punch_internal(task, DAOS_OBJ_RPC_PUNCH_AKEYS, args);
 }

@@ -70,7 +70,6 @@ struct daos_task_args {
 		daos_obj_open_t		obj_open;
 		daos_obj_close_t	obj_close;
 		daos_obj_punch_t	obj_punch;
-		daos_obj_punch_key_t	obj_punch_key;
 		daos_obj_query_t	obj_query;
 		daos_obj_fetch_t	obj_fetch;
 		daos_obj_update_t	obj_update;
