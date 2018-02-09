@@ -113,7 +113,9 @@ ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 }
 
 struct ds_bulk_async_args {
-	ABT_future	future;
+	int		bulks_inflight;
+	int		all_bulks_issued;
+	ABT_eventual	eventual;
 	int		result;
 };
 
@@ -140,7 +142,11 @@ bulk_complete_cb(const struct crt_bulk_cb_info *cb_info)
 	 **/
 	if (arg->result == 0)
 		arg->result = rc;
-	ABT_future_set(arg->future, &rc);
+
+	D__ASSERT(arg->bulks_inflight > 0);
+	arg->bulks_inflight--;
+	if (arg->bulks_inflight == 0)
+		ABT_eventual_set(arg->eventual, &rc, sizeof(rc));
 
 	crt_bulk_free(local_bulk_hdl);
 	crt_req_decref(rpc);
@@ -195,18 +201,16 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 {
 	crt_bulk_opid_t		bulk_opid;
 	crt_bulk_perm_t		bulk_perm;
-	ABT_future		future;
-	struct ds_bulk_async_args arg;
+	struct ds_bulk_async_args arg = { 0 };
 	int			i;
 	int			rc;
+	int			*status;
 
 	bulk_perm = bulk_op == CRT_BULK_PUT ? CRT_BULK_RO : CRT_BULK_RW;
-	rc = ABT_future_create(sgl_nr, NULL, &future);
+	rc = ABT_eventual_create(sizeof(*status), &arg.eventual);
 	if (rc != 0)
 		return dss_abterr2der(rc);
 
-	memset(&arg, 0, sizeof(arg));
-	arg.future = future;
 	for (i = 0; i < sgl_nr; i++) {
 		daos_sg_list_t		*sgl;
 		struct crt_bulk_desc	 bulk_desc;
@@ -214,20 +218,20 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		int			 ret = 0;
 		daos_size_t		 offset = 0;
 		unsigned int		 idx = 0;
-		bool			 did_something = false;
 
-		if (remote_bulks[i] == NULL) {
-			ABT_future_set(future, &ret);
+		if (remote_bulks[i] == NULL)
 			continue;
-		}
 
 		if (sgls != NULL) {
 			sgl = sgls[i];
 		} else {
 			D__ASSERT(!daos_handle_is_inval(ioh));
 			ret = vos_obj_zc_sgl_at(ioh, i, &sgl);
-			if (ret)
-				ABT_future_set(future, &ret);
+			if (ret) {
+				if (rc == 0)
+					rc = ret;
+				continue;
+			}
 			D__ASSERT(sgl != NULL);
 		}
 
@@ -237,7 +241,8 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			 * performance evaluation on low bandwidth network.
 			 */
 			ret = bulk_bypass(sgl, bulk_op);
-			ABT_future_set(future, &ret);
+			if (rc == 0)
+				rc = ret;
 			continue;
 		}
 
@@ -247,8 +252,6 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		 * vos_recx_fetch()), and skip these empty iov during bulk
 		 * transfer to avoid touching the input buffer.
 		 *
-		 * XXX: initial value of future can't match with bulk transfers
-		 * if there are holes.
 		 */
 		while (idx < sgl->sg_nr.num_out) {
 			daos_sg_list_t	sgl_sent;
@@ -269,7 +272,6 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			if (idx == sgl->sg_nr.num_out)
 				break;
 
-			did_something = true;
 			start = idx;
 			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
 			/* Find the end of the non-empty record */
@@ -288,14 +290,10 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			if (ret != 0) {
 				D__ERROR("crt_bulk_create i %d failed, rc: %d\n",
 					i, ret);
-				/**
-				 * Sigh, future can not be abort now, let's
-				 * continue until of all of future compartments
-				 * have been set.
-				 */
-				ABT_future_set(future, &ret);
 				if (rc == 0)
 					rc = ret;
+				offset += length;
+				continue;
 			}
 
 			crt_req_addref(rpc);
@@ -308,28 +306,36 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			bulk_desc.bd_remote_off	= offset;
 			bulk_desc.bd_local_off	= 0;
 
+			arg.bulks_inflight++;
 			ret = crt_bulk_transfer(&bulk_desc, bulk_complete_cb,
 						&arg, &bulk_opid);
 			if (ret < 0) {
 				D__ERROR("crt_bulk_transfer failed, rc: %d.\n",
 					ret);
+				arg.bulks_inflight--;
 				crt_bulk_free(local_bulk_hdl);
 				crt_req_decref(rpc);
-				ABT_future_set(future, &ret);
 				if (rc == 0)
 					rc = ret;
 			}
 			offset += length;
 		}
-		if (!did_something)
-			ABT_future_set(future, &ret);
 	}
 
-	ABT_future_wait(future);
+	/* The bulk might already finished or no bulk at all */
+	if (arg.bulks_inflight == 0)
+		ABT_eventual_set(arg.eventual, &rc, sizeof(rc));
+
+	rc = ABT_eventual_wait(arg.eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D__GOTO(out_eventual, rc = dss_abterr2der(rc));
+
+	rc = *status;
+	/* arg.result might not be set through bulk_complete_cb */
 	if (rc == 0)
 		rc = arg.result;
-
-	ABT_future_free(&future);
+out_eventual:
+	ABT_eventual_free(&arg.eventual);
 	return rc;
 }
 
