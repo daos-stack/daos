@@ -62,7 +62,7 @@ dbh_lock_fini(struct d_binheap *h)
 		return;
 
 	if (h->d_bh_feats & DBH_FT_RWLOCK)
-		pthread_rwlock_destroy(&h->d_bh_rwlock);
+		D_RWLOCK_DESTROY(&h->d_bh_rwlock);
 	else
 		D_MUTEX_DESTROY(&h->d_bh_mutex);
 }

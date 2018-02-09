@@ -760,8 +760,10 @@ crt_context_req_track(crt_rpc_t *req)
 		epi->epi_ref = 1;
 		epi->epi_initialized = 1;
 		rc = D_MUTEX_INIT(&epi->epi_mutex, NULL);
-		if (rc != 0)
+		if (rc != 0) {
+			D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 			D_GOTO(out, rc);
+		}
 
 		rc = d_chash_rec_insert(&crt_ctx->cc_epi_table, &ep_rank,
 					sizeof(ep_rank), &epi->epi_link,

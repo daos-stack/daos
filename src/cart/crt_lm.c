@@ -584,7 +584,7 @@ lm_prog_cb(crt_context_t crt_ctx, void *arg)
 {
 	struct lm_grp_srv_t		*lm_grp_srv;
 	int				 ctx_idx;
-	int				 rc;
+	int				 rc = 0;
 
 	D_ASSERT(crt_initialized());
 	D_ASSERT(crt_is_service());
@@ -1225,7 +1225,7 @@ crt_hdlr_memb_sample(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc);
 	}
 	rc = crt_grp_failed_ranks_dup(NULL, &failed_ranks);
-	if (rc != 0) {
+	if (rc != 0 || failed_ranks == NULL) {
 		D_ERROR("crt_grp_failed_ranks_dup() failed. rc %d\n", rc);
 		out_data->mso_rc = rc;
 		crt_reply_send(rpc_req);
@@ -1429,6 +1429,7 @@ crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 					lm_grp_priv->lgp_psr_cand[i].pc_rank);
 		if (rc != 0) {
 			D_ERROR("d_rank_list_append() failed, rc: %d\n", rc);
+			D_RWLOCK_UNLOCK(&lm_grp_priv->lgp_rwlock);
 			D_GOTO(out, rc);
 		}
 	}

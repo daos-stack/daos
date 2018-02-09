@@ -336,6 +336,7 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 	rpc = iv_info->ifc_child_rpc;
 	iv_ops = crt_iv_ops_get(iv_info->ifc_ivns_internal,
 				iv_info->ifc_class_id);
+	D_ASSERT(iv_ops != NULL);
 
 	if (rpc) {
 		/* If there is child to respond to - bulk transfer to it */
@@ -1004,6 +1005,7 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	class_id = iv_info->ifc_class_id;
 
 	iv_ops = crt_iv_ops_get(ivns, class_id);
+	D_ASSERT(iv_ops != NULL);
 
 	IV_DBG(&input->ifi_key, "response received, rc = %d\n", rc);
 
@@ -1759,6 +1761,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 #endif
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
+	D_ASSERT(iv_ops != NULL);
 
 	switch (sync_type.ivs_mode) {
 	case CRT_IV_SYNC_NONE:

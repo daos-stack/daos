@@ -210,8 +210,12 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 #define D_ALLOC_ARRAY(ptr, count) D_ALLOC_CORE(ptr, sizeof(*ptr), count)
 #define D_FREE_PTR(ptr)		D_FREE(ptr)
 
-#define D_GOTO(label, rc)	do { ((void)(rc)); goto label; } while (0)
-
+#define D_GOTO(label, rc)			\
+	do {					\
+		typeof(rc) __rc = (rc);		\
+		(void)(__rc);			\
+		goto label;			\
+	} while (0)
 
 /* Internal helper macros, not to be called directly by the outside caller */
 #define __D_PTHREAD(fn, x)						\
@@ -314,7 +318,7 @@ int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
 int d_sgl_init(d_sg_list_t *sgl, unsigned int nr);
 void d_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
 void d_getenv_bool(const char *env, bool *bool_val);
-void d_getenv_int(const char *env, unsigned *int_val);
+void d_getenv_int(const char *env, unsigned int *int_val);
 
 
 #if !defined(container_of)
@@ -456,7 +460,7 @@ d_timeleft_ns(const struct timespec *expiration)
 
 /* calculate the number in us after \param sec_diff second */
 static inline uint64_t
-d_timeus_secdiff(unsigned sec_diff)
+d_timeus_secdiff(unsigned int sec_diff)
 {
 	struct timespec		now;
 	uint64_t		us;

@@ -183,6 +183,7 @@ int bulk_test_cb(const struct crt_bulk_cb_info *cb_info)
 	unsigned char md5[16];
 	d_string_t md5_str = (d_string_t)malloc(33);
 
+	D_ASSERT(md5_str != NULL);
 	memset(md5_str, 0, 33);
 
 	rc = MD5_Init(&md5_ctx);
@@ -256,7 +257,9 @@ echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	       rpc_req->cr_opc, e_req->bulk_intro_msg, bulk_len, bulk_sgnum);
 
 	iovs = (d_iov_t *)malloc(sizeof(d_iov_t));
+	assert(iovs != NULL);
 	iovs[0].iov_buf = malloc(bulk_len);
+	assert(iovs[0].iov_buf != NULL);
 	iovs[0].iov_buf_len = bulk_len;
 	memset(iovs[0].iov_buf, 0, iovs[0].iov_buf_len);
 	sgl.sg_nr.num = 1;

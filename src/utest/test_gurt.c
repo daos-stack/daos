@@ -965,6 +965,7 @@ test_gurt_hash_decref(void **state)
 	d_list_t		 *test;
 
 	D_ALLOC_PTR(entry);
+	assert_non_null(entry);
 
 	/* Create a minimum-size hash table */
 	rc = d_chash_table_create(D_HASH_FT_EPHEMERAL, num_bits, NULL,
@@ -1260,7 +1261,9 @@ _test_gurt_hash_threaded_same_operations(void *(*fn)(struct hash_thread_arg *),
 	void			*thread_result;
 
 	/* Use barrier to make sure all threads start at the same time */
-	pthread_barrier_init(&barrier, NULL, TEST_GURT_HASH_NUM_THREADS + 1);
+	rc = pthread_barrier_init(&barrier, NULL,
+				TEST_GURT_HASH_NUM_THREADS + 1);
+	assert_int_equal(rc, 0);
 
 	for (i = 0; i < TEST_GURT_HASH_NUM_THREADS; i++) {
 		thread_args[i].thread_idx = i;
@@ -1292,7 +1295,8 @@ _test_gurt_hash_threaded_same_operations(void *(*fn)(struct hash_thread_arg *),
 	assert_int_equal(rc, 0);
 
 	/* Cleanup barrier */
-	pthread_barrier_destroy(&barrier);
+	rc = pthread_barrier_destroy(&barrier);
+	assert_int_equal(rc, 0);
 }
 
 /**

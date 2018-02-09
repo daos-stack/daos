@@ -142,8 +142,10 @@ int main(int argc, char **argv)
 	printf("Waiting for stop rpc\n");
 	D_MUTEX_LOCK(&lock);
 	while (done == 0)
-		pthread_cond_wait(&cond, &lock);
+		rc = pthread_cond_wait(&cond, &lock);
+
 	D_MUTEX_UNLOCK(&lock);
+	printf("Stop rpc exited with rc = %d\n", rc);
 
 	status = STOP;
 	printf("Waiting for threads to stop\n");

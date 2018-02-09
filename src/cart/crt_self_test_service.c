@@ -195,6 +195,7 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 	struct st_buf_entry	*new_entry;
 	int			 ret;
 
+	D_ASSERT(return_entry != NULL);
 	/* No returned buffer yet */
 	*return_entry = NULL;
 
@@ -225,7 +226,6 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 	if (test_buf_len == 0)
 		return 0;
 
-	D_ASSERT(return_entry != NULL);
 	D_ASSERT(alloc_buf_len > 0);
 
 	D_ALLOC_PTR(new_entry);
@@ -498,7 +498,7 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 		/************ UNLOCK: session->buf_list_lock ************/
 	}
 
-	if (do_decref) {
+	if (do_decref && session) {
 		/* addref in crt_self_test_msg_handler */
 		decref_session(session);
 	}

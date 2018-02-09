@@ -824,8 +824,8 @@ out:
 	if (rc != 0) {
 		crt_context_req_untrack(&rpc_priv->crp_pub);
 		crt_rpc_complete(rpc_priv, rc);
-		RPC_DECREF(rpc_priv); /* destroy */
 	}
+
 	/* addref in crt_req_hg_addr_lookup */
 	RPC_DECREF(rpc_priv);
 	return rc;

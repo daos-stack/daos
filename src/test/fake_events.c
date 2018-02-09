@@ -77,6 +77,14 @@ fake_event_thread(void *arg)
 			break;
 		}
 		fifo_pipe = fdopen(fd, "r");
+
+		if (fifo_pipe == NULL) {
+			D_ERROR("fdopen() failed. error: %s\n",
+				strerror(errno));
+			close(fd);
+			break;
+		}
+
 		pollfds[0].fd = fd;
 		pollfds[0].events = POLLIN;
 		pollfds[0].revents = 0;

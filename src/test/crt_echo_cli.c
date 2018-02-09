@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -225,15 +225,21 @@ static void run_client(void)
 	assert(rc == 0 && rpc_req != NULL);
 
 	iovs = (d_iov_t *)malloc(2 * sizeof(d_iov_t));
+	assert(iovs != NULL);
+
 	iovs[0].iov_buf_len = 4097;
 	iovs[0].iov_len = 4097;
 	iovs[0].iov_buf = malloc(iovs[0].iov_buf_len);
+	assert(iovs[0].iov_buf != NULL);
+
 	pchar = iovs[0].iov_buf;
 	for (i = 0; i < iovs[0].iov_buf_len; i++)
 		*(pchar++) = i + myrank;
 	iovs[1].iov_buf_len = 1*1024*1024 + 11;
 	iovs[1].iov_len = 1*1024*1024 + 11;
 	iovs[1].iov_buf = malloc(iovs[1].iov_buf_len);
+	assert(iovs[1].iov_buf != NULL);
+
 	pchar = iovs[1].iov_buf;
 	for (i = 0; i < iovs[1].iov_buf_len; i++)
 		*(pchar++) = random();
@@ -244,7 +250,7 @@ static void run_client(void)
 	MD5_CTX md5_ctx;
 	unsigned char md5[16];
 	d_string_t md5_str = (d_string_t)malloc(33);
-
+	assert(md5_str != NULL);
 	memset(md5_str, 0, 33);
 
 	rc = MD5_Init(&md5_ctx);

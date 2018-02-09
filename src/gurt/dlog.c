@@ -357,6 +357,10 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	}
 	(void) gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
+	if (tm == NULL) {
+		fprintf(stderr, "clog: localtime returned NULL\n");
+		return;
+	}
 
 	/*
 	 * ok, first, put the header into b[]

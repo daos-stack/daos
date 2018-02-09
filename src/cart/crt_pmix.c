@@ -484,6 +484,11 @@ crt_pmix_uri_lookup(crt_group_id_t srv_grpid, d_rank_t rank, char **uri)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	PMIX_PDATA_CREATE(pdata, 1);
+	if (pdata == NULL) {
+		D_ERROR("PMIX_PDATA_CREATE returned NULL\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
 	snprintf(pdata[0].key, PMIX_MAX_NSLEN + 5, "cart-%s-%d-uri",
 		 srv_grpid, rank);
 	rc = PMIx_Lookup(&pdata[0], 1, NULL, 0);
@@ -517,7 +522,7 @@ crt_pmix_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 	int		rc;
 
 	D_ASSERT(grp_priv != NULL);
-	D_ASSERT(psr_rank >= 0 && psr_rank < grp_priv->gp_size);
+	D_ASSERT(psr_rank < grp_priv->gp_size);
 
 	rc = crt_pmix_uri_lookup(grp_priv->gp_pub.cg_grpid,
 				 psr_rank, &uri);
@@ -542,6 +547,11 @@ crt_pmix_attach(struct crt_grp_priv *grp_priv)
 	D_ASSERT(grp_priv != NULL);
 
 	PMIX_PDATA_CREATE(pdata, 1);
+	if (pdata == NULL) {
+		D_ERROR("PMIX_PDATA_CREATE returned NULL\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
 	snprintf(pdata[0].key, PMIX_MAX_KEYLEN + 1, "cart-%s-size",
 		 grp_priv->gp_pub.cg_grpid);
 	rc = PMIx_Lookup(pdata, 1, NULL, 0);
@@ -707,11 +717,13 @@ crt_plugin_pmix_init(void)
 	if (rc != 0) {
 		D_ERROR("sem_wait failed, rc: %d.\n", rc);
 		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+		sem_destroy(&token_to_proceed);
 		return -DER_MISC;
 	}
 
 	crt_plugin_gdata.cpg_pmix_errhdlr_inited = 1;
 	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+	sem_destroy(&token_to_proceed);
 	return -DER_SUCCESS;
 }
 

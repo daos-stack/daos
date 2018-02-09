@@ -150,7 +150,7 @@ static int
 crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 {
 	struct d_chash_table	**htables;
-	int			  rc, i;
+	int			  i, rc = 0;
 
 	D_ASSERT(grp_priv != NULL);
 	if (grp_priv->gp_primary == 0) {
@@ -1338,8 +1338,8 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 		D_GOTO(out, rc);
 	}
 	gd_in = crt_req_get(gd_corpc);
-	gd_in->gd_grp_id = grp->cg_grpid;
 	D_ASSERT(gd_in != NULL);
+	gd_in->gd_grp_id = grp->cg_grpid;
 	crt_group_rank(NULL, &gd_in->gd_initiate_rank);
 
 	rc = crt_req_send(gd_corpc, grp_destroy_corpc_cb, grp_priv);
@@ -1711,7 +1711,7 @@ crt_get_tag_uri(const char *base_uri, int tag)
 	D_ALLOC(tag_uri, CRT_ADDR_STR_MAX_LEN);
 	if (tag_uri == NULL)
 		D_GOTO(out, 0);
-	strncpy(tag_uri, base_uri, CRT_ADDR_STR_MAX_LEN);
+	strncpy(tag_uri, base_uri, CRT_ADDR_STR_MAX_LEN - 1);
 
 	if (tag == 0)
 		D_GOTO(out, 0);
@@ -2073,13 +2073,17 @@ crt_grp_init(crt_group_id_t grpid)
 	D_INIT_LIST_HEAD(&grp_gdata->gg_cli_grps_attached);
 	D_INIT_LIST_HEAD(&grp_gdata->gg_srv_grps_attached);
 	D_INIT_LIST_HEAD(&grp_gdata->gg_sub_grps);
-	D_RWLOCK_INIT(&grp_gdata->gg_rwlock, NULL);
+	rc = D_RWLOCK_INIT(&grp_gdata->gg_rwlock, NULL);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	crt_gdata.cg_grp = grp_gdata;
 
 	rc = crt_pmix_init();
-	if (rc != 0)
+	if (rc != 0) {
+		D_RWLOCK_DESTROY(&grp_gdata->gg_rwlock);
 		D_GOTO(out, rc);
+	}
 	pmix_gdata = grp_gdata->gg_pmix;
 	D_ASSERT(grp_gdata->gg_pmix_inited == 1);
 	D_ASSERT(pmix_gdata != NULL);
@@ -2087,6 +2091,7 @@ crt_grp_init(crt_group_id_t grpid)
 	rc = crt_primary_grp_init(grpid);
 	if (rc != 0) {
 		crt_pmix_fini();
+		D_RWLOCK_DESTROY(&grp_gdata->gg_rwlock);
 		D_GOTO(out, rc);
 	}
 
@@ -2770,7 +2775,7 @@ crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 {
 	d_rank_t	psr_rank;
 	crt_phy_addr_t	uri = NULL, psr_phy_addr = NULL;
-	int		rc;
+	int		rc = 0;
 
 	psr_rank = grp_priv->gp_psr_rank;
 	while (1) {
