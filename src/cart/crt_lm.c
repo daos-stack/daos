@@ -1323,7 +1323,7 @@ void
 crt_lm_finalize(void)
 {
 	struct lm_grp_srv_t		*lm_grp_srv;
-	int				 rc;
+	int				 rc = 0;
 
 	if (crt_lm_gdata.clg_inited == 0) {
 		D_DEBUG("cannot finalize before crt_lm_init().\n");

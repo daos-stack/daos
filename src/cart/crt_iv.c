@@ -1696,15 +1696,23 @@ struct iv_sync_cb_info {
 	crt_iv_comp_cb_t		isc_update_comp_cb;
 	void				*isc_cb_arg;
 	int				isc_update_rc;
+
+	/* user private data */
+	void				*isc_user_priv;
 };
 
 /* IV_SYNC response handler */
 static void
 handle_ivsync_response(const struct crt_cb_info *cb_info)
 {
-	struct iv_sync_cb_info *iv_sync = cb_info->cci_arg;
+	struct iv_sync_cb_info	*iv_sync = cb_info->cci_arg;
+	struct crt_iv_ops	*iv_ops;
 
 	crt_bulk_free(iv_sync->isc_bulk_hdl);
+
+	iv_ops = crt_iv_ops_get(iv_sync->isc_ivns_internal,
+				iv_sync->isc_class_id);
+	D_ASSERT(iv_ops != NULL);
 
 	/* do_callback is set based on sync value specified */
 	if (iv_sync->isc_do_callback) {
@@ -1716,6 +1724,8 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 					iv_sync->isc_update_rc,
 					iv_sync->isc_cb_arg);
 
+		iv_ops->ivo_on_put(iv_sync->isc_ivns_internal, NULL,
+					iv_sync->isc_user_priv);
 		D_FREE(iv_sync->isc_iv_key.iov_buf);
 	}
 	D_FREE(iv_sync);
@@ -1736,29 +1746,12 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	crt_rpc_t		*corpc_req;
 	struct iv_sync_in	*input;
 	int			rc = 0;
-	bool			sync = false;
+	bool			delay_completion = false;
 	struct iv_sync_cb_info	*iv_sync_cb = NULL;
 	struct crt_iv_ops	*iv_ops;
 	crt_bulk_t		local_bulk = CRT_BULK_NULL;
 	d_rank_list_t		excluded_list;
 	d_rank_t		excluded_ranks[1]; /* Excluding self */
-
-	/* TODO: An optional feature for future get all ranks between
-	* source node and destination in order to exclude them from
-	* being synchronized (as they already got updated)
-	**/
-#if 0
-	d_rank_t		cur_rank;
-
-	cur_rank = src_node;
-	while (1) {
-		if (cur_rank == dst_node)
-			break;
-
-		cur_rank = get_ranks_parent(ivns_internal, cur_rank,
-					dst_node);
-	}
-#endif
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	D_ASSERT(iv_ops != NULL);
@@ -1768,11 +1761,11 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		D_GOTO(exit, rc = 0);
 
 	case CRT_IV_SYNC_EAGER:
-		sync = true;
+		delay_completion = true;
 		break;
 
 	case CRT_IV_SYNC_LAZY:
-		sync = false;
+		delay_completion = false;
 		break;
 
 	default:
@@ -1798,6 +1791,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
 
+	local_bulk = CRT_BULK_NULL;
 	if (iv_value != NULL) {
 		rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value,
 				CRT_BULK_RO, &local_bulk);
@@ -1805,8 +1799,6 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 			D_ERROR("ctt_bulk_create() failed; rc=%d\n", rc);
 			D_GOTO(exit, rc);
 		}
-	} else {
-		local_bulk = CRT_BULK_NULL;
 	}
 
 	rc = crt_corpc_req_create(ivns_internal->cii_ctx,
@@ -1835,10 +1827,11 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		D_GOTO(exit, rc = -DER_NOMEM);
 
 	iv_sync_cb->isc_bulk_hdl = local_bulk;
-	iv_sync_cb->isc_do_callback = sync;
+	iv_sync_cb->isc_do_callback = delay_completion;
+	iv_sync_cb->isc_user_priv = user_priv;
 
-	/* If sync is set, perform callback from sync response handler */
-	if (sync) {
+	/* Perform callback from sync response handler */
+	if (delay_completion) {
 		iv_sync_cb->isc_update_comp_cb = update_comp_cb;
 		iv_sync_cb->isc_cb_arg = cb_arg;
 		iv_sync_cb->isc_update_rc = update_rc;
@@ -1867,9 +1860,16 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	D_ASSERT(rc == 0);
 
 exit:
-	if (sync == false)
+	if (delay_completion == false || rc != 0) {
+		if (rc != 0)
+			update_rc = rc;
+
 		update_comp_cb(ivns_internal, class_id, iv_key, NULL, iv_value,
 			       update_rc, cb_arg);
+
+		/* on_get() done in crt_iv_update_internal */
+		iv_ops->ivo_on_put(ivns_internal, NULL, user_priv);
+	}
 
 	if (rc != 0) {
 		if (local_bulk != CRT_BULK_NULL)
@@ -1877,7 +1877,6 @@ exit:
 
 		if (iv_sync_cb) {
 			D_FREE(iv_sync_cb->isc_iv_key.iov_buf);
-
 			D_FREE(iv_sync_cb);
 		}
 	}
@@ -1953,7 +1952,8 @@ bulk_update_transfer_back_done(const struct crt_bulk_cb_info *info)
 
 /* Helper function to transfer iv_value back to child */
 static
-void transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info)
+void transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
+			bool do_refresh, int update_rc)
 {
 	struct crt_bulk_desc		bulk_desc = {0};
 	struct iv_update_in		*child_input;
@@ -1968,16 +1968,19 @@ void transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info)
 	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
 	D_ASSERT(iv_ops != NULL);
 
-	rc = iv_ops->ivo_on_refresh(ivns, key, 0, &cb_info->uci_iv_value, false,
-				0, cb_info->uci_user_priv);
+	if (do_refresh)
+		iv_ops->ivo_on_refresh(ivns, key, 0,
+				&cb_info->uci_iv_value,
+				false, 0, cb_info->uci_user_priv);
 
 	/* No more children -- we are the originator; call update_cb */
 	if (cb_info->uci_child_rpc == NULL) {
 		cb_info->uci_comp_cb(ivns, cb_info->uci_class_id, key, NULL,
-				&cb_info->uci_iv_value, rc,
+				&cb_info->uci_iv_value, update_rc,
 				cb_info->uci_cb_arg);
 
-		iv_ops->ivo_on_put(ivns, &cb_info->uci_iv_value,
+		/* Corresponding on_get() done in crt_iv_update_internal */
+		iv_ops->ivo_on_put(ivns, NULL,
 				cb_info->uci_user_priv);
 
 		if (cb_info->uci_bulk_hdl != CRT_BULK_NULL)
@@ -2026,7 +2029,8 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 
 	/* For bi-directional updates, transfer data back to child */
 	if (iv_info->uci_sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
-		transfer_back_to_child(&input->ivu_key, iv_info);
+		transfer_back_to_child(&input->ivu_key, iv_info, true,
+					cb_info->cci_rc);
 		D_GOTO(exit, 0);
 	}
 
@@ -2062,24 +2066,11 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		RPC_PUB_DECREF(iv_info->uci_child_rpc);
 	} else {
 		d_sg_list_t *tmp_iv_value;
-		void *priv;
 
 		if (iv_info->uci_bulk_hdl == NULL)
 			tmp_iv_value = NULL;
 		else
 			tmp_iv_value = &iv_info->uci_iv_value;
-
-		iv_ops = crt_iv_ops_get(iv_info->uci_ivns_internal,
-					iv_info->uci_class_id);
-		D_ASSERT(iv_ops != NULL);
-
-		/* Since ivsysnc_rpc_issue will do local node refresh,
-		 * let's get the write access here.
-		 */
-		rc = iv_ops->ivo_on_get(iv_info->uci_ivns_internal,
-					&input->ivu_key, 0, CRT_IV_PERM_WRITE,
-					NULL, &priv);
-		D_ASSERT(rc == 0);
 
 		crt_ivsync_rpc_issue(iv_info->uci_ivns_internal,
 					iv_info->uci_class_id,
@@ -2090,11 +2081,8 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 					input->ivu_root_node,
 					iv_info->uci_comp_cb,
 					iv_info->uci_cb_arg,
-					priv,
+					iv_info->uci_user_priv,
 					output->rc);
-
-		rc = iv_ops->ivo_on_put(iv_info->uci_ivns_internal,
-					NULL, priv);
 
 	}
 
@@ -2264,7 +2252,8 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 
 		/* If sync was bi-directional - trasnfer value back */
 		if (sync_type->ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
-			transfer_back_to_child(&input->ivu_key, update_cb_info);
+			transfer_back_to_child(&input->ivu_key, update_cb_info,
+						false, update_rc);
 			D_GOTO(exit, rc = update_rc);
 		}
 
@@ -2441,6 +2430,30 @@ send_error:
 }
 
 static int
+check_sync_type(crt_iv_sync_t *sync)
+{
+	int rc = 0;
+
+	D_ASSERT(sync != NULL);
+
+	/* Bidirectional sync is only allowed during UPDATE event */
+	if (sync->ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
+		if (sync->ivs_mode != CRT_IV_SYNC_NONE) {
+			D_ERROR("ivs_mode must be set to CRT_IV_SYNC_NONE\n");
+			return -DER_INVAL;
+		}
+
+		if (sync->ivs_event != CRT_IV_SYNC_EVENT_UPDATE) {
+			D_ERROR("ivs_event must be set to "
+				"CRT_IV_SYNC_EVENT_UPDATE\n");
+			return -DER_INVAL;
+		}
+	}
+
+	return rc;
+}
+
+static int
 crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		       crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
 		       d_sg_list_t *iv_value, crt_iv_shortcut_t shortcut,
@@ -2454,6 +2467,12 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 	struct update_cb_info		*cb_info;
 	void				*priv;
 	int				 rc = 0;
+
+	rc = check_sync_type(&sync_type);
+	if (rc != 0) {
+		D_ERROR("Invalid sync specified\n");
+		D_GOTO(exit, rc);
+	}
 
 	ivns_internal = crt_ivns_internal_get(ivns);
 	if (ivns_internal == NULL) {
@@ -2485,11 +2504,21 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 					true, 0, priv);
 
 	if (rc == 0) {
-		/* issue sync. will call completion callback */
-		rc = crt_ivsync_rpc_issue(ivns_internal, class_id, iv_key,
-				iv_ver, iv_value, sync_type,
+		if (sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
+			rc = update_comp_cb(ivns_internal, class_id, iv_key,
+					NULL, iv_value, rc, cb_arg);
+
+			/* on_get() done above */
+			iv_ops->ivo_on_put(ivns_internal, NULL, priv);
+		} else {
+			/* issue sync. will call completion callback */
+			rc = crt_ivsync_rpc_issue(ivns_internal, class_id,
+				iv_key, iv_ver, iv_value, sync_type,
 				ivns_internal->cii_grp_priv->gp_self,
 				root_rank, update_comp_cb, cb_arg, priv, rc);
+		}
+
+		D_GOTO(exit, rc);
 	} else  if (rc == -DER_IVCB_FORWARD) {
 		if (shortcut == CRT_IV_SHORTCUT_TO_ROOT)
 			next_node = root_rank;
@@ -2526,6 +2555,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 			D_FREE_PTR(cb_info);
 			D_GOTO(put, rc);
 		}
+		D_GOTO(exit, rc);
+
 	} else {
 		D_ERROR("ivo_on_update failed with rc = %d\n", rc);
 

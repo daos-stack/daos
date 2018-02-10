@@ -462,8 +462,25 @@ typedef enum {
 	CRT_IV_SYNC_LAZY	= 2,
 } crt_iv_sync_mode_t;
 
-#define CRT_IV_SYNC_EVENT_UPDATE	(0x01U)
-#define CRT_IV_SYNC_EVENT_NOTIFY	(0x02U)
+
+/*
+ * The type of the synchronization event requested.
+ *
+ * CRT_IV_SYNC_EVENT_NONE   - no synchronization
+ * CRT_IV_SYNC_EVENT_UPDATE - update synchronization. IV value is propagated
+ *			to all nodes during the synchronization phase.
+ * CRT_IV_SYNC_EVENT_NOTIFY - notification. IV value is not propagated
+ *			during the synchronization phase.
+ *
+ * The on_refresh callback will be triggered when the update/notify
+ * propagates to one node, for notify NULL will be passed for the
+ * iv_value parameter.
+ */
+typedef enum {
+	CRT_IV_SYNC_EVENT_NONE		= 0,
+	CRT_IV_SYNC_EVENT_UPDATE	= 1,
+	CRT_IV_SYNC_EVENT_NOTIFY	= 2,
+} crt_iv_sync_event_t;
 
 typedef enum {
 	/* Treat namespace lookup errors as fatal during sync */
@@ -475,26 +492,17 @@ typedef enum {
 	 * back to the caller.
 	 * The default behavior is to only propagate IV value from the
 	 * caller up to the root.
+	 *
+	 * Currently, if this flag is specified ivs_mode must be set to
+	 * CRT_IV_SYNC_NONE, ivs_event must be set to CRT_IV_SYNC_EVENT_UPDATE
 	 */
 	CRT_IV_SYNC_BIDIRECTIONAL = 0x2,
 } crt_iv_sync_flag_t;
 
 typedef struct {
 	crt_iv_sync_mode_t	ivs_mode;
-	/*
-	 * The ivs_event can be the bit flag of:
-	 * CRT_IV_SYNC_EVENT_UPDATE -- synchronize the update request
-	 * CRT_IV_SYNC_EVENT_NOTIFY -- synchronize the notification that some
-	 *			       IVs are updated
-	 * The on_refresh callback will be triggered when the update/notify
-	 * propagates to one node, for notify NULL will be passed for the
-	 * iv_value parameter. /see crt_iv_on_update_cb_t.
-	 */
-	uint32_t		ivs_event;
-	/*
-	* ivns_flags is OR-ed combination of 0 or more crt_iv_sync_flag_t flags.
-	* Currently only CRT_IV_SYNC_FLAG_IGNORE_NS is supported
-	*/
+	crt_iv_sync_event_t	ivs_event;
+	/* OR-ed combination of 0 or more crt_iv_sync_flag_t flags */
 	uint32_t		ivs_flags;
 } crt_iv_sync_t;
 
