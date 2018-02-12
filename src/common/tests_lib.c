@@ -127,8 +127,10 @@ dts_readline(const char *prompt)
 	if (!line)
 		return NULL;
 
-	if (prompt)
+	if (prompt) {
 		fprintf(stdout, "%s", prompt);
+		fflush(stdout);
+	}
 
 	cur = line;
 	eof = false;
@@ -214,7 +216,8 @@ dts_cmd_parser(struct option *opts, const char *prompt,
 		}
 
 		if (opc == -1) {
-			D__PRINT("Unknown command string %s\n", cmd);
+			D__PRINT("Unknown command string %s, try \"help\"\n",
+				 cmd);
 			continue;
 		}
 

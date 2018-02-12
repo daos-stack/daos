@@ -262,6 +262,32 @@ ctl_daos_list(struct dts_io_credit *cred)
 	return 0;
 }
 
+static inline void
+ctl_obj_open(bool *opened)
+{
+	int rc;
+
+	if (daos_mode) {
+		rc = daos_obj_open(ctl_ctx.tsc_coh, ctl_oid.id_pub, 1,
+				   DAOS_OO_RW, &ctl_oh, NULL);
+		D_ASSERT(!rc);
+		*opened = true;
+	}
+}
+
+static void
+ctl_print_usage(void)
+{
+	printf("daos_ctl -- interactive function testing shell for DAOS\n");
+	printf("Usage:\n");
+	printf("update\to=...,d=...,a=...,v=...,e=...\n");
+	printf("fetch\to=...d=...,a=...,e=...\n");
+	printf("list\to=...[,d=...][,e=...]\n");
+	printf("punch\to=...,e=...[,d=...][,a=...]\n");
+	printf("quit\n");
+	fflush(stdout);
+}
+
 static int
 ctl_cmd_run(char opc, char *args)
 {
@@ -364,23 +390,24 @@ ctl_cmd_run(char opc, char *args)
 	cred->tc_sgl.sg_nr.num = 1;
 	cred->tc_sgl.sg_iovs = &cred->tc_val;
 
-	if (daos_mode) {
-		rc = daos_obj_open(ctl_ctx.tsc_coh, ctl_oid.id_pub, 1,
-				   DAOS_OO_RW, &ctl_oh, NULL);
-		opened = true;
-		D_ASSERT(!rc);
-	}
-
 	switch (opc) {
 	case 'u':
-		if (ctl_abits != CTL_ARG_ALL)
-			D__GOTO(out, rc = -12);
+		if (ctl_abits != CTL_ARG_ALL) {
+			ctl_print_usage();
+			D__GOTO(out, rc = -1);
+		} else {
+			ctl_obj_open(&opened);
+		}
 
 		rc = ctl_update(cred);
 		break;
 	case 'f':
-		if (ctl_abits != (CTL_ARG_ALL & ~CTL_ARG_VAL))
-			D__GOTO(out, rc = -12);
+		if (ctl_abits != (CTL_ARG_ALL & ~CTL_ARG_VAL)) {
+			ctl_print_usage();
+			D__GOTO(out, rc = -1);
+		} else {
+			ctl_obj_open(&opened);
+		}
 
 		rc = ctl_fetch(cred);
 		if (rc == 0) {
@@ -389,24 +416,43 @@ ctl_cmd_run(char opc, char *args)
 		}
 		break;
 	case 'p':
-		if (!(ctl_abits & CTL_ARG_EPOCH) || !(ctl_abits & CTL_ARG_OID))
-			D__GOTO(out, rc = -12);
+		if (!(ctl_abits & CTL_ARG_EPOCH) ||
+		    !(ctl_abits & CTL_ARG_OID)) {
+			ctl_print_usage();
+			D__GOTO(out, rc = -1);
+		} else {
+			ctl_obj_open(&opened);
+		}
 
 		rc = ctl_punch(cred);
 		break;
 	case 'l':
-		if (!(ctl_abits & CTL_ARG_EPOCH))
-			ctl_epoch = DAOS_EPOCH_MAX;
+		if (!(ctl_abits & CTL_ARG_OID)) {
+			ctl_print_usage();
+			D__GOTO(out, rc = -1);
+		} else {
+			if (!(ctl_abits & CTL_ARG_EPOCH))
+				ctl_epoch = DAOS_EPOCH_MAX;
+			ctl_obj_open(&opened);
+		}
 
 		if (daos_mode)
 			rc = ctl_daos_list(cred);
 		else
 			rc = ctl_vos_list(cred);
 		break;
+	case 'h':
+		ctl_print_usage();
+		rc = 0;
+		break;
+	case 'q':
+		printf("quiting ...\n");
+		rc = -ESHUTDOWN;
+		break;
 	default:
 		D__GOTO(out, rc = -1);
 	}
-	if (rc)
+	if (rc && rc != -ESHUTDOWN)
 		D__GOTO(out, rc = -2);
 out:
 	if (opened)
@@ -431,6 +477,8 @@ static struct option ctl_ops[] = {
 	{ "fetch",	required_argument,	NULL,	'f'	},
 	{ "punch",	required_argument,	NULL,	'p'	},
 	{ "list",	required_argument,	NULL,	'l'	},
+	{ "help",	no_argument,		NULL,	'h'	},
+	{ "quit",	no_argument,		NULL,	'q'	},
 	{ NULL,		0,			NULL,	0	},
 };
 
