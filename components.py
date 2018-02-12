@@ -101,6 +101,17 @@ REQS.define('openpa',
                       './configure --prefix=$OPENPA_PREFIX', 'make',
                       'make install'], libs=['opa'])
 
+ISAL_BUILD = ['./autogen.sh ',
+              './configure --prefix=$ISAL_PREFIX --libdir=$ISAL_PREFIX/lib',
+              'make', 'make install']
+
+REQS.define('isal',
+            retriever=GitRepoRetriever(
+                'https://github.com/01org/isa-l.git'),
+            commands=ISAL_BUILD,
+            required_progs=['nasm', 'yasm'],
+            libs=["isal"])
+
 # Save this old definition for now.
 RETRIEVER = \
     GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
