@@ -216,14 +216,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != ABT_SUCCESS)
 		D__GOTO(err_pool, rc = dss_abterr2der(rc));
 
-	rc = ABT_cond_create(&pool->sp_map_cond);
-	if (rc != ABT_SUCCESS)
-		D__GOTO(err_rwlock, rc = dss_abterr2der(rc));
-
-	rc = ABT_mutex_create(&pool->sp_map_lock);
-	if (rc != ABT_SUCCESS)
-		D__GOTO(err_cond, rc = dss_abterr2der(rc));
-
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 
@@ -254,10 +246,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 err_collective:
 	rc_tmp = dss_task_collective(pool_child_delete_one, key);
 	D__ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
-	ABT_mutex_free(&pool->sp_map_lock);
-err_cond:
-	ABT_cond_free(&pool->sp_map_cond);
-err_rwlock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_pool:
 	D__FREE_PTR(pool);
@@ -294,8 +282,6 @@ pool_free_ref(struct daos_llink *llink)
 	if (pool->sp_map != NULL)
 		pool_map_decref(pool->sp_map);
 
-	ABT_mutex_free(&pool->sp_map_lock);
-	ABT_cond_free(&pool->sp_map_cond);
 	ABT_rwlock_free(&pool->sp_lock);
 	D__FREE_PTR(pool);
 }
@@ -748,8 +734,6 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 	}
 	ABT_rwlock_unlock(pool->sp_lock);
 
-	/* rebuild ULTs may be waiting for this */
-	ABT_cond_broadcast(pool->sp_map_cond);
 	if (map)
 		pool_map_decref(map);
 out_pool:

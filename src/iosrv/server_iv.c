@@ -124,7 +124,7 @@ iv_ns_create_internal(unsigned int ns_id, d_rank_t rank,
 				ns->iv_master_rank, rank);
 			D_ASSERT(ns->iv_master_rank != rank);
 			/* XXX Move the key/value to new namespace? */
-			crt_iv_namespace_destroy(&ns->iv_ns);
+			crt_iv_namespace_destroy(ns->iv_ns);
 			D_FREE_PTR(ns);
 		}
 	}

@@ -41,8 +41,6 @@ struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;
 	ABT_rwlock		sp_lock;
-	ABT_cond		sp_map_cond;
-	ABT_mutex		sp_map_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	crt_group_t	       *sp_group;
