@@ -413,11 +413,10 @@ tse_task_complete_callback(tse_task_t *task)
 
 /** Walk through the result task list and execute callback for each task. */
 void
-tse_task_result_process(tse_task_t *task,
-			tse_task_result_cb_t callback, void *arg)
+tse_task_result_process(tse_task_t *task, tse_task_cb_t callback, void *arg)
 {
-	struct tse_task_private *dtp = tse_task2priv(task);
-	struct tse_task_link   *result;
+	struct tse_task_private	*dtp = tse_task2priv(task);
+	struct tse_task_link	*result;
 
 	daos_list_for_each_entry(result, &dtp->dtp_ret_list, tl_link)
 		callback(result->tl_task, arg);
@@ -775,7 +774,7 @@ tse_task_complete(tse_task_t *task, int ret)
  * If one task dependents on other tasks, only if the dependent task
  * is done, then the task can be added to the scheduler list
  **/
-int
+static int
 tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 {
 	struct tse_task_private  *dtp = tse_task2priv(task);

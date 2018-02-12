@@ -54,7 +54,7 @@ struct tse_task_private {
 	/* daos complete task callback list */
 	daos_list_t			 dtp_comp_cb_list;
 
-	/* daos complete task callback list */
+	/* finished tasks this task depends on, might check theirs result */
 	daos_list_t			 dtp_ret_list;
 
 	uint32_t			 dtp_complete:1,

@@ -67,9 +67,6 @@ typedef struct {
 typedef int (*tse_sched_comp_cb_t)(void *args, int rc);
 typedef int (*tse_task_func_t)(tse_task_t *);
 
-/** MSC - deprecate both function defs */
-typedef int (*tse_task_comp_cb_t)(tse_task_t *, void *arg);
-typedef int (*tse_task_result_cb_t)(tse_task_t *, void *arg);
 /** CB type for prepare, completion, and result processing */
 typedef int (*tse_task_cb_t)(tse_task_t *, void *arg);
 
@@ -224,22 +221,6 @@ void
 tse_task_complete(tse_task_t *task, int ret);
 
 /**
- * MSC - deprecate in favor of tse_task_register_deps
- * Add dependent task
- *
- * If one task depends on other tasks, only if all of its dependent
- * tasks finish, then the task can be scheduled.
- *
- * param task [in]	task which depends on dep task(@dep).
- * param dep [in]	dependent task which the task depends on.
- *
- * return		0 if adding dependent succeeds.
- * return		errno if adding dependent fails.
- **/
-int
-tse_task_add_dependent(tse_task_t *task, tse_task_t *dep);
-
-/**
  * MSC - I think we can move this as an internal function for just DAOS.
  * Process the result tasks.
  *
@@ -253,8 +234,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep);
  * \param arg [in]	argument of the callback.
  **/
 void
-tse_task_result_process(tse_task_t *task, tse_task_result_cb_t callback,
-			void *arg);
+tse_task_result_process(tse_task_t *task, tse_task_cb_t callback, void *arg);
 
 /**
  * Get embedded buffer of a task, user can use it to carry function parameters.

@@ -919,7 +919,7 @@ dc_obj_update(tse_task_t *task)
 			D__GOTO(out_task, rc);
 		}
 
-		rc = tse_task_add_dependent(task, shard_task);
+		rc = tse_task_register_deps(task, 1, &shard_task);
 		if (rc != 0) {
 			tse_task_complete(shard_task, rc);
 			D__GOTO(out_task, rc);
@@ -1255,7 +1255,7 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 			D_GOTO(out_task, rc);
 		}
 
-		rc = tse_task_add_dependent(api_task, task);
+		rc = tse_task_register_deps(api_task, 1, &task);
 		if (rc != 0) {
 			tse_task_complete(task, rc);
 			D_GOTO(out_task, rc);
