@@ -1168,19 +1168,21 @@ crt_lm_attach(crt_group_t *tgt_grp, crt_lm_attach_cb_t completion_cb,
 /**
  * A protocol is a set of RPCs. A protocol has a base opcode and a version,
  * member RPCs have opcodes that are contiguous numbers starting from
- * (base opcode | version) + 1. For example, if the protocol has
+ * (base opcode | version). For example, if the protocol has
  *
- * base opcode:    0x00005000
- * version number: 0x00000300,
+ * base opcode:    0x05000000
+ * version number: 0x00030000,
  *
  * its member RPCs will have opcode
- *                 0x00005301
- *                 0x00005302
- *                 0x00005303 and so on
+ *                 0x05030000
+ *                 0x05030001
+ *                 0x05030002 and so on
  *
- * base opcode mask    0x0000F000UL
- * version number mask 0x00000F00UL
- * This gives 16 protocols, 16 versions for each protocol
+ * base opcode mask    0xFF000000UL
+ * version number mask 0x00FF0000UL
+ *
+ * The base opcode 0xFF000000UL is not allowed. This gives 255 protocols, 256
+ * versions for each protocol, 65,536 RPCs per protocol.
  *
  * Mode of operation:
  *
@@ -1190,9 +1192,9 @@ crt_lm_attach(crt_group_t *tgt_grp, crt_lm_attach_cb_t completion_cb,
  *
  * 1) A server registers a protocol with base opcode MY_BASE_OPC and version
  * number MY_VER, with member RPC opcodes
+ *		MY_OPC_0 = (MY_BASE_OPC | MY_VER),
  *		MY_OPC_1 = (MY_BASE_OPC | MY_VER) + 1,
  *		MY_OPC_2 = (MY_BASE_OPC | MY_VER) + 2,
- *		MY_OPC_3 = (MY_BASE_OPC | MY_VER) + 3,
  * 2) A client queries the server if MY_BASE_OPC with version number is
  *    registered, the server replies Yes.
  *
