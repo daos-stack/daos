@@ -26,6 +26,12 @@
 
 #include <daos_types.h>
 
+enum vos_oi_attr {
+	/** Marks object as failed */
+	VOS_OI_FAILED		= (1U << 0),
+	/** TODO: Additional attributes to support metadata storage for SR */
+};
+
 /**
  * pool attributes returned to query
  */

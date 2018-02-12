@@ -2458,3 +2458,91 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 /**
  * @} vos_obj_iters
  */
+
+static int
+vos_oi_set_attr_helper(daos_handle_t coh, daos_unit_oid_t oid,
+		       daos_epoch_t epoch, uint64_t attr, bool set)
+{
+	PMEMobjpool	  *pop;
+	struct vos_object *obj;
+	int		   rc;
+
+	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, false,
+			  &obj);
+	if (rc != 0)
+		return rc;
+
+	pop = vos_obj2pop(obj);
+	TX_BEGIN(pop) {
+		rc = umem_tx_add_ptr(vos_obj2umm(obj), &obj->obj_df->vo_oi_attr,
+				     sizeof(obj->obj_df->vo_oi_attr));
+		if (set) {
+			obj->obj_df->vo_oi_attr |= attr;
+		} else {
+			/* Only clear bits that are set */
+			uint64_t to_clear = attr & obj->obj_df->vo_oi_attr;
+
+			obj->obj_df->vo_oi_attr ^= to_clear;
+		}
+	} TX_ONABORT {
+		rc = umem_tx_errno(rc);
+		D__DEBUG(DB_IO, "Failed to set attributes on object: %d\n", rc);
+	} TX_END
+	D_EXIT;
+	vos_obj_release(vos_obj_cache_current(), obj);
+	return rc;
+}
+
+int
+vos_oi_set_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		uint64_t attr)
+{
+	D__DEBUG(DB_IO, "Set attributes "DF_UOID", epoch "DF_U64", attributes "
+		 DF_X64"\n", DP_UOID(oid), epoch, attr);
+
+	return vos_oi_set_attr_helper(coh, oid, epoch, attr, true);
+}
+
+int
+vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		uint64_t attr)
+{
+	D__DEBUG(DB_IO, "Clear attributes "DF_UOID", epoch "DF_U64
+		 ", attributes "DF_X64"\n", DP_UOID(oid), epoch, attr);
+
+	return vos_oi_set_attr_helper(coh, oid, epoch, attr, false);
+}
+
+int
+vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		uint64_t *attr)
+{
+	struct vos_object *obj;
+	int		   rc = 0;
+
+	D__DEBUG(DB_IO, "Get attributes "DF_UOID", epoch "DF_U64"\n",
+		 DP_UOID(oid), epoch);
+
+	if (attr == NULL) {
+		D__ERROR("Invalid attribute argument\n");
+		return -DER_INVAL;
+	}
+
+	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, true,
+			  &obj);
+	if (rc != 0)
+		return rc;
+
+	*attr = 0;
+
+	if (obj->obj_df == NULL) /* nothing to do */
+		D__GOTO(out, rc = 0);
+
+	*attr = obj->obj_df->vo_oi_attr;
+
+	D_EXIT;
+
+out:
+	vos_obj_release(vos_obj_cache_current(), obj);
+	return rc;
+}

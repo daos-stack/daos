@@ -187,6 +187,8 @@ struct vos_obj_df {
 	daos_epoch_t			vo_epc_lo;
 	/** the punched epoch of this object */
 	daos_epoch_t			vo_epc_hi;
+	/** Attributes of object.  See vos_oi_attr */
+	uint64_t			vo_oi_attr;
 	/** VOS object btree root */
 	struct btr_root			vo_tree;
 };

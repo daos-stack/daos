@@ -559,4 +559,52 @@ vos_iter_delete(daos_handle_t ih, void *args);
 int
 vos_iter_empty(daos_handle_t ih);
 
+/**
+ * VOS object index set attributes
+ * Add a new object ID entry in the object index table
+ * Creates an empty tree for the object
+ *
+ * \param coh   [IN]    Container handle
+ * \param oid   [IN]    DAOS object ID
+ * \param epoch [IN]    Epoch to set
+ * \param attr	[IN]	Attributes bitmask
+ *
+ * \return              0 on success and negative on
+ *                      failure
+ */
+int
+vos_oi_set_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		uint64_t attr);
+
+/**
+ * VOS object index clear attributes
+ * Add a new object ID entry in the object index table
+ * Creates an empty tree for the object
+ *
+ * \param coh   [IN]    Container handle
+ * \param oid   [IN]    DAOS object ID
+ * \param epoch [IN]    Epoch to set
+ * \param attr	[IN]	Attributes bitmask
+ *
+ * \return              0 on success and negative on
+ *                      failure
+ */
+int
+vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		  uint64_t attr);
+
+/**
+ * VOS object index get attributes
+ *
+ * \param coh   [IN]		Container handle
+ * \param oid   [IN]		DAOS object ID
+ * \param epoch [IN]		Epoch to get
+ * \param attr	[IN, OUT]	Attributes bitmask
+ *
+ * \return			0 on success and negative on
+ *				failure
+ */
+int
+vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		uint64_t *attr);
 #endif /* __VOS_API_H */
