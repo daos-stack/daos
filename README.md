@@ -1,6 +1,7 @@
 # DAOS
 [![Build Status](https://travis-ci.org/daos-stack/daos.svg?branch=master)](https://travis-ci.org/daos-stack/daos)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
++[![Codacy Badge](https://api.codacy.com/project/badge/Grade/4163f52ec65e4ba8991208288a9a15a6)](https://www.codacy.com/app/johann.lombardi/daos?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=daos-stack/daos&amp;utm_campaign=Badge_Grade)
 
 > :warning: **Warning:** DAOS is under heavy development. Use at your own risk.
 
@@ -33,4 +34,4 @@ More information can be found on the [wiki](https://wiki.hpdd.intel.com/display/
 
 ## Contacts
 
-For any questions, please post to our [user forum](https://daos.groups.io/g/users). Bugs should be reported through our [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and [debug logs](./doc/debugging.md) that should be compressed.
+For any questions, please post to our [user forum](https://daos.groups.io/g/daos). Bugs should be reported through our [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and [debug logs](./doc/debugging.md).
