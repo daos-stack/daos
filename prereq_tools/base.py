@@ -842,6 +842,7 @@ class PreReqComponent(object):
         """Update a variable in the default construction environment"""
         opt_name = '%s_SRC' % name.upper()
         self.__env[opt_name] = value
+        self.__opts.args[opt_name] = value
 
     def add_opts(self, *variables):
         """Add options to the command line"""
@@ -1054,29 +1055,27 @@ class PreReqComponent(object):
         if name in self.__src_path:
             return self.__src_path[name]
         opt_name = '%s_SRC' % name.upper()
+        default_src_path = os.path.join(self.__build_dir, name)
         self.add_opts(PathVariable(opt_name,
-                                   'Alternate path for %s source' % name, None,
-                                   PathVariable.PathIsDir))
+                                   'Alternate path for %s source' % name,
+                                   default_src_path, PathVariable.PathAccept))
         self.setup_path_var(opt_name)
 
         src_path = self.__env.get(opt_name)
-        if src_path and not os.path.exists(src_path) and not self.__dry_run:
-            raise MissingPath(opt_name)
+        if src_path != default_src_path and not os.path.exists(src_path):
+            if not self.__dry_run:
+                raise MissingPath(opt_name)
 
-        if not src_path:
-
+        if src_path == default_src_path:
             # check the global source area
-
             src_path_var = self.__env.get('SRC_PREFIX')
             if src_path_var:
                 for path in src_path_var.split(os.pathsep):
-                    src_path = os.path.join(path, name)
-                    if os.path.exists(src_path):
+                    new_src_path = os.path.join(path, name)
+                    if os.path.exists(new_src_path):
+                        src_path = new_src_path
+                        self.update_src_path(name, src_path)
                         break
-                    src_path = None
-
-        if not src_path:
-            src_path = os.path.join(self.__build_dir, name)
 
         self.__src_path[name] = src_path
         return src_path
@@ -1181,7 +1180,6 @@ class _Component(object):
                 defpath = os.path.join(self.prereqs.get_build_dir(), self.name)
                 # only do this if the source was checked out by this script
                 if self.src_path == defpath:
-                    print "Trying to update cart"
                     self.retriever.update(self.src_path, commit_sha=commit_sha,
                                           patch=patch, branch=branch)
             return
