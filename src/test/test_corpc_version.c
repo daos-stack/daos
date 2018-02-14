@@ -475,7 +475,7 @@ subgrp_ping_cb(crt_rpc_t *rpc_req)
 	D_ASSERT(rpc_req_output != NULL);
 
 	D_DEBUG("Received magic number %d\n", rpc_req_output->magic);
-	D_ASSERT(rpc_req_output->magic = rpc_req_input->magic + 1);
+	D_ASSERT(rpc_req_output->magic == rpc_req_input->magic + 1);
 
 	eviction_rpc_issue();
 
