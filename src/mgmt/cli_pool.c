@@ -58,8 +58,7 @@ pool_create_cp(tse_task_t *task, void *data)
 	 * report list of targets running the metadata service. CMF_RANK_LIST
 	 * only processes "num".
 	 */
-	pc_out->pc_svc->rl_nr.num_out = pc_out->pc_svc->rl_nr.num;
-	daos_rank_list_copy(svc, pc_out->pc_svc, false);
+	rc = daos_rank_list_copy(svc, pc_out->pc_svc);
 out:
 	daos_group_detach(arg->rpc->cr_ep.ep_grp);
 	crt_req_decref(arg->rpc);
@@ -112,7 +111,7 @@ dc_pool_create(tse_task_t *task)
 	pc_in->pc_tgt_dev = (d_string_t)args->dev;
 	pc_in->pc_tgts = (d_rank_list_t *)args->tgts;
 	pc_in->pc_tgt_size = args->size;
-	pc_in->pc_svc_nr = args->svc->rl_nr.num;
+	pc_in->pc_svc_nr = args->svc->rl_nr;
 
 	crt_req_addref(rpc_req);
 	create_args.rpc = rpc_req;

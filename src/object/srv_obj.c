@@ -168,7 +168,7 @@ bulk_bypass(daos_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 			return 0; /* ignore error */
 	}
 
-	for (i = 0; i < sgl->sg_nr.num_out; i++) {
+	for (i = 0; i < sgl->sg_nr_out; i++) {
 		char	*buf;
 		int	 total;
 		int	 nob;
@@ -252,7 +252,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		 * transfer to avoid touching the input buffer.
 		 *
 		 */
-		while (idx < sgl->sg_nr.num_out) {
+		while (idx < sgl->sg_nr_out) {
 			daos_sg_list_t	sgl_sent;
 			daos_size_t	length = 0;
 			unsigned int	start;
@@ -263,25 +263,25 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			 * it to 0.
 			 */
 			while (sgl->sg_iovs[idx].iov_buf == NULL &&
-			       idx < sgl->sg_nr.num_out) {
+			       idx < sgl->sg_nr_out) {
 				offset += sgl->sg_iovs[idx].iov_len;
 				idx++;
 			}
 
-			if (idx == sgl->sg_nr.num_out)
+			if (idx == sgl->sg_nr_out)
 				break;
 
 			start = idx;
 			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
 			/* Find the end of the non-empty record */
 			while (sgl->sg_iovs[idx].iov_buf != NULL &&
-			       idx < sgl->sg_nr.num_out) {
+			       idx < sgl->sg_nr_out) {
 				length += sgl->sg_iovs[idx].iov_len;
 				idx++;
 			}
 
-			sgl_sent.sg_nr.num = idx - start;
-			sgl_sent.sg_nr.num_out = idx - start;
+			sgl_sent.sg_nr = idx - start;
+			sgl_sent.sg_nr_out = idx - start;
 
 			ret = crt_bulk_create(rpc->cr_ctx,
 					      daos2crt_sg(&sgl_sent),
@@ -345,13 +345,13 @@ ds_sgls_prep(daos_sg_list_t *dst_sgls, daos_sg_list_t *sgls, int number)
 	int rc = 0;
 
 	for (i = 0; i < number; i++) {
-		dst_sgls[i].sg_nr.num = sgls[i].sg_nr.num;
+		dst_sgls[i].sg_nr = sgls[i].sg_nr;
 		D__ALLOC(dst_sgls[i].sg_iovs,
-			sgls[i].sg_nr.num * sizeof(*sgls[i].sg_iovs));
+			sgls[i].sg_nr * sizeof(*sgls[i].sg_iovs));
 		if (dst_sgls[i].sg_iovs == NULL)
 			D__GOTO(out, rc = -DER_NOMEM);
 
-		for (j = 0; j < dst_sgls[i].sg_nr.num; j++) {
+		for (j = 0; j < dst_sgls[i].sg_nr; j++) {
 			dst_sgls[i].sg_iovs[j].iov_buf_len =
 				sgls[i].sg_iovs[j].iov_buf_len;
 
@@ -437,7 +437,7 @@ ds_obj_update_nrs_in_reply(crt_rpc_t *rpc, daos_handle_t ioh,
 		}
 
 		D__ASSERT(sgl != NULL);
-		nrs[i] = sgl->sg_nr.num_out;
+		nrs[i] = sgl->sg_nr_out;
 	}
 out:
 	return rc;
@@ -565,13 +565,13 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 	p_sgl = &tls->ot_echo_sgl;
 
 	/* Let's check if tls already have enough buffer */
-	if (p_sgl->sg_nr.num < iod->iod_nr) {
+	if (p_sgl->sg_nr < iod->iod_nr) {
 		daos_sgl_fini(p_sgl, true);
 		rc = daos_sgl_init(p_sgl, iod->iod_nr);
 		if (rc)
 			D_GOTO(out, rc);
 
-		p_sgl->sg_nr.num_out = p_sgl->sg_nr.num;
+		p_sgl->sg_nr_out = p_sgl->sg_nr;
 	}
 
 	for (i = 0; i < iod->iod_nr; i++) {
@@ -772,7 +772,7 @@ fill_key(vos_iter_entry_t *key_ent, struct obj_key_enum_in *oei,
 {
 	daos_iov_t	*iovs = oeo->oeo_sgl.sg_iovs;
 	daos_key_desc_t	*kds = oeo->oeo_kds.da_arrays;
-	unsigned int	iovs_nr = oeo->oeo_sgl.sg_nr.num;
+	unsigned int	iovs_nr = oeo->oeo_sgl.sg_nr;
 	unsigned int	kds_nr = oei->oei_nr;
 
 	while (*iovs_idx < iovs_nr) {
@@ -792,8 +792,8 @@ fill_key(vos_iter_entry_t *key_ent, struct obj_key_enum_in *oei,
 		       key_ent->ie_key.iov_buf, key_ent->ie_key.iov_len);
 		iovs[*iovs_idx].iov_len += key_ent->ie_key.iov_len;
 
-		if (oeo->oeo_sgl.sg_nr.num_out < *iovs_idx + 1)
-			oeo->oeo_sgl.sg_nr.num_out = *iovs_idx + 1;
+		if (oeo->oeo_sgl.sg_nr_out < *iovs_idx + 1)
+			oeo->oeo_sgl.sg_nr_out = *iovs_idx + 1;
 
 		break;
 	}
@@ -1090,7 +1090,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		if (opc_get(rpc->cr_opc) == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
 		    opc_get(rpc->cr_opc) == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
 			if (task_arg.u.iter_arg.iovs_idx >=
-			    oeo->oeo_sgl.sg_nr.num)
+			    oeo->oeo_sgl.sg_nr)
 				break;
 		}
 	}
@@ -1107,8 +1107,8 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		 */
 		daos_sgl_fini(sgl, true);
 		oeo->oeo_sgl.sg_iovs = NULL;
-		oeo->oeo_sgl.sg_nr.num = 0;
-		oeo->oeo_sgl.sg_nr.num_out = 0;
+		oeo->oeo_sgl.sg_nr = 0;
+		oeo->oeo_sgl.sg_nr_out = 0;
 	}
 
 out:

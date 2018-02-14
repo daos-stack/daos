@@ -161,8 +161,7 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 	/* TODO shouldn't be hard-coded */
 	uint32_t rl_ranks = 0;
 
-	svc.rl_nr.num = 1;
-	svc.rl_nr.num_out = 0;
+	svc.rl_nr = 1;
 	svc.rl_ranks = &rl_ranks;
 
 	rc = daos_pool_create(cp_options.mode, cp_options.uid,
@@ -260,8 +259,7 @@ cmd_evict_pool(int argc, const char **argv, void *ctx)
 	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &ep_options);
 
 	/* TODO make this a parameter */
-	svc.rl_nr.num = 1;
-	svc.rl_nr.num_out = 1;
+	svc.rl_nr = 1;
 	svc.rl_ranks = &rl_ranks;
 
 	rc = uuid_parse(ep_options.uuid, uuid);

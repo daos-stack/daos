@@ -355,16 +355,15 @@ rdbt_init_handler(crt_rpc_t *rpc)
 	crt_group_size(NULL /* grp */, &group_size);
 
 	/* Build the rank list. */
-	ranks.rl_nr.num = in->tii_nreplicas;
-	if (ranks.rl_nr.num > group_size)
-		ranks.rl_nr.num = group_size;
-	ranks.rl_nr.num_out = ranks.rl_nr.num;
-	D__ALLOC(ranks.rl_ranks, sizeof(*ranks.rl_ranks) * ranks.rl_nr.num);
+	ranks.rl_nr = in->tii_nreplicas;
+	if (ranks.rl_nr > group_size)
+		ranks.rl_nr = group_size;
+	D__ALLOC(ranks.rl_ranks, sizeof(*ranks.rl_ranks) * ranks.rl_nr);
 	if (ranks.rl_ranks == NULL) {
 		D__ERROR("failed to allocate ranks array\n");
 		D__GOTO(out, rc = -DER_NOMEM);
 	}
-	for (i = 0; i < ranks.rl_nr.num; i++)
+	for (i = 0; i < ranks.rl_nr; i++)
 		ranks.rl_ranks[i] = i;
 
 	D__WARN("initializing rank %u: nreplicas=%u\n", rank, in->tii_nreplicas);

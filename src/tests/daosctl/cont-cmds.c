@@ -133,8 +133,7 @@ cmd_create_container(int argc, const char **argv, void *ctx)
 	/* TODO should be a parameter not hard-coded */
 	uint32_t          rl_ranks = 0;
 
-	svc.rl_nr.num = 1;
-	svc.rl_nr.num_out = 0;
+	svc.rl_nr = 1;
 	svc.rl_ranks = &rl_ranks;
 
 	rc = daos_pool_connect(pool_uuid, cc_options.server_group, &svc,
@@ -215,8 +214,8 @@ cmd_destroy_container(int argc, const char **argv, void *ctx)
 	/* TODO should be a parameter not hard-coded */
 	uint32_t          rl_ranks = 0;
 
-	svc.rl_nr.num = 1;
-	svc.rl_nr.num_out = 0;
+	svc.rl_nr = 1;
+
 	svc.rl_ranks = &rl_ranks;
 
 	rc = daos_pool_connect(pool_uuid, cc_options.server_group, &svc,

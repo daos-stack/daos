@@ -43,6 +43,9 @@ extern "C" {
 
 #include <daos_errno.h>
 
+/** Scatter/gather list for memory buffers */
+#define daos_sg_list_t d_sg_list_t
+
 /**
  * Generic data type definition
  */
@@ -57,10 +60,6 @@ daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
 	iov->iov_buf = buf;
 	iov->iov_len = iov->iov_buf_len = size;
 }
-
-#define daos_nr_t	d_nr_t
-/** Scatter/gather list for memory buffers */
-#define daos_sg_list_t d_sg_list_t
 
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
@@ -370,7 +369,8 @@ enum {
 
 typedef struct {
 	/** Input/output number of oids */
-	daos_nr_t	 ol_nr;
+	uint32_t	ol_nr;
+	uint32_t	ol_nr_out;
 	/** OID buffer */
 	daos_obj_id_t	*ol_oids;
 } daos_oid_list_t;

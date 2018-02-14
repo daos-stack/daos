@@ -212,12 +212,10 @@ main(int argc, char **argv)
 	int rc;
 
 	/*IDs and daos (not MPI) rank info*/
-	warm_svc.rl_nr.num = 8;
-	warm_svc.rl_nr.num_out = 0;
+	warm_svc.rl_nr = 8;
 	warm_svc.rl_ranks = warm_ranks;
 
-	cold_svc.rl_nr.num = 8;
-	cold_svc.rl_nr.num_out = 0;
+	cold_svc.rl_nr = 8;
 	cold_svc.rl_ranks = cold_ranks;
 
 	if (argc != 3) {

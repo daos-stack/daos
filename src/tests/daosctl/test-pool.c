@@ -167,8 +167,7 @@ cmd_connect_pool(int argc, const char **argv, void *ctx)
 	/* TODO should be a parameter not hard-coded */
 	uint32_t          rl_ranks = 0;
 
-	svc.rl_nr.num = 1;
-	svc.rl_nr.num_out = 0;
+	svc.rl_nr = 1;
 	svc.rl_ranks = &rl_ranks;
 
 	rc = daos_pool_connect(uuid, cp_options.server_group, &svc,
@@ -266,8 +265,7 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 	/* TODO should be a parameter not hard-coded */
 	uint32_t rl_ranks = 0;
 
-	svc.rl_nr.num = 1;
-	svc.rl_nr.num_out = 0;
+	svc.rl_nr = 1;
 	svc.rl_ranks = &rl_ranks;
 
 	printf("Getting ready to create pool\n");
@@ -327,10 +325,10 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 			return 1;
 		}
 		/* TODO not specifying targets just yet */
-		/* if (pool_info.pi_ntargets != tgts.rl_nr.num) {
+		/* if (pool_info.pi_ntargets != tgts.rl_nr) {
 		 * printf("tgt count doesn't match: %i %i\n",
 		 * pool_info.pi_ntargets,
-		 * tgts.rl_nr.num);
+		 * tgts.rl_nr);
 		 * return 1;
 		 * }
 		 */
@@ -399,8 +397,7 @@ cmd_test_create_pool(int argc, const char **argv, void *ctx)
 
 	uint32_t rl_ranks = 0;
 
-	svc.rl_nr.num = 1;
-	svc.rl_nr.num_out = 0;
+	svc.rl_nr = 1;
 	svc.rl_ranks = &rl_ranks;
 
 	rc = daos_pool_create(cp_options.mode, cp_options.uid, cp_options.gid,
@@ -476,8 +473,7 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 	/* TODO should be a parameter not hard-coded */
 	uint32_t          rl_ranks = 0;
 
-	svc.rl_nr.num = 1;
-	svc.rl_nr.num_out = 0;
+	svc.rl_nr = 1;
 	svc.rl_ranks = &rl_ranks;
 
 	printf("Getting ready to create pool\n");

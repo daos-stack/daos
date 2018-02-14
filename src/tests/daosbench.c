@@ -244,7 +244,7 @@ ioreq_init_basic(struct a_ioreq *ioreq, daos_iod_type_t iod_type)
 	ioreq->iod.iod_csums = &ioreq->csum;
 	ioreq->iod.iod_eprs = &ioreq->erange;
 
-	ioreq->sgl.sg_nr.num = 1;
+	ioreq->sgl.sg_nr = 1;
 	ioreq->sgl.sg_iovs = &ioreq->val_iov;
 
 	rc = daos_event_init(&ioreq->ev, eq, NULL);
@@ -334,8 +334,7 @@ kill_daos_server(const char *grp)
 	rc  = daos_mgmt_svc_rip(grp, rank, true, NULL);
 	DBENCH_CHECK(rc, "Error in killing server\n");
 
-	targets.rl_nr.num	= 1;
-	targets.rl_nr.num_out	= 0;
+	targets.rl_nr		= 1;
 	targets.rl_ranks	= &rank;
 
 	rc = daos_pool_exclude(pool_uuid, grp, svcl, &targets, NULL);

@@ -34,7 +34,7 @@
 #include <daos/common.h>
 
 #define DF_CLI		"n=%u known=%d alive=%u term="DF_U64" index=%d next=%d"
-#define DP_CLI(c)	(c)->sc_ranks->rl_nr.num, (c)->sc_leader_known,	\
+#define DP_CLI(c)	(c)->sc_ranks->rl_nr, (c)->sc_leader_known,	\
 			(c)->sc_leader_aliveness, (c)->sc_leader_term,	\
 			(c)->sc_leader_index, (c)->sc_next
 
@@ -49,10 +49,9 @@ rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
 {
 	int rc;
 
-	if (ranks->rl_nr.num == 0)
+	if (ranks->rl_nr == 0)
 		return -DER_INVAL;
-	rc = daos_rank_list_dup_sort_uniq(&client->sc_ranks, ranks,
-					  true /* input */);
+	rc = daos_rank_list_dup_sort_uniq(&client->sc_ranks, ranks);
 	if (rc != 0)
 		return rc;
 	client->sc_leader_known = false;
@@ -92,9 +91,9 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 		chosen = client->sc_next;
 		/* The hintless search is a round robin of all replicas. */
 		client->sc_next++;
-		client->sc_next %= client->sc_ranks->rl_nr.num;
+		client->sc_next %= client->sc_ranks->rl_nr;
 	}
-	D__ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr.num, "%d\n",
+	D__ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr, "%d\n",
 		  chosen);
 	ep->ep_rank = client->sc_ranks->rl_ranks[chosen];
 	ep->ep_tag = 0;
@@ -119,7 +118,7 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 			 * search.
 			 */
 			client->sc_next = client->sc_leader_index + 1;
-			client->sc_next %= client->sc_ranks->rl_nr.num;
+			client->sc_next %= client->sc_ranks->rl_nr;
 		}
 	}
 }
@@ -167,7 +166,7 @@ rsvc_client_process_hint(struct rsvc_client *client,
 			D__DEBUG(DB_MD, "failed to append new rank: %d\n", rc);
 			return;
 		}
-		client->sc_leader_index = client->sc_ranks->rl_nr.num - 1;
+		client->sc_leader_index = client->sc_ranks->rl_nr - 1;
 	}
 	client->sc_leader_term = hint->sh_term;
 	client->sc_leader_known = true;
@@ -258,17 +257,17 @@ rsvc_client_encode(const struct rsvc_client *client, void *buf)
 	struct rsvc_client_buf *p = buf;
 	size_t			len;
 
-	len = sizeof(*p) + sizeof(*p->scb_ranks) * client->sc_ranks->rl_nr.num;
+	len = sizeof(*p) + sizeof(*p->scb_ranks) * client->sc_ranks->rl_nr;
 	if (p != NULL) {
 		p->scb_magic = rsvc_client_buf_magic;
-		p->scb_nranks = client->sc_ranks->rl_nr.num;
+		p->scb_nranks = client->sc_ranks->rl_nr;
 		p->scb_leader_known = client->sc_leader_known ? 1 : 0;
 		p->scb_leader_aliveness = client->sc_leader_aliveness;
 		p->scb_leader_term = client->sc_leader_term;
 		p->scb_leader_index = client->sc_leader_index;
 		p->scb_next = client->sc_next;
 		memcpy(p->scb_ranks, client->sc_ranks->rl_ranks,
-		       sizeof(*p->scb_ranks) * client->sc_ranks->rl_nr.num);
+		       sizeof(*p->scb_ranks) * client->sc_ranks->rl_nr);
 	}
 	return len;
 }

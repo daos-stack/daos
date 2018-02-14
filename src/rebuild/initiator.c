@@ -84,8 +84,8 @@ rebuild_fetch_update_inline(struct rebuild_dkey *rdkey, daos_handle_t oh,
 	int			rc;
 
 	daos_iov_set(&iov, iov_buf, MAX_BUF_SIZE);
-	sgl.sg_nr.num = 1;
-	sgl.sg_nr.num_out = 1;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
 	sgl.sg_iovs = &iov;
 
 	memset(&iod, 0, sizeof(iod));
@@ -323,7 +323,7 @@ rebuild_one_dkey(struct rebuild_tgt_pool_tracker *rpt,
 		D__GOTO(free, rc = -DER_NOMEM);
 
 	akey_iov.iov_buf_len = akey_buf_size;
-	akey_sgl.sg_nr.num = 1;
+	akey_sgl.sg_nr = 1;
 	akey_sgl.sg_iovs = &akey_iov;
 
 	if (daos_handle_is_inval(tls->rebuild_pool_hdl)) {
@@ -571,7 +571,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	if (dkey_iov.iov_buf == NULL)
 		return -DER_NOMEM;
 	dkey_iov.iov_buf_len = dkey_buf_size;
-	dkey_sgl.sg_nr.num = 1;
+	dkey_sgl.sg_nr = 1;
 	dkey_sgl.sg_iovs = &dkey_iov;
 
 	rc = ds_obj_open(arg->cont_hdl, oid.id_pub, epoch, DAOS_OO_RW, &oh);

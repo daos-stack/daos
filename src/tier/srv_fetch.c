@@ -643,8 +643,8 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 			D__ERROR("vos_obj_zc_sgl_at returned %d\n", rc);
 			break;
 		}
-		ptmp->dki_sgs[j].sg_nr.num_out   = psg->sg_nr.num_out;
-		ptmp->dki_sgs[j].sg_nr.num       = psg->sg_nr.num_out;
+		ptmp->dki_sgs[j].sg_nr_out   = psg->sg_nr_out;
+		ptmp->dki_sgs[j].sg_nr       = psg->sg_nr_out;
 		ptmp->dki_sgs[j].sg_iovs         = psg->sg_iovs;
 	}
 	tf_obj_update(fctx, ptmp);

@@ -79,7 +79,7 @@ vos_csum_compute(daos_sg_list_t *sgl, daos_csum_buf_t *csum)
 		D__GOTO(failed, rc = -DER_IO);
 	}
 
-	for (i = 0; i < sgl->sg_nr.num_out; i++) {
+	for (i = 0; i < sgl->sg_nr_out; i++) {
 		if (!sgl->sg_iovs[i].iov_buf ||
 		    !sgl->sg_iovs[i].iov_len)
 			continue;

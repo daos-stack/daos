@@ -969,7 +969,7 @@ rdb_raft_start(struct rdb *db)
 	int		term;
 	int		vote;
 	int		i;
-	uint8_t		nreplicas = db->d_replicas->rl_nr.num;
+	uint8_t		nreplicas = db->d_replicas->rl_nr;
 	int		election_timeout;
 	int		request_timeout;
 	int		rc;
@@ -1046,7 +1046,7 @@ rdb_raft_start(struct rdb *db)
 	/* Add nodes. */
 	rc = crt_group_rank(NULL, &self);
 	D__ASSERTF(rc == 0, "%d\n", rc);
-	for (i = 0; i < db->d_replicas->rl_nr.num; i++) {
+	for (i = 0; i < db->d_replicas->rl_nr; i++) {
 		struct rdb_raft_node   *n;
 		raft_node_t	       *node;
 		d_rank_t		rank = db->d_replicas->rl_ranks[i];

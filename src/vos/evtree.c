@@ -515,11 +515,11 @@ evt_ptr_copy_sgl(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid,
 		 * allow vos to copy in data.
 		 */
 		daos_iov_set(&sgl->sg_iovs[0], addr, nob);
-		sgl->sg_nr.num_out = 1;
+		sgl->sg_nr_out = 1;
 		return 0;
 	}
 
-	for (i = 0; i < sgl->sg_nr.num && nob != 0; i++) {
+	for (i = 0; i < sgl->sg_nr && nob != 0; i++) {
 		daos_iov_t *iov = &sgl->sg_iovs[i];
 
 		if (nob < iov->iov_len) {

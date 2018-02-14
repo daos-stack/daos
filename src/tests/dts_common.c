@@ -234,7 +234,6 @@ pool_init(struct dts_context *tsc)
 		if (rc)
 			goto bcast;
 
-		svc->rl_nr.num = svc->rl_nr.num_out;
 		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL, svc,
 				       DAOS_PC_EX, &poh, NULL, NULL);
 		if (rc)

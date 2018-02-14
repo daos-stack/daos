@@ -81,7 +81,7 @@ io_update(struct io_test_args *arg, daos_epoch_t update_epoch,
 		ioreq->iod.iod_size = 0;
 	}
 
-	ioreq->sgl.sg_nr.num = 1;
+	ioreq->sgl.sg_nr = 1;
 	ioreq->sgl.sg_iovs = &ioreq->val_iov;
 
 	ioreq->epoch		= update_epoch;

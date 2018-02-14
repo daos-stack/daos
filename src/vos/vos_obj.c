@@ -95,8 +95,8 @@ iobuf_sgl_empty(struct iod_buf *iobuf)
 static bool
 iobuf_sgl_exhausted(struct iod_buf *iobuf)
 {
-	D__ASSERT(iobuf->db_at <= iobuf->db_sgl.sg_nr.num);
-	return iobuf->db_at == iobuf->db_sgl.sg_nr.num;
+	D__ASSERT(iobuf->db_at <= iobuf->db_sgl.sg_nr);
+	return iobuf->db_at == iobuf->db_sgl.sg_nr;
 }
 
 /**
@@ -132,7 +132,7 @@ iobuf_cp_fetch(struct iod_buf *iobuf, daos_iov_t *iov)
 
 		iobuf->db_iov_off += nob;
 		if (iobuf->db_iov_off == nob) /* the first population */
-			iobuf->db_sgl.sg_nr.num_out++;
+			iobuf->db_sgl.sg_nr_out++;
 
 		iov->iov_len = iobuf->db_iov_off;
 		if (iov->iov_len == iov->iov_buf_len) {
@@ -162,7 +162,7 @@ iobuf_zc_fetch(struct iod_buf *iobuf, daos_iov_t *iov)
 
 	sgl = &iobuf->db_sgl;
 	at  = iobuf->db_at;
-	nr  = sgl->sg_nr.num;
+	nr  = sgl->sg_nr;
 
 	if (at == nr - 1) {
 		D__ALLOC(iovs, nr * 2 * sizeof(*iovs));
@@ -173,12 +173,12 @@ iobuf_zc_fetch(struct iod_buf *iobuf, daos_iov_t *iov)
 		D__FREE(sgl->sg_iovs, nr * sizeof(*iovs));
 
 		sgl->sg_iovs	= iovs;
-		sgl->sg_nr.num	= nr * 2;
+		sgl->sg_nr	= nr * 2;
 	}
 
 	/* return the data address for rdma in upper level stack */
 	sgl->sg_iovs[at] = *iov;
-	sgl->sg_nr.num_out++;
+	sgl->sg_nr_out++;
 	iobuf->db_at++;
 	return 0;
 }
@@ -298,7 +298,7 @@ vos_empty_sgl(daos_sg_list_t *sgl)
 {
 	int	i;
 
-	for (i = 0; i < sgl->sg_nr.num; i++)
+	for (i = 0; i < sgl->sg_nr; i++)
 		sgl->sg_iovs[i].iov_len = 0;
 }
 
@@ -689,7 +689,7 @@ dkey_fetch(struct vos_object *obj, daos_epoch_t epoch, daos_key_t *dkey,
 			memset(iobuf, 0, sizeof(*iobuf));
 			if (sgls) {
 				iobuf->db_sgl = sgls[i];
-				iobuf->db_sgl.sg_nr.num_out = 0;
+				iobuf->db_sgl.sg_nr_out = 0;
 			}
 		}
 
@@ -697,8 +697,10 @@ dkey_fetch(struct vos_object *obj, daos_epoch_t epoch, daos_key_t *dkey,
 		if (rc != 0)
 			D__GOTO(failed, rc);
 
-		if (sgls)
+		if (sgls) {
 			sgls[i].sg_nr = iobuf->db_sgl.sg_nr;
+			sgls[i].sg_nr_out = iobuf->db_sgl.sg_nr_out;
+		}
 	}
 	D_EXIT;
  failed:
@@ -820,7 +822,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 		daos_sg_list_t	sgl;
 
 		sgl.sg_iovs   = &iov;
-		sgl.sg_nr.num = 1;
+		sgl.sg_nr = 1;
 
 		/* NB: evtree will return the allocated buffer addresses
 		 * if there is no input buffer in sgl, which means we can
@@ -1491,7 +1493,7 @@ akey_zc_update_begin(struct vos_zc_context *zcc, int iod_idx)
 		 * update for the record.
 		 */
 		daos_iov_set(&iobuf->db_sgl.sg_iovs[i], addr, size);
-		iobuf->db_sgl.sg_nr.num_out++;
+		iobuf->db_sgl.sg_nr_out++;
 	}
 	return 0;
 }

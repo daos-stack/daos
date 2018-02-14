@@ -142,8 +142,8 @@ pool_create(void)
 	 */
 
 	/** create pool over all the storage targets */
-	svcl.rl_nr.num	= 3;
-	ASSERT(sizeof(svc)/sizeof(svc[0]) >= svcl.rl_nr.num);
+	svcl.rl_nr	= 3;
+	ASSERT(ARRAY_SIZE(svc) >= svcl.rl_nr);
 	svcl.rl_ranks	= svc;
 	rc = daos_pool_create(0731 /* mode */,
 			      geteuid() /* user owner */,
@@ -156,7 +156,6 @@ pool_create(void)
 			      pool_uuid, /* the uuid of the pool created */
 			      NULL /* event, use blocking call for now */);
 	ASSERT(rc == 0, "pool create failed with %d", rc);
-	svcl.rl_nr.num = svcl.rl_nr.num_out;
 }
 
 void
@@ -208,7 +207,7 @@ ioreqs_init(struct ioreq *reqs) {
 			.iov_buf_len	= SLICE_SIZE * sizeof(data[0]),
 			.iov_len	= SLICE_SIZE * sizeof(data[0]),
 		};
-		req->sg.sg_nr.num	= 1;
+		req->sg.sg_nr		= 1;
 		req->sg.sg_iovs		= &req->iov;
 	}
 }

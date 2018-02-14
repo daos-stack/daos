@@ -91,7 +91,7 @@ dac_kv_put(tse_task_t *task)
 	params->iod.iod_type	= DAOS_IOD_SINGLE;
 
 	/** init sgl */
-	params->sgl.sg_nr.num = 1;
+	params->sgl.sg_nr = 1;
 	params->sgl.sg_iovs = &params->iov;
 	daos_iov_set(&params->sgl.sg_iovs[0], (void *)args->buf,
 		     args->buf_size);
@@ -176,7 +176,7 @@ dac_kv_get(tse_task_t *task)
 	if (buf && *buf_size) {
 		daos_iov_set(&params->iov, buf, *buf_size);
 		params->sgl.sg_iovs = &params->iov;
-		params->sgl.sg_nr.num = 1;
+		params->sgl.sg_nr = 1;
 	}
 
 	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),

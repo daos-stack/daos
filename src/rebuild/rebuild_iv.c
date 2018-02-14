@@ -214,7 +214,7 @@ rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 	iov.iov_buf = rebuild_iv;
 	iov.iov_len = sizeof(*rebuild_iv);
 	iov.iov_buf_len = sizeof(*rebuild_iv);
-	sgl.sg_nr.num = 1;
+	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
 
 	rc = ds_iv_fetch(ns, IV_REBUILD, &sgl);
@@ -235,8 +235,8 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 	iov.iov_buf = iv;
 	iov.iov_len = sizeof(*iv);
 	iov.iov_buf_len = sizeof(*iv);
-	sgl.sg_nr.num = 1;
-	sgl.sg_nr.num_out = 0;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 	rc = ds_iv_update(ns, IV_REBUILD, &sgl, shortcut, sync_mode);
 	if (rc)

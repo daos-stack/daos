@@ -67,7 +67,7 @@ ds_tier_init_group(d_rank_list_t *prl, d_rank_t *pr, uint32_t nr)
 		pr[j] = j;
 
 	prl->rl_ranks = pr;
-	prl->rl_nr.num = prl->rl_nr.num_out = nr;
+	prl->rl_nr = nr;
 }
 
 void
@@ -245,12 +245,10 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	daos_pool_connect_t		*pc_args;
 
 	colder_svc.rl_ranks = colder_ranks;
-	colder_svc.rl_nr.num = MAX_RANKS;
-	colder_svc.rl_nr.num_out = 0;
+	colder_svc.rl_nr = MAX_RANKS;
 
 	this_svc.rl_ranks = this_ranks;
-	this_svc.rl_nr.num = MAX_RANKS;
-	this_svc.rl_nr.num_out = 0;
+	this_svc.rl_nr = MAX_RANKS;
 
 	/* Check if we've actually got a colder group to connect to*/
 	/* If not, we're done and time to move on.*/
@@ -457,8 +455,7 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 				D__ERROR("crt_group_size returned %d\n", rc);
 			else {
 				D__INFO("warmer_svc has %u ranks\n", grpsz);
-				warmer_svc.rl_nr.num_out = grpsz;
-				warmer_svc.rl_nr.num     = grpsz;
+				warmer_svc.rl_nr     = grpsz;
 			}
 		} else
 			D__DEBUG(DF_TIERS, "failed to lookup warmer group\n");
@@ -552,8 +549,7 @@ ds_tier_register_cold_handler(crt_rpc_t *rpc)
 				D__ERROR("crt_group_size returned %d\n", rc);
 			else {
 				D__INFO("colder_svc has %u ranks\n", grpsz);
-				colder_svc.rl_nr.num     = grpsz;
-				colder_svc.rl_nr.num_out = grpsz;
+				colder_svc.rl_nr     = grpsz;
 			}
 		} else
 			D__DEBUG(DF_TIERS, "fail to lookup colder group\n");

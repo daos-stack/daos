@@ -87,12 +87,8 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	 * Report 1 domain per target for now
 	 */
 	rc = ds_pool_svc_create(pool_uuid, uid, gid, mode,
-				ranks->rl_nr.num, target_uuids, group,
+				ranks->rl_nr, target_uuids, group,
 				ranks, ARRAY_SIZE(doms), doms, svc_list);
-
-	if (rc == 0)
-		/* CMF_RANK_LIST only processes "num". */
-		svc_list->rl_nr.num = svc_list->rl_nr.num_out;
 
 	return rc;
 }
@@ -128,14 +124,14 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	if (pc_in->pc_tgts) {
 		daos_rank_list_sort(pc_in->pc_tgts);
 		rank_list = pc_in->pc_tgts;
-		ranks_size = pc_in->pc_tgts->rl_nr.num;
+		ranks_size = pc_in->pc_tgts->rl_nr;
 	} else {
 		int	i;
 
 		rc = crt_group_size(NULL, &ranks_size);
 		D__ASSERT(rc == 0);
 
-		tmp_rank_list.rl_nr.num = ranks_size;
+		tmp_rank_list.rl_nr = ranks_size;
 		if (ranks_size > TMP_RANKS_ARRAY_SIZE) {
 			d_rank_t *ranks;
 
@@ -230,7 +226,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		pc_in->pc_svc_nr * sizeof(d_rank_t));
 	if (pc_out->pc_svc->rl_ranks == NULL)
 		D__GOTO(tgt_pool_create_fail, rc = -DER_NOMEM);
-	pc_out->pc_svc->rl_nr.num = pc_in->pc_svc_nr;
+	pc_out->pc_svc->rl_nr = pc_in->pc_svc_nr;
 
 	rc = ds_mgmt_pool_svc_create(pc_in->pc_pool_uuid, pc_in->pc_uid,
 				     pc_in->pc_gid, pc_in->pc_mode,

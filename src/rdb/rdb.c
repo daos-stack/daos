@@ -49,7 +49,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	PMEMoid			sb_oid;
 	struct rdb_sb	       *sb;
 	volatile daos_handle_t	attr = DAOS_HDL_INVAL;
-	uint8_t			nreplicas = ranks->rl_nr.num;
+	uint8_t			nreplicas = ranks->rl_nr;
 	volatile int		rc;
 
 	D__DEBUG(DB_ANY, "creating db %s with %u replicas\n", path, nreplicas);
@@ -437,7 +437,7 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 int
 rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 {
-	return daos_rank_list_dup(ranksp, db->d_replicas, true /* input */);
+	return daos_rank_list_dup(ranksp, db->d_replicas);
 }
 
 /* I regretted... May move these back to the service level. */
@@ -570,7 +570,7 @@ rdb_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  *
  * \param[in]	uuid		database UUID
  * \param[in]	pool_uuid	pool UUID (for ds_mgmt_tgt_file())
- * \param[in]	ranks		list of \a ranks->rl_nr.num_out replica ranks
+ * \param[in]	ranks		list of \a ranks->rl_nr replica ranks
  * \param[in]	destroy		destroy after close
  */
 int

@@ -223,7 +223,7 @@ ts_add_rect(char *args)
 		val ? val : "<NULL>");
 
 	daos_iov_set(&iov, val, rect.rc_off_hi - rect.rc_off_lo + 1);
-	sgl.sg_nr.num = 1;
+	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
 
 	rc = evt_insert_sgl(ts_toh, ts_uuid, 0, &rect, val ? 1 : 0, &sgl);
@@ -397,7 +397,7 @@ ts_many_add(char *args)
 
 		memset(buf, 'a' + seq[i] % TS_VAL_CYCLE, size);
 		daos_iov_set(&iov, buf, size);
-		sgl.sg_nr.num = 1;
+		sgl.sg_nr = 1;
 		sgl.sg_iovs = &iov;
 
 		rc = evt_insert_sgl(ts_toh, ts_uuid, 0, &rect, 1, &sgl);

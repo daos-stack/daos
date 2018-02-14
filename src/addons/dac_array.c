@@ -233,8 +233,8 @@ write_md_cb(tse_task_t *task, void *data)
 		     sizeof(daos_size_t));
 	daos_iov_set(&params->sgl.sg_iovs[1], &args->block_size,
 		     sizeof(daos_size_t));
-	params->sgl.sg_nr.num		= 2;
-	params->sgl.sg_nr.num_out	= 0;
+	params->sgl.sg_nr		= 2;
+	params->sgl.sg_nr_out		= 0;
 
 	/** init I/O descriptor */
 	daos_iov_set(&params->iod.iod_name, ARRAY_MD_KEY, strlen(ARRAY_MD_KEY));
@@ -403,8 +403,8 @@ fetch_md_cb(tse_task_t *task, void *data)
 		     sizeof(daos_size_t));
 	daos_iov_set(&params->sgl.sg_iovs[1], args->block_size,
 		     sizeof(daos_size_t));
-	params->sgl.sg_nr.num		= 2;
-	params->sgl.sg_nr.num_out	= 0;
+	params->sgl.sg_nr		= 2;
+	params->sgl.sg_nr_out		= 0;
 
 	/** init I/O descriptor */
 	daos_iov_set(&params->iod.iod_name, ARRAY_MD_KEY, strlen(ARRAY_MD_KEY));
@@ -576,10 +576,10 @@ io_extent_same(daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
 #ifdef ARRAY_DEBUG
 	printf("------------------------------------\n");
 	printf("USER SGL -----------------------\n");
-	printf("sg_nr = %u\n", sgl->sg_nr.num);
+	printf("sg_nr = %u\n", sgl->sg_nr);
 #endif
 	sgl_len = 0;
-	for (u = 0 ; u < sgl->sg_nr.num; u++) {
+	for (u = 0 ; u < sgl->sg_nr; u++) {
 		sgl_len += sgl->sg_iovs[u].iov_len;
 #ifdef ARRAY_DEBUG
 		printf("%zu: length %zu, Buf %p\n",
@@ -636,7 +636,7 @@ create_sgl(daos_sg_list_t *user_sgl, daos_size_t cell_size,
 
 	cur_i = *sgl_i;
 	cur_off = *sgl_off;
-	sgl->sg_nr.num = k = 0;
+	sgl->sg_nr = k = 0;
 	sgl->sg_iovs = NULL;
 	rem_records = num_records;
 
@@ -645,11 +645,11 @@ create_sgl(daos_sg_list_t *user_sgl, daos_size_t cell_size,
 	 * satisfy the number of records to read/write from the KV object
 	 */
 	do {
-		D__ASSERT(user_sgl->sg_nr.num > cur_i);
+		D__ASSERT(user_sgl->sg_nr > cur_i);
 
-		sgl->sg_nr.num++;
+		sgl->sg_nr++;
 		sgl->sg_iovs = (daos_iov_t *)realloc
-			(sgl->sg_iovs, sizeof(daos_iov_t) * sgl->sg_nr.num);
+			(sgl->sg_iovs, sizeof(daos_iov_t) * sgl->sg_nr);
 		if (sgl->sg_iovs == NULL) {
 			D__ERROR("Failed memory allocation\n");
 			return -DER_NOMEM;
@@ -673,9 +673,9 @@ create_sgl(daos_sg_list_t *user_sgl, daos_size_t cell_size,
 		rem_records -= sgl->sg_iovs[k].iov_len / cell_size;
 
 		k++;
-	} while (rem_records && user_sgl->sg_nr.num > cur_i);
+	} while (rem_records && user_sgl->sg_nr > cur_i);
 
-	sgl->sg_nr.num_out = 0;
+	sgl->sg_nr_out = 0;
 
 	*sgl_i = cur_i;
 	*sgl_off = cur_off;
@@ -906,7 +906,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		 * if the user sgl maps directly to the array range, no need to
 		 * partition it.
 		 */
-		if (1 == ranges->arr_nr && 1 == user_sgl->sg_nr.num &&
+		if (1 == ranges->arr_nr && 1 == user_sgl->sg_nr &&
 		    dkey_records == ranges->arr_rgs[0].rg_len) {
 			sgl = user_sgl;
 			params->user_sgl_used = true;
@@ -924,8 +924,8 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			daos_size_t s;
 
 			printf("DKEY SGL -----------------------\n");
-			printf("sg_nr = %u\n", sgl->sg_nr.num);
-			for (s = 0; s < sgl->sg_nr.num; s++) {
+			printf("sg_nr = %u\n", sgl->sg_nr);
+			for (s = 0; s < sgl->sg_nr; s++) {
 				printf("%zu: length %zu, Buf %p\n",
 				       s, sgl->sg_iovs[s].iov_len,
 				       sgl->sg_iovs[s].iov_buf);
@@ -1147,7 +1147,7 @@ get_array_size_cb(tse_task_t *task, void *data)
 	if (!daos_hash_is_eof(args->anchor)) {
 		props->nr = ENUM_DESC_NR;
 		memset(props->buf, 0, ENUM_DESC_BUF);
-		args->sgl->sg_nr.num = 1;
+		args->sgl->sg_nr = 1;
 		daos_iov_set(&args->sgl->sg_iovs[0], props->buf, ENUM_DESC_BUF);
 
 		rc = tse_task_reinit(task);
@@ -1272,7 +1272,7 @@ dac_array_get_size(tse_task_t *task)
 	get_size_props->array = array;
 	memset(get_size_props->buf, 0, ENUM_DESC_BUF);
 	memset(&get_size_props->anchor, 0, sizeof(get_size_props->anchor));
-	get_size_props->sgl.sg_nr.num = 1;
+	get_size_props->sgl.sg_nr = 1;
 	get_size_props->sgl.sg_iovs = &get_size_props->iov;
 	daos_iov_set(&get_size_props->sgl.sg_iovs[0], get_size_props->buf,
 		     ENUM_DESC_BUF);
@@ -1521,7 +1521,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 	if (!daos_hash_is_eof(args->anchor)) {
 		props->nr = ENUM_DESC_NR;
 		memset(props->buf, 0, ENUM_DESC_BUF);
-		args->sgl->sg_nr.num = 1;
+		args->sgl->sg_nr = 1;
 		daos_iov_set(&args->sgl->sg_iovs[0], props->buf, ENUM_DESC_BUF);
 
 		rc = tse_task_reinit(task);
@@ -1576,7 +1576,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 
 		/** set memory location */
 		props->val = calloc(1, props->cell_size);
-		sgl->sg_nr.num = 1;
+		sgl->sg_nr = 1;
 		sgl->sg_iovs = malloc(sizeof(daos_iov_t));
 		daos_iov_set(&sgl->sg_iovs[0], props->val, props->cell_size);
 
@@ -1693,7 +1693,7 @@ dac_array_set_size(tse_task_t *task)
 	set_size_props->val = NULL;
 	memset(set_size_props->buf, 0, ENUM_DESC_BUF);
 	memset(&set_size_props->anchor, 0, sizeof(set_size_props->anchor));
-	set_size_props->sgl.sg_nr.num = 1;
+	set_size_props->sgl.sg_nr = 1;
 	set_size_props->sgl.sg_iovs = &set_size_props->iov;
 	daos_iov_set(&set_size_props->sgl.sg_iovs[0], set_size_props->buf,
 		     ENUM_DESC_BUF);

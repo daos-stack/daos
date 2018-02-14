@@ -177,17 +177,17 @@ dc_obj_shard_sgl_copy(daos_sg_list_t *dst_sgl, uint32_t dst_nr,
 	}
 
 	for (i = 0; i < src_nr; i++) {
-		if (src_sgl[i].sg_nr.num == 0)
+		if (src_sgl[i].sg_nr == 0)
 			continue;
 
-		if (src_sgl[i].sg_nr.num > dst_sgl[i].sg_nr.num) {
+		if (src_sgl[i].sg_nr > dst_sgl[i].sg_nr) {
 			D__ERROR("%d : %u > %u\n", i,
-				src_sgl[i].sg_nr.num, dst_sgl[i].sg_nr.num);
+				src_sgl[i].sg_nr, dst_sgl[i].sg_nr);
 			return -DER_INVAL;
 		}
 
-		dst_sgl[i].sg_nr.num_out = src_sgl[i].sg_nr.num_out;
-		for (j = 0; j < src_sgl[i].sg_nr.num_out; j++) {
+		dst_sgl[i].sg_nr_out = src_sgl[i].sg_nr_out;
+		for (j = 0; j < src_sgl[i].sg_nr_out; j++) {
 			if (src_sgl[i].sg_iovs[j].iov_len == 0)
 				continue;
 
@@ -288,7 +288,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 						   orwo->orw_sgls.da_arrays,
 						   orwo->orw_sgls.da_count);
 		} else if (rw_args->rwaa_sgls != NULL) {
-			/* for bulk transfer it needs to update sg_nr.num_out */
+			/* for bulk transfer it needs to update sg_nr_out */
 			daos_sg_list_t *sgls = rw_args->rwaa_sgls;
 			uint32_t       *nrs;
 			uint32_t	nrs_count;
@@ -303,7 +303,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 			/* update sgl_nr */
 			for (i = 0; i < nrs_count; i++)
-				sgls[i].sg_nr.num_out = nrs[i];
+				sgls[i].sg_nr_out = nrs[i];
 		}
 	}
 out:
@@ -787,7 +787,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	tgt_tag = enum_anchor_get_tag(&oeo->oeo_anchor);
 	enum_anchor_set_tag(enum_args->eaa_anchor, tgt_tag);
 
-	if (oeo->oeo_sgl.sg_nr.num > 0 && oeo->oeo_sgl.sg_iovs != NULL)
+	if (oeo->oeo_sgl.sg_nr > 0 && oeo->oeo_sgl.sg_iovs != NULL)
 		rc = dc_obj_shard_sgl_copy(enum_args->eaa_sgl, 1, &oeo->oeo_sgl,
 					   1);
 

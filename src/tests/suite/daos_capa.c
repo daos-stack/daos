@@ -328,8 +328,8 @@ io_invalid_poh(void **state)
 		/** init I/O */
 		daos_iov_set(&dkey, "dkey", strlen("dkey"));
 		daos_iov_set(&sg_iov, buf, sizeof(buf));
-		sgl.sg_nr.num		= 1;
-		sgl.sg_nr.num_out	= 0;
+		sgl.sg_nr		= 1;
+		sgl.sg_nr_out		= 0;
 		sgl.sg_iovs		= &sg_iov;
 		daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 		daos_csum_set(&iod.iod_kcsum, NULL, 0);
@@ -419,8 +419,8 @@ io_invalid_coh(void **state)
 		/** init I/O */
 		daos_iov_set(&dkey, "dkey", strlen("dkey"));
 		daos_iov_set(&sg_iov, buf, sizeof(buf));
-		sgl.sg_nr.num		= 1;
-		sgl.sg_nr.num_out	= 0;
+		sgl.sg_nr		= 1;
+		sgl.sg_nr_out		= 0;
 		sgl.sg_iovs		= &sg_iov;
 		daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 		daos_csum_set(&iod.iod_kcsum, NULL, 0);
@@ -498,8 +498,8 @@ update_ro(void **state)
 	/** init I/O */
 	daos_iov_set(&dkey, "dkey", strlen("dkey"));
 	daos_iov_set(&sg_iov, buf, sizeof(buf));
-	sgl.sg_nr.num		= 1;
-	sgl.sg_nr.num_out	= 0;
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);

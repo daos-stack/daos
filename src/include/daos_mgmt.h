@@ -58,13 +58,13 @@ extern "C" {
  *			space targets can consume) in bytes. Passing 0 will use
  *			the minimal supported target size.
  * \param svc	[IN]	Number of desired pool service replicas. Callers must
- *			speicfy svc->rl_nr.num and allocate a matching
- *			svc->rl_ranks; svc->rl_nr.num_out and svc->rl_ranks
+ *			speicfy svc->rl_nr and allocate a matching
+ *			svc->rl_ranks; svc->rl_nr and svc->rl_ranks
  *			content are ignored.
- *		[OUT]	List of actual pool service replicas. svc->rl_nr.num_out
+ *		[OUT]	List of actual pool service replicas. svc->rl_nr
  *			is the number of actual pool service replicas, which
  *			shall be equal to or smaller than the desired number.
- *			The first svc->rl_nr.num_out elements of svc->rl_ranks
+ *			The first svc->rl_nr elements of svc->rl_ranks
  *			shall be the list of pool service ranks.
  * \param uuid	[OUT]	UUID of the pool created
  * \param ev	[IN]	Completion event, it is optional and can be NULL.

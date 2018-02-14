@@ -49,7 +49,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 
 	/* init sgl */
 	for (i = 0; i < IOREQ_SG_IOD_NR; i++) {
-		req->sgl[i].sg_nr.num = IOREQ_SG_NR;
+		req->sgl[i].sg_nr = IOREQ_SG_NR;
 		req->sgl[i].sg_iovs = req->val_iov[i];
 	}
 
@@ -157,8 +157,8 @@ ioreq_sgl_simple_set(struct ioreq *req, void **value,
 
 	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 	for (i = 0; i < nr; i++) {
-		sgl[i].sg_nr.num = 1;
-		sgl[i].sg_nr.num_out = 0;
+		sgl[i].sg_nr = 1;
+		sgl[i].sg_nr_out = 0;
 		daos_iov_set(&sgl[i].sg_iovs[0], value[i], size[i]);
 	}
 }
@@ -213,7 +213,7 @@ lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 	assert_int_equal(ev_flag, true);
 	assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 	/* Only single iov for each sgls during the test */
-	assert_int_equal(sgls->sg_nr.num_out, 1);
+	assert_int_equal(sgls->sg_nr_out, 1);
 }
 
 void
@@ -277,8 +277,7 @@ main(int argc, char **argv)
 	uuid_t cold_uuid;
 
 	warm_ranks[0] = 0;
-	warm_svc.rl_nr.num = 1;
-	warm_svc.rl_nr.num_out = 1;
+	warm_svc.rl_nr = 1;
 	warm_svc.rl_ranks = warm_ranks;
 
 	/*Pool handles and info*/
@@ -325,8 +324,7 @@ main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 	arg.myrank = rank;
 	arg.rank_size = size;
-	arg.svc.rl_nr.num = 1;
-	arg.svc.rl_nr.num_out = 0;
+	arg.svc.rl_nr = 1;
 	arg.svc.rl_ranks = arg.ranks;
 	arg.multi_rank = 0;
 	arg.mode = 0731;

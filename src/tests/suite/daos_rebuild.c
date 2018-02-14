@@ -106,8 +106,7 @@ rebuild_test_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank)
 	if (args[0]->myrank == 0) {
 		int i;
 
-		ranks.rl_nr.num = 1;
-		ranks.rl_nr.num_out = 0;
+		ranks.rl_nr = 1;
 		ranks.rl_ranks = &rank;
 		for (i = 0; i < args_cnt; i++) {
 			rc = daos_pool_tgt_add(args[i]->pool_uuid,

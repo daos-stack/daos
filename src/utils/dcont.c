@@ -133,7 +133,7 @@ cont_op_hdlr(int argc, char *argv[])
 		return 2;
 	}
 
-	if (svc->rl_nr.num == 0) {
+	if (svc->rl_nr == 0) {
 		fprintf(stderr, "--svc mustn't be empty\n");
 		daos_rank_list_free(svc);
 		return 2;

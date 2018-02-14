@@ -190,7 +190,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	ranges.arr_rgs = &rg;
 
 	/** set memory location */
-	sgl.sg_nr.num = 1;
+	sgl.sg_nr = 1;
 	daos_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
 	sgl.sg_iovs = &iov;
 
@@ -326,7 +326,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	/** set memory location */
-	sgl.sg_nr.num = 1;
+	sgl.sg_nr = 1;
 	daos_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
 	sgl.sg_iovs = &iov;
 
@@ -466,7 +466,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	/** set memory location */
-	sgl.sg_nr.num = NUM_SEGS;
+	sgl.sg_nr = NUM_SEGS;
 	sgl.sg_iovs = (daos_iov_t *)malloc(sizeof(daos_iov_t) * NUM_SEGS);
 	assert_non_null(sgl.sg_iovs);
 
@@ -613,7 +613,7 @@ read_empty_records(void **state)
 	}
 
 	/** set memory location */
-	sgl.sg_nr.num = 1;
+	sgl.sg_nr = 1;
 	daos_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
 	sgl.sg_iovs = &iov;
 

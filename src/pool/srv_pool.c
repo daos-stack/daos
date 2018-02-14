@@ -304,7 +304,7 @@ out_map_buf:
 }
 
 /*
- * nreplicas inputs how many replicas are wanted, while ranks->rl_nr.num
+ * nreplicas inputs how many replicas are wanted, while ranks->rl_nr
  * outputs how many replicas are actually selected, which may be less than
  * nreplicas. If successful, callers are responsible for calling
  * daos_rank_list_free(*ranksp).
@@ -323,7 +323,7 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 		return -DER_INVAL;
 
 	/* Determine the number of selectable targets. */
-	selectable = target_addrs->rl_nr.num;
+	selectable = target_addrs->rl_nr;
 	if (daos_rank_list_find((d_rank_list_t *)target_addrs, 0 /* rank */,
 				&i_rank_zero)) {
 		/*
@@ -342,8 +342,8 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 
 	/* TODO: Choose ranks according to failure domains. */
 	j = 0;
-	for (i = 0; i < target_addrs->rl_nr.num; i++) {
-		if (j == ranks->rl_nr.num)
+	for (i = 0; i < target_addrs->rl_nr; i++) {
+		if (j == ranks->rl_nr)
 			break;
 		if (i == i_rank_zero && selectable > 1)
 			/* This is rank 0 and it's not the only rank. */
@@ -352,7 +352,7 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 		ranks->rl_ranks[j] = target_addrs->rl_ranks[i];
 		j++;
 	}
-	D__ASSERTF(j == ranks->rl_nr.num, "%d == %u\n", j, ranks->rl_nr.num);
+	D__ASSERTF(j == ranks->rl_nr, "%d == %u\n", j, ranks->rl_nr);
 
 	*ranksp = ranks;
 	return 0;
@@ -392,7 +392,7 @@ get_md_cap(void)
  * \param[in]		target_addrs	list of \a ntargets target ranks
  * \param[in]		ndomains	number of domains the pool spans over
  * \param[in]		domains		serialized domain tree
- * \param[in,out]	svc_addrs	\a svc_addrs.rl_nr.num inputs how many
+ * \param[in,out]	svc_addrs	\a svc_addrs.rl_nr inputs how many
  *					replicas shall be created; returns the
  *					list of pool service replica ranks
  */
@@ -412,10 +412,10 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	struct pool_create_out *out;
 	int			rc;
 
-	D__ASSERTF(ntargets == target_addrs->rl_nr.num, "ntargets=%u num=%u\n",
-		  ntargets, target_addrs->rl_nr.num);
+	D__ASSERTF(ntargets == target_addrs->rl_nr, "ntargets=%u num=%u\n",
+		  ntargets, target_addrs->rl_nr);
 
-	rc = select_svc_ranks(svc_addrs->rl_nr.num, target_addrs, ndomains,
+	rc = select_svc_ranks(svc_addrs->rl_nr, target_addrs, ndomains,
 			      domains, &ranks);
 	if (rc != 0)
 		D__GOTO(out, rc);
@@ -473,7 +473,7 @@ rechoose:
 		D__GOTO(out_rpc, rc);
 	}
 
-	daos_rank_list_copy(svc_addrs, ranks, false /* !input */);
+	rc = daos_rank_list_copy(svc_addrs, ranks);
 out_rpc:
 	crt_req_decref(rpc);
 out_client:
@@ -1412,7 +1412,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		DP_UUID(in->pri_op.pi_uuid), rpc);
 
 	if (in->pri_ntgts != in->pri_tgt_uuids.da_count ||
-	    in->pri_ntgts != in->pri_tgt_ranks->rl_nr.num)
+	    in->pri_ntgts != in->pri_tgt_ranks->rl_nr)
 		D__GOTO(out, rc = -DER_PROTO);
 	if (in->pri_ndomains != in->pri_domains.da_count)
 		D__GOTO(out, rc = -DER_PROTO);
@@ -1652,8 +1652,8 @@ transfer_map_buf(struct rdb_tx *tx, struct pool_svc *svc, crt_rpc_t *rpc,
 	}
 
 	daos_iov_set(&map_iov, map_buf, map_buf_size);
-	map_sgl.sg_nr.num = 1;
-	map_sgl.sg_nr.num_out = 0;
+	map_sgl.sg_nr = 1;
+	map_sgl.sg_nr_out = 0;
 	map_sgl.sg_iovs = &map_iov;
 
 	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&map_sgl),
@@ -2159,7 +2159,7 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 
 	D__DEBUG(DF_DSMS, DF_UUID": version=%u->%u failed=%d\n",
 		DP_UUID(svc->ps_uuid), map_version_before, map_version,
-		tgts_out == NULL ? -1 : tgts_out->rl_nr.num_out);
+		tgts_out == NULL ? -1 : tgts_out->rl_nr);
 	if (map_version == map_version_before) {
 		if (updated)
 			*updated = false;
@@ -2237,12 +2237,12 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	bool				updated;
 	int				rc;
 
-	if (in->pti_targets == NULL || in->pti_targets->rl_nr.num == 0 ||
+	if (in->pti_targets == NULL || in->pti_targets->rl_nr == 0 ||
 	    in->pti_targets->rl_ranks == NULL)
 		D__GOTO(out, rc = -DER_INVAL);
 
 	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p: ntargets=%u\n",
-		DP_UUID(in->pti_op.pi_uuid), rpc, in->pti_targets->rl_nr.num);
+		DP_UUID(in->pti_op.pi_uuid), rpc, in->pti_targets->rl_nr);
 
 	/* These have to be freed after the reply is sent. */
 	D__ALLOC_PTR(out->pto_targets);
@@ -2250,11 +2250,11 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 		D__GOTO(out, rc = -DER_NOMEM);
 	D__ALLOC(out->pto_targets->rl_ranks,
 		sizeof(*out->pto_targets->rl_ranks) *
-		in->pti_targets->rl_nr.num);
+		in->pti_targets->rl_nr);
 	if (out->pto_targets->rl_ranks == NULL)
 		D__GOTO(out, rc = -DER_NOMEM);
 
-	out->pto_targets->rl_nr.num = in->pti_targets->rl_nr.num;
+	out->pto_targets->rl_nr = in->pti_targets->rl_nr;
 
 	rc = ds_pool_update_internal(in->pti_op.pi_uuid, in->pti_targets,
 				     opc_get(rpc->cr_opc), out->pto_targets,
@@ -2262,8 +2262,6 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	if (rc)
 		D__GOTO(out, rc);
 
-	/* The RPC encoding code only looks at rl_nr.num. */
-	out->pto_targets->rl_nr.num = out->pto_targets->rl_nr.num_out;
 	D_EXIT;
 out:
 	out->pto_op.po_rc = rc;
@@ -2299,7 +2297,7 @@ out:
 		if (out->pto_targets->rl_ranks != NULL)
 			D__FREE(out->pto_targets->rl_ranks,
 			       sizeof(*out->pto_targets->rl_ranks) *
-			       in->pti_targets->rl_nr.num);
+			       in->pti_targets->rl_nr);
 		D__FREE_PTR(out->pto_targets);
 	}
 }

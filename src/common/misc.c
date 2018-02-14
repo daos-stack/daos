@@ -36,7 +36,7 @@ daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 {
 	memset(sgl, 0, sizeof(*sgl));
 
-	sgl->sg_nr.num = nr;
+	sgl->sg_nr = nr;
 	D__ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
@@ -54,14 +54,14 @@ daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 	if (sgl->sg_iovs == NULL)
 		return;
 
-	for (i = 0; free_iovs && i < sgl->sg_nr.num; i++) {
+	for (i = 0; free_iovs && i < sgl->sg_nr; i++) {
 		if (sgl->sg_iovs[i].iov_buf != NULL) {
 			D__FREE(sgl->sg_iovs[i].iov_buf,
 			       sgl->sg_iovs[i].iov_buf_len);
 		}
 	}
 
-	D__FREE(sgl->sg_iovs, sgl->sg_nr.num * sizeof(*sgl->sg_iovs));
+	D__FREE(sgl->sg_iovs, sgl->sg_nr * sizeof(*sgl->sg_iovs));
 	memset(sgl, 0, sizeof(*sgl));
 }
 
@@ -71,15 +71,15 @@ daos_sgl_copy(d_sg_list_t *dst, d_sg_list_t *src)
 	int rc;
 
 	if (dst->sg_iovs == NULL) {
-		rc = daos_sgl_init(dst, src->sg_nr.num);
+		rc = daos_sgl_init(dst, src->sg_nr);
 		if (rc)
 			return rc;
 	}
 
-	D_ASSERT(dst->sg_nr.num <= src->sg_nr.num);
+	D_ASSERT(dst->sg_nr <= src->sg_nr);
 
 	memcpy(dst->sg_iovs, src->sg_iovs,
-	       dst->sg_nr.num * sizeof(*dst->sg_iovs));
+	       dst->sg_nr * sizeof(*dst->sg_iovs));
 
 	return 0;
 }
@@ -93,7 +93,7 @@ daos_sgl_data_len(d_sg_list_t *sgl)
 	if (sgl == NULL || sgl->sg_iovs == NULL)
 		return 0;
 
-	for (i = 0, len = 0; i < sgl->sg_nr.num; i++)
+	for (i = 0, len = 0; i < sgl->sg_nr; i++)
 		len += sgl->sg_iovs[i].iov_len;
 
 	return len;
@@ -108,7 +108,7 @@ daos_sgl_buf_len(d_sg_list_t *sgl)
 	if (sgl == NULL || sgl->sg_iovs == NULL)
 		return 0;
 
-	for (i = 0, len = 0; i < sgl->sg_nr.num; i++)
+	for (i = 0, len = 0; i < sgl->sg_nr; i++)
 		len += sgl->sg_iovs[i].iov_buf_len;
 
 	return len;

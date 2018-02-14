@@ -27,15 +27,15 @@ parse_oid(char *p, struct tier_info *pinfo)
 	daos_obj_id_t oid;
 	int nr;
 
-	if (pinfo->oids.ol_nr.num_out >= pinfo->oids.ol_nr.num)
+	if (pinfo->oids.ol_nr_out >= pinfo->oids.ol_nr)
 		return 0;
 	if (pinfo->oids.ol_oids == NULL)
 		return 0;
 
 	nr = sscanf(p, DF_OID, &oid.hi, &oid.lo);
 	if (nr == 3) {
-		pinfo->oids.ol_oids[pinfo->oids.ol_nr.num_out] = oid;
-		pinfo->oids.ol_nr.num_out += 1;
+		pinfo->oids.ol_oids[pinfo->oids.ol_nr_out] = oid;
+		pinfo->oids.ol_nr_out += 1;
 	}
 	return 0;
 }
@@ -54,8 +54,8 @@ tinfo_init(struct tier_info *pinfo, daos_obj_id_t *poids, int max_oids)
 {
 	memset(pinfo, 0, sizeof(*pinfo));
 	pinfo->oids.ol_oids = poids;
-	pinfo->oids.ol_nr.num = max_oids;
-	pinfo->oids.ol_nr.num_out = 0;
+	pinfo->oids.ol_nr = max_oids;
+	pinfo->oids.ol_nr_out = 0;
 }
 
 int

@@ -56,8 +56,7 @@ setup(void **state, unsigned int step, bool multi_rank)
 	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
 	arg->multi_rank = multi_rank;
 
-	arg->svc.rl_nr.num = svc_nreplicas;
-	arg->svc.rl_nr.num_out = svc_nreplicas;
+	arg->svc.rl_nr = svc_nreplicas;
 	arg->svc.rl_ranks = arg->ranks;
 	for (i = 0; i < svc_nreplicas; i++)
 		arg->svc.rl_ranks[i] = i;
@@ -113,8 +112,6 @@ setup(void **state, unsigned int step, bool multi_rank)
 		return rc;
 
 	/** broadcast pool UUID and svc addresses */
-	if (arg->myrank == 0)
-		arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
 	if (multi_rank) {
 		MPI_Bcast(arg->pool_uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
 		MPI_Bcast(&arg->svc, sizeof(arg->pool_info), MPI_CHAR, 0,

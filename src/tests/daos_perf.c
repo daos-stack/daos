@@ -77,8 +77,8 @@ ts_vos_update(struct dts_io_credit *cred, daos_epoch_t epoch)
 		if (rc)
 			return rc;
 
-		D__ASSERT(cred->tc_sgl.sg_nr.num == 1);
-		D__ASSERT(sgl->sg_nr.num_out == 1);
+		D__ASSERT(cred->tc_sgl.sg_nr == 1);
+		D__ASSERT(sgl->sg_nr_out == 1);
 
 		memcpy(sgl->sg_iovs[0].iov_buf,
 		       cred->tc_sgl.sg_iovs[0].iov_buf,
@@ -177,7 +177,7 @@ ts_key_insert(void)
 
 			daos_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
 			sgl->sg_iovs = &cred->tc_val;
-			sgl->sg_nr.num = 1;
+			sgl->sg_nr = 1;
 
 			/* overwrite can replace orignal data and reduce space
 			 * consumption.
@@ -483,7 +483,7 @@ main(int argc, char **argv)
 		ts_ctx.tsc_pmem_file = ts_pmem_file;
 	} else {
 		ts_ctx.tsc_cred_nr = credits;
-		ts_ctx.tsc_svc.rl_nr.num = 1;
+		ts_ctx.tsc_svc.rl_nr = 1;
 		ts_ctx.tsc_svc.rl_ranks  = &svc_rank;
 	}
 	ts_ctx.tsc_cred_vsize	= vsize;

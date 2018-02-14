@@ -53,7 +53,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 
 	/* init sgl */
 	for (i = 0; i < IOREQ_SG_IOD_NR; i++) {
-		req->sgl[i].sg_nr.num = IOREQ_SG_NR;
+		req->sgl[i].sg_nr = IOREQ_SG_NR;
 		req->sgl[i].sg_iovs = req->val_iov[i];
 	}
 
@@ -172,8 +172,8 @@ ioreq_sgl_simple_set(struct ioreq *req, void **value,
 
 	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 	for (i = 0; i < nr; i++) {
-		sgl[i].sg_nr.num = 1;
-		sgl[i].sg_nr.num_out = 0;
+		sgl[i].sg_nr = 1;
+		sgl[i].sg_nr_out = 0;
 		daos_iov_set(&sgl[i].sg_iovs[0], value[i], size[i]);
 	}
 }
@@ -265,7 +265,7 @@ lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 	assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 	/* Only single iov for each sgls during the test */
 	if (!empty)
-		assert_int_equal(sgls->sg_nr.num_out, 1);
+		assert_int_equal(sgls->sg_nr_out, 1);
 }
 
 void
@@ -915,8 +915,8 @@ basic_byte_array(void **state)
 
 	/** init scatter/gather */
 	daos_iov_set(&sg_iov, buf, sizeof(buf));
-	sgl.sg_nr.num		= 1;
-	sgl.sg_nr.num_out	= 0;
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
@@ -981,8 +981,8 @@ read_empty_records_internal(void **state, unsigned int size)
 	buf = 2000;
 	/** init scatter/gather */
 	daos_iov_set(&sg_iov, &buf, sizeof(int));
-	sgl.sg_nr.num = 1;
-	sgl.sg_nr.num_out = 0;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &sg_iov;
 
 	/** init I/O descriptor */
@@ -1091,8 +1091,8 @@ fetch_size(void **state)
 
 		/** init scatter/gather */
 		daos_iov_set(&sg_iov[i], buf[i], size * (i+1));
-		sgl[i].sg_nr.num	= 1;
-		sgl[i].sg_nr.num_out	= 0;
+		sgl[i].sg_nr		= 1;
+		sgl[i].sg_nr_out	= 0;
 		sgl[i].sg_iovs		= &sg_iov[i];
 
 		/** init I/O descriptor */

@@ -226,13 +226,12 @@ pool_exclude(void **state)
 	print_message("success\n");
 
 	/** exclude last non-svc rank */
-	if (info.pi_ntargets - 1 /* rank 0 */ <= arg->svc.rl_nr.num) {
+	if (info.pi_ntargets - 1 /* rank 0 */ <= arg->svc.rl_nr) {
 		print_message("not enough non-svc targets; skipping\n");
 		goto disconnect;
 	}
 	rank = info.pi_ntargets - 1;
-	ranks.rl_nr.num = 1;
-	ranks.rl_nr.num_out = ranks.rl_nr.num;
+	ranks.rl_nr = 1;
 	ranks.rl_ranks = &rank;
 
 	print_message("rank 0 excluding rank %u... ", rank);

@@ -48,16 +48,14 @@ mdr_stop_pool_svc(void **argv)
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	assert_int_equal(rc, 0);
-	if (arg->myrank == 0)
-		arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
 	MPI_Bcast(uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&arg->svc.rl_nr.num, sizeof(arg->svc.rl_nr.num), MPI_CHAR, 0,
+	MPI_Bcast(&arg->svc.rl_nr, sizeof(arg->svc.rl_nr), MPI_CHAR, 0,
 		  MPI_COMM_WORLD);
-	MPI_Bcast(arg->ranks, sizeof(arg->ranks[0]) * arg->svc.rl_nr.num,
+	MPI_Bcast(arg->ranks, sizeof(arg->ranks[0]) * arg->svc.rl_nr,
 		  MPI_CHAR, 0, MPI_COMM_WORLD);
 
 	/* Check the number of pool service replicas. */
-	if (arg->svc.rl_nr.num < 3) {
+	if (arg->svc.rl_nr < 3) {
 		if (arg->myrank == 0)
 			print_message(">= 3 pool service replicas needed\n");
 		skip = true;
@@ -136,9 +134,8 @@ mdr_stop_cont_svc(void **argv)
 			      "pmem", 128*1024*1024, &arg->svc, pool_uuid,
 			      NULL);
 	assert_int_equal(rc, 0);
-	arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
 
-	if (arg->svc.rl_nr.num < 3) {
+	if (arg->svc.rl_nr < 3) {
 		print_message(">= 3 pool service replicas needed; skipping\n");
 		goto destroy;
 	}

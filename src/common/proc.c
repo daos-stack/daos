@@ -436,22 +436,6 @@ daos_proc_key_desc(crt_proc_t proc, daos_key_desc_t *key)
 	return 0;
 }
 
-static int
-daos_proc_nr(crt_proc_t proc, daos_nr_t *dnr)
-{
-	int rc;
-
-	rc = crt_proc_uint32_t(proc, &dnr->num);
-	if (rc != 0)
-		return rc;
-
-	rc = crt_proc_uint32_t(proc, &dnr->num_out);
-	if (rc != 0)
-		return rc;
-
-	return rc;
-}
-
 int
 daos_proc_sg_list(crt_proc_t proc, daos_sg_list_t *sgl)
 {
@@ -459,7 +443,11 @@ daos_proc_sg_list(crt_proc_t proc, daos_sg_list_t *sgl)
 	int		i;
 	int		rc;
 
-	rc = daos_proc_nr(proc, &sgl->sg_nr);
+	rc = crt_proc_uint32_t(proc, &sgl->sg_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &sgl->sg_nr_out);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -467,25 +455,25 @@ daos_proc_sg_list(crt_proc_t proc, daos_sg_list_t *sgl)
 	if (rc != 0)
 		return -DER_HG;
 
-	if (proc_op == CRT_PROC_DECODE && sgl->sg_nr.num > 0) {
-		D__ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
+	if (proc_op == CRT_PROC_DECODE && sgl->sg_nr > 0) {
+		D__ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr);
 		if (sgl->sg_iovs == NULL)
 			return -DER_NOMEM;
 	}
 
-	for (i = 0; i < sgl->sg_nr.num; i++) {
+	for (i = 0; i < sgl->sg_nr; i++) {
 		rc = daos_proc_iovec(proc, &sgl->sg_iovs[i]);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
 				D__FREE(sgl->sg_iovs,
 				       sizeof(sgl->sg_iovs[0]) *
-				       sgl->sg_nr.num);
+				       sgl->sg_nr);
 			return -DER_HG;
 		}
 	}
 
 	if (proc_op == CRT_PROC_FREE && sgl->sg_iovs != NULL)
-		D__FREE(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
+		D__FREE(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr);
 
 	return rc;
 }
@@ -501,17 +489,21 @@ daos_proc_sg_desc_list(crt_proc_t proc, daos_sg_list_t *sgl)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = daos_proc_nr(proc, &sgl->sg_nr);
+	rc = crt_proc_uint32_t(proc, &sgl->sg_nr);
 	if (rc != 0)
 		return -DER_HG;
 
-	if (proc_op == CRT_PROC_DECODE && sgl->sg_nr.num > 0) {
-		D__ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
+	rc = crt_proc_uint32_t(proc, &sgl->sg_nr_out);
+	if (rc != 0)
+		return -DER_HG;
+
+	if (proc_op == CRT_PROC_DECODE && sgl->sg_nr > 0) {
+		D__ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr);
 		if (sgl->sg_iovs == NULL)
 			return -DER_NOMEM;
 	}
 
-	for (i = 0; i < sgl->sg_nr.num; i++) {
+	for (i = 0; i < sgl->sg_nr; i++) {
 		daos_iov_t	*div;
 
 		div = &sgl->sg_iovs[i];
@@ -525,7 +517,7 @@ daos_proc_sg_desc_list(crt_proc_t proc, daos_sg_list_t *sgl)
 	}
 
 	if (proc_op == CRT_PROC_FREE && sgl->sg_iovs != NULL)
-		D__FREE(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
+		D__FREE(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr);
 
 	return rc;
 }

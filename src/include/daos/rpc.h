@@ -213,7 +213,6 @@ daos2crt_sg(daos_sg_list_t *sgl)
 		  offsetof(d_sg_list_t, sg_nr));
 	D_CASSERT(offsetof(daos_sg_list_t, sg_iovs) ==
 		  offsetof(d_sg_list_t, sg_iovs));
-	D_CASSERT(sizeof(daos_nr_t) == sizeof(d_nr_t));
 	D_CASSERT(sizeof(daos_iov_t) == sizeof(d_iov_t));
 	D_CASSERT(offsetof(daos_iov_t, iov_buf) ==
 		  offsetof(d_iov_t, iov_buf));

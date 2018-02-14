@@ -129,7 +129,7 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 		D__GOTO(out, rc = -DER_NOMEM);
 	for (i = 0; i < ranks_size; i++)
 		ranks[i] = i;
-	rank_list.rl_nr.num = ranks_size;
+	rank_list.rl_nr = ranks_size;
 	rank_list.rl_ranks = ranks;
 
 	uuid_generate(uuid);

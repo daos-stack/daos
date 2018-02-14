@@ -121,7 +121,7 @@ create_hdlr(int argc, char *argv[])
 
 	memset(ranks, 0, sizeof(ranks));
 	svc.rl_ranks = ranks;
-	svc.rl_nr.num = default_svc_nreplicas;
+	svc.rl_nr = default_svc_nreplicas;
 
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
@@ -148,7 +148,7 @@ create_hdlr(int argc, char *argv[])
 			gid = atoi(optarg);
 			break;
 		case 'v':
-			svc.rl_nr.num = atoi(optarg);
+			svc.rl_nr = atoi(optarg);
 			break;
 		default:
 			return 2;
@@ -163,7 +163,7 @@ create_hdlr(int argc, char *argv[])
 		}
 	}
 
-	if (svc.rl_nr.num < 1 || svc.rl_nr.num > ARRAY_SIZE(ranks)) {
+	if (svc.rl_nr < 1 || svc.rl_nr > ARRAY_SIZE(ranks)) {
 		fprintf(stderr, "--svcn must be in [1, %lu]\n",
 			ARRAY_SIZE(ranks));
 		if (targets != NULL)
@@ -183,9 +183,9 @@ create_hdlr(int argc, char *argv[])
 	/* Print the pool UUID. */
 	printf(DF_UUIDF" ", DP_UUID(pool_uuid));
 	/* Print the pool service replica ranks. */
-	for (i = 0; i < svc.rl_nr.num_out - 1; i++)
+	for (i = 0; i < svc.rl_nr - 1; i++)
 		printf("%u:", svc.rl_ranks[i]);
-	printf("%u\n", svc.rl_ranks[svc.rl_nr.num_out - 1]);
+	printf("%u\n", svc.rl_ranks[svc.rl_nr - 1]);
 
 	return 0;
 }
@@ -321,7 +321,7 @@ pool_op_hdlr(int argc, char *argv[])
 		fprintf(stderr, "failed to parse service ranks\n");
 		return 2;
 	}
-	if (svc->rl_nr.num == 0) {
+	if (svc->rl_nr == 0) {
 		fprintf(stderr, "--svc mustn't be empty\n");
 		daos_rank_list_free(svc);
 		return 2;
@@ -357,8 +357,7 @@ pool_op_hdlr(int argc, char *argv[])
 		d_rank_list_t targets;
 
 		memset(&targets, 0, sizeof(targets));
-		targets.rl_nr.num = 1;
-		targets.rl_nr.num_out = 0;
+		targets.rl_nr = 1;
 		targets.rl_ranks = &target;
 
 		rc = daos_pool_exclude(pool_uuid, group, svc, &targets,
@@ -554,7 +553,7 @@ obj_op_hdlr(int argc, char *argv[])
 		fprintf(stderr, "failed to parse service ranks\n");
 		return 2;
 	}
-	if (svc->rl_nr.num == 0) {
+	if (svc->rl_nr == 0) {
 		fprintf(stderr, "--svc mustn't be empty\n");
 		daos_rank_list_free(svc);
 		return 2;

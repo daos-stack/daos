@@ -67,8 +67,7 @@ daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 	d_rank_list_t	targets;
 
 	/** exclude from the pool */
-	targets.rl_nr.num = 1;
-	targets.rl_nr.num_out = 0;
+	targets.rl_nr = 1;
 	targets.rl_ranks = &rank;
 	rc = daos_pool_exclude(pool_uuid, grp, svc, &targets, NULL);
 	assert_int_equal(rc, 0);

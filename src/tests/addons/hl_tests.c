@@ -222,8 +222,8 @@ simple_multi_io(void **state)
 		daos_iov_set(io_array[i].ioa_dkey, keys[i], strlen(keys[i]));
 		/** init scatter/gather */
 		daos_iov_set(&sg_iov[i], buf[i], buf_size);
-		io_array[i].ioa_sgls[0].sg_nr.num		= 1;
-		io_array[i].ioa_sgls[0].sg_nr.num_out	= 0;
+		io_array[i].ioa_sgls[0].sg_nr		= 1;
+		io_array[i].ioa_sgls[0].sg_nr_out	= 0;
 		io_array[i].ioa_sgls[0].sg_iovs		= &sg_iov[i];
 		/** init I/O descriptor */
 		daos_iov_set(&io_array[i].ioa_iods[0].iod_name, "akey",
@@ -251,8 +251,8 @@ simple_multi_io(void **state)
 	for (i = 0; i < NUM_KEYS; i++) {
 		/** init scatter/gather */
 		daos_iov_set(&sg_iov[i], buf_out[i], buf_size);
-		io_array[i].ioa_sgls[0].sg_nr.num		= 1;
-		io_array[i].ioa_sgls[0].sg_nr.num_out	= 0;
+		io_array[i].ioa_sgls[0].sg_nr		= 1;
+		io_array[i].ioa_sgls[0].sg_nr_out	= 0;
 		io_array[i].ioa_sgls[0].sg_iovs		= &sg_iov[i];
 	}
 

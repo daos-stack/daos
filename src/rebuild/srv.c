@@ -613,7 +613,7 @@ rebuild_pool_group_prepare(struct ds_pool *pool)
 		D__DEBUG(DB_TRACE, "i %d rank %d\n", i, ranks[i]);
 	}
 
-	rank_list.rl_nr.num = tgt_cnt;
+	rank_list.rl_nr = tgt_cnt;
 	rank_list.rl_ranks = ranks;
 
 	uuid_unparse_lower(pool->sp_uuid, id);
@@ -663,7 +663,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t map_ver,
 		int i;
 
 		/* Set excluded targets scan/pull bits */
-		for (i = 0; i < exclude_tgts->rl_nr.num; i++) {
+		for (i = 0; i < exclude_tgts->rl_nr; i++) {
 			D__ASSERT(exclude_tgts->rl_ranks[i] <
 				  (*rgt)->rgt_bits_size);
 			setbit((*rgt)->rgt_scan_bits,
@@ -691,7 +691,7 @@ rebuild_trigger(struct ds_pool *pool, struct rebuild_global_pool_tracker *rgt,
 	crt_bulk_t		bulk_hdl;
 	int			rc;
 
-	sgl.sg_nr.num = 1;
+	sgl.sg_nr = 1;
 	sgl.sg_iovs = map_buf;
 	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx,
 			     daos2crt_sg(&sgl), CRT_BULK_RW,
@@ -1006,13 +1006,13 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	uuid_copy(task->dst_pool_uuid, uuid);
 	DAOS_INIT_LIST_HEAD(&task->dst_list);
 
-	rc = daos_rank_list_dup(&task->dst_tgts_failed, tgts_failed, true);
+	rc = daos_rank_list_dup(&task->dst_tgts_failed, tgts_failed);
 	if (rc) {
 		D__FREE_PTR(task);
 		return rc;
 	}
 
-	rc = daos_rank_list_dup(&task->dst_svc_list, svc_list, true);
+	rc = daos_rank_list_dup(&task->dst_svc_list, svc_list);
 	if (rc) {
 		D__FREE_PTR(task);
 		return rc;
@@ -1071,8 +1071,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, d_rank_list_t *svc_list)
 		d_rank_t	   rank;
 
 		rank = tgt->ta_comp.co_rank;
-		rank_list.rl_nr.num = 1;
-		rank_list.rl_nr.num_out = 0;
+		rank_list.rl_nr = 1;
 		rank_list.rl_ranks = &rank;
 
 		rc = ds_rebuild_schedule(pool->sp_uuid, tgt->ta_comp.co_fseq,
@@ -1328,7 +1327,7 @@ rebuild_tgt_pool_tracker_create(struct ds_pool *pool, d_rank_list_t *svc_list,
 	}
 
 	uuid_copy(rpt->rt_pool_uuid, pool->sp_uuid);
-	daos_rank_list_dup(&rpt->rt_svc_list, svc_list, true);
+	daos_rank_list_dup(&rpt->rt_svc_list, svc_list);
 	rpt->rt_lead_puller_running = 0;
 	rpt->rt_rebuild_ver = pm_ver;
 	crt_group_rank(pool->sp_group, &rank);
@@ -1365,8 +1364,8 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	}
 
 	/* Get the pool map */
-	sgl.sg_nr.num = 1;
-	sgl.sg_nr.num_out = 1;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
 	sgl.sg_iovs = &iov;
 	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
 	if (rc != 0)

@@ -57,7 +57,7 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
 	arg->multi_rank = multi_rank;
 
-	arg->svc.rl_nr.num = svc_nreplicas;
+	arg->svc.rl_nr = svc_nreplicas;
 	arg->svc.rl_ranks = arg->ranks;
 
 	arg->mode = 0731;
@@ -111,14 +111,12 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 		return rc;
 
 	/** broadcast pool UUID and svc addresses */
-	if (arg->myrank == 0)
-		arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
 	if (multi_rank) {
 		MPI_Bcast(arg->pool_uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
-		MPI_Bcast(&arg->svc.rl_nr.num, sizeof(arg->svc.rl_nr.num),
+		MPI_Bcast(&arg->svc.rl_nr, sizeof(arg->svc.rl_nr),
 			  MPI_CHAR, 0, MPI_COMM_WORLD);
 		MPI_Bcast(arg->ranks,
-			  sizeof(arg->ranks[0]) * arg->svc.rl_nr.num,
+			  sizeof(arg->ranks[0]) * arg->svc.rl_nr,
 			  MPI_CHAR, 0, MPI_COMM_WORLD);
 	}
 

@@ -81,19 +81,18 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	if (rs == NULL)
 		return -DER_NOMEM;
 
-	ranks->rl_nr.num = n;
-	ranks->rl_nr.num_out = 0;
+	ranks->rl_nr = n;
 	ranks->rl_ranks = rs;
 
 	n = 0;
 	for (i = 0; i < ntargets; i++) {
 		if (map_ranks_include(class, targets[i].ta_comp.co_status)) {
-			D__ASSERT(n < ranks->rl_nr.num);
+			D__ASSERT(n < ranks->rl_nr);
 			ranks->rl_ranks[n] = targets[i].ta_comp.co_rank;
 			n++;
 		}
 	}
-	D__ASSERTF(n == ranks->rl_nr.num, "%d != %u\n", n, ranks->rl_nr.num);
+	D__ASSERTF(n == ranks->rl_nr, "%d != %u\n", n, ranks->rl_nr);
 
 	return 0;
 }
@@ -102,11 +101,11 @@ static void
 map_ranks_fini(d_rank_list_t *ranks)
 {
 	if (ranks->rl_ranks != NULL) {
-		D__ASSERT(ranks->rl_nr.num != 0);
+		D__ASSERT(ranks->rl_nr != 0);
 		D__FREE(ranks->rl_ranks,
-		       sizeof(*ranks->rl_ranks) * ranks->rl_nr.num);
+		       sizeof(*ranks->rl_ranks) * ranks->rl_nr);
 	} else {
-		D__ASSERT(ranks->rl_nr.num == 0);
+		D__ASSERT(ranks->rl_nr == 0);
 	}
 }
 
@@ -124,12 +123,12 @@ map_ranks_merge(d_rank_list_t *src_ranks, d_rank_list_t *ranks_merge)
 	if (ranks_merge == NULL || src_ranks == NULL)
 		return 0;
 
-	src_num = src_ranks->rl_nr.num;
-	D__ALLOC(indexes, sizeof(*indexes) * ranks_merge->rl_nr.num);
+	src_num = src_ranks->rl_nr;
+	D__ALLOC(indexes, sizeof(*indexes) * ranks_merge->rl_nr);
 	if (indexes == NULL)
 		return -DER_NOMEM;
 
-	for (i = 0; i < ranks_merge->rl_nr.num; i++) {
+	for (i = 0; i < ranks_merge->rl_nr; i++) {
 		bool included = false;
 
 		for (j = 0; j < src_num; j++) {
@@ -149,7 +148,7 @@ map_ranks_merge(d_rank_list_t *src_ranks, d_rank_list_t *ranks_merge)
 	if (num == 0)
 		D__GOTO(free, rc = 0);
 
-	D__ALLOC(rs, sizeof(*rs) * (num + src_ranks->rl_nr.num));
+	D__ALLOC(rs, sizeof(*rs) * (num + src_ranks->rl_nr));
 	if (rs == NULL)
 		D__GOTO(free, rc = -DER_NOMEM);
 
@@ -164,12 +163,11 @@ map_ranks_merge(d_rank_list_t *src_ranks, d_rank_list_t *ranks_merge)
 
 	map_ranks_fini(src_ranks);
 
-	src_ranks->rl_nr.num = num + src_num;
-	src_ranks->rl_nr.num_out = num + src_num;
+	src_ranks->rl_nr = num + src_num;
 	src_ranks->rl_ranks = rs;
 
 free:
-	D__FREE(indexes, sizeof(*indexes) * ranks_merge->rl_nr.num);
+	D__FREE(indexes, sizeof(*indexes) * ranks_merge->rl_nr);
 	return rc;
 }
 
@@ -193,7 +191,7 @@ ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 		D__GOTO(out, rc);
 	}
 
-	if (ranks.rl_nr.num == 0) {
+	if (ranks.rl_nr == 0) {
 		D__ERROR(DF_UUID": failed to find any up targets\n",
 			DP_UUID(pool_uuid));
 		D__GOTO(out_ranks, rc = -DER_IO);
@@ -247,7 +245,7 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 
 	opc = DAOS_RPC_OPCODE(opcode, module, 1);
 	rc = crt_corpc_req_create(ctx, pool->sp_group,
-			  excluded.rl_nr.num == 0 ? NULL : &excluded,
+			  excluded.rl_nr == 0 ? NULL : &excluded,
 			  opc, bulk_hdl/* co_bulk_hdl */, NULL /* priv */,
 			  0 /* flags */, crt_tree_topo(CRT_TREE_KNOMIAL, 4),
 			  rpc);
@@ -258,27 +256,29 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 
 static int
 map_exclude_create_sanitized_tgts(const d_rank_list_t *tgts,
-				  d_rank_list_t **tgts_sanitized)
+				  d_rank_list_t **tgts_sanitized,
+				  uint32_t *tgts_sanitized_size)
 {
 	d_rank_list_t       *ts;
 	int			rc;
 
-	rc = d_rank_list_dup_sort_uniq(&ts, tgts, true /* input */);
+	rc = d_rank_list_dup_sort_uniq(&ts, tgts);
 	if (rc != 0)
 		return rc;
 
-	/* Save the size of this rank list in num_out. */
-	ts->rl_nr.num_out = ts->rl_nr.num;
+	/* Save the size of this rank list */
+	*tgts_sanitized_size = ts->rl_nr;
 
 	*tgts_sanitized = ts;
 	return 0;
 }
 
 static void
-map_exclude_destroy_sanitized_tgts(d_rank_list_t *tgts)
+map_exclude_destroy_sanitized_tgts(d_rank_list_t *tgts,
+				   uint32_t tgts_sanitized_size)
 {
-	/* Restore the size of this rank list from num_out. */
-	tgts->rl_nr.num = tgts->rl_nr.num_out;
+	/* Restore the size of this rank list. */
+	tgts->rl_nr = tgts_sanitized_size;
 	d_rank_list_free(tgts);
 }
 
@@ -297,22 +297,25 @@ ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 	int			i;
 	int			nchanges = 0;
 	int			rc;
+	uint32_t		tgts_failed_out;
+	uint32_t		tgts_sanitized_size = 0;
 
-	D__ASSERT(tgts != NULL && tgts->rl_nr.num > 0 && tgts->rl_ranks != NULL);
+	D__ASSERT(tgts != NULL && tgts->rl_nr > 0 && tgts->rl_ranks != NULL);
 	D__ASSERT(tgts_failed == NULL ||
-		 (tgts_failed->rl_nr.num >= tgts->rl_nr.num &&
+		 (tgts_failed->rl_nr >= tgts->rl_nr &&
 		  tgts_failed->rl_ranks != NULL));
 
 	if (tgts_failed != NULL)
-		tgts_failed->rl_nr.num_out = 0;
+		tgts_failed_out = 0;
 
-	rc = map_exclude_create_sanitized_tgts(tgts, &tgts_sanitized);
+	rc = map_exclude_create_sanitized_tgts(tgts, &tgts_sanitized,
+					       &tgts_sanitized_size);
 	if (rc != 0)
 		return rc;
 
 	version = pool_map_get_version(map) + 1;
 
-	for (i = 0; i < tgts_sanitized->rl_nr.num; i++) {
+	for (i = 0; i < tgts_sanitized->rl_nr; i++) {
 		struct pool_target     *target;
 		d_rank_t		rank = tgts_sanitized->rl_ranks[i];
 
@@ -321,10 +324,10 @@ ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 			D__DEBUG(DF_DSMS, "failed to find rank %u in map %p\n",
 				rank, map);
 			if (tgts_failed != NULL) {
-				int j = tgts_failed->rl_nr.num_out;
+				int j = tgts_failed_out;
 
 				tgts_failed->rl_ranks[j] = rank;
-				tgts_failed->rl_nr.num_out++;
+				tgts_failed_out++;
 			}
 			continue;
 		}
@@ -368,6 +371,6 @@ ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 		D__ASSERTF(rc == 0, "%d\n", rc);
 	}
 
-	map_exclude_destroy_sanitized_tgts(tgts_sanitized);
+	map_exclude_destroy_sanitized_tgts(tgts_sanitized, tgts_sanitized_size);
 	return 0;
 }

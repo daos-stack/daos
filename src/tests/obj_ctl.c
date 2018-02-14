@@ -387,7 +387,7 @@ ctl_cmd_run(char opc, char *args)
 		daos_iov_set(&cred->tc_val, cred->tc_vbuf,
 			     ctl_ctx.tsc_cred_vsize);
 	}
-	cred->tc_sgl.sg_nr.num = 1;
+	cred->tc_sgl.sg_nr = 1;
 	cred->tc_sgl.sg_iovs = &cred->tc_val;
 
 	switch (opc) {
@@ -513,7 +513,7 @@ main(int argc, char **argv)
 
 	} else if (!strcasecmp(argv[1], "daos")) {
 		ctl_ctx.tsc_svc.rl_ranks = &ctl_svc_rank;
-		ctl_ctx.tsc_svc.rl_nr.num = 1;
+		ctl_ctx.tsc_svc.rl_nr = 1;
 
 	} else {
 		fprintf(stderr, "Unknown test mode %s\n", argv[1]);

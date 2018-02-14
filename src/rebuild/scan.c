@@ -581,13 +581,13 @@ rebuild_scan_leader(void *data)
 
 	arg->tgp_failed = tgp;
 	tgp->tg_ver = rpt->rt_rebuild_ver;
-	tgp->tg_target_nr = arg->failed_ranks->rl_nr.num;
+	tgp->tg_target_nr = arg->failed_ranks->rl_nr;
 
 	D__ALLOC(tgp->tg_targets, tgp->tg_target_nr * sizeof(*tgp->tg_targets));
 	if (tgp->tg_targets == NULL)
 		D__GOTO(out_group, rc = -DER_NOMEM);
 
-	for (i = 0; i < arg->failed_ranks->rl_nr.num; i++) {
+	for (i = 0; i < arg->failed_ranks->rl_nr; i++) {
 		struct pool_target      *target;
 		d_rank_t		 rank;
 
@@ -717,8 +717,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D__GOTO(out_lock, rc);
 	}
 
-	rc = daos_rank_list_dup(&scan_arg->failed_ranks,
-				rsi->rsi_tgts_failed, true);
+	rc = daos_rank_list_dup(&scan_arg->failed_ranks, rsi->rsi_tgts_failed);
 	if (rc != 0)
 		D__GOTO(out_tree, rc);
 

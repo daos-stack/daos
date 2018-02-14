@@ -176,10 +176,10 @@ copy_iv_value(d_sg_list_t *dst, d_sg_list_t *src)
 
 	D_ASSERT(dst != NULL);
 	D_ASSERT(src != NULL);
-	D_ASSERT(dst->sg_nr.num <= src->sg_nr.num);
+	D_ASSERT(dst->sg_nr <= src->sg_nr);
 	D_ASSERT(dst->sg_iovs != NULL);
 
-	for (i = 0; i < dst->sg_nr.num; i++) {
+	for (i = 0; i < dst->sg_nr; i++) {
 		D_ASSERT(src->sg_iovs[i].iov_buf != NULL);
 		if (dst->sg_iovs[i].iov_buf == src->sg_iovs[i].iov_buf)
 			continue;

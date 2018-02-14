@@ -143,8 +143,8 @@ map_bulk_create(crt_context_t ctx, crt_bulk_t *bulk, struct pool_buf **buf)
 		return -DER_NOMEM;
 
 	daos_iov_set(&iov, *buf, pool_buf_size((*buf)->pb_nr));
-	sgl.sg_nr.num = 1;
-	sgl.sg_nr.num_out = 0;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
 	rc = crt_bulk_create(ctx, daos2crt_sg(&sgl), CRT_BULK_RW, bulk);
@@ -987,9 +987,9 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 
 	D__DEBUG(DF_DSMC, DF_UUID": updated: hdl="DF_UUID" failed=%u\n",
 		DP_UUID(in->pti_op.pi_uuid), DP_UUID(in->pti_op.pi_hdl),
-		out->pto_targets == NULL ? 0 : out->pto_targets->rl_nr.num);
+		out->pto_targets == NULL ? 0 : out->pto_targets->rl_nr);
 
-	if (out->pto_targets != NULL && out->pto_targets->rl_nr.num > 0)
+	if (out->pto_targets != NULL && out->pto_targets->rl_nr > 0)
 		rc = -DER_INVAL;
 
 out:
@@ -1013,11 +1013,11 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	int				 rc;
 
 	if (state == NULL) {
-		if (args->tgts == NULL || args->tgts->rl_nr.num == 0)
+		if (args->tgts == NULL || args->tgts->rl_nr == 0)
 			return -DER_INVAL;
 
 		D__DEBUG(DF_DSMC, DF_UUID": excluding %u targets: tgts[0]=%u\n",
-			DP_UUID(args->uuid), args->tgts->rl_nr.num,
+			DP_UUID(args->uuid), args->tgts->rl_nr,
 			args->tgts->rl_ranks[0]);
 
 		D__ALLOC_PTR(state);
@@ -1314,7 +1314,7 @@ dc_pool_evict(tse_task_t *task)
 	state = dc_task_get_priv(task);
 
 	if (state == NULL) {
-		if (uuid_is_null(args->uuid) || args->svc->rl_nr.num == 0)
+		if (uuid_is_null(args->uuid) || args->svc->rl_nr == 0)
 			D__GOTO(out_task, rc = -DER_INVAL);
 
 		D__DEBUG(DF_DSMC, DF_UUID": evicting\n", DP_UUID(args->uuid));

@@ -58,8 +58,8 @@ byte_array_simple_stack(void **state)
 
 	/** init scatter/gather */
 	daos_iov_set(&sg_iov, buf, sizeof(buf));
-	sgl.sg_nr.num		= 1;
-	sgl.sg_nr.num_out	= 0;
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
@@ -133,8 +133,8 @@ array_simple(void **state)
 
 	/** init scatter/gather */
 	daos_iov_set(&sg_iov, buf, arg->size * arg->nr);
-	sgl.sg_nr.num		= 1;
-	sgl.sg_nr.num_out	= 0;
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
@@ -217,8 +217,8 @@ array_partial(void **state)
 
 	/** init scatter/gather */
 	daos_iov_set(&sg_iov, buf, arg->size * NUM_RECORDS);
-	sgl.sg_nr.num		= 1;
-	sgl.sg_nr.num_out	= 0;
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
@@ -372,8 +372,8 @@ replicator(void **state)
 
 	/** init scatter/gather */
 	daos_iov_set(&sg_iov, buf, sizeof(buf));
-	sgl.sg_nr.num		= 1;
-	sgl.sg_nr.num_out	= 0;
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
