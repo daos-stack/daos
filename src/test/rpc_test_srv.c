@@ -1,5 +1,5 @@
 
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -439,9 +439,9 @@ grp_rpc_test(void)
 
 	dbg("---%s--->", __func__);
 
-	grp_membs.rl_nr.num = 4;
+	grp_membs.rl_nr = 4;
 	grp_membs.rl_ranks = grp_ranks;
-	excluded_membs.rl_nr.num = 2;
+	excluded_membs.rl_nr = 2;
 	excluded_membs.rl_ranks = excluded_ranks;
 
 	rc = crt_group_rank(NULL, &myrank);

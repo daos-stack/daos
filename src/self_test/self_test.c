@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -888,7 +888,7 @@ static int run_self_test(struct st_size_params all_params[],
 			    rep_count * sizeof(**latencies));
 		latencies_sg_list[m_idx].sg_iovs =
 			&latencies_iov[m_idx];
-		latencies_sg_list[m_idx].sg_nr.num = 1;
+		latencies_sg_list[m_idx].sg_nr = 1;
 
 		ret = crt_bulk_create(crt_ctx, &latencies_sg_list[m_idx],
 				      CRT_BULK_RW,

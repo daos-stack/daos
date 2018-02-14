@@ -61,7 +61,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = d_rank_list_dup_sort_uniq(&co_info->co_excluded_ranks,
-				       excluded_ranks, true /* input */);
+				       excluded_ranks);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
 		D_FREE_PTR(co_info);
@@ -72,8 +72,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	co_info->co_grp_ref_taken = 1;
 	co_info->co_grp_priv = grp_priv;
 	d_rank_list_filter(co_info->co_grp_priv->gp_membs,
-			   co_info->co_excluded_ranks, true /* input */,
-			   false /* exclude */);
+			   co_info->co_excluded_ranks, false /* exclude */);
 	co_info->co_grp_ver = grp_ver;
 	co_info->co_tree_topo = tree_topo;
 	co_info->co_root = grp_root;
@@ -224,7 +223,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 	if (bulk_hdl == CRT_BULK_NULL)
 		return 0;
 
-	sgl.sg_nr.num = 0;
+	sgl.sg_nr = 0;
 	sgl.sg_iovs = NULL;
 	rc = crt_bulk_access(bulk_hdl, &sgl);
 	if (rc != -DER_TRUNC) {
@@ -234,7 +233,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_GOTO(out, rc);
 	}
 
-	seg_num = sgl.sg_nr.num_out;
+	seg_num = sgl.sg_nr_out;
 	if (seg_num == 0) {
 		D_ERROR("bad zero seg_num.\n");
 		D_GOTO(out, rc = -DER_PROTO);
@@ -243,7 +242,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 	if (iovs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	sgl.sg_nr.num = seg_num;
+	sgl.sg_nr = seg_num;
 	sgl.sg_iovs = iovs;
 	rc = crt_bulk_access(bulk_hdl, &sgl);
 	if (rc != 0) {
@@ -302,7 +301,7 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		if (bulk_iov.iov_buf == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		bulk_iov.iov_buf_len = bulk_len;
-		bulk_sgl.sg_nr.num = 1;
+		bulk_sgl.sg_nr = 1;
 		bulk_sgl.sg_iovs = &bulk_iov;
 
 		rc = crt_bulk_create(rpc_priv->crp_pub.cr_ctx, &bulk_sgl,
@@ -415,21 +414,20 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	 * if bcast initiator is in excluded ranks, here we remove it and set
 	 * a special flag to indicate need not to execute RPC handler.
 	 */
-	if (d_rank_in_rank_list(excluded_ranks, pri_root, true /* input */)) {
+	if (d_rank_in_rank_list(excluded_ranks, pri_root)) {
 		d_rank_list_t		tmp_rank_list;
 		d_rank_t		tmp_rank;
 
 		tmp_rank = pri_root;
-		tmp_rank_list.rl_nr.num = 1;
+		tmp_rank_list.rl_nr = 1;
 		tmp_rank_list.rl_ranks = &tmp_rank;
 
-		rc =  d_rank_list_dup(&tobe_excluded_ranks, excluded_ranks,
-				      true /* input */);
+		rc =  d_rank_list_dup(&tobe_excluded_ranks, excluded_ranks);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
 		d_rank_list_filter(&tmp_rank_list, tobe_excluded_ranks,
-				   true /* input */, true /* exclude */);
+				   true /* exclude */);
 		root_excluded = true;
 	}
 
@@ -808,7 +806,7 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 	}
 
 	co_info->co_child_num = (children_rank_list == NULL) ? 0 :
-				children_rank_list->rl_nr.num;
+				children_rank_list->rl_nr;
 	co_info->co_child_ack_num = 0;
 
 	D_DEBUG("group %s grp_rank %d, co_info->co_child_num: %d.\n",

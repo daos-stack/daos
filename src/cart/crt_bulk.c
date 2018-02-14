@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,11 +49,11 @@ crt_sgl_valid(d_sg_list_t *sgl)
 	d_iov_t	*iov;
 	int		i;
 
-	if (sgl == NULL || sgl->sg_nr.num == 0) {
+	if (sgl == NULL || sgl->sg_nr == 0) {
 		if (sgl == NULL)
 			D_ERROR("invalid parameter, NULL sgl.\n");
 		else
-			D_ERROR("invalid parameter, zero sgl->sg_nr.num.\n");
+			D_ERROR("invalid parameter, zero sgl.sg_nr.\n");
 		return false;
 	}
 
@@ -64,7 +64,7 @@ crt_sgl_valid(d_sg_list_t *sgl)
 		D_ERROR("invalid parameter, NULL sgl->sg_iovs.\n");
 		return false;
 	}
-	for (i = 0; i < sgl->sg_nr.num; i++) {
+	for (i = 0; i < sgl->sg_nr; i++) {
 		iov = &sgl->sg_iovs[i];
 		if (iov->iov_buf == NULL || iov->iov_buf_len == 0) {
 			if (iov->iov_buf == NULL)

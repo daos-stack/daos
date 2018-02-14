@@ -54,18 +54,17 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	d_rank_list_t		*grp_rank_list = NULL;
 	int			 rc = 0;
 
-	if (exclude_ranks == NULL || exclude_ranks->rl_nr.num == 0) {
+	if (exclude_ranks == NULL || exclude_ranks->rl_nr == 0) {
 		grp_rank_list = grp_priv->gp_live_ranks;
 
-		*grp_size = grp_rank_list->rl_nr.num;
-		D_ASSERT(*grp_size == grp_rank_list->rl_nr.num);
+		*grp_size = grp_rank_list->rl_nr;
+		D_ASSERT(*grp_size == grp_rank_list->rl_nr);
 		*allocated = false;
 	} else {
 		/* grp_priv->gp_live_ranks/exclude_ranks already sorted
 		 * and unique
 		 */
-		rc = d_rank_list_dup(&grp_rank_list, grp_priv->gp_live_ranks,
-				     true /* input */);
+		rc = d_rank_list_dup(&grp_rank_list, grp_priv->gp_live_ranks);
 
 		if (rc != 0) {
 			D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
@@ -73,9 +72,9 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		}
 		D_ASSERT(grp_rank_list != NULL);
 		d_rank_list_filter(exclude_ranks, grp_rank_list,
-				   true /* input */, true /* exclude */);
+				   true /* exclude */);
 
-		if (grp_rank_list->rl_nr.num == 0) {
+		if (grp_rank_list->rl_nr == 0) {
 			D_DEBUG("d_rank_list_filter(group %s) get empty.\n",
 				grp_priv->gp_pub.cg_grpid);
 			d_rank_list_free(grp_rank_list);
@@ -84,12 +83,11 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		}
 
 		*allocated = true;
-		*grp_size = grp_rank_list->rl_nr.num;
+		*grp_size = grp_rank_list->rl_nr;
 	}
 
 	rc = d_idx_in_rank_list(grp_rank_list,
-				grp_priv->gp_membs->rl_ranks[root],
-				grp_root, true /* input */);
+				grp_priv->gp_membs->rl_ranks[root], grp_root);
 	if (rc != 0) {
 		D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
 			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
@@ -97,8 +95,7 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		D_GOTO(out, rc);
 	}
 	rc = d_idx_in_rank_list(grp_rank_list,
-				grp_priv->gp_membs->rl_ranks[self],
-				grp_self, true /* input */);
+				grp_priv->gp_membs->rl_ranks[self], grp_self);
 	if (rc != 0)
 		D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
 			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,

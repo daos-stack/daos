@@ -389,7 +389,7 @@ rank_evict_cb(crt_rpc_t *rpc_req)
 	if (rpc_req_output == NULL)
 		return -DER_INVAL;
 
-	excluded_membs.rl_nr.num = 3;
+	excluded_membs.rl_nr = 3;
 	excluded_membs.rl_ranks = excluded_ranks;
 	rc = crt_corpc_req_create(test.t_crt_ctx, test.t_sub_group,
 			&excluded_membs, TEST_OPC_CORPC_VER_MISMATCH,
@@ -560,7 +560,7 @@ test_run(void)
 		D_GOTO(out, rc);
 
 	/* root: rank 3, participants: rank 1, rank 2, rank 4 */
-	sub_grp_membs.rl_nr.num = 4;
+	sub_grp_membs.rl_nr = 4;
 	sub_grp_membs.rl_ranks = sub_grp_ranks;
 
 

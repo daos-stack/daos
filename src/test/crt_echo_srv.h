@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -262,7 +262,7 @@ echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	assert(iovs[0].iov_buf != NULL);
 	iovs[0].iov_buf_len = bulk_len;
 	memset(iovs[0].iov_buf, 0, iovs[0].iov_buf_len);
-	sgl.sg_nr.num = 1;
+	sgl.sg_nr = 1;
 	sgl.sg_iovs = iovs;
 
 	rc = crt_bulk_create(rpc_req->cr_ctx, &sgl, CRT_BULK_RW,

@@ -226,12 +226,12 @@ static void print_sgl_as_json(d_sg_list_t *sg_list, char *prefix)
 {
 	uint32_t i;
 
-	for (i = 0; i < sg_list->sg_nr.num; i++) {
+	for (i = 0; i < sg_list->sg_nr; i++) {
 		printf("%s\"", prefix);
 		print_hex(sg_list->sg_iovs[i].iov_buf,
 			  sg_list->sg_iovs[i].iov_buf_len);
 		printf("\"");
-		if (i + 1 < sg_list->sg_nr.num)
+		if (i + 1 < sg_list->sg_nr)
 			printf(",");
 		printf("\n");
 	}

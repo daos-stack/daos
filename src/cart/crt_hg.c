@@ -1365,33 +1365,33 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 	flags = (bulk_perm == CRT_BULK_RW) ? HG_BULK_READWRITE :
 					     HG_BULK_READ_ONLY;
 
-	if (sgl->sg_nr.num <= CRT_HG_IOVN_STACK) {
+	if (sgl->sg_nr <= CRT_HG_IOVN_STACK) {
 		buf_sizes = buf_sizes_stack;
 	} else {
 		allocate = true;
-		D_ALLOC_ARRAY(buf_sizes, sgl->sg_nr.num);
+		D_ALLOC_ARRAY(buf_sizes, sgl->sg_nr);
 		if (buf_sizes == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
-	for (i = 0; i < sgl->sg_nr.num; i++)
+	for (i = 0; i < sgl->sg_nr; i++)
 		buf_sizes[i] = sgl->sg_iovs[i].iov_buf_len;
 
 	if (sgl->sg_iovs == NULL) {
 		buf_ptrs = NULL;
 	} else {
 		if (allocate) {
-			D_ALLOC_ARRAY(buf_ptrs, sgl->sg_nr.num);
+			D_ALLOC_ARRAY(buf_ptrs, sgl->sg_nr);
 			if (buf_ptrs == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		} else {
 			buf_ptrs = buf_ptrs_stack;
 		}
 
-		for (i = 0; i < sgl->sg_nr.num; i++)
+		for (i = 0; i < sgl->sg_nr; i++)
 			buf_ptrs[i] = sgl->sg_iovs[i].iov_buf;
 	}
 
-	hg_ret = HG_Bulk_create(hg_ctx->chc_bulkcla, sgl->sg_nr.num, buf_ptrs,
+	hg_ret = HG_Bulk_create(hg_ctx->chc_bulkcla, sgl->sg_nr, buf_ptrs,
 				buf_sizes, flags, &hg_bulk_hdl);
 	if (hg_ret == HG_SUCCESS) {
 		*bulk_hdl = hg_bulk_hdl;
@@ -1438,10 +1438,10 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 		D_GOTO(out, rc);
 	}
 
-	if (sgl->sg_nr.num < bulk_sgnum) {
-		D_DEBUG("sgl->sg_nr.num (%d) too small, %d required.\n",
-			sgl->sg_nr.num, bulk_sgnum);
-		sgl->sg_nr.num_out = bulk_sgnum;
+	if (sgl->sg_nr < bulk_sgnum) {
+		D_DEBUG("sgl->sg_nr (%d) too small, %d required.\n",
+			sgl->sg_nr, bulk_sgnum);
+		sgl->sg_nr_out = bulk_sgnum;
 		D_GOTO(out, rc = -DER_TRUNC);
 	}
 
@@ -1475,7 +1475,7 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 		sgl->sg_iovs[i].iov_buf_len = buf_sizes[i];
 		sgl->sg_iovs[i].iov_len = buf_sizes[i];
 	}
-	sgl->sg_nr.num_out = bulk_sgnum;
+	sgl->sg_nr_out = bulk_sgnum;
 
 out:
 	if (allocate) {

@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,7 @@
 #include <gurt/common.h>
 
 int
-d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src, bool input)
+d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 {
 	d_rank_list_t		*rank_list;
 	uint32_t		 rank_num;
@@ -62,13 +62,9 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src, bool input)
 	D_ALLOC_PTR(rank_list);
 	if (rank_list == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	if (input == true) {
-		rank_num = src->rl_nr.num;
-		rank_list->rl_nr.num = rank_num;
-	} else {
-		rank_num = src->rl_nr.num_out;
-		rank_list->rl_nr.num_out = rank_num;
-	}
+
+	rank_num = src->rl_nr;
+	rank_list->rl_nr = rank_num;
 	if (rank_num == 0) {
 		rank_list->rl_ranks = NULL;
 		*dst = rank_list;
@@ -89,16 +85,15 @@ out:
 }
 
 int
-d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src,
-			 bool input)
+d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 {
 	d_rank_list_t		*rank_list;
-	d_rank_t			 rank_tmp;
-	uint32_t		 rank_num, identical_num;
-	int			 i, j;
-	int			 rc = 0;
+	d_rank_t		rank_tmp;
+	uint32_t		rank_num, identical_num;
+	int			i, j;
+	int			rc = 0;
 
-	rc = d_rank_list_dup(dst, src, input);
+	rc = d_rank_list_dup(dst, src);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
@@ -111,7 +106,7 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src,
 	d_rank_list_sort(rank_list);
 
 	/* uniq - remove same rank number in the list */
-	rank_num = (input == true) ? src->rl_nr.num : src->rl_nr.num_out;
+	rank_num = src->rl_nr;
 	if (rank_num <= 1)
 		D_GOTO(out, rc);
 	identical_num = 0;
@@ -129,10 +124,7 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src,
 		rank_tmp = rank_list->rl_ranks[i];
 	}
 	if (identical_num != 0) {
-		if (input == true)
-			rank_list->rl_nr.num -= identical_num;
-		else
-			rank_list->rl_nr.num_out -= identical_num;
+		rank_list->rl_nr -= identical_num;
 		D_DEBUG("%s:%d, rank_list %p, removed %d ranks.\n",
 			__FILE__, __LINE__, rank_list, identical_num);
 	}
@@ -151,7 +143,7 @@ out:
  */
 void
 d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
-		  bool input, bool exclude)
+		   bool exclude)
 {
 	d_rank_t	rank;
 	uint32_t	rank_num, filter_num;
@@ -162,15 +154,14 @@ d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 	if (src_set->rl_ranks == NULL || dst_set->rl_ranks == NULL)
 		return;
 
-	rank_num = (input == true) ? dst_set->rl_nr.num :
-				     dst_set->rl_nr.num_out;
+	rank_num = dst_set->rl_nr;
 	if (rank_num == 0)
 		return;
 
 	filter_num = 0;
 	for (i = 0; i < rank_num - filter_num; i++) {
 		rank = dst_set->rl_ranks[i];
-		if (d_rank_in_rank_list(src_set, rank, input) != exclude)
+		if (d_rank_in_rank_list(src_set, rank) != exclude)
 			continue;
 		filter_num++;
 		for (j = i; j < rank_num - 1; j++)
@@ -182,10 +173,7 @@ d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 		i--;
 	}
 	if (filter_num != 0) {
-		if (input == true)
-			dst_set->rl_nr.num -= filter_num;
-		else
-			dst_set->rl_nr.num_out -= filter_num;
+		dst_set->rl_nr -= filter_num;
 		D_DEBUG("%s:%d, rank_list %p, filter %d ranks.\n",
 			__FILE__, __LINE__, dst_set, filter_num);
 	}
@@ -202,8 +190,7 @@ d_rank_list_alloc(uint32_t size)
 		return NULL;
 
 	if (size == 0) {
-		rank_list->rl_nr.num = 0;
-		rank_list->rl_nr.num_out = 0;
+		rank_list->rl_nr = 0;
 		rank_list->rl_ranks = NULL;
 		return rank_list;
 	}
@@ -214,8 +201,7 @@ d_rank_list_alloc(uint32_t size)
 		return NULL;
 	}
 
-	rank_list->rl_nr.num = size;
-	rank_list->rl_nr.num_out = size;
+	rank_list->rl_nr = size;
 	for (i = 0; i < size; i++)
 		rank_list->rl_ranks[i] = i;
 
@@ -236,7 +222,7 @@ d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size)
 	D_REALLOC(new_rl_ranks, ptr->rl_ranks, size * sizeof(d_rank_t));
 	if (new_rl_ranks != NULL) {
 		ptr->rl_ranks = new_rl_ranks;
-		ptr->rl_nr.num = size;
+		ptr->rl_nr = size;
 	} else {
 		D_ERROR("d_rank_list_realloc() failed.\n");
 		ptr = NULL;
@@ -254,24 +240,30 @@ d_rank_list_free(d_rank_list_t *rank_list)
 	D_FREE(rank_list);
 }
 
-void
-d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src, bool input)
+int
+d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src)
 {
+	int		rc = 0;
+
 	if (dst == NULL || src == NULL) {
 		D_DEBUG("d_rank_list_copy do nothing, dst: %p, src: %p.\n",
 			dst, src);
-		return;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (input == true) {
-		dst->rl_nr.num = src->rl_nr.num;
-		memcpy(dst->rl_ranks, src->rl_ranks,
-		       dst->rl_nr.num * sizeof(d_rank_t));
-	} else {
-		dst->rl_nr.num_out = src->rl_nr.num_out;
-		memcpy(dst->rl_ranks, src->rl_ranks,
-		       dst->rl_nr.num_out * sizeof(d_rank_t));
+	if (dst->rl_nr > src->rl_nr) {
+		D_DEBUG("Not enough space allocated by user for rank list: ");
+		D_DEBUG("dst: %" PRIu32 ", ", dst->rl_nr);
+		D_DEBUG("src: %" PRIu32 "\n", src->rl_nr);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	dst->rl_nr = src->rl_nr;
+	memcpy(dst->rl_ranks, src->rl_ranks,
+	       dst->rl_nr * sizeof(d_rank_t));
+
+out:
+	return rc;
 }
 
 static inline int
@@ -294,7 +286,7 @@ d_rank_list_sort(d_rank_list_t *rank_list)
 {
 	if (rank_list == NULL)
 		return;
-	qsort(rank_list->rl_ranks, rank_list->rl_nr.num,
+	qsort(rank_list->rl_ranks, rank_list->rl_nr,
 	      sizeof(d_rank_t), rank_compare);
 }
 
@@ -309,7 +301,7 @@ d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx)
 
 	if (rank_list == NULL)
 		return false;
-	for (i = 0; i < rank_list->rl_nr.num; i++) {
+	for (i = 0; i < rank_list->rl_nr; i++) {
 		if (rank_list->rl_ranks[i] == rank) {
 			if (idx)
 				*idx = i;
@@ -341,7 +333,7 @@ d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 		D_DEBUG("Rank %d not in the rank list.\n", rank);
 		D_GOTO(out, rc);
 	}
-	new_num = rank_list->rl_nr.num - 1;
+	new_num = rank_list->rl_nr - 1;
 	src = &rank_list->rl_ranks[idx + 1];
 	dest = &rank_list->rl_ranks[idx];
 	D_ASSERT(idx <= new_num);
@@ -363,7 +355,7 @@ d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank)
 	d_rank_list_t		*new_rank_list;
 	int			 rc = 0;
 
-	old_num = rank_list->rl_nr.num;
+	old_num = rank_list->rl_nr;
 	new_rank_list = d_rank_list_realloc(rank_list, old_num + 1);
 	if (new_rank_list == NULL) {
 		D_ERROR("d_rank_list_realloc() failed.\n");
@@ -380,8 +372,7 @@ out:
  * will sort the rank list in order.
  */
 bool
-d_rank_list_identical(d_rank_list_t *rank_list1,
-		      d_rank_list_t *rank_list2, bool input)
+d_rank_list_identical(d_rank_list_t *rank_list1, d_rank_list_t *rank_list2)
 {
 	int i;
 
@@ -389,37 +380,27 @@ d_rank_list_identical(d_rank_list_t *rank_list1,
 		return true;
 	if (rank_list1 == NULL || rank_list2 == NULL)
 		return false;
-	if (input == true) {
-		if (rank_list1->rl_nr.num != rank_list2->rl_nr.num)
+	if (rank_list1->rl_nr != rank_list2->rl_nr)
+		return false;
+	d_rank_list_sort(rank_list1);
+	for (i = 0; i < rank_list1->rl_nr; i++) {
+		if (rank_list1->rl_ranks[i] != rank_list2->rl_ranks[i])
 			return false;
-		d_rank_list_sort(rank_list1);
-		for (i = 0; i < rank_list1->rl_nr.num; i++) {
-			if (rank_list1->rl_ranks[i] != rank_list2->rl_ranks[i])
-				return false;
-		}
-	} else {
-		if (rank_list1->rl_nr.num_out != rank_list2->rl_nr.num_out)
-			return false;
-		d_rank_list_sort(rank_list1);
-		for (i = 0; i < rank_list1->rl_nr.num_out; i++) {
-			if (rank_list1->rl_ranks[i] != rank_list2->rl_ranks[i])
-				return false;
-		}
 	}
+
 	return true;
 }
 
 /* check whether one rank included in the rank list, all are global ranks. */
 bool
-d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, bool input)
+d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank)
 {
 	uint32_t	rank_num, i;
 
 	if (rank_list == NULL)
 		return false;
 
-	rank_num = (input == true) ? rank_list->rl_nr.num :
-				     rank_list->rl_nr.num_out;
+	rank_num = rank_list->rl_nr;
 	for (i = 0; i < rank_num; i++) {
 		if (rank_list->rl_ranks[i] == rank)
 			return true;
@@ -433,8 +414,7 @@ d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, bool input)
  * return -DER_NONEXIST when rank not belong to rank list.
  */
 int
-d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank,
-		   uint32_t *idx, bool input)
+d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, uint32_t *idx)
 {
 	uint32_t	rank_num;
 	bool		found = false;
@@ -443,8 +423,7 @@ d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank,
 	if (rank_list == NULL || idx == NULL)
 		return -DER_INVAL;
 
-	rank_num = (input == true) ? rank_list->rl_nr.num :
-				     rank_list->rl_nr.num_out;
+	rank_num = rank_list->rl_nr;
 	for (i = 0; i < rank_num; i++) {
 		if (rank_list->rl_ranks[i] == rank) {
 			found = true;
@@ -481,16 +460,16 @@ d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	width = 0;
-	for (i = 0; i < rank_list->rl_nr.num; i++)
+	for (i = 0; i < rank_list->rl_nr; i++)
 		width += snprintf(NULL, 0, "%d ", rank_list->rl_ranks[i]);
 	width++;
 	D_ALLOC(tmp_str, width);
 	if (tmp_str == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	for (i = 0; i < rank_list->rl_nr.num; i++)
+	for (i = 0; i < rank_list->rl_nr; i++)
 		idx += sprintf(&tmp_str[idx], "%d ", rank_list->rl_ranks[i]);
 	tmp_str[width - 1] = '\0';
-	D_DEBUG("%s, %d ranks: %s\n", name, rank_list->rl_nr.num, tmp_str);
+	D_DEBUG("%s, %d ranks: %s\n", name, rank_list->rl_nr, tmp_str);
 	D_FREE(tmp_str);
 
 out:
@@ -505,7 +484,7 @@ d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 {
 	memset(sgl, 0, sizeof(*sgl));
 
-	sgl->sg_nr.num = sgl->sg_nr.num_out = nr;
+	sgl->sg_nr = sgl->sg_nr_out = nr;
 	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
@@ -523,7 +502,7 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 	if (sgl->sg_iovs == NULL)
 		return;
 
-	for (i = 0; free_iovs && i < sgl->sg_nr.num; i++)
+	for (i = 0; free_iovs && i < sgl->sg_nr; i++)
 		D_FREE(sgl->sg_iovs[i].iov_buf);
 
 	D_FREE(sgl->sg_iovs);

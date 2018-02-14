@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -445,10 +445,10 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
  * \param bulk_hdl [IN]         bulk handle
  * \param sgl[IN/OUT]           pointer to buffer segment list
  *                              Caller should provide a valid sgl pointer, if
- *                              sgl->sg_nr.num is too small, -DER_TRUNC will be
+ *                              sgl->sg_nr is too small, -DER_TRUNC will be
  *                              returned and the needed number of iovs be set at
- *                              sgl->sg_nr.num_out.
- *                              On success, sgl->sg_nr.num_out will be set as
+ *                              sgl->sg_nr_out.
+ *                              On success, sgl->sg_nr_out will be set as
  *                              the actual number of iovs.
  *
  * \return                      zero on success, negative value if error

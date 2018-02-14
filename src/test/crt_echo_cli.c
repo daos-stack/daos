@@ -243,7 +243,7 @@ static void run_client(void)
 	pchar = iovs[1].iov_buf;
 	for (i = 0; i < iovs[1].iov_buf_len; i++)
 		*(pchar++) = random();
-	sgl.sg_nr.num = 2;
+	sgl.sg_nr = 2;
 	sgl.sg_iovs = iovs;
 
 	/* calculate md5 checksum */
@@ -268,14 +268,14 @@ static void run_client(void)
 
 	/* verify result from crt_bulk_access */
 	sgl_query.sg_iovs = iovs_query;
-	sgl_query.sg_nr.num = 1;
+	sgl_query.sg_nr = 1;
 	rc = crt_bulk_access(bulk_hdl, &sgl_query);
-	assert(rc == -DER_TRUNC && sgl_query.sg_nr.num_out == 2);
+	assert(rc == -DER_TRUNC && sgl_query.sg_nr_out == 2);
 
-	sgl_query.sg_nr.num = 2;
+	sgl_query.sg_nr = 2;
 	rc = crt_bulk_access(bulk_hdl, &sgl_query);
 	assert(rc == 0);
-	assert(sgl_query.sg_nr.num_out == 2);
+	assert(sgl_query.sg_nr_out == 2);
 	rc = memcmp(iovs, iovs_query, 2 * sizeof(d_iov_t));
 	assert(rc == 0);
 

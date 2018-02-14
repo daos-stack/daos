@@ -253,7 +253,7 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 	 * comes time to actually do a bulk transfer
 	 */
 	new_entry->sg_list.sg_iovs = &new_entry->sg_iov;
-	new_entry->sg_list.sg_nr.num = 1;
+	new_entry->sg_list.sg_nr = 1;
 	d_iov_set(&new_entry->sg_iov,
 		    crt_st_get_aligned_ptr(new_entry->buf,
 					   session->params.buf_alignment),

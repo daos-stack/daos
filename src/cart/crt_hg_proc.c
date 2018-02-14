@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -254,7 +254,7 @@ crt_proc_crt_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 			D_GOTO(out, rc);
 		}
 
-		rank_num = rank_list->rl_nr.num;
+		rank_num = rank_list->rl_nr;
 		rc = crt_proc_uint32_t(proc, &rank_num);
 		if (rc != 0) {
 			D_ERROR("crt_proc_uint32_t failed, rc: %d.\n",
@@ -285,7 +285,7 @@ crt_proc_crt_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 		D_ALLOC_PTR(rank_list);
 		if (rank_list == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		rank_list->rl_nr.num = rank_num;
+		rank_list->rl_nr = rank_num;
 		D_ALLOC_ARRAY(rank_list->rl_ranks, rank_num);
 		if (rank_list->rl_ranks == NULL) {
 			D_FREE(rank_list);

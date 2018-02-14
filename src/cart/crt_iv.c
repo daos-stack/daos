@@ -934,7 +934,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 
 	/* Calculate total size of all iovs in sg list */
 	size = 0;
-	for (i = 0; i < iv_value->sg_nr.num; i++)
+	for (i = 0; i < iv_value->sg_nr; i++)
 		size += iv_value->sg_iovs[i].iov_buf_len;
 
 	/* crt_req_decref done in crt_ivf_bulk_transfer_done_cb */
@@ -1774,7 +1774,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	}
 
 	/* Exclude self from corpc */
-	excluded_list.rl_nr.num = 1;
+	excluded_list.rl_nr = 1;
 	excluded_list.rl_ranks = excluded_ranks;
 	excluded_ranks[0] = ivns_internal->cii_grp_priv->gp_self;
 	/* Perform refresh on local node */
@@ -1995,7 +1995,7 @@ void transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
 	child_input = crt_req_get(cb_info->uci_child_rpc);
 
 	/* Calculate size of iv value */
-	for (i = 0; i < cb_info->uci_iv_value.sg_nr.num; i++)
+	for (i = 0; i < cb_info->uci_iv_value.sg_nr; i++)
 		size += cb_info->uci_iv_value.sg_iovs[i].iov_buf_len;
 
 	bulk_desc.bd_rpc = cb_info->uci_child_rpc;
@@ -2381,7 +2381,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	}
 
 	size = 0;
-	for (i = 0; i < iv_value.sg_nr.num; i++)
+	for (i = 0; i < iv_value.sg_nr; i++)
 		size += iv_value.sg_iovs[i].iov_buf_len;
 
 	rc = crt_bulk_create(rpc_req->cr_ctx, &iv_value, CRT_BULK_RW,

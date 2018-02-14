@@ -135,7 +135,7 @@ lm_am_i_ras_mgr(struct lm_grp_srv_t *lm_grp_srv)
 	bool		rc;
 
 	crt_group_rank(lm_grp_srv->lgs_grp, &grp_self);
-	D_ASSERT(lm_grp_srv->lgs_ras_ranks->rl_nr.num > 0);
+	D_ASSERT(lm_grp_srv->lgs_ras_ranks->rl_nr > 0);
 	D_RWLOCK_RDLOCK(&lm_grp_srv->lgs_rwlock);
 	rc = (grp_self == lm_grp_srv->lgs_ras_ranks->rl_ranks[0])
 	      ? true : false;
@@ -200,9 +200,9 @@ evict_corpc_cb(const struct crt_cb_info *cb_info)
 	/* advance the index for the last successful bcast */
 	lm_grp_srv->lgs_bcast_idx++;
 	D_ASSERT(lm_grp_srv->lgs_bcast_idx <=
-		 lm_grp_srv->lgs_bcast_list->rl_nr.num);
+		 lm_grp_srv->lgs_bcast_list->rl_nr);
 	if (lm_grp_srv->lgs_bcast_idx ==
-	    lm_grp_srv->lgs_bcast_list->rl_nr.num) {
+	    lm_grp_srv->lgs_bcast_list->rl_nr) {
 		lm_grp_srv->lgs_bcast_in_prog = 0;
 		D_RWLOCK_UNLOCK(&lm_grp_srv->lgs_rwlock);
 		D_GOTO(out, rc);
@@ -266,7 +266,7 @@ lm_bcast_eviction_event(crt_context_t crt_ctx, struct lm_grp_srv_t *lm_grp_srv,
 	evict_in = crt_req_get(evict_corpc);
 	evict_in->clei_rank = crt_rank;
 	evict_in->clei_ver = lm_grp_srv->lgs_lm_ver;
-	num = excluded_ranks->rl_nr.num;
+	num = excluded_ranks->rl_nr;
 	rc = crt_req_send(evict_corpc, evict_corpc_cb,
 			  (void *) (uintptr_t) num);
 	d_rank_list_free(excluded_ranks);
@@ -372,10 +372,10 @@ lm_drain_evict_req_start(crt_context_t crt_ctx)
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(lm_grp_srv->lgs_bcast_idx <=
-		 lm_grp_srv->lgs_bcast_list->rl_nr.num);
+		 lm_grp_srv->lgs_bcast_list->rl_nr);
 	/* return if no more pending entries */
 	if (lm_grp_srv->lgs_bcast_idx ==
-	    lm_grp_srv->lgs_bcast_list->rl_nr.num) {
+	    lm_grp_srv->lgs_bcast_list->rl_nr) {
 		D_RWLOCK_UNLOCK(&lm_grp_srv->lgs_rwlock);
 		D_GOTO(out, rc);
 	}
@@ -1231,7 +1231,7 @@ crt_hdlr_memb_sample(crt_rpc_t *rpc_req)
 		crt_reply_send(rpc_req);
 		D_GOTO(out, rc);
 	}
-	num_delta = failed_ranks->rl_nr.num - in_data->msi_ver;
+	num_delta = failed_ranks->rl_nr - in_data->msi_ver;
 	delta = &failed_ranks->rl_ranks[in_data->msi_ver];
 	d_iov_set(&out_data->mso_delta, delta, sizeof(d_rank_t) * (num_delta));
 	rc = crt_reply_send(rpc_req);

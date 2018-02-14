@@ -79,7 +79,7 @@ crt_barrier_info_init(struct crt_grp_priv *grp_priv)
 	/* Eventually, this will be handled by a flag passed to the corpc
 	 * routine but until then, create a list to exclude self from broadcast
 	 */
-	info->bi_exclude_self.rl_nr.num = 1;
+	info->bi_exclude_self.rl_nr = 1;
 	info->bi_exclude_self.rl_ranks = &info->bi_primary_grp->gp_self;
 exit:
 	return rc;
@@ -111,22 +111,21 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 
 	D_RWLOCK_RDLOCK(primary_grp->gp_rwlock_ft);
 	if (!d_rank_in_rank_list(grp_priv->gp_live_ranks,
-				 info->bi_master_pri_rank, true)) {
+				 info->bi_master_pri_rank)) {
 		rank = -1;
 		/* Master has failed */
 		new_master = true;
 		for (i = info->bi_master_idx + 1;
-		     i < grp_priv->gp_membs->rl_nr.num; i++) {
+		     i < grp_priv->gp_membs->rl_nr; i++) {
 			rank = grp_priv->gp_membs->rl_ranks[i];
-			if (d_rank_in_rank_list(grp_priv->gp_live_ranks,
-						rank, true))
+			if (d_rank_in_rank_list(grp_priv->gp_live_ranks, rank))
 				break;
 		}
 
 		/* This should be impossible since the current rank, at least,
 		 * is still alive and can be the master.
 		 */
-		D_ASSERTF(i != grp_priv->gp_membs->rl_nr.num,
+		D_ASSERTF(i != grp_priv->gp_membs->rl_nr,
 			  "No more ranks for barrier");
 		D_ASSERTF(rank != -1, "No more ranks for barrier");
 		info->bi_master_pri_rank = rank;

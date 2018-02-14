@@ -85,16 +85,9 @@ typedef struct {
 typedef uint32_t	d_rank_t;
 
 typedef struct {
-	/** input number */
-	uint32_t	num;
-	/** output/returned number */
-	uint32_t	num_out;
-} d_nr_t;
-
-typedef struct {
-	/** number of ranks */
-	d_nr_t	 rl_nr;
 	d_rank_t	*rl_ranks;
+	/** number of ranks */
+	uint32_t	rl_nr;
 } d_rank_list_t;
 
 typedef char		*d_string_t;
@@ -102,8 +95,9 @@ typedef const char	*d_const_string_t;
 
 /** Scatter/gather list for memory buffers */
 typedef struct {
-	d_nr_t	 sg_nr;
-	d_iov_t	*sg_iovs;
+	uint32_t	sg_nr;
+	uint32_t	sg_nr_out;
+	d_iov_t		*sg_iovs;
 } d_sg_list_t;
 
 static inline void
@@ -296,23 +290,21 @@ d_power2_nbits(unsigned int val)
 	return val == LOWEST_BIT_SET(val) ? shift - 1 : shift;
 }
 
-int d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src, bool input);
-int d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src,
-			      bool input);
+int d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src);
+int d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src);
 void d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
-			bool input, bool exclude);
+			bool exclude);
 d_rank_list_t *d_rank_list_alloc(uint32_t size);
 d_rank_list_t *d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size);
 void d_rank_list_free(d_rank_list_t *rank_list);
-void d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src, bool input);
+int d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src);
 void d_rank_list_sort(d_rank_list_t *rank_list);
 bool d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx);
 int d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank);
 bool d_rank_list_identical(d_rank_list_t *rank_list1,
-			   d_rank_list_t *rank_list2, bool input);
-bool d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, bool input);
-int d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank,
-			uint32_t *idx, bool input);
+			   d_rank_list_t *rank_list2);
+bool d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank);
+int d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, uint32_t *idx);
 int d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank);
 int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
 int d_sgl_init(d_sg_list_t *sgl, unsigned int nr);

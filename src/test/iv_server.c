@@ -259,14 +259,14 @@ copy_iv_value(d_sg_list_t *dst, d_sg_list_t *src)
 	assert(dst != NULL);
 	assert(src != NULL);
 
-	if (dst->sg_nr.num != src->sg_nr.num) {
+	if (dst->sg_nr != src->sg_nr) {
 		DBG_PRINT("dst = %d, src = %d\n",
-			  dst->sg_nr.num, src->sg_nr.num);
+			  dst->sg_nr, src->sg_nr);
 
-		assert(dst->sg_nr.num == src->sg_nr.num);
+		assert(dst->sg_nr == src->sg_nr);
 	}
 
-	for (i = 0; i < dst->sg_nr.num; i++) {
+	for (i = 0; i < dst->sg_nr; i++) {
 
 		assert(dst->sg_iovs[i].iov_buf != NULL);
 		assert(src->sg_iovs[i].iov_buf != NULL);
@@ -301,7 +301,7 @@ verify_value(d_sg_list_t *iv_value)
 	size = sizeof(struct iv_value_struct);
 
 	assert(iv_value != NULL);
-	assert(iv_value->sg_nr.num == 1);
+	assert(iv_value->sg_nr == 1);
 	assert(iv_value->sg_iovs != NULL);
 	assert(iv_value->sg_iovs[0].iov_buf_len == size);
 	assert(iv_value->sg_iovs[0].iov_len == size);
@@ -332,13 +332,13 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 	entry->key.iov_len = iv_key->iov_len;
 
 	/* Allocate space for iv value */
-	entry->value.sg_nr.num = 1;
+	entry->value.sg_nr = 1;
 	D_ALLOC_PTR(entry->value.sg_iovs);
 	assert(entry->value.sg_iovs != NULL);
 
 	size = sizeof(struct iv_value_struct);
 
-	for (i = 0; i < entry->value.sg_nr.num; i++) {
+	for (i = 0; i < entry->value.sg_nr; i++) {
 		D_ALLOC(entry->value.sg_iovs[i].iov_buf, size);
 		assert(entry->value.sg_iovs[i].iov_buf != NULL);
 

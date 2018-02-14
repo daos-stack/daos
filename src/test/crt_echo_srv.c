@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -117,9 +117,9 @@ static int run_echo_srver(void)
 	d_rank_t		excluded_ranks[4] = {1, 4, 2, 9};
 	d_rank_list_t	excluded_membs;
 
-	grp_membs.rl_nr.num = 6;
+	grp_membs.rl_nr = 6;
 	grp_membs.rl_ranks = grp_ranks;
-	excluded_membs.rl_nr.num = 4;
+	excluded_membs.rl_nr = 4;
 	excluded_membs.rl_ranks = excluded_ranks;
 
 	if (mysize >= 8 && myrank == 4) {

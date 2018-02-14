@@ -906,7 +906,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	d_iov_set(&g_data->rep_latencies_iov, g_data->rep_latencies,
 		 g_data->rep_count * sizeof(g_data->rep_latencies[0]));
 	g_data->rep_latencies_sg_list.sg_iovs = &g_data->rep_latencies_iov;
-	g_data->rep_latencies_sg_list.sg_nr.num = 1;
+	g_data->rep_latencies_sg_list.sg_nr = 1;
 	ret = crt_bulk_create(g_data->crt_ctx, &g_data->rep_latencies_sg_list,
 			      CRT_BULK_RO, &g_data->rep_latencies_bulk_hdl);
 	if (ret != 0) {
@@ -989,7 +989,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		 * comes time to actually do a bulk transfer
 		 */
 		cb_args->sg_list.sg_iovs = &cb_args->sg_iov;
-		cb_args->sg_list.sg_nr.num = 1;
+		cb_args->sg_list.sg_nr = 1;
 		d_iov_set(&cb_args->sg_iov,
 			 crt_st_get_aligned_ptr(cb_args->buf,
 						g_data->buf_alignment),

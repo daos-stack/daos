@@ -665,8 +665,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 		D_FREE_PTR(grp_priv);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
-	rc = d_rank_list_dup_sort_uniq(&grp_priv->gp_membs, membs,
-					 true /* input */);
+	rc = d_rank_list_dup_sort_uniq(&grp_priv->gp_membs, membs);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup_sort_uniq failed, rc: %d.\n", rc);
 		D_FREE(grp_priv->gp_pub.cg_grpid);
@@ -711,8 +710,7 @@ crt_grp_ras_init(struct crt_grp_priv *grp_priv)
 
 	D_ASSERT(grp_priv->gp_service);
 
-	rc = d_rank_list_dup(&grp_priv->gp_live_ranks, grp_priv->gp_membs,
-			     true);
+	rc = d_rank_list_dup(&grp_priv->gp_live_ranks, grp_priv->gp_membs);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup() failed, group: %s, rc: %d\n",
 				grp_priv->gp_pub.cg_grpid, rc);
@@ -752,7 +750,7 @@ crt_grp_ras_init(struct crt_grp_priv *grp_priv)
 
 	D_RWLOCK_WRLOCK(grp_priv->gp_rwlock_ft);
 	d_rank_list_filter(grp_priv->gp_failed_ranks, grp_priv->gp_live_ranks,
-			   true /* input */, true /* exclude */);
+			   true /* exclude */);
 	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 
 out:
@@ -880,11 +878,11 @@ crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 
 	/* assign the size and logical rank number for the subgrp */
 	D_ASSERT(grp_priv->gp_membs != NULL &&
-		 grp_priv->gp_membs->rl_nr.num > 0 &&
+		 grp_priv->gp_membs->rl_nr > 0 &&
 		 grp_priv->gp_membs->rl_ranks != NULL);
-	grp_priv->gp_size = grp_priv->gp_membs->rl_nr.num;
+	grp_priv->gp_size = grp_priv->gp_membs->rl_nr;
 	rc = d_idx_in_rank_list(grp_priv->gp_membs, pri_rank,
-				&grp_priv->gp_self, true /* input */);
+				&grp_priv->gp_self);
 	if (rc != 0) {
 		D_ERROR("d_idx_in_rank_list(rank %d, group %s) failed, "
 			"rc: %d.\n", pri_rank, gc_in->gc_grp_id, rc);
@@ -1041,7 +1039,7 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 	myrank = default_grp_priv->gp_self;
 	grp_size = default_grp_priv->gp_size;
 
-	for (i = 0; i < member_ranks->rl_nr.num; i++) {
+	for (i = 0; i < member_ranks->rl_nr; i++) {
 		if (member_ranks->rl_ranks[i] >= grp_size) {
 			D_ERROR("invalid arg, member_ranks[%d]: %d exceed "
 				"primary group size %d.\n",
@@ -1080,13 +1078,12 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 	 * RPC is only sent to subgroup members.
 	 */
 	default_gp_membs = default_grp_priv->gp_membs;
-	rc = d_rank_list_dup(&excluded_ranks, default_gp_membs, true);
+	rc = d_rank_list_dup(&excluded_ranks, default_gp_membs);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup() failed, rc %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	d_rank_list_filter(member_ranks, excluded_ranks, true /* input */,
-			   true /* exlude */);
+	d_rank_list_filter(member_ranks, excluded_ranks, true /* exlude */);
 	rc = crt_corpc_req_create(crt_ctx, NULL, excluded_ranks,
 			     CRT_OPC_GRP_CREATE, NULL, NULL, 0,
 			     crt_tree_topo(CRT_TREE_KNOMIAL, 4),
@@ -2609,7 +2606,7 @@ crt_rank_evicted(crt_group_t *grp, d_rank_t rank)
 	}
 
 	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
-	ret = d_rank_in_rank_list(grp_priv->gp_failed_ranks, rank, true);
+	ret = d_rank_in_rank_list(grp_priv->gp_failed_ranks, rank);
 	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 
 out:
@@ -2663,17 +2660,17 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 	}
 
 	D_RWLOCK_WRLOCK(grp_priv->gp_rwlock_ft);
-	if (d_rank_in_rank_list(grp_priv->gp_failed_ranks, rank, true)) {
+	if (d_rank_in_rank_list(grp_priv->gp_failed_ranks, rank)) {
 		D_DEBUG("Rank %d already evicted.\n", rank);
 		D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 		D_GOTO(out, rc = -DER_EVICTED);
 	}
 
-	tmp_rank_list.rl_nr.num = 1;
+	tmp_rank_list.rl_nr = 1;
 	tmp_rank_list.rl_ranks = &rank;
 
 	d_rank_list_filter(&tmp_rank_list, grp_priv->gp_live_ranks,
-			   true /* input */, true /* exclude */);
+			   true /* exlude */);
 
 	rc = d_rank_list_append(grp_priv->gp_failed_ranks, rank);
 	if (rc != 0) {
@@ -2686,7 +2683,7 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 	/* remove rank from sub groups */
 	d_list_for_each_entry(curr_entry, &crt_grp_list, gp_link)
 		d_rank_list_filter(&tmp_rank_list, curr_entry->gp_live_ranks,
-				   true /* input */, true /* exclude */);
+				   true /* exclude */);
 	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 
 	rc = crt_grp_lc_mark_evicted(grp_priv, rank);
@@ -2748,7 +2745,7 @@ crt_grp_failed_ranks_dup(crt_group_t *grp, d_rank_list_t **failed_ranks)
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
-	rc = d_rank_list_dup(failed_ranks, grp_priv->gp_failed_ranks, true);
+	rc = d_rank_list_dup(failed_ranks, grp_priv->gp_failed_ranks);
 	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 	if (rc != 0)
 		D_ERROR("d_rank_list_dup() failed, group: %s, rc: %d\n",
