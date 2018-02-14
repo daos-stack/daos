@@ -75,7 +75,7 @@ def scons():
 
     env.Command("fixtest", "./utils/bvtest/OrteRunner.py",
                 [Copy("$PREFIX/TESTING/test_runner/",
-                      "./utils/bvtest/OrteRunner.py", False)])
+                      "./utils/bvtest/OrteRunner.py")])
 
     Default('build')
     Depends('install', 'build')

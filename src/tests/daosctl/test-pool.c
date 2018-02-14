@@ -282,7 +282,7 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 		char uuid_str[100];
 
 		uuid_unparse(uuid, uuid_str);
-		printf(uuid_str);
+		printf("%s", uuid_str);
 	}
 
 	if (rc) {
@@ -492,7 +492,7 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 		char uuid_str[100];
 
 		uuid_unparse(uuid, uuid_str);
-		printf(uuid_str);
+		printf("%s", uuid_str);
 	}
 
 
