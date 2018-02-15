@@ -42,6 +42,7 @@ import copy
 import ConfigParser
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
+from SCons.Variables import EnumVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import SetOption
@@ -712,7 +713,39 @@ class PreReqComponent(object):
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
 
+        self._setup_compiler()
+
 # pylint: enable=too-many-branches
+    def _setup_compiler(self):
+        """Setup the compiler to use"""
+        compiler_map = {'gcc': {'CC' : 'gcc', 'CXX' : 'g++'},
+                        'clang' : {'CC' : 'clang', 'CXX' : 'clang++'},
+                        'icc' : {'CC' : 'icc', 'CXX' : 'icpc'},
+                       }
+        self.add_opts(EnumVariable('COMPILER', "Set the compiler family to use",
+                                   'gcc', ['gcc', 'clang', 'icc'],
+                                   ignorecase=1))
+        compiler = self.__env.get('COMPILER').lower()
+        env = self.__env.Clone()
+        config = Configure(env)
+
+        if self.__check_only:
+            # Have to temporarily turn off dry run to allow this check.
+            env.SetOption('no_exec', False)
+
+        for name, prog in compiler_map[compiler].iteritems():
+            if not config.CheckProg(prog):
+                print "%s must be installed when COMPILER=%s" % (prog, compiler)
+                if self.__check_only:
+                    continue
+                config.Finish()
+                raise MissingSystemLibs(prog)
+            args = {name : prog}
+            self.__env.Replace(**args)
+        config.Finish()
+        if self.__check_only:
+            # Restore the dry run state
+            env.SetOption('no_exec', True)
 
     def get_build_info(self):
         """Retrieve the BuildInfo"""
