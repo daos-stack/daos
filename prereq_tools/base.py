@@ -703,17 +703,22 @@ class PreReqComponent(object):
         self.__build_info = BuildInfo()
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
 
-        local_script = os.path.expanduser("~/.scons_localrc")
-        if os.path.exists(local_script):
-            SConscript(local_script, exports=['env'])
+        self._setup_compiler()
+
+        self.add_opts(PathVariable('ENV_SCRIPT',
+                                   "Location of environment script",
+                                   os.path.expanduser('~/.scons_localrc'),
+                                   PathVariable.PathAccept))
+
+        env_script = self.__env.get("ENV_SCRIPT")
+        if os.path.exists(env_script):
+            SConscript(env_script, exports=['env'])
 
         if config_file is not None:
             self.configs = ConfigParser.ConfigParser()
             self.configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
-
-        self._setup_compiler()
 
 # pylint: enable=too-many-branches
     def _setup_compiler(self):
@@ -725,6 +730,7 @@ class PreReqComponent(object):
         self.add_opts(EnumVariable('COMPILER', "Set the compiler family to use",
                                    'gcc', ['gcc', 'clang', 'icc'],
                                    ignorecase=1))
+
         compiler = self.__env.get('COMPILER').lower()
         env = self.__env.Clone()
         config = Configure(env)
