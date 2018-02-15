@@ -89,6 +89,11 @@ def _get_host_platform(env):
     newenv['ENV'].pop('GOOS', None)
     newenv['ENV'].pop('GOARCH', None)
     newenv['ENV'].pop('GOBIN', None)
+    config = newenv.Configure()
+    if not config.CheckProg('go'):
+        print "go is required"
+        newenv.Exit(2)
+    config.Finish()
     config = _parse_config(_run_goenv(newenv))
     env.Append(ENV={'GOROOT' : config['GOROOT'],
                     'GOBIN' : os.path.join(config['GOROOT'], 'bin')})
