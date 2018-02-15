@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (C) 2016-2017 Intel Corporation
+# Copyright (C) 2016-2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -69,7 +69,7 @@ if [[ "$CART_TEST_MODE" =~ (native|all) ]]; then
   echo "Nothing to do yet, wish we could fail some tests"
   scons utest
   cd ${TESTDIR}
-  python3.4 test_runner "${JENKINS_TEST_LIST[@]}"
+  python3 test_runner "${JENKINS_TEST_LIST[@]}"
   cd -
 fi
 
@@ -78,7 +78,7 @@ if [[ "$CART_TEST_MODE" =~ (memcheck|all) ]]; then
   scons utest --utest-mode=memcheck
   export TR_USE_VALGRIND=memcheck
   cd ${TESTDIR}
-  python3.4 test_runner "${JENKINS_TEST_LIST[@]}"
+  python3 test_runner "${JENKINS_TEST_LIST[@]}"
 
   cd -
   RESULTS="valgrind_results"
