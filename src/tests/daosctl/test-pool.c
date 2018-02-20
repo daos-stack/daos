@@ -177,28 +177,29 @@ cmd_connect_pool(int argc, const char **argv, void *ctx)
 	if (rc) {
 		printf("<<<daosctl>>> Pool connect fail, result: %d\n",
 		       rc);
-	} else {
-		daos_pool_info_t pool_info;
+		return 1;
+	}
 
-		rc = daos_pool_query(poh, NULL, &pool_info, NULL);
+	daos_pool_info_t pool_info;
 
-		/* TODO not ready for this test yet */
-		/* the info returned by connect should match query */
-		/* if (memcmp(&info, &pool_info, sizeof(daos_pool_info_t))) {
-		 *  printf("pool info mismatch\n");
-		 *  return 1;
-		 *  }
-		 */
+	rc = daos_pool_query(poh, NULL, &pool_info, NULL);
 
-		char uuid_str2[100];
+	/* TODO not ready for this test yet */
+	/* the info returned by connect should match query */
+	/* if (memcmp(&info, &pool_info, sizeof(daos_pool_info_t))) {
+	 *  printf("pool info mismatch\n");
+	 *  return 1;
+	 *  }
+	 */
 
-		uuid_unparse(pool_info.pi_uuid, uuid_str2);
+	char uuid_str2[100];
 
-		if (strcmp(cp_options.uuid, uuid_str2)) {
-			printf("uuids don't match: %s %s\n",
-			       cp_options.uuid, uuid_str2);
-			return 1;
-		}
+	uuid_unparse(pool_info.pi_uuid, uuid_str2);
+
+	if (strcmp(cp_options.uuid, uuid_str2)) {
+		printf("uuids don't match: %s %s\n",
+		       cp_options.uuid, uuid_str2);
+		return 1;
 	}
 
 	printf("<<<daosctl>>> Connected to pool.\n");

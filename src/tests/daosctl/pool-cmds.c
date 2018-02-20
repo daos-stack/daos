@@ -59,7 +59,33 @@ struct pool_cmd_options {
 	unsigned int  mode;
 	unsigned int  uid;
 	unsigned int  gid;
+	uint64_t      size;
 };
+
+static int
+parse_size(uint64_t *size, char *arg)
+{
+	char *unit;
+	*size = strtoul(arg, &unit, 0);
+
+	switch (*unit) {
+	case '\0':
+		break;
+	case 'k':
+	case 'K':
+		*size <<= 10;
+		break;
+	case 'm':
+	case 'M':
+		*size <<= 20;
+		break;
+	case 'g':
+	case 'G':
+		*size <<= 30;
+		break;
+	}
+	return 0;
+}
 
 /**
  * Callback function for create poolthat works with argp to put
@@ -87,6 +113,9 @@ parse_pool_args_cb(int key, char *arg,
 	case 'g':
 		options->gid = atoi(arg);
 		break;
+	case 'z':
+		parse_size(&(options->size), arg);
+		break;
 	case 'f':
 		options->force = 1;
 	}
@@ -103,9 +132,6 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 	uuid_t        uuid;
 	d_rank_list_t svc;
 
-	/* TODO should be a parameter not hard-coded */
-	uint64_t          pool_size = 1024*1024*1024;
-
 	struct argp_option options[] = {
 		{"server-group",   's',    "SERVER-GROUP",     0,
 		 "ID of the server group that is to manage the new pool"},
@@ -115,10 +141,13 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 		 "Group ID that is to own the new pool"},
 		{"mode",           'm',    "mode",             0,
 		 "Mode defines the operations allowed on the pool"},
+		{"size",           'z',    "size",             0,
+		 "Size of the pool in bytes or with k/m/g appended (e.g. 10g)"},
 		{0}
 	};
 	struct argp argp = {options, parse_pool_args_cb};
-	struct pool_cmd_options cp_options = {"daos_server", NULL, 0, 0, 0, 0};
+	struct pool_cmd_options cp_options = {"daos_server", NULL, 0, 0700, 0,
+					      1024*1024*1024, 0};
 
 	/* adjust the arguments to skip over the command */
 	argv++;
@@ -138,7 +167,7 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 
 	rc = daos_pool_create(cp_options.mode, cp_options.uid,
 			      cp_options.gid, cp_options.server_group,
-				   NULL, "rubbish", pool_size, &svc,
+				   NULL, "rubbish", cp_options.size, &svc,
 				   uuid, NULL);
 	if (rc) {
 		printf("Pool create fail, result: %d\n", rc);
@@ -146,7 +175,7 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 		char uuid_str[100];
 
 		uuid_unparse(uuid, uuid_str);
-		printf("%s", uuid_str);
+		printf("%s\n", uuid_str);
 	}
 
 	return rc;

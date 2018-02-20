@@ -6,8 +6,9 @@ def scons():
     Import('env', 'prereqs')
 
     libs = ['daos', 'gurt', 'daos_common', 'daos_tier', 'mpi', 'uuid',
-        	   'cart', 'pmem', 'pmemobj']
-    sources = ['daosctl.c', 'help.c', 'test-pool.c', 'pool-cmds.c']
+	   	       'cart', 'pmem', 'pmemobj']
+    sources = ['daosctl.c', 'help.c', 'test-pool.c', 'pool-cmds.c',
+    	    		    'cont-cmds.c']
 
     denv = env.Clone()
     denv.AppendUnique(CFLAGS=['-std=gnu99'])

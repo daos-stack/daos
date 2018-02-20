@@ -55,9 +55,11 @@ const char daosctl_option_string[] =
 	"\t--list-cmds   lists the available daosctl commands";
 
 /* add a command then increment the count */
-int command_count = 9;
+int command_count = 11;
 static struct cmd_struct commands[] = {
+	{ "create-container", cmd_create_container },
 	{ "create-pool", cmd_create_pool },
+	{ "destroy-container", cmd_destroy_container },
 	{ "destroy-pool", cmd_destroy_pool },
 	{ "connect-pool", cmd_connect_pool },
 	{ "evict-pool", cmd_evict_pool },
