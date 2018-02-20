@@ -1395,6 +1395,98 @@ out:
 }
 
 int
+crt_group_rank_p2s(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
+{
+	struct crt_grp_priv	*grp_priv;
+	int			 rc = 0;
+
+	if (!crt_initialized()) {
+		D_ERROR("CaRT not initialized yet.\n");
+		return -DER_UNINIT;
+	}
+
+	if (!crt_is_service()) {
+		D_ERROR("Can only be called in a service group.\n");
+		return -DER_INVAL;
+	}
+
+	if (subgrp == NULL) {
+		D_ERROR("Invalid argument: subgrp is NULL.\n");
+		return -DER_INVAL;
+	}
+
+	if (rank_out == NULL) {
+		D_ERROR("Invalid argument: rank_out is NULL.\n");
+		return -DER_INVAL;
+	}
+
+	grp_priv = container_of(subgrp, struct crt_grp_priv, gp_pub);
+
+	if (grp_priv->gp_local == 0) {
+		D_ERROR("group %s is a remote group.\n", subgrp->cg_grpid);
+		return -DER_INVAL;
+
+	}
+
+	if (grp_priv->gp_primary) {
+		*rank_out = rank_in;
+		return rc;
+	}
+
+	rc = d_idx_in_rank_list(grp_priv->gp_membs, rank_in, rank_out);
+	if (rc != 0) {
+		D_ERROR("primary rank %d is not a member of subgroup %s.\n",
+			rank_in, subgrp->cg_grpid);
+		rc = -DER_OOG;
+	}
+
+	return rc;
+}
+
+int
+crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
+{
+	struct crt_grp_priv	*grp_priv;
+	int			 rc = 0;
+
+	if (!crt_initialized()) {
+		D_ERROR("CaRT not initialized yet.\n");
+		return -DER_UNINIT;
+	}
+
+	if (!crt_is_service()) {
+		D_ERROR("Can only be called in a service group.\n");
+		return -DER_INVAL;
+	}
+
+	if (subgrp == NULL) {
+		D_ERROR("Invalid argument: subgrp is NULL.\n");
+		return -DER_INVAL;
+	}
+
+	if (rank_out == NULL) {
+		D_ERROR("Invalid argument: rank_out is NULL.\n");
+		return -DER_INVAL;
+	}
+
+	grp_priv = container_of(subgrp, struct crt_grp_priv, gp_pub);
+
+	if (grp_priv->gp_local == 0) {
+		D_ERROR("group %s is a remote group.\n", subgrp->cg_grpid);
+		return -DER_INVAL;
+	}
+
+	if (rank_in >= grp_priv->gp_size) {
+		D_ERROR("rank_in %d is out of range.\n", rank_in);
+		return -DER_OOG;
+	}
+
+	*rank_out = grp_priv->gp_membs->rl_ranks[rank_in];
+
+	return rc;
+}
+
+int
 crt_group_size(crt_group_t *grp, uint32_t *size)
 {
 	struct crt_grp_gdata	*grp_gdata;

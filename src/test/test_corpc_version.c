@@ -512,6 +512,21 @@ client_cb(const struct crt_cb_info *cb_info)
 	}
 }
 
+static void
+test_rank_conversion(void)
+{
+	d_rank_t	rank_out;
+	int		rc = 0;
+
+	rc = crt_group_rank_p2s(test.t_sub_group, 2, &rank_out);
+	D_ASSERT(rc == 0);
+	D_ASSERT(rank_out == 1);
+
+	rc = crt_group_rank_s2p(test.t_sub_group, 3, &rank_out);
+	D_ASSERT(rc == 0);
+	D_ASSERT(rank_out == 4);
+}
+
 static int
 sub_grp_create_cb(crt_group_t *grp, void *priv, int status)
 {
@@ -525,6 +540,9 @@ sub_grp_create_cb(crt_group_t *grp, void *priv, int status)
 		grp, *(int *) priv, status);
 	D_ASSERT(status == 0);
 	test.t_sub_group = grp;
+
+	/* test rank conversion */
+	test_rank_conversion();
 
 	/* send an RPC to a subgroup rank */
 	server_ep.ep_grp = test.t_sub_group;

@@ -732,6 +732,33 @@ crt_group_config_save(crt_group_t *grp, bool forall);
 int
 crt_group_detach(crt_group_t *attached_grp);
 
+
+/*
+ * Convert a primary group rank to a local subgroup rank. Given a primary group
+ * rank \p rank_in, find its rank number \p rank_out within a sub-group \p
+ * subgrp.
+ *
+ * \param subgrp [IN]		CRT subgroup handle. subgrp must be local, i.e.
+ *				not created by crt_group_attach()
+ * \param rank_in [IN]		primary group rank number.
+ * \param rank_out [OUT]	the result rank number of the conversion.
+ */
+int
+crt_group_rank_p2s(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
+
+/*
+ * Convert a local subgroup rank to a primary group rank. Given a sub-group \p
+ * subgrp and rank \p rank_in within the sub-group, find out its primary group
+ * rank number \p rank_out.
+ *
+ * \param subgrp [IN]		CRT subgroup handle. subgrp must be local, i.e.
+ *				not created by crt_group_attach()
+ * \param rank_in [IN]		rank number witin grp.
+ * \param rank_out [OUT]	the result rank number of the conversion.
+ */
+int
+crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
+
 /*
  * Create collective RPC request. Can reuse the crt_req_send to broadcast it.
  * Can only be called on the server side.
