@@ -129,7 +129,7 @@ typedef d_string_t crt_phy_addr_t;
  * expected.
  */
 typedef uint32_t crt_opcode_t;
-#define CRT_OPC_INTERNAL_BASE	0xFFFF0000UL
+#define CRT_OPC_INTERNAL_BASE		0xFF000000UL
 
 /**
  * Check if the opcode is reserved by CRT internally.
@@ -140,7 +140,7 @@ typedef uint32_t crt_opcode_t;
  * \retval                      non-zero means CRT internally reserved opcode.
  */
 static inline int
-crt_opcode_reserved(crt_opcode_t opc)
+crt_opcode_reserved_legacy(crt_opcode_t opc)
 {
 	return (opc & CRT_OPC_INTERNAL_BASE) == CRT_OPC_INTERNAL_BASE;
 }
@@ -248,23 +248,72 @@ DEFINE_CRT_REQ_FMT_ARRAY((name), (crt_in),				\
 	cmf_proc :	(crt_proc_cb_t)(proc)				\
 }
 
-#define DEFINE_CRT_PROTO_FMT(name, ver, crf_array)		\
-	{						\
-		.cpf_name = (name),			\
-		.cpf_ver = (ver),			\
-		.cpf_crf = (crf_array)			\
-	}
+/** server-side RPC handler */
+typedef void (*crt_rpc_cb_t)(crt_rpc_t *rpc);
 
-struct crt_proto_format {
-	const char		*cpf_name;
-	int			 ver;
-	/** number of RPCs in this protocol, i.e. size of cpf_crf */
-	int			 count;
-	/** array of req formats for member RPCs */
-	struct crt_req_format	*cpf_crf[];
+/** specifies a member RPC of a protocol. */
+struct crt_proto_rpc_format {
+	/** the input/output format of the member RPC */
+	struct crt_req_format	*prf_req_fmt;
+	/** the RPC hander on the server side */
+	crt_rpc_cb_t		 prf_hdlr;
+	/** aggregation function for co-rpc */
+	struct crt_corpc_ops	*prf_co_ops;
+	/**
+	 * RPC feature bits to toggle RPC behaviour. Two flags are supported
+	 * now: \ref CRT_RPC_FEAT_NO_REPLY and \ref CRT_RPC_FEAT_NO_TIMEOUT
+	 */
+	uint32_t		 prf_flags;
 };
 
-/* Common request format types */
+enum proto_type {
+	CRT_PROTO_TYPE_USER	= 0U,
+	CRT_PROTO_TYPE_INTERNAL	= 1U,
+};
+
+/** specify an RPC protocol */
+struct crt_proto_format {
+	const char				*cpf_name;
+	uint32_t				 cpf_ver;
+	/** number of RPCs in this protocol, i.e. number of entreis in
+	 * cpf_prf
+	 */
+	uint32_t				 cpf_count;
+	/** 0 means user protocol, 1 means internal protocol */
+	enum proto_type				 cpf_type;
+	struct crt_proto_rpc_format		*cpf_prf;
+};
+
+/**
+ * given the base opcode, version of a protocol, and a member RPC index, compute
+ * the RPC opcode of that member RPC
+ */
+#define CRT_PROTO_OPC(base_opc, version, rpc_index)			\
+	((uint32_t)(base_opc) |						\
+	(uint32_t)(version) << 16 |					\
+	(uint32_t)(rpc_index))
+
+/**
+ * argument available to the completion callback in crt_proto_query().
+ */
+struct crt_proto_query_cb_info {
+	/** user data passed-in to crt_proto_query() as arg */
+	void	*pq_arg;
+	/**
+	 * contains the hightest version supported by the target
+	 * when pq_rc == DER_SUCCESS
+	 */
+	int	 pq_ver;
+	/** return falue */
+	int	 pq_rc;
+};
+
+/**
+ * The completion callback to crt_proto_query().
+ */
+typedef void (*crt_proto_query_cb_t)(struct crt_proto_query_cb_info *cb_info);
+
+/* Common request format type */
 extern struct crt_msg_field CMF_UUID;
 extern struct crt_msg_field CMF_GRP_ID;
 extern struct crt_msg_field CMF_INT;
@@ -357,9 +406,6 @@ struct crt_bulk_cb_info {
 	void			*bci_arg; /**< User passed in arg */
 	int			bci_rc; /**< return code */
 };
-
-/** server-side RPC handler */
-typedef void (*crt_rpc_cb_t)(crt_rpc_t *rpc);
 
 /**
  * completion callback for crt_req_send

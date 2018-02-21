@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,66 +35,87 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/**
- * This file is part of CaRT. It gives out the main CaRT internal function
- * declarations which are not included by other specific header files.
- */
+#include <semaphore.h>
 
-#ifndef __CRT_INTERNAL_FNS_H__
-#define __CRT_INTERNAL_FNS_H__
+#include <gurt/common.h>
+#include <cart/api.h>
 
-/** crt_init.c */
-bool crt_initialized(void);
+#include "test_proto_common.h"
 
-/** crt_register.c */
-int crt_opc_map_create(unsigned int bits);
-int crt_opc_map_create_legacy(unsigned int bits);
-void crt_opc_map_destroy(struct crt_opc_map *map);
-void crt_opc_map_destroy_legacy(struct crt_opc_map_legacy *map);
-struct crt_opc_info *crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc,
-				    int locked);
-struct crt_opc_info *crt_opc_lookup_legacy(struct crt_opc_map_legacy *map,
-					   crt_opcode_t opc, int locked);
-
-/** crt_context.c */
-/* return value of crt_context_req_track */
-enum {
-	CRT_REQ_TRACK_IN_INFLIGHQ = 0,
-	CRT_REQ_TRACK_IN_WAITQ,
-};
-
-int crt_context_req_track(crt_rpc_t *req);
-bool crt_context_empty(int locked);
-void crt_context_req_untrack(crt_rpc_t *req);
-crt_context_t crt_context_lookup(int ctx_idx);
-void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
-int crt_req_timeout_track(crt_rpc_t *req);
-void crt_req_timeout_untrack(crt_rpc_t *req);
-void crt_req_force_timeout(struct crt_rpc_priv *rpc_priv);
-
-/** some simple helper functions */
-
-static inline bool
-crt_is_service()
+static void
+test_init()
 {
-	return crt_gdata.cg_server;
+	uint32_t	flag;
+	int		rc;
+
+	fprintf(stderr, "local group: %s remote group: %s\n",
+		test.tg_local_group_name, test.tg_remote_group_name);
+
+	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
+	D_ASSERTF(rc == 0, "sem_init() failed.\n");
+
+	flag = test.tg_is_service ? CRT_FLAG_BIT_SERVER : 0;
+	rc = crt_init(test.tg_local_group_name, flag);
+	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
+
+	rc = crt_group_rank(NULL, &test.tg_my_rank);
+	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
+
+	rc = crt_proto_register(OPC_MY_PROTO, &my_proto_fmt_0);
+	D_ASSERT(rc == 0);
+	rc = crt_proto_register(OPC_MY_PROTO, &my_proto_fmt_1);
+	D_ASSERT(rc == 0);
+
+	rc = crt_context_create(&test.tg_crt_ctx);
+	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
+
+	rc = pthread_create(&test.tg_tid, NULL, progress_thread,
+			    &test.tg_thread_id);
+	D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
 }
 
-static inline bool
-crt_is_singleton()
+static void
+test_run()
 {
-	return crt_gdata.cg_singleton;
+	D_DEBUG(DB_TRACE, "test_run\n");
 }
 
-static inline void
-crt_bulk_desc_dup(struct crt_bulk_desc *bulk_desc_new,
-		  struct crt_bulk_desc *bulk_desc)
+/************************************************/
+static void
+test_fini()
 {
-	D_ASSERT(bulk_desc_new != NULL && bulk_desc != NULL);
-	*bulk_desc_new = *bulk_desc;
+	int	rc;
+
+	rc = pthread_join(test.tg_tid, NULL);
+	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
+	D_DEBUG(DB_TRACE, "joined progress thread.\n");
+
+
+	rc = crt_context_destroy(test.tg_crt_ctx, 0);
+	D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
+
+	rc = sem_destroy(&test.tg_token_to_proceed);
+	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
+
+	rc = crt_finalize();
+	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
+	D_DEBUG(DB_TRACE, "exiting.\n");
 }
 
-void
-crt_hdlr_proto_query(crt_rpc_t *rpc_req);
+int
+main(int argc, char **argv)
+{
+	int	rc;
 
-#endif /* __CRT_INTERNAL_FNS_H__ */
+	rc = test_parse_args(argc, argv);
+	if (rc != 0) {
+		fprintf(stderr, "test_parse_args() failed, rc: %d.\n", rc);
+		return rc;
+	}
+
+	test_init();
+	test_run();
+	test_fini();
+
+	return rc;
+}

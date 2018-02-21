@@ -94,7 +94,7 @@
 	ACTION(DER_OOG,			(DER_ERR_GURT_BASE + 19))	\
 	/** transport layer mercury error */				\
 	ACTION(DER_HG,			(DER_ERR_GURT_BASE + 20))	\
-	/** RPC (opcode) unregister */					\
+	/** RPC or protocol version not registered */			\
 	ACTION(DER_UNREG,		(DER_ERR_GURT_BASE + 21))	\
 	/** failed to generate an address string */			\
 	ACTION(DER_ADDRSTR_GEN,		(DER_ERR_GURT_BASE + 22))	\

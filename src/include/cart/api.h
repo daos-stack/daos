@@ -1345,37 +1345,41 @@ crt_lm_attach(crt_group_t *tgt_grp, crt_lm_attach_cb_t completion_cb,
  */
 
 /**
- * Register a protocol. Can be called on a server or a client. This
- * function calls crt_rpc_register() to register each member RPC.
+ * Register a protocol. Can be called on a server or a client.
  *
  * \param[in] base_opc         protocol base opcode
- * \param[in] cpf              array of crt_proto_formats. Each
- *                             crt_proto_format specifies a version
+ * \param[in] proto_format     protocol format description. (See \ref
+ *                             crt_proto_format)
  *
  * \return                     DER_SUCCESS on success, negative value
  *                             on failure.
  */
 int
-crt_proto_register(crt_opcode_t base_opc, struct crt_proto_format *cpf);
+crt_proto_register(crt_opcode_t base_opc,
+		   struct crt_proto_format *proto_format);
 
 /**
- * query tgt_ep if it has registered base_opc with version
+ * query tgt_ep if it has registered base_opc with version.
  *
  * \param[in] tgt_ep           the service rank to query
  * \param[in] base_opc         the base opcode for the protocol
  * \param[in] ver              array of protocol version
  * \param[in] count            number of elements in ver
- * \param[out] high_ver        the highest protocol version supported by the
- *                             target
+ * \param[in] cb               completion callback. crt_proto_query() internally
+ *                             sends an RPC to \a tgt_ep. \a cb will be called
+ *                             upon completion of that RPC. The highest protocol
+ *                             version supported by the target is available to
+ *                             \a cb as cb_info->pq_ver. (See \ref
+ *                             crt_proto_query_cb_t and \ref
+ *                             crt_proto_query_cb_info)
+ * \param[in,out] arg          argument for \a cb.
  *
- * \return                     DER_SUCCESS on success, negative value
- *                             on failure.
+ * \return                     DER_SUCCESS on success, negative value on
+ *                             failure.
  */
 int
-crt_proto_registered(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, int *ver,
-		     int count, int *high_ver);
-
-
+crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
+		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
 
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_crt_rank_t		crt_proc_uint32_t

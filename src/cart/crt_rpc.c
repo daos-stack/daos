@@ -356,224 +356,193 @@ static struct crt_req_format CQF_CRT_CTL_GET_PID =
 			    crt_ctl_in_fields,
 			    crt_ctl_get_pid_out_fields);
 
-struct crt_internal_rpc crt_internal_rpcs[] = {
+struct crt_msg_field *crt_proto_query_in_fields[] = {
+	&CMF_IOVEC,		/* version array */
+	&CMF_INT,		/* num of enlemtns in version array */
+	&CMF_UINT32,		/* base opcode */
+};
+
+struct crt_msg_field *crt_proto_query_out_fields[] = {
+	&CMF_UINT32,		/* version */
+	&CMF_INT,		/* return value */
+};
+
+static struct crt_req_format CQF_CRT_PROTO_QUERY =
+	DEFINE_CRT_REQ_FMT("CRT_PROTO_QUERY",
+			   crt_proto_query_in_fields,
+			   crt_proto_query_out_fields);
+
+struct crt_internal_rpc_format crt_internal_rpcs[] = {
 	{
-		.ir_name	= "CRT_GRP_CREATE",
-		.ir_opc		= CRT_OPC_GRP_CREATE,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_GRP_CREATE,
-		.ir_hdlr	= crt_hdlr_grp_create,
-		.ir_co_ops	= &crt_grp_create_co_ops,
+		.irf_opc	= CRT_OPC_GRP_CREATE,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_GRP_CREATE,
+		.irf_hdlr	= crt_hdlr_grp_create,
+		.irf_co_ops	= &crt_grp_create_co_ops,
 	}, {
-		.ir_name	= "CRT_GRP_DESTROY",
-		.ir_opc		= CRT_OPC_GRP_DESTROY,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_GRP_DESTROY,
-		.ir_hdlr	= crt_hdlr_grp_destroy,
-		.ir_co_ops	= &crt_grp_destroy_co_ops,
+		.irf_opc	= CRT_OPC_GRP_DESTROY,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_GRP_DESTROY,
+		.irf_hdlr	= crt_hdlr_grp_destroy,
+		.irf_co_ops	= &crt_grp_destroy_co_ops,
 	}, {
-		.ir_name	= "CRT_URI_LOOKUP",
-		.ir_opc		= CRT_OPC_URI_LOOKUP,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_URI_LOOKUP,
-		.ir_hdlr	= crt_hdlr_uri_lookup,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_URI_LOOKUP,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_URI_LOOKUP,
+		.irf_hdlr	= crt_hdlr_uri_lookup,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_BOTH_EMPTY",
-		.ir_opc		= CRT_OPC_SELF_TEST_BOTH_EMPTY,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= NULL, /* No payload in either direction */
-		.ir_hdlr	= crt_self_test_msg_handler,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_SELF_TEST_BOTH_EMPTY,
+		.irf_flags	= 0,
+		.irf_req_fmt	= NULL, /* No payload in either direction */
+		.irf_hdlr	= crt_self_test_msg_handler,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV",
-		.ir_opc		= CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV,
-		.ir_hdlr	= crt_self_test_msg_handler,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV,
+		.irf_hdlr	= crt_self_test_msg_handler,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY",
-		.ir_opc		= CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY,
-		.ir_hdlr	= crt_self_test_msg_handler,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY,
+		.irf_hdlr	= crt_self_test_msg_handler,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_BOTH_IOV",
-		.ir_opc		= CRT_OPC_SELF_TEST_BOTH_IOV,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_BOTH_IOV,
-		.ir_hdlr	= crt_self_test_msg_handler,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_SELF_TEST_BOTH_IOV,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_SELF_TEST_BOTH_IOV,
+		.irf_hdlr	= crt_self_test_msg_handler,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_SEND_BULK_REPLY_IOV",
-		.ir_opc		= CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_SEND_BULK_REPLY_IOV,
-		.ir_hdlr	= crt_self_test_msg_handler,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_SELF_TEST_SEND_BULK_REPLY_IOV,
+		.irf_hdlr	= crt_self_test_msg_handler,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_SEND_IOV_REPLY_BULK",
-		.ir_opc		= CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_SEND_IOV_REPLY_BULK,
-		.ir_hdlr	= crt_self_test_msg_handler,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_SELF_TEST_SEND_IOV_REPLY_BULK,
+		.irf_hdlr	= crt_self_test_msg_handler,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_BOTH_BULK",
-		.ir_opc		= CRT_OPC_SELF_TEST_BOTH_BULK,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_BOTH_BULK,
-		.ir_hdlr	= crt_self_test_msg_handler,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_SELF_TEST_BOTH_BULK,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_SELF_TEST_BOTH_BULK,
+		.irf_hdlr	= crt_self_test_msg_handler,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_OPEN_SESSION",
-		.ir_opc		= CRT_OPC_SELF_TEST_OPEN_SESSION,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_OPEN_SESSION,
-		.ir_hdlr	= crt_self_test_open_session_handler,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_SELF_TEST_OPEN_SESSION,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_SELF_TEST_OPEN_SESSION,
+		.irf_hdlr	= crt_self_test_open_session_handler,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_CLOSE_SESSION",
-		.ir_opc		= CRT_OPC_SELF_TEST_CLOSE_SESSION,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_CLOSE_SESSION,
-		.ir_hdlr	= crt_self_test_close_session_handler,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_SELF_TEST_CLOSE_SESSION,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_SELF_TEST_CLOSE_SESSION,
+		.irf_hdlr	= crt_self_test_close_session_handler,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_START",
-		.ir_opc		= CRT_OPC_SELF_TEST_START,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_START,
-		.ir_hdlr	= crt_self_test_start_handler,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_SELF_TEST_START,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_SELF_TEST_START,
+		.irf_hdlr	= crt_self_test_start_handler,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_STATUS_REQ",
-		.ir_opc		= CRT_OPC_SELF_TEST_STATUS_REQ,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_STATUS_REQ,
-		.ir_hdlr	= crt_self_test_status_req_handler,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_SELF_TEST_STATUS_REQ,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_SELF_TEST_STATUS_REQ,
+		.irf_hdlr	= crt_self_test_status_req_handler,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_IV_FETCH",
-		.ir_opc		= CRT_OPC_IV_FETCH,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_IV_FETCH,
-		.ir_hdlr	= crt_hdlr_iv_fetch,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_IV_FETCH,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_IV_FETCH,
+		.irf_hdlr	= crt_hdlr_iv_fetch,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_IV_UPDATE",
-		.ir_opc		= CRT_OPC_IV_UPDATE,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_IV_UPDATE,
-		.ir_hdlr	= crt_hdlr_iv_update,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_IV_UPDATE,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_IV_UPDATE,
+		.irf_hdlr	= crt_hdlr_iv_update,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_IV_SYNC",
-		.ir_opc		= CRT_OPC_IV_SYNC,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_IV_SYNC,
-		.ir_hdlr	= crt_hdlr_iv_sync,
-		.ir_co_ops	= &crt_iv_sync_co_ops,
+		.irf_opc	= CRT_OPC_IV_SYNC,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_IV_SYNC,
+		.irf_hdlr	= crt_hdlr_iv_sync,
+		.irf_co_ops	= &crt_iv_sync_co_ops,
 	}, {
-		.ir_name	= "CRT_BARRIER_ENTER",
-		.ir_opc		= CRT_OPC_BARRIER_ENTER,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_BARRIER,
-		.ir_hdlr	= crt_hdlr_barrier_enter,
-		.ir_co_ops	= &crt_barrier_corpc_ops,
+		.irf_opc	= CRT_OPC_BARRIER_ENTER,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_BARRIER,
+		.irf_hdlr	= crt_hdlr_barrier_enter,
+		.irf_co_ops	= &crt_barrier_corpc_ops,
 	}, {
-		.ir_name	= "CRT_BARRIER_EXIT",
-		.ir_opc		= CRT_OPC_BARRIER_EXIT,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_BARRIER,
-		.ir_hdlr	= crt_hdlr_barrier_exit,
-		.ir_co_ops	= &crt_barrier_corpc_ops,
+		.irf_opc	= CRT_OPC_BARRIER_EXIT,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_BARRIER,
+		.irf_hdlr	= crt_hdlr_barrier_exit,
+		.irf_co_ops	= &crt_barrier_corpc_ops,
 	}, {
-		.ir_name	= "CRT_RANK_EVICT",
-		.ir_opc		= CRT_OPC_RANK_EVICT,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_LM_EVICT,
-		.ir_hdlr	= crt_hdlr_rank_evict,
-		.ir_co_ops	= &crt_rank_evict_co_ops,
+		.irf_opc	= CRT_OPC_RANK_EVICT,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_LM_EVICT,
+		.irf_hdlr	= crt_hdlr_rank_evict,
+		.irf_co_ops	= &crt_rank_evict_co_ops,
 	}, {
-		.ir_name	= "CRT_MEMB_SAMPLE",
-		.ir_opc		= CRT_OPC_MEMB_SAMPLE,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_LM_MEMB_SAMPLE,
-		.ir_hdlr	= crt_hdlr_memb_sample,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_MEMB_SAMPLE,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_LM_MEMB_SAMPLE,
+		.irf_hdlr	= crt_hdlr_memb_sample,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_CTL_LS",
-		.ir_opc		= CRT_OPC_CTL_LS,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_CTL_LS,
-		.ir_hdlr	= crt_hdlr_ctl_ls,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_CTL_LS,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_CTL_LS,
+		.irf_hdlr	= crt_hdlr_ctl_ls,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_CTL_GET_HOSTNAME",
-		.ir_opc		= CRT_OPC_CTL_GET_HOSTNAME,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_CTL_GET_HOSTNAME,
-		.ir_hdlr	= crt_hdlr_ctl_get_hostname,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_CTL_GET_HOSTNAME,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_CTL_GET_HOSTNAME,
+		.irf_hdlr	= crt_hdlr_ctl_get_hostname,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_CTL_GET_PID",
-		.ir_opc		= CRT_OPC_CTL_GET_PID,
-		.ir_ver		= 1,
-		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_CTL_GET_PID,
-		.ir_hdlr	= crt_hdlr_ctl_get_pid,
-		.ir_co_ops	= NULL,
+		.irf_opc	= CRT_OPC_CTL_GET_PID,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_CTL_GET_PID,
+		.irf_hdlr	= crt_hdlr_ctl_get_pid,
+		.irf_co_ops	= NULL,
 	}, {
-		.ir_opc		= 0
+		.irf_opc	= CRT_OPC_PROTO_QUERY,
+		.irf_flags	= 0,
+		.irf_req_fmt	= &CQF_CRT_PROTO_QUERY,
+		.irf_hdlr	= crt_hdlr_proto_query,
+		.irf_co_ops	= NULL,
 	}
 };
 
 /* CRT RPC related APIs or internal functions */
-
 int
 crt_internal_rpc_register(void)
 {
-	struct crt_internal_rpc *rpc;
-	int	rc = 0;
+	struct crt_proto_internal_format	cpf;
+	int					rc;
 
-	/* walk through the handler list and register each individual RPC */
-	for (rpc = crt_internal_rpcs; rpc->ir_opc != 0; rpc++) {
-		D_ASSERT(rpc->ir_hdlr != NULL);
-		rc = crt_rpc_reg_internal(rpc->ir_opc, 0 /* feats */,
-					  rpc->ir_req_fmt,
-					  rpc->ir_hdlr, rpc->ir_co_ops);
-		if (rc) {
-			D_ERROR("opcode %#x registration failed, rc: %d.\n",
-				rpc->ir_opc, rc);
-			break;
-		}
-	}
+	cpf.cpf_name = "internal-proto";
+	cpf.cpf_ver = 0;
+	cpf.cpf_count = ARRAY_SIZE(crt_internal_rpcs);
+	cpf.cpf_irf = crt_internal_rpcs;
+	cpf.cpf_type = CRT_PROTO_TYPE_INTERNAL;
+
+	rc = crt_proto_register_internal(CRT_OPC_INTERNAL_BASE, &cpf);
+	if (rc != 0)
+		D_ERROR("crt_proto_register_internal() failed. rc %d\n", rc);
+
 	return rc;
 }
 
@@ -587,7 +556,11 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 
 	D_ASSERT(priv_allocated != NULL);
 
+	D_DEBUG(DB_TRACE, "entering (opc: %#x)\n", opc);
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
+	if (opc_info == NULL)
+		opc_info = crt_opc_lookup_legacy(crt_gdata.cg_opc_map_legacy,
+						 opc, CRT_UNLOCK);
 	if (opc_info == NULL) {
 		D_ERROR("opc: %#x, lookup failed.\n", opc);
 		D_GOTO(out, rc = -DER_UNREG);
@@ -739,7 +712,6 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 out:
 	return rc;
 }
-
 int
 crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 {

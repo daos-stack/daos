@@ -287,7 +287,7 @@ do_init:
 		rc = crt_hg_init(&addr, server);
 		if (rc != 0) {
 			D_ERROR("crt_hg_init failed rc: %d.\n", rc);
-			D_GOTO(unlock, rc);
+			D_GOTO(cleanup, rc);
 		}
 		D_ASSERT(addr != NULL);
 		crt_gdata.cg_addr = addr;
@@ -296,21 +296,14 @@ do_init:
 		rc = crt_grp_init(grpid);
 		if (rc != 0) {
 			D_ERROR("crt_grp_init failed, rc: %d.\n", rc);
-			crt_hg_fini();
-			D_FREE(crt_gdata.cg_addr);
-			crt_gdata.cg_addr = NULL;
-			D_GOTO(unlock, rc);
+			D_GOTO(cleanup, rc);
 		}
 
 		if (crt_plugin_gdata.cpg_inited == 0) {
 			rc = crt_plugin_init();
 			if (rc != 0) {
 				D_ERROR("crt_plugin_init rc: %d.\n", rc);
-				crt_hg_fini();
-				crt_grp_fini();
-				D_FREE(crt_gdata.cg_addr);
-				crt_gdata.cg_addr = NULL;
-				D_GOTO(unlock, rc);
+				D_GOTO(cleanup, rc);
 			}
 		}
 
@@ -319,13 +312,17 @@ do_init:
 		rc = crt_opc_map_create(CRT_OPC_MAP_BITS);
 		if (rc != 0) {
 			D_ERROR("crt_opc_map_create failed rc: %d.\n", rc);
-			crt_hg_fini();
-			crt_grp_fini();
-			D_FREE(crt_gdata.cg_addr);
-			crt_gdata.cg_addr = NULL;
-			D_GOTO(unlock, rc);
+			D_GOTO(cleanup, rc);
 		}
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
+
+		rc = crt_opc_map_create_legacy(CRT_OPC_MAP_BITS_LEGACY);
+		if (rc != 0) {
+			D_ERROR("crt_opc_map_create_legacy failed rc: %d.\n",
+				rc);
+			D_GOTO(cleanup, rc);
+		}
+		D_ASSERT(crt_gdata.cg_opc_map_legacy != NULL);
 
 		crt_gdata.cg_inited = 1;
 		if ((flags & CRT_FLAG_BIT_LM_DISABLE) == 0)
@@ -339,6 +336,19 @@ do_init:
 	}
 
 	crt_gdata.cg_refcount++;
+
+	D_GOTO(unlock, rc);
+
+cleanup:
+
+	if (crt_gdata.cg_addr != NULL) {
+		crt_hg_fini();
+		D_FREE(crt_gdata.cg_addr);
+	}
+	if (crt_gdata.cg_grp_inited == 1)
+		crt_grp_fini();
+	if (crt_gdata.cg_opc_map != NULL)
+		crt_opc_map_destroy(crt_gdata.cg_opc_map);
 
 unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -459,6 +469,7 @@ crt_finalize(void)
 		crt_gdata.cg_server = false;
 
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
+		crt_opc_map_destroy_legacy(crt_gdata.cg_opc_map_legacy);
 
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		rc = D_RWLOCK_DESTROY(&crt_gdata.cg_rwlock);

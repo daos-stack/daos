@@ -83,6 +83,8 @@ struct crt_gdata {
 	uint32_t		cg_ctx_max_num;
 	/* the global opcode map */
 	struct crt_opc_map	*cg_opc_map;
+	/* the legacy global opcode map */
+	struct crt_opc_map_legacy *cg_opc_map_legacy;
 	/* HG level global data */
 	struct crt_hg_gdata	*cg_hg;
 
@@ -206,10 +208,19 @@ struct crt_ep_inflight {
 #define CRT_LOCKED			(1)
 #define CRT_ADDR_STR_MAX_LEN		(128)
 
-#define CRT_OPC_MAP_BITS	(12)
+#define CRT_OPC_MAP_BITS	8
+#define CRT_OPC_MAP_BITS_LEGACY	12
+
+/* highest protocol version allowed */
+#define CRT_PROTO_MAX_VER	(0xFFUL)
+/* max member RPC count allowed in one protocol  */
+#define CRT_PROTO_MAX_COUNT	(0xFFFFUL)
+#define CRT_PROTO_BASEOPC_MASK	(0xFF000000UL)
+#define CRT_PROTO_VER_MASK	(0x00FF0000UL)
+#define CRT_PROTO_COUNT_MASK	(0x0000FFFFUL)
 
 /* opcode map (hash list) */
-struct crt_opc_map {
+struct crt_opc_map_legacy {
 	pthread_rwlock_t	 com_rwlock;
 	unsigned int		 com_lock_init:1;
 	unsigned int		 com_pid;
@@ -220,7 +231,8 @@ struct crt_opc_map {
 struct crt_opc_info {
 	d_list_t		 coi_link;
 	crt_opcode_t		 coi_opc;
-	unsigned int		 coi_proc_init:1,
+	unsigned int		 coi_inited:1,
+				 coi_proc_init:1,
 				 coi_rpccb_init:1,
 				 coi_coops_init:1,
 				 coi_no_reply:1, /* flag of one-way RPC */
@@ -238,6 +250,51 @@ struct crt_opc_info {
 	off_t			 coi_input_offset;
 	off_t			 coi_output_offset;
 	struct crt_req_format	*coi_crf;
+};
+
+/* specifies a member RPC of the built-in protocol. */
+struct crt_internal_rpc_format {
+	crt_opcode_t		 irf_opc;
+	uint32_t		 irf_flags;
+	struct crt_req_format	*irf_req_fmt;
+	crt_rpc_cb_t		 irf_hdlr;
+	struct crt_corpc_ops	*irf_co_ops;
+};
+
+/* specify an RPC protocol */
+struct crt_proto_internal_format {
+	const char				*cpf_name;
+	uint32_t				 cpf_ver;
+	/* number of RPCs in this protocol, i.e. size of cpf_crf */
+	uint32_t				 cpf_count;
+	/* 0 means user protocol, 1 means internal protocol */
+	enum proto_type				 cpf_type;
+	union {
+		struct crt_proto_rpc_format	*cpf_prf;
+		struct crt_internal_rpc_format	*cpf_irf;
+	};
+};
+
+/* opcode map (three-level array) */
+struct crt_opc_map_L3 {
+	unsigned int		 L3_num_slots_total;
+	unsigned int		 L3_num_slots_used;
+	struct crt_opc_info	*L3_map;
+};
+
+struct crt_opc_map_L2 {
+	unsigned int		 L2_num_slots_total;
+	unsigned int		 L2_num_slots_used;
+	struct crt_opc_map_L3	*L2_map;
+};
+
+struct crt_opc_map {
+	pthread_rwlock_t	 com_rwlock;
+	unsigned int		 com_lock_init:1;
+	unsigned int		 com_pid;
+	unsigned int		 com_bits;
+	unsigned int		 com_num_slots_total;
+	struct crt_opc_map_L2	*com_map;
 };
 
 struct na_ofi_config {

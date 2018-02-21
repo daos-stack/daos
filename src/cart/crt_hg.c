@@ -921,6 +921,9 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	opc = rpc_tmp.crp_req_hdr.cch_opc;
 
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
+	if (opc_info == NULL)
+		opc_info = crt_opc_lookup_legacy(crt_gdata.cg_opc_map_legacy,
+						 opc, CRT_UNLOCK);
 	if (opc_info == NULL) {
 		D_ERROR("opc: %#x, lookup failed.\n", opc);
 		/*

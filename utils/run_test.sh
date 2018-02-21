@@ -56,9 +56,10 @@ JENKINS_TEST_LIST=(scripts/cart_echo_test.yml                   \
                    scripts/cart_rpc_test_non_sep.yml            \
                    scripts/cart_test_corpc_version.yml          \
                    scripts/cart_test_corpc_version_non_sep.yml  \
-                   scripts/cart_test_cart_ctl.yml	            \
+                   scripts/cart_test_cart_ctl.yml               \
                    scripts/cart_test_cart_ctl_non_sep.yml       \
                    scripts/cart_test_iv.yml                     \
+                   scripts/cart_test_proto.yml                  \
                    scripts/cart_test_iv_non_sep.yml)
 
 # Check for symbol names in the library.
