@@ -351,8 +351,9 @@ daos_fail_check(uint64_t id);
 #define DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE	(DAOS_OBJ_FAIL_MOD | 0x07)
 
 
-/* failure for DAOS_OBJ_MODULE */
+/* failure for DAOS_REBUILD_MODULE */
 #define DAOS_REBUILD_DROP_SCAN	(DAOS_REBUILD_FAIL_MOD | 0x001)
+#define DAOS_REBUILD_NO_HDL	(DAOS_REBUILD_FAIL_MOD | 0x002)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

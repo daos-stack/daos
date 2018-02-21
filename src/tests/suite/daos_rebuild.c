@@ -471,9 +471,48 @@ rebuild_drop_scan(void **state)
 		}
 		ioreq_fini(&req);
 	}
-	/* Set drop scan reply on all servers */
+
+	/* Set drop scan fail_loc on server 0 */
 	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
-			     DAOS_REBUILD_DROP_SCAN | DAOS_FAIL_ONCE,
+			     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
+			     NULL);
+	rebuild_single_target(arg, ranks_to_kill[0], false);
+}
+
+static void
+rebuild_retry_rebuild(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	daos_obj_id_t		oid;
+	struct ioreq		req;
+	int			i;
+	int			j;
+
+	if (!rebuild_runable(arg, 3, false))
+		skip();
+
+	print_message("create %d objects\n", OBJ_NR);
+	for (i = 0; i < OBJ_NR; i++) {
+		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+		/** Insert 1000 records */
+		print_message("Insert %d kv record in object "DF_OID"\n",
+			      KEY_NR, DP_OID(oid));
+		for (j = 0; j < 10; j++) {
+			char	key[16];
+
+			sprintf(key, "%d", j);
+			insert_single(key, "a_key", 0, "data",
+				      strlen("data") + 1, 0, &req);
+		}
+		ioreq_fini(&req);
+	}
+
+	/* Set no hdl fail_loc on all servers */
+	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+			     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
 			     NULL);
 	rebuild_single_target(arg, ranks_to_kill[0], false);
 }
@@ -688,9 +727,11 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_objects, NULL, test_case_teardown},
 	{"REBUILD7: drop rebuild scan reply",
 	rebuild_drop_scan, NULL, test_case_teardown},
-	{"REBUILD8: offline rebuild",
+	{"REBUILD8: retry rebuild",
+	rebuild_retry_rebuild, NULL, test_case_teardown},
+	{"REBUILD9: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD9: rebuild with two failures",
+	{"REBUILD10: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
 };
 

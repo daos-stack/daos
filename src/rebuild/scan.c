@@ -210,9 +210,19 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	 * this object list, because the later rebuild will rebuild
 	 * it again anyway
 	 */
-	rc = dss_rpc_send(rpc);
-	if (rc)
-		D__GOTO(out, rc);
+	while (1) {
+		rc = dss_rpc_send(rpc);
+		/* If the remote target is not ready, let's retry */
+		switch (rc) {
+		default: /* real failure */
+			D__GOTO(out, rc);
+		case 0: /* success */
+			D__GOTO(out, rc = 0);
+		case -DER_AGAIN: /* remote side is not ready */
+			ABT_thread_yield();
+			continue;
+		}
+	}
 out:
 	if (oids != NULL)
 		D__FREE(oids, sizeof(*oids) * REBUILD_SEND_LIMIT);

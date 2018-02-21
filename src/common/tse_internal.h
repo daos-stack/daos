@@ -57,7 +57,18 @@ struct tse_task_private {
 	/* finished tasks this task depends on, might check theirs result */
 	daos_list_t			 dtp_ret_list;
 
-	uint32_t			 dtp_complete:1,
+	uint32_t			/* task has been completed, no chance to
+					 * be re-initialized.
+					 */
+					 dtp_completed:1,
+					/* task is being completed, before those
+					 * complete callbacks are being called,
+					 * if the task is re-initialized, then
+					 * this dtp_completing will be reset
+					 * to 0.
+					 */
+					 dtp_completing:1,
+					/* task is in running state */
 					 dtp_running:1,
 					 dtp_dep_cnt:30;
 	/* refcount of the task */

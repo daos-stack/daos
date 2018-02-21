@@ -278,12 +278,13 @@ static void
 tse_task_complete_locked(struct tse_task_private *dtp,
 			 struct tse_sched_private *dsp)
 {
-	if (dtp->dtp_complete)
+	if (dtp->dtp_completed)
 		return;
 
 	D__ASSERT(dtp->dtp_running);
 	dtp->dtp_running = 0;
-	dtp->dtp_complete = 1;
+	dtp->dtp_completing = 0;
+	dtp->dtp_completed = 1;
 	daos_list_move_tail(&dtp->dtp_list, &dsp->dsp_complete_list);
 }
 
@@ -294,7 +295,7 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 	struct tse_task_private *dtp = tse_task2priv(task);
 	struct tse_task_cb *dtc;
 
-	if (dtp->dtp_complete) {
+	if (dtp->dtp_completed) {
 		D__ERROR("Can't add a callback for a completed task\n");
 		return -DER_NO_PERM;
 	}
@@ -305,7 +306,8 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 
 	dtc->dtc_arg_size = arg_size;
 	dtc->dtc_cb = cb;
-	memcpy(dtc->dtc_arg, arg, arg_size);
+	if (arg)
+		memcpy(dtc->dtc_arg, arg, arg_size);
 
 	D__ASSERT(dtp->dtp_sched != NULL);
 
@@ -359,7 +361,7 @@ tse_task_prep_callback(tse_task_t *task)
 			&dtp->dtp_prep_cb_list, dtc_list) {
 		daos_list_del(&dtc->dtc_list);
 		/** no need to call if task was completed in one of the cbs */
-		if (!dtp->dtp_complete) {
+		if (!dtp->dtp_completed) {
 			rc = dtc->dtc_cb(task, dtc->dtc_arg);
 			if (task->dt_result == 0)
 				task->dt_result = rc;
@@ -369,7 +371,7 @@ tse_task_prep_callback(tse_task_t *task)
 				     dtc_arg[dtc->dtc_arg_size]));
 
 		/** Task was re-initialized; break */
-		if (!dtp->dtp_running && !dtp->dtp_complete)
+		if (!dtp->dtp_completing)
 			return false;
 	}
 
@@ -404,8 +406,10 @@ tse_task_complete_callback(tse_task_t *task)
 				     dtc_arg[dtc->dtc_arg_size]));
 
 		/** Task was re-initialized; break */
-		if (!dtp->dtp_running && !dtp->dtp_complete)
+		if (!dtp->dtp_completing) {
+			D__DEBUG(DB_TRACE, "re-init task %p\n", task);
 			return false;
+		}
 	}
 
 	return true;
@@ -475,7 +479,7 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 				continue;
 			}
 			D__ASSERT(dtp->dtp_func != NULL);
-			if (!dtp->dtp_complete)
+			if (!dtp->dtp_completed)
 				dtp->dtp_func(task);
 		}
 		if (bumped)
@@ -498,7 +502,7 @@ tse_task_post_process(tse_task_t *task)
 	struct tse_sched_private *dsp = dtp->dtp_sched;
 	int rc = 0;
 
-	D__ASSERT(dtp->dtp_complete == 1);
+	D__ASSERT(dtp->dtp_completed == 1);
 
 	/* set scheduler result */
 	if (tse_priv2sched(dsp)->ds_result == 0)
@@ -549,6 +553,7 @@ tse_task_post_process(tse_task_t *task)
 				 * code block.
 				 */
 
+				dtp_tmp->dtp_completing = 1;
 				/** release lock for CB */
 				pthread_mutex_unlock(&dsp->dsp_lock);
 				done = tse_task_complete_callback(task_tmp);
@@ -733,12 +738,13 @@ tse_task_complete(tse_task_t *task, int ret)
 	bool				bumped  = false;
 	bool				done;
 
-	if (dtp->dtp_complete)
+	if (dtp->dtp_completed)
 		return;
 
 	if (task->dt_result == 0)
 		task->dt_result = ret;
 
+	dtp->dtp_completing = 1;
 	/** Execute task completion callbacks first. */
 	done = tse_task_complete_callback(task);
 
@@ -759,7 +765,7 @@ tse_task_complete(tse_task_t *task, int ret)
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
 	/** update task in scheduler lists. */
-	if (!dsp->dsp_cancelling)
+	if (!dsp->dsp_cancelling && done)
 		tse_sched_process_complete(dsp);
 	/** If another thread canceled, make sure we drop the ref count */
 	else if (bumped)
@@ -786,14 +792,14 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 		return -DER_NO_PERM;
 	}
 
-	if (dtp->dtp_complete) {
+	if (dtp->dtp_completed) {
 		D__ERROR("Can't add a depedency for a completed task (%p)\n",
 			task);
 		return -DER_NO_PERM;
 	}
 
 	/** if task to depend on has completed already, do nothing */
-	if (dep_dtp->dtp_complete)
+	if (dep_dtp->dtp_completed)
 		return 0;
 
 	D__ALLOC_PTR(tlink);
@@ -891,7 +897,7 @@ tse_task_schedule(tse_task_t *task, bool instant)
 		dtp->dtp_func(task);
 
 		/** If task was completed return the task result */
-		if (dtp->dtp_complete)
+		if (dtp->dtp_completed)
 			rc = task->dt_result;
 
 		tse_task_decref(task);
@@ -917,7 +923,7 @@ tse_task_reinit(tse_task_t *task)
 		D__GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
-	if (dtp->dtp_complete) {
+	if (dtp->dtp_completed) {
 		D__ERROR("Can't re-init a task that has completed already.\n");
 		D__GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
@@ -934,7 +940,7 @@ tse_task_reinit(tse_task_t *task)
 
 	/** Mark the task back at init state */
 	dtp->dtp_running = 0;
-	dtp->dtp_complete = 0;
+	dtp->dtp_completing = 0;
 
 	/** Task not in-flight anymore */
 	dsp->dsp_inflight--;
@@ -958,7 +964,11 @@ tse_task_list_add(tse_task_t *task, daos_list_t *head)
 {
 	struct tse_task_private *dtp = tse_task2priv(task);
 
-	if (dtp->dtp_running || dtp->dtp_complete)
+	/* Note: this is export API, so once the task is scheduled,
+	 * it is not allowed to be moved to any list by an outsider.
+	 */
+	if (dtp->dtp_running || dtp->dtp_completed ||
+	    dtp->dtp_completing)
 		return -DER_NO_PERM;
 
 	D__ASSERT(daos_list_empty(&dtp->dtp_list));

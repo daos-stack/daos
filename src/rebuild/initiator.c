@@ -553,7 +553,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	daos_hash_out_t		hash_out;
 	daos_handle_t		oh;
 	daos_epoch_t		epoch = DAOS_EPOCH_MAX;
-	daos_sg_list_t		dkey_sgl;
+	daos_sg_list_t		dkey_sgl = { 0 };
 	daos_iov_t		dkey_iov;
 	daos_size_t		dkey_buf_size = 1024;
 	int			rc;
@@ -836,7 +836,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 	 */
 	rpt = rebuild_tgt_pool_tracker_lookup(rebuild_in->roi_pool_uuid,
 					      rebuild_in->roi_rebuild_ver);
-	if (rpt == NULL)
+	if (rpt == NULL || rpt->rt_pool == NULL)
 		D__GOTO(out, rc = -DER_AGAIN);
 
 	/* Initialize the local rebuild tree */

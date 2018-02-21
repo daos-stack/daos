@@ -1010,22 +1010,6 @@ dss_thread_collective(int (*func)(void *), void *arg)
 	return dss_collective_internal(func, arg, true);
 }
 
-struct async_result {
-	ABT_future *future;
-	int	   *result;
-};
-
-static int
-dss_task_comp_cb(tse_task_t *task, void *arg)
-{
-	struct async_result *cb_arg = arg;
-
-	*cb_arg->result = task->dt_result;
-	ABT_future_set(*(cb_arg->future), (void *)(intptr_t)task->dt_result);
-
-	return 0;
-}
-
 static void
 dss_tse_progress_ult(void *arg)
 {
@@ -1058,46 +1042,58 @@ generate_task_progress_ult(unsigned int type)
 	return 0;
 }
 
+static int
+dss_task_comp_cb(tse_task_t *task, void *arg)
+{
+	ABT_eventual *eventual = arg;
+
+	ABT_eventual_set(*eventual, &task->dt_result, sizeof(task->dt_result));
+	return 0;
+}
+
 /**
  * Call client side API on the server side asynchronously.
  */
 int
-dss_task_run(tse_task_t *task, unsigned int type)
+dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb, void *arg)
 {
-	struct async_result	cb_arg;
-	ABT_future		future;
-	int			rc;
-	int			ret;
+	ABT_eventual	eventual;
+	int		*status;
+	int		rc;
 
 	/* Generate the progress task */
 	rc = generate_task_progress_ult(type);
 	if (rc)
 		return rc;
 
-	rc = ABT_future_create(1, NULL, &future);
-	if (rc != ABT_SUCCESS)
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != 0)
 		return dss_abterr2der(rc);
 
-	cb_arg.future = &future;
-	cb_arg.result = &ret;
-	rc = dc_task_reg_comp_cb(task, dss_task_comp_cb, &cb_arg,
-				 sizeof(cb_arg));
-	if (rc != 0) {
-		D__FREE_PTR(task);
-		D__GOTO(free_future, rc = -DER_NOMEM);
+	rc = dc_task_reg_comp_cb(task, dss_task_comp_cb, &eventual,
+				 sizeof(eventual));
+	if (rc != 0)
+		D__GOTO(free_eventual, rc = -DER_NOMEM);
+
+	if (cb != NULL) {
+		rc = dc_task_reg_comp_cb(task, cb, arg, sizeof(arg));
+		if (rc)
+			D__GOTO(free_eventual, rc);
 	}
 
 	/* task will be freed inside scheduler */
 	rc = dc_task_schedule(task, true);
 	if (rc != 0)
-		D__GOTO(free_future, rc = -DER_NOMEM);
+		D__GOTO(free_eventual, rc = -DER_NOMEM);
 
-	ABT_future_wait(future);
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D__GOTO(free_eventual, rc = dss_abterr2der(rc));
 
-	if (rc == 0)
-		rc = ret;
-free_future:
-	ABT_future_free(&future);
+	rc = *status;
+
+free_eventual:
+	ABT_eventual_free(&eventual);
 	return rc;
 }
 

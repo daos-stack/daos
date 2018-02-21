@@ -508,23 +508,26 @@ ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 				  cont_hdl_uuid)) {
 		D__ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
 			 DP_UUID(cont_uuid), cont_hdl->sch_ref);
-		ds_cont_hdl_put(cont_hdl);
 		D__GOTO(failed, rc = -DER_NO_HDL);
 	}
+
 	/* rebuild handle is a dummy and never attached by a real container */
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_HDL))
+		D__GOTO(failed, rc = -DER_NO_HDL);
 
 	D__DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
 		DP_UUID(cont_hdl_uuid), cont_hdl);
 
 	/* load or create VOS container on demand */
 	rc = ds_cont_lookup(cont_hdl->sch_pool->spc_uuid, cont_uuid, contp);
-	if (rc) {
-		ds_cont_hdl_put(cont_hdl);
+	if (rc)
 		D__GOTO(failed, rc);
-	}
 out:
 	*hdlp = cont_hdl;
 failed:
+	if (cont_hdl != NULL && rc != 0)
+		ds_cont_hdl_put(cont_hdl);
+
 	return rc;
 }
 

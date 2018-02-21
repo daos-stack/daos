@@ -291,7 +291,8 @@ dss_thread_collective_reduce(struct dss_coll_ops *ops,
 int dss_task_collective(int (*func)(void *), void *arg);
 int dss_thread_collective(int (*func)(void *), void *arg);
 
-int dss_task_run(tse_task_t *task, unsigned int priority);
+int dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb,
+		 void *arg);
 unsigned int dss_get_threads_number(void);
 
 /* Convert Argobots errno to DAOS ones. */
