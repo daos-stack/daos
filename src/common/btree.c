@@ -1170,14 +1170,17 @@ btr_probe_next(struct btr_context *tcx)
 
 		nd = btr_mmid2ptr(tcx, nd_mmid);
 
+		/* NB: trace->tr_at might be larger than key number because
+		 * split can happen between two calls.
+		 */
 		if (btr_node_is_root(tcx, nd_mmid) &&
-		    trace->tr_at == nd->tn_keyn - leaf) {
+		    trace->tr_at >= nd->tn_keyn - leaf) {
 			D__ASSERT(trace == tcx->tc_trace);
 			D__DEBUG(DB_TRACE, "End\n");
 			return false; /* done */
 		}
 
-		if (trace->tr_at == nd->tn_keyn - leaf) {
+		if (trace->tr_at >= nd->tn_keyn - leaf) {
 			/* finish current level */
 			trace--;
 			continue;
@@ -1232,6 +1235,10 @@ btr_probe_prev(struct btr_context *tcx)
 		}
 
 		trace->tr_at--;
+		/* might split between two calls */
+		if (trace->tr_at >= nd->tn_keyn)
+			trace->tr_at = nd->tn_keyn - 1;
+
 		btr_trace_debug(tcx, trace, "trace back\n");
 		break;
 	}
