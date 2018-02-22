@@ -513,6 +513,9 @@ ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_HDL))
 		D__GOTO(failed, rc = -DER_NO_HDL);
 
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_STALE_POOL))
+		D__GOTO(failed, rc = -DER_STALE);
+
 	D__DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
 		DP_UUID(cont_hdl_uuid), cont_hdl);
 
