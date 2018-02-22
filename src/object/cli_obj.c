@@ -369,8 +369,8 @@ obj_dkey2shard(struct dc_object *obj, daos_key_t *dkey,
 	uint64_t hash;
 	int	 grp_idx;
 
-	hash = daos_hash_murmur64((unsigned char *)dkey->iov_buf,
-				  dkey->iov_len, 5731);
+	hash = d_hash_murmur64((unsigned char *)dkey->iov_buf,
+				dkey->iov_len, 5731);
 
 	grp_idx = obj_dkey2grp(obj, hash, map_ver);
 	if (grp_idx < 0)
@@ -386,8 +386,8 @@ obj_dkey2update_grp(struct dc_object *obj, daos_key_t *dkey,
 	uint64_t hash;
 	int	 grp_idx;
 
-	hash = daos_hash_murmur64((unsigned char *)dkey->iov_buf,
-				  dkey->iov_len, 5731);
+	hash = d_hash_murmur64((unsigned char *)dkey->iov_buf,
+				dkey->iov_len, 5731);
 
 	grp_idx = obj_dkey2grp(obj, hash, map_ver);
 	if (grp_idx < 0)
@@ -831,7 +831,7 @@ dc_obj_update(tse_task_t *task)
 	daos_obj_update_t	*args = dc_task_get_args(task);
 	tse_sched_t		*sched = tse_task2sched(task);
 	struct dc_object	*obj;
-	daos_list_t		head;
+	d_list_t		head;
 	unsigned int		shard;
 	unsigned int		shards_cnt;
 	unsigned int		map_ver;
@@ -1132,7 +1132,7 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 {
 	tse_sched_t	   *sched = tse_task2sched(api_task);
 	struct dc_object   *obj;
-	daos_list_t	    head;
+	d_list_t	    head;
 	daos_handle_t	    coh;
 	uuid_t		    coh_uuid;
 	uuid_t		    cont_uuid;

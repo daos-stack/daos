@@ -334,7 +334,7 @@ tse_task_decref(tse_task_t *task);
  * running or completed.
  */
 int
-tse_task_list_add(tse_task_t *task, daos_list_t *head);
+tse_task_list_add(tse_task_t *task, d_list_t *head);
 
 /**
  * Remove the task from list head.
@@ -347,30 +347,30 @@ tse_task_list_del(tse_task_t *task);
  * if the list is empty.
  */
 tse_task_t *
-tse_task_list_first(daos_list_t *head);
+tse_task_list_first(d_list_t *head);
 
 /**
  * Schedule all tasks attached on list \a head.
  */
 void
-tse_task_list_sched(daos_list_t *head, bool instant);
+tse_task_list_sched(d_list_t *head, bool instant);
 
 /**
  * Abort all tasks attached on list \a head.
  */
 void
-tse_task_list_abort(daos_list_t *head, int rc);
+tse_task_list_abort(d_list_t *head, int rc);
 
 /**
  * All tasks attached on \a head depend on list \a task.
  */
 int
-tse_task_list_depend(daos_list_t *head, tse_task_t *task);
+tse_task_list_depend(d_list_t *head, tse_task_t *task);
 
 /**
  * \a task depends on all tasks attached on list \a head
  */
 int
-tse_task_depend_list(tse_task_t *task, daos_list_t *head);
+tse_task_depend_list(tse_task_t *task, d_list_t *head);
 
 #endif /* __TSE_SCHEDULE_H__ */

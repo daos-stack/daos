@@ -54,7 +54,7 @@ struct daos_bld_iod_ctx {
 	daos_unit_oid_t		oid;
 	daos_handle_t		coh;
 	unsigned int		nr;
-	struct daos_list_head   recs;
+	struct d_list_head	recs;
 };
 
 void

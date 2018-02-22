@@ -207,7 +207,7 @@ nv_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 	 */
 	D__ASSERT(key_iov->iov_len <= key_iov->iov_buf_len);
 
-	*hash = daos_hash_string_u32(key, key_size);
+	*hash = d_hash_string_u32(key, key_size);
 }
 
 static int
@@ -1081,7 +1081,7 @@ kv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
 	D__ASSERTF(key->iov_len > 0, DF_U64" > 0\n", key->iov_len);
 	D__ASSERTF(key->iov_len <= key->iov_buf_len, DF_U64" <= "DF_U64"\n",
 		  key->iov_len, key->iov_buf_len);
-	*hash = daos_hash_murmur64(key->iov_buf, key->iov_len, 609815U);
+	*hash = d_hash_murmur64(key->iov_buf, key->iov_len, 609815U);
 }
 
 static int

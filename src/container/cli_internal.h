@@ -30,9 +30,9 @@
 /* Client container handle */
 struct dc_cont {
 	/* list to pool */
-	daos_list_t	  dc_po_list;
+	d_list_t	  dc_po_list;
 	/* object list for this container */
-	daos_list_t	  dc_obj_list;
+	d_list_t	  dc_obj_list;
 	/* lock for list of dc_obj_list */
 	pthread_rwlock_t  dc_obj_list_lock;
 	/* uuid for this container */

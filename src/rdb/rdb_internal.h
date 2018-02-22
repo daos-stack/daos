@@ -29,7 +29,7 @@
 
 #include <abt.h>
 #include <raft.h>
-#include <daos/hash.h>
+#include <gurt/hash.h>
 #include <daos/lru.h>
 #include <daos/rpc.h>
 
@@ -48,7 +48,7 @@ struct rdb_raft_event {
 /* rdb.c **********************************************************************/
 
 struct rdb {
-	daos_list_t		d_entry;	/* in rdb_hash */
+	d_list_t		d_entry;	/* in rdb_hash */
 	uuid_t			d_uuid;		/* of database */
 	ABT_mutex		d_mutex;	/* mainly for using CVs */
 	int			d_ref;		/* of callers and RPCs */
@@ -66,9 +66,9 @@ struct rdb {
 	uint64_t		d_debut;	/* first entry in a term */
 	ABT_cond		d_applied_cv;	/* for d_applied updates */
 	ABT_cond		d_committed_cv;	/* for last committed updates */
-	struct dhash_table	d_results;	/* rdb_raft_result hash */
-	daos_list_t		d_requests;	/* RPCs waiting for replies */
-	daos_list_t		d_replies;	/* RPCs received replies */
+	struct d_hash_table	d_results;	/* rdb_raft_result hash */
+	d_list_t		d_requests;	/* RPCs waiting for replies */
+	d_list_t		d_replies;	/* RPCs received replies */
 	ABT_cond		d_replies_cv;	/* for d_replies enqueues */
 	struct rdb_raft_event	d_events[2];	/* rdb_raft_events queue */
 	int			d_nevents;	/* d_events queue len from 0 */
@@ -216,7 +216,7 @@ void rdb_recvd(void *arg);
 /* rdb_tx.c *******************************************************************/
 
 int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-		 void *result, daos_list_t *destroyed);
+		 void *result, d_list_t *destroyed);
 
 /* rdb_tree.c *****************************************************************/
 
@@ -225,7 +225,7 @@ struct rdb_tree {
 	struct daos_llink	de_entry;	/* in LRU */
 	rdb_path_t		de_path;
 	daos_handle_t		de_hdl;		/* of dbtree */
-	daos_list_t		de_list;	/* for rdb_tx_apply_op() */
+	d_list_t		de_list;	/* for rdb_tx_apply_op() */
 };
 
 int rdb_tree_cache_create(struct daos_lru_cache **cache);

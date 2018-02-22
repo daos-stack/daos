@@ -147,13 +147,13 @@ rdb_put(struct rdb *db)
 }
 
 static inline struct rdb *
-rdb_obj(daos_list_t *rlink)
+rdb_obj(d_list_t *rlink)
 {
 	return container_of(rlink, struct rdb, d_entry);
 }
 
 static bool
-rdb_key_cmp(struct dhash_table *htable, daos_list_t *rlink, const void *key,
+rdb_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key,
 	    unsigned int ksize)
 {
 	struct rdb *db = rdb_obj(rlink);
@@ -163,25 +163,25 @@ rdb_key_cmp(struct dhash_table *htable, daos_list_t *rlink, const void *key,
 }
 
 static void
-rdb_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+rdb_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	rdb_get(rdb_obj(rlink));
 }
 
 static bool
-rdb_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+rdb_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	rdb_put(rdb_obj(rlink));
 	return false;
 }
 
-static dhash_table_ops_t rdb_hash_ops = {
+static d_hash_table_ops_t rdb_hash_ops = {
 	.hop_key_cmp	= rdb_key_cmp,
 	.hop_rec_addref	= rdb_rec_addref,
 	.hop_rec_decref	= rdb_rec_decref,
 };
 
-static struct dhash_table	rdb_hash;
+static struct d_hash_table	rdb_hash;
 static ABT_mutex		rdb_hash_lock;
 
 int
@@ -192,7 +192,7 @@ rdb_hash_init(void)
 	rc = ABT_mutex_create(&rdb_hash_lock);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
-	rc = dhash_table_create_inplace(DHASH_FT_NOLOCK, 4 /* bits */,
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 4 /* bits */,
 					NULL /* priv */, &rdb_hash_ops,
 					&rdb_hash);
 	if (rc != 0)
@@ -203,17 +203,17 @@ rdb_hash_init(void)
 void
 rdb_hash_fini(void)
 {
-	dhash_table_destroy_inplace(&rdb_hash, true /* force */);
+	d_hash_table_destroy_inplace(&rdb_hash, true /* force */);
 	ABT_mutex_free(&rdb_hash_lock);
 }
 
 struct rdb *
 rdb_lookup(const uuid_t uuid)
 {
-	daos_list_t *entry;
+	d_list_t *entry;
 
 	ABT_mutex_lock(rdb_hash_lock);
-	entry = dhash_rec_find(&rdb_hash, uuid, sizeof(uuid_t));
+	entry = d_hash_rec_find(&rdb_hash, uuid, sizeof(uuid_t));
 	ABT_mutex_unlock(rdb_hash_lock);
 	if (entry == NULL)
 		return NULL;
@@ -313,8 +313,8 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 		D__GOTO(err_replicas, rc);
 
 	ABT_mutex_lock(rdb_hash_lock);
-	rc = dhash_rec_insert(&rdb_hash, db->d_uuid, sizeof(uuid_t),
-			      &db->d_entry, true /* exclusive */);
+	rc = d_hash_rec_insert(&rdb_hash, db->d_uuid, sizeof(uuid_t),
+			       &db->d_entry, true /* exclusive */);
 	ABT_mutex_unlock(rdb_hash_lock);
 	if (rc != 0) {
 		/* We have the PMDK pool open. */
@@ -360,7 +360,7 @@ rdb_stop(struct rdb *db)
 
 	D__DEBUG(DB_ANY, DF_DB": stopping db %p\n", DP_DB(db), db);
 	ABT_mutex_lock(rdb_hash_lock);
-	deleted = dhash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
+	deleted = d_hash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
 	ABT_mutex_unlock(rdb_hash_lock);
 	D__ASSERT(deleted);
 	rdb_raft_stop(db);

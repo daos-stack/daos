@@ -24,6 +24,8 @@
 #ifndef __DAOS_LIST_H__
 #define __DAOS_LIST_H__
 
+#include <gurt/list.h>
+
 /*
  * Simple doubly linked list implementation.
  *
@@ -36,16 +38,10 @@
 
 #define prefetch(a) ((void)a)
 
-struct daos_list_head {
-	struct daos_list_head *next, *prev;
-};
-
-typedef struct daos_list_head daos_list_t;
-
 #define DAOS_LIST_HEAD_INIT(name) { &(name), &(name) }
 
 #define DAOS_LIST_HEAD(name) \
-	daos_list_t name = DAOS_LIST_HEAD_INIT(name)
+	d_list_t name = DAOS_LIST_HEAD_INIT(name)
 
 #define DAOS_INIT_LIST_HEAD(ptr) do { \
 	(ptr)->next = (ptr); (ptr)->prev = (ptr); \
@@ -58,7 +54,7 @@ typedef struct daos_list_head daos_list_t;
  * the prev/next entries already!
  */
 static inline void
-__daos_list_add(daos_list_t *newe, daos_list_t *prev, daos_list_t *next)
+__daos_list_add(d_list_t *newe, d_list_t *prev, d_list_t *next)
 {
 	next->prev = newe;
 	newe->next = next;
@@ -75,7 +71,7 @@ __daos_list_add(daos_list_t *newe, daos_list_t *prev, daos_list_t *next)
  * This is good for implementing stacks.
  */
 static inline void
-daos_list_add(daos_list_t *newe, daos_list_t *head)
+daos_list_add(d_list_t *newe, d_list_t *head)
 {
 	__daos_list_add(newe, head, head->next);
 }
@@ -89,7 +85,7 @@ daos_list_add(daos_list_t *newe, daos_list_t *head)
  * This is useful for implementing queues.
  */
 static inline void
-daos_list_add_tail(daos_list_t *newe, daos_list_t *head)
+daos_list_add_tail(d_list_t *newe, d_list_t *head)
 {
 	__daos_list_add(newe, head->prev, head);
 }
@@ -102,7 +98,7 @@ daos_list_add_tail(daos_list_t *newe, daos_list_t *head)
  * the prev/next entries already!
  */
 static inline void
-__daos_list_del(daos_list_t *prev, daos_list_t *next)
+__daos_list_del(d_list_t *prev, d_list_t *next)
 {
 	next->prev = prev;
 	prev->next = next;
@@ -115,7 +111,7 @@ __daos_list_del(daos_list_t *prev, daos_list_t *next)
  * undefined state.
  */
 static inline void
-daos_list_del(daos_list_t *entry)
+daos_list_del(d_list_t *entry)
 {
 	__daos_list_del(entry->prev, entry->next);
 }
@@ -125,7 +121,7 @@ daos_list_del(daos_list_t *entry)
  * \param entry the entry to remove.
  */
 static inline void
-daos_list_del_init(daos_list_t *entry)
+daos_list_del_init(d_list_t *entry)
 {
 	__daos_list_del(entry->prev, entry->next);
 	DAOS_INIT_LIST_HEAD(entry);
@@ -138,7 +134,7 @@ daos_list_del_init(daos_list_t *entry)
  * \param head the list to move it to
  */
 static inline void
-daos_list_move(daos_list_t *list, daos_list_t *head)
+daos_list_move(d_list_t *list, d_list_t *head)
 {
 	__daos_list_del(list->prev, list->next);
 	daos_list_add(list, head);
@@ -151,7 +147,7 @@ daos_list_move(daos_list_t *list, daos_list_t *head)
  * \param head the list to move it to
  */
 static inline void
-daos_list_move_tail(daos_list_t *list, daos_list_t *head)
+daos_list_move_tail(d_list_t *list, d_list_t *head)
 {
 	__daos_list_del(list->prev, list->next);
 	daos_list_add_tail(list, head);
@@ -162,7 +158,7 @@ daos_list_move_tail(daos_list_t *list, daos_list_t *head)
  * \param head the list to test.
  */
 static inline int
-daos_list_empty(daos_list_t *head)
+daos_list_empty(d_list_t *head)
 {
 	return head->next == head;
 }
@@ -180,18 +176,18 @@ daos_list_empty(daos_list_t *head)
  * if another CPU could re-list_add() it.
  */
 static inline int
-daos_list_empty_careful(const daos_list_t *head)
+daos_list_empty_careful(const d_list_t *head)
 {
-	daos_list_t *next = head->next;
+	d_list_t *next = head->next;
 	return (next == head) && (next == head->prev);
 }
 
 static inline void
-__daos_list_splice(daos_list_t *list, daos_list_t *head)
+__daos_list_splice(d_list_t *list, d_list_t *head)
 {
-	daos_list_t *first = list->next;
-	daos_list_t *last = list->prev;
-	daos_list_t *at = head->next;
+	d_list_t *first = list->next;
+	d_list_t *last = list->prev;
+	d_list_t *at = head->next;
 
 	first->prev = head;
 	head->next = first;
@@ -209,7 +205,7 @@ __daos_list_splice(daos_list_t *list, daos_list_t *head)
  * undefined state on return.
  */
 static inline void
-daos_list_splice(daos_list_t *list, daos_list_t *head)
+daos_list_splice(d_list_t *list, d_list_t *head)
 {
 	if (!daos_list_empty(list))
 		__daos_list_splice(list, head);
@@ -224,7 +220,7 @@ daos_list_splice(daos_list_t *list, daos_list_t *head)
  * on return.
  */
 static inline void
-daos_list_splice_init(daos_list_t *list, daos_list_t *head)
+daos_list_splice_init(d_list_t *list, d_list_t *head)
 {
 	if (!daos_list_empty(list)) {
 		__daos_list_splice(list, head);

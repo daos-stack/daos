@@ -129,7 +129,7 @@ struct test {
 };
 
 struct a_ioreq {
-	daos_list_t		list;
+	d_list_t		list;
 	daos_event_t		ev;
 	daos_key_t		dkey;
 	daos_iov_t		val_iov;

@@ -34,7 +34,7 @@
 #include "client_internal.h"
 #include <daos/rpc.h>
 
-static struct daos_hhash *daos_eq_hhash;
+static struct d_hhash *daos_eq_hhash;
 
 /** thread-private event */
 static __thread daos_event_t	ev_thpriv;
@@ -93,7 +93,7 @@ daos_eq_lib_init()
 		D__GOTO(unlock, rc = 0);
 	}
 
-	rc = daos_hhash_create(DAOS_HHASH_BITS, &daos_eq_hhash);
+	rc = d_hhash_create(D_HHASH_BITS, &daos_eq_hhash);
 	if (rc != 0) {
 		D__ERROR("failed to create hash for eq: %d\n", rc);
 		D__GOTO(unlock, rc);
@@ -132,7 +132,7 @@ unlock:
 crt:
 	crt_finalize();
 hash:
-	daos_hhash_destroy(daos_eq_hhash);
+	d_hhash_destroy(daos_eq_hhash);
 	D__GOTO(unlock, rc);
 }
 
@@ -167,7 +167,7 @@ daos_eq_lib_fini()
 	}
 
 	D__ASSERT(daos_eq_hhash != NULL);
-	daos_hhash_destroy(daos_eq_hhash);
+	d_hhash_destroy(daos_eq_hhash);
 
 	refcount = 0;
 unlock:
@@ -176,7 +176,7 @@ unlock:
 }
 
 static void
-daos_eq_free(struct daos_hlink *hlink)
+daos_eq_free(struct d_hlink *hlink)
 {
 	struct daos_eq_private	*eqx;
 	struct daos_eq		*eq;
@@ -187,7 +187,7 @@ daos_eq_free(struct daos_hlink *hlink)
 	D__ASSERT(daos_list_empty(&eq->eq_comp));
 	D__ASSERTF(eq->eq_n_comp == 0 && eq->eq_n_running == 0,
 		  "comp %d running %d\n", eq->eq_n_comp, eq->eq_n_running);
-	D__ASSERT(daos_hhash_link_empty(&eqx->eqx_hlink));
+	D__ASSERT(d_hhash_link_empty(&eqx->eqx_hlink));
 
 	if (eqx->eqx_lock_init)
 		pthread_mutex_destroy(&eqx->eqx_lock);
@@ -195,7 +195,7 @@ daos_eq_free(struct daos_hlink *hlink)
 	D__FREE_PTR(eq);
 }
 
-struct daos_hlink_ops	eq_h_ops = {
+struct d_hlink_ops	eq_h_ops = {
 	.hop_free	= daos_eq_free,
 };
 
@@ -222,7 +222,7 @@ daos_eq_alloc(void)
 		goto out;
 	eqx->eqx_lock_init = 1;
 
-	daos_hhash_hlink_init(&eqx->eqx_hlink, &eq_h_ops);
+	d_hhash_hlink_init(&eqx->eqx_hlink, &eq_h_ops);
 	return eq;
 out:
 	daos_eq_free(&eqx->eqx_hlink);
@@ -232,9 +232,9 @@ out:
 static struct daos_eq_private *
 daos_eq_lookup(daos_handle_t eqh)
 {
-	struct daos_hlink *hlink;
+	struct d_hlink *hlink;
 
-	hlink = daos_hhash_link_lookup(daos_eq_hhash, eqh.cookie);
+	hlink = d_hhash_link_lookup(daos_eq_hhash, eqh.cookie);
 	if (hlink == NULL)
 		return NULL;
 
@@ -245,27 +245,27 @@ static void
 daos_eq_putref(struct daos_eq_private *eqx)
 {
 	D__ASSERT(daos_eq_hhash != NULL);
-	daos_hhash_link_putref(daos_eq_hhash, &eqx->eqx_hlink);
+	d_hhash_link_putref(daos_eq_hhash, &eqx->eqx_hlink);
 }
 
 static void
 daos_eq_delete(struct daos_eq_private *eqx)
 {
 	D__ASSERT(daos_eq_hhash != NULL);
-	daos_hhash_link_delete(daos_eq_hhash, &eqx->eqx_hlink);
+	d_hhash_link_delete(daos_eq_hhash, &eqx->eqx_hlink);
 }
 
 static void
 daos_eq_insert(struct daos_eq_private *eqx)
 {
 	D__ASSERT(daos_eq_hhash != NULL);
-	daos_hhash_link_insert(daos_eq_hhash, &eqx->eqx_hlink, DAOS_HTYPE_EQ);
+	d_hhash_link_insert(daos_eq_hhash, &eqx->eqx_hlink, D_HTYPE_EQ);
 }
 
 static void
 daos_eq_handle(struct daos_eq_private *eqx, daos_handle_t *h)
 {
-	daos_hhash_link_key(&eqx->eqx_hlink, &h->cookie);
+	d_hhash_link_key(&eqx->eqx_hlink, &h->cookie);
 }
 
 static void

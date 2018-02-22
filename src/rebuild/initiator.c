@@ -62,8 +62,8 @@ rebuild_get_nstream_idx(daos_key_t *dkey)
 
 	nstream = dss_get_threads_number();
 
-	hash = daos_hash_murmur64((unsigned char *)dkey->iov_buf,
-				   dkey->iov_len, 5731);
+	hash = d_hash_murmur64((unsigned char *)dkey->iov_buf,
+				dkey->iov_len, 5731);
 	hash %= nstream;
 
 	return hash;
@@ -423,7 +423,7 @@ rebuild_dkey_ult(void *arg)
 	while (1) {
 		struct rebuild_dkey	*rdkey;
 		struct rebuild_dkey	*tmp;
-		daos_list_t		dkey_list;
+		d_list_t		dkey_list;
 		int			rc;
 
 		DAOS_INIT_LIST_HEAD(&dkey_list);

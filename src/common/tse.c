@@ -39,7 +39,7 @@
 #include "tse_internal.h"
 
 struct tse_task_link {
-	daos_list_t		 tl_link;
+	d_list_t		 tl_link;
 	tse_task_t		*tl_task;
 };
 
@@ -436,7 +436,7 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 {
 	struct tse_task_private		*dtp;
 	struct tse_task_private		*tmp;
-	daos_list_t			list;
+	d_list_t			list;
 	int				processed = 0;
 
 	DAOS_INIT_LIST_HEAD(&list);
@@ -593,7 +593,7 @@ tse_sched_process_complete(struct tse_sched_private *dsp)
 {
 	struct tse_task_private *dtp;
 	struct tse_task_private *tmp;
-	daos_list_t comp_list;
+	d_list_t comp_list;
 	int processed = 0;
 
 	/* pick tasks from complete_list */
@@ -960,7 +960,7 @@ err_unlock:
 }
 
 int
-tse_task_list_add(tse_task_t *task, daos_list_t *head)
+tse_task_list_add(tse_task_t *task, d_list_t *head)
 {
 	struct tse_task_private *dtp = tse_task2priv(task);
 
@@ -977,7 +977,7 @@ tse_task_list_add(tse_task_t *task, daos_list_t *head)
 }
 
 tse_task_t *
-tse_task_list_first(daos_list_t *head)
+tse_task_list_first(d_list_t *head)
 {
 	struct tse_task_private	*dtp;
 
@@ -997,7 +997,7 @@ tse_task_list_del(tse_task_t *task)
 }
 
 void
-tse_task_list_sched(daos_list_t *head, bool instant)
+tse_task_list_sched(d_list_t *head, bool instant)
 {
 	while (!daos_list_empty(head)) {
 		tse_task_t *task = tse_task_list_first(head);
@@ -1008,7 +1008,7 @@ tse_task_list_sched(daos_list_t *head, bool instant)
 }
 
 void
-tse_task_list_abort(daos_list_t *head, int rc)
+tse_task_list_abort(d_list_t *head, int rc)
 {
 	while (!daos_list_empty(head)) {
 		tse_task_t *task = tse_task_list_first(head);
@@ -1019,7 +1019,7 @@ tse_task_list_abort(daos_list_t *head, int rc)
 }
 
 int
-tse_task_list_depend(daos_list_t *head, tse_task_t *task)
+tse_task_list_depend(d_list_t *head, tse_task_t *task)
 {
 	struct tse_task_private *dtp;
 	int			 rc;
@@ -1033,7 +1033,7 @@ tse_task_list_depend(daos_list_t *head, tse_task_t *task)
 }
 
 int
-tse_task_depend_list(tse_task_t *task, daos_list_t *head)
+tse_task_depend_list(tse_task_t *task, d_list_t *head)
 {
 	struct tse_task_private *dtp;
 	int			 rc;

@@ -237,7 +237,7 @@ dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
 	     daos_dkey_io_t *io_array, daos_opc_t opc, tse_task_t *task)
 {
 	daos_opc_t	d_opc;
-	daos_list_t	head;
+	d_list_t	head;
 	int		i;
 	int		rc = 0;
 

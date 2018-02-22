@@ -56,7 +56,7 @@ enum pool_svc_state {
 
 /* Pool service */
 struct pool_svc {
-	daos_list_t		ps_entry;
+	d_list_t		ps_entry;
 	uuid_t			ps_uuid;	/* pool UUID */
 	int			ps_ref;
 	ABT_rwlock		ps_lock;	/* for DB data */
@@ -885,13 +885,13 @@ pool_svc_fini(struct pool_svc *svc)
 }
 
 static inline struct pool_svc *
-pool_svc_obj(daos_list_t *rlink)
+pool_svc_obj(d_list_t *rlink)
 {
 	return container_of(rlink, struct pool_svc, ps_entry);
 }
 
 static bool
-pool_svc_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
+pool_svc_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 		 const void *key, unsigned int ksize)
 {
 	struct pool_svc *svc = pool_svc_obj(rlink);
@@ -901,13 +901,13 @@ pool_svc_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
 }
 
 static void
-pool_svc_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+pool_svc_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	pool_svc_obj(rlink)->ps_ref++;
 }
 
 static bool
-pool_svc_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+pool_svc_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct pool_svc *svc = pool_svc_obj(rlink);
 
@@ -917,25 +917,25 @@ pool_svc_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
 }
 
 static void
-pool_svc_rec_free(struct dhash_table *htable, daos_list_t *rlink)
+pool_svc_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct pool_svc *svc = pool_svc_obj(rlink);
 
 	D__DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(svc->ps_uuid));
-	D__ASSERT(dhash_rec_unlinked(&svc->ps_entry));
+	D__ASSERT(d_hash_rec_unlinked(&svc->ps_entry));
 	D__ASSERTF(svc->ps_ref == 0, "%d\n", svc->ps_ref);
 	pool_svc_fini(svc);
 	D__FREE_PTR(svc);
 }
 
-static dhash_table_ops_t pool_svc_hash_ops = {
+static d_hash_table_ops_t pool_svc_hash_ops = {
 	.hop_key_cmp	= pool_svc_key_cmp,
 	.hop_rec_addref	= pool_svc_rec_addref,
 	.hop_rec_decref	= pool_svc_rec_decref,
 	.hop_rec_free	= pool_svc_rec_free
 };
 
-static struct dhash_table	pool_svc_hash;
+static struct d_hash_table	pool_svc_hash;
 static ABT_mutex		pool_svc_hash_lock;
 
 int
@@ -946,9 +946,9 @@ ds_pool_svc_hash_init(void)
 	rc = ABT_mutex_create(&pool_svc_hash_lock);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
-	rc = dhash_table_create_inplace(DHASH_FT_NOLOCK, 4 /* bits */,
-					NULL /* priv */, &pool_svc_hash_ops,
-					&pool_svc_hash);
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 4 /* bits */,
+					 NULL /* priv */, &pool_svc_hash_ops,
+					 &pool_svc_hash);
 	if (rc != 0)
 		ABT_mutex_free(&pool_svc_hash_lock);
 	return rc;
@@ -957,18 +957,18 @@ ds_pool_svc_hash_init(void)
 void
 ds_pool_svc_hash_fini(void)
 {
-	dhash_table_destroy_inplace(&pool_svc_hash, true /* force */);
+	d_hash_table_destroy_inplace(&pool_svc_hash, true /* force */);
 	ABT_mutex_free(&pool_svc_hash_lock);
 }
 
 static int
 pool_svc_lookup(const uuid_t uuid, struct pool_svc **svcp)
 {
-	daos_list_t    *entry;
+	d_list_t	*entry;
 	bool		nonexist = false;
 
 	ABT_mutex_lock(pool_svc_hash_lock);
-	entry = dhash_rec_find(&pool_svc_hash, uuid, sizeof(uuid_t));
+	entry = d_hash_rec_find(&pool_svc_hash, uuid, sizeof(uuid_t));
 	if (entry == NULL) {
 		char	       *path;
 		struct stat	buf;
@@ -1010,7 +1010,7 @@ static void
 pool_svc_get(struct pool_svc *svc)
 {
 	ABT_mutex_lock(pool_svc_hash_lock);
-	dhash_rec_addref(&pool_svc_hash, &svc->ps_entry);
+	d_hash_rec_addref(&pool_svc_hash, &svc->ps_entry);
 	ABT_mutex_unlock(pool_svc_hash_lock);
 }
 
@@ -1018,7 +1018,7 @@ static void
 pool_svc_put(struct pool_svc *svc)
 {
 	ABT_mutex_lock(pool_svc_hash_lock);
-	dhash_rec_decref(&pool_svc_hash, &svc->ps_entry);
+	d_hash_rec_decref(&pool_svc_hash, &svc->ps_entry);
 	ABT_mutex_unlock(pool_svc_hash_lock);
 }
 
@@ -1119,13 +1119,13 @@ ds_pool_cont_svc_term(struct cont_svc **svcp)
 int
 ds_pool_svc_start(const uuid_t uuid)
 {
-	daos_list_t	       *entry;
+	d_list_t	       *entry;
 	struct pool_svc	       *svc;
 	int			rc;
 
 	ABT_mutex_lock(pool_svc_hash_lock);
 
-	entry = dhash_rec_find(&pool_svc_hash, uuid, sizeof(uuid_t));
+	entry = d_hash_rec_find(&pool_svc_hash, uuid, sizeof(uuid_t));
 	if (entry != NULL) {
 		svc = pool_svc_obj(entry);
 		D__GOTO(out_ref, rc = 0);
@@ -1139,13 +1139,13 @@ ds_pool_svc_start(const uuid_t uuid)
 	if (rc != 0)
 		D__GOTO(err_svc, rc);
 
-	rc = dhash_rec_insert(&pool_svc_hash, uuid, sizeof(uuid_t),
-			      &svc->ps_entry, true /* exclusive */);
+	rc = d_hash_rec_insert(&pool_svc_hash, uuid, sizeof(uuid_t),
+			       &svc->ps_entry, true /* exclusive */);
 	if (rc != 0)
 		D__GOTO(err_svc_init, rc);
 
 out_ref:
-	dhash_rec_decref(&pool_svc_hash, &svc->ps_entry);
+	d_hash_rec_decref(&pool_svc_hash, &svc->ps_entry);
 	ABT_mutex_unlock(pool_svc_hash_lock);
 	D__DEBUG(DF_DSMS, DF_UUID": started pool service\n", DP_UUID(uuid));
 	return 0;
@@ -1192,7 +1192,7 @@ pool_svc_stop(struct pool_svc *svc)
 	ABT_mutex_unlock(svc->ps_mutex);
 
 	ABT_mutex_lock(pool_svc_hash_lock);
-	dhash_rec_delete_at(&pool_svc_hash, &svc->ps_entry);
+	d_hash_rec_delete_at(&pool_svc_hash, &svc->ps_entry);
 	ABT_mutex_unlock(pool_svc_hash_lock);
 }
 
@@ -1277,15 +1277,15 @@ ds_pool_svc_start_all(void)
 }
 
 struct ult {
-	daos_list_t	u_entry;
+	d_list_t	u_entry;
 	ABT_thread	u_thread;
 };
 
 static int
-stop_one(daos_list_t *entry, void *arg)
+stop_one(d_list_t *entry, void *arg)
 {
 	struct pool_svc	       *svc = pool_svc_obj(entry);
-	daos_list_t	       *list = arg;
+	d_list_t	       *list = arg;
 	struct ult	       *ult;
 	int			rc;
 
@@ -1293,10 +1293,10 @@ stop_one(daos_list_t *entry, void *arg)
 	if (ult == NULL)
 		return -DER_NOMEM;
 
-	dhash_rec_addref(&pool_svc_hash, &svc->ps_entry);
+	d_hash_rec_addref(&pool_svc_hash, &svc->ps_entry);
 	rc = dss_ult_create(pool_svc_stopper, svc, 0, &ult->u_thread);
 	if (rc != 0) {
-		dhash_rec_decref(&pool_svc_hash, &svc->ps_entry);
+		d_hash_rec_decref(&pool_svc_hash, &svc->ps_entry);
 		D__FREE_PTR(ult);
 		return rc;
 	}
@@ -1312,14 +1312,14 @@ stop_one(daos_list_t *entry, void *arg)
 int
 ds_pool_svc_stop_all(void)
 {
-	daos_list_t	list = DAOS_LIST_HEAD_INIT(list);
+	d_list_t	list = DAOS_LIST_HEAD_INIT(list);
 	struct ult     *ult;
 	struct ult     *ult_tmp;
 	int		rc;
 
 	/* Create a stopper ULT for each pool service. */
 	ABT_mutex_lock(pool_svc_hash_lock);
-	rc = dhash_table_traverse(&pool_svc_hash, stop_one, &list);
+	rc = d_hash_table_traverse(&pool_svc_hash, stop_one, &list);
 	ABT_mutex_unlock(pool_svc_hash_lock);
 
 	/* Wait for the stopper ULTs to return. */

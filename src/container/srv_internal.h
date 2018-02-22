@@ -41,7 +41,7 @@ struct ds_pool_hdl;
 /* ds_cont thread local storage structure */
 struct dsm_tls {
 	struct daos_lru_cache  *dt_cont_cache;
-	struct dhash_table	dt_cont_hdl_hash;
+	struct d_hash_table	dt_cont_hdl_hash;
 };
 
 extern struct dss_module_key cont_module_key;
@@ -144,7 +144,7 @@ int ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 					   void *priv);
 int ds_cont_cache_create(struct daos_lru_cache **cache);
 void ds_cont_cache_destroy(struct daos_lru_cache *cache);
-int ds_cont_hdl_hash_create(struct dhash_table *hash);
-void ds_cont_hdl_hash_destroy(struct dhash_table *hash);
+int ds_cont_hdl_hash_create(struct d_hash_table *hash);
+void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
 
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

@@ -40,13 +40,13 @@
 static int
 cookie_hkey_size(struct btr_instance *tins)
 {
-	return sizeof(struct daos_uuid);
+	return sizeof(struct d_uuid);
 }
 
 static void
 cookie_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 {
-	D__ASSERT(key_iov->iov_len == sizeof(struct daos_uuid));
+	D__ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
 	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
 }
 
@@ -57,7 +57,7 @@ cookie_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	TMMID(struct vos_cookie_rec_df)	vce_rec_mmid;
 	struct vos_cookie_rec_df	*vce_rec;
 
-	D__ASSERT(key_iov->iov_len == sizeof(struct daos_uuid));
+	D__ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
 	D__ASSERT(val_iov->iov_len == sizeof(daos_epoch_t));
 
 	vce_rec_mmid = umem_znew_typed(&tins->ti_umm, struct vos_cookie_rec_df);
@@ -176,11 +176,11 @@ vos_cookie_find_update(daos_handle_t th, uuid_t cookie, daos_epoch_t epoch,
 	daos_epoch_t		max_epoch;
 	daos_iov_t		key;
 	daos_iov_t		value;
-	struct daos_uuid	uuid_key;
+	struct d_uuid		uuid_key;
 	int			rc;
 
 	uuid_copy(uuid_key.uuid, cookie);
-	daos_iov_set(&key, &uuid_key, sizeof(struct daos_uuid));
+	daos_iov_set(&key, &uuid_key, sizeof(struct d_uuid));
 	daos_iov_set(&value, &max_epoch, sizeof(daos_epoch_t));
 
 	rc = dbtree_lookup(th, &key, &value);

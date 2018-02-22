@@ -65,7 +65,7 @@ void ds_pool_put(struct ds_pool *pool);
  * object.
  */
 struct ds_pool_hdl {
-	daos_list_t		sph_entry;
+	d_list_t		sph_entry;
 	uuid_t			sph_uuid;	/* of the pool handle */
 	uint64_t		sph_capas;
 	struct ds_pool	       *sph_pool;
@@ -83,7 +83,7 @@ void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
  * object I/Os do not need to access global, parent ds_pool objects.
  */
 struct ds_pool_child {
-	daos_list_t	spc_list;
+	d_list_t	spc_list;
 	daos_handle_t	spc_hdl;
 	uuid_t		spc_uuid;
 	uint32_t	spc_map_version;

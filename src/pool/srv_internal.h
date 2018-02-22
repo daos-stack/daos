@@ -35,7 +35,7 @@
  */
 struct pool_tls {
 	/* in-memory structures TLS instance */
-	struct daos_list_head	dt_pool_list;
+	struct d_list_head	dt_pool_list;
 };
 
 extern struct dss_module_key pool_module_key;

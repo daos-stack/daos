@@ -111,7 +111,7 @@ ds_cont_cache_create(struct daos_lru_cache **cache)
 	 * Since there's currently no way to evict an idle object, we don't
 	 * really cache any idle objects.
 	 */
-	return daos_lru_cache_create(-1 /* bits */, DHASH_FT_NOLOCK /* feats */,
+	return daos_lru_cache_create(-1 /* bits */, D_HASH_FT_NOLOCK /*feats*/,
 				     &cont_cache_ops, cache);
 }
 
@@ -159,13 +159,13 @@ cont_put(struct daos_lru_cache *cache, struct ds_cont *cont)
 /* ds_cont_hdl ****************************************************************/
 
 static inline struct ds_cont_hdl *
-cont_hdl_obj(daos_list_t *rlink)
+cont_hdl_obj(d_list_t *rlink)
 {
 	return container_of(rlink, struct ds_cont_hdl, sch_entry);
 }
 
 static bool
-cont_hdl_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
+cont_hdl_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 		 const void *key, unsigned int ksize)
 {
 	struct ds_cont_hdl *hdl = cont_hdl_obj(rlink);
@@ -175,13 +175,13 @@ cont_hdl_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
 }
 
 static void
-cont_hdl_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+cont_hdl_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	cont_hdl_obj(rlink)->sch_ref++;
 }
 
 static bool
-cont_hdl_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+cont_hdl_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_cont_hdl *hdl = cont_hdl_obj(rlink);
 
@@ -190,12 +190,12 @@ cont_hdl_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
 }
 
 static void
-cont_hdl_rec_free(struct dhash_table *htable, daos_list_t *rlink)
+cont_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_cont_hdl     *hdl = cont_hdl_obj(rlink);
 	struct dsm_tls	       *tls = dsm_tls_get();
 
-	D__ASSERT(dhash_rec_unlinked(&hdl->sch_entry));
+	D__ASSERT(d_hash_rec_unlinked(&hdl->sch_entry));
 	D__ASSERTF(hdl->sch_ref == 0, "%d\n", hdl->sch_ref);
 	D__DEBUG(DF_DSMS, "freeing "DF_UUID"\n", DP_UUID(hdl->sch_uuid));
 	if (hdl->sch_cont != NULL) {
@@ -208,7 +208,7 @@ cont_hdl_rec_free(struct dhash_table *htable, daos_list_t *rlink)
 	D__FREE_PTR(hdl);
 }
 
-static dhash_table_ops_t cont_hdl_hash_ops = {
+static d_hash_table_ops_t cont_hdl_hash_ops = {
 	.hop_key_cmp	= cont_hdl_key_cmp,
 	.hop_rec_addref	= cont_hdl_rec_addref,
 	.hop_rec_decref	= cont_hdl_rec_decref,
@@ -216,41 +216,41 @@ static dhash_table_ops_t cont_hdl_hash_ops = {
 };
 
 int
-ds_cont_hdl_hash_create(struct dhash_table *hash)
+ds_cont_hdl_hash_create(struct d_hash_table *hash)
 {
-	return dhash_table_create_inplace(0 /* feats */, 8 /* bits */,
-					  NULL /* priv */,
-					  &cont_hdl_hash_ops, hash);
+	return d_hash_table_create_inplace(0 /* feats */, 8 /* bits */,
+					   NULL /* priv */,
+					   &cont_hdl_hash_ops, hash);
 }
 
 void
-ds_cont_hdl_hash_destroy(struct dhash_table *hash)
+ds_cont_hdl_hash_destroy(struct d_hash_table *hash)
 {
-	dhash_table_destroy_inplace(hash, true /* force */);
+	d_hash_table_destroy_inplace(hash, true /* force */);
 }
 
 static int
-cont_hdl_add(struct dhash_table *hash, struct ds_cont_hdl *hdl)
+cont_hdl_add(struct d_hash_table *hash, struct ds_cont_hdl *hdl)
 {
-	return dhash_rec_insert(hash, hdl->sch_uuid, sizeof(uuid_t),
-				&hdl->sch_entry, true /* exclusive */);
+	return d_hash_rec_insert(hash, hdl->sch_uuid, sizeof(uuid_t),
+				 &hdl->sch_entry, true /* exclusive */);
 }
 
 static void
-cont_hdl_delete(struct dhash_table *hash, struct ds_cont_hdl *hdl)
+cont_hdl_delete(struct d_hash_table *hash, struct ds_cont_hdl *hdl)
 {
 	bool deleted;
 
-	deleted = dhash_rec_delete(hash, hdl->sch_uuid, sizeof(uuid_t));
+	deleted = d_hash_rec_delete(hash, hdl->sch_uuid, sizeof(uuid_t));
 	D__ASSERT(deleted == true);
 }
 
 static struct ds_cont_hdl *
-cont_hdl_lookup_internal(struct dhash_table *hash, const uuid_t uuid)
+cont_hdl_lookup_internal(struct d_hash_table *hash, const uuid_t uuid)
 {
-	daos_list_t *rlink;
+	d_list_t *rlink;
 
-	rlink = dhash_rec_find(hash, uuid, sizeof(uuid_t));
+	rlink = d_hash_rec_find(hash, uuid, sizeof(uuid_t));
 	if (rlink == NULL)
 		return NULL;
 
@@ -268,23 +268,23 @@ cont_hdl_lookup_internal(struct dhash_table *hash, const uuid_t uuid)
 struct ds_cont_hdl *
 ds_cont_hdl_lookup(const uuid_t uuid)
 {
-	struct dhash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
+	struct d_hash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
 
 	return cont_hdl_lookup_internal(hash, uuid);
 }
 
 static void
-cont_hdl_put_internal(struct dhash_table *hash,
+cont_hdl_put_internal(struct d_hash_table *hash,
 		      struct ds_cont_hdl *hdl)
 {
-	dhash_rec_decref(hash, &hdl->sch_entry);
+	d_hash_rec_decref(hash, &hdl->sch_entry);
 }
 
 static void
-cont_hdl_get_internal(struct dhash_table *hash,
+cont_hdl_get_internal(struct d_hash_table *hash,
 		      struct ds_cont_hdl *hdl)
 {
-	dhash_rec_addref(hash, &hdl->sch_entry);
+	d_hash_rec_addref(hash, &hdl->sch_entry);
 }
 
 /**
@@ -295,7 +295,7 @@ cont_hdl_get_internal(struct dhash_table *hash,
 void
 ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 {
-	struct dhash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
+	struct d_hash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
 
 	cont_hdl_put_internal(hash, hdl);
 }
@@ -308,7 +308,7 @@ ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 void
 ds_cont_hdl_get(struct ds_cont_hdl *hdl)
 {
-	struct dhash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
+	struct d_hash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
 
 	cont_hdl_get_internal(hash, hdl);
 }

@@ -462,7 +462,7 @@ rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs, const daos_iov_t *key)
 }
 
 static int
-rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, daos_list_t *destroyed)
+rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, d_list_t *destroyed)
 {
 	struct rdb_tree	       *tree = NULL;
 	rdb_path_t		victim_path;
@@ -584,7 +584,7 @@ rdb_tx_deterministic_error(int error)
  */
 int
 rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-	     void *result, daos_list_t *destroyed)
+	     void *result, d_list_t *destroyed)
 {
 	daos_iov_t	value;
 	volatile int	rc;

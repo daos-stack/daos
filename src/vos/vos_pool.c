@@ -32,7 +32,7 @@
 #include <daos_srv/vos.h>
 #include <daos_errno.h>
 #include <daos/common.h>
-#include <daos/hash.h>
+#include <gurt/hash.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/mman.h>
@@ -51,14 +51,14 @@ pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 umem_class_id_t	vos_mem_class	 = UMEM_CLASS_PMEM;
 
 static struct vos_pool *
-pool_hlink2ptr(struct daos_ulink *hlink)
+pool_hlink2ptr(struct d_ulink *hlink)
 {
 	D__ASSERT(hlink != NULL);
 	return container_of(hlink, struct vos_pool, vp_hlink);
 }
 
 static void
-pool_hop_free(struct daos_ulink *hlink)
+pool_hop_free(struct d_ulink *hlink)
 {
 	struct vos_pool	*pool = pool_hlink2ptr(hlink);
 
@@ -76,7 +76,7 @@ pool_hop_free(struct daos_ulink *hlink)
 	D__FREE_PTR(pool);
 }
 
-static struct daos_ulink_ops   pool_uuid_hops = {
+static struct d_ulink_ops   pool_uuid_hops = {
 	.uop_free       = pool_hop_free,
 };
 
@@ -92,7 +92,7 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 	if (pool == NULL)
 		return -DER_NOMEM;
 
-	daos_uhash_ulink_init(&pool->vp_hlink, &pool_uuid_hops);
+	d_uhash_ulink_init(&pool->vp_hlink, &pool_uuid_hops);
 	uuid_copy(pool->vp_id, uuid);
 
 	memset(&uma, 0, sizeof(uma));
@@ -112,12 +112,12 @@ failed:
 }
 
 static int
-pool_link(struct vos_pool *pool, struct daos_uuid *ukey, daos_handle_t *poh)
+pool_link(struct vos_pool *pool, struct d_uuid *ukey, daos_handle_t *poh)
 {
 	int	rc;
 
-	rc = daos_uhash_link_insert(vos_pool_hhash_get(), ukey,
-				    &pool->vp_hlink);
+	rc = d_uhash_link_insert(vos_pool_hhash_get(), ukey,
+				 &pool->vp_hlink);
 	if (rc) {
 		D__ERROR("uuid hash table insert failed: %d\n", rc);
 		D__GOTO(failed, rc);
@@ -131,15 +131,15 @@ failed:
 static void
 pool_unlink(struct vos_pool *pool)
 {
-	daos_uhash_link_delete(vos_pool_hhash_get(), &pool->vp_hlink);
+	d_uhash_link_delete(vos_pool_hhash_get(), &pool->vp_hlink);
 }
 
 static int
-pool_lookup(struct daos_uuid *ukey, struct vos_pool **pool)
+pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
 {
-	struct daos_ulink *hlink;
+	struct d_ulink *hlink;
 
-	hlink = daos_uhash_link_lookup(vos_pool_hhash_get(), ukey);
+	hlink = d_uhash_link_lookup(vos_pool_hhash_get(), ukey);
 	if (hlink == NULL) {
 		D__DEBUG(DB_MGMT, "can't find "DF_UUID"\n", DP_UUID(ukey->uuid));
 		return -DER_NONEXIST;
@@ -235,7 +235,7 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 {
 
 	struct vos_pool		*pool;
-	struct daos_uuid	 ukey;
+	struct d_uuid		 ukey;
 	int			 rc;
 
 	uuid_copy(ukey.uuid, uuid);
@@ -300,7 +300,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	struct vos_pool_df	*pool_df;
 	struct vos_pool		*pool;
 	struct umem_attr	*uma;
-	struct daos_uuid	 ukey;
+	struct d_uuid		 ukey;
 	int			 rc;
 
 	if (path == NULL || poh == NULL) {

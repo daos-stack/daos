@@ -26,7 +26,7 @@
  * src/placement/pl_map.c
  */
 #define DDSUBSYS	DDFAC(placement)
-#include <daos/hash.h>
+#include <gurt/hash.h>
 #include "pl_map.h"
 
 extern struct pl_map_ops	ring_map_ops;
@@ -265,7 +265,7 @@ pl_obj_shard2grp_index(struct daos_obj_shard_md *shard_md,
 /** serialize operations on pl_htable */
 pthread_rwlock_t	pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /** hash table for placement maps */
-struct dhash_table	pl_htable = {
+struct d_hash_table	pl_htable = {
 	.ht_ops			  = NULL,
 };
 
@@ -291,21 +291,21 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 }
 
 struct pl_map *
-pl_link2map(daos_list_t *link)
+pl_link2map(d_list_t *link)
 {
 	return container_of(link, struct pl_map, pl_link);
 }
 
 static unsigned int
-pl_hop_key_hash(struct dhash_table *htab, const void *key,
+pl_hop_key_hash(struct d_hash_table *htab, const void *key,
 		unsigned int ksize)
 {
 	D__ASSERT(ksize == sizeof(uuid_t));
-	return daos_hash_string_u32((const char *)key, ksize);
+	return d_hash_string_u32((const char *)key, ksize);
 }
 
 static bool
-pl_hop_key_cmp(struct dhash_table *htab, daos_list_t *link,
+pl_hop_key_cmp(struct d_hash_table *htab, d_list_t *link,
 	       const void *key, unsigned int ksize)
 {
 	struct pl_map *map = pl_link2map(link);
@@ -315,7 +315,7 @@ pl_hop_key_cmp(struct dhash_table *htab, daos_list_t *link,
 }
 
 static void
-pl_hop_rec_addref(struct dhash_table *htab, daos_list_t *link)
+pl_hop_rec_addref(struct d_hash_table *htab, d_list_t *link)
 {
 	struct pl_map *map = pl_link2map(link);
 
@@ -325,7 +325,7 @@ pl_hop_rec_addref(struct dhash_table *htab, daos_list_t *link)
 }
 
 static bool
-pl_hop_rec_decref(struct dhash_table *htab, daos_list_t *link)
+pl_hop_rec_decref(struct d_hash_table *htab, d_list_t *link)
 {
 	struct pl_map	*map = pl_link2map(link);
 	bool		 zombie;
@@ -341,7 +341,7 @@ pl_hop_rec_decref(struct dhash_table *htab, daos_list_t *link)
 }
 
 void
-pl_hop_rec_free(struct dhash_table *htab, daos_list_t *link)
+pl_hop_rec_free(struct d_hash_table *htab, d_list_t *link)
 {
 	struct pl_map *map = pl_link2map(link);
 
@@ -349,7 +349,7 @@ pl_hop_rec_free(struct dhash_table *htab, daos_list_t *link)
 	pl_map_destroy(map);
 }
 
-static dhash_table_ops_t pl_hash_ops = {
+static d_hash_table_ops_t pl_hash_ops = {
 	.hop_key_hash		= pl_hop_key_hash,
 	.hop_key_cmp		= pl_hop_key_cmp,
 	.hop_rec_addref		= pl_hop_rec_addref,
@@ -369,7 +369,7 @@ static dhash_table_ops_t pl_hash_ops = {
 int
 pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 {
-	daos_list_t		*link;
+	d_list_t		*link;
 	struct pl_map		*map;
 	struct pl_map_init_attr	 mia;
 	int			 rc;
@@ -379,16 +379,16 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 		/* NB: this hash table is created on demand, it will never
 		 * be destroyed.
 		 */
-		rc = dhash_table_create_inplace(DHASH_FT_NOLOCK,
-						PL_HTABLE_BITS, NULL,
-						&pl_hash_ops, &pl_htable);
+		rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
+						 PL_HTABLE_BITS, NULL,
+						 &pl_hash_ops, &pl_htable);
 		if (rc)
 			D__GOTO(out, rc);
 
 		link = NULL;
 	} else {
 		/* already created */
-		link = dhash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
+		link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
 	}
 
 	if (!link) {
@@ -401,7 +401,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 
 		tmp = container_of(link, struct pl_map, pl_link);
 		if (pl_map_version(tmp) >= pool_map_get_version(pool_map)) {
-			dhash_rec_decref(&pl_htable, link);
+			d_hash_rec_decref(&pl_htable, link);
 			if (connect)
 				tmp->pl_connects++;
 			D__GOTO(out, rc = 0);
@@ -410,15 +410,15 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 		pl_map_attr_init(pool_map, PL_TYPE_RING, &mia);
 		rc = pl_map_create(pool_map, &mia, &map);
 		if (rc != 0) {
-			dhash_rec_decref(&pl_htable, link);
+			d_hash_rec_decref(&pl_htable, link);
 			D__GOTO(out, rc);
 		}
 
 		/* transfer the pool connection count */
 		map->pl_connects = tmp->pl_connects;
 		/* evict the old placement map for this pool */
-		dhash_rec_delete_at(&pl_htable, link);
-		dhash_rec_decref(&pl_htable, link);
+		d_hash_rec_delete_at(&pl_htable, link);
+		d_hash_rec_decref(&pl_htable, link);
 	}
 
 	if (connect)
@@ -426,8 +426,8 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 
 	/* insert the new placement map into hash table */
 	uuid_copy(map->pl_uuid, uuid);
-	rc = dhash_rec_insert(&pl_htable, uuid, sizeof(uuid_t),
-			      &map->pl_link, true);
+	rc = d_hash_rec_insert(&pl_htable, uuid, sizeof(uuid_t),
+			       &map->pl_link, true);
 	D__ASSERT(rc == 0);
 	pl_map_decref(map); /* hash table has held the refcount */
 	D_EXIT;
@@ -443,10 +443,10 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 void
 pl_map_disconnect(uuid_t uuid)
 {
-	daos_list_t	*link;
+	d_list_t	*link;
 
 	pthread_rwlock_wrlock(&pl_rwlock);
-	link = dhash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
+	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
 	if (link) {
 		struct pl_map	*map;
 
@@ -454,8 +454,8 @@ pl_map_disconnect(uuid_t uuid)
 		D__ASSERT(map->pl_connects > 0);
 		map->pl_connects--;
 		if (map->pl_connects == 0) {
-			dhash_rec_delete_at(&pl_htable, link);
-			dhash_rec_decref(&pl_htable, link);
+			d_hash_rec_delete_at(&pl_htable, link);
+			d_hash_rec_decref(&pl_htable, link);
 		}
 	}
 	pthread_rwlock_unlock(&pl_rwlock);
@@ -467,10 +467,10 @@ pl_map_disconnect(uuid_t uuid)
 struct pl_map *
 pl_map_find(uuid_t uuid, daos_obj_id_t oid)
 {
-	daos_list_t	*link;
+	d_list_t	*link;
 
 	pthread_rwlock_rdlock(&pl_rwlock);
-	link = dhash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
+	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
 	pthread_rwlock_unlock(&pl_rwlock);
 
 	return link ? pl_link2map(link) : NULL;
@@ -478,13 +478,13 @@ pl_map_find(uuid_t uuid, daos_obj_id_t oid)
 void
 pl_map_addref(struct pl_map *map)
 {
-	dhash_rec_addref(&pl_htable, &map->pl_link);
+	d_hash_rec_addref(&pl_htable, &map->pl_link);
 }
 
 void
 pl_map_decref(struct pl_map *map)
 {
-	dhash_rec_decref(&pl_htable, &map->pl_link);
+	d_hash_rec_decref(&pl_htable, &map->pl_link);
 }
 
 uint32_t

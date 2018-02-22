@@ -38,7 +38,7 @@ struct pl_map {
 	/** correpsonding pool uuid */
 	uuid_t			 pl_uuid;
 	/** link chain on hash */
-	daos_list_t		 pl_link;
+	d_list_t		 pl_link;
 	/** protect refcount */
 	pthread_spinlock_t	 pl_lock;
 	/** refcount */

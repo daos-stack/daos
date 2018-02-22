@@ -43,7 +43,7 @@ struct loaded_mod {
 	/* module interface looked up via dlsym(3) */
 	struct dss_module	*lm_dss_mod;
 	/* linked list of loaded module */
-	daos_list_t		 lm_lk;
+	d_list_t		 lm_lk;
 };
 
 /* Track list of loaded modules */
@@ -291,7 +291,7 @@ dss_module_unload_all(void)
 {
 	struct loaded_mod	*mod;
 	struct loaded_mod	*tmp;
-	struct daos_list_head	destroy_list;
+	struct d_list_head	destroy_list;
 
 	DAOS_INIT_LIST_HEAD(&destroy_list);
 	pthread_mutex_lock(&loaded_mod_list_lock);

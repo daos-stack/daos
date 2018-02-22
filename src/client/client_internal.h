@@ -37,11 +37,11 @@
 
 typedef struct daos_eq {
 	/* After event is completed, it will be moved to the eq_comp list */
-	daos_list_t		eq_comp;
+	d_list_t		eq_comp;
 	int			eq_n_comp;
 
 	/** Launched events will be added to the running list */
-	daos_list_t		eq_running;
+	d_list_t		eq_running;
 	int			eq_n_running;
 
 	struct {
@@ -51,21 +51,21 @@ typedef struct daos_eq {
 } daos_eq_t;
 
 struct daos_event_comp_list {
-	daos_list_t	op_comp_list;
+	d_list_t	op_comp_list;
 	daos_event_comp_cb_t op_comp_cb;
 	void *op_comp_arg;
 };
 
 struct daos_event_callback {
 	daos_event_comp_cb_t	evx_inline_cb;
-	daos_list_t		evx_comp_list;
+	d_list_t		evx_comp_list;
 };
 
 struct daos_event_private {
 	daos_handle_t		evx_eqh;
-	daos_list_t		evx_link;
+	d_list_t		evx_link;
 	/** children list */
-	daos_list_t		evx_child;
+	d_list_t		evx_child;
 	unsigned int		evx_nchild;
 	unsigned int		evx_nchild_running;
 	unsigned int		evx_nchild_comp;
@@ -97,13 +97,13 @@ daos_evx2ev(struct daos_event_private *evx)
 
 struct daos_eq_private {
 	/* link chain in the global hash list */
-	struct daos_hlink	eqx_hlink;
+	struct d_hlink		eqx_hlink;
 	pthread_mutex_t		eqx_lock;
 	unsigned int		eqx_lock_init:1,
 				eqx_finalizing:1;
 
 	/* All of its events are linked here */
-	struct daos_hhash	*eqx_events_hash;
+	struct d_hhash		*eqx_events_hash;
 
 	/* CRT context associated with this eq */
 	crt_context_t		eqx_ctx;

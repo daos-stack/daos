@@ -89,7 +89,7 @@ struct dc_obj_shard {
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
 	/** list to the container */
-	daos_list_t		do_co_list;
+	d_list_t		do_co_list;
 };
 
 /**

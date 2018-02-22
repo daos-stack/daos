@@ -44,7 +44,7 @@ unsigned int	dss_rebuild_res_percentage = 30;
 /** Per-xstream configuration data */
 struct dss_xstream {
 	ABT_future	dx_shutdown;
-	daos_list_t	dx_list;
+	d_list_t	dx_list;
 	hwloc_cpuset_t	dx_cpuset;
 	ABT_xstream	dx_xstream;
 	ABT_pool	dx_pools[DSS_POOL_CNT];
@@ -55,7 +55,7 @@ struct dss_xstream {
 
 struct dss_xstream_data {
 	/** List of running execution streams */
-	daos_list_t	xd_list;
+	d_list_t	xd_list;
 	/** Initializing step, it is for cleanup of global states */
 	int		xd_init_step;
 	bool		xd_ult_signal;

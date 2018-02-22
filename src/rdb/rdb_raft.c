@@ -619,19 +619,19 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 
 /* Result buffer for an entry */
 struct rdb_raft_result {
-	daos_list_t	drr_entry;
+	d_list_t	drr_entry;
 	uint64_t	drr_index;
 	void	       *drr_buf;
 };
 
 static inline struct rdb_raft_result *
-rdb_raft_result_obj(daos_list_t *rlink)
+rdb_raft_result_obj(d_list_t *rlink)
 {
 	return container_of(rlink, struct rdb_raft_result, drr_entry);
 }
 
 static bool
-rdb_raft_result_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
+rdb_raft_result_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 			const void *key, unsigned int ksize)
 {
 	struct rdb_raft_result *result = rdb_raft_result_obj(rlink);
@@ -640,7 +640,7 @@ rdb_raft_result_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
 	return memcmp(&result->drr_index, key, sizeof(result->drr_index)) == 0;
 }
 
-static dhash_table_ops_t rdb_raft_result_hash_ops = {
+static d_hash_table_ops_t rdb_raft_result_hash_ops = {
 	.hop_key_cmp = rdb_raft_result_key_cmp
 };
 
@@ -655,9 +655,9 @@ rdb_raft_register_result(struct rdb *db, uint64_t index, void *buf)
 		return -DER_NOMEM;
 	result->drr_index = index;
 	result->drr_buf = buf;
-	rc = dhash_rec_insert(&db->d_results, &result->drr_index,
-			      sizeof(result->drr_index), &result->drr_entry,
-			      true /* exclusive */);
+	rc = d_hash_rec_insert(&db->d_results, &result->drr_index,
+			       sizeof(result->drr_index), &result->drr_entry,
+			       true /* exclusive */);
 	if (rc != 0)
 		D__FREE_PTR(result);
 	return rc;
@@ -666,9 +666,9 @@ rdb_raft_register_result(struct rdb *db, uint64_t index, void *buf)
 static void *
 rdb_raft_lookup_result(struct rdb *db, uint64_t index)
 {
-	daos_list_t *entry;
+	d_list_t *entry;
 
-	entry = dhash_rec_find(&db->d_results, &index, sizeof(index));
+	entry = d_hash_rec_find(&db->d_results, &index, sizeof(index));
 	if (entry == NULL)
 		return NULL;
 	return rdb_raft_result_obj(entry)->drr_buf;
@@ -678,13 +678,13 @@ static void
 rdb_raft_unregister_result(struct rdb *db, uint64_t index)
 {
 	struct rdb_raft_result *result;
-	daos_list_t	       *entry;
+	d_list_t	       *entry;
 	bool			deleted;
 
-	entry = dhash_rec_find(&db->d_results, &index, sizeof(index));
+	entry = d_hash_rec_find(&db->d_results, &index, sizeof(index));
 	D__ASSERT(entry != NULL);
 	result = rdb_raft_result_obj(entry);
-	deleted = dhash_rec_delete_at(&db->d_results, entry);
+	deleted = d_hash_rec_delete_at(&db->d_results, entry);
 	D__ASSERT(deleted);
 	D__FREE_PTR(result);
 }
@@ -749,7 +749,7 @@ rdb_apply_to(struct rdb *db, uint64_t index)
 		uint64_t	i = db->d_applied + 1;
 		raft_entry_t   *e;
 		void	       *result;
-		daos_list_t	destroyed = DAOS_LIST_HEAD_INIT(destroyed);
+		d_list_t	destroyed = DAOS_LIST_HEAD_INIT(destroyed);
 		int		rc;
 
 		e = raft_get_entry_from_idx(db->d_raft, i);
@@ -977,10 +977,10 @@ rdb_raft_start(struct rdb *db)
 	DAOS_INIT_LIST_HEAD(&db->d_requests);
 	DAOS_INIT_LIST_HEAD(&db->d_replies);
 
-	rc = dhash_table_create_inplace(DHASH_FT_NOLOCK, 4 /* bits */,
-					NULL /* priv */,
-					&rdb_raft_result_hash_ops,
-					&db->d_results);
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 4 /* bits */,
+					 NULL /* priv */,
+					 &rdb_raft_result_hash_ops,
+					 &db->d_results);
 	if (rc != 0)
 		D__GOTO(err, rc);
 
@@ -1138,7 +1138,7 @@ err_committed_cv:
 err_applied_cv:
 	ABT_cond_free(&db->d_applied_cv);
 err_results:
-	dhash_table_destroy_inplace(&db->d_results, true /* force */);
+	d_hash_table_destroy_inplace(&db->d_results, true /* force */);
 err:
 	return rc;
 }
@@ -1212,7 +1212,7 @@ rdb_raft_stop(struct rdb *db)
 	ABT_cond_free(&db->d_events_cv);
 	ABT_cond_free(&db->d_committed_cv);
 	ABT_cond_free(&db->d_applied_cv);
-	dhash_table_destroy_inplace(&db->d_results, true /* force */);
+	d_hash_table_destroy_inplace(&db->d_results, true /* force */);
 }
 
 /* Resign the leadership in term. */

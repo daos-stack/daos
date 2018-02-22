@@ -43,19 +43,19 @@ struct tse_task_private {
 	tse_task_func_t			 dtp_func;
 
 	/* links to scheduler */
-	daos_list_t			 dtp_list;
+	d_list_t			 dtp_list;
 
 	/* links to tasks which dependent on it */
-	daos_list_t			 dtp_dep_list;
+	d_list_t			 dtp_dep_list;
 
 	/* daos prepare task callback list */
-	daos_list_t			 dtp_prep_cb_list;
+	d_list_t			 dtp_prep_cb_list;
 
 	/* daos complete task callback list */
-	daos_list_t			 dtp_comp_cb_list;
+	d_list_t			 dtp_comp_cb_list;
 
 	/* finished tasks this task depends on, might check theirs result */
-	daos_list_t			 dtp_ret_list;
+	d_list_t			 dtp_ret_list;
 
 	uint32_t			/* task has been completed, no chance to
 					 * be re-initialized.
@@ -85,7 +85,7 @@ struct tse_task_private {
 };
 
 struct tse_task_cb {
-	daos_list_t		dtc_list;
+	d_list_t		dtc_list;
 	tse_task_cb_t		dtc_cb;
 	daos_size_t		dtc_arg_size;
 	char			dtc_arg[0];
@@ -98,20 +98,20 @@ struct tse_sched_private {
 	/* The task will be added to init list when it is initially
 	 * added to scheduler.
 	 **/
-	daos_list_t	dsp_init_list;
+	d_list_t	dsp_init_list;
 
 	/* The task will be moved to complete list after the
 	 * complete callback is being executed
 	 **/
-	daos_list_t	dsp_complete_list;
+	d_list_t	dsp_complete_list;
 
 	/**
 	 * The task running list.
 	 **/
-	daos_list_t	dsp_running_list;
+	d_list_t	dsp_running_list;
 
 	/* the list for complete callback */
-	daos_list_t	dsp_comp_cb_list;
+	d_list_t	dsp_comp_cb_list;
 
 	int		dsp_refcount;
 
@@ -123,7 +123,7 @@ struct tse_sched_private {
 };
 
 struct tse_sched_comp {
-	daos_list_t		dsc_list;
+	d_list_t		dsc_list;
 	tse_sched_comp_cb_t	dsc_comp_cb;
 	void			*dsc_arg;
 };

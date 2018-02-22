@@ -31,7 +31,7 @@
 
 #include <daos_types.h>
 #include <daos/common.h>
-#include <daos/hash.h>
+#include <gurt/hash.h>
 #include <daos/pool_map.h>
 #include <daos/rsvc.h>
 #include <daos/tse.h>
@@ -42,7 +42,7 @@ void dc_pool_fini(void);
 /* Client pool handle */
 struct dc_pool {
 	/* container list of the pool */
-	daos_list_t		dp_co_list;
+	d_list_t		dp_co_list;
 	/* lock for the container list */
 	pthread_rwlock_t	dp_co_list_lock;
 	/* pool uuid */

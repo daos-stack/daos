@@ -256,7 +256,7 @@ rdb_create_bcast(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
 }
 
 struct rdb_raft_rpc {
-	daos_list_t	drc_entry;	/* in rdb::{d_requests,d_replies} */
+	d_list_t	drc_entry;	/* in rdb::{d_requests,d_replies} */
 	crt_rpc_t      *drc_rpc;
 	struct rdb     *drc_db;
 	raft_node_t    *drc_node;

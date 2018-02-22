@@ -178,9 +178,9 @@ kb_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 	struct vos_key_bundle	*kbund = vos_iov2key_bundle(key_iov);
 	daos_key_t		*key   = kbund->kb_key;
 
-	kkey->kb_hash1  = daos_hash_murmur64(key->iov_buf, key->iov_len,
-					     VOS_BTR_MUR_SEED);
-	kkey->kb_hash2  = daos_hash_string_u32(key->iov_buf, key->iov_len);
+	kkey->kb_hash1  = d_hash_murmur64(key->iov_buf, key->iov_len,
+					  VOS_BTR_MUR_SEED);
+	kkey->kb_hash2  = d_hash_string_u32(key->iov_buf, key->iov_len);
 	kkey->kb_epc_lo = kbund->kb_epr->epr_lo;
 	kkey->kb_epc_hi = kbund->kb_epr->epr_hi;
 }

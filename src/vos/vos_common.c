@@ -125,10 +125,10 @@ vos_imem_strts_destroy(struct vos_imem_strts *imem_inst)
 		vos_obj_cache_destroy(imem_inst->vis_ocache);
 
 	if (imem_inst->vis_pool_hhash)
-		daos_uhash_destroy(imem_inst->vis_pool_hhash);
+		d_uhash_destroy(imem_inst->vis_pool_hhash);
 
 	if (imem_inst->vis_cont_hhash)
-		daos_uhash_destroy(imem_inst->vis_cont_hhash);
+		d_uhash_destroy(imem_inst->vis_cont_hhash);
 }
 
 static inline int
@@ -144,15 +144,15 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 		return rc;
 	}
 
-	rc = daos_uhash_create(0 /* no locking */, VOS_POOL_HHASH_BITS,
-			       &imem_inst->vis_pool_hhash);
+	rc = d_uhash_create(0 /* no locking */, VOS_POOL_HHASH_BITS,
+			    &imem_inst->vis_pool_hhash);
 	if (rc) {
 		D__ERROR("Error in creating POOL ref hash: %d\n", rc);
 		goto failed;
 	}
 
-	rc = daos_uhash_create(0 /* no locking */, VOS_CONT_HHASH_BITS,
-			       &imem_inst->vis_cont_hhash);
+	rc = d_uhash_create(0 /* no locking */, VOS_CONT_HHASH_BITS,
+			    &imem_inst->vis_cont_hhash);
 	if (rc) {
 		D__ERROR("Error in creating CONT ref hash: %d\n", rc);
 		goto failed;

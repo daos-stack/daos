@@ -373,8 +373,8 @@ obj_shard_dkey2tag(struct dc_obj_shard *dobj, daos_key_t *dkey)
 		return 0;
 
 	/** XXX hash is calculated twice (see cli_obj_dkey2shard) */
-	hash = daos_hash_murmur64((unsigned char *)dkey->iov_buf,
-				  dkey->iov_len, 5731);
+	hash = d_hash_murmur64((unsigned char *)dkey->iov_buf,
+				dkey->iov_len, 5731);
 	hash %= dobj->do_part_nr;
 
 	return hash;

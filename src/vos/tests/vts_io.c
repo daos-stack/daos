@@ -89,10 +89,10 @@ gen_rand_epoch(void)
 	return vts_epoch_gen;
 }
 
-struct daos_uuid
+struct d_uuid
 gen_rand_cookie(void)
 {
-	struct daos_uuid	uuid_val;
+	struct d_uuid		uuid_val;
 	int			i;
 
 	i = rand() % NUM_UNIQUE_COOKIES;
@@ -418,7 +418,7 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 int
 io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 		   daos_iod_t *iod, daos_sg_list_t *sgl,
-		   struct daos_uuid *dsm_cookie, bool verbose)
+		   struct d_uuid *dsm_cookie, bool verbose)
 {
 	daos_sg_list_t		*iod_sgl;
 	daos_iov_t		*iod_iov;
@@ -532,7 +532,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
-	struct daos_uuid	dsm_cookie;
+	struct d_uuid		dsm_cookie;
 	unsigned int		recx_size;
 	unsigned int		recx_nr;
 
@@ -590,7 +590,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &val_iov;
 
-	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
+	rex.rx_idx	= d_hash_string_u32(dkey_buf, dkey.iov_len);
 	rex.rx_idx	%= 1000000;
 
 	iod.iod_name	= akey;
@@ -1010,7 +1010,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
-	struct daos_uuid	dsm_cookie;
+	struct d_uuid		dsm_cookie;
 
 	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
@@ -1031,7 +1031,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	sgl.sg_iovs = &val_iov;
 
 	rex.rx_nr	= 1;
-	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
+	rex.rx_idx	= d_hash_string_u32(dkey_buf, dkey.iov_len);
 	rex.rx_idx	%= 1000000;
 
 	iod.iod_name	= akey;
@@ -1091,7 +1091,7 @@ io_fetch_wo_object(void **state)
 	sgl.sg_iovs = &val_iov;
 
 	rex.rx_nr	= 1;
-	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
+	rex.rx_idx	= d_hash_string_u32(dkey_buf, dkey.iov_len);
 	rex.rx_idx	%= 1000000;
 
 	iod.iod_name	= akey;
@@ -1423,7 +1423,7 @@ io_simple_one_key_cross_container(void **state)
 	daos_key_t		dkey;
 	daos_epoch_t		epoch = gen_rand_epoch();
 	daos_unit_oid_t		l_oid;
-	struct daos_uuid	cookie;
+	struct d_uuid		cookie;
 
 	/* Creating an additional container */
 	uuid_generate_time_safe(arg->addn_co_uuid);
@@ -1460,7 +1460,7 @@ io_simple_one_key_cross_container(void **state)
 		iod.iod_size = UPDATE_BUF_SIZE;
 		rex.rx_nr    = 1;
 	}
-	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
+	rex.rx_idx	= d_hash_string_u32(dkey_buf, dkey.iov_len);
 	rex.rx_idx	%= 1000000;
 
 	iod.iod_recxs	= &rex;

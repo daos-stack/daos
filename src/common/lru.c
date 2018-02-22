@@ -32,23 +32,23 @@
 #include <pthread.h>
 #include <daos/common.h>
 #include <daos/list.h>
-#include <daos/hash.h>
+#include <gurt/hash.h>
 #include <daos/lru.h>
 
 static struct daos_llink*
-hash2lru_link(daos_list_t *blink)
+hash2lru_link(d_list_t *blink)
 {
 	return container_of(blink, struct daos_llink, ll_hlink);
 }
 
 static void
-lru_hop_rec_addref(struct dhash_table *lr_htab, daos_list_t *rlink)
+lru_hop_rec_addref(struct d_hash_table *lr_htab, d_list_t *rlink)
 {
 	hash2lru_link(rlink)->ll_ref++;
 }
 
 static bool
-lru_hop_rec_decref(struct dhash_table *lr_htab, daos_list_t *rlink)
+lru_hop_rec_decref(struct d_hash_table *lr_htab, d_list_t *rlink)
 {
 
        struct daos_llink *llink = hash2lru_link(rlink);
@@ -60,7 +60,7 @@ lru_hop_rec_decref(struct dhash_table *lr_htab, daos_list_t *rlink)
 }
 
 static bool
-lru_hop_key_cmp(struct dhash_table *lr_htab, daos_list_t *rlink,
+lru_hop_key_cmp(struct d_hash_table *lr_htab, d_list_t *rlink,
 		const void *key, unsigned int ksize)
 {
 	struct daos_llink *llink = hash2lru_link(rlink);
@@ -72,14 +72,14 @@ lru_hop_key_cmp(struct dhash_table *lr_htab, daos_list_t *rlink,
 }
 
 static void
-lru_hop_rec_free(struct dhash_table *lr_htab, daos_list_t *rlink)
+lru_hop_rec_free(struct d_hash_table *lr_htab, d_list_t *rlink)
 {
 	struct daos_llink *llink = hash2lru_link(rlink);
 
 	llink->ll_ops->lop_free_ref(llink);
 }
 
-static dhash_table_ops_t lru_ops = {
+static d_hash_table_ops_t lru_ops = {
 	.hop_key_cmp		= lru_hop_key_cmp,
 	.hop_rec_addref		= lru_hop_rec_addref,
 	.hop_rec_decref		= lru_hop_rec_decref,
@@ -110,9 +110,9 @@ daos_lru_cache_create(int bits, uint32_t feats,
 	if (lru_cache == NULL)
 		return -DER_NOMEM;
 
-	rc = dhash_table_create_inplace(feats, max(4, bits - 3),
-					NULL, &lru_ops,
-					&lru_cache->dlc_htable);
+	rc = d_hash_table_create_inplace(feats, max(4, bits - 3),
+					 NULL, &lru_ops,
+					 &lru_cache->dlc_htable);
 	if (rc)
 		D__GOTO(exit, rc = -DER_NOMEM);
 
@@ -146,8 +146,8 @@ daos_lru_cache_destroy(struct daos_lru_cache *lcache)
 	D__DEBUG(DB_TRACE, "refs_held :%u\n", lcache->dlc_busy_nr);
 	D__ASSERTF(lcache->dlc_busy_nr == 0, "busy=%d", lcache->dlc_busy_nr);
 
-	dhash_table_debug(&lcache->dlc_htable);
-	dhash_table_destroy_inplace(&lcache->dlc_htable, true);
+	d_hash_table_debug(&lcache->dlc_htable);
+	d_hash_table_destroy_inplace(&lcache->dlc_htable, true);
 	D__FREE_PTR(lcache);
 }
 
@@ -172,8 +172,8 @@ daos_lru_cache_evict(struct daos_lru_cache *lcache,
 				      ll_qlink) {
 		if (cond == NULL || cond(llink, args)) {
 			daos_list_del_init(&llink->ll_qlink);
-			dhash_rec_delete_at(&lcache->dlc_htable,
-					    &llink->ll_hlink);
+			d_hash_rec_delete_at(&lcache->dlc_htable,
+					     &llink->ll_hlink);
 			lcache->dlc_idle_nr--;
 			cntr++;
 		}
@@ -182,7 +182,7 @@ daos_lru_cache_evict(struct daos_lru_cache *lcache,
 }
 
 static struct daos_llink *
-lru_fast_search(struct daos_lru_cache *lcache, daos_list_t *head,
+lru_fast_search(struct daos_lru_cache *lcache, d_list_t *head,
 		void *key, unsigned int key_size)
 {
 	struct daos_llink *llink;
@@ -208,9 +208,9 @@ struct daos_llink *
 lru_hash_search(struct daos_lru_cache *lcache, void *key,
 		unsigned int key_size)
 {
-	daos_list_t	*hlink;
+	d_list_t	*hlink;
 
-	hlink = dhash_rec_find(&lcache->dlc_htable, key, key_size);
+	hlink = d_hash_rec_find(&lcache->dlc_htable, key, key_size);
 	if (hlink == NULL)
 		return NULL;
 
@@ -276,8 +276,8 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	llink->ll_ops	  = lcache->dlc_ops;
 	DAOS_INIT_LIST_HEAD(&llink->ll_qlink);
 
-	rc = dhash_rec_insert(&lcache->dlc_htable, key, key_size,
-			      &llink->ll_hlink, true);
+	rc = d_hash_rec_insert(&lcache->dlc_htable, key, key_size,
+			       &llink->ll_hlink, true);
 	D__ASSERT(rc == 0);
 found:
 	if (llink->ll_ref == 2) /* 1 for hash, 1 for the first holder */
@@ -306,8 +306,8 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 			D__DEBUG(DB_TRACE, "Evict %p from LRU cache\n", llink);
 			daos_list_del_init(&llink->ll_qlink);
 			/* be freed within hash callback */
-			dhash_rec_delete_at(&lcache->dlc_htable,
-					    &llink->ll_hlink);
+			d_hash_rec_delete_at(&lcache->dlc_htable,
+					     &llink->ll_hlink);
 		} else {
 			D__DEBUG(DB_TRACE,
 				"Moving %p to the idle list\n", llink);
@@ -329,7 +329,7 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 				     struct daos_llink, ll_qlink);
 
 		daos_list_del_init(&llink->ll_qlink);
-		dhash_rec_delete_at(&lcache->dlc_htable, &llink->ll_hlink);
+		d_hash_rec_delete_at(&lcache->dlc_htable, &llink->ll_hlink);
 		lcache->dlc_idle_nr--;
 	}
 	D__DEBUG(DB_TRACE, "Done releasing reference\n");

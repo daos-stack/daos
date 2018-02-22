@@ -189,7 +189,7 @@ static struct daos_llink_ops rdb_tree_cache_ops = {
 int
 rdb_tree_cache_create(struct daos_lru_cache **cache)
 {
-	return daos_lru_cache_create(5 /* bits */, DHASH_FT_NOLOCK /* feats */,
+	return daos_lru_cache_create(5 /* bits */, D_HASH_FT_NOLOCK /* feats */,
 				     &rdb_tree_cache_ops, cache);
 }
 

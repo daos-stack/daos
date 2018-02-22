@@ -125,8 +125,8 @@ ring_comp_shuff_cmp(struct pool_component *comp_a,
 	uint64_t	key_a = comp_a->co_id;
 	uint64_t	key_b = comp_b->co_id;
 
-	key_a = daos_hash_mix96(seed, key_a % prime, key_a);
-	key_b = daos_hash_mix96(seed, key_b % prime, key_b);
+	key_a = d_hash_mix96(seed, key_a % prime, key_a);
+	key_b = d_hash_mix96(seed, key_b % prime, key_b);
 
 	if (key_a > key_b)
 		return 1;
@@ -752,8 +752,8 @@ ring_oid2ring(struct pl_ring_map *rimap, daos_obj_id_t id)
 	uint64_t hash;
 
 	hash = pl_hash64(id.lo, RING_HASH_BITS);
-	hash = daos_chash_srch_u64(rimap->rmp_ring_hashes,
-				   rimap->rmp_ring_nr, hash);
+	hash = d_hash_srch_u64(rimap->rmp_ring_hashes,
+				rimap->rmp_ring_nr, hash);
 	return &rimap->rmp_rings[hash];
 }
 
@@ -772,8 +772,8 @@ ring_obj_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid)
 	hash  = daos_u64_hash(hash, TARGET_HASH_BITS);
 	hash &= (1ULL << rimap->rmp_target_hbits) - 1;
 
-	return daos_chash_srch_u64(rimap->rmp_target_hashes,
-				   rimap->rmp_target_nr, hash);
+	return d_hash_srch_u64(rimap->rmp_target_hashes,
+				rimap->rmp_target_nr, hash);
 }
 
 /** calculate distance between to object shard */
@@ -857,7 +857,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 }
 
 struct ring_failed_shard {
-	daos_list_t	rfs_list;
+	d_list_t	rfs_list;
 	uint32_t	rfs_shard_idx;
 	uint32_t	rfs_fseq;
 	uint32_t	rfs_rank;
@@ -866,10 +866,10 @@ struct ring_failed_shard {
 
 /** add one failed shard into remap list */
 static void
-ring_remap_add_one(daos_list_t *remap_list, struct ring_failed_shard *f_new)
+ring_remap_add_one(d_list_t *remap_list, struct ring_failed_shard *f_new)
 {
 	struct ring_failed_shard *f_shard;
-	daos_list_t		 *tmp;
+	d_list_t		 *tmp;
 
 	/* All failed shards are sorted by fseq in ascending order */
 	daos_list_for_each_prev(tmp, remap_list) {
@@ -893,7 +893,7 @@ ring_remap_add_one(daos_list_t *remap_list, struct ring_failed_shard *f_new)
 
 /** allocate one failed shard then add it into remap list */
 static int
-ring_remap_alloc_one(daos_list_t *remap_list, unsigned int shard_idx,
+ring_remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 		     struct pool_target *tgt)
 {
 	struct ring_failed_shard *f_new;
@@ -914,7 +914,7 @@ ring_remap_alloc_one(daos_list_t *remap_list, unsigned int shard_idx,
 
 /** free all elements in the remap list */
 static void
-ring_remap_free_all(daos_list_t *remap_list)
+ring_remap_free_all(d_list_t *remap_list)
 {
 	struct ring_failed_shard *f_shard, *f_tmp;
 
@@ -979,7 +979,7 @@ ring_remap_next_spare(struct pl_ring_map *rimap,
 
 /** dump remap list, for debug only */
 static void
-ring_remap_dump(daos_list_t *remap_list, struct daos_obj_md *md,
+ring_remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
 		char *comment)
 {
 	struct ring_failed_shard *f_shard;
@@ -1003,13 +1003,13 @@ ring_remap_dump(daos_list_t *remap_list, struct daos_obj_md *md,
 static void
 ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		      struct pl_obj_layout *layout,
-		      struct ring_obj_placement *rop, daos_list_t *remap_list)
+		      struct ring_obj_placement *rop, d_list_t *remap_list)
 {
 	struct ring_failed_shard *f_shard, *f_tmp;
 	struct pl_target	 *plts;
 	struct pl_obj_shard	 *l_shard;
 	struct pool_target	 *spare_tgt, *tgts;
-	daos_list_t		 *current;
+	d_list_t		 *current;
 	unsigned int		  spare_idx;
 	bool			  spare_avail = true;
 
@@ -1170,7 +1170,7 @@ ring_map_dump(struct pl_map *map, bool dump_rings)
 static int
 ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 		     struct ring_obj_placement *rop,
-		     struct pl_obj_layout *layout, daos_list_t *remap_list)
+		     struct pl_obj_layout *layout, d_list_t *remap_list)
 {
 	struct pl_ring_map	*rimap = pl_map2rimap(map);
 	struct pl_target	*plts;
@@ -1240,7 +1240,7 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	struct ring_obj_placement  rop;
 	struct pl_ring_map	  *rimap = pl_map2rimap(map);
 	struct pl_obj_layout	  *layout;
-	daos_list_t		   remap_list;
+	d_list_t		   remap_list;
 	int			   rc;
 
 	rc = ring_obj_placement_get(rimap, md, shard_md, &rop);
@@ -1275,7 +1275,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	struct pl_obj_layout	  *layout;
 	struct pl_obj_layout	   layout_on_stack;
 	struct pl_obj_shard	   shards_on_stack[SHARDS_ON_STACK_COUNT];
-	daos_list_t		   remap_list;
+	d_list_t		   remap_list;
 	struct ring_failed_shard  *f_shard;
 	struct pl_obj_shard	  *l_shard;
 	unsigned int		   shards_count;

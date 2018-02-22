@@ -144,7 +144,7 @@ dc_task_schedule(tse_task_t *task, bool instant)
 }
 
 void
-dc_task_list_sched(daos_list_t *head, bool instant)
+dc_task_list_sched(d_list_t *head, bool instant)
 {
 	tse_task_t *task;
 

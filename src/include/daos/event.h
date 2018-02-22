@@ -30,7 +30,7 @@
 #include <daos_types.h>
 #include <daos_errno.h>
 #include <daos/list.h>
-#include <daos/hash.h>
+#include <gurt/hash.h>
 #include <daos_task.h>
 
 enum daos_ev_flags {
@@ -215,6 +215,6 @@ dc_task_get_args(tse_task_t *task);
 	tse_task_reinit(task)
 
 void
-dc_task_list_sched(daos_list_t *head, bool instant);
+dc_task_list_sched(d_list_t *head, bool instant);
 
 #endif /*  __DAOS_EV_INTERNAL_H__ */

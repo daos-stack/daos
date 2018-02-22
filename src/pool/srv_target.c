@@ -308,7 +308,7 @@ ds_pool_cache_init(void)
 	rc = ABT_mutex_create(&pool_cache_lock);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
-	rc = daos_lru_cache_create(-1 /* bits */, DHASH_FT_NOLOCK /* feats */,
+	rc = daos_lru_cache_create(-1 /* bits */, D_HASH_FT_NOLOCK /* feats */,
 				     &pool_cache_ops, &pool_cache);
 	if (rc != 0)
 		ABT_mutex_free(&pool_cache_lock);
@@ -379,16 +379,16 @@ ds_pool_put(struct ds_pool *pool)
 
 /* ds_pool_hdl ****************************************************************/
 
-static struct dhash_table *pool_hdl_hash;
+static struct d_hash_table *pool_hdl_hash;
 
 static inline struct ds_pool_hdl *
-pool_hdl_obj(daos_list_t *rlink)
+pool_hdl_obj(d_list_t *rlink)
 {
 	return container_of(rlink, struct ds_pool_hdl, sph_entry);
 }
 
 static bool
-pool_hdl_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
+pool_hdl_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 		 const void *key, unsigned int ksize)
 {
 	struct ds_pool_hdl *hdl = pool_hdl_obj(rlink);
@@ -398,13 +398,13 @@ pool_hdl_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
 }
 
 static void
-pool_hdl_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+pool_hdl_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	pool_hdl_obj(rlink)->sph_ref++;
 }
 
 static bool
-pool_hdl_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+pool_hdl_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_pool_hdl *hdl = pool_hdl_obj(rlink);
 
@@ -414,19 +414,19 @@ pool_hdl_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
 }
 
 static void
-pool_hdl_rec_free(struct dhash_table *htable, daos_list_t *rlink)
+pool_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_pool_hdl *hdl = pool_hdl_obj(rlink);
 
 	D__DEBUG(DF_DSMS, DF_UUID": freeing "DF_UUID"\n",
 		DP_UUID(hdl->sph_pool->sp_uuid), DP_UUID(hdl->sph_uuid));
-	D__ASSERT(dhash_rec_unlinked(&hdl->sph_entry));
+	D__ASSERT(d_hash_rec_unlinked(&hdl->sph_entry));
 	D__ASSERTF(hdl->sph_ref == 0, "%d\n", hdl->sph_ref);
 	ds_pool_put(hdl->sph_pool);
 	D__FREE_PTR(hdl);
 }
 
-static dhash_table_ops_t pool_hdl_hash_ops = {
+static d_hash_table_ops_t pool_hdl_hash_ops = {
 	.hop_key_cmp	= pool_hdl_key_cmp,
 	.hop_rec_addref	= pool_hdl_rec_addref,
 	.hop_rec_decref	= pool_hdl_rec_decref,
@@ -436,23 +436,23 @@ static dhash_table_ops_t pool_hdl_hash_ops = {
 int
 ds_pool_hdl_hash_init(void)
 {
-	return dhash_table_create(0 /* feats */, 4 /* bits */, NULL /* priv */,
-				  &pool_hdl_hash_ops, &pool_hdl_hash);
+	return d_hash_table_create(0 /* feats */, 4 /* bits */, NULL /* priv */,
+				   &pool_hdl_hash_ops, &pool_hdl_hash);
 }
 
 void
 ds_pool_hdl_hash_fini(void)
 {
 	/* Currently, we use "force" to purge all ds_pool_hdl objects. */
-	dhash_table_destroy(pool_hdl_hash, true /* force */);
+	d_hash_table_destroy(pool_hdl_hash, true /* force */);
 }
 
 static int
 pool_hdl_add(struct ds_pool_hdl *hdl)
 {
-	return dhash_rec_insert(pool_hdl_hash, hdl->sph_uuid,
-				sizeof(uuid_t), &hdl->sph_entry,
-				true /* exclusive */);
+	return d_hash_rec_insert(pool_hdl_hash, hdl->sph_uuid,
+				 sizeof(uuid_t), &hdl->sph_entry,
+				 true /* exclusive */);
 }
 
 static void
@@ -460,17 +460,17 @@ pool_hdl_delete(struct ds_pool_hdl *hdl)
 {
 	bool deleted;
 
-	deleted = dhash_rec_delete(pool_hdl_hash, hdl->sph_uuid,
-				   sizeof(uuid_t));
+	deleted = d_hash_rec_delete(pool_hdl_hash, hdl->sph_uuid,
+				    sizeof(uuid_t));
 	D__ASSERT(deleted == true);
 }
 
 struct ds_pool_hdl *
 ds_pool_hdl_lookup(const uuid_t uuid)
 {
-	daos_list_t *rlink;
+	d_list_t *rlink;
 
-	rlink = dhash_rec_find(pool_hdl_hash, uuid, sizeof(uuid_t));
+	rlink = d_hash_rec_find(pool_hdl_hash, uuid, sizeof(uuid_t));
 	if (rlink == NULL)
 		return NULL;
 
@@ -480,7 +480,7 @@ ds_pool_hdl_lookup(const uuid_t uuid)
 void
 ds_pool_hdl_put(struct ds_pool_hdl *hdl)
 {
-	dhash_rec_decref(pool_hdl_hash, &hdl->sph_entry);
+	d_hash_rec_decref(pool_hdl_hash, &hdl->sph_entry);
 }
 
 void

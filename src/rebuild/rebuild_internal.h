@@ -35,7 +35,7 @@
 
 struct rebuild_dkey {
 	daos_key_t	rd_dkey;
-	daos_list_t	rd_list;
+	d_list_t	rd_list;
 	uuid_t		rd_cont_uuid;
 	daos_unit_oid_t	rd_oid;
 	daos_epoch_t	rd_epoch;
@@ -47,7 +47,7 @@ struct rebuild_puller {
 	ABT_mutex	rp_lock;
 	/** serialize initialization of ULTs */
 	ABT_cond	rp_fini_cond;
-	daos_list_t	rp_dkey_list;
+	d_list_t	rp_dkey_list;
 	unsigned int	rp_ult_running:1;
 };
 
@@ -72,7 +72,7 @@ struct rebuild_tgt_pool_tracker {
 	uuid_t			rt_coh_uuid;
 
 	/* Link it to the rebuild_global tracker_list */
-	daos_list_t		rt_list;
+	d_list_t		rt_list;
 	ABT_mutex		rt_lock;
 	uuid_t			rt_pool_uuid;
 	struct btr_root		rt_local_root;
@@ -96,7 +96,7 @@ struct rebuild_global_pool_tracker {
 	struct daos_rebuild_status	rgt_status;
 
 	/* link to rebuild_global.rg_global_tracker_list */
-	daos_list_t	rgt_list;
+	d_list_t	rgt_list;
 
 	/* rebuild cont/pool hdl uuid */
 	uuid_t		rgt_poh_uuid;
@@ -129,20 +129,20 @@ struct rebuild_global {
 	/* Tracking each target rebuild status per pool
 	 * Only operated by stream 0, no need lock
 	 */
-	daos_list_t	rg_tgt_tracker_list;
+	d_list_t	rg_tgt_tracker_list;
 
 	/* Tracking global rebuild status per pool.
 	 * Only operated by stream 0, no need lock
 	 */
-	daos_list_t	rg_global_tracker_list;
+	d_list_t	rg_global_tracker_list;
 
 	/* rebuild running list */
-	daos_list_t	rg_running_list;
+	d_list_t	rg_running_list;
 
 	/* rebuild task is queued to this list waiting
 	 * to be scheduled.
 	 */
-	daos_list_t	rg_queue_list;
+	d_list_t	rg_queue_list;
 
 
 	ABT_mutex	rg_lock;
@@ -157,7 +157,7 @@ struct rebuild_global {
 extern struct rebuild_global rebuild_gst;
 
 struct rebuild_task {
-	daos_list_t	dst_list;
+	d_list_t	dst_list;
 	uuid_t		dst_pool_uuid;
 	d_rank_list_t	*dst_tgts_failed;
 	d_rank_list_t	*dst_svc_list;
@@ -170,7 +170,7 @@ struct rebuild_task {
 struct rebuild_pool_tls {
 	uuid_t		rebuild_pool_uuid;
 	daos_handle_t	rebuild_pool_hdl;
-	daos_list_t	rebuild_pool_list;
+	d_list_t	rebuild_pool_list;
 	uint64_t	rebuild_pool_obj_count;
 	uint64_t	rebuild_pool_rec_count;
 	unsigned int	rebuild_pool_ver;
@@ -181,7 +181,7 @@ struct rebuild_pool_tls {
 /* per thread structure to track rebuild status for all pools */
 struct rebuild_tls {
 	/* rebuild_pool_tls will link here */
-	daos_list_t	rebuild_pool_list;
+	d_list_t	rebuild_pool_list;
 };
 
 struct rebuild_root {

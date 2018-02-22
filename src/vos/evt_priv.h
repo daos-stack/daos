@@ -70,11 +70,11 @@ struct evt_context {
 	 */
 	struct evt_entry_list		 tc_ent_list;
 	/** reserved: entries being checking for clip */
-	daos_list_t			 tc_ent_clipping;
+	d_list_t			 tc_ent_clipping;
 	/** reserved: entries ready to be inserted */
-	daos_list_t			 tc_ent_inserting;
+	d_list_t			 tc_ent_inserting;
 	/** reserved: entries that should be dropped */
-	daos_list_t			 tc_ent_dropping;
+	d_list_t			 tc_ent_dropping;
 	/** magic number to identify invalid tree open handle */
 	unsigned int			 tc_magic;
 	/** refcount on the context */

@@ -55,21 +55,21 @@ struct tier_ext_rec {
 
 /* a buffer for collecting tier_ext_rec structs */
 struct tier_ext_list {
-	daos_list_t	      del_lh;
+	d_list_t	      del_lh;
 	struct tier_ext_rec   del_recs[NUM_BUNDLED_EXTS];
 	int		      del_nrecs;
 };
 
 /* a buffer for collecting sg list info */
 struct tier_sgiod_list {
-	daos_list_t	      dsl_lh;
+	d_list_t	      dsl_lh;
 	daos_iov_t            dsl_iovs[NUM_BUNDLED_IODS];
 	int		      dsl_niods;
 };
 
 /* buffer for collection daos_iod_t structs */
 struct tier_vec_iod {
-	daos_list_t	      dvi_lh;
+	d_list_t	      dvi_lh;
 	daos_iod_t	      dvi_viod;
 };
 
@@ -101,28 +101,28 @@ struct tier_key_iod {
 /* context for enumeration callback functions -*/
 struct tier_fetch_ctx {
 	/* fetch parameters */
-	uuid_t		     dfc_pool;
-	daos_handle_t	     dfc_co;
-	daos_epoch_t	     dfc_ev;
-	int		     dfc_flags;
+	uuid_t			dfc_pool;
+	daos_handle_t		dfc_co;
+	daos_epoch_t		dfc_ev;
+	int			dfc_flags;
 	/* working area */
-	daos_unit_oid_t      dfc_oid;
-	daos_key_t	     dfc_dkey;
-	daos_key_t	     dfc_akey;
-	unsigned int	     dfc_na;
-	unsigned int	     dfc_ne;
+	daos_unit_oid_t		dfc_oid;
+	daos_key_t		dfc_dkey;
+	daos_key_t		dfc_akey;
+	unsigned int		dfc_na;
+	unsigned int		dfc_ne;
 	/* cross-tier godies */
-	daos_handle_t	     dfc_eqh;
-	daos_event_t	     dfc_evt;
-	daos_event_t	    *dfc_evp;
-	daos_handle_t	     dfc_oh;
-	daos_handle_t	     dfc_coh;
-	daos_handle_t	     dfc_ioh;
-	tse_sched_t	*dfc_sched;
+	daos_handle_t		dfc_eqh;
+	daos_event_t		dfc_evt;
+	daos_event_t		*dfc_evp;
+	daos_handle_t		dfc_oh;
+	daos_handle_t		dfc_coh;
+	daos_handle_t		dfc_ioh;
+	tse_sched_t		*dfc_sched;
 	/* list heads for collecting what to fetch */
-	daos_list_t          dfc_head;
-	daos_list_t          dfc_iods;
-	daos_list_t	     dfc_dkios;
+	d_list_t		dfc_head;
+	d_list_t		dfc_iods;
+	d_list_t		dfc_dkios;
 };
 static int
 tier_fetche(uuid_t pool, daos_handle_t coh, daos_epoch_t ev, uuid_t cid,
@@ -171,7 +171,7 @@ tf_cont_close(daos_handle_t coh, uuid_t cid, daos_epoch_t epoch)
 	int			rc;
 	bool			empty;
 	daos_epoch_state_t	state;
-	daos_list_t		head;
+	d_list_t		head;
 	tse_sched_t		*sched;
 
 	D_ENTER;
@@ -219,7 +219,7 @@ tf_cont_open(daos_handle_t *pcoh, uuid_t cid, daos_epoch_t *epoch)
 	tse_task_t		*task2;
 	int			 rc;
 	bool			 empty;
-	daos_list_t		 head;
+	d_list_t		 head;
 	daos_epoch_state_t	 epstate;
 	tse_sched_t		*sched;
 
@@ -603,8 +603,8 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 	struct tier_key_iod		*ptmp;
 	struct tier_vec_iod		*src;
 	int				 nrecs = fctx->dfc_na;
-	daos_list_t			*iter;
-	daos_list_t			*tmp;
+	d_list_t			*iter;
+	d_list_t			*tmp;
 	int				 j;
 	daos_epoch_t			 epoch = DAOS_EPOCH_MAX;
 
@@ -675,8 +675,8 @@ tier_proc_akey(void *ctx, vos_iter_entry_t *ie)
 	int			 rc = 0;
 	int			 nrecs = 0;
 	int			 j;
-	daos_list_t		*iter;
-	daos_list_t		*tmp;
+	d_list_t		*iter;
+	d_list_t		*tmp;
 	unsigned char		*ptmp;
 	char			 kbuf[80];
 

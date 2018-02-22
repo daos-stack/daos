@@ -31,7 +31,7 @@
 #define __VOS_INTERNAL_H__
 
 #include <daos/list.h>
-#include <daos/hash.h>
+#include <gurt/hash.h>
 #include <daos/btree.h>
 #include <daos/common.h>
 #include <daos/lru.h>
@@ -59,7 +59,7 @@ struct vos_cookie_table {
  */
 struct vos_pool {
 	/** VOS uuid hash-link with refcnt */
-	struct daos_ulink	vp_hlink;
+	struct d_ulink		vp_hlink;
 	/** number of openers */
 	int			vp_opened;
 	/** UUID of vos pool */
@@ -81,7 +81,7 @@ struct vos_pool {
  */
 struct vos_container {
 	/* VOS uuid hash with refcnt */
-	struct daos_ulink	vc_uhlink;
+	struct d_ulink		vc_uhlink;
 	/* VOS PMEMobjpool pointer */
 	struct vos_pool		*vc_pool;
 	/* Unique UID of VOS container */
@@ -104,8 +104,8 @@ struct vos_imem_strts {
 	struct daos_lru_cache	*vis_ocache;
 	/** Hash table to refcount VOS handles */
 	/** (container/pool, etc.,) */
-	struct dhash_table	*vis_pool_hhash;
-	struct dhash_table	*vis_cont_hhash;
+	struct d_hash_table	*vis_pool_hhash;
+	struct d_hash_table	*vis_cont_hhash;
 	int			vis_enable_checksum;
 	mchecksum_object_t	vis_checksum;
 
@@ -156,7 +156,7 @@ vos_tls_get()
 	return tls;
 }
 
-static inline struct dhash_table *
+static inline struct d_hash_table *
 vos_pool_hhash_get(void)
 {
 #ifdef VOS_STANDALONE
@@ -166,7 +166,7 @@ vos_pool_hhash_get(void)
 #endif
 }
 
-static inline struct dhash_table *
+static inline struct d_hash_table *
 vos_cont_hhash_get(void)
 {
 #ifdef VOS_STANDALONE
@@ -233,13 +233,13 @@ vos_pool_ptr2df(struct vos_pool *pool)
 static inline void
 vos_pool_addref(struct vos_pool *pool)
 {
-	daos_uhash_link_addref(vos_pool_hhash_get(), &pool->vp_hlink);
+	d_uhash_link_addref(vos_pool_hhash_get(), &pool->vp_hlink);
 }
 
 static inline void
 vos_pool_decref(struct vos_pool *pool)
 {
-	daos_uhash_link_decref(vos_pool_hhash_get(), &pool->vp_hlink);
+	d_uhash_link_putref(vos_pool_hhash_get(), &pool->vp_hlink);
 }
 
 

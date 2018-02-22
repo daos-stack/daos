@@ -54,7 +54,7 @@ struct vc_test_args {
 	int			seq_cnt[VCT_CONTAINERS];
 	int			ops_seq[VCT_CONTAINERS][5];
 	daos_handle_t		coh[VCT_CONTAINERS];
-	struct daos_uuid	uuid[VCT_CONTAINERS];
+	struct d_uuid		uuid[VCT_CONTAINERS];
 	bool			anchor_flag;
 };
 
@@ -348,13 +348,13 @@ co_iter_test_with_anchor(void **state)
 
 
 struct cookie_entry {
-	struct daos_ulink	ulink;
+	struct d_ulink		ulink;
 	uuid_t			cookie;
 	daos_epoch_t		max_epoch;
 };
 
 void
-cookie_uhash_free(struct daos_ulink *uhlink)
+cookie_uhash_free(struct d_ulink *uhlink)
 {
 	struct cookie_entry	*entry;
 
@@ -362,7 +362,7 @@ cookie_uhash_free(struct daos_ulink *uhlink)
 	D__FREE_PTR(entry);
 }
 
-struct daos_ulink_ops	cookie_uh_ops = {
+struct d_ulink_ops	cookie_uh_ops = {
 	.uop_free	= cookie_uhash_free,
 };
 
@@ -372,22 +372,22 @@ cookie_table_test(void **state)
 	int				ret = 0;
 	int				i = 0, j = 0, k = 0;
 	struct vos_cookie_table		*itab;
-	struct daos_uuid		*cookie_array;
+	struct d_uuid			*cookie_array;
 	daos_epoch_t			*epochs;
 	struct umem_attr		uma;
 	uint64_t			epoch_ret;
 	daos_handle_t			cookie_hdl;
 	/* static uuid hash for verification */
 	struct cookie_entry		*cookie_entries, *l_entry = NULL;
-	struct dhash_table		*uhtab = NULL;
-	struct daos_ulink		*l_ulink = NULL;
+	struct d_hash_table		*uhtab = NULL;
+	struct d_ulink			*l_ulink = NULL;
 
 	D__ALLOC_PTR(itab);
-	D__ALLOC(cookie_array, VCT_COOKIES * sizeof(struct daos_uuid));
+	D__ALLOC(cookie_array, VCT_COOKIES * sizeof(struct d_uuid));
 	D__ALLOC(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
 	D__ALLOC(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
 
-	ret = daos_uhash_create(0, 8, &uhtab);
+	ret = d_uhash_create(0, 8, &uhtab);
 	if (ret != 0)
 		print_error("Error creating daos Uhash  for verification\n");
 
@@ -406,7 +406,7 @@ cookie_table_test(void **state)
 		j = (rand()%VCT_COOKIES) - 1;
 		epochs[i] = rand()%100;
 
-		l_ulink = daos_uhash_link_lookup(uhtab, &cookie_array[j]);
+		l_ulink = d_uhash_link_lookup(uhtab, &cookie_array[j]);
 		if (l_ulink != NULL) {
 			l_entry = container_of(l_ulink, struct cookie_entry,
 					       ulink);
@@ -417,10 +417,10 @@ cookie_table_test(void **state)
 			uuid_copy(cookie_entries[k].cookie,
 				  cookie_array[j].uuid);
 			cookie_entries[k].max_epoch = epochs[i];
-			daos_uhash_ulink_init(&cookie_entries[k].ulink,
-					      &cookie_uh_ops);
-			ret = daos_uhash_link_insert(uhtab, &cookie_array[j],
-						     &cookie_entries[k].ulink);
+			d_uhash_ulink_init(&cookie_entries[k].ulink,
+					   &cookie_uh_ops);
+			ret = d_uhash_link_insert(uhtab, &cookie_array[j],
+						  &cookie_entries[k].ulink);
 			if (ret != 0)
 				D__ERROR("Inserting handle to UUID hash\n");
 			l_entry = &cookie_entries[k];
@@ -440,12 +440,12 @@ cookie_table_test(void **state)
 
 	}
 	/* Cleanup allocations */
-	daos_uhash_destroy(uhtab);
+	d_uhash_destroy(uhtab);
 	ret = vos_cookie_tab_destroy(cookie_hdl);
 	if (ret != 0)
 		D__ERROR("Cookie itab destroy error\n");
 	D__FREE_PTR(itab);
-	D__FREE(cookie_array, VCT_COOKIES * sizeof(struct daos_uuid));
+	D__FREE(cookie_array, VCT_COOKIES * sizeof(struct d_uuid));
 	D__FREE(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
 	D__FREE(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
 }

@@ -34,7 +34,7 @@
 #include <daos_event.h>
 #include <daos/event.h>
 #include <daos/list.h>
-#include <daos/hash.h>
+#include <gurt/hash.h>
 
 /* XXX For the testing purpose, this test case will use
  * some internal api of event queue, and for real use

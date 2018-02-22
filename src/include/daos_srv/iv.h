@@ -70,7 +70,7 @@ struct ds_iv_entry_ops {
  */
 struct ds_iv_key_type {
 	struct ds_iv_entry_ops *iv_key_ops;
-	daos_list_t	 iv_key_list;
+	d_list_t	 iv_key_list;
 	char		 iv_key_name[32];
 	unsigned int	 iv_key_id;
 };
@@ -87,7 +87,7 @@ struct ds_iv_entry {
 	/* value of the IV entry */
 	d_sg_list_t		value;
 	/* link to the namespace */
-	daos_list_t		link;
+	d_list_t		link;
 	unsigned int		ref;
 	unsigned int		valid:1;
 };
@@ -100,12 +100,12 @@ struct ds_iv_ns {
 	/* Different pool will use different ns id */
 	unsigned int	iv_ns_id;
 	/* Link to global ns list (ds_iv_list) */
-	daos_list_t	iv_ns_link;
+	d_list_t	iv_ns_link;
 
 	/* Protect to the key list */
 	ABT_mutex	iv_lock;
 	/* all of entries under the ns links here */
-	daos_list_t	iv_entry_list;
+	d_list_t	iv_entry_list;
 	/* Cart IV namespace */
 	crt_iv_namespace_t	iv_ns;
 };

@@ -46,13 +46,6 @@
 #include <gurt/common.h>
 #include <daos/debug.h>
 
-/**
- * NB: hide the dark secret that
- * uuid_t is an array not a structure
- */
-struct daos_uuid {
-	uuid_t	uuid;
-};
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -136,18 +129,6 @@ daos_u32_hash(uint64_t key, unsigned int bits)
 	return (DAOS_GOLDEN_RATIO_PRIME_32 * key) >> (32 - bits);
 }
 
-uint64_t daos_hash_mix64(uint64_t key);
-uint32_t daos_hash_mix96(uint32_t a, uint32_t b, uint32_t c);
-
-/** consistent hash search */
-unsigned int daos_chash_srch_u64(uint64_t *hashes, unsigned int nhashes,
-				 uint64_t value);
-
-/** djb2 hash a string to a uint32_t value */
-uint32_t daos_hash_string_u32(const char *string, unsigned int len);
-/** murmur hash (64 bits) */
-uint64_t daos_hash_murmur64(const unsigned char *key, unsigned int key_len,
-			    unsigned int seed);
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 

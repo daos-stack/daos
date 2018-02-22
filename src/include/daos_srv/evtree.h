@@ -167,7 +167,7 @@ enum evt_feats {
  */
 struct evt_entry {
 	/** link chain on evt_entry_list */
-	daos_list_t			 en_link;
+	d_list_t			 en_link;
 	/** the input/output versioned extent */
 	struct evt_rect			 en_rect;
 	/** cookie to insert this extent */
@@ -195,7 +195,7 @@ struct evt_entry {
  */
 struct evt_entry_list {
 	/** list head of all allocated entries */
-	daos_list_t			el_list;
+	d_list_t			el_list;
 	/** total number of allocated entries attached on the list */
 	unsigned int			el_ent_nr;
 	/** embedded entries (avoid allocation) */

@@ -78,7 +78,7 @@ struct io_test_args {
 	/* testing flags, see vts_test_flags */
 	unsigned long		ta_flags;
 	bool			cookie_flag;
-	daos_list_t		req_list;
+	d_list_t		req_list;
 };
 
 /** test counters */
@@ -94,7 +94,7 @@ struct vts_counter {
 };
 
 struct io_req {
-	daos_list_t		rlist;
+	d_list_t		rlist;
 	daos_iov_t		val_iov;
 	daos_key_t		dkey;
 	daos_key_t		akey;
@@ -103,7 +103,7 @@ struct io_req {
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
-	struct daos_uuid	cookie;
+	struct d_uuid		cookie;
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
 	daos_epoch_t		epoch;
@@ -111,7 +111,7 @@ struct io_req {
 
 
 daos_epoch_t		gen_rand_epoch(void);
-struct daos_uuid	gen_rand_cookie(void);
+struct d_uuid		gen_rand_cookie(void);
 void			gen_rand_key(char *rkey, char *key, int ksize);
 bool			is_found(uuid_t cookie);
 daos_unit_oid_t		gen_oid(void);
@@ -126,7 +126,7 @@ int			io_test_obj_update(struct io_test_args *arg,
 					   int epoch, daos_key_t *dkey,
 					   daos_iod_t *iod,
 					   daos_sg_list_t *sgl,
-					   struct daos_uuid *cookie,
+					   struct d_uuid *cookie,
 					   bool verbose);
 int			io_test_obj_fetch(struct io_test_args *arg,
 					  int epoch, daos_key_t *dkey,

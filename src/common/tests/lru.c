@@ -123,7 +123,7 @@ main(int argc, char **argv)
 		exit(-1);
 	}
 
-	rc = daos_lru_cache_create(atoi(argv[1]), DHASH_FT_RWLOCK,
+	rc = daos_lru_cache_create(atoi(argv[1]), D_HASH_FT_RWLOCK,
 				   &uint_ref_llink_ops,
 				   &tcache);
 	if (rc)

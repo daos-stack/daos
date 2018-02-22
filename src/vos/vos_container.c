@@ -32,7 +32,7 @@
 #include <daos_errno.h>
 #include <daos/common.h>
 #include <daos/mem.h>
-#include <daos/hash.h>
+#include <gurt/hash.h>
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <vos_internal.h>
@@ -51,13 +51,13 @@ struct cont_df_args {
 static int
 cont_df_hkey_size(struct btr_instance *tins)
 {
-	return sizeof(struct daos_uuid);
+	return sizeof(struct d_uuid);
 }
 
 static void
 cont_df_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 {
-	D__ASSERT(key_iov->iov_len == sizeof(struct daos_uuid));
+	D__ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
 	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
 }
 
@@ -82,11 +82,11 @@ cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	TMMID(struct vos_cont_df)	cont_mmid;
 	struct vos_cont_df		*cont_df;
 	struct cont_df_args		*args = NULL;
-	struct daos_uuid		*ukey = NULL;
+	struct d_uuid			*ukey = NULL;
 	int				rc = 0;
 
-	D__ASSERT(key_iov->iov_len == sizeof(struct daos_uuid));
-	ukey = (struct daos_uuid *)key_iov->iov_buf;
+	D__ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
+	ukey = (struct d_uuid *)key_iov->iov_buf;
 	D__DEBUG(DB_DF, "Allocating container uuid=%s\n", DP_UUID(ukey->uuid));
 
 	args = (struct cont_df_args *)(val_iov->iov_buf);
@@ -145,12 +145,12 @@ static btr_ops_t vct_ops = {
 };
 
 static int
-cont_df_lookup(struct vos_pool *vpool, struct daos_uuid *ukey,
+cont_df_lookup(struct vos_pool *vpool, struct d_uuid *ukey,
 	       struct cont_df_args *args)
 {
 	daos_iov_t	key, value;
 
-	daos_iov_set(&key, ukey, sizeof(struct daos_uuid));
+	daos_iov_set(&key, ukey, sizeof(struct d_uuid));
 	daos_iov_set(&value, args, sizeof(struct cont_df_args));
 	return dbtree_lookup(vpool->vp_cont_th, &key, &value);
 }
@@ -159,7 +159,7 @@ cont_df_lookup(struct vos_pool *vpool, struct daos_uuid *ukey,
  * Container cache functions
  */
 void
-cont_free(struct daos_ulink *ulink)
+cont_free(struct d_ulink *ulink)
 {
 	struct vos_container *cont;
 
@@ -169,21 +169,20 @@ cont_free(struct daos_ulink *ulink)
 	D__FREE_PTR(cont);
 }
 
-struct daos_ulink_ops   co_hdl_uh_ops = {
+struct d_ulink_ops   co_hdl_uh_ops = {
 	.uop_free       = cont_free,
 };
 
 int
-cont_insert(struct vos_container *cont, struct daos_uuid *key,
-	    daos_handle_t *coh)
+cont_insert(struct vos_container *cont, struct d_uuid *key, daos_handle_t *coh)
 {
 	int	rc = 0;
 
 	D__ASSERT(cont != NULL && coh != NULL);
 
-	daos_uhash_ulink_init(&cont->vc_uhlink, &co_hdl_uh_ops);
-	rc = daos_uhash_link_insert(vos_cont_hhash_get(), key,
-				    &cont->vc_uhlink);
+	d_uhash_ulink_init(&cont->vc_uhlink, &co_hdl_uh_ops);
+	rc = d_uhash_link_insert(vos_cont_hhash_get(), key,
+				 &cont->vc_uhlink);
 	if (rc) {
 		D__ERROR("UHASH table container handle insert failed\n");
 		D__GOTO(exit, rc);
@@ -195,11 +194,11 @@ exit:
 }
 
 static int
-cont_lookup(struct daos_uuid *key, struct vos_container **cont)
+cont_lookup(struct d_uuid *key, struct vos_container **cont)
 {
-	struct daos_ulink *ulink;
+	struct d_ulink *ulink;
 
-	ulink = daos_uhash_link_lookup(vos_cont_hhash_get(), key);
+	ulink = d_uhash_link_lookup(vos_cont_hhash_get(), key);
 	if (ulink == NULL)
 		return -DER_NONEXIST;
 
@@ -210,19 +209,19 @@ cont_lookup(struct daos_uuid *key, struct vos_container **cont)
 static void
 cont_decref(struct vos_container *cont)
 {
-	daos_uhash_link_decref(vos_cont_hhash_get(), &cont->vc_uhlink);
+	d_uhash_link_putref(vos_cont_hhash_get(), &cont->vc_uhlink);
 }
 
 static void
 cont_addref(struct vos_container *cont)
 {
-	daos_uhash_link_addref(vos_cont_hhash_get(), &cont->vc_uhlink);
+	d_uhash_link_addref(vos_cont_hhash_get(), &cont->vc_uhlink);
 }
 
 static int
 cont_close(struct vos_container *cont)
 {
-	daos_uhash_link_delete(vos_cont_hhash_get(), &cont->vc_uhlink);
+	d_uhash_link_delete(vos_cont_hhash_get(), &cont->vc_uhlink);
 	return 0;
 }
 
@@ -235,7 +234,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 
 	struct vos_pool		*vpool = NULL;
 	struct cont_df_args	 args;
-	struct daos_uuid	 ukey;
+	struct d_uuid		 ukey;
 	int			 rc = 0;
 
 	vpool = vos_hdl2pool(poh);
@@ -284,7 +283,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	int				rc = 0;
 	struct vos_pool			*vpool = NULL;
-	struct daos_uuid		ukey;
+	struct d_uuid			ukey;
 	struct cont_df_args		args;
 	struct vos_container		*cont = NULL;
 
@@ -397,7 +396,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	struct vos_pool			*vpool;
 	struct vos_container		*cont = NULL;
 	struct cont_df_args		 args;
-	struct daos_uuid		 uuid;
+	struct d_uuid			 uuid;
 	int				 rc;
 
 	uuid_copy(uuid.uuid, co_uuid);
@@ -434,7 +433,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 			pmemobj_tx_abort(EFAULT);
 		}
 
-		daos_iov_set(&iov, &uuid, sizeof(struct daos_uuid));
+		daos_iov_set(&iov, &uuid, sizeof(struct d_uuid));
 		rc = dbtree_delete(vpool->vp_cont_th, &iov, NULL);
 	}  TX_ONABORT {
 		rc = umem_tx_errno(rc);
@@ -582,13 +581,13 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 {
 	struct cont_iterator	*co_iter = vos_iter2co_iter(iter);
 	daos_iov_t		key, value;
-	struct daos_uuid	ukey;
+	struct d_uuid		ukey;
 	struct cont_df_args	args;
 	int			rc;
 
 	D__ASSERT(iter->it_type == VOS_ITER_COUUID);
 
-	daos_iov_set(&key, &ukey, sizeof(struct daos_uuid));
+	daos_iov_set(&key, &ukey, sizeof(struct d_uuid));
 	daos_iov_set(&value, &args, sizeof(struct cont_df_args));
 	uuid_clear(it_entry->ie_couuid);
 

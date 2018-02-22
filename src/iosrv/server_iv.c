@@ -32,10 +32,10 @@
 #include <daos_srv/iv.h>
 #include "srv_internal.h"
 
-static daos_list_t	ds_iv_ns_list;
+static d_list_t		ds_iv_ns_list;
 static d_rank_t		myrank;
 static int		ds_iv_ns_id = 1;
-static daos_list_t	ds_iv_key_type_list;
+static d_list_t		ds_iv_key_type_list;
 
 static struct ds_iv_key_type *
 iv_key_type_lookup(unsigned int key_id)
