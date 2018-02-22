@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -174,8 +174,8 @@ struct crt_req_format {
 };
 
 struct crt_array {
-	size_t		 da_count;
-	void		*da_arrays;
+	size_t		 ca_count;
+	void		*ca_arrays;
 };
 
 #define DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, in_size,			\

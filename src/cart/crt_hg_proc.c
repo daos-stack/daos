@@ -663,38 +663,38 @@ crt_proc_internal(struct crf_field *crf,
 			void		*array_ptr;
 
 			/* retrieve the count of array first */
-			hg_ret = hg_proc_hg_uint64_t(proc, &array->da_count);
+			hg_ret = hg_proc_hg_uint64_t(proc, &array->ca_count);
 			if (hg_ret != HG_SUCCESS) {
 				rc = -DER_HG;
 				break;
 			}
 
 			proc_op = hg_proc_get_op(proc);
-			if (array->da_count == 0) {
-				hg_ret = hg_proc_memcpy(proc, &array->da_arrays,
-						      sizeof(array->da_arrays));
+			if (array->ca_count == 0) {
+				hg_ret = hg_proc_memcpy(proc, &array->ca_arrays,
+						      sizeof(array->ca_arrays));
 				if (hg_ret != HG_SUCCESS) {
 					rc = -DER_HG;
 					break;
 				}
 
 				if (proc_op == HG_DECODE)
-					array->da_arrays = NULL;
+					array->ca_arrays = NULL;
 				ptr = (char *)ptr + sizeof(struct crt_array);
 				continue;
 			}
 
 			if (proc_op == HG_DECODE) {
-				D_ASSERT(array->da_count > 0);
-				D_ALLOC(array->da_arrays, array->da_count *
+				D_ASSERT(array->ca_count > 0);
+				D_ALLOC(array->ca_arrays, array->ca_count *
 						crf->crf_msg[i]->cmf_size);
-				if (array->da_arrays == NULL) {
+				if (array->ca_arrays == NULL) {
 					rc = -DER_NOMEM;
 					break;
 				}
 			}
-			array_ptr = array->da_arrays;
-			for (j = 0; j < array->da_count; j++) {
+			array_ptr = array->ca_arrays;
+			for (j = 0; j < array->ca_count; j++) {
 				rc = crf->crf_msg[i]->cmf_proc(proc, array_ptr);
 				if (rc != 0) {
 					D_ERROR("cmf_proc failed, i %d, "
@@ -707,7 +707,7 @@ crt_proc_internal(struct crf_field *crf,
 			}
 
 			if (proc_op == HG_FREE)
-				D_FREE(array->da_arrays);
+				D_FREE(array->ca_arrays);
 
 			ptr = (char *)ptr + sizeof(struct crt_array);
 		} else {
