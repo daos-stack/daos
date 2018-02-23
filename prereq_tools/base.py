@@ -758,6 +758,9 @@ class PreReqComponent(object):
                                    'gcc', ['gcc', 'clang', 'icc'],
                                    ignorecase=1))
 
+        if GetOption('clean'):
+            return
+
         compiler = self.__env.get('COMPILER').lower()
         if compiler == 'icc':
             self._setup_intelc()
@@ -1397,7 +1400,6 @@ class _Component(object):
 
         config = Configure(env)
         for header in self.headers:
-            print "Checking %s" % header
             if not config.CheckHeader(header):
                 config.Finish()
                 if self.__check_only:
