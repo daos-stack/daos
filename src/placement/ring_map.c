@@ -808,7 +808,11 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 
 	oid = md->omd_id;
 	oc_attr = daos_oclass_attr_find(oid);
-	D__ASSERT(oc_attr != NULL);
+	if (oc_attr == NULL) {
+		D__ERROR("Can not find obj class, invlaid oid="DF_OID"\n",
+			 DP_OID(oid));
+		return -DER_INVAL;
+	}
 
 	rop->rop_begin = ring_obj_place_begin(rimap, oid);
 	rop->rop_dist = ring_obj_place_dist(rimap, oid);

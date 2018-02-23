@@ -121,32 +121,84 @@ rebuild_test_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank)
 
 static int
 rebuild_io_internal(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
-		    bool update)
+		    bool validate)
 {
 	struct ioreq	req;
 	int		i;
 	int		j;
-	char		dkey[16];
-	char		buf[10];
 
-	print_message("insert obj %d rec %d for rebuild test\n",
-		      oids_nr, KEY_NR);
+	print_message("insert obj %d for rebuild test\n",
+		      oids_nr);
 
-	for (j = 0; j < oids_nr; j++) {
-		ioreq_init(&req, arg->coh, oids[j], DAOS_IOD_ARRAY, arg);
-		/* Let's do I/O at the same time */
-		for (i = 0; i < KEY_NR; i++) {
-			sprintf(dkey, "%d", i);
-			memset(buf, 0, 10);
-			if (update)
-				insert_single(dkey, "rebuild_akey_in", 0,
-					      "data", strlen("data") + 1,
+	for (i = 0; i < oids_nr; i++) {
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		for (j = 0; j < 5; j++) {
+			char	dkey[20];
+			char	akey[20];
+			char	buf[16];
+			int	k;
+			int	l;
+
+			req.iod_type = DAOS_IOD_ARRAY;
+			/* small records */
+			sprintf(dkey, "dkey_%d", j);
+			for (k = 0; k < 2; k++) {
+				sprintf(akey, "akey_%d", k);
+				for (l = 0; l < 10; l++) {
+					if (validate) {
+						memset(buf, 0, 16);
+						lookup_single(dkey, akey, l,
+							      buf, 5, 0, &req);
+						assert_memory_equal(buf, "data",
+								strlen("data"));
+					} else {
+						insert_single(dkey, akey, l,
+							"data",
+							strlen("data") + 1, 0,
+							&req);
+					}
+				}
+			}
+
+			/* large records */
+			for (k = 0; k < 2; k++) {
+				char bulk[5010];
+				char compare[5000];
+
+				sprintf(akey, "akey_bulk_%d", k);
+				memset(compare, 'a', 5000);
+				for (l = 0; l < 5; l++) {
+					if (validate) {
+						memset(bulk, 0, 5000);
+						lookup_single(dkey, akey, l,
+							      bulk, 5010, 0,
+							      &req);
+						assert_memory_equal(bulk,
+								compare, 5000);
+					} else {
+						memset(bulk, 'a', 5000);
+						insert_single(dkey, akey, l,
+							      bulk, 5000, 0,
+							      &req);
+					}
+				}
+			}
+
+			/* single record */
+			memset(buf, 0, 16);
+			req.iod_type = DAOS_IOD_SINGLE;
+			sprintf(dkey, "dkey_single_%d", j);
+			if (validate) {
+				lookup_single(dkey, "akey_single", 0, buf, 16,
 					      0, &req);
-			lookup_single(dkey, "rebuild_akey_in", 0, buf,
-				      10, 0, &req);
-			assert_memory_equal(buf, "data", strlen("data"));
-			assert_int_equal(req.iod[0].iod_size,
-					 strlen("data") + 1);
+				assert_memory_equal(buf, "single_data",
+						    strlen("single_data"));
+			} else {
+				insert_single(dkey, "akey_single", 0,
+					      "single_data",
+					      strlen("single_data") + 1,
+					      0, &req);
+			}
 		}
 		ioreq_fini(&req);
 	}
@@ -157,93 +209,80 @@ rebuild_io_internal(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 static void
 rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
-	rebuild_io_internal(arg, oids, oids_nr, true);
+	rebuild_io_internal(arg, oids, oids_nr, false);
 }
 
 static void
 rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
-	rebuild_io_internal(arg, oids, oids_nr, false);
+	rebuild_io_internal(arg, oids, oids_nr, true);
 }
 
-static void
+static bool
 rebuild_pool_wait(test_arg_t *arg)
 {
 	daos_pool_info_t	   pinfo;
 	struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
 	bool			   connect_pool = false;
 	int			   rc;
+	bool			   done = false;
 
-	while (1) {
-		if (daos_handle_is_inval(arg->poh)) {
-			rc = daos_pool_connect(arg->pool_uuid, arg->group,
-					       &arg->svc, DAOS_PC_RW,
-					       &arg->poh, &pinfo, NULL);
-			if (rc) {
-				print_message("pool_connect failed, rc: %d\n",
-					      rc);
-				break;
-			}
-			connect_pool = true;
+	if (daos_handle_is_inval(arg->poh)) {
+		rc = daos_pool_connect(arg->pool_uuid, arg->group,
+				       &arg->svc, DAOS_PC_RW,
+				       &arg->poh, &pinfo, NULL);
+		if (rc) {
+			print_message("pool_connect failed, rc: %d\n",
+				      rc);
+			return done;
 		}
-
-		memset(&pinfo, 0, sizeof(pinfo));
-		rc = daos_pool_query(arg->poh, NULL, &pinfo, NULL);
-		if (rst->rs_done || rc != 0) {
-			print_message("Rebuild (ver=%d) is done %d/%d\n",
-				       rst->rs_version, rc, rst->rs_errno);
-			if (connect_pool) {
-				rc = daos_pool_disconnect(arg->poh, NULL);
-				if (rc)
-					print_message("disconnect failed: %d\n",
-						      rc);
-				arg->poh = DAOS_HDL_INVAL;
-			}
-			break;
-		}
-
-		print_message("wait for rebuild (ver=%u), "
-			      "already rebuilt obj="DF_U64", rec="DF_U64"\n",
-			      rst->rs_version, rst->rs_obj_nr, rst->rs_rec_nr);
-		sleep(2);
+		connect_pool = true;
 	}
+
+	memset(&pinfo, 0, sizeof(pinfo));
+	rc = daos_pool_query(arg->poh, NULL, &pinfo, NULL);
+	if (rst->rs_done || rc != 0) {
+		print_message("Rebuild (ver=%d) is done %d/%d\n",
+			       rst->rs_version, rc, rst->rs_errno);
+		if (connect_pool) {
+			rc = daos_pool_disconnect(arg->poh, NULL);
+			if (rc)
+				print_message("disconnect failed: %d\n",
+					      rc);
+			arg->poh = DAOS_HDL_INVAL;
+		}
+		done = true;
+	} else {
+		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u), "
+			      "already rebuilt obj="DF_U64", rec="DF_U64"\n",
+			      DP_UUID(arg->pool_uuid), rst->rs_version,
+			      rst->rs_obj_nr, rst->rs_rec_nr);
+	}
+	return done;
 }
 
-static void
-rebuild_wait(test_arg_t **args, int args_cnt, d_rank_t failed_rank,
-	     bool concurrent_io)
+static bool
+rebuild_wait(test_arg_t **args, int args_cnt)
 {
-	daos_obj_id_t	oid;
-	int		i;
+	bool all_done = true;
+	int i;
 
-	oid = dts_oid_gen(OBJ_CLS, args[0]->myrank);
-	if (concurrent_io) {
-		for (i = 0; i < args_cnt; i++) {
-			if (!daos_handle_is_inval(args[i]->coh))
-				rebuild_io(args[i], &oid, 1);
-		}
-	}
+	for (i = 0; i < args_cnt; i++) {
+		bool done;
 
-	if (args[0]->myrank == 0) {
-		for (i = 0; i < args_cnt; i++)
-			rebuild_pool_wait(args[i]);
+		done = rebuild_pool_wait(args[i]);
+		if (!done)
+			all_done = false;
 	}
-
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (concurrent_io) {
-		for (i = 0; i < args_cnt; i++) {
-			/* validate the data */
-			if (!daos_handle_is_inval(args[i]->coh))
-				rebuild_io_validate(args[i], &oid, 1);
-		}
-	}
+	return all_done;
 }
 
 static void
 rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
-		int rank_nr, bool kill, bool concurrent_io)
+		int rank_nr, bool kill)
 {
 	int	i;
+	bool	done = false;
 
 	/** exclude the target from the pool */
 	for (i = 0; i < rank_nr; i++) {
@@ -252,7 +291,22 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 		sleep(5);
 	}
 
-	rebuild_wait(args, args_cnt, failed_ranks[i], concurrent_io);
+	for (i = 0; i < args_cnt; i++)
+		if (args[i]->rebuild_cb)
+			args[i]->rebuild_cb(args[i]);
+
+	if (args[0]->myrank == 0) {
+		while (!done) {
+			done = rebuild_wait(args, args_cnt);
+			if (!done)
+				sleep(2);
+		}
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	for (i = 0; i < args_cnt; i++)
+		if (args[i]->rebuild_post_cb)
+			args[i]->rebuild_post_cb(args[i]);
 
 	/* XXX sigh, we do not support restart service after killing yet */
 	if (kill)
@@ -264,18 +318,16 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 }
 
 static void
-rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
-			   bool concurrent_io)
+rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank)
 {
-	rebuild_targets(&arg, 1, &failed_rank, 1, false, concurrent_io);
+	rebuild_targets(&arg, 1, &failed_rank, 1, false);
 }
 
 static void
 rebuild_pools_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
-		      int ranks_nr, bool concurrent_io)
+		      int ranks_nr)
 {
-	rebuild_targets(args, args_cnt, failed_ranks, ranks_nr, false,
-			concurrent_io);
+	rebuild_targets(args, args_cnt, failed_ranks, ranks_nr, false);
 }
 
 static void
@@ -303,7 +355,7 @@ rebuild_dkeys(void **state)
 			      strlen("data") + 1, 0, &req);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 	ioreq_fini(&req);
 }
 
@@ -332,7 +384,7 @@ rebuild_akeys(void **state)
 			      strlen("data") + 1, 0, &req);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 	ioreq_fini(&req);
 }
 
@@ -364,7 +416,7 @@ rebuild_indexes(void **state)
 	}
 
 	/* Rebuild rank 1 */
-	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 	ioreq_fini(&req);
 }
 
@@ -401,7 +453,7 @@ rebuild_multiple(void **state)
 		}
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 	ioreq_fini(&req);
 }
 
@@ -431,7 +483,7 @@ rebuild_large_rec(void **state)
 		insert_single(key, "a_key", 0, buffer, 5000, 0, &req);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 	ioreq_fini(&req);
 }
 
@@ -450,7 +502,7 @@ rebuild_objects(void **state)
 		rebuild_io(arg, &oid, 1);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 }
 
 static void
@@ -472,7 +524,7 @@ rebuild_drop_scan(void **state)
 	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
 			     NULL);
-	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 }
 
 static void
@@ -494,7 +546,7 @@ rebuild_retry_rebuild(void **state)
 	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
 			     NULL);
-	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 }
 
 static void
@@ -516,7 +568,7 @@ rebuild_retry_for_stale_pool(void **state)
 	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_STALE_POOL | DAOS_FAIL_ONCE,
 			     NULL);
-	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 }
 
 static void
@@ -538,7 +590,7 @@ rebuild_drop_obj(void **state)
 	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_DROP_OBJ | DAOS_FAIL_ONCE,
 			     NULL);
-	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 }
 
 static void
@@ -560,7 +612,7 @@ rebuild_update_failed(void **state)
 	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_UPDATE_FAIL | DAOS_FAIL_ONCE,
 			     NULL);
-	rebuild_single_pool_target(arg, ranks_to_kill[0], false);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 }
 
 static void
@@ -589,10 +641,89 @@ rebuild_multiple_pools(void **state)
 	rebuild_io(args[0], oids, OBJ_NR);
 	rebuild_io(args[1], oids, OBJ_NR);
 
-	rebuild_pools_targets(args, 2, ranks_to_kill, 1, false);
+	rebuild_pools_targets(args, 2, ranks_to_kill, 1);
 
 	rebuild_io_validate(args[0], oids, OBJ_NR);
 	rebuild_io_validate(args[1], oids, OBJ_NR);
+
+	test_teardown((void **)&args[1]);
+}
+
+static int
+rebuild_destroy_container_cb(void *data)
+{
+	test_arg_t	*arg = data;
+	int		rc = 0;
+	int		rc_reduce = 0;
+
+	if (!daos_handle_is_inval(arg->coh)) {
+		rc = daos_cont_close(arg->coh, NULL);
+		if (arg->multi_rank) {
+			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
+				      MPI_COMM_WORLD);
+			rc = rc_reduce;
+		}
+		print_message("container close "DF_UUIDF"\n",
+			      DP_UUID(arg->co_uuid));
+		if (rc) {
+			print_message("failed to close container "DF_UUIDF
+				      ": %d\n", DP_UUID(arg->co_uuid), rc);
+			return rc;
+		}
+		arg->coh = DAOS_HDL_INVAL;
+	}
+
+	if (!uuid_is_null(arg->co_uuid)) {
+		while (arg->myrank == 0) {
+			rc = daos_cont_destroy(arg->poh, arg->co_uuid, 1, NULL);
+			if (rc == -DER_BUSY || rc == -DER_IO) {
+				print_message("Container is busy, wait\n");
+				sleep(1);
+				continue;
+			}
+			break;
+		}
+		print_message("container "DF_UUIDF"/"DF_UUIDF" destroyed\n",
+			      DP_UUID(arg->pool_uuid), DP_UUID(arg->co_uuid));
+		if (arg->multi_rank)
+			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		if (rc)
+			print_message("failed to destroy container "DF_UUIDF
+				      ": %d\n", DP_UUID(arg->co_uuid), rc);
+		uuid_clear(arg->co_uuid);
+	}
+	return rc;
+}
+
+static void
+rebuild_destroy_container(void **state)
+{
+	test_arg_t	*arg = *state;
+	test_arg_t	*args[2];
+	daos_obj_id_t	oids[OBJ_NR * 100];
+	int		i;
+	int		rc;
+
+	if (!rebuild_runable(arg, 3, false))
+		skip();
+
+	args[0] = arg;
+	/* create/connect another pool */
+	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank,
+			DEFAULT_POOL_SIZE);
+	if (rc) {
+		print_message("open/connect another pool failed: rc %d\n", rc);
+		return;
+	}
+
+	for (i = 0; i < OBJ_NR * 100; i++)
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+
+	rebuild_io(args[1], oids, OBJ_NR * 100);
+
+	args[1]->rebuild_cb = rebuild_destroy_container_cb;
+
+	rebuild_pools_targets(args, 2, ranks_to_kill, 1);
 
 	test_teardown((void **)&args[1]);
 }
@@ -633,7 +764,7 @@ rebuild_offline(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	rebuild_targets(&arg, 1, ranks_to_kill, 1, true, false);
+	rebuild_targets(&arg, 1, ranks_to_kill, 1, true);
 
 	/* reconnect the pool again */
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -672,109 +803,61 @@ rebuild_offline(void **state)
 	}
 }
 
+static int
+rebuild_io_cb(void *arg)
+{
+	test_arg_t	*test_arg = arg;
+	daos_obj_id_t	*oids = test_arg->rebuild_cb_arg;
+
+	if (!daos_handle_is_inval(test_arg->coh))
+		rebuild_io(test_arg, oids, OBJ_NR);
+
+	return 0;
+}
+
+static int
+rebuild_io_post_cb(void *arg)
+{
+	test_arg_t	*test_arg = arg;
+	daos_obj_id_t	*oids = test_arg->rebuild_post_cb_arg;
+
+	if (!daos_handle_is_inval(test_arg->coh))
+		rebuild_io_validate(test_arg, oids, OBJ_NR);
+
+	return 0;
+}
+
 static void
 rebuild_two_failures(void **state)
 {
-	test_arg_t		*arg = *state;
-	daos_obj_id_t		oid[OBJ_NR];
-	struct ioreq		req;
-	int			i;
-	int			j;
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	daos_obj_id_t	cb_arg_oids[OBJ_NR];
+	int		i;
 
 	if (!rebuild_runable(arg, 4, false))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oid[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
-		ioreq_init(&req, arg->coh, oid[i], DAOS_IOD_ARRAY, arg);
-		/* Insert small size records */
-		for (j = 0; j < 5; j++) {
-			char	dkey[20];
-			char	akey[20];
-			int	k;
-			int	l;
-
-			req.iod_type = DAOS_IOD_ARRAY;
-			/* small records */
-			sprintf(dkey, "dkey_%d", j);
-			for (k = 0; k < 2; k++) {
-				sprintf(akey, "akey_%d", k);
-				for (l = 0; l < 5; l++)
-					insert_single(dkey, akey, l, "data",
-						      strlen("data") + 1, 0,
-						      &req);
-			}
-
-			for (k = 0; k < 2; k++) {
-				char bulk[5000];
-
-				sprintf(akey, "akey_bulk_%d", k);
-				memset(bulk, 'a', 5000);
-				for (l = 0; l < 5; l++)
-					insert_single(dkey, akey, l, bulk,
-						      5000, 0, &req);
-			}
-
-			req.iod_type = DAOS_IOD_SINGLE;
-			sprintf(dkey, "dkey_single_%d", j);
-			insert_single(dkey, "akey_single", 0,
-				      "single_data", strlen("single_data") + 1,
-				      0, &req);
-		}
-		ioreq_fini(&req);
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		cb_arg_oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
 	}
 
-	rebuild_targets(&arg, 1, ranks_to_kill, 2, true, true);
+	/* prepare the data */
+	rebuild_io(arg, oids, OBJ_NR);
 
-	/* Verify the data being rebuilt on other target */
-	for (i = 0; i < OBJ_NR; i++) {
-		ioreq_init(&req, arg->coh, oid[i], DAOS_IOD_ARRAY, arg);
-		/* Insert small size records */
-		for (j = 0; j < 5; j++) {
-			char	dkey[20];
-			char	akey[20];
-			char	buf[16];
-			int	k;
-			int	l;
+	arg->rebuild_cb = rebuild_io_cb;
+	arg->rebuild_cb_arg = cb_arg_oids;
+	arg->rebuild_post_cb = rebuild_io_post_cb;
+	arg->rebuild_post_cb_arg = cb_arg_oids;
 
-			/* small records */
-			req.iod_type = DAOS_IOD_ARRAY;
-			sprintf(dkey, "dkey_%d", j);
-			for (k = 0; k < 2; k++) {
-				sprintf(akey, "akey_%d", k);
-				for (l = 0; l < 5; l++) {
-					memset(buf, 0, 16);
-					lookup_single(dkey, akey, l, buf, 5, 0,
-						      &req);
-					assert_memory_equal(buf, "data",
-							    strlen("data"));
-				}
-			}
+	rebuild_targets(&arg, 1, ranks_to_kill, 2, true);
 
-			for (k = 0; k < 2; k++) {
-				char bulk[5010];
-				char compare[5000];
+	arg->rebuild_cb = NULL;
+	arg->rebuild_post_cb = NULL;
 
-				sprintf(akey, "akey_bulk_%d", k);
-				memset(compare, 'a', 5000);
-				for (l = 0; l < 5; l++) {
-					lookup_single(dkey, akey, l, bulk,
-						      5010, 0, &req);
-					assert_memory_equal(bulk, compare,
-							    5000);
-				}
-			}
-
-
-			memset(buf, 0, 16);
-			req.iod_type = DAOS_IOD_SINGLE;
-			sprintf(dkey, "dkey_single_%d", j);
-			lookup_single(dkey, "akey_single", 0, buf, 16, 0, &req);
-			assert_memory_equal(buf, "single_data",
-					    strlen("single_data"));
-		}
-		ioreq_fini(&req);
-	}
+	/* Verify the data */
+	rebuild_io_validate(arg, oids, OBJ_NR);
 }
 
 /** create a new pool/container for each test */
@@ -803,9 +886,11 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_update_failed, NULL, test_case_teardown},
 	{"REBUILD12: retry rebuild for pool stale",
 	rebuild_retry_for_stale_pool, NULL, test_case_teardown},
-	{"REBUILD13: offline rebuild",
+	{"REBUILD13: rebuild with container destroy",
+	rebuild_destroy_container, NULL, test_case_teardown},
+	{"REBUILD14: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD14: rebuild with two failures",
+	{"REBUILD15: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
 };
 

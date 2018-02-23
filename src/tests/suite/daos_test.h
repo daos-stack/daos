@@ -69,6 +69,17 @@ typedef struct {
 	int			nr;
 	int			srv_ntgts;
 	int			srv_disabled_ntgts;
+
+	/* The callback is called during pool rebuild, used for concurrent IO,
+	 * container destroy etc
+	 */
+	int			(*rebuild_cb)(void *test_arg);
+	void			*rebuild_cb_arg;
+	/* The callback is called after pool rebuild, used for validating IO
+	 * after rebuild
+	 */
+	int			(*rebuild_post_cb)(void *test_arg);
+	void			*rebuild_post_cb_arg;
 } test_arg_t;
 
 enum {
