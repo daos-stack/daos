@@ -371,7 +371,7 @@ tse_task_prep_callback(tse_task_t *task)
 				     dtc_arg[dtc->dtc_arg_size]));
 
 		/** Task was re-initialized; break */
-		if (!dtp->dtp_completing)
+		if (!dtp->dtp_running && !dtp->dtp_completing)
 			return false;
 	}
 
