@@ -33,6 +33,8 @@ def scons():
 
     prereqs = PreReqComponent(env, opts, commits_file)
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
+    prereqs.define('readline', libs=['readline', 'history'],
+                   package='readline')
     prereqs.preload(os.path.join(Dir('#').abspath, 'scons_local',
                                  'components.py'),
                     prebuild=['ompi', 'cart', 'argobots', 'pmdk', 'cmocka',

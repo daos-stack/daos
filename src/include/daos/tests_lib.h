@@ -24,7 +24,7 @@
 #ifndef __DAOS_TESTS_LIB_H__
 #define __DAOS_TESTS_LIB_H__
 
-#define HAVE_LIB_READLINE	0
+#define HAVE_LIB_READLINE	1
 
 #if HAVE_LIB_READLINE
 # include <readline/history.h>

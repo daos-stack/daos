@@ -11,7 +11,7 @@ def scons():
     # in the rpath.   It is normally only included by libpmemobj
     # but that library doesn't contain the installed location
     # in the rpath.
-    prereqs.require(env, 'pmdk', 'argobots', 'cart',
+    prereqs.require(env, 'pmdk', 'argobots', 'cart', 'readline',
                     pmdk_libs=['pmemobj', 'pmem'])
 
     denv = env.Clone()
