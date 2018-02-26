@@ -788,7 +788,6 @@ struct shard_update_args {
 	daos_sg_list_t		*sgls;
 	unsigned int		map_ver;
 	unsigned int		shard;
-	bool			retry;
 };
 
 static int
@@ -809,15 +808,6 @@ shard_update_task(tse_task_t *task)
 				  DAOS_FAIL_ONCE);
 	}
 
-	if (args->retry) {
-		rc = obj_ptr2pm_ver(obj, &args->map_ver);
-		if (rc) {
-			D__ERROR("obj_ptr2pm_ver failed, rc: %d.n", rc);
-			return rc;
-		}
-		args->retry = false;
-	}
-
 	rc = obj_shard_open(obj, args->shard, args->map_ver, &shard_oh);
 	if (rc != 0) {
 		/* skip a failed target */
@@ -833,20 +823,6 @@ shard_update_task(tse_task_t *task)
 
 	dc_obj_shard_close(shard_oh);
 	return rc;
-}
-
-static int
-shard_update_cb(tse_task_t *task, void *nouse)
-{
-	struct shard_update_args *args;
-
-	args = tse_task_buf_embedded(task, sizeof(*args));
-	if (task->dt_result) {
-		args->retry = true;
-		obj_retry_cb(task, args->obj);
-	}
-
-	return 0;
 }
 
 int
@@ -906,18 +882,6 @@ dc_obj_update(tse_task_t *task)
 		shard_arg->sgls	   = args->sgls;
 		shard_arg->map_ver = map_ver;
 		shard_arg->shard   = shard;
-		shard_arg->retry   = false;
-
-		/* Register retry CB.
-		 * NB: share the obj refcount taken by obj_comp_cb
-		 * which is guaranteed to be called at the end.
-		 */
-		rc = tse_task_register_comp_cb(shard_task, shard_update_cb,
-					       NULL, 0);
-		if (rc != 0) {
-			tse_task_complete(task, rc);
-			D__GOTO(out_task, rc);
-		}
 
 		rc = tse_task_register_deps(task, 1, &shard_task);
 		if (rc != 0) {
