@@ -74,3 +74,9 @@ daos_fail_value_set(uint64_t value)
 {
 	daos_fail_value = value;
 }
+
+uint64_t
+daos_fail_value_get(void)
+{
+	return daos_fail_value;
+}

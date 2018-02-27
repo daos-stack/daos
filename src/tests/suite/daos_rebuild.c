@@ -35,6 +35,7 @@
 #define KEY_NR		1000
 #define OBJ_NR		10
 #define OBJ_CLS		DAOS_OC_R3S_RW
+#define OBJ_REPLICAS	3
 
 #define MAX_KILLS	3
 
@@ -97,21 +98,21 @@ rebuild_test_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 }
 
 static void
-rebuild_test_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank)
+rebuild_test_add_tgt(test_arg_t *args, int args_cnt, d_rank_t rank)
 {
 	d_rank_list_t	ranks;
 	int		rc;
 
 	/** exclude the target from the pool */
-	if (args[0]->myrank == 0) {
+	if (args[0].myrank == 0) {
 		int i;
 
 		ranks.rl_nr = 1;
 		ranks.rl_ranks = &rank;
 		for (i = 0; i < args_cnt; i++) {
-			rc = daos_pool_tgt_add(args[i]->pool_uuid,
-					       args[i]->group,
-					       &args[i]->svc, &ranks,
+			rc = daos_pool_tgt_add(args[i].pool_uuid,
+					       args[i].group,
+					       &args[i].svc, &ranks,
 					       NULL);
 			assert_int_equal(rc, 0);
 		}
@@ -127,8 +128,8 @@ rebuild_io_internal(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 	int		i;
 	int		j;
 
-	print_message("insert obj %d for rebuild test\n",
-		      oids_nr);
+	print_message("%s obj %d for rebuild test\n",
+		      validate ? "validate" : "update", oids_nr);
 
 	for (i = 0; i < oids_nr; i++) {
 		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
@@ -215,7 +216,17 @@ rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 static void
 rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
-	rebuild_io_internal(arg, oids, oids_nr, true);
+	int i;
+
+	/* Validate data for each shard */
+	for (i = 0; i < OBJ_REPLICAS; i++) {
+		arg->fail_loc = DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_VALUE;
+		arg->fail_value = i;
+		rebuild_io_internal(arg, oids, oids_nr, true);
+	}
+
+	arg->fail_loc = 0;
+	arg->fail_value = 0;
 }
 
 static bool
@@ -307,14 +318,6 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 	for (i = 0; i < args_cnt; i++)
 		if (args[i]->rebuild_post_cb)
 			args[i]->rebuild_post_cb(args[i]);
-
-	/* XXX sigh, we do not support restart service after killing yet */
-	if (kill)
-		return;
-
-	/* Add back those targets for future test */
-	for (i = 0; i < rank_nr; i++)
-		rebuild_test_add_tgt(args, args_cnt, failed_ranks[i]);
 }
 
 static void
@@ -338,7 +341,7 @@ rebuild_dkeys(void **state)
 	struct ioreq		req;
 	int			i;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -354,9 +357,11 @@ rebuild_dkeys(void **state)
 		insert_single(key, "a_key", 0, "data",
 			      strlen("data") + 1, 0, &req);
 	}
+	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
-	ioreq_fini(&req);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -367,7 +372,7 @@ rebuild_akeys(void **state)
 	struct ioreq		req;
 	int			i;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -383,9 +388,11 @@ rebuild_akeys(void **state)
 		insert_single("d_key", akey, 0, "data",
 			      strlen("data") + 1, 0, &req);
 	}
+	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
-	ioreq_fini(&req);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -397,13 +404,13 @@ rebuild_indexes(void **state)
 	int			i;
 	int			j;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	/** Insert 1000 records */
+	/** Insert 2000 records */
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      2000, DP_OID(oid));
 	for (i = 0; i < 100; i++) {
@@ -414,23 +421,25 @@ rebuild_indexes(void **state)
 			insert_single(key, "a_key", j, "data",
 				      strlen("data") + 1, 0, &req);
 	}
+	ioreq_fini(&req);
 
 	/* Rebuild rank 1 */
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
-	ioreq_fini(&req);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
 rebuild_multiple(void **state)
 {
-	test_arg_t		*arg = *state;
-	daos_obj_id_t		oid;
-	struct ioreq		req;
-	int			i;
-	int			j;
-	int			k;
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	int		i;
+	int		j;
+	int		k;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -449,12 +458,15 @@ rebuild_multiple(void **state)
 			sprintf(akey, "akey_%d", j);
 			for (k = 0; k < 10; k++)
 				insert_single(dkey, akey, k, "data",
-					      strlen("data") + 1, 0, &req);
+					      strlen("data") + 1, 0,
+					      &req);
 		}
 	}
+	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
-	ioreq_fini(&req);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -466,7 +478,7 @@ rebuild_large_rec(void **state)
 	int			i;
 	char			buffer[5000];
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -482,137 +494,161 @@ rebuild_large_rec(void **state)
 		sprintf(key, "%d", i);
 		insert_single(key, "a_key", 0, buffer, 5000, 0, &req);
 	}
+	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
-	ioreq_fini(&req);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
 rebuild_objects(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
+	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++) {
-		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		rebuild_io(arg, &oid, 1);
-	}
+	for (i = 0; i < OBJ_NR; i++)
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+
+	rebuild_io(arg, oids, OBJ_NR);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	rebuild_io_validate(arg, oids, OBJ_NR);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
 rebuild_drop_scan(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
+	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++) {
-		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		rebuild_io(arg, &oid, 1);
-	}
+	for (i = 0; i < OBJ_NR; i++)
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+
+	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Set drop scan fail_loc on server 0 */
 	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
 			     NULL);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	rebuild_io_validate(arg, oids, OBJ_NR);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
 rebuild_retry_rebuild(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
+	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++) {
-		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		rebuild_io(arg, &oid, 1);
-	}
+	for (i = 0; i < OBJ_NR; i++)
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+
+	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Set no hdl fail_loc on all servers */
 	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
 			     NULL);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	rebuild_io_validate(arg, oids, OBJ_NR);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
 rebuild_retry_for_stale_pool(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
+	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++) {
-		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		rebuild_io(arg, &oid, 1);
-	}
+	for (i = 0; i < OBJ_NR; i++)
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+
+	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Set no hdl fail_loc on all servers */
 	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_STALE_POOL | DAOS_FAIL_ONCE,
 			     NULL);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	rebuild_io_validate(arg, oids, OBJ_NR);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
 rebuild_drop_obj(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
+	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++) {
-		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		rebuild_io(arg, &oid, 1);
-	}
+	for (i = 0; i < OBJ_NR; i++)
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+
+	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Set drop scan reply on all servers */
 	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_DROP_OBJ | DAOS_FAIL_ONCE,
 			     NULL);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	rebuild_io_validate(arg, oids, OBJ_NR);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
 rebuild_update_failed(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
+	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++) {
-		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		rebuild_io(arg, &oid, 1);
-	}
+	for (i = 0; i < OBJ_NR; i++)
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+
+	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Set drop scan reply on all servers */
 	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_UPDATE_FAIL | DAOS_FAIL_ONCE,
 			     NULL);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -624,7 +660,7 @@ rebuild_multiple_pools(void **state)
 	int		i;
 	int		rc;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
 	args[0] = arg;
@@ -647,6 +683,8 @@ rebuild_multiple_pools(void **state)
 	rebuild_io_validate(args[1], oids, OBJ_NR);
 
 	test_teardown((void **)&args[1]);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static int
@@ -704,7 +742,7 @@ rebuild_destroy_container(void **state)
 	int		i;
 	int		rc;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
 	args[0] = arg;
@@ -726,23 +764,50 @@ rebuild_destroy_container(void **state)
 	rebuild_pools_targets(args, 2, ranks_to_kill, 1);
 
 	test_teardown((void **)&args[1]);
+
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
+}
+
+static void
+rebuild_iv_tgt_fail(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
+
+	if (!rebuild_runable(arg, 6, false))
+		skip();
+
+	for (i = 0; i < OBJ_NR; i++)
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+
+	rebuild_io(arg, oids, OBJ_NR);
+
+	/* Set no hdl fail_loc on all servers */
+	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+			     DAOS_REBUILD_TGT_IV_UPDATE_FAIL | DAOS_FAIL_ONCE,
+			     NULL);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
 rebuild_offline(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
+	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 	int		rc;
 
-	if (!rebuild_runable(arg, 3, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++) {
-		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
-		rebuild_io(arg, &oid, 1);
-	}
+	for (i = 0; i < OBJ_NR; i++)
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+
+	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Close cont and disconnect pool */
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -801,6 +866,8 @@ rebuild_offline(void **state)
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 0);
 	}
+
+	rebuild_io_validate(arg, oids, OBJ_NR);
 }
 
 static int
@@ -835,7 +902,7 @@ rebuild_two_failures(void **state)
 	daos_obj_id_t	cb_arg_oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 4, false))
+	if (!rebuild_runable(arg, 6, false))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -888,9 +955,11 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_retry_for_stale_pool, NULL, test_case_teardown},
 	{"REBUILD13: rebuild with container destroy",
 	rebuild_destroy_container, NULL, test_case_teardown},
-	{"REBUILD14: offline rebuild",
+	{"REBUILD14: rebuild iv tgt fail",
+	rebuild_iv_tgt_fail, NULL, test_case_teardown},
+	{"REBUILD15: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD15: rebuild with two failures",
+	{"REBUILD16: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
 };
 

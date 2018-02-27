@@ -320,7 +320,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 	int idx_last;
 	int grp_size;
 	bool rebuilding = false;
-	int i;
+	int i = 0;
 
 	grp_size = obj_get_grp_size(obj);
 	D__ASSERT(grp_size > 0);
@@ -338,6 +338,21 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 		/* Sigh, someone else change the pool map */
 		D_RWLOCK_UNLOCK(&obj->cob_lock);
 		return -DER_STALE;
+	}
+
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_SPECIAL_SHARD)) {
+		idx = daos_fail_value_get();
+
+		if (idx >= grp_size) {
+			D_RWLOCK_UNLOCK(&obj->cob_lock);
+			return -DER_INVAL;
+		}
+
+		if (obj->cob_layout->ol_shards[idx].po_shard != -1) {
+			D__DEBUG(DB_TRACE, "special shard %d\n", idx);
+			D_RWLOCK_UNLOCK(&obj->cob_lock);
+			return idx;
+		}
 	}
 
 	for (i = 0; i < grp_size; i++,

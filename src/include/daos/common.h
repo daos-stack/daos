@@ -300,6 +300,9 @@ daos_fail_value_set(uint64_t val);
 int
 daos_fail_check(uint64_t id);
 
+uint64_t
+daos_fail_value_get(void);
+
 /**
  * DAOS FAIL Mask
  *
@@ -316,6 +319,7 @@ daos_fail_check(uint64_t id);
 /* fail mode */
 #define DAOS_FAIL_ONCE		0x1000000
 #define DAOS_FAIL_SOME		0x2000000
+#define DAOS_FAIL_VALUE		0x4000000
 
 /* module mask */
 #define DAOS_FAIL_MASK_MOD	0x0000ff00
@@ -331,7 +335,7 @@ daos_fail_check(uint64_t id);
 #define DAOS_SHARD_OBJ_RW_CRT_ERROR	(DAOS_OBJ_FAIL_MOD | 0x05)
 #define DAOS_OBJ_REQ_CREATE_TIMEOUT	(DAOS_OBJ_FAIL_MOD | 0x06)
 #define DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE	(DAOS_OBJ_FAIL_MOD | 0x07)
-
+#define DAOS_OBJ_SPECIAL_SHARD		(DAOS_OBJ_FAIL_MOD | 0x08)
 
 /* failure for DAOS_REBUILD_MODULE */
 #define DAOS_REBUILD_DROP_SCAN	(DAOS_REBUILD_FAIL_MOD | 0x001)
@@ -339,6 +343,7 @@ daos_fail_check(uint64_t id);
 #define DAOS_REBUILD_DROP_OBJ	(DAOS_REBUILD_FAIL_MOD | 0x003)
 #define DAOS_REBUILD_UPDATE_FAIL (DAOS_REBUILD_FAIL_MOD | 0x004)
 #define DAOS_REBUILD_STALE_POOL (DAOS_REBUILD_FAIL_MOD | 0x005)
+#define DAOS_REBUILD_TGT_IV_UPDATE_FAIL (DAOS_REBUILD_FAIL_MOD | 0x006)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

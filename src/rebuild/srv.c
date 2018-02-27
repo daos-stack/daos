@@ -1290,12 +1290,16 @@ rebuild_tgt_status_check(void *arg)
 				rpt->rt_pool->sp_iv_ns->iv_master_rank;
 			iv.riv_rank = rpt->rt_rank;
 			iv.riv_ver = rpt->rt_rebuild_ver;
+
 			/* Cart does not support failure recovery yet, let's
 			 * send the status to root for now. FIXME
 			 */
-			rc = rebuild_iv_update(rpt->rt_pool->sp_iv_ns,
-					       &iv, CRT_IV_SHORTCUT_TO_ROOT,
-					       CRT_IV_SYNC_NONE);
+			if (DAOS_FAIL_CHECK(DAOS_REBUILD_TGT_IV_UPDATE_FAIL))
+				rc = -DER_INVAL;
+			else
+				rc = rebuild_iv_update(rpt->rt_pool->sp_iv_ns,
+						   &iv, CRT_IV_SHORTCUT_TO_ROOT,
+						   CRT_IV_SYNC_NONE);
 			if (rc)
 				D__WARN("rebuild tgt iv update failed: %d\n",
 					rc);

@@ -480,9 +480,9 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	tgt_ep.ep_rank = shard->do_rank;
 	tgt_ep.ep_tag = obj_shard_dkey2tag(shard, dkey);
 
-	D__DEBUG(DB_TRACE, "opc %d %.*s rank %d tag %d\n",
-		opc, (int)dkey->iov_len, (char *)dkey->iov_buf,
-		tgt_ep.ep_rank, tgt_ep.ep_tag);
+	D__DEBUG(DB_TRACE, "opc %d "DF_UOID" %.*s rank %d tag %d\n",
+		 opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
+		 (char *)dkey->iov_buf, tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0) {
 		obj_shard_decref(shard);
