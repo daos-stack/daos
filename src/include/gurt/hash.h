@@ -517,10 +517,10 @@ bool d_uhash_link_last_ref(struct d_ulink *ulink);
 void d_uhash_link_addref(struct d_hash_table *uhtab, struct d_ulink *hlink);
 void d_uhash_link_putref(struct d_hash_table *uhtab, struct d_ulink *hlink);
 void d_uhash_link_delete(struct d_hash_table *uhtab, struct d_ulink *hlink);
-int  duhash_link_insert(struct d_hash_table *uhtab, struct d_uuid *key,
-			struct d_ulink *hlink);
-struct d_ulink *duhash_link_lookup(struct d_hash_table *uhtab,
-				   struct d_uuid *key);
+int  d_uhash_link_insert(struct d_hash_table *uhtab, struct d_uuid *key,
+			 struct d_ulink *hlink);
+struct d_ulink *d_uhash_link_lookup(struct d_hash_table *uhtab,
+				    struct d_uuid *key);
 
 #if defined(__cplusplus)
 }
