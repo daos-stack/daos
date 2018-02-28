@@ -654,8 +654,10 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 
 	/* Some one might insert new record to the tree let's reprobe */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
-	if (rc)
+	if (rc) {
+		D__ASSERT(rc != -DER_NONEXIST);
 		return rc;
+	}
 
 	rc = dbtree_iter_delete(ih, NULL);
 	if (rc)
@@ -663,10 +665,7 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
-	if (rc == -DER_NONEXIST)
-		return 1;
-
-	if (rpt->rt_abort)
+	if (rc == -DER_NONEXIST || rpt->rt_abort)
 		return 1;
 
 	return rc;
@@ -710,7 +709,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 	arg->cont_hdl = coh;
 
-	if (!dbtree_is_empty(root->root_hdl)) {
+	while (!dbtree_is_empty(root->root_hdl)) {
 		rc = dbtree_iterate(root->root_hdl, false,
 				    rebuild_obj_iter_cb, arg);
 		if (rc) {
@@ -718,10 +717,11 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 				tls->rebuild_pool_status = rc;
 			D__ERROR("iterate cont "DF_UUID" failed: rc %d\n",
 				DP_UUID(arg->cont_uuid), rc);
+			break;
 		}
 	}
 
-	dc_cont_local_close(tls->rebuild_pool_hdl, coh);
+	rc = dc_cont_local_close(tls->rebuild_pool_hdl, coh);
 	if (rc)
 		return rc;
 
@@ -730,8 +730,10 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 
 	/* Some one might insert new record to the tree let's reprobe */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
-	if (rc)
+	if (rc) {
+		D__ASSERT(rc != -DER_NONEXIST);
 		return rc;
+	}
 
 	rc = dbtree_iter_delete(ih, NULL);
 	if (rc)
@@ -739,7 +741,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
-	if (rc == -DER_NONEXIST)
+	if (rc == -DER_NONEXIST || rpt->rt_abort)
 		return 1;
 
 	return rc;
@@ -756,20 +758,20 @@ rebuild_puller(void *arg)
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 				      rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
-	if (!dbtree_is_empty(iter_arg->root_hdl)) {
+	while (!dbtree_is_empty(iter_arg->root_hdl)) {
 		rc = dbtree_iterate(iter_arg->root_hdl, false,
 				    rebuild_cont_iter_cb, iter_arg);
 		if (rc) {
 			D__ERROR("dbtree iterate fails %d\n", rc);
 			if (tls->rebuild_pool_status == 0)
 				tls->rebuild_pool_status = rc;
+			break;
 		}
 	}
 
 	D__FREE_PTR(iter_arg);
 	rpt->rt_lead_puller_running = 0;
 }
-
 
 static int
 rebuild_obj_hdl_get(struct rebuild_tgt_pool_tracker *rpt, daos_handle_t *hdl)
