@@ -56,10 +56,10 @@ tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
 
 	memset(sched, 0, sizeof(*sched));
 
-	DAOS_INIT_LIST_HEAD(&dsp->dsp_init_list);
-	DAOS_INIT_LIST_HEAD(&dsp->dsp_running_list);
-	DAOS_INIT_LIST_HEAD(&dsp->dsp_complete_list);
-	DAOS_INIT_LIST_HEAD(&dsp->dsp_comp_cb_list);
+	D_INIT_LIST_HEAD(&dsp->dsp_init_list);
+	D_INIT_LIST_HEAD(&dsp->dsp_running_list);
+	D_INIT_LIST_HEAD(&dsp->dsp_complete_list);
+	D_INIT_LIST_HEAD(&dsp->dsp_comp_cb_list);
 
 	dsp->dsp_refcount = 1;
 	dsp->dsp_inflight = 0;
@@ -161,12 +161,12 @@ tse_task_ret_list_cleanup(tse_task_t *task)
 {
 	struct tse_task_private  *dtp = tse_task2priv(task);
 
-	while (!daos_list_empty(&dtp->dtp_ret_list)) {
+	while (!d_list_empty(&dtp->dtp_ret_list)) {
 		struct tse_task_link *result;
 
-		result = daos_list_entry(dtp->dtp_ret_list.next,
-					 struct tse_task_link, tl_link);
-		daos_list_del(&result->tl_link);
+		result = d_list_entry(dtp->dtp_ret_list.next,
+				      struct tse_task_link, tl_link);
+		d_list_del(&result->tl_link);
 		tse_task_decref(result->tl_task);
 		D__FREE_PTR(result);
 	}
@@ -187,7 +187,7 @@ tse_task_decref(tse_task_t *task)
 		return;
 
 	tse_task_ret_list_cleanup(task);
-	D__ASSERT(daos_list_empty(&dtp->dtp_dep_list));
+	D__ASSERT(d_list_empty(&dtp->dtp_dep_list));
 
 	/*
 	 * MSC - since we require user to allocate task, maybe we should have
@@ -203,9 +203,9 @@ tse_sched_fini(tse_sched_t *sched)
 	struct tse_sched_private *dsp = tse_sched2priv(sched);
 
 	D__ASSERT(dsp->dsp_inflight == 0);
-	D__ASSERT(daos_list_empty(&dsp->dsp_init_list));
-	D__ASSERT(daos_list_empty(&dsp->dsp_running_list));
-	D__ASSERT(daos_list_empty(&dsp->dsp_complete_list));
+	D__ASSERT(d_list_empty(&dsp->dsp_init_list));
+	D__ASSERT(d_list_empty(&dsp->dsp_running_list));
+	D__ASSERT(d_list_empty(&dsp->dsp_complete_list));
 	pthread_mutex_destroy(&dsp->dsp_lock);
 }
 
@@ -247,8 +247,7 @@ tse_sched_register_comp_cb(tse_sched_t *sched,
 	dsc->dsc_arg = arg;
 
 	pthread_mutex_lock(&dsp->dsp_lock);
-	daos_list_add(&dsc->dsc_list,
-		      &dsp->dsp_comp_cb_list);
+	d_list_add(&dsc->dsc_list, &dsp->dsp_comp_cb_list);
 	pthread_mutex_unlock(&dsp->dsp_lock);
 	return 0;
 }
@@ -262,9 +261,8 @@ tse_sched_complete_cb(tse_sched_t *sched)
 	struct tse_sched_private	*dsp = tse_sched2priv(sched);
 	int				rc;
 
-	daos_list_for_each_entry_safe(dsc, tmp,
-			&dsp->dsp_comp_cb_list, dsc_list) {
-		daos_list_del(&dsc->dsc_list);
+	d_list_for_each_entry_safe(dsc, tmp, &dsp->dsp_comp_cb_list, dsc_list) {
+		d_list_del(&dsc->dsc_list);
 		rc = dsc->dsc_comp_cb(dsc->dsc_arg, sched->ds_result);
 		if (sched->ds_result == 0)
 			sched->ds_result = rc;
@@ -285,7 +283,7 @@ tse_task_complete_locked(struct tse_task_private *dtp,
 	dtp->dtp_running = 0;
 	dtp->dtp_completing = 0;
 	dtp->dtp_completed = 1;
-	daos_list_move_tail(&dtp->dtp_list, &dsp->dsp_complete_list);
+	d_list_move_tail(&dtp->dtp_list, &dsp->dsp_complete_list);
 }
 
 static int
@@ -313,9 +311,9 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 
 	pthread_mutex_lock(&dtp->dtp_sched->dsp_lock);
 	if (is_comp)
-		daos_list_add(&dtc->dtc_list, &dtp->dtp_comp_cb_list);
+		d_list_add(&dtc->dtc_list, &dtp->dtp_comp_cb_list);
 	else /** MSC - don't see a need for more than 1 prep cb */
-		daos_list_add_tail(&dtc->dtc_list, &dtp->dtp_prep_cb_list);
+		d_list_add_tail(&dtc->dtc_list, &dtp->dtp_prep_cb_list);
 
 	pthread_mutex_unlock(&dtp->dtp_sched->dsp_lock);
 
@@ -357,9 +355,8 @@ tse_task_prep_callback(tse_task_t *task)
 	struct tse_task_cb	*tmp;
 	int			 rc;
 
-	daos_list_for_each_entry_safe(dtc, tmp,
-			&dtp->dtp_prep_cb_list, dtc_list) {
-		daos_list_del(&dtc->dtc_list);
+	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_prep_cb_list, dtc_list) {
+		d_list_del(&dtc->dtc_list);
 		/** no need to call if task was completed in one of the cbs */
 		if (!dtp->dtp_completed) {
 			rc = dtc->dtc_cb(task, dtc->dtc_arg);
@@ -393,11 +390,10 @@ tse_task_complete_callback(tse_task_t *task)
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
 
-	daos_list_for_each_entry_safe(dtc, tmp,
-			&dtp->dtp_comp_cb_list, dtc_list) {
+	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
 		int ret;
 
-		daos_list_del(&dtc->dtc_list);
+		d_list_del(&dtc->dtc_list);
 		ret = dtc->dtc_cb(task, dtc->dtc_arg);
 		if (task->dt_result == 0)
 			task->dt_result = ret;
@@ -422,7 +418,7 @@ tse_task_result_process(tse_task_t *task, tse_task_cb_t callback, void *arg)
 	struct tse_task_private	*dtp = tse_task2priv(task);
 	struct tse_task_link	*result;
 
-	daos_list_for_each_entry(result, &dtp->dtp_ret_list, tl_link)
+	d_list_for_each_entry(result, &dtp->dtp_ret_list, tl_link)
 		callback(result->tl_task, arg);
 }
 
@@ -439,23 +435,22 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 	d_list_t			list;
 	int				processed = 0;
 
-	DAOS_INIT_LIST_HEAD(&list);
+	D_INIT_LIST_HEAD(&list);
 	pthread_mutex_lock(&dsp->dsp_lock);
-	daos_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_init_list,
-				      dtp_list) {
+	d_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_init_list, dtp_list) {
 		if (dtp->dtp_dep_cnt == 0 || dsp->dsp_cancelling) {
-			daos_list_move_tail(&dtp->dtp_list, &list);
+			d_list_move_tail(&dtp->dtp_list, &list);
 			dsp->dsp_inflight++;
 		}
 	}
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
-	while (!daos_list_empty(&list)) {
+	while (!d_list_empty(&list)) {
 		tse_task_t *task;
 		bool bumped = false;
 
-		dtp = daos_list_entry(list.next,
-				      struct tse_task_private, dtp_list);
+		dtp = d_list_entry(list.next, struct tse_task_private,
+				   dtp_list);
 
 		task = tse_priv2task(dtp);
 
@@ -464,8 +459,8 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 			tse_task_complete_locked(dtp, dsp);
 		} else {
 			dtp->dtp_running = 1;
-			daos_list_move_tail(&dtp->dtp_list,
-					    &dsp->dsp_running_list);
+			d_list_move_tail(&dtp->dtp_list,
+					 &dsp->dsp_running_list);
 			/** +1 in case prep cb calls task_complete() */
 			tse_task_addref_locked(dtp);
 			bumped = true;
@@ -510,14 +505,14 @@ tse_task_post_process(tse_task_t *task)
 
 	/* Check dependent list */
 	pthread_mutex_lock(&dsp->dsp_lock);
-	while (!daos_list_empty(&dtp->dtp_dep_list)) {
+	while (!d_list_empty(&dtp->dtp_dep_list)) {
 		struct tse_task_link	*tlink;
 		tse_task_t		*task_tmp;
 		struct tse_task_private	*dtp_tmp;
 
-		tlink = daos_list_entry(dtp->dtp_dep_list.next,
-					struct tse_task_link, tl_link);
-		daos_list_del(&tlink->tl_link);
+		tlink = d_list_entry(dtp->dtp_dep_list.next,
+				     struct tse_task_link, tl_link);
+		d_list_del(&tlink->tl_link);
 		task_tmp = tlink->tl_task;
 		dtp_tmp = tse_task2priv(task_tmp);
 
@@ -536,8 +531,8 @@ tse_task_post_process(tse_task_t *task)
 			 */
 			tse_task_addref_locked(dtp);
 			tlink->tl_task = task;
-			daos_list_add_tail(&tlink->tl_link,
-					   &dtp_tmp->dtp_ret_list);
+			d_list_add_tail(&tlink->tl_link,
+					&dtp_tmp->dtp_ret_list);
 
 			if (dtp_tmp->dtp_dep_cnt == 0 && dtp_tmp->dtp_running) {
 				bool done;
@@ -597,16 +592,16 @@ tse_sched_process_complete(struct tse_sched_private *dsp)
 	int processed = 0;
 
 	/* pick tasks from complete_list */
-	DAOS_INIT_LIST_HEAD(&comp_list);
+	D_INIT_LIST_HEAD(&comp_list);
 	pthread_mutex_lock(&dsp->dsp_lock);
-	daos_list_splice_init(&dsp->dsp_complete_list, &comp_list);
+	d_list_splice_init(&dsp->dsp_complete_list, &comp_list);
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
-	daos_list_for_each_entry_safe(dtp, tmp, &comp_list, dtp_list) {
+	d_list_for_each_entry_safe(dtp, tmp, &comp_list, dtp_list) {
 		tse_task_t *task = tse_priv2task(dtp);
 
 		tse_task_post_process(task);
-		daos_list_del_init(&dtp->dtp_list);
+		d_list_del_init(&dtp->dtp_list);
 		tse_task_decref(task);  /* drop final ref */
 		processed++;
 	}
@@ -621,7 +616,7 @@ tse_sched_check_complete(tse_sched_t *sched)
 
 	/* check if all tasks are done */
 	pthread_mutex_lock(&dsp->dsp_lock);
-	completed = (daos_list_empty(&dsp->dsp_init_list) &&
+	completed = (d_list_empty(&dsp->dsp_init_list) &&
 		     dsp->dsp_inflight == 0);
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
@@ -681,10 +676,9 @@ tse_sched_complete_inflight(struct tse_sched_private *dsp)
 	int			  processed = 0;
 
 	pthread_mutex_lock(&dsp->dsp_lock);
-	daos_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_running_list,
-				      dtp_list)
+	d_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_running_list, dtp_list)
 		if (dtp->dtp_dep_cnt == 0) {
-			daos_list_del(&dtp->dtp_list);
+			d_list_del(&dtp->dtp_list);
 			tse_task_complete_locked(dtp, dsp);
 			processed++;
 		}
@@ -813,7 +807,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	tse_task_addref_locked(dtp);
 	tlink->tl_task = task;
 
-	daos_list_add_tail(&tlink->tl_link, &dep_dtp->dtp_dep_list);
+	d_list_add_tail(&tlink->tl_link, &dep_dtp->dtp_dep_list);
 	dtp->dtp_dep_cnt++;
 
 	pthread_mutex_unlock(&dtp->dtp_sched->dsp_lock);
@@ -848,11 +842,11 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	dtp = tse_task2priv(task);
 	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
 
-	DAOS_INIT_LIST_HEAD(&dtp->dtp_list);
-	DAOS_INIT_LIST_HEAD(&dtp->dtp_dep_list);
-	DAOS_INIT_LIST_HEAD(&dtp->dtp_comp_cb_list);
-	DAOS_INIT_LIST_HEAD(&dtp->dtp_prep_cb_list);
-	DAOS_INIT_LIST_HEAD(&dtp->dtp_ret_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_dep_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_comp_cb_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_prep_cb_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_ret_list);
 
 	dtp->dtp_refcnt   = 1;
 	dtp->dtp_func	  = task_func;
@@ -878,14 +872,14 @@ tse_task_schedule(tse_task_t *task, bool instant)
 		/** If task has no body function, mark it as running */
 		dsp->dsp_inflight++;
 		dtp->dtp_running = 1;
-		daos_list_add_tail(&dtp->dtp_list, &dsp->dsp_running_list);
+		d_list_add_tail(&dtp->dtp_list, &dsp->dsp_running_list);
 
 		/** +1 in case task is completed in body function */
 		if (instant)
 			tse_task_addref_locked(dtp);
 	} else {
 		/** Otherwise, scheduler will process it from init list */
-		daos_list_add_tail(&dtp->dtp_list, &dsp->dsp_init_list);
+		d_list_add_tail(&dtp->dtp_list, &dsp->dsp_init_list);
 	}
 	tse_sched_addref_locked(dsp);
 	pthread_mutex_unlock(&dsp->dsp_lock);
@@ -945,7 +939,7 @@ tse_task_reinit(tse_task_t *task)
 	/** Task not in-flight anymore */
 	dsp->dsp_inflight--;
 	/** Move back to init list */
-	daos_list_move_tail(&dtp->dtp_list, &dsp->dsp_init_list);
+	d_list_move_tail(&dtp->dtp_list, &dsp->dsp_init_list);
 
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
@@ -971,8 +965,8 @@ tse_task_list_add(tse_task_t *task, d_list_t *head)
 	    dtp->dtp_completing)
 		return -DER_NO_PERM;
 
-	D__ASSERT(daos_list_empty(&dtp->dtp_list));
-	daos_list_add_tail(&dtp->dtp_list, head);
+	D__ASSERT(d_list_empty(&dtp->dtp_list));
+	d_list_add_tail(&dtp->dtp_list, head);
 	return 0;
 }
 
@@ -981,10 +975,10 @@ tse_task_list_first(d_list_t *head)
 {
 	struct tse_task_private	*dtp;
 
-	if (daos_list_empty(head))
+	if (d_list_empty(head))
 		return NULL;
 
-	dtp = daos_list_entry(head->next, struct tse_task_private, dtp_list);
+	dtp = d_list_entry(head->next, struct tse_task_private, dtp_list);
 	return tse_priv2task(dtp);
 }
 
@@ -993,13 +987,13 @@ tse_task_list_del(tse_task_t *task)
 {
 	struct tse_task_private *dtp = tse_task2priv(task);
 
-	daos_list_del_init(&dtp->dtp_list);
+	d_list_del_init(&dtp->dtp_list);
 }
 
 void
 tse_task_list_sched(d_list_t *head, bool instant)
 {
-	while (!daos_list_empty(head)) {
+	while (!d_list_empty(head)) {
 		tse_task_t *task = tse_task_list_first(head);
 
 		tse_task_list_del(task);
@@ -1010,7 +1004,7 @@ tse_task_list_sched(d_list_t *head, bool instant)
 void
 tse_task_list_abort(d_list_t *head, int rc)
 {
-	while (!daos_list_empty(head)) {
+	while (!d_list_empty(head)) {
 		tse_task_t *task = tse_task_list_first(head);
 
 		tse_task_list_del(task);
@@ -1024,7 +1018,7 @@ tse_task_list_depend(d_list_t *head, tse_task_t *task)
 	struct tse_task_private *dtp;
 	int			 rc;
 
-	daos_list_for_each_entry(dtp, head, dtp_list) {
+	d_list_for_each_entry(dtp, head, dtp_list) {
 		rc = tse_task_add_dependent(tse_priv2task(dtp), task);
 		if (rc)
 			return rc;
@@ -1038,7 +1032,7 @@ tse_task_depend_list(tse_task_t *task, d_list_t *head)
 	struct tse_task_private *dtp;
 	int			 rc;
 
-	daos_list_for_each_entry(dtp, head, dtp_list) {
+	d_list_for_each_entry(dtp, head, dtp_list) {
 		rc = tse_task_add_dependent(task, tse_priv2task(dtp));
 		if (rc)
 			return rc;

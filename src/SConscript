@@ -15,7 +15,6 @@ def scons():
     # For Common library (tse.h)
     env.Append(CPPPATH=['#/src/include/daos'])
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
-    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/list.h')
 
     # Generic DAOS includes
     env.Append(CPPPATH=['#/src/include'])

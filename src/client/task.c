@@ -148,7 +148,7 @@ dc_task_list_sched(d_list_t *head, bool instant)
 {
 	tse_task_t *task;
 
-	while (!daos_list_empty(head)) {
+	while (!d_list_empty(head)) {
 		task = tse_task_list_first(head);
 		tse_task_list_del(task);
 		dc_task_schedule(task, instant);

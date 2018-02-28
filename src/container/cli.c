@@ -285,8 +285,8 @@ static void
 dc_cont_free(struct dc_cont *dc)
 {
 	pthread_rwlock_destroy(&dc->dc_obj_list_lock);
-	D__ASSERT(daos_list_empty(&dc->dc_po_list));
-	D__ASSERT(daos_list_empty(&dc->dc_obj_list));
+	D__ASSERT(d_list_empty(&dc->dc_po_list));
+	D__ASSERT(d_list_empty(&dc->dc_obj_list));
 	D__FREE_PTR(dc);
 }
 
@@ -308,8 +308,8 @@ dc_cont_alloc(const uuid_t uuid)
 		return NULL;
 
 	uuid_copy(dc->dc_uuid, uuid);
-	DAOS_INIT_LIST_HEAD(&dc->dc_obj_list);
-	DAOS_INIT_LIST_HEAD(&dc->dc_po_list);
+	D_INIT_LIST_HEAD(&dc->dc_obj_list);
+	D_INIT_LIST_HEAD(&dc->dc_po_list);
 	pthread_rwlock_init(&dc->dc_obj_list_lock, NULL);
 	dc->dc_ref = 1;
 
@@ -367,7 +367,7 @@ cont_open_complete(tse_task_t *task, void *data)
 		D__GOTO(out, rc = -DER_NO_HDL);
 	}
 
-	daos_list_add(&cont->dc_po_list, &pool->dp_co_list);
+	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = arg->hdl;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
@@ -413,7 +413,7 @@ dc_cont_local_close(daos_handle_t ph, daos_handle_t coh)
 
 	/* Remove the container from pool container list */
 	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
-	daos_list_del_init(&cont->dc_po_list);
+	d_list_del_init(&cont->dc_po_list);
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
 out:
@@ -453,7 +453,7 @@ dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 	cont->dc_capas = flags;
 
 	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
-	daos_list_add(&cont->dc_po_list, &pool->dp_co_list);
+	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = ph;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
@@ -599,7 +599,7 @@ cont_close_complete(tse_task_t *task, void *data)
 
 	/* Remove the container from pool container list */
 	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
-	daos_list_del_init(&cont->dc_po_list);
+	d_list_del_init(&cont->dc_po_list);
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
 out:
@@ -632,7 +632,7 @@ dc_cont_close(tse_task_t *task)
 
 	/* Check if there are not objects opened for this container */
 	pthread_rwlock_rdlock(&cont->dc_obj_list_lock);
-	if (!daos_list_empty(&cont->dc_obj_list)) {
+	if (!d_list_empty(&cont->dc_obj_list)) {
 		D__ERROR("cannot close container, object not closed.\n");
 		pthread_rwlock_unlock(&cont->dc_obj_list_lock);
 		D__GOTO(err_cont, rc = -DER_BUSY);
@@ -652,7 +652,7 @@ dc_cont_close(tse_task_t *task)
 
 		/* Remove the container from pool container list */
 		pthread_rwlock_wrlock(&pool->dp_co_list_lock);
-		daos_list_del_init(&cont->dc_po_list);
+		d_list_del_init(&cont->dc_po_list);
 		pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
 		D__DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
@@ -983,7 +983,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 		D__GOTO(out_cont, rc = -DER_NO_HDL);
 	}
 
-	daos_list_add(&cont->dc_po_list, &pool->dp_co_list);
+	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = poh;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 

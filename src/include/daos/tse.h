@@ -29,7 +29,7 @@
 #ifndef __TSE_SCHEDULE_H__
 #define __TSE_SCHEDULE_H__
 
-#include <daos/list.h>
+#include <gurt/list.h>
 
 /**
  * tse_task is used to track single asynchronous operation.

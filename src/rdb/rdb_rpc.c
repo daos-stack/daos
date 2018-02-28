@@ -271,7 +271,7 @@ rdb_alloc_raft_rpc(struct rdb *db, crt_rpc_t *rpc, raft_node_t *node)
 	D__ALLOC_PTR(rrpc);
 	if (rrpc == NULL)
 		return NULL;
-	DAOS_INIT_LIST_HEAD(&rrpc->drc_entry);
+	D_INIT_LIST_HEAD(&rrpc->drc_entry);
 	crt_req_addref(rpc);
 	rrpc->drc_rpc = rpc;
 	rdb_get(db);
@@ -285,7 +285,7 @@ rdb_free_raft_rpc(struct rdb_raft_rpc *rrpc)
 {
 	rdb_put(rrpc->drc_db);
 	crt_req_decref(rrpc->drc_rpc);
-	D__ASSERT(daos_list_empty(&rrpc->drc_entry));
+	D__ASSERT(d_list_empty(&rrpc->drc_entry));
 	D__FREE_PTR(rrpc);
 }
 
@@ -303,11 +303,11 @@ rdb_recvd(void *arg)
 		ABT_mutex_lock(db->d_mutex);
 		for (;;) {
 			stop = db->d_stop;
-			if (!daos_list_empty(&db->d_replies)) {
-				rrpc = daos_list_entry(db->d_replies.next,
-						       struct rdb_raft_rpc,
-						       drc_entry);
-				daos_list_del_init(&rrpc->drc_entry);
+			if (!d_list_empty(&db->d_replies)) {
+				rrpc = d_list_entry(db->d_replies.next,
+						    struct rdb_raft_rpc,
+						    drc_entry);
+				d_list_del_init(&rrpc->drc_entry);
 				break;
 			}
 			if (stop)
@@ -356,14 +356,14 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 		 * are stopping, rdb_recvd() might have already stopped. Hence,
 		 * we shall not add any new items to db->d_replies.
 		 */
-		daos_list_del_init(&rrpc->drc_entry);
+		d_list_del_init(&rrpc->drc_entry);
 		ABT_mutex_unlock(db->d_mutex);
 		rdb_raft_free_request(db, rrpc->drc_rpc);
 		rdb_free_raft_rpc(rrpc);
 		return;
 	}
 	/* Move this RPC to db->d_replies for rdb_recvd(). */
-	daos_list_move_tail(&rrpc->drc_entry, &db->d_replies);
+	d_list_move_tail(&rrpc->drc_entry, &db->d_replies);
 	ABT_cond_broadcast(db->d_replies_cv);
 	ABT_mutex_unlock(db->d_mutex);
 }
@@ -386,7 +386,7 @@ rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node)
 		rdb_free_raft_rpc(rrpc);
 		return -DER_CANCELED;
 	}
-	daos_list_add_tail(&rrpc->drc_entry, &db->d_requests);
+	d_list_add_tail(&rrpc->drc_entry, &db->d_requests);
 	ABT_mutex_unlock(db->d_mutex);
 
 	timeout /= 1000; /* ms to s */
@@ -411,8 +411,8 @@ rdb_abort_raft_rpcs(struct rdb *db)
 	struct rdb_raft_rpc    *tmp;
 	int			rc;
 
-	daos_list_for_each_entry_safe(rrpc, tmp, &db->d_requests, drc_entry) {
-		daos_list_del_init(&rrpc->drc_entry);
+	d_list_for_each_entry_safe(rrpc, tmp, &db->d_requests, drc_entry) {
+		d_list_del_init(&rrpc->drc_entry);
 		rc = crt_req_abort(rrpc->drc_rpc);
 		if (rc != 0) {
 			D__ERROR(DF_DB": failed to abort %x to rank %u: %d\n",

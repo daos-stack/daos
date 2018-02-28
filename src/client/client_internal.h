@@ -33,7 +33,7 @@
 #include <daos/common.h>
 #include <daos_event.h>
 #include <daos/event.h>
-#include <daos/list.h>
+#include <gurt/list.h>
 
 typedef struct daos_eq {
 	/* After event is completed, it will be moved to the eq_comp list */

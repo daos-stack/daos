@@ -749,7 +749,7 @@ rdb_apply_to(struct rdb *db, uint64_t index)
 		uint64_t	i = db->d_applied + 1;
 		raft_entry_t   *e;
 		void	       *result;
-		d_list_t	destroyed = DAOS_LIST_HEAD_INIT(destroyed);
+		d_list_t	destroyed = D_LIST_HEAD_INIT(destroyed);
 		int		rc;
 
 		e = raft_get_entry_from_idx(db->d_raft, i);
@@ -974,8 +974,8 @@ rdb_raft_start(struct rdb *db)
 	int		request_timeout;
 	int		rc;
 
-	DAOS_INIT_LIST_HEAD(&db->d_requests);
-	DAOS_INIT_LIST_HEAD(&db->d_replies);
+	D_INIT_LIST_HEAD(&db->d_requests);
+	D_INIT_LIST_HEAD(&db->d_replies);
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 4 /* bits */,
 					 NULL /* priv */,

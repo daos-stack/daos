@@ -33,7 +33,7 @@
 #include <daos/common.h>
 #include <daos_event.h>
 #include <daos/event.h>
-#include <daos/list.h>
+#include <gurt/list.h>
 #include <gurt/hash.h>
 
 /* XXX For the testing purpose, this test case will use

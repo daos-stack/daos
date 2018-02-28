@@ -50,7 +50,7 @@ obj_shard_alloc(d_rank_t rank, daos_unit_oid_t id, uint32_t part_nr)
 	shard->do_rank	  = rank;
 	shard->do_part_nr = part_nr;
 	shard->do_id	  = id;
-	DAOS_INIT_LIST_HEAD(&shard->do_co_list);
+	D_INIT_LIST_HEAD(&shard->do_co_list);
 
 	return shard;
 }

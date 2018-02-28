@@ -56,7 +56,7 @@ ds_pool_child_lookup(const uuid_t uuid)
 	struct ds_pool_child   *child;
 	struct pool_tls	       *tls = pool_tls_get();
 
-	daos_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
+	d_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
 		if (uuid_compare(uuid, child->spc_uuid) == 0) {
 			child->spc_ref++;
 			return child;
@@ -73,7 +73,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 	if (child->spc_ref == 0) {
 		D__DEBUG(DF_DSMS, DF_UUID": destroying\n",
 			DP_UUID(child->spc_uuid));
-		D__ASSERT(daos_list_empty(&child->spc_list));
+		D__ASSERT(d_list_empty(&child->spc_list));
 		vos_pool_close(child->spc_hdl);
 		D__FREE_PTR(child);
 	}
@@ -85,10 +85,10 @@ ds_pool_child_purge(struct pool_tls *tls)
 	struct ds_pool_child   *child;
 	struct ds_pool_child   *n;
 
-	daos_list_for_each_entry_safe(child, n, &tls->dt_pool_list, spc_list) {
+	d_list_for_each_entry_safe(child, n, &tls->dt_pool_list, spc_list) {
 		D__ASSERTF(child->spc_ref == 1, DF_UUID": %d\n",
 			  DP_UUID(child->spc_uuid), child->spc_ref);
-		daos_list_del_init(&child->spc_list);
+		d_list_del_init(&child->spc_list);
 		ds_pool_child_put(child);
 	}
 }
@@ -142,7 +142,7 @@ ds_pool_child_open(uuid_t uuid, unsigned int version)
 	child->spc_map_version = version;
 	child->spc_ref = 1; /* 1 for the list */
 
-	daos_list_add(&child->spc_list, &tls->dt_pool_list);
+	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
 	return 0;
 }
@@ -168,7 +168,7 @@ ds_pool_child_close(uuid_t uuid)
 	if (child == NULL)
 		return 0;
 
-	daos_list_del_init(&child->spc_list);
+	d_list_del_init(&child->spc_list);
 	ds_pool_child_put(child); /* -1 for the list */
 	ds_pool_child_put(child); /* -1 for lookup */
 	return 0;

@@ -31,7 +31,7 @@
 
 #include <abt.h>
 #include <daos_errno.h>
-#include <daos/list.h>
+#include <gurt/list.h>
 #include <daos/event.h>
 #include <daos_event.h>
 #include "srv_internal.h"
@@ -407,7 +407,7 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	dx->dx_xstream	= ABT_XSTREAM_NULL;
 	dx->dx_sched	= ABT_SCHED_NULL;
 	dx->dx_progress	= ABT_THREAD_NULL;
-	DAOS_INIT_LIST_HEAD(&dx->dx_list);
+	D_INIT_LIST_HEAD(&dx->dx_list);
 
 	return dx;
 
@@ -488,7 +488,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 	xstream_data.xd_ult_signal = false;
 
 	/** add to the list of execution streams */
-	daos_list_add_tail(&dx->dx_list, &xstream_data.xd_list);
+	d_list_add_tail(&dx->dx_list, &xstream_data.xd_list);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
 	return 0;
@@ -518,23 +518,23 @@ dss_xstreams_fini(bool force)
 	D__DEBUG(DB_TRACE, "Stopping execution streams\n");
 
 	/** Stop & free progress xstreams */
-	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list)
+	d_list_for_each_entry(dx, &xstream_data.xd_list, dx_list)
 		ABT_future_set(dx->dx_shutdown, dx);
-	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
+	d_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
 		ABT_thread_join(dx->dx_progress);
 		ABT_thread_free(&dx->dx_progress);
 		ABT_future_free(&dx->dx_shutdown);
 	}
 
 	/** Wait for each execution stream to complete */
-	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
+	d_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
 		ABT_xstream_join(dx->dx_xstream);
 		ABT_xstream_free(&dx->dx_xstream);
 	}
 
 	/** housekeeping ... */
-	daos_list_for_each_entry_safe(dx, tmp, &xstream_data.xd_list, dx_list) {
-		daos_list_del_init(&dx->dx_list);
+	d_list_for_each_entry_safe(dx, tmp, &xstream_data.xd_list, dx_list) {
+		d_list_del_init(&dx->dx_list);
 		ABT_sched_free(&dx->dx_sched);
 		dss_xstream_free(dx);
 	}
@@ -558,7 +558,7 @@ dss_xstreams_open_barrier(void)
 static bool
 dss_xstreams_empty(void)
 {
-	return daos_list_empty(&xstream_data.xd_list);
+	return d_list_empty(&xstream_data.xd_list);
 }
 
 static int
@@ -653,7 +653,7 @@ dss_xstream_get(int stream_id)
 	if (stream_id == -1)
 		return dss_get_module_info()->dmi_xstream;
 
-	daos_list_for_each_entry(tmp, &xstream_data.xd_list, dx_list) {
+	d_list_for_each_entry(tmp, &xstream_data.xd_list, dx_list) {
 		if (tmp->dx_idx == stream_id) {
 			dx = tmp;
 			break;
@@ -705,7 +705,7 @@ dss_ult_create_all(void (*func)(void *), void *arg)
 	/*
 	 * Create ULT for each stream in the target
 	 */
-	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
+	d_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE], func, arg,
 				       ABT_THREAD_ATTR_NULL,
 				       NULL /* new thread */);
@@ -884,7 +884,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	D__ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 
 	tid = 0;
-	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
+	d_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
 		stream			= &stream_args->csa_streams[tid];
 		stream->st_coll_args	= &carg;
 
@@ -1189,7 +1189,7 @@ dss_srv_init(int nr)
 	xstream_data.xd_init_step  = XD_INIT_NONE;
 	xstream_data.xd_ult_signal = false;
 
-	DAOS_INIT_LIST_HEAD(&xstream_data.xd_list);
+	D_INIT_LIST_HEAD(&xstream_data.xd_list);
 	rc = ABT_mutex_create(&xstream_data.xd_mutex);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);

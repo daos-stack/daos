@@ -861,7 +861,7 @@ dc_obj_update(tse_task_t *task)
 	D__DEBUG(DB_IO, "update "DF_OID" start %u cnt %u\n",
 		DP_OID(obj->cob_md.omd_id), shard, shards_cnt);
 
-	DAOS_INIT_LIST_HEAD(&head);
+	D_INIT_LIST_HEAD(&head);
 	for (i = 0; i < shards_cnt; i++, shard++) {
 		tse_task_t		 *shard_task;
 		struct shard_update_args *shard_arg;
@@ -893,7 +893,7 @@ dc_obj_update(tse_task_t *task)
 	tse_task_list_sched(&head, true);
 	return 0;
 out_task:
-	if (daos_list_empty(&head))
+	if (d_list_empty(&head))
 		tse_task_complete(task, rc);
 	else
 		tse_task_list_abort(&head, rc);
@@ -1180,7 +1180,7 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 	D__DEBUG(DB_IO, "punch "DF_OID" start %u cnt %u\n",
 		 DP_OID(obj->cob_md.omd_id), shard_first, shard_nr);
 
-	DAOS_INIT_LIST_HEAD(&head);
+	D_INIT_LIST_HEAD(&head);
 	for (i = 0; i < shard_nr; i++) {
 		tse_task_t		*task;
 		struct tsa_obj_punch	*args;
@@ -1232,7 +1232,7 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 out:
 	return rc;
 out_task:
-	if (daos_list_empty(&head)) /* nothing has been started */
+	if (d_list_empty(&head)) /* nothing has been started */
 		tse_task_complete(api_task, rc);
 	else
 		tse_task_list_abort(&head, rc);

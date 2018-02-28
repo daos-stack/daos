@@ -129,7 +129,7 @@ rdb_tree_alloc_ref(void *key, unsigned int ksize, void *varg,
 	D__ALLOC_PTR(tree);
 	if (tree == NULL)
 		D__GOTO(err, rc = -DER_NOMEM);
-	DAOS_INIT_LIST_HEAD(&tree->de_list);
+	D_INIT_LIST_HEAD(&tree->de_list);
 
 	/* tree->de_path */
 	D__ALLOC(buf, ksize);
@@ -162,7 +162,7 @@ rdb_tree_free_ref(struct daos_llink *llink)
 	struct rdb_tree *tree = rdb_tree_obj(llink);
 
 	D__DEBUG(DB_ANY, "freeing %p "DF_U64"\n", tree, tree->de_hdl.cookie);
-	D__ASSERT(daos_list_empty(&tree->de_list));
+	D__ASSERT(d_list_empty(&tree->de_list));
 	dbtree_close(tree->de_hdl);
 	D__FREE(tree->de_path.iov_buf, tree->de_path.iov_buf_len);
 	D__FREE_PTR(tree);

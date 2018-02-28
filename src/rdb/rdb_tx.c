@@ -553,7 +553,7 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, d_list_t *destroyed)
 			if (rc_tmp == 0) {
 				D__DEBUG(DB_ANY, DF_DB": add to destroyed %p\n",
 					DP_DB(db), victim);
-				daos_list_add_tail(&victim->de_list, destroyed);
+				d_list_add_tail(&victim->de_list, destroyed);
 			}
 		}
 	} TX_ONABORT {
@@ -633,8 +633,8 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		 * If rc == 0, then evict the tree objects that have been
 		 * destroyed. Otherwise, just release them.
 		 */
-		daos_list_for_each_entry_safe(tree, tmp, destroyed, de_list) {
-			daos_list_del_init(&tree->de_list);
+		d_list_for_each_entry_safe(tree, tmp, destroyed, de_list) {
+			d_list_del_init(&tree->de_list);
 			if (rc == 0) {
 				D__DEBUG(DB_ANY, DF_DB": evicting %p\n",
 					DP_DB(db), tree);

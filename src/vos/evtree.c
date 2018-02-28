@@ -182,7 +182,7 @@ void
 evt_ent_list_init(struct evt_entry_list *ent_list)
 {
 	memset(ent_list, 0, sizeof(*ent_list));
-	DAOS_INIT_LIST_HEAD(&ent_list->el_list);
+	D_INIT_LIST_HEAD(&ent_list->el_list);
 }
 
 /** Finalize an entry list */
@@ -193,14 +193,14 @@ evt_ent_list_fini(struct evt_entry_list *ent_list)
 	while (ent_list->el_ent_nr > ERT_ENT_EMBEDDED) {
 		struct evt_entry *ent;
 
-		ent = daos_list_entry(ent_list->el_list.prev,
-				      struct evt_entry, en_link);
-		daos_list_del(&ent->en_link);
+		ent = d_list_entry(ent_list->el_list.prev, struct evt_entry,
+				   en_link);
+		d_list_del(&ent->en_link);
 		D__FREE_PTR(ent);
 		ent_list->el_ent_nr--;
 	}
 
-	DAOS_INIT_LIST_HEAD(&ent_list->el_list);
+	D_INIT_LIST_HEAD(&ent_list->el_list);
 	ent_list->el_ent_nr = 0;
 }
 
@@ -225,7 +225,7 @@ evt_ent_list_alloc(struct evt_entry_list *ent_list)
 			return NULL;
 
 	}
-	daos_list_add_tail(&ent->en_link, &ent_list->el_list);
+	d_list_add_tail(&ent->en_link, &ent_list->el_list);
 	return ent;
 }
 
@@ -332,9 +332,9 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 	tcx->tc_ops = evt_policies[0];
 
 	evt_ent_list_init(&tcx->tc_ent_list);
-	DAOS_INIT_LIST_HEAD(&tcx->tc_ent_clipping);
-	DAOS_INIT_LIST_HEAD(&tcx->tc_ent_inserting);
-	DAOS_INIT_LIST_HEAD(&tcx->tc_ent_dropping);
+	D_INIT_LIST_HEAD(&tcx->tc_ent_clipping);
+	D_INIT_LIST_HEAD(&tcx->tc_ent_inserting);
+	D_INIT_LIST_HEAD(&tcx->tc_ent_dropping);
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
@@ -1131,7 +1131,7 @@ evt_clip_entry(struct evt_context *tcx, struct evt_entry *ent)
 	entmp->en_rect	 = ent->en_rect;
 	entmp->en_offset = ent->en_offset;
 	entmp->en_mmid	 = ent->en_mmid;
-	daos_list_add_tail(&entmp->en_link, &tcx->tc_ent_inserting);
+	d_list_add_tail(&entmp->en_link, &tcx->tc_ent_inserting);
 
 	return 0;
 }
@@ -1351,12 +1351,12 @@ evt_insert_entries(struct evt_context *tcx)
 {
 	int	rc;
 
-	while (!daos_list_empty(&tcx->tc_ent_inserting)) {
+	while (!d_list_empty(&tcx->tc_ent_inserting)) {
 		struct evt_entry *ent;
 
-		ent = daos_list_entry(tcx->tc_ent_inserting.next,
-				      struct evt_entry, en_link);
-		daos_list_del_init(&ent->en_link);
+		ent = d_list_entry(tcx->tc_ent_inserting.next, struct evt_entry,
+				   en_link);
+		d_list_del_init(&ent->en_link);
 
 		rc = evt_insert_entry(tcx, ent);
 		if (rc != 0)
@@ -1387,8 +1387,8 @@ evt_insert_ptr(struct evt_context *tcx, struct evt_rect *rect,
 	struct evt_entry ent;
 	int		 rc;
 
-	DAOS_INIT_LIST_HEAD(&tcx->tc_ent_clipping);
-	DAOS_INIT_LIST_HEAD(&tcx->tc_ent_inserting);
+	D_INIT_LIST_HEAD(&tcx->tc_ent_clipping);
+	D_INIT_LIST_HEAD(&tcx->tc_ent_inserting);
 	evt_ent_list_init(&tcx->tc_ent_list);
 
 	if (tcx->tc_depth == 0) { /* empty tree */
@@ -1411,13 +1411,13 @@ evt_insert_ptr(struct evt_context *tcx, struct evt_rect *rect,
 	if (out_mmid)
 		*out_mmid = umem_id_u2t(ent.en_mmid, struct evt_ptr);
 
-	D__ASSERT(daos_list_empty(&tcx->tc_ent_clipping));
+	D__ASSERT(d_list_empty(&tcx->tc_ent_clipping));
 	/* Phase-2: Inserting */
 	rc = evt_insert_entries(tcx);
 	if (rc != 0)
 		D__GOTO(failed, rc);
 
-	D__ASSERT(daos_list_empty(&tcx->tc_ent_inserting));
+	D__ASSERT(d_list_empty(&tcx->tc_ent_inserting));
 	D_EXIT;
  failed:
 	evt_ent_list_fini(&tcx->tc_ent_list);

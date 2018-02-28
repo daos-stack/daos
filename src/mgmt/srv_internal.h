@@ -30,7 +30,7 @@
 #ifndef __SRV_MGMT_INTERNAL_H__
 #define __SRV_MGMT_INTERNAL_H__
 
-#include <daos/list.h>
+#include <gurt/list.h>
 #include <daos/rpc.h>
 #include <daos/common.h>
 #include <daos_srv/daos_server.h>

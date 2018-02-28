@@ -872,9 +872,8 @@ ring_remap_add_one(d_list_t *remap_list, struct ring_failed_shard *f_new)
 	d_list_t		 *tmp;
 
 	/* All failed shards are sorted by fseq in ascending order */
-	daos_list_for_each_prev(tmp, remap_list) {
-		f_shard = daos_list_entry(tmp, struct ring_failed_shard,
-					  rfs_list);
+	d_list_for_each_prev(tmp, remap_list) {
+		f_shard = d_list_entry(tmp, struct ring_failed_shard, rfs_list);
 		/*
 		 * Since we can only reuild one target at a time, the
 		 * target fseq should be assigned uniquely, even if all
@@ -885,10 +884,10 @@ ring_remap_add_one(d_list_t *remap_list, struct ring_failed_shard *f_new)
 
 		if (f_new->rfs_fseq < f_shard->rfs_fseq)
 			continue;
-		daos_list_add(&f_new->rfs_list, tmp);
+		d_list_add(&f_new->rfs_list, tmp);
 		return;
 	}
-	daos_list_add(&f_new->rfs_list, remap_list);
+	d_list_add(&f_new->rfs_list, remap_list);
 }
 
 /** allocate one failed shard then add it into remap list */
@@ -902,7 +901,7 @@ ring_remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	if (f_new == NULL)
 		return -DER_NOMEM;
 
-	DAOS_INIT_LIST_HEAD(&f_new->rfs_list);
+	D_INIT_LIST_HEAD(&f_new->rfs_list);
 	f_new->rfs_shard_idx = shard_idx;
 	f_new->rfs_fseq = tgt->ta_comp.co_fseq;
 	f_new->rfs_status = tgt->ta_comp.co_status;
@@ -918,9 +917,8 @@ ring_remap_free_all(d_list_t *remap_list)
 {
 	struct ring_failed_shard *f_shard, *f_tmp;
 
-	daos_list_for_each_entry_safe(f_shard, f_tmp, remap_list,
-				      rfs_list) {
-		daos_list_del_init(&f_shard->rfs_list);
+	d_list_for_each_entry_safe(f_shard, f_tmp, remap_list, rfs_list) {
+		d_list_del_init(&f_shard->rfs_list);
 		D__FREE_PTR(f_shard);
 	}
 }
@@ -987,7 +985,7 @@ ring_remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
 	D__DEBUG(DB_PL, "remap list for "DF_OID", %s\n",
 		DP_OID(md->omd_id), comment);
 
-	daos_list_for_each_entry(f_shard, remap_list, rfs_list) {
+	d_list_for_each_entry(f_shard, remap_list, rfs_list) {
 		D__DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u\n",
 			f_shard->rfs_fseq, f_shard->rfs_shard_idx,
 			f_shard->rfs_status);
@@ -1021,8 +1019,8 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	spare_idx = rop->rop_begin;
 
 	while (current != remap_list) {
-		f_shard = daos_list_entry(current, struct ring_failed_shard,
-					  rfs_list);
+		f_shard = d_list_entry(current, struct ring_failed_shard,
+				       rfs_list);
 		l_shard = &layout->ol_shards[f_shard->rfs_shard_idx];
 
 		/*
@@ -1079,16 +1077,16 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 			f_shard->rfs_status = spare_tgt->ta_comp.co_status;
 
 			current = current->next;
-			daos_list_del_init(&f_shard->rfs_list);
+			d_list_del_init(&f_shard->rfs_list);
 			ring_remap_add_one(remap_list, f_shard);
 
 			/* Continue with the failed shard has minimal fseq */
 			if (current == remap_list) {
 				current = &f_shard->rfs_list;
 			} else {
-				f_tmp = daos_list_entry(current,
-						struct ring_failed_shard,
-						rfs_list);
+				f_tmp = d_list_entry(current,
+						     struct ring_failed_shard,
+						     rfs_list);
 				if (f_shard->rfs_fseq < f_tmp->rfs_fseq)
 					current = &f_shard->rfs_list;
 			}
@@ -1251,7 +1249,7 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	if (rc)
 		return rc;
 
-	DAOS_INIT_LIST_HEAD(&remap_list);
+	D_INIT_LIST_HEAD(&remap_list);
 	rc = ring_obj_layout_fill(map, md, &rop, layout, &remap_list);
 	if (rc) {
 		pl_obj_layout_free(layout);
@@ -1309,12 +1307,12 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		layout->ol_shards = shards_on_stack;
 	}
 
-	DAOS_INIT_LIST_HEAD(&remap_list);
+	D_INIT_LIST_HEAD(&remap_list);
 	rc = ring_obj_layout_fill(map, md, &rop, layout, &remap_list);
 	if (rc)
 		goto out;
 
-	daos_list_for_each_entry(f_shard, &remap_list, rfs_list) {
+	d_list_for_each_entry(f_shard, &remap_list, rfs_list) {
 		l_shard = &layout->ol_shards[f_shard->rfs_shard_idx];
 
 		if (f_shard->rfs_fseq > rebuild_ver)

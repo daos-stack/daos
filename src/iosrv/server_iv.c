@@ -28,7 +28,7 @@
 #include <abt.h>
 #include <cart/iv.h>
 #include <daos/common.h>
-#include <daos/list.h>
+#include <gurt/list.h>
 #include <daos_srv/iv.h>
 #include "srv_internal.h"
 
@@ -42,7 +42,7 @@ iv_key_type_lookup(unsigned int key_id)
 {
 	struct ds_iv_key_type *type;
 
-	daos_list_for_each_entry(type, &ds_iv_key_type_list, iv_key_list) {
+	d_list_for_each_entry(type, &ds_iv_key_type_list, iv_key_list) {
 		if (type->iv_key_id == key_id)
 			return type;
 	}
@@ -58,9 +58,9 @@ ds_iv_key_type_unregister(unsigned int key_id)
 {
 	struct ds_iv_key_type *type;
 
-	daos_list_for_each_entry(type, &ds_iv_key_type_list, iv_key_list) {
+	d_list_for_each_entry(type, &ds_iv_key_type_list, iv_key_list) {
 		if (type->iv_key_id == key_id) {
-			daos_list_del(&type->iv_key_list);
+			d_list_del(&type->iv_key_list);
 			D_FREE_PTR(type);
 			return 0;
 		}
@@ -90,8 +90,8 @@ ds_iv_key_type_register(unsigned int key_id, struct ds_iv_entry_ops *ops)
 
 	type->iv_key_id = key_id;
 	type->iv_key_ops = ops;
-	DAOS_INIT_LIST_HEAD(&type->iv_key_list);
-	daos_list_add(&type->iv_key_list, &ds_iv_key_type_list);
+	D_INIT_LIST_HEAD(&type->iv_key_list);
+	d_list_add(&type->iv_key_list, &ds_iv_key_type_list);
 	return 0;
 }
 
@@ -100,7 +100,7 @@ iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns)
 {
 	struct ds_iv_ns *ns;
 
-	daos_list_for_each_entry(ns, &ds_iv_ns_list, iv_ns_link) {
+	d_list_for_each_entry(ns, &ds_iv_ns_list, iv_ns_link) {
 		if (ns->iv_ns == ivns)
 			return ns;
 	}
@@ -117,9 +117,9 @@ iv_ns_create_internal(unsigned int ns_id, d_rank_t rank,
 	/* Destroy the ns with the same id, probably because the new
 	 * is elected.
 	 */
-	daos_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
+	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
 		if (ns->iv_ns_id == ns_id) {
-			daos_list_del(&ns->iv_ns_link);
+			d_list_del(&ns->iv_ns_link);
 			D__DEBUG(DB_TRACE, "orig rank %d -> %d\n",
 				ns->iv_master_rank, rank);
 			D_ASSERT(ns->iv_master_rank != rank);
@@ -133,11 +133,11 @@ iv_ns_create_internal(unsigned int ns_id, d_rank_t rank,
 	if (ns == NULL)
 		return -DER_NOMEM;
 
-	DAOS_INIT_LIST_HEAD(&ns->iv_entry_list);
+	D_INIT_LIST_HEAD(&ns->iv_entry_list);
 	ns->iv_ns_id = ns_id;
 	ns->iv_master_rank = rank;
 	ABT_mutex_create(&ns->iv_lock);
-	daos_list_add(&ns->iv_ns_link, &ds_iv_ns_list);
+	d_list_add(&ns->iv_ns_link, &ds_iv_ns_list);
 	*pns = ns;
 	return 0;
 }
@@ -288,7 +288,7 @@ iv_entry_lookup(struct ds_iv_ns *ns, crt_iv_key_t *key)
 	struct ds_iv_entry *entry;
 
 	ABT_mutex_lock(ns->iv_lock);
-	daos_list_for_each_entry(entry, &ns->iv_entry_list, link) {
+	d_list_for_each_entry(entry, &ns->iv_entry_list, link) {
 		if (key_equal((daos_key_t *)key, &entry->key)) {
 			/* resolve the permission issue later and also
 			 * hold the value XXX
@@ -373,7 +373,7 @@ iv_entry_find_or_create(struct ds_iv_ns *ns, crt_iv_key_t *iv_key,
 
 	entry->ref++;
 	ABT_mutex_lock(ns->iv_lock);
-	daos_list_add(&entry->link, &ns->iv_entry_list);
+	d_list_add(&entry->link, &ns->iv_entry_list);
 	ABT_mutex_unlock(ns->iv_lock);
 	*got = entry;
 
@@ -508,7 +508,7 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	*priv = entry;
 out:
 	if (rc && alloc_entry) {
-		daos_list_del(&entry->link);
+		d_list_del(&entry->link);
 		iv_entry_free(entry);
 	}
 
@@ -537,7 +537,7 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	if (--entry->ref > 0)
 		return 0;
 
-	daos_list_del(&entry->link);
+	d_list_del(&entry->link);
 	iv_entry_free(entry);
 
 	return 0;
@@ -584,7 +584,7 @@ ds_iv_ns_create(crt_context_t ctx, crt_group_t *grp,
 				     &iv_class, 1, &ns->iv_ns,
 				     (d_iov_t *)g_ivns);
 	if (rc) {
-		daos_list_del(&ns->iv_ns_link);
+		d_list_del(&ns->iv_ns_link);
 		D_FREE_PTR(ns);
 		return rc;
 	}
@@ -617,7 +617,7 @@ ds_iv_ns_attach(crt_context_t ctx, unsigned int ns_id,
 				     &iv_class, 1, &ns->iv_ns);
 
 	if (rc) {
-		daos_list_del(&ns->iv_ns_link);
+		d_list_del(&ns->iv_ns_link);
 		D_FREE_PTR(ns);
 		D_GOTO(out, rc);
 	}
@@ -650,8 +650,8 @@ ds_iv_ns_destroy_internal(struct ds_iv_ns *ns)
 	struct ds_iv_entry *entry;
 	struct ds_iv_entry *tmp;
 
-	daos_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, link) {
-		daos_list_del(&entry->link);
+	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, link) {
+		d_list_del(&entry->link);
 		iv_entry_free(entry);
 	}
 
@@ -669,7 +669,7 @@ ds_iv_ns_destroy(void *ns)
 		return;
 
 	D__DEBUG(DB_TRACE, "destroy ivns %d\n", iv_ns->iv_ns_id);
-	daos_list_del(&iv_ns->iv_ns_link);
+	d_list_del(&iv_ns->iv_ns_link);
 	ds_iv_ns_destroy_internal(iv_ns);
 }
 
@@ -678,8 +678,8 @@ ds_iv_init()
 {
 	int rc;
 
-	DAOS_INIT_LIST_HEAD(&ds_iv_ns_list);
-	DAOS_INIT_LIST_HEAD(&ds_iv_key_type_list);
+	D_INIT_LIST_HEAD(&ds_iv_ns_list);
+	D_INIT_LIST_HEAD(&ds_iv_key_type_list);
 	rc = crt_group_rank(NULL, &myrank);
 	return rc;
 }
@@ -692,14 +692,14 @@ ds_iv_fini(void)
 	struct ds_iv_key_type	*type;
 	struct ds_iv_key_type	*type_tmp;
 
-	daos_list_for_each_entry_safe(type, type_tmp, &ds_iv_key_type_list,
-				      iv_key_list) {
-		daos_list_del(&type->iv_key_list);
+	d_list_for_each_entry_safe(type, type_tmp, &ds_iv_key_type_list,
+				   iv_key_list) {
+		d_list_del(&type->iv_key_list);
 		D_FREE_PTR(type);
 	}
 
-	daos_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
-		daos_list_del(&ns->iv_ns_link);
+	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
+		d_list_del(&ns->iv_ns_link);
 		ds_iv_ns_destroy_internal(ns);
 		D_FREE_PTR(ns);
 	}

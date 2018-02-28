@@ -38,7 +38,7 @@
 #include <assert.h>
 #include <mpi.h>
 
-#include <daos/list.h>
+#include <gurt/list.h>
 #include <daos.h>
 #include <errno.h>
 #include "suite/daos_test.h"
@@ -152,7 +152,7 @@ struct value_entry {
 };
 
 /** List to limit AIO operations */
-static	DAOS_LIST_HEAD(aios);
+static	D_LIST_HEAD(aios);
 
 /**
  * Global initializations
@@ -453,7 +453,7 @@ aio_req_init(struct test *test)
 
 		memset(ioreq, 0, sizeof(*ioreq));
 		ioreq_init(ioreq, test, i);
-		daos_list_add(&ioreq->list, &aios);
+		d_list_add(&ioreq->list, &aios);
 
 		DBENCH_INFO("Allocated AIO %p: buffer %p", ioreq,
 			    ioreq->val_iov.iov_buf);
@@ -472,11 +472,11 @@ aio_req_fini(struct test *test)
 
 	free(events);
 
-	daos_list_for_each_entry_safe(ioreq, tmp, &aios, list) {
+	d_list_for_each_entry_safe(ioreq, tmp, &aios, list) {
 		DBENCH_INFO("Freeing AIO %p: buffer %p", ioreq,
 			     ioreq->val_iov.iov_buf);
 
-		daos_list_del_init(&ioreq->list);
+		d_list_del_init(&ioreq->list);
 		ioreq_fini(ioreq);
 		free(ioreq);
 	}
@@ -514,7 +514,7 @@ aio_req_wait(struct test *test, int fetch_flag, uint64_t value)
 			     ioreq->iod.iod_recxs->rx_idx,
 			     ioreq->iod.iod_recxs->rx_nr);
 
-		daos_list_move(&ioreq->list, &aios);
+		d_list_move(&ioreq->list, &aios);
 		naios++;
 		DBENCH_INFO("Completed AIO %p: buffer %p",
 			    ioreq, ioreq->val_iov.iov_buf);
@@ -842,8 +842,8 @@ get_next_ioreq(struct test *test)
 
 	while (naios == 0)
 		aio_req_wait(test, 0, 0);
-	ioreq = daos_list_entry(aios.next, struct a_ioreq, list);
-	daos_list_move_tail(&ioreq->list, &aios);
+	ioreq = d_list_entry(aios.next, struct a_ioreq, list);
+	d_list_move_tail(&ioreq->list, &aios);
 	naios--;
 
 	return ioreq;

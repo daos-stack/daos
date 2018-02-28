@@ -1302,7 +1302,7 @@ stop_one(d_list_t *entry, void *arg)
 		return rc;
 	}
 
-	daos_list_add(&ult->u_entry, list);
+	d_list_add(&ult->u_entry, list);
 	return 0;
 }
 
@@ -1313,7 +1313,7 @@ stop_one(d_list_t *entry, void *arg)
 int
 ds_pool_svc_stop_all(void)
 {
-	d_list_t	list = DAOS_LIST_HEAD_INIT(list);
+	d_list_t	list = D_LIST_HEAD_INIT(list);
 	struct ult     *ult;
 	struct ult     *ult_tmp;
 	int		rc;
@@ -1324,8 +1324,8 @@ ds_pool_svc_stop_all(void)
 	ABT_mutex_unlock(pool_svc_hash_lock);
 
 	/* Wait for the stopper ULTs to return. */
-	daos_list_for_each_entry_safe(ult, ult_tmp, &list, u_entry) {
-		daos_list_del_init(&ult->u_entry);
+	d_list_for_each_entry_safe(ult, ult_tmp, &list, u_entry) {
+		d_list_del_init(&ult->u_entry);
 		ABT_thread_join(ult->u_thread);
 		ABT_thread_free(&ult->u_thread);
 		D__FREE_PTR(ult);

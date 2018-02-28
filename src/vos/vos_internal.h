@@ -30,7 +30,7 @@
 #ifndef __VOS_INTERNAL_H__
 #define __VOS_INTERNAL_H__
 
-#include <daos/list.h>
+#include <gurt/list.h>
 #include <gurt/hash.h>
 #include <daos/btree.h>
 #include <daos/common.h>

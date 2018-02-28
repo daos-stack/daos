@@ -155,7 +155,7 @@ pool_tls_init(const struct dss_thread_local_storage *dtls,
 	if (tls == NULL)
 		return NULL;
 
-	DAOS_INIT_LIST_HEAD(&tls->dt_pool_list);
+	D_INIT_LIST_HEAD(&tls->dt_pool_list);
 	return tls;
 }
 
@@ -166,7 +166,7 @@ pool_tls_fini(const struct dss_thread_local_storage *dtls,
 	struct pool_tls *tls = data;
 
 	ds_pool_child_purge(tls);
-	D__ASSERT(daos_list_empty(&tls->dt_pool_list));
+	D__ASSERT(d_list_empty(&tls->dt_pool_list));
 	D__FREE_PTR(tls);
 }
 

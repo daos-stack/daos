@@ -176,7 +176,7 @@ tf_cont_close(daos_handle_t coh, uuid_t cid, daos_epoch_t epoch)
 
 	D_ENTER;
 
-	DAOS_INIT_LIST_HEAD(&head);
+	D_INIT_LIST_HEAD(&head);
 	sched = &(dss_get_module_info()->dmi_sched);
 
 	D__DEBUG(DF_TIERS, "epoch:"DF_U64"\n", epoch);
@@ -224,7 +224,7 @@ tf_cont_open(daos_handle_t *pcoh, uuid_t cid, daos_epoch_t *epoch)
 	daos_epoch_state_t	 epstate;
 	tse_sched_t		*sched;
 
-	DAOS_INIT_LIST_HEAD(&head);
+	D_INIT_LIST_HEAD(&head);
 	sched = &(dss_get_module_info()->dmi_sched);
 
 	rc = dc_task_create(dc_cont_open, sched, NULL, &task1);
@@ -409,9 +409,9 @@ tier_fetche(uuid_t pool, daos_handle_t co, daos_epoch_t ev, uuid_t cid,
 	ctx.dfc_ev       = ev;
 	uuid_copy(ctx.dfc_pool, pool);
 
-	DAOS_INIT_LIST_HEAD(&ctx.dfc_head);
-	DAOS_INIT_LIST_HEAD(&ctx.dfc_dkios);
-	DAOS_INIT_LIST_HEAD(&ctx.dfc_iods);
+	D_INIT_LIST_HEAD(&ctx.dfc_head);
+	D_INIT_LIST_HEAD(&ctx.dfc_dkios);
+	D_INIT_LIST_HEAD(&ctx.dfc_iods);
 
 
 	ctx.dfc_sched  = &(dss_get_module_info()->dmi_sched);
@@ -621,13 +621,13 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 	tier_cp_oid(&ptmp->dki_oid, &fctx->dfc_oid);
 	ptmp->dki_dkey = fctx->dfc_dkey;
 
-	daos_list_for_each_safe(iter, tmp, &fctx->dfc_iods) {
+	d_list_for_each_safe(iter, tmp, &fctx->dfc_iods) {
 		src = (struct tier_vec_iod *)
-		      daos_list_entry(iter, struct tier_vec_iod, dvi_lh);
+		      d_list_entry(iter, struct tier_vec_iod, dvi_lh);
 		tier_cp_vec_iod(&ptmp->dki_iods[ptmp->dki_nr],
 				 &src->dvi_viod);
 		(ptmp->dki_nr)++;
-		daos_list_del(iter);
+		d_list_del(iter);
 		D__FREE(src, tier_vec_iod_size(src->dvi_viod.iod_nr));
 	}
 	rc = vos_obj_zc_fetch_begin(fctx->dfc_co, fctx->dfc_oid, epoch,
@@ -725,17 +725,17 @@ tier_proc_akey(void *ctx, vos_iter_entry_t *ie)
 
 	vio->dvi_viod.iod_eprs = (daos_epoch_range_t *)ptmp;
 
-	DAOS_INIT_LIST_HEAD(&vio->dvi_lh);
-	daos_list_add(&vio->dvi_lh, &fctx->dfc_iods);
+	D_INIT_LIST_HEAD(&vio->dvi_lh);
+	d_list_add(&vio->dvi_lh, &fctx->dfc_iods);
 
 	tier_cp_iov(&vio->dvi_viod.iod_name, &fctx->dfc_akey);
 	tier_csum(&vio->dvi_viod.iod_kcsum, &fctx->dfc_dkey,
 		  sizeof(daos_key_t));
 
 	/* pass to copy recxs */
-	daos_list_for_each_safe(iter, tmp, &fctx->dfc_head) {
+	d_list_for_each_safe(iter, tmp, &fctx->dfc_head) {
 		dei = (struct tier_ext_list *)
-		      daos_list_entry(iter, struct tier_ext_list, del_lh);
+		      d_list_entry(iter, struct tier_ext_list, del_lh);
 		for (j = 0; j < dei->del_nrecs; j++) {
 			daos_iod_t *p = &vio->dvi_viod;
 
@@ -756,7 +756,7 @@ tier_proc_akey(void *ctx, vos_iter_entry_t *ie)
 			p->iod_nr++;
 
 		}
-		daos_list_del(iter);
+		d_list_del(iter);
 		D__FREE_PTR(dei);
 	}
 	fctx->dfc_na++;
@@ -773,22 +773,22 @@ tier_rec_cb(void *ctx, vos_iter_entry_t *ie)
 	struct tier_ext_list  *el;
 	int		       rc = 0;
 
-	if (daos_list_empty(&fctx->dfc_head)) {
+	if (d_list_empty(&fctx->dfc_head)) {
 		D__ALLOC_PTR(el);
 		if (el == NULL)
 			D__GOTO(out, -DER_NOMEM);
-		DAOS_INIT_LIST_HEAD(&el->del_lh);
+		D_INIT_LIST_HEAD(&el->del_lh);
 		el->del_nrecs = 0;
-		daos_list_add_tail(&el->del_lh, &fctx->dfc_head);
+		d_list_add_tail(&el->del_lh, &fctx->dfc_head);
 	}
-	el = daos_list_entry(fctx->dfc_head.prev, struct tier_ext_list, del_lh);
+	el = d_list_entry(fctx->dfc_head.prev, struct tier_ext_list, del_lh);
 	if (el->del_nrecs == NUM_BUNDLED_EXTS) {
 		D__ALLOC_PTR(el);
 		if (el == NULL)
 			D__GOTO(out, -DER_NOMEM);
-		DAOS_INIT_LIST_HEAD(&el->del_lh);
+		D_INIT_LIST_HEAD(&el->del_lh);
 		el->del_nrecs = 0;
-		daos_list_add_tail(&el->del_lh, &fctx->dfc_head);
+		d_list_add_tail(&el->del_lh, &fctx->dfc_head);
 	}
 
 	tier_cp_recx(&el->del_recs[el->del_nrecs].der_rec, &ie->ie_recx);

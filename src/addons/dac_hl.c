@@ -243,7 +243,7 @@ dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
 
 	d_opc = (opc == DAOS_OPC_OBJ_FETCH_MULTI ? DAOS_OPC_OBJ_FETCH :
 		DAOS_OPC_OBJ_UPDATE);
-	DAOS_INIT_LIST_HEAD(&head);
+	D_INIT_LIST_HEAD(&head);
 
 	for (i = 0; i < num_dkeys; i++) {
 		tse_task_t	 *io_task;
@@ -275,7 +275,7 @@ dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
 	return 0;
 
 err_task:
-	while (!daos_list_empty(&head)) {
+	while (!d_list_empty(&head)) {
 		tse_task_t *tmp = tse_task_list_first(&head);
 
 		tse_task_list_del(tmp);

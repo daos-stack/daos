@@ -65,7 +65,7 @@ pool_free(struct dc_pool *pool)
 	pthread_rwlock_destroy(&pool->dp_map_lock);
 	pthread_mutex_destroy(&pool->dp_client_lock);
 	pthread_rwlock_destroy(&pool->dp_co_list_lock);
-	D__ASSERT(daos_list_empty(&pool->dp_co_list));
+	D__ASSERT(d_list_empty(&pool->dp_co_list));
 
 	if (pool->dp_map != NULL)
 		pool_map_decref(pool->dp_map);
@@ -121,7 +121,7 @@ pool_alloc(void)
 		return NULL;
 	}
 
-	DAOS_INIT_LIST_HEAD(&pool->dp_co_list);
+	D_INIT_LIST_HEAD(&pool->dp_co_list);
 	pthread_rwlock_init(&pool->dp_co_list_lock, NULL);
 	pthread_mutex_init(&pool->dp_client_lock, NULL);
 	pthread_rwlock_init(&pool->dp_map_lock, NULL);
@@ -617,7 +617,7 @@ dc_pool_disconnect(tse_task_t *task)
 		args->poh.cookie);
 
 	pthread_rwlock_rdlock(&pool->dp_co_list_lock);
-	if (!daos_list_empty(&pool->dp_co_list)) {
+	if (!d_list_empty(&pool->dp_co_list)) {
 		pthread_rwlock_unlock(&pool->dp_co_list_lock);
 		D__GOTO(out_pool, rc = -DER_BUSY);
 	}

@@ -426,18 +426,18 @@ rebuild_dkey_ult(void *arg)
 		d_list_t		dkey_list;
 		int			rc;
 
-		DAOS_INIT_LIST_HEAD(&dkey_list);
+		D_INIT_LIST_HEAD(&dkey_list);
 		ABT_mutex_lock(puller->rp_lock);
-		daos_list_for_each_entry_safe(rdkey, tmp, &puller->rp_dkey_list,
+		d_list_for_each_entry_safe(rdkey, tmp, &puller->rp_dkey_list,
 					      rd_list) {
-			daos_list_move(&rdkey->rd_list, &dkey_list);
+			d_list_move(&rdkey->rd_list, &dkey_list);
 			puller->rp_inflight++;
 
 		}
 		ABT_mutex_unlock(puller->rp_lock);
 
-		daos_list_for_each_entry_safe(rdkey, tmp, &dkey_list, rd_list) {
-			daos_list_del(&rdkey->rd_list);
+		d_list_for_each_entry_safe(rdkey, tmp, &dkey_list, rd_list) {
+			d_list_del(&rdkey->rd_list);
 			rc = rebuild_one_dkey(rpt, rdkey);
 			D__DEBUG(DB_TRACE, DF_UOID" rebuild dkey %.*s rc = %d"
 				" tag %d\n", DP_UOID(rdkey->rd_oid),
@@ -468,7 +468,7 @@ rebuild_dkey_ult(void *arg)
 
 		/* check if it should exist */
 		ABT_mutex_lock(puller->rp_lock);
-		if (daos_list_empty(&puller->rp_dkey_list) &&
+		if (d_list_empty(&puller->rp_dkey_list) &&
 		    rpt->rt_finishing) {
 			ABT_mutex_unlock(puller->rp_lock);
 			break;
@@ -521,7 +521,7 @@ rebuild_dkey_queue(daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rdkey == NULL)
 		D__GOTO(free, rc = -DER_NOMEM);
 
-	DAOS_INIT_LIST_HEAD(&rdkey->rd_list);
+	D_INIT_LIST_HEAD(&rdkey->rd_list);
 	rc = daos_iov_copy(&rdkey->rd_dkey, dkey);
 	if (rc != 0)
 		D__GOTO(free, rc);
@@ -531,7 +531,7 @@ rebuild_dkey_queue(daos_unit_oid_t oid, daos_epoch_t epoch,
 	rdkey->rd_epoch = epoch;
 
 	ABT_mutex_lock(puller->rp_lock);
-	daos_list_add_tail(&rdkey->rd_list, &puller->rp_dkey_list);
+	d_list_add_tail(&rdkey->rd_list, &puller->rp_dkey_list);
 	ABT_mutex_unlock(puller->rp_lock);
 free:
 	if (rc != 0 && rdkey != NULL) {

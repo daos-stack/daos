@@ -27,7 +27,7 @@
 #ifndef __POOL_SRV_INTERNAL_H__
 #define __POOL_SRV_INTERNAL_H__
 
-#include <daos/list.h>
+#include <gurt/list.h>
 #include <daos_srv/daos_server.h>
 
 /**

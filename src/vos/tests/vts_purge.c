@@ -310,7 +310,7 @@ io_multikey_discard_setup(void **state)
 {
 	struct io_test_args	*arg = *state;
 
-	DAOS_INIT_LIST_HEAD(&arg->req_list);
+	D_INIT_LIST_HEAD(&arg->req_list);
 	arg->oid = dts_unit_oid_gen(0, 0);
 	last_oid = arg->oid;
 
@@ -322,7 +322,7 @@ io_multi_recx_discard_setup(void **state)
 {
 	struct io_test_args	*arg = *state;
 
-	DAOS_INIT_LIST_HEAD(&arg->req_list);
+	D_INIT_LIST_HEAD(&arg->req_list);
 	arg->ta_flags = IF_DISABLED;
 	return 0;
 }
@@ -538,7 +538,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 		rc = io_update(arg, epoch1, &cookie, &dkey_buf[0],
 			       &akey_buf[0], &cntrs, &req, idx, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch1, req, FETCH_VERBOSE);
 		assert_int_equal(rc, 0);
 	}
@@ -553,7 +553,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 			       &akey_buf[0], &cntrs, &req,
 			       idx, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 		rc  = io_fetch(arg, epoch2, req, FETCH_VERBOSE);
 		assert_int_equal(rc, 0);
 	}
@@ -574,7 +574,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	arg->oid = last_oid;
 
 	/* Check first TF_DISCARD_KEYS entries in object 1 */
-	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
+	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		if (search_req->epoch == epoch2)
 			continue;
 		rc = io_fetch_empty_buf(arg, search_req->epoch,
@@ -609,8 +609,8 @@ io_multikey_discard_teardown(void **state)
 	struct io_req		*req;
 
 	/** Free all request */
-	daos_list_for_each_entry_safe(req, tmp, &arg->req_list, rlist) {
-		daos_list_del_init(&req->rlist);
+	d_list_for_each_entry_safe(req, tmp, &arg->req_list, rlist) {
+		d_list_del_init(&req->rlist);
 		free(req);
 	}
 
@@ -710,7 +710,7 @@ io_multi_akey_discard_test(void **state)
 		rc = io_update(arg, epoch1, &cookie, &dkey_buf[0], &akey_buf[0],
 			       &cntrs, &req, idx, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch1, req, false);
 		assert_int_equal(rc, 0);
 		set_key_and_index(NULL, &akey_buf[0], NULL);
@@ -723,7 +723,7 @@ io_multi_akey_discard_test(void **state)
 			       &akey_buf[0],  &cntrs, &req, idx,
 			       UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch2, req, false);
 		assert_int_equal(rc, 0);
 		set_key_and_index(NULL, &akey_buf[0], NULL);
@@ -737,7 +737,7 @@ io_multi_akey_discard_test(void **state)
 	arg->oid = last_oid;
 	/* Check first TF_DISCARD_KEYS entries in object 1 */
 	i = 0;
-	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
+	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		if (epoch1 != search_req->epoch)
 			continue;
 		rc = io_fetch_empty_buf(arg, epoch1, search_req, false);
@@ -790,7 +790,7 @@ io_multi_recx_overwrite_discard_test(void **state)
 			       &cntrs, &req,
 			       index_start, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
-		daos_list_add_tail(&req->rlist, &arg->req_list);
+		d_list_add_tail(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch_start + j, req, FETCH_VERBOSE);
 		assert_int_equal(rc, 0);
 
@@ -812,7 +812,7 @@ io_multi_recx_overwrite_discard_test(void **state)
 	/* Check first TF_DISCARD_KEYS entries in object 1 */
 	struct io_req *b_req = NULL;
 
-	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
+	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 
 		/* Save this for verifying check of previous epoch */
 		if (search_req->epoch == discard_epoch - 1)
@@ -864,7 +864,7 @@ io_multi_recx_discard_test(void **state)
 		rc = io_update(arg, epoch1, &cookie, &dkey_buf[0], &akey_buf[0],
 			       &cntrs, &req, i, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch1, req, false);
 		assert_int_equal(rc, 0);
 	}
@@ -875,7 +875,7 @@ io_multi_recx_discard_test(void **state)
 		rc = io_update(arg, epoch2, &cookie, &dkey_buf[0],
 			       &akey_buf[0],  &cntrs, &req, i, false);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch2, req, false);
 		assert_int_equal(rc, 0);
 	}
@@ -888,7 +888,7 @@ io_multi_recx_discard_test(void **state)
 	arg->oid = last_oid;
 	/* Check first TF_DISCARD_KEYS entries in object 1 */
 	i = 0;
-	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
+	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		if (epoch1 != search_req->epoch)
 			continue;
 		rc = io_fetch_empty_buf(arg, epoch1, search_req, false);
@@ -928,7 +928,7 @@ io_multi_dkey_aggregate_test(void **state)
 			       &akey_buf[0], &cntrs, &req, idx,
 			       UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch + i, req, false);
 		assert_int_equal(rc, 0);
 		set_key_and_index(&dkey_buf[0], NULL, NULL);
@@ -942,7 +942,7 @@ io_multi_dkey_aggregate_test(void **state)
 	assert_true(finish);
 
 	/** Verifying aggregation */
-	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
+	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		rc = io_fetch(arg, search_req->epoch, search_req, false);
 		assert_int_equal(rc, 0);
 	}
@@ -978,7 +978,7 @@ io_multi_akey_aggregate_test(void **state)
 			       &akey_buf[0], &cntrs, &req, idx,
 			       UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch + i, req, false);
 		assert_int_equal(rc, 0);
 		set_key_and_index(NULL, &akey_buf[0], NULL);
@@ -992,7 +992,7 @@ io_multi_akey_aggregate_test(void **state)
 	assert_true(finish);
 
 	/** Verifying aggregation */
-	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
+	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		rc = io_fetch(arg, search_req->epoch, search_req, false);
 		assert_int_equal(rc, 0);
 	}
@@ -1033,7 +1033,7 @@ io_multi_recx_aggregate_test(void **state)
 			       &cookie, &dkey_buf[0], &akey_buf[0],
 			       &cntrs, &req, i + 1, false);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 
 		rc = io_fetch(arg, epoch + i, req, false);
 		assert_int_equal(rc, 0);
@@ -1048,7 +1048,7 @@ io_multi_recx_aggregate_test(void **state)
 	assert_true(finish);
 
 	/** Verifying aggregation */
-	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
+	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		rc = io_fetch(arg, search_req->epoch, search_req, false);
 		assert_int_equal(rc, 0);
 	}
@@ -1085,7 +1085,7 @@ io_recx_overwrite_aggregate(void **state)
 			       &cookie, &dkey_buf[0], &akey_buf[0],
 			       &cntrs, &req, index, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch + i, req, false);
 		assert_int_equal(rc, 0);
 	}
@@ -1099,7 +1099,7 @@ io_recx_overwrite_aggregate(void **state)
 	assert_true(finish);
 
 	/** Verifying aggregation */
-	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
+	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		if (search_req->epoch >= range.epr_lo &&
 		    search_req->epoch < range.epr_hi) {
 			rc = io_fetch_empty_buf(arg, search_req->epoch,
@@ -1144,7 +1144,7 @@ io_recx_overwrite(struct io_test_args *arg)
 			       &cookie, &dkey_buf[0], &akey_buf[0],
 			       &cntrs, &req, index, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, max_epoch, req, false);
 		assert_int_equal(rc, 0);
 	}
@@ -1158,7 +1158,7 @@ io_recx_overwrite(struct io_test_args *arg)
 			       &cookie, &dkey_buf[0], &akey_buf[0],
 			       &cntrs, &req, index, false);
 		assert_int_equal(rc, 0);
-		daos_list_add(&req->rlist, &arg->req_list);
+		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch2 + i, req, FETCH_VERBOSE);
 		assert_int_equal(rc, 0);
 	}
@@ -1183,7 +1183,7 @@ io_recx_overwrite(struct io_test_args *arg)
 	assert_true(finish);
 
 	/** Verifying aggregation */
-	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
+	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		if (search_req->epoch >= range.epr_lo &&
 		    search_req->epoch < max_epoch) {
 			rc = io_fetch_empty_buf(arg, search_req->epoch,
@@ -1225,7 +1225,7 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &index);
 	memset(&vp_anchor, 0, sizeof(vos_purge_anchor_t));
-	DAOS_INIT_LIST_HEAD(&agg_entries);
+	D_INIT_LIST_HEAD(&agg_entries);
 
 	for (i = 0; i < TF_DISCARD_KEYS; i++) {
 		struct io_req	*req = NULL;
@@ -1236,9 +1236,9 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 		assert_int_equal(rc, 0);
 
 		if (overwrite)
-			daos_list_add(&req->rlist, &arg->req_list);
+			d_list_add(&req->rlist, &arg->req_list);
 		else
-			daos_list_add(&req->rlist, &agg_entries);
+			d_list_add(&req->rlist, &agg_entries);
 
 		rc = io_fetch(arg, epoch + i, req, FETCH_VERBOSE);
 		assert_int_equal(rc, 0);
@@ -1299,13 +1299,13 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 	 * Checking all writes at max_epoch for that record
 	 * this would be retained
 	 */
-	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
+	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		rc = io_fetch(arg, search_req->epoch, search_req,
 			      FETCH_VERBOSE);
 		assert_int_equal(rc, 0);
 	}
 
-	daos_list_for_each_entry(search_req, &agg_entries, rlist) {
+	d_list_for_each_entry(search_req, &agg_entries, rlist) {
 		if (search_req->epoch >= range.epr_lo &&
 		    search_req->epoch < range.epr_hi) {
 			rc = io_fetch_empty_buf(arg, search_req->epoch,
@@ -1319,8 +1319,8 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 	}
 
 	/** Aggregate list is created here locally. cleaning up!*/
-	daos_list_for_each_entry_safe(search_req, tmp, &agg_entries, rlist) {
-		daos_list_del_init(&search_req->rlist);
+	d_list_for_each_entry_safe(search_req, tmp, &agg_entries, rlist) {
+		d_list_del_init(&search_req->rlist);
 		free(search_req);
 	}
 }

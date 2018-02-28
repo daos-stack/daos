@@ -29,7 +29,7 @@
 
 #include <daos_types.h>
 #include <daos_errno.h>
-#include <daos/list.h>
+#include <gurt/list.h>
 #include <gurt/hash.h>
 #include <daos_task.h>
 

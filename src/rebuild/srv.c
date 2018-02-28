@@ -68,8 +68,8 @@ rebuild_pool_tls_lookup(uuid_t pool_uuid,
 	struct rebuild_pool_tls *found = NULL;
 
 	/* Only 1 thread will access the list, no need lock */
-	daos_list_for_each_entry(pool_tls, &tls->rebuild_pool_list,
-				 rebuild_pool_list) {
+	d_list_for_each_entry(pool_tls, &tls->rebuild_pool_list,
+			      rebuild_pool_list) {
 		if (uuid_compare(pool_tls->rebuild_pool_uuid, pool_uuid) == 0 &&
 		    (ver == (unsigned int)(-1) ||
 		     ver == pool_tls->rebuild_pool_ver)) {
@@ -97,8 +97,8 @@ rebuild_pool_tls_create(uuid_t pool_uuid, unsigned int ver)
 	rebuild_pool_tls->rebuild_pool_ver = ver;
 	uuid_copy(rebuild_pool_tls->rebuild_pool_uuid, pool_uuid);
 	/* Only 1 thread will access the list, no need lock */
-	daos_list_add(&rebuild_pool_tls->rebuild_pool_list,
-		      &tls->rebuild_pool_list);
+	d_list_add(&rebuild_pool_tls->rebuild_pool_list,
+		   &tls->rebuild_pool_list);
 
 	D__DEBUG(DB_TRACE, "TLS create for "DF_UUID" ver %d\n",
 		 DP_UUID(pool_uuid), ver);
@@ -110,7 +110,7 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 {
 	D__DEBUG(DB_TRACE, "TLS destroy for "DF_UUID" ver %d\n",
 		 DP_UUID(tls->rebuild_pool_uuid), tls->rebuild_pool_ver);
-	daos_list_del(&tls->rebuild_pool_list);
+	d_list_del(&tls->rebuild_pool_list);
 	D_FREE_PTR(tls);
 }
 
@@ -124,7 +124,7 @@ rebuild_tls_init(const struct dss_thread_local_storage *dtls,
 	if (tls == NULL)
 		return NULL;
 
-	DAOS_INIT_LIST_HEAD(&tls->rebuild_pool_list);
+	D_INIT_LIST_HEAD(&tls->rebuild_pool_list);
 	return tls;
 }
 
@@ -135,8 +135,7 @@ rebuild_tgt_pool_tracker_lookup(uuid_t pool_uuid, unsigned int ver)
 	struct rebuild_tgt_pool_tracker	*found = NULL;
 
 	/* Only stream 0 will access the list */
-	daos_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list,
-				 rt_list) {
+	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
 		if (uuid_compare(rpt->rt_pool_uuid, pool_uuid) == 0 &&
 		    (ver == (unsigned int)(-1) || rpt->rt_rebuild_ver == ver)) {
 			found = rpt;
@@ -154,8 +153,8 @@ rebuild_global_pool_tracker_lookup(uuid_t pool_uuid, unsigned int ver)
 	struct rebuild_global_pool_tracker	*found = NULL;
 
 	/* Only stream 0 will access the list */
-	daos_list_for_each_entry(rgt, &rebuild_gst.rg_global_tracker_list,
-				 rgt_list) {
+	d_list_for_each_entry(rgt, &rebuild_gst.rg_global_tracker_list,
+			      rgt_list) {
 		if (uuid_compare(rgt->rgt_pool_uuid, pool_uuid) == 0 &&
 		    (ver == (unsigned int)(-1) ||
 		     rgt->rgt_rebuild_ver == ver)) {
@@ -294,8 +293,8 @@ rebuild_tls_fini(const struct dss_thread_local_storage *dtls,
 	struct rebuild_pool_tls *pool_tls;
 	struct rebuild_pool_tls *tmp;
 
-	daos_list_for_each_entry_safe(pool_tls, tmp, &tls->rebuild_pool_list,
-				      rebuild_pool_list)
+	d_list_for_each_entry_safe(pool_tls, tmp, &tls->rebuild_pool_list,
+				   rebuild_pool_list)
 		rebuild_pool_tls_destroy(pool_tls);
 
 	D__FREE_PTR(tls);
@@ -367,7 +366,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 			puller = &rpt->rt_pullers[i];
 			ABT_mutex_lock(puller->rp_lock);
-			if (daos_list_empty(&puller->rp_dkey_list) &&
+			if (d_list_empty(&puller->rp_dkey_list) &&
 			    puller->rp_inflight == 0) {
 				ABT_mutex_unlock(puller->rp_lock);
 				continue;
@@ -403,7 +402,7 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 
 	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, -1);
 	if (rgt == NULL) {
-		if (daos_list_empty(&rebuild_gst.rg_queue_list) &&
+		if (d_list_empty(&rebuild_gst.rg_queue_list) &&
 		    rebuild_gst.rg_inflight == 0)
 			status->rs_done = 1;
 		D__GOTO(out, rc = 0);
@@ -538,7 +537,7 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 static void
 rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 {
-	daos_list_del(&rgt->rgt_list);
+	d_list_del(&rgt->rgt_list);
 	if (rgt->rgt_scan_bits)
 		D__FREE(rgt->rgt_scan_bits,
 			roundup(rgt->rgt_bits_size, DAOS_BITS_SIZE) /
@@ -564,7 +563,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 	D_ALLOC_PTR(rgt);
 	if (rgt == NULL)
 		return -DER_NOMEM;
-	DAOS_INIT_LIST_HEAD(&rgt->rgt_list);
+	D_INIT_LIST_HEAD(&rgt->rgt_list);
 
 	rc = crt_group_size(NULL, &rank_size);
 	if (rc)
@@ -583,7 +582,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 
 	uuid_copy(rgt->rgt_pool_uuid, pool->sp_uuid);
 	rgt->rgt_rebuild_ver = ver;
-	daos_list_add(&rgt->rgt_list, &rebuild_gst.rg_global_tracker_list);
+	d_list_add(&rgt->rgt_list, &rebuild_gst.rg_global_tracker_list);
 	*p_rgt = rgt;
 out:
 	if (rc)
@@ -761,7 +760,7 @@ out_rpc:
 static  void
 rebuild_tgt_pool_tracker_destroy(struct rebuild_tgt_pool_tracker *rpt)
 {
-	daos_list_del(&rpt->rt_list);
+	d_list_del(&rpt->rt_list);
 	if (!daos_handle_is_inval(rpt->rt_local_root_hdl))
 		dbtree_destroy(rpt->rt_local_root_hdl);
 
@@ -890,7 +889,7 @@ out:
 	if (rgt)
 		rebuild_global_pool_tracker_destroy(rgt);
 
-	daos_list_del(&task->dst_list);
+	d_list_del(&task->dst_list);
 	daos_rank_list_free(task->dst_tgts_failed);
 	daos_rank_list_free(task->dst_svc_list);
 	D__FREE_PTR(task);
@@ -904,7 +903,7 @@ pool_is_rebuilding(uuid_t pool_uuid)
 {
 	struct rebuild_task *task;
 
-	daos_list_for_each_entry(task, &rebuild_gst.rg_running_list, dst_list) {
+	d_list_for_each_entry(task, &rebuild_gst.rg_running_list, dst_list) {
 		if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0)
 			return true;
 	}
@@ -919,13 +918,13 @@ rebuild_ults(void *arg)
 	struct rebuild_task	*task_tmp;
 	int			 rc;
 
-	while (!daos_list_empty(&rebuild_gst.rg_queue_list) ||
-	       !daos_list_empty(&rebuild_gst.rg_running_list)) {
+	while (!d_list_empty(&rebuild_gst.rg_queue_list) ||
+	       !d_list_empty(&rebuild_gst.rg_running_list)) {
 
-		if (!daos_list_empty(&rebuild_gst.rg_queue_list) &&
+		if (!d_list_empty(&rebuild_gst.rg_queue_list) &&
 		    rebuild_gst.rg_inflight < REBUILD_MAX_INFLIGHT) {
-			task = daos_list_entry(rebuild_gst.rg_queue_list.next,
-					       struct rebuild_task, dst_list);
+			task = d_list_entry(rebuild_gst.rg_queue_list.next,
+					    struct rebuild_task, dst_list);
 
 			if (!pool_is_rebuilding(task->dst_pool_uuid)) {
 				rc = dss_ult_create(rebuild_one_ult, task, -1,
@@ -937,12 +936,12 @@ rebuild_ults(void *arg)
 						rc);
 				} else {
 					rebuild_gst.rg_inflight++;
-					daos_list_move(&task->dst_list,
-					       &rebuild_gst.rg_running_list);
+					d_list_move(&task->dst_list,
+						&rebuild_gst.rg_running_list);
 				}
 			} else {
-				daos_list_move_tail(&task->dst_list,
-						&rebuild_gst.rg_queue_list);
+				d_list_move_tail(&task->dst_list,
+						 &rebuild_gst.rg_queue_list);
 			}
 		}
 
@@ -957,15 +956,15 @@ rebuild_ults(void *arg)
 	 * it is forced abort, let's delete the queue_list task, and wait
 	 * for the running list finished.
 	 */
-	daos_list_for_each_entry_safe(task, task_tmp,
-				      &rebuild_gst.rg_queue_list, dst_list) {
-		daos_list_del(&task->dst_list);
+	d_list_for_each_entry_safe(task, task_tmp, &rebuild_gst.rg_queue_list,
+				   dst_list) {
+		d_list_del(&task->dst_list);
 		daos_rank_list_free(task->dst_tgts_failed);
 		daos_rank_list_free(task->dst_svc_list);
 		D__FREE_PTR(task);
 	}
 
-	while (!daos_list_empty(&rebuild_gst.rg_running_list))
+	while (!d_list_empty(&rebuild_gst.rg_running_list))
 		ABT_thread_yield();
 
 	ABT_mutex_lock(rebuild_gst.rg_lock);
@@ -1010,7 +1009,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 
 	task->dst_map_ver = map_ver;
 	uuid_copy(task->dst_pool_uuid, uuid);
-	DAOS_INIT_LIST_HEAD(&task->dst_list);
+	D_INIT_LIST_HEAD(&task->dst_list);
 
 	rc = daos_rank_list_dup(&task->dst_tgts_failed, tgts_failed);
 	if (rc) {
@@ -1026,7 +1025,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 
 	D__PRINT("Rebuild [queued] ("DF_UUID" ver=%u) failed rank %u\n",
 		 DP_UUID(uuid), map_ver, tgts_failed->rl_ranks[0]);
-	daos_list_add_tail(&task->dst_list, &rebuild_gst.rg_queue_list);
+	d_list_add_tail(&task->dst_list, &rebuild_gst.rg_queue_list);
 
 	if (!rebuild_gst.rg_rebuild_running) {
 		rc = ABT_cond_create(&rebuild_gst.rg_stop_cond);
@@ -1043,7 +1042,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	}
 free:
 	if (rc) {
-		daos_list_del(&task->dst_list);
+		d_list_del(&task->dst_list);
 		daos_rank_list_free(task->dst_tgts_failed);
 		daos_rank_list_free(task->dst_svc_list);
 		D__FREE_PTR(task);
@@ -1151,9 +1150,9 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		/* since the dkey thread has been stopped, so we do not
 		 * need lock here
 		 */
-		daos_list_for_each_entry_safe(dkey, tmp, &puller->rp_dkey_list,
-					      rd_list) {
-			daos_list_del(&dkey->rd_list);
+		d_list_for_each_entry_safe(dkey, tmp, &puller->rp_dkey_list,
+					   rd_list) {
+			d_list_del(&dkey->rd_list);
 			D__WARN(DF_UUID" left rebuild dkey %*.s\n",
 			       DP_UUID(rpt->rt_pool_uuid),
 			       (int)dkey->rd_dkey.iov_len,
@@ -1306,7 +1305,7 @@ rebuild_tgt_pool_tracker_create(struct ds_pool *pool, d_rank_list_t *svc_list,
 	if (rpt == NULL)
 		return -DER_NOMEM;
 
-	DAOS_INIT_LIST_HEAD(&rpt->rt_list);
+	D_INIT_LIST_HEAD(&rpt->rt_list);
 	rc = ABT_mutex_create(&rpt->rt_lock);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(free, rc = dss_abterr2der(rc));
@@ -1322,7 +1321,7 @@ rebuild_tgt_pool_tracker_create(struct ds_pool *pool, d_rank_list_t *svc_list,
 		struct rebuild_puller *puller;
 
 		puller = &rpt->rt_pullers[i];
-		DAOS_INIT_LIST_HEAD(&puller->rp_dkey_list);
+		D_INIT_LIST_HEAD(&puller->rp_dkey_list);
 		rc = ABT_mutex_create(&puller->rp_lock);
 		if (rc != ABT_SUCCESS)
 			D__GOTO(free, rc = dss_abterr2der(rc));
@@ -1339,7 +1338,7 @@ rebuild_tgt_pool_tracker_create(struct ds_pool *pool, d_rank_list_t *svc_list,
 	crt_group_rank(pool->sp_group, &rank);
 	rpt->rt_rank = rank;
 
-	daos_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
+	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
 	*p_rpt = rpt;
 free:
 	if (rc != 0)
@@ -1471,10 +1470,10 @@ init(void)
 {
 	int rc;
 
-	DAOS_INIT_LIST_HEAD(&rebuild_gst.rg_tgt_tracker_list);
-	DAOS_INIT_LIST_HEAD(&rebuild_gst.rg_global_tracker_list);
-	DAOS_INIT_LIST_HEAD(&rebuild_gst.rg_queue_list);
-	DAOS_INIT_LIST_HEAD(&rebuild_gst.rg_running_list);
+	D_INIT_LIST_HEAD(&rebuild_gst.rg_tgt_tracker_list);
+	D_INIT_LIST_HEAD(&rebuild_gst.rg_global_tracker_list);
+	D_INIT_LIST_HEAD(&rebuild_gst.rg_queue_list);
+	D_INIT_LIST_HEAD(&rebuild_gst.rg_running_list);
 
 	rc = ABT_mutex_create(&rebuild_gst.rg_lock);
 	if (rc != ABT_SUCCESS)

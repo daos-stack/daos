@@ -30,7 +30,7 @@
 #include <daos/common.h>
 #include <daos_types.h>
 #include <daos/mem.h>
-#include <daos/list.h>
+#include <gurt/list.h>
 
 enum {
 	EVT_UMEM_TYPE	= 150,
@@ -204,9 +204,9 @@ struct evt_entry_list {
 
 /** iterate over all entries of a ent_list */
 #define evt_ent_list_for_each(ent, el)	\
-	daos_list_for_each_entry(ent, (&(el)->el_list), en_link)
+	d_list_for_each_entry(ent, (&(el)->el_list), en_link)
 
-#define evt_ent_list_empty(el)		daos_list_empty(&(el)->el_list)
+#define evt_ent_list_empty(el)		d_list_empty(&(el)->el_list)
 
 void evt_ent_list_init(struct evt_entry_list *ent_list);
 void evt_ent_list_fini(struct evt_entry_list *ent_list);
