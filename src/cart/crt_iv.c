@@ -1361,7 +1361,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	if (iv_key == NULL) {
 		D_ERROR("iv_key is NULL\n");
-		D_GOTO(exit, rc = -DER_INVAL);
+		return -DER_INVAL;
 	}
 
 	IV_DBG(iv_key, "fetch issued\n");
@@ -1370,13 +1370,13 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	if (ivns_internal == NULL) {
 		D_ERROR("Invalid ivns\n");
-		D_GOTO(exit, rc = -DER_NONEXIST);
+		return -DER_NONEXIST;
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	if (iv_ops == NULL) {
 		D_ERROR("Failed to get iv_ops for class_id = %d\n", class_id);
-		D_GOTO(exit, rc = -DER_INVAL);
+		return -DER_INVAL;
 	}
 
 	rc = iv_ops->ivo_on_hash(ivns_internal, iv_key, &root_rank);
