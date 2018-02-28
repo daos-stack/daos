@@ -70,7 +70,6 @@ vos_fini(void);
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param size	[IN]	Size of the pool
- * \param poh	[OUT]	Returned pool open handle
  *
  * \return              Zero on success, negative value if error
  */
@@ -81,7 +80,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size);
  * Destroy a Versioned Object Storage Pool (VOSP)
  * The open handle will be invalidated after the destroy.
  *
- * \param poh	[IN]	Pool open handle
+ * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]	Pool UUID
  *
  * \return		Zero on success, negative value if error

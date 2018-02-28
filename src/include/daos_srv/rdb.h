@@ -85,8 +85,9 @@
  * If a TX does not include any updates, then rdb_tx_commit() will be a no-op
  * and is not required.
  *
- * Currently, rdb expects to be accessed only by one thread and takes advantage
- * of the non-preemptive scheduling to simply internal locking.
+ * Currently, a database can be accessed by only one ES. This is to take
+ * advantage of Argobots's non-preemptive scheduling in order to simplify the
+ * locking inside rdb.
  *
  * Caller locking guidelines:
  *

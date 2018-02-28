@@ -480,6 +480,9 @@ typedef struct {
 	daos_oclass_attr_t	*oa_oa;
 } daos_obj_attr_t;
 
+/** key type */
+typedef daos_iov_t daos_key_t;
+
 /**
  * Record
  *
@@ -495,9 +498,6 @@ typedef struct {
  *   identifies a contiguous set of records called extent. All records inside an
  *   extent must have the same size.
  */
-
-/** opaque key type */
-typedef daos_iov_t daos_key_t;
 
 /**
  * A record extent is a range of contiguous records of the same size inside an
