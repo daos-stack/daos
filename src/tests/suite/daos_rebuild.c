@@ -44,7 +44,6 @@ static bool
 rebuild_runable(test_arg_t *arg, unsigned int required_tgts,
 		bool kill_master)
 {
-	daos_pool_info_t info;
 	int		 i;
 	int		 start = 0;
 	bool		 runable = true;
@@ -53,8 +52,9 @@ rebuild_runable(test_arg_t *arg, unsigned int required_tgts,
 		if (arg->srv_ntgts - arg->srv_disabled_ntgts < required_tgts) {
 			if (arg->myrank == 0)
 				print_message("Not enough targets, skipping "
-					      "(%d/%d)\n", info.pi_ntargets,
-					      info.pi_ndisabled);
+					      "(%d/%d)\n",
+					      arg->srv_ntgts,
+					      arg->srv_disabled_ntgts);
 			runable = false;
 		}
 
