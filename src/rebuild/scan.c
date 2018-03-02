@@ -198,12 +198,12 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 
 	rebuild_in = crt_req_get(rpc);
 	rebuild_in->roi_rebuild_ver = rpt->rt_rebuild_ver;
-	rebuild_in->roi_oids.da_count = arg->count;
-	rebuild_in->roi_oids.da_arrays = oids;
-	rebuild_in->roi_uuids.da_count = arg->count;
-	rebuild_in->roi_uuids.da_arrays = uuids;
-	rebuild_in->roi_shards.da_count = arg->count;
-	rebuild_in->roi_shards.da_arrays = shards;
+	rebuild_in->roi_oids.ca_count = arg->count;
+	rebuild_in->roi_oids.ca_arrays = oids;
+	rebuild_in->roi_uuids.ca_count = arg->count;
+	rebuild_in->roi_uuids.ca_arrays = uuids;
+	rebuild_in->roi_shards.ca_count = arg->count;
+	rebuild_in->roi_shards.ca_arrays = shards;
 	uuid_copy(rebuild_in->roi_pool_uuid, rpt->rt_pool_uuid);
 
 	/* Note: if the remote target fails, let's just ignore the

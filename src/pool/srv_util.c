@@ -371,6 +371,8 @@ ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 		D__ASSERTF(rc == 0, "%d\n", rc);
 	}
 
+	if (tgts_failed != NULL)
+		tgts_failed->rl_nr = tgts_failed_out;
 	map_exclude_destroy_sanitized_tgts(tgts_sanitized, tgts_sanitized_size);
 	return 0;
 }

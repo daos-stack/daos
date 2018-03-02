@@ -405,14 +405,14 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	int				i;
 
 	tc_out = crt_reply_get(source);
-	tc_uuids_nr = tc_out->tc_tgt_uuids.da_count;
-	tc_uuids = tc_out->tc_tgt_uuids.da_arrays;
-	tc_ranks = tc_out->tc_ranks.da_arrays;
+	tc_uuids_nr = tc_out->tc_tgt_uuids.ca_count;
+	tc_uuids = tc_out->tc_tgt_uuids.ca_arrays;
+	tc_ranks = tc_out->tc_ranks.ca_arrays;
 
 	ret_out = crt_reply_get(result);
-	ret_uuids_nr = ret_out->tc_tgt_uuids.da_count;
-	ret_uuids = ret_out->tc_tgt_uuids.da_arrays;
-	ret_ranks = ret_out->tc_ranks.da_arrays;
+	ret_uuids_nr = ret_out->tc_tgt_uuids.ca_count;
+	ret_uuids = ret_out->tc_tgt_uuids.ca_arrays;
+	ret_ranks = ret_out->tc_ranks.ca_arrays;
 	if (tc_uuids_nr == 0)
 		return 0;
 
@@ -442,10 +442,10 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	D__FREE(ret_uuids, sizeof(*ret_uuids) * ret_uuids_nr);
 	D__FREE(ret_ranks, sizeof(*ret_uuids) * ret_uuids_nr);
 
-	ret_out->tc_tgt_uuids.da_arrays = new_uuids;
-	ret_out->tc_tgt_uuids.da_count = new_uuids_nr;
-	ret_out->tc_ranks.da_arrays = new_ranks;
-	ret_out->tc_ranks.da_count = new_uuids_nr;
+	ret_out->tc_tgt_uuids.ca_arrays = new_uuids;
+	ret_out->tc_tgt_uuids.ca_count = new_uuids_nr;
+	ret_out->tc_ranks.ca_arrays = new_ranks;
+	ret_out->tc_ranks.ca_count = new_uuids_nr;
 	return 0;
 }
 
@@ -502,8 +502,8 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		D__GOTO(free, rc = -DER_NOMEM);
 
 	uuid_copy(*tmp_tgt_uuid, tgt_uuid);
-	tc_out->tc_tgt_uuids.da_arrays = tmp_tgt_uuid;
-	tc_out->tc_tgt_uuids.da_count = 1;
+	tc_out->tc_tgt_uuids.ca_arrays = tmp_tgt_uuid;
+	tc_out->tc_tgt_uuids.ca_count = 1;
 
 	D__ALLOC_PTR(rank);
 	if (rank == NULL) {
@@ -513,8 +513,8 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 
 	rc = crt_group_rank(NULL, rank);
 	D__ASSERT(rc == 0);
-	tc_out->tc_ranks.da_arrays = rank;
-	tc_out->tc_ranks.da_count = 1;
+	tc_out->tc_ranks.ca_arrays = rank;
+	tc_out->tc_ranks.ca_count = 1;
 
 free:
 	free(path);

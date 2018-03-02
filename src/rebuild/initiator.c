@@ -816,12 +816,12 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 	int				rc;
 
 	rebuild_in = crt_req_get(rpc);
-	oids = rebuild_in->roi_oids.da_arrays;
-	oids_count = rebuild_in->roi_oids.da_count;
-	co_uuids = rebuild_in->roi_uuids.da_arrays;
-	co_count = rebuild_in->roi_uuids.da_count;
-	shards = rebuild_in->roi_shards.da_arrays;
-	shards_count = rebuild_in->roi_shards.da_count;
+	oids = rebuild_in->roi_oids.ca_arrays;
+	oids_count = rebuild_in->roi_oids.ca_count;
+	co_uuids = rebuild_in->roi_uuids.ca_arrays;
+	co_count = rebuild_in->roi_uuids.ca_count;
+	shards = rebuild_in->roi_shards.ca_arrays;
+	shards_count = rebuild_in->roi_shards.ca_count;
 
 	if (co_count == 0 || oids_count == 0 || shards_count == 0 ||
 	    oids_count != co_count || oids_count != shards_count) {

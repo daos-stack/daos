@@ -447,12 +447,12 @@ rechoose:
 	in->pri_gid = gid;
 	in->pri_mode = mode;
 	in->pri_ntgts = ntargets;
-	in->pri_tgt_uuids.da_count = ntargets;
-	in->pri_tgt_uuids.da_arrays = target_uuids;
+	in->pri_tgt_uuids.ca_count = ntargets;
+	in->pri_tgt_uuids.ca_arrays = target_uuids;
 	in->pri_tgt_ranks = (d_rank_list_t *)target_addrs;
 	in->pri_ndomains = ndomains;
-	in->pri_domains.da_count = ndomains;
-	in->pri_domains.da_arrays = (int *)domains;
+	in->pri_domains.ca_count = ndomains;
+	in->pri_domains.ca_arrays = (int *)domains;
 
 	/* Send the POOL_CREATE request. */
 	rc = dss_rpc_send(rpc);
@@ -1411,10 +1411,10 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pri_op.pi_uuid), rpc);
 
-	if (in->pri_ntgts != in->pri_tgt_uuids.da_count ||
+	if (in->pri_ntgts != in->pri_tgt_uuids.ca_count ||
 	    in->pri_ntgts != in->pri_tgt_ranks->rl_nr)
 		D__GOTO(out, rc = -DER_PROTO);
-	if (in->pri_ndomains != in->pri_domains.da_count)
+	if (in->pri_ndomains != in->pri_domains.ca_count)
 		D__GOTO(out, rc = -DER_PROTO);
 
 	/* This RPC doesn't care about pool_svc_up(). */
@@ -1462,9 +1462,9 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		D__GOTO(out_tx, rc);
 	rc = init_pool_metadata(&tx, &svc->ps_root, in->pri_uid, in->pri_gid,
 				in->pri_mode, in->pri_ntgts,
-				in->pri_tgt_uuids.da_arrays, NULL /* group */,
+				in->pri_tgt_uuids.ca_arrays, NULL /* group */,
 				in->pri_tgt_ranks, in->pri_ndomains,
-				in->pri_domains.da_arrays);
+				in->pri_domains.ca_arrays);
 	if (rc != 0)
 		D__GOTO(out_tx, rc);
 	rc = ds_cont_init_metadata(&tx, &svc->ps_root, in->pri_op.pi_uuid);
@@ -1866,8 +1866,8 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->tdi_uuid, svc->ps_uuid);
-	in->tdi_hdls.da_arrays = pool_hdls;
-	in->tdi_hdls.da_count = n_pool_hdls;
+	in->tdi_hdls.ca_arrays = pool_hdls;
+	in->tdi_hdls.ca_count = n_pool_hdls;
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		D__GOTO(out_rpc, rc);

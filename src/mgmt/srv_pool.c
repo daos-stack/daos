@@ -188,15 +188,15 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	}
 
 	D__DEBUG(DB_MGMT, DF_UUID" create %zu tgts pool\n",
-		DP_UUID(pc_in->pc_pool_uuid), tc_out->tc_tgt_uuids.da_count);
+		DP_UUID(pc_in->pc_pool_uuid), tc_out->tc_tgt_uuids.ca_count);
 
 	/** Gather target uuids ranks from collective RPC to start pool svc. */
 	D__ALLOC(tgt_uuids, ranks_size * sizeof(*tgt_uuids));
 	if (tgt_uuids == NULL)
 		D__GOTO(free, rc = -DER_NOMEM);
-	tc_out_ranks = tc_out->tc_ranks.da_arrays;
-	tc_out_uuids = tc_out->tc_tgt_uuids.da_arrays;
-	for (i = 0; i < tc_out->tc_tgt_uuids.da_count; i++) {
+	tc_out_ranks = tc_out->tc_ranks.ca_arrays;
+	tc_out_uuids = tc_out->tc_tgt_uuids.ca_arrays;
+	for (i = 0; i < tc_out->tc_tgt_uuids.ca_count; i++) {
 		int	idx;
 		bool	found;
 

@@ -568,21 +568,21 @@ ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_disconnect_in  *in = crt_req_get(rpc);
 	struct pool_tgt_disconnect_out *out = crt_reply_get(rpc);
-	uuid_t			       *hdl_uuids = in->tdi_hdls.da_arrays;
+	uuid_t			       *hdl_uuids = in->tdi_hdls.ca_arrays;
 	int				i;
 	int				rc;
 
-	if (in->tdi_hdls.da_count == 0)
+	if (in->tdi_hdls.ca_count == 0)
 		D__GOTO(out, rc = 0);
 
-	if (in->tdi_hdls.da_arrays == NULL)
+	if (in->tdi_hdls.ca_arrays == NULL)
 		D__GOTO(out, rc = -DER_INVAL);
 
 	D__DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdls[0]="DF_UUID" nhdls="
 		DF_U64"\n", DP_UUID(in->tdi_uuid), rpc, DP_UUID(hdl_uuids),
-		in->tdi_hdls.da_count);
+		in->tdi_hdls.ca_count);
 
-	for (i = 0; i < in->tdi_hdls.da_count; i++) {
+	for (i = 0; i < in->tdi_hdls.ca_count; i++) {
 		struct ds_pool_hdl *hdl;
 
 		hdl = ds_pool_hdl_lookup(hdl_uuids[i]);

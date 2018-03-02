@@ -633,11 +633,11 @@ static int
 cont_close_one(void *vin)
 {
 	struct cont_tgt_close_in       *in = vin;
-	struct cont_tgt_close_rec      *recs = in->tci_recs.da_arrays;
+	struct cont_tgt_close_rec      *recs = in->tci_recs.ca_arrays;
 	int				i;
 	int				rc = 0;
 
-	for (i = 0; i < in->tci_recs.da_count; i++) {
+	for (i = 0; i < in->tci_recs.ca_count; i++) {
 		int rc_tmp;
 
 		rc_tmp = cont_close_one_rec(&recs[i]);
@@ -653,19 +653,19 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 {
 	struct cont_tgt_close_in       *in = crt_req_get(rpc);
 	struct cont_tgt_close_out      *out = crt_reply_get(rpc);
-	struct cont_tgt_close_rec      *recs = in->tci_recs.da_arrays;
+	struct cont_tgt_close_rec      *recs = in->tci_recs.ca_arrays;
 	int				rc;
 
-	if (in->tci_recs.da_count == 0)
+	if (in->tci_recs.ca_count == 0)
 		D__GOTO(out, rc = 0);
 
-	if (in->tci_recs.da_arrays == NULL)
+	if (in->tci_recs.ca_arrays == NULL)
 		D__GOTO(out, rc = -DER_INVAL);
 
 	D__DEBUG(DF_DSMS, DF_CONT": handling rpc %p: recs[0].hdl="DF_UUID
 		"recs[0].hce="DF_U64" nres="DF_U64"\n", DP_CONT(NULL, NULL),
 		rpc, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce,
-		in->tci_recs.da_count);
+		in->tci_recs.ca_count);
 
 	rc = dss_task_collective(cont_close_one, in);
 	D__ASSERTF(rc == 0, "%d\n", rc);

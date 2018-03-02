@@ -151,17 +151,17 @@ obj_shard_rw_bulk_fini(crt_rpc_t *rpc)
 	int			i;
 
 	orw = crt_req_get(rpc);
-	bulks = orw->orw_bulks.da_arrays;
+	bulks = orw->orw_bulks.ca_arrays;
 	if (bulks == NULL)
 		return;
 
-	nr = orw->orw_bulks.da_count;
+	nr = orw->orw_bulks.ca_count;
 	for (i = 0; i < nr; i++)
 		crt_bulk_free(bulks[i]);
 
 	D__FREE(bulks, nr * sizeof(crt_bulk_t));
-	orw->orw_bulks.da_arrays = NULL;
-	orw->orw_bulks.da_count = 0;
+	orw->orw_bulks.ca_arrays = NULL;
+	orw->orw_bulks.ca_count = 0;
 }
 
 static int
@@ -267,12 +267,12 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		int		 i;
 
 		orwo = crt_reply_get(rw_args->rpc);
-		iods = orw->orw_iods.da_arrays;
-		sizes = orwo->orw_sizes.da_arrays;
+		iods = orw->orw_iods.ca_arrays;
+		sizes = orwo->orw_sizes.ca_arrays;
 
-		if (orwo->orw_sizes.da_count != orw->orw_nr) {
+		if (orwo->orw_sizes.ca_count != orw->orw_nr) {
 			D__ERROR("out:%u != in:%u\n",
-				(unsigned)orwo->orw_sizes.da_count,
+				(unsigned)orwo->orw_sizes.ca_count,
 				orw->orw_nr);
 			D__GOTO(out, rc = -DER_PROTO);
 		}
@@ -281,20 +281,20 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		for (i = 0; i < orw->orw_nr; i++)
 			iods[i].iod_size = sizes[i];
 
-		if (orwo->orw_sgls.da_count > 0) {
+		if (orwo->orw_sgls.ca_count > 0) {
 			/* inline transfer */
 			rc = dc_obj_shard_sgl_copy(rw_args->rwaa_sgls,
 						   rw_args->rwaa_nr,
-						   orwo->orw_sgls.da_arrays,
-						   orwo->orw_sgls.da_count);
+						   orwo->orw_sgls.ca_arrays,
+						   orwo->orw_sgls.ca_count);
 		} else if (rw_args->rwaa_sgls != NULL) {
 			/* for bulk transfer it needs to update sg_nr_out */
 			daos_sg_list_t *sgls = rw_args->rwaa_sgls;
 			uint32_t       *nrs;
 			uint32_t	nrs_count;
 
-			nrs = orwo->orw_nrs.da_arrays;
-			nrs_count = orwo->orw_nrs.da_count;
+			nrs = orwo->orw_nrs.ca_arrays;
+			nrs_count = orwo->orw_nrs.ca_count;
 			if (nrs_count != rw_args->rwaa_nr) {
 				D__ERROR("Invalid nrs %u != %u\n", nrs_count,
 					rw_args->rwaa_nr);
@@ -449,8 +449,8 @@ obj_shard_rw_bulk_prep(crt_rpc_t *rpc, unsigned int nr, daos_sg_list_t *sgls,
 
 	orw = crt_req_get(rpc);
 	D__ASSERT(orw != NULL);
-	orw->orw_bulks.da_count = nr;
-	orw->orw_bulks.da_arrays = bulks;
+	orw->orw_bulks.ca_count = nr;
+	orw->orw_bulks.ca_arrays = bulks;
 out:
 	if (rc != 0 && bulks != NULL)
 		D__FREE(bulks, nr * sizeof(*bulks));
@@ -539,8 +539,8 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	/* FIXME: if iods is too long, then we needs to do bulk transfer
 	 * as well, but then we also needs to serialize the iods
 	 **/
-	orw->orw_iods.da_count = nr;
-	orw->orw_iods.da_arrays = iods;
+	orw->orw_iods.ca_count = nr;
+	orw->orw_iods.ca_arrays = iods;
 
 	total_len = iods_data_len(iods, nr);
 	/* If it is read, let's try to get the size from sg list */
@@ -555,17 +555,17 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 		rc = obj_shard_rw_bulk_prep(req, nr, sgls, task);
 		if (rc != 0)
 			D__GOTO(out_req, rc);
-		orw->orw_sgls.da_count = 0;
-		orw->orw_sgls.da_arrays = NULL;
+		orw->orw_sgls.ca_count = 0;
+		orw->orw_sgls.ca_arrays = NULL;
 	} else {
 		/* Transfer data inline */
 		if (sgls != NULL)
-			orw->orw_sgls.da_count = nr;
+			orw->orw_sgls.ca_count = nr;
 		else
-			orw->orw_sgls.da_count = 0;
-		orw->orw_sgls.da_arrays = sgls;
-		orw->orw_bulks.da_count = 0;
-		orw->orw_bulks.da_arrays = NULL;
+			orw->orw_sgls.ca_count = 0;
+		orw->orw_sgls.ca_arrays = sgls;
+		orw->orw_bulks.ca_count = 0;
+		orw->orw_bulks.ca_arrays = NULL;
 	}
 
 	crt_req_addref(req);
@@ -660,10 +660,10 @@ dc_shard_punch(tse_task_t *task)
 	opi->opi_map_ver	 = args->pa_mapv;
 	opi->opi_epoch		 = api_args->epoch;
 	opi->opi_oid		 = oid;
-	opi->opi_dkeys.da_count  = (api_args->dkey == NULL) ? 0 : 1;
-	opi->opi_dkeys.da_arrays = api_args->dkey;
-	opi->opi_akeys.da_count	 = api_args->akey_nr;
-	opi->opi_akeys.da_arrays = api_args->akeys;
+	opi->opi_dkeys.ca_count  = (api_args->dkey == NULL) ? 0 : 1;
+	opi->opi_dkeys.ca_arrays = api_args->dkey;
+	opi->opi_akeys.ca_count	 = api_args->akey_nr;
+	opi->opi_akeys.ca_arrays = api_args->akeys;
 
 	uuid_copy(opi->opi_co_hdl, args->pa_coh_uuid);
 	uuid_copy(opi->opi_co_uuid, args->pa_cont_uuid);
@@ -745,41 +745,41 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	if (oeo->oeo_ret < 0)
 		D__GOTO(out, rc = oeo->oeo_ret);
 
-	if (*enum_args->eaa_nr < oeo->oeo_kds.da_count) {
+	if (*enum_args->eaa_nr < oeo->oeo_kds.ca_count) {
 		D__ERROR("DAOS_OBJ_RPC_ENUMERATE return more kds, rc: %d\n",
 			-DER_PROTO);
 		D__GOTO(out, rc = -DER_PROTO);
 	}
 
 	if (opc_get(enum_args->rpc->cr_opc) == DAOS_OBJ_RECX_RPC_ENUMERATE) {
-		*(enum_args->eaa_nr) = oeo->oeo_eprs.da_count;
-		if (enum_args->eaa_eprs && oeo->oeo_eprs.da_count > 0)
-			memcpy(enum_args->eaa_eprs, oeo->oeo_eprs.da_arrays,
+		*(enum_args->eaa_nr) = oeo->oeo_eprs.ca_count;
+		if (enum_args->eaa_eprs && oeo->oeo_eprs.ca_count > 0)
+			memcpy(enum_args->eaa_eprs, oeo->oeo_eprs.ca_arrays,
 			       sizeof(*enum_args->eaa_eprs) *
-			       oeo->oeo_eprs.da_count);
-		if (enum_args->eaa_recxs && oeo->oeo_recxs.da_count > 0)
-			memcpy(enum_args->eaa_recxs, oeo->oeo_recxs.da_arrays,
+			       oeo->oeo_eprs.ca_count);
+		if (enum_args->eaa_recxs && oeo->oeo_recxs.ca_count > 0)
+			memcpy(enum_args->eaa_recxs, oeo->oeo_recxs.ca_arrays,
 			       sizeof(*enum_args->eaa_recxs) *
-			       oeo->oeo_recxs.da_count);
+			       oeo->oeo_recxs.ca_count);
 		*enum_args->eaa_size = oeo->oeo_size;
-		if (enum_args->eaa_cookies && oeo->oeo_cookies.da_count > 0) {
-			uuid_t *cookies = oeo->oeo_cookies.da_arrays;
+		if (enum_args->eaa_cookies && oeo->oeo_cookies.ca_count > 0) {
+			uuid_t *cookies = oeo->oeo_cookies.ca_arrays;
 			int i;
 
-			for (i = 0; i < oeo->oeo_cookies.da_count; i++)
+			for (i = 0; i < oeo->oeo_cookies.ca_count; i++)
 				uuid_copy(enum_args->eaa_cookies[i],
 					  cookies[i]);
 		}
-		if (enum_args->eaa_versions && oeo->oeo_vers.da_count > 0)
-			memcpy(enum_args->eaa_versions, oeo->oeo_vers.da_arrays,
+		if (enum_args->eaa_versions && oeo->oeo_vers.ca_count > 0)
+			memcpy(enum_args->eaa_versions, oeo->oeo_vers.ca_arrays,
 			       sizeof(*enum_args->eaa_versions) *
-			       oeo->oeo_vers.da_count);
+			       oeo->oeo_vers.ca_count);
 	} else {
-		*(enum_args->eaa_nr) = oeo->oeo_kds.da_count;
-		if (enum_args->eaa_kds && oeo->oeo_kds.da_count > 0)
-			memcpy(enum_args->eaa_kds, oeo->oeo_kds.da_arrays,
+		*(enum_args->eaa_nr) = oeo->oeo_kds.ca_count;
+		if (enum_args->eaa_kds && oeo->oeo_kds.ca_count > 0)
+			memcpy(enum_args->eaa_kds, oeo->oeo_kds.ca_arrays,
 			       sizeof(*enum_args->eaa_kds) *
-			       oeo->oeo_kds.da_count);
+			       oeo->oeo_kds.ca_count);
 	}
 
 	/* Update hkey hash and tag */
