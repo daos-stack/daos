@@ -1710,12 +1710,12 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 
 	crt_bulk_free(iv_sync->isc_bulk_hdl);
 
-	iv_ops = crt_iv_ops_get(iv_sync->isc_ivns_internal,
-				iv_sync->isc_class_id);
-	D_ASSERT(iv_ops != NULL);
-
 	/* do_callback is set based on sync value specified */
 	if (iv_sync->isc_do_callback) {
+		iv_ops = crt_iv_ops_get(iv_sync->isc_ivns_internal,
+					iv_sync->isc_class_id);
+		D_ASSERT(iv_ops != NULL);
+
 		iv_sync->isc_update_comp_cb(iv_sync->isc_ivns_internal,
 					iv_sync->isc_class_id,
 					&iv_sync->isc_iv_key,
