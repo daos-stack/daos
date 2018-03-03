@@ -680,6 +680,22 @@ dc_obj_query(tse_task_t *task)
 	return 0;
 }
 
+int
+dc_obj_layout_refresh(daos_handle_t oh)
+{
+	struct dc_object *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
+	obj_layout_refresh(obj);
+
+	obj_decref(obj);
+
+	return 0;
+}
+
 static int
 obj_retry_cb(tse_task_t *task, void *data)
 {

@@ -270,14 +270,9 @@ rebuild_akey(struct rebuild_tgt_pool_tracker *rpt, struct ds_cont *ds_cont,
 	D_ASSERT(tls != NULL);
 	memset(&hash, 0, sizeof(hash));
 	while (!daos_hash_is_eof(&hash)) {
-		struct pool_map	*map;
 		unsigned int	rec_num = ITER_COUNT;
 		daos_size_t	size;
 		int		i;
-
-		map = rebuild_pool_map_get(rpt->rt_pool);
-		dc_pool_update_map(tls->rebuild_pool_hdl, map);
-		rebuild_pool_map_put(map);
 
 		memset(recxs, 0, sizeof(*recxs) * ITER_COUNT);
 		memset(eprs, 0, sizeof(*eprs) * ITER_COUNT);

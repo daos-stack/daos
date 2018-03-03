@@ -61,8 +61,7 @@ rebuild_pool_map_put(struct pool_map *map)
 }
 
 struct rebuild_pool_tls *
-rebuild_pool_tls_lookup(uuid_t pool_uuid,
-			unsigned int ver)
+rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver)
 {
 	struct rebuild_tls *tls = rebuild_tls_get();
 	struct rebuild_pool_tls *pool_tls;
@@ -1406,6 +1405,27 @@ rebuild_tgt_pool_tracker_create(struct ds_pool *pool, d_rank_list_t *svc_list,
 free:
 	if (rc != 0)
 		rebuild_tgt_pool_tracker_destroy(rpt);
+	return rc;
+}
+
+/**
+ * Called by ds_pool_tgt_map_update->update_child_map() to update pool
+ * map on each xstream for rebuild.
+ */
+int ds_rebuild_pool_map_update(struct ds_pool *pool)
+{
+	struct rebuild_pool_tls *pool_tls;
+	int rc;
+
+	pool_tls = rebuild_pool_tls_lookup(pool->sp_uuid, -1);
+	if (pool_tls == NULL ||
+	    daos_handle_is_inval(pool_tls->rebuild_pool_hdl))
+		return 0;
+
+	/* update the pool map over the client stack */
+	rc = dc_pool_update_map(pool_tls->rebuild_pool_hdl,
+				pool->sp_map);
+
 	return rc;
 }
 

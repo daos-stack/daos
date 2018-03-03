@@ -794,6 +794,32 @@ rebuild_iv_tgt_fail(void **state)
 }
 
 static void
+rebuild_tgt_start_fail(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
+
+	if (!rebuild_runable(arg, 6, false))
+		skip();
+
+	for (i = 0; i < OBJ_NR; i++)
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+
+	rebuild_io(arg, oids, OBJ_NR);
+
+	/* failed to start rebuild on rank 0 */
+	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
+			     DAOS_REBUILD_TGT_START_FAIL | DAOS_FAIL_ONCE,
+			     NULL);
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
+	rebuild_test_add_tgt(arg, 1, 0);
+}
+
+static void
 rebuild_offline(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -957,9 +983,11 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_destroy_container, NULL, test_case_teardown},
 	{"REBUILD14: rebuild iv tgt fail",
 	rebuild_iv_tgt_fail, NULL, test_case_teardown},
-	{"REBUILD15: offline rebuild",
+	{"REBUILD15: rebuild tgt start fail",
+	rebuild_tgt_start_fail, NULL, test_case_teardown},
+	{"REBUILD16: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD16: rebuild with two failures",
+	{"REBUILD17: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
 };
 

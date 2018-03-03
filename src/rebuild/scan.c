@@ -693,6 +693,9 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		}
 	}
 
+	if (daos_fail_check(DAOS_REBUILD_TGT_START_FAIL))
+		D__GOTO(out, rc = -DER_INVAL);
+
 	rc = rebuild_tgt_prepare(rpc, &rpt);
 	if (rc)
 		D__GOTO(out, rc);

@@ -76,6 +76,7 @@ int dc_obj_single_shard_list_dkey(tse_task_t *task);
 int dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md);
 int dc_obj_layout_get(daos_handle_t oh, struct pl_obj_layout **layout,
 		      unsigned int *grp_nr, unsigned int *grp_size);
+int dc_obj_layout_refresh(daos_handle_t oh);
 
 #define ENUM_ANCHOR_SHARD_OFF		28
 #define ENUM_ANCHOR_SHARD_LENGTH	4

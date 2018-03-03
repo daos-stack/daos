@@ -43,15 +43,23 @@
 static int
 rebuild_need_retry_cb(tse_task_t *task, void *arg)
 {
+	daos_handle_t *oh = arg;
 	int rc;
 
-	if (task->dt_result != -DER_NO_HDL)
+	if (task->dt_result != -DER_NO_HDL || oh == NULL)
 		return 0;
 
 	/* If the remote rebuild pool/container is not ready,
-	 * let's retry.
+	 * or the remote target has been evicted from pool.
+	 * Note: the pool map will redistributed by IV
+	 * automatically, so let's just keep refreshing the
+	 * layout.
 	 */
 	D__DEBUG(DB_TRACE, "retry task %p\n", task);
+
+	/* let's check if the pool_map has been changed */
+	dc_obj_layout_refresh(*oh);
+
 	task->dt_result = 0;
 	rc = dc_task_resched(task);
 	if (rc != 0) {
@@ -62,8 +70,7 @@ rebuild_need_retry_cb(tse_task_t *task, void *arg)
 	/* Register the callback, since it will be removed
 	 * after callback.
 	 */
-	rc = dc_task_reg_comp_cb(task, rebuild_need_retry_cb,
-				 arg, sizeof(arg));
+	rc = dc_task_reg_comp_cb(task, rebuild_need_retry_cb, arg, sizeof(arg));
 	return rc;
 }
 
@@ -86,12 +93,12 @@ ds_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	arg->mode	= mode;
 	arg->oh		= oh;
 
-	return dss_task_run(task, DSS_POOL_REBUILD,
-			    rebuild_need_retry_cb, NULL);
+	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb,
+			    NULL);
 }
 
 int
-ds_obj_close(daos_handle_t obj_hl)
+ds_obj_close(daos_handle_t oh)
 {
 	tse_task_t	 *task;
 	daos_obj_close_t *arg;
@@ -102,10 +109,9 @@ ds_obj_close(daos_handle_t obj_hl)
 		return rc;
 
 	arg = dc_task_get_args(task);
-	arg->oh = obj_hl;
+	arg->oh = oh;
 
-	return dss_task_run(task, DSS_POOL_REBUILD,
-			    rebuild_need_retry_cb, NULL);
+	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb, &oh);
 }
 
 int
@@ -118,7 +124,7 @@ ds_obj_single_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
 	int		      rc;
 
 	rc = dc_task_create(dc_obj_single_shard_list_dkey,
-			     dss_tse_scheduler(), NULL, &task);
+			    dss_tse_scheduler(), NULL, &task);
 	if (rc)
 		return rc;
 
@@ -130,8 +136,7 @@ ds_obj_single_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
 	arg->sgl	= sgl;
 	arg->anchor	= anchor;
 
-	return dss_task_run(task, DSS_POOL_REBUILD,
-			    rebuild_need_retry_cb, NULL);
+	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb, &oh);
 }
 
 int
@@ -157,8 +162,7 @@ ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	arg->sgl	= sgl;
 	arg->anchor	= anchor;
 
-	return dss_task_run(task, DSS_POOL_REBUILD,
-			    rebuild_need_retry_cb, NULL);
+	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb, &oh);
 }
 
 int
@@ -184,8 +188,7 @@ ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 	arg->sgls	= sgls;
 	arg->maps	= maps;
 
-	return dss_task_run(task, DSS_POOL_REBUILD,
-			    rebuild_need_retry_cb, NULL);
+	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb, &oh);
 }
 
 int
@@ -218,6 +221,5 @@ ds_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	arg->anchor	= anchor;
 	arg->incr_order	= incr;
 
-	return dss_task_run(task, DSS_POOL_REBUILD,
-			    rebuild_need_retry_cb, NULL);
+	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb, &oh);
 }
