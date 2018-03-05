@@ -48,18 +48,18 @@ obj_shard_open(struct dc_object *obj, unsigned int shard, unsigned int map_ver,
 	bool			 lock_upgraded = false;
 	int			 rc = 0;
 
-	pthread_rwlock_rdlock(&obj->cob_lock);
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
 open_retry:
 	layout = obj->cob_layout;
 	if (layout->ol_ver != map_ver) {
-		pthread_rwlock_unlock(&obj->cob_lock);
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
 		return -DER_STALE;
 	}
 
 	/* Skip the invalid shards and targets */
 	if (layout->ol_shards[shard].po_shard == -1 ||
 	    layout->ol_shards[shard].po_target == -1) {
-		pthread_rwlock_unlock(&obj->cob_lock);
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
 		return -DER_NONEXIST;
 	}
 
@@ -73,8 +73,8 @@ open_retry:
 
 		/* upgrade to write lock to safely update open shard cache */
 		if (!lock_upgraded) {
-			pthread_rwlock_unlock(&obj->cob_lock);
-			pthread_rwlock_wrlock(&obj->cob_lock);
+			D_RWLOCK_UNLOCK(&obj->cob_lock);
+			D_RWLOCK_WRLOCK(&obj->cob_lock);
 			lock_upgraded = true;
 			goto open_retry;
 		}
@@ -99,7 +99,7 @@ open_retry:
 		*shard_ptr = obj_shard;
 	}
 
-	pthread_rwlock_unlock(&obj->cob_lock);
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	return rc;
 }
@@ -148,7 +148,7 @@ obj_free(struct dc_object *obj)
 {
 	obj_layout_free(obj);
 	D_SPIN_DESTROY(&obj->cob_spin);
-	pthread_rwlock_destroy(&obj->cob_lock);
+	D_RWLOCK_DESTROY(&obj->cob_lock);
 	D__FREE_PTR(obj);
 }
 
@@ -265,10 +265,10 @@ obj_layout_refresh(struct dc_object *obj)
 {
 	int	rc;
 
-	pthread_rwlock_wrlock(&obj->cob_lock);
+	D_RWLOCK_WRLOCK(&obj->cob_lock);
 	obj_layout_free(obj);
 	rc = obj_layout_create(obj);
-	pthread_rwlock_unlock(&obj->cob_lock);
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	return rc;
 }
@@ -296,9 +296,9 @@ obj_dkey2grp(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 	grp_size = obj_get_grp_size(obj);
 	D__ASSERT(grp_size > 0);
 
-	pthread_rwlock_rdlock(&obj->cob_lock);
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
 	if (obj->cob_layout->ol_ver != map_ver) {
-		pthread_rwlock_unlock(&obj->cob_lock);
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
 		return -DER_STALE;
 	}
 
@@ -306,7 +306,7 @@ obj_dkey2grp(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 
 	/* XXX, consistent hash? */
 	grp_idx = hash % (obj->cob_layout->ol_nr / grp_size);
-	pthread_rwlock_unlock(&obj->cob_lock);
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	return grp_idx;
 }
@@ -333,10 +333,10 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 		  "idx %d, first %d, last %d, shard_nr %d\n",
 		  idx, idx_first, idx_last, obj->cob_layout->ol_nr);
 
-	pthread_rwlock_rdlock(&obj->cob_lock);
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
 	if (obj->cob_layout->ol_ver != map_ver) {
 		/* Sigh, someone else change the pool map */
-		pthread_rwlock_unlock(&obj->cob_lock);
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
 		return -DER_STALE;
 	}
 
@@ -352,7 +352,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 		if (obj->cob_layout->ol_shards[idx].po_shard != -1)
 			break;
 	}
-	pthread_rwlock_unlock(&obj->cob_lock);
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	if (i == grp_size) {
 		if (op == DAOS_OBJ_RPC_UPDATE || !rebuilding)
@@ -579,7 +579,9 @@ dc_obj_open(tse_task_t *task)
 	if (rc != 0)
 		D__GOTO(out, rc);
 
-	pthread_rwlock_init(&obj->cob_lock, NULL);
+	rc = D_RWLOCK_INIT(&obj->cob_lock, NULL);
+	if (rc != 0)
+		D__GOTO(out, rc);
 
 	/* it is a local operation for now, does not require event */
 	rc = dc_obj_fetch_md(args->oid, &obj->cob_md);

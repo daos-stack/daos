@@ -62,9 +62,9 @@ dc_pool_fini(void)
 static void
 pool_free(struct dc_pool *pool)
 {
-	pthread_rwlock_destroy(&pool->dp_map_lock);
+	D_RWLOCK_DESTROY(&pool->dp_map_lock);
 	D_MUTEX_DESTROY(&pool->dp_client_lock);
-	pthread_rwlock_destroy(&pool->dp_co_list_lock);
+	D_RWLOCK_DESTROY(&pool->dp_co_list_lock);
 	D__ASSERT(d_list_empty(&pool->dp_co_list));
 
 	if (pool->dp_map != NULL)
@@ -123,19 +123,25 @@ pool_alloc(void)
 	}
 
 	D_INIT_LIST_HEAD(&pool->dp_co_list);
-	pthread_rwlock_init(&pool->dp_co_list_lock, NULL);
-	rc = D_MUTEX_INIT(&pool->dp_client_lock, NULL);
+	rc = D_RWLOCK_INIT(&pool->dp_co_list_lock, NULL);
 	if (rc != 0)
 		goto failed;
-	pthread_rwlock_init(&pool->dp_map_lock, NULL);
+	rc = D_MUTEX_INIT(&pool->dp_client_lock, NULL);
+	if (rc != 0) {
+		D_RWLOCK_DESTROY(&pool->dp_co_list_lock);
+		goto failed;
+	}
+	rc = D_RWLOCK_INIT(&pool->dp_map_lock, NULL);
+	if (rc != 0) {
+		D_RWLOCK_DESTROY(&pool->dp_co_list_lock);
+		D_MUTEX_DESTROY(&pool->dp_client_lock);
+		goto failed;
+	}
 	pool->dp_ref = 1;
 
 	return pool;
 
 failed:
-	pthread_rwlock_destroy(&pool->dp_map_lock);
-	D_MUTEX_DESTROY(&pool->dp_client_lock);
-	pthread_rwlock_destroy(&pool->dp_co_list_lock);
 	D__FREE_PTR(pool);
 	return NULL;
 }
@@ -237,7 +243,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		return rc;
 	}
 
-	pthread_rwlock_wrlock(&pool->dp_map_lock);
+	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
 	rc = pool_map_update(pool, map, map_version, connect);
 	if (rc)
 		D__GOTO(out_unlock, rc);
@@ -265,7 +271,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	}
 	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
 out_unlock:
-	pthread_rwlock_unlock(&pool->dp_map_lock);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	if (info != NULL && rc == 0) {
 		uuid_copy(info->pi_uuid, pool->dp_pool);
@@ -450,9 +456,9 @@ dc_pool_update_map(daos_handle_t ph, struct pool_map *map)
 	if (pool->dp_ver >= pool_map_get_version(map))
 		D__GOTO(out, rc = 0); /* nothing to do */
 
-	pthread_rwlock_wrlock(&pool->dp_map_lock);
+	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
 	rc = pool_map_update(pool, map, pool_map_get_version(map), false);
-	pthread_rwlock_unlock(&pool->dp_map_lock);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 out:
 	if (pool)
 		dc_pool_put(pool);
@@ -626,13 +632,13 @@ dc_pool_disconnect(tse_task_t *task)
 		"\n", DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl),
 		args->poh.cookie);
 
-	pthread_rwlock_rdlock(&pool->dp_co_list_lock);
+	D_RWLOCK_RDLOCK(&pool->dp_co_list_lock);
 	if (!d_list_empty(&pool->dp_co_list)) {
-		pthread_rwlock_unlock(&pool->dp_co_list_lock);
+		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 		D__GOTO(out_pool, rc = -DER_BUSY);
 	}
 	pool->dp_disconnecting = 1;
-	pthread_rwlock_unlock(&pool->dp_co_list_lock);
+	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 	if (pool->dp_slave) {
 		D__DEBUG(DF_DSMC, DF_UUID": disconnecting: cookie="DF_X64" hdl="
@@ -777,10 +783,10 @@ dc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	if (pool == NULL)
 		D__GOTO(out, rc = -DER_NO_HDL);
 
-	pthread_rwlock_rdlock(&pool->dp_map_lock);
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
 	map_version = pool_map_get_version(pool->dp_map);
 	rc = pool_buf_extract(pool->dp_map, &map_buf);
-	pthread_rwlock_unlock(&pool->dp_map_lock);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 	if (rc != 0)
 		D__GOTO(out_pool, rc);
 
@@ -1398,9 +1404,9 @@ dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
 		return -DER_NO_HDL;
 	}
 
-	pthread_rwlock_rdlock(&pool->dp_map_lock);
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
 	*map_ver = pool_map_get_version(pool->dp_map);
-	pthread_rwlock_unlock(&pool->dp_map_lock);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 	dc_pool_put(pool);
 
 	return 0;

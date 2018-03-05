@@ -284,7 +284,7 @@ err:
 static void
 dc_cont_free(struct dc_cont *dc)
 {
-	pthread_rwlock_destroy(&dc->dc_obj_list_lock);
+	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
 	D__ASSERT(d_list_empty(&dc->dc_po_list));
 	D__ASSERT(d_list_empty(&dc->dc_obj_list));
 	D__FREE_PTR(dc);
@@ -310,8 +310,11 @@ dc_cont_alloc(const uuid_t uuid)
 	uuid_copy(dc->dc_uuid, uuid);
 	D_INIT_LIST_HEAD(&dc->dc_obj_list);
 	D_INIT_LIST_HEAD(&dc->dc_po_list);
-	pthread_rwlock_init(&dc->dc_obj_list_lock, NULL);
 	dc->dc_ref = 1;
+	if (D_RWLOCK_INIT(&dc->dc_obj_list_lock, NULL) != 0) {
+		free(dc);
+		dc = NULL;
+	}
 
 	return dc;
 }
@@ -355,9 +358,9 @@ cont_open_complete(tse_task_t *task, void *data)
 		D__GOTO(out, rc);
 	}
 
-	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
+	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
 	if (pool->dp_disconnecting) {
-		pthread_rwlock_unlock(&pool->dp_co_list_lock);
+		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 		D__ERROR("pool connection being invalidated\n");
 		/*
 		 * Instead of sending a CONT_CLOSE RPC, we leave this new
@@ -369,7 +372,7 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = arg->hdl;
-	pthread_rwlock_unlock(&pool->dp_co_list_lock);
+	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 	dc_cont2hdl(cont, arg->hdlp);
 
@@ -412,9 +415,9 @@ dc_cont_local_close(daos_handle_t ph, daos_handle_t coh)
 	dc_cont_put(cont);
 
 	/* Remove the container from pool container list */
-	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
+	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
 	d_list_del_init(&cont->dc_po_list);
-	pthread_rwlock_unlock(&pool->dp_co_list_lock);
+	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 out:
 	if (cont != NULL)
@@ -452,10 +455,10 @@ dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 	uuid_copy(cont->dc_cont_hdl, cont_hdl_uuid);
 	cont->dc_capas = flags;
 
-	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
+	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = ph;
-	pthread_rwlock_unlock(&pool->dp_co_list_lock);
+	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 	dc_cont2hdl(cont, coh);
 out:
@@ -598,9 +601,9 @@ cont_close_complete(tse_task_t *task, void *data)
 	dc_cont_put(cont);
 
 	/* Remove the container from pool container list */
-	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
+	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
 	d_list_del_init(&cont->dc_po_list);
-	pthread_rwlock_unlock(&pool->dp_co_list_lock);
+	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 out:
 	crt_req_decref(arg->rpc);
@@ -631,14 +634,14 @@ dc_cont_close(tse_task_t *task)
 		D__GOTO(err, rc = -DER_NO_HDL);
 
 	/* Check if there are not objects opened for this container */
-	pthread_rwlock_rdlock(&cont->dc_obj_list_lock);
+	D_RWLOCK_RDLOCK(&cont->dc_obj_list_lock);
 	if (!d_list_empty(&cont->dc_obj_list)) {
 		D__ERROR("cannot close container, object not closed.\n");
-		pthread_rwlock_unlock(&cont->dc_obj_list_lock);
+		D_RWLOCK_UNLOCK(&cont->dc_obj_list_lock);
 		D__GOTO(err_cont, rc = -DER_BUSY);
 	}
 	cont->dc_closing = 1;
-	pthread_rwlock_unlock(&cont->dc_obj_list_lock);
+	D_RWLOCK_UNLOCK(&cont->dc_obj_list_lock);
 
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	D__ASSERT(pool != NULL);
@@ -651,9 +654,9 @@ dc_cont_close(tse_task_t *task)
 		dc_cont_put(cont);
 
 		/* Remove the container from pool container list */
-		pthread_rwlock_wrlock(&pool->dp_co_list_lock);
+		D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
 		d_list_del_init(&cont->dc_po_list);
-		pthread_rwlock_unlock(&pool->dp_co_list_lock);
+		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 		D__DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
 			"\n", DP_CONT(pool->dp_pool, cont->dc_uuid), coh.cookie,
@@ -976,16 +979,16 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_capas = cont_glob->dcg_capas;
 	cont->dc_slave = 1;
 
-	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
+	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
 	if (pool->dp_disconnecting) {
-		pthread_rwlock_unlock(&pool->dp_co_list_lock);
+		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 		D__ERROR("pool connection being invalidated\n");
 		D__GOTO(out_cont, rc = -DER_NO_HDL);
 	}
 
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = poh;
-	pthread_rwlock_unlock(&pool->dp_co_list_lock);
+	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 	dc_cont2hdl(cont, coh);
 
@@ -1314,9 +1317,9 @@ dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
 	/* Get map_tgt so that we can have the rank of the target. */
 	pool = dc_hdl2pool(dc->dc_pool_hdl);
 	D__ASSERT(pool != NULL);
-	pthread_rwlock_rdlock(&pool->dp_map_lock);
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
 	n = pool_map_find_target(pool->dp_map, tgt_idx, tgt);
-	pthread_rwlock_unlock(&pool->dp_map_lock);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 	dc_pool_put(pool);
 	dc_cont_put(dc);
 	if (n != 1) {

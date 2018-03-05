@@ -379,7 +379,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 	struct pl_map_init_attr	 mia;
 	int			 rc;
 
-	pthread_rwlock_wrlock(&pl_rwlock);
+	D_RWLOCK_WRLOCK(&pl_rwlock);
 	if (!pl_htable.ht_ops) {
 		/* NB: this hash table is created on demand, it will never
 		 * be destroyed.
@@ -437,7 +437,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 	pl_map_decref(map); /* hash table has held the refcount */
 	D_EXIT;
  out:
-	pthread_rwlock_unlock(&pl_rwlock);
+	D_RWLOCK_UNLOCK(&pl_rwlock);
 	return rc;
 }
 
@@ -450,7 +450,7 @@ pl_map_disconnect(uuid_t uuid)
 {
 	d_list_t	*link;
 
-	pthread_rwlock_wrlock(&pl_rwlock);
+	D_RWLOCK_WRLOCK(&pl_rwlock);
 	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
 	if (link) {
 		struct pl_map	*map;
@@ -463,7 +463,7 @@ pl_map_disconnect(uuid_t uuid)
 			d_hash_rec_decref(&pl_htable, link);
 		}
 	}
-	pthread_rwlock_unlock(&pl_rwlock);
+	D_RWLOCK_UNLOCK(&pl_rwlock);
 }
 
 /**
@@ -474,9 +474,9 @@ pl_map_find(uuid_t uuid, daos_obj_id_t oid)
 {
 	d_list_t	*link;
 
-	pthread_rwlock_rdlock(&pl_rwlock);
+	D_RWLOCK_RDLOCK(&pl_rwlock);
 	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
-	pthread_rwlock_unlock(&pl_rwlock);
+	D_RWLOCK_UNLOCK(&pl_rwlock);
 
 	return link ? pl_link2map(link) : NULL;
 }
