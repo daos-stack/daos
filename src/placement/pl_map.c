@@ -83,7 +83,12 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 	if (rc != 0)
 		return rc;
 
-	pthread_spin_init(&map->pl_lock, PTHREAD_PROCESS_PRIVATE);
+	rc = D_SPIN_INIT(&map->pl_lock, PTHREAD_PROCESS_PRIVATE);
+	if (rc != 0) {
+		dict->pd_ops->o_destroy(map);
+		return rc;
+	}
+
 	map->pl_ref  = 1; /* for the caller */
 	map->pl_connects = 0;
 	map->pl_type = mia->ia_type;
@@ -103,7 +108,7 @@ pl_map_destroy(struct pl_map *map)
 	D__ASSERT(map->pl_ops != NULL);
 	D__ASSERT(map->pl_ops->o_destroy != NULL);
 
-	pthread_spin_destroy(&map->pl_lock);
+	D_SPIN_DESTROY(&map->pl_lock);
 	map->pl_ops->o_destroy(map);
 }
 
@@ -319,9 +324,9 @@ pl_hop_rec_addref(struct d_hash_table *htab, d_list_t *link)
 {
 	struct pl_map *map = pl_link2map(link);
 
-	pthread_spin_lock(&map->pl_lock);
+	D_SPIN_LOCK(&map->pl_lock);
 	map->pl_ref++;
-	pthread_spin_unlock(&map->pl_lock);
+	D_SPIN_UNLOCK(&map->pl_lock);
 }
 
 static bool
@@ -332,10 +337,10 @@ pl_hop_rec_decref(struct d_hash_table *htab, d_list_t *link)
 
 	D__ASSERT(map->pl_ref > 0);
 
-	pthread_spin_lock(&map->pl_lock);
+	D_SPIN_LOCK(&map->pl_lock);
 	map->pl_ref--;
 	zombie = (map->pl_ref == 0);
-	pthread_spin_unlock(&map->pl_lock);
+	D_SPIN_UNLOCK(&map->pl_lock);
 
 	return zombie;
 }

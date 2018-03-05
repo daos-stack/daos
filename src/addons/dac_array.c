@@ -69,36 +69,41 @@ static struct dac_array *
 array_alloc(void)
 {
 	struct dac_array *obj;
+	int rc = 0;
 
 	D__ALLOC_PTR(obj);
 	if (obj == NULL)
 		return NULL;
 
 	obj->cob_ref = 1;
-	pthread_spin_init(&obj->cob_lock, PTHREAD_PROCESS_PRIVATE);
+	rc = D_SPIN_INIT(&obj->cob_lock, PTHREAD_PROCESS_PRIVATE);
+	if (rc != 0) {
+		D__FREE_PTR(obj);
+		return NULL;
+	}
 	return obj;
 }
 
 static void
 array_decref(struct dac_array *obj)
 {
-	pthread_spin_lock(&obj->cob_lock);
+	D_SPIN_LOCK(&obj->cob_lock);
 	obj->cob_ref--;
 	if (obj->cob_ref == 0) {
-		pthread_spin_unlock(&obj->cob_lock);
-		pthread_spin_destroy(&obj->cob_lock);
+		D_SPIN_UNLOCK(&obj->cob_lock);
+		D_SPIN_DESTROY(&obj->cob_lock);
 		D__FREE_PTR(obj);
 	} else {
-		pthread_spin_unlock(&obj->cob_lock);
+		D_SPIN_UNLOCK(&obj->cob_lock);
 	}
 }
 
 static void
 array_addref(struct dac_array *obj)
 {
-	pthread_spin_lock(&obj->cob_lock);
+	D_SPIN_LOCK(&obj->cob_lock);
 	obj->cob_ref++;
-	pthread_spin_unlock(&obj->cob_lock);
+	D_SPIN_UNLOCK(&obj->cob_lock);
 }
 
 static daos_handle_t

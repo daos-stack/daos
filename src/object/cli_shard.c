@@ -62,10 +62,10 @@ obj_shard_decref(struct dc_obj_shard *shard)
 
 	D__ASSERT(shard != NULL && shard->do_ref > 0);
 
-	pthread_spin_lock(&shard->do_obj->cob_spin);
+	D_SPIN_LOCK(&shard->do_obj->cob_spin);
 	shard->do_ref--;
 	do_free = (shard->do_ref == 0);
-	pthread_spin_unlock(&shard->do_obj->cob_spin);
+	D_SPIN_UNLOCK(&shard->do_obj->cob_spin);
 	if (do_free) {
 		obj_decref(shard->do_obj);
 		shard->do_obj = NULL;
@@ -76,9 +76,9 @@ obj_shard_decref(struct dc_obj_shard *shard)
 void
 obj_shard_addref(struct dc_obj_shard *shard)
 {
-	pthread_spin_lock(&shard->do_obj->cob_spin);
+	D_SPIN_LOCK(&shard->do_obj->cob_spin);
 	shard->do_ref++;
-	pthread_spin_unlock(&shard->do_obj->cob_spin);
+	D_SPIN_UNLOCK(&shard->do_obj->cob_spin);
 }
 
 int

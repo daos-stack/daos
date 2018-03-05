@@ -147,7 +147,7 @@ static void
 obj_free(struct dc_object *obj)
 {
 	obj_layout_free(obj);
-	pthread_spin_destroy(&obj->cob_spin);
+	D_SPIN_DESTROY(&obj->cob_spin);
 	pthread_rwlock_destroy(&obj->cob_lock);
 	D__FREE_PTR(obj);
 }
@@ -155,22 +155,22 @@ obj_free(struct dc_object *obj)
 void
 obj_decref(struct dc_object *obj)
 {
-	pthread_spin_lock(&obj->cob_spin);
+	D_SPIN_LOCK(&obj->cob_spin);
 	obj->cob_ref--;
 	if (obj->cob_ref == 0) {
-		pthread_spin_unlock(&obj->cob_spin);
+		D_SPIN_UNLOCK(&obj->cob_spin);
 		obj_free(obj);
 	} else {
-		pthread_spin_unlock(&obj->cob_spin);
+		D_SPIN_UNLOCK(&obj->cob_spin);
 	}
 }
 
 void
 obj_addref(struct dc_object *obj)
 {
-	pthread_spin_lock(&obj->cob_spin);
+	D_SPIN_LOCK(&obj->cob_spin);
 	obj->cob_ref++;
-	pthread_spin_unlock(&obj->cob_spin);
+	D_SPIN_UNLOCK(&obj->cob_spin);
 }
 
 static daos_handle_t
@@ -575,7 +575,10 @@ dc_obj_open(tse_task_t *task)
 	obj->cob_coh  = args->coh;
 	obj->cob_mode = args->mode;
 
-	pthread_spin_init(&obj->cob_spin, PTHREAD_PROCESS_PRIVATE);
+	rc = D_SPIN_INIT(&obj->cob_spin, PTHREAD_PROCESS_PRIVATE);
+	if (rc != 0)
+		D__GOTO(out, rc);
+
 	pthread_rwlock_init(&obj->cob_lock, NULL);
 
 	/* it is a local operation for now, does not require event */
