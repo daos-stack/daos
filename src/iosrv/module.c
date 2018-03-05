@@ -151,9 +151,9 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 		*mod_facs = smod->sm_facs;
 
 	/* module successfully loaded, add it to the tracking list */
-	pthread_mutex_lock(&loaded_mod_list_lock);
+	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	d_list_add_tail(&lmod->lm_lk, &loaded_mod_list);
-	pthread_mutex_unlock(&loaded_mod_list_lock);
+	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 	return 0;
 
 err_cl_rpc:
@@ -210,15 +210,15 @@ dss_module_unload(const char *modname)
 	struct loaded_mod	*lmod;
 
 	/* lookup the module from the loaded module list */
-	pthread_mutex_lock(&loaded_mod_list_lock);
+	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	lmod = dss_module_search(modname);
 	if (lmod == NULL) {
-		pthread_mutex_unlock(&loaded_mod_list_lock);
+		D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 		/* module not found ... */
 		return -DER_ENOENT;
 	}
 	d_list_del_init(&lmod->lm_lk);
-	pthread_mutex_unlock(&loaded_mod_list_lock);
+	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 
 	dss_module_unload_internal(lmod);
 
@@ -234,7 +234,7 @@ dss_module_setup_all(void)
 	struct loaded_mod      *mod;
 	int			rc = 0;
 
-	pthread_mutex_lock(&loaded_mod_list_lock);
+	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
 		struct dss_module *m = mod->lm_dss_mod;
 
@@ -247,7 +247,7 @@ dss_module_setup_all(void)
 			break;
 		}
 	}
-	pthread_mutex_unlock(&loaded_mod_list_lock);
+	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 	return rc;
 }
 
@@ -257,7 +257,7 @@ dss_module_cleanup_all(void)
 	struct loaded_mod      *mod;
 	int			rc = 0;
 
-	pthread_mutex_lock(&loaded_mod_list_lock);
+	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	d_list_for_each_entry_reverse(mod, &loaded_mod_list, lm_lk) {
 		struct dss_module *m = mod->lm_dss_mod;
 
@@ -270,7 +270,7 @@ dss_module_cleanup_all(void)
 			break;
 		}
 	}
-	pthread_mutex_unlock(&loaded_mod_list_lock);
+	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 	return rc;
 }
 
@@ -294,12 +294,12 @@ dss_module_unload_all(void)
 	struct d_list_head	destroy_list;
 
 	D_INIT_LIST_HEAD(&destroy_list);
-	pthread_mutex_lock(&loaded_mod_list_lock);
+	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	d_list_for_each_entry_safe(mod, tmp, &loaded_mod_list, lm_lk) {
 		d_list_del_init(&mod->lm_lk);
 		d_list_add(&mod->lm_lk, &destroy_list);
 	}
-	pthread_mutex_unlock(&loaded_mod_list_lock);
+	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 
 	d_list_for_each_entry_safe(mod, tmp, &destroy_list, lm_lk) {
 		d_list_del_init(&mod->lm_lk);

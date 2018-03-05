@@ -87,7 +87,7 @@ daos_eq_lib_init()
 	uint32_t	flags;
 	int		rc;
 
-	pthread_mutex_lock(&daos_eq_lock);
+	D_MUTEX_LOCK(&daos_eq_lock);
 	if (refcount > 0) {
 		refcount++;
 		D__GOTO(unlock, rc = 0);
@@ -127,7 +127,7 @@ daos_eq_lib_init()
 	refcount = 1;
 
 unlock:
-	pthread_mutex_unlock(&daos_eq_lock);
+	D_MUTEX_UNLOCK(&daos_eq_lock);
 	return rc;
 crt:
 	crt_finalize();
@@ -141,7 +141,7 @@ daos_eq_lib_fini()
 {
 	int rc;
 
-	pthread_mutex_lock(&daos_eq_lock);
+	D_MUTEX_LOCK(&daos_eq_lock);
 	if (refcount == 0)
 		D__GOTO(unlock, rc = -DER_UNINIT);
 	if (refcount > 1) {
@@ -171,7 +171,7 @@ daos_eq_lib_fini()
 
 	refcount = 0;
 unlock:
-	pthread_mutex_unlock(&daos_eq_lock);
+	D_MUTEX_UNLOCK(&daos_eq_lock);
 	return rc;
 }
 
@@ -190,7 +190,7 @@ daos_eq_free(struct d_hlink *hlink)
 	D__ASSERT(d_hhash_link_empty(&eqx->eqx_hlink));
 
 	if (eqx->eqx_lock_init)
-		pthread_mutex_destroy(&eqx->eqx_lock);
+		D_MUTEX_DESTROY(&eqx->eqx_lock);
 
 	D__FREE_PTR(eq);
 }
@@ -217,7 +217,7 @@ daos_eq_alloc(void)
 
 	eqx = daos_eq2eqx(eq);
 
-	rc = pthread_mutex_init(&eqx->eqx_lock, NULL);
+	rc = D_MUTEX_INIT(&eqx->eqx_lock, NULL);
 	if (rc != 0)
 		goto out;
 	eqx->eqx_lock_init = 1;
@@ -434,7 +434,7 @@ daos_event_launch(struct daos_event *ev)
 			return -DER_NONEXIST;
 		}
 
-		pthread_mutex_lock(&eqx->eqx_lock);
+		D_MUTEX_LOCK(&eqx->eqx_lock);
 		if (eqx->eqx_finalizing) {
 			D__ERROR("Event queue is in progress of finalizing\n");
 			rc = -DER_NONEXIST;
@@ -455,7 +455,7 @@ daos_event_launch(struct daos_event *ev)
 	}
  out:
 	if (eqx != NULL)
-		pthread_mutex_unlock(&eqx->eqx_lock);
+		D_MUTEX_UNLOCK(&eqx->eqx_lock);
 
 	if (eqx != NULL)
 		daos_eq_putref(eqx);
@@ -492,7 +492,7 @@ daos_event_complete(struct daos_event *ev, int rc)
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		D__ASSERT(eqx != NULL);
 
-		pthread_mutex_lock(&eqx->eqx_lock);
+		D_MUTEX_LOCK(&eqx->eqx_lock);
 	}
 
 	D__ASSERT(evx->evx_status == DAOS_EVS_RUNNING ||
@@ -501,7 +501,7 @@ daos_event_complete(struct daos_event *ev, int rc)
 	daos_event_complete_locked(eqx, evx, rc);
 
 	if (eqx != NULL)
-		pthread_mutex_unlock(&eqx->eqx_lock);
+		D_MUTEX_UNLOCK(&eqx->eqx_lock);
 
 	if (eqx != NULL)
 		daos_eq_putref(eqx);
@@ -544,7 +544,7 @@ ev_progress_cb(void *arg)
 	}
 
 	/** Grab the lock so we don't race with eq_progress_cb. */
-	pthread_mutex_lock(&eqx->eqx_lock);
+	D_MUTEX_LOCK(&eqx->eqx_lock);
 
 	/*
 	 * if the EQ was finalized from under us, just update the event status
@@ -553,7 +553,7 @@ ev_progress_cb(void *arg)
 	if (eqx->eqx_finalizing) {
 		evx->evx_status = DAOS_EVS_READY;
 		D__ASSERT(d_list_empty(&evx->evx_link));
-		pthread_mutex_unlock(&epa->eqx->eqx_lock);
+		D_MUTEX_UNLOCK(&epa->eqx->eqx_lock);
 		return 1;
 	}
 
@@ -572,7 +572,7 @@ ev_progress_cb(void *arg)
 	}
 
 	D__ASSERT(evx->evx_status == DAOS_EVS_READY);
-	pthread_mutex_unlock(&eqx->eqx_lock);
+	D_MUTEX_UNLOCK(&eqx->eqx_lock);
 
 	return 1;
 }
@@ -667,7 +667,7 @@ eq_progress_cb(void *arg)
 
 	tse_sched_progress(&epa->eqx->eqx_sched);
 
-	pthread_mutex_lock(&epa->eqx->eqx_lock);
+	D_MUTEX_LOCK(&epa->eqx->eqx_lock);
 	d_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
 		D__ASSERT(eq->eq_n_comp > 0);
 
@@ -694,24 +694,24 @@ eq_progress_cb(void *arg)
 
 	/* exit once there are completion events */
 	if (epa->count > 0) {
-		pthread_mutex_unlock(&epa->eqx->eqx_lock);
+		D_MUTEX_UNLOCK(&epa->eqx->eqx_lock);
 		return 1;
 	}
 
 	/* no completion event, eq::eq_comp is empty */
 	if (epa->eqx->eqx_finalizing) { /* no new event is coming */
 		D__ASSERT(d_list_empty(&eq->eq_running));
-		pthread_mutex_unlock(&epa->eqx->eqx_lock);
+		D_MUTEX_UNLOCK(&epa->eqx->eqx_lock);
 		return -DER_NONEXIST;
 	}
 
 	/* wait only if there are running events? */
 	if (epa->wait_running && d_list_empty(&eq->eq_running)) {
-		pthread_mutex_unlock(&epa->eqx->eqx_lock);
+		D_MUTEX_UNLOCK(&epa->eqx->eqx_lock);
 		return 1;
 	}
 
-	pthread_mutex_unlock(&epa->eqx->eqx_lock);
+	D_MUTEX_UNLOCK(&epa->eqx->eqx_lock);
 
 	/** continue waiting */
 	return 0;
@@ -768,7 +768,7 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
 	eq = daos_eqx2eq(eqx);
 
 	count = 0;
-	pthread_mutex_lock(&eqx->eqx_lock);
+	D_MUTEX_LOCK(&eqx->eqx_lock);
 
 	if (n_events == 0 || events == NULL) {
 		if ((query & DAOS_EQR_COMPLETED) != 0)
@@ -797,7 +797,7 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
 		}
 	}
 out:
-	pthread_mutex_unlock(&eqx->eqx_lock);
+	D_MUTEX_UNLOCK(&eqx->eqx_lock);
 	daos_eq_putref(eqx);
 	return count;
 }
@@ -857,7 +857,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	if (eqx == NULL)
 		return -DER_NONEXIST;
 
-	pthread_mutex_lock(&eqx->eqx_lock);
+	D_MUTEX_LOCK(&eqx->eqx_lock);
 	if (eqx->eqx_finalizing) {
 		rc = -DER_NONEXIST;
 		goto out;
@@ -895,7 +895,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	tse_sched_complete(&eqx->eqx_sched, rc, true);
 
 out:
-	pthread_mutex_unlock(&eqx->eqx_lock);
+	D_MUTEX_UNLOCK(&eqx->eqx_lock);
 	if (rc == 0)
 		daos_eq_delete(eqx);
 	daos_eq_putref(eqx);
@@ -1152,13 +1152,13 @@ daos_event_abort(struct daos_event *ev)
 				evx->evx_eqh.cookie);
 			return -DER_NONEXIST;
 		}
-		pthread_mutex_lock(&eqx->eqx_lock);
+		D_MUTEX_LOCK(&eqx->eqx_lock);
 	}
 
 	daos_event_abort_locked(eqx, evx);
 
 	if (eqx != NULL) {
-		pthread_mutex_unlock(&eqx->eqx_lock);
+		D_MUTEX_UNLOCK(&eqx->eqx_lock);
 		daos_eq_putref(eqx);
 	}
 

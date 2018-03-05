@@ -68,10 +68,10 @@ cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 {
 	int rc;
 
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rc = rsvc_client_complete_rpc(&pool->dp_client, ep, rc_crt, out->co_rc,
 				      &out->co_hint);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	if (rc == RSVC_CLIENT_RECHOOSE ||
 	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->co_rc))) {
 		task->dt_result = 0;
@@ -148,9 +148,9 @@ dc_cont_create(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid));
 
 	ep.ep_grp = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, &rpc);
 	if (rc != 0) {
 		D__ERROR("failed to create rpc: %d\n", rc);
@@ -246,9 +246,9 @@ dc_cont_destroy(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
 
 	ep.ep_grp = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_DESTROY, &rpc);
 	if (rc != 0) {
 		D__ERROR("failed to create rpc: %d\n", rc);
@@ -506,9 +506,9 @@ dc_cont_open(tse_task_t *task)
 		args->flags);
 
 	ep.ep_grp = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OPEN, &rpc);
 	if (rc != 0) {
 		D__ERROR("failed to create rpc: %d\n", rc);
@@ -665,9 +665,9 @@ dc_cont_close(tse_task_t *task)
 	}
 
 	ep.ep_grp = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, &rpc);
 	if (rc != 0) {
 		D__ERROR("failed to create rpc: %d\n", rc);
@@ -795,9 +795,9 @@ dc_cont_query(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, &rpc);
 	if (rc != 0) {
 		D__ERROR("failed to create rpc: %d\n", rc);
@@ -1174,9 +1174,9 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		DP_UUID(cont->dc_cont_hdl), epoch == NULL ? 0 : *epoch);
 
 	ep.ep_grp = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
 		D__ERROR("failed to create rpc: %d\n", rc);

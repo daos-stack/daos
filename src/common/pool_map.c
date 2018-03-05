@@ -880,7 +880,7 @@ pool_map_finalise(struct pool_map *map)
 		pool_tree_free(map->po_tree);
 		map->po_tree = NULL;
 	}
-	pthread_mutex_destroy(&map->po_lock);
+	D_MUTEX_DESTROY(&map->po_lock);
 }
 
 /**
@@ -899,12 +899,15 @@ pool_map_initialise(struct pool_map *map, bool activate,
 	int			 rc = 0;
 
 	D__ASSERT(pool_map_empty(map));
-	pthread_mutex_init(&map->po_lock, NULL);
+	rc = D_MUTEX_INIT(&map->po_lock, NULL);
+	if (rc != 0)
+		return rc;
 
 	if (tree[0].do_comp.co_type != PO_COMP_TP_ROOT) {
 		D__DEBUG(DB_MGMT, "Invalid tree format: %s/%d\n",
 			pool_domain_name(&tree[0]), tree[0].do_comp.co_type);
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		goto failed;
 	}
 
 	map->po_tree = tree;
@@ -974,6 +977,7 @@ pool_map_initialise(struct pool_map *map, bool activate,
 	return 0;
  failed:
 	D__DEBUG(DB_MGMT, "Failed to setup pool map %d\n", rc);
+	D_MUTEX_DESTROY(&map->po_lock);
 	pool_map_finalise(map);
 	return rc;
 }
@@ -1398,9 +1402,9 @@ pool_map_destroy(struct pool_map *map)
 void
 pool_map_addref(struct pool_map *map)
 {
-	pthread_mutex_lock(&map->po_lock);
+	D_MUTEX_LOCK(&map->po_lock);
 	map->po_ref++;
-	pthread_mutex_unlock(&map->po_lock);
+	D_MUTEX_UNLOCK(&map->po_lock);
 }
 
 /**
@@ -1412,11 +1416,11 @@ pool_map_decref(struct pool_map *map)
 {
 	bool free;
 
-	pthread_mutex_lock(&map->po_lock);
+	D_MUTEX_LOCK(&map->po_lock);
 	D__ASSERT(map->po_ref > 0);
 	map->po_ref--;
 	free = (map->po_ref == 0);
-	pthread_mutex_unlock(&map->po_lock);
+	D_MUTEX_UNLOCK(&map->po_lock);
 
 	if (free)
 		pool_map_destroy(map);

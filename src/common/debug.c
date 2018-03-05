@@ -442,11 +442,11 @@ debug_fini_locked(void)
 void
 daos_debug_fini(void)
 {
-	pthread_mutex_lock(&debug_data.dd_lock);
+	D_MUTEX_LOCK(&debug_data.dd_lock);
 	debug_data.dd_ref--;
 	if (debug_data.dd_ref == 0)
 		debug_fini_locked();
-	pthread_mutex_unlock(&debug_data.dd_lock);
+	D_MUTEX_UNLOCK(&debug_data.dd_lock);
 }
 
 /** Initialize debug system */
@@ -456,10 +456,10 @@ daos_debug_init(char *logfile)
 	int	i;
 	int	rc;
 
-	pthread_mutex_lock(&debug_data.dd_lock);
+	D_MUTEX_LOCK(&debug_data.dd_lock);
 	if (debug_data.dd_ref > 0) {
 		debug_data.dd_ref++;
-		pthread_mutex_unlock(&debug_data.dd_lock);
+		D_MUTEX_UNLOCK(&debug_data.dd_lock);
 		return 0;
 	}
 
@@ -505,7 +505,7 @@ daos_debug_init(char *logfile)
 		d_log_setlogmask(*debug_fac_dict[i].df_idp, mask);
 	}
 	debug_data.dd_ref = 1;
-	pthread_mutex_unlock(&debug_data.dd_lock);
+	D_MUTEX_UNLOCK(&debug_data.dd_lock);
 
 	return 0;
 
@@ -513,7 +513,7 @@ failed_fini:
 	debug_fini_locked();
 
 failed_unlock:
-	pthread_mutex_unlock(&debug_data.dd_lock);
+	D_MUTEX_UNLOCK(&debug_data.dd_lock);
 	return rc;
 }
 

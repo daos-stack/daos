@@ -283,7 +283,7 @@ vos_init(void)
 		return rc;
 	}
 
-	pthread_mutex_lock(&mutex);
+	D_MUTEX_LOCK(&mutex);
 
 	if (is_init && vsa_imems_inst)
 		D__GOTO(exit, rc);
@@ -302,7 +302,7 @@ vos_init(void)
 
 	is_init = 1;
 exit:
-	pthread_mutex_unlock(&mutex);
+	D_MUTEX_UNLOCK(&mutex);
 	if (rc && vsa_imems_inst)
 		D__FREE_PTR(vsa_imems_inst);
 	return rc;
@@ -311,10 +311,10 @@ exit:
 void
 vos_fini(void)
 {
-	pthread_mutex_lock(&mutex);
+	D_MUTEX_LOCK(&mutex);
 	if (vsa_imems_inst) {
 		vos_imem_strts_destroy(vsa_imems_inst);
 		D__FREE_PTR(vsa_imems_inst);
 	}
-	pthread_mutex_unlock(&mutex);
+	D_MUTEX_UNLOCK(&mutex);
 }

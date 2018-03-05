@@ -39,7 +39,7 @@ dss_register_key(struct dss_module_key *key)
 {
 	int i;
 
-	pthread_mutex_lock(&dss_module_keys_lock);
+	D_MUTEX_LOCK(&dss_module_keys_lock);
 	for (i = 0; i < DAOS_MODULE_KEYS_NR; i++) {
 		if (dss_module_keys[i] == NULL) {
 			dss_module_keys[i] = key;
@@ -47,7 +47,7 @@ dss_register_key(struct dss_module_key *key)
 			break;
 		}
 	}
-	pthread_mutex_unlock(&dss_module_keys_lock);
+	D_MUTEX_UNLOCK(&dss_module_keys_lock);
 	D__ASSERT(i < DAOS_MODULE_KEYS_NR);
 }
 
@@ -58,9 +58,9 @@ dss_unregister_key(struct dss_module_key *key)
 		return;
 	D__ASSERT(key->dmk_index >= 0);
 	D__ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
-	pthread_mutex_lock(&dss_module_keys_lock);
+	D_MUTEX_LOCK(&dss_module_keys_lock);
 	dss_module_keys[key->dmk_index] = NULL;
-	pthread_mutex_unlock(&dss_module_keys_lock);
+	D_MUTEX_UNLOCK(&dss_module_keys_lock);
 }
 
 /**

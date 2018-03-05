@@ -63,7 +63,10 @@ tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
 
 	dsp->dsp_refcount = 1;
 	dsp->dsp_inflight = 0;
-	pthread_mutex_init(&dsp->dsp_lock, NULL);
+
+	rc = D_MUTEX_INIT(&dsp->dsp_lock, NULL);
+	if (rc != 0)
+		return rc;
 
 	if (comp_cb != NULL) {
 		rc = tse_sched_register_comp_cb(sched, comp_cb, udata);
@@ -151,9 +154,9 @@ tse_task_addref(tse_task_t *task)
 
 	D__ASSERT(dsp != NULL);
 
-	pthread_mutex_lock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 	tse_task_addref_locked(dtp);
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 }
 
 static inline void
@@ -180,9 +183,9 @@ tse_task_decref(tse_task_t *task)
 	bool			   zombie;
 
 	D__ASSERT(dsp != NULL);
-	pthread_mutex_lock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 	zombie = tse_task_decref_locked(dtp);
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 	if (!zombie)
 		return;
 
@@ -206,7 +209,7 @@ tse_sched_fini(tse_sched_t *sched)
 	D__ASSERT(d_list_empty(&dsp->dsp_init_list));
 	D__ASSERT(d_list_empty(&dsp->dsp_running_list));
 	D__ASSERT(d_list_empty(&dsp->dsp_complete_list));
-	pthread_mutex_destroy(&dsp->dsp_lock);
+	D_MUTEX_DESTROY(&dsp->dsp_lock);
 }
 
 static inline void
@@ -220,13 +223,13 @@ tse_sched_decref(struct tse_sched_private *dsp)
 {
 	bool	finalize;
 
-	pthread_mutex_lock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	D__ASSERT(dsp->dsp_refcount > 0);
 	dsp->dsp_refcount--;
 	finalize = dsp->dsp_refcount == 0;
 
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	if (finalize)
 		tse_sched_fini(tse_priv2sched(dsp));
@@ -246,9 +249,10 @@ tse_sched_register_comp_cb(tse_sched_t *sched,
 	dsc->dsc_comp_cb = comp_cb;
 	dsc->dsc_arg = arg;
 
-	pthread_mutex_lock(&dsp->dsp_lock);
-	d_list_add(&dsc->dsc_list, &dsp->dsp_comp_cb_list);
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+	d_list_add(&dsc->dsc_list,
+		      &dsp->dsp_comp_cb_list);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 	return 0;
 }
 
@@ -309,13 +313,13 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 
 	D__ASSERT(dtp->dtp_sched != NULL);
 
-	pthread_mutex_lock(&dtp->dtp_sched->dsp_lock);
+	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
 	if (is_comp)
 		d_list_add(&dtc->dtc_list, &dtp->dtp_comp_cb_list);
 	else /** MSC - don't see a need for more than 1 prep cb */
 		d_list_add_tail(&dtc->dtc_list, &dtp->dtp_prep_cb_list);
 
-	pthread_mutex_unlock(&dtp->dtp_sched->dsp_lock);
+	D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
 
 	return 0;
 }
@@ -436,14 +440,15 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 	int				processed = 0;
 
 	D_INIT_LIST_HEAD(&list);
-	pthread_mutex_lock(&dsp->dsp_lock);
-	d_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_init_list, dtp_list) {
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+	d_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_init_list,
+				      dtp_list) {
 		if (dtp->dtp_dep_cnt == 0 || dsp->dsp_cancelling) {
 			d_list_move_tail(&dtp->dtp_list, &list);
 			dsp->dsp_inflight++;
 		}
 	}
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	while (!d_list_empty(&list)) {
 		tse_task_t *task;
@@ -454,7 +459,7 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 
 		task = tse_priv2task(dtp);
 
-		pthread_mutex_lock(&dsp->dsp_lock);
+		D_MUTEX_LOCK(&dsp->dsp_lock);
 		if (dsp->dsp_cancelling) {
 			tse_task_complete_locked(dtp, dsp);
 		} else {
@@ -465,7 +470,7 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 			tse_task_addref_locked(dtp);
 			bumped = true;
 		}
-		pthread_mutex_unlock(&dsp->dsp_lock);
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 		if (!dsp->dsp_cancelling) {
 			/** if task is reinitialized in prep cb, skip over it */
@@ -504,7 +509,7 @@ tse_task_post_process(tse_task_t *task)
 		tse_priv2sched(dsp)->ds_result = task->dt_result;
 
 	/* Check dependent list */
-	pthread_mutex_lock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 	while (!d_list_empty(&dtp->dtp_dep_list)) {
 		struct tse_task_link	*tlink;
 		tse_task_t		*task_tmp;
@@ -550,9 +555,9 @@ tse_task_post_process(tse_task_t *task)
 
 				dtp_tmp->dtp_completing = 1;
 				/** release lock for CB */
-				pthread_mutex_unlock(&dsp->dsp_lock);
+				D_MUTEX_UNLOCK(&dsp->dsp_lock);
 				done = tse_task_complete_callback(task_tmp);
-				pthread_mutex_lock(&dsp->dsp_lock);
+				D_MUTEX_LOCK(&dsp->dsp_lock);
 
 				/*
 				 * task reinserted itself in scheduler by
@@ -575,7 +580,7 @@ tse_task_post_process(tse_task_t *task)
 
 	D__ASSERT(dsp->dsp_inflight > 0);
 	dsp->dsp_inflight--;
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	if (task->dt_result == 0)
 		task->dt_result = rc;
@@ -593,9 +598,9 @@ tse_sched_process_complete(struct tse_sched_private *dsp)
 
 	/* pick tasks from complete_list */
 	D_INIT_LIST_HEAD(&comp_list);
-	pthread_mutex_lock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 	d_list_splice_init(&dsp->dsp_complete_list, &comp_list);
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	d_list_for_each_entry_safe(dtp, tmp, &comp_list, dtp_list) {
 		tse_task_t *task = tse_priv2task(dtp);
@@ -615,10 +620,10 @@ tse_sched_check_complete(tse_sched_t *sched)
 	bool completed;
 
 	/* check if all tasks are done */
-	pthread_mutex_lock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 	completed = (d_list_empty(&dsp->dsp_init_list) &&
 		     dsp->dsp_inflight == 0);
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	return completed;
 }
@@ -656,10 +661,10 @@ tse_sched_progress(tse_sched_t *sched)
 	if (dsp->dsp_cancelling)
 		return;
 
-	pthread_mutex_lock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 	/** +1 for tse_sched_run() */
 	tse_sched_addref_locked(dsp);
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	if (!dsp->dsp_cancelling)
 		tse_sched_run(sched);
@@ -675,14 +680,15 @@ tse_sched_complete_inflight(struct tse_sched_private *dsp)
 	struct tse_task_private *tmp;
 	int			  processed = 0;
 
-	pthread_mutex_lock(&dsp->dsp_lock);
-	d_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_running_list, dtp_list)
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+	d_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_running_list,
+				      dtp_list)
 		if (dtp->dtp_dep_cnt == 0) {
 			d_list_del(&dtp->dtp_list);
 			tse_task_complete_locked(dtp, dsp);
 			processed++;
 		}
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	return processed;
 }
@@ -695,9 +701,9 @@ tse_sched_complete(tse_sched_t *sched, int ret, bool cancel)
 	if (sched->ds_result == 0)
 		sched->ds_result = ret;
 
-	pthread_mutex_lock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 	if (dsp->dsp_cancelling || dsp->dsp_completing) {
-		pthread_mutex_unlock(&dsp->dsp_lock);
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
 		return;
 	}
 
@@ -708,7 +714,7 @@ tse_sched_complete(tse_sched_t *sched, int ret, bool cancel)
 
 	/** +1 for tse_sched_run */
 	tse_sched_addref_locked(dsp);
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	/** Wait for all in-flight tasks */
 	while (1) {
@@ -742,7 +748,7 @@ tse_task_complete(tse_task_t *task, int ret)
 	/** Execute task completion callbacks first. */
 	done = tse_task_complete_callback(task);
 
-	pthread_mutex_lock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (!dsp->dsp_cancelling) {
 		/** +1 for tse_sched_run() */
@@ -756,7 +762,7 @@ tse_task_complete(tse_task_t *task, int ret)
 	} else {
 		tse_task_decref_locked(dtp);
 	}
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	/** update task in scheduler lists. */
 	if (!dsp->dsp_cancelling && done)
@@ -802,7 +808,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 
 	D__DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep_dtp, dtp);
 
-	pthread_mutex_lock(&dtp->dtp_sched->dsp_lock);
+	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
 
 	tse_task_addref_locked(dtp);
 	tlink->tl_task = task;
@@ -810,7 +816,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	d_list_add_tail(&tlink->tl_link, &dep_dtp->dtp_dep_list);
 	dtp->dtp_dep_cnt++;
 
-	pthread_mutex_unlock(&dtp->dtp_sched->dsp_lock);
+	D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
 
 	return 0;
 }
@@ -867,7 +873,7 @@ tse_task_schedule(tse_task_t *task, bool instant)
 	D_ASSERT(!instant || dtp->dtp_func);
 
 	/* Add task to scheduler */
-	pthread_mutex_lock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 	if (dtp->dtp_func == NULL || instant) {
 		/** If task has no body function, mark it as running */
 		dsp->dsp_inflight++;
@@ -882,7 +888,7 @@ tse_task_schedule(tse_task_t *task, bool instant)
 		d_list_add_tail(&dtp->dtp_list, &dsp->dsp_init_list);
 	}
 	tse_sched_addref_locked(dsp);
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	/* if caller wants to run the task instantly, call the task body
 	 * function now.
@@ -910,7 +916,7 @@ tse_task_reinit(tse_task_t *task)
 
 	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
 
-	pthread_mutex_lock(&dsp->dsp_lock);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (dsp->dsp_cancelling) {
 		D__ERROR("Scheduler is cancelling, can't re-insert task\n");
@@ -941,7 +947,7 @@ tse_task_reinit(tse_task_t *task)
 	/** Move back to init list */
 	d_list_move_tail(&dtp->dtp_list, &dsp->dsp_init_list);
 
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	/** cleanup result task list */
 	tse_task_ret_list_cleanup(task);
@@ -949,7 +955,7 @@ tse_task_reinit(tse_task_t *task)
 	return 0;
 
 err_unlock:
-	pthread_mutex_unlock(&dsp->dsp_lock);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 	return rc;
 }
 

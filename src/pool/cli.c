@@ -63,7 +63,7 @@ static void
 pool_free(struct dc_pool *pool)
 {
 	pthread_rwlock_destroy(&pool->dp_map_lock);
-	pthread_mutex_destroy(&pool->dp_client_lock);
+	D_MUTEX_DESTROY(&pool->dp_client_lock);
 	pthread_rwlock_destroy(&pool->dp_co_list_lock);
 	D__ASSERT(d_list_empty(&pool->dp_co_list));
 
@@ -113,6 +113,7 @@ static struct dc_pool *
 pool_alloc(void)
 {
 	struct dc_pool *pool;
+	int rc = 0;
 
 	/** allocate and fill in pool connection */
 	D__ALLOC_PTR(pool);
@@ -123,11 +124,20 @@ pool_alloc(void)
 
 	D_INIT_LIST_HEAD(&pool->dp_co_list);
 	pthread_rwlock_init(&pool->dp_co_list_lock, NULL);
-	pthread_mutex_init(&pool->dp_client_lock, NULL);
+	rc = D_MUTEX_INIT(&pool->dp_client_lock, NULL);
+	if (rc != 0)
+		goto failed;
 	pthread_rwlock_init(&pool->dp_map_lock, NULL);
 	pool->dp_ref = 1;
 
 	return pool;
+
+failed:
+	pthread_rwlock_destroy(&pool->dp_map_lock);
+	D_MUTEX_DESTROY(&pool->dp_client_lock);
+	pthread_rwlock_destroy(&pool->dp_co_list_lock);
+	D__FREE_PTR(pool);
+	return NULL;
 }
 
 static int
@@ -280,10 +290,10 @@ pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 {
 	int rc;
 
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rc = rsvc_client_complete_rpc(&pool->dp_client, ep, rc_crt, out->po_rc,
 				      &out->po_hint);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	if (rc == RSVC_CLIENT_RECHOOSE ||
 	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->po_rc))) {
 		task->dt_result = 0;
@@ -493,9 +503,9 @@ dc_pool_connect(tse_task_t *task)
 
 	/** Choose an endpoint and create an RPC. */
 	ep.ep_grp = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_CONNECT, &rpc);
 	if (rc != 0) {
 		D__ERROR("failed to create rpc: %d\n", rc);
@@ -636,9 +646,9 @@ dc_pool_disconnect(tse_task_t *task)
 	}
 
 	ep.ep_grp = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_DISCONNECT, &rpc);
 	if (rc != 0) {
 		D__ERROR("failed to create rpc: %d\n", rc);
@@ -774,15 +784,15 @@ dc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	if (rc != 0)
 		D__GOTO(out_pool, rc);
 
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	client_len = rsvc_client_encode(&pool->dp_client, NULL /* buf */);
 	D__ALLOC(client_buf, client_len);
 	if (client_buf == NULL) {
-		pthread_mutex_unlock(&pool->dp_client_lock);
+		D_MUTEX_UNLOCK(&pool->dp_client_lock);
 		D__GOTO(out_map_buf, rc = -DER_NOMEM);
 	}
 	rsvc_client_encode(&pool->dp_client, client_buf);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 
 	pb_nr = map_buf->pb_nr;
 	glob_buf_size = dc_pool_glob_buf_size(pb_nr, client_len);
@@ -1199,9 +1209,9 @@ dc_pool_query(tse_task_t *task)
 		args->tgts, args->info);
 
 	ep.ep_grp = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_QUERY, &rpc);
 	if (rc != 0) {
 		D__ERROR(DF_UUID": failed to create pool query rpc: %d\n",
@@ -1463,9 +1473,9 @@ dc_pool_svc_stop(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
 
 	ep.ep_grp = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
+	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_SVC_STOP, &rpc);
 	if (rc != 0) {
 		D__ERROR(DF_UUID": failed to create POOL_SVC_STOP RPC: %d\n",

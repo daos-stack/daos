@@ -417,17 +417,17 @@ do {								\
 		break;						\
 	}							\
 	D__ERROR("\tQuery should return 0 but not: %d\n", rc);	\
-	pthread_mutex_lock(&epc_data.epc_mutex);		\
+	D_MUTEX_LOCK(&epc_data.epc_mutex);		\
 	epc_data.epc_error = rc;				\
 	pthread_cond_broadcast(&epc_data.epc_cond);		\
-	pthread_mutex_unlock(&epc_data.epc_mutex);		\
+	D_MUTEX_UNLOCK(&epc_data.epc_mutex);		\
 } while (0)
 
 #define EQ_TEST_BARRIER(msg, out)				\
 do {								\
-	pthread_mutex_lock(&epc_data.epc_mutex);		\
+	D_MUTEX_LOCK(&epc_data.epc_mutex);		\
 	if (epc_data.epc_error != 0) {				\
-		pthread_mutex_unlock(&epc_data.epc_mutex);	\
+		D_MUTEX_UNLOCK(&epc_data.epc_mutex);	\
 		goto out;					\
 	}							\
 	epc_data.epc_barrier++;					\
@@ -440,16 +440,16 @@ do {								\
 		epc_data.epc_index++;				\
 	}							\
 	D__ERROR(msg);						\
-	pthread_mutex_unlock(&epc_data.epc_mutex);		\
+	D_MUTEX_UNLOCK(&epc_data.epc_mutex);		\
 } while (0)
 
 #define EQ_TEST_DONE(rc)					\
 do {								\
-	pthread_mutex_lock(&epc_data.epc_mutex);		\
+	D_MUTEX_LOCK(&epc_data.epc_mutex);		\
 	if (epc_data.epc_error == 0 && rc != 0)			\
 		epc_data.epc_error = rc;			\
 	pthread_cond_broadcast(&epc_data.epc_cond);		\
-	pthread_mutex_unlock(&epc_data.epc_mutex);		\
+	D_MUTEX_UNLOCK(&epc_data.epc_mutex);		\
 } while (0)
 
 #define EQ_TEST_CHECK_SLEEP(name, then, intv, rc, out)		\
@@ -559,7 +559,9 @@ eq_test_4()
 	}
 
 	pthread_cond_init(&epc_data.epc_cond, NULL);
-	pthread_mutex_init(&epc_data.epc_mutex, NULL);
+	rc = D_MUTEX_INIT(&epc_data.epc_mutex, NULL);
+	if (rc != 0)
+		goto out;
 
 	rc = pthread_create(&thread, NULL, eq_test_consumer, NULL);
 	if (rc != 0)
@@ -627,7 +629,7 @@ out:
 	EQ_TEST_DONE(rc);
 	DAOS_TEST_EXIT(rc);
 
-	pthread_mutex_destroy(&epc_data.epc_mutex);
+	D_MUTEX_DESTROY(&epc_data.epc_mutex);
 	pthread_cond_destroy(&epc_data.epc_cond);
 
 	for (i = 0; i < EQT_EV_COUNT * 3; i++) {

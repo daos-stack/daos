@@ -109,7 +109,7 @@ daos_init(void)
 {
 	int rc;
 
-	pthread_mutex_lock(&module_lock);
+	D_MUTEX_LOCK(&module_lock);
 	if (module_initialized)
 		D__GOTO(unlock, rc = -DER_ALREADY);
 
@@ -164,7 +164,7 @@ out_eq:
 out_debug:
 	daos_debug_fini();
 unlock:
-	pthread_mutex_unlock(&module_lock);
+	D_MUTEX_UNLOCK(&module_lock);
 	return rc;
 }
 
@@ -176,7 +176,7 @@ daos_fini(void)
 {
 	int	rc;
 
-	pthread_mutex_lock(&module_lock);
+	D_MUTEX_LOCK(&module_lock);
 	if (!module_initialized)
 		D__GOTO(unlock, rc = -DER_UNINIT);
 
@@ -195,6 +195,6 @@ daos_fini(void)
 	daos_debug_fini();
 	module_initialized = false;
 unlock:
-	pthread_mutex_unlock(&module_lock);
+	D_MUTEX_UNLOCK(&module_lock);
 	return rc;
 }
