@@ -88,6 +88,10 @@ On CentOS and openSuSE:
     $ yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
     $ yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
     $ yum install -y doxygen pandoc flex patch nasm yasm
+    # Additionally required SPDK packages
+    $ yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
+    $ yum install -y python clang-analyzer sg3_utils libiscsi-devel
+    $ yum install -y libibverbs-devel numactl-devel doxygen mscgen graphviz
 
 On Ubuntu and Debian:
 
@@ -95,6 +99,9 @@ On Ubuntu and Debian:
     $ apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
     $ apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
     $ apt-get install -y curl doxygen pandoc flex patch nasm yasm
+    # Additionally required SPDK packages
+    $ apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
+    $ apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen
 
 Moreover, please make sure all the auto tools listed below are at the appropriate versions.
 
@@ -187,6 +194,7 @@ Installing the components into seperate directories allow to upgrade the compone
     OMPI=${daos_prefix_path}/opt/ompi
     OPA=${daos_prefix_path}/opt/openpa
     PMIX=${daos_prefix_path}/opt/pmix
+    SPDK=${daos_prefix_path}/opt/spdk
 
     PATH=$CART/bin/:$OMPI/bin/:${daos_prefix_path}/bin/:$PATH
 

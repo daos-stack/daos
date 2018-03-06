@@ -20,6 +20,19 @@ def is_platform_arm():
         return True
     return False
 
+def preload_prereqs(prereqs):
+    """Preload prereqs specific to platform"""
+    prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
+    prereqs.define('readline', libs=['readline', 'history'],
+                   package='readline')
+    components = os.path.join(Dir('#').abspath, 'scons_local', 'components.py')
+    reqs = ['ompi', 'cart', 'argobots', 'pmdk', 'cmocka',
+            'uuid', 'crypto']
+    if not is_platform_arm():
+        reqs.extend(['spdk'])
+    prereqs.preload(components, prebuild=reqs)
+    return prereqs
+
 def scons():
     """Execute build"""
     BUILD_TARGETS.append('fixtest')
@@ -41,13 +54,7 @@ def scons():
         commits_file = None
 
     prereqs = PreReqComponent(env, opts, commits_file)
-    prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
-    prereqs.define('readline', libs=['readline', 'history'],
-                   package='readline')
-    prereqs.preload(os.path.join(Dir('#').abspath, 'scons_local',
-                                 'components.py'),
-                    prebuild=['ompi', 'cart', 'argobots', 'pmdk', 'cmocka',
-                              'uuid', 'crypto'])
+    prereqs = preload_prereqs(prereqs)
     opts.Save(opts_file, env)
 
     # Define this now, and then the individual components can import this

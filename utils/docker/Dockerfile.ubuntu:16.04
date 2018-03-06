@@ -23,6 +23,8 @@ RUN apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
 RUN apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
 RUN apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
 RUN apt-get install -y curl doxygen pandoc flex patch nasm yasm
+RUN apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
+RUN apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen
 
 # Dependencies
 
