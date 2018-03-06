@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,7 +78,6 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
- * The open handle will be invalidated after the destroy.
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]	Pool UUID

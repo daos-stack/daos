@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -212,6 +212,13 @@ btr_context_set_depth(struct btr_context *tcx, unsigned int depth)
 	tcx->tc_trace = &tcx->tc_traces[BTR_TRACE_MAX - depth];
 }
 
+static inline btr_ops_t *
+btr_ops(struct btr_context *tcx)
+{
+	return tcx->tc_tins.ti_ops;
+}
+
+
 /**
  * Create a btree context (in volatile memory).
  *
@@ -247,6 +254,18 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 
 	root = tcx->tc_tins.ti_root;
 	if (root == NULL || root->tr_class == 0) { /* tree creation */
+		if (!(tree_feats & BTR_FEAT_UINT_KEY) &&
+		    (btr_ops(tcx)->to_hkey_gen == NULL ||
+		     btr_ops(tcx)->to_hkey_size == NULL)) {
+			/* If no hkey callbacks are supplied, only integer
+			 * keys are supported.  Rather than flagging an error
+			 * just set the flag.
+			 */
+			D__DEBUG(DB_TRACE, "Setting BTR_FEAT_UINT_KEY required"
+				 " by tree class %d", tree_class);
+			tree_feats |= BTR_FEAT_UINT_KEY;
+		}
+
 		tcx->tc_class	= tree_class;
 		tcx->tc_feats	= tree_feats;
 		tcx->tc_order	= tree_order;
@@ -335,17 +354,15 @@ do {									\
 /**
  * Wrapper for customized tree functions
  */
-
-static inline btr_ops_t *
-btr_ops(struct btr_context *tcx)
-{
-	return tcx->tc_tins.ti_ops;
-}
-
 static int
 btr_hkey_size(struct btr_context *tcx)
 {
-	int size = btr_ops(tcx)->to_hkey_size(&tcx->tc_tins);
+	int size;
+
+	if (tcx->tc_feats & BTR_FEAT_UINT_KEY)
+		return sizeof(uint64_t);
+
+	size = btr_ops(tcx)->to_hkey_size(&tcx->tc_tins);
 
 	D__ASSERT(size <= DAOS_HKEY_MAX);
 	return size;
@@ -354,7 +371,18 @@ btr_hkey_size(struct btr_context *tcx)
 static void
 btr_hkey_gen(struct btr_context *tcx, daos_iov_t *key, void *hkey)
 {
-	return btr_ops(tcx)->to_hkey_gen(&tcx->tc_tins, key, hkey);
+	if (tcx->tc_feats & BTR_FEAT_UINT_KEY) {
+		/* Use key directory as unsigned integer in lieu of hkey */
+		D__ASSERT(key->iov_len <= sizeof(uint64_t));
+		/* NB: This works for little endian architectures.  An
+		 * alternative would be explicit casting based on iov_len but
+		 * this is a little nicer to read.
+		 */
+		*(uint64_t *)hkey = 0;
+		memcpy(hkey, key->iov_buf, key->iov_len);
+		return;
+	}
+	btr_ops(tcx)->to_hkey_gen(&tcx->tc_tins, key, hkey);
 }
 
 static void
@@ -366,6 +394,12 @@ btr_hkey_copy(struct btr_context *tcx, char *dst_key, char *src_key)
 static int
 btr_hkey_cmp(struct btr_context *tcx, struct btr_record *rec, void *hkey)
 {
+	if (tcx->tc_feats & BTR_FEAT_UINT_KEY) {
+		uint64_t a = rec->rec_ukey[0];
+		uint64_t b = *(uint64_t *)hkey;
+
+		return (a < b) ? -1 : (a > b) ? 1 : 0;
+	}
 	if (btr_ops(tcx)->to_hkey_cmp)
 		return btr_ops(tcx)->to_hkey_cmp(&tcx->tc_tins, rec, hkey);
 	else
@@ -1107,11 +1141,14 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 	D__ASSERT(level == tcx->tc_depth - 1);
 	D__ASSERT(!TMMID_IS_NULL(nd_mmid));
 
-	if (cmp == 0 && key != NULL) {
-		rec = btr_node_rec_at(tcx, nd_mmid, at);
-		cmp = btr_key_cmp(tcx, rec, key);
-		if (cmp != 0)
-			D__ERROR("Hash collision is not well handled\n");
+	if (!(tcx->tc_feats & BTR_FEAT_UINT_KEY)) {
+
+		if (cmp == 0 && key != NULL) {
+			rec = btr_node_rec_at(tcx, nd_mmid, at);
+			cmp = btr_key_cmp(tcx, rec, key);
+			if (cmp != 0)
+				D__ERROR("Hash collision is poorly handled\n");
+		}
 	}
 
 	if (opc == BTR_PROBE_UPDATE)
@@ -3107,8 +3144,10 @@ dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 
 	/* These are mandatory functions */
 	D__ASSERT(ops != NULL);
-	D__ASSERT(ops->to_hkey_gen != NULL);
-	D__ASSERT(ops->to_hkey_size != NULL);
+	if (!(tree_feats & BTR_FEAT_UINT_KEY)) {
+		D__ASSERT(ops->to_hkey_gen != NULL);
+		D__ASSERT(ops->to_hkey_size != NULL);
+	}
 	D__ASSERT(ops->to_rec_fetch != NULL);
 	D__ASSERT(ops->to_rec_alloc != NULL);
 	D__ASSERT(ops->to_rec_free != NULL);

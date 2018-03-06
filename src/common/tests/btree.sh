@@ -19,14 +19,39 @@ if [ "x$BACKWARD" == "xyes" ]; then
 	IDIR="b"
 fi
 
+PERF=""
+UINT=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+    perf)
+        shift
+        PERF="on"
+        ;;
+    ukey)
+        shift
+        UINT="+"
+        ;;
+    *)
+        cat << EOF
+Unknown option $# $1
+Usage: btree.sh [OPTIONS]
+    Options:
+        ukey    Use integer keys
+        perf    Run performance tests
+EOF
+        exit 1
+        ;;
+    esac
+done
+
 KEYS=${KEYS:-"3,6,5,7,2,1,4"}
 RECORDS=${RECORDS:-"7:loaded,3:that,5:dice,2:knows,4:the,6:are,1:Everybody"}
 
-if [[ $1 != "perf" ]]; then
+if [ -z ${PERF} ]; then
 
     echo "B+tree functional test..."
     DAOS_DEBUG=$DDEBUG			\
-    $BTR	-C ${IPL}o:$ORDER		\
+    $BTR	-C ${UINT}${IPL}o:$ORDER		\
 	-c				\
 	-o				\
 	-u $RECORDS			\
@@ -44,20 +69,20 @@ if [[ $1 != "perf" ]]; then
 	-D
 
     echo "B+tree batch operations test..."
-    $BTR	-C ${IPL}o:$ORDER		\
+    $BTR	-C ${UINT}${IPL}o:$ORDER		\
 	-c				\
 	-o				\
 	-b $BAT_NUM			\
 	-D
 else
     echo "B+tree performance test..."
-    $BTR	-C ${IPL}o:$ORDER		\
+    $BTR	-C ${UINT}${IPL}o:$ORDER		\
 	-p $BAT_NUM			\
 	-D
 
     echo "B+tree performance test using pmemobj"
     $BTR    -m                      \
-	-C ${IPL}o:$ORDER   \
+	-C ${UINT}${IPL}o:$ORDER   \
 	-p $BAT_NUM             \
 	-D
 fi

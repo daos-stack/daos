@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,8 +64,14 @@ struct btr_record {
 	 * Fix-size key can be stored in if it is small enough (DAOS_HKEY_MAX),
 	 * or hashed key for variable-length/large key. In the later case,
 	 * the hashed key can be used for efficient comparison.
+	 *
+	 * When BTR_FEAT_UINT_KEY is set, no key callbacks are used for
+	 * comparisons.
 	 */
-	char			rec_hkey[0];
+	union {
+		char			rec_hkey[0]; /* hashed key */
+		uint64_t		rec_ukey[0]; /* uint key */
+	};
 };
 
 /**
@@ -398,9 +404,9 @@ typedef enum {
 	BTR_PROBE_LAST		= 2,
 	/** probe the record whose key equals to the provide key */
 	BTR_PROBE_EQ		= 0x100,
-	/** probe the record whose key is great/equal to the provide key */
+	/** probe the record whose key is great/equal to the provided key */
 	BTR_PROBE_GE		= BTR_PROBE_EQ | 1,
-	/** probe the record whose key is little/equal to the provide key */
+	/** probe the record whose key is less/equal to the provided key */
 	BTR_PROBE_LE		= BTR_PROBE_EQ | 2,
 	/**
 	 * private probe opcodes, don't pass them into APIs
@@ -408,6 +414,11 @@ typedef enum {
 	/** probe the record for update */
 	BTR_PROBE_UPDATE	= BTR_PROBE_EQ | 3,
 } dbtree_probe_opc_t;
+
+enum btr_feats {
+	/** Key is an unsigned integer.  Implies no hash or key callbacks */
+	BTR_FEAT_UINT_KEY		= (1 << 0),
+};
 
 int  dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 			   btr_ops_t *ops);

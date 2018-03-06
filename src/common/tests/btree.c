@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -259,8 +259,9 @@ static daos_handle_t		ik_toh;
 static int
 ik_btr_open_create(bool create, char *args)
 {
-	bool	inplace = false;
-	int	rc;
+	bool		inplace = false;
+	uint64_t	feats = 0;
+	int		rc;
 
 	if (!daos_handle_is_inval(ik_toh)) {
 		D__ERROR("Tree has been opened\n");
@@ -268,6 +269,10 @@ ik_btr_open_create(bool create, char *args)
 	}
 
 	if (create && args != NULL) {
+		if (args[0] == '+') {
+			feats = BTR_FEAT_UINT_KEY;
+			args += 1;
+		}
 		if (args[0] == 'i') { /* inplace create/open */
 			inplace = true;
 			if (args[1] != IK_SEP) {
@@ -287,7 +292,6 @@ ik_btr_open_create(bool create, char *args)
 			D__ERROR("Invalid tree order %d\n", ik_order);
 			return -1;
 		}
-
 	} else if (!create) {
 		inplace = (ik_root.tr_class != 0);
 		if (TMMID_IS_NULL(ik_root_mmid) && !inplace) {
@@ -297,14 +301,15 @@ ik_btr_open_create(bool create, char *args)
 	}
 
 	if (create) {
-		D__PRINT("Create btree with order %d%s\n",
-			ik_order, inplace ? " inplace" : "");
+		D__PRINT("Create btree with order %d%s feats "DF_X64"\n",
+			ik_order, inplace ? " inplace" : "", feats);
 		if (inplace) {
-			rc = dbtree_create_inplace(IK_TREE_CLASS, 0, ik_order,
-						   &ik_uma, &ik_root, &ik_toh);
+			rc = dbtree_create_inplace(IK_TREE_CLASS, feats,
+						   ik_order, &ik_uma, &ik_root,
+						   &ik_toh);
 		} else {
-			rc = dbtree_create(IK_TREE_CLASS, 0, ik_order, &ik_uma,
-					   &ik_root_mmid, &ik_toh);
+			rc = dbtree_create(IK_TREE_CLASS, feats, ik_order,
+					   &ik_uma, &ik_root_mmid, &ik_toh);
 		}
 	} else {
 		D__PRINT("Open btree%s\n", inplace ? " inplace" : "");
@@ -424,6 +429,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 		if (opc == BTR_OPC_UPDATE) {
 			val = strchr(str, IK_SEP_VAL);
 			if (val == NULL) {
+				D__PRINT("Failed with %d\n", rc);
 				D__ERROR("Invalid parameters %s\n", str);
 				return -1;
 			}
@@ -837,7 +843,7 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
-	rc = dbtree_class_register(IK_TREE_CLASS, 0, &ik_ops);
+	rc = dbtree_class_register(IK_TREE_CLASS, BTR_FEAT_UINT_KEY, &ik_ops);
 	D__ASSERT(rc == 0);
 
 	optind = 0;

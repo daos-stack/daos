@@ -5,16 +5,16 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    daos_build.program(denv, 'btree', 'btree.c',
-                       LIBS=['daos_common', 'gurt', 'cart', 'pmemobj'])
-    daos_build.program(denv, 'other', 'other.c',
-                       LIBS=['daos_common', 'gurt', 'cart'])
-    daos_build.program(denv, 'lru', 'lru.c',
-                       LIBS=['daos_common', 'gurt', 'cart'])
-    daos_build.program(denv, 'sched', 'sched.c',
-                       LIBS=['daos_common', 'gurt', 'cart'])
-    daos_build.program(denv, 'abt_perf', 'abt_perf.c',
-                       LIBS=['daos_common', 'gurt', 'abt'])
+    daos_build.test(denv, 'btree', 'btree.c',
+                    LIBS=['daos_common', 'gurt', 'cart', 'pmemobj'])
+    daos_build.test(denv, 'other', 'other.c',
+                    LIBS=['daos_common', 'gurt', 'cart'])
+    daos_build.test(denv, 'lru', 'lru.c',
+                    LIBS=['daos_common', 'gurt', 'cart'])
+    daos_build.test(denv, 'sched', 'sched.c',
+                    LIBS=['daos_common', 'gurt', 'cart'])
+    daos_build.test(denv, 'abt_perf', 'abt_perf.c',
+                    LIBS=['daos_common', 'gurt', 'abt'])
 
 if __name__ == "SCons.Script":
     scons()
