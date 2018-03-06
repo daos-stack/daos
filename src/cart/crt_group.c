@@ -2622,7 +2622,7 @@ crt_grp_lc_mark_evicted(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	int				 rc = 0;
 
 	D_ASSERT(grp_priv != NULL);
-	D_ASSERT(rank >= 0 && rank < grp_priv->gp_size);
+	D_ASSERT(rank < grp_priv->gp_size);
 
 	for (ctx_idx = 0; ctx_idx < CRT_SRV_CONTEXT_NUM; ctx_idx++) {
 		htable = grp_priv->gp_lookup_cache[ctx_idx];

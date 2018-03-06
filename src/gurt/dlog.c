@@ -477,7 +477,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
  */
 int d_log_str2pri(const char *pstr)
 {
-	char ptmp[11];
+	char ptmp[11] = {0};
 	int lcv;
 
 	/* make sure we have a valid input */
@@ -485,7 +485,8 @@ int d_log_str2pri(const char *pstr)
 		printf("wrong size! ");
 		return -1;
 	}
-	strncpy(ptmp, pstr, 11);  /* because we may overwrite parts of it */
+
+	strncpy(ptmp, pstr, 10);  /* because we may overwrite parts of it */
 	/*
 	 * handle some quirks
 	 */
@@ -725,8 +726,8 @@ int d_log_setlogmask(int facility, int mask)
 int d_log_setmasks(char *mstr, int mlen0)
 {
 	char *m, *current, *fac, *pri, pbuf[8];
-	int mlen, facno, clen, elen, prilen, prino, rv, tmp;
-	unsigned int faclen;
+	int mlen, facno, clen, elen, prino, rv, tmp;
+	unsigned int faclen, prilen;
 	/* not open? */
 	if (!d_log_xst.tag)
 		return -1;

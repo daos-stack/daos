@@ -97,8 +97,7 @@ static void data_init(void)
 			credits);
 	}
 	crt_gdata.cg_credit_ep_ctx = credits;
-	D_ASSERT(crt_gdata.cg_credit_ep_ctx >= 0 &&
-		 crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
+	D_ASSERT(crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
 
 	gdata_init_flag = 1;
 }

@@ -772,10 +772,6 @@ lm_sample_rpc_cb(const struct crt_cb_info *cb_info)
 		D_RWLOCK_WRLOCK(&lm_grp_priv->lgp_rwlock);
 		lm_grp_priv->lgp_lm_ver++;
 		D_RWLOCK_UNLOCK(&lm_grp_priv->lgp_rwlock);
-		if (rc != 0) {
-			D_ERROR("d_rank_list_del() failed, rc: %d.\n", rc);
-			D_GOTO(out, rc);
-		}
 	}
 
 	lm_sample_flag_unmark(lm_grp_priv, rpc_req->cr_ep.ep_rank);

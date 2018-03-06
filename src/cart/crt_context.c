@@ -203,6 +203,7 @@ crt_context_create(crt_context_t *crt_ctx)
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, crt_gdata.cg_ctx_num);
 	if (rc != 0) {
 		D_ERROR("crt_hg_ctx_init failed rc: %d.\n", rc);
+		crt_context_destroy(ctx, true);
 		D_FREE_PTR(ctx);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc);

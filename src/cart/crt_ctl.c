@@ -93,9 +93,9 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
 		str_size = CRT_ADDR_STR_MAX_LEN;
 
-		pthread_mutex_lock(&ctx->cc_mutex);
+		D_MUTEX_LOCK(&ctx->cc_mutex);
 		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla, NULL, &str_size);
-		pthread_mutex_unlock(&ctx->cc_mutex);
+		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 		if (rc != 0) {
 			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 			D_ERROR("context (idx %d), crt_hg_get_addr failed rc: "
