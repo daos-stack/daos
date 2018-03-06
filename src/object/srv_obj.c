@@ -50,26 +50,26 @@ obj_tls_get()
  * After bulk finish, let's send reply, then release the resource.
  */
 static void
-ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
-		   uint32_t map_version, uuid_t cookie)
+ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
+		   daos_handle_t ioh, int status, uint32_t map_version)
 {
-	int	rc;
+	struct obj_rw_in	*orwi;
+	struct obj_rw_out	*orwo;
+	int			rc;
+
+	orwi = crt_req_get(rpc);
+	orwo = crt_reply_get(rpc);
 
 	if (!daos_handle_is_inval(ioh)) {
-		struct obj_rw_in *orwi;
-
-		orwi = crt_req_get(rpc);
-		D_ASSERT(orwi != NULL);
-
 		if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE) {
-			rc = vos_obj_zc_update_end(ioh, cookie, map_version,
+			rc = vos_obj_zc_update_end(ioh, cont_hdl->sch_uuid,
+						   map_version,
 						   &orwi->orw_dkey,
 						   orwi->orw_nr,
 						   orwi->orw_iods.ca_arrays,
 						   status);
 
 		} else {
-			D_ASSERT(opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH);
 			rc = vos_obj_zc_fetch_end(ioh, &orwi->orw_dkey,
 						  orwi->orw_nr,
 						  orwi->orw_iods.ca_arrays,
@@ -85,6 +85,17 @@ ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 		}
 	}
 
+	if (cont_hdl != NULL && cont_hdl->sch_cont != NULL) {
+		rc = vos_oi_get_attr(cont_hdl->sch_cont->sc_hdl, orwi->orw_oid,
+				     orwi->orw_epoch, &orwo->orw_attr);
+		if (rc) {
+			D_ERROR(DF_UOID" can not get status: rc %d\n",
+				DP_UOID(orwi->orw_oid), rc);
+			if (status == 0)
+				status = rc;
+		}
+	}
+
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
 
@@ -93,11 +104,6 @@ ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 		D_ERROR("send reply failed: %d\n", rc);
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
-		struct obj_rw_out *orwo;
-
-		orwo = crt_reply_get(rpc);
-		D_ASSERT(orwo != NULL);
-
 		if (orwo->orw_sizes.ca_arrays != NULL) {
 			D_FREE(orwo->orw_sizes.ca_arrays);
 			orwo->orw_sizes.ca_count = 0;
@@ -463,6 +469,11 @@ ds_obj_rw_inline(crt_rpc_t *rpc, struct ds_cont *cont, uuid_t cookie,
 		if (rc != 0)
 			D_GOTO(out, rc);
 
+		rc = vos_oi_get_attr(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
+				     &orwo->orw_attr);
+		if (rc)
+			D_GOTO(out, rc);
+
 		orwo->orw_sgls.ca_arrays = sgls;
 		orwo->orw_sgls.ca_count = orw->orw_sgls.ca_count;
 		rc = ds_obj_update_sizes_in_reply(rpc);
@@ -709,8 +720,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	rc = ds_bulk_transfer(rpc, bulk_op, orw->orw_bulks.ca_arrays,
 			      ioh, NULL, orw->orw_nr);
 out:
-	ds_obj_rw_complete(rpc, ioh, rc, map_version,
-			   cont_hdl ? cont_hdl->sch_uuid : NULL);
+	ds_obj_rw_complete(rpc, cont_hdl, ioh, rc, map_version);
 	if (cont_hdl) {
 		if (!cont_hdl->sch_cont)
 			ds_cont_put(cont); /* -1 for rebuild container */

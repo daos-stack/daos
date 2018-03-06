@@ -138,6 +138,7 @@ struct obj_rw_args {
 	crt_rpc_t	*rpc;
 	daos_handle_t	*hdlp;
 	daos_sg_list_t	*rwaa_sgls;
+	struct dc_obj_shard	*dobj;
 	unsigned int	*map_ver;
 	uint32_t	 rwaa_nr;
 };
@@ -145,8 +146,9 @@ struct obj_rw_args {
 static int
 dc_rw_cb(tse_task_t *task, void *arg)
 {
-	struct obj_rw_args     *rw_args = (struct obj_rw_args *)arg;
-	struct obj_rw_in       *orw;
+	struct obj_rw_args	*rw_args = (struct obj_rw_args *)arg;
+	struct obj_rw_in	*orw;
+	struct obj_rw_out	*orwo;
 	int			opc;
 	int                     ret = task->dt_result;
 	int			rc = 0;
@@ -188,13 +190,13 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 	*rw_args->map_ver = obj_reply_map_version_get(rw_args->rpc);
 
+	orwo = crt_reply_get(rw_args->rpc);
+	rw_args->dobj->do_md.smd_attr = orwo->orw_attr;
 	if (opc_get(rw_args->rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
-		struct obj_rw_out *orwo;
 		daos_iod_t	*iods;
 		uint64_t	*sizes;
 		int		 i;
 
-		orwo = crt_reply_get(rw_args->rpc);
 		iods = orw->orw_iods.ca_arrays;
 		sizes = orwo->orw_sizes.ca_arrays;
 
@@ -237,6 +239,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 out:
 	obj_shard_rw_bulk_fini(rw_args->rpc);
 	crt_req_decref(rw_args->rpc);
+	obj_shard_decref(rw_args->dobj);
 	dc_pool_put((struct dc_pool *)rw_args->hdlp);
 
 	if (ret == 0 || obj_retry_error(rc))
@@ -413,16 +416,12 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	obj_shard_addref(shard);
 	rc = dc_cont_hdl2uuid(shard->do_co_hdl, &cont_hdl_uuid, &cont_uuid);
-	if (rc != 0) {
-		obj_shard_decref(shard);
-		D_GOTO(out_task, rc);
-	}
+	if (rc != 0)
+		D_GOTO(out_obj, rc);
 
 	pool = obj_shard_ptr2pool(shard);
-	if (pool == NULL) {
-		obj_shard_decref(shard);
-		D_GOTO(out_task, rc);
-	}
+	if (pool == NULL)
+		D_GOTO(out_obj, rc);
 
 	tgt_ep.ep_grp = pool->dp_group;
 	tgt_ep.ep_rank = shard->do_rank;
@@ -432,10 +431,8 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
 		(char *)dkey->iov_buf, tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
-	if (rc != 0) {
-		obj_shard_decref(shard);
+	if (rc != 0)
 		D_GOTO(out_pool, rc);
-	}
 
 	orw = crt_req_get(req);
 	D_ASSERT(orw != NULL);
@@ -445,7 +442,6 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(orw->orw_co_hdl, cont_hdl_uuid);
 	uuid_copy(orw->orw_co_uuid, cont_uuid);
 
-	obj_shard_decref(shard);
 	orw->orw_epoch = epoch;
 	orw->orw_nr = nr;
 	/** FIXME: large dkey should be transferred via bulk */
@@ -487,6 +483,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	rw_args.rpc = req;
 	rw_args.hdlp = (daos_handle_t *)pool;
 	rw_args.map_ver = map_ver;
+	rw_args.dobj = shard;
 
 	if (opc == DAOS_OBJ_RPC_FETCH) {
 		/* remember the sgl to copyout the data inline for fetch */
@@ -524,6 +521,8 @@ out_req:
 	crt_req_decref(req);
 out_pool:
 	dc_pool_put(pool);
+out_obj:
+	obj_shard_decref(shard);
 out_task:
 	tse_task_complete(task, rc);
 	return rc;

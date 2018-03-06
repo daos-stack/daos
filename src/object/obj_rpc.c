@@ -46,6 +46,7 @@ static struct crt_msg_field *obj_rw_in_fields[] = {
 static struct crt_msg_field *obj_rw_out_fields[] = {
 	&CMF_INT,	/* status */
 	&CMF_UINT32,	/* map version */
+	&CMF_UINT64,	/* object attribute */
 	&DMF_REC_SIZE_ARRAY, /* actual size of records */
 	&DMF_NR_ARRAY, /* array of sgl nr */
 	&DMF_SGL_ARRAY, /* return buffer */

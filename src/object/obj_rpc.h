@@ -73,6 +73,7 @@ struct obj_rw_in {
 struct obj_rw_out {
 	int32_t			orw_ret;
 	uint32_t		orw_map_version;
+	uint64_t		orw_attr;
 	struct crt_array	orw_sizes;
 	struct crt_array	orw_nrs;
 	struct crt_array	orw_sgls;

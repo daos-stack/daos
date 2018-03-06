@@ -43,6 +43,7 @@ struct daos_obj_md {
 struct daos_obj_shard_md {
 	/** ID of the object shard */
 	daos_unit_oid_t		smd_id;
+	uint64_t		smd_attr;
 	uint32_t		smd_po_ver;
 	uint32_t		smd_padding;
 };

@@ -57,6 +57,8 @@ extern bool	srv_bypass_bulk;
 struct dc_obj_shard {
 	/** rank of the target this object belongs to */
 	d_rank_t		do_rank;
+	/* Metadata for this shard */
+	struct daos_obj_shard_md do_md;
 	/** refcount */
 	unsigned int		do_ref;
 	/** number of partitions on the remote target */
