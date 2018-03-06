@@ -194,7 +194,7 @@ rebuild_rec(struct rebuild_tgt_pool_tracker *rpt, struct ds_cont *ds_cont,
 	for (i = 0; i < num; i++) {
 		/* check if the record needs to be rebuilt.*/
 		if (versions[i] >= rpt->rt_rebuild_ver) {
-			D__DEBUG(DB_REBUILD, "i %d rec ver %d rebuild ver %d "
+			D_DEBUG(DB_REBUILD, "i %d rec ver %d rebuild ver %d "
 				"does not needs to be rebuilt\n",
 				i, versions[i], rpt->rt_rebuild_ver);
 			if (cnt == 0)
@@ -239,8 +239,8 @@ next:
 			total += cnt;
 	}
 
-	D__DEBUG(DB_REBUILD, "rebuild "DF_UOID" ver %d dkey %.*s akey"
-		" %.*s rc %d total %d tag %d\n", DP_UOID(rdkey->rd_oid),
+	D_DEBUG(DB_REBUILD, "rebuild "DF_UOID" ver %d dkey %.*s akey %.*s rc %d"
+		" total %d tag %d\n", DP_UOID(rdkey->rd_oid),
 		rpt->rt_rebuild_ver, (int)rdkey->rd_dkey.iov_len,
 		(char *)rdkey->rd_dkey.iov_buf, (int)akey->iov_len,
 		(char *)akey->iov_buf, rc, total,
@@ -364,7 +364,7 @@ rebuild_one_dkey(struct rebuild_tgt_pool_tracker *rpt,
 		if (rc)
 			break;
 
-		D__DEBUG(DB_REBUILD, ""DF_UOID" list akey %d for dkey %.*s\n",
+		D_DEBUG(DB_REBUILD, ""DF_UOID" list akey %d for dkey %.*s\n",
 			DP_UOID(rdkey->rd_oid), akey_num,
 			(int)rdkey->rd_dkey.iov_len,
 			(char *)rdkey->rd_dkey.iov_buf);
@@ -437,8 +437,8 @@ rebuild_dkey_ult(void *arg)
 			d_list_del(&rdkey->rd_list);
 			if (!rpt->rt_abort) {
 				rc = rebuild_one_dkey(rpt, rdkey);
-				D__DEBUG(DB_REBUILD, DF_UOID" rebuild dkey %.*s"
-					" rc %d tag %d\n",
+				D_DEBUG(DB_REBUILD, DF_UOID" rebuild dkey %.*s "
+					"rc %d tag %d\n",
 					DP_UOID(rdkey->rd_oid),
 					(int)rdkey->rd_dkey.iov_len,
 					(char *)rdkey->rd_dkey.iov_buf, rc,
@@ -506,7 +506,7 @@ rebuild_dkey_queue(daos_unit_oid_t oid, daos_epoch_t epoch,
 		 * rebuild finish in rebuild_fini().
 		 */
 		D__ASSERT(puller->rp_ult_running == 0);
-		D__DEBUG(DB_REBUILD, "create rebuild dkey ult %d\n", idx);
+		D_DEBUG(DB_REBUILD, "create rebuild dkey ult %d\n", idx);
 		rc = dss_ult_create(rebuild_dkey_ult, rpt, idx,
 				    &puller->rp_ult);
 		if (rc)
@@ -569,7 +569,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	if (rc)
 		D__GOTO(free, rc);
 
-	D__DEBUG(DB_REBUILD, "start rebuild obj "DF_UOID" for shard %u\n",
+	D_DEBUG(DB_REBUILD, "start rebuild obj "DF_UOID" for shard %u\n",
 		DP_UOID(oid), shard);
 	memset(&hash_out, 0, sizeof(hash_out));
 	dc_obj_shard2anchor(&hash_out, shard);
@@ -594,7 +594,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 		if (num == 0)
 			continue;
 
-		D__DEBUG(DB_REBUILD, "rebuild list dkey %d\n", num);
+		D_DEBUG(DB_REBUILD, "rebuild list dkey %d\n", num);
 		for (ptr = dkey_iov.iov_buf, i = 0;
 		     i < num; ptr += kds[i].kd_key_len, i++) {
 			daos_key_t dkey;
@@ -613,7 +613,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 free:
 	if (dkey_iov.iov_buf != NULL)
 		D__FREE(dkey_iov.iov_buf, dkey_buf_size);
-	D__DEBUG(DB_REBUILD, "stop rebuild obj "DF_UOID" for shard %u rc %d\n",
+	D_DEBUG(DB_REBUILD, "stop rebuild obj "DF_UOID" for shard %u rc %d\n",
 		DP_UOID(oid), shard, rc);
 
 	return rc;
@@ -629,9 +629,9 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	unsigned int			*shard = val_iov->iov_buf;
 	int				rc;
 
-	D__DEBUG(DB_REBUILD, "obj rebuild "DF_UUID"/"DF_UOID" %"PRIx64
-		 " start\n", DP_UUID(arg->cont_uuid), DP_UOID(*oid),
-		 ih.cookie);
+	D_DEBUG(DB_REBUILD, "obj rebuild "DF_UUID"/"DF_UOID" %"PRIx64
+		" start\n", DP_UUID(arg->cont_uuid), DP_UOID(*oid),
+		ih.cookie);
 	D__ASSERT(arg->obj_cb != NULL);
 
 	/* NB: if rebuild for this object fail, let's continue rebuilding
@@ -640,10 +640,10 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	 */
 	rc = arg->obj_cb(*oid, *shard, arg);
 	if (rc)
-		D__DEBUG(DB_REBUILD, "obj "DF_UOID" cb callback rc %d\n",
-			 DP_UOID(*oid), rc);
+		D_DEBUG(DB_REBUILD, "obj "DF_UOID" cb callback rc %d\n",
+			DP_UOID(*oid), rc);
 
-	D__DEBUG(DB_REBUILD, "obj rebuild "DF_UUID"/%"PRIx64" end\n",
+	D_DEBUG(DB_REBUILD, "obj rebuild "DF_UUID"/%"PRIx64" end\n",
 		DP_UUID(arg->cont_uuid), ih.cookie);
 
 	/* Some one might insert new record to the tree let's reprobe */
@@ -677,7 +677,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	int rc;
 
 	uuid_copy(arg->cont_uuid, *(uuid_t *)key_iov->iov_buf);
-	D__DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" %"PRIx64" start\n",
+	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" %"PRIx64" start\n",
 		DP_UUID(arg->cont_uuid), ih.cookie, root->root_hdl.cookie);
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
@@ -719,7 +719,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	if (rc)
 		return rc;
 
-	D__DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" finish.\n",
+	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" finish.\n",
 		DP_UUID(arg->cont_uuid), ih.cookie);
 
 	/* Some one might insert new record to the tree let's reprobe */
@@ -843,7 +843,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		rc = rebuild_cont_obj_insert(btr_hdl, co_uuids[i],
 					     oids[i], shards[i]);
 		if (rc == 1) {
-			D__DEBUG(DB_REBUILD, "insert local "DF_UOID" "DF_UUID
+			D_DEBUG(DB_REBUILD, "insert local "DF_UOID" "DF_UUID
 				" %u hdl %"PRIx64"\n", DP_UOID(oids[i]),
 				DP_UUID(co_uuids[i]), shards[i],
 				btr_hdl.cookie);
@@ -856,7 +856,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 			D_ASSERT(tls != NULL);
 
 			tls->rebuild_pool_obj_count++;
-			D__DEBUG(DB_REBUILD, ""DF_UOID" "DF_UUID" %u exist.\n",
+			D_DEBUG(DB_REBUILD, ""DF_UOID" "DF_UUID" %u exist.\n",
 				DP_UOID(oids[i]), DP_UUID(co_uuids[i]),
 				shards[i]);
 		} else if (rc < 0) {

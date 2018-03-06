@@ -281,7 +281,7 @@ kb_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	ta = vos_obj_sub_tree_attr(tins->ti_root->tr_class);
 	D__ASSERT(ta != NULL);
 
-	D__DEBUG(DB_TRACE, "Create dbtree %s\n", ta->ta_name);
+	D_DEBUG(DB_TRACE, "Create dbtree %s\n", ta->ta_name);
 
 	umem_attr_get(&tins->ti_umm, &uma);
 	rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats, ta->ta_order,
@@ -296,7 +296,7 @@ kb_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		D__GOTO(copy_in, rc = 0);
 
 	/* Step-2: find evtree for akey only */
-	D__DEBUG(DB_TRACE, "Create evtree\n");
+	D_DEBUG(DB_TRACE, "Create evtree\n");
 
 	rc = evt_create_inplace(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, &uma,
 				&krec->kr_evt[0], &evt_oh);
@@ -630,7 +630,7 @@ svb_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	}
 
 	skey = (struct svb_hkey *)&rec->rec_hkey[0];
-	D__DEBUG(DB_IO, "Overwrite epoch "DF_U64"\n", skey->sv_epoch);
+	D_DEBUG(DB_IO, "Overwrite epoch "DF_U64"\n", skey->sv_epoch);
 
 	umem_tx_add(&tins->ti_umm, rec->rec_mmid, vos_irec_size(rbund));
 	return svb_rec_copy_in(tins, rec, kbund, rbund);
@@ -693,13 +693,13 @@ vos_obj_tree_init(struct vos_object *obj)
 
 	D__ASSERT(obj->obj_df);
 	if (obj->obj_df->vo_tree.tr_class == 0) {
-		D__DEBUG(DB_DF, "Create btree for object\n");
+		D_DEBUG(DB_DF, "Create btree for object\n");
 		rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats,
 					   ta->ta_order, vos_obj2uma(obj),
 					   &obj->obj_df->vo_tree,
 					   &obj->obj_toh);
 	} else {
-		D__DEBUG(DB_DF, "Open btree for object\n");
+		D_DEBUG(DB_DF, "Open btree for object\n");
 		rc = dbtree_open_inplace(&obj->obj_df->vo_tree,
 					 vos_obj2uma(obj), &obj->obj_toh);
 	}
@@ -735,7 +735,7 @@ vos_obj_tree_register(void)
 			D__ERROR("Failed to register %s: %d\n", ta->ta_name, rc);
 			break;
 		}
-		D__DEBUG(DB_TRACE, "Register tree type %s\n", ta->ta_name);
+		D_DEBUG(DB_TRACE, "Register tree type %s\n", ta->ta_name);
 	}
 	return rc;
 }
@@ -764,7 +764,7 @@ vos_obj_sub_tree_attr(unsigned tree_class)
 	for (i = 0;; i++) {
 		struct vos_btr_attr *ta = &vos_btr_attrs[i];
 
-		D__DEBUG(DB_TRACE, "ta->ta_class: %d, tree_class: %d\n",
+		D_DEBUG(DB_TRACE, "ta->ta_class: %d, tree_class: %d\n",
 			ta->ta_class, tree_class);
 
 		if (ta->ta_class == tree_class)

@@ -295,7 +295,7 @@ rdb_recvd(void *arg)
 {
 	struct rdb *db = arg;
 
-	D__DEBUG(DB_ANY, DF_DB": recvd starting\n", DP_DB(db));
+	D_DEBUG(DB_ANY, DF_DB": recvd starting\n", DP_DB(db));
 	for (;;) {
 		struct rdb_raft_rpc    *rrpc = NULL;
 		bool			stop;
@@ -332,7 +332,7 @@ rdb_recvd(void *arg)
 		rdb_free_raft_rpc(rrpc);
 		ABT_thread_yield();
 	}
-	D__DEBUG(DB_ANY, DF_DB": recvd stopping\n", DP_DB(db));
+	D_DEBUG(DB_ANY, DF_DB": recvd stopping\n", DP_DB(db));
 }
 
 static void
@@ -343,7 +343,7 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 	crt_opcode_t		opc = opc_get(cb_info->cci_rpc->cr_opc);
 	int			rc = cb_info->cci_rc;
 
-	D__DEBUG(DB_MD, DF_DB": opc=%u rank=%u rtt=%f\n", DP_DB(db), opc,
+	D_DEBUG(DB_MD, DF_DB": opc=%u rank=%u rtt=%f\n", DP_DB(db), opc,
 		rrpc->drc_rpc->cr_ep.ep_rank, ABT_get_wtime() - rrpc->drc_sent);
 	ABT_mutex_lock(db->d_mutex);
 	if (rc != 0 || db->d_stop) {

@@ -150,7 +150,7 @@ tf_cont_cb(tse_task_t *task, void *data)
 	daos_epoch_hold_t *args = dc_task_get_args(task);
 	int rc = 0;
 
-	D__DEBUG(DF_TIERS, "got "DF_X64"\n", args->coh.cookie);
+	D_DEBUG(DF_TIERS, "got "DF_X64"\n", args->coh.cookie);
 	if (args == NULL) {
 		D__ERROR("dc_task_get_args failed\n");
 		rc = -DER_INVAL;
@@ -179,7 +179,7 @@ tf_cont_close(daos_handle_t coh, uuid_t cid, daos_epoch_t epoch)
 	D_INIT_LIST_HEAD(&head);
 	sched = &(dss_get_module_info()->dmi_sched);
 
-	D__DEBUG(DF_TIERS, "epoch:"DF_U64"\n", epoch);
+	D_DEBUG(DF_TIERS, "epoch:"DF_U64"\n", epoch);
 
 	rc = dc_task_create(dc_epoch_commit, sched, NULL, &task1);
 	if (rc) {
@@ -292,18 +292,18 @@ tier_hdlr_fetch_one(void *vin)
 
 	child = ds_pool_child_lookup(in->tfi->bfi_pool);
 	if (child == NULL) {
-		D__DEBUG(DF_TIERS, "ds_pool_child_lookup returned NULL\n");
+		D_DEBUG(DF_TIERS, "ds_pool_child_lookup returned NULL\n");
 		return -DER_NONEXIST;
 	}
 	rc = vos_cont_open(child->spc_hdl, in->tfi->bfi_co_id, &coh);
 	if (rc != 0) {
-		D__DEBUG(DF_TIERS, "vos_cont_open returned %d\n", rc);
+		D_DEBUG(DF_TIERS, "vos_cont_open returned %d\n", rc);
 		D__GOTO(out, rc);
 	}
 	rc = tier_fetche(in->tfi->bfi_pool, coh, in->tfi->bfi_ep,
 			 in->tfi->bfi_co_id, in->coh);
 	if (rc != 0)
-		D__DEBUG(DF_TIERS, "tier_fetche returned %d\n", rc);
+		D_DEBUG(DF_TIERS, "tier_fetche returned %d\n", rc);
 out:
 	ds_pool_child_put(child);
 	return rc;
@@ -344,9 +344,9 @@ ds_tier_fetch_handler(crt_rpc_t *rpc)
 	crt_rpc_t	      *brpc;
 	daos_iov_t	       gh;
 
-	D__DEBUG(DF_TIERS, "\tpool:"DF_UUIDF"\n", DP_UUID(in->tfi_pool));
-	D__DEBUG(DF_TIERS, "\tcont_id:"DF_UUIDF"\n", DP_UUID(in->tfi_co_id));
-	D__DEBUG(DF_TIERS, "\tepoch:"DF_U64"\n", in->tfi_ep);
+	D_DEBUG(DF_TIERS, "\tpool:"DF_UUIDF"\n", DP_UUID(in->tfi_pool));
+	D_DEBUG(DF_TIERS, "\tcont_id:"DF_UUIDF"\n", DP_UUID(in->tfi_co_id));
+	D_DEBUG(DF_TIERS, "\tepoch:"DF_U64"\n", in->tfi_ep);
 
 	rc = tf_cont_open(&coh, in->tfi_co_id, &in->tfi_ep);
 	if (rc) {
@@ -440,7 +440,7 @@ tier_proc_obj(void *ctx, vos_iter_entry_t *ie)
 	tse_task_t		*task;
 	int			 rc;
 
-	D__DEBUG(DF_TIERS, "closing object:"DF_UOID" on dest tier\n",
+	D_DEBUG(DF_TIERS, "closing object:"DF_UOID" on dest tier\n",
 		DP_UOID(fctx->dfc_oid));
 
 	rc = dc_task_create(dc_obj_close, fctx->dfc_sched, NULL, &task);
@@ -463,7 +463,7 @@ tf_obj_open(struct tier_fetch_ctx *fctx)
 	int			rc;
 	bool			empty;
 
-	D__DEBUG(DF_TIERS, "opening object:"DF_UOID" on dest tier\n",
+	D_DEBUG(DF_TIERS, "opening object:"DF_UOID" on dest tier\n",
 		DP_UOID(fctx->dfc_oid));
 	rc = dc_task_create(dc_obj_open, fctx->dfc_sched, NULL, &task);
 	if (rc == 0) {
@@ -496,7 +496,7 @@ tf_obj_update_cb(tse_task_t *task, void *data)
 	int rc;
 	int j;
 
-	D__DEBUG(DF_TIERS, "object update complete\n");
+	D_DEBUG(DF_TIERS, "object update complete\n");
 	rc = vos_obj_zc_fetch_end(cba->ioh, cba->dkey, cba->nrecs,
 				  cba->iods, 0);
 	if (rc)
@@ -524,7 +524,7 @@ tf_obj_update(struct tier_fetch_ctx *fctx, struct tier_key_iod *tki)
 	struct tf_ou_cb_args	cba;
 	bool			empty;
 
-	D__DEBUG(DF_TIERS, "updating object on dest tier\n");
+	D_DEBUG(DF_TIERS, "updating object on dest tier\n");
 	DAOS_API_ARG_ASSERT(args, OBJ_UPDATE);
 
 	rc = dc_task_create(dc_obj_update, fctx->dfc_sched, NULL, &task);
@@ -576,7 +576,7 @@ tier_latch_oid(void *ctx, vos_iter_entry_t *ie)
 	struct tier_fetch_ctx *fctx = (struct tier_fetch_ctx *)ctx;
 	int rc;
 
-	D__DEBUG(DF_TIERS, " "DF_UOID"\n", DP_UOID(ie->ie_oid));
+	D_DEBUG(DF_TIERS, " "DF_UOID"\n", DP_UOID(ie->ie_oid));
 	fctx->dfc_oid = ie->ie_oid;
 	rc = tf_obj_open(fctx);
 	if (rc)
@@ -683,11 +683,11 @@ tier_proc_akey(void *ctx, vos_iter_entry_t *ie)
 	char			 kbuf[80];
 
 	nrecs = fctx->dfc_ne;
-	D__DEBUG(DF_TIERS, "(%d) %s\n", nrecs, tier_pr_key(ie->ie_key, kbuf));
+	D_DEBUG(DF_TIERS, "(%d) %s\n", nrecs, tier_pr_key(ie->ie_key, kbuf));
 
 
 	if (nrecs  == 0) {
-		D__DEBUG(DF_TIERS, "akey had no extents\n");
+		D_DEBUG(DF_TIERS, "akey had no extents\n");
 		D__GOTO(out, 0);
 	}
 

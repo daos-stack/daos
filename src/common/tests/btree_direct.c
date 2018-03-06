@@ -495,7 +495,7 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 			break;
 
 		case BTR_OPC_LOOKUP:
-			D__DEBUG(DB_TEST, "Looking for %s\n", key);
+			D_DEBUG(DB_TEST, "Looking for %s\n", key);
 
 			daos_iov_set(&val_iov, NULL, 0); /* get address */
 			rc = dbtree_lookup(sk_toh, &key_iov, &val_iov);

@@ -102,7 +102,7 @@ rebuild_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src)
 
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
-	D__DEBUG(DB_TRACE, "pool "DF_UUID" rank %d\n",
+	D_DEBUG(DB_TRACE, "pool "DF_UUID" rank %d\n",
 		 DP_UUID(dst_iv->riv_pool_uuid), src_iv->riv_master_rank);
 
 	return 0;
@@ -122,7 +122,7 @@ rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src)
 	if (rc)
 		return rc;
 
-	D__DEBUG(DB_TRACE, "rank %d master rank %d\n", src_iv->riv_rank,
+	D_DEBUG(DB_TRACE, "rank %d master rank %d\n", src_iv->riv_rank,
 		src_iv->riv_master_rank);
 
 	if (rank != src_iv->riv_master_rank)
@@ -143,7 +143,7 @@ rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src)
 		if (rgt->rgt_status.rs_errno == 0)
 			rgt->rgt_status.rs_errno = src_iv->riv_status;
 
-		D__DEBUG(DB_TRACE, "update rebuild "DF_UUID" ver %d "
+		D_DEBUG(DB_TRACE, "update rebuild "DF_UUID" ver %d "
 			"obj/rec/global done/status/rank "
 			DF_U64"/"DF_U64"/%d/%d/%d\n",
 			DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver,
@@ -152,7 +152,7 @@ rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src)
 			src_iv->riv_rank);
 	}
 
-	D__DEBUG(DB_TRACE, "pool "DF_UUID" master_rank %d\n",
+	D_DEBUG(DB_TRACE, "pool "DF_UUID" master_rank %d\n",
 		 DP_UUID(dst_iv->riv_pool_uuid), dst_iv->riv_master_rank);
 
 	return 0;
@@ -176,7 +176,7 @@ rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src)
 		rpt = rebuild_tgt_pool_tracker_lookup(src_iv->riv_pool_uuid,
 						      src_iv->riv_ver);
 		if (rpt) {
-			D__DEBUG(DB_TRACE, DF_UUID" rebuild finished"
+			D_DEBUG(DB_TRACE, DF_UUID" rebuild finished"
 				" sgl/gl %d/%d\n",
 				 DP_UUID(src_iv->riv_pool_uuid),
 				 dst_iv->riv_global_scan_done,

@@ -81,22 +81,13 @@ extern bool dd_tune_alloc;
 
 #define DDFAC(name)	dd_fac_##name
 
-#define D__DEBUG(mask, fmt, ...)					\
-do {									\
-	if (((mask) < DP_INFO) && DDSUBSYS == dd_fac_null)		\
-		break;							\
-	d_log((mask) | DDSUBSYS,					\
-		"%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
-		##__VA_ARGS__);						\
-} while (0)
-
-/** macros to output logs which are more important than D__DEBUG */
-#define D__INFO(fmt, ...)	D__DEBUG(DP_INFO, fmt, ## __VA_ARGS__)
-#define D__NOTE(fmt, ...)	D__DEBUG(DP_NOTE, fmt, ## __VA_ARGS__)
-#define D__WARN(fmt, ...)	D__DEBUG(DP_WARN, fmt, ## __VA_ARGS__)
-#define D__ERROR(fmt, ...)	D__DEBUG(DP_ERR, fmt, ## __VA_ARGS__)
-#define D__CRIT(fmt, ...)	D__DEBUG(DP_CRIT, fmt, ## __VA_ARGS__)
-#define D__FATAL(fmt, ...)	D__DEBUG(DP_FATAL, fmt, ## __VA_ARGS__)
+/** macros to output logs which are more important than D_DEBUG */
+#define D__INFO(fmt, ...)	D_DEBUG(DP_INFO, fmt, ## __VA_ARGS__)
+#define D__NOTE(fmt, ...)	D_DEBUG(DP_NOTE, fmt, ## __VA_ARGS__)
+#define D__WARN(fmt, ...)	D_DEBUG(DP_WARN, fmt, ## __VA_ARGS__)
+#define D__ERROR(fmt, ...)	D_DEBUG(DP_ERR, fmt, ## __VA_ARGS__)
+#define D__CRIT(fmt, ...)	D_DEBUG(DP_CRIT, fmt, ## __VA_ARGS__)
+#define D__FATAL(fmt, ...)	D_DEBUG(DP_FATAL, fmt, ## __VA_ARGS__)
 
 #define D__ASSERTF(cond, fmt, ...)					\
 do {									\
@@ -120,20 +111,20 @@ do {									\
 		  sizeof(args), dc_funcs[__opc].arg_size);		\
 } while (0)
 
-#define D_ENTER			D__DEBUG(DB_TRACE, "Entered\n")
-#define D_EXIT			D__DEBUG(DB_TRACE, "Leaving\n")
+#define D_ENTER			D_DEBUG(DB_TRACE, "Entered\n")
+#define D_EXIT			D_DEBUG(DB_TRACE, "Leaving\n")
 
 #define D__GOTO(label, rc)						\
 do {									\
 	typeof(rc) __rc = (rc);						\
-	D__DEBUG(DB_TRACE, "goto %s: %ld\n", #label, (long)__rc);	\
+	D_DEBUG(DB_TRACE, "goto %s: %ld\n", #label, (long)__rc);	\
 	goto label;							\
 } while (0)
 
 #define D__RETURN(rc)							\
 do {									\
 	typeof(rc) __rc = (rc);						\
-	D__DEBUG(DB_TRACE, "return: %ld\n", (long)__rc);			\
+	D_DEBUG(DB_TRACE, "return: %ld\n", (long)__rc);			\
 	return __rc;							\
 } while (0)
 

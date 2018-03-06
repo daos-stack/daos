@@ -70,7 +70,7 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
 			memset(rec, 0, (strlen(val_fmt) + g_dkeys_strlen + 1));
 			sprintf(rec, val_fmt, epoch + i);
 			rec_size = strlen(rec);
-			D__DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
+			D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
 				dkey, (int)rec_size, rec);
 			insert_single(dkey, akey, 1100, rec, rec_size,
 				      (epoch + i), &req);

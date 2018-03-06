@@ -468,7 +468,7 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, d_list_t *destroyed)
 	rdb_path_t		victim_path;
 	volatile int		rc;
 
-	D__DEBUG(DB_ANY, DF_DB": "DF_TX_OP"\n", DP_DB(db), DP_TX_OP(op));
+	D_DEBUG(DB_ANY, DF_DB": "DF_TX_OP"\n", DP_DB(db), DP_TX_OP(op));
 
 	if (op->dto_opc != RDB_TX_CREATE_ROOT &&
 	    op->dto_opc != RDB_TX_DESTROY_ROOT) {
@@ -551,7 +551,7 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, d_list_t *destroyed)
 			 */
 			rc_tmp = rdb_tree_lookup(db, &victim_path, &victim);
 			if (rc_tmp == 0) {
-				D__DEBUG(DB_ANY, DF_DB": add to destroyed %p\n",
+				D_DEBUG(DB_ANY, DF_DB": add to destroyed %p\n",
 					DP_DB(db), victim);
 				d_list_add_tail(&victim->de_list, destroyed);
 			}
@@ -589,7 +589,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 	daos_iov_t	value;
 	volatile int	rc;
 
-	D__DEBUG(DB_ANY, DF_DB": applying entry "DF_U64": buf=%p len="DF_U64
+	D_DEBUG(DB_ANY, DF_DB": applying entry "DF_U64": buf=%p len="DF_U64
 		"\n", DP_DB(db), index, buf, len);
 
 	daos_iov_set(&value, &index, sizeof(index));
@@ -636,7 +636,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		d_list_for_each_entry_safe(tree, tmp, destroyed, de_list) {
 			d_list_del_init(&tree->de_list);
 			if (rc == 0) {
-				D__DEBUG(DB_ANY, DF_DB": evicting %p\n",
+				D_DEBUG(DB_ANY, DF_DB": evicting %p\n",
 					DP_DB(db), tree);
 				rdb_tree_evict(db, tree);
 			}

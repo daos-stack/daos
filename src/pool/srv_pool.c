@@ -81,7 +81,7 @@ write_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf *buf,
 	daos_iov_t	value;
 	int		rc;
 
-	D__DEBUG(DF_DSMS, "version=%u ntargets=%u ndomains=%u\n", version,
+	D_DEBUG(DF_DSMS, "version=%u ntargets=%u ndomains=%u\n", version,
 		buf->pb_target_nr, buf->pb_domain_nr);
 
 	/* Write the version. */
@@ -121,7 +121,7 @@ read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
 
 	*buf = value.iov_buf;
 	*version = ver;
-	D__DEBUG(DF_DSMS, "version=%u ntargets=%u ndomains=%u\n", *version,
+	D_DEBUG(DF_DSMS, "version=%u ntargets=%u ndomains=%u\n", *version,
 		(*buf)->pb_target_nr, (*buf)->pb_domain_nr);
 	return 0;
 }
@@ -349,7 +349,7 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 		if (i == i_rank_zero && selectable > 1)
 			/* This is rank 0 and it's not the only rank. */
 			continue;
-		D__DEBUG(DB_MD, "ranks[%d]: %u\n", j, target_addrs->rl_ranks[i]);
+		D_DEBUG(DB_MD, "ranks[%d]: %u\n", j, target_addrs->rl_ranks[i]);
 		ranks->rl_ranks[j] = target_addrs->rl_ranks[i];
 		j++;
 	}
@@ -506,7 +506,7 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 	uuid_unparse_lower(pool_uuid, id);
 	group = crt_group_lookup(id);
 	if (group != NULL) {
-		D__DEBUG(DB_MD, DF_UUID": destroying pool group\n",
+		D_DEBUG(DB_MD, DF_UUID": destroying pool group\n",
 			DP_UUID(pool_uuid));
 		rc = dss_group_destroy(group);
 		if (rc != 0) {
@@ -556,7 +556,7 @@ pool_svc_step_up(struct pool_svc *svc)
 	int				rc;
 
 	D__ASSERT(svc->ps_state != POOL_SVC_UP);
-	D__DEBUG(DB_MD, DF_UUID": stepping up to "DF_U64"\n",
+	D_DEBUG(DB_MD, DF_UUID": stepping up to "DF_U64"\n",
 		DP_UUID(svc->ps_uuid), svc->ps_term);
 
 	/* Read the pool map into map and map_version. */
@@ -580,7 +580,7 @@ pool_svc_step_up(struct pool_svc *svc)
 	rdb_tx_end(&tx);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D__DEBUG(DF_DSMS, DF_UUID": new db\n",
+			D_DEBUG(DF_DSMS, DF_UUID": new db\n",
 				DP_UUID(svc->ps_uuid));
 		D__GOTO(failed, rc);
 	}
@@ -657,7 +657,7 @@ pool_svc_step_down(struct pool_svc *svc)
 	int		rc;
 
 	D__ASSERT(svc->ps_state != POOL_SVC_DOWN);
-	D__DEBUG(DB_MD, DF_UUID": stepping down from "DF_U64"\n",
+	D_DEBUG(DB_MD, DF_UUID": stepping down from "DF_U64"\n",
 		DP_UUID(svc->ps_uuid), svc->ps_term);
 
 	/* Stop accepting new leader references. */
@@ -673,7 +673,7 @@ pool_svc_step_down(struct pool_svc *svc)
 	for (;;) {
 		if (svc->ps_leader_ref == 0)
 			break;
-		D__DEBUG(DB_MD, DF_UUID": waiting for %d references\n",
+		D_DEBUG(DB_MD, DF_UUID": waiting for %d references\n",
 			DP_UUID(svc->ps_uuid), svc->ps_leader_ref);
 		ABT_cond_wait(svc->ps_leader_ref_cv, svc->ps_mutex);
 	}
@@ -697,7 +697,7 @@ pool_svc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 
 	ABT_mutex_lock(svc->ps_mutex);
 	if (svc->ps_stop) {
-		D__DEBUG(DB_MD, DF_UUID": skip term "DF_U64" due to stopping\n",
+		D_DEBUG(DB_MD, DF_UUID": skip term "DF_U64" due to stopping\n",
 			DP_UUID(svc->ps_uuid), term);
 		D__GOTO(out_mutex, rc = 0);
 	}
@@ -922,7 +922,7 @@ pool_svc_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct pool_svc *svc = pool_svc_obj(rlink);
 
-	D__DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(svc->ps_uuid));
+	D_DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(svc->ps_uuid));
 	D__ASSERT(d_hash_rec_unlinked(&svc->ps_entry));
 	D__ASSERTF(svc->ps_ref == 0, "%d\n", svc->ps_ref);
 	pool_svc_fini(svc);
@@ -1148,7 +1148,7 @@ ds_pool_svc_start(const uuid_t uuid)
 out_ref:
 	d_hash_rec_decref(&pool_svc_hash, &svc->ps_entry);
 	ABT_mutex_unlock(pool_svc_hash_lock);
-	D__DEBUG(DF_DSMS, DF_UUID": started pool service\n", DP_UUID(uuid));
+	D_DEBUG(DF_DSMS, DF_UUID": started pool service\n", DP_UUID(uuid));
 	return 0;
 
 err_svc_init:
@@ -1167,12 +1167,12 @@ pool_svc_stop(struct pool_svc *svc)
 	ABT_mutex_lock(svc->ps_mutex);
 
 	if (svc->ps_stop) {
-		D__DEBUG(DF_DSMS, DF_UUID": already stopping\n",
+		D_DEBUG(DF_DSMS, DF_UUID": already stopping\n",
 			 DP_UUID(svc->ps_uuid));
 		ABT_mutex_unlock(svc->ps_mutex);
 		return;
 	}
-	D__DEBUG(DF_DSMS, DF_UUID": stopping pool service\n",
+	D_DEBUG(DF_DSMS, DF_UUID": stopping pool service\n",
 		 DP_UUID(svc->ps_uuid));
 	svc->ps_stop = true;
 
@@ -1232,7 +1232,7 @@ start_one(const uuid_t uuid, void *arg)
 	rc = access(path, R_OK | W_OK);
 	free(path);
 	if (rc != 0) {
-		D__DEBUG(DB_MD, DF_UUID": cannot find or access rdb: %d\n",
+		D_DEBUG(DB_MD, DF_UUID": cannot find or access rdb: %d\n",
 			DP_UUID(uuid), errno);
 		return 0;
 	}
@@ -1244,7 +1244,7 @@ start_one(const uuid_t uuid, void *arg)
 		return 0;
 	}
 
-	D__DEBUG(DB_MD, "started pool service "DF_UUID"\n", DP_UUID(uuid));
+	D_DEBUG(DB_MD, "started pool service "DF_UUID"\n", DP_UUID(uuid));
 	return 0;
 }
 
@@ -1389,7 +1389,7 @@ pool_attr_read(struct rdb_tx *tx, const struct pool_svc *svc,
 	if (rc != 0)
 		return rc;
 
-	D__DEBUG(DF_DSMS, "uid=%u gid=%u mode=%u\n", attr->pa_uid, attr->pa_gid,
+	D_DEBUG(DF_DSMS, "uid=%u gid=%u mode=%u\n", attr->pa_uid, attr->pa_gid,
 		attr->pa_mode);
 	return 0;
 }
@@ -1409,7 +1409,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	struct rdb_kvs_attr	attr;
 	int			rc;
 
-	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pri_op.pi_uuid), rpc);
 
 	if (in->pri_ntgts != in->pri_tgt_uuids.ca_count ||
@@ -1430,7 +1430,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	ABT_mutex_lock(svc->ps_mutex);
 
 	if (svc->ps_stop) {
-		D__DEBUG(DB_MD, DF_UUID": pool service already stopping\n",
+		D_DEBUG(DB_MD, DF_UUID": pool service already stopping\n",
 			DP_UUID(svc->ps_uuid));
 		D__GOTO(out_mutex, rc = -DER_CANCELED);
 	}
@@ -1447,7 +1447,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 			   &value);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0)
-			D__DEBUG(DF_DSMS, DF_UUID": db already initialized\n",
+			D_DEBUG(DF_DSMS, DF_UUID": db already initialized\n",
 				DP_UUID(svc->ps_uuid));
 		else
 			D__ERROR(DF_UUID": failed to look up pool map: %d\n",
@@ -1491,7 +1491,7 @@ out_tx:
 		 * call yet, we should call pool_svc_step_up() to finish
 		 * stepping up.
 		 */
-		D__DEBUG(DF_DSMS, DF_UUID": trying to finish stepping up\n",
+		D_DEBUG(DF_DSMS, DF_UUID": trying to finish stepping up\n",
 			DP_UUID(in->pri_op.pi_uuid));
 		rc = pool_svc_step_up(svc);
 		if (rc != 0) {
@@ -1509,7 +1509,7 @@ out_svc:
 	pool_svc_put(svc);
 out:
 	out->pro_op.po_rc = rc;
-	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pri_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
@@ -1550,7 +1550,7 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	crt_rpc_t		       *rpc;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
+	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
 	rc = crt_group_rank(svc->ps_pool->sp_group, &rank);
 	if (rc != 0)
@@ -1586,7 +1586,7 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D__DEBUG(DF_DSMS, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
+	D_DEBUG(DF_DSMS, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
 	return rc;
 }
 
@@ -1711,7 +1711,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	int				skip_update = 0;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->pci_op.pi_uuid, &svc,
@@ -1799,7 +1799,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	/* Take care of exclusive handles. */
 	if (nhandles != 0) {
 		if (in->pci_capas & DAOS_PC_EX) {
-			D__DEBUG(DF_DSMS, DF_UUID": others already connected\n",
+			D_DEBUG(DF_DSMS, DF_UUID": others already connected\n",
 				DP_UUID(in->pci_op.pi_uuid));
 			D__GOTO(out_map_version, rc = -DER_BUSY);
 		} else {
@@ -1851,7 +1851,7 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pco_op.po_rc = rc;
-	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
@@ -1865,7 +1865,7 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	crt_rpc_t		       *rpc;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
+	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
 	rc = bcast_create(ctx, svc, POOL_TGT_DISCONNECT, &rpc);
 	if (rc != 0)
@@ -1890,7 +1890,7 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D__DEBUG(DF_DSMS, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
+	D_DEBUG(DF_DSMS, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
 	return rc;
 }
 
@@ -1905,7 +1905,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 
 	D__ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
 
-	D__DEBUG(DF_DSMS, DF_UUID": disconnecting %d hdls: hdl_uuids[0]="DF_UUID
+	D_DEBUG(DF_DSMS, DF_UUID": disconnecting %d hdls: hdl_uuids[0]="DF_UUID
 		"\n", DP_UUID(svc->ps_uuid), n_hdl_uuids,
 		DP_UUID(hdl_uuids[0]));
 
@@ -1944,7 +1944,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 		D__GOTO(out, rc);
 
 out:
-	D__DEBUG(DF_DSMS, DF_UUID": leaving: %d\n", DP_UUID(svc->ps_uuid), rc);
+	D_DEBUG(DF_DSMS, DF_UUID": leaving: %d\n", DP_UUID(svc->ps_uuid), rc);
 	return rc;
 }
 
@@ -1960,7 +1960,7 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	struct pool_hdl			hdl;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, DP_UUID(pdi->pdi_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(pdi->pdi_op.pi_uuid, &svc,
@@ -1998,7 +1998,7 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	pdo->pdo_op.po_rc = rc;
-	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
@@ -2016,7 +2016,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	struct pool_attr	attr;
 	int			rc;
 
-	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_UUID(in->pqi_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->pqi_op.pi_uuid, &svc,
@@ -2070,7 +2070,7 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pqo_op.po_rc = rc;
-	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
@@ -2083,7 +2083,7 @@ pool_map_update(crt_context_t ctx, struct pool_svc *svc,
 	uint32_t		size;
 	int			rc;
 
-	D__DEBUG(DF_DSMS, DF_UUID": update ver %d pb_nr %d\n",
+	D_DEBUG(DF_DSMS, DF_UUID": update ver %d pb_nr %d\n",
 		 DP_UUID(svc->ps_uuid), map_version, buf->pb_nr);
 
 	size = pool_iv_ent_size(buf->pb_nr);
@@ -2157,7 +2157,7 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 		D__GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
 
-	D__DEBUG(DF_DSMS, DF_UUID": version=%u->%u failed=%d\n",
+	D_DEBUG(DF_DSMS, DF_UUID": version=%u->%u failed=%d\n",
 		DP_UUID(svc->ps_uuid), map_version_before, map_version,
 		tgts_out == NULL ? -1 : tgts_out->rl_nr);
 	if (map_version == map_version_before) {
@@ -2176,7 +2176,7 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 
 	rc = rdb_tx_commit(&tx);
 	if (rc != 0) {
-		D__DEBUG(DB_MD, DF_UUID": failed to commit: %d\n",
+		D_DEBUG(DB_MD, DF_UUID": failed to commit: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
 		D__GOTO(out_map, rc);
 	}
@@ -2252,7 +2252,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	    in->pti_targets->rl_ranks == NULL)
 		D__GOTO(out, rc = -DER_INVAL);
 
-	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p: ntargets=%u\n",
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: ntargets=%u\n",
 		DP_UUID(in->pti_op.pi_uuid), rpc, in->pti_targets->rl_nr);
 
 	/* These have to be freed after the reply is sent. */
@@ -2276,7 +2276,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	D_EXIT;
 out:
 	out->pto_op.po_rc = rc;
-	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pti_op.pi_uuid), rpc, rc);
 	rc = crt_reply_send(rpc);
 
@@ -2287,7 +2287,7 @@ out:
 
 		env = getenv(REBUILD_ENV);
 		if (env && !strcasecmp(env, REBUILD_ENV_DISABLED)) {
-			D__DEBUG(DB_TRACE, "Rebuild is disabled\n");
+			D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
 
 		} else { /* enabled by default */
 			D__ASSERT(replicas != NULL);
@@ -2400,7 +2400,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	int			n_hdl_uuids;
 	int			rc;
 
-	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pvi_op.pi_uuid), rpc);
 
 	rc = pool_svc_lookup_leader(in->pvi_op.pi_uuid, &svc,
@@ -2434,7 +2434,7 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pvo_op.po_rc = rc;
-	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pvi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
@@ -2447,7 +2447,7 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 	struct pool_svc		       *svc;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->psi_op.pi_uuid), rpc);
 
 	rc = pool_svc_lookup(in->psi_op.pi_uuid, &svc);
@@ -2463,7 +2463,7 @@ out_svc:
 	pool_svc_put(svc);
 out:
 	out->pso_op.po_rc = rc;
-	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->psi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }

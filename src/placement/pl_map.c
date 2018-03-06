@@ -72,12 +72,12 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 	}
 
 	if (dict->pd_type == PL_TYPE_UNKNOWN) {
-		D__DEBUG(DB_PL,
+		D_DEBUG(DB_PL,
 			"Unknown placement map type %d\n", dict->pd_type);
 		return -EINVAL;
 	}
 
-	D__DEBUG(DB_PL, "Create a %s placement map\n", dict->pd_name);
+	D_DEBUG(DB_PL, "Create a %s placement map\n", dict->pd_name);
 
 	rc = dict->pd_ops->o_create(pool_map, mia, &map);
 	if (rc != 0)

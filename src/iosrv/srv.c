@@ -515,7 +515,7 @@ dss_xstreams_fini(bool force)
 	struct dss_xstream	*tmp;
 	int			 rc;
 
-	D__DEBUG(DB_TRACE, "Stopping execution streams\n");
+	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
 
 	/** Stop & free progress ULTs */
 	d_list_for_each_entry(dx, &xstream_data.xd_list, dx_list)
@@ -547,7 +547,7 @@ dss_xstreams_fini(bool force)
 	if (rc)
 		D__ERROR("failed to delete dtc: %d\n", rc);
 
-	D__DEBUG(DB_TRACE, "Execution streams stopped\n");
+	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
 }
 
 static void
@@ -590,7 +590,7 @@ dss_xstreams_init(int nr)
 	}
 
 	/* start the execution streams */
-	D__DEBUG(DB_TRACE, "%d cores detected, starting %d execution streams\n",
+	D_DEBUG(DB_TRACE, "%d cores detected, starting %d execution streams\n",
 		ncores, dss_nxstreams);
 	for (i = 1; i <= dss_nxstreams; i++) {
 		hwloc_obj_t	obj;
@@ -606,7 +606,7 @@ dss_xstreams_init(int nr)
 		if (rc)
 			D__GOTO(failed, rc);
 	}
-	D__DEBUG(DB_TRACE, "%d execution streams successfully started\n",
+	D_DEBUG(DB_TRACE, "%d execution streams successfully started\n",
 		dss_nxstreams);
 failed:
 	dss_xstreams_open_barrier();
@@ -876,19 +876,19 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	int				tid;
 
 	if (ops == NULL || args == NULL || ops->co_func == NULL) {
-		D__DEBUG(DB_MD, "mandatory args mising dss_collective_reduce");
+		D_DEBUG(DB_MD, "mandatory args mising dss_collective_reduce");
 		return -DER_INVAL;
 	}
 
 	if (ops->co_reduce_arg_alloc != NULL &&
 	    ops->co_reduce_arg_free == NULL) {
-		D__DEBUG(DB_MD, "Free callback missing for reduce args\n");
+		D_DEBUG(DB_MD, "Free callback missing for reduce args\n");
 		return -DER_INVAL;
 	}
 
 	if (dss_nxstreams == 0) {
 		/* May happen when the server is shutting down. */
-		D__DEBUG(DB_TRACE, "no xstreams\n");
+		D_DEBUG(DB_TRACE, "no xstreams\n");
 		return -DER_CANCELED;
 	}
 
@@ -1285,7 +1285,7 @@ dss_srv_fini(bool force)
 		ABT_mutex_free(&xstream_data.xd_mutex);
 		/* fall through */
 	case XD_INIT_NONE:
-		D__DEBUG(DB_TRACE, "Finalized everything\n");
+		D_DEBUG(DB_TRACE, "Finalized everything\n");
 	}
 	return 0;
 }

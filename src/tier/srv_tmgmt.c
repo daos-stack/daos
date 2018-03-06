@@ -119,7 +119,7 @@ poh_bcast(crt_context_t *ctx, const uuid_t pool_id, int hdl_type,
 
 	b_out = crt_reply_get(rpc);
 	rc = b_out->hbo_ret;
-	D__DEBUG(DF_TIERS, "Pool handle broadcast resp: %d", b_out->hbo_ret);
+	D_DEBUG(DF_TIERS, "Pool handle broadcast resp: %d", b_out->hbo_ret);
 
 out:
 	D__FREE(glob_buf, global_hdl.iov_buf_len);
@@ -133,7 +133,7 @@ tier_upstream_cb(tse_task_t *task, void *data)
 	struct upstream_arg		*arg = (struct upstream_arg *) data;
 	int				rc = 0;
 
-	D__DEBUG(DF_TIERS, "Upstream Connection Complete!\n");
+	D_DEBUG(DF_TIERS, "Upstream Connection Complete!\n");
 
 	crt_req_decref(arg->rpc);
 	return rc;
@@ -341,7 +341,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 		D__GOTO(out, -HANDLE_BCAST_ERR);
 	}
 
-	D__DEBUG(DF_TIERS, "Connect to Colder Tier Group: %s, ID:"DF_UUIDF"\n",
+	D_DEBUG(DF_TIERS, "Connect to Colder Tier Group: %s, ID:"DF_UUIDF"\n",
 		colder_grp, DP_UUID(colder_id));
 
 	/*Now we do the work for the local connection*/
@@ -375,7 +375,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 		D__GOTO(out, HANDLE_BCAST_ERR);
 	}
 
-	D__DEBUG(DF_TIERS, "Connect to Local Tier Group: %s, ID:"DF_UUIDF"\n",
+	D_DEBUG(DF_TIERS, "Connect to Local Tier Group: %s, ID:"DF_UUIDF"\n",
 		this_grp, DP_UUID(this_id));
 
 	/*End of local connection*/
@@ -417,7 +417,7 @@ out:
 	rc = crt_reply_send(rpc);
 	daos_event_fini(&upstream_ev);
 	daos_eq_destroy(cross_conn_eqh, 0);
-	D__DEBUG(DF_TIERS, "Leaving ds_ct_hdlr_cross_conn...\n");
+	D_DEBUG(DF_TIERS, "Leaving ds_ct_hdlr_cross_conn...\n");
 	if (self_srv_grp != NULL)
 		D__FREE(self_srv_grp, buf_len);
 	return;
@@ -458,7 +458,7 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 				warmer_svc.rl_nr     = grpsz;
 			}
 		} else
-			D__DEBUG(DF_TIERS, "failed to lookup warmer group\n");
+			D_DEBUG(DF_TIERS, "failed to lookup warmer group\n");
 
 	}
 
@@ -511,9 +511,9 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 
 	pool = dc_hdl2pool(warmer_poh);
 
-	D__DEBUG(DF_TIERS, "UUID of Warmer POH:"DF_UUIDF"\n",
+	D_DEBUG(DF_TIERS, "UUID of Warmer POH:"DF_UUIDF"\n",
 		DP_UUID(pool->dp_pool));
-	D__DEBUG(DF_TIERS, "Tier/Group of Warmer: %s\n",
+	D_DEBUG(DF_TIERS, "Tier/Group of Warmer: %s\n",
 		pool->dp_group->cg_grpid);
 
 	/*Note, in this case the cold ID is local, as this is upstream hdlr*/
@@ -552,7 +552,7 @@ ds_tier_register_cold_handler(crt_rpc_t *rpc)
 				colder_svc.rl_nr     = grpsz;
 			}
 		} else
-			D__DEBUG(DF_TIERS, "fail to lookup colder group\n");
+			D_DEBUG(DF_TIERS, "fail to lookup colder group\n");
 	} else {
 		D__WARN("Colder Group already set to: %s\n", colder_grp);
 		D__WARN("Ignoring Colder Tier Set Request\n");

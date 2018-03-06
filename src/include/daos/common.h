@@ -82,7 +82,7 @@ do {									\
 		D__ERROR("out of memory (alloc '" #ptr "' = %d)",	\
 			(int)(size));					\
 	}								\
-	D__DEBUG(DB_MEM, "alloc #ptr : %d at %p.\n", (int)(size), ptr);	\
+	D_DEBUG(DB_MEM, "alloc #ptr : %d at %p.\n", (int)(size), ptr);	\
 	if (DD_ALLOC_PADDING != 0) {					\
 		if (!ptr)						\
 			break;						\
@@ -93,7 +93,7 @@ do {									\
 
 # define D__FREE(ptr, size)						\
 do {									\
-	D__DEBUG(DB_MEM, "free #ptr : %d at %p.\n", (int)(size), ptr);	\
+	D_DEBUG(DB_MEM, "free #ptr : %d at %p.\n", (int)(size), ptr);	\
 	if (DD_ALLOC_PADDING != 0) {					\
 		if (!ptr)						\
 			break;						\

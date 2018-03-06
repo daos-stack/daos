@@ -124,7 +124,7 @@ vos_cookie_tab_register()
 {
 	int	rc;
 
-	D__DEBUG(DB_MD, "Registering tree class for cookie table: %d\n",
+	D_DEBUG(DB_MD, "Registering tree class for cookie table: %d\n",
 		VOS_BTR_COOKIE);
 
 	rc = dbtree_class_register(VOS_BTR_COOKIE, 0, &vcoi_ops);
@@ -140,7 +140,7 @@ vos_cookie_tab_create(struct umem_attr *uma, struct vos_cookie_table *ctab,
 	int	rc;
 
 	D__ASSERT(ctab->cit_btr.tr_class == 0);
-	D__DEBUG(DB_MD, "Create cookie tree in-place :%d\n", VOS_BTR_COOKIE);
+	D_DEBUG(DB_MD, "Create cookie tree in-place :%d\n", VOS_BTR_COOKIE);
 
 	rc = dbtree_create_inplace(VOS_BTR_COOKIE, 0, COOKIE_BTREE_ORDER, uma,
 				   &ctab->cit_btr, cookie_handle);
@@ -185,7 +185,7 @@ vos_cookie_find_update(daos_handle_t th, uuid_t cookie, daos_epoch_t epoch,
 
 	rc = dbtree_lookup(th, &key, &value);
 	if (rc == 0) {
-		D__DEBUG(DB_TRACE, "dbtree lookup found "DF_UUID","DF_U64"\n",
+		D_DEBUG(DB_TRACE, "dbtree lookup found "DF_UUID","DF_U64"\n",
 			DP_UUID(cookie), max_epoch);
 
 		if (!update_flag) /* read-only */

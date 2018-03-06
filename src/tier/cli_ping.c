@@ -41,14 +41,14 @@ tier_ping_cb(tse_task_t *task, void *data)
 	struct tier_ping_out	*out;
 	int                     rc = task->dt_result;
 
-	D__DEBUG(DF_MISC, "Entering tier_ping_cb\n");
+	D_DEBUG(DF_MISC, "Entering tier_ping_cb\n");
 
 	/* extract the RPC reply */
 	out = crt_reply_get(rpc);
 
-	D__DEBUG(DF_MISC, "DCT Ping Return Val %d\n", out->ping_out);
+	D_DEBUG(DF_MISC, "DCT Ping Return Val %d\n", out->ping_out);
 
-	D__DEBUG(DF_MISC, "Leaving tier_ping_cb()");
+	D_DEBUG(DF_MISC, "Leaving tier_ping_cb()");
 
 	crt_req_decref(rpc);
 	return rc;
@@ -58,7 +58,7 @@ int
 dc_tier_ping(uint32_t ping_val, tse_task_t *task)
 {
 
-	D__DEBUG(DF_MISC, "Entering daos_tier_ping()\n");
+	D_DEBUG(DF_MISC, "Entering daos_tier_ping()\n");
 
 	struct tier_ping_in	*in;
 	crt_endpoint_t		ep;
@@ -66,7 +66,7 @@ dc_tier_ping(uint32_t ping_val, tse_task_t *task)
 	struct tier_ping_arg    arg;
 	int			rc;
 
-	D__DEBUG(DF_MISC, "Ping Val to Issue: %d\n", ping_val);
+	D_DEBUG(DF_MISC, "Ping Val to Issue: %d\n", ping_val);
 
 	/* Harded coded enpoint stuff */
 	ep.ep_grp = NULL;
@@ -95,7 +95,7 @@ dc_tier_ping(uint32_t ping_val, tse_task_t *task)
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);
 
-	D__DEBUG(DF_MISC, "leaving daos_tier_ping()\n");
+	D_DEBUG(DF_MISC, "leaving daos_tier_ping()\n");
 
 	return rc;
 

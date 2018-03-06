@@ -255,7 +255,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	daos_iov_t		val_iov;
 	int			rc;
 
-	D__DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
+	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
 		DP_UOID(oid));
 
 	rc = vos_oi_find(cont, oid, epoch, obj);
@@ -263,7 +263,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		return rc;
 
 	/* Object ID not found insert it to the OI tree */
-	D__DEBUG(DB_TRACE, "Object"DF_UOID" not found adding it..\n",
+	D_DEBUG(DB_TRACE, "Object"DF_UOID" not found adding it..\n",
 		DP_UOID(oid));
 
 	okey.o_oid	= oid;
@@ -564,7 +564,7 @@ vos_obj_tab_register()
 {
 	int	rc;
 
-	D__DEBUG(DB_DF, "Registering class for OI table Class: %d\n",
+	D_DEBUG(DB_DF, "Registering class for OI table Class: %d\n",
 		VOS_BTR_OBJ_TABLE);
 
 	rc = dbtree_class_register(VOS_BTR_OBJ_TABLE, 0, &voi_ops);
@@ -589,7 +589,7 @@ vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 	/** Inplace btr_root */
 	oi_root = (struct btr_root *) &(otab_df->obt_btr);
 	if (!oi_root->tr_class) {
-		D__DEBUG(DB_DF, "create OI Tree in-place: %d\n",
+		D_DEBUG(DB_DF, "create OI Tree in-place: %d\n",
 			VOS_BTR_OBJ_TABLE);
 
 		rc = dbtree_create_inplace(VOS_BTR_OBJ_TABLE, 0,

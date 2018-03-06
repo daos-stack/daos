@@ -315,7 +315,7 @@ ring_buf_create(struct pl_ring_map *rimap, struct ring_buf **buf_pp)
 			}
 		}
 
-		D__DEBUG(DB_PL, "Found %d targets for %s[%d]\n",
+		D_DEBUG(DB_PL, "Found %d targets for %s[%d]\n",
 			rdom->rd_target_nr, pool_domain_name(&doms[i]),
 			doms[i].do_comp.co_id);
 
@@ -366,7 +366,7 @@ ring_domain_shuffle(struct ring_domain *rdom, unsigned int seed)
 	int		    nr;
 	int		    i;
 
-	D__DEBUG(DB_PL, "Sort %d targets of %s[%d] by version\n",
+	D_DEBUG(DB_PL, "Sort %d targets of %s[%d] by version\n",
 		rdom->rd_target_nr, pool_comp_name(rdom->rd_comp),
 		rdom->rd_comp->co_id);
 
@@ -415,7 +415,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 		return -DER_NOMEM;
 
 	sorter.rs_domains = buf->rb_domains;
-	D__DEBUG(DB_PL, "Sort domains by version\n");
+	D_DEBUG(DB_PL, "Sort domains by version\n");
 	daos_array_sort(&sorter, buf->rb_domain_nr, false,
 			&ring_domain_ver_sops);
 
@@ -465,7 +465,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 		}
 	}
 
-	D__DEBUG(DB_PL, "Copy scratch buffer\n");
+	D_DEBUG(DB_PL, "Copy scratch buffer\n");
 	memcpy(buf->rb_domains, scratch, buf->rb_domain_nr * sizeof(*scratch));
 	D__FREE(scratch, buf->rb_domain_nr * sizeof(*scratch));
 	return 0;
@@ -485,7 +485,7 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 	int		    j;
 	int		    rc;
 
-	D__DEBUG(DB_PL, "Create ring %d [%d targets] for rimap\n",
+	D_DEBUG(DB_PL, "Create ring %d [%d targets] for rimap\n",
 		index, rimap->rmp_target_nr);
 
 	rc = ring_buf_shuffle(rimap, index + 1, buf);
@@ -581,7 +581,7 @@ ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 			goto out;
 	}
 
-	D__DEBUG(DB_PL, "Built %d rings for placement map\n",
+	D_DEBUG(DB_PL, "Built %d rings for placement map\n",
 		rimap->rmp_ring_nr);
  out:
 	if (buf != NULL)
@@ -613,7 +613,7 @@ ring_map_hash_build(struct pl_ring_map *rimap)
 	int		i;
 	unsigned	tg_per_dom;
 
-	D__DEBUG(DB_PL, "Build consistent hash for ring map\n");
+	D_DEBUG(DB_PL, "Build consistent hash for ring map\n");
 	D__ALLOC(rimap->rmp_target_hashes,
 		rimap->rmp_target_nr * sizeof(*rimap->rmp_target_hashes));
 	if (rimap->rmp_target_hashes == NULL)
@@ -632,7 +632,7 @@ ring_map_hash_build(struct pl_ring_map *rimap)
 
 	range = 1ULL << rimap->rmp_target_hbits;
 
-	D__DEBUG(DB_PL, "domanis %d, targets %d, hash range is 0-0x"DF_X64"\n",
+	D_DEBUG(DB_PL, "domanis %d, targets %d, hash range is 0-0x"DF_X64"\n",
 		rimap->rmp_domain_nr, rimap->rmp_target_nr, range);
 
 	/* create consistent hash for targets */
@@ -668,7 +668,7 @@ ring_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	int		    rc;
 
 	D__ASSERT(mia->ia_ring.ring_nr > 0);
-	D__DEBUG(DB_PL, "Create ring map: domain %s, ring_nr: %d\n",
+	D_DEBUG(DB_PL, "Create ring map: domain %s, ring_nr: %d\n",
 		pool_comp_type2str(mia->ia_ring.domain),
 		mia->ia_ring.ring_nr);
 
@@ -852,7 +852,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	D__ASSERT(rop->rop_grp_nr > 0);
 	D__ASSERT(rop->rop_grp_size > 0);
 
-	D__DEBUG(DB_PL,
+	D_DEBUG(DB_PL,
 		"obj="DF_OID"/%u begin=%u dist=%u grp_size=%u grp_nr=%d\n",
 		DP_OID(oid), rop->rop_shard_id, rop->rop_begin, rop->rop_dist,
 		rop->rop_grp_size, rop->rop_grp_nr);
@@ -986,11 +986,11 @@ ring_remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
 {
 	struct ring_failed_shard *f_shard;
 
-	D__DEBUG(DB_PL, "remap list for "DF_OID", %s\n",
+	D_DEBUG(DB_PL, "remap list for "DF_OID", %s\n",
 		DP_OID(md->omd_id), comment);
 
 	d_list_for_each_entry(f_shard, remap_list, rfs_list) {
-		D__DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u\n",
+		D_DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u\n",
 			f_shard->rfs_fseq, f_shard->rfs_shard_idx,
 			f_shard->rfs_status);
 	}
@@ -1035,7 +1035,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		spare_avail = spare_avail ?
 			ring_remap_next_spare(rimap, rop, &spare_idx) : false;
 
-		D__DEBUG(DB_PL, "obj:"DF_OID", select spare:%d grp_size:%u, "
+		D_DEBUG(DB_PL, "obj:"DF_OID", select spare:%d grp_size:%u, "
 			"grp_nr:%u, begin:%u, spare:%u\n", DP_OID(md->omd_id),
 			spare_avail, rop->rop_grp_size, rop->rop_grp_nr,
 			rop->rop_begin, spare_idx);
@@ -1139,7 +1139,7 @@ ring_map_dump(struct pl_map *map, bool dump_rings)
 	if (DEBUG_DUMP_RING_MAP == 0)
 		return;
 
-	D__DEBUG(DB_PL, "ring map: ver %d, nrims %d, domain_nr %d, "
+	D_DEBUG(DB_PL, "ring map: ver %d, nrims %d, domain_nr %d, "
 		"tgt_nr %d\n", pl_map_version(&rimap->rmp_map),
 		rimap->rmp_ring_nr, rimap->rmp_domain_nr,
 		rimap->rmp_target_nr);
@@ -1152,18 +1152,18 @@ ring_map_dump(struct pl_map *map, bool dump_rings)
 	for (index = 0; index < rimap->rmp_ring_nr; index++) {
 		ring = &rimap->rmp_rings[index];
 
-		D__DEBUG(DB_PL, "ring[%d]\n", index);
+		D_DEBUG(DB_PL, "ring[%d]\n", index);
 		for (i = period = 0; i < rimap->rmp_target_nr; i++) {
 			int pos = ring->ri_targets[i].pt_pos;
 
-			D__DEBUG(DB_PL, "id:%d fseq:%d status:%d",
+			D_DEBUG(DB_PL, "id:%d fseq:%d status:%d",
 				targets[pos].ta_comp.co_id,
 				targets[pos].ta_comp.co_fseq,
 				targets[pos].ta_comp.co_status);
 			period++;
 			if (period == rimap->rmp_domain_nr) {
 				period = 0;
-				D__DEBUG(DB_PL, "\n");
+				D_DEBUG(DB_PL, "\n");
 			}
 		}
 	}
@@ -1224,9 +1224,9 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 
 	ring_obj_remap_shards(rimap, md, layout, rop, remap_list);
 
-	D__DEBUG(DB_PL, "dump layout for "DF_OID"\n", DP_OID(md->omd_id));
+	D_DEBUG(DB_PL, "dump layout for "DF_OID"\n", DP_OID(md->omd_id));
 	for (i = 0; i < layout->ol_nr; i++)
-		D__DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d rebuilding %d\n",
+		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d rebuilding %d\n",
 			i, layout->ol_shards[i].po_shard,
 			layout->ol_shards[i].po_target,
 			layout->ol_shards[i].po_rebuilding);
@@ -1295,7 +1295,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		return rc;
 
 	if (rop.rop_grp_size == 1) {
-		D__DEBUG(DB_PL, "Not replicated object "DF_OID"\n",
+		D_DEBUG(DB_PL, "Not replicated object "DF_OID"\n",
 			DP_OID(md->omd_id));
 		return 0;
 	}

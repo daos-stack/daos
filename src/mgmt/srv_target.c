@@ -288,7 +288,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		if (rc)
 			break;
 
-		D__DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n",
+		D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n",
 			DP_UUID(uuid), path);
 
 		fd = open(path, O_CREAT|O_RDWR, 0600);

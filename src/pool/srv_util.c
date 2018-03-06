@@ -181,7 +181,7 @@ ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 
 	uuid_unparse_lower(pool_uuid, id);
 
-	D__DEBUG(DF_DSMS, DF_UUID": creating pool group %s\n",
+	D_DEBUG(DF_DSMS, DF_UUID": creating pool group %s\n",
 		DP_UUID(pool_uuid), id);
 
 	rc = map_ranks_init(map, MAP_RANKS_UP, &ranks);
@@ -212,7 +212,7 @@ ds_pool_group_destroy(const uuid_t pool_uuid, crt_group_t *group)
 {
 	int rc;
 
-	D__DEBUG(DF_DSMS, DF_UUID": destroying pool group %s\n",
+	D_DEBUG(DF_DSMS, DF_UUID": destroying pool group %s\n",
 		DP_UUID(pool_uuid), group->cg_grpid);
 	rc = dss_group_destroy(group);
 	if (rc != 0)
@@ -321,7 +321,7 @@ ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 
 		target = pool_map_find_target_by_rank(map, rank);
 		if (target == NULL) {
-			D__DEBUG(DF_DSMS, "failed to find rank %u in map %p\n",
+			D_DEBUG(DF_DSMS, "failed to find rank %u in map %p\n",
 				rank, map);
 			if (tgts_failed != NULL) {
 				int j = tgts_failed_out;
@@ -340,7 +340,7 @@ ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 		if (opc == POOL_EXCLUDE &&
 		    target->ta_comp.co_status != PO_COMP_ST_DOWN &&
 		    target->ta_comp.co_status != PO_COMP_ST_DOWNOUT) {
-			D__DEBUG(DF_DSMS, "changing rank %u to DOWN in map %p\n",
+			D_DEBUG(DF_DSMS, "changing rank %u to DOWN in map %p\n",
 				target->ta_comp.co_rank, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWN;
 			target->ta_comp.co_fseq = version;
@@ -348,7 +348,7 @@ ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 		} else if (opc == POOL_ADD &&
 			   target->ta_comp.co_status != PO_COMP_ST_UP &&
 			   target->ta_comp.co_status != PO_COMP_ST_UPIN) {
-			D__DEBUG(DF_DSMS, "changing rank %u to UP in map %p\n",
+			D_DEBUG(DF_DSMS, "changing rank %u to UP in map %p\n",
 				target->ta_comp.co_rank, map);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_ver = version;
@@ -356,7 +356,7 @@ ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 			nchanges++;
 		} else if (opc == POOL_EXCLUDE_OUT &&
 			   target->ta_comp.co_status == PO_COMP_ST_DOWN) {
-			D__DEBUG(DF_DSMS, "changing rank %u to DOWNOUT map %p\n",
+			D_DEBUG(DF_DSMS, "changing rank %u to DOWNOUT map %p\n",
 				target->ta_comp.co_rank, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
 			nchanges++;
@@ -365,7 +365,7 @@ ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 
 	/* Set the version only if actual changes have been made. */
 	if (nchanges > 0) {
-		D__DEBUG(DF_DSMS, "generating map %p version %u: nchanges=%d\n",
+		D_DEBUG(DF_DSMS, "generating map %p version %u: nchanges=%d\n",
 			map, version, nchanges);
 		rc = pool_map_set_version(map, version);
 		D__ASSERTF(rc == 0, "%d\n", rc);

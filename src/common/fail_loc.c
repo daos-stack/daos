@@ -36,7 +36,7 @@ void
 daos_reset_fail_loc()
 {
 	daos_fail_loc = 0;
-	D__DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
+	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
 }
 
 int
@@ -49,7 +49,7 @@ daos_fail_check(uint64_t id)
 	    (id & DAOS_FAIL_MASK_LOC))
 		return 0;
 
-	D__DEBUG(DB_ANY, "*** fail_loc="DF_X64" value="DF_U64", id ="DF_X64
+	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64" value="DF_U64", id ="DF_X64
 		"***\n", daos_fail_loc, daos_fail_value, id);
 
 	if (daos_fail_loc & DAOS_FAIL_ONCE) {
@@ -66,7 +66,7 @@ void
 daos_fail_loc_set(uint64_t id)
 {
 	daos_fail_loc = id;
-	D__DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
+	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
 }
 
 void

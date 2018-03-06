@@ -283,7 +283,7 @@ co_uuid_iter_test(struct vc_test_args *arg)
 		}
 
 		if (!uuid_is_null(ent.ie_couuid)) {
-			D__DEBUG(DB_TRACE,
+			D_DEBUG(DB_TRACE,
 				"COUUID:"DF_UUID"\n", DP_UUID(ent.ie_couuid));
 			nr++;
 		}
@@ -432,9 +432,9 @@ cookie_table_test(void **state)
 		if (ret != 0)
 			print_error("find and update error\n");
 
-		D__DEBUG(DB_TRACE, "Cookie: "DF_UUID" Epoch :%"PRIu64"\t",
+		D_DEBUG(DB_TRACE, "Cookie: "DF_UUID" Epoch :%"PRIu64"\t",
 			DP_UUID(cookie_array[j].uuid), epochs[i]);
-		D__DEBUG(DB_TRACE, "Returned max_epoch: %"PRIu64"\n",
+		D_DEBUG(DB_TRACE, "Returned max_epoch: %"PRIu64"\n",
 			epoch_ret);
 		assert_true(epoch_ret == l_entry->max_epoch);
 

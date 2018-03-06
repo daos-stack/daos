@@ -472,7 +472,7 @@ ds_obj_rw_inline(crt_rpc_t *rpc, struct ds_cont *cont, uuid_t cookie,
 			D__GOTO(out, rc);
 	}
 out:
-	D__DEBUG(DB_IO, "obj"DF_OID" rw inline rc = %d\n",
+	D_DEBUG(DB_IO, "obj"DF_OID" rw inline rc = %d\n",
 		DP_OID(orw->orw_oid.id_pub), rc);
 
 	return rc;
@@ -492,7 +492,7 @@ ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
 	if (cont_hdl == NULL) {
-		D__DEBUG(DB_TRACE, "can not find "DF_UUID" hdl\n",
+		D_DEBUG(DB_TRACE, "can not find "DF_UUID" hdl\n",
 			 DP_UUID(cont_hdl_uuid));
 		D__GOTO(failed, rc = -DER_NO_HDL);
 	}
@@ -516,7 +516,7 @@ ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_STALE_POOL))
 		D__GOTO(failed, rc = -DER_STALE);
 
-	D__DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
+	D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
 		DP_UUID(cont_hdl_uuid), cont_hdl);
 
 	/* load or create VOS container on demand */
@@ -544,7 +544,7 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 	int			i;
 	int			rc = 0;
 
-	D__DEBUG(DB_TRACE, "opc %d "DF_UOID" tag %d\n", opc_get(rpc->cr_opc),
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" tag %d\n", opc_get(rpc->cr_opc),
 		DP_UOID(orw->orw_oid), dss_get_module_info()->dmi_tid);
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
@@ -660,7 +660,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		D__GOTO(out, rc = -DER_STALE);
 	}
 
-	D__DEBUG(DB_TRACE, "opc %d "DF_UOID" tag %d\n", opc_get(rpc->cr_opc),
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" tag %d\n", opc_get(rpc->cr_opc),
 		DP_UOID(orw->orw_oid), dss_get_module_info()->dmi_tid);
 	/* Inline update/fetch */
 	if (orw->orw_bulks.ca_arrays == NULL && orw->orw_bulks.ca_count == 0) {
@@ -885,7 +885,7 @@ ds_iter_single_vos(void *data)
 		iter_arg->map_version = cont_hdl->sch_pool->spc_map_version;
 
 	if (oei->oei_map_ver < iter_arg->map_version) {
-		D__DEBUG(DB_TRACE, "oei map_version %d map_ver %d\n",
+		D_DEBUG(DB_TRACE, "oei map_version %d map_ver %d\n",
 			oei->oei_map_ver, iter_arg->map_version);
 		D__GOTO(out_cont_hdl, rc = -DER_STALE);
 	}
@@ -928,7 +928,7 @@ ds_iter_single_vos(void *data)
 		}
 	}
 
-	D__DEBUG(DB_TRACE, ""DF_UOID" iterate type %d tag %d\n",
+	D_DEBUG(DB_TRACE, ""DF_UOID" iterate type %d tag %d\n",
 		DP_UOID(oei->oei_oid), type, dss_get_module_info()->dmi_tid);
 
 	rc = vos_iter_prepare(type, &param, &ih);

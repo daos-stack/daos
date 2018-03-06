@@ -166,7 +166,7 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 			goto failed;
 		}
 
-		D__DEBUG(DB_IO, "Enable VOS checksum=%s\n", env);
+		D_DEBUG(DB_IO, "Enable VOS checksum=%s\n", env);
 		imem_inst->vis_enable_checksum = 1;
 	} else {
 		imem_inst->vis_enable_checksum = 0;

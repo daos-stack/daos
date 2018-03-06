@@ -49,8 +49,8 @@ setup_1_tier(daos_tier_info_t **ppt, const uuid_t uuid, const char *grp)
 			pt->ti_group_id = p;
 			uuid_copy(pt->ti_pool_id, uuid);
 			daos_group_attach(pt->ti_group_id, &pt->ti_group);
-			D__DEBUG(DF_TIERS, "group ID:%s\n", pt->ti_group_id);
-			D__DEBUG(DF_TIERS, "pool ID:"DF_UUIDF"\n",
+			D_DEBUG(DF_TIERS, "group ID:%s\n", pt->ti_group_id);
+			D_DEBUG(DF_TIERS, "pool ID:"DF_UUIDF"\n",
 				DP_UUID(pt->ti_pool_id));
 		} else {
 			D__FREE(pt, sizeof(*pt));
@@ -83,14 +83,14 @@ void tier_teardown(void)
 daos_tier_info_t *
 tier_setup_cold_tier(const uuid_t uuid, const char *grp)
 {
-	D__DEBUG(DF_TIERS, "setting up cold tier\n");
+	D_DEBUG(DF_TIERS, "setting up cold tier\n");
 	return setup_1_tier(&g_tierctx.dtc_colder, uuid, grp);
 }
 
 daos_tier_info_t *
 tier_setup_this_tier(const uuid_t uuid, const char *grp)
 {
-	D__DEBUG(DF_TIERS, "setting up warm tier\n");
+	D_DEBUG(DF_TIERS, "setting up warm tier\n");
 	return setup_1_tier(&g_tierctx.dtc_this, uuid, grp);
 }
 
@@ -99,14 +99,14 @@ tier_lookup(const char *tier_id)
 {
 	daos_tier_info_t *pt;
 
-	D__DEBUG(DF_TIERS, "%s\n", tier_id);
+	D_DEBUG(DF_TIERS, "%s\n", tier_id);
 	pt = g_tierctx.dtc_this;
 	if (pt && (!strncmp(pt->ti_group_id, tier_id, strlen(pt->ti_group_id))))
 		return pt;
 	pt = g_tierctx.dtc_colder;
 	if (pt && (!strncmp(pt->ti_group_id, tier_id, strlen(pt->ti_group_id))))
 		return pt;
-	D__DEBUG(DF_TIERS, "%s NOT FOUND\n", tier_id);
+	D_DEBUG(DF_TIERS, "%s NOT FOUND\n", tier_id);
 	return NULL;
 }
 

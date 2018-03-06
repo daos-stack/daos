@@ -45,7 +45,7 @@ dc_obj_init(void)
 
 	env = getenv(IO_BYPASS_ENV);
 	if (env && !strcasecmp(env, "cli_rpc")) {
-		D__DEBUG(DB_IO, "All client I/O RPCs will be dropped\n");
+		D_DEBUG(DB_IO, "All client I/O RPCs will be dropped\n");
 		cli_bypass_rpc = true;
 	}
 

@@ -115,7 +115,7 @@ pool_iv_ent_copy(d_sg_list_t *dst, d_sg_list_t *src)
 	}
 
 	dst->sg_iovs[0].iov_len = src->sg_iovs[0].iov_len;
-	D__DEBUG(DB_TRACE, "pool "DF_UUID" map ver %d\n",
+	D_DEBUG(DB_TRACE, "pool "DF_UUID" map ver %d\n",
 		 DP_UUID(dst_iv->piv_pool_uuid), dst_iv->piv_pool_map_ver);
 	return 0;
 }

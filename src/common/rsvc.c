@@ -84,7 +84,7 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 {
 	int chosen;
 
-	D__DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
+	D_DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
 	if (client->sc_leader_known && client->sc_leader_aliveness > 0) {
 		chosen = client->sc_leader_index;
 	} else {
@@ -142,7 +142,7 @@ rsvc_client_process_hint(struct rsvc_client *client,
 
 	if (client->sc_leader_known) {
 		if (hint->sh_term < client->sc_leader_term) {
-			D__DEBUG(DB_MD, "stale hint from rank %u: hint.term="
+			D_DEBUG(DB_MD, "stale hint from rank %u: hint.term="
 				DF_U64" hint.rank=%u\n", ep->ep_rank,
 				hint->sh_term, hint->sh_rank);
 			return;
@@ -157,13 +157,13 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	if (!found) {
 		int rc;
 
-		D__DEBUG(DB_MD, "unknown replica from rank %u: hint.term="DF_U64
+		D_DEBUG(DB_MD, "unknown replica from rank %u: hint.term="DF_U64
 			" hint.rank=%u\n", ep->ep_rank, hint->sh_term,
 			hint->sh_rank);
 		/* Append the unknown rank to tolerate user mistakes. */
 		rc = daos_rank_list_append(client->sc_ranks, hint->sh_rank);
 		if (rc != 0) {
-			D__DEBUG(DB_MD, "failed to append new rank: %d\n", rc);
+			D_DEBUG(DB_MD, "failed to append new rank: %d\n", rc);
 			return;
 		}
 		client->sc_leader_index = client->sc_ranks->rl_nr - 1;
@@ -177,7 +177,7 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	 * used instead.)
 	 */
 	client->sc_leader_aliveness = from_leader ? 2 : 1;
-	D__DEBUG(DB_MD, "new hint from rank %u: hint.term="DF_U64
+	D_DEBUG(DB_MD, "new hint from rank %u: hint.term="DF_U64
 		" hint.rank=%u\n", ep->ep_rank, hint->sh_term, hint->sh_rank);
 }
 
@@ -199,24 +199,24 @@ int
 rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 			 int rc_crt, int rc_svc, const struct rsvc_hint *hint)
 {
-	D__DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
+	D_DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
 	/*
 	 * Enumerate all cases of <rc_crt, rc_svc, hint>. Keep them at the same
 	 * indentation level, please.
 	 */
 	if (rc_crt != 0) {
-		D__DEBUG(DB_MD, "no reply from rank %u: rc_crt=%d\n",
+		D_DEBUG(DB_MD, "no reply from rank %u: rc_crt=%d\n",
 			ep->ep_rank, rc_crt);
 		rsvc_client_process_error(client, rc_crt, ep);
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (rc_svc == -DER_NOTLEADER &&
 		   (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID))) {
-		D__DEBUG(DB_MD, "non-leader reply without hint from rank %u\n",
+		D_DEBUG(DB_MD, "non-leader reply without hint from rank %u\n",
 			ep->ep_rank);
 		rsvc_client_process_error(client, rc_svc, ep);
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (rc_svc == -DER_NOTLEADER) {
-		D__DEBUG(DB_MD, "non-leader reply with hint from rank %u: "
+		D_DEBUG(DB_MD, "non-leader reply with hint from rank %u: "
 			"hint.term="DF_U64" hint.rank=%u\n", ep->ep_rank,
 			hint->sh_term, hint->sh_rank);
 		rsvc_client_process_error(client, rc_svc, ep);
@@ -225,11 +225,11 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID)) {
 		/* This may happen if the service wasn't found. */
-		D__DEBUG(DB_MD, "\"leader\" reply without hint from rank %u: "
+		D_DEBUG(DB_MD, "\"leader\" reply without hint from rank %u: "
 			"rc_svc=%d\n", ep->ep_rank, rc_svc);
 		return RSVC_CLIENT_PROCEED;
 	} else {
-		D__DEBUG(DB_MD, "leader reply with hint from rank %u: hint.term="
+		D_DEBUG(DB_MD, "leader reply with hint from rank %u: hint.term="
 			DF_U64" hint.rank=%u rc_svc=%d\n", ep->ep_rank,
 			hint->sh_term, hint->sh_rank, rc_svc);
 		rsvc_client_process_hint(client, hint, true /* from_leader */,

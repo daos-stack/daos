@@ -47,7 +47,7 @@ dc_tier_init(void)
 {
 	int rc = 0;
 
-	D__DEBUG(DF_TIER, "Entered dc_tier_init()\n");
+	D_DEBUG(DF_TIER, "Entered dc_tier_init()\n");
 	rc = daos_rpc_register(tier_rpcs, NULL, DAOS_TIER_MODULE);
 	if (rc != 0)
 		D__ERROR("rpc register failure: rc = %d\n", rc);
@@ -62,7 +62,7 @@ dc_tier_init(void)
 void
 dc_tier_fini(void)
 {
-	D__DEBUG(DF_TIER, "Entered dc_tier_fini()\n");
+	D_DEBUG(DF_TIER, "Entered dc_tier_fini()\n");
 	tier_teardown();
 	daos_rpc_unregister(tier_rpcs);
 }

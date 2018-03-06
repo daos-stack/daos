@@ -66,7 +66,7 @@ ds_iv_key_type_unregister(unsigned int key_id)
 		}
 	}
 
-	D__DEBUG(DB_TRACE, "can not find the key %d\n", key_id);
+	D_DEBUG(DB_TRACE, "can not find the key %d\n", key_id);
 	return 0;
 }
 
@@ -79,7 +79,7 @@ ds_iv_key_type_register(unsigned int key_id, struct ds_iv_entry_ops *ops)
 {
 	struct ds_iv_key_type *type;
 
-	D__DEBUG(DB_TRACE, "register key %d\n", key_id);
+	D_DEBUG(DB_TRACE, "register key %d\n", key_id);
 	type = iv_key_type_lookup(key_id);
 	if (type != NULL)
 		return 0;
@@ -260,8 +260,8 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	entry = priv;
 	D_ASSERT(entry != NULL);
 
-	D__DEBUG(DB_TRACE, "FETCH: Key [%d:%d] entry %p valid %s\n", key->rank,
-		 key->key_id, entry, entry->valid ? "yes" : "no");
+	D_DEBUG(DB_TRACE, "FETCH: Key [%d:%d] entry %p valid %s\n", key->rank,
+		key->key_id, entry, entry->valid ? "yes" : "no");
 
 	if (!entry->valid)
 		return -DER_IVCB_FORWARD;
@@ -349,8 +349,8 @@ iv_entry_find_or_create(struct ds_iv_ns *ns, crt_iv_key_t *iv_key,
 		entry->ref++;
 		if (got != NULL)
 			*got = entry;
-		D__DEBUG(DB_TRACE, "Get entry %p/%d key %d\n",
-			 entry, entry->ref, key->key_id);
+		D_DEBUG(DB_TRACE, "Get entry %p/%d key %d\n",
+			entry, entry->ref, key->key_id);
 		return 0;
 	}
 
@@ -411,8 +411,8 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	else
 		entry->valid = true;
 
-	D__DEBUG(DB_TRACE, "key id %d rank %d myrank %d valid %s\n",
-		 key->key_id, key->rank, myrank, invalidate ? "no" : "yes");
+	D_DEBUG(DB_TRACE, "key id %d rank %d myrank %d valid %s\n",
+		key->key_id, key->rank, myrank, invalidate ? "no" : "yes");
 
 	return 0;
 }
@@ -442,8 +442,8 @@ iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		return rc;
 
 	if (key->rank != myrank) {
-		D__DEBUG(DB_TRACE, "Key id %d rank %d myrank %d\n",
-			 key->key_id, key->rank, myrank);
+		D_DEBUG(DB_TRACE, "Key id %d rank %d myrank %d\n",
+			key->key_id, key->rank, myrank);
 		return -DER_IVCB_FORWARD;
 	}
 
@@ -527,7 +527,7 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	if (rc)
 		return rc;
 
-	D__DEBUG(DB_TRACE, "Put entry %p/%d\n", entry, entry->ref - 1);
+	D_DEBUG(DB_TRACE, "Put entry %p/%d\n", entry, entry->ref - 1);
 	if (--entry->ref > 0)
 		return 0;
 
@@ -616,8 +616,8 @@ ds_iv_ns_attach(crt_context_t ctx, unsigned int ns_id,
 		D_GOTO(out, rc);
 	}
 
-	D__DEBUG(DB_TRACE, "create iv_ns %d master rank %d myrank %d ns %p\n",
-		 ns_id, master_rank, myrank, ns);
+	D_DEBUG(DB_TRACE, "create iv_ns %d master rank %d myrank %d ns %p\n",
+		ns_id, master_rank, myrank, ns);
 	*p_iv_ns = ns;
 out:
 	return rc;
@@ -662,7 +662,7 @@ ds_iv_ns_destroy(void *ns)
 	if (iv_ns == NULL)
 		return;
 
-	D__DEBUG(DB_TRACE, "destroy ivns %d\n", iv_ns->iv_ns_id);
+	D_DEBUG(DB_TRACE, "destroy ivns %d\n", iv_ns->iv_ns_id);
 	d_list_del(&iv_ns->iv_ns_link);
 	ds_iv_ns_destroy_internal(iv_ns);
 }
@@ -760,7 +760,7 @@ iv_internal(struct ds_iv_ns *ns, unsigned int key_id,
 	iv_key.iov_buf_len = sizeof(key);
 	iv_key.iov_buf = &key;
 
-	D__DEBUG(DB_TRACE, "key_id %d opc %d\n", key_id, opc);
+	D_DEBUG(DB_TRACE, "key_id %d opc %d\n", key_id, opc);
 	memset(&cb_info, 0, sizeof(cb_info));
 	cb_info.future = future;
 	cb_info.key = &key;
@@ -790,7 +790,7 @@ iv_internal(struct ds_iv_ns *ns, unsigned int key_id,
 
 	ABT_future_wait(future);
 	rc = cb_info.result;
-	D__DEBUG(DB_TRACE, "key_id %d opc %d rc %d\n", key_id, opc, rc);
+	D_DEBUG(DB_TRACE, "key_id %d opc %d rc %d\n", key_id, opc, rc);
 out:
 	ABT_future_free(&future);
 	return rc;

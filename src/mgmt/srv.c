@@ -220,7 +220,7 @@ ds_mgmt_init()
 	if (rc)
 		return rc;
 
-	D__DEBUG(DB_MGMT, "successfull init call\n");
+	D_DEBUG(DB_MGMT, "successfull init call\n");
 	return 0;
 }
 
@@ -228,7 +228,7 @@ static int
 ds_mgmt_fini()
 {
 	ds_mgmt_tgt_fini();
-	D__DEBUG(DB_MGMT, "successfull fini call\n");
+	D_DEBUG(DB_MGMT, "successfull fini call\n");
 	return 0;
 }
 

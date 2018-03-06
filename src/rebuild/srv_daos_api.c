@@ -55,7 +55,7 @@ rebuild_need_retry_cb(tse_task_t *task, void *arg)
 	 * automatically, so let's just keep refreshing the
 	 * layout.
 	 */
-	D__DEBUG(DB_TRACE, "retry task %p\n", task);
+	D_DEBUG(DB_TRACE, "retry task %p\n", task);
 
 	/* let's check if the pool_map has been changed */
 	dc_obj_layout_refresh(*oh);

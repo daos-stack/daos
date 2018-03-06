@@ -261,7 +261,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	uint64_t		ghpce = 0;
 	int			rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": processing rpc %p\n",
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc);
 
 	/* Verify the pool handle capabilities. */
@@ -275,7 +275,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = rdb_tx_lookup(tx, &svc->cs_conts, &key, &value);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0)
-			D__DEBUG(DF_DSMS, DF_CONT": container already exists\n",
+			D_DEBUG(DF_DSMS, DF_CONT": container already exists\n",
 				DP_CONT(pool_hdl->sph_pool->sp_uuid,
 					in->cci_op.ci_uuid));
 		D__GOTO(out, rc);
@@ -346,7 +346,7 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 	crt_rpc_t		       *rpc;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": bcasting\n",
+	D_DEBUG(DF_DSMS, DF_CONT": bcasting\n",
 		DP_CONT(svc->cs_pool_uuid, cont_uuid));
 
 	rc = ds_cont_bcast_create(ctx, svc, CONT_TGT_DESTROY, &rpc);
@@ -372,7 +372,7 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
 		DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
 	return rc;
 }
@@ -387,7 +387,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rdb_path_t		kvs;
 	int			rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": processing rpc %p: force=%u\n",
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: force=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cdi_op.ci_uuid), rpc,
 		in->cdi_force);
 
@@ -438,7 +438,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 out_kvs:
 	rdb_path_fini(&kvs);
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cdi_op.ci_uuid), rpc,
 		rc);
 	return rc;
@@ -528,7 +528,7 @@ cont_open_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 	crt_rpc_t		       *rpc;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": bcasting: pool_hdl="DF_UUID" cont_hdl="
+	D_DEBUG(DF_DSMS, DF_CONT": bcasting: pool_hdl="DF_UUID" cont_hdl="
 		DF_UUID" capas="DF_X64"\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas);
@@ -559,7 +559,7 @@ cont_open_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": bcasted: pool_hdl="DF_UUID" cont_hdl="DF_UUID
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: pool_hdl="DF_UUID" cont_hdl="DF_UUID
 		" capas="DF_X64": %d\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas, rc);
@@ -577,7 +577,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct container_hdl	chdl;
 	int			rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" capas="
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" capas="
 		DF_X64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coi_op.ci_uuid), rpc,
 		DP_UUID(in->coi_op.ci_hdl), in->coi_capas);
@@ -622,7 +622,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		memset(&out->coo_epoch_state, 0, sizeof(out->coo_epoch_state));
 
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coi_op.ci_uuid), rpc,
 		rc);
 	return rc;
@@ -638,7 +638,7 @@ cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
 	crt_rpc_t		       *rpc;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": bcasting: recs[0].hdl="DF_UUID
+	D_DEBUG(DF_DSMS, DF_CONT": bcasting: recs[0].hdl="DF_UUID
 		" recs[0].hce="DF_U64" nrecs=%d\n",
 		DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[0].tcr_hdl),
 		recs[0].tcr_hce, nrecs);
@@ -666,7 +666,7 @@ cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": bcasted: hdls[0]="DF_UUID" nhdls=%d: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: hdls[0]="DF_UUID" nhdls=%d: %d\n",
 		DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[0].tcr_hdl),
 		nrecs, rc);
 	return rc;
@@ -712,7 +712,7 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 	int	rc;
 
 	D__ASSERTF(nrecs > 0, "%d\n", nrecs);
-	D__DEBUG(DF_DSMS, DF_CONT": closing %d recs: recs[0].hdl="DF_UUID
+	D_DEBUG(DF_DSMS, DF_CONT": closing %d recs: recs[0].hdl="DF_UUID
 		" recs[0].hce="DF_U64"\n", DP_CONT(svc->cs_pool_uuid, NULL),
 		nrecs, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce);
 
@@ -748,7 +748,7 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 	}
 
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": leaving: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": leaving: %d\n",
 		DP_CONT(svc->cs_pool_uuid, NULL), rc);
 	return rc;
 }
@@ -764,7 +764,7 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct cont_tgt_close_rec	rec;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc,
 		DP_UUID(in->cci_op.ci_hdl));
 
@@ -774,7 +774,7 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			D__DEBUG(DF_DSMS, DF_CONT": already closed: "DF_UUID"\n",
+			D_DEBUG(DF_DSMS, DF_CONT": already closed: "DF_UUID"\n",
 				DP_CONT(cont->c_svc->cs_pool->sp_uuid,
 					cont->c_uuid),
 				DP_UUID(in->cci_op.ci_hdl));
@@ -786,7 +786,7 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	uuid_copy(rec.tcr_hdl, in->cci_op.ci_hdl);
 	rec.tcr_hce = chdl.ch_hce;
 
-	D__DEBUG(DF_DSMS, DF_CONT": closing: hdl="DF_UUID" hce="DF_U64"\n",
+	D_DEBUG(DF_DSMS, DF_CONT": closing: hdl="DF_UUID" hce="DF_U64"\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, in->cci_op.ci_uuid),
 		DP_UUID(rec.tcr_hdl), rec.tcr_hce);
 
@@ -797,7 +797,7 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	rc = cont_close_one_hdl(tx, cont->c_svc, rpc->cr_ctx, rec.tcr_hdl);
 
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc,
 		rc);
 	return rc;
@@ -812,7 +812,7 @@ cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 	crt_rpc_t			*rpc;
 	int				 rc;
 
-	D__DEBUG(DF_DSMS,
+	D_DEBUG(DF_DSMS,
 		DF_CONT"bcasting pool_hld="DF_UUID" cont_hdl ="DF_UUID"\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(pool_hdl), DP_UUID(cont_hdl));
@@ -834,7 +834,7 @@ cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 	out = crt_reply_get(rpc);
 	rc  = out->tqo_rc;
 	if (rc != 0) {
-		D__DEBUG(DF_DSMS, DF_CONT": failed to query %d targets\n",
+		D_DEBUG(DF_DSMS, DF_CONT": failed to query %d targets\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		D__GOTO(out_rpc, rc = -DER_IO);
 	}
@@ -855,7 +855,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct cont_query_out  *out = crt_reply_get(rpc);
 	int			rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cqi_op.ci_uuid), rpc,
 		DP_UUID(in->cqi_op.ci_hdl));
 
@@ -982,7 +982,7 @@ ds_cont_close_by_pool_hdls(const uuid_t pool_uuid, uuid_t *pool_hdls,
 	int				nrecs;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": closing by %d pool hdls: pool_hdls[0]="
+	D_DEBUG(DF_DSMS, DF_CONT": closing by %d pool hdls: pool_hdls[0]="
 		DF_UUID"\n", DP_CONT(pool_uuid, NULL), n_pool_hdls,
 		DP_UUID(pool_hdls[0]));
 
@@ -1152,7 +1152,7 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	if (pool_hdl == NULL)
 		D__GOTO(out, rc = -DER_NO_HDL);
 
-	D__DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" opc=%u\n",
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" opc=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
 		DP_UUID(in->ci_hdl), opc);
 
@@ -1171,7 +1171,7 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	ds_pool_set_hint(svc->cs_db, &out->co_hint);
 	cont_svc_put_leader(svc);
 out_pool_hdl:
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: hdl="DF_UUID
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: hdl="DF_UUID
 		" opc=%u rc=%d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
 		DP_UUID(in->ci_hdl), opc, rc);

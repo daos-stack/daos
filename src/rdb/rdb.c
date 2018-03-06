@@ -52,7 +52,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	uint8_t			nreplicas = ranks->rl_nr;
 	volatile int		rc;
 
-	D__DEBUG(DB_ANY, "creating db %s with %u replicas\n", path, nreplicas);
+	D_DEBUG(DB_ANY, "creating db %s with %u replicas\n", path, nreplicas);
 
 	pmem = pmemobj_create(path, RDB_LAYOUT, size, 0666);
 	if (pmem == NULL) {
@@ -323,7 +323,7 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	}
 
 	*dbp = db;
-	D__DEBUG(DB_ANY, DF_DB": started db %s %p with %u replicas\n", DP_DB(db),
+	D_DEBUG(DB_ANY, DF_DB": started db %s %p with %u replicas\n", DP_DB(db),
 		path, db, nreplicas);
 	return 0;
 
@@ -358,7 +358,7 @@ rdb_stop(struct rdb *db)
 {
 	bool deleted;
 
-	D__DEBUG(DB_ANY, DF_DB": stopping db %p\n", DP_DB(db), db);
+	D_DEBUG(DB_ANY, DF_DB": stopping db %p\n", DP_DB(db), db);
 	ABT_mutex_lock(rdb_hash_lock);
 	deleted = d_hash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
 	ABT_mutex_unlock(rdb_hash_lock);

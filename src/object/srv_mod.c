@@ -39,7 +39,7 @@ obj_mod_init(void)
 
 	env = getenv(IO_BYPASS_ENV);
 	if (env && !strcasecmp(env, "srv_bulk")) {
-		D__DEBUG(DB_IO, "All bulk data will be dropped\n");
+		D_DEBUG(DB_IO, "All bulk data will be dropped\n");
 		srv_bypass_bulk = true;
 	}
 

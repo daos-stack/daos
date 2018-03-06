@@ -70,7 +70,7 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	lkey = (struct obj_lru_key *)key;
 	D__ASSERT(lkey != NULL);
 
-	D__DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
+	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_obj_id));
 
 	D__ALLOC_PTR(obj);
@@ -96,7 +96,7 @@ obj_lop_cmp_key(const void *key, unsigned int ksize, struct daos_llink *llink)
 	struct vos_object	*obj;
 	struct obj_lru_key	*hkey = (struct obj_lru_key *) key;
 
-	D__DEBUG(DB_TRACE, "LRU compare keys\n");
+	D_DEBUG(DB_TRACE, "LRU compare keys\n");
 	D__ASSERT(llink);
 	D__ASSERT(ksize == sizeof(struct obj_lru_key));
 
@@ -112,7 +112,7 @@ obj_lop_free(struct daos_llink *llink)
 {
 	struct vos_object	*obj;
 
-	D__DEBUG(DB_TRACE, "lru free callback for vos_obj_cache\n");
+	D_DEBUG(DB_TRACE, "lru free callback for vos_obj_cache\n");
 	D__ASSERT(llink);
 
 	obj = container_of(llink, struct vos_object, obj_llink);
@@ -129,7 +129,7 @@ obj_lop_print_key(void *key, unsigned int ksize)
 	struct obj_lru_key	*lkey = (struct obj_lru_key *)key;
 
 	D__ASSERT(lkey != NULL);
-	D__DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
+	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(lkey->olk_co_uuid), DP_UOID(lkey->olk_obj_id));
 }
 
@@ -145,7 +145,7 @@ vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
 {
 	int	rc;
 
-	D__DEBUG(DB_TRACE, "Creating an object cache %d\n", (1 << cache_size));
+	D_DEBUG(DB_TRACE, "Creating an object cache %d\n", (1 << cache_size));
 	rc = daos_lru_cache_create(cache_size, D_HASH_FT_NOLOCK,
 				   &obj_lru_ops, occ);
 	if (rc)
@@ -213,7 +213,7 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	cont = vos_hdl2cont(coh);
 	D__ASSERT(cont != NULL);
 
-	D__DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID"\n",
+	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(cont->vc_id), DP_UOID(oid));
 
 	/* Create the key for obj cache */
@@ -233,7 +233,7 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		    obj->obj_df->vo_epc_hi >= epoch)
 			D__GOTO(found, rc = 0);
 
-		D__DEBUG(DB_IO, "Evict obj ["DF_U64":"DF_U64" -> "DF_U64"]\n",
+		D_DEBUG(DB_IO, "Evict obj ["DF_U64":"DF_U64" -> "DF_U64"]\n",
 			obj->obj_df->vo_epc_lo, obj->obj_df->vo_epc_hi, epoch);
 
 		/* NB: we don't expect user wants to access many versions
@@ -244,7 +244,7 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		vos_obj_evict(obj);
 		vos_obj_release(occ, obj);
 	}
-	D__DEBUG(DB_TRACE, "%s durable object in epoch="DF_U64"\n",
+	D_DEBUG(DB_TRACE, "%s durable object in epoch="DF_U64"\n",
 		no_create ? "find" : "find/create", epoch);
 
 	if (no_create) {

@@ -76,7 +76,7 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	int	rc;
 	int	i;
 
-	D__DEBUG(DB_MGMT, DF_UUID": all tgts created, setting up pool "
+	D_DEBUG(DB_MGMT, DF_UUID": all tgts created, setting up pool "
 		"svc\n", DP_UUID(pool_uuid));
 
 	for (i = 0; i < ntargets; i++)
@@ -187,7 +187,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		D__GOTO(tgt_pool_create_fail, rc);
 	}
 
-	D__DEBUG(DB_MGMT, DF_UUID" create %zu tgts pool\n",
+	D_DEBUG(DB_MGMT, DF_UUID" create %zu tgts pool\n",
 		DP_UUID(pc_in->pc_pool_uuid), tc_out->tc_tgt_uuids.ca_count);
 
 	/** Gather target uuids ranks from collective RPC to start pool svc. */
@@ -206,7 +206,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		/** copy returned target UUID */
 		uuid_copy(tgt_uuids[idx], tc_out_uuids[i]);
 
-		D__DEBUG(DB_TRACE, "fill ranks %d idx %d "DF_UUID"\n",
+		D_DEBUG(DB_TRACE, "fill ranks %d idx %d "DF_UUID"\n",
 			tc_out_ranks[i], idx, DP_UUID(tc_out_uuids[i]));
 	}
 
@@ -272,7 +272,7 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 	/* TODO check metadata about the pool's existence?
 	 *      and check active pool connection for "force"
 	 */
-	D__DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n",
+	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n",
 		DP_UUID(pd_in->pd_pool_uuid));
 
 	rc = ds_pool_svc_destroy(pd_in->pd_pool_uuid);
@@ -284,7 +284,7 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 
 	rc = ds_mgmt_tgt_pool_destroy(pd_in->pd_pool_uuid, NULL);
 	if (rc == 0)
-		D__DEBUG(DB_MGMT, "Destroying pool "DF_UUID" succeed.\n",
+		D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID" succeed.\n",
 			DP_UUID(pd_in->pd_pool_uuid));
 	else
 		D__ERROR("Destroying pool "DF_UUID"failed, rc: %d.\n",

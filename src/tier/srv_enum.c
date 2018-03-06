@@ -65,7 +65,7 @@ ds_tier_enum(daos_handle_t coh, struct tier_enum_params *params)
 	}
 	rc = vos_iter_probe(hio, NULL);
 	if (rc) {
-		D__DEBUG(DF_TIERS, "failed to probe object iter %d\n", rc);
+		D_DEBUG(DF_TIERS, "failed to probe object iter %d\n", rc);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else
@@ -126,7 +126,7 @@ ds_tier_enum_dkeys(daos_handle_t coh, struct tier_enum_params *params,
 	}
 	rc = vos_iter_probe(hidk, NULL);
 	if (rc) {
-		D__DEBUG(DF_TIERS, "failed to probe dkey iter %d\n", rc);
+		D_DEBUG(DF_TIERS, "failed to probe dkey iter %d\n", rc);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		D__GOTO(out_iter, rc);
@@ -206,7 +206,7 @@ ds_tier_enum_akeys(daos_handle_t coh, struct tier_enum_params *params,
 			rc = tier_safecb(params->dep_akey_pre,
 					 params->dep_cbctx, &eak);
 			if (rc) {
-				D__DEBUG(DF_TIERS, "akey cb: nzret(%d)\n", rc);
+				D_DEBUG(DF_TIERS, "akey cb: nzret(%d)\n", rc);
 				D__GOTO(out_iter, rc);
 			}
 			if (params->dep_type != VOS_ITER_AKEY) {

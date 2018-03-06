@@ -110,11 +110,11 @@ cont_create_complete(tse_task_t *task, void *data)
 
 	rc = out->cco_op.co_rc;
 	if (rc != 0) {
-		D__DEBUG(DF_DSMC, "failed to create container: %d\n", rc);
+		D_DEBUG(DF_DSMC, "failed to create container: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
-	D__DEBUG(DF_DSMC, "completed creating container\n");
+	D_DEBUG(DF_DSMC, "completed creating container\n");
 
 out:
 	crt_req_decref(arg->rpc);
@@ -144,7 +144,7 @@ dc_cont_create(tse_task_t *task)
 	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX))
 		D__GOTO(err_pool, rc = -DER_NO_PERM);
 
-	D__DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
+	D_DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid));
 
 	ep.ep_grp = pool->dp_group;
@@ -204,11 +204,11 @@ cont_destroy_complete(tse_task_t *task, void *data)
 
 	rc = out->cdo_op.co_rc;
 	if (rc != 0) {
-		D__DEBUG(DF_DSMC, "failed to destroy container: %d\n", rc);
+		D_DEBUG(DF_DSMC, "failed to destroy container: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
-	D__DEBUG(DF_DSMC, "completed destroying container\n");
+	D_DEBUG(DF_DSMC, "completed destroying container\n");
 
 out:
 	crt_req_decref(arg->rpc);
@@ -242,7 +242,7 @@ dc_cont_destroy(tse_task_t *task)
 	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX))
 		D__GOTO(err_pool, rc = -DER_NO_PERM);
 
-	D__DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
+	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
 
 	ep.ep_grp = pool->dp_group;
@@ -353,7 +353,7 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	rc = out->coo_op.co_rc;
 	if (rc != 0) {
-		D__DEBUG(DF_DSMC, DF_CONT": failed to open container: %d\n",
+		D_DEBUG(DF_DSMC, DF_CONT": failed to open container: %d\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
 		D__GOTO(out, rc);
 	}
@@ -376,7 +376,7 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	dc_cont2hdl(cont, arg->hdlp);
 
-	D__DEBUG(DF_DSMC, DF_CONT": opened: cookie="DF_X64" hdl="DF_UUID
+	D_DEBUG(DF_DSMC, DF_CONT": opened: cookie="DF_X64" hdl="DF_UUID
 		" master\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
 		arg->hdlp->cookie, DP_UUID(cont->dc_cont_hdl));
 
@@ -504,7 +504,7 @@ dc_cont_open(tse_task_t *task)
 		dc_task_set_priv(task, cont);
 	}
 
-	D__DEBUG(DF_DSMC, DF_CONT": opening: hdl="DF_UUIDF" flags=%x\n",
+	D_DEBUG(DF_DSMC, DF_CONT": opening: hdl="DF_UUIDF" flags=%x\n",
 		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(cont->dc_cont_hdl),
 		args->flags);
 
@@ -549,7 +549,7 @@ err_pool:
 	dc_pool_put(pool);
 err:
 	tse_task_complete(task, rc);
-	D__DEBUG(DF_DSMC, "failed to open container: %d\n", rc);
+	D_DEBUG(DF_DSMC, "failed to open container: %d\n", rc);
 	return rc;
 }
 
@@ -584,7 +584,7 @@ cont_close_complete(tse_task_t *task, void *data)
 	rc = out->cco_op.co_rc;
 	if (rc == -DER_NO_HDL) {
 		/* The pool connection cannot be found on the server. */
-		D__DEBUG(DF_DSMC, DF_CONT": already disconnected: hdl="DF_UUID
+		D_DEBUG(DF_DSMC, DF_CONT": already disconnected: hdl="DF_UUID
 			" pool_hdl="DF_UUID"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid),
 			DP_UUID(cont->dc_cont_hdl), DP_UUID(pool->dp_pool_hdl));
@@ -594,7 +594,7 @@ cont_close_complete(tse_task_t *task, void *data)
 		D__GOTO(out, rc);
 	}
 
-	D__DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
+	D_DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
 		" master\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
 		arg->hdl.cookie, DP_UUID(cont->dc_cont_hdl));
 
@@ -646,7 +646,7 @@ dc_cont_close(tse_task_t *task)
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	D__ASSERT(pool != NULL);
 
-	D__DEBUG(DF_DSMC, DF_CONT": closing: cookie="DF_X64" hdl="DF_UUID"\n",
+	D_DEBUG(DF_DSMC, DF_CONT": closing: cookie="DF_X64" hdl="DF_UUID"\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), coh.cookie,
 		DP_UUID(cont->dc_cont_hdl));
 
@@ -658,7 +658,7 @@ dc_cont_close(tse_task_t *task)
 		d_list_del_init(&cont->dc_po_list);
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
-		D__DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
+		D_DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
 			"\n", DP_CONT(pool->dp_pool, cont->dc_uuid), coh.cookie,
 			DP_UUID(cont->dc_cont_hdl));
 		dc_pool_put(pool);
@@ -705,7 +705,7 @@ err_cont:
 	dc_cont_put(cont);
 err:
 	tse_task_complete(task, rc);
-	D__DEBUG(DF_DSMC, "failed to close container handle "DF_X64": %d\n",
+	D_DEBUG(DF_DSMC, "failed to close container handle "DF_X64": %d\n",
 		coh.cookie, rc);
 	return rc;
 }
@@ -741,12 +741,12 @@ cont_query_complete(tse_task_t *task, void *data)
 
 	rc = out->cqo_op.co_rc;
 	if (rc != 0) {
-		D__DEBUG(DF_DSMC, DF_CONT": failed to query container: %d\n",
+		D_DEBUG(DF_DSMC, DF_CONT": failed to query container: %d\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
 		D__GOTO(out, rc);
 	}
 
-	D__DEBUG(DF_DSMC, DF_CONT": Queried: using hdl="DF_UUID"\n",
+	D_DEBUG(DF_DSMC, DF_CONT": Queried: using hdl="DF_UUID"\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
 
@@ -793,7 +793,7 @@ dc_cont_query(tse_task_t *task)
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	D__ASSERT(pool != NULL);
 
-	D__DEBUG(DF_DSMC, DF_CONT": querying: hdl="DF_UUID"\n",
+	D_DEBUG(DF_DSMC, DF_CONT": querying: hdl="DF_UUID"\n",
 		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
 
@@ -834,7 +834,7 @@ err_cont:
 	dc_pool_put(pool);
 err:
 	tse_task_complete(task, rc);
-	D__DEBUG(DF_DSMC, "Failed to open container: %d\n", rc);
+	D_DEBUG(DF_DSMC, "Failed to open container: %d\n", rc);
 	return rc;
 }
 
@@ -893,7 +893,7 @@ dc_cont_l2g(daos_handle_t coh, daos_iov_t *glob)
 		D__GOTO(out_cont, rc = 0);
 	}
 	if (glob->iov_buf_len < glob_buf_size) {
-		D__DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
 			"provided, "DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;
@@ -992,7 +992,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 
 	dc_cont2hdl(cont, coh);
 
-	D__DEBUG(DF_DSMC, DF_UUID": opened "DF_UUID": cookie="DF_X64" hdl="
+	D_DEBUG(DF_DSMC, DF_UUID": opened "DF_UUID": cookie="DF_X64" hdl="
 		DF_UUID" slave\n", DP_UUID(pool->dp_pool),
 		DP_UUID(cont->dc_uuid), coh->cookie,
 		DP_UUID(cont->dc_cont_hdl));
@@ -1013,14 +1013,14 @@ dc_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 
 	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len ||
 	    glob.iov_len != dc_cont_glob_buf_size()) {
-		D__DEBUG(DF_DSMC, "Invalid parameter of glob, iov_buf %p, "
+		D_DEBUG(DF_DSMC, "Invalid parameter of glob, iov_buf %p, "
 			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
 			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
 		D__GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (coh == NULL) {
-		D__DEBUG(DF_DSMC, "Invalid parameter, NULL coh.\n");
+		D_DEBUG(DF_DSMC, "Invalid parameter, NULL coh.\n");
 		D__GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1120,7 +1120,7 @@ epoch_op_complete(tse_task_t *task, void *data)
 		D__GOTO(out, rc);
 	}
 
-	D__DEBUG(DF_DSMC, "completed epoch operation %u\n", opc);
+	D_DEBUG(DF_DSMC, "completed epoch operation %u\n", opc);
 
 	if (opc == CONT_EPOCH_HOLD)
 		*arg->eoa_epoch = out->ceo_epoch_state.es_lhe;
@@ -1172,7 +1172,7 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	D__ASSERT(pool != NULL);
 
-	D__DEBUG(DF_DSMC, DF_CONT": op=%u hdl="DF_UUID" epoch="DF_U64"\n",
+	D_DEBUG(DF_DSMC, DF_CONT": op=%u hdl="DF_UUID" epoch="DF_U64"\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), opc,
 		DP_UUID(cont->dc_cont_hdl), epoch == NULL ? 0 : *epoch);
 
@@ -1216,7 +1216,7 @@ err_pool:
 	dc_cont_put(cont);
 err:
 	tse_task_complete(task, rc);
-	D__DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc,
+	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc,
 		epoch == NULL ? 0 : *epoch, rc);
 	return rc;
 }

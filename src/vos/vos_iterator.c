@@ -169,7 +169,7 @@ vos_iter_next(daos_handle_t ih)
 	}
 
 	if (iter->it_state == VOS_ITS_END) {
-		D__DEBUG(DB_TRACE, "The end of iteration\n");
+		D_DEBUG(DB_TRACE, "The end of iteration\n");
 		return -DER_NONEXIST;
 	}
 
@@ -197,7 +197,7 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 	}
 
 	if (iter->it_state == VOS_ITS_END) {
-		D__DEBUG(DB_TRACE, "The end of iteration\n");
+		D_DEBUG(DB_TRACE, "The end of iteration\n");
 		return -DER_NONEXIST;
 	}
 
@@ -216,7 +216,7 @@ vos_iter_delete(daos_handle_t ih, void *args)
 	}
 
 	if (iter->it_state == VOS_ITS_END) {
-		D__DEBUG(DB_TRACE, "The end of iteration\n");
+		D_DEBUG(DB_TRACE, "The end of iteration\n");
 		return -DER_NONEXIST;
 	}
 

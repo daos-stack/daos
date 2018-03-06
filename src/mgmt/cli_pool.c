@@ -122,7 +122,7 @@ dc_pool_create(tse_task_t *task)
 	if (rc != 0)
 		D__GOTO(out_put_req, rc);
 
-	D__DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(args->uuid));
+	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(args->uuid));
 
 	/** send the request */
 	return daos_rpc_send(rpc_req, task);
@@ -207,7 +207,7 @@ dc_pool_destroy(tse_task_t *task)
 	if (rc != 0)
 		D__GOTO(out_put_req, rc);
 
-	D__DEBUG(DB_MGMT, DF_UUID": destroying pool\n", DP_UUID(args->uuid));
+	D_DEBUG(DB_MGMT, DF_UUID": destroying pool\n", DP_UUID(args->uuid));
 
 	/** send the request */
 	return daos_rpc_send(rpc_req, task);

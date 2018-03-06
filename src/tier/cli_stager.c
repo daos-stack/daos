@@ -112,7 +112,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	int			*prc;
 	daos_cont_open_t	*cont_args;
 
-	D__DEBUG(DF_MISC, "Entering tier_fetch_cont()\n");
+	D_DEBUG(DF_MISC, "Entering tier_fetch_cont()\n");
 
 	from = g_tierctx.dtc_colder;
 	if (from == NULL) {

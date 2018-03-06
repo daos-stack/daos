@@ -87,7 +87,7 @@ cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 	D__ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
 	ukey = (struct d_uuid *)key_iov->iov_buf;
-	D__DEBUG(DB_DF, "Allocating container uuid=%s\n", DP_UUID(ukey->uuid));
+	D_DEBUG(DB_DF, "Allocating container uuid=%s\n", DP_UUID(ukey->uuid));
 
 	args = (struct cont_df_args *)(val_iov->iov_buf);
 	cont_mmid = umem_znew_typed(&tins->ti_umm, struct vos_cont_df);
@@ -131,7 +131,7 @@ static int
 cont_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		   daos_iov_t *key, daos_iov_t *val)
 {
-	D__DEBUG(DB_DF, "Record exists already. Nothing to do\n");
+	D_DEBUG(DB_DF, "Record exists already. Nothing to do\n");
 	return 0;
 }
 
@@ -243,7 +243,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 		return -DER_INVAL;
 	}
 
-	D__DEBUG(DB_TRACE, "looking up co_id in container index\n");
+	D_DEBUG(DB_TRACE, "looking up co_id in container index\n");
 	uuid_copy(ukey.uuid, co_uuid);
 	args.ca_pool = vpool;
 
@@ -287,7 +287,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	struct cont_df_args		args;
 	struct vos_container		*cont = NULL;
 
-	D__DEBUG(DB_TRACE, "Open container "DF_UUID"\n", DP_UUID(co_uuid));
+	D_DEBUG(DB_TRACE, "Open container "DF_UUID"\n", DP_UUID(co_uuid));
 
 	vpool = vos_hdl2pool(poh);
 	if (vpool == NULL) {
@@ -302,14 +302,14 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	 */
 	rc = cont_lookup(&ukey, &cont);
 	if (rc == 0) {
-		D__DEBUG(DB_TRACE, "Found handle in DRAM UUID hash\n");
+		D_DEBUG(DB_TRACE, "Found handle in DRAM UUID hash\n");
 		*coh = vos_cont2hdl(cont);
 		D__GOTO(exit, rc);
 	}
 
 	rc = cont_df_lookup(vpool, &ukey, &args);
 	if (rc) {
-		D__DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
+		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
 			DP_UUID(co_uuid));
 		D__GOTO(exit, rc);
 	}
@@ -400,7 +400,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	int				 rc;
 
 	uuid_copy(uuid.uuid, co_uuid);
-	D__DEBUG(DB_TRACE, "Destroying CO ID in container index "DF_UUID"\n",
+	D_DEBUG(DB_TRACE, "Destroying CO ID in container index "DF_UUID"\n",
 		DP_UUID(uuid.uuid));
 
 	vpool = vos_hdl2pool(poh);
@@ -418,7 +418,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 
 	rc = cont_df_lookup(vpool, &uuid, &args);
 	if (rc) {
-		D__DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
+		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
 			DP_UUID(co_uuid));
 		D__GOTO(exit, rc);
 	}
@@ -466,7 +466,7 @@ vos_cont_tab_register()
 {
 	int	rc;
 
-	D__DEBUG(DB_DF, "Registering Container table class: %d\n",
+	D_DEBUG(DB_DF, "Registering Container table class: %d\n",
 		VOS_BTR_CONT_TABLE);
 
 	rc = dbtree_class_register(VOS_BTR_CONT_TABLE, 0, &vct_ops);
@@ -484,7 +484,7 @@ vos_cont_tab_create(struct umem_attr *p_umem_attr,
 	daos_handle_t		btr_hdl;
 
 	D__ASSERT(ctab_df->ctb_btree.tr_class == 0);
-	D__DEBUG(DB_DF, "Create container table, type=%d\n", VOS_BTR_CONT_TABLE);
+	D_DEBUG(DB_DF, "Create container table, type=%d\n", VOS_BTR_CONT_TABLE);
 
 	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, 0, CT_BTREE_ORDER,
 				   p_umem_attr, &ctab_df->ctb_btree, &btr_hdl);

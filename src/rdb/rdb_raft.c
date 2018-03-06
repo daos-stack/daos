@@ -77,7 +77,7 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 	int				rc;
 
 	D__ASSERT(db->d_raft == raft);
-	D__DEBUG(DB_ANY, DF_DB": sending rv to node %d rank %u: term=%d\n",
+	D_DEBUG(DB_ANY, DF_DB": sending rv to node %d rank %u: term=%d\n",
 		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
 		msg->term);
 
@@ -160,7 +160,7 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 	int				rc;
 
 	D__ASSERT(db->d_raft == raft);
-	D__DEBUG(DB_ANY, DF_DB": sending ae to node %u rank %u: term=%d\n",
+	D_DEBUG(DB_ANY, DF_DB": sending ae to node %u rank %u: term=%d\n",
 		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
 		msg->term);
 
@@ -301,9 +301,9 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	buf = value.iov_buf;
 	entry->data.buf = buf->dre_bytes;
 
-	D__DEBUG(DB_TRACE, DF_DB": appended entry "DF_U64": term=%d type=%d "
-		 "buf=%p len=%u\n", DP_DB(db), i, entry->term, entry->type,
-		 entry->data.buf, entry->data.len);
+	D_DEBUG(DB_TRACE, DF_DB": appended entry "DF_U64": term=%d type=%d "
+		"buf=%p len=%u\n", DP_DB(db), i, entry->term, entry->type,
+		entry->data.buf, entry->data.len);
 	return 0;
 }
 
@@ -322,9 +322,9 @@ rdb_raft_cb_log_delete(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		D__ERROR(DF_DB": failed to delete entry: %d\n", DP_DB(db), rc);
 		return rc;
 	}
-	D__DEBUG(DB_TRACE, DF_DB": deleted entry "DF_U64": term=%d type=%d "
-		 "buf=%p len=%u\n", DP_DB(db), i, entry->term, entry->type,
-		 entry->data.buf, entry->data.len);
+	D_DEBUG(DB_TRACE, DF_DB": deleted entry "DF_U64": term=%d type=%d "
+		"buf=%p len=%u\n", DP_DB(db), i, entry->term, entry->type,
+		entry->data.buf, entry->data.len);
 	return 0;
 }
 
@@ -337,10 +337,10 @@ rdb_raft_cb_debug(raft_server_t *raft, raft_node_t *node, void *arg,
 	if (node != NULL) {
 		struct rdb_raft_node *rdb_node = raft_node_get_udata(node);
 
-		D__DEBUG(DB_ANY, DF_DB": %s: rank=%u\n", DP_DB(db), buf,
+		D_DEBUG(DB_ANY, DF_DB": %s: rank=%u\n", DP_DB(db), buf,
 			rdb_node->dn_rank);
 	} else {
-		D__DEBUG(DB_ANY, DF_DB": %s\n", DP_DB(db), buf);
+		D_DEBUG(DB_ANY, DF_DB": %s\n", DP_DB(db), buf);
 	}
 }
 
@@ -433,7 +433,7 @@ rdb_raft_process_event(struct rdb *db, struct rdb_raft_event *event)
 		if (raft_is_leader(db->d_raft) &&
 		    raft_get_current_term(db->d_raft) ==
 		    event->dre_term) {
-			D__DEBUG(DB_MD, DF_DB": stepping down from term "DF_U64
+			D_DEBUG(DB_MD, DF_DB": stepping down from term "DF_U64
 				"\n", DP_DB(db), event->dre_term);
 			/* No need to generate a DOWN event. */
 			raft_become_follower(db->d_raft);
@@ -470,7 +470,7 @@ rdb_callbackd(void *arg)
 {
 	struct rdb *db = arg;
 
-	D__DEBUG(DB_ANY, DF_DB": callbackd starting\n", DP_DB(db));
+	D_DEBUG(DB_ANY, DF_DB": callbackd starting\n", DP_DB(db));
 	for (;;) {
 		struct rdb_raft_event	event;
 		bool			stop;
@@ -492,7 +492,7 @@ rdb_callbackd(void *arg)
 		rdb_raft_process_event(db, &event);
 		ABT_thread_yield();
 	}
-	D__DEBUG(DB_ANY, DF_DB": callbackd stopping\n", DP_DB(db));
+	D_DEBUG(DB_ANY, DF_DB": callbackd stopping\n", DP_DB(db));
 }
 
 static int
@@ -581,7 +581,7 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 		  committed, state->drs_committed);
 	if (committed != state->drs_committed) {
 		ABT_cond_broadcast(db->d_committed_cv);
-		D__DEBUG(DB_ANY, DF_DB": committed to entry "DF_U64"\n",
+		D_DEBUG(DB_ANY, DF_DB": committed to entry "DF_U64"\n",
 			DP_DB(db), committed);
 	}
 
@@ -773,7 +773,7 @@ rdb_apply_to(struct rdb *db, uint64_t index)
 		db->d_applied = i;
 		ABT_cond_broadcast(db->d_applied_cv);
 		ABT_mutex_unlock(db->d_mutex);
-		D__DEBUG(DB_ANY, DF_DB": applied to entry "DF_U64"\n",
+		D_DEBUG(DB_ANY, DF_DB": applied to entry "DF_U64"\n",
 			DP_DB(db), i);
 	}
 	return 0;
@@ -786,7 +786,7 @@ rdb_applyd(void *arg)
 	struct rdb     *db = arg;
 	int		rc;
 
-	D__DEBUG(DB_ANY, DF_DB": applyd starting\n", DP_DB(db));
+	D_DEBUG(DB_ANY, DF_DB": applyd starting\n", DP_DB(db));
 	for (;;) {
 		uint64_t	committed;
 		bool		stop;
@@ -812,7 +812,7 @@ rdb_applyd(void *arg)
 			break;
 		ABT_thread_yield();
 	}
-	D__DEBUG(DB_ANY, DF_DB": applyd stopping: %d\n", DP_DB(db), rc);
+	D_DEBUG(DB_ANY, DF_DB": applyd stopping: %d\n", DP_DB(db), rc);
 }
 
 /* Generate a random double in [0.0, 1.0]. */
@@ -834,7 +834,7 @@ rdb_timerd(void *arg)
 	double		t_prev;		/* timestamp of previous beat (s) */
 	int		rc;
 
-	D__DEBUG(DB_ANY, DF_DB": timerd starting\n", DP_DB(db));
+	D_DEBUG(DB_ANY, DF_DB": timerd starting\n", DP_DB(db));
 	t = ABT_get_wtime();
 	t_prev = t;
 	do {
@@ -858,7 +858,7 @@ rdb_timerd(void *arg)
 		while ((t = ABT_get_wtime()) < t_prev + d && !db->d_stop)
 			ABT_thread_yield();
 	} while (!db->d_stop);
-	D__DEBUG(DB_ANY, DF_DB": timerd stopping\n", DP_DB(db));
+	D_DEBUG(DB_ANY, DF_DB": timerd stopping\n", DP_DB(db));
 }
 
 int
@@ -919,7 +919,7 @@ rdb_raft_log_load_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
 		return rdb_raft_rc(rc);
 	}
 
-	D__DEBUG(DB_TRACE, "loaded entry "DF_U64": term=%d type=%d len=%u\n",
+	D_DEBUG(DB_TRACE, "loaded entry "DF_U64": term=%d type=%d len=%u\n",
 		 index, entry.term, entry.type, entry.data.len);
 	return 0;
 }
@@ -1074,9 +1074,9 @@ rdb_raft_start(struct rdb *db)
 
 	election_timeout = rdb_raft_get_election_timeout(self_id, nreplicas);
 	request_timeout = rdb_raft_get_request_timeout();
-	D__DEBUG(DB_ANY, DF_DB": election timeout %d ms\n", DP_DB(db),
+	D_DEBUG(DB_ANY, DF_DB": election timeout %d ms\n", DP_DB(db),
 		election_timeout);
-	D__DEBUG(DB_ANY, DF_DB": request timeout %d ms\n", DP_DB(db),
+	D_DEBUG(DB_ANY, DF_DB": request timeout %d ms\n", DP_DB(db),
 		request_timeout);
 	raft_set_election_timeout(db->d_raft, election_timeout);
 	raft_set_request_timeout(db->d_raft, request_timeout);
@@ -1170,7 +1170,7 @@ rdb_raft_stop(struct rdb *db)
 			  RDB_BASE_REFS);
 		if (db->d_ref == RDB_BASE_REFS)
 			break;
-		D__DEBUG(DB_MD, DF_DB": waiting for %d references\n", DP_DB(db),
+		D_DEBUG(DB_MD, DF_DB": waiting for %d references\n", DP_DB(db),
 			db->d_ref - RDB_BASE_REFS);
 		ABT_cond_wait(db->d_ref_cv, db->d_mutex);
 	}
@@ -1237,7 +1237,7 @@ rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term)
 {
 	int rc = 0;
 
-	D__DEBUG(DB_ANY, DF_DB": waiting for entry "DF_U64" to be applied\n",
+	D_DEBUG(DB_ANY, DF_DB": waiting for entry "DF_U64" to be applied\n",
 		DP_DB(db), index);
 	ABT_mutex_lock(db->d_mutex);
 	for (;;) {
@@ -1290,7 +1290,7 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	if (db->d_stop)
 		D__GOTO(out_db, rc = -DER_CANCELED);
 
-	D__DEBUG(DB_ANY, DF_DB": handling raft rv from rank %u\n", DP_DB(db),
+	D_DEBUG(DB_ANY, DF_DB": handling raft rv from rank %u\n", DP_DB(db),
 		rpc->cr_ep.ep_rank);
 	node = rdb_raft_find_node(db, rpc->cr_ep.ep_rank);
 	if (node == NULL)
@@ -1333,7 +1333,7 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	if (db->d_stop)
 		D__GOTO(out_db, rc = -DER_CANCELED);
 
-	D__DEBUG(DB_ANY, DF_DB": handling raft ae from rank %u\n", DP_DB(db),
+	D_DEBUG(DB_ANY, DF_DB": handling raft ae from rank %u\n", DP_DB(db),
 		rpc->cr_ep.ep_rank);
 	node = rdb_raft_find_node(db, rpc->cr_ep.ep_rank);
 	if (node == NULL)
@@ -1372,7 +1372,7 @@ rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 
 	rc = ((struct rdb_op_out *)out)->ro_rc;
 	if (rc != 0) {
-		D__DEBUG(DB_MD, DF_DB": opc %u failed: %d\n", DP_DB(db), opc,
+		D_DEBUG(DB_MD, DF_DB": opc %u failed: %d\n", DP_DB(db), opc,
 			rc);
 		return;
 	}

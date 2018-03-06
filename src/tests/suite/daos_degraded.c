@@ -160,7 +160,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	for (i = 0; i < g_dkeys; i++) {
 		sprintf(rec[i], val_fmt, i);
 		rec_size[i] = strlen(rec[i]);
-		D__DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
+		D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
 			dkey[i], (int)rec_size[i], rec[i]);
 		insert_single(dkey[i], akey, offset[i], rec[i],
 			      rec_size[i], epoch, &req);
@@ -229,7 +229,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 
 		for (ptr = buf, i = 0; i < number; i++) {
 			snprintf(dkey_enum, kds[i].kd_key_len + 1, "%s", ptr);
-			D__DEBUG(DF_MISC, "i %d key %s len %d\n", i, dkey_enum,
+			D_DEBUG(DF_MISC, "i %d key %s len %d\n", i, dkey_enum,
 				(int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 		}

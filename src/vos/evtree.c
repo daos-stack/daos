@@ -284,7 +284,7 @@ evt_tcx_set_trace(struct evt_context *tcx, int level,
 
 	D__ASSERT(at >= 0 && at < tcx->tc_order);
 
-	D__DEBUG(DB_TRACE, "set trace[%d] "TMMID_PF"/%d\n",
+	D_DEBUG(DB_TRACE, "set trace[%d] "TMMID_PF"/%d\n",
 		level, TMMID_P(nd_mmid), at);
 
 	trace = evt_tcx_trace(tcx, level);
@@ -353,13 +353,13 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 		tcx->tc_feats	= feats;
 		tcx->tc_order	= order;
 		depth		= 0;
-		D__DEBUG(DB_TRACE, "Create context for a new tree\n");
+		D_DEBUG(DB_TRACE, "Create context for a new tree\n");
 
 	} else {
 		tcx->tc_feats	= root->tr_feats;
 		tcx->tc_order	= root->tr_order;
 		depth		= root->tr_depth;
-		D__DEBUG(DB_TRACE, "Load tree context from "TMMID_PF"\n",
+		D_DEBUG(DB_TRACE, "Load tree context from "TMMID_PF"\n",
 			TMMID_P(root_mmid));
 	}
 
@@ -368,7 +368,7 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 	return 0;
 
  failed:
-	D__DEBUG(DB_TRACE, "Failed to create tree context: %d\n", rc);
+	D_DEBUG(DB_TRACE, "Failed to create tree context: %d\n", rc);
 	evt_tcx_decref(tcx);
 	return rc;
 }
@@ -482,7 +482,7 @@ evt_ptr_copy(struct evt_context *tcx, TMMID(struct evt_ptr) dst_mmid,
 	struct evt_ptr *dst_ptr = evt_tmmid2ptr(tcx, dst_mmid);
 	int		ref	= dst_ptr->pt_ref;
 
-	D__DEBUG(DB_IO, "dst r=%d, num=%d, nob=%d, src r=%d, num=%d, nob=%d\n",
+	D_DEBUG(DB_IO, "dst r=%d, num=%d, nob=%d, src r=%d, num=%d, nob=%d\n",
 		dst_ptr->pt_ref, (int)dst_ptr->pt_inum, dst_ptr->pt_inob,
 		src_ptr->pt_ref, (int)src_ptr->pt_inum, src_ptr->pt_inob);
 
@@ -523,7 +523,7 @@ evt_ptr_copy_sgl(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid,
 		daos_iov_t *iov = &sgl->sg_iovs[i];
 
 		if (nob < iov->iov_len) {
-			D__DEBUG(DB_IO, "sgl is too large\n");
+			D_DEBUG(DB_IO, "sgl is too large\n");
 			return -DER_IO_INVAL;
 		}
 
@@ -533,7 +533,7 @@ evt_ptr_copy_sgl(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid,
 	}
 
 	if (nob != 0) /* ignore if data buffer is short */
-		D__DEBUG(DB_IO, "sgl is too small\n");
+		D_DEBUG(DB_IO, "sgl is too small\n");
 
 	return 0;
 }
@@ -720,7 +720,7 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	if (TMMID_IS_NULL(nd_mmid))
 		return -DER_NOMEM;
 
-	D__DEBUG(DB_TRACE, "Allocate new node "TMMID_PF"\n", TMMID_P(nd_mmid));
+	D_DEBUG(DB_TRACE, "Allocate new node "TMMID_PF"\n", TMMID_P(nd_mmid));
 	nd = evt_tmmid2ptr(tcx, nd_mmid);
 	nd->tn_flags = flags;
 
@@ -749,7 +749,7 @@ evt_node_destroy(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	nd = evt_tmmid2ptr(tcx, nd_mmid);
 	leaf = evt_node_is_leaf(tcx, nd_mmid);
 
-	D__DEBUG(DB_TRACE, "Destroy %s node at level %d (nr = %d)\n",
+	D_DEBUG(DB_TRACE, "Destroy %s node at level %d (nr = %d)\n",
 		leaf ? "leaf" : "", level, nd->tn_nr);
 
 	for (i = 0; i < nd->tn_nr; i++) {
@@ -811,7 +811,7 @@ evt_node_mbr_cal(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid)
 		rect = evt_node_rect_at(tcx, nd_mmid, i);
 		evt_rect_merge(mbr, rect);
 	}
-	D__DEBUG(DB_TRACE, "Compute out MBR "DF_RECT"("TMMID_PF"), nr=%d\n",
+	D_DEBUG(DB_TRACE, "Compute out MBR "DF_RECT"("TMMID_PF"), nr=%d\n",
 		DP_RECT(mbr), TMMID_P(nd_mmid), node->tn_nr);
 }
 
@@ -855,7 +855,7 @@ evt_node_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	nd  = evt_tmmid2ptr(tcx, nd_mmid);
 	mbr = evt_node_mbr_get(tcx, nd_mmid);
 
-	D__DEBUG(DB_TRACE, "Insert "DF_RECT" into "DF_RECT"("TMMID_PF")\n",
+	D_DEBUG(DB_TRACE, "Insert "DF_RECT" into "DF_RECT"("TMMID_PF")\n",
 		DP_RECT(&ent->en_rect), DP_RECT(mbr), TMMID_P(nd_mmid));
 
 	rc = tcx->tc_ops->po_insert(tcx, nd_mmid, ent);
@@ -866,7 +866,7 @@ evt_node_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		} else {
 			changed = evt_rect_merge(&nd->tn_mbr, &ent->en_rect);
 		}
-		D__DEBUG(DB_TRACE, "New MBR is "DF_RECT", nr=%d\n",
+		D_DEBUG(DB_TRACE, "New MBR is "DF_RECT", nr=%d\n",
 			DP_RECT(mbr), nd->tn_nr);
 	}
 
@@ -946,7 +946,7 @@ evt_root_fini(struct evt_context *tcx)
 	if (TMMID_IS_NULL(tcx->tc_root_mmid)) {
 		struct evt_root *root = tcx->tc_root;
 
-		D__DEBUG(DB_TRACE, "Destroy inplace created tree root\n");
+		D_DEBUG(DB_TRACE, "Destroy inplace created tree root\n");
 		if (root == NULL)
 			return;
 
@@ -956,7 +956,7 @@ evt_root_fini(struct evt_context *tcx)
 		memset(root, 0, sizeof(*root));
 
 	} else {
-		D__DEBUG(DB_TRACE, "Destroy tree root\n");
+		D_DEBUG(DB_TRACE, "Destroy tree root\n");
 		umem_free_typed(evt_umm(tcx), tcx->tc_root_mmid);
 	}
 
@@ -1099,7 +1099,7 @@ evt_clip_entry(struct evt_context *tcx, struct evt_entry *ent)
 		D__ASSERT(rt1->rc_epc_lo <= rt2->rc_epc_lo);
 
 		if (rt1->rc_epc_lo < rt2->rc_epc_lo) { /* cap epoch */
-			D__DEBUG(DB_TRACE,
+			D_DEBUG(DB_TRACE,
 				"Recap epoch to "DF_U64" for "DF_RECT"\n",
 				rt2->rc_epc_lo - 1, DP_RECT(rt1));
 
@@ -1111,7 +1111,7 @@ evt_clip_entry(struct evt_context *tcx, struct evt_entry *ent)
 		D__ASSERT(!replaced);
 		D__ASSERT(evt_rect_equal_width(rt1, rt2));
 
-		D__DEBUG(DB_TRACE, "Replacing "DF_RECT"\n", DP_RECT(rt1));
+		D_DEBUG(DB_TRACE, "Replacing "DF_RECT"\n", DP_RECT(rt1));
 		evt_ptr_copy(tcx, umem_id_u2t(entmp->en_mmid, struct evt_ptr),
 			     umem_id_u2t(ent->en_mmid, struct evt_ptr));
 		ent->en_mmid = entmp->en_mmid;
@@ -1120,7 +1120,7 @@ evt_clip_entry(struct evt_context *tcx, struct evt_entry *ent)
 	evt_ent_list_fini(&tcx->tc_ent_list);
 
 	if (replaced) {
-		D__DEBUG(DB_TRACE, "Replaced\n");
+		D_DEBUG(DB_TRACE, "Replaced\n");
 		return 0; /* nothing to insert */
 	}
 
@@ -1214,7 +1214,7 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 		}
 		/* Try to split */
 
-		D__DEBUG(DB_TRACE, "Split node at level %d\n", level);
+		D_DEBUG(DB_TRACE, "Split node at level %d\n", level);
 
 		leaf = evt_node_is_leaf(tcx, nm_cur);
 		rc = evt_node_alloc(tcx, leaf ? EVT_NODE_LEAF : 0, &nm_new);
@@ -1223,7 +1223,7 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 
 		rc = evt_node_split(tcx, leaf, nm_cur, nm_new);
 		if (rc != 0) {
-			D__DEBUG(DB_TRACE, "Failed to split node: %d\n", rc);
+			D_DEBUG(DB_TRACE, "Failed to split node: %d\n", rc);
 			D__GOTO(failed, rc);
 		}
 
@@ -1256,7 +1256,7 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 			continue;
 		}
 
-		D__DEBUG(DB_TRACE, "Create a new root, depth=%d.\n",
+		D_DEBUG(DB_TRACE, "Create a new root, depth=%d.\n",
 			tcx->tc_root->tr_depth + 1);
 
 		D__ASSERT(evt_node_is_root(tcx, nm_cur));
@@ -1299,7 +1299,7 @@ evt_insert_entry(struct evt_context *tcx, struct evt_entry *ent)
 	int			 level;
 	int			 i;
 
-	D__DEBUG(DB_TRACE, "Inserting rectangle "DF_RECT"\n",
+	D_DEBUG(DB_TRACE, "Inserting rectangle "DF_RECT"\n",
 		DP_RECT(&ent->en_rect));
 
 	evt_tcx_reset_trace(tcx);
@@ -1365,7 +1365,7 @@ evt_insert_entries(struct evt_context *tcx)
 	D_EXIT;
 	return 0;
 failed:
-	D__DEBUG(DB_IO, "Failed to add rect list: %d\n", rc);
+	D_DEBUG(DB_IO, "Failed to add rect list: %d\n", rc);
 	return rc;
 }
 
@@ -1584,7 +1584,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 	int			 i;
 	int			 rc = 0;
 
-	D__DEBUG(DB_TRACE, "Searching rectangle "DF_RECT"\n", DP_RECT(rect));
+	D_DEBUG(DB_TRACE, "Searching rectangle "DF_RECT"\n", DP_RECT(rect));
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
@@ -1602,7 +1602,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 		mbr  = evt_node_mbr_get(tcx, nd_mmid);
 
 		D__ASSERT(!leaf || at == 0);
-		D__DEBUG(DB_TRACE,
+		D_DEBUG(DB_TRACE,
 			"Checking "DF_RECT"("TMMID_PF"), l=%d, a=%d, f=%d\n",
 			DP_RECT(mbr), TMMID_P(nd_mmid), level, at, leaf);
 
@@ -1612,7 +1612,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 			int			 overlap;
 
 			rtmp = evt_node_rect_at(tcx, nd_mmid, i);
-			D__DEBUG(DB_TRACE, " rect[%d]="DF_RECT"\n",
+			D_DEBUG(DB_TRACE, " rect[%d]="DF_RECT"\n",
 				i, DP_RECT(rtmp));
 
 			overlap = evt_rect_overlap(rtmp, rect, leaf);
@@ -1641,10 +1641,10 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 				/* break the internal loop and enter the
 				 * child node.
 				 */
-				D__DEBUG(DB_TRACE, "Enter the next level\n");
+				D_DEBUG(DB_TRACE, "Enter the next level\n");
 				break;
 			}
-			D__DEBUG(DB_TRACE, "Found overlapped leaf rect\n");
+			D_DEBUG(DB_TRACE, "Found overlapped leaf rect\n");
 
 			/* early check */
 			switch (find_opc) {
@@ -1666,7 +1666,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 				    overlap == RT_OVERLAP_SAME)
 					break; /* matched */
 
-				D__DEBUG(DB_IO, "Invalid overlap for capping :"
+				D_DEBUG(DB_IO, "Invalid overlap for capping :"
 					DF_RECT" overlaps with "DF_RECT"\n",
 					DP_RECT(rect), DP_RECT(rtmp));
 				D__GOTO(out, rc = -DER_NO_PERM);
@@ -1721,7 +1721,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 			struct evt_trace *trace;
 
 			if (level == 0) { /* done with the root */
-				D__DEBUG(DB_TRACE, "Found total %d rects\n",
+				D_DEBUG(DB_TRACE, "Found total %d rects\n",
 					ent_list ? ent_list->el_ent_nr : 0);
 				return 0; /* succeed and return */
 			}
@@ -1790,7 +1790,7 @@ evt_move_trace(struct evt_context *tcx, bool forward)
 		    (trace->tr_at == 0 && !forward)) {
 			if (evt_node_is_root(tcx, nd_mmid)) {
 				D__ASSERT(trace == tcx->tc_trace);
-				D__DEBUG(DB_TRACE, "End\n");
+				D_DEBUG(DB_TRACE, "End\n");
 				return false;
 			}
 			/* check its parent */
@@ -1854,7 +1854,7 @@ evt_open_inplace(struct evt_root *root, struct umem_attr *uma,
 	int		    rc;
 
 	if (root->tr_order == 0) {
-		D__DEBUG(DB_TRACE, "Tree order is zero\n");
+		D_DEBUG(DB_TRACE, "Tree order is zero\n");
 		return -DER_INVAL;
 	}
 
@@ -1896,12 +1896,12 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 	int		    rc;
 
 	if (!(feats & EVT_FEAT_SORT_SOFF)) {
-		D__DEBUG(DB_TRACE, "Unknown feature bits "DF_X64"\n", feats);
+		D_DEBUG(DB_TRACE, "Unknown feature bits "DF_X64"\n", feats);
 		return -DER_INVAL;
 	}
 
 	if (order < EVT_ORDER_MIN || order > EVT_ORDER_MAX) {
-		D__DEBUG(DB_TRACE, "Invalid tree order %d\n", order);
+		D_DEBUG(DB_TRACE, "Invalid tree order %d\n", order);
 		return -DER_INVAL;
 	}
 
@@ -1933,12 +1933,12 @@ evt_create_inplace(uint64_t feats, unsigned int order, struct umem_attr *uma,
 	int		    rc;
 
 	if (!(feats & EVT_FEAT_SORT_SOFF)) {
-		D__DEBUG(DB_TRACE, "Unknown feature bits "DF_X64"\n", feats);
+		D_DEBUG(DB_TRACE, "Unknown feature bits "DF_X64"\n", feats);
 		return -DER_INVAL;
 	}
 
 	if (order < EVT_ORDER_MIN || order > EVT_ORDER_MAX) {
-		D__DEBUG(DB_TRACE, "Invalid tree order %d\n", order);
+		D_DEBUG(DB_TRACE, "Invalid tree order %d\n", order);
 		return -DER_INVAL;
 	}
 

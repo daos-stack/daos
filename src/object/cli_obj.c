@@ -66,7 +66,7 @@ open_retry:
 	/* XXX could be otherwise for some object classes? */
 	D__ASSERT(layout->ol_shards[shard].po_shard == shard);
 
-	D__DEBUG(DB_IO, "Open object shard %d\n", shard);
+	D_DEBUG(DB_IO, "Open object shard %d\n", shard);
 	obj_shard = obj->cob_obj_shards[shard];
 	if (obj_shard == NULL) {
 		daos_unit_oid_t	 oid;
@@ -235,17 +235,17 @@ obj_layout_create(struct dc_object *obj)
 	dc_pool_put(pool);
 
 	if (map == NULL) {
-		D__DEBUG(DB_PL, "Cannot find valid placement map\n");
+		D_DEBUG(DB_PL, "Cannot find valid placement map\n");
 		D__GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
-		D__DEBUG(DB_PL, "Failed to generate object layout\n");
+		D_DEBUG(DB_PL, "Failed to generate object layout\n");
 		D__GOTO(out, rc);
 	}
-	D__DEBUG(DB_PL, "Place object on %d targets\n", layout->ol_nr);
+	D_DEBUG(DB_PL, "Place object on %d targets\n", layout->ol_nr);
 
 	D__ASSERT(obj->cob_layout == NULL);
 	obj->cob_layout = layout;
@@ -349,7 +349,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 		}
 
 		if (obj->cob_layout->ol_shards[idx].po_shard != -1) {
-			D__DEBUG(DB_TRACE, "special shard %d\n", idx);
+			D_DEBUG(DB_TRACE, "special shard %d\n", idx);
 			D_RWLOCK_UNLOCK(&obj->cob_lock);
 			return idx;
 		}
@@ -709,7 +709,7 @@ obj_retry_cb(tse_task_t *task, void *data)
 	if (!obj_retry_error(result))
 		return result;
 
-	D__DEBUG(DB_IO, "Retry task=%p for error=%d\n", task, result);
+	D_DEBUG(DB_IO, "Retry task=%p for error=%d\n", task, result);
 
 	/* Let's reset task result before retry */
 	task->dt_result = 0;
@@ -821,7 +821,7 @@ dc_obj_fetch(tse_task_t *task)
 	if (rc != 0)
 		D__GOTO(out_task, rc);
 
-	D__DEBUG(DB_IO, "fetch "DF_OID" shard %u\n",
+	D_DEBUG(DB_IO, "fetch "DF_OID" shard %u\n",
 		DP_OID(obj->cob_md.omd_id), shard);
 	rc = dc_obj_shard_fetch(obj_shard, args->epoch, args->dkey, args->nr,
 				args->iods, args->sgls, args->maps, map_ver,
@@ -913,7 +913,7 @@ dc_obj_update(tse_task_t *task)
 	if (rc != 0)
 		D__GOTO(out_task, rc);
 
-	D__DEBUG(DB_IO, "update "DF_OID" start %u cnt %u\n",
+	D_DEBUG(DB_IO, "update "DF_OID" start %u cnt %u\n",
 		DP_OID(obj->cob_md.omd_id), shard, shards_cnt);
 
 	D_INIT_LIST_HEAD(&head);
@@ -977,18 +977,18 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg)
 	D__ASSERT(grp_size > 0);
 
 	if (!daos_hash_is_eof(anchor)) {
-		D__DEBUG(DB_IO, "More keys in shard %d\n", shard);
+		D_DEBUG(DB_IO, "More keys in shard %d\n", shard);
 	} else if ((shard < obj->cob_layout->ol_nr - grp_size) &&
 		   !arg->single_shard) {
 		shard += grp_size;
-		D__DEBUG(DB_IO, "next shard %d grp %d nr %u\n",
+		D_DEBUG(DB_IO, "next shard %d grp %d nr %u\n",
 			shard, grp_size, obj->cob_layout->ol_nr);
 
 		enum_anchor_reset_hkey(anchor);
 		enum_anchor_set_tag(anchor, 0);
 		dc_obj_shard2anchor(anchor, shard);
 	} else {
-		D__DEBUG(DB_IO, "Enumerated All shards\n");
+		D_DEBUG(DB_IO, "Enumerated All shards\n");
 	}
 }
 
@@ -1007,7 +1007,7 @@ obj_list_comp_cb(tse_task_t *task, void *data)
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		if (daos_hash_is_eof(arg->anchor))
-			D__DEBUG(DB_IO, "Enumerated completed\n");
+			D_DEBUG(DB_IO, "Enumerated completed\n");
 		break;
 	}
 
@@ -1035,7 +1035,7 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	int			 rc;
 
 	if (nr == NULL || *nr == 0) {
-		D__DEBUG(DB_IO, "Invalid API parameter.\n");
+		D_DEBUG(DB_IO, "Invalid API parameter.\n");
 		D__GOTO(out_task, rc = -DER_INVAL);
 	}
 
@@ -1089,7 +1089,7 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 		rc = dc_obj_shard_list_key(obj_shard, op, epoch, dkey, nr,
 					   kds, sgl, anchor, map_ver, task);
 
-	D__DEBUG(DB_IO, "Enumerate keys in shard %d: rc %d\n", shard, rc);
+	D_DEBUG(DB_IO, "Enumerate keys in shard %d: rc %d\n", shard, rc);
 	obj_shard_close(obj_shard);
 
 	return rc;
@@ -1232,7 +1232,7 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 			D_GOTO(out_task, rc);
 	}
 
-	D__DEBUG(DB_IO, "punch "DF_OID" start %u cnt %u\n",
+	D_DEBUG(DB_IO, "punch "DF_OID" start %u cnt %u\n",
 		 DP_OID(obj->cob_md.omd_id), shard_first, shard_nr);
 
 	D_INIT_LIST_HEAD(&head);

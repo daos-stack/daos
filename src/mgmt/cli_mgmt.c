@@ -81,7 +81,7 @@ dc_mgmt_svc_rip(tse_task_t *task)
 		D__GOTO(err_rpc, rc);
 
 	crt_req_addref(rpc); /** for rip_cp */
-	D__DEBUG(DB_MGMT, "killing rank %u\n", args->rank);
+	D_DEBUG(DB_MGMT, "killing rank %u\n", args->rank);
 
 	/** send the request */
 	return daos_rpc_send(rpc, task);
@@ -135,7 +135,7 @@ dc_mgmt_params_set(tse_task_t *task)
 		D__GOTO(err_rpc, rc);
 
 	crt_req_addref(rpc); /** for rip_cp */
-	D__DEBUG(DB_MGMT, "set parameter %d/%u/"DF_U64".\n", args->rank,
+	D_DEBUG(DB_MGMT, "set parameter %d/%u/"DF_U64".\n", args->rank,
 		 args->key_id, args->value);
 
 	/** send the request */

@@ -141,7 +141,7 @@ pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
 
 	hlink = d_uhash_link_lookup(vos_pool_hhash_get(), ukey);
 	if (hlink == NULL) {
-		D__DEBUG(DB_MGMT, "can't find "DF_UUID"\n", DP_UUID(ukey->uuid));
+		D_DEBUG(DB_MGMT, "can't find "DF_UUID"\n", DP_UUID(ukey->uuid));
 		return -DER_NONEXIST;
 	}
 
@@ -161,7 +161,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 	if (!path || uuid_is_null(uuid))
 		return -DER_INVAL;
 
-	D__DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64",UUID: "DF_UUID"\n",
+	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64",UUID: "DF_UUID"\n",
 		path, size, DP_UUID(uuid));
 
 	/* Path must be a file with a certain size when size argument is 0 */
@@ -239,7 +239,7 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	int			 rc;
 
 	uuid_copy(ukey.uuid, uuid);
-	D__DEBUG(DB_MGMT, "Destroy path: %s UUID: "DF_UUID"\n",
+	D_DEBUG(DB_MGMT, "Destroy path: %s UUID: "DF_UUID"\n",
 		path, DP_UUID(uuid));
 
 	rc = pool_lookup(&ukey, &pool);
@@ -249,7 +249,7 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 		D__GOTO(exit, rc = -DER_BUSY);
 	}
 
-	D__DEBUG(DB_MGMT, "No open handles. OK to destroy\n");
+	D_DEBUG(DB_MGMT, "No open handles. OK to destroy\n");
 	/**
 	 * NB: no need to explicitly destroy container index table because
 	 * pool file removal will do this for free.
@@ -309,12 +309,11 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	}
 
 	uuid_copy(ukey.uuid, uuid);
-	D__DEBUG(DB_MGMT, "open pool %s, uuid "DF_UUID"\n", path,
-		 DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, "open pool %s, uuid "DF_UUID"\n", path, DP_UUID(uuid));
 
 	rc = pool_lookup(&ukey, &pool);
 	if (rc == 0) {
-		D__DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
+		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
 			pool->vp_opened, pool);
 		pool->vp_opened++;
 		*poh = vos_pool2hdl(pool);
@@ -367,7 +366,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	}
 
 	pool->vp_opened = 1;
-	D__DEBUG(DB_MGMT, "Opened pool %p\n", pool);
+	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
 failed:
 	vos_pool_decref(pool); /* -1 for myself */
 	return rc;
@@ -387,7 +386,7 @@ vos_pool_close(daos_handle_t poh)
 		D__ERROR("Cannot close a NULL handle\n");
 		return -DER_NO_HDL;
 	}
-	D__DEBUG(DB_MGMT, "Close opened(%d) pool "DF_UUID" (%p).\n",
+	D_DEBUG(DB_MGMT, "Close opened(%d) pool "DF_UUID" (%p).\n",
 		pool->vp_opened, DP_UUID(pool->vp_id), pool);
 
 	D__ASSERT(pool->vp_opened > 0);

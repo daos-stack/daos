@@ -147,7 +147,7 @@ ec_find_lowest(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
 	rc = rdb_tx_fetch(tx, kvs, RDB_PROBE_FIRST, NULL /* key_in */, &key,
 			  NULL /* value */);
 	if (rc == -DER_NONEXIST)
-		D__DEBUG(DF_DSMS, DF_CONT": %s KVS empty: %d\n",
+		D_DEBUG(DF_DSMS, DF_CONT": %s KVS empty: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			ec_type2name(type), rc);
 	else if (rc != 0)
@@ -274,7 +274,7 @@ epoch_aggregate_bcast(crt_context_t ctx, struct cont *cont,
 	crt_rpc_t				*rpc;
 	int					rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT" bcast epr: "DF_U64"->"DF_U64 "\n",
+	D_DEBUG(DF_DSMS, DF_CONT" bcast epr: "DF_U64"->"DF_U64 "\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		epr->epr_lo, epr->epr_hi);
 
@@ -306,7 +306,7 @@ epoch_aggregate_bcast(crt_context_t ctx, struct cont *cont,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 	return rc;
 }
@@ -638,7 +638,7 @@ ds_cont_epoch_hold(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	daos_iov_t			value;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
 
@@ -672,7 +672,7 @@ ds_cont_epoch_hold(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (hdl->ch_lhe == lhe)
 		D__GOTO(out_state, rc = 0);
 
-	D__DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
+	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
 
 	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
 	daos_iov_set(&value, hdl, sizeof(*hdl));
@@ -702,7 +702,7 @@ out_hdl:
 	if (rc != 0)
 		hdl->ch_lhe = lhe;
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		rc);
 	return rc;
@@ -721,7 +721,7 @@ ds_cont_epoch_slip(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	daos_iov_t			value;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
 
@@ -749,7 +749,7 @@ ds_cont_epoch_slip(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (hdl->ch_lre == lre)
 		D__GOTO(out_state, rc = 0);
 
-	D__DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
+	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
 
 	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
 	daos_iov_set(&value, hdl, sizeof(*hdl));
@@ -779,7 +779,7 @@ out_hdl:
 	if (rc != 0)
 		hdl->ch_lre = lre;
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		rc);
 	return rc;
@@ -794,7 +794,7 @@ cont_epoch_discard_bcast(crt_context_t ctx, struct cont *cont,
 	crt_rpc_t			       *rpc;
 	int					rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": bcasting\n",
+	D_DEBUG(DF_DSMS, DF_CONT": bcasting\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
 
 	rc = ds_cont_bcast_create(ctx, cont->c_svc, CONT_TGT_EPOCH_DISCARD,
@@ -823,7 +823,7 @@ cont_epoch_discard_bcast(crt_context_t ctx, struct cont *cont,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 	return rc;
 }
@@ -838,7 +838,7 @@ ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct epoch_attr		attr;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" epoch="
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" epoch="
 		DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		DP_UUID(in->cei_op.ci_hdl), in->cei_epoch);
@@ -866,7 +866,7 @@ ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	set_epoch_state(&attr, hdl, &out->ceo_epoch_state);
 
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		rc);
 	return rc;
@@ -890,7 +890,7 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	bool				slip_flag;
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
 
@@ -928,9 +928,9 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (!(hdl->ch_capas & DAOS_COO_NOSLIP))
 		hdl->ch_lre = hdl->ch_hce;
 
-	D__DEBUG(DF_DSMS, "hce="DF_U64" hce'="DF_U64"\n", hce, hdl->ch_hce);
-	D__DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
-	D__DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
+	D_DEBUG(DF_DSMS, "hce="DF_U64" hce'="DF_U64"\n", hce, hdl->ch_hce);
+	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
+	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
 
 	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
 	daos_iov_set(&value, hdl, sizeof(*hdl));
@@ -992,7 +992,7 @@ out_hdl:
 		hdl->ch_hce = hce;
 	}
 out:
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		rc);
 	return rc;

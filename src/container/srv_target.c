@@ -62,7 +62,7 @@ cont_alloc_ref(void *key, unsigned int ksize, void *varg,
 	struct ds_cont	       *cont;
 	int			rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": creating\n", DP_CONT(pool->spc_uuid, key));
+	D_DEBUG(DF_DSMS, DF_CONT": creating\n", DP_CONT(pool->spc_uuid, key));
 
 	D__ALLOC_PTR(cont);
 	if (cont == NULL)
@@ -85,7 +85,7 @@ cont_free_ref(struct daos_llink *llink)
 {
 	struct ds_cont *cont = cont_obj(llink);
 
-	D__DEBUG(DF_DSMS, DF_CONT": freeing\n", DP_CONT(NULL, cont->sc_uuid));
+	D_DEBUG(DF_DSMS, DF_CONT": freeing\n", DP_CONT(NULL, cont->sc_uuid));
 	vos_cont_close(cont->sc_hdl);
 	D__FREE_PTR(cont);
 }
@@ -136,7 +136,7 @@ cont_lookup(struct daos_lru_cache *cache, const uuid_t uuid,
 			       &llink);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D__DEBUG(DF_DSMS, DF_CONT": failed to lookup%s "
+			D_DEBUG(DF_DSMS, DF_CONT": failed to lookup%s "
 				"container: %d\n", DP_CONT(NULL, uuid),
 				pool == NULL ? "" : "/create", rc);
 		else
@@ -197,9 +197,9 @@ cont_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 
 	D__ASSERT(d_hash_rec_unlinked(&hdl->sch_entry));
 	D__ASSERTF(hdl->sch_ref == 0, "%d\n", hdl->sch_ref);
-	D__DEBUG(DF_DSMS, "freeing "DF_UUID"\n", DP_UUID(hdl->sch_uuid));
+	D_DEBUG(DF_DSMS, "freeing "DF_UUID"\n", DP_UUID(hdl->sch_uuid));
 	if (hdl->sch_cont != NULL) {
-		D__DEBUG(DF_DSMS, DF_CONT": freeing\n",
+		D_DEBUG(DF_DSMS, DF_CONT": freeing\n",
 			DP_CONT(hdl->sch_pool->spc_uuid,
 			hdl->sch_cont->sc_uuid));
 		cont_put(tls->dt_cont_cache, hdl->sch_cont);
@@ -340,7 +340,7 @@ cont_destroy_one(void *vin)
 		D__GOTO(out_pool, rc);
 	}
 
-	D__DEBUG(DF_DSMS, DF_CONT": destroying vos container\n",
+	D_DEBUG(DF_DSMS, DF_CONT": destroying vos container\n",
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
 
 	rc = vos_cont_destroy(pool->spc_hdl, in->tdi_uuid);
@@ -363,12 +363,12 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	struct cont_tgt_destroy_out    *out = crt_reply_get(rpc);
 	int				rc = 0;
 
-	D__DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
 	rc = dss_task_collective(cont_destroy_one, in);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
 		rc);
 	crt_reply_send(rpc);
@@ -421,7 +421,7 @@ ds_cont_lookup_or_create(struct ds_cont_hdl *hdl, uuid_t cont_uuid)
 	if (rc != -DER_NONEXIST)
 		return rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": creating new vos container\n",
+	D_DEBUG(DF_DSMS, DF_CONT": creating new vos container\n",
 		DP_CONT(hdl->sch_pool->spc_uuid, cont_uuid));
 
 	rc = vos_cont_create(hdl->sch_pool->spc_hdl, cont_uuid);
@@ -481,7 +481,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 					DP_UUID(cont_hdl_uuid), capas);
 				rc = -DER_EXIST;
 			} else {
-				D__DEBUG(DF_DSMS, DF_CONT": found compatible"
+				D_DEBUG(DF_DSMS, DF_CONT": found compatible"
 					" container handle: hdl="DF_UUID
 					" capas="DF_U64"\n",
 				      DP_CONT(pool_uuid, cont_uuid),
@@ -531,7 +531,7 @@ err_cont:
 		cont_put(tls->dt_cont_cache, hdl->sch_cont);
 
 	if (vos_co_created) {
-		D__DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
+		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
 			DP_CONT(hdl->sch_pool->spc_uuid, cont_uuid));
 		vos_cont_destroy(hdl->sch_pool->spc_hdl, cont_uuid);
 	}
@@ -563,7 +563,7 @@ ds_cont_tgt_open_handler(crt_rpc_t *rpc)
 	struct cont_tgt_open_out       *out = crt_reply_get(rpc);
 	int				rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(in->toi_pool_uuid, in->toi_uuid), rpc,
 		DP_UUID(in->toi_hdl));
 
@@ -571,7 +571,7 @@ ds_cont_tgt_open_handler(crt_rpc_t *rpc)
 	D__ASSERTF(rc == 0, "%d\n", rc);
 
 	out->too_rc = (rc == 0 ? 0 : 1);
-	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->toi_uuid), rpc, out->too_rc, rc);
 	crt_reply_send(rpc);
 }
@@ -597,13 +597,13 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, rec->tcr_hdl);
 	if (hdl == NULL) {
-		D__DEBUG(DF_DSMS, DF_CONT": already closed: hdl="DF_UUID" hce="
+		D_DEBUG(DF_DSMS, DF_CONT": already closed: hdl="DF_UUID" hce="
 			DF_U64"\n", DP_CONT(NULL, NULL), DP_UUID(rec->tcr_hdl),
 			rec->tcr_hce);
 		return 0;
 	}
 
-	D__DEBUG(DF_DSMS, DF_CONT": closing: hdl="DF_UUID" hce="DF_U64"\n",
+	D_DEBUG(DF_DSMS, DF_CONT": closing: hdl="DF_UUID" hce="DF_U64"\n",
 		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
 		DP_UUID(rec->tcr_hdl), rec->tcr_hce);
 
@@ -662,7 +662,7 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 	if (in->tci_recs.ca_arrays == NULL)
 		D__GOTO(out, rc = -DER_INVAL);
 
-	D__DEBUG(DF_DSMS, DF_CONT": handling rpc %p: recs[0].hdl="DF_UUID
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: recs[0].hdl="DF_UUID
 		"recs[0].hce="DF_U64" nres="DF_U64"\n", DP_CONT(NULL, NULL),
 		rpc, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce,
 		in->tci_recs.ca_count);
@@ -672,7 +672,7 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 
 out:
 	out->tco_rc = (rc == 0 ? 0 : 1);
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tco_rc, rc);
 	crt_reply_send(rpc);
 }
@@ -809,7 +809,7 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 					pack_args.xcq_purged_epoch);
 	out->tqo_rc = (rc == 0 ? 0 : 1);
 
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tqo_rc, rc);
 	crt_reply_send(rpc);
 }
@@ -863,7 +863,7 @@ ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc)
 	struct cont_tgt_epoch_discard_out      *out = crt_reply_get(rpc);
 	int					rc;
 
-	D__DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID" epoch="DF_U64
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID" epoch="DF_U64
 		"\n", DP_CONT(NULL, NULL), rpc, DP_UUID(in->tii_hdl),
 		in->tii_epoch);
 
@@ -876,7 +876,7 @@ ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc)
 
 out:
 	out->tio_rc = (rc == 0 ? 0 : 1);
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tio_rc, rc);
 	crt_reply_send(rpc);
 }
@@ -902,7 +902,7 @@ set_container_purged_epoch(daos_handle_t vos_chdl,
 	daos_unit_oid_t		oid_tmp;
 	bool			finish;
 
-	D__DEBUG(DF_DSMS, DF_CONT" Setting aggregated epoch as "DF_U64"\n",
+	D_DEBUG(DF_DSMS, DF_CONT" Setting aggregated epoch as "DF_U64"\n",
 		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
 		range->epr_hi);
 	memset(&oid_tmp, 0, sizeof(oid_tmp));
@@ -970,7 +970,7 @@ cont_epoch_aggregate_one(void *vin)
 	opstr = "setting first probe for vos obj iterator";
 	rc = vos_iter_probe(iter_hdl, NULL);
 	if (rc == -DER_NONEXIST) {
-		D__DEBUG(DF_DSMS, DF_CONT": No objects to iterate\n",
+		D_DEBUG(DF_DSMS, DF_CONT": No objects to iterate\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid));
 		/* empty container then set the highest epoch and exit */
 		set_container_purged_epoch(vos_chdl, in, &param.ip_epr);
@@ -992,7 +992,7 @@ cont_epoch_aggregate_one(void *vin)
 		}
 
 		if (rc == -DER_NONEXIST) {
-			D__DEBUG(DF_DSMS, DF_CONT": Finish obj iteration\n",
+			D_DEBUG(DF_DSMS, DF_CONT": Finish obj iteration\n",
 				DP_CONT(in->tai_pool_uuid,
 					in->tai_cont_uuid));
 			set_container_purged_epoch(vos_chdl, in, &param.ip_epr);
@@ -1021,7 +1021,7 @@ cont_epoch_aggregate_one(void *vin)
 				D__GOTO(out, rc);
 
 			if (finish) {
-				D__DEBUG(DB_EPC,
+				D_DEBUG(DB_EPC,
 					"Finished "DF_U64"->"DF_U64")\n",
 					param.ip_epr.epr_lo,
 					param.ip_epr.epr_hi);
@@ -1033,7 +1033,7 @@ cont_epoch_aggregate_one(void *vin)
 		opstr = "iter next with vos obj iterator";
 		rc = vos_iter_next(iter_hdl);
 	}
-	D__DEBUG(DF_DSMS, DF_CONT": aggregated %d/%d objects\n",
+	D_DEBUG(DF_DSMS, DF_CONT": aggregated %d/%d objects\n",
 		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
 			aggregated, found);
 out:
@@ -1052,7 +1052,7 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	struct cont_tgt_epoch_aggregate_out    *out = crt_reply_get(rpc);
 	int					rc = 0;
 
-	D__DEBUG(DF_DSMS, DF_CONT": handling rpc %p: epr="DF_U64"->"DF_U64"\n",
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: epr="DF_U64"->"DF_U64"\n",
 		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
 		in->tai_start_epoch, in->tai_end_epoch);
 
@@ -1063,7 +1063,7 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 
 	/* Reply without waiting for the aggregation ULTs to finish. */
 	out->tao_rc = (rc == 0 ? 0 : 1);
-	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tao_rc, rc);
 	crt_reply_send(rpc);
 
@@ -1147,7 +1147,7 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 			break;
 		}
 
-		D__DEBUG(DB_ANY, "iter "DF_UOID" rc: %d\n",
+		D_DEBUG(DB_ANY, "iter "DF_UOID" rc: %d\n",
 			DP_UOID(ent.ie_oid), rc);
 
 		vos_iter_next(iter_h);

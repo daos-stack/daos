@@ -407,7 +407,7 @@ tse_task_complete_callback(tse_task_t *task)
 
 		/** Task was re-initialized; break */
 		if (!dtp->dtp_completing) {
-			D__DEBUG(DB_TRACE, "re-init task %p\n", task);
+			D_DEBUG(DB_TRACE, "re-init task %p\n", task);
 			return false;
 		}
 	}
@@ -524,7 +524,7 @@ tse_task_post_process(tse_task_t *task)
 		/* see if the dependent task is ready to be scheduled */
 		D__ASSERT(dtp_tmp->dtp_dep_cnt > 0);
 		dtp_tmp->dtp_dep_cnt--;
-		D__DEBUG(DB_TRACE, "daos task %p dep_cnt %d\n", dtp_tmp,
+		D_DEBUG(DB_TRACE, "daos task %p dep_cnt %d\n", dtp_tmp,
 			dtp_tmp->dtp_dep_cnt);
 		if (!dsp->dsp_cancelling) {
 			/*
@@ -806,7 +806,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	if (tlink == NULL)
 		return -DER_NOMEM;
 
-	D__DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep_dtp, dtp);
+	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep_dtp, dtp);
 
 	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
 

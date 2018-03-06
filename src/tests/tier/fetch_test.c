@@ -82,7 +82,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		req->iod[i].iod_type = iod_type;
 
 	}
-	D__DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
+	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
 	/** open the object */
 	rc = daos_obj_open(coh, oid, 0, 0, &req->oh,
@@ -184,7 +184,7 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
 		iod[i].iod_eprs[0].epr_lo = *epoch;
 		iod[i].iod_nr = 1;
 
-		D__DEBUG(DF_TIERS,
+		D_DEBUG(DF_TIERS,
 			"%d: typ:%d sz:%lu idx:"DF_U64" nr:"DF_U64"\n",
 			i, iod[i].iod_type, iod[i].iod_size,
 			iod[i].iod_recxs[0].rx_idx,

@@ -25,7 +25,6 @@
  *
  * common/debug.c
  *
- * NB: Do NOT use D__DEBUG in this file.
  */
 #include <limits.h>
 #include <daos/common.h>

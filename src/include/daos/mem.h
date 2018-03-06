@@ -263,7 +263,7 @@ umem_alloc_typed_verb(umm, type, flags, size)				\
 									\
 	__ummid = (umm)->umm_ops->mo_tx_alloc(umm, size, flags,		\
 					   TMMID_TYPE_NUM(type));	\
-	D__DEBUG(DB_MEM, "allocate %s mmid "UMMID_PF"\n",		\
+	D_DEBUG(DB_MEM, "allocate %s mmid "UMMID_PF"\n",		\
 		(umm)->umm_name, UMMID_P(__ummid));			\
 	__tmmid.oid = __ummid;						\
 	__tmmid;							\
@@ -284,7 +284,7 @@ umem_alloc_typed_verb(umm, type, flags, size)				\
 static inline void
 umem_free(struct umem_instance *umm, umem_id_t ummid)
 {
-	D__DEBUG(DB_MEM, "Free %s mmid "UMMID_PF"\n",
+	D_DEBUG(DB_MEM, "Free %s mmid "UMMID_PF"\n",
 		umm->umm_name, UMMID_P(ummid));
 
 	umm->umm_ops->mo_tx_free(umm, ummid);

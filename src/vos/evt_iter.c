@@ -164,7 +164,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 static int
 evt_iter_is_ready(struct evt_iterator *iter)
 {
-	D__DEBUG(DB_TRACE, "iterator state is %d\n", iter->it_state);
+	D_DEBUG(DB_TRACE, "iterator state is %d\n", iter->it_state);
 
 	switch (iter->it_state) {
 	default:

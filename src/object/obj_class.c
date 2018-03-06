@@ -188,12 +188,12 @@ daos_oclass_attr_find(daos_obj_id_t oid)
 	}
 
 	if (ocid == DAOS_OC_UNKNOWN) {
-		D__DEBUG(DB_PL, "Unknown object class %d for "DF_OID"\n",
+		D_DEBUG(DB_PL, "Unknown object class %d for "DF_OID"\n",
 			ocid, DP_OID(oid));
 		return NULL;
 	}
 
-	D__DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
+	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
 		oc->oc_name, DP_OID(oid));
 	return &oc->oc_attr;
 }

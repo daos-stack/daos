@@ -95,7 +95,7 @@ daos_lru_cache_create(int bits, uint32_t feats,
 	struct daos_lru_cache	*lru_cache = NULL;
 	int			rc = 0;
 
-	D__DEBUG(DB_TRACE, "Creating a new LRU cache of size (2^%d)\n",
+	D_DEBUG(DB_TRACE, "Creating a new LRU cache of size (2^%d)\n",
 		bits);
 
 	if (ops == NULL ||
@@ -138,12 +138,12 @@ void
 daos_lru_cache_destroy(struct daos_lru_cache *lcache)
 {
 
-	D__DEBUG(DB_TRACE, "Destroying LRU cache\n");
+	D_DEBUG(DB_TRACE, "Destroying LRU cache\n");
 	/**
 	 * Cannot destroy if either lcache is NULL or
 	 * if there are busy references.
 	 */
-	D__DEBUG(DB_TRACE, "refs_held :%u\n", lcache->dlc_busy_nr);
+	D_DEBUG(DB_TRACE, "refs_held :%u\n", lcache->dlc_busy_nr);
 	D__ASSERTF(lcache->dlc_busy_nr == 0, "busy=%d", lcache->dlc_busy_nr);
 
 	d_hash_table_debug(&lcache->dlc_htable);
@@ -165,7 +165,7 @@ daos_lru_cache_evict(struct daos_lru_cache *lcache,
 			/* will be evicted later in daos_lru_ref_release */
 			daos_lru_ref_evict(llink);
 	}
-	D__DEBUG(DB_TRACE, "Marked %d busy items as evicted\n", cntr);
+	D_DEBUG(DB_TRACE, "Marked %d busy items as evicted\n", cntr);
 
 	cntr = 0;
 	d_list_for_each_entry_safe(llink, tmp, &lcache->dlc_idle_list,
@@ -178,7 +178,7 @@ daos_lru_cache_evict(struct daos_lru_cache *lcache,
 			cntr++;
 		}
 	}
-	D__DEBUG(DB_TRACE, "Evicted %d items from idle list\n", cntr);
+	D_DEBUG(DB_TRACE, "Evicted %d items from idle list\n", cntr);
 }
 
 static struct daos_llink *
@@ -195,7 +195,7 @@ lru_fast_search(struct daos_lru_cache *lcache, d_list_t *head,
 		return NULL;
 
 	if (llink->ll_ops->lop_cmp_keys(key, key_size, llink)) {
-		D__DEBUG(DB_TRACE, "Found item on the %s list.\n",
+		D_DEBUG(DB_TRACE, "Found item on the %s list.\n",
 			head == &lcache->dlc_busy_list ? "busy" : "idle");
 
 		llink->ll_ref++; /* +1 for caller */
@@ -214,7 +214,7 @@ lru_hash_search(struct daos_lru_cache *lcache, void *key,
 	if (hlink == NULL)
 		return NULL;
 
-	D__DEBUG(DB_TRACE, "Found in the cache hash table\n");
+	D_DEBUG(DB_TRACE, "Found in the cache hash table\n");
 	return hash2lru_link(hlink);
 }
 
@@ -225,7 +225,7 @@ lru_mark_busy(struct daos_lru_cache *lcache, struct daos_llink *llink)
 	 * This reference is about to get busy, lets move it from the idle
 	 * list to busy list, and change counters for the cache.
 	 */
-	D__DEBUG(DB_TRACE, "Ref to get busy held: %u, filled :%u\n",
+	D_DEBUG(DB_TRACE, "Ref to get busy held: %u, filled :%u\n",
 		lcache->dlc_busy_nr, lcache->dlc_idle_nr);
 
 	if (d_list_empty(&llink->ll_qlink)) { /* new item */
@@ -264,13 +264,13 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	if (!create_args)
 		D__GOTO(out, rc = -DER_NONEXIST);
 
-	D__DEBUG(DB_TRACE, "Entry not found adding it to LRU\n");
+	D_DEBUG(DB_TRACE, "Entry not found adding it to LRU\n");
 	/* llink does not exist create one */
 	rc = lcache->dlc_ops->lop_alloc_ref(key, key_size, create_args, &llink);
 	if (rc)
 		D__GOTO(out, rc);
 
-	D__DEBUG(DB_TRACE, "Inserting into LRU Hash table\n");
+	D_DEBUG(DB_TRACE, "Inserting into LRU Hash table\n");
 	llink->ll_evicted = 0;
 	llink->ll_ref	  = 1; /* 1 for caller */
 	llink->ll_ops	  = lcache->dlc_ops;
@@ -292,24 +292,24 @@ void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
 	D__ASSERT(lcache != NULL && llink != NULL && llink->ll_ref > 1);
-	D__DEBUG(DB_TRACE, "Releasing item %p, ref=%d\n", llink, llink->ll_ref);
+	D_DEBUG(DB_TRACE, "Releasing item %p, ref=%d\n", llink, llink->ll_ref);
 
 	llink->ll_ref--;
 	if (llink->ll_ref == 1) { /* the last refcount */
-		D__DEBUG(DB_TRACE, "busy: %u, idle: %u\n",
+		D_DEBUG(DB_TRACE, "busy: %u, idle: %u\n",
 			lcache->dlc_busy_nr, lcache->dlc_idle_nr);
 
 		D__ASSERT(lcache->dlc_busy_nr > 0);
 		lcache->dlc_busy_nr--;
 
 		if (llink->ll_evicted) {
-			D__DEBUG(DB_TRACE, "Evict %p from LRU cache\n", llink);
+			D_DEBUG(DB_TRACE, "Evict %p from LRU cache\n", llink);
 			d_list_del_init(&llink->ll_qlink);
 			/* be freed within hash callback */
 			d_hash_rec_delete_at(&lcache->dlc_htable,
 					     &llink->ll_hlink);
 		} else {
-			D__DEBUG(DB_TRACE,
+			D_DEBUG(DB_TRACE,
 				"Moving %p to the idle list\n", llink);
 			lcache->dlc_idle_nr++;
 			d_list_move(&llink->ll_qlink, &lcache->dlc_idle_list);
@@ -319,7 +319,7 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 	while (lcache->dlc_idle_nr != 0 &&
 	       (lcache->dlc_busy_nr + lcache->dlc_idle_nr >=
 		lcache->dlc_csize)) {
-		D__DEBUG(DB_TRACE, "Evicting from object cache :%d, %d\n",
+		D_DEBUG(DB_TRACE, "Evicting from object cache :%d, %d\n",
 			lcache->dlc_idle_nr, lcache->dlc_busy_nr);
 
 		/** evict from the tail of the list */
@@ -331,5 +331,5 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 		d_hash_rec_delete_at(&lcache->dlc_htable, &llink->ll_hlink);
 		lcache->dlc_idle_nr--;
 	}
-	D__DEBUG(DB_TRACE, "Done releasing reference\n");
+	D_DEBUG(DB_TRACE, "Done releasing reference\n");
 }
