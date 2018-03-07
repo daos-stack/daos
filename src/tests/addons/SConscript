@@ -6,7 +6,7 @@ def scons():
     Import('denv')
 
     libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
-    libraries += ['daos_tier', 'uuid', 'mpi']
+    libraries += ['uuid', 'mpi']
     libraries += ['cmocka']
 
     denv.Append(CPPPATH=['#/src/addons/tests/'])

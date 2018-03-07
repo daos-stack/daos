@@ -7,7 +7,7 @@ def scons():
     denv.Append(CPPPATH=['#/src/tier', '#/src/server'])
 
     #Import('build_program')
-    #libraries = ['pthread', 'uuid', 'daos_common', 'daos', 'crt', 'daos_tier',
+    #libraries = ['pthread', 'uuid', 'daos_common', 'daos', 'crt',
     #             'cmocka']
     #build_program(denv, 'dct_test', ['dct_ping_test.c', 'dct_test.c'],
     #              LIBS=[libraries, 'daos_tier'])

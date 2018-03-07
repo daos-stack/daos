@@ -6,7 +6,7 @@ def scons():
     Import('denv')
 
     daos_build.program(denv, 'eq_test', Glob('eq_tests.c'),
-                       LIBS=['daos', 'daos_common', 'daos_tier', 'gurt', 'cart',
+                       LIBS=['daos', 'daos_common', 'gurt', 'cart',
                              'pthread'])
 
 if __name__ == "SCons.Script":
