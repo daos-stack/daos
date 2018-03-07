@@ -189,7 +189,7 @@ cmd_destroy_container(int argc, const char **argv, void *ctx)
 		{"pool-uuid",       'i',  "UUID",         0,
 		 "ID of the pool that hosts the container to be destroyed."},
 		{"cont-uuid",       'c',  "UUID",         0,
-		 "ID of the pool that hosts the container to be destroyed."},
+		 "ID of the container to be destroyed."},
 		{"force",           'f',  0,              OPTION_ARG_OPTIONAL,
 		 "Force pool destruction regardless of current state."},
 		{0}
@@ -222,12 +222,14 @@ cmd_destroy_container(int argc, const char **argv, void *ctx)
 			       flag, &poh, &info, NULL);
 
 	if (rc) {
-		printf("<<<daosctl>>> Pool connect fail, result: %d\n",
-		       rc);
+		printf("Pool connect fail, result: %d\n", rc);
 		return rc;
 	}
 
-	/*rc = daos_cont_destroy(poh, cont_uuid, (int)cc_options.force, NULL);*/
+	/**
+	 * For now ignore callers force preference because its not implemented
+	 * and asserts.
+	 */
 	rc = daos_cont_destroy(poh, cont_uuid, 1, NULL);
 
 	if (rc)
@@ -235,6 +237,105 @@ cmd_destroy_container(int argc, const char **argv, void *ctx)
 	else
 		printf("Container destroyed.\n");
 
+	daos_pool_disconnect(poh, NULL);
+	return rc;
+}
+
+/**
+ * Process a container query command.
+ */
+int
+cmd_query_container(int argc, const char **argv, void *ctx)
+{
+	int              rc = -ENXIO;
+	uuid_t           pool_uuid;
+	uuid_t           cont_uuid;
+	daos_handle_t    poh;
+	d_rank_list_t    svc;
+	unsigned int     flag = DAOS_PC_RW;
+	daos_pool_info_t pool_info;
+	daos_handle_t    coh;
+	daos_cont_info_t cont_info;
+
+	struct argp_option options[] = {
+		{"server-group",    's',  "SERVER-GROUP", 0,
+		 "ID of the server group that owns the pool"},
+		{"pool-uuid",       'i',  "UUID",         0,
+		 "ID of the pool that hosts the container to be queried."},
+		{"cont-uuid",       'c',  "UUID",         0,
+		 "ID of the container to be queried."},
+		{0}
+	};
+	struct argp argp = {options, parse_cont_args_cb};
+	struct container_cmd_options cc_options = {"daos_server", NULL, NULL,
+						   0, 0, 0, 0};
+
+	/* adjust the arguments to skip over the command */
+	argv++;
+	argc--;
+
+	/* once the command is removed the remaining arguments conform
+	 * to GNU standards and can be parsed with argp
+	 */
+	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cc_options);
+
+	/* uuids needs extra parsing */
+	rc = uuid_parse(cc_options.pool_uuid, pool_uuid);
+	rc = uuid_parse(cc_options.cont_uuid, cont_uuid);
+
+	/* TODO should be a parameter not hard-coded */
+	uint32_t          rl_ranks = 0;
+
+	svc.rl_nr = 1;
+	svc.rl_ranks = &rl_ranks;
+
+	rc = daos_pool_connect(pool_uuid, cc_options.server_group, &svc,
+			       flag, &poh, &pool_info, NULL);
+
+	if (rc) {
+		printf("Pool connect fail, result: %d\n", rc);
+		return rc;
+	}
+
+	rc = daos_cont_open(poh, cont_uuid, DAOS_COO_RO, &coh,
+			    &cont_info, NULL);
+
+	if (rc) {
+		printf("Container open fail, result: %d\n", rc);
+		goto done2;
+	}
+
+	rc = daos_cont_query(coh, &cont_info, NULL);
+
+	if (rc) {
+		printf("Container query failed, result: %d\n", rc);
+		goto done1;
+	}
+
+	char uuid_str[100];
+
+	uuid_unparse(pool_uuid, uuid_str);
+	printf("Pool UUID: %s\n", uuid_str);
+
+	uuid_unparse(cont_uuid, uuid_str);
+	printf("Container UUID: %s\n", uuid_str);
+
+	printf("Highest committed epoch: %llu\n",
+	       (long long int)cont_info.ci_epoch_state.es_hce);
+	printf("Lowest referenced epoch: %llu\n",
+	       (long long int)cont_info.ci_epoch_state.es_lre);
+	printf("Lowest held epoch: %llu\n",
+	       (long long int)cont_info.ci_epoch_state.es_lhe);
+	printf("Global highest committed epoch: %llu\n",
+	       (long long int)cont_info.ci_epoch_state.es_ghce);
+	printf("Global highest partially commited epoch: %llu\n",
+	       (long long int)cont_info.ci_epoch_state.es_ghpce);
+	printf("Number of snapshots: %i\n",
+	       (int)cont_info.ci_nsnapshots);
+
+ done1:
+	daos_cont_close(coh, NULL);
+ done2:
 	daos_pool_disconnect(poh, NULL);
 	return rc;
 }

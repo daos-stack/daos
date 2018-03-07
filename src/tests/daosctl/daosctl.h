@@ -39,6 +39,7 @@ int cmd_destroy_pool(int argc, const char **argv, void *ctx);
 int cmd_evict_pool(int argc, const char **argv, void *ctx);
 int cmd_help(int argc, const char **argv, void *ctx);
 int cmd_list(int argc, const char **argv, void *ctx);
+int cmd_query_container(int argc, const char **argv, void *ctx);
 /* these are test functions that maybe removed later */
 int cmd_connect_pool(int argc, const char **argv, void *ctx);
 int cmd_test_create_pool(int argc, const char **argv, void *ctx);
