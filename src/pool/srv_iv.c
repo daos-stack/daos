@@ -101,8 +101,7 @@ pool_iv_ent_copy(d_sg_list_t *dst, d_sg_list_t *src)
 	dst_iv->piv_pool_map_ver = src_iv->piv_pool_map_ver;
 
 	if (src_iv->piv_pool_buf.pb_nr > 0) {
-		int src_len = src->sg_iovs[0].iov_len - sizeof(*src_iv) +
-			      sizeof(struct pool_buf);
+		int src_len = pool_buf_size(src_iv->piv_pool_buf.pb_nr);
 		int dst_len = dst->sg_iovs[0].iov_buf_len - sizeof(*dst_iv) +
 			      sizeof(struct pool_buf);
 
