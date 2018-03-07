@@ -112,11 +112,11 @@ dss_thread_local_storage_fini(struct dss_thread_local_storage *dtls)
 	int i;
 
 	if (dtls->dtls_values != NULL) {
-		for (i = 0; i < DAOS_MODULE_KEYS_NR; i++) {
+		for (i = DAOS_MODULE_KEYS_NR - 1; i >= 0; i--) {
 			struct dss_module_key *dmk = dss_module_keys[i];
 
-			if (dtls->dtls_values[i] != NULL) {
-				D__ASSERT(dmk != NULL);
+			if (dmk != NULL && dtls->dtls_tag & dmk->dmk_tags) {
+				D__ASSERT(dtls->dtls_values[i] != NULL);
 				D__ASSERT(dmk->dmk_fini != NULL);
 				dmk->dmk_fini(dtls, dmk, dtls->dtls_values[i]);
 			}
@@ -162,15 +162,10 @@ dss_tls_init(int tag)
 	return dtls;
 }
 
-/*
- * Free DTC for a particular thread. Called upon thread termination via the
- * pthread key destructor.
- */
+/* Free DTC for a particular thread. */
 void
-dss_tls_fini(void *arg)
+dss_tls_fini(struct dss_thread_local_storage *dtls)
 {
-	struct dss_thread_local_storage  *dtls;
-
-	dtls = (struct dss_thread_local_storage  *)arg;
 	dss_thread_local_storage_fini(dtls);
+	D__FREE_PTR(dtls);
 }

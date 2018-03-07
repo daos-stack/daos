@@ -39,7 +39,7 @@ int dss_srv_init(int);
 int dss_srv_fini(bool force);
 
 /* tls.c */
-void dss_tls_fini(void *arg);
+void dss_tls_fini(struct dss_thread_local_storage *dtls);
 struct dss_thread_local_storage *dss_tls_init(int tag);
 
 /* server_iv.c */

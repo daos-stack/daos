@@ -373,6 +373,7 @@ dss_srv_handler(void *arg)
 	tse_sched_fini(&dmi->dmi_sched);
 destroy:
 	crt_context_destroy(dmi->dmi_ctx, true);
+	dss_tls_fini(dtc);
 }
 
 static inline struct dss_xstream *
@@ -579,7 +580,7 @@ dss_xstreams_init(int nr)
 		dss_nxstreams = nr;
 
 	/* initialize xstream-local storage */
-	rc = pthread_key_create(&dss_tls_key, dss_tls_fini);
+	rc = pthread_key_create(&dss_tls_key, NULL);
 	if (rc) {
 		D__ERROR("failed to create dtc: %d\n", rc);
 		return -DER_NOMEM;
