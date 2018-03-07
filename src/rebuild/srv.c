@@ -920,34 +920,31 @@ rebuild_ults(void *arg)
 
 	while (!d_list_empty(&rebuild_gst.rg_queue_list) ||
 	       !d_list_empty(&rebuild_gst.rg_running_list)) {
-
-		if (!d_list_empty(&rebuild_gst.rg_queue_list) &&
-		    rebuild_gst.rg_inflight < REBUILD_MAX_INFLIGHT) {
-			task = d_list_entry(rebuild_gst.rg_queue_list.next,
-					    struct rebuild_task, dst_list);
-
-			if (!pool_is_rebuilding(task->dst_pool_uuid)) {
-				rc = dss_ult_create(rebuild_one_ult, task, -1,
-						    NULL);
-				if (rc != 0) {
-					D__ERROR(""DF_UUID" create ult"
-						" failed: %d\n",
-						DP_UUID(task->dst_pool_uuid),
-						rc);
-				} else {
-					rebuild_gst.rg_inflight++;
-					d_list_move(&task->dst_list,
-						&rebuild_gst.rg_running_list);
-				}
-			} else {
-				d_list_move_tail(&task->dst_list,
-						 &rebuild_gst.rg_queue_list);
-			}
-		}
-
 		if (rebuild_gst.rg_abort) {
 			D__DEBUG(DB_TRACE, "abort rebuild\n");
 			break;
+		}
+
+		if (d_list_empty(&rebuild_gst.rg_queue_list) ||
+		    rebuild_gst.rg_inflight >= REBUILD_MAX_INFLIGHT) {
+			ABT_thread_yield();
+			continue;
+		}
+
+		d_list_for_each_entry_safe(task, task_tmp,
+				      &rebuild_gst.rg_queue_list, dst_list) {
+			if (pool_is_rebuilding(task->dst_pool_uuid))
+				continue;
+
+			rc = dss_ult_create(rebuild_one_ult, task, -1, NULL);
+			if (rc == 0) {
+				rebuild_gst.rg_inflight++;
+				d_list_move(&task->dst_list,
+					       &rebuild_gst.rg_running_list);
+			} else {
+				D__ERROR(DF_UUID" create ult failed: %d\n",
+					 DP_UUID(task->dst_pool_uuid), rc);
+			}
 		}
 		ABT_thread_yield();
 	}
@@ -964,8 +961,10 @@ rebuild_ults(void *arg)
 		D__FREE_PTR(task);
 	}
 
-	while (!d_list_empty(&rebuild_gst.rg_running_list))
+	while (!d_list_empty(&rebuild_gst.rg_running_list)) {
+		D__DEBUG(DB_TRACE, "wait for rebuild running finish\n");
 		ABT_thread_yield();
+	}
 
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	ABT_cond_signal(rebuild_gst.rg_stop_cond);
