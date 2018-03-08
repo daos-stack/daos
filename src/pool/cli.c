@@ -252,8 +252,8 @@ out:
  */
 static int
 process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
-		    uint32_t map_version, uint32_t mode, d_rank_list_t *tgts,
-		    daos_pool_info_t *info, bool connect)
+		    uint32_t map_version, uint32_t mode, uint32_t leader_rank,
+		    d_rank_list_t *tgts, daos_pool_info_t *info, bool connect)
 {
 	struct pool_map	       *map;
 	int			rc;
@@ -298,6 +298,7 @@ out_unlock:
 		uuid_copy(info->pi_uuid, pool->dp_pool);
 		info->pi_ntargets = map_buf->pb_target_nr;
 		info->pi_mode = mode;
+		info->pi_leader = leader_rank;
 	}
 
 	return rc;
@@ -377,7 +378,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 	}
 
 	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
-				 pco->pco_mode, NULL /* tgts */, info, true);
+				 pco->pco_mode, pco->pco_op.po_hint.sh_rank,
+				 NULL /* tgts */, info, true);
 	if (rc != 0) {
 		/* TODO: What do we do about the remote connection state? */
 		D_ERROR("failed to create local pool map: %d\n", rc);
@@ -1195,6 +1197,7 @@ pool_query_cb(tse_task_t *task, void *data)
 
 	rc = process_query_reply(arg->dqa_pool, arg->dqa_map_buf,
 				 out->pqo_op.po_map_version, out->pqo_mode,
+				 out->pqo_op.po_hint.sh_rank,
 				 arg->dqa_tgts, arg->dqa_info, false);
 	if (arg->dqa_info != NULL) {
 		memcpy(&arg->dqa_info->pi_rebuild_st, &out->pqo_rebuild_st,

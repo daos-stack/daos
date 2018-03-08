@@ -213,6 +213,8 @@ typedef struct {
 	uint32_t			pi_ndisabled;
 	/** Mode */
 	unsigned int			pi_mode;
+	/** current raft leader */
+	uint32_t			pi_leader;
 	/** Space usage */
 	daos_space_t			pi_space;
 	/** rebuild status */

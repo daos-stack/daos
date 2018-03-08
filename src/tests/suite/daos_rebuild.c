@@ -43,11 +43,9 @@
 static d_rank_t ranks_to_kill[MAX_KILLS];
 
 static bool
-rebuild_runable(test_arg_t *arg, unsigned int required_tgts,
-		bool kill_master)
+rebuild_runable(test_arg_t *arg, unsigned int required_tgts)
 {
 	int		 i;
-	int		 start = 0;
 	bool		 runable = true;
 
 	if (arg->myrank == 0) {
@@ -60,13 +58,7 @@ rebuild_runable(test_arg_t *arg, unsigned int required_tgts,
 			runable = false;
 		}
 
-		/* XXX let's assume master rank is 1 for now */
-		if (kill_master) {
-			ranks_to_kill[0] = 1;
-			start = 1;
-		}
-
-		for (i = start; i < MAX_KILLS; i++)
+		for (i = 0; i < MAX_KILLS; i++)
 			ranks_to_kill[i] = arg->srv_ntgts -
 					   arg->srv_disabled_ntgts - i - 1;
 	}
@@ -230,39 +222,52 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 	arg->fail_value = 0;
 }
 
-static bool
-rebuild_pool_wait(test_arg_t *arg)
+static int
+rebuild_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 {
-	daos_pool_info_t	   pinfo;
-	struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
-	bool			   connect_pool = false;
-	int			   rc;
-	bool			   done = false;
+	bool	   connect_pool = false;
+	int	   rc;
 
 	if (daos_handle_is_inval(arg->poh)) {
 		rc = daos_pool_connect(arg->pool_uuid, arg->group,
 				       &arg->svc, DAOS_PC_RW,
-				       &arg->poh, &pinfo, NULL);
+				       &arg->poh, pinfo, NULL);
 		if (rc) {
 			print_message("pool_connect failed, rc: %d\n",
 				      rc);
-			return done;
+			return rc;
 		}
 		connect_pool = true;
 	}
 
-	memset(&pinfo, 0, sizeof(pinfo));
-	rc = daos_pool_query(arg->poh, NULL, &pinfo, NULL);
+	rc = daos_pool_query(arg->poh, NULL, pinfo, NULL);
+	if (rc != 0)
+		print_message("pool query failed %d\n", rc);
+
+	if (connect_pool) {
+		rc = daos_pool_disconnect(arg->poh, NULL);
+		if (rc)
+			print_message("disconnect failed: %d\n",
+				      rc);
+		arg->poh = DAOS_HDL_INVAL;
+	}
+
+	return rc;
+}
+
+static bool
+rebuild_pool_wait(test_arg_t *arg)
+{
+	daos_pool_info_t	   pinfo = { 0 };
+	struct daos_rebuild_status *rst;
+	int			   rc;
+	bool			   done = false;
+
+	rc = rebuild_pool_get_info(arg, &pinfo);
+	rst = &pinfo.pi_rebuild_st;
 	if (rst->rs_done || rc != 0) {
 		print_message("Rebuild (ver=%d) is done %d/%d\n",
 			       rst->rs_version, rc, rst->rs_errno);
-		if (connect_pool) {
-			rc = daos_pool_disconnect(arg->poh, NULL);
-			if (rc)
-				print_message("disconnect failed: %d\n",
-					      rc);
-			arg->poh = DAOS_HDL_INVAL;
-		}
 		done = true;
 	} else {
 		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u), "
@@ -270,7 +275,22 @@ rebuild_pool_wait(test_arg_t *arg)
 			      DP_UUID(arg->pool_uuid), rst->rs_version,
 			      rst->rs_obj_nr, rst->rs_rec_nr);
 	}
+
 	return done;
+}
+
+static int
+daos_get_leader(test_arg_t *arg, d_rank_t *rank)
+{
+	daos_pool_info_t	pinfo = { 0 };
+	int			rc;
+
+	rc = rebuild_pool_get_info(arg, &pinfo);
+	if (rc)
+		return rc;
+
+	*rank = pinfo.pi_leader;
+	return 0;
 }
 
 static bool
@@ -342,7 +362,7 @@ rebuild_dkeys(void **state)
 	struct ioreq		req;
 	int			i;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -373,7 +393,7 @@ rebuild_akeys(void **state)
 	struct ioreq		req;
 	int			i;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -405,7 +425,7 @@ rebuild_indexes(void **state)
 	int			i;
 	int			j;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -440,7 +460,7 @@ rebuild_multiple(void **state)
 	int		j;
 	int		k;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -479,7 +499,7 @@ rebuild_large_rec(void **state)
 	int			i;
 	char			buffer[5000];
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -509,7 +529,7 @@ rebuild_objects(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
@@ -531,7 +551,7 @@ rebuild_drop_scan(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
@@ -557,7 +577,7 @@ rebuild_retry_rebuild(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
@@ -583,7 +603,7 @@ rebuild_retry_for_stale_pool(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
@@ -609,7 +629,7 @@ rebuild_drop_obj(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
@@ -635,7 +655,7 @@ rebuild_update_failed(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
@@ -661,7 +681,7 @@ rebuild_multiple_pools(void **state)
 	int		i;
 	int		rc;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	args[0] = arg;
@@ -743,7 +763,7 @@ rebuild_destroy_container(void **state)
 	int		i;
 	int		rc;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	args[0] = arg;
@@ -776,7 +796,7 @@ rebuild_iv_tgt_fail(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
@@ -801,7 +821,7 @@ rebuild_tgt_start_fail(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
@@ -828,7 +848,7 @@ rebuild_offline(void **state)
 	int		i;
 	int		rc;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
@@ -922,6 +942,40 @@ rebuild_io_post_cb(void *arg)
 }
 
 static void
+rebuild_master_failure(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	daos_obj_id_t	cb_arg_oids[OBJ_NR];
+	int		i;
+
+	if (!rebuild_runable(arg, 6) || arg->svc.rl_nr == 1)
+		skip();
+
+	daos_get_leader(arg, &ranks_to_kill[0]);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		cb_arg_oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+	}
+
+	/* prepare the data */
+	rebuild_io(arg, oids, OBJ_NR);
+
+	arg->rebuild_cb = rebuild_io_cb;
+	arg->rebuild_cb_arg = cb_arg_oids;
+	arg->rebuild_post_cb = rebuild_io_post_cb;
+	arg->rebuild_post_cb_arg = cb_arg_oids;
+
+	rebuild_targets(&arg, 1, ranks_to_kill, 1, true);
+
+	arg->rebuild_cb = NULL;
+	arg->rebuild_post_cb = NULL;
+
+	/* Verify the data */
+	rebuild_io_validate(arg, oids, OBJ_NR);
+}
+
+static void
 rebuild_two_failures(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -929,7 +983,7 @@ rebuild_two_failures(void **state)
 	daos_obj_id_t	cb_arg_oids[OBJ_NR];
 	int		i;
 
-	if (!rebuild_runable(arg, 6, false))
+	if (!rebuild_runable(arg, 6))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -988,7 +1042,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_tgt_start_fail, NULL, test_case_teardown},
 	{"REBUILD16: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD17: rebuild with two failures",
+	{"REBUILD17: rebuild with master failure",
+	 rebuild_master_failure, NULL, test_case_teardown},
+	{"REBUILD18: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
 };
 
