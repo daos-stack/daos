@@ -53,6 +53,24 @@ extern bool	cli_bypass_rpc;
  */
 extern bool	srv_bypass_bulk;
 
+/** client object shard */
+struct dc_obj_shard {
+	/** rank of the target this object belongs to */
+	d_rank_t		do_rank;
+	/** refcount */
+	unsigned int		do_ref;
+	/** number of partitions on the remote target */
+	int			do_part_nr;
+	/** object id */
+	daos_unit_oid_t		do_id;
+	/** container handler of the object */
+	daos_handle_t		do_co_hdl;
+	/** list to the container */
+	d_list_t		do_co_list;
+	/** point back to object */
+	struct dc_object	*do_obj;
+};
+
 /** Client stack object */
 struct dc_object {
 	/**
@@ -67,29 +85,15 @@ struct dc_object {
 	unsigned int		 cob_mode;
 	/** refcount on this object */
 	unsigned int		 cob_ref;
+	/** cob_spin protects cob_ref and obj_shards' do_ref */
+	pthread_spinlock_t	 cob_spin;
 
-	/* protect layout and shard objects handle */
-	pthread_rwlock_t	cob_lock;
+	/* cob_lock protects layout and shard objects ptrs */
+	pthread_rwlock_t	 cob_lock;
 	/** algorithmically generated object layout */
 	struct pl_obj_layout	*cob_layout;
-	/** shard object handles */
-	daos_handle_t		*cob_mohs;
-};
-
-/* client object shard */
-struct dc_obj_shard {
-	/** rank of the target this object belongs to */
-	d_rank_t		do_rank;
-	/** refcount */
-	unsigned int		do_ref;
-	/** number of partitions on the remote target */
-	int			do_part_nr;
-	/** object id */
-	daos_unit_oid_t		do_id;
-	/** container handler of the object */
-	daos_handle_t		do_co_hdl;
-	/** list to the container */
-	d_list_t		do_co_list;
+	/** shard object ptrs */
+	struct dc_obj_shard	**cob_obj_shards;
 };
 
 /**
@@ -152,24 +156,25 @@ struct obj_tls {
 	d_sg_list_t	ot_echo_sgl;
 };
 
-int dc_obj_shard_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
-		      unsigned int mode, daos_handle_t *oh);
-int dc_obj_shard_close(daos_handle_t oh);
+int dc_obj_shard_open(struct dc_object *obj, uint32_t tgt, daos_unit_oid_t id,
+		      unsigned int mode, struct dc_obj_shard **shard);
+void dc_obj_shard_close(struct dc_obj_shard *shard);
 
-int dc_obj_shard_update(daos_handle_t oh, daos_epoch_t epoch,
+int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			daos_key_t *dkey, unsigned int nr,
 			daos_iod_t *iods, daos_sg_list_t *sgls,
 			unsigned int map_ver, tse_task_t *task);
-int dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
+int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       daos_key_t *dkey, unsigned int nr,
 		       daos_iod_t *iods, daos_sg_list_t *sgls,
 		       daos_iom_t *maps, unsigned int map_ver,
 		       tse_task_t *task);
-int dc_obj_shard_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
-			  daos_key_t *key, uint32_t *nr, daos_key_desc_t *kds,
-			  daos_sg_list_t *sgl, daos_hash_out_t *anchor,
-			  unsigned int map_ver, tse_task_t *task);
-int dc_obj_shard_list_rec(daos_handle_t oh, uint32_t op,
+int dc_obj_shard_list_key(struct dc_obj_shard *shard, uint32_t op,
+			  daos_epoch_t epoch, daos_key_t *key, uint32_t *nr,
+			  daos_key_desc_t *kds, daos_sg_list_t *sgl,
+			  daos_hash_out_t *anchor, unsigned int map_ver,
+			  tse_task_t *task);
+int dc_obj_shard_list_rec(struct dc_obj_shard *shard, uint32_t op,
 		      daos_epoch_t epoch, daos_key_t *dkey,
 		      daos_key_t *akey, daos_iod_type_t type,
 		      daos_size_t *size, uint32_t *nr,
@@ -201,8 +206,10 @@ struct tsa_obj_punch {
 
 int dc_shard_punch(tse_task_t *task);
 
-struct dc_obj_shard *obj_shard_hdl2ptr(daos_handle_t hdl);
 void obj_shard_decref(struct dc_obj_shard *shard);
+void obj_shard_addref(struct dc_obj_shard *shard);
+void obj_addref(struct dc_object *obj);
+void obj_decref(struct dc_object *obj);
 
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);

@@ -43,13 +43,15 @@
 
 struct dac_array {
 	/** DAOS KV object handle */
-	daos_handle_t	daos_oh;
+	daos_handle_t		daos_oh;
 	/** Array cell size of each element */
-	daos_size_t	cell_size;
+	daos_size_t		cell_size;
 	/** elems to store in 1 dkey before moving to the next one in the grp */
-	daos_size_t	block_size;
+	daos_size_t		block_size;
 	/** ref count on array */
-	unsigned int	cob_ref;
+	unsigned int		cob_ref;
+	/** protect ref count */
+	pthread_spinlock_t	cob_lock;
 };
 
 struct io_params {
@@ -73,21 +75,30 @@ array_alloc(void)
 		return NULL;
 
 	obj->cob_ref = 1;
+	pthread_spin_init(&obj->cob_lock, PTHREAD_PROCESS_PRIVATE);
 	return obj;
 }
 
 static void
 array_decref(struct dac_array *obj)
 {
+	pthread_spin_lock(&obj->cob_lock);
 	obj->cob_ref--;
-	if (obj->cob_ref == 0)
+	if (obj->cob_ref == 0) {
+		pthread_spin_unlock(&obj->cob_lock);
+		pthread_spin_destroy(&obj->cob_lock);
 		D__FREE_PTR(obj);
+	} else {
+		pthread_spin_unlock(&obj->cob_lock);
+	}
 }
 
 static void
 array_addref(struct dac_array *obj)
 {
+	pthread_spin_lock(&obj->cob_lock);
 	obj->cob_ref++;
+	pthread_spin_unlock(&obj->cob_lock);
 }
 
 static daos_handle_t

@@ -36,6 +36,76 @@
 
 #define CLI_OBJ_IO_PARMS	8
 
+/**
+ * Open an object shard (shard object), cache the open handle.
+ */
+static int
+obj_shard_open(struct dc_object *obj, unsigned int shard, unsigned int map_ver,
+	       struct dc_obj_shard **shard_ptr)
+{
+	struct pl_obj_layout	*layout;
+	struct dc_obj_shard	*obj_shard;
+	bool			 lock_upgraded = false;
+	int			 rc = 0;
+
+	pthread_rwlock_rdlock(&obj->cob_lock);
+open_retry:
+	layout = obj->cob_layout;
+	if (layout->ol_ver != map_ver) {
+		pthread_rwlock_unlock(&obj->cob_lock);
+		return -DER_STALE;
+	}
+
+	/* Skip the invalid shards and targets */
+	if (layout->ol_shards[shard].po_shard == -1 ||
+	    layout->ol_shards[shard].po_target == -1) {
+		pthread_rwlock_unlock(&obj->cob_lock);
+		return -DER_NONEXIST;
+	}
+
+	/* XXX could be otherwise for some object classes? */
+	D__ASSERT(layout->ol_shards[shard].po_shard == shard);
+
+	D__DEBUG(DB_IO, "Open object shard %d\n", shard);
+	obj_shard = obj->cob_obj_shards[shard];
+	if (obj_shard == NULL) {
+		daos_unit_oid_t	 oid;
+
+		/* upgrade to write lock to safely update open shard cache */
+		if (!lock_upgraded) {
+			pthread_rwlock_unlock(&obj->cob_lock);
+			pthread_rwlock_wrlock(&obj->cob_lock);
+			lock_upgraded = true;
+			goto open_retry;
+		}
+
+		memset(&oid, 0, sizeof(oid));
+		oid.id_shard = shard;
+		oid.id_pub   = obj->cob_md.omd_id;
+		/* NB: obj open is a local operation, so it is ok to call
+		 * it in sync mode, at least for now.
+		 */
+		rc = dc_obj_shard_open(obj, layout->ol_shards[shard].po_target,
+				       oid, obj->cob_mode, &obj_shard);
+		if (rc == 0) {
+			D__ASSERT(obj_shard != NULL);
+			obj->cob_obj_shards[shard] = obj_shard;
+		}
+	}
+
+	if (rc == 0) {
+		/* hold the object shard */
+		obj_shard_addref(obj_shard);
+		*shard_ptr = obj_shard;
+	}
+
+	pthread_rwlock_unlock(&obj->cob_lock);
+
+	return rc;
+}
+
+#define obj_shard_close(shard)	dc_obj_shard_close(shard)
+
 static struct dc_object *
 obj_alloc(void)
 {
@@ -59,13 +129,14 @@ obj_layout_free(struct dc_object *obj)
 	if (layout == NULL)
 		return;
 
-	if (obj->cob_mohs != NULL) {
+	if (obj->cob_obj_shards != NULL) {
 		for (i = 0; i < layout->ol_nr; i++) {
-			if (!daos_handle_is_inval(obj->cob_mohs[i]))
-				dc_obj_shard_close(obj->cob_mohs[i]);
+			if (obj->cob_obj_shards[i] != NULL)
+				obj_shard_close(obj->cob_obj_shards[i]);
 		}
-		D__FREE(obj->cob_mohs, layout->ol_nr * sizeof(*obj->cob_mohs));
-		obj->cob_mohs = NULL;
+		D__FREE(obj->cob_obj_shards,
+			layout->ol_nr * sizeof(obj->cob_obj_shards[0]));
+		obj->cob_obj_shards = NULL;
 	}
 
 	pl_obj_layout_free(layout);
@@ -76,22 +147,30 @@ static void
 obj_free(struct dc_object *obj)
 {
 	obj_layout_free(obj);
+	pthread_spin_destroy(&obj->cob_spin);
 	pthread_rwlock_destroy(&obj->cob_lock);
 	D__FREE_PTR(obj);
 }
 
-static void
+void
 obj_decref(struct dc_object *obj)
 {
+	pthread_spin_lock(&obj->cob_spin);
 	obj->cob_ref--;
-	if (obj->cob_ref == 0)
+	if (obj->cob_ref == 0) {
+		pthread_spin_unlock(&obj->cob_spin);
 		obj_free(obj);
+	} else {
+		pthread_spin_unlock(&obj->cob_spin);
+	}
 }
 
-static void
+void
 obj_addref(struct dc_object *obj)
 {
+	pthread_spin_lock(&obj->cob_spin);
 	obj->cob_ref++;
+	pthread_spin_unlock(&obj->cob_spin);
 }
 
 static daos_handle_t
@@ -140,70 +219,12 @@ obj_hdl2cont_hdl(daos_handle_t oh)
 	return hdl;
 }
 
-/**
- * Open an object shard (shard object), cache the open handle.
- */
-static int
-obj_shard_open(struct dc_object *obj, unsigned int shard, unsigned int map_ver,
-	       daos_handle_t *oh)
-{
-	struct pl_obj_layout	*layout;
-	int			 rc = 0;
-
-	pthread_rwlock_rdlock(&obj->cob_lock);
-	layout = obj->cob_layout;
-	if (layout->ol_ver != map_ver) {
-		pthread_rwlock_unlock(&obj->cob_lock);
-		return -DER_STALE;
-	}
-
-	/* Skip the invalid shards and targets */
-	if (layout->ol_shards[shard].po_shard == -1 ||
-	    layout->ol_shards[shard].po_target == -1) {
-		pthread_rwlock_unlock(&obj->cob_lock);
-		return -DER_NONEXIST;
-	}
-
-	/* XXX could be otherwise for some object classes? */
-	D__ASSERT(layout->ol_shards[shard].po_shard == shard);
-
-	D__DEBUG(DB_IO, "Open object shard %d\n", shard);
-	if (daos_handle_is_inval(obj->cob_mohs[shard])) {
-		daos_unit_oid_t	 oid;
-
-		memset(&oid, 0, sizeof(oid));
-		oid.id_shard = shard;
-		oid.id_pub   = obj->cob_md.omd_id;
-		/* NB: obj open is a local operation, so it is ok to call
-		 * it in sync mode, at least for now.
-		 */
-		rc = dc_obj_shard_open(obj->cob_coh,
-				       layout->ol_shards[shard].po_target,
-				       oid, obj->cob_mode,
-				       &obj->cob_mohs[shard]);
-	}
-
-	if (rc == 0) {
-		struct dc_obj_shard *shard_obj;
-
-		*oh = obj->cob_mohs[shard];
-		/* hold the object */
-		shard_obj = obj_shard_hdl2ptr(*oh);
-		D__ASSERT(shard_obj != NULL);
-	}
-
-	pthread_rwlock_unlock(&obj->cob_lock);
-
-	return rc;
-}
-
 static int
 obj_layout_create(struct dc_object *obj)
 {
 	struct pl_obj_layout	*layout;
 	struct dc_pool		*pool;
 	struct pl_map		*map;
-	int			 i;
 	int			 nr;
 	int			 rc;
 
@@ -230,13 +251,10 @@ obj_layout_create(struct dc_object *obj)
 	obj->cob_layout = layout;
 	nr = layout->ol_nr;
 
-	D__ASSERT(obj->cob_mohs == NULL);
-	D__ALLOC(obj->cob_mohs, nr * sizeof(*obj->cob_mohs));
-	if (obj->cob_mohs == NULL)
-		D__GOTO(out, rc = -DER_NOMEM);
-
-	for (i = 0; i < nr; i++)
-		obj->cob_mohs[i] = DAOS_HDL_INVAL;
+	D__ASSERT(obj->cob_obj_shards == NULL);
+	D__ALLOC(obj->cob_obj_shards, nr * sizeof(obj->cob_obj_shards[0]));
+	if (obj->cob_obj_shards == NULL)
+		rc = -DER_NOMEM;
 
 out:
 	return rc;
@@ -557,6 +575,7 @@ dc_obj_open(tse_task_t *task)
 	obj->cob_coh  = args->coh;
 	obj->cob_mode = args->mode;
 
+	pthread_spin_init(&obj->cob_spin, PTHREAD_PROCESS_PRIVATE);
 	pthread_rwlock_init(&obj->cob_lock, NULL);
 
 	/* it is a local operation for now, does not require event */
@@ -737,10 +756,10 @@ dc_obj_fetch(tse_task_t *task)
 {
 	daos_obj_fetch_t	*args = dc_task_get_args(task);
 	struct dc_object	*obj;
-	unsigned int		map_ver;
-	int			shard;
-	daos_handle_t		shard_oh;
-	int			rc;
+	struct dc_obj_shard	*obj_shard;
+	int			 shard;
+	unsigned int		 map_ver;
+	int			 rc;
 
 	obj = obj_hdl2ptr(args->oh);
 	if (obj == NULL)
@@ -762,16 +781,16 @@ dc_obj_fetch(tse_task_t *task)
 	if (shard < 0)
 		D__GOTO(out_task, rc = shard);
 
-	rc = obj_shard_open(obj, shard, map_ver, &shard_oh);
+	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (rc != 0)
 		D__GOTO(out_task, rc);
 
 	D__DEBUG(DB_IO, "fetch "DF_OID" shard %u\n",
 		DP_OID(obj->cob_md.omd_id), shard);
-	rc = dc_obj_shard_fetch(shard_oh, args->epoch, args->dkey, args->nr,
+	rc = dc_obj_shard_fetch(obj_shard, args->epoch, args->dkey, args->nr,
 				args->iods, args->sgls, args->maps, map_ver,
 				task);
-	dc_obj_shard_close(shard_oh);
+	obj_shard_close(obj_shard);
 	return rc;
 
 out_task:
@@ -795,8 +814,8 @@ shard_update_task(tse_task_t *task)
 {
 	struct shard_update_args	*args;
 	struct dc_object		*obj;
-	daos_handle_t			shard_oh;
-	int				rc;
+	struct dc_obj_shard		*obj_shard;
+	int				 rc;
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
 	obj = args->obj;
@@ -808,7 +827,7 @@ shard_update_task(tse_task_t *task)
 				  DAOS_FAIL_ONCE);
 	}
 
-	rc = obj_shard_open(obj, args->shard, args->map_ver, &shard_oh);
+	rc = obj_shard_open(obj, args->shard, args->map_ver, &obj_shard);
 	if (rc != 0) {
 		/* skip a failed target */
 		if (rc == -DER_NONEXIST) {
@@ -818,10 +837,10 @@ shard_update_task(tse_task_t *task)
 		return rc;
 	}
 
-	rc = dc_obj_shard_update(shard_oh, args->epoch, args->dkey, args->nr,
+	rc = dc_obj_shard_update(obj_shard, args->epoch, args->dkey, args->nr,
 				 args->iods, args->sgls, args->map_ver, task);
 
-	dc_obj_shard_close(shard_oh);
+	obj_shard_close(obj_shard);
 	return rc;
 }
 
@@ -973,11 +992,11 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 		     bool incr_order, bool single_shard, tse_task_t *task)
 {
 	struct dc_object	*obj;
-	unsigned int		map_ver;
-	struct obj_list_arg	list_args;
-	daos_handle_t		shard_oh;
-	int			shard;
-	int			rc;
+	struct dc_obj_shard	*obj_shard;
+	unsigned int		 map_ver;
+	struct obj_list_arg	 list_args;
+	int			 shard;
+	int			 rc;
 
 	if (nr == NULL || *nr == 0) {
 		D__DEBUG(DB_IO, "Invalid API parameter.\n");
@@ -1021,21 +1040,21 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	}
 
 	/** object will be decref by task complete cb */
-	rc = obj_shard_open(obj, shard, map_ver, &shard_oh);
+	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (rc != 0)
 		D__GOTO(out_task, rc);
 
 	if (op == DAOS_OBJ_RECX_RPC_ENUMERATE)
-		rc = dc_obj_shard_list_rec(shard_oh, op, epoch, dkey, akey,
+		rc = dc_obj_shard_list_rec(obj_shard, op, epoch, dkey, akey,
 					   type, size, nr, recxs, eprs,
 					   cookies, versions, anchor, map_ver,
 					   incr_order, task);
 	else
-		rc = dc_obj_shard_list_key(shard_oh, op, epoch, dkey, nr,
+		rc = dc_obj_shard_list_key(obj_shard, op, epoch, dkey, nr,
 					   kds, sgl, anchor, map_ver, task);
 
 	D__DEBUG(DB_IO, "Enumerate keys in shard %d: rc %d\n", shard, rc);
-	dc_obj_shard_close(shard_oh);
+	obj_shard_close(obj_shard);
 
 	return rc;
 
@@ -1184,9 +1203,9 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 	for (i = 0; i < shard_nr; i++) {
 		tse_task_t		*task;
 		struct tsa_obj_punch	*args;
-		daos_handle_t		 soh;
+		struct dc_obj_shard	*obj_shard;
 
-		rc = obj_shard_open(obj, shard_first + i, map_ver, &soh);
+		rc = obj_shard_open(obj, shard_first + i, map_ver, &obj_shard);
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
 			continue; /* skip a failed target */
@@ -1205,8 +1224,9 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 		/* obj_process_rc_cb has taken refcount, which is called
 		 * at the end.
 		 */
+		obj_shard_addref(obj_shard);
+		args->pa_shard	  = obj_shard;
 		args->pa_obj	  = obj;
-		args->pa_shard	  = obj_shard_hdl2ptr(soh);
 		args->pa_mapv	  = map_ver;
 		uuid_copy(args->pa_coh_uuid, coh_uuid);
 		uuid_copy(args->pa_cont_uuid, cont_uuid);
