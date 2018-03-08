@@ -1343,6 +1343,38 @@ send_error:
 	D_ASSERT(rc == 0);
 }
 
+
+static int
+get_shortcut_path(struct crt_ivns_internal *ivns, d_rank_t root_rank,
+			crt_iv_shortcut_t shortcut, d_rank_t *next_node)
+{
+	int rc = 0;
+
+	D_ASSERT(ivns != NULL);
+	D_ASSERT(next_node != NULL);
+
+	switch (shortcut) {
+	case CRT_IV_SHORTCUT_TO_ROOT:
+		*next_node = root_rank;
+		break;
+
+	case CRT_IV_SHORTCUT_NONE:
+		rc = crt_iv_parent_get(ivns, root_rank, next_node);
+		if (rc != 0) {
+			D_DEBUG("crt_iv_parent_get() returned %d\n", rc);
+			D_GOTO(exit, rc = -DER_OOG);
+		}
+		break;
+
+	default:
+		D_ERROR("Unknown shortcut=%d specified\n", shortcut);
+		D_GOTO(exit, rc = -DER_INVAL);
+	}
+
+exit:
+	return rc;
+}
+
 int
 crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	    crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
@@ -1432,25 +1464,9 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	/* If we reached here, means we got DER_IVCB_FORWARD */
 
-	switch (shortcut) {
-	case CRT_IV_SHORTCUT_TO_ROOT:
-		next_node = root_rank;
-		break;
-
-	case CRT_IV_SHORTCUT_NONE:
-		rc = crt_iv_parent_get(ivns_internal, root_rank,
-					&next_node);
-		if (rc != 0) {
-			D_DEBUG("crt_iv_parent_get() returned %d\n", rc);
-			D_GOTO(exit, rc = -DER_OOG);
-		}
-
-		break;
-
-	default:
-		D_ERROR("Unknown shortcut=%d specified\n", shortcut);
-		D_GOTO(exit, rc = -DER_INVAL);
-	}
+	rc = get_shortcut_path(ivns_internal, root_rank, shortcut, &next_node);
+	if (rc != 0)
+		D_GOTO(exit, rc);
 
 	IV_DBG(iv_key, "root=%d next_parent=%d\n", root_rank, next_node);
 
@@ -2520,19 +2536,11 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else  if (rc == -DER_IVCB_FORWARD) {
-		if (shortcut == CRT_IV_SHORTCUT_TO_ROOT)
-			next_node = root_rank;
-		else if (shortcut == CRT_IV_SHORTCUT_NONE) {
-			rc = crt_iv_parent_get(ivns_internal, root_rank,
+
+		rc = get_shortcut_path(ivns_internal, root_rank, shortcut,
 					&next_node);
-			if (rc != 0) {
-				D_DEBUG("crt_iv_parent_get() rc=%d\n", rc);
-				D_GOTO(put, rc = -DER_OOG);
-			}
-		} else {
-			D_ERROR("Unknown shortcut argument %d\n", shortcut);
-			D_GOTO(put, rc = -DER_INVAL);
-		}
+		if (rc != 0)
+			D_GOTO(put, rc);
 
 		D_ALLOC_PTR(cb_info);
 		if (cb_info == NULL)

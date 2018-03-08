@@ -2316,7 +2316,7 @@ crt_group_config_path_set(const char *path)
 		return -DER_NOTDIR;
 	}
 
-	strncpy(crt_attach_prefix, path, CRT_MAX_ATTACH_PREFIX);
+	strncpy(crt_attach_prefix, path, CRT_MAX_ATTACH_PREFIX-1);
 
 	return 0;
 }

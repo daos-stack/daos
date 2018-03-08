@@ -176,19 +176,19 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
  */
 #define D_REALLOC(newptr, oldptr, size)					\
 	do {								\
+		int _sz = (int)(size);					\
 		D_ASSERT((void *)&(newptr) != &(oldptr));		\
-		(newptr) =  realloc((oldptr), (size));			\
+		(newptr) =  realloc((oldptr), (_sz));			\
 		if ((newptr) != NULL) {					\
 			d_log(MEM_DBG, "%s:%d, realloc '"		\
 			      #newptr "': %i at %p (old '" #oldptr	\
 			      "':%p).\n", __FILE__, __LINE__,		\
-			      (int)(size), (newptr), (oldptr));		\
+			      _sz, (newptr), (oldptr));			\
 			(oldptr) = NULL;				\
 			break;						\
 		}							\
 		d_log(MEM_ERR, "%s:%d, out of memory (tried to realloc "\
-		      "'" #newptr "': %i)\n", __FILE__, __LINE__,	\
-		      (int)(size));					\
+		      "'" #newptr "': %i)\n", __FILE__, __LINE__, _sz); \
 	} while (0)
 
 # define D_FREE(ptr)							\

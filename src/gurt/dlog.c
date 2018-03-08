@@ -422,7 +422,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	} else {
 		/* it fit, make sure it ends in newline */
 		if (b[tlen - 1] != '\n') {
-			D_ASSERT(tlen < DLOG_TBSIZ);
+			D_ASSERT(tlen < DLOG_TBSIZ-1);
 			b[tlen++] = '\n';
 			b[tlen] = 0;
 		}

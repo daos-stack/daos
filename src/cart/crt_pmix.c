@@ -759,6 +759,7 @@ crt_plugin_pmix_fini(void)
 	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 	if (!crt_plugin_gdata.cpg_pmix_errhdlr_inited) {
 		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+		sem_destroy(&token_to_proceed);
 		return;
 	}
 
@@ -771,7 +772,7 @@ crt_plugin_pmix_fini(void)
 	if (rc != 0) {
 		D_ERROR("sem_wait failed, rc: %d.\n", rc);
 		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-
+		sem_destroy(&token_to_proceed);
 		return;
 	}
 	crt_plugin_gdata.cpg_pmix_errhdlr_inited = 0;

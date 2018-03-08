@@ -481,10 +481,7 @@ send_rpc:
 			D_ERROR("d_gettime failed; ret = %d\n", ret);
 
 			/* Free the RPC request that was created but not sent */
-			ret = crt_req_decref(new_rpc);
-			if (ret != 0)
-				D_ERROR("crt_req_decref failed; ret=%d\n", ret);
-
+			RPC_PUB_DECREF(new_rpc);
 			D_GOTO(abort, ret = -DER_UNKNOWN);
 		}
 
@@ -1065,9 +1062,7 @@ static int status_req_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	if (ret != 0)
 		D_ERROR("crt_reply_send failed; ret = %d\n", ret);
 
-	ret = crt_req_decref(cb_info->bci_bulk_desc->bd_rpc);
-	if (ret != 0)
-		D_ERROR("crt_req_decref failed; ret=%d\n", ret);
+	RPC_PUB_DECREF(cb_info->bci_bulk_desc->bd_rpc);
 
 	D_MUTEX_UNLOCK(&g_data_lock);
 	/******************* UNLOCK: g_data_lock *******************/
@@ -1089,8 +1084,7 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 	 * Increment the reference counter for this RPC
 	 * It is decremented after the reply is sent
 	 */
-	ret = crt_req_addref(rpc_req);
-	D_ASSERT(ret == 0);
+	RPC_PUB_ADDREF(rpc_req);
 
 	bulk_hdl_in = crt_req_get(rpc_req);
 	D_ASSERT(bulk_hdl_in != NULL);
@@ -1176,11 +1170,7 @@ send_rpc:
 	if (ret != 0)
 		D_ERROR("crt_reply_send failed; ret = %d\n", ret);
 
-	ret = crt_req_decref(rpc_req);
-	if (ret != 0) {
-		D_ERROR("crt_req_decref failed; ret=%d\n", ret);
-		res->status = ret;
-	}
+	RPC_PUB_DECREF(rpc_req);
 
 	D_MUTEX_UNLOCK(&g_data_lock);
 	/******************* UNLOCK: g_data_lock *******************/
