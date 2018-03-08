@@ -868,18 +868,6 @@ struct ec_rec {
 	uint64_t	er_counter;
 };
 
-static void
-ec_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
-{
-	*(uint64_t *)hkey = *(uint64_t *)key->iov_buf;
-}
-
-static int
-ec_hkey_size(struct btr_instance *tins)
-{
-	return sizeof(uint64_t);
-}
-
 static int
 ec_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 	       struct btr_record *rec)
@@ -972,8 +960,6 @@ ec_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 }
 
 btr_ops_t dbtree_ec_ops = {
-	.to_hkey_gen	= ec_hkey_gen,
-	.to_hkey_size	= ec_hkey_size,
 	.to_rec_alloc	= ec_rec_alloc,
 	.to_rec_free	= ec_rec_free,
 	.to_rec_fetch	= ec_rec_fetch,
@@ -1239,19 +1225,6 @@ struct iv_rec {
 	uint64_t	ir_value_cap;	/* capacity of value buffer */
 };
 
-static void
-iv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
-{
-	D__ASSERTF(key->iov_len == sizeof(uint64_t), DF_U64"\n", key->iov_len);
-	*(uint64_t *)hkey = *(uint64_t *)key->iov_buf;
-}
-
-static int
-iv_hkey_size(struct btr_instance *tins)
-{
-	return sizeof(uint64_t);
-}
-
 static int
 iv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 	     struct btr_record *rec)
@@ -1366,8 +1339,6 @@ iv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 }
 
 btr_ops_t dbtree_iv_ops = {
-	.to_hkey_gen	= iv_hkey_gen,
-	.to_hkey_size	= iv_hkey_size,
 	.to_rec_alloc	= iv_rec_alloc,
 	.to_rec_free	= iv_rec_free,
 	.to_rec_fetch	= iv_rec_fetch,

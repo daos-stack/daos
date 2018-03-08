@@ -82,7 +82,8 @@ register_dbtree_classes(void)
 		return rc;
 	}
 
-	rc = dbtree_class_register(DBTREE_CLASS_IV, 0 /* feats */,
+	rc = dbtree_class_register(DBTREE_CLASS_IV,
+				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_iv_ops);
 	if (rc != 0) {
 		D__ERROR("failed to register DBTREE_CLASS_IV: %d\n", rc);
@@ -103,7 +104,8 @@ register_dbtree_classes(void)
 		return rc;
 	}
 
-	rc = dbtree_class_register(DBTREE_CLASS_EC, 0 /* feats */,
+	rc = dbtree_class_register(DBTREE_CLASS_EC,
+				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_ec_ops);
 	if (rc != 0)
 		D__ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
