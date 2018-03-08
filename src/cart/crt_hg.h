@@ -208,7 +208,16 @@ crt_hg_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len)
 {
 	hg_size_t	hg_size;
 
-	D_ASSERT(bulk_len != NULL);
+	if (bulk_len == NULL) {
+		D_ERROR("bulk_len is NULL\n");
+		return -DER_INVAL;
+	}
+
+	if (bulk_hdl == CRT_BULK_NULL) {
+		D_ERROR("bulk_hdl is NULL\n");
+		return -DER_INVAL;
+	}
+
 	hg_size = HG_Bulk_get_size(bulk_hdl);
 	*bulk_len = hg_size;
 

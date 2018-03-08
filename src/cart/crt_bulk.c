@@ -180,37 +180,13 @@ out:
 int
 crt_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len)
 {
-	int	rc = 0;
-
-	if (bulk_hdl == CRT_BULK_NULL || bulk_len == NULL) {
-		D_ERROR("invalid parameter, NULL bulk_hdl or bulk_len.\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rc = crt_hg_bulk_get_len(bulk_hdl, bulk_len);
-	if (rc != 0)
-		D_ERROR("crt_hg_bulk_get_len failed, rc: %d.\n", rc);
-
-out:
-	return rc;
+	return crt_hg_bulk_get_len(bulk_hdl, bulk_len);
 }
 
 int
 crt_bulk_get_sgnum(crt_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
 {
-	int	rc = 0;
-
-	if (bulk_hdl == CRT_BULK_NULL || bulk_sgnum == NULL) {
-		D_ERROR("invalid parameter, NULL bulk_hdl or bulk_sgnum.\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rc = crt_hg_bulk_get_sgnum(bulk_hdl, bulk_sgnum);
-	if (rc != 0)
-		D_ERROR("crt_hg_bulk_get_sgnum failed, rc: %d.\n", rc);
-
-out:
-	return rc;
+	return crt_hg_bulk_get_sgnum(bulk_hdl, bulk_sgnum);
 }
 
 int

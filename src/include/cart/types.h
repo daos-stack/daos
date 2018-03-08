@@ -113,6 +113,7 @@ typedef void *crt_rpc_output_t;
 
 typedef void *crt_bulk_t; /* abstract bulk handle */
 
+#define CRT_BULK_NULL            (NULL)
 /**
  * max size of input/output parameters defined as 64M bytes, for larger length
  * the user should transfer by bulk.

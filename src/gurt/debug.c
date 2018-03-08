@@ -109,9 +109,19 @@ d_log_sync_mask(void)
 static inline int
 setup_clog_facnamemask(void)
 {
+	int rc;
 	/* add crt internally used the log facilities */
-	D_INIT_LOG_FAC(misc, "MISC", "misc");
-	D_INIT_LOG_FAC(mem, "MEM", "memory");
+	rc = D_INIT_LOG_FAC(misc, "MISC", "misc");
+	if (rc != 0) {
+		D_ERROR("MISC log facility failed to init; rc=%d\n", rc);
+		return rc;
+	}
+
+	rc = D_INIT_LOG_FAC(mem, "MEM", "memory");
+	if (rc != 0) {
+		D_ERROR("MEM log facility failed to init; rc=%d\n", rc);
+		return rc;
+	}
 
 	/* Lock is already held */
 	d_log_sync_mask_helper(false);

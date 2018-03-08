@@ -44,7 +44,6 @@
 #define __CRT_INTERNAL_TYPES_H__
 
 #define CRT_CONTEXT_NULL         (NULL)
-#define CRT_BULK_NULL            (NULL)
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>

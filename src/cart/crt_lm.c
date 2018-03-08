@@ -1088,6 +1088,7 @@ lm_grp_priv_destroy(struct lm_grp_priv_t *lm_grp_priv)
 
 	D_FREE(lm_grp_priv->lgp_psr_cand);
 	D_RWLOCK_DESTROY(&lm_grp_priv->lgp_rwlock);
+	sem_destroy(&lm_grp_priv->lgp_sem);
 	D_FREE_PTR(lm_grp_priv);
 }
 
@@ -1415,6 +1416,11 @@ crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 	D_ASSERT(lm_grp_priv != NULL);
 
 	*psr_cand = d_rank_list_alloc(0);
+	if (*psr_cand == NULL) {
+		D_ERROR("d_rank_list_alloc(0) failed\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
 	D_RWLOCK_RDLOCK(&lm_grp_priv->lgp_rwlock);
 	for (i = 0; i < lm_grp_priv->lgp_num_psr; i++) {
 		evicted = crt_rank_evicted(lm_grp_priv->lgp_grp,

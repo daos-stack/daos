@@ -1802,6 +1802,9 @@ crt_get_tag_uri(const char *base_uri, int tag)
 		D_GOTO(out, 0);
 	strncpy(tag_uri, base_uri, CRT_ADDR_STR_MAX_LEN - 1);
 
+	/* KW #1461 fix */
+	tag_uri[CRT_ADDR_STR_MAX_LEN - 1] = '\0';
+
 	if (tag == 0)
 		D_GOTO(out, 0);
 
@@ -2313,7 +2316,7 @@ crt_group_config_path_set(const char *path)
 		return -DER_NOTDIR;
 	}
 
-	strcpy(crt_attach_prefix, path);
+	strncpy(crt_attach_prefix, path, CRT_MAX_ATTACH_PREFIX);
 
 	return 0;
 }

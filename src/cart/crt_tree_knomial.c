@@ -77,9 +77,9 @@ int_2_knomial_number(uint32_t x, uint32_t ratio, struct knomial_number *n)
 	memset((void *)n->digits, 0, sizeof(n->digits));
 
 	while (x > 0) {
+		D_ASSERT(n->ndigits < CRT_TREE_MAX_RATIO);
 		n->digits[n->ndigits++] = x % ratio;
 		x /= ratio;
-		D_ASSERT(n->ndigits <= CRT_TREE_MAX_RATIO);
 	}
 }
 
@@ -95,7 +95,8 @@ knomial_get_children(uint32_t *children, uint32_t self, uint32_t size,
 	D_ASSERT(self < size);
 
 	int_2_knomial_number(self, ratio, &n);
-	for (digit = 0; digit > n.ndigits || n.digits[digit] == 0; digit++) {
+	for (digit = 0; (digit < CRT_TREE_MAX_RATIO) &&
+		(digit > n.ndigits || n.digits[digit] == 0); digit++) {
 		for (i = 1; i < ratio; i++) {
 			uint32_t child = self + i*inc;
 
