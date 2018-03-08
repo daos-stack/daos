@@ -49,7 +49,7 @@ struct dss_xstream {
 	ABT_xstream	dx_xstream;
 	ABT_pool	dx_pools[DSS_POOL_CNT];
 	ABT_sched	dx_sched;
-	ABT_xstream	dx_progress;
+	ABT_thread	dx_progress;
 	unsigned int	dx_idx;
 };
 
@@ -517,7 +517,7 @@ dss_xstreams_fini(bool force)
 
 	D__DEBUG(DB_TRACE, "Stopping execution streams\n");
 
-	/** Stop & free progress xstreams */
+	/** Stop & free progress ULTs */
 	d_list_for_each_entry(dx, &xstream_data.xd_list, dx_list)
 		ABT_future_set(dx->dx_shutdown, dx);
 	d_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
@@ -538,6 +538,9 @@ dss_xstreams_fini(bool force)
 		ABT_sched_free(&dx->dx_sched);
 		dss_xstream_free(dx);
 	}
+
+	/* All other xstreams have terminated. */
+	dss_nxstreams = 0;
 
 	/* release local storage */
 	rc = pthread_key_delete(dss_tls_key);
@@ -883,9 +886,17 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		return -DER_INVAL;
 	}
 
-	stream_args   = &args->ca_stream_args;
+	if (dss_nxstreams == 0) {
+		/* May happen when the server is shutting down. */
+		D__DEBUG(DB_TRACE, "no xstreams\n");
+		return -DER_CANCELED;
+	}
+
+	stream_args = &args->ca_stream_args;
 	D__ALLOC(stream_args->csa_streams,
 		(dss_nxstreams) * sizeof(struct dss_stream_arg_type));
+	if (stream_args->csa_streams == NULL)
+		return -DER_NOMEM;
 
 	/*
 	 * Use the first, extra element of the value array to store the number
@@ -894,7 +905,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	rc = ABT_future_create(dss_nxstreams + 1, collective_reduce,
 			       &future);
 	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
+		D__GOTO(out_streams, rc = dss_abterr2der(rc));
 
 	carg.ca_future.dfa_future = future;
 	carg.ca_future.dfa_func	= ops->co_func;
@@ -940,16 +951,20 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	}
 
 	ABT_future_wait(future);
+
+	rc = aggregator.at_rc;
+
 	ABT_future_free(&future);
 
 	if (ops->co_reduce_arg_free)
 		for (tid = 0; tid < dss_nxstreams; tid++)
 			ops->co_reduce_arg_free(&stream_args->csa_streams[tid]);
 
+out_streams:
 	D__FREE(args->ca_stream_args.csa_streams,
 	       (dss_nxstreams) * sizeof(struct dss_stream_arg_type));
 
-	return aggregator.at_rc;
+	return rc;
 }
 
 /**

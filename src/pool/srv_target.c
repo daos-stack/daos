@@ -99,8 +99,8 @@ struct pool_child_lookup_arg {
 };
 
 /*
- * Called via dss_collective() to create and add the ds_pool_child object for
- * one thread. This opens the matching VOS pool.
+ * Called via dss_task_collective() to create and add the ds_pool_child object
+ * for one thread. This opens the matching VOS pool.
  */
 int
 ds_pool_child_open(uuid_t uuid, unsigned int version)
@@ -175,7 +175,7 @@ ds_pool_child_close(uuid_t uuid)
 }
 
 /*
- * Called via dss_collective() to delete the ds_pool_child object for one
+ * Called via dss_task_collective() to delete the ds_pool_child object for one
  * thread. If nobody else is referencing this object, then its VOS pool handle
  * is closed and the object itself is freed.
  */
@@ -227,7 +227,8 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 
 	rc = dss_task_collective(pool_child_add_one, &collective_arg);
 	if (rc != 0) {
-		D__ERROR("Pool "DF_UUID" invalid: %d\n", DP_UUID(key), rc);
+		D__ERROR(DF_UUID": failed to add ES pool caches: %d\n",
+			 DP_UUID(key), rc);
 		D__GOTO(err_lock, rc);
 	}
 
@@ -281,7 +282,11 @@ pool_free_ref(struct daos_llink *llink)
 		ds_iv_ns_destroy(pool->sp_iv_ns);
 
 	rc = dss_task_collective(pool_child_delete_one, pool->sp_uuid);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	if (rc == -DER_CANCELED)
+		D__DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
+	else if (rc != 0)
+		D__ERROR(DF_UUID": failed to delete ES pool caches: %d\n",
+			 DP_UUID(pool->sp_uuid), rc);
 
 	if (pool->sp_map != NULL)
 		pool_map_decref(pool->sp_map);
