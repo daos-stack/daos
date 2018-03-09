@@ -354,6 +354,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		     int tree_topo, crt_rpc_t **req)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
+	struct crt_grp_priv	*default_grp_priv;
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_rpc_priv	*rpc_priv = NULL;
 	d_rank_list_t		*tobe_excluded_ranks;
@@ -379,6 +380,10 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		D_ERROR("invalid parameter of tree_topo: %#x.\n", tree_topo);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	default_grp_priv = crt_grp_pub2priv(NULL);
+	D_ASSERT(default_grp_priv != NULL);
+
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
 	if (grp == NULL) {
@@ -432,7 +437,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	}
 
 	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
-	grp_ver = grp_priv->gp_membs_ver;
+	grp_ver = default_grp_priv->gp_membs_ver;
 	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, false, tobe_excluded_ranks,
