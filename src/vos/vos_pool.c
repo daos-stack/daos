@@ -309,7 +309,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	}
 
 	uuid_copy(ukey.uuid, uuid);
-	D__DEBUG(DB_MGMT, "open pool %s, uuid "DF_UUID"\n", path, DP_UUID(uuid));
+	D__DEBUG(DB_MGMT, "open pool %s, uuid "DF_UUID"\n", path,
+		 DP_UUID(uuid));
 
 	rc = pool_lookup(&ukey, &pool);
 	if (rc == 0) {

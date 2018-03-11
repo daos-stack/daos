@@ -210,6 +210,7 @@ int dss_ult_create(void (*func)(void *), void *arg,
 		   int stream_id, ABT_thread *ult);
 int dss_ult_create_all(void (*func)(void *), void *arg);
 int dss_ult_create_execute(int (*func)(void *), void *arg,
+			   void (*user_cb)(void *), void *cb_args,
 			   int stream_id);
 
 /* Pack return codes with additional argument to reduce */
@@ -310,9 +311,48 @@ int dss_rpc_send(crt_rpc_t *rpc);
 int dss_group_create(crt_group_id_t id, d_rank_list_t *ranks,
 		     crt_group_t **group);
 int dss_group_destroy(crt_group_t *group);
-
 void dss_sleep(int ms);
 int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
+
+enum {
+	/** Min Value */
+	DSS_OFFLOAD_MIN		= -1,
+	/** Does computation on same ULT */
+	DSS_OFFLOAD_ULT		= 1,
+	/** Offload to an accelarator */
+	DSS_OFFLOAD_ACC		= 2,
+	/** Max value */
+	DSS_OFFLOAD_MAX		= 7
+};
+
+struct dss_acc_task {
+	/**
+	 * Type of offload for this operation
+	 * \param at_offload_type	[IN] type of accelaration
+	 */
+	int		at_offload_type;
+	/**
+	 * Opcode for this offload task
+	 * \param at_opcode		[IN] opcode for offload
+	 */
+	int		at_opcode;
+	/**
+	 * Buffer arguments for task offload
+	 * \param at_params		[IN] buffer for offload
+	 */
+	void		*at_params;
+	/**
+	 * Callback required for offload task
+	 * \param cb_args		[IN] arguments for offload
+	 */
+	int		(*at_cb)(void *cb_args);
+};
+
+/**
+ * Generic offload call abstraction for accelaration with both
+ * ULT and FPGA
+ */
+int dss_acc_offload(struct dss_acc_task *at_args);
 
 /** Different type of ES pools, there are 3 pools for now
  *

@@ -731,7 +731,12 @@ struct dss_future_arg {
 	ABT_future	dfa_future;
 	int		(*dfa_func)(void *);
 	void		*dfa_arg;
+	/** User callback for asynchronous mode */
+	void		(*dfa_comp_cb)(void *);
+	/** Argument for the user callback */
+	void		*dfa_comp_arg;
 	int		dfa_status;
+	bool		dfa_async;
 };
 
 static void
@@ -743,43 +748,67 @@ dss_ult_create_execute_cb(void *data)
 	rc = arg->dfa_func(arg->dfa_arg);
 	arg->dfa_status = rc;
 
-	ABT_future_set(arg->dfa_future, (void *)(intptr_t)rc);
+	if (!arg->dfa_async)
+		ABT_future_set(arg->dfa_future, (void *)(intptr_t)rc);
+	else
+		arg->dfa_comp_cb(arg->dfa_comp_arg);
 }
 
 /**
- * Create a ULT and wait until it has been executed. Note: This is
- * normally used when it needs to create a ULT on other xstream.
+ * Create an ULT in synchornous or asynchronous mode
+ * Sync: wait until it has been executed.
+ * Async: return and call user callback from ULT.
+ *
+ * Note: This is
+ * normally used when it needs to create an ULT on other xstream.
  *
  * \param[in]	func	function to execute
  * \param[in]	arg	argument for \a func
+ * \param[in]	user_cb	user call back (mandatory for async mode)
+ * \param[in]	arg	argument for \a user callback
  * \param[in]	stream_id indicate which xtream the ULT is executed.
  * \param[out]		error code.
+ *
  */
 int
-dss_ult_create_execute(int (*func)(void *), void *arg, int stream_id)
+dss_ult_create_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
+		       void *cb_args, int stream_id)
 {
 	struct dss_future_arg	future_arg;
 	ABT_future		future;
 	int			rc;
 
-	rc = ABT_future_create(1, NULL, &future);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	future_arg.dfa_future = future;
+	memset(&future_arg, 0, sizeof(future_arg));
 	future_arg.dfa_func = func;
 	future_arg.dfa_arg = arg;
 	future_arg.dfa_status = 0;
+
+	if (user_cb == NULL) {
+		rc = ABT_future_create(1, NULL, &future);
+		if (rc != ABT_SUCCESS)
+			return dss_abterr2der(rc);
+		future_arg.dfa_future = future;
+		future_arg.dfa_async  = false;
+	} else {
+		future_arg.dfa_comp_cb	= user_cb;
+		future_arg.dfa_comp_arg = cb_args;
+		future_arg.dfa_async	= true;
+	}
+
 	rc = dss_ult_create(dss_ult_create_execute_cb, &future_arg, stream_id,
 			    NULL);
 	if (rc)
 		D__GOTO(free, rc);
 
-	ABT_future_wait(future);
+	if (!future_arg.dfa_async)
+		ABT_future_wait(future);
 free:
 	if (rc == 0)
 		rc = future_arg.dfa_status;
-	ABT_future_free(&future);
+
+	if (!future_arg.dfa_async)
+		ABT_future_free(&future);
+
 	return rc;
 }
 
@@ -983,6 +1012,66 @@ dss_collective_internal(int (*func)(void *), void *arg, bool thread)
 		rc = dss_thread_collective_reduce(&coll_ops, &coll_args);
 	else
 		rc = dss_task_collective_reduce(&coll_ops, &coll_args);
+
+	return rc;
+}
+
+/** TODO: use daos checksum library to offload checksum calculation */
+static int
+compute_checksum_ult(void *args)
+{
+	return 0;
+}
+
+/** TODO: use OFI calls to calculate checksum on FPGA */
+static int
+compute_checksum_acc(void *args)
+{
+	return 0;
+}
+
+/**
+ * Generic offload call - abstraction for accelaration with
+ *
+ * \param[in] at_args	accelaration tasks with both ULT and FPGA
+ */
+int
+dss_acc_offload(struct dss_acc_task *at_args)
+{
+
+	int		rc = 0;
+	int		tid;
+
+
+	/**
+	 * Currently just launching it in this stream,
+	 * ideally will move to a separate exclusive xstream
+	 */
+	tid = dss_get_module_info()->dmi_tid;
+	if (at_args == NULL) {
+		D__ERROR("missing arguments for acc_offload\n");
+		return -DER_INVAL;
+	}
+
+	if (at_args->at_offload_type <= DSS_OFFLOAD_MIN ||
+	    at_args->at_offload_type >= DSS_OFFLOAD_MAX) {
+		D__ERROR("Unknown type of offload\n");
+		return -DER_INVAL;
+	}
+
+	switch (at_args->at_offload_type) {
+	case DSS_OFFLOAD_ULT:
+		rc = dss_ult_create_execute(compute_checksum_ult,
+					    at_args->at_params,
+					    NULL /* user-cb */,
+					    NULL /* user-cb args */,
+					    tid);
+		break;
+	case DSS_OFFLOAD_ACC:
+		/** calls to offload to FPGA*/
+		rc = compute_checksum_acc(at_args->at_params);
+		break;
+	}
 
 	return rc;
 }

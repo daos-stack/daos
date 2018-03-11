@@ -504,7 +504,8 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		/** prepare the max iterator */
 		rc = vos_iter_prepare(pcx->pc_type, &pcx->pc_param, &ih_max);
 		if (rc == -DER_NONEXIST) {
-			D__DEBUG(DB_EPC, "Exit from empty %s.\n", pcx_name(pcx));
+			D__DEBUG(DB_EPC, "Exit from empty %s.\n",
+				 pcx_name(pcx));
 			return 0;
 		}
 
@@ -561,7 +562,8 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		}
 
 		if (rc == -DER_NONEXIST) {
-			D__DEBUG(DB_EPC, "Finish %s iteration\n", pcx_name(pcx));
+			D__DEBUG(DB_EPC, "Finish %s iteration\n",
+				 pcx_name(pcx));
 			purge_ctx_anchor_ctl(pcx, vp_anchor, NULL,
 					     ANCHOR_UNSET);
 			purge_ctx_set_complete(pcx, finish, vp_anchor);
@@ -604,8 +606,9 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		} else {
 			rc = purge_ctx_init(pcx, &ent);
 			if (rc != 0) {
-				D__DEBUG(DB_EPC, "%s context enter failed :%d\n",
-					pcx_name(pcx), rc);
+				D__DEBUG(DB_EPC,
+					 "%s context enter failed :%d\n",
+					 pcx_name(pcx), rc);
 				D__GOTO(out, rc);
 			}
 
@@ -733,7 +736,8 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 		}
 
 		if (rc == -DER_NONEXIST) { /* no more entry, done */
-			D__DEBUG(DB_EPC, "Finish %s iteration\n", pcx_name(pcx));
+			D__DEBUG(DB_EPC, "Finish %s iteration\n",
+				 pcx_name(pcx));
 			rc = 0;
 			break;
 		}
@@ -752,7 +756,7 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 			/* prepare the context for the subtree */
 			rc = purge_ctx_init(pcx, &ent);
 			if (rc != 0) {
-				D__DEBUG(DB_EPC, "%s context enter failed: %d\n",
+				D__DEBUG(DB_EPC, "%s context enter fail: %d\n",
 					pcx_name(pcx), rc);
 				D__GOTO(out, rc);
 			}

@@ -287,8 +287,8 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 					      daos2crt_sg(&sgl_sent),
 					      bulk_perm, &local_bulk_hdl);
 			if (ret != 0) {
-				D__ERROR("crt_bulk_create i %d failed, rc: %d\n",
-					i, ret);
+				D__ERROR("crt_bulk_create %d failed;rc: %d\n",
+					 i, ret);
 				if (rc == 0)
 					rc = ret;
 				offset += length;
@@ -613,6 +613,7 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 
 	rc = ds_bulk_transfer(rpc, bulk_op, orw->orw_bulks.ca_arrays,
 			      DAOS_HDL_INVAL, &p_sgl, orw->orw_nr);
+
 	D_EXIT;
 out:
 	orwo->orw_ret = rc;
@@ -1066,7 +1067,10 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 			rc = ds_iter_single_vos(&task_arg);
 		else
 			rc = dss_ult_create_execute(ds_iter_single_vos,
-						    &task_arg, tag);
+						    &task_arg,
+						    NULL /* user callback */,
+						    NULL /* user cb args */,
+						    tag/* async */);
 
 		if (rc != 0)
 			D__GOTO(out, rc);

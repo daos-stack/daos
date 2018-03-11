@@ -624,7 +624,8 @@ akey_fetch(struct vos_object *obj, daos_epoch_t epoch, daos_handle_t ak_toh,
 		rc = akey_fetch_recx(toh, etmp, &iod->iod_recxs[i], &rsize,
 				     iobuf);
 		if (rc != 0) {
-			D__DEBUG(DB_IO, "Failed to fetch index %d: %d\n", i, rc);
+			D__DEBUG(DB_IO, "Failed to fetch index %d: %d\n",
+				 i, rc);
 			D__GOTO(out, rc);
 		}
 
@@ -1413,7 +1414,7 @@ vos_zc_reserve(struct vos_zc_context *zcc, daos_size_t size)
 		if (!UMMID_IS_NULL(mmid))
 			zcc->zc_actv_at++;
 	} else {
-		mmid = umem_alloc_noflush(vos_obj2umm(obj), size);
+		mmid = umem_alloc(vos_obj2umm(obj), size);
 	}
 
 	return mmid;

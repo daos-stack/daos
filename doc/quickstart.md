@@ -54,7 +54,7 @@ Please install the following software packages (or equivalent for other distros)
     $ apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
     $ apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
     $ apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev
-    $ apt-get install -y curl doxygen pandoc flex patch
+    $ apt-get install -y curl doxygen pandoc flex patch readline-devel
 
 If no Cmocka RPMs are available, please install from [source](https://cmocka.org/files/1.1/cmocka-1.1.0.tar.xz) as detailed below:
 
