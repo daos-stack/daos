@@ -45,6 +45,7 @@
 #include <daos_types.h>
 #include <gurt/hash.h>
 #include <cart/api.h>
+#include <daos/checksum.h>
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -358,7 +359,6 @@ static inline int __is_po2(unsigned long long val)
 
 #define IS_PO2(val)	__is_po2((unsigned long long)(val))
 
-bool daos_csum_supported(const char *cs_name);
 bool daos_file_is_dax(const char *pathname);
 
 /* daos handle hash table helpers */

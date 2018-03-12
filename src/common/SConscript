@@ -1,5 +1,6 @@
 """Build common libraries"""
 import daos_build
+import platform
 
 def scons():
     """Execute build"""
@@ -14,11 +15,19 @@ def scons():
     prereqs.require(env, 'pmdk', 'argobots', 'cart', 'readline',
                     pmdk_libs=['pmemobj', 'pmem'])
 
-    denv = env.Clone()
+    # TODO Need to make this generic. This probably will be
+    # necessary in future.
+    processor = platform.machine()
+    arm_list = ["ARMv7", "armeabi", "aarch64", "arm64"]
+    if processor.lower() in arm_list:
+        prereqs.require(env, 'mercury', mercury_lib=['mchecksum'])
+    else:
+        prereqs.require(env, 'isal')
 
+    denv = env.Clone()
     common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                   'misc.c', 'pool_map.c', 'proc.c', 'sort.c', 'btree.c',
-                  'btree_class.c', 'tse.c', 'rsvc.c']
+                  'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c']
     common = daos_build.library(denv, 'libdaos_common', common_src)
     denv.Install('$PREFIX/lib/', common)
 

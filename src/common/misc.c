@@ -323,42 +323,6 @@ daos_first_unset_bit(uint32_t *bits, unsigned int size)
 	return idx * 32 + off;
 }
 
-struct daos_csum_dict {
-	char		*cs_name;	/**< name string of the checksum */
-};
-
-static struct daos_csum_dict	csum_dict[] = {
-	{
-		.cs_name	= "crc64",
-	},
-	{
-		.cs_name	= "crc32",
-	},
-	{
-		.cs_name	= NULL,
-	}
-};
-
-/**
- * This function returns true if the checksum type can be supported by DAOS,
- * return false otherwise.
- */
-bool
-daos_csum_supported(const char *cs_name)
-{
-	struct daos_csum_dict	*dict;
-
-	if (!cs_name)
-		return false;
-
-	for (dict = &csum_dict[0]; dict->cs_name; dict++) {
-		if (!strcasecmp(dict->cs_name, cs_name))
-			return true;
-	}
-	D_ERROR("Unsuppprted checksum type: %s\n", cs_name);
-	return false;
-}
-
 bool
 daos_file_is_dax(const char *pathname)
 {

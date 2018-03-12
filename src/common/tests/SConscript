@@ -11,6 +11,8 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'cart', 'pmemobj'])
     daos_build.test(denv, 'other', 'other.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
+    daos_build.test(denv, 'checksum', 'checksum.c',
+                    LIBS=['daos_common', 'gurt', 'cart'])
     daos_build.test(denv, 'lru', 'lru.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
     daos_build.test(denv, 'sched', 'sched.c',

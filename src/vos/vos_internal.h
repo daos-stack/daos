@@ -34,11 +34,11 @@
 #include <gurt/hash.h>
 #include <daos/btree.h>
 #include <daos/common.h>
+#include <daos/checksum.h>
 #include <daos/lru.h>
 #include <daos_srv/daos_server.h>
 #include <vos_layout.h>
 #include <vos_obj.h>
-#include <mchecksum.h>
 
 extern struct dss_module_key vos_module_key;
 extern umem_class_id_t vos_mem_class;
@@ -107,7 +107,7 @@ struct vos_imem_strts {
 	struct d_hash_table	*vis_pool_hhash;
 	struct d_hash_table	*vis_cont_hhash;
 	int			vis_enable_checksum;
-	mchecksum_object_t	vis_checksum;
+	daos_csum_t		vis_checksum;
 
 };
 
