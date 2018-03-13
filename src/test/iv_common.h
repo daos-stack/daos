@@ -237,7 +237,7 @@ int send_rpc_request(crt_context_t crt_ctx, crt_rpc_t *rpc_req, void **output)
 	assert(rc == 0);
 
 	while (!done)
-		crt_progress(crt_ctx, 10000, NULL, NULL);
+		sched_yield();
 
 	*output = crt_reply_get(rpc_req);
 	return rc;
