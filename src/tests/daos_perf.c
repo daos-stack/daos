@@ -222,15 +222,16 @@ failed:
 }
 
 static int
-ts_write_perf(void)
+ts_write_records_internal(unsigned int class, unsigned int rank)
 {
-	int	i;
-	int	j;
-	int	rc;
+	int i;
+	int j;
+	int rc;
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		ts_oid = dts_oid_gen(ts_class, 0, ts_ctx.tsc_mpi_rank);
-
+		if (ts_class == DAOS_OC_R3S_SPEC_RANK)
+			ts_oid = dts_oid_set_rank(ts_oid, rank);
 		for (j = 0; j < ts_dkey_p_obj; j++) {
 			if (ts_class != DAOS_OC_RAW) {
 				rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid, 1,
@@ -254,6 +255,89 @@ ts_write_perf(void)
 	}
 
 	rc = dts_credit_drain(&ts_ctx);
+
+	return rc;
+}
+
+static int
+ts_write_perf(double *start_time, double *end_time)
+{
+	int	rc;
+
+	*start_time = dts_time_now();
+	rc = ts_write_records_internal(ts_class, 0);
+	*end_time = dts_time_now();
+	return rc;
+}
+
+static int
+ts_exclude_server(d_rank_t rank)
+{
+	d_rank_list_t	targets;
+	int		rc;
+
+	/** exclude from the pool */
+	targets.rl_nr = 1;
+	targets.rl_ranks = &rank;
+	rc = daos_pool_exclude(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
+			       &targets, NULL);
+
+	return rc;
+}
+
+static int
+ts_add_server(d_rank_t rank)
+{
+	d_rank_list_t	targets;
+	int		rc;
+
+	/** exclude from the pool */
+	targets.rl_nr = 1;
+	targets.rl_ranks = &rank;
+	rc = daos_pool_tgt_add(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
+			       &targets, NULL);
+	return rc;
+}
+
+static void
+ts_rebuild_wait()
+{
+	daos_pool_info_t	   pinfo;
+	struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
+	int			   rc = 0;
+
+	while (1) {
+		memset(&pinfo, 0, sizeof(pinfo));
+		rc = daos_pool_query(ts_ctx.tsc_poh, NULL, &pinfo, NULL);
+		if (rst->rs_done || rc != 0) {
+			fprintf(stderr, "Rebuild (ver=%d) is done %d/%d\n",
+				rst->rs_version, rc, rst->rs_errno);
+			break;
+		}
+		sleep(2);
+	}
+}
+
+static int
+ts_rebuild_perf(double *start_time, double *end_time)
+{
+	int rc;
+
+	/* prepare the record */
+	rc = ts_write_records_internal(DAOS_OC_R3S_SPEC_RANK, 0);
+	if (rc)
+		return rc;
+
+	rc = ts_exclude_server(0);
+	if (rc)
+		return rc;
+
+	*start_time = dts_time_now();
+	ts_rebuild_wait();
+	*end_time = dts_time_now();
+
+	rc = ts_add_server(0);
+
 	return rc;
 }
 
@@ -366,6 +450,10 @@ The options are as follows:\n\
 	same extent in the same epoch. This option can reduce usage of\n\
 	storage space.\n\
 \n\
+-U	Only run update performance test.\n\
+\n\
+-R	Only run rebuild performance test.\n\
+\n\
 -f pathname\n\
 	Full path name of the VOS file.\n");
 }
@@ -387,6 +475,88 @@ static struct option ts_ops[] = {
 	{ NULL,		0,			NULL,	0   },
 };
 
+void show_result(double now, double then, int vsize, char *test_name)
+{
+	double		duration, agg_duration;
+	double		first_start;
+	double		last_end;
+	double		duration_max;
+	double		duration_min;
+	double		duration_sum;
+
+	duration = now - then;
+
+	if (ts_ctx.tsc_mpi_size > 1) {
+		MPI_Reduce(&then, &first_start, 1, MPI_DOUBLE,
+			   MPI_MIN, 0, MPI_COMM_WORLD);
+		MPI_Reduce(&now, &last_end, 1, MPI_DOUBLE,
+			   MPI_MAX, 0, MPI_COMM_WORLD);
+	} else {
+		first_start = then;
+		last_end = now;
+	}
+
+	agg_duration = last_end - first_start;
+
+	if (ts_ctx.tsc_mpi_size > 1) {
+		MPI_Reduce(&duration, &duration_max, 1, MPI_DOUBLE,
+			   MPI_MAX, 0, MPI_COMM_WORLD);
+		MPI_Reduce(&duration, &duration_min, 1, MPI_DOUBLE,
+			   MPI_MIN, 0, MPI_COMM_WORLD);
+		MPI_Reduce(&duration, &duration_sum, 1, MPI_DOUBLE,
+			   MPI_SUM, 0, MPI_COMM_WORLD);
+	} else {
+		duration_max = duration_min = duration_sum = duration;
+	}
+
+	if (ts_ctx.tsc_mpi_rank == 0) {
+		unsigned long	total;
+		double		bandwidth;
+		double		latency;
+		double		rate;
+
+		total = ts_ctx.tsc_mpi_size *
+			ts_obj_p_cont * ts_dkey_p_obj *
+			ts_akey_p_dkey * ts_recx_p_akey;
+
+		rate = total / agg_duration;
+		latency = (agg_duration * 1000 * 1000) / total;
+		bandwidth = (rate * vsize) / (1024 * 1024);
+
+		fprintf(stdout, "%s successfully completed:\n"
+			"\tduration : %-10.6f sec\n"
+			"\tbandwith : %-10.3f MB/sec\n"
+			"\trate     : %-10.2f IO/sec\n"
+			"\tlatency  : %-10.3f us "
+			"(nonsense if credits > 1)\n",
+			test_name, agg_duration, bandwidth, rate, latency);
+
+		fprintf(stdout, "Duration across processes:\n");
+		fprintf(stdout, "MAX duration : %-10.6f sec\n",
+			duration_max);
+		fprintf(stdout, "MIN duration : %-10.6f sec\n",
+			duration_min);
+		fprintf(stdout, "Average duration : %-10.6f sec\n",
+			duration_sum / ts_ctx.tsc_mpi_size);
+	}
+}
+enum {
+	UPDATE_TEST = 0,
+	FETCH_TEST,
+	ITERATE_TEST,
+	REBUILD_TEST,
+	TEST_SIZE,
+};
+
+static int (*perf_tests[TEST_SIZE])(double *start, double *end);
+
+char	*perf_tests_name[] = {
+	"update",
+	"fetch",
+	"iterate",
+	"rebuild"
+};
+
 int
 main(int argc, char **argv)
 {
@@ -397,13 +567,14 @@ main(int argc, char **argv)
 	double		then;
 	double		now;
 	int		rc;
+	int		i;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
-	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:ztf:h",
+	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:ztf:hUR",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -469,11 +640,28 @@ main(int argc, char **argv)
 		case 'f':
 			strncpy(ts_pmem_file, optarg, PATH_MAX - 1);
 			break;
+		case 'U':
+			perf_tests[UPDATE_TEST] = ts_write_perf;
+			break;
+		case 'R':
+			perf_tests[REBUILD_TEST] = ts_rebuild_perf;
+			break;
 		case 'h':
 			if (ts_ctx.tsc_mpi_rank == 0)
 				ts_print_usage();
 			return 0;
 		}
+	}
+
+	/* It will run write tests by default */
+	if (perf_tests[REBUILD_TEST] == NULL && perf_tests[UPDATE_TEST] == NULL)
+		perf_tests[UPDATE_TEST] = ts_write_perf;
+
+	if (perf_tests[REBUILD_TEST] && ts_class != DAOS_OC_TINY_RW) {
+		fprintf(stderr, "rebuild can only run with -T \"daos\"");
+		if (ts_ctx.tsc_mpi_rank == 0)
+			ts_print_usage();
+		return -1;
 	}
 
 	if (ts_dkey_p_obj == 0 || ts_akey_p_dkey == 0 ||
@@ -545,85 +733,28 @@ main(int argc, char **argv)
 
 	if (ts_ctx.tsc_mpi_rank == 0)
 		fprintf(stdout, "Started...\n");
+
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	then = dts_time_now();
-	/* TODO: add fetch performance test */
-	rc = ts_write_perf();
-	now = dts_time_now();
+	for (i = 0; i < TEST_SIZE; i++) {
+		if (perf_tests[i] == NULL)
+			continue;
 
-	if (ts_ctx.tsc_mpi_size > 1) {
-		int rc_g;
-
-		MPI_Allreduce(&rc, &rc_g, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-		rc = rc_g;
-	}
-
-	if (rc) {
-		fprintf(stderr, "Failed: %d\n", rc);
-	} else {
-		double		duration, agg_duration;
-		double		first_start;
-		double		last_end;
-		double		duration_max;
-		double		duration_min;
-		double		duration_sum;
-
-		duration = now - then;
-
+		rc = perf_tests[i](&then, &now);
 		if (ts_ctx.tsc_mpi_size > 1) {
-			MPI_Reduce(&then, &first_start, 1, MPI_DOUBLE,
-				   MPI_MIN, 0, MPI_COMM_WORLD);
-			MPI_Reduce(&now, &last_end, 1, MPI_DOUBLE,
-				   MPI_MAX, 0, MPI_COMM_WORLD);
-		} else {
-			first_start = then;
-			last_end = now;
+			int rc_g;
+
+			MPI_Allreduce(&rc, &rc_g, 1, MPI_INT, MPI_MIN,
+				      MPI_COMM_WORLD);
+			rc = rc_g;
 		}
 
-		agg_duration = last_end - first_start;
-
-		if (ts_ctx.tsc_mpi_size > 1) {
-			MPI_Reduce(&duration, &duration_max, 1, MPI_DOUBLE,
-				   MPI_MAX, 0, MPI_COMM_WORLD);
-			MPI_Reduce(&duration, &duration_min, 1, MPI_DOUBLE,
-				   MPI_MIN, 0, MPI_COMM_WORLD);
-			MPI_Reduce(&duration, &duration_sum, 1, MPI_DOUBLE,
-				   MPI_SUM, 0, MPI_COMM_WORLD);
-		} else {
-			duration_max = duration_min = duration_sum = duration;
+		if (rc != 0) {
+			fprintf(stderr, "Failed: %d\n", rc);
+			break;
 		}
 
-		if (ts_ctx.tsc_mpi_rank == 0) {
-			unsigned long	total;
-			double		bandwidth;
-			double		latency;
-			double		rate;
-
-			total = ts_ctx.tsc_mpi_size *
-				ts_obj_p_cont * ts_dkey_p_obj *
-				ts_akey_p_dkey * ts_recx_p_akey;
-
-			rate = total / agg_duration;
-			latency = (agg_duration * 1000 * 1000) / total;
-			bandwidth = (rate * vsize) / (1024 * 1024);
-
-			fprintf(stdout, "Successfully completed:\n"
-				"\tduration : %-10.6f sec\n"
-				"\tbandwith : %-10.3f MB/sec\n"
-				"\trate     : %-10.2f IO/sec\n"
-				"\tlatency  : %-10.3f us "
-				"(nonsense if credits > 1)\n",
-				agg_duration, bandwidth, rate, latency);
-
-			fprintf(stdout, "Duration across processes:\n");
-			fprintf(stdout, "MAX duration : %-10.6f sec\n",
-				duration_max);
-			fprintf(stdout, "MIN duration : %-10.6f sec\n",
-				duration_min);
-			fprintf(stdout, "Average duration : %-10.6f sec\n",
-				duration_sum / ts_ctx.tsc_mpi_size);
-		}
+		show_result(now, then, vsize, perf_tests_name[i]);
 	}
 
 	dts_ctx_fini(&ts_ctx);

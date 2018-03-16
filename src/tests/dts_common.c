@@ -265,7 +265,8 @@ pool_fini(struct dts_context *tsc)
 		/* rank 0 does collective close and destroy */
 		daos_pool_disconnect(tsc->tsc_poh, NULL);
 		rc = daos_pool_destroy(tsc->tsc_pool_uuid, NULL, true, NULL);
-		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc=%d\n", rc);
+		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST || rc == -DER_TIMEDOUT,
+			  "rc=%d\n", rc);
 	}
 }
 
