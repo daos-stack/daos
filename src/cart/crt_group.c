@@ -2789,7 +2789,8 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 	D_DEBUG("evicted group %s rank %d.\n", grp_priv->gp_pub.cg_grpid, rank);
 
 out_cb:
-	crt_barrier_handle_eviction(grp_priv);
+	if (grp_priv->gp_local)
+		crt_barrier_handle_eviction(grp_priv);
 
 	crt_exec_eviction_cb(&grp_priv->gp_pub, rank);
 	tgt_ep.ep_grp = grp;
