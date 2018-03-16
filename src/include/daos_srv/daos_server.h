@@ -368,4 +368,29 @@ enum {
 	DSS_POOL_CNT,
 };
 
+/* DAOS object API on the server side */
+int ds_obj_open(daos_handle_t coh, daos_obj_id_t oid,
+		daos_epoch_t epoch, unsigned int mode,
+		daos_handle_t *oh);
+int ds_obj_close(daos_handle_t obj_hl);
+
+int ds_obj_single_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
+			      uint32_t *nr, daos_key_desc_t *kds,
+			      daos_sg_list_t *sgl, daos_hash_out_t *anchor);
+int ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
+		 daos_key_t *dkey, uint32_t *nr,
+		 daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		 daos_hash_out_t *anchor);
+
+int ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
+		 daos_key_t *dkey, unsigned int nr,
+		 daos_iod_t *iods, daos_sg_list_t *sgls,
+		 daos_iom_t *maps);
+
+int ds_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
+		uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		uuid_t *cookies, uint32_t *versions, daos_hash_out_t *anchor,
+		bool incr);
+
 #endif /* __DSS_API_H__ */

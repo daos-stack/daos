@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * rebuild: server daos api
+ * server: server daos obj api
  *
  * This file includes functions to call client daos API on the server side.
  */
@@ -30,6 +30,7 @@
 #include <daos/container.h>
 #include <daos/object.h>
 #include <daos/event.h>
+#include <daos/task.h>
 
 #include <daos_types.h>
 #include <daos_errno.h>
@@ -37,10 +38,9 @@
 #include <daos_task.h>
 
 #include <daos_srv/daos_server.h>
-#include "rebuild_internal.h"
 
 static int
-rebuild_need_retry_cb(tse_task_t *task, void *arg)
+ds_obj_retry_cb(tse_task_t *task, void *arg)
 {
 	daos_handle_t *oh = arg;
 	int rc;
@@ -65,10 +65,10 @@ rebuild_need_retry_cb(tse_task_t *task, void *arg)
 		return rc;
 	}
 
-	/* Register the callback, since it will be removed
+	/* Register the callback again, because it will be removed
 	 * after callback.
 	 */
-	rc = dc_task_reg_comp_cb(task, rebuild_need_retry_cb, arg, sizeof(arg));
+	rc = dc_task_reg_comp_cb(task, ds_obj_retry_cb, arg, sizeof(arg));
 	return rc;
 }
 
@@ -77,39 +77,27 @@ ds_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	    unsigned int mode, daos_handle_t *oh)
 {
 	tse_task_t	*task;
-	daos_obj_open_t	*arg;
 	int		 rc;
 
-	rc = dc_task_create(dc_obj_open, dss_tse_scheduler(), NULL, &task);
+	rc = dc_obj_open_task_create(coh, oid, epoch, mode, oh, NULL,
+				     dss_tse_scheduler(), &task);
 	if (rc)
 		return rc;
 
-	arg = dc_task_get_args(task);
-	arg->coh	= coh;
-	arg->oid	= oid;
-	arg->epoch	= epoch;
-	arg->mode	= mode;
-	arg->oh		= oh;
-
-	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb,
-			    NULL);
+	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, NULL);
 }
 
 int
 ds_obj_close(daos_handle_t oh)
 {
 	tse_task_t	 *task;
-	daos_obj_close_t *arg;
 	int		  rc;
 
-	rc = dc_task_create(dc_obj_close, dss_tse_scheduler(), NULL, &task);
+	rc = dc_obj_close_task_create(oh, NULL, dss_tse_scheduler(), &task);
 	if (rc)
 		return rc;
 
-	arg = dc_task_get_args(task);
-	arg->oh = oh;
-
-	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb, &oh);
+	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh);
 }
 
 int
@@ -117,24 +105,16 @@ ds_obj_single_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
 			      uint32_t *nr, daos_key_desc_t *kds,
 			      daos_sg_list_t *sgl, daos_hash_out_t *anchor)
 {
-	tse_task_t	     *task;
-	daos_obj_list_dkey_t *arg;
-	int		      rc;
+	tse_task_t	*task;
+	int		rc;
 
-	rc = dc_task_create(dc_obj_single_shard_list_dkey,
-			    dss_tse_scheduler(), NULL, &task);
+	rc = dc_obj_shard_list_dkey_task_create(oh, epoch, nr, kds,
+						sgl, anchor, NULL,
+						dss_tse_scheduler(), &task);
 	if (rc)
 		return rc;
 
-	arg = dc_task_get_args(task);
-	arg->oh		= oh;
-	arg->epoch	= epoch;
-	arg->nr		= nr;
-	arg->kds	= kds;
-	arg->sgl	= sgl;
-	arg->anchor	= anchor;
-
-	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb, &oh);
+	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh);
 }
 
 int
@@ -142,25 +122,15 @@ ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		 uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		 daos_hash_out_t *anchor)
 {
-	tse_task_t	     *task;
-	daos_obj_list_akey_t *arg;
-	int		      rc;
+	tse_task_t	*task;
+	int		rc;
 
-	rc = dc_task_create(dc_obj_list_akey, dss_tse_scheduler(),
-			     NULL, &task);
+	rc = dc_obj_list_akey_task_create(oh, epoch, dkey, nr, kds, sgl, anchor,
+					  NULL, dss_tse_scheduler(), &task);
 	if (rc)
 		return rc;
 
-	arg = dc_task_get_args(task);
-	arg->oh		= oh;
-	arg->epoch	= epoch;
-	arg->dkey	= dkey;
-	arg->nr		= nr;
-	arg->kds	= kds;
-	arg->sgl	= sgl;
-	arg->anchor	= anchor;
-
-	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb, &oh);
+	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh);
 }
 
 int
@@ -169,55 +139,33 @@ ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 	     daos_iod_t *iods, daos_sg_list_t *sgls,
 	     daos_iom_t *maps)
 {
-	tse_task_t	 *task;
-	daos_obj_fetch_t *arg;
-	int		  rc;
+	tse_task_t	*task;
+	int		rc;
 
-	rc = dc_task_create(dc_obj_fetch, dss_tse_scheduler(), NULL, &task);
+	rc = dc_obj_fetch_task_create(oh, epoch, dkey, nr, iods, sgls, maps,
+				      NULL, dss_tse_scheduler(), &task);
 	if (rc)
 		return rc;
 
-	arg = dc_task_get_args(task);
-	arg->oh		= oh;
-	arg->epoch	= epoch;
-	arg->dkey	= dkey;
-	arg->nr		= nr;
-	arg->iods	= iods;
-	arg->sgls	= sgls;
-	arg->maps	= maps;
-
-	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb, &oh);
+	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh);
 }
 
 int
-ds_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
-		uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		uuid_t *cookies, uint32_t *versions, daos_hash_out_t *anchor,
-		bool incr)
+ds_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		 daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
+		 uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		 uuid_t *cookies, uint32_t *versions, daos_hash_out_t *anchor,
+		 bool incr)
 {
-	tse_task_t		*task;
-	daos_obj_list_recx_t	*arg;
-	int			 rc;
+	tse_task_t	*task;
+	int		rc;
 
-	rc = dc_task_create(dc_obj_list_rec, dss_tse_scheduler(), NULL, &task);
+	rc = dc_obj_list_recx_task_create(oh, epoch, dkey, akey, type, size,
+					  nr, recxs, eprs, cookies, versions,
+					  anchor, incr, NULL,
+					  dss_tse_scheduler(), &task);
 	if (rc)
 		return rc;
 
-	arg = dc_task_get_args(task);
-	arg->oh		= oh;
-	arg->epoch	= epoch;
-	arg->dkey	= dkey;
-	arg->akey	= akey;
-	arg->type	= type;
-	arg->size	= size;
-	arg->nr		= nr;
-	arg->recxs	= recxs;
-	arg->eprs	= eprs;
-	arg->cookies	= cookies;
-	arg->versions	= versions;
-	arg->anchor	= anchor;
-	arg->incr_order	= incr;
-
-	return dss_task_run(task, DSS_POOL_REBUILD, rebuild_need_retry_cb, &oh);
+	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh);
 }

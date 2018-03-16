@@ -278,9 +278,9 @@ rebuild_akey(struct rebuild_tgt_pool_tracker *rpt, struct ds_cont *ds_cont,
 		memset(eprs, 0, sizeof(*eprs) * ITER_COUNT);
 		memset(cookies, 0, sizeof(*cookies) * ITER_COUNT);
 		memset(versions, 0, sizeof(*versions) * ITER_COUNT);
-		rc = ds_obj_list_rec(oh, rdkey->rd_epoch, &rdkey->rd_dkey, akey,
-				     type, &size, &rec_num, recxs, eprs,
-				     cookies, versions, &hash, true);
+		rc = ds_obj_list_recx(oh, rdkey->rd_epoch, &rdkey->rd_dkey,
+				      akey, type, &size, &rec_num, recxs, eprs,
+				      cookies, versions, &hash, true);
 		if (rc)
 			break;
 		if (rec_num == 0)

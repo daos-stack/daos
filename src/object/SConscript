@@ -10,7 +10,7 @@ def scons():
     denv = env.Clone()
 
     # Common object code
-    common_tgts = denv.SharedObject(['obj_class.c', 'obj_rpc.c'])
+    common_tgts = denv.SharedObject(['obj_class.c', 'obj_rpc.c', 'obj_task.c'])
 
     # generate server module
     srv = daos_build.library(denv, 'obj',

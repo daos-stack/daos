@@ -23,6 +23,7 @@
 #define D_LOGFAC	DD_FAC(client)
 
 #include <daos/object.h>
+#include <daos/task.h>
 #include "client_internal.h"
 #include "task_internal.h"
 
@@ -62,21 +63,13 @@ int
 daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	      unsigned int mode, daos_handle_t *oh, daos_event_t *ev)
 {
-	daos_obj_open_t		*args;
-	tse_task_t		*task;
-	int			 rc;
+	tse_task_t *task;
+	int rc;
 
-	DAOS_API_ARG_ASSERT(*args, OBJ_OPEN);
-	rc = dc_task_create(dc_obj_open, NULL, ev, &task);
+	rc = dc_obj_open_task_create(coh, oid, epoch, mode, oh, ev, NULL,
+				     &task);
 	if (rc)
 		return rc;
-
-	args = dc_task_get_args(task);
-	args->coh		= coh;
-	args->oid		= oid;
-	args->epoch		= epoch;
-	args->mode		= mode;
-	args->oh		= oh;
 
 	return dc_task_schedule(task, true);
 }
@@ -84,17 +77,12 @@ daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 int
 daos_obj_close(daos_handle_t oh, daos_event_t *ev)
 {
-	daos_obj_close_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	tse_task_t	*task;
+	int		rc;
 
-	DAOS_API_ARG_ASSERT(*args, OBJ_CLOSE);
-	rc = dc_task_create(dc_obj_close, NULL, ev, &task);
+	rc = dc_obj_close_task_create(oh, ev, NULL, &task);
 	if (rc)
 		return rc;
-
-	args = dc_task_get_args(task);
-	args->oh	= oh;
 
 	return dc_task_schedule(task, true);
 }
@@ -102,19 +90,12 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev)
 int
 daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
 {
-	daos_obj_punch_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	tse_task_t	*task;
+	int		rc;
 
-	DAOS_API_ARG_ASSERT(*args, OBJ_PUNCH);
-	rc = dc_task_create(dc_obj_punch, NULL, ev, &task);
+	rc = dc_obj_punch_task_create(oh, epoch, ev, NULL, &task);
 	if (rc)
 		return rc;
-
-	args = dc_task_get_args(task);
-	args->epoch	= epoch;
-	args->oh	= oh;
-	/* dkey, akeys are NULL by default */
 
 	return dc_task_schedule(task, true);
 }
@@ -123,9 +104,8 @@ int
 daos_obj_punch_dkeys(daos_handle_t oh, daos_epoch_t epoch, unsigned int nr,
 		     daos_key_t *dkeys, daos_event_t *ev)
 {
-	daos_obj_punch_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	tse_task_t	*task;
+	int		rc;
 
 	if (dkeys == NULL) {
 		D_ERROR("NULL dkeys\n");
@@ -139,17 +119,10 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_epoch_t epoch, unsigned int nr,
 		return -DER_INVAL;
 	}
 
-	DAOS_API_ARG_ASSERT(*args, OBJ_PUNCH_DKEYS);
-	rc = dc_task_create(dc_obj_punch_dkeys, NULL, ev, &task);
+	rc = dc_obj_punch_dkeys_task_create(oh, epoch, nr, dkeys, ev, NULL,
+					    &task);
 	if (rc)
 		return rc;
-
-	args = dc_task_get_args(task);
-	args->oh	= oh;
-	args->epoch	= epoch;
-	args->dkey	= &dkeys[0];
-	args->akeys	= NULL;
-	args->akey_nr	= 0;
 
 	return dc_task_schedule(task, true);
 }
@@ -158,26 +131,18 @@ int
 daos_obj_punch_akeys(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		     unsigned int nr, daos_key_t *akeys, daos_event_t *ev)
 {
-	daos_obj_punch_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	tse_task_t	*task;
+	int		rc;
 
 	if (dkey == NULL || dkey->iov_buf == NULL || dkey->iov_len == 0) {
 		D_ERROR("NULL or invalid dkey\n");
 		return -DER_INVAL;
 	}
 
-	DAOS_API_ARG_ASSERT(*args, OBJ_PUNCH_AKEYS);
-	rc = dc_task_create(dc_obj_punch_akeys, NULL, ev, &task);
+	rc = dc_obj_punch_akeys_task_create(oh, epoch, dkey, nr, akeys, ev,
+					    NULL, &task);
 	if (rc)
 		return rc;
-
-	args = dc_task_get_args(task);
-	args->oh	= oh;
-	args->epoch	= epoch;
-	args->dkey	= dkey;
-	args->akeys	= akeys;
-	args->akey_nr	= nr;
 
 	return dc_task_schedule(task, true);
 }
@@ -195,23 +160,13 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	       unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_iom_t *maps, daos_event_t *ev)
 {
-	daos_obj_fetch_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	tse_task_t	*task;
+	int		rc;
 
-	DAOS_API_ARG_ASSERT(*args, OBJ_FETCH);
-	rc = dc_task_create(dc_obj_fetch, NULL, ev, &task);
+	rc = dc_obj_fetch_task_create(oh, epoch, dkey, nr, iods, sgls,
+				      maps, ev, NULL, &task);
 	if (rc)
 		return rc;
-
-	args = dc_task_get_args(task);
-	args->oh	= oh;
-	args->epoch	= epoch;
-	args->dkey	= dkey;
-	args->nr	= nr;
-	args->iods	= iods;
-	args->sgls	= sgls;
-	args->maps	= maps;
 
 	return dc_task_schedule(task, true);
 }
@@ -221,22 +176,13 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
 		daos_event_t *ev)
 {
-	daos_obj_update_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	tse_task_t	*task;
+	int		rc;
 
-	DAOS_API_ARG_ASSERT(*args, OBJ_UPDATE);
-	rc = dc_task_create(dc_obj_update, NULL, ev, &task);
+	rc = dc_obj_update_task_create(oh, epoch, dkey, nr, iods, sgls,
+				       ev, NULL, &task);
 	if (rc)
 		return rc;
-
-	args = dc_task_get_args(task);
-	args->oh	= oh;
-	args->epoch	= epoch;
-	args->dkey	= dkey;
-	args->nr	= nr;
-	args->iods	= iods;
-	args->sgls	= sgls;
 
 	return dc_task_schedule(task, true);
 }
@@ -246,22 +192,13 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev)
 {
-	daos_obj_list_dkey_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	tse_task_t	*task;
+	int		rc;
 
-	DAOS_API_ARG_ASSERT(*args, OBJ_LIST_DKEY);
-	rc = dc_task_create(dc_obj_list_dkey, NULL, ev, &task);
+	rc = dc_obj_list_dkey_task_create(oh, epoch, nr, kds, sgl, anchor, ev,
+					  NULL, &task);
 	if (rc)
 		return rc;
-
-	args = dc_task_get_args(task);
-	args->oh	= oh;
-	args->epoch	= epoch;
-	args->nr	= nr;
-	args->kds	= kds;
-	args->sgl	= sgl;
-	args->anchor	= anchor;
 
 	return dc_task_schedule(task, true);
 }
@@ -271,23 +208,13 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		   uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev)
 {
-	daos_obj_list_akey_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	tse_task_t	*task;
+	int		rc;
 
-	DAOS_API_ARG_ASSERT(*args, OBJ_LIST_AKEY);
-	rc = dc_task_create(dc_obj_list_akey, NULL, ev, &task);
+	rc = dc_obj_list_akey_task_create(oh, epoch, dkey, nr, kds, sgl, anchor,
+					  ev, NULL, &task);
 	if (rc)
 		return rc;
-
-	args = dc_task_get_args(task);
-	args->oh	= oh;
-	args->epoch	= epoch;
-	args->dkey	= dkey;
-	args->nr	= nr;
-	args->kds	= kds;
-	args->sgl	= sgl;
-	args->anchor	= anchor;
 
 	return dc_task_schedule(task, true);
 }
@@ -298,29 +225,14 @@ daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		   daos_recx_t *recxs, daos_epoch_range_t *eprs,
 		   daos_hash_out_t *anchor, bool incr_order, daos_event_t *ev)
 {
-	daos_obj_list_recx_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	tse_task_t	*task;
+	int		rc;
 
-	DAOS_API_ARG_ASSERT(*args, OBJ_LIST_RECX);
-	rc = dc_task_create(dc_obj_list_rec, NULL, ev, &task);
+	rc = dc_obj_list_recx_task_create(oh, epoch, dkey, akey, DAOS_IOD_ARRAY,
+					  size, nr, recxs, eprs, NULL, NULL,
+					  anchor, incr_order, ev, NULL, &task);
 	if (rc)
 		return rc;
-
-	args = dc_task_get_args(task);
-	args->oh	= oh;
-	args->epoch	= epoch;
-	args->dkey	= dkey;
-	args->akey	= akey;
-	args->type	= DAOS_IOD_ARRAY;
-	args->size	= size;
-	args->nr	= nr;
-	args->recxs	= recxs;
-	args->eprs	= eprs;
-	args->cookies	= NULL;
-	args->versions	= NULL;
-	args->anchor	= anchor;
-	args->incr_order = incr_order;
 
 	return dc_task_schedule(task, true);
 }

@@ -30,7 +30,6 @@
 #define __TSE_SCHEDULE_H__
 
 #include <gurt/list.h>
-
 /**
  * tse_task is used to track single asynchronous operation.
  * 512 bytes all together.

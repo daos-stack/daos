@@ -93,11 +93,4 @@ struct daos_task_args {
 	daos_event_t	*ta_ev;
 };
 
-struct daos_task_api {
-	tse_task_func_t		task_func;
-	daos_size_t		arg_size;
-};
-
-extern const struct daos_task_api dc_funcs[DAOS_OPC_MAX];
-
 #endif /* __DAOS_TASK_INTERNAL_H__ */

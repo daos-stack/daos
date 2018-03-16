@@ -29,6 +29,7 @@
 
 #include <daos/common.h>
 #include <daos/event.h>
+#include <daos/task.h>
 #include "client_internal.h"
 #include "task_internal.h"
 

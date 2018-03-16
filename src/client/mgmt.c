@@ -24,8 +24,8 @@
 
 #include <daos/mgmt.h>
 #include <daos/pool.h>
+#include <daos/task.h>
 #include <daos_mgmt.h>
-
 #include "client_internal.h"
 #include "task_internal.h"
 

@@ -31,6 +31,7 @@
 #include <daos/pool.h>
 #include <daos/container.h>
 #include <daos/object.h>
+#include <daos/task.h>
 #include <daos/addons.h>
 #include <daos/tier.h>
 #include "task_internal.h"

@@ -38,6 +38,7 @@
 #include <daos_task.h>
 #include <daos/container.h>
 #include <daos/object.h>
+#include <daos/task.h>
 #include "../client/client_internal.h"
 #include "../client/task_internal.h"
 

@@ -66,14 +66,6 @@ extern int d_tests_logfac;
 #define DF_TIERS	DB_ANY
 #define DF_MISC		DB_ANY
 
-#define DAOS_API_ARG_ASSERT(args, name)					\
-do {									\
-	int __opc = DAOS_OPC_##name;					\
-	D_ASSERTF(sizeof(args) == dc_funcs[__opc].arg_size,		\
-		  "Argument size %zu != predefiened arg size %zu\n",	\
-		  sizeof(args), dc_funcs[__opc].arg_size);		\
-} while (0)
-
 /** initialize the debug system */
 int  daos_debug_init(char *logfile);
 /** finalize the debug system */

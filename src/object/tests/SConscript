@@ -6,9 +6,12 @@ def scons():
     Import('denv')
     Import('common_tgts')
 
+    denv.AppendUnique(LIBPATH=['#/build/src/client'])
+
     test_tgt = denv.SharedObject('place_obj.c')
     daos_build.program(denv, 'pl_map', test_tgt + common_tgts,
-                       LIBS=['daos_common', 'gurt', 'cart', 'placement'])
+                       LIBS=['daos', 'daos_common', 'gurt', 'cart',
+                             'placement'])
 
 if __name__ == "SCons.Script":
     scons()
