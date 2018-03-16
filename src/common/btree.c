@@ -132,7 +132,7 @@ struct btr_context {
 
 static int btr_class_init(TMMID(struct btr_root) root_mmid,
 			  struct btr_root *root, unsigned int tree_class,
-			  uint64_t tree_feats, struct umem_attr *uma,
+			  uint64_t *tree_feats, struct umem_attr *uma,
 			  struct btr_instance *tins);
 static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 					  TMMID(struct btr_node) nd_mmid,
@@ -245,7 +245,7 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 		return -DER_NOMEM;
 
 	tcx->tc_ref = 1; /* for the caller */
-	rc = btr_class_init(root_mmid, root, tree_class, tree_feats, uma,
+	rc = btr_class_init(root_mmid, root, tree_class, &tree_feats, uma,
 			    &tcx->tc_tins);
 	if (rc != 0) {
 		D__ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
@@ -254,18 +254,6 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 
 	root = tcx->tc_tins.ti_root;
 	if (root == NULL || root->tr_class == 0) { /* tree creation */
-		if (!(tree_feats & BTR_FEAT_UINT_KEY) &&
-		    (btr_ops(tcx)->to_hkey_gen == NULL ||
-		     btr_ops(tcx)->to_hkey_size == NULL)) {
-			/* If no hkey callbacks are supplied, only integer
-			 * keys are supported.  Rather than flagging an error
-			 * just set the flag.
-			 */
-			D__DEBUG(DB_TRACE, "Setting BTR_FEAT_UINT_KEY required"
-				 " by tree class %d", tree_class);
-			tree_feats |= BTR_FEAT_UINT_KEY;
-		}
-
 		tcx->tc_class	= tree_class;
 		tcx->tc_feats	= tree_feats;
 		tcx->tc_order	= tree_order;
@@ -359,7 +347,9 @@ btr_hkey_size(struct btr_context *tcx)
 {
 	int size;
 
-	if (tcx->tc_feats & BTR_FEAT_UINT_KEY)
+	if (tcx->tc_feats & BTR_FEAT_DIRECT_KEY)
+		return sizeof(TMMID(struct btr_node));
+	else if (tcx->tc_feats & BTR_FEAT_UINT_KEY)
 		return sizeof(uint64_t);
 
 	size = btr_ops(tcx)->to_hkey_size(&tcx->tc_tins);
@@ -371,7 +361,10 @@ btr_hkey_size(struct btr_context *tcx)
 static void
 btr_hkey_gen(struct btr_context *tcx, daos_iov_t *key, void *hkey)
 {
-	if (tcx->tc_feats & BTR_FEAT_UINT_KEY) {
+	if (tcx->tc_feats & BTR_FEAT_DIRECT_KEY) {
+		/* We store mmid to record when bubbling up */
+		return;
+	} else if (tcx->tc_feats & BTR_FEAT_UINT_KEY) {
 		/* Use key directory as unsigned integer in lieu of hkey */
 		D__ASSERT(key->iov_len <= sizeof(uint64_t));
 		/* NB: This works for little endian architectures.  An
@@ -394,6 +387,7 @@ btr_hkey_copy(struct btr_context *tcx, char *dst_key, char *src_key)
 static int
 btr_hkey_cmp(struct btr_context *tcx, struct btr_record *rec, void *hkey)
 {
+	D__ASSERT((tcx->tc_feats & BTR_FEAT_DIRECT_KEY) == 0);
 	if (tcx->tc_feats & BTR_FEAT_UINT_KEY) {
 		uint64_t a = rec->rec_ukey[0];
 		uint64_t b = *(uint64_t *)hkey;
@@ -915,14 +909,14 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	struct btr_record	*rec_dst;
 	struct btr_node		*nd_left;
 	struct btr_node		*nd_right;
+	TMMID(struct btr_node)	 mmid_left;
+	TMMID(struct btr_node)	 mmid_right;
+	char			 hkey_buf[DAOS_HKEY_MAX];
 	int			 split_at;
 	int			 level;
 	int			 rc;
 	bool			 leaf;
 	bool			 right;
-	char			 hkey_buf[DAOS_HKEY_MAX];
-	TMMID(struct btr_node)	 mmid_left;
-	TMMID(struct btr_node)	 mmid_right;
 
 	D__ASSERT(trace >= tcx->tc_trace);
 	level = trace - tcx->tc_trace;
@@ -952,10 +946,14 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 
 		btr_rec_copy(tcx, rec_dst, rec_src, nd_right->tn_keyn);
 		btr_node_insert_rec_only(tcx, trace, rec);
+
 		/* insert the right node and the first key of the right
 		 * node to its parent
 		 */
-		btr_rec_copy_hkey(tcx, rec, rec_dst);
+		if (tcx->tc_feats & BTR_FEAT_DIRECT_KEY)
+			rec->rec_node[0] = mmid_right;
+		else
+			btr_rec_copy_hkey(tcx, rec, rec_dst);
 		goto bubble_up;
 	}
 	/* non-leaf */
@@ -996,6 +994,7 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	btr_hkey_copy(tcx, &hkey_buf[0], &rec_src->rec_hkey[0]);
 
 	btr_node_insert_rec_only(tcx, trace, rec);
+
 	btr_hkey_copy(tcx, &rec->rec_hkey[0], &hkey_buf[0]);
 
  bubble_up:
@@ -1032,6 +1031,21 @@ enum btr_probe_rc {
 	/** found something but not the provided key */
 	PROBE_RC_OK,
 };
+
+/* For direct keys, resolve the mmid in the record */
+static struct btr_record *
+btr_node_direct_rec_at(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid,
+		       unsigned int at)
+{
+	struct btr_record	 *rec;
+
+	D__ASSERT(tcx->tc_feats & BTR_FEAT_DIRECT_KEY);
+	rec = btr_node_rec_at(tcx, nd_mmid, at);
+	if (btr_node_is_leaf(tcx, nd_mmid))
+		return rec;
+
+	return btr_node_rec_at(tcx, rec->rec_node[0], 0);
+}
 
 /**
  * Try to find \a key within a btree, it will store the searching path in
@@ -1075,6 +1089,7 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 		} else {
 			D__ASSERT(anchor != NULL);
 			D__ASSERT(opc != BTR_PROBE_UPDATE);
+			D__ASSERT((tcx->tc_feats & BTR_FEAT_DIRECT_KEY) == 0);
 
 			btr_hkey_copy(tcx, hkey, &anchor->body[0]);
 		}
@@ -1097,8 +1112,13 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 		if (opc & BTR_PROBE_EQ) {
 			/* binary search */
 			at = (start + end) / 2;
-			rec = btr_node_rec_at(tcx, nd_mmid, at);
-			cmp = btr_hkey_cmp(tcx, rec, hkey);
+			if (tcx->tc_feats & BTR_FEAT_DIRECT_KEY) {
+				rec = btr_node_direct_rec_at(tcx, nd_mmid, at);
+				cmp = btr_key_cmp(tcx, rec, key);
+			} else {
+				rec = btr_node_rec_at(tcx, nd_mmid, at);
+				cmp = btr_hkey_cmp(tcx, rec, hkey);
+			}
 
 			D__DEBUG(DB_TRACE, "compared record at %d, cmp %d\n",
 				at, cmp);
@@ -1141,8 +1161,7 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 	D__ASSERT(level == tcx->tc_depth - 1);
 	D__ASSERT(!TMMID_IS_NULL(nd_mmid));
 
-	if (!(tcx->tc_feats & BTR_FEAT_UINT_KEY)) {
-
+	if (!(tcx->tc_feats & (BTR_FEAT_DIRECT_KEY | BTR_FEAT_UINT_KEY))) {
 		if (cmp == 0 && key != NULL) {
 			rec = btr_node_rec_at(tcx, nd_mmid, at);
 			cmp = btr_key_cmp(tcx, rec, key);
@@ -1621,19 +1640,23 @@ btr_node_del_leaf_rebal(struct btr_context *tcx,
 		 * parent node.
 		 */
 		par_rec = btr_node_rec_at(tcx, par_tr->tr_node, par_tr->tr_at);
-		btr_rec_copy_hkey(tcx, par_rec, src_rec);
+
+		/* NB: Direct key of parent already points here */
+		if (!(tcx->tc_feats & BTR_FEAT_DIRECT_KEY))
+			btr_rec_copy_hkey(tcx, par_rec, src_rec);
 	} else {
 		/* grab the last record from the left sibling */
 		src_rec = btr_node_rec_at(tcx, sib_mmid, sib_nd->tn_keyn - 1);
 		dst_rec = btr_node_rec_at(tcx, cur_tr->tr_node, 0);
-
 		btr_rec_copy(tcx, dst_rec, src_rec, 1);
 		/* copy the first record key of the current node to the
 		 * parent node.
 		 */
 		par_rec = btr_node_rec_at(tcx, par_tr->tr_node,
 					  par_tr->tr_at - 1);
-		btr_rec_copy_hkey(tcx, par_rec, dst_rec);
+		/* NB: Direct key of parent already points to this leaf */
+		if (!(tcx->tc_feats & BTR_FEAT_DIRECT_KEY))
+			btr_rec_copy_hkey(tcx, par_rec, dst_rec);
 	}
 	cur_nd->tn_keyn++;
 	sib_nd->tn_keyn--;
@@ -1715,7 +1738,7 @@ btr_node_del_leaf_merge(struct btr_context *tcx,
 
 /**
  * Delete the specified leaf record from the current node:
- * - if the current node has more than one records, just delete and return.
+ * - if the current node has more than one record, just delete and return.
  * - if the current node only has one leaf record, and the sibling has more
  *   than one leaf records, grab one record from the sibling node after
  *   the deletion.
@@ -1723,7 +1746,7 @@ btr_node_del_leaf_merge(struct btr_context *tcx,
  *   leaf record as well, merge the current node with the sibling after
  *   the deletion.
  *
- * This functino returns false if the deletion does not need to bubble up
+ * This function returns false if the deletion does not need to bubble up
  * to upper level tree, otherwise returns true.
  */
 static bool
@@ -1858,6 +1881,7 @@ btr_node_del_child_rebal(struct btr_context *tcx,
 		par_rec = btr_node_rec_at(tcx, par_tr->tr_node, par_tr->tr_at);
 
 		dst_rec->rec_mmid = umem_id_t2u(sib_nd->tn_child);
+
 		btr_rec_copy_hkey(tcx, dst_rec, par_rec);
 		btr_rec_copy_hkey(tcx, par_rec, src_rec);
 
@@ -1968,7 +1992,7 @@ btr_node_del_child_merge(struct btr_context *tcx,
  *   children as well, merge the current node with the sibling after the
  *   deletion.
  *
- * This functino returns false if the deletion does not need to bubble up
+ * This function returns false if the deletion does not need to bubble up
  * to upper level tree, otherwise returns true.
  */
 static bool
@@ -2037,7 +2061,7 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 
 	if (cur_nd->tn_keyn > 1) {
 		/* OK to delete record without doing any extra work */
-		D__DEBUG(DB_TRACE, "Straightaway deleteion, no rebalance.\n");
+		D__DEBUG(DB_TRACE, "Straightaway deletion, no rebalance.\n");
 		sib_mmid	= BTR_NODE_NULL;
 		sib_on_right	= false; /* whatever... */
 
@@ -2799,7 +2823,8 @@ dbtree_iter_finish(daos_handle_t ih)
  *
  * \param opc	[IN]	Probe opcode, see dbtree_probe_opc_t for the details.
  * \param key	[IN]	The key to probe, it will be ignored if opc is
- *			BTR_PROBE_FIRST or BTR_PROBE_LAST.
+ *			BTR_PROBE_FIRST or BTR_PROBE_LAST.  Otherwise, it is
+ *			required if BTR_FEAT_DIRECT_KEY is used.
  * \param anchor [IN]	the anchor point to probe, it will be ignored if
  *			\a key is provided.
  */
@@ -3079,11 +3104,12 @@ static struct btr_class btr_class_registered[BTR_TYPE_MAX];
  */
 static int
 btr_class_init(TMMID(struct btr_root) root_mmid, struct btr_root *root,
-	       unsigned int tree_class, uint64_t tree_feats,
+	       unsigned int tree_class, uint64_t *tree_feats,
 	       struct umem_attr *uma, struct btr_instance *tins)
 {
-	struct btr_class *tc;
-	int		  rc;
+	struct btr_class	*tc;
+	uint64_t		 special_feat;
+	int			 rc;
 
 	memset(tins, 0, sizeof(*tins));
 	rc = umem_class_init(uma, &tins->ti_umm);
@@ -3099,7 +3125,7 @@ btr_class_init(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 
 	if (root != NULL && root->tr_class != 0) {
 		tree_class = root->tr_class;
-		tree_feats = root->tr_feats;
+		*tree_feats = root->tr_feats;
 	}
 
 	/* XXX should be multi-thread safe */
@@ -3114,9 +3140,22 @@ btr_class_init(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 		return -DER_NONEXIST;
 	}
 
-	if ((tree_feats & tc->tc_feats) != tree_feats) {
+	/* If no hkey callbacks are supplied, only special key types are
+	 * supported.  Rather than flagging an error just set the
+	 * appropriate flag.
+	 */
+	special_feat = tc->tc_feats & (BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY);
+	if (!(special_feat & *tree_feats) &&
+	    (tc->tc_ops->to_hkey_gen == NULL ||
+	     tc->tc_ops->to_hkey_size == NULL)) {
+		D__DEBUG(DB_TRACE, "Setting feature "DF_X64" required"
+			 " by tree class %d", special_feat, tree_class);
+		*tree_feats |= special_feat;
+	}
+
+	if ((*tree_feats & tc->tc_feats) != *tree_feats) {
 		D__ERROR("Unsupported features "DF_U64"/"DF_U64"\n",
-			tree_feats, tc->tc_feats);
+			*tree_feats, tc->tc_feats);
 		return -DER_PROTO;
 	}
 
@@ -3144,10 +3183,12 @@ dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 
 	/* These are mandatory functions */
 	D__ASSERT(ops != NULL);
-	if (!(tree_feats & BTR_FEAT_UINT_KEY)) {
+	if (!(tree_feats & (BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY))) {
 		D__ASSERT(ops->to_hkey_gen != NULL);
 		D__ASSERT(ops->to_hkey_size != NULL);
 	}
+	if (tree_feats & BTR_FEAT_DIRECT_KEY)
+		D__ASSERT(ops->to_key_cmp != NULL);
 	D__ASSERT(ops->to_rec_fetch != NULL);
 	D__ASSERT(ops->to_rec_alloc != NULL);
 	D__ASSERT(ops->to_rec_free != NULL);

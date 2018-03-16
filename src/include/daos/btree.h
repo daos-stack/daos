@@ -67,10 +67,14 @@ struct btr_record {
 	 *
 	 * When BTR_FEAT_UINT_KEY is set, no key callbacks are used for
 	 * comparisons.
+	 *
+	 * When BTR_FEAT_DIRECT_KEY is used, we store the mmid of the
+	 * relevant leaf node for direct key comparison
 	 */
 	union {
 		char			rec_hkey[0]; /* hashed key */
 		uint64_t		rec_ukey[0]; /* uint key */
+		TMMID(struct btr_node)	rec_node[0]; /* direct key */
 	};
 };
 
@@ -418,6 +422,10 @@ typedef enum {
 enum btr_feats {
 	/** Key is an unsigned integer.  Implies no hash or key callbacks */
 	BTR_FEAT_UINT_KEY		= (1 << 0),
+	/** Key is not hashed or stored by library.  User must provide
+	 * to_key_cmp callback
+	 */
+	BTR_FEAT_DIRECT_KEY		= (1 << 1),
 };
 
 int  dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,

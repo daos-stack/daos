@@ -19,6 +19,9 @@ if [ "x$BACKWARD" == "xyes" ]; then
 	IDIR="b"
 fi
 
+KEYS=${KEYS:-"3,6,5,7,2,1,4"}
+RECORDS=${RECORDS:-"7:loaded,3:that,5:dice,2:knows,4:the,6:are,1:Everybody"}
+
 PERF=""
 UINT=""
 while [ $# -gt 0 ]; do
@@ -31,6 +34,13 @@ while [ $# -gt 0 ]; do
         shift
         UINT="+"
         ;;
+    direct)
+        BTR=$DAOS_DIR/build/src/common/tests/btree_direct
+        KEYS=${KEYS:-"delta,lambda,kappa,omega,beta,alpha,epsilon"}
+        RECORDS=${RECORDS:-"omega:loaded,delta:that,kappa:dice,beta:knows,epsilon:the,lambda:are,alpha:Everybody"}
+
+        shift
+        ;;
     *)
         cat << EOF
 Unknown option $# $1
@@ -38,14 +48,12 @@ Usage: btree.sh [OPTIONS]
     Options:
         ukey    Use integer keys
         perf    Run performance tests
+        direct  Use direct string key
 EOF
         exit 1
         ;;
     esac
 done
-
-KEYS=${KEYS:-"3,6,5,7,2,1,4"}
-RECORDS=${RECORDS:-"7:loaded,3:that,5:dice,2:knows,4:the,6:are,1:Everybody"}
 
 if [ -z ${PERF} ]; then
 
