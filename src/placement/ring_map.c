@@ -788,6 +788,51 @@ struct ring_obj_placement {
 	unsigned int	rop_shard_id;
 };
 
+static d_rank_t
+obj_spec_oid_get_rank(daos_obj_id_t oid)
+{
+	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK);
+
+	return (oid.hi << 8) >> 56;
+}
+
+static unsigned int
+ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid)
+{
+	struct pool_target	*tgts;
+	unsigned int		tgts_nr;
+	struct pl_target	*plts;
+	d_rank_t		rank;
+	unsigned int		pos;
+	unsigned int		i;
+
+	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK);
+
+	/* locate rank in the pool map targets */
+	tgts = pool_map_targets(rimap->rmp_map.pl_poolmap);
+	tgts_nr = pool_map_target_nr(rimap->rmp_map.pl_poolmap);
+	rank = obj_spec_oid_get_rank(oid);
+	for (pos = 0; pos < tgts_nr; pos++) {
+		if (rank == tgts[pos].ta_comp.co_rank)
+			break;
+	}
+	if (pos == tgts_nr)
+		return -DER_INVAL;
+
+	/* locate the target in the ring */
+	plts = ring_oid2ring(rimap, oid)->ri_targets;
+	for (i = 0; i < rimap->rmp_target_nr; i++) {
+		if (plts[i].pt_pos == pos)
+			break;
+	}
+	if (i == rimap->rmp_target_nr)
+		return -DER_INVAL;
+
+	D_DEBUG(DB_PL, "create obj with rank %d pl pos %d\n", rank, i);
+
+	return i;
+}
+
 /** calculate the ring map placement for the object */
 static int
 ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
@@ -806,7 +851,10 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		return -DER_INVAL;
 	}
 
-	rop->rop_begin = ring_obj_place_begin(rimap, oid);
+	if (daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK)
+		rop->rop_begin = ring_obj_spec_place_begin(rimap, oid);
+	else
+		rop->rop_begin = ring_obj_place_begin(rimap, oid);
 	rop->rop_dist = ring_obj_place_dist(rimap, oid);
 
 	rop->rop_grp_size = daos_oclass_grp_size(oc_attr);

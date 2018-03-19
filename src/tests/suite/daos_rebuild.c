@@ -364,7 +364,8 @@ rebuild_dkeys(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	oid = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -395,7 +396,8 @@ rebuild_akeys(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	oid = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -427,7 +429,8 @@ rebuild_indexes(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	oid = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 2000 records */
@@ -462,7 +465,8 @@ rebuild_multiple(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	oid = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -501,7 +505,8 @@ rebuild_large_rec(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	oid = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -531,8 +536,10 @@ rebuild_objects(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -553,8 +560,10 @@ rebuild_drop_scan(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -579,8 +588,10 @@ rebuild_retry_rebuild(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -605,8 +616,10 @@ rebuild_retry_for_stale_pool(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -631,8 +644,10 @@ rebuild_drop_obj(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -657,8 +672,10 @@ rebuild_update_failed(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -692,8 +709,11 @@ rebuild_multiple_pools(void **state)
 		return;
 	}
 
-	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
+
 	rebuild_io(args[0], oids, OBJ_NR);
 	rebuild_io(args[1], oids, OBJ_NR);
 
@@ -774,8 +794,10 @@ rebuild_destroy_container(void **state)
 		return;
 	}
 
-	for (i = 0; i < OBJ_NR * 100; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	for (i = 0; i < OBJ_NR * 100; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
 
 	rebuild_io(args[1], oids, OBJ_NR * 100);
 
@@ -798,8 +820,10 @@ rebuild_iv_tgt_fail(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -823,8 +847,10 @@ rebuild_tgt_start_fail(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -850,8 +876,10 @@ rebuild_offline(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -953,7 +981,8 @@ rebuild_master_failure(void **state)
 
 	daos_get_leader(arg, &ranks_to_kill[0]);
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 		cb_arg_oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 	}
 
@@ -986,7 +1015,8 @@ rebuild_two_failures(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 		cb_arg_oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 	}
 

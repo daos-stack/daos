@@ -26,6 +26,7 @@
  * Test suite helper functions.
  */
 #include <daos/common.h>
+#include <daos/object.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
 
@@ -54,6 +55,16 @@ dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed)
 	oid.hi	= rand() % 100;
 	daos_obj_id_generate(&oid, ofeats, oclass);
 
+	return oid;
+}
+
+daos_obj_id_t
+dts_oid_set_rank(daos_obj_id_t oid, unsigned int rank)
+{
+	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK);
+
+	D_ASSERT(rank < 0xff);
+	oid.hi |= (uint64_t)rank << 48;
 	return oid;
 }
 
