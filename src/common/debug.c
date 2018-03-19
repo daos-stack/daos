@@ -301,6 +301,10 @@ static struct daos_debug_bit debug_bit_dict[] = {
 		.db_name	= "trace",
 	},
 	{
+		.db_bit		= DB_REBUILD,
+		.db_name	= "rebuild",
+	},
+	{
 		.db_bit		= DB_ALL,
 		.db_name	= "all",
 	},

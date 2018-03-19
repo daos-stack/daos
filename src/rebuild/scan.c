@@ -85,9 +85,9 @@ rebuild_obj_fill_buf(daos_handle_t ih, daos_iov_t *key_iov,
 	D__ASSERT(root->count > 0);
 	root->count--;
 
-	D__DEBUG(DB_TRACE, "send oid/con "DF_UOID"/"DF_UUID" cnt %d left %d\n",
-		DP_UOID(oids[count]), DP_UUID(arg->current_uuid), arg->count,
-		root->count);
+	D__DEBUG(DB_REBUILD, "send oid/con "DF_UOID"/"DF_UUID" cnt %d"
+		" left %d\n", DP_UOID(oids[count]), DP_UUID(arg->current_uuid),
+		arg->count, root->count);
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
@@ -186,8 +186,8 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	if (arg->count == 0)
 		D__GOTO(out, rc);
 
-	D__DEBUG(DB_TRACE, "send rebuild objects "DF_UUID" to tgt %d cnt %d\n",
-		 DP_UUID(rpt->rt_pool_uuid), tgt_id, arg->count);
+	D__DEBUG(DB_REBUILD, "send rebuild objects "DF_UUID" to tgt %d"
+		 " cnt %d\n", DP_UUID(rpt->rt_pool_uuid), tgt_id, arg->count);
 
 	tgt_ep.ep_rank = tgt_id;
 	tgt_ep.ep_tag = 0;
@@ -378,7 +378,7 @@ rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 	daos_iov_set(&key_iov, &oid, sizeof(oid));
 	daos_iov_set(&val_iov, &shard, sizeof(shard));
 	rc = dbtree_lookup(cont_root->root_hdl, &key_iov, &val_iov);
-	D__DEBUG(DB_TRACE, "lookup "DF_UOID" in cont "DF_UUID" rc %d\n",
+	D__DEBUG(DB_REBUILD, "lookup "DF_UOID" in cont "DF_UUID" rc %d\n",
 		DP_UOID(oid), DP_UUID(co_uuid), rc);
 	if (rc == -DER_NONEXIST) {
 		rc = dbtree_update(cont_root->root_hdl, &key_iov, &val_iov);
@@ -388,9 +388,9 @@ rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 			D__GOTO(out, rc);
 		}
 		cont_root->count++;
-		D__DEBUG(DB_TRACE, "update "DF_UOID"/"DF_UUID" in cont_root %p"
-			" count %d\n", DP_UOID(oid), DP_UUID(co_uuid),
-			cont_root, cont_root->count);
+		D__DEBUG(DB_REBUILD, "update "DF_UOID"/"DF_UUID" in"
+			" cont_root %p count %d\n", DP_UOID(oid),
+			DP_UUID(co_uuid), cont_root, cont_root->count);
 		return 1;
 	}
 out:
@@ -444,7 +444,7 @@ rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 		rc = 0;
 	}
 
-	D__DEBUG(DB_TRACE, "insert "DF_UOID"/"DF_UUID" tgt %u cnt %d rc %d\n",
+	D__DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u cnt %d rc %d\n",
 		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, tgt_root->count, rc);
 out:
 	return rc;
@@ -612,7 +612,7 @@ rebuild_scan_leader(void *data)
 	if (rc)
 		D__GOTO(out_group, rc);
 
-	D__DEBUG(DB_TRACE, "rebuild scan collective "DF_UUID" done.\n",
+	D__DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
 		 DP_UUID(rpt->rt_pool_uuid));
 
 	while (!dbtree_is_empty(arg->rebuild_tree_hdl)) {
@@ -632,7 +632,7 @@ rebuild_scan_leader(void *data)
 		D__GOTO(out_group, rc);
 	}
 
-	D__DEBUG(DB_TRACE, DF_UUID" sent objects to initiator %d\n",
+	D__DEBUG(DB_REBUILD, DF_UUID" sent objects to initiator %d\n",
 		DP_UUID(rpt->rt_pool_uuid), rc);
 	D_EXIT;
 out_group:
@@ -669,7 +669,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D__ASSERT(rsi != NULL);
 
-	D__DEBUG(DB_TRACE, "%d scan rebuild for "DF_UUID" ver %d/%d\n",
+	D__DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d/%d\n",
 		 dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
 		 rsi->rsi_pool_map_ver, rsi->rsi_rebuild_ver);
 
@@ -681,13 +681,13 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 		/* Delete the left over rpt */
 		if (rsi->rsi_rebuild_ver > rpt->rt_rebuild_ver) {
-			D__DEBUG(DB_TRACE, "delete the leftover "
+			D__DEBUG(DB_REBUILD, "delete the leftover "
 				 DF_UUID"/%d/%p\n", DP_UUID(rpt->rt_pool_uuid),
 				 rpt->rt_rebuild_ver, rpt);
 			rebuild_tgt_fini(rpt);
 			rpt = NULL;
 		} else if (rsi->rsi_rebuild_ver == rpt->rt_rebuild_ver) {
-			D__DEBUG(DB_TRACE, DF_UUID" already started.\n",
+			D__DEBUG(DB_REBUILD, DF_UUID" already started.\n",
 				 DP_UUID(rsi->rsi_pool_uuid));
 			D__GOTO(out, rc = 0);
 		}

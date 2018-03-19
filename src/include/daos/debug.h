@@ -96,11 +96,12 @@ extern bool dd_tune_alloc;
 #define DB_MGMT		(1 << (DLOG_DPRISHIFT + 7)) /* pool management */
 #define DB_EPC		(1 << (DLOG_DPRISHIFT + 8)) /* epoch system */
 #define DB_DF		(1 << (DLOG_DPRISHIFT + 9)) /* durable format */
+#define DB_REBUILD	(1 << (DLOG_DPRISHIFT + 10)) /* rebuild process */
 #define DB_TEST		(1 << (DLOG_DPRISHIFT + 15)) /* test programs */
 #define DB_ALL		DLOG_DBG		    /* all of masks */
 
 /* should be replaced by more reasonable mask, e.g. (DB_IO | DB_MD | DB_PL) */
-#define DB_DEFAULT	(DB_IO | DB_MD | DB_PL)
+#define DB_DEFAULT	(DB_IO | DB_MD | DB_PL | DB_REBUILD)
 #define DB_NULL		0
 
 /** XXX Temporary things, should be replaced by debug bits above */
