@@ -623,6 +623,16 @@ rebuild_pool_group_prepare(struct ds_pool *pool)
 	if (pool->sp_group != NULL)
 		return 0;
 
+	/* During pool leader changing, the cart group might still
+	 * exists even if sp_group is NULL.
+	 */
+	uuid_unparse_lower(pool->sp_uuid, id);
+	grp = crt_group_lookup(id);
+	if (grp != NULL) {
+		pool->sp_group = grp;
+		return 0;
+	}
+
 	rc = pool_map_find_up_tgts(pool->sp_map, &tgts, &tgt_cnt);
 	if (rc)
 		return rc;
@@ -639,7 +649,6 @@ rebuild_pool_group_prepare(struct ds_pool *pool)
 	rank_list.rl_nr = tgt_cnt;
 	rank_list.rl_ranks = ranks;
 
-	uuid_unparse_lower(pool->sp_uuid, id);
 	rc = dss_group_create(id, &rank_list, &grp);
 	if (rc != 0)
 		D__GOTO(out, rc);
@@ -1015,10 +1024,8 @@ rebuild_ults(void *arg)
 		D__FREE_PTR(task);
 	}
 
-	while (!d_list_empty(&rebuild_gst.rg_running_list)) {
-		D__DEBUG(DB_TRACE, "wait for rebuild running finish\n");
+	while (!d_list_empty(&rebuild_gst.rg_running_list))
 		ABT_thread_yield();
-	}
 
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	ABT_cond_signal(rebuild_gst.rg_stop_cond);

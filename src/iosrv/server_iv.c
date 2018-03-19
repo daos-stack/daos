@@ -108,8 +108,8 @@ iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns)
 }
 
 static int
-iv_ns_create_internal(unsigned int ns_id, d_rank_t rank,
-			 struct ds_iv_ns **pns)
+iv_ns_create_internal(unsigned int ns_id, d_rank_t master_rank,
+		      struct ds_iv_ns **pns)
 {
 	struct ds_iv_ns *ns;
 	struct ds_iv_ns *tmp;
@@ -118,15 +118,9 @@ iv_ns_create_internal(unsigned int ns_id, d_rank_t rank,
 	 * is elected.
 	 */
 	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
-		if (ns->iv_ns_id == ns_id) {
-			d_list_del(&ns->iv_ns_link);
-			D__DEBUG(DB_TRACE, "orig rank %d -> %d\n",
-				ns->iv_master_rank, rank);
-			D_ASSERT(ns->iv_master_rank != rank);
-			/* XXX Move the key/value to new namespace? */
-			crt_iv_namespace_destroy(ns->iv_ns);
-			D_FREE_PTR(ns);
-		}
+		if (ns->iv_ns_id == ns_id &&
+		    ns->iv_master_rank == master_rank)
+			return -DER_EXIST;
 	}
 
 	D_ALLOC_PTR(ns);
@@ -135,7 +129,7 @@ iv_ns_create_internal(unsigned int ns_id, d_rank_t rank,
 
 	D_INIT_LIST_HEAD(&ns->iv_entry_list);
 	ns->iv_ns_id = ns_id;
-	ns->iv_master_rank = rank;
+	ns->iv_master_rank = master_rank;
 	ABT_mutex_create(&ns->iv_lock);
 	d_list_add(&ns->iv_ns_link, &ds_iv_ns_list);
 	*pns = ns;
