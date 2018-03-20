@@ -460,9 +460,7 @@ cmd_kill_server(int argc, const char **argv, void *ctx)
 		{0}
 	};
 	struct argp argp = {options, parse_pool_args_cb};
-
 	d_rank_list_t pool_service_list = {NULL, 0};
-
 
 	/* adjust the arguments to skip over the command */
 	argv++;
@@ -494,4 +492,72 @@ cmd_kill_server(int argc, const char **argv, void *ctx)
 	fflush(stdout);
 
 	return rc;
+}
+
+int
+cmd_kill_pool_leader(int argc, const char **argv, void *ctx)
+{
+	uuid_t uuid;
+	int rc;
+	d_rank_list_t svc;
+	uint32_t rl_ranks = 1;
+	daos_handle_t poh;
+
+	struct argp_option options[] = {
+		{"server-group",   's',    "SERVER-GROUP",     0,
+		 "ID of the server group that is to manage the new pool"},
+		{"uid",            'u',    "UID",              0,
+		 "User ID that is to own the new pool"},
+		{"gid",            'g',    "GID",              0,
+		 "Group ID that is to own the new pool"},
+		{"uuid",           'i',   "UUID",           0,
+		 "ID of the pool that is to be destroyed"},
+		{"rank",           'r',   "RANK",           0,
+		 "mpi rank of the server to kill"},
+		{0}
+	};
+	struct argp argp = {options, parse_pool_args_cb};
+	struct pool_cmd_options killp_options = {"daos_server", NULL, "0", "0",
+						 0, 0700, 0, 1024*1024*1024, 0,
+						 1};
+
+	/* adjust the arguments to skip over the command */
+	argv++;
+	argc--;
+
+	/* once the command is removed the remaining arguments
+	 * conform to GNU standards and can be parsed with argp
+	 */
+	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &killp_options);
+
+	/* TODO once we have a way to serialize/deserialize this,
+	 * deserialize it here appropriately
+	 * for now, we will just let the user specify one rank
+	 * rather than a list of ranks
+	 */
+	svc.rl_nr = 1;
+	rl_ranks = killp_options.replica_count;
+	svc.rl_ranks = &rl_ranks;
+
+	rc = uuid_parse(killp_options.uuid, uuid);
+	if (rc) {
+		printf("error parsing uuid = %d\n", rc);
+		return rc;
+	}
+
+	rc = daos_pool_connect(uuid, killp_options.server_group, &svc,
+			       DAOS_PC_RW, &poh, NULL, NULL);
+	if (rc != DER_SUCCESS) {
+		printf("error connecting to pool: '%s'\n", d_errstr(rc));
+		return -1;
+	}
+
+	rc = daos_pool_svc_stop(poh, NULL);
+	if (rc != DER_SUCCESS) {
+		printf("error killing pool: '%s'\n", d_errstr(rc));
+		return -1;
+	}
+
+	printf("SUCCESS killing pool service leader");
+	return 0;
 }

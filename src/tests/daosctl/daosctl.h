@@ -43,6 +43,7 @@ int cmd_kill_server(int argc, const char **argv, void *ctx);
 int cmd_list(int argc, const char **argv, void *ctx);
 int cmd_query_container(int argc, const char **argv, void *ctx);
 int cmd_query_pool_status(int argc, const char **argv, void *ctx);
+int cmd_kill_pool_leader(int argc, const char **argv, void *ctx);
 /* these are test functions that maybe removed later */
 int cmd_connect_pool(int argc, const char **argv, void *ctx);
 int cmd_test_create_pool(int argc, const char **argv, void *ctx);

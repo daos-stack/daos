@@ -68,6 +68,7 @@ static struct cmd_struct commands[] = {
 	{ "query-pool-status", cmd_query_pool_status },
 	{ "test-create-pool", cmd_test_create_pool },
 	{ "test-connect-pool", cmd_test_connect_pool },
+	{ "kill-leader", cmd_kill_pool_leader },
 	{ "test-evict-pool", cmd_test_evict_pool },
 	{ "test-query-pool", cmd_test_query_pool },
 	{ "kill-server", cmd_kill_server },
