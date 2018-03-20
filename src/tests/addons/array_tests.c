@@ -123,7 +123,7 @@ simple_array_mgmt(void **state)
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
 	assert_int_equal(rc, 0);
 	if (size != 265) {
-		fprintf(stderr, "Size = %zu, expected: 265\n", size);
+		print_error("Size = %zu, expected: 265\n", size);
 		assert_int_equal(size, 265);
 	}
 
@@ -142,7 +142,7 @@ simple_array_mgmt(void **state)
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
 	assert_int_equal(rc, 0);
 	if (size != 112) {
-		fprintf(stderr, "Size = %zu, expected: 112\n", size);
+		print_error("Size = %zu, expected: 112\n", size);
 		assert_int_equal(size, 112);
 	}
 
@@ -151,7 +151,7 @@ simple_array_mgmt(void **state)
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
 	assert_int_equal(rc, 0);
 	if (size != 0) {
-		fprintf(stderr, "Size = %zu, expected: 0\n", size);
+		print_error("Size = %zu, expected: 0\n", size);
 		assert_int_equal(size, 0);
 	}
 
@@ -160,7 +160,7 @@ simple_array_mgmt(void **state)
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
 	assert_int_equal(rc, 0);
 	if (size != 1048576) {
-		fprintf(stderr, "Size = %zu, expected: 1048576\n", size);
+		print_error("Size = %zu, expected: 1048576\n", size);
 		assert_int_equal(size, 1048576);
 	}
 
@@ -238,7 +238,7 @@ static int
 change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size)
 {
 	daos_size_t expected_size;
-	daos_size_t new_size;
+	daos_size_t new_size, i;
 	int rc;
 
 	daos_sync_ranks(MPI_COMM_WORLD);
@@ -252,8 +252,8 @@ change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size)
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &new_size, NULL);
 	assert_int_equal(rc, 0);
 	if (new_size != expected_size) {
-		fprintf(stderr, "Size = %zu, expected: %zu\n",
-			new_size, expected_size);
+		print_error("(%d) Size = %zu, expected: %zu\n",
+			    arg->myrank, new_size, expected_size);
 		rc = -1;
 		goto out;
 	}
@@ -264,10 +264,40 @@ change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size)
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &new_size, NULL);
 	assert_int_equal(rc, 0);
 	if (new_size != expected_size) {
-		fprintf(stderr, "Size = %zu, expected: %zu\n",
-			new_size, expected_size);
+		print_error("(%d) Size = %zu, expected: %zu\n",
+			    arg->myrank, new_size, expected_size);
 		rc = -1;
 		goto out;
+	}
+
+	for (i = 0; i < 5; i++) {
+		rc = daos_array_set_size(oh, DAOS_TX_NONE, 0, NULL);
+		assert_int_equal(rc, 0);
+		rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
+		assert_int_equal(rc, 0);
+		if (array_size != 0) {
+			print_error("Size = %zu, expected: 0\n", array_size);
+			assert_int_equal(array_size, 0);
+		}
+
+		rc = daos_array_set_size(oh, DAOS_TX_NONE, 265 + i, NULL);
+		assert_int_equal(rc, 0);
+		rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
+		assert_int_equal(rc, 0);
+		if (array_size != 265 + i) {
+			print_error("Size = %zu, expected: %zu\n",
+				    array_size, 265 + i);
+			assert_int_equal(array_size, 265 + i);
+		}
+
+		rc = daos_array_set_size(oh, DAOS_TX_NONE, 0, NULL);
+		assert_int_equal(rc, 0);
+		rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
+		assert_int_equal(rc, 0);
+		if (array_size != 0) {
+			print_error("Size = %zu, expected: 0\n", array_size);
+			assert_int_equal(array_size, 0);
+		}
 	}
 
 out:
@@ -382,7 +412,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	assert_int_equal(rc, 0);
 
 	if (array_size != expected_size)
-		fprintf(stderr, "(%d) Size = %zu, expected: %zu\n",
+		print_error("(%d) Size = %zu, expected: %zu\n",
 			arg->myrank, array_size, expected_size);
 	assert_int_equal(array_size, expected_size);
 
@@ -542,7 +572,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	assert_int_equal(rc, 0);
 
 	if (array_size != expected_size) {
-		fprintf(stderr, "(%d) Size = %zu, expected: %zu\n",
+		print_error("(%d) Size = %zu, expected: %zu\n",
 			arg->myrank, array_size, expected_size);
 	}
 	assert_int_equal(array_size, expected_size);
@@ -713,9 +743,10 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
 	assert_int_equal(rc, 0);
 
-	if (array_size != expected_size)
-		fprintf(stderr, "(%d) Size = %zu, expected: %zu\n",
-			arg->myrank, array_size, expected_size);
+	if (array_size != expected_size) {
+		print_error("(%d) Size = %zu, expected: %zu\n",
+			    arg->myrank, array_size, expected_size);
+	}
 	assert_int_equal(array_size, expected_size);
 
 	rc = change_array_size(arg, oh, array_size);

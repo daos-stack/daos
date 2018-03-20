@@ -81,8 +81,7 @@ byte_array_simple_stack(void **state)
 	/** fetch record size & verify */
 	print_message("fetching record size\n");
 	iod.iod_size	= DAOS_REC_ANY;
-	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, NULL, NULL,
-			    NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(iod.iod_size, 1);
 
@@ -90,8 +89,7 @@ byte_array_simple_stack(void **state)
 	print_message("reading data back ...\n");
 	memset(buf_out, 0, sizeof(buf_out));
 	daos_iov_set(&sg_iov, buf_out, sizeof(buf_out));
-	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
-			    NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** Verify data consistency */
 	print_message("validating data ...\n");
@@ -163,8 +161,7 @@ array_simple(void **state)
 	memset(buf_out, 0, arg->size * arg->nr);
 	daos_iov_set(&sg_iov, buf_out, arg->size * arg->nr);
 	iod.iod_size	= DAOS_REC_ANY;
-	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
-			    NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** verify record size */
 	print_message("validating record size ...\n");
@@ -253,8 +250,7 @@ array_partial(void **state)
 	}
 
 	iod.iod_recxs = recxs;
-	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
-			    NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
 	print_message("fetch returns %d\n", rc);
 	assert_int_equal(rc, 0);
 	/** verify record size */
@@ -412,8 +408,7 @@ replicator(void **state)
 	recx.rx_idx     = 27136;
 	recx.rx_nr      = sizeof(buf_out);
 	iod.iod_recxs	= &recx;
-	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
-			    NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	/** close object */
@@ -469,8 +464,7 @@ read_empty(void **state)
 
 	/** fetch */
 	print_message("reading empty object ...\n");
-	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
-			    NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	/** close object */
@@ -478,6 +472,348 @@ read_empty(void **state)
 	assert_int_equal(rc, 0);
 	print_message("all good\n");
 	D_FREE(buf);
+}
+
+#define ENUM_KEY_BUF	32
+#define ENUM_DESC_BUF	512
+#define ENUM_DESC_NR	5
+
+enum {
+	OBJ_DKEY,
+	OBJ_AKEY
+};
+
+static void
+enumerate_key(daos_handle_t oh, int *total_nr, daos_key_t *dkey, int key_type)
+{
+	char		*buf;
+	daos_key_desc_t  kds[ENUM_DESC_NR];
+	daos_anchor_t	 anchor;
+	daos_sg_list_t	 sgl;
+	daos_iov_t       sg_iov;
+	uint32_t	 nr;
+	int		 key_nr;
+	int		 rc;
+
+	buf = malloc(ENUM_DESC_BUF);
+	daos_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	memset(&anchor, 0, sizeof(anchor));
+	for (nr = ENUM_DESC_NR, key_nr = 0; !daos_anchor_is_eof(&anchor);
+	     nr = ENUM_DESC_NR) {
+
+		memset(buf, 0, ENUM_DESC_BUF);
+		if (key_type == OBJ_DKEY)
+			rc = daos_obj_list_dkey(oh, DAOS_TX_NONE, &nr, kds,
+						&sgl, &anchor, NULL);
+		else
+			rc = daos_obj_list_akey(oh, DAOS_TX_NONE, dkey, &nr,
+						kds, &sgl, &anchor, NULL);
+		assert_int_equal(rc, 0);
+		if (nr == 0)
+			continue;
+		key_nr += nr;
+	}
+
+	*total_nr = key_nr;
+}
+
+#define SM_BUF_LEN 10
+
+static void
+array_dkey_punch_enumerate(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	daos_iov_t	 dkey;
+	daos_sg_list_t	 sgl;
+	daos_iov_t	 sg_iov;
+	daos_iod_t	 iod;
+	daos_recx_t	 recx;
+	char		 buf[SM_BUF_LEN];
+	int		 total_nr;
+	int		 i;
+	int		 rc;
+
+	dts_buf_render(buf, SM_BUF_LEN);
+
+	/** open object */
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init scatter/gather */
+	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	/** init I/O descriptor */
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
+	iod.iod_size	= 1;
+	recx.rx_nr	= SM_BUF_LEN;
+	recx.rx_idx	= 0;
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	print_message("Inserting 100 dkeys...\n");
+	for (i = 0; i < 100; i++) {
+		char dkey_str[10];
+
+		/** init dkey */
+		sprintf(dkey_str, "dkey_%d", i);
+		daos_iov_set(&dkey, dkey_str, strlen(dkey_str));
+		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+				     NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	total_nr = 0;
+	print_message("Enumerating dkeys before punch...\n");
+	enumerate_key(oh, &total_nr, NULL, OBJ_DKEY);
+	print_message("DONE DKEY Enumeration (%d extents) -------\n", total_nr);
+	assert_int_equal(total_nr, 100);
+
+	/** punch first 10 records */
+	print_message("Punching 10 dkeys...\n");
+	for (i = 0; i < 10; i++) {
+		char dkey_str[10];
+
+		/** init dkey */
+		sprintf(dkey_str, "dkey_%d", i);
+		daos_iov_set(&dkey, dkey_str, strlen(dkey_str));
+		rc = daos_obj_punch_dkeys(oh, DAOS_TX_NONE, 1, &dkey, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	total_nr = 0;
+	print_message("Enumerating dkeys after punch...\n");
+	enumerate_key(oh, &total_nr, NULL, OBJ_DKEY);
+	print_message("DONE DKEY Enumeration (%d extents) -------\n", total_nr);
+	assert_int_equal(total_nr, 90);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("all good\n");
+}
+
+static void
+array_akey_punch_enumerate(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	daos_iov_t	 dkey;
+	daos_sg_list_t	 sgl;
+	daos_iov_t	 sg_iov;
+	daos_iod_t	 iod;
+	daos_recx_t	 recx;
+	char		 buf[SM_BUF_LEN];
+	int		 total_nr;
+	int		 i;
+	int		 rc;
+
+	dts_buf_render(buf, SM_BUF_LEN);
+
+	/** open object */
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init scatter/gather */
+	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	/** init dkey */
+	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init I/O descriptor */
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
+	iod.iod_size	= 1;
+	recx.rx_nr	= SM_BUF_LEN;
+	recx.rx_idx	= 0;
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	print_message("Inserting 100 akeys...\n");
+	for (i = 0; i < 100; i++) {
+		char akey_str[10];
+
+		sprintf(akey_str, "akey_%d", i);
+		daos_iov_set(&iod.iod_name, akey_str, strlen(akey_str));
+		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+				     NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	total_nr = 0;
+	print_message("Enumerating akeys before punch...\n");
+	enumerate_key(oh, &total_nr, &dkey, OBJ_AKEY);
+	print_message("DONE AKEY Enumeration (%d extents) -------\n", total_nr);
+	assert_int_equal(total_nr, 100);
+
+	/** punch first 10 akeys */
+	print_message("Punching 10 akeys...\n");
+	for (i = 0; i < 10; i++) {
+		char akey_str[10];
+		daos_key_t akey;
+
+		sprintf(akey_str, "akey_%d", i);
+		daos_iov_set(&akey, akey_str, strlen(akey_str));
+		rc = daos_obj_punch_akeys(oh, DAOS_TX_NONE, &dkey, 1, &akey,
+					  NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	total_nr = 0;
+	print_message("Enumerating akeys after punch...\n");
+	enumerate_key(oh, &total_nr, &dkey, OBJ_AKEY);
+	print_message("DONE AKEY Enumeration (%d extents) -------\n", total_nr);
+	assert_int_equal(total_nr, 90);
+
+	print_message("Fetch akeys after punch and verify size...\n");
+	for (i = 0; i < 100; i++) {
+		char akey_str[10];
+
+		sprintf(akey_str, "akey_%d", i);
+		daos_iov_set(&iod.iod_name, akey_str, strlen(akey_str));
+
+		iod.iod_size = DAOS_REC_ANY;
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod,
+				    NULL, NULL, NULL);
+		assert_int_equal(rc, 0);
+		if (i < 10)
+			assert_int_equal(iod.iod_size, 0);
+		else
+			assert_int_equal(iod.iod_size, 1);
+	}
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("all good\n");
+}
+
+static void
+array_recx_punch_enumerate(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	daos_iov_t	 dkey;
+	daos_sg_list_t	 sgl;
+	daos_iov_t	 sg_iov;
+	daos_iod_t	 iod;
+	daos_recx_t	 recx;
+	char		 buf[SM_BUF_LEN];
+	daos_anchor_t	 anchor;
+	int		 total_nr = 0;
+	int		 i;
+	int		 rc;
+
+	dts_buf_render(buf, SM_BUF_LEN);
+
+	/** open object */
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	/** init I/O descriptor */
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
+	iod.iod_size	= 1;
+	recx.rx_nr	= SM_BUF_LEN;
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	/** insert 100 extents */
+	for (i = 0; i < 100; i++) {
+		recx.rx_idx = i * SM_BUF_LEN;
+		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+				     NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	/** enumerate extents before punch */
+	print_message("Enumerating extents before punch...\n");
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_size_t size = 0;
+		uint32_t nr = 5;
+		daos_recx_t recxs[5];
+		daos_epoch_range_t eprs[5];
+
+		rc = daos_obj_list_recx(oh, DAOS_TX_NONE, &dkey, &iod.iod_name,
+					&size, &nr, recxs, eprs, &anchor, true,
+					NULL);
+		assert_int_equal(rc, 0);
+		total_nr += nr;
+	}
+	print_message("DONE recx Enumeration (%d extents) -------\n", total_nr);
+	assert_int_equal(total_nr, 100);
+
+	/** punch first 10 records */
+	iod.iod_size	= 0;
+	recx.rx_nr	= SM_BUF_LEN;
+	iod.iod_recxs	= &recx;
+	for (i = 0; i < 10; i++) {
+		recx.rx_idx = i * SM_BUF_LEN;
+		print_message("punching idx: %"PRIu64" len %"PRIu64"\n",
+			      recx.rx_idx, recx.rx_nr);
+		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, NULL,
+				     NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	/** enumerate records again */
+	print_message("Enumerating extents after punch...\n");
+	memset(&anchor, 0, sizeof(anchor));
+	total_nr = 0;
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_size_t size = 0;
+		uint32_t nr = 5;
+		daos_recx_t recxs[5];
+		daos_epoch_range_t eprs[5];
+
+		rc = daos_obj_list_recx(oh, DAOS_TX_NONE, &dkey, &iod.iod_name,
+					&size, &nr, recxs, eprs, &anchor, true,
+					NULL);
+		assert_int_equal(rc, 0);
+		total_nr += nr;
+	}
+	print_message("DONE recx Enumeration (%d extents) -------\n", total_nr);
+	assert_int_equal(total_nr, 90);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("all good\n");
 }
 
 static const struct CMUnitTest array_tests[] = {
@@ -501,6 +837,12 @@ static const struct CMUnitTest array_tests[] = {
 	  replicator, NULL, test_case_teardown},
 	{ "ARRAY10: read from empty object",
 	  read_empty, NULL, test_case_teardown},
+	{ "ARRAY11: Array DKEY punch/enumerate",
+	  array_dkey_punch_enumerate, NULL, test_case_teardown},
+	{ "ARRAY12: Array AKEY punch/enumerate",
+	  array_akey_punch_enumerate, NULL, test_case_teardown},
+	{ "ARRAY13: Array RECX punch/enumerate",
+	  array_recx_punch_enumerate, NULL, test_case_teardown},
 };
 
 int
