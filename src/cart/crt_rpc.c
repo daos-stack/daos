@@ -1636,7 +1636,11 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 		  crt_opcode_t opc, bool srv_flag)
 {
 	int rc;
+	struct crt_context *ctx;
+
 	D_ASSERT(rpc_priv != NULL);
+
+	ctx = crt_ctx;
 
 	rc = D_SPIN_INIT(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
 	if (rc != 0)
@@ -1662,6 +1666,8 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	rpc_priv->crp_pub.cr_ctx = crt_ctx;
 
 	crt_rpc_inout_buff_init(rpc_priv);
+
+	rpc_priv->crp_timeout_sec = ctx->cc_timeout_sec;
 exit:
 	return rc;
 }

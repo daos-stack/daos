@@ -1196,3 +1196,26 @@ crt_register_timeout_cb(crt_timeout_cb cb, void *arg)
 out:
 	return rc;
 }
+
+int
+crt_context_set_timeout(crt_context_t crt_ctx, uint32_t timeout_sec)
+{
+	struct crt_context	*ctx;
+	int			rc = 0;
+
+	if (crt_ctx == CRT_CONTEXT_NULL) {
+		D_ERROR("NULL context passed\n");
+		D_GOTO(exit, rc = -DER_INVAL);
+	}
+
+	if (timeout_sec == 0) {
+		D_ERROR("Invalid value 0 for timeout specified\n");
+		D_GOTO(exit, rc = -DER_INVAL);
+	}
+
+	ctx = crt_ctx;
+	ctx->cc_timeout_sec = timeout_sec;
+
+exit:
+	return rc;
+}

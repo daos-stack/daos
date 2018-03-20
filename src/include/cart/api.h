@@ -87,6 +87,29 @@ crt_init(crt_group_id_t grpid, uint32_t flags);
 int
 crt_context_create(crt_context_t *crt_ctx);
 
+
+/**
+ * Set the timeout value for all RPC requests created on the specified context.
+ * Setting the timeout after crt_req_create() call will not affect already
+ * created rpcs.
+ *
+ * This is an optional function.
+ *
+ * The precendence order of timeouts:
+ * - crt_req_set_timeout()
+ * - crt_context_set_timeout()
+ * - CRT_TIMEOUT environment variable
+ *
+ * \param ctx_ctx [IN]          CaRT context
+ * \param timeout_sec [IN]      timeout value in seconds
+ *                              value of zero will be treated as invalid
+ *                              parameter.
+ *
+ * \return                      zero on success, negative value if error
+ */
+int
+crt_context_set_timeout(crt_context_t crt_ctx, uint32_t timeout_sec);
+
 /**
  * Destroy CRT transport context.
  *

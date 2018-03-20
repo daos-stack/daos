@@ -168,6 +168,8 @@ struct crt_context {
 	struct d_binheap	 cc_bh_timeout;
 	/* mutex to protect cc_epi_table and timeout binheap */
 	pthread_mutex_t		 cc_mutex;
+	/* timeout per-context */
+	uint32_t		 cc_timeout_sec;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */
