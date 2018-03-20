@@ -568,8 +568,6 @@ test_log(void **state)
 	int rc;
 	int logfac1;
 	int logfac2;
-	const char *preset = "D0xF";
-	const char *preset1 = "D0xACF";
 	char retbuf[1024];
 	char *oldmask;
 
@@ -588,7 +586,7 @@ test_log(void **state)
 
 	LOG_DEBUG(logfac1, "log1 debug should not print\n");
 	/* Sync the cart mask */
-	d_log_sync_mask();
+	d_log_sync_mask(0, false);
 
 	LOG_DEBUG(logfac1, "log1 debug should print\n");
 	LOG_DEBUG(logfac2, "log2 debug should not print\n");
@@ -616,71 +614,67 @@ test_log(void **state)
 	LOG_INFO(logfac1, "log1 info test message %d\n", logfac2);
 	LOG_INFO(logfac2, "log2 info test message %d\n", logfac2);
 
-	D_STRNDUP(logmask, "T1=D10", 32);
-	assert_non_null(logmask);
+	/* Test debug mask bits*/
 
-	rc = d_log_setmasks(logmask, -1);
-	/* should be all f's from earlier */
-	assert_int_equal(rc & DLOG_PRIMASK, (0xFFFF00));
-
-	rc = d_log_setmasks(logmask, -1);
-	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 10)));
-	D_FREE(logmask);
-
-	/* todo add new test here for the new levels */
-	setenv("D_LOG_MASK", "T1=D0", 1);
-	d_log_sync_mask();
-	D_STRNDUP(logmask, "T1=D0", 32);
-	assert_non_null(logmask);
-
-	rc = d_log_setmasks(logmask, -1);
-	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 0)));
-	D_FREE(logmask);
-
-	rc = d_log_getmasks(retbuf, 0, 200, 0);
-	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
-	memset(retbuf, 0x00, sizeof(retbuf));
-
-
-	setenv("D_LOG_MASK", "T1=D4", 1);
-	d_log_sync_mask();
-
-	rc = d_log_getmasks(retbuf, 0, 200, 0);
-	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
-	memset(retbuf, 0x00, sizeof(retbuf));
-	D_STRNDUP(logmask, "T1=D4", 32);
-	assert_non_null(logmask);
-
-	rc = d_log_setmasks(logmask, -1);
-	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 4)));
-	D_FREE(logmask);
-
-	setenv("D_LOG_MASK", "T1=D0xACF", 1);
-	d_log_sync_mask();
-
-	rc = d_log_getmasks(retbuf, 0, 200, 0);
-	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
-	memset(retbuf, 0x00, sizeof(retbuf));
-
-	setenv("D_LOG_MASK", "T1=D0xACFFF", 1);
-	d_log_sync_mask();
-
-	rc = d_log_getmasks(retbuf, 0, 200, 0);
-	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
-	memset(retbuf, 0x00, sizeof(retbuf));
-
+	/* Set trace debug mask */
 	setenv("D_LOG_MASK", "T1=DEBUG", 1);
-	d_log_sync_mask();
+	setenv("DD_MASK", "trace", 1); /* DB_TRACE stream is set */
+	d_log_sync_mask(0, false);
+	D_STRNDUP(logmask, "T1=DEBUG", 32);
+	assert_non_null(logmask);
+
+	rc = d_log_setmasks(logmask, -1);
+	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 1)));
+	D_FREE(logmask);
 
 	rc = d_log_getmasks(retbuf, 0, 200, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
 
-	rc = d_log_str2pri(preset);
-	assert_int_equal(rc, 0xF << DLOG_DPRISHIFT);
+	/* Set test debug mask */
+	setenv("DD_MASK", "test", 1); /* DB_TEST stream is set */
+	d_log_sync_mask(0, true);
+	D_STRNDUP(logmask, "T1=DEBUG", 32);
+	assert_non_null(logmask);
 
-	rc = d_log_str2pri(preset1);
-	assert_int_equal(rc, 0xACF << DLOG_DPRISHIFT);
+	rc = d_log_setmasks(logmask, -1);
+	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 5)));
+	D_FREE(logmask);
+
+	rc = d_log_getmasks(retbuf, 0, 200, 0);
+	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
+	memset(retbuf, 0x00, sizeof(retbuf));
+
+	/* Set multiple debug streams */
+	setenv("D_LOG_MASK", "T1=DEBUG", 1);
+	setenv("DD_MASK", "mem,io", 1); /* DB_MEM & DB_IO streams are set */
+	d_log_sync_mask(0, true);
+	D_STRNDUP(logmask, "T1=DEBUG", 32);
+	assert_non_null(logmask);
+
+	rc = d_log_setmasks(logmask, -1);
+	assert_int_equal(rc & DLOG_PRIMASK, ((1 << (DLOG_DPRISHIFT + 2)) |
+					     (1 << (DLOG_DPRISHIFT + 4))));
+	D_FREE(logmask);
+
+	rc = d_log_getmasks(retbuf, 0, 200, 0);
+	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
+	memset(retbuf, 0x00, sizeof(retbuf));
+
+	/* Attempt to set debug mask bits with facility mask not set to DEBUG */
+	setenv("D_LOG_MASK", "T2=WARN", 1);
+	setenv("DD_MASK", "trace", 1);
+	d_log_sync_mask(0, true);
+	D_STRNDUP(logmask, "T2=WARN", 32);
+	assert_non_null(logmask);
+
+	rc = d_log_setmasks(logmask, -1);
+	assert_int_equal(rc & DLOG_PRIMASK, (3 << DLOG_PRISHIFT));
+	D_FREE(logmask);
+
+	rc = d_log_getmasks(retbuf, 0, 200, 0);
+	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
+	memset(retbuf, 0x00, sizeof(retbuf));
 
 	if (oldmask)
 		d_log_setmasks(oldmask, -1);

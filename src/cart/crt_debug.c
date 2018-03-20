@@ -37,6 +37,8 @@
  */
 #include <crt_internal.h>
 
+#define CART_FAC_MAX_LEN (128)
+
 #define DECLARE_FAC(name) int DD_FAC(name)
 
 DECLARE_FAC(rpc);
@@ -50,24 +52,111 @@ DECLARE_FAC(self_test);
 DECLARE_FAC(iv);
 DECLARE_FAC(ctl);
 
-#define D_INIT_LOG_FAC(name, aname, lname)				\
-	d_init_log_facility(&d_##name##_logfac, aname, lname)
+#define D_INIT_LOG_FAC(name, lname, idp)	\
+	d_init_log_facility(idp, name, lname)
+
+struct cart_debug_fac {
+	/** name of the facility */
+	char		*df_name;
+	char		*df_lname;
+	/** pointer to the facility ID */
+	int		*df_idp;
+	/** facility is enabled */
+	int		df_enabled;
+	size_t		df_name_size;
+	size_t		df_lname_size;
+};
+
+#define CART_FAC_DICT_ENTRY(name, lname, idp, enabled)		\
+	{ .df_name = name, .df_lname = lname, .df_idp = idp,	\
+	  .df_enabled = enabled, .df_name_size = sizeof(name),	\
+	  .df_lname_size = sizeof(lname) }
+
+/** dictionary for all facilities */
+static struct cart_debug_fac debug_fac_dict[] = {
+	CART_FAC_DICT_ENTRY("RPC", "rpc", &d_rpc_logfac, 1),
+	CART_FAC_DICT_ENTRY("BULK", "bulk", &d_bulk_logfac, 1),
+	CART_FAC_DICT_ENTRY("CORPC", "corpc", &d_corpc_logfac, 1),
+	CART_FAC_DICT_ENTRY("GRP", "group", &d_grp_logfac, 1),
+	CART_FAC_DICT_ENTRY("LM", "livenessmap", &d_lm_logfac, 1),
+	CART_FAC_DICT_ENTRY("HG", "mercury", &d_hg_logfac, 1),
+	CART_FAC_DICT_ENTRY("PMIX", "pmix", &d_pmix_logfac, 1),
+	CART_FAC_DICT_ENTRY("ST", "self_test", &d_self_test_logfac, 1),
+	CART_FAC_DICT_ENTRY("IV", "iv", &d_iv_logfac, 1),
+};
+
+/** Load enabled debug facilities from the environment variable. */
+static void
+debug_fac_load_env(void)
+{
+	char	*fac_env;
+	char	*fac_str;
+	char	*cur;
+	int	i;
+	int	num_dbg_fac_entries;
+
+	fac_env = getenv(DD_FAC_ENV);
+	if (fac_env == NULL)
+		return;
+
+	D_STRNDUP(fac_str, fac_env, CART_FAC_MAX_LEN);
+	if (fac_str == NULL) {
+		fprintf(stderr, "D_STRNDUP of fac mask failed");
+		return;
+	}
+
+	/* Disable all facilities. */
+	num_dbg_fac_entries = ARRAY_SIZE(debug_fac_dict);
+	for (i = 0; i < num_dbg_fac_entries; i++)
+		debug_fac_dict[i].df_enabled = 0;
+
+	cur = strtok(fac_str, DD_SEP);
+	while (cur != NULL) {
+		for (i = 0; i < num_dbg_fac_entries; i++) {
+			if (debug_fac_dict[i].df_name != NULL &&
+			    strncasecmp(cur, debug_fac_dict[i].df_name,
+					debug_fac_dict[i].df_name_size)
+					== 0) {
+				debug_fac_dict[i].df_enabled = 1;
+				break;
+			} else if (debug_fac_dict[i].df_lname != NULL &&
+				   strncasecmp(cur, debug_fac_dict[i].df_lname,
+				   debug_fac_dict[i].df_lname_size) == 0) {
+				debug_fac_dict[i].df_enabled = 1;
+				break;
+			} else if (strncasecmp(cur, DD_FAC_ALL,
+						strlen(DD_FAC_ALL)) == 0) {
+				debug_fac_dict[i].df_enabled = 1;
+			}
+		}
+		cur = strtok(NULL, DD_SEP);
+	}
+	D_FREE(fac_str);
+}
 
 int
 crt_setup_log_fac(void)
 {
-	/* add crt internally used the log facilities */
-	D_INIT_LOG_FAC(rpc, "RPC", "rpc");
-	D_INIT_LOG_FAC(bulk, "BULK", "bulk");
-	D_INIT_LOG_FAC(corpc, "CORPC", "corpc");
-	D_INIT_LOG_FAC(grp, "GRP", "group");
-	D_INIT_LOG_FAC(lm, "LM", "livenessmap");
-	D_INIT_LOG_FAC(hg, "HG", "mercury");
-	D_INIT_LOG_FAC(pmix, "PMIX", "pmix");
-	D_INIT_LOG_FAC(self_test, "ST", "self_test");
-	D_INIT_LOG_FAC(iv, "IV", "iv");
+	int	i;
+	int	num_dbg_fac_entries;
 
-	d_log_sync_mask();
+	num_dbg_fac_entries = ARRAY_SIZE(debug_fac_dict);
+
+	debug_fac_load_env();
+	for (i = 0; i < num_dbg_fac_entries; i++) {
+		if (debug_fac_dict[i].df_enabled) {
+			D_INIT_LOG_FAC(debug_fac_dict[i].df_name,
+				       debug_fac_dict[i].df_lname,
+				       debug_fac_dict[i].df_idp);
+		}
+	}
+
+	/*
+	 * Mask parameter passed to d_log_sync_mask() in order to load project-
+	 * specific debug bit mask.
+	 * 0 = Currently no CaRT-specific debug bits available
+	 */
+	d_log_sync_mask(0, false);
 
 	return 0;
 }

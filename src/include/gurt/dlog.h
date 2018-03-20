@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -70,6 +70,8 @@
 
 #include <inttypes.h>
 #include <stdarg.h>
+#include <stdbool.h>
+#include <stdlib.h>
 
 /* clog open flavor */
 #define DLOG_FLV_LOGPID	(1 << 0)	/* include pid in log tag */
@@ -98,6 +100,45 @@
 #define DLOG_DBG        0x00ffff00	/* all debug streams */
 #define DLOG_FACMASK    0x000000ff	/* facility mask */
 
+/* The environment variable for the default debug bit-mask */
+#define DD_MASK_ENV	"DD_MASK"
+#define DD_MASK_DEFAULT	"all"
+#define DD_SEP		","
+
+/* The environment variable for setting debug level being output to stderr.
+ * Options: "info", "note", "warn", "err", "crit", "emerg".
+ * Default: "crit", which is used by D__FATAL, D__ASSERT and D__ASSERTF
+ */
+#define DD_STDERR_ENV	"DD_STDERR"
+
+/* The environment variable for enabled debug facilities (subsystems) */
+#define DD_FAC_ENV	"DD_SUBSYS"
+#define DD_FAC_ALL	"all"
+
+/*
+ * Debug bits for common logic paths, can only have up to 16 different bits.
+ */
+/* wildcard for unclassed debug messages */
+#define DB_ANY		(1 << (DLOG_DPRISHIFT + 0))
+/* function trace, tree/hash/lru operations, a very expensive one */
+#define DB_TRACE	(1 << (DLOG_DPRISHIFT + 1))
+#define DB_MEM		(1 << (DLOG_DPRISHIFT + 2)) /* memory operation */
+#define DB_NET		(1 << (DLOG_DPRISHIFT + 3)) /* network operation */
+#define DB_IO		(1 << (DLOG_DPRISHIFT + 4)) /* object I/O */
+#define DB_TEST		(1 << (DLOG_DPRISHIFT + 5)) /* test programs */
+#define DB_ALL		DLOG_DBG                    /* all of masks */
+/* Configurable debug bits (project-specific) */
+#define DB_OPT1		(1 << (DLOG_DPRISHIFT + 6))
+#define DB_OPT2		(1 << (DLOG_DPRISHIFT + 7))
+#define DB_OPT3		(1 << (DLOG_DPRISHIFT + 8))
+#define DB_OPT4		(1 << (DLOG_DPRISHIFT + 9))
+#define DB_OPT5		(1 << (DLOG_DPRISHIFT + 10))
+#define DB_OPT6		(1 << (DLOG_DPRISHIFT + 11))
+#define DB_OPT7		(1 << (DLOG_DPRISHIFT + 12))
+#define DB_OPT8		(1 << (DLOG_DPRISHIFT + 13))
+#define DB_OPT9		(1 << (DLOG_DPRISHIFT + 14))
+#define DB_OPT10	(1 << (DLOG_DPRISHIFT + 15))
+
 /* dlog_fac: facility name and mask info */
 struct dlog_fac {
 	int fac_mask;  /* log level for this facility */
@@ -114,11 +155,45 @@ struct d_log_xstate {
 	char			*nodename; /* pointer to our utsname */
 };
 
+struct d_debug_data {
+	uint64_t		dd_mask_init;
+	/* debug bitmask, e.g. DB_IO */
+	uint64_t		dd_mask;
+	/** priority level that should be output to stderr */
+	uint64_t		dd_prio_err;
+};
+/**
+ * Priority level for debug message.
+ * It is only used by D_INFO, D_NOTE, D_WARN, D_ERROR, D_CRIT and
+ * D_FATAL.
+ * - All priority debug messages are always stored in the debug log.
+ * - User can decide the priority level to output to stderr by setting
+ *   env variable DD_STDERR, the default level is D__CRIT.
+ */
+struct d_debug_priority {
+	char			*dd_name;
+	uint64_t		dd_prio;
+	size_t			dd_name_size;
+};
+
+/*
+ * Predefined bits for the debug mask, each bit can represent a functionality
+ * of the system, e.g. DB_MEM, DB_IO, DB_TRACE...
+ */
+struct d_debug_bit {
+	uint64_t		db_bit;
+	char			*db_name;
+	char			*db_lname;
+	size_t			db_name_size;
+	size_t			db_lname_size;
+};
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
 extern struct d_log_xstate d_log_xst;
+extern struct d_debug_data d_dbglog_data;
 
 /**
  * d_log_check: clog a message using stdarg list without checking filtering
@@ -250,8 +325,11 @@ void d_log_close(void);
 /** Reapplies the masks set in D_LOG_MASK.   Can be called after adding new
  *  log facilities to ensure that the mask is set appropriately for the
  *  previously unknown facilities.
+ *
+ *  \param opt_dbg_mask [IN]	debug bit mask of configurable debug bits only
+ *  \param overwrite [IN]	option to overwrite DD_MASK value previously set
  */
-void d_log_sync_mask(void);
+void d_log_sync_mask(uint64_t opt_dbg_mask, bool overwrite);
 
 /**
  * d_log_open: open a clog.

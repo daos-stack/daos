@@ -143,13 +143,6 @@ static int clog_setnfac(int);
 /* static arrays for converting between pri's and strings */
 static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
 				     "CRIT", "ALRT", "EMRG"};
-
-static const char * const dbg[] = { "D0", "D1", "D2", "D3",
-				   "D4", "D5", "D6", "D7",
-				   "D8", "D9", "D10", "D11",
-				   "D12", "D13", "D14", "D15"};
-
-static const char *dbg_bitfield = "D0x";
 /**
  * clog_pristr: convert priority to 4 byte symbolic name.
  *
@@ -492,25 +485,21 @@ int d_log_str2pri(const char *pstr)
 	 * handle some quirks
 	 */
 
-	/* this case allows the user to pass in a bitmask for debug levels */
-	if (strncasecmp(ptmp, dbg_bitfield, 3) == 0)
-		return (strtoul((ptmp + 3), NULL, 16)) << DLOG_DPRISHIFT;
-
 	if (strcasecmp(ptmp, "ERR") == 0)
 		/* has trailing space in the array */
 		return DLOG_ERR;
-	if (strcasecmp(ptmp, "DEBUG") == 0) /* 5 char alternative to 'DBUG' */
-		return DLOG_DBG;
+	if (strcasecmp(ptmp, "DEBUG") == 0 || strcasecmp(ptmp, "DBUG") == 0) {
+		/* check to see is debug mask bits are set */
+		return d_dbglog_data.dd_mask != 0 ?
+		       d_dbglog_data.dd_mask : DLOG_DBG;
+	}
 
 	/*
-	 * do non-debug first, then debug
+	 * handle non-debug case
 	 */
 	for (lcv = 1; lcv <= 7; lcv++)
 		if (strcasecmp(ptmp, norm[lcv]) == 0)
 			return lcv << DLOG_PRISHIFT;
-	for (lcv = 0; lcv < 16; lcv++)
-		if (strcasecmp(ptmp, dbg[lcv]) == 0)
-			return 1 << (DLOG_DPRISHIFT + lcv);
 	/* bogus! */
 	return -1;
 }

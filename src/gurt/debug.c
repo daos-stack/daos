@@ -50,16 +50,131 @@ static int d_log_refcount;
 int d_misc_logfac;
 int d_mem_logfac;
 
+#define DBG_ENV_MAX_LEN	(32)
+
+#define DBG_DICT_ENTRY(bit, name)					\
+	{ .db_bit = bit, .db_name = name, .db_name_size = sizeof(name),	\
+	  .db_lname = NULL, .db_lname_size = 0 }
+
+struct d_debug_bit d_dbg_bit_dict[] = {
+	/* load common debug bits into dict */
+	DBG_DICT_ENTRY(DB_ANY, "any"),
+	DBG_DICT_ENTRY(DB_ALL, "all"),
+	DBG_DICT_ENTRY(DB_MEM, "mem"),
+	DBG_DICT_ENTRY(DB_NET, "net"),
+	DBG_DICT_ENTRY(DB_IO, "io"),
+	DBG_DICT_ENTRY(DB_TRACE, "trace"),
+	DBG_DICT_ENTRY(DB_TEST, "test"),
+};
+
+#define PRI_DICT_ENTRY(prio, name)	\
+	{ .dd_prio = prio, .dd_name = name, .dd_name_size = sizeof(name) }
+
+static struct d_debug_priority d_dbg_prio_dict[] = {
+	PRI_DICT_ENTRY(DLOG_INFO, "info"),
+	PRI_DICT_ENTRY(DLOG_NOTE, "note"),
+	PRI_DICT_ENTRY(DLOG_WARN, "warn"),
+	PRI_DICT_ENTRY(DLOG_ERR, "err"),
+	PRI_DICT_ENTRY(DLOG_CRIT, "crit"),
+	PRI_DICT_ENTRY(DLOG_EMERG, "fatal"),
+};
+
+struct d_debug_data d_dbglog_data = {
+	/* used to avoid possible debug mask overwrite */
+	.dd_mask_init		= 0,
+	/* 0 means we should use the mask provided by facilities */
+	.dd_mask		= 0,
+	/* optional priority output to stderr */
+	.dd_prio_err		= 0,
+};
+
+/** Load the priority stderr from the environment variable. */
 static void
-d_log_sync_mask_helper(bool acquire_lock)
+debug_prio_err_load_env(void)
 {
-	static int	 log_mask_init;
+	char	*env;
+	int	num_dbg_prio_entries;
+	int	i;
+
+	env = getenv(DD_STDERR_ENV);
+	if (env == NULL)
+		return;
+
+	num_dbg_prio_entries = ARRAY_SIZE(d_dbg_prio_dict);
+	for (i = 0; i < num_dbg_prio_entries; i++) {
+		if (d_dbg_prio_dict[i].dd_name != NULL &&
+		    strncasecmp(env, d_dbg_prio_dict[i].dd_name,
+				d_dbg_prio_dict[i].dd_name_size) == 0) {
+			d_dbglog_data.dd_prio_err = d_dbg_prio_dict[i].dd_prio;
+			break;
+		}
+	}
+	/* invalid DD_STDERR option */
+	if (d_dbglog_data.dd_prio_err == 0)
+		fprintf(stderr, "DD_STDERR = %s - invalid option\n", env);
+}
+
+/** Load the debug mask from the environment variable. */
+static void
+debug_mask_load_env(uint64_t opt_dbg_mask)
+{
+	char	*mask_env;
+	char	*mask_str;
+	char	*cur;
+	int	i;
+	int	num_dbg_bit_entries;
+
+	mask_env = getenv(DD_MASK_ENV);
+	if (mask_env == NULL)
+		return;
+
+	D_STRNDUP(mask_str, mask_env, DBG_ENV_MAX_LEN);
+	if (mask_str == NULL) {
+		fprintf(stderr, "D_STRNDUP of debug mask failed");
+		return;
+	}
+
+	num_dbg_bit_entries = ARRAY_SIZE(d_dbg_bit_dict);
+	/* account for DD_MASK bits that are project specific */
+	d_dbglog_data.dd_mask = opt_dbg_mask;
+	cur = strtok(mask_str, DD_SEP);
+	while (cur != NULL) {
+		for (i = 0; i < num_dbg_bit_entries; i++) {
+			if (d_dbg_bit_dict[i].db_name != NULL &&
+			    strncasecmp(cur, d_dbg_bit_dict[i].db_name,
+					d_dbg_bit_dict[i].db_name_size)
+					== 0) {
+				d_dbglog_data.dd_mask |=
+					d_dbg_bit_dict[i].db_bit;
+				break;
+			}
+		}
+		cur = strtok(NULL, DD_SEP);
+	}
+	D_FREE(mask_str);
+	/* set to avoid overwrite from another call sync log */
+	d_dbglog_data.dd_mask_init = 1;
+}
+
+static void
+d_log_sync_mask_helper(bool acquire_lock, uint64_t opt_dbg_mask)
+{
 	static char	*log_mask;
 
 	if (acquire_lock)
 		D_MUTEX_LOCK(&d_log_lock);
-	if (log_mask_init)
+
+	/* avoid overwrite of debug mask */
+	if (d_dbglog_data.dd_mask_init)
 		goto out;
+
+	/* Load debug mask environment (DD_MASK); only the facility log mask
+	 * will be returned and debug mask will be set iff fac mask = DEBUG
+	 * and dd_mask is not 0.
+	 */
+	debug_mask_load_env(opt_dbg_mask);
+
+	/* load facility mask environment (D_LOG_MASK) */
 	log_mask = getenv(D_LOG_MASK_ENV);
 	if (log_mask != NULL)
 		goto out;
@@ -80,9 +195,13 @@ out:
 }
 
 void
-d_log_sync_mask(void)
+d_log_sync_mask(uint64_t opt_dbg_mask, bool overwrite)
 {
-	d_log_sync_mask_helper(true);
+	/* if overwrite is true then unset previously set mask init */
+	if (overwrite)
+		d_dbglog_data.dd_mask_init = 0;
+
+	d_log_sync_mask_helper(true, opt_dbg_mask);
 }
 
 /* this macro contains a return statement */
@@ -124,7 +243,7 @@ setup_clog_facnamemask(void)
 	}
 
 	/* Lock is already held */
-	d_log_sync_mask_helper(false);
+	d_log_sync_mask_helper(false, 0);
 
 	return 0;
 }
@@ -139,6 +258,13 @@ d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 	d_log_refcount++;
 	if (d_log_refcount > 1) /* Already initialized */
 		D_GOTO(out, rc);
+
+	/* Load priority error from environment variable (DD_STDERR)
+	 * A Priority error will be output to stderr by the debug system.
+	 */
+	debug_prio_err_load_env();
+	if (d_dbglog_data.dd_prio_err != 0)
+		err_mask = d_dbglog_data.dd_prio_err;
 
 	rc = d_log_open(log_tag, 0, def_mask, err_mask, log_file, flavor);
 	if (rc != 0) {
