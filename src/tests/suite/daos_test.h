@@ -94,19 +94,20 @@ enum {
 
 #define DEFAULT_POOL_SIZE	(4ULL << 30)
 
-#define WAIT_ON_ASYNC(arg, ev)					\
-	do {							\
-		if (arg->async) {				\
-			int rc;					\
-			daos_event_t *evp;			\
-								\
-			rc = daos_eq_poll(arg->eq, 1,		\
-					  DAOS_EQ_WAIT,		\
-					  1, &evp);		\
-			assert_int_equal(rc, 1);		\
-			assert_ptr_equal(evp, &ev);		\
-			assert_int_equal(ev.ev_error, 0);	\
-		}						\
+#define WAIT_ON_ASYNC(arg, ev)				\
+	do {						\
+		int rc;					\
+		daos_event_t *evp;			\
+							\
+		if (!arg->async)			\
+			break;				\
+							\
+		rc = daos_eq_poll(arg->eq, 1,		\
+				  DAOS_EQ_WAIT,		\
+				  1, &evp);		\
+		assert_int_equal(rc, 1);		\
+		assert_ptr_equal(evp, &ev);		\
+		assert_int_equal(ev.ev_error, 0);	\
 	} while (0)
 
 int

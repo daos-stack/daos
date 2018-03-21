@@ -40,7 +40,7 @@ struct rsvc_hint {
 
 /** Replicated service client (opaque) */
 struct rsvc_client {
-	d_rank_list_t       *sc_ranks;		/* of rsvc replicas */
+	d_rank_list_t		*sc_ranks;		/* of rsvc replicas */
 	bool			sc_leader_known;	/* cache nonempty */
 	unsigned int		sc_leader_aliveness;	/* 0 means dead */
 	uint64_t		sc_leader_term;

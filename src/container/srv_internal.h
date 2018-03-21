@@ -81,6 +81,7 @@ struct cont {
 	rdb_path_t		c_attrs;	/* container attribute KVS */
 	rdb_path_t		c_lres;		/* LRE KVS */
 	rdb_path_t		c_lhes;		/* LHE KVS */
+	rdb_path_t		c_user;		/* user attributes KVS */
 };
 
 /* OID range for allocator */

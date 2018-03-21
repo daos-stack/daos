@@ -338,51 +338,62 @@ daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
 		daos_event_t *ev);
 
 /**
- * List all attribute names in a buffer, with each name terminated by a '\0'.
+ * List the names of all user-defined container attributes.
  *
- * \param coh	[IN]	Container handle
- * \param buf	[OUT]	Buffer
- * \param size	[IN]	Buffer size
- *		[OUT]	Total size of all names (regardless of actual buffer
- *			size)
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param coh	 [IN]	Container handle.
+ * \param buffer [OUT]	Buffer containing concatenation of all attribute
+ *			names, each being null-terminated. No truncation is
+ *			performed and only full names will be returned.
+ *			NULL is permitted in which case only the aggregate
+ *			size will be retrieved.
+ * \param size	 [IN]	Buffer size.
+ *		 [OUT]	Aggregate size of all attribute names (excluding
+ *			terminating null characters), regardless of the
+ *			actual buffer size.
+ * \param ev	 [IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_attr_list(daos_handle_t coh, char *buf, size_t *size,
+daos_cont_attr_list(daos_handle_t coh, char *buffer, size_t *size,
 		    daos_event_t *ev);
 
 /**
- * Get a set of attributes.
+ * Retrieve a list of user-defined container attribute values.
  *
- * \param coh	[IN]	Container handle
- * \param n	[IN]	Number of attributes
- * \param names	[IN]	Array of attribute names
- * \param bufs	[OUT]	Array of attribute values
- * \param sizes	[IN]	Array of buffer sizes
- *		[OUT]	Array of value sizes (regardless of actual buffer sizes)
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param coh	  [IN]	Container handle
+ * \param n	  [IN]	Number of attributes
+ * \param names	  [IN]	Array of \a n null-terminated attribute names.
+ * \param buffers [OUT]	Array of \a n buffers to store attribute values.
+ *			Attribute values larger than corresponding
+ *			buffer sizes will be truncated. NULL values are
+ *			permitted and will be treated identical to
+ *			zero-length buffers, in which case only the
+ *			sizes of attribute values will be retrieved.
+ * \param sizes	  [IN]	Array of \a n buffer sizes.
+ *		  [OUT]	Array of actual sizes of \a n attribute values,
+ *			regardless of given buffer sizes.
+ * \param ev	  [IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_attr_get(daos_handle_t coh, int n, const char *const names[],
-		   void *bufs[], size_t *sizes[], daos_event_t *ev);
+daos_cont_attr_get(daos_handle_t coh, int n, char const *const names[],
+		   void *const buffers[], size_t sizes[], daos_event_t *ev);
 
 /**
- * Set a set of attributes.
+ * Create or update a list of user-defined container attributes.
  *
- * \param coh	[IN]	Container handle
- * \param n	[IN]	Number of attributes
- * \param names	[IN]	Array of attribute names
- * \param values
- *		[IN]	Array of attribute values
- * \param sizes	[IN]	Array of value sizes
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param coh	  [IN]	Container handle
+ * \param n	  [IN]	Number of attributes
+ * \param names	  [IN]	Array of \a n null-terminated attribute names.
+ * \param values  [IN]	Array of \a n attribute values
+ * \param sizes	  [IN]	Array of \a n elements containing the
+ *			sizes of respective attribute values.
+ * \param ev	  [IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_attr_set(daos_handle_t coh, int n, const char *const names[],
-		   const void *const values[], const size_t sizes[],
+daos_cont_attr_set(daos_handle_t coh, int n, char const *const names[],
+		   void const *const values[], size_t const sizes[],
 		   daos_event_t *ev);
 
 /**

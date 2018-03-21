@@ -50,8 +50,8 @@ enum cont_operation {
 	CONT_OID_ALLOC		 = 6,
 
 	CONT_ATTR_LIST		 = 10,
-	CONT_ATTR_SET		 = 11,
-	CONT_ATTR_GET		 = 12,
+	CONT_ATTR_GET		 = 11,
+	CONT_ATTR_SET		 = 12,
 
 	CONT_EPOCH_QUERY	 = 20,
 	CONT_EPOCH_HOLD		 = 21,
@@ -134,6 +134,37 @@ struct cont_oid_alloc_in {
 struct cont_oid_alloc_out {
 	struct cont_op_out      coao_op;
 	uint64_t		oid;
+};
+
+struct cont_attr_list_in {
+	struct cont_op_in	cali_op;
+	crt_bulk_t		cali_bulk;
+};
+
+struct cont_attr_list_out {
+	struct cont_op_out	calo_op;
+	uint64_t		calo_size;
+};
+
+struct cont_attr_get_in {
+	struct cont_op_in	cagi_op;
+	uint64_t		cagi_count;
+	uint64_t		cagi_key_length;
+	crt_bulk_t		cagi_bulk;
+};
+
+struct cont_attr_get_out {
+	struct cont_op_out	cago_op;
+};
+
+struct cont_attr_set_in {
+	struct cont_op_in	casi_op;
+	uint64_t		casi_count;
+	crt_bulk_t		casi_bulk;
+};
+
+struct cont_attr_set_out {
+	struct cont_op_out	caso_op;
 };
 
 struct cont_close_in {

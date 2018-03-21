@@ -237,17 +237,17 @@ typedef struct {
 typedef struct {
 	daos_handle_t		coh;
 	int			n;
-	const char		**names;
-	void			**values;
-	size_t			**sizes;
+	char    const *const	*names;
+	void   *const		*values;
+	size_t			*sizes;
 } daos_cont_attr_get_t;
 
 typedef struct {
 	daos_handle_t		coh;
 	int			n;
-	const char		**names;
-	const void		**values;
-	const size_t		*sizes;
+	char   const *const	*names;
+	void   const *const	*values;
+	size_t const const	*sizes;
 } daos_cont_attr_set_t;
 
 typedef struct {

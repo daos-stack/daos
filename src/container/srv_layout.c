@@ -39,3 +39,4 @@ RDB_STRING_KEY(ds_cont_attr_, max_oid);
 RDB_STRING_KEY(ds_cont_attr_, lres);
 RDB_STRING_KEY(ds_cont_attr_, lhes);
 RDB_STRING_KEY(ds_cont_attr_, snapshots);
+RDB_STRING_KEY(ds_cont_attr_, user);

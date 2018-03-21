@@ -36,6 +36,7 @@
  *         LRE KVS (INTEGER)
  *         LHE KVS (INTEGER)
  *         Snapshot KVS (INTEGER)
+ *         User Attributes KVS (GENERIC)
  *       ... (more container attribute KVSs)
  *     Container handle KVS (GENERIC)
  */
@@ -66,6 +67,7 @@ extern daos_iov_t ds_cont_attr_lres;		/* LRE KVS */
 extern daos_iov_t ds_cont_attr_lhes;		/* LHE KVS */
 extern daos_iov_t ds_cont_attr_snapshots;	/* snapshot KVS */
 extern daos_iov_t ds_cont_attr_max_oid;		/* uint64_t */
+extern daos_iov_t ds_cont_attr_user;		/* User attributes KVS */
 
 /*
  * LRE and LHE KVSs (RDB_KVS_INTEGER)

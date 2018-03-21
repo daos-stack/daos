@@ -75,6 +75,15 @@ static struct daos_rpc_handler cont_handlers[] = {
 		.dr_opc		= CONT_OID_ALLOC,
 		.dr_hdlr	= ds_cont_oid_alloc_handler
 	}, {
+		.dr_opc		= CONT_ATTR_LIST,
+		.dr_hdlr	= ds_cont_op_handler
+	}, {
+		.dr_opc		= CONT_ATTR_GET,
+		.dr_hdlr	= ds_cont_op_handler
+	}, {
+		.dr_opc		= CONT_ATTR_SET,
+		.dr_hdlr	= ds_cont_op_handler
+	}, {
 		.dr_opc		= CONT_EPOCH_QUERY,
 		.dr_hdlr	= ds_cont_op_handler
 	}, {
