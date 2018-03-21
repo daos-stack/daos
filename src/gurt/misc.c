@@ -117,15 +117,15 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 			for (j = i; j < rank_num; j++)
 				rank_list->rl_ranks[j - 1] =
 					rank_list->rl_ranks[j];
-			D_DEBUG("%s:%d, rank_list %p, removed identical "
-				"rank[%d](%d).\n", __FILE__, __LINE__,
+			D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed "
+				"identical rank[%d](%d).\n", __FILE__, __LINE__,
 				rank_list, i, rank_tmp);
 		}
 		rank_tmp = rank_list->rl_ranks[i];
 	}
 	if (identical_num != 0) {
 		rank_list->rl_nr -= identical_num;
-		D_DEBUG("%s:%d, rank_list %p, removed %d ranks.\n",
+		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed %d ranks.\n",
 			__FILE__, __LINE__, rank_list, identical_num);
 	}
 
@@ -167,14 +167,14 @@ d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 		for (j = i; j < rank_num - 1; j++)
 			dst_set->rl_ranks[j] =
 				dst_set->rl_ranks[j + 1];
-		D_DEBUG("%s:%d, rank_list %p, filter rank[%d](%d).\n",
+		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter rank[%d](%d).\n",
 			__FILE__, __LINE__, dst_set, i, rank);
 		/* as dst_set moved one item ahead */
 		i--;
 	}
 	if (filter_num != 0) {
 		dst_set->rl_nr -= filter_num;
-		D_DEBUG("%s:%d, rank_list %p, filter %d ranks.\n",
+		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter %d ranks.\n",
 			__FILE__, __LINE__, dst_set, filter_num);
 	}
 }
@@ -246,15 +246,16 @@ d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src)
 	int		rc = 0;
 
 	if (dst == NULL || src == NULL) {
-		D_DEBUG("d_rank_list_copy do nothing, dst: %p, src: %p.\n",
-			dst, src);
+		D_DEBUG(DB_TRACE, "d_rank_list_copy do nothing, dst: %p, "
+			"src: %p.\n", dst, src);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (dst->rl_nr > src->rl_nr) {
-		D_DEBUG("Not enough space allocated by user for rank list: ");
-		D_DEBUG("dst: %" PRIu32 ", ", dst->rl_nr);
-		D_DEBUG("src: %" PRIu32 "\n", src->rl_nr);
+		D_DEBUG(DB_TRACE, "Not enough space allocated by user for rank "
+			"list: ");
+		D_DEBUG(DB_TRACE, "dst: %" PRIu32 ", ", dst->rl_nr);
+		D_DEBUG(DB_TRACE, "src: %" PRIu32 "\n", src->rl_nr);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -330,7 +331,7 @@ d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (!d_rank_list_find(rank_list, rank, &idx)) {
-		D_DEBUG("Rank %d not in the rank list.\n", rank);
+		D_DEBUG(DB_TRACE, "Rank %d not in the rank list.\n", rank);
 		D_GOTO(out, rc);
 	}
 	new_num = rank_list->rl_nr - 1;
@@ -469,7 +470,8 @@ d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len)
 	for (i = 0; i < rank_list->rl_nr; i++)
 		idx += sprintf(&tmp_str[idx], "%d ", rank_list->rl_ranks[i]);
 	tmp_str[width - 1] = '\0';
-	D_DEBUG("%s, %d ranks: %s\n", name, rank_list->rl_nr, tmp_str);
+	D_DEBUG(DB_TRACE, "%s, %d ranks: %s\n",
+		name, rank_list->rl_nr, tmp_str);
 	D_FREE(tmp_str);
 
 out:
@@ -583,6 +585,6 @@ void d_getenv_int(const char *env, unsigned *int_val)
 	}
 
 	value = atoi(env_val);
-	D_DEBUG("d_getenv_int(), get ENV %s as %d.\n", env, value);
+	D_DEBUG(DB_TRACE, "d_getenv_int(), get ENV %s as %d.\n", env, value);
 	*int_val = value;
 }

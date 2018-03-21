@@ -1,5 +1,4 @@
-
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -200,7 +199,7 @@ void crt_lm_fake_event_notify_fn(d_rank_t pmix_rank, bool *dead);
 	(strrchr(__FILE__, '/')+1), __LINE__, getpid(), ##__VA_ARGS__)
 
 #if DEBUG == 1
-#define dbg(fmt, ...)   D_DEBUG(fmt, ##__VA_ARGS__)
+#define dbg(fmt, ...)   D_DEBUG(DB_TEST, fmt, ##__VA_ARGS__)
 #else
 #define dbg(fmt, ...)	 DBG(fmt, ##__VA_ARGS__)
 #endif

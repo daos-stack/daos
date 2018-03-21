@@ -658,8 +658,8 @@ static int test_msg_size(crt_context_t crt_ctx,
 
 			switch (ms_endpts[m_idx].reply.status) {
 			case CRT_ST_STATUS_TEST_IN_PROGRESS:
-				D_DEBUG("Test still processing on %u:%u -"
-					" # RPCs remaining: %u\n",
+				D_DEBUG(DB_TEST, "Test still processing on "
+					"%u:%u - # RPCs remaining: %u\n",
 					ms_endpts[m_idx].endpt.ep_rank,
 					ms_endpts[m_idx].endpt.ep_tag,
 					ms_endpts[m_idx].reply.num_remaining);

@@ -62,7 +62,7 @@ corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
 static int
 corpc_pre_forward(crt_rpc_t *rpc, void *arg)
 {
-	D_DEBUG("Pre-forward called\n");
+	D_DEBUG(DB_TEST, "Pre-forward called\n");
 
 	if (hdlr_called == true) {
 		D_ERROR("Handler called before pre-forward callback\n");
@@ -83,7 +83,7 @@ test_basic_corpc_hdlr(crt_rpc_t *rpc)
 {
 	int rc;
 
-	D_DEBUG("Handler called\n");
+	D_DEBUG(DB_TEST, "Handler called\n");
 	if (pre_forward_called == false) {
 		D_ERROR("Handler called before pre-forward callback\n");
 		assert(0);
@@ -146,7 +146,7 @@ int main(void)
 	rc =  crt_group_rank(NULL, &my_rank);
 
 	if (my_rank == 0) {
-		D_DEBUG("Rank 0 sending CORPC call\n");
+		D_DEBUG(DB_TEST, "Rank 0 sending CORPC call\n");
 		rc = crt_corpc_req_create(g_main_ctx, NULL, &excluded_membs,
 				TEST_BASIC_CORPC, NULL, 0, 0,
 				crt_tree_topo(CRT_TREE_KNOMIAL, 4), &rpc);
@@ -159,7 +159,7 @@ int main(void)
 	while (!g_do_shutdown)
 		crt_progress(g_main_ctx, 1000, NULL, NULL);
 
-	D_DEBUG("Shutting down\n");
+	D_DEBUG(DB_TEST, "Shutting down\n");
 
 	/* Progress for a while to make sure we forward to all children */
 	for (i = 0; i < 1000; i++)

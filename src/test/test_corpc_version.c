@@ -261,7 +261,7 @@ subgrp_ping_hdlr(crt_rpc_t *rpc_req)
 	rpc_req_output = crt_reply_get(rpc_req);
 	D_ASSERT(rpc_req_output != NULL);
 
-	D_DEBUG("Recieved magic number %d\n", rpc_req_input->magic);
+	D_DEBUG(DB_TEST, "Recieved magic number %d\n", rpc_req_input->magic);
 	rpc_req_output->magic = rpc_req_input->magic + 1;
 	rc = crt_reply_send(rpc_req);
 	D_ASSERT(rc == 0);
@@ -285,8 +285,8 @@ test_rank_evict_hdlr(crt_rpc_t *rpc_req)
 	D_ASSERT(test.t_sub_group != NULL);
 	rc = crt_rank_evict(test.t_local_group, rpc_req_input->rank);
 	D_ASSERT(rc == 0);
-	D_DEBUG("rank %d evicted rank %d.\n", test.t_my_rank,
-			rpc_req_input->rank);
+	D_DEBUG(DB_TEST, "rank %d evicted rank %d.\n", test.t_my_rank,
+		rpc_req_input->rank);
 
 	rpc_req_output->rc = rc;
 	rc = crt_reply_send(rpc_req);
@@ -475,7 +475,7 @@ subgrp_ping_cb(crt_rpc_t *rpc_req)
 	rpc_req_output = crt_reply_get(rpc_req);
 	D_ASSERT(rpc_req_output != NULL);
 
-	D_DEBUG("Received magic number %d\n", rpc_req_output->magic);
+	D_DEBUG(DB_TEST, "Received magic number %d\n", rpc_req_output->magic);
 	D_ASSERT(rpc_req_output->magic == rpc_req_input->magic + 1);
 
 	eviction_rpc_issue();
@@ -492,7 +492,7 @@ client_cb(const struct crt_cb_info *cb_info)
 
 	switch (cb_info->cci_rpc->cr_opc) {
 	case TEST_OPC_SUBGRP_PING:
-		D_DEBUG("subgrp_ping got reply\n");
+		D_DEBUG(DB_TEST, "subgrp_ping got reply\n");
 		subgrp_ping_cb(rpc_req);
 		break;
 	case TEST_OPC_CORPC_VER_MISMATCH:
@@ -561,7 +561,7 @@ sub_grp_create_cb(crt_group_t *grp, void *priv, int status)
 	rc = crt_req_send(rpc_req, client_cb, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed, rc %d\n", rc);
 
-	D_DEBUG("exiting\n");
+	D_DEBUG(DB_TEST, "exiting\n");
 
 	return rc;
 }
@@ -602,7 +602,7 @@ test_init(void)
 	int		rc = 0;
 	uint32_t	flag;
 
-	D_DEBUG("local group: %s, target group: %s\n",
+	D_DEBUG(DB_TEST, "local group: %s, target group: %s\n",
 		test.t_local_group_name,
 		test.t_target_group_name ? test.t_target_group_name : "NULL\n");
 
@@ -616,11 +616,11 @@ test_init(void)
 
 	rc = crt_group_rank(NULL, &test.t_my_rank);
 	D_ASSERTF(rc == 0, "crt_group_rank() failed, rc: %d\n", rc);
-	D_DEBUG("local rank is %d\n", test.t_my_rank);
+	D_DEBUG(DB_TEST, "local rank is %d\n", test.t_my_rank);
 
 	rc = crt_group_size(NULL, &test.t_my_group_size);
 	D_ASSERTF(rc == 0, "crt_group_size() failed. rc: %d\n", rc);
-	D_DEBUG("local group size is %d\n", test.t_my_group_size);
+	D_DEBUG(DB_TEST, "local group size is %d\n", test.t_my_group_size);
 
 	rc = crt_context_create(&test.t_crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
@@ -658,7 +658,7 @@ test_init(void)
 		rc = crt_group_size(test.t_target_group,
 			       &test.t_target_group_size);
 		D_ASSERTF(rc == 0, "crt_group_size() failed. rc: %d\n", rc);
-		D_DEBUG("sizeof %s is %d\n", test.t_target_group_name,
+		D_DEBUG(DB_TEST, "sizeof %s is %d\n", test.t_target_group_name,
 			test.t_target_group_size);
 	}
 }

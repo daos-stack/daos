@@ -269,7 +269,8 @@ crt_get_subgrp_id()
 	grp_priv->gp_subgrp_idx++;
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
-	D_DEBUG("crt_get_subgrp_id get subgrp_id: "DF_X64".\n", subgrp_id);
+	D_DEBUG(DB_TRACE, "crt_get_subgrp_id get subgrp_id: "DF_X64".\n",
+		subgrp_id);
 
 	return subgrp_id;
 }

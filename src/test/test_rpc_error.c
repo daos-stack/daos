@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -199,7 +199,7 @@ rpc_err_init(void)
 	int		rc = 0;
 	uint32_t	flag;
 
-	D_DEBUG("local group: %s, target group: %s\n",
+	D_DEBUG(DB_TEST, "local group: %s, target group: %s\n",
 		rpc_err.re_local_group_name,
 		rpc_err.re_target_group_name);
 
@@ -300,7 +300,7 @@ rpc_err_rpc_issue()
 		D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed. "
 			  "rpc_req_input: %p\n", rpc_req_input);
 		rpc_req_input->magic = rand()%100;
-		D_DEBUG("client rank %d sending magic number %d to "
+		D_DEBUG(DB_TEST, "client rank %d sending magic number %d to "
 			"rank %d, tag %d.\n",
 			rpc_err.re_my_rank, rpc_req_input->magic,
 			server_ep.ep_rank, server_ep.ep_tag);
@@ -309,7 +309,7 @@ rpc_err_rpc_issue()
 		D_ASSERTF(rc == 0, "crt_req_send() failed, rc %d\n", rc);
 	}
 	for (i = 0; i < rpc_err.re_target_group_size; i++) {
-		D_DEBUG("Waiting on reply N.O. %d\n", i);
+		D_DEBUG(DB_TEST, "Waiting on reply N.O. %d\n", i);
 		sem_wait(&rpc_err.re_all_done);
 	}
 }
@@ -358,7 +358,8 @@ rpc_err_test_run(void)
 		rc = crt_group_size(rpc_err.re_target_group,
 			       &rpc_err.re_target_group_size);
 		D_ASSERTF(rc == 0, "crt_group_size() failed. rc: %d\n", rc);
-		D_DEBUG("sizeof %s is %d\n", rpc_err.re_target_group_name,
+		D_DEBUG(DB_TEST, "sizeof %s is %d\n",
+			rpc_err.re_target_group_name,
 			rpc_err.re_target_group_size);
 	}
 

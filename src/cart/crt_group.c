@@ -245,13 +245,13 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 				       &rank, sizeof(rank), &li->li_link,
 				       true /* exclusive */);
 		if (rc != 0) {
-			D_DEBUG("entry already exists in lookup table, "
-				"grp_priv %p ctx_idx %d, rank: %d.\n",
+			D_DEBUG(DB_TRACE, "entry already exists in lookup "
+				"table, grp_priv %p ctx_idx %d, rank: %d.\n",
 				grp_priv, ctx_idx, rank);
 			crt_li_destroy(li);
 			rc = 0;
 		} else {
-			D_DEBUG("Filling in URI in lookup table. "
+			D_DEBUG(DB_TRACE, "Filling in URI in lookup table. "
 				" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
 				grp_priv, ctx_idx, rank, &li->li_link);
 		}
@@ -266,13 +266,13 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 		D_STRNDUP(li->li_base_phy_addr, uri, CRT_ADDR_STR_MAX_LEN);
 		if (li->li_base_phy_addr == NULL)
 			rc = -DER_NOMEM;
-		D_DEBUG("Filling in URI in lookup table. "
+		D_DEBUG(DB_TRACE, "Filling in URI in lookup table. "
 			" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
 			grp_priv, ctx_idx, rank, &li->li_link);
 	} else {
-		D_WARN("URI already exists. "
-			" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
-			grp_priv, ctx_idx, rank, &li->li_link);
+		D_WARN("URI already exists. grp_priv %p ctx_idx %d, "
+		       "rank: %d, rlink %p\n", grp_priv, ctx_idx, rank,
+		       &li->li_link);
 	}
 	D_MUTEX_UNLOCK(&li->li_mutex);
 	d_hash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
@@ -553,12 +553,13 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 			       &rank, sizeof(rank), &li->li_link,
 			       true /* exclusive */);
 	if (rc != 0) {
-		D_DEBUG("entry already exists.\n");
+		D_DEBUG(DB_TRACE, "entry already exists.\n");
 		crt_li_destroy(li);
 	} else {
-		D_DEBUG("Inserted lookup table entry without base URI. "
-			"default_grp_priv %p ctx_idx %d, rank: %d, tag: %d, rlink %p\n",
-			default_grp_priv, ctx_idx, rank, tag, &li->li_link);
+		D_DEBUG(DB_TRACE, "Inserted lookup table entry without base "
+			"URI. default_grp_priv %p ctx_idx %d, rank: %d, "
+			"tag: %d, rlink %p\n", default_grp_priv, ctx_idx, rank,
+			tag, &li->li_link);
 	}
 	/* the only possible failure is key conflict */
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
@@ -898,10 +899,11 @@ out:
 		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
 			rc, rpc_req->cr_opc);
 	else if (gc_out->gc_rc == 0)
-		D_DEBUG("pri_rank %d created subgrp (%s), internal group id 0x"
-			DF_X64", gp_size %d, gp_self %d.\n", pri_rank,
-			grp_priv->gp_pub.cg_grpid, grp_priv->gp_int_grpid,
-			grp_priv->gp_size, grp_priv->gp_self);
+		D_DEBUG(DB_TRACE, "pri_rank %d created subgrp (%s), internal "
+			"group id 0x"DF_X64", gp_size %d, gp_self %d.\n",
+			pri_rank, grp_priv->gp_pub.cg_grpid,
+			grp_priv->gp_int_grpid, grp_priv->gp_size,
+			grp_priv->gp_self);
 }
 
 
@@ -1172,7 +1174,7 @@ crt_group_lookup(crt_group_id_t grp_id)
 	D_RWLOCK_RDLOCK(&crt_grp_list_rwlock);
 	grp_priv = crt_grp_lookup_locked(grp_id);
 	if (grp_priv == NULL)
-		D_DEBUG("group non-exist.\n");
+		D_DEBUG(DB_TRACE, "group non-exist.\n");
 	D_RWLOCK_UNLOCK(&crt_grp_list_rwlock);
 
 out:
@@ -1207,7 +1209,7 @@ crt_hdlr_grp_destroy(crt_rpc_t *rpc_req)
 	D_RWLOCK_RDLOCK(&crt_grp_list_rwlock);
 	grp_priv = crt_grp_lookup_locked(gd_in->gd_grp_id);
 	if (grp_priv == NULL) {
-		D_DEBUG("group non-exist.\n");
+		D_DEBUG(DB_TRACE, "group non-exist.\n");
 		D_RWLOCK_UNLOCK(&crt_grp_list_rwlock);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
@@ -1217,8 +1219,8 @@ crt_hdlr_grp_destroy(crt_rpc_t *rpc_req)
 	D_ASSERT(rc == 0);
 	/* for gd_initiate_rank, destroy the group in gd_rpc_cb */
 	if (my_rank != gd_in->gd_initiate_rank) {
-		D_DEBUG("my_rank %d root of bcast %d\n", my_rank,
-				gd_in->gd_initiate_rank);
+		D_DEBUG(DB_TRACE, "my_rank %d root of bcast %d\n", my_rank,
+			gd_in->gd_initiate_rank);
 		crt_grp_ras_fini(grp_priv);
 		crt_grp_priv_decref(grp_priv);
 	}
@@ -1305,7 +1307,7 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 	}
 	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 	if (grp_priv->gp_primary) {
-		D_DEBUG("cannot destroy primary group.\n");
+		D_ERROR("cannot destroy primary group.\n");
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
@@ -1382,8 +1384,8 @@ crt_group_rank(crt_group_t *grp, d_rank_t *rank)
 	} else {
 		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 		if (grp_priv->gp_primary && !grp_priv->gp_local) {
-			D_DEBUG("not belong to attached remote group (%s).\n",
-				grp->cg_grpid);
+			D_DEBUG(DB_TRACE, "not belong to attached remote "
+				"group (%s).\n", grp->cg_grpid);
 			D_GOTO(out, rc = -DER_OOG);
 		}
 		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
@@ -1649,7 +1651,7 @@ crt_primary_grp_init(crt_group_id_t grpid)
 
 out:
 	if (rc == 0) {
-		D_DEBUG("primary group %s, gp_size %d, gp_self %d.\n",
+		D_DEBUG(DB_TRACE, "primary group %s, gp_size %d, gp_self %d.\n",
 			grp_priv->gp_pub.cg_grpid, grp_priv->gp_size,
 			grp_priv->gp_self);
 	} else {
@@ -1719,8 +1721,9 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	if (strncmp(ul_in->ul_grp_id, default_grp_priv->gp_pub.cg_grpid,
 		    CRT_GROUP_ID_MAX_LEN) == 0) {
 		grp_priv = default_grp_priv;
-		D_DEBUG("ul_grp_id %s matches with gg_srv_pri_grp %s.\n",
-			ul_in->ul_grp_id, default_grp_priv->gp_pub.cg_grpid);
+		D_DEBUG(DB_TRACE, "ul_grp_id %s matches with gg_srv_pri_grp "
+			"%s.\n", ul_in->ul_grp_id,
+			default_grp_priv->gp_pub.cg_grpid);
 	} else {
 		/* handle subgroup lookups */
 		D_RWLOCK_RDLOCK(&crt_grp_list_rwlock);
@@ -1823,7 +1826,8 @@ crt_get_tag_uri(const char *base_uri, int tag)
 	port = atoi(pchar);
 	port += tag;
 	snprintf(pchar, 16, "%d", port);
-	D_DEBUG("base uri(%s), tag(%d) uri(%s).\n", base_uri, tag, tag_uri);
+	D_DEBUG(DB_TRACE, "base uri(%s), tag(%d) uri(%s).\n", base_uri, tag,
+		tag_uri);
 
 out:
 	return tag_uri;
@@ -1869,8 +1873,8 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 				crt_grp_priv_addref(grp_priv);
 				*attached_grp = &grp_priv->gp_pub;
 			} else {
-				D_DEBUG("group %s is finalizing, try attach "
-					"again later.\n",
+				D_DEBUG(DB_TRACE, "group %s is finalizing, try "
+					"attach again later.\n",
 					grp_priv->gp_pub.cg_grpid);
 				rc = -DER_AGAIN;
 			}
@@ -1887,8 +1891,8 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 				crt_grp_priv_addref(grp_priv);
 				*attached_grp = &grp_priv->gp_pub;
 			} else {
-				D_DEBUG("group %s is finalizing, try attach "
-					"again later.\n",
+				D_DEBUG(DB_TRACE, "group %s is finalizing, try "
+					"attach again later.\n",
 					grp_priv->gp_pub.cg_grpid);
 				rc = -DER_AGAIN;
 			}
@@ -1945,8 +1949,8 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 				crt_grp_priv_addref(grp_priv);
 				*attached_grp = &grp_priv->gp_pub;
 			} else {
-				D_DEBUG("group %s is finalizing, try attach "
-					"again later.\n",
+				D_DEBUG(DB_TRACE, "group %s is finalizing, try "
+					"attach again later.\n",
 					grp_priv->gp_pub.cg_grpid);
 				rc = -DER_AGAIN;
 			}
@@ -2568,8 +2572,8 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 			D_GOTO(out, rc = d_errno2der(errno));
 		}
 		if (!forall || rank == psr_rank) {
-			D_DEBUG("grp %s selected psr_rank %d, uri %s.\n",
-				grpid, rank, addr_str);
+			D_DEBUG(DB_TRACE, "grp %s selected psr_rank %d, "
+				"uri %s.\n", grpid, rank, addr_str);
 			crt_grp_psr_set(grp_priv, rank, addr_str);
 			rc = 0;
 			break;
@@ -2657,7 +2661,7 @@ crt_grp_lc_mark_evicted(struct crt_grp_priv *grp_priv, d_rank_t rank)
 			}
 			/* insert failed */
 			crt_li_destroy(li);
-			D_DEBUG("entry already exists, "
+			D_DEBUG(DB_TRACE, "entry already exists, "
 				"group %s, rank %d, context id %d\n",
 				grp_priv->gp_pub.cg_grpid, rank, ctx_idx);
 			rlink = d_hash_rec_find(htable, (void *) &rank,
@@ -2756,7 +2760,7 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 
 	D_RWLOCK_WRLOCK(grp_priv->gp_rwlock_ft);
 	if (d_rank_in_rank_list(grp_priv->gp_failed_ranks, rank)) {
-		D_DEBUG("Rank %d already evicted.\n", rank);
+		D_DEBUG(DB_TRACE, "Rank %d already evicted.\n", rank);
 		D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 		D_GOTO(out, rc = -DER_EVICTED);
 	}
@@ -2786,7 +2790,8 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 		D_ERROR("crt_grp_lc_mark_evicted() failed, rc: %d.\n", rc);
 		D_GOTO(out_cb, rc);
 	}
-	D_DEBUG("evicted group %s rank %d.\n", grp_priv->gp_pub.cg_grpid, rank);
+	D_DEBUG(DB_TRACE, "evicted group %s rank %d.\n",
+		grp_priv->gp_pub.cg_grpid, rank);
 
 out_cb:
 	if (grp_priv->gp_local)

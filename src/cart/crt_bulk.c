@@ -146,7 +146,7 @@ crt_bulk_free(crt_bulk_t bulk_hdl)
 	int	rc = 0;
 
 	if (bulk_hdl == CRT_BULK_NULL) {
-		D_DEBUG("crt_bulk_free with NULL bulk_hdl.\n");
+		D_DEBUG(DB_TRACE, "crt_bulk_free with NULL bulk_hdl.\n");
 		D_GOTO(out, rc);
 	}
 

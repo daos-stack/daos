@@ -570,7 +570,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 	rpc_priv->crp_forward = forward;
 	*priv_allocated = rpc_priv;
 
-	D_DEBUG("rpc_priv %p (opc: %#x), allocated.\n",
+	D_DEBUG(DB_NET, "rpc_priv %p (opc: %#x), allocated.\n",
 		rpc_priv, rpc_priv->crp_opc_info->coi_opc);
 
 out:
@@ -727,7 +727,7 @@ crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 
 	crt_rpc_priv_set_ep(rpc_priv, tgt_ep);
 
-	D_DEBUG("rpc_priv %p ep modified %u.%u.\n",
+	D_DEBUG(DB_NET, "rpc_priv %p ep modified %u.%u.\n",
 		rpc_priv, req->cr_ep.ep_rank, req->cr_ep.ep_tag);
 
 out:
@@ -1188,7 +1188,8 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	/* this is a remote group, contact the PSR */
 	if (grp_priv->gp_local == 0) {
 		/* send an RPC to the PSR */
-		D_DEBUG("Querying PSR to find out target NA Address.\n");
+		D_DEBUG(DB_NET, "Querying PSR to find out target "
+			"NA Address.\n");
 		rc = crt_req_uri_lookup_psr(rpc_priv, crt_req_uri_lookup_psr_cb,
 					rpc_priv);
 		if (rc != 0) {
@@ -1427,7 +1428,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		}
 	}
 
-	D_DEBUG("rpc_priv %p submitted.\n", rpc_priv);
+	D_DEBUG(DB_NET, "rpc_priv %p submitted.\n", rpc_priv);
 
 	rc = crt_context_req_track(req);
 	if (rc == CRT_REQ_TRACK_IN_INFLIGHQ) {
@@ -1510,7 +1511,7 @@ crt_req_abort(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
 	if (crt_req_aborted(req)) {
-		D_DEBUG("req (rpc_priv %p, opc: %#x) aborted, need not "
+		D_DEBUG(DB_NET, "req (rpc_priv %p, opc: %#x) aborted, need not "
 			"abort again.\n", rpc_priv, req->cr_opc);
 		D_GOTO(out, rc);
 	}
@@ -1749,7 +1750,7 @@ timeout_bp_node_enter(struct d_binheap *h, struct d_binheap_node *e)
 
 	rpc_priv = container_of(e, struct crt_rpc_priv, crp_timeout_bp_node);
 
-	D_DEBUG("rpc_priv %p (opc %#x) entering the timeout binheap.\n",
+	D_DEBUG(DB_NET, "rpc_priv %p (opc %#x) entering the timeout binheap.\n",
 		rpc_priv, rpc_priv->crp_pub.cr_opc);
 
 	return 0;
@@ -1765,7 +1766,7 @@ timeout_bp_node_exit(struct d_binheap *h, struct d_binheap_node *e)
 
 	rpc_priv = container_of(e, struct crt_rpc_priv, crp_timeout_bp_node);
 
-	D_DEBUG("rpc_priv %p (opc %#x) exiting the timeout binheap.\n",
+	D_DEBUG(DB_NET, "rpc_priv %p (opc %#x) exiting the timeout binheap.\n",
 		rpc_priv, rpc_priv->crp_pub.cr_opc);
 
 	return 0;

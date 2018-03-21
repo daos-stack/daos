@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -95,10 +95,12 @@ fake_event_thread(void *arg)
 					    &rank);
 				if (rc == EOF) {
 					/* reached EOF */
-					D_DEBUG("fscanf reached end of file\n");
+					D_DEBUG(DB_TEST,
+						"fscanf reached end of file\n");
 					break;
 				}
-				D_DEBUG("fscanf return code %d\n", rc);
+				D_DEBUG(DB_TEST, "fscanf return code %d\n",
+					rc);
 				fprintf(stderr, "event code: %d rank: %d\n",
 					event_code, rank);
 				if (event_code == 0)
@@ -128,7 +130,8 @@ crt_fake_event_init(d_rank_t rank)
 	}
 	snprintf(pipe_name, length + 1, "/tmp/fake_event_pipe_%02d", 0);
 	mkfifo(pipe_name, 0666);
-	D_DEBUG("Rank: %d, named pipe created: %s\n", rank, pipe_name);
+	D_DEBUG(DB_TEST, "Rank: %d, named pipe created: %s\n",
+		rank, pipe_name);
 	rc = pthread_create(&fake_event_tid, NULL, fake_event_thread, (void *)
 			    pipe_name);
 	if (rc != 0)

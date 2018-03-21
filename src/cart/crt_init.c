@@ -54,7 +54,7 @@ static void data_init(void)
 	uint32_t	credits;
 	int		rc = 0;
 
-	D_DEBUG("initializing crt_gdata...\n");
+	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 
 	/*
 	 * avoid size mis-matching between client/server side
@@ -80,21 +80,22 @@ static void data_init(void)
 		crt_gdata.cg_timeout = CRT_DEFAULT_TIMEOUT_S;
 	else
 		crt_gdata.cg_timeout = timeout;
-	D_DEBUG("set the global timeout value as %d second.\n",
+	D_DEBUG(DB_ALL, "set the global timeout value as %d second.\n",
 		crt_gdata.cg_timeout);
 
 	credits = CRT_DEFAULT_CREDITS_PER_EP_CTX;
 	d_getenv_int("CRT_CREDIT_EP_CTX", &credits);
 	if (credits == 0) {
-		D_DEBUG("CRT_CREDIT_EP_CTX set as 0, flow control disabled.\n");
+		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as 0, flow control "
+			"disabled.\n");
 	} else if (credits > CRT_MAX_CREDITS_PER_EP_CTX) {
-		D_DEBUG("ENV CRT_CREDIT_EP_CTX's value %d exceed max allowed "
-			"value, use %d for flow control.\n",
+		D_DEBUG(DB_ALL, "ENV CRT_CREDIT_EP_CTX's value %d exceed max "
+			"allowed value, use %d for flow control.\n",
 			credits, CRT_MAX_CREDITS_PER_EP_CTX);
 		credits = CRT_MAX_CREDITS_PER_EP_CTX;
 	} else {
-		D_DEBUG("CRT_CREDIT_EP_CTX set as %d for flow control.\n",
-			credits);
+		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as %d for flow "
+			"control.\n", credits);
 	}
 	crt_gdata.cg_credit_ep_ctx = credits;
 	D_ASSERT(crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
@@ -217,15 +218,18 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 					"but crt_group_config_path_set failed "
 					"rc: %d, ignore the ENV.\n", path, rc);
 			else
-				D_DEBUG("set group_config_path as %s.\n", path);
+				D_DEBUG(DB_ALL, "set group_config_path as "
+					"%s.\n", path);
 		}
 
 		addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
 		if (addr_env == NULL) {
-			D_DEBUG("ENV %s not found.\n", CRT_PHY_ADDR_ENV);
+			D_DEBUG(DB_ALL, "ENV %s not found.\n",
+				CRT_PHY_ADDR_ENV);
 			goto do_init;
 		} else{
-			D_DEBUG("EVN %s: %s.\n", CRT_PHY_ADDR_ENV, addr_env);
+			D_DEBUG(DB_ALL, "EVN %s: %s.\n", CRT_PHY_ADDR_ENV,
+				addr_env);
 		}
 
 		for (plugin_idx = 0; crt_na_dict[plugin_idx].nad_str != NULL;
@@ -517,7 +521,7 @@ crt_get_port(int *port)
 
 	D_ASSERT(port != NULL);
 	*port = ntohs(tmp_socket.sin_port);
-	D_DEBUG("get a port: %d.\n", *port);
+	D_DEBUG(DB_ALL, "get a port: %d.\n", *port);
 
 out:
 	return rc;
@@ -603,10 +607,12 @@ int crt_na_ofi_config_init(void)
 	port_str = getenv("OFI_PORT");
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
-			D_DEBUG("ignore invalid OFI_PORT %s.", port_str);
+			D_DEBUG(DB_ALL, "ignore invalid OFI_PORT %s.",
+				port_str);
 		} else {
 			port = atoi(port_str);
-			D_DEBUG("OFI_PORT %d, use it as service port.\n", port);
+			D_DEBUG(DB_ALL, "OFI_PORT %d, use it as service "
+				"port.\n", port);
 		}
 	}
 	crt_na_ofi_conf.noc_port = port;

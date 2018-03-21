@@ -187,13 +187,13 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc, uint32_t flags,
 			D_DEBUG("re-reg, opc %#x.\n", opc);
 			*/
 			if (info->coi_input_size != input_size) {
-				D_DEBUG("opc %#x, update input_size "
+				D_DEBUG(DB_TRACE, "opc %#x, update input_size "
 					"from "DF_U64" to "DF_U64".\n", opc,
 					info->coi_input_size, input_size);
 				info->coi_input_size = input_size;
 			}
 			if (info->coi_output_size != output_size) {
-				D_DEBUG("opc %#x, update output_size "
+				D_DEBUG(DB_TRACE, "opc %#x, update output_size "
 					"from "DF_U64" to "DF_U64".\n", opc,
 					info->coi_output_size, output_size);
 				info->coi_output_size = output_size;
@@ -201,15 +201,15 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc, uint32_t flags,
 			info->coi_crf = crf;
 			if (rpc_cb != NULL) {
 				if (info->coi_rpc_cb != NULL)
-					D_DEBUG("re-reg rpc callback, "
-						"opc %#x.\n", opc);
+					D_DEBUG(DB_TRACE, "re-reg rpc callback,"
+						" opc %#x.\n", opc);
 				else
 					info->coi_rpccb_init = 1;
 				info->coi_rpc_cb = rpc_cb;
 			}
 			if (co_ops != NULL) {
 				if (info->coi_co_ops != NULL)
-					D_DEBUG("re-reg co_ops, "
+					D_DEBUG(DB_TRACE, "re-reg co_ops, "
 						"opc %#x.\n", opc);
 				else
 					info->coi_coops_init = 1;
@@ -263,15 +263,15 @@ set:
 
 	new_info->coi_no_reply = disable_reply;
 	if (disable_reply)
-		D_DEBUG("opc %#x, reply disabled.\n", opc);
+		D_DEBUG(DB_TRACE, "opc %#x, reply disabled.\n", opc);
 	else
-		D_DEBUG("opc %#x, reply enabled.\n", opc);
+		D_DEBUG(DB_TRACE, "opc %#x, reply enabled.\n", opc);
 
 	new_info->coi_reset_timer = enable_reset_timer;
 	if (enable_reset_timer)
-		D_DEBUG("opc %#x, reset_timer enabled.\n", opc);
+		D_DEBUG(DB_TRACE, "opc %#x, reset_timer enabled.\n", opc);
 	else
-		D_DEBUG("opc %#x, reset_timer disabled.\n", opc);
+		D_DEBUG(DB_TRACE, "opc %#x, reset_timer disabled.\n", opc);
 
 
 out:

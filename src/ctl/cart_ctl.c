@@ -88,7 +88,7 @@ progress_thread(void *arg)
 
 
 		if (ctl_gdata.cg_complete == 1) {
-			D_DEBUG("ctl_gdata.cg_complete %d.\n",
+			D_DEBUG(DB_TRACE, "ctl_gdata.cg_complete %d.\n",
 				ctl_gdata.cg_complete);
 			break;
 		}
@@ -118,7 +118,7 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 		D_ERROR("arg string too long.\n");
 		return;
 	}
-	D_DEBUG("arg_str %s\n", arg_str);
+	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
 	token = strtok(arg_str, ",");
 	while (token != NULL) {
 		ptr = strchr(token, '-');
@@ -240,7 +240,7 @@ ctl_ls_ctx()
 	crt_endpoint_t			 ep;
 	int				 rc = 0;
 
-	D_DEBUG("num requested ranks %d\n", ctl_gdata.cg_num_ranks);
+	D_DEBUG(DB_TRACE, "num requested ranks %d\n", ctl_gdata.cg_num_ranks);
 	for (i = 0; i < ctl_gdata.cg_num_ranks; i++) {
 		ep.ep_grp = ctl_gdata.cg_target_group;
 		ep.ep_rank = ctl_gdata.cg_ranks[i];
@@ -254,7 +254,7 @@ ctl_ls_ctx()
 		in_args = crt_req_get(rpc_req);
 		in_args->cel_grp_id = ctl_gdata.cg_target_group->cg_grpid;
 		in_args->cel_rank = ctl_gdata.cg_ranks[i];
-		D_DEBUG("rpc_req %p rank %d tag %d seq %d\n",
+		D_DEBUG(DB_NET, "rpc_req %p rank %d tag %d seq %d\n",
 			rpc_req, ep.ep_rank, ep.ep_tag, i);
 		rc = crt_req_send(rpc_req, ctl_client_cb, NULL);
 		if (rc != 0) {

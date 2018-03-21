@@ -75,8 +75,8 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 				   true /* exclude */);
 
 		if (grp_rank_list->rl_nr == 0) {
-			D_DEBUG("d_rank_list_filter(group %s) get empty.\n",
-				grp_priv->gp_pub.cg_grpid);
+			D_DEBUG(DB_TRACE, "d_rank_list_filter(group %s) "
+				"get empty.\n", grp_priv->gp_pub.cg_grpid);
 			d_rank_list_free(grp_rank_list);
 			grp_rank_list = NULL;
 			D_GOTO(out, rc = 0);
@@ -240,8 +240,8 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		D_GOTO(out, rc);
 	}
 	if (grp_rank_list == NULL) {
-		D_DEBUG("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
-			grp_priv->gp_pub.cg_grpid);
+		D_DEBUG(DB_TRACE, "crt_get_filtered_grp_rank_list(group %s) "
+			"get empty.\n", grp_priv->gp_pub.cg_grpid);
 		*children_rank_list = NULL;
 		D_GOTO(out, rc);
 	}
@@ -328,8 +328,8 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		D_GOTO(out, rc);
 	}
 	if (grp_rank_list == NULL) {
-		D_DEBUG("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
-			grp_priv->gp_pub.cg_grpid);
+		D_DEBUG(DB_TRACE, "crt_get_filtered_grp_rank_list(group %s) "
+			"get empty.\n", grp_priv->gp_pub.cg_grpid);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

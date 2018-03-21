@@ -369,8 +369,8 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 
 out:
 	if (rc == 0)
-		D_DEBUG("crt_pmix_assign_rank get size %d, self %d.\n",
-			grp_priv->gp_size, grp_priv->gp_self);
+		D_DEBUG(DB_TRACE, "crt_pmix_assign_rank get size %d, "
+			"self %d.\n", grp_priv->gp_size, grp_priv->gp_self);
 	else if (myproc != NULL)
 		D_ERROR("PMIx ns %s rank %d, crt_pmix_assign_rank failed, "
 			"rc: %d.\n", myproc->nspace, myproc->rank, rc);
@@ -407,7 +407,8 @@ crt_pmix_publish_self(struct crt_grp_priv *grp_priv)
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 	if (!grp_priv->gp_service) {
-		D_DEBUG("ignore publish self on non-service group.\n");
+		D_DEBUG(DB_TRACE,
+			"ignore publish self on non-service group.\n");
 		D_GOTO(out, rc = 0);
 	}
 
@@ -619,7 +620,7 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	/* filter source->namespace */
 	if (strncmp(source->nspace, pmix_gdata->pg_proc.nspace,
 		    PMIX_MAX_NSLEN)) {
-		D_DEBUG("PMIx event not relevant to my namespace.\n");
+		D_DEBUG(DB_TRACE, "PMIx event not relevant to my namespace.\n");
 		return;
 	}
 
@@ -627,13 +628,14 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	 * so simply log it and move on.
 	 */
 	if (status == PMIX_ERR_UNREACH) {
-		D_DEBUG("PMIx event is PMIX_ERR_UNREACH %d\n", source->rank);
+		D_DEBUG(DB_TRACE, "PMIx event is PMIX_ERR_UNREACH %d\n",
+			source->rank);
 		return;
 	}
 
 	if (status != PMIX_ERR_PROC_ABORTED) {
-		D_DEBUG("PMIx event is %d not PMIX_ERR_PROC_ABORTED.\n",
-			status);
+		D_DEBUG(DB_TRACE, "PMIx event is %d not PMIX_ERR_PROC_ABORTED."
+			"\n", status);
 		return;
 	}
 
@@ -644,14 +646,15 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	}
 
 	if (grp_priv->gp_rank_map[source->rank].rm_status == CRT_RANK_NOENT) {
-		D_DEBUG("PMIx event not relevant to cart group: %s.\n",
-			grp_priv->gp_pub.cg_grpid);
+		D_DEBUG(DB_TRACE, "PMIx event not relevant to cart group: "
+			"%s.\n", grp_priv->gp_pub.cg_grpid);
 		return;
 	}
 
 	/* convert source->rank from pmix rank to cart rank */
 	crt_rank = grp_priv->gp_rank_map[source->rank].rm_rank;
-	D_DEBUG("received pmix notification about rank %d.\n", crt_rank);
+	D_DEBUG(DB_TRACE, "received pmix notification about rank %d.\n",
+		crt_rank);
 	/* walk the global list to execute the user callbacks */
 	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 	d_list_for_each_entry(event_cb_priv,
@@ -674,8 +677,8 @@ crt_plugin_pmix_errhdlr_reg_cb(pmix_status_t status, size_t errhdlr_ref,
 	sem_t *token_to_proceed = arg;
 	int rc;
 
-	D_DEBUG("crt_plugin_pmix_errhdlr_reg_cb() called with status %d, "
-		"ref=%zu.\n", status, errhdlr_ref);
+	D_DEBUG(DB_TRACE, "crt_plugin_pmix_errhdlr_reg_cb() called with status"
+		" %d, ref=%zu.\n", status, errhdlr_ref);
 	if (status != 0)
 		D_ERROR("crt_plugin_pmix_errhdlr_reg_cb() called with "
 			"status %d\n", status);
@@ -733,8 +736,8 @@ crt_plugin_pmix_errhdlr_dereg_cb(pmix_status_t status, void *arg)
 	sem_t	*token_to_proceed = arg;
 	int	 rc;
 
-	D_DEBUG("crt_plugin_pmix_errhdlr_dereg_cb() called with status %d",
-		status);
+	D_DEBUG(DB_TRACE, "crt_plugin_pmix_errhdlr_dereg_cb() called with "
+		"status %d", status);
 
 	rc = sem_post(token_to_proceed);
 	if (rc != 0)
@@ -767,7 +770,7 @@ crt_plugin_pmix_fini(void)
 				      crt_plugin_pmix_errhdlr_dereg_cb,
 				      &token_to_proceed);
 
-	D_DEBUG("calling sem_wait on sem_t %p.\n", &token_to_proceed);
+	D_DEBUG(DB_TRACE, "calling sem_wait on sem_t %p.\n", &token_to_proceed);
 	rc = sem_wait(&token_to_proceed);
 	if (rc != 0) {
 		D_ERROR("sem_wait failed, rc: %d.\n", rc);

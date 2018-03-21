@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -117,8 +117,9 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
 	d_log(DINFO, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
 	     ##__VA_ARGS__)
 
-#define D_DEBUG(fmt, ...)						\
-	d_log(DDBG, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
+#define D_DEBUG(mask, fmt, ...)						\
+	d_log((mask) | D_LOGFAC,					\
+	     "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,		\
 	     ##__VA_ARGS__)
 
 #define D_INFO(fmt, ...)						\

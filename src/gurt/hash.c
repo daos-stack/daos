@@ -335,8 +335,9 @@ ch_rec_insert(struct d_hash_table *htable, unsigned idx, d_list_t *rlink)
 		bucket->hb_dep++;
 		if (bucket->hb_dep > htable->ht_dep_max) {
 			htable->ht_dep_max = bucket->hb_dep;
-			D_DEBUG("Max depth %d/%d/%d\n", htable->ht_dep_max,
-				htable->ht_nr, htable->ht_nr_max);
+			D_DEBUG(DB_TRACE, "Max depth %d/%d/%d\n",
+				htable->ht_dep_max, htable->ht_nr,
+				htable->ht_nr_max);
 		}
 	}
 #endif
@@ -761,7 +762,7 @@ d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 	for (i = 0; i < nr; i++) {
 		while (!d_list_empty(&buckets[i].hb_head)) {
 			if (!force) {
-				D_DEBUG("Warning, non-empty hash\n");
+				D_DEBUG(DB_TRACE, "Warning, non-empty hash\n");
 				return -DER_BUSY;
 			}
 			d_hash_rec_delete_at(htable, buckets[i].hb_head.next);
@@ -790,7 +791,7 @@ void
 d_hash_table_debug(struct d_hash_table *htable)
 {
 #if D_HASH_DEBUG
-	D_DEBUG("max nr: %d, cur nr: %d, max_dep: %d\n",
+	D_DEBUG(DB_TRACE, "max nr: %d, cur nr: %d, max_dep: %d\n",
 		htable->ht_nr_max, htable->ht_nr, htable->ht_dep_max);
 #endif
 }
@@ -1098,7 +1099,7 @@ uh_op_key_hash(struct d_hash_table *uhtab, const void *key, unsigned int ksize)
 	struct d_uuid *lkey = (struct d_uuid *)key;
 
 	D_ASSERT(ksize == sizeof(struct d_uuid));
-	D_DEBUG("uuid_key: "CF_UUID"\n", CP_UUID(lkey->uuid));
+	D_DEBUG(DB_TRACE, "uuid_key: "CF_UUID"\n", CP_UUID(lkey->uuid));
 
 	return (unsigned int)(d_hash_string_u32((const char *)lkey->uuid,
 						   sizeof(uuid_t)));
@@ -1112,7 +1113,7 @@ uh_op_key_cmp(struct d_hash_table *uhtab, d_list_t *link, const void *key,
 	struct d_uuid  *lkey = (struct d_uuid *)key;
 
 	D_ASSERT(ksize == sizeof(struct d_uuid));
-	D_DEBUG("Link key, Key:"CF_UUID","CF_UUID"\n",
+	D_DEBUG(DB_TRACE, "Link key, Key:"CF_UUID","CF_UUID"\n",
 		CP_UUID(lkey->uuid),
 		CP_UUID(ulink->ul_uuid.uuid));
 

@@ -195,8 +195,8 @@ static void run_client(void)
 		d_iov_set(&e_req->raw_package, raw_buf, strlen(raw_buf) + 1);
 		e_req->days = myrank;
 
-		D_DEBUG("client(rank %d) sending checkin rpc with tag %d, "
-			"name: %s, age: %d, days: %d.\n",
+		D_DEBUG(DB_TEST, "client(rank %d) sending checkin rpc with "
+			"tag %d, name: %s, age: %d, days: %d.\n",
 			myrank, svr_ep.ep_tag, e_req->name, e_req->age,
 			e_req->days);
 
@@ -340,8 +340,8 @@ static void run_client(void)
 		e_req->age = 32 + svr_ep.ep_tag;
 		e_req->days = myrank;
 
-		D_DEBUG("client(rank %d) sending checkin rpc to tier2 with "
-			"tag %d, name: %s, age: %d, days: %d.\n",
+		D_DEBUG(DB_TEST, "client(rank %d) sending checkin rpc to "
+			"tier2 with tag %d, name: %s, age: %d, days: %d.\n",
 			myrank, svr_ep.ep_tag, e_req->name, e_req->age,
 			e_req->days);
 

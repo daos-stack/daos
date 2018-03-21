@@ -85,7 +85,7 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 	}
 
 	out_args->cel_ctx_num = crt_gdata.cg_ctx_num;
-	D_DEBUG("out_args->cel_ctx_num %d\n", crt_gdata.cg_ctx_num);
+	D_DEBUG(DB_TRACE, "out_args->cel_ctx_num %d\n", crt_gdata.cg_ctx_num);
 	addr_buf_len = 0;
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
@@ -141,6 +141,6 @@ out:
 	out_args->cel_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
-	D_DEBUG("sent reply to endpoint list request\n");
+	D_DEBUG(DB_TRACE, "sent reply to endpoint list request\n");
 	D_FREE(addr_buf);
 }

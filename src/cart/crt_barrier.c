@@ -169,7 +169,7 @@ crt_hdlr_barrier_enter(crt_rpc_t *rpc_req)
 
 	D_MUTEX_LOCK(&barrier_info->bi_lock);
 
-	D_DEBUG("barrier enter msg received for %d\n", in->b_num);
+	D_DEBUG(DB_TRACE, "barrier enter msg received for %d\n", in->b_num);
 
 	if (barrier_info->bi_num_exited >= in->b_num) {
 		/* It's a duplicate.   Send the reply again */
@@ -237,13 +237,14 @@ crt_hdlr_barrier_exit(crt_rpc_t *rpc_req)
 	}
 
 	barrier_info = &grp_priv->gp_barrier_info;
-	D_DEBUG("barrier exit msg received for %d\n", in->b_num);
+	D_DEBUG(DB_TRACE, "barrier exit msg received for %d\n", in->b_num);
 
 	D_MUTEX_LOCK(&barrier_info->bi_lock);
 
 	if (barrier_info->bi_num_exited >= in->b_num) {
 		/* Duplicate message.  Send reply again */
-		D_DEBUG("barrier exit msg %d is duplcate\n", in->b_num);
+		D_DEBUG(DB_TRACE, "barrier exit msg %d is duplcate\n",
+			in->b_num);
 		D_GOTO(send_reply, rc = 0);
 	}
 
@@ -320,7 +321,8 @@ send_barrier_msg(struct crt_grp_priv *grp_priv, int b_num,
 	 */
 	crt_ctx = crt_context_lookup(0);
 	D_ASSERT(crt_ctx != CRT_CONTEXT_NULL);
-	D_DEBUG("Sending barrier message for %d (OPC=%d)\n", b_num, opcode);
+	D_DEBUG(DB_TRACE, "Sending barrier message for %d (OPC=%d)\n",
+		b_num, opcode);
 
 	/* TODO: Eventually, there will be a flag to exclude self from
 	 * from the broadcast.  Until then, the rank list including
@@ -340,14 +342,14 @@ send_barrier_msg(struct crt_grp_priv *grp_priv, int b_num,
 			opcode, rc);
 		D_GOTO(handle_error, rc);
 	}
-	D_DEBUG("Created req for %d\n", b_num);
+	D_DEBUG(DB_TRACE, "Created req for %d\n", b_num);
 	in = crt_req_get(rpc_req);
 
 	in->b_num = b_num;
 
 	rc = crt_req_send(rpc_req, complete_cb, NULL);
 
-	D_DEBUG("Sent req for %d\n", b_num);
+	D_DEBUG(DB_TRACE, "Sent req for %d\n", b_num);
 	if (rc != 0) {
 		D_ERROR("Failed to send barrier opc %d rpc, rc = %d",
 			opcode, rc);
@@ -403,7 +405,7 @@ barrier_exit_cb(const struct crt_cb_info *cb_info)
 				 CRT_OPC_BARRIER_EXIT);
 		return;
 	}
-	D_DEBUG("Exit phase complete for %d\n", in->b_num);
+	D_DEBUG(DB_TRACE, "Exit phase complete for %d\n", in->b_num);
 
 	barrier_info = &grp_priv->gp_barrier_info;
 	ab = &barrier_info->bi_barriers[in->b_num % CRT_MAX_BARRIER_INFLIGHT];
@@ -473,7 +475,7 @@ barrier_enter_cb(const struct crt_cb_info *cb_info)
 		return;
 	}
 
-	D_DEBUG("Enter phase complete for %d\n", in->b_num);
+	D_DEBUG(DB_TRACE, "Enter phase complete for %d\n", in->b_num);
 
 	barrier_info = &grp_priv->gp_barrier_info;
 	ab = &barrier_info->bi_barriers[in->b_num % CRT_MAX_BARRIER_INFLIGHT];
@@ -599,7 +601,7 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg)
 		send_barrier_msg(grp_priv, enter_num, barrier_enter_cb,
 				 CRT_OPC_BARRIER_ENTER);
 
-	D_DEBUG("barrier %d started\n", enter_num);
+	D_DEBUG(DB_TRACE, "barrier %d started\n", enter_num);
 
 	return 0;
 }
@@ -636,13 +638,14 @@ crt_barrier_handle_eviction(struct crt_grp_priv *grp_priv)
 	D_MUTEX_UNLOCK(&barrier_info->bi_lock);
 
 	/* First send the exit message remote ranks may have missed */
-	D_DEBUG("New master sending exit for %d\n", saved_exited);
+	D_DEBUG(DB_TRACE, "New master sending exit for %d\n", saved_exited);
 	send_barrier_msg(grp_priv, saved_exited,  barrier_exit_cb,
 			 CRT_OPC_BARRIER_EXIT);
 	/* Now send any enter messages that remote nodes may have missed */
 	saved_exited++;
 	for (; saved_exited <= saved_created; ++saved_exited) {
-		D_DEBUG("New master sending enter for %d\n", saved_exited);
+		D_DEBUG(DB_TRACE, "New master sending enter for %d\n",
+			saved_exited);
 		send_barrier_msg(grp_priv, saved_exited,  barrier_enter_cb,
 				 CRT_OPC_BARRIER_ENTER);
 	}

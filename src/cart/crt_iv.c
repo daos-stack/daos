@@ -53,7 +53,7 @@
 #include "cart/iv.h"
 
 #define IV_DBG(key, msg, ...) \
-	D_DEBUG("[key=%p] " msg, (key)->iov_buf, ##__VA_ARGS__)
+	D_DEBUG(DB_TRACE, "[key=%p] " msg, (key)->iov_buf, ##__VA_ARGS__)
 
 static D_LIST_HEAD(ns_list);
 static uint32_t ns_id;
@@ -281,7 +281,8 @@ crt_ivf_key_in_progress_unset(struct ivf_key_in_progress *entry)
 		return true;
 
 	entry->kip_refcnt--;
-	D_DEBUG("kip_entry=%p  refcnt=%d\n", entry, entry->kip_refcnt);
+	D_DEBUG(DB_TRACE, "kip_entry=%p  refcnt=%d\n", entry,
+		entry->kip_refcnt);
 
 	if (entry->kip_refcnt == 0) {
 		d_list_del(&entry->kip_link);
@@ -399,7 +400,7 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 	if (!kip_entry)
 		D_GOTO(exit, rc);
 
-	D_DEBUG("Processing requests for kip_entry=%p\n", kip_entry);
+	D_DEBUG(DB_TRACE, "Processing requests for kip_entry=%p\n", kip_entry);
 
 	/* If there is nothing pending - exit */
 	if (d_list_empty(&kip_entry->kip_pending_fetch_list))
@@ -535,7 +536,8 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 
 
 cleanup:
-	D_DEBUG("Done processing requests for kip_entry=%p\n", kip_entry);
+	D_DEBUG(DB_TRACE, "Done processing requests for kip_entry=%p\n",
+		kip_entry);
 
 	kip_entry->kip_rpc_in_progress = false;
 	D_MUTEX_UNLOCK(&kip_entry->kip_lock);
@@ -545,7 +547,7 @@ cleanup:
 	*/
 	D_MUTEX_LOCK(&ivns_internal->cii_lock);
 	D_MUTEX_LOCK(&kip_entry->kip_lock);
-	D_DEBUG("kip_entry=%p in_prog=%d\n",
+	D_DEBUG(DB_TRACE, "kip_entry=%p in_prog=%d\n",
 		kip_entry, kip_entry->kip_rpc_in_progress);
 
 	if (kip_entry->kip_rpc_in_progress == false) {
@@ -652,7 +654,8 @@ crt_ivns_internal_create(crt_context_t crt_ctx, struct crt_grp_priv *grp_priv,
 	ivns_internal->cii_grp_priv = grp_priv;
 	ivns_internal->cii_gns.gn_int_grp_id = grp_priv->gp_int_grpid;
 
-	D_DEBUG("Group id was 0x%lx\n", ivns_internal->cii_gns.gn_int_grp_id);
+	D_DEBUG(DB_TRACE, "Group id was 0x%lx\n",
+		ivns_internal->cii_gns.gn_int_grp_id);
 
 	D_MUTEX_LOCK(&ns_list_lock);
 	d_list_add_tail(&ivns_internal->cii_link, &ns_list);
@@ -1194,8 +1197,8 @@ crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
 	if (rc == 0)
 		*ret_node = parent_rank;
 
-	D_DEBUG("parent lookup: current=%d, root=%d, parent=%d rc=%d\n",
-		cur_node, root_node, parent_rank, rc);
+	D_DEBUG(DB_TRACE, "parent lookup: current=%d, root=%d, parent=%d "
+		"rc=%d\n", cur_node, root_node, parent_rank, rc);
 
 	return rc;
 }
@@ -1296,7 +1299,8 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		rc = crt_iv_parent_get(ivns_internal, input->ifi_root_node,
 					&next_node);
 		if (rc != 0) {
-			D_DEBUG("crt_iv_parent_get() returned %d\n", rc);
+			D_DEBUG(DB_TRACE, "crt_iv_parent_get() returned %d\n",
+				rc);
 			D_GOTO(send_error, rc = -DER_OOG);
 		}
 
@@ -1361,7 +1365,8 @@ get_shortcut_path(struct crt_ivns_internal *ivns, d_rank_t root_rank,
 	case CRT_IV_SHORTCUT_NONE:
 		rc = crt_iv_parent_get(ivns, root_rank, next_node);
 		if (rc != 0) {
-			D_DEBUG("crt_iv_parent_get() returned %d\n", rc);
+			D_DEBUG(DB_TRACE, "crt_iv_parent_get() returned %d\n",
+				rc);
 			D_GOTO(exit, rc = -DER_OOG);
 		}
 		break;
@@ -2257,7 +2262,8 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 		rc = crt_iv_parent_get(ivns_internal,
 					input->ivu_root_node, &next_rank);
 		if (rc != 0) {
-			D_DEBUG("crt_iv_parent_get() returned %d\n", rc);
+			D_DEBUG(DB_TRACE, "crt_iv_parent_get() returned %d\n",
+				rc);
 			D_GOTO(send_error, rc = -DER_OOG);
 		}
 
@@ -2355,7 +2361,8 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 			rc = crt_iv_parent_get(ivns_internal,
 					input->ivu_root_node, &next_rank);
 			if (rc != 0) {
-				D_DEBUG("crt_iv_parent_get() rc=%d\n", rc);
+				D_DEBUG(DB_TRACE, "crt_iv_parent_get() rc=%d\n",
+					rc);
 				D_GOTO(send_error, rc = -DER_OOG);
 			}
 

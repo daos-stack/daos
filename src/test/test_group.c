@@ -315,10 +315,10 @@ check_in(crt_group_t *remote_group, int rank)
 	rpc_req_input->name = buffer;
 	rpc_req_input->age = 21;
 	rpc_req_input->days = 7;
-	D_DEBUG("client(rank %d) sending checkin rpc with tag "
-			"%d, name: %s, age: %d, days: %d.\n",
-			test.tg_my_rank, server_ep.ep_tag, rpc_req_input->name,
-			rpc_req_input->age, rpc_req_input->days);
+	D_DEBUG(DB_TEST, "client(rank %d) sending checkin rpc with tag "
+		"%d, name: %s, age: %d, days: %d.\n",
+		test.tg_my_rank, server_ep.ep_tag, rpc_req_input->name,
+		rpc_req_input->age, rpc_req_input->days);
 
 	/* send an rpc, print out reply */
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
@@ -406,11 +406,11 @@ test_group_fini()
 		rc = pthread_join(test.tg_tid[ii], NULL);
 		if (rc != 0)
 			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
-		D_DEBUG("joined progress thread.\n");
+		D_DEBUG(DB_TEST, "joined progress thread.\n");
 		rc = crt_context_destroy(test.tg_crt_ctx[ii], 1);
 		D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n",
 			  rc);
-		D_DEBUG("destroyed crt_ctx.\n");
+		D_DEBUG(DB_TEST, "destroyed crt_ctx.\n");
 	}
 
 	if (test.tg_is_service)
@@ -424,7 +424,7 @@ test_group_fini()
 	}
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
-	D_DEBUG("exiting.\n");
+	D_DEBUG(DB_TEST, "exiting.\n");
 
 }
 

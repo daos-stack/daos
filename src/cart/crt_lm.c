@@ -270,8 +270,8 @@ lm_bcast_eviction_event(crt_context_t crt_ctx, struct lm_grp_srv_t *lm_grp_srv,
 	rc = crt_req_send(evict_corpc, evict_corpc_cb,
 			  (void *) (uintptr_t) num);
 	d_rank_list_free(excluded_ranks);
-	D_DEBUG("ras event broadcast sent, initiator rank %d, rc %d\n",
-		grp_self, rc);
+	D_DEBUG(DB_TRACE, "ras event broadcast sent, initiator rank %d, "
+		"rc %d\n", grp_self, rc);
 
 out:
 	return rc;
@@ -300,7 +300,7 @@ lm_ras_event_hdlr_internal(d_rank_t crt_rank)
 		D_ERROR("crt_group_rank() failed, rc: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	D_DEBUG("ras rank %d got PMIx notification, cart rank: %d.\n",
+	D_DEBUG(DB_TRACE, "ras rank %d got PMIx notification, cart rank: %d.\n",
 		grp_self, crt_rank);
 
 	rc = crt_rank_evict(lm_grp_srv->lgs_grp, crt_rank);
@@ -447,7 +447,7 @@ crt_hdlr_rank_evict(crt_rpc_t *rpc_req)
 		D_ERROR("crt_group_rank() failed, rc: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	D_DEBUG("ras rank %d requests to evict rank %d",
+	D_DEBUG(DB_TRACE, "ras rank %d requests to evict rank %d",
 		rpc_req->cr_ep.ep_rank, crt_rank);
 	if (lm_grp_srv->lgs_ras) {
 		D_RWLOCK_WRLOCK(&lm_grp_srv->lgs_rwlock);
@@ -518,7 +518,7 @@ crt_lm_grp_init(crt_group_t *grp)
 	 * subscribed to RAS
 	 */
 	num_ras_ranks = grp_size - mvs + 1;
-	D_DEBUG("grp_size %d, mvs %d, num_ras_ranks %d\n",
+	D_DEBUG(DB_TRACE, "grp_size %d, mvs %d, num_ras_ranks %d\n",
 		grp_size, mvs, num_ras_ranks);
 	lm_grp_srv->lgs_lm_ver = 0;
 	/* create a dummy list to simplify list management */
@@ -631,9 +631,9 @@ int crt_rank_evict_corpc_aggregate(crt_rpc_t *source,
 		D_ERROR("crt_reply_get() failed.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	D_DEBUG("reply_source->cleo_succeeded %d, reply_result->cleo_succeeded "
-		"%d\n", reply_source->cleo_succeeded,
-		reply_result->cleo_succeeded);
+	D_DEBUG(DB_TRACE, "reply_source->cleo_succeeded %d,"
+		"reply_result->cleo_succeeded %d\n",
+		reply_source->cleo_succeeded, reply_result->cleo_succeeded);
 	reply_result->cleo_succeeded += reply_source->cleo_succeeded;
 
 out:
@@ -748,10 +748,11 @@ lm_sample_rpc_cb(const struct crt_cb_info *cb_info)
 	D_RWLOCK_RDLOCK(&lm_grp_priv->lgp_rwlock);
 	curr_ver = lm_grp_priv->lgp_lm_ver;
 	D_RWLOCK_UNLOCK(&lm_grp_priv->lgp_rwlock);
-	D_DEBUG("group name: %s, local version: %d, remote version %d.\n",
-		tgt_grp->cg_grpid, curr_ver, out_data->mso_ver);
+	D_DEBUG(DB_TRACE, "group name: %s, local version: %d, "
+		"remote version %d.\n", tgt_grp->cg_grpid, curr_ver,
+		out_data->mso_ver);
 	if (out_data->mso_ver == curr_ver) {
-		D_DEBUG("Local version up to date.\n");
+		D_DEBUG(DB_TRACE, "Local version up to date.\n");
 		D_GOTO(out, rc);
 	}
 
@@ -839,7 +840,7 @@ lm_sample_rpc(crt_context_t ctx, struct lm_grp_priv_t *lm_grp_priv,
 		crt_grp_priv_decref(grp_priv);
 		D_GOTO(out, rc);
 	}
-	D_DEBUG("sample RPC sent to rank %d in group %s.\n",
+	D_DEBUG(DB_TRACE, "sample RPC sent to rank %d in group %s.\n",
 		tgt_rank, tgt_grp->cg_grpid);
 
 out:
@@ -1048,9 +1049,9 @@ lm_grp_priv_init(crt_group_t *grp, crt_lm_attach_cb_t completion_cb, void *arg)
 	if (psr_cand == NULL)
 		D_GOTO(error_out, rc = -DER_NOMEM);
 
-	D_DEBUG("num_psr %d, list of PSRs: ", num_psr);
+	D_DEBUG(DB_TRACE, "num_psr %d, list of PSRs: ", num_psr);
 	psr_cand[0].pc_rank = lm_grp_priv->lgp_psr_rank;
-	D_DEBUG("%d ", psr_cand[0].pc_rank);
+	D_DEBUG(DB_TRACE, "%d ", psr_cand[0].pc_rank);
 	for (i = 1; i < num_psr; i++) {
 		/* same formula for picking ranks subscribed to RAS, with a
 		 * shift
@@ -1058,7 +1059,7 @@ lm_grp_priv_init(crt_group_t *grp, crt_lm_attach_cb_t completion_cb, void *arg)
 		psr_cand[i].pc_rank = ((i*remote_grp_size + num_psr - 1) /
 				       num_psr + local_rank) %
 				      remote_grp_size;
-		D_DEBUG("%d ", psr_cand[i].pc_rank);
+		D_DEBUG(DB_TRACE, "%d ", psr_cand[i].pc_rank);
 
 	}
 	lm_grp_priv->lgp_psr_cand = psr_cand;
@@ -1142,7 +1143,7 @@ should_sample(struct lm_grp_priv_t *lm_grp_priv, d_rank_t tgt_rank,
 	if (pending_count < live_count) {
 		ret = true;
 		psr_cand[picked_index].pc_pending_sample = true;
-		D_DEBUG("psr rank %d is selected.\n",
+		D_DEBUG(DB_TRACE, "psr rank %d is selected.\n",
 			psr_cand[picked_index].pc_rank);
 	}
 
@@ -1213,18 +1214,19 @@ crt_hdlr_memb_sample(crt_rpc_t *rpc_req)
 
 	in_data = crt_req_get(rpc_req);
 	out_data = crt_reply_get(rpc_req);
-	D_DEBUG("client version: %d, server version: %d\n",
+	D_DEBUG(DB_TRACE, "client version: %d, server version: %d\n",
 		in_data->msi_ver, curr_ver);
 	D_ASSERT(in_data->msi_ver <= curr_ver);
 	out_data->mso_ver = curr_ver;
 	if (in_data->msi_ver == curr_ver) {
-		D_DEBUG("client membership list is up-to-date.\n");
+		D_DEBUG(DB_TRACE, "client membership list is up-to-date.\n");
 		crt_reply_send(rpc_req);
 		D_GOTO(out, rc);
 	}
 	rc = crt_grp_failed_ranks_dup(NULL, &failed_ranks);
 	if (rc != 0 || failed_ranks == NULL) {
-		D_ERROR("crt_grp_failed_ranks_dup() failed. rc %d\n", rc);
+		D_ERROR("crt_grp_failed_ranks_dup() failed. rc %d\n",
+			rc);
 		out_data->mso_rc = rc;
 		crt_reply_send(rpc_req);
 		D_GOTO(out, rc);
@@ -1324,7 +1326,7 @@ crt_lm_finalize(void)
 	int				 rc = 0;
 
 	if (crt_lm_gdata.clg_inited == 0) {
-		D_DEBUG("cannot finalize before crt_lm_init().\n");
+		D_DEBUG(DB_TRACE, "cannot finalize before crt_lm_init().\n");
 		D_GOTO(out, rc);
 	}
 	D_RWLOCK_WRLOCK(&crt_lm_gdata.clg_rwlock);

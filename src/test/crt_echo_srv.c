@@ -99,8 +99,9 @@ static int run_echo_srver(void)
 	e_req->age = 32;
 	e_req->days = myrank;
 
-	D_DEBUG("server(rank %d) sending checkin request, name: %s, age: %d, "
-	       "days: %d.\n", myrank, e_req->name, e_req->age, e_req->days);
+	D_DEBUG(DB_TEST, "server(rank %d) sending checkin request, name: %s, "
+		"age: %d, days: %d.\n", myrank, e_req->name, e_req->age,
+		e_req->days);
 
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	assert(rc == 0);

@@ -121,7 +121,7 @@ crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
 		D_SPIN_LOCK(&hg_pool->chp_lock);
 		d_list_add_tail(&hdl->chh_link, &hg_pool->chp_list);
 		hg_pool->chp_num++;
-		D_DEBUG("hg_pool %p, add, chp_num %d.\n",
+		D_DEBUG(DB_NET, "hg_pool %p, add, chp_num %d.\n",
 			hg_pool, hg_pool->chp_num);
 		if (hg_pool->chp_num >= prepost_num)
 			prepost = false;
@@ -147,7 +147,8 @@ crt_hg_pool_disable(struct crt_hg_context *hg_ctx)
 	hg_pool->chp_max_num = 0;
 	hg_pool->chp_enabled = false;
 	d_list_splice_init(&hg_pool->chp_list, &destroy_list);
-	D_DEBUG("hg_pool %p disabled and become empty (chp_num 0).\n", hg_pool);
+	D_DEBUG(DB_NET, "hg_pool %p disabled and become empty (chp_num 0).\n",
+		hg_pool);
 	D_SPIN_UNLOCK(&hg_pool->chp_lock);
 
 	d_list_for_each_entry_safe(hdl, next, &destroy_list, chh_link) {
@@ -157,7 +158,7 @@ crt_hg_pool_disable(struct crt_hg_context *hg_ctx)
 			D_ERROR("HG_Destroy failed, hg_hdl %p, hg_ret: %d.\n",
 				hdl->chh_hdl, hg_ret);
 		else
-			D_DEBUG("hg_hdl %p destroyed.\n", hdl->chh_hdl);
+			D_DEBUG(DB_NET, "hg_hdl %p destroyed.\n", hdl->chh_hdl);
 		d_list_del_init(&hdl->chh_link);
 		D_FREE_PTR(hdl);
 	}
@@ -204,8 +205,8 @@ crt_hg_pool_get(struct crt_hg_context *hg_ctx)
 
 	D_SPIN_LOCK(&hg_pool->chp_lock);
 	if (!hg_pool->chp_enabled || d_list_empty(&hg_pool->chp_list)) {
-		D_DEBUG("hg_pool %p is not enabled or empty, cannot get.\n",
-			hg_pool);
+		D_DEBUG(DB_NET, "hg_pool %p is not enabled or empty, "
+			"cannot get.\n", hg_pool);
 		D_GOTO(unlock, hdl);
 	}
 	d_list_for_each_entry_safe(hdl, next, &hg_pool->chp_list, chh_link) {
@@ -213,7 +214,7 @@ crt_hg_pool_get(struct crt_hg_context *hg_ctx)
 		d_list_del_init(&hdl->chh_link);
 		hg_pool->chp_num--;
 		D_ASSERT(hg_pool->chp_num >= 0);
-		D_DEBUG("hg_pool %p, remove, chp_num %d.\n",
+		D_DEBUG(DB_NET, "hg_pool %p, remove, chp_num %d.\n",
 			hg_pool, hg_pool->chp_num);
 		break;
 	}
@@ -247,12 +248,12 @@ crt_hg_pool_put(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 	if (hg_pool->chp_enabled && hg_pool->chp_num < hg_pool->chp_max_num) {
 		d_list_add_tail(&hdl->chh_link, &hg_pool->chp_list);
 		hg_pool->chp_num++;
-		D_DEBUG("hg_pool %p, add, chp_num %d.\n",
+		D_DEBUG(DB_NET, "hg_pool %p, add, chp_num %d.\n",
 			hg_pool, hg_pool->chp_num);
 	} else {
 		D_FREE_PTR(hdl);
-		D_DEBUG("hg_pool %p, chp_num %d, max_num %d, enabled %d, "
-			"cannot put.\n", hg_pool, hg_pool->chp_num,
+		D_DEBUG(DB_NET, "hg_pool %p, chp_num %d, max_num %d, "
+			"enabled %d, cannot put.\n", hg_pool, hg_pool->chp_num,
 			hg_pool->chp_max_num, hg_pool->chp_enabled);
 		rc = -DER_OVERFLOW;
 	}
@@ -639,7 +640,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		}
 	}
 
-	D_DEBUG("in crt_hg_init, listen address: %s.\n", *addr);
+	D_DEBUG(DB_NET, "in crt_hg_init, listen address: %s.\n", *addr);
 
 out:
 	if (info_string)
@@ -739,7 +740,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_HG);
 		}
-		D_DEBUG("New context(idx:%d), listen address: %s.\n",
+		D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
 			idx, addr_str);
 
 		init_info.na_class = na_class;
@@ -941,7 +942,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 
 	rpc_priv->crp_opc_info = opc_info;
 
-	D_DEBUG("rpc_priv %p (opc: %#x),"
+	D_DEBUG(DB_NET, "rpc_priv %p (opc: %#x),"
 		" allocated per RPC request received.\n",
 		rpc_priv, rpc_priv->crp_opc_info->coi_opc);
 
@@ -1083,8 +1084,9 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 			hg_ctx = &ctx->cc_hg_ctx;
 			rc = crt_hg_pool_put(hg_ctx, rpc_priv);
 			if (rc == 0) {
-				D_DEBUG("rpc_priv %p, hg_hdl %p put to pool.\n",
-					rpc_priv, rpc_priv->crp_hg_hdl);
+				D_DEBUG(DB_NET, "rpc_priv %p, hg_hdl %p put to "
+					"pool.\n", rpc_priv,
+					rpc_priv->crp_hg_hdl);
 				D_GOTO(mem_free, rc);
 			} else {
 				rc = 0;
@@ -1134,14 +1136,14 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	case HG_CANCELED:
 		if (crt_rank_evicted(rpc_pub->cr_ep.ep_grp,
 				     rpc_pub->cr_ep.ep_rank)) {
-			D_DEBUG("request target evicted, opc: %#x.\n",
+			D_DEBUG(DB_NET, "request target evicted, opc: %#x.\n",
 				opc);
 			rc = -DER_EVICTED;
 		} else if (crt_req_timedout(rpc_pub)) {
-			D_DEBUG("request timedout, opc: %#x.\n", opc);
+			D_DEBUG(DB_NET, "request timedout, opc: %#x.\n", opc);
 			rc = -DER_TIMEDOUT;
 		} else {
-			D_DEBUG("request canceled, opc: %#x.\n", opc);
+			D_DEBUG(DB_NET, "request canceled, opc: %#x.\n", opc);
 			rc = -DER_CANCELED;
 		}
 		state = RPC_STATE_CANCELED;
@@ -1152,7 +1154,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		state = RPC_STATE_COMPLETED;
 		rc = -DER_HG;
 		hg_ret = hg_cbinfo->ret;
-		D_DEBUG("hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
+		D_DEBUG(DB_NET, "hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
 		break;
 	}
 
@@ -1211,7 +1213,7 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			rpc_priv->crp_pub.cr_opc);
 		rc = -DER_HG;
 	} else {
-		D_DEBUG("rpc_priv %p sent.\n", rpc_priv);
+		D_DEBUG(DB_NET, "rpc_priv %p sent.\n", rpc_priv);
 	}
 
 	return rc;
@@ -1302,7 +1304,7 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 			"HG_Respond failed, hg_ret: %d, opc: %#x.\n",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
 	else
-		D_DEBUG("Sent CART level error message back to client. "
+		D_DEBUG(DB_NET, "Sent CART level error message back to client. "
 			"rpc_priv %p, opc: %#x, error_code: %d.\n",
 			rpc_priv, rpc_priv->crp_pub.cr_opc, error_code);
 }
@@ -1467,7 +1469,7 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 	}
 
 	if (sgl->sg_nr < bulk_sgnum) {
-		D_DEBUG("sgl->sg_nr (%d) too small, %d required.\n",
+		D_DEBUG(DB_NET, "sgl->sg_nr (%d) too small, %d required.\n",
 			sgl->sg_nr, bulk_sgnum);
 		sgl->sg_nr_out = bulk_sgnum;
 		D_GOTO(out, rc = -DER_TRUNC);
@@ -1546,7 +1548,7 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 
 	if (hg_cbinfo->ret != HG_SUCCESS) {
 		if (hg_cbinfo->ret == HG_CANCELED) {
-			D_DEBUG("bulk transferring canceled.\n");
+			D_DEBUG(DB_NET, "bulk transferring canceled.\n");
 			rc = -DER_CANCELED;
 		} else {
 			D_ERROR("crt_hg_bulk_transfer_cb,hg_cbinfo->ret: %d.\n",
@@ -1557,7 +1559,7 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 	}
 
 	if (bulk_cbinfo->bci_cb == NULL) {
-		D_DEBUG("No bulk completion callback registered.\n");
+		D_DEBUG(DB_NET, "No bulk completion callback registered.\n");
 		D_GOTO(out, hg_ret);
 	}
 	crt_bulk_cbinfo.bci_arg = bulk_cbinfo->bci_arg;

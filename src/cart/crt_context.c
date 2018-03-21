@@ -315,7 +315,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 				   crp_epi_link) {
 		D_ASSERT(epi->epi_req_wait_num > 0);
 		if (msg_logged == false) {
-			D_DEBUG("destroy context (idx %d, rank %d, "
+			D_DEBUG(DB_NET, "destroy context (idx %d, rank %d, "
 				"req_wait_num "DF_U64").\n", ctx->cc_idx,
 				epi->epi_ep.ep_rank, epi->epi_req_wait_num);
 			msg_logged = true;
@@ -336,7 +336,8 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 				   crp_epi_link) {
 		D_ASSERT(epi->epi_req_num > epi->epi_reply_num);
 		if (msg_logged == false) {
-			D_DEBUG("destroy context (idx %d, rank %d, "
+			D_DEBUG(DB_NET,
+				"destroy context (idx %d, rank %d, "
 				"epi_req_num "DF_U64", epi_reply_num "
 				""DF_U64", inflight "DF_U64").\n",
 				ctx->cc_idx, epi->epi_ep.ep_rank,
@@ -347,7 +348,8 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 
 		rc = crt_req_abort(&rpc_priv->crp_pub);
 		if (rc != 0) {
-			D_DEBUG("crt_req_abort(opc: %#x) failed, rc: %d.\n",
+			D_DEBUG(DB_NET,
+				"crt_req_abort(opc: %#x) failed, rc: %d.\n",
 				rpc_priv->crp_pub.cr_opc, rc);
 			rc = 0;
 			continue;
@@ -410,7 +412,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	rc = d_hash_table_traverse(&ctx->cc_epi_table, crt_ctx_epi_abort,
 				   &flags);
 	if (rc != 0) {
-		D_DEBUG("destroy context (idx %d, force %d), "
+		D_DEBUG(DB_TRACE, "destroy context (idx %d, force %d), "
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		D_MUTEX_UNLOCK(&ctx->cc_mutex);
@@ -576,12 +578,14 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 	D_ASSERT(opc_info != NULL);
 
 	if (opc_info->coi_reset_timer == 0) {
-		D_DEBUG("rpc_priv %p reset_timer not enabled.\n", rpc_priv);
+		D_DEBUG(DB_NET, "rpc_priv %p reset_timer not enabled.\n",
+			rpc_priv);
 		return false;
 	}
 	if (rpc_priv->crp_state == RPC_STATE_CANCELED ||
 		rpc_priv->crp_state == RPC_STATE_COMPLETED) {
-		D_DEBUG("rpc_priv %p state %#x, not reseting timer.\n",
+		D_DEBUG(DB_NET,
+			"rpc_priv %p state %#x, not reseting timer.\n",
 			rpc_priv, rpc_priv->crp_state);
 		return false;
 	}
@@ -589,11 +593,12 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	is_evicted = crt_rank_evicted(tgt_ep->ep_grp, tgt_ep->ep_rank);
 	if (is_evicted) {
-		D_DEBUG("rpc_priv %p grp %p, rank %d already evicted.\n",
+		D_DEBUG(DB_NET,
+			"rpc_priv %p grp %p, rank %d already evicted.\n",
 			rpc_priv, tgt_ep->ep_grp, tgt_ep->ep_rank);
 		return false;
 	}
-	D_DEBUG("rpc_priv %p reset_timer enabled.\n", rpc_priv);
+	D_DEBUG(DB_NET, "rpc_priv %p reset_timer enabled.\n", rpc_priv);
 
 	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
@@ -617,8 +622,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	struct crt_uri_lookup_in	*ul_in;
 
 	if (crt_req_timeout_reset(rpc_priv)) {
-		D_DEBUG("rpc_opc: %#x reached timeout. Renewed for "
-			"another cycle.\n", rpc_priv->crp_pub.cr_opc);
+		D_DEBUG(DB_NET,
+			"rpc_opc: %#x reached timeout. Renewed for another cycle.\n",
+			rpc_priv->crp_pub.cr_opc);
 		return;
 	};
 
@@ -730,7 +736,7 @@ crt_context_req_track(crt_rpc_t *req)
 	D_ASSERT(crt_ctx != NULL);
 
 	if (req->cr_opc == CRT_OPC_URI_LOOKUP) {
-		D_DEBUG("bypass tracking for URI_LOOKUP.\n");
+		D_DEBUG(DB_NET, "bypass tracking for URI_LOOKUP.\n");
 		D_GOTO(out, rc = CRT_REQ_TRACK_IN_INFLIGHQ);
 	}
 	/* TODO use global rank */
@@ -838,7 +844,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
 	if (req->cr_opc == CRT_OPC_URI_LOOKUP) {
-		D_DEBUG("bypass untracking for URI_LOOKUP.\n");
+		D_DEBUG(DB_NET, "bypass untracking for URI_LOOKUP.\n");
 		return;
 	}
 

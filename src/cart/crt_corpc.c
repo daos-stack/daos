@@ -699,8 +699,8 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 				rc = 0;
 			}
 			co_info->co_child_ack_num++;
-			D_DEBUG("parent rpc %p, child rpc %p, wait_num %d, "
-				"ack_num %d.\n", parent_rpc_priv,
+			D_DEBUG(DB_NET, "parent rpc %p, child rpc %p, "
+				"wait_num %d, ack_num %d.\n", parent_rpc_priv,
 				child_rpc_priv, wait_num,
 				co_info->co_child_ack_num);
 			corpc_del_child_rpc_locked(parent_rpc_priv,
@@ -735,7 +735,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 			}
 		}
 		co_info->co_child_ack_num++;
-		D_DEBUG("parent rpc %p, child rpc %p, wait_num %d, "
+		D_DEBUG(DB_NET, "parent rpc %p, child rpc %p, wait_num %d, "
 			"ack_num %d.\n", parent_rpc_priv, child_rpc_priv,
 			wait_num, co_info->co_child_ack_num);
 		if (parent_rpc_priv != child_rpc_priv)
@@ -745,8 +745,8 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 		D_ASSERT(wait_num > co_info->co_child_ack_num);
 		d_list_move_tail(&child_rpc_priv->crp_parent_link,
 				 &co_info->co_replied_rpcs);
-		D_DEBUG("parent rpc %p, child rpc %p move to replided rpcs.\n",
-			parent_rpc_priv, child_rpc_priv);
+		D_DEBUG(DB_NET, "parent rpc %p, child rpc %p move to "
+			"replided rpcs.\n", parent_rpc_priv, child_rpc_priv);
 	}
 
 aggregate_done:
@@ -832,7 +832,7 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 				children_rank_list->rl_nr;
 	co_info->co_child_ack_num = 0;
 
-	D_DEBUG("group %s grp_rank %d, co_info->co_child_num: %d.\n",
+	D_DEBUG(DB_TRACE, "group %s grp_rank %d, co_info->co_child_num: %d.\n",
 		co_info->co_grp_priv->gp_pub.cg_grpid, grp_rank,
 		co_info->co_child_num);
 
