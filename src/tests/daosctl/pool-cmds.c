@@ -60,6 +60,8 @@ struct pool_cmd_options {
 	unsigned int  uid;
 	unsigned int  gid;
 	uint64_t      size;
+	/* used interchangeably as rank or rank count */
+	uint32_t      r_count;
 };
 
 static int
@@ -118,6 +120,10 @@ parse_pool_args_cb(int key, char *arg,
 		break;
 	case 'f':
 		options->force = 1;
+		break;
+	case 'r':
+		options->r_count = atoi(arg);
+		break;
 	}
 	return 0;
 }
@@ -130,7 +136,7 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 {
 	int           rc = -ENXIO;
 	uuid_t        uuid;
-	d_rank_list_t svc;
+	d_rank_list_t svc = {NULL, 0};
 
 	struct argp_option options[] = {
 		{"server-group",   's',    "SERVER-GROUP",     0,
@@ -143,11 +149,13 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 		 "Mode defines the operations allowed on the pool"},
 		{"size",           'z',    "size",             0,
 		 "Size of the pool in bytes or with k/m/g appended (e.g. 10g)"},
+		{"replicas",           'r',   "REPLICAS",           0,
+		 "number of service replicas"},
 		{0}
 	};
 	struct argp argp = {options, parse_pool_args_cb};
 	struct pool_cmd_options cp_options = {"daos_server", NULL, 0, 0700, 0,
-					      1024*1024*1024, 0};
+					      1024*1024*1024, 0, 1};
 
 	/* adjust the arguments to skip over the command */
 	argv++;
@@ -157,26 +165,34 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 	 * to GNU standards and can be parsed with argp
 	 */
 	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cp_options);
-
-	/* TODO shouldn't be hard-coded */
-	uint32_t rl_ranks = 0;
-
-	svc.rl_nr = 1;
-	svc.rl_ranks = &rl_ranks;
+	svc.rl_nr = cp_options.r_count;
+	svc.rl_ranks = (d_rank_t *)calloc(svc.rl_nr, sizeof(d_rank_t));
+	if (svc.rl_ranks == NULL) {
+		printf("failed allocating rank list");
+		return -1;
+	}
 
 	rc = daos_pool_create(cp_options.mode, cp_options.uid,
 			      cp_options.gid, cp_options.server_group,
 				   NULL, "rubbish", cp_options.size, &svc,
 				   uuid, NULL);
 	if (rc) {
-		printf("Pool create fail, result: %d\n", rc);
+		printf("Pool create fail, result: %s\n", d_errstr(rc));
 	} else {
 		char uuid_str[100];
+		int i;
 
 		uuid_unparse(uuid, uuid_str);
 		printf("%s\n", uuid_str);
+		printf("server rank(s):");
+		for (i = 0; i < svc.rl_nr; i++)
+			printf(" %d", svc.rl_ranks[i]);
+
+		printf("\n");
 	}
 
+	if (svc.rl_ranks != NULL)
+		free(svc.rl_ranks);
 	return rc;
 }
 
@@ -199,7 +215,8 @@ cmd_destroy_pool(int argc, const char **argv, void *ctx)
 		{0}
 	};
 	struct argp argp = {options, parse_pool_args_cb};
-	struct pool_cmd_options dp_options = {"daos_server", NULL, 0, 0, 0, 0};
+	struct pool_cmd_options dp_options = {"daos_server", NULL, 0, 0,
+					      0, 0, 0};
 
 	/* adjust the arguments to skip over the command */
 	argv++;
@@ -237,7 +254,8 @@ cmd_evict_pool(int argc, const char **argv, void *ctx)
 {
 	uuid_t uuid;
 	int rc;
-	struct pool_cmd_options ep_options = {"daos_server", NULL, 0, 0, 0, 0};
+	struct pool_cmd_options ep_options = {"daos_server", NULL, 0, 0,
+					      0, 0, 0};
 	d_rank_list_t svc;
 	uint32_t rl_ranks = 0;
 	struct argp_option options[] = {
@@ -271,6 +289,47 @@ cmd_evict_pool(int argc, const char **argv, void *ctx)
 		       rc);
 	else
 		printf("Clients evicted from pool successfuly.\n");
+
+	fflush(stdout);
+
+	return rc;
+}
+
+int
+cmd_kill_server(int argc, const char **argv, void *ctx)
+{
+	int rc;
+	struct pool_cmd_options ep_options = {"daos_server", NULL, 0, 0, 0,
+					      0, 0, 0};
+	struct argp_option options[] = {
+		{"server-group",   's',   "SERVER-GROUP",   0,
+		 "ID of the server group that manages the pool"},
+		{"rank",           'r',   "RANK",           0,
+		 "mpi rank of the server to kill"},
+		{"force",          'f',   0,                0,
+		 "Abrupt shutdown, no cleanup."},
+		{0}
+	};
+	struct argp argp = {options, parse_pool_args_cb};
+
+	/* adjust the arguments to skip over the command */
+	argv++;
+	argc--;
+
+	/* once the command is removed the remaining arguments
+	 * conform to GNU standards and can be parsed with argp
+	 */
+	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &ep_options);
+
+
+	rc = daos_mgmt_svc_rip(ep_options.server_group, ep_options.r_count,
+			       ep_options.force, NULL);
+
+	if (rc)
+		printf("Server %d kill failed with: '%s'\n",
+		       ep_options.r_count, d_errstr(rc));
+	else
+		printf("Server %d killed successfuly.\n", ep_options.r_count);
 
 	fflush(stdout);
 

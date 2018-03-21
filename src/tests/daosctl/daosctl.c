@@ -66,6 +66,7 @@ static struct cmd_struct commands[] = {
 	{ "test-connect-pool", cmd_test_connect_pool },
 	{ "test-evict-pool", cmd_test_evict_pool },
 	{ "test-query-pool", cmd_test_query_pool },
+	{ "kill-server", cmd_kill_server },
 	{ "help", cmd_help }
 };
 int command_count = ARRAY_SIZE(commands);
@@ -174,7 +175,7 @@ process_cmd(int argc, const char **argv)
 	int rc = EINVAL;
 	int i;
 
-	for (i = 0; i < 9; i++) {
+	for (i = 0; i < command_count; i++) {
 		if (!strcmp(commands[i].cmd, argv[1]))
 			rc = commands[i].fn(argc, argv, NULL);
 	}
