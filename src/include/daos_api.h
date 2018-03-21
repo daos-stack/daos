@@ -218,6 +218,65 @@ daos_pool_target_query(daos_handle_t poh, d_rank_list_t *tgts,
 		       daos_event_t *ev);
 
 /**
+ * List the names of all user-defined pool attributes.
+ *
+ * \param poh	 [IN]	Pool handle.
+ * \param buffer [OUT]	Buffer containing concatenation of all attribute
+ *			names, each being null-terminated. No truncation is
+ *			performed and only full names will be returned.
+ *			NULL is permitted in which case only the aggregate
+ *			size will be retrieved.
+ * \param size	 [IN]	Buffer size.
+ *		 [OUT]	Aggregate size of all attribute names (excluding
+ *			terminating null characters), regardless of the
+ *			actual buffer size.
+ * \param ev	 [IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_pool_attr_list(daos_handle_t poh, char *buffer, size_t *size,
+		    daos_event_t *ev);
+
+/**
+ * Retrieve a list of user-defined pool attribute values.
+ *
+ * \param poh	  [IN]	Pool handle
+ * \param n	  [IN]	Number of attributes
+ * \param names	  [IN]	Array of \a n null-terminated attribute names.
+ * \param buffers [OUT]	Array of \a n buffers to store attribute values.
+ *			Attribute values larger than corresponding
+ *			buffer sizes will be truncated. NULL values are
+ *			permitted and will be treated identical to
+ *			zero-length buffers, in which case only the
+ *			sizes of attribute values will be retrieved.
+ * \param sizes	  [IN]	Array of \a n buffer sizes.
+ *		  [OUT]	Array of actual sizes of \a n attribute values,
+ *			regardless of given buffer sizes.
+ * \param ev	  [IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_pool_attr_get(daos_handle_t poh, int n, char const *const names[],
+		   void *const buffers[], size_t sizes[], daos_event_t *ev);
+
+/**
+ * Create or update a list of user-defined pool attributes.
+ *
+ * \param poh	  [IN]	Pool handle
+ * \param n	  [IN]	Number of attributes
+ * \param names	  [IN]	Array of \a n null-terminated attribute names.
+ * \param values  [IN]	Array of \a n attribute values
+ * \param sizes	  [IN]	Array of \a n elements containing the
+ *			sizes of respective attribute values.
+ * \param ev	  [IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_pool_attr_set(daos_handle_t poh, int n, char const *const names[],
+		   void const *const values[], size_t const sizes[],
+		   daos_event_t *ev);
+
+/**
  * Container API
  */
 

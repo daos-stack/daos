@@ -61,6 +61,7 @@ extern daos_iov_t ds_pool_attr_map_buffer;	/* pool_buf */
 extern daos_iov_t ds_pool_attr_map_uuids;	/* uuid_t[] (unused now) */
 extern daos_iov_t ds_pool_attr_nhandles;	/* uint32_t */
 extern daos_iov_t ds_pool_attr_handles;		/* pool handle KVS */
+extern daos_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
 
 /* Pool handle KVS (RDB_KVS_GENERIC) */
 struct pool_hdl {

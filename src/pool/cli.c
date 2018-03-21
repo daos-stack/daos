@@ -1453,6 +1453,375 @@ dc_pool_target_query(tse_task_t *task)
 	return -DER_NOSYS;
 }
 
+
+
+struct pool_req_arg {
+	struct dc_pool	*pra_pool;
+	crt_rpc_t	*pra_rpc;
+	crt_bulk_t	 pra_bulk;
+	tse_task_cb_t	 pra_callback;
+};
+
+enum preq_cleanup_stage {
+	CLEANUP_ALL,
+	CLEANUP_BULK,
+	CLEANUP_RPC,
+	CLEANUP_POOL,
+};
+
+static void
+pool_req_cleanup(enum preq_cleanup_stage stage, struct pool_req_arg *args)
+{
+	switch (stage) {
+	case CLEANUP_ALL:
+		crt_req_decref(args->pra_rpc);
+	case CLEANUP_BULK:
+		if (args->pra_bulk)
+			crt_bulk_free(args->pra_bulk);
+	case CLEANUP_RPC:
+		crt_req_decref(args->pra_rpc);
+	case CLEANUP_POOL:
+		dc_pool_put(args->pra_pool);
+	}
+}
+
+static int
+pool_req_complete(tse_task_t *task, void *data)
+{
+	struct pool_req_arg	*args = data;
+	struct dc_pool		*pool	 = args->pra_pool;
+	struct pool_op_out	*op_out	 = crt_reply_get(args->pra_rpc);
+	int			 rc	 = task->dt_result;
+
+	rc = pool_rsvc_client_complete_rpc(pool, &args->pra_rpc->cr_ep,
+					   rc, op_out, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
+
+	if (rc != 0) {
+		D_ERROR("RPC error while querying pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = op_out->po_rc;
+	if (rc != 0) {
+		D_DEBUG(DF_DSMC, DF_UUID": failed to access pool: %d\n",
+			DP_UUID(pool->dp_pool), rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, DF_UUID": Accessed: using hdl="DF_UUID"\n",
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
+	if (args->pra_callback != NULL)
+		rc = args->pra_callback(task, data);
+out:
+	pool_req_cleanup(CLEANUP_BULK, args);
+	return rc;
+}
+
+static int
+attr_list_req_complete(tse_task_t *task, void *data)
+{
+	struct pool_req_arg	  *args = data;
+	daos_pool_attr_list_t	  *task_args = dc_task_get_args(task);
+	struct pool_attr_list_out *out = crt_reply_get(args->pra_rpc);
+
+	*task_args->size = out->palo_size;
+	return 0;
+}
+
+static int
+pool_req_prepare(daos_handle_t poh, enum pool_operation opcode,
+		 crt_context_t *ctx, struct pool_req_arg *args)
+{
+	struct pool_op_in *in;
+	crt_endpoint_t	   ep;
+	int		   rc;
+
+	args->pra_bulk = NULL;
+	args->pra_callback = NULL;
+	args->pra_pool = dc_hdl2pool(poh);
+	if (args->pra_pool == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+
+	ep.ep_grp  = args->pra_pool->dp_group;
+	D_MUTEX_LOCK(&args->pra_pool->dp_client_lock);
+	rsvc_client_choose(&args->pra_pool->dp_client, &ep);
+	D_MUTEX_UNLOCK(&args->pra_pool->dp_client_lock);
+
+	rc = pool_req_create(ctx, &ep, opcode, &args->pra_rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: %d\n", rc);
+		pool_req_cleanup(CLEANUP_POOL, args);
+		D_GOTO(out, rc);
+	}
+
+	in = crt_req_get(args->pra_rpc);
+	uuid_copy(in->pi_uuid, args->pra_pool->dp_pool);
+	uuid_copy(in->pi_hdl, args->pra_pool->dp_pool_hdl);
+out:
+	return rc;
+}
+
+int
+dc_pool_attr_list(tse_task_t *task)
+{
+	daos_pool_attr_list_t		*args;
+	struct pool_attr_list_in	*in;
+	struct pool_req_arg		 cb_args;
+	int				 rc;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (args->size == NULL ||
+	    (*args->size > 0 && args->buf == NULL)) {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = pool_req_prepare(args->poh, POOL_ATTR_LIST,
+			     daos_task2ctx(task), &cb_args);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DF_DSMC, DF_UUID": listing attributes: hdl="
+			 DF_UUID "; size=%lu\n",
+		DP_UUID(cb_args.pra_pool->dp_pool_hdl),
+		DP_UUID(cb_args.pra_pool->dp_pool_hdl), *args->size);
+
+	in = crt_req_get(cb_args.pra_rpc);
+	if (*args->size > 0) {
+		daos_iov_t iov = {
+			.iov_buf     = args->buf,
+			.iov_buf_len = *args->size,
+			.iov_len     = 0
+		};
+		daos_sg_list_t sgl = {
+			.sg_nr_out = 0,
+			.sg_nr	   = 1,
+			.sg_iovs   = &iov
+		};
+		rc = crt_bulk_create(daos_task2ctx(task), daos2crt_sg(&sgl),
+				     CRT_BULK_RW, &in->pali_bulk);
+		if (rc != 0) {
+			pool_req_cleanup(CLEANUP_RPC, &cb_args);
+			D_GOTO(out, rc);
+		}
+	}
+
+	cb_args.pra_bulk = in->pali_bulk;
+	cb_args.pra_callback = attr_list_req_complete;
+	rc = tse_task_register_comp_cb(task, pool_req_complete,
+				       &cb_args, sizeof(cb_args));
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_BULK, &cb_args);
+		D_GOTO(out, rc);
+	}
+
+	crt_req_addref(cb_args.pra_rpc);
+	rc = daos_rpc_send(cb_args.pra_rpc, task);
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_ALL, &cb_args);
+		D_GOTO(out, rc);
+	}
+
+	return rc;
+out:
+	tse_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "Failed to list pool attributes: %d\n", rc);
+	return rc;
+}
+
+static int
+attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
+		 crt_context_t crt_ctx, crt_bulk_perm_t perm, crt_bulk_t *bulk)
+{
+	int		rc;
+	int		i;
+	int		j;
+	daos_sg_list_t	sgl;
+
+	/* Buffers = 'n' names + non-null values + 1 sizes */
+	sgl.sg_nr_out	= 0;
+	sgl.sg_nr	= n + 1;
+	for (j = 0; j < n; j++)
+		if (sizes[j] > 0)
+			++sgl.sg_nr;
+
+	D_ALLOC(sgl.sg_iovs, sgl.sg_nr * sizeof(*sgl.sg_iovs));
+	if (sgl.sg_iovs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* names */
+	for (j = 0, i = 0; j < n; ++j)
+		daos_iov_set(&sgl.sg_iovs[i++], (void *)(names[j]),
+			     strlen(names[j]) + 1 /* trailing '\0' */);
+
+	/* TODO: Add packing/unpacking of non-byte-arrays to rpc.[hc] ? */
+	/* sizes */
+	daos_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
+
+	/* values */
+	for (j = 0; j < n; ++j)
+		if (sizes[j] > 0)
+			daos_iov_set(&sgl.sg_iovs[i++],
+				     values[j], sizes[j]);
+
+	rc = crt_bulk_create(crt_ctx, daos2crt_sg(&sgl), perm, bulk);
+	D_FREE(sgl.sg_iovs);
+out:
+	return rc;
+}
+
+/*
+ * Check for valid inputs. If normalize is true,
+ * sets corresponding size to zero for NULL values
+ * (or the entire 'values' array is NULL).
+ */
+static int
+attr_check_input(int n, char const *const names[], void const *const values[],
+		 size_t sizes[], bool normalize)
+{
+	int i;
+
+	if (n <= 0 || names == NULL || sizes == NULL)
+		return -DER_INVAL;
+	if (values == NULL && !normalize)
+		return -DER_INVAL;
+
+	for (i = 0; i < n; i++) {
+		if (names[i] == NULL || *(names[i]) == '\0')
+			return -DER_INVAL;
+		if (values == NULL || values[i] == NULL) {
+			if (sizes[i] != 0 && !normalize)
+				return -DER_INVAL;
+			sizes[i] = 0;
+		}
+	}
+	return 0;
+}
+
+int
+dc_pool_attr_get(tse_task_t *task)
+{
+	daos_pool_attr_get_t	*args;
+	struct pool_attr_get_in	*in;
+	struct pool_req_arg	 cb_args;
+	int			 rc;
+	int			 i;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	rc = attr_check_input(args->n, args->names,
+			      (void const *const) args->values,
+			      (size_t *)args->sizes, true);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = pool_req_prepare(args->poh, POOL_ATTR_GET,
+			     daos_task2ctx(task), &cb_args);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DF_DSMC, DF_UUID": getting attributes: hdl="DF_UUID"\n",
+		DP_UUID(cb_args.pra_pool->dp_pool_hdl),
+		DP_UUID(cb_args.pra_pool->dp_pool_hdl));
+
+	in = crt_req_get(cb_args.pra_rpc);
+	in->pagi_count = args->n;
+	for (i = 0, in->pagi_key_length = 0; i < args->n; i++)
+		in->pagi_key_length += strlen(args->names[i]) + 1;
+
+	rc = attr_bulk_create(args->n, (char **)args->names,
+			      (void **)args->values, (size_t *)args->sizes,
+			      daos_task2ctx(task), CRT_BULK_RW, &in->pagi_bulk);
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_RPC, &cb_args);
+		D_GOTO(out, rc);
+	}
+
+	cb_args.pra_bulk = in->pagi_bulk;
+	rc = tse_task_register_comp_cb(task, pool_req_complete,
+				       &cb_args, sizeof(cb_args));
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_BULK, &cb_args);
+		D_GOTO(out, rc);
+	}
+
+	crt_req_addref(cb_args.pra_rpc);
+	rc = daos_rpc_send(cb_args.pra_rpc, task);
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_ALL, &cb_args);
+		D_GOTO(out, rc);
+	}
+
+	return rc;
+out:
+	tse_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "Failed to get pool attributes: %d\n", rc);
+	return rc;
+}
+
+int
+dc_pool_attr_set(tse_task_t *task)
+{
+	daos_pool_attr_set_t	*args;
+	struct pool_attr_set_in	*in;
+	struct pool_req_arg	 cb_args;
+	int			 rc;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	rc = attr_check_input(args->n, args->names, args->values,
+			      (size_t *)args->sizes, false);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = pool_req_prepare(args->poh, POOL_ATTR_SET,
+			     daos_task2ctx(task), &cb_args);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DF_DSMC, DF_UUID": setting attributes: hdl="DF_UUID"\n",
+		DP_UUID(cb_args.pra_pool->dp_pool_hdl),
+		DP_UUID(cb_args.pra_pool->dp_pool_hdl));
+
+	in = crt_req_get(cb_args.pra_rpc);
+	in->pasi_count = args->n;
+	rc = attr_bulk_create(args->n, (char **)args->names,
+			      (void **)args->values, (size_t *)args->sizes,
+			      daos_task2ctx(task), CRT_BULK_RO, &in->pasi_bulk);
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_RPC, &cb_args);
+		D_GOTO(out, rc);
+	}
+
+	cb_args.pra_bulk = in->pasi_bulk;
+	rc = tse_task_register_comp_cb(task, pool_req_complete,
+				       &cb_args, sizeof(cb_args));
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_BULK, &cb_args);
+		D_GOTO(out, rc);
+	}
+
+	crt_req_addref(cb_args.pra_rpc);
+	rc = daos_rpc_send(cb_args.pra_rpc, task);
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_ALL, &cb_args);
+		D_GOTO(out, rc);
+	}
+
+	return rc;
+out:
+	tse_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "Failed to set pool attributes: %d\n", rc);
+	return rc;
+}
+
 int
 dc_pool_extend(tse_task_t *task)
 {

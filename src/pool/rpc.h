@@ -53,9 +53,13 @@ enum pool_operation {
 	POOL_EXCLUDE_OUT	= 9,
 	POOL_SVC_STOP		= 10,
 
-	POOL_TGT_CONNECT	= 11,
-	POOL_TGT_DISCONNECT	= 12,
-	POOL_TGT_UPDATE_MAP	= 13
+	POOL_ATTR_LIST		 = 11,
+	POOL_ATTR_GET		 = 12,
+	POOL_ATTR_SET		 = 13,
+
+	POOL_TGT_CONNECT	= 14,
+	POOL_TGT_DISCONNECT	= 15,
+	POOL_TGT_UPDATE_MAP	= 16
 };
 
 struct pool_op_in {
@@ -121,6 +125,29 @@ struct pool_query_out {
 	/* only set on -DER_TRUNC */
 	uint32_t			pqo_map_buf_size;
 	struct daos_rebuild_status	pqo_rebuild_st;
+};
+
+struct pool_attr_list_in {
+	struct pool_op_in	pali_op;
+	crt_bulk_t		pali_bulk;
+};
+
+struct pool_attr_list_out {
+	struct pool_op_out	palo_op;
+	uint64_t		palo_size;
+};
+
+struct pool_attr_get_in {
+	struct pool_op_in	pagi_op;
+	uint64_t		pagi_count;
+	uint64_t		pagi_key_length;
+	crt_bulk_t		pagi_bulk;
+};
+
+struct pool_attr_set_in {
+	struct pool_op_in	pasi_op;
+	uint64_t		pasi_count;
+	crt_bulk_t		pasi_bulk;
 };
 
 struct pool_tgt_update_in {

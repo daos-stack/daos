@@ -234,6 +234,125 @@ disconnect:
 	print_message("rank %d success\n", arg->myrank);
 }
 
+#define BUFSIZE 10
+
+static void
+pool_attribute(void **state)
+{
+	test_arg_t *arg = *state;
+	daos_event_t	 ev;
+	int		 rc;
+
+	char const *const names[] = { "AVeryLongName", "Name" };
+	size_t const name_sizes[] = {
+				strlen(names[0]) + 1,
+				strlen(names[1]) + 1,
+	};
+	void const *const in_values[] = {
+				"value",
+				"this is a long value"
+	};
+	size_t const in_sizes[] = {
+				strlen(in_values[0]),
+				strlen(in_values[1])
+	};
+	int			 n = (int) ARRAY_SIZE(names);
+	char			 out_buf[10 * BUFSIZE] = { 0 };
+	void			*out_values[] = {
+						  &out_buf[0 * BUFSIZE],
+						  &out_buf[1 * BUFSIZE]
+						};
+	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE };
+	size_t			 total_size;
+
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	print_message("setting pool attributes %ssynchronously ...\n",
+		      arg->async ? "a" : "");
+	rc = daos_pool_attr_set(arg->poh, n, names, in_values, in_sizes,
+				arg->async ? &ev : NULL);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	print_message("listing pool attributes %ssynchronously ...\n",
+		      arg->async ? "a" : "");
+
+	total_size = 0;
+	rc = daos_pool_attr_list(arg->poh, NULL, &total_size,
+				 arg->async ? &ev : NULL);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	print_message("Verifying Total Name Length..\n");
+	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
+
+	total_size = BUFSIZE;
+	rc = daos_pool_attr_list(arg->poh, out_buf, &total_size,
+				 arg->async ? &ev : NULL);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	print_message("Verifying Small Name..\n");
+	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
+	assert_string_equal(out_buf, names[1]);
+
+	total_size = 10*BUFSIZE;
+	rc = daos_pool_attr_list(arg->poh, out_buf, &total_size,
+				 arg->async ? &ev : NULL);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	print_message("Verifying All Names..\n");
+	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
+	assert_string_equal(out_buf, names[1]);
+	assert_string_equal(out_buf + name_sizes[1], names[0]);
+
+	print_message("getting pool attributes %ssynchronously ...\n",
+		      arg->async ? "a" : "");
+
+	rc = daos_pool_attr_get(arg->poh, n, names, out_values, out_sizes,
+				arg->async ? &ev : NULL);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	print_message("Verifying Name-Value (A)..\n");
+	assert_int_equal(out_sizes[0], in_sizes[0]);
+	assert_memory_equal(out_values[0], in_values[0], in_sizes[0]);
+
+	print_message("Verifying Name-Value (B)..\n");
+	assert_true(in_sizes[1] > BUFSIZE);
+	assert_int_equal(out_sizes[1], in_sizes[1]);
+	assert_memory_equal(out_values[1], in_values[1], BUFSIZE);
+
+	rc = daos_pool_attr_get(arg->poh, n, names, NULL, out_sizes,
+				arg->async ? &ev : NULL);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	print_message("Verifying with NULL buffer..\n");
+	assert_int_equal(out_sizes[0], in_sizes[0]);
+	assert_int_equal(out_sizes[1], in_sizes[1]);
+
+	if (arg->async) {
+		rc = daos_event_fini(&ev);
+		assert_int_equal(rc, 0);
+	}
+}
+
+static int
+pool_setup_sync(void **state)
+{
+	async_disable(state);
+	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE);
+}
+
+static int
+pool_setup_async(void **state)
+{
+	async_enable(state);
+	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE);
+}
+
 static int
 setup(void **state)
 {
@@ -254,6 +373,10 @@ static const struct CMUnitTest pool_tests[] = {
 	/* Keep this one at the end, as it excludes target rank 1. */
 	{ "POOL6: exclude targets and query pool info",
 	  pool_exclude, async_disable, NULL},
+	{ "POOL7: set/get/list user-defined pool attributes (sync)",
+	  pool_attribute, pool_setup_sync, test_case_teardown},
+	{ "POOL8: set/get/list user-defined pool attributes (async)",
+	  pool_attribute, pool_setup_async, test_case_teardown},
 };
 
 int

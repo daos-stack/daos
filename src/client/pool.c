@@ -113,6 +113,77 @@ daos_pool_target_query(daos_handle_t poh, d_rank_list_t *tgts,
 }
 
 int
+daos_pool_attr_list(daos_handle_t poh, char *buf, size_t *size,
+		    daos_event_t *ev)
+{
+	daos_pool_attr_list_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_ATTR_LIST);
+
+	rc = dc_task_create(dc_pool_attr_list, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->buf	= buf;
+	args->size	= size;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_pool_attr_get(daos_handle_t poh, int n, char const *const names[],
+		   void *const values[], size_t sizes[], daos_event_t *ev)
+{
+	daos_pool_attr_get_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_ATTR_GET);
+
+	rc = dc_task_create(dc_pool_attr_get, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->n		= n;
+	args->names	= names;
+	args->values	= values;
+	args->sizes	= sizes;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_pool_attr_set(daos_handle_t poh, int n, char const *const names[],
+		   void const *const values[], size_t const sizes[],
+		   daos_event_t *ev)
+{
+	daos_pool_attr_set_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_ATTR_SET);
+
+	rc = dc_task_create(dc_pool_attr_set, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->n		= n;
+	args->names	= names;
+	args->values	= values;
+	args->sizes	= sizes;
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_pool_svc_stop(daos_handle_t poh, daos_event_t *ev)
 {
 	daos_pool_svc_stop_t	*args;

@@ -37,3 +37,4 @@ RDB_STRING_KEY(ds_pool_attr_, map_buffer);
 RDB_STRING_KEY(ds_pool_attr_, map_uuids);
 RDB_STRING_KEY(ds_pool_attr_, nhandles);
 RDB_STRING_KEY(ds_pool_attr_, handles);
+RDB_STRING_KEY(ds_pool_attr_, user);

@@ -122,6 +122,15 @@ static struct daos_rpc_handler pool_handlers[] = {
 		.dr_opc		= POOL_SVC_STOP,
 		.dr_hdlr	= ds_pool_svc_stop_handler
 	}, {
+		.dr_opc		= POOL_ATTR_LIST,
+		.dr_hdlr	= ds_pool_attr_list_handler
+	}, {
+		.dr_opc		= POOL_ATTR_GET,
+		.dr_hdlr	= ds_pool_attr_get_handler
+	}, {
+		.dr_opc		= POOL_ATTR_SET,
+		.dr_hdlr	= ds_pool_attr_set_handler
+	}, {
 		.dr_opc		= POOL_TGT_CONNECT,
 		.dr_hdlr	= ds_pool_tgt_connect_handler,
 		.dr_corpc_ops	= {

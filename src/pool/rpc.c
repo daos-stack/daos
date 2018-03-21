@@ -102,6 +102,46 @@ struct crt_msg_field *pool_query_out_fields[] = {
 	&CMF_UINT64,	/* rebuild_st.rec_nr */
 };
 
+struct crt_msg_field *pool_attr_list_in_fields[] = {
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID,	/* op.handle */
+	&CMF_BULK	/* attr bulk */
+};
+
+struct crt_msg_field *pool_attr_list_out_fields[] = {
+	&CMF_INT,		/* op.rc */
+	&CMF_UINT32,		/* op.map_version */
+	&DMF_RSVC_HINT,		/* op.hint */
+	&CMF_UINT64		/* names size */
+};
+
+struct crt_msg_field *pool_attr_get_in_fields[] = {
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID,	/* op.handle */
+	&CMF_UINT64,	/* count */
+	&CMF_UINT64,	/* key length */
+	&CMF_BULK	/* attr bulk */
+};
+
+struct crt_msg_field *pool_attr_get_out_fields[] = {
+	&CMF_INT,		/* op.rc */
+	&CMF_UINT32,		/* op.map_version */
+	&DMF_RSVC_HINT,		/* op.hint */
+};
+
+struct crt_msg_field *pool_attr_set_in_fields[] = {
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID,	/* op.handle */
+	&CMF_UINT64,	/* count */
+	&CMF_BULK	/* bulk */
+};
+
+struct crt_msg_field *pool_attr_set_out_fields[] = {
+	&CMF_INT,		/* op.rc */
+	&CMF_UINT32,		/* op.map_version */
+	&DMF_RSVC_HINT,		/* op.hint */
+};
+
 struct crt_msg_field *pool_tgt_update_in_fields[] = {
 	&CMF_UUID,	/* op.uuid */
 	&CMF_UUID,	/* op.handle */
@@ -206,6 +246,21 @@ struct crt_req_format DQF_POOL_SVC_STOP =
 	DEFINE_CRT_REQ_FMT("POOL_SVC_STOP", pool_svc_stop_in_fields,
 			   pool_svc_stop_out_fields);
 
+struct crt_req_format DQF_POOL_ATTR_LIST =
+	DEFINE_CRT_REQ_FMT("POOL_ATTR_LIST",
+			   pool_attr_list_in_fields,
+			   pool_attr_list_out_fields);
+
+struct crt_req_format DQF_POOL_ATTR_GET =
+	DEFINE_CRT_REQ_FMT("POOL_ATTR_GET",
+			   pool_attr_get_in_fields,
+			   pool_attr_get_out_fields);
+
+struct crt_req_format DQF_POOL_ATTR_SET =
+	DEFINE_CRT_REQ_FMT("POOL_ATTR_SET",
+			   pool_attr_set_in_fields,
+			   pool_attr_set_out_fields);
+
 struct crt_req_format DQF_POOL_TGT_CONNECT =
 	DEFINE_CRT_REQ_FMT("POOL_TGT_CONNECT", pool_tgt_connect_in_fields,
 			   pool_tgt_connect_out_fields);
@@ -284,6 +339,24 @@ struct daos_rpc pool_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_POOL_SVC_STOP,
+	}, {
+		.dr_name	= "POOL_ATTR_LIST",
+		.dr_opc		= POOL_ATTR_LIST,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_ATTR_LIST,
+	}, {
+		.dr_name	= "POOL_ATTR_GET",
+		.dr_opc		= POOL_ATTR_GET,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_ATTR_GET,
+	}, {
+		.dr_name	= "POOL_ATTR_SET",
+		.dr_opc		= POOL_ATTR_SET,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_ATTR_SET,
 	}, {
 		.dr_opc		= 0
 	}
