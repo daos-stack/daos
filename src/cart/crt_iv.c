@@ -1218,7 +1218,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	struct iv_fetch_out		*output;
 	struct crt_ivns_id		*ivns_id;
 	struct crt_ivns_internal	*ivns_internal;
-	struct crt_iv_ops		*iv_ops;
+	struct crt_iv_ops		*iv_ops = NULL;
 	d_sg_list_t			iv_value = {0};
 	int				rc = 0;
 	bool				put_needed = false;
@@ -1336,7 +1336,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	return;
 
 send_error:
-	if (put_needed)
+	if (put_needed && iv_ops)
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 	output->ifo_rc = rc;
 	rc = crt_reply_send(rpc_req);
@@ -1564,7 +1564,7 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 	struct iv_sync_in		*input;
 	struct iv_sync_out		*output;
 	struct crt_ivns_internal	*ivns_internal;
-	struct crt_iv_ops		*iv_ops;
+	struct crt_iv_ops		*iv_ops = NULL;
 	struct crt_ivns_id		*ivns_id;
 	crt_iv_sync_t			*sync_type;
 	d_sg_list_t			iv_value = {0};
@@ -1664,7 +1664,7 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 	}
 
 exit:
-	if (need_put)
+	if (need_put && iv_ops)
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 
 	output->rc = rc;

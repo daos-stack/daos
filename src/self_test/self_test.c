@@ -741,7 +741,7 @@ static int run_self_test(struct st_size_params all_params[],
 	int			  cleanup_ret;
 
 	struct st_master_endpt	 *ms_endpts;
-	uint32_t		  num_ms_endpts;
+	uint32_t		  num_ms_endpts = 0;
 
 	struct st_latency	**latencies = NULL;
 	d_iov_t		 *latencies_iov = NULL;
@@ -1257,7 +1257,8 @@ static void st_parse_range_str(char *const str, char *const validated_str,
 		*(validated_cur_ptr - 1) = '\0';
 }
 
-int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
+int parse_endpoint_string(char *const opt_arg,
+			  struct st_endpoint **const endpts,
 			  uint32_t *const num_endpts)
 {
 	char			*token_ptrs[2] = {NULL, NULL};
@@ -1277,7 +1278,7 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 	 *
 	 * Use the first three ; delimited strings - ignore the rest
 	 */
-	pch = strtok(optarg, ":");
+	pch = strtok(opt_arg, ":");
 	while (pch != NULL && separator_count < 2) {
 		token_ptrs[separator_count] = pch;
 

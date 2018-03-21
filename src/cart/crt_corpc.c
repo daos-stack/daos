@@ -357,7 +357,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	struct crt_grp_priv	*default_grp_priv;
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_rpc_priv	*rpc_priv = NULL;
-	d_rank_list_t		*tobe_excluded_ranks;
+	d_rank_list_t		*tobe_excluded_ranks = NULL;
 	bool			 root_excluded = false;
 	crt_rpc_t		*rpc_pub;
 	d_rank_t		 grp_root, pri_root;

@@ -183,7 +183,7 @@ out:
 static int
 crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 {
-	int	rc, i;
+	int	rc = 0, i;
 
 	D_ASSERT(grp_priv != NULL);
 
@@ -2349,7 +2349,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	char			*tmp_name = NULL;
 	crt_group_id_t		 grpid;
 	d_rank_t		 rank;
-	crt_phy_addr_t		 addr;
+	crt_phy_addr_t		 addr = NULL;
 	bool			 addr_free = false;
 	int			 rc = 0;
 

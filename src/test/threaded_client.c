@@ -180,11 +180,11 @@ static void *send_rpcs(void *arg)
 
 #define check_return(cmd, saved_rc)					\
 	do {								\
-		int	rc = (cmd);					\
-		if ((rc) != 0) {					\
-			(saved_rc) = rc;				\
+		int	rc_chk_rtn = (cmd);				\
+		if ((rc_chk_rtn) != 0) {				\
+			(saved_rc) = rc_chk_rtn;			\
 			printf("Error executing " #cmd ": rc = %d\n",	\
-			       rc);					\
+			       rc_chk_rtn);				\
 		}							\
 	} while (0)
 
@@ -212,9 +212,10 @@ int main(int argc, char **argv)
 		sched_yield();
 
 	for (;;) {
-		int	rc;
-		rc = crt_group_attach("manyserver", &grp);
-		if (rc == 0)
+		int	rc_tmp;
+
+		rc_tmp = crt_group_attach("manyserver", &grp);
+		if (rc_tmp == 0)
 			break;
 		printf("Attach not yet available, sleeping...\n");
 		sleep(1);
