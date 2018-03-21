@@ -30,25 +30,14 @@
 #include <limits.h>
 #include <daos/common.h>
 
-struct daos_debug_data {
-	pthread_mutex_t		 dd_lock;
-	unsigned int		 dd_ref;
-	/** debug bitmask, e.g. DB_IO | DB_MD... */
-	uint64_t		 dd_mask;
-	/** priority level that should be output to stderr */
-	uint64_t		 dd_prio_err;
-	char			 dd_logfile[PATH_MAX];
-};
+/* default debug log file */
+#define DAOS_LOG_DEFAULT	"/tmp/daos.log"
 
-static struct daos_debug_data	debug_data = {
-	.dd_lock		= PTHREAD_MUTEX_INITIALIZER,
-	.dd_ref			= 0,
-	/* 0 means we should use the mask provided by facilities */
-	.dd_mask		= 0,
-	/* output critical or higher priority message to stderr */
-	.dd_prio_err		= DP_CRIT,
-	.dd_logfile		= DD_LOG_DEFAULT,
-};
+#define DAOS_DBG_MAX_LEN	(32)
+#define DAOS_FAC_MAX_LEN	(128)
+
+static int dd_ref;
+static pthread_mutex_t dd_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /** DAOS debug tunables */
 bool dd_tune_alloc = false;	/* disabled */
@@ -82,295 +71,49 @@ struct daos_debug_fac {
 	uint64_t	 df_mask;
 	/** facility is enabled */
 	int		 df_enabled;
+	size_t		 df_name_size;
 };
+
+#define DBG_DICT_ENTRY(bit, name, lname)				\
+	{ .db_bit = bit, .db_name = name, .db_lname = lname,		\
+	  .db_name_size = sizeof(name), .db_lname_size = sizeof(lname) }
+
+static struct d_debug_bit daos_bit_dict[] = {
+	/* load DAOS-specific debug bits into dict */
+	DBG_DICT_ENTRY(DB_MD, "md", "metadata"),
+	DBG_DICT_ENTRY(DB_PL, "pl", "placement"),
+	DBG_DICT_ENTRY(DB_MGMT, "mgmt", "management"),
+	DBG_DICT_ENTRY(DB_EPC, "epc", "epoch"),
+	DBG_DICT_ENTRY(DB_DF, "df", "durafmt"), /* durable format */
+	DBG_DICT_ENTRY(DB_REBUILD, "rebuild", NULL),
+};
+
+#define DBG_FAC_DICT_ENTRY(name, idp, mask, enabled)		\
+	{ .df_name = name, .df_idp = idp, .df_mask = mask,	\
+	  .df_enabled = enabled, .df_name_size = sizeof(name) }
 
 /** dictionary for all facilities */
 static struct daos_debug_fac debug_fac_dict[] = {
-	{ /* MUST be the first one */
-		.df_name	= "",	/* no facility name for NULL */
-		.df_idp		= &dd_fac_null,
-		.df_mask	= DB_NULL,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "misc",
-		.df_idp		= &dd_fac_misc,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "common",
-		.df_idp		= &dd_fac_common,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 0, /* disabled by default */
-	},
-	{
-		.df_name	= "tree",
-		.df_idp		= &dd_fac_tree,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 0, /* disabled by default */
-	},
-	{
-		.df_name	= "vos",
-		.df_idp		= &dd_fac_vos,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 0,
-	},
-	{
-		.df_name	= "client",
-		.df_idp		= &dd_fac_client,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "server",
-		.df_idp		= &dd_fac_server,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "rdb",
-		.df_idp		= &dd_fac_rdb,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "pool",
-		.df_idp		= &dd_fac_pool,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "container",
-		.df_idp		= &dd_fac_container,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "object",
-		.df_idp		= &dd_fac_object,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "placement",
-		.df_idp		= &dd_fac_placement,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "rebuild",
-		.df_idp		= &dd_fac_rebuild,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "tier",
-		.df_idp		= &dd_fac_tier,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "mgmt",
-		.df_idp		= &dd_fac_mgmt,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
-	},
-	{
-		.df_name	= "utils",
-		.df_idp		= &dd_fac_utils,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 0, /* disabled by default */
-	},
-	{
-		.df_name	= "tests",
-		.df_idp		= &dd_fac_tests,
-		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 0, /* disabled by default */
-	},
-	{
-		.df_name	= NULL,
-	},
+	/* MUST be the first one */
+	/* no facility name for NULL */
+	DBG_FAC_DICT_ENTRY("", &dd_fac_null, DB_NULL, 1),
+	DBG_FAC_DICT_ENTRY("misc", &dd_fac_misc, DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENTRY("common", &dd_fac_common, DB_DEFAULT, 0),
+	DBG_FAC_DICT_ENTRY("tree", &dd_fac_tree, DB_DEFAULT, 0),
+	DBG_FAC_DICT_ENTRY("vos", &dd_fac_vos, DB_DEFAULT, 0),
+	DBG_FAC_DICT_ENTRY("client", &dd_fac_client, DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENTRY("server", &dd_fac_server, DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENTRY("rdb", &dd_fac_rdb, DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENTRY("pool", &dd_fac_pool, DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENTRY("container", &dd_fac_container, DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENTRY("object", &dd_fac_object, DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENTRY("placement", &dd_fac_placement, DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENTRY("rebuild", &dd_fac_rebuild, DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENTRY("tier", &dd_fac_tier, DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENTRY("mgmt", &dd_fac_mgmt, DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENTRY("utils", &dd_fac_utils, DB_DEFAULT, 0),
+	DBG_FAC_DICT_ENTRY("tests", &dd_fac_tests, DB_DEFAULT, 0),
 };
-
-/**
- * Priority level for debug message.
- * It is only used by D__INFO, D__NOTE, D__WARN, D__ERROR, D__CRIT and D__FATAL.
- * - All priority debug messages are always stored in the debug log.
- * - User can decide the priority level to output to stderr by setting
- *   env variable DD_STDERR, the default level is D__CRIT.
- */
-struct daos_debug_priority {
-	char		*dd_name;
-	char		*dd_lname;	/**< long name */
-	uint64_t	 dd_prio;
-};
-
-static struct daos_debug_priority debug_prio_dict[] = {
-	{
-		.dd_name	= "info",
-		.dd_lname	= NULL,
-		.dd_prio	= DP_INFO,
-	},
-	{
-		.dd_name	= "note",
-		.dd_lname	= NULL,
-		.dd_prio	= DP_NOTE,
-	},
-	{
-		.dd_name	= "warn",
-		.dd_lname	= "warning",
-		.dd_prio	= DP_WARN,
-	},
-	{
-		.dd_name	= "err",
-		.dd_lname	= "error",
-		.dd_prio	= DP_ERR,
-	},
-	{
-		.dd_name	= "crit",
-		.dd_lname	= "critical",
-		.dd_prio	= DP_CRIT,
-	},
-	{
-		.dd_name	= "fatal",
-		.dd_lname	= NULL,
-		.dd_prio	= DP_FATAL,
-	},
-	{
-		.dd_name	= NULL,
-	}
-};
-
-/**
- * Predefined bits for the debug mask, each bit can represent a functionality
- * of the system, e.g. DB_MEM, DB_IO, DB_MD, DB_PL...
- */
-struct daos_debug_bit {
-	uint64_t		 db_bit;
-	char			*db_name;
-	char			*db_lname;
-};
-
-static struct daos_debug_bit debug_bit_dict[] = {
-	{
-		.db_bit		= DB_ANY,
-		.db_name	= "any",
-	},
-	{
-		.db_bit		= DB_MEM,
-		.db_name	= "mem",
-		.db_lname	= "memory",
-	},
-	{
-		.db_bit		= DB_NET,
-		.db_name	= "net",
-		.db_lname	= "network",
-	},
-	{
-		.db_bit		= DB_IO,
-		.db_name	= "io",
-	},
-	{
-		.db_bit		= DB_MD,
-		.db_name	= "md",
-		.db_lname	= "metadata",
-	},
-	{
-		.db_bit		= DB_PL,
-		.db_name	= "pl",
-		.db_lname	= "placement",
-	},
-	{
-		.db_bit		= DB_MGMT,
-		.db_name	= "mgmt",
-		.db_lname	= "management",
-	},
-	{
-		.db_bit		= DB_EPC,
-		.db_name	= "epc",
-		.db_lname	= "epoch",
-	},
-	{
-		.db_bit		= DB_DF,
-		.db_name	= "df",
-		.db_lname	= "durafmt", /* durable format */
-	},
-	{
-		.db_bit		= DB_TRACE,
-		.db_name	= "trace",
-	},
-	{
-		.db_bit		= DB_REBUILD,
-		.db_name	= "rebuild",
-	},
-	{
-		.db_bit		= DB_ALL,
-		.db_name	= "all",
-	},
-	{
-		.db_name	= NULL,
-	},
-};
-
-/**
- * Load priority error from environment variable
- * A Priority error will be output to stderr by the debug system.
- */
-static void
-debug_prio_err_load_env(void)
-{
-	struct daos_debug_priority *dict;
-	char			   *env;
-
-	env = getenv(DD_STDERR_ENV);
-	if (env == NULL)
-		return;
-
-	for (dict = &debug_prio_dict[0]; dict->dd_name != NULL; dict++) {
-		if (strcasecmp(env, dict->dd_name) == 0)
-			break;
-
-		if (dict->dd_lname != NULL &&
-		    strcasecmp(env, dict->dd_lname) == 0)
-			break;
-	}
-
-	if (dict->dd_name != NULL) /* found */
-		debug_data.dd_prio_err = dict->dd_prio;
-}
-
-/** Load the debug mask from the environment variable. */
-static void
-debug_mask_load_env(void)
-{
-	char	*mask_env;
-	char	*mask_str;
-	char	*cur;
-	int	 i;
-
-	mask_env = getenv(DD_MASK_ENV);
-	if (mask_env == NULL)
-		return;
-
-	mask_str = strdup(mask_env);
-	if (mask_str == NULL)
-		return;
-
-	debug_data.dd_mask = 0;
-
-	cur = strtok(mask_str, DD_SEP);
-	while (cur != NULL) {
-		for (i = 0; debug_bit_dict[i].db_name; i++) {
-			if (strcasecmp(cur, debug_bit_dict[i].db_name) == 0) {
-				debug_data.dd_mask |= debug_bit_dict[i].db_bit;
-				break;
-			}
-		}
-		cur = strtok(NULL, DD_SEP);
-	}
-	free(mask_str);
-}
 
 /** Load enabled debug facilities from the environment variable. */
 static void
@@ -380,35 +123,90 @@ debug_fac_load_env(void)
 	char	*fac_str;
 	char	*cur;
 	int	 i;
+	int	num_dbg_fac_entries;
 
 	fac_env = getenv(DD_FAC_ENV);
 	if (fac_env == NULL)
 		return;
 
-	fac_str = strdup(fac_env);
-	if (fac_str == NULL)
+	D_STRNDUP(fac_str, fac_env, DAOS_FAC_MAX_LEN);
+	if (fac_str == NULL) {
+		fprintf(stderr, "D_STRNDUP of fac mask failed");
 		return;
+	}
 
 	/* Disable all facilities. The first one is ignored because NULL is
 	 * always enabled.
 	 */
-	for (i = 1; debug_fac_dict[i].df_name; i++)
+	num_dbg_fac_entries = ARRAY_SIZE(debug_fac_dict);
+	for (i = 1; i < num_dbg_fac_entries; i++)
 		debug_fac_dict[i].df_enabled = 0;
 
 	cur = strtok(fac_str, DD_SEP);
 	while (cur != NULL) {
 		/* skip 1 because it's NULL and enabled always */
-		for (i = 1; debug_fac_dict[i].df_name; i++) {
-			if (strcasecmp(cur, debug_fac_dict[i].df_name) == 0) {
+		for (i = 1; i < num_dbg_fac_entries; i++) {
+			if (debug_fac_dict[i].df_name != NULL &&
+			    strncasecmp(cur, debug_fac_dict[i].df_name,
+					debug_fac_dict[i].df_name_size)
+					== 0) {
 				debug_fac_dict[i].df_enabled = 1;
 				break;
-			} else if (strcasecmp(cur, DD_FAC_ALL) == 0) {
+			} else if (strncasecmp(cur, DD_FAC_ALL,
+						strlen(DD_FAC_ALL)) == 0) {
 				debug_fac_dict[i].df_enabled = 1;
 			}
 		}
 		cur = strtok(NULL, DD_SEP);
 	}
-	free(fac_str);
+	D_FREE(fac_str);
+}
+
+/** Load the debug mask from the environment variable. */
+static uint64_t
+debug_mask_load_env(void)
+{
+	char		*mask_env;
+	char		*mask_str;
+	char		*cur;
+	int		i;
+	uint64_t	dd_mask;
+	int		num_dbg_bit_entries;
+
+	mask_env = getenv(DD_MASK_ENV);
+	if (mask_env == NULL)
+		return 0;
+
+	D_STRNDUP(mask_str, mask_env, DAOS_DBG_MAX_LEN);
+	if (mask_str == NULL) {
+		fprintf(stderr, "D_STRNDUP of debug mask failed");
+		return 0;
+	}
+
+	dd_mask = 0;
+	num_dbg_bit_entries = ARRAY_SIZE(daos_bit_dict);
+	cur = strtok(mask_str, DD_SEP);
+	while (cur != NULL) {
+		for (i = 0; i < num_dbg_bit_entries; i++) {
+			if (daos_bit_dict[i].db_name != NULL &&
+			    strncasecmp(cur, daos_bit_dict[i].db_name,
+					daos_bit_dict[i].db_name_size)
+					== 0) {
+				dd_mask |= daos_bit_dict[i].db_bit;
+				break;
+			}
+			if (daos_bit_dict[i].db_lname != NULL &&
+			    strncasecmp(cur, daos_bit_dict[i].db_lname,
+					daos_bit_dict[i].db_lname_size)
+					== 0) {
+				dd_mask |= daos_bit_dict[i].db_bit;
+				break;
+			}
+		}
+		cur = strtok(NULL, DD_SEP);
+	}
+	D_FREE(mask_str);
+	return dd_mask;
 }
 
 /** loading misc debug tunables */
@@ -446,50 +244,46 @@ debug_fini_locked(void)
 void
 daos_debug_fini(void)
 {
-	D_MUTEX_LOCK(&debug_data.dd_lock);
-	debug_data.dd_ref--;
-	if (debug_data.dd_ref == 0)
+	D_MUTEX_LOCK(&dd_lock);
+	dd_ref--;
+	if (dd_ref == 0)
 		debug_fini_locked();
-	D_MUTEX_UNLOCK(&debug_data.dd_lock);
+	D_MUTEX_UNLOCK(&dd_lock);
 }
 
 /** Initialize debug system */
 int
 daos_debug_init(char *logfile)
 {
-	int	i;
-	int	rc;
+	int		i;
+	int		rc;
+	uint64_t	dd_mask;
 
-	D_MUTEX_LOCK(&debug_data.dd_lock);
-	if (debug_data.dd_ref > 0) {
-		debug_data.dd_ref++;
-		D_MUTEX_UNLOCK(&debug_data.dd_lock);
+	D_MUTEX_LOCK(&dd_lock);
+	if (dd_ref > 0) {
+		dd_ref++;
+		D_MUTEX_UNLOCK(&dd_lock);
 		return 0;
 	}
 
-	if (getenv(DD_LOG_ENV)) /* honor the env variable first */
-		logfile = getenv(DD_LOG_ENV);
+	if (getenv(D_LOG_FILE_ENV)) /* honor the env variable first */
+		logfile = getenv(D_LOG_FILE_ENV);
 	else if (logfile == NULL)
-		logfile = DD_LOG_DEFAULT;
+		logfile = DAOS_LOG_DEFAULT;
 
-	strncpy(debug_data.dd_logfile, logfile, sizeof(debug_data.dd_logfile));
-
+	dd_mask = debug_mask_load_env();
 	/* load other env variables */
-	debug_prio_err_load_env();
-	debug_mask_load_env();
 	debug_fac_load_env();
 	debug_tunables_load_env();
 
-	rc = d_log_init_adv("DAOS", debug_data.dd_logfile, DLOG_FLV_LOGPID,
-			    DP_INFO, debug_data.dd_prio_err);
+	rc = d_log_init_adv("DAOS", logfile, DLOG_FLV_LOGPID,
+			    DP_INFO, DLOG_CRIT);
 	if (rc != 0) {
 		fprintf(stderr, "Failed to initialize debug log: %d\n", rc);
 		goto failed_unlock;
 	}
 
 	for (i = 0; debug_fac_dict[i].df_name != NULL; i++) {
-		unsigned int	mask;
-
 		if (!debug_fac_dict[i].df_enabled) {
 			/* redirect disabled facility to NULL */
 			*debug_fac_dict[i].df_idp = dd_fac_null;
@@ -502,14 +296,12 @@ daos_debug_init(char *logfile)
 				debug_fac_dict[i].df_name, rc);
 			goto failed_fini;
 		}
-
-		mask = debug_data.dd_mask != 0 ?
-		       debug_data.dd_mask : debug_fac_dict[i].df_mask;
-
-		d_log_setlogmask(*debug_fac_dict[i].df_idp, mask);
 	}
-	debug_data.dd_ref = 1;
-	D_MUTEX_UNLOCK(&debug_data.dd_lock);
+
+	d_log_sync_mask(dd_mask, false);
+
+	dd_ref = 1;
+	D_MUTEX_UNLOCK(&dd_lock);
 
 	return 0;
 
@@ -517,7 +309,7 @@ failed_fini:
 	debug_fini_locked();
 
 failed_unlock:
-	D_MUTEX_UNLOCK(&debug_data.dd_lock);
+	D_MUTEX_UNLOCK(&dd_lock);
 	return rc;
 }
 

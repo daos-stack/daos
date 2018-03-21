@@ -47,7 +47,7 @@ def runServer(hostfile, urifile, setname, basepath):
         initial_cmd = "/bin/sh"
         server_cmd = basepath + "/install/bin/orterun --np {0} ".format(server_count)
         server_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
-        server_cmd += "--report-uri {0} -x DD_LOG=".format(urifile)
+        server_cmd += "--report-uri {0} -x D_LOG_FILE=".format(urifile)
         server_cmd += basepath + "/install/tmp/daos.log "
         server_cmd += "-x LD_LIBRARY_PATH={0}/install/lib:{0}/install/lib/daos_srv ".format(
             basepath)

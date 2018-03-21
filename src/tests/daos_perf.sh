@@ -42,7 +42,7 @@ $ORTERUN 				\
 	--ompi-server file:${SRV_URI}	\
 	-x DDSUBSYS=$D_SUBSYS		\
 	-x DD_MASK=$D_DEBUG		\
-	-x DD_LOG=$D_LOG		\
+	-x D_LOG_FILE=$D_LOG		\
 	${DAOS_PERF}			\
 	-T $TCLASS			\
 	-P "${POOL_SIZE}G"		\

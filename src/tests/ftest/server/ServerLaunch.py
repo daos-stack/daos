@@ -44,7 +44,7 @@ class ServerLaunch(Test):
         launch_cmd = "../../install/bin/orterun --np {0} ".format(
                 server_count)
         launch_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
-        launch_cmd += "--report-uri {0} -x DD_LOG=/mnt/shared/test/tmp/daos.log ".format(urifile)
+        launch_cmd += "--report-uri {0} -x D_LOG_FILE=/mnt/shared/test/tmp/daos.log ".format(urifile)
         launch_cmd += "-x LD_LIBRARY_PATH=/home/skirvan/daos_m10/install/lib:/home/skirvan/daos_m10/install/lib/daos_srv "
         launch_cmd += "../../install/bin/daos_server -g daos_server"
 
