@@ -59,6 +59,8 @@ typedef struct {
 	daos_handle_t		coh;
 	daos_pool_info_t	pool_info;
 	daos_cont_info_t	co_info;
+	daos_size_t		pool_size;
+	int			setup_state;
 	bool			async;
 	bool			hdl_share;
 	uint64_t		fail_loc;
@@ -91,6 +93,22 @@ enum {
 };
 
 #define DEFAULT_POOL_SIZE	(4ULL << 30)
+
+#define WAIT_ON_ASYNC(arg, ev)					\
+	do {							\
+		if (arg->async) {				\
+			int rc;					\
+			daos_event_t *evp;			\
+								\
+			rc = daos_eq_poll(arg->eq, 1,		\
+					  DAOS_EQ_WAIT,		\
+					  1, &evp);		\
+			assert_int_equal(rc, 1);		\
+			assert_ptr_equal(evp, &ev);		\
+			assert_int_equal(ev.ev_error, 0);	\
+		}						\
+	} while (0)
+
 int
 test_teardown(void **state);
 int

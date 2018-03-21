@@ -37,7 +37,6 @@ co_create(void **state)
 	daos_handle_t	 coh;
 	daos_cont_info_t info;
 	daos_event_t	 ev;
-	daos_event_t	*evp;
 	int		 rc;
 
 	if (!arg->hdl_share && arg->myrank != 0)
@@ -57,14 +56,7 @@ co_create(void **state)
 			      arg->async ? "a" : "");
 		rc = daos_cont_create(arg->poh, uuid, arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
-
-		if (arg->async) {
-			/** wait for container creation */
-			rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-			assert_int_equal(rc, 1);
-			assert_ptr_equal(evp, &ev);
-			assert_int_equal(ev.ev_error, 0);
-		}
+		WAIT_ON_ASYNC(arg, ev);
 		print_message("container created\n");
 
 		print_message("opening container %ssynchronously\n",
@@ -72,14 +64,7 @@ co_create(void **state)
 		rc = daos_cont_open(arg->poh, uuid, DAOS_COO_RW, &coh, &info,
 				 arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
-
-		if (arg->async) {
-			/** wait for container open */
-			rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-			assert_int_equal(rc, 1);
-			assert_ptr_equal(evp, &ev);
-			assert_int_equal(ev.ev_error, 0);
-		}
+		WAIT_ON_ASYNC(arg, ev);
 		print_message("contained opened\n");
 
 		print_message("container info:\n");
@@ -101,14 +86,7 @@ co_create(void **state)
 		      arg->async ? "a" : "");
 	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
-
-	if (arg->async) {
-		/** wait for container close */
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
-	}
+	WAIT_ON_ASYNC(arg, ev);
 	print_message("container closed\n");
 
 	if (arg->hdl_share)
@@ -121,19 +99,19 @@ co_create(void **state)
 		rc = daos_cont_destroy(arg->poh, uuid, 1 /* force */,
 				    arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
-
+		WAIT_ON_ASYNC(arg, ev);
 		if (arg->async) {
-			/** wait for container destroy */
-			rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-			assert_int_equal(rc, 1);
-			assert_ptr_equal(evp, &ev);
-			assert_int_equal(ev.ev_error, 0);
-
 			rc = daos_event_fini(&ev);
 			assert_int_equal(rc, 0);
 		}
 		print_message("container destroyed\n");
 	}
+}
+
+static int
+setup(void **state)
+{
+	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE);
 }
 
 static const struct CMUnitTest co_tests[] = {
@@ -144,12 +122,6 @@ static const struct CMUnitTest co_tests[] = {
 	{ "CONT3: container handle local2glocal and global2local",
 	  co_create, hdl_share_enable, test_case_teardown},
 };
-
-static int
-setup(void **state)
-{
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE);
-}
 
 int
 run_daos_cont_test(int rank, int size)

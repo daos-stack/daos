@@ -55,7 +55,6 @@ pool_connect(void **state)
 	test_arg_t	*arg = *state;
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
-	daos_event_t	*evp;
 	daos_pool_info_t info;
 	int		 rc;
 
@@ -75,14 +74,7 @@ pool_connect(void **state)
 				       DAOS_PC_RW, &poh, &info,
 				      arg->async ? &ev : NULL /* ev */);
 		assert_int_equal(rc, 0);
-
-		if (arg->async) {
-			/** wait for pool connection */
-			rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-			assert_int_equal(rc, 1);
-			assert_ptr_equal(evp, &ev);
-			assert_int_equal(ev.ev_error, 0);
-		}
+		WAIT_ON_ASYNC(arg, ev);
 		assert_memory_equal(info.pi_uuid, arg->pool_uuid,
 				    sizeof(info.pi_uuid));
 		/** TODO: assert_int_equal(info.pi_ntargets, arg->...); */
@@ -95,15 +87,7 @@ pool_connect(void **state)
 		rc = daos_pool_query(poh, NULL /* tgts */, &info,
 				     arg->async ? &ev : NULL /* ev */);
 		assert_int_equal(rc, 0);
-
-		if (arg->async) {
-			/** wait for pool query */
-			rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-			assert_int_equal(rc, 1);
-			assert_ptr_equal(evp, &ev);
-			assert_int_equal(ev.ev_error, 0);
-		}
-
+		WAIT_ON_ASYNC(arg, ev);
 		assert_int_equal(info.pi_ndisabled, 0);
 		print_message("success\n");
 	}
@@ -116,14 +100,8 @@ pool_connect(void **state)
 		      arg->myrank, arg->async ? "a" : "");
 	rc = daos_pool_disconnect(poh, arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
-
+	WAIT_ON_ASYNC(arg, ev);
 	if (arg->async) {
-		/** wait for pool disconnection */
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
-
 		rc = daos_event_fini(&ev);
 		assert_int_equal(rc, 0);
 		/* disable the async after testing done */
@@ -186,7 +164,6 @@ pool_exclude(void **state)
 	test_arg_t	*arg = *state;
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
-	daos_event_t	*evp;
 	daos_pool_info_t info;
 	d_rank_list_t ranks;
 	d_rank_t	 rank;
@@ -214,15 +191,7 @@ pool_exclude(void **state)
 			       DAOS_PC_RW, &poh, &info,
 			       arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
-
-	if (arg->async) {
-		/** wait for pool connection */
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
-	}
-
+	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
 
 	/** exclude last non-svc rank */
@@ -238,15 +207,7 @@ pool_exclude(void **state)
 	rc = daos_pool_exclude(arg->pool_uuid, arg->group, &arg->svc, &ranks,
 			       arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
-
-	if (arg->async) {
-		/** wait for pool exclusion */
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
-	}
-
+	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
 
 	print_message("rank 0 querying pool info... ");
@@ -254,15 +215,7 @@ pool_exclude(void **state)
 	rc = daos_pool_query(poh, NULL /* tgts */, &info,
 			     arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
-
-	if (arg->async) {
-		/** wait for pool query */
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
-	}
-
+	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(info.pi_ndisabled, 1);
 	print_message("success\n");
 
@@ -272,20 +225,20 @@ disconnect:
 		      arg->myrank, arg->async ? "a" : "");
 	rc = daos_pool_disconnect(poh, arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
-
+	WAIT_ON_ASYNC(arg, ev);
 	if (arg->async) {
-		/** wait for pool disconnection */
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
-
 		rc = daos_event_fini(&ev);
 		assert_int_equal(rc, 0);
 		/* disable the async after testing done */
 		arg->async = false;
 	}
 	print_message("rank %d success\n", arg->myrank);
+}
+
+static int
+setup(void **state)
+{
+	return test_setup(state, SETUP_POOL_CREATE, true, DEFAULT_POOL_SIZE);
 }
 
 static const struct CMUnitTest pool_tests[] = {
@@ -301,14 +254,8 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_connect_exclusively, NULL, test_case_teardown},
 	/* Keep this one at the end, as it excludes target rank 1. */
 	{ "POOL6: exclude targets and query pool info",
-	  pool_exclude, async_disable, NULL}
+	  pool_exclude, async_disable, NULL},
 };
-
-static int
-setup(void **state)
-{
-	return test_setup(state, SETUP_POOL_CREATE, true, DEFAULT_POOL_SIZE);
-}
 
 int
 run_daos_pool_test(int rank, int size)
