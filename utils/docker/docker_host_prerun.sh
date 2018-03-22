@@ -58,21 +58,38 @@ docker_setup_file="docker_setup.sh"
 rm -f ${docker_setup_file}
 touch ${docker_setup_file}
 
-# Allow running on local or Intel Compute Cloud VMs.
-set +e
-proxy_host="proxy-chain.intel.com"
-host proxy-chain.intel.com
-if [ $? == 0 ]; then
-  printf "export http_proxy=\"http://${proxy_host}:911\"\n" >> \
-    ${docker_setup_file}
-  printf "export https_proxy=\"https://${proxy_host}:912\"\n" >> \
-    ${docker_setup_file}
-fi
 # Export the build number
 printf "export BUILD_NUMBER=${BUILD_NUMBER}\n" >> \
     ${docker_setup_file}
 set -e
 chmod 755 ${docker_setup_file}
+
+set +u
+# Pass the klocwork environment variables to the container.
+if [ -n "${KLOCWORK_PROJECT}" ]; then
+  printf "export KLOCWORK_PROJECT=${KLOCWORK_PROJECT}\n" >> \
+    ${docker_setup_file}
+fi
+if [ -n "${KLOCWORK_LICENSE_HOST}" ]; then
+  printf "export KLOCWORK_LICENSE_HOST=${KLOCWORK_LICENSE_HOST}\n" >> \
+    ${docker_setup_file}
+fi
+if [ -n "${KLOCWORK_LICENSE_PORT}" ]; then
+  printf "export KLOCWORK_LICENSE_PORT=${KLOCWORK_LICENSE_PORT}\n" >> \
+    ${docker_setup_file}
+fi
+if [ -n "${KLOCWORK_URL}" ]; then
+  printf "export KLOCWORK_URL=${KLOCWORK_URL}\n" >> \
+    ${docker_setup_file}
+fi
+
+if [ -n "${KW_PATH}" ]; then
+  printf "export KW_PATH=${KW_PATH}\n" >> \
+    ${docker_setup_file}
+  printf "export PATH=${KW_PATH}/bin:${PATH}\n" >> \
+    ${docker_setup_file}
+fi
+set -u
 
 # Look for extra container setup for the package
 if [ -e extra_exports.sh ]; then

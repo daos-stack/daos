@@ -55,8 +55,18 @@ matrix="${distro%.*}_$$"
 echo "${job_real_name}_${BUILD_NUMBER}_${matrix}" > \
   ${WORKSPACE}/docker_container_name.txt
 
+kwmount=""
+# Need to mount the klocwork tools path for the docker container
+# The build agent should set the KW_PATH environment variable.
+set +u
+if [ -n "${KW_PATH}" ]; then
+  kwmount="-v ${KW_PATH}:${KW_PATH}"
+  kwmount+=" -v ${KW_SETTINGS}:${KW_SETTINGS}"
+fi
+set -u
+
 docker run --rm --name "${job_real_name}_${BUILD_NUMBER}_${matrix}" \
-           -u $USER -v ${PWD}:/work \
+           -u $USER -v ${PWD}:/work ${kwmount} \
            -v ${WORK_TARGET}:${DIST_MOUNT} \
            --privileged --device /dev/fuse:/dev/fuse:rwm \
            -a stderr -a stdout ${DOCKER_OPTIONS} -i coral/${DOCKER_IMAGE} \
