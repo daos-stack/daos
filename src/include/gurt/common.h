@@ -156,10 +156,11 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 
 #define D_ASPRINTF(ptr, ...)						\
 	do {								\
-		int rc;							\
-		rc = asprintf(&(ptr), __VA_ARGS__);			\
-		D_CHECK_ALLOC(asprintf, rc != -1 && (ptr) != NULL,	\
-			      ptr, #ptr, rc + 1, 0, #ptr, (ptr) = NULL);\
+		int _rc;						\
+		_rc = asprintf(&(ptr), __VA_ARGS__);			\
+		D_CHECK_ALLOC(asprintf, _rc != -1 && (ptr) != NULL,	\
+			      ptr, #ptr, _rc + 1, 0, #ptr,		\
+			      (ptr) = NULL);				\
 	} while (0)
 
 #define D_REALPATH(ptr, path)						\
@@ -216,7 +217,8 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 	({								\
 		int _rc;						\
 		_rc = fn(x);						\
-		D_ASSERTF(_rc == 0, "%s rc=%d\n", #fn, _rc);		\
+		D_ASSERTF(_rc == 0, "%s rc=%d %s\n", #fn, _rc,		\
+			  strerror(_rc));				\
 		d_errno2der(_rc);					\
 	})
 
