@@ -24,10 +24,13 @@
 import ctypes
 import traceback
 
+
 class RankList(ctypes.Structure):
+
     """ For those DAOS calls that take a rank list """
     _fields_ = [("rl_ranks", ctypes.POINTER(ctypes.c_uint)),
                 ("rl_nr", ctypes.c_uint)]
+
 
 class DaosPool(object):
     """ A python object representing a DAOS pool."""
@@ -36,6 +39,7 @@ class DaosPool(object):
         """ setup the python pool object, not the real pool. """
         self.context = context
         self.uuid = ""
+        self.group = ""
 
     def create(self, mode, uid, gid, size, group):
         """ send a pool creation request to the daos server group """
@@ -44,17 +48,30 @@ class DaosPool(object):
         c_gid = ctypes.c_uint(gid)
         c_size = ctypes.c_longlong(size)
         c_group = ctypes.create_string_buffer(group)
-        c_uuid = (ctypes.c_int*3)()
+        c_uuid = (ctypes.c_ubyte * 16)()
         rank = ctypes.c_uint(1)
         rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
-        whatever = ctypes.create_string_buffer(b"rubbish")
+        c_whatever = ctypes.create_string_buffer(b"rubbish")
 
         svc = RankList(rl_ranks, 1)
 
         func = self.context.get_function('create-pool')
-        func(c_mode, c_uid, c_gid, c_group, None, whatever, c_size,
+        func(c_mode, c_uid, c_gid, c_group, None, c_whatever, c_size,
              ctypes.byref(svc), c_uuid, None)
         self.uuid = c_uuid
+        self.group = group
+
+    def destroy(self, force):
+
+        if self.uuid == "":
+            raise ValueError("No existing UUID for pool.")
+        c_uuid = self.uuid
+        c_grp = ctypes.create_string_buffer(self.group)
+        c_force = ctypes.c_uint(force)
+
+        func = self.context.get_function('destroy-pool')
+        func(c_uuid, c_grp, c_force, None)
+
 
 class DaosServer(object):
     """Represents a DAOS Server"""
@@ -74,6 +91,7 @@ class DaosServer(object):
         func = self.context.get_function('kill-server')
         func(c_group, c_rank, c_force, None)
 
+
 class DaosContext(object):
     """Provides environment and other info for a DAOS client."""
 
@@ -88,8 +106,9 @@ class DaosContext(object):
         self.libdaos = ctypes.CDLL(path+"libdaos.so.0.0.2", mode=0x00101)
         self.libdaos.daos_init()
         self.ftable = {
-             'create-pool':self.libdaos.daos_pool_create,
-             'kill-server':self.libdaos.daos_mgmt_svc_rip,
+             'create-pool': self.libdaos.daos_pool_create,
+             'destroy-pool': self.libdaos.daos_pool_destroy,
+             'kill-server': self.libdaos.daos_mgmt_svc_rip,
         }
 
     def __del__(self):
@@ -100,17 +119,20 @@ class DaosContext(object):
         """ call a function through the API """
         return self.ftable[function]
 
+
 if __name__ == '__main__':
-    # test the API functions, this is just unit testing
-    # for this file.
+    # test the API functions
 
     try:
-        CONTEXT = DaosContext('path to library goes here')
+        CONTEXT = DaosContext('path to libdaos.so goes here')
         print("initialized!!!\n")
 
         POOL = DaosPool(CONTEXT)
-        POOL.create(448, 11374638, 11374638, 1024*1024*1024, b'daos_server')
-        print ("created!\n")
+        POOL.create(448, 11374638, 11374638, 1024 * 1024 * 1024, b'daos_server')
+        print ("Pool created!\n")
+
+        POOL.destroy(1)
+        print("Pool destroyed")
 
         SERVICE = DaosServer(CONTEXT, b'daos_server', 0)
         SERVICE.kill(1)
