@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,8 +118,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 		/* provide an v-extent which covers everything */
 		rtmp.rc_off_lo = 0;
 		rtmp.rc_off_hi = ~0ULL;
-		rtmp.rc_epc_lo = 0;
-		rtmp.rc_epc_hi = DAOS_EPOCH_MAX;
+		rtmp.rc_epc_lo = DAOS_EPOCH_MAX;
 		break;
 
 	case EVT_ITER_FIND:
@@ -134,8 +133,6 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 			rect = (struct evt_rect *)&anchor->body[0];
 
 		rtmp = *rect;
-		if (rtmp.rc_epc_hi == 0)
-			rtmp.rc_epc_hi = DAOS_EPOCH_MAX;
 	}
 
 	evt_ent_list_init(&entl);
@@ -248,13 +245,6 @@ evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
 
 	if (anchor) {
 		struct evt_rect rtmp = *rect;
-
-		/* XXX this is a nasty workaround for anchor, because we
-		 * determine end of enumeration by checking if the last 8
-		 * bytes is ~0ULL, which equals to DAOS_EPOCH_MAX.
-		 */
-		if (rtmp.rc_epc_hi == DAOS_EPOCH_MAX)
-			rtmp.rc_epc_hi = 0;
 
 		memset(anchor, 0, sizeof(*anchor));
 		memcpy(&anchor->body[0], &rtmp, sizeof(rtmp));

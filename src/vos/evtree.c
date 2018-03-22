@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,30 @@
 
 #include "evt_priv.h"
 
+enum {
+	/** no overlap */
+	RT_OVERLAP_NO		= 0,
+	/* set if rt1 range or epoch matches rt2 */
+	RT_OVERLAP_SAME		= (1 << 1),
+	/* set if rt1 is before rt2 */
+	RT_OVERLAP_OVER		= (1 << 2),
+	/* set if rt1 is after rt2 */
+	RT_OVERLAP_UNDER	= (1 << 3),
+	/* set if rt1 range includes rt2 */
+	RT_OVERLAP_INCLUDED	= (1 << 4),
+	/* set if rt2 range includes rt1 */
+	RT_OVERLAP_INCLUDES	= (1 << 5),
+	/* set if rt2 range overlaps rt1 */
+	RT_OVERLAP_PARTIAL	= (1 << 6),
+};
+
+struct evt_entry_pool {
+	/** link chain of evt_entry_pool */
+	d_list_t		ep_link;
+	/** additional entries, if needed */
+	struct evt_entry	ep_ents[ERT_ENT_EMBEDDED];
+};
+
 static struct evt_policy_ops evt_ssof_pol_ops;
 /**
  * Tree policy table.
@@ -38,7 +62,7 @@ static struct evt_rect *evt_node_mbr_get(struct evt_context *tcx,
 					 TMMID(struct evt_node) nd_mmid);
 
 /**
- * Returns true if the first rectangle \a rt1 is wider than the second
+ * Returns true if the first rectangle \a rt1 is at least as wide as the second
  * rectangle \a rt2.
  */
 static bool
@@ -61,47 +85,35 @@ evt_rect_equal_width(struct evt_rect *rt1, struct evt_rect *rt2)
  * of input rectangles), the first rectangle \a rt1 should be in-tree, the
  * second rectangle \a rt2 should be the one being searched/inserted.
  */
-static int
-evt_rect_overlap(struct evt_rect *rt1, struct evt_rect *rt2, bool leaf)
+static void
+evt_rect_overlap(struct evt_rect *rt1, struct evt_rect *rt2, int *range,
+		 int *time)
 {
+	*time = *range = RT_OVERLAP_NO;
 
 	if (rt1->rc_off_lo > rt2->rc_off_hi || /* no offset overlap */
-	    rt1->rc_off_hi < rt2->rc_off_lo ||
-	    rt1->rc_epc_lo > rt2->rc_epc_hi || /* no epoch overlap */
-	    rt1->rc_epc_hi < rt2->rc_epc_lo)
-		return RT_OVERLAP_NO;
+	    rt1->rc_off_hi < rt2->rc_off_lo)
+		return;
 
-	if (leaf) {
-		if (rt1->rc_epc_lo == rt2->rc_epc_lo) {
-			if (evt_rect_equal_width(rt1, rt2))
-				return RT_OVERLAP_SAME;
+	/* NB: By definition, there is always epoch overlap since all
+	 * updates are from epc_lo to INF.  Determine here what kind
+	 * of overlap exists.
+	 */
+	if (rt1->rc_epc_lo == rt2->rc_epc_lo)
+		*time = RT_OVERLAP_SAME;
+	else if (rt1->rc_epc_lo < rt2->rc_epc_lo)
+		*time = RT_OVERLAP_OVER;
+	else
+		*time = RT_OVERLAP_UNDER;
 
-			if (evt_rect_is_wider(rt1, rt2))
-				return RT_OVERLAP_INPLACE;
-
-			if (evt_rect_is_wider(rt2, rt1))
-				return RT_OVERLAP_EXPAND;
-
-		} else if (rt1->rc_epc_lo < rt2->rc_epc_lo) {
-			/* the in-tree extent is older */
-			if (evt_rect_is_wider(rt2, rt1))
-				return RT_OVERLAP_CAPPING;
-
-		} else {
-			/* the current extent is older */
-			if (evt_rect_is_wider(rt1, rt2))
-				return RT_OVERLAP_CAPPED;
-		}
-		return RT_OVERLAP_YES;
-
-	} else { /* non-leaf */
-		if (evt_rect_is_wider(rt1, rt2) &&
-		    rt1->rc_epc_lo <= rt2->rc_epc_lo &&
-		    rt1->rc_epc_hi >= rt2->rc_epc_hi)
-			return RT_OVERLAP_INCLUDED;
-
-		return RT_OVERLAP_YES;
-	}
+	if (evt_rect_equal_width(rt1, rt2))
+		*range = RT_OVERLAP_SAME;
+	else if (evt_rect_is_wider(rt1, rt2))
+		*range = RT_OVERLAP_INCLUDED;
+	else if (evt_rect_is_wider(rt2, rt1))
+		*range = RT_OVERLAP_INCLUDES;
+	else
+		*range = RT_OVERLAP_PARTIAL;
 }
 
 /**
@@ -128,11 +140,6 @@ evt_rect_merge(struct evt_rect *rt1, struct evt_rect *rt2)
 
 	if (rt1->rc_epc_lo > rt2->rc_epc_lo) {
 		rt1->rc_epc_lo = rt2->rc_epc_lo;
-		changed = true;
-	}
-
-	if (rt1->rc_epc_hi < rt2->rc_epc_hi) {
-		rt1->rc_epc_hi = rt2->rc_epc_hi;
 		changed = true;
 	}
 
@@ -183,25 +190,44 @@ evt_ent_list_init(struct evt_entry_list *ent_list)
 {
 	memset(ent_list, 0, sizeof(*ent_list));
 	D_INIT_LIST_HEAD(&ent_list->el_list);
+	D_INIT_LIST_HEAD(&ent_list->el_pool);
 }
 
 /** Finalize an entry list */
 void
 evt_ent_list_fini(struct evt_entry_list *ent_list)
 {
-	/* NB: free allocated entries and leave alone embedded entries */
-	while (ent_list->el_ent_nr > ERT_ENT_EMBEDDED) {
-		struct evt_entry *ent;
+	struct evt_entry_pool	*pool;
+	struct evt_entry_pool	*temp;
 
-		ent = d_list_entry(ent_list->el_list.prev, struct evt_entry,
-				   en_link);
-		d_list_del(&ent->en_link);
-		D_FREE_PTR(ent);
-		ent_list->el_ent_nr--;
+	/* NB: free any allocated pools of extra entries */
+	d_list_for_each_entry_safe(pool, temp, &ent_list->el_pool, ep_link) {
+		D_FREE(pool);
 	}
 
+	D_INIT_LIST_HEAD(&ent_list->el_pool);
 	D_INIT_LIST_HEAD(&ent_list->el_list);
 	ent_list->el_ent_nr = 0;
+}
+
+static struct evt_entry *
+evt_ent_list_alloc_pool(struct evt_entry_list *ent_list)
+{
+	struct evt_entry_pool	*pool;
+	int		 index	= ent_list->el_ent_nr % ERT_ENT_EMBEDDED;
+
+	if (index == 0) { /* first index of new pool */
+		D_ALLOC_PTR(pool);
+		if (pool == NULL)
+			return NULL;
+		d_list_add_tail(&pool->ep_link, &ent_list->el_pool);
+	} else {
+		/* Get the tail */
+		pool = d_list_entry(ent_list->el_pool.prev,
+				    struct evt_entry_pool, ep_link);
+	}
+
+	return &pool->ep_ents[index];
 }
 
 /**
@@ -209,31 +235,323 @@ evt_ent_list_fini(struct evt_entry_list *ent_list)
  * have been taken.
  */
 static struct evt_entry *
-evt_ent_list_alloc(struct evt_entry_list *ent_list)
+evt_ent_list_alloc(struct evt_entry_list *ent_list, bool add)
 {
 	struct evt_entry *ent;
 
 	if (ent_list->el_ent_nr < ERT_ENT_EMBEDDED) {
 		/* consume a embedded entry */
 		ent = &ent_list->el_ents[ent_list->el_ent_nr];
-		ent_list->el_ent_nr++;
 
 		memset(ent, 0, sizeof(*ent));
 	} else {
-		D_ALLOC_PTR(ent);
+		ent = evt_ent_list_alloc_pool(ent_list);
 		if (ent == NULL)
 			return NULL;
 
 	}
-	d_list_add_tail(&ent->en_link, &ent_list->el_list);
+	ent_list->el_ent_nr++;
+	if (add)
+		d_list_add_tail(&ent->en_link, &ent_list->el_list);
+
 	return ent;
 }
 
-/** Sort all entries of the ent_list */
-static void
-evt_ent_list_sort(struct evt_entry_list *ent_list)
+static int
+evt_cmp_rect_helper(const struct evt_rect *rt1, const struct evt_rect *rt2)
 {
-	/* TODO */
+	if (rt1->rc_off_lo < rt2->rc_off_lo)
+		return -1;
+
+	if (rt1->rc_off_lo > rt2->rc_off_lo)
+		return 1;
+
+	if (rt1->rc_epc_lo > rt2->rc_epc_lo)
+		return -1;
+
+	if (rt1->rc_epc_lo < rt2->rc_epc_lo)
+		return 1;
+
+	if (rt1->rc_off_hi < rt2->rc_off_hi)
+		return -1;
+
+	if (rt1->rc_off_hi > rt2->rc_off_hi)
+		return 1;
+
+	return 0;
+}
+
+int evt_ent_cmp(const void *p1, const void *p2)
+{
+	const struct evt_entry	*ent1	= p1;
+	const struct evt_entry	*ent2	= p2;
+
+	return evt_cmp_rect_helper(&ent1->en_sel_rect, &ent2->en_sel_rect);
+}
+
+static void
+evt_sort_and_merge(struct evt_entry *ents, int count, d_list_t *sorted)
+{
+	d_list_t		*current;
+	struct evt_entry	*ent;
+	int			 index;
+	int			 cmp;
+
+	qsort(ents, count, sizeof(ents[0]), evt_ent_cmp);
+
+	/* Now merge into sorted list */
+	for (index = 0, current = sorted->next; index < count;) {
+		if (current == sorted) {
+			d_list_add_tail(&ents[index].en_link, sorted);
+			index++;
+			continue;
+		}
+
+		ent = d_list_entry(current, struct evt_entry, en_link);
+
+		cmp = evt_cmp_rect_helper(&ents[index].en_sel_rect,
+					       &ent->en_sel_rect);
+		D_ASSERTF(cmp != 0, "Same epoch overwrite detected r1="DF_RECT
+			  " r2="DF_RECT"\n", DP_RECT(&ent->en_rect),
+			  DP_RECT(&ents[index].en_rect));
+		if (cmp < 0) {
+			d_list_add(&ents[index].en_link, current->prev);
+			index++;
+		} else {
+			/* Skip to next entry */
+			current = current->next;
+		}
+	}
+}
+
+/* Use top bit of inob field to temporarily mark a partial rectangle as part
+ * of another rectangle so we don't return it in the covered list
+ */
+#define EVT_PARTIAL_FLAG (1 << 31)
+
+static struct evt_entry *
+evt_find_next_uncovered(struct evt_entry *this_ent, d_list_t *head,
+			d_list_t **next, d_list_t *free_list, int *flag_bit)
+{
+	d_list_t		*temp;
+	struct evt_rect		*this_rect;
+	struct evt_rect		*next_rect;
+	struct evt_entry	*next_ent;
+
+	while (*next != head) {
+		next_ent = d_list_entry(*next, struct evt_entry, en_link);
+
+		/* NB: Flag is set if part of the extent is visible */
+		*flag_bit = next_ent->en_inob & EVT_PARTIAL_FLAG;
+		next_ent->en_inob &= ~(EVT_PARTIAL_FLAG);
+
+		this_rect = &this_ent->en_sel_rect;
+		next_rect = &next_ent->en_sel_rect;
+		if (next_rect->rc_epc_lo > this_rect->rc_epc_lo)
+			return next_ent; /* next_ent is a later update */
+		if (next_rect->rc_off_hi > this_rect->rc_off_hi)
+			return next_ent; /* next_ent extends past end */
+
+		temp = *next;
+		*next = temp->next;
+		if (*flag_bit) /* NB: part of the extent is visible */
+			d_list_move(temp, free_list);
+
+	}
+
+	return NULL;
+}
+
+static struct evt_entry *
+evt_get_unused_entry(struct evt_entry_list *ent_list, d_list_t *unused)
+{
+	d_list_t *entry;
+
+	if (d_list_empty(unused))
+		return evt_ent_list_alloc(ent_list, false);
+
+	entry = unused->next;
+	d_list_del(entry);
+
+	return d_list_entry(entry, struct evt_entry, en_link);
+}
+
+static void
+evt_split_entry(struct evt_entry *current, struct evt_entry *next,
+		struct evt_entry *split)
+{
+	daos_off_t	diff;
+
+	*split = *current;
+	diff = next->en_sel_rect.rc_off_hi + 1 - split->en_sel_rect.rc_off_lo;
+	split->en_sel_rect.rc_off_lo = next->en_sel_rect.rc_off_hi + 1;
+	split->en_offset += diff;
+	split->en_addr = (char *)split->en_addr + diff * split->en_inob;
+	/* Mark the split entry so we don't keep it in covered list */
+	split->en_inob |= EVT_PARTIAL_FLAG;
+
+	current->en_sel_rect.rc_off_hi = next->en_sel_rect.rc_off_lo - 1;
+}
+
+static d_list_t *
+evt_insert_sorted(struct evt_entry *this_ent, d_list_t *head, d_list_t *current)
+{
+	d_list_t		*start = current;
+	struct evt_entry	*next_ent;
+	int			 cmp;
+
+	while (current != head) {
+		next_ent = d_list_entry(current, struct evt_entry, en_link);
+		cmp = evt_cmp_rect_helper(&this_ent->en_sel_rect,
+					       &next_ent->en_sel_rect);
+		if (cmp < 0) {
+			d_list_add(&this_ent->en_link, current->prev);
+			goto out;
+		}
+		current = current->next;
+	}
+	d_list_add_tail(&this_ent->en_link, head);
+out:
+	if (start == current)
+		return &this_ent->en_link;
+	return start;
+}
+
+static int
+evt_uncover_entries(struct evt_entry_list *ent_list, d_list_t *covered)
+{
+	struct evt_rect		*this_rect;
+	struct evt_rect		*next_rect;
+	struct evt_entry	*this_ent;
+	struct evt_entry	*next_ent;
+	struct evt_entry	*temp_ent;
+	d_list_t		*current;
+	d_list_t		*next;
+	d_list_t		 unused;
+	daos_size_t		 diff;
+	int			 flag_bit;
+	bool			 insert;
+
+	D_INIT_LIST_HEAD(&unused);  /* list of entries that can be reclaimed */
+
+	/* reset the linked list.  We'll reconstruct it */
+	D_INIT_LIST_HEAD(&ent_list->el_list);
+
+	insert = true;
+	/* Now uncover entries */
+	current = covered->next;
+	/* Some compilers can't tell that this_ent will be initialized */
+	this_ent = d_list_entry(current, struct evt_entry,
+				en_link);
+	next = current->next;
+
+	while (next != covered) {
+		if (insert) {
+			this_ent = d_list_entry(current, struct evt_entry,
+						en_link);
+			d_list_move_tail(current, &ent_list->el_list);
+		}
+
+		insert = true;
+
+		/* Find next uncovered rectangle */
+		next_ent = evt_find_next_uncovered(this_ent, covered, &next,
+						   &unused, &flag_bit);
+		if (next_ent == NULL)
+			return 0;
+
+		this_rect = &this_ent->en_sel_rect;
+		next_rect = &next_ent->en_sel_rect;
+		current = next;
+		next = current->next;
+		/* NB: Three possibilities
+		 * 1. No intersection.  Current entry is inserted in entirety
+		 * 2. Partial intersection, next is earlier. Next is truncated
+		 * 3. Partial intersection, next is later. Current is truncated
+		 * 4. Current entry contains next_entry.  Current is split
+		 * in two and both are truncated.
+		 */
+		if (next_rect->rc_off_lo >= this_rect->rc_off_hi + 1) {
+			/* Case #1, entry already inserted, nothing to do */
+		} else if (next_rect->rc_epc_lo < this_rect->rc_epc_lo) {
+			/* Case #2, next rect is partially under this rect,
+			 * Truncate left end of next_rec, reinsert.
+			 */
+			diff = this_rect->rc_off_hi + 1 - next_rect->rc_off_lo;
+			next_rect->rc_off_lo = this_rect->rc_off_hi + 1;
+			next_ent->en_offset += diff;
+			next_ent->en_addr = (char *)next_ent->en_addr +
+				diff * next_ent->en_inob;
+			/* current now points at next_ent.  Remove it and
+			 * reinsert it in the list in case truncation moved
+			 * it to a new position
+			 */
+			d_list_del(current);
+			next = evt_insert_sorted(next_ent, covered, next);
+			/* Reset the flag bit */
+			next_ent->en_inob |= flag_bit;
+
+			/* Now we need to rerun this iteration without
+			 * inserting this_ent again
+			 */
+			insert = false;
+		} else if (next_rect->rc_off_hi >= this_rect->rc_off_hi) {
+			/* Case #3, truncate entry */
+			this_rect->rc_off_hi = next_rect->rc_off_lo - 1;
+		} else {
+			/* Case #4, split, insert tail into sorted list */
+			temp_ent = evt_get_unused_entry(ent_list, &unused);
+			if (temp_ent == NULL)
+				return -DER_NOMEM;
+			evt_split_entry(this_ent, next_ent, temp_ent);
+			/* Current points at next_ent */
+			next = evt_insert_sorted(temp_ent, covered, next);
+		}
+	}
+
+	d_list_move_tail(current, &ent_list->el_list);
+
+	return 0;
+}
+
+/** Place all entries into covered list in sorted order based on selected
+ * range.   Then walk through the range to find only extents that are visible
+ * and place them in the main list.   Update the selection bounds for visible
+ * rectangles.
+ */
+static int
+evt_ent_list_sort(struct evt_entry_list *ent_list, d_list_t *covered)
+{
+	d_list_t		*current = &ent_list->el_pool;
+	struct evt_entry_pool	*pool;
+	struct evt_entry	*ents;
+	int			 count;
+	int			 todo;
+
+	D_INIT_LIST_HEAD(covered);
+
+	if (ent_list->el_ent_nr <= 1)
+		return 0;
+
+	/* First, sort the entries and place all in covered list */
+	todo = ent_list->el_ent_nr;
+	ents = &ent_list->el_ents[0]; /* start with embedded pool */
+
+	for (todo = ent_list->el_ent_nr; todo != 0; todo -= count) {
+		count = min(todo, ERT_ENT_EMBEDDED);
+
+		evt_sort_and_merge(ents, count, covered);
+
+		if (current->next == &ent_list->el_pool)
+			break;
+
+		current = current->next;
+		pool = d_list_entry(current, struct evt_entry_pool, ep_link);
+		ents = &pool->ep_ents[0];
+	}
+
+	/* Now separate entries into covered and visible */
+	return evt_uncover_entries(ent_list, covered);
 }
 
 daos_handle_t
@@ -472,25 +790,6 @@ evt_ptr_payload(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid,
 	/* returns the embedded data */
 	D_ASSERT(ptr->pt_inob * ptr->pt_inum <= EVT_PTR_PAYLOAD);
 	return &ptr->pt_payload[0];
-}
-
-static void
-evt_ptr_copy(struct evt_context *tcx, TMMID(struct evt_ptr) dst_mmid,
-	     TMMID(struct evt_ptr) src_mmid)
-{
-	struct evt_ptr *src_ptr = evt_tmmid2ptr(tcx, src_mmid);
-	struct evt_ptr *dst_ptr = evt_tmmid2ptr(tcx, dst_mmid);
-	int		ref	= dst_ptr->pt_ref;
-
-	D_DEBUG(DB_IO, "dst r=%d, num=%d, nob=%d, src r=%d, num=%d, nob=%d\n",
-		dst_ptr->pt_ref, (int)dst_ptr->pt_inum, dst_ptr->pt_inob,
-		src_ptr->pt_ref, (int)src_ptr->pt_inum, src_ptr->pt_inob);
-
-	if (!UMMID_IS_NULL(dst_ptr->pt_mmid))
-		umem_free(evt_umm(tcx), dst_ptr->pt_mmid);
-
-	memcpy(dst_ptr, src_ptr, sizeof(*dst_ptr));
-	dst_ptr->pt_ref = ref;
 }
 
 /** copy data from \a sgl to the buffer addressed by \a ptr_mmid */
@@ -891,10 +1190,12 @@ evt_node_weight_diff(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	struct evt_rect	   rtmp;
 	struct evt_weight  wt_org;
 	struct evt_weight  wt_new;
-	int		   rc;
+	int		   range;
+	int		   time;
 
-	rc = evt_rect_overlap(&nd->tn_mbr, rect, false);
-	if (rc == RT_OVERLAP_INCLUDED) {
+	evt_rect_overlap(&nd->tn_mbr, rect, &range, &time);
+	if ((time & (RT_OVERLAP_SAME | RT_OVERLAP_OVER)) &&
+	    (range & RT_OVERLAP_INCLUDED)) {
 		/* no difference, because the rectangle is included by the
 		 * MBR of the node.
 		 */
@@ -1047,92 +1348,6 @@ evt_root_destroy(struct evt_context *tcx)
 	}
 
 	evt_root_free(tcx);
-	return 0;
-}
-
-/**
- * Clip the new entry if its rectangle overlaps with any existent leaf node,
- * clipped shards are attached on tcx::tc_ent_inserting:
- *
- * - If there is no overlap, then simply copy the entry \a ent and attach it
- *   to tcx::tc_ent_inserting
- *
- * - If there is overlap:
- *   . Clip the original rectangle (the rectangle already in tree), some of
- *     the clipped shards could be re-inserted straightaway if their parent
- *     still have empty slots. If their parent have no available slots, then
- *     new shards should be attached on tcx::tc_ent_inserting and be inserted
- *     later in the "inserting" phase.
- *
- *   . Clip the new rectangle, then clipped shards should be attached on
- *     tcx::tc_ent_clipping and they should be checked again. A rectangle can
- *     be moved from tcx::tc_ent_clipping to tcx::tc_ent_inserting only if
- *     there is no more overlap.
- *
- * XXX This function is not done yet.
- */
-static int
-evt_clip_entry(struct evt_context *tcx, struct evt_entry *ent)
-{
-	struct evt_entry *entmp;
-	int		  rc;
-	bool		  replaced;
-
-	/* XXX we only clip those epoch capped rectangles, also, we don't
-	 * even update their parent (MBR of their parent could be shrinked).
-	 * This may not be good for performance but should maintain the
-	 * correctness of the tree.
-	 */
-	evt_ent_list_init(&tcx->tc_ent_list);
-	rc = evt_find_ent_list(tcx, EVT_FIND_CAP, &ent->en_rect,
-			       &tcx->tc_ent_list);
-	if (rc != 0)
-		return rc;
-
-	replaced = false;
-	/* cap epoch for returned rectangles */
-	evt_ent_list_for_each(entmp, &tcx->tc_ent_list) {
-		struct evt_rect	   *rt1 = (struct evt_rect *)entmp->en_addr;
-		struct evt_rect	   *rt2 = &ent->en_rect;
-
-		D_ASSERT(evt_rect_is_wider(rt2, rt1));
-		D_ASSERT(rt1->rc_epc_lo <= rt2->rc_epc_lo);
-
-		if (rt1->rc_epc_lo < rt2->rc_epc_lo) { /* cap epoch */
-			D_DEBUG(DB_TRACE,
-				"Recap epoch to "DF_U64" for "DF_RECT"\n",
-				rt2->rc_epc_lo - 1, DP_RECT(rt1));
-
-			D_ASSERT(rt1->rc_epc_hi >= rt2->rc_epc_lo);
-			rt1->rc_epc_hi = rt2->rc_epc_lo - 1;
-			continue;
-		} /* else: replace */
-
-		D_ASSERT(!replaced);
-		D_ASSERT(evt_rect_equal_width(rt1, rt2));
-
-		D_DEBUG(DB_TRACE, "Replacing "DF_RECT"\n", DP_RECT(rt1));
-		evt_ptr_copy(tcx, umem_id_u2t(entmp->en_mmid, struct evt_ptr),
-			     umem_id_u2t(ent->en_mmid, struct evt_ptr));
-		ent->en_mmid = entmp->en_mmid;
-		replaced = true;
-	}
-	evt_ent_list_fini(&tcx->tc_ent_list);
-
-	if (replaced) {
-		D_DEBUG(DB_TRACE, "Replaced\n");
-		return 0; /* nothing to insert */
-	}
-
-	entmp = evt_ent_list_alloc(&tcx->tc_ent_list);
-	if (entmp == NULL)
-		return -DER_NOMEM;
-
-	entmp->en_rect	 = ent->en_rect;
-	entmp->en_offset = ent->en_offset;
-	entmp->en_mmid	 = ent->en_mmid;
-	d_list_add_tail(&entmp->en_link, &tcx->tc_ent_inserting);
-
 	return 0;
 }
 
@@ -1344,27 +1559,24 @@ evt_insert_entry(struct evt_context *tcx, struct evt_entry *ent)
 	return evt_insert_or_split(tcx, ent);
 }
 
-/** Insert all entries attached on tcx::tc_ent_inserting to the evtree */
-static int
-evt_insert_entries(struct evt_context *tcx)
+static void
+evt_ptr_copy(struct evt_context *tcx, TMMID(struct evt_ptr) dst_mmid,
+	     TMMID(struct evt_ptr) src_mmid)
 {
-	int	rc;
+	struct evt_ptr	*src_ptr	= evt_tmmid2ptr(tcx, src_mmid);
+	struct evt_ptr	*dst_ptr	= evt_tmmid2ptr(tcx, dst_mmid);
+	int		 ref		= dst_ptr->pt_ref;
 
-	while (!d_list_empty(&tcx->tc_ent_inserting)) {
-		struct evt_entry *ent;
+	D_DEBUG(DB_IO, "dst r=%d, num=%d, nob=%d, src r=%d, num=%d, nob=%d\n",
+		dst_ptr->pt_ref, (int)dst_ptr->pt_inum, dst_ptr->pt_inob,
+		src_ptr->pt_ref, (int)src_ptr->pt_inum, src_ptr->pt_inob);
 
-		ent = d_list_entry(tcx->tc_ent_inserting.next, struct evt_entry,
-				   en_link);
-		d_list_del_init(&ent->en_link);
+	/* Free the pmem that dst_ptr references */
+	if (!UMMID_IS_NULL(dst_ptr->pt_mmid))
+		umem_free(evt_umm(tcx), dst_ptr->pt_mmid);
 
-		rc = evt_insert_entry(tcx, ent);
-		if (rc != 0)
-			D_GOTO(failed, rc);
-	}
-	return 0;
-failed:
-	D_DEBUG(DB_IO, "Failed to add rect list: %d\n", rc);
-	return rc;
+	memcpy(dst_ptr, src_ptr, sizeof(*dst_ptr));
+	dst_ptr->pt_ref = ref;
 }
 
 /**
@@ -1382,41 +1594,48 @@ static int
 evt_insert_ptr(struct evt_context *tcx, struct evt_rect *rect,
 	       TMMID(struct evt_ptr) ptr_mmid, TMMID(struct evt_ptr) *out_mmid)
 {
-	struct evt_entry ent;
-	int		 rc;
+	struct evt_entry	*entmp;
+	struct evt_entry	 ent;
+	int			 rc;
 
-	D_INIT_LIST_HEAD(&tcx->tc_ent_clipping);
-	D_INIT_LIST_HEAD(&tcx->tc_ent_inserting);
 	evt_ent_list_init(&tcx->tc_ent_list);
 
 	if (tcx->tc_depth == 0) { /* empty tree */
 		rc = evt_root_activate(tcx);
 		if (rc != 0)
-			D_GOTO(failed, rc);
+			goto out;
 	}
 
 	memset(&ent, 0, sizeof(ent));
 	ent.en_mmid = umem_id_t2u(ptr_mmid);
 	ent.en_rect = *rect;
-	if (ent.en_rect.rc_epc_hi == 0)
-		ent.en_rect.rc_epc_hi = DAOS_EPOCH_MAX;
 
-	/* Phase-1: Clipping */
-	rc = evt_clip_entry(tcx, &ent);
+	/* Phase-1: Check for overwrite */
+	rc = evt_find_ent_list(tcx, EVT_FIND_OVERWRITE, &ent.en_rect,
+			       &tcx->tc_ent_list);
 	if (rc != 0)
-		D_GOTO(failed, rc);
+		goto out;
+
+	if (!d_list_empty(&tcx->tc_ent_list.el_list)) {
+		/* NB: This is part of the current hack to keep "supporting"
+		 * overwrite for same epoch, full overwrite
+		 */
+		entmp = d_list_entry(tcx->tc_ent_list.el_list.next,
+				     struct evt_entry, en_link);
+		d_list_del_init(&entmp->en_link);
+		evt_ptr_copy(tcx, umem_id_u2t(entmp->en_mmid, struct evt_ptr),
+			     umem_id_u2t(ent.en_mmid, struct evt_ptr));
+		if (out_mmid)
+			*out_mmid = umem_id_u2t(entmp->en_mmid, struct evt_ptr);
+		goto out;
+	}
 
 	if (out_mmid)
 		*out_mmid = umem_id_u2t(ent.en_mmid, struct evt_ptr);
 
-	D_ASSERT(d_list_empty(&tcx->tc_ent_clipping));
 	/* Phase-2: Inserting */
-	rc = evt_insert_entries(tcx);
-	if (rc != 0)
-		D_GOTO(failed, rc);
-
-	D_ASSERT(d_list_empty(&tcx->tc_ent_inserting));
- failed:
+	rc = evt_insert_entry(tcx, &ent);
+out:
 	evt_ent_list_fini(&tcx->tc_ent_list);
 	return rc;
 }
@@ -1540,9 +1759,9 @@ evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		width -= nr;
 	}
 
-	entry->en_rect = *rect;
-	entry->en_rect.rc_off_lo += offset;
-	entry->en_rect.rc_off_hi = entry->en_rect.rc_off_lo + width - 1;
+	entry->en_rect = entry->en_sel_rect = *rect;
+	entry->en_sel_rect.rc_off_lo += offset;
+	entry->en_sel_rect.rc_off_hi = entry->en_sel_rect.rc_off_lo + width - 1;
 
 	entry->en_mmid = umem_id_t2u(pref->pr_ptr_mmid);
 	uuid_copy(entry->en_cookie, ptr->pt_cookie);
@@ -1581,7 +1800,8 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 	int			 i;
 	int			 rc = 0;
 
-	D_DEBUG(DB_TRACE, "Searching rectangle "DF_RECT"\n", DP_RECT(rect));
+	D_DEBUG(DB_TRACE, "Searching rectangle "DF_RECT" opc=%d\n",
+		DP_RECT(rect), find_opc);
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
@@ -1606,31 +1826,36 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 		for (i = at; i < node->tn_nr; i++) {
 			struct evt_entry	*ent;
 			struct evt_rect		*rtmp;
-			int			 overlap;
+			int			 time_overlap;
+			int			 range_overlap;
 
 			rtmp = evt_node_rect_at(tcx, nd_mmid, i);
 			D_DEBUG(DB_TRACE, " rect[%d]="DF_RECT"\n",
 				i, DP_RECT(rtmp));
 
-			overlap = evt_rect_overlap(rtmp, rect, leaf);
-			switch (overlap) {
+			evt_rect_overlap(rtmp, rect, &range_overlap,
+					 &time_overlap);
+			switch (range_overlap) {
 			default:
 				D_ASSERT(0);
-			case RT_OVERLAP_INVAL:
-				return -DER_INVAL;
-
 			case RT_OVERLAP_NO:
-				continue; /* search the next one */
+				continue; /* skip, no overlap */
 
-			case RT_OVERLAP_INCLUDED:
-				D_ASSERT(!leaf);
-				/* fall through */
-			case RT_OVERLAP_YES:
 			case RT_OVERLAP_SAME:
-			case RT_OVERLAP_INPLACE:
-			case RT_OVERLAP_EXPAND:
-			case RT_OVERLAP_CAPPING:
-			case RT_OVERLAP_CAPPED:
+			case RT_OVERLAP_INCLUDED:
+			case RT_OVERLAP_INCLUDES:
+			case RT_OVERLAP_PARTIAL:
+				break; /* overlapped */
+			}
+
+			switch (time_overlap) {
+			default:
+				D_ASSERT(0);
+			case RT_OVERLAP_NO:
+			case RT_OVERLAP_UNDER:
+				continue; /* skip, no overlap */
+			case RT_OVERLAP_OVER:
+			case RT_OVERLAP_SAME:
 				break; /* overlapped */
 			}
 
@@ -1647,38 +1872,42 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 			switch (find_opc) {
 			default:
 				D_ASSERTF(0, "%d\n", find_opc);
-			case EVT_FIND_CAP:
-				if (overlap == RT_OVERLAP_CAPPED) {
-					/* Trying to insert an extent which is
-					 * fully overwriten by an in-tree
-					 * extent. We just modify the high
-					 * epoch of the current extent and
-					 * continue the scan.
-					 */
-					rect->rc_epc_hi = rtmp->rc_epc_lo - 1;
-					continue;
+			case EVT_FIND_OVERWRITE:
+				if (time_overlap != RT_OVERLAP_SAME)
+					continue; /* not same epoch, skip */
+				/* NB: This is temporary to allow full overwrite
+				 * in same epoch to avoid breaking rebuild.
+				 * Without some sequence number and client
+				 * identifier, we can't do this robustly.
+				 * There can be a race between rebuild and
+				 * client doing different updates.  But this
+				 * isn't any worse than what we already have in
+				 * place so I did it this way to minimize
+				 * change while we decide how to handle this
+				 * properly.
+				 */
+				if (range_overlap != RT_OVERLAP_SAME) {
+					D_DEBUG(DB_IO, "Same epoch partial "
+						"overwrite not supported:"
+						DF_RECT" overlaps with "DF_RECT
+						"\n", DP_RECT(rect),
+						DP_RECT(rtmp));
+					rc = -DER_NO_PERM;
+					goto out;
 				}
-
-				if (overlap == RT_OVERLAP_CAPPING ||
-				    overlap == RT_OVERLAP_SAME)
-					break; /* matched */
-
-				D_DEBUG(DB_IO, "Invalid overlap for capping :"
-					DF_RECT" overlaps with "DF_RECT"\n",
-					DP_RECT(rect), DP_RECT(rtmp));
-				D_GOTO(out, rc = -DER_NO_PERM);
-
+				break; /* we can update the record in place */
 			case EVT_FIND_SAME:
-				if (overlap != RT_OVERLAP_SAME)
+				if (range_overlap != RT_OVERLAP_SAME)
+					continue;
+				if (time_overlap != RT_OVERLAP_SAME)
 					continue;
 				break;
-
 			case EVT_FIND_FIRST:
 			case EVT_FIND_ALL:
 				break;
 			}
 
-			ent = evt_ent_list_alloc(ent_list);
+			ent = evt_ent_list_alloc(ent_list, true);
 			if (ent == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1686,6 +1915,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 			switch (find_opc) {
 			default:
 				D_ASSERTF(0, "%d\n", find_opc);
+			case EVT_FIND_OVERWRITE:
 			case EVT_FIND_FIRST:
 			case EVT_FIND_SAME:
 				/* store the trace and return for clip or
@@ -1696,13 +1926,6 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 				D_GOTO(out, rc = 0);
 
 			case EVT_FIND_ALL:
-				break;
-
-			case EVT_FIND_CAP:
-				/* store the intree rectangle and cap all
-				 * them together.
-				 */
-				ent->en_addr = rtmp;
 				break;
 			}
 		}
@@ -1744,7 +1967,7 @@ out:
  */
 int
 evt_find(daos_handle_t toh, struct evt_rect *rect,
-	 struct evt_entry_list *ent_list)
+	 struct evt_entry_list *ent_list, d_list_t *covered)
 {
 	struct evt_context *tcx;
 	int		    rc;
@@ -1755,12 +1978,10 @@ evt_find(daos_handle_t toh, struct evt_rect *rect,
 
 	evt_ent_list_init(ent_list);
 	rc = evt_find_ent_list(tcx, EVT_FIND_ALL, rect, ent_list);
-	if (rc != 0) {
+	if (rc == 0 && covered != NULL)
+		rc = evt_ent_list_sort(ent_list, covered);
+	if (rc != 0)
 		evt_ent_list_fini(ent_list);
-		D_GOTO(out, rc);
-	}
-	evt_ent_list_sort(ent_list);
- out:
 	return rc;
 }
 
@@ -2025,6 +2246,7 @@ evt_debug(daos_handle_t toh, int debug_level)
 	return 0;
 }
 
+
 /**
  * Tree policies
  *
@@ -2032,36 +2254,18 @@ evt_debug(daos_handle_t toh, int debug_level)
  */
 
 /**
- * Sorted by Start OFfset (SSOF)
+ * Sorted by Start Offset (SSOF)
  *
- * Assume there is no overwrite, all versioned extents are sorted by start
- * offset in the tree.
+ * Extents are sorted by start offset first, then high to low epoch, then end
+ * offset
  */
 
 /** Rectangle comparison for sorting */
 static int
-evt_ssof_cmp_rect(struct evt_context *tcx, struct evt_rect *rt1,
-		  struct evt_rect *rt2)
+evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *rt1,
+		  const struct evt_rect *rt2)
 {
-	if (rt1->rc_off_lo < rt2->rc_off_lo)
-		return -1;
-
-	if (rt1->rc_off_lo > rt2->rc_off_lo)
-		return 1;
-
-	if (rt1->rc_off_hi < rt2->rc_off_hi)
-		return -1;
-
-	if (rt1->rc_off_hi > rt2->rc_off_hi)
-		return 1;
-
-	if (rt1->rc_epc_lo < rt2->rc_epc_lo)
-		return -1;
-
-	if (rt1->rc_epc_lo > rt2->rc_epc_lo)
-		return 1;
-
-	return 0;
+	return evt_cmp_rect_helper(rt1, rt2);
 }
 
 static int

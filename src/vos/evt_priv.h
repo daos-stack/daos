@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,50 +105,20 @@ struct evt_context {
 #define evt_tmmid2ptr(tcx, tmmid)	umem_id2ptr_typed(evt_umm(tcx), tmmid)
 #define evt_has_tx(tcx)			umem_has_tx(evt_umm(tcx))
 
-enum {
-	/** invalid input */
-	RT_OVERLAP_INVAL	= -1,
-	/** no overlap */
-	RT_OVERLAP_NO		= 0,
-	/** overlapped rectangles */
-	RT_OVERLAP_YES,
-
-	/** NB: Bits below are used by leaf rectangles only */
-
-	/** reserved */
-	RT_OVERLAP_EXPAND,
-	/** change part of the in-tree extent in the same epoch */
-	RT_OVERLAP_INPLACE,
-	/** exactly same extent in the same epoch */
-	RT_OVERLAP_SAME,
-	/**
-	 * the current extent fully covers (overwrites) an in-tree extent
-	 * which has lower epoch.
-	 */
-	RT_OVERLAP_CAPPING,
-	/**
-	 * the current extent is fully covered by an in-tree extent which has
-	 * higher epoch.
-	 */
-	RT_OVERLAP_CAPPED,
-
-	/** bits below are used by non-leaf rectangles */
-
-	/** new rectangle is included by the original rectangle */
-	RT_OVERLAP_INCLUDED,
-};
-
+/* By definition, all rectangles overlap in the epoch range because all
+ * are from start to infinity.  However, for common queries, we often only want
+ * rectangles intersect at a given epoch
+ */
 enum evt_find_opc {
 	/** find all rectangles overlapped with the input rectangle */
 	EVT_FIND_ALL,
 	/** find the first rectangle overlapped with the input rectangle */
 	EVT_FIND_FIRST,
 	/**
-	 * find all rectangles that can be capped by the input rectangle,
-	 * it returns error if there is any rectangle overlapping with the
-	 * input one but not capped.
+	 * Returns -DER_NO_PERM if any overlapping rectangle is found in
+	 * the same epoch with an identical sequence number.
 	 */
-	EVT_FIND_CAP,
+	EVT_FIND_OVERWRITE,
 	/** Find the exactly same extent. */
 	EVT_FIND_SAME,
 };

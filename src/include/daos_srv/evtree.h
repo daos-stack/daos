@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,22 +85,23 @@ struct evt_ptr_ref {
 	uint64_t			pr_inum;
 };
 
-/** A versioned extent is effectively a rectangle... */
+/** A versioned extent is effectively a rectangle...
+ *  The epoch range is always to infinity.   The sequence number
+ *  gives priority to later overwrites within the same epoch.
+ */
 struct evt_rect {
 	daos_off_t			rc_off_lo;	/**< low offset */
 	daos_off_t			rc_off_hi;	/**< high offset */
 	daos_epoch_t			rc_epc_lo;	/**< low epoch */
-	daos_epoch_t			rc_epc_hi;	/**< high epoch */
 };
 
 /** Log format of rectangle */
 #define DF_RECT				\
-	DF_U64"-"DF_U64"@"DF_U64"-"DF_U64
+	DF_U64"-"DF_U64"@"DF_U64"-INF"
 
 /** Expanded rectangle members for debug log */
 #define DP_RECT(r)			\
-	(r)->rc_off_lo, (r)->rc_off_hi, (r)->rc_epc_lo, \
-	((r)->rc_epc_hi == DAOS_EPOCH_MAX ? 0 : (r)->rc_epc_hi)
+	(r)->rc_off_lo, (r)->rc_off_hi, (r)->rc_epc_lo
 
 /** Return the width of a versioned extent */
 static inline daos_size_t
@@ -170,6 +171,8 @@ struct evt_entry {
 	d_list_t			 en_link;
 	/** the input/output versioned extent */
 	struct evt_rect			 en_rect;
+	/** the trimmed rect selected by a search */
+	struct evt_rect			 en_sel_rect;
 	/** cookie to insert this extent */
 	uuid_t				 en_cookie;
 	/** pool map version */
@@ -187,16 +190,18 @@ struct evt_entry {
 	void				*en_addr;
 };
 
-#define ERT_ENT_EMBEDDED		8
+#define ERT_ENT_EMBEDDED		32
 
 /**
  * list head of \a evt_entry, it contains a few embedded entries to support
  * lightweight allocation of entries.
  */
 struct evt_entry_list {
-	/** list head of all allocated entries */
+	/** All entries returned by the search */
 	d_list_t			el_list;
-	/** total number of allocated entries attached on the list */
+	/** pool of allocated blocks of spare entries */
+	d_list_t			el_pool;
+	/** total number of entries in the list */
 	unsigned int			el_ent_nr;
 	/** embedded entries (avoid allocation) */
 	struct evt_entry		el_ents[ERT_ENT_EMBEDDED];
@@ -340,9 +345,18 @@ int evt_insert_sgl(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
  * \param toh		[IN]	The tree open handle
  * \param rect		[IN]	The versioned extent to search
  * \param ent_list	[OUT]	The returned entry list
+ * \param covered	[OUT]	Optional argument to get list of evt_entries
+ *				fully covered at specified epoch
+ *
+ * If \a covered is NULL, \a ent_list will be unsorted and will contain all
+ * history for specified epoch for the range.   If a pointer is passed in,
+ * ent_list will be sorted and will only contain visible rectangles and
+ * covered will be filled with any rectangles that are entirely covered
+ * at the specified epoch for the range.  If the covered rectangle is only
+ * partially covered by the range,
  */
 int evt_find(daos_handle_t toh, struct evt_rect *rect,
-	     struct evt_entry_list *ent_list);
+	     struct evt_entry_list *ent_list, d_list_t *covered);
 
 /**
  * Debug function, it outputs status of tree nodes at level \a debug_level,

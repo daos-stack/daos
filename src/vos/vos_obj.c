@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -485,6 +485,10 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 		daos_size_t *rsize_p, struct iod_buf *iobuf)
 {
 	struct evt_entry	*ent;
+	/* At present, this is not exposed in interface but passing it toggles
+	 * sorting and clipping of rectangles
+	 */
+	d_list_t		 covered;
 	struct evt_entry_list	 ent_list;
 	struct evt_rect		 rect;
 	daos_iov_t		 iov;
@@ -500,18 +504,17 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 	rect.rc_off_lo = index;
 	rect.rc_off_hi = end - 1;
 	rect.rc_epc_lo = epr->epr_lo;
-	rect.rc_epc_hi = epr->epr_hi;
 
 	evt_ent_list_init(&ent_list);
-	rc = evt_find(toh, &rect, &ent_list);
+	rc = evt_find(toh, &rect, &ent_list, &covered);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
 	rsize = 0;
 	holes = 0;
 	evt_ent_list_for_each(ent, &ent_list) {
-		daos_off_t	lo = ent->en_rect.rc_off_lo;
-		daos_off_t	hi = ent->en_rect.rc_off_hi;
+		daos_off_t	lo = ent->en_sel_rect.rc_off_lo;
+		daos_off_t	hi = ent->en_sel_rect.rc_off_hi;
 		daos_size_t	nr;
 
 		D_ASSERT(hi >= lo);
@@ -521,7 +524,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			D_ASSERTF(lo > index,
 				  DF_U64"/"DF_U64", "DF_RECT", "DF_RECT"\n",
 				  lo, index, DP_RECT(&rect),
-				  DP_RECT(&ent->en_rect));
+				  DP_RECT(&ent->en_sel_rect));
 			holes += lo - index;
 		}
 
@@ -803,7 +806,6 @@ akey_update_recx(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 	int		rc;
 
 	rect.rc_epc_lo = epr->epr_lo;
-	rect.rc_epc_hi = epr->epr_hi;
 	rect.rc_off_lo = recx->rx_idx;
 	rect.rc_off_hi = recx->rx_idx + recx->rx_nr - 1;
 
@@ -2176,7 +2178,6 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	rect = &entry.en_rect;
 	it_entry->ie_epr.epr_lo	 = rect->rc_epc_lo;
-	it_entry->ie_epr.epr_hi	 = rect->rc_epc_hi;
 	it_entry->ie_recx.rx_idx = rect->rc_off_lo;
 	it_entry->ie_recx.rx_nr	 = rect->rc_off_hi - rect->rc_off_lo + 1;
 	it_entry->ie_rsize	 = entry.en_inob;

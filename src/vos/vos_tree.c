@@ -291,7 +291,7 @@ kb_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 	daos_epoch_range_t	*epr1  = NULL;
 	daos_epoch_range_t	*epr2;
 	uint64_t		 feats = tins->ti_root->tr_feats;
-	int			 cmp;
+	int			 cmp = 0;
 
 	kbund = vos_iov2key_bundle(key_iov);
 	kiov  = kbund->kb_key;

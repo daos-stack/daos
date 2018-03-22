@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,11 +154,18 @@ ts_close_destroy(bool destroy)
 }
 
 static int
-ts_parse_rect(char *str, struct evt_rect *rect, char **val_p)
+ts_parse_rect(char *str, struct evt_rect *rect, char **val_p, bool *should_pass)
 {
 	char	*tmp;
 
+	*should_pass = true;
+	if (str[0] == '-') {
+		str++;
+		*should_pass = false;
+	}
+
 	rect->rc_off_lo = atoi(str);
+
 	tmp = strchr(str, EVT_SEP_EXT);
 	if (tmp == NULL) {
 		D_PRINT("Invalid input string %s\n", str);
@@ -175,14 +182,6 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p)
 
 	str = tmp + 1;
 	rect->rc_epc_lo = atoi(str);
-	tmp = strchr(str, EVT_SEP_EXT);
-	if (tmp != NULL) {
-		str = tmp + 1;
-		rect->rc_epc_hi = atoi(str);
-	} else {
-		rect->rc_epc_hi = val_p == NULL ?
-				  rect->rc_epc_lo : DAOS_EPOCH_MAX;
-	}
 
 	if (val_p == NULL) /* called by evt_find */
 		return 0;
@@ -195,8 +194,10 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p)
 
 	str = tmp + 1;
 	if (strlen(str) != evt_rect_width(rect)) {
-		D_PRINT("Length of string cannot match extent size %d/%d\n",
-			(int)strlen(str), (int)evt_rect_width(rect));
+		D_PRINT("Length of string cannot match extent size %d/%d "
+			"str=%s rect="DF_RECT"\n",
+			(int)strlen(str), (int)evt_rect_width(rect), str,
+			DP_RECT(rect));
 		return -1;
 	}
 	*val_p = str;
@@ -211,24 +212,37 @@ ts_add_rect(char *args)
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 iov;
 	int		 rc;
+	bool		 should_pass;
+	static int	 total_added;
 
 	if (args == NULL)
 		return -1;
 
-	rc = ts_parse_rect(args, &rect, &val);
+	rc = ts_parse_rect(args, &rect, &val, &should_pass);
 	if (rc != 0)
 		return -1;
 
-	D_PRINT("Insert "DF_RECT": val=%s\n", DP_RECT(&rect),
-		val ? val : "<NULL>");
+	D_PRINT("Insert "DF_RECT": val=%s expect_pass=%s (total in tree=%d)\n",
+		DP_RECT(&rect), val ? val : "<NULL>",
+		should_pass ? "true" : "false", total_added);
 
 	daos_iov_set(&iov, val, rect.rc_off_hi - rect.rc_off_lo + 1);
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
 
 	rc = evt_insert_sgl(ts_toh, ts_uuid, 0, &rect, val ? 1 : 0, &sgl);
-	if (rc != 0)
-		D_FATAL("Add rect failed %d\n", rc);
+	if (rc == 0)
+		total_added++;
+	if (should_pass) {
+		if (rc != 0)
+			D_FATAL("Add rect failed %d\n", rc);
+	} else {
+		if (rc == 0) {
+			D_FATAL("Add rect should have failed\n");
+			return -1;
+		}
+		rc = 0;
+	}
 
 	return rc;
 }
@@ -237,27 +251,31 @@ static int
 ts_find_rect(char *args)
 {
 	struct evt_entry	*ent;
+	char			*val;
+	d_list_t		 covered;
 	struct evt_rect		 rect;
 	struct evt_entry_list	 enlist;
 	int			 rc;
+	bool			 should_pass;
 
 	if (args == NULL)
 		return -1;
 
-	rc = ts_parse_rect(args, &rect, NULL);
+	rc = ts_parse_rect(args, &rect, &val, &should_pass);
 	if (rc != 0)
 		return -1;
 
 	D_PRINT("Search rectangle "DF_RECT"\n", DP_RECT(&rect));
 
 	evt_ent_list_init(&enlist);
-	rc = evt_find(ts_toh, &rect, &enlist);
+	rc = evt_find(ts_toh, &rect, &enlist, &covered);
 	if (rc != 0)
 		D_FATAL("Add rect failed %d\n", rc);
 
 	evt_ent_list_for_each(ent, &enlist) {
-		D_PRINT("Find rect "DF_RECT", val=%s\n",
-			DP_RECT(&ent->en_rect),
+		D_PRINT("Find rect "DF_RECT" (sel="DF_RECT") val=%.*s\n",
+			DP_RECT(&ent->en_rect), DP_RECT(&ent->en_sel_rect),
+			(int)evt_rect_width(&ent->en_sel_rect),
 			ent->en_addr ? (char *)ent->en_addr : "<NULL>");
 	}
 
@@ -395,7 +413,6 @@ ts_many_add(char *args)
 		rect.rc_off_lo = offset + seq[i] * size;
 		rect.rc_off_hi = rect.rc_off_lo + size - 1;
 		rect.rc_epc_lo = (seq[i] % TS_VAL_CYCLE) + 1;
-		rect.rc_epc_hi = DAOS_EPOCH_MAX;
 
 		memset(buf, 'a' + seq[i] % TS_VAL_CYCLE, size);
 		daos_iov_set(&iov, buf, size);
@@ -476,6 +493,9 @@ ts_cmd_run(char opc, char *args)
 		rc = 0;
 		break;
 	}
+	if (rc != 0)
+		D_PRINT("opc=%d failed with rc=%d\n", opc, rc);
+
 	return rc;
 }
 
@@ -503,8 +523,9 @@ main(int argc, char **argv)
 				 ts_ops, NULL)) != -1) {
 		rc = ts_cmd_run(rc, optarg);
 		if (rc != 0)
-			break;
+			goto out;
 	}
+	rc = 0;
  out:
 	daos_debug_fini();
 	return rc;

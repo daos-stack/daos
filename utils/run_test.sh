@@ -40,6 +40,7 @@ if [ -d "/mnt/daos" ]; then
     run_test src/common/tests/btree.sh perf ukey -s 20000
     run_test build/src/common/tests/sched
     run_test build/src/client/tests/eq_tests
+    run_test src/vos/tests/evt_ctl.sh
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for
