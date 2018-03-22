@@ -35,7 +35,7 @@
 
 int
 daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-		  daos_size_t cell_size, daos_size_t block_size,
+		  daos_size_t cell_size, daos_size_t chunk_size,
 		  daos_handle_t *oh, daos_event_t *ev)
 {
 	daos_array_create_t	*args;
@@ -51,7 +51,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	args->oid	 = oid;
 	args->epoch	 = epoch;
 	args->cell_size	 = cell_size;
-	args->block_size = block_size;
+	args->chunk_size = chunk_size;
 	args->oh	 = oh;
 
 	return dc_task_schedule(task, true);
@@ -60,7 +60,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 int
 daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		unsigned int mode, daos_size_t *cell_size,
-		daos_size_t *block_size, daos_handle_t *oh, daos_event_t *ev)
+		daos_size_t *chunk_size, daos_handle_t *oh, daos_event_t *ev)
 {
 	daos_array_open_t	*args;
 	tse_task_t		*task;
@@ -71,7 +71,7 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		return rc;
 
 	*cell_size	 = 0;
-	*block_size	 = 0;
+	*chunk_size	 = 0;
 
 	args = dc_task_get_args(task);
 	args->coh	 = coh;
@@ -79,7 +79,7 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	args->epoch	 = epoch;
 	args->mode	 = mode;
 	args->cell_size	 = cell_size;
-	args->block_size = block_size;
+	args->chunk_size = chunk_size;
 	args->oh	 = oh;
 
 	return dc_task_schedule(task, true);

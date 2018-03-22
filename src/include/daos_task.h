@@ -423,7 +423,7 @@ typedef struct {
 	daos_obj_id_t	oid;
 	daos_epoch_t	epoch;
 	daos_size_t	cell_size;
-	daos_size_t	block_size;
+	daos_size_t	chunk_size;
 	daos_handle_t	*oh;
 } daos_array_create_t;
 
@@ -433,7 +433,7 @@ typedef struct {
 	daos_epoch_t	epoch;
 	unsigned int	mode;
 	daos_size_t	*cell_size;
-	daos_size_t	*block_size;
+	daos_size_t	*chunk_size;
 	daos_handle_t	*oh;
 } daos_array_open_t;
 

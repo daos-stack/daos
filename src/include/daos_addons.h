@@ -46,7 +46,7 @@ typedef struct {
 
 /**
  * Create an Array object. This creates a DAOS KV object and adds metadata to
- * define the cell size and block size. Further access to that object using the
+ * define the cell size and chunk size. Further access to that object using the
  * handle will use that metadata to store the array elements.
  *
  * The metadata are just entries in the KV object, meaning that any user can
@@ -61,9 +61,9 @@ typedef struct {
  * \param epoch	[IN]	Epoch to open object.
  * \param cell_size [IN]
  *			Record size of the array.
- * \param block_size [IN]
+ * \param chunk_size [IN]
  *			Contiguous bytes to store per DKey before moving to a
- *			differen dkey.
+ *			different dkey.
  * \param oh	[OUT]	Returned object open handle.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
@@ -80,7 +80,7 @@ typedef struct {
  */
 int
 daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-		  daos_size_t cell_size, daos_size_t block_size,
+		  daos_size_t cell_size, daos_size_t chunk_size,
 		  daos_handle_t *oh, daos_event_t *ev);
 
 /**
@@ -94,7 +94,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  * \param mode	[IN]	Open mode: DAOS_OO_RO/RW/EXCL/IO_RAND/IO_SEQ
  * \param cell_size [OUT]
  *			Record size of the array.
- * \param block_size [OUT]
+ * \param chunk_size [OUT]
  *			Contiguous bytes to store per DKey before moving to a
  *			differen dkey.
  * \param oh	[OUT]	Returned object open handle.
@@ -114,7 +114,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 int
 daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		unsigned int mode, daos_size_t *elem_size,
-		daos_size_t *block_size, daos_handle_t *oh, daos_event_t *ev);
+		daos_size_t *chunk_size, daos_handle_t *oh, daos_event_t *ev);
 
 /**
  * Close an opened object.
