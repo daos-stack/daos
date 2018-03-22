@@ -286,9 +286,8 @@ crt_grp_priv_addref(struct crt_grp_priv *grp_priv)
 	refcount = ++grp_priv->gp_refcount;
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
-	d_log(DD_FAC(grp) | DLOG_DBG,
-	      "service group (%s), refcount increased to %d.\n",
-	      grp_priv->gp_pub.cg_grpid, refcount);
+	D_DEBUG(DB_TRACE, "service group (%s), refcount increased to %d.\n",
+		grp_priv->gp_pub.cg_grpid, refcount);
 }
 
 /*
@@ -308,16 +307,15 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	if (grp_priv->gp_refcount == 0) {
-		d_log(DD_FAC(grp) | DLOG_ERR,
-		      "group (%s), refcount already dropped to 0.\n",
-		      grp_priv->gp_pub.cg_grpid);
+		D_DEBUG(DB_TRACE, "group (%s), refcount already dropped "
+			"to 0.\n", grp_priv->gp_pub.cg_grpid);
 		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 		D_GOTO(out, rc = -DER_ALREADY);
 	} else {
 		grp_priv->gp_refcount--;
-		d_log(DD_FAC(grp) | DLOG_DBG,
-		      "service group (%s), refcount decreased to %d.\n",
-		      grp_priv->gp_pub.cg_grpid, grp_priv->gp_refcount);
+		D_DEBUG(DB_TRACE, "service group (%s), refcount decreased to "
+			"%d.\n", grp_priv->gp_pub.cg_grpid,
+			grp_priv->gp_refcount);
 		if (grp_priv->gp_refcount == 0)
 			grp_priv->gp_finalizing = 1;
 		if (grp_priv->gp_local == 0 && grp_priv->gp_refcount == 1) {
@@ -337,8 +335,8 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 		if (rc == 0 && !crt_is_service() &&
 		    grp_gdata->gg_srv_pri_grp == grp_priv) {
 			grp_gdata->gg_srv_pri_grp = NULL;
-			d_log(DD_FAC(grp) | DLOG_DBG,
-			      "reset grp_gdata->gg_srv_pri_grp as NULL.\n");
+			D_DEBUG(DB_TRACE, "reset grp_gdata->gg_srv_pri_grp "
+				"as NULL.\n");
 		}
 	} else {
 		crt_grp_priv_destroy(grp_priv);
@@ -357,7 +355,7 @@ crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank,
 	grp_priv->gp_psr_rank = psr_rank;
 	grp_priv->gp_psr_phy_addr = psr_addr;
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-	d_log(DD_FAC(grp) | DLOG_DBG, "group %s, set psr rank %d, uri %s.\n",
+	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s.\n",
 		grp_priv->gp_pub.cg_grpid, psr_rank, psr_addr);
 }
 

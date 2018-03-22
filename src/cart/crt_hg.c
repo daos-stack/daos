@@ -567,9 +567,9 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
-	hg_log_set_stream_debug((FILE *)(intptr_t)DDBG);
-	hg_log_set_stream_warning((FILE *)(intptr_t)DWARN);
-	hg_log_set_stream_error((FILE *)(intptr_t)DERR);
+	hg_log_set_stream_debug((FILE *)(intptr_t)(D_LOGFAC | DLOG_DBG));
+	hg_log_set_stream_warning((FILE *)(intptr_t)(D_LOGFAC | DLOG_WARN));
+	hg_log_set_stream_error((FILE *)(intptr_t)(D_LOGFAC | DLOG_ERR));
 
 	if (*addr != NULL) {
 		info_string = *addr;

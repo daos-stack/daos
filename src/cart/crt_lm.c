@@ -556,7 +556,7 @@ crt_lm_grp_init(crt_group_t *grp)
 	}
 
 	/* every ras rank prints out its list of subscribed ranks */
-	if (DDBG && lm_grp_srv->lgs_ras) {
+	if ((D_LOGFAC | DLOG_DBG) && lm_grp_srv->lgs_ras) {
 		rc = d_rank_list_dump(lm_grp_srv->lgs_ras_ranks,
 				     "subscribed_ranks: ",
 				     CRT_GROUP_ID_MAX_LEN);

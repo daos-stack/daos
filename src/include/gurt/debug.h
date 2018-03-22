@@ -54,19 +54,30 @@ extern int DD_FAC(mem);
 #define D_LOGFAC	DD_FAC(misc)
 #endif
 
-#define DFATAL		(D_LOGFAC | DLOG_EMERG)
-#define DCRIT		(D_LOGFAC | DLOG_CRIT)
-#define DERR		(D_LOGFAC | DLOG_ERR)
-#define DWARN		(D_LOGFAC | DLOG_WARN)
-#define DINFO		(D_LOGFAC | DLOG_INFO)
-#define DDBG		(D_LOGFAC | DLOG_DBG)
-
 #define D_LOG_FILE_ENV	"D_LOG_FILE"
 #define D_LOG_MASK_ENV	"D_LOG_MASK"
 
 /* deprecated. these two are provided for the transition period. */
 #define CRT_LOG_FILE_ENV	"CRT_LOG_FILE"
 #define CRT_LOG_MASK_ENV	"CRT_LOG_MASK"
+
+/*
+ * D_DEBUG/D_ERROR etc can-only be used when clog enabled. User can define other
+ * similar macros using different subsystem and log-level, for example:
+ * #define DSR_DEBUG(...) d_log(DSR_DEBUG, ...)
+ */
+#define D_DEBUG(mask, fmt, ...)						\
+	d_log((mask) | D_LOGFAC,					\
+	     "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,		\
+	     ##__VA_ARGS__)
+
+/** macros to output logs which are more important than D_DEBUG */
+#define D_INFO(fmt, ...)	D_DEBUG(DLOG_INFO, fmt, ## __VA_ARGS__)
+#define D_NOTE(fmt, ...)	D_DEBUG(DLOG_NOTE, fmt, ## __VA_ARGS__)
+#define D_WARN(fmt, ...)	D_DEBUG(DLOG_WARN, fmt, ## __VA_ARGS__)
+#define D_ERROR(fmt, ...)	D_DEBUG(DLOG_ERR, fmt, ## __VA_ARGS__)
+#define D_CRIT(fmt, ...)	D_DEBUG(DLOG_CRIT, fmt, ## __VA_ARGS__)
+#define D_FATAL(fmt, ...)	D_DEBUG(DLOG_EMERG, fmt, ## __VA_ARGS__)
 
 /*
  * Add a new log facility.
@@ -89,7 +100,7 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
 
 	*fac = d_add_log_facility(aname, lname);
 	if (*fac < 0) {
-		d_log(DERR, "d_add_log_facility failed, *fac: %d\n", *fac);
+		D_ERROR("d_add_log_facility failed, *fac: %d\n", *fac);
 		return -DER_UNINIT;
 	}
 
@@ -107,40 +118,8 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
 		fflush(stderr);						\
 	} while (0)
 
-
-/*
- * D_DEBUG/D_ERROR etc can-only be used when clog enabled. User can define other
- * similar macros using different subsystem and log-level, for example:
- * #define DSR_DEBUG(...) d_log(DSR_DEBUG, ...)
- */
-#define D_INFO(fmt, ...)						\
-	d_log(DINFO, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
-	     ##__VA_ARGS__)
-
-#define D_DEBUG(mask, fmt, ...)						\
-	d_log((mask) | D_LOGFAC,					\
-	     "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,		\
-	     ##__VA_ARGS__)
-
-#define D_INFO(fmt, ...)						\
-	d_log(DINFO, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
-	     ##__VA_ARGS__)
-
-#define D_WARN(fmt, ...)						\
-	d_log(DWARN, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
-	     ##__VA_ARGS__)
-
-#define D_ERROR(fmt, ...)						\
-	d_log(DERR, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
-	     ##__VA_ARGS__)
-
-#define D_CRIT(fmt, ...)						\
-	d_log(DCRIT, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
-	     ##__VA_ARGS__)
-
-#define D_FATAL(fmt, ...)						\
-	d_log(DFATAL, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
-	     ##__VA_ARGS__)
+#define D_ENTER			D_DEBUG(DB_TRACE, "Entered\n")
+#define D_EXIT			D_DEBUG(DB_TRACE, "Leaving\n")
 
 #define D_ASSERT(e)	assert(e)
 

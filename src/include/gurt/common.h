@@ -109,35 +109,32 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 
 /* memory allocating macros */
 
-#define MEM_DBG		(d_mem_logfac | DLOG_DBG)
-#define MEM_ERR		(d_mem_logfac | DLOG_ERR)
-
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 		      on_error)						\
 	do {								\
 		if (cond) {						\
 			if (count <= 1)					\
-				d_log(MEM_DBG, "%s:%d, alloc(" #func ")"\
-				      " '" name "': %i at %p.\n",	\
-				      __FILE__, __LINE__, (int)(size),	\
-				      (ptr));				\
+				D_DEBUG(DB_MEM, "%s:%d, alloc(" #func ")"\
+					" '" name "': %i at %p.\n",	\
+					__FILE__, __LINE__, (int)(size),\
+					(ptr));				\
 			else						\
-				d_log(MEM_DBG, "%s:%d, alloc(" #func ")"\
-				      " '" name "': %i * '" cname	\
-				      "':%i at %p.\n", __FILE__,	\
-				      __LINE__, (int)(size), (count),	\
-				      (ptr));				\
+				D_DEBUG(DB_MEM, "%s:%d, alloc(" #func ")"\
+					" '" name "': %i * '" cname	\
+					"':%i at %p.\n", __FILE__,	\
+					__LINE__, (int)(size), (count),	\
+					(ptr));				\
 			break;						\
 		}							\
 		(void)(on_error);					\
 		if (count >= 1)						\
-			d_log(MEM_ERR, "%s:%d, out of memory (tried to "\
-			      #func " '" name "': %i)\n", __FILE__,	\
-			      __LINE__, (int)(size) * (count));		\
+			D_ERROR("%s:%d, out of memory (tried to "	\
+				#func " '" name "': %i)\n", __FILE__,	\
+				__LINE__, (int)(size) * (count));	\
 		else							\
-			d_log(MEM_ERR, "%s:%d, out of memory (tried to "\
-			      #func " '" name "')\n", __FILE__,		\
-			      __LINE__);				\
+			D_ERROR("%s:%d, out of memory (tried to "	\
+				#func " '" name "')\n", __FILE__,	\
+				__LINE__);				\
 	} while (0)
 
 #define D_ALLOC_CORE(ptr, size, count)					\
@@ -181,20 +178,20 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 		D_ASSERT((void *)&(newptr) != &(oldptr));		\
 		(newptr) =  realloc((oldptr), (_sz));			\
 		if ((newptr) != NULL) {					\
-			d_log(MEM_DBG, "%s:%d, realloc '"		\
-			      #newptr "': %i at %p (old '" #oldptr	\
-			      "':%p).\n", __FILE__, __LINE__,		\
-			      _sz, (newptr), (oldptr));			\
+			D_DEBUG(DB_MEM, "%s:%d, realloc '"		\
+				#newptr "': %i at %p (old '" #oldptr	\
+				"':%p).\n", __FILE__, __LINE__,		\
+				_sz, (newptr), (oldptr));		\
 			(oldptr) = NULL;				\
 			break;						\
 		}							\
-		d_log(MEM_ERR, "%s:%d, out of memory (tried to realloc "\
-		      "'" #newptr "': %i)\n", __FILE__, __LINE__, _sz); \
+		D_ERROR("%s:%d, out of memory (tried to realloc "	\
+			"'" #newptr "': %i)\n", __FILE__, __LINE__, _sz); \
 	} while (0)
 
 # define D_FREE(ptr)							\
 	do {								\
-		d_log(MEM_DBG, "%s:%d, free '" #ptr "' at %p.\n",	\
+		D_DEBUG(DB_MEM, "%s:%d, free '" #ptr "' at %p.\n",	\
 			__FILE__, __LINE__, (ptr));			\
 		free(ptr);						\
 		(ptr) = NULL;						\

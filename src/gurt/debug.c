@@ -209,9 +209,9 @@ d_log_sync_mask(uint64_t opt_dbg_mask, bool overwrite)
 	do {								\
 		d_##name##_logfac = d_add_log_facility(aname, lname);	\
 		if (d_##name##_logfac < 0) {				\
-			d_log(DERR, "d_add_log_facility failed, "	\
-				    "d_##name##__logfac: %d.\n",	\
-				    d_##name##_logfac);			\
+			D_ERROR("d_add_log_facility failed, "		\
+				"d_##name##__logfac: %d.\n",		\
+				 d_##name##_logfac);			\
 			return -DER_UNINIT;				\
 		}							\
 	} while (0)
