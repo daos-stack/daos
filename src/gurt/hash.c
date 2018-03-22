@@ -869,17 +869,6 @@ hh_op_key_init(struct d_hash_table *hhtab, d_list_t *rlink, void *arg)
 }
 
 static int
-hh_key_type(const void *key)
-{
-	uint64_t	cookie;
-
-	D_ASSERT(key != NULL);
-	cookie = *(uint64_t *)key;
-
-	return cookie & D_HTYPE_MASK;
-}
-
-static int
 hh_op_key_get(struct d_hash_table *hhtab, d_list_t *rlink, void **key_pp)
 {
 	struct d_hlink *hlink = hh_link2ptr(rlink);
@@ -986,8 +975,20 @@ void
 d_hhash_link_insert(struct d_hhash *hhtab, struct d_hlink *hlink, int type)
 {
 	D_ASSERT(hlink->hl_link.rl_initialized);
-	d_hash_rec_insert_anonym(&hhtab->ch_htable, &hlink->hl_link.rl_link,
-				 (void *)&type);
+
+	if (type == D_HTYPE_PTR) {
+		uint64_t ptr_key = (uintptr_t)hlink;
+
+		D_ASSERTF(d_hhash_key_isptr(ptr_key), "hlink ptr %p is invalid "
+			  "D_HTYPE_PTR type", hlink);
+		ch_lock(&hhtab->ch_htable, false);
+		ch_rec_addref(&hhtab->ch_htable, &hlink->hl_link.rl_link);
+		hlink->hl_key = ptr_key;
+		ch_unlock(&hhtab->ch_htable, false);
+	} else {
+		d_hash_rec_insert_anonym(&hhtab->ch_htable,
+			&hlink->hl_link.rl_link, (void *)&type);
+	}
 }
 
 static inline struct d_hlink*
@@ -999,21 +1000,49 @@ d_hlink_find(struct d_hash_table *htable, void *key, size_t size)
 	return link == NULL ? NULL : hh_link2ptr(link);
 }
 
+bool
+d_hhash_key_isptr(uint64_t key)
+{
+	return ((key & 0x1) == 0);
+}
+
 struct d_hlink *
 d_hhash_link_lookup(struct d_hhash *hhtab, uint64_t key)
 {
-	return d_hlink_find(&hhtab->ch_htable, (void *)&key, sizeof(key));
+	if (d_hhash_key_isptr(key)) {
+		struct d_hlink *hlink;
+
+		hlink = (struct d_hlink *)key;
+		if (hlink->hl_key != key) {
+			D_ERROR("invalid PTR type key.\n");
+			return NULL;
+		}
+
+		ch_lock(&hhtab->ch_htable, true);
+		ch_rec_addref(&hhtab->ch_htable, &hlink->hl_link.rl_link);
+		ch_unlock(&hhtab->ch_htable, true);
+
+		return hlink;
+	} else {
+		return d_hlink_find(&hhtab->ch_htable, (void *)&key,
+				    sizeof(key));
+	}
 }
 
 bool
 d_hhash_link_delete(struct d_hhash *hhtab, struct d_hlink *hlink)
 {
-	return d_hash_rec_delete_at(&hhtab->ch_htable,
-				    &hlink->hl_link.rl_link);
+	if (d_hhash_key_isptr(hlink->hl_key)) {
+		d_hhash_link_putref(hhtab, hlink);
+		return true;
+	} else {
+		return d_hash_rec_delete_at(&hhtab->ch_htable,
+					    &hlink->hl_link.rl_link);
+	}
 }
 
 void
-d_hhash_link_addref(struct d_hhash *hhtab, struct d_hlink *hlink)
+d_hhash_link_getref(struct d_hhash *hhtab, struct d_hlink *hlink)
 {
 	d_hash_rec_addref(&hhtab->ch_htable, &hlink->hl_link.rl_link);
 }
@@ -1038,7 +1067,10 @@ d_hhash_link_key(struct d_hlink *hlink, uint64_t *key)
 
 int d_hhash_key_type(uint64_t key)
 {
-	return hh_key_type(&key);
+	if (d_hhash_key_isptr(key))
+		return D_HTYPE_PTR;
+	else
+		return key & D_HTYPE_MASK;
 }
 
 /******************************************************************************

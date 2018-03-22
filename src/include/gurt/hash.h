@@ -445,12 +445,18 @@ void d_hash_table_debug(struct d_hash_table *htable);
 #define D_HTYPE_BITS		3
 #define D_HTYPE_MASK		((1ULL << D_HTYPE_BITS) - 1)
 
+/**
+ * The handle type, uses the least significant 3-bits in the 64-bits hhash key.
+ * The bit 0 is only used for D_HYTPE_PTR (pointer type), all other types MUST
+ * with bit 0 set as 1.
+ */
 enum {
-	D_HTYPE_EQ		= 0, /* event queue */
-	D_HTYPE_POOL		= 1,
-	D_HTYPE_CO		= 2, /* container */
-	D_HTYPE_OBJ		= 3, /* object */
-	/* More to be added */
+	D_HTYPE_PTR		= 0, /* pointer type handle */
+	D_HTYPE_EQ		= 1, /* event queue */
+	D_HTYPE_POOL		= 3, /* pool */
+	D_HTYPE_CO		= 5, /* container */
+	D_HTYPE_OBJ		= 7, /* object */
+	/* Needs to enlarge D_HTYPE_BITS to add more types */
 };
 
 struct d_hlink;
@@ -476,6 +482,13 @@ struct d_hhash;
 int  d_hhash_create(unsigned int bits, struct d_hhash **hhash);
 void d_hhash_destroy(struct d_hhash *hh);
 void d_hhash_hlink_init(struct d_hlink *hlink, struct d_hlink_ops *ops);
+/**
+ * Insert to handle hash table.
+ * If /a type is D_HTYPE_PTR, user MUST ensure the bit 0 of /a hlink pointer is
+ * zero. Assuming zero value of bit 0 of the pointer is reasonable portable. It
+ * is with undefined result if bit 0 of /a hlink pointer is 1 for D_HTYPE_PTR
+ * type.
+ */
 void d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink,
 		         int type);
 struct d_hlink *d_hhash_link_lookup(struct d_hhash *hhash, uint64_t key);
@@ -485,6 +498,7 @@ bool d_hhash_link_delete(struct d_hhash *hhash, struct d_hlink *hlink);
 bool d_hhash_link_empty(struct d_hlink *hlink);
 void d_hhash_link_key(struct d_hlink *hlink, uint64_t *key);
 int  d_hhash_key_type(uint64_t key);
+bool d_hhash_key_isptr(uint64_t key);
 
 /******************************************************************************
  * UUID Hash Table Wrapper
