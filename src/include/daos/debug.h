@@ -28,17 +28,6 @@
 #include <assert.h>
 #include <gurt/dlog.h>
 
-/** priority level */
-#define DP_INFO			DLOG_INFO
-#define DP_NOTE			DLOG_NOTE
-#define DP_WARN			DLOG_WARN
-#define DP_ERR			DLOG_ERR
-#define DP_CRIT			DLOG_CRIT
-#define DP_FATAL		DLOG_EMERG
-
-/* other debug tunables */
-#define DD_TUNE_ALLOC		"DD_ALLOC"
-
 /** predefined debug facilities (subsystems/modules) */
 extern unsigned int dd_fac_null;
 extern unsigned int dd_fac_misc;
@@ -59,6 +48,7 @@ extern unsigned int dd_fac_utils;
 extern unsigned int dd_fac_tests;
 
 /** other debug tunables */
+#define DD_TUNE_ALLOC		"DD_ALLOC"
 extern bool dd_tune_alloc;
 
 /* DAOS-specific debug bits OPT1-10 available */
@@ -81,18 +71,10 @@ extern bool dd_tune_alloc;
 
 #define DDFAC(name)	dd_fac_##name
 
-/** macros to output logs which are more important than D_DEBUG */
-#define D__INFO(fmt, ...)	D_DEBUG(DP_INFO, fmt, ## __VA_ARGS__)
-#define D__NOTE(fmt, ...)	D_DEBUG(DP_NOTE, fmt, ## __VA_ARGS__)
-#define D__WARN(fmt, ...)	D_DEBUG(DP_WARN, fmt, ## __VA_ARGS__)
-#define D__ERROR(fmt, ...)	D_DEBUG(DP_ERR, fmt, ## __VA_ARGS__)
-#define D__CRIT(fmt, ...)	D_DEBUG(DP_CRIT, fmt, ## __VA_ARGS__)
-#define D__FATAL(fmt, ...)	D_DEBUG(DP_FATAL, fmt, ## __VA_ARGS__)
-
 #define D__ASSERTF(cond, fmt, ...)					\
 do {									\
 	if (!(cond)) {							\
-		D__CRIT(fmt, ## __VA_ARGS__);				\
+		D_CRIT(fmt, ## __VA_ARGS__);				\
 		fflush(stderr);						\
 	}								\
 	assert(cond);							\
@@ -110,9 +92,6 @@ do {									\
 		  "Argument size %zu != predefiened arg size %zu\n",	\
 		  sizeof(args), dc_funcs[__opc].arg_size);		\
 } while (0)
-
-#define D_ENTER			D_DEBUG(DB_TRACE, "Entered\n")
-#define D_EXIT			D_DEBUG(DB_TRACE, "Leaving\n")
 
 #define D__GOTO(label, rc)						\
 do {									\

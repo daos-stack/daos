@@ -131,7 +131,7 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 
 	rc = ds_cont_cache_create(&tls->dt_cont_cache);
 	if (rc != 0) {
-		D__ERROR("failed to create thread-local container cache: %d\n",
+		D_ERROR("failed to create thread-local container cache: %d\n",
 			rc);
 		D__FREE_PTR(tls);
 		return NULL;
@@ -139,7 +139,7 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 
 	rc = ds_cont_hdl_hash_create(&tls->dt_cont_hdl_hash);
 	if (rc != 0) {
-		D__ERROR("failed to create thread-local container handle cache: "
+		D_ERROR("failed to create thread-local container handle cache: "
 			"%d\n", rc);
 		ds_cont_cache_destroy(tls->dt_cont_cache);
 		D__FREE_PTR(tls);

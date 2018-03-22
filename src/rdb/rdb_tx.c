@@ -225,7 +225,7 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 
 	/* opc */
 	if (p + sizeof(uint8_t) > buf + len) {
-		D__ERROR("truncated opc: %zu < %zu\n", len, sizeof(uint8_t));
+		D_ERROR("truncated opc: %zu < %zu\n", len, sizeof(uint8_t));
 		return -DER_IO;
 	}
 	o.dto_opc = *(const uint8_t *)p;
@@ -233,14 +233,14 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 	/* kvs */
 	n = rdb_decode_iov(p, buf + len - p, &o.dto_kvs);
 	if (n < 0) {
-		D__ERROR("failed to decode kvs\n");
+		D_ERROR("failed to decode kvs\n");
 		return n;
 	}
 	p += n;
 	/* key */
 	n = rdb_decode_iov(p, buf + len - p, &o.dto_key);
 	if (n < 0) {
-		D__ERROR("failed to decode key\n");
+		D_ERROR("failed to decode key\n");
 		return n;
 	}
 	p += n;
@@ -248,7 +248,7 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 		/* value */
 		n = rdb_decode_iov(p, buf + len - p, &o.dto_value);
 		if (n < 0) {
-			D__ERROR("failed to decode value\n");
+			D_ERROR("failed to decode value\n");
 			return n;
 		}
 		p += n;
@@ -256,7 +256,7 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 		   o.dto_opc == RDB_TX_CREATE) {
 		/* attr */
 		if (p + sizeof(struct rdb_kvs_attr) > buf + len) {
-			D__ERROR("truncated attr: %zu < %zu\n", buf + len - p,
+			D_ERROR("truncated attr: %zu < %zu\n", buf + len - p,
 				sizeof(struct rdb_kvs_attr));
 			return -DER_IO;
 		}
@@ -532,7 +532,7 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, d_list_t *destroyed)
 			rc = dbtree_delete(tree->de_hdl, &op->dto_key, NULL);
 			break;
 		default:
-			D__ERROR(DF_DB": unknown update operation %u\n",
+			D_ERROR(DF_DB": unknown update operation %u\n",
 				DP_DB(db), op->dto_opc);
 			rc = -DER_IO;
 		}
@@ -604,7 +604,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 			n = rdb_tx_op_decode(p, buf + len - p, &op);
 			if (n < 0) {
 				/* Perhaps due to storage corruptions. */
-				D__ERROR(DF_DB": invalid entry format: buf=%p "
+				D_ERROR(DF_DB": invalid entry format: buf=%p "
 					"len="DF_U64" p=%p\n", DP_DB(db), buf,
 					len, p);
 				pmemobj_tx_abort(n);
@@ -612,7 +612,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 			rc = rdb_tx_apply_op(db, &op, destroyed);
 			if (rc != 0) {
 				if (!rdb_tx_deterministic_error(rc))
-					D__ERROR(DF_DB": failed to apply entry "
+					D_ERROR(DF_DB": failed to apply entry "
 						DF_U64" op %u <%td, %zd>: %d\n",
 						DP_DB(db), index, op.dto_opc,
 						p - buf, n, rc);

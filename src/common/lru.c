@@ -102,7 +102,7 @@ daos_lru_cache_create(int bits, uint32_t feats,
 	    ops->lop_cmp_keys == NULL ||
 	    ops->lop_alloc_ref == NULL ||
 	    ops->lop_free_ref == NULL) {
-		D__ERROR("Error missing ops/mandatory-ops for LRU cache\n");
+		D_ERROR("Error missing ops/mandatory-ops for LRU cache\n");
 		return -DER_INVAL;
 	}
 

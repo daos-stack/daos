@@ -64,7 +64,7 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	ntargets = pool_map_find_target((struct pool_map *)map, PO_COMP_ID_ALL,
 					&targets);
 	if (ntargets == 0) {
-		D__ERROR("no targets in pool map\n");
+		D_ERROR("no targets in pool map\n");
 		return -DER_IO;
 	}
 
@@ -186,13 +186,13 @@ ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 
 	rc = map_ranks_init(map, MAP_RANKS_UP, &ranks);
 	if (rc != 0) {
-		D__ERROR(DF_UUID": failed to create rank list: %d\n",
+		D_ERROR(DF_UUID": failed to create rank list: %d\n",
 			DP_UUID(pool_uuid), rc);
 		D__GOTO(out, rc);
 	}
 
 	if (ranks.rl_nr == 0) {
-		D__ERROR(DF_UUID": failed to find any up targets\n",
+		D_ERROR(DF_UUID": failed to find any up targets\n",
 			DP_UUID(pool_uuid));
 		D__GOTO(out_ranks, rc = -DER_IO);
 	}
@@ -216,7 +216,7 @@ ds_pool_group_destroy(const uuid_t pool_uuid, crt_group_t *group)
 		DP_UUID(pool_uuid), group->cg_grpid);
 	rc = dss_group_destroy(group);
 	if (rc != 0)
-		D__ERROR(DF_UUID": failed to destroy pool group %s: %d\n",
+		D_ERROR(DF_UUID": failed to destroy pool group %s: %d\n",
 			DP_UUID(pool_uuid), group->cg_grpid, rc);
 	return rc;
 }
@@ -235,7 +235,7 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN, &excluded);
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc != 0) {
-		D__ERROR(DF_UUID": failed to create rank list: %d\n",
+		D_ERROR(DF_UUID": failed to create rank list: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
 		return rc;
 	}

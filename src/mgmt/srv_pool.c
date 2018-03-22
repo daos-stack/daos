@@ -58,7 +58,7 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, crt_group_t *grp)
 	td_out = crt_reply_get(td_req);
 	rc = td_out->td_rc;
 	if (rc != 0)
-		D__ERROR(DF_UUID": failed to update pool map on %d targets\n",
+		D_ERROR(DF_UUID": failed to update pool map on %d targets\n",
 			DP_UUID(pool_uuid), rc);
 out_rpc:
 	crt_req_decref(td_req);
@@ -181,7 +181,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	tc_out = crt_reply_get(tc_req);
 	rc = tc_out->tc_rc;
 	if (rc != 0) {
-		D__ERROR(DF_UUID": failed to update pool map on %d targets\n",
+		D_ERROR(DF_UUID": failed to update pool map on %d targets\n",
 			DP_UUID(tc_in->tc_pool_uuid), rc);
 		crt_req_decref(tc_req);
 		D__GOTO(tgt_pool_create_fail, rc);
@@ -233,7 +233,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 				     ranks_size, tgt_uuids, pc_in->pc_grp,
 				     rank_list, pc_out->pc_svc);
 	if (rc)
-		D__ERROR("create pool "DF_UUID" svc failed: rc %d\n",
+		D_ERROR("create pool "DF_UUID" svc failed: rc %d\n",
 			DP_UUID(pc_in->pc_pool_uuid), rc);
 
 tgt_pool_create_fail:
@@ -254,7 +254,7 @@ free:
 	pc_out->pc_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D__ERROR("crt_reply_send failed, rc: %d "
+		D_ERROR("crt_reply_send failed, rc: %d "
 			"(pc_tgt_dev: %s).\n", rc, pc_in->pc_tgt_dev);
 }
 
@@ -277,7 +277,7 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 
 	rc = ds_pool_svc_destroy(pd_in->pd_pool_uuid);
 	if (rc != 0) {
-		D__ERROR("Failed to destroy pool service "DF_UUID": %d\n",
+		D_ERROR("Failed to destroy pool service "DF_UUID": %d\n",
 			DP_UUID(pd_in->pd_pool_uuid), rc);
 		D__GOTO(out, rc);
 	}
@@ -287,11 +287,11 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 		D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID" succeed.\n",
 			DP_UUID(pd_in->pd_pool_uuid));
 	else
-		D__ERROR("Destroying pool "DF_UUID"failed, rc: %d.\n",
+		D_ERROR("Destroying pool "DF_UUID"failed, rc: %d.\n",
 			DP_UUID(pd_in->pd_pool_uuid), rc);
 out:
 	pd_out->pd_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D__ERROR("crt_reply_send failed, rc: %d.\n", rc);
+		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
 }

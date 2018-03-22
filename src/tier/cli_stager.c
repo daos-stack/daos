@@ -60,21 +60,21 @@ tier_fetch_cb(tse_task_t *task, void *data)
 	int			 rc = task->dt_result;
 
 	if (rc) {
-		D__ERROR("RPC error while fetching: %d\n", rc);
+		D_ERROR("RPC error while fetching: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
 	tfo = crt_reply_get(arg->rpc);
 	rc = tfo->tfo_ret;
 	if (rc) {
-		D__ERROR("failed to fetch: %d\n", rc);
+		D_ERROR("failed to fetch: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
 	arg->hdl.cookie = 0;
 
 	if (*arg->prc < 0) {
-		D__ERROR("Failed to create warm tier container: %d\n",
+		D_ERROR("Failed to create warm tier container: %d\n",
 			*arg->prc);
 		D__GOTO(out, *arg->prc);
 	}
@@ -116,12 +116,12 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 
 	from = g_tierctx.dtc_colder;
 	if (from == NULL) {
-		D__ERROR(" have no colder tier\n");
+		D_ERROR(" have no colder tier\n");
 		D__GOTO(out, -DER_NONEXIST);
 	}
 	D__ALLOC_PTR(prc);
 	if (prc == NULL) {
-		D__ERROR(" could not allocate rc ptr\n");
+		D_ERROR(" could not allocate rc ptr\n");
 		D__GOTO(out, -DER_NOMEM);
 	}
 
@@ -137,7 +137,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	rc = dc_task_reg_comp_cb(cont_open_task, tier_fetch_cont_create_cb,
 				 &co_args, sizeof(co_args));
 	if (rc != 0) {
-		D__ERROR("tse_task_register_comp_cb returned %d\n", rc);
+		D_ERROR("tse_task_register_comp_cb returned %d\n", rc);
 		return rc;
 	}
 
@@ -148,7 +148,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	/* Create the local recipient container */
 	rc = dc_task_schedule(cont_open_task, true);
 	if (rc) {
-		D__ERROR(" create local container: %d\n", rc);
+		D_ERROR(" create local container: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 

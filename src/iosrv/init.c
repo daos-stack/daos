@@ -78,7 +78,7 @@ register_dbtree_classes(void)
 	rc = dbtree_class_register(DBTREE_CLASS_KV, 0 /* feats */,
 				   &dbtree_kv_ops);
 	if (rc != 0) {
-		D__ERROR("failed to register DBTREE_CLASS_KV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_KV: %d\n", rc);
 		return rc;
 	}
 
@@ -86,21 +86,21 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_iv_ops);
 	if (rc != 0) {
-		D__ERROR("failed to register DBTREE_CLASS_IV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_IV: %d\n", rc);
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_NV, 0 /* feats */,
 				   &dbtree_nv_ops);
 	if (rc != 0) {
-		D__ERROR("failed to register DBTREE_CLASS_NV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_NV: %d\n", rc);
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_UV, 0 /* feats */,
 				   &dbtree_uv_ops);
 	if (rc != 0) {
-		D__ERROR("failed to register DBTREE_CLASS_UV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_UV: %d\n", rc);
 		return rc;
 	}
 
@@ -108,7 +108,7 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_ec_ops);
 	if (rc != 0)
-		D__ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
 
 	return rc;
 }
@@ -144,7 +144,7 @@ modules_load(uint64_t *facs)
 		mod_facs = 0;
 		rc = dss_module_load(mod, &mod_facs);
 		if (rc != 0) {
-			D__ERROR("Failed to load module %s: %d\n",
+			D_ERROR("Failed to load module %s: %d\n",
 				mod, rc);
 			break;
 		}
@@ -183,14 +183,14 @@ server_init()
 	if (rc)
 		D__GOTO(exit_debug_init, rc);
 
-	D__INFO("Module interface successfully initialized\n");
+	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
 	rc = crt_init(server_group_id,
 		      CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE);
 	if (rc)
 		D__GOTO(exit_mod_init, rc);
-	D__INFO("Network successfully initialized\n");
+	D_INFO("Network successfully initialized\n");
 
 	crt_group_rank(NULL, &rank);
 	crt_group_size(NULL, &size);
@@ -221,27 +221,27 @@ server_init()
 	if (rc)
 		/* Some modules may have been loaded successfully. */
 		D__GOTO(exit_mod_loaded, rc);
-	D__INFO("Module %s successfully loaded\n", modules);
+	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* start up service */
 	rc = dss_srv_init(nr_threads);
 	if (rc)
 		D__GOTO(exit_mod_loaded, rc);
-	D__INFO("Service is now running\n");
+	D_INFO("Service is now running\n");
 
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		rc = daos_init();
 		if (rc) {
-			D__ERROR("daos_init (client) failed, rc: %d.\n", rc);
+			D_ERROR("daos_init (client) failed, rc: %d.\n", rc);
 			D__GOTO(exit_srv_init, rc);
 		}
-		D__INFO("Client stack enabled\n");
+		D_INFO("Client stack enabled\n");
 	}
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
 		D__GOTO(exit_daos_fini, rc);
-	D__INFO("Modules successfully set up\n");
+	D_INFO("Modules successfully set up\n");
 
 	D__PRINT("DAOS server (v%s) process %u started on rank %u (out of %u) "
 		"with %u xstream(s)\n", DAOS_VERSION, getpid(), rank, size,
@@ -269,7 +269,7 @@ exit_debug_init:
 static void
 server_fini(bool force)
 {
-	D__INFO("Service is shutting down\n");
+	D_INFO("Service is shutting down\n");
 	dss_module_cleanup_all();
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();
@@ -390,7 +390,7 @@ main(int argc, char **argv)
 
 	rc = ABT_init(argc, argv);
 	if (rc != 0) {
-		D__ERROR("failed to init ABT: %d\n", rc);
+		D_ERROR("failed to init ABT: %d\n", rc);
 		exit(EXIT_FAILURE);
 	}
 	/** server initialization */
@@ -406,7 +406,7 @@ main(int argc, char **argv)
 	sigaddset(&set, SIGUSR2);
 	rc = sigwait(&set, &sig);
 	if (rc)
-		D__ERROR("failed to wait for signals: %d\n", rc);
+		D_ERROR("failed to wait for signals: %d\n", rc);
 
 	/** shutdown */
 	server_fini(true);

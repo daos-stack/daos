@@ -78,7 +78,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	int			 rc;
 
 	if (strlen(modname) > DSS_MODNAME_MAX_LEN) {
-		D__ERROR("modname %s is too long > %d\n",
+		D_ERROR("modname %s is too long > %d\n",
 			modname, DSS_MODNAME_MAX_LEN);
 		return -DER_INVAL;
 	}
@@ -87,7 +87,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	sprintf(name, "lib%s.so", modname);
 	handle = dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
 	if (handle == NULL) {
-		D__ERROR("cannot load %s: %s\n", name, dlerror());
+		D_ERROR("cannot load %s: %s\n", name, dlerror());
 		return -DER_INVAL;
 	}
 
@@ -108,14 +108,14 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	/* check for errors */
 	err = dlerror();
 	if (err != NULL) {
-		D__ERROR("failed to load %s: %s\n", modname, err);
+		D_ERROR("failed to load %s: %s\n", modname, err);
 		D__GOTO(err_lmod, rc = -DER_INVAL);
 	}
 	lmod->lm_dss_mod = smod;
 
 	/* check module name is consistent */
 	if (strcmp(smod->sm_name, modname) != 0) {
-		D__ERROR("inconsistent module name %s != %s\n", modname,
+		D_ERROR("inconsistent module name %s != %s\n", modname,
 			smod->sm_name);
 		D__GOTO(err_hdl, rc = -DER_INVAL);
 	}
@@ -123,7 +123,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	/* initialize the module */
 	rc = smod->sm_init();
 	if (rc) {
-		D__ERROR("failed to init %s: %d\n", modname, rc);
+		D_ERROR("failed to init %s: %d\n", modname, rc);
 		D__GOTO(err_hdl, rc = -DER_INVAL);
 	}
 
@@ -133,7 +133,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	rc = daos_rpc_register(smod->sm_cl_rpcs, smod->sm_handlers,
 			       smod->sm_mod_id);
 	if (rc) {
-		D__ERROR("failed to register client RPC for %s: %d\n",
+		D_ERROR("failed to register client RPC for %s: %d\n",
 			modname, rc);
 		D__GOTO(err_mod_init, rc);
 	}
@@ -142,7 +142,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	rc = daos_rpc_register(smod->sm_srv_rpcs, smod->sm_handlers,
 			       smod->sm_mod_id);
 	if (rc) {
-		D__ERROR("failed to register srv RPC for %s: %d\n",
+		D_ERROR("failed to register srv RPC for %s: %d\n",
 			modname, rc);
 		D__GOTO(err_cl_rpc, rc);
 	}
@@ -177,14 +177,14 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	/* unregister client RPC handlers */
 	rc = daos_rpc_unregister(smod->sm_cl_rpcs);
 	if (rc) {
-		D__ERROR("failed to unregister client RPC %d\n", rc);
+		D_ERROR("failed to unregister client RPC %d\n", rc);
 		return rc;
 	}
 
 	/* unregister server RPC handlers */
 	rc = daos_rpc_unregister(smod->sm_srv_rpcs);
 	if (rc) {
-		D__ERROR("failed to unregister srv RPC: %d\n", rc);
+		D_ERROR("failed to unregister srv RPC: %d\n", rc);
 		return rc;
 	}
 
@@ -193,7 +193,7 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	/* finalize the module */
 	rc = smod->sm_fini();
 	if (rc) {
-		D__ERROR("module finalization failed for: %d\n", rc);
+		D_ERROR("module finalization failed for: %d\n", rc);
 		return rc;
 
 	}
@@ -242,8 +242,8 @@ dss_module_setup_all(void)
 			continue;
 		rc = m->sm_setup();
 		if (rc != 0) {
-			D__ERROR("failed to set up module %s: %d\n", m->sm_name,
-				 rc);
+			D_ERROR("failed to set up module %s: %d\n", m->sm_name,
+				rc);
 			break;
 		}
 	}
@@ -265,8 +265,8 @@ dss_module_cleanup_all(void)
 			continue;
 		rc = m->sm_cleanup();
 		if (rc != 0) {
-			D__ERROR("failed to clean up module %s: %d\n",
-				 m->sm_name, rc);
+			D_ERROR("failed to clean up module %s: %d\n",
+				m->sm_name, rc);
 			break;
 		}
 	}

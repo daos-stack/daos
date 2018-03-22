@@ -58,7 +58,7 @@ uint_ref_lru_alloc(void *key, unsigned int ksize,
 
 	D__ALLOC_PTR(ref);
 	if (ref == NULL) {
-		D__ERROR("Error in allocating lru_refs");
+		D_ERROR("Error in allocating lru_refs");
 		return -DER_NOMEM;
 	}
 	ref->ur_key = *(uint64_t *)key;
@@ -93,7 +93,7 @@ test_ref_hold(struct daos_lru_cache *cache,
 
 	rc = daos_lru_ref_hold(cache, key, size, (void *)1, link);
 	if (rc)
-		D__ERROR("Error in holding reference\n");
+		D_ERROR("Error in holding reference\n");
 
 	refs = container_of(*link, struct uint_ref, ur_llink);
 
@@ -119,7 +119,7 @@ main(int argc, char **argv)
 		return rc;
 
 	if (argc < 3) {
-		D__ERROR("<exec><size bits(^2)><num_keys>\n");
+		D_ERROR("<exec><size bits(^2)><num_keys>\n");
 		exit(-1);
 	}
 

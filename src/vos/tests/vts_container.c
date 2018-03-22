@@ -422,7 +422,7 @@ cookie_table_test(void **state)
 			ret = d_uhash_link_insert(uhtab, &cookie_array[j],
 						  &cookie_entries[k].ulink);
 			if (ret != 0)
-				D__ERROR("Inserting handle to UUID hash\n");
+				D_ERROR("Inserting handle to UUID hash\n");
 			l_entry = &cookie_entries[k];
 			k++;
 		}
@@ -443,7 +443,7 @@ cookie_table_test(void **state)
 	d_uhash_destroy(uhtab);
 	ret = vos_cookie_tab_destroy(cookie_hdl);
 	if (ret != 0)
-		D__ERROR("Cookie itab destroy error\n");
+		D_ERROR("Cookie itab destroy error\n");
 	D__FREE_PTR(itab);
 	D__FREE(cookie_array, VCT_COOKIES * sizeof(struct d_uuid));
 	D__FREE(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));

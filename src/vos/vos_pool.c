@@ -101,7 +101,7 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 	rc = vos_cookie_tab_create(&uma, &pool->vp_cookie_tab,
 				    &pool->vp_cookie_th);
 	if (rc != 0) {
-		D__ERROR("Cookie tree create failed: %d\n", rc);
+		D_ERROR("Cookie tree create failed: %d\n", rc);
 		D__GOTO(failed, rc);
 	}
 	*pool_p = pool;
@@ -119,7 +119,7 @@ pool_link(struct vos_pool *pool, struct d_uuid *ukey, daos_handle_t *poh)
 	rc = d_uhash_link_insert(vos_pool_hhash_get(), ukey,
 				 &pool->vp_hlink);
 	if (rc) {
-		D__ERROR("uuid hash table insert failed: %d\n", rc);
+		D_ERROR("uuid hash table insert failed: %d\n", rc);
 		D__GOTO(failed, rc);
 	}
 	*poh = vos_pool2hdl(pool);
@@ -166,14 +166,14 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 
 	/* Path must be a file with a certain size when size argument is 0 */
 	if (!size && access(path, F_OK) == -1) {
-		D__ERROR("File not accessible (%d) when size is 0\n", errno);
+		D_ERROR("File not accessible (%d) when size is 0\n", errno);
 		return -DER_NONEXIST;
 	}
 
 	ph = vos_pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout), size,
 				0666);
 	if (!ph) {
-		D__ERROR("Failed to create pool, size="DF_U64", errno=%d\n",
+		D_ERROR("Failed to create pool, size="DF_U64", errno=%d\n",
 			size, errno);
 		return  -DER_NOSPACE;
 	}
@@ -211,7 +211,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D__ERROR("Initialize pool root error: %d\n", rc);
+		D_ERROR("Initialize pool root error: %d\n", rc);
 		/**
 		 * The transaction can in reality be aborted
 		 * only when there is no memory, either due
@@ -244,7 +244,7 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 
 	rc = pool_lookup(&ukey, &pool);
 	if (rc == 0) {
-		D__ERROR("Open reference exists, cannot destroy pool\n");
+		D_ERROR("Open reference exists, cannot destroy pool\n");
 		vos_pool_decref(pool);
 		D__GOTO(exit, rc = -DER_BUSY);
 	}
@@ -261,14 +261,14 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 
 		fd = open(path, O_RDWR);
 		if (fd < 0) {
-			D__ERROR("Failed to open %s\n", path);
+			D_ERROR("Failed to open %s\n", path);
 			D__GOTO(exit, rc = fd);
 		}
 
 		addr = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 		if (addr == MAP_FAILED) {
 			close(fd);
-			D__ERROR("Failed to mmap %s, len:%d\n", path, len);
+			D_ERROR("Failed to mmap %s, len:%d\n", path, len);
 			D__GOTO(exit, rc = -errno);
 		}
 		memset((char *)addr, 0, len);
@@ -283,7 +283,7 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	} else {
 		rc = remove(path);
 		if (rc)
-			D__ERROR("While deleting file from PMEM\n");
+			D_ERROR("While deleting file from PMEM\n");
 	}
 exit:
 	return rc;
@@ -304,7 +304,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	int			 rc;
 
 	if (path == NULL || poh == NULL) {
-		D__ERROR("Invalid parameters.\n");
+		D_ERROR("Invalid parameters.\n");
 		return -DER_INVAL;
 	}
 
@@ -323,7 +323,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	/* Create a new handle during open */
 	rc = pool_alloc(uuid, &pool); /* returned with refcount=1 */
 	if (rc != 0) {
-		D__ERROR("Error allocating pool handle\n");
+		D_ERROR("Error allocating pool handle\n");
 		return rc;
 	}
 
@@ -332,20 +332,20 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	uma->uma_u.pmem_pool = vos_pmemobj_open(path,
 				   POBJ_LAYOUT_NAME(vos_pool_layout));
 	if (uma->uma_u.pmem_pool == NULL) {
-		D__ERROR("Error in opening the pool: %s\n", pmemobj_errormsg());
+		D_ERROR("Error in opening the pool: %s\n", pmemobj_errormsg());
 		D__GOTO(failed, rc = -DER_NO_HDL);
 	}
 
 	/* initialize a umem instance for later btree operations */
 	rc = umem_class_init(uma, &pool->vp_umm);
 	if (rc != 0) {
-		D__ERROR("Failed to instantiate umem: %d\n", rc);
+		D_ERROR("Failed to instantiate umem: %d\n", rc);
 		D__GOTO(failed, rc);
 	}
 
 	pool_df = vos_pool_ptr2df(pool);
 	if (uuid_compare(uuid, pool_df->pd_id)) {
-		D__ERROR("Mismatch uuid, user="DF_UUID", pool="DF_UUID"\n",
+		D_ERROR("Mismatch uuid, user="DF_UUID", pool="DF_UUID"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
 		D__GOTO(failed, rc = -DER_IO);
 	}
@@ -354,14 +354,14 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	rc = dbtree_open_inplace(&pool_df->pd_ctab_df.ctb_btree,
 				 &pool->vp_uma, &pool->vp_cont_th);
 	if (rc) {
-		D__ERROR("Container Tree open failed\n");
+		D_ERROR("Container Tree open failed\n");
 		D__GOTO(failed, rc);
 	}
 
 	/* Insert the opened pool to the uuid hash table */
 	rc = pool_link(pool, &ukey, poh);
 	if (rc) {
-		D__ERROR("Error inserting into vos DRAM hash\n");
+		D_ERROR("Error inserting into vos DRAM hash\n");
 		D__GOTO(failed, rc);
 	}
 
@@ -383,7 +383,7 @@ vos_pool_close(daos_handle_t poh)
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL) {
-		D__ERROR("Cannot close a NULL handle\n");
+		D_ERROR("Cannot close a NULL handle\n");
 		return -DER_NO_HDL;
 	}
 	D_DEBUG(DB_MGMT, "Close opened(%d) pool "DF_UUID" (%p).\n",

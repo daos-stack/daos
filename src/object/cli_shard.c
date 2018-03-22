@@ -144,7 +144,7 @@ dc_obj_shard_sgl_copy(daos_sg_list_t *dst_sgl, uint32_t dst_nr,
 	int j;
 
 	if (src_nr > dst_nr) {
-		D__ERROR("%u > %u\n", src_nr, dst_nr);
+		D_ERROR("%u > %u\n", src_nr, dst_nr);
 		return -DER_INVAL;
 	}
 
@@ -153,7 +153,7 @@ dc_obj_shard_sgl_copy(daos_sg_list_t *dst_sgl, uint32_t dst_nr,
 			continue;
 
 		if (src_sgl[i].sg_nr > dst_sgl[i].sg_nr) {
-			D__ERROR("%d : %u > %u\n", i,
+			D_ERROR("%d : %u > %u\n", i,
 				src_sgl[i].sg_nr, dst_sgl[i].sg_nr);
 			return -DER_INVAL;
 		}
@@ -165,7 +165,7 @@ dc_obj_shard_sgl_copy(daos_sg_list_t *dst_sgl, uint32_t dst_nr,
 
 			if (src_sgl[i].sg_iovs[j].iov_len >
 			    dst_sgl[i].sg_iovs[j].iov_buf_len) {
-				D__ERROR("%d:%d "DF_U64" > "DF_U64"\n",
+				D_ERROR("%d:%d "DF_U64" > "DF_U64"\n",
 					i, j, src_sgl[i].sg_iovs[j].iov_len,
 					src_sgl[i].sg_iovs[j].iov_buf_len);
 				return -DER_INVAL;
@@ -199,17 +199,17 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	opc = opc_get(rw_args->rpc->cr_opc);
 	if (opc == DAOS_OBJ_RPC_FETCH &&
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FETCH_TIMEOUT)) {
-		D__ERROR("Inducing -DER_TIMEDOUT error on shard I/O fetch\n");
+		D_ERROR("Inducing -DER_TIMEDOUT error on shard I/O fetch\n");
 		D__GOTO(out, rc = -DER_TIMEDOUT);
 	}
 	if (opc == DAOS_OBJ_RPC_UPDATE &&
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT)) {
-		D__ERROR("Inducing -DER_TIMEDOUT error on shard I/O update\n");
+		D_ERROR("Inducing -DER_TIMEDOUT error on shard I/O update\n");
 		D__GOTO(out, rc = -DER_TIMEDOUT);
 	}
 	if (opc == DAOS_OBJ_RPC_UPDATE &&
 	    DAOS_FAIL_CHECK(DAOS_OBJ_UPDATE_NOSPACE)) {
-		D__ERROR("Inducing -DER_NOSPACE error on shard I/O update\n");
+		D_ERROR("Inducing -DER_NOSPACE error on shard I/O update\n");
 		D__GOTO(out, rc = -DER_NOSPACE);
 	}
 
@@ -220,14 +220,14 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
 		 */
-		D__ERROR("RPC %d failed: %d\n",
+		D_ERROR("RPC %d failed: %d\n",
 			opc_get(rw_args->rpc->cr_opc), ret);
 		D__GOTO(out, ret);
 	}
 
 	rc = obj_reply_get_status(rw_args->rpc);
 	if (rc != 0) {
-		D__ERROR("rpc %p RPC %d failed: %d\n",
+		D_ERROR("rpc %p RPC %d failed: %d\n",
 			rw_args->rpc, opc_get(rw_args->rpc->cr_opc), rc);
 		D__GOTO(out, rc);
 	}
@@ -243,7 +243,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		sizes = orwo->orw_sizes.ca_arrays;
 
 		if (orwo->orw_sizes.ca_count != orw->orw_nr) {
-			D__ERROR("out:%u != in:%u\n",
+			D_ERROR("out:%u != in:%u\n",
 				(unsigned)orwo->orw_sizes.ca_count,
 				orw->orw_nr);
 			D__GOTO(out, rc = -DER_PROTO);
@@ -268,7 +268,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			nrs = orwo->orw_nrs.ca_arrays;
 			nrs_count = orwo->orw_nrs.ca_count;
 			if (nrs_count != rw_args->rwaa_nr) {
-				D__ERROR("Invalid nrs %u != %u\n", nrs_count,
+				D_ERROR("Invalid nrs %u != %u\n", nrs_count,
 					rw_args->rwaa_nr);
 				D__GOTO(out, rc = -DER_PROTO);
 			}
@@ -300,14 +300,14 @@ obj_shard_io_check(unsigned int nr, daos_iod_t *iods)
 
 		switch (iods[i].iod_type) {
 		default:
-			D__ERROR("Unknown iod type=%d\n", iods[i].iod_type);
+			D_ERROR("Unknown iod type=%d\n", iods[i].iod_type);
 			return false;
 
 		case DAOS_IOD_NONE:
 			if (!iods[i].iod_recxs && iods[i].iod_nr == 0)
 				continue;
 
-			D__ERROR("IOD_NONE ignores value iod_nr=%d, recx=%p\n",
+			D_ERROR("IOD_NONE ignores value iod_nr=%d, recx=%p\n",
 				 iods[i].iod_nr, iods[i].iod_recxs);
 			return false;
 
@@ -315,14 +315,14 @@ obj_shard_io_check(unsigned int nr, daos_iod_t *iods)
 			if (iods[i].iod_recxs)
 				continue;
 
-			D__ERROR("IOD_ARRAY should have valid iod_recxs\n");
+			D_ERROR("IOD_ARRAY should have valid iod_recxs\n");
 			return false;
 
 		case DAOS_IOD_SINGLE:
 			if (iods[i].iod_nr == 1)
 				continue;
 
-			D__ERROR("IOD_SINGLE iod_nr %d != 1\n", iods[i].iod_nr);
+			D_ERROR("IOD_SINGLE iod_nr %d != 1\n", iods[i].iod_nr);
 			return false;
 		}
 	}
@@ -561,7 +561,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	} else {
 		rc = daos_rpc_send(req, task);
 		if (rc != 0) {
-			D__ERROR("update/fetch rpc failed rc %d\n", rc);
+			D_ERROR("update/fetch rpc failed rc %d\n", rc);
 			D__GOTO(out_args, rc);
 		}
 	}
@@ -637,7 +637,7 @@ dc_shard_punch(tse_task_t *task)
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
-		D__ERROR("punch rpc failed rc %d\n", rc);
+		D_ERROR("punch rpc failed rc %d\n", rc);
 		D__GOTO(out_req, rc);
 	}
 	D_EXIT;
@@ -703,7 +703,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		/* If any failure happens inside Cart, let's reset
 		 * failure to TIMEDOUT, so the upper layer can retry
 		 **/
-		D__ERROR("RPC %d failed: %d\n",
+		D_ERROR("RPC %d failed: %d\n",
 			opc_get(enum_args->rpc->cr_opc), ret);
 		D__GOTO(out, ret);
 	}
@@ -713,7 +713,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		D__GOTO(out, rc = oeo->oeo_ret);
 
 	if (*enum_args->eaa_nr < oeo->oeo_kds.ca_count) {
-		D__ERROR("DAOS_OBJ_RPC_ENUMERATE return more kds, rc: %d\n",
+		D_ERROR("DAOS_OBJ_RPC_ENUMERATE return more kds, rc: %d\n",
 			-DER_PROTO);
 		D__GOTO(out, rc = -DER_PROTO);
 	}
@@ -872,7 +872,7 @@ dc_obj_shard_list_internal(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
-		D__ERROR("enumerate rpc failed rc %d\n", rc);
+		D_ERROR("enumerate rpc failed rc %d\n", rc);
 		D__GOTO(out_eaa, rc);
 	}
 

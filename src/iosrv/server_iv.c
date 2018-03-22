@@ -356,7 +356,7 @@ iv_entry_find_or_create(struct ds_iv_ns *ns, crt_iv_key_t *iv_key,
 
 	type = iv_key_type_lookup(key->key_id);
 	if (type == NULL) {
-		D__ERROR("Can not find type %d\n", key->key_id);
+		D_ERROR("Can not find type %d\n", key->key_id);
 		return -DER_NONEXIST;
 	}
 
@@ -400,8 +400,8 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		else
 			rc = update_iv_value(entry, &entry->value, iv_value);
 		if (rc) {
-			D__ERROR("key id %d update failed: rc = %d\n",
-				 key->key_id, rc);
+			D_ERROR("key id %d update failed: rc = %d\n",
+				key->key_id, rc);
 			return rc;
 		}
 	}

@@ -50,7 +50,7 @@ dc_tier_init(void)
 	D_DEBUG(DF_TIER, "Entered dc_tier_init()\n");
 	rc = daos_rpc_register(tier_rpcs, NULL, DAOS_TIER_MODULE);
 	if (rc != 0)
-		D__ERROR("rpc register failure: rc = %d\n", rc);
+		D_ERROR("rpc register failure: rc = %d\n", rc);
 
 	return rc;
 

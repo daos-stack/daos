@@ -264,7 +264,7 @@ ik_btr_open_create(bool create, char *args)
 	int		rc;
 
 	if (!daos_handle_is_inval(ik_toh)) {
-		D__ERROR("Tree has been opened\n");
+		D_ERROR("Tree has been opened\n");
 		return -1;
 	}
 
@@ -276,26 +276,26 @@ ik_btr_open_create(bool create, char *args)
 		if (args[0] == 'i') { /* inplace create/open */
 			inplace = true;
 			if (args[1] != IK_SEP) {
-				D__ERROR("wrong parameter format %s\n", args);
+				D_ERROR("wrong parameter format %s\n", args);
 				return -1;
 			}
 			args += 2;
 		}
 
 		if (args[0] != 'o' || args[1] != IK_SEP_VAL) {
-			D__ERROR("incorrect format for tree order: %s\n", args);
+			D_ERROR("incorrect format for tree order: %s\n", args);
 			return -1;
 		}
 
 		ik_order = atoi(&args[2]);
 		if (ik_order < BTR_ORDER_MIN || ik_order > BTR_ORDER_MAX) {
-			D__ERROR("Invalid tree order %d\n", ik_order);
+			D_ERROR("Invalid tree order %d\n", ik_order);
 			return -1;
 		}
 	} else if (!create) {
 		inplace = (ik_root.tr_class != 0);
 		if (TMMID_IS_NULL(ik_root_mmid) && !inplace) {
-			D__ERROR("Please create tree first\n");
+			D_ERROR("Please create tree first\n");
 			return -1;
 		}
 	}
@@ -320,7 +320,7 @@ ik_btr_open_create(bool create, char *args)
 		}
 	}
 	if (rc != 0) {
-		D__ERROR("Tree %s failed: %d\n", create ? "create" : "open", rc);
+		D_ERROR("Tree %s failed: %d\n", create ? "create" : "open", rc);
 		return -1;
 	}
 	return 0;
@@ -332,7 +332,7 @@ ik_btr_close_destroy(bool destroy)
 	int rc;
 
 	if (daos_handle_is_inval(ik_toh)) {
-		D__ERROR("Invalid tree open handle\n");
+		D_ERROR("Invalid tree open handle\n");
 		return -1;
 	}
 
@@ -346,7 +346,7 @@ ik_btr_close_destroy(bool destroy)
 
 	ik_toh = DAOS_HDL_INVAL;
 	if (rc != 0) {
-		D__ERROR("Tree %s failed: %d\n",
+		D_ERROR("Tree %s failed: %d\n",
 			destroy ? "destroy" : "close", rc);
 		return -1;
 	}
@@ -363,7 +363,7 @@ btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 
 	rc = umem_class_init(&ik_uma, &umm);
 	if (rc != 0) {
-		D__ERROR("Failed to instantiate umem while vefify: %d\n", rc);
+		D_ERROR("Failed to instantiate umem while vefify: %d\n", rc);
 		return -1;
 	}
 
@@ -372,7 +372,7 @@ btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 
 	if ((sizeof(irec->ir_key) != key->iov_len) ||
 	    (irec->ir_key != *((uint64_t *)key->iov_buf))) {
-		D__ERROR("Preserved record mismatch while delete\n");
+		D_ERROR("Preserved record mismatch while delete\n");
 		return -1;
 	}
 
@@ -414,7 +414,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 	int		rc;
 
 	if (daos_handle_is_inval(ik_toh)) {
-		D__ERROR("Can't find opened tree\n");
+		D_ERROR("Can't find opened tree\n");
 		return -1;
 	}
 
@@ -430,7 +430,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 			val = strchr(str, IK_SEP_VAL);
 			if (val == NULL) {
 				D__PRINT("Failed with %d\n", rc);
-				D__ERROR("Invalid parameters %s\n", str);
+				D_ERROR("Invalid parameters %s\n", str);
 				return -1;
 			}
 			str = ++val;
@@ -450,7 +450,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 			daos_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(ik_toh, &key_iov, &val_iov);
 			if (rc != 0) {
-				D__ERROR("Failed to update "DF_U64":%s\n",
+				D_ERROR("Failed to update "DF_U64":%s\n",
 					key, val);
 				return -1;
 			}
@@ -459,7 +459,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 		case BTR_OPC_DELETE:
 			rc = dbtree_delete(ik_toh, &key_iov, NULL);
 			if (rc != 0) {
-				D__ERROR("Failed to delete "DF_U64"\n", key);
+				D_ERROR("Failed to delete "DF_U64"\n", key);
 				return -1;
 			}
 			if (verbose)
@@ -472,14 +472,14 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 		case BTR_OPC_DELETE_RETAIN:
 			rc = dbtree_delete(ik_toh, &key_iov, &rec_mmid);
 			if (rc != 0) {
-				D__ERROR("Failed to delete "DF_U64"\n", key);
+				D_ERROR("Failed to delete "DF_U64"\n", key);
 				return -1;
 			}
 
 			/** Verify and delete rec_mmid here */
 			rc = btr_rec_verify_delete(&rec_mmid, &key_iov);
 			if (rc != 0) {
-				D__ERROR("Failed to verify and delete rec\n");
+				D_ERROR("Failed to verify and delete rec\n");
 				return -1;
 			}
 
@@ -495,7 +495,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 			daos_iov_set(&val_iov, NULL, 0); /* get address */
 			rc = dbtree_lookup(ik_toh, &key_iov, &val_iov);
 			if (rc != 0) {
-				D__ERROR("Failed to lookup "DF_U64"\n", key);
+				D_ERROR("Failed to lookup "DF_U64"\n", key);
 				return -1;
 			}
 
@@ -521,7 +521,7 @@ ik_btr_query(void)
 
 	rc = dbtree_query(ik_toh, &attr, &stat);
 	if (rc != 0) {
-		D__ERROR("Failed to query btree: %d\n", rc);
+		D_ERROR("Failed to query btree: %d\n", rc);
 		return -1;
 	}
 
@@ -549,7 +549,7 @@ ik_btr_iterate(char *args)
 	char		*err;
 
 	if (daos_handle_is_inval(ik_toh)) {
-		D__ERROR("Can't find opened tree\n");
+		D_ERROR("Can't find opened tree\n");
 		return -1;
 	}
 

@@ -140,7 +140,7 @@ cont_lookup(struct daos_lru_cache *cache, const uuid_t uuid,
 				"container: %d\n", DP_CONT(NULL, uuid),
 				pool == NULL ? "" : "/create", rc);
 		else
-			D__ERROR(DF_CONT": failed to lookup%s container: %d\n",
+			D_ERROR(DF_CONT": failed to lookup%s container: %d\n",
 				DP_CONT(NULL, uuid),
 				pool == NULL ? "" : "/create", rc);
 		return rc;
@@ -475,7 +475,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (hdl != NULL) {
 		if (capas != 0) {
 			if (hdl->sch_capas != capas) {
-				D__ERROR(DF_CONT": conflicting container : hdl="
+				D_ERROR(DF_CONT": conflicting container : hdl="
 					DF_UUID" capas="DF_U64"\n",
 					DP_CONT(pool_uuid, cont_uuid),
 					DP_UUID(cont_hdl_uuid), capas);
@@ -613,7 +613,7 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 
 	rc = vos_epoch_discard(hdl->sch_cont->sc_hdl, &range, rec->tcr_hdl);
 	if (rc != 0) {
-		D__ERROR(DF_CONT": failed to discard uncommitted epochs ["DF_U64
+		D_ERROR(DF_CONT": failed to discard uncommitted epochs ["DF_U64
 			", "DF_X64"): hdl="DF_UUID" rc=%d\n",
 			DP_CONT(hdl->sch_pool->spc_uuid,
 				hdl->sch_cont->sc_uuid), range.epr_lo,
@@ -721,7 +721,7 @@ cont_query_one(void *vin)
 	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid,
 			   &vos_chdl);
 	if (rc != 0) {
-		D__ERROR(DF_CONT": Failed %s: %d",
+		D_ERROR(DF_CONT": Failed %s: %d",
 			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
 			rc);
 		D__GOTO(ds_child, rc);
@@ -730,7 +730,7 @@ cont_query_one(void *vin)
 	opstr = "Querying VOS container open handle\n";
 	rc = vos_cont_query(vos_chdl, &vos_cinfo);
 	if (rc != 0) {
-		D__ERROR(DF_CONT": Failed :%s: %d",
+		D_ERROR(DF_CONT": Failed :%s: %d",
 			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
 			rc);
 		D__GOTO(out, rc);
@@ -846,7 +846,7 @@ cont_epoch_discard_one(void *vin)
 
 	rc = vos_epoch_discard(hdl->sch_cont->sc_hdl, &range, in->tii_hdl);
 	if (rc != 0)
-		D__ERROR(DF_CONT": failed to discard epoch "DF_U64": hdl="DF_UUID
+		D_ERROR(DF_CONT": failed to discard epoch "DF_U64": hdl="DF_UUID
 			" rc=%d\n",
 			DP_CONT(hdl->sch_pool->spc_uuid,
 				hdl->sch_cont->sc_uuid), in->tii_epoch,
@@ -933,7 +933,7 @@ cont_epoch_aggregate_one(void *vin)
 
 	pool_child = ds_pool_child_lookup(in->tai_pool_uuid);
 	if (pool_child == NULL) {
-		D__ERROR(DF_CONT": pool child is NULL\n",
+		D_ERROR(DF_CONT": pool child is NULL\n",
 			DP_CONT(in->tai_pool_uuid,
 				in->tai_cont_uuid));
 		return -DER_NO_HDL;
@@ -943,7 +943,7 @@ cont_epoch_aggregate_one(void *vin)
 	rc = vos_cont_open(pool_child->spc_hdl, in->tai_cont_uuid,
 			   &vos_chdl);
 	if (rc != 0) {
-		D__ERROR(DF_CONT": Failed %s : %d",
+		D_ERROR(DF_CONT": Failed %s : %d",
 			DP_CONT(in->tai_pool_uuid,
 				in->tai_cont_uuid), opstr, rc);
 		/*
@@ -961,7 +961,7 @@ cont_epoch_aggregate_one(void *vin)
 	opstr = "preparing vos obj iterator ";
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_hdl);
 	if (rc != 0) {
-		D__ERROR(DF_CONT": failed %s : %d",
+		D_ERROR(DF_CONT": failed %s : %d",
 			DP_CONT(in->tai_pool_uuid,
 				in->tai_cont_uuid), opstr, rc);
 		D__GOTO(cont_close, rc);
@@ -978,7 +978,7 @@ cont_epoch_aggregate_one(void *vin)
 	}
 
 	if (rc != 0) {
-		D__ERROR("failed %s : %d\n", opstr, rc);
+		D_ERROR("failed %s : %d\n", opstr, rc);
 		D__GOTO(out, rc);
 	}
 
@@ -1001,7 +1001,7 @@ cont_epoch_aggregate_one(void *vin)
 		}
 
 		if (rc != 0) {
-			D__ERROR("obj iterator in "DF_CONT" failed to %s: %d",
+			D_ERROR("obj iterator in "DF_CONT" failed to %s: %d",
 				DP_CONT(in->tai_pool_uuid,
 					in->tai_cont_uuid), opstr, rc);
 
@@ -1072,7 +1072,7 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 
 	rc = dss_thread_collective(cont_epoch_aggregate_one, in);
 	if (rc != 0)
-		D__ERROR(DF_CONT": failed to aggregate "DF_U64"->"DF_U64": %d\n",
+		D_ERROR(DF_CONT": failed to aggregate "DF_U64"->"DF_U64": %d\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
 			in->tai_start_epoch, in->tai_end_epoch, rc);
 }
@@ -1102,7 +1102,7 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 
 	rc = vos_cont_open(ph, co_uuid, &coh);
 	if (rc != 0) {
-		D__ERROR("Open container "DF_UUID" failed: rc = %d\n",
+		D_ERROR("Open container "DF_UUID" failed: rc = %d\n",
 			DP_UUID(co_uuid), rc);
 		return rc;
 	}
@@ -1114,7 +1114,7 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_h);
 	if (rc != 0) {
-		D__ERROR("prepare obj iterator failed %d\n", rc);
+		D_ERROR("prepare obj iterator failed %d\n", rc);
 		D__GOTO(close, rc);
 	}
 
@@ -1123,7 +1123,7 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else
-			D__ERROR("set iterator cursor failed: %d\n", rc);
+			D_ERROR("set iterator cursor failed: %d\n", rc);
 		D__GOTO(iter_fini, rc);
 	}
 
@@ -1136,7 +1136,7 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 			if (rc == -DER_NONEXIST)
 				rc = 0;
 			else
-				D__ERROR("Fetch obj failed: %d\n", rc);
+				D_ERROR("Fetch obj failed: %d\n", rc);
 			break;
 		}
 

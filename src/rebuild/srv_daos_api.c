@@ -63,7 +63,7 @@ rebuild_need_retry_cb(tse_task_t *task, void *arg)
 	task->dt_result = 0;
 	rc = dc_task_resched(task);
 	if (rc != 0) {
-		D__ERROR("Failed to re-init task (%p)\n", task);
+		D_ERROR("Failed to re-init task (%p)\n", task);
 		return rc;
 	}
 

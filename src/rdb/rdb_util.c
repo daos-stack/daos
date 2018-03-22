@@ -85,13 +85,13 @@ rdb_decode_iov(const void *buf, size_t len, daos_iov_t *iov)
 
 	/* iov_len (head) */
 	if (p + sizeof(rdb_iov_size_t) > buf + len) {
-		D__ERROR("truncated iov_len (head): %zu < %zu\n", len,
+		D_ERROR("truncated iov_len (head): %zu < %zu\n", len,
 			sizeof(rdb_iov_size_t));
 		return -DER_IO;
 	}
 	v.iov_len = *(const rdb_iov_size_t *)p;
 	if (v.iov_len > rdb_iov_max) {
-		D__ERROR("invalid iov_len (head): "DF_U64" > "DF_U64"\n",
+		D_ERROR("invalid iov_len (head): "DF_U64" > "DF_U64"\n",
 			v.iov_len, rdb_iov_max);
 		return -DER_IO;
 	}
@@ -100,7 +100,7 @@ rdb_decode_iov(const void *buf, size_t len, daos_iov_t *iov)
 	/* iov_buf */
 	if (v.iov_len != 0) {
 		if (p + v.iov_len > buf + len) {
-			D__ERROR("truncated iov_buf: %zu < %zu\n", buf + len - p,
+			D_ERROR("truncated iov_buf: %zu < %zu\n", buf + len - p,
 				v.iov_len);
 			return -DER_IO;
 		}
@@ -109,12 +109,12 @@ rdb_decode_iov(const void *buf, size_t len, daos_iov_t *iov)
 	}
 	/* iov_len (tail) */
 	if (p + sizeof(rdb_iov_size_t) > buf + len) {
-		D__ERROR("truncated iov_len (tail): %zu < %zu\n", buf + len - p,
+		D_ERROR("truncated iov_len (tail): %zu < %zu\n", buf + len - p,
 			sizeof(rdb_iov_size_t));
 		return -DER_IO;
 	}
 	if (*(const rdb_iov_size_t *)p != v.iov_len) {
-		D__ERROR("inconsistent iov_lens: "DF_U64" != %u\n",
+		D_ERROR("inconsistent iov_lens: "DF_U64" != %u\n",
 			v.iov_len, *(const rdb_iov_size_t *)p);
 		return -DER_IO;
 	}
@@ -132,14 +132,14 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, daos_iov_t *iov)
 
 	/* iov_len (tail) */
 	if (p - sizeof(rdb_iov_size_t) < buf_end - len) {
-		D__ERROR("truncated iov_len (tail): %zu < %zu\n", len,
+		D_ERROR("truncated iov_len (tail): %zu < %zu\n", len,
 			sizeof(rdb_iov_size_t));
 		return -DER_IO;
 	}
 	p -= sizeof(rdb_iov_size_t);
 	v.iov_len = *(const rdb_iov_size_t *)p;
 	if (v.iov_len > rdb_iov_max) {
-		D__ERROR("invalid iov_len (tail): "DF_U64" > "DF_U64"\n",
+		D_ERROR("invalid iov_len (tail): "DF_U64" > "DF_U64"\n",
 			v.iov_len, rdb_iov_max);
 		return -DER_IO;
 	}
@@ -147,7 +147,7 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, daos_iov_t *iov)
 	/* iov_buf */
 	if (v.iov_len != 0) {
 		if (p - v.iov_len < buf_end - len) {
-			D__ERROR("truncated iov_buf: %zu < %zu\n",
+			D_ERROR("truncated iov_buf: %zu < %zu\n",
 				p - (buf_end - len), v.iov_len);
 			return -DER_IO;
 		}
@@ -156,13 +156,13 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, daos_iov_t *iov)
 	}
 	/* iov_len (head) */
 	if (p - sizeof(rdb_iov_size_t) < buf_end - len) {
-		D__ERROR("truncated iov_len (head): %zu < %zu\n",
+		D_ERROR("truncated iov_len (head): %zu < %zu\n",
 			p - (buf_end - len), sizeof(rdb_iov_size_t));
 		return -DER_IO;
 	}
 	p -= sizeof(rdb_iov_size_t);
 	if (*(const rdb_iov_size_t *)p != v.iov_len) {
-		D__ERROR("inconsistent iov_lens: "DF_U64" != %u\n",
+		D_ERROR("inconsistent iov_lens: "DF_U64" != %u\n",
 			v.iov_len, *(const rdb_iov_size_t *)p);
 		return -DER_IO;
 	}

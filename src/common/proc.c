@@ -75,8 +75,8 @@ daos_proc_iovec(crt_proc_t proc, daos_iov_t *div)
 		return -DER_HG;
 
 	if (div->iov_buf_len < div->iov_len) {
-		D__ERROR("invalid iov buf len "DF_U64" < iov len "DF_U64"\n",
-				div->iov_buf_len, div->iov_len);
+		D_ERROR("invalid iov buf len "DF_U64" < iov len "DF_U64"\n",
+			div->iov_buf_len, div->iov_len);
 		return -DER_HG;
 	}
 	if (proc_op == CRT_PROC_DECODE && div->iov_buf_len > 0) {
@@ -157,7 +157,7 @@ daos_proc_csum_buf(crt_proc_t proc, daos_csum_buf_t *csum)
 		return -DER_HG;
 
 	if (csum->cs_buf_len < csum->cs_len) {
-		D__ERROR("invalid csum buf len %hu < csum len %hu\n",
+		D_ERROR("invalid csum buf len %hu < csum len %hu\n",
 			csum->cs_buf_len, csum->cs_len);
 		return -DER_HG;
 	}
@@ -251,7 +251,7 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 	uint32_t	existing_flags = 0;
 
 	if (proc == NULL ||  dvi == NULL) {
-		D__ERROR("Invalid parameter, proc: %p, data: %p.\n",
+		D_ERROR("Invalid parameter, proc: %p, data: %p.\n",
 			proc, dvi);
 		return -DER_INVAL;
 	}
@@ -277,7 +277,7 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 		return -DER_HG;
 
 	if (dvi->iod_nr == 0) {
-		D__ERROR("invalid I/O descriptor, iod_nr = 0\n");
+		D_ERROR("invalid I/O descriptor, iod_nr = 0\n");
 		return -DER_HG;
 	}
 

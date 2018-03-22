@@ -80,7 +80,7 @@ ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
 
 	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
 	if (rc)
-		D__ERROR("Set parameter failed key_id %d: rc %d\n",
+		D_ERROR("Set parameter failed key_id %d: rc %d\n",
 			 in->tps_key_id, rc);
 
 	out = crt_reply_get(rpc);
@@ -116,8 +116,8 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 		/* Only set local parameter */
 		rc = dss_parameters_set(ps_in->ps_key_id, ps_in->ps_value);
 		if (rc)
-			D__ERROR("Set parameter failed key_id %d: rc %d\n",
-				 ps_in->ps_key_id, rc);
+			D_ERROR("Set parameter failed key_id %d: rc %d\n",
+				ps_in->ps_key_id, rc);
 		D__GOTO(out, rc);
 	}
 

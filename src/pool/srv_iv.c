@@ -107,7 +107,7 @@ pool_iv_ent_copy(d_sg_list_t *dst, d_sg_list_t *src)
 
 		/* copy pool buf */
 		if (dst_len < src_len) {
-			D__ERROR("dst %d\n src %d\n", dst_len, src_len);
+			D_ERROR("dst %d\n src %d\n", dst_len, src_len);
 			return -DER_REC2BIG;
 		}
 
@@ -149,7 +149,7 @@ pool_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src)
 	/* Update pool map version or pool map */
 	pool = ds_pool_lookup(src_iv->piv_pool_uuid);
 	if (pool == NULL) {
-		D__WARN("No pool "DF_UUID"\n", DP_UUID(src_iv->piv_pool_uuid));
+		D_WARN("No pool "DF_UUID"\n", DP_UUID(src_iv->piv_pool_uuid));
 		return 0;
 	}
 
@@ -189,7 +189,7 @@ pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv)
 
 	rc = ds_iv_fetch(ns, IV_POOL_MAP, &sgl);
 	if (rc)
-		D__ERROR("iv fetch failed %d\n", rc);
+		D_ERROR("iv fetch failed %d\n", rc);
 
 	return rc;
 }
@@ -212,7 +212,7 @@ pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
 	sgl.sg_iovs = &iov;
 	rc = ds_iv_update(ns, IV_POOL_MAP, &sgl, shortcut, sync_mode);
 	if (rc)
-		D__ERROR("iv update failed %d\n", rc);
+		D_ERROR("iv update failed %d\n", rc);
 
 	return rc;
 }

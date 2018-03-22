@@ -37,7 +37,7 @@ rip_cp(tse_task_t *task, void *data)
 	int                      rc = task->dt_result;
 
 	if (rc)
-		D__ERROR("RPC error while killing rank: %d\n", rc);
+		D_ERROR("RPC error while killing rank: %d\n", rc);
 
 	daos_group_detach(rpc->cr_ep.ep_grp);
 	crt_req_decref(rpc);
@@ -64,7 +64,7 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE, 1);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc);
 	if (rc != 0) {
-		D__ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
+		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
 			rc);
 		D__GOTO(err_grp, rc);
 	}
@@ -116,7 +116,7 @@ dc_mgmt_params_set(tse_task_t *task)
 	opc = DAOS_RPC_OPCODE(MGMT_PARAMS_SET, DAOS_MGMT_MODULE, 1);
 	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
-		D__ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
+		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
 			rc);
 		D__GOTO(err_grp, rc);
 	}
@@ -158,7 +158,7 @@ dc_mgmt_init()
 
 	rc = daos_rpc_register(mgmt_rpcs, NULL, DAOS_MGMT_MODULE);
 	if (rc != 0)
-		D__ERROR("failed to register rpcs: %d\n", rc);
+		D_ERROR("failed to register rpcs: %d\n", rc);
 
 	return rc;
 }

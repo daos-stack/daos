@@ -100,7 +100,7 @@ cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 	rc = vos_obj_tab_create(args->ca_pool, &cont_df->cd_otab_df);
 	if (rc) {
-		D__ERROR("VOS object index create failure\n");
+		D_ERROR("VOS object index create failure\n");
 		D__GOTO(exit, rc);
 	}
 	rec->rec_mmid = umem_id_t2u(cont_mmid);
@@ -184,7 +184,7 @@ cont_insert(struct vos_container *cont, struct d_uuid *key, daos_handle_t *coh)
 	rc = d_uhash_link_insert(vos_cont_hhash_get(), key,
 				 &cont->vc_uhlink);
 	if (rc) {
-		D__ERROR("UHASH table container handle insert failed\n");
+		D_ERROR("UHASH table container handle insert failed\n");
 		D__GOTO(exit, rc);
 	}
 
@@ -239,7 +239,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 
 	vpool = vos_hdl2pool(poh);
 	if (vpool == NULL) {
-		D__ERROR("Empty pool handle?\n");
+		D_ERROR("Empty pool handle?\n");
 		return -DER_INVAL;
 	}
 
@@ -250,7 +250,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 	rc = cont_df_lookup(vpool, &ukey, &args);
 	if (!rc) {
 		/* Check if attemt to reuse the same container uuid */
-		D__ERROR("Container already exists\n");
+		D_ERROR("Container already exists\n");
 		D__GOTO(exit, rc = -DER_EXIST);
 	}
 
@@ -262,12 +262,12 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 
 		rc = dbtree_update(vpool->vp_cont_th, &key, &value);
 		if (rc) {
-			D__ERROR("Creating a container entry: %d\n", rc);
+			D_ERROR("Creating a container entry: %d\n", rc);
 			pmemobj_tx_abort(ENOMEM);
 		}
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D__ERROR("Creating a container entry: %d\n", rc);
+		D_ERROR("Creating a container entry: %d\n", rc);
 	} TX_END;
 
 exit:
@@ -291,7 +291,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	vpool = vos_hdl2pool(poh);
 	if (vpool == NULL) {
-		D__ERROR("Empty pool handle?\n");
+		D_ERROR("Empty pool handle?\n");
 		return -DER_INVAL;
 	}
 	uuid_copy(ukey.uuid, co_uuid);
@@ -316,7 +316,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	D__ALLOC_PTR(cont);
 	if (!cont) {
-		D__ERROR("Error in allocating container handle\n");
+		D_ERROR("Error in allocating container handle\n");
 		D__GOTO(exit, rc = -DER_NOMEM);
 	}
 
@@ -330,13 +330,13 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				 &cont->vc_pool->vp_uma,
 				 &cont->vc_btr_hdl);
 	if (rc) {
-		D__ERROR("No Object handle, Tree open failed\n");
+		D_ERROR("No Object handle, Tree open failed\n");
 		D__GOTO(exit, rc);
 	}
 
 	rc = cont_insert(cont, &ukey, coh);
 	if (rc) {
-		D__ERROR("Error inserting vos container handle to uuid hash\n");
+		D_ERROR("Error inserting vos container handle to uuid hash\n");
 		D__GOTO(exit, rc);
 	}
 
@@ -357,7 +357,7 @@ vos_cont_close(daos_handle_t coh)
 
 	cont = vos_hdl2cont(coh);
 	if (cont == NULL) {
-		D__ERROR("Cannot close a NULL handle\n");
+		D_ERROR("Cannot close a NULL handle\n");
 		return -DER_INVAL;
 	}
 
@@ -378,7 +378,7 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cont_info)
 
 	cont = vos_hdl2cont(coh);
 	if (cont == NULL) {
-		D__ERROR("Empty container handle for querying?\n");
+		D_ERROR("Empty container handle for querying?\n");
 		return -DER_INVAL;
 	}
 
@@ -405,13 +405,13 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 
 	vpool = vos_hdl2pool(poh);
 	if (vpool == NULL) {
-		D__ERROR("Empty pool handle for destroying container?\n");
+		D_ERROR("Empty pool handle for destroying container?\n");
 		return -DER_INVAL;
 	}
 
 	rc = cont_lookup(&uuid, &cont);
 	if (rc != -DER_NONEXIST) {
-		D__ERROR("Open reference exists, cannot destroy\n");
+		D_ERROR("Open reference exists, cannot destroy\n");
 		cont_decref(cont);
 		D__GOTO(exit, rc = -DER_BUSY);
 	}
@@ -428,7 +428,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 
 		rc = vos_obj_tab_destroy(vpool, &args.ca_cont_df->cd_otab_df);
 		if (rc) {
-			D__ERROR("OI destroy failed with error : %d\n",
+			D_ERROR("OI destroy failed with error : %d\n",
 				rc);
 			pmemobj_tx_abort(EFAULT);
 		}
@@ -437,7 +437,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		rc = dbtree_delete(vpool->vp_cont_th, &iov, NULL);
 	}  TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D__ERROR("Destroying container transaction failed %d\n", rc);
+		D_ERROR("Destroying container transaction failed %d\n", rc);
 	} TX_END;
 	D_EXIT;
 exit:
@@ -471,7 +471,7 @@ vos_cont_tab_register()
 
 	rc = dbtree_class_register(VOS_BTR_CONT_TABLE, 0, &vct_ops);
 	if (rc)
-		D__ERROR("dbtree create failed\n");
+		D_ERROR("dbtree create failed\n");
 	return rc;
 }
 
@@ -489,13 +489,13 @@ vos_cont_tab_create(struct umem_attr *p_umem_attr,
 	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, 0, CT_BTREE_ORDER,
 				   p_umem_attr, &ctab_df->ctb_btree, &btr_hdl);
 	if (rc) {
-		D__ERROR("DBtree create failed\n");
+		D_ERROR("DBtree create failed\n");
 		D__GOTO(exit, rc);
 	}
 
 	rc = dbtree_close(btr_hdl);
 	if (rc)
-		D__ERROR("Error in closing btree handle\n");
+		D_ERROR("Error in closing btree handle\n");
 
 exit:
 	return rc;
@@ -529,7 +529,7 @@ cont_iter_fini(struct vos_iterator *iter)
 	if (!daos_handle_is_inval(co_iter->cot_hdl)) {
 		rc = dbtree_iter_finish(co_iter->cot_hdl);
 		if (rc)
-			D__ERROR("co_iter_fini failed: %d\n", rc);
+			D_ERROR("co_iter_fini failed: %d\n", rc);
 	}
 
 	if (co_iter->cot_pool != NULL)
@@ -548,7 +548,7 @@ cont_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	int			rc = 0;
 
 	if (type != VOS_ITER_COUUID) {
-		D__ERROR("Expected Type: %d, got %d\n",
+		D_ERROR("Expected Type: %d, got %d\n",
 			VOS_ITER_COUUID, type);
 		return -DER_INVAL;
 	}
@@ -593,7 +593,7 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 	rc = dbtree_iter_fetch(co_iter->cot_hdl, &key, &value, anchor);
 	if (rc != 0) {
-		D__ERROR("Error while fetching co info: %d\n", rc);
+		D_ERROR("Error while fetching co info: %d\n", rc);
 		return rc;
 	}
 	D__ASSERT(value.iov_len == sizeof(struct cont_df_args));
@@ -638,7 +638,7 @@ cont_iter_delete(struct vos_iterator *iter, void *args)
 		rc = dbtree_iter_delete(co_iter->cot_hdl, args);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D__ERROR("Failed to delete oid entry: %d\n", rc);
+		D_ERROR("Failed to delete oid entry: %d\n", rc);
 	} TX_END
 
 	D_EXIT;

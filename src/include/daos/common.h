@@ -79,7 +79,7 @@ char *DP_UUID(const void *uuid);
 do {									\
 	(ptr) = (__typeof__(ptr))calloc(1, (size + DD_ALLOC_PADDING));	\
 	if ((ptr) == NULL) {						\
-		D__ERROR("out of memory (alloc '" #ptr "' = %d)",	\
+		D_ERROR("out of memory (alloc '" #ptr "' = %d)",	\
 			(int)(size));					\
 	}								\
 	D_DEBUG(DB_MEM, "alloc #ptr : %d at %p.\n", (int)(size), ptr);	\

@@ -216,7 +216,7 @@ rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 
 	rc = ds_iv_fetch(ns, IV_REBUILD, &sgl);
 	if (rc)
-		D__ERROR("iv fetch failed %d\n", rc);
+		D_ERROR("iv fetch failed %d\n", rc);
 
 	return rc;
 }
@@ -237,7 +237,7 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 	sgl.sg_iovs = &iov;
 	rc = ds_iv_update(ns, IV_REBUILD, &sgl, shortcut, sync_mode);
 	if (rc)
-		D__ERROR("iv update failed %d\n", rc);
+		D_ERROR("iv update failed %d\n", rc);
 
 	return rc;
 }

@@ -228,8 +228,8 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 
 	rc = dss_task_collective(pool_child_add_one, &collective_arg);
 	if (rc != 0) {
-		D__ERROR(DF_UUID": failed to add ES pool caches: %d\n",
-			 DP_UUID(key), rc);
+		D_ERROR(DF_UUID": failed to add ES pool caches: %d\n",
+			DP_UUID(key), rc);
 		D__GOTO(err_lock, rc);
 	}
 
@@ -239,7 +239,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 		uuid_unparse_lower(key, id);
 		pool->sp_group = crt_group_lookup(id);
 		if (pool->sp_group == NULL) {
-			D__ERROR(DF_UUID": pool group not found\n",
+			D_ERROR(DF_UUID": pool group not found\n",
 				DP_UUID(key));
 			D__GOTO(err_collective, rc = -DER_NONEXIST);
 		}
@@ -271,7 +271,7 @@ pool_free_ref(struct daos_llink *llink)
 #if 0
 		rc = ds_pool_group_destroy(pool->sp_uuid, pool->sp_group);
 		if (rc != 0)
-			D__ERROR(DF_UUID": failed to destroy pool group %s: "
+			D_ERROR(DF_UUID": failed to destroy pool group %s: "
 				"%d\n", DP_UUID(pool->sp_uuid),
 				pool->sp_group->cg_grpid, rc);
 #else
@@ -286,8 +286,8 @@ pool_free_ref(struct daos_llink *llink)
 	if (rc == -DER_CANCELED)
 		D_DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
 	else if (rc != 0)
-		D__ERROR(DF_UUID": failed to delete ES pool caches: %d\n",
-			 DP_UUID(pool->sp_uuid), rc);
+		D_ERROR(DF_UUID": failed to delete ES pool caches: %d\n",
+			DP_UUID(pool->sp_uuid), rc);
 
 	if (pool->sp_map != NULL)
 		pool_map_decref(pool->sp_map);
@@ -357,7 +357,7 @@ ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
 			D_DEBUG(DF_DSMS, DF_UUID": pure lookup failed: %d\n",
 				DP_UUID(uuid), rc);
 		else
-			D__ERROR(DF_UUID": failed to lookup%s pool: %d\n",
+			D_ERROR(DF_UUID": failed to lookup%s pool: %d\n",
 				DP_UUID(uuid), arg == NULL ? "" : "/create",
 				rc);
 		return rc;
@@ -515,7 +515,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 				hdl->sph_capas);
 			rc = 0;
 		} else {
-			D__ERROR(DF_UUID": found conflicting pool handle: hdl="
+			D_ERROR(DF_UUID": found conflicting pool handle: hdl="
 				DF_UUID" capas="DF_U64"\n",
 				DP_UUID(in->tci_uuid), DP_UUID(in->tci_hdl),
 				hdl->sph_capas);
@@ -554,7 +554,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 					      &in->tci_iv_ctxt,
 					      in->tci_iv_ns_id);
 		if (rc) {
-			D__ERROR("attach iv ns failed rc %d\n", rc);
+			D_ERROR("attach iv ns failed rc %d\n", rc);
 			D__GOTO(out, rc);
 		}
 	}
@@ -692,8 +692,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		pool->sp_map = map;
 		map = tmp;
 	} else {
-		D__WARN("Ignore old map version: cur=%u, input=%u pool %p\n",
-			pool->sp_map_version, map_version, pool);
+		D_WARN("Ignore old map version: cur=%u, input=%u pool %p\n",
+		       pool->sp_map_version, map_version, pool);
 	}
 	ABT_rwlock_unlock(pool->sp_lock);
 
@@ -773,7 +773,7 @@ ds_pool_cont_iter(daos_handle_t ph, pool_iter_cb_t callback, void *arg)
 
 	rc = vos_iter_prepare(VOS_ITER_COUUID, &param, &iter_h);
 	if (rc != 0) {
-		D__ERROR("prepare co iterator failed %d\n", rc);
+		D_ERROR("prepare co iterator failed %d\n", rc);
 		return rc;
 	}
 
@@ -782,7 +782,7 @@ ds_pool_cont_iter(daos_handle_t ph, pool_iter_cb_t callback, void *arg)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else
-			D__ERROR("set iterator cursor failed: %d\n", rc);
+			D_ERROR("set iterator cursor failed: %d\n", rc);
 
 		D__GOTO(iter_fini, rc);
 	}
@@ -796,7 +796,7 @@ ds_pool_cont_iter(daos_handle_t ph, pool_iter_cb_t callback, void *arg)
 			if (rc == -DER_NONEXIST)
 				rc = 0;
 			else
-				D__ERROR("Fetch co failed: %d\n", rc);
+				D_ERROR("Fetch co failed: %d\n", rc);
 			break;
 		}
 

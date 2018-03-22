@@ -50,13 +50,13 @@ dir_fsync(const char *path)
 
 	fd = open(path, O_RDONLY|O_DIRECTORY);
 	if (fd < 0) {
-		D__ERROR("failed to open %s for sync: %d\n", path, errno);
+		D_ERROR("failed to open %s for sync: %d\n", path, errno);
 		return daos_errno2der(errno);
 	}
 
 	rc = fsync(fd);
 	if (rc < 0) {
-		D__ERROR("failed to fync %s: %d\n", path, errno);
+		D_ERROR("failed to fync %s: %d\n", path, errno);
 		rc = daos_errno2der(errno);
 	}
 
@@ -79,7 +79,7 @@ destroy_cb(const char *path, const struct stat *sb, int flag,
 	else
 		rc = unlink(path);
 	if (rc)
-		D__ERROR("failed to remove %s\n", path);
+		D_ERROR("failed to remove %s\n", path);
 	return rc;
 }
 
@@ -114,7 +114,7 @@ ds_mgmt_tgt_init(void)
 	/** create NEWBORNS directory if it does not exist already */
 	rc = mkdir(newborns_path, mode);
 	if (rc < 0 && errno != EEXIST) {
-		D__ERROR("failed to create NEWBORNS dir: %d\n", errno);
+		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
 		umask(stored_mode);
 		D__GOTO(err_zombies, rc = daos_errno2der(errno));
 	}
@@ -122,7 +122,7 @@ ds_mgmt_tgt_init(void)
 	/** create ZOMBIES directory if it does not exist already */
 	rc = mkdir(zombies_path, mode);
 	if (rc < 0 && errno != EEXIST) {
-		D__ERROR("failed to create ZOMBIES dir: %d\n", errno);
+		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
 		umask(stored_mode);
 		D__GOTO(err_zombies, rc = daos_errno2der(errno));
 	}
@@ -132,13 +132,13 @@ ds_mgmt_tgt_init(void)
 	rc = subtree_destroy(newborns_path);
 	if (rc)
 		/** only log error, will try again next time */
-		D__ERROR("failed to cleanup NEWBORNS dir: %d, will try again\n",
+		D_ERROR("failed to cleanup NEWBORNS dir: %d, will try again\n",
 			rc);
 
 	rc = subtree_destroy(zombies_path);
 	if (rc)
 		/** only log error, will try again next time */
-		D__ERROR("failed to cleanup ZOMBIES dir: %d, will try again\n",
+		D_ERROR("failed to cleanup ZOMBIES dir: %d, will try again\n",
 			rc);
 	return 0;
 
@@ -293,7 +293,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 
 		fd = open(path, O_CREAT|O_RDWR, 0600);
 		if (fd < 0) {
-			D__ERROR(DF_UUID": failed to create vos file %s: %d\n",
+			D_ERROR(DF_UUID": failed to create vos file %s: %d\n",
 				DP_UUID(uuid), path, rc);
 			rc = daos_errno2der(errno);
 			break;
@@ -301,7 +301,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 
 		rc = posix_fallocate(fd, 0, size);
 		if (rc) {
-			D__ERROR(DF_UUID": failed to allocate vos file %s with "
+			D_ERROR(DF_UUID": failed to allocate vos file %s with "
 				"size: "DF_U64", rc: %d.\n",
 				DP_UUID(uuid), path, size, rc);
 			rc = daos_errno2der(rc);
@@ -311,7 +311,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		/* A zero size accommodates the existing file */
 		rc = vos_pool_create(path, (unsigned char *)uuid, 0 /* size */);
 		if (rc) {
-			D__ERROR(DF_UUID": failed to init vos pool %s: %d\n",
+			D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
 				DP_UUID(uuid), path, rc);
 			break;
 		}
@@ -320,7 +320,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		(void)close(fd);
 		fd = -1;
 		if (rc) {
-			D__ERROR(DF_UUID": failed to sync vos pool %s: %d\n",
+			D_ERROR(DF_UUID": failed to sync vos pool %s: %d\n",
 				DP_UUID(uuid), path, rc);
 			rc = daos_errno2der(errno);
 			break;
@@ -350,7 +350,7 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t size, char *path)
 
 	rc = mkdir(newborn, 0700);
 	if (rc < 0 && errno != EEXIST) {
-		D__ERROR("failed to created pool directory: %d\n", rc);
+		D_ERROR("failed to created pool directory: %d\n", rc);
 		D__GOTO(out, rc = daos_errno2der(errno));
 	}
 
@@ -362,14 +362,14 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t size, char *path)
 	/** initialize DAOS-M target and fetch uuid */
 	rc = ds_pool_create(pool_uuid, newborn, tgt_uuid);
 	if (rc) {
-		D__ERROR("ds_pool_create failed, rc: %d.\n", rc);
+		D_ERROR("ds_pool_create failed, rc: %d.\n", rc);
 		D__GOTO(out_tree, rc);
 	}
 
 	/** ready for prime time, move away from NEWBORNS dir */
 	rc = rename(newborn, path);
 	if (rc < 0) {
-		D__ERROR("failed to rename pool directory: %d\n", rc);
+		D_ERROR("failed to rename pool directory: %d\n", rc);
 		D__GOTO(out_tree, rc = daos_errno2der(errno));
 	}
 

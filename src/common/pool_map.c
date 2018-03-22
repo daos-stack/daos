@@ -1443,7 +1443,7 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
 	int			 i;
 
 	if (pool_map_empty(map)) {
-		D__ERROR("Uninitialized pool map\n");
+		D_ERROR("Uninitialized pool map\n");
 		return 0;
 	}
 
@@ -1499,7 +1499,7 @@ pool_map_find_target(struct pool_map *map, uint32_t id,
 	struct pool_target	*target;
 
 	if (pool_map_empty(map)) {
-		D__ERROR("Uninitialized pool map\n");
+		D_ERROR("Uninitialized pool map\n");
 		return 0;
 	}
 
@@ -1616,7 +1616,7 @@ pool_map_find_tgts(struct pool_map *map, struct find_tgts_param *param,
 	*tgt_cnt = 0;
 
 	if (pool_map_empty(map)) {
-		D__ERROR("Uninitialized pool map\n");
+		D_ERROR("Uninitialized pool map\n");
 		return 0;
 	}
 
@@ -1767,7 +1767,7 @@ int
 pool_map_set_version(struct pool_map *map, uint32_t version)
 {
 	if (map->po_version > version) {
-		D__ERROR("Cannot decrease pool map version %u/%u\n",
+		D_ERROR("Cannot decrease pool map version %u/%u\n",
 			map->po_version, version);
 		return -DER_NO_PERM;
 	}
@@ -1805,7 +1805,7 @@ pool_map_find_target_by_rank(struct pool_map *map, uint32_t rank)
 	int			 i;
 
 	if (pool_map_empty(map)) {
-		D__ERROR("Uninitialized pool map\n");
+		D_ERROR("Uninitialized pool map\n");
 		return NULL;
 	}
 

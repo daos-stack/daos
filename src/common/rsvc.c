@@ -134,7 +134,7 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	D__ASSERT(hint->sh_flags & RSVC_HINT_VALID);
 
 	if (from_leader && hint->sh_rank != ep->ep_rank) {
-		D__ERROR("empty or invalid hint from leader rank %u: hint.term="
+		D_ERROR("empty or invalid hint from leader rank %u: hint.term="
 			DF_U64" hint.rank=%u\n", ep->ep_rank, hint->sh_term,
 			hint->sh_rank);
 		return;
@@ -302,7 +302,7 @@ rsvc_client_decode(void *buf, size_t len, struct rsvc_client *client)
 
 	/* OK to access the struct? */
 	if (len < sizeof(*p)) {
-		D__ERROR("truncated buffer: %zu < %zu\n", len, sizeof(*p));
+		D_ERROR("truncated buffer: %zu < %zu\n", len, sizeof(*p));
 		return -DER_IO;
 	}
 	/* Magic matches? */
@@ -310,7 +310,7 @@ rsvc_client_decode(void *buf, size_t len, struct rsvc_client *client)
 		if (p->scb_magic == D_SWAP32(rsvc_client_buf_magic)) {
 			swap = true;
 		} else {
-			D__ERROR("bad buffer magic: %x\n", p->scb_magic);
+			D_ERROR("bad buffer magic: %x\n", p->scb_magic);
 			return -DER_IO;
 		}
 	}
@@ -319,11 +319,11 @@ rsvc_client_decode(void *buf, size_t len, struct rsvc_client *client)
 		rsvc_client_buf_swap(p);
 	/* OK to access the ranks? */
 	if (p->scb_nranks == 0) {
-		D__ERROR("zero nranks\n");
+		D_ERROR("zero nranks\n");
 		return -DER_IO;
 	}
 	if (len < sizeof(*p) + sizeof(*p->scb_ranks) * p->scb_nranks) {
-		D__ERROR("truncated buffer: %zu < %zu\n", len,
+		D_ERROR("truncated buffer: %zu < %zu\n", len,
 			sizeof(*p) + sizeof(*p->scb_ranks) * p->scb_nranks);
 		return -DER_IO;
 	}

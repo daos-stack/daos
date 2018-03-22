@@ -41,7 +41,7 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 
 	if (options & EVT_ITER_EMBEDDED) {
 		if (tcx->tc_ref != 1) {
-			D__ERROR("Cannot share embedded iterator\n");
+			D_ERROR("Cannot share embedded iterator\n");
 			D__GOTO(out, rc = -DER_BUSY);
 		}
 

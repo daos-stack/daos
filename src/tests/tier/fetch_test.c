@@ -392,7 +392,7 @@ main(int argc, char **argv)
 
 	print_message("Polling for event completion\n");
 	daos_eq_poll(arg.eq, 1, DAOS_EQ_WAIT, 1, &evp);
-	D__INFO("event says done!\n");
+	D_INFO("event says done!\n");
 
 	rc = evp->ev_error;
 
@@ -409,7 +409,7 @@ main(int argc, char **argv)
 	rc = daos_tier_fetch_cont(warm_poh, tinfo.cont_uuid, ep, NULL, &ev);
 	daos_eq_poll(arg.eq, 1, DAOS_EQ_WAIT, 1, &evp);
 
-	D__INFO("event says done!\n");
+	D_INFO("event says done!\n");
 
 	rc = evp->ev_error;
 

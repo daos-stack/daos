@@ -253,7 +253,7 @@ evt_hdl2tcx(daos_handle_t toh)
 
 	tcx = (struct evt_context *)toh.cookie;
 	if (tcx->tc_magic != EVT_HDL_ALIVE) {
-		D__WARN("Invalid tree handle %x\n", tcx->tc_magic);
+		D_WARN("Invalid tree handle %x\n", tcx->tc_magic);
 		return NULL;
 	}
 	return tcx;
@@ -338,7 +338,7 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
-		D__ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
+		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
 		D__GOTO(failed, rc);
 	}
 
@@ -1287,7 +1287,7 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 	D_EXIT;
 	return 0;
  failed:
-	D__ERROR("Failed to insert entry to level %d: %d\n", level, rc);
+	D_ERROR("Failed to insert entry to level %d: %d\n", level, rc);
 	return rc;
 }
 

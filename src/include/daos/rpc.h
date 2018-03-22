@@ -173,7 +173,7 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 
 			handler = daos_rpc_handler_find(handlers, rpc->dr_opc);
 			if (handler == NULL) {
-				D__ERROR("failed to find handler for opc %d\n",
+				D_ERROR("failed to find handler for opc %d\n",
 					rpc->dr_opc);
 				return rc;
 			}

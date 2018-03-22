@@ -276,7 +276,7 @@ daos_debug_init(char *logfile)
 	debug_tunables_load_env();
 
 	rc = d_log_init_adv("DAOS", logfile, DLOG_FLV_LOGPID,
-			    DP_INFO, DLOG_CRIT);
+			    DLOG_INFO, DLOG_CRIT);
 	if (rc != 0) {
 		fprintf(stderr, "Failed to initialize debug log: %d\n", rc);
 		goto failed_unlock;

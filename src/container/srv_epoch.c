@@ -93,7 +93,7 @@ ec_increment(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
 
 out:
 	if (rc != 0)
-		D__ERROR(DF_CONT": failed to increment %s epoch counter: %d\n",
+		D_ERROR(DF_CONT": failed to increment %s epoch counter: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			ec_type2name(type), rc);
 	return rc;
@@ -129,7 +129,7 @@ ec_decrement(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
 
 out:
 	if (rc != 0)
-		D__ERROR(DF_CONT": failed to decrement %s epoch counter: %d\n",
+		D_ERROR(DF_CONT": failed to decrement %s epoch counter: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			ec_type2name(type), rc);
 	return rc;
@@ -151,7 +151,7 @@ ec_find_lowest(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			ec_type2name(type), rc);
 	else if (rc != 0)
-		D__ERROR(DF_CONT": failed to find lowest %s: %d\n",
+		D_ERROR(DF_CONT": failed to find lowest %s: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			ec_type2name(type), rc);
 	return rc;
@@ -216,7 +216,7 @@ ec_update_and_find_lowest(struct rdb_tx *tx, struct cont *cont,
 		rc = rdb_tx_iterate(tx, kvs, false /* !backward */,
 				    ec_decrement_iter_cb, &arg);
 		if (rc != 0) {
-			D__ERROR(DF_CONT": failed to iterate %s KVS: %d\n",
+			D_ERROR(DF_CONT": failed to iterate %s KVS: %d\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid),
 				ec_type2name(type), rc);
@@ -297,7 +297,7 @@ epoch_aggregate_bcast(crt_context_t ctx, struct cont *cont,
 	rc = out->tao_rc;
 
 	if (rc != 0) {
-		D__ERROR(DF_CONT",agg-bcast,e:"DF_U64"->"DF_U64":%d(targets)\n",
+		D_ERROR(DF_CONT",agg-bcast,e:"DF_U64"->"DF_U64":%d(targets)\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			epr->epr_lo, epr->epr_hi, rc);
 		rc = -DER_IO;
@@ -326,7 +326,7 @@ read_epoch_attr(struct rdb_tx *tx, struct cont *cont,
 	daos_iov_set(&value, &ghce, sizeof(ghce));
 	rc = rdb_tx_lookup(tx, &cont->c_attrs, &ds_cont_attr_ghce, &value);
 	if (rc != 0) {
-		D__ERROR(DF_CONT": failed to lookup GHCE: %d\n",
+		D_ERROR(DF_CONT": failed to lookup GHCE: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		return rc;
 	}
@@ -335,7 +335,7 @@ read_epoch_attr(struct rdb_tx *tx, struct cont *cont,
 	daos_iov_set(&value, &ghpce, sizeof(ghpce));
 	rc = rdb_tx_lookup(tx, &cont->c_attrs, &ds_cont_attr_ghpce, &value);
 	if (rc != 0) {
-		D__ERROR(DF_CONT": failed to lookup GHPCE: %d\n",
+		D_ERROR(DF_CONT": failed to lookup GHPCE: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		return rc;
 	}
@@ -388,7 +388,7 @@ static inline int
 check_global_epoch_invariant(struct cont *cont, struct epoch_attr *attr)
 {
 	if (!(attr->ea_ghce <= attr->ea_ghpce)) {
-		D__ERROR(DF_CONT": GHCE "DF_U64" > GHPCE "DF_U64"\n",
+		D_ERROR(DF_CONT": GHCE "DF_U64" > GHPCE "DF_U64"\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			attr->ea_ghce, attr->ea_ghpce);
 		return 1;
@@ -396,7 +396,7 @@ check_global_epoch_invariant(struct cont *cont, struct epoch_attr *attr)
 
 	if (!(attr->ea_glhe == DAOS_EPOCH_MAX ||
 	      attr->ea_glhe > attr->ea_ghce)) {
-		D__ERROR(DF_CONT": GLHE "DF_U64" <= GHCE "DF_U64"\n",
+		D_ERROR(DF_CONT": GLHE "DF_U64" <= GHCE "DF_U64"\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			attr->ea_glhe, attr->ea_ghce);
 		return 1;
@@ -414,28 +414,28 @@ check_epoch_invariant(struct cont *cont, struct epoch_attr *attr,
 		return 1;
 
 	if (!(hdl->ch_hce < hdl->ch_lhe)) {
-		D__ERROR(DF_CONT": HCE "DF_U64" >= LHE "DF_U64"\n",
+		D_ERROR(DF_CONT": HCE "DF_U64" >= LHE "DF_U64"\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			hdl->ch_hce, hdl->ch_lhe);
 		return 1;
 	}
 
 	if (!(attr->ea_glre <= hdl->ch_lre)) {
-		D__ERROR(DF_CONT": GLRE "DF_U64" > LRE "DF_U64"\n",
+		D_ERROR(DF_CONT": GLRE "DF_U64" > LRE "DF_U64"\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			attr->ea_glre, hdl->ch_lre);
 		return 1;
 	}
 
 	if (!(attr->ea_ghce < hdl->ch_lhe)) {
-		D__ERROR(DF_CONT": GHCE "DF_U64" >= LHE "DF_U64"\n",
+		D_ERROR(DF_CONT": GHCE "DF_U64" >= LHE "DF_U64"\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			attr->ea_ghce, hdl->ch_lhe);
 		return 1;
 	}
 
 	if (!(attr->ea_ghpce >= hdl->ch_hce)) {
-		D__ERROR(DF_CONT": GHPCE "DF_U64" < HCE "DF_U64"\n",
+		D_ERROR(DF_CONT": GHPCE "DF_U64" < HCE "DF_U64"\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			attr->ea_ghpce, hdl->ch_hce);
 		return 1;
@@ -478,7 +478,7 @@ update_ghce(struct rdb_tx *tx, struct cont *cont, struct epoch_attr *attr)
 	ghce = min(attr->ea_ghpce, attr->ea_glhe - 1);
 
 	if (ghce < attr->ea_ghce) {
-		D__ERROR(DF_CONT": GHCE would decrease: "DF_EPOCH_ATTR"\n",
+		D_ERROR(DF_CONT": GHCE would decrease: "DF_EPOCH_ATTR"\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			DP_EPOCH_ATTR(attr));
 		return -DER_IO;
@@ -489,7 +489,7 @@ update_ghce(struct rdb_tx *tx, struct cont *cont, struct epoch_attr *attr)
 	daos_iov_set(&value, &ghce, sizeof(ghce));
 	rc = rdb_tx_update(tx, &cont->c_attrs, &ds_cont_attr_ghce, &value);
 	if (rc != 0)
-		D__ERROR(DF_CONT": failed to update ghce: %d\n",
+		D_ERROR(DF_CONT": failed to update ghce: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid,
 				cont->c_uuid), rc);
 
@@ -813,7 +813,7 @@ cont_epoch_discard_bcast(crt_context_t ctx, struct cont *cont,
 	out = crt_reply_get(rpc);
 	rc = out->tio_rc;
 	if (rc != 0) {
-		D__ERROR(DF_CONT": failed to discard epoch "DF_U64" for handle "
+		D_ERROR(DF_CONT": failed to discard epoch "DF_U64" for handle "
 			DF_UUID" on %d targets\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch,
 			DP_UUID(hdl_uuid), rc);
@@ -959,7 +959,7 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		rc = rdb_tx_update(tx, &cont->c_attrs, &ds_cont_attr_ghpce,
 				   &value);
 		if (rc != 0) {
-			D__ERROR(DF_CONT": failed to update ghpce: %d\n",
+			D_ERROR(DF_CONT": failed to update ghpce: %d\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid), rc);
 			D__GOTO(out_hdl, rc);
@@ -977,7 +977,7 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		rc = trigger_aggregation(glre, attr.ea_glre, attr.ea_ghce,
 					 cont, rpc->cr_ctx);
 		if (rc != 0) {
-			D__ERROR("Trigger aggregation from commit failed %d\n",
+			D_ERROR("Trigger aggregation from commit failed %d\n",
 				rc);
 			D__GOTO(out_hdl, rc);
 		}

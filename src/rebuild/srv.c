@@ -480,8 +480,8 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 		rc = pool_map_find_failed_tgts(pool->sp_map, &targets,
 					       &failed_tgts_cnt);
 		if (rc != 0) {
-			D__ERROR("failed to create failed tgt list rc %d\n",
-				 rc);
+			D_ERROR("failed to create failed tgt list rc %d\n",
+				rc);
 			return;
 		}
 
@@ -515,8 +515,8 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 					       &iv, CRT_IV_SHORTCUT_NONE,
 					       CRT_IV_SYNC_LAZY);
 			if (rc)
-				D__WARN("rebuild master iv update failed: %d\n",
-					rc);
+				D_WARN("rebuild master iv update failed: %d\n",
+				       rc);
 		}
 
 		/* query the current rebuild status */
@@ -728,7 +728,7 @@ rebuild_trigger(struct ds_pool *pool, struct rebuild_global_pool_tracker *rgt,
 			     daos2crt_sg(&sgl), CRT_BULK_RW,
 			     &bulk_hdl);
 	if (rc != 0) {
-		D__ERROR("Create bulk for map buffer failed: rc %d\n", rc);
+		D_ERROR("Create bulk for map buffer failed: rc %d\n", rc);
 		return rc;
 	}
 
@@ -741,7 +741,7 @@ retry:
 				  REBUILD_OBJECTS_SCAN, &rpc, bulk_hdl,
 				  tgts_failed);
 	if (rc != 0) {
-		D__ERROR("pool map broad cast failed: rc %d\n", rc);
+		D_ERROR("pool map broad cast failed: rc %d\n", rc);
 		D__GOTO(out_rpc, rc = 0); /* ignore the failure */
 	}
 
@@ -792,8 +792,8 @@ retry:
 			rc = ds_pool_tgt_exclude(pool->sp_uuid, &fail_rank_list,
 						 NULL);
 			if (rc) {
-				D__ERROR("Can not exclude rank %d\n",
-					 rso->rso_ranks_list->rl_ranks[i]);
+				D_ERROR("Can not exclude rank %d\n",
+					rso->rso_ranks_list->rl_ranks[i]);
 				break;
 			}
 
@@ -801,7 +801,7 @@ retry:
 					 pool_map_get_version(pool->sp_map),
 					 &fail_rank_list, svc_list);
 			if (rc != 0) {
-				D__ERROR("rebuild fails rc %d\n", rc);
+				D_ERROR("rebuild fails rc %d\n", rc);
 				break;
 			}
 		}
@@ -809,7 +809,7 @@ retry:
 
 	rc = rso->rso_status;
 	if (rc != 0) {
-		D__ERROR(DF_UUID": failed to start pool rebuild: %d\n",
+		D_ERROR(DF_UUID": failed to start pool rebuild: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
 		D__GOTO(out_rpc, rc);
 	}
@@ -875,13 +875,13 @@ rebuild_internal(struct ds_pool *pool, uint32_t rebuild_ver,
 
 	rc = rebuild_prepare(pool, rebuild_ver, tgts_failed, p_rgt);
 	if (rc) {
-		D__ERROR("rebuild prepare failed: rc %d\n", rc);
+		D_ERROR("rebuild prepare failed: rc %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
 	rc = ds_pool_map_buf_get(pool->sp_uuid, &map_buf_iov, &map_ver);
 	if (rc) {
-		D__ERROR("pool map broadcast failed: rc %d\n", rc);
+		D_ERROR("pool map broadcast failed: rc %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -889,7 +889,7 @@ rebuild_internal(struct ds_pool *pool, uint32_t rebuild_ver,
 	rc = rebuild_trigger(pool, *p_rgt, tgts_failed, svc_list, map_ver,
 			     rebuild_ver, &map_buf_iov);
 	if (rc) {
-		D__ERROR("object scan failed: rc %d\n", rc);
+		D_ERROR("object scan failed: rc %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -912,7 +912,7 @@ rebuild_one_ult(void *arg)
 	pc_arg.pca_map_version = task->dst_map_ver;
 	rc = ds_pool_lookup_create(task->dst_pool_uuid, &pc_arg, &pool);
 	if (rc) {
-		D__ERROR("pool lookup and create failed: rc %d\n", rc);
+		D_ERROR("pool lookup and create failed: rc %d\n", rc);
 		return;
 	}
 
@@ -922,7 +922,7 @@ rebuild_one_ult(void *arg)
 	rc = rebuild_internal(pool, task->dst_map_ver, task->dst_tgts_failed,
 			      task->dst_svc_list, &rgt);
 	if (rc != 0) {
-		D__ERROR(""DF_UUID" (ver=%u) rebuild failed: rc %d\n",
+		D_ERROR(""DF_UUID" (ver=%u) rebuild failed: rc %d\n",
 			DP_UUID(task->dst_pool_uuid), task->dst_map_ver, rc);
 		D__GOTO(out, rc);
 	}
@@ -1004,8 +1004,8 @@ rebuild_ults(void *arg)
 				d_list_move(&task->dst_list,
 					       &rebuild_gst.rg_running_list);
 			} else {
-				D__ERROR(DF_UUID" create ult failed: %d\n",
-					 DP_UUID(task->dst_pool_uuid), rc);
+				D_ERROR(DF_UUID" create ult failed: %d\n",
+					DP_UUID(task->dst_pool_uuid), rc);
 			}
 		}
 		ABT_thread_yield();
@@ -1122,7 +1122,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, d_rank_list_t *svc_list)
 	rc = pool_map_find_down_tgts(pool->sp_map, &down_tgts,
 				     &down_tgts_cnt);
 	if (rc != 0) {
-		D__ERROR("failed to create failed tgt list rc %d\n", rc);
+		D_ERROR("failed to create failed tgt list rc %d\n", rc);
 		return rc;
 	}
 
@@ -1141,9 +1141,9 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, d_rank_list_t *svc_list)
 		rc = ds_rebuild_schedule(pool->sp_uuid, tgt->ta_comp.co_fseq,
 					 &rank_list, svc_list);
 		if (rc) {
-			D__ERROR(DF_UUID" schedule ver %d failed: rc %d\n",
-				 DP_UUID(pool->sp_uuid), tgt->ta_comp.co_fseq,
-				 rc);
+			D_ERROR(DF_UUID" schedule ver %d failed: rc %d\n",
+				DP_UUID(pool->sp_uuid), tgt->ta_comp.co_fseq,
+				rc);
 			break;
 		}
 	}
@@ -1212,10 +1212,10 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		d_list_for_each_entry_safe(dkey, tmp, &puller->rp_dkey_list,
 					   rd_list) {
 			d_list_del(&dkey->rd_list);
-			D__WARN(DF_UUID" left rebuild dkey %*.s\n",
+			D_WARN(DF_UUID" left rebuild dkey %*.s\n",
 			       DP_UUID(rpt->rt_pool_uuid),
-			       (int)dkey->rd_dkey.iov_len,
-			       (char *)dkey->rd_dkey.iov_buf);
+			      (int)dkey->rd_dkey.iov_len,
+			      (char *)dkey->rd_dkey.iov_buf);
 			daos_iov_free(&dkey->rd_dkey);
 			D__FREE_PTR(dkey);
 		}
@@ -1256,9 +1256,9 @@ rebuild_tgt_status_check(void *arg)
 		rc = rebuild_tgt_query(rpt, &status);
 		ABT_mutex_free(&status.lock);
 		if (rc || status.status != 0) {
-			D__ERROR(DF_UUID" rebuild failed: rc %d\n",
-				 DP_UUID(rpt->rt_pool_uuid),
-				 rc == 0 ? status.status : rc);
+			D_ERROR(DF_UUID" rebuild failed: rc %d\n",
+				DP_UUID(rpt->rt_pool_uuid),
+				rc == 0 ? status.status : rc);
 			if (status.status == 0)
 				status.status = rc;
 			if (rpt->rt_errno == 0)
@@ -1300,8 +1300,8 @@ rebuild_tgt_status_check(void *arg)
 						   &iv, CRT_IV_SHORTCUT_TO_ROOT,
 						   CRT_IV_SYNC_NONE);
 			if (rc)
-				D__WARN("rebuild tgt iv update failed: %d\n",
-					rc);
+				D_WARN("rebuild tgt iv update failed: %d\n",
+				       rc);
 		}
 
 		D_DEBUG(DB_REBUILD, "ver %d obj "DF_U64" rec "DF_U64
@@ -1445,7 +1445,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 
 	/* lookup create the ds_pool first */
 	if (rpc->cr_co_bulk_hdl == NULL) {
-		D__ERROR("No pool map in scan rpc\n");
+		D_ERROR("No pool map in scan rpc\n");
 		return -DER_INVAL;
 	}
 
@@ -1461,7 +1461,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	pc_arg.pca_map_version = rsi->rsi_pool_map_ver;
 	rc = ds_pool_lookup_create(rsi->rsi_pool_uuid, &pc_arg, &pool);
 	if (rc != 0) {
-		D__ERROR("Can not find pool.\n");
+		D_ERROR("Can not find pool.\n");
 		return rc;
 	}
 
@@ -1484,8 +1484,8 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		uuid_unparse_lower(pool->sp_uuid, id);
 		pool->sp_group = crt_group_lookup(id);
 		if (pool->sp_group == NULL) {
-			D__ERROR(DF_UUID": pool group not found\n",
-				 DP_UUID(pool->sp_uuid));
+			D_ERROR(DF_UUID": pool group not found\n",
+				DP_UUID(pool->sp_uuid));
 			D__GOTO(out, rc = -DER_INVAL);
 		}
 	}

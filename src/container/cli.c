@@ -104,7 +104,7 @@ cont_create_complete(tse_task_t *task, void *data)
 		D__GOTO(out, rc = 0);
 
 	if (rc != 0) {
-		D__ERROR("RPC error while creating container: %d\n", rc);
+		D_ERROR("RPC error while creating container: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -153,7 +153,7 @@ dc_cont_create(tse_task_t *task)
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, &rpc);
 	if (rc != 0) {
-		D__ERROR("failed to create rpc: %d\n", rc);
+		D_ERROR("failed to create rpc: %d\n", rc);
 		D__GOTO(err_pool, rc);
 	}
 
@@ -198,7 +198,7 @@ cont_destroy_complete(tse_task_t *task, void *data)
 		D__GOTO(out, rc = 0);
 
 	if (rc != 0) {
-		D__ERROR("RPC error while destroying container: %d\n", rc);
+		D_ERROR("RPC error while destroying container: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -251,7 +251,7 @@ dc_cont_destroy(tse_task_t *task)
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_DESTROY, &rpc);
 	if (rc != 0) {
-		D__ERROR("failed to create rpc: %d\n", rc);
+		D_ERROR("failed to create rpc: %d\n", rc);
 		D__GOTO(err_pool, rc);
 	}
 
@@ -347,7 +347,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	}
 
 	if (rc != 0) {
-		D__ERROR("RPC error while opening container: %d\n", rc);
+		D_ERROR("RPC error while opening container: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -361,7 +361,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
 	if (pool->dp_disconnecting) {
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-		D__ERROR("pool connection being invalidated\n");
+		D_ERROR("pool connection being invalidated\n");
 		/*
 		 * Instead of sending a CONT_CLOSE RPC, we leave this new
 		 * container handle on the server side to the POOL_DISCONNECT
@@ -514,7 +514,7 @@ dc_cont_open(tse_task_t *task)
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OPEN, &rpc);
 	if (rc != 0) {
-		D__ERROR("failed to create rpc: %d\n", rc);
+		D_ERROR("failed to create rpc: %d\n", rc);
 		D__GOTO(err_cont, rc);
 	}
 
@@ -577,7 +577,7 @@ cont_close_complete(tse_task_t *task, void *data)
 		D__GOTO(out, rc = 0);
 
 	if (rc != 0) {
-		D__ERROR("RPC error while closing container: %d\n", rc);
+		D_ERROR("RPC error while closing container: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -590,7 +590,7 @@ cont_close_complete(tse_task_t *task, void *data)
 			DP_UUID(cont->dc_cont_hdl), DP_UUID(pool->dp_pool_hdl));
 		rc = 0;
 	} else if (rc != 0) {
-		D__ERROR("failed to close container: %d\n", rc);
+		D_ERROR("failed to close container: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -636,7 +636,7 @@ dc_cont_close(tse_task_t *task)
 	/* Check if there are not objects opened for this container */
 	D_RWLOCK_RDLOCK(&cont->dc_obj_list_lock);
 	if (!d_list_empty(&cont->dc_obj_list)) {
-		D__ERROR("cannot close container, object not closed.\n");
+		D_ERROR("cannot close container, object not closed.\n");
 		D_RWLOCK_UNLOCK(&cont->dc_obj_list_lock);
 		D__GOTO(err_cont, rc = -DER_BUSY);
 	}
@@ -673,7 +673,7 @@ dc_cont_close(tse_task_t *task)
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, &rpc);
 	if (rc != 0) {
-		D__ERROR("failed to create rpc: %d\n", rc);
+		D_ERROR("failed to create rpc: %d\n", rc);
 		D__GOTO(err_pool, rc);
 	}
 
@@ -735,7 +735,7 @@ cont_query_complete(tse_task_t *task, void *data)
 		D__GOTO(out, rc = 0);
 
 	if (rc != 0) {
-		D__ERROR("RPC error while querying container: %d\n", rc);
+		D_ERROR("RPC error while querying container: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -803,7 +803,7 @@ dc_cont_query(tse_task_t *task)
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, &rpc);
 	if (rc != 0) {
-		D__ERROR("failed to create rpc: %d\n", rc);
+		D_ERROR("failed to create rpc: %d\n", rc);
 		D__GOTO(err_cont, rc);
 	}
 
@@ -918,7 +918,7 @@ out_cont:
 	dc_cont_put(cont);
 out:
 	if (rc)
-		D__ERROR("daos_cont_l2g failed, rc: %d\n", rc);
+		D_ERROR("daos_cont_l2g failed, rc: %d\n", rc);
 	return rc;
 }
 
@@ -928,12 +928,12 @@ dc_cont_local2global(daos_handle_t coh, daos_iov_t *glob)
 	int	rc = 0;
 
 	if (glob == NULL) {
-		D__ERROR("Invalid parameter, NULL glob pointer.\n");
+		D_ERROR("Invalid parameter, NULL glob pointer.\n");
 		D__GOTO(out, rc = -DER_INVAL);
 	}
 	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
 	    glob->iov_buf_len < glob->iov_len)) {
-		D__ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len "
+		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len "
 			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
 			glob->iov_buf_len, glob->iov_len);
 		D__GOTO(out, rc = -DER_INVAL);
@@ -961,7 +961,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 		D__GOTO(out, rc = -DER_NO_HDL);
 
 	if (uuid_compare(pool->dp_pool_hdl, cont_glob->dcg_pool_hdl) != 0) {
-		D__ERROR("pool_hdl mismatch, in pool: "DF_UUID", in cont_glob: "
+		D_ERROR("pool_hdl mismatch, in pool: "DF_UUID", in cont_glob: "
 			DF_UUID"\n", DP_UUID(pool->dp_pool_hdl),
 			DP_UUID(cont_glob->dcg_pool_hdl));
 		D__GOTO(out, rc = -DER_INVAL);
@@ -982,7 +982,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
 	if (pool->dp_disconnecting) {
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-		D__ERROR("pool connection being invalidated\n");
+		D_ERROR("pool connection being invalidated\n");
 		D__GOTO(out_cont, rc = -DER_NO_HDL);
 	}
 
@@ -1030,20 +1030,20 @@ dc_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 		D__ASSERT(cont_glob->dcg_magic == DC_CONT_GLOB_MAGIC);
 
 	} else if (cont_glob->dcg_magic != DC_CONT_GLOB_MAGIC) {
-		D__ERROR("Bad hgh_magic: 0x%x.\n", cont_glob->dcg_magic);
+		D_ERROR("Bad hgh_magic: 0x%x.\n", cont_glob->dcg_magic);
 		D__GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (uuid_is_null(cont_glob->dcg_pool_hdl) ||
 	    uuid_is_null(cont_glob->dcg_uuid) ||
 	    uuid_is_null(cont_glob->dcg_cont_hdl)) {
-		D__ERROR("Invalid parameter, pool_hdl/uuid/cont_hdl is null.\n");
+		D_ERROR("Invalid parameter, pool_hdl/uuid/cont_hdl is null.\n");
 		D__GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = dc_cont_g2l(poh, cont_glob, coh);
 	if (rc != 0)
-		D__ERROR("dc_cont_g2l failed, rc: %d.\n", rc);
+		D_ERROR("dc_cont_g2l failed, rc: %d.\n", rc);
 
 out:
 	return rc;
@@ -1110,13 +1110,13 @@ epoch_op_complete(tse_task_t *task, void *data)
 		D__GOTO(out, rc = 0);
 
 	if (rc != 0) {
-		D__ERROR("RPC error during epoch operation %u: %d\n", opc, rc);
+		D_ERROR("RPC error during epoch operation %u: %d\n", opc, rc);
 		D__GOTO(out, rc);
 	}
 
 	rc = out->ceo_op.co_rc;
 	if (rc != 0) {
-		D__ERROR("epoch operation %u failed: %d\n", opc, rc);
+		D_ERROR("epoch operation %u failed: %d\n", opc, rc);
 		D__GOTO(out, rc);
 	}
 
@@ -1182,7 +1182,7 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
-		D__ERROR("failed to create rpc: %d\n", rc);
+		D_ERROR("failed to create rpc: %d\n", rc);
 		D__GOTO(err_pool, rc);
 	}
 
@@ -1323,7 +1323,7 @@ dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
 	dc_pool_put(pool);
 	dc_cont_put(dc);
 	if (n != 1) {
-		D__ERROR("failed to find target %u\n", tgt_idx);
+		D_ERROR("failed to find target %u\n", tgt_idx);
 		return -DER_INVAL;
 	}
 	return 0;

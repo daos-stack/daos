@@ -306,7 +306,7 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 	rc = dbtree_create_inplace(tree_class, 0, 4, &uma,
 				   broot, &root.root_hdl);
 	if (rc) {
-		D__ERROR("failed to create rebuild tree: %d\n", rc);
+		D_ERROR("failed to create rebuild tree: %d\n", rc);
 		D__FREE_PTR(broot);
 		D__GOTO(out, rc);
 	}
@@ -383,7 +383,7 @@ rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 	if (rc == -DER_NONEXIST) {
 		rc = dbtree_update(cont_root->root_hdl, &key_iov, &val_iov);
 		if (rc < 0) {
-			D__ERROR("failed to insert "DF_UOID": rc %d\n",
+			D_ERROR("failed to insert "DF_UOID": rc %d\n",
 				DP_UOID(oid), rc);
 			D__GOTO(out, rc);
 		}
@@ -471,9 +471,9 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 
 		map = pl_map_find(rpt->rt_pool_uuid, oid.id_pub);
 		if (map == NULL) {
-			D__ERROR(DF_UOID"Cannot find valid placement map"
-				 DF_UUID"\n", DP_UOID(oid),
-				 DP_UUID(rpt->rt_pool_uuid));
+			D_ERROR(DF_UOID"Cannot find valid placement map"
+				DF_UUID"\n", DP_UOID(oid),
+				DP_UUID(rpt->rt_pool_uuid));
 			D__GOTO(out, rc = -DER_INVAL);
 		}
 
@@ -598,7 +598,7 @@ rebuild_scan_leader(void *data)
 		rank = arg->failed_ranks->rl_ranks[i];
 		target = pool_map_find_target_by_rank(map, rank);
 		if (target == NULL) {
-			D__ERROR("Nonexistent target rank=%d\n", rank);
+			D_ERROR("Nonexistent target rank=%d\n", rank);
 			D__GOTO(out_group, rc = -DER_NONEXIST);
 		}
 
@@ -627,7 +627,7 @@ rebuild_scan_leader(void *data)
 	rc = dss_task_collective(rebuild_scan_done, rpt);
 	ABT_mutex_unlock(rpt->rt_lock);
 	if (rc) {
-		D__ERROR(DF_UUID" send rebuild object list failed:%d\n",
+		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
 			DP_UUID(rpt->rt_pool_uuid), rc);
 		D__GOTO(out_group, rc);
 	}
@@ -720,7 +720,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rc = dbtree_create(DBTREE_CLASS_NV, 0, 4, &uma, NULL,
 			   &scan_arg->rebuild_tree_hdl);
 	if (rc != 0) {
-		D__ERROR("failed to create rebuild tree: %d\n", rc);
+		D_ERROR("failed to create rebuild tree: %d\n", rc);
 		D__GOTO(out_lock, rc);
 	}
 

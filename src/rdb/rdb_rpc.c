@@ -348,7 +348,7 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 	ABT_mutex_lock(db->d_mutex);
 	if (rc != 0 || db->d_stop) {
 		if (rc != -DER_CANCELED)
-			D__ERROR(DF_DB": RPC %x to rank %u failed: %d\n",
+			D_ERROR(DF_DB": RPC %x to rank %u failed: %d\n",
 				DP_DB(rrpc->drc_db), opc,
 				rrpc->drc_rpc->cr_ep.ep_rank, rc);
 		/*
@@ -415,7 +415,7 @@ rdb_abort_raft_rpcs(struct rdb *db)
 		d_list_del_init(&rrpc->drc_entry);
 		rc = crt_req_abort(rrpc->drc_rpc);
 		if (rc != 0) {
-			D__ERROR(DF_DB": failed to abort %x to rank %u: %d\n",
+			D_ERROR(DF_DB": failed to abort %x to rank %u: %d\n",
 				DP_DB(rrpc->drc_db), rrpc->drc_rpc->cr_opc,
 				rrpc->drc_rpc->cr_ep.ep_rank, rc);
 			return rc;

@@ -60,7 +60,7 @@ ds_tier_enum(daos_handle_t coh, struct tier_enum_params *params)
 	vip.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &vip, &hio);
 	if (rc) {
-		D__ERROR("failed to prepare object iter %d\n", rc);
+		D_ERROR("failed to prepare object iter %d\n", rc);
 		D__GOTO(out, rc);
 	}
 	rc = vos_iter_probe(hio, NULL);
@@ -69,7 +69,7 @@ ds_tier_enum(daos_handle_t coh, struct tier_enum_params *params)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else
-			D__ERROR("failed to probe object iter %d\n", rc);
+			D_ERROR("failed to probe object iter %d\n", rc);
 		D__GOTO(out_iter, rc);
 	}
 	do {
@@ -77,7 +77,7 @@ ds_tier_enum(daos_handle_t coh, struct tier_enum_params *params)
 		eo.ie_epr.epr_hi = DAOS_EPOCH_MAX;
 		rc = vos_iter_fetch(hio, &eo, NULL);
 		if (rc) {
-			D__ERROR("failed to fetch iter %d\n", rc);
+			D_ERROR("failed to fetch iter %d\n", rc);
 			D__GOTO(out_iter, rc);
 		}
 
@@ -121,7 +121,7 @@ ds_tier_enum_dkeys(daos_handle_t coh, struct tier_enum_params *params,
 	vip.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	rc = vos_iter_prepare(VOS_ITER_DKEY, &vip, &hidk);
 	if (rc) {
-		D__ERROR("failed to prepare dkey iter %d\n", rc);
+		D_ERROR("failed to prepare dkey iter %d\n", rc);
 		D__GOTO(out, rc);
 	}
 	rc = vos_iter_probe(hidk, NULL);
@@ -136,7 +136,7 @@ ds_tier_enum_dkeys(daos_handle_t coh, struct tier_enum_params *params,
 		edk.ie_epr.epr_hi = DAOS_EPOCH_MAX;
 		rc = vos_iter_fetch(hidk, &edk, NULL);
 		if (rc) {
-			D__ERROR("failed to fetch iter %d\n", rc);
+			D_ERROR("failed to fetch iter %d\n", rc);
 			D__GOTO(out_iter, rc);
 		}
 		if (tier_rangein(&edk.ie_epr, params->dep_ev)) {
@@ -184,12 +184,12 @@ ds_tier_enum_akeys(daos_handle_t coh, struct tier_enum_params *params,
 	vip.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	rc = vos_iter_prepare(VOS_ITER_AKEY, &vip, &hiak);
 	if (rc) {
-		D__ERROR("failed to prepare akey iter %d\n", rc);
+		D_ERROR("failed to prepare akey iter %d\n", rc);
 		D__GOTO(out, rc);
 	}
 	rc = vos_iter_probe(hiak, NULL);
 	if (rc) {
-		D__ERROR("failed to probe akey iter %d\n", rc);
+		D_ERROR("failed to probe akey iter %d\n", rc);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		D__GOTO(out_iter, rc);
@@ -199,7 +199,7 @@ ds_tier_enum_akeys(daos_handle_t coh, struct tier_enum_params *params,
 		eak.ie_epr.epr_hi = DAOS_EPOCH_MAX;
 		rc = vos_iter_fetch(hiak, &eak, NULL);
 		if (rc) {
-			D__ERROR("failed to fetch iter %d\n", rc);
+			D_ERROR("failed to fetch iter %d\n", rc);
 			D__GOTO(out_iter, rc);
 		}
 		if (tier_rangein(&eak.ie_epr, params->dep_ev)) {
@@ -218,7 +218,7 @@ ds_tier_enum_akeys(daos_handle_t coh, struct tier_enum_params *params,
 			rc = tier_safecb(params->dep_akey_post,
 					 params->dep_cbctx, &eak);
 			if (rc) {
-				D__ERROR("akey cb: nzret(%d)\n", rc);
+				D_ERROR("akey cb: nzret(%d)\n", rc);
 				D__GOTO(out_iter, rc);
 			}
 		}
@@ -250,12 +250,12 @@ ds_tier_enum_recs(daos_handle_t coh, struct tier_enum_params *params,
 
 	rc = vos_iter_prepare(VOS_ITER_RECX, &vip, &hir);
 	if (rc) {
-		D__ERROR("failed to prepare recx iter %d\n", rc);
+		D_ERROR("failed to prepare recx iter %d\n", rc);
 		D__GOTO(out, rc);
 	}
 	rc = vos_iter_probe(hir, NULL);
 	if (rc) {
-		D__ERROR("failed to probe recx iter %d\n", rc);
+		D_ERROR("failed to probe recx iter %d\n", rc);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		D__GOTO(out_iter, rc);
@@ -265,7 +265,7 @@ ds_tier_enum_recs(daos_handle_t coh, struct tier_enum_params *params,
 		er.ie_epr.epr_hi = DAOS_EPOCH_MAX;
 		rc = vos_iter_fetch(hir, &er, NULL);
 		if (rc) {
-			D__ERROR("failed to fetch iter %d\n", rc);
+			D_ERROR("failed to fetch iter %d\n", rc);
 			D__GOTO(out_iter, rc);
 		}
 		if (tier_rangein(&er.ie_epr, params->dep_ev)) {

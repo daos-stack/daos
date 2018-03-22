@@ -43,14 +43,14 @@ pool_create_cp(tse_task_t *task, void *data)
 	int				 rc = task->dt_result;
 
 	if (rc) {
-		D__ERROR("RPC error while creating pool: %d\n", rc);
+		D_ERROR("RPC error while creating pool: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
 	pc_out = crt_reply_get(arg->rpc);
 	rc = pc_out->pc_rc;
 	if (rc) {
-		D__ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
+		D_ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -78,7 +78,7 @@ dc_pool_create(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	if (args->dev == NULL || strlen(args->dev) == 0) {
-		D__ERROR("Invalid parameter of dev (NULL or empty string).\n");
+		D_ERROR("Invalid parameter of dev (NULL or empty string).\n");
 		D__GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -93,7 +93,7 @@ dc_pool_create(tse_task_t *task)
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_CREATE, DAOS_MGMT_MODULE, 1);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
 	if (rc != 0) {
-		D__ERROR("crt_req_create(MGMT_POOL_CREATE) failed, rc: %d.\n",
+		D_ERROR("crt_req_create(MGMT_POOL_CREATE) failed, rc: %d.\n",
 			rc);
 		D__GOTO(out_grp, rc);
 	}
@@ -145,14 +145,14 @@ pool_destroy_cp(tse_task_t *task, void *data)
 	int				 rc = task->dt_result;
 
 	if (rc) {
-		D__ERROR("RPC error while destroying pool: %d\n", rc);
+		D_ERROR("RPC error while destroying pool: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
 	pd_out = crt_reply_get(rpc);
 	rc = pd_out->pd_rc;
 	if (rc) {
-		D__ERROR("MGMT_POOL_DESTROY replied failed, rc: %d\n", rc);
+		D_ERROR("MGMT_POOL_DESTROY replied failed, rc: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -174,7 +174,7 @@ dc_pool_destroy(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	if (uuid_is_null(args->uuid)) {
-		D__ERROR("Invalid parameter of uuid (NULL).\n");
+		D_ERROR("Invalid parameter of uuid (NULL).\n");
 		D__GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -187,7 +187,7 @@ dc_pool_destroy(tse_task_t *task)
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_DESTROY, DAOS_MGMT_MODULE, 1);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
 	if (rc != 0) {
-		D__ERROR("crt_req_create(MGMT_POOL_DESTROY) failed, rc: %d.\n",
+		D_ERROR("crt_req_create(MGMT_POOL_DESTROY) failed, rc: %d.\n",
 			rc);
 		D__GOTO(out_group, rc);
 	}

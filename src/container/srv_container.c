@@ -52,7 +52,7 @@ cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid, uint64_t id,
 
 	rc = ABT_rwlock_create(&svc->cs_lock);
 	if (rc != ABT_SUCCESS) {
-		D__ERROR("failed to create cs_lock: %d\n", rc);
+		D_ERROR("failed to create cs_lock: %d\n", rc);
 		D__GOTO(err, rc = dss_abterr2der(rc));
 	}
 
@@ -231,7 +231,7 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_attr_conts, &attr);
 	if (rc != 0) {
-		D__ERROR(DF_UUID": failed to create container KVS: %d\n",
+		D_ERROR(DF_UUID": failed to create container KVS: %d\n",
 			DP_UUID(pool_uuid), rc);
 		return rc;
 	}
@@ -240,7 +240,7 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_attr_cont_handles, &attr);
 	if (rc != 0) {
-		D__ERROR(DF_UUID": failed to create container handle KVS: %d\n",
+		D_ERROR(DF_UUID": failed to create container handle KVS: %d\n",
 			DP_UUID(pool_uuid), rc);
 		return rc;
 	}
@@ -293,7 +293,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, &svc->cs_conts, &key, &attr);
 	if (rc != 0) {
-		D__ERROR("failed to create container attribute KVS: "
+		D_ERROR("failed to create container attribute KVS: "
 			"%d\n", rc);
 		D__GOTO(out, rc);
 	}
@@ -364,7 +364,7 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
 	if (rc != 0) {
-		D__ERROR(DF_CONT": failed to destroy %d targets\n",
+		D_ERROR(DF_CONT": failed to destroy %d targets\n",
 			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
 		rc = -DER_IO;
 	}
@@ -462,7 +462,7 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 
 	D__ALLOC_PTR(p);
 	if (p == NULL) {
-		D__ERROR("Failed to allocate container descriptor\n");
+		D_ERROR("Failed to allocate container descriptor\n");
 		D__GOTO(err, rc = -DER_NOMEM);
 	}
 
@@ -551,7 +551,7 @@ cont_open_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 	out = crt_reply_get(rpc);
 	rc = out->too_rc;
 	if (rc != 0) {
-		D__ERROR(DF_CONT": failed to open %d targets\n",
+		D_ERROR(DF_CONT": failed to open %d targets\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		rc = -DER_IO;
 	}
@@ -594,7 +594,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0 && chdl.ch_capas != in->coi_capas) {
-			D__ERROR(DF_CONT": found conflicting container handle\n",
+			D_ERROR(DF_CONT": found conflicting container handle\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid));
 			rc = -DER_EXIST;
@@ -658,7 +658,7 @@ cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
 	out = crt_reply_get(rpc);
 	rc = out->tco_rc;
 	if (rc != 0) {
-		D__ERROR(DF_CONT": failed to close %d targets\n",
+		D_ERROR(DF_CONT": failed to close %d targets\n",
 			DP_CONT(svc->cs_pool_uuid, NULL), rc);
 		rc = -DER_IO;
 	}
@@ -903,7 +903,7 @@ close_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *varg)
 
 	if (key->iov_len != sizeof(uuid_t) ||
 	    val->iov_len != sizeof(*hdl)) {
-		D__ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
+		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
 			key->iov_len, val->iov_len);
 		return -DER_IO;
 	}
@@ -1065,14 +1065,14 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
-				D__ERROR(DF_CONT": rejecting unauthorized "
+				D_ERROR(DF_CONT": rejecting unauthorized "
 					"operation: "DF_UUID"\n",
 					DP_CONT(cont->c_svc->cs_pool_uuid,
 						cont->c_uuid),
 					DP_UUID(in->ci_hdl));
 				rc = -DER_NO_HDL;
 			} else {
-				D__ERROR(DF_CONT": failed to look up container"
+				D_ERROR(DF_CONT": failed to look up container"
 					"handle "DF_UUID": %d\n",
 					DP_CONT(cont->c_svc->cs_pool_uuid,
 						cont->c_uuid),

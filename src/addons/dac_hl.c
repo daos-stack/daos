@@ -73,7 +73,7 @@ dac_kv_put(tse_task_t *task)
 
 	D__ALLOC_PTR(params);
 	if (params == NULL) {
-		D__ERROR("Failed memory allocation\n");
+		D_ERROR("Failed memory allocation\n");
 		return -DER_NOMEM;
 	}
 
@@ -149,13 +149,13 @@ dac_kv_get(tse_task_t *task)
 	buf = args->buf;
 	buf_size = args->buf_size;
 	if (buf_size == NULL) {
-		D__ERROR("Buffer size pointer is NULL\n");
+		D_ERROR("Buffer size pointer is NULL\n");
 		return -DER_INVAL;
 	}
 
 	D__ALLOC_PTR(params);
 	if (params == NULL) {
-		D__ERROR("Failed memory allocation\n");
+		D_ERROR("Failed memory allocation\n");
 		return -DER_NOMEM;
 	}
 

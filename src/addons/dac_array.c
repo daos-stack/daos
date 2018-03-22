@@ -184,7 +184,7 @@ create_handle_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D__ERROR("Failed to create array obj (%d)\n", rc);
+		D_ERROR("Failed to create array obj (%d)\n", rc);
 		D__GOTO(err_obj, rc);
 	}
 
@@ -245,13 +245,13 @@ write_md_cb(tse_task_t *task, void *data)
 	int rc = task->dt_result;
 
 	if (rc != 0) {
-		D__ERROR("Failed to open object (%d)\n", rc);
+		D_ERROR("Failed to open object (%d)\n", rc);
 		return rc;
 	}
 
 	D__ALLOC_PTR(params);
 	if (params == NULL) {
-		D__ERROR("Failed memory allocation\n");
+		D_ERROR("Failed memory allocation\n");
 		return -DER_NOMEM;
 	}
 
@@ -313,7 +313,7 @@ dac_array_create(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task),
 			      0, NULL, &open_task);
 	if (rc != 0) {
-		D__ERROR("Failed to create object_open task\n");
+		D_ERROR("Failed to create object_open task\n");
 		return rc;
 	}
 
@@ -330,7 +330,7 @@ dac_array_create(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
 			      1, &open_task, &update_task);
 	if (rc != 0) {
-		D__ERROR("Failed to create object_update task\n");
+		D_ERROR("Failed to create object_update task\n");
 		D__GOTO(err_put1, rc);
 	}
 
@@ -338,14 +338,14 @@ dac_array_create(tse_task_t *task)
 	rc = tse_task_register_cbs(update_task, write_md_cb, &args,
 				   sizeof(args), NULL, NULL, 0);
 	if (rc != 0) {
-		D__ERROR("Failed to register prep CB\n");
+		D_ERROR("Failed to register prep CB\n");
 		D__GOTO(err_put2, rc);
 	}
 
 	/** The upper task completes when the update task completes */
 	rc = tse_task_register_deps(task, 1, &update_task);
 	if (rc != 0) {
-		D__ERROR("Failed to register dependency\n");
+		D_ERROR("Failed to register dependency\n");
 		D__GOTO(err_put2, rc);
 	}
 
@@ -353,7 +353,7 @@ dac_array_create(tse_task_t *task)
 	rc = tse_task_register_cbs(task, NULL, NULL, 0, create_handle_cb,
 				    &args, sizeof(args));
 	if (rc != 0) {
-		D__ERROR("Failed to register completion cb\n");
+		D_ERROR("Failed to register completion cb\n");
 		D__GOTO(err_put2, rc);
 	}
 
@@ -385,13 +385,13 @@ open_handle_cb(tse_task_t *task, void *data)
 	D__ASSERT(magic_val != NULL);
 	if (*magic_val != AKEY_MAGIC_V) {
 		D__FREE(magic_val, sizeof(int64_t));
-		D__ERROR("DAOS Object is not an array object\n");
+		D_ERROR("DAOS Object is not an array object\n");
 		D__GOTO(err_obj, rc = -DER_NO_PERM);
 	}
 
 	/** If no cell and chunk size, this isn't an array obj. */
 	if (*args->cell_size == 0 || *args->chunk_size == 0) {
-		D__ERROR("Failed to retrieve array metadata\n");
+		D_ERROR("Failed to retrieve array metadata\n");
 		D__GOTO(err_obj, rc = -DER_NO_PERM);
 	}
 
@@ -432,13 +432,13 @@ fetch_md_cb(tse_task_t *task, void *data)
 	int rc = task->dt_result;
 
 	if (rc != 0) {
-		D__ERROR("Failed to open object (%d)\n", rc);
+		D_ERROR("Failed to open object (%d)\n", rc);
 		return rc;
 	}
 
 	D__ALLOC_PTR(params);
 	if (params == NULL) {
-		D__ERROR("Failed memory allocation\n");
+		D_ERROR("Failed memory allocation\n");
 		return -DER_NOMEM;
 	}
 
@@ -501,7 +501,7 @@ dac_array_open(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task),
 			      0, NULL, &open_task);
 	if (rc != 0) {
-		D__ERROR("Failed to open object_open task\n");
+		D_ERROR("Failed to open object_open task\n");
 		return rc;
 	}
 
@@ -518,7 +518,7 @@ dac_array_open(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),
 			      1, &open_task, &fetch_task);
 	if (rc != 0) {
-		D__ERROR("Failed to open object_fetch task\n");
+		D_ERROR("Failed to open object_fetch task\n");
 		D__GOTO(err_put1, rc);
 	}
 
@@ -526,14 +526,14 @@ dac_array_open(tse_task_t *task)
 	rc = tse_task_register_cbs(fetch_task, fetch_md_cb, &args,
 				   sizeof(args), NULL, NULL, 0);
 	if (rc != 0) {
-		D__ERROR("Failed to register prep CB\n");
+		D_ERROR("Failed to register prep CB\n");
 		D__GOTO(err_put2, rc);
 	}
 
 	/** The upper task completes when the fetch task completes */
 	rc = tse_task_register_deps(task, 1, &fetch_task);
 	if (rc != 0) {
-		D__ERROR("Failed to register dependency\n");
+		D_ERROR("Failed to register dependency\n");
 		D__GOTO(err_put2, rc);
 	}
 
@@ -541,7 +541,7 @@ dac_array_open(tse_task_t *task)
 	rc = tse_task_register_cbs(task, NULL, NULL, 0, open_handle_cb,
 				   &args, sizeof(args));
 	if (rc != 0) {
-		D__ERROR("Failed to register completion cb\n");
+		D_ERROR("Failed to register completion cb\n");
 		D__GOTO(err_put2, rc);
 	}
 
@@ -581,7 +581,7 @@ dac_array_close(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
 			      0, NULL, &close_task);
 	if (rc != 0) {
-		D__ERROR("Failed to create object_close task\n");
+		D_ERROR("Failed to create object_close task\n");
 		return rc;
 	}
 	close_args = daos_task_get_args(close_task);
@@ -590,7 +590,7 @@ dac_array_close(tse_task_t *task)
 	/** The upper task completes when the close task completes */
 	rc = tse_task_register_deps(task, 1, &close_task);
 	if (rc != 0) {
-		D__ERROR("Failed to register dependency\n");
+		D_ERROR("Failed to register dependency\n");
 		D__GOTO(err, rc);
 	}
 
@@ -598,7 +598,7 @@ dac_array_close(tse_task_t *task)
 	rc = tse_task_register_cbs(task, NULL, NULL, 0, free_handle_cb,
 				    &args->oh, sizeof(args->oh));
 	if (rc != 0) {
-		D__ERROR("Failed to register completion cb\n");
+		D_ERROR("Failed to register completion cb\n");
 		D__GOTO(err, rc);
 	}
 
@@ -676,7 +676,7 @@ compute_dkey(struct dac_array *array, daos_off_t array_idx,
 
 		ret = asprintf(dkey_str, "%zu", dkey_num);
 		if (ret < 0 || *dkey_str == NULL) {
-			D__ERROR("Failed memory allocation\n");
+			D_ERROR("Failed memory allocation\n");
 			return -DER_NOMEM;
 		}
 	}
@@ -711,7 +711,7 @@ create_sgl(daos_sg_list_t *user_sgl, daos_size_t cell_size,
 		sgl->sg_iovs = (daos_iov_t *)realloc
 			(sgl->sg_iovs, sizeof(daos_iov_t) * sgl->sg_nr);
 		if (sgl->sg_iovs == NULL) {
-			D__ERROR("Failed memory allocation\n");
+			D_ERROR("Failed memory allocation\n");
 			return -DER_NOMEM;
 		}
 
@@ -763,11 +763,11 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 	int		rc;
 
 	if (ranges == NULL) {
-		D__ERROR("NULL ranges passed\n");
+		D_ERROR("NULL ranges passed\n");
 		D__GOTO(err_task, rc = -DER_INVAL);
 	}
 	if (user_sgl == NULL) {
-		D__ERROR("NULL scatter-gather list passed\n");
+		D_ERROR("NULL scatter-gather list passed\n");
 		D__GOTO(err_task, rc = -DER_INVAL);
 	}
 
@@ -776,7 +776,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		return -DER_NO_HDL;
 
 	if (!io_extent_same(ranges, user_sgl, array->cell_size)) {
-		D__ERROR("Unequal extents of memory and array descriptors\n");
+		D_ERROR("Unequal extents of memory and array descriptors\n");
 		D__GOTO(err_task, rc = -DER_INVAL);
 	}
 
@@ -819,7 +819,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 
 		D__ALLOC_PTR(params);
 		if (params == NULL) {
-			D__ERROR("Failed memory allocation\n");
+			D_ERROR("Failed memory allocation\n");
 			D__GOTO(err_task, rc = -DER_NOMEM);
 		}
 
@@ -845,7 +845,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		rc = compute_dkey(array, array_idx, &num_records, &record_i,
 				  &params->dkey_str);
 		if (rc != 0) {
-			D__ERROR("Failed to compute dkey\n");
+			D_ERROR("Failed to compute dkey\n");
 			D__GOTO(err_task, rc);
 		}
 		dkey_str = params->dkey_str;
@@ -884,7 +884,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 				(iod->iod_recxs, sizeof(daos_recx_t) *
 				 iod->iod_nr);
 			if (iod->iod_recxs == NULL) {
-				D__ERROR("Failed memory allocation\n");
+				D_ERROR("Failed memory allocation\n");
 				D__GOTO(err_task, rc = -DER_NOMEM);
 			}
 
@@ -946,7 +946,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 						  &num_records, &record_i,
 						  &dkey_str_tmp);
 				if (rc != 0) {
-					D__ERROR("Failed to compute dkey\n");
+					D_ERROR("Failed to compute dkey\n");
 					D__GOTO(err_task, rc);
 				}
 
@@ -977,7 +977,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			rc = create_sgl(user_sgl, array->cell_size,
 					dkey_records, &cur_off, &cur_i, sgl);
 			if (rc != 0) {
-				D__ERROR("Failed to create sgl\n");
+				D_ERROR("Failed to create sgl\n");
 				D__GOTO(err_task, rc);
 			}
 #ifdef ARRAY_DEBUG
@@ -1002,7 +1002,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 					      tse_task2sched(task),
 					      0, NULL, &io_task);
 			if (rc != 0) {
-				D__ERROR("KV Fetch of dkey %s failed (%d)\n",
+				D_ERROR("KV Fetch of dkey %s failed (%d)\n",
 					dkey_str, rc);
 				D__GOTO(err_task, rc);
 			}
@@ -1022,7 +1022,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 					      tse_task2sched(task),
 					      0, NULL, &io_task);
 			if (rc != 0) {
-				D__ERROR("KV Update of dkey %s failed (%d)\n",
+				D_ERROR("KV Update of dkey %s failed (%d)\n",
 					dkey_str, rc);
 				D__GOTO(err_task, rc);
 			}
@@ -1143,7 +1143,7 @@ list_recxs_cb(tse_task_t *task, void *data)
 		params->nr = 1;
 		rc = tse_task_reinit(task);
 		if (rc != 0) {
-			D__ERROR("FAILED to continue enumrating task\n");
+			D_ERROR("FAILED to continue enumrating task\n");
 			D__GOTO(out, rc);
 		}
 
@@ -1178,7 +1178,7 @@ get_array_size_cb(tse_task_t *task, void *data)
 	int		rc = task->dt_result;
 
 	if (rc != 0) {
-		D__ERROR("Array DKEY enumermation Failed (%d)\n", rc);
+		D_ERROR("Array DKEY enumermation Failed (%d)\n", rc);
 		return rc;
 	}
 
@@ -1215,7 +1215,7 @@ get_array_size_cb(tse_task_t *task, void *data)
 
 		rc = tse_task_reinit(task);
 		if (rc != 0) {
-			D__ERROR("FAILED to continue enumrating task\n");
+			D_ERROR("FAILED to continue enumrating task\n");
 			return rc;
 		}
 
@@ -1250,7 +1250,7 @@ get_array_size_cb(tse_task_t *task, void *data)
 
 	D__ALLOC_PTR(params);
 	if (params == NULL) {
-		D__ERROR("Failed memory allocation\n");
+		D_ERROR("Failed memory allocation\n");
 		return -DER_NOMEM;
 	}
 
@@ -1271,7 +1271,7 @@ get_array_size_cb(tse_task_t *task, void *data)
 	rc = daos_task_create(DAOS_OPC_OBJ_LIST_RECX, tse_task2sched(task),
 			      0, NULL, &io_task);
 	if (rc != 0) {
-		D__ERROR("punch recs failed (%d)\n", rc);
+		D_ERROR("punch recs failed (%d)\n", rc);
 		D__GOTO(err, rc);
 	}
 
@@ -1365,13 +1365,13 @@ dac_array_get_size(tse_task_t *task)
 	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0, get_array_size_cb,
 				   &get_size_props, sizeof(get_size_props));
 	if (rc != 0) {
-		D__ERROR("Failed to register completion cb\n");
+		D_ERROR("Failed to register completion cb\n");
 		D__GOTO(err_enum_task, rc);
 	}
 
 	rc = tse_task_register_deps(task, 1, &enum_task);
 	if (rc != 0) {
-		D__ERROR("Failed to register dependency\n");
+		D_ERROR("Failed to register dependency\n");
 		D__GOTO(err_enum_task, rc);
 	}
 
@@ -1477,7 +1477,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 
 			D__ALLOC_PTR(params);
 			if (params == NULL) {
-				D__ERROR("Failed memory allocation\n");
+				D_ERROR("Failed memory allocation\n");
 				return -DER_NOMEM;
 			}
 
@@ -1496,7 +1496,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 					      tse_task2sched(task), 0, NULL,
 					      &io_task);
 			if (rc != 0) {
-				D__ERROR("Punch dkey %s failed (%d)\n",
+				D_ERROR("Punch dkey %s failed (%d)\n",
 					params->dkey_str, rc);
 				D__GOTO(err, rc);
 			}
@@ -1535,7 +1535,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 
 			D__ALLOC_PTR(params);
 			if (params == NULL) {
-				D__ERROR("Failed memory allocation\n");
+				D_ERROR("Failed memory allocation\n");
 				return -DER_NOMEM;
 			}
 
@@ -1566,7 +1566,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 					      tse_task2sched(task),
 					      0, NULL, &io_task);
 			if (rc != 0) {
-				D__ERROR("punch recs failed (%d)\n", rc);
+				D_ERROR("punch recs failed (%d)\n", rc);
 				D__GOTO(err, rc);
 			}
 
@@ -1603,7 +1603,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 
 		rc = tse_task_reinit(task);
 		if (rc) {
-			D__ERROR("FAILED to continue enumrating task\n");
+			D_ERROR("FAILED to continue enumrating task\n");
 			D__GOTO(err, rc);
 		}
 
@@ -1633,7 +1633,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 
 		D__ALLOC_PTR(params);
 		if (params == NULL) {
-			D__ERROR("Failed memory allocation\n");
+			D_ERROR("Failed memory allocation\n");
 			return -DER_NOMEM;
 		}
 
@@ -1648,7 +1648,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 
 		rc = asprintf(&params->dkey_str, "%zu", props->dkey_num);
 		if (rc < 0 || params->dkey_str == NULL) {
-			D__ERROR("Failed memory allocation\n");
+			D_ERROR("Failed memory allocation\n");
 			D__GOTO(err, -DER_NOMEM);
 		}
 		daos_iov_set(dkey, (void *)params->dkey_str,
@@ -1675,7 +1675,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
 				      0, NULL, &io_task);
 		if (rc != 0) {
-			D__ERROR("KV Update of dkey %s failed (%d)\n",
+			D_ERROR("KV Update of dkey %s failed (%d)\n",
 				params->dkey_str, rc);
 			free(sgl->sg_iovs);
 			D__GOTO(err, rc);
@@ -1745,7 +1745,7 @@ dac_array_set_size(tse_task_t *task)
 		rc = compute_dkey(array, args->size-1, &num_records, &record_i,
 				  &dkey_str);
 		if (rc != 0) {
-			D__ERROR("Failed to compute dkey\n");
+			D_ERROR("Failed to compute dkey\n");
 			D__GOTO(err_task, rc);
 		}
 	}

@@ -77,7 +77,7 @@ ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 		}
 
 		if (rc != 0) {
-			D__ERROR(DF_UOID "%x ZC end failed: %d\n",
+			D_ERROR(DF_UOID "%x ZC end failed: %d\n",
 				DP_UOID(orwi->orw_oid), opc_get(rpc->cr_opc),
 				rc);
 			if (status == 0)
@@ -90,7 +90,7 @@ ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D__ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: %d\n", rc);
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		struct obj_rw_out *orwo;
@@ -129,7 +129,7 @@ bulk_complete_cb(const struct crt_bulk_cb_info *cb_info)
 
 	rc = cb_info->bci_rc;
 	if (rc != 0)
-		D__ERROR("bulk transfer failed: rc = %d\n", rc);
+		D_ERROR("bulk transfer failed: rc = %d\n", rc);
 
 	bulk_desc = cb_info->bci_bulk_desc;
 	local_bulk_hdl = bulk_desc->bd_local_hdl;
@@ -287,7 +287,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 					      daos2crt_sg(&sgl_sent),
 					      bulk_perm, &local_bulk_hdl);
 			if (ret != 0) {
-				D__ERROR("crt_bulk_create %d failed;rc: %d\n",
+				D_ERROR("crt_bulk_create %d failed;rc: %d\n",
 					 i, ret);
 				if (rc == 0)
 					rc = ret;
@@ -309,7 +309,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			ret = crt_bulk_transfer(&bulk_desc, bulk_complete_cb,
 						&arg, &bulk_opid);
 			if (ret < 0) {
-				D__ERROR("crt_bulk_transfer failed, rc: %d.\n",
+				D_ERROR("crt_bulk_transfer failed, rc: %d.\n",
 					ret);
 				arg.bulks_inflight--;
 				crt_bulk_free(local_bulk_hdl);
@@ -504,8 +504,8 @@ ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	if (!is_rebuild_container(cont_hdl->sch_pool->spc_uuid,
 				  cont_hdl_uuid)) {
-		D__ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
-			 DP_UUID(cont_uuid), cont_hdl->sch_ref);
+		D_ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
+			DP_UUID(cont_uuid), cont_hdl->sch_ref);
 		D__GOTO(failed, rc = -DER_NO_HDL);
 	}
 
@@ -623,7 +623,7 @@ out:
 	orwo->orw_map_version = orw->orw_map_ver;
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D__ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: %d\n", rc);
 }
 
 void
@@ -655,8 +655,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	D__ASSERT(cont_hdl->sch_pool != NULL);
 	map_version = cont_hdl->sch_pool->spc_map_version;
 	if (orw->orw_map_ver < map_version) {
-		D__ERROR("stale version req %d map_version %d\n",
-			 orw->orw_map_ver, map_version);
+		D_ERROR("stale version req %d map_version %d\n",
+			orw->orw_map_ver, map_version);
 		D__GOTO(out, rc = -DER_STALE);
 	}
 
@@ -676,7 +676,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 					     &orw->orw_dkey, orw->orw_nr,
 					     orw->orw_iods.ca_arrays, &ioh);
 		if (rc != 0) {
-			D__ERROR(DF_UOID"preparing update fails: %d\n",
+			D_ERROR(DF_UOID"preparing update fails: %d\n",
 				DP_UOID(orw->orw_oid), rc);
 			D__GOTO(out, rc);
 		}
@@ -692,7 +692,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 					    &orw->orw_dkey, orw->orw_nr,
 					    orw->orw_iods.ca_arrays, &ioh);
 		if (rc != 0) {
-			D__ERROR(DF_UOID"preparing fetch fails: %d\n",
+			D_ERROR(DF_UOID"preparing fetch fails: %d\n",
 				DP_UOID(orw->orw_oid), rc);
 			D__GOTO(out, rc);
 		}
@@ -736,7 +736,7 @@ ds_eu_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 	obj_reply_map_version_set(rpc, map_version);
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D__ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: %d\n", rc);
 
 	oei = crt_req_get(rpc);
 	D__ASSERT(oei != NULL);
@@ -937,7 +937,7 @@ ds_iter_single_vos(void *data)
 			daos_hash_set_eof(&oeo->oeo_anchor);
 			rc = 0;
 		} else {
-			D__ERROR("Failed to prepare d-key iterator: %d\n", rc);
+			D_ERROR("Failed to prepare d-key iterator: %d\n", rc);
 		}
 		D__GOTO(out_cont_hdl, rc);
 	}
@@ -1135,7 +1135,7 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D__ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: %d\n", rc);
 }
 
 struct obj_punch_args {
@@ -1168,13 +1168,13 @@ ds_obj_punch(void *punch_args)
 
 	if (opi->opi_map_ver < map_version) {
 		/** Di's warning for stale(DAOS-308). */
-		D__WARN("stale version req %d map_version %d\n",
+		D_WARN("stale version req %d map_version %d\n",
 		       opi->opi_map_ver, map_version);
 	}
 
 	switch (opc_get(args->opc)) {
 	default:
-		D__ERROR("opc %#x not supported\n", opc_get(args->opc));
+		D_ERROR("opc %#x not supported\n", opc_get(args->opc));
 		D__GOTO(out, rc = -DER_NOSYS);
 
 	case DAOS_OBJ_RPC_PUNCH:

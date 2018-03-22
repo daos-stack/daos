@@ -75,7 +75,7 @@ vos_csum_compute(daos_sg_list_t *sgl, daos_csum_buf_t *csum)
 
 	rc = mchecksum_reset(*checksum);
 	if (rc <= 0) {
-		D__ERROR("Error in resetting checksum: %d\n", rc);
+		D_ERROR("Error in resetting checksum: %d\n", rc);
 		D__GOTO(failed, rc = -DER_IO);
 	}
 
@@ -88,7 +88,7 @@ vos_csum_compute(daos_sg_list_t *sgl, daos_csum_buf_t *csum)
 		rc = mchecksum_update(*checksum, sgl->sg_iovs[i].iov_buf,
 				      sgl->sg_iovs[i].iov_len);
 		if (rc <= 0) {
-			D__ERROR("Error in updating checksum: %d\n", rc);
+			D_ERROR("Error in updating checksum: %d\n", rc);
 			D__GOTO(failed, rc = -DER_IO);
 		}
 	}
@@ -140,21 +140,21 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 	rc = vos_obj_cache_create(LRU_CACHE_BITS,
 				  &imem_inst->vis_ocache);
 	if (rc) {
-		D__ERROR("Error in createing object cache\n");
+		D_ERROR("Error in createing object cache\n");
 		return rc;
 	}
 
 	rc = d_uhash_create(0 /* no locking */, VOS_POOL_HHASH_BITS,
 			    &imem_inst->vis_pool_hhash);
 	if (rc) {
-		D__ERROR("Error in creating POOL ref hash: %d\n", rc);
+		D_ERROR("Error in creating POOL ref hash: %d\n", rc);
 		goto failed;
 	}
 
 	rc = d_uhash_create(0 /* no locking */, VOS_CONT_HHASH_BITS,
 			    &imem_inst->vis_cont_hhash);
 	if (rc) {
-		D__ERROR("Error in creating CONT ref hash: %d\n", rc);
+		D_ERROR("Error in creating CONT ref hash: %d\n", rc);
 		goto failed;
 	}
 
@@ -162,7 +162,7 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 	if (daos_csum_supported(env)) {
 		rc = mchecksum_init(env, &imem_inst->vis_checksum);
 		if (!rc) {
-			D__ERROR("Error in initializing checksum\n");
+			D_ERROR("Error in initializing checksum\n");
 			goto failed;
 		}
 
@@ -224,13 +224,13 @@ vos_mod_init(void)
 	 */
 	env = getenv("VOS_MEM_CLASS");
 	if (env && strcasecmp(env, "DRAM") == 0) {
-		D__WARN("Running in DRAM mode, all data are volatile.\n");
+		D_WARN("Running in DRAM mode, all data are volatile.\n");
 		vos_mem_class = UMEM_CLASS_VMEM;
 	}
 
 	rc = vos_cont_tab_register();
 	if (rc) {
-		D__ERROR("VOS CI btree initialization error\n");
+		D_ERROR("VOS CI btree initialization error\n");
 		return rc;
 	}
 
@@ -240,19 +240,19 @@ vos_mod_init(void)
 	 */
 	rc = vos_obj_tab_register();
 	if (rc) {
-		D__ERROR("VOS OI btree initialization error\n");
+		D_ERROR("VOS OI btree initialization error\n");
 		return rc;
 	}
 
 	rc = vos_cookie_tab_register();
 	if (rc) {
-		D__ERROR("VOS cookie btree initialization error\n");
+		D_ERROR("VOS cookie btree initialization error\n");
 		return rc;
 	}
 
 	rc = vos_obj_tree_register();
 	if (rc)
-		D__ERROR("Failed to register vos trees\n");
+		D_ERROR("Failed to register vos trees\n");
 
 	return rc;
 }
@@ -279,7 +279,7 @@ vos_init(void)
 	static int	is_init = 0;
 
 	if (is_init) {
-		D__ERROR("Already initialized a VOS instance\n");
+		D_ERROR("Already initialized a VOS instance\n");
 		return rc;
 	}
 

@@ -298,7 +298,7 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 	struct tse_task_cb *dtc;
 
 	if (dtp->dtp_completed) {
-		D__ERROR("Can't add a callback for a completed task\n");
+		D_ERROR("Can't add a callback for a completed task\n");
 		return -DER_NO_PERM;
 	}
 
@@ -788,12 +788,12 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	struct tse_task_link	  *tlink;
 
 	if (dtp->dtp_sched != dep_dtp->dtp_sched) {
-		D__ERROR("Two tasks should belong to the same scheduler.\n");
+		D_ERROR("Two tasks should belong to the same scheduler.\n");
 		return -DER_NO_PERM;
 	}
 
 	if (dtp->dtp_completed) {
-		D__ERROR("Can't add a depedency for a completed task (%p)\n",
+		D_ERROR("Can't add a depedency for a completed task (%p)\n",
 			task);
 		return -DER_NO_PERM;
 	}
@@ -919,22 +919,22 @@ tse_task_reinit(tse_task_t *task)
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (dsp->dsp_cancelling) {
-		D__ERROR("Scheduler is cancelling, can't re-insert task\n");
+		D_ERROR("Scheduler is cancelling, can't re-insert task\n");
 		D__GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (dtp->dtp_completed) {
-		D__ERROR("Can't re-init a task that has completed already.\n");
+		D_ERROR("Can't re-init a task that has completed already.\n");
 		D__GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (!dtp->dtp_running) {
-		D__ERROR("Can't re-init a task that is not running.\n");
+		D_ERROR("Can't re-init a task that is not running.\n");
 		D__GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (dtp->dtp_func == NULL) {
-		D__ERROR("Task body function can't be NULL.\n");
+		D_ERROR("Task body function can't be NULL.\n");
 		D__GOTO(err_unlock, rc = -DER_INVAL);
 	}
 

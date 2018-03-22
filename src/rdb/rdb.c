@@ -56,13 +56,13 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 
 	pmem = pmemobj_create(path, RDB_LAYOUT, size, 0666);
 	if (pmem == NULL) {
-		D__ERROR("failed to create db in %s: %d\n", path, errno);
+		D_ERROR("failed to create db in %s: %d\n", path, errno);
 		return daos_errno2der(errno);
 	}
 
 	sb_oid = pmemobj_root(pmem, sizeof(*sb));
 	if (OID_IS_NULL(sb_oid)) {
-		D__ERROR("failed to allocate db superblock in %s\n", path);
+		D_ERROR("failed to allocate db superblock in %s\n", path);
 		D__GOTO(out_pmem, rc = -DER_NOSPACE);
 	}
 	sb = pmemobj_direct(sb_oid);
@@ -108,7 +108,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 out_pmem:
 	if (rc != 0) {
 		if (remove(path) != 0)
-			D__ERROR("failed to remove %s: %d\n", path, errno);
+			D_ERROR("failed to remove %s: %d\n", path, errno);
 	}
 	pmemobj_close(pmem);
 	return rc;
@@ -243,7 +243,7 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 
 	D__ALLOC_PTR(db);
 	if (db == NULL) {
-		D__ERROR("failed to allocate db object\n");
+		D_ERROR("failed to allocate db object\n");
 		D__GOTO(err, rc = -DER_NOMEM);
 	}
 
@@ -257,7 +257,7 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 
 	rc = ABT_cond_create(&db->d_ref_cv);
 	if (rc != ABT_SUCCESS) {
-		D__ERROR("failed to create ref CV: %d\n", rc);
+		D_ERROR("failed to create ref CV: %d\n", rc);
 		D__GOTO(err_mutex, rc = dss_abterr2der(rc));
 	}
 
@@ -267,13 +267,13 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 
 	db->d_pmem = pmemobj_open(path, RDB_LAYOUT);
 	if (db->d_pmem == NULL) {
-		D__ERROR("failed to open db in %s: %d\n", path, errno);
+		D_ERROR("failed to open db in %s: %d\n", path, errno);
 		D__GOTO(err_trees, rc = daos_errno2der(errno));
 	}
 
 	sb_oid = pmemobj_root(db->d_pmem, sizeof(*sb));
 	if (OID_IS_NULL(sb_oid)) {
-		D__ERROR("failed to retrieve db superblock in %s\n", path);
+		D_ERROR("failed to retrieve db superblock in %s\n", path);
 		D__GOTO(err_pmem, rc = -DER_IO);
 	}
 	sb = pmemobj_direct(sb_oid);
@@ -284,7 +284,7 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	uma.uma_u.pmem_pool = db->d_pmem;
 	rc = dbtree_open_inplace(&sb->dsb_attr, &uma, &db->d_attr);
 	if (rc != 0) {
-		D__ERROR("failed to open db attribute tree: %d\n", rc);
+		D_ERROR("failed to open db attribute tree: %d\n", rc);
 		D__GOTO(err_pmem, rc);
 	}
 
@@ -299,7 +299,7 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	if (rc != 0)
 		D__GOTO(err_attr, rc);
 	if (value.iov_len != sizeof(*db->d_replicas->rl_ranks) * nreplicas) {
-		D__ERROR(DF_DB": inconsistent replica list: size="DF_U64
+		D_ERROR(DF_DB": inconsistent replica list: size="DF_U64
 			" n=%u\n", DP_DB(db), value.iov_len, nreplicas);
 		D__GOTO(err_attr, rc);
 	}
@@ -487,7 +487,7 @@ rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
 	out = crt_reply_get(rpc);
 	rc = out->dao_rc;
 	if (rc != 0) {
-		D__ERROR(DF_UUID": failed to start%s %d replicas\n",
+		D_ERROR(DF_UUID": failed to start%s %d replicas\n",
 			DP_UUID(uuid), create ? "/create" : "", rc);
 		rdb_dist_stop(uuid, pool_uuid, ranks, create /* destroy */);
 		rc = -DER_IO;
@@ -529,7 +529,7 @@ rdb_start_handler(crt_rpc_t *rpc)
 		rc = rdb_create(path, in->dai_uuid, in->dai_size,
 				in->dai_ranks);
 		if (rc != 0 && rc != -DER_EXIST) {
-			D__ERROR(DF_UUID": failed to create replica: %d\n",
+			D_ERROR(DF_UUID": failed to create replica: %d\n",
 				DP_UUID(in->dai_uuid), rc);
 			D__GOTO(out_path, rc);
 		}
@@ -538,7 +538,7 @@ rdb_start_handler(crt_rpc_t *rpc)
 	rc = ds_pool_svc_start(in->dai_uuid);
 	if (rc != 0) {
 		if ((in->dai_flags & RDB_AF_CREATE) || rc != -DER_NONEXIST)
-			D__ERROR(DF_UUID": failed to start replica: %d\n",
+			D_ERROR(DF_UUID": failed to start replica: %d\n",
 				DP_UUID(in->dai_uuid), rc);
 		if (in->dai_flags & RDB_AF_CREATE)
 			rdb_destroy(path);
@@ -602,7 +602,7 @@ rdb_dist_stop(const uuid_t uuid, const uuid_t pool_uuid,
 	out = crt_reply_get(rpc);
 	rc = out->doo_rc;
 	if (rc != 0) {
-		D__ERROR(DF_UUID": failed to stop%s %d replicas\n",
+		D_ERROR(DF_UUID": failed to stop%s %d replicas\n",
 			DP_UUID(uuid), destroy ? "/destroy" : "", rc);
 		rc = -DER_IO;
 	}
@@ -633,7 +633,7 @@ rdb_stop_handler(crt_rpc_t *rpc)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else if (rc != 0)
-			D__ERROR(DF_UUID": failed to destroy replica: %d\n",
+			D_ERROR(DF_UUID": failed to destroy replica: %d\n",
 				DP_UUID(in->doi_uuid), rc);
 	}
 

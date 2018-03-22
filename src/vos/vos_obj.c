@@ -118,7 +118,7 @@ iobuf_cp_fetch(struct iod_buf *iobuf, daos_iov_t *iov)
 		/** current iov */
 		iov = &iobuf->db_sgl.sg_iovs[iobuf->db_at];
 		if (iov->iov_buf_len <= iobuf->db_iov_off) {
-			D__ERROR("Invalid iov[%d] "DF_U64"/"DF_U64"\n",
+			D_ERROR("Invalid iov[%d] "DF_U64"/"DF_U64"\n",
 				iobuf->db_at, iobuf->db_iov_off,
 				iov->iov_buf_len);
 			return -1;
@@ -236,7 +236,7 @@ iobuf_cp_update(struct iod_buf *iobuf, daos_iov_t *iov)
 		/** current iov */
 		iov = &iobuf->db_sgl.sg_iovs[iobuf->db_at];
 		if (iov->iov_len <= iobuf->db_iov_off) {
-			D__ERROR("Invalid iov[%d] "DF_U64"/"DF_U64"\n",
+			D_ERROR("Invalid iov[%d] "DF_U64"/"DF_U64"\n",
 				iobuf->db_at, iobuf->db_iov_off,
 				iov->iov_len);
 			return -1;
@@ -536,7 +536,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			rsize = ent->en_inob;
 
 		if (rsize != ent->en_inob) {
-			D__ERROR("Record sizes of all indices must be "
+			D_ERROR("Record sizes of all indices must be "
 				"the same: %u/%u\n", rsize, ent->en_inob);
 			D__GOTO(failed, rc = -DER_IO_INVAL);
 		}
@@ -635,7 +635,7 @@ akey_fetch(struct vos_object *obj, daos_epoch_t epoch, daos_handle_t ak_toh,
 			iod->iod_size = rsize;
 
 		if (iod->iod_size != rsize) {
-			D__ERROR("Cannot support mixed record size "
+			D_ERROR("Cannot support mixed record size "
 				DF_U64"/"DF_U64"\n", iod->iod_size, rsize);
 			D__GOTO(out, rc);
 		}
@@ -781,7 +781,7 @@ akey_update_single(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 
 	rc = dbtree_update(toh, &kiov, &riov);
 	if (rc != 0) {
-		D__ERROR("Failed to update subtree: %d\n", rc);
+		D_ERROR("Failed to update subtree: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -938,7 +938,7 @@ dkey_update(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 	ck_toh = vos_obj2cookie_hdl(obj);
 	rc = vos_cookie_find_update(ck_toh, cookie, epoch, true, NULL);
 	if (rc) {
-		D__ERROR("Failed to record cookie: %d\n", rc);
+		D_ERROR("Failed to record cookie: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 	D_EXIT;
@@ -1834,7 +1834,7 @@ akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
 	rc = tree_prepare(obj, &oiter->it_epr, obj->obj_toh, VOS_BTR_DKEY,
 			  dkey, 0, &toh);
 	if (rc != 0) {
-		D__ERROR("Cannot load the akey tree: %d\n", rc);
+		D_ERROR("Cannot load the akey tree: %d\n", rc);
 		return rc;
 	}
 
@@ -2255,7 +2255,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	switch (type) {
 	default:
-		D__ERROR("unknown iterator type %d.\n", type);
+		D_ERROR("unknown iterator type %d.\n", type);
 		rc = -DER_INVAL;
 		break;
 
@@ -2401,7 +2401,7 @@ obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 		rc = dbtree_iter_delete(oiter->it_hdl, args);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D__ERROR("Failed to delete iter entry: %d\n", rc);
+		D_ERROR("Failed to delete iter entry: %d\n", rc);
 	} TX_END
 
 	return rc;
@@ -2526,7 +2526,7 @@ vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 DP_UOID(oid), epoch);
 
 	if (attr == NULL) {
-		D__ERROR("Invalid attribute argument\n");
+		D_ERROR("Invalid attribute argument\n");
 		return -DER_INVAL;
 	}
 

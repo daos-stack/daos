@@ -78,7 +78,7 @@ group_create_cb(crt_group_t *grp, void *priv, int status)
 	ABT_eventual *eventual = priv;
 
 	if (status != 0) {
-		D__ERROR("failed to create group: %d\n", status);
+		D_ERROR("failed to create group: %d\n", status);
 		grp = NULL;
 	}
 	ABT_eventual_set(*eventual, &grp, sizeof(grp));
@@ -204,7 +204,7 @@ dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc)
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D__ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: %d\n", rc);
 
 	return rc;
 }

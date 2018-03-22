@@ -129,7 +129,7 @@ vos_cookie_tab_register()
 
 	rc = dbtree_class_register(VOS_BTR_COOKIE, 0, &vcoi_ops);
 	if (rc)
-		D__ERROR("dbtree create failed\n");
+		D_ERROR("dbtree create failed\n");
 	return rc;
 }
 
@@ -145,7 +145,7 @@ vos_cookie_tab_create(struct umem_attr *uma, struct vos_cookie_table *ctab,
 	rc = dbtree_create_inplace(VOS_BTR_COOKIE, 0, COOKIE_BTREE_ORDER, uma,
 				   &ctab->cit_btr, cookie_handle);
 	if (rc) {
-		D__ERROR("dbtree create failed: %d\n", rc);
+		D_ERROR("dbtree create failed: %d\n", rc);
 		D__GOTO(exit, rc);
 	}
 exit:
@@ -159,7 +159,7 @@ vos_cookie_tab_destroy(daos_handle_t th)
 
 	rc = dbtree_destroy(th);
 	if (rc)
-		D__ERROR("COOKIE BTREE destroy failed\n");
+		D_ERROR("COOKIE BTREE destroy failed\n");
 
 	return rc;
 }
@@ -208,7 +208,7 @@ vos_cookie_find_update(daos_handle_t th, uuid_t cookie, daos_epoch_t epoch,
 	max_epoch = epoch;
 	rc = dbtree_update(th, &key, &value);
 	if (rc)
-		D__ERROR("Updating the cookie entry\n");
+		D_ERROR("Updating the cookie entry\n");
 exit:
 	if (rc == 0 && epoch_ret != NULL)
 		*epoch_ret = max_epoch;

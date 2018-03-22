@@ -168,7 +168,7 @@ dss_sched_run(ABT_sched sched)
 
 	ret = ABT_sched_get_pools(sched, DSS_POOL_CNT, 0, pools);
 	if (ret != ABT_SUCCESS) {
-		D__ERROR("ABT_sched_get_pools");
+		D_ERROR("ABT_sched_get_pools");
 		return;
 	}
 
@@ -293,14 +293,14 @@ dss_srv_handler(void *arg)
 	/** set affinity */
 	rc = hwloc_set_cpubind(dss_topo, dx->dx_cpuset, HWLOC_CPUBIND_THREAD);
 	if (rc) {
-		D__ERROR("failed to set affinity: %d\n", errno);
+		D_ERROR("failed to set affinity: %d\n", errno);
 		return;
 	}
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(DAOS_SERVER_TAG);
 	if (dtc == NULL) {
-		D__ERROR("failed to initialize TLS\n");
+		D_ERROR("failed to initialize TLS\n");
 		return;
 	}
 
@@ -310,7 +310,7 @@ dss_srv_handler(void *arg)
 	/* create private transport context */
 	rc = crt_context_create(&dmi->dmi_ctx);
 	if (rc != 0) {
-		D__ERROR("failed to create crt ctxt: %d\n", rc);
+		D_ERROR("failed to create crt ctxt: %d\n", rc);
 		return;
 	}
 
@@ -318,21 +318,21 @@ dss_srv_handler(void *arg)
 					   dss_process_rpc,
 					   dx->dx_pools);
 	if (rc != 0) {
-		D__ERROR("failed to register process cb %d\n", rc);
+		D_ERROR("failed to register process cb %d\n", rc);
 		D_GOTO(destroy, rc);
 	}
 
 	/** Get xtream index from cart */
 	rc = crt_context_idx(dmi->dmi_ctx, &dmi->dmi_tid);
 	if (rc != 0) {
-		D__ERROR("failed to get xtream index: rc %d\n", rc);
+		D_ERROR("failed to get xtream index: rc %d\n", rc);
 		D_GOTO(destroy, rc);
 	}
 
 	/* Prepare the scheduler */
 	rc = tse_sched_init(&dmi->dmi_sched, NULL, dmi->dmi_ctx);
 	if (rc != 0) {
-		D__ERROR("failed to init the scheduler\n");
+		D_ERROR("failed to init the scheduler\n");
 		D__GOTO(destroy, rc);
 	}
 
@@ -357,8 +357,8 @@ dss_srv_handler(void *arg)
 
 		rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */, NULL, NULL);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D__ERROR("failed to progress network context: %d\n",
-				 rc);
+			D_ERROR("failed to progress network context: %d\n",
+				rc);
 			break;
 		}
 
@@ -385,19 +385,19 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 
 	D__ALLOC_PTR(dx);
 	if (dx == NULL) {
-		D__ERROR("Can not allocate execution stream.\n");
+		D_ERROR("Can not allocate execution stream.\n");
 		return NULL;
 	}
 
 	rc = ABT_future_create(1, NULL, &dx->dx_shutdown);
 	if (rc != 0) {
-		D__ERROR("failed to allocate future\n");
+		D_ERROR("failed to allocate future\n");
 		D__GOTO(err_free, rc = dss_abterr2der(rc));
 	}
 
 	dx->dx_cpuset = hwloc_bitmap_dup(cpus);
 	if (dx->dx_cpuset == NULL) {
-		D__ERROR("failed to allocate cpuset\n");
+		D_ERROR("failed to allocate cpuset\n");
 		D__GOTO(err_future, rc = -DER_NOMEM);
 	}
 
@@ -461,14 +461,14 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 
 	rc = dss_sched_create(dx->dx_pools, DSS_POOL_CNT, &dx->dx_sched);
 	if (rc != 0) {
-		D__ERROR("create scheduler fails: %d\n", rc);
+		D_ERROR("create scheduler fails: %d\n", rc);
 		D__GOTO(out_pool, rc);
 	}
 
 	/** start execution stream, rank must be non-null */
 	rc = ABT_xstream_create_with_rank(dx->dx_sched, idx, &dx->dx_xstream);
 	if (rc != ABT_SUCCESS) {
-		D__ERROR("create xstream fails %d\n", rc);
+		D_ERROR("create xstream fails %d\n", rc);
 		D__GOTO(out_sched, rc = dss_abterr2der(rc));
 	}
 
@@ -477,7 +477,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 			       dss_srv_handler, dx, ABT_THREAD_ATTR_NULL,
 			       &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
-		D__ERROR("create xstream failed: %d\n", rc);
+		D_ERROR("create xstream failed: %d\n", rc);
 		D__GOTO(out_xstream, rc = dss_abterr2der(rc));
 	}
 
@@ -545,7 +545,7 @@ dss_xstreams_fini(bool force)
 	/* release local storage */
 	rc = pthread_key_delete(dss_tls_key);
 	if (rc)
-		D__ERROR("failed to delete dtc: %d\n", rc);
+		D_ERROR("failed to delete dtc: %d\n", rc);
 
 	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
 }
@@ -585,7 +585,7 @@ dss_xstreams_init(int nr)
 	/* initialize xstream-local storage */
 	rc = pthread_key_create(&dss_tls_key, NULL);
 	if (rc) {
-		D__ERROR("failed to create dtc: %d\n", rc);
+		D_ERROR("failed to create dtc: %d\n", rc);
 		return -DER_NOMEM;
 	}
 
@@ -597,7 +597,7 @@ dss_xstreams_init(int nr)
 
 		obj = hwloc_get_obj_by_depth(dss_topo, depth, i % ncores);
 		if (obj == NULL) {
-			D__ERROR("Null core returned by hwloc\n");
+			D_ERROR("Null core returned by hwloc\n");
 			D__GOTO(failed, rc = -DER_INVAL);
 		}
 
@@ -832,7 +832,7 @@ collective_func(void *varg)
 
 	rc = ABT_future_set(f_arg->dfa_future, (void *)a_args);
 	if (rc != ABT_SUCCESS)
-		D__ERROR("future set failure %d\n", rc);
+		D_ERROR("future set failure %d\n", rc);
 }
 
 /* Reduce the return codes into the first element. */
@@ -1064,13 +1064,13 @@ dss_acc_offload(struct dss_acc_task *at_args)
 	 */
 	tid = dss_get_module_info()->dmi_tid;
 	if (at_args == NULL) {
-		D__ERROR("missing arguments for acc_offload\n");
+		D_ERROR("missing arguments for acc_offload\n");
 		return -DER_INVAL;
 	}
 
 	if (at_args->at_offload_type <= DSS_OFFLOAD_MIN ||
 	    at_args->at_offload_type >= DSS_OFFLOAD_MAX) {
-		D__ERROR("Unknown type of offload\n");
+		D_ERROR("Unknown type of offload\n");
 		return -DER_INVAL;
 	}
 
@@ -1227,14 +1227,14 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 		break;
 	case DSS_REBUILD_RES_PERCENTAGE:
 		if (value >= 100 || value == 0) {
-			D__ERROR("invalid value "DF_U64"\n", value);
+			D_ERROR("invalid value "DF_U64"\n", value);
 			rc = -DER_INVAL;
 			break;
 		}
 		dss_rebuild_res_percentage = value;
 		break;
 	default:
-		D__ERROR("invalid key_id %d\n", key_id);
+		D_ERROR("invalid key_id %d\n", key_id);
 		rc = -DER_INVAL;
 	}
 

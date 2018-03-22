@@ -149,7 +149,7 @@ vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
 	rc = daos_lru_cache_create(cache_size, D_HASH_FT_NOLOCK,
 				   &obj_lru_ops, occ);
 	if (rc)
-		D__ERROR("Error in creating lru cache: %d\n", rc);
+		D_ERROR("Error in creating lru cache: %d\n", rc);
 	return rc;
 }
 

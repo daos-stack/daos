@@ -809,8 +809,8 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	oid = md->omd_id;
 	oc_attr = daos_oclass_attr_find(oid);
 	if (oc_attr == NULL) {
-		D__ERROR("Can not find obj class, invlaid oid="DF_OID"\n",
-			 DP_OID(oid));
+		D_ERROR("Can not find obj class, invlaid oid="DF_OID"\n",
+			DP_OID(oid));
 		return -DER_INVAL;
 	}
 
@@ -823,7 +823,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		rop->rop_grp_size = rimap->rmp_domain_nr;
 
 	if (rop->rop_grp_size > rimap->rmp_domain_nr) {
-		D__ERROR("obj="DF_OID": group size (%u) is larger than "
+		D_ERROR("obj="DF_OID": group size (%u) is larger than "
 			"domain nr (%u)\n", DP_OID(oid),
 			rop->rop_grp_size, rimap->rmp_domain_nr);
 		return -DER_INVAL;
@@ -1285,7 +1285,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	/* Caller should guarantee the pl_map is uptodate */
 	if (pl_map_version(map) < rebuild_ver) {
-		D__ERROR("pl_map version(%u) < rebuild version(%u)\n",
+		D_ERROR("pl_map version(%u) < rebuild version(%u)\n",
 			pl_map_version(map), rebuild_ver);
 		return -DER_INVAL;
 	}
@@ -1324,7 +1324,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 		if (f_shard->rfs_fseq < rebuild_ver) {
 			if (f_shard->rfs_status != PO_COMP_ST_DOWNOUT)
-				D__ERROR(""DF_OID" rebuild isn't done for "
+				D_ERROR(""DF_OID" rebuild isn't done for "
 					"fseq:%d(status:%d)? rbd_ver:%d\n",
 					DP_OID(md->omd_id), f_shard->rfs_fseq,
 					f_shard->rfs_status, rebuild_ver);
@@ -1343,7 +1343,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 				*shard_id = l_shard->po_shard;
 			}
 		} else {
-			D__ERROR(""DF_OID" rebuild is done for "
+			D_ERROR(""DF_OID" rebuild is done for "
 				"fseq:%d(status:%d)? rbd_ver:%d\n",
 				DP_OID(md->omd_id), f_shard->rfs_fseq,
 				f_shard->rfs_status, rebuild_ver);
@@ -1366,7 +1366,7 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		    struct pl_target_grp *tgp_reint,
 		    uint32_t *tgt_reint)
 {
-	D__ERROR("Unsupported\n");
+	D_ERROR("Unsupported\n");
 	return -DER_NOSYS;
 }
 

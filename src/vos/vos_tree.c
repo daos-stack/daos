@@ -287,7 +287,7 @@ kb_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats, ta->ta_order,
 				   &uma, &krec->kr_btr, &btr_oh);
 	if (rc != 0) {
-		D__ERROR("Failed to create btree: %d\n", rc);
+		D_ERROR("Failed to create btree: %d\n", rc);
 		return rc;
 	}
 	rbund->rb_btr = &krec->kr_btr;
@@ -301,7 +301,7 @@ kb_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	rc = evt_create_inplace(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, &uma,
 				&krec->kr_evt[0], &evt_oh);
 	if (rc != 0) {
-		D__ERROR("Failed to create evtree: %d\n", rc);
+		D_ERROR("Failed to create evtree: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -338,7 +338,7 @@ kb_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (krec->kr_btr.tr_order) {
 		rc = dbtree_open_inplace(&krec->kr_btr, &uma, &toh);
 		if (rc != 0)
-			D__ERROR("Failed to open btree: %d\n", rc);
+			D_ERROR("Failed to open btree: %d\n", rc);
 		else
 			dbtree_destroy(toh);
 	}
@@ -346,7 +346,7 @@ kb_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if ((krec->kr_bmap & KREC_BF_EVT) && krec->kr_evt[0].tr_order) {
 		rc = evt_open_inplace(&krec->kr_evt[0], &uma, &toh);
 		if (rc != 0)
-			D__ERROR("Failed to open evtree: %d\n", rc);
+			D_ERROR("Failed to open evtree: %d\n", rc);
 		else
 			evt_destroy(toh);
 	}
@@ -732,7 +732,7 @@ vos_obj_tree_register(void)
 		rc = dbtree_class_register(ta->ta_class, ta->ta_feats,
 					   ta->ta_ops);
 		if (rc != 0) {
-			D__ERROR("Failed to register %s: %d\n", ta->ta_name, rc);
+			D_ERROR("Failed to register %s: %d\n", ta->ta_name, rc);
 			break;
 		}
 		D_DEBUG(DB_TRACE, "Register tree type %s\n", ta->ta_name);

@@ -275,7 +275,7 @@ sk_btr_open_create(bool create, char *args)
 	int		rc;
 
 	if (!daos_handle_is_inval(sk_toh)) {
-		D__ERROR("Tree has been opened\n");
+		D_ERROR("Tree has been opened\n");
 		return -1;
 	}
 
@@ -283,26 +283,26 @@ sk_btr_open_create(bool create, char *args)
 		if (args[0] == 'i') { /* inplace create/open */
 			inplace = true;
 			if (args[1] != SK_SEP) {
-				D__ERROR("wrong parameter format %s\n", args);
+				D_ERROR("wrong parameter format %s\n", args);
 				return -1;
 			}
 			args += 2;
 		}
 
 		if (args[0] != 'o' || args[1] != SK_SEP_VAL) {
-			D__ERROR("incorrect format for tree order: %s\n", args);
+			D_ERROR("incorrect format for tree order: %s\n", args);
 			return -1;
 		}
 
 		sk_order = atoi(&args[2]);
 		if (sk_order < BTR_ORDER_MIN || sk_order > BTR_ORDER_MAX) {
-			D__ERROR("Invalid tree order %d\n", sk_order);
+			D_ERROR("Invalid tree order %d\n", sk_order);
 			return -1;
 		}
 	} else if (!create) {
 		inplace = (sk_root.tr_class != 0);
 		if (TMMID_IS_NULL(sk_root_mmid) && !inplace) {
-			D__ERROR("Please create tree first\n");
+			D_ERROR("Please create tree first\n");
 			return -1;
 		}
 	}
@@ -326,7 +326,7 @@ sk_btr_open_create(bool create, char *args)
 			rc = dbtree_open(sk_root_mmid, &sk_uma, &sk_toh);
 	}
 	if (rc != 0) {
-		D__ERROR("Tree %s failed: %d\n", create ? "create" : "open",
+		D_ERROR("Tree %s failed: %d\n", create ? "create" : "open",
 			 rc);
 		return -1;
 	}
@@ -339,7 +339,7 @@ sk_btr_close_destroy(bool destroy)
 	int rc;
 
 	if (daos_handle_is_inval(sk_toh)) {
-		D__ERROR("Invalid tree open handle\n");
+		D_ERROR("Invalid tree open handle\n");
 		return -1;
 	}
 
@@ -353,7 +353,7 @@ sk_btr_close_destroy(bool destroy)
 
 	sk_toh = DAOS_HDL_INVAL;
 	if (rc != 0) {
-		D__ERROR("Tree %s failed: %d\n",
+		D_ERROR("Tree %s failed: %d\n",
 			destroy ? "destroy" : "close", rc);
 		return -1;
 	}
@@ -370,7 +370,7 @@ btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 
 	rc = umem_class_init(&sk_uma, &umm);
 	if (rc != 0) {
-		D__ERROR("Failed to instantiate umem while vefify: %d\n", rc);
+		D_ERROR("Failed to instantiate umem while vefify: %d\n", rc);
 		return -1;
 	}
 
@@ -379,7 +379,7 @@ btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 
 	if ((srec->sr_key_len != key->iov_len) ||
 	    (memcmp(srec->sr_key, key->iov_buf, key->iov_len) != 0)) {
-		D__ERROR("Preserved record mismatch while delete\n");
+		D_ERROR("Preserved record mismatch while delete\n");
 		return -1;
 	}
 
@@ -421,7 +421,7 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 	int		rc;
 
 	if (daos_handle_is_inval(sk_toh)) {
-		D__ERROR("Can't find opened tree\n");
+		D_ERROR("Can't find opened tree\n");
 		return -1;
 	}
 
@@ -435,7 +435,7 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 			val = strchr(str, SK_SEP_VAL);
 			if (val == NULL) {
 				D__PRINT("Failed with %d\n", rc);
-				D__ERROR("Invalid parameters %s\n", str);
+				D_ERROR("Invalid parameters %s\n", str);
 				return -1;
 			}
 			*val = 0;
@@ -456,7 +456,7 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 			daos_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(sk_toh, &key_iov, &val_iov);
 			if (rc != 0) {
-				D__ERROR("Failed to update %s:%s\n", key, val);
+				D_ERROR("Failed to update %s:%s\n", key, val);
 				return -1;
 			}
 			break;
@@ -464,7 +464,7 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 		case BTR_OPC_DELETE:
 			rc = dbtree_delete(sk_toh, &key_iov, NULL);
 			if (rc != 0) {
-				D__ERROR("Failed to delete %s\n", key);
+				D_ERROR("Failed to delete %s\n", key);
 				return -1;
 			}
 			if (verbose)
@@ -477,14 +477,14 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 		case BTR_OPC_DELETE_RETAIN:
 			rc = dbtree_delete(sk_toh, &key_iov, &rec_mmid);
 			if (rc != 0) {
-				D__ERROR("Failed to delete %s\n", key);
+				D_ERROR("Failed to delete %s\n", key);
 				return -1;
 			}
 
 			/** Verify and delete rec_mmid here */
 			rc = btr_rec_verify_delete(&rec_mmid, &key_iov);
 			if (rc != 0) {
-				D__ERROR("Failed to verify and delete rec\n");
+				D_ERROR("Failed to verify and delete rec\n");
 				return -1;
 			}
 
@@ -500,7 +500,7 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 			daos_iov_set(&val_iov, NULL, 0); /* get address */
 			rc = dbtree_lookup(sk_toh, &key_iov, &val_iov);
 			if (rc != 0) {
-				D__ERROR("Failed to lookup %s\n", key);
+				D_ERROR("Failed to lookup %s\n", key);
 				return -1;
 			}
 
@@ -526,7 +526,7 @@ sk_btr_query(void)
 
 	rc = dbtree_query(sk_toh, &attr, &stat);
 	if (rc != 0) {
-		D__ERROR("Failed to query btree: %d\n", rc);
+		D_ERROR("Failed to query btree: %d\n", rc);
 		return -1;
 	}
 
@@ -554,7 +554,7 @@ sk_btr_iterate(char *args)
 	char		*err;
 
 	if (daos_handle_is_inval(sk_toh)) {
-		D__ERROR("Can't find opened tree\n");
+		D_ERROR("Can't find opened tree\n");
 		return -1;
 	}
 

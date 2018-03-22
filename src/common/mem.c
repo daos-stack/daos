@@ -125,7 +125,7 @@ umem_tx_errno(int err)
 	}
 
 	if (err == 0) {
-		D__ERROR("Transaction aborted for unknown reason\n");
+		D_ERROR("Transaction aborted for unknown reason\n");
 		return -DER_UNKNOWN;
 	}
 
@@ -133,7 +133,7 @@ umem_tx_errno(int err)
 		if (err < -DER_ERR_GURT_BASE)
 			return err; /* aborted by DAOS */
 
-		D__ERROR("pmdk returned negative errno %d\n", err);
+		D_ERROR("pmdk returned negative errno %d\n", err);
 		err = -err;
 	}
 	return daos_errno2der(err);

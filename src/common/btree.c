@@ -248,7 +248,7 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	rc = btr_class_init(root_mmid, root, tree_class, &tree_feats, uma,
 			    &tcx->tc_tins);
 	if (rc != 0) {
-		D__ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
+		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
 		D__GOTO(failed, rc);
 	}
 
@@ -1166,7 +1166,7 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 			rec = btr_node_rec_at(tcx, nd_mmid, at);
 			cmp = btr_key_cmp(tcx, rec, key);
 			if (cmp != 0)
-				D__ERROR("Hash collision is poorly handled\n");
+				D_ERROR("Hash collision is poorly handled\n");
 		}
 	}
 
@@ -3036,7 +3036,7 @@ dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 
 	rc = dbtree_iter_prepare(toh, 0 /* options */, &ih);
 	if (rc != 0) {
-		D__ERROR("failed to prepare tree iterator: %d\n", rc);
+		D_ERROR("failed to prepare tree iterator: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -3045,7 +3045,7 @@ dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 	if (rc == -DER_NONEXIST) {
 		D__GOTO(out_iter, rc = 0);
 	} else if (rc != 0) {
-		D__ERROR("failed to initialize iterator: %d\n", rc);
+		D_ERROR("failed to initialize iterator: %d\n", rc);
 		D__GOTO(out_iter, rc);
 	}
 
@@ -3058,7 +3058,7 @@ dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 
 		rc = dbtree_iter_fetch(ih, &key, &val, NULL /* anchor */);
 		if (rc != 0) {
-			D__ERROR("failed to fetch iterator: %d\n", rc);
+			D_ERROR("failed to fetch iterator: %d\n", rc);
 			break;
 		}
 
@@ -3083,7 +3083,7 @@ dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 			rc = 0;
 			break;
 		} else if (rc != 0) {
-			D__ERROR("failed to move iterator: %d\n", rc);
+			D_ERROR("failed to move iterator: %d\n", rc);
 			break;
 		}
 	}
@@ -3154,7 +3154,7 @@ btr_class_init(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	}
 
 	if ((*tree_feats & tc->tc_feats) != *tree_feats) {
-		D__ERROR("Unsupported features "DF_U64"/"DF_U64"\n",
+		D_ERROR("Unsupported features "DF_U64"/"DF_U64"\n",
 			*tree_feats, tc->tc_feats);
 		return -DER_PROTO;
 	}

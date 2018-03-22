@@ -81,7 +81,7 @@ int
 daos_kv_remove(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 	       daos_event_t *ev)
 {
-	D__ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 

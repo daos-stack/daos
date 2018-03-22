@@ -529,7 +529,7 @@ err:
 int
 dc_obj_class_register(tse_task_t *task)
 {
-	D__ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API\n");
 	tse_task_complete(task, -DER_NOSYS);
 	return 0;
 }
@@ -537,7 +537,7 @@ dc_obj_class_register(tse_task_t *task)
 int
 dc_obj_class_query(tse_task_t *task)
 {
-	D__ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API\n");
 	tse_task_complete(task, -DER_NOSYS);
 	return 0;
 }
@@ -545,7 +545,7 @@ dc_obj_class_query(tse_task_t *task)
 int
 dc_obj_class_list(tse_task_t *task)
 {
-	D__ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API\n");
 	tse_task_complete(task, -DER_NOSYS);
 	return 0;
 }
@@ -553,7 +553,7 @@ dc_obj_class_list(tse_task_t *task)
 int
 dc_obj_declare(tse_task_t *task)
 {
-	D__ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API\n");
 	tse_task_complete(task, -DER_NOSYS);
 	return 0;
 #if 0
@@ -675,7 +675,7 @@ dc_obj_layout_get(daos_handle_t oh, struct pl_obj_layout **layout,
 int
 dc_obj_query(tse_task_t *task)
 {
-	D__ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API\n");
 	tse_task_complete(task, -DER_NOSYS);
 	return 0;
 }
@@ -721,13 +721,13 @@ obj_retry_cb(tse_task_t *task, void *data)
 
 	rc = dc_task_resched(task);
 	if (rc != 0) {
-		D__ERROR("Failed to re-init task (%p)\n", task);
+		D_ERROR("Failed to re-init task (%p)\n", task);
 		D__GOTO(err, rc);
 	}
 
 	rc = dc_task_depend(task, 1, &pool_task);
 	if (rc != 0) {
-		D__ERROR("Failed to add dependency on pool query task (%p)\n",
+		D_ERROR("Failed to add dependency on pool query task (%p)\n",
 			pool_task);
 		D__GOTO(err, rc);
 	}
@@ -858,7 +858,7 @@ shard_update_task(tse_task_t *task)
 
 	if (args->shard == 0 &&
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE)) {
-		D__INFO("Set Shard 0 update to return -DER_TIMEOUT\n");
+		D_INFO("Set Shard 0 update to return -DER_TIMEOUT\n");
 		daos_fail_loc_set(DAOS_SHARD_OBJ_UPDATE_TIMEOUT |
 				  DAOS_FAIL_ONCE);
 	}

@@ -132,7 +132,7 @@ rebuild_fetch_update_bulk(struct rebuild_dkey *rdkey, daos_handle_t oh,
 				     eprs->epr_lo, &rdkey->rd_dkey, 1,
 				     &iod, &ioh);
 	if (rc != 0) {
-		D__ERROR(DF_UOID"preparing update fails: %d\n",
+		D_ERROR(DF_UOID"preparing update fails: %d\n",
 			DP_UOID(rdkey->rd_oid), rc);
 		return rc;
 	}
@@ -709,7 +709,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		if (rc) {
 			if (tls->rebuild_pool_status == 0)
 				tls->rebuild_pool_status = rc;
-			D__ERROR("iterate cont "DF_UUID" failed: rc %d\n",
+			D_ERROR("iterate cont "DF_UUID" failed: rc %d\n",
 				DP_UUID(arg->cont_uuid), rc);
 			break;
 		}
@@ -756,7 +756,7 @@ rebuild_puller(void *arg)
 		rc = dbtree_iterate(iter_arg->root_hdl, false,
 				    rebuild_cont_iter_cb, iter_arg);
 		if (rc) {
-			D__ERROR("dbtree iterate fails %d\n", rc);
+			D_ERROR("dbtree iterate fails %d\n", rc);
 			if (tls->rebuild_pool_status == 0)
 				tls->rebuild_pool_status = rc;
 			break;
@@ -784,7 +784,7 @@ rebuild_obj_hdl_get(struct rebuild_tgt_pool_tracker *rpt, daos_handle_t *hdl)
 				   &rpt->rt_local_root,
 				   &rpt->rt_local_root_hdl);
 	if (rc != 0) {
-		D__ERROR("failed to create rebuild tree: %d\n", rc);
+		D_ERROR("failed to create rebuild tree: %d\n", rc);
 		return rc;
 	}
 
@@ -819,7 +819,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 
 	if (co_count == 0 || oids_count == 0 || shards_count == 0 ||
 	    oids_count != co_count || oids_count != shards_count) {
-		D__ERROR("oids_count %u co_count %u shards_count %u\n",
+		D_ERROR("oids_count %u co_count %u shards_count %u\n",
 			oids_count, co_count, shards_count);
 		D__GOTO(out, rc = -DER_INVAL);
 	}

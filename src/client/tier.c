@@ -60,7 +60,7 @@ local_tier_conn_cb(tse_task_t *task, void *data)
 
 	/*Check for task error*/
 	if (rc) {
-		D__ERROR("Tier Conn task returned error:%d\n", rc);
+		D_ERROR("Tier Conn task returned error:%d\n", rc);
 		return rc;
 	}
 
@@ -74,7 +74,7 @@ local_tier_conn_cb(tse_task_t *task, void *data)
 	rc = tse_task_register_comp_cb(cross_conn_task, cross_conn_cb,
 				       cb_arg, sizeof(struct xconn_arg));
 	if (rc != 0) {
-		D__ERROR("Failed to register completion callback: %d\n", rc);
+		D_ERROR("Failed to register completion callback: %d\n", rc);
 		return rc;
 	}
 
@@ -84,7 +84,7 @@ local_tier_conn_cb(tse_task_t *task, void *data)
 
 	rc = dc_tier_connect(cb_arg->uuid, cb_arg->grp, cross_conn_task);
 	if (rc != 0) {
-		D__ERROR("Error from dc_tier_connect: %d\n", rc);
+		D_ERROR("Error from dc_tier_connect: %d\n", rc);
 		return rc;
 	}
 
@@ -139,7 +139,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	/*Client prep, plus a manual callback register to  add our CB arg*/
 	rc = dc_task_create(dc_pool_connect, NULL, ev, &local_conn_task);
 	if (rc) {
-		D__ERROR("Error in client task prep: %d\n", rc);
+		D_ERROR("Error in client task prep: %d\n", rc);
 		return rc;
 	}
 
@@ -147,7 +147,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 				       cb_arg, sizeof(struct xconn_arg));
 
 	if (rc) {
-		D__ERROR("Error registering comp cb: %d\n", rc);
+		D_ERROR("Error registering comp cb: %d\n", rc);
 		return rc;
 	}
 
@@ -156,7 +156,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	 */
 	pt = tier_lookup(grp);
 	if (pt == NULL)
-		D__WARN("No client context, connectivity may be limited\n");
+		D_WARN("No client context, connectivity may be limited\n");
 
 	pc_args = dc_task_get_args(local_conn_task);
 	uuid_copy((unsigned char *)pc_args->uuid, uuid);
@@ -168,7 +168,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 
 	rc = dc_task_schedule(local_conn_task, true);
 	if (rc)
-		D__ERROR("Error to schedule connect task: %d\n", rc);
+		D_ERROR("Error to schedule connect task: %d\n", rc);
 
 	return rc;
 }

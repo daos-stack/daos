@@ -152,7 +152,7 @@ tf_cont_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DF_TIERS, "got "DF_X64"\n", args->coh.cookie);
 	if (args == NULL) {
-		D__ERROR("dc_task_get_args failed\n");
+		D_ERROR("dc_task_get_args failed\n");
 		rc = -DER_INVAL;
 	} else
 		*pcoh = args->coh;
@@ -183,7 +183,7 @@ tf_cont_close(daos_handle_t coh, uuid_t cid, daos_epoch_t epoch)
 
 	rc = dc_task_create(dc_epoch_commit, sched, NULL, &task1);
 	if (rc) {
-		D__ERROR("task create returned %d\n", rc);
+		D_ERROR("task create returned %d\n", rc);
 		D__GOTO(out, rc);
 	}
 	ec_args = dc_task_get_args(task1);
@@ -194,7 +194,7 @@ tf_cont_close(daos_handle_t coh, uuid_t cid, daos_epoch_t epoch)
 
 	rc = dc_task_create(dc_cont_close, sched, NULL, &task2);
 	if (rc) {
-		D__ERROR("task create returned %d\n", rc);
+		D_ERROR("task create returned %d\n", rc);
 		dc_task_decref(task1);
 		D__GOTO(out, rc);
 	}
@@ -229,7 +229,7 @@ tf_cont_open(daos_handle_t *pcoh, uuid_t cid, daos_epoch_t *epoch)
 
 	rc = dc_task_create(dc_cont_open, sched, NULL, &task1);
 	if (rc) {
-		D__ERROR("task create returned %d\n", rc);
+		D_ERROR("task create returned %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -243,7 +243,7 @@ tf_cont_open(daos_handle_t *pcoh, uuid_t cid, daos_epoch_t *epoch)
 	rc = dc_task_create(dc_epoch_hold, sched, NULL, &task2);
 	if (rc) {
 		tse_task_decref(task1);
-		D__ERROR("task create returned %d\n", rc);
+		D_ERROR("task create returned %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -262,7 +262,7 @@ tf_cont_open(daos_handle_t *pcoh, uuid_t cid, daos_epoch_t *epoch)
 	rc = dc_task_reg_comp_cb(task2, tf_cont_cb,
 				 &pcoh, sizeof(daos_handle_t **));
 	if (rc) {
-		D__ERROR("tse_task_register_comp_cb returned %d\n", rc);
+		D_ERROR("tse_task_register_comp_cb returned %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -327,7 +327,7 @@ ds_tier_fetch_bcast_handler(crt_rpc_t *rpc)
 	out->tfo_ret = dss_task_collective(tier_hdlr_fetch_one, &cof);
 	rc = crt_reply_send(rpc);
 	if (rc < 0)
-		D__ERROR("crt_reply_send returned %d\n", rc);
+		D_ERROR("crt_reply_send returned %d\n", rc);
 }
 
 /* Primary fetch handler - runs on single node */
@@ -350,7 +350,7 @@ ds_tier_fetch_handler(crt_rpc_t *rpc)
 
 	rc = tf_cont_open(&coh, in->tfi_co_id, &in->tfi_ep);
 	if (rc) {
-		D__ERROR("tf_cont_open returned %d\n", rc);
+		D_ERROR("tf_cont_open returned %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
@@ -364,7 +364,7 @@ ds_tier_fetch_handler(crt_rpc_t *rpc)
 	rc = ds_tier_bcast_create(rpc->cr_ctx, in->tfi_pool,
 				  TIER_BCAST_FETCH, &brpc);
 	if (rc) {
-		D__ERROR("ds_tier_bcast_create returned %d\n", rc);
+		D_ERROR("ds_tier_bcast_create returned %d\n", rc);
 		D__GOTO(out_free, rc);
 	}
 	inb = crt_req_get(brpc);
@@ -383,7 +383,7 @@ ds_tier_fetch_handler(crt_rpc_t *rpc)
 
 	rc = tf_cont_close(coh, in->tfi_co_id, in->tfi_ep);
 	if (rc)
-		D__ERROR("tf_cont_close returned %d\n", rc);
+		D_ERROR("tf_cont_close returned %d\n", rc);
 
 out_free:
 	D__FREE(gh.iov_buf, gh.iov_buf_len);
@@ -500,7 +500,7 @@ tf_obj_update_cb(tse_task_t *task, void *data)
 	rc = vos_obj_zc_fetch_end(cba->ioh, cba->dkey, cba->nrecs,
 				  cba->iods, 0);
 	if (rc)
-		D__ERROR("vox_obj_zc_fetch_end returned %d\n", rc);
+		D_ERROR("vox_obj_zc_fetch_end returned %d\n", rc);
 
 	for (j = 0; j < cba->nrecs; j++) {
 		daos_iod_t *piod = &cba->iods[j];
@@ -548,7 +548,7 @@ tf_obj_update(struct tier_fetch_ctx *fctx, struct tier_key_iod *tki)
 	rc = dc_task_reg_comp_cb(task, tf_obj_update_cb,
 				 &cba, sizeof(struct tf_ou_cb_args));
 	if (rc) {
-		D__ERROR("das_task_register_comp_cb returned %d\n", rc);
+		D_ERROR("das_task_register_comp_cb returned %d\n", rc);
 		D__GOTO(out, rc);
 	} else {
 		dc_task_schedule(task, true);
@@ -580,7 +580,7 @@ tier_latch_oid(void *ctx, vos_iter_entry_t *ie)
 	fctx->dfc_oid = ie->ie_oid;
 	rc = tf_obj_open(fctx);
 	if (rc)
-		D__ERROR("tf_obj_open returned %d\n", rc);
+		D_ERROR("tf_obj_open returned %d\n", rc);
 
 	return 0;
 }
@@ -634,7 +634,7 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 				    &fctx->dfc_dkey, nrecs,
 				    ptmp->dki_iods, &fctx->dfc_ioh);
 	if (rc != 0) {
-		D__ERROR("vos_obj_zc_fetch returned %d\n", rc);
+		D_ERROR("vos_obj_zc_fetch returned %d\n", rc);
 		D__GOTO(out, rc);
 	}
 	for (j = 0; j < nrecs; j++) {
@@ -642,7 +642,7 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 
 		rc = vos_obj_zc_sgl_at(fctx->dfc_ioh, j, &psg);
 		if (rc != 0) {
-			D__ERROR("vos_obj_zc_sgl_at returned %d\n", rc);
+			D_ERROR("vos_obj_zc_sgl_at returned %d\n", rc);
 			break;
 		}
 		ptmp->dki_sgs[j].sg_nr_out   = psg->sg_nr_out;
@@ -743,7 +743,7 @@ tier_proc_akey(void *ctx, vos_iter_entry_t *ie)
 				p->iod_size = dei->del_recs[j].der_rsize;
 				p->iod_type = dei->del_recs[j].der_type;
 			} else if (p->iod_size != dei->del_recs[j].der_rsize) {
-				D__ERROR("mutilple sizes %lu  %lu\n",
+				D_ERROR("mutilple sizes %lu  %lu\n",
 					p->iod_size,
 					dei->del_recs[j].der_rsize);
 			}

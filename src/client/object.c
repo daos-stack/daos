@@ -30,7 +30,7 @@ int
 daos_obj_class_register(daos_handle_t coh, daos_oclass_id_t cid,
 			daos_oclass_attr_t *cattr, daos_event_t *ev)
 {
-	D__ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 
@@ -38,7 +38,7 @@ int
 daos_obj_class_query(daos_handle_t coh, daos_oclass_id_t cid,
 		     daos_oclass_attr_t *cattr, daos_event_t *ev)
 {
-	D__ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 
@@ -46,7 +46,7 @@ int
 daos_obj_class_list(daos_handle_t coh, daos_oclass_list_t *clist,
 		    daos_hash_out_t *anchor, daos_event_t *ev)
 {
-	D__ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 
@@ -54,7 +54,7 @@ int
 daos_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		 daos_obj_attr_t *oa, daos_event_t *ev)
 {
-	D__ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 
@@ -128,14 +128,14 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_epoch_t epoch, unsigned int nr,
 	int			 rc;
 
 	if (dkeys == NULL) {
-		D__ERROR("NULL dkeys\n");
+		D_ERROR("NULL dkeys\n");
 		return -DER_INVAL;
 	} else if (nr != 1) {
 		/* TODO: create multiple tasks for punch of multiple dkeys */
-		D__ERROR("Can't punch multiple dkeys for now\n");
+		D_ERROR("Can't punch multiple dkeys for now\n");
 		return -DER_INVAL;
 	} else if (dkeys[0].iov_buf == NULL || dkeys[0].iov_len == 0) {
-		D__ERROR("invalid dkey (NULL iov_buf or zero iov_len.\n");
+		D_ERROR("invalid dkey (NULL iov_buf or zero iov_len.\n");
 		return -DER_INVAL;
 	}
 
@@ -186,7 +186,7 @@ int
 daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
 	       d_rank_list_t *ranks, daos_event_t *ev)
 {
-	D__ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 

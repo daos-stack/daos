@@ -228,7 +228,7 @@ ts_add_rect(char *args)
 
 	rc = evt_insert_sgl(ts_toh, ts_uuid, 0, &rect, val ? 1 : 0, &sgl);
 	if (rc != 0)
-		D__FATAL("Add rect failed %d\n", rc);
+		D_FATAL("Add rect failed %d\n", rc);
 
 	return rc;
 }
@@ -253,7 +253,7 @@ ts_find_rect(char *args)
 	evt_ent_list_init(&enlist);
 	rc = evt_find(ts_toh, &rect, &enlist);
 	if (rc != 0)
-		D__FATAL("Add rect failed %d\n", rc);
+		D_FATAL("Add rect failed %d\n", rc);
 
 	evt_ent_list_for_each(ent, &enlist) {
 		D__PRINT("Find rect "DF_RECT", val=%s\n",
@@ -404,7 +404,7 @@ ts_many_add(char *args)
 
 		rc = evt_insert_sgl(ts_toh, ts_uuid, 0, &rect, 1, &sgl);
 		if (rc != 0) {
-			D__FATAL("Add rect %d failed %d\n", i, rc);
+			D_FATAL("Add rect %d failed %d\n", i, rc);
 			break;
 		}
 	}

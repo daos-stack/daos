@@ -157,7 +157,7 @@ obj_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		umem_attr_get(&tins->ti_umm, &uma);
 		rc = dbtree_open_inplace(&vobj->vo_tree, &uma, &toh);
 		if (rc != 0)
-			D__ERROR("Failed to open KV tree: %d\n", rc);
+			D_ERROR("Failed to open KV tree: %d\n", rc);
 		else
 			dbtree_destroy(toh);
 	}
@@ -227,7 +227,7 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	int			rc;
 
 	if (!cont->vc_otab_df) {
-		D__ERROR("Object index cannot be empty\n");
+		D_ERROR("Object index cannot be empty\n");
 		return -DER_NONEXIST;
 	}
 
@@ -274,7 +274,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 
 	rc = dbtree_update(cont->vc_btr_hdl, &key_iov, &val_iov);
 	if (rc) {
-		D__ERROR("Failed to update Key for Object index\n");
+		D_ERROR("Failed to update Key for Object index\n");
 		return rc;
 	}
 
@@ -327,7 +327,7 @@ oiter_fini(struct vos_iterator *iter)
 	if (!daos_handle_is_inval(oid_iter->oit_hdl)) {
 		rc = dbtree_iter_finish(oid_iter->oit_hdl);
 		if (rc)
-			D__ERROR("oid_iter_fini failed:%d\n", rc);
+			D_ERROR("oid_iter_fini failed:%d\n", rc);
 	}
 
 	if (oid_iter->oit_cont != NULL)
@@ -346,7 +346,7 @@ oiter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	int			rc = 0;
 
 	if (type != VOS_ITER_OBJ) {
-		D__ERROR("Expected Type: %d, got %d\n",
+		D_ERROR("Expected Type: %d, got %d\n",
 			VOS_ITER_OBJ, type);
 		return -DER_INVAL;
 	}
@@ -510,7 +510,7 @@ oiter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	daos_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oid_iter->oit_hdl, NULL, &rec_iov, anchor);
 	if (rc != 0) {
-		D__ERROR("Error while fetching oid info\n");
+		D_ERROR("Error while fetching oid info\n");
 		return rc;
 	}
 
@@ -539,7 +539,7 @@ oiter_delete(struct vos_iterator *iter, void *args)
 		rc = dbtree_iter_delete(oiter->oit_hdl, args);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D__ERROR("Failed to delete oid entry: %d\n", rc);
+		D_ERROR("Failed to delete oid entry: %d\n", rc);
 	} TX_END
 	D_EXIT;
 
@@ -569,7 +569,7 @@ vos_obj_tab_register()
 
 	rc = dbtree_class_register(VOS_BTR_OBJ_TABLE, 0, &voi_ops);
 	if (rc)
-		D__ERROR("dbtree create failed\n");
+		D_ERROR("dbtree create failed\n");
 	return rc;
 }
 
@@ -582,7 +582,7 @@ vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 	struct btr_root			*oi_root = NULL;
 
 	if (!pool || !otab_df) {
-		D__ERROR("Invalid handle\n");
+		D_ERROR("Invalid handle\n");
 		return -DER_INVAL;
 	}
 
@@ -596,7 +596,7 @@ vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 					   OT_BTREE_ORDER, &pool->vp_uma,
 					   &otab_df->obt_btr, &btr_hdl);
 		if (rc)
-			D__ERROR("dbtree create failed\n");
+			D_ERROR("dbtree create failed\n");
 		dbtree_close(btr_hdl);
 	}
 	return rc;
@@ -609,19 +609,19 @@ vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 	daos_handle_t			btr_hdl;
 
 	if (!pool || !otab_df) {
-		D__ERROR("Invalid handle\n");
+		D_ERROR("Invalid handle\n");
 		return -DER_INVAL;
 	}
 
 	rc = dbtree_open_inplace(&otab_df->obt_btr, &pool->vp_uma, &btr_hdl);
 	if (rc) {
-		D__ERROR("No Object handle, Tree open failed\n");
+		D_ERROR("No Object handle, Tree open failed\n");
 		D__GOTO(exit, rc = -DER_NONEXIST);
 	}
 
 	rc = dbtree_destroy(btr_hdl);
 	if (rc)
-		D__ERROR("OI BTREE destroy failed\n");
+		D_ERROR("OI BTREE destroy failed\n");
 exit:
 	return rc;
 }

@@ -47,19 +47,19 @@ dc_tier_conn_cb(tse_task_t *task, void *data)
 
 	/*Check for task error*/
 	if (rc) {
-		D__ERROR("Task error in Cross-conn: %d\n", rc);
+		D_ERROR("Task error in Cross-conn: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
 	/*Check return status of the RPC itself (i.e. what did the server say)*/
 	rc = cco_out->cco_ret;
 	if (rc) {
-		D__ERROR("Cross-Conn error: %d\n", rc);
+		D_ERROR("Cross-Conn error: %d\n", rc);
 		D__GOTO(out, rc);
 	}
 
 	/* Info as its a onetime per run call*/
-	D__INFO("Warm-Cold Connection Complete!\n");
+	D_INFO("Warm-Cold Connection Complete!\n");
 
 out:
 	crt_req_decref(tc_arg->rpc);
@@ -77,19 +77,19 @@ dc_tier_register_cold_cb(tse_task_t *task, void *data)
 
 	/*Check for task  error*/
 	if (rc) {
-		D__ERROR("Task error from dc_tier_register_cold: %d\n", rc);
-		D__GOTO(out, rc);
+		D_ERROR("Task error from dc_tier_register_cold: %d\n", rc);
+		D_GOTO(out, rc);
 	}
 
 	/*Check return status of the RPC itself (i.e. what did the server say)*/
 	rc = uo_out->uo_ret;
 	if (rc) {
-		D__ERROR("Tier register cold error: %d\n", rc);
-		D__GOTO(out, rc);
+		D_ERROR("Tier register cold error: %d\n", rc);
+		D_GOTO(out, rc);
 	}
 
 	/*info as its a onetime per run call*/
-	D__INFO("Tier Register Cold CB Complete!!\n");
+	D_INFO("Tier Register Cold CB Complete!!\n");
 
 out:
 	crt_req_decref(trc_arg->rpc);
@@ -119,7 +119,7 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 			     &rpc_req);
 
 	if (rc != 0) {
-		D__ERROR("crt_req_create(TIER_CROSS_CONN) failed, rc: %d.\n",
+		D_ERROR("crt_req_create(TIER_CROSS_CONN) failed, rc: %d.\n",
 			rc);
 		D__GOTO(out_final, rc);
 	}
@@ -149,7 +149,7 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 	rc = tse_task_register_comp_cb(task, dc_tier_conn_cb, tc_arg,
 				       sizeof(struct tier_conn_arg));
 	if (rc) {
-		D__ERROR("Failed to register task callback.\n");
+		D_ERROR("Failed to register task callback.\n");
 		D__GOTO(out_decref, rc);
 	}
 	/*Send the RPC*/

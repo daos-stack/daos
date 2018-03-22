@@ -441,7 +441,7 @@ recx_max_iter_probe(int opc, vos_iter_entry_t *ent, vos_iter_entry_t *ent_max,
 	}
 
 	if (rc != 0) {
-		D__ERROR("%s max-iterator failed to %s: %d\n",
+		D_ERROR("%s max-iterator failed to %s: %d\n",
 			vos_iter_type2name(VOS_ITER_SINGLE), opstr, rc);
 	}
 	return rc;
@@ -495,7 +495,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 	}
 
 	if (rc != 0) {
-		D__ERROR("Failed to create %s iterator: %d\n",
+		D_ERROR("Failed to create %s iterator: %d\n",
 			pcx_name(pcx), rc);
 		return rc;
 	}
@@ -509,7 +509,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		}
 
 		if (rc != 0) {
-			D__ERROR("Failed to create %s max_iterator: %d\n",
+			D_ERROR("Failed to create %s max_iterator: %d\n",
 				pcx_name(pcx), rc);
 			return rc;
 		}
@@ -570,7 +570,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		}
 
 		if (rc != 0) {
-			D__ERROR("%s iterator failed to %s: %d\n",
+			D_ERROR("%s iterator failed to %s: %d\n",
 				pcx_name(pcx), opstr, rc);
 			D__GOTO(out, rc);
 		}
@@ -652,7 +652,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 			}
 		} TX_ONABORT {
 			rc = umem_tx_errno(rc);
-			D__ERROR("failed to delete: %d\n", rc);
+			D_ERROR("failed to delete: %d\n", rc);
 		} TX_END
 
 		if (rc != 0)
@@ -703,7 +703,7 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 	}
 
 	if (rc != 0) {
-		D__ERROR("Failed to create %s iterator: %d\n",
+		D_ERROR("Failed to create %s iterator: %d\n",
 			pcx_name(pcx), rc);
 		return rc;
 	}
@@ -739,7 +739,7 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 		}
 
 		if (rc != 0) {
-			D__ERROR("%s iterator failed to %s: %d\n",
+			D_ERROR("%s iterator failed to %s: %d\n",
 				pcx_name(pcx), opstr, rc);
 			D__GOTO(out, rc);
 		}
@@ -780,7 +780,7 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 			}
 		} TX_ONABORT {
 			rc = umem_tx_errno(rc);
-			D__ERROR("failed to delete:%d\n", rc);
+			D_ERROR("failed to delete:%d\n", rc);
 		} TX_END
 
 		if (rc != 0)
@@ -864,12 +864,12 @@ vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
 		DP_OID(oid.id_pub), epr->epr_lo, epr->epr_hi);
 
 	if (epr->epr_hi < epr->epr_lo) {
-		D__ERROR("range::epr_lo cannot be lesser than range::epr_hi\n");
+		D_ERROR("range::epr_lo cannot be lesser than range::epr_hi\n");
 		return -DER_INVAL;
 	}
 
 	if (!purge_anchor_is_valid(anchor)) {
-		D__ERROR("Invalid anchor provided\n");
+		D_ERROR("Invalid anchor provided\n");
 		return -DER_INVAL;
 	}
 

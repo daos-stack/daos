@@ -287,7 +287,7 @@ daos_csum_supported(const char *cs_name)
 		if (!strcasecmp(dict->cs_name, cs_name))
 			return true;
 	}
-	D__ERROR("Unsuppprted checksum type: %s\n", cs_name);
+	D_ERROR("Unsuppprted checksum type: %s\n", cs_name);
 	return false;
 }
 
