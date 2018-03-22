@@ -1158,7 +1158,9 @@ int
 crt_register_eviction_cb(crt_eviction_cb cb, void *arg);
 
 /**
- * Retrieve the PSR candidate list for \a tgt_grp.
+ * Retrieve the PSR candidate list for \a tgt_grp.  There is guaranteed to be
+ * at least one PSR returned in the \a psr_cand list.
+ *
  * \param tgt_grp [IN]		The remote group
  * \param psr_cand [OUT]	The PSR candidate list for \a tgt_grp. The first
  *				entry of psr_cand is the current PSR. The rest
@@ -1166,6 +1168,7 @@ crt_register_eviction_cb(crt_eviction_cb cb, void *arg);
  *				crt_rank_list_free() to free the memory after
  *				using it.
  * \return			0 on success, negative value on error.
+ * \retval			-DER_NONEXIST No active PSRs.
  */
 int
 crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand);

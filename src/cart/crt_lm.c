@@ -1392,10 +1392,11 @@ out:
 int
 crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 {
-	struct lm_grp_priv_t		*lm_grp_priv;
-	bool				 evicted;
-	int				 i;
-	int				 rc = 0;
+	struct lm_grp_priv_t	*lm_grp_priv;
+	d_rank_list_t		*new_list = NULL;
+	bool			 evicted;
+	int			 i;
+	int			 rc;
 
 	if (tgt_grp == NULL) {
 		D_ERROR("tgt_grp can't be NULL.\n");
@@ -1405,6 +1406,7 @@ crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 		D_ERROR("psr_cand can't be NULL.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+	*psr_cand = NULL;
 	if (crt_grp_is_local(tgt_grp)) {
 		D_ERROR("tgt_grp can't be a local group.\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -1415,8 +1417,8 @@ crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 	D_RWLOCK_UNLOCK(&crt_lm_gdata.clg_rwlock);
 	D_ASSERT(lm_grp_priv != NULL);
 
-	*psr_cand = d_rank_list_alloc(0);
-	if (*psr_cand == NULL) {
+	new_list = d_rank_list_alloc(0);
+	if (new_list == NULL) {
 		D_ERROR("d_rank_list_alloc(0) failed\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -1427,7 +1429,7 @@ crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 				lm_grp_priv->lgp_psr_cand[i].pc_rank);
 		if (evicted)
 			continue;
-		rc = d_rank_list_append(*psr_cand,
+		rc = d_rank_list_append(new_list,
 					lm_grp_priv->lgp_psr_cand[i].pc_rank);
 		if (rc != 0) {
 			D_ERROR("d_rank_list_append() failed, rc: %d\n", rc);
@@ -1436,10 +1438,15 @@ crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 		}
 	}
 	D_RWLOCK_UNLOCK(&lm_grp_priv->lgp_rwlock);
-	if (rc != 0)
-		D_ERROR("d_rank_list_dup() failed, group: %s, rc: %d\n",
-			tgt_grp->cg_grpid, rc);
+	if (new_list->rl_nr == 0)
+		D_GOTO(out, rc = -DER_NONEXIST);
 
+	*psr_cand = new_list;
+
+	return 0;
 out:
+	if (new_list)
+		d_rank_list_free(new_list);
+
 	return rc;
 }
