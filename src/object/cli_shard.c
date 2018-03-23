@@ -134,50 +134,6 @@ obj_shard_rw_bulk_fini(crt_rpc_t *rpc)
 	orw->orw_bulks.ca_count = 0;
 }
 
-static int
-dc_obj_shard_sgl_copy(daos_sg_list_t *dst_sgl, uint32_t dst_nr,
-		      daos_sg_list_t *src_sgl, uint32_t src_nr)
-{
-	int i;
-	int j;
-
-	if (src_nr > dst_nr) {
-		D_ERROR("%u > %u\n", src_nr, dst_nr);
-		return -DER_INVAL;
-	}
-
-	for (i = 0; i < src_nr; i++) {
-		if (src_sgl[i].sg_nr == 0)
-			continue;
-
-		if (src_sgl[i].sg_nr > dst_sgl[i].sg_nr) {
-			D_ERROR("%d : %u > %u\n", i,
-				src_sgl[i].sg_nr, dst_sgl[i].sg_nr);
-			return -DER_INVAL;
-		}
-
-		dst_sgl[i].sg_nr_out = src_sgl[i].sg_nr_out;
-		for (j = 0; j < src_sgl[i].sg_nr_out; j++) {
-			if (src_sgl[i].sg_iovs[j].iov_len == 0)
-				continue;
-
-			if (src_sgl[i].sg_iovs[j].iov_len >
-			    dst_sgl[i].sg_iovs[j].iov_buf_len) {
-				D_ERROR("%d:%d "DF_U64" > "DF_U64"\n",
-					i, j, src_sgl[i].sg_iovs[j].iov_len,
-					src_sgl[i].sg_iovs[j].iov_buf_len);
-				return -DER_INVAL;
-			}
-			memcpy(dst_sgl[i].sg_iovs[j].iov_buf,
-			       src_sgl[i].sg_iovs[j].iov_buf,
-			       src_sgl[i].sg_iovs[j].iov_len);
-			dst_sgl[i].sg_iovs[j].iov_len =
-				src_sgl[i].sg_iovs[j].iov_len;
-		}
-	}
-	return 0;
-}
-
 struct obj_rw_args {
 	crt_rpc_t	*rpc;
 	daos_handle_t	*hdlp;
@@ -253,10 +209,10 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 		if (orwo->orw_sgls.ca_count > 0) {
 			/* inline transfer */
-			rc = dc_obj_shard_sgl_copy(rw_args->rwaa_sgls,
-						   rw_args->rwaa_nr,
-						   orwo->orw_sgls.ca_arrays,
-						   orwo->orw_sgls.ca_count);
+			rc = daos_sgls_copy_data_out(rw_args->rwaa_sgls,
+						     rw_args->rwaa_nr,
+						     orwo->orw_sgls.ca_arrays,
+						     orwo->orw_sgls.ca_count);
 		} else if (rw_args->rwaa_sgls != NULL) {
 			/* for bulk transfer it needs to update sg_nr_out */
 			daos_sg_list_t *sgls = rw_args->rwaa_sgls;
@@ -753,8 +709,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	enum_anchor_set_tag(enum_args->eaa_anchor, tgt_tag);
 
 	if (oeo->oeo_sgl.sg_nr > 0 && oeo->oeo_sgl.sg_iovs != NULL)
-		rc = dc_obj_shard_sgl_copy(enum_args->eaa_sgl, 1, &oeo->oeo_sgl,
-					   1);
+		rc = daos_sgl_copy_data_out(enum_args->eaa_sgl, &oeo->oeo_sgl);
 
 out:
 	if (enum_args->eaa_obj != NULL)

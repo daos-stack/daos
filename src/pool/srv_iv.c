@@ -39,8 +39,7 @@ pool_iv_ent_size(int nr)
 }
 
 static int
-pool_iv_ent_alloc(struct ds_iv_key *iv_key, void *data,
-		  d_sg_list_t *sgl)
+pool_iv_value_alloc_internal(d_sg_list_t *sgl)
 {
 	uint32_t	buf_size;
 	uint32_t	pool_nr;
@@ -66,13 +65,29 @@ free:
 }
 
 static int
-pool_iv_ent_get(struct ds_iv_entry *entry)
+pool_iv_ent_init(struct ds_iv_key *iv_key, void *data,
+		 struct ds_iv_entry *entry)
+{
+	int	rc;
+
+	rc = pool_iv_value_alloc_internal(&entry->iv_value);
+	if (rc)
+		return rc;
+
+	entry->iv_key.class_id = iv_key->class_id;
+	entry->iv_key.rank = iv_key->rank;
+
+	return rc;
+}
+
+static int
+pool_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 {
 	return 0;
 }
 
 static int
-pool_iv_ent_put(struct ds_iv_entry *entry)
+pool_iv_ent_put(struct ds_iv_entry *entry, void **priv)
 {
 	return 0;
 }
@@ -121,19 +136,19 @@ pool_iv_ent_copy(d_sg_list_t *dst, d_sg_list_t *src)
 }
 
 static int
-pool_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src)
+pool_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 {
 	return pool_iv_ent_copy(dst, src);
 }
 
 static int
-pool_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src)
+pool_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 {
 	return pool_iv_ent_copy(dst, src);
 }
 
 static int
-pool_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src)
+pool_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 {
 	struct pool_iv_entry	*dst_iv = dst->sg_iovs[0].iov_buf;
 	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
@@ -161,14 +176,21 @@ pool_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src)
 	return rc;
 }
 
-struct ds_iv_entry_ops pool_iv_ops = {
-	.iv_ent_alloc	= pool_iv_ent_alloc,
-	.iv_ent_get	= pool_iv_ent_get,
-	.iv_ent_put	= pool_iv_ent_put,
-	.iv_ent_destroy = pool_iv_ent_destroy,
-	.iv_ent_fetch	= pool_iv_ent_fetch,
-	.iv_ent_update	= pool_iv_ent_update,
-	.iv_ent_refresh = pool_iv_ent_refresh
+static int
+pool_iv_value_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
+{
+	return pool_iv_value_alloc_internal(sgl);
+}
+
+struct ds_iv_class_ops pool_iv_ops = {
+	.ivc_ent_init	= pool_iv_ent_init,
+	.ivc_ent_get	= pool_iv_ent_get,
+	.ivc_ent_put	= pool_iv_ent_put,
+	.ivc_ent_destroy = pool_iv_ent_destroy,
+	.ivc_ent_fetch	= pool_iv_ent_fetch,
+	.ivc_ent_update	= pool_iv_ent_update,
+	.ivc_ent_refresh = pool_iv_ent_refresh,
+	.ivc_value_alloc = pool_iv_value_alloc,
 };
 
 int
@@ -187,7 +209,7 @@ pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
-	rc = ds_iv_fetch(ns, IV_POOL_MAP, &sgl);
+	rc = ds_iv_fetch(ns, IV_POOL_MAP, NULL, &sgl);
 	if (rc)
 		D_ERROR("iv fetch failed %d\n", rc);
 
@@ -210,7 +232,7 @@ pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
-	rc = ds_iv_update(ns, IV_POOL_MAP, &sgl, shortcut, sync_mode);
+	rc = ds_iv_update(ns, IV_POOL_MAP, NULL, &sgl, shortcut, sync_mode, 0);
 	if (rc)
 		D_ERROR("iv update failed %d\n", rc);
 
@@ -220,16 +242,11 @@ pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
 int
 ds_pool_iv_init(void)
 {
-	int rc;
-
-	rc = ds_iv_key_type_register(IV_POOL_MAP, &pool_iv_ops);
-
-	return rc;
+	return ds_iv_class_register(IV_POOL_MAP, &iv_cache_ops, &pool_iv_ops);
 }
 
 int
 ds_pool_iv_fini(void)
 {
-	ds_iv_key_type_unregister(IV_POOL_MAP);
-	return 0;
+	return ds_iv_class_unregister(IV_POOL_MAP);
 }

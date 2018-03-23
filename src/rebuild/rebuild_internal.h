@@ -213,7 +213,6 @@ struct rebuild_iv {
 	int		riv_status;
 };
 
-extern struct ds_iv_entry_ops rebuild_iv_ops;
 extern struct dss_module_key rebuild_module_key;
 static inline struct rebuild_tls *
 rebuild_tls_get()
@@ -238,6 +237,8 @@ int rebuild_iv_update(void *ns, struct rebuild_iv *rebuild_iv,
 int rebuild_iv_ns_create(struct ds_pool *pool, uint32_t map_ver,
 			 d_rank_list_t *exclude_tgts,
 			 unsigned int master_rank);
+int rebuild_iv_init(void);
+int rebuild_iv_fini(void);
 
 void
 rebuild_tgt_status_check(void *arg);

@@ -1565,7 +1565,8 @@ init(void)
 	rc = ABT_mutex_create(&rebuild_gst.rg_lock);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
-	rc = ds_iv_key_type_register(IV_REBUILD, &rebuild_iv_ops);
+
+	rc = rebuild_iv_init();
 	return rc;
 }
 
@@ -1576,7 +1577,8 @@ fini(void)
 		ABT_cond_free(&rebuild_gst.rg_stop_cond);
 
 	ABT_mutex_free(&rebuild_gst.rg_lock);
-	ds_iv_key_type_unregister(IV_REBUILD);
+
+	rebuild_iv_fini();
 	return 0;
 }
 

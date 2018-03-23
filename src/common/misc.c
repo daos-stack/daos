@@ -65,23 +65,91 @@ daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 	memset(sgl, 0, sizeof(*sgl));
 }
 
-int
-daos_sgl_copy(d_sg_list_t *dst, d_sg_list_t *src)
+static int
+daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
+			d_sg_list_t *src_sgl, uint32_t src_nr,
+			bool copy_data, bool by_out)
 {
-	int rc;
+	int i;
 
-	if (dst->sg_iovs == NULL) {
-		rc = daos_sgl_init(dst, src->sg_nr);
-		if (rc)
-			return rc;
+	if (src_nr > dst_nr) {
+		D_ERROR("%u > %u\n", src_nr, dst_nr);
+		return -DER_INVAL;
 	}
 
-	D_ASSERT(dst->sg_nr <= src->sg_nr);
+	for (i = 0; i < src_nr; i++) {
+		int num;
 
-	memcpy(dst->sg_iovs, src->sg_iovs,
-	       dst->sg_nr * sizeof(*dst->sg_iovs));
+		if (by_out)
+			num = src_sgl[i].sg_nr_out;
+		else
+			num = src_sgl[i].sg_nr;
 
+		if (num == 0)
+			continue;
+
+		if (src_sgl[i].sg_nr > dst_sgl[i].sg_nr) {
+			D_ERROR("%d : %u > %u\n", i,
+				src_sgl[i].sg_nr, dst_sgl[i].sg_nr);
+			return -DER_INVAL;
+		}
+
+		if (by_out)
+			dst_sgl[i].sg_nr_out = num;
+
+		if (copy_data) {
+			int j;
+
+			/* only copy data */
+			for (j = 0; j < num; j++) {
+				if (src_sgl[i].sg_iovs[j].iov_len == 0)
+					continue;
+
+				if (src_sgl[i].sg_iovs[j].iov_len >
+				    dst_sgl[i].sg_iovs[j].iov_buf_len) {
+					D_ERROR("%d:%d "DF_U64" > "DF_U64"\n",
+					   i, j, src_sgl[i].sg_iovs[j].iov_len,
+					   src_sgl[i].sg_iovs[j].iov_buf_len);
+					return -DER_INVAL;
+				}
+				memcpy(dst_sgl[i].sg_iovs[j].iov_buf,
+				       src_sgl[i].sg_iovs[j].iov_buf,
+				       src_sgl[i].sg_iovs[j].iov_len);
+				dst_sgl[i].sg_iovs[j].iov_len =
+					src_sgl[i].sg_iovs[j].iov_len;
+			}
+		} else {
+			/* only copy the pointer */
+			memcpy(dst_sgl[i].sg_iovs, src_sgl[i].sg_iovs,
+			       num * sizeof(*dst_sgl[i].sg_iovs));
+		}
+	}
 	return 0;
+}
+
+int
+daos_sgl_copy_ptr(d_sg_list_t *dst, d_sg_list_t *src)
+{
+	return daos_sgls_copy_internal(dst, 1, src, 1, false, false);
+}
+
+int
+daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
+		       int src_nr)
+{
+	return daos_sgls_copy_internal(dst, dst_nr, src, src_nr, true, true);
+}
+
+int
+daos_sgl_copy_data_out(d_sg_list_t *dst, d_sg_list_t *src)
+{
+	return daos_sgls_copy_internal(dst, 1, src, 1, true, true);
+}
+
+int
+daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src)
+{
+	return daos_sgls_copy_internal(dst, 1, src, 1, true, false);
 }
 
 daos_size_t

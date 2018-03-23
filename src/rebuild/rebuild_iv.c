@@ -63,20 +63,28 @@ free:
 }
 
 static int
-rebuild_iv_ent_alloc(struct ds_iv_key *iv_key, void *data,
-		     d_sg_list_t *sgl)
+rebuild_iv_ent_init(struct ds_iv_key *iv_key, void *data,
+		    struct ds_iv_entry *entry)
 {
-	return rebuild_iv_alloc_internal(sgl);
+	int rc;
+
+	rc = rebuild_iv_alloc_internal(&entry->iv_value);
+	if (rc)
+		return rc;
+
+	entry->iv_key.class_id = iv_key->class_id;
+	entry->iv_key.rank = iv_key->rank;
+	return 0;
 }
 
 static int
-rebuild_iv_ent_get(struct ds_iv_entry *entry)
+rebuild_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 {
 	return 0;
 }
 
 static int
-rebuild_iv_ent_put(struct ds_iv_entry *entry)
+rebuild_iv_ent_put(struct ds_iv_entry *entry, void **priv)
 {
 	return 0;
 }
@@ -89,7 +97,7 @@ rebuild_iv_ent_destroy(d_sg_list_t *sgl)
 }
 
 static int
-rebuild_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src)
+rebuild_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 {
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
@@ -110,7 +118,7 @@ rebuild_iv_ent_fetch(d_sg_list_t *dst, d_sg_list_t *src)
 
 /* Update the rebuild status from leaves to the master */
 static int
-rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src)
+rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 {
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
@@ -126,7 +134,7 @@ rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src)
 		src_iv->riv_master_rank);
 
 	if (rank != src_iv->riv_master_rank)
-		return 0;
+		return -DER_IVCB_FORWARD;
 
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
@@ -160,7 +168,7 @@ rebuild_iv_ent_update(d_sg_list_t *dst, d_sg_list_t *src)
 
 /* Distribute the rebuild uuid/master rank from master to leaves */
 static int
-rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src)
+rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 {
 	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
@@ -189,14 +197,21 @@ rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src)
 	return 0;
 }
 
-struct ds_iv_entry_ops rebuild_iv_ops = {
-	.iv_ent_alloc	= rebuild_iv_ent_alloc,
-	.iv_ent_get	= rebuild_iv_ent_get,
-	.iv_ent_put	= rebuild_iv_ent_put,
-	.iv_ent_destroy	= rebuild_iv_ent_destroy,
-	.iv_ent_fetch	= rebuild_iv_ent_fetch,
-	.iv_ent_update	= rebuild_iv_ent_update,
-	.iv_ent_refresh = rebuild_iv_ent_refresh,
+static int
+rebuild_iv_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
+{
+	return rebuild_iv_alloc_internal(sgl);
+}
+
+struct ds_iv_class_ops rebuild_iv_ops = {
+	.ivc_ent_init		= rebuild_iv_ent_init,
+	.ivc_ent_get		= rebuild_iv_ent_get,
+	.ivc_ent_put		= rebuild_iv_ent_put,
+	.ivc_ent_destroy	= rebuild_iv_ent_destroy,
+	.ivc_ent_fetch		= rebuild_iv_ent_fetch,
+	.ivc_ent_update		= rebuild_iv_ent_update,
+	.ivc_ent_refresh	= rebuild_iv_ent_refresh,
+	.ivc_value_alloc	= rebuild_iv_alloc,
 };
 
 int
@@ -214,7 +229,7 @@ rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
 
-	rc = ds_iv_fetch(ns, IV_REBUILD, &sgl);
+	rc = ds_iv_fetch(ns, IV_REBUILD, NULL, &sgl);
 	if (rc)
 		D_ERROR("iv fetch failed %d\n", rc);
 
@@ -235,9 +250,21 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
-	rc = ds_iv_update(ns, IV_REBUILD, &sgl, shortcut, sync_mode);
+	rc = ds_iv_update(ns, IV_REBUILD, NULL, &sgl, shortcut, sync_mode, 0);
 	if (rc)
 		D_ERROR("iv update failed %d\n", rc);
 
 	return rc;
+}
+
+int
+rebuild_iv_init(void)
+{
+	return ds_iv_class_register(IV_REBUILD, &iv_cache_ops, &rebuild_iv_ops);
+}
+
+int
+rebuild_iv_fini(void)
+{
+	return ds_iv_class_unregister(IV_REBUILD);
 }
