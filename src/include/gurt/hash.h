@@ -35,6 +35,11 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/**
+ * \file
+ *
+ * Generic Hash Table APIs & data structures
+ */
 
 #ifndef __GURT_HASH_H__
 #define __GURT_HASH_H__
@@ -63,16 +68,16 @@ extern "C" {
 
 typedef struct {
 	/**
-	 * Compare @key with the key of the record @rlink
+	 * Compare \p key with the key of the record \p rlink
 	 * This member function is mandatory.
 	 *
-	 * \return	true	The key of the record equals to @key.
+	 * \return	true	The key of the record equals to \p key.
 	 *		false	Not match
 	 */
 	bool	 (*hop_key_cmp)(struct d_hash_table *htable, d_list_t *rlink,
 				const void *key, unsigned int ksize);
 	/**
-	 * Optional, generate a key for the record @rlink.
+	 * Optional, generate a key for the record \p rlink.
 	 *
 	 * This function is called before inserting a record w/o key into a
 	 * hash table.
@@ -83,7 +88,7 @@ typedef struct {
 	void	 (*hop_key_init)(struct d_hash_table *htable,
 				 d_list_t *rlink, void *arg);
 	/**
-	 * Optional, return the key of record @rlink to @key_pp, and size of
+	 * Optional, return the key of record \p rlink to \p key_pp, and size of
 	 * the key as the returned value.
 	 *
 	 * \param rlink  [IN]	The link chain of the record being queried.
@@ -94,13 +99,13 @@ typedef struct {
 	int	 (*hop_key_get)(struct d_hash_table *htable, d_list_t *rlink,
 				void **key_pp);
 	/**
-	 * Optional, hash @key to a 32-bit value.
+	 * Optional, hash \p key to a 32-bit value.
 	 * DJB2 hash is used when this function is abscent.
 	 */
 	uint32_t (*hop_key_hash)(struct d_hash_table *htable, const void *key,
 				 unsigned int ksize);
 	/**
-	 * Optional, increase refcount on the record @rlink
+	 * Optional, increase refcount on the record \p rlink
 	 * If this function is provided, it will be called for successfully
 	 * inserted record.
 	 *
@@ -109,7 +114,7 @@ typedef struct {
 	void	 (*hop_rec_addref)(struct d_hash_table *htable,
 				   d_list_t *rlink);
 	/**
-	 * Optional, release refcount on the record @rlink
+	 * Optional, release refcount on the record \p rlink
 	 *
 	 * If this function is provided, it is called while deleting a record
 	 * from the hash table.
@@ -129,7 +134,7 @@ typedef struct {
 	bool	 (*hop_rec_decref)(struct d_hash_table *htable,
 				   d_list_t *rlink);
 	/**
-	 * Optional, free the record @rlink
+	 * Optional, free the record \p rlink
 	 * It is called if hop_decref() returns zero.
 	 *
 	 * \param rlink	[IN]	The record being freed.
@@ -290,7 +295,7 @@ int  d_hash_table_destroy(struct d_hash_table *htable, bool force);
 int  d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force);
 
 /**
- * lookup @key in the hash table, the found chain rlink is returned on
+ * lookup \p key in the hash table, the found chain rlink is returned on
  * success.
  *
  * \param htable	[IN]	Pointer to the hash table
@@ -301,9 +306,9 @@ d_list_t *d_hash_rec_find(struct d_hash_table *htable, const void *key,
 			  unsigned int ksize);
 
 /**
- * Lookup @key in the hash table, if there is a matched record, it should be
- * returned, otherwise @rlink will be inserted into the hash table. In the
- * later case, the returned link chain is the input @rlink.
+ * Lookup \p key in the hash table, if there is a matched record, it should be
+ * returned, otherwise \p rlink will be inserted into the hash table. In the
+ * later case, the returned link chain is the input \p rlink.
  *
  * \param htable	[IN]	Pointer to the hash table
  * \param key		[IN]	The key to be inserted
@@ -315,11 +320,11 @@ d_list_t *d_hash_rec_find_insert(struct d_hash_table *htable,
 				 d_list_t *rlink);
 
 /**
- * Insert a new key and its record chain @rlink into the hash table. The hash
+ * Insert a new key and its record chain \p rlink into the hash table. The hash
  * table holds a refcount on the successfully inserted record, it releases the
  * refcount while deleting the record.
  *
- * If @exclusive is true, it can succeed only if the key is unique, otherwise
+ * If \p exclusive is true, it can succeed only if the key is unique, otherwise
  * this function returns error.
  *
  * \param htable	[IN]	Pointer to the hash table
@@ -345,20 +350,20 @@ int  d_hash_rec_insert_anonym(struct d_hash_table *htable, d_list_t *rlink,
 			       void *arg);
 
 /**
- * Delete the record identified by @key from the hash table.
+ * Delete the record identified by \p key from the hash table.
  *
  * \param htable	[IN]	Pointer to the hash table
  * \param key		[IN]	The key of the record being deleted
  * \param ksize		[IN]	Size of the key
  *
- * return		True	Item with @key has been deleted
- *			False	Can't find the record by @key
+ * return		True	Item with \p key has been deleted
+ *			False	Can't find the record by \p key
  */
 bool d_hash_rec_delete(struct d_hash_table *htable, const void *key,
 		       unsigned int ksize);
 
 /**
- * Delete the record linked by the chain @rlink.
+ * Delete the record linked by the chain \p rlink.
  * This record will be freed if hop_rec_free() is defined and the hash table
  * holds the last refcount.
  *
@@ -394,7 +399,7 @@ void d_hash_rec_decref(struct d_hash_table *htable, d_list_t *rlink);
  * The record will be freed if hop_decref() returns true.
  *
  * \param htable	[IN]	Pointer to the hash table
- * \param int		[IN]	Number of references to drop
+ * \param count		[IN]	Number of references to drop
  * \param rlink		[IN]	Chain rlink of the hash record
  *
  * \return		0	Success

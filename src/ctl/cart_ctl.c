@@ -291,10 +291,13 @@ out:
 	return rc;
 }
 
+#define NUM_ATTACH_RETRIES 10
+
 int
 ctl_init()
 {
 	int rc;
+	int attach_retries = NUM_ATTACH_RETRIES;
 
 	rc = crt_init("crt_ctl", 0);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
@@ -312,8 +315,20 @@ ctl_init()
 			    ctl_gdata.cg_crt_ctx);
 	D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
 
-	rc = crt_group_attach(ctl_gdata.cg_group_name,
+	/* Attempt to attach up to NUM_ATTACH_RETRIES in case servers
+	 * have not started up yet
+	 */
+	while (attach_retries-- > 0) {
+		rc = crt_group_attach(ctl_gdata.cg_group_name,
 			      &ctl_gdata.cg_target_group);
+		if (rc == 0)
+			break;
+
+		D_DEBUG(DB_TEST, "Attach failed, retries left=%d\n",
+			attach_retries);
+		sleep(1);
+	}
+
 	D_ASSERTF(rc == 0, "crt_group_attach failed, tgt_group: %s rc: %d\n",
 		  ctl_gdata.cg_group_name, rc);
 	D_ASSERTF(ctl_gdata.cg_target_group != NULL,

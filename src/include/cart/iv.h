@@ -36,7 +36,11 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* CaRT (Collective and RPC Transport) IV (Incast Variable) APIs. */
+/**
+ * \file
+ *
+ * CaRT (Collective and RPC Transport) IV (Incast Variable) APIs and types.
+ */
 
 #ifndef __CRT_IV_H__
 #define __CRT_IV_H__
@@ -53,7 +57,13 @@
 extern "C" {
 #endif
 
-/* Local handle for an incast variable namespace */
+/** @defgroup CART_IV CART IV API */
+
+/** @addtogroup CART_IV
+ * @{
+ */
+
+/** Local handle for an incast variable namespace */
 typedef void		*crt_iv_namespace_t;
 
 /**
@@ -73,7 +83,7 @@ typedef uint32_t	crt_iv_ver_t;
 /**
  * The shortcut hints to optimize the request propagation.
  *
- * One usage example is indicating the #level of the tree of the group to avoid
+ * One usage example is indicating the level of the tree of the group to avoid
  * the request traverses every level.
  * Another possible usage is to indicate user's accessing behavior for example:
  * contention unlikely means the request with low likelihood to content with
@@ -85,13 +95,13 @@ typedef uint32_t	crt_iv_ver_t;
  * User can indicate it for every specific fetch/update request.
  */
 typedef enum {
-	/* no shortcut */
+	/** no shortcut */
 	CRT_IV_SHORTCUT_NONE	= 0,
-	/* directly send request to root node */
+	/** directly send request to root node */
 	CRT_IV_SHORTCUT_TO_ROOT	= 1
 } crt_iv_shortcut_t;
 
-/* key is the unique ID for IV within namespace */
+/** key is the unique ID for IV within namespace */
 typedef d_iov_t	crt_iv_key_t;
 
 /**
@@ -104,9 +114,9 @@ typedef d_iov_t	crt_iv_key_t;
  * previously allocated/reserved.
  */
 typedef enum {
-	/* Called node is the root for the operation */
+	/** Called node is the root for the operation */
 	CRT_IV_FLAG_ROOT = 0x1,
-	/* Fetch was performed as a result of aggregation */
+	/** Fetch was performed as a result of aggregation */
 	CRT_IV_FLAG_PENDING_FETCH = 0x2,
 } crt_iv_flag_t;
 
@@ -114,16 +124,16 @@ typedef enum {
  * Incast variable on_fetch callback which will be called when the fetching
  * request propagated to the node.
  *
- * \param ivns [IN]		the local handle of the IV namespace
- * \param iv_key [IN]		key of the IV
- * \param iv_ver [IN/OUT]	version of the IV
- * \param flags [IN]		OR-ed combination of 0 or more crt_iv_flag_t
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] iv_key		key of the IV
+ * \param[in,out] iv_ver	version of the IV
+ * \param[in] flags		OR-ed combination of 0 or more crt_iv_flag_t
  *				flags
- * \param iv_value [OUT]	IV value returned
- * \param arg [IN]		private user data
+ * \param[out] iv_value	IV value returned
+ * \param[in] arg		private user data
  *
- * \return			zero on success handled locally,
- *				-DER_IVCB_FORWARD when cannot handle locally and
+ * \retval			DER_SUCCESS on success handled locally,
+ * \retval			-DER_IVCB_FORWARD when cannot handle locally and
  *				need to forward to next hop,
  *				other negative value if error
  */
@@ -136,16 +146,16 @@ typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
  * Incast variable on_update callback which will be called when the updating
  * request propagated to the node (flowing up from leaf to root).
  *
- * \param ivns [IN]		the local handle of the IV namespace
- * \param iv_key [IN]		key of the IV
- * \param iv_ver [IN]		version of the IV
- * \param flags [IN]		OR-ed combination of 0 or more crt_iv_flag_t
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] iv_key		key of the IV
+ * \param[in] iv_ver		version of the IV
+ * \param[in] flags		OR-ed combination of 0 or more crt_iv_flag_t
  *				flags
- * \param iv_value [IN]		IV value to be update
- * \param arg [IN]		private user data
+ * \param[in] iv_value		IV value to be update
+ * \param[in] arg		private user data
  *
- * \return			zero on success handled locally,
- *				-DER_IVCB_FORWARD when cannot handle locally and
+ * \retval			DER_SUCCESS on success handled locally,
+ * \retval			-DER_IVCB_FORWARD when cannot handle locally and
  *				need to forward to next hop,
  *				other negative value if error
  */
@@ -161,16 +171,16 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  * fetch request's reply flows down; if fetch request is not successful this
  * callback will be invoked with NULL for iv_value.
  *
- * \param ivns [IN]		the local handle of the IV namespace
- * \param iv_key [IN]		key of the IV
- * \param iv_ver [IN]		version of the IV
- * \param iv_value [IN]		IV value to be refresh
- * \param invalidate [IN]       true for invalidate the IV in which case the
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] iv_key		key of the IV
+ * \param[in] iv_ver		version of the IV
+ * \param[in] iv_value		IV value to be refresh
+ * \param[in] invalidate       true for invalidate the IV in which case the
  *				iv_ver and iv_value can be ignored.
- * \param rc [IN]		Status of the operation.
- * \param arg [IN]		private user data
+ * \param[in] rc		Status of the operation.
+ * \param[in] arg		private user data
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
 				      crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
@@ -184,11 +194,11 @@ typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
  * The root of IV is the node that finally serves the IV fetch/update request if
  * the request cannot be satisfied by intermediate nodes.
  *
- * \param ivns [IN]		the local handle of the IV namespace
- * \param iv_key [IN]		key of the IV
- * \param root [OUT]		the hashed result root rank
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] iv_key		key of the IV
+ * \param[out] root		the hashed result root rank
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 typedef int (*crt_iv_on_hash_cb_t)(crt_iv_namespace_t ivns,
 				   crt_iv_key_t *iv_key, d_rank_t *root);
@@ -210,7 +220,7 @@ typedef enum {
  *
  * If iv_value == NULL, then it means the caller does not need the buffer,
  * but in this callback, it should still check if it can access the IV
- * value by permission flag(@permission), and setup the cache entry if
+ * value by permission flag(\ref crt_iv_perm_t), and setup the cache entry if
  * necessary.
  *
  * When called with CRT_IV_PERM_READ permission, it will fetch the IV value,
@@ -224,14 +234,14 @@ typedef enum {
  * Callback implementation should consider iv_value being 'in use' until
  * a corresponding crt_iv_on_put_cb_t callback is called.
  *
- * \param ivns [IN]		the local handle to the IV namespace
- * \param iv_key [IN]		key of the IV
- * \param iv_ver [IN]		Version of iv_key
- * \param permission [IN]	crt_iv_perm_t flags
- * \param iv_value [OUT]	Resultant placeholder for iv value buffer
- * \param arg [OUT]		Pointer to the private data
+ * \param[in] ivns		the local handle to the IV namespace
+ * \param[in] iv_key		key of the IV
+ * \param[in] iv_ver		Version of iv_key
+ * \param[in] permission	crt_iv_perm_t flags
+ * \param[out] iv_value	Resultant placeholder for iv value buffer
+ * \param[out] arg		Pointer to the private data
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
 				  crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
@@ -244,11 +254,11 @@ typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
  * Original buffers in iv_value are to be retrieved via
  * crt_iv_on_get_cb_t call.
  *
- * \param ivns [IN]		the local handle to the IV namespace
- * \param iv_value [IN]		iv_value buffers to return
- * \param arg [IN]		private user data
+ * \param[in] ivns		the local handle to the IV namespace
+ * \param[in] iv_value		iv_value buffers to return
+ * \param[in] arg		private user data
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
 				  d_sg_list_t *iv_value,
@@ -263,9 +273,9 @@ typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
  * going for the same key will be aggregated if keys match.
  *
  *
- * \param ivns [IN]		the local handle to the IV namespace
- * \param key1 [IN]		first iv key
- * \param iv_ver [IN]		second iv key
+ * \param[in] ivns		the local handle to the IV namespace
+ * \param[in] key1		first iv key
+ * \param[in] iv_ver		second iv key
  *
  * \return			true if keys match, false otherwise
  */
@@ -302,37 +312,38 @@ struct crt_iv_ops {
 #define CRT_IV_CLASS_DISCARD_CACHE	(0x0002U)
 
 struct crt_iv_class {
-	/* ID of the IV class */
+	/** ID of the IV class */
 	uint32_t		 ivc_id;
-	/* feature bits of the IV class */
+	/** feature bits of the IV class */
 	uint32_t		 ivc_feats;
-	/* IV callback table for the IV class */
+	/** IV callback table for the IV class */
 	struct crt_iv_ops	*ivc_ops;
 };
 
 /**
  * Create an incast variable namespace.
  *
- * \param crt_ctx [IN]		CRT transport namespace
- * \param grp [IN]		CRT group for the IV namespace
- * \param tree_topo[IN]		tree topology for the IV message propagation,
+ * \param[in] crt_ctx		CRT transport namespace
+ * \param[in] grp		CRT group for the IV namespace
+ * \param[in] tree_topo		tree topology for the IV message propagation,
  *				can be calculated by crt_tree_topo().
- *				/see enum crt_tree_type, /see crt_tree_topo().
- * \param iv_classes [IN]	the array of IV class. User must ensure passing
+ *				See \ref enum crt_tree_type,
+ *				\ref crt_tree_topo().
+ * \param[in] iv_classes	the array of IV class. User must ensure passing
  *				same set of iv_classes when creating or
  *				attaching IV namespace, or undefined results are
  *				expected.
- * \param num_class [IN]	the number of elements in the iv_classes array,
+ * \param[in] num_class		the number of elements in the iv_classes array,
  *				one IV namespace should have at least one IV
  *				class.
- * \param ivns [OUT]		the local handle of the IV namespace
- * \param g_ivns [OUT]		the global handle of the IV namespace. It can be
+ * \param[out] ivns		the local handle of the IV namespace
+ * \param[out] g_ivns		the global handle of the IV namespace. It can be
  *				transferred to other processes on any other node
  *				in the group, and the crt_iv_namespace_attach()
  *				can attach to the global handle to get a local
  *				usable IV namespace handle.
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 int
 crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
@@ -342,10 +353,10 @@ crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
 /**
  * Return global IV namespace from the local IV namespace
  *
- * \param ivns [IN]		Local namespace
- * \param g_ivns [OUT]		Global namespace
+ * \param[in] ivns		Local namespace
+ * \param[out] g_ivns		Global namespace
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 int
 crt_iv_global_namespace_get(crt_iv_namespace_t *ivns, d_iov_t *g_ivns);
@@ -358,18 +369,18 @@ crt_iv_global_namespace_get(crt_iv_namespace_t *ivns, d_iov_t *g_ivns);
  * group. And need to provide the same set of IV classes, Otherwise IV behaviour
  * is undermined.
  *
- * \param crt_ctx [IN]		CRT transport namespace
- * \param g_ivns [IN]		the global handle of the IV namespace
- * \param iv_classes [IN]	the array of IV class. User must ensure passing
+ * \param[in] crt_ctx		CRT transport namespace
+ * \param[in] g_ivns		the global handle of the IV namespace
+ * \param[in] iv_classes	the array of IV class. User must ensure passing
  *				same set of iv_classes when creating or
  *				attaching IV namespace, or undefined results are
  *				expected.
- * \param num_class [IN]	the number of elements in the iv_classes array,
+ * \param[in] num_class		the number of elements in the iv_classes array,
  *				one IV namespace should have at least one IV
  *				class.
- * \param ivns [OUT]		the local handle of the IV namespace
+ * \param[out] ivns		the local handle of the IV namespace
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 int
 crt_iv_namespace_attach(crt_context_t crt_ctx, d_iov_t *g_ivns,
@@ -381,26 +392,27 @@ crt_iv_namespace_attach(crt_context_t crt_ctx, d_iov_t *g_ivns,
  * (including all IVs in the namespace) are released. It is a local operation,
  * every node in the group needs to do the destroy respectively.
  *
- * \param ivns [IN]		the local handle of the IV namespace
+ * \param[in] ivns		the local handle of the IV namespace
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 int
 crt_iv_namespace_destroy(crt_iv_namespace_t ivns);
 
-/* IV fetch/update/invalidate completion callback
+/**
+ * IV fetch/update/invalidate completion callback
  *
- * \param ivns [IN]		the local handle of the IV namespace
- * \param class_id [IN]		IV class ID the IV belong to
- * \param iv_key [IN/OUT]	key of the IV, output only for fetch
- * \param iv_ver [IN]		version of the IV
- * \param iv_value [IN/OUT]	IV value buffer, input for update, output for
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] class_id		IV class ID the IV belong to
+ * \param[in,out] iv_key	key of the IV, output only for fetch
+ * \param[in] iv_ver		version of the IV
+ * \param[in,out] iv_value	IV value buffer, input for update, output for
  *				fetch.
- * \param rc [IN]		Return code of fetch/update/invalidate operation
- * \param cb_arg [IN]		pointer to argument passed to fetch/update/
+ * \param[in] rc		Return code of fetch/update/invalidate operation
+ * \param[in] cb_arg		pointer to argument passed to fetch/update/
  *				invalidate.
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 typedef int (*crt_iv_comp_cb_t)(crt_iv_namespace_t ivns, uint32_t class_id,
 				crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
@@ -410,10 +422,10 @@ typedef int (*crt_iv_comp_cb_t)(crt_iv_namespace_t ivns, uint32_t class_id,
 /**
  * Fetch the value of incast variable.
  *
- * \param ivns [IN]		the local handle of the IV namespace
- * \param class_id [IN]		IV class ID the IV belong to
- * \param iv_key [IN]		key of the IV
- * \param iv_ver [IN/OUT]	version of the IV
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] class_id		IV class ID the IV belong to
+ * \param[in] iv_key		key of the IV
+ * \param[in,out] iv_ver	version of the IV
  *				for input parameter:
  *				1) (version == 0) means caller does not care
  *				what version it is, or depend on updating’s
@@ -427,12 +439,12 @@ typedef int (*crt_iv_comp_cb_t)(crt_iv_namespace_t ivns, uint32_t class_id,
  *				version.
  *				The actual version will be returned through this
  *				parameter in fetch_comp_cb.
- * \param shortcut [IN]		the shortcut hints to optimize the propagation
- *				of accessing request, \see crt_iv_shortcut_t
- * \param fetch_comp_cb [IN]	pointer to fetch completion callback
- * \param cb_arg [IN]		pointer to argument passed to fetch_comp_cb
+ * \param[in] shortcut		the shortcut hints to optimize the propagation
+ *				of accessing request, See \ref crt_iv_shortcut_t
+ * \param[in] fetch_comp_cb	pointer to fetch completion callback
+ * \param[in] cb_arg		pointer to argument passed to fetch_comp_cb
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 int
 crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
@@ -463,30 +475,30 @@ typedef enum {
 } crt_iv_sync_mode_t;
 
 
-/*
+/**
  * The type of the synchronization event requested.
- *
- * CRT_IV_SYNC_EVENT_NONE   - no synchronization
- * CRT_IV_SYNC_EVENT_UPDATE - update synchronization. IV value is propagated
- *			to all nodes during the synchronization phase.
- * CRT_IV_SYNC_EVENT_NOTIFY - notification. IV value is not propagated
- *			during the synchronization phase.
- *
- * The on_refresh callback will be triggered when the update/notify
- * propagates to one node, for notify NULL will be passed for the
- * iv_value parameter.
  */
 typedef enum {
+	/** No synchronization */
 	CRT_IV_SYNC_EVENT_NONE		= 0,
+	/**
+	 * Update synchronization. IV value is propagated to all the
+	 * nodes during the synchronization phase.
+	 */
 	CRT_IV_SYNC_EVENT_UPDATE	= 1,
+	/**
+	 * Notification only. IV value is not propagated during the
+	 * synchronization phase.
+	 */
 	CRT_IV_SYNC_EVENT_NOTIFY	= 2,
 } crt_iv_sync_event_t;
 
 typedef enum {
-	/* Treat namespace lookup errors as fatal during sync */
+	/** Treat namespace lookup errors as fatal during sync */
 	CRT_IV_SYNC_FLAG_NS_ERRORS_FATAL = 0x1,
 
-	/* Bi-directional update. When this flag is set, it causes IV
+	/**
+	 * Bi-directional update. When this flag is set, it causes IV
 	 * framework to propagate IV value in both directions --
 	 * from the caller of crt_iv_update up to the root and from the root
 	 * back to the caller.
@@ -524,22 +536,22 @@ typedef struct {
 /**
  * Update the value of incast variable.
  *
- * \param ivns [IN]		the local handle of the IV namespace
- * \param class_id [IN]		IV class ID the IV belong to
- * \param iv_key [IN]		key of the IV
- * \param iv_ver [IN]		version of the IV
- * \param iv_value [IN]		IV value buffer
- * \param shortcut [IN]		the shortcut hints to optimize the propagation
- *				of accessing request, \see crt_iv_shortcut_t
- * \param sync_type [IN]	synchronization type.
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] class_id		IV class ID the IV belong to
+ * \param[in] iv_key		key of the IV
+ * \param[in] iv_ver		version of the IV
+ * \param[in] iv_value		IV value buffer
+ * \param[in] shortcut		the shortcut hints to optimize the propagation
+ *				of accessing request, See \ref crt_iv_shortcut_t
+ * \param[in] sync_type		synchronization type.
  *				If user wants to synchronize the update or
  *				notification to other nodes, it can select eager
  *				or lazy mode, and update or notification.
- *				\see crt_iv_sync_t.
- * \param update_comp_cb [IN]	pointer to update completion callback
- * \param cb_arg [IN]		pointer to argument passed to update_comp_cb
+ *				See \ref crt_iv_sync_t.
+ * \param[in] update_comp_cb	pointer to update completion callback
+ * \param[in] cb_arg		pointer to argument passed to update_comp_cb
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 int
 crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
@@ -556,18 +568,18 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
  * internally do a broadcast and ensure the on_refresh callback being called on
  * all nodes within the group of the namespace.
  *
- * \param ivns [IN]		the local handle of the IV namespace
- * \param class_id [IN]		IV class ID the IV belong to
- * \param iv_key [IN]		key of the IV
- * \param iv_ver [IN]		Version of the IV
- * \param shortcut [IN]		the shotcut hints to optimize the propagation
- *				of accessing request, \see crt_iv_shortcut_t
- * \param sync_type [IN]	synchronization type
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] class_id		IV class ID the IV belong to
+ * \param[in] iv_key		key of the IV
+ * \param[in] iv_ver		Version of the IV
+ * \param[in] shortcut		the shotrcut hints to optimize the propagation
+ *				of accessing request. See \ref crt_iv_shortcut_t
+ * \param[in] sync_type		synchronization type
  *
- * \param invali_comp_cb [IN]	pointer to invalidate completion callback
- * \param cb_arg [IN]		pointer to argument passed to invali_comp_cb
+ * \param[in] invali_comp_cb	pointer to invalidate completion callback
+ * \param[in] cb_arg		pointer to argument passed to invali_comp_cb
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 int
 crt_iv_invalidate(crt_iv_namespace_t ivns, uint32_t class_id,
@@ -580,18 +592,20 @@ crt_iv_invalidate(crt_iv_namespace_t ivns, uint32_t class_id,
  * Query the topo info for the number of immediate children of the caller in IV
  * tree.
  *
- * \param ivns [IN]		the local handle of the IV namespace
- * \param class_id [IN]		IV class ID the IV belong to
- * \param iv_key [IN]		key of the IV
- * \param nchildren [OUT]	number of children
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] class_id		IV class ID the IV belong to
+ * \param[in] iv_key		key of the IV
+ * \param[out] nchildren	number of children
  *
- * \return			zero on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value if error
  */
 int
 crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 		     crt_iv_key_t *iv_key, uint32_t *nchildren);
 
 
+/** @}
+ */
 #if defined(__cplusplus)
 }
 #endif
