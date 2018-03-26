@@ -160,7 +160,7 @@ dss_sched_run(ABT_sched sched)
 	uint32_t		work_count = 0;
 	struct sched_data	*p_data;
 	ABT_pool		pools[DSS_POOL_CNT];
-	ABT_pool		pool;
+	ABT_pool		pool = ABT_POOL_NULL;
 	ABT_unit		unit;
 	int			ret;
 
@@ -175,7 +175,7 @@ dss_sched_run(ABT_sched sched)
 	while (1) {
 		/* Execute one work unit from the scheduler's pool */
 		unit = dss_sched_unit_pop(pools, &pool);
-		if (unit != ABT_UNIT_NULL)
+		if (unit != ABT_UNIT_NULL && pool != ABT_UNIT_NULL)
 			ABT_xstream_run_unit(unit, pool);
 
 		if (++work_count >= p_data->event_freq) {
