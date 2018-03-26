@@ -590,7 +590,7 @@ struct crt_corpc_ops {
 	 *
 	 * \param source [IN]		the rpc structure of aggregating source
 	 * \param result[IN]		the rpc structure of aggregating result
-	 * \param priv [IN]		the private pointer, valid only on
+	 * \param arg [IN]		the private pointer, valid only on
 	 *				collective RPC initiator (same as the
 	 *				priv pointer passed in for
 	 *				crt_corpc_req_create).
@@ -598,6 +598,22 @@ struct crt_corpc_ops {
 	 * \return			zero on success, negative value if error
 	 */
 	int (*co_aggregate)(crt_rpc_t *source, crt_rpc_t *result, void *arg);
+
+	/**
+	 * Collective RPC pre-forward callback.
+	 * This is an optional callback. If specified, it will execute prior
+	 * to corpc request being forwarded.
+	 *
+	 * \param[in] rpc		the rpc structure
+	 * \param[in] arg		the private pointer, valid only on
+	 *				collective RPC initiator (same as the
+	 *				priv pointer passed in for
+	 *				crt_corpc_req_create).
+	 *
+	 * \retval			Any value other than DER_SUCCESS will
+	 *				cause CORPC to abort.
+	 */
+	int (*co_pre_forward)(crt_rpc_t *rpc, void *arg);
 };
 
 /*

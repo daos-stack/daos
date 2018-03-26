@@ -771,6 +771,8 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 	d_rank_list_t		*children_rank_list = NULL;
 	d_rank_t		 grp_rank;
 	struct crt_rpc_priv	*rpc_priv, *child_rpc_priv;
+	struct crt_opc_info	*opc_info;
+	struct crt_corpc_ops	*co_ops;
 	bool			 ver_match;
 	int			 i, rc = 0;
 
@@ -795,6 +797,24 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 		}
 	};
 
+	opc_info = rpc_priv->crp_opc_info;
+	co_ops = opc_info->coi_co_ops;
+
+	/* Invoke pre-forward callback first if it is registered */
+	if (co_ops && co_ops->co_pre_forward) {
+		rc = co_ops->co_pre_forward(&rpc_priv->crp_pub,
+					co_info->co_priv);
+		if (rc != 0) {
+			D_ERROR("co_pre_forward(group %s, opc %#x) failed, "
+				"rc: %d.\n",
+				co_info->co_grp_priv->gp_pub.cg_grpid,
+				req->cr_opc, rc);
+			crt_corpc_fail_parent_rpc(rpc_priv, rc);
+			D_GOTO(forward_done, rc);
+		}
+	}
+
+
 	rc = crt_tree_get_children(co_info->co_grp_priv, co_info->co_grp_ver,
 				   co_info->co_excluded_ranks,
 				   co_info->co_tree_topo, co_info->co_root,
@@ -805,8 +825,6 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 			"rc: %d.\n", co_info->co_grp_priv->gp_pub.cg_grpid,
 			req->cr_opc, rc);
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
-		if (co_info->co_root_excluded)
-			crt_corpc_complete(rpc_priv);
 		D_GOTO(forward_done, rc);
 	}
 
@@ -821,7 +839,8 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 	if (!ver_match) {
 		D_INFO("parent version and local version mismatch.\n");
 		rc = -DER_MISMATCH;
-		crt_corpc_fail_child_rpc(rpc_priv, co_info->co_child_num, rc);
+		co_info->co_child_num = 0;
+		crt_corpc_fail_parent_rpc(rpc_priv, rc);
 		D_GOTO(forward_done, rc);
 	}
 
