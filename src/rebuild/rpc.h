@@ -56,6 +56,7 @@ struct rebuild_scan_in {
 	uint32_t	rsi_pool_map_ver;
 	uint32_t	rsi_rebuild_ver;
 	uint32_t	rsi_master_rank;
+	uint64_t	rsi_leader_term;
 };
 
 struct rebuild_scan_out {

@@ -75,11 +75,28 @@ daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 
 void
 daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			 const char *grp, const d_rank_list_t *svc,
-			 d_rank_t rank)
+			 const char *grp, const d_rank_list_t *svc)
 {
-	if (rank == -1)
-		rank = arg->srv_ntgts - arg->srv_disabled_ntgts - 1;
+	int		failures = 0;
+	int		max_failure;
+	int		i;
+	d_rank_t	rank;
+
+	max_failure = (svc->rl_nr - 1) / 2;
+	for (i = 0; i < svc->rl_nr; i++) {
+		if (svc->rl_ranks[i] >=
+		    arg->srv_ntgts - arg->srv_disabled_ntgts - 1)
+			failures++;
+	}
+
+	if (failures > max_failure) {
+		print_message("Already kill %d targets with %d replica,"
+			      " (max_kill %d) can not kill anymore\n",
+			      arg->srv_disabled_ntgts, svc->rl_nr, max_failure);
+		return;
+	}
+
+	rank = arg->srv_ntgts - arg->srv_disabled_ntgts - 1;
 
 	daos_kill_server(arg, pool_uuid, grp, svc, rank);
 	daos_exclude_server(pool_uuid, grp, svc, rank);
@@ -176,7 +193,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		if (op_kill == UPDATE && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
 			daos_kill_exclude_server(arg, arg->pool_uuid,
-						 arg->group, &arg->svc, -1);
+						 arg->group, &arg->svc);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -205,7 +222,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		if (op_kill == LOOKUP && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
 			daos_kill_exclude_server(arg, arg->pool_uuid,
-						 arg->group, &arg->svc, -1);
+						 arg->group, &arg->svc);
 	}
 	free(rec_verify);
 
@@ -247,7 +264,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		if (op_kill == ENUMERATE && rank == 0 && enum_op &&
 		    g_dkeys > 1 && (key_nr  >= g_dkeys/2)) {
 			daos_kill_exclude_server(arg, arg->pool_uuid,
-						 arg->group, &arg->svc, -1);
+						 arg->group, &arg->svc);
 			enum_op = 0;
 		}
 

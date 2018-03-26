@@ -79,15 +79,18 @@ struct rebuild_tgt_pool_tracker {
 	daos_handle_t		rt_local_root_hdl;
 	d_rank_list_t		*rt_svc_list;
 	d_rank_t		rt_rank;
-	d_rank_t		rt_leader_rank;
 	int			rt_errno;
+	int			rt_refcount;
+	uint64_t		rt_leader_term;
+	ABT_mutex		rt_fini_lock;
+	ABT_cond		rt_fini_cond;
 
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,
+				rt_finishing:1,
 				rt_scan_done:1,
 				rt_global_scan_done:1,
-				rt_global_done:1,
-				rt_finishing:1;
+				rt_global_done:1;
 };
 
 /* Track the rebuild status globally */
@@ -169,6 +172,8 @@ struct rebuild_task {
  */
 struct rebuild_pool_tls {
 	uuid_t		rebuild_pool_uuid;
+	uuid_t		rebuild_poh_uuid;
+	uuid_t		rebuild_coh_uuid;
 	daos_handle_t	rebuild_pool_hdl;
 	d_list_t	rebuild_pool_list;
 	uint64_t	rebuild_pool_obj_count;
@@ -220,6 +225,9 @@ rebuild_tls_get()
 	return dss_module_key_get(dss_tls_get(), &rebuild_module_key);
 }
 
+void rpt_get(struct rebuild_tgt_pool_tracker *rpt);
+void rpt_put(struct rebuild_tgt_pool_tracker *rpt);
+
 struct rebuild_pool_tls *
 rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver);
 
@@ -254,7 +262,7 @@ rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 			daos_unit_oid_t oid, unsigned int shard);
 
 struct rebuild_tgt_pool_tracker *
-rebuild_tgt_pool_tracker_lookup(uuid_t pool_uuid, unsigned int ver);
+rpt_lookup(uuid_t pool_uuid, unsigned int ver);
 
 struct rebuild_global_pool_tracker *
 rebuild_global_pool_tracker_lookup(uuid_t pool_uuid, unsigned int ver);

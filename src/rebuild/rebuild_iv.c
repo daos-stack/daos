@@ -184,8 +184,7 @@ rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc,
 	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done) {
 		struct rebuild_tgt_pool_tracker *rpt;
 
-		rpt = rebuild_tgt_pool_tracker_lookup(src_iv->riv_pool_uuid,
-						      src_iv->riv_ver);
+		rpt = rpt_lookup(src_iv->riv_pool_uuid, src_iv->riv_ver);
 		if (rpt) {
 			D_DEBUG(DB_TRACE, DF_UUID" rebuild finished"
 				" sgl/gl %d/%d\n",
@@ -194,6 +193,7 @@ rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc,
 				 dst_iv->riv_global_done);
 			rpt->rt_global_done = dst_iv->riv_global_done;
 			rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
+			rpt_put(rpt);
 		}
 	}
 

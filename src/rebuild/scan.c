@@ -712,6 +712,7 @@ out_map:
 
 	ABT_mutex_free(&arg->scan_lock);
 	D_FREE_PTR(arg);
+	rpt_put(rpt);
 }
 
 /* Scan the local target and generate rebuild object list */
@@ -722,7 +723,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_scan_out		*ro;
 	struct rebuild_scan_arg		*scan_arg;
 	struct umem_attr		 uma;
-	struct rebuild_tgt_pool_tracker	*rpt;
+	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	int				 rc;
 
 	rsi = crt_req_get(rpc);
@@ -733,23 +734,41 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		rsi->rsi_pool_map_ver, rsi->rsi_rebuild_ver);
 
 	/* check if the rebuild is already started */
-	rpt = rebuild_tgt_pool_tracker_lookup(rsi->rsi_pool_uuid,
-					      rsi->rsi_rebuild_ver);
+	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
 	if (rpt != NULL) {
-		D_ASSERT(rsi->rsi_rebuild_ver >= rpt->rt_rebuild_ver);
+		/* Rebuild should never skip the version */
+		D_ASSERTF(rsi->rsi_rebuild_ver == rpt->rt_rebuild_ver,
+			  "rsi_rebuild_ver %d != rt_rebuild_ver %d\n",
+			  rsi->rsi_rebuild_ver, rpt->rt_rebuild_ver);
 
-		/* Delete the left over rpt */
-		if (rsi->rsi_rebuild_ver > rpt->rt_rebuild_ver) {
-			D_DEBUG(DB_REBUILD, "delete the leftover "
-				DF_UUID"/%d/%p\n", DP_UUID(rpt->rt_pool_uuid),
-				rpt->rt_rebuild_ver, rpt);
-			rebuild_tgt_fini(rpt);
-			rpt = NULL;
-		} else if (rsi->rsi_rebuild_ver == rpt->rt_rebuild_ver) {
-			D_DEBUG(DB_REBUILD, DF_UUID" already started.\n",
-				DP_UUID(rsi->rsi_pool_uuid));
+		D_DEBUG(DB_REBUILD, DF_UUID" already started.\n",
+			DP_UUID(rsi->rsi_pool_uuid));
+
+		if (rpt->rt_pool->sp_iv_ns == NULL ||
+		    rpt->rt_pool->sp_iv_ns->iv_master_rank ==
+					rsi->rsi_master_rank)
 			D_GOTO(out, rc = 0);
+
+		/* only change master rank if there is new leader */
+		if (rpt->rt_leader_term < rsi->rsi_leader_term) {
+			D_DEBUG(DB_REBUILD, DF_UUID" master rank"
+				" %d -> %d term "DF_U64" -> "DF_U64"\n",
+				DP_UUID(rpt->rt_pool_uuid),
+				rpt->rt_pool->sp_iv_ns->iv_master_rank,
+				rsi->rsi_master_rank,
+				rpt->rt_leader_term,
+				rsi->rsi_leader_term);
+			/* only update iv ns */
+			rc = ds_pool_iv_ns_update(rpt->rt_pool,
+						  rsi->rsi_master_rank,
+						  &rsi->rsi_ns_iov,
+						  rsi->rsi_ns_id);
+			if (rc)
+				D_GOTO(out, rc);
+			rpt->rt_leader_term = rsi->rsi_leader_term;
 		}
+
+		D_GOTO(out, rc = 0);
 	}
 
 	if (daos_fail_check(DAOS_REBUILD_TGT_START_FAIL))
@@ -759,9 +778,13 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
+	rpt_get(rpt);
 	rc = dss_ult_create(rebuild_tgt_status_check, rpt, -1, NULL);
-	if (rc)
+	if (rc) {
+		rpt_put(rpt);
 		D_GOTO(out, rc);
+	}
+
 	/* step-1: parameters for scanner */
 	D_ALLOC_PTR(scan_arg);
 	if (scan_arg == NULL)
@@ -787,11 +810,14 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_tree, rc);
 
+	rpt_get(rpt);
 	scan_arg->rpt = rpt;
 	/* step-3: start scann leader */
 	rc = dss_ult_create(rebuild_scan_leader, scan_arg, -1, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		rpt_put(rpt);
 		D_GOTO(out_f_rankfs, rc);
+	}
 
 	D_GOTO(out, rc);
 out_f_rankfs:
@@ -803,6 +829,8 @@ out_lock:
 out_arg:
 	D_FREE_PTR(scan_arg);
 out:
+	if (rpt)
+		rpt_put(rpt);
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
 	if (rc) {
@@ -856,5 +884,4 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	return 0;
 }
-
 

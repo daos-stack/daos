@@ -470,8 +470,7 @@ rebuild_dkey_ult(void *arg)
 
 		/* check if it should exist */
 		ABT_mutex_lock(puller->rp_lock);
-		if (d_list_empty(&puller->rp_dkey_list) &&
-		    (rpt->rt_finishing || rpt->rt_abort)) {
+		if (d_list_empty(&puller->rp_dkey_list) && rpt->rt_finishing) {
 			ABT_mutex_unlock(puller->rp_lock);
 			break;
 		}
@@ -484,6 +483,7 @@ rebuild_dkey_ult(void *arg)
 	ABT_cond_signal(puller->rp_fini_cond);
 	puller->rp_ult_running = 0;
 	ABT_mutex_unlock(puller->rp_lock);
+	rpt_put(rpt);
 }
 
 /**
@@ -507,10 +507,13 @@ rebuild_dkey_queue(daos_unit_oid_t oid, daos_epoch_t epoch,
 		 */
 		D_ASSERT(puller->rp_ult_running == 0);
 		D_DEBUG(DB_REBUILD, "create rebuild dkey ult %d\n", idx);
+		rpt_get(rpt);
 		rc = dss_ult_create(rebuild_dkey_ult, rpt, idx,
 				    &puller->rp_ult);
-		if (rc)
+		if (rc) {
+			rpt_put(rpt);
 			D_GOTO(free, rc);
+		}
 	}
 
 	D_ALLOC_PTR(rdkey);
@@ -764,6 +767,7 @@ rebuild_puller(void *arg)
 
 	D_FREE_PTR(iter_arg);
 	rpt->rt_lead_puller_running = 0;
+	rpt_put(rpt);
 }
 
 static int
@@ -828,15 +832,15 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 	 * rebuilding yet, i.e. it did not receive scan req to
 	 * prepare rebuild yet (see rebuild_tgt_prepare()).
 	 */
-	rpt = rebuild_tgt_pool_tracker_lookup(rebuild_in->roi_pool_uuid,
-					      rebuild_in->roi_rebuild_ver);
+	rpt = rpt_lookup(rebuild_in->roi_pool_uuid,
+			 rebuild_in->roi_rebuild_ver);
 	if (rpt == NULL || rpt->rt_pool == NULL)
 		D_GOTO(out, rc = -DER_AGAIN);
 
 	/* Initialize the local rebuild tree */
 	rc = rebuild_obj_hdl_get(rpt, &btr_hdl);
 	if (rc)
-		D_GOTO(out, rc);
+		D_GOTO(out_put, rc);
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 				      rpt->rt_rebuild_ver);
@@ -862,7 +866,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		}
 	}
 	if (rc < 0)
-		D_GOTO(out, rc);
+		D_GOTO(out_put, rc);
 
 	/* Check and create task to iterate the local rebuild tree */
 	if (!rpt->rt_lead_puller_running) {
@@ -870,22 +874,25 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 
 		D_ALLOC_PTR(arg);
 		if (arg == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_put, rc = -DER_NOMEM);
 
 		uuid_copy(arg->pool_uuid, rebuild_in->roi_pool_uuid);
 		arg->obj_cb = rebuild_obj_iterate_keys;
 		arg->root_hdl = btr_hdl;
+		rpt_get(rpt);
 		arg->rpt = rpt;
 
 		D_ASSERT(rpt->rt_pullers != NULL);
-
 		rc = dss_ult_create(rebuild_puller, arg, -1, NULL);
 		if (rc) {
+			rpt_put(rpt);
 			D_FREE_PTR(arg);
-			D_GOTO(out, rc);
+			D_GOTO(out_put, rc);
 		}
 		rpt->rt_lead_puller_running = 1;
 	}
+out_put:
+	rpt_put(rpt);
 out:
 	rebuild_out = crt_reply_get(rpc);
 	rebuild_out->ro_status = rc;

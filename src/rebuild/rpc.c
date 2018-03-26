@@ -41,6 +41,7 @@ static struct crt_msg_field *rebuild_scan_in_fields[] = {
 	&CMF_UINT32,	/* pool map version */
 	&CMF_UINT32,	/* rebuild version */
 	&CMF_UINT32,	/* master rank */
+	&CMF_UINT64,	/* term of leader */
 };
 
 static struct crt_msg_field *rebuild_scan_out_fields[] = {

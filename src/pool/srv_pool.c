@@ -2503,8 +2503,8 @@ out:
 
 /* Try to create iv namespace for the pool */
 int
-ds_pool_iv_ns_try_create(struct ds_pool *pool, unsigned int master_rank,
-			 d_iov_t *iv_iov, unsigned int iv_ns_id)
+ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
+		     d_iov_t *iv_iov, unsigned int iv_ns_id)
 {
 	struct ds_iv_ns	*ns;
 	int		rc;
@@ -2542,4 +2542,20 @@ ds_pool_iv_ns_try_create(struct ds_pool *pool, unsigned int master_rank,
 	pool->sp_iv_ns = ns;
 
 	return rc;
+}
+
+int
+ds_pool_svc_term_get(const uuid_t uuid, uint64_t *term)
+{
+	struct pool_svc	*svc;
+	int		rc;
+
+	rc = pool_svc_lookup_leader(uuid, &svc, NULL /* hint */);
+	if (rc != 0)
+		return rc;
+
+	*term = svc->ps_term;
+
+	pool_svc_put_leader(svc);
+	return 0;
 }

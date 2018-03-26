@@ -250,7 +250,7 @@ oid_allocator_checker(void **state)
 					daos_kill_exclude_server(arg,
 								 arg->pool_uuid,
 								 arg->group,
-								 &arg->svc, -1);
+								 &arg->svc);
 			}
 			MPI_Barrier(MPI_COMM_WORLD);
 		}

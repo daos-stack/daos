@@ -189,8 +189,7 @@ daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 
 void
 daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			 const char *grp, const d_rank_list_t *svc,
-			 d_rank_t rank);
+			 const char *grp, const d_rank_list_t *svc);
 
 static inline void
 daos_test_print(int rank, char *message)

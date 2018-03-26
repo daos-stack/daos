@@ -158,6 +158,10 @@ struct rdb;
 void ds_pool_set_hint(struct rdb *db, struct rsvc_hint *hint);
 
 int
-ds_pool_iv_ns_try_create(struct ds_pool *pool, unsigned int master_rank,
-			 d_iov_t *iv_iov, unsigned int iv_ns_id);
+ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
+		     d_iov_t *iv_iov, unsigned int iv_ns_id);
+
+int
+ds_pool_svc_term_get(const uuid_t uuid, uint64_t *term);
+
 #endif /* __DAOS_SRV_POOL_H__ */
