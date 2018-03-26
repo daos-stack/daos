@@ -19,8 +19,8 @@ ARG UID=1000
 RUN yum install -y epel-release
 RUN yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
 RUN yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
-RUN yum install -y librdmacm-devel libcmocka libcmocka-devel
-RUN yum install -y doxygen pandoc flex patch readline-devel
+RUN yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
+RUN yum install -y doxygen pandoc flex patch
 
 # Dependencies
 # Packages for NVML, PMIx, hwloc and OpenMPI exist in CentOS, but are unfortunately

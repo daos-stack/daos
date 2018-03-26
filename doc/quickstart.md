@@ -50,17 +50,17 @@ The below instructions have been verified with CentOS. Installations on other Li
 Please install the following software packages (or equivalent for other distros):
 
 - On CentOS and openSuSE:
-    $ yum -y install epel-release
-    $ yum -y install git gcc gcc-c++ make cmake golang libtool scons boost-devel
-    $ yum -y install libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
-    $ yum -y install librdmacm-devel libcmocka libcmocka-devel
-    $ yum -y install doxygen pandoc flex patch
+    $ yum install -y epel-release
+    $ yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
+    $ yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
+    $ yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
+    $ yum install -y doxygen pandoc flex patch
 
 - On Ubuntu and Debian:
     $ apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
     $ apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
-    $ apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev
-    $ apt-get install -y curl doxygen pandoc flex patch readline-devel
+    $ apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
+    $ apt-get install -y curl doxygen pandoc flex patch
 
 If no Cmocka RPMs are available, please install from [source](https://cmocka.org/files/1.1/cmocka-1.1.0.tar.xz) as detailed below:
 
