@@ -6,7 +6,7 @@ cd /work
 function print_status()
 {
     echo "*******************************************************************"
-    echo $*
+    echo "$@"
     echo "*******************************************************************"
 }
 
@@ -16,8 +16,8 @@ if [ -e ${docker_setup_file} ]; then
 fi
 
 kw_build=0
-: ${KWINJECT_OUT:="/work/kwinject.out"}
-: ${KW_TABLES:="/work/kwtables"}
+: "${KWINJECT_OUT:="/work/kwinject.out"}"
+: "${KW_TABLES:="/work/kwtables"}"
 if [ -n "${KLOCWORK_PROJECT}" ]; then
   if [ -e "${KW_PATH}/bin/kwinject" ]; then
     kw_build=1
@@ -36,9 +36,11 @@ set -e
 pushd ${scons_local_dir}
 if [ ${kw_build} -eq 1 ];
 then
-  kwinject -o ${KWINJECT_OUT} scons $option $*
+  # shellcheck disable=SC2086 disable=SC2048
+  kwinject -o "${KWINJECT_OUT}" scons ${option} $*
 else
-  scons $option $*
+  # shellcheck disable=SC2086 disable=SC2048
+  scons ${option} $*
 fi
 
 if [ -n "${SCONS_INSTALL}" ];then
@@ -49,7 +51,7 @@ popd
 if [ -n "${CUSTOM_BUILD_STEP}" ];then
   if [ -e "${CUSTOM_BUILD_STEP}" ]; then
     print_status "Running custom build step"
-    source ${CUSTOM_BUILD_STEP}
+    source "${CUSTOM_BUILD_STEP}"
   else
     print_status "Custom build step file not found!"
   fi
@@ -62,8 +64,8 @@ if [ -n "${KLOCWORK_URL}" ]; then
       mkdir -p "${KW_TABLES}"
       kwbuildproject --force --verbose \
         --url "${KLOCWORK_URL}/${KLOCWORK_PROJECT}" \
-        --tables-directory ${KW_TABLES} ${KWINJECT_OUT}
+        --tables-directory "${KW_TABLES}" "${KWINJECT_OUT}"
     fi
-  if
+  fi
 fi
 
