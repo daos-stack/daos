@@ -1,6 +1,12 @@
 # DAOS Quick Start Guide
 
-DAOS runs on both x86 and ARM64 platforms and has been successfully tested on CentOS7, openSuSE 42.2 and Ubuntu 16.04 distributions.
+DAOS runs on both x86 and ARM platforms and has been successfully tested on CentOS7, openSuSE 42.2 and Ubuntu 16.04 distributions.
+
+## Hardware Support
+
+DAOS requires a 64-bit processor architecture and is primarily developed on x64-64 and AArch64 platforms. Apart from using a popular linux distribution, no special considerations are necessary to build DAOS on 64-bit ARM processors. The same instructions that are used in Xeon are applicable for ARM builds as well, DAOS and its dependencies will make the necessary adjustments automatically in their respective build systems for ARM platforms.
+
+Storage-class memory (SCM) can be emulated with DRAM by creating tmpfs mountpoints on the DAOS servers.
 
 ## DAOS in Docker
 
@@ -169,14 +175,6 @@ With this type of installation each individual component is built into a differe
 
     PATH=$CART/bin/:$OMPI/bin/:${daos_prefix_path}/bin/:$PATH
 
-With this approach only daos would get built using the prebuilt dependencies in ${daos_prefix_path}/opt and required options are saved for future compilations. So, after the first time, during development, a mere "scons" and "scons install" would suffice for compiling changes to daos source code.
+With this approach DAOS would get built using the prebuilt dependencies in ${daos_prefix_path}/opt and required options are saved for future compilations. So, after the first time, during development, a mere "scons" and "scons install" would suffice for compiling changes to daos source code.
 
 If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on the scons command line.   This option is also saved for future compilations.
-
-## ARM support
-
-DAOS is also supported on 64-bit ARM platforms. Currently DAOS has been tested on aarch64 architecutres like the ARM-Cortex A53 processor.
-Apart from using a popular linux distribution, no special considerations are necessary to build DAOS on ARM plaforms.
-The same instructions that are used in Xeon are applicable for ARM builds as well, DAOS and its dependencies will make the necessary adjustments
-automatically in their respective build systems for ARM platforms.
-

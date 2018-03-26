@@ -22,7 +22,7 @@ RUN apt-get update
 RUN apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
 RUN apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
 RUN apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev
-RUN apt-get install -y curl doxygen pandoc flex patch
+RUN apt-get install -y curl doxygen pandoc flex patch readline-devel
 
 # Dependencies
 
