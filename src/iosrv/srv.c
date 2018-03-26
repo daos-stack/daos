@@ -576,11 +576,11 @@ dss_xstreams_init(int nr)
 	/** number of physical core, w/o hyperthreading */
 	ncores = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 
-	if (nr == 0)
-		/* start one xstream per core by default */
-		dss_nxstreams = ncores;
-	else
-		dss_nxstreams = nr;
+	if (!nr || nr > ncores)
+		D__PRINT("(%d/%d) cores requested; use default (%d) cores\n",
+			 nr, ncores, ncores);
+	/** default: one xstream per core (ncores) */
+	dss_nxstreams = (nr > 0 && nr <= ncores) ? nr : ncores;
 
 	/* initialize xstream-local storage */
 	rc = pthread_key_create(&dss_tls_key, NULL);
