@@ -181,7 +181,7 @@ crt_hg_reg(hg_class_t *hg_class, hg_id_t rpcid, crt_proc_cb_t in_proc_cb,
 	hg_ret = HG_Register(hg_class, rpcid, (hg_proc_cb_t)in_proc_cb,
 			     (hg_proc_cb_t)out_proc_cb, rpc_cb);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Register(rpcid: %#x) failed, hg_ret: %d.\n",
+		D_ERROR("HG_Register(rpcid: %#lx) failed, hg_ret: %d.\n",
 			rpcid, hg_ret);
 		rc = -DER_HG;
 	}

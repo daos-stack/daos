@@ -582,6 +582,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 
 	init_info.na_init_info.progress_mode = NA_DEFAULT;
 	init_info.na_init_info.auth_key = NULL;
+	init_info.na_init_info.max_contexts = 1;
 	init_info.na_class = NULL;
 	na_class = NA_Initialize_opt(info_string, server,
 				     &init_info.na_init_info);
@@ -706,7 +707,6 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 				hg_ret);
 			D_GOTO(out, rc = -DER_HG);
 		}
-
 		hg_context = HG_Context_create(crt_gdata.cg_hg->chg_hgcla);
 		if (hg_context == NULL) {
 			D_ERROR("Could not create HG context.\n");
@@ -726,6 +726,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 
 		init_info.na_init_info.progress_mode = NA_DEFAULT;
 		init_info.na_init_info.auth_key = NULL;
+		init_info.na_init_info.max_contexts = 1;
 		init_info.na_class = NULL;
 		na_class = NA_Initialize_opt(info_string, crt_is_service(),
 					     &init_info.na_init_info);
