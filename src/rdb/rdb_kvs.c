@@ -24,9 +24,10 @@
  * rdb: KVSs
  *
  * This file implements an LRU cache of rdb_kvs objects, each of which maps a
- * path to the matching dbtree handle. The cache enables us to have at most one
- * handle per tree, while potentially provides better path lookup performance.
+ * KVS path to the matching VOS object. The cache provides better KVS path
+ * lookup performance.
  */
+
 #define D_LOGFAC	DD_FAC(rdb)
 
 #include <daos_srv/rdb.h>
@@ -34,44 +35,36 @@
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
-static int rdb_kvs_lookup_internal(struct rdb *db, const rdb_path_t *path,
-				   bool alloc, struct rdb_kvs **kvs);
-
 struct rdb_kvs_open_arg {
-	daos_handle_t	deo_base;
-	daos_handle_t	deo_parent;
+	struct rdb     *deo_db;
+	rdb_oid_t	deo_parent;
+	uint64_t	deo_index;
 };
 
+/* Open key in arg->deo_parent. */
 static int
 rdb_kvs_open_path_cb(daos_iov_t *key, void *varg)
 {
 	struct rdb_kvs_open_arg	       *arg = varg;
-	daos_handle_t			parent;
-	daos_handle_t			child;
-	int				rc;
+	rdb_oid_t			parent = arg->deo_parent;
+	daos_iov_t			value;
 
-	if (daos_handle_is_inval(arg->deo_parent)) {
-		/* First key. */
-		parent = arg->deo_base;
-		if (key->iov_len == 0)
-			key = &rdb_attr_root;
-	} else {
-		parent = arg->deo_parent;
+	if (key->iov_len == 0) {
+		D_ASSERTF(parent == RDB_LC_ATTRS, DF_X64"\n", parent);
+		key = &rdb_lc_root;
 	}
-	rc = rdb_open_tree(parent, key, &child);
-	if (rc != 0)
-		return rc;
-
-	/* Prepare deo_parent for next key lookup. */
-	if (!daos_handle_is_inval(arg->deo_parent))
-		dbtree_close(arg->deo_parent);
-	arg->deo_parent = child;
-	return 0;
+	daos_iov_set(&value, &arg->deo_parent, sizeof(arg->deo_parent));
+	return rdb_lc_lookup(arg->deo_db->d_lc, arg->deo_index, parent, key,
+			     &value);
 }
 
-/* Open the KVS corresponding to path, which is not in the cache. */
+/*
+ * Open the KVS corresponding to path, which is not in the cache. Currently,
+ * the result is just an object ID, since object handles are not exported.
+ */
 static int
-rdb_kvs_open_path(struct rdb *db, const rdb_path_t *path, daos_handle_t *hdl)
+rdb_kvs_open_path(struct rdb *db, uint64_t index, const rdb_path_t *path,
+		  rdb_oid_t *object)
 {
 	rdb_path_t		p = *path;
 	struct rdb_kvs	       *kvs = NULL;
@@ -80,7 +73,7 @@ rdb_kvs_open_path(struct rdb *db, const rdb_path_t *path, daos_handle_t *hdl)
 
 	/* See if we can find a cache hit for a prefix of the path. */
 	while (rdb_path_pop(&p) == 0 && p.iov_len > 0) {
-		rc = rdb_kvs_lookup_internal(db, &p, false /* alloc */, &kvs);
+		rc = rdb_kvs_lookup(db, &p, index, false /* alloc */, &kvs);
 		if (rc == 0)
 			break;
 		else if (rc != -DER_NONEXIST)
@@ -93,19 +86,17 @@ rdb_kvs_open_path(struct rdb *db, const rdb_path_t *path, daos_handle_t *hdl)
 	p.iov_buf_len -= p.iov_len;
 	p.iov_len = path->iov_len - p.iov_len;
 	D_ASSERT(p.iov_len > 0);
-	arg.deo_base = kvs == NULL ? db->d_attr : kvs->de_hdl;
-	arg.deo_parent = DAOS_HDL_INVAL;
+	arg.deo_db = db;
+	arg.deo_parent = kvs == NULL ? RDB_LC_ATTRS : kvs->de_object;
+	arg.deo_index = index;
 	rc = rdb_path_iterate(&p, rdb_kvs_open_path_cb, &arg);
 	if (kvs != NULL)
 		rdb_kvs_put(db, kvs);
-	if (rc != 0) {
-		if (!daos_handle_is_inval(arg.deo_parent))
-			dbtree_close(arg.deo_parent);
+	if (rc != 0)
 		return rc;
-	}
 
-	D_DEBUG(DB_ANY, "got kvs handle "DF_U64"\n", arg.deo_parent.cookie);
-	*hdl = arg.deo_parent;
+	D_DEBUG(DB_ANY, "got kvs handle "DF_X64"\n", arg.deo_parent);
+	*object = arg.deo_parent;
 	return 0;
 }
 
@@ -115,19 +106,29 @@ rdb_kvs_obj(struct daos_llink *entry)
 	return container_of(entry, struct rdb_kvs, de_entry);
 }
 
+struct rdb_kvs_alloc_arg {
+	struct rdb     *dea_db;
+	uint64_t	dea_index;
+	bool		dea_alloc;
+};
+
 static int
 rdb_kvs_alloc_ref(void *key, unsigned int ksize, void *varg,
 		  struct daos_llink **link)
 {
-	struct rdb     *db = varg;
-	struct rdb_kvs *kvs;
-	void	       *buf;
-	int		rc;
+	struct rdb_kvs_alloc_arg       *arg = varg;
+	struct rdb_kvs		       *kvs;
+	void			       *buf;
+	int				rc;
+
+	if (!arg->dea_alloc) {
+		rc = -DER_NONEXIST;
+		goto err;
+	}
 
 	D_ALLOC_PTR(kvs);
 	if (kvs == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
-	D_INIT_LIST_HEAD(&kvs->de_list);
 
 	/* kvs->de_path */
 	D_ALLOC(buf, ksize);
@@ -136,12 +137,14 @@ rdb_kvs_alloc_ref(void *key, unsigned int ksize, void *varg,
 	memcpy(buf, key, ksize);
 	daos_iov_set(&kvs->de_path, buf, ksize);
 
-	/* kvs->de_hdl */
-	rc = rdb_kvs_open_path(db, &kvs->de_path, &kvs->de_hdl);
+	/* kvs->de_object */
+	rc = rdb_kvs_open_path(arg->dea_db, arg->dea_index, &kvs->de_path,
+			       &kvs->de_object);
 	if (rc != 0)
 		D_GOTO(err_path, rc);
 
-	D_DEBUG(DB_ANY, DF_DB": created %p len %u\n", DP_DB(db), kvs, ksize);
+	D_DEBUG(DB_ANY, DF_DB": created %p len %u\n", DP_DB(arg->dea_db), kvs,
+		ksize);
 	*link = &kvs->de_entry;
 	return 0;
 
@@ -158,9 +161,7 @@ rdb_kvs_free_ref(struct daos_llink *llink)
 {
 	struct rdb_kvs *kvs = rdb_kvs_obj(llink);
 
-	D_DEBUG(DB_ANY, "freeing %p "DF_U64"\n", kvs, kvs->de_hdl.cookie);
-	D_ASSERT(d_list_empty(&kvs->de_list));
-	dbtree_close(kvs->de_hdl);
+	D_DEBUG(DB_ANY, "freeing %p "DF_X64"\n", kvs, kvs->de_object);
 	D_FREE(kvs->de_path.iov_buf);
 	D_FREE_PTR(kvs);
 }
@@ -196,27 +197,33 @@ rdb_kvs_cache_destroy(struct daos_lru_cache *cache)
 	daos_lru_cache_destroy(cache);
 }
 
-static int
-rdb_kvs_lookup_internal(struct rdb *db, const rdb_path_t *path, bool alloc,
-			struct rdb_kvs **kvs)
+void
+rdb_kvs_cache_evict(struct daos_lru_cache *cache)
 {
-	struct daos_llink      *entry;
-	int			rc;
-
-	D_DEBUG(DB_ANY, DF_DB": looking up "DF_IOV": alloc=%d\n", DP_DB(db),
-		DP_IOV(path), alloc);
-	rc = daos_lru_ref_hold(db->d_kvss, path->iov_buf, path->iov_len,
-			       alloc ? db : NULL, &entry);
-	if (rc != 0)
-		return rc;
-	*kvs = rdb_kvs_obj(entry);
-	return 0;
+	daos_lru_cache_evict(cache, NULL /* cond */, NULL /* args */);
 }
 
 int
-rdb_kvs_lookup(struct rdb *db, const rdb_path_t *path, struct rdb_kvs **kvs)
+rdb_kvs_lookup(struct rdb *db, const rdb_path_t *path, uint64_t index,
+	       bool alloc, struct rdb_kvs **kvs)
 {
-	return rdb_kvs_lookup_internal(db, path, true /* alloc */, kvs);
+	struct rdb_kvs_alloc_arg	arg;
+	struct daos_llink	       *entry;
+	int				rc;
+
+	D_DEBUG(DB_TRACE, DF_DB": looking up "DF_IOV": alloc=%d\n", DP_DB(db),
+		DP_IOV(path), alloc);
+
+	arg.dea_db = db;
+	arg.dea_index = index;
+	arg.dea_alloc = alloc;
+	rc = daos_lru_ref_hold(db->d_kvss, path->iov_buf, path->iov_len, &arg,
+			       &entry);
+	if (rc != 0)
+		return rc;
+
+	*kvs = rdb_kvs_obj(entry);
+	return 0;
 }
 
 void

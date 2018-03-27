@@ -141,6 +141,86 @@ read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
 	return pool_map_create(buf, version, map);
 }
 
+/* Store uuid in file path. */
+static int
+uuid_store(const char *path, const uuid_t uuid)
+{
+	int	fd;
+	int	rc;
+
+	/* Create and open the UUID file. */
+	fd = open(path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+	if (fd < 0) {
+		D_ERROR(DF_UUID": failed to create uuid file %s: %d\n",
+			DP_UUID(uuid), path, errno);
+		rc = daos_errno2der(errno);
+		goto out;
+	}
+
+	/* Write the UUID. */
+	rc = write(fd, uuid, sizeof(uuid_t));
+	if (rc != sizeof(uuid_t)) {
+		if (rc != -1)
+			errno = EIO;
+		D_ERROR(DF_UUID": failed to write uuid into %s: %d %d\n",
+			DP_UUID(uuid), path, rc, errno);
+		rc = daos_errno2der(errno);
+		goto out_fd;
+	}
+
+	/* Persist the UUID. */
+	rc = fsync(fd);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to fsync %s: %d\n", DP_UUID(uuid),
+			path, errno);
+		rc = daos_errno2der(errno);
+	}
+
+	/* Free the resource and remove the file on errors. */
+out_fd:
+	close(fd);
+	if (rc != 0)
+		remove(path);
+out:
+	return rc;
+}
+
+/* Load uuid from file path. */
+static int
+uuid_load(const char *path, uuid_t uuid)
+{
+	int	fd;
+	int	rc;
+
+	/* Open the UUID file. */
+	fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		if (errno == ENOENT)
+			D_DEBUG(DB_MD, "failed to open uuid file %s: %d\n",
+				path, errno);
+		else
+			D_ERROR("failed to open uuid file %s: %d\n", path,
+				errno);
+		rc = daos_errno2der(errno);
+		goto out;
+	}
+
+	/* Read the UUID. */
+	rc = read(fd, uuid, sizeof(uuid_t));
+	if (rc == sizeof(uuid_t)) {
+		rc = 0;
+	} else {
+		if (rc != -1)
+			errno = EIO;
+		D_ERROR("failed to read %s: %d %d\n", path, rc, errno);
+		rc = daos_errno2der(errno);
+	}
+
+	close(fd);
+out:
+	return rc;
+}
+
 /*
  * Called by mgmt module on every storage node belonging to this pool.
  * "path" is the directory under which the VOS and metadata files shall be.
@@ -149,9 +229,8 @@ read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
 int
 ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 {
-	char	       *fpath;
-	int		fd;
-	int		rc;
+	char   *fpath;
+	int	rc;
 
 	uuid_generate(target_uuid);
 
@@ -159,34 +238,9 @@ ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 	rc = asprintf(&fpath, "%s/%s", path, DSM_META_FILE);
 	if (rc < 0)
 		return -DER_NOMEM;
-	fd = open(fpath, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
-	if (rc < 0) {
-		D_ERROR(DF_UUID": failed to create pool target file %s: %d\n",
-			DP_UUID(pool_uuid), fpath, errno);
-		D_GOTO(err_fpath, rc = daos_errno2der(errno));
-	}
-	rc = fsync(fd);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to fsync pool target file %s: %d\n",
-			DP_UUID(pool_uuid), fpath, errno);
-		D_GOTO(err_fd, rc = daos_errno2der(errno));
-	}
-	rc = close(fd);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to close pool target file %s: %d\n",
-			DP_UUID(pool_uuid), fpath, errno);
-		D_GOTO(err_file, rc = daos_errno2der(errno));
-	}
-
+	rc = uuid_store(fpath, target_uuid);
 	free(fpath);
-	return 0;
 
-err_fd:
-	close(fd);
-err_file:
-	remove(fpath);
-err_fpath:
-	free(fpath);
 	return rc;
 }
 
@@ -409,6 +463,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 		   d_rank_list_t *svc_addrs)
 {
 	d_rank_list_t	       *ranks;
+	uuid_t			rdb_uuid;
 	struct rsvc_client	client;
 	struct dss_module_info *info = dss_get_module_info();
 	crt_endpoint_t		ep;
@@ -425,8 +480,8 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/* Use the pool UUID as the RDB UUID. */
-	rc = rdb_dist_start(pool_uuid, pool_uuid, ranks, true /* create */,
+	uuid_generate(rdb_uuid);
+	rc = rdb_dist_start(rdb_uuid, pool_uuid, ranks, true /* create */,
 			    get_md_cap());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
@@ -485,7 +540,7 @@ out_client:
 	rsvc_client_fini(&client);
 out_creation:
 	if (rc != 0)
-		rdb_dist_stop(pool_uuid, pool_uuid, ranks, true /* destroy */);
+		rdb_dist_stop(pool_uuid, ranks, true /* destroy */);
 out_ranks:
 	daos_rank_list_free(ranks);
 out:
@@ -499,8 +554,7 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 	crt_group_t    *group;
 	int		rc;
 
-	rc = rdb_dist_stop(pool_uuid, pool_uuid, NULL /* ranks */,
-			   true /* destroy */);
+	rc = rdb_dist_stop(pool_uuid, NULL /* ranks */, true /* destroy */);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to destroy pool service: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -773,16 +827,14 @@ static struct rdb_cbs pool_svc_rdb_cbs = {
 	.dc_stop	= pool_svc_stop_cb
 };
 
-char *
-ds_pool_rdb_path(const uuid_t uuid, const uuid_t pool_uuid)
+static char *
+pool_svc_rdb_path_common(const uuid_t pool_uuid, const char *suffix)
 {
-	char	uuid_str[DAOS_UUID_STR_SIZE];
 	char   *name;
 	char   *path;
 	int	rc;
 
-	uuid_unparse_lower(uuid, uuid_str);
-	rc = asprintf(&name, RDB_FILE"%s", uuid_str);
+	rc = asprintf(&name, RDB_FILE"pool%s", suffix);
 	if (rc < 0)
 		return NULL;
 	rc = ds_mgmt_tgt_file(pool_uuid, name, NULL /* idx */, &path);
@@ -792,10 +844,72 @@ ds_pool_rdb_path(const uuid_t uuid, const uuid_t pool_uuid)
 	return path;
 }
 
+/* Return a pool service RDB path. */
+char *
+ds_pool_svc_rdb_path(const uuid_t pool_uuid)
+{
+	return pool_svc_rdb_path_common(pool_uuid, "");
+}
+
+/* Return a pool service RDB UUID file path. This file stores the RDB UUID. */
+static char *
+pool_svc_rdb_uuid_path(const uuid_t pool_uuid)
+{
+	return pool_svc_rdb_path_common(pool_uuid, "-uuid");
+}
+
+int
+ds_pool_svc_rdb_uuid_store(const uuid_t pool_uuid, const uuid_t uuid)
+{
+	char   *path;
+	int	rc;
+
+	path = pool_svc_rdb_uuid_path(pool_uuid);
+	if (path == NULL)
+		return -DER_NOMEM;
+	rc = uuid_store(path, uuid);
+	free(path);
+	return rc;
+}
+
+int
+ds_pool_svc_rdb_uuid_load(const uuid_t pool_uuid, uuid_t uuid)
+{
+	char   *path;
+	int	rc;
+
+	path = pool_svc_rdb_uuid_path(pool_uuid);
+	if (path == NULL)
+		return -DER_NOMEM;
+	rc = uuid_load(path, uuid);
+	free(path);
+	return rc;
+}
+
+int
+ds_pool_svc_rdb_uuid_remove(const uuid_t pool_uuid)
+{
+	char   *path;
+	int	rc;
+
+	path = pool_svc_rdb_uuid_path(pool_uuid);
+	if (path == NULL)
+		return -DER_NOMEM;
+	rc = remove(path);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to remove %s: %d\n",
+			DP_UUID(pool_uuid), path, errno);
+		rc = daos_errno2der(errno);
+	}
+	free(path);
+	return rc;
+}
+
 static int
 pool_svc_init(struct pool_svc *svc, const uuid_t uuid)
 {
 	char   *path;
+	uuid_t	rdb_uuid;
 	int	rc;
 
 	uuid_copy(svc->ps_uuid, uuid);
@@ -848,10 +962,16 @@ pool_svc_init(struct pool_svc *svc, const uuid_t uuid)
 	if (rc != 0)
 		D_GOTO(err_user, rc);
 
-	path = ds_pool_rdb_path(uuid, uuid);
-	if (path == NULL)
-		D_GOTO(err_user, rc);
-	rc = rdb_start(path, &pool_svc_rdb_cbs, svc, &svc->ps_db);
+	/* Start the RDB with rdb_uuid at path. */
+	rc = ds_pool_svc_rdb_uuid_load(uuid, rdb_uuid);
+	if (rc != 0)
+		goto err_handles;
+	path = ds_pool_svc_rdb_path(uuid);
+	if (path == NULL) {
+		rc = -DER_NOMEM;
+		goto err_handles;
+	}
+	rc = rdb_start(path, rdb_uuid, &pool_svc_rdb_cbs, svc, &svc->ps_db);
 	free(path);
 	if (rc != 0)
 		D_GOTO(err_user, rc);
@@ -991,7 +1111,7 @@ pool_svc_lookup(const uuid_t uuid, struct pool_svc **svcp)
 		 * out, return -DER_NOTLEADER so that the client tries other
 		 * replicas.
 		 */
-		path = ds_pool_rdb_path(uuid, uuid);
+		path = ds_pool_svc_rdb_path(uuid);
 		if (path == NULL) {
 			D_ERROR(DF_UUID": failed to get rdb path\n",
 				DP_UUID(uuid));
@@ -1235,7 +1355,7 @@ start_one(const uuid_t uuid, void *arg)
 	 * Check if an RDB file exists and we can access it, to avoid
 	 * unnecessary error messages from the ds_pool_svc_start() call.
 	 */
-	path = ds_pool_rdb_path(uuid, uuid);
+	path = ds_pool_svc_rdb_path(uuid);
 	if (path == NULL) {
 		D_ERROR(DF_UUID": failed allocate rdb path\n", DP_UUID(uuid));
 		return 0;
@@ -2795,7 +2915,7 @@ ds_pool_attr_get_handler(crt_rpc_t *rpc)
 		len = strlen(names) + /* trailing '\0' */ 1;
 		daos_iov_set(&key, names, len);
 		names += len;
-		daos_iov_set(&iovs[j], NULL, sizes[i]);
+		daos_iov_set(&iovs[j], NULL, 0);
 
 		rc = rdb_tx_lookup(&tx, &svc->ps_user, &key, &iovs[j]);
 
@@ -2805,6 +2925,7 @@ ds_pool_attr_get_handler(crt_rpc_t *rpc)
 				 (char *) key.iov_buf, rc);
 			D_GOTO(out_iovs, rc);
 		}
+		iovs[j].iov_buf_len = sizes[i];
 		sizes[i] = iovs[j].iov_len;
 
 		/* If buffer length is zero, send only size */

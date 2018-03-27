@@ -23,6 +23,7 @@
 /**
  * rdb: RPCs
  */
+
 #define D_LOGFAC	DD_FAC(rdb)
 
 #include <daos_srv/rdb.h>
@@ -183,7 +184,6 @@ static struct crt_req_format DQF_RDB_START =
 			   rdb_start_out_fields);
 
 static struct crt_msg_field *rdb_stop_in_fields[] = {
-	&CMF_UUID,	/* uuid */
 	&CMF_UUID,	/* pool */
 	&CMF_UINT32	/* flags */
 };

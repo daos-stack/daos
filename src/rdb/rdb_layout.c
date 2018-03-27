@@ -23,16 +23,26 @@
 /**
  * rdb: Storage Layout Definitions
  */
+
 #define D_LOGFAC	DD_FAC(rdb)
 
 #include <daos_srv/rdb.h>
 
 #include "rdb_layout.h"
 
-RDB_STRING_KEY(rdb_attr_, nreplicas);
-RDB_STRING_KEY(rdb_attr_, replicas);
-RDB_STRING_KEY(rdb_attr_, term);
-RDB_STRING_KEY(rdb_attr_, vote);
-RDB_STRING_KEY(rdb_attr_, log);
-RDB_STRING_KEY(rdb_attr_, applied);
-RDB_STRING_KEY(rdb_attr_, root);
+RDB_STRING_KEY(rdb_, dkey);
+
+/* Cookie for all VOS calls taking a cookie argument */
+uuid_t rdb_cookie;
+
+RDB_STRING_KEY(rdb_mc_, uuid);
+RDB_STRING_KEY(rdb_mc_, nreplicas);
+RDB_STRING_KEY(rdb_mc_, replicas);
+RDB_STRING_KEY(rdb_mc_, term);
+RDB_STRING_KEY(rdb_mc_, vote);
+RDB_STRING_KEY(rdb_mc_, lc);
+
+RDB_STRING_KEY(rdb_lc_, oid_next);
+RDB_STRING_KEY(rdb_lc_, entry_header);
+RDB_STRING_KEY(rdb_lc_, entry_data);
+RDB_STRING_KEY(rdb_lc_, root);

@@ -1089,7 +1089,7 @@ cont_attr_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		len = strlen(names) + /* trailing '\0' */ 1;
 		daos_iov_set(&key, names, len);
 		names += len;
-		daos_iov_set(&iovs[j], NULL, sizes[i]);
+		daos_iov_set(&iovs[j], NULL, 0);
 
 		rc = rdb_tx_lookup(tx, &cont->c_user, &key, &iovs[j]);
 
@@ -1101,6 +1101,7 @@ cont_attr_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 				 (char *) key.iov_buf, rc);
 			D_GOTO(out_iovs, rc);
 		}
+		iovs[j].iov_buf_len = sizes[i];
 		sizes[i] = iovs[j].iov_len;
 
 		/* If buffer length is zero, send only size */

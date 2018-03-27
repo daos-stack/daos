@@ -23,10 +23,14 @@
 /**
  * rdb: Utilities
  */
+
 #define D_LOGFAC	DD_FAC(rdb)
 
 #include <daos_srv/rdb.h>
 
+#include <daos_types.h>
+#include <daos_api.h>
+#include <daos_srv/vos.h>
 #include "rdb_internal.h"
 
 /*
@@ -169,117 +173,312 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, daos_iov_t *iov)
 	return buf_end - p;
 }
 
-/*
- * Tree value utilities
- *
- * These functions handle tree values that represent other trees. Currently,
- * each such value is simply a btr_root object; we may want to include at least
- * a magic number later.
- */
+/* VOS access utilities */
 
-static inline int
-rdb_tree_class(enum rdb_kvs_class class)
+void
+rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 {
-	switch (class) {
-	case RDB_KVS_GENERIC:
-		return DBTREE_CLASS_KV;
-	case RDB_KVS_INTEGER:
-		return DBTREE_CLASS_IV;
-	default:
-		return -DER_IO;
+	daos_ofeat_t feat;
+
+	memset(uoid, 0, sizeof(*uoid));
+	uoid->id_pub.lo = oid & ~RDB_OID_CLASS_MASK;
+	/* Since we don't really use d-keys, use HASHED for both classes. */
+	if ((oid & RDB_OID_CLASS_MASK) == RDB_OID_CLASS_GENERIC)
+		feat = DAOS_OF_DKEY_HASHED | DAOS_OF_AKEY_HASHED;
+	else
+		feat = DAOS_OF_DKEY_HASHED | DAOS_OF_AKEY_UINT64;
+	daos_obj_id_generate(&uoid->id_pub, feat, 0 /* cid */);
+}
+
+enum rdb_vos_op {
+	RDB_VOS_QUERY,
+	RDB_VOS_UPDATE
+};
+
+static void
+rdb_vos_set_iods(enum rdb_vos_op op, int n, daos_iov_t akeys[],
+		 daos_iov_t values[], daos_iod_t iods[])
+{
+	int i;
+
+	for (i = 0; i < n; i++) {
+		memset(&iods[i], 0, sizeof(iods[i]));
+		iods[i].iod_name = akeys[i];
+		iods[i].iod_type = DAOS_IOD_SINGLE;
+		if (op == RDB_VOS_UPDATE) {
+			D_ASSERT(values[i].iov_len > 0);
+			iods[i].iod_size = values[i].iov_len;
+		}
+		iods[i].iod_nr = 1;
 	}
 }
 
-int
-rdb_create_tree(daos_handle_t parent, daos_iov_t *key, enum rdb_kvs_class class,
-		uint64_t feats, unsigned int order, daos_handle_t *child)
+static void
+rdb_vos_set_sgls(enum rdb_vos_op op, int n, daos_iov_t values[],
+		 daos_sg_list_t sgls[])
 {
-	daos_iov_t	value;
-	struct btr_root	buf = {};
-	struct btr_attr	attr;
-	daos_handle_t	h;
-	int		rc;
+	int i;
 
-	/* Allocate the value and look up its address. */
-	daos_iov_set(&value, &buf, sizeof(buf));
-	rc = dbtree_update(parent, key, &value);
-	if (rc != 0)
-		return rc;
-	daos_iov_set(&value, NULL /* buf */, 0 /* size */);
-	rc = dbtree_lookup(parent, key, &value);
-	if (rc != 0)
-		return rc;
+	for (i = 0; i < n; i++) {
+		memset(&sgls[i], 0, sizeof(sgls[i]));
+		sgls[i].sg_nr = 1;
+		if (op == RDB_VOS_UPDATE)
+			D_ASSERT(values[i].iov_len > 0);
+		sgls[i].sg_iovs = &values[i];
+	}
+}
 
-	/* Create the child tree in the value. */
-	rc = dbtree_query(parent, &attr, NULL /* stat */);
-	if (rc != 0)
-		return rc;
-	rc = rdb_tree_class(class);
-	if (rc < 0)
-		return rc;
-	rc = dbtree_create_inplace(rc, feats, order, &attr.ba_uma,
-				   value.iov_buf, &h);
-	if (rc != 0)
-		return rc;
-
-	if (child == NULL)
-		dbtree_close(h);
-	else
-		*child = h;
+static inline int
+rdb_vos_fetch_check(daos_iov_t *value, daos_iov_t *value_orig)
+{
+	/*
+	 * An emtpy value represents nonexistence. Keep the caller value intact
+	 * in this case.
+	 */
+	if (value->iov_len == 0) {
+		*value = *value_orig;
+		return -DER_NONEXIST;
+	}
+	/*
+	 * If the caller has an expected value length, check whether the actual
+	 * value length matches it. (The != could be loosened to <, if
+	 * necessary for compatibility reasons.)
+	 */
+	if (value_orig->iov_len > 0 && value->iov_len != value_orig->iov_len)
+		return -DER_MISMATCH;
 	return 0;
 }
 
 int
-rdb_open_tree(daos_handle_t parent, daos_iov_t *key, daos_handle_t *child)
+rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
+	      daos_key_t *akey, daos_iov_t *value)
 {
-	daos_iov_t	value = {};
-	struct btr_attr	attr;
+	daos_unit_oid_t	uoid;
+	daos_iod_t	iod;
+	daos_sg_list_t	sgl;
+	daos_iov_t	value_orig = *value;
 	int		rc;
 
-	/* Look up the address of the value. */
-	rc = dbtree_lookup(parent, key, &value);
+	rdb_oid_to_uoid(oid, &uoid);
+	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
+	rdb_vos_set_sgls(RDB_VOS_QUERY, 1 /* n */, value, &sgl);
+	rc = vos_obj_fetch(cont, uoid, epoch, &rdb_dkey, 1 /* n */, &iod, &sgl);
 	if (rc != 0)
 		return rc;
 
-	/* Open the child tree in the value. */
-	rc = dbtree_query(parent, &attr, NULL /* stat */);
+	return rdb_vos_fetch_check(value, &value_orig);
+}
+
+/*
+ * Fetch the persistent address of a value. Such an address will remain valid
+ * until the value is punched and then aggregated or discarded, as rdb employs
+ * only DAOS_IOD_SINGLE values.
+ *
+ * We have to use the zero-copy methods, as vos_obj_fetch() doesn't work in
+ * this mode.
+ */
+int
+rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
+		   daos_key_t *akey, daos_iov_t *value)
+{
+	daos_unit_oid_t	uoid;
+	daos_iod_t	iod;
+	daos_handle_t	io;
+	daos_sg_list_t *sgl;
+	daos_iov_t	value_orig = *value;
+	int		rc;
+
+	rdb_oid_to_uoid(oid, &uoid);
+	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
+	rc = vos_obj_zc_fetch_begin(cont, uoid, epoch, &rdb_dkey, 1 /* n */,
+				    &iod, &io);
 	if (rc != 0)
 		return rc;
-	return dbtree_open_inplace(value.iov_buf, &attr.ba_uma, child);
+
+	rc = vos_obj_zc_sgl_at(io, 0 /* idx */, &sgl);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	if (sgl->sg_nr_out == 0) {
+		D_ASSERTF(iod.iod_size == 0, DF_U64"\n", iod.iod_size);
+		value->iov_buf = NULL;
+		value->iov_buf_len = 0;
+		value->iov_len = 0;
+	} else {
+		D_ASSERTF(sgl->sg_nr_out == 1, "%u\n", sgl->sg_nr_out);
+		D_ASSERTF(iod.iod_size == sgl->sg_iovs[0].iov_len,
+			  DF_U64" == "DF_U64"\n", iod.iod_size,
+			  sgl->sg_iovs[0].iov_len);
+		*value = sgl->sg_iovs[0];
+	}
+
+	rc = vos_obj_zc_fetch_end(io, &rdb_dkey, 1 /* n */, &iod, 0 /* err */);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+
+	return rdb_vos_fetch_check(value, &value_orig);
 }
 
 int
-rdb_destroy_tree(daos_handle_t parent, daos_iov_t *key)
+rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
+		   enum rdb_probe_opc opc, daos_key_t *akey_in,
+		   daos_key_t *akey_out, daos_iov_t *value)
 {
-	volatile daos_handle_t	hdl;
-	daos_handle_t		hdl_tmp;
-	struct btr_attr		attr;
+	vos_iter_param_t	param = {};
+	daos_handle_t		iter;
+	vos_iter_entry_t	entry;
 	int			rc;
 
-	/* Open the child tree. */
-	rc = rdb_open_tree(parent, key, &hdl_tmp);
-	if (rc != 0)
-		return rc;
-	hdl = hdl_tmp;
+	D_ASSERTF(opc == RDB_PROBE_FIRST, "unsupported opc: %d\n", opc);
+	D_ASSERT(akey_in == NULL);
 
-	rc = dbtree_query(parent, &attr, NULL /* stat */);
+	/* Find out the a-key. */
+	param.ip_hdl = cont;
+	rdb_oid_to_uoid(oid, &param.ip_oid);
+	param.ip_dkey = rdb_dkey;
+	param.ip_epr.epr_lo = epoch;
+	param.ip_epr.epr_hi = epoch;
+	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter);
 	if (rc != 0)
-		return rc;
-	TX_BEGIN(attr.ba_uma.uma_u.pmem_pool) {
-		/* Destroy the child tree. */
-		rc = dbtree_destroy(hdl);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-		hdl = DAOS_HDL_INVAL;
+		goto out;
+	rc = vos_iter_probe(iter, NULL /* anchor */);
+	if (rc != 0)
+		goto out_iter;
+	rc = vos_iter_fetch(iter, &entry, NULL /* anchor */);
+	if (rc != 0)
+		goto out_iter;
 
-		/* Delete the value. */
-		rc = dbtree_delete(parent, key, NULL);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		if (!daos_handle_is_inval(hdl))
-			dbtree_close(hdl);
-		rc = umem_tx_errno(rc);
-	} TX_END
+	/* Return the a-key. */
+	if (akey_out != NULL) {
+		if (akey_out->iov_buf == NULL) {
+			*akey_out = entry.ie_key;
+		} else if (akey_out->iov_buf_len >= entry.ie_key.iov_len) {
+			memcpy(akey_out->iov_buf, entry.ie_key.iov_buf,
+			       entry.ie_key.iov_len);
+			akey_out->iov_len = entry.ie_key.iov_len;
+		} else {
+			akey_out->iov_len = entry.ie_key.iov_len;
+		}
+	}
+
+	/* Fetch the value of the a-key. */
+	if (value != NULL) {
+		if (value->iov_buf == NULL)
+			rc = rdb_vos_fetch_addr(cont, epoch, oid, &entry.ie_key,
+						value);
+		else
+			rc = rdb_vos_fetch(cont, epoch, oid, &entry.ie_key,
+					   value);
+	}
+
+out_iter:
+	vos_iter_finish(iter);
+out:
 	return rc;
+}
+
+int
+rdb_vos_iterate(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
+		bool backward, rdb_iterate_cb_t cb, void *arg)
+{
+	vos_iter_param_t	param = {};
+	daos_handle_t		iter;
+	int			rc;
+
+	D_ASSERTF(!backward, "unsupported direction: %d\n", backward);
+
+	/* Prepare an iteration from the first a-key. */
+	param.ip_hdl = cont;
+	rdb_oid_to_uoid(oid, &param.ip_oid);
+	param.ip_dkey = rdb_dkey;
+	param.ip_epr.epr_lo = epoch;
+	param.ip_epr.epr_hi = epoch;
+	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			/* No a-keys. */
+			rc = 0;
+		goto out;
+	}
+	rc = vos_iter_probe(iter, NULL /* anchor */);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			/* No a-keys. */
+			rc = 0;
+		goto out_iter;
+	}
+
+	for (;;) {
+		daos_iov_t		value;
+		vos_iter_entry_t	entry;
+
+		/* Fetch the a-key and the address of its value. */
+		rc = vos_iter_fetch(iter, &entry, NULL /* anchor */);
+		if (rc != 0)
+			break;
+		daos_iov_set(&value, NULL /* buf */, 0 /* size */);
+		rc = rdb_vos_fetch_addr(cont, epoch, oid, &entry.ie_key,
+					&value);
+		if (rc != 0)
+			break;
+
+		rc = cb(iter, &entry.ie_key, &value, arg);
+		if (rc != 0) {
+			if (rc == 1)
+				/* Stop without errors. */
+				rc = 0;
+			break;
+		}
+
+		/* Move to next a-key. */
+		rc = vos_iter_next(iter);
+		if (rc != 0) {
+			if (rc == -DER_NONEXIST)
+				/* No more a-keys. */
+				rc = 0;
+			break;
+		}
+	}
+
+out_iter:
+	vos_iter_finish(iter);
+out:
+	return rc;
+}
+
+int
+rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
+	       daos_iov_t akeys[], daos_iov_t values[])
+{
+	daos_unit_oid_t	uoid;
+	daos_iod_t	iods[n];
+	daos_sg_list_t	sgls[n];
+
+	D_ASSERTF(n <= RDB_VOS_BATCH_MAX, "%d <= %d\n", n, RDB_VOS_BATCH_MAX);
+	rdb_oid_to_uoid(oid, &uoid);
+	rdb_vos_set_iods(RDB_VOS_UPDATE, n, akeys, values, iods);
+	rdb_vos_set_sgls(RDB_VOS_UPDATE, n, values, sgls);
+	return vos_obj_update(cont, uoid, epoch, rdb_cookie, RDB_PM_VER,
+			      &rdb_dkey, n, iods, sgls);
+}
+
+int
+rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
+	      daos_iov_t akeys[])
+{
+	daos_unit_oid_t	uoid;
+
+	rdb_oid_to_uoid(oid, &uoid);
+	return vos_obj_punch(cont, uoid, epoch, rdb_cookie, RDB_PM_VER,
+			     n == 0 ? NULL : &rdb_dkey, n,
+			     n == 0 ? NULL : akeys);
+}
+
+int
+rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
+{
+	daos_epoch_range_t range;
+
+	D_ASSERTF(low <= high && high <= DAOS_EPOCH_MAX, DF_U64" "DF_U64"\n",
+		  low, high);
+	range.epr_lo = low;
+	range.epr_hi = high;
+	return vos_epoch_discard(cont, &range, rdb_cookie);
 }

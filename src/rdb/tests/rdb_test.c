@@ -28,6 +28,7 @@
 #include "rpc.h"
 
 static char	       *rdb_file_path;
+static uuid_t		rdb_uuid;
 static struct rdb      *rdb_db;
 
 #define MUST(call)							\
@@ -208,6 +209,7 @@ rdbt_test_tx(bool update)
 	struct rdb_tx		tx;
 	struct rdb_kvs_attr	attr;
 	struct iterate_cb_arg	arg;
+	uint64_t		k = 0;
 	int			i;
 	int			rc;
 
@@ -264,6 +266,7 @@ rdbt_test_tx(bool update)
 	MUST(rdb_path_push(&path, &key));
 	daos_iov_set(&key, &keys[0], sizeof(keys[0]));
 	daos_iov_set(&value, buf, sizeof(buf));
+	value.iov_len = 0; /* no size check */
 	MUST(rdb_tx_lookup(&tx, &path, &key, &value));
 	D_ASSERTF(value.iov_len == strlen(value_written) + 1, DF_U64" == %zu\n",
 		  value.iov_len, strlen(value_written) + 1);
@@ -275,6 +278,17 @@ rdbt_test_tx(bool update)
 	arg.i = 0;
 	MUST(rdb_tx_iterate(&tx, &path, false /* backward */, iterate_cb,
 			    &arg));
+	/* Fetch the first key. */
+	daos_iov_set(&key, &k, sizeof(k));
+	daos_iov_set(&value, NULL, 0);
+	MUST(rdb_tx_fetch(&tx, &path, RDB_PROBE_FIRST, NULL, &key, &value));
+	D_ASSERTF(key.iov_len == sizeof(k), DF_U64" == %zu\n", key.iov_len,
+		  sizeof(k));
+	D_ASSERTF(k == keys[0], DF_U64" == "DF_U64"\n", k, keys[0]);
+	D_ASSERTF(value.iov_len == strlen(value_written) + 1, DF_U64" == %zu\n",
+		  value.iov_len, strlen(value_written) + 1);
+	D_ASSERT(memcmp(value.iov_buf, value_written,
+			strlen(value_written) + 1) == 0);
 	rdb_path_fini(&path);
 	MUST(rdb_tx_commit(&tx));
 	rdb_tx_end(&tx);
@@ -367,8 +381,10 @@ rdbt_init_handler(crt_rpc_t *rpc)
 
 	D_WARN("initializing rank %u: nreplicas=%u\n", rank, in->tii_nreplicas);
 	rdb_file_path = rdbt_path(in->tii_uuid);
+	uuid_copy(rdb_uuid, in->tii_uuid);
 	MUST(rdb_create(rdb_file_path, in->tii_uuid, 1 << 25, &ranks));
-	MUST(rdb_start(rdb_file_path, &rdbt_rdb_cbs, NULL /* arg */, &rdb_db));
+	MUST(rdb_start(rdb_file_path, in->tii_uuid, &rdbt_rdb_cbs,
+		       NULL /* arg */, &rdb_db));
 out:
 	crt_reply_send(rpc);
 }
@@ -381,7 +397,7 @@ rdbt_fini_handler(crt_rpc_t *rpc)
 	crt_group_rank(NULL /* grp */, &rank);
 	D_WARN("finalizing rank %u\n", rank);
 	rdb_stop(rdb_db);
-	MUST(rdb_destroy(rdb_file_path));
+	MUST(rdb_destroy(rdb_file_path, rdb_uuid));
 	D_FREE(rdb_file_path);
 	crt_reply_send(rpc);
 }

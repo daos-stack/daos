@@ -142,7 +142,10 @@ int ds_pool_hdl_evict(const uuid_t pool_uuid, const uuid_t handle_uuid);
 typedef int (*obj_iter_cb_t)(uuid_t cont_uuid, daos_unit_oid_t oid, void *arg);
 int ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *arg);
 
-char *ds_pool_rdb_path(const uuid_t uuid, const uuid_t pool_uuid);
+char *ds_pool_svc_rdb_path(const uuid_t pool_uuid);
+int ds_pool_svc_rdb_uuid_store(const uuid_t pool_uuid, const uuid_t uuid);
+int ds_pool_svc_rdb_uuid_load(const uuid_t pool_uuid, uuid_t uuid);
+int ds_pool_svc_rdb_uuid_remove(const uuid_t pool_uuid);
 int ds_pool_svc_start(const uuid_t uuid);
 void ds_pool_svc_stop(const uuid_t uuid);
 

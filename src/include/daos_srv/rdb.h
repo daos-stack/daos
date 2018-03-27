@@ -24,13 +24,14 @@
  * rdb: Replicated Database
  *
  * An RDB database comprises a hierarchy of key-value stores (KVSs), much like
- * how a file system comprises a hierarchy of directories. A value in a
- * (parent) KVS may be another (child) KVS. A KVS is therefore identified by a
- * path, which is the list of keys leading from the root KVS to the key whose
- * value is the KVS in question. A newly-created database is empty; to store
- * data, callers must first create the root KVS.
+ * how a file system comprises a hierarchy of directories. A key-value pair
+ * (KV) in a (parent) KVS may be another (child) KVS. A KVS is therefore
+ * identified by a path, which is the list of keys leading from the root KVS to
+ * the key whose value is the KVS in question. A newly-created database is
+ * empty; to store data, callers must first create the root KVS.
  *
  * Each KVS belongs to one of the predefined KVS classes (see rdb_kvs_class).
+ * Each value is a nonempty byte stream or a child KVS (see above).
  *
  * The key space of an example database may look like:
  *
@@ -82,6 +83,8 @@
  * aborted (i.e., all applied updates in the TX are rolled back), and
  * rdb_tx_commit() returns the error.
  *
+ * If a TX destroys a KVS, then it must first destroy any child KVSs.
+ *
  * If a TX does not include any updates, then rdb_tx_commit() will be a no-op
  * and is not required.
  *
@@ -89,7 +92,7 @@
  * advantage of Argobots's non-preemptive scheduling in order to simplify the
  * locking inside rdb.
  *
- * Caller locking guidelines:
+ * Caller locking rules:
  *
  *   rdb_tx_begin()
  *   rdlock(rl)
@@ -100,13 +103,20 @@
  *   unlock(wl)		// must after commit()
  *   unlock(rl)		// must after all {rd,wr}lock()s; may before commit()
  *   rdb_tx_end()
+ *
+ * These cases must be serialized:
+ *
+ *   - rdb_tx_destroy_{root,kvs}(kvs0) versus any query or update to kvs0 or
+ *     any of its child KVSs
+ *
+ *   - rdb_tx_create_{root,kvs}(kvs0) versus any query or update to kvs0 or any
+ *     of its child KVSs
  */
 
 #ifndef DAOS_SRV_RDB_H
 #define DAOS_SRV_RDB_H
 
 #include <daos/common.h>
-#include <daos/btree_class.h>
 #include <daos_types.h>
 
 /** Database (opaque) */
@@ -141,9 +151,9 @@ struct rdb_cbs {
 /** Database methods */
 int rdb_create(const char *path, const uuid_t uuid, size_t size,
 	       const d_rank_list_t *ranks);
-int rdb_destroy(const char *path);
-int rdb_start(const char *path, struct rdb_cbs *cbs, void *arg,
-	      struct rdb **dbp);
+int rdb_destroy(const char *path, const uuid_t uuid);
+int rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs,
+	      void *arg, struct rdb **dbp);
 void rdb_stop(struct rdb *db);
 void rdb_resign(struct rdb *db, uint64_t term);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
@@ -187,13 +197,13 @@ daos_iov_t	prefix ## name = {					\
 /** KVS classes */
 enum rdb_kvs_class {
 	RDB_KVS_GENERIC,	/**< hash-ordered byte-stream keys */
-	RDB_KVS_INTEGER		/**< ordered fixed-size integer keys */
+	RDB_KVS_INTEGER		/**< numerically-ordered uint64_t keys */
 };
 
 /** KVS attributes */
 struct rdb_kvs_attr {
 	enum rdb_kvs_class	dsa_class;
-	unsigned int		dsa_order;	/**< dbtree order */
+	unsigned int		dsa_order;	/**< dbtree order (unused) */
 };
 
 /**
@@ -232,15 +242,23 @@ int rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs,
 
 /** Probe operation codes */
 enum rdb_probe_opc {
-	RDB_PROBE_FIRST	= BTR_PROBE_FIRST,
-	RDB_PROBE_LAST	= BTR_PROBE_LAST,
-	RDB_PROBE_EQ	= BTR_PROBE_EQ,
-	RDB_PROBE_GE	= BTR_PROBE_GE,
-	RDB_PROBE_LE	= BTR_PROBE_LE
+	RDB_PROBE_FIRST,	/**< first key */
+	RDB_PROBE_LAST,		/**< unsupported */
+	RDB_PROBE_EQ,		/**< unsupported */
+	RDB_PROBE_GE,		/**< unsupported */
+	RDB_PROBE_LE		/**< unsupported */
 };
 
-/** Iteration callback */
-typedef dbtree_iterate_cb_t rdb_iterate_cb_t;
+/**
+ * Iteration callback
+ *
+ * When a callback returns an rc,
+ *   - if rc == 0, rdb_tx_iterate() continues;
+ *   - if rc == 1, rdb_tx_iterate() stops and returns 0;
+ *   - otherwise, rdb_tx_iterate() stops and returns rc.
+ */
+typedef int (*rdb_iterate_cb_t)(daos_handle_t ih, daos_iov_t *key,
+				daos_iov_t *val, void *arg);
 
 /** TX query methods */
 int rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs,
@@ -254,7 +272,7 @@ int rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward,
 /** Distributed helper methods */
 int rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
 		   const d_rank_list_t *ranks, bool create, size_t size);
-int rdb_dist_stop(const uuid_t uuid, const uuid_t pool_uuid,
-		  const d_rank_list_t *ranks, bool destroy);
+int rdb_dist_stop(const uuid_t pool_uuid, const d_rank_list_t *ranks,
+		  bool destroy);
 
 #endif /* DAOS_SRV_RDB_H */
