@@ -372,7 +372,7 @@ def run_test(source, target, env, for_signature, mode=None):
                            "%s " % (target[count], sup)
             if mode == "memcheck":
                 # Memory analysis
-                valgrind_str += "--leak-check=full "
+                valgrind_str += "--partial-loads-ok=yes --leak-check=full "
             elif mode == "helgrind":
                 # Thread analysis
                 valgrind_str += "--tool=helgrind "
