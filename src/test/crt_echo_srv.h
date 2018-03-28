@@ -148,6 +148,7 @@ int corpc_example_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *arg)
 
 struct crt_corpc_ops echo_co_ops = {
 	.co_aggregate = corpc_example_aggregate,
+	.co_pre_forward = NULL,
 };
 
 int bulk_test_cb(const struct crt_bulk_cb_info *cb_info)

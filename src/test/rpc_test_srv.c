@@ -154,6 +154,7 @@ srv_grp_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *arg)
 
 struct crt_corpc_ops grp_co_ops = {
 	.co_aggregate = srv_grp_aggregate,
+	.co_pre_forward = NULL,
 };
 
 

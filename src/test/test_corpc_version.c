@@ -313,6 +313,7 @@ corpc_ver_mismatch_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 
 struct crt_corpc_ops corpc_ver_mismatch_ops = {
 	.co_aggregate = corpc_ver_mismatch_aggregate,
+	.co_pre_forward = NULL,
 };
 
 void

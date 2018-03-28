@@ -61,6 +61,7 @@ static struct crt_req_format CQF_CRT_GRP_CREATE =
 
 static struct crt_corpc_ops crt_grp_create_co_ops = {
 	.co_aggregate = crt_grp_create_corpc_aggregate,
+	.co_pre_forward = NULL,
 };
 
 /* group destroy */
@@ -79,6 +80,7 @@ static struct crt_req_format CQF_CRT_GRP_DESTROY =
 
 static struct crt_corpc_ops crt_grp_destroy_co_ops = {
 	.co_aggregate = crt_grp_destroy_corpc_aggregate,
+	.co_pre_forward = NULL,
 };
 
 /* uri lookup */
@@ -250,6 +252,7 @@ static struct crt_msg_field *crt_iv_sync_out_fields[] = {
 
 static struct crt_corpc_ops crt_iv_sync_co_ops = {
 	.co_aggregate = crt_iv_sync_corpc_aggregate,
+	.co_pre_forward = NULL,
 };
 
 
@@ -280,6 +283,7 @@ static struct crt_req_format CQF_CRT_BARRIER =
 
 static struct crt_corpc_ops crt_barrier_corpc_ops = {
 	.co_aggregate = crt_hdlr_barrier_aggregate,
+	.co_pre_forward = NULL,
 };
 
 /* for broadcasting RAS notifications on rank failures */

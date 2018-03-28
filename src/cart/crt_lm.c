@@ -642,6 +642,7 @@ out:
 
 struct crt_corpc_ops crt_rank_evict_co_ops = {
 	.co_aggregate = crt_rank_evict_corpc_aggregate,
+	.co_pre_forward = NULL,
 };
 
 static struct lm_grp_priv_t *
