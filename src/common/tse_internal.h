@@ -33,8 +33,8 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 
-/* NB: tse_task_private is TSE_PRIV_SIZE = 248 bytes for now */
-#define TSE_TASK_ARG_LEN		128
+/* NB: tse_task_private is TSE_PRIV_SIZE = 504 bytes for now */
+#define TSE_TASK_ARG_LEN		376
 
 struct tse_task_private {
 	struct tse_sched_private	*dtp_sched;
@@ -80,7 +80,17 @@ struct tse_task_private {
 	 * fit in.
 	 */
 	void				*dtp_priv;
-	/** reserved buffer for user to assign embedded parameters */
+	/**
+	 * reserved buffer for user to assign embedded parameters, it also can
+	 * be used as task stack space that can push/pop parameters to
+	 * facilitate I/O handling. The embedded parameter uses buffer from the
+	 * bottom, and the stack space grows down from top.
+	 *
+	 * The sum of dtp_stack_top and dtp_embed_top should not exceed
+	 * TSE_TASK_ARG_LEN.
+	 */
+	uint32_t			 dtp_stack_top;
+	uint32_t			 dtp_embed_top;
 	char				 dtp_buf[TSE_TASK_ARG_LEN];
 };
 

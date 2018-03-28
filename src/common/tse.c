@@ -95,14 +95,95 @@ tse_task_buf_size(int size)
 void *
 tse_task_buf_embedded(tse_task_t *task, int size)
 {
-	struct tse_task_private *dtp = tse_task2priv(task);
+	struct tse_task_private	*dtp = tse_task2priv(task);
+	uint32_t		 avail_size;
 
 	/** Let's assume dtp_buf is always enough at the moment */
 	/** MSC - should malloc if size requested is bigger */
-	D__ASSERTF(tse_task_buf_size(size) <= sizeof(dtp->dtp_buf),
-		  "req size %u all size %lu\n",
-		  tse_task_buf_size(size), sizeof(dtp->dtp_buf));
+	avail_size = sizeof(dtp->dtp_buf) - dtp->dtp_stack_top;
+	D__ASSERTF(tse_task_buf_size(size) <= avail_size,
+		   "req size %u avail size %u (all_size %lu stack_top %u)\n",
+		   tse_task_buf_size(size), avail_size, sizeof(dtp->dtp_buf),
+		   dtp->dtp_stack_top);
+	dtp->dtp_embed_top = size;
 	return (void *)dtp->dtp_buf;
+}
+
+void *
+tse_task_stack_push(tse_task_t *task, uint32_t size)
+{
+	struct tse_task_private	*dtp = tse_task2priv(task);
+	void			*pushed_ptr;
+	uint32_t		 avail_size;
+
+	if (task == NULL || size == 0)
+		return NULL;
+
+	avail_size = sizeof(dtp->dtp_buf) -
+		     (dtp->dtp_stack_top + dtp->dtp_embed_top);
+	if (size > avail_size) {
+		D_ERROR("req size %u avail size %u (all_size %lu, stack_top %u,"
+			" embed_top %u).\n", size, avail_size,
+			sizeof(dtp->dtp_buf), dtp->dtp_stack_top,
+			dtp->dtp_embed_top);
+		return NULL;
+	}
+
+	dtp->dtp_stack_top += size;
+	pushed_ptr = dtp->dtp_buf + sizeof(dtp->dtp_buf) - dtp->dtp_stack_top;
+	D__ASSERT(dtp->dtp_stack_top <=
+		  (sizeof(dtp->dtp_buf) - dtp->dtp_embed_top));
+
+	return pushed_ptr;
+}
+
+void *
+tse_task_stack_pop(tse_task_t *task, uint32_t size)
+{
+	struct tse_task_private	*dtp = tse_task2priv(task);
+	void			*poped_ptr;
+
+	if (task == NULL || size == 0 || size > dtp->dtp_stack_top)
+		return NULL;
+
+	poped_ptr = dtp->dtp_buf + sizeof(dtp->dtp_buf) - dtp->dtp_stack_top;
+	dtp->dtp_stack_top -= size;
+	D__ASSERT(dtp->dtp_stack_top <=
+		  (sizeof(dtp->dtp_buf) - dtp->dtp_embed_top));
+
+	return poped_ptr;
+}
+
+int
+tse_task_stack_push_data(tse_task_t *task, void *data, uint32_t data_len)
+{
+	void	*stack_data;
+
+	if (task == NULL || data == NULL || data_len == 0)
+		return -DER_INVAL;
+
+	stack_data = tse_task_stack_push(task, data_len);
+	if (stack_data == NULL)
+		return -DER_OVERFLOW;
+
+	memcpy(stack_data, data, data_len);
+	return 0;
+}
+
+int
+tse_task_stack_pop_data(tse_task_t *task, void *data, uint32_t data_len)
+{
+	void	*stack_data;
+
+	if (task == NULL || data == NULL || data_len == 0)
+		return -DER_INVAL;
+
+	stack_data = tse_task_stack_pop(task, data_len);
+	if (stack_data == NULL)
+		return -DER_OVERFLOW;
+
+	memcpy(data, stack_data, data_len);
+	return 0;
 }
 
 void *

@@ -33,11 +33,11 @@
 
 /**
  * tse_task is used to track single asynchronous operation.
- * 256 bytes all together.
+ * 512 bytes all together.
  */
-#define TSE_TASK_SIZE		256
+#define TSE_TASK_SIZE		512
 /* 8 bytes for public members */
-#define TSE_PRIV_SIZE		248
+#define TSE_PRIV_SIZE		504
 
 typedef struct tse_task {
 	int			dt_result;
@@ -244,12 +244,12 @@ tse_task_result_process(tse_task_t *task, tse_task_cb_t callback, void *arg);
  * User should use private data by tse_task_set_priv() to pass large parameter.
  *
  * \param task [in] task to get the buffer.
- * \param task [in] task buffer size.
+ * \param size [in] task buffer size.
  *
  * \return	pointer to the buffer.
  **/
 void *
-tse_task_buf_embedded(tse_task_t *task, int buf_size);
+tse_task_buf_embedded(tse_task_t *task, int size);
 
 /**
  * Return the private data of the task.
@@ -257,6 +257,56 @@ tse_task_buf_embedded(tse_task_t *task, int buf_size);
  */
 void *
 tse_task_get_priv(tse_task_t *task);
+
+/**
+ * Push to task stack space. This API only reserves space on the task stack, no
+ * data copy involved.
+ *
+ * \param task [in] task to push the buffer.
+ * \param size [in] buffer size.
+ *
+ * \return	pointer to the pushed buffer in task stack,
+ *		NULL when overflow.
+ */
+void *
+tse_task_stack_push(tse_task_t *task, uint32_t size);
+
+/**
+ * Pop from task stack space. This API only reserves space on the task stack, no
+ * data copy involved.
+ *
+ * \param task [in] task to pop the buffer.
+ * \param size [in] buffer size.
+ *
+ * \return	pointer to the poped buffer in task stack,
+ *		NULL when overflow.
+ */
+void *
+tse_task_stack_pop(tse_task_t *task, uint32_t size);
+
+/**
+ * Push data to task stack space, will copy the data to stack.
+ *
+ * \param task [in]	task to push the buffer.
+ * \param data [in]	pointer of data to push
+ * \param len  [in]	length of data
+ *
+ * \return	zero for success, -DER_OVERFLOW when overflow.
+ */
+int
+tse_task_stack_push_data(tse_task_t *task, void *data, uint32_t len);
+
+/**
+ * Pop data from task stack space, will copy the data from stack.
+ *
+ * \param task [in]	task to push the buffer.
+ * \param data [in/out]	pointer of value to store the poped data
+ * \param len  [in]	length of data
+ *
+ * \return	zero for success, -DER_OVERFLOW when overflow.
+ */
+int
+tse_task_stack_pop_data(tse_task_t *task, void *data, uint32_t len);
 
 /**
  * Set or change the private data of the task. The original private data will
