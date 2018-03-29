@@ -8,75 +8,20 @@ DAOS requires a 64-bit processor architecture and is primarily developed on x64-
 
 Storage-class memory (SCM) can be emulated with DRAM by creating tmpfs mountpoints on the DAOS servers.
 
-## DAOS in Docker
+## Software Dependencies
 
-To build the Docker image, run the following command:
-
-    $ docker build -t daos -f Dockerfile.centos\:7 github.com/daos-stack/daos#:utils/docker
-
-This creates a CentOS7 image and builds the latest DAOS version from GitHub in this environment.
-For Ubuntu, replace Dockerfile.centos\:7 with Dockerfile.ubuntu\:16.04.
-
-To run the DAOS server in a new container:
-
-    $ docker run --tmpfs /mnt/daos:rw,uid=1000,size=1G -v /tmp/uri:/tmp/uri daos \
-      orterun -H localhost -np 1 --report-uri /tmp/uri/uri.txt daos_server
-
-This allocates 1GB of DRAM for DAOS storage. The more, the better.
-
-To run the DAOS unit tests:
-
-    $ docker run -v /tmp/uri:/tmp/uri daos \
-      orterun -H localhost -np 1 --ompi-server file:/tmp/uri/uri.txt daos_test
-
-## DAOS from Scratch
-
-### Build Prerequisites
-
-DAOS requires a C99-capable compiler, a golang compiler and the scons build tool. In addition, the DAOS stack leverages the following open source projects:
+DAOS requires a C99-capable compiler, a golang compiler and the scons build tool. Moreover, the DAOS stack leverages the following open source projects:
 - [CaRT](https://github.com/daos-stack/cart) that relies on both [Mercury](https://mercury-hpc.github.io) and [Libfabric](https://ofiwg.github.io/libfabric/) for lightweight network transport and [PMIx](https://github.com/pmix/master) for process set management. See the CaRT repository for more information on how to build the CaRT library.
 - [PMDK](https://github.com/pmem/pmdk.git) for persistent memory programming.
-- [SPDK](http://spdk.io) for NVMe device access and management
-- [ISA-L](https://github.com/01org/isa-l) for checksum and erasure code computation
+- [SPDK](http://spdk.io) for userspace NVMe device access and management.
+- [ISA-L](https://github.com/01org/isa-l) for checksum and erasure code computation.
 - [Argobots](https://github.com/pmodels/argobots) for thread management.
 
-If all the software dependencies listed above are already satisfied, then just type "scons" in the top source directory to build the DAOS stack. Otherwise, please follow the instructions in the section below to build DAOS with all the dependencies.
+The DAOS build system can be configured to download and build any missing dependencies automatically.
 
-### Building DAOS & Dependencies
+## DAOS Source Code
 
-The below instructions have been verified with CentOS. Installations on other Linux distributions might be similar with some variations. Please contact us in our [forum](users@daos.groups.io) if running into issues.
-
-(a) Pre-install dependencies
-Please install the following software packages (or equivalent for other distros):
-
-- On CentOS and openSuSE:
-    $ yum install -y epel-release
-    $ yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
-    $ yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
-    $ yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
-    $ yum install -y doxygen pandoc flex patch
-
-- On Ubuntu and Debian:
-    $ apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
-    $ apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
-    $ apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
-    $ apt-get install -y curl doxygen pandoc flex patch
-
-If no Cmocka RPMs are available, please install from [source](https://cmocka.org/files/1.1/cmocka-1.1.0.tar.xz) as detailed below:
-
-    $ tar xvf cmocka-1.1.0.tar.xz
-    $ cd cmocka
-    $ mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug .. && make && sudo make install
-
-Moreover, please make sure all the auto tools listed below are at the appropriate versions.
-
-    m4 (GNU M4) 1.4.16
-    flex 2.5.37
-    autoconf (GNU Autoconf) 2.69
-    automake (GNU automake) 1.13.4
-    libtool (GNU libtool) 2.4.2
-
-(b) Checking out the DAOS source code
+To check out the DAOS source code, run the following command:
 
     $ git clone https://github.com/daos-stack/daos.git
 
@@ -86,15 +31,92 @@ This clones the DAOS git repository (path referred as \${daospath} below). Then 
     $ git submodule init
     $ git submodule update
 
-(c) Building all dependencies automatically
+## DAOS in Docker
 
-Invoke scons with the following parameters:
+Docker is the fastest way to build, install and run DAOS on a non-Linux system.
 
-    $ scons --build-deps=yes install
+### Building DAOS in a Container
 
-The default installation path, modified by adding the PREFIX= option to the above command line is \${daospath}/install.   DAOS and its dependencies are installed here by default.   If TARGET\_PREFIX is added to the above command line, each dependency will be installed in a unique subdirectory at the specified location.
+To build the Docker image directly from GitHub, run the following command:
 
-(d) Environment setup
+    $ docker build -t daos -f Dockerfile.centos\:7 github.com/daos-stack/daos#:utils/docker
+
+This creates a CentOS7 image, fetches the latest DAOS version from GitHub and  builds it in the container.
+For Ubuntu, replace Dockerfile.centos\:7 with Dockerfile.ubuntu\:16.04.
+
+To build from a local tree stored on the host, a volume must be created to share the source tree with the Docker container. To do so, execute the following command to create a docker image without checking out the DAOS source tree:
+
+    $ docker build -t daos -f utils/docker/Dockerfile.centos\:7 --build-arg NOBUILD=1 .
+
+And then the following command to export the DAOS source tree to the docker container and build it:
+
+    $ docker run -v ${daospath}:/home/daos/daos:Z daos scons --build-deps=yes USE_INSTALLED=all install
+
+### Running DAOS in a Container
+
+Let's first create a container that will run the DAOS service:
+
+    $ docker run -it -d --name server --tmpfs /mnt/daos:rw,uid=1000,size=1G -v /tmp/uri:/tmp/uri daos
+
+Add "-v \${daospath}:/home/daos/daos:Z" to this command line if DAOS source tree is stored on the host.
+
+This allocates 1GB of DRAM for DAOS storage. The more, the better.
+
+To start the DAOS service in this newly created container, execute the following command:
+
+    $ docker exec server orterun -H localhost -np 1 --report-uri /tmp/uri/uri.txt daos_server
+
+Once the DAOS server is started, the integration tests can be run as follows:
+
+    $ docker run -v /tmp/uri:/tmp/uri daos \
+      orterun -H localhost -np 1 --ompi-server file:/tmp/uri/uri.txt daos_test
+
+Again, "-v \${daospath}:/home/daos/daos:Z" must be added if the DAOS source tree is shared with the host.
+
+## DAOS from Scratch
+
+The below instructions have been verified with CentOS. Installations on other Linux distributions might be similar with some variations. Please contact us in our [forum](users@daos.groups.io) if running into issues.
+
+### Build Prerequisites
+
+Please install the following software packages (or equivalent for other distros):
+
+On CentOS and openSuSE:
+
+    $ yum install -y epel-release
+    $ yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
+    $ yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
+    $ yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
+    $ yum install -y doxygen pandoc flex patch
+
+On Ubuntu and Debian:
+
+    $ apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
+    $ apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
+    $ apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
+    $ apt-get install -y curl doxygen pandoc flex patch
+
+Moreover, please make sure all the auto tools listed below are at the appropriate versions.
+
+    m4 (GNU M4) 1.4.16
+    flex 2.5.37
+    autoconf (GNU Autoconf) 2.69
+    automake (GNU automake) 1.13.4
+    libtool (GNU libtool) 2.4.2
+
+### Building DAOS & Dependencies
+
+If all the software dependencies listed previously are already satisfied, then just type the following command in the top source directory to build the DAOS stack:
+
+    $ scons install
+
+Otherwise, the missing dependencies can be built automatically by invoking scons with the following parameters:
+
+    $ scons --build-deps=yes USE_INSTALLED=all install
+
+By default, DAOS and its dependencies are installed under \${daospath}/install. The installation path can be modified by adding the PREFIX= option to the above command line (e.g. PREFIX=/usr/local).
+
+### Environment setup
 
 Once built, the environment must be modified to search for binaries and header files in the installation path. This step is not required if standard locations (e.g. /bin, /sbin, /usr/lib, ...) are used.
 
@@ -106,16 +128,9 @@ If using bash, PATH can be setup for you after a build by sourcing the script sc
 
 If required, \${daospath}/install must be replaced with the alternative path specified through PREFIX. The network type to use as well the debug log location can be selected as follows:
 
-    CRT_PHY_ADDR_STR="ofi+sockets",
+    export CRT_PHY_ADDR_STR="ofi+sockets",
 	OFI_INTERFACE=eth0, where eth0 is the network device you want to use.
 	for infiniband you could use ib0 or whichever else pointing to IB device.
-    export CRT_PHY_ADDR_STR
-
-Additionally, one might want to set the following environment variables to work around an Argobot issue:
-
-    ABT_ENV_MAX_NUM_XSTREAMS=100
-    ABT_MAX_NUM_XSTREAMS=100
-    export ABT_ENV_MAX_NUM_XSTREAMS ABT_MAX_NUM_XSTREAMS
 
 ### Running DAOS
 
@@ -158,11 +173,11 @@ Include the daos.h header file in your program and link with -Ldaos. Examples ar
 
 ## DAOS for Development
 
-Setting up DAOS for development would be simpler by building with running a separate command using TARGET\_PREFIX for all the dependencies and then using PREFIX for your custom DAOS installation from your sandbox and PREBUILT\_PREFIX to point to the same location specified for dependencies. Once the submodule has been initialized and updated, run the following:
+For development, it is recommended to build and install each dependency in a unique subdirectory. The DAOS build system supports this through the TARGET\_PREFIX variable. Once the submodules have been initialized and updated, run the following:
 
     $ scons PREFIX=$(daos_prefix_path} TARGET_PREFIX=${daos_prefix_path}/opt install --build-deps=yes
 
-With this type of installation each individual component is built into a different directory. Installing the components into seperate directories allow to upgrade the components individually replacing --build-deps=yes with --update-prereq={component\_name}. This requires change to the environment configuration from before.  For automated environment setup, source scons_local/utils/setup_local.sh.
+Installing the components into seperate directories allow to upgrade the components individually replacing --build-deps=yes with --update-prereq={component\_name}. This requires change to the environment configuration from before. For automated environment setup, source scons_local/utils/setup_local.sh.
 
     ARGOBOTS=${daos_prefix_path}/opt/argobots
     CART=${daos_prefix_path}/opt/cart
