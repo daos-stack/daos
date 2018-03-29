@@ -38,14 +38,13 @@ set +u
 job_real_name=""
 if [ -n "${JOB_NAME}" ];then
   job_real_name=${JOB_NAME%/*}
-  : ${JOB_SUFFIX:="-${job_real_name#*-}"}
+  : "${JOB_SUFFIX:="-${job_real_name#*-}"}"
 fi
 
-: ${TARGET:="${job_real_name%-*}"}
-: ${JOB_SUFFIX:="-master"}
-job_suffix=${JOB_SUFFIX#-}
+: "${TARGET:="${job_real_name%-*}"}"
+: "${JOB_SUFFIX:="-master"}"
 
-: ${DEPEND_INFO:="depend_info"}
+: "${DEPEND_INFO:="depend_info"}"
 
 update=""
 if [ "${1}" == "update" ]; then
@@ -58,14 +57,14 @@ if [ -n "${DEPEND_INFO}" ]; then
   rm -rf "${DEPEND_INFO}"
 fi
 
-: ${BRANCH_SUFFIX:="devel"}
+: "${BRANCH_SUFFIX:="devel"}"
 
-my_path="`dirname \"${0}\"`"
-my_path_back1="`dirname \"${my_path}\"`"
-my_path_back2="`dirname \"${my_path_back1}\"`"
-my_path_abs="`readlink -f \"${my_path_back2}\"`"
+my_path="$(dirname "${0}")"
+my_path_back1="$(dirname "${my_path}")"
+my_path_back2="$(dirname "${my_path_back1}")"
+my_path_abs="$(readlink -f "${my_path_back2}")"
 
-: ${SCONS_LOCAL:="${my_path_back2}"}
+: "${SCONS_LOCAL:="${my_path_back2}"}"
 
 # For the component repos, there should be a <name>-<name>_<suffix> Jenkins job
 # that has as artifacts the git commits wanted by the build.config file.
@@ -77,12 +76,12 @@ repo_base='ssh://review.whamcloud.com:29418'
 
 component_script="${PWD}/component_info.sh"
 
-pushd ${SCONS_LOCAL}
-  scons -f ${my_path_abs}/utils/docker/SConstruct_info \
-    --output-script=${component_script}
+pushd "${SCONS_LOCAL}"
+  scons -f "${my_path_abs}/utils/docker/SConstruct_info" \
+    --output-script="${component_script}"
 popd
 
-. ${component_script}
+. "${component_script}"
 
 # Keep public_repo_xxx arrays in same order and count.
 public_repo_name=(\
@@ -94,7 +93,9 @@ public_repo_name=(\
   'ofi' \
   'ompi' \
   'openpa' \
-  'pmix')
+  'pmix' \
+  'isal' \
+  'spdk')
 
 public_repo_dir=(\
   'daos/argobots' \
@@ -105,7 +106,9 @@ public_repo_dir=(\
   'coral/libfabric' \
   'coral/ompi' \
   'daos/openpa' \
-  'coral/pmix')
+  'coral/pmix' \
+  'daos/isal' \
+  'daos/spdk')
 
 # Keep comp_repo_xxx arrays in same order and count
 comp_repo_name=('cart' 'cppr' 'daos' 'iof')
@@ -118,13 +121,13 @@ std_repo_dir=("${public_repo_dir[@]}" "${comp_repo_dir[@]}")
 
 for i in "${!comp_repo_name[@]}"; do
   if [[ "${TARGET}" = "${comp_repo_name[i]}" ]]; then
-    if [ ! -d ${TARGET} ]; then
-      git clone ${repo_base}/${comp_repo_dir[i]} ${comp_repo_name[i]}
+    if [ ! -d "${TARGET}" ]; then
+      git clone "${repo_base}/${comp_repo_dir[i]}" "${comp_repo_name[i]}"
     fi
   fi
 done
 
-pushd ${TARGET}
+pushd "${TARGET}"
   git config advise.detachedHead false
   git clean -dfx
   git reset --hard
@@ -143,28 +146,28 @@ popd
 # If the repository has a scons_local submodule, then we want to make
 # sure that there is a tracking branch created for this.
 if [ -n "${scons_local_commit}" ]; then
-  pushd ${SCONS_LOCAL}
+  pushd "${SCONS_LOCAL}"
     set +e
-    repo=${TARGET}
+    repo="${TARGET}"
     my_commit=${scons_local_commit}
-    branch_commit="$(git rev-parse origin/${branch_name})"
+    branch_commit="$(git rev-parse "origin/${branch_name}")"
     rc=${?}
     set -e
     if [ ${rc} -eq 0 ]; then
       if [ "${my_commit}" != "${branch_commit}" ]; then
-        git branch -d ${branch_name} || true
-        git branch -f ${branch_name} ${my_commit}
+        git branch -d "${branch_name}" || true
+        git branch -f "${branch_name}" "${my_commit}"
         if [ -n "${update}" ]; then
-          git push -u origin ${branch_name}
+          git push -u origin "${branch_name}"
         else
            # Testing / dry-run mode
            echo "would git push -u origin ${branch_name} to ${repo}"
         fi
       fi
     else
-      git branch -f ${branch_name} ${my_commit}
+      git branch -f "${branch_name}" "${my_commit}"
       if [ -n "${update}" ]; then
-        git push -u origin ${branch_name}
+        git push -u origin "${branch_name}"
       else
         # Testing / dry-run mode.
         echo "would git push -u origin ${branch_name}"
@@ -175,8 +178,8 @@ fi
 
 print_err() { printf "%s\n" "$*" 1>&2; }
 
-def_build_config=`find . -name 'build.config' -print -quit`
-: ${BUILD_CONFIG:="${def_build_config}"}
+def_build_config=$(find . -name 'build.config' -print -quit)
+: "${BUILD_CONFIG:="${def_build_config}"}"
 
 set + u
 if [ -z "${BUILD_CONFIG}" ]; then
@@ -187,10 +190,11 @@ fi
 # Read and parse the git commit hashes from build.config
 gr1='grep -v depends='
 gr2='grep -v component='
-depend_hashes=`grep -i "\s*=\s*" ${BUILD_CONFIG} | ${gr1} | ${gr2}`
+depend_hashes=$(grep -i "\s*=\s*" "${BUILD_CONFIG}" | ${gr1} | ${gr2})
 mapfile -t depend_lines <<< "${depend_hashes}"
 depend_names=""
 for line in "${depend_lines[@]}"; do
+  # shellcheck disable=SC1001
   if [[ "${line}" != \#* ]]; then
     depend_name=${line%=*}
     depend_name=${depend_name% *}
@@ -240,27 +244,27 @@ for i in "${!std_repo_name[@]}"; do
     git checkout -f "${my_commit}"
     git clean -dfx
     set +e
-    branch_commit=`git rev-parse origin/${branch_name}`
+    branch_commit=$(git rev-parse "origin/${branch_name}")
     rc=${?}
     set -e
     if [ ${rc} -eq 0 ]; then
       if [ "${my_commit}" != "${branch_commit}" ]; then
-        git branch -d ${branch_name} || true
-        git branch -f ${branch_name} ${my_commit}
+        git branch -d "${branch_name}" || true
+        git branch -f "${branch_name}" "${my_commit}"
         if [ -n "${update}" ]; then
-          git push -f -u origin ${branch_name}
+          git push -f -u origin "${branch_name}"
         else
           echo "would git push -u origin ${branch_name} to ${repo}"
-          git branch -d ${branch_name} || true
+          git branch -d "${branch_name}" || true
         fi
       fi
     else
-      git branch -f ${branch_name} ${my_commit}
+      git branch -f "${branch_name}" "${my_commit}"
       if [ -n "${update}" ]; then
-        git push -f -u origin ${branch_name}
+        git push -f -u origin "${branch_name}"
       else
         echo "would git push -u origin ${branch_name}"
-        git branch -d ${branch_name} || true
+        git branch -d "${branch_name}" || true
       fi
     fi
     set -e
