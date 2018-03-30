@@ -8,7 +8,9 @@
 # uncommented
 function run_pool_tests {
     avocado run --show-job-log --html-job-result on --mux-yaml \
-	./pool/SimpleCreateDeleteTest.yaml -- ./pool/SimpleCreateDeleteTest.py
+	./pool/RebuildTests.yaml -- ./pool/RebuildTests.py
+#    avocado run --show-job-log --html-job-result on --mux-yaml \
+#	./pool/SimpleCreateDeleteTest.yaml -- ./pool/SimpleCreateDeleteTest.py
 #    avocado run --show-job-log --html-job-result on --mux-yaml \
 #	./pool/MultipleCreatesTest.yaml -- ./pool/MultipleCreatesTest.py
 #    avocado run --show-job-log --html-job-result on --mux-yaml \

@@ -1,0 +1,18 @@
+paths:
+   base: /home/skirvan/daos_rebuild/
+server:
+   server_group: daos_server
+binaries:
+   orterun: install/bin/orterun
+   daosctl: install/bin/daosctl
+testparams:
+   urifiles:
+      urifile: install/tmp/urifile
+   four_hosts:
+      hostfile: install/tmp/hostfile4
+   ranks:
+      simpletest:
+	rank_to_kill: 3
+   setnames:
+      validsetname:
+	setname: daos_server
