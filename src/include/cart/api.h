@@ -75,6 +75,29 @@ extern "C" {
  *                             CRT_DEFAULT_CLI_GRPID for client and
  *                             CRT_DEFAULT_SRV_GRPID for server.
  * \param[in] flags            bit flags, see \ref crt_init_flag_bits.
+ * \param[in] opt              additional init time options. If a NULL value
+ *                             is provided, this call becomes identical to
+ *                             crt_init().
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ *
+ * \note crt_init_opt() is a collective call which means every caller process
+ *       should make the call collectively, as now it will internally call
+ *       PMIx_Fence.
+ */
+int
+crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt);
+
+/**
+ * Initialize CRT transport layer. Must be called on both the server side and
+ * the client side. This function is reference counted, it can be called
+ * multiple times. Each call must be paired with a corresponding crt_finalize().
+ *
+ * \param[in] grpid            primary group ID, user can provide a NULL value
+ *                             in that case will use the default group ID,
+ *                             CRT_DEFAULT_CLI_GRPID for client and
+ *                             CRT_DEFAULT_SRV_GRPID for server.
+ * \param[in] flags            bit flags, see \ref crt_init_flag_bits.
  *
  * \return                     DER_SUCCESS on success, negative value if error
  *
@@ -82,8 +105,11 @@ extern "C" {
  *       should make the call collectively, as now it will internally call
  *       PMIx_Fence.
  */
-int
-crt_init(crt_group_id_t grpid, uint32_t flags);
+static inline int
+crt_init(crt_group_id_t grpid, uint32_t flags)
+{
+	return crt_init_opt(grpid, flags, NULL);
+}
 
 /**
  * Create CRT transport context. Must be destroyed by crt_context_destroy()

@@ -43,12 +43,11 @@
 #include "crt_internal.h"
 
 struct crt_gdata crt_gdata;
-static pthread_once_t gdata_init_once = PTHREAD_ONCE_INIT;
 static volatile int   gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 
 /* first step init - for initializing crt_gdata */
-static void data_init(void)
+static int data_init(crt_init_options_t *opt)
 {
 	uint32_t	timeout;
 	uint32_t	credits;
@@ -65,7 +64,10 @@ static void data_init(void)
 	D_INIT_LIST_HEAD(&crt_gdata.cg_ctx_list);
 
 	rc = D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
-	D_ASSERT(rc == 0);
+	if (rc != 0) {
+		D_ERROR("Failed to init cg_rwlock\n");
+		D_GOTO(exit, rc);
+	}
 
 	crt_gdata.cg_ctx_num = 0;
 	crt_gdata.cg_refcount = 0;
@@ -75,11 +77,17 @@ static void data_init(void)
 	crt_gdata.cg_multi_na = false;
 
 	timeout = 0;
-	d_getenv_int("CRT_TIMEOUT", &timeout);
+
+	if (opt && opt->crt_timeout != 0)
+		timeout = opt->crt_timeout;
+	else
+		d_getenv_int("CRT_TIMEOUT", &timeout);
+
 	if (timeout == 0 || timeout > 3600)
 		crt_gdata.cg_timeout = CRT_DEFAULT_TIMEOUT_S;
 	else
 		crt_gdata.cg_timeout = timeout;
+
 	D_DEBUG(DB_ALL, "set the global timeout value as %d second.\n",
 		crt_gdata.cg_timeout);
 
@@ -101,6 +109,8 @@ static void data_init(void)
 	D_ASSERT(crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
 
 	gdata_init_flag = 1;
+exit:
+	return rc;
 }
 
 static int
@@ -145,7 +155,7 @@ crt_plugin_init(void)
 }
 
 int
-crt_init(crt_group_id_t grpid, uint32_t flags)
+crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
 	crt_phy_addr_t	addr = NULL, addr_env;
 	struct timeval	now;
@@ -187,9 +197,9 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 	}
 
 	if (gdata_init_flag == 0) {
-		rc = pthread_once(&gdata_init_once, data_init);
+		rc = data_init(opt);
 		if (rc != 0) {
-			D_ERROR("crt_init failed, rc(%d) - %s.\n",
+			D_ERROR("data_init failed, rc(%d) - %s.\n",
 				rc, strerror(rc));
 			D_GOTO(out, rc = -rc);
 		}
@@ -437,7 +447,6 @@ crt_finalize(void)
 		/* allow the same program to re-initialize */
 		crt_gdata.cg_refcount = 0;
 		crt_gdata.cg_inited = 0;
-		gdata_init_once = PTHREAD_ONCE_INIT;
 		gdata_init_flag = 0;
 
 		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS)

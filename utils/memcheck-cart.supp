@@ -57,7 +57,7 @@
    fun:na_ofi_check_protocol
    fun:NA_Initialize_opt
    fun:crt_hg_init
-   fun:crt_init
+   fun:crt_init_opt
 }
 {
    FI leak 1
@@ -72,7 +72,7 @@
    fun:na_ofi_check_protocol
    fun:NA_Initialize_opt
    fun:crt_hg_init
-   fun:crt_init
+   fun:crt_init_opt
 }
 {
    FI leak 2
@@ -88,7 +88,7 @@
    fun:na_ofi_check_protocol
    fun:NA_Initialize_opt
    fun:crt_hg_init
-   fun:crt_init
+   fun:crt_init_opt
 }
 {
     CRYPTO leaks malloc

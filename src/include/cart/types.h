@@ -54,6 +54,22 @@
 #include <gurt/common.h>
 #include <gurt/list.h>
 
+/**
+ * Initialization options passed during crt_init() call.
+ *
+ * If the same value can be set via ENV variable as well as
+ * a field, the field takes the precedence.
+ */
+typedef struct crt_init_options {
+	/**
+	 * Global RPC timeout.
+	 *
+	 * This field is similar in behavior to setting of CRT_TIMEOUT
+	 * evnironment variable.
+	 */
+	int	crt_timeout;
+} crt_init_options_t;
+
 typedef int		 crt_status_t;
 /**
  * CRT uses a string as the group ID
