@@ -16,6 +16,10 @@ def scons():
     # Compiler options
     denv.Append(CPPPATH=['#/src/vos/'])
 
+    # VEA
+    SConscript('vea/SConscript')
+    denv.AppendUnique(LIBPATH=['vea'])
+
     if lib == "vos":
         # generate standalone library
         denv.Append(CPPDEFINES={'VOS_STANDALONE' : '1'})
@@ -24,7 +28,7 @@ def scons():
         # generate DAOS server module
         install = 'lib/daos_srv'
 
-    vos = daos_build.library(denv, lib, Glob('*.c'))
+    vos = daos_build.library(denv, lib, Glob('*.c'), LIBS=['vea'])
 
     denv.Install('$PREFIX/' + install, vos)
 

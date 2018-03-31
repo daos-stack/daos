@@ -1,0 +1,11 @@
+"""Build versioned extent allocator lib"""
+def scons():
+    """Execute build"""
+    Import('env')
+
+    denv = env.Clone()
+    denv.AppendUnique(CPPPATH=['#/src/vos/vea/'])
+    denv.Library('vea', Glob('*.c'), LIBS=['daos_common', 'gurt'])
+
+if __name__ == "SCons.Script":
+    scons()
