@@ -737,7 +737,7 @@ static void
 rebuild_destroy_container(void **state)
 {
 	test_arg_t	*arg = *state;
-	test_arg_t	*args[2];
+	test_arg_t	*args[2] = { 0 };
 	daos_obj_id_t	oids[OBJ_NR * 100];
 	int		i;
 	int		rc;
