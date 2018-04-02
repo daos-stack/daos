@@ -102,9 +102,6 @@ struct daos_eq_private {
 	unsigned int		eqx_lock_init:1,
 				eqx_finalizing:1;
 
-	/* All of its events are linked here */
-	struct d_hhash		*eqx_events_hash;
-
 	/* CRT context associated with this eq */
 	crt_context_t		eqx_ctx;
 

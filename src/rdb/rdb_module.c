@@ -55,13 +55,15 @@ static struct daos_rpc_handler rdb_handlers[] = {
 		.dr_opc		= RDB_START,
 		.dr_hdlr	= rdb_start_handler,
 		.dr_corpc_ops	= {
-			.co_aggregate	= rdb_start_aggregator
+			.co_aggregate	= rdb_start_aggregator,
+			.co_pre_forward	= NULL,
 		}
 	}, {
 		.dr_opc		= RDB_STOP,
 		.dr_hdlr	= rdb_stop_handler,
 		.dr_corpc_ops	= {
-			.co_aggregate	= rdb_stop_aggregator
+			.co_aggregate	= rdb_stop_aggregator,
+			.co_pre_forward	= NULL,
 		}
 	}, {
 	}

@@ -73,6 +73,8 @@ struct dc_obj_shard {
 
 /** Client stack object */
 struct dc_object {
+	/** link chain in the global handle hash table */
+	struct d_hlink		 cob_hlink;
 	/**
 	 * Object metadata stored in the OI table. For those object classes
 	 * and have no metadata in OI table, DAOS only stores OID and pool map
@@ -83,9 +85,7 @@ struct dc_object {
 	daos_handle_t		 cob_coh;
 	/** object open mode */
 	unsigned int		 cob_mode;
-	/** refcount on this object */
-	unsigned int		 cob_ref;
-	/** cob_spin protects cob_ref and obj_shards' do_ref */
+	/** cob_spin protects obj_shards' do_ref */
 	pthread_spinlock_t	 cob_spin;
 
 	/* cob_lock protects layout and shard objects ptrs */

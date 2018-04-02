@@ -67,7 +67,6 @@ obj_shard_decref(struct dc_obj_shard *shard)
 	do_free = (shard->do_ref == 0);
 	D_SPIN_UNLOCK(&shard->do_obj->cob_spin);
 	if (do_free) {
-		obj_decref(shard->do_obj);
 		shard->do_obj = NULL;
 		obj_shard_free(shard);
 	}
@@ -99,7 +98,6 @@ dc_obj_shard_open(struct dc_object *obj, uint32_t tgt, daos_unit_oid_t id,
 	if (obj_shard == NULL)
 		return -DER_NOMEM;
 
-	obj_addref(obj);
 	obj_shard->do_obj = obj;
 	obj_shard->do_co_hdl = obj->cob_coh;
 	obj_shard_addref(obj_shard);

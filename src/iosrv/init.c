@@ -236,7 +236,16 @@ server_init()
 			D__GOTO(exit_srv_init, rc);
 		}
 		D_INFO("Client stack enabled\n");
+	} else {
+		rc = daos_hhash_init();
+		if (rc) {
+			D_ERROR("daos_hhash_init failed, rc: %d.\n", rc);
+			D__GOTO(exit_srv_init, rc);
+		}
+		D_INFO("daos handle hash-table initialized\n");
 	}
+	/* server-side uses D_HTYPE_PTR handle */
+	daos_hhash_set_ptrtype();
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
@@ -252,6 +261,8 @@ server_init()
 exit_daos_fini:
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();
+	else
+		daos_hhash_fini();
 exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
@@ -273,6 +284,8 @@ server_fini(bool force)
 	dss_module_cleanup_all();
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();
+	else
+		daos_hhash_fini();
 	dss_srv_fini(force);
 	dss_module_unload_all();
 	ds_iv_fini();

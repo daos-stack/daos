@@ -126,19 +126,22 @@ static struct daos_rpc_handler pool_handlers[] = {
 		.dr_opc		= POOL_TGT_CONNECT,
 		.dr_hdlr	= ds_pool_tgt_connect_handler,
 		.dr_corpc_ops	= {
-			.co_aggregate	= ds_pool_tgt_connect_aggregator
+			.co_aggregate	= ds_pool_tgt_connect_aggregator,
+			.co_pre_forward	= NULL,
 		}
 	}, {
 		.dr_opc		= POOL_TGT_DISCONNECT,
 		.dr_hdlr	= ds_pool_tgt_disconnect_handler,
 		.dr_corpc_ops	= {
-			.co_aggregate	= ds_pool_tgt_disconnect_aggregator
+			.co_aggregate	= ds_pool_tgt_disconnect_aggregator,
+			.co_pre_forward	= NULL,
 		}
 	}, {
 		.dr_opc		= POOL_TGT_UPDATE_MAP,
 		.dr_hdlr	= ds_pool_tgt_update_map_handler,
 		.dr_corpc_ops	= {
-			.co_aggregate	= ds_pool_tgt_update_map_aggregator
+			.co_aggregate	= ds_pool_tgt_update_map_aggregator,
+			.co_pre_forward	= NULL,
 		}
 	}, {
 		.dr_opc		= 0

@@ -296,3 +296,113 @@ daos_file_is_dax(const char *pathname)
 {
 	return !strncmp(pathname, "/dev/dax", strlen("/dev/dax"));
 }
+
+/**
+ * Some helper functions for daos handle hash-table.
+ */
+struct daos_hhash_table {
+	struct d_hhash	*dht_hhash;
+	bool		 dht_ptrtype;
+};
+
+struct daos_hhash_table	daos_ht;
+static pthread_mutex_t	daos_ht_lock = PTHREAD_MUTEX_INITIALIZER;
+static unsigned int	daos_ht_ref;
+
+int
+daos_hhash_init(void)
+{
+	int rc;
+
+	D_MUTEX_LOCK(&daos_ht_lock);
+	if (daos_ht_ref > 0) {
+		daos_ht_ref++;
+		D__GOTO(unlock, rc = 0);
+	}
+
+	rc = d_hhash_create(D_HHASH_BITS, &daos_ht.dht_hhash);
+	if (rc == 0) {
+		D__ASSERT(daos_ht.dht_hhash != NULL);
+		daos_ht_ref = 1;
+	} else {
+		D_ERROR("failed to create handle hash table: %d\n", rc);
+	}
+
+unlock:
+	D_MUTEX_UNLOCK(&daos_ht_lock);
+	return rc;
+}
+
+int
+daos_hhash_fini(void)
+{
+	int rc = 0;
+
+	D_MUTEX_LOCK(&daos_ht_lock);
+	if (daos_ht_ref == 0)
+		D__GOTO(unlock, rc = -DER_UNINIT);
+	if (daos_ht_ref > 1) {
+		daos_ht_ref--;
+		D__GOTO(unlock, rc = 0);
+	}
+
+	D__ASSERT(daos_ht.dht_hhash != NULL);
+	d_hhash_destroy(daos_ht.dht_hhash);
+	daos_ht.dht_hhash = NULL;
+	daos_ht.dht_ptrtype = false;
+
+	daos_ht_ref = 0;
+unlock:
+	D_MUTEX_UNLOCK(&daos_ht_lock);
+	return rc;
+}
+
+void
+daos_hhash_set_ptrtype(void)
+{
+	daos_ht.dht_ptrtype = true;
+}
+
+static bool
+daos_hhash_is_ptrtype()
+{
+	return daos_ht.dht_ptrtype;
+}
+
+struct d_hlink *
+daos_hhash_link_lookup(uint64_t key)
+{
+	D__ASSERT(daos_ht.dht_hhash != NULL);
+	return d_hhash_link_lookup(daos_ht.dht_hhash, key);
+}
+
+void
+daos_hhash_link_insert(struct d_hlink *hlink, int type)
+{
+	D__ASSERT(daos_ht.dht_hhash != NULL);
+	if (daos_hhash_is_ptrtype() && d_hhash_key_isptr((uintptr_t)hlink))
+		type = D_HTYPE_PTR;
+
+	d_hhash_link_insert(daos_ht.dht_hhash, hlink, type);
+}
+
+void
+daos_hhash_link_getref(struct d_hlink *hlink)
+{
+	D__ASSERT(daos_ht.dht_hhash != NULL);
+	d_hhash_link_getref(daos_ht.dht_hhash, hlink);
+}
+
+void
+daos_hhash_link_putref(struct d_hlink *hlink)
+{
+	D__ASSERT(daos_ht.dht_hhash != NULL);
+	d_hhash_link_putref(daos_ht.dht_hhash, hlink);
+}
+
+bool
+daos_hhash_link_delete(struct d_hlink *hlink)
+{
+	D__ASSERT(daos_ht.dht_hhash != NULL);
+	return d_hhash_link_delete(daos_ht.dht_hhash, hlink);
+}

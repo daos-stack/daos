@@ -29,6 +29,8 @@
 
 /* Client container handle */
 struct dc_cont {
+	/** link chain in the global handle hash table */
+	struct d_hlink	  dc_hlink;
 	/* list to pool */
 	d_list_t	  dc_po_list;
 	/* object list for this container */
@@ -41,7 +43,6 @@ struct dc_cont {
 	uint64_t	  dc_capas;
 	/* pool handler of the container */
 	daos_handle_t	  dc_pool_hdl;
-	uint32_t	  dc_ref;
 	uint32_t	  dc_closing:1,
 			  dc_slave:1; /* generated via g2l */
 };
@@ -49,18 +50,20 @@ struct dc_cont {
 static inline struct dc_cont *
 dc_hdl2cont(daos_handle_t coh)
 {
-	struct dc_cont *cont = (struct dc_cont *)coh.cookie;
+	struct d_hlink *hlink;
 
-	cont->dc_ref++;
+	hlink = daos_hhash_link_lookup(coh.cookie);
+	if (hlink == NULL)
+		return NULL;
 
-	return cont;
+	return container_of(hlink, struct dc_cont, dc_hlink);
 }
 
 static inline void
 dc_cont2hdl(struct dc_cont *dc, daos_handle_t *hdl)
 {
-	dc->dc_ref++;
-	hdl->cookie = (unsigned long)dc;
+	daos_hhash_link_getref(&dc->dc_hlink);
+	daos_hhash_link_key(&dc->dc_hlink, &hdl->cookie);
 }
 
 void dc_cont_put(struct dc_cont *dc);

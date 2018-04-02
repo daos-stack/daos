@@ -60,8 +60,12 @@ dc_pool_fini(void)
 }
 
 static void
-pool_free(struct dc_pool *pool)
+pool_free(struct d_hlink *hlink)
 {
+	struct dc_pool *pool;
+
+	pool = container_of(hlink, struct dc_pool, dp_hlink);
+	D__ASSERT(daos_hhash_link_empty(&pool->dp_hlink));
 	D_RWLOCK_DESTROY(&pool->dp_map_lock);
 	D_MUTEX_DESTROY(&pool->dp_client_lock);
 	D_RWLOCK_DESTROY(&pool->dp_co_list_lock);
@@ -77,27 +81,44 @@ pool_free(struct dc_pool *pool)
 	D__FREE_PTR(pool);
 }
 
+static struct d_hlink_ops pool_h_ops = {
+	.hop_free	= pool_free,
+};
+
 void
 dc_pool_get(struct dc_pool *pool)
 {
-	pool->dp_ref++;
+	daos_hhash_link_getref(&pool->dp_hlink);
 }
 
 void
 dc_pool_put(struct dc_pool *pool)
 {
-	D__ASSERT(pool->dp_ref > 0);
-	if (--pool->dp_ref == 0)
-		pool_free(pool);
+	daos_hhash_link_putref(&pool->dp_hlink);
 }
 
 struct dc_pool *
 dc_hdl2pool(daos_handle_t poh)
 {
-	struct dc_pool *dp = (struct dc_pool *)poh.cookie;
+	struct d_hlink *hlink;
 
-	dp->dp_ref++;
-	return dp;
+	hlink = daos_hhash_link_lookup(poh.cookie);
+	if (hlink == NULL)
+		return NULL;
+
+	return container_of(hlink, struct dc_pool, dp_hlink);
+}
+
+static void
+dc_pool_hdl_link(struct dc_pool *pool)
+{
+	daos_hhash_link_insert(&pool->dp_hlink, D_HTYPE_POOL);
+}
+
+static void
+dc_pool_hdl_unlink(struct dc_pool *pool)
+{
+	daos_hhash_link_delete(&pool->dp_hlink);
 }
 
 static inline int
@@ -122,6 +143,7 @@ pool_alloc(void)
 		return NULL;
 	}
 
+	daos_hhash_hlink_init(&pool->dp_hlink, &pool_h_ops);
 	D_INIT_LIST_HEAD(&pool->dp_co_list);
 	rc = D_RWLOCK_INIT(&pool->dp_co_list_lock, NULL);
 	if (rc != 0)
@@ -137,7 +159,6 @@ pool_alloc(void)
 		D_MUTEX_DESTROY(&pool->dp_client_lock);
 		goto failed;
 	}
-	pool->dp_ref = 1;
 
 	return pool;
 
@@ -363,7 +384,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 		D__GOTO(out, rc);
 	}
 
-	/* add pool to hash */
+	/* add pool to hhash */
+	dc_pool_hdl_link(pool);
 	dc_pool2hdl(pool, arg->hdlp);
 
 	D_DEBUG(DF_DSMC, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID
@@ -435,6 +457,7 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	D_DEBUG(DF_DSMC, DF_UUID": create: hdl="DF_UUIDF" flags=%x\n",
 		DP_UUID(pool_uuid), DP_UUID(pool->dp_pool_hdl), flags);
 
+	dc_pool_hdl_link(pool);
 	dc_pool2hdl(pool, ph);
 out:
 	if (pool != NULL)
@@ -602,6 +625,8 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 
 	pl_map_disconnect(pool->dp_pool);
 
+	/* remove pool from hhash */
+	dc_pool_hdl_unlink(pool);
 	dc_pool_put(pool);
 	arg->hdl.cookie = 0;
 
@@ -646,6 +671,8 @@ dc_pool_disconnect(tse_task_t *task)
 			args->poh.cookie, DP_UUID(pool->dp_pool_hdl));
 
 		pl_map_disconnect(pool->dp_pool);
+		/* remove pool from hhash */
+		dc_pool_hdl_unlink(pool);
 		dc_pool_put(pool);
 		args->poh.cookie = 0;
 		D__GOTO(out_pool, rc);
@@ -913,6 +940,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 		D__GOTO(out, rc);
 
 	/* add pool to hash */
+	dc_pool_hdl_link(pool);
 	dc_pool2hdl(pool, poh);
 
 	D_DEBUG(DF_DSMC, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID

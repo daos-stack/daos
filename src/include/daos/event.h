@@ -55,16 +55,16 @@ struct tse_task_t;
 typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
 
 /**
- * Finish event queue library
+ * Finish event queue library.
  */
 int
 daos_eq_lib_fini(void);
 
 /**
- * Initialize event queue library
+ * Initialize event queue library.
  */
 int
-daos_eq_lib_init();
+daos_eq_lib_init(void);
 
 crt_context_t *
 daos_task2ctx(tse_task_t *task);

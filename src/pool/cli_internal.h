@@ -30,8 +30,8 @@
 static inline void
 dc_pool2hdl(struct dc_pool *pool, daos_handle_t *hdl)
 {
-	pool->dp_ref++;
-	hdl->cookie = (unsigned long)pool;
+	daos_hhash_link_getref(&pool->dp_hlink);
+	daos_hhash_link_key(&pool->dp_hlink, &hdl->cookie);
 }
 
 #endif /* __POOL_CLIENT_INTERNAL_H__ */

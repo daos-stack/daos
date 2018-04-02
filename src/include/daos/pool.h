@@ -41,6 +41,8 @@ void dc_pool_fini(void);
 
 /* Client pool handle */
 struct dc_pool {
+	/* link chain in the global handle hash table */
+	struct d_hlink		dp_hlink;
 	/* container list of the pool */
 	d_list_t		dp_co_list;
 	/* lock for the container list */
@@ -55,7 +57,6 @@ struct dc_pool {
 	pthread_rwlock_t	dp_map_lock;
 	struct pool_map	       *dp_map;
 	uint32_t		dp_ver;
-	uint32_t		dp_ref;
 	uint32_t		dp_disconnecting:1,
 				dp_slave:1; /* generated via g2l */
 };

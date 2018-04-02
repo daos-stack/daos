@@ -117,11 +117,16 @@ daos_init(void)
 	if (rc != 0)
 		D__GOTO(unlock, rc);
 
+	/** set up handle hash-table */
+	rc = daos_hhash_init();
+	if (rc != 0)
+		D__GOTO(out_debug, rc);
+
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: %d\n", rc);
-		D__GOTO(out_debug, rc);
+		D__GOTO(out_hhash, rc);
 	}
 
 	/** set up management interface */
@@ -161,6 +166,8 @@ out_mgmt:
 	dc_mgmt_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_hhash:
+	daos_hhash_fini();
 out_debug:
 	daos_debug_fini();
 unlock:
@@ -192,6 +199,7 @@ daos_fini(void)
 	dc_pool_fini();
 	dc_mgmt_fini();
 
+	daos_hhash_fini();
 	daos_debug_fini();
 	module_initialized = false;
 unlock:

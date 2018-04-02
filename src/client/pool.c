@@ -42,11 +42,11 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->grp	= grp;
-	args->svc	= svc;
-	args->flags	= flags;
-	args->poh	= poh;
-	args->info	= info;
+	args->grp		= grp;
+	args->svc		= svc;
+	args->flags		= flags;
+	args->poh		= poh;
+	args->info		= info;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
 	return dc_task_schedule(task, true);

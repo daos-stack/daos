@@ -1535,6 +1535,7 @@ static struct daos_rpc_handler rebuild_handlers[] = {
 		.dr_hdlr	= rebuild_tgt_scan_handler,
 		.dr_corpc_ops	= {
 			.co_aggregate	= rebuild_tgt_scan_aggregator,
+			.co_pre_forward	= NULL,
 		}
 	}, {
 		.dr_opc		= REBUILD_OBJECTS,

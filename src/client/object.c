@@ -72,11 +72,11 @@ daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->coh	= coh;
-	args->oid	= oid;
-	args->epoch	= epoch;
-	args->mode	= mode;
-	args->oh	= oh;
+	args->coh		= coh;
+	args->oid		= oid;
+	args->epoch		= epoch;
+	args->mode		= mode;
+	args->oh		= oh;
 
 	return dc_task_schedule(task, true);
 }

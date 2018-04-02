@@ -44,6 +44,7 @@
 #include <daos_types.h>
 #include <cart/api.h>
 #include <gurt/common.h>
+#include <gurt/hash.h>
 #include <daos/debug.h>
 
 
@@ -357,5 +358,18 @@ static inline int __is_po2(unsigned long long val)
 
 bool daos_csum_supported(const char *cs_name);
 bool daos_file_is_dax(const char *pathname);
+
+/* daos handle hash table helpers */
+int daos_hhash_init(void);
+int daos_hhash_fini(void);
+void daos_hhash_set_ptrtype(void);
+struct d_hlink *daos_hhash_link_lookup(uint64_t key);
+void daos_hhash_link_insert(struct d_hlink *hlink, int type);
+void daos_hhash_link_getref(struct d_hlink *hlink);
+void daos_hhash_link_putref(struct d_hlink *hlink);
+bool daos_hhash_link_delete(struct d_hlink *hlink);
+#define daos_hhash_hlink_init(hlink, ops)	d_hhash_hlink_init(hlink, ops)
+#define daos_hhash_link_empty(hlink)		d_hhash_link_empty(hlink)
+#define daos_hhash_link_key(hlink, key)		d_hhash_link_key(hlink, key)
 
 #endif /* __DAOS_COMMON_H__ */

@@ -106,19 +106,6 @@ open_retry:
 
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
 
-static struct dc_object *
-obj_alloc(void)
-{
-	struct dc_object *obj;
-
-	D__ALLOC_PTR(obj);
-	if (obj == NULL)
-		return NULL;
-
-	obj->cob_ref = 1;
-	return obj;
-}
-
 static void
 obj_layout_free(struct dc_object *obj)
 {
@@ -144,33 +131,45 @@ obj_layout_free(struct dc_object *obj)
 }
 
 static void
-obj_free(struct dc_object *obj)
+obj_free(struct d_hlink *hlink)
 {
+	struct dc_object *obj;
+
+	obj = container_of(hlink, struct dc_object, cob_hlink);
+	D__ASSERT(daos_hhash_link_empty(&obj->cob_hlink));
 	obj_layout_free(obj);
 	D_SPIN_DESTROY(&obj->cob_spin);
 	D_RWLOCK_DESTROY(&obj->cob_lock);
 	D__FREE_PTR(obj);
 }
 
+static struct d_hlink_ops obj_h_ops = {
+	.hop_free	= obj_free,
+};
+
+static struct dc_object *
+obj_alloc(void)
+{
+	struct dc_object *obj;
+
+	D__ALLOC_PTR(obj);
+	if (obj == NULL)
+		return NULL;
+
+	daos_hhash_hlink_init(&obj->cob_hlink, &obj_h_ops);
+	return obj;
+}
+
 void
 obj_decref(struct dc_object *obj)
 {
-	D_SPIN_LOCK(&obj->cob_spin);
-	obj->cob_ref--;
-	if (obj->cob_ref == 0) {
-		D_SPIN_UNLOCK(&obj->cob_spin);
-		obj_free(obj);
-	} else {
-		D_SPIN_UNLOCK(&obj->cob_spin);
-	}
+	daos_hhash_link_putref(&obj->cob_hlink);
 }
 
 void
 obj_addref(struct dc_object *obj)
 {
-	D_SPIN_LOCK(&obj->cob_spin);
-	obj->cob_ref++;
-	D_SPIN_UNLOCK(&obj->cob_spin);
+	daos_hhash_link_getref(&obj->cob_hlink);
 }
 
 static daos_handle_t
@@ -178,30 +177,32 @@ obj_ptr2hdl(struct dc_object *obj)
 {
 	daos_handle_t oh;
 
-	oh.cookie = (uint64_t)obj;
+	daos_hhash_link_key(&obj->cob_hlink, &oh.cookie);
 	return oh;
 }
 
 static struct dc_object *
 obj_hdl2ptr(daos_handle_t oh)
 {
-	struct dc_object *obj;
+	struct d_hlink *hlink;
 
-	obj = (struct dc_object *)oh.cookie;
-	obj_addref(obj);
-	return obj;
+	hlink = daos_hhash_link_lookup(oh.cookie);
+	if (hlink == NULL)
+		return NULL;
+
+	return container_of(hlink, struct dc_object, cob_hlink);
 }
 
 static void
 obj_hdl_link(struct dc_object *obj)
 {
-	obj_addref(obj);
+	daos_hhash_link_insert(&obj->cob_hlink, D_HTYPE_OBJ);
 }
 
 static void
 obj_hdl_unlink(struct dc_object *obj)
 {
-	obj_decref(obj);
+	daos_hhash_link_delete(&obj->cob_hlink);
 }
 
 static daos_handle_t

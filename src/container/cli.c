@@ -282,20 +282,38 @@ err:
 }
 
 static void
-dc_cont_free(struct dc_cont *dc)
+dc_cont_free(struct d_hlink *hlink)
 {
+	struct dc_cont *dc;
+
+	dc = container_of(hlink, struct dc_cont, dc_hlink);
+	D__ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
 	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
 	D__ASSERT(d_list_empty(&dc->dc_po_list));
 	D__ASSERT(d_list_empty(&dc->dc_obj_list));
 	D__FREE_PTR(dc);
 }
 
+static struct d_hlink_ops cont_h_ops = {
+	.hop_free	= dc_cont_free,
+};
+
 void
 dc_cont_put(struct dc_cont *dc)
 {
-	D__ASSERT(dc->dc_ref > 0);
-	if (--dc->dc_ref == 0)
-		dc_cont_free(dc);
+	daos_hhash_link_putref(&dc->dc_hlink);
+}
+
+static void
+dc_cont_hdl_link(struct dc_cont *dc)
+{
+	daos_hhash_link_insert(&dc->dc_hlink, D_HTYPE_CO);
+}
+
+static void
+dc_cont_hdl_unlink(struct dc_cont *dc)
+{
+	daos_hhash_link_delete(&dc->dc_hlink);
 }
 
 static struct dc_cont *
@@ -307,10 +325,10 @@ dc_cont_alloc(const uuid_t uuid)
 	if (dc == NULL)
 		return NULL;
 
+	daos_hhash_hlink_init(&dc->dc_hlink, &cont_h_ops);
 	uuid_copy(dc->dc_uuid, uuid);
 	D_INIT_LIST_HEAD(&dc->dc_obj_list);
 	D_INIT_LIST_HEAD(&dc->dc_po_list);
-	dc->dc_ref = 1;
 	if (D_RWLOCK_INIT(&dc->dc_obj_list_lock, NULL) != 0) {
 		free(dc);
 		dc = NULL;
@@ -374,6 +392,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	cont->dc_pool_hdl = arg->hdl;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
+	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, arg->hdlp);
 
 	D_DEBUG(DF_DSMC, DF_CONT": opened: cookie="DF_X64" hdl="DF_UUID
@@ -460,6 +479,7 @@ dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 	cont->dc_pool_hdl = ph;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
+	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
 out:
 	if (cont != NULL)
@@ -524,11 +544,11 @@ dc_cont_open(tse_task_t *task)
 	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
 	in->coi_capas = args->flags;
 
-	arg.coa_pool = pool;
-	arg.coa_info = args->info;
-	arg.rpc = rpc;
-	arg.hdl = args->poh;
-	arg.hdlp = args->coh;
+	arg.coa_pool		= pool;
+	arg.coa_info		= args->info;
+	arg.rpc			= rpc;
+	arg.hdl			= args->poh;
+	arg.hdlp		= args->coh;
 
 	crt_req_addref(rpc);
 
@@ -598,6 +618,7 @@ cont_close_complete(tse_task_t *task, void *data)
 		" master\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
 		arg->hdl.cookie, DP_UUID(cont->dc_cont_hdl));
 
+	dc_cont_hdl_unlink(cont);
 	dc_cont_put(cont);
 
 	/* Remove the container from pool container list */
@@ -651,6 +672,7 @@ dc_cont_close(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	if (cont->dc_slave) {
+		dc_cont_hdl_unlink(cont);
 		dc_cont_put(cont);
 
 		/* Remove the container from pool container list */
@@ -865,7 +887,7 @@ swap_co_glob(struct dc_cont_glob *cont_glob)
 	D__ASSERT(cont_glob != NULL);
 
 	D_SWAP32S(&cont_glob->dcg_magic);
-	/* skip cont_glob->dcg_padding) */
+	/* skip cont_glob->dcg_padding */
 	/* skip cont_glob->dcg_pool_hdl (uuid_t) */
 	/* skip cont_glob->dcg_uuid (uuid_t) */
 	/* skip cont_glob->dcg_cont_hdl (uuid_t) */
@@ -990,6 +1012,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
+	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
 
 	D_DEBUG(DF_DSMC, DF_UUID": opened "DF_UUID": cookie="DF_X64" hdl="

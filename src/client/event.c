@@ -34,8 +34,6 @@
 #include "client_internal.h"
 #include <daos/rpc.h>
 
-static struct d_hhash *daos_eq_hhash;
-
 /** thread-private event */
 static __thread daos_event_t	ev_thpriv;
 static __thread bool		ev_thpriv_is_init;
@@ -72,7 +70,7 @@ static __thread bool		ev_thpriv_is_init;
  */
 static crt_context_t daos_eq_ctx;
 static pthread_mutex_t daos_eq_lock = PTHREAD_MUTEX_INITIALIZER;
-static unsigned int refcount;
+static unsigned int eq_ref;
 
 /*
  * Pointer to global scheduler for events not part of an EQ. Events initialized
@@ -88,15 +86,9 @@ daos_eq_lib_init()
 	int		rc;
 
 	D_MUTEX_LOCK(&daos_eq_lock);
-	if (refcount > 0) {
-		refcount++;
+	if (eq_ref > 0) {
+		eq_ref++;
 		D__GOTO(unlock, rc = 0);
-	}
-
-	rc = d_hhash_create(D_HHASH_BITS, &daos_eq_hhash);
-	if (rc != 0) {
-		D_ERROR("failed to create hash for eq: %d\n", rc);
-		D__GOTO(unlock, rc);
 	}
 
 	/*
@@ -109,7 +101,7 @@ daos_eq_lib_init()
 	rc = crt_init(NULL, flags);
 	if (rc != 0) {
 		D_ERROR("failed to initialize crt: %d\n", rc);
-		D__GOTO(hash, rc);
+		D__GOTO(unlock, rc);
 	}
 
 	/* use a global shared context for all eq for now */
@@ -124,15 +116,13 @@ daos_eq_lib_init()
 	if (rc != 0)
 		D__GOTO(crt, rc);
 
-	refcount = 1;
+	eq_ref = 1;
 
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);
 	return rc;
 crt:
 	crt_finalize();
-hash:
-	d_hhash_destroy(daos_eq_hhash);
 	D__GOTO(unlock, rc);
 }
 
@@ -142,10 +132,10 @@ daos_eq_lib_fini()
 	int rc;
 
 	D_MUTEX_LOCK(&daos_eq_lock);
-	if (refcount == 0)
+	if (eq_ref == 0)
 		D__GOTO(unlock, rc = -DER_UNINIT);
-	if (refcount > 1) {
-		refcount--;
+	if (eq_ref > 1) {
+		eq_ref--;
 		D__GOTO(unlock, rc = 0);
 	}
 
@@ -166,10 +156,7 @@ daos_eq_lib_fini()
 		D__GOTO(unlock, rc);
 	}
 
-	D__ASSERT(daos_eq_hhash != NULL);
-	d_hhash_destroy(daos_eq_hhash);
-
-	refcount = 0;
+	eq_ref = 0;
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);
 	return rc;
@@ -187,7 +174,7 @@ daos_eq_free(struct d_hlink *hlink)
 	D__ASSERT(d_list_empty(&eq->eq_comp));
 	D__ASSERTF(eq->eq_n_comp == 0 && eq->eq_n_running == 0,
 		  "comp %d running %d\n", eq->eq_n_comp, eq->eq_n_running);
-	D__ASSERT(d_hhash_link_empty(&eqx->eqx_hlink));
+	D__ASSERT(daos_hhash_link_empty(&eqx->eqx_hlink));
 
 	if (eqx->eqx_lock_init)
 		D_MUTEX_DESTROY(&eqx->eqx_lock);
@@ -222,7 +209,7 @@ daos_eq_alloc(void)
 		goto out;
 	eqx->eqx_lock_init = 1;
 
-	d_hhash_hlink_init(&eqx->eqx_hlink, &eq_h_ops);
+	daos_hhash_hlink_init(&eqx->eqx_hlink, &eq_h_ops);
 	return eq;
 out:
 	daos_eq_free(&eqx->eqx_hlink);
@@ -234,7 +221,7 @@ daos_eq_lookup(daos_handle_t eqh)
 {
 	struct d_hlink *hlink;
 
-	hlink = d_hhash_link_lookup(daos_eq_hhash, eqh.cookie);
+	hlink = daos_hhash_link_lookup(eqh.cookie);
 	if (hlink == NULL)
 		return NULL;
 
@@ -244,28 +231,25 @@ daos_eq_lookup(daos_handle_t eqh)
 static void
 daos_eq_putref(struct daos_eq_private *eqx)
 {
-	D__ASSERT(daos_eq_hhash != NULL);
-	d_hhash_link_putref(daos_eq_hhash, &eqx->eqx_hlink);
+	daos_hhash_link_putref(&eqx->eqx_hlink);
 }
 
 static void
 daos_eq_delete(struct daos_eq_private *eqx)
 {
-	D__ASSERT(daos_eq_hhash != NULL);
-	d_hhash_link_delete(daos_eq_hhash, &eqx->eqx_hlink);
+	daos_hhash_link_delete(&eqx->eqx_hlink);
 }
 
 static void
 daos_eq_insert(struct daos_eq_private *eqx)
 {
-	D__ASSERT(daos_eq_hhash != NULL);
-	d_hhash_link_insert(daos_eq_hhash, &eqx->eqx_hlink, D_HTYPE_EQ);
+	daos_hhash_link_insert(&eqx->eqx_hlink, D_HTYPE_EQ);
 }
 
 static void
 daos_eq_handle(struct daos_eq_private *eqx, daos_handle_t *h)
 {
-	d_hhash_link_key(&eqx->eqx_hlink, &h->cookie);
+	daos_hhash_link_key(&eqx->eqx_hlink, &h->cookie);
 }
 
 static void
@@ -628,7 +612,7 @@ daos_eq_create(daos_handle_t *eqh)
 	int			 rc = 0;
 
 	/** not thread-safe, but best effort */
-	if (refcount == 0)
+	if (eq_ref == 0)
 		return -DER_UNINIT;
 
 	eq = daos_eq_alloc();

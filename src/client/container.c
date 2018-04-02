@@ -74,10 +74,10 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->poh	= poh;
-	args->flags	= flags;
-	args->coh	= coh;
-	args->info	= info;
+	args->poh		= poh;
+	args->flags		= flags;
+	args->coh		= coh;
+	args->info		= info;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
 	return dc_task_schedule(task, true);
