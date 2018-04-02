@@ -41,12 +41,10 @@
 #include <pthread.h>
 #include <byteswap.h>
 
-#include <daos_types.h>
-#include <cart/api.h>
-#include <gurt/common.h>
-#include <gurt/hash.h>
 #include <daos/debug.h>
-
+#include <daos_types.h>
+#include <gurt/hash.h>
+#include <cart/api.h>
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo

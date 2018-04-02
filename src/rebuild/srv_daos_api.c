@@ -25,17 +25,16 @@
  *
  * This file includes functions to call client daos API on the server side.
  */
-#define DDSUBSYS	DDFAC(rebuild)
+#define D_LOGFAC	DD_FAC(rebuild)
+#include <daos/pool.h>
+#include <daos/container.h>
+#include <daos/object.h>
+#include <daos/event.h>
 
 #include <daos_types.h>
 #include <daos_errno.h>
 #include <daos_event.h>
 #include <daos_task.h>
-
-#include <daos/pool.h>
-#include <daos/container.h>
-#include <daos/object.h>
-#include <daos/event.h>
 
 #include <daos_srv/daos_server.h>
 #include "rebuild_internal.h"

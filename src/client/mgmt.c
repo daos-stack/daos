@@ -20,12 +20,12 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DDSUBSYS	DDFAC(client)
-
-#include <daos_mgmt.h>
+#define D_LOGFAC	DD_FAC(client)
 
 #include <daos/mgmt.h>
 #include <daos/pool.h>
+#include <daos_mgmt.h>
+
 #include "client_internal.h"
 #include "task_internal.h"
 

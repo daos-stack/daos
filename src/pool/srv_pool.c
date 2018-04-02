@@ -26,8 +26,7 @@
  * This file contains the server API methods and the RPC handlers that are both
  * related pool metadata.
  */
-
-#define DDSUBSYS	DDFAC(pool)
+#define D_LOGFAC	DD_FAC(pool)
 
 #include <daos_srv/pool.h>
 

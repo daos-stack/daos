@@ -20,12 +20,12 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DDSUBSYS	DDFAC(common)
+#define D_LOGFAC	DD_FAC(common)
 
-#include <daos_types.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
+#include <daos_types.h>
 
 /**
  * typedef struct {

@@ -23,7 +23,7 @@
 /*
  * Target Methods
  */
-#define DDSUBSYS	DDFAC(mgmt)
+#define D_LOGFAC	DD_FAC(mgmt)
 
 #include <sys/stat.h>
 #include <fcntl.h>

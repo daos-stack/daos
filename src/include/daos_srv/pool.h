@@ -28,6 +28,7 @@
 #define __DAOS_SRV_POOL_H__
 
 #include <abt.h>
+#include <daos/common.h>
 #include <daos/lru.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>

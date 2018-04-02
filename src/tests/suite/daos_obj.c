@@ -25,7 +25,7 @@
  *
  * tests/suite/daos_obj.c
  */
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 #include "daos_iotest.h"
 
 static int dts_obj_class = DAOS_OC_R2S_RW;

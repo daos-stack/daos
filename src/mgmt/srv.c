@@ -30,7 +30,7 @@
  * The management server is a first-class server module (like object/pool
  * server-side library) and can be unloaded/reloaded.
  */
-#define DDSUBSYS	DDFAC(mgmt)
+#define D_LOGFAC	DD_FAC(mgmt)
 
 #include "srv_internal.h"
 #include <signal.h>

@@ -26,12 +26,13 @@
  * This module is part of libdaos. It implements the pool methods of DAOS API
  * as well as daos/pool.h.
  */
-#define DDSUBSYS	DDFAC(pool)
+#define D_LOGFAC	DD_FAC(pool)
 
-#include <daos_types.h>
+#include <daos/common.h>
 #include <daos/event.h>
 #include <daos/placement.h>
 #include <daos/pool.h>
+#include <daos_types.h>
 #include "cli_internal.h"
 #include "rpc.h"
 

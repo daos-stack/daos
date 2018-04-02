@@ -26,10 +26,9 @@
  * This is part of daos_server. It exports the pool RPC handlers and implements
  * Pool Server API.
  */
-#define DDSUBSYS	DDFAC(pool)
+#define D_LOGFAC	DD_FAC(pool)
 
 #include <daos_srv/pool.h>
-
 #include <daos/rpc.h>
 #include <daos_srv/daos_server.h>
 #include "rpc.h"

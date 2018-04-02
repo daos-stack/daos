@@ -23,7 +23,7 @@
 /**
  * server: RPC Utilities
  */
-#define DDSUBSYS       DDFAC(server)
+#define D_LOGFAC       DD_FAC(server)
 
 #include <daos_srv/daos_server.h>
 

@@ -25,7 +25,7 @@
  *
  * vos/tests/vts_common.c
  */
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 
 #include <stdio.h>
 #include <fcntl.h>

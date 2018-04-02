@@ -27,8 +27,9 @@
 #ifndef __DC_MGMT_H__
 #define __DC_MGMT_H__
 
-#include <daos_types.h>
+#include <daos/common.h>
 #include <daos/tse.h>
+#include <daos_types.h>
 
 int dc_mgmt_init(void);
 

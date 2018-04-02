@@ -20,11 +20,9 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-
-#define DDSUBSYS	DDFAC(tier)
+#define D_LOGFAC	DD_FAC(tier)
 
 #include <daos/tier.h>
-#include <daos/debug.h>
 #include "rpc.h"
 #include "cli_internal.h"
 

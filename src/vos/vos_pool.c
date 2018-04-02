@@ -27,11 +27,11 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
-#define DDSUBSYS	DDFAC(vos)
+#define D_LOGFAC	DD_FAC(vos)
 
+#include <daos/common.h>
 #include <daos_srv/vos.h>
 #include <daos_errno.h>
-#include <daos/common.h>
 #include <gurt/hash.h>
 #include <sys/stat.h>
 #include <sys/types.h>

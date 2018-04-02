@@ -23,7 +23,7 @@
 /**
  * dc_pool/ds_pool: RPC Protocol Serialization Functions
  */
-#define DDSUBSYS	DDFAC(pool)
+#define D_LOGFAC	DD_FAC(pool)
 
 #include <daos/rpc.h>
 #include "rpc.h"

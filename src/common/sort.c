@@ -27,7 +27,7 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
-#define DDSUBSYS	DDFAC(common)
+#define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
 

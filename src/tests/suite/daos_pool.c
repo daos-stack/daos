@@ -25,8 +25,7 @@
  *
  * tests/suite/pool.c
  */
-
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_test.h"
 

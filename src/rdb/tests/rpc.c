@@ -20,8 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-
-#define DDSUBSYS DDFAC(rdb)
+#define D_LOGFAC	DD_FAC(rdb)
 
 #include <daos/rpc.h>
 #include "rpc.h"

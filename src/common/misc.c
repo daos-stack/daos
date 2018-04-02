@@ -24,7 +24,7 @@
  * This file is part of daos. It implements some miscellaneous functions which
  * not belong to other parts.
  */
-#define DDSUBSYS	DDFAC(common)
+#define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
 

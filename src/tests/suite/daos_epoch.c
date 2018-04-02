@@ -23,8 +23,7 @@
 /*
  * Epoch Tests
  */
-
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_test.h"
 #include "daos_iotest.h"

@@ -26,8 +26,9 @@
 #ifndef __DC_TIER_H__
 #define __DC_TIER_H__
 
-#include <daos_types.h>
+#include <daos/common.h>
 #include <daos/tse.h>
+#include <daos_types.h>
 
 int  dc_tier_init(void);
 void dc_tier_fini(void);

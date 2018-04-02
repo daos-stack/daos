@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DDSUBSYS	DDFAC(object)
+#define D_LOGFAC	DD_FAC(object)
 
 #include "obj_internal.h"
 #include <daos_api.h>

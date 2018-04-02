@@ -26,7 +26,7 @@
  * dctc is the DCT part of client module/library. It exports part of the DCT
  * API defined in daos_tier.h.
  */
-#define DDSUBSYS	DDFAC(tier)
+#define D_LOGFAC	DD_FAC(tier)
 
 #include <daos/common.h>
 #include <daos_types.h>

@@ -1,4 +1,4 @@
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 
 #include <getopt.h>
 #include "daos_test.h"

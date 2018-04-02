@@ -27,8 +27,9 @@
 #ifndef __DAOS_SRV_BTREE_CLASS_H__
 #define __DAOS_SRV_BTREE_CLASS_H__
 
-#include <daos_types.h>
+#include <daos/common.h>
 #include <daos/btree.h>
+#include <daos_types.h>
 
 /* name-value: hash-ordered keys */
 #define DBTREE_CLASS_NV (DBTREE_DSM_BEGIN + 0)

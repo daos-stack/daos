@@ -23,10 +23,10 @@
 #ifndef __DAOS_OBJECT_H__
 #define __DAOS_OBJECT_H__
 
+#include <daos/common.h>
+#include <daos/tse.h>
 #include <daos_types.h>
 #include <daos_api.h>
-#include <daos/tse.h>
-#include <daos/common.h>
 
 /** object metadata stored in the global OI table of container */
 struct daos_obj_md {

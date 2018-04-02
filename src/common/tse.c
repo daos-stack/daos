@@ -30,7 +30,7 @@
  * it will walk through the task list of the scheduler and pick up those
  * ready tasks to executed.
  */
-#define DDSUBSYS	DDFAC(client)
+#define D_LOGFAC	DD_FAC(client)
 
 #include <stdint.h>
 #include <pthread.h>

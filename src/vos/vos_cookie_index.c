@@ -26,12 +26,10 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
-#define DDSUBSYS	DDFAC(vos)
+#define D_LOGFAC	DD_FAC(vos)
 
-#include <daos_errno.h>
-#include <daos/mem.h>
+#include <daos/common.h>
 #include <daos/btree.h>
-#include <daos_types.h>
 #include <vos_internal.h>
 #include <vos_obj.h>
 

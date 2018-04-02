@@ -24,12 +24,12 @@
  * tier_fetch
  * Implements cross-tier fetching of objects and sub-objects (or will soon).
  **/
-#define DDSUBSYS	DDFAC(tier)
+#define D_LOGFAC	DD_FAC(tier)
 
-#include <daos_types.h>
-#include <daos_api.h>
 #include <daos_srv/daos_server.h>
 #include <daos/rpc.h>
+#include <daos_types.h>
+#include <daos_api.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include <daos_srv/container.h>

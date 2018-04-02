@@ -27,13 +27,13 @@
  * - start/stop execution streams
  * - bind execution streams to core/NUMA node
  */
-#define DDSUBSYS       DDFAC(server)
+#define D_LOGFAC       DD_FAC(server)
 
 #include <abt.h>
+#include <daos/common.h>
+#include <daos/event.h>
 #include <daos_errno.h>
 #include <gurt/list.h>
-#include <daos/event.h>
-#include <daos_event.h>
 #include "srv_internal.h"
 
 /** Number of started xstreams or cores used */

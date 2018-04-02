@@ -21,15 +21,7 @@ Type		| Values
 
 ## Common
 
-Environment variables in this section apply to both the server side and the client side.
-
-### `DD_LOG`
-
-### `DD_FAC`
-
-### `DD_MASK`
-
-### `DD_STDERR`
+Environment variables in this section apply to both the server side and the client side
 
 ### `DD_TUNE_ALLOC`
 

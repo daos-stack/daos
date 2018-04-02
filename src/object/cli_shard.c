@@ -23,7 +23,7 @@
 /**
  * object shard operations.
  */
-#define DDSUBSYS	DDFAC(object)
+#define D_LOGFAC	DD_FAC(object)
 
 #include <daos/container.h>
 #include <daos/pool.h>

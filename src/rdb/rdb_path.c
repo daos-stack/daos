@@ -23,8 +23,7 @@
 /**
  * rdb: Paths
  */
-
-#define DDSUBSYS DDFAC(rdb)
+#define D_LOGFAC	DD_FAC(rdb)
 
 #include <daos_srv/rdb.h>
 

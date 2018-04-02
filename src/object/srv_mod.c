@@ -23,7 +23,7 @@
 /*
  * object server: module definitions
  */
-#define DDSUBSYS	DDFAC(object)
+#define D_LOGFAC	DD_FAC(object)
 
 #include <daos_srv/daos_server.h>
 #include <daos/rpc.h>

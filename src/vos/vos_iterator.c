@@ -25,7 +25,7 @@
  *
  * vos/iterator.c
  */
-#define DDSUBSYS	DDFAC(vos)
+#define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/btree.h>
 #include <daos_srv/vos.h>

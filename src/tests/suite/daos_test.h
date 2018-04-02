@@ -36,9 +36,9 @@
 #include <time.h>
 #include <cmocka.h>
 #include <mpi.h>
-#include <daos.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>
+#include <daos.h>
 
 extern int daos_event_priv_reset(void);
 

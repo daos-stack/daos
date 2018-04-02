@@ -23,7 +23,7 @@
 /**
  * ds_tier: Tier Server utility functions
  */
-#define DDSUBSYS	DDFAC(tier)
+#define D_LOGFAC	DD_FAC(tier)
 
 #include <daos_srv/daos_server.h>
 #include <daos/rpc.h>

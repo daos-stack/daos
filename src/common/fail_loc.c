@@ -25,7 +25,7 @@
  *
  * common/fail_loc.c to inject failure scenario
  */
-#define DDSUBSYS	DDFAC(common)
+#define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
 

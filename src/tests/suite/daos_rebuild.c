@@ -28,7 +28,8 @@
  *
  *
  */
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
+
 #include "daos_iotest.h"
 #include <daos/pool.h>
 

@@ -23,8 +23,7 @@
 /**
  * ds_cont: Epoch Operations
  */
-
-#define DDSUBSYS	DDFAC(container)
+#define D_LOGFAC	DD_FAC(container)
 
 #include <daos_srv/pool.h>
 #include <daos_srv/rdb.h>

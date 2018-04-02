@@ -29,7 +29,7 @@
  * Replication tests need external interaction, to
  * kill servers and update pool map.
 */
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 #include "daos_iotest.h"
 
 int		g_dkeys	  = 1000;

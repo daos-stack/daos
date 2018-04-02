@@ -1,4 +1,4 @@
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 
 #include <getopt.h>
 #include "daos_test.h"
@@ -6,7 +6,6 @@
 #include "tier_test.h"
 #include <sys/types.h>
 #include <unistd.h>
-#include <daos/debug.h>
 #include "daos_iotest.h"
 
 

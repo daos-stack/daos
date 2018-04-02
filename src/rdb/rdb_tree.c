@@ -27,8 +27,7 @@
  * path to the matching dbtree handle. The cache enables us to have at most one
  * handle per tree, while potentially provides better path lookup performance.
  */
-
-#define DDSUBSYS DDFAC(rdb)
+#define D_LOGFAC	DD_FAC(rdb)
 
 #include <daos_srv/rdb.h>
 

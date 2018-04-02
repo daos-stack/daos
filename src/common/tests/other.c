@@ -25,7 +25,7 @@
  *
  * src/common/tests/other.c
  */
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 
 #include <getopt.h>
 #include <daos/common.h>

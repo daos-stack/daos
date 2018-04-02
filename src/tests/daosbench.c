@@ -23,7 +23,7 @@
 /*
  * This is an MPI-based DAOS benchmarking tool.
  */
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 
 #include <time.h>
 #include <limits.h>
@@ -38,7 +38,7 @@
 #include <assert.h>
 #include <mpi.h>
 
-#include <gurt/list.h>
+#include <daos/common.h>
 #include <daos.h>
 #include <errno.h>
 #include "suite/daos_test.h"

@@ -34,7 +34,7 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
-#define DDSUBSYS	DDFAC(vos)
+#define D_LOGFAC	DD_FAC(vos)
 
 #include <stdint.h>
 #include <stdbool.h>

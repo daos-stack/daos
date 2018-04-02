@@ -37,7 +37,6 @@
 #include <daos_api.h>
 #include <daos_mgmt.h>
 #include <daos/common.h>
-#include <daos/debug.h>
 
 const char *program_bug_address = "scott.kirvan@intel.com";
 const char *program_version = "daosctl version 0.1";

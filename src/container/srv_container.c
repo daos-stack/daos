@@ -26,8 +26,7 @@
  * This file contains the server API methods and the RPC handlers that are both
  * related container metadata.
  */
-
-#define DDSUBSYS	DDFAC(container)
+#define D_LOGFAC	DD_FAC(container)
 
 #include <daos_srv/container.h>
 

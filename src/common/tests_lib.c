@@ -20,14 +20,14 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 
 /**
  * Test suite helper functions.
  */
-#include <daos.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>
+#include <daos.h>
 
 #define DTS_OCLASS_DEF		DAOS_OC_REPL_MAX_RW
 

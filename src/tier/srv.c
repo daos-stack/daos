@@ -28,7 +28,7 @@
  * the DCT server API methods are exported directly where they are defined as
  * extern functions.
  */
-#define DDSUBSYS	DDFAC(tier)
+#define D_LOGFAC	DD_FAC(tier)
 
 #include <daos_srv/daos_server.h>
 #include <daos/rpc.h>

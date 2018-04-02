@@ -25,7 +25,7 @@
  * to load server-side code on demand. DAOS modules are effectively dynamic
  * libraries loaded on-the-fly in the DAOS server via dlopen(3).
  */
-#define DDSUBSYS       DDFAC(server)
+#define D_LOGFAC       DD_FAC(server)
 
 #include <dlfcn.h>
 

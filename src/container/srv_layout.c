@@ -23,8 +23,7 @@
 /**
  * ds_cont: Container Server Storage Layout Definitions
  */
-
-#define DDSUBSYS	DDFAC(container)
+#define D_LOGFAC	DD_FAC(container)
 
 #include <daos_srv/rdb.h>
 #include "srv_layout.h"

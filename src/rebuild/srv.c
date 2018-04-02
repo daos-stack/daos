@@ -25,7 +25,7 @@
  *
  * Rebuild service module api.
  */
-#define DDSUBSYS	DDFAC(rebuild)
+#define D_LOGFAC	DD_FAC(rebuild)
 
 #include <daos/rpc.h>
 #include <daos/pool.h>

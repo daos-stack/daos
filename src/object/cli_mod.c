@@ -23,12 +23,12 @@
 /**
  * object client: Module Definitions
  */
-#define DDSUBSYS	DDFAC(object)
+#define D_LOGFAC	DD_FAC(object)
 
-#include <daos_types.h>
-#include <daos/rpc.h>
 #include <pthread.h>
 #include <daos/common.h>
+#include <daos/rpc.h>
+#include <daos_types.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 

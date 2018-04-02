@@ -24,7 +24,7 @@
  * This file is part of the DAOS server. It implements the startup/shutdown
  * routines for the daos_server.
  */
-#define DDSUBSYS	DDFAC(server)
+#define D_LOGFAC	DD_FAC(server)
 
 #include <signal.h>
 #include <abt.h>

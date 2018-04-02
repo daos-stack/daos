@@ -26,12 +26,10 @@
  * These are utilities help us deal with replicated services. Currently, it is
  * mainly about client state and client leader searching.
  */
-
-#define DDSUBSYS	DDFAC(common)
-
-#include <daos/rsvc.h>
+#define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
+#include <daos/rsvc.h>
 
 #define DF_CLI		"n=%u known=%d alive=%u term="DF_U64" index=%d next=%d"
 #define DP_CLI(c)	(c)->sc_ranks->rl_nr, (c)->sc_leader_known,	\

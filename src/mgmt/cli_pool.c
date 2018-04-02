@@ -23,7 +23,7 @@
 /*
  * Pool create/destroy methods
  */
-#define DDSUBSYS	DDFAC(mgmt)
+#define D_LOGFAC	DD_FAC(mgmt)
 
 #include <daos/mgmt.h>
 #include <daos/event.h>

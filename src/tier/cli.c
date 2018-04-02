@@ -26,7 +26,7 @@
  * Daos caching/tiering client module/library. It exports the DCT API defined in
  * daos_api.h.
  */
-#define DDSUBSYS	DDFAC(tier)
+#define D_LOGFAC	DD_FAC(tier)
 
 #include <pthread.h>
 #include <daos/rpc.h>

@@ -24,7 +24,7 @@
  * DAOS management client library. It exports the mgmt API defined in
  * daos_mgmt.h
  */
-#define DDSUBSYS	DDFAC(mgmt)
+#define D_LOGFAC	DD_FAC(mgmt)
 
 #include <daos/mgmt.h>
 #include <daos/event.h>

@@ -27,7 +27,7 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
-#define DDSUBSYS	DDFAC(common)
+#define D_LOGFAC	DD_FAC(common)
 
 #include <pthread.h>
 #include <daos/common.h>

@@ -29,12 +29,12 @@
 #ifndef __DAOS_POOL_H__
 #define __DAOS_POOL_H__
 
-#include <daos_types.h>
 #include <daos/common.h>
 #include <gurt/hash.h>
 #include <daos/pool_map.h>
 #include <daos/rsvc.h>
 #include <daos/tse.h>
+#include <daos_types.h>
 
 int dc_pool_init(void);
 void dc_pool_fini(void);

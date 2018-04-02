@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DDSUBSYS	DDFAC(vos)
+#define D_LOGFAC	DD_FAC(vos)
 
 #include "evt_priv.h"
 

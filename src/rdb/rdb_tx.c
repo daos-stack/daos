@@ -29,8 +29,7 @@
  *   - TX update applying: Unpack and apply the updates in an entry.
  *   - TX query methods: Call directly into dbtree.
  */
-
-#define DDSUBSYS DDFAC(rdb)
+#define D_LOGFAC	DD_FAC(rdb)
 
 #include <daos_srv/rdb.h>
 

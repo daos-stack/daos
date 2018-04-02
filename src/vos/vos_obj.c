@@ -25,10 +25,11 @@
  *
  * vos/vos_obj.c
  */
-#define DDSUBSYS	DDFAC(vos)
+#define D_LOGFAC	DD_FAC(vos)
 
-#include <daos_types.h>
+#include <daos/common.h>
 #include <daos/btree.h>
+#include <daos_types.h>
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
 #include "vos_internal.h"

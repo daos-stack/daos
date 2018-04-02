@@ -26,26 +26,28 @@
 
 #include <stdio.h>
 #include <assert.h>
-#include <gurt/dlog.h>
 
-/** predefined debug facilities (subsystems/modules) */
-extern unsigned int dd_fac_null;
-extern unsigned int dd_fac_misc;
-extern unsigned int dd_fac_common;
-extern unsigned int dd_fac_tree;
-extern unsigned int dd_fac_vos;
-extern unsigned int dd_fac_client;
-extern unsigned int dd_fac_server;
-extern unsigned int dd_fac_rdb;
-extern unsigned int dd_fac_pool;
-extern unsigned int dd_fac_container;
-extern unsigned int dd_fac_object;
-extern unsigned int dd_fac_placement;
-extern unsigned int dd_fac_rebuild;
-extern unsigned int dd_fac_tier;
-extern unsigned int dd_fac_mgmt;
-extern unsigned int dd_fac_utils;
-extern unsigned int dd_fac_tests;
+/**
+ * predefined debug facilities (subsystems/modules), they have to be declared
+ * before including any libgurt headers
+ */
+extern int d_null_logfac;
+extern int d_common_logfac;
+extern int d_tree_logfac;
+extern int d_vos_logfac;
+extern int d_client_logfac;
+extern int d_server_logfac;
+extern int d_rdb_logfac;
+extern int d_pool_logfac;
+extern int d_container_logfac;
+extern int d_object_logfac;
+extern int d_placement_logfac;
+extern int d_rebuild_logfac;
+extern int d_tier_logfac;
+extern int d_mgmt_logfac;
+extern int d_tests_logfac;
+
+#include <gurt/debug.h>
 
 /** other debug tunables */
 #define DD_TUNE_ALLOC		"DD_ALLOC"
@@ -68,8 +70,6 @@ extern bool dd_tune_alloc;
 #define DF_TIERC	DB_ANY
 #define DF_TIERS	DB_ANY
 #define DF_MISC		DB_ANY
-
-#define DDFAC(name)	dd_fac_##name
 
 #define D__ASSERTF(cond, fmt, ...)					\
 do {									\

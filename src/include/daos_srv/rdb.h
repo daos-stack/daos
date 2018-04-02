@@ -105,8 +105,9 @@
 #ifndef DAOS_SRV_RDB_H
 #define DAOS_SRV_RDB_H
 
-#include <daos_types.h>
+#include <daos/common.h>
 #include <daos/btree_class.h>
+#include <daos_types.h>
 
 /** Database (opaque) */
 struct rdb;

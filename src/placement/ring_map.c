@@ -25,7 +25,8 @@
  *
  * src/placement/ring_map.c
  */
-#define DDSUBSYS	DDFAC(placement)
+#define D_LOGFAC	DD_FAC(placement)
+
 #include "pl_map.h"
 
 /** placement ring */

@@ -41,31 +41,30 @@ static pthread_mutex_t dd_lock = PTHREAD_MUTEX_INITIALIZER;
 /** DAOS debug tunables */
 bool dd_tune_alloc = false;	/* disabled */
 
+#define DECLARE_FAC(name)	int DD_FAC(name)
 /** predefined log facilities */
-unsigned int dd_fac_null;
-unsigned int dd_fac_misc;
-unsigned int dd_fac_common;
-unsigned int dd_fac_tree;
-unsigned int dd_fac_vos;
-unsigned int dd_fac_client;
-unsigned int dd_fac_server;
-unsigned int dd_fac_rdb;
-unsigned int dd_fac_pool;
-unsigned int dd_fac_container;
-unsigned int dd_fac_object;
-unsigned int dd_fac_placement;
-unsigned int dd_fac_rebuild;
-unsigned int dd_fac_tier;
-unsigned int dd_fac_mgmt;
-unsigned int dd_fac_utils;
-unsigned int dd_fac_tests;
+DECLARE_FAC(null);
+DECLARE_FAC(common);
+DECLARE_FAC(tree);
+DECLARE_FAC(vos);
+DECLARE_FAC(client);
+DECLARE_FAC(server);
+DECLARE_FAC(rdb);
+DECLARE_FAC(pool);
+DECLARE_FAC(container);
+DECLARE_FAC(object);
+DECLARE_FAC(placement);
+DECLARE_FAC(rebuild);
+DECLARE_FAC(tier);
+DECLARE_FAC(mgmt);
+DECLARE_FAC(tests);
 
 /** debug facility (or subsystem/module) */
 struct daos_debug_fac {
 	/** name of the facility */
 	char		*df_name;
 	/** pointer to the facility ID */
-	unsigned int	*df_idp;
+	int		*df_idp;
 	/** debug bit-mask of the facility */
 	uint64_t	 df_mask;
 	/** facility is enabled */
@@ -73,47 +72,55 @@ struct daos_debug_fac {
 	size_t		 df_name_size;
 };
 
-#define DBG_DICT_ENTRY(bit, name, lname)				\
-	{ .db_bit = bit, .db_name = name, .db_lname = lname,		\
-	  .db_name_size = sizeof(name), .db_lname_size = sizeof(lname) }
+#define DBG_DICT_ENTRY(bit, name, lname)			\
+{								\
+	.db_bit = bit,						\
+	.db_name = name,					\
+	.db_lname = lname,					\
+	.db_name_size = sizeof(name),				\
+	.db_lname_size = sizeof(lname),				\
+}
 
 static struct d_debug_bit daos_bit_dict[] = {
 	/* load DAOS-specific debug bits into dict */
-	DBG_DICT_ENTRY(DB_MD, "md", "metadata"),
-	DBG_DICT_ENTRY(DB_PL, "pl", "placement"),
-	DBG_DICT_ENTRY(DB_MGMT, "mgmt", "management"),
-	DBG_DICT_ENTRY(DB_EPC, "epc", "epoch"),
-	DBG_DICT_ENTRY(DB_DF, "df", "durafmt"), /* durable format */
-	DBG_DICT_ENTRY(DB_REBUILD, "rebuild", NULL),
+	DBG_DICT_ENTRY(DB_MD,		"md",		"metadata"),
+	DBG_DICT_ENTRY(DB_PL,		"pl",		"placement"),
+	DBG_DICT_ENTRY(DB_MGMT,		"mgmt",		"management"),
+	DBG_DICT_ENTRY(DB_EPC,		"epc",		"epoch"),
+	DBG_DICT_ENTRY(DB_DF,		"df",		"durable_format"),
+	DBG_DICT_ENTRY(DB_REBUILD,	"rebuild",	"rebuild"),
 };
 
 #define NUM_DBG_BIT_ENTRIES ARRAY_SIZE(daos_bit_dict)
 
-#define DBG_FAC_DICT_ENTRY(name, idp, mask, enabled)		\
-	{ .df_name = name, .df_idp = idp, .df_mask = mask,	\
-	  .df_enabled = enabled, .df_name_size = sizeof(name) }
+#define DBG_FAC_DICT_ENT(name, idp, mask, enabled)		\
+{								\
+	.df_name	= name,					\
+	.df_idp		= idp,					\
+	.df_mask	= mask,					\
+	.df_enabled	= enabled,				\
+	.df_name_size	= sizeof(name),				\
+}
 
 /** dictionary for all facilities */
 static struct daos_debug_fac debug_fac_dict[] = {
 	/* MUST be the first one */
 	/* no facility name for NULL */
-	DBG_FAC_DICT_ENTRY("", &dd_fac_null, DB_NULL, 1),
-	DBG_FAC_DICT_ENTRY("misc", &dd_fac_misc, DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENTRY("common", &dd_fac_common, DB_DEFAULT, 0),
-	DBG_FAC_DICT_ENTRY("tree", &dd_fac_tree, DB_DEFAULT, 0),
-	DBG_FAC_DICT_ENTRY("vos", &dd_fac_vos, DB_DEFAULT, 0),
-	DBG_FAC_DICT_ENTRY("client", &dd_fac_client, DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENTRY("server", &dd_fac_server, DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENTRY("rdb", &dd_fac_rdb, DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENTRY("pool", &dd_fac_pool, DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENTRY("container", &dd_fac_container, DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENTRY("object", &dd_fac_object, DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENTRY("placement", &dd_fac_placement, DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENTRY("rebuild", &dd_fac_rebuild, DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENTRY("tier", &dd_fac_tier, DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENTRY("mgmt", &dd_fac_mgmt, DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENTRY("utils", &dd_fac_utils, DB_DEFAULT, 0),
-	DBG_FAC_DICT_ENTRY("tests", &dd_fac_tests, DB_DEFAULT, 0),
+	DBG_FAC_DICT_ENT("null",	&d_null_logfac,		DB_NULL, 1),
+	DBG_FAC_DICT_ENT("common",	&d_common_logfac,	DB_DEFAULT, 0),
+	DBG_FAC_DICT_ENT("tree",	&d_tree_logfac,		DB_DEFAULT, 0),
+	DBG_FAC_DICT_ENT("vos",		&d_vos_logfac,		DB_DEFAULT, 0),
+	DBG_FAC_DICT_ENT("client",	&d_client_logfac,	DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENT("server",	&d_server_logfac,	DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENT("rdb",		&d_rdb_logfac,		DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENT("pool",	&d_pool_logfac,		DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENT("container",	&d_container_logfac,	DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENT("object",	&d_object_logfac,	DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENT("placement",	&d_placement_logfac,	DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENT("rebuild",	&d_rebuild_logfac,	DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENT("tier",	&d_tier_logfac,		DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENT("mgmt",	&d_mgmt_logfac,		DB_DEFAULT, 1),
+	DBG_FAC_DICT_ENT("tests",	&d_tests_logfac,	DB_DEFAULT, 0),
 };
 
 #define NUM_DBG_FAC_ENTRIES ARRAY_SIZE(debug_fac_dict)
@@ -277,20 +284,20 @@ daos_debug_init(char *logfile)
 	rc = d_log_init_adv("DAOS", logfile, DLOG_FLV_LOGPID,
 			    DLOG_INFO, DLOG_CRIT);
 	if (rc != 0) {
-		fprintf(stderr, "Failed to initialize debug log: %d\n", rc);
+		fprintf(stderr, "Failed to init DAOS debug log: %d\n", rc);
 		goto failed_unlock;
 	}
 
 	for (i = 0; i < NUM_DBG_FAC_ENTRIES; i++) {
 		if (!debug_fac_dict[i].df_enabled) {
 			/* redirect disabled facility to NULL */
-			*debug_fac_dict[i].df_idp = dd_fac_null;
+			*debug_fac_dict[i].df_idp = d_null_logfac;
 			continue;
 		}
 
 		rc = debug_fac_register(&debug_fac_dict[i]);
 		if (rc != 0) {
-			fprintf(stderr, "Failed to add facility %s: %d\n",
+			fprintf(stderr, "Failed to add DAOS facility %s: %d\n",
 				debug_fac_dict[i].df_name, rc);
 			goto failed_fini;
 		}

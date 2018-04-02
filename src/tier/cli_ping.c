@@ -23,8 +23,9 @@
 /*
  * dctc_ping: Client portion of ping test
  */
-#define DDSUBSYS	DDFAC(tier)
+#define D_LOGFAC	DD_FAC(tier)
 
+#include <daos/debug.h>
 #include <daos_types.h>
 #include <daos_tier.h>
 #include "rpc.h"

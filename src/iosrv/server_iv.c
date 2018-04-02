@@ -23,12 +23,12 @@
 /**
  * This file is part of the DAOS server. It implements the server .
  */
-#define DDSUBSYS	DDFAC(server)
+#define D_LOGFAC	DD_FAC(server)
 
 #include <abt.h>
-#include <cart/iv.h>
 #include <daos/common.h>
 #include <gurt/list.h>
+#include <cart/iv.h>
 #include <daos_srv/iv.h>
 #include "srv_internal.h"
 

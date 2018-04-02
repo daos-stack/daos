@@ -28,8 +28,7 @@
  * Author: Liang Zhen  <liang.zhen@intel.com>
  * Author: Di Wang  <di.wang@intel.com>
  */
-
-#define DDSUBSYS	DDFAC(client)
+#define D_LOGFAC	DD_FAC(client)
 
 #include "client_internal.h"
 #include <daos/rpc.h>

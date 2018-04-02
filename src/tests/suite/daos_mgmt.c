@@ -23,8 +23,7 @@
 /**
  * This file is part of daos, basic testing for the management API
  */
-
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 #include "daos_test.h"
 
 #include <stdlib.h>

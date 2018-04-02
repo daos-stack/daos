@@ -23,7 +23,7 @@
 /**
  * DAOS Client initialization/shutdown routines
  */
-#define DDSUBSYS	DDFAC(client)
+#define D_LOGFAC	DD_FAC(client)
 
 #include <daos/common.h>
 #include <daos/event.h>

@@ -23,7 +23,7 @@
 /*
  * dct: RPC Protocol Serialization Functions
  */
-#define DDSUBSYS	DDFAC(tier)
+#define D_LOGFAC	DD_FAC(tier)
 
 #include <daos/rpc.h>
 #include <daos/event.h>

@@ -39,8 +39,6 @@
  * bumping the epoch number. The transaction manager is responsible for
  * flushing and committing the epoch once all tasks have reported completion.
  */
-#define DDSUBSYS	DDFAC(tests)
-
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>

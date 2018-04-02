@@ -31,6 +31,7 @@
 #ifndef __VOS_API_H__
 #define __VOS_API_H__
 
+#include <daos/common.h>
 #include <daos_types.h>
 #include <daos_srv/vos_types.h>
 

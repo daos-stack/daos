@@ -27,11 +27,12 @@
 #ifndef __DAOS_SRV_CONTAINER_H__
 #define __DAOS_SRV_CONTAINER_H__
 
+#include <daos/common.h>
 #include <daos_types.h>
 #include <daos_srv/pool.h>
-
 /* For the combined pool/container service */
 #include <daos_srv/rdb.h>
+
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
 void ds_cont_unlock_metadata(struct cont_svc *svc);

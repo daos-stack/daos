@@ -23,8 +23,7 @@
 /**
  * DAOS Metadata Replication Tests
  */
-
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 
 #include <daos/pool.h>
 #include "daos_test.h"

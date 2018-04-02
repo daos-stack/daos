@@ -36,6 +36,7 @@
 #endif /* HAVE_LIB_READLINE */
 
 #include <getopt.h>
+#include <daos_types.h>
 
 /** Read a command line from stdin. */
 char *dts_readline(const char *prompt);

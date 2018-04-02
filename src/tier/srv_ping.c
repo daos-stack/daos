@@ -24,7 +24,7 @@
  * tier_ping
  * Implements the ping function of srv_internal.h.
  **/
-#define DDSUBSYS	DDFAC(tier)
+#define D_LOGFAC	DD_FAC(tier)
 
 #include <daos_srv/daos_ct_srv.h>
 #include <daos/rpc.h>

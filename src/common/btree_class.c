@@ -25,7 +25,7 @@
  *
  * This file implements dbtree classes for different key and value types.
  */
-#define DDSUBSYS	DDFAC(tree)
+#define D_LOGFAC	DD_FAC(tree)
 
 #include <string.h>
 #include <daos/btree_class.h>

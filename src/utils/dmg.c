@@ -23,8 +23,6 @@
 /**
  * dmg(8): DAOS Management Utility
  */
-#define DDSUBSYS	DDFAC(utils)
-
 #include <getopt.h>
 #include <stdio.h>
 #include <daos.h>

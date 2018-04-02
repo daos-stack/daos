@@ -25,7 +25,7 @@
  *
  * src/common/pool_map.c
  */
-#define DDSUBSYS	DDFAC(common)
+#define D_LOGFAC	DD_FAC(common)
 
 #include <daos/pool_map.h>
 

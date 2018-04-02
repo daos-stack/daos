@@ -25,9 +25,10 @@
  *
  * src/placement/pl_map.c
  */
-#define DDSUBSYS	DDFAC(placement)
-#include <gurt/hash.h>
+#define D_LOGFAC	DD_FAC(placement)
+
 #include "pl_map.h"
+#include <gurt/hash.h>
 
 extern struct pl_map_ops	ring_map_ops;
 

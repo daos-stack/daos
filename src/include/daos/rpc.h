@@ -29,12 +29,9 @@
 #ifndef __DRPC_API_H__
 #define __DRPC_API_H__
 
-#include <cart/api.h>
-#include <cart/types.h>
-#include <gurt/errno.h>
-
 #include <daos/common.h>
 #include <daos/tse.h>
+#include <cart/api.h>
 
 /* Opcode registered in crt will be
  * client/server | mod_id | rpc_version | op_code

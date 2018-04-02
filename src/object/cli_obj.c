@@ -25,12 +25,13 @@
  *
  * src/object/cli_obj.c
  */
-#define DDSUBSYS	DDFAC(object)
+#define D_LOGFAC	DD_FAC(object)
 
-#include <daos_task.h>
-#include <daos_types.h>
+#include <daos/object.h>
 #include <daos/container.h>
 #include <daos/pool.h>
+#include <daos_task.h>
+#include <daos_types.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 

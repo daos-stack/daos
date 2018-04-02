@@ -24,7 +24,7 @@
  * This file is part of the DAOS server. It implements thread-local storage
  * (TLS) for DAOS service threads.
  */
-#define DDSUBSYS       DDFAC(server)
+#define D_LOGFAC       DD_FAC(server)
 
 #include <pthread.h>
 #include "srv_internal.h"

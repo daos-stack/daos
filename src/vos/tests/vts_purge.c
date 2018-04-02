@@ -27,7 +27,7 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
-#define DDSUBSYS	DDFAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
 
 #include <vts_io.h>
 

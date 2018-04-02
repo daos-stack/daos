@@ -27,7 +27,7 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
-#define DDSUBSYS	DDFAC(tree)
+#define D_LOGFAC	DD_FAC(tree)
 
 #include <daos_errno.h>
 #include <daos/btree.h>

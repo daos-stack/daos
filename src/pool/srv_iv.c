@@ -23,8 +23,8 @@
 /**
  * ds_pool: Pool IV cache
  */
+#define D_LOGFAC	DD_FAC(pool)
 
-#define DDSUBSYS	DDFAC(pool)
 #include <daos_srv/pool.h>
 #include <daos/pool_map.h>
 #include "srv_internal.h"

@@ -36,7 +36,7 @@
  *   Thread-local  ds_pool_child  ds_cont
  *                                ds_cont_hdl
  */
-#define DDSUBSYS	DDFAC(pool)
+#define D_LOGFAC	DD_FAC(pool)
 
 #include <daos_srv/pool.h>
 

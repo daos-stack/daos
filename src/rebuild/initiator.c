@@ -26,7 +26,7 @@
  * This file contains the server API methods and the RPC handlers for rebuild
  * initiator.
  */
-#define DDSUBSYS	DDFAC(rebuild)
+#define D_LOGFAC	DD_FAC(rebuild)
 
 #include <daos_srv/pool.h>
 #include <daos/btree_class.h>

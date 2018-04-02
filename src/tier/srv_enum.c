@@ -23,11 +23,11 @@
 /*
  * Framework for driving VOS enumeration.
  */
-#define DDSUBSYS       DDFAC(tier)
+#define D_LOGFAC       DD_FAC(tier)
 
-#include <daos_types.h>
 #include <daos_srv/daos_server.h>
 #include <daos/rpc.h>
+#include <daos_types.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include <daos_srv/vos.h>

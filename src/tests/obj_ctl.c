@@ -20,6 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+#define D_LOGFAC	DD_FAC(tests)
 
 #include <stdio.h>
 #include <fcntl.h>
@@ -33,11 +34,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
-
-#define DDSUBSYS	DDFAC(tests)
-
 #include <mpi.h>
-#include <daos.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
