@@ -87,6 +87,8 @@ static struct d_debug_bit daos_bit_dict[] = {
 	DBG_DICT_ENTRY(DB_REBUILD, "rebuild", NULL),
 };
 
+#define NUM_DBG_BIT_ENTRIES ARRAY_SIZE(daos_bit_dict)
+
 #define DBG_FAC_DICT_ENTRY(name, idp, mask, enabled)		\
 	{ .df_name = name, .df_idp = idp, .df_mask = mask,	\
 	  .df_enabled = enabled, .df_name_size = sizeof(name) }
@@ -114,6 +116,7 @@ static struct daos_debug_fac debug_fac_dict[] = {
 	DBG_FAC_DICT_ENTRY("tests", &dd_fac_tests, DB_DEFAULT, 0),
 };
 
+#define NUM_DBG_FAC_ENTRIES ARRAY_SIZE(debug_fac_dict)
 /** Load enabled debug facilities from the environment variable. */
 static void
 debug_fac_load_env(void)
@@ -122,7 +125,6 @@ debug_fac_load_env(void)
 	char	*fac_str;
 	char	*cur;
 	int	 i;
-	int	num_dbg_fac_entries;
 
 	fac_env = getenv(DD_FAC_ENV);
 	if (fac_env == NULL)
@@ -137,14 +139,13 @@ debug_fac_load_env(void)
 	/* Disable all facilities. The first one is ignored because NULL is
 	 * always enabled.
 	 */
-	num_dbg_fac_entries = ARRAY_SIZE(debug_fac_dict);
-	for (i = 1; i < num_dbg_fac_entries; i++)
+	for (i = 1; i < NUM_DBG_FAC_ENTRIES; i++)
 		debug_fac_dict[i].df_enabled = 0;
 
 	cur = strtok(fac_str, DD_SEP);
 	while (cur != NULL) {
 		/* skip 1 because it's NULL and enabled always */
-		for (i = 1; i < num_dbg_fac_entries; i++) {
+		for (i = 1; i < NUM_DBG_FAC_ENTRIES; i++) {
 			if (debug_fac_dict[i].df_name != NULL &&
 			    strncasecmp(cur, debug_fac_dict[i].df_name,
 					debug_fac_dict[i].df_name_size)
@@ -170,7 +171,6 @@ debug_mask_load_env(void)
 	char		*cur;
 	int		i;
 	uint64_t	dd_mask;
-	int		num_dbg_bit_entries;
 
 	mask_env = getenv(DD_MASK_ENV);
 	if (mask_env == NULL)
@@ -183,10 +183,9 @@ debug_mask_load_env(void)
 	}
 
 	dd_mask = 0;
-	num_dbg_bit_entries = ARRAY_SIZE(daos_bit_dict);
 	cur = strtok(mask_str, DD_SEP);
 	while (cur != NULL) {
-		for (i = 0; i < num_dbg_bit_entries; i++) {
+		for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
 			if (daos_bit_dict[i].db_name != NULL &&
 			    strncasecmp(cur, daos_bit_dict[i].db_name,
 					daos_bit_dict[i].db_name_size)
@@ -282,7 +281,7 @@ daos_debug_init(char *logfile)
 		goto failed_unlock;
 	}
 
-	for (i = 0; debug_fac_dict[i].df_name != NULL; i++) {
+	for (i = 0; i < NUM_DBG_FAC_ENTRIES; i++) {
 		if (!debug_fac_dict[i].df_enabled) {
 			/* redirect disabled facility to NULL */
 			*debug_fac_dict[i].df_idp = dd_fac_null;
