@@ -58,14 +58,14 @@ static struct vos_btr_attr *vos_obj_sub_tree_attr(unsigned tree_class);
 static struct vos_key_bundle *
 vos_iov2key_bundle(daos_iov_t *key_iov)
 {
-	D__ASSERT(key_iov->iov_len == sizeof(struct vos_key_bundle));
+	D_ASSERT(key_iov->iov_len == sizeof(struct vos_key_bundle));
 	return (struct vos_key_bundle *)key_iov->iov_buf;
 }
 
 static struct vos_rec_bundle *
 vos_iov2rec_bundle(daos_iov_t *val_iov)
 {
-	D__ASSERT(val_iov->iov_len == sizeof(struct vos_rec_bundle));
+	D_ASSERT(val_iov->iov_len == sizeof(struct vos_rec_bundle));
 	return (struct vos_rec_bundle *)val_iov->iov_buf;
 }
 
@@ -114,7 +114,7 @@ kb_rec_copy_in(struct btr_instance *tins, struct btr_record *rec,
 	}
 
 	/* XXX only dkey for the time being */
-	D__ASSERT(iov->iov_buf == kbund->kb_key->iov_buf);
+	D_ASSERT(iov->iov_buf == kbund->kb_key->iov_buf);
 	if (iov->iov_buf != NULL) {
 		memcpy(vos_krec2key(krec), iov->iov_buf, iov->iov_len);
 	} else {
@@ -279,7 +279,7 @@ kb_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 	/* Step-1: find the btree attributes and create btree */
 	ta = vos_obj_sub_tree_attr(tins->ti_root->tr_class);
-	D__ASSERT(ta != NULL);
+	D_ASSERT(ta != NULL);
 
 	D_DEBUG(DB_TRACE, "Create dbtree %s\n", ta->ta_name);
 
@@ -293,7 +293,7 @@ kb_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	rbund->rb_btr = &krec->kr_btr;
 
 	if (rbund->rb_tclass == VOS_BTR_DKEY)
-		D__GOTO(copy_in, rc = 0);
+		D_GOTO(copy_in, rc = 0);
 
 	/* Step-2: find evtree for akey only */
 	D_DEBUG(DB_TRACE, "Create evtree\n");
@@ -302,12 +302,11 @@ kb_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 				&krec->kr_evt[0], &evt_oh);
 	if (rc != 0) {
 		D_ERROR("Failed to create evtree: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rbund->rb_evt = &krec->kr_evt[0];
 	krec->kr_bmap |= KREC_BF_EVT;
-	D_EXIT;
  copy_in:
 	kb_rec_copy_in(tins, rec, kbund, rbund);
  out:
@@ -691,7 +690,7 @@ vos_obj_tree_init(struct vos_object *obj)
 	if (!daos_handle_is_inval(obj->obj_toh))
 		return 0;
 
-	D__ASSERT(obj->obj_df);
+	D_ASSERT(obj->obj_df);
 	if (obj->obj_df->vo_tree.tr_class == 0) {
 		D_DEBUG(DB_DF, "Create btree for object\n");
 		rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats,
@@ -714,7 +713,7 @@ vos_obj_tree_fini(struct vos_object *obj)
 
 	/* NB: tree is created inplace, so don't need to destroy */
 	if (!daos_handle_is_inval(obj->obj_toh)) {
-		D__ASSERT(obj->obj_df);
+		D_ASSERT(obj->obj_df);
 		rc = dbtree_close(obj->obj_toh);
 		obj->obj_toh = DAOS_HDL_INVAL;
 	}

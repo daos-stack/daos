@@ -351,7 +351,7 @@ main(int argc, char **argv)
 	rc = daos_eq_create(&arg.eq);
 	if (rc) {
 		print_message("EQ Create Failed");
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = daos_event_init(&ev, arg.eq, NULL);

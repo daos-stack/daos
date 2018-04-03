@@ -161,12 +161,12 @@ ctl_vos_list(struct dts_io_credit *cred)
 
 	rc = vos_iter_prepare(type, &param, &ih);
 	if (rc == -DER_NONEXIST) {
-		D__PRINT("No matched object or key\n");
-		D__GOTO(out, rc = 0);
+		D_PRINT("No matched object or key\n");
+		D_GOTO(out, rc = 0);
 
 	} else if (rc) {
 		opstr = "prepare";
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	n = 0;
@@ -176,8 +176,8 @@ ctl_vos_list(struct dts_io_credit *cred)
 		vos_iter_entry_t        ent;
 
 		if (rc == -DER_NONEXIST) {
-			D__PRINT("Completed, n=%d\n", n);
-			D__GOTO(out, rc = 0);
+			D_PRINT("Completed, n=%d\n", n);
+			D_GOTO(out, rc = 0);
 		}
 
 		if (rc == 0) {
@@ -186,20 +186,20 @@ ctl_vos_list(struct dts_io_credit *cred)
 		}
 
 		if (rc)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 
 		n++;
 		switch (type) {
 		case VOS_ITER_OBJ:
-			D__PRINT("\t"DF_UOID"\n", DP_UOID(ent.ie_oid));
+			D_PRINT("\t"DF_UOID"\n", DP_UOID(ent.ie_oid));
 			break;
 		case VOS_ITER_DKEY:
 		case VOS_ITER_AKEY:
-			D__PRINT("\t%s\n", (char *)ent.ie_key.iov_buf);
+			D_PRINT("\t%s\n", (char *)ent.ie_key.iov_buf);
 			break;
 		default:
-			D__PRINT("Unsupported\n");
-			D__GOTO(out, rc = -1);
+			D_PRINT("Unsupported\n");
+			D_GOTO(out, rc = -1);
 		}
 
 		rc = vos_iter_next(ih);
@@ -207,7 +207,7 @@ ctl_vos_list(struct dts_io_credit *cred)
 	}
 out:
 	if (rc)
-		D__PRINT("list(%s) failed, rc=%d\n", opstr, rc);
+		D_PRINT("list(%s) failed, rc=%d\n", opstr, rc);
 	return rc;
 }
 
@@ -251,11 +251,11 @@ ctl_daos_list(struct dts_io_credit *cred)
 
 		total += knr;
 		for (i = 0, kstr = kbuf; i < knr; i++) {
-			D__PRINT("%s\n", kstr);
+			D_PRINT("%s\n", kstr);
 			kstr += kds[i].kd_key_len;
 		}
 	}
-	D__PRINT("total %d keys\n", total);
+	D_PRINT("total %d keys\n", total);
 	return 0;
 }
 
@@ -305,7 +305,7 @@ ctl_cmd_run(char opc, char *args)
 	}
 
 	cred = dts_credit_take(&ctl_ctx);
-	D__ASSERT(cred);
+	D_ASSERT(cred);
 
 	ctl_abits = 0;
 	memset(&ctl_oid, 0, sizeof(ctl_oid));
@@ -315,7 +315,7 @@ ctl_cmd_run(char opc, char *args)
 
 	while (str && !isspace(*str) && *str != '\0') {
 		if (str[1] != CTL_SEP_VAL)
-			D__GOTO(out, rc = -1);
+			D_GOTO(out, rc = -1);
 
 		switch (str[0]) {
 		case 'e':
@@ -391,7 +391,7 @@ ctl_cmd_run(char opc, char *args)
 	case 'u':
 		if (ctl_abits != CTL_ARG_ALL) {
 			ctl_print_usage();
-			D__GOTO(out, rc = -1);
+			D_GOTO(out, rc = -1);
 		} else {
 			ctl_obj_open(&opened);
 		}
@@ -401,14 +401,14 @@ ctl_cmd_run(char opc, char *args)
 	case 'f':
 		if (ctl_abits != (CTL_ARG_ALL & ~CTL_ARG_VAL)) {
 			ctl_print_usage();
-			D__GOTO(out, rc = -1);
+			D_GOTO(out, rc = -1);
 		} else {
 			ctl_obj_open(&opened);
 		}
 
 		rc = ctl_fetch(cred);
 		if (rc == 0) {
-			D__PRINT("%s\n", strlen(cred->tc_vbuf) ?
+			D_PRINT("%s\n", strlen(cred->tc_vbuf) ?
 					 cred->tc_vbuf : "<NULL>");
 		}
 		break;
@@ -416,7 +416,7 @@ ctl_cmd_run(char opc, char *args)
 		if (!(ctl_abits & CTL_ARG_EPOCH) ||
 		    !(ctl_abits & CTL_ARG_OID)) {
 			ctl_print_usage();
-			D__GOTO(out, rc = -1);
+			D_GOTO(out, rc = -1);
 		} else {
 			ctl_obj_open(&opened);
 		}
@@ -426,7 +426,7 @@ ctl_cmd_run(char opc, char *args)
 	case 'l':
 		if (!(ctl_abits & CTL_ARG_OID)) {
 			ctl_print_usage();
-			D__GOTO(out, rc = -1);
+			D_GOTO(out, rc = -1);
 		} else {
 			if (!(ctl_abits & CTL_ARG_EPOCH))
 				ctl_epoch = DAOS_EPOCH_MAX;
@@ -447,21 +447,21 @@ ctl_cmd_run(char opc, char *args)
 		rc = -ESHUTDOWN;
 		break;
 	default:
-		D__GOTO(out, rc = -1);
+		D_GOTO(out, rc = -1);
 	}
 	if (rc && rc != -ESHUTDOWN)
-		D__GOTO(out, rc = -2);
+		D_GOTO(out, rc = -2);
 out:
 	if (opened)
 		daos_obj_close(ctl_oh, NULL);
 
 	switch (rc) {
 	case -2: /* real failure */
-		D__PRINT("Operation failed, rc=%d\n", rc);
+		D_PRINT("Operation failed, rc=%d\n", rc);
 		break;
 
 	case -1: /* invalid input */
-		D__PRINT("Invalid command or parameter string: %c, %s\n",
+		D_PRINT("Invalid command or parameter string: %c, %s\n",
 			opc, args);
 		rc = 0; /* ignore input error */
 		break;
@@ -525,9 +525,8 @@ main(int argc, char **argv)
 
 	rc = dts_cmd_parser(ctl_ops, "$ > ", ctl_cmd_run);
 	if (rc)
-		D__GOTO(out_ctx, rc);
+		D_GOTO(out_ctx, rc);
 
-	D_EXIT;
  out_ctx:
 	dts_ctx_fini(&ctl_ctx);
 	return rc;

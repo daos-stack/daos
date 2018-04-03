@@ -97,7 +97,7 @@ purge_ctx_init(struct purge_context *pcx, vos_iter_entry_t *ent)
 	switch (pcx->pc_type) {
 	default:
 	case VOS_ITER_SINGLE:
-		D__ASSERT(0);
+		D_ASSERT(0);
 	case VOS_ITER_NONE:
 		pcx->pc_type = VOS_ITER_OBJ;
 		break;
@@ -146,13 +146,13 @@ purge_ctx_fini(struct purge_context *pcx, int rc)
 
 	switch (pcx->pc_type) {
 	default:
-		D__ASSERT(0);
+		D_ASSERT(0);
 	case VOS_ITER_OBJ:
 		pcx->pc_type = VOS_ITER_NONE;
 		return;
 
 	case VOS_ITER_DKEY:
-		D__ASSERT(pcx->pc_obj != NULL);
+		D_ASSERT(pcx->pc_obj != NULL);
 
 		/* Evict the object because we might have destroyed the
 		 * cached I/O context, or even released the object.
@@ -243,7 +243,7 @@ purge_ctx_anchor_is_set(struct purge_context *pcx,
 {
 	switch (pcx->pc_type) {
 	default:
-		D__ASSERT(0);
+		D_ASSERT(0);
 	case VOS_ITER_OBJ:
 		return OBJ_ANCHOR & vp_anchor->pa_mask;
 	case VOS_ITER_DKEY:
@@ -269,7 +269,7 @@ purge_ctx_anchor_ctl(struct purge_context *pcx, vos_purge_anchor_t *vp_anchor,
 
 	switch (pcx->pc_type) {
 	default:
-		D__ASSERT(0);
+		D_ASSERT(0);
 	case VOS_ITER_OBJ:
 		purge_anchor	= &vp_anchor->pa_obj;
 		bits		= OBJ_ANCHOR;
@@ -308,7 +308,7 @@ purge_ctx_test_complete(struct purge_context *pcx, bool *finish,
 {
 	switch (pcx->pc_type) {
 	default:
-		D__ASSERT(0);
+		D_ASSERT(0);
 	case VOS_ITER_OBJ:
 		/*
 		 * Currently nothing
@@ -340,7 +340,7 @@ purge_ctx_reset_complete(struct purge_context *pcx,
 {
 	switch (pcx->pc_type) {
 	default:
-		D__ASSERT(0);
+		D_ASSERT(0);
 	case VOS_ITER_SINGLE:
 		break;
 	case VOS_ITER_AKEY:
@@ -358,7 +358,7 @@ purge_ctx_set_complete(struct purge_context *pcx, bool *finish,
 {
 	switch (pcx->pc_type) {
 	default:
-		D__ASSERT(0);
+		D_ASSERT(0);
 	case VOS_ITER_OBJ:
 		/*
 		 * Currently nothing
@@ -369,7 +369,7 @@ purge_ctx_set_complete(struct purge_context *pcx, bool *finish,
 	case VOS_ITER_DKEY:
 		vp_anchor->pa_mask |= DKEY_SCAN_COMPLETE;
 		D_DEBUG(DB_EPC, "Setting DKEY scan completion\n");
-		D__ASSERT(finish != NULL);
+		D_ASSERT(finish != NULL);
 		*finish = true;
 		break;
 	case VOS_ITER_AKEY:
@@ -572,7 +572,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		if (rc != 0) {
 			D_ERROR("%s iterator failed to %s: %d\n",
 				pcx_name(pcx), opstr, rc);
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
 		if (val_tree) {
@@ -581,13 +581,13 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 						 pcx->pc_param.ip_epc_expr,
 						 &ih_max);
 			if (rc != 0)
-				D__GOTO(out, rc);
+				D_GOTO(out, rc);
 		}
 
 		if (!credits) {
 			purge_ctx_anchor_ctl(pcx, vp_anchor, &anchor,
 					     ANCHOR_SET);
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
 		/* Probing REUSED_ANCHOR should not be counted for credits */
@@ -606,7 +606,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 			if (rc != 0) {
 				D_DEBUG(DB_EPC, "%s context enter failed :%d\n",
 					pcx_name(pcx), rc);
-				D__GOTO(out, rc);
+				D_GOTO(out, rc);
 			}
 
 			/* Enter the next level of tree until recx */
@@ -614,12 +614,12 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 					     NULL);
 			purge_ctx_fini(pcx, rc);
 			if (rc != 0)
-				D__GOTO(out, rc);
+				D_GOTO(out, rc);
 
 			if (!credits) { /* credits used up by subtree return */
 				purge_ctx_anchor_ctl(pcx, vp_anchor, &anchor,
 						     ANCHOR_SET);
-				D__GOTO(out, rc);
+				D_GOTO(out, rc);
 			}
 		}
 
@@ -656,7 +656,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		} TX_END
 
 		if (rc != 0)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 
 		/* Number of keys aggregated in this tree ctx */
 		aggregated++;
@@ -741,7 +741,7 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 		if (rc != 0) {
 			D_ERROR("%s iterator failed to %s: %d\n",
 				pcx_name(pcx), opstr, rc);
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
 		found++;
@@ -754,7 +754,7 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 			if (rc != 0) {
 				D_DEBUG(DB_EPC, "%s context enter failed: %d\n",
 					pcx_name(pcx), rc);
-				D__GOTO(out, rc);
+				D_GOTO(out, rc);
 			}
 
 			/* enter the subtree */
@@ -762,7 +762,7 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 			/* exit from the context of subtree */
 			purge_ctx_fini(pcx, rc);
 			if (rc != 0)
-				D__GOTO(out, rc);
+				D_GOTO(out, rc);
 		}
 
 		if (!empty) { /* subtree or record is not empty */
@@ -784,7 +784,7 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 		} TX_END
 
 		if (rc != 0)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 
 		discarded++;
 		/* need to probe again after the delete */
@@ -836,7 +836,7 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie)
 	purge_set_iter_expr(&pcx, epr);
 
 	rc = purge_ctx_init(&pcx, NULL);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	rc = epoch_discard(&pcx, NULL);
 	purge_ctx_fini(&pcx, rc);
@@ -901,7 +901,7 @@ vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
 
 	oid_entry.ie_oid	= oid;
 	rc = purge_ctx_init(&pcx, &oid_entry);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	rc = epoch_aggregate(&pcx, NULL, credits, anchor, finished);
 	purge_ctx_fini(&pcx, rc);

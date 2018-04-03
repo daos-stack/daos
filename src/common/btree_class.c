@@ -80,7 +80,7 @@ create_tree(daos_handle_t tree, daos_iov_t *key, unsigned int class,
 	if (rc != 0)
 		return rc;
 
-	D__ASSERT(btr_check_tx(&attr) == BTR_NO_TX ||
+	D_ASSERT(btr_check_tx(&attr) == BTR_NO_TX ||
 		 btr_check_tx(&attr) == BTR_IN_TX);
 
 	memset(&buf, 0, sizeof(buf));
@@ -148,11 +148,11 @@ destroy_tree(daos_handle_t tree, daos_iov_t *key)
 		rc = dbtree_destroy(hdl);
 		if (rc != 0) {
 			dbtree_close(hdl);
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 		rc = dbtree_delete(tree, key, NULL);
 		if (rc != 0)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 	} else {
 #ifdef DAOS_HAS_PMDK
 		volatile daos_handle_t	hdl_tmp = hdl;
@@ -205,7 +205,7 @@ nv_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 	 * TODO: This function should be allowed to return an error
 	 * code.
 	 */
-	D__ASSERT(key_iov->iov_len <= key_iov->iov_buf_len);
+	D_ASSERT(key_iov->iov_len <= key_iov->iov_buf_len);
 
 	*hash = d_hash_string_u32(key, key_size);
 }
@@ -237,7 +237,7 @@ nv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 
 	if (key->iov_len == 0 || key->iov_buf_len < key->iov_len ||
 	    val->iov_len == 0 || val->iov_buf_len < val->iov_len)
-		D__GOTO(err, rc);
+		D_GOTO(err, rc);
 
 	name_len = key->iov_len;
 
@@ -245,7 +245,7 @@ nv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 
 	rid = umem_zalloc(&tins->ti_umm, sizeof(*r) + name_len);
 	if (UMMID_IS_NULL(rid))
-		D__GOTO(err, rc);
+		D_GOTO(err, rc);
 
 	r = umem_id2ptr(&tins->ti_umm, rid);
 	r->nr_value_size = val->iov_len;
@@ -253,7 +253,7 @@ nv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 
 	r->nr_value = umem_alloc(&tins->ti_umm, r->nr_value_buf_size);
 	if (UMMID_IS_NULL(r->nr_value))
-		D__GOTO(err_r, rc);
+		D_GOTO(err_r, rc);
 
 	value = umem_id2ptr(&tins->ti_umm, r->nr_value);
 	memcpy(value, val->iov_buf, r->nr_value_size);
@@ -571,11 +571,11 @@ uv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 
 	if (key->iov_len != sizeof(uuid_t) || key->iov_buf_len < key->iov_len ||
 	    val->iov_len == 0 || val->iov_buf_len < val->iov_len)
-		D__GOTO(err, rc);
+		D_GOTO(err, rc);
 
 	rid = umem_zalloc(&tins->ti_umm, sizeof(*r));
 	if (UMMID_IS_NULL(rid))
-		D__GOTO(err, rc);
+		D_GOTO(err, rc);
 
 	r = umem_id2ptr(&tins->ti_umm, rid);
 	r->ur_value_size = val->iov_len;
@@ -583,7 +583,7 @@ uv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 
 	r->ur_value = umem_alloc(&tins->ti_umm, r->ur_value_buf_size);
 	if (UMMID_IS_NULL(r->ur_value))
-		D__GOTO(err_r, rc);
+		D_GOTO(err_r, rc);
 
 	value = umem_id2ptr(&tins->ti_umm, r->ur_value);
 	memcpy(value, val->iov_buf, r->ur_value_size);
@@ -1064,8 +1064,8 @@ kv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
 {
 	uint64_t *hash = hkey;
 
-	D__ASSERTF(key->iov_len > 0, DF_U64" > 0\n", key->iov_len);
-	D__ASSERTF(key->iov_len <= key->iov_buf_len, DF_U64" <= "DF_U64"\n",
+	D_ASSERTF(key->iov_len > 0, DF_U64" > 0\n", key->iov_len);
+	D_ASSERTF(key->iov_len <= key->iov_buf_len, DF_U64" <= "DF_U64"\n",
 		  key->iov_len, key->iov_buf_len);
 	*hash = d_hash_murmur64(key->iov_buf, key->iov_len, 609815U);
 }
@@ -1099,18 +1099,18 @@ kv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 
 	if (key->iov_len == 0 || key->iov_buf_len < key->iov_len ||
 	    val->iov_buf_len < val->iov_len)
-		D__GOTO(err, rc = -DER_INVAL);
+		D_GOTO(err, rc = -DER_INVAL);
 
 	rid = umem_zalloc(&tins->ti_umm, sizeof(*r) + key->iov_len);
 	if (UMMID_IS_NULL(rid))
-		D__GOTO(err, rc = -DER_NOMEM);
+		D_GOTO(err, rc = -DER_NOMEM);
 	r = umem_id2ptr(&tins->ti_umm, rid);
 
 	r->kr_value_len = val->iov_len;
 	r->kr_value_cap = r->kr_value_len;
 	r->kr_value = umem_alloc(&tins->ti_umm, r->kr_value_cap);
 	if (UMMID_IS_NULL(r->kr_value))
-		D__GOTO(err_r, rc = -DER_NOMEM);
+		D_GOTO(err_r, rc = -DER_NOMEM);
 	v = umem_id2ptr(&tins->ti_umm, r->kr_value);
 	memcpy(v, val->iov_buf, r->kr_value_len);
 
@@ -1236,18 +1236,18 @@ iv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 
 	if (key->iov_len != sizeof(uint64_t) ||
 	    key->iov_buf_len < key->iov_len || val->iov_buf_len < val->iov_len)
-		D__GOTO(err, rc = -DER_INVAL);
+		D_GOTO(err, rc = -DER_INVAL);
 
 	rid = umem_zalloc(&tins->ti_umm, sizeof(*r));
 	if (UMMID_IS_NULL(rid))
-		D__GOTO(err, rc = -DER_NOMEM);
+		D_GOTO(err, rc = -DER_NOMEM);
 	r = umem_id2ptr(&tins->ti_umm, rid);
 
 	r->ir_value_len = val->iov_len;
 	r->ir_value_cap = r->ir_value_len;
 	r->ir_value = umem_alloc(&tins->ti_umm, r->ir_value_cap);
 	if (UMMID_IS_NULL(r->ir_value))
-		D__GOTO(err_r, rc = -DER_NOMEM);
+		D_GOTO(err_r, rc = -DER_NOMEM);
 	v = umem_id2ptr(&tins->ti_umm, r->ir_value);
 	memcpy(v, val->iov_buf, r->ir_value_len);
 
@@ -1301,7 +1301,7 @@ iv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	struct iv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 	void	       *v;
 
-	D__ASSERTF(key->iov_len == sizeof(uint64_t), DF_U64"\n", key->iov_len);
+	D_ASSERTF(key->iov_len == sizeof(uint64_t), DF_U64"\n", key->iov_len);
 	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
 	if (r->ir_value_cap < val->iov_len) {
 		umem_id_t vid;

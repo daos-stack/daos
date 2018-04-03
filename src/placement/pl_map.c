@@ -105,9 +105,9 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 void
 pl_map_destroy(struct pl_map *map)
 {
-	D__ASSERT(map->pl_ref == 0);
-	D__ASSERT(map->pl_ops != NULL);
-	D__ASSERT(map->pl_ops->o_destroy != NULL);
+	D_ASSERT(map->pl_ref == 0);
+	D_ASSERT(map->pl_ops != NULL);
+	D_ASSERT(map->pl_ops->o_destroy != NULL);
 
 	D_SPIN_DESTROY(&map->pl_lock);
 	map->pl_ops->o_destroy(map);
@@ -116,7 +116,7 @@ pl_map_destroy(struct pl_map *map)
 /** Print a placement map, it's optional and for debug only */
 void pl_map_print(struct pl_map *map)
 {
-	D__ASSERT(map->pl_ops != NULL);
+	D_ASSERT(map->pl_ops != NULL);
 
 	if (map->pl_ops->o_print != NULL)
 		map->pl_ops->o_print(map);
@@ -132,8 +132,8 @@ pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	     struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp)
 {
-	D__ASSERT(map->pl_ops != NULL);
-	D__ASSERT(map->pl_ops->o_obj_place != NULL);
+	D_ASSERT(map->pl_ops != NULL);
+	D_ASSERT(map->pl_ops->o_obj_place != NULL);
 
 	return map->pl_ops->o_obj_place(map, md, shard_md, layout_pp);
 }
@@ -159,7 +159,7 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    uint32_t rebuild_ver, uint32_t *tgt_rank,
 		    uint32_t *shard_id)
 {
-	D__ASSERT(map->pl_ops != NULL);
+	D_ASSERT(map->pl_ops != NULL);
 
 	if (!map->pl_ops->o_obj_find_rebuild)
 		return -DER_NOSYS;
@@ -181,7 +181,7 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		  struct daos_obj_shard_md *shard_md,
 		  struct pl_target_grp *tgp_reint, uint32_t *tgt_reint)
 {
-	D__ASSERT(map->pl_ops != NULL);
+	D_ASSERT(map->pl_ops != NULL);
 
 	if (!map->pl_ops->o_obj_find_reint)
 		return -DER_NOSYS;
@@ -194,10 +194,9 @@ void
 pl_obj_layout_free(struct pl_obj_layout *layout)
 {
 	if (layout->ol_shards != NULL) {
-		D__FREE(layout->ol_shards,
-		       layout->ol_nr * sizeof(*layout->ol_shards));
+		D_FREE(layout->ol_shards);
 	}
-	D__FREE_PTR(layout);
+	D_FREE_PTR(layout);
 }
 
 int
@@ -205,12 +204,12 @@ pl_obj_layout_alloc(unsigned int shard_nr, struct pl_obj_layout **layout_pp)
 {
 	struct pl_obj_layout *layout;
 
-	D__ALLOC_PTR(layout);
+	D_ALLOC_PTR(layout);
 	if (layout == NULL)
 		return -DER_NOMEM;
 
 	layout->ol_nr = shard_nr;
-	D__ALLOC(layout->ol_shards,
+	D_ALLOC(layout->ol_shards,
 		layout->ol_nr * sizeof(*layout->ol_shards));
 	if (layout->ol_shards == NULL)
 		goto failed;
@@ -233,7 +232,7 @@ pl_obj_shard2grp_head(struct daos_obj_shard_md *shard_md,
 	int sid	= shard_md->smd_id.id_shard;
 
 	/* XXX: only for the static stripe classes for the time being */
-	D__ASSERT(oc_attr->ca_schema == DAOS_OS_SINGLE ||
+	D_ASSERT(oc_attr->ca_schema == DAOS_OS_SINGLE ||
 		 oc_attr->ca_schema == DAOS_OS_STRIPED);
 
 	switch (oc_attr->ca_resil) {
@@ -255,7 +254,7 @@ pl_obj_shard2grp_index(struct daos_obj_shard_md *shard_md,
 	int sid	= shard_md->smd_id.id_shard;
 
 	/* XXX: only for the static stripe classes for the time being */
-	D__ASSERT(oc_attr->ca_schema == DAOS_OS_SINGLE ||
+	D_ASSERT(oc_attr->ca_schema == DAOS_OS_SINGLE ||
 		 oc_attr->ca_schema == DAOS_OS_STRIPED);
 
 	switch (oc_attr->ca_resil) {
@@ -285,7 +284,7 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 
 	switch (type) {
 	default:
-		D__ASSERTF(0, "Unknown placemet map type: %d.\n", type);
+		D_ASSERTF(0, "Unknown placemet map type: %d.\n", type);
 		break;
 
 	case PL_TYPE_RING:
@@ -306,7 +305,7 @@ static unsigned int
 pl_hop_key_hash(struct d_hash_table *htab, const void *key,
 		unsigned int ksize)
 {
-	D__ASSERT(ksize == sizeof(uuid_t));
+	D_ASSERT(ksize == sizeof(uuid_t));
 	return d_hash_string_u32((const char *)key, ksize);
 }
 
@@ -316,7 +315,7 @@ pl_hop_key_cmp(struct d_hash_table *htab, d_list_t *link,
 {
 	struct pl_map *map = pl_link2map(link);
 
-	D__ASSERT(ksize == sizeof(uuid_t));
+	D_ASSERT(ksize == sizeof(uuid_t));
 	return !uuid_compare(map->pl_uuid, key);
 }
 
@@ -336,7 +335,7 @@ pl_hop_rec_decref(struct d_hash_table *htab, d_list_t *link)
 	struct pl_map	*map = pl_link2map(link);
 	bool		 zombie;
 
-	D__ASSERT(map->pl_ref > 0);
+	D_ASSERT(map->pl_ref > 0);
 
 	D_SPIN_LOCK(&map->pl_lock);
 	map->pl_ref--;
@@ -351,7 +350,7 @@ pl_hop_rec_free(struct d_hash_table *htab, d_list_t *link)
 {
 	struct pl_map *map = pl_link2map(link);
 
-	D__ASSERT(map->pl_ref == 0);
+	D_ASSERT(map->pl_ref == 0);
 	pl_map_destroy(map);
 }
 
@@ -389,7 +388,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 						 PL_HTABLE_BITS, NULL,
 						 &pl_hash_ops, &pl_htable);
 		if (rc)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 
 		link = NULL;
 	} else {
@@ -401,7 +400,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 		pl_map_attr_init(pool_map, PL_TYPE_RING, &mia);
 		rc = pl_map_create(pool_map, &mia, &map);
 		if (rc != 0)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 	} else {
 		struct pl_map	*tmp;
 
@@ -410,14 +409,14 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 			d_hash_rec_decref(&pl_htable, link);
 			if (connect)
 				tmp->pl_connects++;
-			D__GOTO(out, rc = 0);
+			D_GOTO(out, rc = 0);
 		}
 
 		pl_map_attr_init(pool_map, PL_TYPE_RING, &mia);
 		rc = pl_map_create(pool_map, &mia, &map);
 		if (rc != 0) {
 			d_hash_rec_decref(&pl_htable, link);
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
 		/* transfer the pool connection count */
@@ -434,9 +433,8 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 	uuid_copy(map->pl_uuid, uuid);
 	rc = d_hash_rec_insert(&pl_htable, uuid, sizeof(uuid_t),
 			       &map->pl_link, true);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 	pl_map_decref(map); /* hash table has held the refcount */
-	D_EXIT;
  out:
 	D_RWLOCK_UNLOCK(&pl_rwlock);
 	return rc;
@@ -457,7 +455,7 @@ pl_map_disconnect(uuid_t uuid)
 		struct pl_map	*map;
 
 		map = container_of(link, struct pl_map, pl_link);
-		D__ASSERT(map->pl_connects > 0);
+		D_ASSERT(map->pl_connects > 0);
 		map->pl_connects--;
 		if (map->pl_connects == 0) {
 			d_hash_rec_delete_at(&pl_htable, link);

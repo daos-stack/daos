@@ -106,7 +106,7 @@ dts_freeline(char *line)
 #if HAVE_LIB_READLINE
 	free(line);
 #else
-	D__FREE(line, DTS_LINE_SIZE);
+	D_FREE(line);
 #endif
 }
 
@@ -123,7 +123,7 @@ dts_readline(const char *prompt)
 	char	*cur;
 	bool	 eof;
 
-	D__ALLOC(line, DTS_LINE_SIZE);
+	D_ALLOC(line, DTS_LINE_SIZE);
 	if (!line)
 		return NULL;
 
@@ -216,7 +216,7 @@ dts_cmd_parser(struct option *opts, const char *prompt,
 		}
 
 		if (opc == -1) {
-			D__PRINT("Unknown command string %s, try \"help\"\n",
+			D_PRINT("Unknown command string %s, try \"help\"\n",
 				 cmd);
 			continue;
 		}

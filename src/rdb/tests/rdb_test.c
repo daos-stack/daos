@@ -34,23 +34,23 @@ static struct rdb      *rdb_db;
 do {									\
 	int _rc = call;							\
 									\
-	D__ASSERTF(_rc == 0, "%d\n", _rc);				\
+	D_ASSERTF(_rc == 0, "%d\n", _rc);				\
 } while (0)
 
 static void
 iovok(const daos_iov_t *iov)
 {
-	D__ASSERT((iov->iov_buf == NULL && iov->iov_buf_len == 0) ||
+	D_ASSERT((iov->iov_buf == NULL && iov->iov_buf_len == 0) ||
 		 (iov->iov_buf != NULL && iov->iov_buf_len > 0));
-	D__ASSERT(iov->iov_len <= iov->iov_buf_len);
+	D_ASSERT(iov->iov_len <= iov->iov_buf_len);
 }
 
 static void
 ioveq(const daos_iov_t *iov1, const daos_iov_t *iov2)
 {
-	D__ASSERTF(iov1->iov_len == iov2->iov_len, DF_U64" == "DF_U64"\n",
+	D_ASSERTF(iov1->iov_len == iov2->iov_len, DF_U64" == "DF_U64"\n",
 		  iov1->iov_len, iov2->iov_len);
-	D__ASSERT(memcmp(iov1->iov_buf, iov2->iov_buf, iov1->iov_len) == 0);
+	D_ASSERT(memcmp(iov1->iov_buf, iov2->iov_buf, iov1->iov_len) == 0);
 }
 
 static void
@@ -68,26 +68,26 @@ rdbt_test_util(void)
 	D_WARN("encode/decode empty iov\n");
 	v1 = empty;
 	len1 = rdb_encode_iov(&v1, NULL);
-	D__ASSERTF(len1 == sizeof(uint32_t) * 2, "%zu\n", len1);
+	D_ASSERTF(len1 == sizeof(uint32_t) * 2, "%zu\n", len1);
 	len2 = rdb_encode_iov(&v1, buf2);
-	D__ASSERTF(len2 == len1, "%zu == %zu\n", len2, len1);
+	D_ASSERTF(len2 == len1, "%zu == %zu\n", len2, len1);
 	v2 = empty;
 	n = rdb_decode_iov(buf2, len2, &v2);
-	D__ASSERTF(n == len2, "%zd == %zu\n", n, len2);
+	D_ASSERTF(n == len2, "%zd == %zu\n", n, len2);
 	iovok(&v2);
 	ioveq(&v1, &v2);
 
 	D_WARN("encode/decode non-empty iov\n");
 	daos_iov_set(&v1, buf1, strlen(buf1) + 1);
 	len1 = rdb_encode_iov(&v1, NULL);
-	D__ASSERTF(len1 == sizeof(uint32_t) * 2 + strlen(buf1) + 1, "%zu\n",
+	D_ASSERTF(len1 == sizeof(uint32_t) * 2 + strlen(buf1) + 1, "%zu\n",
 		  len1);
-	D__ASSERT(len1 <= sizeof(buf2));
+	D_ASSERT(len1 <= sizeof(buf2));
 	len2 = rdb_encode_iov(&v1, buf2);
-	D__ASSERTF(len2 == len1, "%zu == %zu\n", len2, len1);
+	D_ASSERTF(len2 == len1, "%zu == %zu\n", len2, len1);
 	v2 = empty;
 	n = rdb_decode_iov(buf2, len2, &v2);
-	D__ASSERTF(n == len2, "%zd == %zu\n", n, len2);
+	D_ASSERTF(n == len2, "%zd == %zu\n", n, len2);
 	iovok(&v2);
 	ioveq(&v1, &v2);
 }
@@ -127,9 +127,9 @@ rdbt_test_path(void)
 	int				rc;
 
 	D_WARN("RDB_STRING_KEY\n");
-	D__ASSERTF(rdbt_key_foo.iov_len == strlen("foo") + 1, DF_U64"\n",
+	D_ASSERTF(rdbt_key_foo.iov_len == strlen("foo") + 1, DF_U64"\n",
 		  rdbt_key_foo.iov_len);
-	D__ASSERTF(rdbt_key_foo.iov_buf_len == rdbt_key_foo.iov_len, DF_U64"\n",
+	D_ASSERTF(rdbt_key_foo.iov_buf_len == rdbt_key_foo.iov_len, DF_U64"\n",
 		  rdbt_key_foo.iov_buf_len);
 
 	D_WARN("init rdb path\n");
@@ -138,11 +138,11 @@ rdbt_test_path(void)
 
 	D_WARN("pop empty rdb path\n");
 	rc = rdb_path_pop(&path);
-	D__ASSERTF(rc == -DER_NONEXIST, "%d\n", rc);
+	D_ASSERTF(rc == -DER_NONEXIST, "%d\n", rc);
 
 	D_WARN("iterate empty rdb path\n");
 	MUST(rdb_path_iterate(&path, rdbt_test_path_cb, &arg));
-	D__ASSERTF(arg.n == 0, "%d\n", arg.n);
+	D_ASSERTF(arg.n == 0, "%d\n", arg.n);
 
 	D_WARN("push to rdb path\n");
 	for (i = 0; i < ARRAY_SIZE(keys); i++) {
@@ -158,7 +158,7 @@ rdbt_test_path(void)
 	arg.keys = keys;
 	arg.nkeys = ARRAY_SIZE(keys) - 1; /* popped one already */
 	MUST(rdb_path_iterate(&path, rdbt_test_path_cb, &arg));
-	D__ASSERTF(arg.n == arg.nkeys, "%d\n", arg.n);
+	D_ASSERTF(arg.n == arg.nkeys, "%d\n", arg.n);
 
 	D_WARN("fini rdb path\n");
 	rdb_path_fini(&path);
@@ -173,7 +173,7 @@ rdbt_path(uuid_t uuid)
 
 	uuid_unparse_lower(uuid, uuid_string);
 	rc = asprintf(&path, "%s/rdbt-%s", storage_path, uuid_string);
-	D__ASSERT(rc > 0 && path != NULL);
+	D_ASSERT(rc > 0 && path != NULL);
 	return path;
 }
 
@@ -188,9 +188,9 @@ iterate_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *varg)
 {
 	struct iterate_cb_arg *arg = varg;
 
-	D__ASSERTF(key->iov_len == sizeof(arg->keys[arg->i]), "%zu\n",
+	D_ASSERTF(key->iov_len == sizeof(arg->keys[arg->i]), "%zu\n",
 		  key->iov_len);
-	D__ASSERT(memcmp(key->iov_buf, &arg->keys[arg->i],
+	D_ASSERT(memcmp(key->iov_buf, &arg->keys[arg->i],
 			sizeof(arg->keys[arg->i])) == 0);
 	(arg->i)++;
 	return 0;
@@ -265,9 +265,9 @@ rdbt_test_tx(bool update)
 	daos_iov_set(&key, &keys[0], sizeof(keys[0]));
 	daos_iov_set(&value, buf, sizeof(buf));
 	MUST(rdb_tx_lookup(&tx, &path, &key, &value));
-	D__ASSERTF(value.iov_len == strlen(value_written) + 1, DF_U64" == %zu\n",
+	D_ASSERTF(value.iov_len == strlen(value_written) + 1, DF_U64" == %zu\n",
 		  value.iov_len, strlen(value_written) + 1);
-	D__ASSERT(memcmp(value.iov_buf, value_written,
+	D_ASSERT(memcmp(value.iov_buf, value_written,
 			strlen(value_written) + 1) == 0);
 	/* Iterate "kvs1". */
 	arg.keys = keys;
@@ -331,7 +331,7 @@ rdbt_stop(struct rdb *db, int err, void *arg)
 
 	crt_group_rank(NULL, &rank);
 	D_WARN("rank %u should stop\n", rank);
-	D__ASSERT(0);
+	D_ASSERT(0);
 }
 
 static struct rdb_cbs rdbt_rdb_cbs = {
@@ -357,10 +357,10 @@ rdbt_init_handler(crt_rpc_t *rpc)
 	ranks.rl_nr = in->tii_nreplicas;
 	if (ranks.rl_nr > group_size)
 		ranks.rl_nr = group_size;
-	D__ALLOC(ranks.rl_ranks, sizeof(*ranks.rl_ranks) * ranks.rl_nr);
+	D_ALLOC(ranks.rl_ranks, sizeof(*ranks.rl_ranks) * ranks.rl_nr);
 	if (ranks.rl_ranks == NULL) {
 		D_ERROR("failed to allocate ranks array\n");
-		D__GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	for (i = 0; i < ranks.rl_nr; i++)
 		ranks.rl_ranks[i] = i;
@@ -382,7 +382,7 @@ rdbt_fini_handler(crt_rpc_t *rpc)
 	D_WARN("finalizing rank %u\n", rank);
 	rdb_stop(rdb_db);
 	MUST(rdb_destroy(rdb_file_path));
-	D__FREE(rdb_file_path, strlen(rdb_file_path) + 1);
+	D_FREE(rdb_file_path);
 	crt_reply_send(rpc);
 }
 
@@ -394,7 +394,7 @@ rdbt_test_handler(crt_rpc_t *rpc)
 	int			rc;
 
 	rc = crt_group_rank(NULL /* grp */, &rank);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	D_WARN("testing rank %u: update=%d\n", rank, in->tti_update);
 	rdbt_test_util();
 	rdbt_test_path();

@@ -229,7 +229,7 @@ oid_iv_ent_get(struct ds_iv_entry *entry, void **_priv)
 	fprintf(stderr, "%u: OID GET\n", myrank);
 #endif
 
-	D__ALLOC_PTR(priv);
+	D_ALLOC_PTR(priv);
 	if (priv == NULL)
 		return -DER_NOMEM;
 
@@ -246,7 +246,7 @@ oid_iv_ent_put(struct ds_iv_entry *entry, void **_priv)
 	fprintf(stderr, "%u: ON PUT\n", myrank);
 #endif
 
-	D__FREE_PTR(priv);
+	D_FREE_PTR(priv);
 	_priv = NULL;
 
 	return 0;

@@ -82,7 +82,7 @@ create_rpc(crt_opcode_t opc, crt_group_t *group, d_rank_t rank)
 	ep.ep_rank = rank;
 	ep.ep_tag = 0;
 	rc = crt_req_create(context, &ep, opcode, &rpc);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	return rpc;
 }
 
@@ -95,7 +95,7 @@ invoke_rpc(crt_rpc_t *rpc)
 
 	crt_req_addref(rpc);
 	rc = crt_req_send(rpc, rpc_cb, &rpc_rc);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	/* Sloppy... */
 	while (rpc_rc == rpc_rc_uninitialized)
 		crt_progress(context, 0, NULL, NULL);
@@ -121,7 +121,7 @@ rdbt_init(crt_group_t *group, d_rank_t rank, uuid_t uuid, uint32_t nreplicas)
 	uuid_copy(in->tii_uuid, uuid);
 	in->tii_nreplicas = nreplicas;
 	rc = invoke_rpc(rpc);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	out = crt_reply_get(rpc);
 	rc = out->tio_rc;
 	destroy_rpc(rpc);
@@ -137,7 +137,7 @@ rdbt_fini(crt_group_t *group, d_rank_t rank)
 
 	rpc = create_rpc(RDBT_FINI, group, rank);
 	rc = invoke_rpc(rpc);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	out = crt_reply_get(rpc);
 	rc = out->tfo_rc;
 	destroy_rpc(rpc);
@@ -156,7 +156,7 @@ rdbt_test(crt_group_t *group, d_rank_t rank, int update)
 	in = crt_req_get(rpc);
 	in->tti_update = update;
 	rc = invoke_rpc(rpc);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	out = crt_reply_get(rpc);
 	rc = out->tto_rc;
 	destroy_rpc(rpc);
@@ -302,11 +302,11 @@ main(int argc, char *argv[])
 	}
 
 	rc = crt_init(NULL, 0 /* client-only */);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	rc = crt_context_create(&context);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	rc = daos_rpc_register(rdbt_rpcs, NULL, DAOS_RDBT_MODULE);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = hdlr(argc, argv);
 

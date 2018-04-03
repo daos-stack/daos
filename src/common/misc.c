@@ -37,7 +37,7 @@ daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 	memset(sgl, 0, sizeof(*sgl));
 
 	sgl->sg_nr = nr;
-	D__ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
+	D_ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
 }
@@ -56,12 +56,11 @@ daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 
 	for (i = 0; free_iovs && i < sgl->sg_nr; i++) {
 		if (sgl->sg_iovs[i].iov_buf != NULL) {
-			D__FREE(sgl->sg_iovs[i].iov_buf,
-			       sgl->sg_iovs[i].iov_buf_len);
+			D_FREE(sgl->sg_iovs[i].iov_buf);
 		}
 	}
 
-	D__FREE(sgl->sg_iovs, sgl->sg_nr * sizeof(*sgl->sg_iovs));
+	D_FREE(sgl->sg_iovs);
 	memset(sgl, 0, sizeof(*sgl));
 }
 
@@ -231,7 +230,7 @@ daos_str_trimwhite(char *str)
 int
 daos_iov_copy(daos_iov_t *dst, daos_iov_t *src)
 {
-	D__ALLOC(dst->iov_buf, src->iov_buf_len);
+	D_ALLOC(dst->iov_buf, src->iov_buf_len);
 	if (dst->iov_buf == NULL)
 		return -DER_NOMEM;
 	dst->iov_buf_len = src->iov_buf_len;
@@ -245,9 +244,9 @@ daos_iov_free(daos_iov_t *iov)
 {
 	if (iov->iov_buf == NULL)
 		return;
-	D__ASSERT(iov->iov_buf_len > 0);
+	D_ASSERT(iov->iov_buf_len > 0);
 
-	D__FREE(iov->iov_buf, iov->iov_buf_len);
+	D_FREE(iov->iov_buf);
 	iov->iov_buf = NULL;
 	iov->iov_buf_len = 0;
 	iov->iov_len = 0;
@@ -263,12 +262,12 @@ daos_rank_list_parse(const char *str, const char *sep)
 	char		       *p;
 	int			n = 0;
 
-	D__ALLOC(buf, sizeof(*buf) * cap);
+	D_ALLOC(buf, sizeof(*buf) * cap);
 	if (buf == NULL)
-		D__GOTO(out, ranks = NULL);
+		D_GOTO(out, ranks = NULL);
 	s = s_saved = strdup(str);
 	if (s == NULL)
-		D__GOTO(out_buf, ranks = NULL);
+		D_GOTO(out_buf, ranks = NULL);
 
 	while ((s = strtok_r(s, sep, &p)) != NULL) {
 		if (n == cap) {
@@ -277,11 +276,11 @@ daos_rank_list_parse(const char *str, const char *sep)
 
 			/* Double the buffer. */
 			cap_new = cap * 2;
-			D__ALLOC(buf_new, sizeof(*buf_new) * cap_new);
+			D_ALLOC(buf_new, sizeof(*buf_new) * cap_new);
 			if (buf_new == NULL)
-				D__GOTO(out_s, ranks = NULL);
+				D_GOTO(out_s, ranks = NULL);
 			memcpy(buf_new, buf, sizeof(*buf_new) * n);
-			D__FREE(buf, sizeof(*buf) * cap);
+			D_FREE(buf);
 			buf = buf_new;
 			cap = cap_new;
 		}
@@ -292,13 +291,13 @@ daos_rank_list_parse(const char *str, const char *sep)
 
 	ranks = daos_rank_list_alloc(n);
 	if (ranks == NULL)
-		D__GOTO(out_s, ranks = NULL);
+		D_GOTO(out_s, ranks = NULL);
 	memcpy(ranks->rl_ranks, buf, sizeof(*buf) * n);
 
 out_s:
 	free(s_saved);
 out_buf:
-	D__FREE(buf, sizeof(*buf) * cap);
+	D_FREE(buf);
 out:
 	return ranks;
 }
@@ -349,12 +348,12 @@ daos_hhash_init(void)
 	D_MUTEX_LOCK(&daos_ht_lock);
 	if (daos_ht_ref > 0) {
 		daos_ht_ref++;
-		D__GOTO(unlock, rc = 0);
+		D_GOTO(unlock, rc = 0);
 	}
 
 	rc = d_hhash_create(D_HHASH_BITS, &daos_ht.dht_hhash);
 	if (rc == 0) {
-		D__ASSERT(daos_ht.dht_hhash != NULL);
+		D_ASSERT(daos_ht.dht_hhash != NULL);
 		daos_ht_ref = 1;
 	} else {
 		D_ERROR("failed to create handle hash table: %d\n", rc);
@@ -372,13 +371,13 @@ daos_hhash_fini(void)
 
 	D_MUTEX_LOCK(&daos_ht_lock);
 	if (daos_ht_ref == 0)
-		D__GOTO(unlock, rc = -DER_UNINIT);
+		D_GOTO(unlock, rc = -DER_UNINIT);
 	if (daos_ht_ref > 1) {
 		daos_ht_ref--;
-		D__GOTO(unlock, rc = 0);
+		D_GOTO(unlock, rc = 0);
 	}
 
-	D__ASSERT(daos_ht.dht_hhash != NULL);
+	D_ASSERT(daos_ht.dht_hhash != NULL);
 	d_hhash_destroy(daos_ht.dht_hhash);
 	daos_ht.dht_hhash = NULL;
 	daos_ht.dht_ptrtype = false;
@@ -404,14 +403,14 @@ daos_hhash_is_ptrtype()
 struct d_hlink *
 daos_hhash_link_lookup(uint64_t key)
 {
-	D__ASSERT(daos_ht.dht_hhash != NULL);
+	D_ASSERT(daos_ht.dht_hhash != NULL);
 	return d_hhash_link_lookup(daos_ht.dht_hhash, key);
 }
 
 void
 daos_hhash_link_insert(struct d_hlink *hlink, int type)
 {
-	D__ASSERT(daos_ht.dht_hhash != NULL);
+	D_ASSERT(daos_ht.dht_hhash != NULL);
 	if (daos_hhash_is_ptrtype() && d_hhash_key_isptr((uintptr_t)hlink))
 		type = D_HTYPE_PTR;
 
@@ -421,20 +420,20 @@ daos_hhash_link_insert(struct d_hlink *hlink, int type)
 void
 daos_hhash_link_getref(struct d_hlink *hlink)
 {
-	D__ASSERT(daos_ht.dht_hhash != NULL);
+	D_ASSERT(daos_ht.dht_hhash != NULL);
 	d_hhash_link_getref(daos_ht.dht_hhash, hlink);
 }
 
 void
 daos_hhash_link_putref(struct d_hlink *hlink)
 {
-	D__ASSERT(daos_ht.dht_hhash != NULL);
+	D_ASSERT(daos_ht.dht_hhash != NULL);
 	d_hhash_link_putref(daos_ht.dht_hhash, hlink);
 }
 
 bool
 daos_hhash_link_delete(struct d_hlink *hlink)
 {
-	D__ASSERT(daos_ht.dht_hhash != NULL);
+	D_ASSERT(daos_ht.dht_hhash != NULL);
 	return d_hhash_link_delete(daos_ht.dht_hhash, hlink);
 }

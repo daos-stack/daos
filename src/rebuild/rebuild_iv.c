@@ -106,8 +106,8 @@ rebuild_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst,
 	if (dst_iv == src_iv)
 		return 0;
 
-	D__ASSERT(src_iv != NULL);
-	D__ASSERT(dst_iv != NULL);
+	D_ASSERT(src_iv != NULL);
+	D_ASSERT(dst_iv != NULL);
 
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);

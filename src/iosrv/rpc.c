@@ -52,17 +52,17 @@ dss_rpc_send(crt_rpc_t *rpc)
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
-		D__GOTO(out, rc = dss_abterr2der(rc));
+		D_GOTO(out, rc = dss_abterr2der(rc));
 
 	crt_req_addref(rpc);
 
 	rc = crt_req_send(rpc, rpc_cb, &eventual);
 	if (rc != 0)
-		D__GOTO(out_eventual, rc);
+		D_GOTO(out_eventual, rc);
 
 	rc = ABT_eventual_wait(eventual, (void **)&status);
 	if (rc != ABT_SUCCESS)
-		D__GOTO(out_eventual, rc = dss_abterr2der(rc));
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
 
 	rc = *status;
 
@@ -102,7 +102,7 @@ dss_group_create(crt_group_id_t id, d_rank_list_t *ranks, crt_group_t **group)
 
 	rc = ABT_eventual_create(sizeof(*g), &eventual);
 	if (rc != ABT_SUCCESS)
-		D__GOTO(out, rc = dss_abterr2der(rc));
+		D_GOTO(out, rc = dss_abterr2der(rc));
 
 	/*
 	 * Always wait for the eventual, as group_create_cb() will be called in
@@ -114,10 +114,10 @@ dss_group_create(crt_group_id_t id, d_rank_list_t *ranks, crt_group_t **group)
 
 	rc = ABT_eventual_wait(eventual, (void **)&g);
 	if (rc != ABT_SUCCESS)
-		D__GOTO(out_eventual, rc = dss_abterr2der(rc));
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
 
 	if (*g == NULL)
-		D__GOTO(out_eventual, rc = -DER_IO);
+		D_GOTO(out_eventual, rc = -DER_IO);
 
 	*group = *g;
 	rc = 0;
@@ -150,7 +150,7 @@ dss_group_destroy(crt_group_t *group)
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
-		D__GOTO(out, rc = dss_abterr2der(rc));
+		D_GOTO(out, rc = dss_abterr2der(rc));
 
 	/*
 	 * Always wait for the eventual, as group_destroy_cb() will be called
@@ -160,7 +160,7 @@ dss_group_destroy(crt_group_t *group)
 
 	rc = ABT_eventual_wait(eventual, (void **)&status);
 	if (rc != ABT_SUCCESS)
-		D__GOTO(out_eventual, rc = dss_abterr2der(rc));
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
 
 	rc = *status;
 out_eventual:

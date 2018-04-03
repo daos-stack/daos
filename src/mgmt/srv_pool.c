@@ -48,12 +48,12 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, crt_group_t *grp)
 		return rc;
 
 	td_in = crt_req_get(td_req);
-	D__ASSERT(td_in != NULL);
+	D_ASSERT(td_in != NULL);
 	uuid_copy(td_in->td_pool_uuid, pool_uuid);
 
 	rc = dss_rpc_send(td_req);
 	if (rc != 0)
-		D__GOTO(out_rpc, rc);
+		D_GOTO(out_rpc, rc);
 
 	td_out = crt_reply_get(td_req);
 	rc = td_out->td_rc;
@@ -117,9 +117,9 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	int				rc;
 
 	pc_in = crt_req_get(rpc_req);
-	D__ASSERT(pc_in != NULL);
+	D_ASSERT(pc_in != NULL);
 	pc_out = crt_reply_get(rpc_req);
-	D__ASSERT(pc_out != NULL);
+	D_ASSERT(pc_out != NULL);
 
 	if (pc_in->pc_tgts) {
 		daos_rank_list_sort(pc_in->pc_tgts);
@@ -129,15 +129,15 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		int	i;
 
 		rc = crt_group_size(NULL, &ranks_size);
-		D__ASSERT(rc == 0);
+		D_ASSERT(rc == 0);
 
 		tmp_rank_list.rl_nr = ranks_size;
 		if (ranks_size > TMP_RANKS_ARRAY_SIZE) {
 			d_rank_t *ranks;
 
-			D__ALLOC(ranks, sizeof(*ranks) * ranks_size);
+			D_ALLOC(ranks, sizeof(*ranks) * ranks_size);
 			if (ranks == NULL)
-				D__GOTO(free, rc = -DER_NOMEM);
+				D_GOTO(free, rc = -DER_NOMEM);
 			tmp_rank_list.rl_ranks = ranks;
 		} else {
 			tmp_rank_list.rl_ranks = ranks_array;
@@ -153,17 +153,17 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	uuid_unparse_lower(pc_in->pc_pool_uuid, id);
 	rc = dss_group_create(id, rank_list, &grp);
 	if (rc != 0)
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_CREATE, DAOS_MGMT_MODULE, 1);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, grp, NULL,
 				  opc, NULL, NULL, 0, topo, &tc_req);
 	if (rc)
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 
 	tc_in = crt_req_get(tc_req);
-	D__ASSERT(tc_in != NULL);
+	D_ASSERT(tc_in != NULL);
 	uuid_copy(tc_in->tc_pool_uuid, pc_in->pc_pool_uuid);
 
 	/* the pc_in->pc_tgt_dev will be freed when the MGMT_POOL_CREATE
@@ -175,7 +175,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	rc = dss_rpc_send(tc_req);
 	if (rc != 0) {
 		crt_req_decref(tc_req);
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 	}
 
 	tc_out = crt_reply_get(tc_req);
@@ -184,16 +184,16 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		D_ERROR(DF_UUID": failed to update pool map on %d targets\n",
 			DP_UUID(tc_in->tc_pool_uuid), rc);
 		crt_req_decref(tc_req);
-		D__GOTO(tgt_pool_create_fail, rc);
+		D_GOTO(tgt_pool_create_fail, rc);
 	}
 
 	D_DEBUG(DB_MGMT, DF_UUID" create %zu tgts pool\n",
 		DP_UUID(pc_in->pc_pool_uuid), tc_out->tc_tgt_uuids.ca_count);
 
 	/** Gather target uuids ranks from collective RPC to start pool svc. */
-	D__ALLOC(tgt_uuids, ranks_size * sizeof(*tgt_uuids));
+	D_ALLOC(tgt_uuids, ranks_size * sizeof(*tgt_uuids));
 	if (tgt_uuids == NULL)
-		D__GOTO(free, rc = -DER_NOMEM);
+		D_GOTO(free, rc = -DER_NOMEM);
 	tc_out_ranks = tc_out->tc_ranks.ca_arrays;
 	tc_out_uuids = tc_out->tc_tgt_uuids.ca_arrays;
 	for (i = 0; i < tc_out->tc_tgt_uuids.ca_count; i++) {
@@ -201,7 +201,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		bool	found;
 
 		found = daos_rank_list_find(rank_list, tc_out_ranks[i], &idx);
-		D__ASSERT(found);
+		D_ASSERT(found);
 
 		/** copy returned target UUID */
 		uuid_copy(tgt_uuids[idx], tc_out_uuids[i]);
@@ -218,14 +218,14 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	grp = NULL;
 
 	/** allocate service rank list */
-	D__ALLOC_PTR(pc_out->pc_svc);
+	D_ALLOC_PTR(pc_out->pc_svc);
 	if (pc_out->pc_svc == NULL)
-		D__GOTO(tgt_pool_create_fail, rc = -DER_NOMEM);
+		D_GOTO(tgt_pool_create_fail, rc = -DER_NOMEM);
 
-	D__ALLOC(pc_out->pc_svc->rl_ranks,
+	D_ALLOC(pc_out->pc_svc->rl_ranks,
 		pc_in->pc_svc_nr * sizeof(d_rank_t));
 	if (pc_out->pc_svc->rl_ranks == NULL)
-		D__GOTO(tgt_pool_create_fail, rc = -DER_NOMEM);
+		D_GOTO(tgt_pool_create_fail, rc = -DER_NOMEM);
 	pc_out->pc_svc->rl_nr = pc_in->pc_svc_nr;
 
 	rc = ds_mgmt_pool_svc_create(pc_in->pc_pool_uuid, pc_in->pc_uid,
@@ -242,11 +242,10 @@ tgt_pool_create_fail:
 free:
 	if (tmp_rank_list.rl_ranks != NULL &&
 	    tmp_rank_list.rl_ranks != ranks_array)
-		D__FREE(tmp_rank_list.rl_ranks,
-		       sizeof(*tmp_rank_list.rl_ranks) * ranks_size);
+		D_FREE(tmp_rank_list.rl_ranks);
 
 	if (tgt_uuids != NULL)
-		D__FREE(tgt_uuids, ranks_size * sizeof(*tgt_uuids));
+		D_FREE(tgt_uuids);
 
 	if (grp != NULL)
 		dss_group_destroy(grp);
@@ -267,7 +266,7 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 
 	pd_in = crt_req_get(rpc_req);
 	pd_out = crt_reply_get(rpc_req);
-	D__ASSERT(pd_in != NULL && pd_out != NULL);
+	D_ASSERT(pd_in != NULL && pd_out != NULL);
 
 	/* TODO check metadata about the pool's existence?
 	 *      and check active pool connection for "force"
@@ -279,7 +278,7 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 	if (rc != 0) {
 		D_ERROR("Failed to destroy pool service "DF_UUID": %d\n",
 			DP_UUID(pd_in->pd_pool_uuid), rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = ds_mgmt_tgt_pool_destroy(pd_in->pd_pool_uuid, NULL);

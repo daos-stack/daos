@@ -93,7 +93,7 @@ rdb_tree_open_path(struct rdb *db, const rdb_path_t *path, daos_handle_t *hdl)
 	p.iov_buf += p.iov_len;
 	p.iov_buf_len -= p.iov_len;
 	p.iov_len = path->iov_len - p.iov_len;
-	D__ASSERT(p.iov_len > 0);
+	D_ASSERT(p.iov_len > 0);
 	arg.deo_base = tree == NULL ? db->d_attr : tree->de_hdl;
 	arg.deo_parent = DAOS_HDL_INVAL;
 	rc = rdb_path_iterate(&p, rdb_tree_open_path_cb, &arg);
@@ -125,22 +125,22 @@ rdb_tree_alloc_ref(void *key, unsigned int ksize, void *varg,
 	void		       *buf;
 	int			rc;
 
-	D__ALLOC_PTR(tree);
+	D_ALLOC_PTR(tree);
 	if (tree == NULL)
-		D__GOTO(err, rc = -DER_NOMEM);
+		D_GOTO(err, rc = -DER_NOMEM);
 	D_INIT_LIST_HEAD(&tree->de_list);
 
 	/* tree->de_path */
-	D__ALLOC(buf, ksize);
+	D_ALLOC(buf, ksize);
 	if (buf == NULL)
-		D__GOTO(err_tree, rc = -DER_NOMEM);
+		D_GOTO(err_tree, rc = -DER_NOMEM);
 	memcpy(buf, key, ksize);
 	daos_iov_set(&tree->de_path, buf, ksize);
 
 	/* tree->de_hdl */
 	rc = rdb_tree_open_path(db, &tree->de_path, &tree->de_hdl);
 	if (rc != 0)
-		D__GOTO(err_path, rc);
+		D_GOTO(err_path, rc);
 
 	D_DEBUG(DB_ANY, DF_DB": created %p len %u\n", DP_DB(db), tree,
 		ksize);
@@ -148,9 +148,9 @@ rdb_tree_alloc_ref(void *key, unsigned int ksize, void *varg,
 	return 0;
 
 err_path:
-	D__FREE(tree->de_path.iov_buf, tree->de_path.iov_buf_len);
+	D_FREE(tree->de_path.iov_buf);
 err_tree:
-	D__FREE_PTR(tree);
+	D_FREE_PTR(tree);
 err:
 	return rc;
 }
@@ -161,10 +161,10 @@ rdb_tree_free_ref(struct daos_llink *llink)
 	struct rdb_tree *tree = rdb_tree_obj(llink);
 
 	D_DEBUG(DB_ANY, "freeing %p "DF_U64"\n", tree, tree->de_hdl.cookie);
-	D__ASSERT(d_list_empty(&tree->de_list));
+	D_ASSERT(d_list_empty(&tree->de_list));
 	dbtree_close(tree->de_hdl);
-	D__FREE(tree->de_path.iov_buf, tree->de_path.iov_buf_len);
-	D__FREE_PTR(tree);
+	D_FREE(tree->de_path.iov_buf);
+	D_FREE_PTR(tree);
 }
 
 static bool

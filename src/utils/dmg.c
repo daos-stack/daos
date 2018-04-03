@@ -374,7 +374,7 @@ pool_op_hdlr(int argc, char *argv[])
 			fprintf(stderr, "pool query failed: %d\n", rc);
 			return rc;
 		}
-		D__PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u\n",
+		D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u\n",
 			DP_UUID(pinfo.pi_uuid), pinfo.pi_ntargets,
 			pinfo.pi_ndisabled);
 
@@ -388,10 +388,10 @@ pool_op_hdlr(int argc, char *argv[])
 			else
 				sstr = "busy";
 
-			D__PRINT("Rebuild %s, "DF_U64" objs, "DF_U64" recs\n",
+			D_PRINT("Rebuild %s, "DF_U64" objs, "DF_U64" recs\n",
 				sstr, rstat->rs_obj_nr, rstat->rs_rec_nr);
 		} else {
-			D__PRINT("Rebuild failed, rc=%d, status=%d\n",
+			D_PRINT("Rebuild failed, rc=%d, status=%d\n",
 				rc, rstat->rs_errno);
 		}
 	}
@@ -568,13 +568,13 @@ obj_op_hdlr(int argc, char *argv[])
 	rc = daos_cont_open(poh, cont_uuid, DAOS_COO_RO, &coh, NULL, NULL);
 	if (rc) {
 		fprintf(stderr, "daos_cont_open failed, rc: %d\n", rc);
-		D__GOTO(disconnect, rc);
+		D_GOTO(disconnect, rc);
 	}
 
 	rc = daos_obj_layout_get(coh, oid, &layout);
 	if (rc) {
 		fprintf(stderr, "daos_cont_open failed, rc: %d\n", rc);
-		D__GOTO(close, rc);
+		D_GOTO(close, rc);
 	}
 
 	/* Print the object layout */

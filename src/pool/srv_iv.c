@@ -108,8 +108,8 @@ pool_iv_ent_copy(d_sg_list_t *dst, d_sg_list_t *src)
 	if (dst_iv == src_iv)
 		return 0;
 
-	D__ASSERT(src_iv != NULL);
-	D__ASSERT(dst_iv != NULL);
+	D_ASSERT(src_iv != NULL);
+	D_ASSERT(dst_iv != NULL);
 
 	dst_iv->piv_master_rank = src_iv->piv_master_rank;
 	uuid_copy(dst_iv->piv_pool_uuid, src_iv->piv_pool_uuid);
@@ -157,8 +157,8 @@ pool_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc, void **priv)
 	struct ds_pool		*pool;
 	int			rc;
 
-	D__ASSERT(src_iv != NULL);
-	D__ASSERT(dst_iv != NULL);
+	D_ASSERT(src_iv != NULL);
+	D_ASSERT(dst_iv != NULL);
 	rc = pool_iv_ent_copy(dst, src);
 	if (rc)
 		return rc;

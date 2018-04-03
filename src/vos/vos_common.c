@@ -162,12 +162,12 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 {
 	struct vos_tls *tls;
 
-	D__ALLOC_PTR(tls);
+	D_ALLOC_PTR(tls);
 	if (tls == NULL)
 		return NULL;
 
 	if (vos_imem_strts_create(&tls->vtl_imems_inst)) {
-		D__FREE_PTR(tls);
+		D_FREE_PTR(tls);
 		return NULL;
 	}
 
@@ -181,7 +181,7 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 	struct vos_tls *tls = data;
 
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
-	D__FREE_PTR(tls);
+	D_FREE_PTR(tls);
 }
 
 struct dss_module_key vos_module_key = {
@@ -264,25 +264,25 @@ vos_init(void)
 	D_MUTEX_LOCK(&mutex);
 
 	if (is_init && vsa_imems_inst)
-		D__GOTO(exit, rc);
+		D_GOTO(exit, rc);
 
-	D__ALLOC_PTR(vsa_imems_inst);
+	D_ALLOC_PTR(vsa_imems_inst);
 	if (vsa_imems_inst == NULL)
-		D__GOTO(exit, rc);
+		D_GOTO(exit, rc);
 
 	rc = vos_imem_strts_create(vsa_imems_inst);
 	if (rc)
-		D__GOTO(exit, rc);
+		D_GOTO(exit, rc);
 
 	rc = vos_mod_init();
 	if (rc)
-		D__GOTO(exit, rc);
+		D_GOTO(exit, rc);
 
 	is_init = 1;
 exit:
 	D_MUTEX_UNLOCK(&mutex);
 	if (rc && vsa_imems_inst)
-		D__FREE_PTR(vsa_imems_inst);
+		D_FREE_PTR(vsa_imems_inst);
 	return rc;
 }
 
@@ -292,7 +292,7 @@ vos_fini(void)
 	D_MUTEX_LOCK(&mutex);
 	if (vsa_imems_inst) {
 		vos_imem_strts_destroy(vsa_imems_inst);
-		D__FREE_PTR(vsa_imems_inst);
+		D_FREE_PTR(vsa_imems_inst);
 	}
 	D_MUTEX_UNLOCK(&mutex);
 }

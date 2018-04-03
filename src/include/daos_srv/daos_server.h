@@ -114,9 +114,9 @@ static inline void *
 dss_module_key_get(struct dss_thread_local_storage *dtls,
 		   struct dss_module_key *key)
 {
-	D__ASSERT(key->dmk_index >= 0);
-	D__ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
-	D__ASSERT(dss_module_keys[key->dmk_index] == key);
+	D_ASSERT(key->dmk_index >= 0);
+	D_ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
+	D_ASSERT(dss_module_keys[key->dmk_index] == key);
 
 	return dtls->dtls_values[key->dmk_index];
 }

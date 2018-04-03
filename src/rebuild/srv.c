@@ -45,8 +45,8 @@ rebuild_pool_map_get(struct ds_pool *pool)
 {
 	struct pool_map *map = NULL;
 
-	D__ASSERT(pool);
-	D__ASSERT(pool->sp_map != NULL);
+	D_ASSERT(pool);
+	D_ASSERT(pool->sp_map != NULL);
 	ABT_rwlock_rdlock(pool->sp_lock);
 	map = pool->sp_map;
 	pool_map_addref(map);
@@ -120,7 +120,7 @@ rebuild_tls_init(const struct dss_thread_local_storage *dtls,
 {
 	struct rebuild_tls *tls;
 
-	D__ALLOC_PTR(tls);
+	D_ALLOC_PTR(tls);
 	if (tls == NULL)
 		return NULL;
 
@@ -182,7 +182,7 @@ is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt, int type)
 	else
 		bits = rgt->rgt_pull_bits;
 
-	D__ASSERT(bits != NULL);
+	D_ASSERT(bits != NULL);
 
 	D_DEBUG(DB_REBUILD, "%s done check 0x%x [%d-%d]\n",
 		type == SCAN_CHECK ? "scan" : "pull", bits[0], 0,
@@ -297,7 +297,7 @@ rebuild_tls_fini(const struct dss_thread_local_storage *dtls,
 				   rebuild_pool_list)
 		rebuild_pool_tls_destroy(pool_tls);
 
-	D__FREE_PTR(tls);
+	D_FREE_PTR(tls);
 }
 
 struct rebuild_tgt_query_arg {
@@ -316,7 +316,7 @@ dss_rebuild_check_one(void *data)
 
 	pool_tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 					   rpt->rt_rebuild_ver);
-	D__ASSERTF(pool_tls != NULL, DF_UUID" ver %d\n",
+	D_ASSERTF(pool_tls != NULL, DF_UUID" ver %d\n",
 		   DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 
 	D_DEBUG(DB_REBUILD, "%d rec_count "DF_U64" obj_count "DF_U64
@@ -355,7 +355,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 	rc = dss_task_collective(dss_rebuild_check_one, &arg);
 	if (rc) {
 		ABT_mutex_unlock(rpt->rt_lock);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	if (!status->scanning && !rpt->rt_lead_puller_running) {
@@ -406,7 +406,7 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		if (d_list_empty(&rebuild_gst.rg_queue_list) &&
 		    rebuild_gst.rg_inflight == 0)
 			status->rs_done = 1;
-		D__GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 	}
 
 	memcpy(status, &rgt->rgt_status, sizeof(*status));
@@ -496,7 +496,7 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 				setbit(rgt->rgt_pull_bits,
 				       targets[i].ta_comp.co_rank);
 			}
-			D__FREE(targets, failed_tgts_cnt * sizeof(*targets));
+			D_FREE(targets);
 		}
 
 		if (!rgt->rgt_done && rgt->rgt_scan_done) {
@@ -539,14 +539,14 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 
 		D_DEBUG(DB_REBUILD, "%s", sbuf);
 		if (rs->rs_done) {
-			D__PRINT("%s", sbuf);
+			D_PRINT("%s", sbuf);
 			break;
 		}
 
 		/* print something at least for each 10 secons */
 		if (now - last_print > 10) {
 			last_print = now;
-			D__PRINT("%s", sbuf);
+			D_PRINT("%s", sbuf);
 		}
 	}
 }
@@ -556,14 +556,10 @@ rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 {
 	d_list_del(&rgt->rgt_list);
 	if (rgt->rgt_scan_bits)
-		D__FREE(rgt->rgt_scan_bits,
-			roundup(rgt->rgt_bits_size, DAOS_BITS_SIZE) /
-						    DAOS_BITS_SIZE);
+		D_FREE(rgt->rgt_scan_bits);
 
 	if (rgt->rgt_pull_bits)
-		D__FREE(rgt->rgt_pull_bits,
-			roundup(rgt->rgt_bits_size, DAOS_BITS_SIZE) /
-						    DAOS_BITS_SIZE);
+		D_FREE(rgt->rgt_pull_bits);
 
 	D_FREE_PTR(rgt);
 }
@@ -591,11 +587,11 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 
 	D_ALLOC(rgt->rgt_scan_bits, array_size * sizeof(uint32_t));
 	if (rgt->rgt_scan_bits == NULL)
-		D__GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_ALLOC(rgt->rgt_pull_bits, array_size * sizeof(uint32_t));
 	if (rgt->rgt_pull_bits == NULL)
-		D__GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	uuid_copy(rgt->rgt_pool_uuid, pool->sp_uuid);
 	rgt->rgt_rebuild_ver = ver;
@@ -638,7 +634,7 @@ rebuild_pool_group_prepare(struct ds_pool *pool)
 
 	D_ALLOC(ranks, sizeof(*ranks) * tgt_cnt);
 	if (ranks == NULL)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	for (i = 0; i < tgt_cnt; i++) {
 		ranks[i] = tgts[i].ta_comp.co_rank;
@@ -650,14 +646,14 @@ rebuild_pool_group_prepare(struct ds_pool *pool)
 
 	rc = dss_group_create(id, &rank_list, &grp);
 	if (rc != 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	pool->sp_group = grp;
 out:
 	if (ranks != NULL)
-		D__FREE(ranks, tgt_cnt * sizeof(*ranks));
+		D_FREE(ranks);
 	if (tgt_cnt > 0 && tgts != NULL)
-		D__FREE(tgts, tgt_cnt * sizeof(*tgts));
+		D_FREE(tgts);
 
 	return rc;
 }
@@ -695,7 +691,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t map_ver,
 
 		/* Set excluded targets scan/pull bits */
 		for (i = 0; i < exclude_tgts->rl_nr; i++) {
-			D__ASSERT(exclude_tgts->rl_ranks[i] <
+			D_ASSERT(exclude_tgts->rl_ranks[i] <
 				  (*rgt)->rgt_bits_size);
 			setbit((*rgt)->rgt_scan_bits,
 				exclude_tgts->rl_ranks[i]);
@@ -742,7 +738,7 @@ retry:
 				  tgts_failed);
 	if (rc != 0) {
 		D_ERROR("pool map broad cast failed: rc %d\n", rc);
-		D__GOTO(out_rpc, rc = 0); /* ignore the failure */
+		D_GOTO(out_rpc, rc = 0); /* ignore the failure */
 	}
 
 	rsi = crt_req_get(rpc);
@@ -766,9 +762,9 @@ retry:
 		if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) &&
 		    !rebuild_gst.rg_abort) {
 			crt_req_decref(rpc);
-			D__GOTO(retry, rc);
+			D_GOTO(retry, rc);
 		}
-		D__GOTO(out_rpc, rc);
+		D_GOTO(out_rpc, rc);
 	}
 
 	rso = crt_reply_get(rpc);
@@ -811,7 +807,7 @@ retry:
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to start pool rebuild: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
-		D__GOTO(out_rpc, rc);
+		D_GOTO(out_rpc, rc);
 	}
 out_rpc:
 	crt_req_decref(rpc);
@@ -847,8 +843,7 @@ rebuild_tgt_pool_tracker_destroy(struct rebuild_tgt_pool_tracker *rpt)
 			if (puller->rp_lock)
 				ABT_mutex_free(&puller->rp_lock);
 		}
-		D__FREE(rpt->rt_pullers, rpt->rt_puller_nxs *
-					 sizeof(*rpt->rt_pullers));
+		D_FREE(rpt->rt_pullers);
 	}
 
 	if (rpt->rt_lock)
@@ -876,13 +871,13 @@ rebuild_internal(struct ds_pool *pool, uint32_t rebuild_ver,
 	rc = rebuild_prepare(pool, rebuild_ver, tgts_failed, p_rgt);
 	if (rc) {
 		D_ERROR("rebuild prepare failed: rc %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = ds_pool_map_buf_get(pool->sp_uuid, &map_buf_iov, &map_ver);
 	if (rc) {
 		D_ERROR("pool map broadcast failed: rc %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/* broadcast scan RPC to all targets */
@@ -890,10 +885,9 @@ rebuild_internal(struct ds_pool *pool, uint32_t rebuild_ver,
 			     rebuild_ver, &map_buf_iov);
 	if (rc) {
 		D_ERROR("object scan failed: rc %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
-	D_EXIT;
 out:
 	return rc;
 }
@@ -916,7 +910,7 @@ rebuild_one_ult(void *arg)
 		return;
 	}
 
-	D__PRINT("Rebuild [started] (pool "DF_UUID" ver=%u)\n",
+	D_PRINT("Rebuild [started] (pool "DF_UUID" ver=%u)\n",
 		 DP_UUID(task->dst_pool_uuid), task->dst_map_ver);
 
 	rc = rebuild_internal(pool, task->dst_map_ver, task->dst_tgts_failed,
@@ -924,7 +918,7 @@ rebuild_one_ult(void *arg)
 	if (rc != 0) {
 		D_ERROR(""DF_UUID" (ver=%u) rebuild failed: rc %d\n",
 			DP_UUID(task->dst_pool_uuid), task->dst_map_ver, rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/* Wait until rebuild finished */
@@ -945,7 +939,6 @@ rebuild_one_ult(void *arg)
 	rc = rebuild_iv_update(pool->sp_iv_ns,
 			       &iv, CRT_IV_SHORTCUT_NONE,
 			       CRT_IV_SYNC_LAZY);
-	D_EXIT;
 out:
 	ds_pool_put(pool);
 	if (rgt)
@@ -954,7 +947,7 @@ out:
 	d_list_del(&task->dst_list);
 	daos_rank_list_free(task->dst_tgts_failed);
 	daos_rank_list_free(task->dst_svc_list);
-	D__FREE_PTR(task);
+	D_FREE_PTR(task);
 	rebuild_gst.rg_inflight--;
 
 	return;
@@ -1020,7 +1013,7 @@ rebuild_ults(void *arg)
 		d_list_del(&task->dst_list);
 		daos_rank_list_free(task->dst_tgts_failed);
 		daos_rank_list_free(task->dst_svc_list);
-		D__FREE_PTR(task);
+		D_FREE_PTR(task);
 	}
 
 	while (!d_list_empty(&rebuild_gst.rg_running_list))
@@ -1062,7 +1055,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	struct rebuild_task	*task;
 	int			rc;
 
-	D__ALLOC_PTR(task);
+	D_ALLOC_PTR(task);
 	if (task == NULL)
 		return -DER_NOMEM;
 
@@ -1072,31 +1065,31 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 
 	rc = daos_rank_list_dup(&task->dst_tgts_failed, tgts_failed);
 	if (rc) {
-		D__FREE_PTR(task);
+		D_FREE_PTR(task);
 		return rc;
 	}
 
 	rc = daos_rank_list_dup(&task->dst_svc_list, svc_list);
 	if (rc) {
-		D__FREE_PTR(task);
+		D_FREE_PTR(task);
 		return rc;
 	}
 
-	D__PRINT("Rebuild [queued] ("DF_UUID" ver=%u) failed rank %u\n",
+	D_PRINT("Rebuild [queued] ("DF_UUID" ver=%u) failed rank %u\n",
 		 DP_UUID(uuid), map_ver, tgts_failed->rl_ranks[0]);
 	d_list_add_tail(&task->dst_list, &rebuild_gst.rg_queue_list);
 
 	if (!rebuild_gst.rg_rebuild_running) {
 		rc = ABT_cond_create(&rebuild_gst.rg_stop_cond);
 		if (rc != ABT_SUCCESS)
-			D__GOTO(free, rc = dss_abterr2der(rc));
+			D_GOTO(free, rc = dss_abterr2der(rc));
 
 		rebuild_gst.rg_rebuild_running = 1;
 		rc = dss_ult_create(rebuild_ults, NULL, -1, NULL);
 		if (rc) {
 			ABT_cond_free(&rebuild_gst.rg_stop_cond);
 			rebuild_gst.rg_rebuild_running = 0;
-			D__GOTO(free, rc);
+			D_GOTO(free, rc);
 		}
 	}
 free:
@@ -1104,7 +1097,7 @@ free:
 		d_list_del(&task->dst_list);
 		daos_rank_list_free(task->dst_tgts_failed);
 		daos_rank_list_free(task->dst_svc_list);
-		D__FREE_PTR(task);
+		D_FREE_PTR(task);
 	}
 	return rc;
 }
@@ -1217,7 +1210,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 			      (int)dkey->rd_dkey.iov_len,
 			      (char *)dkey->rd_dkey.iov_buf);
 			daos_iov_free(&dkey->rd_dkey);
-			D__FREE_PTR(dkey);
+			D_FREE_PTR(dkey);
 		}
 	}
 
@@ -1374,10 +1367,10 @@ rebuild_tgt_pool_tracker_create(struct ds_pool *pool, d_rank_list_t *svc_list,
 
 	/* Initialize per-thread counters */
 	rpt->rt_puller_nxs = dss_get_threads_number();
-	D__ALLOC(rpt->rt_pullers, rpt->rt_puller_nxs *
+	D_ALLOC(rpt->rt_pullers, rpt->rt_puller_nxs *
 				  sizeof(*rpt->rt_pullers));
 	if (!rpt->rt_pullers)
-		D__GOTO(free, rc = -DER_NOMEM);
+		D_GOTO(free, rc = -DER_NOMEM);
 
 	for (i = 0; i < rpt->rt_puller_nxs; i++) {
 		struct rebuild_puller *puller;
@@ -1386,11 +1379,11 @@ rebuild_tgt_pool_tracker_create(struct ds_pool *pool, d_rank_list_t *svc_list,
 		D_INIT_LIST_HEAD(&puller->rp_dkey_list);
 		rc = ABT_mutex_create(&puller->rp_lock);
 		if (rc != ABT_SUCCESS)
-			D__GOTO(free, rc = dss_abterr2der(rc));
+			D_GOTO(free, rc = dss_abterr2der(rc));
 
 		rc = ABT_cond_create(&puller->rp_fini_cond);
 		if (rc != ABT_SUCCESS)
-			D__GOTO(free, rc = dss_abterr2der(rc));
+			D_GOTO(free, rc = dss_abterr2der(rc));
 	}
 
 	uuid_copy(rpt->rt_pool_uuid, pool->sp_uuid);
@@ -1471,11 +1464,11 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	sgl.sg_iovs = &iov;
 	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
 	if (rc != 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	rc = ds_pool_tgt_map_update(pool, iov.iov_buf, rsi->rsi_pool_map_ver);
 	if (rc != 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	/* Then check sp_group */
 	if (pool->sp_group == NULL) {
@@ -1486,7 +1479,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		if (pool->sp_group == NULL) {
 			D_ERROR(DF_UUID": pool group not found\n",
 				DP_UUID(pool->sp_uuid));
-			D__GOTO(out, rc = -DER_INVAL);
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
 
@@ -1494,7 +1487,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	rc = rebuild_tgt_pool_tracker_create(pool, rsi->rsi_svc_list,
 					     rsi->rsi_rebuild_ver, &rpt);
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	uuid_copy(rpt->rt_poh_uuid, rsi->rsi_pool_hdl_uuid);
 	uuid_copy(rpt->rt_coh_uuid, rsi->rsi_cont_hdl_uuid);
@@ -1509,7 +1502,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 
 	rc = dss_task_collective(rebuild_prepare_one, rpt);
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	rpt->rt_finishing = 0;
 

@@ -237,7 +237,7 @@ daos_group_attach(const char *group_id, crt_group_t **group)
 static inline int
 daos_group_detach(crt_group_t *group)
 {
-	D__ASSERT(group != NULL);
+	D_ASSERT(group != NULL);
 	D_DEBUG(DB_NET, "detaching from group '%s'\n", group->cg_grpid);
 	return crt_group_detach(group);
 }

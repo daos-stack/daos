@@ -46,7 +46,7 @@ free_io_params_cb(tse_task_t *task, void *data)
 {
 	struct io_params *params = *((struct io_params **)data);
 
-	D__FREE_PTR(params);
+	D_FREE_PTR(params);
 	return 0;
 }
 
@@ -56,7 +56,7 @@ set_size_cb(tse_task_t *task, void *data)
 	daos_size_t *buf_size = *((daos_size_t **)data);
 	daos_obj_fetch_t *args = daos_task_get_args(task);
 
-	D__ASSERT(buf_size != NULL);
+	D_ASSERT(buf_size != NULL);
 	*buf_size = args->iods[0].iod_size;
 	return 0;
 }
@@ -70,7 +70,7 @@ dac_kv_put(tse_task_t *task)
 	struct io_params	*params;
 	int			rc;
 
-	D__ALLOC_PTR(params);
+	D_ALLOC_PTR(params);
 	if (params == NULL) {
 		D_ERROR("Failed memory allocation\n");
 		return -DER_NOMEM;
@@ -98,7 +98,7 @@ dac_kv_put(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
 			      0, NULL, &update_task);
 	if (rc != 0)
-		D__GOTO(err_task, rc);
+		D_GOTO(err_task, rc);
 
 	update_args = daos_task_get_args(update_task);
 	update_args->oh		= args->oh;
@@ -111,15 +111,15 @@ dac_kv_put(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
 				       sizeof(params));
 	if (rc != 0)
-		D__GOTO(err_task, rc);
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_register_deps(task, 1, &update_task);
 	if (rc != 0)
-		D__GOTO(err_task, rc);
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_schedule(update_task, false);
 	if (rc != 0)
-		D__GOTO(err_task, rc);
+		D_GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
 
@@ -127,9 +127,9 @@ dac_kv_put(tse_task_t *task)
 
 err_task:
 	if (params)
-		D__FREE_PTR(params);
+		D_FREE_PTR(params);
 	if (update_task)
-		D__FREE_PTR(update_task);
+		D_FREE_PTR(update_task);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -152,7 +152,7 @@ dac_kv_get(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	D__ALLOC_PTR(params);
+	D_ALLOC_PTR(params);
 	if (params == NULL) {
 		D_ERROR("Failed memory allocation\n");
 		return -DER_NOMEM;
@@ -181,7 +181,7 @@ dac_kv_get(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),
 			      0, NULL, &fetch_task);
 	if (rc != 0)
-		D__GOTO(err_task, rc);
+		D_GOTO(err_task, rc);
 
 	fetch_args = daos_task_get_args(fetch_task);
 	fetch_args->oh		= args->oh;
@@ -196,21 +196,21 @@ dac_kv_get(tse_task_t *task)
 		rc = tse_task_register_comp_cb(fetch_task, set_size_cb,
 					       &buf_size, sizeof(buf_size));
 		if (rc != 0)
-			D__GOTO(err_task, rc);
+			D_GOTO(err_task, rc);
 	}
 
 	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
 				       sizeof(params));
 	if (rc != 0)
-		D__GOTO(err_task, rc);
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_register_deps(task, 1, &fetch_task);
 	if (rc != 0)
-		D__GOTO(err_task, rc);
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_schedule(fetch_task, false);
 	if (rc != 0)
-		D__GOTO(err_task, rc);
+		D_GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
 
@@ -218,9 +218,9 @@ dac_kv_get(tse_task_t *task)
 
 err_task:
 	if (params)
-		D__FREE_PTR(params);
+		D_FREE_PTR(params);
 	if (fetch_task)
-		D__FREE_PTR(fetch_task);
+		D_FREE_PTR(fetch_task);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -251,7 +251,7 @@ dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
 		rc = daos_task_create(d_opc, tse_task2sched(task), 0, NULL,
 				      &io_task);
 		if (rc != 0)
-			D__GOTO(err_task, rc);
+			D_GOTO(err_task, rc);
 
 		args = daos_task_get_args(io_task);
 		args->oh	= oh;
@@ -267,7 +267,7 @@ dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
 
 	rc = tse_task_depend_list(task, &head);
 	if (rc != 0)
-		D__GOTO(err_task, rc);
+		D_GOTO(err_task, rc);
 
 	tse_task_list_sched(&head, false);
 	tse_sched_progress(tse_task2sched(task));

@@ -57,9 +57,9 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
 		print_message("Inserting %d keys...\n",
 			      gs_dkeys);
 
-	D__ALLOC(rec, strlen(val_fmt) + g_dkeys_strlen + 1);
+	D_ALLOC(rec, strlen(val_fmt) + g_dkeys_strlen + 1);
 	assert_non_null(rec);
-	D__ALLOC(val, 64);
+	D_ALLOC(val, 64);
 	assert_non_null(val);
 	val_size = 64;
 	epoch = start_epoch;
@@ -76,7 +76,7 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
 		}
 	}
 
-	D__ALLOC(rec_verify, strlen(val_fmt) + g_dkeys_strlen + 1);
+	D_ALLOC(rec_verify, strlen(val_fmt) + g_dkeys_strlen + 1);
 	for (i = 0; i < gs_dkeys; i++) {
 		memset(rec_verify, 0, (strlen(val_fmt) + g_dkeys_strlen + 1));
 		memset(val, 0, 64);
@@ -92,9 +92,9 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
 		assert_memory_equal(val, rec_verify, req.iod[0].iod_size);
 	}
 
-	D__FREE(val, 64);
-	D__FREE(rec_verify, (strlen(val_fmt) + g_dkeys_strlen + 1));
-	D__FREE(rec, strlen(val_fmt) + g_dkeys_strlen + 1);
+	D_FREE(val);
+	D_FREE(rec_verify);
+	D_FREE(rec);
 }
 
 static void

@@ -61,14 +61,14 @@ tier_fetch_cb(tse_task_t *task, void *data)
 
 	if (rc) {
 		D_ERROR("RPC error while fetching: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	tfo = crt_reply_get(arg->rpc);
 	rc = tfo->tfo_ret;
 	if (rc) {
 		D_ERROR("failed to fetch: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	arg->hdl.cookie = 0;
@@ -76,10 +76,10 @@ tier_fetch_cb(tse_task_t *task, void *data)
 	if (*arg->prc < 0) {
 		D_ERROR("Failed to create warm tier container: %d\n",
 			*arg->prc);
-		D__GOTO(out, *arg->prc);
+		D_GOTO(out, *arg->prc);
 	}
 
-	D__FREE(arg->prc, sizeof(*arg->prc));
+	D_FREE(arg->prc);
 out:
 	crt_req_decref(arg->rpc);
 	return rc;
@@ -117,12 +117,12 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	from = g_tierctx.dtc_colder;
 	if (from == NULL) {
 		D_ERROR(" have no colder tier\n");
-		D__GOTO(out, -DER_NONEXIST);
+		D_GOTO(out, -DER_NONEXIST);
 	}
-	D__ALLOC_PTR(prc);
+	D_ALLOC_PTR(prc);
 	if (prc == NULL) {
 		D_ERROR(" could not allocate rc ptr\n");
-		D__GOTO(out, -DER_NOMEM);
+		D_GOTO(out, -DER_NOMEM);
 	}
 
 	sched = tse_task2sched(task);
@@ -130,7 +130,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	*prc = 1;
 	rc = dc_task_create(dc_cont_create, sched, NULL, &cont_open_task);
 	if (rc != 0) {
-		D__FREE_PTR(prc);
+		D_FREE_PTR(prc);
 		return rc;
 	}
 
@@ -149,7 +149,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	rc = dc_task_schedule(cont_open_task, true);
 	if (rc) {
 		D_ERROR(" create local container: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	while (*prc == 1) {
@@ -165,7 +165,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	/* Create RPC and allocate memory for the various field-eybops */
 	rc = tier_req_create(daos_task2ctx(task), &ep, TIER_FETCH, &rpc);
 	if (rc != 0)
-		D__GOTO(out_task, rc);
+		D_GOTO(out_task, rc);
 
 	/* Grab the input struct of the RPC */
 	in = crt_req_get(rpc);
@@ -184,7 +184,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	arg.prc  = prc;
 	rc = tse_task_register_comp_cb(task, tier_fetch_cb, &arg, sizeof(arg));
 	if (rc != 0)
-		D__GOTO(out_req_put, rc);
+		D_GOTO(out_req_put, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);

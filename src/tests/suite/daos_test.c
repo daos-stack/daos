@@ -372,7 +372,7 @@ test_teardown(void **state)
 		}
 	}
 
-	D__FREE_PTR(arg);
+	D_FREE_PTR(arg);
 	return 0;
 }
 
@@ -488,7 +488,7 @@ run_specified_tests(const char *tests, int rank, int size,
 							   sub_tests_size);
 			break;
 		default:
-			D__ASSERT(0);
+			D_ASSERT(0);
 		}
 
 		tests++;

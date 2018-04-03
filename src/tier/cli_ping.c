@@ -77,7 +77,7 @@ dc_tier_ping(uint32_t ping_val, tse_task_t *task)
 	/* Create RPC and allocate memory for the various field-eybops */
 	rc = tier_req_create(daos_task2ctx(task), &ep, TIER_PING, &rpc);
 	if (rc != 0)
-		D__GOTO(out_task, rc);
+		D_GOTO(out_task, rc);
 
 	/* Grab the input struct of the RPC */
 	in = crt_req_get(rpc);
@@ -91,7 +91,7 @@ dc_tier_ping(uint32_t ping_val, tse_task_t *task)
 
 	rc = tse_task_register_comp_cb(task, tier_ping_cb, &arg, sizeof(arg));
 	if (rc != 0)
-		D__GOTO(out_req_put, rc);
+		D_GOTO(out_req_put, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);

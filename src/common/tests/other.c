@@ -79,17 +79,17 @@ comb_sort_test(int num)
 
 	for (i = 0; i < num; i++) {
 		arr[i] = rand() % (4 * num);
-		D__PRINT("%d ", arr[i]);
+		D_PRINT("%d ", arr[i]);
 	}
-	D__PRINT("\n");
+	D_PRINT("\n");
 
 	daos_array_sort(arr, num, false, &sort_ops);
 
-	D__PRINT("Sorted:\n");
+	D_PRINT("Sorted:\n");
 	for (i = 0; i < num; i++)
-		D__PRINT("%d ", arr[i]);
+		D_PRINT("%d ", arr[i]);
 
-	D__PRINT("\n");
+	D_PRINT("\n");
 	free(arr);
 	return 0;
 }

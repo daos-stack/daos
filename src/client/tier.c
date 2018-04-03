@@ -124,7 +124,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	/*Note CB arg (on task complete) is freed implicitly by scheduler
 	* See daos_task_complete_callback in scheduler.c
 	*/
-	D__ALLOC_PTR(cb_arg);
+	D_ALLOC_PTR(cb_arg);
 	if (cb_arg == NULL)
 		return -DER_NOMEM;
 

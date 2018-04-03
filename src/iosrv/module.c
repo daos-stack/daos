@@ -92,9 +92,9 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	}
 
 	/* allocate data structure to track this module instance */
-	D__ALLOC_PTR(lmod);
+	D_ALLOC_PTR(lmod);
 	if (!lmod)
-		D__GOTO(err_hdl, rc = -DER_NOMEM);
+		D_GOTO(err_hdl, rc = -DER_NOMEM);
 
 	lmod->lm_hdl = handle;
 
@@ -109,7 +109,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	err = dlerror();
 	if (err != NULL) {
 		D_ERROR("failed to load %s: %s\n", modname, err);
-		D__GOTO(err_lmod, rc = -DER_INVAL);
+		D_GOTO(err_lmod, rc = -DER_INVAL);
 	}
 	lmod->lm_dss_mod = smod;
 
@@ -117,14 +117,14 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	if (strcmp(smod->sm_name, modname) != 0) {
 		D_ERROR("inconsistent module name %s != %s\n", modname,
 			smod->sm_name);
-		D__GOTO(err_hdl, rc = -DER_INVAL);
+		D_GOTO(err_hdl, rc = -DER_INVAL);
 	}
 
 	/* initialize the module */
 	rc = smod->sm_init();
 	if (rc) {
 		D_ERROR("failed to init %s: %d\n", modname, rc);
-		D__GOTO(err_hdl, rc = -DER_INVAL);
+		D_GOTO(err_hdl, rc = -DER_INVAL);
 	}
 
 	if (smod->sm_key != NULL)
@@ -135,7 +135,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	if (rc) {
 		D_ERROR("failed to register client RPC for %s: %d\n",
 			modname, rc);
-		D__GOTO(err_mod_init, rc);
+		D_GOTO(err_mod_init, rc);
 	}
 
 	/* register server RPC handlers */
@@ -144,7 +144,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	if (rc) {
 		D_ERROR("failed to register srv RPC for %s: %d\n",
 			modname, rc);
-		D__GOTO(err_cl_rpc, rc);
+		D_GOTO(err_cl_rpc, rc);
 	}
 
 	if (mod_facs != NULL)
@@ -162,7 +162,7 @@ err_mod_init:
 	dss_unregister_key(smod->sm_key);
 	smod->sm_fini();
 err_lmod:
-	D__FREE_PTR(lmod);
+	D_FREE_PTR(lmod);
 err_hdl:
 	dlclose(handle);
 	return rc;
@@ -223,7 +223,7 @@ dss_module_unload(const char *modname)
 	dss_module_unload_internal(lmod);
 
 	/* free memory used to track this module instance */
-	D__FREE_PTR(lmod);
+	D_FREE_PTR(lmod);
 
 	return 0;
 }
@@ -304,6 +304,6 @@ dss_module_unload_all(void)
 	d_list_for_each_entry_safe(mod, tmp, &destroy_list, lm_lk) {
 		d_list_del_init(&mod->lm_lk);
 		dss_module_unload_internal(mod);
-		D__FREE_PTR(mod);
+		D_FREE_PTR(mod);
 	}
 }

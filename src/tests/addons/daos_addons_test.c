@@ -332,7 +332,7 @@ teardown(void **state)
 			return rc;
 	}
 
-	D__FREE_PTR(arg);
+	D_FREE_PTR(arg);
 	return 0;
 }
 

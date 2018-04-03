@@ -47,13 +47,13 @@ plt_obj_place(daos_obj_id_t oid)
 	md.omd_ver = 1;
 
 	rc = pl_obj_place(pl_map, &md, NULL, &layout);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
-	D__PRINT("Layout of object "DF_OID"\n", DP_OID(oid));
+	D_PRINT("Layout of object "DF_OID"\n", DP_OID(oid));
 	for (i = 0; i < layout->ol_nr; i++)
-		D__PRINT("%d ", layout->ol_shards[i].po_target);
+		D_PRINT("%d ", layout->ol_shards[i].po_target);
 
-	D__PRINT("\n");
+	D_PRINT("\n");
 
 	pl_obj_layout_free(layout);
 	return 0;
@@ -96,13 +96,13 @@ main(int argc, char **argv)
 
 	nr = ARRAY_SIZE(comps);
 	buf = pool_buf_alloc(nr);
-	D__ASSERT(buf != NULL);
+	D_ASSERT(buf != NULL);
 
 	rc = pool_buf_attach(buf, comps, nr);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	rc = pool_map_create(buf, 1, &po_map);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	pool_map_print(po_map);
 
@@ -111,13 +111,13 @@ main(int argc, char **argv)
 	mia.ia_ring.domain  = PO_COMP_TP_RACK;
 
 	rc = pl_map_create(po_map, &mia, &pl_map);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	pl_map_print(pl_map);
 
 	daos_obj_id_generate(&oid, DAOS_OC_SMALL_RW);
 	rc = plt_obj_place(oid);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	pl_map_decref(pl_map);
 

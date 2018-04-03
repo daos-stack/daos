@@ -37,7 +37,7 @@ int test_checksum_simple(char *cs_name, daos_csum_t *csum,
 
 	rc = daos_csum_init(cs_name, csum);
 	if (rc != 0) {
-		D__PRINT("Error ins initializing checksum\n");
+		D_PRINT("Error ins initializing checksum\n");
 		goto exit;
 	}
 
@@ -50,14 +50,14 @@ int test_checksum_simple(char *cs_name, daos_csum_t *csum,
 
 	rc = daos_csum_compute(csum, &sgl);
 	if (rc != 0)
-		D__PRINT("Error in computing checksum\n");
+		D_PRINT("Error in computing checksum\n");
 
 	csum_buf->cs_len = csum_buf->cs_buf_len = daos_csum_get_size(csum);
 	D_ALLOC(csum_buf->cs_csum, csum_buf->cs_buf_len);
 
 	daos_csum_get(csum, csum_buf);
-	D__PRINT("Checksum for string \"%s\" using  %s is "DF_X64"\n",
-		 test_buf, cs_name, *(uint64_t *)csum_buf->cs_csum);
+	D_PRINT("Checksum for string \"%s\" using  %s is "DF_X64"\n",
+		test_buf, cs_name, *(uint64_t *)csum_buf->cs_csum);
 
 	D_FREE(csum_buf->cs_csum);
 exit:
@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
 
 	rc = daos_csum_reset(csum);
 	if (rc != 0) {
-		D__PRINT("Error in reset: %d\n", rc);
+		D_PRINT("Error in reset: %d\n", rc);
 		test_fail++;
 	}
 
@@ -108,9 +108,9 @@ int main(int argc, char *argv[])
 		test_fail++;
 	}
 	if (test_fail)
-		D__PRINT("%d tests failed\n", test_fail);
+		D_PRINT("%d tests failed\n", test_fail);
 	else
-		D__PRINT("All tests pass\n");
+		D_PRINT("All tests pass\n");
 
 	return rc;
 }

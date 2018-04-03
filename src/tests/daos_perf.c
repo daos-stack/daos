@@ -97,8 +97,8 @@ ts_vos_update(struct dts_io_credit *cred, daos_epoch_t epoch)
 		if (rc)
 			return rc;
 
-		D__ASSERT(cred->tc_sgl.sg_nr == 1);
-		D__ASSERT(sgl->sg_nr_out == 1);
+		D_ASSERT(cred->tc_sgl.sg_nr == 1);
+		D_ASSERT(sgl->sg_nr_out == 1);
 
 		memcpy(sgl->sg_iovs[0].iov_buf,
 		       cred->tc_sgl.sg_iovs[0].iov_buf,
@@ -136,7 +136,7 @@ ts_key_insert(void)
 	daos_epoch_t	 epoch = 0;
 
 	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0);
-	D__ASSERT(indices != NULL);
+	D_ASSERT(indices != NULL);
 
 	dts_key_gen(dkey_buf, DTS_KEY_LEN, "blade");
 
@@ -212,7 +212,7 @@ ts_key_insert(void)
 
 			if (rc != 0) {
 				fprintf(stderr, "Update failed: %d\n", rc);
-				D__GOTO(failed, rc);
+				D_GOTO(failed, rc);
 			}
 		}
 	}

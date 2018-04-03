@@ -77,7 +77,7 @@ ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
 	int rc;
 
 	in = crt_req_get(rpc);
-	D__ASSERT(in != NULL);
+	D_ASSERT(in != NULL);
 
 	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
 	if (rc)
@@ -112,22 +112,22 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	int				i;
 
 	ps_in = crt_req_get(rpc);
-	D__ASSERT(ps_in != NULL);
+	D_ASSERT(ps_in != NULL);
 	if (ps_in->ps_rank != -1) {
 		/* Only set local parameter */
 		rc = dss_parameters_set(ps_in->ps_key_id, ps_in->ps_value);
 		if (rc)
 			D_ERROR("Set parameter failed key_id %d: rc %d\n",
 				ps_in->ps_key_id, rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/* Set parameter on all servers */
 	rc = crt_group_size(NULL, &ranks_size);
-	D__ASSERT(rc == 0);
-	D__ALLOC(ranks, sizeof(*ranks) * ranks_size);
+	D_ASSERT(rc == 0);
+	D_ALLOC(ranks, sizeof(*ranks) * ranks_size);
 	if (ranks == NULL)
-		D__GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	for (i = 0; i < ranks_size; i++)
 		ranks[i] = i;
 	rank_list.rl_nr = ranks_size;
@@ -137,17 +137,17 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	uuid_unparse_lower(uuid, id);
 	rc = dss_group_create(id, &rank_list, &grp);
 	if (rc != 0)
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_PARAMS_SET, DAOS_MGMT_MODULE, 1);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, grp, NULL,
 				  opc, NULL, NULL, 0, topo, &tc_req);
 	if (rc)
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 
 	tc_in = crt_req_get(tc_req);
-	D__ASSERT(tc_in != NULL);
+	D_ASSERT(tc_in != NULL);
 
 	tc_in->tps_key_id = ps_in->ps_key_id;
 	tc_in->tps_value = ps_in->ps_value;
@@ -155,18 +155,18 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	rc = dss_rpc_send(tc_req);
 	if (rc != 0) {
 		crt_req_decref(tc_req);
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 	}
 
 	out = crt_reply_get(tc_req);
 	rc = out->srv_rc;
 	if (rc != 0) {
 		crt_req_decref(tc_req);
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 	}
 free:
 	if (ranks != NULL)
-		D__FREE(ranks, sizeof(*ranks) * ranks_size);
+		D_FREE(ranks);
 	uuid_clear(uuid);
 	if (grp)
 		dss_group_destroy(grp);
@@ -207,7 +207,7 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	else
 		sig = SIGTERM;
 	crt_group_rank(NULL, &rank);
-	D__PRINT("Service rank %d is being killed by signal %d... farewell\n",
+	D_PRINT("Service rank %d is being killed by signal %d... farewell\n",
 		rank, sig);
 	kill(getpid(), sig);
 }

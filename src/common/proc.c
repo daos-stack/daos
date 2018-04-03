@@ -80,18 +80,18 @@ daos_proc_iovec(crt_proc_t proc, daos_iov_t *div)
 		return -DER_HG;
 	}
 	if (proc_op == CRT_PROC_DECODE && div->iov_buf_len > 0) {
-		D__ALLOC(div->iov_buf, div->iov_buf_len);
+		D_ALLOC(div->iov_buf, div->iov_buf_len);
 		if (div->iov_buf == NULL)
 			return -DER_NOMEM;
 	} else if (proc_op == CRT_PROC_FREE && div->iov_buf_len > 0) {
-		D__FREE(div->iov_buf, div->iov_buf_len);
+		D_FREE(div->iov_buf);
 	}
 
 	if (div->iov_len > 0) {
 		rc = crt_proc_memcpy(proc, div->iov_buf, div->iov_len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D__FREE(div->iov_buf, div->iov_buf_len);
+				D_FREE(div->iov_buf);
 			return -DER_HG;
 		}
 	}
@@ -163,18 +163,18 @@ daos_proc_csum_buf(crt_proc_t proc, daos_csum_buf_t *csum)
 	}
 
 	if (proc_op == CRT_PROC_DECODE && csum->cs_buf_len > 0) {
-		D__ALLOC(csum->cs_csum, csum->cs_buf_len);
+		D_ALLOC(csum->cs_csum, csum->cs_buf_len);
 		if (csum->cs_csum == NULL)
 			return -DER_NOMEM;
 	} else if (proc_op == CRT_PROC_FREE && csum->cs_buf_len > 0) {
-		D__FREE(csum->cs_csum, csum->cs_buf_len);
+		D_FREE(csum->cs_csum);
 	}
 
 	if (csum->cs_len > 0) {
 		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D__FREE(csum->cs_csum, csum->cs_buf_len);
+				D_FREE(csum->cs_csum);
 			return -DER_HG;
 		}
 	}
@@ -300,24 +300,24 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 
 	if (proc_op == CRT_PROC_DECODE) {
 		if (existing_flags & IOD_REC_EXIST) {
-			D__ALLOC(dvi->iod_recxs,
+			D_ALLOC(dvi->iod_recxs,
 				dvi->iod_nr * sizeof(*dvi->iod_recxs));
 			if (dvi->iod_recxs == NULL)
-				D__GOTO(free, rc = -DER_NOMEM);
+				D_GOTO(free, rc = -DER_NOMEM);
 		}
 
 		if (existing_flags & IOD_CSUM_EXIST) {
-			D__ALLOC(dvi->iod_csums,
+			D_ALLOC(dvi->iod_csums,
 				dvi->iod_nr * sizeof(*dvi->iod_csums));
 			if (dvi->iod_csums == NULL)
-				D__GOTO(free, rc = -DER_NOMEM);
+				D_GOTO(free, rc = -DER_NOMEM);
 		}
 
 		if (existing_flags & IOD_EPRS_EXIST) {
-			D__ALLOC(dvi->iod_eprs,
+			D_ALLOC(dvi->iod_eprs,
 				dvi->iod_nr * sizeof(*dvi->iod_eprs));
 			if (dvi->iod_eprs == NULL)
-				D__GOTO(free, rc = -DER_NOMEM);
+				D_GOTO(free, rc = -DER_NOMEM);
 		}
 	}
 
@@ -326,7 +326,7 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 			rc = daos_proc_recx(proc, &dvi->iod_recxs[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
-					D__GOTO(free, rc);
+					D_GOTO(free, rc);
 				return rc;
 			}
 		}
@@ -337,7 +337,7 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 			rc = daos_proc_csum_buf(proc, &dvi->iod_csums[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
-					D__GOTO(free, rc);
+					D_GOTO(free, rc);
 				return rc;
 			}
 		}
@@ -348,7 +348,7 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 			rc = daos_proc_epoch_range(proc, &dvi->iod_eprs[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
-					D__GOTO(free, rc);
+					D_GOTO(free, rc);
 				return rc;
 			}
 		}
@@ -357,14 +357,11 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 	if (proc_op == CRT_PROC_FREE) {
 free:
 		if (dvi->iod_recxs != NULL)
-			D__FREE(dvi->iod_recxs,
-			       dvi->iod_nr * sizeof(*dvi->iod_recxs));
+			D_FREE(dvi->iod_recxs);
 		if (dvi->iod_csums != NULL)
-			D__FREE(dvi->iod_csums,
-			       dvi->iod_nr * sizeof(*dvi->iod_csums));
+			D_FREE(dvi->iod_csums);
 		if (dvi->iod_eprs != NULL)
-			D__FREE(dvi->iod_eprs,
-			       dvi->iod_nr * sizeof(*dvi->iod_eprs));
+			D_FREE(dvi->iod_eprs);
 	}
 
 	return rc;
@@ -456,7 +453,7 @@ daos_proc_sg_list(crt_proc_t proc, daos_sg_list_t *sgl)
 		return -DER_HG;
 
 	if (proc_op == CRT_PROC_DECODE && sgl->sg_nr > 0) {
-		D__ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr);
+		D_ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr);
 		if (sgl->sg_iovs == NULL)
 			return -DER_NOMEM;
 	}
@@ -465,15 +462,13 @@ daos_proc_sg_list(crt_proc_t proc, daos_sg_list_t *sgl)
 		rc = daos_proc_iovec(proc, &sgl->sg_iovs[i]);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D__FREE(sgl->sg_iovs,
-				       sizeof(sgl->sg_iovs[0]) *
-				       sgl->sg_nr);
+				D_FREE(sgl->sg_iovs);
 			return -DER_HG;
 		}
 	}
 
 	if (proc_op == CRT_PROC_FREE && sgl->sg_iovs != NULL)
-		D__FREE(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr);
+		D_FREE(sgl->sg_iovs);
 
 	return rc;
 }
@@ -498,7 +493,7 @@ daos_proc_sg_desc_list(crt_proc_t proc, daos_sg_list_t *sgl)
 		return -DER_HG;
 
 	if (proc_op == CRT_PROC_DECODE && sgl->sg_nr > 0) {
-		D__ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr);
+		D_ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr);
 		if (sgl->sg_iovs == NULL)
 			return -DER_NOMEM;
 	}
@@ -517,7 +512,7 @@ daos_proc_sg_desc_list(crt_proc_t proc, daos_sg_list_t *sgl)
 	}
 
 	if (proc_op == CRT_PROC_FREE && sgl->sg_iovs != NULL)
-		D__FREE(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr);
+		D_FREE(sgl->sg_iovs);
 
 	return rc;
 }

@@ -80,8 +80,8 @@ ds_iv_class_register(unsigned int class_id, struct crt_iv_ops *crt_ops,
 	if (!found) {
 		struct crt_iv_class *new_iv_class;
 
-		D__ALLOC(new_iv_class, (crt_iv_class_nr + 1) *
-					sizeof(*new_iv_class));
+		D_ALLOC(new_iv_class, (crt_iv_class_nr + 1) *
+				       sizeof(*new_iv_class));
 		if (new_iv_class == NULL)
 			return -DER_NOMEM;
 
@@ -93,8 +93,7 @@ ds_iv_class_register(unsigned int class_id, struct crt_iv_ops *crt_ops,
 		new_iv_class[crt_iv_class_nr].ivc_feats = 0;
 		new_iv_class[crt_iv_class_nr].ivc_ops = crt_ops;
 		if (crt_iv_class_nr > 0)
-			D__FREE(crt_iv_class, crt_iv_class_nr *
-					      sizeof(*crt_iv_class));
+			D_FREE(crt_iv_class);
 		crt_iv_class_nr++;
 		crt_iv_class = new_iv_class;
 		crt_iv_class_id = crt_iv_class_nr - 1;
@@ -141,7 +140,7 @@ iv_key_pack(crt_iv_key_t *key_iov, struct ds_iv_key *key_iv)
 
 	/* packing the key */
 	class = iv_class_lookup(key_iv->class_id);
-	D__ASSERT(class != NULL);
+	D_ASSERT(class != NULL);
 
 	if (class->iv_class_ops->ivc_key_pack) {
 		rc = class->iv_class_ops->ivc_key_pack(class, key_iv, key_iov);
@@ -166,7 +165,7 @@ iv_key_unpack(struct ds_iv_key *key_iv, crt_iv_key_t *key_iov)
 	 * ds_iv_key, so it is safe to use before unpack
 	 */
 	class = iv_class_lookup(tmp_key->class_id);
-	D__ASSERT(class != NULL);
+	D_ASSERT(class != NULL);
 
 	if (class->iv_class_ops->ivc_key_unpack)
 		rc = class->iv_class_ops->ivc_key_unpack(class, key_iov,
@@ -383,7 +382,7 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		if (rc < 0)
 			return rc;
 	} else {
-		D__ASSERT(priv_entry->entry != NULL);
+		D_ASSERT(priv_entry->entry != NULL);
 		entry = priv_entry->entry;
 	}
 
@@ -506,17 +505,17 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	if (iv_value) {
 		rc = class->iv_class_ops->ivc_value_alloc(entry, iv_value);
 		if (rc)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 	}
 
 	rc = class->iv_class_ops->ivc_ent_get(entry, priv);
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
-	D__ALLOC_PTR(priv_entry);
+	D_ALLOC_PTR(priv_entry);
 	if (priv_entry == NULL) {
 		class->iv_class_ops->ivc_ent_put(entry, priv);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	priv_entry->priv = *priv;
@@ -542,7 +541,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	D_ASSERT(priv_entry != NULL);
 
 	entry = priv_entry->entry;
-	D__ASSERT(entry != NULL);
+	D_ASSERT(entry != NULL);
 
 	/* Let's deal with iv_value first */
 	if (iv_value != NULL)
@@ -647,7 +646,7 @@ ds_iv_ns_create(crt_context_t ctx, crt_group_t *grp,
 				     crt_iv_class_nr, &ns->iv_ns,
 				     (d_iov_t *)g_ivns);
 	if (rc)
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 
 	*p_iv_ns = ns;
 	*ns_id = ns->iv_ns_id;
@@ -749,7 +748,7 @@ ds_iv_fini(void)
 	}
 
 	if (crt_iv_class_nr > 0)
-		D__FREE(crt_iv_class, crt_iv_class_nr * sizeof(*crt_iv_class));
+		D_FREE(crt_iv_class);
 
 	return 0;
 }
@@ -808,7 +807,7 @@ iv_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv, d_sg_list_t *value,
 
 	key_iv->rank = ns->iv_master_rank;
 	class = iv_class_lookup(key_iv->class_id);
-	D__ASSERT(class != NULL);
+	D_ASSERT(class != NULL);
 	D_DEBUG(DB_TRACE, "class_id %d crt class id %d opc %d\n",
 		key_iv->class_id, class->iv_cart_class_id, opc);
 

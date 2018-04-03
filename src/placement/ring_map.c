@@ -139,7 +139,7 @@ ring_comp_shuff_cmp(struct pool_component *comp_a,
 	if (comp_a->co_id < comp_b->co_id)
 		return -1;
 
-	D__ASSERT(0);
+	D_ASSERT(0);
 	return 0;
 }
 
@@ -272,7 +272,7 @@ ring_buf_create(struct pl_ring_map *rimap, struct ring_buf **buf_pp)
 		return rc == 0 ? -DER_INVAL : rc;
 
 	dom_nr = rc;
-	D__ALLOC_PTR(buf);
+	D_ALLOC_PTR(buf);
 	if (buf == NULL)
 		return -DER_NOMEM;
 
@@ -283,7 +283,7 @@ ring_buf_create(struct pl_ring_map *rimap, struct ring_buf **buf_pp)
 			buf->rb_domain_nr++;
 	}
 
-	D__ALLOC(buf->rb_domains, buf->rb_domain_nr * sizeof(*buf->rb_domains));
+	D_ALLOC(buf->rb_domains, buf->rb_domain_nr * sizeof(*buf->rb_domains));
 	if (buf->rb_domains == NULL) {
 		rc = -DER_NOMEM;
 		goto err_out;
@@ -300,7 +300,7 @@ ring_buf_create(struct pl_ring_map *rimap, struct ring_buf **buf_pp)
 				rdom->rd_target_nr++;
 		}
 
-		D__ALLOC(rdom->rd_targets,
+		D_ALLOC(rdom->rd_targets,
 			rdom->rd_target_nr * sizeof(*rdom->rd_targets));
 		if (rdom->rd_targets == NULL) {
 			rc = -DER_NOMEM;
@@ -341,15 +341,12 @@ ring_buf_destroy(struct ring_buf *buf)
 			struct ring_domain *rdom = &buf->rb_domains[i];
 
 			if (rdom->rd_targets != NULL) {
-				D__FREE(rdom->rd_targets,
-				       rdom->rd_target_nr *
-				       sizeof(*rdom->rd_targets));
+				D_FREE(rdom->rd_targets);
 			}
 		}
-		D__FREE(buf->rb_domains,
-		       buf->rb_domain_nr * sizeof(*buf->rb_domains));
+		D_FREE(buf->rb_domains);
 	}
-	D__FREE_PTR(buf);
+	D_FREE_PTR(buf);
 }
 
 /**
@@ -411,7 +408,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 	int		    j;
 	int		    k;
 
-	D__ALLOC(scratch, buf->rb_domain_nr * sizeof(*scratch));
+	D_ALLOC(scratch, buf->rb_domain_nr * sizeof(*scratch));
 	if (scratch == NULL)
 		return -DER_NOMEM;
 
@@ -468,7 +465,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 
 	D_DEBUG(DB_PL, "Copy scratch buffer\n");
 	memcpy(buf->rb_domains, scratch, buf->rb_domain_nr * sizeof(*scratch));
-	D__FREE(scratch, buf->rb_domain_nr * sizeof(*scratch));
+	D_FREE(scratch);
 	return 0;
 }
 
@@ -493,7 +490,7 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 	if (rc < 0)
 		return rc;
 
-	D__ALLOC(ring->ri_targets,
+	D_ALLOC(ring->ri_targets,
 		rimap->rmp_target_nr * sizeof(struct pl_target));
 	if (ring->ri_targets == NULL)
 		return -DER_NOMEM;
@@ -523,8 +520,7 @@ static void
 ring_free(struct pl_ring_map *rimap, struct pl_ring *ring)
 {
 	if (ring->ri_targets != NULL) {
-		D__FREE(ring->ri_targets,
-		       rimap->rmp_target_nr * sizeof(*ring->ri_targets));
+		D_FREE(ring->ri_targets);
 	}
 }
 
@@ -537,18 +533,18 @@ ring_print(struct pl_ring_map *rimap, int index)
 	int		    i;
 	int		    j;
 
-	D__PRINT("ring[%d]\n", index);
+	D_PRINT("ring[%d]\n", index);
 	targets = pool_map_targets(rimap->rmp_map.pl_poolmap);
 
 	for (i = j = period = 0; i < rimap->rmp_target_nr; i++) {
 		int pos = ring->ri_targets[i].pt_pos;
 
-		D__PRINT("%d ", targets[pos].ta_comp.co_id);
+		D_PRINT("%d ", targets[pos].ta_comp.co_id);
 		j++;
 		period++;
 		if (period == rimap->rmp_domain_nr) {
 			period = 0;
-			D__PRINT("\n");
+			D_PRINT("\n");
 		}
 	}
 }
@@ -561,11 +557,11 @@ ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 	int		 i;
 	int		 rc;
 
-	D__ASSERT(rimap->rmp_map.pl_poolmap != NULL);
+	D_ASSERT(rimap->rmp_map.pl_poolmap != NULL);
 	rimap->rmp_domain  = mia->ia_ring.domain;
 	rimap->rmp_ring_nr = mia->ia_ring.ring_nr;
 
-	D__ALLOC(rimap->rmp_rings, rimap->rmp_ring_nr * sizeof(struct pl_ring));
+	D_ALLOC(rimap->rmp_rings, rimap->rmp_ring_nr * sizeof(struct pl_ring));
 	if (rimap->rmp_rings == NULL)
 		return -DER_NOMEM;
 
@@ -615,12 +611,12 @@ ring_map_hash_build(struct pl_ring_map *rimap)
 	unsigned	tg_per_dom;
 
 	D_DEBUG(DB_PL, "Build consistent hash for ring map\n");
-	D__ALLOC(rimap->rmp_target_hashes,
+	D_ALLOC(rimap->rmp_target_hashes,
 		rimap->rmp_target_nr * sizeof(*rimap->rmp_target_hashes));
 	if (rimap->rmp_target_hashes == NULL)
 		return -DER_NOMEM;
 
-	D__ALLOC(rimap->rmp_ring_hashes,
+	D_ALLOC(rimap->rmp_ring_hashes,
 		rimap->rmp_ring_nr * sizeof(*rimap->rmp_ring_hashes));
 	if (rimap->rmp_ring_hashes == NULL)
 		return -DER_NOMEM;
@@ -668,12 +664,12 @@ ring_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	struct pl_ring_map *rimap;
 	int		    rc;
 
-	D__ASSERT(mia->ia_ring.ring_nr > 0);
+	D_ASSERT(mia->ia_ring.ring_nr > 0);
 	D_DEBUG(DB_PL, "Create ring map: domain %s, ring_nr: %d\n",
 		pool_comp_type2str(mia->ia_ring.domain),
 		mia->ia_ring.ring_nr);
 
-	D__ALLOC_PTR(rimap);
+	D_ALLOC_PTR(rimap);
 	if (rimap == NULL)
 		return -DER_NOMEM;
 
@@ -705,28 +701,23 @@ ring_map_destroy(struct pl_map *map)
 	int		    i;
 
 	if (rimap->rmp_ring_hashes != NULL) {
-		D__FREE(rimap->rmp_ring_hashes,
-		       rimap->rmp_ring_nr *
-		       sizeof(*rimap->rmp_ring_hashes));
+		D_FREE(rimap->rmp_ring_hashes);
 	}
 
 	if (rimap->rmp_target_hashes != NULL) {
-		D__FREE(rimap->rmp_target_hashes,
-		       rimap->rmp_target_nr *
-		       sizeof(*rimap->rmp_target_hashes));
+		D_FREE(rimap->rmp_target_hashes);
 	}
 
 	if (rimap->rmp_rings != NULL) {
 		for (i = 0; i < rimap->rmp_ring_nr; i++)
 			ring_free(rimap, &rimap->rmp_rings[i]);
 
-		D__FREE(rimap->rmp_rings,
-		       rimap->rmp_ring_nr * sizeof(*rimap->rmp_rings));
+		D_FREE(rimap->rmp_rings);
 	}
 	if (rimap->rmp_map.pl_poolmap)
 		pool_map_decref(rimap->rmp_map.pl_poolmap);
 
-	D__FREE_PTR(rimap);
+	D_FREE_PTR(rimap);
 }
 
 /**
@@ -738,7 +729,7 @@ ring_map_print(struct pl_map *map)
 	struct pl_ring_map *rimap = pl_map2rimap(map);
 	int		    i;
 
-	D__PRINT("ring map: ver %d, nrims %d, hash 0-"DF_X64"\n",
+	D_PRINT("ring map: ver %d, nrims %d, hash 0-"DF_X64"\n",
 		pl_map_version(&rimap->rmp_map), rimap->rmp_ring_nr,
 		(1UL << rimap->rmp_target_hbits));
 
@@ -783,7 +774,7 @@ ring_obj_place_dist(struct pl_ring_map *rimap, daos_obj_id_t oid)
 {
 	/* XXX
 	 * dist = shard->os_stride / rimap->rmp_stride + RING_PRECISION;
-	 * D__ASSERT(dist > 0);
+	 * D_ASSERT(dist > 0);
 	 * return dist;
 	 */
 	return 1;
@@ -819,7 +810,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	rop->rop_dist = ring_obj_place_dist(rimap, oid);
 
 	rop->rop_grp_size = daos_oclass_grp_size(oc_attr);
-	D__ASSERT(rop->rop_grp_size != 0);
+	D_ASSERT(rop->rop_grp_size != 0);
 	if (rop->rop_grp_size == DAOS_OBJ_REPL_MAX)
 		rop->rop_grp_size = rimap->rmp_domain_nr;
 
@@ -832,7 +823,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 
 	grp_dist = rop->rop_grp_size * rop->rop_dist;
 
-	D__ASSERT(rimap->rmp_target_nr > 0);
+	D_ASSERT(rimap->rmp_target_nr > 0);
 	if (shard_md == NULL) {
 		unsigned int grp_max = rimap->rmp_target_nr / rop->rop_grp_size;
 
@@ -850,8 +841,8 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 			pl_obj_shard2grp_index(shard_md, oc_attr);
 	}
 
-	D__ASSERT(rop->rop_grp_nr > 0);
-	D__ASSERT(rop->rop_grp_size > 0);
+	D_ASSERT(rop->rop_grp_nr > 0);
+	D_ASSERT(rop->rop_grp_size > 0);
 
 	D_DEBUG(DB_PL,
 		"obj="DF_OID"/%u begin=%u dist=%u grp_size=%u grp_nr=%d\n",
@@ -884,7 +875,7 @@ ring_remap_add_one(d_list_t *remap_list, struct ring_failed_shard *f_new)
 		 * target fseq should be assigned uniquely, even if all
 		 * the targets of the same domain failed at same time.
 		 */
-		D__ASSERTF(f_new->rfs_fseq != f_shard->rfs_fseq,
+		D_ASSERTF(f_new->rfs_fseq != f_shard->rfs_fseq,
 			  "same fseq %u!\n", f_new->rfs_fseq);
 
 		if (f_new->rfs_fseq < f_shard->rfs_fseq)
@@ -902,7 +893,7 @@ ring_remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 {
 	struct ring_failed_shard *f_new;
 
-	D__ALLOC_PTR(f_new);
+	D_ALLOC_PTR(f_new);
 	if (f_new == NULL)
 		return -DER_NOMEM;
 
@@ -924,7 +915,7 @@ ring_remap_free_all(d_list_t *remap_list)
 
 	d_list_for_each_entry_safe(f_shard, f_tmp, remap_list, rfs_list) {
 		d_list_del_init(&f_shard->rfs_list);
-		D__FREE_PTR(f_shard);
+		D_FREE_PTR(f_shard);
 	}
 }
 
@@ -939,7 +930,7 @@ ring_remap_next_spare(struct pl_ring_map *rimap,
 {
 	unsigned int dist, max_dist, total_dist;
 
-	D__ASSERTF(rop->rop_grp_size <= rimap->rmp_domain_nr,
+	D_ASSERTF(rop->rop_grp_size <= rimap->rmp_domain_nr,
 		  "grp_size: %u > domain_nr: %u\n",
 		  rop->rop_grp_size, rimap->rmp_domain_nr);
 
@@ -1048,7 +1039,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 
 		/* The selected spare target is down as well */
 		if (pool_target_unavail(spare_tgt)) {
-			D__ASSERTF(spare_tgt->ta_comp.co_fseq !=
+			D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
 				  f_shard->rfs_fseq, "same fseq %u!\n",
 				  f_shard->rfs_fseq);
 
@@ -1068,7 +1059,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 			 * down spare target.
 			 */
 			if (f_shard->rfs_status == PO_COMP_ST_DOWN) {
-				D__ASSERTF(spare_tgt->ta_comp.co_status !=
+				D_ASSERTF(spare_tgt->ta_comp.co_status !=
 					  PO_COMP_ST_DOWNOUT,
 					  "down fseq(%u) < downout fseq(%u)\n",
 					  f_shard->rfs_fseq,
@@ -1339,7 +1330,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 			 */
 			if (l_shard->po_shard != -1) {
 				rc = 1;
-				D__ASSERT(f_shard->rfs_rank != -1);
+				D_ASSERT(f_shard->rfs_rank != -1);
 				*tgt_rank = f_shard->rfs_rank;
 				*shard_id = l_shard->po_shard;
 			}

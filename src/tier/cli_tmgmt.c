@@ -46,14 +46,14 @@ dc_tier_conn_cb(tse_task_t *task, void *data)
 	/*Check for task error*/
 	if (rc) {
 		D_ERROR("Task error in Cross-conn: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/*Check return status of the RPC itself (i.e. what did the server say)*/
 	rc = cco_out->cco_ret;
 	if (rc) {
 		D_ERROR("Cross-Conn error: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/* Info as its a onetime per run call*/
@@ -119,20 +119,20 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 	if (rc != 0) {
 		D_ERROR("crt_req_create(TIER_CROSS_CONN) failed, rc: %d.\n",
 			rc);
-		D__GOTO(out_final, rc);
+		D_GOTO(out_final, rc);
 	}
 
 	/*Verifying Request is there.*/
-	D__ASSERT(rpc_req != NULL);
+	D_ASSERT(rpc_req != NULL);
 	cci_in = crt_req_get(rpc_req);
-	D__ASSERT(cci_in != NULL);
+	D_ASSERT(cci_in != NULL);
 
 	/*Set up arg info affiliated with task*
 	* The alloc is non-std because we need to copy the warm_grp string
 	* note this should be freed via callback infrastructure automatically
 	*/
 	alen = sizeof(*tc_arg) + strlen(warm_grp) + 1;
-	D__ALLOC(tc_arg, alen);
+	D_ALLOC(tc_arg, alen);
 	warm_grp_cpy = (char *)(&tc_arg[1]);
 	strcpy(warm_grp_cpy, warm_grp);
 
@@ -148,7 +148,7 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 				       sizeof(struct tier_conn_arg));
 	if (rc) {
 		D_ERROR("Failed to register task callback.\n");
-		D__GOTO(out_decref, rc);
+		D_GOTO(out_decref, rc);
 	}
 	/*Send the RPC*/
 	rc = daos_rpc_send(rpc_req, task);
@@ -159,7 +159,7 @@ out_decref:
 	/*Decrement ref count since callback never triggers if we got here*/
 	crt_req_decref(rpc_req);
 	/*Free since completion callback will never be triggered*/
-	D__FREE(tc_arg, alen);
+	D_FREE(tc_arg);
 	return rc;
 out_final:
 	return rc;
@@ -186,12 +186,12 @@ dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 
 	D_DEBUG(DF_TIERS, "entering...\n");
 	if (rc != 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	/*Verifying Request is, you know, there.*/
-	D__ASSERT(rpc_req != NULL);
+	D_ASSERT(rpc_req != NULL);
 	rc_in = crt_req_get(rpc_req);
-	D__ASSERT(rc_in != NULL);
+	D_ASSERT(rc_in != NULL);
 
 	/*Load up the RPC inputs*/
 	uuid_copy(rc_in->rci_colder_id, colder_id);
@@ -200,7 +200,7 @@ dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	/*Set log up arg for task CB, this should be automatically freed
 	* by the callback infrastrucure after it completes
 	**/
-	D__ALLOC_PTR(trc_arg);
+	D_ALLOC_PTR(trc_arg);
 	crt_req_addref(rpc_req);
 	trc_arg->rpc = rpc_req;
 
@@ -210,10 +210,10 @@ dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	/* Reardless of whether we succeed trc_arg needs to be freed here as a
 	 * copy is made deep in register_cb
 	 **/
-	D__FREE_PTR(trc_arg);
+	D_FREE_PTR(trc_arg);
 
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	/*Send the RPC*/
 	rc = daos_rpc_send(rpc_req, task);

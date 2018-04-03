@@ -51,7 +51,7 @@ task_is_valid(tse_task_t *task)
 static int
 task_comp_event(tse_task_t *task, void *data)
 {
-	D__ASSERT(task_is_valid(task));
+	D_ASSERT(task_is_valid(task));
 	daos_event_complete(task_ptr2args(task)->ta_ev, task->dt_result);
 	return 0;
 }
@@ -90,7 +90,7 @@ dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev,
 		/** register a comp cb on the task to complete the event */
 		rc = tse_task_register_comp_cb(task, task_comp_event, NULL, 0);
 		if (rc != 0)
-			D__GOTO(failed, rc);
+			D_GOTO(failed, rc);
 		args->ta_ev = ev;
 	}
 
@@ -115,7 +115,7 @@ dc_task_schedule(tse_task_t *task, bool instant)
 	daos_event_t *ev;
 	int	      rc;
 
-	D__ASSERT(task_is_valid(task));
+	D_ASSERT(task_is_valid(task));
 
 	ev = task_ptr2args(task)->ta_ev;
 	if (ev) {
@@ -123,17 +123,16 @@ dc_task_schedule(tse_task_t *task, bool instant)
 		if (rc) {
 			tse_task_complete(task, rc);
 			/* error has been reported to event */
-			D__GOTO(out, rc = 0);
+			D_GOTO(out, rc = 0);
 		}
 	}
 
 	rc = tse_task_schedule(task, instant);
 	if (rc) {
 		tse_task_complete(task, rc);
-		D__GOTO(out, rc = 0); /* error has been reported to event */
+		D_GOTO(out, rc = 0); /* error has been reported to event */
 	}
 
-	D_EXIT;
  out:
 	if (daos_event_is_priv(ev)) {
 		daos_event_priv_wait();
@@ -157,7 +156,7 @@ dc_task_list_sched(d_list_t *head, bool instant)
 void *
 dc_task_get_args(tse_task_t *task)
 {
-	D__ASSERT(task_is_valid(task));
+	D_ASSERT(task_is_valid(task));
 	return &task_ptr2args(task)->ta_u;
 }
 
@@ -186,7 +185,7 @@ daos_task_create(daos_opc_t opc, tse_sched_t *sched, unsigned int num_deps,
 	if (DAOS_OPC_INVALID >= opc || DAOS_OPC_MAX <= opc)
 		return -DER_NOSYS;
 
-	D__ASSERT(dc_funcs[opc].task_func);
+	D_ASSERT(dc_funcs[opc].task_func);
 	rc = dc_task_create(dc_funcs[opc].task_func, sched, NULL, &task);
 	if (rc)
 		return rc;
@@ -194,7 +193,7 @@ daos_task_create(daos_opc_t opc, tse_sched_t *sched, unsigned int num_deps,
 	if (dep_tasks) {
 		rc = dc_task_depend(task, num_deps, dep_tasks);
 		if (rc)
-			D__GOTO(failed, rc);
+			D_GOTO(failed, rc);
 	}
 	*taskp = task;
 	return 0;
@@ -267,6 +266,6 @@ daos_task2ctx(tse_task_t *task)
 {
 	tse_sched_t *sched = tse_task2sched(task);
 
-	D__ASSERT(sched->ds_udata != NULL);
+	D_ASSERT(sched->ds_udata != NULL);
 	return (crt_context_t *)sched->ds_udata;
 }

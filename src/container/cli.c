@@ -99,19 +99,19 @@ cont_create_complete(tse_task_t *task, void *data)
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->cco_op, task);
 	if (rc < 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	else if (rc == RSVC_CLIENT_RECHOOSE)
-		D__GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("RPC error while creating container: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = out->cco_op.co_rc;
 	if (rc != 0) {
 		D_DEBUG(DF_DSMC, "failed to create container: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_DEBUG(DF_DSMC, "completed creating container\n");
@@ -135,14 +135,14 @@ dc_cont_create(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	if (uuid_is_null(args->uuid))
-		D__GOTO(err_task, rc = -DER_INVAL);
+		D_GOTO(err_task, rc = -DER_INVAL);
 
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
-		D__GOTO(err_task, rc = -DER_NO_HDL);
+		D_GOTO(err_task, rc = -DER_NO_HDL);
 
 	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX))
-		D__GOTO(err_pool, rc = -DER_NO_PERM);
+		D_GOTO(err_pool, rc = -DER_NO_PERM);
 
 	D_DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid));
@@ -154,7 +154,7 @@ dc_cont_create(tse_task_t *task)
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
-		D__GOTO(err_pool, rc);
+		D_GOTO(err_pool, rc);
 	}
 
 	in = crt_req_get(rpc);
@@ -168,7 +168,7 @@ dc_cont_create(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_create_complete, &arg,
 				       sizeof(arg));
 	if (rc != 0)
-		D__GOTO(err_rpc, rc);
+		D_GOTO(err_rpc, rc);
 
 	return daos_rpc_send(rpc, task);
 
@@ -193,19 +193,19 @@ cont_destroy_complete(tse_task_t *task, void *data)
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->cdo_op, task);
 	if (rc < 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	else if (rc == RSVC_CLIENT_RECHOOSE)
-		D__GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("RPC error while destroying container: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = out->cdo_op.co_rc;
 	if (rc != 0) {
 		D_DEBUG(DF_DSMC, "failed to destroy container: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_DEBUG(DF_DSMC, "completed destroying container\n");
@@ -230,17 +230,17 @@ dc_cont_destroy(tse_task_t *task)
 	args = dc_task_get_args(task);
 
 	/* TODO: Implement "force". */
-	D__ASSERT(args->force != 0);
+	D_ASSERT(args->force != 0);
 
 	if (uuid_is_null(args->uuid))
-		D__GOTO(err, rc = -DER_INVAL);
+		D_GOTO(err, rc = -DER_INVAL);
 
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
-		D__GOTO(err, rc = -DER_NO_HDL);
+		D_GOTO(err, rc = -DER_NO_HDL);
 
 	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX))
-		D__GOTO(err_pool, rc = -DER_NO_PERM);
+		D_GOTO(err_pool, rc = -DER_NO_PERM);
 
 	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
@@ -252,7 +252,7 @@ dc_cont_destroy(tse_task_t *task)
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_DESTROY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
-		D__GOTO(err_pool, rc);
+		D_GOTO(err_pool, rc);
 	}
 
 	in = crt_req_get(rpc);
@@ -267,7 +267,7 @@ dc_cont_destroy(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_destroy_complete, &arg,
 				       sizeof(arg));
 	if (rc != 0)
-		D__GOTO(err_rpc, rc);
+		D_GOTO(err_rpc, rc);
 
 	return daos_rpc_send(rpc, task);
 
@@ -287,11 +287,11 @@ dc_cont_free(struct d_hlink *hlink)
 	struct dc_cont *dc;
 
 	dc = container_of(hlink, struct dc_cont, dc_hlink);
-	D__ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
+	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
 	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
-	D__ASSERT(d_list_empty(&dc->dc_po_list));
-	D__ASSERT(d_list_empty(&dc->dc_obj_list));
-	D__FREE_PTR(dc);
+	D_ASSERT(d_list_empty(&dc->dc_po_list));
+	D_ASSERT(d_list_empty(&dc->dc_obj_list));
+	D_FREE_PTR(dc);
 }
 
 static struct d_hlink_ops cont_h_ops = {
@@ -321,7 +321,7 @@ dc_cont_alloc(const uuid_t uuid)
 {
 	struct dc_cont *dc;
 
-	D__ALLOC_PTR(dc);
+	D_ALLOC_PTR(dc);
 	if (dc == NULL)
 		return NULL;
 
@@ -358,22 +358,22 @@ cont_open_complete(tse_task_t *task, void *data)
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->coo_op, task);
 	if (rc < 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	else if (rc == RSVC_CLIENT_RECHOOSE) {
 		put_cont = false;
-		D__GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 	}
 
 	if (rc != 0) {
 		D_ERROR("RPC error while opening container: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = out->coo_op.co_rc;
 	if (rc != 0) {
 		D_DEBUG(DF_DSMC, DF_CONT": failed to open container: %d\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
@@ -385,7 +385,7 @@ cont_open_complete(tse_task_t *task, void *data)
 		 * container handle on the server side to the POOL_DISCONNECT
 		 * effort we are racing with.
 		 */
-		D__GOTO(out, rc = -DER_NO_HDL);
+		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
@@ -400,7 +400,7 @@ cont_open_complete(tse_task_t *task, void *data)
 		arg->hdlp->cookie, DP_UUID(cont->dc_cont_hdl));
 
 	if (arg->coa_info == NULL)
-		D__GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
 	arg->coa_info->ci_epoch_state = out->coo_epoch_state;
@@ -429,7 +429,7 @@ dc_cont_local_close(daos_handle_t ph, daos_handle_t coh)
 
 	pool = dc_hdl2pool(ph);
 	if (pool == NULL)
-		D__GOTO(out, rc = -DER_NO_HDL);
+		D_GOTO(out, rc = -DER_NO_HDL);
 
 	dc_cont_put(cont);
 
@@ -459,17 +459,17 @@ dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 	if (!daos_handle_is_inval(*coh)) {
 		cont = dc_hdl2cont(*coh);
 		if (cont != NULL)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 	}
 
 	cont = dc_cont_alloc(cont_uuid);
 	if (cont == NULL)
-		D__GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
-	D__ASSERT(!daos_handle_is_inval(ph));
+	D_ASSERT(!daos_handle_is_inval(ph));
 	pool = dc_hdl2pool(ph);
 	if (pool == NULL)
-		D__GOTO(out, rc = -DER_NO_HDL);
+		D_GOTO(out, rc = -DER_NO_HDL);
 
 	uuid_copy(cont->dc_cont_hdl, cont_hdl_uuid);
 	cont->dc_capas = flags;
@@ -506,19 +506,19 @@ dc_cont_open(tse_task_t *task)
 	cont = dc_task_get_priv(task);
 
 	if (uuid_is_null(args->uuid) || args->coh == NULL)
-		D__GOTO(err, rc = -DER_INVAL);
+		D_GOTO(err, rc = -DER_INVAL);
 
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
-		D__GOTO(err, rc = -DER_NO_HDL);
+		D_GOTO(err, rc = -DER_NO_HDL);
 
 	if ((args->flags & DAOS_COO_RW) && (pool->dp_capas & DAOS_PC_RO))
-		D__GOTO(err_pool, rc = -DER_NO_PERM);
+		D_GOTO(err_pool, rc = -DER_NO_PERM);
 
 	if (cont == NULL) {
 		cont = dc_cont_alloc(args->uuid);
 		if (cont == NULL)
-			D__GOTO(err_pool, rc = -DER_NOMEM);
+			D_GOTO(err_pool, rc = -DER_NOMEM);
 		uuid_generate(cont->dc_cont_hdl);
 		cont->dc_capas = args->flags;
 		dc_task_set_priv(task, cont);
@@ -535,7 +535,7 @@ dc_cont_open(tse_task_t *task)
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OPEN, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
-		D__GOTO(err_cont, rc);
+		D_GOTO(err_cont, rc);
 	}
 
 	in = crt_req_get(rpc);
@@ -555,7 +555,7 @@ dc_cont_open(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_open_complete, &arg,
 				       sizeof(arg));
 	if (rc != 0)
-		D__GOTO(err_rpc, rc);
+		D_GOTO(err_rpc, rc);
 
 	/** send the request */
 	return daos_rpc_send(rpc, task);
@@ -592,13 +592,13 @@ cont_close_complete(tse_task_t *task, void *data)
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->cco_op, task);
 	if (rc < 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	else if (rc == RSVC_CLIENT_RECHOOSE)
-		D__GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("RPC error while closing container: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = out->cco_op.co_rc;
@@ -611,7 +611,7 @@ cont_close_complete(tse_task_t *task, void *data)
 		rc = 0;
 	} else if (rc != 0) {
 		D_ERROR("failed to close container: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
@@ -647,25 +647,25 @@ dc_cont_close(tse_task_t *task)
 	int			rc;
 
 	args = dc_task_get_args(task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 	coh = args->coh;
 
 	cont = dc_hdl2cont(coh);
 	if (cont == NULL)
-		D__GOTO(err, rc = -DER_NO_HDL);
+		D_GOTO(err, rc = -DER_NO_HDL);
 
 	/* Check if there are not objects opened for this container */
 	D_RWLOCK_RDLOCK(&cont->dc_obj_list_lock);
 	if (!d_list_empty(&cont->dc_obj_list)) {
 		D_ERROR("cannot close container, object not closed.\n");
 		D_RWLOCK_UNLOCK(&cont->dc_obj_list_lock);
-		D__GOTO(err_cont, rc = -DER_BUSY);
+		D_GOTO(err_cont, rc = -DER_BUSY);
 	}
 	cont->dc_closing = 1;
 	D_RWLOCK_UNLOCK(&cont->dc_obj_list_lock);
 
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
-	D__ASSERT(pool != NULL);
+	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DF_DSMC, DF_CONT": closing: cookie="DF_X64" hdl="DF_UUID"\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), coh.cookie,
@@ -696,7 +696,7 @@ dc_cont_close(tse_task_t *task)
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
-		D__GOTO(err_pool, rc);
+		D_GOTO(err_pool, rc);
 	}
 
 	in = crt_req_get(rpc);
@@ -713,7 +713,7 @@ dc_cont_close(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_close_complete, &arg,
 				       sizeof(arg));
 	if (rc != 0)
-		D__GOTO(err_rpc, rc);
+		D_GOTO(err_rpc, rc);
 
 	/** send the request */
 	return daos_rpc_send(rpc, task);
@@ -752,20 +752,20 @@ cont_query_complete(tse_task_t *task, void *data)
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->cqo_op, task);
 	if (rc < 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	else if (rc == RSVC_CLIENT_RECHOOSE)
-		D__GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("RPC error while querying container: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = out->cqo_op.co_rc;
 	if (rc != 0) {
 		D_DEBUG(DF_DSMC, DF_CONT": failed to query container: %d\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_DEBUG(DF_DSMC, DF_CONT": Queried: using hdl="DF_UUID"\n",
@@ -773,7 +773,7 @@ cont_query_complete(tse_task_t *task, void *data)
 		DP_UUID(cont->dc_cont_hdl));
 
 	if (arg->cqa_info == NULL)
-		D__GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
 	arg->cqa_info->ci_epoch_state = out->cqo_epoch_state;
@@ -803,17 +803,17 @@ dc_cont_query(tse_task_t *task)
 	int			 rc;
 
 	args = dc_task_get_args(task);
-	D__ASSERTF(args != NULL, "Task Argumetn OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argumetn OPC does not match DC OPC\n");
 
 	if (args->info == NULL)
-		D__GOTO(err, rc = -DER_INVAL);
+		D_GOTO(err, rc = -DER_INVAL);
 
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
-		D__GOTO(err, rc = -DER_NO_HDL);
+		D_GOTO(err, rc = -DER_NO_HDL);
 
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
-	D__ASSERT(pool != NULL);
+	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DF_DSMC, DF_CONT": querying: hdl="DF_UUID"\n",
 		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
@@ -826,7 +826,7 @@ dc_cont_query(tse_task_t *task)
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
-		D__GOTO(err_cont, rc);
+		D_GOTO(err_cont, rc);
 	}
 
 	in = crt_req_get(rpc);
@@ -844,7 +844,7 @@ dc_cont_query(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_query_complete, &arg,
 				       sizeof(arg));
 	if (rc != 0)
-		D__GOTO(err_rpc, rc);
+		D_GOTO(err_rpc, rc);
 
 	return daos_rpc_send(rpc, task);
 
@@ -875,7 +875,7 @@ pool_query_cb(tse_task_t *task, void *data)
 	daos_pool_query_t	*args;
 
 	args = dc_task_get_args(task);
-	D__FREE_PTR(args->info);
+	D_FREE_PTR(args->info);
 	return task->dt_result;
 }
 
@@ -903,46 +903,46 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 
 		pargs = dc_task_get_args(ptask);
 		pargs->poh = arg->coaa_cont->dc_pool_hdl;
-		D__ALLOC_PTR(pargs->info);
+		D_ALLOC_PTR(pargs->info);
 		if (pargs->info == NULL) {
 			dc_task_decref(ptask);
-			D__GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 		}
 
 		rc = dc_task_reg_comp_cb(ptask, pool_query_cb, NULL, 0);
 		if (rc != 0) {
-			D__FREE_PTR(pargs->info);
+			D_FREE_PTR(pargs->info);
 			dc_task_decref(ptask);
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
 		rc = dc_task_resched(task);
 		if (rc != 0) {
-			D__FREE_PTR(pargs->info);
+			D_FREE_PTR(pargs->info);
 			dc_task_decref(ptask);
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
 		rc = dc_task_depend(task, 1, &ptask);
 		if (rc != 0) {
-			D__FREE_PTR(pargs->info);
+			D_FREE_PTR(pargs->info);
 			dc_task_decref(ptask);
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
 		/* ignore returned value, error is reported by comp_cb */
 		dc_task_schedule(ptask, true);
-		D__GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 	} else if (rc != 0) {
 		/** error but non retryable RPC */
 		D_ERROR("failed to allocate oids: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = out->coao_op.co_rc;
 	if (rc != 0) {
 		D_ERROR("failed to allocate oids: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_DEBUG(DF_DSMC, DF_CONT": OID ALLOC: using hdl="DF_UUID"\n",
@@ -975,7 +975,7 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 
 	*rank = tgts[rand() % tgt_cnt].ta_comp.co_rank;
 
-	D__FREE(tgts, tgt_cnt * sizeof(*tgts));
+	D_FREE(tgts);
 
 	return 0;
 }
@@ -993,17 +993,17 @@ dc_cont_oid_alloc(tse_task_t *task)
 	int				rc;
 
 	args = dc_task_get_args(task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	if (args->num_oids == 0 || args->oid == NULL)
-		D__GOTO(err, rc = -DER_INVAL);
+		D_GOTO(err, rc = -DER_INVAL);
 
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
-		D__GOTO(err, rc = -DER_NO_HDL);
+		D_GOTO(err, rc = -DER_NO_HDL);
 
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
-	D__ASSERT(pool != NULL);
+	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DF_DSMC, DF_CONT": oid allocate: hdl="DF_UUID"\n",
 		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
@@ -1014,12 +1014,12 @@ dc_cont_oid_alloc(tse_task_t *task)
 	ep.ep_tag = 0;
 	rc = get_tgt_rank(pool, &ep.ep_rank);
 	if (rc != 0)
-		D__GOTO(err_cont, rc);
+		D_GOTO(err_cont, rc);
 
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OID_ALLOC, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
-		D__GOTO(err_cont, rc);
+		D_GOTO(err_cont, rc);
 	}
 
 	in = crt_req_get(rpc);
@@ -1039,7 +1039,7 @@ dc_cont_oid_alloc(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_oid_alloc_complete, &arg,
 				       sizeof(arg));
 	if (rc != 0)
-		D__GOTO(err_rpc, rc);
+		D_GOTO(err_rpc, rc);
 
 	return daos_rpc_send(rpc, task);
 
@@ -1079,7 +1079,7 @@ dc_cont_glob_buf_size()
 static inline void
 swap_co_glob(struct dc_cont_glob *cont_glob)
 {
-	D__ASSERT(cont_glob != NULL);
+	D_ASSERT(cont_glob != NULL);
 
 	D_SWAP32S(&cont_glob->dcg_magic);
 	/* skip cont_glob->dcg_padding */
@@ -1098,29 +1098,29 @@ dc_cont_l2g(daos_handle_t coh, daos_iov_t *glob)
 	daos_size_t		 glob_buf_size;
 	int			 rc = 0;
 
-	D__ASSERT(glob != NULL);
+	D_ASSERT(glob != NULL);
 
 	cont = dc_hdl2cont(coh);
 	if (cont == NULL)
-		D__GOTO(out, rc = -DER_NO_HDL);
+		D_GOTO(out, rc = -DER_NO_HDL);
 
 	glob_buf_size = dc_cont_glob_buf_size();
 	if (glob->iov_buf == NULL) {
 		glob->iov_buf_len = glob_buf_size;
-		D__GOTO(out_cont, rc = 0);
+		D_GOTO(out_cont, rc = 0);
 	}
 	if (glob->iov_buf_len < glob_buf_size) {
 		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
 			"provided, "DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;
-		D__GOTO(out_cont, rc = -DER_TRUNC);
+		D_GOTO(out_cont, rc = -DER_TRUNC);
 	}
 	glob->iov_len = glob_buf_size;
 
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	if (pool == NULL)
-		D__GOTO(out_cont, rc = -DER_NO_HDL);
+		D_GOTO(out_cont, rc = -DER_NO_HDL);
 
 	/* init global handle */
 	cont_glob = (struct dc_cont_glob *)glob->iov_buf;
@@ -1146,14 +1146,14 @@ dc_cont_local2global(daos_handle_t coh, daos_iov_t *glob)
 
 	if (glob == NULL) {
 		D_ERROR("Invalid parameter, NULL glob pointer.\n");
-		D__GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
 	    glob->iov_buf_len < glob->iov_len)) {
 		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len "
 			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
 			glob->iov_buf_len, glob->iov_len);
-		D__GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = dc_cont_l2g(coh, glob);
@@ -1170,27 +1170,27 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	struct dc_cont *cont;
 	int		rc = 0;
 
-	D__ASSERT(cont_glob != NULL);
-	D__ASSERT(coh != NULL);
+	D_ASSERT(cont_glob != NULL);
+	D_ASSERT(coh != NULL);
 
 	pool = dc_hdl2pool(poh);
 	if (pool == NULL)
-		D__GOTO(out, rc = -DER_NO_HDL);
+		D_GOTO(out, rc = -DER_NO_HDL);
 
 	if (uuid_compare(pool->dp_pool_hdl, cont_glob->dcg_pool_hdl) != 0) {
 		D_ERROR("pool_hdl mismatch, in pool: "DF_UUID", in cont_glob: "
 			DF_UUID"\n", DP_UUID(pool->dp_pool_hdl),
 			DP_UUID(cont_glob->dcg_pool_hdl));
-		D__GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if ((cont_glob->dcg_capas & DAOS_COO_RW) &&
 	    (pool->dp_capas & DAOS_PC_RO))
-		D__GOTO(out_pool, rc = -DER_NO_PERM);
+		D_GOTO(out_pool, rc = -DER_NO_PERM);
 
 	cont = dc_cont_alloc(cont_glob->dcg_uuid);
 	if (cont == NULL)
-		D__GOTO(out_pool, rc = -DER_NOMEM);
+		D_GOTO(out_pool, rc = -DER_NOMEM);
 
 	uuid_copy(cont->dc_cont_hdl, cont_glob->dcg_cont_hdl);
 	cont->dc_capas = cont_glob->dcg_capas;
@@ -1200,7 +1200,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	if (pool->dp_disconnecting) {
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 		D_ERROR("pool connection being invalidated\n");
-		D__GOTO(out_cont, rc = -DER_NO_HDL);
+		D_GOTO(out_cont, rc = -DER_NO_HDL);
 	}
 
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
@@ -1234,29 +1234,29 @@ dc_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 		D_DEBUG(DF_DSMC, "Invalid parameter of glob, iov_buf %p, "
 			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
 			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
-		D__GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (coh == NULL) {
 		D_DEBUG(DF_DSMC, "Invalid parameter, NULL coh.\n");
-		D__GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	cont_glob = (struct dc_cont_glob *)glob.iov_buf;
 	if (cont_glob->dcg_magic == D_SWAP32(DC_CONT_GLOB_MAGIC)) {
 		swap_co_glob(cont_glob);
-		D__ASSERT(cont_glob->dcg_magic == DC_CONT_GLOB_MAGIC);
+		D_ASSERT(cont_glob->dcg_magic == DC_CONT_GLOB_MAGIC);
 
 	} else if (cont_glob->dcg_magic != DC_CONT_GLOB_MAGIC) {
 		D_ERROR("Bad hgh_magic: 0x%x.\n", cont_glob->dcg_magic);
-		D__GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (uuid_is_null(cont_glob->dcg_pool_hdl) ||
 	    uuid_is_null(cont_glob->dcg_uuid) ||
 	    uuid_is_null(cont_glob->dcg_cont_hdl)) {
 		D_ERROR("Invalid parameter, pool_hdl/uuid/cont_hdl is null.\n");
-		D__GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = dc_cont_g2l(poh, cont_glob, coh);
@@ -1323,19 +1323,19 @@ epoch_op_complete(tse_task_t *task, void *data)
 	rc = cont_rsvc_client_complete_rpc(arg->eoa_pool, &arg->rpc->cr_ep, rc,
 					   &out->ceo_op, task);
 	if (rc < 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	else if (rc == RSVC_CLIENT_RECHOOSE)
-		D__GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("RPC error during epoch operation %u: %d\n", opc, rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = out->ceo_op.co_rc;
 	if (rc != 0) {
 		D_ERROR("epoch operation %u failed: %d\n", opc, rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_DEBUG(DF_DSMC, "completed epoch operation %u\n", opc);
@@ -1368,27 +1368,27 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	/* Check incoming arguments. */
 	switch (opc) {
 	case CONT_EPOCH_QUERY:
-		D__ASSERT(epoch == NULL);
+		D_ASSERT(epoch == NULL);
 		break;
 	case CONT_EPOCH_HOLD:
 		if (epoch == NULL)
-			D__GOTO(err, rc = -DER_INVAL);
+			D_GOTO(err, rc = -DER_INVAL);
 		break;
 	case CONT_EPOCH_SLIP:
 	case CONT_EPOCH_DISCARD:
 	case CONT_EPOCH_COMMIT:
-		D__ASSERT(epoch != NULL);
+		D_ASSERT(epoch != NULL);
 		if (*epoch >= DAOS_EPOCH_MAX)
-			D__GOTO(err, rc = -DER_OVERFLOW);
+			D_GOTO(err, rc = -DER_OVERFLOW);
 		break;
 	}
 
 	cont = dc_hdl2cont(coh);
 	if (cont == NULL)
-		D__GOTO(err, rc = -DER_NO_HDL);
+		D_GOTO(err, rc = -DER_NO_HDL);
 
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
-	D__ASSERT(pool != NULL);
+	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DF_DSMC, DF_CONT": op=%u hdl="DF_UUID" epoch="DF_U64"\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), opc,
@@ -1401,7 +1401,7 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	rc = cont_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
-		D__GOTO(err_pool, rc);
+		D_GOTO(err_pool, rc);
 	}
 
 	in = crt_req_get(rpc);
@@ -1421,7 +1421,7 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	rc = tse_task_register_comp_cb(task, epoch_op_complete, &arg,
 				       sizeof(arg));
 	if (rc != 0)
-		D__GOTO(err_rpc, rc);
+		D_GOTO(err_rpc, rc);
 
 	/** send the request */
 	return daos_rpc_send(rpc, task);
@@ -1445,7 +1445,7 @@ dc_epoch_query(tse_task_t *task)
 	daos_epoch_query_t *args;
 
 	args = dc_task_get_args(task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return epoch_op(args->coh, CONT_EPOCH_QUERY, NULL, args->state, task);
 }
@@ -1456,7 +1456,7 @@ dc_epoch_hold(tse_task_t *task)
 	daos_epoch_hold_t *args;
 
 	args = dc_task_get_args(task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return epoch_op(args->coh, CONT_EPOCH_HOLD, args->epoch, args->state,
 			task);
@@ -1468,7 +1468,7 @@ dc_epoch_slip(tse_task_t *task)
 	daos_epoch_slip_t *args;
 
 	args = dc_task_get_args(task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return epoch_op(args->coh, CONT_EPOCH_SLIP, &args->epoch, args->state,
 			task);
@@ -1480,7 +1480,7 @@ dc_epoch_discard(tse_task_t *task)
 	daos_epoch_discard_t *args;
 
 	args = dc_task_get_args(task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return epoch_op(args->coh, CONT_EPOCH_DISCARD, &args->epoch,
 			args->state, task);
@@ -1492,7 +1492,7 @@ dc_epoch_commit(tse_task_t *task)
 	daos_epoch_commit_t *args;
 
 	args = dc_task_get_args(task);
-	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return epoch_op(args->coh, CONT_EPOCH_COMMIT, &args->epoch, args->state,
 			task);
@@ -1534,7 +1534,7 @@ dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
 
 	/* Get map_tgt so that we can have the rank of the target. */
 	pool = dc_hdl2pool(dc->dc_pool_hdl);
-	D__ASSERT(pool != NULL);
+	D_ASSERT(pool != NULL);
 	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
 	n = pool_map_find_target(pool->dp_map, tgt_idx, tgt);
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);

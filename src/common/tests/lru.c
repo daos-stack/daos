@@ -44,10 +44,10 @@ uint_ref_lru_free(struct daos_llink *llink)
 {
 	struct uint_ref	*ref;
 
-	D__ASSERT(llink);
-	D__PRINT("Freeing LRU ref from uint_ref cb\n");
+	D_ASSERT(llink);
+	D_PRINT("Freeing LRU ref from uint_ref cb\n");
 	ref = container_of(llink, struct uint_ref, ur_llink);
-	D__FREE_PTR(ref);
+	D_FREE_PTR(ref);
 }
 
 int
@@ -56,7 +56,7 @@ uint_ref_lru_alloc(void *key, unsigned int ksize,
 {
 	struct uint_ref *ref;
 
-	D__ALLOC_PTR(ref);
+	D_ALLOC_PTR(ref);
 	if (ref == NULL) {
 		D_ERROR("Error in allocating lru_refs");
 		return -DER_NOMEM;
@@ -97,9 +97,9 @@ test_ref_hold(struct daos_lru_cache *cache,
 
 	refs = container_of(*link, struct uint_ref, ur_llink);
 
-	D__ASSERT(refs->ur_key == *(uint64_t *)key);
+	D_ASSERT(refs->ur_key == *(uint64_t *)key);
 
-	D__PRINT("Completed ref hold for key: %"PRIu64"\n",
+	D_PRINT("Completed ref hold for key: %"PRIu64"\n",
 	       *(uint64_t *)key);
 
 	return rc;
@@ -127,12 +127,12 @@ main(int argc, char **argv)
 				   &uint_ref_llink_ops,
 				   &tcache);
 	if (rc)
-		D__ASSERTF(0, "Error in creating lru cache\n");
+		D_ASSERTF(0, "Error in creating lru cache\n");
 
 	num_keys = atoi(argv[2]);
-	D__ALLOC(keys, ((num_keys + 2) * sizeof(uint64_t)));
+	D_ALLOC(keys, ((num_keys + 2) * sizeof(uint64_t)));
 	if (keys == NULL)
-		D__ASSERTF(0, "Error in allocating keys_array\n");
+		D_ASSERTF(0, "Error in allocating keys_array\n");
 
 	keys[0] = 0; keys[1] = 1;
 
@@ -142,37 +142,37 @@ main(int argc, char **argv)
 	rc = test_ref_hold(tcache, &link_ret[0], &keys[0],
 			   sizeof(uint64_t));
 	if (rc)
-		D__GOTO(exit, rc);
+		D_GOTO(exit, rc);
 
 	rc = test_ref_hold(tcache, &link_ret[1], &keys[1],
 			   sizeof(uint64_t));
 	if (rc)
-		D__GOTO(exit, rc);
+		D_GOTO(exit, rc);
 
 	for (j = 0, i = 2; i < num_keys+2; i++, j++) {
 
 		keys[i] =  j;
-		D__PRINT("Hold and release for %d\n", j);
+		D_PRINT("Hold and release for %d\n", j);
 		link_ret[2] = NULL;
 		rc = test_ref_hold(tcache, &link_ret[2], &keys[i],
 				   sizeof(uint64_t));
 		if (rc)
-			D__GOTO(exit, rc);
+			D_GOTO(exit, rc);
 
 		daos_lru_ref_release(tcache, link_ret[2]);
-		D__PRINT("Completed ref release for key: %d\n", j);
+		D_PRINT("Completed ref release for key: %d\n", j);
 	}
 
 	daos_lru_ref_release(tcache, link_ret[0]);
-	D__PRINT("Completed ref release for key: %"PRIu64"\n",
+	D_PRINT("Completed ref release for key: %"PRIu64"\n",
 		keys[0]);
 	daos_lru_ref_release(tcache, link_ret[1]);
-	D__PRINT("Completed ref release for key: %"PRIu64"\n",
+	D_PRINT("Completed ref release for key: %"PRIu64"\n",
 		keys[1]);
 exit:
 	daos_lru_cache_destroy(tcache);
 	if (keys)
-		D__FREE(keys, ((num_keys+2) * sizeof(int)));
+		D_FREE(keys);
 
 	daos_debug_fini();
 	return rc;

@@ -89,7 +89,7 @@ DP_RANK(void)
 	int		rc;
 
 	rc = crt_group_rank(NULL, &rank);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	return rank;
 }
 

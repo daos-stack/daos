@@ -172,7 +172,7 @@ server_init()
 
 	rc = register_dbtree_classes();
 	if (rc != 0)
-		D__GOTO(exit_debug_init, rc);
+		D_GOTO(exit_debug_init, rc);
 
 	/** initialize server topology data */
 	hwloc_topology_init(&dss_topo);
@@ -181,7 +181,7 @@ server_init()
 	/* initialize the modular interface */
 	rc = dss_module_init();
 	if (rc)
-		D__GOTO(exit_debug_init, rc);
+		D_GOTO(exit_debug_init, rc);
 
 	D_INFO("Module interface successfully initialized\n");
 
@@ -189,7 +189,7 @@ server_init()
 	rc = crt_init(server_group_id,
 		      CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE);
 	if (rc)
-		D__GOTO(exit_mod_init, rc);
+		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");
 
 	crt_group_rank(NULL, &rank);
@@ -220,27 +220,27 @@ server_init()
 	rc = modules_load(&dss_mod_facs);
 	if (rc)
 		/* Some modules may have been loaded successfully. */
-		D__GOTO(exit_mod_loaded, rc);
+		D_GOTO(exit_mod_loaded, rc);
 	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* start up service */
 	rc = dss_srv_init(nr_threads);
 	if (rc)
-		D__GOTO(exit_mod_loaded, rc);
+		D_GOTO(exit_mod_loaded, rc);
 	D_INFO("Service is now running\n");
 
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		rc = daos_init();
 		if (rc) {
 			D_ERROR("daos_init (client) failed, rc: %d.\n", rc);
-			D__GOTO(exit_srv_init, rc);
+			D_GOTO(exit_srv_init, rc);
 		}
 		D_INFO("Client stack enabled\n");
 	} else {
 		rc = daos_hhash_init();
 		if (rc) {
 			D_ERROR("daos_hhash_init failed, rc: %d.\n", rc);
-			D__GOTO(exit_srv_init, rc);
+			D_GOTO(exit_srv_init, rc);
 		}
 		D_INFO("daos handle hash-table initialized\n");
 	}
@@ -249,10 +249,10 @@ server_init()
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
-		D__GOTO(exit_daos_fini, rc);
+		D_GOTO(exit_daos_fini, rc);
 	D_INFO("Modules successfully set up\n");
 
-	D__PRINT("DAOS server (v%s) process %u started on rank %u (out of %u) "
+	D_PRINT("DAOS server (v%s) process %u started on rank %u (out of %u) "
 		"with %u xstream(s)\n", DAOS_VERSION, getpid(), rank, size,
 		dss_nxstreams);
 

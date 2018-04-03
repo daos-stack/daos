@@ -41,15 +41,15 @@ init(void)
 
 	rc = ds_pool_svc_hash_init();
 	if (rc != 0)
-		D__GOTO(err, rc);
+		D_GOTO(err, rc);
 
 	rc = ds_pool_cache_init();
 	if (rc != 0)
-		D__GOTO(err_pool_svc, rc);
+		D_GOTO(err_pool_svc, rc);
 
 	rc = ds_pool_hdl_hash_init();
 	if (rc != 0)
-		D__GOTO(err_pool_cache, rc);
+		D_GOTO(err_pool_cache, rc);
 
 	rc = ds_pool_iv_init();
 	if (rc)
@@ -153,7 +153,7 @@ pool_tls_init(const struct dss_thread_local_storage *dtls,
 {
 	struct pool_tls *tls;
 
-	D__ALLOC_PTR(tls);
+	D_ALLOC_PTR(tls);
 	if (tls == NULL)
 		return NULL;
 
@@ -168,8 +168,8 @@ pool_tls_fini(const struct dss_thread_local_storage *dtls,
 	struct pool_tls *tls = data;
 
 	ds_pool_child_purge(tls);
-	D__ASSERT(d_list_empty(&tls->dt_pool_list));
-	D__FREE_PTR(tls);
+	D_ASSERT(d_list_empty(&tls->dt_pool_list));
+	D_FREE_PTR(tls);
 }
 
 struct dss_module_key pool_module_key = {

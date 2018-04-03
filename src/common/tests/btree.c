@@ -84,7 +84,7 @@ ik_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	char		      *vbuf;
 
 	irec_mmid = umem_znew_typed(&tins->ti_umm, struct ik_rec);
-	D__ASSERT(!TMMID_IS_NULL(irec_mmid)); /* lazy bone... */
+	D_ASSERT(!TMMID_IS_NULL(irec_mmid)); /* lazy bone... */
 
 	irec = umem_id2ptr_typed(&tins->ti_umm, irec_mmid);
 
@@ -92,7 +92,7 @@ ik_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	irec->ir_val_size = irec->ir_val_msize = val_iov->iov_len;
 
 	irec->ir_val_mmid = umem_alloc(&tins->ti_umm, val_iov->iov_len);
-	D__ASSERT(!UMMID_IS_NULL(irec->ir_val_mmid));
+	D_ASSERT(!UMMID_IS_NULL(irec->ir_val_mmid));
 
 	vbuf = umem_id2ptr(&tins->ti_umm, irec->ir_val_mmid);
 	memcpy(vbuf, (char *)val_iov->iov_buf, val_iov->iov_len);
@@ -209,7 +209,7 @@ ik_rec_update(struct btr_instance *tins, struct btr_record *rec,
 
 		irec->ir_val_msize = val_iov->iov_len;
 		irec->ir_val_mmid = umem_alloc(umm, val_iov->iov_len);
-		D__ASSERT(!UMMID_IS_NULL(irec->ir_val_mmid));
+		D_ASSERT(!UMMID_IS_NULL(irec->ir_val_mmid));
 	}
 	val = umem_id2ptr(umm, irec->ir_val_mmid);
 
@@ -301,7 +301,7 @@ ik_btr_open_create(bool create, char *args)
 	}
 
 	if (create) {
-		D__PRINT("Create btree with order %d%s feats "DF_X64"\n",
+		D_PRINT("Create btree with order %d%s feats "DF_X64"\n",
 			ik_order, inplace ? " inplace" : "", feats);
 		if (inplace) {
 			rc = dbtree_create_inplace(IK_TREE_CLASS, feats,
@@ -312,7 +312,7 @@ ik_btr_open_create(bool create, char *args)
 					   &ik_uma, &ik_root_mmid, &ik_toh);
 		}
 	} else {
-		D__PRINT("Open btree%s\n", inplace ? " inplace" : "");
+		D_PRINT("Open btree%s\n", inplace ? " inplace" : "");
 		if (inplace) {
 			rc = dbtree_open_inplace(&ik_root, &ik_uma, &ik_toh);
 		} else {
@@ -337,10 +337,10 @@ ik_btr_close_destroy(bool destroy)
 	}
 
 	if (destroy) {
-		D__PRINT("Destroy btree\n");
+		D_PRINT("Destroy btree\n");
 		rc = dbtree_destroy(ik_toh);
 	} else {
-		D__PRINT("Close btree\n");
+		D_PRINT("Close btree\n");
 		rc = dbtree_close(ik_toh);
 	}
 
@@ -429,7 +429,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 		if (opc == BTR_OPC_UPDATE) {
 			val = strchr(str, IK_SEP_VAL);
 			if (val == NULL) {
-				D__PRINT("Failed with %d\n", rc);
+				D_PRINT("Failed with %d\n", rc);
 				D_ERROR("Invalid parameters %s\n", str);
 				return -1;
 			}
@@ -463,10 +463,10 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 				return -1;
 			}
 			if (verbose)
-				D__PRINT("Deleted key "DF_U64"\n", key);
+				D_PRINT("Deleted key "DF_U64"\n", key);
 
 			if (dbtree_is_empty(ik_toh) && verbose)
-				D__PRINT("Tree is empty now\n");
+				D_PRINT("Tree is empty now\n");
 			break;
 
 		case BTR_OPC_DELETE_RETAIN:
@@ -484,9 +484,9 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 			}
 
 			if (verbose)
-				D__PRINT("Deleted key "DF_U64"\n", key);
+				D_PRINT("Deleted key "DF_U64"\n", key);
 			if (dbtree_is_empty(ik_toh) && verbose)
-				D__PRINT("Tree is empty now\n");
+				D_PRINT("Tree is empty now\n");
 			break;
 
 		case BTR_OPC_LOOKUP:
@@ -500,7 +500,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 			}
 
 			if (verbose) {
-				D__PRINT("Found key "DF_U64", value %s\n",
+				D_PRINT("Found key "DF_U64", value %s\n",
 					key, (char *)val_iov.iov_buf);
 			}
 			break;
@@ -508,7 +508,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 		count++;
 	}
 	if (verbose)
-		D__PRINT("%s %d record(s)\n", btr_opc2str(opc), count);
+		D_PRINT("%s %d record(s)\n", btr_opc2str(opc), count);
 	return 0;
 }
 
@@ -525,8 +525,8 @@ ik_btr_query(void)
 		return -1;
 	}
 
-	D__PRINT("tree   [order=%d, depth=%d]\n", attr.ba_order, attr.ba_depth);
-	D__PRINT("node   [total="DF_U64"]\n"
+	D_PRINT("tree   [order=%d, depth=%d]\n", attr.ba_order, attr.ba_depth);
+	D_PRINT("node   [total="DF_U64"]\n"
 		"record [total="DF_U64"]\n"
 		"key    [total="DF_U64", max="DF_U64"]\n"
 		"val    [total="DF_U64", max="DF_U64"]\n",
@@ -600,11 +600,11 @@ ik_btr_iterate(char *args)
 			goto failed;
 		}
 
-		D__ASSERT(key_iov.iov_len == sizeof(key));
+		D_ASSERT(key_iov.iov_len == sizeof(key));
 		memcpy(&key, key_iov.iov_buf, sizeof(key));
 
 		if (d != 0) { /* delete */
-			D__PRINT("Delete "DF_U64": %s\n",
+			D_PRINT("Delete "DF_U64": %s\n",
 				key, (char *)val_iov.iov_buf);
 			rc = dbtree_iter_delete(ih, NULL);
 			if (rc != 0) {
@@ -613,7 +613,7 @@ ik_btr_iterate(char *args)
 			}
 
 		} else { /* iterate */
-			D__PRINT(DF_U64": %s\n", key, (char *)val_iov.iov_buf);
+			D_PRINT(DF_U64": %s\n", key, (char *)val_iov.iov_buf);
 
 			if (opc == BTR_PROBE_LAST)
 				rc = dbtree_iter_prev(ih);
@@ -630,12 +630,12 @@ ik_btr_iterate(char *args)
 		}
 	}
 
-	D__PRINT("%s iterator: total %d, deleted %d\n",
+	D_PRINT("%s iterator: total %d, deleted %d\n",
 		opc == BTR_PROBE_FIRST ? "forward" : "backward", i, d);
 	dbtree_iter_finish(ih);
 	return 0;
  failed:
-	D__PRINT("Iterator %s failed: %d\n", err, rc);
+	D_PRINT("Iterator %s failed: %d\n", err, rc);
 	dbtree_iter_finish(ih);
 	return -1;
 }
@@ -685,21 +685,21 @@ ik_btr_batch_oper(unsigned int key_nr)
 	bool		 verbose = key_nr < 20;
 
 	if (key_nr == 0 || key_nr > (1U << 28)) {
-		D__PRINT("Invalid key number: %d\n", key_nr);
+		D_PRINT("Invalid key number: %d\n", key_nr);
 		return -1;
 	}
 
 	arr = malloc(key_nr * sizeof(*arr));
-	D__ASSERT(arr != NULL);
+	D_ASSERT(arr != NULL);
 
-	D__PRINT("Batch add %d records.\n", key_nr);
+	D_PRINT("Batch add %d records.\n", key_nr);
 	ik_btr_gen_keys(arr, key_nr);
 	for (i = 0; i < key_nr; i++) {
 		sprintf(buf, "%d:%d", arr[i], arr[i]);
 
 		rc = ik_btr_kv_operate(BTR_OPC_UPDATE, buf, verbose);
 		if (rc != 0) {
-			D__PRINT("Batch update failed: %d\n", rc);
+			D_PRINT("Batch update failed: %d\n", rc);
 			return -1;
 		}
 	}
@@ -712,18 +712,18 @@ ik_btr_batch_oper(unsigned int key_nr)
 	for (i = 0; i < key_nr;) {
 		int	j;
 
-		D__PRINT("Batch lookup %d records.\n", key_nr - i);
+		D_PRINT("Batch lookup %d records.\n", key_nr - i);
 		for (j = i; j < key_nr; j++) {
 			sprintf(buf, "%d", arr[j]);
 
 			rc = ik_btr_kv_operate(BTR_OPC_LOOKUP, buf, verbose);
 			if (rc != 0) {
-				D__PRINT("Batch lookup failed: %d\n", rc);
+				D_PRINT("Batch lookup failed: %d\n", rc);
 				return -1;
 			}
 		}
 
-		D__PRINT("Batch delete %d records.\n",
+		D_PRINT("Batch delete %d records.\n",
 			min(key_nr - i, DEL_BATCH));
 
 		for (j = 0; i < key_nr && j < DEL_BATCH; i++, j++) {
@@ -731,7 +731,7 @@ ik_btr_batch_oper(unsigned int key_nr)
 
 			rc = ik_btr_kv_operate(BTR_OPC_DELETE, buf, verbose);
 			if (rc != 0) {
-				D__PRINT("Batch delete failed: %d\n", rc);
+				D_PRINT("Batch delete failed: %d\n", rc);
 				return -1;
 			}
 		}
@@ -751,15 +751,15 @@ ik_btr_perf(unsigned int key_nr)
 	double		 now;
 
 	if (key_nr == 0 || key_nr > (1U << 28)) {
-		D__PRINT("Invalid key number: %d\n", key_nr);
+		D_PRINT("Invalid key number: %d\n", key_nr);
 		return -1;
 	}
 
-	D__PRINT("Btree performance test, order=%u, keys=%u\n",
+	D_PRINT("Btree performance test, order=%u, keys=%u\n",
 		ik_order, key_nr);
 
 	arr = malloc(key_nr * sizeof(*arr));
-	D__ASSERT(arr != NULL);
+	D_ASSERT(arr != NULL);
 
 	/* step-1: Insert performance */
 	ik_btr_gen_keys(arr, key_nr);
@@ -770,12 +770,12 @@ ik_btr_perf(unsigned int key_nr)
 
 		rc = ik_btr_kv_operate(BTR_OPC_UPDATE, buf, false);
 		if (rc != 0) {
-			D__PRINT("update failed: %d\n", rc);
+			D_PRINT("update failed: %d\n", rc);
 			D_GOTO(out, rc = -1);
 		}
 	}
 	now = dts_time_now();
-	D__PRINT("insert = %10.2f/sec\n", key_nr / (now - then));
+	D_PRINT("insert = %10.2f/sec\n", key_nr / (now - then));
 
 	/* step-2: lookup performance */
 	ik_btr_gen_keys(arr, key_nr);
@@ -786,12 +786,12 @@ ik_btr_perf(unsigned int key_nr)
 
 		rc = ik_btr_kv_operate(BTR_OPC_LOOKUP, buf, false);
 		if (rc != 0) {
-			D__PRINT("lookup failed: %d\n", rc);
+			D_PRINT("lookup failed: %d\n", rc);
 			D_GOTO(out, rc = -1);
 		}
 	}
 	now = dts_time_now();
-	D__PRINT("lookup = %10.2f/sec\n", key_nr / (now - then));
+	D_PRINT("lookup = %10.2f/sec\n", key_nr / (now - then));
 
 	/* step-3: delete performance */
 	ik_btr_gen_keys(arr, key_nr);
@@ -802,12 +802,12 @@ ik_btr_perf(unsigned int key_nr)
 
 		rc = ik_btr_kv_operate(BTR_OPC_DELETE, buf, false);
 		if (rc != 0) {
-			D__PRINT("delete failed: %d\n", rc);
+			D_PRINT("delete failed: %d\n", rc);
 			D_GOTO(out, rc = -1);
 		}
 	}
 	now = dts_time_now();
-	D__PRINT("delete = %10.2f/sec\n", key_nr / (now - then));
+	D_PRINT("delete = %10.2f/sec\n", key_nr / (now - then));
 
 out:
 	free(arr);
@@ -844,7 +844,7 @@ main(int argc, char **argv)
 		return rc;
 
 	rc = dbtree_class_register(IK_TREE_CLASS, BTR_FEAT_UINT_KEY, &ik_ops);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	optind = 0;
 	ik_uma.uma_id = UMEM_CLASS_VMEM;
@@ -895,7 +895,7 @@ main(int argc, char **argv)
 						0666);
 			break;
 		default:
-			D__PRINT("Unsupported command %c\n", rc);
+			D_PRINT("Unsupported command %c\n", rc);
 			break;
 		}
 	}

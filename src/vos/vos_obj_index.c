@@ -79,7 +79,7 @@ obj_df_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 	uint64_t	    *ohash = (uint64_t *)&ohkey->h_oid_hs[0];
 	daos_unit_oid_t	     oid   = okey->o_oid;
 
-	D__ASSERT(key_iov->iov_len == sizeof(struct vos_obj_key));
+	D_ASSERT(key_iov->iov_len == sizeof(struct vos_obj_key));
 	ohkey->h_epc_lo = okey->o_epc_lo;
 	ohkey->h_epc_hi = okey->o_epc_hi;
 
@@ -125,7 +125,7 @@ obj_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 	obj_df = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
 
-	D__ASSERT(key_iov->iov_len == sizeof(struct vos_obj_key));
+	D_ASSERT(key_iov->iov_len == sizeof(struct vos_obj_key));
 	obj_key = key_iov->iov_buf;
 
 	obj_df->vo_id = obj_key->o_oid;
@@ -170,7 +170,7 @@ obj_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_obj_df	*obj_df;
 
-	D__ASSERT(val_iov != NULL);
+	D_ASSERT(val_iov != NULL);
 
 	obj_df = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 	daos_iov_set(val_iov, obj_df, sizeof(struct vos_obj_df));
@@ -192,8 +192,8 @@ obj_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	 */
 	obj_df = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
-	D__ASSERT(okey->o_epc_hi == okey->o_epc_lo);
-	D__ASSERT(hkey->h_epc_hi >= okey->o_epc_lo &&
+	D_ASSERT(okey->o_epc_hi == okey->o_epc_lo);
+	D_ASSERT(hkey->h_epc_hi >= okey->o_epc_lo &&
 		 hkey->h_epc_lo <= okey->o_epc_lo);
 
 	/* NB: it is possible obj_df::vo_epc_hi < obj_df::vo_epc_lo, it means
@@ -289,7 +289,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	daos_iov_t		kiov;
 	int			rc;
 
-	D__ASSERT(obj->vo_epc_lo <= epoch && obj->vo_epc_hi >= epoch);
+	D_ASSERT(obj->vo_epc_lo <= epoch && obj->vo_epc_hi >= epoch);
 
 	okey.o_oid	= oid;
 	okey.o_epc_lo	= epoch;
@@ -298,10 +298,9 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 
 	rc = dbtree_update(cont->vc_btr_hdl, &kiov, NULL);
 	if (rc != 0)
-		D__GOTO(failed, rc);
+		D_GOTO(failed, rc);
 
-	D__ASSERT(obj->vo_epc_hi == epoch - 1);
-	D_EXIT;
+	D_ASSERT(obj->vo_epc_hi == epoch - 1);
  failed:
 	return rc;
 }
@@ -319,7 +318,7 @@ oiter_fini(struct vos_iterator *iter)
 	struct vos_oid_iter	*oid_iter = NULL;
 
 	/** iter type should be VOS_ITER_OBJ */
-	D__ASSERT(iter->it_type == VOS_ITER_OBJ);
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
 	oid_iter = iter2oiter(iter);
 
@@ -332,7 +331,7 @@ oiter_fini(struct vos_iterator *iter)
 	if (oid_iter->oit_cont != NULL)
 		vos_cont_decref(oid_iter->oit_cont);
 
-	D__FREE_PTR(oid_iter);
+	D_FREE_PTR(oid_iter);
 	return rc;
 }
 
@@ -354,7 +353,7 @@ oiter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (cont == NULL)
 		return -DER_INVAL;
 
-	D__ALLOC_PTR(oid_iter);
+	D_ALLOC_PTR(oid_iter);
 	if (oid_iter == NULL)
 		return -DER_NOMEM;
 
@@ -364,7 +363,7 @@ oiter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	rc = dbtree_iter_prepare(cont->vc_btr_hdl, 0, &oid_iter->oit_hdl);
 	if (rc)
-		D__GOTO(exit, rc);
+		D_GOTO(exit, rc);
 
 	*iter_pp = &oid_iter->oit_iter;
 	return 0;
@@ -387,7 +386,7 @@ oiter_probe_match(struct vos_iterator *iter)
 
 	if (oiter->oit_epr.epr_lo == 0 &&
 	    oiter->oit_epr.epr_hi == DAOS_EPOCH_MAX)
-		D__GOTO(out, rc = 0); /* no condition */
+		D_GOTO(out, rc = 0); /* no condition */
 
 	while (1) {
 		struct vos_obj_df	*obj_df;
@@ -398,9 +397,9 @@ oiter_probe_match(struct vos_iterator *iter)
 		daos_iov_set(&iov, NULL, 0);
 		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, NULL);
 		if (rc != 0)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 
-		D__ASSERT(iov.iov_len == sizeof(struct vos_obj_df));
+		D_ASSERT(iov.iov_len == sizeof(struct vos_obj_df));
 		obj_df = (struct vos_obj_df *)iov.iov_buf;
 
 		iop = IT_OPC_NOOP;
@@ -433,7 +432,7 @@ oiter_probe_match(struct vos_iterator *iter)
 
 		switch (iop) {
 		case IT_OPC_NOOP: /* match the condition */
-			D__GOTO(out, rc = 0);
+			D_GOTO(out, rc = 0);
 
 		case IT_OPC_PROBE:
 			key.o_oid = obj_df->vo_id;
@@ -448,9 +447,8 @@ oiter_probe_match(struct vos_iterator *iter)
 		}
 
 		if (rc)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 	}
-	D_EXIT;
 out:
 	return rc;
 }
@@ -462,18 +460,17 @@ oiter_probe(struct vos_iterator *iter, daos_hash_out_t *anchor)
 	dbtree_probe_opc_t	 opc;
 	int			 rc;
 
-	D__ASSERT(iter->it_type == VOS_ITER_OBJ);
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
 	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
 	rc = dbtree_iter_probe(oiter->oit_hdl, opc, NULL, anchor);
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	/* NB: these probe cannot guarantee the returned entry is within
 	 * the condition epoch range.
 	 */
 	rc = oiter_probe_match(iter);
-	D_EXIT;
  out:
 	return rc;
 }
@@ -484,13 +481,12 @@ oiter_next(struct vos_iterator *iter)
 	struct vos_oid_iter	*oid_iter = iter2oiter(iter);
 	int			 rc;
 
-	D__ASSERT(iter->it_type == VOS_ITER_OBJ);
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 	rc = dbtree_iter_next(oid_iter->oit_hdl);
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	rc = oiter_probe_match(iter);
-	D_EXIT;
  out:
 	return rc;
 }
@@ -504,7 +500,7 @@ oiter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	daos_iov_t		 rec_iov;
 	int			 rc;
 
-	D__ASSERT(iter->it_type == VOS_ITER_OBJ);
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
 	daos_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oid_iter->oit_hdl, NULL, &rec_iov, anchor);
@@ -513,14 +509,13 @@ oiter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		return rc;
 	}
 
-	D__ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
 	obj_df = (struct vos_obj_df *)rec_iov.iov_buf;
 
 	it_entry->ie_oid = obj_df->vo_id;
 	it_entry->ie_epr.epr_lo = obj_df->vo_epc_lo;
 	it_entry->ie_epr.epr_hi = obj_df->vo_epc_hi;
 
-	D_EXIT;
 	return 0;
 }
 
@@ -531,7 +526,7 @@ oiter_delete(struct vos_iterator *iter, void *args)
 	PMEMobjpool		*pop;
 	int			rc = 0;
 
-	D__ASSERT(iter->it_type == VOS_ITER_OBJ);
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 	pop = vos_cont2pop(oiter->oit_cont);
 
 	TX_BEGIN(pop) {
@@ -540,7 +535,6 @@ oiter_delete(struct vos_iterator *iter, void *args)
 		rc = umem_tx_errno(rc);
 		D_ERROR("Failed to delete oid entry: %d\n", rc);
 	} TX_END
-	D_EXIT;
 
 	return rc;
 }
@@ -615,7 +609,7 @@ vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 	rc = dbtree_open_inplace(&otab_df->obt_btr, &pool->vp_uma, &btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
-		D__GOTO(exit, rc = -DER_NONEXIST);
+		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 
 	rc = dbtree_destroy(btr_hdl);

@@ -53,7 +53,7 @@ lru_hop_rec_decref(struct d_hash_table *lr_htab, d_list_t *rlink)
 
        struct daos_llink *llink = hash2lru_link(rlink);
 
-       D__ASSERT(llink->ll_ref > 0);
+       D_ASSERT(llink->ll_ref > 0);
        llink->ll_ref--;
        /* Delete from hash only if no more references */
        return llink->ll_ref == 0;
@@ -106,7 +106,7 @@ daos_lru_cache_create(int bits, uint32_t feats,
 		return -DER_INVAL;
 	}
 
-	D__ALLOC_PTR(lru_cache);
+	D_ALLOC_PTR(lru_cache);
 	if (lru_cache == NULL)
 		return -DER_NOMEM;
 
@@ -114,7 +114,7 @@ daos_lru_cache_create(int bits, uint32_t feats,
 					 NULL, &lru_ops,
 					 &lru_cache->dlc_htable);
 	if (rc)
-		D__GOTO(exit, rc = -DER_NOMEM);
+		D_GOTO(exit, rc = -DER_NOMEM);
 
 	if (bits >= 0)
 		lru_cache->dlc_csize = (1 << bits);
@@ -129,7 +129,7 @@ daos_lru_cache_create(int bits, uint32_t feats,
 	*lcache = lru_cache;
 exit:
 	if (rc != 0)
-		D__FREE_PTR(lru_cache);
+		D_FREE_PTR(lru_cache);
 
 	return rc;
 }
@@ -144,11 +144,11 @@ daos_lru_cache_destroy(struct daos_lru_cache *lcache)
 	 * if there are busy references.
 	 */
 	D_DEBUG(DB_TRACE, "refs_held :%u\n", lcache->dlc_busy_nr);
-	D__ASSERTF(lcache->dlc_busy_nr == 0, "busy=%d", lcache->dlc_busy_nr);
+	D_ASSERTF(lcache->dlc_busy_nr == 0, "busy=%d", lcache->dlc_busy_nr);
 
 	d_hash_table_debug(&lcache->dlc_htable);
 	d_hash_table_destroy_inplace(&lcache->dlc_htable, true);
-	D__FREE_PTR(lcache);
+	D_FREE_PTR(lcache);
 }
 
 void
@@ -245,30 +245,30 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	struct daos_llink *llink;
 	int		   rc;
 
-	D__ASSERT(lcache != NULL && key != NULL && key_size > 0);
+	D_ASSERT(lcache != NULL && key != NULL && key_size > 0);
 	if (lcache->dlc_ops->lop_print_key)
 		lcache->dlc_ops->lop_print_key(key, key_size);
 
 	llink = lru_fast_search(lcache, &lcache->dlc_busy_list, key, key_size);
 	if (llink)
-		D__GOTO(found, rc = 0);
+		D_GOTO(found, rc = 0);
 
 	llink = lru_fast_search(lcache, &lcache->dlc_idle_list, key, key_size);
 	if (llink)
-		D__GOTO(found, rc = 0);
+		D_GOTO(found, rc = 0);
 
 	llink = lru_hash_search(lcache, key, key_size);
 	if (llink)
-		D__GOTO(found, rc = 0);
+		D_GOTO(found, rc = 0);
 
 	if (!create_args)
-		D__GOTO(out, rc = -DER_NONEXIST);
+		D_GOTO(out, rc = -DER_NONEXIST);
 
 	D_DEBUG(DB_TRACE, "Entry not found adding it to LRU\n");
 	/* llink does not exist create one */
 	rc = lcache->dlc_ops->lop_alloc_ref(key, key_size, create_args, &llink);
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	D_DEBUG(DB_TRACE, "Inserting into LRU Hash table\n");
 	llink->ll_evicted = 0;
@@ -278,7 +278,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 
 	rc = d_hash_rec_insert(&lcache->dlc_htable, key, key_size,
 			       &llink->ll_hlink, true);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 found:
 	if (llink->ll_ref == 2) /* 1 for hash, 1 for the first holder */
 		lru_mark_busy(lcache, llink);
@@ -291,7 +291,7 @@ out:
 void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
-	D__ASSERT(lcache != NULL && llink != NULL && llink->ll_ref > 1);
+	D_ASSERT(lcache != NULL && llink != NULL && llink->ll_ref > 1);
 	D_DEBUG(DB_TRACE, "Releasing item %p, ref=%d\n", llink, llink->ll_ref);
 
 	llink->ll_ref--;
@@ -299,7 +299,7 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 		D_DEBUG(DB_TRACE, "busy: %u, idle: %u\n",
 			lcache->dlc_busy_nr, lcache->dlc_idle_nr);
 
-		D__ASSERT(lcache->dlc_busy_nr > 0);
+		D_ASSERT(lcache->dlc_busy_nr > 0);
 		lcache->dlc_busy_nr--;
 
 		if (llink->ll_evicted) {
@@ -323,7 +323,7 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 			lcache->dlc_idle_nr, lcache->dlc_busy_nr);
 
 		/** evict from the tail of the list */
-		D__ASSERT(!d_list_empty(&lcache->dlc_idle_list));
+		D_ASSERT(!d_list_empty(&lcache->dlc_idle_list));
 		llink = container_of(lcache->dlc_idle_list.prev,
 				     struct daos_llink, ll_qlink);
 

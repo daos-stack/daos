@@ -70,63 +70,19 @@ char *DP_UUID(const void *uuid);
 #define DF_CONT			DF_UUID"/"DF_UUID
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
 
-#define DD_ALLOC_PADDING		(dd_tune_alloc ? 4 : 0)
-#define DD_ALLOC_MAGIC			0xdeadbeef
-#define DD_ALLOC_POISON			0x3d
-
-/* memory allocating macros */
-#define D__ALLOC(ptr, size)						\
-do {									\
-	(ptr) = (__typeof__(ptr))calloc(1, (size + DD_ALLOC_PADDING));	\
-	if ((ptr) == NULL) {						\
-		D_ERROR("out of memory (alloc '" #ptr "' = %d)",	\
-			(int)(size));					\
-	}								\
-	D_DEBUG(DB_MEM, "alloc #ptr : %d at %p.\n", (int)(size), ptr);	\
-	if (DD_ALLOC_PADDING != 0) {					\
-		if (!ptr)						\
-			break;						\
-		void *__ptr = (void *)(ptr) + size;			\
-		*(unsigned int *)__ptr = DD_ALLOC_MAGIC;		\
-	}								\
-} while (0)
-
-# define D__FREE(ptr, size)						\
-do {									\
-	D_DEBUG(DB_MEM, "free #ptr : %d at %p.\n", (int)(size), ptr);	\
-	if (DD_ALLOC_PADDING != 0) {					\
-		if (!ptr)						\
-			break;						\
-		void *__ptr = (void *)(ptr) + size;			\
-		D__ASSERT(*(unsigned int *)__ptr == DD_ALLOC_MAGIC);	\
-		if (size <= 2048) {					\
-			memset((void *)(ptr), DD_ALLOC_POISON,		\
-				size + DD_ALLOC_PADDING);		\
-		}							\
-	}								\
-	free(ptr);							\
-	(ptr) = NULL;							\
-} while (0)
-
-#define D__ALLOC_PTR(ptr)        D__ALLOC(ptr, sizeof *(ptr))
-#define D__FREE_PTR(ptr)         D__FREE(ptr, sizeof *(ptr))
-
-#define DAOS_GOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
-#define DAOS_GOLDEN_RATIO_PRIME_32	0x9e370001UL
-
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
 {
 	uint64_t hash = val;
 
-	hash *= DAOS_GOLDEN_RATIO_PRIME_64;
+	hash *= DGOLDEN_RATIO_PRIME_64;
 	return hash >> (64 - bits);
 }
 
 static inline uint32_t
 daos_u32_hash(uint64_t key, unsigned int bits)
 {
-	return (DAOS_GOLDEN_RATIO_PRIME_32 * key) >> (32 - bits);
+	return (DGOLDEN_RATIO_PRIME_32 * key) >> (32 - bits);
 }
 
 

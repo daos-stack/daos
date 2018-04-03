@@ -170,11 +170,11 @@ evt_tcx_addref(struct evt_context *tcx)
 static inline void
 evt_tcx_decref(struct evt_context *tcx)
 {
-	D__ASSERT(tcx->tc_ref > 0);
+	D_ASSERT(tcx->tc_ref > 0);
 	tcx->tc_ref--;
 	if (tcx->tc_ref == 0) {
 		tcx->tc_magic = EVT_HDL_DEAD;
-		D__FREE_PTR(tcx);
+		D_FREE_PTR(tcx);
 	}
 }
 

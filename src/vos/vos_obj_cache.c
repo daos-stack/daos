@@ -65,17 +65,17 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	int			 rc;
 
 	cont = (struct vos_container *)args;
-	D__ASSERT(cont != NULL);
+	D_ASSERT(cont != NULL);
 
 	lkey = (struct obj_lru_key *)key;
-	D__ASSERT(lkey != NULL);
+	D_ASSERT(lkey != NULL);
 
 	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_obj_id));
 
-	D__ALLOC_PTR(obj);
+	D_ALLOC_PTR(obj);
 	if (!obj)
-		D__GOTO(failed, rc = -DER_NOMEM);
+		D_GOTO(failed, rc = -DER_NOMEM);
 	/**
 	 * Saving a copy of oid to avoid looking up in vos_obj_df, which
 	 * is a direct pointer to pmem data structure
@@ -97,8 +97,8 @@ obj_lop_cmp_key(const void *key, unsigned int ksize, struct daos_llink *llink)
 	struct obj_lru_key	*hkey = (struct obj_lru_key *) key;
 
 	D_DEBUG(DB_TRACE, "LRU compare keys\n");
-	D__ASSERT(llink);
-	D__ASSERT(ksize == sizeof(struct obj_lru_key));
+	D_ASSERT(llink);
+	D_ASSERT(ksize == sizeof(struct obj_lru_key));
 
 	obj = container_of(llink, struct vos_object, obj_llink);
 
@@ -113,14 +113,14 @@ obj_lop_free(struct daos_llink *llink)
 	struct vos_object	*obj;
 
 	D_DEBUG(DB_TRACE, "lru free callback for vos_obj_cache\n");
-	D__ASSERT(llink);
+	D_ASSERT(llink);
 
 	obj = container_of(llink, struct vos_object, obj_llink);
 	if (obj->obj_cont != NULL)
 		vos_cont_decref(obj->obj_cont);
 
 	vos_obj_tree_fini(obj);
-	D__FREE_PTR(obj);
+	D_FREE_PTR(obj);
 }
 
 static void
@@ -128,7 +128,7 @@ obj_lop_print_key(void *key, unsigned int ksize)
 {
 	struct obj_lru_key	*lkey = (struct obj_lru_key *)key;
 
-	D__ASSERT(lkey != NULL);
+	D_ASSERT(lkey != NULL);
 	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(lkey->olk_co_uuid), DP_UOID(lkey->olk_obj_id));
 }
@@ -156,7 +156,7 @@ vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
 void
 vos_obj_cache_destroy(struct daos_lru_cache *occ)
 {
-	D__ASSERT(occ != NULL);
+	D_ASSERT(occ != NULL);
 	daos_lru_cache_destroy(occ);
 }
 
@@ -192,7 +192,7 @@ void
 vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj)
 {
 
-	D__ASSERT((occ != NULL) && (obj != NULL));
+	D_ASSERT((occ != NULL) && (obj != NULL));
 	daos_lru_ref_release(occ, &obj->obj_llink);
 }
 
@@ -209,9 +209,9 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	struct obj_lru_key	 lkey;
 	int			 rc;
 
-	D__ASSERT(occ != NULL);
+	D_ASSERT(occ != NULL);
 	cont = vos_hdl2cont(coh);
-	D__ASSERT(cont != NULL);
+	D_ASSERT(cont != NULL);
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(cont->vc_id), DP_UOID(oid));
@@ -223,7 +223,7 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	while (1) {
 		rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), cont, &lret);
 		if (rc)
-			D__GOTO(failed, rc);
+			D_GOTO(failed, rc);
 
 		obj = container_of(lret, struct vos_object, obj_llink);
 		if (!obj->obj_df) /* empty object */
@@ -231,7 +231,7 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 
 		if (obj->obj_df->vo_epc_lo <= epoch &&
 		    obj->obj_df->vo_epc_hi >= epoch)
-			D__GOTO(found, rc = 0);
+			D_GOTO(found, rc = 0);
 
 		D_DEBUG(DB_IO, "Evict obj ["DF_U64":"DF_U64" -> "DF_U64"]\n",
 			obj->obj_df->vo_epc_lo, obj->obj_df->vo_epc_hi, epoch);
@@ -255,14 +255,13 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		}
 	} else {
 		rc = vos_oi_find_alloc(cont, oid, epoch, &obj->obj_df);
-		D__ASSERT(rc || obj->obj_df);
+		D_ASSERT(rc || obj->obj_df);
 	}
 
 	if (rc) {
 		vos_obj_release(occ, obj);
-		D__GOTO(failed, rc);
+		D_GOTO(failed, rc);
 	}
-	D_EXIT;
 found:
 	*obj_p = obj;
 failed:
@@ -294,7 +293,7 @@ vos_obj_revalidate(struct daos_lru_cache *occ, daos_epoch_t epoch,
 	rc = vos_obj_hold(occ, vos_cont2hdl(obj->obj_cont), obj->obj_id,
 			  epoch, !obj->obj_df, obj_p);
 	if (rc == 0) {
-		D__ASSERT(*obj_p != obj);
+		D_ASSERT(*obj_p != obj);
 		vos_obj_release(occ, obj);
 	}
 	return rc;

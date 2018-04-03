@@ -135,7 +135,7 @@ vos_iter_finish(daos_handle_t ih)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 
-	D__ASSERT(iter->it_ops != NULL);
+	D_ASSERT(iter->it_ops != NULL);
 	return iter->it_ops->iop_finish(iter);
 }
 
@@ -145,7 +145,7 @@ vos_iter_probe(daos_handle_t ih, daos_hash_out_t *anchor)
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int		     rc;
 
-	D__ASSERT(iter->it_ops != NULL);
+	D_ASSERT(iter->it_ops != NULL);
 	rc = iter->it_ops->iop_probe(iter, anchor);
 	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
@@ -173,7 +173,7 @@ vos_iter_next(daos_handle_t ih)
 		return -DER_NONEXIST;
 	}
 
-	D__ASSERT(iter->it_ops != NULL);
+	D_ASSERT(iter->it_ops != NULL);
 	rc = iter->it_ops->iop_next(iter);
 	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
@@ -201,7 +201,7 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 		return -DER_NONEXIST;
 	}
 
-	D__ASSERT(iter->it_ops != NULL);
+	D_ASSERT(iter->it_ops != NULL);
 	return iter->it_ops->iop_fetch(iter, it_entry, anchor);
 }
 
@@ -220,7 +220,7 @@ vos_iter_delete(daos_handle_t ih, void *args)
 		return -DER_NONEXIST;
 	}
 
-	D__ASSERT(iter->it_ops != NULL);
+	D_ASSERT(iter->it_ops != NULL);
 
 	if (iter->it_ops->iop_delete == NULL)
 		return -DER_NOSYS;
@@ -233,7 +233,7 @@ vos_iter_empty(daos_handle_t ih)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 
-	D__ASSERT(iter->it_ops != NULL);
+	D_ASSERT(iter->it_ops != NULL);
 	if (iter->it_ops->iop_empty == NULL)
 		return -DER_NOSYS;
 

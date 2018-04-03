@@ -139,12 +139,12 @@ rebuild_fetch_update_bulk(struct rebuild_dkey *rdkey, daos_handle_t oh,
 
 	rc = vos_obj_zc_sgl_at(ioh, 0, &sgl);
 	if (rc)
-		D__GOTO(end, rc);
+		D_GOTO(end, rc);
 
 	rc = ds_obj_fetch(oh, rdkey->rd_epoch, &rdkey->rd_dkey, 1, &iod,
 			  sgl, NULL);
 	if (rc)
-		D__GOTO(end, rc);
+		D_GOTO(end, rc);
 end:
 	vos_obj_zc_update_end(ioh, cookie, version,
 			      &rdkey->rd_dkey, 1, &iod, rc);
@@ -316,9 +316,9 @@ rebuild_one_dkey(struct rebuild_tgt_pool_tracker *rpt,
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 				      rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
-	D__ALLOC(akey_iov.iov_buf, akey_buf_size);
+	D_ALLOC(akey_iov.iov_buf, akey_buf_size);
 	if (akey_iov.iov_buf == NULL)
-		D__GOTO(free, rc = -DER_NOMEM);
+		D_GOTO(free, rc = -DER_NOMEM);
 
 	akey_iov.iov_buf_len = akey_buf_size;
 	akey_sgl.sg_nr = 1;
@@ -332,7 +332,7 @@ rebuild_one_dkey(struct rebuild_tgt_pool_tracker *rpt,
 					0, NULL, map, rpt->rt_svc_list, &ph);
 		rebuild_pool_map_put(map);
 		if (rc)
-			D__GOTO(free, rc);
+			D_GOTO(free, rc);
 
 		tls->rebuild_pool_hdl = ph;
 	}
@@ -341,17 +341,17 @@ rebuild_one_dkey(struct rebuild_tgt_pool_tracker *rpt,
 	rc = dc_cont_local_open(rdkey->rd_cont_uuid, rpt->rt_coh_uuid,
 				0, tls->rebuild_pool_hdl, &coh);
 	if (rc)
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 
 	rc = ds_obj_open(coh, rdkey->rd_oid.id_pub, rdkey->rd_epoch, DAOS_OO_RW,
 			 &oh);
 	if (rc)
-		D__GOTO(cont_close, rc);
+		D_GOTO(cont_close, rc);
 
 	rc = ds_cont_lookup(rpt->rt_pool_uuid, rdkey->rd_cont_uuid,
 			    &rebuild_cont);
 	if (rc)
-		D__GOTO(obj_close, rc);
+		D_GOTO(obj_close, rc);
 
 	memset(&hash, 0, sizeof(hash));
 	while (!daos_hash_is_eof(&hash)) {
@@ -398,7 +398,7 @@ cont_close:
 	dc_cont_local_close(tls->rebuild_pool_hdl, coh);
 free:
 	if (akey_iov.iov_buf != NULL)
-		D__FREE(akey_iov.iov_buf, akey_buf_size);
+		D_FREE(akey_iov.iov_buf);
 
 	return rc;
 }
@@ -413,8 +413,8 @@ rebuild_dkey_ult(void *arg)
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 				      rpt->rt_rebuild_ver);
-	D__ASSERT(tls != NULL);
-	D__ASSERT(rpt->rt_pullers != NULL);
+	D_ASSERT(tls != NULL);
+	D_ASSERT(rpt->rt_pullers != NULL);
 	idx = dss_get_module_info()->dmi_tid;
 	puller = &rpt->rt_pullers[idx];
 	puller->rp_ult_running = 1;
@@ -445,7 +445,7 @@ rebuild_dkey_ult(void *arg)
 					idx);
 			}
 
-			D__ASSERT(puller->rp_inflight > 0);
+			D_ASSERT(puller->rp_inflight > 0);
 			puller->rp_inflight--;
 
 			/* Ignore nonexistent error because puller could race
@@ -465,7 +465,7 @@ rebuild_dkey_ult(void *arg)
 			 * dkey list
 			 */
 			daos_iov_free(&rdkey->rd_dkey);
-			D__FREE_PTR(rdkey);
+			D_FREE_PTR(rdkey);
 		}
 
 		/* check if it should exist */
@@ -505,22 +505,22 @@ rebuild_dkey_queue(daos_unit_oid_t oid, daos_epoch_t epoch,
 		/* Create puller ULT thread, and destroy ULT until
 		 * rebuild finish in rebuild_fini().
 		 */
-		D__ASSERT(puller->rp_ult_running == 0);
+		D_ASSERT(puller->rp_ult_running == 0);
 		D_DEBUG(DB_REBUILD, "create rebuild dkey ult %d\n", idx);
 		rc = dss_ult_create(rebuild_dkey_ult, rpt, idx,
 				    &puller->rp_ult);
 		if (rc)
-			D__GOTO(free, rc);
+			D_GOTO(free, rc);
 	}
 
-	D__ALLOC_PTR(rdkey);
+	D_ALLOC_PTR(rdkey);
 	if (rdkey == NULL)
-		D__GOTO(free, rc = -DER_NOMEM);
+		D_GOTO(free, rc = -DER_NOMEM);
 
 	D_INIT_LIST_HEAD(&rdkey->rd_list);
 	rc = daos_iov_copy(&rdkey->rd_dkey, dkey);
 	if (rc != 0)
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 
 	rdkey->rd_oid = oid;
 	uuid_copy(rdkey->rd_cont_uuid, iter_arg->cont_uuid);
@@ -532,7 +532,7 @@ rebuild_dkey_queue(daos_unit_oid_t oid, daos_epoch_t epoch,
 free:
 	if (rc != 0 && rdkey != NULL) {
 		daos_iov_free(&rdkey->rd_dkey);
-		D__FREE_PTR(rdkey);
+		D_FREE_PTR(rdkey);
 	}
 
 	return rc;
@@ -558,7 +558,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 				      arg->rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 
-	D__ALLOC(dkey_iov.iov_buf, dkey_buf_size);
+	D_ALLOC(dkey_iov.iov_buf, dkey_buf_size);
 	if (dkey_iov.iov_buf == NULL)
 		return -DER_NOMEM;
 	dkey_iov.iov_buf_len = dkey_buf_size;
@@ -567,7 +567,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 
 	rc = ds_obj_open(arg->cont_hdl, oid.id_pub, epoch, DAOS_OO_RW, &oh);
 	if (rc)
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 
 	D_DEBUG(DB_REBUILD, "start rebuild obj "DF_UOID" for shard %u\n",
 		DP_UOID(oid), shard);
@@ -611,7 +611,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	ds_obj_close(oh);
 free:
 	if (dkey_iov.iov_buf != NULL)
-		D__FREE(dkey_iov.iov_buf, dkey_buf_size);
+		D_FREE(dkey_iov.iov_buf);
 	D_DEBUG(DB_REBUILD, "stop rebuild obj "DF_UOID" for shard %u rc %d\n",
 		DP_UOID(oid), shard, rc);
 
@@ -631,7 +631,7 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	D_DEBUG(DB_REBUILD, "obj rebuild "DF_UUID"/"DF_UOID" %"PRIx64
 		" start\n", DP_UUID(arg->cont_uuid), DP_UOID(*oid),
 		ih.cookie);
-	D__ASSERT(arg->obj_cb != NULL);
+	D_ASSERT(arg->obj_cb != NULL);
 
 	/* NB: if rebuild for this object fail, let's continue rebuilding
 	 * other objects, anyway the failure will be remembered in
@@ -648,7 +648,7 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	/* Some one might insert new record to the tree let's reprobe */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
 	if (rc) {
-		D__ASSERT(rc != -DER_NONEXIST);
+		D_ASSERT(rc != -DER_NONEXIST);
 		return rc;
 	}
 
@@ -724,7 +724,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	/* Some one might insert new record to the tree let's reprobe */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
 	if (rc) {
-		D__ASSERT(rc != -DER_NONEXIST);
+		D_ASSERT(rc != -DER_NONEXIST);
 		return rc;
 	}
 
@@ -762,7 +762,7 @@ rebuild_puller(void *arg)
 		}
 	}
 
-	D__FREE_PTR(iter_arg);
+	D_FREE_PTR(iter_arg);
 	rpt->rt_lead_puller_running = 0;
 }
 
@@ -821,7 +821,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 	    oids_count != co_count || oids_count != shards_count) {
 		D_ERROR("oids_count %u co_count %u shards_count %u\n",
 			oids_count, co_count, shards_count);
-		D__GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	/* If rpt is NULL, it means the target is not prepared for
@@ -831,12 +831,12 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 	rpt = rebuild_tgt_pool_tracker_lookup(rebuild_in->roi_pool_uuid,
 					      rebuild_in->roi_rebuild_ver);
 	if (rpt == NULL || rpt->rt_pool == NULL)
-		D__GOTO(out, rc = -DER_AGAIN);
+		D_GOTO(out, rc = -DER_AGAIN);
 
 	/* Initialize the local rebuild tree */
 	rc = rebuild_obj_hdl_get(rpt, &btr_hdl);
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 				      rpt->rt_rebuild_ver);
@@ -862,31 +862,30 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		}
 	}
 	if (rc < 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	/* Check and create task to iterate the local rebuild tree */
 	if (!rpt->rt_lead_puller_running) {
 		struct rebuild_iter_arg *arg;
 
-		D__ALLOC_PTR(arg);
+		D_ALLOC_PTR(arg);
 		if (arg == NULL)
-			D__GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 
 		uuid_copy(arg->pool_uuid, rebuild_in->roi_pool_uuid);
 		arg->obj_cb = rebuild_obj_iterate_keys;
 		arg->root_hdl = btr_hdl;
 		arg->rpt = rpt;
 
-		D__ASSERT(rpt->rt_pullers != NULL);
+		D_ASSERT(rpt->rt_pullers != NULL);
 
 		rc = dss_ult_create(rebuild_puller, arg, -1, NULL);
 		if (rc) {
-			D__FREE_PTR(arg);
-			D__GOTO(out, rc);
+			D_FREE_PTR(arg);
+			D_GOTO(out, rc);
 		}
 		rpt->rt_lead_puller_running = 1;
 	}
-	D_EXIT;
 out:
 	rebuild_out = crt_reply_get(rpc);
 	rebuild_out->ro_status = rc;

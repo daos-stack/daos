@@ -156,13 +156,13 @@ handle_information_options(const char ***argv, int *argc)
 			}
 			exit(0);
 		} else {
-			D__PRINT("Unknown option: %s\n", cmd);
-			D__PRINT("\n Usage: %s\n", daosctl_usage_string);
+			D_PRINT("Unknown option: %s\n", cmd);
+			D_PRINT("\n Usage: %s\n", daosctl_usage_string);
 			exit(129);
 		}
 	} else {
-		D__PRINT("No options or commands.\n");
-		D__PRINT("\n Usage: %s\n", daosctl_usage_string);
+		D_PRINT("No options or commands.\n");
+		D_PRINT("\n Usage: %s\n", daosctl_usage_string);
 		exit(129);
 	}
 }
@@ -183,7 +183,7 @@ process_cmd(int argc, const char **argv)
 	}
 
 	if (rc == EINVAL) {
-		D__PRINT("Unknown command: %s\n\n", argv[1]);
+		D_PRINT("Unknown command: %s\n\n", argv[1]);
 		print_help();
 	}
 
@@ -200,7 +200,7 @@ main(int argc, const char **argv)
 	int test_rc = setup(argc, (char **)argv);
 
 	if (test_rc) {
-		D__PRINT("Couldn't initialize DAOS.\n");
+		D_PRINT("Couldn't initialize DAOS.\n");
 		return 1;
 	}
 

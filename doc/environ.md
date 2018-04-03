@@ -23,8 +23,6 @@ Type		| Values
 
 Environment variables in this section apply to both the server side and the client side
 
-### `DD_TUNE_ALLOC`
-
 ### `DAOS_IO_BYPASS`
 
 ## Server

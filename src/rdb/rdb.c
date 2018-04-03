@@ -62,7 +62,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	sb_oid = pmemobj_root(pmem, sizeof(*sb));
 	if (OID_IS_NULL(sb_oid)) {
 		D_ERROR("failed to allocate db superblock in %s\n", path);
-		D__GOTO(out_pmem, rc = -DER_NOSPACE);
+		D_GOTO(out_pmem, rc = -DER_NOSPACE);
 	}
 	sb = pmemobj_direct(sb_oid);
 
@@ -138,7 +138,7 @@ void
 rdb_put(struct rdb *db)
 {
 	ABT_mutex_lock(db->d_mutex);
-	D__ASSERTF(db->d_ref > 0, "%d\n", db->d_ref);
+	D_ASSERTF(db->d_ref > 0, "%d\n", db->d_ref);
 	db->d_ref--;
 	if (db->d_ref == RDB_BASE_REFS)
 		ABT_cond_broadcast(db->d_ref_cv);
@@ -157,7 +157,7 @@ rdb_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key,
 {
 	struct rdb *db = rdb_obj(rlink);
 
-	D__ASSERTF(ksize == sizeof(uuid_t), "%u\n", ksize);
+	D_ASSERTF(ksize == sizeof(uuid_t), "%u\n", ksize);
 	return uuid_compare(db->d_uuid, key) == 0;
 }
 
@@ -238,12 +238,12 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	uint8_t			nreplicas;
 	int			rc;
 
-	D__ASSERT(cbs->dc_stop != NULL);
+	D_ASSERT(cbs->dc_stop != NULL);
 
-	D__ALLOC_PTR(db);
+	D_ALLOC_PTR(db);
 	if (db == NULL) {
 		D_ERROR("failed to allocate db object\n");
-		D__GOTO(err, rc = -DER_NOMEM);
+		D_GOTO(err, rc = -DER_NOMEM);
 	}
 
 	db->d_ref = 1;
@@ -252,28 +252,28 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 
 	rc = ABT_mutex_create(&db->d_mutex);
 	if (rc != ABT_SUCCESS)
-		D__GOTO(err_db, rc = dss_abterr2der(rc));
+		D_GOTO(err_db, rc = dss_abterr2der(rc));
 
 	rc = ABT_cond_create(&db->d_ref_cv);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("failed to create ref CV: %d\n", rc);
-		D__GOTO(err_mutex, rc = dss_abterr2der(rc));
+		D_GOTO(err_mutex, rc = dss_abterr2der(rc));
 	}
 
 	rc = rdb_tree_cache_create(&db->d_trees);
 	if (rc != 0)
-		D__GOTO(err_ref_cv, rc);
+		D_GOTO(err_ref_cv, rc);
 
 	db->d_pmem = pmemobj_open(path, RDB_LAYOUT);
 	if (db->d_pmem == NULL) {
 		D_ERROR("failed to open db in %s: %d\n", path, errno);
-		D__GOTO(err_trees, rc = daos_errno2der(errno));
+		D_GOTO(err_trees, rc = daos_errno2der(errno));
 	}
 
 	sb_oid = pmemobj_root(db->d_pmem, sizeof(*sb));
 	if (OID_IS_NULL(sb_oid)) {
 		D_ERROR("failed to retrieve db superblock in %s\n", path);
-		D__GOTO(err_pmem, rc = -DER_IO);
+		D_GOTO(err_pmem, rc = -DER_IO);
 	}
 	sb = pmemobj_direct(sb_oid);
 
@@ -284,32 +284,32 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	rc = dbtree_open_inplace(&sb->dsb_attr, &uma, &db->d_attr);
 	if (rc != 0) {
 		D_ERROR("failed to open db attribute tree: %d\n", rc);
-		D__GOTO(err_pmem, rc);
+		D_GOTO(err_pmem, rc);
 	}
 
 	/* Read the list of replicas. */
 	daos_iov_set(&value, &nreplicas, sizeof(nreplicas));
 	rc = dbtree_lookup(db->d_attr, &rdb_attr_nreplicas, &value);
 	if (rc != 0)
-		D__GOTO(err_attr, rc);
+		D_GOTO(err_attr, rc);
 	/* Query the address and the length of the persistent list. */
 	daos_iov_set(&value, NULL /* buf */, 0 /* size */);
 	rc = dbtree_lookup(db->d_attr, &rdb_attr_replicas, &value);
 	if (rc != 0)
-		D__GOTO(err_attr, rc);
+		D_GOTO(err_attr, rc);
 	if (value.iov_len != sizeof(*db->d_replicas->rl_ranks) * nreplicas) {
 		D_ERROR(DF_DB": inconsistent replica list: size="DF_U64
 			" n=%u\n", DP_DB(db), value.iov_len, nreplicas);
-		D__GOTO(err_attr, rc);
+		D_GOTO(err_attr, rc);
 	}
 	db->d_replicas = daos_rank_list_alloc(nreplicas);
 	if (db->d_replicas == NULL)
-		D__GOTO(err_attr, rc);
+		D_GOTO(err_attr, rc);
 	memcpy(db->d_replicas->rl_ranks, value.iov_buf, value.iov_len);
 
 	rc = rdb_raft_start(db);
 	if (rc != 0)
-		D__GOTO(err_replicas, rc);
+		D_GOTO(err_replicas, rc);
 
 	ABT_mutex_lock(rdb_hash_lock);
 	rc = d_hash_rec_insert(&rdb_hash, db->d_uuid, sizeof(uuid_t),
@@ -317,8 +317,8 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	ABT_mutex_unlock(rdb_hash_lock);
 	if (rc != 0) {
 		/* We have the PMDK pool open. */
-		D__ASSERT(rc != -DER_EXIST);
-		D__GOTO(err_raft, rc);
+		D_ASSERT(rc != -DER_EXIST);
+		D_GOTO(err_raft, rc);
 	}
 
 	*dbp = db;
@@ -341,7 +341,7 @@ err_ref_cv:
 err_mutex:
 	ABT_mutex_free(&db->d_mutex);
 err_db:
-	D__FREE_PTR(db);
+	D_FREE_PTR(db);
 err:
 	return rc;
 }
@@ -361,7 +361,7 @@ rdb_stop(struct rdb *db)
 	ABT_mutex_lock(rdb_hash_lock);
 	deleted = d_hash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
 	ABT_mutex_unlock(rdb_hash_lock);
-	D__ASSERT(deleted);
+	D_ASSERT(deleted);
 	rdb_raft_stop(db);
 	daos_rank_list_free(db->d_replicas);
 	dbtree_close(db->d_attr);
@@ -369,7 +369,7 @@ rdb_stop(struct rdb *db)
 	rdb_tree_cache_destroy(db->d_trees);
 	ABT_cond_free(&db->d_ref_cv);
 	ABT_mutex_free(&db->d_mutex);
-	D__FREE_PTR(db);
+	D_FREE_PTR(db);
 }
 
 /**
@@ -420,7 +420,7 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 	if (node == NULL)
 		return -DER_NONEXIST;
 	dnode = raft_node_get_udata(node);
-	D__ASSERT(dnode != NULL);
+	D_ASSERT(dnode != NULL);
 	*term = raft_get_current_term(db->d_raft);
 	*rank = dnode->dn_rank;
 	return 0;
@@ -462,7 +462,7 @@ rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
 	struct rdb_start_out   *out;
 	int			rc;
 
-	D__ASSERT(!create || ranks != NULL);
+	D_ASSERT(!create || ranks != NULL);
 
 	/*
 	 * If ranks doesn't include myself, creating a group with ranks will
@@ -470,7 +470,7 @@ rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
 	 */
 	rc = rdb_create_bcast(RDB_START, NULL /* group */, &rpc);
 	if (rc != 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	in = crt_req_get(rpc);
 	uuid_copy(in->dai_uuid, uuid);
 	uuid_copy(in->dai_pool, pool_uuid);
@@ -481,7 +481,7 @@ rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
-		D__GOTO(out_rpc, rc);
+		D_GOTO(out_rpc, rc);
 
 	out = crt_reply_get(rpc);
 	rc = out->dao_rc;
@@ -507,7 +507,7 @@ rdb_start_handler(crt_rpc_t *rpc)
 	int			rc;
 
 	if (in->dai_flags & RDB_AF_CREATE && in->dai_ranks == NULL)
-		D__GOTO(out, rc = -DER_PROTO);
+		D_GOTO(out, rc = -DER_PROTO);
 
 	if (in->dai_ranks != NULL) {
 		d_rank_t	rank;
@@ -515,14 +515,14 @@ rdb_start_handler(crt_rpc_t *rpc)
 
 		/* Do nothing if I'm not one of the replicas. */
 		rc = crt_group_rank(NULL /* grp */, &rank);
-		D__ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, "%d\n", rc);
 		if (!daos_rank_list_find(in->dai_ranks, rank, &i))
-			D__GOTO(out, rc = 0);
+			D_GOTO(out, rc = 0);
 	}
 
 	path = ds_pool_rdb_path(in->dai_uuid, in->dai_pool);
 	if (path == NULL)
-		D__GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	if (in->dai_flags & RDB_AF_CREATE) {
 		rc = rdb_create(path, in->dai_uuid, in->dai_size,
@@ -530,7 +530,7 @@ rdb_start_handler(crt_rpc_t *rpc)
 		if (rc != 0 && rc != -DER_EXIST) {
 			D_ERROR(DF_UUID": failed to create replica: %d\n",
 				DP_UUID(in->dai_uuid), rc);
-			D__GOTO(out_path, rc);
+			D_GOTO(out_path, rc);
 		}
 	}
 
@@ -587,7 +587,7 @@ rdb_dist_stop(const uuid_t uuid, const uuid_t pool_uuid,
 	 */
 	rc = rdb_create_bcast(RDB_STOP, NULL /* group */, &rpc);
 	if (rc != 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	in = crt_req_get(rpc);
 	uuid_copy(in->doi_uuid, uuid);
 	uuid_copy(in->doi_pool, pool_uuid);
@@ -596,7 +596,7 @@ rdb_dist_stop(const uuid_t uuid, const uuid_t pool_uuid,
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
-		D__GOTO(out_rpc, rc);
+		D_GOTO(out_rpc, rc);
 
 	out = crt_reply_get(rpc);
 	rc = out->doo_rc;
@@ -626,7 +626,7 @@ rdb_stop_handler(crt_rpc_t *rpc)
 
 		path = ds_pool_rdb_path(in->doi_uuid, in->doi_pool);
 		if (path == NULL)
-			D__GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 		rc = rdb_destroy(path);
 		free(path);
 		if (rc == -DER_NONEXIST)

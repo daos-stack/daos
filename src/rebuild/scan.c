@@ -72,7 +72,7 @@ rebuild_obj_fill_buf(daos_handle_t ih, daos_iov_t *key_iov,
 	int			count = arg->count;
 	int			rc;
 
-	D__ASSERT(count < REBUILD_SEND_LIMIT);
+	D_ASSERT(count < REBUILD_SEND_LIMIT);
 	oids[count] = *((daos_unit_oid_t *)key_iov->iov_buf);
 	shards[count] = *((unsigned int *)val_iov->iov_buf);
 	uuid_copy(uuids[count], arg->current_uuid);
@@ -82,7 +82,7 @@ rebuild_obj_fill_buf(daos_handle_t ih, daos_iov_t *key_iov,
 	if (rc != 0)
 		return rc;
 
-	D__ASSERT(root->count > 0);
+	D_ASSERT(root->count > 0);
 	root->count--;
 
 	D_DEBUG(DB_REBUILD, "send oid/con "DF_UOID"/"DF_UUID" cnt %d"
@@ -150,21 +150,21 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	crt_endpoint_t		tgt_ep = {0};
 	int			rc = 0;
 
-	D__ALLOC_PTR(arg);
+	D_ALLOC_PTR(arg);
 	if (arg == NULL)
 		return -DER_NOMEM;
 
-	D__ALLOC(oids, sizeof(*oids) * REBUILD_SEND_LIMIT);
+	D_ALLOC(oids, sizeof(*oids) * REBUILD_SEND_LIMIT);
 	if (oids == NULL)
-		D__GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
-	D__ALLOC(uuids, sizeof(*uuids) * REBUILD_SEND_LIMIT);
+	D_ALLOC(uuids, sizeof(*uuids) * REBUILD_SEND_LIMIT);
 	if (oids == NULL)
-		D__GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
-	D__ALLOC(shards, sizeof(*shards) * REBUILD_SEND_LIMIT);
+	D_ALLOC(shards, sizeof(*shards) * REBUILD_SEND_LIMIT);
 	if (shards == NULL)
-		D__GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	arg->tgt_root = root;
 	arg->count = 0;
@@ -178,14 +178,14 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 				    arg);
 		ABT_mutex_unlock(scan_arg->scan_lock);
 		if (rc < 0)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 
 		if (arg->count >= REBUILD_SEND_LIMIT)
 			break;
 	}
 
 	if (arg->count == 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	D_DEBUG(DB_REBUILD, "send rebuild objects "DF_UUID" to tgt %d"
 		" cnt %d\n", DP_UUID(rpt->rt_pool_uuid), tgt_id, arg->count);
@@ -201,7 +201,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		rc = rebuild_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 					REBUILD_OBJECTS, &rpc);
 		if (rc)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 
 		rebuild_in = crt_req_get(rpc);
 		rebuild_in->roi_rebuild_ver = rpt->rt_rebuild_ver;
@@ -260,7 +260,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		}
 
 		if (targets)
-			D__FREE(targets, failed_tgts_cnt * sizeof(*targets));
+			D_FREE(targets);
 
 		if (target_failed) {
 			/* Remote target has failed, no need retry */
@@ -274,13 +274,13 @@ out:
 	if (rpc)
 		crt_req_decref(rpc);
 	if (oids != NULL)
-		D__FREE(oids, sizeof(*oids) * REBUILD_SEND_LIMIT);
+		D_FREE(oids);
 	if (uuids != NULL)
-		D__FREE(uuids, sizeof(*uuids) * REBUILD_SEND_LIMIT);
+		D_FREE(uuids);
 	if (shards != NULL)
-		D__FREE(shards, sizeof(*shards) * REBUILD_SEND_LIMIT);
+		D_FREE(shards);
 	if (arg != NULL)
-		D__FREE_PTR(arg);
+		D_FREE_PTR(arg);
 
 	return rc;
 }
@@ -339,7 +339,7 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 	struct btr_root	*broot;
 	int rc;
 
-	D__ALLOC_PTR(broot);
+	D_ALLOC_PTR(broot);
 	if (broot == NULL)
 		return -DER_NOMEM;
 
@@ -352,23 +352,23 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 				   broot, &root.root_hdl);
 	if (rc) {
 		D_ERROR("failed to create rebuild tree: %d\n", rc);
-		D__FREE_PTR(broot);
-		D__GOTO(out, rc);
+		D_FREE_PTR(broot);
+		D_GOTO(out, rc);
 	}
 
 	daos_iov_set(&key_iov, key, key_size);
 	daos_iov_set(&val_iov, &root, sizeof(root));
 	rc = dbtree_update(toh, &key_iov, &val_iov);
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	daos_iov_set(&val_iov, NULL, 0);
 	rc = dbtree_lookup(toh, &key_iov, &val_iov);
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	*rootp = val_iov.iov_buf;
-	D__ASSERT(*rootp != NULL);
+	D_ASSERT(*rootp != NULL);
 out:
 	if (rc < 0) {
 		if (!daos_handle_is_inval(root.root_hdl))
@@ -408,12 +408,12 @@ rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 	rc = dbtree_lookup(toh, &key_iov, &val_iov);
 	if (rc < 0) {
 		if (rc != -DER_NONEXIST)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 
 		rc = rebuild_uuid_tree_create(toh, co_uuid,
 					      &cont_root);
 		if (rc)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 	} else {
 		cont_root = val_iov.iov_buf;
 	}
@@ -430,7 +430,7 @@ rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 		if (rc < 0) {
 			D_ERROR("failed to insert "DF_UOID": rc %d\n",
 				DP_UOID(oid), rc);
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 		cont_root->count++;
 		D_DEBUG(DB_REBUILD, "update "DF_UOID"/"DF_UUID" in"
@@ -467,7 +467,7 @@ rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 		rc = rebuild_tgt_tree_create(toh, tgt_id, &tgt_root);
 		if (rc) {
 			ABT_mutex_unlock(arg->scan_lock);
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 	} else {
 		tgt_root = val_iov.iov_buf;
@@ -477,14 +477,14 @@ rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 				     oid, shard);
 	ABT_mutex_unlock(arg->scan_lock);
 	if (rc <= 0)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	if (rc == 1) {
 		/* Check if we need send the object list */
 		if (++tgt_root->count >= REBUILD_SEND_LIMIT) {
 			rc = rebuild_objects_send(tgt_root, tgt_id, arg);
 			if (rc < 0)
-				D__GOTO(out, rc);
+				D_GOTO(out, rc);
 		}
 		rc = 0;
 	}
@@ -520,7 +520,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 			D_ERROR(DF_UOID"Cannot find valid placement map"
 				DF_UUID"\n", DP_UOID(oid),
 				DP_UUID(rpt->rt_pool_uuid));
-			D__GOTO(out, rc = -DER_INVAL);
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 
 		poolmap = rebuild_pool_map_get(rpt->rt_pool);
@@ -542,7 +542,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 	rc = pl_obj_find_rebuild(map, &md, NULL, arg->tgp_failed->tg_ver,
 				 &tgt_rebuild, &shard_rebuild);
 	if (rc <= 0) /* No need rebuild */
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
 		" on %d for shard %d\n", DP_UOID(oid), DP_UUID(co_uuid),
@@ -559,7 +559,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 		rc = rebuild_object_insert(arg, tgt_rebuild, shard_rebuild,
 					   rpt->rt_pool_uuid, co_uuid, oid);
 		if (rc)
-			D__GOTO(out, rc);
+			D_GOTO(out, rc);
 	} else {
 		D_DEBUG(DB_REBUILD, "skip "DF_UOID", not send it to its own.\n",
 			DP_UOID(oid));
@@ -623,9 +623,9 @@ rebuild_scan_leader(void *data)
 	int			   i;
 	int			   rc;
 
-	D__ASSERT(arg != NULL);
-	D__ASSERT(arg->failed_ranks);
-	D__ASSERT(!daos_handle_is_inval(arg->rebuild_tree_hdl));
+	D_ASSERT(arg != NULL);
+	D_ASSERT(arg->failed_ranks);
+	D_ASSERT(!daos_handle_is_inval(arg->rebuild_tree_hdl));
 
 	rpt = arg->rpt;
 	/* refresh placement for the server stack */
@@ -635,22 +635,22 @@ rebuild_scan_leader(void *data)
 	rc = pl_map_update(rpt->rt_pool_uuid, map, true);
 	if (rc != 0) {
 		ABT_mutex_unlock(rpt->rt_lock);
-		D__GOTO(out_map, rc = -DER_NOMEM);
+		D_GOTO(out_map, rc = -DER_NOMEM);
 	}
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	/* initialize parameters for scanners */
-	D__ALLOC_PTR(tgp);
+	D_ALLOC_PTR(tgp);
 	if (tgp == NULL)
-		D__GOTO(put_plmap, rc = -DER_NOMEM);
+		D_GOTO(put_plmap, rc = -DER_NOMEM);
 
 	arg->tgp_failed = tgp;
 	tgp->tg_ver = rpt->rt_rebuild_ver;
 	tgp->tg_target_nr = arg->failed_ranks->rl_nr;
 
-	D__ALLOC(tgp->tg_targets, tgp->tg_target_nr * sizeof(*tgp->tg_targets));
+	D_ALLOC(tgp->tg_targets, tgp->tg_target_nr * sizeof(*tgp->tg_targets));
 	if (tgp->tg_targets == NULL)
-		D__GOTO(out_group, rc = -DER_NOMEM);
+		D_GOTO(out_group, rc = -DER_NOMEM);
 
 	for (i = 0; i < arg->failed_ranks->rl_nr; i++) {
 		struct pool_target      *target;
@@ -660,7 +660,7 @@ rebuild_scan_leader(void *data)
 		target = pool_map_find_target_by_rank(map, rank);
 		if (target == NULL) {
 			D_ERROR("Nonexistent target rank=%d\n", rank);
-			D__GOTO(out_group, rc = -DER_NONEXIST);
+			D_GOTO(out_group, rc = -DER_NONEXIST);
 		}
 
 		tgp->tg_targets[i].pt_pos = target - pool_map_targets(map);
@@ -671,7 +671,7 @@ rebuild_scan_leader(void *data)
 
 	rc = dss_thread_collective(rebuild_scanner, &iter_arg);
 	if (rc)
-		D__GOTO(out_group, rc);
+		D_GOTO(out_group, rc);
 
 	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
 		DP_UUID(rpt->rt_pool_uuid));
@@ -681,7 +681,7 @@ rebuild_scan_leader(void *data)
 		rc = dbtree_iterate(arg->rebuild_tree_hdl, false,
 				    rebuild_tgt_iter_cb, arg);
 		if (rc)
-			D__GOTO(out_group, rc);
+			D_GOTO(out_group, rc);
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
@@ -690,17 +690,15 @@ rebuild_scan_leader(void *data)
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
 			DP_UUID(rpt->rt_pool_uuid), rc);
-		D__GOTO(out_group, rc);
+		D_GOTO(out_group, rc);
 	}
 
 	D_DEBUG(DB_REBUILD, DF_UUID" sent objects to initiator %d\n",
 		DP_UUID(rpt->rt_pool_uuid), rc);
-	D_EXIT;
 out_group:
 	if (tgp->tg_targets != NULL)
-		D__FREE(tgp->tg_targets,
-			tgp->tg_target_nr * sizeof(*tgp->tg_targets));
-	D__FREE_PTR(tgp);
+		D_FREE(tgp->tg_targets);
+	D_FREE_PTR(tgp);
 put_plmap:
 	pl_map_disconnect(rpt->rt_pool_uuid);
 out_map:
@@ -713,7 +711,7 @@ out_map:
 		tls->rebuild_pool_status = rc;
 
 	ABT_mutex_free(&arg->scan_lock);
-	D__FREE_PTR(arg);
+	D_FREE_PTR(arg);
 }
 
 /* Scan the local target and generate rebuild object list */
@@ -728,7 +726,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	int				 rc;
 
 	rsi = crt_req_get(rpc);
-	D__ASSERT(rsi != NULL);
+	D_ASSERT(rsi != NULL);
 
 	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d/%d\n",
 		dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
@@ -738,7 +736,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rpt = rebuild_tgt_pool_tracker_lookup(rsi->rsi_pool_uuid,
 					      rsi->rsi_rebuild_ver);
 	if (rpt != NULL) {
-		D__ASSERT(rsi->rsi_rebuild_ver >= rpt->rt_rebuild_ver);
+		D_ASSERT(rsi->rsi_rebuild_ver >= rpt->rt_rebuild_ver);
 
 		/* Delete the left over rpt */
 		if (rsi->rsi_rebuild_ver > rpt->rt_rebuild_ver) {
@@ -750,29 +748,29 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		} else if (rsi->rsi_rebuild_ver == rpt->rt_rebuild_ver) {
 			D_DEBUG(DB_REBUILD, DF_UUID" already started.\n",
 				DP_UUID(rsi->rsi_pool_uuid));
-			D__GOTO(out, rc = 0);
+			D_GOTO(out, rc = 0);
 		}
 	}
 
 	if (daos_fail_check(DAOS_REBUILD_TGT_START_FAIL))
-		D__GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 
 	rc = rebuild_tgt_prepare(rpc, &rpt);
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	rc = dss_ult_create(rebuild_tgt_status_check, rpt, -1, NULL);
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	/* step-1: parameters for scanner */
-	D__ALLOC_PTR(scan_arg);
+	D_ALLOC_PTR(scan_arg);
 	if (scan_arg == NULL)
-		D__GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = ABT_mutex_create(&scan_arg->scan_lock);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D__GOTO(out_arg, rc);
+		D_GOTO(out_arg, rc);
 	}
 
 	/* step-2: Create the btree root for global object scan list */
@@ -782,20 +780,20 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			   &scan_arg->rebuild_tree_hdl);
 	if (rc != 0) {
 		D_ERROR("failed to create rebuild tree: %d\n", rc);
-		D__GOTO(out_lock, rc);
+		D_GOTO(out_lock, rc);
 	}
 
 	rc = daos_rank_list_dup(&scan_arg->failed_ranks, rsi->rsi_tgts_failed);
 	if (rc != 0)
-		D__GOTO(out_tree, rc);
+		D_GOTO(out_tree, rc);
 
 	scan_arg->rpt = rpt;
 	/* step-3: start scann leader */
 	rc = dss_ult_create(rebuild_scan_leader, scan_arg, -1, NULL);
 	if (rc != 0)
-		D__GOTO(out_f_rankfs, rc);
+		D_GOTO(out_f_rankfs, rc);
 
-	D__GOTO(out, rc);
+	D_GOTO(out, rc);
 out_f_rankfs:
 	daos_rank_list_free(scan_arg->failed_ranks);
 out_tree:
@@ -803,7 +801,7 @@ out_tree:
 out_lock:
 	ABT_mutex_free(&scan_arg->scan_lock);
 out_arg:
-	D__FREE_PTR(scan_arg);
+	D_FREE_PTR(scan_arg);
 out:
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;

@@ -162,7 +162,7 @@ credits_init(struct dts_context *tsc)
 
 		if (!daos_handle_is_inval(tsc->tsc_eqh)) {
 			rc = daos_event_init(&cred->tc_ev, tsc->tsc_eqh, NULL);
-			D__ASSERTF(!rc, "rc=%d\n", rc);
+			D_ASSERTF(!rc, "rc=%d\n", rc);
 			cred->tc_evp = &cred->tc_ev;
 		}
 		tsc->tsc_credits[i] = cred;
@@ -175,7 +175,7 @@ credits_fini(struct dts_context *tsc)
 {
 	int	i;
 
-	D__ASSERT(!tsc->tsc_cred_inuse);
+	D_ASSERT(!tsc->tsc_cred_inuse);
 
 	for (i = 0; i < tsc->tsc_cred_nr; i++) {
 		if (!daos_handle_is_inval(tsc->tsc_eqh))
@@ -258,13 +258,13 @@ pool_fini(struct dts_context *tsc)
 	if (tsc->tsc_pmem_file) { /* VOS mode */
 		vos_pool_close(tsc->tsc_poh);
 		rc = vos_pool_destroy(tsc->tsc_pmem_file, tsc->tsc_pool_uuid);
-		D__ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc=%d\n", rc);
+		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc=%d\n", rc);
 
 	} else if (tsc->tsc_mpi_rank == 0) { /* DAOS mode */
 		/* rank 0 does collective close and destroy */
 		daos_pool_disconnect(tsc->tsc_poh, NULL);
 		rc = daos_pool_destroy(tsc->tsc_pool_uuid, NULL, true, NULL);
-		D__ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc=%d\n", rc);
+		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc=%d\n", rc);
 	}
 }
 

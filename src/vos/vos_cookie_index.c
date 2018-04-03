@@ -44,7 +44,7 @@ cookie_hkey_size(struct btr_instance *tins)
 static void
 cookie_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 {
-	D__ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
+	D_ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
 	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
 }
 
@@ -55,8 +55,8 @@ cookie_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	TMMID(struct vos_cookie_rec_df)	vce_rec_mmid;
 	struct vos_cookie_rec_df	*vce_rec;
 
-	D__ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
-	D__ASSERT(val_iov->iov_len == sizeof(daos_epoch_t));
+	D_ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
+	D_ASSERT(val_iov->iov_len == sizeof(daos_epoch_t));
 
 	vce_rec_mmid = umem_znew_typed(&tins->ti_umm, struct vos_cookie_rec_df);
 	if (TMMID_IS_NULL(vce_rec_mmid))
@@ -87,7 +87,7 @@ cookie_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_cookie_rec_df *vce_rec;
 
-	D__ASSERT(val_iov != NULL);
+	D_ASSERT(val_iov != NULL);
 
 	vce_rec = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 	memcpy(val_iov->iov_buf, &vce_rec->cr_max_epoch, sizeof(daos_epoch_t));
@@ -101,7 +101,7 @@ cookie_rec_update(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_cookie_rec_df *vce_rec;
 
-	D__ASSERT(key_iov != NULL && val_iov != NULL);
+	D_ASSERT(key_iov != NULL && val_iov != NULL);
 	vce_rec = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 	/** Update the max epoch */
 	vce_rec->cr_max_epoch	= *(daos_epoch_t *)val_iov->iov_buf;
@@ -137,14 +137,14 @@ vos_cookie_tab_create(struct umem_attr *uma, struct vos_cookie_table *ctab,
 {
 	int	rc;
 
-	D__ASSERT(ctab->cit_btr.tr_class == 0);
+	D_ASSERT(ctab->cit_btr.tr_class == 0);
 	D_DEBUG(DB_MD, "Create cookie tree in-place :%d\n", VOS_BTR_COOKIE);
 
 	rc = dbtree_create_inplace(VOS_BTR_COOKIE, 0, COOKIE_BTREE_ORDER, uma,
 				   &ctab->cit_btr, cookie_handle);
 	if (rc) {
 		D_ERROR("dbtree create failed: %d\n", rc);
-		D__GOTO(exit, rc);
+		D_GOTO(exit, rc);
 	}
 exit:
 	return rc;
@@ -187,19 +187,19 @@ vos_cookie_find_update(daos_handle_t th, uuid_t cookie, daos_epoch_t epoch,
 			DP_UUID(cookie), max_epoch);
 
 		if (!update_flag) /* read-only */
-			D__GOTO(exit, rc);
+			D_GOTO(exit, rc);
 
 		if (epoch <= max_epoch) /* no need to overwrite */
-			D__GOTO(exit, rc);
+			D_GOTO(exit, rc);
 		/* overwrite */
 
 	} else if (rc == -DER_NONEXIST) { /* not found */
 		if (!update_flag)
-			D__GOTO(exit, rc);
+			D_GOTO(exit, rc);
 		/* insert */
 
 	} else { /* other failures */
-		D__GOTO(exit, rc);
+		D_GOTO(exit, rc);
 	}
 
 	/** if not found or max_epoch < epoch, update */

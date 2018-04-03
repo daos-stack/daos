@@ -25,7 +25,6 @@
 #define __DAOS_DEBUG_H__
 
 #include <stdio.h>
-#include <assert.h>
 
 /**
  * predefined debug facilities (subsystems/modules), they have to be declared
@@ -49,10 +48,6 @@ extern int d_tests_logfac;
 
 #include <gurt/debug.h>
 
-/** other debug tunables */
-#define DD_TUNE_ALLOC		"DD_ALLOC"
-extern bool dd_tune_alloc;
-
 /* DAOS-specific debug bits OPT1-10 available */
 #define DB_MD		DB_OPT1	/* metadata operation */
 #define	DB_PL		DB_OPT2	/* placement */
@@ -71,46 +66,12 @@ extern bool dd_tune_alloc;
 #define DF_TIERS	DB_ANY
 #define DF_MISC		DB_ANY
 
-#define D__ASSERTF(cond, fmt, ...)					\
-do {									\
-	if (!(cond)) {							\
-		D_CRIT(fmt, ## __VA_ARGS__);				\
-		fflush(stderr);						\
-	}								\
-	assert(cond);							\
-} while (0)
-
-#define D__ASSERT(cond)		D__ASSERTF(cond, "assertion failure\n")
-
-#define D_CASSERT(cond)                                                 \
-do {switch (1) {case (cond): case 0: break; } } while (0)
-
 #define DAOS_API_ARG_ASSERT(args, name)					\
 do {									\
 	int __opc = DAOS_OPC_##name;					\
-	D__ASSERTF(sizeof(args) == dc_funcs[__opc].arg_size,		\
+	D_ASSERTF(sizeof(args) == dc_funcs[__opc].arg_size,		\
 		  "Argument size %zu != predefiened arg size %zu\n",	\
 		  sizeof(args), dc_funcs[__opc].arg_size);		\
-} while (0)
-
-#define D__GOTO(label, rc)						\
-do {									\
-	typeof(rc) __rc = (rc);						\
-	D_DEBUG(DB_TRACE, "goto %s: %ld\n", #label, (long)__rc);	\
-	goto label;							\
-} while (0)
-
-#define D__RETURN(rc)							\
-do {									\
-	typeof(rc) __rc = (rc);						\
-	D_DEBUG(DB_TRACE, "return: %ld\n", (long)__rc);			\
-	return __rc;							\
-} while (0)
-
-#define D__PRINT(fmt, ...)                                               \
-do {                                                                    \
-	fprintf(stdout, fmt, ## __VA_ARGS__);				\
-	fflush(stdout);							\
 } while (0)
 
 /** initialize the debug system */

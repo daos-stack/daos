@@ -66,19 +66,19 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
 			rc);
-		D__GOTO(err_grp, rc);
+		D_GOTO(err_grp, rc);
 	}
 
-	D__ASSERT(rpc != NULL);
+	D_ASSERT(rpc != NULL);
 	rip_in = crt_req_get(rpc);
-	D__ASSERT(rip_in != NULL);
+	D_ASSERT(rip_in != NULL);
 
 	/** fill in request buffer */
 	rip_in->rip_flags = args->force;
 
 	rc = tse_task_register_comp_cb(task, rip_cp, &rpc, sizeof(rpc));
 	if (rc != 0)
-		D__GOTO(err_rpc, rc);
+		D_GOTO(err_rpc, rc);
 
 	crt_req_addref(rpc); /** for rip_cp */
 	D_DEBUG(DB_MGMT, "killing rank %u\n", args->rank);
@@ -118,12 +118,12 @@ dc_mgmt_params_set(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
 			rc);
-		D__GOTO(err_grp, rc);
+		D_GOTO(err_grp, rc);
 	}
 
-	D__ASSERT(rpc != NULL);
+	D_ASSERT(rpc != NULL);
 	in = crt_req_get(rpc);
-	D__ASSERT(in != NULL);
+	D_ASSERT(in != NULL);
 
 	/** fill in request buffer */
 	in->ps_rank = args->rank;
@@ -132,7 +132,7 @@ dc_mgmt_params_set(tse_task_t *task)
 
 	rc = tse_task_register_comp_cb(task, rip_cp, &rpc, sizeof(rpc));
 	if (rc != 0)
-		D__GOTO(err_rpc, rc);
+		D_GOTO(err_rpc, rc);
 
 	crt_req_addref(rpc); /** for rip_cp */
 	D_DEBUG(DB_MGMT, "set parameter %d/%u/"DF_U64".\n", args->rank,

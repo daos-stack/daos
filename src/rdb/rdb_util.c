@@ -55,8 +55,8 @@ rdb_encode_iov(const daos_iov_t *iov, void *buf)
 {
 	size_t len = sizeof(rdb_iov_size_t) * 2 + iov->iov_len;
 
-	D__ASSERTF(iov->iov_len <= rdb_iov_max, DF_U64"\n", iov->iov_len);
-	D__ASSERTF(iov->iov_buf_len <= rdb_iov_max, DF_U64"\n",
+	D_ASSERTF(iov->iov_len <= rdb_iov_max, DF_U64"\n", iov->iov_len);
+	D_ASSERTF(iov->iov_buf_len <= rdb_iov_max, DF_U64"\n",
 		  iov->iov_buf_len);
 	if (buf != NULL) {
 		void *p = buf;
@@ -70,7 +70,7 @@ rdb_encode_iov(const daos_iov_t *iov, void *buf)
 		/* iov_len (tail) */
 		*(rdb_iov_size_t *)p = iov->iov_len;
 		p += sizeof(rdb_iov_size_t);
-		D__ASSERTF(p - buf == len, "%td == %zu\n", p - buf, len);
+		D_ASSERTF(p - buf == len, "%td == %zu\n", p - buf, len);
 	}
 	return len;
 }

@@ -91,7 +91,7 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 		client->sc_next++;
 		client->sc_next %= client->sc_ranks->rl_nr;
 	}
-	D__ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr, "%d\n",
+	D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr, "%d\n",
 		  chosen);
 	ep->ep_rank = client->sc_ranks->rl_ranks[chosen];
 	ep->ep_tag = 0;
@@ -129,7 +129,7 @@ rsvc_client_process_hint(struct rsvc_client *client,
 {
 	bool found;
 
-	D__ASSERT(hint->sh_flags & RSVC_HINT_VALID);
+	D_ASSERT(hint->sh_flags & RSVC_HINT_VALID);
 
 	if (from_leader && hint->sh_rank != ep->ep_rank) {
 		D_ERROR("empty or invalid hint from leader rank %u: hint.term="
@@ -287,7 +287,7 @@ rsvc_client_buf_swap_ranks(struct rsvc_client_buf *buf)
 {
 	int i;
 
-	D__ASSERT(buf->scb_magic == rsvc_client_buf_magic);
+	D_ASSERT(buf->scb_magic == rsvc_client_buf_magic);
 	for (i = 0; i < buf->scb_nranks; i++)
 		D_SWAP32S(&buf->scb_ranks[i]);
 }

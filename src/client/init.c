@@ -112,51 +112,51 @@ daos_init(void)
 
 	D_MUTEX_LOCK(&module_lock);
 	if (module_initialized)
-		D__GOTO(unlock, rc = -DER_ALREADY);
+		D_GOTO(unlock, rc = -DER_ALREADY);
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
-		D__GOTO(unlock, rc);
+		D_GOTO(unlock, rc);
 
 	/** set up handle hash-table */
 	rc = daos_hhash_init();
 	if (rc != 0)
-		D__GOTO(out_debug, rc);
+		D_GOTO(out_debug, rc);
 
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: %d\n", rc);
-		D__GOTO(out_hhash, rc);
+		D_GOTO(out_hhash, rc);
 	}
 
 	/** set up management interface */
 	rc = dc_mgmt_init();
 	if (rc != 0)
-		D__GOTO(out_eq, rc);
+		D_GOTO(out_eq, rc);
 
 	/** set up pool */
 	rc = dc_pool_init();
 	if (rc != 0)
-		D__GOTO(out_mgmt, rc);
+		D_GOTO(out_mgmt, rc);
 
 	/** set up container */
 	rc = dc_cont_init();
 	if (rc != 0)
-		D__GOTO(out_pool, rc);
+		D_GOTO(out_pool, rc);
 
 	/** set up object */
 	rc = dc_obj_init();
 	if (rc != 0)
-		D__GOTO(out_co, rc);
+		D_GOTO(out_co, rc);
 
 	/** set up tiering */
 	rc = dc_tier_init();
 	if (rc != 0)
-		D__GOTO(out_obj, rc);
+		D_GOTO(out_obj, rc);
 
 	module_initialized = true;
-	D__GOTO(unlock, rc = 0);
+	D_GOTO(unlock, rc = 0);
 out_obj:
 	dc_obj_fini();
 out_co:
@@ -186,13 +186,13 @@ daos_fini(void)
 
 	D_MUTEX_LOCK(&module_lock);
 	if (!module_initialized)
-		D__GOTO(unlock, rc = -DER_UNINIT);
+		D_GOTO(unlock, rc = -DER_UNINIT);
 
 	dc_tier_fini();
 	rc = daos_eq_lib_fini();
 	if (rc != 0) {
 		D_ERROR("failed to finalize eq: %d\n", rc);
-		D__GOTO(unlock, rc);
+		D_GOTO(unlock, rc);
 	}
 
 	dc_obj_fini();

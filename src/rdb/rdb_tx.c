@@ -130,7 +130,7 @@ rdb_tx_end(struct rdb_tx *tx)
 {
 	rdb_put(tx->dt_db);
 	if (tx->dt_entry != NULL)
-		D__FREE(tx->dt_entry, tx->dt_entry_cap);
+		D_FREE(tx->dt_entry);
 }
 
 /* Update operation codes */
@@ -206,10 +206,10 @@ rdb_tx_op_encode(struct rdb_tx_op *op, void *buf)
 			*(struct rdb_kvs_attr *)p = *(op->dto_attr);
 		p += sizeof(struct rdb_kvs_attr);
 	} else {
-		D__ASSERT(op->dto_value.iov_buf == NULL);
-		D__ASSERT(op->dto_value.iov_buf_len == 0);
-		D__ASSERT(op->dto_value.iov_len == 0);
-		D__ASSERT(op->dto_attr == NULL);
+		D_ASSERT(op->dto_value.iov_buf == NULL);
+		D_ASSERT(op->dto_value.iov_buf_len == 0);
+		D_ASSERT(op->dto_value.iov_len == 0);
+		D_ASSERT(op->dto_attr == NULL);
 	}
 	return p - buf;
 }
@@ -273,7 +273,7 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 	size_t	len;
 	int	rc;
 
-	D__ASSERTF((tx->dt_entry == NULL && tx->dt_entry_cap == 0 &&
+	D_ASSERTF((tx->dt_entry == NULL && tx->dt_entry_cap == 0 &&
 		   tx->dt_entry_len == 0) ||
 		  (tx->dt_entry != NULL && tx->dt_entry_cap > 0 &&
 		   tx->dt_entry_len <= tx->dt_entry_cap),
@@ -302,13 +302,13 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 			else
 				new_size *= 2;
 		} while (len > new_size - tx->dt_entry_len);
-		D__ALLOC(new_buf, new_size);
+		D_ALLOC(new_buf, new_size);
 		if (new_buf == NULL)
 			return -DER_NOMEM;
 		if (tx->dt_entry_len > 0)
 			memcpy(new_buf, tx->dt_entry, tx->dt_entry_len);
 		if (tx->dt_entry != NULL)
-			D__FREE(tx->dt_entry, tx->dt_entry_cap);
+			D_FREE(tx->dt_entry);
 		tx->dt_entry = new_buf;
 		tx->dt_entry_cap = new_size;
 	}

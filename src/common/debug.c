@@ -38,9 +38,6 @@
 static int dd_ref;
 static pthread_mutex_t dd_lock = PTHREAD_MUTEX_INITIALIZER;
 
-/** DAOS debug tunables */
-bool dd_tune_alloc = false;	/* disabled */
-
 #define DECLARE_FAC(name)	int DD_FAC(name)
 /** predefined log facilities */
 DECLARE_FAC(null);
@@ -214,19 +211,6 @@ debug_mask_load_env(void)
 	return dd_mask;
 }
 
-/** loading misc debug tunables */
-static void
-debug_tunables_load_env(void)
-{
-	char	*tune_alloc;
-
-	tune_alloc = getenv(DD_TUNE_ALLOC);
-	if (tune_alloc == NULL)
-		return;
-
-	dd_tune_alloc = !!atoi(tune_alloc);
-}
-
 static int
 debug_fac_register(struct daos_debug_fac *dfac)
 {
@@ -279,7 +263,6 @@ daos_debug_init(char *logfile)
 	dd_mask = debug_mask_load_env();
 	/* load other env variables */
 	debug_fac_load_env();
-	debug_tunables_load_env();
 
 	rc = d_log_init_adv("DAOS", logfile, DLOG_FLV_LOGPID,
 			    DLOG_INFO, DLOG_CRIT);

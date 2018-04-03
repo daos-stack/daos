@@ -74,7 +74,7 @@ rdb_proc_msg_entry_t(crt_proc_t proc, void *data)
 		return -DER_HG;
 	if (proc_op == CRT_PROC_DECODE) {
 		if (e->data.len > 0) {
-			D__ALLOC(e->data.buf, e->data.len);
+			D_ALLOC(e->data.buf, e->data.len);
 			if (e->data.buf == NULL)
 				return -DER_NOMEM;
 		} else {
@@ -85,12 +85,12 @@ rdb_proc_msg_entry_t(crt_proc_t proc, void *data)
 		rc = crt_proc_memcpy(proc, e->data.buf, e->data.len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D__FREE(e->data.buf, e->data.len);
+				D_FREE(e->data.buf);
 			return -DER_HG;
 		}
 	}
 	if (proc_op == CRT_PROC_FREE && e->data.buf != NULL)
-		D__FREE(e->data.buf, e->data.len);
+		D_FREE(e->data.buf);
 	return 0;
 }
 
@@ -122,7 +122,7 @@ rdb_proc_msg_appendentries_t(crt_proc_t proc, void *data)
 		return -DER_HG;
 	if (proc_op == CRT_PROC_DECODE) {
 		if (ae->n_entries > 0) {
-			D__ALLOC(ae->entries,
+			D_ALLOC(ae->entries,
 				sizeof(*ae->entries) * ae->n_entries);
 			if (ae->entries == NULL)
 				return -DER_NOMEM;
@@ -134,13 +134,12 @@ rdb_proc_msg_appendentries_t(crt_proc_t proc, void *data)
 		rc = rdb_proc_msg_entry_t(proc, &ae->entries[i]);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D__FREE(ae->entries,
-				       sizeof(*ae->entries) * ae->n_entries);
+				D_FREE(ae->entries);
 			return -DER_HG;
 		}
 	}
 	if (proc_op == CRT_PROC_FREE && ae->entries != NULL)
-		D__FREE(ae->entries, sizeof(*ae->entries) * ae->n_entries);
+		D_FREE(ae->entries);
 	return 0;
 }
 
@@ -267,7 +266,7 @@ rdb_alloc_raft_rpc(struct rdb *db, crt_rpc_t *rpc, raft_node_t *node)
 {
 	struct rdb_raft_rpc *rrpc;
 
-	D__ALLOC_PTR(rrpc);
+	D_ALLOC_PTR(rrpc);
 	if (rrpc == NULL)
 		return NULL;
 	D_INIT_LIST_HEAD(&rrpc->drc_entry);
@@ -284,8 +283,8 @@ rdb_free_raft_rpc(struct rdb_raft_rpc *rrpc)
 {
 	rdb_put(rrpc->drc_db);
 	crt_req_decref(rrpc->drc_rpc);
-	D__ASSERT(d_list_empty(&rrpc->drc_entry));
-	D__FREE_PTR(rrpc);
+	D_ASSERT(d_list_empty(&rrpc->drc_entry));
+	D_FREE_PTR(rrpc);
 }
 
 /* Daemon ULT for processing RPC replies */
@@ -315,7 +314,7 @@ rdb_recvd(void *arg)
 		}
 		ABT_mutex_unlock(db->d_mutex);
 		if (rrpc == NULL) {
-			D__ASSERT(stop);
+			D_ASSERT(stop);
 			/* The queue is empty and we are asked to stop. */
 			break;
 		}
@@ -393,12 +392,12 @@ rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node)
 		timeout = timeout_min;
 #if 0
 	rc = crt_req_set_timeout(rpc, timeout);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 #endif
 	rrpc->drc_sent = ABT_get_wtime();
 
 	rc = crt_req_send(rpc, rdb_raft_rpc_cb, rrpc);
-	D__ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	return 0;
 }
 

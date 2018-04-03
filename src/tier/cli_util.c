@@ -35,7 +35,7 @@ setup_1_tier(daos_tier_info_t **ppt, const uuid_t uuid, const char *grp)
 	daos_tier_info_t *pt = *ppt;
 
 	if (pt == NULL) {
-		D__ALLOC_PTR(pt);
+		D_ALLOC_PTR(pt);
 		*ppt = pt;
 	}
 	if (pt) {
@@ -43,7 +43,7 @@ setup_1_tier(daos_tier_info_t **ppt, const uuid_t uuid, const char *grp)
 
 		pt->ti_leader = 0;
 
-		D__ALLOC(p, strlen(grp) + 1);
+		D_ALLOC(p, strlen(grp) + 1);
 		if (p != NULL) {
 			strcpy(p, grp);
 			pt->ti_group_id = p;
@@ -53,7 +53,7 @@ setup_1_tier(daos_tier_info_t **ppt, const uuid_t uuid, const char *grp)
 			D_DEBUG(DF_TIERS, "pool ID:"DF_UUIDF"\n",
 				DP_UUID(pt->ti_pool_id));
 		} else {
-			D__FREE(pt, sizeof(*pt));
+			D_FREE(pt);
 			pt = NULL;
 			*ppt = pt;
 		}
@@ -68,8 +68,8 @@ tier_teardown_one(daos_tier_info_t **ptier)
 
 	if (tier != NULL) {
 		daos_group_detach(tier->ti_group);
-		D__FREE(tier->ti_group_id, strlen(tier->ti_group_id));
-		D__FREE_PTR(tier);
+		D_FREE(tier->ti_group_id);
+		D_FREE_PTR(tier);
 		*ptier = NULL;
 	}
 }

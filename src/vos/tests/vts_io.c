@@ -233,22 +233,22 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		if (arg->cookie_flag) {
 			assert_true(is_found(ent.ie_cookie));
 			if (print_ent)
-				D__PRINT("Cookie : %s\n",
+				D_PRINT("Cookie : %s\n",
 					DP_UUID(ent.ie_cookie));
 		}
 
 		nr++;
 		if (print_ent) {
 			if (nr == 1) {
-				D__PRINT("akey[%d]: %s\n", akey_id,
+				D_PRINT("akey[%d]: %s\n", akey_id,
 					(char *)param->ip_akey.iov_buf);
 			}
 
-			D__PRINT("\trecx %u : %s\n",
+			D_PRINT("\trecx %u : %s\n",
 				(unsigned int)ent.ie_recx.rx_idx,
 				ent.ie_iov.iov_len == 0 ?
 				"[NULL]" : (char *)ent.ie_iov.iov_buf);
-			D__PRINT("\tepoch: "DF_U64"\n",
+			D_PRINT("\tepoch: "DF_U64"\n",
 				ent.ie_epr.epr_lo);
 		}
 
@@ -297,7 +297,7 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		}
 
 		if (print_ent && nr == 0) {
-			D__PRINT("dkey[%d]: %s\n", dkey_id,
+			D_PRINT("dkey[%d]: %s\n", dkey_id,
 				(char *)param->ip_dkey.iov_buf);
 		}
 

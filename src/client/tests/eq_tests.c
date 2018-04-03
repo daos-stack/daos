@@ -81,18 +81,18 @@ eq_test_1()
 	}
 
 	rc = daos_event_init(&ev, eqh, NULL);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	rc = daos_event_launch(&ev);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	daos_event_complete(&ev, 0);
 
 	rc = daos_event_init(&abort_ev, eqh, NULL);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	rc = daos_event_launch(&abort_ev);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	daos_event_abort(&abort_ev);
 
@@ -242,7 +242,7 @@ eq_test_3()
 
 	D_ERROR("Initialize parent event\n");
 	rc = daos_event_init(&event, my_eqh, NULL);
-	D__ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	D_ERROR("Initialize & launch child events");
 	for (i = 0; i < EQT_EV_COUNT; i++) {

@@ -48,7 +48,7 @@ dss_register_key(struct dss_module_key *key)
 		}
 	}
 	D_MUTEX_UNLOCK(&dss_module_keys_lock);
-	D__ASSERT(i < DAOS_MODULE_KEYS_NR);
+	D_ASSERT(i < DAOS_MODULE_KEYS_NR);
 }
 
 void
@@ -56,8 +56,8 @@ dss_unregister_key(struct dss_module_key *key)
 {
 	if (key == NULL)
 		return;
-	D__ASSERT(key->dmk_index >= 0);
-	D__ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
+	D_ASSERT(key->dmk_index >= 0);
+	D_ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
 	D_MUTEX_LOCK(&dss_module_keys_lock);
 	dss_module_keys[key->dmk_index] = NULL;
 	D_MUTEX_UNLOCK(&dss_module_keys_lock);
@@ -79,7 +79,7 @@ dss_thread_local_storage_init(struct dss_thread_local_storage *dtls)
 	int i;
 
 	if (dtls->dtls_values == NULL) {
-		D__ALLOC(dtls->dtls_values, ARRAY_SIZE(dss_module_keys) *
+		D_ALLOC(dtls->dtls_values, ARRAY_SIZE(dss_module_keys) *
 					 sizeof(dtls->dtls_values[0]));
 		if (dtls->dtls_values == NULL)
 			return -DER_NOMEM;
@@ -89,7 +89,7 @@ dss_thread_local_storage_init(struct dss_thread_local_storage *dtls)
 		struct dss_module_key *dmk = dss_module_keys[i];
 
 		if (dmk != NULL && dtls->dtls_tag & dmk->dmk_tags) {
-			D__ASSERT(dmk->dmk_init != NULL);
+			D_ASSERT(dmk->dmk_init != NULL);
 			dtls->dtls_values[i] = dmk->dmk_init(dtls, dmk);
 			if (dtls->dtls_values[i] == NULL) {
 				rc = -DER_NOMEM;
@@ -116,15 +116,14 @@ dss_thread_local_storage_fini(struct dss_thread_local_storage *dtls)
 			struct dss_module_key *dmk = dss_module_keys[i];
 
 			if (dmk != NULL && dtls->dtls_tag & dmk->dmk_tags) {
-				D__ASSERT(dtls->dtls_values[i] != NULL);
-				D__ASSERT(dmk->dmk_fini != NULL);
+				D_ASSERT(dtls->dtls_values[i] != NULL);
+				D_ASSERT(dmk->dmk_fini != NULL);
 				dmk->dmk_fini(dtls, dmk, dtls->dtls_values[i]);
 			}
 		}
 	}
 
-	D__FREE(dtls->dtls_values,
-	       ARRAY_SIZE(dss_module_keys) * sizeof(dtls->dtls_values[0]));
+	D_FREE(dtls->dtls_values);
 }
 
 pthread_key_t dss_tls_key;
@@ -140,14 +139,14 @@ dss_tls_init(int tag)
 	struct dss_thread_local_storage *dtls;
 	int		 rc;
 
-	D__ALLOC_PTR(dtls);
+	D_ALLOC_PTR(dtls);
 	if (dtls == NULL)
 		return NULL;
 
 	dtls->dtls_tag = tag;
 	rc = dss_thread_local_storage_init(dtls);
 	if (rc != 0) {
-		D__FREE_PTR(dtls);
+		D_FREE_PTR(dtls);
 		return NULL;
 	}
 
@@ -155,7 +154,7 @@ dss_tls_init(int tag)
 	if (rc) {
 		D_ERROR("failed to initialize tls: %d\n", rc);
 		dss_thread_local_storage_fini(dtls);
-		D__FREE_PTR(dtls);
+		D_FREE_PTR(dtls);
 		return NULL;
 	}
 
@@ -167,5 +166,5 @@ void
 dss_tls_fini(struct dss_thread_local_storage *dtls)
 {
 	dss_thread_local_storage_fini(dtls);
-	D__FREE_PTR(dtls);
+	D_FREE_PTR(dtls);
 }

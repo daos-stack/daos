@@ -115,7 +115,7 @@ poh_bcast(crt_context_t *ctx, const uuid_t pool_id, int hdl_type,
 	rc = ds_tier_bcast_create(ctx, pool_id, TIER_BCAST_HDL, &rpc);
 	if (rc) {
 		D_ERROR("ds_tier_bcast_create returned %d\n", rc);
-		D__GOTO(out_nofree, rc);
+		D_GOTO(out_nofree, rc);
 	}
 
 	/*Get global token handle, set it to null so we get the handle size*/
@@ -123,7 +123,7 @@ poh_bcast(crt_context_t *ctx, const uuid_t pool_id, int hdl_type,
 
 	/*First get size, then allocate buffer and try again to get handle*/
 	daos_pool_local2global(poh, &global_hdl);
-	D__ALLOC(glob_buf, global_hdl.iov_buf_len);
+	D_ALLOC(glob_buf, global_hdl.iov_buf_len);
 	global_hdl.iov_len = global_hdl.iov_buf_len;
 	global_hdl.iov_buf = glob_buf;
 
@@ -137,14 +137,14 @@ poh_bcast(crt_context_t *ctx, const uuid_t pool_id, int hdl_type,
 	rc = dss_rpc_send(rpc);
 
 	if (rc)
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 
 	b_out = crt_reply_get(rpc);
 	rc = b_out->hbo_ret;
 	D_DEBUG(DF_TIERS, "Pool handle broadcast resp: %d", b_out->hbo_ret);
 
 out:
-	D__FREE(glob_buf, global_hdl.iov_buf_len);
+	D_FREE(glob_buf);
 out_nofree:
 	return rc;
 }
@@ -174,17 +174,17 @@ tier_upstream(uuid_t warm_id, char *warm_grp, uuid_t cold_id,
 	struct upstream_arg		*cb_arg;
 
 	/* NOTE freed by callback infrastructure*/
-	D__ALLOC_PTR(cb_arg);
+	D_ALLOC_PTR(cb_arg);
 	if (cb_arg == NULL) {
 		rc = DER_NOMEM;
-		D__GOTO(no_cleanup_err, rc);
+		D_GOTO(no_cleanup_err, rc);
 	}
 
 
-	D__ALLOC(tgt_grp, sizeof(crt_group_t));
+	D_ALLOC(tgt_grp, sizeof(crt_group_t));
 	if (tgt_grp == NULL) {
 		rc = DER_NOMEM;
-		D__GOTO(no_cleanup_err, rc);
+		D_GOTO(no_cleanup_err, rc);
 	}
 
 
@@ -195,7 +195,7 @@ tier_upstream(uuid_t warm_id, char *warm_grp, uuid_t cold_id,
 
 	if (rc != 0) {
 		D_ERROR("Error attaching group: %d\n", rc);
-		D__GOTO(no_cleanup_err, rc);
+		D_GOTO(no_cleanup_err, rc);
 	}
 
 	cold_tgt.ep_grp = tgt_grp;
@@ -208,13 +208,13 @@ tier_upstream(uuid_t warm_id, char *warm_grp, uuid_t cold_id,
 	if (rc != 0) {
 		D_ERROR("crt_req_create(TIER_UPSTREAM_CONN) failed, rc: %d.\n",
 			rc);
-		D__GOTO(no_cleanup_err, rc);
+		D_GOTO(no_cleanup_err, rc);
 	}
 
 	/*Verifying Request is	there.*/
-	D__ASSERT(rpc_req != NULL);
+	D_ASSERT(rpc_req != NULL);
 	ui_in = crt_req_get(rpc_req);
-	D__ASSERT(ui_in != NULL);
+	D_ASSERT(ui_in != NULL);
 
 	/*Load up the RPC inputs*/
 	uuid_copy(ui_in->ui_warm_id, warm_id);
@@ -230,7 +230,7 @@ tier_upstream(uuid_t warm_id, char *warm_grp, uuid_t cold_id,
 				       sizeof(struct upstream_arg));
 	if (rc) {
 		D_ERROR("Callback registration failed: %d", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/*Send the RPC*/
@@ -240,7 +240,7 @@ out:
 	/*Decrement ref count since callback never triggers if we got here*/
 	crt_req_decref(cb_arg->rpc);
 	/*Free CB arg since it will not be freed via task completions*/
-	D__FREE_PTR(cb_arg);
+	D_FREE_PTR(cb_arg);
 	return rc;
 no_cleanup_err:
 	return rc;
@@ -279,21 +279,21 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 		       in->cci_warm_grp, DP_UUID(in->cci_warm_id));
 
 		out->cco_ret = -NO_COLDER;
-		D__GOTO(no_conn_out, rc);
+		D_GOTO(no_conn_out, rc);
 	}
 
 	/*Note: this naively assumes all servers are or are not connected*/
 	if (colder_conn_flg == true) {
 		D_WARN("Downstream (colder) tier connection already made!\n");
 		out->cco_ret = -ALREADY_CONN_COLD;
-		D__GOTO(no_conn_out, rc);
+		D_GOTO(no_conn_out, rc);
 	}
 
 	/*Initialize the event queue*/
 	rc = daos_eq_create(&cross_conn_eqh);
 	if (rc) {
 		D_ERROR("Failed to Create Event Queue:%d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/* Copying uuid over, in this case the warm ID actually the pool
@@ -304,7 +304,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	uuid_copy(self_pool_id, in->cci_warm_id);
 	if (in->cci_warm_grp != NULL) {
 		buf_len = strlen((char *)in->cci_warm_grp) + 1;
-		D__ALLOC(self_srv_grp, buf_len);
+		D_ALLOC(self_srv_grp, buf_len);
 		strcpy(self_srv_grp, in->cci_warm_grp);
 	} else {
 		self_srv_grp = NULL;
@@ -315,19 +315,19 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	rc = daos_event_init(&downstream_ev, cross_conn_eqh, NULL);
 	if (rc) {
 		D_ERROR("Downstream event init failure: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = daos_event_init(&upstream_ev, cross_conn_eqh, NULL);
 	if (rc) {
 		D_ERROR("Upstream event init failure: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = daos_event_init(&this_ev, cross_conn_eqh, NULL);
 	if (rc) {
 		D_ERROR("Upstream event init failure: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/*Initialize tasks affiliated with downstream event*/
@@ -335,7 +335,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 			    &downstream_task);
 	if (rc) {
 		D_ERROR("Client Task prep failure: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	pc_args = dc_task_get_args(downstream_task);
@@ -352,7 +352,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	rc = daos_event_test(&downstream_ev, DAOS_EQ_WAIT, &ev_flag);
 	if (rc) {
 		D_ERROR("Error waiting for downstream event complete:%d", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 	daos_event_fini(&downstream_ev);
 
@@ -360,7 +360,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	rc = poh_bcast(rpc->cr_ctx, self_pool_id, COLDER, colder_poh);
 	if (rc) {
 		D_ERROR("Cold Handle Broadcast Error: %d\n", rc);
-		D__GOTO(out, -HANDLE_BCAST_ERR);
+		D_GOTO(out, -HANDLE_BCAST_ERR);
 	}
 
 	D_DEBUG(DF_TIERS, "Connect to Colder Tier Group: %s, ID:"DF_UUIDF"\n",
@@ -370,7 +370,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	 rc = dc_task_create(dc_pool_connect, NULL, &this_ev, &this_task);
 	if (rc) {
 		D_ERROR("Client Task prep failure: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	pc_args = dc_task_get_args(this_task);
@@ -386,7 +386,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	rc = daos_event_test(&this_ev, DAOS_EQ_WAIT, &ev_flag);
 	if (rc) {
 		D_ERROR("Error waiting for local event complete:%d", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 	daos_event_fini(&this_ev);
 
@@ -394,7 +394,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	rc = poh_bcast(rpc->cr_ctx, self_pool_id, THIS, this_poh);
 	if (rc) {
 		D_ERROR("Local Handle Broadcast Error: %d\n", rc);
-		D__GOTO(out, HANDLE_BCAST_ERR);
+		D_GOTO(out, HANDLE_BCAST_ERR);
 	}
 
 	D_DEBUG(DF_TIERS, "Connect to Local Tier Group: %s, ID:"DF_UUIDF"\n",
@@ -406,7 +406,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	rc = dc_task_create(NULL, NULL, &upstream_ev, &upstream_task);
 	if (rc) {
 		D_ERROR("Client Task Prep Error for Upstream Task: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/* XXX this is a hack and can't work anymore */
@@ -417,13 +417,13 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	*/
 	if (rc) {
 		D_ERROR("Error from dc_tier_upstream call: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = daos_event_test(&upstream_ev, DAOS_EQ_WAIT, &ev_flag);
 	if (rc) {
 		D_ERROR("Error waiting for upstream conn event: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = upstream_ev.ev_error;
@@ -441,7 +441,7 @@ out:
 	daos_eq_destroy(cross_conn_eqh, 0);
 	D_DEBUG(DF_TIERS, "Leaving ds_ct_hdlr_cross_conn...\n");
 	if (self_srv_grp != NULL)
-		D__FREE(self_srv_grp, buf_len);
+		D_FREE(self_srv_grp);
 	return;
 /* Used for when no connection is being set up
  * e.g. no colder tier, or already exists, return code already set in RPC
@@ -468,7 +468,7 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 		crt_group_t *grp;
 		uint32_t     grpsz;
 
-		D__ALLOC(warmer_grp, 32);
+		D_ALLOC(warmer_grp, 32);
 		strcpy(warmer_grp, in->ui_warm_grp);
 		grp = crt_group_lookup(warmer_grp);
 		if (grp) {
@@ -488,7 +488,7 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 	rc = daos_eq_create(&upstream_eqh);
 	if (rc) {
 		D_ERROR("Failed to create event queue:%d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 
@@ -496,13 +496,13 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 	rc = daos_event_init(&conn_ev, upstream_eqh, NULL);
 	if (rc) {
 		D_ERROR("Event init failure:%d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = dc_task_create(dc_pool_connect, NULL, &conn_ev, &upstream_task);
 	if (rc) {
 		D_ERROR("Client Task Prep Error: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	pc_args = dc_task_get_args(upstream_task);
@@ -518,7 +518,7 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 	rc = daos_event_test(&conn_ev, DAOS_EQ_WAIT, &ev_flag);
 	if (rc) {
 		D_ERROR("Error waiting for upstream conn event: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_INFO("Tier: %s upstream connect to pool: "DF_UUIDF"\n",
@@ -528,7 +528,7 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 	rc = daos_event_test(&conn_ev, DAOS_EQ_WAIT, &ev_flag);
 	if (rc) {
 		D_ERROR("Daos Event Test Error: %d\n", rc);
-		D__GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	pool = dc_hdl2pool(warmer_poh);
@@ -561,7 +561,7 @@ ds_tier_register_cold_handler(crt_rpc_t *rpc)
 		uint32_t     grpsz;
 
 		uuid_copy(colder_id, in->rci_colder_id);
-		D__ALLOC(colder_grp, 32);
+		D_ALLOC(colder_grp, 32);
 		strcpy(colder_grp, in->rci_colder_grp);
 		out->rco_ret = 0;
 		grp = crt_group_lookup(colder_grp);

@@ -53,7 +53,7 @@ umem_class_id_t	vos_mem_class	 = UMEM_CLASS_PMEM;
 static struct vos_pool *
 pool_hlink2ptr(struct d_ulink *hlink)
 {
-	D__ASSERT(hlink != NULL);
+	D_ASSERT(hlink != NULL);
 	return container_of(hlink, struct vos_pool, vp_hlink);
 }
 
@@ -62,7 +62,7 @@ pool_hop_free(struct d_ulink *hlink)
 {
 	struct vos_pool	*pool = pool_hlink2ptr(hlink);
 
-	D__ASSERT(pool->vp_opened == 0);
+	D_ASSERT(pool->vp_opened == 0);
 
 	if (!daos_handle_is_inval(pool->vp_cookie_th))
 		vos_cookie_tab_destroy(pool->vp_cookie_th);
@@ -73,7 +73,7 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_uma.uma_u.pmem_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_u.pmem_pool);
 
-	D__FREE_PTR(pool);
+	D_FREE_PTR(pool);
 }
 
 static struct d_ulink_ops   pool_uuid_hops = {
@@ -88,7 +88,7 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 	struct umem_attr	 uma;
 	int			 rc;
 
-	D__ALLOC_PTR(pool);
+	D_ALLOC_PTR(pool);
 	if (pool == NULL)
 		return -DER_NOMEM;
 
@@ -102,7 +102,7 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 				    &pool->vp_cookie_th);
 	if (rc != 0) {
 		D_ERROR("Cookie tree create failed: %d\n", rc);
-		D__GOTO(failed, rc);
+		D_GOTO(failed, rc);
 	}
 	*pool_p = pool;
 	return 0;
@@ -120,7 +120,7 @@ pool_link(struct vos_pool *pool, struct d_uuid *ukey, daos_handle_t *poh)
 				 &pool->vp_hlink);
 	if (rc) {
 		D_ERROR("uuid hash table insert failed: %d\n", rc);
-		D__GOTO(failed, rc);
+		D_GOTO(failed, rc);
 	}
 	*poh = vos_pool2hdl(pool);
 	return 0;
@@ -220,7 +220,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 	} TX_END
 
 	if (rc != 0)
-		D__GOTO(exit, rc);
+		D_GOTO(exit, rc);
 exit:
 	/* Close this local handle, opened using pool_open */
 	vos_pmemobj_close(ph);
@@ -246,7 +246,7 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	if (rc == 0) {
 		D_ERROR("Open reference exists, cannot destroy pool\n");
 		vos_pool_decref(pool);
-		D__GOTO(exit, rc = -DER_BUSY);
+		D_GOTO(exit, rc = -DER_BUSY);
 	}
 
 	D_DEBUG(DB_MGMT, "No open handles. OK to destroy\n");
@@ -262,14 +262,14 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 		fd = open(path, O_RDWR);
 		if (fd < 0) {
 			D_ERROR("Failed to open %s\n", path);
-			D__GOTO(exit, rc = fd);
+			D_GOTO(exit, rc = fd);
 		}
 
 		addr = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 		if (addr == MAP_FAILED) {
 			close(fd);
 			D_ERROR("Failed to mmap %s, len:%d\n", path, len);
-			D__GOTO(exit, rc = -errno);
+			D_GOTO(exit, rc = -errno);
 		}
 		memset((char *)addr, 0, len);
 
@@ -333,21 +333,21 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 				   POBJ_LAYOUT_NAME(vos_pool_layout));
 	if (uma->uma_u.pmem_pool == NULL) {
 		D_ERROR("Error in opening the pool: %s\n", pmemobj_errormsg());
-		D__GOTO(failed, rc = -DER_NO_HDL);
+		D_GOTO(failed, rc = -DER_NO_HDL);
 	}
 
 	/* initialize a umem instance for later btree operations */
 	rc = umem_class_init(uma, &pool->vp_umm);
 	if (rc != 0) {
 		D_ERROR("Failed to instantiate umem: %d\n", rc);
-		D__GOTO(failed, rc);
+		D_GOTO(failed, rc);
 	}
 
 	pool_df = vos_pool_ptr2df(pool);
 	if (uuid_compare(uuid, pool_df->pd_id)) {
 		D_ERROR("Mismatch uuid, user="DF_UUID", pool="DF_UUID"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
-		D__GOTO(failed, rc = -DER_IO);
+		D_GOTO(failed, rc = -DER_IO);
 	}
 
 	/* Cache container table btree hdl */
@@ -355,14 +355,14 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 				 &pool->vp_uma, &pool->vp_cont_th);
 	if (rc) {
 		D_ERROR("Container Tree open failed\n");
-		D__GOTO(failed, rc);
+		D_GOTO(failed, rc);
 	}
 
 	/* Insert the opened pool to the uuid hash table */
 	rc = pool_link(pool, &ukey, poh);
 	if (rc) {
 		D_ERROR("Error inserting into vos DRAM hash\n");
-		D__GOTO(failed, rc);
+		D_GOTO(failed, rc);
 	}
 
 	pool->vp_opened = 1;
@@ -389,7 +389,7 @@ vos_pool_close(daos_handle_t poh)
 	D_DEBUG(DB_MGMT, "Close opened(%d) pool "DF_UUID" (%p).\n",
 		pool->vp_opened, DP_UUID(pool->vp_id), pool);
 
-	D__ASSERT(pool->vp_opened > 0);
+	D_ASSERT(pool->vp_opened > 0);
 	pool->vp_opened--;
 	if (pool->vp_opened == 0)
 		pool_unlink(pool);

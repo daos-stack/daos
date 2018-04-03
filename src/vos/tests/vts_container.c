@@ -104,7 +104,7 @@ co_ops_run(void **state)
 				assert_int_equal(ret, 0);
 		}
 	}
-	D__PRINT("Finished all create and discards\n");
+	D_PRINT("Finished all create and discards\n");
 }
 
 static int
@@ -359,7 +359,7 @@ cookie_uhash_free(struct d_ulink *uhlink)
 	struct cookie_entry	*entry;
 
 	entry = container_of(uhlink, struct cookie_entry, ulink);
-	D__FREE_PTR(entry);
+	D_FREE_PTR(entry);
 }
 
 struct d_ulink_ops	cookie_uh_ops = {
@@ -382,10 +382,10 @@ cookie_table_test(void **state)
 	struct d_hash_table		*uhtab = NULL;
 	struct d_ulink			*l_ulink = NULL;
 
-	D__ALLOC_PTR(itab);
-	D__ALLOC(cookie_array, VCT_COOKIES * sizeof(struct d_uuid));
-	D__ALLOC(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
-	D__ALLOC(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
+	D_ALLOC_PTR(itab);
+	D_ALLOC(cookie_array, VCT_COOKIES * sizeof(struct d_uuid));
+	D_ALLOC(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
+	D_ALLOC(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
 
 	ret = d_uhash_create(0, 8, &uhtab);
 	if (ret != 0)
@@ -444,10 +444,10 @@ cookie_table_test(void **state)
 	ret = vos_cookie_tab_destroy(cookie_hdl);
 	if (ret != 0)
 		D_ERROR("Cookie itab destroy error\n");
-	D__FREE_PTR(itab);
-	D__FREE(cookie_array, VCT_COOKIES * sizeof(struct d_uuid));
-	D__FREE(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
-	D__FREE(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
+	D_FREE_PTR(itab);
+	D_FREE(cookie_array);
+	D_FREE(cookie_entries);
+	D_FREE(epochs);
 }
 
 static int

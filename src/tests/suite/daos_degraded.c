@@ -145,13 +145,13 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (i = 0; i < g_dkeys; i++) {
-		D__ALLOC(dkey[i], strlen(dkey_fmt) + g_dkeys_strlen + 1);
+		D_ALLOC(dkey[i], strlen(dkey_fmt) + g_dkeys_strlen + 1);
 		assert_non_null(dkey[i]);
 		sprintf(dkey[i], dkey_fmt, i);
-		D__ALLOC(rec[i], strlen(val_fmt) + g_dkeys_strlen + 1);
+		D_ALLOC(rec[i], strlen(val_fmt) + g_dkeys_strlen + 1);
 		assert_non_null(rec[i]);
 		offset[i] = i * 20;
-		D__ALLOC(val[i], 64);
+		D_ALLOC(val[i], 64);
 		assert_non_null(val[i]);
 		val_size[i] = 64;
 	}
@@ -185,7 +185,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		print_message("insertion done\nNow looking up %d keys ...\n",
 			      g_dkeys * size);
 
-	D__ALLOC(rec_verify, strlen(val_fmt) + g_dkeys_strlen + 1);
+	D_ALLOC(rec_verify, strlen(val_fmt) + g_dkeys_strlen + 1);
 
 	for (i = 0; i < g_dkeys; i++) {
 		sprintf(rec_verify, val_fmt, i);
@@ -216,8 +216,8 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 			      g_dkeys * size);
 
 	memset(&hash_out, 0, sizeof(hash_out));
-	D__ALLOC(buf, 512);
-	D__ALLOC(dkey_enum, strlen(dkey_fmt) + g_dkeys_strlen + 1);
+	D_ALLOC(buf, 512);
+	D_ALLOC(dkey_enum, strlen(dkey_fmt) + g_dkeys_strlen + 1);
 
 	/** enumerate records */
 	for (number = 5, key_nr = 0; !daos_hash_is_eof(&hash_out);
@@ -261,12 +261,12 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	ioreq_fini(&req);
 
 	for (i = 0; i < g_dkeys; i++) {
-		D__FREE(val[i], 64);
-		D__FREE(dkey[i], strlen(dkey_fmt) + g_dkeys_strlen + 1);
-		D__FREE(rec[i], strlen(val_fmt) + g_dkeys_strlen + 1);
+		D_FREE(val[i]);
+		D_FREE(dkey[i]);
+		D_FREE(rec[i]);
 	}
-	D__FREE(buf, 512);
-	D__FREE(dkey_enum,  strlen(dkey_fmt) + g_dkeys_strlen + 1);
+	D_FREE(buf);
+	D_FREE(dkey_enum);
 }
 
 static void

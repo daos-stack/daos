@@ -78,7 +78,7 @@ dss_sched_init(ABT_sched sched, ABT_sched_config config)
 	struct sched_data	*p_data;
 	int			 ret;
 
-	D__ALLOC_PTR(p_data);
+	D_ALLOC_PTR(p_data);
 	if (p_data == NULL)
 		return ABT_ERR_MEM;
 
@@ -191,7 +191,7 @@ dss_sched_free(ABT_sched sched)
 	struct sched_data *p_data;
 
 	ABT_sched_get_data(sched, (void **)&p_data);
-	D__FREE_PTR(p_data);
+	D_FREE_PTR(p_data);
 
 	return ABT_SUCCESS;
 }
@@ -246,7 +246,7 @@ void
 dss_abt_pool_choose_cb_register(unsigned int mod_id,
 				dss_abt_pool_choose_cb_t cb)
 {
-	D__ASSERT(abt_pool_choose_cbs[mod_id] == NULL);
+	D_ASSERT(abt_pool_choose_cbs[mod_id] == NULL);
 	abt_pool_choose_cbs[mod_id] = cb;
 }
 
@@ -305,7 +305,7 @@ dss_srv_handler(void *arg)
 	}
 
 	dmi = dss_get_module_info();
-	D__ASSERT(dmi != NULL);
+	D_ASSERT(dmi != NULL);
 
 	/* create private transport context */
 	rc = crt_context_create(&dmi->dmi_ctx);
@@ -333,14 +333,14 @@ dss_srv_handler(void *arg)
 	rc = tse_sched_init(&dmi->dmi_sched, NULL, dmi->dmi_ctx);
 	if (rc != 0) {
 		D_ERROR("failed to init the scheduler\n");
-		D__GOTO(destroy, rc);
+		D_GOTO(destroy, rc);
 	}
 
 	dx->dx_idx = dmi->dmi_tid;
 	dmi->dmi_xstream = dx;
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creater */
-	D__ASSERT(!xstream_data.xd_ult_signal);
+	D_ASSERT(!xstream_data.xd_ult_signal);
 	xstream_data.xd_ult_signal = true;
 	ABT_cond_signal(xstream_data.xd_ult_init);
 
@@ -363,7 +363,7 @@ dss_srv_handler(void *arg)
 		}
 
 		rc = ABT_future_test(dx->dx_shutdown, &state);
-		D__ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		if (state == ABT_TRUE)
 			break;
 
@@ -383,7 +383,7 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	int			i;
 	int			rc = 0;
 
-	D__ALLOC_PTR(dx);
+	D_ALLOC_PTR(dx);
 	if (dx == NULL) {
 		D_ERROR("Can not allocate execution stream.\n");
 		return NULL;
@@ -392,13 +392,13 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	rc = ABT_future_create(1, NULL, &dx->dx_shutdown);
 	if (rc != 0) {
 		D_ERROR("failed to allocate future\n");
-		D__GOTO(err_free, rc = dss_abterr2der(rc));
+		D_GOTO(err_free, rc = dss_abterr2der(rc));
 	}
 
 	dx->dx_cpuset = hwloc_bitmap_dup(cpus);
 	if (dx->dx_cpuset == NULL) {
 		D_ERROR("failed to allocate cpuset\n");
-		D__GOTO(err_future, rc = -DER_NOMEM);
+		D_GOTO(err_future, rc = -DER_NOMEM);
 	}
 
 	for (i = 0; i < DSS_POOL_CNT; i++)
@@ -414,7 +414,7 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 err_future:
 	ABT_future_free(&dx->dx_shutdown);
 err_free:
-	D__FREE_PTR(dx);
+	D_FREE_PTR(dx);
 	return NULL;
 }
 
@@ -422,7 +422,7 @@ static inline void
 dss_xstream_free(struct dss_xstream *dx)
 {
 	hwloc_bitmap_free(dx->dx_cpuset);
-	D__FREE_PTR(dx);
+	D_FREE_PTR(dx);
 }
 
 /**
@@ -456,20 +456,20 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 		rc = ABT_pool_create_basic(ABT_POOL_FIFO, access, ABT_TRUE,
 					   &dx->dx_pools[i]);
 		if (rc != ABT_SUCCESS)
-			D__GOTO(out_pool, rc = dss_abterr2der(rc));
+			D_GOTO(out_pool, rc = dss_abterr2der(rc));
 	}
 
 	rc = dss_sched_create(dx->dx_pools, DSS_POOL_CNT, &dx->dx_sched);
 	if (rc != 0) {
 		D_ERROR("create scheduler fails: %d\n", rc);
-		D__GOTO(out_pool, rc);
+		D_GOTO(out_pool, rc);
 	}
 
 	/** start execution stream, rank must be non-null */
 	rc = ABT_xstream_create_with_rank(dx->dx_sched, idx, &dx->dx_xstream);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create xstream fails %d\n", rc);
-		D__GOTO(out_sched, rc = dss_abterr2der(rc));
+		D_GOTO(out_sched, rc = dss_abterr2der(rc));
 	}
 
 	/** start progress ULT */
@@ -478,7 +478,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 			       &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create xstream failed: %d\n", rc);
-		D__GOTO(out_xstream, rc = dss_abterr2der(rc));
+		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
 	}
 
 	ABT_mutex_lock(xstream_data.xd_mutex);
@@ -577,7 +577,7 @@ dss_xstreams_init(int nr)
 	ncores = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 
 	if (!nr || nr > ncores)
-		D__PRINT("(%d/%d) cores requested; use default (%d) cores\n",
+		D_PRINT("(%d/%d) cores requested; use default (%d) cores\n",
 			 nr, ncores, ncores);
 	/** default: one xstream per core (ncores) */
 	dss_nxstreams = (nr > 0 && nr <= ncores) ? nr : ncores;
@@ -598,13 +598,13 @@ dss_xstreams_init(int nr)
 		obj = hwloc_get_obj_by_depth(dss_topo, depth, i % ncores);
 		if (obj == NULL) {
 			D_ERROR("Null core returned by hwloc\n");
-			D__GOTO(failed, rc = -DER_INVAL);
+			D_GOTO(failed, rc = -DER_INVAL);
 		}
 
 		/** ABT rank 0 is reserved for the primary xstream */
 		rc = dss_start_one_xstream(obj->allowed_cpuset, i);
 		if (rc)
-			D__GOTO(failed, rc);
+			D_GOTO(failed, rc);
 	}
 	D_DEBUG(DB_TRACE, "%d execution streams successfully started\n",
 		dss_nxstreams);
@@ -626,7 +626,7 @@ dss_srv_tls_init(const struct dss_thread_local_storage *dtls,
 {
 	struct dss_module_info *info;
 
-	D__ALLOC_PTR(info);
+	D_ALLOC_PTR(info);
 
 	return info;
 }
@@ -637,7 +637,7 @@ dss_srv_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct dss_module_info *info = (struct dss_module_info *)data;
 
-	D__FREE_PTR(info);
+	D_FREE_PTR(info);
 }
 
 struct dss_module_key daos_srv_modkey = {
@@ -801,7 +801,7 @@ dss_ult_create_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 	rc = dss_ult_create(dss_ult_create_execute_cb, &future_arg, stream_id,
 			    NULL);
 	if (rc)
-		D__GOTO(free, rc);
+		D_GOTO(free, rc);
 
 	if (!future_arg.dfa_async)
 		ABT_future_wait(future);
@@ -893,7 +893,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	}
 
 	stream_args = &args->ca_stream_args;
-	D__ALLOC(stream_args->csa_streams,
+	D_ALLOC(stream_args->csa_streams,
 		(dss_nxstreams) * sizeof(struct dss_stream_arg_type));
 	if (stream_args->csa_streams == NULL)
 		return -DER_NOMEM;
@@ -905,7 +905,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	rc = ABT_future_create(dss_nxstreams + 1, collective_reduce,
 			       &future);
 	if (rc != ABT_SUCCESS)
-		D__GOTO(out_streams, rc = dss_abterr2der(rc));
+		D_GOTO(out_streams, rc = dss_abterr2der(rc));
 
 	carg.ca_future.dfa_future = future;
 	carg.ca_future.dfa_func	= ops->co_func;
@@ -926,7 +926,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		}
 
 	rc = ABT_future_set(future, (void *)&aggregator);
-	D__ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 
 	tid = 0;
 	d_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
@@ -945,7 +945,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 			aggregator.at_args.st_rc = dss_abterr2der(rc);
 			rc = ABT_future_set(future,
 					    (void *)&aggregator);
-			D__ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
 		tid++;
 	}
@@ -961,8 +961,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 			ops->co_reduce_arg_free(&stream_args->csa_streams[tid]);
 
 out_streams:
-	D__FREE(args->ca_stream_args.csa_streams,
-	       (dss_nxstreams) * sizeof(struct dss_stream_arg_type));
+	D_FREE(args->ca_stream_args.csa_streams);
 
 	return rc;
 }
@@ -1183,22 +1182,22 @@ dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb, void *arg)
 	rc = dc_task_reg_comp_cb(task, dss_task_comp_cb, &eventual,
 				 sizeof(eventual));
 	if (rc != 0)
-		D__GOTO(free_eventual, rc = -DER_NOMEM);
+		D_GOTO(free_eventual, rc = -DER_NOMEM);
 
 	if (cb != NULL) {
 		rc = dc_task_reg_comp_cb(task, cb, arg, sizeof(arg));
 		if (rc)
-			D__GOTO(free_eventual, rc);
+			D_GOTO(free_eventual, rc);
 	}
 
 	/* task will be freed inside scheduler */
 	rc = dc_task_schedule(task, true);
 	if (rc != 0)
-		D__GOTO(free_eventual, rc = -DER_NOMEM);
+		D_GOTO(free_eventual, rc = -DER_NOMEM);
 
 	rc = ABT_eventual_wait(eventual, (void **)&status);
 	if (rc != ABT_SUCCESS)
-		D__GOTO(free_eventual, rc = dss_abterr2der(rc));
+		D_GOTO(free_eventual, rc = dss_abterr2der(rc));
 
 	rc = *status;
 
@@ -1268,7 +1267,7 @@ dss_srv_fini(bool force)
 {
 	switch (xstream_data.xd_init_step) {
 	default:
-		D__ASSERT(0);
+		D_ASSERT(0);
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);
 		/* fall through */
@@ -1302,21 +1301,21 @@ dss_srv_init(int nr)
 	rc = ABT_mutex_create(&xstream_data.xd_mutex);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D__GOTO(failed, rc);
+		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_MUTEX;
 
 	rc = ABT_cond_create(&xstream_data.xd_ult_init);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D__GOTO(failed, rc);
+		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_INIT;
 
 	rc = ABT_cond_create(&xstream_data.xd_ult_barrier);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D__GOTO(failed, rc);
+		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
 
@@ -1330,7 +1329,7 @@ dss_srv_init(int nr)
 		xstream_data.xd_init_step = XD_INIT_XSTREAMS;
 
 	if (rc != 0)
-		D__GOTO(failed, rc);
+		D_GOTO(failed, rc);
 
 	return 0;
 failed:
