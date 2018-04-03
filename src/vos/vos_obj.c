@@ -1709,6 +1709,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 	tree_rec_bundle2iov(&rbund, &riov);
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_key = &oiter->it_akey;
+	kbund.kb_epr = &oiter->it_epr;
 
 	rc = dbtree_lookup(toh, &kiov, &riov);
 	tree_release(toh, false);

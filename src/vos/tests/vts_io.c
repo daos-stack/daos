@@ -808,16 +808,13 @@ io_iter_test_dkey_cond(void **state)
 	int			 akeys, recs;
 	daos_epoch_range_t	 epr;
 
-	skip();
-
 	arg->ta_flags = TF_FIXED_AKEY;
 	arg->cookie_flag = false;
 	epr.epr_lo = gen_rand_epoch();
 	epr.epr_hi = DAOS_EPOCH_MAX;
 
 	for (i = 0; i < IOT_FA_DKEYS; i++) {
-		rc = io_update_and_fetch_dkey(arg, epr.epr_lo,
-					      epr.epr_lo);
+		rc = io_update_and_fetch_dkey(arg, epr.epr_lo, epr.epr_lo);
 		assert_int_equal(rc, 0);
 	}
 	epr.epr_lo += 10;
@@ -913,11 +910,6 @@ io_obj_recx_range_iteration(struct io_test_args *args, vos_it_epc_expr_t expr)
 		print_message("Enum range lo:"DF_U64", hi:"DF_U64"\n",
 			      epr.epr_lo, epr.epr_hi);
 
-	args->ta_flags = 0;
-	rc = io_update_and_fetch_dkey(args, epr.epr_lo, epr.epr_lo);
-	if (rc != 0)
-		return rc;
-
 	args->ta_flags |= TF_OVERWRITE;
 	for (i = 1; i < RANGE_ITER_KEYS * 4; i++) {
 		rc = io_update_and_fetch_dkey(args, epoch + i,
@@ -974,7 +966,6 @@ io_obj_forward_recx_iter_test(void **state)
 	struct io_test_args	*args = *state;
 	int			rc;
 
-	skip();
 	rc = io_obj_recx_range_iteration(args, VOS_IT_EPC_RE);
 	assert_int_equal(rc, 0);
 }
@@ -987,7 +978,6 @@ io_obj_reverse_recx_iter_test(void **state)
 	struct io_test_args	*args = *state;
 	int			rc;
 
-	skip();
 	rc = io_obj_recx_range_iteration(args, VOS_IT_EPC_RR);
 	assert_int_equal(rc, 0);
 }
