@@ -135,10 +135,14 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
 		fflush(stderr);						\
 	} while (0)
 
-/** Macro to trace function entry */
-#define D_ENTER			D_DEBUG(DB_TRACE, "Entered\n")
-/** Macro to trace function exit */
-#define D_EXIT			D_DEBUG(DB_TRACE, "Leaving\n")
+/**
+ * D_PRINT can be used for output to stdout with or without clog being enabled
+ */
+#define D_PRINT(fmt, ...)						\
+	do {								\
+		fprintf(stdout, fmt, ## __VA_ARGS__);			\
+		fflush(stdout);						\
+	} while (0)
 
 #define D_ASSERT(e)	assert(e)
 
