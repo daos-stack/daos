@@ -853,6 +853,9 @@ out:
 	if (rc != 0) {
 		crt_context_req_untrack(&rpc_priv->crp_pub);
 		crt_rpc_complete(rpc_priv, rc);
+
+		/* Corresponds to cleanup in crt_hg_req_send_cb() */
+		RPC_DECREF(rpc_priv);
 	}
 
 	/* addref in crt_req_hg_addr_lookup */
