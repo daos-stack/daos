@@ -46,4 +46,10 @@ struct dss_thread_local_storage *dss_tls_init(int tag);
 int ds_iv_init(void);
 int ds_iv_fini(void);
 
+/* srv_nvme.c */
+int dss_nvme_init(void);
+void dss_nvme_fini(void);
+int dss_nvme_ctxt_init(struct dss_nvme_context *ctxt, int xs_id);
+void dss_nvme_ctxt_fini(struct dss_nvme_context *ctxt);
+size_t dss_nvme_poll(struct dss_nvme_context *ctxt);
 #endif /* __DAOS_SRV_INTERNAL__ */

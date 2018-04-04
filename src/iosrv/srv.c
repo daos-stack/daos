@@ -338,6 +338,14 @@ dss_srv_handler(void *arg)
 		goto crt_destroy;
 	}
 
+	/* Initialize NVMe context */
+	rc = dss_nvme_ctxt_init(&dmi->dmi_nvme_ctxt, dmi->dmi_tid);
+	if (rc != 0) {
+		D_ERROR("failed to init spdk context for xstream(%d) rc:%d\n",
+			dx->dx_idx, rc);
+		D_GOTO(tse_fini, rc);
+	}
+
 	dx->dx_idx = dmi->dmi_tid;
 	dmi->dmi_xstream = dx;
 	ABT_mutex_lock(xstream_data.xd_mutex);
@@ -365,6 +373,7 @@ dss_srv_handler(void *arg)
 				rc);
 			break;
 		}
+		dss_nvme_poll(&dmi->dmi_nvme_ctxt);
 
 		rc = ABT_future_test(dx->dx_shutdown, &state);
 		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
@@ -374,6 +383,8 @@ dss_srv_handler(void *arg)
 		ABT_thread_yield();
 	}
 
+	dss_nvme_ctxt_fini(&dmi->dmi_nvme_ctxt);
+tse_fini:
 	tse_sched_fini(&dmi->dmi_sched);
 crt_destroy:
 	crt_context_destroy(dmi->dmi_ctx, true);
@@ -1275,6 +1286,7 @@ enum {
 	XD_INIT_ULT_INIT,
 	XD_INIT_ULT_BARRIER,
 	XD_INIT_REG_KEY,
+	XD_INIT_NVME,
 	XD_INIT_XSTREAMS,
 };
 
@@ -1289,6 +1301,9 @@ dss_srv_fini(bool force)
 		D_ASSERT(0);
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);
+		/* fall through */
+	case XD_INIT_NVME:
+		dss_nvme_fini();
 		/* fall through */
 	case XD_INIT_REG_KEY:
 		dss_unregister_key(&daos_srv_modkey);
@@ -1341,6 +1356,11 @@ dss_srv_init(int nr)
 	/** register global tls accessible to all modules */
 	dss_register_key(&daos_srv_modkey);
 	xstream_data.xd_init_step = XD_INIT_REG_KEY;
+
+	rc = dss_nvme_init();
+	if (rc != 0)
+		D_GOTO(failed, rc);
+	xstream_data.xd_init_step = XD_INIT_NVME;
 
 	/* start xstreams */
 	rc = dss_xstreams_init(nr);
