@@ -114,27 +114,24 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 	do {								\
 		if (cond) {						\
 			if (count <= 1)					\
-				D_DEBUG(DB_MEM, "%s:%d, alloc(" #func ")"\
-					" '" name "': %i at %p.\n",	\
-					__FILE__, __LINE__, (int)(size),\
-					(ptr));				\
+				D_DEBUG(DB_MEM,				\
+					"alloc(" #func ") '" name "': %i at %p.\n", \
+					(int)(size), (ptr));		\
 			else						\
-				D_DEBUG(DB_MEM, "%s:%d, alloc(" #func ")"\
-					" '" name "': %i * '" cname	\
-					"':%i at %p.\n", __FILE__,	\
-					__LINE__, (int)(size), (count),	\
-					(ptr));				\
+				D_DEBUG(DB_MEM,				\
+					"alloc(" #func ") '" name "': %i * '" cname "':%i at %p.\n", \
+					(int)(size), (count), (ptr));	\
 			break;						\
 		}							\
 		(void)(on_error);					\
 		if (count >= 1)						\
-			D_ERROR("%s:%d, out of memory (tried to "	\
-				#func " '" name "': %i)\n", __FILE__,	\
-				__LINE__, (int)(size) * (count));	\
+			D_ERROR("out of memory (tried to "		\
+				#func " '" name "': %i)\n",		\
+				(int)(size) * (count));			\
 		else							\
-			D_ERROR("%s:%d, out of memory (tried to "	\
-				#func " '" name "')\n", __FILE__,	\
-				__LINE__);				\
+			D_ERROR("out of memory (tried to "		\
+				#func " '" name "': %i)\n",		\
+				(int)(size));				\
 	} while (0)
 
 #define D_ALLOC_CORE(ptr, size, count)					\
@@ -178,21 +175,19 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 		D_ASSERT((void *)&(newptr) != &(oldptr));		\
 		(newptr) =  realloc((oldptr), (_sz));			\
 		if ((newptr) != NULL) {					\
-			D_DEBUG(DB_MEM, "%s:%d, realloc '"		\
-				#newptr "': %i at %p (old '" #oldptr	\
-				"':%p).\n", __FILE__, __LINE__,		\
+			D_DEBUG(DB_MEM,					\
+				"realloc '" #newptr "': %i at %p (old '" #oldptr "':%p).\n", \
 				_sz, (newptr), (oldptr));		\
 			(oldptr) = NULL;				\
 			break;						\
 		}							\
-		D_ERROR("%s:%d, out of memory (tried to realloc "	\
-			"'" #newptr "': %i)\n", __FILE__, __LINE__, _sz); \
+		D_ERROR("out of memory (tried to realloc "		\
+			"'" #newptr "': %i)\n", _sz);			\
 	} while (0)
 
 # define D_FREE(ptr)							\
 	do {								\
-		D_DEBUG(DB_MEM, "%s:%d, free '" #ptr "' at %p.\n",	\
-			__FILE__, __LINE__, (ptr));			\
+		D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));	\
 		free(ptr);						\
 		(ptr) = NULL;						\
 	} while (0)

@@ -336,8 +336,7 @@ struct crt_internal_rpc {
 		__ref = ++(RPC)->crp_refcount;				\
 		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
 		D_DEBUG(DB_NET,						\
-			"%s:%d %s() rpc_priv %p (opc: %#x), addref to %d.\n", \
-			__FILE__, __LINE__, __func__,			\
+			"rpc_priv %p (opc: %#x), addref to %d.\n",	\
 			(RPC), (RPC)->crp_pub.cr_opc, __ref);		\
 	} while (0)
 
@@ -349,8 +348,7 @@ struct crt_internal_rpc {
 		__ref = --(RPC)->crp_refcount;				\
 		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
 		D_DEBUG(DB_NET,						\
-			"%s:%d %s() rpc_priv %p (opc: %#x), decref to %d.\n", \
-			__FILE__, __LINE__, __func__,			\
+			"rpc_priv %p (opc: %#x), decref to %d.\n",	\
 			(RPC), (RPC)->crp_pub.cr_opc, __ref);		\
 		if (__ref == 0)						\
 			crt_req_destroy(RPC);				\
