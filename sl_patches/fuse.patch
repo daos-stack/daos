@@ -1,50 +1,40 @@
-diff --git a/util/install_helper.sh b/util/install_helper.sh
-index 63b79ee..c5964d8 100755
---- a/util/install_helper.sh
-+++ b/util/install_helper.sh
-@@ -11,25 +11,23 @@ bindir="$2"
- udevrulesdir="$3"
- prefix="${MESON_INSTALL_DESTDIR_PREFIX}"
- 
--chown root:root "${prefix}/${bindir}/fusermount3"
--chmod u+s "${prefix}/${bindir}/fusermount3"
--
--if test ! -e "${DESTDIR}/dev/fuse"; then
--    mkdir -p "${DESTDIR}/dev"
--    mknod "${DESTDIR}/dev/fuse" -m 0666 c 10 229
--fi
--
--install -D -m 644 "${MESON_SOURCE_ROOT}/util/udev.rules" \
--        "${DESTDIR}/${udevrulesdir}/99-fuse3.rules"
--
--install -D -m 755 "${MESON_SOURCE_ROOT}/util/init_script" \
--        "${DESTDIR}/etc/init.d/fuse3"
--
--if test -x /usr/sbin/update-rc.d && test -z "${DESTDIR}"; then
--    /usr/sbin/update-rc.d fuse3 start 34 S . start 41 0 6 . || /bin/true
--else
--    echo "== FURTHER ACTION REQUIRED =="
--    echo "Make sure that your init system will start the ${DESTDIR}/etc/init.d/fuse3 init script"
--fi
--
--
-+#chown root:root "${prefix}/${bindir}/fusermount3"
-+#chmod u+s "${prefix}/${bindir}/fusermount3"
+diff --git a/meson_options.txt b/meson_options.txt
+index b4608a7..e619e38 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -3,3 +3,7 @@ option('disable-mtab', type : 'boolean', value : false,
+
+ option('udevrulesdir', type : 'string', value : '',
+        description: 'Path where udev rules are installed to (Defaults to udevdir specified in udev.pc)')
 +
-+#if test ! -e "${DESTDIR}/dev/fuse"; then
-+#    mkdir -p "${DESTDIR}/dev"
-+#    mknod "${DESTDIR}/dev/fuse" -m 0666 c 10 229
-+#fi
++option('skip-systemfiles', type : 'boolean', value : false,
++       description: 'Whether to install system files or not, incl. udevrules, etc. (Defaults to false)')
 +
-+#install -D -m 644 "${MESON_SOURCE_ROOT}/util/udev.rules" \
-+#        "${DESTDIR}/${udevrulesdir}/99-fuse3.rules"
-+
-+#install -D -m 755 "${MESON_SOURCE_ROOT}/util/init_script" \
-+#        "${DESTDIR}/etc/init.d/fuse3"
-+
-+#if test -x /usr/sbin/update-rc.d && test -z "${DESTDIR}"; then
-+#    /usr/sbin/update-rc.d fuse3 start 34 S . start 41 0 6 . || /bin/true
-+#else
-+#    echo "== FURTHER ACTION REQUIRED =="
-+#    echo "Make sure that your init system will start the ${DESTDIR}/etc/init.d/fuse3 init script"
-+#fi
+diff --git a/util/meson.build b/util/meson.build
+index ec08c17..3de3056 100644
+--- a/util/meson.build
++++ b/util/meson.build
+@@ -18,14 +18,14 @@ executable('mount.fuse3', ['mount.fuse.c'],
+            install: true,
+            install_dir: get_option('sbindir'))
+
++if not get_option('skip-systemfiles')
++  udevrulesdir = get_option('udevrulesdir')
++  if udevrulesdir == ''
++    udev = dependency('udev')
++    udevrulesdir = join_paths(udev.get_pkgconfig_variable('udevdir'), 'rules.d')
++  endif
+
+-udevrulesdir = get_option('udevrulesdir')
+-if udevrulesdir == ''
+-  udev = dependency('udev')
+-  udevrulesdir = join_paths(udev.get_pkgconfig_variable('udevdir'), 'rules.d')
++  meson.add_install_script('install_helper.sh', get_option('sysconfdir'),
++                           get_option('bindir'), udevrulesdir)
+ endif
+
+-meson.add_install_script('install_helper.sh', get_option('sysconfdir'),
+-                         get_option('bindir'), udevrulesdir)
+-
+-
+

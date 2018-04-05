@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2016-2017 Intel Corporation
+# Copyright (c) 2016-2018 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -308,22 +308,22 @@ REQS.define('daos',
             headers=['daos.h'],
             requires=['cart', 'ompi'])
 
-#pylint: disable=line-too-long
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
             commands=['meson $FUSE_SRC --prefix=$FUSE_PREFIX',
                       'meson configure -D udevrulesdir=$FUSE_PREFIX/udev',
                       'meson configure -D disable-mtab=True',
+                      'meson configure -D skip-systemfiles=True',
                       'ninja-build -v -j1',
                       'ninja-build install',
-                      'mv $FUSE_PREFIX/bin/fusermount3 $FUSE_PREFIX/bin/fusermount3.nosuid'],
+                      'mv $FUSE_PREFIX/bin/fusermount3' \
+                      ' $FUSE_PREFIX/bin/fusermount3.nosuid'],
             patch='$PATCH_PREFIX/fuse.patch',
             libs=['fuse3'],
             defines=["FUSE_USE_VERSION=32"],
             required_progs=['libtoolize'],
             headers=['fuse3/fuse.h'],
             out_of_src_build=True)
-#pylint: enable=line-too-long
 
 REQS.define('ofi',
             retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),

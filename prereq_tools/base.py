@@ -640,6 +640,9 @@ class PreReqComponent(object):
         if pre_path:
             old_path = self.__env['ENV']['PATH']
             self.__env['ENV']['PATH'] = pre_path + os.pathsep + old_path
+        locale_name = GetOption('locale_name')
+        if locale_name:
+            self.__env['ENV']['LC_ALL'] = locale_name
         self.__check_only = GetOption('check_only')
         if self.__check_only:
             # This is mostly a no_exec request.
@@ -812,6 +815,12 @@ class PreReqComponent(object):
                   dest='prepend_path',
                   default=None,
                   help="String to prepend to PATH environment variable.")
+
+        # Allow specifying the locale to be used.  Default "en_US.UTF8"
+        AddOption('--locale-name',
+                  dest='locale_name',
+                  default='en_US.UTF8',
+                  help='locale to use for building. [%default]')
 
         # This option sets a hint as to if -Werror should be used.
         AddOption('--warning-level',
@@ -1226,7 +1235,14 @@ class _Component(object):
                 if self.src_path == defpath:
                     self.retriever.update(self.src_path, commit_sha=commit_sha,
                                           patch=patch, branch=branch)
+            elif self.patch is not None:
+                # Apply patch to existing source.
+                print "Applying patch %s" % (self.patch)
+                commands = ['patch -p 1 -N -t < %s' % (self.patch)]
+                if not RUNNER.run_commands(commands, subdir=self.src_path):
+                    raise BuildFailure(self.patch)
             return
+
         if not self.retriever:
             print 'Using installed version of %s' % self.name
             return
