@@ -139,13 +139,14 @@ static int
 rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		     struct rebuild_scan_arg *scan_arg)
 {
-	struct rebuild_objs_in *rebuild_in;
+	struct rebuild_objs_in	*rebuild_in = NULL;
+	struct rebuild_out	*rebuild_out = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = scan_arg->rpt;
 	struct rebuild_send_arg *arg = NULL;
 	daos_unit_oid_t		*oids = NULL;
 	uuid_t			*uuids = NULL;
 	unsigned int		*shards = NULL;
-	crt_rpc_t		*rpc;
+	crt_rpc_t		*rpc = NULL;
 	crt_endpoint_t		tgt_ep = {0};
 	int			rc = 0;
 
@@ -191,43 +192,87 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 
 	tgt_ep.ep_rank = tgt_id;
 	tgt_ep.ep_tag = 0;
-	rc = rebuild_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
-				REBUILD_OBJECTS, &rpc);
-	if (rc)
-		D__GOTO(out, rc);
-
-	rebuild_in = crt_req_get(rpc);
-	rebuild_in->roi_rebuild_ver = rpt->rt_rebuild_ver;
-	rebuild_in->roi_oids.ca_count = arg->count;
-	rebuild_in->roi_oids.ca_arrays = oids;
-	rebuild_in->roi_uuids.ca_count = arg->count;
-	rebuild_in->roi_uuids.ca_arrays = uuids;
-	rebuild_in->roi_shards.ca_count = arg->count;
-	rebuild_in->roi_shards.ca_arrays = shards;
-	uuid_copy(rebuild_in->roi_pool_uuid, rpt->rt_pool_uuid);
-
-	/* Note: if the remote target fails, let's just ignore the
-	 * this object list, because the later rebuild will rebuild
-	 * it again anyway
-	 */
 	while (1) {
+		struct pool_target	*targets = NULL;
+		unsigned int		failed_tgts_cnt;
+		bool			target_failed = false;
+		int			i;
+
+		rc = rebuild_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
+					REBUILD_OBJECTS, &rpc);
+		if (rc)
+			D__GOTO(out, rc);
+
+		rebuild_in = crt_req_get(rpc);
+		rebuild_in->roi_rebuild_ver = rpt->rt_rebuild_ver;
+		rebuild_in->roi_oids.ca_count = arg->count;
+		rebuild_in->roi_oids.ca_arrays = oids;
+		rebuild_in->roi_uuids.ca_count = arg->count;
+		rebuild_in->roi_uuids.ca_arrays = uuids;
+		rebuild_in->roi_shards.ca_count = arg->count;
+		rebuild_in->roi_shards.ca_arrays = shards;
+		uuid_copy(rebuild_in->roi_pool_uuid, rpt->rt_pool_uuid);
+		crt_group_rank(NULL, &rebuild_in->roi_pad);
+
 		rc = dss_rpc_send(rpc);
 
-		/* If the remote target is not ready, let's retry */
-		if (rc == -DER_AGAIN) {
-			ABT_thread_yield();
-			continue;
+		rebuild_out = crt_reply_get(rpc);
+		if (rc == 0 && rebuild_out->ro_status == 0)
+			break;
+
+		/* If the remote nodes are dead, let's ignore the failure and
+		 * obj list, and the next rebuild will handle it.
+		 */
+		if (rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) {
+			rc = 0;
+			break;
 		}
 
-		/* The remote nodes are probably dead, let's ignore it,
-		 * and the next rebuild will handle it anyway
-		 */
-		if (rc == -DER_TIMEDOUT || daos_crt_network_error(rc))
-			rc = 0;
+		/* If it is failed, but no need retry, let's just fail */
+		if (rc != 0)
+			break;
 
-		D__GOTO(out, rc);
+		if (rebuild_out->ro_status != -DER_AGAIN) {
+			rc = rebuild_out->ro_status;
+			break;
+		}
+
+		/* Otherwise let's retry, but before retry it needs to check
+		 * if remote target has been marked failed.
+		 */
+		crt_req_decref(rpc);
+		rpc = NULL;
+
+		/*  the remote target fail before retry */
+		rc = pool_map_find_down_tgts(rpt->rt_pool->sp_map,
+					    &targets, &failed_tgts_cnt);
+		if (rc != 0) {
+			D_ERROR("failed create failed tgt list rc %d\n",
+				rc);
+			break;
+		}
+
+		for (i = 0; i < failed_tgts_cnt; i++) {
+			if (targets[i].ta_comp.co_rank == tgt_id) {
+				target_failed = true;
+				break;
+			}
+		}
+
+		if (targets)
+			D__FREE(targets, failed_tgts_cnt * sizeof(*targets));
+
+		if (target_failed) {
+			/* Remote target has failed, no need retry */
+			D_DEBUG(DB_REBUILD, "target %d has been failed\n",
+				tgt_id);
+			break;
+		}
+		ABT_thread_yield();
 	}
 out:
+	if (rpc)
+		crt_req_decref(rpc);
 	if (oids != NULL)
 		D__FREE(oids, sizeof(*oids) * REBUILD_SEND_LIMIT);
 	if (uuids != NULL)
@@ -460,6 +505,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 	struct daos_obj_md	md;
 	uint32_t		tgt_rebuild;
 	unsigned int		shard_rebuild;
+	d_rank_t		myrank;
 	int			rc;
 
 	if (rpt->rt_abort)
@@ -491,19 +537,34 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 		rebuild_pool_map_put(poolmap);
 	}
 
+	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
+
 	rc = pl_obj_find_rebuild(map, &md, NULL, arg->tgp_failed->tg_ver,
 				 &tgt_rebuild, &shard_rebuild);
 	if (rc <= 0) /* No need rebuild */
 		D__GOTO(out, rc);
 
-	D_DEBUG(DB_PL, "rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
+	D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
 		" on %d for shard %d\n", DP_UOID(oid), DP_UUID(co_uuid),
 		DP_UUID(rpt->rt_pool_uuid), tgt_rebuild, shard_rebuild);
 
-	rc = rebuild_object_insert(arg, tgt_rebuild, shard_rebuild,
-				   rpt->rt_pool_uuid, co_uuid, oid);
-	if (rc)
-		D__GOTO(out, rc);
+	/* During rebuild test, it will manually exclude some target to
+	 * trigger the rebuild, then later add it back, so some objects
+	 * might exist on some illegal target, so they might use its "own"
+	 * target as the spare target, let's skip these object now.
+	 * When we have better support from CART exclude/addback, myrank
+	 * should always equal to tgt_rebuild. XXX
+	 */
+	if (myrank != tgt_rebuild) {
+		rc = rebuild_object_insert(arg, tgt_rebuild, shard_rebuild,
+					   rpt->rt_pool_uuid, co_uuid, oid);
+		if (rc)
+			D__GOTO(out, rc);
+	} else {
+		D_DEBUG(DB_REBUILD, "skip "DF_UOID", not send it to its own.\n",
+			DP_UOID(oid));
+		rc = 0;
+	}
 out:
 	if (layout != NULL)
 		pl_obj_layout_free(layout);

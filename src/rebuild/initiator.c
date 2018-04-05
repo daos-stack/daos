@@ -574,7 +574,6 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	memset(&hash_out, 0, sizeof(hash_out));
 	dc_obj_shard2anchor(&hash_out, shard);
 
-	tls->rebuild_pool_obj_count++;
 	while (!daos_hash_is_eof(&hash_out)) {
 		daos_key_desc_t	kds[ITER_COUNT];
 		uint32_t	num = ITER_COUNT;
@@ -798,6 +797,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_objs_in		*rebuild_in;
 	struct rebuild_tgt_pool_tracker *rpt = NULL;
+	struct rebuild_pool_tls		*tls;
 	struct rebuild_out		*rebuild_out;
 	daos_unit_oid_t			*oids;
 	unsigned int			oids_count;
@@ -838,25 +838,23 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 	if (rc)
 		D__GOTO(out, rc);
 
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+				      rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
+
 	/* Insert these oids/conts into the local rebuild tree */
 	for (i = 0; i < oids_count; i++) {
 		rc = rebuild_cont_obj_insert(btr_hdl, co_uuids[i],
 					     oids[i], shards[i]);
 		if (rc == 1) {
+			tls->rebuild_pool_obj_count++;
 			D_DEBUG(DB_REBUILD, "insert local "DF_UOID" "DF_UUID
 				" %u hdl %"PRIx64"\n", DP_UOID(oids[i]),
 				DP_UUID(co_uuids[i]), shards[i],
 				btr_hdl.cookie);
 			rc = 0;
 		} else if (rc == 0) {
-			struct rebuild_pool_tls *tls;
-
-			tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
-						      rpt->rt_rebuild_ver);
-			D_ASSERT(tls != NULL);
-
-			tls->rebuild_pool_obj_count++;
-			D_DEBUG(DB_REBUILD, ""DF_UOID" "DF_UUID" %u exist.\n",
+			D_DEBUG(DB_REBUILD, DF_UOID" "DF_UUID" %u exist.\n",
 				DP_UOID(oids[i]), DP_UUID(co_uuids[i]),
 				shards[i]);
 		} else if (rc < 0) {
