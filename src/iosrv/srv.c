@@ -58,6 +58,7 @@ struct dss_xstream_data {
 	d_list_t	xd_list;
 	/** Initializing step, it is for cleanup of global states */
 	int		xd_init_step;
+	int		xd_ult_init_rc;
 	bool		xd_ult_signal;
 	/** serialize initialization of ULTs */
 	ABT_cond	xd_ult_init;
@@ -289,19 +290,20 @@ dss_srv_handler(void *arg)
 	struct dss_thread_local_storage	*dtc;
 	struct dss_module_info		*dmi;
 	int				 rc;
+	bool				 signal_caller = true;
 
 	/** set affinity */
 	rc = hwloc_set_cpubind(dss_topo, dx->dx_cpuset, HWLOC_CPUBIND_THREAD);
 	if (rc) {
 		D_ERROR("failed to set affinity: %d\n", errno);
-		return;
+		goto signal;
 	}
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(DAOS_SERVER_TAG);
 	if (dtc == NULL) {
 		D_ERROR("failed to initialize TLS\n");
-		return;
+		goto signal;
 	}
 
 	dmi = dss_get_module_info();
@@ -311,7 +313,7 @@ dss_srv_handler(void *arg)
 	rc = crt_context_create(&dmi->dmi_ctx);
 	if (rc != 0) {
 		D_ERROR("failed to create crt ctxt: %d\n", rc);
-		return;
+		goto tls_fini;
 	}
 
 	rc = crt_context_register_rpc_task(dmi->dmi_ctx,
@@ -319,21 +321,21 @@ dss_srv_handler(void *arg)
 					   dx->dx_pools);
 	if (rc != 0) {
 		D_ERROR("failed to register process cb %d\n", rc);
-		D_GOTO(destroy, rc);
+		goto crt_destroy;
 	}
 
 	/** Get xtream index from cart */
 	rc = crt_context_idx(dmi->dmi_ctx, &dmi->dmi_tid);
 	if (rc != 0) {
 		D_ERROR("failed to get xtream index: rc %d\n", rc);
-		D_GOTO(destroy, rc);
+		goto crt_destroy;
 	}
 
 	/* Prepare the scheduler */
 	rc = tse_sched_init(&dmi->dmi_sched, NULL, dmi->dmi_ctx);
 	if (rc != 0) {
 		D_ERROR("failed to init the scheduler\n");
-		D_GOTO(destroy, rc);
+		goto crt_destroy;
 	}
 
 	dx->dx_idx = dmi->dmi_tid;
@@ -342,6 +344,7 @@ dss_srv_handler(void *arg)
 	/* initialized everything for the ULT, notify the creater */
 	D_ASSERT(!xstream_data.xd_ult_signal);
 	xstream_data.xd_ult_signal = true;
+	xstream_data.xd_ult_init_rc = 0;
 	ABT_cond_signal(xstream_data.xd_ult_init);
 
 	/* wait until all xstreams are ready, otherwise it is not safe
@@ -351,6 +354,7 @@ dss_srv_handler(void *arg)
 	ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
+	signal_caller = false;
 	/* main service progress loop */
 	for (;;) {
 		ABT_bool state;
@@ -371,9 +375,20 @@ dss_srv_handler(void *arg)
 	}
 
 	tse_sched_fini(&dmi->dmi_sched);
-destroy:
+crt_destroy:
 	crt_context_destroy(dmi->dmi_ctx, true);
+tls_fini:
 	dss_tls_fini(dtc);
+signal:
+	if (signal_caller) {
+		ABT_mutex_lock(xstream_data.xd_mutex);
+		/* initialized everything for the ULT, notify the creater */
+		D_ASSERT(!xstream_data.xd_ult_signal);
+		xstream_data.xd_ult_signal = true;
+		xstream_data.xd_ult_init_rc = rc;
+		ABT_cond_signal(xstream_data.xd_ult_init);
+		ABT_mutex_unlock(xstream_data.xd_mutex);
+	}
 }
 
 static inline struct dss_xstream *
@@ -486,7 +501,11 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 	if (!xstream_data.xd_ult_signal)
 		ABT_cond_wait(xstream_data.xd_ult_init, xstream_data.xd_mutex);
 	xstream_data.xd_ult_signal = false;
-
+	rc = xstream_data.xd_ult_init_rc;
+	if (rc != 0) {
+		ABT_mutex_unlock(xstream_data.xd_mutex);
+		goto out_xstream;
+	}
 	/** add to the list of execution streams */
 	d_list_add_tail(&dx->dx_list, &xstream_data.xd_list);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
