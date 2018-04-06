@@ -121,13 +121,14 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla, addr_str,
 				     &str_size);
 		pthread_mutex_unlock(&ctx->cc_mutex);
+
 		if (rc != 0) {
 			D_ERROR("context (idx %d), crt_hg_get_addr failed rc: "
 				"%d.\n", ctx->cc_idx, rc);
 			break;
 		}
 
-		count += snprintf(addr_buf + count, addr_buf_len - count - 1,
+		count += snprintf(addr_buf + count, addr_buf_len - count,
 				  "%s", addr_str);
 		count += 1;
 	}

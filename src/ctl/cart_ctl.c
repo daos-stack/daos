@@ -222,6 +222,7 @@ ctl_client_cb(const struct crt_cb_info *cb_info)
 	out_args = crt_reply_get(cb_info->cci_rpc);
 	fprintf(stdout, "group: %s, rank %d, ctx_num %d\n",
 		in_args->cel_grp_id, in_args->cel_rank, out_args->cel_ctx_num);
+
 	addr_str = out_args->cel_addr_str.iov_buf;
 	for (i = 0; i < out_args->cel_ctx_num; i++) {
 		fprintf(stdout, "    %s\n", addr_str);
@@ -299,7 +300,7 @@ ctl_init()
 	int rc;
 	int attach_retries = NUM_ATTACH_RETRIES;
 
-	rc = crt_init("crt_ctl", 0);
+	rc = crt_init("crt_ctl", CRT_FLAG_BIT_SINGLETON);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
 	rc = d_log_init();

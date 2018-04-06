@@ -253,6 +253,9 @@ test_group_init(void)
 	rc = crt_group_rank(NULL, &test.tg_my_rank);
 	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 	if (test.tg_is_service) {
+		rc = crt_group_config_save(NULL, true);
+		D_ASSERTF(rc == 0, "crt_group_config_save() failed. rc: %d\n",
+			rc);
 		crt_fake_event_init(test.tg_my_rank);
 		D_ASSERTF(rc == 0, "crt_fake_event_init() failed. rc: %d\n",
 			  rc);
