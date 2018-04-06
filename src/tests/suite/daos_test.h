@@ -73,6 +73,12 @@ typedef struct {
 	int			srv_ntgts;
 	int			srv_disabled_ntgts;
 
+	/* The callback is called before pool rebuild. like disconnect
+	 * pool etc.
+	 */
+	int			(*rebuild_pre_cb)(void *test_arg);
+	void			*rebuild_pre_cb_arg;
+
 	/* The callback is called during pool rebuild, used for concurrent IO,
 	 * container destroy etc
 	 */

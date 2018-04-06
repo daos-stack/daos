@@ -99,17 +99,10 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	struct mgmt_params_set_in	*ps_in;
 	crt_opcode_t			opc;
 	int				topo;
-	uuid_t				uuid;
-	char				id[DAOS_UUID_STR_SIZE];
-	d_rank_list_t			rank_list = {0};
-	unsigned int			ranks_size;
-	crt_group_t			*grp = NULL;
 	crt_rpc_t			*tc_req;
-	d_rank_t			*ranks = NULL;
 	struct mgmt_tgt_params_set_in	*tc_in;
 	struct mgmt_srv_out		*out;
 	int				rc;
-	int				i;
 
 	ps_in = crt_req_get(rpc);
 	D_ASSERT(ps_in != NULL);
@@ -122,29 +115,12 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	/* Set parameter on all servers */
-	rc = crt_group_size(NULL, &ranks_size);
-	D_ASSERT(rc == 0);
-	D_ALLOC(ranks, sizeof(*ranks) * ranks_size);
-	if (ranks == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	for (i = 0; i < ranks_size; i++)
-		ranks[i] = i;
-	rank_list.rl_nr = ranks_size;
-	rank_list.rl_ranks = ranks;
-
-	uuid_generate(uuid);
-	uuid_unparse_lower(uuid, id);
-	rc = dss_group_create(id, &rank_list, &grp);
-	if (rc != 0)
-		D_GOTO(free, rc);
-
-	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
+	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_PARAMS_SET, DAOS_MGMT_MODULE, 1);
-	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, grp, NULL,
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, NULL,
 				  opc, NULL, NULL, 0, topo, &tc_req);
 	if (rc)
-		D_GOTO(free, rc);
+		D_GOTO(out, rc);
 
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
@@ -155,22 +131,15 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	rc = dss_rpc_send(tc_req);
 	if (rc != 0) {
 		crt_req_decref(tc_req);
-		D_GOTO(free, rc);
+		D_GOTO(out, rc);
 	}
 
 	out = crt_reply_get(tc_req);
 	rc = out->srv_rc;
 	if (rc != 0) {
 		crt_req_decref(tc_req);
-		D_GOTO(free, rc);
+		D_GOTO(out, rc);
 	}
-free:
-	if (ranks != NULL)
-		D_FREE(ranks);
-	uuid_clear(uuid);
-	if (grp)
-		dss_group_destroy(grp);
-
 out:
 	out = crt_reply_get(rpc);
 	out->srv_rc = rc;

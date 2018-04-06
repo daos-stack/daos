@@ -590,6 +590,9 @@ rebuild_scanner(void *data)
 
 	D_ASSERT(rpt != NULL);
 
+	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
+		ABT_thread_yield();
+
 	return ds_pool_obj_iter(rpt->rt_pool_uuid, arg->callback,
 				arg->arg);
 }

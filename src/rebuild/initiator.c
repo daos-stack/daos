@@ -411,6 +411,9 @@ rebuild_dkey_ult(void *arg)
 	struct rebuild_puller		*puller;
 	unsigned int			idx;
 
+	while (daos_fail_check(DAOS_REBUILD_TGT_REBUILD_HANG))
+		ABT_thread_yield();
+
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 				      rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);

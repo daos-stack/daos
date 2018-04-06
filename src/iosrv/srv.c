@@ -371,8 +371,13 @@ dss_srv_handler(void *arg)
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("failed to progress network context: %d\n",
 				rc);
-			break;
+			/* XXX if it exists the loop here, then tls to be freed,
+			 * other ULTs on this xstream might get freed TLS, so
+			 * let's not break here until we have proper server stop
+			 * procedures, i.e. this server xstream should wait until
+			 * all ULTs DAOS-769 */
 		}
+
 		dss_nvme_poll(&dmi->dmi_nvme_ctxt);
 
 		rc = ABT_future_test(dx->dx_shutdown, &state);

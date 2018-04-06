@@ -60,24 +60,15 @@ rebuild_test_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 }
 
 static void
-rebuild_test_add_tgt(test_arg_t *args, int args_cnt, d_rank_t rank)
+rebuild_test_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank)
 {
-	d_rank_list_t	ranks;
-	int		rc;
-
 	/** exclude the target from the pool */
-	if (args[0].myrank == 0) {
+	if (args[0]->myrank == 0) {
 		int i;
 
-		ranks.rl_nr = 1;
-		ranks.rl_ranks = &rank;
-		for (i = 0; i < args_cnt; i++) {
-			rc = daos_pool_tgt_add(args[i].pool_uuid,
-					       args[i].group,
-					       &args[i].svc, &ranks,
-					       NULL);
-			assert_int_equal(rc, 0);
-		}
+		for (i = 0; i < args_cnt; i++)
+			daos_add_server(args[i]->pool_uuid,
+					args[i]->group, &args[i]->svc, rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -197,6 +188,10 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 {
 	int	i;
 
+	for (i = 0; i < args_cnt; i++)
+		if (args[i]->rebuild_pre_cb)
+			args[i]->rebuild_pre_cb(args[i]);
+
 	/** exclude the target from the pool */
 	for (i = 0; i < rank_nr; i++) {
 		rebuild_test_exclude_tgt(args, args_cnt, failed_ranks[i], kill);
@@ -210,6 +205,12 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 
 	if (args[0]->myrank == 0)
 		test_rebuild_wait(args, args_cnt);
+
+	if (!kill) {
+		/* Add back the target if it is not being killed */
+		for (i = 0; i < rank_nr; i++)
+			rebuild_test_add_tgt(args, args_cnt, failed_ranks[i]);
+	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	for (i = 0; i < args_cnt; i++)
@@ -258,8 +259,6 @@ rebuild_dkeys(void **state)
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -290,8 +289,6 @@ rebuild_akeys(void **state)
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -325,8 +322,6 @@ rebuild_indexes(void **state)
 
 	/* Rebuild rank 1 */
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -366,8 +361,6 @@ rebuild_multiple(void **state)
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -399,8 +392,6 @@ rebuild_large_rec(void **state)
 	ioreq_fini(&req);
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -423,8 +414,6 @@ rebuild_objects(void **state)
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -445,14 +434,14 @@ rebuild_drop_scan(void **state)
 	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Set drop scan fail_loc on server 0 */
-	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
-			     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
-			     NULL);
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
+				     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
+				     NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -473,14 +462,14 @@ rebuild_retry_rebuild(void **state)
 	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Set no hdl fail_loc on all servers */
-	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
-			     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
-			     NULL);
+	if (arg->myrank == 0)	
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
+				     NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -501,14 +490,14 @@ rebuild_retry_for_stale_pool(void **state)
 	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Set no hdl fail_loc on all servers */
-	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
-			     DAOS_REBUILD_STALE_POOL | DAOS_FAIL_ONCE,
-			     NULL);
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     DAOS_REBUILD_STALE_POOL | DAOS_FAIL_ONCE,
+				     NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -529,14 +518,14 @@ rebuild_drop_obj(void **state)
 	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Set drop scan reply on all servers */
-	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
-			     DAOS_REBUILD_DROP_OBJ | DAOS_FAIL_ONCE,
-			     NULL);
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
+				     DAOS_REBUILD_DROP_OBJ | DAOS_FAIL_ONCE,
+				     NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -557,12 +546,12 @@ rebuild_update_failed(void **state)
 	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Set drop scan reply on all servers */
-	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
-			     DAOS_REBUILD_UPDATE_FAIL | DAOS_FAIL_ONCE,
-			     NULL);
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
+				     DAOS_REBUILD_UPDATE_FAIL | DAOS_FAIL_ONCE,
+				     NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -600,8 +589,6 @@ rebuild_multiple_pools(void **state)
 	rebuild_io_validate(args[1], oids, OBJ_NR);
 
 	test_teardown((void **)&args[1]);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static int
@@ -683,8 +670,6 @@ rebuild_destroy_container(void **state)
 	rebuild_pools_targets(args, 2, ranks_to_kill, 1);
 
 	test_teardown((void **)&args[1]);
-
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -705,13 +690,14 @@ rebuild_iv_tgt_fail(void **state)
 	rebuild_io(arg, oids, OBJ_NR);
 
 	/* Set no hdl fail_loc on all servers */
-	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
-			     DAOS_REBUILD_TGT_IV_UPDATE_FAIL | DAOS_FAIL_ONCE,
-			     NULL);
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     DAOS_REBUILD_TGT_IV_UPDATE_FAIL |
+				     DAOS_FAIL_ONCE, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
 }
 
 static void
@@ -732,68 +718,38 @@ rebuild_tgt_start_fail(void **state)
 	rebuild_io(arg, oids, OBJ_NR);
 
 	/* failed to start rebuild on rank 0 */
-	daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
-			     DAOS_REBUILD_TGT_START_FAIL | DAOS_FAIL_ONCE,
-			     NULL);
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_REBUILD_TGT_START_FAIL | DAOS_FAIL_ONCE,
+				  NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
-	rebuild_test_add_tgt(arg, 1, ranks_to_kill[0]);
-	rebuild_test_add_tgt(arg, 1, 0);
 }
 
-static void
-rebuild_offline(void **state)
+static int
+rebuild_pool_connect_internal(void *data)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oids[OBJ_NR];
-	int		i;
+	test_arg_t	*arg = data;
 	int		rc;
 
-	if (!test_runable(arg, 6))
-		skip();
-
-	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
-		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
-	}
-
-	rebuild_io(arg, oids, OBJ_NR);
-
-	/* Close cont and disconnect pool */
-	MPI_Barrier(MPI_COMM_WORLD);
-	rc = daos_cont_close(arg->coh, NULL);
-	if (rc) {
-		print_message("failed to close container "DF_UUIDF
-			      ": %d\n", DP_UUID(arg->co_uuid), rc);
-		return;
-	}
-	arg->coh = DAOS_HDL_INVAL;
-
-	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
-	if (rc) {
-		print_message("failed to disconnect pool "DF_UUIDF
-			      ": %d\n", DP_UUID(arg->pool_uuid), rc);
-		return;
-	}
-	arg->poh = DAOS_HDL_INVAL;
-
-	MPI_Barrier(MPI_COMM_WORLD);
-
-	rebuild_targets(&arg, 1, ranks_to_kill, 1, true);
-
-	/* reconnect the pool again */
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
 				       DAOS_PC_RW, &arg->poh, &arg->pool_info,
 				       NULL /* ev */);
-		if (rc) {
+		if (rc)
 			print_message("daos_pool_connect failed, rc: %d\n", rc);
-			return;
-		}
+
+		print_message("pool connect "DF_UUIDF"\n",
+			       DP_UUID(arg->pool_uuid));
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		return rc;
 
 	/** broadcast pool info */
 	if (arg->multi_rank) {
@@ -809,14 +765,223 @@ rebuild_offline(void **state)
 				    &arg->coh, &arg->co_info, NULL);
 		if (rc)
 			print_message("daos_cont_open failed, rc: %d\n", rc);
+
+		print_message("container open "DF_UUIDF"\n",
+			       DP_UUID(arg->co_uuid));
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		return rc;
 
 	/** broadcast container info */
 	if (arg->multi_rank) {
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 0);
 	}
+
+	return 0;
+}
+
+static int
+rebuild_pool_disconnect_internal(void *data)
+{
+	test_arg_t	*arg = data;
+	int		rc = 0;
+	int		rc_reduce = 0;
+
+	/* Close cont and disconnect pool */
+	rc = daos_cont_close(arg->coh, NULL);
+	if (arg->multi_rank) {
+		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
+			      MPI_COMM_WORLD);
+		rc = rc_reduce;
+	}
+	print_message("container close "DF_UUIDF"\n",
+		      DP_UUID(arg->co_uuid));
+	if (rc)
+		print_message("failed to close container "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (rc)
+		return rc;
+
+	arg->coh = DAOS_HDL_INVAL;
+	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
+	if (rc)
+		print_message("failed to disconnect pool "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->pool_uuid), rc);
+
+	print_message("pool disconnect "DF_UUIDF"\n",
+		      DP_UUID(arg->pool_uuid));
+
+	arg->poh = DAOS_HDL_INVAL;
+	MPI_Barrier(MPI_COMM_WORLD);
+	return rc;
+}
+
+static int
+rebuild_pool_disconnect_cb(void *data)
+{
+	test_arg_t	*arg = data;
+
+	rebuild_pool_disconnect_internal(data);
+
+	/* Disable fail_loc and start rebuild */
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	return 0;
+}
+
+static void
+rebuild_tgt_pool_disconnect_internal(void **state, unsigned int fail_loc)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
+
+	if (!test_runable(arg, 6))
+		skip();
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
+
+	rebuild_io(arg, oids, OBJ_NR);
+
+	/* hang the rebuild during scan */
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, fail_loc,
+				     NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* NB: During the test, one target will be excluded from the pool map,
+	 * then container/pool will be closed/disconnectd during the rebuild,
+	 * i.e. before the target is added back. so the container hdl cache
+	 * will be left on the excluded target after the target is added back.
+	 * So the container might not be able to destroyed because of the left
+	 * over container hdl. Once the container is able to evict the container
+	 * hdl, then this issue can be fixed. XXX
+	 */
+	arg->rebuild_cb = rebuild_pool_disconnect_cb;
+	arg->rebuild_post_cb = rebuild_pool_connect_internal;
+
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	arg->rebuild_cb = NULL;
+	arg->rebuild_post_cb = NULL;
+
+	rebuild_io_validate(arg, oids, OBJ_NR);
+}
+
+static void
+rebuild_tgt_pool_disconnect_in_scan(void **state)
+{
+	rebuild_tgt_pool_disconnect_internal(state,
+					     DAOS_REBUILD_TGT_SCAN_HANG |
+					     DAOS_FAIL_VALUE);
+}
+
+static void
+rebuild_tgt_pool_disconnect_in_rebuild(void **state)
+{
+	rebuild_tgt_pool_disconnect_internal(state,
+					     DAOS_REBUILD_TGT_REBUILD_HANG |
+					     DAOS_FAIL_VALUE);
+}
+
+static int
+rebuild_pool_connect_cb(void *data)
+{
+	test_arg_t	*arg = data;
+
+	rebuild_pool_connect_internal(data);
+	/* Disable fail_loc and start rebuild */
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+	return 0;
+}
+
+static void
+rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
+
+	if (!test_runable(arg, 6))
+		skip();
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
+
+	rebuild_io(arg, oids, OBJ_NR);
+
+	/* hang the rebuild */
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, fail_loc,
+				     NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	arg->rebuild_pre_cb = rebuild_pool_disconnect_internal;
+	arg->rebuild_cb = rebuild_pool_connect_cb;
+
+	rebuild_targets(&arg, 1, ranks_to_kill, 1, true);
+
+	arg->rebuild_pre_cb = NULL;
+	arg->rebuild_cb = NULL;
+
+	rebuild_io_validate(arg, oids, OBJ_NR);
+}
+
+static void
+rebuild_offline_pool_connect_in_scan(void **state)
+{
+	rebuild_offline_pool_connect_internal(state,
+					      DAOS_REBUILD_TGT_SCAN_HANG |
+					      DAOS_FAIL_VALUE);
+}
+
+static void
+rebuild_offline_pool_connect_in_rebuild(void **state)
+{
+	rebuild_offline_pool_connect_internal(state,
+					      DAOS_REBUILD_TGT_REBUILD_HANG |
+					      DAOS_FAIL_VALUE);
+}
+
+static void
+rebuild_offline(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
+
+	if (!test_runable(arg, 6))
+		skip();
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
+	rebuild_io(arg, oids, OBJ_NR);
+
+	arg->rebuild_pre_cb = rebuild_pool_disconnect_internal;
+	arg->rebuild_post_cb = rebuild_pool_connect_internal;
+
+	rebuild_targets(&arg, 1, ranks_to_kill, 1, true);
+
+	arg->rebuild_pre_cb = NULL;
+	arg->rebuild_post_cb = NULL;
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
 }
@@ -946,11 +1111,19 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_iv_tgt_fail, NULL, test_case_teardown},
 	{"REBUILD15: rebuild tgt start fail",
 	rebuild_tgt_start_fail, NULL, test_case_teardown},
-	{"REBUILD16: offline rebuild",
+	{"REBUILD16: disconnect pool during scan",
+	 rebuild_tgt_pool_disconnect_in_scan, NULL, test_case_teardown},
+	{"REBUILD17: disconnect pool during rebuild",
+	 rebuild_tgt_pool_disconnect_in_rebuild, NULL, test_case_teardown},
+	{"REBUILD18: connect pool during scan for offline rebuild",
+	 rebuild_offline_pool_connect_in_scan, NULL, test_case_teardown},
+	{"REBUILD19: connect pool during rebuild for offline rebuild",
+	 rebuild_offline_pool_connect_in_rebuild, NULL, test_case_teardown},
+	{"REBUILD20: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD17: rebuild with master failure",
+	{"REBUILD21: rebuild with master failure",
 	 rebuild_master_failure, NULL, test_case_teardown},
-	{"REBUILD18: rebuild with two failures",
+	{"REBUILD22: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
 };
 

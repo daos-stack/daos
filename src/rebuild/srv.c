@@ -67,6 +67,7 @@ rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver)
 	struct rebuild_pool_tls *pool_tls;
 	struct rebuild_pool_tls *found = NULL;
 
+	D_ASSERT(tls != NULL);
 	/* Only 1 thread will access the list, no need lock */
 	d_list_for_each_entry(pool_tls, &tls->rebuild_pool_list,
 			      rebuild_pool_list) {
@@ -556,6 +557,8 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 			last_print = now;
 			D_PRINT("%s", sbuf);
 		}
+
+		ABT_thread_yield();
 	}
 }
 

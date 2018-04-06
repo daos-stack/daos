@@ -620,6 +620,20 @@ iv_ns_create_internal(unsigned int ns_id, d_rank_t master_rank,
 	return 0;
 }
 
+/* Destroy iv ns. */
+void
+ds_iv_ns_destroy(void *ns)
+{
+	struct ds_iv_ns *iv_ns = ns;
+
+	if (iv_ns == NULL)
+		return;
+
+	D_DEBUG(DB_TRACE, "destroy ivns %d\n", iv_ns->iv_ns_id);
+	iv_ns_destroy_internal(iv_ns);
+	D_FREE_PTR(ns);
+}
+
 /**
  * Create namespace for server IV, which will only
  * be called on master node
@@ -652,7 +666,7 @@ ds_iv_ns_create(crt_context_t ctx, crt_group_t *grp,
 	*ns_id = ns->iv_ns_id;
 free:
 	if (rc)
-		iv_ns_destroy_internal(ns);
+		ds_iv_ns_destroy(ns);
 
 	return rc;
 }
@@ -684,7 +698,7 @@ ds_iv_ns_attach(crt_context_t ctx, unsigned int ns_id,
 
 free:
 	if (rc)
-		iv_ns_destroy_internal(ns);
+		ds_iv_ns_destroy(ns);
 
 	return rc;
 }
@@ -702,19 +716,6 @@ unsigned int
 ds_iv_ns_id_get(void *ns)
 {
 	return ((struct ds_iv_ns *)ns)->iv_ns_id;
-}
-
-/* Destroy iv ns. */
-void
-ds_iv_ns_destroy(void *ns)
-{
-	struct ds_iv_ns *iv_ns = ns;
-
-	if (iv_ns == NULL)
-		return;
-
-	D_DEBUG(DB_TRACE, "destroy ivns %d\n", iv_ns->iv_ns_id);
-	iv_ns_destroy_internal(iv_ns);
 }
 
 int
