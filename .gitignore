@@ -1,3 +1,4 @@
+autodocs/
 cci.ini
 .gitreview
 .build_vars-*.sh

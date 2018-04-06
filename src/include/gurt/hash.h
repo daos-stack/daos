@@ -62,6 +62,9 @@ struct d_hash_table;
 extern "C" {
 #endif
 
+/** @addtogroup GURT
+ * @{
+ */
 /******************************************************************************
  * Generic Hash Table APIs / data structures
  ******************************************************************************/
@@ -71,8 +74,13 @@ typedef struct {
 	 * Compare \p key with the key of the record \p rlink
 	 * This member function is mandatory.
 	 *
-	 * \return	true	The key of the record equals to \p key.
-	 *		false	Not match
+	 * \param[in] htable	hash table
+	 * \param[in] rlink	The link chain of the record
+	 * \param[in] key	Key to compare
+	 * \param[in] ksize	Size of the key
+	 *
+	 * \retval	true	The key of the record equals to \p key.
+	 * \retval	false	No match
 	 */
 	bool	 (*hop_key_cmp)(struct d_hash_table *htable, d_list_t *rlink,
 				const void *key, unsigned int ksize);
@@ -82,8 +90,9 @@ typedef struct {
 	 * This function is called before inserting a record w/o key into a
 	 * hash table.
 	 *
-	 * \param rlink	[IN]	The link chain of the record to generate key.
-	 * \param arg	[IN]	Input arguments for the key generating.
+	 * \param[in] htable	hash table
+	 * \param[in] rlink	The link chain of the record to generate key.
+	 * \param[in] arg	Input arguments for the key generating.
 	 */
 	void	 (*hop_key_init)(struct d_hash_table *htable,
 				 d_list_t *rlink, void *arg);
@@ -91,8 +100,9 @@ typedef struct {
 	 * Optional, return the key of record \p rlink to \p key_pp, and size of
 	 * the key as the returned value.
 	 *
-	 * \param rlink  [IN]	The link chain of the record being queried.
-	 * \param key_pp [OUT]	The returned key.
+	 * \param[in] htable	hash table
+	 * \param[in] rlink	The link chain of the record being queried.
+	 * \param[out] key_pp	The returned key.
 	 *
 	 * \return		size of the key.
 	 */
@@ -101,6 +111,12 @@ typedef struct {
 	/**
 	 * Optional, hash \p key to a 32-bit value.
 	 * DJB2 hash is used when this function is abscent.
+	 *
+	 * \param[in] htable	hash table
+	 * \param[in] key	Key to hash
+	 * \param[in] ksize	Key size
+	 *
+	 * \return		hash of the key
 	 */
 	uint32_t (*hop_key_hash)(struct d_hash_table *htable, const void *key,
 				 unsigned int ksize);
@@ -109,7 +125,8 @@ typedef struct {
 	 * If this function is provided, it will be called for successfully
 	 * inserted record.
 	 *
-	 * \param rlink	[IN]	The record being referenced.
+	 * \param[in] htable	hash table
+	 * \param[in] rlink	The record being referenced.
 	 */
 	void	 (*hop_rec_addref)(struct d_hash_table *htable,
 				   d_list_t *rlink);
@@ -124,10 +141,11 @@ typedef struct {
 	 * If the record should not be automatically freed by the hash table
 	 * despite of refcount, then this function should never return true.
 	 *
-	 * \param rlink	[IN]	The rlink being released.
+	 * \param[in] htable	hash table
+	 * \param[in] rlink	The rlink being released.
 	 *
-	 * \return	False	Do nothing
-	 *		True	Only if refcount is zero and the hash item
+	 * \retval	false	Do nothing
+	 * \retval	true	Only if refcount is zero and the hash item
 	 *			can be freed. If this function can return
 	 *			true, then hop_rec_free() should be defined.
 	 */
@@ -137,7 +155,8 @@ typedef struct {
 	 * Optional, free the record \p rlink
 	 * It is called if hop_decref() returns zero.
 	 *
-	 * \param rlink	[IN]	The record being freed.
+	 * \param[in] htable	hash table
+	 * \param[in] rlink	The record being freed.
 	 */
 	void	 (*hop_rec_free)(struct d_hash_table *htable, d_list_t *rlink);
 } d_hash_table_ops_t;
@@ -218,14 +237,16 @@ struct d_hash_table {
 /**
  * Create a new hash table.
  *
- * Note: Please be careful while using rwlock and refcount at the same time,
- * see d_hash_feats for the details.
+ * \note Please be careful while using rwlock and refcount at the same time,
+ * see \ref d_hash_feats for the details.
  *
- * \param feats		[IN]	Feature bits, see D_HASH_FT_*
- * \param bits		[IN]	power2(bits) is the size of hash table
- * \param priv		[IN]	Private data for the hash table
- * \param hops		[IN]	Customized member functions
- * \param htable_pp	[OUT]	The newly created hash table
+ * \param[in] feats		Feature bits, see D_HASH_FT_*
+ * \param[in] bits		power2(bits) is the size of hash table
+ * \param[in] priv		Private data for the hash table
+ * \param[in] hops		Customized member functions
+ * \param[out] htable_pp	The newly created hash table
+ *
+ * \return			0 on success, negative value on error
  */
 int  d_hash_table_create(uint32_t feats, unsigned int bits,
 			  void *priv, d_hash_table_ops_t *hops,
@@ -236,14 +257,16 @@ int  d_hash_table_create(uint32_t feats, unsigned int bits,
  *
  * Does not allocate the htable pointer itself
  *
- * Note: Please be careful while using rwlock and refcount at the same time,
- * see d_hash_feats for the details.
+ * \note Please be careful while using rwlock and refcount at the same time,
+ * see \ref d_hash_feats for the details.
  *
- * \param feats		[IN]	Feature bits, see D_HASH_FT_*
- * \param bits		[IN]	power2(bits) is the size of hash table
- * \param priv		[IN]	Private data for the hash table
- * \param hops		[IN]	Customized member functions
- * \param htable	[IN]	Hash table to be initialised
+ * \param[in] feats		Feature bits, see D_HASH_FT_*
+ * \param[in] bits		power2(bits) is the size of hash table
+ * \param[in] priv		Private data for the hash table
+ * \param[in] hops		Customized member functions
+ * \param[in] htable		Hash table to be initialised
+ *
+ * \return			0 on success, negative value on error
  */
 int  d_hash_table_create_inplace(uint32_t feats, unsigned int bits,
 				 void *priv, d_hash_table_ops_t *hops,
@@ -255,11 +278,11 @@ typedef int (*d_hash_traverse_cb_t)(d_list_t *rlink, void *arg);
  * Traverse a hash table, call the traverse callback function on every item.
  * Break once the callback returns non-zero.
  *
- * \param htable	[IN]	The hash table to be finalised.
- * \param cb		[IN]	Traverse callback, will be called on every item
+ * \param[in] htable		The hash table to be finalised.
+ * \param[in] cb		Traverse callback, will be called on every item
  *				in the hash table.
- *				\see d_hash_traverse_cb_t.
- * \param arg		[IN]	Arguments for the callback.
+ *				See \a d_hash_traverse_cb_t.
+ * \param[in] arg			Arguments for the callback.
  *
  * \return			zero on success, negative value if error.
  */
@@ -269,13 +292,15 @@ int d_hash_table_traverse(struct d_hash_table *htable,
 /**
  * Destroy a hash table.
  *
- * \param htable	[IN]	The hash table to be destroyed.
- * \param force		[IN]	True:
+ * \param[in] htable		The hash table to be destroyed.
+ * \param[in] force		true:
  *				Destroy the hash table even it is not empty,
  *				all pending items will be deleted.
- *				False:
+ *				false:
  *				Destroy the hash table only if it is empty,
  *				otherwise returns error
+ *
+ * \return			zero on success, negative value if error.
  */
 int  d_hash_table_destroy(struct d_hash_table *htable, bool force);
 
@@ -284,13 +309,15 @@ int  d_hash_table_destroy(struct d_hash_table *htable, bool force);
  *
  * Note this does NOT free htable itself - only the members it contains.
  *
- * \param htable	[IN]	The hash table to be finalised.
- * \param force		[IN]	True:
+ * \param[in] htable		The hash table to be finalised.
+ * \param[in] force		true:
  *				Finalise the hash table even it is not empty,
  *				all pending items will be deleted.
- *				False:
+ *				false:
  *				Finalise the hash table only if it is empty,
  *				otherwise returns error
+ *
+ * \return			zero on success, negative value if error.
  */
 int  d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force);
 
@@ -298,9 +325,11 @@ int  d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force);
  * lookup \p key in the hash table, the found chain rlink is returned on
  * success.
  *
- * \param htable	[IN]	Pointer to the hash table
- * \param key		[IN]	The key to search
- * \param ksize		[IN]	Size of the key
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] key		The key to search
+ * \param[in] ksize		Size of the key
+ *
+ * \return			found chain rlink
  */
 d_list_t *d_hash_rec_find(struct d_hash_table *htable, const void *key,
 			  unsigned int ksize);
@@ -310,10 +339,12 @@ d_list_t *d_hash_rec_find(struct d_hash_table *htable, const void *key,
  * returned, otherwise \p rlink will be inserted into the hash table. In the
  * later case, the returned link chain is the input \p rlink.
  *
- * \param htable	[IN]	Pointer to the hash table
- * \param key		[IN]	The key to be inserted
- * \param ksize		[IN]	Size of the key
- * \param rlink		[IN]	The link chain of the record being inserted
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] key		The key to be inserted
+ * \param[in] ksize		Size of the key
+ * \param[in] rlink		The link chain of the record being inserted
+ *
+ * \return			matched record
  */
 d_list_t *d_hash_rec_find_insert(struct d_hash_table *htable,
 				 const void *key, unsigned int ksize,
@@ -327,11 +358,13 @@ d_list_t *d_hash_rec_find_insert(struct d_hash_table *htable,
  * If \p exclusive is true, it can succeed only if the key is unique, otherwise
  * this function returns error.
  *
- * \param htable	[IN]	Pointer to the hash table
- * \param key		[IN]	The key to be inserted
- * \param ksize		[IN]	Size of the key
- * \param rlink		[IN]	The link chain of the record being inserted
- * \param exclusive	[IN]	The key has to be unique if it is true.
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] key		The key to be inserted
+ * \param[in] ksize		Size of the key
+ * \param[in] rlink		The link chain of the record being inserted
+ * \param[in] exclusive		The key has to be unique if it is true.
+ *
+ * \return			0 on success, negative value on error
  */
 int  d_hash_rec_insert(struct d_hash_table *htable, const void *key,
 		       unsigned int ksize, d_list_t *rlink,
@@ -342,9 +375,11 @@ int  d_hash_rec_insert(struct d_hash_table *htable, const void *key,
  * This function calls hop_key_init() to generate a key for the new rlink
  * under the protection of the hash table lock.
  *
- * \param htable	[IN]	Pointer to the hash table
- * \param rlink		[IN]	The link chain of the hash record
- * \param arg		[IN]	Arguments for key generating
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] rlink		The link chain of the hash record
+ * \param[in] arg		Arguments for key generating
+ *
+ * \return			0 on success, negative value on error
  */
 int  d_hash_rec_insert_anonym(struct d_hash_table *htable, d_list_t *rlink,
 			       void *arg);
@@ -352,12 +387,12 @@ int  d_hash_rec_insert_anonym(struct d_hash_table *htable, d_list_t *rlink,
 /**
  * Delete the record identified by \p key from the hash table.
  *
- * \param htable	[IN]	Pointer to the hash table
- * \param key		[IN]	The key of the record being deleted
- * \param ksize		[IN]	Size of the key
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] key		The key of the record being deleted
+ * \param[in] ksize		Size of the key
  *
- * return		True	Item with \p key has been deleted
- *			False	Can't find the record by \p key
+ * \retval			true	Item with \p key has been deleted
+ * \retval			false	Can't find the record by \p key
  */
 bool d_hash_rec_delete(struct d_hash_table *htable, const void *key,
 		       unsigned int ksize);
@@ -367,20 +402,20 @@ bool d_hash_rec_delete(struct d_hash_table *htable, const void *key,
  * This record will be freed if hop_rec_free() is defined and the hash table
  * holds the last refcount.
  *
- * \param htable	[IN]	Pointer to the hash table
- * \param rlink		[IN]	The link chain of the record
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] rlink		The link chain of the record
  *
- * return		True	Successfully deleted the record
- *			False	The record has already been unlinked from the
- *				hash table
+ * \retval			true	Successfully deleted the record
+ * \retval			false	The record has already been unlinked
+ *					from the hash table
  */
 bool d_hash_rec_delete_at(struct d_hash_table *htable, d_list_t *rlink);
 
 /**
  * Increase the refcount of the record.
  *
- * \param htable	[IN]	Pointer to the hash table
- * \param rlink		[IN]	The link chain of the record
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] rlink		The link chain of the record
  */
 void d_hash_rec_addref(struct d_hash_table *htable, d_list_t *rlink);
 
@@ -389,8 +424,8 @@ void d_hash_rec_addref(struct d_hash_table *htable, d_list_t *rlink);
  * The record will be freed if hop_decref() returns true and the EPHEMERAL bit
  * is set.
  *
- * \param htable	[IN]	Pointer to the hash table
- * \param rlink		[IN]	Chain rlink of the hash record
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] rlink		Chain rlink of the hash record
  */
 void d_hash_rec_decref(struct d_hash_table *htable, d_list_t *rlink);
 
@@ -398,12 +433,12 @@ void d_hash_rec_decref(struct d_hash_table *htable, d_list_t *rlink);
  * Decrease the refcount of the record by count.
  * The record will be freed if hop_decref() returns true.
  *
- * \param htable	[IN]	Pointer to the hash table
- * \param count		[IN]	Number of references to drop
- * \param rlink		[IN]	Chain rlink of the hash record
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] count		Number of references to drop
+ * \param[in] rlink		Chain rlink of the hash record
  *
- * \return		0	Success
- *			-DER_INVAL Not enough references were held.
+ * \retval			0		Success
+ * \retval			-DER_INVAL	Not enough references were held.
  */
 int d_hash_rec_ndecref(struct d_hash_table *htable, int count,
 		       d_list_t *rlink);
@@ -411,8 +446,10 @@ int d_hash_rec_ndecref(struct d_hash_table *htable, int count,
 /**
  * Check if the link chain has already been unlinked from the hash table.
  *
- * \return	True	Yes
- *		False	No
+ * \param[in] rlink		The link chain of the record
+ *
+ * \retval			true	Yes
+ * \retval			false	No
  */
 bool d_hash_rec_unlinked(d_list_t *rlink);
 
@@ -425,15 +462,17 @@ bool d_hash_rec_unlinked(d_list_t *rlink);
  * semantics.  It's main use is for draining a hash table before calling
  * destroy()
  *
- * \param htable	[IN]	Pointer to the hash table
+ * \param[in] htable		Pointer to the hash table
  *
- * \return		rlink	Pointer to first element in hash table
- *			NULL	Hash table is empty or error occurred
+ * \retval			rlink	Pointer to first element in hash table
+ * \retval			NULL	Hash table is empty or error occurred
  */
 d_list_t *d_hash_rec_first(struct d_hash_table *htable);
 
 /**
  * If debugging is enabled, prints stats about the hash table
+ *
+ * \param[in] htable		Pointer to the hash table
  */
 void d_hash_table_debug(struct d_hash_table *htable);
 
@@ -456,11 +495,11 @@ void d_hash_table_debug(struct d_hash_table *htable);
  * with bit 0 set as 1.
  */
 enum {
-	D_HTYPE_PTR		= 0, /* pointer type handle */
-	D_HTYPE_EQ		= 1, /* event queue */
-	D_HTYPE_POOL		= 3, /* pool */
-	D_HTYPE_CO		= 5, /* container */
-	D_HTYPE_OBJ		= 7, /* object */
+	D_HTYPE_PTR		= 0, /**< pointer type handle */
+	D_HTYPE_EQ		= 1, /**< event queue */
+	D_HTYPE_POOL		= 3, /**< pool */
+	D_HTYPE_CO		= 5, /**< container */
+	D_HTYPE_OBJ		= 7, /**< object */
 	/* Needs to enlarge D_HTYPE_BITS to add more types */
 };
 
@@ -489,9 +528,9 @@ void d_hhash_destroy(struct d_hhash *hh);
 void d_hhash_hlink_init(struct d_hlink *hlink, struct d_hlink_ops *ops);
 /**
  * Insert to handle hash table.
- * If /a type is D_HTYPE_PTR, user MUST ensure the bit 0 of /a hlink pointer is
+ * If \a type is D_HTYPE_PTR, user MUST ensure the bit 0 of \a hlink pointer is
  * zero. Assuming zero value of bit 0 of the pointer is reasonable portable. It
- * is with undefined result if bit 0 of /a hlink pointer is 1 for D_HTYPE_PTR
+ * is with undefined result if bit 0 of \a hlink pointer is 1 for D_HTYPE_PTR
  * type.
  */
 void d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink,
@@ -545,4 +584,6 @@ struct d_ulink *d_uhash_link_lookup(struct d_hash_table *uhtab,
 }
 #endif
 
+/** @}
+ */
 #endif /*__GURT_HASH_H__*/

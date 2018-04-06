@@ -53,6 +53,8 @@ extern "C" {
 #endif
 
 /**
+ * \file
+ *
  * Binary heap
  *
  * The binary heap is a scalable data structure created using a binary tree. It
@@ -73,13 +75,16 @@ extern "C" {
  * select to use its own external lock mechanism as well.
  */
 
+/** @addtogroup GURT
+ * @{
+ */
+
 /**
  * Binary heap node.
  *
  * Objects of this type are embedded into objects of the ordered set that is to
  * be maintained by a struct d_binheap instance.
  */
-
 struct d_binheap_node {
 	/** Index into the binary tree */
 	uint32_t	chn_idx;
@@ -122,8 +127,8 @@ struct d_binheap_ops {
 	 *
 	 * Implementing this operation is optional.
 	 *
-	 * \param h [IN]	The heap
-	 * \param e [IN]	The node
+	 * \param[in] h		The heap
+	 * \param[in] e		The node
 	 *
 	 * \return		zero on success, negative value if error
 	 */
@@ -134,8 +139,8 @@ struct d_binheap_ops {
 	 *
 	 * Implementing this operation is optional.
 	 *
-	 * \param h [IN]	The heap
-	 * \param e [IN]	The node
+	 * \param[in] h		The heap
+	 * \param[in] e		The node
 	 *
 	 * \return		zero on success, negative value if error
 	 */
@@ -147,8 +152,8 @@ struct d_binheap_ops {
 	 *
 	 * Implementing this operation is mandatory.
 	 *
-	 * \param a [IN]	The first heap node
-	 * \param b [IN]	The second heap node
+	 * \param[in] a		The first heap node
+	 * \param[in] b		The second heap node
 	 *
 	 * \return		true if node a < node b,
 	 *			false if node a > node b.
@@ -189,11 +194,11 @@ struct d_binheap {
 /**
  * Creates and initializes a binary heap instance.
  *
- * \param feats [IN]	The heap feats bits
- * \param count [IN]	The initial heap capacity in # of nodes
- * \param priv [IN]	An optional private argument
- * \param ops [IN]	The operations to be used
- * \param h [IN/OUT]	The 2nd level pointer of created binheap
+ * \param[in] feats	The heap feats bits
+ * \param[in] count	The initial heap capacity in # of nodes
+ * \param[in] priv	An optional private argument
+ * \param[in] ops	The operations to be used
+ * \param[in,out] h	The 2nd level pointer of created binheap
  *
  * \return		zero on success, negative value if error
  */
@@ -203,11 +208,11 @@ int d_binheap_create(uint32_t feats, uint32_t count, void *priv,
 /**
  * Creates and initializes a binary heap instance inplace.
  *
- * \param feats [IN]	The heap feats bits
- * \param count [IN]	The initial heap capacity in # of nodes
- * \param priv [IN]	An optional private argument
- * \param ops [IN]	The operations to be used
- * \param h [IN]	The pointer of binheap
+ * \param[in] feats	The heap feats bits
+ * \param[in] count	The initial heap capacity in # of nodes
+ * \param[in] priv	An optional private argument
+ * \param[in] ops	The operations to be used
+ * \param[in,out] h	The pointer of binheap
  *
  * \return		zero on success, negative value if error
  */
@@ -220,7 +225,7 @@ int d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
  * Deallocates memory for all indirection levels and the binary heap object
  * itself.
  *
- * \param h [IN]	The binary heap object
+ * \param[in] h		The binary heap object
  */
 void d_binheap_destroy(struct d_binheap *h);
 
@@ -230,15 +235,15 @@ void d_binheap_destroy(struct d_binheap *h);
  * Deallocates memory for all indirection levels and clear data in binary heap
  * object as zero.
  *
- * \param h [IN]	The binary heap object
+ * \param[in] h		The binary heap object
  */
 void d_binheap_destroy_inplace(struct d_binheap *h);
 
 /**
  * Obtains a pointer to a heap node, given its index into the binary tree.
  *
- * \param h [IN]	The binary heap
- * \param idx [IN]	The requested node's index
+ * \param[in] h		The binary heap
+ * \param[in] idx	The requested node's index
  *
  * \return		valid-pointer of the requested heap node,
  *			NULL if index is out of bounds
@@ -248,8 +253,8 @@ struct d_binheap_node *d_binheap_find(struct d_binheap *h, uint32_t idx);
 /**
  * Sort-inserts a node into the binary heap.
  *
- * \param h [IN]	The heap
- * \param e [IN]	The node
+ * \param[in] h		The heap
+ * \param[in] e		The node
  *
  * \return		0 if the node inserted successfully
  *			negative value if error
@@ -259,15 +264,15 @@ int d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e);
 /**
  * Removes a node from the binary heap.
  *
- * \param h [IN]	The heap
- * \param e [IN]	The node
+ * \param[in] h		The heap
+ * \param[in] e		The node
  */
 void d_binheap_remove(struct d_binheap *h, struct d_binheap_node *e);
 
 /**
  * Removes the root node from the binary heap.
  *
- * \param h [IN]	The heap
+ * \param[in] h		The heap
  *
  * \return		valid pointer of the removed root node,
  *			or NULL when empty.
@@ -277,7 +282,7 @@ struct d_binheap_node *d_binheap_remove_root(struct d_binheap *h);
 /**
  * Queries the size (number of nodes) of the binary heap.
  *
- * \param h [IN]	The heap
+ * \param[in] h		The heap
  *
  * \return		positive value of the size,
  *			or -DER_INVAL for NULL heap.
@@ -296,10 +301,10 @@ d_binheap_size(struct d_binheap *h)
 /**
  * Queries if the binary heap is empty.
  *
- * \param h [IN]	The heap
+ * \param[in] h		The heap
  *
- * \return		true when empty (or for NULL heap),
- *			false when non-empty.
+ * \retval		true	heap is empty (or for NULL heap),
+ * \retval		false	heap is non-empty.
  */
 static inline bool
 d_binheap_is_empty(struct d_binheap *h)
@@ -313,7 +318,7 @@ d_binheap_is_empty(struct d_binheap *h)
 /**
  * Gets back the root node of the binary heap.
  *
- * \param h [IN]	The heap
+ * \param[in] h		The heap
  *
  * \return		valid pointer of the root node, or NULL in error case.
  */
@@ -327,4 +332,6 @@ d_binheap_root(struct d_binheap *h)
 }
 #endif
 
+/** @}
+ */
 #endif /* __GURT_HEAP_H__ */

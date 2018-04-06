@@ -37,7 +37,9 @@
  */
 #ifndef __GURT_LIST_H__
 #define __GURT_LIST_H__
-/*
+/**
+ * \file
+ *
  * Simple doubly linked list implementation.
  *
  * Some of the internal functions ("__xxx") are useful when
@@ -47,6 +49,9 @@
  * using the generic single-entry routines.
  */
 
+/** @addtogroup GURT
+ * @{
+ */
 #define prefetch(a) ((void)a)
 
 struct d_list_head {
@@ -85,11 +90,10 @@ __gurt_list_add(d_list_t *newe, d_list_t *prev, d_list_t *next)
 
 /**
  * Insert an entry at the start of a list.
- * \param newe  new entry to be inserted
- * \param head list to add it to
+ * This is useful for implementing stacks.
  *
- * Insert a new entry after the specified head.
- * This is good for implementing stacks.
+ * \param[in] newe	new entry to be inserted
+ * \param[in] head	list to add it to
  */
 static inline void
 d_list_add(d_list_t *newe, d_list_t *head)
@@ -99,11 +103,11 @@ d_list_add(d_list_t *newe, d_list_t *head)
 
 /**
  * Insert an entry at the end of a list.
- * \param newe  new entry to be inserted
- * \param head list to add it to
- *
- * Insert a new entry before the specified head.
  * This is useful for implementing queues.
+ *
+ * \param[in] newe	new entry to be inserted
+ * \param[in] head	list to add it to
+ *
  */
 static inline void
 d_list_add_tail(d_list_t *newe, d_list_t *head)
@@ -111,11 +115,14 @@ d_list_add_tail(d_list_t *newe, d_list_t *head)
 	__gurt_list_add(newe, head->prev, head);
 }
 
-/*
+/**
  * Delete a list entry by making the prev/next entries
  * point to each other.
  *
- * This is only for internal list manipulation where we know
+ * \param[in] prev	previous entry
+ * \param[in] next	next entry
+ *
+ * \note This is only for internal list manipulation where we know
  * the prev/next entries already!
  */
 static inline void
@@ -127,8 +134,10 @@ __gurt_list_del(d_list_t *prev, d_list_t *next)
 
 /**
  * Remove an entry from the list it is currently in.
- * \param entry the entry to remove
- * Note: list_empty(entry) does not return true after this, the entry is in an
+ *
+ * \param[in]	entry the entry to remove
+ *
+ * \note list_empty(entry) does not return true after this, the entry is in an
  * undefined state.
  */
 static inline void
@@ -139,7 +148,8 @@ d_list_del(d_list_t *entry)
 
 /**
  * Remove an entry from the list it is currently in and reinitialize it.
- * \param entry the entry to remove.
+ *
+ * \param[in] entry	the entry to remove.
  */
 static inline void
 d_list_del_init(d_list_t *entry)
@@ -151,8 +161,9 @@ d_list_del_init(d_list_t *entry)
 /**
  * Remove an entry from the list it is currently in and insert it at the start
  * of another list.
- * \param list the entry to move
- * \param head the list to move it to
+ *
+ * \param[in] list	the entry to move
+ * \param[in] head	the list to move it to
  */
 static inline void
 d_list_move(d_list_t *list, d_list_t *head)
@@ -164,8 +175,9 @@ d_list_move(d_list_t *list, d_list_t *head)
 /**
  * Remove an entry from the list it is currently in and insert it at the end of
  * another list.
- * \param list the entry to move
- * \param head the list to move it to
+ *
+ * \param[in] list	the entry to move
+ * \param[in] head	the list to move it to
  */
 static inline void
 d_list_move_tail(d_list_t *list, d_list_t *head)
@@ -176,7 +188,8 @@ d_list_move_tail(d_list_t *list, d_list_t *head)
 
 /**
  * Test whether a list is empty
- * \param head the list to test.
+ *
+ * \param[in] head	the list to test.
  */
 static inline int
 d_list_empty(d_list_t *head)
@@ -185,13 +198,12 @@ d_list_empty(d_list_t *head)
 }
 
 /**
- * Test whether a list is empty and not being modified
- * \param head the list to test
- *
  * Tests whether a list is empty _and_ checks that no other CPU might be
  * in the process of modifying either member (next or prev)
  *
- * NOTE: using d_list_empty_careful() without synchronization
+ * \param[in] head the list to test
+ *
+ * \note using d_list_empty_careful() without synchronization
  * can only be safe if the only activity that can happen
  * to the list entry is d_list_del_init(). Eg. it cannot be used
  * if another CPU could re-list_add() it.
@@ -220,11 +232,12 @@ __gurt_list_splice(d_list_t *list, d_list_t *head)
 
 /**
  * Join two lists
- * \param list the new list to add.
- * \param head the place to add it in the first list.
- *
- * The contents of \a list are added at the start of \a head.  \a list is in an
+ * The contents of \p list are added at the start of \p head.  \p list is in an
  * undefined state on return.
+ *
+ * \param[in] list	the new list to add.
+ * \param[in] head	the place to add it in the first list.
+ *
  */
 static inline void
 d_list_splice(d_list_t *list, d_list_t *head)
@@ -235,11 +248,11 @@ d_list_splice(d_list_t *list, d_list_t *head)
 
 /**
  * Join two lists and reinitialise the emptied list.
- * \param list the new list to add.
- * \param head the place to add it in the first list.
- *
- * The contents of \a list are added at the start of \a head.  \a list is empty
+ * The contents of \p list are added at the start of \p head.  \p list is empty
  * on return.
+ *
+ * \param[in,out] list	the new list to add.
+ * \param[in] head	the place to add it in the first list.
  */
 static inline void
 d_list_splice_init(d_list_t *list, d_list_t *head)
@@ -252,20 +265,21 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
 
 /**
  * Get the container of a list
- * \param ptr	 the embedded list.
- * \param type	 the type of the struct this is embedded in.
- * \param member the member name of the list within the struct.
+ * \param[in] ptr	the embedded list.
+ * \param[in] type	the type of the struct this is embedded in.
+ * \param[in] member	the member name of the list within the struct.
  */
 #define d_list_entry(ptr, type, member) \
 	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
 /**
  * Iterate over a list
- * \param pos	the iterator
- * \param head	the list to iterate over
- *
- * Behaviour is undefined if \a pos is removed from the list in the body of the
+ * Behaviour is undefined if \p pos is removed from the list in the body of the
  * loop.
+ *
+ * \param[in] pos	the iterator
+ * \param[in] head	the list to iterate over
+ *
  */
 #define d_list_for_each(pos, head) \
 	for (pos = (head)->next, prefetch(pos->next); pos != (head); \
@@ -273,12 +287,13 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
 
 /**
  * Iterate over a list safely
- * \param pos	the iterator
- * \param n     temporary storage
- * \param head	the list to iterate over
  *
  * This is safe to use if \a pos could be removed from the list in the body of
  * the loop.
+ *
+ * \param[in] pos	the iterator
+ * \param[in] n		temporary storage
+ * \param[in] head	the list to iterate over
  */
 #define d_list_for_each_safe(pos, n, head) \
 	for (pos = (head)->next, n = pos->next; pos != (head); \
@@ -286,22 +301,15 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
 
 /**
  * Iterate over a list continuing after existing point
- * \param pos    the type * to use as a loop counter
- * \param head   the list head
- * \param member the name of the list_struct within the struct
+ *
+ * \param[in] pos	the type * to use as a loop counter
+ * \param[in] head	the list head
+ * \param[in] member	the name of the list_struct within the struct
  */
 #define d_list_for_each_entry_continue(pos, head, member)                 \
 	for (pos = d_list_entry(pos->member.next, __typeof__(*pos), member);\
 	     prefetch(pos->member.next), &pos->member != (head);             \
 	     pos = d_list_entry(pos->member.next, __typeof__(*pos), member))
-
-/**
- * \defgroup hlist Hash List
- * Double linked lists with a single pointer list head.
- * Mostly useful for hash tables where the two pointer list head is too
- * wasteful.  You lose the ability to access the tail in O(1).
- * @{
- */
 
 typedef struct d_hlist_node {
 	struct d_hlist_node *next, **pprev;
@@ -311,7 +319,6 @@ typedef struct d_hlist_head {
 	d_hlist_node_t *first;
 } d_hlist_head_t;
 
-/* @} */
 
 /*
  * "NULL" might not be defined at this point
@@ -322,10 +329,6 @@ typedef struct d_hlist_head {
 #define NULL_P ((void *)0)
 #endif
 
-/**
- * \addtogroup hlist
- * @{
- */
 
 #define D_HLIST_HEAD_INIT { NULL_P }
 #define D_HLIST_HEAD(name) d_hlist_head_t name = { NULL_P }
@@ -415,10 +418,11 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 
 /**
  * Iterate over an hlist of given type
- * \param tpos	 the type * to use as a loop counter.
- * \param pos	 the &struct hlist_node to use as a loop counter.
- * \param head	 the head for your list.
- * \param member the name of the hlist_node within the struct.
+ *
+ * \param[in] tpos	the type * to use as a loop counter.
+ * \param[in] pos	the &struct hlist_node to use as a loop counter.
+ * \param[in] head	the head for your list.
+ * \param[in] member	the name of the hlist_node within the struct.
  */
 #define dhlist_for_each_entry(tpos, pos, head, member)                   \
 	for (pos = (head)->first;                                           \
@@ -429,9 +433,10 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 
 /**
  * Iterate over an hlist continuing after existing point
- * \param tpos	 the type * to use as a loop counter.
- * \param pos	 the &struct hlist_node to use as a loop counter.
- * \param member the name of the hlist_node within the struct.
+ *
+ * \param[in] tpos	the type * to use as a loop counter.
+ * \param[in] pos	the &struct hlist_node to use as a loop counter.
+ * \param[in] member	the name of the hlist_node within the struct.
  */
 #define dhlist_for_each_entry_continue(tpos, pos, member)                \
 	for (pos = (pos)->next;                                             \
@@ -442,9 +447,10 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 
 /**
  * Iterate over an hlist continuing from an existing point
- * \param tpos	 the type * to use as a loop counter.
- * \param pos	 the &struct hlist_node to use as a loop counter.
- * \param member the name of the hlist_node within the struct.
+ *
+ * \param[in] tpos	the type * to use as a loop counter.
+ * \param[in] pos	the &struct hlist_node to use as a loop counter.
+ * \param[in] member	the name of the hlist_node within the struct.
  */
 #define dhlist_for_each_entry_from(tpos, pos, member)		    \
 	for (; pos && ({ prefetch(pos->next); 1; }) &&                      \
@@ -454,11 +460,12 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 
 /**
  * Iterate over an hlist of given type safe against removal of list entry
- * \param tpos	 the type * to use as a loop counter.
- * \param pos	 the &struct hlist_node to use as a loop counter.
- * \param n	 another &struct hlist_node to use as temporary storage
- * \param head	 the head for your list.
- * \param member the name of the hlist_node within the struct.
+ *
+ * \param[in] tpos	the type * to use as a loop counter.
+ * \param[in] pos	the &struct hlist_node to use as a loop counter.
+ * \param[in] n		another &struct hlist_node to use as temporary storage
+ * \param[in] head	the head for your list.
+ * \param[in] member	the name of the hlist_node within the struct.
  */
 #define dhlist_for_each_entry_safe(tpos, pos, n, head, member)           \
 	for (pos = (head)->first;                                            \
@@ -467,13 +474,13 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 		   1; });                                                    \
 	     pos = n)
 
-/* @} */
 
 #ifndef d_list_for_each_prev
 /**
  * Iterate over a list in reverse order
- * \param pos	the &struct list_head to use as a loop counter.
- * \param head	the head for your list.
+ *
+ * \param[in] pos	the &struct list_head to use as a loop counter.
+ * \param[in] head	the head for your list.
  */
 #define d_list_for_each_prev(pos, head) \
 	for (pos = (head)->prev, prefetch(pos->prev); pos != (head);     \
@@ -484,9 +491,10 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 #ifndef d_list_for_each_entry
 /**
  * Iterate over a list of given type
- * \param pos        the type * to use as a loop counter.
- * \param head       the head for your list.
- * \param member     the name of the list_struct within the struct.
+ *
+ * \param[in] pos	the type * to use as a loop counter.
+ * \param[in] head	the head for your list.
+ * \param[in] member	the name of the list_struct within the struct.
  */
 #define d_list_for_each_entry(pos, head, member)                          \
 	for (pos = d_list_entry((head)->next, __typeof__(*pos), member),  \
@@ -509,9 +517,10 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 #ifndef d_list_for_each_entry_reverse
 /**
  * Iterate backwards over a list of given type.
- * \param pos        the type * to use as a loop counter.
- * \param head       the head for your list.
- * \param member     the name of the list_struct within the struct.
+ *
+ * \param[in] pos	the type * to use as a loop counter.
+ * \param[in] head	the head for your list.
+ * \param[in] member	the name of the list_struct within the struct.
  */
 #define d_list_for_each_entry_reverse(pos, head, member)                  \
 	for (pos = d_list_entry((head)->prev, __typeof__(*pos), member);  \
@@ -522,10 +531,11 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 #ifndef d_list_for_each_entry_safe
 /**
  * Iterate over a list of given type safe against removal of list entry
- * \param pos        the type * to use as a loop counter.
- * \param n          another type * to use as temporary storage
- * \param head       the head for your list.
- * \param member     the name of the list_struct within the struct.
+ *
+ * \param[in] pos	the type * to use as a loop counter.
+ * \param[in] n		another type * to use as temporary storage
+ * \param[in] head	the head for your list.
+ * \param[in] member	the name of the list_struct within the struct.
  */
 #define d_list_for_each_entry_safe(pos, n, head, member)                   \
 	for (pos = d_list_entry((head)->next, __typeof__(*pos), member),   \
@@ -540,13 +550,13 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 #ifndef d_list_for_each_entry_safe_from
 /**
  * Iterate over a list continuing from an existing point
- * \param pos        the type * to use as a loop cursor.
- * \param n          another type * to use as temporary storage
- * \param head       the head for your list.
- * \param member     the name of the list_struct within the struct.
- *
  * Iterate over list of given type from current point, safe against
  * removal of list entry.
+ *
+ * \param[in] pos	the type * to use as a loop cursor.
+ * \param[in] n		another type * to use as temporary storage
+ * \param[in] head	the head for your list.
+ * \param[in] member	the name of the list_struct within the struct.
  */
 #define d_list_for_each_entry_safe_from(pos, n, head, member)             \
 	for (n = d_list_entry(pos->member.next, __typeof__(*pos), member);\
@@ -569,19 +579,19 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 
 #define d_list_for_each_entry_safe_typed(pos, n, head, type, member)	\
 	for (pos = d_list_entry((head)->next, type, member),		\
-	     n = d_list_entry(pos->member.next, type, member);	\
-	     &pos->member != (head);                                    \
+	     n = d_list_entry(pos->member.next, type, member);		\
+	     &pos->member != (head);					\
 	     pos = n, n = d_list_entry(n->member.next, type, member))
 
 #define d_list_for_each_entry_safe_from_typed(pos, n, head, type, member)  \
 	for (n = d_list_entry(pos->member.next, type, member);             \
-	     &pos->member != (head);                                          \
+	     &pos->member != (head);                                       \
 	     pos = n, n = d_list_entry(n->member.next, type, member))
 
-#define dhlist_for_each_entry_typed(tpos, pos, head, type, member)   \
-	for (pos = (head)->first;                                        \
-	     pos && (prefetch(pos->next), 1) &&                          \
-		(tpos = d_hlist_entry(pos, type, member), 1);         \
+#define dhlist_for_each_entry_typed(tpos, pos, head, type, member)	\
+	for (pos = (head)->first;					\
+	     pos && (prefetch(pos->next), 1) &&				\
+		(tpos = d_hlist_entry(pos, type, member), 1);		\
 	     pos = pos->next)
 
 #define dhlist_for_each_entry_safe_typed(tpos, pos, n, head, type, member) \
@@ -594,4 +604,6 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 }
 #endif
 
+/** @}
+ */
 #endif /* __GURT_LIST_H__ */

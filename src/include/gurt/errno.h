@@ -36,11 +36,16 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
+ * \file
+ *
  * GURT Error numbers
  */
 
 #ifndef __GURT_ERRNO_H__
 #define __GURT_ERRNO_H__
+/** @addtogroup GURT
+ * @{
+ */
 
 /*
  * This preprocessor machinery defines the errno values but also
@@ -176,4 +181,6 @@ typedef enum {
 
 const char *d_errstr(int rc);
 
+/** @}
+ */
 #endif /*  __GURT_ERRNO_H__ */

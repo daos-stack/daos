@@ -63,10 +63,18 @@
  * OR DOCUMENTATION.
  */
 
-/* dlog.h  define API for message logging system */
+/**
+ * \file
+ *
+ * APIs and defines for message logging system
+ */
 
 #ifndef _DLOG_H_
 #define _DLOG_H_
+
+/** @addtogroup GURT_LOG
+ * @{
+ */
 
 #include <inttypes.h>
 #include <stdarg.h>
@@ -74,60 +82,62 @@
 #include <stdlib.h>
 
 /* clog open flavor */
-#define DLOG_FLV_LOGPID	(1 << 0)	/* include pid in log tag */
-#define DLOG_FLV_FQDN	(1 << 1)	/* log fully quallified domain name */
-#define DLOG_FLV_FAC	(1 << 2)	/* log facility name */
-#define DLOG_FLV_YEAR	(1 << 3)	/* log year */
-#define DLOG_FLV_TAG	(1 << 4)	/* log tag */
-#define DLOG_FLV_STDOUT	(1 << 5)	/* always log to stdout */
-#define DLOG_FLV_STDERR	(1 << 6)	/* always log to stderr */
+#define DLOG_FLV_LOGPID	(1 << 0)	/**< include pid in log tag */
+#define DLOG_FLV_FQDN	(1 << 1)	/**< log fully quallified domain name */
+#define DLOG_FLV_FAC	(1 << 2)	/**< log facility name */
+#define DLOG_FLV_YEAR	(1 << 3)	/**< log year */
+#define DLOG_FLV_TAG	(1 << 4)	/**< log tag */
+#define DLOG_FLV_STDOUT	(1 << 5)	/**< always log to stdout */
+#define DLOG_FLV_STDERR	(1 << 6)	/**< always log to stderr */
 
 /* per-message log flag values */
-#define DLOG_STDERR     0x20000000	/* always log to stderr */
-#define DLOG_STDOUT     0x10000000	/* always log to stdout */
+#define DLOG_STDERR     0x20000000	/**< always log to stderr */
+#define DLOG_STDOUT     0x10000000	/**< always log to stdout */
 
-#define DLOG_PRIMASK    0x07ffff00	/* priority mask */
-#define DLOG_EMERG      0x07000000	/* emergency */
-#define DLOG_ALERT      0x06000000	/* alert */
-#define DLOG_CRIT       0x05000000	/* critical */
-#define DLOG_ERR        0x04000000	/* error */
-#define DLOG_WARN       0x03000000	/* warning */
-#define DLOG_NOTE       0x02000000	/* notice */
-#define DLOG_INFO       0x01000000	/* info */
+#define DLOG_PRIMASK    0x07ffff00	/**< priority mask */
+#define DLOG_EMERG      0x07000000	/**< emergency */
+#define DLOG_ALERT      0x06000000	/**< alert */
+#define DLOG_CRIT       0x05000000	/**< critical */
+#define DLOG_ERR        0x04000000	/**< error */
+#define DLOG_WARN       0x03000000	/**< warning */
+#define DLOG_NOTE       0x02000000	/**< notice */
+#define DLOG_INFO       0x01000000	/**< info */
 
-#define DLOG_PRISHIFT   24		/* to get non-debug level */
-#define DLOG_DPRISHIFT  8		/* to get debug level */
-#define DLOG_DBG        0x00ffff00	/* all debug streams */
-#define DLOG_FACMASK    0x000000ff	/* facility mask */
+#define DLOG_PRISHIFT   24		/**< to get non-debug level */
+#define DLOG_DPRISHIFT  8		/**< to get debug level */
+#define DLOG_DBG        0x00ffff00	/**< all debug streams */
+#define DLOG_FACMASK    0x000000ff	/**< facility mask */
 
-/* The environment variable for the default debug bit-mask */
+/** The environment variable for the default debug bit-mask */
 #define DD_MASK_ENV	"DD_MASK"
 #define DD_MASK_DEFAULT	"all"
 #define DD_SEP		","
 
-/* The environment variable for setting debug level being output to stderr.
+/**
+ * The environment variable for setting debug level being output to stderr.
  * Options: "info", "note", "warn", "err", "crit", "emerg".
  * Default: "crit", which is used by D__FATAL, D__ASSERT and D__ASSERTF
  */
 #define DD_STDERR_ENV	"DD_STDERR"
 
-/* The environment variable for enabled debug facilities (subsystems) */
+/** The environment variable for enabled debug facilities (subsystems) */
 #define DD_FAC_ENV	"DD_SUBSYS"
 #define DD_FAC_ALL	"all"
 
 /*
  * Debug bits for common logic paths, can only have up to 16 different bits.
  */
-/* wildcard for unclassed debug messages */
+
+/** wildcard for unclassed debug messages */
 #define DB_ANY		(1 << (DLOG_DPRISHIFT + 0))
-/* function trace, tree/hash/lru operations, a very expensive one */
+/** function trace, tree/hash/lru operations, a very expensive one */
 #define DB_TRACE	(1 << (DLOG_DPRISHIFT + 1))
-#define DB_MEM		(1 << (DLOG_DPRISHIFT + 2)) /* memory operation */
-#define DB_NET		(1 << (DLOG_DPRISHIFT + 3)) /* network operation */
-#define DB_IO		(1 << (DLOG_DPRISHIFT + 4)) /* object I/O */
-#define DB_TEST		(1 << (DLOG_DPRISHIFT + 5)) /* test programs */
-#define DB_ALL		DLOG_DBG                    /* all of masks */
-/* Configurable debug bits (project-specific) */
+#define DB_MEM		(1 << (DLOG_DPRISHIFT + 2)) /**< memory operation */
+#define DB_NET		(1 << (DLOG_DPRISHIFT + 3)) /**< network operation */
+#define DB_IO		(1 << (DLOG_DPRISHIFT + 4)) /**< object I/O */
+#define DB_TEST		(1 << (DLOG_DPRISHIFT + 5)) /**< test programs */
+#define DB_ALL		DLOG_DBG                    /**< all of masks */
+/** Configurable debug bits (project-specific) */
 #define DB_OPT1		(1 << (DLOG_DPRISHIFT + 6))
 #define DB_OPT2		(1 << (DLOG_DPRISHIFT + 7))
 #define DB_OPT3		(1 << (DLOG_DPRISHIFT + 8))
@@ -139,29 +149,30 @@
 #define DB_OPT9		(1 << (DLOG_DPRISHIFT + 14))
 #define DB_OPT10	(1 << (DLOG_DPRISHIFT + 15))
 
-/* dlog_fac: facility name and mask info */
+/** facility name and mask info */
 struct dlog_fac {
-	int fac_mask;  /* log level for this facility */
-	char *fac_aname;  /* abbreviated name of this facility */
-	char *fac_lname;  /* optional long name of this facility */
+	int fac_mask;		/**< log level for this facility */
+	char *fac_aname;	/**< abbreviated name of this facility */
+	char *fac_lname;	/**< optional long name of this facility */
 };
 
-/* clog global state */
+/** dlog global state */
 struct d_log_xstate {
-	char			*tag; /* tag string */
+	char			*tag; /**< tag string */
 	/* note that tag is NULL if clog is not open/inited */
-	struct dlog_fac		*dlog_facs; /* array of facility */
-	int			 fac_cnt; /* # of facilities */
-	char			*nodename; /* pointer to our utsname */
+	struct dlog_fac		*dlog_facs; /**< array of facility */
+	int			 fac_cnt; /**< # of facilities */
+	char			*nodename; /**< pointer to our utsname */
 };
 
 struct d_debug_data {
 	uint64_t		dd_mask_init;
-	/* debug bitmask, e.g. DB_IO */
+	/** debug bitmask, e.g. DB_IO */
 	uint64_t		dd_mask;
 	/** priority level that should be output to stderr */
 	uint64_t		dd_prio_err;
 };
+
 /**
  * Priority level for debug message.
  * It is only used by D_INFO, D_NOTE, D_WARN, D_ERROR, D_CRIT and
@@ -196,10 +207,11 @@ extern struct d_log_xstate d_log_xst;
 extern struct d_debug_data d_dbglog_data;
 
 /**
- * d_log_check: clog a message using stdarg list without checking filtering
+ * log a message using stdarg list without checking filtering
  *
- * \param flags [IN]		facility+level+misc flags
- * @return flags to pass to d_vlog, 0 indicates no log
+ * \param[in] flags		facility+level+misc flags
+ *
+ * \return			flags to pass to d_vlog, 0 indicates no log
  */
 static inline int d_log_check(int flags)
 {
@@ -241,26 +253,26 @@ static inline int d_log_check(int flags)
 }
 
 /**
- * d_vlog: log a message using stdarg list without checking flags
+ * log a message using stdarg list without checking flags
  *
  * A log line cannot be larger than DLOG_TBSZ (4096), if it is larger it will be
  * (silently) truncated].
  *
- * \param flags [IN]		flags returned from d_log_check
- * \param fmt [IN]		printf-style format string
- * @param ap [IN]		stdarg list
+ * \param[in] flags		flags returned from d_log_check
+ * \param[in] fmt		printf-style format string
+ * \param[in] ap		stdarg list
  */
 void d_vlog(int flags, const char *fmt, va_list ap);
 
 /**
- * d_log: clog a message if type specified by flags is enabled
+ * log a message if type specified by flags is enabled
  *
  * A log line cannot be larger than DLOG_TBSZ (4096), if it is larger it will be
  * (silently) truncated].
  *
- * \param flags [IN]		facility+level+misc flags
- * \param fmt [IN]		printf-style format string
- * @param ap [IN]		stdarg list
+ * \param[in] flags		facility+level+misc flags
+ * \param[in] fmt		printf-style format string
+ * \param[in] ap		stdarg list
  */
 static inline void d_log(int flags, const char *fmt, ...)
 	__attribute__ ((__format__(__printf__, 2, 3)));
@@ -279,15 +291,15 @@ static inline void d_log(int flags, const char *fmt, ...)
 }
 
 /**
- * d_log_allocfacility: allocate a new facility with the given name
+ * allocate a new facility with the given name
  *
- * \param aname [IN]		the abbr. name for the facility
+ * \param[in] aname		the abbr. name for the facility
  *				can be null for no name
- * \param lname [IN]		the long name for the new facility
+ * \param[in] lname		the long name for the new facility
  *				can be null for no name
  *
- * \return			new facility number on success
- *				-1 on error - malloc problem.
+ * \return			new facility number on success, -1 on
+ *				error - malloc problem.
  */
 int d_log_allocfacility(const char *aname, const char *lname);
 
@@ -301,12 +313,22 @@ int d_log_allocfacility(const char *aname, const char *lname);
  * mechanism from another library because clog doesn't allow multiple
  * log files.   It's better for things in the same process to share
  * anyway.
+ *
+ * \return			0 on success, negative value on error
  */
 int d_log_init(void);
 
 /**
- * Advanced version of clog initialing function. User can specify log tag,
+ * Advanced version of log initialing function. User can specify log tag,
  * output log file, the default log mask and the mask for output errors.
+ *
+ * \param[in] log_tag		Log tag
+ * \param[in] log_file		Log file
+ * \param[in] flavor		Flavor controlling output
+ * \param[in] def_mask		Default log mask
+ * \param[in] err_mask		Output errors mask
+ *
+ * \return			0 on success, -1 on failure
  */
 int d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 		     uint64_t def_mask, uint64_t err_mask);
@@ -318,31 +340,32 @@ int d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 void d_log_fini(void);
 
 /**
- * d_log_close: close off an clog and release any allocated resources.
+ * close off an log and release any allocated resources.
  */
 void d_log_close(void);
 
-/** Reapplies the masks set in D_LOG_MASK.   Can be called after adding new
- *  log facilities to ensure that the mask is set appropriately for the
- *  previously unknown facilities.
+/**
+ * Reapplies the masks set in D_LOG_MASK.   Can be called after adding new
+ * log facilities to ensure that the mask is set appropriately for the
+ * previously unknown facilities.
  *
- *  \param opt_dbg_mask [IN]	debug bit mask of configurable debug bits only
- *  \param overwrite [IN]	option to overwrite DD_MASK value previously set
+ * \param[in] opt_dbg_mask	debug bit mask of configurable debug bits only
+ * \param[in] overwrite		option to overwrite DD_MASK value previously set
  */
 void d_log_sync_mask(uint64_t opt_dbg_mask, bool overwrite);
 
 /**
- * d_log_open: open a clog.
+ * open a dlog.
  *
- * \param tag [IN]		string we tag each line with
- * \param maxfac_hint [IN]	hint as to largest user fac value will be used
- * \param default_mask [IN]	the default mask to use for each facility
- * \param stderr_mask [IN]	messages with a mask above this go to stderr.
+ * \param[in] tag		string we tag each line with
+ * \param[in] maxfac_hint	hint as to largest user fac value will be used
+ * \param[in] default_mask	the default mask to use for each facility
+ * \param[in] stderr_mask	messages with a mask above this go to stderr.
  *				if pass in 0, then output goes to stderr only if
  *				DLOG_STDERR is used (either in d_log_open or
  *				in d_log).
- * \param logfile [IN]		log file name, or null if no log file
- * \param flags [IN]		STDERR, LOGPID
+ * \param[in] logfile		log file name, or null if no log file
+ * \param[in] flags		STDERR, LOGPID
  *
  * \return			0 on success, -1 on error.
  */
@@ -350,36 +373,41 @@ int d_log_open(char *tag, int maxfac_hint, int default_mask,
 	      int stderr_mask, char *logfile, int flags);
 
 /**
- * d_log_setlogmask: set the logmask for a given facility.
+ * set the logmask for a given facility.
  *
- * \param facility [IN]		Facility number
- * \param mask [IN]		The new mask for the facility
+ * \param[in] facility		Facility number
+ * \param[in] mask		The new mask for the facility
+ *
+ * \return			0 on success, -1 on error.
  */
 int d_log_setlogmask(int facility, int mask);
 
 /**
- * d_log_setmasks: set clog masks for a set of facilities to a given level.
+ * set log masks for a set of facilities to a given level.
  * the input string should look like: PREFIX1=LEVEL1,PREFIX2=LEVEL2,...
  * where the "PREFIX" is the facility name defined with d_log_namefacility().
  *
- * \param mstr [IN]		settings to use (doesn't have to be null term'd
+ * \param[in] mstr		settings to use (doesn't have to be null term'd
  *				if mstr >= 0)
- * \param mlen [IN]		length of mstr (if < 0, assume null terminated,
+ * \param[in] mlen		length of mstr (if < 0, assume null terminated,
  *				use strlen)
+ *
+ * \return			0 on success, -1 on error.
  */
 int d_log_setmasks(char *mstr, int mlen);
 
 /**
- * d_log_getmasks: get current mask level as a string (not null terminated).
+ * get current mask level as a string (not null terminated).
  * if the buffer is null, we probe for length rather than fill.
  *
- * \param buf [OUT]		the buffer to put the results in
+ * \param[out] buf		the buffer to put the results in
  *				(NULL == probe for length)
- * \param discard [IN]		bytes to discard before starting to fill buf
- * \param len [IN]		length of the buffer
- * \param unterm [IN]		if non-zero do not include a trailing null
+ * \param[in] discard		bytes to discard before starting to fill buf
+ * \param[in] len		length of the buffer
+ * \param[in] unterm		if non-zero do not include a trailing null
  *
- * \return bytes returned (may be trunced and non-null terminated if == len)
+ * \return			bytes returned (may be trunced and non-null
+ *				terminated if == len)
  */
 int d_log_getmasks(char *buf, int discard, int len, int unterm);
 
@@ -388,5 +416,8 @@ int d_log_str2pri(const char *pstr);
 #if defined(__cplusplus)
 }
 #endif
+
+/** @}
+ */
 
 #endif /* _DLOG_H_ */

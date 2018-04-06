@@ -45,6 +45,14 @@
 #include <gurt/dlog.h>
 #include <gurt/errno.h>
 
+/**
+ * \file
+ * Debug macros and functions
+ */
+
+/** @addtogroup GURT_DEBUG
+ * @{
+ */
 #define DD_FAC(name)	(d_##name##_logfac)
 
 extern int DD_FAC(misc);
@@ -54,17 +62,17 @@ extern int DD_FAC(mem);
 #define D_LOGFAC	DD_FAC(misc)
 #endif
 
-#define D_LOG_FILE_ENV	"D_LOG_FILE"
-#define D_LOG_MASK_ENV	"D_LOG_MASK"
+#define D_LOG_FILE_ENV	"D_LOG_FILE"	/**< Env to specify log file */
+#define D_LOG_MASK_ENV	"D_LOG_MASK"	/**< Env to specify log mask */
 
 /* deprecated. these two are provided for the transition period. */
 #define CRT_LOG_FILE_ENV	"CRT_LOG_FILE"
 #define CRT_LOG_MASK_ENV	"CRT_LOG_MASK"
 
-/*
+/**
  * D_DEBUG/D_ERROR etc can-only be used when clog enabled. User can define other
  * similar macros using different subsystem and log-level, for example:
- * #define DSR_DEBUG(...) d_log(DSR_DEBUG, ...)
+ * \#define DSR_DEBUG(...) d_log(DSR_DEBUG, ...)
  */
 #define D_DEBUG(mask, fmt, ...)						\
 	d_log((mask) | D_LOGFAC,					\
@@ -79,11 +87,11 @@ extern int DD_FAC(mem);
 #define D_CRIT(fmt, ...)	D_DEBUG(DLOG_CRIT, fmt, ## __VA_ARGS__)
 #define D_FATAL(fmt, ...)	D_DEBUG(DLOG_EMERG, fmt, ## __VA_ARGS__)
 
-/*
+/**
  * Add a new log facility.
  *
- * \param aname [IN]	abbr. name for the facility, for example DSR.
- * \param lname [IN]	long name for the facility, for example DSR.
+ * \param[in] aname	abbr. name for the facility, for example DSR.
+ * \param[ib] lname	long name for the facility, for example DSR.
  *
  * \return		new positive facility number on success, -1 on error.
  */
@@ -93,6 +101,15 @@ d_add_log_facility(const char *aname, const char *lname)
 	return d_log_allocfacility(aname, lname);
 }
 
+/**
+ * Add a new log facility.
+ *
+ * \param[out fac	facility number to be returned
+ * \param[in] aname	abbr. name for the facility, for example DSR.
+ * \param[ib] lname	long name for the facility, for example DSR.
+ *
+ * \return		0 on success, -1 on error.
+ */
 static inline int
 d_init_log_facility(int *fac, const char *aname, const char *lname)
 {
@@ -107,7 +124,7 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
 	return DER_SUCCESS;
 }
 
-/*
+/**
  * D_PRINT_ERR must be used for any error logging before clog is enabled or
  * after it is disabled
  */
@@ -118,7 +135,9 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
 		fflush(stderr);						\
 	} while (0)
 
+/** Macro to trace function entry */
 #define D_ENTER			D_DEBUG(DB_TRACE, "Entered\n")
+/** Macro to trace function exit */
 #define D_EXIT			D_DEBUG(DB_TRACE, "Leaving\n")
 
 #define D_ASSERT(e)	assert(e)
@@ -136,4 +155,6 @@ do {									\
 #define DF_U64		"%" PRIu64
 #define DF_X64		"%" PRIx64
 
+/** @}
+ */
 #endif /* __GURT_DEBUG_H__ */

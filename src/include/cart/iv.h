@@ -327,8 +327,8 @@ struct crt_iv_class {
  * \param[in] grp		CRT group for the IV namespace
  * \param[in] tree_topo		tree topology for the IV message propagation,
  *				can be calculated by crt_tree_topo().
- *				See \ref enum crt_tree_type,
- *				\ref crt_tree_topo().
+ *				See \a enum crt_tree_type,
+ *				\a crt_tree_topo().
  * \param[in] iv_classes	the array of IV class. User must ensure passing
  *				same set of iv_classes when creating or
  *				attaching IV namespace, or undefined results are

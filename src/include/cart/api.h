@@ -271,7 +271,7 @@ crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep);
  * Set the timeout value for an RPC request.
  *
  * It is an optional function. If user does not call it, then will depend on
- * \ref CRT_TIMEOUT ENV as timeout value (see the CRT_TIMEOUT section in
+ * CRT_TIMEOUT ENV as timeout value (see the CRT_TIMEOUT section in
  * README.env). User can also explicitly set one RPC request's timeout value
  * by calling this function.
  *
@@ -853,8 +853,8 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
  *                             when this bcast RPC successfully finished.
  * \param[in] tree_topo        tree topology for the collective propagation,
  *                             can be calculated by crt_tree_topo().
- *                             See \ref enum crt_tree_type,
- *                             \ref crt_tree_topo().
+ *                             See \a crt_tree_type,
+ *                             \a crt_tree_topo().
  * \param req [out]            created collective RPC request
  *
  * \return                     DER_SUCCESS on success, negative value if error

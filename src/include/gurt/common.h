@@ -35,7 +35,14 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/**
+ * \file
+ * GURT Common functions and types.
+ */
 
+/** @defgroup GURT GURT */
+/** @defgroup GURT_LOG Gurt Log */
+/** @defgroup GURT_DEBUG Gurt Debug */
 #ifndef __GURT_COMMON_H__
 #define __GURT_COMMON_H__
 
@@ -55,11 +62,16 @@
 #include <gurt/errno.h>
 #include <gurt/debug.h>
 
+/** @addtogroup GURT
+ * @{
+ */
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-/* Get the current time using a monotonic timer
+/**
+ * Get the current time using a monotonic timer
  * param[out] ts A timespec structure for the result
  */
 #define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
@@ -85,6 +97,7 @@ typedef struct {
 typedef uint32_t	d_rank_t;
 
 typedef struct {
+	/** list of ranks */
 	d_rank_t	*rl_ranks;
 	/** number of ranks */
 	uint32_t	rl_nr;
@@ -185,7 +198,7 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 			"'" #newptr "': %i)\n", _sz);			\
 	} while (0)
 
-# define D_FREE(ptr)							\
+#define D_FREE(ptr)							\
 	do {								\
 		D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));	\
 		free(ptr);						\
@@ -357,6 +370,13 @@ void d_getenv_int(const char *env, unsigned int *int_val);
 #define D_SWAP32S(x)	do { *(x) = D_SWAP32(*(x)); } while (0)
 #define D_SWAP64S(x)	do { *(x) = D_SWAP64(*(x)); } while (0)
 
+/**
+ * convert system errno to DER_* variaent
+ *
+ * \param[in] err	System error code
+ *
+ * \return		Corresponding DER_* error code
+ */
 static inline int
 d_errno2der(int err)
 {
@@ -386,6 +406,14 @@ d_errno2der(int err)
 #endif
 
 /* timing utilities */
+
+/**
+ * Return current time in timespec form
+ *
+ * \param[out] t	timespec returned
+ *
+ * \return		0 on success, negative value on error
+ */
 static inline int
 d_gettime(struct timespec *t)
 {
@@ -401,7 +429,14 @@ d_gettime(struct timespec *t)
 	return rc;
 }
 
-/* Calculate t2 - t1 in nanoseconds */
+/**
+ * Calculate \a t2 - \a t1 time difference in nanoseconds
+ *
+ * \param[in] t1	First timespec
+ * \param[in] t2	Second timespec
+ *
+ * \return		Time difference in nanoseconds
+ */
 static inline int64_t
 d_timediff_ns(const struct timespec *t1, const struct timespec *t2)
 {
@@ -488,4 +523,6 @@ d_time2s(struct timespec t)
 }
 #endif
 
+/** @}
+ */
 #endif /* __GURT_COMMON_H__ */
