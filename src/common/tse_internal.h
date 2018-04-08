@@ -34,13 +34,16 @@
  */
 
 /* NB: tse_task_private is TSE_PRIV_SIZE = 504 bytes for now */
-#define TSE_TASK_ARG_LEN		376
+#define TSE_TASK_ARG_LEN		360
 
 struct tse_task_private {
 	struct tse_sched_private	*dtp_sched;
 
 	/* function for the task */
 	tse_task_func_t			 dtp_func;
+
+	/* links to user task list like tse_task_list_add/_del etc APIs */
+	d_list_t			 dtp_usr_link;
 
 	/* links to scheduler */
 	d_list_t			 dtp_list;

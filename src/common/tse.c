@@ -930,6 +930,7 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
 
 	D_INIT_LIST_HEAD(&dtp->dtp_list);
+	D_INIT_LIST_HEAD(&dtp->dtp_usr_link);
 	D_INIT_LIST_HEAD(&dtp->dtp_dep_list);
 	D_INIT_LIST_HEAD(&dtp->dtp_comp_cb_list);
 	D_INIT_LIST_HEAD(&dtp->dtp_prep_cb_list);
@@ -1045,15 +1046,8 @@ tse_task_list_add(tse_task_t *task, d_list_t *head)
 {
 	struct tse_task_private *dtp = tse_task2priv(task);
 
-	/* Note: this is export API, so once the task is scheduled,
-	 * it is not allowed to be moved to any list by an outsider.
-	 */
-	if (dtp->dtp_running || dtp->dtp_completed ||
-	    dtp->dtp_completing)
-		return -DER_NO_PERM;
-
-	D__ASSERT(d_list_empty(&dtp->dtp_list));
-	d_list_add_tail(&dtp->dtp_list, head);
+	D__ASSERT(d_list_empty(&dtp->dtp_usr_link));
+	d_list_add_tail(&dtp->dtp_usr_link, head);
 	return 0;
 }
 
@@ -1065,7 +1059,7 @@ tse_task_list_first(d_list_t *head)
 	if (d_list_empty(head))
 		return NULL;
 
-	dtp = d_list_entry(head->next, struct tse_task_private, dtp_list);
+	dtp = d_list_entry(head->next, struct tse_task_private, dtp_usr_link);
 	return tse_priv2task(dtp);
 }
 
@@ -1074,7 +1068,7 @@ tse_task_list_del(tse_task_t *task)
 {
 	struct tse_task_private *dtp = tse_task2priv(task);
 
-	d_list_del_init(&dtp->dtp_list);
+	d_list_del_init(&dtp->dtp_usr_link);
 }
 
 void
@@ -1105,7 +1099,7 @@ tse_task_list_depend(d_list_t *head, tse_task_t *task)
 	struct tse_task_private *dtp;
 	int			 rc;
 
-	d_list_for_each_entry(dtp, head, dtp_list) {
+	d_list_for_each_entry(dtp, head, dtp_usr_link) {
 		rc = tse_task_add_dependent(tse_priv2task(dtp), task);
 		if (rc)
 			return rc;
@@ -1119,10 +1113,27 @@ tse_task_depend_list(tse_task_t *task, d_list_t *head)
 	struct tse_task_private *dtp;
 	int			 rc;
 
-	d_list_for_each_entry(dtp, head, dtp_list) {
+	d_list_for_each_entry(dtp, head, dtp_usr_link) {
 		rc = tse_task_add_dependent(task, tse_priv2task(dtp));
 		if (rc)
 			return rc;
 	}
 	return 0;
+}
+
+int
+tse_task_list_traverse(d_list_t *head, tse_task_cb_t cb, void *arg)
+{
+	struct tse_task_private	*dtp;
+	struct tse_task_private	*tmp;
+	int			 ret = 0;
+	int			 rc;
+
+	d_list_for_each_entry_safe(dtp, tmp, head, dtp_usr_link) {
+		rc = cb(tse_priv2task(dtp), arg);
+		if (rc != 0)
+			ret = rc;
+	}
+
+	return ret;
 }

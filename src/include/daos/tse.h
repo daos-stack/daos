@@ -423,4 +423,12 @@ tse_task_list_depend(d_list_t *head, tse_task_t *task);
 int
 tse_task_depend_list(tse_task_t *task, d_list_t *head);
 
+/**
+ * Traverse all tasks on list \a head, invoke the \a cb with parameter of \a arg
+ * on each task. User is free to remove the task from the list \a head within
+ * the \a cb's executing.
+ */
+int
+tse_task_list_traverse(d_list_t *head, tse_task_cb_t cb, void *arg);
+
 #endif /* __TSE_SCHEDULE_H__ */
