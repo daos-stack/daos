@@ -1,6 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 '''
-  (C) Copyright 2017 Intel Corporation.
+  (C) Copyright 2018 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -40,22 +40,24 @@ import ServerUtils
 import CheckForPool
 import GetHostsFromFile
 
-def printFunc(thestring):
-       print("<SERVER>" + thestring)
 
 class DestroyTests(Test):
     """
     Tests DAOS pool removal
 
-    avocado: tags=pool,pooldestroy
+    :avocado: tags=pool,pooldestroy
     """
 
     # super wasteful since its doing this for every variation
     def setUp(self):
            global basepath
            global server_group
-           basepath = self.params.get("base",'/paths/','rubbish')
-           server_group = self.params.get("server_group",'/server/','daos_server')
+
+           # there is a presumption that this test lives in a specific
+           # spot in the repo
+           basepath = os.path.normpath(os.getcwd() + "../../../../")
+           server_group = self.params.get("server_group",'/server/',
+                                          'daos_server')
 
     def tearDown(self):
            pass
@@ -64,16 +66,16 @@ class DestroyTests(Test):
         """
         Test destroying a pool created on a single server, nobody is using
         the pool, force is not needed.
+
+        :avocado: tags=pool,pooldestroy,quick
         """
         global basepath
         global server_group
 
         hostfile = basepath
-        urifile = basepath
         hostfile += self.params.get("hostfile",'/run/testparams/one_host/')
-        urifile += self.params.get("urifile",'/run/testparams/urifiles/')
 
-        ServerUtils.runServer(hostfile, urifile, server_group, basepath)
+        ServerUtils.runServer(hostfile, server_group, basepath)
 
         # not sure I need to do this but ... give it time to start
         time.sleep(1)
@@ -88,13 +90,11 @@ class DestroyTests(Test):
                gid = os.getegid()
 
                # TODO make these params in the yaml
-               orterun = basepath + 'install/bin/orterun'
-               daosctl = basepath + 'install/bin/daosctl'
+               daosctl = basepath + '/install/bin/daosctl'
 
-               create_cmd = ('{0} --np 1 --ompi-server file:{1} '.
-                             format(orterun, urifile) +
-                      '{0} create-pool -m {1} -u {2} -g {3} -s {4}'.format(
-                             daosctl, 0x731, uid, gid, setid))
+               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
+                             format(daosctl, 0x731, uid, gid, setid))
+
                uuid_str = """{0}""".format(process.system_output(create_cmd))
                print("uuid is {0}\n".format(uuid_str))
 
@@ -104,11 +104,8 @@ class DestroyTests(Test):
                       self.fail("Pool {0} not found on host {1}.\n".
                                 format(uuid_str, host))
 
-               delete_cmd =  ('{0} --np 1 --ompi-server file:{1} {2}'
-                              ' destroy-pool -i {3} -s {4}'.
-                              format(orterun, urifile, daosctl, uuid_str,
-                                     setid))
-
+               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.
+                              format(daosctl, uuid_str, setid))
                process.system(delete_cmd)
 
                exists = CheckForPool.checkForPool(host, uuid_str)
@@ -129,16 +126,17 @@ class DestroyTests(Test):
     def test_delete_doesnt_exist(self):
         """
         Test destroying a pool uuid that doesn't exist.
+
+        :avocado: tags=pool,pooldestroy
         """
         global basepath
         global server_group
 
         hostfile = basepath + self.params.get("hostfile",
                 '/run/testparams/one_host/')
-        urifile = basepath + self.params.get("urifile",
-                '/run/testparams/urifiles/')
 
-        ServerUtils.runServer(hostfile, urifile, server_group)
+
+        ServerUtils.runServer(hostfile, server_group, basepath)
 
         # not sure I need to do this but ... give it time to start
         time.sleep(1)
@@ -151,12 +149,10 @@ class DestroyTests(Test):
                bogus_uuid = '81ef94d7-a59d-4a5e-935b-abfbd12f2105'
 
                # TODO make these params in the yaml
-               orterun = basepath + 'install/bin/orterun'
-               daosctl = basepath + 'install/bin/daosctl'
+               daosctl = basepath + '/install/bin/daosctl'
 
-               delete_cmd =  ('{0} --np 1 --ompi-server file:{1} {2} '
-                              'destroy-pool -i {3} -s {4}'.format(
-                             orterun, urifile, daosctl, bogus_uuid, setid))
+               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.format(
+                   daosctl, bogus_uuid, setid))
 
                process.system(delete_cmd)
 
@@ -178,16 +174,16 @@ class DestroyTests(Test):
     def test_delete_wrong_servers(self):
         """
         Test destroying a pool valid pool but use the wrong server group.
+
+        :avocado: tags=pool,pooldestroy
         """
         global basepath
         global server_group
 
         hostfile = basepath + self.params.get("hostfile",
                               '/run/testparams/one_host/')
-        urifile = basepath + self.params.get("urifile",
-                              '/run/testparams/urifiles/')
 
-        ServerUtils.runServer(hostfile, urifile, server_group)
+        ServerUtils.runServer(hostfile, server_group, basepath)
 
         # not sure I need to do this but ... give it time to start
         time.sleep(1)
@@ -202,8 +198,7 @@ class DestroyTests(Test):
         uuid_str = ""
 
         # TODO make these params in the yaml
-        orterun = basepath + 'install/bin/orterun'
-        daosctl = basepath + 'install/bin/daosctl'
+        daosctl = basepath + '/install/bin/daosctl'
 
         try:
                # use the uid/gid of the user running the test, these should
@@ -211,9 +206,7 @@ class DestroyTests(Test):
                uid = os.geteuid()
                gid = os.getegid()
 
-               create_cmd = ('{0} --np 1 --ompi-server file:{1} '.
-               format(orterun, urifile) +
-                      '{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
+               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
                       format(daosctl, 0x731, uid, gid, goodsetid))
                uuid_str = """{0}""".format(process.system_output(create_cmd))
                print("uuid is {0}\n".format(uuid_str))
@@ -223,9 +216,8 @@ class DestroyTests(Test):
                       self.fail("Pool {0} not found on host {1}.\n".
                       format(uuid_str, host))
 
-               delete_cmd =  ('{0} --np 1 --ompi-server file:{1} {2} '
-                              'destroy-pool -i {3} -s {4}'.format(orterun,
-                             urifile, daosctl, uuid_str, badsetid))
+               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.format(
+                             daosctl, uuid_str, badsetid))
 
                process.system(delete_cmd)
 
@@ -237,10 +229,8 @@ class DestroyTests(Test):
         except Exception as e:
                # expecting an exception, but now need to
                # clean up the pool for real
-               delete_cmd = ('{0} --np 1 --ompi-server file:{1} {2} '
-                             'destroy-pool '
-                              '-i {3} -s {4}'.format(orterun, urifile, daosctl,
-                                               uuid_str, goodsetid))
+               delete_cmd = ('{0} destroy-pool -i {1} -s {2}'.
+                             format(daosctl, uuid_str, goodsetid))
                process.system(delete_cmd)
 
         # no matter what happens shutdown the server
@@ -253,16 +243,16 @@ class DestroyTests(Test):
         Test destroying a pool created on two servers, nobody is using
         the pool, force is not needed.  This is accomplished by switching
         hostfiles.
+
+        :avocado: tags=pool,pooldestroy,multiserver
         """
         global basepath
         global server_group
 
         hostfile = basepath + self.params.get("hostfile",
                               '/run/testparams/two_hosts/')
-        urifile = basepath + self.params.get("urifile",
-        '/run/testparams/urifiles/')
 
-        ServerUtils.runServer(hostfile, urifile, server_group)
+        ServerUtils.runServer(hostfile, server_group, basepath)
 
         # not sure I need to do this but ... give it time to start
         time.sleep(1)
@@ -271,8 +261,7 @@ class DestroyTests(Test):
                                 '/run/testparams/setnames/validsetname/')
 
         # TODO make these params in the yaml
-        orterun = basepath + 'install/bin/orterun'
-        daosctl = basepath + 'install/bin/daosctl'
+        daosctl = basepath + '/install/bin/daosctl'
 
         host1 = GetHostsFromFile.getHostsFromFile(hostfile)[0]
         host2 = GetHostsFromFile.getHostsFromFile(hostfile)[1]
@@ -283,10 +272,8 @@ class DestroyTests(Test):
                uid = os.geteuid()
                gid = os.getegid()
 
-               create_cmd = ('{0} --np 1 --ompi-server file:{1} '.
-                      format(orterun, urifile) +
-                      '{0} create-pool -m {1} -u {2} -g {3} -s {4}'.format(
-                             daosctl, 0x731, uid, gid, setid))
+               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
+                             format(daosctl, 0x731, uid, gid, setid))
                uuid_str = """{0}""".format(process.system_output(create_cmd))
                print("uuid is {0}\n".format(uuid_str))
 
@@ -299,11 +286,8 @@ class DestroyTests(Test):
                       self.fail("Pool {0} not found on host {1}.\n".
                       format(uuid_str, host2))
 
-               delete_cmd =  ('{0} --np 1 --ompi-server file:{1} {2} '
-                              'destroy-pool -i {3} '
-                              '-s {4}'.format(orterun, urifile,
-                              daosctl, uuid_str, setid))
-
+               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.
+                              format(daosctl, uuid_str, setid))
                process.system(delete_cmd)
 
                exists = CheckForPool.checkForPool(host1, uuid_str)
@@ -329,6 +313,8 @@ class DestroyTests(Test):
         """
         Test destroying a pool created on server group A by passing
         in server group B, should fail.
+
+        :avocado: tags=pool,pooldestroy
         """
 
         global basepath
@@ -341,18 +327,13 @@ class DestroyTests(Test):
                               '/run/testparams/one_host/')
         hostfile2 = basepath + self.params.get("hostfile",
                               '/run/testparams/two_other_hosts/')
-        urifile1 = basepath + self.params.get("urifile",
-                              '/run/testparams/urifiles/')
-        urifile2 = basepath + self.params.get("urifile",
-                              '/run/testparams/other_urifile/')
 
         # TODO make these params in the yaml
-        orterun = basepath + 'install/bin/orterun'
-        daosctl = basepath + 'install/bin/daosctl'
+        daosctl = basepath + '/install/bin/daosctl'
 
         # start 2 different sets of servers,
-        ServerUtils.runServer(hostfile1, urifile1, server_group)
-        ServerUtils.runServer(hostfile2, urifile2, setid2)
+        ServerUtils.runServer(hostfile1, server_group, basepath)
+        ServerUtils.runServer(hostfile2, setid2, basepath)
 
         host = GetHostsFromFile.getHostsFromFile(hostfile1)[0]
 
@@ -367,10 +348,8 @@ class DestroyTests(Test):
                uid = os.geteuid()
                gid = os.getegid()
 
-               create_cmd = ('{0} --np 1 -ompi-server file:{1} '.
-               format(orterun, urifile1) +
-                      '{0} create-pool -m {1} -u {2} -g {3} -s {4}'.format(
-                             daosctl, 0x731, uid, gid, server_group))
+               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
+                             format(daosctl, 0x731, uid, gid, server_group))
                uuid_str = """{0}""".format(process.system_output(create_cmd))
                print("uuid is {0}\n".format(uuid_str))
 
@@ -380,30 +359,28 @@ class DestroyTests(Test):
                       format(uuid_str, host))
 
                # try and delete it using the wrong group
-               delete_cmd =  ('{0} --np 1 --ompi-server file:{1} {2} '
-                              'destroy-pool '
-                              '-i {3} -s {4}'.format(
-                             orterun, urifile2, daosctl, uuid_str, setid2))
+               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.
+                              format(daosctl, uuid_str, setid2))
 
                process.system(delete_cmd)
 
                exists = CheckForPool.checkForPool(host, uuid_str)
                if exists != 0:
-                      self.fail("Pool {0} not found on host {1} but delete should have failed.\n".
-                                format(uuid_str, host))
+                      self.fail("Pool {0} not found on host {1} but delete "
+                                "should have failed.\n".format(uuid_str, host))
 
         except Exception as e:
 
                # now issue a good delete command so we clean-up after this test
-               delete_cmd =  ('{0} -np 1 --ompi-server file:{1} {2} destroy-pool '
-                              '-i {3} -s {4}'.format(
-                             orterun, urifile1, uuid_str, server_group))
+               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.
+                              format(uuid_str, server_group))
 
                process.system(delete_cmd)
 
                exists = CheckForPool.checkForPool(host, uuid_str)
                if exists == 0:
-                      self.fail("Pool {0} ound on host {1} but delete should have removed it.\n".
+                      self.fail("Pool {0} ound on host {1} but delete "
+                                "should have removed it.\n".
                                 format(uuid_str, host))
 
         # no matter what happens shutdown the server
@@ -416,22 +393,23 @@ class DestroyTests(Test):
     # keeps it from being called)
     def dontrun_test_destroy_connect(self):
         """
-        Test destroying a pool that has a connected client with force == false.  Should fail.
+        Test destroying a pool that has a connected client with force == false.
+        Should fail.
+
+        :avocado: tags=pool,pooldestroy
         """
-        global urifile
         global basepath
         global server_group
 
-        hostfile = basepath + self.params.get("hostfile",'/run/testparams/one_host/')
-        urifile = basepath + self.params.get("urifile",'/run/testparams/urifiles/')
+        hostfile = basepath + self.params.get("hostfile",
+                                              '/run/testparams/one_host/')
 
-        ServerUtils.runServer(hostfile, urifile, server_group)
+        ServerUtils.runServer(hostfile, server_group, basepath)
 
         host = GetHostsFromFile.getHostsFromFile(hostfile)[0]
 
         # TODO make these params in the yaml
-        orterun = basepath + 'install/bin/orterun'
-        daosctl = basepath + 'install/bin/daosctl'
+        daosctl = basepath + '/install/bin/daosctl'
 
         # not sure I need to do this but ... give it time to start
         time.sleep(1)
@@ -442,51 +420,50 @@ class DestroyTests(Test):
                uid = os.geteuid()
                gid = os.getegid()
 
-               create_cmd = ('{0} --np 1 --ompi-server file:{1} {2} create-pool '
-                             '-m {3} -u {4} -g {5} -s {6}'.format(orterun, urifile,
-                             daosctl, 0x731, uid, gid, server_group))
+               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
+                             format(daosctl, 0x731, uid, gid, server_group))
                uuid_str = """{0}""".format(process.system_output(create_cmd))
                print("uuid is {0}\n".format(uuid_str))
 
                exists = CheckForPool.checkForPool(host, uuid_str)
                if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".format(uuid_str, host))
+                      self.fail("Pool {0} not found on host {1}.\n".
+                                format(uuid_str, host))
 
-               connect_cmd = ('{0} --np 1 --ompi-server file:{1} {2} connect-pool '
-                              ' -i {3} -s {4} -r'.format(orterun, urifile, daosctl,
-                                                         uuid_str, server_group))
+               connect_cmd = ('{0} connect-pool -i {1} -s {2} -r'.
+                              format(daosctl, uuid_str, server_group))
                process.system(connect_cmd)
 
-               delete_cmd =  ('{0} --np 1 --ompi-server file:{1} {2} destroy-pool '
-                              '-i {3} -s {4}'.format(
-                                     orterun, urifile, daosctl, uuid_str, server_group))
+               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.format(
+                   daosctl, uuid_str, server_group))
 
                process.system(delete_cmd)
 
                exists = CheckForPool.checkForPool(host, uuid_str)
                if exists == 0:
-                      print("Didn't return the right code but also didn't delete the pool")
+                      print("Didn't return the right code but also didn't "
+                            "delete the pool")
 
                # should throw an exception and not hit this
                fail = 1
                self.fail("Shouldn't hit this line.\n")
 
         except Exception as e:
-               print("got exception which is expected so long as it relates to delete cmd")
+               print("got exception which is expected so long as it relates "
+                     "to delete cmd")
                print(e)
                print(traceback.format_exc())
 
                # this time force = 1, should work
-               delete_cmd =  ('{0} --np 1 --ompi-server file:{1} {2} destroy-pool '
-                              '-i {3} -s {4} -f'.format(orterun, urifile, daosctl,
-                                                        uuid_str, server_group))
+               delete_cmd =  ('{0} destroy-pool -i {1} -s {2} -f'.
+                              format(daosctl, uuid_str, server_group))
 
                process.system(delete_cmd)
 
                exists = CheckForPool.checkForPool(host, uuid_str)
                if exists == 0:
-                      self.fail("Pool {0} found on host {1} after delete.\n".format(
-                             uuid_str, host))
+                      self.fail("Pool {0} found on host {1} after delete.\n".
+                                format(uuid_str, host))
 
                if fail == 1:
                       self.fail("Didn't return DER_BUSY.\n")

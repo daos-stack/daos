@@ -32,9 +32,6 @@ from avocado       import main
 from avocado.utils import process
 from avocado.utils import git
 
-import aexpect
-from aexpect.client import run_bg
-
 sys.path.append('./util')
 import ServerUtils
 import CheckForPool
@@ -44,21 +41,21 @@ class MultiServerCreateDeleteTest(Test):
     """
     Tests DAOS pool creation, trying both valid and invalid parameters.
 
-    avocado: tags=pool,poolcreate
+    :avocado: tags=pool,poolcreate,multitarget
     """
 
     # super wasteful since its doing this for every variation
     def setUp(self):
-       global urifile
        global hostfile
        global basepath
 
-       basepath = self.params.get("base",'/paths/','rubbish')
+       # there is a presumption that this test lives in a specific spot
+       # in the repo
+       basepath = os.path.normpath(os.getcwd() + "../../../../")
        hostfile = basepath + self.params.get("hostfile",'/files/','rubbish')
-       urifile = basepath + self.params.get("urifile",'/files/','rubbish')
        server_group = self.params.get("server_group",'/server/','daos_server')
 
-       ServerUtils.runServer(hostfile, urifile, server_group, basepath)
+       ServerUtils.runServer(hostfile, server_group, basepath)
        # not sure I need to do this but ... give it time to start
        time.sleep(1)
 
@@ -68,12 +65,14 @@ class MultiServerCreateDeleteTest(Test):
     def test_create(self):
         """
         Test basic pool creation.
+
+        :avocado: tags=pool,poolcreate,multitarget
         """
-        global urifile
         global basepath
 
-        # Accumulate a list of pass/fail indicators representing what is expected for
-        # each parameter then "and" them to determine the expected result of the test
+        # Accumulate a list of pass/fail indicators representing what is
+        # expected for each parameter then "and" them to determine the
+        # expected result of the test
         expected_for_param = []
 
         modelist = self.params.get("mode",'/run/tests/modes/*',0731)
@@ -113,12 +112,11 @@ class MultiServerCreateDeleteTest(Test):
         host2 = GetHostsFromFile.getHostsFromFile(hostfile)[1]
 
         try:
-            daosctl = basepath + 'install/bin/daosctl'
-            orterun = basepath + 'install/bin/orterun'
+            daosctl = basepath + '/install/bin/daosctl'
 
-            cmd = ('{0} --np 1 --ompi-server file:{1} {2} create-pool '
-                   '-m {3} -u {4} -g {5} -s {6}'.format(
-                          orterun, urifile, daosctl, mode, uid, gid, setid, tgtlist))
+            cmd = ('{0} create-pool '
+                   '-m {1} -u {2} -g {3} -s {4}'.format(
+                          daosctl, mode, uid, gid, setid, tgtlist))
 
             uuid_str = """{0}""".format(process.system_output(cmd))
             print("uuid is {0}\n".format(uuid_str))
@@ -126,14 +124,16 @@ class MultiServerCreateDeleteTest(Test):
             if '0' in tgtlist:
                    exists = CheckForPool.checkForPool(host1, uuid_str)
                    if exists != 0:
-                          self.fail("Pool {0} not found on host {1}.\n".format(uuid_str, host1))
+                          self.fail("Pool {0} not found on host {1}.\n".
+                                    format(uuid_str, host1))
             if '1' in tgtlist:
                    exists = CheckForPool.checkForPool(host2, uuid_str)
                    if exists != 0:
-                          self.fail("Pool {0} not found on host {1}.\n".format(uuid_str, host2))
+                          self.fail("Pool {0} not found on host {1}.\n".
+                                    format(uuid_str, host2))
 
-            delete_cmd =  ('{0} --np 1 --ompi-server file:{1} {2} destroy-pool '
-                           '-i {3} -s {4} -f'.format(orterun, urifile, daosctl,
+            delete_cmd =  ('{0} destroy-pool '
+                           '-i {1} -s {2} -f'.format(daosctl,
                                                      uuid_str, setid))
 
             process.system(delete_cmd)
@@ -141,11 +141,15 @@ class MultiServerCreateDeleteTest(Test):
             if '0' in tgtlist:
                    exists = CheckForPool.checkForPool(host1, uuid_str)
                    if exists == 0:
-                          self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str, host1))
+                          self.fail("Pool {0} found on host {1}"
+                                    "after destroy.\n".
+                                    format(uuid_str, host1))
             if '1' in tgtlist:
                    exists = CheckForPool.checkForPool(host2, uuid_str)
                    if exists == 0:
-                          self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str, host2))
+                          self.fail("Pool {0} found on host {1} "
+                                    "after destroy.\n".
+                                    format(uuid_str, host2))
 
             if expected_result in ['FAIL']:
                    self.fail("Test was expected to fail but it passed.\n")
@@ -158,4 +162,3 @@ class MultiServerCreateDeleteTest(Test):
 
 if __name__ == "__main__":
     main()
-

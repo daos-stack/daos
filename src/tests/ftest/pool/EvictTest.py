@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2017 Intel Corporation.
+  (C) Copyright 2018 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -39,28 +39,27 @@ sys.path.append('./util')
 import ServerUtils
 import CheckForPool
 
-def printFunc(thestring):
-       print "<SERVER>" + thestring
-
 class EvictTest(Test):
     """
     Tests DAOS client eviction from a pool that the client is using.
 
-    avocado: tags=pool,poolevict
+    :avocado: tags=pool,poolevict
     """
 
     # super wasteful since its doing this for every variation
     def setUp(self):
            global hostfile
-           global urifile
            global basepath
 
-           basepath = self.params.get("base",'/paths/','rubbish')
-           server_group = self.params.get("server_group",'/server/','daos_server')
-           hostfile = basepath + self.params.get("hostfile",'/run/tests/one_host/')
-           urifile = basepath + self.params.get("urifile",'/run/tests/urifiles/')
+           # there is a presumption that this test lives in a specific spot
+           # in the repo
+           basepath = os.path.normpath(os.getcwd() + "../../../../")
+           server_group = self.params.get("server_group",'/server/',
+                                          'daos_server')
+           hostfile = basepath + self.params.get("hostfile",
+                                                 '/run/tests/one_host/')
 
-           ServerUtils.runServer(hostfile, urifile, server_group, basepath)
+           ServerUtils.runServer(hostfile, server_group, basepath)
            # not sure I need to do this but ... give it time to start
            time.sleep(1)
 
@@ -69,28 +68,27 @@ class EvictTest(Test):
 
     def test_evict(self):
         """
-        Test connecting to a pool.
+        Test evicting a client to a pool.
+
+        :avocado: tags=pool,poolevict,quick
         """
         global basepath
-        global urifile
 
         size = self.params.get("size",'/run/tests/sizes/size1gb/*')
         setid = self.params.get("setname",'/run/tests/setnames/validsetname/*')
-        connectperm = self.params.get("perms",'/run/tests/connectperms/permro/*')
+        connectperm = self.params.get("perms",
+                                      '/run/tests/connectperms/permro/*')
 
         try:
-               orterun = basepath + 'install/bin/orterun'
-               daosctl = basepath + 'install/bin/daosctl'
+               daosctl = basepath + '/install/bin/daosctl'
 
                uid = os.geteuid()
                gid = os.getegid()
 
-               create_connect_evict = ('{0} --np 1 --ompi-server file:{1} {2} '
-                                       'test-evict-pool -m {3} -u {4} -g {5} '
-                                       '-s {6} -z {7} {8}'.
-                                       format(orterun, urifile, daosctl,
-                                              0731, uid, gid, setid, size,
-                                              connectperm))
+               create_connect_evict = ('{0} test-evict-pool -m {1} -u {2} '
+                                       '-g {3} -s {4} -z {5} {6}'.
+                                       format(daosctl, 0731, uid, gid,
+                                              setid, size, connectperm))
                process.system(create_connect_evict)
 
         except Exception as e:
@@ -102,26 +100,26 @@ class EvictTest(Test):
     def test_evict_bad_pool(self):
         """
         Test connecting to a pool.
+
+        :avocado: tags=pool,poolevict
         """
         global hostfile
-        global urifile
         global basepath
 
         # test parameters are in the EvictTest.yaml
         setid = self.params.get("setname",'/run/tests/setnames/validsetname/*')
         size = self.params.get("size",'/run/tests/sizes/size1gb/*')
-        connectperm = self.params.get("perms",'/run/tests/connectperms/permro/*')
+        connectperm = self.params.get("perms",
+                                      '/run/tests/connectperms/permro/*')
         mode =  self.params.get("mode",'/run/tests/modes/modeall/*')
         uid = os.geteuid()
         gid = os.getegid()
 
-        orterun = basepath + 'install/bin/orterun'
-        daosctl = basepath + 'install/bin/daosctl'
+        daosctl = basepath + '/install/bin/daosctl'
 
         try:
-               create_cmd = ('{0} --np 1 --ompi-server file:{1} {2} '
-                             'create-pool -m {3} -u {4} -g {5} -s {6}'.
-                             format(orterun, urifile, daosctl, mode, uid, gid, setid))
+               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
+                             format(daosctl, mode, uid, gid, setid))
                uuid_str = """{0}""".format(process.system_output(create_cmd))
                print("uuid is {0}\n".format(uuid_str))
 
@@ -132,9 +130,8 @@ class EvictTest(Test):
         try:
                # use the wrong uuid, which of course should fail
                bogus_uuid = "44be695840f4b6eda581b461a4d4c570490ba4db"
-               bad_evict_cmd = ('{0} --np 1 --ompi-server file:{1} {2} '
-                                'evict-pool -i {3} -s {4}'.format(orterun,
-                                       urifile, daosctl, bogus_uuid, setid))
+               bad_evict_cmd = ('{0} evict-pool -i {1} -s {2}'.
+                                format(daosctl, bogus_uuid, setid))
                process.system(bad_evict_cmd)
 
         except Exception as e:
@@ -144,9 +141,9 @@ class EvictTest(Test):
         try:
                # use the wrong server group name but the correct uuid
                bogus_server_group = self.params.get("setname",
-                                                    '/run/tests/setnames/badsetname/*')
-               bad_evict_cmd = ('{0} --np 1 --ompi-server file:{1} {2} '
-                                'evict-pool -i {3} -s {4}'.format(orterun, urifile,
+                                                    '/run/tests/setnames/'
+                                                    'badsetname/*')
+               bad_evict_cmd = ('{0} evict-pool -i {1} -s {2}'.format(
                                    daosctl, uuid_str, bogus_server_group))
                process.system(bad_evict_cmd)
 
@@ -155,15 +152,14 @@ class EvictTest(Test):
                pass
 
         try:
-               # evict for real, there are no client connections so not really necessary
-               good_evict_cmd = ('{0} --np 1 --ompi-server file:{1} {2} '
-                                 'evict-pool -i {3} -s {4}'.format(orterun,
-                                     urifile, daosctl, uuid_str, setid))
+               # evict for real, there are no client connections so not
+               # really necessary
+               good_evict_cmd = ('{0} evict-pool -i {1} -s {2}'.format(
+                      daosctl, uuid_str, setid))
                process.system(good_evict_cmd)
 
-               delete_cmd =  ('{0} --np 1 --ompi-server file:{1} {2} '
-                              'destroy-pool -i {3} -s {4} -f'.
-                              format(orterun, urifile, daosctl, uuid_str, setid))
+               delete_cmd =  ('{0} destroy-pool -i {1} -s {2} -f'.
+                              format(daosctl, uuid_str, setid))
 
                process.system(delete_cmd)
 

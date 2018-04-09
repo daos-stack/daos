@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2017 Intel Corporation.
+  (C) Copyright 2018 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -40,28 +40,26 @@ import ServerUtils
 import CheckForPool
 import GetHostsFromFile
 
-#def printFunc(thestring):
-#       print "<SERVER>" + thestring
-
 class ConnectTest(Test):
     """
     Tests DAOS pool creation, calling it repeatedly one after another
 
-    avocado: tags=pool,poolcreate
+    :avocado: tags=pool,poolconnect
     """
 
     # super wasteful since its doing this for every variation
     def setUp(self):
-       global urifile
        global hostfile
        global basepath
 
-       basepath = self.params.get("base",'/paths/','rubbish')
+       # there is a presumption that this test lives in a specific spot in
+       # the repo
+       basepath = os.path.normpath(os.getcwd() + "../../../../")
+
        hostfile = basepath + self.params.get("hostfile",'/files/','rubbish')
-       urifile = basepath + self.params.get("urifile",'/files/','rubbish')
        server_group = self.params.get("server_group",'/server/','daos_server')
 
-       ServerUtils.runServer(hostfile, urifile, server_group, basepath)
+       ServerUtils.runServer(hostfile, server_group, basepath)
 
        # not sure I need to do this but ... give it time to start
        time.sleep(1)
@@ -72,12 +70,14 @@ class ConnectTest(Test):
     def test_connect(self):
         """
         Test connecting to a pool.
+
+        :avocado: tags=pool,poolconnect,quick
         """
-        global urifile
         global basepath
 
-        # Accumulate a list of pass/fail indicators representing what is expected for
-        # each parameter then "and" them to determine the expected result of the test
+        # Accumulate a list of pass/fail indicators representing what is
+        # expected for each parameter then "and" them to determine the
+        # expected result of the test
         expected_for_param = []
 
         setidlist = self.params.get("setname",'/run/tests/setnames/*')
@@ -95,20 +95,17 @@ class ConnectTest(Test):
                gid = os.getegid()
 
                # TODO make these params in the yaml
-               orterun = basepath + 'install/bin/orterun'
-               daosctl = basepath + 'install/bin/daosctl'
+               daosctl = basepath + '/install/bin/daosctl'
 
                hostfile = basepath + self.params.get("hostfile",'/run/files/')
                host1 = GetHostsFromFile.getHostsFromFile(hostfile)[0]
                host2 = GetHostsFromFile.getHostsFromFile(hostfile)[1]
 
                create_cmd = (
-                   '{0} --np 1 --ompi-server file:{1} {2} create-pool '
-                   '-m {3} -u {4} -g {5} -s {6}'.format(orterun,
-                            urifile, daosctl, 0731, uid, gid, setid))
+                   '{0} create-pool -m {1} -u {2} -g {3} -s {4}'.format(
+                            daosctl, 0731, uid, gid, setid))
                uuid_str = """{0}""".format(process.system_output(create_cmd))
                print("uuid is {0}\n".format(uuid_str))
-
 
                exists = CheckForPool.checkForPool(host1, uuid_str)
                if exists != 0:
@@ -120,15 +117,12 @@ class ConnectTest(Test):
                                 format(uuid_str, host2))
 
                connect_cmd = (
-                   '{0} --np 1 --ompi-server file:{1} {2} connect-pool '
-                   '-i {3} -s {4} -r'.format(orterun, urifile, daosctl,
-                   uuid_str, setid, "RO"))
+                   '{0} connect-pool -i {1} -s {2} -r'.format(daosctl,
+                   uuid_str, setid))
                process.system(connect_cmd)
 
-               delete_cmd = (
-                   '{0} --np 1 --ompi-server file:{1} {2} destroy-pool '
-                   '-i {3} -s {4} -f'.format(orterun, urifile, daosctl,
-                                                     uuid_str, setid))
+               delete_cmd = ('{0} destroy-pool -i {1} -s {2} -f'.format(
+                   daosctl, uuid_str, setid))
 
                if expected_result == 'FAIL':
                       self.fail("Expected to fail but passed.\n")

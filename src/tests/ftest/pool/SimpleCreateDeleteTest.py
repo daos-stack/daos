@@ -32,21 +32,15 @@ from avocado       import main
 from avocado.utils import process
 from avocado.utils import git
 
-import aexpect
-from aexpect.client import run_bg
-
 sys.path.append('./util')
 import ServerUtils
 import CheckForPool
-
-def printFunc(thestring):
-       print "<TESTCLIENT>" + thestring
 
 class SimpleCreateDeleteTest(Test):
     """
     Tests DAOS pool creation, trying both valid and invalid parameters.
 
-    avocado: tags=pool,poolcreate
+    :avocado: tags=pool,poolcreate
     """
 
     # super wasteful since its doing this for every variation
@@ -56,7 +50,8 @@ class SimpleCreateDeleteTest(Test):
        global basepath
 
        basepath = self.params.get("base",'/paths/','rubbish')
-       hostfile = basepath + self.params.get("hostfile",'/files/local/','rubbish')
+       hostfile = basepath + self.params.get("hostfile",'/files/local/',
+                                             'rubbish')
        urifile = basepath + self.params.get("urifile",'/files/local/','rubbish')
        server_group = self.params.get("server_group",'/server/','daos_server')
 
@@ -70,6 +65,8 @@ class SimpleCreateDeleteTest(Test):
     def test_create(self):
         """
         Test basic pool creation.
+
+        :avocado: tags=pool,poolcreate,quick
         """
         global urifile
         global basepath
@@ -107,12 +104,10 @@ class SimpleCreateDeleteTest(Test):
 
         try:
             daosctl = basepath + 'install/bin/daosctl'
-            orterun = basepath + 'install/bin/orterun'
 
-            cmd = ('{0} --np 1 --ompi-server file:{1} {2} test-create-pool '
-                   '-m {3} -u {4} -g {5} -s {6}'.format(orterun,
-                          urifile, daosctl, mode, uid, gid, setid))
-
+            cmd = ('{0} test-create-pool '
+                   '-m {1} -u {2} -g {3} -s {4}'.format(
+                          daosctl, mode, uid, gid, setid))
             process.system(cmd)
 
             if expected_result in ['FAIL']:
@@ -126,4 +121,3 @@ class SimpleCreateDeleteTest(Test):
 
 if __name__ == "__main__":
     main()
-

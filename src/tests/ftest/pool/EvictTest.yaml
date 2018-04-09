@@ -1,26 +1,19 @@
-paths:
-   base: daos-repo-path-goes-here
 server:
    server_group: daos_server
 tests:
-   urifiles:
-      urifile: install/tmp/urifile
-   other_urifile:
-      urifile: intall/tmp/urifile2
    one_host:
-      hostfile: install/tmp/hostfile1
+      hostfile: /install/tmp/hostfile1
    setnames:
       validsetname:
-          setname: daos_server
+        setname: daos_server
       badsetname:
-          setname: complete_rubbish
+        setname: complete_rubbish
    sizes:
       size1gb:
-          size: 1073741824
+        size: 1073741824
    connectperms:
       permro:
-          perms: -r
+        perms: -r
    modes:
       modeall:
-          mode: 511
-
+        mode: 511

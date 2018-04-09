@@ -1,17 +1,14 @@
-paths:
-   base: daos-repo-path-goes-here
 server:
-   server_group: daos_server
+  server_group: daos_server
 files:
-      hostfile: install/tmp/hostfile2
-      urifile: install/tmp/urifile
+  hostfile: /install/tmp/hostfile2
 tests:
-   setnames: !mux
-      validsetname:
-          setname:
-             - daos_server
-             - PASS
-      badsetname:
-          setname:
-             - complete_rubbish
-             - FAIL
+  setnames: !mux
+    validsetname:
+      setname:
+        - daos_server
+        - PASS
+    badsetname:
+      setname:
+        - complete_rubbish
+        - FAIL

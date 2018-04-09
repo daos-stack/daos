@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 '''
   (C) Copyright 2018 Intel Corporation.
 
@@ -23,7 +23,7 @@
 '''
 import ctypes
 import traceback
-
+from mpi4py import MPI
 
 class RankList(ctypes.Structure):
 
@@ -111,9 +111,17 @@ class DaosContext(object):
              'kill-server': self.libdaos.daos_mgmt_svc_rip,
         }
 
+        comm = MPI.COMM_WORLD
+        self.myrank = comm.Get_rank()
+
+    def get_rank(self):
+        return self.myrank
+
     def __del__(self):
         """ cleanup the DAOS API and MPI """
         self.libdaos.daos_fini()
+        if not MPI.Is_finalized():
+            MPI.Finalize()
 
     def get_function(self, function):
         """ call a function through the API """

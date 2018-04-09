@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2017 Intel Corporation.
+  (C) Copyright 2018 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ class InfoTests(Test):
     """
     Tests DAOS pool query
 
-    avocado: tags=pool,pooldestroy
+    :avocado: tags=pool,poolinfo,quick
     """
 
     # super wasteful since its doing this for every variation
@@ -57,13 +57,16 @@ class InfoTests(Test):
         """
         Test querying a pool created on a single server.
 
+        :avocado: tags=pool,poolinfo,quick
         """
-        basepath = self.params.get("base",'/paths/','rubbish')
+        # there is a presumption that this test lives in a specific spot
+        # in the repo
+        basepath = os.path.normpath(os.getcwd() + "../../../../")
         server_group = self.params.get("server_group",'/server/','daos_server')
-        hostfile = basepath + self.params.get("hostfile",'/run/testparams/one_host/')
-        urifile = basepath + self.params.get("urifile",'/run/testparams/urifiles/')
+        hostfile = basepath + self.params.get("hostfile",
+                                              '/run/testparams/one_host/')
 
-        ServerUtils.runServer(hostfile, urifile, server_group, basepath)
+        ServerUtils.runServer(hostfile, server_group, basepath)
 
         # not sure I need to do this but ... give it time to start
         time.sleep(1)
@@ -73,7 +76,8 @@ class InfoTests(Test):
 
         mode = self.params.get("mode",'/run/testparams/modes/*',0731)
         size = self.params.get("size",'/run/testparams/sizes/*',0)
-        connectperm = self.params.get("perms",'/run/testparams/connectperms/*','')
+        connectperm = self.params.get("perms",'/run/testparams/connectperms/*',
+                                      '')
 
         try:
                # use the uid/gid of the user running the test, these should
@@ -82,13 +86,14 @@ class InfoTests(Test):
                gid = os.getegid()
 
                # TODO make these params in the yaml
-               orterun = basepath + 'install/bin/orterun'
-               daosctl = basepath + 'install/bin/daosctl'
+               daosctl = basepath + '/install/bin/daosctl'
 
                create_connect_query_cmd = (
-                      '{0} --np 1 --ompi-server file:{1} {2} test-connect-pool '
-                      '-m {3} -u {4} -g {5} -s {6} -z {7} {8}'.format(orterun, urifile,
-                             mode, uid, gid, setid, 1, size, connectperm))
+                      '{0} test-connect-pool '
+                      '-m {1} -u {2} -g {3} -s {4} -z {5} {6}'.
+                   format(daosctl, mode, uid, gid, setid, 1, size, connectperm))
+
+               process.system(create_connect_query_cmd)
 
         except Exception as e:
                print e
@@ -101,4 +106,3 @@ class InfoTests(Test):
 
 if __name__ == "__main__":
     main()
-

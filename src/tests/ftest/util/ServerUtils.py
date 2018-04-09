@@ -38,20 +38,23 @@ class ServerFailed(Exception):
 def printFunc(thestring):
        print "<SERVER>" + thestring
 
-def runServer(hostfile, urifile, setname, basepath):
+def runServer(hostfile, setname, basepath):
 
     global sessions
     try:
         server_count = len(genio.read_all_lines(hostfile))
 
         initial_cmd = "/bin/sh"
-        server_cmd = basepath + "/install/bin/orterun --np {0} ".format(server_count)
+        server_cmd = basepath + "/install/bin/orterun --np {0} ".
+        format(server_count)
         server_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
-        server_cmd += "--report-uri {0} -x D_LOG_FILE=".format(urifile)
+        server_cmd += "-x DD_LOG="
         server_cmd += basepath + "/install/tmp/daos.log "
-        server_cmd += "-x LD_LIBRARY_PATH={0}/install/lib:{0}/install/lib/daos_srv ".format(
-            basepath)
-        server_cmd += basepath + "/install/bin/daos_server -g {0}".format(setname)
+        server_cmd += "-x LD_LIBRARY_PATH={0}/install/lib:"
+        "{0}/install/lib/daos_srv ".format(basepath)
+        server_cmd += basepath + "/install/bin/daos_server -g {0} ".
+        format(setname)
+        server_cmd += basepath + " -a" + basepath + "/install/tmp/"
 
         print "Start CMD>>>>{0}".format(server_cmd)
 
