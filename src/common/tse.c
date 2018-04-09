@@ -1007,27 +1007,28 @@ tse_task_reinit(tse_task_t *task)
 		D__GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
-	if (dtp->dtp_completed) {
-		D_ERROR("Can't re-init a task that has completed already.\n");
-		D__GOTO(err_unlock, rc = -DER_NO_PERM);
-	}
-
-	if (!dtp->dtp_running) {
-		D_ERROR("Can't re-init a task that is not running.\n");
-		D__GOTO(err_unlock, rc = -DER_NO_PERM);
-	}
-
 	if (dtp->dtp_func == NULL) {
 		D_ERROR("Task body function can't be NULL.\n");
 		D__GOTO(err_unlock, rc = -DER_INVAL);
 	}
 
+	if (dtp->dtp_completed) {
+		D__ASSERT(d_list_empty(&dtp->dtp_list));
+		/* +1 ref for valid until complete */
+		tse_task_addref_locked(dtp);
+	} else if (dtp->dtp_running) {
+		/** Task not in-flight anymore */
+		dsp->dsp_inflight--;
+	} else {
+		D_ERROR("Can't re-init a task that is not running or "
+			"completed.\n");
+		D__GOTO(err_unlock, rc = -DER_NO_PERM);
+	}
+
 	/** Mark the task back at init state */
 	dtp->dtp_running = 0;
 	dtp->dtp_completing = 0;
-
-	/** Task not in-flight anymore */
-	dsp->dsp_inflight--;
+	dtp->dtp_completed = 0;
 	/** Move back to init list */
 	d_list_move_tail(&dtp->dtp_list, &dsp->dsp_init_list);
 

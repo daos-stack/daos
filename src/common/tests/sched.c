@@ -562,6 +562,80 @@ out:
 	return rc;
 }
 
+static int
+empty_task_body_fn(tse_task_t *task)
+{
+	D_ASSERT(task != NULL);
+	return 0;
+}
+
+static int
+sched_test_5()
+{
+	tse_sched_t	sched;
+	tse_task_t	*task;
+	int		counter = 0;
+	bool		flag;
+	int		rc;
+
+	TSE_TEST_ENTRY("5", "reinit completed task");
+
+	printf("Init Scheduler\n");
+	rc = tse_sched_init(&sched, NULL, 0);
+	if (rc != 0) {
+		printf("Failed to init scheduler: %d\n", rc);
+		D__GOTO(out, rc);
+	}
+
+	printf("Init task\n");
+	rc = tse_task_create(empty_task_body_fn, &sched, NULL, &task);
+	if (rc != 0) {
+		printf("Failed to init task: %d\n", rc);
+		D__GOTO(out, rc);
+	}
+
+	rc = tse_task_schedule(task, false);
+	if (rc != 0) {
+		printf("Failed to insert task in scheduler: %d\n", rc);
+		D__GOTO(out, rc);
+	}
+
+	printf("test to reinit the completed task %d times\n", NUM_REINITS);
+reinited:
+	flag = tse_sched_check_complete(&sched);
+	if (flag) {
+		printf("Scheduler should have 1 in-flight tasks\n");
+		D__GOTO(out, rc = -DER_INVAL);
+	}
+
+	tse_sched_progress(&sched);
+	tse_task_addref(task);
+	tse_task_complete(task, 0);
+
+	flag = tse_sched_check_complete(&sched);
+	if (!flag) {
+		printf("Scheduler should not have in-flight tasks\n");
+		D__GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (counter++ < NUM_REINITS) {
+		rc = tse_task_reinit(task);
+		if (rc == 0) {
+			tse_task_decref(task);
+			D__GOTO(reinited, rc);
+		} else {
+			printf("Failed to reinit completed task (%d)\n", rc);
+			D__GOTO(out, rc);
+		}
+	} else {
+		tse_task_decref(task);
+	}
+
+out:
+	TSE_TEST_EXIT(rc);
+	return rc;
+}
+
 #define NUM_DEPS 128
 
 int
@@ -601,7 +675,7 @@ check_func_1(tse_task_t *task)
 }
 
 static int
-sched_test_5()
+sched_test_6()
 {
 	tse_sched_t	sched;
 	tse_task_t	*task = NULL;
@@ -763,6 +837,10 @@ main(int argc, char **argv)
 		goto out;
 
 	rc = sched_test_5();
+	if (rc != 0)
+		goto out;
+
+	rc = sched_test_6();
 	if (rc != 0)
 		goto out;
 
