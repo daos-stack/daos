@@ -1992,7 +1992,7 @@ void transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
 	if (do_refresh)
 		iv_ops->ivo_on_refresh(ivns, key, 0,
 				&cb_info->uci_iv_value,
-				false, 0, cb_info->uci_user_priv);
+				false, update_rc, cb_info->uci_user_priv);
 
 	/* No more children -- we are the originator; call update_cb */
 	if (cb_info->uci_child_rpc == NULL) {
