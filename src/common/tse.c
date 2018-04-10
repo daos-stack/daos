@@ -806,8 +806,7 @@ tse_sched_complete(tse_sched_t *sched, int ret, bool cancel)
 			tse_sched_complete_inflight(dsp);
 
 		D_MUTEX_LOCK(&dsp->dsp_lock);
-	};
-	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+	}
 
 	tse_sched_complete_cb(sched);
 	sched->ds_udata = NULL;
