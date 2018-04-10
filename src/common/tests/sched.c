@@ -663,6 +663,7 @@ sched_test_5()
 
 	tse_sched_progress(&sched);
 	tse_task_complete(task, 0);
+	task = NULL; /* lost my refcount */
 
 	printf("Verify Counter\n");
 	D__ASSERT(*counter == NUM_DEPS);
@@ -712,6 +713,7 @@ sched_test_5()
 	tse_sched_progress(&sched);
 	tse_task_complete(task, 0);
 	tse_sched_progress(&sched);
+	task = NULL; /* lost my refcount */
 
 	for (i = 0; i < NUM_DEPS; i++)
 		tse_task_complete(tasks[i], 0);

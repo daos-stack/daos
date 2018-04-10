@@ -793,18 +793,21 @@ tse_sched_complete(tse_sched_t *sched, int ret, bool cancel)
 	else
 		dsp->dsp_completing = 1;
 
-	/** +1 for tse_sched_run */
-	tse_sched_addref_locked(dsp);
-	D_MUTEX_UNLOCK(&dsp->dsp_lock);
-
 	/** Wait for all in-flight tasks */
 	while (1) {
+		/** +1 for tse_sched_run */
+		tse_sched_addref_locked(dsp);
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
 		tse_sched_run(sched);
 		if (dsp->dsp_inflight == 0)
 			break;
 		if (dsp->dsp_cancelling)
 			tse_sched_complete_inflight(dsp);
+
+		D_MUTEX_LOCK(&dsp->dsp_lock);
 	};
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	tse_sched_complete_cb(sched);
 	sched->ds_udata = NULL;
