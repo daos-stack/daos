@@ -799,7 +799,8 @@ ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid)
 	unsigned int		i;
 
 	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
-		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK);
+		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
+		 daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK);
 
 	/* locate rank in the pool map targets */
 	tgts = pool_map_targets(rimap->rmp_map.pl_poolmap);
@@ -845,7 +846,8 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	}
 
 	if (daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
-	    daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK)
+	    daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
+	    daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK)
 		rop->rop_begin = ring_obj_spec_place_begin(rimap, oid);
 	else
 		rop->rop_begin = ring_obj_place_begin(rimap, oid);

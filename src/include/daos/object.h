@@ -59,7 +59,8 @@ static inline d_rank_t
 daos_oclass_sr_get_rank(daos_obj_id_t oid)
 {
 	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
-		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK);
+		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
+		 daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK);
 
 	return ((oid.hi & DAOS_OC_SR_MASK) >> DAOS_OC_SR_SHIFT);
 }
@@ -68,7 +69,8 @@ static inline daos_obj_id_t
 daos_oclass_sr_set_rank(daos_obj_id_t oid, d_rank_t rank)
 {
 	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
-		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK);
+		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
+		 daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK);
 	D_ASSERT(rank < (1 << DAOS_OC_SR_SHIFT));
 	D_ASSERT((oid.hi & DAOS_OC_SR_MASK) == 0);
 

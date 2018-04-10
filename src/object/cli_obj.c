@@ -54,6 +54,8 @@ open_retry:
 	layout = obj->cob_layout;
 	if (layout->ol_ver != map_ver) {
 		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		D_DEBUG(DB_IO, "layout %p ol ver %d != map ver %d\n", layout,
+			layout->ol_ver, map_ver);
 		return -DER_STALE;
 	}
 
@@ -246,7 +248,8 @@ obj_layout_create(struct dc_object *obj)
 		D_DEBUG(DB_PL, "Failed to generate object layout\n");
 		D_GOTO(out, rc);
 	}
-	D_DEBUG(DB_PL, "Place object on %d targets\n", layout->ol_nr);
+	D_DEBUG(DB_PL, "Place object on %d targets ver %d\n", layout->ol_nr,
+		layout->ol_ver);
 
 	D_ASSERT(obj->cob_layout == NULL);
 	obj->cob_layout = layout;

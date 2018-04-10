@@ -1033,6 +1033,9 @@ rebuild_ults(void *arg)
 	struct rebuild_task	*task_tmp;
 	int			 rc;
 
+	while (DAOS_FAIL_CHECK(DAOS_REBUILD_HANG))
+		ABT_thread_yield();
+
 	while (!d_list_empty(&rebuild_gst.rg_queue_list) ||
 	       !d_list_empty(&rebuild_gst.rg_running_list)) {
 		if (rebuild_gst.rg_abort) {

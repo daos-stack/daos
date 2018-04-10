@@ -31,6 +31,7 @@
 
 #include "daos_iotest.h"
 #include <daos/pool.h>
+#include <daos/mgmt.h>
 
 #define KEY_NR		1000
 #define OBJ_NR		10
@@ -728,6 +729,41 @@ rebuild_tgt_start_fail(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR);
 }
 
+static void
+rebuild_send_objects_fail(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
+
+	if (!test_runable(arg, 6))
+		skip();
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
+
+	rebuild_io(arg, oids, OBJ_NR);
+
+	/* Skip object send on all of the targets */
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     DAOS_REBUILD_TGT_SEND_OBJS_FAIL |
+				     DAOS_FAIL_VALUE, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+	/* Even do not sending the objects, the rebuild should still be
+	 * able to finish.
+	 */
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	/* failed to start rebuild on rank 0 */
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
+				     NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static int
 rebuild_pool_connect_internal(void *data)
 {
@@ -1168,6 +1204,101 @@ rebuild_two_failures(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR);
 }
 
+static void
+rebuild_fail_all_replicas_before_rebuild(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct daos_obj_layout *layout;
+	struct daos_obj_shard *shard;
+
+	if (!test_runable(arg, 6))
+		skip();
+
+	oid = dts_oid_gen(DAOS_OC_R2S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
+
+	rebuild_io(arg, &oid, 1);
+
+	daos_obj_layout_get(arg->coh, oid, &layout);
+
+	/* HOLD rebuild ULT */
+	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+			     DAOS_REBUILD_HANG | DAOS_FAIL_VALUE,
+			     NULL);
+
+	/* Kill one replica and start rebuild */
+	shard = layout->ol_shards[0];
+	daos_kill_server(arg, arg->pool_uuid, arg->group, &arg->svc,
+			 shard->os_ranks[0]);
+	daos_exclude_server(arg->pool_uuid, arg->group, &arg->svc,
+			    shard->os_ranks[0]);
+
+	/* Sleep 10 seconds after it scan finish and hang before rebuild */
+	print_message("sleep 10 seconds to wait scan to be finished \n");
+	sleep(10);
+
+	/* Then kill rank 1 */
+	daos_kill_server(arg, arg->pool_uuid, arg->group, &arg->svc,
+			 shard->os_ranks[1]);
+	daos_exclude_server(arg->pool_uuid, arg->group, &arg->svc,
+			    shard->os_ranks[1]);
+
+	/* Continue rebuild */
+	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, 0, NULL);
+
+	sleep(5);
+	if (arg->myrank == 0)
+		test_rebuild_wait(&arg, 1);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_obj_layout_free(layout);
+}
+
+static void
+rebuild_fail_all_replicas(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct daos_obj_layout *layout;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		skip();
+
+	oid = dts_oid_gen(DAOS_OC_R2S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
+
+	rebuild_io(arg, &oid, 1);
+
+	daos_obj_layout_get(arg->coh, oid, &layout);
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		int j;
+
+		for (j = 0; j < layout->ol_shards[i]->os_replica_nr; j++) {
+			d_rank_t rank = layout->ol_shards[i]->os_ranks[j];
+
+			daos_kill_server(arg, arg->pool_uuid,
+					 arg->group, &arg->svc, rank);
+		}
+
+		for (j = 0; j < layout->ol_shards[i]->os_replica_nr; j++) {
+			d_rank_t rank = layout->ol_shards[i]->os_ranks[j];
+
+			daos_exclude_server(arg->pool_uuid, arg->group,
+					    &arg->svc, rank);
+		}
+	}
+
+	sleep(5);
+	if (arg->myrank == 0)
+		test_rebuild_wait(&arg, 1);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_obj_layout_free(layout);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec mulitple dkeys",
@@ -1200,24 +1331,30 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_iv_tgt_fail, NULL, test_case_teardown},
 	{"REBUILD15: rebuild tgt start fail",
 	rebuild_tgt_start_fail, NULL, test_case_teardown},
-	{"REBUILD16: rebuild with master change during scan",
+	{"REBUILD16: rebuild send objects failed",
+	 rebuild_send_objects_fail, NULL, test_case_teardown},
+	{"REBUILD17: rebuild with master change during scan",
 	rebuild_master_change_during_scan, NULL, test_case_teardown},
-	{"REBUILD17: rebuild with master change during rebuild",
+	{"REBUILD18: rebuild with master change during rebuild",
 	rebuild_master_change_during_rebuild, NULL, test_case_teardown},
-	{"REBUILD18: disconnect pool during scan",
+	{"REBUILD19: disconnect pool during scan",
 	 rebuild_tgt_pool_disconnect_in_scan, NULL, test_case_teardown},
-	{"REBUILD19: disconnect pool during rebuild",
+	{"REBUILD20: disconnect pool during rebuild",
 	 rebuild_tgt_pool_disconnect_in_rebuild, NULL, test_case_teardown},
-	{"REBUILD20: connect pool during scan for offline rebuild",
+	{"REBUILD21: connect pool during scan for offline rebuild",
 	 rebuild_offline_pool_connect_in_scan, NULL, test_case_teardown},
-	{"REBUILD21: connect pool during rebuild for offline rebuild",
+	{"REBUILD22: connect pool during rebuild for offline rebuild",
 	 rebuild_offline_pool_connect_in_rebuild, NULL, test_case_teardown},
-	{"REBUILD22: offline rebuild",
+	{"REBUILD23: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD23: rebuild with master failure",
+	{"REBUILD24: rebuild with master failure",
 	 rebuild_master_failure, NULL, test_case_teardown},
-	{"REBUILD24: rebuild with two failures",
+	{"REBUILD25: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
+	{"REBUILD26: rebuild fail all replicas before rebuild",
+	 rebuild_fail_all_replicas_before_rebuild, NULL, test_case_teardown},
+	{"REBUILD27: rebuild fail all replicas",
+	 rebuild_fail_all_replicas, NULL, test_case_teardown},
 };
 
 #define REBUILD_POOL_SIZE	(10ULL << 30)

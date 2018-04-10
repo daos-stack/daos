@@ -180,6 +180,18 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
+		.oc_name	= "repl_2_small_rw_spec_rank",
+		.oc_id		= DAOS_OC_R2S_SPEC_RANK,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.u.repl			= {
+				.r_num		= 2,
+			},
+		},
+	},
+	{
 		.oc_name	= "repl_1_small_rw_spec_rank",
 		.oc_id		= DAOS_OC_R1S_SPEC_RANK,
 		{
@@ -191,7 +203,6 @@ static struct daos_obj_class daos_obj_classes[] = {
 			},
 		},
 	},
-
 	{
 		.oc_name	= NULL,
 		.oc_id		= DAOS_OC_UNKNOWN,

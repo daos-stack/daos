@@ -188,6 +188,9 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	if (arg->count == 0)
 		D_GOTO(out, rc);
 
+	if (daos_fail_check(DAOS_REBUILD_TGT_SEND_OBJS_FAIL))
+		D_GOTO(out, rc = 0);
+
 	D_DEBUG(DB_REBUILD, "send rebuild objects "DF_UUID" to tgt %d"
 		" cnt %d\n", DP_UUID(rpt->rt_pool_uuid), tgt_id, arg->count);
 
@@ -221,35 +224,27 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		if (rc == 0 && rebuild_out->ro_status == 0)
 			break;
 
-		/* If the remote nodes are dead, let's ignore the failure and
-		 * obj list, and the next rebuild will handle it.
-		 */
-		if (rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) {
-			rc = 0;
-			break;
-		}
-
 		/* If it is failed, but no need retry, let's just fail */
-		if (rc != 0)
-			break;
-
-		if (rebuild_out->ro_status != -DER_AGAIN) {
-			rc = rebuild_out->ro_status;
+		if ((rc != 0 && rc != -DER_TIMEDOUT &&
+		     !daos_crt_network_error(rc)) ||
+		    (rebuild_out->ro_status != 0 &&
+		     rebuild_out->ro_status != -DER_AGAIN)) {
+			if (rc == 0)
+				rc = rebuild_out->ro_status;
 			break;
 		}
 
-		/* Otherwise let's retry, but before retry it needs to check
-		 * if remote target has been marked failed.
-		 */
+		/* Otherwise let's retry. */
 		crt_req_decref(rpc);
 		rpc = NULL;
 
-		/*  the remote target fail before retry */
-		rc = pool_map_find_down_tgts(rpt->rt_pool->sp_map,
-					    &targets, &failed_tgts_cnt);
+		/* but we need check if the remote target is kicked out of the
+		 * pool map before retry.
+		 */
+		rc = pool_map_find_down_tgts(rpt->rt_pool->sp_map, &targets,
+					     &failed_tgts_cnt);
 		if (rc != 0) {
-			D_ERROR("failed create failed tgt list rc %d\n",
-				rc);
+			D_ERROR("failed create failed tgt list rc %d\n", rc);
 			break;
 		}
 
@@ -264,9 +259,11 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 			D_FREE(targets);
 
 		if (target_failed) {
-			/* Remote target has failed, no need retry */
-			D_DEBUG(DB_REBUILD, "target %d has been failed\n",
-				tgt_id);
+			/* Remote target has failed, no need retry, but not
+			 * report failure as well and next rebuild will handle
+			 * it anyway.
+			 */
+			D_DEBUG(DB_REBUILD, "tgt %d was failed\n", tgt_id);
 			break;
 		}
 		ABT_thread_yield();
