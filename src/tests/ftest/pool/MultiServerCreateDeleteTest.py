@@ -115,7 +115,7 @@ class MultiServerCreateDeleteTest(Test):
             daosctl = basepath + '/install/bin/daosctl'
 
             cmd = ('{0} create-pool '
-                   '-m {1} -u {2} -g {3} -s {4}'.format(
+                   '-m {1} -u {2} -g {3} -s {4} -c 1'.format(
                           daosctl, mode, uid, gid, setid, tgtlist))
 
             uuid_str = """{0}""".format(process.system_output(cmd))

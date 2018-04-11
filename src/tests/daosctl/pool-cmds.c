@@ -37,6 +37,7 @@
 #include <argp.h>
 
 /* daos specific */
+#include "common_utils.h"
 #include <daos.h>
 #include <daos_api.h>
 #include <daos_mgmt.h>
@@ -68,62 +69,6 @@ struct pool_cmd_options {
 	unsigned int  verbose;
 };
 
-static int
-parse_rank_list(char *str_rank_list, d_rank_list_t *num_rank_list)
-{
-	/* note the presumption that no more than 1000, it just throws
-	 * them away if there are, that should be be plenty for
-	 * any currently imaginable situation.
-	 */
-	const uint32_t MAX = 1000;
-	uint32_t rank_list[MAX];
-	int i = 0;
-	char *token;
-
-	token = strtok(str_rank_list, ",");
-	while (token != NULL && i < MAX) {
-		rank_list[i++] = atoi(token);
-		token = strtok(NULL, ",");
-	}
-	if (i >= MAX)
-		printf("rank list exceeded maximum, threw some away");
-	num_rank_list->rl_nr = i;
-	num_rank_list->rl_ranks = (d_rank_t *)calloc(
-		num_rank_list->rl_nr, sizeof(d_rank_t));
-	if (num_rank_list->rl_ranks == NULL) {
-		printf("failed allocating pool service rank list");
-		return -1;
-	}
-	for (i = 0; i < num_rank_list->rl_nr; i++)
-		num_rank_list->rl_ranks[i] = rank_list[i];
-	return 0;
-}
-
-static int
-parse_size(uint64_t *size, char *arg)
-{
-	char *unit;
-	*size = strtoul(arg, &unit, 0);
-
-	switch (*unit) {
-	case '\0':
-		break;
-	case 'k':
-	case 'K':
-		*size <<= 10;
-		break;
-	case 'm':
-	case 'M':
-		*size <<= 20;
-		break;
-	case 'g':
-	case 'G':
-		*size <<= 30;
-		break;
-	}
-	return 0;
-}
-
 /**
  * Callback function for create poolthat works with argp to put
  * all the arguments into a structure.
@@ -154,7 +99,7 @@ parse_pool_args_cb(int key, char *arg,
 	case 'm':
 		options->mode = atoi(arg);
 		break;
-	case 'r':
+	case 'c':
 		options->replica_count = atoi(arg);
 		break;
 	case 's':
@@ -197,7 +142,7 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 		 "Mode defines the operations allowed on the pool"},
 		{"size",           'z',    "size",             0,
 		 "Size of the pool in bytes or with k/m/g appended (e.g. 10g)"},
-		{"replicas",       'r',   "REPLICAS",           0,
+		{"replicas",       'c',   "REPLICAS",           0,
 		 "number of service replicas"},
 		{"verbose",          'v',   0,                0,
 		 "Verbose triggers additional results text to be output."},
@@ -377,16 +322,17 @@ cmd_evict_pool(int argc, const char **argv, void *ctx)
 {
 	uuid_t uuid;
 	int rc;
+	d_rank_list_t pool_service_list = {NULL, 0};
 
 	struct pool_cmd_options ep_options = {"daos_server", NULL, "0",
 					       "0", 0, 0, 0, 0, 0, 0, 0};
-	d_rank_list_t svc;
-	uint32_t rl_ranks = 1;
 	struct argp_option options[] = {
 		{"server-group",   's',   "SERVER-GROUP",   0,
 		 "ID of the server group that manages the pool"},
 		{"uuid",           'i',   "UUID",           0,
 		 "ID of the pool to evict"},
+		{"servers",        'l',   "server rank-list", 0,
+		 "pool service ranks, comma separated, no spaces e.g. -l 1,2"},
 		{0}
 	};
 	struct argp argp = {options, parse_pool_args_cb};
@@ -400,13 +346,15 @@ cmd_evict_pool(int argc, const char **argv, void *ctx)
 	 */
 	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &ep_options);
 
-	/* TODO make this a parameter */
-	svc.rl_nr = 1;
-	svc.rl_ranks = &rl_ranks;
-
+	/* turn the UUID string into a uuid array */
 	rc = uuid_parse(ep_options.uuid, uuid);
 
-	rc = daos_pool_evict(uuid, ep_options.server_group, &svc, NULL);
+	/* turn the list of pool service nodes into a rank list */
+	rc = parse_rank_list(ep_options.server_list,
+			     &pool_service_list);
+
+	rc = daos_pool_evict(uuid, ep_options.server_group,
+			     &pool_service_list, NULL);
 
 	if (rc)
 		printf("Client pool eviction failed with: %d\n",

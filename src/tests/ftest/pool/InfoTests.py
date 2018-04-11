@@ -30,10 +30,6 @@ import sys
 from avocado       import Test
 from avocado       import main
 from avocado.utils import process
-from avocado.utils import git
-
-import aexpect
-from aexpect.client import run_bg
 
 sys.path.append('./util')
 import ServerUtils
@@ -41,9 +37,11 @@ import CheckForPool
 
 class InfoTests(Test):
     """
-    Tests DAOS pool query
+    Tests DAOS pool query.
 
-    :avocado: tags=pool,poolinfo,quick
+    Note tags not set at present because the test isn't in a working state
+
+    :avocado: tags=rubbish
     """
 
     # super wasteful since its doing this for every variation
@@ -57,7 +55,9 @@ class InfoTests(Test):
         """
         Test querying a pool created on a single server.
 
-        :avocado: tags=pool,poolinfo,quick
+        Note tags not set at present because the test isn't in a working state
+
+        :avocado: tags=rubbish
         """
         # there is a presumption that this test lives in a specific spot
         # in the repo

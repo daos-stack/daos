@@ -36,6 +36,7 @@
 #include <argp.h>
 
 /* daos specific */
+#include "common_utils.h"
 #include <daos.h>
 #include <daos_api.h>
 #include <daos_mgmt.h>
@@ -58,6 +59,7 @@
 struct test_pool_options {
 	char        *server_group;
 	char        *uuid;
+	char        *server_list;
 	unsigned int mode;
 	unsigned int uid;
 	unsigned int gid;
@@ -65,6 +67,7 @@ struct test_pool_options {
 	unsigned int write;
 	unsigned int exclusive;
 	uint64_t     size;
+	uint32_t     replica_count;
 	char         *handle;
 };
 
@@ -77,9 +80,11 @@ parse_pool_test_args_cb(int key, char *arg,
 			struct argp_state *state)
 {
 	struct test_pool_options *options = state->input;
-	char *strend;
 
 	switch (key) {
+	case 'c':
+		options->replica_count = atoi(arg);
+		break;
 	case 's':
 		options->server_group = arg;
 		break;
@@ -88,6 +93,9 @@ parse_pool_test_args_cb(int key, char *arg,
 		break;
 	case 'i':
 		options->uuid = arg;
+		break;
+	case 'l':
+		options->server_list = arg;
 		break;
 	case 'm':
 		options->mode = atoi(arg);
@@ -108,7 +116,7 @@ parse_pool_test_args_cb(int key, char *arg,
 		options->exclusive = 1;
 		break;
 	case 'z':
-		options->size = strtoull(arg, &strend, 0);
+		parse_size(&(options->size), arg);
 		break;
 	}
 	return 0;
@@ -121,14 +129,15 @@ parse_pool_test_args_cb(int key, char *arg,
 int
 cmd_connect_pool(int argc, const char **argv, void *ctx)
 {
-	d_rank_list_t     svc;
+	d_rank_list_t     pool_service_list;
 	daos_handle_t     poh;
 	unsigned int      flag = DAOS_PC_RO;
 	daos_pool_info_t  info;
 	uuid_t            uuid;
 	int rc = 1;
 	struct test_pool_options cp_options = {
-		"daos_server", NULL, 0, 0, 0, 0, 0, 0, 1024*1024*1024, NULL};
+		"daos_server", NULL, NULL, 0, 0, 0, 0, 0, 0,
+		1024*1024*1024, 1, NULL};
 
 	struct argp_option options[] = {
 		{"server-group",  's',    "SERVER-GROUP",    0,
@@ -141,6 +150,8 @@ cmd_connect_pool(int argc, const char **argv, void *ctx)
 		 "Enable write access"},
 		{"exclusive",     'e',    0,                 0,
 		 "Enable exclusive access"},
+		{"servers",       'l',   "server rank-list", 0,
+		 "pool service ranks, comma separated, no spaces e.g. -l 1,2"},
 		{0}
 	};
 	struct argp argp = {options, parse_pool_test_args_cb};
@@ -164,13 +175,15 @@ cmd_connect_pool(int argc, const char **argv, void *ctx)
 	/* finish parsing the uuid */
 	rc = uuid_parse(cp_options.uuid, uuid);
 
-	/* TODO should be a parameter not hard-coded */
-	uint32_t          rl_ranks = 0;
+	/* turn the list of pool service nodes into a rank list */
+	rc = parse_rank_list(cp_options.server_list,
+			     &pool_service_list);
+	if (rc < 0)
+		/* TODO do a better job with failure return */
+		return rc;
 
-	svc.rl_nr = 1;
-	svc.rl_ranks = &rl_ranks;
-
-	rc = daos_pool_connect(uuid, cp_options.server_group, &svc,
+	rc = daos_pool_connect(uuid, cp_options.server_group,
+			       &pool_service_list,
 			       flag, &poh, &info, NULL);
 
 	if (rc) {
@@ -207,23 +220,21 @@ cmd_connect_pool(int argc, const char **argv, void *ctx)
 
 /**
  * A seemingly dumb command but it has its uses testing connections to
- * pools.  Itcreates, connects to and then destroys a pool.
+ * pools.  It creates, connects to and then destroys a pool.
  */
 int
 cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 {
-
+	int               rc;
+	d_rank_list_t     pool_service_list;
 	uuid_t            uuid;
-	d_rank_list_t     svc;
 	/*d_rank_list_t     tgts;*/
 	daos_handle_t     poh;
 	unsigned int      flag = DAOS_PC_RO;
 	daos_pool_info_t  info;
 	struct test_pool_options cp_options = {
-		"daos_server", NULL, 0, 0, 0, 0, 0, 0, 1024*1024*1024, NULL};
-
-	/* TODO should be a parameter not hard-coded */
-	uint64_t          pool_size = 1024*1024*1024;
+		"daos_server", NULL, NULL, 0, 0, 0, 0, 0, 0,
+		1024*1024*1024, 1, NULL};
 
 	struct argp_option options[] = {
 		{"server-group",    's',    "SERVER-GROUP",    0,
@@ -240,6 +251,10 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 		 "Enable write access"},
 		{"exclusive",       'e',    0,                 0,
 		 "Enable exclusive access"},
+		{"servers",       'l',   "server rank-list", 0,
+		 "pool service ranks, comma separated, no spaces e.g. -l 1,2"},
+		{"size",           'z',    "size",             0,
+		 "Size of the pool in bytes or with k/m/g appended (e.g. 10g)"},
 		{0}
 	};
 	struct argp argp = {options, parse_pool_test_args_cb};
@@ -262,19 +277,17 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 	else if (cp_options.exclusive)
 		flag = DAOS_PC_EX;
 
-	/* TODO should be a parameter not hard-coded */
-	uint32_t rl_ranks = 0;
-
-	svc.rl_nr = 1;
-	svc.rl_ranks = &rl_ranks;
-
-	printf("Getting ready to create pool\n");
-	int rc;
+	/* turn the list of pool service nodes into a rank list */
+	rc = parse_rank_list(cp_options.server_list,
+			     &pool_service_list);
+	if (rc < 0)
+		/* TODO do a better job with failure return */
+		return rc;
 
 	rc = daos_pool_create(cp_options.mode,
 			cp_options.uid, cp_options.gid, cp_options.server_group,
-				   NULL, "rubbish", pool_size, &svc,
-				   uuid, NULL);
+			      NULL, "rubbish", cp_options.size,
+			      &pool_service_list, uuid, NULL);
 	if (rc) {
 		printf("<<<daosctl>>> Pool create fail, result: %d\n", rc);
 	} else {
@@ -296,7 +309,7 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 
 	/* the create worked, so connect */
 	rc = daos_pool_connect(uuid, cp_options.server_group,
-			       &svc, flag, &poh, &info, NULL);
+			       &pool_service_list, flag, &poh, &info, NULL);
 
 	if (rc) {
 		printf("<<<daosctl>>> Pool connect fail, result: %d\n",
@@ -366,13 +379,11 @@ cmd_test_create_pool(int argc, const char **argv, void *ctx)
 {
 	int rc = -ENXIO;
 	uuid_t            uuid;
-	d_rank_list_t     svc;
-
-	/* TODO this should be an input parameter */
-	uint64_t          pool_size = 1024*1024*1024;
+	d_rank_list_t     pool_service_list = {NULL, 0};
 
 	struct test_pool_options cp_options = {
-		"daos_server", NULL, 0, 0, 0, 0, 0, 0, 1024*1024*1024, NULL};
+		"daos_server", NULL, NULL, 0, 0, 0, 0, 0, 0,
+		1024*1024*1024, 1, NULL};
 	struct argp_option options[] = {
 		{"server-group",   's',   "SERVER-GROUP",    0,
 		 "ID of the server group that is to manage the new pool"},
@@ -382,6 +393,10 @@ cmd_test_create_pool(int argc, const char **argv, void *ctx)
 		 "Group ID that is to own the new pool"},
 		{"mode",           'm',   "mode",            0,
 		 "Mode defines the operations allowed on the pool"},
+		{"servers",       'l',   "server rank-list", 0,
+		 "pool service ranks, comma separated, no spaces e.g. -l 1,2"},
+		{"size",           'z',    "size",             0,
+		 "Size of the pool in bytes or with k/m/g appended (e.g. 10g)"},
 		{0}
 	};
 	struct argp argp = {options, parse_pool_test_args_cb};
@@ -395,14 +410,16 @@ cmd_test_create_pool(int argc, const char **argv, void *ctx)
 	 */
 	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cp_options);
 
-	uint32_t rl_ranks = 0;
-
-	svc.rl_nr = 1;
-	svc.rl_ranks = &rl_ranks;
+	/* turn the list of pool service nodes into a rank list */
+	rc = parse_rank_list(cp_options.server_list,
+			     &pool_service_list);
+	if (rc < 0)
+		/* TODO do a better job with failure return */
+		return rc;
 
 	rc = daos_pool_create(cp_options.mode, cp_options.uid, cp_options.gid,
 			      cp_options.server_group, NULL, "rubbish",
-			      pool_size, &svc, uuid, NULL);
+			      cp_options.size, &pool_service_list, uuid, NULL);
 	if (rc) {
 		printf("<<<daosctl>>> Pool create fail, result: %d\n", rc);
 	} else {
@@ -421,15 +438,17 @@ cmd_test_create_pool(int argc, const char **argv, void *ctx)
 int
 cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 {
+	int               rc;
 	uuid_t            uuid;
-	d_rank_list_t     svc;
+	d_rank_list_t     pool_service_list = {NULL, 0};
 
 	/*d_rank_list_t     tgts;*/
 	daos_handle_t     poh;
 	unsigned int      flag = DAOS_PC_RO;
 	daos_pool_info_t  info;
 	struct test_pool_options ep_options = {
-		"daos_server", NULL, 0, 0, 0, 0, 0, 0, 1024*1024*1024, NULL};
+		"daos_server", NULL, NULL, 0, 0, 0, 0, 0, 0,
+		1024*1024*1024, 1, NULL};
 
 	struct argp_option options[] = {
 		{"server-group",   's',   "SERVER-GROUP",   0,
@@ -440,14 +459,18 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 		 "Group ID that is to own the new pool"},
 		{"mode",           'm',   "MODE",           0,
 		 "Mode defines the operations allowed on the pool"},
+		{"replicas",       'c',   "replica-count",  0,
+		 "number of service replicas"},
 		{"read",           'r',   0,                0,
 		 "Enable read access"},
 		{"write",          'm',   0,                0,
 		 "Enable write access"},
 		{"exclusive",      'e',   0,                0,
 		 "Enable exclusive access"},
-		{"size",           'z',   "SIZE",           0,
-		 "Enable exclusive access"},
+		{"servers",        'l',   "server rank-list", 0,
+		 "pool service ranks, comma separated, no spaces e.g. -l 1,2"},
+		{"size",           'z',   "pool-size",      0,
+		 "Size of the pool in bytes or with k/m/g appended (e.g. 10g)"},
 		{0}
 	};
 	struct argp argp = {options, parse_pool_test_args_cb};
@@ -470,19 +493,14 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 	else if (ep_options.exclusive)
 		flag = DAOS_PC_EX;
 
-	/* TODO should be a parameter not hard-coded */
-	uint32_t          rl_ranks = 0;
-
-	svc.rl_nr = 1;
-	svc.rl_ranks = &rl_ranks;
-
-	printf("Getting ready to create pool\n");
-	int rc;
+	/* turn the list of pool service nodes into a rank list */
+	rc = parse_rank_list(ep_options.server_list,
+			     &pool_service_list);
 
 	rc = daos_pool_create(ep_options.mode, ep_options.uid, ep_options.gid,
 			      ep_options.server_group,
-			      NULL, "rubbish", ep_options.size, &svc,
-			      uuid, NULL);
+			      NULL, "rubbish", ep_options.size,
+			      &pool_service_list, uuid, NULL);
 	if (rc) {
 		printf("<<<daosctl>>> Pool create fail, result: %d\n", rc);
 	} else {
@@ -491,7 +509,6 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 		uuid_unparse(uuid, uuid_str);
 		printf("%s", uuid_str);
 	}
-
 
 	if (rc) {
 		printf("<<<daosctl>> Pool create fail, result: %d\n",
@@ -504,7 +521,8 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 	uuid_unparse(uuid, uuid_str);
 
 	/* the create worked, so connect */
-	rc = daos_pool_connect(uuid, ep_options.server_group, &svc, flag,
+	rc = daos_pool_connect(uuid, ep_options.server_group,
+			       &pool_service_list, flag,
 			       &poh, &info, NULL);
 
 	if (rc) {
@@ -526,7 +544,8 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 		if (rc)
 			return 1;
 
-		rc = daos_pool_evict(uuid, ep_options.server_group, &svc, NULL);
+		rc = daos_pool_evict(uuid, ep_options.server_group,
+				     &pool_service_list, NULL);
 		if (rc) {
 			printf("<<<daosctl>>> Pool evict fail, result: %d\n",
 			       rc);
@@ -568,7 +587,8 @@ cmd_test_query_pool(int argc, const char **argv, void *ctx)
 	};
 	struct argp argp = {options, parse_pool_test_args_cb};
 	struct test_pool_options qp_options = {
-		"daos_server", NULL, 0, 0, 0, 0, 0, 0, 1024*1024*1024, NULL};
+		"daos_server", NULL, NULL, 0, 0, 0, 0, 0, 0,
+		1024*1024*1024, 1, NULL};
 
 	/* adjust the arguments to skip over the command */
 	argv++;

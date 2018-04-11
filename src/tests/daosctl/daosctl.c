@@ -38,6 +38,8 @@
 #include <daos_mgmt.h>
 #include <daos/common.h>
 
+#define USE_MPI 0
+
 const char *program_bug_address = "scott.kirvan@intel.com";
 const char *program_version = "daosctl version 0.1";
 
@@ -90,6 +92,7 @@ print_help(void)
 int
 setup(int argc, char **argv)
 {
+#ifdef USE_MPI
 	int my_client_rank = 0;
 	int rank_size = 1;
 
@@ -98,7 +101,7 @@ setup(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_client_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &rank_size);
 	MPI_Barrier(MPI_COMM_WORLD);
-
+#endif
 	return daos_init();
 }
 
@@ -109,9 +112,9 @@ int
 done()
 {
 	int rc = daos_fini();
-
+#ifdef USE_MPI
 	MPI_Finalize();
-
+#endif
 	return rc;
 }
 

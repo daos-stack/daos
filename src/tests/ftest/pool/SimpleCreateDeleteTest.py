@@ -45,17 +45,16 @@ class SimpleCreateDeleteTest(Test):
 
     # super wasteful since its doing this for every variation
     def setUp(self):
-       global urifile
        global hostfile
        global basepath
 
-       basepath = self.params.get("base",'/paths/','rubbish')
+       basepath = os.path.normpath(os.getcwd() + "../../../../")
+
        hostfile = basepath + self.params.get("hostfile",'/files/local/',
                                              'rubbish')
-       urifile = basepath + self.params.get("urifile",'/files/local/','rubbish')
        server_group = self.params.get("server_group",'/server/','daos_server')
 
-       ServerUtils.runServer(hostfile, urifile, server_group, basepath)
+       ServerUtils.runServer(hostfile, server_group, basepath)
        # not sure I need to do this but ... give it time to start
        time.sleep(2)
 
@@ -66,9 +65,8 @@ class SimpleCreateDeleteTest(Test):
         """
         Test basic pool creation.
 
-        :avocado: tags=pool,poolcreate,quick
+        :avocado: tags=pool,poolcreate,quick,superquick
         """
-        global urifile
         global basepath
 
         # Accumulate a list of pass/fail indicators representing what is
@@ -103,10 +101,10 @@ class SimpleCreateDeleteTest(Test):
                       break
 
         try:
-            daosctl = basepath + 'install/bin/daosctl'
+            daosctl = basepath + '/install/bin/daosctl'
 
             cmd = ('{0} test-create-pool '
-                   '-m {1} -u {2} -g {3} -s {4}'.format(
+                   '-m {1} -u {2} -g {3} -s {4} -l 0'.format(
                           daosctl, mode, uid, gid, setid))
             process.system(cmd)
 

@@ -30,7 +30,6 @@ import sys
 from avocado       import Test
 from avocado       import main
 from avocado.utils import process
-from avocado.utils import git
 
 sys.path.append('./util')
 import ServerUtils
@@ -100,7 +99,7 @@ class MultipleCreatesTest(Test):
                       break
         try:
                daosctl = basepath + '/install/bin/daosctl'
-               cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
+               cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4} -c 1'.
                       format(daosctl, mode, uid, gid, setid))
                uuid_str = """{0}""".format(process.system_output(cmd))
                print("uuid is {0}\n".format(uuid_str))
@@ -166,7 +165,7 @@ class MultipleCreatesTest(Test):
                       break
         try:
                daosctl = basepath + '/install/bin/daosctl'
-               cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
+               cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4} -c 1'.
                format(daosctl, mode, uid, gid, setid))
 
                uuid_str_1 = """{0}""".format(process.system_output(cmd))
@@ -248,14 +247,13 @@ class MultipleCreatesTest(Test):
                daosctl = basepath + '/install/bin/daosctl'
 
                cmd = ('{0} create-pool '
-                      '-m {1} -u {2} -g {3} -s {4}'.
+                      '-m {1} -u {2} -g {3} -s {4} -c 1'.
                       format(daosctl, mode, uid, gid, setid))
 
                uuid_str_1 = """{0}""".format(process.system_output(cmd))
                uuid_str_2 = """{0}""".format(process.system_output(cmd))
                uuid_str_3 = """{0}""".format(process.system_output(cmd))
 
-               # TODO: horrible hard-coded hostname needs to be fixed
                hostfile = basepath + self.params.get("hostfile",
                                                      '/run/files/local/')
                host = GetHostsFromFile.getHostsFromFile(hostfile)[0]

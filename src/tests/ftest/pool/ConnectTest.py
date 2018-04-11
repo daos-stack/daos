@@ -30,10 +30,6 @@ import sys
 from avocado       import Test
 from avocado       import main
 from avocado.utils import process
-from avocado.utils import git
-
-import aexpect
-from aexpect.client import run_bg
 
 sys.path.append('./util')
 import ServerUtils
@@ -101,8 +97,8 @@ class ConnectTest(Test):
                host1 = GetHostsFromFile.getHostsFromFile(hostfile)[0]
                host2 = GetHostsFromFile.getHostsFromFile(hostfile)[1]
 
-               create_cmd = (
-                   '{0} create-pool -m {1} -u {2} -g {3} -s {4}'.format(
+               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} '
+                             '-s {4} -c 1'.format(
                             daosctl, 0731, uid, gid, setid))
                uuid_str = """{0}""".format(process.system_output(create_cmd))
                print("uuid is {0}\n".format(uuid_str))
@@ -116,8 +112,8 @@ class ConnectTest(Test):
                       self.fail("Pool {0} not found on host {1}.\n".
                                 format(uuid_str, host2))
 
-               connect_cmd = (
-                   '{0} connect-pool -i {1} -s {2} -r'.format(daosctl,
+               connect_cmd = ('{0} connect-pool -i {1} '
+                              '-s {2} -r -l 0,1'.format(daosctl,
                    uuid_str, setid))
                process.system(connect_cmd)
 

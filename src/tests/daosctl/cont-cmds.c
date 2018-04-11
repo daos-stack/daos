@@ -37,6 +37,7 @@
 #include <uuid/uuid.h>
 
 /* daos specific */
+#include "common_utils.h"
 #include <daos.h>
 #include <daos_api.h>
 #include <daos_mgmt.h>
@@ -57,6 +58,7 @@ struct container_cmd_options {
 	char          *server_group;
 	char          *pool_uuid;
 	char          *cont_uuid;
+	char          *server_list;
 	unsigned int  force;
 	unsigned int  mode;
 	unsigned int  uid;
@@ -85,6 +87,10 @@ parse_cont_args_cb(int key, char *arg,
 		break;
 	case 'f':
 		options->force = 1;
+		break;
+	case 'l':
+		options->server_list = arg;
+		break;
 	}
 	return 0;
 }
@@ -99,13 +105,15 @@ cmd_create_container(int argc, const char **argv, void *ctx)
 	uuid_t           pool_uuid;
 	uuid_t           cont_uuid;
 	daos_handle_t    poh;
-	d_rank_list_t    svc;
+	d_rank_list_t    pool_service_list = {NULL, 0};
 	unsigned int     flag = DAOS_PC_EX;
 	daos_pool_info_t info;
 
 	struct argp_option options[] = {
 		{"server-group", 's', "SERVER-GROUP", 0,
 		 "ID of the server group that owns the pool"},
+		{"servers",       'l',   "server rank-list", 0,
+		 "pool service ranks, comma separated, no spaces e.g. -l 1,2"},
 		{"p-uuid", 'i', "UUID", 0,
 		 "ID of the pool that is to host the new container."},
 		{"c-uuid", 'c', "UUID", 0,
@@ -114,7 +122,8 @@ cmd_create_container(int argc, const char **argv, void *ctx)
 	};
 	struct argp argp = {options, parse_cont_args_cb};
 	struct container_cmd_options cc_options = {"daos_server",
-						   NULL, NULL, 0, 0, 0, 0};
+						   NULL, NULL, NULL,
+						   0, 0, 0, 0};
 
 	/* adjust the arguments to skip over the command */
 	argv++;
@@ -130,15 +139,16 @@ cmd_create_container(int argc, const char **argv, void *ctx)
 		return EINVAL;
 	rc = uuid_parse(cc_options.pool_uuid, pool_uuid);
 
-	/* TODO should be a parameter not hard-coded */
-	uint32_t          rl_ranks = 0;
+	/* turn the list of pool service nodes into a rank list */
+	rc = parse_rank_list(cc_options.server_list,
+			     &pool_service_list);
+	if (rc < 0)
+		/* TODO do a better job with failure return */
+		return rc;
 
-	svc.rl_nr = 1;
-	svc.rl_ranks = &rl_ranks;
-
-	rc = daos_pool_connect(pool_uuid, cc_options.server_group, &svc,
+	rc = daos_pool_connect(pool_uuid, cc_options.server_group,
+			       &pool_service_list,
 			       flag, &poh, &info, NULL);
-
 	if (rc) {
 		printf("Pool connect fail, result: %d\n", rc);
 		return rc;
@@ -179,13 +189,15 @@ cmd_destroy_container(int argc, const char **argv, void *ctx)
 	uuid_t           pool_uuid;
 	uuid_t           cont_uuid;
 	daos_handle_t    poh;
-	d_rank_list_t    svc;
+	d_rank_list_t    pool_service_list = {NULL, 0};
 	unsigned int     flag = DAOS_PC_RW;
 	daos_pool_info_t info;
 
 	struct argp_option options[] = {
 		{"server-group",    's',  "SERVER-GROUP", 0,
 		 "ID of the server group that owns the pool"},
+		{"servers",         'l',   "server rank-list", 0,
+		 "pool service ranks, comma separated, no spaces e.g. -l 1,2"},
 		{"pool-uuid",       'i',  "UUID",         0,
 		 "ID of the pool that hosts the container to be destroyed."},
 		{"cont-uuid",       'c',  "UUID",         0,
@@ -195,7 +207,8 @@ cmd_destroy_container(int argc, const char **argv, void *ctx)
 		{0}
 	};
 	struct argp argp = {options, parse_cont_args_cb};
-	struct container_cmd_options cc_options = {"daos_server", NULL, NULL,
+	struct container_cmd_options cc_options = {"daos_server",
+						   NULL, NULL, NULL,
 						   0, 0, 0, 0};
 
 	/* adjust the arguments to skip over the command */
@@ -211,14 +224,15 @@ cmd_destroy_container(int argc, const char **argv, void *ctx)
 	rc = uuid_parse(cc_options.pool_uuid, pool_uuid);
 	rc = uuid_parse(cc_options.cont_uuid, cont_uuid);
 
-	/* TODO should be a parameter not hard-coded */
-	uint32_t          rl_ranks = 0;
+	/* turn the list of pool service nodes into a rank list */
+	rc = parse_rank_list(cc_options.server_list,
+			     &pool_service_list);
+	if (rc < 0)
+		/* TODO do a better job with failure return */
+		return rc;
 
-	svc.rl_nr = 1;
-
-	svc.rl_ranks = &rl_ranks;
-
-	rc = daos_pool_connect(pool_uuid, cc_options.server_group, &svc,
+	rc = daos_pool_connect(pool_uuid, cc_options.server_group,
+			       &pool_service_list,
 			       flag, &poh, &info, NULL);
 
 	if (rc) {
@@ -251,7 +265,7 @@ cmd_query_container(int argc, const char **argv, void *ctx)
 	uuid_t           pool_uuid;
 	uuid_t           cont_uuid;
 	daos_handle_t    poh;
-	d_rank_list_t    svc;
+	d_rank_list_t    pool_service_list = {NULL, 0};
 	unsigned int     flag = DAOS_PC_RW;
 	daos_pool_info_t pool_info;
 	daos_handle_t    coh;
@@ -260,6 +274,8 @@ cmd_query_container(int argc, const char **argv, void *ctx)
 	struct argp_option options[] = {
 		{"server-group",    's',  "SERVER-GROUP", 0,
 		 "ID of the server group that owns the pool"},
+		{"servers",        'l',   "server rank-list", 0,
+		 "pool service ranks, comma separated, no spaces e.g. -l 1,2"},
 		{"pool-uuid",       'i',  "UUID",         0,
 		 "ID of the pool that hosts the container to be queried."},
 		{"cont-uuid",       'c',  "UUID",         0,
@@ -267,7 +283,8 @@ cmd_query_container(int argc, const char **argv, void *ctx)
 		{0}
 	};
 	struct argp argp = {options, parse_cont_args_cb};
-	struct container_cmd_options cc_options = {"daos_server", NULL, NULL,
+	struct container_cmd_options cc_options = {"daos_server",
+						   NULL, NULL, NULL,
 						   0, 0, 0, 0};
 
 	/* adjust the arguments to skip over the command */
@@ -283,14 +300,16 @@ cmd_query_container(int argc, const char **argv, void *ctx)
 	rc = uuid_parse(cc_options.pool_uuid, pool_uuid);
 	rc = uuid_parse(cc_options.cont_uuid, cont_uuid);
 
-	/* TODO should be a parameter not hard-coded */
-	uint32_t          rl_ranks = 0;
+	/* turn the list of pool service nodes into a rank list */
+	rc = parse_rank_list(cc_options.server_list,
+			     &pool_service_list);
+	if (rc < 0)
+		/* TODO do a better job with failure return */
+		return rc;
 
-	svc.rl_nr = 1;
-	svc.rl_ranks = &rl_ranks;
-
-	rc = daos_pool_connect(pool_uuid, cc_options.server_group, &svc,
-			       flag, &poh, &pool_info, NULL);
+	rc = daos_pool_connect(pool_uuid, cc_options.server_group,
+			       &pool_service_list, flag, &poh,
+			       &pool_info, NULL);
 
 	if (rc) {
 		printf("Pool connect fail, result: %d\n", rc);

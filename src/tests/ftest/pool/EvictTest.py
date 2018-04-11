@@ -30,10 +30,6 @@ import sys
 from avocado       import Test
 from avocado       import main
 from avocado.utils import process
-from avocado.utils import git
-
-import aexpect
-from aexpect.client import run_bg
 
 sys.path.append('./util')
 import ServerUtils
@@ -86,7 +82,7 @@ class EvictTest(Test):
                gid = os.getegid()
 
                create_connect_evict = ('{0} test-evict-pool -m {1} -u {2} '
-                                       '-g {3} -s {4} -z {5} {6}'.
+                                       '-g {3} -s {4} -z {5} {6} -l 0'.
                                        format(daosctl, 0731, uid, gid,
                                               setid, size, connectperm))
                process.system(create_connect_evict)
@@ -118,7 +114,7 @@ class EvictTest(Test):
         daosctl = basepath + '/install/bin/daosctl'
 
         try:
-               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
+               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4} -c 1'.
                              format(daosctl, mode, uid, gid, setid))
                uuid_str = """{0}""".format(process.system_output(create_cmd))
                print("uuid is {0}\n".format(uuid_str))
@@ -154,7 +150,7 @@ class EvictTest(Test):
         try:
                # evict for real, there are no client connections so not
                # really necessary
-               good_evict_cmd = ('{0} evict-pool -i {1} -s {2}'.format(
+               good_evict_cmd = ('{0} evict-pool -i {1} -s {2} -l 0'.format(
                       daosctl, uuid_str, setid))
                process.system(good_evict_cmd)
 

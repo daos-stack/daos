@@ -6,8 +6,6 @@ testparams:
    setnames:
       validsetname:
         setname: daos_server
-      badsetname:
-        setname: complete_rubbish
    modes: !mux
       modeall:
         mode: 511
