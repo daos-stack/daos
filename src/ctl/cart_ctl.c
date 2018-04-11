@@ -57,8 +57,59 @@
 
 int crt_ctl_logfac;
 
+enum cmd_t {
+	CMD_LIST_CTX,
+	CMD_GET_HOSTNAME,
+	CMD_GET_PID,
+};
+
+struct cmd_info {
+	enum cmd_t	cmd;
+	int		opcode;
+	char		*cmd_str;
+};
+
+/* Helper macro to fill out cmd_info struct entry */
+#define DEF_CMD(cmd, opc)	{cmd, opc, #cmd}
+
+struct cmd_info cmds[] = {
+	DEF_CMD(CMD_LIST_CTX, CRT_OPC_CTL_LS),
+	DEF_CMD(CMD_GET_HOSTNAME, CRT_OPC_CTL_GET_HOSTNAME),
+	DEF_CMD(CMD_GET_PID, CRT_OPC_CTL_GET_PID),
+};
+
+static char *cmd2str(enum cmd_t cmd)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(cmds); i++) {
+		if (cmd == cmds[i].cmd)
+			return cmds[i].cmd_str;
+	}
+
+	return "Unknown cmd";
+}
+
+static int cmd2opcode(enum cmd_t cmd)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(cmds); i++) {
+		if (cmd == cmds[i].cmd)
+			return cmds[i].opcode;
+	}
+
+	return -1;
+}
+
+
+struct cb_info {
+	enum cmd_t cmd;
+};
+
+
 struct ctl_g {
-	int		 cg_cmd_code;
+	enum cmd_t	 cg_cmd_code;
 	char		*cg_group_name;
 	crt_group_t	*cg_target_group;
 	int		 cg_num_ranks;
@@ -94,7 +145,7 @@ progress_thread(void *arg)
 		}
 	} while (1);
 
-	printf("progress_thread: progress thread exit ...\n");
+	D_DEBUG(DB_TRACE, "progress_thread: progress thread exit ...\n");
 
 	pthread_exit(NULL);
 }
@@ -151,21 +202,22 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 		token = strtok(NULL, ",");
 	}
 	*num_ranks = num_ranks_l;
-
-	fprintf(stdout, "requested %d target ranks: ", num_ranks_l);
-	for (i = 0; i < num_ranks_l; i++)
-		fprintf(stdout, " %d", ranks[i]);
-	fprintf(stdout, "\n");
 }
 
 static void
-print_usage_msg(void)
+print_usage_msg(const char *msg)
 {
-	printf("Usage: cart_ctl list_ctx --group-name name --rank "
+	if (msg)
+		printf("\nERROR: %s\n", msg);
+	printf("Usage: cart_ctl <cmd> --group-name name --rank "
 	       "start-end,start-end,rank,rank\n");
-	printf("\nThis command takes a group name and a list of ranks as "
-		"arguments, it will pint the number of CART contexts on each "
-		"specified rank and the URI of each context.\n");
+	printf("cmds: list_ctx, get_hostname, get_pid\n");
+	printf("\nlist_ctx:\n");
+	printf("\tPrint # of contexts on each rank and uri for each context\n");
+	printf("\nget_hostname:\n");
+	printf("\tPrint hostnames of specified ranks\n");
+	printf("\nget_pid:\n");
+	printf("\tReturn pids of the specified ranks\n");
 }
 
 static int
@@ -176,11 +228,20 @@ parse_args(int argc, char **argv)
 	int		rc = 0;
 
 	if (argc <= 2) {
-		print_usage_msg();
+		print_usage_msg("Wrong number of args\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
 	if (strcmp(argv[1], "list_ctx") == 0)
-		ctl_gdata.cg_cmd_code = 0;
+		ctl_gdata.cg_cmd_code = CMD_LIST_CTX;
+	else if (strcmp(argv[1], "get_hostname") == 0)
+		ctl_gdata.cg_cmd_code = CMD_GET_HOSTNAME;
+	else if (strcmp(argv[1], "get_pid") == 0)
+		ctl_gdata.cg_cmd_code = CMD_GET_PID;
+	else {
+		print_usage_msg("Invalid command\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	optind = 2;
 	while (1) {
@@ -213,51 +274,88 @@ out:
 static void
 ctl_client_cb(const struct crt_cb_info *cb_info)
 {
-	struct crt_ctl_ep_ls_in		*in_args;
-	struct crt_ctl_ep_ls_out	*out_args;
+	struct crt_ctl_in		*in_args;
+	struct crt_ctl_ep_ls_out	*out_ls_args;
+	struct crt_ctl_get_host_out	*out_get_host_args;
+	struct crt_ctl_get_pid_out	*out_get_pid_args;
 	char				*addr_str;
 	int				 i;
+	struct cb_info			*info;
+
+	info = cb_info->cci_arg;
 
 	in_args = crt_req_get(cb_info->cci_rpc);
-	out_args = crt_reply_get(cb_info->cci_rpc);
-	fprintf(stdout, "group: %s, rank %d, ctx_num %d\n",
-		in_args->cel_grp_id, in_args->cel_rank, out_args->cel_ctx_num);
 
-	addr_str = out_args->cel_addr_str.iov_buf;
-	for (i = 0; i < out_args->cel_ctx_num; i++) {
-		fprintf(stdout, "    %s\n", addr_str);
-		addr_str += (strlen(addr_str) + 1);
+	fprintf(stdout, "COMMAND: %s\n", cmd2str(info->cmd));
+
+	if (cb_info->cci_rc == 0) {
+		fprintf(stdout, "group: %s, rank: %d\n",
+			in_args->cel_grp_id, in_args->cel_rank);
+
+		if (info->cmd == CMD_LIST_CTX) {
+			out_ls_args = crt_reply_get(cb_info->cci_rpc);
+			fprintf(stdout, "ctx_num: %d\n",
+				out_ls_args->cel_ctx_num);
+			addr_str = out_ls_args->cel_addr_str.iov_buf;
+			for (i = 0; i < out_ls_args->cel_ctx_num; i++) {
+				fprintf(stdout, "    %s\n", addr_str);
+				addr_str += (strlen(addr_str) + 1);
+			}
+		} else if (info->cmd == CMD_GET_HOSTNAME) {
+			out_get_host_args = crt_reply_get(cb_info->cci_rpc);
+
+			fprintf(stdout, "hostname: %s\n",
+			    (char *)out_get_host_args->cgh_hostname.iov_buf);
+		} else if (info->cmd == CMD_GET_PID) {
+
+			out_get_pid_args = crt_reply_get(cb_info->cci_rpc);
+
+			fprintf(stdout, "pid: %d\n",
+				out_get_pid_args->cgp_pid);
+		}
+
+	} else {
+		fprintf(stdout, "ERROR: group: %s, rank %d, rc %d\n",
+			in_args->cel_grp_id, in_args->cel_rank,
+			cb_info->cci_rc);
 	}
 
 	sem_post(&ctl_gdata.cg_num_reply);
 }
 
-int
-ctl_ls_ctx()
+static int
+ctl_issue_cmd(void)
 {
 	int				 i;
 	crt_rpc_t			*rpc_req;
-	struct crt_ctl_ep_ls_in		*in_args;
+	struct crt_ctl_in		*in_args;
 	crt_endpoint_t			 ep;
+	struct cb_info			 info;
 	int				 rc = 0;
 
 	D_DEBUG(DB_TRACE, "num requested ranks %d\n", ctl_gdata.cg_num_ranks);
+
+	info.cmd = ctl_gdata.cg_cmd_code;
+
 	for (i = 0; i < ctl_gdata.cg_num_ranks; i++) {
 		ep.ep_grp = ctl_gdata.cg_target_group;
 		ep.ep_rank = ctl_gdata.cg_ranks[i];
 		ep.ep_tag = 0;
 		rc = crt_req_create(ctl_gdata.cg_crt_ctx, &ep,
-				    CRT_OPC_CTL_LS, &rpc_req);
+				    cmd2opcode(info.cmd), &rpc_req);
 		if (rc != 0) {
 			D_ERROR("crt_req_create() failed. rc %d.\n", rc);
 			D_GOTO(out, rc);
 		}
+
 		in_args = crt_req_get(rpc_req);
 		in_args->cel_grp_id = ctl_gdata.cg_target_group->cg_grpid;
 		in_args->cel_rank = ctl_gdata.cg_ranks[i];
+
 		D_DEBUG(DB_NET, "rpc_req %p rank %d tag %d seq %d\n",
 			rpc_req, ep.ep_rank, ep.ep_tag, i);
-		rc = crt_req_send(rpc_req, ctl_client_cb, NULL);
+
+		rc = crt_req_send(rpc_req, ctl_client_cb, &info);
 		if (rc != 0) {
 			D_ERROR("crt_req_send() failed. rpc_req %p rank %d tag "
 				"%d rc %d.\n",
@@ -272,29 +370,10 @@ out:
 	return rc;
 }
 
-int
-exec_cmd()
-{
-	int	rc = 0;
-
-	switch (ctl_gdata.cg_cmd_code) {
-	case 0:
-		/* list_ctx */
-		rc = ctl_ls_ctx();
-		if (rc != 0) {
-			D_ERROR("ctl_ls_ctx() failed. rc %d", rc);
-			D_GOTO(out, rc);
-		}
-		break;
-	}
-
-out:
-	return rc;
-}
 
 #define NUM_ATTACH_RETRIES 10
 
-int
+static int
 ctl_init()
 {
 	int rc;
@@ -338,7 +417,7 @@ ctl_init()
 	return rc;
 }
 
-int
+static int
 ctl_finalize()
 {
 	int		rc;
@@ -372,18 +451,22 @@ main(int argc, char **argv)
 		D_ERROR("ctl_init() failed, rc %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = exec_cmd();
+
+	rc = ctl_issue_cmd();
+
 	if (rc != 0) {
-		D_ERROR("exec_cmd() failed, rc %d\n", rc);
+		D_ERROR("Command '%s' failed with rc=%d\n",
+			cmd2str(ctl_gdata.cg_cmd_code), rc);
 		D_GOTO(out, rc);
 	}
+
+	D_DEBUG(DB_TRACE, "cart_ctl exiting\n");
 	rc = ctl_finalize();
 	if (rc != 0) {
 		D_ERROR("ctl_finalize() failed, rc %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	fprintf(stderr, "cart_ctl exiting.\n");
 out:
 	return rc;
 }

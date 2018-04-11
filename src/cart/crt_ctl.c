@@ -42,12 +42,90 @@
 
 #include "crt_internal.h"
 
+#define MAX_HOSTNAME_SIZE 1024
+
+static int verify_ctl_in_args(struct crt_ctl_in *in_args)
+{
+	struct crt_grp_priv	*grp_priv;
+	int			rc = 0;
+
+	if (in_args->cel_grp_id == NULL) {
+		D_ERROR("invalid parameter, NULL input grp_id.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (crt_validate_grpid(in_args->cel_grp_id) != 0) {
+		D_ERROR("srv_grpid contains invalid characters "
+			"or is too long\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+
+	if (!crt_grp_id_identical(in_args->cel_grp_id,
+				  grp_priv->gp_pub.cg_grpid)) {
+		D_ERROR("RPC request has wrong grp_id: %s\n",
+			in_args->cel_grp_id);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (in_args->cel_rank != grp_priv->gp_self) {
+		D_ERROR("RPC request has wrong rank: %d\n", in_args->cel_rank);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+out:
+	return rc;
+}
+
+void
+crt_hdlr_ctl_get_hostname(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_get_host_out	*out_args;
+	char				hostname[MAX_HOSTNAME_SIZE];
+	int				rc;
+
+	out_args = crt_reply_get(rpc_req);
+	rc = verify_ctl_in_args(crt_req_get(rpc_req));
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	if (gethostname(hostname, MAX_HOSTNAME_SIZE) != 0) {
+		D_ERROR("gethostname() failed with errno %d\n", errno);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	d_iov_set(&out_args->cgh_hostname, hostname, strlen(hostname));
+
+out:
+	out_args->cgh_rc = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send() failed with rc %d\n", rc);
+}
+
+void
+crt_hdlr_ctl_get_pid(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_get_pid_out	*out_args;
+	int				rc;
+
+	out_args = crt_reply_get(rpc_req);
+	rc = verify_ctl_in_args(crt_req_get(rpc_req));
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	out_args->cgp_pid = getpid();
+
+out:
+	out_args->cgp_rc = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send() failed with rc %d\n", rc);
+}
+
 void
 crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 {
-	struct crt_ctl_ep_ls_in		*in_args;
+	struct crt_ctl_in		*in_args;
 	struct crt_ctl_ep_ls_out	*out_args;
-	struct crt_grp_priv		*grp_priv;
 	char				 addr_str[CRT_ADDR_STR_MAX_LEN]
 						= {'\0'};
 	size_t				 str_size;
@@ -63,26 +141,10 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 	out_args = crt_reply_get(rpc_req);
 	D_ASSERTF(out_args != NULL, "NULL output args\n");
 
-	if (in_args->cel_grp_id == NULL) {
-		D_ERROR("invalid parameter, NULL input grp_id.\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-	if (crt_validate_grpid(in_args->cel_grp_id) != 0) {
-		D_ERROR("srv_grpid contains invalid characters "
-			"or is too long\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-	grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
-	if (!crt_grp_id_identical(in_args->cel_grp_id,
-				  grp_priv->gp_pub.cg_grpid)) {
-		D_ERROR("RPC request has wrong grp_id: %s\n",
-			in_args->cel_grp_id);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-	if (in_args->cel_rank != grp_priv->gp_self) {
-		D_ERROR("RPC request has wrong rank: %d\n", in_args->cel_rank);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
+	rc = verify_ctl_in_args(in_args);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 
 	out_args->cel_ctx_num = crt_gdata.cg_ctx_num;
 	D_DEBUG(DB_TRACE, "out_args->cel_ctx_num %d\n", crt_gdata.cg_ctx_num);

@@ -319,10 +319,9 @@ static struct crt_req_format CQF_CRT_LM_MEMB_SAMPLE =
 			   crt_lm_memb_sample_in_fields,
 			   crt_lm_memb_sample_out_fields);
 
-struct crt_msg_field *crt_ctl_ls_in_fields[] = {
+struct crt_msg_field *crt_ctl_in_fields[] = {
 	&CMF_GRP_ID,
 	&CMF_RANK,
-	&CMF_UINT32,	/* request type */
 };
 
 struct crt_msg_field *crt_ctl_ls_out_fields[] = {
@@ -331,10 +330,30 @@ struct crt_msg_field *crt_ctl_ls_out_fields[] = {
 	&CMF_INT,		/* return value */
 };
 
+struct crt_msg_field *crt_ctl_get_host_out_fields[] = {
+	&CMF_IOVEC,		/* hostname string */
+	&CMF_INT,		/* return code */
+};
+
+struct crt_msg_field *crt_ctl_get_pid_out_fields[] = {
+	&CMF_INT,		/* pid */
+	&CMF_INT,		/* return code */
+};
+
 static struct crt_req_format CQF_CRT_CTL_LS =
 	DEFINE_CRT_REQ_FMT("CRT_CTL_LS",
-			    crt_ctl_ls_in_fields,
+			    crt_ctl_in_fields,
 			    crt_ctl_ls_out_fields);
+
+static struct crt_req_format CQF_CRT_CTL_GET_HOSTNAME =
+	DEFINE_CRT_REQ_FMT("CRT_CTL_GET_HOSTNAME",
+			    crt_ctl_in_fields,
+			    crt_ctl_get_host_out_fields);
+
+static struct crt_req_format CQF_CRT_CTL_GET_PID =
+	DEFINE_CRT_REQ_FMT("CRT_CTL_GET_PID",
+			    crt_ctl_in_fields,
+			    crt_ctl_get_pid_out_fields);
 
 struct crt_internal_rpc crt_internal_rpcs[] = {
 	{
@@ -512,6 +531,22 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_flags	= 0,
 		.ir_req_fmt	= &CQF_CRT_CTL_LS,
 		.ir_hdlr	= crt_hdlr_ctl_ls,
+		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_CTL_GET_HOSTNAME",
+		.ir_opc		= CRT_OPC_CTL_GET_HOSTNAME,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_CTL_GET_HOSTNAME,
+		.ir_hdlr	= crt_hdlr_ctl_get_hostname,
+		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_CTL_GET_PID",
+		.ir_opc		= CRT_OPC_CTL_GET_PID,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_CTL_GET_PID,
+		.ir_hdlr	= crt_hdlr_ctl_get_pid,
 		.ir_co_ops	= NULL,
 	}, {
 		.ir_opc		= 0

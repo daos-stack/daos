@@ -43,5 +43,7 @@
 #define __CRT_CTL_H__
 
 void crt_hdlr_ctl_ls(crt_rpc_t *rpc_req);
+void crt_hdlr_ctl_get_hostname(crt_rpc_t *rpc_req);
+void crt_hdlr_ctl_get_pid(crt_rpc_t *rpc_req);
 
 #endif /* __CRT_CTL_H__ */
