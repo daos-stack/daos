@@ -265,8 +265,7 @@ tse_task_get_priv(tse_task_t *task);
  * \param task [in] task to push the buffer.
  * \param size [in] buffer size.
  *
- * \return	pointer to the pushed buffer in task stack,
- *		NULL when overflow.
+ * \return	pointer to the pushed buffer in task stack.
  */
 void *
 tse_task_stack_push(tse_task_t *task, uint32_t size);
@@ -278,8 +277,7 @@ tse_task_stack_push(tse_task_t *task, uint32_t size);
  * \param task [in] task to pop the buffer.
  * \param size [in] buffer size.
  *
- * \return	pointer to the poped buffer in task stack,
- *		NULL when overflow.
+ * \return	pointer to the poped buffer in task stack.
  */
 void *
 tse_task_stack_pop(tse_task_t *task, uint32_t size);
@@ -290,10 +288,8 @@ tse_task_stack_pop(tse_task_t *task, uint32_t size);
  * \param task [in]	task to push the buffer.
  * \param data [in]	pointer of data to push
  * \param len  [in]	length of data
- *
- * \return	zero for success, -DER_OVERFLOW when overflow.
  */
-int
+void
 tse_task_stack_push_data(tse_task_t *task, void *data, uint32_t len);
 
 /**
@@ -302,10 +298,8 @@ tse_task_stack_push_data(tse_task_t *task, void *data, uint32_t len);
  * \param task [in]	task to push the buffer.
  * \param data [in/out]	pointer of value to store the poped data
  * \param len  [in]	length of data
- *
- * \return	zero for success, -DER_OVERFLOW when overflow.
  */
-int
+void
 tse_task_stack_pop_data(tse_task_t *task, void *data, uint32_t len);
 
 /**

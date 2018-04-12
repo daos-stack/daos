@@ -163,25 +163,30 @@ void dc_obj_shard_close(struct dc_obj_shard *shard);
 int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			daos_key_t *dkey, unsigned int nr,
 			daos_iod_t *iods, daos_sg_list_t *sgls,
-			unsigned int map_ver, tse_task_t *task);
+			unsigned int *map_ver, tse_task_t *task);
 int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       daos_key_t *dkey, unsigned int nr,
 		       daos_iod_t *iods, daos_sg_list_t *sgls,
-		       daos_iom_t *maps, unsigned int map_ver,
+		       daos_iom_t *maps, unsigned int *map_ver,
 		       tse_task_t *task);
 int dc_obj_shard_list_key(struct dc_obj_shard *shard, uint32_t op,
 			  daos_epoch_t epoch, daos_key_t *key, uint32_t *nr,
 			  daos_key_desc_t *kds, daos_sg_list_t *sgl,
-			  daos_hash_out_t *anchor, unsigned int map_ver,
+			  daos_hash_out_t *anchor, unsigned int *map_ver,
 			  tse_task_t *task);
 int dc_obj_shard_list_rec(struct dc_obj_shard *shard, uint32_t op,
-		      daos_epoch_t epoch, daos_key_t *dkey,
-		      daos_key_t *akey, daos_iod_type_t type,
-		      daos_size_t *size, uint32_t *nr,
-		      daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		      uuid_t *cookies, uint32_t *versions,
-		      daos_hash_out_t *anchor, unsigned int map_ver,
-		      bool incr_order, tse_task_t *task);
+			 daos_epoch_t epoch, daos_key_t *dkey,
+			 daos_key_t *akey, daos_iod_type_t type,
+			 daos_size_t *size, uint32_t *nr,
+			 daos_recx_t *recxs, daos_epoch_range_t *eprs,
+			 uuid_t *cookies, uint32_t *versions,
+			 daos_hash_out_t *anchor, unsigned int *map_ver,
+			 bool incr_order, tse_task_t *task);
+int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,
+		       daos_epoch_t epoch, daos_key_t *dkey,
+		       daos_key_t *akeys, unsigned int akey_nr,
+		       const uuid_t coh_uuid, const uuid_t cont_uuid,
+		       unsigned int *map_ver, tse_task_t *task);
 
 static inline bool
 obj_retry_error(int err)
@@ -189,22 +194,6 @@ obj_retry_error(int err)
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       daos_crt_network_error(err);
 }
-
-/**
- * Task Arguments for key punch
- */
-struct tsa_obj_punch {
-	uint32_t		 pa_opc;
-	uint32_t		 pa_mapv;
-	uuid_t			 pa_coh_uuid;
-	uuid_t			 pa_cont_uuid;
-	struct dc_obj_shard	*pa_shard;
-	daos_obj_punch_t	*pa_api_args;
-	struct dc_object	*pa_obj;
-	crt_rpc_t		*pa_rpc;
-};
-
-int dc_shard_punch(tse_task_t *task);
 
 void obj_shard_decref(struct dc_obj_shard *shard);
 void obj_shard_addref(struct dc_obj_shard *shard);
@@ -218,5 +207,16 @@ void ds_obj_punch_handler(crt_rpc_t *rpc);
 
 ABT_pool
 ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
+
+static inline uint64_t
+obj_dkey2hash(daos_key_t *dkey)
+{
+	/* return 0 for NULL dkey, for example obj punch and list dkey */
+	if (dkey == NULL)
+		return 0;
+
+	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
+			       dkey->iov_len, 5731);
+}
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

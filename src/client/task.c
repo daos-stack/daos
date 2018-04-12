@@ -160,6 +160,18 @@ dc_task_get_args(tse_task_t *task)
 	return &task_ptr2args(task)->ta_u;
 }
 
+void
+dc_task_set_opc(tse_task_t *task, uint32_t opc)
+{
+	task_ptr2args(task)->ta_opc = opc;
+}
+
+uint32_t
+dc_task_get_opc(tse_task_t *task)
+{
+	return task_ptr2args(task)->ta_opc;
+}
+
 /***************************************************************************
  * Task based interface for all DAOS API
  *

@@ -650,11 +650,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	map_version = cont_hdl->sch_pool->spc_map_version;
-	if (orw->orw_map_ver < map_version) {
-		D_ERROR("stale version req %d map_version %d\n",
+	if (orw->orw_map_ver < map_version)
+		D_DEBUG(DB_IO, "stale version req %d map_version %d\n",
 			orw->orw_map_ver, map_version);
-		D_GOTO(out, rc = -DER_STALE);
-	}
 
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" tag %d\n", opc_get(rpc->cr_opc),
 		DP_UOID(orw->orw_oid), dss_get_module_info()->dmi_tid);
@@ -874,11 +872,9 @@ ds_iter_single_vos(void *data)
 	if (iter_arg->map_version == 0)
 		iter_arg->map_version = cont_hdl->sch_pool->spc_map_version;
 
-	if (oei->oei_map_ver < iter_arg->map_version) {
-		D_DEBUG(DB_TRACE, "oei map_version %d map_ver %d\n",
+	if (oei->oei_map_ver < iter_arg->map_version)
+		D_DEBUG(DB_IO, "stale version req %d map_version %d\n",
 			oei->oei_map_ver, iter_arg->map_version);
-		D_GOTO(out_cont_hdl, rc = -DER_STALE);
-	}
 
 	if (arg->opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
 		type = VOS_ITER_AKEY;
@@ -1155,11 +1151,9 @@ ds_obj_punch(void *punch_args)
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	map_version = cont_hdl->sch_pool->spc_map_version;
 
-	if (opi->opi_map_ver < map_version) {
-		/** Di's warning for stale(DAOS-308). */
-		D_WARN("stale version req %d map_version %d\n",
-		       opi->opi_map_ver, map_version);
-	}
+	if (opi->opi_map_ver < map_version)
+		D_DEBUG(DB_IO, "stale version req %d map_version %d\n",
+			 opi->opi_map_ver, map_version);
 
 	switch (opc_get(args->opc)) {
 	default:

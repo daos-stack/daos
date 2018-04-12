@@ -368,7 +368,7 @@ typedef struct {
 	daos_handle_t		oh;
 	daos_epoch_t		epoch;
 	daos_obj_attr_t		*oa;
-	d_rank_list_t	*ranks;
+	d_rank_list_t		*ranks;
 } daos_obj_query_t;
 
 typedef struct {

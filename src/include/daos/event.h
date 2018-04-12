@@ -173,6 +173,14 @@ dc_task_schedule(tse_task_t *task, bool instant);
 void *
 dc_task_get_args(tse_task_t *task);
 
+/** set opc of the task */
+void
+dc_task_set_opc(tse_task_t *task, uint32_t opc);
+
+/** get opc of the task */
+uint32_t
+dc_task_get_opc(tse_task_t *task);
+
 /* It's a little confusing to use both tse_task_* and dc_task_* at the same
  * time, we probably want to use macros to wrap all tse_task_* functions?
  *
