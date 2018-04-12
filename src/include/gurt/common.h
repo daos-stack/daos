@@ -158,7 +158,7 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 	do {								\
 		(ptr) = strndup(s, n);					\
 		D_CHECK_ALLOC(strndup, (ptr) != NULL, ptr, #ptr,	\
-			      strnlen(ptr, n + 1) + 1, 0, #ptr, 0);	\
+			      strnlen(s, n + 1) + 1, 0, #ptr, 0);	\
 	} while (0)
 
 #define D_ASPRINTF(ptr, ...)						\
@@ -172,10 +172,12 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 
 #define D_REALPATH(ptr, path)						\
 	do {								\
+		int _size;						\
 		(ptr) = realpath((path), NULL);				\
-		D_CHECK_ALLOC(realpath, (ptr) != NULL, ptr, #ptr,	\
-			      strnlen((ptr), PATH_MAX + 1) + 1, 0, #ptr,\
-			      0);					\
+		_size = (ptr) != NULL ?					\
+			strnlen((ptr), PATH_MAX + 1) + 1 : 0;		\
+		D_CHECK_ALLOC(realpath, (ptr) != NULL, ptr, #ptr, _size,\
+			      0, #ptr, 0);				\
 	} while (0)
 
 /* Requires newptr and oldptr to be different variables.  Otherwise
