@@ -163,6 +163,9 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
 		msg->term);
 
+	if (DAOS_FAIL_CHECK(DAOS_RDB_SKIP_APPENDENTRIES_FAIL))
+		D_GOTO(err, rc = 0);
+
 	rc = rdb_create_raft_rpc(RDB_APPENDENTRIES, node, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to create AE RPC to node %d: %d\n",

@@ -987,6 +987,95 @@ rebuild_offline(void **state)
 }
 
 static int
+rebuild_change_leader_cb(void *arg)
+{
+	test_arg_t	*test_arg = arg;
+	d_rank_t	leader;
+
+	test_get_leader(test_arg, &leader);
+
+	/* Skip appendentry to re-elect the leader */
+	if (test_arg->myrank == 0) {
+		daos_mgmt_params_set(test_arg->group, leader, DSS_KEY_FAIL_LOC,
+				     DAOS_RDB_SKIP_APPENDENTRIES_FAIL |
+				     DAOS_FAIL_VALUE, NULL);
+		print_message("sleep 15 seconds for re-election leader");
+		/* Sleep 15 seconds to make sure the leader is changed */
+		sleep(15);
+		/* Continue the rebuild */
+		daos_mgmt_params_set(test_arg->group, -1, DSS_KEY_FAIL_LOC,
+				     0, NULL);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	return 0;
+}
+
+static void
+rebuild_master_change_during_scan(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
+
+	if (!test_runable(arg, 6) || arg->svc.rl_nr == 1)
+		skip();
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
+
+	rebuild_io(arg, oids, OBJ_NR);
+
+	/* All ranks should wait before rebuild */
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+				 DAOS_REBUILD_TGT_SCAN_HANG | DAOS_FAIL_VALUE,
+				     NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+	arg->rebuild_cb = rebuild_change_leader_cb;
+
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	arg->rebuild_cb = NULL;
+
+	/* Verify the data */
+	rebuild_io_validate(arg, oids, OBJ_NR);
+}
+
+static void
+rebuild_master_change_during_rebuild(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		i;
+
+	if (!test_runable(arg, 6) || arg->svc.rl_nr == 1)
+		skip();
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
+
+	rebuild_io(arg, oids, OBJ_NR);
+
+	/* All ranks should wait before rebuild */
+	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+			     DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_VALUE,
+			     NULL);
+
+	arg->rebuild_cb = rebuild_change_leader_cb;
+
+	rebuild_single_pool_target(arg, ranks_to_kill[0]);
+
+	arg->rebuild_cb = NULL;
+
+	/* Verify the data */
+	rebuild_io_validate(arg, oids, OBJ_NR);
+}
+
+static int
 rebuild_io_cb(void *arg)
 {
 	test_arg_t	*test_arg = arg;
@@ -1111,19 +1200,23 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_iv_tgt_fail, NULL, test_case_teardown},
 	{"REBUILD15: rebuild tgt start fail",
 	rebuild_tgt_start_fail, NULL, test_case_teardown},
-	{"REBUILD16: disconnect pool during scan",
+	{"REBUILD16: rebuild with master change during scan",
+	rebuild_master_change_during_scan, NULL, test_case_teardown},
+	{"REBUILD17: rebuild with master change during rebuild",
+	rebuild_master_change_during_rebuild, NULL, test_case_teardown},
+	{"REBUILD18: disconnect pool during scan",
 	 rebuild_tgt_pool_disconnect_in_scan, NULL, test_case_teardown},
-	{"REBUILD17: disconnect pool during rebuild",
+	{"REBUILD19: disconnect pool during rebuild",
 	 rebuild_tgt_pool_disconnect_in_rebuild, NULL, test_case_teardown},
-	{"REBUILD18: connect pool during scan for offline rebuild",
+	{"REBUILD20: connect pool during scan for offline rebuild",
 	 rebuild_offline_pool_connect_in_scan, NULL, test_case_teardown},
-	{"REBUILD19: connect pool during rebuild for offline rebuild",
+	{"REBUILD21: connect pool during rebuild for offline rebuild",
 	 rebuild_offline_pool_connect_in_rebuild, NULL, test_case_teardown},
-	{"REBUILD20: offline rebuild",
+	{"REBUILD22: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD21: rebuild with master failure",
+	{"REBUILD23: rebuild with master failure",
 	 rebuild_master_failure, NULL, test_case_teardown},
-	{"REBUILD22: rebuild with two failures",
+	{"REBUILD24: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
 };
 
