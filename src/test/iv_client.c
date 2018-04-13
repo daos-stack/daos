@@ -401,6 +401,8 @@ progress_function(void *data)
 	return NULL;
 }
 
+#define NUM_ATTACH_RETRIES 10
+
 int main(int argc, char **argv)
 {
 	struct iv_key_struct	 iv_key;
@@ -417,6 +419,7 @@ int main(int argc, char **argv)
 	int			 rc = 0;
 	pthread_t		 progress_thread;
 	int			 c;
+	int			 attach_retries_left;
 
 	init_hostname(g_hostname, sizeof(g_hostname));
 
@@ -504,7 +507,17 @@ int main(int argc, char **argv)
 	rc = crt_context_create(&g_crt_ctx);
 	assert(rc == 0);
 
-	rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &srv_grp);
+	attach_retries_left = NUM_ATTACH_RETRIES;
+
+	while (attach_retries_left-- > 0) {
+		rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &srv_grp);
+		if (rc == 0)
+			break;
+
+		printf("attach failed (rc=%d). retries left %d\n",
+			rc, attach_retries_left);
+		sleep(1);
+	}
 	assert(rc == 0);
 
 	rc = pthread_create(&progress_thread, 0, progress_function, &g_crt_ctx);

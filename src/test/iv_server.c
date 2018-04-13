@@ -62,12 +62,19 @@ static d_rank_t g_my_rank;
 static uint32_t g_group_size;
 
 static int g_verbose_mode;
-static bool namespace_attached;
+
+static int namespace_attached;
 
 static void wait_for_namespace(void)
 {
-	while (!namespace_attached)
+	while (!namespace_attached) {
 		sched_yield();
+
+		/* namespace_attached doesnt get updated properly without
+		 * this call being present
+		 */
+		__sync_synchronize();
+	}
 }
 
 #define DBG_PRINT(x...)							\
@@ -100,12 +107,10 @@ struct iv_value_struct {
 	char data[MAX_DATA_SIZE];
 };
 
-#define NUM_WORK_CTX 9
-crt_context_t g_work_ctx[NUM_WORK_CTX];
-crt_context_t g_main_ctx;
+static crt_context_t g_main_ctx;
 static int g_do_shutdown;
-pthread_t g_progress_thread[NUM_WORK_CTX + 1];
-pthread_mutex_t g_key_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t g_progress_thread;
+static pthread_mutex_t g_key_lock = PTHREAD_MUTEX_INITIALIZER;
 #define LOCK_KEYS() D_MUTEX_LOCK(&g_key_lock)
 #define UNLOCK_KEYS() D_MUTEX_UNLOCK(&g_key_lock)
 
@@ -137,14 +142,9 @@ progress_function(void *data)
 static void
 shutdown(void)
 {
-	int i;
-
-	DBG_PRINT("Joining threads\n");
-
-	for (i = 0; i < NUM_WORK_CTX + 1; i++)
-		pthread_join(g_progress_thread[i], NULL);
-
-	DBG_PRINT("Finished joining all threads\n");
+	DBG_PRINT("Joining progress thread\n");
+	pthread_join(g_progress_thread, NULL);
+	DBG_PRINT("Finished joining progress thread\n");
 }
 
 /* handler for RPC_SHUTDOWN */
@@ -178,24 +178,14 @@ iv_shutdown(crt_rpc_t *rpc) {
 static void
 init_work_contexts(void)
 {
-	int i;
 	int rc;
 
 	rc = crt_context_create(&g_main_ctx);
 	assert(rc == 0);
 
-	rc = pthread_create(&g_progress_thread[0], 0,
+	rc = pthread_create(&g_progress_thread, 0,
 			    progress_function, &g_main_ctx);
 	assert(rc == 0);
-
-	for (i = 0; i < NUM_WORK_CTX; i++) {
-		rc = crt_context_create(&g_work_ctx[i]);
-		assert(rc == 0);
-
-		rc = pthread_create(&g_progress_thread[i + 1], 0,
-				    progress_function, &g_work_ctx[i]);
-		assert(rc == 0);
-	}
 }
 
 #define NUM_LOCAL_IVS 10
@@ -720,7 +710,7 @@ init_iv(void)
 					     &iv_class, 1, &g_ivns, &s_ivns);
 		assert(rc == 0);
 
-		namespace_attached = true;
+		namespace_attached = 1;
 
 		for (rank = 1; rank < g_group_size; rank++) {
 			server_ep.ep_rank = rank;
@@ -784,7 +774,7 @@ iv_set_ivns(crt_rpc_t *rpc)
 	rc = crt_reply_send(rpc);
 	assert(rc == 0);
 
-	namespace_attached = true;
+	namespace_attached = 1;
 
 	DBG_EXIT();
 	return 0;
@@ -1172,8 +1162,6 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting\n");
-	rc = crt_group_config_save(NULL, true);
-	assert(rc == 0);
 
 	rc = RPC_REGISTER(RPC_TEST_FETCH_IV);
 	assert(rc == 0);
@@ -1198,6 +1186,15 @@ int main(int argc, char **argv)
 
 	init_work_contexts();
 	init_iv();
+
+	/* Wait for IV namespace attach before saving group config
+	 * This prevents singleton iv_client from connecting toservers
+	 * before those are fully initialized
+	 */
+	wait_for_namespace();
+
+	rc = crt_group_config_save(NULL, true);
+	assert(rc == 0);
 
 	while (!g_do_shutdown)
 		sleep(1);
