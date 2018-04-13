@@ -87,14 +87,14 @@ On CentOS and openSuSE:
     $ yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
     $ yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
     $ yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
-    $ yum install -y doxygen pandoc flex patch
+    $ yum install -y doxygen pandoc flex patch nasm yasm
 
 On Ubuntu and Debian:
 
     $ apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
     $ apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
     $ apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
-    $ apt-get install -y curl doxygen pandoc flex patch
+    $ apt-get install -y curl doxygen pandoc flex patch nasm yasm
 
 Moreover, please make sure all the auto tools listed below are at the appropriate versions.
 
