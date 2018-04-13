@@ -29,6 +29,7 @@
 
 #include <stdio.h>
 #include <fcntl.h>
+#include <linux/falloc.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -96,7 +97,7 @@ vts_pool_fallocate(char **fname)
 		ret = -ENOMEM;
 		goto exit;
 	}
-	ret = posix_fallocate(fd, 0, VPOOL_16M);
+	ret = fallocate(fd, 0, 0, VPOOL_16M);
 exit:
 	return ret;
 }

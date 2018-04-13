@@ -27,6 +27,7 @@
  */
 #include <stdio.h>
 #include <fcntl.h>
+#include <linux/falloc.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -207,7 +208,7 @@ pool_init(struct dts_context *tsc)
 				goto out;
 
 			fd = rc;
-			rc = posix_fallocate(fd, 0, tsc->tsc_pool_size);
+			rc = fallocate(fd, 0, 0, tsc->tsc_pool_size);
 			if (rc)
 				goto out;
 		}

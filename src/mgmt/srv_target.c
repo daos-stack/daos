@@ -27,6 +27,7 @@
 
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <linux/falloc.h>
 #include <sys/sysinfo.h>
 #include <ftw.h>
 #include <dirent.h>
@@ -299,12 +300,19 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 			break;
 		}
 
-		rc = posix_fallocate(fd, 0, size);
+		/**
+		 * Pre-allocate blocks for vos files in order to provide
+		 * consistent performance and avoid entering into the backend
+		 * filesystem allocator through page faults.
+		 * Use fallocate(2) instead of posix_fallocate(3) since the
+		 * latter is bogus with tmpfs.
+		 */
+		rc = fallocate(fd, 0, 0, size);
 		if (rc) {
 			D_ERROR(DF_UUID": failed to allocate vos file %s with "
 				"size: "DF_U64", rc: %d.\n",
 				DP_UUID(uuid), path, size, rc);
-			rc = daos_errno2der(rc);
+			rc = daos_errno2der(errno);
 			break;
 		}
 
