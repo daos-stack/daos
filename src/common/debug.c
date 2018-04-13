@@ -56,6 +56,14 @@ DECLARE_FAC(tier);
 DECLARE_FAC(mgmt);
 DECLARE_FAC(tests);
 
+uint64_t DB_MD; /* metadata operation */
+uint64_t DB_PL; /* placement */
+uint64_t DB_MGMT; /* pool management */
+uint64_t DB_EPC; /* epoch system */
+uint64_t DB_DF; /* durable format */
+uint64_t DB_REBUILD; /* rebuild process */
+
+
 /** debug facility (or subsystem/module) */
 struct daos_debug_fac {
 	/** name of the facility */
@@ -80,12 +88,12 @@ struct daos_debug_fac {
 
 static struct d_debug_bit daos_bit_dict[] = {
 	/* load DAOS-specific debug bits into dict */
-	DBG_DICT_ENTRY(DB_MD,		"md",		"metadata"),
-	DBG_DICT_ENTRY(DB_PL,		"pl",		"placement"),
-	DBG_DICT_ENTRY(DB_MGMT,		"mgmt",		"management"),
-	DBG_DICT_ENTRY(DB_EPC,		"epc",		"epoch"),
-	DBG_DICT_ENTRY(DB_DF,		"df",		"durable_format"),
-	DBG_DICT_ENTRY(DB_REBUILD,	"rebuild",	"rebuild"),
+	DBG_DICT_ENTRY(&DB_MD,		"md",		"metadata"),
+	DBG_DICT_ENTRY(&DB_PL,		"pl",		"placement"),
+	DBG_DICT_ENTRY(&DB_MGMT,	"mgmt",		"management"),
+	DBG_DICT_ENTRY(&DB_EPC,		"epc",		"epoch"),
+	DBG_DICT_ENTRY(&DB_DF,		"df",		"durable_format"),
+	DBG_DICT_ENTRY(&DB_REBUILD,	"rebuild",	"rebuild"),
 };
 
 #define NUM_DBG_BIT_ENTRIES ARRAY_SIZE(daos_bit_dict)
@@ -136,7 +144,7 @@ debug_fac_load_env(void)
 
 	D_STRNDUP(fac_str, fac_env, DAOS_FAC_MAX_LEN);
 	if (fac_str == NULL) {
-		fprintf(stderr, "D_STRNDUP of fac mask failed");
+		D_ERROR("D_STRNDUP of fac mask failed");
 		return;
 	}
 
@@ -164,51 +172,6 @@ debug_fac_load_env(void)
 		cur = strtok(NULL, DD_SEP);
 	}
 	D_FREE(fac_str);
-}
-
-/** Load the debug mask from the environment variable. */
-static uint64_t
-debug_mask_load_env(void)
-{
-	char		*mask_env;
-	char		*mask_str;
-	char		*cur;
-	int		i;
-	uint64_t	dd_mask;
-
-	mask_env = getenv(DD_MASK_ENV);
-	if (mask_env == NULL)
-		return 0;
-
-	D_STRNDUP(mask_str, mask_env, DAOS_DBG_MAX_LEN);
-	if (mask_str == NULL) {
-		fprintf(stderr, "D_STRNDUP of debug mask failed");
-		return 0;
-	}
-
-	dd_mask = 0;
-	cur = strtok(mask_str, DD_SEP);
-	while (cur != NULL) {
-		for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
-			if (daos_bit_dict[i].db_name != NULL &&
-			    strncasecmp(cur, daos_bit_dict[i].db_name,
-					daos_bit_dict[i].db_name_size)
-					== 0) {
-				dd_mask |= daos_bit_dict[i].db_bit;
-				break;
-			}
-			if (daos_bit_dict[i].db_lname != NULL &&
-			    strncasecmp(cur, daos_bit_dict[i].db_lname,
-					daos_bit_dict[i].db_lname_size)
-					== 0) {
-				dd_mask |= daos_bit_dict[i].db_bit;
-				break;
-			}
-		}
-		cur = strtok(NULL, DD_SEP);
-	}
-	D_FREE(mask_str);
-	return dd_mask;
 }
 
 static int
@@ -246,7 +209,7 @@ daos_debug_init(char *logfile)
 {
 	int		i;
 	int		rc;
-	uint64_t	dd_mask;
+	uint64_t	allocd_dbg_bit;
 
 	D_MUTEX_LOCK(&dd_lock);
 	if (dd_ref > 0) {
@@ -260,14 +223,13 @@ daos_debug_init(char *logfile)
 	else if (logfile == NULL)
 		logfile = DAOS_LOG_DEFAULT;
 
-	dd_mask = debug_mask_load_env();
 	/* load other env variables */
 	debug_fac_load_env();
 
 	rc = d_log_init_adv("DAOS", logfile, DLOG_FLV_LOGPID,
 			    DLOG_INFO, DLOG_CRIT);
 	if (rc != 0) {
-		fprintf(stderr, "Failed to init DAOS debug log: %d\n", rc);
+		D_ERROR("Failed to init DAOS debug log: %d\n", rc);
 		goto failed_unlock;
 	}
 
@@ -280,13 +242,29 @@ daos_debug_init(char *logfile)
 
 		rc = debug_fac_register(&debug_fac_dict[i]);
 		if (rc != 0) {
-			fprintf(stderr, "Failed to add DAOS facility %s: %d\n",
+			D_ERROR("Failed to add DAOS facility %s: %d\n",
 				debug_fac_dict[i].df_name, rc);
 			goto failed_fini;
 		}
 	}
 
-	d_log_sync_mask(dd_mask, false);
+	/* Register DAOS debug bits with gurt used with DD_MASK env */
+	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
+		/* register DAOS debug bit masks */
+		rc = d_log_dbg_bit_alloc(&allocd_dbg_bit,
+					 daos_bit_dict[i].db_name,
+					 daos_bit_dict[i].db_lname);
+		if (rc < 0) {
+			D_ERROR("Error allocating daos debug bit for %s",
+				daos_bit_dict[i].db_name);
+			return -DER_UNINIT;
+		}
+
+		*daos_bit_dict[i].db_bit = allocd_dbg_bit;
+	}
+
+	/* Sync DAOS debug env with libgurt */
+	d_log_sync_mask();
 
 	dd_ref = 1;
 	D_MUTEX_UNLOCK(&dd_lock);

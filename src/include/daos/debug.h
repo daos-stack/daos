@@ -48,15 +48,14 @@ extern int d_tests_logfac;
 
 #include <gurt/debug.h>
 
-/* DAOS-specific debug bits OPT1-10 available */
-#define DB_MD		DB_OPT1	/* metadata operation */
-#define	DB_PL		DB_OPT2	/* placement */
-#define DB_MGMT		DB_OPT3	/* pool management */
-#define DB_EPC		DB_OPT4	/* epoch system */
-#define DB_DF		DB_OPT5	/* durable format */
-#define DB_REBUILD	DB_OPT6	/* rebuild process */
+extern uint64_t DB_MD; /* metadata operation */
+extern uint64_t DB_PL; /* placement */
+extern uint64_t DB_MGMT; /* pool management */
+extern uint64_t DB_EPC; /* epoch system */
+extern uint64_t DB_DF; /* durable format */
+extern uint64_t DB_REBUILD; /* rebuild process */
 
-#define DB_DEFAULT	(DB_IO | DB_MD | DB_PL | DB_REBUILD)
+#define DB_DEFAULT	DLOG_DBG
 #define DB_NULL		0
 /** XXX Temporary things, should be replaced by debug bits above */
 #define DF_DSMC		DB_ANY
