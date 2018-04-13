@@ -62,7 +62,13 @@ struct crt_msg_field *pool_connect_out_fields[] = {
 	&CMF_UINT32,	/* op.map_version */
 	&DMF_RSVC_HINT,	/* op.hint */
 	&CMF_UINT32,	/* mode */
-	&CMF_UINT32	/* map_buf_size */
+	&CMF_UINT32,	/* map_buf_size */
+	&CMF_UINT32,	/* rebuild_st.version */
+	&CMF_UINT32,	/* rebuild_st.pad_32 */
+	&CMF_INT,	/* rebuild_st.errno */
+	&CMF_INT,	/* rebuild_st.done */
+	&CMF_UINT64,	/* rebuild_st.obj_nr */
+	&CMF_UINT64,	/* rebuild_st.rec_nr */
 };
 
 struct crt_msg_field *pool_disconnect_in_fields[] = {

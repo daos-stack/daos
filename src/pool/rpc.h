@@ -95,9 +95,11 @@ struct pool_connect_in {
 };
 
 struct pool_connect_out {
-	struct pool_op_out	pco_op;
-	uint32_t		pco_mode;
-	uint32_t		pco_map_buf_size;   /* only set on -DER_TRUNC */
+	struct pool_op_out		pco_op;
+	uint32_t			pco_mode;
+	/* only set on -DER_TRUNC */
+	uint32_t			pco_map_buf_size;
+	struct daos_rebuild_status	pco_rebuild_st;
 };
 
 struct pool_disconnect_in {
@@ -114,10 +116,11 @@ struct pool_query_in {
 };
 
 struct pool_query_out {
-	struct pool_op_out	pqo_op;
-	uint32_t		pqo_mode;
-	uint32_t		pqo_map_buf_size;   /* only set on -DER_TRUNC */
-	struct daos_rebuild_status pqo_rebuild_st;
+	struct pool_op_out		pqo_op;
+	uint32_t			pqo_mode;
+	/* only set on -DER_TRUNC */
+	uint32_t			pqo_map_buf_size;
+	struct daos_rebuild_status	pqo_rebuild_st;
 };
 
 struct pool_tgt_update_in {

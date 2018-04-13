@@ -384,6 +384,11 @@ pool_connect_cp(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
+	if (arg->pca_info != NULL) {
+		memcpy(&arg->pca_info->pi_rebuild_st, &pco->pco_rebuild_st,
+		       sizeof(pco->pco_rebuild_st));
+	}
+
 	/* add pool to hhash */
 	dc_pool_hdl_link(pool);
 	dc_pool2hdl(pool, arg->hdlp);
@@ -1191,8 +1196,10 @@ pool_query_cb(tse_task_t *task, void *data)
 	rc = process_query_reply(arg->dqa_pool, arg->dqa_map_buf,
 				 out->pqo_op.po_map_version, out->pqo_mode,
 				 arg->dqa_tgts, arg->dqa_info, false);
-	memcpy(&arg->dqa_info->pi_rebuild_st, &out->pqo_rebuild_st,
-	       sizeof(out->pqo_rebuild_st));
+	if (arg->dqa_info != NULL) {
+		memcpy(&arg->dqa_info->pi_rebuild_st, &out->pqo_rebuild_st,
+		       sizeof(out->pqo_rebuild_st));
+	}
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(arg->dqa_pool);

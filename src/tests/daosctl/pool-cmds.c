@@ -134,8 +134,11 @@ parse_pool_args_cb(int key, char *arg,
 {
 	struct pool_cmd_options *options = state->input;
 
-	switch (key) {
+	/* if no uid/gid specified, get them from current user */
+	options->uid = geteuid();
+	options->gid = getegid();
 
+	switch (key) {
 	case 'f':
 		options->force = 1;
 		break;
@@ -466,19 +469,26 @@ cmd_query_pool_status(int argc, const char **argv, void *ctx)
 	rc = daos_pool_connect(uuid, qp_options.server_group,
 			       &pool_service_list,
 			       flag, &poh, &info, NULL);
-
-	if (rc) {
-		printf("<<<daosctl>>> Pool connect fail, result: %d\n",
-		       rc);
-		return 1;
+	if (rc == 0) {
+		printf("target count: %i\n", info.pi_ntargets);
+		printf("disabled targets: %i\n", info.pi_ndisabled);
+		printf("rebuild status:\n");
+		printf("in rebuilding: %i\n", !info.pi_rebuild_st.rs_done);
+		printf("pool map version in building: %i\n",
+		       info.pi_rebuild_st.rs_version);
+		printf("rebuild error: %i\n", info.pi_rebuild_st.rs_errno);
+		printf("objects rebuilt: %" PRIu64 "\n",
+		       info.pi_rebuild_st.rs_obj_nr);
+		printf("record rebuilt: %" PRIu64 "\n",
+		       info.pi_rebuild_st.rs_rec_nr);
+	} else {
+		printf("<<<daosctl>>> Pool connect fail, result: %d\n", rc);
+		return rc;
 	}
-	printf("target count: %i\n", info.pi_ntargets);
-	printf("disabled targets: %i\n", info.pi_ndisabled);
-	printf("pool map version: %i\n", info.pi_rebuild_st.rs_version);
-	printf("rebuild error: %i\n", info.pi_rebuild_st.rs_errno);
-	printf("rebuild done: %i\n", info.pi_rebuild_st.rs_done);
-	printf("objects rebuilt: %" PRIu64 "\n", info.pi_rebuild_st.rs_obj_nr);
-	printf("record rebuilt: %" PRIu64 "\n", info.pi_rebuild_st.rs_rec_nr);
+
+	rc = daos_pool_disconnect(poh, NULL);
+	if (rc != 0)
+		printf("disconnect failed: %d\n", rc);
 
 	fflush(stdout);
 

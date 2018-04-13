@@ -1733,6 +1733,10 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 			D_GOTO(out_svc, rc);
 	}
 
+	rc = ds_rebuild_query(in->pci_op.pi_uuid, &out->pco_rebuild_st);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
