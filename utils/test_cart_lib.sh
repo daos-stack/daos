@@ -63,7 +63,7 @@ else
     if [ $? -ne 1 ]; then RC=1; fi
     echo "checking libgurt.so"
     nm -g ${SL_PREFIX}/lib/libgurt.so |
-        grep -v " U " |  grep -v " w " |  grep -v " d_" |
+        grep -v " U " |  grep -v " w " |  grep -v " d_" | grep -v " DB_" |
         grep -v " D _edata" | grep -v " T _fini" | grep -v " T _init" |
         grep -v " B __bss_start" | grep -v " B _end" |
         grep -v " T chash_";

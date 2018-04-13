@@ -50,6 +50,29 @@ static int d_log_refcount;
 int d_misc_logfac;
 int d_mem_logfac;
 
+/*
+ * Debug bits for common logic paths, can only have up to 16 different bits.
+ */
+uint64_t DB_ANY; /** wildcard for unclassed debug messages */
+/** function trace, tree/hash/lru operations, a very expensive one */
+uint64_t DB_TRACE;
+uint64_t DB_MEM; /**< memory operation */
+uint64_t DB_NET; /**< network operation */
+uint64_t DB_IO;	/**< object I/O */
+uint64_t DB_TEST; /**< test programs */
+uint64_t DB_ALL; /**< all of masks */
+/** Configurable debug bits (project-specific) */
+static uint64_t DB_OPT1;
+static uint64_t DB_OPT2;
+static uint64_t DB_OPT3;
+static uint64_t DB_OPT4;
+static uint64_t DB_OPT5;
+static uint64_t DB_OPT6;
+static uint64_t DB_OPT7;
+static uint64_t DB_OPT8;
+static uint64_t DB_OPT9;
+static uint64_t DB_OPT10;
+
 #define DBG_ENV_MAX_LEN	(32)
 
 #define DBG_DICT_ENTRY(bit, name)					\
@@ -58,13 +81,25 @@ int d_mem_logfac;
 
 struct d_debug_bit d_dbg_bit_dict[] = {
 	/* load common debug bits into dict */
-	DBG_DICT_ENTRY(DB_ANY, "any"),
-	DBG_DICT_ENTRY(DB_ALL, "all"),
-	DBG_DICT_ENTRY(DB_MEM, "mem"),
-	DBG_DICT_ENTRY(DB_NET, "net"),
-	DBG_DICT_ENTRY(DB_IO, "io"),
-	DBG_DICT_ENTRY(DB_TRACE, "trace"),
-	DBG_DICT_ENTRY(DB_TEST, "test"),
+	DBG_DICT_ENTRY(&DB_ANY, "any"),
+	DBG_DICT_ENTRY(&DB_ALL, "all"),
+	DBG_DICT_ENTRY(&DB_MEM, "mem"),
+	DBG_DICT_ENTRY(&DB_NET, "net"),
+	DBG_DICT_ENTRY(&DB_IO, "io"),
+	DBG_DICT_ENTRY(&DB_TRACE, "trace"),
+	DBG_DICT_ENTRY(&DB_TEST, "test"),
+	/* set by d_log_dbg_bit_alloc() */
+	DBG_DICT_ENTRY(&DB_OPT1, NULL),
+	DBG_DICT_ENTRY(&DB_OPT2, NULL),
+	DBG_DICT_ENTRY(&DB_OPT3, NULL),
+	DBG_DICT_ENTRY(&DB_OPT4, NULL),
+	DBG_DICT_ENTRY(&DB_OPT5, NULL),
+	DBG_DICT_ENTRY(&DB_OPT6, NULL),
+	DBG_DICT_ENTRY(&DB_OPT7, NULL),
+	DBG_DICT_ENTRY(&DB_OPT8, NULL),
+	DBG_DICT_ENTRY(&DB_OPT9, NULL),
+	DBG_DICT_ENTRY(&DB_OPT10, NULL),
+
 };
 
 #define PRI_DICT_ENTRY(prio, name)	\
@@ -80,28 +115,107 @@ static struct d_debug_priority d_dbg_prio_dict[] = {
 };
 
 struct d_debug_data d_dbglog_data = {
-	/* used to avoid possible debug mask overwrite */
-	.dd_mask_init		= 0,
+	/* count of alloc'd debug bits */
+	.dbg_bit_cnt		= 0,
 	/* 0 means we should use the mask provided by facilities */
 	.dd_mask		= 0,
 	/* optional priority output to stderr */
 	.dd_prio_err		= 0,
 };
 
+#define NUM_DBG_BIT_ENTRIES	ARRAY_SIZE(d_dbg_bit_dict)
+#define NUM_DBG_PRIO_ENTRIES	ARRAY_SIZE(d_dbg_prio_dict)
+
+#define BIT_CNT_TO_BIT_MASK(cnt)	(1 << (DLOG_DPRISHIFT + cnt))
+
+/**
+ * Allocate optional debug bit, register name and return available bit
+ *
+ * \param[in]	name	debug mask short name
+ * \param[in]	lname	debug mask long name
+ * \param[out]	dbgbit	alloc'd debug bit
+ *
+ * \return		0 on success, -1 on error
+ */
+int
+d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname)
+{
+	size_t		   name_len;
+	size_t		   lname_len;
+	int		   i;
+	uint64_t	   bit;
+	struct d_debug_bit *d;
+
+	if (name == NULL || dbgbit == NULL)
+		return -1;
+
+	name_len = strlen(name);
+	if (lname != NULL)
+		lname_len = strlen(lname);
+	else
+		lname_len = 0;
+
+	/* DB_ALL = DLOG_DBG */
+	if (strncasecmp(name, DB_ALL_BITS, name_len) == 0) {
+		*dbgbit = DLOG_DBG;
+		return 0;
+	}
+
+	/**
+	 * Allocate debug bit in gurt for given debug mask name.
+	 * Currently only 10 configurable debug mask options.
+	 */
+	if (d_dbglog_data.dbg_bit_cnt > DB_OPTS) {
+		D_ERROR("Cannot allocate debug bit, all available debug mask "
+			"bits currently allocated.\n");
+		return -1;
+	}
+
+	bit = BIT_CNT_TO_BIT_MASK(d_dbglog_data.dbg_bit_cnt);
+	d_dbglog_data.dbg_bit_cnt++;
+
+	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
+		/**
+		 * Debug bit name already present in struct,
+		 * still need to assign available bit
+		 */
+		d = &d_dbg_bit_dict[i];
+		if (d->db_name != NULL) {
+			if (strncasecmp(d->db_name, name, name_len) == 0) {
+				if (*(d->db_bit) == 0)
+					*dbgbit = bit;
+				else /* debug bit already assigned */
+					*dbgbit = *(d->db_bit);
+				return 0;
+			}
+		/* Allocate configurable debug bit along with name */
+		} else {
+			d->db_name = name;
+			d->db_lname = lname;
+			d->db_name_size = name_len;
+			d->db_lname_size = lname_len;
+			*(d->db_bit) = bit;
+
+			*dbgbit = bit;
+			return 0;
+		}
+	}
+
+	return -1;
+}
+
 /** Load the priority stderr from the environment variable. */
 static void
 debug_prio_err_load_env(void)
 {
 	char	*env;
-	int	num_dbg_prio_entries;
 	int	i;
 
 	env = getenv(DD_STDERR_ENV);
 	if (env == NULL)
 		return;
 
-	num_dbg_prio_entries = ARRAY_SIZE(d_dbg_prio_dict);
-	for (i = 0; i < num_dbg_prio_entries; i++) {
+	for (i = 0; i < NUM_DBG_PRIO_ENTRIES; i++) {
 		if (d_dbg_prio_dict[i].dd_name != NULL &&
 		    strncasecmp(env, d_dbg_prio_dict[i].dd_name,
 				d_dbg_prio_dict[i].dd_name_size) == 0) {
@@ -111,18 +225,18 @@ debug_prio_err_load_env(void)
 	}
 	/* invalid DD_STDERR option */
 	if (d_dbglog_data.dd_prio_err == 0)
-		fprintf(stderr, "DD_STDERR = %s - invalid option\n", env);
+		D_ERROR("DD_STDERR = %s - invalid option\n", env);
 }
 
 /** Load the debug mask from the environment variable. */
 static void
-debug_mask_load_env(uint64_t opt_dbg_mask)
+debug_mask_load_env(void)
 {
-	char	*mask_env;
-	char	*mask_str;
-	char	*cur;
-	int	i;
-	int	num_dbg_bit_entries;
+	char		    *mask_env;
+	char		    *mask_str;
+	char		    *cur;
+	int		    i;
+	struct d_debug_bit *d;
 
 	mask_env = getenv(DD_MASK_ENV);
 	if (mask_env == NULL)
@@ -130,49 +244,47 @@ debug_mask_load_env(uint64_t opt_dbg_mask)
 
 	D_STRNDUP(mask_str, mask_env, DBG_ENV_MAX_LEN);
 	if (mask_str == NULL) {
-		fprintf(stderr, "D_STRNDUP of debug mask failed");
+		D_ERROR("D_STRNDUP of debug mask failed");
 		return;
 	}
 
-	num_dbg_bit_entries = ARRAY_SIZE(d_dbg_bit_dict);
-	/* account for DD_MASK bits that are project specific */
-	d_dbglog_data.dd_mask = opt_dbg_mask;
 	cur = strtok(mask_str, DD_SEP);
 	while (cur != NULL) {
-		for (i = 0; i < num_dbg_bit_entries; i++) {
-			if (d_dbg_bit_dict[i].db_name != NULL &&
-			    strncasecmp(cur, d_dbg_bit_dict[i].db_name,
-					d_dbg_bit_dict[i].db_name_size)
+		for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
+			d = &d_dbg_bit_dict[i];
+			if (d->db_name != NULL && strncasecmp(cur, d->db_name,
+			    d->db_name_size) == 0) {
+				d_dbglog_data.dd_mask |=
+					*(d->db_bit);
+				break;
+			}
+			if (d->db_lname != NULL &&
+			    strncasecmp(cur, d->db_lname,
+					d->db_lname_size)
 					== 0) {
 				d_dbglog_data.dd_mask |=
-					d_dbg_bit_dict[i].db_bit;
+					*(d->db_bit);
 				break;
 			}
 		}
 		cur = strtok(NULL, DD_SEP);
 	}
 	D_FREE(mask_str);
-	/* set to avoid overwrite from another call sync log */
-	d_dbglog_data.dd_mask_init = 1;
 }
 
 static void
-d_log_sync_mask_helper(bool acquire_lock, uint64_t opt_dbg_mask)
+d_log_sync_mask_helper(bool acquire_lock)
 {
 	static char	*log_mask;
 
 	if (acquire_lock)
 		D_MUTEX_LOCK(&d_log_lock);
 
-	/* avoid overwrite of debug mask */
-	if (d_dbglog_data.dd_mask_init)
-		goto out;
-
 	/* Load debug mask environment (DD_MASK); only the facility log mask
 	 * will be returned and debug mask will be set iff fac mask = DEBUG
 	 * and dd_mask is not 0.
 	 */
-	debug_mask_load_env(opt_dbg_mask);
+	debug_mask_load_env();
 
 	/* load facility mask environment (D_LOG_MASK) */
 	log_mask = getenv(D_LOG_MASK_ENV);
@@ -195,13 +307,9 @@ out:
 }
 
 void
-d_log_sync_mask(uint64_t opt_dbg_mask, bool overwrite)
+d_log_sync_mask(void)
 {
-	/* if overwrite is true then unset previously set mask init */
-	if (overwrite)
-		d_dbglog_data.dd_mask_init = 0;
-
-	d_log_sync_mask_helper(true, opt_dbg_mask);
+	d_log_sync_mask_helper(true);
 }
 
 /* this macro contains a return statement */
@@ -222,7 +330,7 @@ d_log_sync_mask(uint64_t opt_dbg_mask, bool overwrite)
 /**
  * Setup the clog facility names and mask.
  *
- * \param masks [IN]	 masks in d_log_setmasks() format, or NULL.
+ * \param[in] masks	 masks in d_log_setmasks() format, or NULL.
  */
 
 static inline int
@@ -243,7 +351,39 @@ setup_clog_facnamemask(void)
 	}
 
 	/* Lock is already held */
-	d_log_sync_mask_helper(false, 0);
+	d_log_sync_mask_helper(false);
+
+	return 0;
+}
+
+/**
+ * Setup the debug names and mask bits.
+ *
+ * \return	 -DER_UNINIT on error, 0 on success
+ */
+static inline int
+setup_dbg_namebit(void)
+{
+	int		   i;
+	int		   rc;
+	uint64_t	   allocd_dbg_bit;
+	struct d_debug_bit *d;
+
+	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
+		d = &d_dbg_bit_dict[i];
+		if (d->db_name != NULL) {
+			/* register gurt debug bit masks */
+			rc = d_log_dbg_bit_alloc(&allocd_dbg_bit, d->db_name,
+						 d->db_lname);
+			if (rc < 0) {
+				D_ERROR("Error allocating debug bit for %s",
+					d->db_name);
+				return -DER_UNINIT;
+			}
+
+			*(d->db_bit) = allocd_dbg_bit;
+		}
+	}
 
 	return 0;
 }
@@ -271,6 +411,10 @@ d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 		D_PRINT_ERR("d_log_open failed: %d\n", rc);
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
+
+	rc = setup_dbg_namebit();
+	if (rc != 0)
+		D_GOTO(out, rc = -DER_UNINIT);
 
 	rc = setup_clog_facnamemask();
 	if (rc != 0)
@@ -319,4 +463,34 @@ void d_log_fini(void)
 	if (d_log_refcount == 0)
 		d_log_close();
 	D_MUTEX_UNLOCK(&d_log_lock);
+}
+
+/**
+ * Get allocated debug mask bit from bit name.
+ *
+ * \param[in] bitname	short name of debug bit
+ * \param[out] dbgbit	bit mask allocated for given name
+ *
+ * \return		0 on success, -1 on error
+ */
+int d_log_getdbgbit(uint64_t *dbgbit, char *bitname)
+{
+	int		   i;
+	int		   num_dbg_bit_entries;
+	struct d_debug_bit *d;
+
+	if (bitname == NULL)
+		return 0;
+
+	num_dbg_bit_entries = ARRAY_SIZE(d_dbg_bit_dict);
+	for (i = 0; i < num_dbg_bit_entries; i++) {
+		d = &d_dbg_bit_dict[i];
+		if (d->db_name != NULL &&
+		    strncasecmp(bitname, d->db_name, d->db_name_size) == 0) {
+			*dbgbit = *(d->db_bit);
+			return 0;
+		}
+	}
+
+	return -1;
 }

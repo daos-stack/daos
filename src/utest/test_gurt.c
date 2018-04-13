@@ -566,10 +566,13 @@ test_log(void **state)
 	char *logmask;
 	char *allocated_mask = NULL;
 	int rc;
+	int rc_dbgbit;
 	int logfac1;
 	int logfac2;
 	char retbuf[1024];
 	char *oldmask;
+	uint64_t dbg_mask;
+	uint64_t current_dbgmask;
 
 	oldmask = getenv("D_LOG_MASK");
 
@@ -586,7 +589,7 @@ test_log(void **state)
 
 	LOG_DEBUG(logfac1, "log1 debug should not print\n");
 	/* Sync the cart mask */
-	d_log_sync_mask(0, false);
+	d_log_sync_mask();
 
 	LOG_DEBUG(logfac1, "log1 debug should print\n");
 	LOG_DEBUG(logfac2, "log2 debug should not print\n");
@@ -616,60 +619,53 @@ test_log(void **state)
 
 	/* Test debug mask bits*/
 
-	/* Set trace debug mask */
-	setenv("D_LOG_MASK", "T1=DEBUG", 1);
-	setenv("DD_MASK", "trace", 1); /* DB_TRACE stream is set */
-	d_log_sync_mask(0, false);
-	D_STRNDUP(logmask, "T1=DEBUG", 32);
-	assert_non_null(logmask);
-
-	rc = d_log_setmasks(logmask, -1);
-	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 1)));
-	D_FREE(logmask);
-
-	rc = d_log_getmasks(retbuf, 0, 200, 0);
-	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
-	memset(retbuf, 0x00, sizeof(retbuf));
-
-	/* Set test debug mask */
-	setenv("DD_MASK", "test", 1); /* DB_TEST stream is set */
-	d_log_sync_mask(0, true);
-	D_STRNDUP(logmask, "T1=DEBUG", 32);
-	assert_non_null(logmask);
-
-	rc = d_log_setmasks(logmask, -1);
-	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 5)));
-	D_FREE(logmask);
-
-	rc = d_log_getmasks(retbuf, 0, 200, 0);
-	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
-	memset(retbuf, 0x00, sizeof(retbuf));
-
-	/* Set multiple debug streams */
-	setenv("D_LOG_MASK", "T1=DEBUG", 1);
-	setenv("DD_MASK", "mem,io", 1); /* DB_MEM & DB_IO streams are set */
-	d_log_sync_mask(0, true);
-	D_STRNDUP(logmask, "T1=DEBUG", 32);
-	assert_non_null(logmask);
-
-	rc = d_log_setmasks(logmask, -1);
-	assert_int_equal(rc & DLOG_PRIMASK, ((1 << (DLOG_DPRISHIFT + 2)) |
-					     (1 << (DLOG_DPRISHIFT + 4))));
-	D_FREE(logmask);
-
-	rc = d_log_getmasks(retbuf, 0, 200, 0);
-	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
-	memset(retbuf, 0x00, sizeof(retbuf));
-
 	/* Attempt to set debug mask bits with facility mask not set to DEBUG */
 	setenv("D_LOG_MASK", "T2=WARN", 1);
 	setenv("DD_MASK", "trace", 1);
-	d_log_sync_mask(0, true);
+	d_log_sync_mask();
 	D_STRNDUP(logmask, "T2=WARN", 32);
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
 	assert_int_equal(rc & DLOG_PRIMASK, (3 << DLOG_PRISHIFT));
+	D_FREE(logmask);
+
+	rc = d_log_getmasks(retbuf, 0, 200, 0);
+	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
+	memset(retbuf, 0x00, sizeof(retbuf));
+
+	/* Set trace debug mask */
+	setenv("D_LOG_MASK", "T1=DEBUG", 1);
+	setenv("DD_MASK", "trace", 1); /* DB_TRACE stream is set */
+	d_log_sync_mask();
+	D_STRNDUP(logmask, "T1=DEBUG", 32);
+	assert_non_null(logmask);
+
+	rc = d_log_setmasks(logmask, -1);
+	rc_dbgbit = d_log_getdbgbit(&dbg_mask, "trace");
+	if (rc_dbgbit < 0)
+		D_ERROR("Unable to get debug bit mask for trace\n");
+	assert_int_equal(dbg_mask, (uint64_t)(rc));
+	D_FREE(logmask);
+
+	rc = d_log_getmasks(retbuf, 0, 200, 0);
+
+	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
+	memset(retbuf, 0x00, sizeof(retbuf));
+
+	/* Set test debug mask */
+	setenv("DD_MASK", "test", 1); /* DB_TEST stream is now also set */
+	d_log_sync_mask();
+	D_STRNDUP(logmask, "T1=DEBUG", 32);
+	assert_non_null(logmask);
+
+	rc = d_log_setmasks(logmask, -1);
+	current_dbgmask = dbg_mask;
+	rc_dbgbit = d_log_getdbgbit(&dbg_mask, "test");
+	if (rc_dbgbit < 0)
+		D_ERROR("Unable to get debug bit mask for test\n");
+	dbg_mask |= current_dbgmask;
+	assert_int_equal(dbg_mask, (uint64_t)(rc));
 	D_FREE(logmask);
 
 	rc = d_log_getmasks(retbuf, 0, 200, 0);

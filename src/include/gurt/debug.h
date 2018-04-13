@@ -62,6 +62,17 @@ extern int DD_FAC(mem);
 #define D_LOGFAC	DD_FAC(misc)
 #endif
 
+extern uint64_t DB_ANY;
+extern uint64_t DB_TRACE;
+extern uint64_t DB_MEM;
+extern uint64_t DB_NET;
+extern uint64_t DB_IO;
+extern uint64_t DB_TEST;
+extern uint64_t DB_ALL;
+
+#define DB_ALL_BITS	"all"
+#define DB_OPTS		 16 /**< number of configurable debug bits avail */
+
 #define D_LOG_FILE_ENV	"D_LOG_FILE"	/**< Env to specify log file */
 #define D_LOG_MASK_ENV	"D_LOG_MASK"	/**< Env to specify log mask */
 
@@ -123,6 +134,16 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
 
 	return DER_SUCCESS;
 }
+
+/**
+ * Get allocated debug bit for the given debug bit name.
+ *
+ * \param[in] bitname	short name for given bit
+ * \param[out] dbgbit	allocated bit mask
+ *
+ * \return		0 on success, -1 on error
+ */
+int d_log_getdbgbit(uint64_t *dbgbit, char *bitname);
 
 /**
  * D_PRINT_ERR must be used for any error logging before clog is enabled or

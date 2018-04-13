@@ -124,31 +124,6 @@
 #define DD_FAC_ENV	"DD_SUBSYS"
 #define DD_FAC_ALL	"all"
 
-/*
- * Debug bits for common logic paths, can only have up to 16 different bits.
- */
-
-/** wildcard for unclassed debug messages */
-#define DB_ANY		(1 << (DLOG_DPRISHIFT + 0))
-/** function trace, tree/hash/lru operations, a very expensive one */
-#define DB_TRACE	(1 << (DLOG_DPRISHIFT + 1))
-#define DB_MEM		(1 << (DLOG_DPRISHIFT + 2)) /**< memory operation */
-#define DB_NET		(1 << (DLOG_DPRISHIFT + 3)) /**< network operation */
-#define DB_IO		(1 << (DLOG_DPRISHIFT + 4)) /**< object I/O */
-#define DB_TEST		(1 << (DLOG_DPRISHIFT + 5)) /**< test programs */
-#define DB_ALL		DLOG_DBG                    /**< all of masks */
-/** Configurable debug bits (project-specific) */
-#define DB_OPT1		(1 << (DLOG_DPRISHIFT + 6))
-#define DB_OPT2		(1 << (DLOG_DPRISHIFT + 7))
-#define DB_OPT3		(1 << (DLOG_DPRISHIFT + 8))
-#define DB_OPT4		(1 << (DLOG_DPRISHIFT + 9))
-#define DB_OPT5		(1 << (DLOG_DPRISHIFT + 10))
-#define DB_OPT6		(1 << (DLOG_DPRISHIFT + 11))
-#define DB_OPT7		(1 << (DLOG_DPRISHIFT + 12))
-#define DB_OPT8		(1 << (DLOG_DPRISHIFT + 13))
-#define DB_OPT9		(1 << (DLOG_DPRISHIFT + 14))
-#define DB_OPT10	(1 << (DLOG_DPRISHIFT + 15))
-
 /** facility name and mask info */
 struct dlog_fac {
 	int fac_mask;		/**< log level for this facility */
@@ -166,7 +141,8 @@ struct d_log_xstate {
 };
 
 struct d_debug_data {
-	uint64_t		dd_mask_init;
+	/** alloc'd debug bit count */
+	int			dbg_bit_cnt;
 	/** debug bitmask, e.g. DB_IO */
 	uint64_t		dd_mask;
 	/** priority level that should be output to stderr */
@@ -192,7 +168,7 @@ struct d_debug_priority {
  * of the system, e.g. DB_MEM, DB_IO, DB_TRACE...
  */
 struct d_debug_bit {
-	uint64_t		db_bit;
+	uint64_t		*db_bit;
 	char			*db_name;
 	char			*db_lname;
 	size_t			db_name_size;
@@ -205,6 +181,18 @@ extern "C" {
 
 extern struct d_log_xstate d_log_xst;
 extern struct d_debug_data d_dbglog_data;
+
+/**
+ * Allocate optional debug bit, register name and return available bit
+ *
+ * \param[in] name	name of bit (determined by sub-project)
+ * \param[in] lname	long name of bit
+ * \param[out] dbgbit	alloc'd debug bit
+ *
+ * \return		0 on success, -1 on error
+ *
+ */
+int d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname);
 
 /**
  * log a message using stdarg list without checking filtering
@@ -349,10 +337,8 @@ void d_log_close(void);
  * log facilities to ensure that the mask is set appropriately for the
  * previously unknown facilities.
  *
- * \param[in] opt_dbg_mask	debug bit mask of configurable debug bits only
- * \param[in] overwrite		option to overwrite DD_MASK value previously set
  */
-void d_log_sync_mask(uint64_t opt_dbg_mask, bool overwrite);
+void d_log_sync_mask(void);
 
 /**
  * open a dlog.

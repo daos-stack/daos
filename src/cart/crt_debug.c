@@ -151,12 +151,7 @@ crt_setup_log_fac(void)
 		}
 	}
 
-	/*
-	 * Mask parameter passed to d_log_sync_mask() in order to load project-
-	 * specific debug bit mask.
-	 * 0 = Currently no CaRT-specific debug bits available
-	 */
-	d_log_sync_mask(0, false);
+	d_log_sync_mask();
 
 	return 0;
 }
