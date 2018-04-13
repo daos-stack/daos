@@ -38,6 +38,7 @@
 #include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_server.h>
+#include <daos_srv/rebuild.h>
 #include <daos_srv/vos.h>
 #include "rpc.h"
 #include "rebuild_internal.h"
@@ -744,13 +745,15 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_DEBUG(DB_REBUILD, DF_UUID" already started.\n",
 			DP_UUID(rsi->rsi_pool_uuid));
 
-		if (rpt->rt_pool->sp_iv_ns == NULL ||
-		    rpt->rt_pool->sp_iv_ns->iv_master_rank ==
-					rsi->rsi_master_rank)
+		/* Ignore the rebuild trigger request if it comes from
+		 * an old or same leader.
+		 */
+		if (rsi->rsi_leader_term <= rpt->rt_leader_term)
 			D_GOTO(out, rc = 0);
 
-		/* only change master rank if there is new leader */
-		if (rpt->rt_leader_term < rsi->rsi_leader_term) {
+		if (rpt->rt_pool->sp_iv_ns != NULL &&
+		    rpt->rt_pool->sp_iv_ns->iv_master_rank !=
+					rsi->rsi_master_rank) {
 			D_DEBUG(DB_REBUILD, DF_UUID" master rank"
 				" %d -> %d term "DF_U64" -> "DF_U64"\n",
 				DP_UUID(rpt->rt_pool_uuid),
@@ -758,15 +761,21 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 				rsi->rsi_master_rank,
 				rpt->rt_leader_term,
 				rsi->rsi_leader_term);
-			/* only update iv ns */
+			/* Update master rank */
 			rc = ds_pool_iv_ns_update(rpt->rt_pool,
 						  rsi->rsi_master_rank,
 						  &rsi->rsi_ns_iov,
 						  rsi->rsi_ns_id);
 			if (rc)
 				D_GOTO(out, rc);
-			rpt->rt_leader_term = rsi->rsi_leader_term;
+
+			/* If this is the old leader, then also stop the rebuild
+			 * tracking ULT.
+			 */
+			ds_rebuild_leader_stop();
 		}
+
+		rpt->rt_leader_term = rsi->rsi_leader_term;
 
 		D_GOTO(out, rc = 0);
 	}

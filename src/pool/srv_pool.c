@@ -666,7 +666,7 @@ pool_svc_step_down(struct pool_svc *svc)
 	 * implemented.
 	 */
 
-	ds_rebuild_stop();
+	ds_rebuild_leader_stop();
 	/* Wait for all leader references to be released. */
 	for (;;) {
 		if (svc->ps_leader_ref == 0)

@@ -226,13 +226,17 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 		D_DEBUG(DB_REBUILD, "rebuild ver %d tgt %d scan"
 			" done bits %x\n", rgt->rgt_rebuild_ver,
 			iv->riv_rank, rgt->rgt_scan_bits[0]);
-		if (is_rebuild_global_scan_done(rgt)) {
-			D_DEBUG(DB_REBUILD, DF_UUID "pool scan is done\n",
-				DP_UUID(rgt->rgt_pool_uuid));
+		if (is_rebuild_global_scan_done(rgt))
 			rgt->rgt_scan_done = 1;
-		} else {
+
+		/* If global scan is not done, then you can not trust
+		 * pull status. But if the rebuild on that target is
+		 * failed(riv_status != 0), then the target will report
+		 * both scan and pull status to the leader, i.e. they
+		 * both can be trusted.
+		 */
+		if (iv->riv_status == 0 && !rgt->rgt_scan_done)
 			return 0;
-		}
 	}
 
 	/* Only trust pull done if scan is done globally */
@@ -510,6 +514,7 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 			iv.riv_master_rank = pool->sp_iv_ns->iv_master_rank;
 			iv.riv_global_scan_done = 1;
 			iv.riv_ver = rgt->rgt_rebuild_ver;
+			iv.riv_leader_term = rgt->rgt_leader_term;
 
 			/* Notify others the global scan is done, then
 			 * each target can reliablly report its pull status
@@ -541,7 +546,7 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 			rs->rs_errno, (int)(now - begin));
 
 		D_DEBUG(DB_REBUILD, "%s", sbuf);
-		if (rs->rs_done) {
+		if (rs->rs_done || rebuild_gst.rg_abort) {
 			D_PRINT("%s", sbuf);
 			break;
 		}
@@ -663,12 +668,12 @@ out:
 
 /* To notify all targets to prepare the rebuild */
 static int
-rebuild_prepare(struct ds_pool *pool, uint32_t map_ver,
-		d_rank_list_t *exclude_tgts,
+rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
+		uint64_t leader_term, d_rank_list_t *exclude_tgts,
 		struct rebuild_global_pool_tracker **rgt)
  {
-	unsigned int		master_rank;
-	int			rc;
+	unsigned int	master_rank;
+	int		rc;
 
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" create rebuild iv\n",
 		DP_UUID(pool->sp_uuid));
@@ -683,12 +688,14 @@ rebuild_prepare(struct ds_pool *pool, uint32_t map_ver,
 	if (rc)
 		return rc;
 
-	rc = rebuild_global_pool_tracker_create(pool, map_ver, rgt);
+	rc = rebuild_global_pool_tracker_create(pool, rebuild_ver, rgt);
 	if (rc)
 		return rc;
 
+	(*rgt)->rgt_leader_term = leader_term;
 	uuid_generate((*rgt)->rgt_coh_uuid);
 	uuid_generate((*rgt)->rgt_poh_uuid);
+
 	if (exclude_tgts != NULL) {
 		int i;
 
@@ -712,8 +719,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t map_ver,
 static int
 rebuild_trigger(struct ds_pool *pool, struct rebuild_global_pool_tracker *rgt,
 		d_rank_list_t *tgts_failed, d_rank_list_t *svc_list,
-		uint32_t map_ver, uint64_t leader_term, uint32_t rebuild_ver,
-		daos_iov_t *map_buf)
+		uint32_t map_ver, daos_iov_t *map_buf)
 {
 	struct rebuild_scan_in	*rsi;
 	struct rebuild_scan_out	*rso;
@@ -754,8 +760,8 @@ retry:
 	ds_iv_global_ns_get(pool->sp_iv_ns, &rsi->rsi_ns_iov);
 	rsi->rsi_ns_id = pool->sp_iv_ns->iv_ns_id;
 	rsi->rsi_pool_map_ver = map_ver;
-	rsi->rsi_leader_term = leader_term;
-	rsi->rsi_rebuild_ver = rebuild_ver;
+	rsi->rsi_leader_term = rgt->rgt_leader_term;
+	rsi->rsi_rebuild_ver = rgt->rgt_rebuild_ver;
 	rsi->rsi_tgts_failed = tgts_failed;
 	rsi->rsi_svc_list = svc_list;
 	crt_group_rank(pool->sp_group,  &rsi->rsi_master_rank);
@@ -915,7 +921,8 @@ rebuild_internal(struct ds_pool *pool, uint32_t rebuild_ver,
 		D_GOTO(out, rc);
 	}
 
-	rc = rebuild_prepare(pool, rebuild_ver, tgts_failed, p_rgt);
+	rc = rebuild_prepare(pool, rebuild_ver, leader_term, tgts_failed,
+			     p_rgt);
 	if (rc) {
 		D_ERROR("rebuild prepare failed: rc %d\n", rc);
 		D_GOTO(out, rc);
@@ -929,7 +936,7 @@ rebuild_internal(struct ds_pool *pool, uint32_t rebuild_ver,
 
 	/* broadcast scan RPC to all targets */
 	rc = rebuild_trigger(pool, *p_rgt, tgts_failed, svc_list, map_ver,
-			     leader_term, rebuild_ver, &map_buf_iov);
+			     &map_buf_iov);
 	if (rc) {
 		D_ERROR("object scan failed: rc %d\n", rc);
 		D_GOTO(out, rc);
@@ -970,6 +977,8 @@ rebuild_one_ult(void *arg)
 
 	/* Wait until rebuild finished */
 	rebuild_status_check(pool, task->dst_map_ver, rgt);
+	if (rebuild_gst.rg_abort && !rgt->rgt_done)
+		D_GOTO(out, rc);
 
 	rc = ds_pool_tgt_exclude_out(pool->sp_uuid, task->dst_tgts_failed,
 				     NULL);
@@ -982,6 +991,7 @@ rebuild_one_ult(void *arg)
 	iv.riv_master_rank = pool->sp_iv_ns->iv_master_rank;
 	iv.riv_ver = rgt->rgt_rebuild_ver;
 	iv.riv_global_done = 1;
+	iv.riv_leader_term = rgt->rgt_leader_term;
 
 	rc = rebuild_iv_update(pool->sp_iv_ns,
 			       &iv, CRT_IV_SHORTCUT_NONE,
@@ -1052,8 +1062,10 @@ rebuild_ults(void *arg)
 	}
 
 	/* If there are still rebuild task in queue and running list, then
-	 * it is forced abort, let's delete the queue_list task, and wait
-	 * for the running list finished.
+	 * it is forced abort, let's delete the queue_list task, but leave
+	 * the running task there, either the new leader will tell these
+	 * running rebuild to update their leader or just abort the rebuild
+	 * task.
 	 */
 	d_list_for_each_entry_safe(task, task_tmp, &rebuild_gst.rg_queue_list,
 				   dst_list) {
@@ -1063,9 +1075,6 @@ rebuild_ults(void *arg)
 		D_FREE_PTR(task);
 	}
 
-	while (!d_list_empty(&rebuild_gst.rg_running_list))
-		ABT_thread_yield();
-
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	ABT_cond_signal(rebuild_gst.rg_stop_cond);
 	rebuild_gst.rg_rebuild_running = 0;
@@ -1073,7 +1082,7 @@ rebuild_ults(void *arg)
 }
 
 void
-ds_rebuild_stop()
+ds_rebuild_leader_stop()
 {
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	if (!rebuild_gst.rg_rebuild_running) {
@@ -1081,6 +1090,17 @@ ds_rebuild_stop()
 		return;
 	}
 
+	/* This will eliminate all of the queued rebuild task, then abort all
+	 * running rebuild. Note: this only abort the rebuild tracking ULT
+	 * (rebuild_one_ult), and the real rebuild process on each target
+	 * triggered by scan/object request are still running. Once the new
+	 * leader is elected, it will send those rebuild trigger req with new
+	 * term, then each target will only need update its leader information
+	 * and report the rebuild status to the new leader.
+	 * If the new leader never comes, then those rebuild process can still
+	 * finish, but those tracking ULT (rebuild_tgt_status_check) will keep
+	 * sending the status report to the stale leader, until it is aborted.
+	 */
 	rebuild_gst.rg_abort = 1;
 	if (rebuild_gst.rg_rebuild_running)
 		ABT_cond_wait(rebuild_gst.rg_stop_cond,
@@ -1088,7 +1108,6 @@ ds_rebuild_stop()
 	ABT_mutex_unlock(rebuild_gst.rg_lock);
 	if (rebuild_gst.rg_stop_cond)
 		ABT_cond_free(&rebuild_gst.rg_stop_cond);
-	rebuild_gst.rg_abort = 0;
 }
 
 /**
@@ -1157,6 +1176,8 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, d_rank_list_t *svc_list)
 	unsigned int	down_tgts_cnt;
 	unsigned int	i;
 	int		rc;
+
+	rebuild_gst.rg_abort = 0;
 
 	/* get all down targets */
 	rc = pool_map_find_down_tgts(pool->sp_map, &down_tgts,
@@ -1330,12 +1351,12 @@ rebuild_tgt_status_check(void *arg)
 			iv.riv_scan_done = 1;
 
 		/* Only global scan is done, then pull is trustable */
-		if (rpt->rt_global_scan_done &&
-		    (!status.rebuilding || rpt->rt_abort))
+		if ((rpt->rt_global_scan_done && !status.rebuilding) ||
+		     rpt->rt_abort)
 			iv.riv_pull_done = 1;
 
 		/* Once the rebuild is globally done, the target
-		 * does not need update the status,, just finish
+		 * does not need update the status, just finish
 		 * the rebuild.
 		 */
 		if (!rpt->rt_global_done) {
@@ -1343,6 +1364,7 @@ rebuild_tgt_status_check(void *arg)
 				rpt->rt_pool->sp_iv_ns->iv_master_rank;
 			iv.riv_rank = rpt->rt_rank;
 			iv.riv_ver = rpt->rt_rebuild_ver;
+			iv.riv_leader_term = rpt->rt_leader_term;
 
 			/* Cart does not support failure recovery yet, let's
 			 * send the status to root for now. FIXME
@@ -1366,7 +1388,7 @@ rebuild_tgt_status_check(void *arg)
 			rpt->rt_global_scan_done, rpt->rt_global_done,
 			iv.riv_status);
 
-		if (rpt->rt_global_done)
+		if (rpt->rt_global_done || rpt->rt_abort)
 			break;
 	}
 

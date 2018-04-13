@@ -100,20 +100,7 @@ static int
 rebuild_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst,
 		     d_sg_list_t *src, void **priv)
 {
-	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
-	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
-
-	if (dst_iv == src_iv)
-		return 0;
-
-	D_ASSERT(src_iv != NULL);
-	D_ASSERT(dst_iv != NULL);
-
-	dst_iv->riv_master_rank = src_iv->riv_master_rank;
-	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
-	D_DEBUG(DB_TRACE, "pool "DF_UUID" rank %d\n",
-		 DP_UUID(dst_iv->riv_pool_uuid), src_iv->riv_master_rank);
-
+	D_ASSERT(0);
 	return 0;
 }
 
@@ -144,7 +131,7 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
 	/* Gathering the rebuild status here */
 	rgt = rebuild_global_pool_tracker_lookup(src_iv->riv_pool_uuid,
 						 src_iv->riv_ver);
-	if (rgt) {
+	if (rgt && rgt->rgt_leader_term == src_iv->riv_leader_term) {
 		/* update the rebuild global status */
 		rgt->rgt_status.rs_obj_nr += src_iv->riv_obj_count;
 		rgt->rgt_status.rs_rec_nr += src_iv->riv_rec_count;
@@ -185,7 +172,7 @@ rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc,
 		struct rebuild_tgt_pool_tracker *rpt;
 
 		rpt = rpt_lookup(src_iv->riv_pool_uuid, src_iv->riv_ver);
-		if (rpt) {
+		if (rpt && rpt->rt_leader_term == src_iv->riv_leader_term) {
 			D_DEBUG(DB_TRACE, DF_UUID" rebuild finished"
 				" sgl/gl %d/%d\n",
 				 DP_UUID(src_iv->riv_pool_uuid),

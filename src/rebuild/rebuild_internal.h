@@ -122,9 +122,11 @@ struct rebuild_global_pool_tracker {
 	 */
 	uint32_t	rgt_bits_size;
 
+	/* The term of the current rebuild leader */
+	uint64_t	rgt_leader_term;
+
 	unsigned int	rgt_scan_done:1,
 			rgt_done:1;
-
 };
 
 /* Structure on all targets to track all pool rebuilding */
@@ -208,6 +210,7 @@ struct rebuild_iv {
 	uuid_t		riv_pool_uuid;
 	uint64_t	riv_obj_count;
 	uint64_t	riv_rec_count;
+	uint64_t	riv_leader_term;
 	unsigned int	riv_rank;
 	unsigned int	riv_master_rank;
 	unsigned int	riv_ver;

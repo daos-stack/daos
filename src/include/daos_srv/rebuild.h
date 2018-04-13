@@ -42,5 +42,5 @@ int ds_rebuild_query(uuid_t pool_uuid,
 		     struct daos_rebuild_status *status);
 int ds_rebuild_regenerate_task(struct ds_pool *pool, d_rank_list_t *svc_list);
 int ds_rebuild_pool_map_update(struct ds_pool *pool);
-void ds_rebuild_stop(void);
+void ds_rebuild_leader_stop(void);
 #endif
