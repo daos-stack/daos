@@ -434,8 +434,8 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 		if (opc == BTR_OPC_UPDATE) {
 			val = strchr(str, SK_SEP_VAL);
 			if (val == NULL) {
-				D_PRINT("Failed with %d\n", errno);
-				D_ERROR("Invalid parameters %s\n", str);
+				D_ERROR("Invalid parameters %s (errno %d)\n",
+					str, errno);
 				return -1;
 			}
 			*val = 0;

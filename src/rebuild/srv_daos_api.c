@@ -59,7 +59,6 @@ rebuild_need_retry_cb(tse_task_t *task, void *arg)
 	/* let's check if the pool_map has been changed */
 	dc_obj_layout_refresh(*oh);
 
-	task->dt_result = 0;
 	rc = dc_task_resched(task);
 	if (rc != 0) {
 		D_ERROR("Failed to re-init task (%p)\n", task);

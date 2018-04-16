@@ -34,7 +34,7 @@
  */
 
 /* NB: tse_task_private is TSE_PRIV_SIZE = 504 bytes for now */
-#define TSE_TASK_ARG_LEN		360
+#define TSE_TASK_ARG_LEN		376
 
 struct tse_task_private {
 	struct tse_sched_private	*dtp_sched;
@@ -43,7 +43,7 @@ struct tse_task_private {
 	tse_task_func_t			 dtp_func;
 
 	/* links to user task list like tse_task_list_add/_del etc APIs */
-	d_list_t			 dtp_usr_link;
+	d_list_t			 dtp_task_list;
 
 	/* links to scheduler */
 	d_list_t			 dtp_list;
@@ -56,9 +56,6 @@ struct tse_task_private {
 
 	/* daos complete task callback list */
 	d_list_t			 dtp_comp_cb_list;
-
-	/* finished tasks this task depends on, might check theirs result */
-	d_list_t			 dtp_ret_list;
 
 	uint32_t			/* task has been completed, no chance to
 					 * be re-initialized.

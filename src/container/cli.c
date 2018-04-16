@@ -74,7 +74,6 @@ cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	if (rc == RSVC_CLIENT_RECHOOSE ||
 	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->co_rc))) {
-		task->dt_result = 0;
 		rc = tse_task_reinit(task);
 		if (rc != 0)
 			return rc;
@@ -892,9 +891,6 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		tse_sched_t *sched = tse_task2sched(task);
 		daos_pool_query_t *pargs;
 		tse_task_t *ptask;
-
-		/** reset task result before retry */
-		task->dt_result = 0;
 
 		/** pool map update task */
 		rc = dc_task_create(dc_pool_query, sched, NULL, &ptask);

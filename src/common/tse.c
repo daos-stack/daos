@@ -221,22 +221,6 @@ tse_task_addref(tse_task_t *task)
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 }
 
-static inline void
-tse_task_ret_list_cleanup(tse_task_t *task)
-{
-	struct tse_task_private  *dtp = tse_task2priv(task);
-
-	while (!d_list_empty(&dtp->dtp_ret_list)) {
-		struct tse_task_link *result;
-
-		result = d_list_entry(dtp->dtp_ret_list.next,
-				      struct tse_task_link, tl_link);
-		d_list_del(&result->tl_link);
-		tse_task_decref(result->tl_task);
-		D_FREE_PTR(result);
-	}
-}
-
 void
 tse_task_decref(tse_task_t *task)
 {
@@ -251,7 +235,6 @@ tse_task_decref(tse_task_t *task)
 	if (!zombie)
 		return;
 
-	tse_task_ret_list_cleanup(task);
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
 
 	/*
@@ -475,17 +458,6 @@ tse_task_complete_callback(tse_task_t *task)
 	return true;
 }
 
-/** Walk through the result task list and execute callback for each task. */
-void
-tse_task_result_process(tse_task_t *task, tse_task_cb_t callback, void *arg)
-{
-	struct tse_task_private	*dtp = tse_task2priv(task);
-	struct tse_task_link	*result;
-
-	d_list_for_each_entry(result, &dtp->dtp_ret_list, tl_link)
-		callback(result->tl_task, arg);
-}
-
 /*
  * Process the task in the init list of the scheduler. This executes all the
  * body function of all tasks with no dependencies in the scheduler's init
@@ -580,61 +552,47 @@ tse_task_post_process(tse_task_t *task)
 		d_list_del(&tlink->tl_link);
 		task_tmp = tlink->tl_task;
 		dtp_tmp = tse_task2priv(task_tmp);
+		D_FREE_PTR(tlink);
 
 		/* see if the dependent task is ready to be scheduled */
 		D_ASSERT(dtp_tmp->dtp_dep_cnt > 0);
 		dtp_tmp->dtp_dep_cnt--;
 		D_DEBUG(DB_TRACE, "daos task %p dep_cnt %d\n", dtp_tmp,
 			dtp_tmp->dtp_dep_cnt);
-		if (!dsp->dsp_cancelling) {
+		if (!dsp->dsp_cancelling && dtp_tmp->dtp_dep_cnt == 0 &&
+		    dtp_tmp->dtp_running) {
+			bool done;
+
 			/*
-			 * let's attach the current task to the dependent task,
-			 * in case the dependent task needs to check the result
-			 * of these tasks.
-			 *
-			 * NB: reuse tlink.
+			 * If the task is already running, let's mark it
+			 * complete. This happens when we create subtasks in the
+			 * body function of the main task. So the task function
+			 * is done, but it will stay in the running state until
+			 * all the tasks that it depends on are completed, then
+			 * it is completed when they completed in this code
+			 * block.
 			 */
-			tse_task_addref_locked(dtp);
-			tlink->tl_task = task;
-			d_list_add_tail(&tlink->tl_link,
-					&dtp_tmp->dtp_ret_list);
 
-			if (dtp_tmp->dtp_dep_cnt == 0 && dtp_tmp->dtp_running) {
-				bool done;
+			dtp_tmp->dtp_completing = 1;
+			/** release lock for CB */
+			D_MUTEX_UNLOCK(&dsp->dsp_lock);
+			done = tse_task_complete_callback(task_tmp);
+			D_MUTEX_LOCK(&dsp->dsp_lock);
 
-				/*
-				 * If the task is already running, let's mark it
-				 * complete. This happens when we create
-				 * subtasks in the body function of the main
-				 * task. So the task function is done, but it
-				 * will stay in the running state until all the
-				 * tasks that it depends on are completed, then
-				 * it is completed when they completed in this
-				 * code block.
-				 */
-
-				dtp_tmp->dtp_completing = 1;
-				/** release lock for CB */
-				D_MUTEX_UNLOCK(&dsp->dsp_lock);
-				done = tse_task_complete_callback(task_tmp);
-				D_MUTEX_LOCK(&dsp->dsp_lock);
-
-				/*
-				 * task reinserted itself in scheduler by
-				 * calling tse_task_reinit().
-				 */
-				if (!done) {
-					tse_task_decref_locked(dtp_tmp);
-					continue;
-				}
-
-				tse_task_complete_locked(dtp_tmp, dsp);
+			/*
+			 * task reinserted itself in scheduler by
+			 * calling tse_task_reinit().
+			 */
+			if (!done) {
+				/* -1 for tlink (addref by add_dependent) */
+				tse_task_decref_locked(dtp_tmp);
+				continue;
 			}
-		} else {
-			D_FREE_PTR(tlink);
+
+			tse_task_complete_locked(dtp_tmp, dsp);
 		}
 
-		/* -1 for tlink */
+		/* -1 for tlink (addref by add_dependent) */
 		tse_task_decref_locked(dtp_tmp);
 	}
 
@@ -911,11 +869,10 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
 
 	D_INIT_LIST_HEAD(&dtp->dtp_list);
-	D_INIT_LIST_HEAD(&dtp->dtp_usr_link);
+	D_INIT_LIST_HEAD(&dtp->dtp_task_list);
 	D_INIT_LIST_HEAD(&dtp->dtp_dep_list);
 	D_INIT_LIST_HEAD(&dtp->dtp_comp_cb_list);
 	D_INIT_LIST_HEAD(&dtp->dtp_prep_cb_list);
-	D_INIT_LIST_HEAD(&dtp->dtp_ret_list);
 
 	dtp->dtp_refcnt   = 1;
 	dtp->dtp_func	  = task_func;
@@ -1013,8 +970,7 @@ tse_task_reinit(tse_task_t *task)
 
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
-	/** cleanup result task list */
-	tse_task_ret_list_cleanup(task);
+	task->dt_result = 0;
 
 	return 0;
 
@@ -1028,8 +984,8 @@ tse_task_list_add(tse_task_t *task, d_list_t *head)
 {
 	struct tse_task_private *dtp = tse_task2priv(task);
 
-	D_ASSERT(d_list_empty(&dtp->dtp_usr_link));
-	d_list_add_tail(&dtp->dtp_usr_link, head);
+	D_ASSERT(d_list_empty(&dtp->dtp_task_list));
+	d_list_add_tail(&dtp->dtp_task_list, head);
 	return 0;
 }
 
@@ -1041,7 +997,7 @@ tse_task_list_first(d_list_t *head)
 	if (d_list_empty(head))
 		return NULL;
 
-	dtp = d_list_entry(head->next, struct tse_task_private, dtp_usr_link);
+	dtp = d_list_entry(head->next, struct tse_task_private, dtp_task_list);
 	return tse_priv2task(dtp);
 }
 
@@ -1050,7 +1006,7 @@ tse_task_list_del(tse_task_t *task)
 {
 	struct tse_task_private *dtp = tse_task2priv(task);
 
-	d_list_del_init(&dtp->dtp_usr_link);
+	d_list_del_init(&dtp->dtp_task_list);
 }
 
 void
@@ -1081,7 +1037,7 @@ tse_task_list_depend(d_list_t *head, tse_task_t *task)
 	struct tse_task_private *dtp;
 	int			 rc;
 
-	d_list_for_each_entry(dtp, head, dtp_usr_link) {
+	d_list_for_each_entry(dtp, head, dtp_task_list) {
 		rc = tse_task_add_dependent(tse_priv2task(dtp), task);
 		if (rc)
 			return rc;
@@ -1095,7 +1051,7 @@ tse_task_depend_list(tse_task_t *task, d_list_t *head)
 	struct tse_task_private *dtp;
 	int			 rc;
 
-	d_list_for_each_entry(dtp, head, dtp_usr_link) {
+	d_list_for_each_entry(dtp, head, dtp_task_list) {
 		rc = tse_task_add_dependent(task, tse_priv2task(dtp));
 		if (rc)
 			return rc;
@@ -1111,7 +1067,7 @@ tse_task_list_traverse(d_list_t *head, tse_task_cb_t cb, void *arg)
 	int			 ret = 0;
 	int			 rc;
 
-	d_list_for_each_entry_safe(dtp, tmp, head, dtp_usr_link) {
+	d_list_for_each_entry_safe(dtp, tmp, head, dtp_task_list) {
 		rc = cb(tse_priv2task(dtp), arg);
 		if (rc != 0)
 			ret = rc;

@@ -221,22 +221,6 @@ void
 tse_task_complete(tse_task_t *task, int ret);
 
 /**
- * MSC - I think we can move this as an internal function for just DAOS.
- * Process the result tasks.
- *
- * After one task finish, if it has dependent task, then this task will
- * be added to the result task list of its dependent task, in case the
- * dependent task might check this task result later. This function will
- * walk through the result task list and call the callback for each task.
- *
- * \param task	[in]	task of its result tasks to be called callback.
- * \param callback [in]	callback to be called for each task.
- * \param arg [in]	argument of the callback.
- **/
-void
-tse_task_result_process(tse_task_t *task, tse_task_cb_t callback, void *arg);
-
-/**
  * Get embedded buffer of a task, user can use it to carry function parameters.
  * Embedded buffer of task has size limit, this function will return NULL if
  * \a buf_size is larger than the limit.

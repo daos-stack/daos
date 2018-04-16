@@ -707,9 +707,6 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj, bool io_retry)
 	if (!obj_retry_error(result) && !io_retry)
 		return result;
 
-	D_DEBUG(DB_IO, "Retry task=%p for err=%d, io_retry=%d\n",
-		 task, result, io_retry);
-
 	/* Add pool map update task */
 	rc = obj_pool_query_task(sched, obj, &pool_task);
 	if (rc != 0)
@@ -717,7 +714,6 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj, bool io_retry)
 
 	if (io_retry) {
 		/* Let's reset task result before retry */
-		task->dt_result = 0;
 		rc = dc_task_resched(task);
 		if (rc != 0) {
 			D_ERROR("Failed to re-init task (%p)\n", task);
@@ -732,6 +728,8 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj, bool io_retry)
 		}
 	}
 
+	D_DEBUG(DB_IO, "Retrying task=%p for err=%d, io_retry=%d\n",
+		 task, result, io_retry);
 	/* ignore returned value, error is reported by comp_cb */
 	dc_task_schedule(pool_task, io_retry);
 
@@ -741,6 +739,8 @@ err:
 		dc_task_decref(pool_task);
 
 	task->dt_result = result; /* restore the orignal error */
+	D_ERROR("Failed to retry task=%p(err=%d), io_retry=%d, rc %d.\n",
+		task, result, io_retry, rc);
 	return rc;
 }
 
@@ -1046,11 +1046,12 @@ shard_task_sched(tse_task_t *task, void *arg)
 	struct obj_auxi_args		*obj_auxi;
 	struct shard_auxi_args		*shard_auxi;
 	uint32_t			 target;
-	unsigned int			 map_ver = *(unsigned int *)arg;
+	unsigned int			 map_ver;
 	int				 rc = 0;
 
 	shard_auxi = tse_task_buf_embedded(task, sizeof(*shard_auxi));
 	obj_auxi = shard_auxi->obj_auxi;
+	map_ver = obj_auxi->map_ver_req;
 	obj_task = obj_auxi->obj_task;
 	if (obj_auxi->io_retry) {
 		/* For retried IO, check if the shard's target changed after
@@ -1070,7 +1071,6 @@ shard_task_sched(tse_task_t *task, void *arg)
 			if (rc != 0)
 				goto out;
 
-			task->dt_result		= 0;
 			shard_auxi->map_ver	= map_ver;
 			shard_auxi->target	= target;
 			obj_auxi->shard_task_scheded = 1;
@@ -1090,6 +1090,21 @@ out:
 	if (rc != 0)
 		tse_task_complete(task, rc);
 	return rc;
+}
+
+static void
+obj_shard_task_sched(struct obj_auxi_args *obj_auxi)
+{
+	D_ASSERT(!d_list_empty(&obj_auxi->shard_task_head));
+	obj_auxi->shard_task_scheded = 0;
+	tse_task_list_traverse(&obj_auxi->shard_task_head, shard_task_sched,
+			       NULL);
+	/* It is possible that the IO retried by stale pm version found, but
+	 * the IO involved shards' targets not changed. No any shard task
+	 * re-scheduled for this case, can complete the obj IO task.
+	 */
+	if (obj_auxi->shard_task_scheded == 0)
+		tse_task_complete(obj_auxi->obj_task, 0);
 }
 
 int
@@ -1175,17 +1190,11 @@ dc_obj_update(tse_task_t *task)
 		tse_task_addref(shard_task);
 		tse_task_list_add(shard_task, head);
 	}
+
 task_sched:
-	D_ASSERT(!d_list_empty(head));
-	obj_auxi->shard_task_scheded = 0;
-	tse_task_list_traverse(head, shard_task_sched, &map_ver);
-	/* It is possible that the IO retried by stale pm version found, but
-	 * the IO involved shards' targets not changed. No any shard task
-	 * re-scheduled for this case, can complete the obj IO task.
-	 */
-	if (obj_auxi->shard_task_scheded == 0)
-		tse_task_complete(task, rc);
+	obj_shard_task_sched(obj_auxi);
 	return 0;
+
 out_task:
 	if (head == NULL || d_list_empty(head))
 		tse_task_complete(task, rc);
@@ -1493,16 +1502,9 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 	}
 
 task_sched:
-	D_ASSERT(!d_list_empty(head));
-	obj_auxi->shard_task_scheded = 0;
-	tse_task_list_traverse(head, shard_task_sched, &map_ver);
-	/* It is possible that the IO retried by stale pm version found, but
-	 * the IO involved shards' targets not changed. No any shard task
-	 * re-scheduled for this case, can complete the obj IO task.
-	 */
-	if (obj_auxi->shard_task_scheded == 0)
-		tse_task_complete(api_task, rc);
+	obj_shard_task_sched(obj_auxi);
 	return rc;
+
 out_task:
 	if (head == NULL || d_list_empty(head)) /* nothing has been started */
 		tse_task_complete(api_task, rc);

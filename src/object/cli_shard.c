@@ -541,9 +541,10 @@ obj_shard_punch_cb(tse_task_t *task, void *data)
 
 	cb_args = (struct obj_punch_cb_args *)data;
 	rpc = cb_args->rpc;
-	*cb_args->map_ver = obj_reply_map_version_get(rpc);
-	if (task->dt_result == 0)
+	if (task->dt_result == 0) {
 		task->dt_result = obj_reply_get_status(rpc);
+		*cb_args->map_ver = obj_reply_map_version_get(rpc);
+	}
 
 	crt_req_decref(rpc);
 	return task->dt_result;

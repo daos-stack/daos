@@ -324,7 +324,6 @@ pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	if (rc == RSVC_CLIENT_RECHOOSE ||
 	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->po_rc))) {
-		task->dt_result = 0;
 		rc = tse_task_reinit(task);
 		if (rc != 0)
 			return rc;
@@ -1017,7 +1016,6 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 	if (rc == RSVC_CLIENT_RECHOOSE ||
 	    (rc == RSVC_CLIENT_PROCEED &&
 	     daos_rpc_retryable_rc(out->pto_op.po_rc))) {
-		task->dt_result = 0;
 		rc = tse_task_reinit(task);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -1322,7 +1320,6 @@ pool_evict_cp(tse_task_t *task, void *data)
 	if (rc == RSVC_CLIENT_RECHOOSE ||
 	    (rc == RSVC_CLIENT_PROCEED &&
 	     daos_rpc_retryable_rc(out->pvo_op.po_rc))) {
-		task->dt_result = 0;
 		rc = tse_task_reinit(task);
 		if (rc != 0)
 			D_GOTO(out, rc);
