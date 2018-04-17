@@ -1,6 +1,5 @@
 /**
- *
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,7 +140,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, rank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, rank);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	if (!rank) {

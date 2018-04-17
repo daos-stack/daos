@@ -1,6 +1,5 @@
 /**
- *
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -365,7 +364,7 @@ rebuild_dkeys(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
+	oid = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -396,7 +395,7 @@ rebuild_akeys(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
+	oid = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -428,7 +427,7 @@ rebuild_indexes(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
+	oid = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 2000 records */
@@ -463,7 +462,7 @@ rebuild_multiple(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
+	oid = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -502,7 +501,7 @@ rebuild_large_rec(void **state)
 	if (!rebuild_runable(arg, 6))
 		skip();
 
-	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
+	oid = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -533,7 +532,7 @@ rebuild_objects(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -555,7 +554,7 @@ rebuild_drop_scan(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -581,7 +580,7 @@ rebuild_retry_rebuild(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -607,7 +606,7 @@ rebuild_retry_for_stale_pool(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -633,7 +632,7 @@ rebuild_drop_obj(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -659,7 +658,7 @@ rebuild_update_failed(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -694,7 +693,7 @@ rebuild_multiple_pools(void **state)
 	}
 
 	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 	rebuild_io(args[0], oids, OBJ_NR);
 	rebuild_io(args[1], oids, OBJ_NR);
 
@@ -776,7 +775,7 @@ rebuild_destroy_container(void **state)
 	}
 
 	for (i = 0; i < OBJ_NR * 100; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 
 	rebuild_io(args[1], oids, OBJ_NR * 100);
 
@@ -800,7 +799,7 @@ rebuild_iv_tgt_fail(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -825,7 +824,7 @@ rebuild_tgt_start_fail(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -852,7 +851,7 @@ rebuild_offline(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++)
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 
 	rebuild_io(arg, oids, OBJ_NR);
 
@@ -954,8 +953,8 @@ rebuild_master_failure(void **state)
 
 	daos_get_leader(arg, &ranks_to_kill[0]);
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
-		cb_arg_oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+		cb_arg_oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 	}
 
 	/* prepare the data */
@@ -987,8 +986,8 @@ rebuild_two_failures(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
-		cb_arg_oids[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
+		oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
+		cb_arg_oids[i] = dts_oid_gen(OBJ_CLS, 0, arg->myrank);
 	}
 
 	/* prepare the data */

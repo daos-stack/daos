@@ -419,6 +419,12 @@ typedef enum {
 	BTR_PROBE_UPDATE	= BTR_PROBE_EQ | 3,
 } dbtree_probe_opc_t;
 
+/* Features are passed as 64-bit unsigned integer.   Only the bits below are
+ * reserved.   A specific class can define its own bits to customize behavior.
+ * For example, VOS can use bits to indicate the type of key comparison used
+ * for user supplied key.   In general, using the upper bits is safer to avoid
+ * conflicts in the future.
+ */
 enum btr_feats {
 	/** Key is an unsigned integer.  Implies no hash or key callbacks */
 	BTR_FEAT_UINT_KEY		= (1 << 0),

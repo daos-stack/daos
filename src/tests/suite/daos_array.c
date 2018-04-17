@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ byte_array_simple_stack(void **state)
 	dts_buf_render(buf, STACK_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -124,7 +124,7 @@ array_simple(void **state)
 	dts_buf_render(buf, arg->size * arg->nr);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -208,7 +208,7 @@ array_partial(void **state)
 	dts_buf_render(buf, arg->size * NUM_RECORDS);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -363,7 +363,7 @@ replicator(void **state)
 	dts_buf_render(buf, 192);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 

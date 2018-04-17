@@ -68,17 +68,24 @@ enum vts_test_flags {
 	IF_DISABLED		= (1 << 30),
 };
 
+#define VTS_BUF_SIZE 128
 struct io_test_args {
-	struct vos_test_ctx	ctx;
-	daos_unit_oid_t		oid;
+	char			 fname[VTS_BUF_SIZE];
+	struct vos_test_ctx	 ctx;
+	daos_unit_oid_t		 oid;
 	/* Optional addn container create params */
-	uuid_t			addn_co_uuid;
-	daos_handle_t		addn_co;
-	int			co_create_step;
+	uuid_t			 addn_co_uuid;
+	daos_handle_t		 addn_co;
+	d_list_t		 req_list;
 	/* testing flags, see vts_test_flags */
-	unsigned long		ta_flags;
-	bool			cookie_flag;
-	d_list_t		req_list;
+	unsigned long		 ta_flags;
+	const char		*dkey;
+	const char		*akey;
+	int			 ofeat;
+	int			 akey_size;
+	int			 dkey_size;
+	int			 co_create_step;
+	bool			 cookie_flag;
 };
 
 /** test counters */
@@ -114,12 +121,10 @@ daos_epoch_t		gen_rand_epoch(void);
 struct d_uuid		gen_rand_cookie(void);
 void			gen_rand_key(char *rkey, char *key, int ksize);
 bool			is_found(uuid_t cookie);
-daos_unit_oid_t		gen_oid(void);
+daos_unit_oid_t		gen_oid(daos_ofeat_t ofeats);
 void			inc_cntr(unsigned long op_flags);
 void			inc_cntr_manual(unsigned long op_flags,
 					struct vts_counter *cntr);
-void			test_args_init(struct io_test_args *args,
-				       uint64_t pool_size);
 void			test_args_reset(struct io_test_args *args,
 					uint64_t pool_size);
 int			io_test_obj_update(struct io_test_args *arg,
@@ -134,6 +139,10 @@ int			io_test_obj_fetch(struct io_test_args *arg,
 					  daos_sg_list_t *sgl,
 					  bool verbose);
 int			setup_io(void **state);
+int			setup_io_int_akey(void **state);
+int			setup_io_int_dkey(void **state);
+int			setup_io_lex_akey(void **state);
+int			setup_io_lex_dkey(void **state);
 int			teardown_io(void **state);
 
 #endif

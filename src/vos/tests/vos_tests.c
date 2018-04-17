@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ print_usage()
 	print_message("Use one of these opt(s) for specific test\n");
 	print_message("vos_tests -p|--pool_tests\n");
 	print_message("vos_tests -c|--container_tests\n");
-	print_message("vos_tests -i|--io_tests\n");
+	print_message("vos_tests -i|--io_tests <ofeat>\n");
 	print_message("vos_tests -d |--discard-tests\n");
 	print_message("vos_tests -a |--aggregate-tests\n");
 	print_message("vos_tests -A|--all_tests\n");
@@ -56,10 +56,12 @@ static inline int
 run_all_tests()
 {
 	int failed = 0;
+	int i;
 
 	failed += run_pool_test();
 	failed += run_co_test();
-	failed += run_io_test();
+	for (i = 0; i != DAOS_OF_MASK; i++)
+		failed += run_io_test(i);
 	failed += run_discard_tests();
 	failed += run_aggregate_tests();
 	return failed;
@@ -71,12 +73,13 @@ main(int argc, char **argv)
 	int		rc = 0;
 	int		nr_failed = 0;
 	int		opt = 0, index = 0;
+	int		ofeats;
 
 	static struct option long_options[] = {
 		{"all_tests",		no_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
 		{"container_tests",	no_argument, 0, 'c'},
-		{"io_tests",		no_argument, 0, 'i'},
+		{"io_tests",		required_argument, 0, 'i'},
 		{"discard_tests",	no_argument, 0, 'd'},
 		{"aggregate_tests",	no_argument, 0, 'a'},
 		{"help",		no_argument, 0, 'h'},
@@ -98,7 +101,7 @@ main(int argc, char **argv)
 	if (argc < 2) {
 		nr_failed = run_all_tests();
 	} else {
-		while ((opt = getopt_long(argc, argv, "apcdtiAh",
+		while ((opt = getopt_long(argc, argv, "apcdti:Ah",
 				  long_options, &index)) != -1) {
 			switch (opt) {
 			case 'p':
@@ -108,7 +111,8 @@ main(int argc, char **argv)
 				nr_failed += run_co_test();
 				break;
 			case 'i':
-				nr_failed += run_io_test();
+				ofeats = strtol(optarg, NULL, 16);
+				nr_failed += run_io_test(ofeats);
 				break;
 			case 'a':
 				nr_failed += run_aggregate_tests();

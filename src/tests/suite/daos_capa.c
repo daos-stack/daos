@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -321,7 +321,7 @@ io_invalid_poh(void **state)
 
 	if (arg->myrank == 1) {
 		/** open object */
-		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 		rc = daos_obj_open(coh, oid, 0, 0, &oh, NULL);
 		assert_int_equal(rc, 0);
 
@@ -412,7 +412,7 @@ io_invalid_coh(void **state)
 
 	if (arg->myrank == 1) {
 		/** open object */
-		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 		rc = daos_obj_open(coh, oid, 0, 0, &oh, NULL);
 		assert_int_equal(rc, 0);
 
@@ -491,7 +491,7 @@ update_ro(void **state)
 	handle_share(&coh, HANDLE_CO, arg->myrank, arg->poh, false);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 	rc = daos_obj_open(coh, oid, 0, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 

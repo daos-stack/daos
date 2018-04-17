@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,10 +51,11 @@ void dts_buf_render(char *buf, unsigned int buf_len);
 void dts_key_gen(char *key, unsigned int key_len, const char *prefix);
 
 /** generate a random and unique object ID */
-daos_obj_id_t dts_oid_gen(uint16_t oclass, unsigned seed);
+daos_obj_id_t dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed);
 
 /** generate a random and unique baseline object ID */
-daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint32_t shard);
+daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint8_t ofeats,
+				 uint32_t shard);
 
 /**
  * Create a random ordered integer array with \a nr elements, value of this

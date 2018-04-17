@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,7 +382,7 @@ test_epoch_slip(void **argp)
 	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP,
 		       &coh));
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
 
 	epoch = 10;

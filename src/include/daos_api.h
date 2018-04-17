@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -648,21 +648,25 @@ daos_obj_class_list(daos_handle_t coh, daos_oclass_list_t *clist,
  *		[OUT]	Fully populated DAOS object identifier with the the low
  *			96 bits untouched and the DAOS private	bits (the high
  *			32 bits) encoded.
+ * \param ofeat	[IN]	Feature bits specific to object
  * \param cid	[IN]	Class Identifier
  */
 static inline void
-daos_obj_id_generate(daos_obj_id_t *oid, daos_oclass_id_t cid)
+daos_obj_id_generate(daos_obj_id_t *oid, daos_ofeat_t ofeats,
+		     daos_oclass_id_t cid)
 {
 	uint64_t hdr = cid;
 
 	oid->hi &= 0x00000000ffffffff;
 	/**
-	 * | 8-bit version | 8-bit unused |
-	 * | 16-bit object class          |
-	 * | 96-bit for upper layer ...  |
+	 * | 8-bit version              |
+	 * | 8-bit object features      |
+	 * | 16-bit object class        |
+	 * | 96-bit for upper layer ... |
 	 */
 	hdr <<= 32;
 	hdr |= 0x1ULL << 56;
+	hdr |= (uint64_t)ofeats << 48;
 	oid->hi |= hdr;
 }
 

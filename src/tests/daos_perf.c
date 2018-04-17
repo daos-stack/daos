@@ -229,7 +229,7 @@ ts_write_perf(void)
 	int	rc;
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
-		ts_oid = dts_oid_gen(ts_class, ts_ctx.tsc_mpi_rank);
+		ts_oid = dts_oid_gen(ts_class, 0, ts_ctx.tsc_mpi_rank);
 
 		for (j = 0; j < ts_dkey_p_obj; j++) {
 			if (ts_class != DAOS_OC_RAW) {

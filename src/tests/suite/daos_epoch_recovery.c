@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,7 +130,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	assert_int_equal(rc, 0);
 	assert_int_equal(epoch, 1);
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 
 	/* Every rank updates epoch 1 and commit. */
 	io(UPDATE, arg, coh, 1 /* epoch */, oid, "epoch 1");

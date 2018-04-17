@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,6 +114,27 @@ struct vos_imem_strts {
 
 /* in-memory structures standalone instance */
 struct vos_imem_strts	*vsa_imems_inst;
+
+enum {
+	VOS_KEY_CMP_UINT64	= (1ULL << 63),
+	VOS_KEY_CMP_LEXICAL	= (1ULL << 62),
+	VOS_KEY_CMP_ANY		= (VOS_KEY_CMP_UINT64 | VOS_KEY_CMP_LEXICAL),
+};
+
+#define VOS_KEY_CMP_UINT64_SET	(VOS_KEY_CMP_UINT64  | BTR_FEAT_DIRECT_KEY)
+#define VOS_KEY_CMP_LEXICAL_SET	(VOS_KEY_CMP_LEXICAL | BTR_FEAT_DIRECT_KEY)
+#define VOS_OFEAT_SHIFT		48
+#define VOS_OFEAT_MASK		(0x0ffULL   << VOS_OFEAT_SHIFT)
+#define VOS_OFEAT_BITS		(0x0ffffULL << VOS_OFEAT_SHIFT)
+
+static inline daos_ofeat_t
+obj_id2ofeat(daos_obj_id_t oid)
+{
+	daos_ofeat_t ofeat;
+
+	ofeat = (oid.hi << 8) >> 56;
+	return ofeat;
+}
 
 /**
  * Reference of a cached object.
@@ -474,14 +495,18 @@ vos_rec2irec(struct btr_instance *tins, struct btr_record *rec)
 }
 
 static inline uint64_t
-vos_krec_size(enum vos_tree_class tclass, struct vos_rec_bundle *rbund)
+vos_krec_size(enum vos_tree_class tclass, uint64_t feats,
+	      struct vos_rec_bundle *rbund)
 {
 	daos_iov_t	*key;
 	uint64_t	 size;
+	uint64_t	 epr_size = 0;
 	bool		 has_evt = (tclass == VOS_BTR_AKEY);
 
+	if (feats & BTR_FEAT_DIRECT_KEY)
+		epr_size = sizeof(daos_epoch_range_t);
 	key = rbund->rb_iov;
-	size = vos_size_round(rbund->rb_csum->cs_len) + key->iov_len;
+	size = vos_size_round(rbund->rb_csum->cs_len) + epr_size + key->iov_len;
 	return size + offsetof(struct vos_krec_df, kr_evt[has_evt]);
 }
 
@@ -504,6 +529,27 @@ vos_krec2key(struct vos_krec_df *krec)
 
 	return &payload[vos_size_round(krec->kr_cs_size)];
 }
+
+static inline char *
+vos_krec2directkey(struct vos_krec_df *krec)
+{
+	size_t	 size;
+	char	*payload = vos_krec2payload(krec);
+
+	size = vos_size_round(krec->kr_cs_size) + sizeof(daos_epoch_range_t);
+
+	return &payload[size];
+}
+
+
+static inline daos_epoch_range_t *
+vos_krec2epr(struct vos_krec_df *krec)
+{
+	char *payload = vos_krec2payload(krec);
+
+	return (daos_epoch_range_t *)&payload[vos_size_round(krec->kr_cs_size)];
+}
+
 
 static inline uint64_t
 vos_irec_size(struct vos_rec_bundle *rbund)

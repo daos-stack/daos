@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,13 +79,13 @@ vos_iov2rec_bundle(daos_iov_t *val_iov)
  */
 struct kb_hkey {
 	/** murmur64 hash */
-	uint64_t	kb_hash1;
+	uint64_t		kb_hash1;
 	/** reserved: the second hash to avoid hash collison of murmur64 */
-	uint64_t	kb_hash2;
-	/** the first update epoch */
-	uint64_t	kb_epc_lo;
-	/** the punched epoch of this key, it's DAOS_EPOCH_MAX if no punch */
-	uint64_t	kb_epc_hi;
+	uint64_t		kb_hash2;
+	/** Low is the first update epoch, high is the punched epoch or
+	 *  DOAS_EPOCH_MAX if no punch
+	 */
+	daos_epoch_range_t	kb_epr;
 };
 
 /**
@@ -98,6 +98,8 @@ kb_rec_copy_in(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_krec_df *krec = vos_rec2krec(tins, rec);
 	daos_iov_t	   *iov	 = rbund->rb_iov;
 	daos_csum_buf_t	   *csum = rbund->rb_csum;
+	char		   *kbuf;
+	daos_epoch_range_t *epr;
 
 	krec->kr_cs_size = csum->cs_len;
 	if (krec->kr_cs_size != 0) {
@@ -113,15 +115,22 @@ kb_rec_copy_in(struct btr_instance *tins, struct btr_record *rec,
 		krec->kr_cs_type = csum->cs_type;
 	}
 
+	if (tins->ti_root->tr_feats & VOS_KEY_CMP_ANY) {
+		kbuf = vos_krec2directkey(krec);
+		epr = vos_krec2epr(krec);
+		*epr = *(kbund->kb_epr);
+	} else {
+		kbuf = vos_krec2key(krec);
+	}
 	/* XXX only dkey for the time being */
 	D_ASSERT(iov->iov_buf == kbund->kb_key->iov_buf);
 	if (iov->iov_buf != NULL) {
-		memcpy(vos_krec2key(krec), iov->iov_buf, iov->iov_len);
+		memcpy(kbuf, iov->iov_buf, iov->iov_len);
 	} else {
 		/* Return the address for rdma? But it is too hard to handle
 		 * rdma failure.
 		 */
-		iov->iov_buf = vos_krec2key(krec);
+		iov->iov_buf = kbuf;
 	}
 	krec->kr_size = iov->iov_len;
 	return 0;
@@ -134,7 +143,8 @@ kb_rec_copy_in(struct btr_instance *tins, struct btr_record *rec,
  */
 static int
 kb_rec_copy_out(struct btr_instance *tins, struct btr_record *rec,
-		struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
+		struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund,
+		char *kbuf)
 {
 	struct vos_krec_df *krec = vos_rec2krec(tins, rec);
 	daos_iov_t	   *iov	 = rbund->rb_iov;
@@ -142,11 +152,11 @@ kb_rec_copy_out(struct btr_instance *tins, struct btr_record *rec,
 
 	iov->iov_len = krec->kr_size;
 	if (iov->iov_buf == NULL) {
-		iov->iov_buf = vos_krec2key(krec);
+		iov->iov_buf = kbuf;
 		iov->iov_buf_len = krec->kr_size;
 
 	} else if (iov->iov_buf_len >= iov->iov_len) {
-		memcpy(iov->iov_buf, vos_krec2key(krec), iov->iov_len);
+		memcpy(iov->iov_buf, kbuf, iov->iov_len);
 	}
 
 	csum->cs_len  = krec->kr_cs_size;
@@ -181,8 +191,7 @@ kb_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 	kkey->kb_hash1  = d_hash_murmur64(key->iov_buf, key->iov_len,
 					  VOS_BTR_MUR_SEED);
 	kkey->kb_hash2  = d_hash_string_u32(key->iov_buf, key->iov_len);
-	kkey->kb_epc_lo = kbund->kb_epr->epr_lo;
-	kkey->kb_epc_hi = kbund->kb_epr->epr_hi;
+	kkey->kb_epr = *kbund->kb_epr;
 }
 
 /** compare the hashed key */
@@ -191,6 +200,7 @@ kb_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 {
 	struct kb_hkey *kkey1 = (struct kb_hkey *)&rec->rec_hkey[0];
 	struct kb_hkey *kkey2 = (struct kb_hkey *)hkey;
+
 
 	if (kkey1->kb_hash1 < kkey2->kb_hash1)
 		return -1;
@@ -207,13 +217,60 @@ kb_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	/* NB: epoch checks may be wrong for underwrite, but we are not
 	 * supposed to support underwrite for now.
 	 */
-	if (kkey1->kb_epc_lo > kkey2->kb_epc_hi)
+	if (kkey1->kb_epr.epr_lo > kkey2->kb_epr.epr_hi)
 		return 1;
 
-	if (kkey1->kb_epc_hi < kkey2->kb_epc_lo)
+	if (kkey1->kb_epr.epr_hi < kkey2->kb_epr.epr_lo)
 		return -1;
 
 	return 0;
+}
+
+static int
+kb_key_cmp_lexical(struct vos_krec_df *krec, daos_iov_t *kiov)
+{
+	int cmp;
+
+	/* First, compare the bytes */
+	cmp = memcmp(vos_krec2directkey(krec), (char *)kiov->iov_buf,
+		     min(krec->kr_size, kiov->iov_len));
+	if (cmp)
+		return cmp;
+
+	/* Second, fallback to the length */
+	if (krec->kr_size > kiov->iov_len)
+		return 1;
+	else if (krec->kr_size < kiov->iov_len)
+		return -1;
+
+	return 0;
+}
+
+static int
+kb_key_cmp_uint64(struct vos_krec_df *krec, daos_iov_t *kiov)
+{
+	uint64_t k1, k2;
+
+	D_ASSERT(krec->kr_size == kiov->iov_len);
+	D_ASSERT(krec->kr_size == sizeof(uint64_t));
+
+	k1 = *(uint64_t *)vos_krec2directkey(krec);
+	k2 = *(uint64_t *)kiov->iov_buf;
+
+	return (k1 > k2) ? 1 : (k1 < k2) ? -1 : 0;
+}
+
+static int
+kb_key_cmp_default(struct vos_krec_df *krec, daos_iov_t *kiov)
+{
+	/* This only gets called if hash comparison matches. */
+	if (krec->kr_size > kiov->iov_len)
+		return 1;
+
+	if (krec->kr_size < kiov->iov_len)
+		return -1;
+
+	return memcmp(vos_krec2key(krec), kiov->iov_buf, kiov->iov_len);
 }
 
 /** compare the real key */
@@ -225,29 +282,35 @@ kb_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_krec_df	*krec;
 	struct vos_key_bundle	*kbund;
 	struct kb_hkey		*hkey;
-	daos_epoch_range_t	*epr;
+	daos_epoch_range_t	*epr1  = NULL;
+	daos_epoch_range_t	*epr2;
+	uint64_t		 feats = tins->ti_root->tr_feats;
 	int			 cmp;
 
 	kbund = vos_iov2key_bundle(key_iov);
 	kiov  = kbund->kb_key;
-	epr   = kbund->kb_epr;
+	epr2   = kbund->kb_epr;
 
 	krec = vos_rec2krec(tins, rec);
-	if (krec->kr_size > kiov->iov_len)
-		return 1;
 
-	if (krec->kr_size < kiov->iov_len)
-		return -1;
-
-	cmp = memcmp(vos_krec2key(krec), kiov->iov_buf, kiov->iov_len);
+	if (feats & VOS_KEY_CMP_UINT64) {
+		cmp = kb_key_cmp_uint64(krec, kiov);
+		epr1 = vos_krec2epr(krec);
+	} else if (feats & VOS_KEY_CMP_LEXICAL) {
+		cmp = kb_key_cmp_lexical(krec, kiov);
+		epr1 = vos_krec2epr(krec);
+	} else {
+		cmp = kb_key_cmp_default(krec, kiov);
+		hkey = (struct kb_hkey *)&rec->rec_hkey[0];
+		epr1 = &hkey->kb_epr;
+	}
 	if (cmp)
 		return cmp;
 
-	hkey = (struct kb_hkey *)&rec->rec_hkey[0];
-	if (hkey->kb_epc_lo > epr->epr_hi)
+	if (epr1->epr_lo > epr2->epr_hi)
 		return 1;
 
-	if (hkey->kb_epc_hi < epr->epr_lo)
+	if (epr1->epr_hi < epr2->epr_lo)
 		return -1;
 
 	return 0;
@@ -265,13 +328,16 @@ kb_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	struct umem_attr	 uma;
 	daos_handle_t		 btr_oh = DAOS_HDL_INVAL;
 	daos_handle_t		 evt_oh = DAOS_HDL_INVAL;
+	uint64_t		 tree_feats = 0;
 	int			 rc;
 
 	kbund = vos_iov2key_bundle(key_iov);
 	rbund = vos_iov2rec_bundle(val_iov);
 
 	rec->rec_mmid = umem_zalloc(&tins->ti_umm,
-				    vos_krec_size(rbund->rb_tclass, rbund));
+				    vos_krec_size(rbund->rb_tclass,
+						  tins->ti_root->tr_feats,
+						  rbund));
 	if (UMMID_IS_NULL(rec->rec_mmid))
 		return -DER_NOMEM;
 
@@ -282,9 +348,22 @@ kb_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	D_ASSERT(ta != NULL);
 
 	D_DEBUG(DB_TRACE, "Create dbtree %s\n", ta->ta_name);
+	if (rbund->rb_tclass == VOS_BTR_DKEY) {
+		uint64_t	obj_feats;
+
+		/* Check and setup the akey key compare bits */
+		obj_feats = tins->ti_root->tr_feats & VOS_OFEAT_MASK;
+		obj_feats = obj_feats >> VOS_OFEAT_SHIFT;
+		/* Use hashed key if feature bits aren't set for object */
+		tree_feats = obj_feats << VOS_OFEAT_SHIFT;
+		if (obj_feats & DAOS_OF_AKEY_UINT64)
+			tree_feats |= VOS_KEY_CMP_UINT64_SET;
+		else if (obj_feats & DAOS_OF_AKEY_LEXICAL)
+			tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
+	}
 
 	umem_attr_get(&tins->ti_umm, &uma);
-	rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats, ta->ta_order,
+	rc = dbtree_create_inplace(ta->ta_class, tree_feats, ta->ta_order,
 				   &uma, &krec->kr_btr, &btr_oh);
 	if (rc != 0) {
 		D_ERROR("Failed to create btree: %d\n", rc);
@@ -359,6 +438,8 @@ kb_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_krec_df	*krec = vos_rec2krec(tins, rec);
 	struct vos_rec_bundle	*rbund;
+	char			*kbuf;
+	uint64_t		 feats = tins->ti_root->tr_feats;
 
 	rbund = vos_iov2rec_bundle(val_iov);
 	rbund->rb_btr = &krec->kr_btr;
@@ -370,12 +451,19 @@ kb_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		struct kb_hkey		*hkey;
 
 		kbund = vos_iov2key_bundle(key_iov);
-		if (kbund->kb_epr) {
-			hkey = (struct kb_hkey *)&rec->rec_hkey[0];
-			kbund->kb_epr->epr_lo = hkey->kb_epc_lo;
-			kbund->kb_epr->epr_hi = hkey->kb_epc_hi;
+		if (feats & VOS_KEY_CMP_ANY) {
+			kbuf = vos_krec2directkey(krec);
+			if (kbund->kb_epr)
+				*(kbund->kb_epr) = *vos_krec2epr(krec);
+		} else {
+			kbuf = vos_krec2key(krec);
+			if (kbund->kb_epr) {
+				hkey = (struct kb_hkey *)&rec->rec_hkey[0];
+				kbund->kb_epr->epr_lo = hkey->kb_epr.epr_lo;
+				kbund->kb_epr->epr_hi = hkey->kb_epr.epr_hi;
+			}
 		}
-		kb_rec_copy_out(tins, rec, kbund, rbund);
+		kb_rec_copy_out(tins, rec, kbund, rbund, kbuf);
 	}
 	return 0;
 }
@@ -398,16 +486,23 @@ kb_rec_update(struct btr_instance *tins, struct btr_record *rec,
 			rbund->rb_evt = &krec->kr_evt[0];
 
 	} else { /* punch */
-		daos_epoch_range_t *epr = vos_iov2key_bundle(key_iov)->kb_epr;
+		daos_epoch_range_t *epr2 = vos_iov2key_bundle(key_iov)->kb_epr;
+		daos_epoch_range_t *epr1 = NULL;
 		struct kb_hkey	   *hkey;
 
-		hkey = (struct kb_hkey *)&rec->rec_hkey[0];
+		D_ASSERT(epr2->epr_lo == epr2->epr_hi);
 
-		D_ASSERT(epr->epr_lo == epr->epr_hi);
-		D_ASSERT(hkey->kb_epc_hi >= epr->epr_lo &&
-			 hkey->kb_epc_lo <= epr->epr_lo);
+		if (tins->ti_root->tr_feats & VOS_KEY_CMP_ANY) {
+			epr1 = vos_krec2epr(krec);
+		} else {
+			hkey = (struct kb_hkey *)&rec->rec_hkey[0];
+			epr1 = &hkey->kb_epr;
+		}
 
-		hkey->kb_epc_hi = epr->epr_lo - 1;
+		D_ASSERT(epr1->epr_hi >= epr2->epr_lo &&
+			 epr1->epr_lo <= epr2->epr_lo);
+
+		epr1->epr_hi = epr2->epr_lo - 1;
 	}
 	return 0;
 }
@@ -652,14 +747,14 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 	{
 		.ta_class	= VOS_BTR_DKEY,
 		.ta_order	= VOS_BTR_ORDER,
-		.ta_feats	= 0,
+		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_DIRECT_KEY,
 		.ta_name	= "vos_dkey",
 		.ta_ops		= &key_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_AKEY,
 		.ta_order	= VOS_BTR_ORDER,
-		.ta_feats	= 0,
+		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_DIRECT_KEY,
 		.ta_name	= "vos_akey",
 		.ta_ops		= &key_btr_ops,
 	},
@@ -684,16 +779,28 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 int
 vos_obj_tree_init(struct vos_object *obj)
 {
-	struct vos_btr_attr *ta = &vos_btr_attrs[0];
-	int		     rc;
+	struct vos_btr_attr *ta	= &vos_btr_attrs[0];
+	int			rc;
 
 	if (!daos_handle_is_inval(obj->obj_toh))
 		return 0;
 
 	D_ASSERT(obj->obj_df);
 	if (obj->obj_df->vo_tree.tr_class == 0) {
+		uint64_t	tree_feats	= 0;
+		daos_ofeat_t	obj_feats;
+
 		D_DEBUG(DB_DF, "Create btree for object\n");
-		rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats,
+
+		obj_feats = obj_id2ofeat(obj->obj_df->vo_id.id_pub);
+		/* Use hashed key if feature bits aren't set for object */
+		tree_feats = (uint64_t)obj_feats << VOS_OFEAT_SHIFT;
+		if (obj_feats & DAOS_OF_DKEY_UINT64)
+			tree_feats |= VOS_KEY_CMP_UINT64_SET;
+		else if (obj_feats & DAOS_OF_DKEY_LEXICAL)
+			tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
+
+		rc = dbtree_create_inplace(ta->ta_class, tree_feats,
 					   ta->ta_order, vos_obj2uma(obj),
 					   &obj->obj_df->vo_tree,
 					   &obj->obj_toh);

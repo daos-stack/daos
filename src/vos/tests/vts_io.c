@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include <vts_io.h>
+#include <daos_api.h>
 
 /* key generator */
 static unsigned int		vts_key_gen;
@@ -41,6 +42,8 @@ static uuid_t			cookie_dict[NUM_UNIQUE_COOKIES];
 
 
 static struct vts_counter	vts_cntr;
+
+static uint64_t			update_akey_fixed;
 
 /**
  * Stores the last key and can be used for
@@ -76,11 +79,29 @@ static struct io_test_flag io_test_flags[] = {
 	},
 };
 
+static uint32_t
+hash_key(d_iov_t *key, int flag)
+{
+	if (flag)
+		return *(uint64_t *)key->iov_buf;
+
+	return d_hash_string_u32((char *)key->iov_buf, key->iov_len);
+}
+
 /**
  * Stores the last cookie ID to verify
  * while updating
  */
 uuid_t	last_cookie;
+
+static void
+set_iov(daos_iov_t *iov, char *buf, int int_flag)
+{
+	if (int_flag)
+		d_iov_set(iov, buf, sizeof(uint64_t));
+	else
+		d_iov_set(iov, buf, strlen(buf));
+}
 
 daos_epoch_t
 gen_rand_epoch(void)
@@ -114,16 +135,16 @@ is_found(uuid_t cookie)
 }
 
 daos_unit_oid_t
-gen_oid(void)
+gen_oid(daos_ofeat_t ofeats)
 {
 	vts_cntr.cn_oids++;
-	return dts_unit_oid_gen(0, 0);
+	return dts_unit_oid_gen(0, ofeats, 0);
 }
 
 void
 inc_cntr(unsigned long op_flags)
 {
-	if (op_flags & TF_OVERWRITE) {
+	if (op_flags & (TF_OVERWRITE | TF_PUNCH)) {
 		vts_cntr.cn_punch++;
 	} else {
 		vts_cntr.cn_dkeys++;
@@ -135,7 +156,7 @@ inc_cntr(unsigned long op_flags)
 void
 inc_cntr_manual(unsigned long op_flags, struct vts_counter *cntrs)
 {
-	if (op_flags & TF_OVERWRITE) {
+	if (op_flags & (TF_OVERWRITE | TF_PUNCH)) {
 		cntrs->cn_punch++;
 	} else {
 		cntrs->cn_dkeys++;
@@ -144,8 +165,11 @@ inc_cntr_manual(unsigned long op_flags, struct vts_counter *cntrs)
 	}
 }
 
+static daos_ofeat_t init_ofeats;
+
 void
-test_args_init(struct io_test_args *args, uint64_t pool_size)
+test_args_init(struct io_test_args *args,
+	       uint64_t pool_size)
 {
 	int	rc, i;
 
@@ -160,8 +184,25 @@ test_args_init(struct io_test_args *args, uint64_t pool_size)
 
 	rc = vts_ctx_init(&args->ctx, pool_size);
 	assert_int_equal(rc, 0);
-	args->oid = gen_oid();
+	args->oid = gen_oid(init_ofeats);
 	args->cookie_flag = false;
+	args->ofeat = init_ofeats;
+	args->dkey = UPDATE_DKEY;
+	args->akey = UPDATE_AKEY;
+	args->akey_size = UPDATE_AKEY_SIZE;
+	args->dkey_size = UPDATE_DKEY_SIZE;
+	if (init_ofeats & DAOS_OF_AKEY_UINT64) {
+		dts_key_gen((char *)&update_akey_fixed,
+			    sizeof(update_akey_fixed), NULL);
+		args->akey = NULL;
+		args->akey_size = sizeof(uint64_t);
+	}
+	if (init_ofeats & DAOS_OF_DKEY_UINT64) {
+		args->dkey = NULL;
+		args->dkey_size = sizeof(uint64_t);
+	}
+	snprintf(args->fname, VTS_BUF_SIZE, "/mnt/daos/vpool.test_%x",
+		 init_ofeats);
 }
 
 void
@@ -240,8 +281,13 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		nr++;
 		if (print_ent) {
 			if (nr == 1) {
-				D_PRINT("akey[%d]: %s\n", akey_id,
-					(char *)param->ip_akey.iov_buf);
+				char *buf = param->ip_akey.iov_buf;
+
+				if (arg->ofeat & DAOS_OF_AKEY_UINT64)
+					D_PRINT("akey[%d]: "DF_U64"\n", akey_id,
+						*(uint64_t *)buf);
+				else
+					D_PRINT("akey[%d]: %s\n", akey_id, buf);
 			}
 
 			D_PRINT("\trecx %u : %s\n",
@@ -297,8 +343,13 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		}
 
 		if (print_ent && nr == 0) {
-			D_PRINT("dkey[%d]: %s\n", dkey_id,
-				(char *)param->ip_dkey.iov_buf);
+			char *buf = param->ip_dkey.iov_buf;
+
+			if (arg->ofeat & DAOS_OF_DKEY_UINT64)
+				D_PRINT("dkey[%d]: "DF_U64"\n", dkey_id,
+					*(uint64_t *)buf);
+			else
+				D_PRINT("dkey[%d]: %s\n", dkey_id, buf);
 		}
 
 		rc = io_recx_iterate(arg, param, &ent.ie_key, nr,
@@ -341,8 +392,12 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 	param.ip_epc_expr	= expr;
 
 	if (iter_fa) {
-		strcpy(&buf[0], UPDATE_AKEY_FIXED);
-		daos_iov_set(&param.ip_akey, &buf[0], strlen(buf));
+		if (arg->ofeat & DAOS_OF_AKEY_UINT64)
+			memcpy(&buf[0], &update_akey_fixed, sizeof(uint64_t));
+		else
+			strcpy(&buf[0], UPDATE_AKEY_FIXED);
+		set_iov(&param.ip_akey, &buf[0],
+			arg->ofeat & DAOS_OF_AKEY_UINT64);
 	}
 
 	rc = vos_iter_prepare(VOS_ITER_DKEY, &param, &ih);
@@ -552,34 +607,37 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 
 	if (!(arg->ta_flags & TF_PUNCH)) {
 		if (arg->ta_flags & TF_OVERWRITE) {
-			memcpy(dkey_buf, last_dkey, UPDATE_DKEY_SIZE);
-			memcpy(akey_buf, last_akey, UPDATE_DKEY_SIZE);
+			memcpy(dkey_buf, last_dkey, arg->dkey_size);
+			memcpy(akey_buf, last_akey, arg->akey_size);
 		} else {
-			dts_key_gen(&dkey_buf[0], UPDATE_DKEY_SIZE,
-				    UPDATE_DKEY);
-			memcpy(last_dkey, dkey_buf, UPDATE_DKEY_SIZE);
+			dts_key_gen(&dkey_buf[0], arg->dkey_size,
+				    arg->dkey);
+			memcpy(last_dkey, dkey_buf, arg->dkey_size);
 
 			if (arg->ta_flags & TF_FIXED_AKEY) {
-				memset(&akey_buf[0], 0, UPDATE_AKEY_SIZE);
-				strcpy(&akey_buf[0], UPDATE_AKEY_FIXED);
+				memset(&akey_buf[0], 0, arg->akey_size);
+				if (arg->ofeat & DAOS_OF_AKEY_UINT64)
+					memcpy(&akey_buf[0], &update_akey_fixed,
+					       sizeof(update_akey_fixed));
+				else
+					strcpy(&akey_buf[0], UPDATE_AKEY_FIXED);
 			} else {
-				dts_key_gen(&akey_buf[0], UPDATE_AKEY_SIZE,
-					    UPDATE_AKEY);
+				dts_key_gen(&akey_buf[0], arg->akey_size,
+					    arg->akey);
 			}
-			memcpy(last_akey, akey_buf, UPDATE_AKEY_SIZE);
+			memcpy(last_akey, akey_buf, arg->akey_size);
 		}
 
-
-		daos_iov_set(&dkey, &dkey_buf[0], strlen(dkey_buf));
-		daos_iov_set(&akey, &akey_buf[0], strlen(akey_buf));
+		set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+		set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
 		dts_buf_render(update_buf, UPDATE_BUF_SIZE);
 		daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 		iod.iod_size = recx_size;
 		rex.rx_nr    = recx_nr;
 	} else {
-		daos_iov_set(&dkey, &last_dkey[0], UPDATE_DKEY_SIZE);
-		daos_iov_set(&akey, &last_akey[0], UPDATE_AKEY_SIZE);
+		set_iov(&dkey, &last_dkey[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+		set_iov(&akey, &last_akey[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
 		memset(update_buf, 0, UPDATE_BUF_SIZE);
 		daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
@@ -590,8 +648,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &val_iov;
 
-	rex.rx_idx	= d_hash_string_u32(dkey_buf, dkey.iov_len);
-	rex.rx_idx	%= 1000000;
+	rex.rx_idx	= hash_key(&dkey, arg->ofeat & DAOS_OF_DKEY_UINT64);
 
 	iod.iod_name	= akey;
 	iod.iod_recxs	= &rex;
@@ -642,7 +699,7 @@ io_oi_test(void **state)
 	daos_unit_oid_t		oid;
 	int			rc = 0;
 
-	oid = gen_oid();
+	oid = gen_oid(arg->ofeat);
 
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(cont, NULL);
@@ -668,8 +725,8 @@ io_obj_cache_test(void **state)
 	rc = vos_obj_cache_create(10, &occ);
 	assert_int_equal(rc, 0);
 
-	oids[0] = gen_oid();
-	oids[1] = gen_oid();
+	oids[0] = gen_oid(arg->ofeat);
+	oids[1] = gen_oid(arg->ofeat);
 
 	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[0], 0, 10);
 	assert_int_equal(rc, 0);
@@ -782,6 +839,9 @@ io_iter_test_with_anchor(void **state)
 	int			nr, rc = 0;
 	int			akeys, recs;
 
+	if (arg->ofeat & (DAOS_OF_DKEY_UINT64 | DAOS_OF_DKEY_LEXICAL))
+		skip(); /* anchor not supported with direct key */
+
 	arg->ta_flags = TF_IT_ANCHOR | TF_REC_EXT;
 	epr.epr_lo = vts_epoch_gen + 10;
 	epr.epr_hi = DAOS_EPOCH_MAX;
@@ -870,7 +930,7 @@ io_obj_range_iter_test(struct io_test_args *args, vos_it_epc_expr_t expr)
 	}
 
 	rc = io_obj_iter_test(args, &epr, expr,
-			      &nr, &akeys, &recs, true);
+			      &nr, &akeys, &recs, false);
 	if (rc == -DER_NONEXIST)
 		rc = 0;
 	if (rc != 0)
@@ -923,7 +983,7 @@ io_obj_recx_range_iteration(struct io_test_args *args, vos_it_epc_expr_t expr)
 	}
 
 	rc = io_obj_iter_test(args, &epr, expr,
-			      &nr, &akeys, &recs, true);
+			      &nr, &akeys, &recs, false);
 	if (rc == -DER_NONEXIST)
 		rc = 0;
 	if (rc != 0)
@@ -1006,12 +1066,12 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
 
-	dts_key_gen(&dkey_buf[0], UPDATE_DKEY_SIZE, UPDATE_DKEY);
-	dts_key_gen(&akey_buf[0], UPDATE_AKEY_SIZE, UPDATE_AKEY);
-	memcpy(last_akey, akey_buf, UPDATE_AKEY_SIZE);
+	dts_key_gen(&dkey_buf[0], arg->dkey_size, arg->dkey);
+	dts_key_gen(&akey_buf[0], arg->akey_size, arg->akey);
+	memcpy(last_akey, akey_buf, arg->akey_size);
 
-	daos_iov_set(&dkey, &dkey_buf[0], strlen(dkey_buf));
-	daos_iov_set(&akey, &akey_buf[0], strlen(akey_buf));
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
 	dts_buf_render(update_buf, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
@@ -1021,8 +1081,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	sgl.sg_iovs = &val_iov;
 
 	rex.rx_nr	= 1;
-	rex.rx_idx	= d_hash_string_u32(dkey_buf, dkey.iov_len);
-	rex.rx_idx	%= 1000000;
+	rex.rx_idx	= hash_key(&dkey, arg->ofeat & DAOS_OF_DKEY_UINT64);
 
 	iod.iod_name	= akey;
 	iod.iod_recxs	= &rex;
@@ -1044,7 +1103,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	iod.iod_size = -1;
 
 	/* Injecting an incorrect dkey for fetch! */
-	dts_key_gen(&dkey_buf[0], UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(&dkey_buf[0], arg->dkey_size, arg->dkey);
 
 	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
@@ -1072,17 +1131,16 @@ io_fetch_wo_object(void **state)
 	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
-	dts_key_gen(&dkey_buf[0], UPDATE_DKEY_SIZE, UPDATE_DKEY);
-	dts_key_gen(&akey_buf[0], UPDATE_AKEY_SIZE, UPDATE_AKEY);
-	daos_iov_set(&dkey, &dkey_buf[0], strlen(dkey_buf));
-	daos_iov_set(&akey, &akey_buf[0], strlen(akey_buf));
+	dts_key_gen(&dkey_buf[0], arg->dkey_size, arg->dkey);
+	dts_key_gen(&akey_buf[0], arg->akey_size, arg->akey);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &val_iov;
 
 	rex.rx_nr	= 1;
-	rex.rx_idx	= d_hash_string_u32(dkey_buf, dkey.iov_len);
-	rex.rx_idx	%= 1000000;
+	rex.rx_idx	= hash_key(&dkey, arg->ofeat & DAOS_OF_DKEY_UINT64);
 
 	iod.iod_name	= akey;
 	iod.iod_recxs	= &rex;
@@ -1094,7 +1152,7 @@ io_fetch_wo_object(void **state)
 
 	/* should be set to zero after fetching a nonexistent object */
 	iod.iod_size = -1;
-	arg->oid = gen_oid();
+	arg->oid = gen_oid(arg->ofeat);
 
 	rc = io_test_obj_fetch(arg, 1, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
@@ -1189,7 +1247,7 @@ io_set_attribute_setup(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(cont, NULL);
 
-	arg->oid = gen_oid();
+	arg->oid = gen_oid(arg->ofeat);
 
 	rc = vos_oi_find_alloc(cont, arg->oid, 1, &obj_df);
 	assert_int_equal(rc, 0);
@@ -1258,10 +1316,9 @@ static void
 pool_cont_same_uuid(void **state)
 {
 
-	int			ret = 0;
+	struct io_test_args	*arg = *state;
 	uuid_t			pool_uuid, co_uuid;
 	daos_handle_t		poh, coh;
-	char			*fname = "/mnt/daos/vpool.test";
 	daos_iov_t		val_iov;
 	daos_key_t		dkey;
 	daos_key_t		akey;
@@ -1273,6 +1330,7 @@ pool_cont_same_uuid(void **state)
 	daos_sg_list_t		sgl;
 	uuid_t			cookie;
 	daos_unit_oid_t		oid;
+	int			ret = 0;
 
 	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
@@ -1281,10 +1339,10 @@ pool_cont_same_uuid(void **state)
 	uuid_generate(pool_uuid);
 	uuid_copy(co_uuid, pool_uuid);
 
-	ret = vos_pool_create(fname, pool_uuid, 16*1024*1024);
+	ret = vos_pool_create(arg->fname, pool_uuid, 16*1024*1024);
 	assert_int_equal(ret, 0);
 
-	ret = vos_pool_open(fname, pool_uuid, &poh);
+	ret = vos_pool_open(arg->fname, pool_uuid, &poh);
 	assert_int_equal(ret, 0);
 
 	ret = vos_cont_create(poh, co_uuid);
@@ -1294,16 +1352,16 @@ pool_cont_same_uuid(void **state)
 	assert_int_equal(ret, 0);
 
 	poh = DAOS_HDL_INVAL;
-	ret = vos_pool_open(fname, pool_uuid, &poh);
+	ret = vos_pool_open(arg->fname, pool_uuid, &poh);
 	assert_int_equal(ret, 0);
 
 	ret = vos_cont_open(poh, co_uuid, &coh);
 	assert_int_equal(ret, 0);
 
-	dts_key_gen(&dkey_buf[0], UPDATE_DKEY_SIZE, UPDATE_DKEY);
-	dts_key_gen(&dkey_buf[0], UPDATE_AKEY_SIZE, UPDATE_AKEY);
-	daos_iov_set(&dkey, &dkey_buf[0], strlen(dkey_buf));
-	daos_iov_set(&akey, &akey_buf[0], strlen(akey_buf));
+	dts_key_gen(&dkey_buf[0], arg->dkey_size, arg->dkey);
+	dts_key_gen(&dkey_buf[0], arg->akey_size, arg->akey);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 	dts_buf_render(update_buf, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 	iod.iod_size = UPDATE_BUF_SIZE;
@@ -1318,7 +1376,7 @@ pool_cont_same_uuid(void **state)
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	uuid_generate(cookie);
-	oid = dts_unit_oid_gen(0, 0);
+	oid = gen_oid(arg->ofeat);
 	ret = vos_obj_update(coh, oid, 10, cookie, 0, &dkey, 1, &iod, &sgl);
 	assert_int_equal(ret, 0);
 
@@ -1331,7 +1389,7 @@ pool_cont_same_uuid(void **state)
 	ret = vos_pool_close(poh);
 	assert_int_equal(ret, 0);
 
-	ret = vos_pool_destroy(fname, pool_uuid);
+	ret = vos_pool_destroy(arg->fname, pool_uuid);
 	assert_int_equal(ret, 0);
 }
 
@@ -1406,11 +1464,13 @@ io_simple_one_key_cross_container(void **state)
 	daos_iov_t		val_iov;
 	daos_recx_t		rex;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_DKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
 	daos_key_t		dkey;
+	daos_key_t		akey;
 	daos_epoch_t		epoch = gen_rand_epoch();
 	daos_unit_oid_t		l_oid;
 	struct d_uuid		cookie;
@@ -1433,9 +1493,11 @@ io_simple_one_key_cross_container(void **state)
 	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
-	memset(dkey_buf, 0, UPDATE_DKEY_SIZE);
+	memset(dkey_buf, 0, arg->dkey_size);
+	memset(akey_buf, 0, arg->akey_size);
 	memset(update_buf, 0, UPDATE_BUF_SIZE);
-	daos_iov_set(&dkey, &dkey_buf[0], UPDATE_DKEY_SIZE);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &val_iov;
@@ -1450,14 +1512,15 @@ io_simple_one_key_cross_container(void **state)
 		iod.iod_size = UPDATE_BUF_SIZE;
 		rex.rx_nr    = 1;
 	}
-	rex.rx_idx	= d_hash_string_u32(dkey_buf, dkey.iov_len);
-	rex.rx_idx	%= 1000000;
+	rex.rx_idx	= hash_key(&dkey, arg->ofeat & DAOS_OF_DKEY_UINT64);
 
+	if (arg->ofeat & DAOS_OF_AKEY_UINT64) /* integer akey required */
+		iod.iod_name	= akey;
 	iod.iod_recxs	= &rex;
 	iod.iod_nr	= 1;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
-	l_oid = gen_oid();
+	l_oid = gen_oid(arg->ofeat);
 	cookie = gen_rand_cookie();
 	rc  = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
 			     cookie.uuid, 0, &dkey, 1, &iod, &sgl);
@@ -1598,7 +1661,7 @@ oid_iter_test_setup(void **state)
 	assert_ptr_not_equal(cont, NULL);
 
 	for (i = 0; i < VTS_IO_OIDS; i++) {
-		oids[i] = gen_oid();
+		oids[i] = gen_oid(arg->ofeat);
 
 		rc = vos_oi_find_alloc(cont, oids[i], 1, &obj_df);
 		assert_int_equal(rc, 0);
@@ -1623,6 +1686,9 @@ oid_iter_test_with_anchor(void **state)
 	struct io_test_args	*arg = *state;
 	int			 rc;
 
+	if (arg->ofeat & (DAOS_OF_DKEY_UINT64 | DAOS_OF_DKEY_LEXICAL))
+		skip(); /* anchor not supported with direct key */
+
 	arg->ta_flags = TF_IT_ANCHOR;
 	rc = io_oid_iter_test(arg);
 	assert_true(rc == 0 || rc == -DER_NONEXIST);
@@ -1633,7 +1699,6 @@ static const struct CMUnitTest io_tests[] = {
 		io_oi_test, NULL, NULL},
 	{ "VOS202: VOS object cache test",
 		io_obj_cache_test, NULL, NULL},
-
 	{ "VOS203: Simple update/fetch/verify test",
 		io_simple_one_key, NULL, NULL},
 	{ "VOS204: Simple Punch test",
@@ -1644,7 +1709,6 @@ static const struct CMUnitTest io_tests[] = {
 		io_multiple_dkey, NULL, NULL},
 	{ "VOS222: overwrite test",
 		io_idx_overwrite, NULL, NULL},
-
 	{ "VOS240.0: KV Iter tests (for dkey)",
 		io_iter_test, NULL, NULL},
 	{ "VOS240.1: KV Iter tests fetch cookie (for dkey)",
@@ -1686,8 +1750,34 @@ static const struct CMUnitTest io_tests[] = {
 };
 
 int
-run_io_test(void)
+run_io_test(daos_ofeat_t feats)
 {
-	return cmocka_run_group_tests_name("VOS IO tests", io_tests,
+	char buf[VTS_BUF_SIZE];
+	const char *akey = "hashed";
+	const char *dkey = "hashed";
+
+	feats = feats & DAOS_OF_MASK;
+	if ((feats & DAOS_OF_DKEY_UINT64) && (feats & DAOS_OF_DKEY_LEXICAL)) {
+		D_PRINT("Skipping ambigous ofeat mask\n");
+		return 0;
+	}
+	if ((feats & DAOS_OF_AKEY_UINT64) && (feats & DAOS_OF_AKEY_LEXICAL)) {
+		D_PRINT("Skipping ambigous ofeat mask\n");
+		return 0;
+	}
+
+	if (feats & DAOS_OF_DKEY_UINT64)
+		dkey = "uint";
+	if (feats & DAOS_OF_DKEY_LEXICAL)
+		dkey = "lex";
+	if (feats & DAOS_OF_AKEY_UINT64)
+		akey = "uint";
+	if (feats & DAOS_OF_AKEY_LEXICAL)
+		akey = "lex";
+	snprintf(buf, VTS_BUF_SIZE, "VOS IO tests (dkey=%-6s akey=%s)",
+		 dkey, akey);
+	init_ofeats = feats;
+	D_PRINT("Running %s\n", buf);
+	return cmocka_run_group_tests_name(buf, io_tests,
 					   setup_io, teardown_io);
 }

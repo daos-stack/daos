@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ static uint32_t obj_id_gen	= 1;
 static uint64_t int_key_gen	= 1;
 
 daos_obj_id_t
-dts_oid_gen(uint16_t oclass, unsigned seed)
+dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed)
 {
 	daos_obj_id_t	oid;
 	uint64_t	hdr;
@@ -52,17 +52,17 @@ dts_oid_gen(uint16_t oclass, unsigned seed)
 	oid.lo	= obj_id_gen++;
 	oid.lo	|= hdr;
 	oid.hi	= rand() % 100;
-	daos_obj_id_generate(&oid, oclass);
+	daos_obj_id_generate(&oid, ofeats, oclass);
 
 	return oid;
 }
 
 daos_unit_oid_t
-dts_unit_oid_gen(uint16_t oclass, uint32_t shard)
+dts_unit_oid_gen(uint16_t oclass, uint8_t ofeats, uint32_t shard)
 {
 	daos_unit_oid_t	uoid;
 
-	uoid.id_pub	= dts_oid_gen(oclass, time(NULL));
+	uoid.id_pub	= dts_oid_gen(oclass, ofeats, time(NULL));
 	uoid.id_shard	= shard;
 	uoid.id_pad_32	= 0;
 
@@ -74,7 +74,7 @@ dts_key_gen(char *key, unsigned int key_len, const char *prefix)
 {
 	memset(key, 0, key_len);
 	if (prefix == NULL)
-		snprintf(key, key_len, DF_U64, int_key_gen);
+		memcpy(key, &int_key_gen, sizeof(int_key_gen));
 	else
 		snprintf(key, key_len, "%s-"DF_U64, prefix, int_key_gen);
 	int_key_gen++;

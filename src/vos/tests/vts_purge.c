@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -209,7 +209,7 @@ io_simple_discard_setup(void **state)
 {
 	struct io_test_args	*args = *state;
 
-	args->oid = dts_unit_oid_gen(0, 0);
+	args->oid = dts_unit_oid_gen(0, 0, 0);
 
 	return 0;
 }
@@ -221,7 +221,7 @@ io_create_object(struct vos_container *cont)
 	daos_unit_oid_t		oid;
 	struct vos_obj_df	*obj;
 
-	oid = dts_unit_oid_gen(0, 0);
+	oid = dts_unit_oid_gen(0, 0, 0);
 	rc = vos_oi_find_alloc(cont, oid, 1, &obj);
 	return rc;
 }
@@ -311,7 +311,7 @@ io_multikey_discard_setup(void **state)
 	struct io_test_args	*arg = *state;
 
 	D_INIT_LIST_HEAD(&arg->req_list);
-	arg->oid = dts_unit_oid_gen(0, 0);
+	arg->oid = dts_unit_oid_gen(0, 0, 0);
 	last_oid = arg->oid;
 
 	return 0;
@@ -543,7 +543,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 		assert_int_equal(rc, 0);
 	}
 
-	arg->oid = dts_unit_oid_gen(0, 0);
+	arg->oid = dts_unit_oid_gen(0, 0, 0);
 	for (i = TF_DISCARD_KEYS; i < TF_DISCARD_KEYS * 2; i++) {
 		struct io_req	*req = NULL;
 

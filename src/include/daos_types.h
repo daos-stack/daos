@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -377,7 +377,29 @@ typedef struct {
 	daos_obj_id_t	*ol_oids;
 } daos_oid_list_t;
 
+enum {
+	/** DKEY's are hashed and sorted in hashed order */
+	DAOS_OF_DKEY_HASHED	= 0,
+	/** AKEY's are hashed and sorted in hashed order */
+	DAOS_OF_AKEY_HASHED	= 0,
+	/** DKEY keys not hashed and sorted numerically.   Keys are accepted
+	 *  in client's byte order and DAOS is responsible for correct behavior
+	 */
+	DAOS_OF_DKEY_UINT64	= (1 << 0),
+	/** DKEY keys not hashed and sorted lexically */
+	DAOS_OF_DKEY_LEXICAL	= (1 << 1),
+	/** AKEY keys not hashed and sorted numerically.   Keys are accepted
+	 *  in client's byte order and DAOS is responsible for correct behavior
+	 */
+	DAOS_OF_AKEY_UINT64	= (1 << 2),
+	/** AKEY keys not hashed and sorted lexically */
+	DAOS_OF_AKEY_LEXICAL	= (1 << 3),
+	/** Mask for convenience */
+	DAOS_OF_MASK		= ((1 << 4) - 1),
+};
+
 typedef uint16_t daos_oclass_id_t;
+typedef uint8_t daos_ofeat_t;
 
 enum {
 	/** Use private class for the object */

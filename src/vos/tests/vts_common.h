@@ -108,8 +108,6 @@ run_discard_tests(void);
 int
 run_aggregate_tests(void);
 
-int
-run_io_test(void);
-
+int run_io_test(daos_ofeat_t feats);
 
 #endif

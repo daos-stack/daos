@@ -1085,7 +1085,6 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 	if (opc & BTR_PROBE_EQ) {
 		if (key != NULL) {
 			btr_hkey_gen(tcx, key, hkey);
-
 		} else {
 			D_ASSERT(anchor != NULL);
 			D_ASSERT(opc != BTR_PROBE_UPDATE);
@@ -3154,7 +3153,7 @@ btr_class_init(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	}
 
 	if ((*tree_feats & tc->tc_feats) != *tree_feats) {
-		D_ERROR("Unsupported features "DF_U64"/"DF_U64"\n",
+		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",
 			*tree_feats, tc->tc_feats);
 		return -DER_PROTO;
 	}

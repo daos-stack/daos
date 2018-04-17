@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ simple_put_get(void **state)
 	buf_out = malloc(buf_size);
 	assert_non_null(buf_out);
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
@@ -187,7 +187,7 @@ simple_multi_io(void **state)
 	int		i;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);

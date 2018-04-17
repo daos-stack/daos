@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -330,7 +330,8 @@ ctl_cmd_run(char opc, char *args)
 			if (!daos_mode)
 				break;
 
-			daos_obj_id_generate(&ctl_oid.id_pub, DAOS_OC_TINY_RW);
+			daos_obj_id_generate(&ctl_oid.id_pub, 0,
+					     DAOS_OC_TINY_RW);
 			break;
 		case 'd':
 		case 'D':

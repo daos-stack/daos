@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -579,7 +579,7 @@ object_open(int t_id, daos_epoch_t epoch, int enum_flag, int declare,
 		oid.hi = t_id + 1;
 		oid.lo = t_id;
 	}
-	daos_obj_id_generate(&oid, obj_class);
+	daos_obj_id_generate(&oid, 0, obj_class);
 
 	if (declare) {
 		if (enum_flag) {

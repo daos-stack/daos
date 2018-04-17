@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ simple_array_mgmt(void **state)
 	daos_size_t	size;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_EPOCH_MAX, 4, 16, &oh, NULL);
 	assert_int_equal(rc, 0);
@@ -168,7 +168,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_event_t	ev, *evp;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_EPOCH_MAX, cell_size,
@@ -298,7 +298,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_event_t	ev, *evp;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_EPOCH_MAX, cell_size,
@@ -436,7 +436,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_event_t	ev, *evp;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_EPOCH_MAX, cell_size,
@@ -590,7 +590,7 @@ read_empty_records(void **state)
 	daos_event_t	ev;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);

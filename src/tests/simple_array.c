@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -524,7 +524,7 @@ main(int argc, char **argv)
 	handle_share(&coh, HANDLE_CO, rank, poh, 1);
 
 	/** generate objid */
-	daos_obj_id_generate(&oid, cid);
+	daos_obj_id_generate(&oid, 0, cid);
 
 	if (rank == 0) {
 		daos_oclass_attr_t	cattr = {

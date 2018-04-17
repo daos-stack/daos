@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ main(int argc, char **argv)
 
 	pl_map_print(pl_map);
 
-	daos_obj_id_generate(&oid, DAOS_OC_SMALL_RW);
+	daos_obj_id_generate(&oid, 0, DAOS_OC_SMALL_RW);
 	rc = plt_obj_place(oid);
 	D_ASSERT(rc == 0);
 
