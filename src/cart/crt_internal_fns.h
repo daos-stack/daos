@@ -70,6 +70,7 @@ crt_context_t crt_context_lookup(int ctx_idx);
 void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
 int crt_req_timeout_track(crt_rpc_t *req);
 void crt_req_timeout_untrack(crt_rpc_t *req);
+void crt_req_force_timeout(struct crt_rpc_priv *rpc_priv);
 
 /** some simple helper functions */
 

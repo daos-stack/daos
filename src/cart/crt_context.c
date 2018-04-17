@@ -1233,3 +1233,40 @@ crt_context_set_timeout(crt_context_t crt_ctx, uint32_t timeout_sec)
 exit:
 	return rc;
 }
+
+/* Execute handling for unreachable rpcs */
+void
+crt_req_force_timeout(struct crt_rpc_priv *rpc_priv)
+{
+	struct crt_context	*crt_ctx;
+
+	D_DEBUG(DB_TRACE, "Handling unreachable rpc, rpc_priv=%p\n",
+			rpc_priv);
+
+	if (rpc_priv == NULL) {
+		D_ERROR("Invalid argument, rpc_priv == NULL\n");
+		return;
+	}
+
+	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_URI_LOOKUP) {
+		D_DEBUG(DB_TRACE, "Skipping for opcode: %#x",
+			CRT_OPC_URI_LOOKUP);
+		return;
+	}
+
+	/* Handle unreachable rpcs similarly to timed out rpcs */
+	RPC_ADDREF(rpc_priv);
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
+
+	/**
+	 * untrack it so that the timeout_check() in crt_progress() won't catch
+	 * it again
+	 */
+	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+	crt_req_timeout_untrack(&rpc_priv->crp_pub);
+	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+
+	crt_exec_timeout_cb(rpc_priv);
+
+	RPC_DECREF(rpc_priv);
+}
