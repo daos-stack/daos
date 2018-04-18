@@ -28,6 +28,7 @@
 #include <gurt/heap.h>
 #include <daos/mem.h>
 #include <daos/btree.h>
+#include <daos_srv/vea.h>
 
 #define VEA_MAGIC	(0xea201804)
 
@@ -50,7 +51,16 @@ struct vea_entry {
 	uint32_t		ve_in_heap:1;
 };
 
-#define VEA_LARGE_EXT_MB  64  /* Large extent threashold in MB */
+#define VEA_LARGE_EXT_MB	64	/* Large extent threashold in MB */
+#define VEA_HINT_OFF_INVAL	0	/* Inavlid hint offset */
+#define VEA_MIGRATE_INTVL	10	/* Seconds */
+
+struct free_ext_cursor {
+	struct vea_entry	*fec_cur;
+	int			 fec_idx;
+	int			 fec_entry_cnt;
+	struct vea_entry	*fec_entries[0];
+};
 
 /*
  * Large free extents (>=VEA_LARGE_EXT_MB) are tracked in max a heap, small
@@ -60,7 +70,7 @@ struct vea_entry {
 struct vea_free_class {
 	/* Max heap for tracking the largest free extent */
 	struct d_binheap	 vfc_heap;
-	/* Idle large free extent list */
+	/* Size threshold for large extent */
 	uint32_t		 vfc_large_thresh;
 	/* How many size classed LRUs for small free extents */
 	uint32_t		 vfc_lru_cnt;
@@ -73,6 +83,11 @@ struct vea_free_class {
 	 * vfc_sizes[i + 1] < blk_cnt <= vfc_sizes[i].
 	 */
 	uint32_t		*vfc_sizes;
+	/*
+	 * Cursor used to scan the size classed LRUs when trying to reserve
+	 * from small extents.
+	 */
+	struct free_ext_cursor	*vfc_cursor;
 };
 
 /* In-memory compound index */
@@ -105,5 +120,68 @@ struct vea_space_info {
 	/* Unmap context to performe unmap against freed extent */
 	struct vea_unmap_context	vsi_unmap_ctxt;
 };
+
+static inline bool ext_is_idle(struct vea_free_extent *vfe)
+{
+	return vfe->vfe_age == VEA_EXT_AGE_MAX;
+}
+
+static inline int get_current_age(uint64_t *age)
+{
+	struct timespec now;
+	int rc;
+
+	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	if (rc != 0)
+		return rc;
+	*age = now.tv_sec;
+
+	return 0;
+}
+
+enum vea_free_flags {
+	VEA_FL_NO_MERGE		= (1 << 0),
+	VEA_FL_GEN_AGE		= (1 << 1),
+};
+
+/* vea_init.c */
+void destroy_free_class(struct vea_free_class *vfc);
+int create_free_class(struct vea_free_class *vfc, struct vea_space_df *md);
+void unload_space_info(struct vea_space_info *vsi);
+int load_space_info(struct vea_space_info *vsi);
+
+/* vea_util.c */
+int verify_free_entry(uint64_t *off, struct vea_free_extent *vfe);
+int verify_vec_entry(uint64_t *off, struct vea_ext_vector *vec);
+int ext_adjacent(struct vea_free_extent *cur, struct vea_free_extent *next);
+int verify_resrvd_ext(struct vea_resrvd_ext *resrvd);
+
+/* vea_alloc.c */
+void free_class_remove(struct vea_free_class *vfc, struct vea_entry *entry);
+int compound_vec_alloc(struct vea_space_info *vsi, struct vea_ext_vector *vec);
+int reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
+		 struct vea_resrvd_ext *resrvd);
+int reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
+		  struct vea_resrvd_ext *resrvd);
+int reserve_small(struct vea_space_info *vsi, uint32_t blk_cnt,
+		  struct vea_resrvd_ext *resrvd);
+int reserve_vector(struct vea_space_info *vsi, uint32_t blk_cnt,
+		   struct vea_resrvd_ext *resrvd);
+int persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe);
+
+/* vea_free.c */
+int compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
+		  unsigned int flags);
+int persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe);
+int aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe);
+void migrate_free_exts(struct vea_space_info *vsi);
+
+/* vea_hint.c */
+void hint_get(struct vea_hint_context *hint, uint64_t *off);
+void hint_update(struct vea_hint_context *hint, uint64_t off, uint64_t *seq);
+int hint_cancel(struct vea_hint_context *hint, uint64_t off, uint64_t seq_min,
+		uint64_t seq_max);
+int hint_tx_publish(struct vea_hint_context *hint, uint64_t off,
+		    uint64_t seq_min, uint64_t seq_max);
 
 #endif /* __VEA_INTERNAL_H__ */

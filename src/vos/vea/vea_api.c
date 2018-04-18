@@ -20,38 +20,251 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+#define D_LOGFAC	DD_FAC(vos)
 
-#define DDSUBSYS	DDFAC(vos)
-
-#include <daos_srv/vea.h>
+#include <daos/common.h>
+#include <daos/btree_class.h>
 #include "vea_internal.h"
+
+#define VEA_BLK_SZ	(4 * 1024)	/* 4K */
+#define VEA_TREE_ODR	20
+
+static void
+erase_md(struct umem_instance *umem, struct vea_space_df *md)
+{
+	struct umem_attr uma;
+	daos_handle_t free_btr, vec_btr;
+	int rc;
+
+	uma.uma_id = umem->umm_id;
+	uma.uma_u.pmem_pool = umem->umm_u.pmem_pool;
+	rc = dbtree_open_inplace(&md->vsd_free_tree, &uma, &free_btr);
+	if (rc == 0) {
+		rc = dbtree_destroy(free_btr);
+		if (rc)
+			D_ERROR("destroy free extent tree error: %d\n", rc);
+	}
+
+	rc = dbtree_open_inplace(&md->vsd_vec_tree, &uma, &vec_btr);
+	if (rc == 0) {
+		rc = dbtree_destroy(vec_btr);
+		if (rc)
+			D_ERROR("destroy vector tree error: %d\n", rc);
+	}
+}
 
 /*
  * Initialize the space tracking information on SCM and the header of the
  * block device.
  */
-int vea_format(struct umem_instance *umem, struct vea_space_df *md,
-	       uint64_t dev_id, uint32_t blk_sz, uint32_t hdr_blks,
-	       uint64_t capacity, vea_format_callback_t cb, void *cb_data,
-	       bool force)
+int
+vea_format(struct umem_instance *umem, struct vea_space_df *md,
+	   uint64_t dev_id, uint32_t blk_sz, uint32_t hdr_blks,
+	   uint64_t capacity, vea_format_callback_t cb, void *cb_data,
+	   bool force)
 {
-	return 0;
+	struct vea_free_extent free_ext;
+	struct umem_attr uma;
+	uint64_t tot_blks;
+	daos_handle_t free_btr, vec_btr;
+	daos_iov_t key, val;
+	int rc;
+
+	/* Can't reformat without 'force' specified */
+	if (md->vsd_magic == VEA_MAGIC) {
+		D_DEBUG(force ? DLOG_WARN : DLOG_ERR,
+			"reformat "DF_U64" force=%d\n", dev_id, force);
+		if (!force)
+			return -DER_EXIST;
+
+		erase_md(umem, md);
+	}
+
+	/* Parameters sanity check */
+	if (dev_id == 0)
+		return -DER_INVAL;
+
+	/* Block size should be aligned with 4K and <= 1M */
+	if (blk_sz && ((blk_sz % VEA_BLK_SZ) != 0 || blk_sz > (1U << 20)))
+		return -DER_INVAL;
+
+	if (hdr_blks < 1)
+		return -DER_INVAL;
+
+	blk_sz = blk_sz ? : VEA_BLK_SZ;
+	if (capacity < (blk_sz * 100))
+		return -DER_NOSPACE;
+
+	tot_blks = capacity / blk_sz;
+	if (tot_blks <= hdr_blks)
+		return -DER_NOSPACE;
+	tot_blks -= hdr_blks;
+
+	/* Initialize block device header in callback */
+	if (cb) {
+		/*
+		 * This function can't be called in pmemobj transaction since
+		 * the callback for block header initialization could yield.
+		 */
+		D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+
+		rc = cb(cb_data);
+		if (rc != 0)
+			return rc;
+	}
+
+	/* Start transaction to initialize allocation metadata */
+	rc = umem_tx_begin(umem);
+	if (rc != 0)
+		return rc;
+
+	free_btr = vec_btr = DAOS_HDL_INVAL;
+
+	rc = umem_tx_add_ptr(umem, md, sizeof(*md));
+	if (rc != 0)
+		goto out;
+
+	md->vsd_magic = VEA_MAGIC;
+	md->vsd_blk_sz = blk_sz;
+	md->vsd_dev_id = dev_id;
+	md->vsd_tot_blks = tot_blks;
+	md->vsd_tot_used = 0;
+	md->vsd_free_frags = 0;
+	md->vsd_hdr_blks = hdr_blks;
+
+	/* Create free extent tree */
+	uma.uma_id = umem->umm_id;
+	uma.uma_u.pmem_pool = umem->umm_u.pmem_pool;
+	rc = dbtree_create_inplace(DBTREE_CLASS_IV, 0, VEA_TREE_ODR, &uma,
+				   &md->vsd_free_tree, &free_btr);
+	if (rc != 0)
+		goto out;
+
+	/* Insert the initial free extent */
+	free_ext.vfe_blk_off = hdr_blks;
+	free_ext.vfe_blk_cnt = tot_blks;
+	free_ext.vfe_flags = 0;
+	free_ext.vfe_age = VEA_EXT_AGE_MAX;
+
+	daos_iov_set(&key, &free_ext.vfe_blk_off,
+		     sizeof(free_ext.vfe_blk_off));
+	daos_iov_set(&val, &free_ext, sizeof(free_ext));
+
+	rc = dbtree_update(free_btr, &key, &val);
+	if (rc != 0)
+		goto out;
+
+	/* Create extent vector tree */
+	rc = dbtree_create_inplace(DBTREE_CLASS_IV, 0, VEA_TREE_ODR, &uma,
+				   &md->vsd_vec_tree, &vec_btr);
+	if (rc != 0)
+		goto out;
+
+out:
+	if (!daos_handle_is_inval(free_btr))
+		dbtree_close(free_btr);
+	if (!daos_handle_is_inval(vec_btr))
+		dbtree_close(vec_btr);
+
+	/* Commit/Abort transaction on success/error */
+	return rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
+}
+
+/* Free the memory footprint created by vea_load(). */
+void
+vea_unload(struct vea_space_info *vsi)
+{
+	unload_space_info(vsi);
+
+	/* Destroy the in-memory free extent tree */
+	if (!daos_handle_is_inval(vsi->vsi_free_btr)) {
+		dbtree_destroy(vsi->vsi_free_btr);
+		vsi->vsi_free_btr = DAOS_HDL_INVAL;
+	}
+
+	/* Destroy the in-memory extent vector tree */
+	if (!daos_handle_is_inval(vsi->vsi_vec_btr)) {
+		dbtree_destroy(vsi->vsi_vec_btr);
+		vsi->vsi_vec_btr = DAOS_HDL_INVAL;
+	}
+
+	/* Destroy the in-memory aggregation tree */
+	if (!daos_handle_is_inval(vsi->vsi_agg_btr)) {
+		dbtree_destroy(vsi->vsi_agg_btr);
+		vsi->vsi_agg_btr = DAOS_HDL_INVAL;
+	}
+
+	destroy_free_class(&vsi->vsi_class);
+	D_FREE_PTR(vsi);
 }
 
 /*
  * Load space tracking information from SCM to initialize the in-memory
  * compound index.
  */
-int vea_load(struct umem_instance *umem, struct vea_space_df *md,
-	     struct vea_unmap_context *unmap_ctxt,
-	     struct vea_space_info **vsip)
+int
+vea_load(struct umem_instance *umem, struct vea_space_df *md,
+	 struct vea_unmap_context *unmap_ctxt, struct vea_space_info **vsip)
 {
-	return 0;
-}
+	struct umem_attr uma;
+	struct vea_space_info *vsi;
+	int rc;
 
-/* Free the memory footprint created by vea_load(). */
-void vea_unload(struct vea_space_info *vsi)
-{
+	if (md->vsd_magic != VEA_MAGIC) {
+		D_DEBUG(DB_IO, "load unformated blob\n");
+		return -DER_UNINIT;
+	}
+
+	D_ALLOC_PTR(vsi);
+	if (vsi == NULL)
+		return -DER_NOMEM;
+
+	vsi->vsi_umem = umem;
+	vsi->vsi_md = md;
+	vsi->vsi_md_free_btr = DAOS_HDL_INVAL;
+	vsi->vsi_md_vec_btr = DAOS_HDL_INVAL;
+	vsi->vsi_free_btr = DAOS_HDL_INVAL;
+	D_INIT_LIST_HEAD(&vsi->vsi_agg_lru);
+	vsi->vsi_agg_btr = DAOS_HDL_INVAL;
+	vsi->vsi_vec_btr = DAOS_HDL_INVAL;
+	vsi->vsi_tot_resrvd = 0;
+	vsi->vsi_agg_time = 0;
+	vsi->vsi_unmap_ctxt = *unmap_ctxt;
+
+	rc = create_free_class(&vsi->vsi_class, md);
+	if (rc)
+		goto error;
+
+	memset(&uma, 0, sizeof(uma));
+	uma.uma_id = UMEM_CLASS_VMEM;
+	/* Create in-memory free extent tree */
+	rc = dbtree_create(DBTREE_CLASS_IV, 0, VEA_TREE_ODR, &uma,
+			   NULL, &vsi->vsi_free_btr);
+	if (rc != 0)
+		goto error;
+
+	/* Create in-memory extent vector tree */
+	rc = dbtree_create(DBTREE_CLASS_IV, 0, VEA_TREE_ODR, &uma,
+			   NULL, &vsi->vsi_vec_btr);
+	if (rc != 0)
+		goto error;
+
+	/* Create in-memory aggregation tree */
+	rc = dbtree_create(DBTREE_CLASS_IV, 0, VEA_TREE_ODR, &uma,
+			   NULL, &vsi->vsi_agg_btr);
+	if (rc != 0)
+		goto error;
+
+	/* Load free space tracking info from SCM */
+	rc = load_space_info(vsi);
+	if (rc)
+		goto error;
+
+	*vsip = vsi;
+	return 0;
+error:
+	vea_unload(vsi);
+	return rc;
 }
 
 /*
@@ -65,41 +278,177 @@ void vea_unload(struct vea_space_info *vsi)
  *
  * 1. Reserve from the free extent with 'hinted' start offset. (vsi_free_tree)
  * 2. Reserve from the largest free extent if it isn't non-active (extent age
- *    isn't VEA_EXT_AGE_MAX), otherwise, if it's dividable (extent size > 2 *
- *    VEA_LARGE_EXT_MB), divide it in half-and-half and resreve from the latter
- *    half. (vfc_heap)
+ *    isn't VEA_EXT_AGE_MAX), otherwise, divide it in half-and-half and resreve
+ *    from the latter half. (vfc_heap)
  * 3. Search & reserve from a bunch of extent size classed LRUs in first fit
  *    policy, larger & older free extent has priority. (vfc_lrus)
  * 4. Repeat the search in 3rd step to reserve an extent vector. (vsi_vec_tree)
  * 5. Fail reserve with ENOMEM if all above attempts fail.
  */
-int vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
-		struct vea_hint_context *hint,
-		d_list_t *resrvd_list)
+int
+vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
+	    struct vea_hint_context *hint, d_list_t *resrvd_list)
 {
+	struct vea_resrvd_ext *resrvd;
+	int rc = 0;
+
+	if (blk_cnt > vsi->vsi_class.vfc_large_thresh) {
+		D_ERROR("required blk_cnt: %u > %u, blk_sz: %u\n",
+			blk_cnt, vsi->vsi_class.vfc_large_thresh,
+			vsi->vsi_md->vsd_blk_sz);
+		return -DER_INVAL;
+	}
+
+	/* Trigger free extents migration */
+	migrate_free_exts(vsi);
+
+	D_ALLOC_PTR(resrvd);
+	if (resrvd == NULL)
+		return -DER_NOMEM;
+
+	D_INIT_LIST_HEAD(&resrvd->vre_link);
+	resrvd->vre_hint_off = VEA_HINT_OFF_INVAL;
+
+	/* Get hint offset */
+	hint_get(hint, &resrvd->vre_hint_off);
+
+	/* Reserve from hint offset */
+	rc = reserve_hint(vsi, blk_cnt, resrvd);
+	if (rc != 0)
+		goto error;
+	else if (resrvd->vre_blk_cnt != 0)
+		goto done;
+
+	/* Reserve from the large extents */
+	rc = reserve_large(vsi, blk_cnt, resrvd);
+	if (rc != 0)
+		goto error;
+	else if (resrvd->vre_blk_cnt != 0)
+		goto done;
+
+	/* Reserve from the small extents */
+	rc = reserve_small(vsi, blk_cnt, resrvd);
+	if (rc != 0)
+		goto error;
+	else if (resrvd->vre_blk_cnt != 0)
+		goto done;
+
+	/* Reserve extent vector as the last resort */
+	rc = reserve_vector(vsi, blk_cnt, resrvd);
+	if (rc != 0)
+		goto error;
+done:
+	D_ASSERT(resrvd->vre_blk_off != VEA_HINT_OFF_INVAL);
+	D_ASSERT(resrvd->vre_blk_cnt == blk_cnt);
+	/* Update hint offset */
+	hint_update(hint, resrvd->vre_blk_off + blk_cnt,
+		    &resrvd->vre_hint_seq);
+
+	d_list_add_tail(&resrvd->vre_link, resrvd_list);
+
 	return 0;
+error:
+	D_FREE_PTR(resrvd);
+	return rc;
+}
+
+static int
+process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
+		    d_list_t *resrvd_list, bool publish)
+{
+	struct vea_resrvd_ext *resrvd, *tmp;
+	struct vea_free_extent vfe;
+	unsigned int flags = VEA_FL_GEN_AGE;
+	uint64_t seq_max = 0, seq_min = 0;
+	uint64_t off_c = 0, off_p = 0;
+	int rc = 0;
+
+	if (d_list_empty(resrvd_list))
+		return 0;
+
+	vfe.vfe_blk_cnt = 0;
+
+	d_list_for_each_entry(resrvd, resrvd_list, vre_link) {
+		rc = verify_resrvd_ext(resrvd);
+		if (rc)
+			goto error;
+
+		/* Reserved list is sorted by hint sequence */
+		if (seq_min == 0) {
+			seq_min = resrvd->vre_hint_seq;
+			off_c = resrvd->vre_hint_off;
+		} else {
+			D_ASSERT(seq_min < resrvd->vre_hint_seq);
+		}
+
+		D_ASSERT(seq_max < resrvd->vre_hint_seq);
+		seq_max = resrvd->vre_hint_seq;
+		off_p = resrvd->vre_hint_off;
+
+		if (vfe.vfe_blk_cnt == 0) {
+			vfe.vfe_blk_off = resrvd->vre_blk_off;
+			vfe.vfe_blk_cnt = resrvd->vre_blk_cnt;
+		} else if (vfe.vfe_blk_off + vfe.vfe_blk_cnt ==
+			   resrvd->vre_blk_off) {
+			vfe.vfe_blk_cnt += resrvd->vre_blk_cnt;
+		} else if (vfe.vfe_blk_cnt != 0) {
+			rc = publish ? persistent_alloc(vsi, &vfe) :
+				       compound_free(vsi, &vfe, flags);
+			vfe.vfe_blk_cnt = 0;
+			if (rc)
+				goto error;
+
+		}
+	}
+
+	if (vfe.vfe_blk_cnt != 0) {
+		rc = publish ? persistent_alloc(vsi, &vfe) :
+			       compound_free(vsi, &vfe, flags);
+		vfe.vfe_blk_cnt = 0;
+		if (rc)
+			goto error;
+	}
+
+	rc = publish ? hint_tx_publish(hint, off_p, seq_min, seq_max) :
+		       hint_cancel(hint, off_c, seq_min, seq_max);
+error:
+	d_list_for_each_entry_safe(resrvd, tmp, resrvd_list, vre_link) {
+		d_list_del_init(&resrvd->vre_link);
+		D_FREE_PTR(resrvd);
+	}
+
+	return rc;
 }
 
 /* Cancel the reserved extent(s) */
-int vea_cancel(struct vea_space_info *vsi, struct vea_hint_context *hint,
-	       d_list_t *resrvd_list)
+int
+vea_cancel(struct vea_space_info *vsi, struct vea_hint_context *hint,
+	   d_list_t *resrvd_list)
 {
-	return 0;
+	return process_resrvd_list(vsi, hint, resrvd_list, false);
 }
 
 /*
  * Make the reservation persistent. It should be part of transaction
  * manipulated by caller.
  */
-int vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
-		   d_list_t *resrvd_list)
+int
+vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
+	       d_list_t *resrvd_list)
 {
-	return 0;
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
+	/*
+	 * We choose to don't rollback the in-memory hint updates even if the
+	 * transaction manipulcated by caller is aborted, that'll result in
+	 * some 'holes' in the allocation stream, but it can keep the API as
+	 * simplified as possible, otherwise, caller has to explicitly call
+	 * a hint cancel API on transaction abort.
+	 */
+	return process_resrvd_list(vsi, hint, resrvd_list, true);
 }
 
 /*
- * Free allocated extent. It should be part of transaction manipulated
- * by caller.
+ * Free allocated extent.
  *
  * The just recent freed extents won't be visible for allocation instantly,
  * they will stay in vsi_agg_lru for a short period time, and being coalesced
@@ -107,33 +456,77 @@ int vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
  *
  * Expired free extents in the vsi_agg_lru will be migrated to the allocation
  * visible index (vsi_free_tree, vfc_heap or vfc_lrus) from time to time, this
- * kind of migration will be triggered by vea_reserve() & vea_tx_free() calls.
+ * kind of migration will be triggered by vea_reserve() & vea_free() calls.
  */
-int vea_tx_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt)
+int
+vea_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt)
 {
-	return 0;
+	struct umem_instance *umem = vsi->vsi_umem;
+	struct vea_free_extent vfe;
+	int rc;
+
+	vfe.vfe_blk_off = blk_off;
+	vfe.vfe_blk_cnt = blk_cnt;
+
+	rc = verify_free_entry(NULL, &vfe);
+	if (rc)
+		return rc;
+
+	/* Start transaction */
+	rc = umem_tx_begin(umem);
+	if (rc != 0)
+		return rc;
+
+	/* Add the free extent in persistent free extent tree */
+	rc = persistent_free(vsi, &vfe);
+
+	/* Commit/Abort transaction on success/error */
+	rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
+	if (rc == 0)
+		rc = aggregated_free(vsi, &vfe);
+
+	/* Migrate the expired aggregated free extents to compound index */
+	migrate_free_exts(vsi);
+
+	return rc;
 }
 
 /* Set an arbitrary age to a free extent with specified start offset. */
-int vea_set_ext_age(struct vea_space_info *vsi, uint64_t blk_off, uint64_t age)
+int
+vea_set_ext_age(struct vea_space_info *vsi, uint64_t blk_off, uint64_t age)
 {
 	return 0;
 }
 
 /* Convert an extent into an allocated extent vector. */
-int vea_get_ext_vector(struct vea_space_info *vsi, uint64_t blk_off,
-		       uint32_t blk_cnt, struct vea_ext_vector *ext_vector)
+int
+vea_get_ext_vector(struct vea_space_info *vsi, uint64_t blk_off,
+		   uint32_t blk_cnt, struct vea_ext_vector *ext_vector)
 {
 	return 0;
 }
 
 /* Load persistent hint data and initialize in-memory hint context */
-int vea_hint_load(struct vea_hint_df *phd, struct vea_hint_context **thc)
+int
+vea_hint_load(struct vea_hint_df *phd, struct vea_hint_context **thc)
 {
+	struct vea_hint_context *hint_ctxt;
+
+	D_ALLOC_PTR(hint_ctxt);
+	if (hint_ctxt == NULL)
+		return -DER_NOMEM;
+
+	hint_ctxt->vhc_pd = phd;
+	hint_ctxt->vhc_off = phd->vhd_off;
+	hint_ctxt->vhc_seq = phd->vhd_seq;
+	*thc = hint_ctxt;
+
 	return 0;
 }
 
 /* Free memory foot-print created by vea_hint_load() */
-void vea_hint_unload(struct vea_hint_context *thc)
+void
+vea_hint_unload(struct vea_hint_context *thc)
 {
+	D_FREE_PTR(thc);
 }
