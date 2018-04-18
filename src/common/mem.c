@@ -78,8 +78,37 @@ pmem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 static int
 pmem_tx_abort(struct umem_instance *umm, int err)
 {
-	pmemobj_tx_abort(err);
+	/*
+	 * obj_tx_abort() may have already been called in the error
+	 * handling code of pmemobj APIs.
+	 */
+	if (pmemobj_tx_stage() != TX_STAGE_ONABORT)
+		pmemobj_tx_abort(err);
+	return pmemobj_tx_end();
+}
+
+static int
+pmem_tx_begin(struct umem_instance *umm)
+{
+	int rc;
+
+	rc = pmemobj_tx_begin(umm->umm_u.pmem_pool, NULL, TX_PARAM_NONE);
+	if (rc != 0) {
+		/*
+		 * pmemobj_tx_end() needs be called to re-initialize the
+		 * tx state when pmemobj_tx_begin() failed.
+		 */
+		pmemobj_tx_end();
+		return pmemobj_tx_errno() ? : rc;
+	}
 	return 0;
+}
+
+static int
+pmem_tx_commit(struct umem_instance *umm)
+{
+	pmemobj_tx_commit();
+	return pmemobj_tx_end();
 }
 
 static umem_id_t
@@ -110,6 +139,8 @@ static umem_ops_t	pmem_ops = {
 	.mo_tx_add		= pmem_tx_add,
 	.mo_tx_add_ptr		= pmem_tx_add_ptr,
 	.mo_tx_abort		= pmem_tx_abort,
+	.mo_tx_begin		= pmem_tx_begin,
+	.mo_tx_commit		= pmem_tx_commit,
 	.mo_reserve		= pmem_reserve,
 	.mo_cancel		= pmem_cancel,
 	.mo_tx_publish		= pmem_tx_publish,

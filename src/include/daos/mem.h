@@ -165,10 +165,10 @@ typedef struct {
 					  void *ptr, size_t size);
 	/** abort memory transaction */
 	int		 (*mo_tx_abort)(struct umem_instance *umm, int error);
-	/** reserved: start memory transaction */
+	/** start memory transaction */
 	int		 (*mo_tx_begin)(struct umem_instance *umm);
-	/** reserved: stop memory transaction */
-	int		 (*mo_tx_end)(struct umem_instance *umm);
+	/** commit memory transaction */
+	int		 (*mo_tx_commit)(struct umem_instance *umm);
 
 	/**
 	 * Reserve space with specified size.
@@ -334,10 +334,10 @@ umem_tx_begin(struct umem_instance *umm)
 }
 
 static inline int
-umem_tx_end(struct umem_instance *umm)
+umem_tx_commit(struct umem_instance *umm)
 {
-	if (umm->umm_ops->mo_tx_end)
-		return umm->umm_ops->mo_tx_end(umm);
+	if (umm->umm_ops->mo_tx_commit)
+		return umm->umm_ops->mo_tx_commit(umm);
 	else
 		return 0;
 }
@@ -345,7 +345,7 @@ umem_tx_end(struct umem_instance *umm)
 static inline int
 umem_tx_abort(struct umem_instance *umm, int err)
 {
-	if (umm->umm_ops->mo_tx_end)
+	if (umm->umm_ops->mo_tx_abort)
 		return umm->umm_ops->mo_tx_abort(umm, err);
 	else
 		return 0;

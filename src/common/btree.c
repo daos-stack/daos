@@ -1501,7 +1501,7 @@ btr_tx_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 	TX_BEGIN(umm->umm_u.pmem_pool) {
 		rc = btr_update(tcx, key, val);
 		if (rc != 0)
-			umem_tx_abort(btr_umm(tcx), rc);
+			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DB_TRACE, "dbtree_update tx aborted: %d\n", rc);
@@ -2234,7 +2234,7 @@ btr_tx_delete(struct btr_context *tcx, void *args)
 	TX_BEGIN(umm->umm_u.pmem_pool) {
 		rc = btr_delete(tcx, args);
 		if (rc != 0)
-			umem_tx_abort(btr_umm(tcx), rc);
+			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DB_TRACE, "dbtree_delete tx aborted: %d\n", rc);
@@ -2417,7 +2417,7 @@ btr_tx_tree_alloc(struct btr_context *tcx)
 	TX_BEGIN(umm->umm_u.pmem_pool) {
 		rc = btr_tree_alloc(tcx);
 		if (rc != 0)
-			umem_tx_abort(btr_umm(tcx), rc);
+			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DB_TRACE, "Failed to create tree root: %d\n", rc);
@@ -2497,7 +2497,7 @@ btr_tx_tree_init(struct btr_context *tcx, struct btr_root *root)
 	TX_BEGIN(umm->umm_u.pmem_pool) {
 		rc = btr_tree_init(tcx, root);
 		if (rc != 0)
-			umem_tx_abort(btr_umm(tcx), rc);
+			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DB_TRACE, "Failed to init tree root: %d\n", rc);
@@ -2686,7 +2686,7 @@ btr_tx_tree_destroy(struct btr_context *tcx)
 	TX_BEGIN(umm->umm_u.pmem_pool) {
 		rc = btr_tree_destroy(tcx);
 		if (rc != 0)
-			umem_tx_abort(btr_umm(tcx), rc);
+			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DB_TRACE, "Failed to destroy the tree: %d\n", rc);
