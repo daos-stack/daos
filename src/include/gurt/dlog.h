@@ -129,6 +129,7 @@ struct dlog_fac {
 	int fac_mask;		/**< log level for this facility */
 	char *fac_aname;	/**< abbreviated name of this facility */
 	char *fac_lname;	/**< optional long name of this facility */
+	bool is_nullfac;	/**< special case facility, not logged */
 };
 
 /** dlog global state */

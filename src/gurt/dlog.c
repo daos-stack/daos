@@ -205,6 +205,7 @@ static int clog_setnfac(int n)
 		nfacs[lcv].fac_aname =
 		    (lcv == 0) ? (char *) default_fac0name : NULL;
 		nfacs[lcv].fac_lname = NULL;
+		nfacs[lcv].is_nullfac = false;
 	}
 	/* install */
 	if (d_log_xst.dlog_facs)
@@ -333,6 +334,13 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 */
 	if (fac >= d_log_xst.fac_cnt)
 		fac = 0;
+
+	/*
+	 * Do not log any messages that have been redirected to the null
+	 * facility.
+	 */
+	if (d_log_xst.dlog_facs[fac].is_nullfac)
+		return;
 
 	/* Assumes stderr mask isn't used for debug messages */
 	if (mst.stderr_mask != 0 && lvl >= mst.stderr_mask)
@@ -622,6 +630,8 @@ int d_log_namefacility(int facility, const char *aname, const char *lname)
 {
 	int rv;
 	char *n, *nl;
+	char *null_fac = "NULL";
+
 	/* not open? */
 	if (!d_log_xst.tag)
 		return -1;
@@ -653,6 +663,12 @@ int d_log_namefacility(int facility, const char *aname, const char *lname)
 		free(d_log_xst.dlog_facs[facility].fac_lname);
 	d_log_xst.dlog_facs[facility].fac_aname = n;
 	d_log_xst.dlog_facs[facility].fac_lname = nl;
+
+	/* special case for null facility */
+	if (strncasecmp(d_log_xst.dlog_facs[facility].fac_aname, null_fac,
+			strlen(null_fac)) == 0)
+		d_log_xst.dlog_facs[facility].is_nullfac = true;
+
 	rv = 0;		/* now we have success */
 done:
 	clog_unlock();

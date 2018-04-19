@@ -85,15 +85,16 @@ static struct cart_debug_fac debug_fac_dict[] = {
 	CART_FAC_DICT_ENTRY("IV", "iv", &d_iv_logfac, 1),
 };
 
+#define NUM_DBG_FAC_ENTRIES	ARRAY_SIZE(debug_fac_dict)
 /** Load enabled debug facilities from the environment variable. */
 static void
 debug_fac_load_env(void)
 {
-	char	*fac_env;
-	char	*fac_str;
-	char	*cur;
-	int	i;
-	int	num_dbg_fac_entries;
+	char		      *fac_env;
+	char		      *fac_str;
+	char		      *cur;
+	int		      i;
+	struct cart_debug_fac *d;
 
 	fac_env = getenv(DD_FAC_ENV);
 	if (fac_env == NULL)
@@ -101,32 +102,31 @@ debug_fac_load_env(void)
 
 	D_STRNDUP(fac_str, fac_env, CART_FAC_MAX_LEN);
 	if (fac_str == NULL) {
-		fprintf(stderr, "D_STRNDUP of fac mask failed");
+		D_ERROR("D_STRNDUP of fac mask failed");
 		return;
 	}
 
 	/* Disable all facilities. */
-	num_dbg_fac_entries = ARRAY_SIZE(debug_fac_dict);
-	for (i = 0; i < num_dbg_fac_entries; i++)
+	for (i = 0; i < NUM_DBG_FAC_ENTRIES; i++)
 		debug_fac_dict[i].df_enabled = 0;
 
 	cur = strtok(fac_str, DD_SEP);
 	while (cur != NULL) {
-		for (i = 0; i < num_dbg_fac_entries; i++) {
-			if (debug_fac_dict[i].df_name != NULL &&
-			    strncasecmp(cur, debug_fac_dict[i].df_name,
-					debug_fac_dict[i].df_name_size)
-					== 0) {
-				debug_fac_dict[i].df_enabled = 1;
+		for (i = 0; i < NUM_DBG_FAC_ENTRIES; i++) {
+			d = &debug_fac_dict[i];
+			if (d->df_name != NULL &&
+			    strncasecmp(cur, d->df_name, d->df_name_size)
+			    == 0) {
+				d->df_enabled = 1;
 				break;
-			} else if (debug_fac_dict[i].df_lname != NULL &&
-				   strncasecmp(cur, debug_fac_dict[i].df_lname,
-				   debug_fac_dict[i].df_lname_size) == 0) {
-				debug_fac_dict[i].df_enabled = 1;
+			} else if (d->df_lname != NULL &&
+				   strncasecmp(cur, d->df_lname,
+					       d->df_lname_size) == 0) {
+				d->df_enabled = 1;
 				break;
 			} else if (strncasecmp(cur, DD_FAC_ALL,
-						strlen(DD_FAC_ALL)) == 0) {
-				debug_fac_dict[i].df_enabled = 1;
+					       strlen(DD_FAC_ALL)) == 0) {
+				d->df_enabled = 1;
 			}
 		}
 		cur = strtok(NULL, DD_SEP);
@@ -137,18 +137,19 @@ debug_fac_load_env(void)
 int
 crt_setup_log_fac(void)
 {
-	int	i;
-	int	num_dbg_fac_entries;
-
-	num_dbg_fac_entries = ARRAY_SIZE(debug_fac_dict);
+	int		      i;
+	struct cart_debug_fac *d;
 
 	debug_fac_load_env();
-	for (i = 0; i < num_dbg_fac_entries; i++) {
-		if (debug_fac_dict[i].df_enabled) {
-			D_INIT_LOG_FAC(debug_fac_dict[i].df_name,
-				       debug_fac_dict[i].df_lname,
-				       debug_fac_dict[i].df_idp);
+	for (i = 0; i < NUM_DBG_FAC_ENTRIES; i++) {
+		d = &debug_fac_dict[i];
+		if (!d->df_enabled) {
+			/* redirect disabled facility to NULL */
+			*(d->df_idp) = d_null_logfac;
+			continue;
 		}
+
+		D_INIT_LOG_FAC(d->df_name, d->df_lname, d->df_idp);
 	}
 
 	d_log_sync_mask();

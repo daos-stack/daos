@@ -49,6 +49,7 @@ static int d_log_refcount;
 
 int d_misc_logfac;
 int d_mem_logfac;
+int d_null_logfac;
 
 /*
  * Debug bits for common logic paths, can only have up to 16 different bits.
@@ -347,6 +348,12 @@ setup_clog_facnamemask(void)
 	rc = D_INIT_LOG_FAC(mem, "MEM", "memory");
 	if (rc != 0) {
 		D_ERROR("MEM log facility failed to init; rc=%d\n", rc);
+		return rc;
+	}
+
+	rc = D_INIT_LOG_FAC(null, "NULL", "null");
+	if (rc != 0) {
+		D_ERROR("NULL log facility failed to init; rc=%d\n", rc);
 		return rc;
 	}
 
