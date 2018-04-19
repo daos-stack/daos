@@ -706,8 +706,10 @@ rdb_raft_append_apply(struct rdb *db, void *entry, size_t size, void *result)
 	rdb_raft_save_state(db, &state);
 	rc = raft_recv_entry(db->d_raft, &mentry, &mresponse);
 	rc = rdb_raft_check_state(db, &state, rc);
-	if (rc != 0 && rc != -DER_NOTLEADER) {
-		D_ERROR(DF_DB": failed to append entry: %d\n", DP_DB(db), rc);
+	if (rc != 0) {
+		if (rc != -DER_NOTLEADER)
+			D_ERROR(DF_DB": failed to append entry: %d\n",
+				DP_DB(db), rc);
 		return rc;
 	}
 
