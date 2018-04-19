@@ -463,21 +463,21 @@ rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs, const daos_iov_t *key)
 static int
 rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, d_list_t *destroyed)
 {
-	struct rdb_tree	       *tree = NULL;
-	rdb_path_t		victim_path;
-	volatile int		rc;
+	struct rdb_kvs *kvs = NULL;
+	rdb_path_t	victim_path;
+	volatile int	rc;
 
 	D_DEBUG(DB_ANY, DF_DB": "DF_TX_OP"\n", DP_DB(db), DP_TX_OP(op));
 
 	if (op->dto_opc != RDB_TX_CREATE_ROOT &&
 	    op->dto_opc != RDB_TX_DESTROY_ROOT) {
-		/* Look up the tree. */
-		rc = rdb_tree_lookup(db, &op->dto_kvs, &tree);
+		/* Look up the KVS. */
+		rc = rdb_kvs_lookup(db, &op->dto_kvs, &kvs);
 		if (rc != 0)
 			return rc;
 	}
 
-	/* If destroying a tree, prepare a path to it. */
+	/* If destroying a KVS, prepare a path to it. */
 	if (op->dto_opc == RDB_TX_DESTROY_ROOT) {
 		rc = rdb_path_init(&victim_path);
 		if (rc != 0)
@@ -490,13 +490,13 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, d_list_t *destroyed)
 	} else if (op->dto_opc == RDB_TX_DESTROY) {
 		rc = rdb_path_clone(&op->dto_kvs, &victim_path);
 		if (rc != 0) {
-			rdb_tree_put(db, tree);
+			rdb_kvs_put(db, kvs);
 			return rc;
 		}
 		rc = rdb_path_push(&victim_path, &op->dto_key);
 		if (rc != 0) {
 			rdb_path_fini(&victim_path);
-			rdb_tree_put(db, tree);
+			rdb_kvs_put(db, kvs);
 			return rc;
 		}
 	}
@@ -514,21 +514,21 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, d_list_t *destroyed)
 			rc = rdb_destroy_tree(db->d_attr, &rdb_attr_root);
 			break;
 		case RDB_TX_CREATE:
-			rc = rdb_create_tree(tree->de_hdl, &op->dto_key,
+			rc = rdb_create_tree(kvs->de_hdl, &op->dto_key,
 					     op->dto_attr->dsa_class,
 					     0 /* feats */,
 					     op->dto_attr->dsa_order,
 					     NULL /* child */);
 			break;
 		case RDB_TX_DESTROY:
-			rc = rdb_destroy_tree(tree->de_hdl, &op->dto_key);
+			rc = rdb_destroy_tree(kvs->de_hdl, &op->dto_key);
 			break;
 		case RDB_TX_UPDATE:
-			rc = dbtree_update(tree->de_hdl, &op->dto_key,
+			rc = dbtree_update(kvs->de_hdl, &op->dto_key,
 					   &op->dto_value);
 			break;
 		case RDB_TX_DELETE:
-			rc = dbtree_delete(tree->de_hdl, &op->dto_key, NULL);
+			rc = dbtree_delete(kvs->de_hdl, &op->dto_key, NULL);
 			break;
 		default:
 			D_ERROR(DF_DB": unknown update operation %u\n",
@@ -540,15 +540,15 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, d_list_t *destroyed)
 	} TX_ONCOMMIT {
 		if (op->dto_opc == RDB_TX_DESTROY_ROOT ||
 		    op->dto_opc == RDB_TX_DESTROY) {
-			struct rdb_tree	       *victim;
-			int			rc_tmp;
+			struct rdb_kvs *victim;
+			int		rc_tmp;
 
 			/*
 			 * Look up and save victim in destroyed, so that
 			 * we can evict it only if the upper-level PMDK TX
 			 * commits successfully.
 			 */
-			rc_tmp = rdb_tree_lookup(db, &victim_path, &victim);
+			rc_tmp = rdb_kvs_lookup(db, &victim_path, &victim);
 			if (rc_tmp == 0) {
 				D_DEBUG(DB_ANY, DF_DB": add to destroyed %p\n",
 					DP_DB(db), victim);
@@ -561,8 +561,8 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, d_list_t *destroyed)
 		if (op->dto_opc == RDB_TX_DESTROY_ROOT ||
 		    op->dto_opc == RDB_TX_DESTROY)
 			rdb_path_fini(&victim_path);
-		if (tree != NULL)
-			rdb_tree_put(db, tree);
+		if (kvs != NULL)
+			rdb_kvs_put(db, kvs);
 	} TX_END
 
 	return rc;
@@ -625,21 +625,21 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 	} TX_FINALLY {
-		struct rdb_tree	       *tree;
-		struct rdb_tree	       *tmp;
+		struct rdb_kvs *kvs;
+		struct rdb_kvs *tmp;
 
 		/*
-		 * If rc == 0, then evict the tree objects that have been
+		 * If rc == 0, then evict the KVS objects that have been
 		 * destroyed. Otherwise, just release them.
 		 */
-		d_list_for_each_entry_safe(tree, tmp, destroyed, de_list) {
-			d_list_del_init(&tree->de_list);
+		d_list_for_each_entry_safe(kvs, tmp, destroyed, de_list) {
+			d_list_del_init(&kvs->de_list);
 			if (rc == 0) {
 				D_DEBUG(DB_ANY, DF_DB": evicting %p\n",
-					DP_DB(db), tree);
-				rdb_tree_evict(db, tree);
+					DP_DB(db), kvs);
+				rdb_kvs_evict(db, kvs);
 			}
-			rdb_tree_put(db, tree);
+			rdb_kvs_put(db, kvs);
 		}
 	} TX_END
 
@@ -673,21 +673,21 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 /* Called at the beginning of every query. */
 static int
 rdb_tx_query_pre(struct rdb_tx *tx, const rdb_path_t *path,
-		 struct rdb_tree **tree)
+		 struct rdb_kvs **kvs)
 {
 	int rc;
 
 	rc = rdb_tx_leader_check(tx);
 	if (rc != 0)
 		return rc;
-	return rdb_tree_lookup(tx->dt_db, path, tree);
+	return rdb_kvs_lookup(tx->dt_db, path, kvs);
 }
 
 /* Called at the end of every query. */
 static void
-rdb_tx_query_post(struct rdb_tx *tx, struct rdb_tree *tree)
+rdb_tx_query_post(struct rdb_tx *tx, struct rdb_kvs *kvs)
 {
-	rdb_tree_put(tx->dt_db, tree);
+	rdb_kvs_put(tx->dt_db, kvs);
 }
 
 /**
@@ -704,14 +704,14 @@ int
 rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs, const daos_iov_t *key,
 	      daos_iov_t *value)
 {
-	struct rdb_tree	       *tree;
-	int			rc;
+	struct rdb_kvs *s;
+	int		rc;
 
-	rc = rdb_tx_query_pre(tx, kvs, &tree);
+	rc = rdb_tx_query_pre(tx, kvs, &s);
 	if (rc != 0)
 		return rc;
-	rc = dbtree_lookup(tree->de_hdl, (daos_iov_t *)key, value);
-	rdb_tx_query_post(tx, tree);
+	rc = dbtree_lookup(s->de_hdl, (daos_iov_t *)key, value);
+	rdb_tx_query_post(tx, s);
 	return rc;
 }
 
@@ -731,15 +731,15 @@ int
 rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs, enum rdb_probe_opc opc,
 	     const daos_iov_t *key_in, daos_iov_t *key_out, daos_iov_t *value)
 {
-	struct rdb_tree	       *tree;
-	int			rc;
+	struct rdb_kvs *s;
+	int		rc;
 
-	rc = rdb_tx_query_pre(tx, kvs, &tree);
+	rc = rdb_tx_query_pre(tx, kvs, &s);
 	if (rc != 0)
 		return rc;
-	rc = dbtree_fetch(tree->de_hdl, (dbtree_probe_opc_t)opc, (daos_iov_t *)key_in, key_out,
-			  value);
-	rdb_tx_query_post(tx, tree);
+	rc = dbtree_fetch(s->de_hdl, (dbtree_probe_opc_t)opc,
+			  (daos_iov_t *)key_in, key_out, value);
+	rdb_tx_query_post(tx, s);
 	return rc;
 }
 
@@ -757,13 +757,13 @@ rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs, enum rdb_probe_opc opc,
 int rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward,
 		   rdb_iterate_cb_t cb, void *arg)
 {
-	struct rdb_tree	       *tree;
-	int			rc;
+	struct rdb_kvs *s;
+	int		rc;
 
-	rc = rdb_tx_query_pre(tx, kvs, &tree);
+	rc = rdb_tx_query_pre(tx, kvs, &s);
 	if (rc != 0)
 		return rc;
-	rc = dbtree_iterate(tree->de_hdl, backward, cb, arg);
-	rdb_tx_query_post(tx, tree);
+	rc = dbtree_iterate(s->de_hdl, backward, cb, arg);
+	rdb_tx_query_post(tx, s);
 	return rc;
 }

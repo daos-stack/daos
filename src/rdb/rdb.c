@@ -260,14 +260,14 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 		D_GOTO(err_mutex, rc = dss_abterr2der(rc));
 	}
 
-	rc = rdb_tree_cache_create(&db->d_trees);
+	rc = rdb_kvs_cache_create(&db->d_kvss);
 	if (rc != 0)
 		D_GOTO(err_ref_cv, rc);
 
 	db->d_pmem = pmemobj_open(path, RDB_LAYOUT);
 	if (db->d_pmem == NULL) {
 		D_ERROR("failed to open db in %s: %d\n", path, errno);
-		D_GOTO(err_trees, rc = daos_errno2der(errno));
+		D_GOTO(err_kvss, rc = daos_errno2der(errno));
 	}
 
 	sb_oid = pmemobj_root(db->d_pmem, sizeof(*sb));
@@ -334,8 +334,8 @@ err_attr:
 	dbtree_close(db->d_attr);
 err_pmem:
 	pmemobj_close(db->d_pmem);
-err_trees:
-	rdb_tree_cache_destroy(db->d_trees);
+err_kvss:
+	rdb_kvs_cache_destroy(db->d_kvss);
 err_ref_cv:
 	ABT_cond_free(&db->d_ref_cv);
 err_mutex:
@@ -366,7 +366,7 @@ rdb_stop(struct rdb *db)
 	daos_rank_list_free(db->d_replicas);
 	dbtree_close(db->d_attr);
 	pmemobj_close(db->d_pmem);
-	rdb_tree_cache_destroy(db->d_trees);
+	rdb_kvs_cache_destroy(db->d_kvss);
 	ABT_cond_free(&db->d_ref_cv);
 	ABT_mutex_free(&db->d_mutex);
 	D_FREE_PTR(db);

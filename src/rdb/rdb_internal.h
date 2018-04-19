@@ -55,7 +55,7 @@ struct rdb {
 	ABT_cond		d_ref_cv;	/* for d_ref decrements */
 	struct rdb_cbs	       *d_cbs;		/* callers' callbacks */
 	void		       *d_arg;		/* for d_cbs callbacks */
-	struct daos_lru_cache  *d_trees;	/* rdb_tree cache */
+	struct daos_lru_cache  *d_kvss;		/* rdb_kvs cache */
 	PMEMobjpool	       *d_pmem;
 	daos_handle_t		d_attr;		/* rdb attribute tree */
 	d_rank_list_t       *d_replicas;
@@ -220,20 +220,20 @@ int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 
 /* rdb_kvs.c ******************************************************************/
 
-/* Tree handle cache entry */
-struct rdb_tree {
+/* KVS cache entry */
+struct rdb_kvs {
 	struct daos_llink	de_entry;	/* in LRU */
 	rdb_path_t		de_path;
 	daos_handle_t		de_hdl;		/* of dbtree */
 	d_list_t		de_list;	/* for rdb_tx_apply_op() */
 };
 
-int rdb_tree_cache_create(struct daos_lru_cache **cache);
-void rdb_tree_cache_destroy(struct daos_lru_cache *cache);
-int rdb_tree_lookup(struct rdb *db, const daos_iov_t *path,
-		    struct rdb_tree **tree);
-void rdb_tree_put(struct rdb *db, struct rdb_tree *tree);
-void rdb_tree_evict(struct rdb *db, struct rdb_tree *tree);
+int rdb_kvs_cache_create(struct daos_lru_cache **cache);
+void rdb_kvs_cache_destroy(struct daos_lru_cache *cache);
+int rdb_kvs_lookup(struct rdb *db, const daos_iov_t *path,
+		   struct rdb_kvs **kvs);
+void rdb_kvs_put(struct rdb *db, struct rdb_kvs *kvs);
+void rdb_kvs_evict(struct rdb *db, struct rdb_kvs *kvs);
 
 /* rdb_path.c *****************************************************************/
 
