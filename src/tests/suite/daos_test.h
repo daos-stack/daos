@@ -37,6 +37,7 @@
 #include <cmocka.h>
 #include <mpi.h>
 #include <daos/common.h>
+#include <daos/mgmt.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
 
@@ -180,17 +181,14 @@ int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 
-void
-daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
-		 const d_rank_list_t *svc, d_rank_t rank);
-
-void
-daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-		    const d_rank_list_t *svc, d_rank_t rank);
-
-void
-daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			 const char *grp, const d_rank_list_t *svc);
+void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
+		      const d_rank_list_t *svc, d_rank_t rank);
+void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
+			 const d_rank_list_t *svc, d_rank_t rank);
+void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
+			      const char *grp, const d_rank_list_t *svc);
+void daos_add_server(const uuid_t pool_uuid, const char *grp,
+		     const d_rank_list_t *svc, d_rank_t rank);
 
 static inline void
 daos_test_print(int rank, char *message)
@@ -270,5 +268,12 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 
 	MPI_Barrier(MPI_COMM_WORLD);
 }
+
+#define MAX_KILLS	3
+extern d_rank_t ranks_to_kill[MAX_KILLS];
+bool test_runable(test_arg_t *arg, unsigned int required_tgts);
+int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo);
+int test_get_leader(test_arg_t *arg, d_rank_t *rank);
+bool test_rebuild_wait(test_arg_t **args, int args_cnt);
 
 #endif

@@ -28,7 +28,8 @@
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_iotest.h"
 
-static int dts_obj_class = DAOS_OC_R2S_RW;
+static int dts_obj_class	= DAOS_OC_R2S_RW;
+static int dts_obj_replica_cnt	= 2;
 
 void
 ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
@@ -118,25 +119,18 @@ ioreq_fini(struct ioreq *req)
 	}
 }
 
+/* no wait for async insert, for sync insert it still will block */
 static void
-insert_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
-		daos_iod_t *iods, daos_epoch_t epoch, struct ioreq *req)
+insert_internal_nowait(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
+		       daos_iod_t *iods, daos_epoch_t epoch, struct ioreq *req)
 {
-	bool ev_flag;
 	int rc;
 
 	/** execute update operation */
 	rc = daos_obj_update(req->oh, epoch, dkey, nr, iods, sgls,
 			     req->arg->async ? &req->ev : NULL);
-	if (!req->arg->async) {
+	if (!req->arg->async)
 		assert_int_equal(rc, req->arg->expect_result);
-		return;
-	}
-
-	rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
-	assert_int_equal(rc, 0);
-	assert_int_equal(ev_flag, true);
-	assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 }
 
 static void
@@ -203,8 +197,9 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size, bool lookup,
 }
 
 void
-insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
-       void **val, daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req)
+insert_nowait(const char *dkey, int nr, const char **akey, uint64_t *idx,
+	      void **val, daos_size_t *size, daos_epoch_t *epoch,
+	      struct ioreq *req)
 {
 	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 
@@ -221,8 +216,35 @@ insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	/* set iod */
 	ioreq_iod_simple_set(req, size, false, idx, epoch, nr);
 
-	insert_internal(&req->dkey, nr, val == NULL ? NULL : req->sgl,
-			req->iod, *epoch, req);
+	insert_internal_nowait(&req->dkey, nr, val == NULL ? NULL : req->sgl,
+			       req->iod, *epoch, req);
+}
+
+
+void
+insert_test(struct ioreq *req, uint64_t timeout)
+{
+	bool	ev_flag;
+	int	rc;
+
+	if (!req->arg->async)
+		return;
+
+	rc = daos_event_test(&req->ev, timeout, &ev_flag);
+	assert_int_equal(rc, 0);
+}
+
+void insert_wait(struct ioreq *req)
+{
+	insert_test(req, DAOS_EQ_WAIT);
+}
+
+void
+insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
+       void **val, daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req)
+{
+	insert_nowait(dkey, nr, akey, idx, val, size, epoch, req);
+	insert_wait(req);
 }
 
 void
@@ -1162,6 +1184,7 @@ io_simple_update_timeout_single(void **state)
 	daos_obj_id_t	 oid;
 
 	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE | DAOS_FAIL_ONCE;
+	arg->fail_value = rand() % dts_obj_replica_cnt;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	io_simple_internal(state, oid, 64);
@@ -1438,6 +1461,142 @@ echo_fetch_update(void **state)
 	io_simple_internal(state, oid, 8192);
 }
 
+static void
+tgt_idx_change_retry(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		 oid;
+	struct ioreq		 req;
+	const char		 dkey[] = "tgt_change dkey";
+	char			*akey[5];
+	char			*rec[5];
+	daos_size_t		 rec_size[5];
+	daos_off_t		 offset[5];
+	char			*val[5];
+	daos_size_t		 val_size[5];
+	daos_epoch_t		 epoch = 0;
+	struct daos_obj_layout	*layout;
+	d_rank_t		 rank = 0;
+	int			 replica;
+	int			 i;
+	int			 rc;
+
+	/* create a 3 replica small object, to test the case that:
+	 * update:
+	 * 1) shard 0 IO finished, then the target x of shard 0 dead/excluded
+	 * 2) shard 1 and shard 2 IO still inflight (not scheduled)
+	 * 3) obj IO retry, shard 0 goes to new target y
+	 *
+	 * Then fetch and verify the data.
+	 */
+
+	/* needs at lest 4 targets, exclude one and another 3 raft nodes */
+	if (!test_runable(arg, 4))
+		skip();
+	if (!arg->async) {
+		if (arg->myrank == 0)
+			print_message("this test can-only run in async mode\n");
+		skip();
+	}
+
+	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, 2);
+	replica = rand() % 3;
+	arg->fail_loc = DAOS_OBJ_TGT_IDX_CHANGE | DAOS_FAIL_VALUE;
+	arg->fail_value = replica;
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	print_message("Insert(e=0)/lookup(e=0)/verify complex kv record "
+		      "with target change.\n");
+	for (i = 0; i < 5; i++) {
+		akey[i] = calloc(20, 1);
+		assert_non_null(akey[i]);
+		sprintf(akey[i], "test_update akey%d", i);
+		rec[i] = calloc(20, 1);
+		assert_non_null(rec[i]);
+		sprintf(rec[i], "test_update val%d", i);
+		rec_size[i] = strlen(rec[i]);
+		offset[i] = i * 20;
+		val[i] = calloc(64, 1);
+		assert_non_null(val[i]);
+		val_size[i] = 64;
+	}
+
+	/** Insert */
+	insert_nowait(dkey, 5, (const char **)akey, offset, (void **)rec,
+		      rec_size, &epoch, &req);
+
+	if (arg->myrank == 0) {
+		/** verify the object layout */
+		rc = daos_obj_layout_get(arg->coh, oid, &layout);
+		assert_int_equal(rc, 0);
+		assert_int_equal(layout->ol_nr, 1);
+		assert_int_equal(layout->ol_shards[0]->os_replica_nr, 3);
+		assert_int_equal(layout->ol_shards[0]->os_ranks[0], 2);
+		rank = layout->ol_shards[0]->os_ranks[replica];
+		rc = daos_obj_layout_free(layout);
+		assert_int_equal(rc, 0);
+
+		/** exclude target of the replica */
+		print_message("rank 0 excluding target rank %u ...\n", rank);
+		daos_exclude_server(arg->pool_uuid, arg->group, &arg->svc,
+				    rank);
+		assert_int_equal(rc, 0);
+
+		/** progress the async IO (not must) */
+		insert_test(&req, 1000);
+
+		/** wait until rebuild done */
+		while (!test_rebuild_wait(&arg, 1))
+			sleep(2);
+
+		/** verify the target of shard 0 changed */
+		rc = daos_obj_layout_get(arg->coh, oid, &layout);
+		assert_int_equal(rc, 0);
+		assert_int_equal(layout->ol_nr, 1);
+		assert_int_equal(layout->ol_shards[0]->os_replica_nr, 3);
+		assert_int_not_equal(layout->ol_shards[0]->os_ranks[replica],
+				     rank);
+		print_message("target of shard %d changed from %d to %d\n",
+			      replica, rank, layout->ol_shards[0]->os_ranks[0]);
+		rc = daos_obj_layout_free(layout);
+		assert_int_equal(rc, 0);
+	}
+
+	daos_fail_loc_set(0);
+	insert_wait(&req);
+
+	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_VALUE);
+	/** lookup through each replica and verify data */
+	for (replica = 0; replica < 3; replica++) {
+		daos_fail_value_set(replica);
+		for (i = 0; i < 5; i++)
+			memset(val[i], 0, 64);
+
+		lookup(dkey, 5, (const char **)akey, offset, rec_size,
+		       (void **)val, val_size, &epoch, &req, false);
+
+		for (i = 0; i < 5; i++) {
+			assert_int_equal(req.iod[i].iod_size, strlen(rec[i]));
+			assert_memory_equal(val[i], rec[i], strlen(rec[i]));
+		}
+	}
+
+	for (i = 0; i < 5; i++) {
+		free(val[i]);
+		free(akey[i]);
+		free(rec[i]);
+	}
+
+	if (arg->myrank == 0) {
+		print_message("rank 0 adding target rank %u ...\n", rank);
+		daos_add_server(arg->pool_uuid, arg->group, &arg->svc, rank);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -1490,6 +1649,8 @@ static const struct CMUnitTest io_tests[] = {
 	  async_disable, test_case_teardown},
 	{ "IO26: echo fetch/update", echo_fetch_update,
 	  async_disable, test_case_teardown},
+	{ "IO27: shard target idx change cause retry", tgt_idx_change_retry,
+	  async_enable, test_case_teardown},
 };
 
 int

@@ -207,7 +207,14 @@ test_setup(void **state, unsigned int step,
 	   bool multi_rank, daos_size_t pool_size)
 {
 	test_arg_t	*arg = *state;
+	struct timeval	 now;
+	unsigned int	 seed;
 	int		 rc = 0;
+
+	/* feed a seed for pseudo-random number generator */
+	gettimeofday(&now, NULL);
+	seed = (unsigned int)(now.tv_sec * 1000000 + now.tv_usec);
+	srandom(seed);
 
 	if (arg == NULL) {
 		arg = malloc(sizeof(test_arg_t));
@@ -374,6 +381,121 @@ test_teardown(void **state)
 
 	D_FREE_PTR(arg);
 	return 0;
+}
+
+d_rank_t ranks_to_kill[MAX_KILLS];
+
+bool
+test_runable(test_arg_t *arg, unsigned int required_tgts)
+{
+	int		 i;
+	static bool	 runable = true;
+
+	if (arg->myrank == 0) {
+		if (arg->srv_ntgts - arg->srv_disabled_ntgts < required_tgts) {
+			if (arg->myrank == 0)
+				print_message("Not enough targets, skipping "
+					      "(%d/%d)\n",
+					      arg->srv_ntgts,
+					      arg->srv_disabled_ntgts);
+			runable = false;
+		}
+
+		for (i = 0; i < MAX_KILLS; i++)
+			ranks_to_kill[i] = arg->srv_ntgts -
+					   arg->srv_disabled_ntgts - i - 1;
+	}
+
+	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
+	return runable;
+}
+
+int
+test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
+{
+	bool	   connect_pool = false;
+	int	   rc;
+
+	if (daos_handle_is_inval(arg->poh)) {
+		rc = daos_pool_connect(arg->pool_uuid, arg->group,
+				       &arg->svc, DAOS_PC_RW,
+				       &arg->poh, pinfo, NULL);
+		if (rc) {
+			print_message("pool_connect failed, rc: %d\n",
+				      rc);
+			return rc;
+		}
+		connect_pool = true;
+	}
+
+	rc = daos_pool_query(arg->poh, NULL, pinfo, NULL);
+	if (rc != 0)
+		print_message("pool query failed %d\n", rc);
+
+	if (connect_pool) {
+		rc = daos_pool_disconnect(arg->poh, NULL);
+		if (rc)
+			print_message("disconnect failed: %d\n",
+				      rc);
+		arg->poh = DAOS_HDL_INVAL;
+	}
+
+	return rc;
+}
+
+static bool
+rebuild_pool_wait(test_arg_t *arg)
+{
+	daos_pool_info_t	   pinfo = { 0 };
+	struct daos_rebuild_status *rst;
+	int			   rc;
+	bool			   done = false;
+
+	rc = test_pool_get_info(arg, &pinfo);
+	rst = &pinfo.pi_rebuild_st;
+	if (rst->rs_done || rc != 0) {
+		print_message("Rebuild (ver=%d) is done %d/%d\n",
+			       rst->rs_version, rc, rst->rs_errno);
+		done = true;
+	} else {
+		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u), "
+			      "already rebuilt obj="DF_U64", rec="DF_U64"\n",
+			      DP_UUID(arg->pool_uuid), rst->rs_version,
+			      rst->rs_obj_nr, rst->rs_rec_nr);
+	}
+
+	return done;
+}
+
+int
+test_get_leader(test_arg_t *arg, d_rank_t *rank)
+{
+	daos_pool_info_t	pinfo = { 0 };
+	int			rc;
+
+	rc = test_pool_get_info(arg, &pinfo);
+	if (rc)
+		return rc;
+
+	*rank = pinfo.pi_leader;
+	return 0;
+}
+
+bool
+test_rebuild_wait(test_arg_t **args, int args_cnt)
+{
+	bool all_done = true;
+	int i;
+
+	for (i = 0; i < args_cnt; i++) {
+		bool done;
+
+		done = rebuild_pool_wait(args[i]);
+		if (!done)
+			all_done = false;
+	}
+	return all_done;
 }
 
 static void

@@ -984,17 +984,30 @@ shard_update_task(tse_task_t *task)
 	struct shard_update_args	*args;
 	struct dc_object		*obj;
 	struct dc_obj_shard		*obj_shard;
+	uint32_t			 shard_tmp;
 	int				 rc;
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
 	obj = args->auxi.obj;
 	D_ASSERT(obj != NULL);
 
-	if (args->auxi.shard == 0 &&
-	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE)) {
-		D_INFO("Set Shard 0 update to return -DER_TIMEDOUT\n");
-		daos_fail_loc_set(DAOS_SHARD_OBJ_UPDATE_TIMEOUT |
-				  DAOS_FAIL_ONCE);
+	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE)) {
+		shard_tmp = daos_fail_value_get();
+		if (args->auxi.shard == shard_tmp) {
+			D_INFO("Set Shard %d update to return -DER_TIMEDOUT\n",
+			       shard_tmp);
+			daos_fail_loc_set(DAOS_SHARD_OBJ_UPDATE_TIMEOUT |
+					  DAOS_FAIL_ONCE);
+		}
+	}
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE)) {
+		shard_tmp = daos_fail_value_get();
+		if (args->auxi.shard != shard_tmp) {
+			D_INFO("complete shard %d update as -DER_TIMEDOUT.\n",
+				args->auxi.shard);
+			tse_task_complete(task, -DER_TIMEDOUT);
+			return 0;
+		}
 	}
 
 	rc = obj_shard_open(obj, args->auxi.shard, args->auxi.map_ver,
@@ -1063,6 +1076,12 @@ shard_task_sched(tse_task_t *task, void *arg)
 		target = obj_shard2tgt(shard_auxi->obj, shard_auxi->shard);
 		if (obj_retry_error(task->dt_result) ||
 		    target != shard_auxi->target) {
+			D_DEBUG(DB_IO, "shard %d, dt_result %d, target %d @ "
+				"map_ver %d, target %d @ last_map_ver %d, "
+				"shard task %p to be re-scheduled.\n",
+				shard_auxi->shard, task->dt_result, target,
+				map_ver, shard_auxi->target,
+				shard_auxi->map_ver, task);
 			rc = tse_task_reinit(task);
 			if (rc != 0)
 				goto out;
@@ -1071,15 +1090,9 @@ shard_task_sched(tse_task_t *task, void *arg)
 			if (rc != 0)
 				goto out;
 
-			shard_auxi->map_ver	= map_ver;
-			shard_auxi->target	= target;
-			obj_auxi->shard_task_scheded = 1;
-			D_DEBUG(DB_IO, "shard %d, dt_result %d, target %d @ "
-				"map_ver %d, target %d @ last_map_ver %d, "
-				"shard task %p re-scheduled.\n",
-				shard_auxi->shard, task->dt_result, target,
-				map_ver, shard_auxi->target,
-				shard_auxi->map_ver, task);
+			shard_auxi->map_ver		= map_ver;
+			shard_auxi->target		= target;
+			obj_auxi->shard_task_scheded	= 1;
 		}
 	} else {
 		tse_task_schedule(task, true);
