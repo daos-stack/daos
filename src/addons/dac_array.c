@@ -1461,7 +1461,6 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		if (!strcmp(ARRAY_MD_KEY, props->key))
 			continue;
 
-		/** Keep a record of the highest dkey */
 		ret = sscanf(props->key, "%zu", &dkey_num);
 		D_ASSERT(ret == 1);
 
@@ -1491,12 +1490,20 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			printf("Punching Key %s\n", params->dkey_str);
 #endif
 
-			rc = daos_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS,
-					      tse_task2sched(task), 0, NULL,
-					      &io_task);
+			daos_opc_t opc = DAOS_OPC_OBJ_PUNCH_DKEYS;
+
+			/*
+			 * If this is dkey "0", punch only the akey "0" because
+			 * it contains other metadata keys that we don't want to
+			 * punch.
+			 */
+			if (dkey_num == 0)
+				opc = DAOS_OPC_OBJ_PUNCH_AKEYS;
+
+			rc = daos_task_create(opc, tse_task2sched(task), 0,
+					      NULL, &io_task);
 			if (rc != 0) {
-				D_ERROR("Punch dkey %s failed (%d)\n",
-					params->dkey_str, rc);
+				D_ERROR("daos_task_create() failed (%d)\n", rc);
 				D_GOTO(err, rc);
 			}
 
@@ -1504,6 +1511,17 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			p_args->oh	= args->oh;
 			p_args->epoch	= args->epoch;
 			p_args->dkey	= dkey;
+
+			/** set akey if we punch akey "0" only */
+			if (dkey_num == 0) {
+				daos_key_t *akey;
+
+				akey = &params->iod.iod_name;
+				params->akey_str = '0';
+				daos_iov_set(akey, &params->akey_str, 1);
+				p_args->akey_nr = 1;
+				p_args->akeys = akey;
+			}
 
 			rc = tse_task_register_comp_cb(io_task,
 						       free_io_params_cb,
