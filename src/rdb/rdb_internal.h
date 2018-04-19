@@ -218,7 +218,7 @@ void rdb_recvd(void *arg);
 int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		 void *result, d_list_t *destroyed);
 
-/* rdb_tree.c *****************************************************************/
+/* rdb_kvs.c ******************************************************************/
 
 /* Tree handle cache entry */
 struct rdb_tree {
