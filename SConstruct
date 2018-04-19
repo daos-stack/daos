@@ -63,7 +63,7 @@ def scons():
         env.Replace(SHLIBSUFFIX='.so')
 
     # Compiler options
-    env.Append(CCFLAGS=['-g', '-Wall', '-Werror', '-Wno-missing-braces',
+    env.Append(CCFLAGS=['-g', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE'])
     env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
