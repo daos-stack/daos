@@ -40,7 +40,6 @@ static pthread_mutex_t dd_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #define DECLARE_FAC(name)	int DD_FAC(name)
 /** predefined log facilities */
-DECLARE_FAC(null);
 DECLARE_FAC(common);
 DECLARE_FAC(tree);
 DECLARE_FAC(vos);
@@ -111,7 +110,6 @@ static struct d_debug_bit daos_bit_dict[] = {
 static struct daos_debug_fac debug_fac_dict[] = {
 	/* MUST be the first one */
 	/* no facility name for NULL */
-	DBG_FAC_DICT_ENT("null",	&d_null_logfac,		DB_NULL, 1),
 	DBG_FAC_DICT_ENT("common",	&d_common_logfac,	DB_DEFAULT, 0),
 	DBG_FAC_DICT_ENT("tree",	&d_tree_logfac,		DB_DEFAULT, 0),
 	DBG_FAC_DICT_ENT("vos",		&d_vos_logfac,		DB_DEFAULT, 0),
@@ -226,7 +224,7 @@ daos_debug_init(char *logfile)
 	/* load other env variables */
 	debug_fac_load_env();
 
-	rc = d_log_init_adv("DAOS", logfile, DLOG_FLV_LOGPID,
+	rc = d_log_init_adv("DAOS", logfile, DLOG_FLV_FAC,
 			    DLOG_INFO, DLOG_CRIT);
 	if (rc != 0) {
 		D_ERROR("Failed to init DAOS debug log: %d\n", rc);

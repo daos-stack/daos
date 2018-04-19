@@ -30,7 +30,6 @@
  * predefined debug facilities (subsystems/modules), they have to be declared
  * before including any libgurt headers
  */
-extern int d_null_logfac;
 extern int d_common_logfac;
 extern int d_tree_logfac;
 extern int d_vos_logfac;
