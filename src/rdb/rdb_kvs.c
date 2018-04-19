@@ -118,7 +118,6 @@ rdb_kvs_alloc_ref(void *key, unsigned int ksize, void *varg,
 {
 	struct rdb_kvs_alloc_arg       *arg = varg;
 	struct rdb_kvs		       *kvs;
-	void			       *buf;
 	int				rc;
 
 	if (!arg->dea_alloc) {
@@ -126,32 +125,29 @@ rdb_kvs_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto err;
 	}
 
-	D_ALLOC_PTR(kvs);
-	if (kvs == NULL)
-		D_GOTO(err, rc = -DER_NOMEM);
+	D_ALLOC(kvs, sizeof(*kvs) + ksize);
+	if (kvs == NULL) {
+		rc = -DER_NOMEM;
+		goto err;
+	}
 
 	/* kvs->de_path */
-	D_ALLOC(buf, ksize);
-	if (buf == NULL)
-		D_GOTO(err_kvs, rc = -DER_NOMEM);
-	memcpy(buf, key, ksize);
-	daos_iov_set(&kvs->de_path, buf, ksize);
+	memcpy(kvs->de_buf, key, ksize);
+	daos_iov_set(&kvs->de_path, kvs->de_buf, ksize);
 
 	/* kvs->de_object */
 	rc = rdb_kvs_open_path(arg->dea_db, arg->dea_index, &kvs->de_path,
 			       &kvs->de_object);
 	if (rc != 0)
-		D_GOTO(err_path, rc);
+		goto err_kvs;
 
 	D_DEBUG(DB_ANY, DF_DB": created %p len %u\n", DP_DB(arg->dea_db), kvs,
 		ksize);
 	*link = &kvs->de_entry;
 	return 0;
 
-err_path:
-	D_FREE(kvs->de_path.iov_buf);
 err_kvs:
-	D_FREE_PTR(kvs);
+	D_FREE(kvs);
 err:
 	return rc;
 }
@@ -162,8 +158,7 @@ rdb_kvs_free_ref(struct daos_llink *llink)
 	struct rdb_kvs *kvs = rdb_kvs_obj(llink);
 
 	D_DEBUG(DB_ANY, "freeing %p "DF_X64"\n", kvs, kvs->de_object);
-	D_FREE(kvs->de_path.iov_buf);
-	D_FREE_PTR(kvs);
+	D_FREE(kvs);
 }
 
 static bool

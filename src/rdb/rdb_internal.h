@@ -227,6 +227,7 @@ struct rdb_kvs {
 	struct daos_llink	de_entry;	/* in LRU */
 	rdb_path_t		de_path;
 	rdb_oid_t		de_object;
+	uint8_t			de_buf[];	/* for de_path */
 };
 
 int rdb_kvs_cache_create(struct daos_lru_cache **cache);
