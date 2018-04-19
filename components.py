@@ -310,10 +310,10 @@ REQS.define('daos',
 
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
-            commands=['meson $FUSE_SRC --prefix=$FUSE_PREFIX',
-                      'meson configure -D udevrulesdir=$FUSE_PREFIX/udev',
-                      'meson configure -D disable-mtab=True',
-                      'meson configure -D skip-systemfiles=True',
+            commands=['meson $FUSE_SRC --prefix=$FUSE_PREFIX' \
+                      ' -D udevrulesdir=$FUSE_PREFIX/udev' \
+                      ' -D disable-mtab=True' \
+                      ' -D skip-systemfiles=True',
                       'ninja-build -v -j1',
                       'ninja-build install',
                       'mv $FUSE_PREFIX/bin/fusermount3' \
