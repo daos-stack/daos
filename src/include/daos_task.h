@@ -247,7 +247,7 @@ typedef struct {
 	int			n;
 	char   const *const	*names;
 	void   const *const	*values;
-	size_t const const	*sizes;
+	size_t const		*sizes;
 } daos_cont_attr_set_t;
 
 typedef struct {

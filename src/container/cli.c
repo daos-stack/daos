@@ -1388,7 +1388,7 @@ dc_cont_attr_list(tse_task_t *task)
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	if (args->size == NULL || *args->size < 0 ||
+	if (args->size == NULL ||
 	    (*args->size > 0 && args->buf == NULL)) {
 		D_GOTO(out, rc = -DER_INVAL);
 	}
