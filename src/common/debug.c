@@ -61,7 +61,8 @@ uint64_t DB_MGMT; /* pool management */
 uint64_t DB_EPC; /* epoch system */
 uint64_t DB_DF; /* durable format */
 uint64_t DB_REBUILD; /* rebuild process */
-
+/* debug bit groups */
+#define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD)
 
 /** debug facility (or subsystem/module) */
 struct daos_debug_fac {
@@ -142,7 +143,7 @@ debug_fac_load_env(void)
 
 	D_STRNDUP(fac_str, fac_env, DAOS_FAC_MAX_LEN);
 	if (fac_str == NULL) {
-		D_ERROR("D_STRNDUP of fac mask failed");
+		D_PRINT_ERR("D_STRNDUP of fac mask failed");
 		return;
 	}
 
@@ -227,7 +228,7 @@ daos_debug_init(char *logfile)
 	rc = d_log_init_adv("DAOS", logfile, DLOG_FLV_FAC,
 			    DLOG_INFO, DLOG_CRIT);
 	if (rc != 0) {
-		D_ERROR("Failed to init DAOS debug log: %d\n", rc);
+		D_PRINT_ERR("Failed to init DAOS debug log: %d\n", rc);
 		goto failed_unlock;
 	}
 
@@ -240,8 +241,8 @@ daos_debug_init(char *logfile)
 
 		rc = debug_fac_register(&debug_fac_dict[i]);
 		if (rc != 0) {
-			D_ERROR("Failed to add DAOS facility %s: %d\n",
-				debug_fac_dict[i].df_name, rc);
+			D_PRINT_ERR("Failed to add DAOS facility %s: %d\n",
+				    debug_fac_dict[i].df_name, rc);
 			goto failed_fini;
 		}
 	}
@@ -253,12 +254,19 @@ daos_debug_init(char *logfile)
 					 daos_bit_dict[i].db_name,
 					 daos_bit_dict[i].db_lname);
 		if (rc < 0) {
-			D_ERROR("Error allocating daos debug bit for %s",
-				daos_bit_dict[i].db_name);
+			D_PRINT_ERR("Error allocating daos debug bit for %s",
+				    daos_bit_dict[i].db_name);
 			return -DER_UNINIT;
 		}
 
 		*daos_bit_dict[i].db_bit = allocd_dbg_bit;
+	}
+
+	/* Register DAOS debug bit groups */
+	rc = d_log_dbg_grp_alloc(DB_GRP1, "daos_default");
+	if (rc < 0) {
+		D_PRINT_ERR("Error allocating daos debug group\n");
+		return -DER_UNINIT;
 	}
 
 	/* Sync DAOS debug env with libgurt */
