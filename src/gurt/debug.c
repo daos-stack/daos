@@ -54,14 +54,18 @@ int d_null_logfac;
 /*
  * Debug bits for common logic paths, can only have up to 16 different bits.
  */
-uint64_t DB_ANY; /** wildcard for unclassed debug messages */
+uint64_t DB_ANY; /** generic messages, no classification */
 /** function trace, tree/hash/lru operations, a very expensive one */
 uint64_t DB_TRACE;
 uint64_t DB_MEM; /**< memory operation */
 uint64_t DB_NET; /**< network operation */
 uint64_t DB_IO;	/**< object I/O */
 uint64_t DB_TEST; /**< test programs */
-uint64_t DB_ALL; /**< all of masks */
+/**
+ * all of masks - can be used to set all streams, or used to log specific
+ * messages by default.
+ */
+uint64_t DB_ALL; /** < = DLOG_DBG */
 /** Configurable debug bits (project-specific) */
 static uint64_t DB_OPT1;
 static uint64_t DB_OPT2;
@@ -103,6 +107,26 @@ struct d_debug_bit d_dbg_bit_dict[] = {
 
 };
 
+#define NUM_DBG_BIT_ENTRIES	ARRAY_SIZE(d_dbg_bit_dict)
+
+#define DBG_GRP_DICT_ENTRY()					\
+	{ .dg_mask = 0, .dg_name = NULL, .dg_name_size = 0 }
+
+struct d_debug_grp d_dbg_grp_dict[] = {
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+	DBG_GRP_DICT_ENTRY(),
+};
+
+#define NUM_DBG_GRP_ENTRIES	ARRAY_SIZE(d_dbg_grp_dict)
+
 #define PRI_DICT_ENTRY(prio, name)	\
 	{ .dd_prio = prio, .dd_name = name, .dd_name_size = sizeof(name) }
 
@@ -115,17 +139,18 @@ static struct d_debug_priority d_dbg_prio_dict[] = {
 	PRI_DICT_ENTRY(DLOG_EMERG, "fatal"),
 };
 
+#define NUM_DBG_PRIO_ENTRIES	ARRAY_SIZE(d_dbg_prio_dict)
+
 struct d_debug_data d_dbglog_data = {
 	/* count of alloc'd debug bits */
 	.dbg_bit_cnt		= 0,
+	/* count of alloc'd debug groups */
+	.dbg_grp_cnt		= 0,
 	/* 0 means we should use the mask provided by facilities */
 	.dd_mask		= 0,
 	/* optional priority output to stderr */
 	.dd_prio_err		= 0,
 };
-
-#define NUM_DBG_BIT_ENTRIES	ARRAY_SIZE(d_dbg_bit_dict)
-#define NUM_DBG_PRIO_ENTRIES	ARRAY_SIZE(d_dbg_prio_dict)
 
 #define BIT_CNT_TO_BIT_MASK(cnt)	(1 << (DLOG_DPRISHIFT + cnt))
 
@@ -144,7 +169,7 @@ d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname)
 	size_t		   name_len;
 	size_t		   lname_len;
 	int		   i;
-	uint64_t	   bit;
+	uint64_t	   bit = 0;
 	struct d_debug_bit *d;
 
 	if (name == NULL || dbgbit == NULL)
@@ -156,24 +181,24 @@ d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname)
 	else
 		lname_len = 0;
 
-	/* DB_ALL = DLOG_DBG */
-	if (strncasecmp(name, DB_ALL_BITS, name_len) == 0) {
-		*dbgbit = DLOG_DBG;
-		return 0;
-	}
-
 	/**
 	 * Allocate debug bit in gurt for given debug mask name.
 	 * Currently only 10 configurable debug mask options.
+	 * dbg_bit_cnt = [0-15]
 	 */
-	if (d_dbglog_data.dbg_bit_cnt > DB_OPTS) {
-		D_ERROR("Cannot allocate debug bit, all available debug mask "
-			"bits currently allocated.\n");
+	if (d_dbglog_data.dbg_bit_cnt >= (NUM_DBG_BIT_ENTRIES - 1)) {
+		D_PRINT_ERR("Cannot allocate debug bit, all available debug "
+			    "mask bits currently allocated.\n");
 		return -1;
 	}
 
-	bit = BIT_CNT_TO_BIT_MASK(d_dbglog_data.dbg_bit_cnt);
-	d_dbglog_data.dbg_bit_cnt++;
+	/**
+	 * DB_ALL = DLOG_DBG, does not require a specific bit
+	 */
+	if (strncasecmp(name, DB_ALL_BITS, name_len) != 0) {
+		bit = BIT_CNT_TO_BIT_MASK(d_dbglog_data.dbg_bit_cnt);
+		d_dbglog_data.dbg_bit_cnt++;
+	}
 
 	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
 		/**
@@ -183,9 +208,15 @@ d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname)
 		d = &d_dbg_bit_dict[i];
 		if (d->db_name != NULL) {
 			if (strncasecmp(d->db_name, name, name_len) == 0) {
-				if (*(d->db_bit) == 0)
-					*dbgbit = bit;
-				else /* debug bit already assigned */
+				if (*(d->db_bit) == 0) {
+					/* DB_ALL = DLOG_DBG */
+					if (strncasecmp(name, DB_ALL_BITS,
+							name_len) == 0)
+						*dbgbit = DLOG_DBG;
+					else
+						*dbgbit = bit;
+					*(d->db_bit) = bit;
+				} else /* debug bit already assigned */
 					*dbgbit = *(d->db_bit);
 				return 0;
 			}
@@ -202,6 +233,51 @@ d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname)
 		}
 	}
 
+	return -1;
+}
+
+/**
+ * Create an identifier/group name for muliple debug bits
+ *
+ * \param[in]	grpname		debug mask group name
+ * \param[in]	dbgmask		group mask
+ *
+ * \return			0 on success, -1 on error
+ */
+int
+d_log_dbg_grp_alloc(uint64_t dbgmask, char *grpname)
+{
+	int		   i;
+	size_t		   name_len;
+	struct d_debug_grp *g;
+
+	if (grpname == NULL || dbgmask == 0)
+		return -1;
+
+	name_len = strlen(grpname);
+
+	/**
+	 * Allocate debug group in gurt for given debug mask name.
+	 * Currently only 10 configurable debug group options.
+	 */
+	if (d_dbglog_data.dbg_grp_cnt > NUM_DBG_GRP_ENTRIES) {
+		D_PRINT_ERR("Cannot allocate debug group, all available debug "
+			    "group currently allocated.\n");
+		return -1;
+	}
+	d_dbglog_data.dbg_grp_cnt++;
+
+	for (i = 0; i < NUM_DBG_GRP_ENTRIES; i++) {
+		g = &d_dbg_grp_dict[i];
+		if (g->dg_name == NULL) {
+			g->dg_name = grpname;
+			g->dg_name_size = name_len;
+			g->dg_mask = dbgmask;
+			return 0;
+		}
+	}
+
+	/* no empty group entries available */
 	return -1;
 }
 
@@ -226,7 +302,7 @@ debug_prio_err_load_env(void)
 	}
 	/* invalid DD_STDERR option */
 	if (d_dbglog_data.dd_prio_err == 0)
-		D_ERROR("DD_STDERR = %s - invalid option\n", env);
+		D_PRINT_ERR("DD_STDERR = %s - invalid option\n", env);
 }
 
 /** Load the debug mask from the environment variable. */
@@ -238,6 +314,7 @@ debug_mask_load_env(void)
 	char		    *cur;
 	int		    i;
 	struct d_debug_bit *d;
+	struct d_debug_grp *g;
 
 	mask_env = getenv(DD_MASK_ENV);
 	if (mask_env == NULL)
@@ -245,7 +322,7 @@ debug_mask_load_env(void)
 
 	D_STRNDUP(mask_str, mask_env, DBG_ENV_MAX_LEN);
 	if (mask_str == NULL) {
-		D_ERROR("D_STRNDUP of debug mask failed");
+		D_PRINT_ERR("D_STRNDUP of debug mask failed");
 		return;
 	}
 
@@ -253,18 +330,26 @@ debug_mask_load_env(void)
 	while (cur != NULL) {
 		for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
 			d = &d_dbg_bit_dict[i];
-			if (d->db_name != NULL && strncasecmp(cur, d->db_name,
-			    d->db_name_size) == 0) {
-				d_dbglog_data.dd_mask |=
-					*(d->db_bit);
+			if (d->db_name != NULL &&
+			    strncasecmp(cur, d->db_name,
+					d->db_name_size) == 0) {
+				d_dbglog_data.dd_mask |= *(d->db_bit);
 				break;
 			}
 			if (d->db_lname != NULL &&
 			    strncasecmp(cur, d->db_lname,
-					d->db_lname_size)
-					== 0) {
-				d_dbglog_data.dd_mask |=
-					*(d->db_bit);
+					d->db_lname_size) == 0) {
+				d_dbglog_data.dd_mask |= *(d->db_bit);
+				break;
+			}
+		}
+		/* check if DD_MASK entry is a group name */
+		for (i = 0; i < NUM_DBG_GRP_ENTRIES; i++) {
+			g = &d_dbg_grp_dict[i];
+			if (g->dg_name != NULL &&
+			    strncasecmp(cur, g->dg_name,
+					g->dg_name_size) == 0) {
+				d_dbglog_data.dd_mask |= g->dg_mask;
 				break;
 			}
 		}
@@ -293,15 +378,14 @@ d_log_sync_mask_helper(bool acquire_lock)
 		goto out;
 	log_mask = getenv(CRT_LOG_MASK_ENV);
 	if (log_mask != NULL)
-		fprintf(stderr, CRT_LOG_MASK_ENV " deprecated. Please use "
-			D_LOG_MASK_ENV "\n");
+		D_PRINT_ERR(CRT_LOG_MASK_ENV " deprecated. Please use "
+			    D_LOG_MASK_ENV "\n");
 
 out:
 	if (log_mask != NULL)
 		d_log_setmasks(log_mask, -1);
 	else
-		fprintf(stderr, D_LOG_MASK_ENV
-			" not set, using default mask.\n");
+		D_PRINT_ERR(D_LOG_MASK_ENV " not set, using default mask.\n");
 
 	if (acquire_lock)
 		D_MUTEX_UNLOCK(&d_log_lock);
@@ -341,19 +425,19 @@ setup_clog_facnamemask(void)
 	/* add crt internally used the log facilities */
 	rc = D_INIT_LOG_FAC(misc, "MISC", "misc");
 	if (rc != 0) {
-		D_ERROR("MISC log facility failed to init; rc=%d\n", rc);
+		D_PRINT_ERR("MISC log facility failed to init; rc=%d\n", rc);
 		return rc;
 	}
 
 	rc = D_INIT_LOG_FAC(mem, "MEM", "memory");
 	if (rc != 0) {
-		D_ERROR("MEM log facility failed to init; rc=%d\n", rc);
+		D_PRINT_ERR("MEM log facility failed to init; rc=%d\n", rc);
 		return rc;
 	}
 
 	rc = D_INIT_LOG_FAC(null, "NULL", "null");
 	if (rc != 0) {
-		D_ERROR("NULL log facility failed to init; rc=%d\n", rc);
+		D_PRINT_ERR("NULL log facility failed to init; rc=%d\n", rc);
 		return rc;
 	}
 
@@ -383,8 +467,8 @@ setup_dbg_namebit(void)
 			rc = d_log_dbg_bit_alloc(&allocd_dbg_bit, d->db_name,
 						 d->db_lname);
 			if (rc < 0) {
-				D_ERROR("Error allocating debug bit for %s",
-					d->db_name);
+				D_PRINT_ERR("Error allocating debug bit for %s",
+					    d->db_name);
 				return -DER_UNINIT;
 			}
 
@@ -447,15 +531,13 @@ d_log_init(void)
 
 	log_file = getenv(CRT_LOG_FILE_ENV);
 	if (log_file != NULL)
-		fprintf(stderr, CRT_LOG_FILE_ENV " deprecated. Please use "
-			D_LOG_FILE_ENV "\n");
+		D_PRINT_ERR(CRT_LOG_FILE_ENV " deprecated. Please use "
+			    D_LOG_FILE_ENV "\n");
 
 out:
 	if (log_file == NULL || strlen(log_file) == 0) {
 		flags |= DLOG_FLV_STDOUT;
 		log_file = NULL;
-		fprintf(stderr, D_LOG_FILE_ENV
-			" not set, printing log to stdout.\n");
 	}
 
 	return d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG);

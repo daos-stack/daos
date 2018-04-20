@@ -126,10 +126,10 @@
 
 /** facility name and mask info */
 struct dlog_fac {
-	int fac_mask;		/**< log level for this facility */
-	char *fac_aname;	/**< abbreviated name of this facility */
-	char *fac_lname;	/**< optional long name of this facility */
-	bool is_nullfac;	/**< special case facility, not logged */
+	char	*fac_aname;	/**< abbreviated name of this facility */
+	char	*fac_lname;	/**< optional long name of this facility */
+	int	 fac_mask;	/**< log level for this facility */
+	bool	 is_nullfac;	/**< special case facility, not logged */
 };
 
 /** dlog global state */
@@ -142,12 +142,14 @@ struct d_log_xstate {
 };
 
 struct d_debug_data {
-	/** alloc'd debug bit count */
-	int			dbg_bit_cnt;
 	/** debug bitmask, e.g. DB_IO */
 	uint64_t		dd_mask;
 	/** priority level that should be output to stderr */
 	uint64_t		dd_prio_err;
+	/** alloc'd debug bit count */
+	int			dbg_bit_cnt;
+	/** alloc'd debug group count */
+	int			dbg_grp_cnt;
 };
 
 /**
@@ -160,8 +162,8 @@ struct d_debug_data {
  */
 struct d_debug_priority {
 	char			*dd_name;
-	uint64_t		dd_prio;
-	size_t			dd_name_size;
+	uint64_t		 dd_prio;
+	size_t			 dd_name_size;
 };
 
 /*
@@ -172,8 +174,18 @@ struct d_debug_bit {
 	uint64_t		*db_bit;
 	char			*db_name;
 	char			*db_lname;
-	size_t			db_name_size;
-	size_t			db_lname_size;
+	size_t			 db_name_size;
+	size_t			 db_lname_size;
+};
+
+/*
+ * Predefined debug groups, multiple debug bits can be combined to form one
+ * group, e.g. "daos_dbg" = DB_IO | DB_OPT1 | DB_OPT2
+ */
+struct d_debug_grp {
+	char			*dg_name;
+	size_t			 dg_name_size;
+	uint64_t		 dg_mask;
 };
 
 #if defined(__cplusplus)
@@ -194,6 +206,16 @@ extern struct d_debug_data d_dbglog_data;
  *
  */
 int d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname);
+
+/**
+ * Create an identifier/group name for muliple debug bits
+ *
+ * \param[in]	grpname		debug mask group name
+ * \param[in]	dbgmask		mask of all bits in group
+ *
+ * \return		0 on success, -1 on error
+ */
+int d_log_dbg_grp_alloc(uint64_t dbgmask, char *grpname);
 
 /**
  * log a message using stdarg list without checking filtering

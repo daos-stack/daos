@@ -72,7 +72,6 @@ extern uint64_t DB_TEST;
 extern uint64_t DB_ALL;
 
 #define DB_ALL_BITS	"all"
-#define DB_OPTS		 16 /**< number of configurable debug bits avail */
 
 #define D_LOG_FILE_ENV	"D_LOG_FILE"	/**< Env to specify log file */
 #define D_LOG_MASK_ENV	"D_LOG_MASK"	/**< Env to specify log mask */
