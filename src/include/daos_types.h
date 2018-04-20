@@ -211,6 +211,8 @@ typedef struct {
 	uint32_t			pi_ntargets;
 	/** Number of deactivated targets */
 	uint32_t			pi_ndisabled;
+	/** Latest pool map version */
+	uint32_t			pi_map_ver;
 	/** Mode */
 	unsigned int			pi_mode;
 	/** current raft leader */

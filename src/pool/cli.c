@@ -296,9 +296,10 @@ out_unlock:
 
 	if (info != NULL && rc == 0) {
 		uuid_copy(info->pi_uuid, pool->dp_pool);
-		info->pi_ntargets = map_buf->pb_target_nr;
-		info->pi_mode = mode;
-		info->pi_leader = leader_rank;
+		info->pi_ntargets	= map_buf->pb_target_nr;
+		info->pi_map_ver	= map_version;
+		info->pi_mode		= mode;
+		info->pi_leader		= leader_rank;
 	}
 
 	return rc;

@@ -420,6 +420,7 @@ cmd_query_pool_status(int argc, const char **argv, void *ctx)
 	if (rc == 0) {
 		printf("target count: %i\n", info.pi_ntargets);
 		printf("disabled targets: %i\n", info.pi_ndisabled);
+		printf("latest pool map version: %i\n", info.pi_map_ver);
 		printf("rebuild status:\n");
 		printf("in rebuilding: %i\n", !info.pi_rebuild_st.rs_done);
 		printf("pool map version in building: %i\n",
