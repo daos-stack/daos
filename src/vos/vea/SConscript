@@ -7,5 +7,7 @@ def scons():
     denv.AppendUnique(CPPPATH=['#/src/vos/vea/'])
     denv.Library('vea', Glob('*.c'), LIBS=['daos_common', 'gurt'])
 
+    SConscript('tests/SConscript', exports='denv')
+
 if __name__ == "SCons.Script":
     scons()

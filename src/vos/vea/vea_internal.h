@@ -155,6 +155,9 @@ int verify_free_entry(uint64_t *off, struct vea_free_extent *vfe);
 int verify_vec_entry(uint64_t *off, struct vea_ext_vector *vec);
 int ext_adjacent(struct vea_free_extent *cur, struct vea_free_extent *next);
 int verify_resrvd_ext(struct vea_resrvd_ext *resrvd);
+int vea_dump(struct vea_space_info *vsi, bool transient);
+int vea_verify_alloc(struct vea_space_info *vsi, bool transient,
+		     uint64_t off, uint32_t cnt);
 
 /* vea_alloc.c */
 void free_class_remove(struct vea_free_class *vfc, struct vea_entry *entry);
