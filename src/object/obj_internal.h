@@ -100,6 +100,26 @@ struct dc_object {
 	struct dc_obj_shard	**cob_obj_shards;
 };
 
+struct ds_iter_arg {
+	struct obj_key_enum_in *oei;
+	struct obj_key_enum_out *oeo;
+	daos_hash_out_t dkey_anchor;
+	daos_hash_out_t akey_anchor;
+	daos_hash_out_t anchor;
+	unsigned int	map_version;
+	unsigned int	sgl_idx;	/* sgl index for the sgl of iteration */
+	unsigned int	kds_idx;	/* kds index for kds buf of iteration */
+	int		rnum;		/* records num only used for rec iter */
+	daos_size_t	rsize;		/* record size only used for rec iter */
+};
+
+struct ds_task_arg {
+	unsigned int    opc;
+	union {
+		struct ds_iter_arg iter_arg;
+	} u;
+};
+
 /**
  * Temporary solution for packing the tag/shard into the hash out,
  * tag stays at 25-28 bytes of daos_hash_out_t->body; shard stays
@@ -173,19 +193,17 @@ int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       daos_iod_t *iods, daos_sg_list_t *sgls,
 		       daos_iom_t *maps, unsigned int *map_ver,
 		       tse_task_t *task);
-int dc_obj_shard_list_key(struct dc_obj_shard *shard, uint32_t op,
-			  daos_epoch_t epoch, daos_key_t *key, uint32_t *nr,
-			  daos_key_desc_t *kds, daos_sg_list_t *sgl,
-			  daos_hash_out_t *anchor, unsigned int *map_ver,
-			  tse_task_t *task);
-int dc_obj_shard_list_rec(struct dc_obj_shard *shard, uint32_t op,
-			 daos_epoch_t epoch, daos_key_t *dkey,
-			 daos_key_t *akey, daos_iod_type_t type,
-			 daos_size_t *size, uint32_t *nr,
-			 daos_recx_t *recxs, daos_epoch_range_t *eprs,
-			 uuid_t *cookies, uint32_t *versions,
-			 daos_hash_out_t *anchor, unsigned int *map_ver,
-			 bool incr_order, tse_task_t *task);
+
+int
+dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
+		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
+		  daos_iod_type_t type, daos_size_t *size, uint32_t *nr,
+		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		  daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		  daos_hash_out_t *anchor, daos_hash_out_t *dkey_anchor,
+		  daos_hash_out_t *akey_anchor, unsigned int *map_ver,
+		  tse_task_t *task);
+
 int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,
 		       daos_epoch_t epoch, daos_key_t *dkey,
 		       daos_key_t *akeys, unsigned int akey_nr,
@@ -222,5 +240,10 @@ obj_dkey2hash(daos_key_t *dkey)
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
 			       dkey->iov_len, 5731);
 }
+
+struct obj_enum_key {
+	daos_key_desc_t	key_desc;
+	char		key_buf[0];
+};
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

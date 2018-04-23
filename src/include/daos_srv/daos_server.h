@@ -217,11 +217,11 @@ typedef ABT_pool (*dss_abt_pool_choose_cb_t)(crt_rpc_t *rpc, ABT_pool *pools);
 void dss_abt_pool_choose_cb_register(unsigned int mod_id,
 				     dss_abt_pool_choose_cb_t cb);
 int dss_ult_create(void (*func)(void *), void *arg,
-		   int stream_id, ABT_thread *ult);
+		   int stream_id, size_t stack_size, ABT_thread *ult);
 int dss_ult_create_all(void (*func)(void *), void *arg);
 int dss_ult_create_execute(int (*func)(void *), void *arg,
 			   void (*user_cb)(void *), void *cb_args,
-			   int stream_id);
+			   int stream_id, size_t stack_size);
 
 /* Pack return codes with additional argument to reduce */
 struct dss_stream_arg_type {
@@ -384,9 +384,6 @@ int ds_obj_open(daos_handle_t coh, daos_obj_id_t oid,
 		daos_handle_t *oh);
 int ds_obj_close(daos_handle_t obj_hl);
 
-int ds_obj_single_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
-			      uint32_t *nr, daos_key_desc_t *kds,
-			      daos_sg_list_t *sgl, daos_hash_out_t *anchor);
 int ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
 		 daos_key_t *dkey, uint32_t *nr,
 		 daos_key_desc_t *kds, daos_sg_list_t *sgl,
@@ -397,10 +394,9 @@ int ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		 daos_iod_t *iods, daos_sg_list_t *sgls,
 		 daos_iom_t *maps);
 
-int ds_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
-		uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		uuid_t *cookies, uint32_t *versions, daos_hash_out_t *anchor,
-		bool incr);
-
+int ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		    daos_key_t *akey, daos_size_t *size, uint32_t *nr,
+		    daos_key_desc_t *kds, d_sg_list_t *sgl,
+		    daos_hash_out_t *anchor, daos_hash_out_t *dkey_anchor,
+		    daos_hash_out_t *akey_anchor);
 #endif /* __DSS_API_H__ */

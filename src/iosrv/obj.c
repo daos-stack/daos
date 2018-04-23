@@ -101,23 +101,6 @@ ds_obj_close(daos_handle_t oh)
 }
 
 int
-ds_obj_single_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
-			      uint32_t *nr, daos_key_desc_t *kds,
-			      daos_sg_list_t *sgl, daos_hash_out_t *anchor)
-{
-	tse_task_t	*task;
-	int		rc;
-
-	rc = dc_obj_shard_list_dkey_task_create(oh, epoch, nr, kds,
-						sgl, anchor, NULL,
-						dss_tse_scheduler(), &task);
-	if (rc)
-		return rc;
-
-	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh);
-}
-
-int
 ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		 uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		 daos_hash_out_t *anchor)
@@ -151,19 +134,18 @@ ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 }
 
 int
-ds_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		 daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
-		 uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		 uuid_t *cookies, uint32_t *versions, daos_hash_out_t *anchor,
-		 bool incr)
+ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
+		daos_key_desc_t *kds, d_sg_list_t *sgl, daos_hash_out_t *anchor,
+		daos_hash_out_t *dkey_anchor, daos_hash_out_t *akey_anchor)
 {
 	tse_task_t	*task;
 	int		rc;
 
-	rc = dc_obj_list_recx_task_create(oh, epoch, dkey, akey, type, size,
-					  nr, recxs, eprs, cookies, versions,
-					  anchor, incr, NULL,
-					  dss_tse_scheduler(), &task);
+	rc = dc_obj_list_obj_task_create(oh, epoch, dkey, akey, size,
+					 nr, kds, sgl, anchor, dkey_anchor,
+					 akey_anchor, true, NULL,
+					 dss_tse_scheduler(), &task);
 	if (rc)
 		return rc;
 

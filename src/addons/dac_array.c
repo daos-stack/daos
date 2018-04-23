@@ -1284,7 +1284,6 @@ get_array_size_cb(tse_task_t *task, void *data)
 	list_args->nr		= &params->nr;
 	list_args->recxs	= &params->recx;
 	list_args->eprs		= NULL;
-	list_args->cookies	= NULL;
 	list_args->incr_order	= false;
 	list_args->versions	= NULL;
 	list_args->anchor	= &params->anchor;

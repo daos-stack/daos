@@ -1150,13 +1150,13 @@ rdb_raft_start(struct rdb *db)
 	raft_set_election_timeout(db->d_raft, election_timeout);
 	raft_set_request_timeout(db->d_raft, request_timeout);
 
-	rc = dss_ult_create(rdb_recvd, db, -1, &db->d_recvd);
+	rc = dss_ult_create(rdb_recvd, db, -1, 0, &db->d_recvd);
 	if (rc != 0)
 		goto err_nodes;
-	rc = dss_ult_create(rdb_timerd, db, -1, &db->d_timerd);
+	rc = dss_ult_create(rdb_timerd, db, -1, 0, &db->d_timerd);
 	if (rc != 0)
 		goto err_recvd;
-	rc = dss_ult_create(rdb_callbackd, db, -1, &db->d_callbackd);
+	rc = dss_ult_create(rdb_callbackd, db, -1, 0, &db->d_callbackd);
 	if (rc != 0)
 		goto err_timerd;
 

@@ -761,8 +761,9 @@ struct shard_auxi_args {
 
 struct obj_list_arg {
 	struct dc_object	*obj;
-	daos_hash_out_t		*anchor;
-	unsigned int		 single_shard:1;
+	daos_hash_out_t		*anchor;	/* anchor for record */
+	daos_hash_out_t		*dkey_anchor;	/* anchor for dkey */
+	daos_hash_out_t		*akey_anchor;	/* anchor for akey */
 };
 
 struct shard_update_args {
@@ -813,10 +814,10 @@ shard_task_remove(tse_task_t *task, void *arg)
 }
 
 static void
-obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg)
+obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 {
 	struct dc_object       *obj = arg->obj;
-	daos_hash_out_t	       *anchor = arg->anchor;
+	daos_hash_out_t	       *anchor = arg->dkey_anchor;
 	uint32_t		shard = dc_obj_anchor2shard(anchor);
 	int			grp_size;
 
@@ -829,7 +830,7 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg)
 	if (!daos_hash_is_eof(anchor)) {
 		D_DEBUG(DB_IO, "More keys in shard %d\n", shard);
 	} else if ((shard < obj->cob_layout->ol_nr - grp_size) &&
-		   !arg->single_shard) {
+		   opc != DAOS_OBJ_RPC_ENUMERATE) {
 		shard += grp_size;
 		D_DEBUG(DB_IO, "next shard %d grp %d nr %u\n",
 			shard, grp_size, obj->cob_layout->ol_nr);
@@ -857,9 +858,20 @@ obj_comp_cb(tse_task_t *task, void *data)
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 		arg = data;
 		obj = arg->obj;
-		obj_list_dkey_cb(task, arg);
+		obj_list_dkey_cb(task, arg, obj_auxi->opc);
+		break;
+	case DAOS_OBJ_RPC_ENUMERATE:
+		arg = data;
+		obj = arg->obj;
+		if (daos_hash_is_eof(arg->dkey_anchor))
+			D_DEBUG(DB_IO, "Enumerated completed\n");
 		break;
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+		arg = data;
+		obj = arg->obj;
+		if (daos_hash_is_eof(arg->akey_anchor))
+			D_DEBUG(DB_IO, "Enumerated completed\n");
+		break;
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		arg = data;
 		obj = arg->obj;
@@ -1320,12 +1332,13 @@ out_task:
 
 static int
 dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
-		     daos_key_t *dkey, daos_key_t *akey, daos_iod_type_t type,
-		     daos_size_t *size, uint32_t *nr, daos_key_desc_t *kds,
+		     daos_key_t *dkey, daos_key_t *akey,
+		     daos_iod_type_t type, daos_size_t *size,
+		     uint32_t *nr, daos_key_desc_t *kds,
 		     daos_sg_list_t *sgl, daos_recx_t *recxs,
-		     daos_epoch_range_t *eprs, uuid_t *cookies,
-		     uint32_t *versions, daos_hash_out_t *anchor,
-		     bool incr_order, bool single_shard, tse_task_t *task)
+		     daos_epoch_range_t *eprs, daos_hash_out_t *anchor,
+		     daos_hash_out_t *dkey_anchor, daos_hash_out_t *akey_anchor,
+		     bool incr_order, tse_task_t *task)
 {
 	struct dc_object	*obj;
 	struct dc_obj_shard	*obj_shard;
@@ -1347,12 +1360,13 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 
 	list_args.obj = obj;
 	list_args.anchor = anchor;
-	list_args.single_shard = single_shard;
+	list_args.dkey_anchor = dkey_anchor;
+	list_args.akey_anchor = akey_anchor;
 
 	obj_auxi = tse_task_stack_push(task, sizeof(*obj_auxi));
 	obj_auxi->opc = op;
-	rc = tse_task_register_comp_cb(task, obj_comp_cb,
-				       &list_args, sizeof(list_args));
+	rc = tse_task_register_comp_cb(task, obj_comp_cb, &list_args,
+				       sizeof(list_args));
 	if (rc != 0) {
 		/* NB: process_rc_cb() will release refcount in other cases */
 		obj_decref(obj);
@@ -1363,20 +1377,26 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	if (rc)
 		D_GOTO(out_task, rc);
 
-	dkey_hash = obj_dkey2hash(dkey);
-	if (op == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
-		shard = dc_obj_anchor2shard(anchor);
+	if (dkey == NULL) {
+		if (op != DAOS_OBJ_DKEY_RPC_ENUMERATE &&
+		    op != DAOS_OBJ_RPC_ENUMERATE) {
+			D_ERROR("No dkey for opc %x\n", op);
+			D_GOTO(out_task, rc = -DER_INVAL);
+		}
+
+		shard = dc_obj_anchor2shard(dkey_anchor);
 		shard = obj_grp_valid_shard_get(obj, shard, map_ver, op);
 		if (shard < 0)
 			D_GOTO(out_task, rc = shard);
 
-		dc_obj_shard2anchor(anchor, shard);
+		dc_obj_shard2anchor(dkey_anchor, shard);
 	} else {
+		dkey_hash = obj_dkey2hash(dkey);
 		shard = obj_dkeyhash2shard(obj, dkey_hash, map_ver, op);
 		if (shard < 0)
 			D_GOTO(out_task, rc = shard);
 
-		dc_obj_shard2anchor(anchor, shard);
+		tse_task_stack_push_data(task, &dkey_hash, sizeof(dkey_hash));
 	}
 
 	/** object will be decref by task complete cb */
@@ -1384,20 +1404,15 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
-	tse_task_stack_push_data(task, &dkey_hash, sizeof(dkey_hash));
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->map_ver_reply = map_ver;
-	if (op == DAOS_OBJ_RECX_RPC_ENUMERATE)
-		rc = dc_obj_shard_list_rec(obj_shard, op, epoch, dkey, akey,
-					   type, size, nr, recxs, eprs,
-					   cookies, versions, anchor,
-					   &obj_auxi->map_ver_reply,
-					   incr_order, task);
-	else
-		rc = dc_obj_shard_list_key(obj_shard, op, epoch, dkey, nr, kds,
-				sgl, anchor, &obj_auxi->map_ver_reply, task);
+	rc = dc_obj_shard_list(obj_shard, op, epoch, dkey, akey, type,
+			       size, nr, kds, sgl, recxs, eprs, anchor,
+			       dkey_anchor, akey_anchor,
+			       &obj_auxi->map_ver_reply, task);
 
-	D_DEBUG(DB_IO, "Enumerate keys in shard %d: rc %d\n", shard, rc);
+	D_DEBUG(DB_IO, "Enumerate in shard %d: rc %d\n", shard, rc);
+
 	obj_shard_close(obj_shard);
 
 	return rc;
@@ -1418,8 +1433,8 @@ dc_obj_list_dkey(tse_task_t *task)
 	return dc_obj_list_internal(args->oh, DAOS_OBJ_DKEY_RPC_ENUMERATE,
 				    args->epoch, NULL, NULL, DAOS_IOD_NONE,
 				    NULL, args->nr, args->kds, args->sgl,
-				    NULL, NULL, NULL, NULL, args->anchor,
-				    true, false, task);
+				    NULL, NULL, NULL, args->anchor, NULL,
+				    true, task);
 }
 
 int
@@ -1434,7 +1449,23 @@ dc_obj_list_akey(tse_task_t *task)
 				    args->epoch, args->dkey, NULL,
 				    DAOS_IOD_NONE, NULL, args->nr, args->kds,
 				    args->sgl, NULL, NULL, NULL, NULL,
-				    args->anchor, true, false, task);
+				    args->anchor, true, task);
+}
+
+int
+dc_obj_list_obj(tse_task_t *task)
+{
+	daos_obj_list_obj_t	*args;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return dc_obj_list_internal(args->oh, DAOS_OBJ_RPC_ENUMERATE,
+				    args->epoch, args->dkey, args->akey,
+				    DAOS_IOD_NONE, args->size, args->nr,
+				    args->kds, args->sgl, NULL, NULL,
+				    args->anchor, args->dkey_anchor,
+				    args->akey_anchor, true, task);
 }
 
 int
@@ -1447,24 +1478,9 @@ dc_obj_list_rec(tse_task_t *task)
 
 	return dc_obj_list_internal(args->oh, DAOS_OBJ_RECX_RPC_ENUMERATE,
 				    args->epoch, args->dkey, args->akey,
-				    args->type, args->size, args->nr, NULL,
-				    NULL, args->recxs, args->eprs,
-				    args->cookies, args->versions, args->anchor,
-				    args->incr_order, false, task);
-}
-
-int
-dc_obj_single_shard_list_dkey(tse_task_t *task)
-{
-	daos_obj_list_dkey_t	*args;
-
-	args = dc_task_get_args(task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
-	return dc_obj_list_internal(args->oh, DAOS_OBJ_DKEY_RPC_ENUMERATE,
-				    args->epoch, NULL, NULL, DAOS_IOD_NONE,
-				    NULL, args->nr, args->kds, args->sgl, NULL,
-				    NULL, NULL, NULL, args->anchor, true, true,
+				    args->type, args->size, args->nr,
+				    NULL, NULL, args->recxs, args->eprs,
+				    args->anchor, NULL, NULL, args->incr_order,
 				    task);
 }
 

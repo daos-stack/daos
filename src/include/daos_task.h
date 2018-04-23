@@ -102,6 +102,7 @@ typedef enum {
 	DAOS_OPC_OBJ_LIST_DKEY,
 	DAOS_OPC_OBJ_LIST_AKEY,
 	DAOS_OPC_OBJ_LIST_RECX,
+	DAOS_OPC_OBJ_LIST_OBJ,
 
 	/** Array APIs */
 	DAOS_OPC_ARRAY_CREATE,
@@ -444,11 +445,32 @@ typedef struct {
 	uint32_t		*nr;
 	daos_recx_t		*recxs;
 	daos_epoch_range_t	*eprs;
-	uuid_t			*cookies;
 	daos_hash_out_t		*anchor;
 	uint32_t		*versions;
 	bool			incr_order;
 } daos_obj_list_recx_t;
+
+/* argument structure for object internal task */
+typedef struct {
+	daos_handle_t		oh;
+	daos_epoch_t		epoch;
+	daos_key_t		*dkey;
+	daos_key_t		*akey;
+	daos_size_t		*size;	/*total buf size for sgl buf, in case
+					 *it uses bulk transfer
+					 */
+	uint32_t		*nr;	/* number of kds entries, please refer
+					 * daos_obj_list_recx() for other
+					 * parameters
+					 */
+	daos_key_desc_t		*kds;
+	daos_sg_list_t		*sgl;
+	daos_hash_out_t		*anchor;
+	daos_hash_out_t		*dkey_anchor;
+	daos_hash_out_t		*akey_anchor;
+	uint32_t		*versions;
+	bool			incr_order;
+} daos_obj_list_obj_t;
 
 typedef struct {
 	daos_handle_t	coh;

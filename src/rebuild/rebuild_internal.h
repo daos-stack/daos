@@ -33,12 +33,17 @@
 #include <daos/rpc.h>
 #include <daos/btree.h>
 
-struct rebuild_dkey {
-	daos_key_t	rd_dkey;
-	d_list_t	rd_list;
-	uuid_t		rd_cont_uuid;
-	daos_unit_oid_t	rd_oid;
-	daos_epoch_t	rd_epoch;
+struct rebuild_one {
+	daos_key_t	ro_dkey;
+	d_list_t	ro_list;
+	uuid_t		ro_cont_uuid;
+	daos_unit_oid_t	ro_oid;
+	daos_epoch_t	ro_epoch;
+	daos_iod_t	*ro_iods;
+	unsigned int	ro_iod_num;
+	unsigned int	ro_rec_cnt;
+	uuid_t		ro_cookie;
+	uint64_t	ro_version;
 };
 
 struct rebuild_puller {
@@ -47,7 +52,7 @@ struct rebuild_puller {
 	ABT_mutex	rp_lock;
 	/** serialize initialization of ULTs */
 	ABT_cond	rp_fini_cond;
-	d_list_t	rp_dkey_list;
+	d_list_t	rp_one_list;
 	unsigned int	rp_ult_running:1;
 };
 
@@ -84,6 +89,9 @@ struct rebuild_tgt_pool_tracker {
 	uint64_t		rt_leader_term;
 	ABT_mutex		rt_fini_lock;
 	ABT_cond		rt_fini_cond;
+	uint64_t		rt_rebuilding_objs;
+	uint64_t		rt_reported_obj_cnt;
+	uint64_t		rt_reported_rec_cnt;
 
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,
@@ -273,5 +281,7 @@ rebuild_global_pool_tracker_lookup(uuid_t pool_uuid, unsigned int ver);
 int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *master_rpt,
 			     struct rebuild_iv *iv);
+void
+rebuild_one_destroy(struct rebuild_one *rdone);
 
 #endif /* __REBUILD_INTERNAL_H_ */

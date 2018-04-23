@@ -719,13 +719,13 @@ enumerate_simple(void **state)
 		if (number == 0)
 			continue; /* loop should break for EOF */
 
-		key_nr += number;
 		for (ptr = buf, i = 0; i < number; i++) {
 			snprintf(key, kds[i].kd_key_len + 1, "%s", ptr);
-			print_message("i %d key %s len %d\n", i, key,
+			print_message("i %d key %s len %d\n", i + key_nr, key,
 				      (int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 		}
+		key_nr += number;
 	}
 	assert_int_equal(key_nr, ENUM_KEY_NR);
 
@@ -746,13 +746,13 @@ enumerate_simple(void **state)
 		if (number == 0)
 			break; /* loop should break for EOF */
 
-		key_nr += number;
 		for (ptr = buf, i = 0; i < number; i++) {
 			snprintf(key, kds[i].kd_key_len + 1, "%s", ptr);
-			print_message("i %d key %s len %d\n", i, key,
+			print_message("i %d key %s len %d\n", i + key_nr, key,
 				     (int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 		}
+		key_nr += number;
 	}
 	assert_int_equal(key_nr, ENUM_KEY_NR);
 
@@ -777,12 +777,12 @@ enumerate_simple(void **state)
 		if (number == 0)
 			break; /* loop should break for EOF */
 
-		key_nr += number;
 		for (i = 0; i < number; i++) {
-			print_message("i %d size %d idx %d\n", i, (int)size,
-				      (int)recxs[i].rx_idx);
+			print_message("i %d size %d idx %d\n", i + key_nr,
+				      (int)size, (int)recxs[i].rx_idx);
 			assert_int_equal(size, strlen("data") + 1);
 		}
+		key_nr += number;
 	}
 
 	free(buf);

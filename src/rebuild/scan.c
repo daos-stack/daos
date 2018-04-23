@@ -346,7 +346,7 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 
-	rc = dbtree_create_inplace(tree_class, 0, 4, &uma,
+	rc = dbtree_create_inplace(tree_class, 0, 32, &uma,
 				   broot, &root.root_hdl);
 	if (rc) {
 		D_ERROR("failed to create rebuild tree: %d\n", rc);
@@ -788,7 +788,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 
 	rpt_get(rpt);
-	rc = dss_ult_create(rebuild_tgt_status_check, rpt, -1, NULL);
+	rc = dss_ult_create(rebuild_tgt_status_check, rpt, -1, 0, NULL);
 	if (rc) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
@@ -822,7 +822,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rpt_get(rpt);
 	scan_arg->rpt = rpt;
 	/* step-3: start scann leader */
-	rc = dss_ult_create(rebuild_scan_leader, scan_arg, -1, NULL);
+	rc = dss_ult_create(rebuild_scan_leader, scan_arg, -1, 0, NULL);
 	if (rc != 0) {
 		rpt_put(rpt);
 		D_GOTO(out_f_rankfs, rc);

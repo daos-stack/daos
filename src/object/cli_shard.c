@@ -146,7 +146,7 @@ struct obj_rw_args {
 static int
 dc_rw_cb(tse_task_t *task, void *arg)
 {
-	struct obj_rw_args	*rw_args = (struct obj_rw_args *)arg;
+	struct obj_rw_args	*rw_args = arg;
 	struct obj_rw_in	*orw;
 	struct obj_rw_out	*orwo;
 	int			opc;
@@ -257,39 +257,6 @@ static uint32_t
 obj_shard_dkeyhash2tag(struct dc_obj_shard *obj_shard, uint64_t hash)
 {
 	return hash % obj_shard->do_part_nr;
-}
-
-static uint64_t
-iods_data_len(daos_iod_t *iods, int nr)
-{
-	uint64_t iod_length = 0;
-	int	 i;
-
-	for (i = 0; i < nr; i++) {
-		uint64_t len = daos_iod_len(&iods[i]);
-
-		if (len == -1) /* unknown */
-			return 0;
-
-		iod_length += len;
-	}
-	return iod_length;
-}
-
-static daos_size_t
-sgls_buf_len(daos_sg_list_t *sgls, int nr)
-{
-	daos_size_t sgls_len = 0;
-	int	    i;
-
-	if (sgls == NULL)
-		return 0;
-
-	/* create bulk transfer for daos_sg_list */
-	for (i = 0; i < nr; i++)
-		sgls_len += daos_sgl_buf_len(&sgls[i]);
-
-	return sgls_len;
 }
 
 static int
@@ -406,10 +373,10 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_iods.ca_count = nr;
 	orw->orw_iods.ca_arrays = iods;
 
-	total_len = iods_data_len(iods, nr);
+	total_len = daos_iods_len(iods, nr);
 	/* If it is read, let's try to get the size from sg list */
-	if (total_len == 0 && opc == DAOS_OBJ_RPC_FETCH)
-		total_len = sgls_buf_len(sgls, nr);
+	if (total_len == -1 && opc == DAOS_OBJ_RPC_FETCH)
+		total_len = daos_sgls_buf_len(sgls, nr);
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FAIL))
 		D_GOTO(out_req, rc = -DER_INVAL);
@@ -598,13 +565,13 @@ struct obj_enum_args {
 	uint32_t		*eaa_nr;
 	daos_key_desc_t		*eaa_kds;
 	daos_hash_out_t		*eaa_anchor;
+	daos_hash_out_t		*eaa_dkey_anchor;
+	daos_hash_out_t		*eaa_akey_anchor;
 	struct dc_obj_shard	*eaa_obj;
 	daos_sg_list_t		*eaa_sgl;
-	daos_epoch_range_t	*eaa_eprs;
 	daos_recx_t		*eaa_recxs;
+	daos_epoch_range_t	*eaa_eprs;
 	daos_size_t		*eaa_size;
-	uuid_t			*eaa_cookies;
-	uint32_t		*eaa_versions;
 	unsigned int		*eaa_map_ver;
 };
 
@@ -639,58 +606,65 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	*enum_args->eaa_map_ver = obj_reply_map_version_get(enum_args->rpc);
 
 	oeo = crt_reply_get(enum_args->rpc);
-	if (*enum_args->eaa_nr < oeo->oeo_kds.ca_count) {
-		D_ERROR("DAOS_OBJ_RPC_ENUMERATE return more kds, rc: %d\n",
-			-DER_PROTO);
+	if (enum_args->eaa_size)
+		*enum_args->eaa_size = oeo->oeo_size;
+
+	if (*enum_args->eaa_nr < oeo->oeo_num) {
+		D_ERROR("key enumerate get %d > %d more kds, %d\n",
+			oeo->oeo_num, *enum_args->eaa_nr, -DER_PROTO);
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
-	if (opc_get(enum_args->rpc->cr_opc) == DAOS_OBJ_RECX_RPC_ENUMERATE) {
-		*(enum_args->eaa_nr) = oeo->oeo_eprs.ca_count;
-		if (enum_args->eaa_eprs && oeo->oeo_eprs.ca_count > 0)
-			memcpy(enum_args->eaa_eprs, oeo->oeo_eprs.ca_arrays,
-			       sizeof(*enum_args->eaa_eprs) *
-			       oeo->oeo_eprs.ca_count);
-		if (enum_args->eaa_recxs && oeo->oeo_recxs.ca_count > 0)
-			memcpy(enum_args->eaa_recxs, oeo->oeo_recxs.ca_arrays,
-			       sizeof(*enum_args->eaa_recxs) *
-			       oeo->oeo_recxs.ca_count);
-		*enum_args->eaa_size = oeo->oeo_size;
-		if (enum_args->eaa_cookies && oeo->oeo_cookies.ca_count > 0) {
-			uuid_t *cookies = oeo->oeo_cookies.ca_arrays;
-			int i;
+	*enum_args->eaa_nr = oeo->oeo_num;
 
-			for (i = 0; i < oeo->oeo_cookies.ca_count; i++)
-				uuid_copy(enum_args->eaa_cookies[i],
-					  cookies[i]);
-		}
-		if (enum_args->eaa_versions && oeo->oeo_vers.ca_count > 0)
-			memcpy(enum_args->eaa_versions, oeo->oeo_vers.ca_arrays,
-			       sizeof(*enum_args->eaa_versions) *
-			       oeo->oeo_vers.ca_count);
-	} else {
-		*(enum_args->eaa_nr) = oeo->oeo_kds.ca_count;
-		if (enum_args->eaa_kds && oeo->oeo_kds.ca_count > 0)
-			memcpy(enum_args->eaa_kds, oeo->oeo_kds.ca_arrays,
-			       sizeof(*enum_args->eaa_kds) *
-			       oeo->oeo_kds.ca_count);
+	if (enum_args->eaa_kds && oeo->oeo_kds.ca_count > 0)
+		memcpy(enum_args->eaa_kds, oeo->oeo_kds.ca_arrays,
+		       sizeof(*enum_args->eaa_kds) *
+		       oeo->oeo_kds.ca_count);
+
+	if (enum_args->eaa_eprs && oeo->oeo_eprs.ca_count > 0) {
+		D_ASSERT(*enum_args->eaa_nr >= oeo->oeo_eprs.ca_count);
+		memcpy(enum_args->eaa_eprs, oeo->oeo_eprs.ca_arrays,
+		       sizeof(*enum_args->eaa_eprs) *
+		       oeo->oeo_eprs.ca_count);
 	}
 
-	/* Update hkey hash and tag */
-	enum_anchor_copy_hkey(enum_args->eaa_anchor, &oeo->oeo_anchor);
-	tgt_tag = enum_anchor_get_tag(&oeo->oeo_anchor);
-	enum_anchor_set_tag(enum_args->eaa_anchor, tgt_tag);
+	if (enum_args->eaa_recxs && oeo->oeo_recxs.ca_count > 0) {
+		D_ASSERT(*enum_args->eaa_nr >= oeo->oeo_recxs.ca_count);
+		memcpy(enum_args->eaa_recxs, oeo->oeo_recxs.ca_arrays,
+		       sizeof(*enum_args->eaa_recxs) *
+		       oeo->oeo_recxs.ca_count);
+	}
 
-	if (oeo->oeo_sgl.sg_nr > 0 && oeo->oeo_sgl.sg_iovs != NULL)
+	if (enum_args->eaa_sgl && oeo->oeo_sgl.sg_nr > 0) {
 		rc = daos_sgl_copy_data_out(enum_args->eaa_sgl, &oeo->oeo_sgl);
+		if (rc)
+			D_GOTO(out, rc);
+	}
 
+	/* Update dkey hash and tag */
+	if (enum_args->eaa_dkey_anchor) {
+		enum_anchor_copy_hkey(enum_args->eaa_dkey_anchor,
+				      &oeo->oeo_dkey_anchor);
+		tgt_tag = enum_anchor_get_tag(&oeo->oeo_dkey_anchor);
+		enum_anchor_set_tag(enum_args->eaa_dkey_anchor, tgt_tag);
+	}
+
+	if (enum_args->eaa_akey_anchor)
+		enum_anchor_copy_hkey(enum_args->eaa_akey_anchor,
+				      &oeo->oeo_akey_anchor);
+
+	if (enum_args->eaa_anchor)
+		enum_anchor_copy_hkey(enum_args->eaa_anchor,
+				      &oeo->oeo_anchor);
 out:
 	if (enum_args->eaa_obj != NULL)
 		obj_shard_decref(enum_args->eaa_obj);
 
 	if (oei->oei_bulk != NULL)
 		crt_bulk_free(oei->oei_bulk);
-
+	if (oei->oei_kds_bulk != NULL)
+		crt_bulk_free(oei->oei_kds_bulk);
 	crt_req_decref(enum_args->rpc);
 	dc_pool_put((struct dc_pool *)enum_args->hdlp);
 
@@ -699,16 +673,17 @@ out:
 	return ret;
 }
 
+#define KDS_BULK_LIMIT	128
+
 int
-dc_obj_shard_list_internal(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
-			   daos_epoch_t epoch, daos_key_t *dkey,
-			   daos_key_t *akey, daos_iod_type_t type,
-			   daos_size_t *size, uint32_t *nr,
-			   daos_key_desc_t *kds, daos_sg_list_t *sgl,
-			   daos_recx_t *recxs, daos_epoch_range_t *eprs,
-			   uuid_t *cookies, uint32_t *versions,
-			   daos_hash_out_t *anchor, unsigned int *map_ver,
-			   tse_task_t *task)
+dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
+		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
+		  daos_iod_type_t type, daos_size_t *size, uint32_t *nr,
+		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		  daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		  daos_hash_out_t *anchor, daos_hash_out_t *dkey_anchor,
+		  daos_hash_out_t *akey_anchor, unsigned int *map_ver,
+		  tse_task_t *task)
 {
 	crt_endpoint_t		tgt_ep;
 	struct dc_pool	       *pool;
@@ -724,8 +699,6 @@ dc_obj_shard_list_internal(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	D_ASSERT(obj_shard != NULL);
 	obj_shard_addref(obj_shard);
 
-	tse_task_stack_pop_data(task, &dkey_hash, sizeof(dkey_hash));
-
 	rc = dc_cont_hdl2uuid(obj_shard->do_co_hdl, &cont_hdl_uuid, &cont_uuid);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
@@ -736,14 +709,14 @@ dc_obj_shard_list_internal(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 
 	tgt_ep.ep_grp = pool->dp_group;
 	tgt_ep.ep_rank = obj_shard->do_rank;
-	if (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
-		tgt_ep.ep_tag = enum_anchor_get_tag(anchor);
+	if (dkey == NULL) {
+		tgt_ep.ep_tag = enum_anchor_get_tag(dkey_anchor);
 	} else {
-		D_ASSERT(dkey != NULL);
+		tse_task_stack_pop_data(task, &dkey_hash, sizeof(dkey_hash));
 		tgt_ep.ep_tag = obj_shard_dkeyhash2tag(obj_shard, dkey_hash);
 	}
 
-	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" rank %d tag %d\n",
+	D_DEBUG(DB_IO, "opc %d "DF_UOID" rank %d tag %d\n",
 		opc, DP_UOID(obj_shard->do_id), tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
@@ -766,10 +739,17 @@ dc_obj_shard_list_internal(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	oei->oei_epoch = epoch;
 	oei->oei_nr = *nr;
 	oei->oei_rec_type = type;
-	enum_anchor_copy_hkey(&oei->oei_anchor, anchor);
+
+	if (anchor != NULL)
+		enum_anchor_copy_hkey(&oei->oei_anchor, anchor);
+	if (dkey_anchor != NULL)
+		enum_anchor_copy_hkey(&oei->oei_dkey_anchor, dkey_anchor);
+	if (akey_anchor != NULL)
+		enum_anchor_copy_hkey(&oei->oei_akey_anchor, akey_anchor);
+
 	if (sgl != NULL) {
 		oei->oei_sgl = *sgl;
-		sgl_len = sgls_buf_len(sgl, 1);
+		sgl_len = daos_sgls_buf_len(sgl, 1);
 		if (sgl_len >= OBJ_BULK_LIMIT) {
 			/* Create bulk */
 			rc = crt_bulk_create(daos_task2ctx(task),
@@ -780,21 +760,37 @@ dc_obj_shard_list_internal(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		}
 	}
 
+	if (*nr > KDS_BULK_LIMIT) {
+		daos_sg_list_t	tmp_sgl = { 0 };
+		d_iov_t		tmp_iov = { 0 };
+
+		tmp_iov.iov_buf_len = sizeof(*kds) * (*nr);
+		tmp_iov.iov_buf = kds;
+		tmp_sgl.sg_nr_out = 1;
+		tmp_sgl.sg_nr = 1;
+		tmp_sgl.sg_iovs = &tmp_iov;
+
+		rc = crt_bulk_create(daos_task2ctx(task),
+				     daos2crt_sg(&tmp_sgl), CRT_BULK_RW,
+				     &oei->oei_kds_bulk);
+		if (rc < 0)
+			D_GOTO(out_req, rc);
+	}
+
 	crt_req_addref(req);
 	enum_args.rpc = req;
 	enum_args.hdlp = (daos_handle_t *)pool;
 	enum_args.eaa_nr = nr;
 	enum_args.eaa_kds = kds;
 	enum_args.eaa_anchor = anchor;
+	enum_args.eaa_dkey_anchor = dkey_anchor;
+	enum_args.eaa_akey_anchor = akey_anchor;
 	enum_args.eaa_obj = obj_shard;
 	enum_args.eaa_size = size;
 	enum_args.eaa_sgl = sgl;
-	enum_args.eaa_eprs = eprs;
-	enum_args.eaa_cookies = cookies;
-	enum_args.eaa_versions = versions;
-	enum_args.eaa_recxs = recxs;
 	enum_args.eaa_map_ver = map_ver;
-
+	enum_args.eaa_recxs = recxs;
+	enum_args.eaa_eprs = eprs;
 	rc = tse_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
 				       sizeof(enum_args));
 	if (rc != 0)
@@ -820,34 +816,4 @@ out_put:
 	obj_shard_decref(obj_shard);
 	tse_task_complete(task, rc);
 	return rc;
-}
-
-int
-dc_obj_shard_list_rec(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
-		      daos_epoch_t epoch, daos_key_t *dkey,
-		      daos_key_t *akey, daos_iod_type_t type,
-		      daos_size_t *size, uint32_t *nr,
-		      daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		      uuid_t *cookies, uint32_t *versions,
-		      daos_hash_out_t *anchor, unsigned int *map_ver,
-		      bool incr_order, tse_task_t *task)
-{
-	/* did not handle incr_order yet */
-	return dc_obj_shard_list_internal(obj_shard, opc, epoch, dkey, akey,
-					  type, size, nr, NULL, NULL,
-					  recxs, eprs, cookies, versions,
-					  anchor, map_ver, task);
-}
-
-int
-dc_obj_shard_list_key(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
-		      daos_epoch_t epoch, daos_key_t *key, uint32_t *nr,
-		      daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		      daos_hash_out_t *anchor, unsigned int *map_ver,
-		      tse_task_t *task)
-{
-	return dc_obj_shard_list_internal(obj_shard, opc, epoch, key, NULL,
-					  DAOS_IOD_NONE, NULL, nr, kds, sgl,
-					  NULL, NULL, NULL, NULL, anchor,
-					  map_ver, task);
 }

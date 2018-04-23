@@ -339,10 +339,10 @@ dss_rebuild_check_one(void *data)
 		status->scanning = 1;
 	if (pool_tls->rebuild_pool_status != 0 && status->status == 0)
 		status->status = pool_tls->rebuild_pool_status;
+
 	status->rec_count += pool_tls->rebuild_pool_rec_count;
 	status->obj_count += pool_tls->rebuild_pool_obj_count;
-	pool_tls->rebuild_pool_rec_count = 0;
-	pool_tls->rebuild_pool_obj_count = 0;
+
 	ABT_mutex_unlock(status->lock);
 
 	return 0;
@@ -366,7 +366,8 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 		D_GOTO(out, rc);
 	}
 
-	if (!status->scanning && !rpt->rt_lead_puller_running) {
+	if (!status->scanning && !rpt->rt_lead_puller_running &&
+	    rpt->rt_rebuilding_objs == status->obj_count) {
 		int i;
 
 		/* then check pulling status*/
@@ -375,7 +376,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 			puller = &rpt->rt_pullers[i];
 			ABT_mutex_lock(puller->rp_lock);
-			if (d_list_empty(&puller->rp_dkey_list) &&
+			if (d_list_empty(&puller->rp_one_list) &&
 			    puller->rp_inflight == 0) {
 				ABT_mutex_unlock(puller->rp_lock);
 				continue;
@@ -1054,7 +1055,7 @@ rebuild_ults(void *arg)
 			if (pool_is_rebuilding(task->dst_pool_uuid))
 				continue;
 
-			rc = dss_ult_create(rebuild_one_ult, task, -1, NULL);
+			rc = dss_ult_create(rebuild_one_ult, task, -1, 0, NULL);
 			if (rc == 0) {
 				rebuild_gst.rg_inflight++;
 				d_list_move(&task->dst_list,
@@ -1157,7 +1158,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 			D_GOTO(free, rc = dss_abterr2der(rc));
 
 		rebuild_gst.rg_rebuild_running = 1;
-		rc = dss_ult_create(rebuild_ults, NULL, -1, NULL);
+		rc = dss_ult_create(rebuild_ults, NULL, -1, 0, NULL);
 		if (rc) {
 			ABT_cond_free(&rebuild_gst.rg_stop_cond);
 			rebuild_gst.rg_rebuild_running = 0;
@@ -1272,8 +1273,8 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	/* Check each puller */
 	for (i = 0; i < rpt->rt_puller_nxs; i++) {
 		struct rebuild_puller	*puller;
-		struct rebuild_dkey	*dkey;
-		struct rebuild_dkey	*tmp;
+		struct rebuild_one	*rdone;
+		struct rebuild_one	*tmp;
 
 		puller = &rpt->rt_pullers[i];
 
@@ -1290,15 +1291,14 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		/* since the dkey thread has been stopped, so we do not
 		 * need lock here
 		 */
-		d_list_for_each_entry_safe(dkey, tmp, &puller->rp_dkey_list,
-					   rd_list) {
-			d_list_del(&dkey->rd_list);
-			D_WARN(DF_UUID" left rebuild dkey %*.s\n",
+		d_list_for_each_entry_safe(rdone, tmp, &puller->rp_one_list,
+					   ro_list) {
+			d_list_del(&rdone->ro_list);
+			D_WARN(DF_UUID" left rebuild rdone %*.s\n",
 			       DP_UUID(rpt->rt_pool_uuid),
-			      (int)dkey->rd_dkey.iov_len,
-			      (char *)dkey->rd_dkey.iov_buf);
-			daos_iov_free(&dkey->rd_dkey);
-			D_FREE_PTR(dkey);
+			      (int)rdone->ro_dkey.iov_len,
+			      (char *)rdone->ro_dkey.iov_buf);
+			rebuild_one_destroy(rdone);
 		}
 	}
 
@@ -1350,8 +1350,10 @@ rebuild_tgt_status_check(void *arg)
 		memset(&iv, 0, sizeof(iv));
 		uuid_copy(iv.riv_pool_uuid, rpt->rt_pool_uuid);
 
-		iv.riv_obj_count = status.obj_count;
-		iv.riv_rec_count = status.rec_count;
+		D_ASSERT(status.obj_count >= rpt->rt_reported_obj_cnt);
+		D_ASSERT(status.rec_count >= rpt->rt_reported_rec_cnt);
+		iv.riv_obj_count = status.obj_count - rpt->rt_reported_obj_cnt;
+		iv.riv_rec_count = status.rec_count - rpt->rt_reported_rec_cnt;
 		iv.riv_status = status.status;
 		if (status.scanning == 0 || rpt->rt_abort)
 			iv.riv_scan_done = 1;
@@ -1381,9 +1383,13 @@ rebuild_tgt_status_check(void *arg)
 				rc = rebuild_iv_update(rpt->rt_pool->sp_iv_ns,
 						   &iv, CRT_IV_SHORTCUT_TO_ROOT,
 						   CRT_IV_SYNC_NONE);
-			if (rc)
+			if (rc == 0) {
+				rpt->rt_reported_obj_cnt = status.obj_count;
+				rpt->rt_reported_rec_cnt = status.rec_count;
+			} else {
 				D_WARN("rebuild tgt iv update failed: %d\n",
 					rc);
+			}
 		}
 
 		D_DEBUG(DB_REBUILD, "ver %d obj "DF_U64" rec "DF_U64
@@ -1475,7 +1481,7 @@ rpt_create(struct ds_pool *pool, d_rank_list_t *svc_list, uint32_t pm_ver,
 		struct rebuild_puller *puller;
 
 		puller = &rpt->rt_pullers[i];
-		D_INIT_LIST_HEAD(&puller->rp_dkey_list);
+		D_INIT_LIST_HEAD(&puller->rp_one_list);
 		rc = ABT_mutex_create(&puller->rp_lock);
 		if (rc != ABT_SUCCESS)
 			D_GOTO(free, rc = dss_abterr2der(rc));
@@ -1488,6 +1494,9 @@ rpt_create(struct ds_pool *pool, d_rank_list_t *svc_list, uint32_t pm_ver,
 	uuid_copy(rpt->rt_pool_uuid, pool->sp_uuid);
 	daos_rank_list_dup(&rpt->rt_svc_list, svc_list);
 	rpt->rt_lead_puller_running = 0;
+	rpt->rt_rebuilding_objs = 0;
+	rpt->rt_reported_obj_cnt = 0;
+	rpt->rt_reported_rec_cnt = 0;
 	rpt->rt_rebuild_ver = pm_ver;
 	rpt->rt_leader_term = leader_term;
 	crt_group_rank(pool->sp_group, &rank);

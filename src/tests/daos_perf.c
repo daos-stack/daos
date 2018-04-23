@@ -245,17 +245,17 @@ ts_key_update_or_fetch(enum ts_op_type_t update_or_fetch, bool with_fetch)
 			memcpy(cred->tc_abuf, akey_buf, DTS_KEY_LEN);
 			daos_iov_set(&iod->iod_name, cred->tc_abuf,
 				     strlen(cred->tc_abuf));
+			iod->iod_size = vsize;
+			recx->rx_nr  = 1;
 			if (ts_single) {
 				iod->iod_type = DAOS_IOD_SINGLE;
-				iod->iod_size = vsize;
-				recx->rx_nr = 1;
 			} else {
 				iod->iod_type = DAOS_IOD_ARRAY;
 				iod->iod_size = 1;
 				recx->rx_nr  = vsize;
-				recx->rx_idx = ts_overwrite ?
-					       0 : indices[j] * vsize;
+				recx->rx_idx = ts_overwrite ? 0 : indices[j];
 			}
+
 			iod->iod_nr    = 1;
 			iod->iod_recxs = recx;
 
@@ -337,7 +337,7 @@ ts_write_records_internal(d_rank_t rank, bool with_fetch)
 	dts_reset_key();
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		ts_oid = dts_oid_gen(ts_class, 0, ts_ctx.tsc_mpi_rank);
-		if (ts_class == DAOS_OC_R3S_SPEC_RANK)
+		if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 			ts_oid = dts_oid_set_rank(ts_oid, rank);
 		for (j = 0; j < ts_dkey_p_obj; j++) {
 			if (ts_class != DAOS_OC_RAW) {
@@ -526,6 +526,7 @@ ts_rebuild_perf(double *start_time, double *end_time)
 	int rc;
 
 	/* prepare the record */
+	ts_class = DAOS_OC_R2S_SPEC_RANK;
 	rc = ts_write_records_internal(RANK_ZERO, WITHOUT_FETCH);
 	if (rc)
 		return rc;

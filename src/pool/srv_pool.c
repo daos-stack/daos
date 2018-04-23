@@ -813,7 +813,7 @@ pool_svc_stop_cb(struct rdb *db, int err, void *arg)
 	int			rc;
 
 	pool_svc_get(svc);
-	rc = dss_ult_create(pool_svc_stopper, svc, -1, NULL);
+	rc = dss_ult_create(pool_svc_stopper, svc, -1, 0, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool service stopper: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
@@ -1398,7 +1398,7 @@ ds_pool_svc_start_all(void)
 	int		rc;
 
 	/* Create a ULT to call ds_pool_svc_start() in xstream 0. */
-	rc = dss_ult_create(pool_svc_start_all, NULL, 0, &thread);
+	rc = dss_ult_create(pool_svc_start_all, NULL, 0, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("failed to create pool service start ULT: %d\n", rc);
 		return rc;
@@ -1426,7 +1426,7 @@ stop_one(d_list_t *entry, void *arg)
 		return -DER_NOMEM;
 
 	d_hash_rec_addref(&pool_svc_hash, &svc->ps_entry);
-	rc = dss_ult_create(pool_svc_stopper, svc, 0, &ult->u_thread);
+	rc = dss_ult_create(pool_svc_stopper, svc, 0, 0, &ult->u_thread);
 	if (rc != 0) {
 		d_hash_rec_decref(&pool_svc_hash, &svc->ps_entry);
 		D_FREE_PTR(ult);

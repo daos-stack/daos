@@ -48,6 +48,14 @@ struct daos_obj_shard_md {
 	uint32_t		smd_padding;
 };
 
+struct obj_enum_rec {
+	daos_recx_t	rec_recx;
+	daos_epoch_range_t rec_epr;
+	uuid_t		rec_cookie;
+	uint64_t	rec_size;
+	uint64_t	rec_version;
+};
+
 struct pl_obj_layout;
 
 struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
@@ -96,7 +104,7 @@ int dc_obj_update(tse_task_t *task);
 int dc_obj_list_dkey(tse_task_t *task);
 int dc_obj_list_akey(tse_task_t *task);
 int dc_obj_list_rec(tse_task_t *task);
-int dc_obj_single_shard_list_dkey(tse_task_t *task);
+int dc_obj_list_obj(tse_task_t *task);
 int dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md);
 int dc_obj_layout_get(daos_handle_t oh, struct pl_obj_layout **layout,
 		      unsigned int *grp_nr, unsigned int *grp_size);

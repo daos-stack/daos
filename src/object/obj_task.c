@@ -254,13 +254,12 @@ dc_obj_list_recx_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			     daos_iod_type_t type,
 			     daos_size_t *size, uint32_t *nr,
 			     daos_recx_t *recxs, daos_epoch_range_t *eprs,
-			     uuid_t *cookies, uint32_t *versions,
 			     daos_hash_out_t *anchor, bool incr_order,
 			     daos_event_t *ev, tse_sched_t *tse,
 			     tse_task_t **task)
 {
 	daos_obj_list_recx_t	*args;
-	int			 rc;
+	int			rc;
 
 	DAOS_API_ARG_ASSERT(*args, OBJ_LIST_RECX);
 	rc = dc_task_create(dc_obj_list_rec, tse, ev, task);
@@ -277,8 +276,6 @@ dc_obj_list_recx_task_create(daos_handle_t oh, daos_epoch_t epoch,
 	args->nr	= nr;
 	args->recxs	= recxs;
 	args->eprs	= eprs;
-	args->cookies	= cookies;
-	args->versions	= versions;
 	args->anchor	= anchor;
 	args->incr_order = incr_order;
 
@@ -286,28 +283,36 @@ dc_obj_list_recx_task_create(daos_handle_t oh, daos_epoch_t epoch,
 }
 
 int
-dc_obj_shard_list_dkey_task_create(daos_handle_t oh, daos_epoch_t epoch,
-				   uint32_t *nr, daos_key_desc_t *kds,
-				   daos_sg_list_t *sgl, daos_hash_out_t *anchor,
-				   daos_event_t *ev, tse_sched_t *tse,
-				   tse_task_t **task)
+dc_obj_list_obj_task_create(daos_handle_t oh, daos_epoch_t epoch,
+			    daos_key_t *dkey, daos_key_t *akey,
+			    daos_size_t *size, uint32_t *nr,
+			    daos_key_desc_t *kds, daos_sg_list_t *sgl,
+			    daos_hash_out_t *anchor,
+			    daos_hash_out_t *dkey_anchor,
+			    daos_hash_out_t *akey_anchor,
+			    bool incr_order, daos_event_t *ev, tse_sched_t *tse,
+			    tse_task_t **task)
 {
-	daos_obj_list_dkey_t	*args;
+	daos_obj_list_obj_t	*args;
 	int			rc;
 
-	DAOS_API_ARG_ASSERT(*args, OBJ_LIST_DKEY);
-	rc = dc_task_create(dc_obj_single_shard_list_dkey, tse, ev, task);
+	rc = dc_task_create(dc_obj_list_obj, tse, ev, task);
 	if (rc)
 		return rc;
 
 	args = dc_task_get_args(*task);
 	args->oh	= oh;
 	args->epoch	= epoch;
+	args->dkey	= dkey;
+	args->akey	= akey;
+	args->size	= size;
 	args->nr	= nr;
 	args->kds	= kds;
 	args->sgl	= sgl;
 	args->anchor	= anchor;
+	args->dkey_anchor = dkey_anchor;
+	args->akey_anchor = akey_anchor;
+	args->incr_order = incr_order;
 
 	return 0;
 }
-

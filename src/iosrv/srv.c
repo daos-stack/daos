@@ -706,20 +706,47 @@ dss_xstream_get(int stream_id)
  *
  * \param[in]	func	function to execute
  * \param[in]	arg	argument for \a func
+ * \param[in]	stream_id on which xstream to create the ULT.
+ * \param[in]	stack_size stacksize of the ULT, if it is 0, then create
+ *			default size of ULT.
  * \param[out]	ult	ULT handle if not NULL
  */
 int
-dss_ult_create(void (*func)(void *), void *arg, int stream_id, ABT_thread *ult)
+dss_ult_create(void (*func)(void *), void *arg, int stream_id,
+	       size_t stack_size, ABT_thread *ult)
 {
+	ABT_thread_attr		attr;
 	struct dss_xstream	*dx;
 	int			rc;
+	int			rc1;
 
 	dx = dss_xstream_get(stream_id);
 	if (dx == NULL)
 		return -DER_NONEXIST;
 
+	if (stack_size > 0) {
+		rc = ABT_thread_attr_create(&attr);
+		if (rc != ABT_SUCCESS)
+			return dss_abterr2der(rc);
+
+		rc = ABT_thread_attr_set_stacksize(attr, stack_size);
+		if (rc != ABT_SUCCESS)
+			D_GOTO(free, rc = dss_abterr2der(rc));
+
+		D_DEBUG(DB_TRACE, "Create ult stacksize is %zd\n", stack_size);
+	} else {
+		attr = ABT_THREAD_ATTR_NULL;
+	}
+
 	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE], func, arg,
-			       ABT_THREAD_ATTR_NULL, ult);
+			       attr, ult);
+
+free:
+	if (attr != ABT_THREAD_ATTR_NULL) {
+		rc1 = ABT_thread_attr_free(&attr);
+		if (rc == ABT_SUCCESS)
+			rc = rc1;
+	}
 
 	return dss_abterr2der(rc);
 }
@@ -810,7 +837,7 @@ dss_ult_create_execute_cb(void *data)
  */
 int
 dss_ult_create_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
-		       void *cb_args, int stream_id)
+		       void *cb_args, int stream_id, size_t stack_size)
 {
 	struct dss_future_arg	future_arg;
 	ABT_future		future;
@@ -834,7 +861,7 @@ dss_ult_create_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 	}
 
 	rc = dss_ult_create(dss_ult_create_execute_cb, &future_arg, stream_id,
-			    NULL);
+			    stack_size, NULL);
 	if (rc)
 		D_GOTO(free, rc);
 
@@ -1114,7 +1141,7 @@ dss_acc_offload(struct dss_acc_task *at_args)
 					    at_args->at_params,
 					    NULL /* user-cb */,
 					    NULL /* user-cb args */,
-					    tid);
+					    tid, 0);
 		break;
 	case DSS_OFFLOAD_ACC:
 		/** calls to offload to FPGA*/

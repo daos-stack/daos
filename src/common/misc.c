@@ -182,6 +182,21 @@ daos_sgl_buf_len(d_sg_list_t *sgl)
 }
 
 daos_size_t
+daos_sgls_buf_len(daos_sg_list_t *sgls, int nr)
+{
+	daos_size_t sgls_len = 0;
+	int	    i;
+
+	if (sgls == NULL)
+		return 0;
+
+	for (i = 0; i < nr; i++)
+		sgls_len += daos_sgl_buf_len(&sgls[i]);
+
+	return sgls_len;
+}
+
+static daos_size_t
 daos_iod_len(daos_iod_t *iod)
 {
 	uint64_t	len;
@@ -203,6 +218,23 @@ daos_iod_len(daos_iod_t *iod)
 	}
 
 	return len;
+}
+
+daos_size_t
+daos_iods_len(daos_iod_t *iods, int nr)
+{
+	uint64_t iod_length = 0;
+	int	 i;
+
+	for (i = 0; i < nr; i++) {
+		uint64_t len = daos_iod_len(&iods[i]);
+
+		if (len == -1) /* unknown */
+			return -1;
+
+		iod_length += len;
+	}
+	return iod_length;
 }
 
 /**
@@ -250,6 +282,22 @@ daos_iov_free(daos_iov_t *iov)
 	iov->iov_buf = NULL;
 	iov->iov_buf_len = 0;
 	iov->iov_len = 0;
+}
+
+bool
+daos_key_match(daos_key_t *key1, daos_key_t *key2)
+{
+	D_ASSERT(key1 != NULL);
+	D_ASSERT(key2 != NULL);
+	D_ASSERT(key1->iov_buf != NULL);
+	D_ASSERT(key2->iov_buf != NULL);
+	if (key1->iov_len != key2->iov_len)
+		return false;
+
+	if (memcmp(key1->iov_buf, key2->iov_buf, key1->iov_len))
+		return false;
+
+	return true;
 }
 
 d_rank_list_t *

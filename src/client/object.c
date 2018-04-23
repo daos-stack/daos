@@ -229,8 +229,8 @@ daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	rc = dc_obj_list_recx_task_create(oh, epoch, dkey, akey, DAOS_IOD_ARRAY,
-					  size, nr, recxs, eprs, NULL, NULL,
-					  anchor, incr_order, ev, NULL, &task);
+					  size, nr, recxs, eprs, anchor,
+					  incr_order, ev, NULL, &task);
 	if (rc)
 		return rc;
 

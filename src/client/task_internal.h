@@ -78,6 +78,7 @@ struct daos_task_args {
 		daos_obj_list_dkey_t	obj_list_dkey;
 		daos_obj_list_akey_t	obj_list_akey;
 		daos_obj_list_recx_t	obj_list_recx;
+		daos_obj_list_obj_t	obj_list_obj;
 		daos_array_create_t	array_create;
 		daos_array_open_t	array_open;
 		daos_array_close_t	array_close;

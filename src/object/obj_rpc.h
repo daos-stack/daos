@@ -51,9 +51,10 @@ enum obj_rpc_opc {
 	DAOS_OBJ_DKEY_RPC_ENUMERATE	= 3,
 	DAOS_OBJ_AKEY_RPC_ENUMERATE	= 4,
 	DAOS_OBJ_RECX_RPC_ENUMERATE	= 5,
-	DAOS_OBJ_RPC_PUNCH		= 6,
-	DAOS_OBJ_RPC_PUNCH_DKEYS	= 7,
-	DAOS_OBJ_RPC_PUNCH_AKEYS	= 8,
+	DAOS_OBJ_RPC_ENUMERATE		= 6,
+	DAOS_OBJ_RPC_PUNCH		= 7,
+	DAOS_OBJ_RPC_PUNCH_DKEYS	= 8,
+	DAOS_OBJ_RPC_PUNCH_AKEYS	= 9,
 };
 
 struct obj_rw_in {
@@ -92,21 +93,26 @@ struct obj_key_enum_in {
 	daos_key_t		oei_dkey;
 	daos_key_t		oei_akey;
 	daos_hash_out_t		oei_anchor;
+	daos_hash_out_t		oei_dkey_anchor;
+	daos_hash_out_t		oei_akey_anchor;
 	daos_sg_list_t		oei_sgl;
 	crt_bulk_t		oei_bulk;
+	crt_bulk_t		oei_kds_bulk;
 };
 
 struct obj_key_enum_out {
 	int32_t			oeo_ret;
 	uint32_t		oeo_map_version;
+	uint32_t		oeo_num;
+	uint32_t		oeo_padding;
+	uint64_t		oeo_size;
 	daos_hash_out_t		oeo_anchor;
-	daos_size_t		oeo_size;
+	daos_hash_out_t		oeo_dkey_anchor;
+	daos_hash_out_t		oeo_akey_anchor;
 	struct crt_array	oeo_kds;
+	daos_sg_list_t		oeo_sgl;
 	struct crt_array	oeo_recxs;
 	struct crt_array	oeo_eprs;
-	struct crt_array	oeo_cookies;
-	struct crt_array	oeo_vers;
-	daos_sg_list_t		oeo_sgl;
 };
 
 struct obj_punch_in {
