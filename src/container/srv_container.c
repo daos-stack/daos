@@ -596,8 +596,6 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct cont_open_out   *out = crt_reply_get(rpc);
 	daos_iov_t		key;
 	daos_iov_t		value;
-	uint64_t		max_oid;
-	daos_iov_t		oid_value;
 	struct container_hdl	chdl;
 	int			rc;
 
@@ -636,16 +634,6 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	uuid_copy(chdl.ch_pool_hdl, pool_hdl->sph_uuid);
 	uuid_copy(chdl.ch_cont, cont->c_uuid);
 	chdl.ch_capas = in->coi_capas;
-
-	/* Read current max OID */
-	daos_iov_set(&oid_value, &max_oid, sizeof(max_oid));
-	rc = rdb_tx_lookup(tx, &cont->c_attrs, &ds_cont_attr_max_oid,
-			   &oid_value);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to lookup MAX_OID: %d\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
-		D_GOTO(out, rc);
-	}
 
 	rc = ds_cont_epoch_init_hdl(tx, cont, &chdl, &out->coo_epoch_state);
 	if (rc != 0)
