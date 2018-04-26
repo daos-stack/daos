@@ -225,7 +225,8 @@ daos_debug_init(char *logfile)
 	/* load other env variables */
 	debug_fac_load_env();
 
-	rc = d_log_init_adv("DAOS", logfile, DLOG_FLV_FAC,
+	rc = d_log_init_adv("DAOS", logfile,
+			    DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG,
 			    DLOG_INFO, DLOG_CRIT);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: %d\n", rc);
