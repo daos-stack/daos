@@ -1069,7 +1069,12 @@ rdb_raft_start(struct rdb *db)
 			D_GOTO(err_nodes, rc = -DER_NOMEM);
 		}
 	}
-	D_ASSERT(self_id != -1);
+	if (self_id == -1) {
+		D_FATAL(DF_DB": rank not in replica rank list: "
+			"server rank changed?\n", DP_DB(db));
+		rc = -DER_OOG;
+		goto err_nodes;
+	}
 
 	election_timeout = rdb_raft_get_election_timeout(self_id, nreplicas);
 	request_timeout = rdb_raft_get_request_timeout();
