@@ -67,9 +67,14 @@ class TestCartCtl(commontestsuite.CommonTestSuite):
         crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
         ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
         baseport = self.generate_port_numbers(ofi_interface)
+        ofi_share_addr = os.getenv("CRT_CTX_SHARE_ADDR", "0")
+        ofi_ctx_num = os.getenv("CRT_CTX_NUM", "0")
         self.pass_env = ' -x CRT_LOG_MASK={!s} -x CRT_PHY_ADDR_STR={!s}' \
-                        ' -x OFI_INTERFACE={!s} -x OFI_PORT={!s}'.format(
-                            log_mask, crt_phy_addr, ofi_interface, baseport)
+                        ' -x OFI_INTERFACE={!s} -x OFI_PORT={!s}' \
+                        ' -x CRT_CTX_SHARE_ADDR={!s}' \
+                        ' -x CRT_CTX_NUM={!s}'.format(
+                            log_mask, crt_phy_addr, ofi_interface, baseport,
+                            ofi_share_addr, ofi_ctx_num)
 
     def tearDown(self):
         """tear down the test"""
