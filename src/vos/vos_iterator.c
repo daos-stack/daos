@@ -117,8 +117,12 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 
 	rc = dict->id_ops->iop_prepare(type, param, &iter);
 	if (rc != 0) {
-		D_ERROR("Failed to prepare %s iterator: %d\n",
-			dict->id_name, rc);
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DB_TRACE, "No %s to iterate: %d\n",
+				dict->id_name, rc);
+		else
+			D_ERROR("Failed to prepare %s iterator: %d\n",
+				dict->id_name, rc);
 		return rc;
 	}
 
