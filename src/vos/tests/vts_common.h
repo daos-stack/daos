@@ -103,11 +103,11 @@ int
 run_co_test(void);
 
 int
-run_discard_tests(void);
+run_discard_tests(int keys);
 
 int
 run_aggregate_tests(void);
 
-int run_io_test(daos_ofeat_t feats);
+int run_io_test(daos_ofeat_t feats, int keys);
 
 #endif

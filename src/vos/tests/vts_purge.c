@@ -510,6 +510,8 @@ io_test_near_epoch_fetch(void **state)
 
 #define TF_DISCARD_KEYS	50000
 #define TF_CREDITS_KEYS 10000
+static int init_credits_keys  = TF_CREDITS_KEYS;
+static int init_discard_keys = TF_DISCARD_KEYS;
 
 static int
 io_multi_dkey_discard(struct io_test_args *arg, int flags)
@@ -530,7 +532,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 
 	epoch1 = 1000;
 	epoch2 = 2000;
-	for (i = 0; i < TF_DISCARD_KEYS; i++) {
+	for (i = 0; i < init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
 		set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
@@ -544,7 +546,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	}
 
 	arg->oid = dts_unit_oid_gen(0, 0, 0);
-	for (i = TF_DISCARD_KEYS; i < TF_DISCARD_KEYS * 2; i++) {
+	for (i = init_discard_keys; i < init_discard_keys * 2; i++) {
 		struct io_req	*req = NULL;
 
 		set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
@@ -573,7 +575,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 
 	arg->oid = last_oid;
 
-	/* Check first TF_DISCARD_KEYS entries in object 1 */
+	/* Check first init_discard_keys entries in object 1 */
 	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		if (search_req->epoch == epoch2)
 			continue;
@@ -625,11 +627,11 @@ io_epoch_range_discard_test(void **state)
 	struct io_test_args	*arg = *state;
 	int			i;
 	int			rc = 0;
-	daos_epoch_t		epochs[TF_DISCARD_KEYS];
+	daos_epoch_t		epochs[init_discard_keys];
 	struct d_uuid		cookie;
 	daos_epoch_range_t	range;
 	struct vts_counter	cntrs;
-	struct io_req		*req[TF_DISCARD_KEYS];
+	struct io_req		*req[init_discard_keys];
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	int			idx;
@@ -638,15 +640,15 @@ io_epoch_range_discard_test(void **state)
 	cookie = gen_rand_cookie();
 
 	/** Need atleast 3 keys for this test */
-	assert_true(TF_DISCARD_KEYS >= 11);
+	assert_true(init_discard_keys >= 11);
 
-	for (i = 0; i < TF_DISCARD_KEYS; i++)
+	for (i = 0; i < init_discard_keys; i++)
 		epochs[i] = 1 + i;
 
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &idx);
 
 	/* Write to the same dkey-akey-idx on different epochs */
-	for (i = 0; i < TF_DISCARD_KEYS; i++) {
+	for (i = 0; i < init_discard_keys; i++) {
 
 		rc = io_update(arg, epochs[i], &cookie, &dkey_buf[0],
 			       &akey_buf[0], &cntrs, &req[i], idx,
@@ -657,27 +659,27 @@ io_epoch_range_discard_test(void **state)
 	}
 
 
-	range.epr_lo = epochs[TF_DISCARD_KEYS - 10];
-	range.epr_hi = epochs[TF_DISCARD_KEYS - 5];
+	range.epr_lo = epochs[init_discard_keys - 10];
+	range.epr_hi = epochs[init_discard_keys - 5];
 
 	D_PRINT("Discard from "DF_U64" to "DF_U64" out of %d epochs\n",
-		range.epr_lo, range.epr_hi, TF_DISCARD_KEYS);
+		range.epr_lo, range.epr_hi, init_discard_keys);
 	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
 
-	for (i = 0; i < TF_DISCARD_KEYS; i++) {
+	for (i = 0; i < init_discard_keys; i++) {
 		/** Fall back while fetching from discarded epochs */
-		if (i >= TF_DISCARD_KEYS - 10 && i <= TF_DISCARD_KEYS - 5)
-			rc = io_fetch(arg, epochs[i], req[TF_DISCARD_KEYS - 11],
-				      false);
+		if (i >= init_discard_keys - 10 && i <= init_discard_keys - 5)
+			rc = io_fetch(arg, epochs[i],
+				      req[init_discard_keys - 11], false);
 		else
 			rc = io_fetch(arg, epochs[i], req[i], false);
 
 		assert_int_equal(rc, 0);
 	}
 	/** Cleanup */
-	for (i = 0; i < TF_DISCARD_KEYS; i++)
+	for (i = 0; i < init_discard_keys; i++)
 		D_FREE_PTR(req[i]);
 }
 
@@ -704,7 +706,7 @@ io_multi_akey_discard_test(void **state)
 
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &idx);
 
-	for (i = 0; i < TF_DISCARD_KEYS; i++) {
+	for (i = 0; i < init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
 		rc = io_update(arg, epoch1, &cookie, &dkey_buf[0], &akey_buf[0],
@@ -716,7 +718,7 @@ io_multi_akey_discard_test(void **state)
 		set_key_and_index(NULL, &akey_buf[0], NULL);
 	}
 
-	for (i = TF_DISCARD_KEYS; i < 2 * TF_DISCARD_KEYS; i++) {
+	for (i = init_discard_keys; i < 2 * init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
 		rc = io_update(arg, epoch2, &cookie, &dkey_buf[0],
@@ -735,7 +737,7 @@ io_multi_akey_discard_test(void **state)
 	assert_int_equal(rc, 0);
 
 	arg->oid = last_oid;
-	/* Check first TF_DISCARD_KEYS entries in object 1 */
+	/* Check first init_discard_keys entries in object 1 */
 	i = 0;
 	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		if (epoch1 != search_req->epoch)
@@ -776,13 +778,13 @@ io_multi_recx_overwrite_discard_test(void **state)
 
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
 	/**
-	 * TF_DISCARD_KEYS/100 recx created
+	 * init_discard_keys/100 recx created
 	 * all recx overwrite 100 epochs
 	 * Starting from (epoch_start + 1 -> epoch_start + 100)
 	 *
 	 */
 	j = 1;
-	for (i = 0; i < TF_DISCARD_KEYS; i++) {
+	for (i = 0; i < init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
 		rc = io_update(arg, epoch_start + j,
@@ -809,7 +811,7 @@ io_multi_recx_overwrite_discard_test(void **state)
 	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
-	/* Check first TF_DISCARD_KEYS entries in object 1 */
+	/* Check first init_discard_keys entries in object 1 */
 	struct io_req *b_req = NULL;
 
 	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
@@ -858,7 +860,7 @@ io_multi_recx_discard_test(void **state)
 
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
 
-	for (i = 0; i < TF_DISCARD_KEYS; i++) {
+	for (i = 0; i < init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
 		rc = io_update(arg, epoch1, &cookie, &dkey_buf[0], &akey_buf[0],
@@ -869,7 +871,7 @@ io_multi_recx_discard_test(void **state)
 		assert_int_equal(rc, 0);
 	}
 
-	for (i = TF_DISCARD_KEYS; i < 2 * TF_DISCARD_KEYS; i++) {
+	for (i = init_discard_keys; i < 2 * init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
 		rc = io_update(arg, epoch2, &cookie, &dkey_buf[0],
@@ -886,7 +888,7 @@ io_multi_recx_discard_test(void **state)
 	assert_int_equal(rc, 0);
 
 	arg->oid = last_oid;
-	/* Check first TF_DISCARD_KEYS entries in object 1 */
+	/* Check first init_discard_keys entries in object 1 */
 	i = 0;
 	d_list_for_each_entry(search_req, &arg->req_list, rlist) {
 		if (epoch1 != search_req->epoch)
@@ -921,7 +923,7 @@ io_multi_dkey_aggregate_test(void **state)
 	epoch = 1024;
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &idx);
 
-	for (i = 0; i < 2 * TF_CREDITS_KEYS; i++) {
+	for (i = 0; i < 2 * init_credits_keys; i++) {
 		struct io_req	*req = NULL;
 
 		rc = io_update(arg, epoch + i, &cookie, &dkey_buf[0],
@@ -935,7 +937,7 @@ io_multi_dkey_aggregate_test(void **state)
 	}
 
 	range.epr_lo = epoch;
-	range.epr_hi = epoch + TF_CREDITS_KEYS - 1;
+	range.epr_hi = epoch + init_credits_keys - 1;
 	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
 				 &credits, &vp_anchor, &finish);
 	assert_int_equal(rc, 0);
@@ -971,7 +973,7 @@ io_multi_akey_aggregate_test(void **state)
 	epoch = 1024;
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &idx);
 
-	for (i = 0; i < 2 * TF_CREDITS_KEYS; i++) {
+	for (i = 0; i < 2 * init_credits_keys; i++) {
 		struct io_req	*req = NULL;
 
 		rc = io_update(arg, epoch + i, &cookie, &dkey_buf[0],
@@ -985,7 +987,7 @@ io_multi_akey_aggregate_test(void **state)
 	}
 
 	range.epr_lo = epoch;
-	range.epr_hi = epoch + TF_CREDITS_KEYS - 1;
+	range.epr_hi = epoch + init_credits_keys - 1;
 	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
 				 &credits, &vp_anchor, &finish);
 	assert_int_equal(rc, 0);
@@ -1026,7 +1028,7 @@ io_multi_recx_aggregate_test(void **state)
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
 	memset(&vp_anchor, 0, sizeof(vos_purge_anchor_t));
 
-	for (i = 0; i < TF_CREDITS_KEYS; i++) {
+	for (i = 0; i < init_credits_keys; i++) {
 		struct io_req	*req = NULL;
 
 		rc = io_update(arg, epoch + i,
@@ -1040,7 +1042,7 @@ io_multi_recx_aggregate_test(void **state)
 	}
 
 	range.epr_lo = epoch;
-	range.epr_hi = epoch + TF_CREDITS_KEYS/2;
+	range.epr_hi = epoch + init_credits_keys/2;
 
 	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
 				 &credits, &vp_anchor, &finish);
@@ -1078,7 +1080,7 @@ io_recx_overwrite_aggregate(void **state)
 
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &index);
 
-	for (i = 0; i < 2 * TF_DISCARD_KEYS; i++) {
+	for (i = 0; i < 2 * init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
 		rc = io_update(arg, epoch + i,
@@ -1091,7 +1093,7 @@ io_recx_overwrite_aggregate(void **state)
 	}
 
 	range.epr_lo = epoch;
-	range.epr_hi = epoch + TF_DISCARD_KEYS  - 1;
+	range.epr_hi = epoch + init_discard_keys  - 1;
 
 	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
 				 &credits, &vp_anchor, &finish);
@@ -1127,8 +1129,8 @@ io_recx_overwrite(struct io_test_args *arg)
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	vos_purge_anchor_t	vp_anchor = {0};
-	int			credits = TF_CREDITS_KEYS + 100;
-	daos_epoch_t		max_epoch;
+	int			credits = init_credits_keys + 100;
+	daos_epoch_t		max_epoch = DAOS_EPOCH_MAX;
 
 	cookie = gen_rand_cookie();
 
@@ -1136,7 +1138,7 @@ io_recx_overwrite(struct io_test_args *arg)
 
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &index);
 
-	for (i = 0; i < TF_CREDITS_KEYS; i++) {
+	for (i = 0; i < init_credits_keys; i++) {
 		struct io_req	*req = NULL;
 
 		max_epoch = epoch1 + i;
@@ -1151,7 +1153,7 @@ io_recx_overwrite(struct io_test_args *arg)
 
 	epoch2 = 500000;
 
-	for (i = 0; i < TF_CREDITS_KEYS; i++) {
+	for (i = 0; i < init_credits_keys; i++) {
 		struct io_req	*req = NULL;
 
 		rc = io_update(arg, epoch2 + i,
@@ -1164,10 +1166,10 @@ io_recx_overwrite(struct io_test_args *arg)
 	}
 
 	range.epr_lo = epoch1;
-	range.epr_hi = epoch1 + TF_CREDITS_KEYS + 10;
+	range.epr_hi = epoch1 + init_credits_keys + 10;
 
 	printf("%d keys in range "DF_U64"->"DF_U64",",
-	       TF_CREDITS_KEYS, range.epr_lo, range.epr_hi);
+	       init_credits_keys, range.epr_lo, range.epr_hi);
 	printf(" using %d credits\n", credits);
 
 	while (credits > 0) {
@@ -1227,7 +1229,7 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 	memset(&vp_anchor, 0, sizeof(vos_purge_anchor_t));
 	D_INIT_LIST_HEAD(&agg_entries);
 
-	for (i = 0; i < TF_DISCARD_KEYS; i++) {
+	for (i = 0; i < init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
 		rc = io_update(arg, epoch + i,
@@ -1251,7 +1253,7 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 	}
 
 	range.epr_lo = epoch;
-	range.epr_hi = epoch + TF_DISCARD_KEYS/2;
+	range.epr_hi = epoch + init_discard_keys/2;
 
 	if (credits < 0) {
 		l_credits = -1;
@@ -1259,7 +1261,7 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 					 &l_credits, &vp_anchor, &finish);
 		assert_int_equal(rc, 0);
 	} else {
-		int loop = TF_DISCARD_KEYS + 1000;
+		int loop = init_discard_keys + 1000;
 
 		print_message("%d credit(s)/iteration in %d iterations\n",
 			      credits, loop);
@@ -1431,8 +1433,12 @@ static const struct CMUnitTest aggregate_tests[] = {
 };
 
 int
-run_discard_tests(void)
+run_discard_tests(int keys)
 {
+	if (keys) {
+		init_discard_keys = keys;
+		init_credits_keys = keys / 2;
+	}
 	return cmocka_run_group_tests_name("VOS Discard test", discard_tests,
 					   setup_io, teardown_io);
 }

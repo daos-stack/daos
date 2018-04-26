@@ -166,6 +166,7 @@ inc_cntr_manual(unsigned long op_flags, struct vts_counter *cntrs)
 }
 
 static daos_ofeat_t init_ofeats;
+static int init_num_keys = VTS_IO_KEYS;
 
 void
 test_args_init(struct io_test_args *args,
@@ -759,7 +760,7 @@ io_multiple_dkey_test(void **state, unsigned int flags)
 	daos_epoch_t		 epoch = gen_rand_epoch();
 
 	arg->ta_flags = flags;
-	for (i = 0; i < VTS_IO_KEYS; i++) {
+	for (i = 0; i < init_num_keys; i++) {
 		rc = io_update_and_fetch_dkey(arg, epoch, epoch);
 		assert_int_equal(rc, 0);
 	}
@@ -1631,7 +1632,7 @@ io_pool_overflow_test(void **state)
 	test_args_reset(args, VPOOL_SIZE);
 
 	epoch = gen_rand_epoch();
-	for (i = 0; i < VTS_IO_KEYS; i++) {
+	for (i = 0; i < init_num_keys; i++) {
 		rc = io_update_and_fetch_dkey(args, epoch, epoch);
 		if (rc) {
 			assert_int_equal(rc, -DER_NOSPACE);
@@ -1750,7 +1751,7 @@ static const struct CMUnitTest io_tests[] = {
 };
 
 int
-run_io_test(daos_ofeat_t feats)
+run_io_test(daos_ofeat_t feats, int keys)
 {
 	char buf[VTS_BUF_SIZE];
 	const char *akey = "hashed";
@@ -1777,6 +1778,8 @@ run_io_test(daos_ofeat_t feats)
 	snprintf(buf, VTS_BUF_SIZE, "VOS IO tests (dkey=%-6s akey=%s)",
 		 dkey, akey);
 	init_ofeats = feats;
+	if (keys)
+		init_num_keys = keys;
 	D_PRINT("Running %s\n", buf);
 	return cmocka_run_group_tests_name(buf, io_tests,
 					   setup_io, teardown_io);

@@ -53,7 +53,7 @@ print_usage()
 }
 
 static inline int
-run_all_tests()
+run_all_tests(int keys)
 {
 	int failed = 0;
 	int i;
@@ -61,8 +61,8 @@ run_all_tests()
 	failed += run_pool_test();
 	failed += run_co_test();
 	for (i = 0; i != DAOS_OF_MASK; i++)
-		failed += run_io_test(i);
-	failed += run_discard_tests();
+		failed += run_io_test(i, keys);
+	failed += run_discard_tests(keys);
 	failed += run_aggregate_tests();
 	return failed;
 }
@@ -70,13 +70,14 @@ run_all_tests()
 int
 main(int argc, char **argv)
 {
-	int		rc = 0;
-	int		nr_failed = 0;
-	int		opt = 0, index = 0;
-	int		ofeats;
+	int		 rc = 0;
+	int		 nr_failed = 0;
+	int		 opt = 0, index = 0;
+	int		 ofeats;
+	int		 keys;
 
 	static struct option long_options[] = {
-		{"all_tests",		no_argument, 0, 'A'},
+		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
 		{"container_tests",	no_argument, 0, 'c'},
 		{"io_tests",		required_argument, 0, 'i'},
@@ -99,9 +100,9 @@ main(int argc, char **argv)
 
 	gc = 0;
 	if (argc < 2) {
-		nr_failed = run_all_tests();
+		nr_failed = run_all_tests(0);
 	} else {
-		while ((opt = getopt_long(argc, argv, "apcdti:Ah",
+		while ((opt = getopt_long(argc, argv, "apcdti:A:h",
 				  long_options, &index)) != -1) {
 			switch (opt) {
 			case 'p':
@@ -112,16 +113,17 @@ main(int argc, char **argv)
 				break;
 			case 'i':
 				ofeats = strtol(optarg, NULL, 16);
-				nr_failed += run_io_test(ofeats);
+				nr_failed += run_io_test(ofeats, 0);
 				break;
 			case 'a':
 				nr_failed += run_aggregate_tests();
 				break;
 			case 'd':
-				nr_failed += run_discard_tests();
+				nr_failed += run_discard_tests(0);
 				break;
 			case 'A':
-				nr_failed = run_all_tests();
+				keys = atoi(optarg);
+				nr_failed = run_all_tests(keys);
 				break;
 			case 'h':
 				print_usage();
