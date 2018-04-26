@@ -723,6 +723,20 @@ class PreReqComponent(object):
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
 
+    def _setup_intelc(self):
+        """Setup environment to use intel compilers"""
+        env = self.__env.Clone(tools=['intelc'])
+        self.__env.Replace(AR=env.get("AR"))
+        self.__env.Replace(ENV=env.get("ENV"))
+        self.__env.Replace(CC=env.get("CC"))
+        self.__env.Replace(CXX=env.get("CXX"))
+        version = env.get("INTEL_C_COMPILER_VERSION")
+        self.__env.Replace(INTEL_C_COMPILER_VERSION=version)
+        self.__env.Replace(LINK=env.get("LINK"))
+        self.__env.Replace(LIBPATH=env.get("LIBPATH"))
+        self.__env.Replace(CPPPATH=env.get("CPPPATH"))
+        self.__env.AppendUnique(LINKFLAGS=["-static-intel"])
+
 # pylint: enable=too-many-branches
     def _setup_compiler(self):
         """Setup the compiler to use"""
@@ -735,6 +749,8 @@ class PreReqComponent(object):
                                    ignorecase=1))
 
         compiler = self.__env.get('COMPILER').lower()
+        if compiler == 'icc':
+            self._setup_intelc()
         env = self.__env.Clone()
         config = Configure(env)
 
