@@ -296,7 +296,7 @@ crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank, const char *uri)
 
 	grp_priv = crt_grp_pub2priv(grp);
 
-	for (i = 0; i < crt_gdata.cg_ctx_num; i++) {
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		rc = crt_grp_lc_uri_insert(grp_priv, i, rank, uri);
 		if (rc != 0) {
 			D_ERROR("crt_grp_lc_uri_insert(%p, %d, %d, %s) failed."
