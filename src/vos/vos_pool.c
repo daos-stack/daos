@@ -167,15 +167,15 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 	/* Path must be a file with a certain size when size argument is 0 */
 	if (!size && access(path, F_OK) == -1) {
 		D_ERROR("File not accessible (%d) when size is 0\n", errno);
-		return -DER_NONEXIST;
+		return daos_errno2der(errno);
 	}
 
 	ph = vos_pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout), size,
 				0666);
 	if (!ph) {
-		D_ERROR("Failed to create pool, size="DF_U64", errno=%d\n",
-			size, errno);
-		return  -DER_NOSPACE;
+		D_ERROR("Failed to create pool %s, size="DF_U64", errno=%d\n",
+			path, size, errno);
+		return daos_errno2der(errno);
 	}
 
 	/* If the file is fallocated seperately we need the fallocated size
@@ -261,23 +261,24 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 
 		fd = open(path, O_RDWR);
 		if (fd < 0) {
-			D_ERROR("Failed to open %s\n", path);
-			D_GOTO(exit, rc = fd);
+			D_ERROR("Failed to open %s: %d\n", path, errno);
+			D_GOTO(exit, rc = daos_errno2der(errno));
 		}
 
 		addr = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 		if (addr == MAP_FAILED) {
 			close(fd);
-			D_ERROR("Failed to mmap %s, len:%d\n", path, len);
-			D_GOTO(exit, rc = -errno);
+			D_ERROR("Failed to mmap %s, len:%d: %d\n", path, len,
+				errno);
+			D_GOTO(exit, rc = daos_errno2der(errno));
 		}
 		memset((char *)addr, 0, len);
 
 		rc = munmap(addr, len);
 		if (rc) {
 			close(fd);
-			D_ERROR("Failed to munmap %s\n", path);
-			D_GOTO(exit, rc = -errno);
+			D_ERROR("Failed to munmap %s: %d\n", path, errno);
+			D_GOTO(exit, rc = daos_errno2der(errno));
 		}
 		close(fd);
 	} else {
