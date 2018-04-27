@@ -230,6 +230,12 @@ corpc_ver_mismatch_hdlr(crt_rpc_t *rpc_req)
 	D_ASSERT(rc == 0);
 	fprintf(stderr, "received magic number %d, reply %d\n",
 		rpc_req_input->magic, rpc_req_output->result);
+
+	/* now everybody evicts rank 2 so group destroy can succeed */
+	rc = crt_rank_evict(test.t_local_group, 2);
+	if (rc != DER_SUCCESS)
+		D_ERROR("crt_rank_evcit(grp=%p, rank=2) failed, rc %d\n",
+			test.t_local_group, rc);
 }
 
 static void

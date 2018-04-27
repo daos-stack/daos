@@ -162,6 +162,7 @@ struct crt_lookup_item {
 	crt_phy_addr_t		 li_base_phy_addr;
 	/* connected HG addr */
 	hg_addr_t		 li_tag_addr[CRT_SRV_CONTEXT_NUM];
+	crt_phy_addr_t		 li_uri[CRT_SRV_CONTEXT_NUM];
 	/* reference count */
 	uint32_t		 li_ref;
 	uint32_t		 li_initialized:1,
@@ -199,15 +200,15 @@ void crt_hdlr_grp_destroy(crt_rpc_t *rpc_req);
 void crt_hdlr_uri_lookup(crt_rpc_t *rpc_req);
 int crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
 int crt_grp_detach(crt_group_t *attached_grp);
-char *crt_get_tag_uri(const char *base_uri, int tag);
+char *crt_get_tag_uri(const char *base_uri, uint32_t tag);
 int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		      d_rank_t rank, uint32_t tag, crt_phy_addr_t *base_addr,
 		      hg_addr_t *hg_addr);
 int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
-			  d_rank_t rank, const char *uri);
+			  d_rank_t rank, uint32_t tag, const char *uri);
 int crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
 			   struct crt_context *ctx_idx,
-			   d_rank_t rank, int tag, hg_addr_t *hg_addr);
+			   d_rank_t rank, uint32_t tag, hg_addr_t *hg_addr);
 int crt_grp_ctx_invalid(struct crt_context *ctx, bool locked);
 struct crt_grp_priv *crt_grp_lookup_int_grpid(uint64_t int_grpid);
 int crt_validate_grpid(const crt_group_id_t grpid);

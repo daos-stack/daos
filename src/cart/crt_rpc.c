@@ -87,6 +87,7 @@ static struct crt_corpc_ops crt_grp_destroy_co_ops = {
 static struct crt_msg_field *crt_uri_lookup_in_fields[] = {
 	&CMF_GRP_ID,		/* ul_grp_id */
 	&CMF_RANK,		/* ul_rank */
+	&CMF_UINT32,		/* ul_tag */
 };
 
 static struct crt_msg_field *crt_uri_lookup_out_fields[] = {
@@ -854,7 +855,7 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 	struct crt_grp_priv		*grp_priv;
 	struct crt_context		*crt_ctx;
 	int				 ctx_idx;
-	int				 tag;
+	uint32_t			 tag;
 	int				 rc = 0;
 
 	rpc_priv = arg;
@@ -901,23 +902,21 @@ out:
 static inline int
 crt_req_get_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 {
-	int		rc;
+	char		*tgt_uri = NULL;
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(base_uri != NULL);
 
-	rpc_priv->crp_tgt_uri  =
-		crt_get_tag_uri(base_uri, rpc_priv->crp_pub.cr_ep.ep_tag);
-	if (rpc_priv->crp_tgt_uri == NULL) {
-		D_ERROR("crt_get_tag_uri failed, opc: %#x.\n",
-			rpc_priv->crp_pub.cr_opc);
-		rc = -DER_NOMEM;
-	} else {
-		rpc_priv->crp_uri_free = 1;
-		rc = 0;
-	}
+	D_ALLOC(tgt_uri, CRT_ADDR_STR_MAX_LEN);
+	if (tgt_uri == NULL)
+		return -DER_NOMEM;
 
-	return rc;
+	strncpy(tgt_uri, base_uri, CRT_ADDR_STR_MAX_LEN - 1);
+
+	rpc_priv->crp_tgt_uri = tgt_uri;
+	rpc_priv->crp_uri_free = 1;
+
+	return DER_SUCCESS;
 }
 
 static int
@@ -966,6 +965,7 @@ static void
 crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 {
 	d_rank_t			 rank;
+	uint32_t			 tag;
 	crt_endpoint_t			*tgt_ep;
 	struct crt_rpc_priv		*rpc_priv;
 	struct crt_grp_priv		*grp_priv;
@@ -981,6 +981,7 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	rank = tgt_ep->ep_rank;
+	tag = tgt_ep->ep_tag;
 	if (tgt_ep->ep_grp == NULL)
 		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
 	else
@@ -1008,7 +1009,7 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	uri = ul_out->ul_uri;
 
 	/* insert uri to hash table */
-	rc = crt_grp_lc_uri_insert(grp_priv, crt_ctx->cc_idx, rank, uri);
+	rc = crt_grp_lc_uri_insert(grp_priv, crt_ctx->cc_idx, rank, tag, uri);
 	if (rc != 0) {
 		D_ERROR("crt_grp_lc_uri_insert() failed, rc %d\n", rc);
 		D_GOTO(out, rc);
@@ -1086,6 +1087,7 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 	D_ASSERT(ul_in != NULL && ul_out != NULL);
 	ul_in->ul_grp_id = grp_priv->gp_pub.cg_grpid;
 	ul_in->ul_rank = rpc_priv->crp_pub.cr_ep.ep_rank;
+	ul_in->ul_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 	rc = crt_req_send(ul_req, complete_cb, arg);
 	if (rc != 0) {
 		D_ERROR("URI_LOOKUP (to group %s rank %d through PSR %d) "
@@ -1155,7 +1157,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 				D_GOTO(out, rc = -DER_NOMEM);
 
 			rc = crt_grp_lc_uri_insert(grp_priv, ctx->cc_idx,
-						   tgt_ep->ep_rank, uri);
+						   tgt_ep->ep_rank, 0, uri);
 			if (rc != 0) {
 				D_ERROR("crt_grp_lc_uri_insert() failed, "
 					"rc: %d\n", rc);
@@ -1261,7 +1263,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		}
 	}
 	rc = crt_grp_lc_uri_insert(default_grp_priv, crt_ctx->cc_idx,
-				   rank, uri);
+				   rank, 0, uri);
 	if (rc != 0) {
 		D_ERROR("crt_grp_lc_uri_insert() failed, rc %d\n", rc);
 		D_GOTO(out, rc);

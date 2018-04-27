@@ -284,6 +284,7 @@ struct crt_grp_destroy_out {
 struct crt_uri_lookup_in {
 	crt_group_id_t		ul_grp_id;
 	d_rank_t		ul_rank;
+	uint32_t		ul_tag;
 };
 
 struct crt_uri_lookup_out {
