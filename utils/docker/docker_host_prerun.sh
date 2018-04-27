@@ -64,6 +64,10 @@ printf "export BUILD_NUMBER=${BUILD_NUMBER}\n" >> \
 set -e
 chmod 755 ${docker_setup_file}
 
+# Export the path to all artifacts
+printf "export DIST_TARGET=${DIST_TARGET}\n" >> \
+    ${docker_setup_file}
+
 set +u
 # Pass the klocwork environment variables to the container.
 if [ -n "${KLOCWORK_PROJECT}" ]; then
