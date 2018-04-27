@@ -547,6 +547,7 @@ pool_svc_create_group(struct pool_svc *svc, struct pool_map *map)
 	return 0;
 }
 
+/* If the DB is new, +DER_UNINIT is returned. */
 static int
 pool_svc_step_up(struct pool_svc *svc)
 {
@@ -566,34 +567,31 @@ pool_svc_step_up(struct pool_svc *svc)
 	/* Read the pool map into map and map_version. */
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
-		return rc;
-
+		goto out;
 	ABT_rwlock_rdlock(svc->ps_lock);
 	rc = read_map(&tx, &svc->ps_root, &map);
-	if (rc == 0) {
+	if (rc == 0)
 		rc = rdb_get_ranks(svc->ps_db, &replicas);
-		if (rc)
-			D_ERROR(DF_UUID": get ranks failed: %d\n",
-				DP_UUID(svc->ps_uuid), rc);
-	} else {
-		D_ERROR(DF_UUID": read map failed: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
-	}
 	ABT_rwlock_unlock(svc->ps_lock);
-
 	rdb_tx_end(&tx);
 	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
+		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DF_DSMS, DF_UUID": new db\n",
 				DP_UUID(svc->ps_uuid));
-		D_GOTO(failed, rc);
+			rc = DER_UNINIT;
+		} else {
+			D_ERROR(DF_UUID": failed to get %s: %d\n",
+				DP_UUID(svc->ps_uuid),
+				map == NULL ? "pool map" : "replica ranks", rc);
+		}
+		goto out;
 	}
 	map_version = pool_map_get_version(map);
 
 	/* Create the pool group. */
 	rc = pool_svc_create_group(svc, map);
 	if (rc != 0)
-		D_GOTO(failed, rc);
+		goto out;
 
 	/* Create or revalidate svc->ps_pool with map and map_version. */
 	D_ASSERT(svc->ps_pool == NULL);
@@ -604,7 +602,7 @@ pool_svc_step_up(struct pool_svc *svc)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
-		D_GOTO(failed, rc);
+		goto out;
 	}
 	pool = svc->ps_pool;
 	ABT_rwlock_wrlock(pool->sp_lock);
@@ -633,20 +631,19 @@ pool_svc_step_up(struct pool_svc *svc)
 
 	ds_cont_svc_step_up(svc->ps_cont_svc);
 
-	/*
-	 * TODO: Step down svc->ps_cont_svc and put svc->ps_pool
-	 * on errors.
-	 */
 	rc = ds_rebuild_regenerate_task(pool, replicas);
-	if (rc)
-		D_GOTO(failed, rc);
+	if (rc != 0) {
+		ds_cont_svc_step_down(svc->ps_cont_svc);
+		ds_pool_put(svc->ps_pool);
+		svc->ps_pool = NULL;
+		goto out;
+	}
 
 	rc = crt_group_rank(NULL, &rank);
 	D_ASSERTF(rc == 0, "%d\n", rc);
-
 	D_PRINT(DF_UUID": rank %u became pool service leader "DF_U64"\n",
 		DP_UUID(svc->ps_uuid), rank, svc->ps_term);
-failed:
+out:
 	if (map != NULL)
 		pool_map_decref(map);
 	if (replicas)
@@ -709,7 +706,7 @@ pool_svc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 	svc->ps_term = term;
 
 	rc = pool_svc_step_up(svc);
-	if (rc == -DER_NONEXIST) {
+	if (rc == DER_UNINIT) {
 		svc->ps_state = POOL_SVC_UP_EMPTY;
 		D_GOTO(out_mutex, rc = 0);
 	} else if (rc != 0) {
@@ -1509,7 +1506,7 @@ out_tx:
 			DP_UUID(in->pri_op.pi_uuid));
 		rc = pool_svc_step_up(svc);
 		if (rc != 0) {
-			D_ASSERT(rc != -DER_NONEXIST);
+			D_ASSERT(rc != DER_UNINIT);
 			/* TODO: Ask rdb to step down. */
 			D_GOTO(out_svc, rc);
 		}
