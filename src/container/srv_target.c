@@ -925,6 +925,7 @@ cont_epoch_aggregate_one(void *vin)
 	int					found;
 	int					rc;
 	bool					finish;
+	size_t					i;
 
 	purge_credits = getenv("DAOS_PURGE_CREDITS");
 	credits = daos_env2uint(purge_credits);
@@ -950,94 +951,107 @@ cont_epoch_aggregate_one(void *vin)
 		 * Aggregate ULT is run in background so ignore return values
 		 * further more aggregation is idempotent.
 		 */
-		D_GOTO(pool_child, rc);
+		goto pool_child;
 	}
 
 	memset(&param, 0, sizeof(param));
-	param.ip_hdl	    = vos_chdl;
-	param.ip_epr.epr_lo = in->tai_start_epoch;
-	param.ip_epr.epr_hi = in->tai_end_epoch;
+	param.ip_hdl = vos_chdl;
+	found = 0;
+	aggregated = 0;
+	for (i = 0; i < in->tai_epr_list.ca_count; i++) {
+		param.ip_epr = ((daos_epoch_range_t *)
+				 in->tai_epr_list.ca_arrays)[i];
+		D_DEBUG(DF_DSMS, DF_CONT": epr[%lu]="DF_U64"->"DF_U64"\n",
+			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
+			i, param.ip_epr.epr_lo, param.ip_epr.epr_hi);
 
-	opstr = "preparing vos obj iterator ";
-	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_hdl);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed %s : %d",
-			DP_CONT(in->tai_pool_uuid,
-				in->tai_cont_uuid), opstr, rc);
-		D_GOTO(cont_close, rc);
-	}
-
-	opstr = "setting first probe for vos obj iterator";
-	rc = vos_iter_probe(iter_hdl, NULL);
-	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DF_DSMS, DF_CONT": No objects to iterate\n",
-			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid));
-		/* empty container then set the highest epoch and exit */
-		set_container_purged_epoch(vos_chdl, in, &param.ip_epr);
-		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("failed %s : %d\n", opstr, rc);
-		D_GOTO(out, rc);
-	}
-
-	for (aggregated = 0, found = 0; true; ) {
-		vos_iter_entry_t	ent;
-		vos_purge_anchor_t	anchor;
-
-		if (rc == 0) {
-			opstr = "iter fetch with vos obj iterator";
-			rc = vos_iter_fetch(iter_hdl, &ent, NULL);
+		opstr = "preparing vos obj iterator ";
+		rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_hdl);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed %s : %d",
+				DP_CONT(in->tai_pool_uuid,
+					in->tai_cont_uuid), opstr, rc);
+			goto cont_close;
 		}
 
+		opstr = "setting first probe for vos obj iterator";
+		rc = vos_iter_probe(iter_hdl, NULL);
 		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DF_DSMS, DF_CONT": Finish obj iteration\n",
-				DP_CONT(in->tai_pool_uuid,
-					in->tai_cont_uuid));
+			D_DEBUG(DF_DSMS, DF_CONT": No objects to iterate\n",
+				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid));
+			/* empty container then set highest epoch and exit */
 			set_container_purged_epoch(vos_chdl, in, &param.ip_epr);
 			rc = 0;
-			break;
+			goto end_loop;
 		}
 
 		if (rc != 0) {
-			D_ERROR("obj iterator in "DF_CONT" failed to %s: %d",
-				DP_CONT(in->tai_pool_uuid,
-					in->tai_cont_uuid), opstr, rc);
-
-			D_GOTO(out, rc);
+			D_ERROR("failed %s : %d\n", opstr, rc);
+			goto end_loop;
 		}
-		found++;
 
-		memset(&anchor, 0, sizeof(vos_purge_anchor_t));
 		while (true) {
-			unsigned int	l_credits = credits;
+			vos_iter_entry_t	ent;
+			vos_purge_anchor_t	anchor;
 
-			finish = false;
-			rc = vos_epoch_aggregate(vos_chdl, ent.ie_oid,
-						 &param.ip_epr, &l_credits,
-						 &anchor, &finish);
-			if (rc != 0)
-				D_GOTO(out, rc);
+			if (rc == 0) {
+				opstr = "iter fetch with vos obj iterator";
+				rc = vos_iter_fetch(iter_hdl, &ent, NULL);
+			}
 
-			if (finish) {
-				D_DEBUG(DB_EPC,
-					"Finished "DF_U64"->"DF_U64")\n",
-					param.ip_epr.epr_lo,
-					param.ip_epr.epr_hi);
+			if (rc == -DER_NONEXIST) {
+				D_DEBUG(DF_DSMS, DF_CONT
+					": Finish obj iteration\n",
+					DP_CONT(in->tai_pool_uuid,
+						in->tai_cont_uuid));
+				set_container_purged_epoch(vos_chdl, in,
+							   &param.ip_epr);
+				rc = 0;
 				break;
 			}
-			ABT_thread_yield();
+
+			if (rc != 0) {
+				D_ERROR("obj iterator in "DF_CONT
+					" failed to %s: %d",
+					DP_CONT(in->tai_pool_uuid,
+						in->tai_cont_uuid), opstr, rc);
+				goto end_loop;
+			}
+			found++;
+
+			memset(&anchor, 0, sizeof(vos_purge_anchor_t));
+			while (true) {
+				unsigned int	l_credits = credits;
+
+				finish = false;
+				rc = vos_epoch_aggregate(vos_chdl, ent.ie_oid,
+							 &param.ip_epr,
+							 &l_credits,
+							 &anchor, &finish);
+				if (rc != 0)
+					goto end_loop;
+
+				if (finish) {
+					D_DEBUG(DB_EPC, "Finished "
+						DF_U64"->"DF_U64")\n",
+						param.ip_epr.epr_lo,
+						param.ip_epr.epr_hi);
+					break;
+				}
+				ABT_thread_yield();
+			}
+			aggregated++;
+			opstr = "iter next with vos obj iterator";
+			rc = vos_iter_next(iter_hdl);
 		}
-		aggregated++;
-		opstr = "iter next with vos obj iterator";
-		rc = vos_iter_next(iter_hdl);
+end_loop:
+		vos_iter_finish(iter_hdl);
+		if (rc != 0)
+			goto cont_close;
 	}
 	D_DEBUG(DF_DSMS, DF_CONT": aggregated %d/%d objects\n",
 		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
 			aggregated, found);
-out:
-	vos_iter_finish(iter_hdl);
 cont_close:
 	vos_cont_close(vos_chdl);
 pool_child:
@@ -1048,33 +1062,65 @@ pool_child:
 void
 ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 {
-	struct cont_tgt_epoch_aggregate_in     *in = crt_req_get(rpc);
-	struct cont_tgt_epoch_aggregate_out    *out = crt_reply_get(rpc);
-	int					rc = 0;
+	struct cont_tgt_epoch_aggregate_in	 in_copy;
+	struct cont_tgt_epoch_aggregate_in	*in  = crt_req_get(rpc);
+	struct cont_tgt_epoch_aggregate_out	*out = crt_reply_get(rpc);
+	daos_epoch_range_t			*epr;
+	int					 i, rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: epr="DF_U64"->"DF_U64"\n",
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: epr (%p) [#"DF_U64"]\n",
 		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
-		in->tai_start_epoch, in->tai_end_epoch);
+		in->tai_epr_list.ca_arrays, in->tai_epr_list.ca_count);
+	epr = in->tai_epr_list.ca_arrays;
+	rc = 0;
+	for (i = 0; i < in->tai_epr_list.ca_count; i++) {
+		if (epr[i].epr_hi <= epr[i].epr_lo) {
+			D_ERROR(DF_CONT": Invalid Range "DF_U64"->"DF_U64"\n",
+				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
+				epr[i].epr_lo, epr[i].epr_hi);
+			rc = -DER_INVAL;
+			goto out;
+		} else if (epr[i].epr_hi == 0) {
+			D_ERROR(DF_CONT": Read-only Epoch "DF_U64"\n",
+				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
+				epr[i].epr_hi);
+			rc = -DER_EP_RO;
+			goto out;
+		} else if (epr[i].epr_hi >= DAOS_EPOCH_MAX) {
+			D_ERROR(DF_CONT": Epoch out of bounds "DF_U64"\n",
+				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
+				epr[i].epr_hi);
+			rc = -DER_OVERFLOW;
+			goto out;
+		}
+	}
 
-	if (in->tai_end_epoch == 0)
-		rc = -DER_EP_RO;
-	else if (in->tai_end_epoch >= DAOS_EPOCH_MAX)
-		rc = -DER_OVERFLOW;
+	/* TODO: Use bulk transfer to avoid memory copy? */
+	D_ALLOC_ARRAY(epr, (int) in->tai_epr_list.ca_count);
+	if (epr == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	memcpy(epr, in->tai_epr_list.ca_arrays,
+	       sizeof(*epr) * in->tai_epr_list.ca_count);
+	in_copy = *in;
+	in_copy.tai_epr_list.ca_arrays = epr;
 
+out:
 	/* Reply without waiting for the aggregation ULTs to finish. */
 	out->tao_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
-		DP_CONT(NULL, NULL), rpc, out->tao_rc, rc);
+		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
+		rpc, out->tao_rc, rc);
 	crt_reply_send(rpc);
-
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_thread_collective(cont_epoch_aggregate_one, in);
+	rc = dss_thread_collective(cont_epoch_aggregate_one, &in_copy);
 	if (rc != 0)
-		D_ERROR(DF_CONT": failed to aggregate "DF_U64"->"DF_U64": %d\n",
-			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
-			in->tai_start_epoch, in->tai_end_epoch, rc);
+		D_ERROR(DF_CONT": Aggregation failed: %d\n",
+			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rc);
+	D_FREE(epr);
 }
 
 int

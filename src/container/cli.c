@@ -1263,11 +1263,12 @@ out:
 	return rc;
 }
 
-struct cont_attr_args {
-	struct dc_pool	*caa_pool;
-	struct dc_cont	*caa_cont;
-	crt_rpc_t	*caa_rpc;
-	crt_bulk_t	 caa_bulk;
+struct cont_req_arg {
+	struct dc_pool	*cra_pool;
+	struct dc_cont	*cra_cont;
+	crt_rpc_t	*cra_rpc;
+	crt_bulk_t	 cra_bulk;
+	tse_task_cb_t	 cra_callback;
 };
 
 enum creq_cleanup_stage {
@@ -1279,33 +1280,33 @@ enum creq_cleanup_stage {
 };
 
 static void
-cont_req_cleanup(enum creq_cleanup_stage stage, struct cont_attr_args *args)
+cont_req_cleanup(enum creq_cleanup_stage stage, struct cont_req_arg *args)
 {
 	switch (stage) {
 	case CLEANUP_ALL:
-		crt_req_decref(args->caa_rpc);
+		crt_req_decref(args->cra_rpc);
 	case CLEANUP_BULK:
-		if (args->caa_bulk)
-			crt_bulk_free(args->caa_bulk);
+		if (args->cra_bulk)
+			crt_bulk_free(args->cra_bulk);
 	case CLEANUP_RPC:
-		crt_req_decref(args->caa_rpc);
+		crt_req_decref(args->cra_rpc);
 	case CLEANUP_POOL:
-		dc_pool_put(args->caa_pool);
+		dc_pool_put(args->cra_pool);
 	case CLEANUP_CONT:
-		dc_cont_put(args->caa_cont);
+		dc_cont_put(args->cra_cont);
 	}
 }
 
 static int
-attr_req_complete(tse_task_t *task, void *data)
+cont_req_complete(tse_task_t *task, void *data)
 {
-	struct cont_attr_args	*args = data;
-	struct dc_pool		*pool	 = args->caa_pool;
-	struct dc_cont		*cont	 = args->caa_cont;
-	struct cont_op_out	*op_out	 = crt_reply_get(args->caa_rpc);
+	struct cont_req_arg	*args = data;
+	struct dc_pool		*pool	 = args->cra_pool;
+	struct dc_cont		*cont	 = args->cra_cont;
+	struct cont_op_out	*op_out	 = crt_reply_get(args->cra_rpc);
 	int			 rc	 = task->dt_result;
 
-	rc = cont_rsvc_client_complete_rpc(pool, &args->caa_rpc->cr_ep,
+	rc = cont_rsvc_client_complete_rpc(pool, &args->cra_rpc->cr_ep,
 					   rc, op_out, task);
 	if (rc < 0)
 		D_GOTO(out, rc);
@@ -1327,54 +1328,58 @@ attr_req_complete(tse_task_t *task, void *data)
 	D_DEBUG(DF_DSMC, DF_CONT": Accessed: using hdl="DF_UUID"\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
+
+	if (args->cra_callback != NULL)
+		args->cra_callback(task, data);
 out:
 	cont_req_cleanup(CLEANUP_BULK, args);
 	return rc;
 }
 
 static int
-attr_list_req_complete(tse_task_t *task, void *data)
-{
-	struct cont_attr_args	  *args = data;
-	daos_cont_attr_list_t	  *task_args = dc_task_get_args(task);
-	struct cont_attr_list_out *out = crt_reply_get(args->caa_rpc);
-
-	*task_args->size = out->calo_size;
-	return attr_req_complete(task, data);
-}
-
-static int
-attr_req_prepare(daos_handle_t coh, enum cont_operation opcode,
-		 crt_context_t *ctx, struct cont_attr_args *args)
+cont_req_prepare(daos_handle_t coh, enum cont_operation opcode,
+		 crt_context_t *ctx, struct cont_req_arg *args)
 {
 	struct cont_op_in *in;
 	crt_endpoint_t	   ep;
 	int		   rc;
 
-	args->caa_cont = dc_hdl2cont(coh);
-	if (args->caa_cont == NULL)
+	memset(args, 0, sizeof(*args));
+	args->cra_cont = dc_hdl2cont(coh);
+	if (args->cra_cont == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
-	args->caa_pool = dc_hdl2pool(args->caa_cont->dc_pool_hdl);
-	D_ASSERT(args->caa_pool != NULL);
+	args->cra_pool = dc_hdl2pool(args->cra_cont->dc_pool_hdl);
+	D_ASSERT(args->cra_pool != NULL);
 
-	ep.ep_grp  = args->caa_pool->dp_group;
-	D_MUTEX_LOCK(&args->caa_pool->dp_client_lock);
-	rsvc_client_choose(&args->caa_pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&args->caa_pool->dp_client_lock);
+	ep.ep_grp  = args->cra_pool->dp_group;
+	D_MUTEX_LOCK(&args->cra_pool->dp_client_lock);
+	rsvc_client_choose(&args->cra_pool->dp_client, &ep);
+	D_MUTEX_UNLOCK(&args->cra_pool->dp_client_lock);
 
-	rc = cont_req_create(ctx, &ep, opcode, &args->caa_rpc);
+	rc = cont_req_create(ctx, &ep, opcode, &args->cra_rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		cont_req_cleanup(CLEANUP_POOL, args);
 		D_GOTO(out, rc);
 	}
 
-	in = crt_req_get(args->caa_rpc);
-	uuid_copy(in->ci_pool_hdl, args->caa_pool->dp_pool_hdl);
-	uuid_copy(in->ci_uuid, args->caa_cont->dc_uuid);
-	uuid_copy(in->ci_hdl, args->caa_cont->dc_cont_hdl);
+	in = crt_req_get(args->cra_rpc);
+	uuid_copy(in->ci_pool_hdl, args->cra_pool->dp_pool_hdl);
+	uuid_copy(in->ci_uuid, args->cra_cont->dc_uuid);
+	uuid_copy(in->ci_hdl, args->cra_cont->dc_cont_hdl);
 out:
 	return rc;
+}
+
+static int
+attr_list_req_complete(tse_task_t *task, void *data)
+{
+	struct cont_req_arg	  *args = data;
+	daos_cont_attr_list_t	  *task_args = dc_task_get_args(task);
+	struct cont_attr_list_out *out = crt_reply_get(args->cra_rpc);
+
+	*task_args->size = out->calo_size;
+	return 0;
 }
 
 int
@@ -1382,7 +1387,7 @@ dc_cont_attr_list(tse_task_t *task)
 {
 	daos_cont_attr_list_t		*args;
 	struct cont_attr_list_in	*in;
-	struct cont_attr_args		 cb_args;
+	struct cont_req_arg		 cb_args;
 	int				 rc;
 
 	args = dc_task_get_args(task);
@@ -1393,18 +1398,18 @@ dc_cont_attr_list(tse_task_t *task)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = attr_req_prepare(args->coh, CONT_ATTR_LIST,
+	rc = cont_req_prepare(args->coh, CONT_ATTR_LIST,
 			     daos_task2ctx(task), &cb_args);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	D_DEBUG(DF_DSMC, DF_CONT": listing attributes: hdl="
 			 DF_UUID "; size=%lu\n",
-		DP_CONT(cb_args.caa_pool->dp_pool_hdl,
-			cb_args.caa_cont->dc_uuid),
-		DP_UUID(cb_args.caa_cont->dc_cont_hdl), *args->size);
+		DP_CONT(cb_args.cra_pool->dp_pool_hdl,
+			cb_args.cra_cont->dc_uuid),
+		DP_UUID(cb_args.cra_cont->dc_cont_hdl), *args->size);
 
-	in = crt_req_get(cb_args.caa_rpc);
+	in = crt_req_get(cb_args.cra_rpc);
 	if (*args->size > 0) {
 		daos_iov_t iov = {
 			.iov_buf     = args->buf,
@@ -1424,16 +1429,17 @@ dc_cont_attr_list(tse_task_t *task)
 		}
 	}
 
-	cb_args.caa_bulk = in->cali_bulk;
-	rc = tse_task_register_comp_cb(task, attr_list_req_complete,
+	cb_args.cra_bulk = in->cali_bulk;
+	cb_args.cra_callback = attr_list_req_complete;
+	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_BULK, &cb_args);
 		D_GOTO(out, rc);
 	}
 
-	crt_req_addref(cb_args.caa_rpc);
-	rc = daos_rpc_send(cb_args.caa_rpc, task);
+	crt_req_addref(cb_args.cra_rpc);
+	rc = daos_rpc_send(cb_args.cra_rpc, task);
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_ALL, &cb_args);
 		D_GOTO(out, rc);
@@ -1520,7 +1526,7 @@ dc_cont_attr_get(tse_task_t *task)
 {
 	daos_cont_attr_get_t	*args;
 	struct cont_attr_get_in	*in;
-	struct cont_attr_args	 cb_args;
+	struct cont_req_arg	 cb_args;
 	int			 rc;
 	int			 i;
 
@@ -1533,17 +1539,17 @@ dc_cont_attr_get(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = attr_req_prepare(args->coh, CONT_ATTR_GET,
+	rc = cont_req_prepare(args->coh, CONT_ATTR_GET,
 			     daos_task2ctx(task), &cb_args);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	D_DEBUG(DF_DSMC, DF_CONT": getting attributes: hdl="DF_UUID"\n",
-		DP_CONT(cb_args.caa_pool->dp_pool_hdl,
-			cb_args.caa_cont->dc_uuid),
-		DP_UUID(cb_args.caa_cont->dc_cont_hdl));
+		DP_CONT(cb_args.cra_pool->dp_pool_hdl,
+			cb_args.cra_cont->dc_uuid),
+		DP_UUID(cb_args.cra_cont->dc_cont_hdl));
 
-	in = crt_req_get(cb_args.caa_rpc);
+	in = crt_req_get(cb_args.cra_rpc);
 	in->cagi_count = args->n;
 	for (i = 0, in->cagi_key_length = 0; i < args->n; i++)
 		in->cagi_key_length += strlen(args->names[i]) + 1;
@@ -1556,16 +1562,16 @@ dc_cont_attr_get(tse_task_t *task)
 		D_GOTO(out, rc);
 	}
 
-	cb_args.caa_bulk = in->cagi_bulk;
-	rc = tse_task_register_comp_cb(task, attr_req_complete,
+	cb_args.cra_bulk = in->cagi_bulk;
+	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_BULK, &cb_args);
 		D_GOTO(out, rc);
 	}
 
-	crt_req_addref(cb_args.caa_rpc);
-	rc = daos_rpc_send(cb_args.caa_rpc, task);
+	crt_req_addref(cb_args.cra_rpc);
+	rc = daos_rpc_send(cb_args.cra_rpc, task);
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_ALL, &cb_args);
 		D_GOTO(out, rc);
@@ -1583,7 +1589,7 @@ dc_cont_attr_set(tse_task_t *task)
 {
 	daos_cont_attr_set_t	*args;
 	struct cont_attr_set_in	*in;
-	struct cont_attr_args	 cb_args;
+	struct cont_req_arg	 cb_args;
 	int			 rc;
 
 	args = dc_task_get_args(task);
@@ -1594,17 +1600,17 @@ dc_cont_attr_set(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = attr_req_prepare(args->coh, CONT_ATTR_SET,
+	rc = cont_req_prepare(args->coh, CONT_ATTR_SET,
 			     daos_task2ctx(task), &cb_args);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	D_DEBUG(DF_DSMC, DF_CONT": setting attributes: hdl="DF_UUID"\n",
-		DP_CONT(cb_args.caa_pool->dp_pool_hdl,
-			cb_args.caa_cont->dc_uuid),
-		DP_UUID(cb_args.caa_cont->dc_cont_hdl));
+		DP_CONT(cb_args.cra_pool->dp_pool_hdl,
+			cb_args.cra_cont->dc_uuid),
+		DP_UUID(cb_args.cra_cont->dc_cont_hdl));
 
-	in = crt_req_get(cb_args.caa_rpc);
+	in = crt_req_get(cb_args.cra_rpc);
 	in->casi_count = args->n;
 	rc = attr_bulk_create(args->n, (char **)args->names,
 			      (void **)args->values, (size_t *)args->sizes,
@@ -1614,16 +1620,16 @@ dc_cont_attr_set(tse_task_t *task)
 		D_GOTO(out, rc);
 	}
 
-	cb_args.caa_bulk = in->casi_bulk;
-	rc = tse_task_register_comp_cb(task, attr_req_complete,
+	cb_args.cra_bulk = in->casi_bulk;
+	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_BULK, &cb_args);
 		D_GOTO(out, rc);
 	}
 
-	crt_req_addref(cb_args.caa_rpc);
-	rc = daos_rpc_send(cb_args.caa_rpc, task);
+	crt_req_addref(cb_args.cra_rpc);
+	rc = daos_rpc_send(cb_args.cra_rpc, task);
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_ALL, &cb_args);
 		D_GOTO(out, rc);
@@ -1636,85 +1642,37 @@ out:
 	return rc;
 }
 
-int
-dc_snap_create(tse_task_t *task)
-{
-	return -DER_NOSYS;
-}
-
-int
-dc_snap_list(tse_task_t *task)
-{
-	return -DER_NOSYS;
-}
-
-int
-dc_snap_destroy(tse_task_t *task)
-{
-	return -DER_NOSYS;
-}
-
 struct epoch_op_arg {
-	struct dc_pool		*eoa_pool;
-	struct dc_cont		*eoa_cont;
+	/* eoa_req must always be the first member of epoch_op_arg */
+	struct cont_req_arg	 eoa_req;
 	daos_epoch_t		*eoa_epoch;
 	daos_epoch_state_t	*eoa_state;
-	crt_rpc_t		*rpc;
 };
 
 static int
 epoch_op_complete(tse_task_t *task, void *data)
 {
-	struct epoch_op_arg	       *arg = (struct epoch_op_arg *)data;
-	crt_rpc_t		       *rpc = arg->rpc;
-	crt_opcode_t			opc = opc_get(rpc->cr_opc);
-	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
-	int				rc = task->dt_result;
-
-	rc = cont_rsvc_client_complete_rpc(arg->eoa_pool, &arg->rpc->cr_ep, rc,
-					   &out->ceo_op, task);
-	if (rc < 0)
-		D_GOTO(out, rc);
-	else if (rc == RSVC_CLIENT_RECHOOSE)
-		D_GOTO(out, rc = 0);
-
-	if (rc != 0) {
-		D_ERROR("RPC error during epoch operation %u: %d\n", opc, rc);
-		D_GOTO(out, rc);
-	}
-
-	rc = out->ceo_op.co_rc;
-	if (rc != 0) {
-		D_ERROR("epoch operation %u failed: %d\n", opc, rc);
-		D_GOTO(out, rc);
-	}
-
-	D_DEBUG(DF_DSMC, "completed epoch operation %u\n", opc);
+	struct epoch_op_arg	  *args = data;
+	crt_rpc_t		  *rpc  = args->eoa_req.cra_rpc;
+	crt_opcode_t		   opc  = opc_get(rpc->cr_opc);
+	struct cont_epoch_op_out  *out  = crt_reply_get(rpc);
 
 	if (opc == CONT_EPOCH_HOLD)
-		*arg->eoa_epoch = out->ceo_epoch_state.es_lhe;
+		*args->eoa_epoch = out->ceo_epoch_state.es_lhe;
 
-	if (arg->eoa_state != NULL)
-		*arg->eoa_state = out->ceo_epoch_state;
-
-out:
-	crt_req_decref(rpc);
-	dc_pool_put(arg->eoa_pool);
-	dc_cont_put(arg->eoa_cont);
-	return rc;
+	if (args->eoa_state != NULL)
+		*args->eoa_state = out->ceo_epoch_state;
+	D_DEBUG(DF_DSMC, "completed epoch operation %u\n", opc);
+	return 0;
 }
 
 static int
 epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	 daos_epoch_state_t *state, tse_task_t *task)
 {
-	struct cont_epoch_op_in	       *in;
-	struct dc_pool		       *pool;
-	struct dc_cont		       *cont;
-	crt_endpoint_t			ep;
-	crt_rpc_t		       *rpc;
-	struct epoch_op_arg	        arg;
-	int				rc;
+	struct cont_epoch_op_in	*in;
+	struct epoch_op_arg	 arg;
+	int			 rc;
 
 	/* Check incoming arguments. */
 	switch (opc) {
@@ -1723,67 +1681,54 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		break;
 	case CONT_EPOCH_HOLD:
 		if (epoch == NULL)
-			D_GOTO(err, rc = -DER_INVAL);
+			D_GOTO(out, rc = -DER_INVAL);
 		break;
 	case CONT_EPOCH_SLIP:
 	case CONT_EPOCH_DISCARD:
 	case CONT_EPOCH_COMMIT:
+	case CONT_SNAP_CREATE:
+	case CONT_SNAP_DESTROY:
 		D_ASSERT(epoch != NULL);
 		if (*epoch >= DAOS_EPOCH_MAX)
-			D_GOTO(err, rc = -DER_OVERFLOW);
+			D_GOTO(out, rc = -DER_OVERFLOW);
 		break;
 	}
 
-	cont = dc_hdl2cont(coh);
-	if (cont == NULL)
-		D_GOTO(err, rc = -DER_NO_HDL);
+	rc = cont_req_prepare(coh, opc,
+			      daos_task2ctx(task), &arg.eoa_req);
+	if (rc != 0)
+		goto out;
 
-	pool = dc_hdl2pool(cont->dc_pool_hdl);
-	D_ASSERT(pool != NULL);
+	D_DEBUG(DF_DSMC, DF_CONT": op=%u; hdl="DF_UUID"; epoch="DF_U64"\n",
+		DP_CONT(arg.eoa_req.cra_pool->dp_pool_hdl,
+			arg.eoa_req.cra_cont->dc_uuid), opc,
+		DP_UUID(arg.eoa_req.cra_cont->dc_cont_hdl),
+		epoch == NULL ? 0 : *epoch);
 
-	D_DEBUG(DF_DSMC, DF_CONT": op=%u hdl="DF_UUID" epoch="DF_U64"\n",
-		DP_CONT(pool->dp_pool, cont->dc_uuid), opc,
-		DP_UUID(cont->dc_cont_hdl), epoch == NULL ? 0 : *epoch);
-
-	ep.ep_grp = pool->dp_group;
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
-	rc = cont_req_create(daos_task2ctx(task), &ep, opc, &rpc);
-	if (rc != 0) {
-		D_ERROR("failed to create rpc: %d\n", rc);
-		D_GOTO(err_pool, rc);
-	}
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->cei_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cei_op.ci_uuid, cont->dc_uuid);
-	uuid_copy(in->cei_op.ci_hdl, cont->dc_cont_hdl);
+	in = crt_req_get(arg.eoa_req.cra_rpc);
 	if (opc != CONT_EPOCH_QUERY)
 		in->cei_epoch = *epoch;
 
-	arg.eoa_pool = pool;
-	arg.eoa_cont = cont;
 	arg.eoa_epoch = epoch;
 	arg.eoa_state = state;
-	crt_req_addref(rpc);
-	arg.rpc = rpc;
+	if (!(opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY))
+		arg.eoa_req.cra_callback = epoch_op_complete;
 
-	rc = tse_task_register_comp_cb(task, epoch_op_complete, &arg,
-				       sizeof(arg));
-	if (rc != 0)
-		D_GOTO(err_rpc, rc);
+	rc = tse_task_register_comp_cb(task, cont_req_complete,
+				       &arg, sizeof(arg));
+	if (rc != 0) {
+		cont_req_cleanup(CLEANUP_ALL, &arg.eoa_req);
+		goto out;
+	}
 
-	/** send the request */
-	return daos_rpc_send(rpc, task);
-
-err_rpc:
-	crt_req_decref(rpc);
-	crt_req_decref(rpc);
-err_pool:
-	dc_pool_put(pool);
-	dc_cont_put(cont);
-err:
+	crt_req_addref(arg.eoa_req.cra_rpc);
+	rc = daos_rpc_send(arg.eoa_req.cra_rpc, task);
+	if (rc != 0) {
+		cont_req_cleanup(CLEANUP_ALL, &arg.eoa_req);
+		goto out;
+	}
+	return rc;
+out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc,
 		epoch == NULL ? 0 : *epoch, rc);
@@ -1859,6 +1804,111 @@ int
 dc_epoch_wait(tse_task_t *task)
 {
 	return -DER_NOSYS;
+}
+
+int
+dc_snap_create(tse_task_t *task)
+{
+	daos_snap_create_t *args;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return epoch_op(args->coh, CONT_SNAP_CREATE,
+			&args->epoch, NULL, task);
+}
+
+int
+dc_snap_destroy(tse_task_t *task)
+{
+	daos_snap_destroy_t *args;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return epoch_op(args->coh, CONT_SNAP_DESTROY,
+			&args->epoch, NULL, task);
+}
+
+static int
+snap_list_req_complete(tse_task_t *task, void *data)
+{
+	struct cont_req_arg	  *args = data;
+	daos_snap_list_t	  *task_args = dc_task_get_args(task);
+	struct cont_snap_list_out *out = crt_reply_get(args->cra_rpc);
+
+	*task_args->n = out->slo_count;
+	return 0;
+}
+
+int
+dc_snap_list(tse_task_t *task)
+{
+	daos_snap_list_t		*args;
+	struct cont_snap_list_in	*in;
+	struct cont_req_arg		 cb_args;
+	int				 rc;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (args->n == NULL)
+		D_GOTO(out, rc = -DER_INVAL);
+	if (args->buf == NULL || *args->n < 0)
+		*args->n = 0;
+
+	rc = cont_req_prepare(args->coh, CONT_SNAP_LIST,
+			     daos_task2ctx(task), &cb_args);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DF_DSMC, DF_CONT": listing snapshots: hdl="
+			 DF_UUID "; size=%d\n",
+		DP_CONT(cb_args.cra_pool->dp_pool_hdl,
+			cb_args.cra_cont->dc_uuid),
+		DP_UUID(cb_args.cra_cont->dc_cont_hdl), *args->n);
+
+	in = crt_req_get(cb_args.cra_rpc);
+	if (*args->n > 0) {
+		daos_iov_t iov = {
+			.iov_buf     = args->buf,
+			.iov_buf_len = *args->n * sizeof(*args->buf),
+			.iov_len     = 0
+		};
+		daos_sg_list_t sgl = {
+			.sg_nr_out = 0,
+			.sg_nr	   = 1,
+			.sg_iovs   = &iov
+		};
+		rc = crt_bulk_create(daos_task2ctx(task), daos2crt_sg(&sgl),
+				     CRT_BULK_RW, &in->sli_bulk);
+		if (rc != 0) {
+			cont_req_cleanup(CLEANUP_RPC, &cb_args);
+			D_GOTO(out, rc);
+		}
+	}
+
+	cb_args.cra_bulk = in->sli_bulk;
+	cb_args.cra_callback = snap_list_req_complete;
+	rc = tse_task_register_comp_cb(task, cont_req_complete,
+				       &cb_args, sizeof(cb_args));
+	if (rc != 0) {
+		cont_req_cleanup(CLEANUP_BULK, &cb_args);
+		D_GOTO(out, rc);
+	}
+
+	crt_req_addref(cb_args.cra_rpc);
+	rc = daos_rpc_send(cb_args.cra_rpc, task);
+	if (rc != 0) {
+		cont_req_cleanup(CLEANUP_ALL, &cb_args);
+		D_GOTO(out, rc);
+	}
+
+	return rc;
+out:
+	tse_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "Failed to list container snapshots: %d\n", rc);
+	return rc;
 }
 
 /**

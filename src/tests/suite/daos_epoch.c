@@ -201,7 +201,7 @@ epoch_slip(test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
 	daos_event_t   *evp;
 	int		rc;
 
-	print_message("sliping to epoch "DF_U64" %ssynchronously ...\n", epoch,
+	print_message("slipping to epoch "DF_U64" %ssynchronously ...\n", epoch,
 		      arg->async ? "a" : "");
 	if (arg->async)
 		MUST(daos_event_init(&ev, arg->eq, NULL));
@@ -591,6 +591,146 @@ test_epoch_hold_complex(void **varg)
 	MUST(cont_destroy(arg, cont_uuid));
 }
 
+static void
+test_snapshots(void **argp)
+{
+	test_arg_t	       *arg = *argp;
+	uuid_t			co_uuid;
+	daos_handle_t		coh;
+	daos_event_t		ev;
+	daos_epoch_t		epoch;
+	daos_epoch_state_t	state;
+	daos_epoch_state_t	state_tmp;
+	daos_cont_info_t	info;
+	daos_obj_id_t		oid;
+	int			i, rc;
+
+	daos_epoch_t		garbage	   = 0xAAAAAAAAAAAAAAAAL;
+	daos_epoch_t		snaps_in[] = { 21, 29, 35, 47, 57, 78, 81 };
+	const int		snap_count = ARRAY_SIZE(snaps_in);
+	int			snap_count_out;
+	int			snap_split_index = snap_count/2;
+	daos_epoch_t		snaps_out[snap_count];
+
+	MUST(cont_create(arg, co_uuid));
+	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
+
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	print_message("OID: "DF_OID"\n", DP_OID(oid));
+
+	epoch = 10;
+	MUST(epoch_hold(arg, coh, &epoch, &state));
+	io_for_aggregation(arg, coh, epoch, 100, &state, oid,
+			   /* update */ true,
+			   /* verify empty record */ false);
+	MUST(epoch_commit(arg, coh, (epoch + 99), &state));
+	MUST(epoch_slip(arg, coh, (epoch + 11), &state));
+
+	if (arg->async)
+		MUST(daos_event_init(&ev, arg->eq, NULL));
+
+	print_message("Snapshot creation at [epoch < LRE] shall fail\n");
+	epoch = 20;
+	rc = daos_snap_create(coh, epoch, arg->async ? &ev : NULL);
+	assert_int_equal(rc, arg->async ? 0 : -DER_NONEXIST);
+	WAIT_ON_ASYNC_ERR(arg, ev, -DER_NONEXIST);
+
+	print_message("Snapshot creation at [epoch > HCE] shall fail\n");
+	epoch = 110;
+	rc = daos_snap_create(coh, epoch, arg->async ? &ev : NULL);
+	assert_int_equal(rc, arg->async ? 0 : -DER_NONEXIST);
+	WAIT_ON_ASYNC_ERR(arg, ev, -DER_NONEXIST);
+
+	print_message("Snapshot creation at [epoch >= LRE"
+		      " AND epoch <= HCE] shall succeed\n");
+	for (i = 0; i < snap_count; i++) {
+		MUST(daos_snap_create(coh, snaps_in[i],
+				      arg->async ? &ev : NULL));
+		WAIT_ON_ASYNC(arg, ev);
+	}
+
+	print_message("Snapshot listing shall succeed with no buffer\n");
+	snap_count_out = 0;
+	MUST(daos_snap_list(coh, NULL, &snap_count_out,
+			    arg->async ? &ev : NULL));
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(snap_count_out, snap_count);
+
+	print_message("Snapshot listing shall succeed with a small buffer\n");
+	snap_count_out = snap_split_index;
+	memset(snaps_out, 0xAA, snap_count * sizeof(daos_epoch_t));
+	MUST(daos_snap_list(coh, snaps_out, &snap_count_out,
+			    arg->async ? &ev : NULL));
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(snap_count_out, snap_count);
+	for (i = 0; i < snap_split_index; i++)
+		assert_int_equal(snaps_out[i], snaps_in[i]);
+	for (i = snap_split_index; i < snap_count; i++)
+		assert_int_equal(snaps_out[i], garbage);
+
+	print_message("Snapshot listing shall succeed with a large buffer\n");
+	snap_count_out = snap_count;
+	memset(snaps_out, 0xAA, snap_count * sizeof(daos_epoch_t));
+	MUST(daos_snap_list(coh, snaps_out, &snap_count_out,
+			    arg->async ? &ev : NULL));
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(snap_count_out, snap_count);
+	for (i = 0; i < snap_count; i++)
+		assert_int_equal(snaps_out[i], snaps_in[i]);
+
+	print_message("Slipping to Epoch between snapshots shall succeed\n");
+	epoch = 40;
+	state_tmp = state;
+	MUST(epoch_slip(arg, coh, epoch, &state));
+	state_tmp.es_lre = epoch;
+	state_tmp.es_glre = epoch;
+	assert_epoch_state_equal(&state, &state_tmp);
+
+	/** Wait for aggregation completion */
+	memset(&info, 0, sizeof(daos_cont_info_t));
+	print_message("Waiting for epoch_slip to complete .");
+	while (info.ci_min_slipped_epoch < epoch)
+		MUST(cont_query(arg, coh, &info));
+	print_message(". Done!\n");
+	print_message("Aggregated epoch: " DF_U64"\n",
+		      info.ci_min_slipped_epoch);
+
+	/** empty records from 10 -> 20 */
+	io_for_aggregation(arg, coh, 10UL, 11, &state, oid,
+			   /* update */ false,
+			   /* verify empty record */ true);
+
+	/** no-empty records at 21 */
+	io_for_aggregation(arg, coh, 21, 1, &state, oid,
+			   /* update */false,
+			   /* verify empty record */false);
+
+	/** no-empty records at 29 */
+	io_for_aggregation(arg, coh, 29, 1, &state, oid,
+			   /* update */false,
+			   /* verify empty record */false);
+
+	/** no-empty records at 29 */
+	io_for_aggregation(arg, coh, 35, 1, &state, oid,
+			   /* update */false,
+			   /* verify empty record */false);
+
+	/** no-empty records from 40 -> 109 */
+	io_for_aggregation(arg, coh, 40, 70, &state, oid,
+			   /* update */false,
+			   /* verify empty record */false);
+
+	print_message("Snapshot deletion shall succeed\n");
+	epoch = 29;
+	MUST(daos_snap_destroy(coh, epoch, arg->async ? &ev : NULL));
+	WAIT_ON_ASYNC(arg, ev);
+
+	if (arg->async)
+		MUST(daos_event_fini(&ev));
+	MUST(cont_close(arg, coh));
+	MUST(cont_destroy(arg, co_uuid));
+}
+
 static const struct CMUnitTest epoch_tests[] = {
 	{ "EPOCH1: initial state when opening a new container",
 	  test_epoch_init, async_disable, test_case_teardown},
@@ -615,7 +755,11 @@ static const struct CMUnitTest epoch_tests[] = {
 	{ "EPOCH11: epoch_commit complex (multiple writers)",
 	  test_epoch_commit_complex, async_disable, test_case_teardown},
 	{ "EPOCH12: epoch_hold complex (multiple writers)",
-	  test_epoch_hold_complex, async_disable, test_case_teardown}
+	  test_epoch_hold_complex, async_disable, test_case_teardown},
+	{ "EPOCH13: snapshots",
+	  test_snapshots, async_disable, test_case_teardown},
+	{ "EPOCH14: snapshots (async)",
+	  test_snapshots, async_enable, test_case_teardown},
 };
 
 static int

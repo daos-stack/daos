@@ -101,7 +101,7 @@ enum {
 
 #define DEFAULT_POOL_SIZE	(4ULL << 30)
 
-#define WAIT_ON_ASYNC(arg, ev)				\
+#define WAIT_ON_ASYNC_ERR(arg, ev, err)			\
 	do {						\
 		int rc;					\
 		daos_event_t *evp;			\
@@ -114,8 +114,10 @@ enum {
 				  1, &evp);		\
 		assert_int_equal(rc, 1);		\
 		assert_ptr_equal(evp, &ev);		\
-		assert_int_equal(ev.ev_error, 0);	\
+		assert_int_equal(ev.ev_error, err);	\
 	} while (0)
+
+#define WAIT_ON_ASYNC(arg, ev) WAIT_ON_ASYNC_ERR(arg, ev, 0)
 
 int
 test_teardown(void **state);

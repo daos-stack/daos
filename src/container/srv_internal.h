@@ -81,6 +81,7 @@ struct cont {
 	rdb_path_t		c_attrs;	/* container attribute KVS */
 	rdb_path_t		c_lres;		/* LRE KVS */
 	rdb_path_t		c_lhes;		/* LHE KVS */
+	rdb_path_t		c_snaps;	/* Snapshots KVS */
 	rdb_path_t		c_user;		/* user attributes KVS */
 };
 
@@ -128,6 +129,15 @@ int ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_epoch_read_state(struct rdb_tx *tx, struct cont *cont,
 			     struct container_hdl *hdl,
 			     daos_epoch_state_t *state);
+int ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		      struct cont *cont, struct container_hdl *hdl,
+		      crt_rpc_t *rpc);
+int ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			struct cont *cont, struct container_hdl *hdl,
+			crt_rpc_t *rpc);
+int ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			 struct cont *cont, struct container_hdl *hdl,
+			 crt_rpc_t *rpc);
 
 /**
  * srv_target.c

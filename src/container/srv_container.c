@@ -506,10 +506,18 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	if (rc != 0)
 		D_GOTO(err_lhes, rc);
 
+	/* c_snaps */
+	rc = rdb_path_clone(&p->c_attrs, &p->c_snaps);
+	if (rc != 0)
+		D_GOTO(err_lhes, rc);
+	rc = rdb_path_push(&p->c_snaps, &ds_cont_attr_snapshots);
+	if (rc != 0)
+		D_GOTO(err_snaps, rc);
+
 	/* c_user */
 	rc = rdb_path_clone(&p->c_attrs, &p->c_user);
 	if (rc != 0)
-		D_GOTO(err_lhes, rc);
+		D_GOTO(err_snaps, rc);
 	rc = rdb_path_push(&p->c_user, &ds_cont_attr_user);
 	if (rc != 0)
 		D_GOTO(err_user, rc);
@@ -519,6 +527,8 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 
 err_user:
 	rdb_path_fini(&p->c_user);
+err_snaps:
+	rdb_path_fini(&p->c_snaps);
 err_lhes:
 	rdb_path_fini(&p->c_lhes);
 err_lres:
@@ -537,6 +547,7 @@ cont_put(struct cont *cont)
 	rdb_path_fini(&cont->c_lhes);
 	rdb_path_fini(&cont->c_lres);
 	rdb_path_fini(&cont->c_attrs);
+	rdb_path_fini(&cont->c_snaps);
 	rdb_path_fini(&cont->c_user);
 	D_FREE_PTR(cont);
 }
@@ -1417,6 +1428,12 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		return ds_cont_epoch_discard(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_COMMIT:
 		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_LIST:
+		return ds_cont_snap_list(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_CREATE:
+		return ds_cont_snap_create(tx, pool_hdl, cont, hdl, rpc);
+	 case CONT_SNAP_DESTROY:
+		return ds_cont_snap_destroy(tx, pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);
 	}
@@ -1494,7 +1511,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	/* TODO: Implement per-container locking. */
 	if (opc == CONT_EPOCH_QUERY || opc == CONT_QUERY ||
 	    opc == CONT_ATTR_GET || opc == CONT_ATTR_LIST ||
-	    opc == CONT_EPOCH_DISCARD)
+	    opc == CONT_EPOCH_DISCARD || opc == CONT_SNAP_LIST)
 		ABT_rwlock_rdlock(svc->cs_lock);
 	else
 		ABT_rwlock_wrlock(svc->cs_lock);

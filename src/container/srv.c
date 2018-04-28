@@ -99,6 +99,15 @@ static struct daos_rpc_handler cont_handlers[] = {
 		.dr_opc		= CONT_EPOCH_COMMIT,
 		.dr_hdlr	= ds_cont_op_handler
 	}, {
+		.dr_opc		= CONT_SNAP_LIST,
+		.dr_hdlr	= ds_cont_op_handler
+	}, {
+		.dr_opc		= CONT_SNAP_CREATE,
+		.dr_hdlr	= ds_cont_op_handler
+	}, {
+		.dr_opc		= CONT_SNAP_DESTROY,
+		.dr_hdlr	= ds_cont_op_handler
+	}, {
 		.dr_opc		= CONT_TGT_DESTROY,
 		.dr_hdlr	= ds_cont_tgt_destroy_handler,
 		.dr_corpc_ops	= {

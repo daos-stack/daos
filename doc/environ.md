@@ -63,7 +63,7 @@ Whether to start existing pool services when starting a `daos_server`. `BOOL`. D
 
 ### `DAOS_IMPLICIT_PURGE`
 
-Whether to aggregate unreferenced epochs. `BOOL3`. Default to false.
+Whether to aggregate unreferenced epochs. `BOOL`. Default to false.
 
 ### `DAOS_PURGE_CREDITS`
 

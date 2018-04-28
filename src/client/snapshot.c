@@ -23,22 +23,67 @@
 #define D_LOGFAC	DD_FAC(client)
 
 #include <daos/container.h>
+#include <daos/task.h>
 #include "client_internal.h"
+#include "task_internal.h"
 
 int
 daos_snap_list(daos_handle_t coh, daos_epoch_t *buf, int *n, daos_event_t *ev)
 {
-	return -DER_NOSYS;
+	daos_snap_list_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, SNAP_LIST);
+
+	rc = dc_task_create(dc_snap_list, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->n		= n;
+	args->buf	= buf;
+
+	return dc_task_schedule(task, true);
 }
 
 int
 daos_snap_create(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
 {
-	return -DER_NOSYS;
+	daos_snap_create_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, SNAP_CREATE);
+
+	rc = dc_task_create(dc_snap_create, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->epoch	= epoch;
+
+	return dc_task_schedule(task, true);
 }
 
 int
 daos_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
 {
-	return -DER_NOSYS;
+	daos_snap_destroy_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, SNAP_DESTROY);
+
+	rc = dc_task_create(dc_snap_destroy, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->epoch	= epoch;
+
+	return dc_task_schedule(task, true);
 }

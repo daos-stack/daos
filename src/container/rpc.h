@@ -185,6 +185,16 @@ struct cont_epoch_op_out {
 	daos_epoch_state_t	ceo_epoch_state;
 };
 
+struct cont_snap_list_in {
+	struct cont_op_in	sli_op;
+	crt_bulk_t		sli_bulk;
+};
+
+struct cont_snap_list_out {
+	struct cont_op_out	slo_op;
+	uint32_t		slo_count;
+};
+
 struct cont_tgt_destroy_in {
 	uuid_t	tdi_pool_uuid;
 	uuid_t	tdi_uuid;
@@ -242,8 +252,7 @@ struct cont_tgt_epoch_discard_out {
 struct cont_tgt_epoch_aggregate_in {
 	uuid_t			tai_cont_uuid;
 	uuid_t			tai_pool_uuid;
-	daos_epoch_t		tai_start_epoch;
-	daos_epoch_t		tai_end_epoch;
+	struct crt_array	tai_epr_list;
 };
 
 struct cont_tgt_epoch_aggregate_out {

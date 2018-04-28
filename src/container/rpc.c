@@ -49,6 +49,12 @@ static struct crt_msg_field DMF_CLOSE_RECS =
 		       sizeof(struct cont_tgt_close_rec),
 		       proc_cont_tgt_close_rec);
 
+struct crt_msg_field *cont_op_out_fields[] = {
+	&CMF_INT,		/* rc */
+	&CMF_UINT32,		/* map_version */
+	&DMF_RSVC_HINT		/* hint */
+};
+
 struct crt_msg_field *cont_create_in_fields[] = {
 	&CMF_UUID,	/* op.pool_hdl */
 	&CMF_UUID,	/* op.uuid */
@@ -185,6 +191,20 @@ struct crt_msg_field *cont_epoch_op_out_fields[] = {
 	&DMF_EPOCH_STATE	/* epoch_state */
 };
 
+struct crt_msg_field *cont_snap_list_in_fields[] = {
+	&CMF_UUID,	/* op.pool_hdl */
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID,	/* op.hdl */
+	&CMF_BULK	/* snapshots bulk */
+};
+
+struct crt_msg_field *cont_snap_list_out_fields[] = {
+	&CMF_INT,		/* op.rc */
+	&CMF_UINT32,		/* op.map_version */
+	&DMF_RSVC_HINT,		/* op.hint */
+	&CMF_UINT32		/* list size */
+};
+
 struct crt_msg_field *cont_tgt_destroy_in_fields[] = {
 	&CMF_UUID,	/* pool_uuid */
 	&CMF_UUID	/* uuid */
@@ -237,8 +257,7 @@ struct crt_msg_field *cont_tgt_epoch_discard_out_fields[] = {
 struct crt_msg_field *cont_tgt_epoch_aggregate_in_fields[] = {
 	&CMF_UUID,	/* container UUID */
 	&CMF_UUID,	/* pool UUID */
-	&CMF_UINT64,	/* start_epoch */
-	&CMF_UINT64	/* end_epoch */
+	&DMF_EPR_ARRAY	/* EPR list */
 };
 
 struct crt_msg_field *cont_tgt_epoch_aggregate_out_fields[] = {
@@ -287,6 +306,18 @@ struct crt_req_format DQF_CONT_ATTR_SET =
 struct crt_req_format DQF_CONT_EPOCH_OP =
 	DEFINE_CRT_REQ_FMT("CONT_EPOCH_OP", cont_epoch_op_in_fields,
 			   cont_epoch_op_out_fields);
+
+struct crt_req_format DQF_CONT_SNAP_LIST_OP =
+	DEFINE_CRT_REQ_FMT("CONT_SNAP_LIST", cont_snap_list_in_fields,
+			   cont_snap_list_out_fields);
+
+struct crt_req_format DQF_CONT_SNAP_CREATE_OP =
+	DEFINE_CRT_REQ_FMT("CONT_SNAP_CREATE", cont_epoch_op_in_fields,
+			   cont_op_out_fields);
+
+struct crt_req_format DQF_CONT_SNAP_DESTROY_OP =
+	DEFINE_CRT_REQ_FMT("CONT_SNAP_DESTROY", cont_epoch_op_in_fields,
+			   cont_op_out_fields);
 
 struct crt_req_format DQF_CONT_TGT_DESTROY =
 	DEFINE_CRT_REQ_FMT("CONT_TGT_DESTROY", cont_tgt_destroy_in_fields,
@@ -411,6 +442,24 @@ struct daos_rpc cont_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_CONT_EPOCH_OP
+	}, {
+		.dr_name	= "CONT_SNAP_LIST",
+		.dr_opc		= CONT_SNAP_LIST,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_SNAP_LIST_OP
+	}, {
+		.dr_name	= "CONT_SNAP_CREATE",
+		.dr_opc		= CONT_SNAP_CREATE,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_SNAP_CREATE_OP
+	}, {
+		.dr_name	= "CONT_SNAP_DESTROY",
+		.dr_opc		= CONT_SNAP_DESTROY,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_SNAP_DESTROY_OP
 	}, {
 		.dr_opc		= 0
 	}
