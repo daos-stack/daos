@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,30 +20,43 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#ifndef __DAOS_SRV_INTERNAL__
-#define __DAOS_SRV_INTERNAL__
+#define D_LOGFAC	DD_FAC(eio)
 
-#include <daos_srv/daos_server.h>
+#include "eio_internal.h"
 
-/* module.c */
-int dss_module_init(void);
-int dss_module_fini(bool force);
-int dss_module_load(const char *modname, uint64_t *mod_facs);
-int dss_module_unload(const char *modname);
-void dss_module_unload_all(void);
-int dss_module_setup_all(void);
-int dss_module_cleanup_all(void);
+int
+eio_ioctxt_create(uuid_t uuid, struct eio_xs_context *xs_ctxt)
+{
+	/* TODO create SPDK blob, update per-server pool table */
+	return 0;
+}
 
-/* srv.c */
-int dss_srv_init(int);
-int dss_srv_fini(bool force);
+int
+eio_ioctxt_open(struct eio_io_context **pctxt, struct eio_xs_context *xs_ctxt,
+		struct umem_instance *umem, uuid_t uuid)
+{
+	struct eio_io_context *ctxt;
+	umem_id_t root_oid;
 
-/* tls.c */
-void dss_tls_fini(struct dss_thread_local_storage *dtls);
-struct dss_thread_local_storage *dss_tls_init(int tag);
+	D_ALLOC_PTR(ctxt);
+	if (ctxt == NULL)
+		return -DER_NOMEM;
 
-/* server_iv.c */
-int ds_iv_init(void);
-int ds_iv_fini(void);
+	/* TODO lookup per-server pool table, open SPDK blob */
+	ctxt->eic_umem = umem;
+	root_oid = pmemobj_root(umem->umm_u.pmem_pool, 0);
+	D_ASSERT(!UMMID_IS_NULL(root_oid));
+	ctxt->eic_pmempool_uuid = root_oid.pool_uuid_lo;
+	ctxt->eic_blob = NULL;
+	ctxt->eic_xs_ctxt = xs_ctxt;
 
-#endif /* __DAOS_SRV_INTERNAL__ */
+	*pctxt = ctxt;
+	return 0;
+}
+
+void
+eio_ioctxt_close(struct eio_io_context *ctxt)
+{
+	/* TODO close SPDK blob */
+	D_FREE_PTR(ctxt);
+}

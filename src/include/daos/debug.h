@@ -43,6 +43,7 @@ extern int d_placement_logfac;
 extern int d_rebuild_logfac;
 extern int d_tier_logfac;
 extern int d_mgmt_logfac;
+extern int d_eio_logfac;
 extern int d_tests_logfac;
 
 #include <gurt/debug.h>

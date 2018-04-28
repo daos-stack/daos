@@ -7,11 +7,11 @@ def scons():
 
     denv = env.Clone()
 
-    libraries = ['daos_common', 'gurt', 'cart', 'vos_srv', 'daos']
+    libraries = ['daos_common', 'gurt', 'cart', 'vos_srv', 'daos', 'eio']
     libraries += ['dl', 'uuid', 'pthread', 'abt']
-    libraries += ['hwloc', 'numa']
+    libraries += ['hwloc']
 
-    prereqs.require(denv, 'hwloc', 'cart', 'argobots', 'spdk')
+    prereqs.require(denv, 'hwloc', 'cart', 'argobots')
 
     # the "-rdynamic" is to allow other dll to refer symbol defined in
     # daos_io_server such as dss_tls_key etc.
@@ -19,15 +19,6 @@ def scons():
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib/daos_srv')])
-
-    # Link to SPDK static libs
-    denv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', '-lspdk_bdev', \
-        '-lspdk_bdev_malloc', '-lspdk_bdev_nvme', '-lspdk_nvme', '-lspdk_log', \
-        '-lspdk_env_dpdk', '-lspdk_conf', '-lspdk_util', '-lspdk_rpc', \
-        '-lspdk_json', '-lspdk_jsonrpc', '-lspdk_blob', '-lspdk_blob_bdev', \
-        '-lspdk_copy', '-lrte_mempool', '-lrte_mempool_ring', '-lrte_bus_pci', \
-        '-lrte_pci', '-lrte_ring', '-lrte_mbuf', '-lrte_eal', \
-        '-Wl,--no-whole-archive'])
 
     # Generate I/O server program
     iosrv = daos_build.program(denv, 'daos_io_server', Glob('*.c'),

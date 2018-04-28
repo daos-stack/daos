@@ -125,17 +125,9 @@ dss_module_key_get(struct dss_thread_local_storage *dtls,
 void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
-struct dss_nvme_context {
-	struct spdk_ring	*dnc_msg_ring;
-	struct spdk_thread	*dnc_thread;
-	struct spdk_blob_store	*dnc_blobstore;
-	struct spdk_io_channel	*dnc_io_channel;
-	d_list_t		 dnc_pollers;
-};
-
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
-	struct dss_nvme_context	dmi_nvme_ctxt;
+	struct eio_xs_context	*dmi_nvme_ctxt;
 	struct dss_xstream	*dmi_xstream;
 	int			dmi_tid;
 	tse_sched_t		dmi_sched;

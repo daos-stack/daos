@@ -1,0 +1,27 @@
+"""Build extent I/O"""
+import os
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
+
+    denv = env.Clone()
+    prereqs.require(denv, 'pmdk', 'spdk', 'argobots')
+
+    # Link to SPDK static libs
+    denv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', '-lspdk_bdev', \
+        '-lspdk_bdev_malloc', '-lspdk_bdev_nvme', '-lspdk_nvme', '-lspdk_log', \
+        '-lspdk_env_dpdk', '-lspdk_conf', '-lspdk_util', '-lspdk_rpc', \
+        '-lspdk_json', '-lspdk_jsonrpc', '-lspdk_blob', '-lspdk_blob_bdev', \
+        '-lspdk_copy', '-lrte_mempool', '-lrte_mempool_ring', '-lrte_bus_pci', \
+        '-lrte_pci', '-lrte_ring', '-lrte_mbuf', '-lrte_eal', \
+        '-Wl,--no-whole-archive'])
+
+    eio = daos_build.library(denv, "eio", Glob('*.c'), LIBS=['numa'])
+    denv.Install('$PREFIX/lib/daos_srv', eio)
+
+if __name__ == "SCons.Script":
+    scons()

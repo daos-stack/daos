@@ -29,6 +29,7 @@ def scons():
 
     # Generate the common libraries used by everyone
     SConscript('common/SConscript')
+    SConscript('eio/SConscript')
 
     # VOS comes with two flavors
     # A standalone library mostly used for testing

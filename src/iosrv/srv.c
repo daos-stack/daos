@@ -33,6 +33,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos_errno.h>
+#include <daos_srv/eio.h>
 #include <gurt/list.h>
 #include "srv_internal.h"
 
@@ -339,7 +340,7 @@ dss_srv_handler(void *arg)
 	}
 
 	/* Initialize NVMe context */
-	rc = dss_nvme_ctxt_init(&dmi->dmi_nvme_ctxt, dmi->dmi_tid);
+	rc = eio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tid);
 	if (rc != 0) {
 		D_ERROR("failed to init spdk context for xstream(%d) rc:%d\n",
 			dx->dx_idx, rc);
@@ -377,8 +378,7 @@ dss_srv_handler(void *arg)
 			 * procedures, i.e. this server xstream should wait until
 			 * all ULTs DAOS-769 */
 		}
-
-		dss_nvme_poll(&dmi->dmi_nvme_ctxt);
+		eio_nvme_poll(dmi->dmi_nvme_ctxt);
 
 		rc = ABT_future_test(dx->dx_shutdown, &state);
 		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
@@ -388,7 +388,7 @@ dss_srv_handler(void *arg)
 		ABT_thread_yield();
 	}
 
-	dss_nvme_ctxt_fini(&dmi->dmi_nvme_ctxt);
+	eio_xsctxt_free(dmi->dmi_nvme_ctxt);
 tse_fini:
 	tse_sched_fini(&dmi->dmi_sched);
 crt_destroy:
@@ -1335,7 +1335,7 @@ dss_srv_fini(bool force)
 		dss_xstreams_fini(force);
 		/* fall through */
 	case XD_INIT_NVME:
-		dss_nvme_fini();
+		eio_nvme_fini();
 		/* fall through */
 	case XD_INIT_REG_KEY:
 		dss_unregister_key(&daos_srv_modkey);
@@ -1389,7 +1389,7 @@ dss_srv_init(int nr)
 	dss_register_key(&daos_srv_modkey);
 	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
-	rc = dss_nvme_init();
+	rc = eio_nvme_init();
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
