@@ -528,33 +528,32 @@ class WebRetriever(object):
         self.get(subdir, **kw)
 
 
-def check_flag(context, flag):
+def check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
-
-    cc_name = context.env.get('CC')
-    context.Message("Checking %s %s " % (cc_name, flag))
-    context.env.Replace(CFLAGS=['-Werror', flag])
+    test_flag = flag
+    werror = "-Werror"
+    if compiler in ["icc", "icpc"]:
+        werror = "-diag-error=10006"
+    if compiler in ["gcc", "g++"]:
+        #remove -no- for test
+        test_flag = flag.replace("-Wno-", "-W")
+    context.Message("Checking %s %s " % (compiler, flag))
+    context.env.Replace(CCFLAGS=[werror, test_flag])
     ret = context.TryCompile("""
 int main() {
     return 0;
 }
-""", ".c")
+""", ext)
     context.Result(ret)
     return ret
+
+def check_flag(context, flag):
+    """Check C specific compiler flags"""
+    return check_flag_helper(context, context.env.get("CC"), ".c", flag)
 
 def check_flag_cc(context, flag):
-    """Helper function to allow checking for compiler flags"""
-
-    cc_name = context.env.get('CXX')
-    context.Message("Checking %s %s " % (cc_name, flag))
-    context.env.Replace(CCFLAGS=['-Werror', flag])
-    ret = context.TryCompile("""
-int main() {
-    return 0;
-}
-""", ".cpp")
-    context.Result(ret)
-    return ret
+    """Check C++ specific compiler flags"""
+    return check_flag_helper(context, context.env.get("CXX"), ".cpp", flag)
 
 def check_flags(env, config, key, value):
     """Check and append all supported flags"""
@@ -733,9 +732,11 @@ class PreReqComponent(object):
         version = env.get("INTEL_C_COMPILER_VERSION")
         self.__env.Replace(INTEL_C_COMPILER_VERSION=version)
         self.__env.Replace(LINK=env.get("LINK"))
-        self.__env.Replace(LIBPATH=env.get("LIBPATH"))
-        self.__env.Replace(CPPPATH=env.get("CPPPATH"))
-        self.__env.AppendUnique(LINKFLAGS=["-static-intel"])
+        # Link intel symbols statically with no external visibility and
+        # disable the warning about Cilk since we don't use it
+        self.__env.AppendUnique(LINKFLAGS=["-Wl,--exclude-libs,ALL",
+                                           "-static-intel",
+                                           "-diag-disable=10237"])
 
 # pylint: enable=too-many-branches
     def _setup_compiler(self):
