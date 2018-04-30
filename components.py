@@ -357,10 +357,10 @@ REQS.define('mpi4py',
             requires=['ompi'])
 
 RETRIEVER = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
-
 REQS.define('spdk',
             retriever=RETRIEVER,
             commands=['./configure --prefix=$SPDK_PREFIX',
                       'make', 'make install',
                       'cp -f ./dpdk/build/lib/lib*.a $SPDK_PREFIX/lib'],
+            patch='$PATCH_PREFIX/dpdk_build.patch',
             libs=["spdk_blob", "spdk_nvme"])
