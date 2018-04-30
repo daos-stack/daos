@@ -55,8 +55,8 @@ print_usage()
 static inline int
 run_all_tests(int keys)
 {
-	int failed = 0;
-	int i;
+	int	failed = 0;
+	int	i;
 
 	failed += run_pool_test();
 	failed += run_co_test();
@@ -70,11 +70,12 @@ run_all_tests(int keys)
 int
 main(int argc, char **argv)
 {
-	int		 rc = 0;
-	int		 nr_failed = 0;
-	int		 opt = 0, index = 0;
-	int		 ofeats;
-	int		 keys;
+	int	rc = 0;
+	int	nr_failed = 0;
+	int	opt = 0;
+	int	index = 0;
+	int	ofeats;
+	int	keys;
 
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
@@ -88,7 +89,7 @@ main(int argc, char **argv)
 
 	rc = daos_debug_init(NULL);
 	if (rc) {
-		print_error("Error initializing VOS instance\n");
+		print_error("Error initializing debug system\n");
 		return rc;
 	}
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -309,54 +309,55 @@ pool_create_exists(void **state)
 	return 0;
 }
 
+static void
+pool_set_sequence(void **state, bool flag, int num_ops,
+		  enum vts_ops_type seq[])
+{
+	struct vp_test_args	*arg = *state;
+
+	pool_allocate_params(1, num_ops, arg);
+	pool_set_param(seq, num_ops, flag, &arg->fcreate[0],
+		  &arg->seq_cnt[0], &arg->ops_seq[0]);
+}
 
 static int
 pool_open_close(void **state)
 {
-	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, OPEN, CLOSE};
+	enum vts_ops_type tmp[] = {CREAT, OPEN, CLOSE};
+	int num_ops = sizeof(tmp) / sizeof(enum vts_ops_type);
 
-	pool_allocate_params(1, 3, arg);
-	pool_set_param(tmp, 3, true, &arg->fcreate[0],
-		  &arg->seq_cnt[0], &arg->ops_seq[0]);
-
+	pool_set_sequence(state, true, num_ops, tmp);
 	return 0;
 }
 
 static int
 pool_destroy(void **state)
 {
-	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, DESTROY};
+	enum vts_ops_type tmp[] = {CREAT, DESTROY};
+	int num_ops = sizeof(tmp) / sizeof(enum vts_ops_type);
 
-	pool_allocate_params(1, 2, arg);
-	pool_set_param(tmp, 2, true, &arg->fcreate[0],
-		  &arg->seq_cnt[0], &arg->ops_seq[0]);
+	pool_set_sequence(state, true, num_ops, tmp);
 	return 0;
 }
 
 static int
 pool_query_after_open(void **state)
 {
-	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, OPEN, QUERY, CLOSE};
+	enum vts_ops_type tmp[] = {CREAT, OPEN, QUERY, CLOSE};
+	int num_ops = sizeof(tmp) / sizeof(enum vts_ops_type);
 
-	pool_allocate_params(1, 4, arg);
-	pool_set_param(tmp, 4, true, &arg->fcreate[0],
-		  &arg->seq_cnt[0], &arg->ops_seq[0]);
+	pool_set_sequence(state, true, num_ops, tmp);
 	return 0;
 }
 
 static int
 pool_all_empty_file(void **state)
 {
-	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, OPEN, QUERY,
+	enum vts_ops_type tmp[] = {CREAT, OPEN, QUERY,
 					 CLOSE, DESTROY};
+	int num_ops = sizeof(tmp) / sizeof(enum vts_ops_type);
 
-	pool_allocate_params(1, 5, arg);
-	pool_set_param(tmp, 5, false, &arg->fcreate[0],
-		  &arg->seq_cnt[0], &arg->ops_seq[0]);
+	pool_set_sequence(state, false, num_ops, tmp);
 	return 0;
 
 }
@@ -364,13 +365,11 @@ pool_all_empty_file(void **state)
 static int
 pool_all(void **state)
 {
-	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, OPEN, QUERY,
+	enum vts_ops_type tmp[] = {CREAT, OPEN, QUERY,
 					 CLOSE, DESTROY};
+	int num_ops = sizeof(tmp) / sizeof(enum vts_ops_type);
 
-	pool_allocate_params(1, 5, arg);
-	pool_set_param(tmp, 5, true, &arg->fcreate[0],
-		  &arg->seq_cnt[0], &arg->ops_seq[0]);
+	pool_set_sequence(state, true, num_ops, tmp);
 	return 0;
 }
 

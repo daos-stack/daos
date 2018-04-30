@@ -32,6 +32,9 @@
 #include <vts_io.h>
 #include <daos_api.h>
 
+#define SETUP_RANDOM_SEED  (10)
+#define NO_FLAGS	    (0)
+
 /* key generator */
 static unsigned int		vts_key_gen;
 /** epoch generator */
@@ -40,9 +43,7 @@ static daos_epoch_t		vts_epoch_gen;
 /** Create dictionary of unique cookies */
 static uuid_t			cookie_dict[NUM_UNIQUE_COOKIES];
 
-
 static struct vts_counter	vts_cntr;
-
 static uint64_t			update_akey_fixed;
 
 /**
@@ -218,7 +219,7 @@ static struct io_test_args	test_args;
 int
 setup_io(void **state)
 {
-	srand(10);
+	srand(SETUP_RANDOM_SEED);
 	test_args_init(&test_args, VPOOL_SIZE);
 
 	*state = &test_args;
@@ -381,7 +382,8 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 	daos_handle_t		ih;
 	bool			iter_fa;
 	int			nr = 0;
-	int			akeys = 0, recs = 0;
+	int			akeys = 0;
+	int			recs = 0;
 	int			rc;
 
 	iter_fa = (arg->ta_flags & TF_FIXED_AKEY);
@@ -807,18 +809,18 @@ io_idx_overwrite(void **state)
 }
 
 static void
-io_iter_test(void **state)
+io_iter_test_base(struct io_test_args *args)
 {
-	struct io_test_args	*arg = *state;
 	daos_epoch_range_t	epr;
 	int			rc = 0;
-	int			nr, akeys, recs;
+	int			nr;
+	int			akeys;
+	int			recs;
 
-	arg->ta_flags = TF_REC_EXT;
 	epr.epr_lo = vts_epoch_gen + 10;
 	epr.epr_hi = DAOS_EPOCH_MAX;
 
-	rc = io_obj_iter_test(arg, &epr, VOS_IT_EPC_GE,
+	rc = io_obj_iter_test(args, &epr, VOS_IT_EPC_GE,
 			      &nr, &akeys, &recs, false);
 	assert_true(rc == 0 || rc == -DER_NONEXIST);
 
@@ -833,32 +835,28 @@ io_iter_test(void **state)
 }
 
 static void
+io_iter_test(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->ta_flags = TF_REC_EXT;
+	io_iter_test_base(arg);
+}
+
+static void
 io_iter_test_with_anchor(void **state)
 {
 	struct io_test_args	*arg = *state;
-	daos_epoch_range_t	epr;
-	int			nr, rc = 0;
-	int			akeys, recs;
 
 	if (arg->ofeat & (DAOS_OF_DKEY_UINT64 | DAOS_OF_DKEY_LEXICAL))
 		skip(); /* anchor not supported with direct key */
 
 	arg->ta_flags = TF_IT_ANCHOR | TF_REC_EXT;
-	epr.epr_lo = vts_epoch_gen + 10;
-	epr.epr_hi = DAOS_EPOCH_MAX;
 	arg->cookie_flag = false;
-
-	rc = io_obj_iter_test(arg, &epr, VOS_IT_EPC_GE,
-			      &nr, &akeys, &recs, false);
-	assert_true(rc == 0 || rc == -DER_NONEXIST);
-
-	print_message("Enumerated: %d, total_dkeys: %lu.\n",
-		      nr, vts_cntr.cn_dkeys);
-	print_message("Enumerated akeys: %d\n", akeys);
-	assert_int_equal(nr, vts_cntr.cn_dkeys);
+	io_iter_test_base(arg);
 }
 
-#define IOT_FA_DKEYS	100
+#define IOT_FA_DKEYS (100)
 
 static void
 io_iter_test_dkey_cond(void **state)
@@ -890,7 +888,7 @@ io_iter_test_dkey_cond(void **state)
 	assert_int_equal(nr, vts_cntr.cn_fa_dkeys);
 }
 
-#define RANGE_ITER_KEYS 10
+#define RANGE_ITER_KEYS (10)
 
 static int
 io_obj_range_iter_test(struct io_test_args *args, vos_it_epc_expr_t expr)
@@ -999,50 +997,48 @@ io_obj_recx_range_iteration(struct io_test_args *args, vos_it_epc_expr_t expr)
 }
 
 static void
+io_obj_iter_test_base(void **state, vos_it_epc_expr_t direction)
+{
+	struct io_test_args	*args = *state;
+	int			 rc;
+
+	rc = io_obj_range_iter_test(args, direction);
+	assert_int_equal(rc, 0);
+}
+
+static void
 io_obj_forward_iter_test(void **state)
 {
-
-	struct io_test_args	*args = *state;
-	int			rc;
-
-	rc = io_obj_range_iter_test(args, VOS_IT_EPC_RE);
-	assert_int_equal(rc, 0);
+	io_obj_iter_test_base(state, VOS_IT_EPC_RE);
 }
 
 static void
 io_obj_reverse_iter_test(void **state)
 {
+	io_obj_iter_test_base(state, VOS_IT_EPC_RR);
+}
 
+static void
+io_obj_recx_iter_test(void **state, vos_it_epc_expr_t direction)
+{
 	struct io_test_args	*args = *state;
-	int			rc;
+	int			 rc;
 
-	rc = io_obj_range_iter_test(args, VOS_IT_EPC_RR);
+	rc = io_obj_recx_range_iteration(args, direction);
 	assert_int_equal(rc, 0);
 }
 
 static void
 io_obj_forward_recx_iter_test(void **state)
 {
-
-	struct io_test_args	*args = *state;
-	int			rc;
-
-	rc = io_obj_recx_range_iteration(args, VOS_IT_EPC_RE);
-	assert_int_equal(rc, 0);
+	io_obj_recx_iter_test(state, VOS_IT_EPC_RE);
 }
-
 
 static void
 io_obj_reverse_recx_iter_test(void **state)
 {
-
-	struct io_test_args	*args = *state;
-	int			rc;
-
-	rc = io_obj_recx_range_iteration(args, VOS_IT_EPC_RR);
-	assert_int_equal(rc, 0);
+	io_obj_recx_iter_test(state, VOS_IT_EPC_RR);
 }
-
 
 static int
 io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
@@ -1340,7 +1336,7 @@ pool_cont_same_uuid(void **state)
 	uuid_generate(pool_uuid);
 	uuid_copy(co_uuid, pool_uuid);
 
-	ret = vos_pool_create(arg->fname, pool_uuid, 16*1024*1024);
+	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_16M);
 	assert_int_equal(ret, 0);
 
 	ret = vos_pool_open(arg->fname, pool_uuid, &poh);
@@ -1395,43 +1391,45 @@ pool_cont_same_uuid(void **state)
 }
 
 static void
-io_fetch_no_exist_dkey(void **state)
+io_fetch_no_exist_dkey_base(void **state, unsigned long flags)
 {
 	struct io_test_args	*arg = *state;
 
-	arg->ta_flags = 0;
+	arg->ta_flags = flags;
 	io_update_and_fetch_incorrect_dkey(arg, 1, 1);
+}
+
+static void
+io_fetch_no_exist_dkey(void **state)
+{
+	io_fetch_no_exist_dkey_base(state, NO_FLAGS);
 }
 
 static void
 io_fetch_no_exist_dkey_zc(void **state)
 {
+	io_fetch_no_exist_dkey_base(state, TF_ZERO_COPY);
+}
+
+static void
+io_fetch_no_exist_object_base(void **state, unsigned long flags)
+{
 	struct io_test_args	*arg = *state;
 
-	arg->ta_flags = TF_ZERO_COPY;
-	io_update_and_fetch_incorrect_dkey(arg, 1, 1);
+	arg->ta_flags = flags;
+	io_fetch_wo_object(state);
 }
 
 static void
 io_fetch_no_exist_object(void **state)
 {
-
-	struct io_test_args	*arg = *state;
-
-	arg->ta_flags = 0;
-
-	io_fetch_wo_object(state);
+	io_fetch_no_exist_object_base(state, NO_FLAGS);
 }
 
 static void
 io_fetch_no_exist_object_zc(void **state)
 {
-
-	struct io_test_args	*arg = *state;
-
-	arg->ta_flags = TF_ZERO_COPY;
-
-	io_fetch_wo_object(state);
+	io_fetch_no_exist_object_base(state, TF_ZERO_COPY);
 }
 
 static void
@@ -1586,8 +1584,6 @@ io_simple_punch(void **state)
 	assert_int_equal(rc, 0);
 }
 
-
-
 static void
 io_simple_near_epoch_test(void **state, int flags)
 {
@@ -1671,28 +1667,30 @@ oid_iter_test_setup(void **state)
 }
 
 static void
-oid_iter_test(void **state)
+oid_iter_test_base(void **state, unsigned int flags)
 {
 	struct io_test_args	*arg = *state;
 	int			 rc;
 
-	arg->ta_flags = 0;
+	arg->ta_flags = flags;
 	rc = io_oid_iter_test(arg);
 	assert_true(rc == 0 || rc == -DER_NONEXIST);
+}
+
+static void
+oid_iter_test(void **state)
+{
+	oid_iter_test_base(state, NO_FLAGS);
 }
 
 static void
 oid_iter_test_with_anchor(void **state)
 {
 	struct io_test_args	*arg = *state;
-	int			 rc;
-
 	if (arg->ofeat & (DAOS_OF_DKEY_UINT64 | DAOS_OF_DKEY_LEXICAL))
 		skip(); /* anchor not supported with direct key */
 
-	arg->ta_flags = TF_IT_ANCHOR;
-	rc = io_oid_iter_test(arg);
-	assert_true(rc == 0 || rc == -DER_NONEXIST);
+	oid_iter_test_base(state, TF_IT_ANCHOR);
 }
 
 static const struct CMUnitTest io_tests[] = {

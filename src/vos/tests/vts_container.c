@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,12 @@ struct vc_test_args {
 	daos_handle_t		coh[VCT_CONTAINERS];
 	struct d_uuid		uuid[VCT_CONTAINERS];
 	bool			anchor_flag;
+};
+
+struct cookie_entry {
+	struct d_ulink		ulink;
+	uuid_t			cookie;
+	daos_epoch_t		max_epoch;
 };
 
 static void
@@ -233,13 +239,7 @@ co_create_tests(void **state)
 static int
 co_iter_tests_setup(void **state)
 {
-	struct vc_test_args	*arg = *state;
-	int			i;
-
-	co_allocate_params(1, arg);
-	for (i = 0; i < VCT_CONTAINERS; i++)
-		arg->ops_seq[i][0]  = CREAT;
-
+	co_create_tests(state);
 	co_ops_run(state);
 	return 0;
 }
@@ -345,13 +345,6 @@ co_iter_test_with_anchor(void **state)
 	rc = co_uuid_iter_test(arg);
 	assert_true(rc == 0 || rc == -DER_NONEXIST);
 }
-
-
-struct cookie_entry {
-	struct d_ulink		ulink;
-	uuid_t			cookie;
-	daos_epoch_t		max_epoch;
-};
 
 void
 cookie_uhash_free(struct d_ulink *uhlink)
