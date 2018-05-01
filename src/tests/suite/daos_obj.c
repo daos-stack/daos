@@ -1654,14 +1654,9 @@ static const struct CMUnitTest io_tests[] = {
 };
 
 int
-obj_setup(void **state)
+obj_setup_internal(void **state)
 {
 	test_arg_t	*arg;
-	int		 rc;
-
-	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE);
-	if (rc != 0)
-		return rc;
 
 	arg = *state;
 	if (arg->pool_info.pi_ntargets < 2)
@@ -1671,12 +1666,34 @@ obj_setup(void **state)
 }
 
 int
-run_daos_io_test(int rank, int size)
+obj_setup(void **state)
+{
+	int	rc;
+
+	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE);
+	if (rc != 0)
+		return rc;
+
+	return obj_setup_internal(state);
+}
+
+int
+run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DAOS I/O tests", io_tests,
-					 obj_setup, test_teardown);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (sub_tests_size == 0) {
+		rc = cmocka_run_group_tests_name("DAOS I/O tests", io_tests,
+						 obj_setup, test_teardown);
+		MPI_Barrier(MPI_COMM_WORLD);
+		return rc;
+	}
+
+	rc = run_daos_sub_tests(io_tests, ARRAY_SIZE(io_tests),
+				DEFAULT_POOL_SIZE, sub_tests, sub_tests_size,
+				obj_setup_internal);
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

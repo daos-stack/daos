@@ -524,6 +524,46 @@ print_usage(int rank)
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 }
 
+int
+run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
+		   daos_size_t pool_size, int *sub_tests,
+		   int sub_tests_size, test_setup_cb_t cb)
+{
+	void *state = NULL;
+	int i;
+	int rc;
+
+	D_ASSERT(pool_size > 0);
+	rc = test_setup(&state, SETUP_CONT_CONNECT, true, pool_size);
+	if (rc)
+		return rc;
+
+	if (cb != NULL) {
+		rc = cb(&state);
+		if (rc)
+			return rc;
+	}
+
+	for (i = 0; i < sub_tests_size; i++) {
+		int idx = sub_tests[i];
+
+		if (idx >= tests_size) {
+			print_message("No test %d\n", idx);
+			continue;
+		}
+
+		print_message("%s\n", tests[idx].name);
+		if (tests[idx].setup_func)
+			tests[idx].setup_func(&state);
+
+		tests[idx].test_func(&state);
+		if (tests[idx].teardown_func)
+			tests[idx].teardown_func(&state);
+	}
+	test_teardown(&state);
+	return 0;
+}
+
 static int
 run_specified_tests(const char *tests, int rank, int size,
 		    int *sub_tests, int sub_tests_size)
@@ -563,7 +603,8 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS IO test..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_io_test(rank, size);
+			nr_failed += run_daos_io_test(rank, size, sub_tests,
+						      sub_tests_size);
 			break;
 		case 'A':
 			daos_test_print(rank, "\n\n=================");

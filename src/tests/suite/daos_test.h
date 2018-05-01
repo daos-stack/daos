@@ -172,7 +172,7 @@ int run_daos_mgmt_test(int rank, int size);
 int run_daos_pool_test(int rank, int size);
 int run_daos_cont_test(int rank, int size);
 int run_daos_capa_test(int rank, int size);
-int run_daos_io_test(int rank, int size);
+int run_daos_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_array_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
@@ -189,6 +189,11 @@ void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 			      const char *grp, const d_rank_list_t *svc);
 void daos_add_server(const uuid_t pool_uuid, const char *grp,
 		     const d_rank_list_t *svc, d_rank_t rank);
+typedef int (*test_setup_cb_t)(void **state);
+
+int run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
+		       daos_size_t pool_size, int *sub_tests,
+		       int sub_tests_size, test_setup_cb_t cb);
 
 static inline void
 daos_test_print(int rank, char *message)

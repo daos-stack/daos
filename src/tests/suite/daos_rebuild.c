@@ -970,8 +970,6 @@ rebuild_setup(void **state)
 int
 run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
-	void *state;
-	int i;
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -983,26 +981,10 @@ run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		return rc;
 	}
 
-	rebuild_setup(&state);
-	for (i = 0; i < sub_tests_size; i++) {
-		int idx = sub_tests[i];
+	rc = run_daos_sub_tests(rebuild_tests, ARRAY_SIZE(rebuild_tests),
+				REBUILD_POOL_SIZE, sub_tests, sub_tests_size,
+				NULL);
 
-		if (ARRAY_SIZE(rebuild_tests) <= idx) {
-			print_message("No test %d\n", idx);
-			continue;
-		}
-
-		print_message("%s\n", rebuild_tests[idx].name);
-		if (rebuild_tests[idx].setup_func) {
-			if (state != NULL)
-				test_teardown(&state);
-			rebuild_tests[idx].setup_func(&state);
-		}
-		rebuild_tests[idx].test_func(&state);
-		if (rebuild_tests[idx].teardown_func)
-			rebuild_tests[idx].teardown_func(&state);
-	}
-	test_teardown(&state);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	return rc;
