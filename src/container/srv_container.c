@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1431,6 +1431,8 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	default:
 		D_ASSERT(0);
 	}
+
+	return 0;
 }
 
 /*

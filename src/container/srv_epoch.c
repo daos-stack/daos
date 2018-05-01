@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ ec_type2kvs(struct cont *cont, enum ec_type type)
 	default:
 		D_ASSERT(0);
 	}
+	return NULL;
 }
 
 static const char *
@@ -64,6 +65,7 @@ ec_type2name(enum ec_type type)
 	default:
 		D_ASSERT(0);
 	}
+	return NULL;
 }
 
 static int

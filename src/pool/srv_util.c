@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,6 +48,8 @@ map_ranks_include(enum map_ranks_class class, int status)
 	default:
 		D_ASSERTF(0, "%d\n", class);
 	}
+
+	return 0;
 }
 
 /* Build a rank list of targets with certain status. */
