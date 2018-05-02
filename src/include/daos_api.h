@@ -659,14 +659,15 @@ daos_obj_id_generate(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 
 	oid->hi &= 0x00000000ffffffff;
 	/**
-	 * | 8-bit version              |
-	 * | 8-bit object features      |
-	 * | 16-bit object class        |
-	 * | 96-bit for upper layer ... |
+	 * | Upper bits contain
+	 * | DAOS_OVERSION_BITS version        |
+	 * | DAOS_OFEAT_BITS object features   |
+	 * | DAOS_OCLASS_BITS object class     |
+	 * | 96-bit for upper layer ...        |
 	 */
-	hdr <<= 32;
-	hdr |= 0x1ULL << 56;
-	hdr |= (uint64_t)ofeats << 48;
+	hdr <<= DAOS_OCLASS_SHIFT;
+	hdr |= 0x1ULL << DAOS_OVERSION_SHIFT;
+	hdr |= ((uint64_t)ofeats << DAOS_OFEAT_SHIFT);
 	oid->hi |= hdr;
 }
 
@@ -675,8 +676,26 @@ daos_obj_id2class(daos_obj_id_t oid)
 {
 	daos_oclass_id_t ocid;
 
-	ocid = (oid.hi << 16) >> (16 + 32);
+	ocid = (oid.hi & DAOS_OCLASS_MASK) >> DAOS_OCLASS_SHIFT;
 	return ocid;
+}
+
+static inline daos_ofeat_t
+daos_obj_id2feat(daos_obj_id_t oid)
+{
+	daos_ofeat_t ofeat;
+
+	ofeat = (oid.hi & DAOS_OFEAT_MASK) >> DAOS_OFEAT_SHIFT;
+	return ofeat;
+}
+
+static inline uint8_t
+daos_obj_id2version(daos_obj_id_t oid)
+{
+	uint8_t version;
+
+	version = (oid.hi & DAOS_OVERSION_MASK) >> DAOS_OVERSION_SHIFT;
+	return version;
 }
 
 /**

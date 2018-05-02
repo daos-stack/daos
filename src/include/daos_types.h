@@ -400,6 +400,31 @@ enum {
 	DAOS_OF_MASK		= ((1 << 4) - 1),
 };
 
+/** Number of reserved by daos in object id for version */
+#define DAOS_OVERSION_BITS	8
+/** Number of reserved by daos in object id for features */
+#define DAOS_OFEAT_BITS		8
+/** Number of reserved by daos in object id for class id */
+#define DAOS_OCLASS_BITS	(32 - DAOS_OVERSION_BITS - DAOS_OFEAT_BITS)
+/** Bit shift for object version in object id */
+#define DAOS_OVERSION_SHIFT	(64 - DAOS_OVERSION_BITS)
+/** Bit shift for object features in object id */
+#define DAOS_OFEAT_SHIFT	(DAOS_OVERSION_SHIFT - DAOS_OFEAT_BITS)
+/** Bit shift for object class id in object id */
+#define DAOS_OCLASS_SHIFT	(DAOS_OFEAT_SHIFT - DAOS_OCLASS_BITS)
+/** Maximum valid object version setting */
+#define DAOS_OVERSION_MAX	((1ULL << DAOS_OVERSION_BITS) - 1)
+/** Maximum valid object feature setting */
+#define DAOS_OFEAT_MAX		((1ULL << DAOS_OFEAT_BITS) - 1)
+/** Maximum valid object class setting */
+#define DAOS_OCLASS_MAX		((1ULL << DAOS_OCLASS_BITS) - 1)
+/** Mask for object version */
+#define DAOS_OVERSION_MASK	(DAOS_OVERSION_MAX << DAOS_OVERSION_SHIFT)
+/** Mask for object features */
+#define DAOS_OFEAT_MASK		(DAOS_OFEAT_MAX << DAOS_OFEAT_SHIFT)
+/** Mask for object class id */
+#define DAOS_OCLASS_MASK	(DAOS_OCLASS_MAX << DAOS_OCLASS_SHIFT)
+
 typedef uint16_t daos_oclass_id_t;
 typedef uint8_t daos_ofeat_t;
 

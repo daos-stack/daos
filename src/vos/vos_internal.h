@@ -127,15 +127,6 @@ enum {
 #define VOS_OFEAT_MASK		(0x0ffULL   << VOS_OFEAT_SHIFT)
 #define VOS_OFEAT_BITS		(0x0ffffULL << VOS_OFEAT_SHIFT)
 
-static inline daos_ofeat_t
-obj_id2ofeat(daos_obj_id_t oid)
-{
-	daos_ofeat_t ofeat;
-
-	ofeat = (oid.hi << 8) >> 56;
-	return ofeat;
-}
-
 /**
  * Reference of a cached object.
  * NB: DRAM data structure.

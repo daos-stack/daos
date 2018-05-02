@@ -29,6 +29,7 @@
 
 #include <daos/btree.h>
 #include <daos_srv/vos.h>
+#include <daos_api.h> /* For ofeat bits */
 #include "vos_internal.h"
 
 /** hash seed for murmur hash */
@@ -792,7 +793,7 @@ vos_obj_tree_init(struct vos_object *obj)
 
 		D_DEBUG(DB_DF, "Create btree for object\n");
 
-		obj_feats = obj_id2ofeat(obj->obj_df->vo_id.id_pub);
+		obj_feats = daos_obj_id2feat(obj->obj_df->vo_id.id_pub);
 		/* Use hashed key if feature bits aren't set for object */
 		tree_feats = (uint64_t)obj_feats << VOS_OFEAT_SHIFT;
 		if (obj_feats & DAOS_OF_DKEY_UINT64)
