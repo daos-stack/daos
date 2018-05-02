@@ -58,16 +58,6 @@ dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed)
 	return oid;
 }
 
-daos_obj_id_t
-dts_oid_set_rank(daos_obj_id_t oid, unsigned int rank)
-{
-	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK);
-
-	D_ASSERT(rank < 0xff);
-	oid.hi |= (uint64_t)rank << 48;
-	return oid;
-}
-
 daos_unit_oid_t
 dts_unit_oid_gen(uint16_t oclass, uint8_t ofeats, uint32_t shard)
 {

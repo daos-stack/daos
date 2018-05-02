@@ -471,6 +471,12 @@ enum {
 				 */
 };
 
+/** bits for the specified rank */
+#define DAOS_OC_SR_SHIFT	24
+#define DAOS_OC_SR_BITS		8
+#define DAOS_OC_SR_MASK		\
+	(((1ULL << DAOS_OC_SR_BITS) - 1) << DAOS_OC_SR_SHIFT)
+
 /** Object class attributes */
 typedef struct daos_oclass_attr {
 	/** Object placement schema */

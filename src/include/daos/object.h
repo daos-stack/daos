@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,25 @@ struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
+
+static inline d_rank_t
+daos_oclass_sr_get_rank(daos_obj_id_t oid)
+{
+	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK);
+
+	return ((oid.hi & DAOS_OC_SR_MASK) >> DAOS_OC_SR_SHIFT);
+}
+
+static inline daos_obj_id_t
+daos_oclass_sr_set_rank(daos_obj_id_t oid, d_rank_t rank)
+{
+	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK);
+	D_ASSERT(rank < (1 << DAOS_OC_SR_SHIFT));
+	D_ASSERT((oid.hi & DAOS_OC_SR_MASK) == 0);
+
+	oid.hi |= (uint64_t)rank << DAOS_OC_SR_SHIFT;
+	return oid;
+}
 
 int dc_obj_init(void);
 void dc_obj_fini(void);

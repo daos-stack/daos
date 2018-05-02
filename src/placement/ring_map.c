@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -788,14 +788,6 @@ struct ring_obj_placement {
 	unsigned int	rop_shard_id;
 };
 
-static d_rank_t
-obj_spec_oid_get_rank(daos_obj_id_t oid)
-{
-	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK);
-
-	return (oid.hi << 8) >> 56;
-}
-
 static unsigned int
 ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid)
 {
@@ -811,7 +803,7 @@ ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid)
 	/* locate rank in the pool map targets */
 	tgts = pool_map_targets(rimap->rmp_map.pl_poolmap);
 	tgts_nr = pool_map_target_nr(rimap->rmp_map.pl_poolmap);
-	rank = obj_spec_oid_get_rank(oid);
+	rank = daos_oclass_sr_get_rank(oid);
 	for (pos = 0; pos < tgts_nr; pos++) {
 		if (rank == tgts[pos].ta_comp.co_rank)
 			break;
