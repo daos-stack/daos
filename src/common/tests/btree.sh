@@ -22,10 +22,32 @@ fi
 KEYS=${KEYS:-"3,6,5,7,2,1,4"}
 RECORDS=${RECORDS:-"7:loaded,3:that,5:dice,2:knows,4:the,6:are,1:Everybody"}
 
+function print_help()
+{
+    cat << EOF
+Usage: btree.sh [OPTIONS]
+    Options:
+        -s [num]  Run with num keys
+        ukey      Use integer keys
+        perf      Run performance tests
+        direct    Use direct string key
+EOF
+    exit 1
+}
+
 PERF=""
 UINT=""
 while [ $# -gt 0 ]; do
     case "$1" in
+    -s)
+        shift
+        BAT_NUM=$1
+        if [ "$BAT_NUM" -ne "$BAT_NUM" ]; then
+            echo "Bad argument to -s option.  Must be numeric"
+            print_help
+        fi
+        shift
+        ;;
     perf)
         shift
         PERF="on"
@@ -42,18 +64,13 @@ while [ $# -gt 0 ]; do
         shift
         ;;
     *)
-        cat << EOF
-Unknown option $# $1
-Usage: btree.sh [OPTIONS]
-    Options:
-        ukey    Use integer keys
-        perf    Run performance tests
-        direct  Use direct string key
-EOF
-        exit 1
+        echo "Unknown option $1"
+        print_help
         ;;
     esac
 done
+
+set -x
 
 if [ -z ${PERF} ]; then
 
