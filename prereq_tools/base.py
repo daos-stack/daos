@@ -534,6 +534,8 @@ def check_flag_helper(context, compiler, ext, flag):
     werror = "-Werror"
     if compiler in ["icc", "icpc"]:
         werror = "-diag-error=10006"
+        # bug in older scons, need CFLAGS to exist, -O2 is default.
+        context.env.Replace(CFLAGS=['-O2'])
     if compiler in ["gcc", "g++"]:
         #remove -no- for test
         test_flag = flag.replace("-Wno-", "-W")
