@@ -64,6 +64,9 @@ pool_hop_free(struct d_ulink *hlink)
 
 	D_ASSERT(pool->vp_opened == 0);
 
+	if (pool->vp_io_ctxt != NULL)
+		eio_ioctxt_close(pool->vp_io_ctxt);
+
 	if (!daos_handle_is_inval(pool->vp_cookie_th))
 		vos_cookie_tab_destroy(pool->vp_cookie_th);
 
@@ -356,6 +359,13 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 				 &pool->vp_uma, &pool->vp_cont_th);
 	if (rc) {
 		D_ERROR("Container Tree open failed\n");
+		D_GOTO(failed, rc);
+	}
+
+	rc = eio_ioctxt_open(&pool->vp_io_ctxt, vos_xsctxt_get(),
+			     &pool->vp_umm, uuid);
+	if (rc) {
+		D_ERROR("Failed to open io context\n");
 		D_GOTO(failed, rc);
 	}
 

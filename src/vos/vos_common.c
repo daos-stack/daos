@@ -250,6 +250,46 @@ struct dss_module vos_srv_module =  {
 	.sm_key		= &vos_module_key,
 };
 
+static void
+vos_nvme_fini(void)
+{
+	if (vsa_xsctxt_inst != NULL) {
+		eio_xsctxt_free(vsa_xsctxt_inst);
+		vsa_xsctxt_inst = NULL;
+	}
+	if (vsa_nvme_init) {
+		eio_nvme_fini();
+		vsa_nvme_init = false;
+	}
+}
+
+static int
+vos_nvme_init(void)
+{
+	int rc;
+
+	rc = eio_nvme_init();
+	if (rc)
+		return rc;
+	vsa_nvme_init = true;
+
+	rc = eio_xsctxt_alloc(&vsa_xsctxt_inst, 1);
+	return rc;
+}
+
+void
+vos_fini(void)
+{
+	D_MUTEX_LOCK(&mutex);
+	if (vsa_imems_inst) {
+		vos_imem_strts_destroy(vsa_imems_inst);
+		D_FREE_PTR(vsa_imems_inst);
+	}
+	vos_nvme_fini();
+	ABT_finalize();
+	D_MUTEX_UNLOCK(&mutex);
+}
+
 int
 vos_init(void)
 {
@@ -266,6 +306,15 @@ vos_init(void)
 	if (is_init && vsa_imems_inst)
 		D_GOTO(exit, rc);
 
+	rc = ABT_init(0, NULL);
+	if (rc != 0) {
+		D_MUTEX_UNLOCK(&mutex);
+		return rc;
+	}
+
+	vsa_xsctxt_inst = NULL;
+	vsa_nvme_init = false;
+
 	D_ALLOC_PTR(vsa_imems_inst);
 	if (vsa_imems_inst == NULL)
 		D_GOTO(exit, rc);
@@ -278,21 +327,14 @@ vos_init(void)
 	if (rc)
 		D_GOTO(exit, rc);
 
+	rc = vos_nvme_init();
+	if (rc)
+		D_GOTO(exit, rc);
+
 	is_init = 1;
 exit:
 	D_MUTEX_UNLOCK(&mutex);
-	if (rc && vsa_imems_inst)
-		D_FREE_PTR(vsa_imems_inst);
+	if (rc)
+		vos_fini();
 	return rc;
-}
-
-void
-vos_fini(void)
-{
-	D_MUTEX_LOCK(&mutex);
-	if (vsa_imems_inst) {
-		vos_imem_strts_destroy(vsa_imems_inst);
-		D_FREE_PTR(vsa_imems_inst);
-	}
-	D_MUTEX_UNLOCK(&mutex);
 }

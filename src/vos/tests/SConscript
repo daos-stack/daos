@@ -3,10 +3,15 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'prereqs')
 
-    libraries = ['vos', 'daos_common', 'daos_tests', 'gurt', 'cart',
-                 'uuid', 'pthread', 'pmemobj', 'cmocka', 'gomp']
+    libraries = ['vos', 'eio', 'abt', 'pthread', 'daos_common', 'daos_tests',
+                 'gurt', 'cart', 'uuid', 'pthread', 'pmemobj', 'cmocka', 'gomp']
+
+    prereqs.require(denv, 'argobots')
+
+    # Add runtime paths for daos libraries
+    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib/daos_srv')])
 
     denv.Append(CPPPATH=['#/src/vos/tests/'])
     vos_test_src = ['vos_tests.c', 'vts_io.c', 'vts_pool.c', 'vts_container.c',

@@ -108,11 +108,13 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		daos_handle_t	 ioh;
 
 		if (update_or_fetch == TS_DO_UPDATE) {
-			rc = vos_obj_zc_update_begin(ts_ctx.tsc_coh, ts_uoid,
-				epoch, &cred->tc_dkey, 1, &cred->tc_iod, &ioh);
+			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
+					      &cred->tc_dkey, 1, &cred->tc_iod,
+					      &ioh);
 		} else {
-			rc = vos_obj_zc_fetch_begin(ts_ctx.tsc_coh, ts_uoid,
-				epoch, &cred->tc_dkey, 1, &cred->tc_iod, &ioh);
+			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
+					     &cred->tc_dkey, 1, &cred->tc_iod,
+					     false, &ioh);
 		}
 		if (rc)
 			return rc;
@@ -135,11 +137,10 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		}
 
 		if (update_or_fetch == TS_DO_UPDATE) {
-			rc = vos_obj_zc_update_end(ioh, ts_cookie, 0,
-				&cred->tc_dkey, 1, &cred->tc_iod, 0);
+			rc = vos_update_end(ioh, ts_cookie, 0, &cred->tc_dkey,
+					    0);
 		} else {
-			rc = vos_obj_zc_fetch_end(ioh, &cred->tc_dkey, 1,
-				&cred->tc_iod, 0);
+			rc = vos_fetch_end(ioh, 0);
 		}
 		if (rc)
 			return rc;

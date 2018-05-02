@@ -37,6 +37,7 @@
 #include <daos/checksum.h>
 #include <daos/lru.h>
 #include <daos_srv/daos_server.h>
+#include <daos_srv/eio.h>
 #include <vos_layout.h>
 #include <vos_obj.h>
 
@@ -74,6 +75,8 @@ struct vos_pool {
 	struct vos_cookie_table	vp_cookie_tab;
 	/** btr handle for the cookie table \a vp_cookie_tab */
 	daos_handle_t		vp_cookie_th;
+	/* I/O context */
+	struct eio_io_context	*vp_io_ctxt;
 };
 
 /**
@@ -114,6 +117,18 @@ struct vos_imem_strts {
 
 /* in-memory structures standalone instance */
 struct vos_imem_strts	*vsa_imems_inst;
+struct eio_xs_context	*vsa_xsctxt_inst;
+bool vsa_nvme_init;
+
+static inline struct eio_xs_context *
+vos_xsctxt_get(void)
+{
+#ifdef VOS_STANDALONE
+	return vsa_xsctxt_inst;
+#else
+	return dss_get_module_info()->dmi_nvme_ctxt;
+#endif
+}
 
 enum {
 	VOS_KEY_CMP_UINT64	= (1ULL << 63),
@@ -741,5 +756,41 @@ vos_hdl2oiter(daos_handle_t hdl);
 
 struct vos_oid_iter*
 vos_hdl2oid_iter(daos_handle_t hdl);
+
+/**
+ * store a bundle of parameters into a iovec, which is going to be passed
+ * into dbtree operations as a compound key.
+ */
+static inline void
+tree_key_bundle2iov(struct vos_key_bundle *kbund, daos_iov_t *iov)
+{
+	memset(kbund, 0, sizeof(*kbund));
+	daos_iov_set(iov, kbund, sizeof(*kbund));
+}
+
+/**
+ * store a bundle of parameters into a iovec, which is going to be passed
+ * into dbtree operations as a compound value (data buffer address, or ZC
+ * buffer mmid, checksum etc).
+ */
+static inline void
+tree_rec_bundle2iov(struct vos_rec_bundle *rbund, daos_iov_t *iov)
+{
+	memset(rbund, 0, sizeof(*rbund));
+	daos_iov_set(iov, rbund, sizeof(*rbund));
+}
+
+enum {
+	SUBTR_CREATE	= (1 << 0),	/**< may create the subtree */
+	SUBTR_EVT	= (1 << 1),	/**< subtree is evtree */
+};
+
+/* vos_obj.c */
+int
+tree_prepare(struct vos_object *obj, daos_epoch_range_t *epr,
+	     daos_handle_t toh, enum vos_tree_class tclass,
+	     daos_key_t *key, int flags, daos_handle_t *sub_toh);
+void
+tree_release(daos_handle_t toh, bool is_array);
 
 #endif /* __VOS_INTERNAL_H__ */

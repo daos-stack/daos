@@ -290,8 +290,8 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
-	rc = vos_obj_zc_fetch_begin(cont, uoid, epoch, &rdb_dkey, 1 /* n */,
-				    &iod, &io);
+	rc = vos_fetch_begin(cont, uoid, epoch, &rdb_dkey, 1 /* n */,
+			     &iod, false /* size_fetch */, &io);
 	if (rc != 0)
 		return rc;
 
@@ -310,7 +310,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		*value = sgl->sg_iovs[0];
 	}
 
-	rc = vos_obj_zc_fetch_end(io, &rdb_dkey, 1 /* n */, &iod, 0 /* err */);
+	rc = vos_fetch_end(io, 0 /* err */);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	return rdb_vos_fetch_check(value, &value_orig);

@@ -495,10 +495,9 @@ tf_obj_update_cb(tse_task_t *task, void *data)
 	int j;
 
 	D_DEBUG(DF_TIERS, "object update complete\n");
-	rc = vos_obj_zc_fetch_end(cba->ioh, cba->dkey, cba->nrecs,
-				  cba->iods, 0);
+	rc = vos_fetch_end(cba->ioh, 0);
 	if (rc)
-		D_ERROR("vox_obj_zc_fetch_end returned %d\n", rc);
+		D_ERROR("vos_fetch_end returned %d\n", rc);
 
 	for (j = 0; j < cba->nrecs; j++) {
 		daos_iod_t *piod = &cba->iods[j];
@@ -627,9 +626,9 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 		d_list_del(iter);
 		D_FREE(src);
 	}
-	rc = vos_obj_zc_fetch_begin(fctx->dfc_co, fctx->dfc_oid, epoch,
-				    &fctx->dfc_dkey, nrecs,
-				    ptmp->dki_iods, &fctx->dfc_ioh);
+	rc = vos_fetch_begin(fctx->dfc_co, fctx->dfc_oid, epoch,
+			     &fctx->dfc_dkey, nrecs, ptmp->dki_iods, false,
+			     &fctx->dfc_ioh);
 	if (rc != 0) {
 		D_ERROR("vos_obj_zc_fetch returned %d\n", rc);
 		D_GOTO(out, rc);

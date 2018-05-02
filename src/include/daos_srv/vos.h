@@ -248,6 +248,7 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
  */
 /**
  * Fetch records from the specified object.
+ * TODO: Deprecated, will be replaced by ds_obj_fetch()
  */
 /**
  * Fetch values for the given keys and their indices.
@@ -282,6 +283,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * If input buffer is not provided in \a sgl, then this function returns
  * the new allocated addresses to store the records, upper layer can
  * directly write data into these addresses (rdma mode).
+ * TODO: Deprecated, will be replaced by ds_obj_update()
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID
@@ -333,16 +335,16 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      unsigned int akey_nr, daos_key_t *akeys);
 
 /**
- * Zero-Copy I/O APIs
+ * I/O APIs
  */
 /**
  *
- * Find and return zero-copy source buffers for the data of the specified
+ * Find and return I/O source buffers for the data of the specified
  * arrays of the given object. The caller can directly use these buffers
  * for RMA read.
  *
- * The upper layer must explicitly call \a vos_obj_zc_end to finalise the
- * ZC I/O and release resources.
+ * The upper layer must explicitly call \a vos_fetch_end to finalise the
+ * I/O and release resources.
  *
  * TODO: add more detail descriptions for punched or missing records.
  *
@@ -355,37 +357,33 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param iods	[IN/OUT]
  *			Array of I/O descriptors. The returned record
  *			sizes are also restored in this parameter.
- * \param ioh	[OUT]	The returned handle for the ZC I/O.
+ * \param size_fetch[IN]
+ *			Fetch size only
+ * \param ioh	[OUT]	The returned handle for the I/O.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
-		       daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
-		       daos_iod_t *iods, daos_handle_t *ioh);
+vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		bool size_fetch, daos_handle_t *ioh);
 
 /**
- * Finish the zero-copy fetch operation and release the responding resources.
+ * Finish the fetch operation and release the responding resources.
  *
- * \param ioh	[IN]	The ZC I/O handle created by \a vos_obj_zc_fetch_begin
- * \param dkey	[IN]	Distribution key.
- * \param nr	[IN]	Number of I/O descriptors in \a iods.
- * \param iods	[IN]	Array of I/O descriptors.
+ * \param ioh	[IN]	The I/O handle created by \a vos_fetch_begin
  * \param err	[IN]	Errno of the current fetch, zero if there is no error.
- *			All updates will be dropped if this function is called
- *			for \a vos_obj_zc_update with a non-zero error code.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_zc_fetch_end(daos_handle_t ioh, daos_key_t *dkey, unsigned int nr,
-		     daos_iod_t *iods, int err);
+vos_fetch_end(daos_handle_t ioh, int err);
 
 /**
- * Prepare zero-copy sink buffers for the specified arrays of the given
+ * Prepare IO sink buffers for the specified arrays of the given
  * object. The caller can directly use thse buffers for RMA write.
  *
- * The upper layer must explicitly call \a vos_obj_zc_fetch_end to finalise the
+ * The upper layer must explicitly call \a vos_fetch_end to finalise the
  * ZC I/O and release resources.
  *
  * \param coh	[IN]	Container open handle
@@ -395,48 +393,65 @@ vos_obj_zc_fetch_end(daos_handle_t ioh, daos_key_t *dkey, unsigned int nr,
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
- * \param ioh	[OUT]	The returned handle for the ZC I/O.
+ * \param ioh	[OUT]	The returned handle for the I/O.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
-			daos_epoch_t epoch, daos_key_t *dkey,
-			unsigned int nr, daos_iod_t *iods,
-			daos_handle_t *ioh);
+vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		 daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		 daos_handle_t *ioh);
 
 /**
- * Finish the current zero-copy update and release the responding resources.
+ * Finish the current update and release the responding resources.
  *
- * \param ioh	[IN]	The ZC I/O handle created by \a vos_obj_zc_update_begin
+ * \param ioh	[IN]	The I/O handle created by \a vos_update_begin
  * \param cookie [IN]	Cookie ID to tag this update to identify during
  *			discard. This tag is used to group all updates
  *			that might in future be discarded together.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param dkey	[IN]	Distribution key.
- * \param nr	[IN]	Number of I/O descriptors in \a iods.
- * \param iods	[IN]	Array of I/O descriptors.
  * \param err	[IN]	Errno of the current update, zero if there is no error.
  *			All updates will be dropped if this function is called
- *			for \a vos_obj_zc_update with a non-zero error code.
+ *			for \a vos_update_begin with a non-zero error code.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
-		      daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-		      int err);
-
+vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
+	       daos_key_t *dkey, int err);
 /**
- * Get the zero-copy scatter/gather list associated with a given I/O descriptor.
+ * Get the scatter/gather list associated with a given I/O descriptor.
+ * TODO: Deprecated, will be replaced with vos_iod_sgl_at().
  *
- * \param ioh	[IN]	The ZC I/O handle.
+ * \param ioh	[IN]	The I/O handle.
  * \param iod	[IN]	Index of the I/O descriptor array.
  * \param sgl_pp [OUT]	The returned scatter/gather list.
  */
 int
 vos_obj_zc_sgl_at(daos_handle_t ioh, unsigned int idx, daos_sg_list_t **sgl_pp);
+
+/**
+ * Get the I/O descriptor.
+ *
+ * \param ioh	[IN]	The I/O handle.
+ *
+ * \return		EIO IO descriptor
+ */
+struct eio_desc *
+vos_ioh2desc(daos_handle_t ioh);
+
+/**
+ * Get the scatter/gather list associated with a given I/O descriptor.
+ *
+ * \param ioh	[IN]	The I/O handle.
+ * \param idx	[IN]	SGL index.
+ *
+ * \return		EIO SGL
+ */
+struct eio_sglist *
+vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
 
 /**
  * VOS iterator APIs

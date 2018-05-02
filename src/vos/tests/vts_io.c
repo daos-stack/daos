@@ -495,9 +495,8 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 		return rc;
 	}
 
-	rc = vos_obj_zc_update_begin(arg->ctx.tc_co_hdl,
-				     arg->oid, epoch, dkey, 1, iod,
-				     &ioh);
+	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, dkey,
+			      1, iod, &ioh);
 	if (rc != 0) {
 		if (verbose)
 			print_error("Failed to prepare ZC update: %d\n", rc);
@@ -517,7 +516,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	}
 	assert_true(srv_iov->iov_len == off);
 
-	rc = vos_obj_zc_update_end(ioh, dsm_cookie->uuid, 0, dkey, 1, iod, 0);
+	rc = vos_update_end(ioh, dsm_cookie->uuid, 0, dkey, 0);
 	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
@@ -545,9 +544,8 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 		return rc;
 	}
 
-	rc = vos_obj_zc_fetch_begin(arg->ctx.tc_co_hdl,
-				    arg->oid, epoch, dkey, 1, iod,
-				    &ioh);
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, dkey,
+			     1, iod, false, &ioh);
 	if (rc != 0) {
 		if (verbose)
 			print_error("Failed to prepare ZC update: %d\n", rc);
@@ -567,7 +565,7 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	dst_iov->iov_len = off;
 	assert_true(dst_iov->iov_buf_len >= dst_iov->iov_len);
 
-	rc = vos_obj_zc_fetch_end(ioh, dkey, 1, iod, 0);
+	rc = vos_fetch_end(ioh, 0);
 	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 

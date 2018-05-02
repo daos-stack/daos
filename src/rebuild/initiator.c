@@ -129,9 +129,9 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 	int		rc;
 
 	D_ASSERT(rdone->ro_iod_num <= MAX_IOD_NUM);
-	rc = vos_obj_zc_update_begin(ds_cont->sc_hdl, rdone->ro_oid,
-				     0, &rdone->ro_dkey, rdone->ro_iod_num,
-				     rdone->ro_iods, &ioh);
+	rc = vos_update_begin(ds_cont->sc_hdl, rdone->ro_oid, 0,
+			      &rdone->ro_dkey, rdone->ro_iod_num,
+			      rdone->ro_iods, &ioh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
 			DP_UOID(rdone->ro_oid), rc);
@@ -162,9 +162,8 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 		D_GOTO(end, rc);
 	}
 end:
-	vos_obj_zc_update_end(ioh, rdone->ro_cookie, rdone->ro_version,
-			      &rdone->ro_dkey, rdone->ro_iod_num,
-			      rdone->ro_iods, rc);
+	vos_update_end(ioh, rdone->ro_cookie, rdone->ro_version,
+		       &rdone->ro_dkey, rc);
 	return rc;
 }
 
