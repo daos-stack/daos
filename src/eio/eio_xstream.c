@@ -35,6 +35,7 @@
 #include <spdk/copy_engine.h>
 #include <spdk/conf.h>
 #include "eio_internal.h"
+#include <daos_srv/smd.h>
 
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
@@ -121,11 +122,17 @@ print_io_stat(uint64_t now)
 }
 
 int
-eio_nvme_init(void)
+eio_nvme_init(const char *storage_path)
 {
-	char *env;
-	int rc, fd;
-	unsigned int size_mb = 8;
+	char		*env;
+	int		rc, fd;
+	unsigned int	size_mb = 8;
+
+	rc = smd_create_initialize(storage_path, NULL, -1);
+	if (rc != 0) {
+		D_ERROR("Error creating server metadata store: %d\n", rc);
+		return rc;
+	}
 
 	nvme_glb.ed_xstream_cnt = 0;
 	nvme_glb.ed_init_thread = NULL;
@@ -188,6 +195,8 @@ eio_nvme_fini(void)
 	D_ASSERT(nvme_glb.ed_xstream_cnt == 0);
 	D_ASSERT(nvme_glb.ed_init_thread == NULL);
 	D_ASSERT(d_list_empty(&nvme_glb.ed_bdevs));
+	smd_fini();
+
 }
 
 struct eio_msg {

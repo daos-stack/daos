@@ -32,7 +32,6 @@
 #include <daos_types.h>
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
-#include "vos_internal.h"
 
 #define ITER_KEY_SIZE		2048
 

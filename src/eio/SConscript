@@ -11,7 +11,11 @@ def scons():
     denv = env.Clone()
     prereqs.require(denv, 'pmdk', 'spdk', 'argobots')
 
-    eio = daos_build.library(denv, "eio", Glob('*.c'), LIBS=['numa', 'spdk'])
+    SConscript('smd/SConscript')
+    denv.AppendUnique(LIBPATH=['smd'])
+
+    eio = daos_build.library(denv, "eio", Glob('*.c'),
+                             LIBS=['numa', 'spdk', 'smd'])
     denv.Install('$PREFIX/lib/daos_srv', eio)
 
 if __name__ == "SCons.Script":

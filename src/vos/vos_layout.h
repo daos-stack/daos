@@ -97,6 +97,9 @@ struct vos_cookie_rec_df {
 	daos_epoch_t		cr_max_epoch;
 };
 
+/**
+ * VOS Pool root object
+ */
 struct vos_pool_df {
 	/* Structs stored in LE or BE representation */
 	uint32_t				pd_magic;
@@ -207,5 +210,4 @@ struct vos_obj_df {
 	/** VOS object btree root */
 	struct btr_root			vo_tree;
 };
-
 #endif

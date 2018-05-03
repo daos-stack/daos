@@ -278,7 +278,7 @@ vos_nvme_init(void)
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = eio_nvme_init();
+	rc = eio_nvme_init("/mnt/daos");
 	if (rc)
 		return rc;
 	vsa_nvme_init = true;

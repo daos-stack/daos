@@ -27,7 +27,7 @@ def scons():
     # Add hwloc requires
     prereqs.require(env, 'hwloc')
 
-    # Generate the common libraries used by everyone
+    # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
     SConscript('eio/SConscript')
 

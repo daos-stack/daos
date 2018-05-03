@@ -34,6 +34,7 @@
 #include <daos/event.h>
 #include <daos_errno.h>
 #include <daos_srv/eio.h>
+#include <daos_srv/smd.h>
 #include <gurt/list.h>
 #include "srv_internal.h"
 
@@ -1416,7 +1417,7 @@ dss_srv_init(int nr)
 	dss_register_key(&daos_srv_modkey);
 	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
-	rc = eio_nvme_init();
+	rc = eio_nvme_init(storage_path);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;

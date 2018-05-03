@@ -392,7 +392,7 @@ vos_cont_close(daos_handle_t coh)
 	cont = vos_hdl2cont(coh);
 	if (cont == NULL) {
 		D_ERROR("Cannot close a NULL handle\n");
-		return -DER_INVAL;
+		return -DER_NO_HDL;
 	}
 
 	vos_obj_cache_evict(vos_obj_cache_current(), cont);

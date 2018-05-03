@@ -149,10 +149,7 @@ struct vos_imem_strts {
 	struct d_hash_table	*vis_cont_hhash;
 	int			vis_enable_checksum;
 	daos_csum_t		vis_checksum;
-
 };
-
-
 /* in-memory structures standalone instance */
 struct vos_imem_strts		*vsa_imems_inst;
 struct eio_xs_context		*vsa_xsctxt_inst;

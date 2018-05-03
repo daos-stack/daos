@@ -135,7 +135,6 @@ ds_mgmt_tgt_init(void)
 		/** only log error, will try again next time */
 		D_ERROR("failed to cleanup NEWBORNS dir: %d, will try again\n",
 			rc);
-
 	rc = subtree_destroy(zombies_path);
 	if (rc)
 		/** only log error, will try again next time */

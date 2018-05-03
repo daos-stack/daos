@@ -359,8 +359,7 @@ pool_query_after_open(void **state)
 static int
 pool_all_empty_file(void **state)
 {
-	enum vts_ops_type tmp[] = {CREAT, OPEN, QUERY,
-					 CLOSE, DESTROY};
+	enum vts_ops_type tmp[] = {CREAT, OPEN, QUERY, CLOSE, DESTROY};
 	int num_ops = sizeof(tmp) / sizeof(enum vts_ops_type);
 
 	pool_set_sequence(state, false, num_ops, tmp);
@@ -371,8 +370,7 @@ pool_all_empty_file(void **state)
 static int
 pool_all(void **state)
 {
-	enum vts_ops_type tmp[] = {CREAT, OPEN, QUERY,
-					 CLOSE, DESTROY};
+	enum vts_ops_type tmp[] = {CREAT, OPEN, QUERY, CLOSE, DESTROY};
 	int num_ops = sizeof(tmp) / sizeof(enum vts_ops_type);
 
 	pool_set_sequence(state, true, num_ops, tmp);

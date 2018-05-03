@@ -153,9 +153,11 @@ eio_sgl_convert(struct eio_sglist *esgl, daos_sg_list_t *sgl)
 /**
  * Global NVMe initialization.
  *
+ * \param[IN] storage_path	daos storage directory path
+ *
  * \return		Zero on success, negative value on error
  */
-int eio_nvme_init(void);
+int eio_nvme_init(const char *storage_path);
 
 /**
  * Global NVMe finilization.
