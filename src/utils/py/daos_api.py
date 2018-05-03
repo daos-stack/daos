@@ -23,13 +23,16 @@
 """
 import ctypes
 import traceback
+import threading
+import time
+import uuid
+import json
 
-
+# DAOS api C structures
 class RankList(ctypes.Structure):
     """ For those DAOS calls that take a rank list """
     _fields_ = [("rl_ranks", ctypes.POINTER(ctypes.c_uint32)),
                 ("rl_nr", ctypes.c_uint)]
-
 
 class IOV(ctypes.Structure):
     _fields_ = [("iov_buf", ctypes.c_void_p),
@@ -44,7 +47,6 @@ class TargetInfo(ctypes.Structure):
                 ("ta_perf", ctypes.c_int),
                 ("ta_space", ctypes.c_int)]
 
-
 class Info(ctypes.Structure):
     """ Structure to represent information about a pool"""
     _fields_ = [("pi_uuid", ctypes.c_ubyte * 16),
@@ -54,6 +56,108 @@ class Info(ctypes.Structure):
                 ("pi_space", ctypes.c_int),
                 ("pi_rebuild_st", ctypes.c_ubyte * 32)]
 
+class DaosEvent(ctypes.Structure):
+    _fields_ = [("ev_error", ctypes.c_int),
+                ("ev_private", ctypes.c_ulonglong * 19),
+                ("ev_debug", ctypes.c_ulonglong)]
+
+def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
+    """ Wrapper function that calls the daos C code.  This can
+        be used to run the DAOS library functions in a thread
+        (or to just run them in the current thread too).
+
+        func_ref   --which daos_api function to call
+        param_list --parameters the c function takes
+        context    --the API context object
+        cb_func    --optional if caller wants notification of completion
+        obj        --optional passed to the callback function
+
+        This is done in a way that exercises the
+        DAOS event code which is cumbersome and done more simply
+        by other means. Its good for testing but replace this
+        implementation if this is used as something other than a test
+        tool.
+    """
+    # TODO insufficient error handling in this function
+
+    # setup the asynchronous infrastructure the API requires
+    the_event = param_list[-1]
+    param_list[-1] = ctypes.byref(the_event)
+
+    qfunc = context.get_function('create-eq')
+    qhandle = ctypes.c_ulonglong(0)
+    rc = qfunc(ctypes.byref(qhandle))
+
+    efunc = context.get_function('init-event')
+    rc = efunc(param_list[-1], qhandle, None)
+
+    # calling the api function here
+    rc = func_ref(*param_list)
+
+    # use the API polling mechanism to tell when its done
+    efunc = context.get_function('poll-eq')
+    c_wait = ctypes.c_int(0)
+    c_timeout = ctypes.c_ulonglong(-1)
+    c_num = ctypes.c_uint(1)
+    anotherEvent = DaosEvent()
+    c_event_ptr = ctypes.pointer(anotherEvent)
+
+    # start polling, wait forever
+    rc = efunc(qhandle, c_wait, c_timeout, c_num, ctypes.byref(c_event_ptr))
+
+    # signal the caller that api function has completed
+    if cb_func is not None:
+        cb_event = CallbackEvent(obj, anotherEvent)
+        cb_func(cb_event)
+
+    # clean up
+    qfunc = context.get_function('destroy-eq')
+    qfunc(ctypes.byref(qhandle))
+
+def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
+    """
+        See AsyncWorker1 for details.  This does the same thing but
+        uses different API functions (test instead of poll) for test
+        coverage purposes.
+    """
+    # TODO insufficient error handling in this function
+
+    # setup the asynchronous infrastructure the API requires
+    the_event = param_list[-1]
+    param_list[-1] = ctypes.byref(the_event)
+
+    qfunc = context.get_function('create-eq')
+    qhandle = ctypes.c_ulonglong(0)
+    rc = qfunc(ctypes.byref(qhandle))
+
+    efunc = context.get_function('init-event')
+    rc = efunc(param_list[-1], qhandle, None)
+
+    # call the api function
+    rc = func_ref(*param_list)
+
+    # -1 means wait forever
+    c_timeout = ctypes.c_ulonglong(-1)
+
+    c_event_ptr = ctypes.byref(the_event)
+    efunc = context.get_function('test-event')
+    c_flag = ctypes.c_bool(0)
+    rc = efunc(c_event_ptr, c_timeout, ctypes.byref(c_flag));
+
+    # signal caller API function has completed
+    if cb_func is not None:
+        cb_event = CallbackEvent(obj, anotherEvent)
+        cb_func(cb_event)
+
+    # cleanup
+    qfunc = context.get_function('destroy-eq')
+    qfunc(ctypes.byref(qhandle))
+
+# python API starts here
+class CallbackEvent(object):
+    def __init__(self, obj, event):
+        self.obj = obj
+        self.event = event
 
 class DaosPool(object):
     """ A python object representing a DAOS pool."""
@@ -62,69 +166,103 @@ class DaosPool(object):
         """ setup the python pool object, not the real pool. """
         self.context = context
         self.uuid = (ctypes.c_ubyte * 1)()
-        self.group = ""
+        self.group = ctypes.create_string_buffer(b"not set")
         self.handle = ctypes.c_uint64(0)
         self.glob = None
         self.svc = None
         self.pool_info = None
         self.target_info = None
 
-    def create(self, mode, uid, gid, size, group):
+    def create(self, mode, uid, gid, size, group, target_list=None,
+               cb_func=None):
         """ send a pool creation request to the daos server group """
         c_mode = ctypes.c_uint(mode)
         c_uid = ctypes.c_uint(uid)
         c_gid = ctypes.c_uint(gid)
         c_size = ctypes.c_longlong(size)
-        c_group = ctypes.create_string_buffer(group)
-        c_uuid = (ctypes.c_ubyte * 16)()
+        self.group = ctypes.create_string_buffer(group)
+        self.uuid = (ctypes.c_ubyte * 16)()
         rank = ctypes.c_uint(1)
         rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
         c_whatever = ctypes.create_string_buffer(b"rubbish")
+        self.svc = RankList(rl_ranks, 1)
 
-        svc = RankList(rl_ranks, 1)
-        self.svc = svc
+        # assuming for now target list is a server rank list
+        tlist = DaosPool.__pylist_to_array(target_list)
+        c_tgts = RankList(tlist, len(tlist))
+
+        target = ctypes.c_uint(1)
+        tlist = ctypes.POINTER(ctypes.c_uint)(target)
+        c_tgts = RankList(tlist, 1)
 
         func = self.context.get_function('create-pool')
-        rc = func(c_mode, c_uid, c_gid, c_group, None, c_whatever, c_size,
-                  ctypes.byref(svc), c_uuid, None)
-        self.uuid = c_uuid
-        self.group = group
 
-        if rc != 0:
-            raise ValueError("Pool create returned non-zero. RC: {0}"
-                             .format(rc))
+        # the callback function is optional, if not supplied then run the
+        # create synchronously, if its there then run it in a thread
+        if cb_func == None:
+            rc = func(c_mode, c_uid, c_gid, self.group, ctypes.byref(c_tgts),
+                      c_whatever, c_size, ctypes.byref(self.svc),
+                      self.uuid, None)
+            if rc != 0:
+                raise ValueError("Pool create returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+            event = DaosEvent()
+            params = [c_mode, c_uid, c_gid, self.group, ctypes.byref(c_tgts),
+                      c_whatever, c_size,
+                      ctypes.byref(self.svc), self.uuid, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,params,self.context,cb_func,self))
+            t.start()
 
-    def connect(self, flags):
+    def connect(self, flags, cb_func=None):
         """ connect to this pool. """
         if not len(self.uuid) == 16:
             raise ValueError("No existing UUID for pool.")
 
-        c_group = ctypes.create_string_buffer(self.group)
         c_flags = ctypes.c_uint(flags)
-        c_handle = ctypes.c_longlong(0)
         c_info = Info()
-
         func = self.context.get_function('connect-pool')
-        rc = func(self.uuid, c_group, ctypes.byref(self.svc), c_flags,
-                  ctypes.byref(c_handle), ctypes.byref(c_info), None)
-        self.handle = c_handle
 
-        if rc != 0:
-            raise ValueError("Pool connect returned non-zero. RC: {0}"
-                             .format(rc))
+        # the callback function is optional, if not supplied then run the
+        # create synchronously, if its there then run it in a thread
+        if cb_func is None:
+            rc = func(self.uuid, self.group, ctypes.byref(self.svc), c_flags,
+                      ctypes.byref(self.handle), ctypes.byref(c_info), None)
+            if rc != 0:
+                raise ValueError("Pool connect returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+           event = DaosEvent()
+           params = [self.uuid, self.group, ctypes.byref(self.svc), c_flags,
+                      ctypes.byref(self.handle), ctypes.byref(c_info), event]
+           t = threading.Thread(target=AsyncWorker1,
+                                args=(func, params, self.context,
+                                                            cb_func, self))
+           t.start()
 
-    def disconnect(self):
+    def disconnect(self, cb_func=None):
+        """ undoes the fine work done by the connect function above """
 
         func = self.context.get_function('disconnect-pool')
-        rc = func(self.handle, None)
-        if rc != 0:
-            raise ValueError("Pool disconnect returned non-zero. RC: {0}"
-                             .format(rc))
+        if cb_func is None:
+            rc = func(self.handle, None)
+            if rc != 0:
+                raise ValueError("Pool disconnect returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.handle, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,params,self.context,cb_func,self))
+            t.start()
+
 
     def local2global(self, poh):
+        """ Create a local pool connection for global representation data. """
 
         c_glob = IOV()
-        func = self.context.get_function("local2global")
+        func = self.context.get_function("convert-local")
         rc = func(poh, ctypes.byref(c_glob))
         if rc != 0:
             raise ValueError("Pool local2global returned non-zero. RC: {0}"
@@ -134,7 +272,7 @@ class DaosPool(object):
     def global2local(self, glob):
 
         c_handle = ctypes.c_uint64(0)
-        func = self.context.get_function("global2local")
+        func = self.context.get_function("convert-global")
 
         rc = func(glob, ctypes.byref(c_handle))
         if rc != 0:
@@ -142,102 +280,156 @@ class DaosPool(object):
                              .format(rc))
         return c_handle
 
-    def exclude(self, tgt_rank_list):
+    def exclude(self, tgt_rank_list, cb_func=None):
         """Exclude a set of storage targets from a pool."""
 
         rl_ranks = DaosPool.__pylist_to_array(tgt_rank_list)
         c_tgts = RankList(rl_ranks, len(tgt_rank_list))
 
-        func = self.context.get_function('pool-exclude')
-        rc = func(self.uuid, self.group, ctypes.byref(self.svc),
-                  ctypes.byref(c_tgts), None)
-
-        if rc != 0:
-            raise ValueError("Pool exclude returned non-zero. RC: {0}"
+        func = self.context.get_function('exclude-target')
+        if cb_func is None:
+            rc = func(self.uuid, self.group, ctypes.byref(self.svc),
+                      ctypes.byref(c_tgts), None)
+            if rc != 0:
+                raise ValueError("Pool exclude returned non-zero. RC: {0}"
                              .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.uuid, self.group, ctypes.byref(self.svc),
+                      ctypes.byref(c_tgts), event]
+            t = threading.Thread(target=AsyncWorker1, args=(func,params,
+                      self.context,cb_func,self))
+            t.start()
 
     def extend(self):
         """Extend the pool to more targets."""
 
         raise NotImplementedError("Extend not implemented in C API yet.")
 
-    def evict(self):
+    def evict(self, cb_func=None):
         """Evict all connections to a pool."""
 
-        func = self.context.get_function('pool-evict')
-        rc = func(self.uuid, self.group, ctypes.byref(self.svc), None)
-        if rc != 0:
-            raise ValueError("Pool evict returned non-zero. RC: {0}".format(rc))
+        func = self.context.get_function('evict-client')
 
-    def tgt_add(self, tgt_rank_list):
+        if cb_func is None:
+            rc = func(self.uuid, self.group, ctypes.byref(self.svc), None)
+            if rc != 0:
+                raise ValueError(
+                    "Pool evict returned non-zero. RC: {0}".format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.uuid, self.group, ctypes.byref(self.svc), event]
+            t = threading.Thread(target=AsyncWorker1, args=(func,params,
+                      self.context,cb_func,self))
+            t.start()
+
+    def tgt_add(self, tgt_rank_list, cb_func=None):
         """add a set of storage targets to a pool."""
 
         rl_ranks = DaosPool.__pylist_to_array(tgt_rank_list)
         c_tgts = RankList(rl_ranks, len(tgt_rank_list))
+        func = self.context.get_function("add-target")
 
-        func = self.context.get_function("target-add")
-        rc = func(self.uuid, self.group, ctypes.byref(self.svc),
-                  ctypes.byref(c_tgts), None)
-        if rc != 0:
-            raise ValueError("Pool tgt_add returned non-zero. RC: {0}"
+        if cb_func is None:
+            rc = func(self.uuid, self.group, ctypes.byref(self.svc),
+                      ctypes.byref(c_tgts), None)
+            if rc != 0:
+                raise ValueError("Pool tgt_add returned non-zero. RC: {0}"
                              .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.uuid, self.group, ctypes.byref(self.svc),
+                      ctypes.byref(c_tgts), event]
+            t = threading.Thread(target=AsyncWorker1, args=(func, params,
+                      self.context, cb_func, self))
+            t.start()
 
-    def exclude_out(self, tgt_rank_list):
+    def exclude_out(self, tgt_rank_list, cb_func=None):
         """Exclude completely a set of storage targets from a pool."""
 
         rl_ranks = DaosPool.__pylist_to_array(tgt_rank_list)
         c_tgts = RankList(rl_ranks, len(tgt_rank_list))
+        func = self.context.get_function('kill-target')
 
-        func = self.context.get_function('exclude-out')
-        rc = func(self.uuid, self.group, ctypes.byref(self.svc),
-                  ctypes.byref(c_tgts), None)
-        if rc != 0:
-            raise ValueError("Pool exclude_out returned non-zero. RC: {0}"
-                             .format(rc))
+        if cb_func is None:
+            rc = func(self.uuid, self.group, ctypes.byref(self.svc),
+                      ctypes.byref(c_tgts), None)
+            if rc != 0:
+                raise ValueError("Pool exclude_out returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.uuid, self.group, ctypes.byref(self.svc),
+                      ctypes.byref(c_tgts), event]
+            t = threading.Thread(target=AsyncWorker1, args=(func, params,
+                      self.context, cb_func, self))
+            t.start()
 
-    def pool_svc_stop(self):
+    def pool_svc_stop(self, cb_func=None):
         """Stop the current pool service leader."""
 
         func = self.context.get_function('service-stop')
-        rc = func(self.handle, None)
-        if rc != 0:
-            raise ValueError("Pool svc_Stop returned non-zero. RC: {0}"
-                             .format(rc))
 
-    def pool_query(self):
+        if cb_func is None:
+            rc = func(self.handle, None)
+            if rc != 0:
+                raise ValueError("Pool svc_Stop returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.handle, event]
+            t = threading.Thread(target=AsyncWorker1, args=(func, params,
+                      self.context, cb_func, self))
+            t.start()
+
+    def pool_query(self, cb_func=None):
         """Query pool information."""
-        c_info = Info()
 
-        func = self.context.get_function('pool-query')
-        rc = func(self.handle, None, ctypes.byref(c_info), None)
-        self.pool_info = c_info
+        self.pool_info = Info()
+        func = self.context.get_function('query-pool')
 
-        if rc != 0:
-            raise ValueError("Pool query returned non-zero. RC: {0}"
-                             .format(rc))
-        return self.pool_info
+        if cb_func is None:
+            rc = func(self.handle, None, ctypes.byref(self.pool_info), None)
+            if rc != 0:
+                raise ValueError("Pool query returned non-zero. RC: {0}"
+                                 .format(rc))
+                return self.pool_info
+        else:
+            event = DaosEvent()
+            params = [self.handle, None, ctypes.byref(self.pool_info), event]
+            t = threading.Thread(target=AsyncWorker1, args=(func, params,
+                      self.context, cb_func, self))
+            t.start()
+        return None
 
     def target_query(self, tgt):
         """Query information of storage targets within a DAOS pool."""
         raise NotImplementedError("Target_query not yet implemented in C API.")
 
-    def destroy(self, force):
+    def destroy(self, force, cb_func=None):
+
         if not len(self.uuid) == 16:
             raise ValueError("No existing UUID for pool.")
-        c_grp = ctypes.create_string_buffer(self.group)
-        c_force = ctypes.c_uint(force)
 
+        c_force = ctypes.c_uint(force)
         func = self.context.get_function('destroy-pool')
-        rc = func(self.uuid, c_grp, c_force, None)
-        if rc != 0:
-            raise ValueError("Pool destroy returned non-zero. RC: {0}"
-                             .format(rc))
+
+        if cb_func is None:
+            rc = func(self.uuid, self.group, c_force, None)
+            if rc != 0:
+                raise ValueError("Pool destroy returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.uuid, self.group, c_force, event]
+            t = threading.Thread(target=AsyncWorker1, args=(func, params,
+                      self.context, cb_func, self))
+            t.start()
 
     @staticmethod
     def __pylist_to_array(pylist):
 
         return (ctypes.c_uint32 * len(pylist))(*pylist)
-
 
 class DaosServer(object):
     """Represents a DAOS Server"""
@@ -257,42 +449,112 @@ class DaosServer(object):
         func = self.context.get_function('kill-server')
         func(c_group, c_rank, c_force, None)
 
-
 class DaosContext(object):
     """Provides environment and other info for a DAOS client."""
 
     def __init__(self, path):
         """ setup the DAOS API and MPI """
 
-        # I had to manually encode the loader mode because python
-        # doesn't support all the values in dlfcn.h, also there is a
-        # circular dependency in the DAOS libraries that mandates use
-        # of LAZY symbol loading and the load order used below.
-        ctypes.CDLL(path+"libdaos_common.so", mode=0x00101)
-        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.0.2", mode=0x00101)
+        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.0.2",
+                                   mode=ctypes.DEFAULT_MODE)
         self.libdaos.daos_init()
+        # Note: action-subject format
         self.ftable = {
-             'create-pool': self.libdaos.daos_pool_create,
-             'destroy-pool': self.libdaos.daos_pool_destroy,
-             'kill-server': self.libdaos.daos_mgmt_svc_rip,
-             'connect-pool': self.libdaos.daos_pool_connect,
+             'add-target'     : self.libdaos.daos_pool_tgt_add,
+             'connect-pool'   : self.libdaos.daos_pool_connect,
+             'convert-global' : self.libdaos.daos_pool_global2local,
+             'covert-local'   : self.libdaos.daos_pool_local2global,
+             'create-pool'    : self.libdaos.daos_pool_create,
+             'create-eq'      : self.libdaos.daos_eq_create,
+             'destroy-pool'   : self.libdaos.daos_pool_destroy,
+             'destroy-eq'     : self.libdaos.daos_eq_destroy,
              'disconnect-pool': self.libdaos.daos_pool_disconnect,
-             'local2global': self.libdaos.daos_pool_local2global,
-             'global2local': self.libdaos.daos_pool_global2local,
-             'pool-exclude': self.libdaos.daos_pool_exclude,
-             'pool-extend': self.libdaos.daos_pool_extend,
-             'pool-evict': self.libdaos.daos_pool_evict,
-             'target-add': self.libdaos.daos_pool_tgt_add,
-             'exclude-out': self.libdaos.daos_pool_exclude_out,
-             'service-stop': self.libdaos.daos_pool_svc_stop,
-             'pool-query': self.libdaos.daos_pool_query,
-             'target-query': self.libdaos.daos_pool_target_query,
+             'evict-client'   : self.libdaos.daos_pool_evict,
+             'exclude-target' : self.libdaos.daos_pool_exclude,
+             'extend-pool'    : self.libdaos.daos_pool_extend,
+             'init-event'     : self.libdaos.daos_event_init,
+             'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
+             'kill-target'    : self.libdaos.daos_pool_exclude_out,
+             'poll-eq'        : self.libdaos.daos_eq_poll,
+             'query-pool'     : self.libdaos.daos_pool_query,
+             'query-target'   : self.libdaos.daos_pool_target_query,
+             'stop-service'   : self.libdaos.daos_pool_svc_stop,
+             'test-event'     : self.libdaos.daos_event_test
         }
 
     def __del__(self):
-        """ cleanup the DAOS API and MPI """
+        """ cleanup the DAOS API """
         self.libdaos.daos_fini()
 
     def get_function(self, function):
         """ call a function through the API """
         return self.ftable[function]
+
+if __name__ == '__main__':
+    # this file is not intended to be run in normal circumstances
+    # this is strictly unit test code here in main, there is a lot
+    # of rubbish but it makes it easy to try stuff out as we expand
+    # this interface.  Will eventially be removed or formalized.
+
+    try:
+        # this works so long as this file is in its usual place
+        with open('../../../.build_vars.json') as f:
+            data = json.load(f)
+
+        CONTEXT = DaosContext(data['PREFIX'] + '/lib/')
+        print("initialized!!!\n")
+
+        POOL = DaosPool(CONTEXT)
+        tgt_list=[1]
+        POOL.create(448, 11374638, 11374638, 1024 * 1024 * 1024,
+                    b'daos_server', tgt_list)
+        #time.sleep(15)
+        print ("Pool create called\n")
+        print ("In main pool uuid 1st digit {:02X}".format(POOL.uuid[0]))
+
+        #time.sleep(5)
+        #print ("handle before connect {0}\n".format(POOL.handle))
+
+        #POOL.connect(1 << 1)
+        #POOL.connect(1 << 1, rubbish)
+        #print ("Main past connect\n");
+
+        #print ("Main: handle after connect {0}\n".format(POOL.handle))
+        #time.sleep(5)
+
+        #POOL.pool_svc_stop();
+        #POOL.pool_query()
+
+        #time.sleep(5)
+
+        #POOL.disconnect(rubbish)
+        #POOL.disconnect()
+        #print ("Main past disconnect\n");
+
+        #time.sleep(5)
+
+        #tgts = [2]
+        #POOL.exclude(tgts, rubbish)
+        #POOL.exclude_out(tgts, rubbish)
+        #POOL.exclude_out(tgts)
+        #print ("Main past exclude\n");
+
+        #POOL.evict(rubbish)
+
+        #time.sleep(5)
+
+        #POOL.tgt_add(tgts, rubbish)
+
+        #print ("Main past tgt_add\n");
+
+        #POOL.destroy(1)
+        #print("Pool destroyed")
+
+        #SERVICE = DaosServer(CONTEXT, b'daos_server', 0)
+        #SERVICE.kill(1)
+        #print ("server killed!\n")
+
+    except Exception as EXCEP:
+        print ("Something horrible happened\n")
+        print (traceback.format_exc())
+        print (EXCEP)
