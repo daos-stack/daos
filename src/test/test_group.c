@@ -462,10 +462,14 @@ test_fini()
 		rc = crt_finalize();
 		D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 	}
+	if (test_g.t_is_service && test_g.t_my_rank == 0) {
+		rc = crt_group_config_remove(NULL);
+		assert(rc == 0);
+	}
+
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 	D_DEBUG(DB_TEST, "exiting.\n");
-
 }
 
 int

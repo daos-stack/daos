@@ -162,12 +162,17 @@ static void
 static void
 srv_rpc_finalize(void)
 {
-	int	rc = 0;
+	int		rc = 0;
 
 	dbg("---%s--->", __func__);
 
 	rc = crt_context_destroy(rpc_srv.crt_ctx, 1);
 	D_ASSERTF(rc == 0, "crt_context_destroy failed %d\n", rc);
+
+	if (rpc_srv.my_rank == 0) {
+		rc = crt_group_config_remove(NULL);
+		assert(rc == 0);
+	}
 
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize failed %d\n", rc);

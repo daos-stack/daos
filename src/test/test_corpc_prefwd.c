@@ -168,6 +168,11 @@ int main(void)
 	rc = crt_context_destroy(g_main_ctx, true);
 	assert(rc == 0);
 
+	if (my_rank == 0) {
+		rc = crt_group_config_remove(NULL);
+		assert(rc == 0);
+	}
+
 	rc = crt_finalize();
 	assert(rc == 0);
 

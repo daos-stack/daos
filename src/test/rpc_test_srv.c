@@ -248,9 +248,24 @@ static void
 static void
 srv_rpc_finalize(void)
 {
-	int	rc = 0;
+	d_rank_t	myrank;
+	int		rc = 0;
 
 	dbg("---%s--->", __func__);
+
+	rc = crt_group_rank(NULL, &myrank);
+	D_ASSERTF(rc == 0, "crt_group_rank failed %d\n", rc);
+
+	if (rpc_srv.target_multitier_grp != NULL) {
+		if (myrank == 0) {
+			rc = crt_group_config_remove(
+					rpc_srv.target_multitier_grp);
+			assert(rc == 0);
+		}
+
+		rc = crt_group_detach(rpc_srv.target_multitier_grp);
+		D_ASSERTF(rc == 0, "crt_group_detach failed %d\n", rc);
+	}
 
 	dbg("main thread wait progress thread ...\n");
 
@@ -262,6 +277,11 @@ srv_rpc_finalize(void)
 
 	rc = sem_destroy(&rpc_srv.srv_sem);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.%d\n", rc);
+
+	if (myrank == 0) {
+		rc = crt_group_config_remove(NULL);
+		assert(rc == 0);
+	}
 
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize failed %d\n", rc);
@@ -580,9 +600,6 @@ srv_rpc_init(void)
 		D_ASSERTF(rc == 0, "crt_group_config_save failed %d\n", rc);
 
 		srv_rpc_multitier_io();
-
-		rc = crt_group_detach(rpc_srv.target_multitier_grp);
-		D_ASSERTF(rc == 0, "crt_group_detach failed %d\n", rc);
 	} else {
 		dbg("multitier group attachment failed:=%d", rc);
 	}

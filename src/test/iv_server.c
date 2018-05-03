@@ -149,7 +149,8 @@ shutdown(void)
 
 /* handler for RPC_SHUTDOWN */
 int
-iv_shutdown(crt_rpc_t *rpc) {
+iv_shutdown(crt_rpc_t *rpc)
+{
 	struct rpc_shutdown_in	*input;
 	struct rpc_shutdown_out	*output;
 	int			 rc;
@@ -1199,7 +1200,7 @@ int main(int argc, char **argv)
 	init_iv();
 
 	/* Wait for IV namespace attach before saving group config
-	 * This prevents singleton iv_client from connecting toservers
+	 * This prevents singleton iv_client from connecting to servers
 	 * before those are fully initialized
 	 */
 	wait_for_namespace();
@@ -1214,6 +1215,11 @@ int main(int argc, char **argv)
 	deinit_iv();
 
 	shutdown();
+
+	if (g_my_rank == 0) {
+		rc = crt_group_config_remove(NULL);
+		assert(rc == 0);
+	}
 
 	rc = crt_finalize();
 	assert(rc == 0);

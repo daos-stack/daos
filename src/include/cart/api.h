@@ -796,6 +796,17 @@ int
 crt_group_config_save(crt_group_t *grp, bool forall);
 
 /**
+ * Remove the attach info file for the sepcified group.
+ *
+ * \param[in] grp              Primary service group attach info to delete,
+ *                             NULL indicates local primary group.
+ *
+ * \return                     DER_SUCCESS on success, negative value on error
+ */
+int
+crt_group_config_remove(crt_group_t *grp);
+
+/**
  * Detach a primary service group which was attached previously.
  *
  * \param[in] attached_grp     attached primary service group handle.

@@ -203,10 +203,13 @@ parse_options(int argc, char *argv[])
 	}
 }
 
+static crt_group_t	*tier2_grp;
+bool			 should_rm_tier1_attach_info;
+
 static inline void
 echo_init(int server, bool tier2)
 {
-	crt_group_t	*tier2_grp;
+	d_rank_t	my_rank;
 	uint32_t	flags;
 	int		rc = 0, i;
 
@@ -230,14 +233,16 @@ echo_init(int server, bool tier2)
 		printf("Saving singleton attach info\n");
 		rc = crt_group_config_save(NULL, false);
 		assert(rc == 0);
+		rc = crt_group_rank(NULL, &my_rank);
+		D_ASSERT(rc == 0);
+		if (my_rank == 0)
+			should_rm_tier1_attach_info = true;
 
 		if (gecho.multi_tier_test) {
 			/* Test saving attach info for another group */
 			rc = crt_group_attach(ECHO_2ND_TIER_GRPID, &tier2_grp);
 			assert(rc == 0 && tier2_grp != NULL);
 			rc = crt_group_config_save(tier2_grp, false);
-			assert(rc == 0);
-			rc = crt_group_detach(tier2_grp);
 			assert(rc == 0);
 		}
 	}
@@ -304,6 +309,18 @@ static inline void
 echo_fini(void)
 {
 	int rc = 0, i;
+	d_rank_t my_rank;
+
+	if (tier2_grp != NULL) {
+		rc = crt_group_rank(NULL, &my_rank);
+		D_ASSERT(rc == 0);
+		if (my_rank == 0) {
+			rc = crt_group_config_remove(tier2_grp);
+			assert(rc == 0);
+		}
+		rc = crt_group_detach(tier2_grp);
+		assert(rc == 0);
+	}
 
 	rc = crt_context_destroy(gecho.crt_ctx, 0);
 	assert(rc == 0);
@@ -318,6 +335,12 @@ echo_fini(void)
 
 	rc = sem_destroy(&gecho.token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
+
+	if (should_rm_tier1_attach_info) {
+		rc = crt_group_config_remove(NULL);
+		assert(rc == 0);
+	}
+
 	rc = crt_finalize();
 	assert(rc == 0);
 }

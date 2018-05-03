@@ -2691,6 +2691,44 @@ out:
 	return rc;
 }
 
+int
+crt_group_config_remove(crt_group_t *grp)
+{
+	struct crt_grp_priv	*grp_priv;
+	char			*filename = NULL;
+	int			 rc;
+
+	if (!crt_initialized()) {
+		D_ERROR("CRT not initialized.\n");
+		D_GOTO(out, rc = -DER_UNINIT);
+	}
+
+	grp_priv = crt_grp_pub2priv(grp);
+	if (!grp_priv->gp_service || !grp_priv->gp_primary) {
+		D_ERROR("Can only remove config info for primary service "
+			"grp.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	filename = crt_grp_attach_info_filename(grp_priv);
+	if (filename == NULL) {
+		D_ERROR("crt_grp_attach_info_filename() failed.\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = unlink(filename);
+	if (rc != 0) {
+		rc = d_errno2der(errno);
+		D_ERROR("Failed to remove %s (%s).\n",
+			filename, strerror(errno));
+	}
+
+out:
+	D_FREE(filename);
+
+	return rc;
+}
+
 /*
  * Load psr from singleton config file.
  * If psr_rank set as "-1", will mod the group rank with group size as psr rank.
