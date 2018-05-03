@@ -1254,10 +1254,11 @@ class _Component(object):
                 if self.src_path == defpath:
                     self.retriever.update(self.src_path, commit_sha=commit_sha,
                                           patch=patch, branch=branch)
-            elif self.patch is not None:
+            elif self.prereqs.build_deps and self.patch is not None:
                 # Apply patch to existing source.
                 print "Applying patch %s" % (self.patch)
-                commands = ['patch -p 1 -N -t < %s' % (self.patch)]
+                commands = ['patch -p 1 -N -t < %s ; if [ $? -gt 1 ]; then '
+                            'false; else true; fi;' % (self.patch)]
                 if not RUNNER.run_commands(commands, subdir=self.src_path):
                     raise BuildFailure(self.patch)
             return
