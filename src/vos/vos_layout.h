@@ -33,6 +33,7 @@
 #include <daos/btree.h>
 #include <daos_srv/evtree.h>
 #include <daos_srv/vos_types.h>
+#include <daos_srv/eio.h>
 
 /**
  * VOS metadata structure declarations
@@ -173,7 +174,9 @@ struct vos_irec_df {
 	uint32_t			ir_ver;
 	/** length of value */
 	uint64_t			ir_size;
-	/** placeholder for the real stuff */
+	/** external payload address */
+	struct eio_addr			ir_ex_addr;
+	/** placeholder for the key checksum & internal value */
 	char				ir_body[0];
 };
 

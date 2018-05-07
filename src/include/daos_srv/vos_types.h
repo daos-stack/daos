@@ -25,6 +25,7 @@
 #define __VOS_TYPES_H__
 
 #include <daos_types.h>
+#include <daos_srv/eio.h>
 
 enum vos_oi_attr {
 	/** Marks object as failed */
@@ -157,6 +158,8 @@ typedef struct {
 			daos_recx_t		ie_recx;
 			/** iovec to return data or ZC address */
 			daos_iov_t		ie_iov;
+			/** eiov to return address for single value rec */
+			struct eio_iov		ie_eiov;
 			/** update cookie */
 			uuid_t			ie_cookie;
 			/** checksum */

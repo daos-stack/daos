@@ -551,10 +551,10 @@ svb_rec_copy_in(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
-	daos_iov_t		*iov	= rbund->rb_iov;
+	struct eio_iov		*eiov	= rbund->rb_eiov;
 	struct svb_hkey		*skey;
 
-	if (iov->iov_len != rbund->rb_rsize)
+	if (eiov->ei_data_len != rbund->rb_rsize)
 		return -DER_IO_INVAL;
 
 	skey = (struct svb_hkey *)&rec->rec_hkey[0];
@@ -564,17 +564,16 @@ svb_rec_copy_in(struct btr_instance *tins, struct btr_record *rec,
 	/** XXX: fix this after CSUM is added to iterator */
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
-	irec->ir_size	 = iov->iov_len;
+	irec->ir_size	 = eiov->ei_data_len;
+	irec->ir_ex_addr = eiov->ei_addr;
 	irec->ir_ver	 = rbund->rb_ver;
 
 	if (irec->ir_size == 0) { /* it is a punch */
 		csum->cs_csum = NULL;
-		iov->iov_buf = NULL;
 		return 0;
 	}
 
 	csum->cs_csum = vos_irec2csum(irec);
-	iov->iov_buf = vos_irec2data(irec);
 	return 0;
 }
 
@@ -585,10 +584,10 @@ static int
 svb_rec_copy_out(struct btr_instance *tins, struct btr_record *rec,
 		 struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
-	struct svb_hkey	   *skey = (struct svb_hkey *)&rec->rec_hkey[0];
-	struct vos_irec_df *irec  = vos_rec2irec(tins, rec);
-	daos_csum_buf_t	   *csum  = rbund->rb_csum;
-	daos_iov_t	   *iov   = rbund->rb_iov;
+	struct svb_hkey    *skey = (struct svb_hkey *)&rec->rec_hkey[0];
+	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
+	daos_csum_buf_t    *csum = rbund->rb_csum;
+	struct eio_iov     *eiov = rbund->rb_eiov;
 
 	if (kbund != NULL) { /* called from iterator */
 		kbund->kb_epr->epr_lo	= skey->sv_epoch;
@@ -597,13 +596,16 @@ svb_rec_copy_out(struct btr_instance *tins, struct btr_record *rec,
 	uuid_copy(rbund->rb_cookie, skey->sv_cookie);
 
 	/* NB: return record address, caller should copy/rma data for it */
-	iov->iov_len = iov->iov_buf_len = irec->ir_size;
+	eiov->ei_data_len = irec->ir_size;
+	eiov->ei_addr = irec->ir_ex_addr;
+	eiov->ei_buf = NULL;
+
 	if (irec->ir_size != 0) {
-		iov->iov_buf	= vos_irec2data(irec);
 		csum->cs_len	= irec->ir_cs_size;
 		csum->cs_type	= irec->ir_cs_type;
 		csum->cs_csum	= vos_irec2csum(irec);
 	}
+
 	rbund->rb_rsize	= irec->ir_size;
 	rbund->rb_ver	= irec->ir_ver;
 	return 0;
@@ -681,6 +683,7 @@ svb_rec_free(struct btr_instance *tins, struct btr_record *rec,
 	if (UMMID_IS_NULL(rec->rec_mmid))
 		return 0;
 
+	/* TODO free NVMe record */
 	if (args != NULL) {
 		*(umem_id_t *)args = rec->rec_mmid;
 		rec->rec_mmid = UMMID_NULL; /** taken over by user */

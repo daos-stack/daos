@@ -738,10 +738,10 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	kbund.kb_epr	= &it_entry->ie_epr;
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	rbund.rb_iov	= &it_entry->ie_iov;
+	rbund.rb_eiov	= &it_entry->ie_eiov;
 	rbund.rb_csum	= &it_entry->ie_csum;
 
-	daos_iov_set(rbund.rb_iov, NULL, 0); /* no data copy */
+	memset(&it_entry->ie_eiov, 0, sizeof(it_entry->ie_eiov));
 	daos_csum_set(rbund.rb_csum, NULL, 0);
 
 	rc = dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);

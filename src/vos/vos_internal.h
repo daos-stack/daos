@@ -462,6 +462,10 @@ struct vos_rec_bundle {
 	 * Output : parameter to return value address.
 	 */
 	daos_iov_t		*rb_iov;
+	/**
+	 * Single value record IOV.
+	 */
+	struct eio_iov		*rb_eiov;
 	/** returned btree root */
 	struct btr_root		*rb_btr;
 	/** returned evtree root */

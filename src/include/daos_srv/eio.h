@@ -38,12 +38,20 @@ enum {
 	EIO_ADDR_NVME,
 };
 
-struct eio_iov {
+struct eio_addr {
 	/*
 	 * Byte offset within PMDK pmemobj pool for SCM;
 	 * Byte offset within SPDK blob for NVMe.
 	 */
-	uint64_t	 ei_off;
+	uint64_t	ea_off;
+	/* EIO_ADDR_SCM or EIO_ADDR_NVME */
+	uint16_t	ea_type;
+	/* Is the address a hole ? */
+	uint16_t	ea_hole;
+	uint32_t	ea_padding;
+};
+
+struct eio_iov {
 	/*
 	 * For SCM, it's direct memory address of 'ea_off';
 	 * For NVMe, it's a DMA buffer allocated by SPDK malloc API.
@@ -51,10 +59,7 @@ struct eio_iov {
 	void		*ei_buf;
 	/* Data length in bytes */
 	size_t		 ei_data_len;
-	/* EIO_ADDR_SCM or EIO_ADDR_NVME */
-	uint16_t	 ei_type;
-	/* Is the address a hole ? */
-	uint16_t	 ei_hole;
+	struct eio_addr	 ei_addr;
 };
 
 struct eio_sglist {
@@ -71,15 +76,15 @@ struct eio_io_context;
 struct eio_xs_context;
 
 static inline bool
-eio_iov_is_hole(struct eio_iov *iov)
+eio_addr_is_hole(struct eio_addr *addr)
 {
-	return iov->ei_hole != 0;
+	return addr->ea_hole != 0;
 }
 
 static inline void
-eio_iov_set_hole(struct eio_iov *iov, uint16_t hole)
+eio_addr_set_hole(struct eio_addr *addr, uint16_t hole)
 {
-	iov->ei_hole = hole;
+	addr->ea_hole = hole;
 }
 
 static inline int

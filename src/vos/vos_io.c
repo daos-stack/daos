@@ -237,10 +237,9 @@ error:
 }
 
 static int
-iod_fetch(struct vos_io_context *ioc, daos_iov_t *iov)
+iod_fetch(struct vos_io_context *ioc, struct eio_iov *eiov)
 {
 	struct eio_sglist *esgl;
-	struct eio_iov *eiovs, eiov;
 	int iov_nr, iov_at;
 
 	if (ioc->ic_size_fetch)
@@ -255,6 +254,8 @@ iod_fetch(struct vos_io_context *ioc, daos_iov_t *iov)
 	D_ASSERT(iov_nr >= esgl->es_nr_out);
 
 	if (iov_at == iov_nr - 1) {
+		struct eio_iov *eiovs;
+
 		D_ALLOC(eiovs, iov_nr * 2 * sizeof(*eiovs));
 		if (eiovs == NULL)
 			return -DER_NOMEM;
@@ -266,24 +267,7 @@ iod_fetch(struct vos_io_context *ioc, daos_iov_t *iov)
 		esgl->es_nr = iov_nr * 2;
 	}
 
-	/*
-	 * TODO: We temporarily forge an eio_iov from daos_iov_t, this will
-	 *	 be fixed once the tree interfaces being adjusted.
-	 */
-	memset(&eiov, 0, sizeof(eiov));
-	eiov.ei_type = EIO_ADDR_SCM;
-	eiov.ei_data_len = iov->iov_len;
-	if (iov->iov_buf != NULL) {
-		umem_id_t umem_id;
-
-		D_ASSERT(iov->iov_len != 0);
-		umem_id = pmemobj_oid(iov->iov_buf);
-		eiov.ei_off = umem_id.off;
-	} else {
-		eio_iov_set_hole(&eiov, 1);
-	}
-
-	esgl->es_iovs[iov_at] = eiov;
+	esgl->es_iovs[iov_at] = *eiov;
 	esgl->es_nr_out++;
 	ioc->ic_iov_at++;
 	return 0;
@@ -299,32 +283,33 @@ akey_fetch_single(daos_handle_t toh, daos_epoch_range_t *epr,
 	daos_csum_buf_t		 csum;
 	daos_iov_t		 kiov; /* iov to carry key bundle */
 	daos_iov_t		 riov; /* iov to carray record bundle */
-	daos_iov_t		 diov; /* iov to return data buffer */
+	struct eio_iov		 eiov; /* iov to return data buffer */
 	int			 rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epr	= epr;
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	rbund.rb_iov	= &diov;
+	rbund.rb_eiov	= &eiov;
 	rbund.rb_csum	= &csum;
-	daos_iov_set(&diov, NULL, 0);
+	memset(&eiov, 0, sizeof(eiov));
 	daos_csum_set(&csum, NULL, 0);
 
 	rc = dbtree_fetch(toh, BTR_PROBE_LE, &kiov, &kiov, &riov);
 	if (rc == -DER_NONEXIST) {
 		rbund.rb_rsize = 0;
+		eio_addr_set_hole(&eiov.ei_addr, 1);
 		rc = 0;
 	} else if (rc != 0) {
-		D_GOTO(out, rc);
+		goto out;
 	}
 
-	rc = iod_fetch(ioc, &diov);
+	rc = iod_fetch(ioc, &eiov);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 
 	*rsize = rbund.rb_rsize;
- out:
+out:
 	return rc;
 }
 
@@ -340,7 +325,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 	d_list_t		 covered;
 	struct evt_entry_list	 ent_list;
 	struct evt_rect		 rect;
-	daos_iov_t		 iov;
+	struct eio_iov		 eiov;
 	daos_size_t		 holes; /* hole width */
 	daos_off_t		 index;
 	daos_off_t		 end;
@@ -393,16 +378,28 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 		}
 
 		if (holes != 0) {
-			daos_iov_set(&iov, NULL, holes * rsize);
+			memset(&eiov, 0, sizeof(eiov));
+			eiov.ei_data_len = holes * rsize;
+			eio_addr_set_hole(&eiov.ei_addr, 1);
 			/* skip the hole */
-			rc = iod_fetch(ioc, &iov);
+			rc = iod_fetch(ioc, &eiov);
 			if (rc != 0)
 				D_GOTO(failed, rc);
 			holes = 0;
 		}
 
-		daos_iov_set(&iov, ent->en_addr, nr * rsize);
-		rc = iod_fetch(ioc, &iov);
+		memset(&eiov, 0, sizeof(eiov));
+		/* TODO: support NVMe */
+		eiov.ei_addr.ea_type = EIO_ADDR_SCM;
+		eiov.ei_data_len = nr * rsize;
+		if (ent->en_addr != NULL) {
+			umem_id_t umem_id = pmemobj_oid(ent->en_addr);
+
+			eiov.ei_addr.ea_off = umem_id.off;
+		} else {
+			eio_addr_set_hole(&eiov.ei_addr, 1);
+		}
+		rc = iod_fetch(ioc, &eiov);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 
@@ -417,8 +414,10 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 		if (rsize == 0) { /* nothing but holes */
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
 		} else {
-			daos_iov_set(&iov, NULL, holes * rsize);
-			rc = iod_fetch(ioc, &iov);
+			memset(&eiov, 0, sizeof(eiov));
+			eiov.ei_data_len = holes * rsize;
+			eio_addr_set_hole(&eiov.ei_addr, 1);
+			rc = iod_fetch(ioc, &eiov);
 			if (rc != 0)
 				D_GOTO(failed, rc);
 		}
@@ -656,6 +655,22 @@ iod_update_mmid(struct vos_io_context *ioc)
 	return mmid;
 }
 
+static struct eio_iov *
+iod_update_eiov(struct vos_io_context *ioc)
+{
+	struct eio_sglist *esgl;
+	struct eio_iov *eiov;
+
+	esgl = eio_iod_sgl(ioc->ic_eiod, ioc->ic_sgl_at);
+	D_ASSERT(esgl->es_nr_out != 0);
+	D_ASSERT(esgl->es_nr_out > ioc->ic_iov_at);
+
+	eiov = &esgl->es_iovs[ioc->ic_iov_at];
+	ioc->ic_iov_at++;
+
+	return eiov;
+}
+
 static int
 akey_update_single(daos_handle_t toh, daos_epoch_range_t *epr,
 		   uuid_t cookie, uint32_t pm_ver, daos_size_t rsize,
@@ -665,7 +680,7 @@ akey_update_single(daos_handle_t toh, daos_epoch_range_t *epr,
 	struct vos_rec_bundle rbund;
 	daos_csum_buf_t csum;
 	daos_iov_t kiov, riov;
-	daos_iov_t iov; /* iov for the sink buffer */
+	struct eio_iov *eiov;
 	umem_id_t mmid;
 	int rc;
 
@@ -673,15 +688,16 @@ akey_update_single(daos_handle_t toh, daos_epoch_range_t *epr,
 	kbund.kb_epr	= epr;
 
 	daos_csum_set(&csum, NULL, 0);
-	daos_iov_set(&iov, NULL, rsize);
+
+	mmid = iod_update_mmid(ioc);
+	D_ASSERT(!UMMID_IS_NULL(mmid));
 
 	D_ASSERT(ioc->ic_iov_at == 0);
-	/* TODO support NVMe record */
-	mmid = iod_update_mmid(ioc);
+	eiov = iod_update_eiov(ioc);
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_csum	= &csum;
-	rbund.rb_iov	= &iov;
+	rbund.rb_eiov	= eiov;
 	rbund.rb_rsize	= rsize;
 	rbund.rb_mmid	= mmid;
 	uuid_copy(rbund.rb_cookie, cookie);
@@ -846,6 +862,119 @@ vos_reserve(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	return -DER_INVAL;
 }
 
+static int
+iod_reserve(struct vos_io_context *ioc, struct eio_iov *eiov)
+{
+	struct eio_sglist *esgl;
+
+	esgl = eio_iod_sgl(ioc->ic_eiod, ioc->ic_sgl_at);
+	D_ASSERT(esgl->es_nr != 0);
+	D_ASSERT(esgl->es_nr > esgl->es_nr_out);
+	D_ASSERT(esgl->es_nr > ioc->ic_iov_at);
+
+	esgl->es_iovs[ioc->ic_iov_at] = *eiov;
+	ioc->ic_iov_at++;
+	esgl->es_nr_out++;
+
+	D_DEBUG(DB_IO, "media %hu offset "DF_X64" size %zd\n",
+		eiov->ei_addr.ea_type, eiov->ei_addr.ea_off,
+		eiov->ei_data_len);
+	return 0;
+}
+
+/* Reserve single value record on specified media */
+static int
+vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
+		   daos_size_t size)
+{
+	struct vos_object *obj = ioc->ic_obj;
+	struct vos_irec_df *irec;
+	daos_size_t scm_size;
+	umem_id_t mmid;
+	struct eio_iov eiov;
+	uint64_t off = 0;
+	int rc;
+
+	/*
+	 * TODO:
+	 * To eliminate internal fragmentaion, misaligned record (record size
+	 * isn't aligned with 4K) on NVMe could be split into two parts, large
+	 * aligned part will be stored on NVMe and being referenced by
+	 * vos_irec_df->ir_ex_addr, small unaligned part will be stored on SCM
+	 * along with vos_irec_df, being referenced by vos_irec_df->ir_body.
+	 */
+	scm_size = (media == EIO_ADDR_SCM) ? vos_recx2irec_size(size, NULL) :
+					     vos_recx2irec_size(0, NULL);
+
+	rc = vos_reserve(ioc, media, scm_size, &off);
+	if (rc) {
+		D_ERROR("Reserve single value failed. %d\n", rc);
+		return rc;
+	}
+
+	D_ASSERT(ioc->ic_mmids_cnt > 0);
+	mmid = ioc->ic_mmids[ioc->ic_mmids_cnt - 1];
+	irec = (struct vos_irec_df *) umem_id2ptr(vos_obj2umm(obj), mmid);
+	irec->ir_cs_size = 0;
+	irec->ir_cs_type = 0;
+
+	if (media == EIO_ADDR_SCM) {
+		char *payload_addr;
+
+		/* Get the record payload offset */
+		payload_addr = vos_irec2data(irec);
+		D_ASSERT(payload_addr >= (char *)irec);
+		off = mmid.off + (payload_addr - (char *)irec);
+	} else {
+		/* TODO support NVMe record */
+		return -DER_NOSYS;
+	}
+
+	memset(&eiov, 0, sizeof(eiov));
+	eiov.ei_addr.ea_type = media;
+	eiov.ei_addr.ea_off = off;
+	eiov.ei_data_len = size;
+	rc = iod_reserve(ioc, &eiov);
+
+	return rc;
+}
+
+static int
+vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
+{
+	struct eio_iov eiov;
+	uint64_t off = 0;
+	int rc;
+
+	memset(&eiov, 0, sizeof(eiov));
+	/* recx punch */
+	if (size == 0) {
+		ioc->ic_mmids[ioc->ic_mmids_cnt] = UMMID_NULL;
+		ioc->ic_mmids_cnt++;
+		media = EIO_ADDR_SCM;
+		goto done;
+	}
+
+	/*
+	 * TODO:
+	 * To eliminate internal fragmentaion, misaligned recx (total recx size
+	 * isn't aligned with 4K) on NVMe could be split into two evtree rects,
+	 * larger rect will be stored on NVMe and small reminder on SCM.
+	 */
+	rc = vos_reserve(ioc, media, size, &off);
+	if (rc) {
+		D_ERROR("Reserve recx failed. %d\n", rc);
+		return rc;
+	}
+done:
+	eiov.ei_addr.ea_type = media;
+	eiov.ei_addr.ea_off = off;
+	eiov.ei_data_len = size;
+	rc = iod_reserve(ioc, &eiov);
+
+	return rc;
+}
+
 /*
  * A simple media selection policy embedded in VOS, which select media by
  * akey type and record size.
@@ -860,9 +989,7 @@ akey_media_select(daos_iod_type_t type, daos_size_t size)
 static int
 akey_update_begin(struct vos_io_context *ioc)
 {
-	struct vos_object *obj = ioc->ic_obj;
 	daos_iod_t *iod = &ioc->ic_iods[ioc->ic_sgl_at];
-	struct eio_sglist *esgl;
 	int i, rc;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE && iod->iod_nr != 1) {
@@ -870,62 +997,21 @@ akey_update_begin(struct vos_io_context *ioc)
 		return -DER_IO_INVAL;
 	}
 
-	esgl = eio_iod_sgl(ioc->ic_eiod, ioc->ic_sgl_at);
-	D_ASSERT(esgl->es_nr != 0 && esgl->es_nr_out == 0);
-
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t size;
-		uint64_t off = 0;
 		uint16_t media;
-		struct eio_iov *eiov;
 
-		D_ASSERTF(i < esgl->es_nr, "%d >= %d\n", i, esgl->es_nr);
-		eiov = &esgl->es_iovs[i];
-
-		size = (iod->iod_type == DAOS_IOD_SINGLE) ?
-		       vos_recx2irec_size(iod->iod_size, NULL) :
-		       iod->iod_recxs[i].rx_nr * iod->iod_size;
+		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
+				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
 		media = akey_media_select(iod->iod_type, size);
 
-		/* recx punch */
-		if (size == 0) {
-			ioc->ic_mmids[ioc->ic_mmids_cnt] = UMMID_NULL;
-			ioc->ic_mmids_cnt++;
-			goto next;
-		}
-
-		rc = vos_reserve(ioc, media, size, &off);
+		if (iod->iod_type == DAOS_IOD_SINGLE)
+			rc = vos_reserve_single(ioc, media, size);
+		else
+			rc = vos_reserve_recx(ioc, media, size);
 		if (rc)
 			return rc;
-
-		if (iod->iod_type == DAOS_IOD_SINGLE) {
-			umem_id_t mmid;
-			struct vos_irec_df *irec;
-			char *payload_addr;
-
-			D_ASSERT(media == EIO_ADDR_SCM);
-			D_ASSERT(ioc->ic_mmids_cnt > 0);
-			mmid = ioc->ic_mmids[ioc->ic_mmids_cnt - 1];
-			irec = (struct vos_irec_df *)
-				umem_id2ptr(vos_obj2umm(obj), mmid);
-			irec->ir_cs_size = 0;
-			irec->ir_cs_type = 0;
-
-			/* Get the record payload offset */
-			payload_addr = vos_irec2data(irec);
-			D_ASSERT(payload_addr >= (char *)irec);
-			off = mmid.off + (payload_addr - (char *)irec);
-			size = iod->iod_size;
-		}
-next:
-		eiov->ei_type = media;
-		eiov->ei_off = off;
-		eiov->ei_data_len = size;
-		D_DEBUG(DB_IO, "media %hu offset "DF_X64" size %zd\n",
-			media, off, size);
-		esgl->es_nr_out++;
-		D_ASSERT(esgl->es_nr_out <= esgl->es_nr);
 	}
 	return 0;
 }
