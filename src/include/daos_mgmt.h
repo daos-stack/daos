@@ -115,6 +115,7 @@ daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
  * \param svc	[IN]	list of pool service ranks
  * \param tgts	[IN]	Target rank array to be excluded from the pool.
+ *			Now can-only exclude one target per API calling.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -223,6 +224,7 @@ daos_mgmt_params_set(const char *grp, d_rank_t rank, unsigned int key_id,
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
  * \param svc	[IN]	list of pool service ranks
  * \param tgts	[IN]	Target rank array to be excluded from the pool.
+ *			Now can-only exclude one target per API calling.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *

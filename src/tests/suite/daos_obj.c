@@ -286,7 +286,7 @@ lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 	assert_int_equal(ev_flag, true);
 	assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 	/* Only single iov for each sgls during the test */
-	if (!empty)
+	if (!empty && req->ev.ev_error == 0)
 		assert_int_equal(sgls->sg_nr_out, 1);
 }
 
@@ -1548,8 +1548,7 @@ tgt_idx_change_retry(void **state)
 		insert_test(&req, 1000);
 
 		/** wait until rebuild done */
-		while (!test_rebuild_wait(&arg, 1))
-			sleep(2);
+		test_rebuild_wait(&arg, 1);
 
 		/** verify the target of shard 0 changed */
 		rc = daos_obj_layout_get(arg->coh, oid, &layout);
@@ -1593,6 +1592,73 @@ tgt_idx_change_retry(void **state)
 		print_message("rank 0 adding target rank %u ...\n", rank);
 		daos_add_server(arg->pool_uuid, arg->group, &arg->svc, rank);
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	ioreq_fini(&req);
+}
+
+static void
+fetch_replica_unavail(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		 oid;
+	struct ioreq		 req;
+	const char		 dkey[] = "test_update dkey";
+	const char		 akey[] = "test_update akey";
+	const char		 rec[]  = "test_update record";
+	uint32_t		 size = 64;
+	daos_pool_info_t	 info;
+	d_rank_t		 rank = 2;
+	char			*buf;
+	int			 rc;
+
+	/* needs at lest 4 targets, exclude one and another 3 raft nodes */
+	if (!test_runable(arg, 4))
+		skip();
+
+	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, rank);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/** Insert */
+	print_message("Insert(e=0)/exclude all tgts/lookup(e=0) verify "
+		      "get -DER_NONEXIST\n");
+	insert_single(dkey, akey, 0, (void *)rec, strlen(rec), 0, &req);
+
+	if (arg->myrank == 0) {
+		/** disable rebuild */
+		rc = daos_pool_query(arg->poh, NULL, &info, NULL);
+		assert_int_equal(rc, 0);
+		rc = daos_mgmt_params_set(arg->group, info.pi_leader,
+			DSS_KEY_FAIL_LOC,
+			DAOS_REBUILD_DISABLE | DAOS_FAIL_VALUE,
+			NULL);
+		assert_int_equal(rc, 0);
+
+		/** exclude the target of this obj's replicas */
+		daos_exclude_server(arg->pool_uuid, arg->group, &arg->svc,
+				    rank);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** Lookup */
+	buf = calloc(size, 1);
+	assert_non_null(buf);
+	/** inject CRT error failure to update pool map + retry */
+	daos_fail_loc_set(DAOS_SHARD_OBJ_RW_CRT_ERROR | DAOS_FAIL_ONCE);
+	arg->expect_result = -DER_NONEXIST;
+	lookup_single(dkey, akey, 0, buf, size, 0, &req);
+
+	if (arg->myrank == 0) {
+		/* add back the excluded targets */
+		daos_add_server(arg->pool_uuid, arg->group, &arg->svc,
+				rank);
+
+		/* re-enable rebuild */
+		rc = daos_mgmt_params_set(arg->group, info.pi_leader,
+			DSS_KEY_FAIL_LOC, 0, NULL);
+		assert_int_equal(rc, 0);
+	}
+	free(buf);
 	MPI_Barrier(MPI_COMM_WORLD);
 	ioreq_fini(&req);
 }
@@ -1650,6 +1716,8 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO26: echo fetch/update", echo_fetch_update,
 	  async_disable, test_case_teardown},
 	{ "IO27: shard target idx change cause retry", tgt_idx_change_retry,
+	  async_enable, test_case_teardown},
+	{ "IO28: fetch when all replicas unavailable", fetch_replica_unavail,
 	  async_enable, test_case_teardown},
 };
 

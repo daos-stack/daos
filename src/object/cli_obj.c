@@ -320,7 +320,6 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 	int idx_first;
 	int idx_last;
 	int grp_size;
-	bool rebuilding = false;
 	int i = 0;
 
 	grp_size = obj_get_grp_size(obj);
@@ -360,26 +359,16 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 	     idx = (idx + 1) % grp_size + idx_first) {
 		/* let's skip the rebuild shard for non-update op */
 		if (op != DAOS_OBJ_RPC_UPDATE &&
-		    obj->cob_layout->ol_shards[idx].po_rebuilding) {
-			rebuilding = true;
+		    obj->cob_layout->ol_shards[idx].po_rebuilding)
 			continue;
-		}
 
 		if (obj->cob_layout->ol_shards[idx].po_shard != -1)
 			break;
 	}
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
-	if (i == grp_size) {
-		if (op == DAOS_OBJ_RPC_UPDATE || !rebuilding)
-			return -DER_NONEXIST;
-
-		/* For non-update ops, some of rebuilding shards
-		 * might not be refreshed yet, let's update pool
-		 * map and retry.
-		 */
-		return -DER_STALE;
-	}
+	if (i == grp_size)
+		return -DER_NONEXIST;
 
 	return idx;
 }
@@ -882,6 +871,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		obj = *((struct dc_object **)data);
+		if (task->dt_result != 0)
+			break;
 		obj_auxi->map_ver_reply = 0;
 		head = &obj_auxi->shard_task_head;
 		D_ASSERT(!d_list_empty(head));
@@ -939,6 +930,7 @@ dc_obj_fetch(tse_task_t *task)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
 	obj_auxi = tse_task_stack_push(task, sizeof(*obj_auxi));
+	obj_auxi->opc = DAOS_OBJ_RPC_FETCH;
 	rc = tse_task_register_comp_cb(task, obj_comp_cb, &obj,
 				       sizeof(obj));
 	if (rc != 0) {
@@ -961,7 +953,6 @@ dc_obj_fetch(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
-	obj_auxi->opc = DAOS_OBJ_RPC_FETCH;
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->map_ver_reply = map_ver;
 	D_DEBUG(DB_IO, "fetch "DF_OID" shard %u\n",
@@ -1142,6 +1133,7 @@ dc_obj_update(tse_task_t *task)
 	}
 
 	obj_auxi = tse_task_stack_push(task, sizeof(*obj_auxi));
+	obj_auxi->opc = DAOS_OBJ_RPC_UPDATE;
 	shard_task_list_init(obj_auxi);
 	rc = tse_task_register_comp_cb(task, obj_comp_cb, &obj,
 				       sizeof(obj));
@@ -1161,7 +1153,6 @@ dc_obj_update(tse_task_t *task)
 	if (rc != 0)
 		goto out_task;
 
-	obj_auxi->opc = DAOS_OBJ_RPC_UPDATE;
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->obj_task = task;
 	D_DEBUG(DB_IO, "update "DF_OID" start %u cnt %u\n",
@@ -1437,6 +1428,7 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 	}
 
 	obj_auxi = tse_task_stack_push(api_task, sizeof(*obj_auxi));
+	obj_auxi->opc = opc;
 	shard_task_list_init(obj_auxi);
 
 	rc = tse_task_register_comp_cb(api_task, obj_comp_cb, &obj,
@@ -1472,7 +1464,6 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 			goto out_task;
 	}
 
-	obj_auxi->opc = opc;
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->obj_task = api_task;
 	D_DEBUG(DB_IO, "punch "DF_OID" start %u cnt %u\n",

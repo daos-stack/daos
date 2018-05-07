@@ -196,7 +196,6 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 		int rank_nr, bool kill)
 {
 	int	i;
-	bool	done = false;
 
 	/** exclude the target from the pool */
 	for (i = 0; i < rank_nr; i++) {
@@ -209,13 +208,8 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 		if (args[i]->rebuild_cb)
 			args[i]->rebuild_cb(args[i]);
 
-	if (args[0]->myrank == 0) {
-		while (!done) {
-			done = test_rebuild_wait(args, args_cnt);
-			if (!done)
-				sleep(2);
-		}
-	}
+	if (args[0]->myrank == 0)
+		test_rebuild_wait(args, args_cnt);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	for (i = 0; i < args_cnt; i++)

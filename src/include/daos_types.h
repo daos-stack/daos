@@ -466,6 +466,7 @@ enum {
 	DAOS_OC_R4_RW,		/* temporary class for testing */
 	DAOS_OC_REPL_MAX_RW,
 	DAOS_OC_ECHO_RW,	/* Echo class */
+	DAOS_OC_R1S_SPEC_RANK,	/* 1 replica with specified rank */
 	DAOS_OC_R3S_SPEC_RANK,	/* 3 replica start with specified rank,
 				 * mostly for testing purpose
 				 */

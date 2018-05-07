@@ -483,7 +483,7 @@ test_get_leader(test_arg_t *arg, d_rank_t *rank)
 }
 
 bool
-test_rebuild_wait(test_arg_t **args, int args_cnt)
+test_rebuild_query(test_arg_t **args, int args_cnt)
 {
 	bool all_done = true;
 	int i;
@@ -496,6 +496,13 @@ test_rebuild_wait(test_arg_t **args, int args_cnt)
 			all_done = false;
 	}
 	return all_done;
+}
+
+void
+test_rebuild_wait(test_arg_t **args, int args_cnt)
+{
+	while (!test_rebuild_query(args, args_cnt))
+		sleep(2);
 }
 
 static void

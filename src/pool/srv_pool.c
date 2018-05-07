@@ -2298,9 +2298,9 @@ out:
 		int	 ret;
 
 		env = getenv(REBUILD_ENV);
-		if (env && !strcasecmp(env, REBUILD_ENV_DISABLED)) {
+		if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
+		    daos_fail_check(DAOS_REBUILD_DISABLE)) {
 			D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
-
 		} else { /* enabled by default */
 			D_ASSERT(replicas != NULL);
 			ret = ds_rebuild_schedule(in->pti_op.pi_uuid,
