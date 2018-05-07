@@ -441,7 +441,7 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 		umem_id_t ummid;
 
 		ummid.pool_uuid_lo = eiod->ed_ctxt->eic_pmempool_uuid;
-		ummid.off = eiov->ei_addr.ea_off;
+		ummid.off = eio_iov2off(eiov);
 
 		eiov->ei_buf = umem_id2ptr(umem, ummid);
 		return 0;
@@ -451,8 +451,8 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 	edb = iod_dma_buf(eiod);
 	cur_chk = edb->edb_cur_chk;
 
-	off = eiov->ei_addr.ea_off;
-	end = eiov->ei_addr.ea_off + eiov->ei_data_len;
+	off = eio_iov2off(eiov);
+	end = eio_iov2off(eiov) + eiov->ei_data_len;
 	pg_cnt = (end + EIO_DMA_PAGE_SZ - 1) / EIO_DMA_PAGE_SZ -
 			off / EIO_DMA_PAGE_SZ;
 	pg_off = off & ~(EIO_DMA_PAGE_SZ - 1);

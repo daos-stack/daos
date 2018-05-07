@@ -31,6 +31,7 @@
 #include <daos_types.h>
 #include <daos/mem.h>
 #include <gurt/list.h>
+#include <daos_srv/eio.h>
 
 enum {
 	EVT_UMEM_TYPE	= 150,
@@ -53,13 +54,8 @@ enum {
 	EVT_ORDER_MAX			= 128,
 };
 
-/** size of embedded bytes in data pointer (tiny extent) */
-#define EVT_PTR_PAYLOAD			16
-
 /** EVTree data pointer */
 struct evt_ptr {
-	/** buffer mmid */
-	umem_id_t			pt_mmid;
 	/** cookie to insert this extent */
 	uuid_t				pt_cookie;
 	uint64_t			pt_csum;
@@ -72,8 +68,8 @@ struct evt_ptr {
 	/** Pool map version for the record */
 	uint32_t			pt_ver;
 	uint32_t			pt_pad_32;
-	/** embedded payload for tiny extent */
-	char				pt_payload[EVT_PTR_PAYLOAD];
+	/** buffer on SCM or NVMe */
+	eio_addr_t			pt_ex_addr;
 };
 
 /** Reference on a evtree data pointer, see \a evt_ptr */
@@ -186,8 +182,8 @@ struct evt_entry {
 	 * \a evt_find
 	 */
 	umem_id_t			 en_mmid;
-	/** the returned memory address for \a evt_find */
-	void				*en_addr;
+	/** the returned data buffer address for \a evt_find */
+	struct eio_iov			 en_eiov;
 };
 
 #define ERT_ENT_EMBEDDED		32
@@ -321,22 +317,10 @@ int evt_destroy(daos_handle_t toh);
  * \param toh		[IN]	The tree open handle
  * \param rect		[IN]	The versioned extent to insert
  * \param inob		[IN]	Number of bytes per index in \a rect
- * \param mmid		[IN]	Memory ID of the input data.
+ * \param addr		[IN]	Address of the input data.
  */
 int evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
-	       struct evt_rect *rect, uint32_t inob, umem_id_t mmid);
-
-/**
- * Insert a new extented version \a rect into a opened tree, and copy data in
- * \a sgl as the extent data.
- *
- * \param toh		[IN]	The tree open handle
- * \param rect		[IN]	The versioned extent to insert
- * \param inob		[IN]	Number of bytes per index in \a rect
- * \param sgl		[IN]	Scatter/gather list to copy in
- */
-int evt_insert_sgl(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
-		   struct evt_rect *rect, uint32_t inob, daos_sg_list_t *sgl);
+	       struct evt_rect *rect, uint32_t inob, eio_addr_t addr);
 
 /**
  * Search the tree and return all versioned extents which overlap with \a rect

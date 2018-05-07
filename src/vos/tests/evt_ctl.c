@@ -205,6 +205,14 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p, bool *should_pass)
 }
 
 static int
+evt_insert_sgl(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
+	       struct evt_rect *rect, uint32_t inob, daos_sg_list_t *sgl)
+{
+	/* TODO: complete this */
+	return 0;
+}
+
+static int
 ts_add_rect(char *args)
 {
 	char		*val;
@@ -273,10 +281,11 @@ ts_find_rect(char *args)
 		D_FATAL("Add rect failed %d\n", rc);
 
 	evt_ent_list_for_each(ent, &enlist) {
-		D_PRINT("Find rect "DF_RECT" (sel="DF_RECT") val=%.*s\n",
-			DP_RECT(&ent->en_rect), DP_RECT(&ent->en_sel_rect),
+		D_PRINT("Find rect "DF_RECT" (sel="DF_RECT") width=%d "
+			"val_addr="DF_U64"\n", DP_RECT(&ent->en_rect),
+			DP_RECT(&ent->en_sel_rect),
 			(int)evt_rect_width(&ent->en_sel_rect),
-			ent->en_addr ? (char *)ent->en_addr : "<NULL>");
+			eio_iov2off(&ent->en_eiov));
 	}
 
 	evt_ent_list_fini(&enlist);
@@ -311,9 +320,9 @@ ts_list_rect(void)
 
 		rc = evt_iter_fetch(ih, &ent, &anchor);
 		if (rc == 0) {
-			D_PRINT("%d) "DF_RECT", val=%s\n",
+			D_PRINT("%d) "DF_RECT", val_addr="DF_U64"\n",
 				i, DP_RECT(&ent.en_rect),
-				ent.en_addr ? (char *)ent.en_addr : "<NULL>");
+				eio_iov2off(&ent.en_eiov));
 
 			if (i % 3 == 0)
 				rc = evt_iter_probe(ih, EVT_ITER_FIND,

@@ -386,7 +386,8 @@ evt_split_entry(struct evt_entry *current, struct evt_entry *next,
 	diff = next->en_sel_rect.rc_off_hi + 1 - split->en_sel_rect.rc_off_lo;
 	split->en_sel_rect.rc_off_lo = next->en_sel_rect.rc_off_hi + 1;
 	split->en_offset += diff;
-	split->en_addr = (char *)split->en_addr + diff * split->en_inob;
+	split->en_eiov.ei_addr.ea_off = eio_iov2off(&split->en_eiov) +
+					diff * split->en_inob;
 	/* Mark the split entry so we don't keep it in covered list */
 	split->en_inob |= EVT_PARTIAL_FLAG;
 
@@ -480,7 +481,8 @@ evt_uncover_entries(struct evt_entry_list *ent_list, d_list_t *covered)
 			diff = this_rect->rc_off_hi + 1 - next_rect->rc_off_lo;
 			next_rect->rc_off_lo = this_rect->rc_off_hi + 1;
 			next_ent->en_offset += diff;
-			next_ent->en_addr = (char *)next_ent->en_addr +
+			next_ent->en_eiov.ei_addr.ea_off =
+				eio_iov2off(&next_ent->en_eiov) +
 				diff * next_ent->en_inob;
 			/* current now points at next_ent.  Remove it and
 			 * reinsert it in the list in case truncation moved
@@ -659,6 +661,7 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
 		D_GOTO(failed, rc);
 	}
+	tcx->tc_pmempool_uuid = umem_get_uuid(&tcx->tc_umm);
 
 	if (!TMMID_IS_NULL(root_mmid)) { /* non-inplace tree open */
 		tcx->tc_root_mmid = root_mmid;
@@ -710,19 +713,23 @@ evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
  * Create a data pointer for extent address @mmid. It allocates buffer
  * if @mmid is NULL.
  *
- * \param mmid		[IN]	Optional, memory ID of the external buffer
+ * \param addr		[IN]	Optional, address of the external buffer
  * \param idx_nob	[IN]	Number Of Bytes per index
  * \param idx_num	[IN]	Indicies within the extent
  * \param ptr_mmid_p	[OUT]	The returned memory ID of extent pointer.
  */
 static int
 evt_ptr_create(struct evt_context *tcx, uuid_t cookie, uint32_t pm_ver,
-	       umem_id_t mmid, uint32_t idx_nob, uint64_t idx_num,
+	       eio_addr_t addr, uint32_t idx_nob, uint64_t idx_num,
 	       TMMID(struct evt_ptr) *ptr_mmid_p)
 {
 	struct evt_ptr		*ptr;
 	TMMID(struct evt_ptr)	 ptr_mmid;
-	int			 rc;
+
+	D_ASSERT(idx_num > 0);
+	D_ASSERTF((idx_nob && !eio_addr_is_hole(&addr)) ||
+		  (!idx_nob && eio_addr_is_hole(&addr)), "nob: %u hole: %d\n",
+		  idx_nob, eio_addr_is_hole(&addr));
 
 	ptr_mmid = umem_znew_typed(evt_umm(tcx), struct evt_ptr);
 	if (TMMID_IS_NULL(ptr_mmid))
@@ -733,19 +740,27 @@ evt_ptr_create(struct evt_context *tcx, uuid_t cookie, uint32_t pm_ver,
 	ptr->pt_inum = idx_num;
 	uuid_copy(ptr->pt_cookie, cookie);
 	ptr->pt_ver = pm_ver;
+	ptr->pt_ex_addr = addr;
 
-	if (UMMID_IS_NULL(mmid) && idx_nob * idx_num > EVT_PTR_PAYLOAD) {
-		mmid = umem_alloc(evt_umm(tcx), idx_nob * idx_num);
-		if (UMMID_IS_NULL(mmid))
-			D_GOTO(failed, rc = -DER_NOMEM);
-	}
-
-	ptr->pt_mmid = mmid;
 	*ptr_mmid_p = ptr_mmid;
 	return 0;
- failed:
-	umem_free_typed(evt_umm(tcx), ptr_mmid);
-	return rc;
+}
+
+static void
+evt_data_free(struct evt_context *tcx, eio_addr_t addr, uint64_t size)
+{
+	if (eio_addr_is_hole(&addr))
+		return;
+
+	if (addr.ea_type == EIO_ADDR_SCM) {
+		umem_id_t mmid;
+
+		mmid.pool_uuid_lo = tcx->tc_pmempool_uuid;
+		mmid.off = addr.ea_off;
+		umem_free(evt_umm(tcx), mmid);
+		return;
+	}
+	/* TODO Free NVMe record */
 }
 
 /**
@@ -758,83 +773,34 @@ evt_ptr_free(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid,
 	struct evt_ptr	*ptr = evt_tmmid2ptr(tcx, ptr_mmid);
 
 	D_ASSERT(ptr->pt_ref == 0);
-	if (free_data) {
-		if (!UMMID_IS_NULL(ptr->pt_mmid))
-			umem_free(evt_umm(tcx), ptr->pt_mmid);
-	}
+	if (free_data)
+		evt_data_free(tcx, ptr->pt_ex_addr,
+			      ptr->pt_inum * ptr->pt_inob);
 	umem_free_typed(evt_umm(tcx), ptr_mmid);
 }
 
 /**
- * Return the data address, NOB per index, and number of indices of the data
- * extent pointed by \a ptr_mmid.
+ * Return the eio_iov pointed by \a ptr_mmid.
  */
-static void *
-evt_ptr_payload(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid,
-		uint32_t *idx_nob, uint64_t *idx_num)
+static void
+evt_ptr2eiov(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid,
+	     struct eio_iov *eiov)
 {
-	struct evt_ptr	*ptr = evt_tmmid2ptr(tcx, ptr_mmid);
+	struct evt_ptr *ptr = evt_tmmid2ptr(tcx, ptr_mmid);
 
-	if (idx_nob != NULL)
-		*idx_nob = ptr->pt_inob;
+	D_ASSERT(ptr->pt_inum != 0);
+	memset(eiov, 0, sizeof(*eiov));
 
-	if (idx_num != NULL)
-		*idx_num = ptr->pt_inum;
-
-	if (!UMMID_IS_NULL(ptr->pt_mmid))
-		return evt_mmid2ptr(tcx, ptr->pt_mmid);
-
-	if (ptr->pt_inob == 0)
-		return NULL;
-
-	/* returns the embedded data */
-	D_ASSERT(ptr->pt_inob * ptr->pt_inum <= EVT_PTR_PAYLOAD);
-	return &ptr->pt_payload[0];
-}
-
-/** copy data from \a sgl to the buffer addressed by \a ptr_mmid */
-static int
-evt_ptr_copy_sgl(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid,
-		 daos_sg_list_t *sgl)
-{
-	void		*addr;
-	uint64_t	 nob;
-	uint64_t	 idx_num;
-	uint32_t	 idx_nob;
-	int		 i;
-
-	addr = evt_ptr_payload(tcx, ptr_mmid, &idx_nob, &idx_num);
-	nob  = idx_nob * idx_num;
-	if (idx_nob == 0) /* punch */
-		return 0;
-
-	D_ASSERT(addr != NULL);
-	if (sgl->sg_iovs[0].iov_buf == NULL) {
-		/* special use-case for VOS, we just return the address and
-		 * allow vos to copy in data.
-		 */
-		daos_iov_set(&sgl->sg_iovs[0], addr, nob);
-		sgl->sg_nr_out = 1;
-		return 0;
+	if (ptr->pt_inob == 0) {
+		/* punched extent */
+		D_ASSERT(eio_addr_is_hole(&ptr->pt_ex_addr));
+	} else {
+		/* externally allocated extent */
+		D_ASSERT(!eio_addr_is_hole(&ptr->pt_ex_addr));
+		eiov->ei_data_len = ptr->pt_inum * ptr->pt_inob;
 	}
 
-	for (i = 0; i < sgl->sg_nr && nob != 0; i++) {
-		daos_iov_t *iov = &sgl->sg_iovs[i];
-
-		if (nob < iov->iov_len) {
-			D_DEBUG(DB_IO, "sgl is too large\n");
-			return -DER_IO_INVAL;
-		}
-
-		memcpy(addr, iov->iov_buf, iov->iov_len);
-		addr += iov->iov_len;
-		nob -= iov->iov_len;
-	}
-
-	if (nob != 0) /* ignore if data buffer is short */
-		D_DEBUG(DB_IO, "sgl is too small\n");
-
-	return 0;
+	eiov->ei_addr = ptr->pt_ex_addr;
 }
 
 /** Take refcount on the specified extent pointer */
@@ -1572,8 +1538,8 @@ evt_ptr_copy(struct evt_context *tcx, TMMID(struct evt_ptr) dst_mmid,
 		src_ptr->pt_ref, (int)src_ptr->pt_inum, src_ptr->pt_inob);
 
 	/* Free the pmem that dst_ptr references */
-	if (!UMMID_IS_NULL(dst_ptr->pt_mmid))
-		umem_free(evt_umm(tcx), dst_ptr->pt_mmid);
+	evt_data_free(tcx, dst_ptr->pt_ex_addr,
+		      dst_ptr->pt_inum * dst_ptr->pt_inob);
 
 	memcpy(dst_ptr, src_ptr, sizeof(*dst_ptr));
 	dst_ptr->pt_ref = ref;
@@ -1647,7 +1613,7 @@ out:
  */
 int
 evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
-	   struct evt_rect *rect, uint32_t inob, umem_id_t mmid)
+	   struct evt_rect *rect, uint32_t inob, eio_addr_t addr)
 {
 	struct evt_context	*tcx;
 	TMMID(struct evt_ptr)	 ptr_mmid;
@@ -1657,7 +1623,7 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = evt_ptr_create(tcx, cookie, pm_ver, mmid, inob,
+	rc = evt_ptr_create(tcx, cookie, pm_ver, addr, inob,
 			    evt_rect_width(rect), &ptr_mmid);
 	if (rc != 0)
 		return rc;
@@ -1672,60 +1638,6 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 	return rc;
 }
 
-/**
- * Insert a versioned extent \a rect to the evtree and copy its data from the
- * scatter/gather list \a sgl.
- *
- * Please check API comment in evtree.h for the details.
- */
-int
-evt_insert_sgl(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
-	       struct evt_rect *rect, uint32_t inob, daos_sg_list_t *sgl)
-{
-	struct evt_context	*tcx;
-	TMMID(struct evt_ptr)	 ptr_mmid;
-	TMMID(struct evt_ptr)	 out_mmid;
-	int			 rc;
-
-	tcx = evt_hdl2tcx(toh);
-	if (tcx == NULL)
-		return -DER_NO_HDL;
-
-	rc = evt_ptr_create(tcx, cookie, pm_ver, UMMID_NULL, inob,
-			    evt_rect_width(rect), &ptr_mmid);
-	if (rc != 0)
-		return rc;
-
-	rc = evt_ptr_copy_sgl(tcx, ptr_mmid, sgl);
-	if (rc != 0)
-		D_GOTO(failed, rc);
-
-	rc = evt_insert_ptr(tcx, rect, ptr_mmid, &out_mmid);
-	if (rc != 0)
-		D_GOTO(failed, rc);
-
-	if (!umem_id_equal_typed(evt_umm(tcx), ptr_mmid, out_mmid)) {
-		struct evt_ptr	*ptr = evt_tmmid2ptr(tcx, ptr_mmid);
-
-		if (UMMID_IS_NULL(ptr->pt_mmid)) {
-			if (sgl->sg_iovs[0].iov_buf ==
-				evt_ptr_payload(tcx, ptr_mmid, NULL, NULL)) {
-				memset(&sgl->sg_iovs[0], 0,
-				       sizeof(sgl->sg_iovs[0]));
-				rc = evt_ptr_copy_sgl(tcx, out_mmid, sgl);
-				if (rc)
-					D_GOTO(failed, rc);
-			}
-		}
-		evt_ptr_free(tcx, ptr_mmid, false);
-	}
-
-	return 0;
-failed:
-	evt_ptr_free(tcx, ptr_mmid, true);
-	return rc;
-}
-
 /** Fill the entry with the extent at the specified position of \a nd_mmid */
 void
 evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
@@ -1735,7 +1647,7 @@ evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	struct evt_ptr_ref *pref;
 	struct evt_ptr	   *ptr;
 	struct evt_rect	   *rect;
-	void		   *addr;
+	struct eio_iov      eiov;
 	daos_off_t	    offset;
 	daos_size_t	    width;
 	daos_size_t	    nr;
@@ -1766,16 +1678,17 @@ evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	entry->en_mmid = umem_id_t2u(pref->pr_ptr_mmid);
 	uuid_copy(entry->en_cookie, ptr->pt_cookie);
 	entry->en_ver = ptr->pt_ver;
+	entry->en_inob = ptr->pt_inob;
 
-	addr = evt_ptr_payload(tcx, pref->pr_ptr_mmid, &entry->en_inob, NULL);
-	if (addr == NULL) { /* punched */
-		entry->en_addr   = NULL;
+	evt_ptr2eiov(tcx, pref->pr_ptr_mmid, &eiov);
+	if (eio_addr_is_hole(&eiov.ei_addr)) { /* punched */
+		entry->en_eiov = eiov;
 		entry->en_offset = 0;
-
 	} else {
 		D_ASSERT(entry->en_inob != 0);
 		entry->en_offset = pref->pr_offset + offset;
-		entry->en_addr   = addr + entry->en_offset * entry->en_inob;
+		eiov.ei_addr.ea_off += entry->en_offset * entry->en_inob;
+		entry->en_eiov = eiov;
 	}
 }
 

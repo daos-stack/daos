@@ -229,6 +229,7 @@ struct umem_instance {
 
 int  umem_class_init(struct umem_attr *uma, struct umem_instance *umm);
 void umem_attr_get(struct umem_instance *umm, struct umem_attr *uma);
+uint64_t umem_get_uuid(struct umem_instance *umm);
 
 enum {
 	UMEM_TYPE_ANY,

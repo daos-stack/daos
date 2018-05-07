@@ -38,7 +38,7 @@ enum {
 	EIO_ADDR_NVME,
 };
 
-struct eio_addr {
+typedef struct {
 	/*
 	 * Byte offset within PMDK pmemobj pool for SCM;
 	 * Byte offset within SPDK blob for NVMe.
@@ -49,7 +49,7 @@ struct eio_addr {
 	/* Is the address a hole ? */
 	uint16_t	ea_hole;
 	uint32_t	ea_padding;
-};
+} eio_addr_t;
 
 struct eio_iov {
 	/*
@@ -59,7 +59,7 @@ struct eio_iov {
 	void		*ei_buf;
 	/* Data length in bytes */
 	size_t		 ei_data_len;
-	struct eio_addr	 ei_addr;
+	eio_addr_t	 ei_addr;
 };
 
 struct eio_sglist {
@@ -75,16 +75,29 @@ struct eio_io_context;
 /* Opaque per-xstream context */
 struct eio_xs_context;
 
+static inline void
+eio_addr_set(eio_addr_t *addr, uint16_t type, uint64_t off)
+{
+	addr->ea_type = type;
+	addr->ea_off = off;
+}
+
 static inline bool
-eio_addr_is_hole(struct eio_addr *addr)
+eio_addr_is_hole(eio_addr_t *addr)
 {
 	return addr->ea_hole != 0;
 }
 
 static inline void
-eio_addr_set_hole(struct eio_addr *addr, uint16_t hole)
+eio_addr_set_hole(eio_addr_t *addr, uint16_t hole)
 {
 	addr->ea_hole = hole;
+}
+
+static inline uint64_t
+eio_iov2off(struct eio_iov *eiov)
+{
+	return eiov->ei_addr.ea_off;
 }
 
 static inline int

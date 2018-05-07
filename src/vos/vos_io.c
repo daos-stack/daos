@@ -313,6 +313,14 @@ out:
 	return rc;
 }
 
+static inline void
+eiov_set_hole(struct eio_iov *eiov, ssize_t len)
+{
+	memset(eiov, 0, sizeof(*eiov));
+	eiov->ei_data_len = len;
+	eio_addr_set_hole(&eiov->ei_addr, 1);
+}
+
 /** Fetch an extent from an akey */
 static int
 akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
@@ -342,7 +350,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 	evt_ent_list_init(&ent_list);
 	rc = evt_find(toh, &rect, &ent_list, &covered);
 	if (rc != 0)
-		D_GOTO(failed, rc);
+		goto failed;
 
 	rsize = 0;
 	holes = 0;
@@ -374,34 +382,23 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 		if (rsize != ent->en_inob) {
 			D_ERROR("Record sizes of all indices must be "
 				"the same: %u/%u\n", rsize, ent->en_inob);
-			D_GOTO(failed, rc = -DER_IO_INVAL);
+			rc = -DER_IO_INVAL;
+			goto failed;
 		}
 
 		if (holes != 0) {
-			memset(&eiov, 0, sizeof(eiov));
-			eiov.ei_data_len = holes * rsize;
-			eio_addr_set_hole(&eiov.ei_addr, 1);
+			eiov_set_hole(&eiov, holes * rsize);
 			/* skip the hole */
 			rc = iod_fetch(ioc, &eiov);
 			if (rc != 0)
-				D_GOTO(failed, rc);
+				goto failed;
 			holes = 0;
 		}
 
-		memset(&eiov, 0, sizeof(eiov));
-		/* TODO: support NVMe */
-		eiov.ei_addr.ea_type = EIO_ADDR_SCM;
-		eiov.ei_data_len = nr * rsize;
-		if (ent->en_addr != NULL) {
-			umem_id_t umem_id = pmemobj_oid(ent->en_addr);
-
-			eiov.ei_addr.ea_off = umem_id.off;
-		} else {
-			eio_addr_set_hole(&eiov.ei_addr, 1);
-		}
-		rc = iod_fetch(ioc, &eiov);
+		ent->en_eiov.ei_data_len = nr * rsize;
+		rc = iod_fetch(ioc, &ent->en_eiov);
 		if (rc != 0)
-			D_GOTO(failed, rc);
+			goto failed;
 
 		index = lo + nr;
 	}
@@ -414,16 +411,14 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 		if (rsize == 0) { /* nothing but holes */
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
 		} else {
-			memset(&eiov, 0, sizeof(eiov));
-			eiov.ei_data_len = holes * rsize;
-			eio_addr_set_hole(&eiov.ei_addr, 1);
+			eiov_set_hole(&eiov, holes * rsize);
 			rc = iod_fetch(ioc, &eiov);
 			if (rc != 0)
-				D_GOTO(failed, rc);
+				goto failed;
 		}
 	}
 	*rsize_p = rsize;
- failed:
+failed:
 	evt_ent_list_fini(&ent_list);
 	return rc;
 }
@@ -481,7 +476,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		if (iod->iod_size != rsize) {
 			D_ERROR("Cannot support mixed record size "
 				DF_U64"/"DF_U64"\n", iod->iod_size, rsize);
-			D_GOTO(out, rc);
+			rc = -DER_INVAL;
+			goto out;
 		}
 	}
 out:
@@ -720,16 +716,16 @@ akey_update_recx(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 		 struct vos_io_context *ioc)
 {
 	struct evt_rect rect;
-	umem_id_t mmid;
+	struct eio_iov *eiov;
 	int rc;
 
+	D_ASSERT(recx->rx_nr > 0);
 	rect.rc_epc_lo = epr->epr_lo;
 	rect.rc_off_lo = recx->rx_idx;
 	rect.rc_off_hi = recx->rx_idx + recx->rx_nr - 1;
 
-	/* TODO support NVMe record */
-	mmid = iod_update_mmid(ioc);
-	rc = evt_insert(toh, cookie, pm_ver, &rect, rsize, mmid);
+	eiov = iod_update_eiov(ioc);
+	rc = evt_insert(toh, cookie, pm_ver, &rect, rsize, eiov->ei_addr);
 
 	return rc;
 }
@@ -951,7 +947,7 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 	if (size == 0) {
 		ioc->ic_mmids[ioc->ic_mmids_cnt] = UMMID_NULL;
 		ioc->ic_mmids_cnt++;
-		media = EIO_ADDR_SCM;
+		eio_addr_set_hole(&eiov.ei_addr, 1);
 		goto done;
 	}
 

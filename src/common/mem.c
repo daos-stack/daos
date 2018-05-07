@@ -289,3 +289,19 @@ umem_attr_get(struct umem_instance *umm, struct umem_attr *uma)
 	uma->uma_u.pmem_pool = umm->umm_u.pmem_pool;
 #endif
 }
+
+/**
+ * Get pmemobj pool uuid
+ */
+uint64_t
+umem_get_uuid(struct umem_instance *umm)
+{
+	umem_id_t root_oid;
+
+	if (umm->umm_id == UMEM_CLASS_VMEM)
+		return 0; /* empty uuid */
+
+	root_oid = pmemobj_root(umm->umm_u.pmem_pool, 0);
+	D_ASSERT(!UMMID_IS_NULL(root_oid));
+	return root_oid.pool_uuid_lo;
+}

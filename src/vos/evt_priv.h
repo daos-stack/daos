@@ -87,6 +87,8 @@ struct evt_context {
 	uint64_t			 tc_feats;
 	/** memory instance (PMEM or DRAM) */
 	struct umem_instance		 tc_umm;
+	/** pmemobj pool uuid */
+	uint64_t			 tc_pmempool_uuid;
 	/** embedded iterator */
 	struct evt_iterator		 tc_iter;
 	/** space to store tree search path */
