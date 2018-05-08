@@ -204,27 +204,27 @@ kb_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 
 
 	if (kkey1->kb_hash1 < kkey2->kb_hash1)
-		return -1;
+		return BTR_CMP_LT;
 
 	if (kkey1->kb_hash1 > kkey2->kb_hash1)
-		return 1;
+		return BTR_CMP_GT;
 
 	if (kkey1->kb_hash2 < kkey2->kb_hash2)
-		return -1;
+		return BTR_CMP_LT;
 
 	if (kkey1->kb_hash2 > kkey2->kb_hash2)
-		return 1;
+		return BTR_CMP_GT;
 
 	/* NB: epoch checks may be wrong for underwrite, but we are not
 	 * supposed to support underwrite for now.
 	 */
 	if (kkey1->kb_epr.epr_lo > kkey2->kb_epr.epr_hi)
-		return 1;
+		return BTR_CMP_GT;
 
 	if (kkey1->kb_epr.epr_hi < kkey2->kb_epr.epr_lo)
-		return -1;
+		return BTR_CMP_LT;
 
-	return 0;
+	return BTR_CMP_EQ;
 }
 
 static int
@@ -236,15 +236,15 @@ kb_key_cmp_lexical(struct vos_krec_df *krec, daos_iov_t *kiov)
 	cmp = memcmp(vos_krec2directkey(krec), (char *)kiov->iov_buf,
 		     min(krec->kr_size, kiov->iov_len));
 	if (cmp)
-		return cmp;
+		return dbtree_key_cmp_rc(cmp);
 
 	/* Second, fallback to the length */
 	if (krec->kr_size > kiov->iov_len)
-		return 1;
+		return BTR_CMP_GT;
 	else if (krec->kr_size < kiov->iov_len)
-		return -1;
+		return BTR_CMP_LT;
 
-	return 0;
+	return BTR_CMP_EQ;
 }
 
 static int
@@ -252,13 +252,17 @@ kb_key_cmp_uint64(struct vos_krec_df *krec, daos_iov_t *kiov)
 {
 	uint64_t k1, k2;
 
-	D_ASSERT(krec->kr_size == kiov->iov_len);
-	D_ASSERT(krec->kr_size == sizeof(uint64_t));
+	if (krec->kr_size != kiov->iov_len ||
+	    krec->kr_size != sizeof(uint64_t)) {
+		D_ERROR("invalid kr_size %d.\n", krec->kr_size);
+		return BTR_CMP_ERR;
+	}
 
 	k1 = *(uint64_t *)vos_krec2directkey(krec);
 	k2 = *(uint64_t *)kiov->iov_buf;
 
-	return (k1 > k2) ? 1 : (k1 < k2) ? -1 : 0;
+	return (k1 > k2) ? BTR_CMP_GT :
+			   ((k1 < k2) ? BTR_CMP_LT : BTR_CMP_EQ);
 }
 
 static int
@@ -266,12 +270,13 @@ kb_key_cmp_default(struct vos_krec_df *krec, daos_iov_t *kiov)
 {
 	/* This only gets called if hash comparison matches. */
 	if (krec->kr_size > kiov->iov_len)
-		return 1;
+		return BTR_CMP_GT;
 
 	if (krec->kr_size < kiov->iov_len)
-		return -1;
+		return BTR_CMP_LT;
 
-	return memcmp(vos_krec2key(krec), kiov->iov_buf, kiov->iov_len);
+	return dbtree_key_cmp_rc(
+		memcmp(vos_krec2key(krec), kiov->iov_buf, kiov->iov_len));
 }
 
 /** compare the real key */
@@ -309,12 +314,12 @@ kb_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 		return cmp;
 
 	if (epr1->epr_lo > epr2->epr_hi)
-		return 1;
+		return BTR_CMP_GT;
 
 	if (epr1->epr_hi < epr2->epr_lo)
-		return -1;
+		return BTR_CMP_LT;
 
-	return 0;
+	return BTR_CMP_EQ;
 }
 
 /** create a new key-record, or install an externally allocated key-record */
@@ -633,12 +638,12 @@ svb_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	struct svb_hkey *skey2 = (struct svb_hkey *)hkey;
 
 	if (skey1->sv_epoch < skey2->sv_epoch)
-		return -1;
+		return BTR_CMP_LT;
 
 	if (skey1->sv_epoch > skey2->sv_epoch)
-		return 1;
+		return BTR_CMP_GT;
 
-	return 0;
+	return BTR_CMP_EQ;
 }
 
 /** allocate a new record and fetch data */

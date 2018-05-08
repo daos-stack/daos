@@ -98,15 +98,15 @@ obj_df_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 
 	cmprc = memcmp(hkey1->h_oid_hs, hkey2->h_oid_hs, OHKEY_LEN);
 	if (cmprc)
-		return cmprc;
+		return dbtree_key_cmp_rc(cmprc);
 
 	if (hkey1->h_epc_lo > hkey2->h_epc_hi)
-		return 1;
+		return BTR_CMP_GT;
 
 	if (hkey1->h_epc_hi < hkey2->h_epc_lo)
-		return -1;
+		return BTR_CMP_LT;
 
-	return 0;
+	return BTR_CMP_EQ;
 }
 
 static int

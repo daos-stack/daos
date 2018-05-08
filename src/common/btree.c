@@ -392,12 +392,14 @@ btr_hkey_cmp(struct btr_context *tcx, struct btr_record *rec, void *hkey)
 		uint64_t a = rec->rec_ukey[0];
 		uint64_t b = *(uint64_t *)hkey;
 
-		return (a < b) ? -1 : (a > b) ? 1 : 0;
+		return (a < b) ? BTR_CMP_LT :
+				 ((a > b) ? BTR_CMP_GT : BTR_CMP_EQ);
 	}
 	if (btr_ops(tcx)->to_hkey_cmp)
 		return btr_ops(tcx)->to_hkey_cmp(&tcx->tc_tins, rec, hkey);
 	else
-		return memcmp(&rec->rec_hkey[0], hkey, btr_hkey_size(tcx));
+		return dbtree_key_cmp_rc(
+			memcmp(&rec->rec_hkey[0], hkey, btr_hkey_size(tcx)));
 }
 
 static int
@@ -406,7 +408,7 @@ btr_key_cmp(struct btr_context *tcx, struct btr_record *rec, daos_iov_t *key)
 	if (btr_ops(tcx)->to_key_cmp)
 		return btr_ops(tcx)->to_key_cmp(&tcx->tc_tins, rec, key);
 	else
-		return 0;
+		return BTR_CMP_EQ;
 }
 
 static int
@@ -1030,6 +1032,8 @@ enum btr_probe_rc {
 	PROBE_RC_EQ,
 	/** found something but not the provided key */
 	PROBE_RC_OK,
+	/** error */
+	PROBE_RC_ERR,
 };
 
 /* For direct keys, resolve the mmid in the record */
@@ -1124,17 +1128,25 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 
 		} else if (opc == BTR_PROBE_FIRST) {
 			at = start = end = 0;
-			cmp = 1;
+			cmp = BTR_CMP_GT;
 
 		} else {
 			D_ASSERT(opc ==  BTR_PROBE_LAST);
 			at = start = end;
-			cmp = -1;
+			cmp = BTR_CMP_LT;
 		}
 
-		if (start < end && cmp != 0) {
+		if (cmp == BTR_CMP_ERR) {
+			D_DEBUG(DB_TRACE, "compared record at %d, got "
+				"BTR_CMP_ERR, return PROBE_RC_ERR.", at);
+			return PROBE_RC_ERR;
+		}
+
+		D_ASSERTF((cmp == BTR_CMP_LT || cmp == BTR_CMP_GT ||
+			   cmp == BTR_CMP_EQ), "invalid key_cmp rc %d.\n", cmp);
+		if (start < end && cmp != BTR_CMP_EQ) {
 			/* continue the binary search in current level */
-			if (cmp < 0)
+			if (cmp == BTR_CMP_LT)
 				start = at + 1;
 			else
 				end = at - 1;
@@ -1144,10 +1156,10 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 		if (btr_node_is_leaf(tcx, nd_mmid))
 			break;
 
-		/* NB: cmp <= 0 means search the record in the right child,
-		 * otherwise it is in the left child.
+		/* NB: cmp is BTR_CMP_LT or BTR_CMP_EQ means search the record
+		 * in the right child, otherwise it is in the left child.
 		 */
-		at += (cmp <= 0);
+		at += (cmp != BTR_CMP_GT);
 		btr_trace_set(tcx, level, nd_mmid, at);
 		btr_trace_debug(tcx, &tcx->tc_trace[level], "probe child\n");
 
@@ -1161,16 +1173,22 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 	D_ASSERT(!TMMID_IS_NULL(nd_mmid));
 
 	if (!(tcx->tc_feats & (BTR_FEAT_DIRECT_KEY | BTR_FEAT_UINT_KEY))) {
-		if (cmp == 0 && key != NULL) {
+		if (cmp == BTR_CMP_EQ && key != NULL) {
 			rec = btr_node_rec_at(tcx, nd_mmid, at);
 			cmp = btr_key_cmp(tcx, rec, key);
-			if (cmp != 0)
+			if (cmp == BTR_CMP_ERR) {
+				D_DEBUG(DB_TRACE, "compared record at %d, got "
+					"BTR_CMP_ERR, return PROBE_RC_ERR.",
+					at);
+				return PROBE_RC_ERR;
+			}
+			if (cmp != BTR_CMP_EQ)
 				D_ERROR("Hash collision is poorly handled\n");
 		}
 	}
 
 	if (opc == BTR_PROBE_UPDATE)
-		at += (cmp < 0);
+		at += (cmp == BTR_CMP_LT);
 
 	btr_trace_set(tcx, level, nd_mmid, at);
 	btr_trace_debug(tcx, &tcx->tc_trace[level], "probe finished\n");
@@ -1184,20 +1202,20 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 
 	case BTR_PROBE_UPDATE:
 	case BTR_PROBE_EQ:
-		return cmp == 0 ? PROBE_RC_EQ : PROBE_RC_NONE;
+		return cmp == BTR_CMP_EQ ? PROBE_RC_EQ : PROBE_RC_NONE;
 
 	case BTR_PROBE_GE:
-		if (cmp == 0)
+		if (cmp == BTR_CMP_EQ)
 			return PROBE_RC_EQ;
-		if (cmp > 0)
+		if (cmp == BTR_CMP_GT)
 			return PROBE_RC_OK;
 
 		return btr_probe_next(tcx) ? PROBE_RC_OK : PROBE_RC_NONE;
 
 	case BTR_PROBE_LE:
-		if (cmp == 0)
+		if (cmp == BTR_CMP_EQ)
 			return PROBE_RC_EQ;
-		if (cmp < 0)
+		if (cmp == BTR_CMP_LT)
 			return PROBE_RC_OK;
 
 		return btr_probe_prev(tcx) ? PROBE_RC_OK : PROBE_RC_NONE;
@@ -1356,7 +1374,7 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
 		return -DER_NO_HDL;
 
 	rc = btr_probe(tcx, opc, key, NULL);
-	if (rc == PROBE_RC_NONE) {
+	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
 	}
@@ -1483,6 +1501,11 @@ btr_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 	rc = btr_probe(tcx, BTR_PROBE_UPDATE, key, NULL);
 	if (rc == PROBE_RC_EQ) {
 		rc = btr_update_only(tcx, key, val);
+	} else if (rc == PROBE_RC_ERR) {
+		D_DEBUG(DB_TRACE, "btr_probe got PROBE_RC_ERR, probably due to "
+			"key_cmp returned BTR_CMP_ERR, treats it as invalid "
+			"operation.\n");
+		rc = -DER_INVAL;
 	} else {
 		D_ASSERT(rc == PROBE_RC_NONE);
 		rc = btr_insert(tcx, key, val);
@@ -2849,7 +2872,7 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 		return -DER_NO_HDL;
 
 	rc = btr_probe(tcx, opc, key, anchor);
-	if (rc == PROBE_RC_NONE) {
+	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
 		itr->it_state = BTR_ITR_FINI;
 		return -DER_NONEXIST;
 	}

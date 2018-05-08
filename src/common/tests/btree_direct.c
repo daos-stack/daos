@@ -85,9 +85,9 @@ sk_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 	rc = strncasecmp(s1, s2, len);
 
 	if (rc != 0)
-		return rc;
+		return dbtree_key_cmp_rc(rc);
 
-	return strncmp(s1, s2, len);
+	return dbtree_key_cmp_rc(strncmp(s1, s2, len));
 }
 
 static int

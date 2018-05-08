@@ -164,6 +164,14 @@ struct btr_rec_stat {
 
 struct btr_instance;
 
+/** the return value of to_hkey_cmp/to_key_cmp callback */
+enum btr_key_cmp_rc {
+	BTR_CMP_EQ = 0,	/* equal */
+	BTR_CMP_LT,	/* less than */
+	BTR_CMP_GT,	/* greater than */
+	BTR_CMP_ERR,	/* error */
+};
+
 /**
  * Customized tree function table.
  */
@@ -192,12 +200,17 @@ typedef struct {
 	 * Absent:
 	 * Calls memcmp.
 	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
+	 * \param tins	[IN]		Tree instance which contains the root
+	 *				mmid and memory class etc.
+	 * \param rec	[IN]	Record to be compared with \a key.
+	 * \param key	[IN]	Key to be compared with key of \a rec.
 	 *
-	 * \a return	-ve	hkey of \a rec is smaller than \a hkey
-	 *		+ve	hkey of \a rec is larger than \a hkey
-	 *		0	hkey of \a rec is equal to \a hkey
+	 * \a return	BTR_CMP_LT	hkey of \a rec is smaller than \a hkey
+	 *		BTR_CMP_GT	hkey of \a rec is larger than \a hkey
+	 *		BTR_CMP_EQ	hkey of \a rec is equal to \a hkey
+	 *		BTR_CMP_ERR	error in the hkey comparison
+	 *		return any other value will cause assertion, segfault or
+	 *		other undefined result.
 	 */
 	int		(*to_hkey_cmp)(struct btr_instance *tins,
 				       struct btr_record *rec, void *hkey);
@@ -213,6 +226,13 @@ typedef struct {
 	 *			and memory class etc.
 	 * \param rec	[IN]	Record to be compared with \a key.
 	 * \param key	[IN]	Key to be compared with key of \a rec.
+	 *
+	 * \a return	BTR_CMP_LT	key of \a rec is smaller than \a key
+	 *		BTR_CMP_GT	key of \a rec is larger than \a key
+	 *		BTR_CMP_EQ	key of \a rec is equal to \a key
+	 *		BTR_CMP_ERR	error in the key comparison
+	 *		return any other value will cause assertion, segfault or
+	 *		other undefined result.
 	 */
 	int		(*to_key_cmp)(struct btr_instance *tins,
 				      struct btr_record *rec, daos_iov_t *key);
@@ -434,9 +454,23 @@ enum btr_feats {
 	BTR_FEAT_DIRECT_KEY		= (1 << 1),
 };
 
+/**
+ * Get the return code of to_hkey_cmp/to_key_cmp in case of success, for failure
+ * case need to directly set it as BTR_CMP_ERR.
+ */
+static inline int
+dbtree_key_cmp_rc(int rc)
+{
+	if (rc == 0)
+		return BTR_CMP_EQ;
+	else if (rc < 0)
+		return BTR_CMP_LT;
+	else
+		return BTR_CMP_GT;
+}
+
 int  dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 			   btr_ops_t *ops);
-
 int  dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 		   unsigned int tree_order, struct umem_attr *uma,
 		   TMMID(struct btr_root) *root_mmidp, daos_handle_t *toh);

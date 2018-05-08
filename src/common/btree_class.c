@@ -221,8 +221,9 @@ nv_key_cmp(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key)
 {
 	struct nv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
-	return memcmp((const void *)r->nr_name, (const void *)key->iov_buf,
-		      key->iov_len);
+	return dbtree_key_cmp_rc(
+		memcmp((const void *)r->nr_name, (const void *)key->iov_buf,
+			key->iov_len));
 }
 
 static int
@@ -689,7 +690,8 @@ uv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 static int
 uv_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 {
-	return uuid_compare(*(uuid_t *)rec->rec_hkey, *(uuid_t *)hkey);
+	return dbtree_key_cmp_rc(
+		uuid_compare(*(uuid_t *)rec->rec_hkey, *(uuid_t *)hkey));
 }
 
 btr_ops_t dbtree_uv_ops = {
@@ -1085,7 +1087,7 @@ kv_key_cmp(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key)
 	rc = memcmp(r->kr_key, key->iov_buf, min(r->kr_key_len, key->iov_len));
 	if (rc == 0)
 		rc = r->kr_key_len - key->iov_len;
-	return rc;
+	return dbtree_key_cmp_rc(rc);
 }
 
 static int
