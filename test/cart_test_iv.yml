@@ -8,7 +8,7 @@ defaultENV:
     OFI_INTERFACE: "eth0"
     CRT_ALLOW_SINGLETON: "1"
     CRT_CTX_SHARE_ADDR: "1"
-    CRT_CTX_NUM: "16"
+    CRT_CTX_NUM: "1"
 
 module:
     name: "cart_test_iv"

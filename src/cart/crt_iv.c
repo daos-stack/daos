@@ -173,7 +173,66 @@ struct crt_ivns_internal {
 
 	/* Link to ns_list */
 	d_list_t		 cii_link;
+
+	/* ref count spinlock */
+	pthread_spinlock_t	cii_ref_lock;
+
+	/* reference count */
+	int			cii_ref_count;
 };
+
+static void
+ivns_destroy(struct crt_ivns_internal *ivns_internal)
+{
+	D_MUTEX_LOCK(&ns_list_lock);
+	d_list_del(&ivns_internal->cii_link);
+	D_MUTEX_UNLOCK(&ns_list_lock);
+
+	/* addref in crt_grp_lookup_int_grpid or crt_iv_namespace_create */
+	crt_grp_priv_decref(ivns_internal->cii_grp_priv);
+
+	D_MUTEX_DESTROY(&ivns_internal->cii_lock);
+	D_SPIN_DESTROY(&ivns_internal->cii_ref_lock);
+
+	D_FREE_PTR(ivns_internal->cii_iv_classes);
+	D_FREE_PTR(ivns_internal);
+}
+
+
+#define IVNS_ADDREF(xx)					\
+do {								\
+	int __ref;						\
+	struct crt_ivns_internal *__ivns = xx;			\
+								\
+	D_SPIN_LOCK(&__ivns->cii_ref_lock);			\
+	D_ASSERTF(__ivns->cii_ref_count != 0,			\
+		"%p addref from zero\n", __ivns);		\
+	__ref = ++__ivns->cii_ref_count;			\
+	D_SPIN_UNLOCK(&__ivns->cii_ref_lock);			\
+	D_DEBUG(DB_ALL, "addref to %d ivns=%p\n",		\
+		 __ref, __ivns);				\
+} while (0)
+
+#define IVNS_DECREF_N(xx, num)					\
+do {								\
+	int __ref;						\
+	struct crt_ivns_internal *__ivns = xx;			\
+								\
+	D_SPIN_LOCK(&__ivns->cii_ref_lock);			\
+	D_ASSERTF(__ivns->cii_ref_count >= (num),		\
+		"%p decref(%d) from %d\n",			\
+		__ivns, num, __ivns->cii_ref_count);		\
+	__ivns->cii_ref_count -= num;				\
+	__ref = __ivns->cii_ref_count;				\
+	D_SPIN_UNLOCK(&__ivns->cii_ref_lock);			\
+	D_DEBUG(DB_ALL, "decref to %d ivns=%p\n",		\
+		__ref, __ivns);					\
+								\
+	if (__ref == 0)						\
+		ivns_destroy(__ivns);				\
+} while (0)
+
+#define IVNS_DECREF(xx) IVNS_DECREF_N(xx, 1)
 
 static int
 crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
@@ -574,6 +633,8 @@ crt_ivns_internal_lookup(struct crt_ivns_id *ivns_id)
 		if (entry->cii_gns.gn_ivns_id.ii_rank == ivns_id->ii_rank &&
 			entry->cii_gns.gn_ivns_id.ii_nsid == ivns_id->ii_nsid) {
 
+			IVNS_ADDREF(entry);
+
 			D_MUTEX_UNLOCK(&ns_list_lock);
 			return entry;
 		}
@@ -618,9 +679,19 @@ crt_ivns_internal_create(crt_context_t crt_ctx, struct crt_grp_priv *grp_priv,
 		D_GOTO(exit, ivns_internal = NULL);
 	}
 
+	rc = D_SPIN_INIT(&ivns_internal->cii_ref_lock, 0);
+	if (rc != 0) {
+		D_MUTEX_DESTROY(&ivns_internal->cii_lock);
+		D_FREE(ivns_internal);
+		D_GOTO(exit, ivns_internal = NULL);
+	}
+
+	ivns_internal->cii_ref_count = 1;
+
 	D_ALLOC_ARRAY(ivns_internal->cii_iv_classes, num_class);
 	if (ivns_internal->cii_iv_classes == NULL) {
 		D_MUTEX_DESTROY(&ivns_internal->cii_lock);
+		D_SPIN_DESTROY(&ivns_internal->cii_ref_lock);
 		D_FREE(ivns_internal);
 		D_GOTO(exit, ivns_internal = NULL);
 	}
@@ -790,10 +861,10 @@ crt_iv_global_namespace_get(crt_iv_namespace_t *ivns, d_iov_t *g_ivns)
 	g_ivns->iov_buf_len = sizeof(struct crt_global_ns);
 	g_ivns->iov_len = sizeof(struct crt_global_ns);
 
+	IVNS_DECREF(ivns_internal);
 exit:
 	return rc;
 }
-
 
 int
 crt_iv_namespace_destroy(crt_iv_namespace_t ivns)
@@ -807,20 +878,8 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns)
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
 
-	D_MUTEX_LOCK(&ns_list_lock);
-	d_list_del(&ivns_internal->cii_link);
-	D_MUTEX_UNLOCK(&ns_list_lock);
-
-	/* addref in crt_grp_lookup_int_grpid or crt_iv_namespace_create */
-	crt_grp_priv_decref(ivns_internal->cii_grp_priv);
-
-	/* TODO: stage2 - wait for all pending requests to be finished*/
-	/* TODO: Need refcount on ivns_internal to know when to free it */
-	D_MUTEX_DESTROY(&ivns_internal->cii_lock);
-
-	D_FREE_PTR(ivns_internal->cii_iv_classes);
-	D_FREE_PTR(ivns_internal);
-
+	/* addref done in crt_ivns_internal_get() and at attach/create time  */
+	IVNS_DECREF_N(ivns, 2);
 exit:
 	return rc;
 }
@@ -901,6 +960,7 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 
 	RPC_PUB_DECREF(rpc);
 
+	IVNS_DECREF(cb_info->tci_ivns_internal);
 	D_FREE_PTR(cb_info);
 
 	return rc;
@@ -1049,6 +1109,9 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	if (rc == 0)
 		crt_ivf_pending_reqs_process(ivns, class_id, kip_entry, rc);
 
+	/* Addref odne in crt_iv_fetch::crt_ivns_internal_get() */
+	IVNS_DECREF(ivns);
+
 	D_FREE_PTR(iv_info);
 }
 
@@ -1168,6 +1231,9 @@ exit:
 		D_MUTEX_UNLOCK(&ivns_internal->cii_lock);
 		if (local_bulk != CRT_BULK_NULL)
 			crt_bulk_free(local_bulk);
+
+		/* Addref done in crt_iv_fetch::crt_ivns_intenral_get() */
+		IVNS_DECREF(ivns_internal);
 	}
 
 	return rc;
@@ -1345,6 +1411,8 @@ send_error:
 	output->ifo_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	D_ASSERT(rc == 0);
+
+	IVNS_DECREF(ivns_internal);
 }
 
 
@@ -1443,6 +1511,9 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 			      iv_value, rc, cb_arg);
 		iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
 		D_FREE_PTR(iv_value);
+
+		/* addref done in crt_ivns_internal_get() */
+		IVNS_DECREF(ivns_internal);
 		return rc;
 	} else if (rc != -DER_IVCB_FORWARD) {
 		/* We got error, call the callback and exit */
@@ -1452,6 +1523,9 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 			      NULL, rc, cb_arg);
 		iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
 		D_FREE_PTR(iv_value);
+
+		/* addref done in crt_ivns_internal_get() */
+		IVNS_DECREF(ivns_internal);
 		return rc;
 	}
 
@@ -1503,6 +1577,9 @@ exit:
 			iv_ops->ivo_on_put(ivns, iv_value, user_priv);
 		D_ERROR("Failed to issue IV fetch; rc = %d\n", rc);
 		D_FREE_PTR(cb_info);
+
+		/* addref done above in crt_ivns_internal_get() */
+		IVNS_DECREF(ivns_internal);
 	}
 
 	D_FREE(iv_value);
@@ -1674,6 +1751,8 @@ exit:
 
 	output->rc = rc;
 	crt_reply_send(rpc_req);
+
+	IVNS_DECREF(ivns_internal);
 }
 
 /* Results aggregate function for sync CORPC */
@@ -1749,7 +1828,10 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 					iv_sync->isc_user_priv);
 		D_FREE(iv_sync->isc_iv_key.iov_buf);
 	}
+
+	IVNS_DECREF(iv_sync->isc_ivns_internal);
 	D_FREE(iv_sync);
+
 }
 
 /* Helper function to issue update sync
@@ -1773,6 +1855,8 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	crt_bulk_t		local_bulk = CRT_BULK_NULL;
 	d_rank_list_t		excluded_list;
 	d_rank_t		excluded_ranks[1]; /* Excluding self */
+
+	IVNS_ADDREF(ivns_internal);
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	D_ASSERT(iv_ops != NULL);
@@ -1890,6 +1974,9 @@ exit:
 
 		/* on_get() done in crt_iv_update_internal */
 		iv_ops->ivo_on_put(ivns_internal, NULL, user_priv);
+
+		/* addref done above */
+		IVNS_DECREF(ivns_internal);
 	}
 
 	if (rc != 0) {
@@ -1957,6 +2044,9 @@ finalize_transfer_back(struct update_cb_info *cb_info, int rc)
 	/* ADDREF done in crt_hdlr_iv_update */
 	RPC_PUB_DECREF(cb_info->uci_child_rpc);
 	crt_bulk_free(cb_info->uci_bulk_hdl);
+
+	/* addref in transfer_back_to_child() */
+	IVNS_DECREF(ivns);
 	D_FREE(cb_info);
 }
 
@@ -1985,6 +2075,8 @@ void transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
 	int				rc = 0;
 
 	ivns = cb_info->uci_ivns_internal;
+	/* decref in finalize_transfer_back */
+	IVNS_ADDREF(ivns);
 
 	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
 	D_ASSERT(iv_ops != NULL);
@@ -2046,7 +2138,9 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	struct iv_update_out	*child_output;
 	struct crt_iv_ops	*iv_ops;
 	int			rc;
+	struct crt_ivns_internal *ivns;
 
+	ivns = iv_info->uci_ivns_internal;
 
 	/* For bi-directional updates, transfer data back to child */
 	if (iv_info->uci_sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
@@ -2112,6 +2206,8 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 
 	D_FREE_PTR(iv_info);
 exit:
+	/* addref done in crt_hdlr_iv_update */
+	IVNS_DECREF(ivns);
 	return;
 }
 
@@ -2192,6 +2288,8 @@ exit:
 
 /* bulk transfer update callback info */
 struct bulk_update_cb_info {
+	struct crt_ivns_internal *buc_ivns;
+
 	/* Input buffer for iv update rpc */
 	struct iv_update_in	*buc_input;
 	/* Local bulk handle to free */
@@ -2206,7 +2304,6 @@ static int
 bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 {
 	struct bulk_update_cb_info	*cb_info;
-	struct crt_ivns_id		*ivns_id;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;
 	struct iv_update_in		*input;
@@ -2221,10 +2318,7 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 
 	input = cb_info->buc_input;
 
-	ivns_id = (struct crt_ivns_id *)input->ivu_nsid.iov_buf;
-
-	/* ivns_internal and iv_ops better not be NULL at this point */
-	ivns_internal = crt_ivns_internal_lookup(ivns_id);
+	ivns_internal = cb_info->buc_ivns;
 	D_ASSERT(ivns_internal != NULL);
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ivu_class_id);
@@ -2267,9 +2361,14 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 			D_GOTO(send_error, rc = -DER_OOG);
 		}
 
-		crt_ivu_rpc_issue(next_rank, &input->ivu_key,
+		rc = crt_ivu_rpc_issue(next_rank, &input->ivu_key,
 				&cb_info->buc_iv_value, sync_type,
 				input->ivu_root_node, update_cb_info);
+		if (rc != 0) {
+			D_ERROR("crt_ivu_rpc_issue() failed, rc = %d\n", rc);
+			D_GOTO(send_error, rc);
+		}
+
 	} else if (update_rc == 0) {
 
 		/* If sync was bi-directional - trasnfer value back */
@@ -2307,6 +2406,8 @@ send_error:
 	crt_reply_send(info->bci_bulk_desc->bd_rpc);
 	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
 
+	/* addref done by crt_hdlr_iv_update:crt_ivns_internal_lookup() */
+	IVNS_DECREF(ivns_internal);
 	return rc;
 }
 
@@ -2383,9 +2484,13 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 
 			update_cb_info->uci_sync_type = *sync_type;
 
-			crt_ivu_rpc_issue(next_rank, &input->ivu_key,
+			rc = crt_ivu_rpc_issue(next_rank, &input->ivu_key,
 					NULL, sync_type,
 					input->ivu_root_node, update_cb_info);
+
+			if (rc != 0)
+				D_GOTO(send_error, rc);
+
 		} else if (rc == 0) {
 			output->rc = rc;
 			rc = crt_reply_send(rpc_req);
@@ -2428,6 +2533,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 		D_GOTO(send_error, rc = -DER_NOMEM);
 	}
 
+	cb_info->buc_ivns = ivns_internal;
 	cb_info->buc_input = input;
 	cb_info->buc_bulk_hdl = local_bulk_handle;
 	cb_info->buc_iv_value = iv_value;
@@ -2450,6 +2556,9 @@ exit:
 send_error:
 	output->rc = rc;
 	crt_reply_send(rpc_req);
+
+	/* addref done by crt_hdlr_iv_update:crt_ivns_internal_lookup() */
+	IVNS_DECREF(ivns_internal);
 }
 
 static int
@@ -2535,11 +2644,14 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 			iv_ops->ivo_on_put(ivns_internal, NULL, priv);
 		} else {
 			/* issue sync. will call completion callback */
-			rc = crt_ivsync_rpc_issue(ivns_internal, class_id,
+			crt_ivsync_rpc_issue(ivns_internal, class_id,
 				iv_key, iv_ver, iv_value, sync_type,
 				ivns_internal->cii_grp_priv->gp_self,
 				root_rank, update_comp_cb, cb_arg, priv, rc);
 		}
+
+		/* addref done above in crt_ivns_intenral_get() */
+		IVNS_DECREF(ivns_internal);
 
 		D_GOTO(exit, rc);
 	} else  if (rc == -DER_IVCB_FORWARD) {
@@ -2583,6 +2695,11 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 put:
 	iv_ops->ivo_on_put(ivns, NULL, priv);
 exit:
+	if (rc != DER_SUCCESS) {
+		/* addref done above in crt_ivns_intenral_get() */
+		IVNS_DECREF(ivns);
+	}
+
 	return rc;
 }
 
@@ -2633,7 +2750,7 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 		    crt_iv_key_t *iv_key, uint32_t *nchildren)
 {
 	struct crt_iv_ops		*iv_ops;
-	struct crt_ivns_internal	*ivns_internal;
+	struct crt_ivns_internal	*ivns_internal = NULL;
 	d_rank_t			 root_rank;
 	d_rank_t			 self_rank;
 	int				 rc = 0;
@@ -2642,11 +2759,13 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 		D_ERROR("invalid parameter (NULL key or nchildren).\n");
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
+
 	ivns_internal = crt_ivns_internal_get(ivns);
 	if (ivns_internal == NULL) {
 		D_ERROR("Invalid ivns specified\n");
 		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
+
 	rc = crt_group_rank(&ivns_internal->cii_grp_priv->gp_pub, &self_rank);
 	if (rc != 0) {
 		D_ERROR("crt_group_rank(grp %s) failed, rc=%d.\n",
@@ -2674,6 +2793,10 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 			ivns_internal->cii_grp_priv->gp_pub.cg_grpid,
 			root_rank, self_rank, rc);
 
+
 exit:
+	/* addref done in crt_ivns_internal_get() */
+	if (ivns_internal)
+		IVNS_DECREF(ivns_internal);
 	return rc;
 }

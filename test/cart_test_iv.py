@@ -300,7 +300,7 @@ class TestIncastVariables(commontestsuite.CommonTestSuite):
 
         # Note: due to CART-408 issue, rank 0 needs to shutdown last
         # Request each server shut down gracefully
-        for rank in reversed(range(1, min_ranks * num_servers)):
+        for rank in reversed(range(1, ranks_per_node * num_servers)):
             self.launch_test(testmsg, '1', self.pass_env, cli=cli_host,
                              cli_arg='tests/iv_client -o shutdown -r ' +
                              str(rank))
