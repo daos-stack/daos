@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,10 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include <pthread.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <setjmp.h>
+#include <cmocka.h>
 #include <daos/common.h>
 #include <daos_event.h>
 #include <daos/event.h>
@@ -48,14 +52,14 @@
 #define DAOS_TEST_FMT	"-------- %s test_%s: %s\n"
 
 #define DAOS_TEST_ENTRY(test_id, test_name)	\
-	D_ERROR(DAOS_TEST_FMT, "EQ", test_id, test_name)
+	print_message(DAOS_TEST_FMT, "EQ", test_id, test_name)
 
 #define DAOS_TEST_EXIT(rc)					\
 do {								\
 	if (rc == 0)						\
-		D_ERROR("-------- PASS\n");			\
+		print_message("-------- PASS\n");		\
 	else							\
-		D_ERROR("-------- FAILED\n");			\
+		print_message("-------- FAILED\n");		\
 	sleep(1);						\
 } while (0)
 
@@ -73,10 +77,10 @@ eq_test_1()
 
 	DAOS_TEST_ENTRY("1", "daos_eq_create/destroy");
 
-	D_ERROR("Create EQ\n");
+	print_message("Create EQ\n");
 	rc = daos_eq_create(&eqh);
 	if (rc != 0) {
-		D_ERROR("Failed to create EQ: %d\n", rc);
+		print_error("Failed to create EQ: %d\n", rc);
 		goto out;
 	}
 
@@ -96,25 +100,25 @@ eq_test_1()
 
 	daos_event_abort(&abort_ev);
 
-	D_ERROR("Destroy non-empty EQ\n");
+	print_message("Destroy non-empty EQ\n");
 	rc = daos_eq_destroy(eqh, 0);
 	if (rc != -DER_BUSY) {
-		D_ERROR("Failed to destroy non-empty EQ: %d\n", rc);
+		print_error("Failed to destroy non-empty EQ: %d\n", rc);
 		goto out;
 	}
 
 	rc = daos_eq_poll(eqh, 0, 0, 1, &ep);
 	if (rc != 1) {
-		D_ERROR("Failed to drain EQ: %d\n", rc);
+		print_error("Failed to drain EQ: %d\n", rc);
 		goto out;
 	}
 	daos_event_fini(&ev);
 	daos_event_fini(&abort_ev);
 
-	D_ERROR("Destroy empty EQ\n");
+	print_message("Destroy empty EQ\n");
 	rc = daos_eq_destroy(eqh, 0);
 	if (rc != 0) {
-		D_ERROR("Failed to destroy empty EQ: %d\n", rc);
+		print_error("Failed to destroy empty EQ: %d\n", rc);
 		goto out;
 	}
 
@@ -144,74 +148,74 @@ eq_test_2()
 			goto out;
 	}
 
-	D_ERROR("Poll empty EQ w/o wait\n");
+	print_message("Poll empty EQ w/o wait\n");
 	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, EQT_EV_COUNT, eps);
 	if (rc != 0) {
-		D_ERROR("Expect to poll zero event: %d\n", rc);
+		print_error("Expect to poll zero event: %d\n", rc);
 		goto out;
 	}
 
-	D_ERROR("Test events / Query EQ with inflight events\n");
+	print_message("Test events / Query EQ with inflight events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		bool ev_flag;
 
 		rc = daos_event_launch(events[i]);
 		if (rc != 0) {
-			D_ERROR("Failed to launch event %d: %d\n", i, rc);
+			print_error("Failed to launch event %d: %d\n", i, rc);
 			goto out;
 		}
 
 		rc = daos_event_test(events[i], DAOS_EQ_NOWAIT, &ev_flag);
 		if (rc != 0) {
-			D_ERROR("Test on child event returned %d\n", rc);
+			print_error("Test on child event returned %d\n", rc);
 			goto out;
 		}
 		if (ev_flag) {
-			D_ERROR("Event %d should be inflight\n", i);
+			print_error("Event %d should be inflight\n", i);
 			rc = -1;
 			goto out;
 		}
 
 		rc = daos_eq_query(my_eqh, DAOS_EQR_WAITING, 0, NULL);
 		if (rc != i + 1) {
-			D_ERROR("Expect to see %d inflight event, "
+			print_error("Expect to see %d inflight event, "
 				 "but got %d\n", i + 1, rc);
 			rc = -1;
 			goto out;
 		}
 	}
 
-	D_ERROR("Poll EQ with timeout\n");
+	print_message("Poll EQ with timeout\n");
 	rc = daos_eq_poll(my_eqh, 1, 10, EQT_EV_COUNT, eps);
 	if (rc != -DER_TIMEDOUT) {
-		D_ERROR("Expect to poll zero event: %d\n", rc);
+		print_error("Expect to poll zero event: %d\n", rc);
 		goto out;
 	}
 
-	D_ERROR("Query EQ with completion events\n");
+	print_message("Query EQ with completion events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		daos_event_complete(events[i], 0);
 		rc = daos_eq_query(my_eqh, DAOS_EQR_COMPLETED,
 				   EQT_EV_COUNT, eps);
 		if (rc != i + 1) {
-			D_ERROR("Expect to see %d inflight event, "
+			print_error("Expect to see %d inflight event, "
 				 "but got %d\n", i + 1, rc);
 			rc = -1;
 			goto out;
 		}
 
 		if (eps[rc - 1] != events[i]) {
-			D_ERROR("Unexpected results from query: %d %p %p\n", i,
-				 eps[rc - 1], &events[i]);
+			print_error("Unexpected result from query: %d %p %p\n",
+				    i, eps[rc - 1], &events[i]);
 			rc = -1;
 			goto out;
 		}
 	}
 
-	D_ERROR("Poll EQ with completion events\n");
+	print_message("Poll EQ with completion events\n");
 	rc = daos_eq_poll(my_eqh, 0, -1, EQT_EV_COUNT, eps);
 	if (rc != EQT_EV_COUNT) {
-		D_ERROR("Expect to poll %d event: %d\n",
+		print_error("Expect to poll %d event: %d\n",
 			EQT_EV_COUNT, rc);
 		goto out;
 	}
@@ -240,11 +244,11 @@ eq_test_3()
 
 	DAOS_TEST_ENTRY("3", "parent event");
 
-	D_ERROR("Initialize parent event\n");
+	print_message("Initialize parent event\n");
 	rc = daos_event_init(&event, my_eqh, NULL);
 	D_ASSERT(rc == 0);
 
-	D_ERROR("Initialize & launch child events");
+	print_message("Initialize & launch child events");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		child_events[i] = malloc(sizeof(*child_events[i]));
 		if (child_events[i] == NULL) {
@@ -261,42 +265,44 @@ eq_test_3()
 			goto out_free;
 	}
 
-	D_ERROR("launch parent event\n");
+	print_message("launch parent event\n");
 	rc = daos_event_launch(&event);
 	if (rc != 0) {
-		D_ERROR("Launch parent event returned %d\n", rc);
+		print_error("Launch parent event returned %d\n", rc);
 		goto out_free;
 	}
 
-	D_ERROR("Add a child event when parent is launched. should fail.\n");
+	print_message("Add a child when parent is launched. should fail.\n");
 	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
 	if (rc != -DER_INVAL) {
-		D_ERROR("Add child to inflight parent should fail (%d)\n", rc);
+		print_error("Add child to inflight parent should fail (%d)\n",
+			    rc);
 		goto out_free;
 	}
 
-	D_ERROR("Complete parent before children complete\n");
+	print_message("Complete parent before children complete\n");
 	daos_event_complete(&event, 0);
 
-	D_ERROR("Add a child event when parent is complete but not init\n");
+	print_message("Add a child when parent is completed but not init\n");
 	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
 	if (rc != -DER_INVAL) {
-		D_ERROR("Add child to inflight parent should fail (%d)\n", rc);
+		print_error("Add child to inflight parent should fail (%d)\n",
+			    rc);
 		goto out_free;
 	}
 
-	D_ERROR("Poll EQ, Parent should not be polled out of EQ.\n");
+	print_message("Poll EQ, Parent should not be polled out of EQ.\n");
 	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, 2, eps);
 	if (rc != 0) {
-		D_ERROR("Expect to get inflight parent event: %d\n", rc);
+		print_error("Expect to get inflight parent event: %d\n", rc);
 		rc = -1;
 		goto out_free;
 	}
 
-	D_ERROR("Test parent completion - should return false\n");
+	print_message("Test parent completion - should return false\n");
 	rc = daos_event_test(&event, DAOS_EQ_NOWAIT, &ev_flag);
 	if (rc != 0 || ev_flag != false) {
-		D_ERROR("expect to get inflight parent (%d)\n", rc);
+		print_error("expect to get inflight parent (%d)\n", rc);
 		rc = -1;
 		goto out_free;
 	}
@@ -304,15 +310,15 @@ eq_test_3()
 	for (i = 0; i < EQT_EV_COUNT; i++)
 		daos_event_complete(child_events[i], 0);
 
-	D_ERROR("Poll parent event\n");
+	print_message("Poll parent event\n");
 	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, 2, eps);
 	if (rc != 1 || eps[0] != &event) {
-		D_ERROR("Expect to get completion of parent event: %d\n", rc);
+		print_error("Expect to get completion of parent EV: %d\n", rc);
 		rc = -1;
 		goto out_free;
 	}
 
-	D_ERROR("re-launch child events\n");
+	print_message("re-launch child events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		daos_event_fini(child_events[i]);
 
@@ -322,7 +328,7 @@ eq_test_3()
 
 		rc = daos_event_launch(child_events[i]);
 		if (rc != 0) {
-			D_ERROR("can't launch child event (%d)\n", rc);
+			print_error("can't launch child event (%d)\n", rc);
 			goto out_free;
 		}
 
@@ -330,31 +336,32 @@ eq_test_3()
 			daos_event_complete(child_events[i], 0);
 	}
 
-	D_ERROR("Insert barrier parent event\n");
+	print_message("Insert barrier parent event\n");
 	rc = daos_event_parent_barrier(&event);
 	if (rc != 0) {
-		D_ERROR("Parent barrier event returned %d\n", rc);
+		print_error("Parent barrier event returned %d\n", rc);
 		goto out_free;
 	}
 
-	D_ERROR("Test on child event - should fail\n");
+	print_message("Test on child event - should fail\n");
 	rc = daos_event_test(child_events[0], DAOS_EQ_WAIT, NULL);
 	if (rc != -DER_NO_PERM) {
-		D_ERROR("Test on child event returned %d\n", rc);
+		print_error("Test on child event returned %d\n", rc);
 		goto out_free;
 	}
 
-	D_ERROR("Add a child event when parent is not polled. should fail.\n");
+	print_message("Add an EV when parent is not polled. should fail.\n");
 	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
 	if (rc != -DER_INVAL) {
-		D_ERROR("Add child to inflight parent should fail (%d)\n", rc);
+		print_error("Add child to inflight parent should fail (%d)\n",
+			    rc);
 		goto out_free;
 	}
 
-	D_ERROR("Poll EQ, Parent should not be polled out of EQ.\n");
+	print_message("Poll EQ, Parent should not be polled out of EQ.\n");
 	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, 2, eps);
 	if (rc != 0) {
-		D_ERROR("Expect to get inflight parent event: %d\n", rc);
+		print_error("Expect to get inflight parent event: %d\n", rc);
 		rc = -1;
 		goto out_free;
 	}
@@ -362,21 +369,21 @@ eq_test_3()
 	for (i = 0; i < EQT_EV_COUNT/2; i++)
 		daos_event_complete(child_events[i], 0);
 
-	D_ERROR("wait on parent barrier event\n");
+	print_message("wait on parent barrier event\n");
 	rc = daos_event_test(&event, DAOS_EQ_NOWAIT, &ev_flag);
 	if (rc != 0) {
-		D_ERROR("Test on barrier event returned %d\n", rc);
+		print_error("Test on barrier event returned %d\n", rc);
 		goto out_free;
 	}
 	if (!ev_flag) {
-		D_ERROR("Barrier event should be completed\n");
+		print_error("Barrier event should be completed\n");
 		rc = -1;
 		goto out_free;
 	}
 
 	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, 2, eps);
 	if (rc != 0) {
-		D_ERROR("EQ should be empty: %d\n", rc);
+		print_error("EQ should be empty: %d\n", rc);
 		rc = -1;
 		goto out_free;
 	}
@@ -413,10 +420,10 @@ do {								\
 	}							\
 	rc = daos_eq_query(eqh, DAOS_EQR_ALL, 0, NULL);		\
 	if (rc == 0) {						\
-		D_ERROR("\tProducer verified EQ empty\n");	\
+		print_error("\tProducer verified EQ empty\n");	\
 		break;						\
 	}							\
-	D_ERROR("\tQuery should return 0 but not: %d\n", rc);	\
+	print_error("\tQuery should return 0 but not: %d\n", rc);	\
 	D_MUTEX_LOCK(&epc_data.epc_mutex);		\
 	epc_data.epc_error = rc;				\
 	pthread_cond_broadcast(&epc_data.epc_cond);		\
@@ -439,7 +446,7 @@ do {								\
 		epc_data.epc_barrier = 0;			\
 		epc_data.epc_index++;				\
 	}							\
-	D_ERROR(msg);						\
+	print_error(msg);						\
 	D_MUTEX_UNLOCK(&epc_data.epc_mutex);		\
 } while (0)
 
@@ -460,11 +467,11 @@ do {								\
 	gettimeofday(&__now, NULL);				\
 	__intv = (int)(__now.tv_sec - (then).tv_sec);		\
 	if (__intv >= (intv) - 1) {				\
-		D_ERROR("\t%s slept for %d seconds\n",		\
+		print_error("\t%s slept for %d seconds\n",		\
 			name, __intv);				\
 		break;						\
 	}							\
-	D_ERROR("%s should sleep for %d seconds not %d\n",	\
+	print_error("%s should sleep for %d seconds not %d\n",	\
 		name, intv, __intv);				\
 	rc = -1;						\
 	goto out;						\
@@ -487,20 +494,21 @@ eq_test_consumer(void *arg)
 	}
 
 	/* step-1 */
-	D_ERROR("\tConsumer should be blocked for %d seconds\n", EQT_SLEEP_INV);
+	print_message("\tConsumer should be blocked for %d seconds\n",
+		      EQT_SLEEP_INV);
 	gettimeofday(&then, NULL);
 
 	for (total = 0; total < EQT_EV_COUNT; ) {
 		rc = daos_eq_poll(my_eqh, 0, -1, EQT_EV_COUNT, evpps);
 		if (rc < 0) {
-			D_ERROR("EQ poll returned error: %d\n", rc);
+			print_error("EQ poll returned error: %d\n", rc);
 			goto out;
 		}
 		total += rc;
 	}
 	EQ_TEST_CHECK_SLEEP("Consumer", then, EQT_SLEEP_INV, rc, out);
 
-	D_ERROR("\tConsumer got %d events\n", EQT_EV_COUNT);
+	print_message("\tConsumer got %d events\n", EQT_EV_COUNT);
 	EQ_TEST_BARRIER("\tConsumer wake up producer for the next step\n", out);
 
 	/* step-2 */
@@ -510,14 +518,14 @@ eq_test_consumer(void *arg)
 	for (total = 0; total < EQT_EV_COUNT; ) {
 		rc = daos_eq_poll(my_eqh, 1, -1, EQT_EV_COUNT, evpps);
 		if (rc < 0) {
-			D_ERROR("EQ poll returned error: %d\n", rc);
+			print_error("EQ poll returned error: %d\n", rc);
 			goto out;
 		}
 		total += rc;
 	}
 
 	EQ_TEST_CHECK_SLEEP("Consumer", then, EQT_SLEEP_INV, rc, out);
-	D_ERROR("\tConsumer got %d events\n", EQT_EV_COUNT);
+	print_message("\tConsumer got %d events\n", EQT_EV_COUNT);
 	EQ_TEST_BARRIER("\tConsumer wake up producer\n", out);
 
 	/* step-3 */
@@ -526,7 +534,7 @@ eq_test_consumer(void *arg)
 	for (total = 0; total < EQT_EV_COUNT; ) {
 		rc = daos_eq_poll(my_eqh, 0, -1, EQT_EV_COUNT, evpps);
 		if (rc < 0) {
-			D_ERROR("EQ poll returned error: %d\n", rc);
+			print_error("EQ poll returned error: %d\n", rc);
 			goto out;
 		}
 		total += rc;
@@ -568,9 +576,9 @@ eq_test_4()
 		goto out;
 
 	EQ_TEST_BARRIER("EQ Producer started\n", out);
-	D_ERROR("Step-1: launch & complete %d events\n", EQT_EV_COUNT);
+	print_message("Step-1: launch & complete %d events\n", EQT_EV_COUNT);
 
-	D_ERROR("\tProducer sleep for %d seconds and block consumer\n",
+	print_message("\tProducer sleep for %d seconds and block consumer\n",
 		EQT_SLEEP_INV);
 	sleep(EQT_SLEEP_INV);
 
@@ -587,9 +595,9 @@ eq_test_4()
 	EQ_TEST_CHECK_EMPTY(my_eqh, rc, out);
 
 	step++;
-	D_ERROR("Step-2: launch %d events, sleep for %d seconds and "
+	print_message("Step-2: launch %d events, sleep for %d seconds and "
 		"complete these events\n", EQT_EV_COUNT, EQT_SLEEP_INV);
-	D_ERROR("\tProducer launch %d events\n", EQT_EV_COUNT);
+	print_message("\tProducer launch %d events\n", EQT_EV_COUNT);
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++) {
 		rc = daos_event_launch(events[i]);
 		if (rc != 0)
@@ -599,7 +607,7 @@ eq_test_4()
 	EQ_TEST_BARRIER("\tProducer wakes up consumer and sleep\n", out);
 	sleep(EQT_SLEEP_INV);
 
-	D_ERROR("\tProducer complete %d events after %d seconds\n",
+	print_message("\tProducer complete %d events after %d seconds\n",
 		EQT_EV_COUNT, EQT_SLEEP_INV);
 
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++)
@@ -609,7 +617,7 @@ eq_test_4()
 	EQ_TEST_CHECK_EMPTY(my_eqh, rc, out);
 
 	step++;
-	D_ERROR("Step-3: Producer launch & complete %d events, "
+	print_message("Step-3: Producer launch & complete %d events, "
 		"race with consumer\n", EQT_EV_COUNT);
 
 	EQ_TEST_BARRIER("\tProducer launch and complete all events\n", out);
@@ -664,11 +672,11 @@ eq_test_5()
 			goto out;
 	}
 
-	D_ERROR("Launch and test inflight events\n");
+	print_message("Launch and test inflight events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		rc = daos_event_launch(events[i]);
 		if (rc != 0) {
-			D_ERROR("Failed to launch event %d: %d\n", i, rc);
+			print_error("Failed to launch event %d: %d\n", i, rc);
 			goto out;
 		}
 
@@ -680,11 +688,12 @@ eq_test_5()
 			rc = daos_event_test(events[i], DAOS_EQ_NOWAIT,
 					     &ev_flag);
 			if (rc != 0) {
-				D_ERROR("Test on child event returns %d\n", rc);
+				print_error("Test on child event returns %d\n",
+					    rc);
 				goto out;
 			}
 			if (!ev_flag) {
-				D_ERROR("Event %d should be completed\n", i);
+				print_error("EV %d should be completed\n", i);
 				rc = -1;
 				goto out;
 			}
@@ -692,49 +701,50 @@ eq_test_5()
 			rc = daos_event_test(events[i], DAOS_EQ_NOWAIT,
 					     &ev_flag);
 			if (rc != 0) {
-				D_ERROR("Test on child event returns %d\n", rc);
+				print_error("Test on child event returns %d\n",
+					    rc);
 				goto out;
 			}
 			if (ev_flag) {
-				D_ERROR("Event %d should be inflight\n", i);
+				print_error("Event %d should be inflight\n", i);
 				rc = -1;
 				goto out;
 			}
 		}
 	}
 
-	D_ERROR("Poll EQ with 1/2 the events\n");
+	print_message("Poll EQ with 1/2 the events\n");
 	rc = daos_eq_poll(my_eqh, 1, 10, EQT_EV_COUNT/2, eps);
 	if (rc != 0) {
-		D_ERROR("Expect to poll zero event: %d\n", rc);
+		print_error("Expect to poll zero event: %d\n", rc);
 		rc = -1;
 		goto out;
 	}
 
-	D_ERROR("Query EQ with completion events\n");
+	print_message("Query EQ with completion events\n");
 	for (i = 0; i < EQT_EV_COUNT/2; i++) {
 		daos_event_complete(events[i], 0);
 		rc = daos_eq_query(my_eqh, DAOS_EQR_COMPLETED,
 				   EQT_EV_COUNT, eps);
 		if (rc != i + 1) {
-			D_ERROR("Expect to see %d inflight event, but got %d\n",
-				i + 1, rc);
+			print_error("Expected %d inflight event, but got %d\n",
+				    i + 1, rc);
 			rc = -1;
 			goto out;
 		}
 
 		if (eps[rc - 1] != events[i]) {
-			D_ERROR("Unexpected results from query: %d %p %p\n", i,
-				eps[rc - 1], &events[i]);
+			print_error("Unexpected result from query: %d %p %p\n",
+				    i, eps[rc - 1], &events[i]);
 			rc = -1;
 			goto out;
 		}
 	}
 
-	D_ERROR("Poll EQ with completion events\n");
+	print_message("Poll EQ with completion events\n");
 	rc = daos_eq_poll(my_eqh, 0, -1, EQT_EV_COUNT, eps);
 	if (rc != EQT_EV_COUNT/2) {
-		D_ERROR("Expect to poll %d event: %d\n",
+		print_error("Expect to poll %d event: %d\n",
 			EQT_EV_COUNT, rc);
 		rc = -1;
 		goto out;
@@ -763,11 +773,11 @@ eq_test_6()
 
 	DAOS_TEST_ENTRY("6", "Multiple EQs");
 
-	D_ERROR("Create EQs and initialize events.\n");
+	print_message("Create EQs and initialize events.\n");
 	for (i = 0; i < EQ_COUNT; i++) {
 		rc = daos_eq_create(&eqh[i]);
 		if (rc != 0) {
-			D_ERROR("Failed to create EQ: %d\n", rc);
+			print_error("Failed to create EQ: %d\n", rc);
 			return rc;
 		}
 
@@ -783,13 +793,13 @@ eq_test_6()
 		}
 	}
 
-	D_ERROR("Launch and test inflight events\n");
+	print_message("Launch and test inflight events\n");
 	for (j = 0; j < EQT_EV_COUNT; j++) {
 		for (i = 0; i < EQ_COUNT; i++) {
 			rc = daos_event_launch(events[i][j]);
 			if (rc != 0) {
-				D_ERROR("Failed to launch event %d: %d\n", j,
-					rc);
+				print_error("Failed to launch event %d: %d\n",
+					    j, rc);
 				goto out_ev;
 			}
 
@@ -801,11 +811,11 @@ eq_test_6()
 				rc = daos_event_test(events[i][j],
 						     DAOS_EQ_NOWAIT, &ev_flag);
 				if (rc != 0) {
-					D_ERROR("Test returns %d\n", rc);
+					print_error("Test returns %d\n", rc);
 					goto out_ev;
 				}
 				if (!ev_flag) {
-					D_ERROR("Event should be completed\n");
+					print_error("EV should be completed\n");
 					rc = -1;
 					goto out_ev;
 				}
@@ -813,11 +823,11 @@ eq_test_6()
 				rc = daos_event_test(events[i][j],
 						     DAOS_EQ_NOWAIT, &ev_flag);
 				if (rc != 0) {
-					D_ERROR("Test returns %d\n", rc);
+					print_error("Test returns %d\n", rc);
 					goto out_ev;
 				}
 				if (ev_flag) {
-					D_ERROR("Event should be inflight\n");
+					print_error("EV Should be inflight\n");
 					rc = -1;
 					goto out_ev;
 				}
@@ -825,26 +835,26 @@ eq_test_6()
 		}
 	}
 
-	D_ERROR("Poll EQs with 1/2 the events\n");
+	print_message("Poll EQs with 1/2 the events\n");
 	for (i = 0; i < EQ_COUNT; i++) {
 		rc = daos_eq_poll(eqh[i], 1, 10, EQT_EV_COUNT/2, eps[i]);
 		if (rc != 0) {
-			D_ERROR("Expect to poll zero event: %d\n", rc);
+			print_error("Expect to poll zero event: %d\n", rc);
 			rc = -1;
 			goto out_ev;
 		}
 	}
 
-	D_ERROR("Complete events\n");
+	print_message("Complete events\n");
 	for (j = 0; j < EQT_EV_COUNT/2; j++)
 		for (i = 0; i < EQ_COUNT; i++)
 			daos_event_complete(events[i][j], 0);
 
-	D_ERROR("Poll EQ with completion events\n");
+	print_message("Poll EQ with completion events\n");
 	for (i = 0; i < EQ_COUNT; i++) {
 		rc = daos_eq_poll(eqh[i], 0, -1, EQT_EV_COUNT, eps[i]);
 		if (rc != EQT_EV_COUNT/2) {
-			D_ERROR("Expect to poll %d event: %d\n",
+			print_error("Expect to poll %d event: %d\n",
 				EQT_EV_COUNT, rc);
 			rc = -1;
 			goto out_ev;
@@ -880,7 +890,7 @@ eq_test_7()
 
 	DAOS_TEST_ENTRY("7", "Events with no EQ");
 
-	D_ERROR("Initialize & launch parent and child events.\n");
+	print_message("Initialize & launch parent and child events.\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		events[i] = malloc(sizeof(*events[i]));
 		if (events[i] == NULL)
@@ -905,31 +915,31 @@ eq_test_7()
 			goto out_free;
 	}
 
-	D_ERROR("Test events\n");
+	print_message("Test events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		rc = daos_event_test(events[i], DAOS_EQ_NOWAIT, &ev_flag);
 		if (rc != 0) {
-			D_ERROR("Test returns %d\n", rc);
+			print_error("Test returns %d\n", rc);
 			goto out_free;
 		}
 		if (ev_flag) {
-			D_ERROR("Event should be inflight\n");
+			print_error("Event should be inflight\n");
 			rc = -1;
 			goto out_free;
 		}
 	}
 
-	D_ERROR("Complete Child & Parent events\n");
+	print_message("Complete Child & Parent events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		daos_event_complete(child_events[i], 0);
 
 		rc = daos_event_test(events[i], DAOS_EQ_NOWAIT, &ev_flag);
 		if (rc != 0) {
-			D_ERROR("Test returns %d\n", rc);
+			print_error("Test returns %d\n", rc);
 			goto out_free;
 		}
 		if (ev_flag) {
-			D_ERROR("Parent Event should still be in inflight\n");
+			print_error("Parent Event should still be inflight\n");
 			rc = -1;
 			goto out_free;
 		}
@@ -939,11 +949,11 @@ eq_test_7()
 		/** Test completion */
 		rc = daos_event_test(events[i], DAOS_EQ_NOWAIT, &ev_flag);
 		if (rc != 0) {
-			D_ERROR("Test returns %d\n", rc);
+			print_error("Test returns %d\n", rc);
 			goto out_free;
 		}
 		if (!ev_flag) {
-			D_ERROR("Event should be completed\n");
+			print_error("Event should be completed\n");
 			rc = -1;
 			goto out_free;
 		}
@@ -969,57 +979,89 @@ out_free:
 int
 main(int argc, char **argv)
 {
+	int		test_fail = 0;
 	int		rc;
 
+	setenv("DAOS_SINGLETON_CLI", "1", 1);
+	setenv("OFI_INTERFACE", "lo", 1);
+
 	rc = daos_debug_init(NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		print_error("Failed daos_debug_init: %d\n", rc);
 		return rc;
+	}
+
+	rc = daos_hhash_init();
+	if (rc != 0) {
+		print_error("Failed daos_hhash_init: %d\n", rc);
+		goto out_debug;
+	}
 
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
-		D_ERROR("Failed to initailiz DAOS/event library: %d\n", rc);
-		goto out_debug;
+		print_error("Failed daos_eq_lib_init: %d\n", rc);
+		goto out_hhash;
 	}
 
 	rc = daos_eq_create(&my_eqh);
 	if (rc != 0) {
-		D_ERROR("Failed to create EQ: %d\n", rc);
+		print_error("Failed daos_eq_create: %d\n", rc);
 		goto out_lib;
 	}
 
 	rc = eq_test_1();
-	if (rc != 0)
-		goto failed;
+	if (rc != 0) {
+		print_error("EQ TEST 1 failed: %d\n", rc);
+		test_fail++;
+	}
 
 	rc = eq_test_2();
-	if (rc != 0)
-		goto failed;
+	if (rc != 0) {
+		print_error("EQ TEST 2 failed: %d\n", rc);
+		test_fail++;
+	}
 
 	rc = eq_test_3();
-	if (rc != 0)
-		goto failed;
+	if (rc != 0) {
+		print_error("EQ TEST 3 failed: %d\n", rc);
+		test_fail++;
+	}
 
 	rc = eq_test_4();
-	if (rc != 0)
-		goto failed;
+	if (rc != 0) {
+		print_error("EQ TEST 4 failed: %d\n", rc);
+		test_fail++;
+	}
 
 	rc = eq_test_5();
-	if (rc != 0)
-		goto failed;
+	if (rc != 0) {
+		print_error("EQ TEST 5 failed: %d\n", rc);
+		test_fail++;
+	}
 
 	rc = eq_test_6();
-	if (rc != 0)
-		goto failed;
+	if (rc != 0) {
+		print_error("EQ TEST 6 failed: %d\n", rc);
+		test_fail++;
+	}
 
 	rc = eq_test_7();
-	if (rc != 0)
-		goto failed;
+	if (rc != 0) {
+		print_error("EQ TEST 7 failed: %d\n", rc);
+		test_fail++;
+	}
 
-failed:
+	if (test_fail)
+		print_error("ERROR, %d test(s) failed\n", test_fail);
+	else
+		print_message("SUCCESS, all tests passed\n");
+
 	daos_eq_destroy(my_eqh, 1);
 out_lib:
 	daos_eq_lib_fini();
+out_hhash:
+	daos_hhash_fini();
 out_debug:
 	daos_debug_fini();
-	return rc;
+	return test_fail;
 }

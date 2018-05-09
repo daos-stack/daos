@@ -16,7 +16,7 @@ def scons():
     daos_build.test(denv, 'lru', 'lru.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
     daos_build.test(denv, 'sched', 'sched.c',
-                    LIBS=['daos_common', 'gurt', 'cart'])
+                    LIBS=['daos_common', 'gurt', 'cart', 'cmocka'])
     daos_build.test(denv, 'abt_perf', 'abt_perf.c',
                     LIBS=['daos_common', 'gurt', 'abt'])
 
