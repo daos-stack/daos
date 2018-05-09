@@ -234,9 +234,12 @@ insert_test(struct ioreq *req, uint64_t timeout)
 	assert_int_equal(rc, 0);
 }
 
-void insert_wait(struct ioreq *req)
+void
+insert_wait(struct ioreq *req)
 {
 	insert_test(req, DAOS_EQ_WAIT);
+	if (req->arg->async)
+		assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 }
 
 void
@@ -1663,6 +1666,77 @@ fetch_replica_unavail(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+update_overlapped_recxs(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	daos_epoch_t	 epoch = 2;
+	daos_iov_t	 dkey;
+	daos_sg_list_t	 sgl;
+	daos_iov_t	 sg_iov;
+	daos_iod_t	 iod;
+	daos_recx_t	 recx[128];
+	char		 buf[STACK_BUF_LEN];
+	int		 i;
+	int		 rc;
+
+	/** open object */
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	/** init I/O descriptor */
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_size	= 1;
+	iod.iod_recxs	= recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	/** update record */
+	print_message("writing with overlapped recxs should get -DER_INVAL\n");
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= 3;
+	recx[1].rx_idx	= 4;
+	recx[1].rx_nr	= 1;
+	recx[2].rx_idx	= 3;
+	recx[2].rx_nr	= 2;
+	iod.iod_nr	= 3;
+	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	for (i = 0; i < 128; i++) {
+		if (i != 111) {
+			recx[i].rx_idx = i * 2;
+			recx[i].rx_nr  = 2;
+		} else {
+			recx[i].rx_idx = (i + 1) * 2;
+			recx[i].rx_nr  = 1;
+		}
+	}
+	iod.iod_nr	= 128;
+	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("all good\n");
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -1718,6 +1792,8 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO27: shard target idx change cause retry", tgt_idx_change_retry,
 	  async_enable, test_case_teardown},
 	{ "IO28: fetch when all replicas unavailable", fetch_replica_unavail,
+	  async_enable, test_case_teardown},
+	{ "IO29: update with overlapped recxs", update_overlapped_recxs,
 	  async_enable, test_case_teardown},
 };
 

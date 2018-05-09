@@ -247,47 +247,6 @@ out:
 	return ret;
 }
 
-static inline bool
-obj_shard_io_check(unsigned int nr, daos_iod_t *iods)
-{
-	int i;
-
-	for (i = 0; i < nr; i++) {
-		if (iods[i].iod_name.iov_buf == NULL)
-			/* XXX checksum & eprs should not be mandatory */
-			return false;
-
-		switch (iods[i].iod_type) {
-		default:
-			D_ERROR("Unknown iod type=%d\n", iods[i].iod_type);
-			return false;
-
-		case DAOS_IOD_NONE:
-			if (!iods[i].iod_recxs && iods[i].iod_nr == 0)
-				continue;
-
-			D_ERROR("IOD_NONE ignores value iod_nr=%d, recx=%p\n",
-				 iods[i].iod_nr, iods[i].iod_recxs);
-			return false;
-
-		case DAOS_IOD_ARRAY:
-			if (iods[i].iod_recxs)
-				continue;
-
-			D_ERROR("IOD_ARRAY should have valid iod_recxs\n");
-			return false;
-
-		case DAOS_IOD_SINGLE:
-			if (iods[i].iod_nr == 1)
-				continue;
-
-			D_ERROR("IOD_SINGLE iod_nr %d != 1\n", iods[i].iod_nr);
-			return false;
-		}
-	}
-	return true;
-}
-
 /**
  * XXX: Only use dkey to distribute the data among targets for
  * now, and eventually, it should use dkey + akey, but then
@@ -408,12 +367,6 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	int			rc;
 
 	tse_task_stack_pop_data(task, &dkey_hash, sizeof(dkey_hash));
-
-	/** sanity check input parameters */
-	if (dkey == NULL || dkey->iov_buf == NULL || nr == 0 ||
-	    !obj_shard_io_check(nr, iods))
-		D_GOTO(out_task, rc = -DER_INVAL);
-
 	obj_shard_addref(shard);
 	rc = dc_cont_hdl2uuid(shard->do_co_hdl, &cont_hdl_uuid, &cont_uuid);
 	if (rc != 0)
@@ -523,7 +476,6 @@ out_pool:
 	dc_pool_put(pool);
 out_obj:
 	obj_shard_decref(shard);
-out_task:
 	tse_task_complete(task, rc);
 	return rc;
 }

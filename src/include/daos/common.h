@@ -338,4 +338,12 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define daos_hhash_link_empty(hlink)		d_hhash_link_empty(hlink)
 #define daos_hhash_link_key(hlink, key)		d_hhash_link_key(hlink, key)
 
+/* daos_recx_t overlap detector */
+#define DAOS_RECX_OVERLAP(recx_1, recx_2)				\
+	(((recx_1).rx_idx < (recx_2).rx_idx + (recx_2).rx_nr) &&	\
+	 ((recx_2).rx_idx < (recx_1).rx_idx + (recx_1).rx_nr))
+#define DAOS_RECX_PTR_OVERLAP(recx_1, recx_2)				\
+	(((recx_1)->rx_idx < (recx_2)->rx_idx + (recx_2)->rx_nr) &&	\
+	 ((recx_2)->rx_idx < (recx_1)->rx_idx + (recx_1)->rx_nr))
+
 #endif /* __DAOS_COMMON_H__ */

@@ -107,8 +107,18 @@ register_dbtree_classes(void)
 	rc = dbtree_class_register(DBTREE_CLASS_EC,
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_ec_ops);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
+		return rc;
+	}
+
+	rc = dbtree_class_register(DBTREE_CLASS_RECX, BTR_FEAT_DIRECT_KEY,
+				   &dbtree_recx_ops);
+	/* DBTREE_CLASS_RECX possibly be registered by client-stack also */
+	if (rc == -DER_EXIST)
+		rc = 0;
+	if (rc != 0)
+		D_ERROR("failed to register DBTREE_CLASS_RECX: %d\n", rc);
 
 	return rc;
 }

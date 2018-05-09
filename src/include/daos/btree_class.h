@@ -97,4 +97,10 @@ extern btr_ops_t dbtree_kv_ops;
 #define DBTREE_CLASS_IV (DBTREE_DSM_BEGIN + 4)
 extern btr_ops_t dbtree_iv_ops;
 
+/**
+ * Using daos_recx_t type direct key, no value.
+ */
+#define DBTREE_CLASS_RECX (DBTREE_DSM_BEGIN + 5)
+extern btr_ops_t dbtree_recx_ops;
+
 #endif /* __DAOS_SRV_BTREE_CLASS_H__ */

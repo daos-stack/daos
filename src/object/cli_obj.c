@@ -913,6 +913,105 @@ obj_comp_cb(tse_task_t *task, void *data)
 	return 0;
 }
 
+static bool
+obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
+{
+	struct umem_attr	uma;
+	daos_handle_t		bth;
+	daos_iov_t		key;
+	int			idx;
+	bool			overlapped;
+	struct btr_root		broot;
+	int			rc;
+
+	if (nr == 0 || recxs == NULL)
+		return false;
+	/* only check recx overlap for update */
+	if (!update || nr == 1)
+		return true;
+
+	switch (nr) {
+	case 2:
+		overlapped = DAOS_RECX_PTR_OVERLAP(&recxs[0], &recxs[1]);
+		break;
+
+	case 3:
+		overlapped = DAOS_RECX_PTR_OVERLAP(&recxs[0], &recxs[1]) ||
+			     DAOS_RECX_PTR_OVERLAP(&recxs[0], &recxs[2]) ||
+			     DAOS_RECX_PTR_OVERLAP(&recxs[1], &recxs[2]);
+		break;
+
+	default:
+		/* using a btree to detect overlap when nr >= 4 */
+		memset(&uma, 0, sizeof(uma));
+		uma.uma_id = UMEM_CLASS_VMEM;
+		rc = dbtree_create_inplace(DBTREE_CLASS_RECX,
+					   BTR_FEAT_DIRECT_KEY, 8,
+					   &uma, &broot, &bth);
+		if (rc != 0) {
+			D_ERROR("failed to create recx tree: %d\n", rc);
+			return false;
+		}
+
+		overlapped = false;
+		for (idx = 0; idx < nr; idx++) {
+			daos_iov_set(&key, &recxs[idx], sizeof(daos_recx_t));
+			rc = dbtree_update(bth, &key, NULL);
+			if (rc != 0) {
+				overlapped = true;
+				break;
+			}
+		}
+		dbtree_destroy(bth);
+		break;
+	};
+
+	return !overlapped;
+}
+
+static bool
+obj_iod_valid(unsigned int nr, daos_iod_t *iods, bool update)
+{
+	int i;
+
+	for (i = 0; i < nr; i++) {
+		if (iods[i].iod_name.iov_buf == NULL)
+			/* XXX checksum & eprs should not be mandatory */
+			return false;
+
+		switch (iods[i].iod_type) {
+		default:
+			D_ERROR("Unknown iod type=%d\n", iods[i].iod_type);
+			return false;
+
+		case DAOS_IOD_NONE:
+			if (!iods[i].iod_recxs && iods[i].iod_nr == 0)
+				continue;
+
+			D_ERROR("IOD_NONE ignores value iod_nr=%d, recx=%p\n",
+				 iods[i].iod_nr, iods[i].iod_recxs);
+			return false;
+
+		case DAOS_IOD_ARRAY:
+			if (obj_recx_valid(iods[i].iod_nr, iods[i].iod_recxs,
+					   update)) {
+				continue;
+			} else {
+				D_ERROR("IOD_ARRAY should have valid recxs\n");
+				return false;
+			}
+
+		case DAOS_IOD_SINGLE:
+			if (iods[i].iod_nr == 1)
+				continue;
+
+			D_ERROR("IOD_SINGLE iod_nr %d != 1\n", iods[i].iod_nr);
+			return false;
+		}
+	}
+	return true;
+}
+
 int
 dc_obj_fetch(tse_task_t *task)
 {
@@ -924,6 +1023,10 @@ dc_obj_fetch(tse_task_t *task)
 	unsigned int		 map_ver;
 	uint64_t		 dkey_hash;
 	int			 rc;
+
+	if (args->dkey == NULL || args->dkey->iov_buf == NULL || args->nr == 0
+	    || !obj_iod_valid(args->nr, args->iods, false))
+		D_GOTO(out_task, rc = -DER_INVAL);
 
 	obj = obj_hdl2ptr(args->oh);
 	if (obj == NULL)
@@ -993,6 +1096,7 @@ shard_update_task(tse_task_t *task)
 	}
 	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE)) {
 		shard_tmp = daos_fail_value_get();
+		/* to trigger retry on all other shards */
 		if (args->auxi.shard != shard_tmp) {
 			D_INFO("complete shard %d update as -DER_TIMEDOUT.\n",
 				args->auxi.shard);
@@ -1125,6 +1229,10 @@ dc_obj_update(tse_task_t *task)
 	uint64_t		dkey_hash;
 	int			i;
 	int			rc;
+
+	if (args->dkey == NULL || args->dkey->iov_buf == NULL || args->nr == 0
+	    || !obj_iod_valid(args->nr, args->iods, true))
+		D_GOTO(out_task, rc = -DER_INVAL);
 
 	obj = obj_hdl2ptr(args->oh);
 	if (obj == NULL) {
