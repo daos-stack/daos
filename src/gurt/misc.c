@@ -39,6 +39,7 @@
  * This file is part of CaRT. It implements some miscellaneous functions which
  * not belong to other parts.
  */
+#define D_LOGFAC	DD_FAC(misc)
 
 #include <gurt/common.h>
 

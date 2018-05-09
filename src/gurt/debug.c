@@ -49,7 +49,6 @@ static int d_log_refcount;
 
 int d_misc_logfac;
 int d_mem_logfac;
-int d_null_logfac;
 
 /*
  * Debug bits for common logic paths, can only have up to 16 different bits.
@@ -376,16 +375,10 @@ d_log_sync_mask_helper(bool acquire_lock)
 	log_mask = getenv(D_LOG_MASK_ENV);
 	if (log_mask != NULL)
 		goto out;
-	log_mask = getenv(CRT_LOG_MASK_ENV);
-	if (log_mask != NULL)
-		D_PRINT_ERR(CRT_LOG_MASK_ENV " deprecated. Please use "
-			    D_LOG_MASK_ENV "\n");
 
 out:
 	if (log_mask != NULL)
 		d_log_setmasks(log_mask, -1);
-	else
-		D_PRINT_ERR(D_LOG_MASK_ENV " not set, using default mask.\n");
 
 	if (acquire_lock)
 		D_MUTEX_UNLOCK(&d_log_lock);
@@ -422,7 +415,8 @@ static inline int
 setup_clog_facnamemask(void)
 {
 	int rc;
-	/* add crt internally used the log facilities */
+
+	/* add gurt internally used log facilities */
 	rc = D_INIT_LOG_FAC(misc, "MISC", "misc");
 	if (rc != 0) {
 		D_PRINT_ERR("MISC log facility failed to init; rc=%d\n", rc);
@@ -432,12 +426,6 @@ setup_clog_facnamemask(void)
 	rc = D_INIT_LOG_FAC(mem, "MEM", "memory");
 	if (rc != 0) {
 		D_PRINT_ERR("MEM log facility failed to init; rc=%d\n", rc);
-		return rc;
-	}
-
-	rc = D_INIT_LOG_FAC(null, "NULL", "null");
-	if (rc != 0) {
-		D_PRINT_ERR("NULL log facility failed to init; rc=%d\n", rc);
 		return rc;
 	}
 

@@ -53,105 +53,26 @@ DECLARE_FAC(iv);
 DECLARE_FAC(ctl);
 
 #define D_INIT_LOG_FAC(name, lname, idp)	\
-	d_init_log_facility(idp, name, lname)
+	d_init_log_facility(idp, name, lname);
 
-struct cart_debug_fac {
-	/** name of the facility */
-	char		*df_name;
-	char		*df_lname;
-	/** pointer to the facility ID */
-	int		*df_idp;
-	/** facility is enabled */
-	int		df_enabled;
-	size_t		df_name_size;
-	size_t		df_lname_size;
-};
+#define FOREACH_CART_LOG_FAC(ACTION)			\
+	ACTION("RPC", "rpc", d_rpc_logfac)		\
+	ACTION("BULK", "bulk", d_bulk_logfac)		\
+	ACTION("CORPC", "corpc", d_corpc_logfac)	\
+	ACTION("GRP", "group", d_grp_logfac)		\
+	ACTION("LM", "livenessmap", d_lm_logfac)	\
+	ACTION("HG", "mercury", d_hg_logfac)		\
+	ACTION("PMIX", "pmix", d_pmix_logfac)		\
+	ACTION("ST", "self_test", d_self_test_logfac)	\
+	ACTION("IV", "iv", d_iv_logfac)
 
-#define CART_FAC_DICT_ENTRY(name, lname, idp, enabled)		\
-	{ .df_name = name, .df_lname = lname, .df_idp = idp,	\
-	  .df_enabled = enabled, .df_name_size = sizeof(name),	\
-	  .df_lname_size = sizeof(lname) }
-
-/** dictionary for all facilities */
-static struct cart_debug_fac debug_fac_dict[] = {
-	CART_FAC_DICT_ENTRY("RPC", "rpc", &d_rpc_logfac, 1),
-	CART_FAC_DICT_ENTRY("BULK", "bulk", &d_bulk_logfac, 1),
-	CART_FAC_DICT_ENTRY("CORPC", "corpc", &d_corpc_logfac, 1),
-	CART_FAC_DICT_ENTRY("GRP", "group", &d_grp_logfac, 1),
-	CART_FAC_DICT_ENTRY("LM", "livenessmap", &d_lm_logfac, 1),
-	CART_FAC_DICT_ENTRY("HG", "mercury", &d_hg_logfac, 1),
-	CART_FAC_DICT_ENTRY("PMIX", "pmix", &d_pmix_logfac, 1),
-	CART_FAC_DICT_ENTRY("ST", "self_test", &d_self_test_logfac, 1),
-	CART_FAC_DICT_ENTRY("IV", "iv", &d_iv_logfac, 1),
-};
-
-#define NUM_DBG_FAC_ENTRIES	ARRAY_SIZE(debug_fac_dict)
-/** Load enabled debug facilities from the environment variable. */
-static void
-debug_fac_load_env(void)
-{
-	char		      *fac_env;
-	char		      *fac_str;
-	char		      *cur;
-	int		      i;
-	struct cart_debug_fac *d;
-
-	fac_env = getenv(DD_FAC_ENV);
-	if (fac_env == NULL)
-		return;
-
-	D_STRNDUP(fac_str, fac_env, CART_FAC_MAX_LEN);
-	if (fac_str == NULL) {
-		D_ERROR("D_STRNDUP of fac mask failed");
-		return;
-	}
-
-	/* Disable all facilities. */
-	for (i = 0; i < NUM_DBG_FAC_ENTRIES; i++)
-		debug_fac_dict[i].df_enabled = 0;
-
-	cur = strtok(fac_str, DD_SEP);
-	while (cur != NULL) {
-		for (i = 0; i < NUM_DBG_FAC_ENTRIES; i++) {
-			d = &debug_fac_dict[i];
-			if (d->df_name != NULL &&
-			    strncasecmp(cur, d->df_name, d->df_name_size)
-			    == 0) {
-				d->df_enabled = 1;
-				break;
-			} else if (d->df_lname != NULL &&
-				   strncasecmp(cur, d->df_lname,
-					       d->df_lname_size) == 0) {
-				d->df_enabled = 1;
-				break;
-			} else if (strncasecmp(cur, DD_FAC_ALL,
-					       strlen(DD_FAC_ALL)) == 0) {
-				d->df_enabled = 1;
-			}
-		}
-		cur = strtok(NULL, DD_SEP);
-	}
-	D_FREE(fac_str);
-}
+#define CART_SETUP_FAC(name, lname, idp)		\
+	D_INIT_LOG_FAC(name, lname, &idp)
 
 int
 crt_setup_log_fac(void)
 {
-	int		      i;
-	struct cart_debug_fac *d;
-
-	debug_fac_load_env();
-	for (i = 0; i < NUM_DBG_FAC_ENTRIES; i++) {
-		d = &debug_fac_dict[i];
-		if (!d->df_enabled) {
-			/* redirect disabled facility to NULL */
-			*(d->df_idp) = d_null_logfac;
-			continue;
-		}
-
-		D_INIT_LOG_FAC(d->df_name, d->df_lname, d->df_idp);
-	}
-
+	FOREACH_CART_LOG_FAC(CART_SETUP_FAC)
 	d_log_sync_mask();
 
 	return 0;

@@ -129,7 +129,7 @@ struct dlog_fac {
 	char	*fac_aname;	/**< abbreviated name of this facility */
 	char	*fac_lname;	/**< optional long name of this facility */
 	int	 fac_mask;	/**< log level for this facility */
-	bool	 is_nullfac;	/**< special case facility, not logged */
+	bool	 is_enabled;	/**< true if facility will be logged */
 };
 
 /** dlog global state */
@@ -231,6 +231,15 @@ static inline int d_log_check(int flags)
 	int msk;
 
 	if (!d_log_xst.tag) /* Log isn't open */
+		return 0;
+
+	/*
+	 * Immediately skip if facility is disabled and the log level is less
+	 * severe than DLOG_ERR. Otherwise, the mask will be checked again
+	 * below. Essentially all error messages should be logged from all
+	 * facilities, except if the user specifies a mask > DLOG_ERR.
+	 */
+	if (!d_log_xst.dlog_facs[fac].is_enabled && lvl < DLOG_ERR)
 		return 0;
 
 	/* Use default facility if it is malformed */

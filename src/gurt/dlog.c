@@ -205,7 +205,7 @@ static int clog_setnfac(int n)
 		nfacs[lcv].fac_aname =
 		    (lcv == 0) ? (char *) default_fac0name : NULL;
 		nfacs[lcv].fac_lname = NULL;
-		nfacs[lcv].is_nullfac = false;
+		nfacs[lcv].is_enabled = true; /* enable all facs by default */
 	}
 	/* install */
 	if (d_log_xst.dlog_facs)
@@ -334,13 +334,6 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 */
 	if (fac >= d_log_xst.fac_cnt)
 		fac = 0;
-
-	/*
-	 * Do not log any messages that have been redirected to the null
-	 * facility.
-	 */
-	if (d_log_xst.dlog_facs[fac].is_nullfac)
-		return;
 
 	/* Assumes stderr mask isn't used for debug messages */
 	if (mst.stderr_mask != 0 && lvl >= mst.stderr_mask)
@@ -623,6 +616,37 @@ void d_log_close(void)
 }
 
 /*
+ * fac_is_enabled: parse DD_SUBSYS to see if facility name that has been called
+ * to be registered is present in the environment variable, if present return
+ * true, false otherwise.
+ * DD_SUBSYS="all" will enable all facilities
+ * if DD_SUBSYS env does not exist, then treat it as "all" (enable all facs)
+ */
+bool d_logfac_is_enabled(const char *fac_name)
+{
+	char *ddsubsys_env;
+	char *ddsubsys_fac;
+	int len = strlen(fac_name);
+
+	/* read env DD_SUBSYS to enable corresponding facilities */
+	ddsubsys_env = getenv(DD_FAC_ENV);
+	if (ddsubsys_env == NULL)
+		return true; /* enable all facilities by default */
+
+	if (strncasecmp(ddsubsys_env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0)
+		return true; /* enable all facilities with DD_SUBSYS=all */
+
+	ddsubsys_fac = strcasestr(ddsubsys_env, fac_name);
+	if (ddsubsys_fac == NULL)
+		return false;
+
+	if (ddsubsys_fac[len] != '\0' && ddsubsys_fac[len] != ',')
+		return false;
+
+	return true;
+}
+
+/*
  * d_log_namefacility: assign a name to a facility
  * return 0 on success, -1 on error (malloc problem).
  */
@@ -630,7 +654,6 @@ int d_log_namefacility(int facility, const char *aname, const char *lname)
 {
 	int rv;
 	char *n, *nl;
-	char *null_fac = "NULL";
 
 	/* not open? */
 	if (!d_log_xst.tag)
@@ -663,11 +686,12 @@ int d_log_namefacility(int facility, const char *aname, const char *lname)
 		free(d_log_xst.dlog_facs[facility].fac_lname);
 	d_log_xst.dlog_facs[facility].fac_aname = n;
 	d_log_xst.dlog_facs[facility].fac_lname = nl;
+	/* is facility enabled? */
+	if (!d_logfac_is_enabled(aname) && !d_logfac_is_enabled(lname))
+		d_log_xst.dlog_facs[facility].is_enabled = false;
+	else
+		d_log_xst.dlog_facs[facility].is_enabled = true;
 
-	/* special case for null facility */
-	if (strncasecmp(d_log_xst.dlog_facs[facility].fac_aname, null_fac,
-			strlen(null_fac)) == 0)
-		d_log_xst.dlog_facs[facility].is_nullfac = true;
 
 	rv = 0;		/* now we have success */
 done:

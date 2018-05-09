@@ -38,6 +38,7 @@
 /**
  * This file is part of cart, it implements the hash table functions.
  */
+#define D_LOGFAC	DD_FAC(mem)
 
 #include <pthread.h>
 #include <gurt/common.h>

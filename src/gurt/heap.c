@@ -38,6 +38,7 @@
 /**
  * This file is part of gurt, it implements the gurt bin heap functions.
  */
+#define D_LOGFAC	DD_FAC(mem)
 
 #include <pthread.h>
 #include <gurt/common.h>
