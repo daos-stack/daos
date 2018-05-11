@@ -29,9 +29,6 @@ import sys
 import fnmatch
 import subprocess
 
-sys.path.append('./util')
-import ServerUtils
-
 def filelist(directory):
     """
     Create a list of test files contained in the provided path.
@@ -63,6 +60,13 @@ def printhelp():
     Print a list of test categories.
     """
     print("Tests are launched by specifying a category.  One of:\n")
+    print("\tbadconnect --run pool connect tests that pass NULL ptrs, etc.  ")
+    print("\tbadevict --run pool client evict tests that pass "
+          "NULL ptrs, etc.  ")
+    print("\tbadexclude --run pool target exclude tests that "
+          "pass NULL ptrs, etc.  ")
+    print("\tbadparam --run tests that pass NULL ptrs, etc.  ")
+    print("\tbadquery --run pool query tests that pass NULL ptrs, etc.  ")
     print("\tmulticreate --run tests that create multiple pools at once ")
     print("\tmultitarget --run tests that create pools over multiple servers")
     print("\tpool --run all pool related tests")

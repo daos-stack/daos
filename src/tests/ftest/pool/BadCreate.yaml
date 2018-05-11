@@ -1,0 +1,93 @@
+# if something is commented out it is because that test causes problems but it
+# should be addedded back when daos code is fixed
+server:
+   server_group: daos_server
+files:
+   local:
+      hostfile: /install/tmp/hostfile1
+createtests:
+   modes: !mux
+      badmode1:
+          mode:
+             - 0
+             - FAIL
+      badmode2:
+          mode:
+             - 111093499399299949949949949
+             - FAIL
+      goodmode:
+          mode:
+             - 473
+             - PASS
+   uids: !mux
+      baduid:
+         uid:
+             - 99999999
+             - FAIL
+      gooduid:
+         uid:
+             - 11374638
+             - PASS
+   gids: !mux
+      badgid:
+         gid:
+             - 99999999
+             - FAIL
+      goodgid:
+         gid:
+             - 11374638
+             - PASS
+   setnames: !mux
+      badstring:
+          setname:
+             - complete_rubbish
+             - FAIL
+      nullptr:
+          setname:
+             - NULL
+             - FAIL
+      goodset:
+          setname:
+             - daos_server
+             - PASS
+   target: !mux
+      #nullptr:
+      #   rankptr:
+      #       - NULL
+      #       - FAIL
+      goodtgt:
+         rankptr:
+             - VALID
+             - PASS
+   device: !mux
+      nullptr:
+         devptr:
+             - NULL
+             - PASS
+      #badstr:
+      #   devptr:
+      #       - complete_rubbish
+      #       - PASS
+   psize: !mux
+      toobig:
+         size:
+             - 999999999999999999999999
+             - FAIL
+      # broken now
+      #toosmall:
+      #   size:
+      #       - 1
+      #       - FAIL
+      justright:
+         size:
+             - 1073741824
+             - PASS
+   svc: !mux
+      #nullptr:
+      #   rankptr:
+      #       - NULL
+      #       - FAIL
+      goodptr:
+         rankptr:
+             - VALID
+             - PASS

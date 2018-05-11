@@ -164,6 +164,7 @@ class DaosPool(object):
 
     def __init__(self, context):
         """ setup the python pool object, not the real pool. """
+        self.attached = 0
         self.context = context
         self.uuid = (ctypes.c_ubyte * 1)()
         self.group = ctypes.create_string_buffer(b"not set")
@@ -180,7 +181,10 @@ class DaosPool(object):
         c_uid = ctypes.c_uint(uid)
         c_gid = ctypes.c_uint(gid)
         c_size = ctypes.c_longlong(size)
-        self.group = ctypes.create_string_buffer(group)
+        if group is not None:
+            self.group = ctypes.create_string_buffer(group)
+        else:
+            self.group = None
         self.uuid = (ctypes.c_ubyte * 16)()
         rank = ctypes.c_uint(1)
         rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
@@ -188,27 +192,29 @@ class DaosPool(object):
         self.svc = RankList(rl_ranks, 1)
 
         # assuming for now target list is a server rank list
-        tlist = DaosPool.__pylist_to_array(target_list)
-        c_tgts = RankList(tlist, len(tlist))
-
-        target = ctypes.c_uint(1)
-        tlist = ctypes.POINTER(ctypes.c_uint)(target)
-        c_tgts = RankList(tlist, 1)
+        if target_list is not None:
+            tlist = DaosPool.__pylist_to_array(target_list)
+            c_tgts = RankList(tlist, len(tlist))
+            tgt_ptr = ctypes.byref(c_tgts)
+        else:
+            tgt_ptr = None
 
         func = self.context.get_function('create-pool')
 
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func == None:
-            rc = func(c_mode, c_uid, c_gid, self.group, ctypes.byref(c_tgts),
+            rc = func(c_mode, c_uid, c_gid, self.group, tgt_ptr,
                       c_whatever, c_size, ctypes.byref(self.svc),
                       self.uuid, None)
             if rc != 0:
                 raise ValueError("Pool create returned non-zero. RC: {0}"
                                  .format(rc))
+            else:
+                self.attached = 1
         else:
             event = DaosEvent()
-            params = [c_mode, c_uid, c_gid, self.group, ctypes.byref(c_tgts),
+            params = [c_mode, c_uid, c_gid, self.group, tgt_ptr,
                       c_whatever, c_size,
                       ctypes.byref(self.svc), self.uuid, event]
             t = threading.Thread(target=AsyncWorker1,
@@ -408,7 +414,7 @@ class DaosPool(object):
 
     def destroy(self, force, cb_func=None):
 
-        if not len(self.uuid) == 16:
+        if not len(self.uuid) == 16 or self.attached == 0:
             raise ValueError("No existing UUID for pool.")
 
         c_force = ctypes.c_uint(force)
@@ -419,6 +425,8 @@ class DaosPool(object):
             if rc != 0:
                 raise ValueError("Pool destroy returned non-zero. RC: {0}"
                                  .format(rc))
+            else:
+                self.attached = 0
         else:
             event = DaosEvent()
             params = [self.uuid, self.group, c_force, event]

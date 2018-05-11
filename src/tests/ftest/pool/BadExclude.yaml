@@ -1,0 +1,60 @@
+server:
+   server_group: scott_server
+files:
+   local:
+      hostfile: /install/tmp/hostfile6
+excludetests:
+   tgtlist: !mux
+     goodlist:
+          ranklist:
+             - 3
+             - PASS
+     #badlist:
+     #     ranklist:
+     #        - 44
+     #        - FAIL
+     #nulllist:
+     #     ranklist:
+     #        - NULL
+     #        - FAIL
+   svrlist: !mux
+     goodlist:
+          ranklist:
+             - VALID
+             - PASS
+     #badlist:
+     #     ranklist:
+     #        - NULL
+     #        - FAIL
+   connectsetnames: !mux
+     goodname:
+          setname:
+             - scott_server
+             - PASS
+     #badname:
+     #     setname:
+     #        - NULL
+     #        - FAIL
+   UUID: !mux
+     gooduuid:
+          uuid:
+             - VALID
+             - PASS
+     #nulluuid:
+     #     uuid:
+     #        - NULL
+     #        - FAIL
+     #baduuid:
+     #     uuid:
+     #        - CRAP
+     #        - FAIL
+   createmode:
+     mode: 511
+   createuid:
+     uid: 11374638
+   creategid:
+     gid: 11374638
+   createset:
+     setname: scott_server
+   createsize:
+     size: 1073741824
