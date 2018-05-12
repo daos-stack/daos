@@ -1332,9 +1332,11 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	/* set state ahead to avoid race with completion cb */
 	rpc_priv->crp_state = RPC_STATE_REQ_SENT;
 	rc = crt_hg_req_send(rpc_priv);
-	if (rc != 0)
+	if (rc != DER_SUCCESS)
 		D_ERROR("crt_hg_req_send failed, rc: %d, rpc_priv: %p,"
 			"opc: %#x.\n", rc, rpc_priv, req->cr_opc);
+	else
+		rpc_priv->crp_on_wire = 1;
 
 out:
 	if (rc != 0)

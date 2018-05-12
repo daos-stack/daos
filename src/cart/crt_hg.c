@@ -1238,19 +1238,19 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 
 	hg_ret = HG_Forward(rpc_priv->crp_hg_hdl, crt_hg_req_send_cb, rpc_priv,
 			    &rpc_priv->crp_pub.cr_input);
+	if (hg_ret != HG_SUCCESS)
+		D_ERROR("HG_Forward failed, hg_ret: %d, prc_priv: %p, "
+			"opc: %#x.\n", hg_ret, rpc_priv,
+			rpc_priv->crp_pub.cr_opc);
+	else
+		D_DEBUG(DB_NET, "rpc_priv %p sent.\n", rpc_priv);
+
 	if (hg_ret == HG_NA_ERROR) {
 		rc = -DER_UNREACH;
 		crt_req_force_timeout(rpc_priv);
 	} else if (hg_ret != HG_SUCCESS) {
 		rc = -DER_HG;
 	}
-
-	if (rc != DER_SUCCESS)
-		D_ERROR("HG_Forward failed, hg_ret: %d, prc_priv: %p, "
-			"opc: %#x.\n", hg_ret, rpc_priv,
-			rpc_priv->crp_pub.cr_opc);
-	else
-		D_DEBUG(DB_NET, "rpc_priv %p sent.\n", rpc_priv);
 
 	return rc;
 }
@@ -1264,6 +1264,13 @@ crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv)
 	D_ASSERT(rpc_priv != NULL);
 	if (!rpc_priv->crp_hg_hdl)
 		D_GOTO(out, rc = -DER_INVAL);
+
+	if (rpc_priv->crp_state != RPC_STATE_REQ_SENT ||
+	    rpc_priv->crp_on_wire != 1) {
+		D_DEBUG(DB_NET, "rpc_priv->crp_state %#x, "
+			"RPC not sent, skipping.\n", rpc_priv->crp_state);
+		return rc;
+	}
 
 	hg_ret = HG_Cancel(rpc_priv->crp_hg_hdl);
 	if (hg_ret != HG_SUCCESS) {
