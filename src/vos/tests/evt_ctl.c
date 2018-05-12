@@ -114,7 +114,7 @@ ts_open_create(bool create, char *args)
 	} else {
 		D_PRINT("Open evtree %s\n", inplace ? " inplace" : "");
 		if (inplace)
-			rc = evt_open_inplace(&ts_root, &ts_uma, &ts_toh);
+			rc = evt_open_inplace(&ts_root, &ts_uma, NULL, &ts_toh);
 		else
 			rc = evt_open(ts_root_mmid, &ts_uma, &ts_toh);
 	}

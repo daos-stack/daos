@@ -47,6 +47,24 @@ extern umem_class_id_t vos_mem_class;
 #define VOS_POOL_HHASH_BITS 10 /* Upto 1024 pools */
 #define VOS_CONT_HHASH_BITS 20 /* Upto 1048576 containers */
 
+#define VOS_BLK_SHIFT		12	/* 4k */
+#define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
+#define VOS_BLOB_HDR_BLKS	1	/* block */
+
+static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
+{
+	D_ASSERT(bytes != 0);
+	return (bytes + VOS_BLK_SZ - 1) >> VOS_BLK_SHIFT;
+}
+
+static inline uint64_t vos_byte2blkoff(uint64_t bytes)
+{
+	D_ASSERT(bytes != 0);
+	D_ASSERTF((bytes >> VOS_BLK_SHIFT) > 0, ""DF_U64"\n", bytes);
+	D_ASSERTF(!(bytes & ((uint64_t)VOS_BLK_SZ - 1)), ""DF_U64"\n", bytes);
+	return bytes >> VOS_BLK_SHIFT;
+}
+
 /**
  * VOS cookie table
  * In-memory btree to hold all cookies and max epoch updated
@@ -75,8 +93,10 @@ struct vos_pool {
 	struct vos_cookie_table	vp_cookie_tab;
 	/** btr handle for the cookie table \a vp_cookie_tab */
 	daos_handle_t		vp_cookie_th;
-	/* I/O context */
+	/** I/O context */
 	struct eio_io_context	*vp_io_ctxt;
+	/** In-memory free space tracking for NVMe device */
+	struct vea_space_info	*vp_vea_info;
 };
 
 /**
@@ -97,6 +117,11 @@ struct vos_container {
 	struct vos_obj_table_df	*vc_otab_df;
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
+	/**
+	 * Corresponding in-memory block allocator hint for the
+	 * durable hint in vos_cont_df
+	 */
+	struct vea_hint_context	*vc_hint_ctxt;
 };
 
 struct vos_imem_strts {

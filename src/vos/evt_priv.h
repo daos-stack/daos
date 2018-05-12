@@ -89,6 +89,11 @@ struct evt_context {
 	struct umem_instance		 tc_umm;
 	/** pmemobj pool uuid */
 	uint64_t			 tc_pmempool_uuid;
+	/**
+	 * NVMe free space tracking information used for NVMe record
+	 * alloc & free
+	 */
+	void				*tc_blks_info;
 	/** embedded iterator */
 	struct evt_iterator		 tc_iter;
 	/** space to store tree search path */
@@ -125,9 +130,6 @@ enum evt_find_opc {
 	EVT_FIND_SAME,
 };
 
-int evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
-		   uint64_t feats, unsigned int order, struct umem_attr *uma,
-		   struct evt_context **tcx_pp);
 int evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp);
 
 #define EVT_HDL_ALIVE	0xbabecafe

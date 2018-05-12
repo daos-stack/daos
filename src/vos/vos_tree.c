@@ -421,7 +421,8 @@ kb_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	/* has subtree? */
 	if (krec->kr_btr.tr_order) {
-		rc = dbtree_open_inplace(&krec->kr_btr, &uma, &toh);
+		rc = dbtree_open_inplace_ex(&krec->kr_btr, &uma,
+					    tins->ti_blks_info, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open btree: %d\n", rc);
 		else
@@ -429,7 +430,8 @@ kb_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	}
 
 	if ((krec->kr_bmap & KREC_BF_EVT) && krec->kr_evt[0].tr_order) {
-		rc = evt_open_inplace(&krec->kr_evt[0], &uma, &toh);
+		rc = evt_open_inplace(&krec->kr_evt[0], &uma,
+				      tins->ti_blks_info, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open evtree: %d\n", rc);
 		else
@@ -679,18 +681,35 @@ static int
 svb_rec_free(struct btr_instance *tins, struct btr_record *rec,
 	      void *args)
 {
+	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
+	eio_addr_t *addr = &irec->ir_ex_addr;
 
 	if (UMMID_IS_NULL(rec->rec_mmid))
 		return 0;
 
-	/* TODO free NVMe record */
 	if (args != NULL) {
 		*(umem_id_t *)args = rec->rec_mmid;
 		rec->rec_mmid = UMMID_NULL; /** taken over by user */
-
-	} else {
-		umem_free(&tins->ti_umm, rec->rec_mmid);
+		return 0;
 	}
+
+	if (addr->ea_type == EIO_ADDR_NVME && !eio_addr_is_hole(addr)) {
+		struct vea_space_info *vsi = tins->ti_blks_info;
+		uint64_t blk_off;
+		uint32_t blk_cnt;
+		int rc;
+
+		D_ASSERT(vsi != NULL);
+
+		blk_off = vos_byte2blkoff(addr->ea_off);
+		blk_cnt = vos_byte2blkcnt(irec->ir_size);
+
+		rc = vea_free(vsi, blk_off, blk_cnt);
+		if (rc)
+			D_ERROR("Error on block free. %d\n", rc);
+	}
+
+	umem_free(&tins->ti_umm, rec->rec_mmid);
 	return 0;
 }
 

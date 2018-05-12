@@ -288,13 +288,14 @@ int evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
  *
  * \param root		[IN]	Root address of the tree
  * \param uma		[IN]	Memory class attributes
+ * \param info		[IN]	NVMe free space information
  * \param toh		[OUT]	The returned tree open handle
  *
  * \return		0	Success
  *			-ve	error code
  */
 int evt_open_inplace(struct evt_root *root, struct umem_attr *uma,
-		     daos_handle_t *toh);
+		     void *info, daos_handle_t *toh);
 
 /**
  * Close a opened tree

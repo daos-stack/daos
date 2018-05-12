@@ -245,7 +245,7 @@ eio_nvme_poll(struct eio_xs_context *ctxt)
 	uint64_t now = d_timeus_secdiff(0);
 
 	/* NVMe context setup was skipped */
-	if (ctxt->exc_msg_ring == NULL)
+	if (ctxt == NULL)
 		return 0;
 
 	/* Process one msg on the msg ring */
@@ -551,6 +551,10 @@ eio_xsctxt_free(struct eio_xs_context *ctxt)
 {
 	struct common_cp_arg cp_arg;
 
+	/* NVMe context setup was skipped */
+	if (ctxt == NULL)
+		return;
+
 	if (ctxt->exc_io_channel != NULL) {
 		spdk_bs_free_io_channel(ctxt->exc_io_channel);
 		ctxt->exc_io_channel = NULL;
@@ -620,6 +624,12 @@ eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id)
 	char name[32];
 	int rc;
 
+	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
+	if (nvme_glb.ed_skip_setup) {
+		*pctxt = NULL;
+		return 0;
+	}
+
 	D_ALLOC_PTR(ctxt);
 	if (ctxt == NULL)
 		return -DER_NOMEM;
@@ -629,12 +639,6 @@ eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id)
 	ABT_mutex_lock(nvme_glb.ed_mutex);
 
 	nvme_glb.ed_xstream_cnt++;
-
-	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
-	if (nvme_glb.ed_skip_setup) {
-		rc = 0;
-		goto out;
-	}
 
 	D_INFO("Initialize NVMe context, xs_id:%d, init_thread:%p\n",
 	       xs_id, nvme_glb.ed_init_thread);

@@ -133,7 +133,7 @@ struct btr_context {
 static int btr_class_init(TMMID(struct btr_root) root_mmid,
 			  struct btr_root *root, unsigned int tree_class,
 			  uint64_t *tree_feats, struct umem_attr *uma,
-			  struct btr_instance *tins);
+			  void *info, struct btr_instance *tins);
 static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 					  TMMID(struct btr_node) nd_mmid,
 					  unsigned int at);
@@ -228,13 +228,14 @@ btr_ops(struct btr_context *tcx)
  *			features for different library versions).
  * \param tree_order	Tree order.
  * \param uma		Memory class attributes.
+ * \param info		NVMe free space information
  * \param tcxp		Returned context.
  */
 static int
 btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 		   unsigned int tree_class, uint64_t tree_feats,
 		   unsigned int tree_order, struct umem_attr *uma,
-		   struct btr_context **tcxp)
+		   void *info, struct btr_context **tcxp)
 {
 	struct btr_context	*tcx;
 	unsigned int		 depth;
@@ -246,7 +247,7 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 
 	tcx->tc_ref = 1; /* for the caller */
 	rc = btr_class_init(root_mmid, root, tree_class, &tree_feats, uma,
-			    &tcx->tc_tins);
+			    info, &tcx->tc_tins);
 	if (rc != 0) {
 		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
 		D_GOTO(failed, rc);
@@ -287,7 +288,8 @@ btr_context_clone(struct btr_context *tcx, struct btr_context **tcx_p)
 
 	umem_attr_get(&tcx->tc_tins.ti_umm, &uma);
 	rc = btr_context_create(tcx->tc_tins.ti_root_mmid,
-				tcx->tc_tins.ti_root, -1, -1, -1, &uma, tcx_p);
+				tcx->tc_tins.ti_root, -1, -1, -1, &uma,
+				tcx->tc_tins.ti_blks_info, tcx_p);
 	return rc;
 }
 
@@ -2481,7 +2483,7 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 	}
 
 	rc = btr_context_create(BTR_ROOT_NULL, NULL, tree_class, tree_feats,
-				tree_order, uma, &tcx);
+				tree_order, uma, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2559,7 +2561,7 @@ dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 	}
 
 	rc = btr_context_create(BTR_ROOT_NULL, root, tree_class, tree_feats,
-				tree_order, uma, &tcx);
+				tree_order, uma, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2592,7 +2594,36 @@ dbtree_open(TMMID(struct btr_root) root_mmid, struct umem_attr *uma,
 	struct btr_context *tcx;
 	int		    rc;
 
-	rc = btr_context_create(root_mmid, NULL, -1, -1, -1, uma, &tcx);
+	rc = btr_context_create(root_mmid, NULL, -1, -1, -1, uma, NULL, &tcx);
+	if (rc != 0)
+		return rc;
+
+	*toh = btr_tcx2hdl(tcx);
+	return 0;
+}
+
+/**
+ * Open a btree from the root address.
+ *
+ * \param root		[IN]	Address of the tree root.
+ * \param uma		[IN]	Memory class attributes.
+ * \param info		[IN]	NVMe free space information.
+ * \param toh		[OUT]	Returned tree open handle.
+ */
+int
+dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
+		       void *info, daos_handle_t *toh)
+{
+	struct btr_context *tcx;
+	int		    rc;
+
+	if (root->tr_class == 0) {
+		D_DEBUG(DB_TRACE, "Tree class is zero\n");
+		return -DER_INVAL;
+	}
+
+	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma,
+				info, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2611,20 +2642,7 @@ int
 dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 		    daos_handle_t *toh)
 {
-	struct btr_context *tcx;
-	int		    rc;
-
-	if (root->tr_class == 0) {
-		D_DEBUG(DB_TRACE, "Tree class is zero\n");
-		return -DER_INVAL;
-	}
-
-	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma, &tcx);
-	if (rc != 0)
-		return rc;
-
-	*toh = btr_tcx2hdl(tcx);
-	return 0;
+	return dbtree_open_inplace_ex(root, uma, NULL, toh);
 }
 
 /**
@@ -3128,7 +3146,7 @@ static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 static int
 btr_class_init(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	       unsigned int tree_class, uint64_t *tree_feats,
-	       struct umem_attr *uma, struct btr_instance *tins)
+	       struct umem_attr *uma, void *info, struct btr_instance *tins)
 {
 	struct btr_class	*tc;
 	uint64_t		 special_feat;
@@ -3138,6 +3156,8 @@ btr_class_init(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	rc = umem_class_init(uma, &tins->ti_umm);
 	if (rc != 0)
 		return rc;
+
+	tins->ti_blks_info = info;
 
 	if (!TMMID_IS_NULL(root_mmid)) {
 		tins->ti_root_mmid = root_mmid;

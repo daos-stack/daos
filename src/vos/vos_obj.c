@@ -85,6 +85,7 @@ tree_prepare(struct vos_object *obj, daos_epoch_range_t *epr,
 	struct vos_rec_bundle	 rbund;
 	daos_iov_t		 kiov;
 	daos_iov_t		 riov;
+	struct vea_space_info	*info;
 	int			 rc;
 
 	if (tclass != VOS_BTR_AKEY && (flags & SUBTR_EVT))
@@ -124,12 +125,14 @@ tree_prepare(struct vos_object *obj, daos_epoch_range_t *epr,
 			D_GOTO(failed, rc);
 	}
 
+	info = obj->obj_cont->vc_pool->vp_vea_info;
+
 	if (flags & SUBTR_EVT) {
-		rc = evt_open_inplace(rbund.rb_evt, uma, sub_toh);
+		rc = evt_open_inplace(rbund.rb_evt, uma, info, sub_toh);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 	} else {
-		rc = dbtree_open_inplace(rbund.rb_btr, uma, sub_toh);
+		rc = dbtree_open_inplace_ex(rbund.rb_btr, uma, info, sub_toh);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 	}

@@ -611,7 +611,8 @@ vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 		return -DER_INVAL;
 	}
 
-	rc = dbtree_open_inplace(&otab_df->obt_btr, &pool->vp_uma, &btr_hdl);
+	rc = dbtree_open_inplace_ex(&otab_df->obt_btr, &pool->vp_uma,
+				    pool->vp_vea_info, &btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
 		D_GOTO(exit, rc = -DER_NONEXIST);

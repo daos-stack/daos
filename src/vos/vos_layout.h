@@ -34,6 +34,7 @@
 #include <daos_srv/evtree.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/eio.h>
+#include <daos_srv/vea.h>
 
 /**
  * VOS metadata structure declarations
@@ -109,6 +110,8 @@ struct vos_pool_df {
 	struct vos_cont_table_df		pd_ctab_df;
 	/* Pool info of objects, containers, space availability */
 	vos_pool_info_t				pd_pool_info;
+	/* Free space tracking for NVMe device */
+	struct vea_space_df			pd_vea_df;
 };
 
 struct vos_epoch_index {
@@ -128,6 +131,11 @@ struct vos_cont_df {
 	uuid_t				cd_id;
 	vos_cont_info_t			cd_info;
 	struct vos_obj_table_df		cd_otab_df;
+	/*
+	 * Allocation hint for block allocator, it can be turned into
+	 * a hint vector when we need to support multiple active epochs.
+	 */
+	struct vea_hint_df		cd_hint_df;
 };
 
 /** btree (d/a-key) record bit flags */

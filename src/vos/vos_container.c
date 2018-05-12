@@ -164,6 +164,8 @@ cont_free(struct d_ulink *ulink)
 
 	cont = container_of(ulink, struct vos_container, vc_uhlink);
 	dbtree_close(cont->vc_btr_hdl);
+	if (cont->vc_hint_ctxt)
+		vea_hint_unload(cont->vc_hint_ctxt);
 
 	D_FREE_PTR(cont);
 }
@@ -325,12 +327,23 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_otab_df = &args.ca_cont_df->cd_otab_df;
 
 	/* Cache this btr object ID in container handle */
-	rc = dbtree_open_inplace(&cont->vc_otab_df->obt_btr,
-				 &cont->vc_pool->vp_uma,
-				 &cont->vc_btr_hdl);
+	rc = dbtree_open_inplace_ex(&cont->vc_otab_df->obt_btr,
+				    &cont->vc_pool->vp_uma,
+				    cont->vc_pool->vp_vea_info,
+				    &cont->vc_btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
 		D_GOTO(exit, rc);
+	}
+
+	if (cont->vc_pool->vp_vea_info != NULL) {
+		rc = vea_hint_load(&cont->vc_cont_df->cd_hint_df,
+				   &cont->vc_hint_ctxt);
+		if (rc) {
+			D_ERROR("Error load allocator hint "DF_UUID": %d\n",
+				DP_UUID(co_uuid), rc);
+			goto exit;
+		}
 	}
 
 	rc = cont_insert(cont, &ukey, coh);

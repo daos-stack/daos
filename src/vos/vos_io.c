@@ -827,8 +827,13 @@ static int
 vos_reserve(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	    uint64_t *off)
 {
-	struct vos_object *obj = ioc->ic_obj;
-	umem_id_t mmid;
+	struct vos_object	*obj = ioc->ic_obj;
+	struct vea_space_info	*vsi;
+	struct vea_hint_context	*hint_ctxt;
+	struct vea_resrvd_ext	*ext;
+	uint32_t		 blk_cnt;
+	umem_id_t		 mmid;
+	int			 rc;
 
 	if (media == EIO_ADDR_SCM) {
 		if (ioc->ic_actv_cnt > 0) {
@@ -854,8 +859,26 @@ vos_reserve(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 		return UMMID_IS_NULL(mmid) ? -DER_NOSPACE : 0;
 	}
 
-	/* TODO: reserve NVMe blocks */
-	return -DER_INVAL;
+	D_ASSERT(media == EIO_ADDR_NVME);
+
+	vsi = obj->obj_cont->vc_pool->vp_vea_info;
+	D_ASSERT(vsi);
+	hint_ctxt = obj->obj_cont->vc_hint_ctxt;
+	D_ASSERT(hint_ctxt);
+	blk_cnt = vos_byte2blkcnt(size);
+
+	rc = vea_reserve(vsi, blk_cnt, hint_ctxt, &ioc->ic_blk_exts);
+	if (rc)
+		return rc;
+
+	ext = d_list_entry(ioc->ic_blk_exts.prev, struct vea_resrvd_ext,
+			   vre_link);
+	D_ASSERTF(ext->vre_blk_cnt == blk_cnt, "%u != %u\n",
+		  ext->vre_blk_cnt, blk_cnt);
+	D_ASSERT(ext->vre_blk_off != 0);
+
+	*off = ext->vre_blk_off << VOS_BLK_SHIFT;
+	return 0;
 }
 
 static int
@@ -902,9 +925,9 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	scm_size = (media == EIO_ADDR_SCM) ? vos_recx2irec_size(size, NULL) :
 					     vos_recx2irec_size(0, NULL);
 
-	rc = vos_reserve(ioc, media, scm_size, &off);
+	rc = vos_reserve(ioc, EIO_ADDR_SCM, scm_size, &off);
 	if (rc) {
-		D_ERROR("Reserve single value failed. %d\n", rc);
+		D_ERROR("Reserve SCM for SV failed. %d\n", rc);
 		return rc;
 	}
 
@@ -914,6 +937,12 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	irec->ir_cs_size = 0;
 	irec->ir_cs_type = 0;
 
+	memset(&eiov, 0, sizeof(eiov));
+	if (size == 0) { /* punch */
+		eio_addr_set_hole(&eiov.ei_addr, 1);
+		goto done;
+	}
+
 	if (media == EIO_ADDR_SCM) {
 		char *payload_addr;
 
@@ -922,13 +951,14 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 		D_ASSERT(payload_addr >= (char *)irec);
 		off = mmid.off + (payload_addr - (char *)irec);
 	} else {
-		/* TODO support NVMe record */
-		return -DER_NOSYS;
+		rc = vos_reserve(ioc, EIO_ADDR_NVME, size, &off);
+		if (rc) {
+			D_ERROR("Reserve NVMe for SV failed. %d\n", rc);
+			return rc;
+		}
 	}
-
-	memset(&eiov, 0, sizeof(eiov));
-	eiov.ei_addr.ea_type = media;
-	eiov.ei_addr.ea_off = off;
+done:
+	eio_addr_set(&eiov.ei_addr, media, off);
 	eiov.ei_data_len = size;
 	rc = iod_reserve(ioc, &eiov);
 
@@ -963,8 +993,7 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 		return rc;
 	}
 done:
-	eiov.ei_addr.ea_type = media;
-	eiov.ei_addr.ea_off = off;
+	eio_addr_set(&eiov.ei_addr, media, off);
 	eiov.ei_data_len = size;
 	rc = iod_reserve(ioc, &eiov);
 
@@ -976,10 +1005,16 @@ done:
  * akey type and record size.
  */
 static uint16_t
-akey_media_select(daos_iod_type_t type, daos_size_t size)
+akey_media_select(struct vos_io_context *ioc, daos_iod_type_t type,
+		  daos_size_t size)
 {
-	/* TODO: support NVMe */
-	return EIO_ADDR_SCM;
+	struct vea_space_info *vsi;
+
+	vsi = ioc->ic_obj->obj_cont->vc_pool->vp_vea_info;
+	if (vsi == NULL)
+		return EIO_ADDR_SCM;
+	else
+		return (size >= VOS_BLK_SZ) ? EIO_ADDR_NVME : EIO_ADDR_SCM;
 }
 
 static int
@@ -1000,7 +1035,7 @@ akey_update_begin(struct vos_io_context *ioc)
 		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-		media = akey_media_select(iod->iod_type, size);
+		media = akey_media_select(ioc, iod->iod_type, size);
 
 		if (iod->iod_type == DAOS_IOD_SINGLE)
 			rc = vos_reserve_single(ioc, media, size);
@@ -1023,6 +1058,31 @@ dkey_update_begin(struct vos_io_context *ioc, daos_key_t *dkey)
 		if (rc != 0)
 			break;
 	}
+
+	return rc;
+}
+
+/* Publish or cancel the NVMe block reservations */
+static int
+process_blocks(struct vos_io_context *ioc, bool publish)
+{
+	struct vea_space_info	*vsi;
+	struct vea_hint_context	*hint_ctxt;
+	int			 rc;
+
+	if (d_list_empty(&ioc->ic_blk_exts))
+		return 0;
+
+	vsi = ioc->ic_obj->obj_cont->vc_pool->vp_vea_info;
+	D_ASSERT(vsi);
+	hint_ctxt = ioc->ic_obj->obj_cont->vc_hint_ctxt;
+	D_ASSERT(hint_ctxt);
+
+	rc = publish ? vea_tx_publish(vsi, hint_ctxt, &ioc->ic_blk_exts) :
+		       vea_cancel(vsi, hint_ctxt, &ioc->ic_blk_exts);
+	if (rc)
+		D_ERROR("Error on %s NVMe reservations. %d\n",
+			publish ? "publish" : "cancel", rc);
 
 	return rc;
 }
@@ -1059,7 +1119,8 @@ update_cancel(struct vos_io_context *ioc)
 		}
 	}
 
-	/* TODO: Cancel NVMe reservations */
+	/* Cancel NVMe reservations */
+	process_blocks(ioc, false);
 }
 
 int
@@ -1102,7 +1163,8 @@ vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
 		goto abort;
 	}
 
-	/* TODO Publish NVMe reservations */
+	/* Publish NVMe reservations */
+	err = process_blocks(ioc, true);
 
 abort:
 	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);

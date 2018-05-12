@@ -67,6 +67,9 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_io_ctxt != NULL)
 		eio_ioctxt_close(pool->vp_io_ctxt);
 
+	if (pool->vp_vea_info != NULL)
+		vea_unload(pool->vp_vea_info);
+
 	if (!daos_handle_is_inval(pool->vp_cookie_th))
 		vos_cookie_tab_destroy(pool->vp_cookie_th);
 
@@ -158,8 +161,12 @@ pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 {
-	PMEMobjpool	*ph;
-	int		 rc = 0;
+	struct vea_space_df	*vea_md = NULL;
+	PMEMobjpool		*ph;
+	struct umem_attr	 uma;
+	struct umem_instance	 umem;
+	uint64_t		 blob_id, blob_sz;
+	int rc = 0;
 
 	if (!path || uuid_is_null(uuid))
 		return -DER_INVAL;
@@ -193,7 +200,6 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 
 	TX_BEGIN(ph) {
 		struct vos_pool_df	*pool_df;
-		struct umem_attr	 uma;
 
 		pool_df = vos_pool_pop2df(ph);
 		pmemobj_tx_add_range_direct(pool_df, sizeof(*pool_df));
@@ -211,6 +217,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 		pool_df->pd_pool_info.pif_size  = size;
 		/* XXX we don't really maintain the available size */
 		pool_df->pd_pool_info.pif_avail = size - pmemobj_root_size(ph);
+		vea_md = &pool_df->pd_vea_df;
 
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
@@ -223,8 +230,36 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 	} TX_END
 
 	if (rc != 0)
-		D_GOTO(exit, rc);
-exit:
+		goto close;
+
+	/* NVMe device isn't configured */
+	if (vos_xsctxt_get() == NULL)
+		goto close;
+
+	/*
+	 * The blob size should be NVME_RATIO * total_pool_size, we just set
+	 * it as pool size for this moment.
+	 */
+	blob_sz = size;
+
+	/* TODO: Create SPDK blob on NVMe device */
+	blob_id = 1;
+
+	/* Format SPDK blob */
+	D_ASSERT(vea_md != NULL);
+	rc = umem_class_init(&uma, &umem);
+	if (rc != 0)
+		goto delete_blob;
+
+	rc = vea_format(&umem, vea_md, blob_id, VOS_BLK_SZ,
+			VOS_BLOB_HDR_BLKS, blob_sz, NULL, NULL, false);
+	if (rc)
+		D_ERROR("Format blob for "DF_UUID" error: %d\n",
+			DP_UUID(uuid), rc);
+
+delete_blob:
+	/* Destroy the SPDK blob on error */
+close:
 	/* Close this local handle, opened using pool_open */
 	vos_pmemobj_close(ph);
 	return rc;
@@ -365,8 +400,22 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	rc = eio_ioctxt_open(&pool->vp_io_ctxt, vos_xsctxt_get(),
 			     &pool->vp_umm, uuid);
 	if (rc) {
-		D_ERROR("Failed to open io context\n");
-		D_GOTO(failed, rc);
+		D_ERROR("Failed to open io context. %d\n", rc);
+		goto failed;
+	}
+
+	if (vos_xsctxt_get() != NULL) {
+		struct vea_unmap_context unmap_ctxt;
+
+		/* TODO: unmap callback */
+		unmap_ctxt.vnc_unmap = NULL;
+		unmap_ctxt.vnc_data = NULL;
+		rc = vea_load(&pool->vp_umm, &pool_df->pd_vea_df, &unmap_ctxt,
+			      &pool->vp_vea_info);
+		if (rc) {
+			D_ERROR("Failed to load block space info: %d\n", rc);
+			goto failed;
+		}
 	}
 
 	/* Insert the opened pool to the uuid hash table */

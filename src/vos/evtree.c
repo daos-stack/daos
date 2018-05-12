@@ -23,6 +23,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include "evt_priv.h"
+#include "vos_internal.h"
 
 enum {
 	/** no overlap */
@@ -630,12 +631,13 @@ evt_tcx_reset_trace(struct evt_context *tcx)
  * \param feats		[IN]	Optional, feature bits for create
  * \param order		[IN]	Optional, tree order for create
  * \param uma		[IN]	Memory attribute for the tree
+ * \param info		[IN]	NVMe free space info
  * \param tcx_pp	[OUT]	The returned tree context
  */
-int
+static int
 evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 	       uint64_t feats, unsigned int order, struct umem_attr *uma,
-	       struct evt_context **tcx_pp)
+	       void *info, struct evt_context **tcx_pp)
 {
 	struct evt_context	*tcx;
 	int			 depth;
@@ -662,6 +664,7 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 		D_GOTO(failed, rc);
 	}
 	tcx->tc_pmempool_uuid = umem_get_uuid(&tcx->tc_umm);
+	tcx->tc_blks_info = info;
 
 	if (!TMMID_IS_NULL(root_mmid)) { /* non-inplace tree open */
 		tcx->tc_root_mmid = root_mmid;
@@ -705,7 +708,7 @@ evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
 		return -DER_INVAL;
 
 	rc = evt_tcx_create(tcx->tc_root_mmid, tcx->tc_root, -1, -1, &uma,
-			    tcx_pp);
+			    tcx->tc_blks_info, tcx_pp);
 	return rc;
 }
 
@@ -758,9 +761,22 @@ evt_data_free(struct evt_context *tcx, eio_addr_t addr, uint64_t size)
 		mmid.pool_uuid_lo = tcx->tc_pmempool_uuid;
 		mmid.off = addr.ea_off;
 		umem_free(evt_umm(tcx), mmid);
-		return;
+	} else {
+		struct vea_space_info *vsi = tcx->tc_blks_info;
+		uint64_t blk_off;
+		uint32_t blk_cnt;
+		int rc;
+
+		D_ASSERT(addr.ea_type == EIO_ADDR_NVME);
+		D_ASSERT(vsi != NULL);
+
+		blk_off = vos_byte2blkoff(addr.ea_off);
+		blk_cnt = vos_byte2blkcnt(size);
+
+		rc = vea_free(vsi, blk_off, blk_cnt);
+		if (rc)
+			D_ERROR("Error on block free. %d\n", rc);
 	}
-	/* TODO Free NVMe record */
 }
 
 /**
@@ -1961,7 +1977,7 @@ evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
 	struct evt_context *tcx;
 	int		    rc;
 
-	rc = evt_tcx_create(root_mmid, NULL, -1, -1, uma, &tcx);
+	rc = evt_tcx_create(root_mmid, NULL, -1, -1, uma, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -1976,7 +1992,7 @@ evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
  */
 int
 evt_open_inplace(struct evt_root *root, struct umem_attr *uma,
-		 daos_handle_t *toh)
+		 void *info, daos_handle_t *toh)
 {
 	struct evt_context *tcx;
 	int		    rc;
@@ -1986,7 +2002,7 @@ evt_open_inplace(struct evt_root *root, struct umem_attr *uma,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(EVT_ROOT_NULL, root, -1, -1, uma, &tcx);
+	rc = evt_tcx_create(EVT_ROOT_NULL, root, -1, -1, uma, info, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2033,7 +2049,7 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(EVT_ROOT_NULL, NULL, feats, order, uma, &tcx);
+	rc = evt_tcx_create(EVT_ROOT_NULL, NULL, feats, order, uma, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2069,7 +2085,7 @@ evt_create_inplace(uint64_t feats, unsigned int order, struct umem_attr *uma,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(EVT_ROOT_NULL, root, feats, order, uma, &tcx);
+	rc = evt_tcx_create(EVT_ROOT_NULL, root, feats, order, uma, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
