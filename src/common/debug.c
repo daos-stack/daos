@@ -64,19 +64,6 @@ uint64_t DB_REBUILD; /* rebuild process */
 /* debug bit groups */
 #define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD)
 
-/** debug facility (or subsystem/module) */
-struct daos_debug_fac {
-	/** name of the facility */
-	char		*df_name;
-	/** pointer to the facility ID */
-	int		*df_idp;
-	/** debug bit-mask of the facility */
-	uint64_t	 df_mask;
-	/** facility is enabled */
-	int		 df_enabled;
-	size_t		 df_name_size;
-};
-
 #define DBG_DICT_ENTRY(bit, name, lname)			\
 {								\
 	.db_bit = bit,						\
@@ -96,95 +83,29 @@ static struct d_debug_bit daos_bit_dict[] = {
 	DBG_DICT_ENTRY(&DB_REBUILD,	"rebuild",	"rebuild"),
 };
 
-#define NUM_DBG_BIT_ENTRIES ARRAY_SIZE(daos_bit_dict)
+#define NUM_DBG_BIT_ENTRIES	ARRAY_SIZE(daos_bit_dict)
 
-#define DBG_FAC_DICT_ENT(name, idp, mask, enabled)		\
-{								\
-	.df_name	= name,					\
-	.df_idp		= idp,					\
-	.df_mask	= mask,					\
-	.df_enabled	= enabled,				\
-	.df_name_size	= sizeof(name),				\
-}
+#define DAOS_INIT_LOG_FAC(name, idp)			\
+	d_init_log_facility(idp, name, name);
 
-/** dictionary for all facilities */
-static struct daos_debug_fac debug_fac_dict[] = {
-	/* MUST be the first one */
-	/* no facility name for NULL */
-	DBG_FAC_DICT_ENT("common",	&d_common_logfac,	DB_DEFAULT, 0),
-	DBG_FAC_DICT_ENT("tree",	&d_tree_logfac,		DB_DEFAULT, 0),
-	DBG_FAC_DICT_ENT("vos",		&d_vos_logfac,		DB_DEFAULT, 0),
-	DBG_FAC_DICT_ENT("client",	&d_client_logfac,	DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENT("server",	&d_server_logfac,	DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENT("rdb",		&d_rdb_logfac,		DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENT("pool",	&d_pool_logfac,		DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENT("container",	&d_container_logfac,	DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENT("object",	&d_object_logfac,	DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENT("placement",	&d_placement_logfac,	DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENT("rebuild",	&d_rebuild_logfac,	DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENT("tier",	&d_tier_logfac,		DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENT("mgmt",	&d_mgmt_logfac,		DB_DEFAULT, 1),
-	DBG_FAC_DICT_ENT("tests",	&d_tests_logfac,	DB_DEFAULT, 0),
-};
+#define FOREACH_DAOS_LOG_FAC(ACTION)			\
+	ACTION("common", d_common_logfac)		\
+	ACTION("tree", d_tree_logfac)			\
+	ACTION("vos", d_vos_logfac)			\
+	ACTION("client", d_client_logfac)		\
+	ACTION("server", d_server_logfac)		\
+	ACTION("rdb", d_rdb_logfac)			\
+	ACTION("pool", d_pool_logfac)			\
+	ACTION("container", d_container_logfac)		\
+	ACTION("object", d_object_logfac)		\
+	ACTION("placement", d_placement_logfac)		\
+	ACTION("rebuild", d_rebuild_logfac)		\
+	ACTION("tier", d_tier_logfac)			\
+	ACTION("mgmt", d_mgmt_logfac)			\
+	ACTION("tests", d_tests_logfac)
 
-#define NUM_DBG_FAC_ENTRIES ARRAY_SIZE(debug_fac_dict)
-/** Load enabled debug facilities from the environment variable. */
-static void
-debug_fac_load_env(void)
-{
-	char	*fac_env;
-	char	*fac_str;
-	char	*cur;
-	int	 i;
-
-	fac_env = getenv(DD_FAC_ENV);
-	if (fac_env == NULL)
-		return;
-
-	D_STRNDUP(fac_str, fac_env, DAOS_FAC_MAX_LEN);
-	if (fac_str == NULL) {
-		D_PRINT_ERR("D_STRNDUP of fac mask failed");
-		return;
-	}
-
-	/* Disable all facilities. The first one is ignored because NULL is
-	 * always enabled.
-	 */
-	for (i = 1; i < NUM_DBG_FAC_ENTRIES; i++)
-		debug_fac_dict[i].df_enabled = 0;
-
-	cur = strtok(fac_str, DD_SEP);
-	while (cur != NULL) {
-		/* skip 1 because it's NULL and enabled always */
-		for (i = 1; i < NUM_DBG_FAC_ENTRIES; i++) {
-			if (debug_fac_dict[i].df_name != NULL &&
-			    strncasecmp(cur, debug_fac_dict[i].df_name,
-					debug_fac_dict[i].df_name_size)
-					== 0) {
-				debug_fac_dict[i].df_enabled = 1;
-				break;
-			} else if (strncasecmp(cur, DD_FAC_ALL,
-						strlen(DD_FAC_ALL)) == 0) {
-				debug_fac_dict[i].df_enabled = 1;
-			}
-		}
-		cur = strtok(NULL, DD_SEP);
-	}
-	D_FREE(fac_str);
-}
-
-static int
-debug_fac_register(struct daos_debug_fac *dfac)
-{
-	int	rc;
-
-	rc = d_log_allocfacility(dfac->df_name, dfac->df_name);
-	if (rc < 0)
-		return rc;
-
-	*dfac->df_idp = rc;
-	return 0;
-}
+#define DAOS_SETUP_FAC(name, idp)			\
+	DAOS_INIT_LOG_FAC(name, &idp)
 
 static void
 debug_fini_locked(void)
@@ -222,8 +143,6 @@ daos_debug_init(char *logfile)
 	else if (logfile == NULL)
 		logfile = DAOS_LOG_DEFAULT;
 
-	/* load other env variables */
-	debug_fac_load_env();
 
 	rc = d_log_init_adv("DAOS", logfile,
 			    DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG,
@@ -233,20 +152,7 @@ daos_debug_init(char *logfile)
 		goto failed_unlock;
 	}
 
-	for (i = 0; i < NUM_DBG_FAC_ENTRIES; i++) {
-		if (!debug_fac_dict[i].df_enabled) {
-			/* redirect disabled facility to NULL */
-			*debug_fac_dict[i].df_idp = d_null_logfac;
-			continue;
-		}
-
-		rc = debug_fac_register(&debug_fac_dict[i]);
-		if (rc != 0) {
-			D_PRINT_ERR("Failed to add DAOS facility %s: %d\n",
-				    debug_fac_dict[i].df_name, rc);
-			goto failed_fini;
-		}
-	}
+	FOREACH_DAOS_LOG_FAC(DAOS_SETUP_FAC)
 
 	/* Register DAOS debug bits with gurt used with DD_MASK env */
 	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
@@ -277,9 +183,6 @@ daos_debug_init(char *logfile)
 	D_MUTEX_UNLOCK(&dd_lock);
 
 	return 0;
-
-failed_fini:
-	debug_fini_locked();
 
 failed_unlock:
 	D_MUTEX_UNLOCK(&dd_lock);
