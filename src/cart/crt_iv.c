@@ -2766,12 +2766,7 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 
-	rc = crt_group_rank(&ivns_internal->cii_grp_priv->gp_pub, &self_rank);
-	if (rc != 0) {
-		D_ERROR("crt_group_rank(grp %s) failed, rc=%d.\n",
-			ivns_internal->cii_grp_priv->gp_pub.cg_grpid, rc);
-		D_GOTO(exit, rc);
-	}
+	self_rank = ivns_internal->cii_grp_priv->gp_self;
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	if (iv_ops == NULL) {
