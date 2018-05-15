@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2016-2018 Intel Corporation
+# Copyright (C) 2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -70,6 +70,7 @@ class TestGroup(commontestsuite.CommonTestSuite):
         """setup the test"""
         self.get_test_info()
         log_mask = os.getenv("D_LOG_MASK", "INFO")
+        crt_timeout = os.getenv("CRT_TIMEOUT", "60")
         crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
         ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
         ofi_share_addr = os.getenv("CRT_CTX_SHARE_ADDR", "0")
@@ -98,7 +99,7 @@ class TestGroup(commontestsuite.CommonTestSuite):
         # Launch both the client and target instances on the
         # same node.
         procrtn = self.launch_test(testmsg, '1', self.pass_env, \
-                                   cli_arg='tests/test_group' + \
+                                   cli_arg='tests/test_no_timeout' + \
                                              ' --name client_group' + \
                                              ' --attach_to service_group',
                                    srv_arg='tests/test_group' + \
@@ -147,7 +148,7 @@ class TestGroup(commontestsuite.CommonTestSuite):
         # until after the target has been stopped.
         cli_rtn = self.launch_test(testmsg, '1', self.pass_env, \
                                    cli=''.join([' -H ', clients.pop(0)]), \
-                                   cli_arg='tests/test_group' + \
+                                   cli_arg='tests/test_no_timeout' + \
                                              ' --name client_group' + \
                                              ' --attach_to service_group')
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,6 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This is a simple example of cart rpc group test based on crt API.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,7 +49,8 @@
 #include "crt_fake_events.h"
 #include "test_group_rpc.h"
 
-#define TEST_CTX_MAX_NUM	 (72)
+#define TEST_CTX_MAX_NUM	72
+#define NUM_ATTACH_RETRIES	10
 
 struct test_t {
 	crt_group_t	*t_local_group;
@@ -63,9 +63,6 @@ struct test_t {
 			 t_shutdown:1,
 			 t_complete:1;
 	int		 t_is_service;
-	int		 t_infinite_loop;
-	int		 t_hold;
-	uint32_t	 t_hold_time;
 	unsigned int	 t_ctx_num;
 	crt_context_t	 t_crt_ctx[TEST_CTX_MAX_NUM];
 	int		 t_thread_id[TEST_CTX_MAX_NUM]; /* logical tid */
@@ -74,30 +71,10 @@ struct test_t {
 	int		 t_roomno;
 };
 
-struct test_t test_g = { .t_hold_time = 0, .t_ctx_num = 1,
-			     .t_roomno = 1082 };
-
-struct crt_msg_field *test_ping_checkin[] = {
-	&CMF_UINT32,
-	&CMF_UINT32,
-	&CMF_STRING,
+struct test_t test_g = {
+	.t_ctx_num = 1,
+	.t_roomno = 1082
 };
-struct crt_test_checkin_req {
-	int		age;
-	int		days;
-	d_string_t	name;
-};
-struct crt_msg_field *test_ping_checkout[] = {
-	&CMF_INT,
-	&CMF_UINT32,
-};
-struct crt_test_checkin_reply {
-	int		ret;
-	uint32_t	room_no;
-};
-struct crt_req_format CQF_TEST_PING_CHECK =
-	DEFINE_CRT_REQ_FMT("TEST_PING_CHECK", test_ping_checkin,
-			   test_ping_checkout);
 
 static inline void
 test_sem_timedwait(sem_t *sem, int sec, int line_number)
@@ -115,72 +92,11 @@ test_sem_timedwait(sem_t *sem, int sec, int line_number)
 }
 
 void
-test_checkin_handler(crt_rpc_t *rpc_req)
-{
-	struct crt_test_checkin_req	*e_req;
-	struct crt_test_checkin_reply	*e_reply;
-	int				 rc = 0;
-
-	/* CaRT internally already allocated the input/output buffer */
-	e_req = crt_req_get(rpc_req);
-	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
-
-	printf("tier1 test_server recv'd checkin, opc: %#x.\n",
-	       rpc_req->cr_opc);
-	printf("tier1 checkin input - age: %d, name: %s, days: %d.\n",
-	       e_req->age, e_req->name, e_req->days);
-
-	e_reply = crt_reply_get(rpc_req);
-	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
-		  e_reply);
-	e_reply->ret = 0;
-	e_reply->room_no = test_g.t_roomno++;
-
-	rc = crt_reply_send(rpc_req);
-	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
-
-	printf("tier1 test_srver sent checkin reply, ret: %d, room_no: %d.\n",
-	       e_reply->ret, e_reply->room_no);
-}
-
-void
-test_ping_delay_handler(crt_rpc_t *rpc_req)
-{
-	struct crt_test_ping_delay_req		*p_req;
-	struct crt_test_ping_delay_reply	*p_reply;
-	int					 rc = 0;
-
-	/* CaRT internally already allocated the input/output buffer */
-	p_req = crt_req_get(rpc_req);
-	D_ASSERTF(p_req != NULL, "crt_req_get() failed. p_req: %p\n", p_req);
-
-	printf("tier1 test_server recv'd checkin, opc: %#x.\n",
-	       rpc_req->cr_opc);
-	printf("tier1 checkin input - age: %d, name: %s, days: %d, "
-	       "delay: %u.\n",
-	       p_req->age, p_req->name, p_req->days, p_req->delay);
-
-	p_reply = crt_reply_get(rpc_req);
-	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed. p_reply: %p\n",
-		  p_reply);
-	p_reply->ret = 0;
-	p_reply->room_no = test_g.t_roomno++;
-
-	sleep(p_req->delay);
-
-	rc = crt_reply_send(rpc_req);
-	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
-
-	printf("tier1 test_srver sent checkin reply, ret: %d, room_no: %d.\n",
-	       p_reply->ret, p_reply->room_no);
-}
-
-void
 client_cb_common(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t				*rpc_req;
-	struct crt_test_checkin_req		*rpc_req_input;
-	struct crt_test_checkin_reply		*rpc_req_output;
+	struct crt_test_ping_delay_req		*rpc_req_input;
+	struct crt_test_ping_delay_reply	*rpc_req_output;
 
 	rpc_req = cb_info->cci_rpc;
 
@@ -188,7 +104,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		*(int *) cb_info->cci_arg = 1;
 
 	switch (cb_info->cci_rpc->cr_opc) {
-	case TEST_OPC_CHECKIN:
+	case TEST_OPC_PING_DELAY:
 		rpc_req_input = crt_req_get(rpc_req);
 		if (rpc_req_input == NULL)
 			return;
@@ -201,7 +117,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			D_FREE(rpc_req_input->name);
 			break;
 		}
-		printf("%s checkin result - ret: %d, room_no: %d.\n",
+		printf("%s ping result - ret: %d, room_no: %d.\n",
 		       rpc_req_input->name, rpc_req_output->ret,
 		       rpc_req_output->room_no);
 		D_FREE(rpc_req_input->name);
@@ -216,7 +132,8 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	}
 }
 
-static void *progress_thread(void *arg)
+static void *
+progress_thread(void *arg)
 {
 	crt_context_t	ctx;
 	pthread_t	current_thread = pthread_self();
@@ -233,20 +150,22 @@ static void *progress_thread(void *arg)
 	fprintf(stderr, "progress thread %d running on core %d...\n",
 		t_idx, sched_getcpu());
 
-	ctx = (crt_context_t)test_g.t_crt_ctx[t_idx];
+	ctx = test_g.t_crt_ctx[t_idx];
 	/* progress loop */
-	do {
+	 while (1) {
 		rc = crt_progress(ctx, 0, NULL, NULL);
-		if (rc != 0 && rc != -DER_TIMEDOUT) {
+		if (rc != 0 && rc != -DER_TIMEDOUT)
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
-		}
+
 		if (test_g.t_shutdown == 1 && test_g.t_complete == 1)
 			break;
-	} while (!dead);
+	}
 
 	printf("progress_thread: rc: %d, test_srv.do_shutdown: %d.\n",
 	       rc, test_g.t_shutdown);
 	printf("progress_thread: progress thread exit ...\n");
+
+	D_ASSERT(rc == 0 || rc == -DER_TIMEDOUT);
 
 	pthread_exit(NULL);
 }
@@ -286,33 +205,15 @@ test_init(void)
 		rc = crt_group_config_save(NULL, true);
 		D_ASSERTF(rc == 0, "crt_group_config_save() failed. rc: %d\n",
 			rc);
-		crt_fake_event_init(test_g.t_my_rank);
-		D_ASSERTF(rc == 0, "crt_fake_event_init() failed. rc: %d\n",
-			  rc);
 	}
 
 	/* register RPCs */
 	if (test_g.t_is_service) {
-		rc = crt_rpc_srv_register(TEST_OPC_CHECKIN, 0,
-					  &CQF_TEST_PING_CHECK,
-					  test_checkin_handler);
-		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
-			  rc);
-		rc = crt_rpc_srv_register(TEST_OPC_SHUTDOWN,
-					  CRT_RPC_FEAT_NO_REPLY, NULL,
-					  test_shutdown_handler);
-		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
-			  rc);
-
-		rc = crt_rpc_srv_register(TEST_OPC_PING_DELAY,
-					  CRT_RPC_FEAT_NO_TIMEOUT,
-					  &CQF_TEST_PING_DELAY,
-					  test_ping_delay_handler);
-		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
-			  rc);
+		D_ERROR("Can't run as service.\n");
 	} else {
-		rc = crt_rpc_register(TEST_OPC_CHECKIN, 0,
-				      &CQF_TEST_PING_CHECK);
+		rc = crt_rpc_register(TEST_OPC_PING_DELAY,
+				      CRT_RPC_FEAT_NO_TIMEOUT,
+				      &CQF_TEST_PING_DELAY);
 		D_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
 		rc = crt_rpc_register(TEST_OPC_SHUTDOWN, CRT_RPC_FEAT_NO_REPLY,
 				      NULL);
@@ -330,11 +231,11 @@ test_init(void)
 	test_g.t_complete = 1;
 }
 
-void
-check_in(crt_group_t *remote_group, int rank)
+static void
+ping_delay_reply(crt_group_t *remote_group, int rank, uint32_t delay)
 {
 	crt_rpc_t			*rpc_req = NULL;
-	struct crt_test_checkin_req	*rpc_req_input;
+	struct crt_test_ping_delay_req	*rpc_req_input;
 	crt_endpoint_t			 server_ep = {0};
 	char				*buffer;
 	int				 rc;
@@ -342,7 +243,7 @@ check_in(crt_group_t *remote_group, int rank)
 	server_ep.ep_grp = remote_group;
 	server_ep.ep_rank = rank;
 	rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-			TEST_OPC_CHECKIN, &rpc_req);
+			TEST_OPC_PING_DELAY, &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
 			" rc: %d rpc_req: %p\n", rc, rpc_req);
 
@@ -355,10 +256,11 @@ check_in(crt_group_t *remote_group, int rank)
 	rpc_req_input->name = buffer;
 	rpc_req_input->age = 21;
 	rpc_req_input->days = 7;
-	D_DEBUG(DB_TEST, "client(rank %d) sending checkin rpc with tag "
-		"%d, name: %s, age: %d, days: %d.\n",
+	rpc_req_input->delay = delay;
+	D_DEBUG(DB_TEST, "client(rank %d) sending ping rpc with tag "
+		"%d, name: %s, age: %d, days: %d, delay: %u.\n",
 		test_g.t_my_rank, server_ep.ep_tag, rpc_req_input->name,
-		rpc_req_input->age, rpc_req_input->days);
+		rpc_req_input->age, rpc_req_input->days, rpc_req_input->delay);
 
 	/* send an rpc, print out reply */
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
@@ -368,9 +270,10 @@ check_in(crt_group_t *remote_group, int rank)
 void
 test_run(void)
 {
-	crt_group_t			*remote_group = NULL;
-	int				 ii;
-	int				 rc;
+	int			ii;
+	uint32_t		delay = 22;
+	int			rc;
+	int			attach_retries_left;
 
 	if (!test_g.t_should_attach)
 		return;
@@ -380,33 +283,31 @@ test_run(void)
 		D_ASSERTF(rc == 0, "crt_init() failed. rc: %d\n", rc);
 	}
 
-	/* try until success to avoid intermittent failures under valgrind. */
-	do {
+	attach_retries_left = NUM_ATTACH_RETRIES;
+	while (attach_retries_left-- > 0) {
 		sleep(1);
 		rc = crt_group_attach(test_g.t_remote_group_name,
 				      &test_g.t_remote_group);
-	} while (rc != 0);
+		if (rc == 0)
+			break;
+
+		printf("attach failed (rc=%d). retries left %d\n",
+			rc, attach_retries_left);
+	}
 	D_ASSERTF(rc == 0, "crt_group_attach failed, rc: %d\n", rc);
 	D_ASSERTF(test_g.t_remote_group != NULL, "NULL attached srv_grp\n");
 
 	test_g.t_complete = 0;
-	remote_group = crt_group_lookup(test_g.t_remote_group_name);
-	D_ASSERTF(remote_group != NULL, "crt_group_lookup() failed. "
-		  "remote_group = %p\n", remote_group);
-	crt_group_size(remote_group, &test_g.t_remote_group_size);
+	crt_group_size(test_g.t_remote_group, &test_g.t_remote_group_size);
 	fprintf(stderr, "size of %s is %d\n", test_g.t_remote_group_name,
 		test_g.t_remote_group_size);
 
 	for (ii = 0; ii < test_g.t_remote_group_size; ii++)
-		check_in(test_g.t_remote_group, ii);
+		ping_delay_reply(test_g.t_remote_group, ii, delay);
 
 	for (ii = 0; ii < test_g.t_remote_group_size; ii++)
-		test_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
-
-	while (test_g.t_infinite_loop) {
-		check_in(test_g.t_remote_group, 1);
-		test_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
-	}
+		test_sem_timedwait(&test_g.t_token_to_proceed, delay + 5,
+				   __LINE__);
 }
 
 void
@@ -453,8 +354,6 @@ test_fini()
 		D_DEBUG(DB_TEST, "destroyed crt_ctx.\n");
 	}
 
-	if (test_g.t_is_service)
-		crt_fake_event_fini(test_g.t_my_rank);
 	rc = sem_destroy(&test_g.t_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
 	/* corresponding to the crt_init() in run_test_group() */
@@ -476,11 +375,8 @@ test_parse_args(int argc, char **argv)
 	struct option			long_options[] = {
 		{"name", required_argument, 0, 'n'},
 		{"attach_to", required_argument, 0, 'a'},
-		{"holdtime", required_argument, 0, 'h'},
-		{"hold", no_argument, &test_g.t_hold, 1},
 		{"is_service", no_argument, &test_g.t_is_service, 1},
 		{"ctx_num", required_argument, 0, 'c'},
-		{"loop", no_argument, &test_g.t_infinite_loop, 1},
 		{0, 0, 0, 0}
 	};
 
@@ -516,10 +412,6 @@ test_parse_args(int argc, char **argv)
 			}
 			break;
 		}
-		case 'h':
-			test_g.t_hold = 1;
-			test_g.t_hold_time = atoi(optarg);
-			break;
 		case '?':
 			return 1;
 		default:
@@ -547,8 +439,6 @@ int main(int argc, char **argv)
 
 	test_init();
 	test_run();
-	if (test_g.t_hold)
-		sleep(test_g.t_hold_time);
 	test_fini();
 
 	return rc;
