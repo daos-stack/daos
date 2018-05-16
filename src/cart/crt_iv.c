@@ -1827,9 +1827,13 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 		iv_ops->ivo_on_put(iv_sync->isc_ivns_internal, NULL,
 					iv_sync->isc_user_priv);
 		D_FREE(iv_sync->isc_iv_key.iov_buf);
+
+		/* If isc_do_callback is false decref is done in
+		 * crt_ivsync_rpc_issue()
+		 */
+		IVNS_DECREF(iv_sync->isc_ivns_internal);
 	}
 
-	IVNS_DECREF(iv_sync->isc_ivns_internal);
 	D_FREE(iv_sync);
 
 }
@@ -1937,10 +1941,10 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 	/* Perform callback from sync response handler */
 	if (delay_completion) {
+		iv_sync_cb->isc_ivns_internal = ivns_internal;
 		iv_sync_cb->isc_update_comp_cb = update_comp_cb;
 		iv_sync_cb->isc_cb_arg = cb_arg;
 		iv_sync_cb->isc_update_rc = update_rc;
-		iv_sync_cb->isc_ivns_internal = ivns_internal;
 		iv_sync_cb->isc_class_id = class_id;
 
 		/* Copy iv_key over as it will get destroyed after this call */
