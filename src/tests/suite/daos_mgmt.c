@@ -57,8 +57,8 @@ pool_create_all(void **state)
 		      arg->async ? "a" : "");
 	rc = daos_pool_create(0 /* mode */, 0 /* uid */, 0 /* gid */,
 			      arg->group, NULL /* tgts */, "pmem" /* dev */,
-			      0 /* minimal size */, &arg->svc /* svc */, uuid,
-			      arg->async ? &ev : NULL);
+			      0 /* minimal size */, &arg->pool.svc /* svc */,
+			      uuid, arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {
@@ -101,7 +101,7 @@ static const struct CMUnitTest tests[] = {
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_EQ, false, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_EQ, false, DEFAULT_POOL_SIZE, NULL);
 }
 
 int

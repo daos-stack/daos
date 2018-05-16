@@ -46,14 +46,15 @@ rebuild_test_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 		int i;
 
 		if (kill) {
-			daos_kill_server(args[0], args[0]->pool_uuid,
-					 args[0]->group, &args[0]->svc, rank);
+			daos_kill_server(args[0], args[0]->pool.pool_uuid,
+					 args[0]->group, &args[0]->pool.svc,
+					 rank);
 			sleep(5);
 		}
 
 		for (i = 0; i < arg_cnt; i++) {
-			daos_exclude_server(args[i]->pool_uuid, args[i]->group,
-					    &args[i]->svc, rank);
+			daos_exclude_server(args[i]->pool.pool_uuid,
+				args[i]->group, &args[i]->pool.svc, rank);
 			sleep(2);
 		}
 	}
@@ -68,8 +69,8 @@ rebuild_test_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank)
 		int i;
 
 		for (i = 0; i < args_cnt; i++)
-			daos_add_server(args[i]->pool_uuid,
-					args[i]->group, &args[i]->svc, rank);
+			daos_add_server(args[i]->pool.pool_uuid,
+				args[i]->group, &args[i]->pool.svc, rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -570,7 +571,7 @@ rebuild_multiple_pools(void **state)
 	args[0] = arg;
 	/* create/connect another pool */
 	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank,
-			DEFAULT_POOL_SIZE);
+			DEFAULT_POOL_SIZE, NULL);
 	if (rc) {
 		print_message("open/connect another pool failed: rc %d\n", rc);
 		return;
@@ -618,7 +619,8 @@ rebuild_destroy_container_cb(void *data)
 
 	if (!uuid_is_null(arg->co_uuid)) {
 		while (arg->myrank == 0) {
-			rc = daos_cont_destroy(arg->poh, arg->co_uuid, 1, NULL);
+			rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1,
+					       NULL);
 			if (rc == -DER_BUSY || rc == -DER_IO) {
 				print_message("Container is busy, wait\n");
 				sleep(1);
@@ -627,7 +629,8 @@ rebuild_destroy_container_cb(void *data)
 			break;
 		}
 		print_message("container "DF_UUIDF"/"DF_UUIDF" destroyed\n",
-			      DP_UUID(arg->pool_uuid), DP_UUID(arg->co_uuid));
+			      DP_UUID(arg->pool.pool_uuid),
+			      DP_UUID(arg->co_uuid));
 		if (arg->multi_rank)
 			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		if (rc)
@@ -653,7 +656,7 @@ rebuild_destroy_container(void **state)
 	args[0] = arg;
 	/* create/connect another pool */
 	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank,
-			DEFAULT_POOL_SIZE);
+			DEFAULT_POOL_SIZE, NULL);
 	if (rc) {
 		print_message("open/connect another pool failed: rc %d\n", rc);
 		return;
@@ -772,14 +775,15 @@ rebuild_pool_connect_internal(void *data)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
-				       DAOS_PC_RW, &arg->poh, &arg->pool_info,
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+				       &arg->pool.svc, DAOS_PC_RW,
+				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
 			print_message("daos_pool_connect failed, rc: %d\n", rc);
 
 		print_message("pool connect "DF_UUIDF"\n",
-			       DP_UUID(arg->pool_uuid));
+			       DP_UUID(arg->pool.pool_uuid));
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->multi_rank)
@@ -789,15 +793,16 @@ rebuild_pool_connect_internal(void *data)
 
 	/** broadcast pool info */
 	if (arg->multi_rank) {
-		MPI_Bcast(&arg->pool_info, sizeof(arg->pool_info), MPI_CHAR, 0,
-			  MPI_COMM_WORLD);
-		handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 0);
+		MPI_Bcast(&arg->pool.pool_info, sizeof(arg->pool.pool_info),
+			  MPI_CHAR, 0, MPI_COMM_WORLD);
+		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
+			     arg->pool.poh, 0);
 	}
 
 	/** open container */
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
 				    &arg->coh, &arg->co_info, NULL);
 		if (rc)
 			print_message("daos_cont_open failed, rc: %d\n", rc);
@@ -814,7 +819,8 @@ rebuild_pool_connect_internal(void *data)
 	/** broadcast container info */
 	if (arg->multi_rank) {
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 0);
+		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh,
+			     0);
 	}
 
 	return 0;
@@ -844,15 +850,15 @@ rebuild_pool_disconnect_internal(void *data)
 		return rc;
 
 	arg->coh = DAOS_HDL_INVAL;
-	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
+	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
 	if (rc)
 		print_message("failed to disconnect pool "DF_UUIDF
-			      ": %d\n", DP_UUID(arg->pool_uuid), rc);
+			      ": %d\n", DP_UUID(arg->pool.pool_uuid), rc);
 
 	print_message("pool disconnect "DF_UUIDF"\n",
-		      DP_UUID(arg->pool_uuid));
+		      DP_UUID(arg->pool.pool_uuid));
 
-	arg->poh = DAOS_HDL_INVAL;
+	arg->pool.poh = DAOS_HDL_INVAL;
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }
@@ -1053,7 +1059,7 @@ rebuild_master_change_during_scan(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6) || arg->svc.rl_nr == 1)
+	if (!test_runable(arg, 6) || arg->pool.svc.rl_nr == 1)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -1086,7 +1092,7 @@ rebuild_master_change_during_rebuild(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6) || arg->svc.rl_nr == 1)
+	if (!test_runable(arg, 6) || arg->pool.svc.rl_nr == 1)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -1143,7 +1149,7 @@ rebuild_master_failure(void **state)
 	daos_obj_id_t	cb_arg_oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6) || arg->svc.rl_nr == 1)
+	if (!test_runable(arg, 6) || arg->pool.svc.rl_nr == 1)
 		skip();
 
 	test_get_leader(arg, &ranks_to_kill[0]);
@@ -1229,9 +1235,9 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 
 	/* Kill one replica and start rebuild */
 	shard = layout->ol_shards[0];
-	daos_kill_server(arg, arg->pool_uuid, arg->group, &arg->svc,
+	daos_kill_server(arg, arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 			 shard->os_ranks[0]);
-	daos_exclude_server(arg->pool_uuid, arg->group, &arg->svc,
+	daos_exclude_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 			    shard->os_ranks[0]);
 
 	/* Sleep 10 seconds after it scan finish and hang before rebuild */
@@ -1239,9 +1245,9 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	sleep(10);
 
 	/* Then kill rank 1 */
-	daos_kill_server(arg, arg->pool_uuid, arg->group, &arg->svc,
+	daos_kill_server(arg, arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 			 shard->os_ranks[1]);
-	daos_exclude_server(arg->pool_uuid, arg->group, &arg->svc,
+	daos_exclude_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 			    shard->os_ranks[1]);
 
 	/* Continue rebuild */
@@ -1279,15 +1285,15 @@ rebuild_fail_all_replicas(void **state)
 		for (j = 0; j < layout->ol_shards[i]->os_replica_nr; j++) {
 			d_rank_t rank = layout->ol_shards[i]->os_ranks[j];
 
-			daos_kill_server(arg, arg->pool_uuid,
-					 arg->group, &arg->svc, rank);
+			daos_kill_server(arg, arg->pool.pool_uuid,
+					 arg->group, &arg->pool.svc, rank);
 		}
 
 		for (j = 0; j < layout->ol_shards[i]->os_replica_nr; j++) {
 			d_rank_t rank = layout->ol_shards[i]->os_ranks[j];
 
-			daos_exclude_server(arg->pool_uuid, arg->group,
-					    &arg->svc, rank);
+			daos_exclude_server(arg->pool.pool_uuid, arg->group,
+					    &arg->pool.svc, rank);
 		}
 	}
 
@@ -1297,6 +1303,55 @@ rebuild_fail_all_replicas(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	daos_obj_layout_free(layout);
+}
+
+static void
+multi_pools_rebuild_concurrently(void **state)
+{
+#define POOL_NUM		6
+#define CONT_PER_POOL		4
+#define OBJ_PER_CONT		256
+	test_arg_t		*arg = *state;
+	test_arg_t		*args[POOL_NUM * CONT_PER_POOL];
+	daos_obj_id_t		oids[OBJ_PER_CONT];
+	struct test_pool	*pool;
+	int			i;
+	int			rc;
+
+	if (!test_runable(arg, 6))
+		skip();
+
+	memset(args, 0, sizeof(args[0]) * POOL_NUM * CONT_PER_POOL);
+	for (i = 0; i < POOL_NUM * CONT_PER_POOL; i++) {
+		pool = (i % CONT_PER_POOL == 0) ? NULL :
+				&args[(i/CONT_PER_POOL) * CONT_PER_POOL]->pool;
+		rc = test_setup((void **)&args[i], SETUP_CONT_CONNECT,
+				arg->multi_rank, DEFAULT_POOL_SIZE, pool);
+		if (rc) {
+			print_message("open/connect another pool failed: "
+				      "rc %d\n", rc);
+			return;
+		}
+		if (i % CONT_PER_POOL == 0)
+			assert_int_equal(args[i]->pool.slave, 0);
+		else
+			assert_int_equal(args[i]->pool.slave, 1);
+	}
+
+	for (i = 0; i < OBJ_PER_CONT; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
+
+	for (i = 0; i < POOL_NUM * CONT_PER_POOL; i++)
+		rebuild_io(args[i], oids, OBJ_PER_CONT);
+
+	rebuild_pools_targets(args, POOL_NUM * CONT_PER_POOL, ranks_to_kill, 1);
+
+	for (i = POOL_NUM * CONT_PER_POOL - 1; i >= 0; i--) {
+		rebuild_io_validate(args[i], oids, OBJ_PER_CONT);
+		test_teardown((void **)&args[i]);
+	}
 }
 
 /** create a new pool/container for each test */
@@ -1355,13 +1410,16 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_fail_all_replicas_before_rebuild, NULL, test_case_teardown},
 	{"REBUILD27: rebuild fail all replicas",
 	 rebuild_fail_all_replicas, NULL, test_case_teardown},
+	{"REBUILD28: multi-pools rebuild concurrently",
+	 multi_pools_rebuild_concurrently, NULL, test_case_teardown},
 };
 
 #define REBUILD_POOL_SIZE	(10ULL << 30)
 int
 rebuild_setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, true, REBUILD_POOL_SIZE);
+	return test_setup(state, SETUP_CONT_CONNECT, true, REBUILD_POOL_SIZE,
+			  NULL);
 }
 
 int

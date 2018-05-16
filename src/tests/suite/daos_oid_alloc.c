@@ -36,17 +36,18 @@ reconnect(test_arg_t *arg) {
 	rc = daos_cont_close(arg->coh, NULL);
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
-	arg->poh = DAOS_HDL_INVAL;
+	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
+	arg->pool.poh = DAOS_HDL_INVAL;
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
-				       DAOS_PC_RW, &arg->poh, &arg->pool_info,
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+				       &arg->pool.svc, DAOS_PC_RW,
+				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
 			goto bcast;
-		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
 				    &arg->coh, &arg->co_info, NULL);
 	}
 bcast:
@@ -56,8 +57,10 @@ bcast:
 	assert_int_equal(rc, 0);
 	/** l2g and g2l the container handle */
 	if (arg->rank_size > 1) {
-		handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 0);
-		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 0);
+		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
+			     arg->pool.poh, 0);
+		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh,
+			     0);
 	}
 }
 
@@ -110,13 +113,13 @@ multi_cont_oid_allocator(void **state)
 
 		uuid_clear(co_uuid);
 		uuid_generate(co_uuid);
-		rc = daos_cont_create(arg->poh, co_uuid, NULL);
+		rc = daos_cont_create(arg->pool.poh, co_uuid, NULL);
 		if (rc) {
 			print_message("Cont create failed\n");
 			goto verify_rc;
 		}
 
-		rc = daos_cont_open(arg->poh, co_uuid, DAOS_COO_RW,
+		rc = daos_cont_open(arg->pool.poh, co_uuid, DAOS_COO_RW,
 				    &coh, &co_info, NULL);
 		if (rc) {
 			print_message("Cont Open failed\n");
@@ -144,7 +147,7 @@ multi_cont_oid_allocator(void **state)
 		if (rc)
 			goto verify_rc;
 
-		rc = daos_cont_destroy(arg->poh, co_uuid, 1, NULL);
+		rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
 		if (rc)
 			goto verify_rc;
 	}
@@ -243,14 +246,14 @@ oid_allocator_checker(void **state)
 			daos_pool_info_t info;
 
 			MPI_Barrier(MPI_COMM_WORLD);
-			rc = daos_pool_query(arg->poh, NULL, &info, NULL);
+			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL);
 			assert_int_equal(rc, 0);
 			if (info.pi_ntargets - info.pi_ndisabled >= 2) {
 				if (arg->myrank == 0)
 					daos_kill_exclude_server(arg,
-								 arg->pool_uuid,
-								 arg->group,
-								 &arg->svc);
+						arg->pool.pool_uuid,
+						arg->group,
+						&arg->pool.svc);
 			}
 			MPI_Barrier(MPI_COMM_WORLD);
 		}
@@ -283,7 +286,8 @@ static const struct CMUnitTest oid_alloc_tests[] = {
 int
 oid_alloc_setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 int

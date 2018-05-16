@@ -118,10 +118,10 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	uuid_generate(uuid);
 	print_message("creating and opening container "DF_UUIDF"\n",
 		      DP_UUID(uuid));
-	rc = daos_cont_create(arg->poh, uuid, NULL /* ev */);
+	rc = daos_cont_create(arg->pool.poh, uuid, NULL /* ev */);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_open(arg->poh, uuid, DAOS_COO_RW, &coh, NULL /* info */,
-			    NULL /* ev */);
+	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh,
+			    NULL /* info */, NULL /* ev */);
 	assert_int_equal(rc, 0);
 
 	epoch = 1;
@@ -146,8 +146,8 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	if (op == POOL_EVICT) {
 		if (arg->myrank == 0) {
 			print_message("evicting pool connections\n");
-			rc = daos_pool_evict(arg->pool_uuid, arg->group,
-					     &arg->svc, NULL /* ev */);
+			rc = daos_pool_evict(arg->pool.pool_uuid, arg->group,
+					     &arg->pool.svc, NULL /* ev */);
 			assert_int_equal(rc, 0);
 		}
 		MPI_Barrier(MPI_COMM_WORLD);
@@ -158,20 +158,22 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (op == POOL_DISCONNECT || op == POOL_EVICT) {
 		print_message("disconnecting from pool\n");
-		rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
+		rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
 		assert_int_equal(rc, 0);
 		print_message("reconnecting to pool\n");
 		if (arg->myrank == 0) {
-			rc = daos_pool_connect(arg->pool_uuid, arg->group,
-					       &arg->svc, DAOS_PC_RW, &arg->poh,
-					       NULL /* info */, NULL /* ev */);
+			rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+					       &arg->pool.svc, DAOS_PC_RW,
+					       &arg->pool.poh, NULL /* info */,
+					       NULL /* ev */);
 			assert_int_equal(rc, 0);
 		}
-		handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 1);
+		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
+			     arg->pool.poh, 1);
 	}
 	print_message("reopening container\n");
-	rc = daos_cont_open(arg->poh, uuid, DAOS_COO_RO, &coh, &arg->co_info,
-			    NULL /* ev */);
+	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RO, &coh,
+			    &arg->co_info, NULL /* ev */);
 	assert_int_equal(rc, 0);
 	assert_int_equal(arg->co_info.ci_epoch_state.es_hce, 1);
 
@@ -213,7 +215,8 @@ static const struct CMUnitTest epoch_recovery_tests[] = {
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 int

@@ -42,25 +42,33 @@
 #include <daos.h>
 
 extern int daos_event_priv_reset(void);
+#define TEST_RANKS_MAX_NUM	(13)
+
+/* the pool used for daos test suite */
+struct test_pool {
+	d_rank_t		ranks[TEST_RANKS_MAX_NUM];
+	uuid_t			pool_uuid;
+	daos_handle_t		poh;
+	daos_pool_info_t	pool_info;
+	daos_size_t		pool_size;
+	d_rank_list_t		svc;
+	/* flag of slave that share the pool of other test_arg_t */
+	bool			slave;
+};
 
 typedef struct {
 	bool			multi_rank;
-	d_rank_t		ranks[13];
 	int			myrank;
 	int			rank_size;
-	d_rank_list_t		svc;
 	const char	       *group;
-	uuid_t			pool_uuid;
+	struct test_pool	pool;
 	uuid_t			co_uuid;
 	unsigned int		mode;
 	unsigned int		uid;
 	unsigned int		gid;
 	daos_handle_t		eq;
-	daos_handle_t		poh;
 	daos_handle_t		coh;
-	daos_pool_info_t	pool_info;
 	daos_cont_info_t	co_info;
-	daos_size_t		pool_size;
 	int			setup_state;
 	bool			async;
 	bool			hdl_share;
@@ -123,7 +131,7 @@ int
 test_teardown(void **state);
 int
 test_setup(void **state, unsigned int step, bool multi_rank,
-	   daos_size_t pool_size);
+	   daos_size_t pool_size, struct test_pool *pool);
 
 static inline int
 async_enable(void **state)

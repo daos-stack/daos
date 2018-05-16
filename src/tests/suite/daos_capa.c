@@ -68,8 +68,8 @@ query(void **state)
 		return;
 
 	/** connect to the pool */
-	rc = daos_pool_connect(arg->pool_uuid, arg->group,
-			       &arg->svc, DAOS_PC_RW, &poh,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       &arg->pool.svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -105,8 +105,8 @@ create(void **state)
 		return;
 
 	/** connect to the pool in read-only mode */
-	rc = daos_pool_connect(arg->pool_uuid, arg->group,
-			       &arg->svc, DAOS_PC_RO, &poh,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       &arg->pool.svc, DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -122,8 +122,8 @@ create(void **state)
 	assert_int_equal(rc, 0);
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool_uuid, arg->group,
-			       &arg->svc, DAOS_PC_RW, &poh,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       &arg->pool.svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -155,8 +155,8 @@ destroy(void **state)
 		return;
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool_uuid, arg->group,
-			       &arg->svc, DAOS_PC_RW, &poh,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       &arg->pool.svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -179,8 +179,8 @@ destroy(void **state)
 	assert_int_equal(rc, 0);
 
 	/** connect to the pool in read-only mode */
-	rc = daos_pool_connect(arg->pool_uuid, arg->group,
-			       &arg->svc, DAOS_PC_RO, &poh,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       &arg->pool.svc, DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -195,8 +195,8 @@ destroy(void **state)
 	assert_int_equal(rc, 0);
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool_uuid, arg->group,
-			       &arg->svc, DAOS_PC_RW, &poh,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       &arg->pool.svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -225,8 +225,8 @@ open(void **state)
 		return;
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool_uuid, arg->group,
-			       &arg->svc, DAOS_PC_RW, &poh,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       &arg->pool.svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -244,8 +244,8 @@ open(void **state)
 	assert_int_equal(rc, 0);
 
 	/** reconnect to the pool in read-only mode */
-	rc = daos_pool_connect(arg->pool_uuid, arg->group,
-			       &arg->svc, DAOS_PC_RO, &poh,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       &arg->pool.svc, DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -293,8 +293,8 @@ io_invalid_poh(void **state)
 
 	if (arg->myrank == 0) {
 		/** connect to the pool in read-write mode */
-		rc = daos_pool_connect(arg->pool_uuid, arg->group,
-				       &arg->svc, DAOS_PC_RW, &poh,
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+				       &arg->pool.svc, DAOS_PC_RW, &poh,
 				       NULL /* info */,
 				       NULL /* ev */);
 		assert_int_equal(rc, 0);
@@ -395,12 +395,12 @@ io_invalid_coh(void **state)
 
 	if (arg->myrank == 0) {
 		/** open container in read/write mode */
-		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &coh,
-				    NULL, NULL);
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
+				    &coh, NULL, NULL);
 		assert_int_equal(rc, 0);
 	}
 
-	handle_share(&coh, HANDLE_CO, arg->myrank, arg->poh, false);
+	handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, false);
 
 	if (arg->myrank != 1) {
 		rc = daos_cont_close(coh, NULL);
@@ -483,12 +483,12 @@ update_ro(void **state)
 
 	if (arg->myrank == 0) {
 		/** open container in read/write mode */
-		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RO, &coh,
-				    NULL, NULL);
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RO,
+				    &coh, NULL, NULL);
 		assert_int_equal(rc, 0);
 	}
 
-	handle_share(&coh, HANDLE_CO, arg->myrank, arg->poh, false);
+	handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, false);
 
 	/** open object */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
@@ -551,7 +551,8 @@ static const struct CMUnitTest capa_tests[] = {
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CREATE, true, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_CONT_CREATE, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 int

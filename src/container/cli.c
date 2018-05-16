@@ -203,7 +203,7 @@ cont_destroy_complete(tse_task_t *task, void *data)
 
 	rc = out->cdo_op.co_rc;
 	if (rc != 0) {
-		D_DEBUG(DF_DSMC, "failed to destroy container: %d\n", rc);
+		D_ERROR("failed to destroy container: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 

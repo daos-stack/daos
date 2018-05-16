@@ -351,7 +351,8 @@ kb_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 	/* Step-1: find the btree attributes and create btree */
 	ta = vos_obj_sub_tree_attr(tins->ti_root->tr_class);
-	D_ASSERT(ta != NULL);
+	D_ASSERTF(ta != NULL, "gets NULL ta for tr_class %d.\n",
+		 tins->ti_root->tr_class);
 
 	D_DEBUG(DB_TRACE, "Create dbtree %s\n", ta->ta_name);
 	if (rbund->rb_tclass == VOS_BTR_DKEY) {

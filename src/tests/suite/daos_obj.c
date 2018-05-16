@@ -1232,11 +1232,11 @@ close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid)
 
 	print_message("reopening container\n");
 	if (arg->myrank == 0) {
-		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
 				    &arg->coh, &arg->co_info, NULL /* ev */);
 		assert_int_equal(rc, 0);
 	}
-	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 1);
+	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
 
 	print_message("reopening object\n");
 	rc = daos_obj_open(arg->coh, oid, 0 /* epoch */, 0 /* mode */, &req->oh,
@@ -1543,8 +1543,8 @@ tgt_idx_change_retry(void **state)
 
 		/** exclude target of the replica */
 		print_message("rank 0 excluding target rank %u ...\n", rank);
-		daos_exclude_server(arg->pool_uuid, arg->group, &arg->svc,
-				    rank);
+		daos_exclude_server(arg->pool.pool_uuid, arg->group,
+				    &arg->pool.svc, rank);
 		assert_int_equal(rc, 0);
 
 		/** progress the async IO (not must) */
@@ -1593,7 +1593,8 @@ tgt_idx_change_retry(void **state)
 
 	if (arg->myrank == 0) {
 		print_message("rank 0 adding target rank %u ...\n", rank);
-		daos_add_server(arg->pool_uuid, arg->group, &arg->svc, rank);
+		daos_add_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+				rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 	ioreq_fini(&req);
@@ -1629,7 +1630,7 @@ fetch_replica_unavail(void **state)
 
 	if (arg->myrank == 0) {
 		/** disable rebuild */
-		rc = daos_pool_query(arg->poh, NULL, &info, NULL);
+		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL);
 		assert_int_equal(rc, 0);
 		rc = daos_mgmt_params_set(arg->group, info.pi_leader,
 			DSS_KEY_FAIL_LOC,
@@ -1638,8 +1639,8 @@ fetch_replica_unavail(void **state)
 		assert_int_equal(rc, 0);
 
 		/** exclude the target of this obj's replicas */
-		daos_exclude_server(arg->pool_uuid, arg->group, &arg->svc,
-				    rank);
+		daos_exclude_server(arg->pool.pool_uuid, arg->group,
+				    &arg->pool.svc, rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1653,7 +1654,7 @@ fetch_replica_unavail(void **state)
 
 	if (arg->myrank == 0) {
 		/* add back the excluded targets */
-		daos_add_server(arg->pool_uuid, arg->group, &arg->svc,
+		daos_add_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 				rank);
 
 		/* re-enable rebuild */
@@ -1803,7 +1804,7 @@ obj_setup_internal(void **state)
 	test_arg_t	*arg;
 
 	arg = *state;
-	if (arg->pool_info.pi_ntargets < 2)
+	if (arg->pool.pool_info.pi_ntargets < 2)
 		dts_obj_class = DAOS_OC_TINY_RW;
 
 	return 0;
@@ -1814,7 +1815,8 @@ obj_setup(void **state)
 {
 	int	rc;
 
-	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE);
+	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+			NULL);
 	if (rc != 0)
 		return rc;
 

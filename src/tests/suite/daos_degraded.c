@@ -158,12 +158,12 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	if (!rank) {
-		print_message("Using pool: %s\n", DP_UUID(arg->pool_uuid));
+		print_message("Using pool: %s\n", DP_UUID(arg->pool.pool_uuid));
 		print_message("Inserting %d keys ...\n", g_dkeys * size);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = daos_pool_query(arg->poh, NULL, &info, NULL);
+	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL);
 	assert_int_equal(rc, 0);
 	if (info.pi_ntargets - info.pi_ndisabled < 2) {
 		if (rank == 0)
@@ -205,8 +205,8 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of updates is half-way inject fault */
 		if (op_kill == UPDATE && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
-			daos_kill_exclude_server(arg, arg->pool_uuid,
-						 arg->group, &arg->svc);
+			daos_kill_exclude_server(arg, arg->pool.pool_uuid,
+						 arg->group, &arg->pool.svc);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -234,8 +234,8 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of lookup is half-way inject fault */
 		if (op_kill == LOOKUP && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
-			daos_kill_exclude_server(arg, arg->pool_uuid,
-						 arg->group, &arg->svc);
+			daos_kill_exclude_server(arg, arg->pool.pool_uuid,
+						 arg->group, &arg->pool.svc);
 	}
 	free(rec_verify);
 
@@ -276,8 +276,8 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of keys enumerated is half-way inject fault */
 		if (op_kill == ENUMERATE && rank == 0 && enum_op &&
 		    g_dkeys > 1 && (key_nr  >= g_dkeys/2)) {
-			daos_kill_exclude_server(arg, arg->pool_uuid,
-						 arg->group, &arg->svc);
+			daos_kill_exclude_server(arg, arg->pool.pool_uuid,
+						 arg->group, &arg->pool.svc);
 			enum_op = 0;
 		}
 
@@ -336,7 +336,8 @@ static const struct CMUnitTest degraded_tests[] = {
 static int
 degraded_setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 static int

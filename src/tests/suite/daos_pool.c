@@ -42,8 +42,8 @@ pool_connect_nonexist(void **state)
 		return;
 
 	uuid_generate(uuid);
-	rc = daos_pool_connect(uuid, arg->group, &arg->svc, DAOS_PC_RW, &poh,
-			       NULL /* info */, NULL /* ev */);
+	rc = daos_pool_connect(uuid, arg->group, &arg->pool.svc, DAOS_PC_RW,
+			       &poh, NULL /* info */, NULL /* ev */);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
 
@@ -69,12 +69,12 @@ pool_connect(void **state)
 		/** connect to pool */
 		print_message("rank 0 connecting to pool %ssynchronously ... ",
 			      arg->async ? "a" : "");
-		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
-				       DAOS_PC_RW, &poh, &info,
-				      arg->async ? &ev : NULL /* ev */);
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+				       &arg->pool.svc, DAOS_PC_RW, &poh, &info,
+				       arg->async ? &ev : NULL /* ev */);
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
-		assert_memory_equal(info.pi_uuid, arg->pool_uuid,
+		assert_memory_equal(info.pi_uuid, arg->pool.pool_uuid,
 				    sizeof(info.pi_uuid));
 		/** TODO: assert_int_equal(info.pi_ntargets, arg->...); */
 		assert_int_equal(info.pi_ndisabled, 0);
@@ -124,12 +124,12 @@ pool_connect_exclusively(void **state)
 	print_message("SUBTEST 1: other connections already exist; shall get "
 		      "%d\n", -DER_BUSY);
 	print_message("establishing a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
 	print_message("trying to establish an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, -DER_BUSY);
@@ -139,7 +139,7 @@ pool_connect_exclusively(void **state)
 
 	print_message("SUBTEST 2: no other connections; shall succeed\n");
 	print_message("establishing an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -147,7 +147,7 @@ pool_connect_exclusively(void **state)
 	print_message("SUBTEST 3: shall prevent other connections (%d)\n",
 		      -DER_BUSY);
 	print_message("trying to establish a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, -DER_BUSY);
@@ -186,7 +186,7 @@ pool_exclude(void **state)
 	/** connect to pool */
 	print_message("rank 0 connecting to pool %ssynchronously... ",
 		      arg->async ? "a" : "");
-	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 			       DAOS_PC_RW, &poh, &info,
 			       arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -194,7 +194,7 @@ pool_exclude(void **state)
 	print_message("success\n");
 
 	/** exclude last non-svc rank */
-	if (info.pi_ntargets - 1 /* rank 0 */ <= arg->svc.rl_nr) {
+	if (info.pi_ntargets - 1 /* rank 0 */ <= arg->pool.svc.rl_nr) {
 		print_message("not enough non-svc targets; skipping\n");
 		goto disconnect;
 	}
@@ -203,8 +203,8 @@ pool_exclude(void **state)
 	ranks.rl_ranks = &rank;
 
 	print_message("rank 0 excluding rank %u... ", rank);
-	rc = daos_pool_exclude(arg->pool_uuid, arg->group, &arg->svc, &ranks,
-			       arg->async ? &ev : NULL /* ev */);
+	rc = daos_pool_exclude(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+			       &ranks, arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
@@ -272,7 +272,7 @@ pool_attribute(void **state)
 
 	print_message("setting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
-	rc = daos_pool_attr_set(arg->poh, n, names, in_values, in_sizes,
+	rc = daos_pool_attr_set(arg->pool.poh, n, names, in_values, in_sizes,
 				arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -281,7 +281,7 @@ pool_attribute(void **state)
 		      arg->async ? "a" : "");
 
 	total_size = 0;
-	rc = daos_pool_attr_list(arg->poh, NULL, &total_size,
+	rc = daos_pool_attr_list(arg->pool.poh, NULL, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -289,7 +289,7 @@ pool_attribute(void **state)
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
 
 	total_size = BUFSIZE;
-	rc = daos_pool_attr_list(arg->poh, out_buf, &total_size,
+	rc = daos_pool_attr_list(arg->pool.poh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -298,7 +298,7 @@ pool_attribute(void **state)
 	assert_string_equal(out_buf, names[1]);
 
 	total_size = 10*BUFSIZE;
-	rc = daos_pool_attr_list(arg->poh, out_buf, &total_size,
+	rc = daos_pool_attr_list(arg->pool.poh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -310,7 +310,7 @@ pool_attribute(void **state)
 	print_message("getting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 
-	rc = daos_pool_attr_get(arg->poh, n, names, out_values, out_sizes,
+	rc = daos_pool_attr_get(arg->pool.poh, n, names, out_values, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -324,7 +324,7 @@ pool_attribute(void **state)
 	assert_int_equal(out_sizes[1], in_sizes[1]);
 	assert_memory_equal(out_values[1], in_values[1], BUFSIZE);
 
-	rc = daos_pool_attr_get(arg->poh, n, names, NULL, out_sizes,
+	rc = daos_pool_attr_get(arg->pool.poh, n, names, NULL, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -343,20 +343,23 @@ static int
 pool_setup_sync(void **state)
 {
 	async_disable(state);
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 static int
 pool_setup_async(void **state)
 {
 	async_enable(state);
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_POOL_CREATE, true, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_POOL_CREATE, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 static const struct CMUnitTest pool_tests[] = {

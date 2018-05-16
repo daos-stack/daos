@@ -54,15 +54,16 @@ co_create(void **state)
 	if (arg->myrank == 0) {
 		print_message("creating container %ssynchronously ...\n",
 			      arg->async ? "a" : "");
-		rc = daos_cont_create(arg->poh, uuid, arg->async ? &ev : NULL);
+		rc = daos_cont_create(arg->pool.poh, uuid,
+				      arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
 		print_message("container created\n");
 
 		print_message("opening container %ssynchronously\n",
 			      arg->async ? "a" : "");
-		rc = daos_cont_open(arg->poh, uuid, DAOS_COO_RW, &coh, &info,
-				 arg->async ? &ev : NULL);
+		rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh,
+				    &info, arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
 		print_message("contained opened\n");
@@ -80,7 +81,7 @@ co_create(void **state)
 	}
 
 	if (arg->hdl_share)
-		handle_share(&coh, HANDLE_CO, arg->myrank, arg->poh, 1);
+		handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
 
 	print_message("closing container %ssynchronously ...\n",
 		      arg->async ? "a" : "");
@@ -96,7 +97,7 @@ co_create(void **state)
 	if (arg->myrank == 0) {
 		print_message("destroying container %ssynchronously ...\n",
 			      arg->async ? "a" : "");
-		rc = daos_cont_destroy(arg->poh, uuid, 1 /* force */,
+		rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */,
 				    arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
@@ -217,20 +218,23 @@ static int
 co_setup_sync(void **state)
 {
 	async_disable(state);
-	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 static int
 co_setup_async(void **state)
 {
 	async_enable(state);
-	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 static const struct CMUnitTest co_tests[] = {

@@ -870,6 +870,10 @@ akey_update(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		rc = akey_update_single(toh, &epr, cookie, pm_ver,
 					iod->iod_size, iobuf);
+		if (rc != 0) {
+			D_ERROR(DF_UOID", akey_update_single failed, rc %d.\n",
+				DP_UOID(obj->obj_id), rc);
+		}
 		D_GOTO(out, rc);
 	} /* else: array */
 
@@ -879,8 +883,11 @@ akey_update(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 		etmp = iod->iod_eprs ? &iod->iod_eprs[i] : &epr;
 		rc = akey_update_recx(toh, etmp, cookie, pm_ver,
 				      &iod->iod_recxs[i], iod->iod_size, iobuf);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_UOID", akey_update_recx failed, rc %d.\n",
+				DP_UOID(obj->obj_id), rc);
 			D_GOTO(out, rc);
+		}
 	}
  out:
 	tree_release(toh, is_array);
@@ -925,8 +932,11 @@ dkey_update(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 
 		rc = akey_update(obj, epoch, cookie, pm_ver, ak_toh, &iods[i],
 				 iobuf);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_UOID", akey_update failed, rc %d.\n",
+				DP_UOID(obj->obj_id), rc);
 			D_GOTO(out, rc);
+		}
 	}
 
 	/** If dkey update is successful update the cookie tree */
@@ -958,13 +968,19 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, false,
 			  &obj);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Update "DF_UOID", vos_obj_hold failed, rc %d.\n",
+			DP_UOID(oid), rc);
 		return rc;
+	}
 
 	pop = vos_obj2pop(obj);
 	TX_BEGIN(pop) {
 		rc = dkey_update(obj, epoch, cookie, pm_ver, dkey, iod_nr, iods,
 				 sgls, NULL);
+		if (rc != 0)
+			D_ERROR(DF_UOID", dkey_update failed, rc %d.\n",
+				DP_UOID(oid), rc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DB_IO, "Failed to update object: %d\n", rc);
@@ -1181,8 +1197,11 @@ vos_zcc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, read_only,
 			  &zcc->zc_obj);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_UOID"vos_obj_hold fails: %d\n",
+			DP_UOID(oid), rc);
 		D_GOTO(failed, rc);
+	}
 
 	zcc->zc_iod_nr = iod_nr;
 	zcc->zc_iods = iods;
@@ -1449,8 +1468,11 @@ akey_zc_update_begin(struct vos_zc_context *zcc, int iod_idx)
 			size = vos_recx2irec_size(iod->iod_size, NULL);
 
 			mmid = vos_zc_reserve(zcc, size);
-			if (UMMID_IS_NULL(mmid))
-				return -DER_NOMEM;
+			if (UMMID_IS_NULL(mmid)) {
+				D_ERROR("vos_zc_reserve(size "DF_U64") "
+					"fails.\n", size);
+				return -DER_NOSPACE;
+			}
 
 			/* return the pmem address, so upper layer stack can do
 			 * RMA update for the record.
@@ -1472,8 +1494,11 @@ akey_zc_update_begin(struct vos_zc_context *zcc, int iod_idx)
 				size *= iod->iod_size;
 
 				mmid = vos_zc_reserve(zcc, size);
-				if (UMMID_IS_NULL(mmid))
-					return -DER_NOMEM;
+				if (UMMID_IS_NULL(mmid)) {
+					D_ERROR("vos_zc_reserve(size "DF_U64") "
+						"fails.\n", size);
+					return -DER_NOSPACE;
+				}
 				addr = umem_id2ptr(vos_obj2umm(obj), mmid);
 			}
 		}
@@ -1518,8 +1543,11 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 	int			 rc;
 
 	rc = vos_zcc_create(coh, oid, false, epoch, iod_nr, iods, &zcc);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_UOID" vos_zcc_create fails: %d\n",
+			DP_UOID(oid), rc);
 		return rc;
+	}
 
 	if (zcc->zc_actv_cnt != 0) {
 		rc = dkey_zc_update_begin(zcc, dkey);
@@ -1533,8 +1561,11 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 		} TX_END
 	}
 
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_UOID" dkey_zc_update_begin fails: %d\n",
+			DP_UOID(oid), rc);
 		goto failed;
+	}
 
 	D_DEBUG(DB_IO, "Prepared zcbufs for updating %d arrays\n", iod_nr);
 	*ioh = vos_zcc2ioh(zcc);

@@ -657,8 +657,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE &&
-	    !(cont_hdl->sch_capas & DAOS_COO_RW))
+	    !(cont_hdl->sch_capas & DAOS_COO_RW)) {
+		D_ERROR("cont "DF_UUID" sch_capas "DF_U64", "
+			"NO_PERM to update.\n",
+			DP_UUID(orw->orw_co_uuid), cont_hdl->sch_capas);
 		D_GOTO(out, rc = -DER_NO_PERM);
+	}
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	map_version = cont_hdl->sch_pool->spc_map_version;
@@ -683,7 +687,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 					     &orw->orw_dkey, orw->orw_nr,
 					     orw->orw_iods.ca_arrays, &ioh);
 		if (rc != 0) {
-			D_ERROR(DF_UOID"preparing update fails: %d\n",
+			D_ERROR(DF_UOID" preparing update fails: %d\n",
 				DP_UOID(orw->orw_oid), rc);
 			D_GOTO(out, rc);
 		}
@@ -699,7 +703,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 					    &orw->orw_dkey, orw->orw_nr,
 					    orw->orw_iods.ca_arrays, &ioh);
 		if (rc != 0) {
-			D_ERROR(DF_UOID"preparing fetch fails: %d\n",
+			D_ERROR(DF_UOID" preparing fetch fails: %d\n",
 				DP_UOID(orw->orw_oid), rc);
 			D_GOTO(out, rc);
 		}

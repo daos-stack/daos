@@ -113,14 +113,14 @@ cont_create(test_arg_t *arg, uuid_t uuid)
 {
 	uuid_generate(uuid);
 	print_message("creating container "DF_UUIDF"\n", DP_UUID(uuid));
-	return daos_cont_create(arg->poh, uuid, NULL);
+	return daos_cont_create(arg->pool.poh, uuid, NULL);
 }
 
 static int
 cont_destroy(test_arg_t *arg, const uuid_t uuid)
 {
 	print_message("destroying container "DF_UUID"\n", DP_UUID(uuid));
-	return daos_cont_destroy(arg->poh, uuid, 1, NULL);
+	return daos_cont_destroy(arg->pool.poh, uuid, 1, NULL);
 }
 
 static int
@@ -129,7 +129,8 @@ cont_open(test_arg_t *arg, const uuid_t uuid, unsigned int flags,
 {
 	print_message("opening container "DF_UUIDF" (flags=%X)\n",
 		      DP_UUID(uuid), flags);
-	return daos_cont_open(arg->poh, uuid, flags, coh, &arg->co_info, NULL);
+	return daos_cont_open(arg->pool.poh, uuid, flags, coh, &arg->co_info,
+			      NULL);
 }
 
 static int
@@ -765,7 +766,8 @@ static const struct CMUnitTest epoch_tests[] = {
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_POOL_CONNECT, false, DEFAULT_POOL_SIZE);
+	return test_setup(state, SETUP_POOL_CONNECT, false, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 int

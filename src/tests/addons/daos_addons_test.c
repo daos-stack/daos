@@ -55,21 +55,21 @@ setup(void **state, unsigned int step, bool multi_rank)
 	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
 	arg->multi_rank = multi_rank;
 
-	arg->svc.rl_nr = svc_nreplicas;
-	arg->svc.rl_ranks = arg->ranks;
+	arg->pool.svc.rl_nr = svc_nreplicas;
+	arg->pool.svc.rl_ranks = arg->pool.ranks;
 	for (i = 0; i < svc_nreplicas; i++)
-		arg->svc.rl_ranks[i] = i;
+		arg->pool.svc.rl_ranks[i] = i;
 
 	arg->mode = 0731;
 	arg->uid = geteuid();
 	arg->gid = getegid();
 
 	arg->group = server_group;
-	uuid_clear(arg->pool_uuid);
+	uuid_clear(arg->pool.pool_uuid);
 	uuid_clear(arg->co_uuid);
 
 	arg->hdl_share = false;
-	arg->poh = DAOS_HDL_INVAL;
+	arg->pool.poh = DAOS_HDL_INVAL;
 	arg->coh = DAOS_HDL_INVAL;
 
 	rc = daos_eq_create(&arg->eq);
@@ -96,13 +96,13 @@ setup(void **state, unsigned int step, bool multi_rank)
 			      (pool_size >> 30));
 
 		rc = daos_pool_create(0731, geteuid(), getegid(), arg->group,
-				      NULL, "pmem", pool_size, &arg->svc,
-				      arg->pool_uuid, NULL);
+				      NULL, "pmem", pool_size, &arg->pool.svc,
+				      arg->pool.pool_uuid, NULL);
 		if (rc)
 			print_message("daos_pool_create failed, rc: %d\n", rc);
 		else
 			print_message("setup: created pool "DF_UUIDF"\n",
-				       DP_UUID(arg->pool_uuid));
+				       DP_UUID(arg->pool.pool_uuid));
 	}
 	/** broadcast pool create result */
 	if (multi_rank)
@@ -112,9 +112,9 @@ setup(void **state, unsigned int step, bool multi_rank)
 
 	/** broadcast pool UUID and svc addresses */
 	if (multi_rank) {
-		MPI_Bcast(arg->pool_uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
-		MPI_Bcast(&arg->svc, sizeof(arg->pool_info), MPI_CHAR, 0,
-			  MPI_COMM_WORLD);
+		MPI_Bcast(arg->pool.pool_uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
+		MPI_Bcast(&arg->pool.svc, sizeof(arg->pool.pool_info), MPI_CHAR,
+			  0, MPI_COMM_WORLD);
 	}
 
 	if (step == SETUP_POOL_CREATE)
@@ -125,17 +125,18 @@ setup(void **state, unsigned int step, bool multi_rank)
 		daos_pool_info_t	info;
 
 		print_message("setup: connecting to pool\n");
-		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
-				       DAOS_PC_RW, &arg->poh, &arg->pool_info,
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+				       &arg->pool.svc, DAOS_PC_RW,
+				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
 			print_message("daos_pool_connect failed, rc: %d\n", rc);
 		else
 			print_message("connected to pool, ntarget=%d\n",
-				      arg->pool_info.pi_ntargets);
+				      arg->pool.pool_info.pi_ntargets);
 
 		if (rc == 0) {
-			rc = daos_pool_query(arg->poh, NULL, &info, NULL);
+			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL);
 
 			if (rc == 0) {
 				arg->srv_ntgts = info.pi_ntargets;
@@ -152,12 +153,13 @@ setup(void **state, unsigned int step, bool multi_rank)
 
 	/** broadcast pool info */
 	if (multi_rank)
-		MPI_Bcast(&arg->pool_info, sizeof(arg->pool_info), MPI_CHAR, 0,
-			  MPI_COMM_WORLD);
+		MPI_Bcast(&arg->pool.pool_info, sizeof(arg->pool.pool_info),
+			  MPI_CHAR, 0, MPI_COMM_WORLD);
 
 	/** l2g and g2l the pool handle */
 	if (multi_rank)
-		handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 0);
+		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
+			     arg->pool.poh, 0);
 
 	if (step == SETUP_POOL_CONNECT)
 		goto out;
@@ -166,7 +168,7 @@ setup(void **state, unsigned int step, bool multi_rank)
 	if (arg->myrank == 0) {
 		print_message("setup: creating container\n");
 		uuid_generate(arg->co_uuid);
-		rc = daos_cont_create(arg->poh, arg->co_uuid, NULL);
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL);
 		if (rc)
 			print_message("daos_cont_create failed, rc: %d\n", rc);
 	}
@@ -186,7 +188,7 @@ setup(void **state, unsigned int step, bool multi_rank)
 	/** open container */
 	if (arg->myrank == 0) {
 		print_message("setup: opening container\n");
-		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
 				    &arg->coh, &arg->co_info, NULL);
 		if (rc)
 			print_message("daos_cont_open failed, rc: %d\n", rc);
@@ -199,7 +201,8 @@ setup(void **state, unsigned int step, bool multi_rank)
 
 	/** l2g and g2l the container handle */
 	if (multi_rank)
-		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 0);
+		handle_share(&arg->coh, HANDLE_CO, arg->myrank,
+			     arg->pool.poh, 0);
 
 	if (step == SETUP_CONT_CONNECT)
 		goto out;
@@ -213,14 +216,14 @@ static int
 pool_destroy_safe(test_arg_t *arg)
 {
 	daos_pool_info_t		 pinfo;
-	daos_handle_t			 poh = arg->poh;
+	daos_handle_t			 poh = arg->pool.poh;
 	bool				 connected = false;
 	int				 rc;
 
 	if (daos_handle_is_inval(poh)) {
-		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
-				       DAOS_PC_RW, &poh, &arg->pool_info,
-				       NULL /* ev */);
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+				       &arg->pool.svc, DAOS_PC_RW, &poh,
+				       &arg->pool.pool_info, NULL /* ev */);
 		if (rc != 0) { /* destory straightaway */
 			print_message("failed to connect pool: %d\n", rc);
 			poh = DAOS_HDL_INVAL;
@@ -251,7 +254,7 @@ pool_destroy_safe(test_arg_t *arg)
 		break;
 	}
 
-	rc = daos_pool_destroy(arg->pool_uuid, arg->group, 1, NULL);
+	rc = daos_pool_destroy(arg->pool.pool_uuid, arg->group, 1, NULL);
 	if (rc && rc != -DER_TIMEDOUT)
 		print_message("daos_pool_destroy failed, rc: %d\n", rc);
 	return rc;
@@ -282,7 +285,8 @@ teardown(void **state)
 
 	if (!uuid_is_null(arg->co_uuid)) {
 		while (arg->myrank == 0) {
-			rc = daos_cont_destroy(arg->poh, arg->co_uuid, 1, NULL);
+			rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1,
+					       NULL);
 			if (rc == -DER_BUSY) {
 				print_message("Container is busy, wait\n");
 				sleep(1);
@@ -299,9 +303,9 @@ teardown(void **state)
 		}
 	}
 
-	if (!daos_handle_is_inval(arg->poh)) {
-		rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
-		arg->poh = DAOS_HDL_INVAL;
+	if (!daos_handle_is_inval(arg->pool.poh)) {
+		rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
+		arg->pool.poh = DAOS_HDL_INVAL;
 		if (arg->multi_rank) {
 			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
 				      MPI_COMM_WORLD);
@@ -309,7 +313,8 @@ teardown(void **state)
 		}
 		if (rc) {
 			print_message("failed to disconnect pool "DF_UUIDF
-				      ": %d\n", DP_UUID(arg->pool_uuid), rc);
+				      ": %d\n", DP_UUID(arg->pool.pool_uuid),
+				      rc);
 			return rc;
 		}
 	}
@@ -322,7 +327,7 @@ teardown(void **state)
 		}
 	}
 
-	if (!uuid_is_null(arg->pool_uuid)) {
+	if (!uuid_is_null(arg->pool.pool_uuid)) {
 		if (arg->myrank == 0)
 			pool_destroy_safe(arg);
 
@@ -357,9 +362,9 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	if (svc_nreplicas > ARRAY_SIZE(arg->ranks) && rank == 0) {
+	if (svc_nreplicas > ARRAY_SIZE(arg->pool.ranks) && rank == 0) {
 		print_message("at most %zu service replicas allowed\n",
-			      ARRAY_SIZE(arg->ranks));
+			      ARRAY_SIZE(arg->pool.ranks));
 		return -1;
 	}
 
