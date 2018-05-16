@@ -879,7 +879,7 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns)
 	}
 
 	/* addref done in crt_ivns_internal_get() and at attach/create time  */
-	IVNS_DECREF_N(ivns, 2);
+	IVNS_DECREF_N(ivns_internal, 2);
 exit:
 	return rc;
 }
