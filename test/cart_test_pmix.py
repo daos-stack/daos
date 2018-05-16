@@ -62,14 +62,14 @@ class TestPMIx(commontestsuite.CommonTestSuite):
     def setUp(self):
         """setup the test"""
         self.get_test_info()
-        log_mask = os.getenv("CRT_LOG_MASK", "INFO")
-        self.pass_env = ' -x CRT_LOG_MASK={!s}' \
+        log_mask = os.getenv("D_LOG_MASK", "INFO")
+        self.pass_env = ' -x D_LOG_MASK={!s}' \
                         .format(log_mask)
 
     def tearDown(self):
         """tear down the test"""
         self.logger.info("tearDown begin")
-        os.environ.pop("CRT_LOG_MASK", "")
+        os.environ.pop("D_LOG_MASK", "")
         self.free_port()
         self.logger.info("tearDown end\n")
 

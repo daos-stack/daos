@@ -2,7 +2,7 @@ description: "pmix test"
 
 defaultENV:
     OMPI_MCA_rmaps_base_oversubscribe: "1"
-    CRT_LOG_MASK: "DEBUG,MEM=ERR"
+    D_LOG_MASK: "DEBUG,MEM=ERR"
 
 module:
     name: "cart_test_pmix"

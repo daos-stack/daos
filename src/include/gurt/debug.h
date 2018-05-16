@@ -75,10 +75,6 @@ extern uint64_t DB_ALL;
 #define D_LOG_FILE_ENV	"D_LOG_FILE"	/**< Env to specify log file */
 #define D_LOG_MASK_ENV	"D_LOG_MASK"	/**< Env to specify log mask */
 
-/* deprecated. these two are provided for the transition period. */
-#define CRT_LOG_FILE_ENV	"CRT_LOG_FILE"
-#define CRT_LOG_MASK_ENV	"CRT_LOG_MASK"
-
 /**
  * D_DEBUG/D_ERROR etc can-only be used when clog enabled. User can define other
  * similar macros using different subsystem and log-level, for example:

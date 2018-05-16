@@ -514,15 +514,6 @@ d_log_init(void)
 	int flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
 
 	log_file = getenv(D_LOG_FILE_ENV);
-	if (log_file != NULL)
-		goto out;
-
-	log_file = getenv(CRT_LOG_FILE_ENV);
-	if (log_file != NULL)
-		D_PRINT_ERR(CRT_LOG_FILE_ENV " deprecated. Please use "
-			    D_LOG_FILE_ENV "\n");
-
-out:
 	if (log_file == NULL || strlen(log_file) == 0) {
 		flags |= DLOG_FLV_STDOUT;
 		log_file = NULL;

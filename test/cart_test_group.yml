@@ -2,7 +2,7 @@ description: "group test module"
 
 defaultENV:
     OMPI_MCA_rmaps_base_oversubscribe: "1"
-    CRT_LOG_MASK: "DEBUG,MEM=ERR"
+    D_LOG_MASK: "DEBUG,MEM=ERR"
     TR_REDIRECT_OUTPUT: "no"
     CRT_PHY_ADDR_STR: "ofi+sockets"
     OFI_INTERFACE: "eth0"

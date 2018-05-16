@@ -51,11 +51,11 @@ class SelfTest(commontestsuite.CommonTestSuite):
     def setUp(self):
         """setup the test"""
         self.get_test_info()
-        log_mask = os.getenv("CRT_LOG_MASK", "WARN")
+        log_mask = os.getenv("D_LOG_MASK", "WARN")
         crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
         ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
         baseport = self.generate_port_numbers(ofi_interface)
-        self.pass_env = ' -x CRT_LOG_MASK={!s} -x CRT_PHY_ADDR_STR={!s}' \
+        self.pass_env = ' -x D_LOG_MASK={!s} -x CRT_PHY_ADDR_STR={!s}' \
                         ' -x OFI_INTERFACE={!s} -x OFI_PORT={!s}'.format(
                             log_mask, crt_phy_addr, ofi_interface, baseport)
 
@@ -64,7 +64,7 @@ class SelfTest(commontestsuite.CommonTestSuite):
         self.logger.info("tearDown begin")
         os.environ.pop("CRT_PHY_ADDR_STR", "")
         os.environ.pop("OFI_INTERFACE", "")
-        os.environ.pop("CRT_LOG_MASK", "")
+        os.environ.pop("D_LOG_MASK", "")
         self.free_port()
         self.logger.info("tearDown end\n")
 
