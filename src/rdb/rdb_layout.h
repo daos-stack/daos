@@ -132,7 +132,9 @@ extern daos_iov_t rdb_mc_lc;		/* rdb_lc_record */
 struct rdb_lc_record {
 	uuid_t		dlr_uuid;	/* of log container */
 	uint64_t	dlr_base;	/* base index */
+	uint64_t	dlr_base_term;	/* base term */
 	uint64_t	dlr_tail;	/* last index + 1 */
+	uint64_t	dlr_aggregated;	/* last aggregated index */
 };
 
 /* Log container (LC) *********************************************************/

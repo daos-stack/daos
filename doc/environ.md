@@ -49,6 +49,12 @@ Raft election timeout used by RDBs in milliseconds. `INTEGER`. Default to 7000 m
 
 Raft request timeout used by RDBs in milliseconds. `INTEGER`. Default to 3000 ms.
 
+### `RDB_COMPACT_THRESHOLD`
+
+Raft log compaction threshold in applied entries. `INTEGER`. Default to 0 entries.
+
+If set to 0, Raft log entries will never be compacted.
+
 ### `DAOS_REBUILD`
 
 Whether to start rebuilds when excluding targets. `BOOL2`. Default to true.

@@ -30,6 +30,7 @@
 
 #include <daos_types.h>
 #include <daos_api.h>
+#include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
 #include "rdb_internal.h"
 
@@ -497,4 +498,52 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 	range.epr_lo = low;
 	range.epr_hi = high;
 	return vos_epoch_discard(cont, &range, rdb_cookie);
+}
+
+static int
+rdb_vos_aggregate_obj(daos_handle_t ih, vos_iter_entry_t *entry,
+		      vos_iter_type_t type, vos_iter_param_t *param, void *arg)
+{
+	const unsigned int	run_max = 64;
+	unsigned int		total = 0;
+	vos_purge_anchor_t	anchor;
+	int			rc;
+
+	memset(&anchor, 0, sizeof(anchor));
+	for (;;) {
+		unsigned int	c = run_max;
+		bool		finished;
+
+		rc = vos_epoch_aggregate(param->ip_hdl, entry->ie_oid,
+					 &param->ip_epr, &c, &anchor,
+					 &finished);
+		if (rc != 0)
+			break;
+		D_ASSERTF(c <= run_max, "%u <= %u\n", c, run_max);
+		total += run_max - c;
+		D_DEBUG(DB_TRACE, "run=%u total=%u finished=%d\n", run_max - c,
+			total, finished);
+		ABT_thread_yield();
+		if (finished)
+			break;
+	}
+	D_DEBUG(DB_TRACE, DF_UOID": total=%u rc=%d\n", DP_UOID(entry->ie_oid),
+		total, rc);
+	return rc;
+}
+
+int
+rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
+{
+	vos_iter_param_t	param;
+	daos_anchor_t		anchor;
+
+	D_ASSERTF(high < DAOS_EPOCH_MAX, DF_U64"\n", high);
+	memset(&param, 0, sizeof(param));
+	param.ip_hdl = cont;
+	param.ip_epr.epr_hi = high;
+	param.ip_epc_expr = VOS_IT_EPC_LE;
+	daos_anchor_set_zero(&anchor);
+	return dss_vos_iterate(VOS_ITER_OBJ, &param, &anchor,
+			       rdb_vos_aggregate_obj, NULL /* arg */);
 }

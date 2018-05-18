@@ -76,10 +76,13 @@ struct rdb {
 	struct rdb_raft_event	d_events[2];	/* rdb_raft_events queue */
 	int			d_nevents;	/* d_events queue len from 0 */
 	ABT_cond		d_events_cv;	/* for d_events enqueues */
+	uint64_t		d_compact_thres;/* of compactable entries */
+	ABT_cond		d_compact_cv;	/* for base updates */
 	bool			d_stop;		/* for rdb_stop() */
 	ABT_thread		d_timerd;
 	ABT_thread		d_callbackd;
 	ABT_thread		d_recvd;
+	ABT_thread		d_compactd;
 };
 
 /* Current rank */
@@ -241,6 +244,7 @@ int rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 int rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 		  daos_iov_t akeys[]);
 int rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high);
+int rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high);
 
 /*
  * Maximal number of a-keys (i.e., the n parameter) passed to an
@@ -303,6 +307,14 @@ rdb_lc_discard(daos_handle_t lc, uint64_t low, uint64_t high)
 	D_DEBUG(DB_TRACE, "lc="DF_X64" low="DF_U64" high="DF_U64"\n", lc.cookie,
 		low, high);
 	return rdb_vos_discard(lc, low, high);
+}
+
+/* Aggregate index range [0, high] and yield from time to time. */
+static inline int
+rdb_lc_aggregate(daos_handle_t lc, uint64_t high)
+{
+	D_DEBUG(DB_TRACE, "lc="DF_X64" high="DF_U64"\n", lc.cookie, high);
+	return rdb_vos_aggregate(lc, high);
 }
 
 static inline int
