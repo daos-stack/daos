@@ -134,29 +134,30 @@ struct rebuild_global_pool_tracker {
 	uint64_t	rgt_leader_term;
 
 	unsigned int	rgt_scan_done:1,
-			rgt_done:1;
+			rgt_done:1,
+			rgt_abort:1;
 };
 
 /* Structure on all targets to track all pool rebuilding */
 struct rebuild_global {
-	/* Tracking each target rebuild status per pool
+	/* Link rebuild_tgt_pool_tracker on all targets.
 	 * Only operated by stream 0, no need lock
 	 */
 	d_list_t	rg_tgt_tracker_list;
 
-	/* Tracking global rebuild status per pool.
+	/* Linked rebuild_global_pool_tracker on the master node,
+	 * empty on other nodes.
 	 * Only operated by stream 0, no need lock
 	 */
 	d_list_t	rg_global_tracker_list;
 
-	/* rebuild running list */
+	/* Rebuild task running list */
 	d_list_t	rg_running_list;
 
-	/* rebuild task is queued to this list waiting
-	 * to be scheduled.
+	/* Rebuild task queued list, on which tasks to be scheduled
+	 * are linked.
 	 */
 	d_list_t	rg_queue_list;
-
 
 	ABT_mutex	rg_lock;
 	ABT_cond	rg_stop_cond;

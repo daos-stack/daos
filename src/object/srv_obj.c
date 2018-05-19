@@ -1223,6 +1223,10 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 		oeo->oeo_kds.ca_count = 0;
 	}
 
+	/* Free oeo_sgl here to avoid rpc reply the data inline */
+	if (oei->oei_bulk)
+		daos_sgl_fini(&oeo->oeo_sgl, true);
+
 	return rc;
 }
 

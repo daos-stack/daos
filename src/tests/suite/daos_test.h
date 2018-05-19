@@ -54,6 +54,7 @@ struct test_pool {
 	d_rank_list_t		svc;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
+	bool			destroyed;
 };
 
 typedef struct {

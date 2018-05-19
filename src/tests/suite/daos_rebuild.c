@@ -68,9 +68,12 @@ rebuild_test_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank)
 	if (args[0]->myrank == 0) {
 		int i;
 
-		for (i = 0; i < args_cnt; i++)
-			daos_add_server(args[i]->pool.pool_uuid,
-				args[i]->group, &args[i]->pool.svc, rank);
+		for (i = 0; i < args_cnt; i++) {
+			if (!args[i]->pool.destroyed)
+				daos_add_server(args[i]->pool.pool_uuid,
+					args[i]->group, &args[i]->pool.svc,
+					rank);
+		}
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -676,6 +679,123 @@ rebuild_destroy_container(void **state)
 	test_teardown((void **)&args[1]);
 }
 
+static int
+rebuild_pool_disconnect_internal(void *data)
+{
+	test_arg_t	*arg = data;
+	int		rc = 0;
+	int		rc_reduce = 0;
+
+	/* Close cont and disconnect pool */
+	rc = daos_cont_close(arg->coh, NULL);
+	if (arg->multi_rank) {
+		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
+			      MPI_COMM_WORLD);
+		rc = rc_reduce;
+	}
+	print_message("container close "DF_UUIDF"\n",
+		      DP_UUID(arg->co_uuid));
+	if (rc) {
+		print_message("failed to close container "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+		return rc;
+	}
+
+	arg->coh = DAOS_HDL_INVAL;
+	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
+	if (rc)
+		print_message("failed to disconnect pool "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->pool.pool_uuid), rc);
+
+	print_message("pool disconnect "DF_UUIDF"\n",
+		      DP_UUID(arg->pool.pool_uuid));
+
+	arg->pool.poh = DAOS_HDL_INVAL;
+	MPI_Barrier(MPI_COMM_WORLD);
+	return rc;
+}
+
+static int
+rebuild_destroy_pool_cb(void *data)
+{
+	test_arg_t	*arg = data;
+	int		rc = 0;
+
+	rebuild_pool_disconnect_internal(data);
+
+	if (arg->myrank == 0) {
+		rc = daos_pool_destroy(arg->pool.pool_uuid, NULL, true, NULL);
+		if (rc)
+			print_message("failed to destroy pool"DF_UUIDF" %d\n",
+				      DP_UUID(arg->pool.pool_uuid), rc);
+	}
+
+	arg->pool.destroyed = true;
+	print_message("pool destroyed "DF_UUIDF"\n",
+		      DP_UUID(arg->pool.pool_uuid));
+	/* Disable fail_loc and start rebuild */
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     0, NULL);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	return rc;
+}
+
+static void
+rebuild_destroy_pool_internal(void **state, uint64_t fail_loc)
+{
+	test_arg_t	*arg = *state;
+	test_arg_t	*args[2] = { 0 };
+	daos_obj_id_t	oids[OBJ_NR * 10];
+	int		i;
+	int		rc;
+
+	if (!test_runable(arg, 6))
+		skip();
+
+	args[0] = arg;
+	/* create/connect another pool */
+	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank,
+			DEFAULT_POOL_SIZE, NULL);
+	if (rc) {
+		print_message("open/connect another pool failed: rc %d\n", rc);
+		return;
+	}
+
+	for (i = 0; i < OBJ_NR * 10; i++) {
+		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
+
+	rebuild_io(args[1], oids, OBJ_NR * 10);
+
+	/* hang the rebuild */
+	if (arg->myrank == 0)
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, fail_loc,
+				     NULL);
+
+	args[1]->rebuild_cb = rebuild_destroy_pool_cb;
+
+	rebuild_pools_targets(args, 2, ranks_to_kill, 1);
+}
+
+static void
+rebuild_destroy_pool_during_scan(void ** state)
+{
+	return rebuild_destroy_pool_internal(state, DAOS_REBUILD_TGT_SCAN_HANG |
+						    DAOS_FAIL_VALUE);
+}
+
+static void
+rebuild_destroy_pool_during_rebuild(void ** state)
+{
+	return rebuild_destroy_pool_internal(state,
+					     DAOS_REBUILD_TGT_REBUILD_HANG |
+					     DAOS_FAIL_VALUE);
+}
+
 static void
 rebuild_iv_tgt_fail(void **state)
 {
@@ -824,43 +944,6 @@ rebuild_pool_connect_internal(void *data)
 	}
 
 	return 0;
-}
-
-static int
-rebuild_pool_disconnect_internal(void *data)
-{
-	test_arg_t	*arg = data;
-	int		rc = 0;
-	int		rc_reduce = 0;
-
-	/* Close cont and disconnect pool */
-	rc = daos_cont_close(arg->coh, NULL);
-	if (arg->multi_rank) {
-		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-			      MPI_COMM_WORLD);
-		rc = rc_reduce;
-	}
-	print_message("container close "DF_UUIDF"\n",
-		      DP_UUID(arg->co_uuid));
-	if (rc)
-		print_message("failed to close container "DF_UUIDF
-			      ": %d\n", DP_UUID(arg->co_uuid), rc);
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	arg->coh = DAOS_HDL_INVAL;
-	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
-	if (rc)
-		print_message("failed to disconnect pool "DF_UUIDF
-			      ": %d\n", DP_UUID(arg->pool.pool_uuid), rc);
-
-	print_message("pool disconnect "DF_UUIDF"\n",
-		      DP_UUID(arg->pool.pool_uuid));
-
-	arg->pool.poh = DAOS_HDL_INVAL;
-	MPI_Barrier(MPI_COMM_WORLD);
-	return rc;
 }
 
 static int
@@ -1382,33 +1465,37 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_retry_for_stale_pool, NULL, test_case_teardown},
 	{"REBUILD13: rebuild with container destroy",
 	rebuild_destroy_container, NULL, test_case_teardown},
-	{"REBUILD14: rebuild iv tgt fail",
+	{"REBUILD14: rebuild with pool destroy during scan",
+	rebuild_destroy_pool_during_scan, NULL, test_case_teardown},
+	{"REBUILD15: rebuild with pool destroy during rebuild",
+	rebuild_destroy_pool_during_rebuild, NULL, test_case_teardown},
+	{"REBUILD16: rebuild iv tgt fail",
 	rebuild_iv_tgt_fail, NULL, test_case_teardown},
-	{"REBUILD15: rebuild tgt start fail",
+	{"REBUILD17: rebuild tgt start fail",
 	rebuild_tgt_start_fail, NULL, test_case_teardown},
-	{"REBUILD16: rebuild send objects failed",
+	{"REBUILD18: rebuild send objects failed",
 	 rebuild_send_objects_fail, NULL, test_case_teardown},
-	{"REBUILD17: rebuild with master change during scan",
+	{"REBUILD19: rebuild with master change during scan",
 	rebuild_master_change_during_scan, NULL, test_case_teardown},
-	{"REBUILD18: rebuild with master change during rebuild",
+	{"REBUILD20: rebuild with master change during rebuild",
 	rebuild_master_change_during_rebuild, NULL, test_case_teardown},
-	{"REBUILD19: disconnect pool during scan",
+	{"REBUILD21: disconnect pool during scan",
 	 rebuild_tgt_pool_disconnect_in_scan, NULL, test_case_teardown},
-	{"REBUILD20: disconnect pool during rebuild",
+	{"REBUILD22: disconnect pool during rebuild",
 	 rebuild_tgt_pool_disconnect_in_rebuild, NULL, test_case_teardown},
-	{"REBUILD21: connect pool during scan for offline rebuild",
+	{"REBUILD23: connect pool during scan for offline rebuild",
 	 rebuild_offline_pool_connect_in_scan, NULL, test_case_teardown},
-	{"REBUILD22: connect pool during rebuild for offline rebuild",
+	{"REBUILD24: connect pool during rebuild for offline rebuild",
 	 rebuild_offline_pool_connect_in_rebuild, NULL, test_case_teardown},
-	{"REBUILD23: offline rebuild",
+	{"REBUILD25: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD24: rebuild with master failure",
+	{"REBUILD26: rebuild with master failure",
 	 rebuild_master_failure, NULL, test_case_teardown},
-	{"REBUILD25: rebuild with two failures",
+	{"REBUILD27: rebuild with two failures",
 	 rebuild_two_failures, NULL, test_case_teardown},
-	{"REBUILD26: rebuild fail all replicas before rebuild",
+	{"REBUILD28: rebuild fail all replicas before rebuild",
 	 rebuild_fail_all_replicas_before_rebuild, NULL, test_case_teardown},
-	{"REBUILD27: rebuild fail all replicas",
+	{"REBUILD29: rebuild fail all replicas",
 	 rebuild_fail_all_replicas, NULL, test_case_teardown},
 	{"REBUILD28: multi-pools rebuild concurrently",
 	 multi_pools_rebuild_concurrently, NULL, test_case_teardown},

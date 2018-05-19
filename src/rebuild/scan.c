@@ -772,7 +772,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			/* If this is the old leader, then also stop the rebuild
 			 * tracking ULT.
 			 */
-			ds_rebuild_leader_stop();
+			ds_rebuild_leader_stop(rsi->rsi_pool_uuid,
+					       rsi->rsi_rebuild_ver);
 		}
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;

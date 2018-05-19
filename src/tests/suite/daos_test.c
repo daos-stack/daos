@@ -275,6 +275,8 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->hdl_share = false;
 		arg->pool.poh = DAOS_HDL_INVAL;
 		arg->coh = DAOS_HDL_INVAL;
+
+		arg->pool.destroyed = false;
 	}
 
 	while (!rc && step != arg->setup_state)
@@ -353,6 +355,7 @@ test_teardown(void **state)
 				      MPI_COMM_WORLD);
 			rc = rc_reduce;
 		}
+		arg->coh = DAOS_HDL_INVAL;
 		if (rc) {
 			print_message("failed to close container "DF_UUIDF
 				      ": %d\n", DP_UUID(arg->co_uuid), rc);
@@ -458,8 +461,9 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 				       &arg->pool.poh, pinfo,
 				       NULL /* ev */);
 		if (rc) {
-			print_message("pool_connect failed, rc: %d\n",
-				      rc);
+			print_message("pool_connect "DF_UUIDF
+				      " failed, rc: %d\n",
+				      DP_UUID(arg->pool.pool_uuid), rc);
 			return rc;
 		}
 		connect_pool = true;
@@ -491,8 +495,9 @@ rebuild_pool_wait(test_arg_t *arg)
 	rc = test_pool_get_info(arg, &pinfo);
 	rst = &pinfo.pi_rebuild_st;
 	if (rst->rs_done || rc != 0) {
-		print_message("Rebuild (ver=%d) is done %d/%d\n",
-			       rst->rs_version, rc, rst->rs_errno);
+		print_message("Rebuild "DF_UUIDF" (ver=%d) is done %d/%d\n",
+			       DP_UUID(arg->pool.pool_uuid), rst->rs_version, rc,
+			       rst->rs_errno);
 		done = true;
 	} else {
 		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u), "

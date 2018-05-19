@@ -535,6 +535,8 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 
 		if (rs->rs_done)
 			str = rs->rs_errno ? "failed" : "completed";
+		else if (rgt->rgt_abort || rebuild_gst.rg_abort)
+			str = "aborted";
 		else if (rs->rs_obj_nr == 0 && rs->rs_rec_nr == 0)
 			str = "scanning";
 		else
@@ -548,7 +550,7 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 			rs->rs_errno, (int)(now - begin));
 
 		D_DEBUG(DB_REBUILD, "%s", sbuf);
-		if (rs->rs_done || rebuild_gst.rg_abort) {
+		if (rs->rs_done || rebuild_gst.rg_abort || rgt->rgt_abort) {
 			D_PRINT("%s", sbuf);
 			break;
 		}
@@ -981,8 +983,11 @@ rebuild_one_ult(void *arg)
 
 	/* Wait until rebuild finished */
 	rebuild_status_check(pool, task->dst_map_ver, rgt);
-	if (rebuild_gst.rg_abort && !rgt->rgt_done)
+	if (!rgt->rgt_done) {
+		D_DEBUG(DB_REBUILD, DF_UUID" rebuild is not done.\n",
+			DP_UUID(task->dst_pool_uuid));
 		D_GOTO(out, rc);
+	}
 
 	rc = ds_pool_tgt_exclude_out(pool->sp_uuid, task->dst_tgts_failed,
 				     NULL);
@@ -1089,7 +1094,41 @@ rebuild_ults(void *arg)
 }
 
 void
-ds_rebuild_leader_stop()
+ds_rebuild_leader_stop(uuid_t pool_uuid, unsigned int version)
+{
+	struct rebuild_global_pool_tracker	*rgt;
+	struct rebuild_task			*task;
+	struct rebuild_task			*task_tmp;
+
+	/* Remove the rebuild tasks from queue list */
+	d_list_for_each_entry_safe(task, task_tmp, &rebuild_gst.rg_queue_list,
+				   dst_list) {
+		if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0 &&
+		    (version == -1 || task->dst_map_ver == version)) {
+			d_list_del(&task->dst_list);
+			daos_rank_list_free(task->dst_tgts_failed);
+			daos_rank_list_free(task->dst_svc_list);
+			D_FREE_PTR(task);
+			if (version != -1)
+				break;
+		}
+	}
+
+	/* Then check running list, Note: each rebuilding pool can only have one
+	 * version being rebuilt each time, so we do not need check version for
+	 * running list.
+	 */
+	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, version);
+	if (rgt == NULL)
+		return;
+
+	D_DEBUG(DB_REBUILD, "abort rebuild "DF_UUID" version %d\n",
+		DP_UUID(pool_uuid), version);
+	rgt->rgt_abort = 1;
+}
+
+void
+ds_rebuild_leader_stop_all()
 {
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	if (!rebuild_gst.rg_rebuild_running) {
@@ -1108,6 +1147,7 @@ ds_rebuild_leader_stop()
 	 * finish, but those tracking ULT (rebuild_tgt_status_check) will keep
 	 * sending the status report to the stale leader, until it is aborted.
 	 */
+	D_DEBUG(DB_REBUILD, "abort rebuild %p\n", &rebuild_gst);
 	rebuild_gst.rg_abort = 1;
 	if (rebuild_gst.rg_rebuild_running)
 		ABT_cond_wait(rebuild_gst.rg_stop_cond,
