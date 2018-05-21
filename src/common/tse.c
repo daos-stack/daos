@@ -554,6 +554,10 @@ tse_task_post_process(tse_task_t *task)
 		dtp_tmp = tse_task2priv(task_tmp);
 		D_FREE_PTR(tlink);
 
+		/* propagate dep task's failure */
+		if (task_tmp->dt_result == 0)
+			task_tmp->dt_result = task->dt_result;
+
 		/* see if the dependent task is ready to be scheduled */
 		D_ASSERT(dtp_tmp->dtp_dep_cnt > 0);
 		dtp_tmp->dtp_dep_cnt--;
