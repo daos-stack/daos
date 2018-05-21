@@ -698,11 +698,16 @@ class PreReqComponent(object):
                        None),
                       PathVariable('TARGET_PREFIX',
                                    'Installation root for prebuilt components',
-                                   None, PathVariable.PathIsDirCreate))
+                                   None, PathVariable.PathIsDirCreate),
+                      PathVariable('GOPATH',
+                                   'Location of your GOPATH for the build',
+                                   "%s/go" % self.__build_dir,
+                                   PathVariable.PathIsDirCreate))
         self.setup_path_var('PREFIX')
         self.setup_path_var('PREBUILT_PREFIX', True)
         self.setup_path_var('TARGET_PREFIX')
         self.setup_path_var('SRC_PREFIX', True)
+        self.setup_path_var('GOPATH')
         self.setup_patch_prefix()
         self.__build_info = BuildInfo()
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
