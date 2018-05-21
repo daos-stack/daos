@@ -1,0 +1,72 @@
+syntax = "proto3";
+package security;
+
+// Encapsulation of reply status including sub status for specific error types
+message ReplyStatus {
+	Status status = 1;
+	oneof error {
+		int32 errno  = 2;
+		AuthStatus auth = 3;
+	}
+	string error_message = 4;
+}
+enum Status {
+	SUCCESS = 0;
+	AUTH_ERROR = 1;
+}
+// These definitions are taken from RFC 1831
+enum AuthStatus {
+	AUTH_OK = 0; /* Success */
+	AUTH_BADCRED = 1; /* bad credential (seal broken)  */
+	AUTH_BADVERF = 2; /* bad verifier (seal broken) */
+	AUTH_TOOWEAK = 3; /* rejected for security reasons */
+	AUTH_FAILED = 4; /* reason unknown */
+}
+
+enum AuthAction {
+	AUTH_INIT = 0; //Request a credential
+	AUTH_SHARE = 1; //Mark context as sharable
+	AUTH_UNSHARE = 2; //Mark context as unsharable (Will not revoke access for already shared instances)
+	AUTH_GET = 3; //Request a copy of the credential with the given handle and increase its refcount
+	AUTH_PUT = 4; //Decrease the refcount and potentially free the handle
+	AUTH_FINI = 5; //Regardless of refcount destroys the handle/context mapping (Used for revocation)
+}
+// Definition of auth token
+enum AuthFlavor {
+	AUTH_NONE = 0;
+	AUTH_SYS = 1;
+}
+message AuthToken {
+	AuthFlavor flavor = 1;
+	bytes token = 2;
+}
+//Definition of AUTH_SYS
+message AuthSys {
+	uint64 stamp = 1;
+	string machinename = 2;
+	uint32 uid = 3;
+	uint32 gid = 4;
+	repeated uint32 gids = 5;
+	string secctx = 6; // Additional field for MAC label
+}
+message SecurityRequest {
+	string host = 1;
+	AuthAction action = 2;
+	oneof data {
+		SecurityHandle handle = 3;
+		AuthToken token = 4;
+	}
+}
+message SecurityReply {
+    ReplyStatus status = 0;
+    AuthToken response = 1;
+
+}
+message SecurityContext {
+	SecurityHandle handle = 1;
+	AuthToken context = 2;
+}
+message SecurityHandle {
+	string handle = 1;
+	string verifier = 2;
+}

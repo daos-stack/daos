@@ -1,0 +1,12 @@
+syntax = "proto3";
+package security;
+
+import "security.proto";
+
+// This is the main service definition for adding services to the daos agent
+// In order to add RPCs associated with your service add them in the AgentService
+// definition below. You are not limited by the number of RPCs you add to the service.
+
+service AgentService {
+    rpc RequestSecurityContext(AuthToken) returns (SecurityReply) {};
+}
