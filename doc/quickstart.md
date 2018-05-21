@@ -87,7 +87,7 @@ On CentOS and openSuSE:
     $ yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
     $ yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
     $ yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
-    $ yum install -y doxygen pandoc flex patch nasm yasm
+    $ yum install -y doxygen pandoc flex patch nasm yasm protobuf-compiler
     # Additionally required SPDK packages
     $ yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
     $ yum install -y python clang-analyzer sg3_utils libiscsi-devel
@@ -98,7 +98,7 @@ On Ubuntu and Debian:
     $ apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
     $ apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
     $ apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
-    $ apt-get install -y curl doxygen pandoc flex patch nasm yasm
+    $ apt-get install -y curl doxygen pandoc flex patch nasm yasm protobuf-compiler
     # Additionally required SPDK packages
     $ apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
     $ apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen
@@ -110,6 +110,16 @@ Moreover, please make sure all the auto tools listed below are at the appropriat
     autoconf (GNU Autoconf) 2.69
     automake (GNU automake) 1.13.4
     libtool (GNU libtool) 2.4.2
+
+### Golang dependencies
+
+The utilities/fetch_go_packages.sh script is provided to prep a GOPATH location for DAOS development.
+
+By default scons will look for a GOPATH located under _build.external/go. To setup your build GOPATh execute the command below from the top level directory.
+
+    utils/fetch_go_packages.sh -i .
+
+Once complete verify the install worked by running the same command with an additional -v flag for verification.
 
 ### Building DAOS & Dependencies
 
