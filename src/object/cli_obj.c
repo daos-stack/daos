@@ -921,7 +921,7 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 	daos_iov_t		key;
 	int			idx;
 	bool			overlapped;
-	struct btr_root		broot;
+	struct btr_root		broot = { 0 };
 	int			rc;
 
 	if (nr == 0 || recxs == NULL)
