@@ -364,3 +364,11 @@ REQS.define('spdk',
                       'cp -f ./dpdk/build/lib/lib*.a $SPDK_PREFIX/lib'],
             patch='$PATCH_PREFIX/dpdk_build.patch',
             libs=["spdk_blob", "spdk_nvme"])
+
+URL = 'https://github.com/google/protobuf/releases/download/' \
+    'v3.5.1/protobuf-all-3.5.1.tar.gz'
+WEB_RETRIEVER = \
+    WebRetriever(URL)
+REQS.define('protobuf', retriever=WEB_RETRIEVER,
+            commands=['./autogen.sh', './configure --prefix=$PROTOBUF_PREFIX',
+                      'make', 'make install'])
