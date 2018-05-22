@@ -86,4 +86,6 @@ dts_time_now(void)
 int dts_cmd_parser(struct option *opts, const char *prompt,
 		   int (*cmd_func)(char opc, char *args));
 
+void dts_reset_key(void);
+
 #endif /* __DAOS_TESTS_LIB_H__ */

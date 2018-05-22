@@ -264,3 +264,9 @@ dts_rand_iarr_alloc(int nr, int base)
 	daos_array_shuffle((void *)array, nr, &rand_iarr_ops);
 	return array;
 }
+
+void
+dts_reset_key(void)
+{
+	int_key_gen = 1;
+}
