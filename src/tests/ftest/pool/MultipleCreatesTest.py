@@ -26,6 +26,7 @@ import os
 import time
 import traceback
 import sys
+import json
 
 from avocado       import Test
 from avocado       import main
@@ -34,10 +35,7 @@ from avocado.utils import process
 sys.path.append('./util')
 import ServerUtils
 import CheckForPool
-import GetHostsFromFile
-
-sessions = {}
-hostfile = ""
+import WriteHostFile
 
 class MultipleCreatesTest(Test):
     """
@@ -48,23 +46,28 @@ class MultipleCreatesTest(Test):
 
     # super wasteful since its doing this for every variation
     def setUp(self):
-       global sessions
-       global hostfile
-       global basepath
 
        # there is a presumption that this test lives in a specific
        # spot in the repo
-       basepath = os.path.normpath(os.getcwd() + "../../../../")
-       hostfile = basepath + self.params.get("hostfile",
-                                             '/files/local/','rubbish')
+       with open('../../../.build_vars.json') as f:
+           build_paths = json.load(f)
+       basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+       tmp = build_paths['PREFIX'] + '/tmp'
+
+       self.hostlist = self.params.get("test_machines",'/run/hosts/')
+       self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+
        server_group = self.params.get("server_group",'/server/','daos_server')
 
-       ServerUtils.runServer(hostfile, server_group, basepath)
+       ServerUtils.runServer(self.hostfile, server_group, basepath)
        # not sure I need to do this but ... give it time to start
        time.sleep(2)
 
+       self.daosctl = basepath + '/install/bin/daosctl'
+
+
     def tearDown(self):
-       global sessions
+       os.remove(self.hostfile)
        ServerUtils.stopServer()
 
     def test_create_one(self):
@@ -73,7 +76,6 @@ class MultipleCreatesTest(Test):
 
         :avocado: tags=pool,poolcreate,multicreate
         """
-        global basepath
 
         # Accumulate a list of pass/fail indicators representing
         # what is expected for each parameter then "and" them
@@ -98,22 +100,19 @@ class MultipleCreatesTest(Test):
                       expected_result = 'FAIL'
                       break
         try:
-               daosctl = basepath + '/install/bin/daosctl'
                cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4} -c 1'.
-                      format(daosctl, mode, uid, gid, setid))
+                      format(self.daosctl, mode, uid, gid, setid))
                uuid_str = """{0}""".format(process.system_output(cmd))
                print("uuid is {0}\n".format(uuid_str))
 
-               hostfile = basepath + self.params.get("hostfile",
-                                                     '/run/files/local/')
-               host = GetHostsFromFile.getHostsFromFile(hostfile)[0]
+               host = self.hostlist[0]
                exists = CheckForPool.checkForPool(host, uuid_str)
                if exists != 0:
                       self.fail("Pool {0} not found on host {1}.\n".
                                 format(uuid_str, host))
 
                delete_cmd =  ('{0} destroy-pool '
-                              '-i {1} -s {2} -f'.format(daosctl,
+                              '-i {1} -s {2} -f'.format(self.daosctl,
                                                         uuid_str, setid))
 
                process.system(delete_cmd)
@@ -139,7 +138,6 @@ class MultipleCreatesTest(Test):
 
         :avocado: tags=pool,poolcreate,multicreate
         """
-        global basepath
 
         # Accumulate a list of pass/fail indicators representing
         # what is expected for each parameter then "and" them to
@@ -164,16 +162,13 @@ class MultipleCreatesTest(Test):
                       expected_result = 'FAIL'
                       break
         try:
-               daosctl = basepath + '/install/bin/daosctl'
                cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4} -c 1'.
-               format(daosctl, mode, uid, gid, setid))
+               format(self.daosctl, mode, uid, gid, setid))
 
                uuid_str_1 = """{0}""".format(process.system_output(cmd))
                uuid_str_2 = """{0}""".format(process.system_output(cmd))
 
-               hostfile = basepath + self.params.get("hostfile",
-                                                     '/run/files/local/')
-               host = GetHostsFromFile.getHostsFromFile(hostfile)[0]
+               host = self.hostlist[0]
                exists = CheckForPool.checkForPool(host, uuid_str_1)
                if exists != 0:
                       self.fail("Pool {0} not found on host {1}.\n".
@@ -185,10 +180,10 @@ class MultipleCreatesTest(Test):
 
                delete_cmd_1 =  ('{0} destroy-pool '
                                 ' -i {1} -s {2} -f'.format(
-                                     daosctl, uuid_str_1, setid))
+                                     self.daosctl, uuid_str_1, setid))
 
                delete_cmd_2 =  ('{0} destroy-pool '
-                                ' -i {1} -s {2} -f'.format(daosctl,
+                                ' -i {1} -s {2} -f'.format(self.daosctl,
                                                            uuid_str_2, setid))
 
                process.system(delete_cmd_1)
@@ -219,7 +214,6 @@ class MultipleCreatesTest(Test):
 
         :avocado: tags=pool,poolcreate,multicreate
         """
-        global basepath
 
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -244,19 +238,15 @@ class MultipleCreatesTest(Test):
                       expected_result = 'FAIL'
                       break
         try:
-               daosctl = basepath + '/install/bin/daosctl'
-
                cmd = ('{0} create-pool '
                       '-m {1} -u {2} -g {3} -s {4} -c 1'.
-                      format(daosctl, mode, uid, gid, setid))
+                      format(self.daosctl, mode, uid, gid, setid))
 
                uuid_str_1 = """{0}""".format(process.system_output(cmd))
                uuid_str_2 = """{0}""".format(process.system_output(cmd))
                uuid_str_3 = """{0}""".format(process.system_output(cmd))
 
-               hostfile = basepath + self.params.get("hostfile",
-                                                     '/run/files/local/')
-               host = GetHostsFromFile.getHostsFromFile(hostfile)[0]
+               host = self.hostlist[0]
                exists = CheckForPool.checkForPool(host, uuid_str_1)
                if exists != 0:
                       self.fail("Pool {0} not found on host {1}.\n".
@@ -271,15 +261,15 @@ class MultipleCreatesTest(Test):
                                 format(uuid_str_3, host))
 
                delete_cmd_1 =  ('{0} destroy-pool '
-                                '-i {1} -s {2} -f'.format(daosctl,
+                                '-i {1} -s {2} -f'.format(self.daosctl,
                                                           uuid_str_1, setid))
 
                delete_cmd_2 =  ('{0} destroy-pool '
-                                '-i {1} -s {2} -f'.format(daosctl,
+                                '-i {1} -s {2} -f'.format(self.daosctl,
                                                           uuid_str_2, setid))
 
                delete_cmd_3 =  ('{0} destroy-pool '
-                                '-i {1} -s {2} -f'.format(daosctl,
+                                '-i {1} -s {2} -f'.format(self.daosctl,
                                                           uuid_str_3, setid))
 
                process.system(delete_cmd_1)

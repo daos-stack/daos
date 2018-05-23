@@ -1,10 +1,10 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_machines:
+    - boro-A
 server:
    server_group: daos_server
-files:
-   local:
-      hostfile: /install/tmp/hostfile1
-   system:
-      hostfile: /mnt/shared/test/hostfile1
 tests:
    modes: !mux
       modeall:

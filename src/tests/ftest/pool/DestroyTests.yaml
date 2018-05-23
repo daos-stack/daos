@@ -1,16 +1,25 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_machines1:
+    - boro-A
+  test_machines2:
+    - boro-A
+    - boro-B
+  test_machines2a:
+    - boro-C
+    - boro-D
+  test_machines3:
+    - boro-B
+    - boro-C
+    - boro-D
 server:
    server_group: daos_server
 testparams:
-   one_host:
-      hostfile: /install/tmp/hostfile1
-   two_hosts:
-      hostfile: /install/tmp/hostfile2
-   two_other_hosts:
-      hostfile: /install/tmp/hostfile2a
-   three_hosts:
-      hostfile: /install/tmp/hostfile3
    setnames:
       validsetname:
         setname: daos_server
       badsetname:
         setname: complete_rubbish
+      othersetname:
+        setname: other_server

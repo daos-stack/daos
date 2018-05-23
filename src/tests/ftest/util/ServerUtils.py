@@ -50,11 +50,11 @@ def runServer(hostfile, setname, basepath):
         server_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
         server_cmd += "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR -x D_LOG_FILE="
         server_cmd += basepath + "/install/tmp/daos.log "
-        server_cmd += "-x LD_LIBRARY_PATH={0}/install/lib: "
-        "{0}/install/lib/daos_srv ".format(basepath)
-        server_cmd += basepath + "/install/bin/daos_server -g {0} ".format(
+        server_cmd += "-x LD_LIBRARY_PATH={0}/install/lib:".format(basepath)
+        server_cmd += "{0}/install/lib/daos_srv ".format(basepath)
+        server_cmd += basepath + "/install/bin/daos_server -g {0} -c 1 ".format(
             setname)
-        server_cmd += basepath + " -a" + basepath + "/install/tmp/"
+        server_cmd += " -a" + basepath + "/install/tmp/"
 
         print "Start CMD>>>>{0}".format(server_cmd)
 

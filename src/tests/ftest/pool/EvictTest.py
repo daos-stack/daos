@@ -26,6 +26,7 @@ import os
 import time
 import traceback
 import sys
+import json
 
 from avocado       import Test
 from avocado       import main
@@ -34,6 +35,7 @@ from avocado.utils import process
 sys.path.append('./util')
 import ServerUtils
 import CheckForPool
+import WriteHostFile
 
 class EvictTest(Test):
     """
@@ -41,26 +43,31 @@ class EvictTest(Test):
 
     :avocado: tags=pool,poolevict
     """
-
     # super wasteful since its doing this for every variation
     def setUp(self):
-           global hostfile
-           global basepath
 
-           # there is a presumption that this test lives in a specific spot
-           # in the repo
-           basepath = os.path.normpath(os.getcwd() + "../../../../")
-           server_group = self.params.get("server_group",'/server/',
-                                          'daos_server')
-           hostfile = basepath + self.params.get("hostfile",
-                                                 '/run/tests/one_host/')
+        # there is a presumption that this test lives in a specific spot
+        # in the repo
+        with open('../../../.build_vars.json') as f:
+            build_paths = json.load(f)
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        tmp = build_paths['PREFIX'] + '/tmp'
 
-           ServerUtils.runServer(hostfile, server_group, basepath)
-           # not sure I need to do this but ... give it time to start
-           time.sleep(1)
+        self.hostlist = self.params.get("test_machines",'/run/hosts/')
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+
+        self.daosctl = self.basepath + '/install/bin/daosctl'
+
+        server_group = self.params.get("server_group",'/server/',
+                                       'daos_server')
+
+        ServerUtils.runServer(self.hostfile, server_group, self.basepath)
+        # not sure I need to do this but ... give it time to start
+        time.sleep(1)
 
     def tearDown(self):
-       ServerUtils.stopServer()
+        ServerUtils.stopServer()
+        os.remove(self.hostfile)
 
     def test_evict(self):
         """
@@ -68,22 +75,18 @@ class EvictTest(Test):
 
         :avocado: tags=pool,poolevict,quick
         """
-        global basepath
-
         size = self.params.get("size",'/run/tests/sizes/size1gb/*')
         setid = self.params.get("setname",'/run/tests/setnames/validsetname/*')
         connectperm = self.params.get("perms",
                                       '/run/tests/connectperms/permro/*')
 
         try:
-               daosctl = basepath + '/install/bin/daosctl'
-
                uid = os.geteuid()
                gid = os.getegid()
 
                create_connect_evict = ('{0} test-evict-pool -m {1} -u {2} '
                                        '-g {3} -s {4} -z {5} {6} -l 0'.
-                                       format(daosctl, 0731, uid, gid,
+                                       format(self.daosctl, 0731, uid, gid,
                                               setid, size, connectperm))
                process.system(create_connect_evict)
 
@@ -99,9 +102,6 @@ class EvictTest(Test):
 
         :avocado: tags=pool,poolevict
         """
-        global hostfile
-        global basepath
-
         # test parameters are in the EvictTest.yaml
         setid = self.params.get("setname",'/run/tests/setnames/validsetname/*')
         size = self.params.get("size",'/run/tests/sizes/size1gb/*')
@@ -111,11 +111,9 @@ class EvictTest(Test):
         uid = os.geteuid()
         gid = os.getegid()
 
-        daosctl = basepath + '/install/bin/daosctl'
-
         try:
                create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4} -c 1'.
-                             format(daosctl, mode, uid, gid, setid))
+                             format(self.daosctl, mode, uid, gid, setid))
                uuid_str = """{0}""".format(process.system_output(create_cmd))
                print("uuid is {0}\n".format(uuid_str))
 
@@ -127,7 +125,7 @@ class EvictTest(Test):
                # use the wrong uuid, which of course should fail
                bogus_uuid = "44be695840f4b6eda581b461a4d4c570490ba4db"
                bad_evict_cmd = ('{0} evict-pool -i {1} -s {2}'.
-                                format(daosctl, bogus_uuid, setid))
+                                format(self.daosctl, bogus_uuid, setid))
                process.system(bad_evict_cmd)
 
         except Exception as e:
@@ -140,7 +138,7 @@ class EvictTest(Test):
                                                     '/run/tests/setnames/'
                                                     'badsetname/*')
                bad_evict_cmd = ('{0} evict-pool -i {1} -s {2}'.format(
-                                   daosctl, uuid_str, bogus_server_group))
+                                   self.daosctl, uuid_str, bogus_server_group))
                process.system(bad_evict_cmd)
 
         except Exception as e:
@@ -151,11 +149,11 @@ class EvictTest(Test):
                # evict for real, there are no client connections so not
                # really necessary
                good_evict_cmd = ('{0} evict-pool -i {1} -s {2} -l 0'.format(
-                      daosctl, uuid_str, setid))
+                      self.daosctl, uuid_str, setid))
                process.system(good_evict_cmd)
 
                delete_cmd =  ('{0} destroy-pool -i {1} -s {2} -f'.
-                              format(daosctl, uuid_str, setid))
+                              format(self.daosctl, uuid_str, setid))
 
                process.system(delete_cmd)
 

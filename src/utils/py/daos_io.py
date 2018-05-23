@@ -54,9 +54,17 @@ class DaosFile(object):
         """ write data from a numpy array into the file """
         self.mpifile.Write(np_array)
 
+    def write_at(self, offset, np_array):
+        """ write data from a numpy array into the file """
+        self.mpifile.Write_at(offset, np_array)
+
     def read(self, np_array):
         """ read data into a numpy array """
         self.mpifile.Read(np_array)
+
+    def read_at(self, offset, np_array):
+        """ read data into a numpy array """
+        self.mpifile.Read_at(offset, np_array)
 
     def close(self):
         """ done with the file """
@@ -66,7 +74,8 @@ if __name__ == "__main__":
     """ this is a unit test driver for this code """
 
     # create some data to write, integers 0,1,2,...
-    data = np.arange(10000, dtype=np.int16)
+    # rolling over at 256 and starting over
+    data = np.arange(90000000, dtype=np.uint8)
 
     # create a file
     fh = DaosFile.open("testfile", DaosFile.MODE_RDWR_CREATE)
@@ -77,11 +86,11 @@ if __name__ == "__main__":
 
     # reopen and read data back
     fh = DaosFile.open("testfile", DaosFile.MODE_RDWR_CREATE)
-    data = np.zeros(10000, dtype=np.int16)
-    fh.read(data)
+    rdata = np.zeros(1, dtype=np.uint8)
+    fh.read_at(89000000,rdata)
 
     # double check a couple values
-    if not data[0] == 0 or not data[50] == 50:
-        print "data read back is not as expected"
+    if not rdata == (89000000 % 256):
+        print "expecting {0} but value is {1}".format((89000000 % 256), rdata)
 
     fh.close()

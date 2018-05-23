@@ -174,6 +174,15 @@ class DaosPool(object):
         self.pool_info = None
         self.target_info = None
 
+    def get_uuid_str(self):
+        mystr = '{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}'\
+                '{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}'.format(
+                    self.uuid[0],self.uuid[1],self.uuid[2],self.uuid[3],
+                    self.uuid[4],self.uuid[5],self.uuid[6],self.uuid[7],
+                    self.uuid[8],self.uuid[9],self.uuid[10],self.uuid[11],
+                    self.uuid[12],self.uuid[13],self.uuid[14],self.uuid[15])
+        return mystr
+
     def create(self, mode, uid, gid, size, group, target_list=None,
                cb_func=None):
         """ send a pool creation request to the daos server group """
@@ -399,7 +408,7 @@ class DaosPool(object):
             if rc != 0:
                 raise ValueError("Pool query returned non-zero. RC: {0}"
                                  .format(rc))
-                return self.pool_info
+            return self.pool_info
         else:
             event = DaosEvent()
             params = [self.handle, None, ctypes.byref(self.pool_info), event]
@@ -455,7 +464,10 @@ class DaosServer(object):
         c_rank = ctypes.c_uint(self.rank)
 
         func = self.context.get_function('kill-server')
-        func(c_group, c_rank, c_force, None)
+        rc = func(c_group, c_rank, c_force, None)
+        if rc != 0:
+            raise ValueError("Server kill returned non-zero. RC: {0}"
+                             .format(rc))
 
 class DaosContext(object):
     """Provides environment and other info for a DAOS client."""
@@ -512,13 +524,14 @@ if __name__ == '__main__':
         CONTEXT = DaosContext(data['PREFIX'] + '/lib/')
         print("initialized!!!\n")
 
-        POOL = DaosPool(CONTEXT)
-        tgt_list=[1]
-        POOL.create(448, 11374638, 11374638, 1024 * 1024 * 1024,
-                    b'daos_server', tgt_list)
+        #POOL = DaosPool(CONTEXT)
+        #tgt_list=[1]
+        #POOL.create(448, 11374638, 11374638, 1024 * 1024 * 1024,
+        #            b'daos_server')
         #time.sleep(15)
-        print ("Pool create called\n")
-        print ("In main pool uuid 1st digit {:02X}".format(POOL.uuid[0]))
+        #print ("Pool create called\n")
+        #print ("uuid is " + POOL.get_uuid_str())
+        #print ("In main pool uuid 1st digit {:02X}".format(POOL.uuid[0]))
 
         #time.sleep(5)
         #print ("handle before connect {0}\n".format(POOL.handle))
@@ -558,9 +571,9 @@ if __name__ == '__main__':
         #POOL.destroy(1)
         #print("Pool destroyed")
 
-        #SERVICE = DaosServer(CONTEXT, b'daos_server', 0)
-        #SERVICE.kill(1)
-        #print ("server killed!\n")
+        SERVICE = DaosServer(CONTEXT, b'daos_server', 5)
+        SERVICE.kill(1)
+        print ("server killed!\n")
 
     except Exception as EXCEP:
         print ("Something horrible happened\n")
