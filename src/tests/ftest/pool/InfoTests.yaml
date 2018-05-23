@@ -1,8 +1,9 @@
+hosts:
+  test_machines1:
+    - boro-A
 server:
    server_group: daos_server
 testparams:
-   one_host:
-      hostfile: /install/tmp/hostfile1
    setnames:
       validsetname:
         setname: daos_server
@@ -24,8 +25,8 @@ testparams:
         size: 12884901888
    connectperms: !mux
       permro:
-        perms: -r
+        perms: 0
       permrw:
-        perms: -w
+        perms: 1
       permex:
-        perms: -e
+        perms: 2
