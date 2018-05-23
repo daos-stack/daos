@@ -1332,7 +1332,7 @@ rebuild_master_failure(void **state)
 }
 
 static void
-rebuild_two_failures(void **state)
+rebuild_multiple_failures(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oids[OBJ_NR];
@@ -1356,7 +1356,7 @@ rebuild_two_failures(void **state)
 	arg->rebuild_post_cb = rebuild_io_post_cb;
 	arg->rebuild_post_cb_arg = cb_arg_oids;
 
-	rebuild_targets(&arg, 1, ranks_to_kill, 2, true);
+	rebuild_targets(&arg, 1, ranks_to_kill, MAX_KILLS, true);
 
 	arg->rebuild_cb = NULL;
 	arg->rebuild_post_cb = NULL;
@@ -1424,10 +1424,16 @@ rebuild_fail_all_replicas(void **state)
 	struct daos_obj_layout *layout;
 	int		i;
 
-	if (!test_runable(arg, 6))
+	/* This test will kill 3 replicas, which might include the ranks
+	 * in svcs, so make sure there are at least 5 ranks in svc, so
+	 * the new leader can be chosen.
+	 */
+	if (!test_runable(arg, 6) || arg->pool.svc.rl_nr < 5) {
+		print_message("need at least 5 svcs, -s5\n");
 		skip();
+	}
 
-	oid = dts_oid_gen(DAOS_OC_R2S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 
 	rebuild_io(arg, &oid, 1);
@@ -1566,7 +1572,7 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD27: rebuild with master failure",
 	 rebuild_master_failure, NULL, test_case_teardown},
 	{"REBUILD28: rebuild with two failures",
-	 rebuild_two_failures, NULL, test_case_teardown},
+	 rebuild_multiple_failures, NULL, test_case_teardown},
 	{"REBUILD29: rebuild fail all replicas before rebuild",
 	 rebuild_fail_all_replicas_before_rebuild, NULL, test_case_teardown},
 	{"REBUILD30: rebuild fail all replicas",
