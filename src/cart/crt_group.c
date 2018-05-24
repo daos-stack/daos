@@ -1777,6 +1777,9 @@ out:
 	if (rc != DER_SUCCESS)
 		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
 			rc, ul_req->cr_opc);
+
+	/* Corresponding addref done in crt_uri_lookup_forward*/
+	RPC_PUB_DECREF(ul_req);
 }
 
 static int
@@ -1788,6 +1791,9 @@ crt_uri_lookup_forward(crt_rpc_t *ul_req, d_rank_t g_rank)
 	crt_rpc_t			*ul_fwd_req;
 	struct crt_cb_info		 cbinfo;
 	int				 rc = DER_SUCCESS;
+
+	/* corresponding decref done in crt_uri_lookup_forward_cb */
+	RPC_PUB_ADDREF(ul_req);
 
 	default_grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
 	ul_in = crt_req_get(ul_req);
