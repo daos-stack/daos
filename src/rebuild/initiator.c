@@ -100,9 +100,10 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 		sgls[i].sg_iovs = &iov[i];
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %.*s nr %d\n",
+	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %.*s nr %d eph "DF_U64"\n",
 		DP_UOID(rdone->ro_oid), rdone, (int)rdone->ro_dkey.iov_len,
-		(char *)rdone->ro_dkey.iov_buf, rdone->ro_iod_num);
+		(char *)rdone->ro_dkey.iov_buf, rdone->ro_iod_num,
+		rdone->ro_epoch);
 	rc = ds_obj_fetch(oh, rdone->ro_epoch, &rdone->ro_dkey,
 			  rdone->ro_iod_num, rdone->ro_iods,
 			  sgls, NULL);
@@ -148,9 +149,10 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 		memcpy(&sgls[i], sgl, sizeof(*sgl));
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %.*s nr %d\n",
+	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %.*s nr %d eph "DF_U64"\n",
 		DP_UOID(rdone->ro_oid), rdone, (int)rdone->ro_dkey.iov_len,
-		(char *)rdone->ro_dkey.iov_buf, rdone->ro_iod_num);
+		(char *)rdone->ro_dkey.iov_buf, rdone->ro_iod_num,
+		rdone->ro_epoch);
 
 	rc = ds_obj_fetch(oh, rdone->ro_epoch, &rdone->ro_dkey,
 			  rdone->ro_iod_num, rdone->ro_iods,
@@ -389,9 +391,11 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t oid,
 			rec_cnt += iods[i].iod_recxs[j].rx_nr;
 
 		D_DEBUG(DB_REBUILD, "rebuild akey %.*s nr %d size "
-			DF_U64" type %d\n", (int)iods[i].iod_name.iov_len,
+			DF_U64" type %d eph "DF_U64"/"DF_U64"\n",
+			(int)iods[i].iod_name.iov_len,
 			(char *)iods[i].iod_name.iov_buf, iods[i].iod_nr,
-			iods[i].iod_size, iods[i].iod_type);
+			iods[i].iod_size, iods[i].iod_type,
+			iods[i].iod_eprs->epr_lo, iods[i].iod_eprs->epr_hi);
 	}
 
 	rdone->ro_rec_cnt = rec_cnt;
@@ -498,6 +502,10 @@ rebuild_iod_pack(daos_iod_t *iod, daos_key_t *akey, daos_key_desc_t *kds,
 			       rec[i].rec_size);
 
 		iod->iod_eprs[idx] = rec[i].rec_epr;
+		/* Iteration does not fill the high epoch, so let's reset
+		 * the high epoch with EPOCH_MAX to make vos fetch/update happy.
+		 */
+		iod->iod_eprs[idx].epr_hi = DAOS_EPOCH_MAX;
 		iod->iod_recxs[idx] = rec[i].rec_recx;
 		if (iod->iod_size == 0)
 			iod->iod_size = rec[i].rec_size;

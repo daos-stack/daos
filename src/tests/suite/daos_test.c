@@ -595,13 +595,15 @@ run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 	}
 
 	for (i = 0; i < sub_tests_size; i++) {
-		int idx = sub_tests[i];
+		int idx = sub_tests ? sub_tests[i] : i;
+		test_arg_t	*arg = state;
 
 		if (idx >= tests_size) {
 			print_message("No test %d\n", idx);
 			continue;
 		}
 
+		arg->index = idx;
 		print_message("%s\n", tests[idx].name);
 		if (tests[idx].setup_func)
 			tests[idx].setup_func(&state);
@@ -851,7 +853,8 @@ main(int argc, char **argv)
 	}
 
 	nr_failed = run_specified_tests(tests, rank, size,
-					sub_tests, sub_tests_idx);
+					sub_tests_idx > 0 ? sub_tests : NULL,
+					sub_tests_idx);
 
 exit:
 	MPI_Allreduce(&nr_failed, &nr_total_failed, 1, MPI_INT, MPI_SUM,

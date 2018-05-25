@@ -85,9 +85,10 @@ rebuild_io_internal(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 	struct ioreq	req;
 	int		i;
 	int		j;
+	daos_epoch_t	eph = arg->index;
 
-	print_message("%s obj %d for rebuild test\n",
-		      validate ? "validate" : "update", oids_nr);
+	print_message("%s obj %d eph "DF_U64" for rebuild test\n",
+		      validate ? "validate" : "update", oids_nr, eph);
 
 	for (i = 0; i < oids_nr; i++) {
 		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
@@ -107,13 +108,13 @@ rebuild_io_internal(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 					if (validate) {
 						memset(buf, 0, 16);
 						lookup_single(dkey, akey, l,
-							      buf, 5, 0, &req);
+							     buf, 5, eph, &req);
 						assert_memory_equal(buf, "data",
 								strlen("data"));
 					} else {
 						insert_single(dkey, akey, l,
 							"data",
-							strlen("data") + 1, 0,
+							strlen("data") + 1, eph,
 							&req);
 					}
 				}
@@ -130,14 +131,14 @@ rebuild_io_internal(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 					if (validate) {
 						memset(bulk, 0, 5000);
 						lookup_single(dkey, akey, l,
-							      bulk, 5010, 0,
+							      bulk, 5010, eph,
 							      &req);
 						assert_memory_equal(bulk,
 								compare, 5000);
 					} else {
 						memset(bulk, 'a', 5000);
 						insert_single(dkey, akey, l,
-							      bulk, 5000, 0,
+							      bulk, 5000, eph,
 							      &req);
 					}
 				}
@@ -149,14 +150,14 @@ rebuild_io_internal(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			sprintf(dkey, "dkey_single_%d", j);
 			if (validate) {
 				lookup_single(dkey, "akey_single", 0, buf, 16,
-					      0, &req);
+					      eph, &req);
 				assert_memory_equal(buf, "single_data",
 						    strlen("single_data"));
 			} else {
 				insert_single(dkey, "akey_single", 0,
 					      "single_data",
 					      strlen("single_data") + 1,
-					      0, &req);
+					      eph, &req);
 			}
 		}
 		ioreq_fini(&req);
@@ -1595,11 +1596,8 @@ run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (sub_tests_size == 0) {
-		rc = cmocka_run_group_tests_name("DAOS rebuild tests",
-						 rebuild_tests, rebuild_setup,
-						 test_teardown);
-		MPI_Barrier(MPI_COMM_WORLD);
-		return rc;
+		sub_tests_size = ARRAY_SIZE(rebuild_tests);
+		sub_tests = NULL;
 	}
 
 	rc = run_daos_sub_tests(rebuild_tests, ARRAY_SIZE(rebuild_tests),

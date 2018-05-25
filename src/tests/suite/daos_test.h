@@ -81,6 +81,7 @@ typedef struct {
 	int			nr;
 	int			srv_ntgts;
 	int			srv_disabled_ntgts;
+	int			index;
 
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.

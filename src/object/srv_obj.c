@@ -965,11 +965,13 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent,
 
 	D_DEBUG(DB_IO, "Pack rebuild rec "DF_U64"/"DF_U64
 		" rsize "DF_U64" cookie "DF_UUID" ver "DF_U64
-		" kd_len "DF_U64" type %d sgl idx %d kds idx %d\n",
+		" kd_len "DF_U64" type %d sgl idx %d kds idx %d"
+		" eph "DF_U64"/"DF_U64"\n",
 		key_ent->ie_recx.rx_idx, key_ent->ie_recx.rx_nr,
 		key_ent->ie_rsize, DP_UUID(rec.rec_cookie),
 		rec.rec_version, kds[iter_arg->kds_idx].kd_key_len, type,
-		iter_arg->sgl_idx, iter_arg->kds_idx);
+		iter_arg->sgl_idx, iter_arg->kds_idx,
+		rec.rec_epr.epr_lo, rec.rec_epr.epr_hi);
 
 	return 0;
 }
