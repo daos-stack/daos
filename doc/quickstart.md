@@ -87,7 +87,7 @@ On CentOS and openSuSE:
     $ yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
     $ yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
     $ yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
-    $ yum install -y doxygen pandoc flex patch nasm yasm protobuf-compiler
+    $ yum install -y doxygen pandoc flex patch nasm yasm
     # Additionally required SPDK packages
     $ yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
     $ yum install -y python clang-analyzer sg3_utils libiscsi-devel
@@ -98,7 +98,7 @@ On Ubuntu and Debian:
     $ apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
     $ apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
     $ apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
-    $ apt-get install -y curl doxygen pandoc flex patch nasm yasm protobuf-compiler
+    $ apt-get install -y curl doxygen pandoc flex patch nasm yasm
     # Additionally required SPDK packages
     $ apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
     $ apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen
@@ -110,6 +110,13 @@ Moreover, please make sure all the auto tools listed below are at the appropriat
     autoconf (GNU Autoconf) 2.69
     automake (GNU automake) 1.13.4
     libtool (GNU libtool) 2.4.2
+
+
+### Protobuf Compiler
+
+The DAOS control plane infrastrucure will be using protobuf as the data serialization format for its RPC requests. The DAOS proto files use protobuf 3 syntax which is not supported by the platform protobuf compiler in all cases. Not all developers will need to build the proto files into the various source files. However if changes are made to the proto files they will need to be regenerated with a protobuf 3.* or higher compiler. To setup support for compiling protobuf files download the following precompiled package for Linux and install it somewhere accessible by your PATH variable.
+
+    https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip
 
 ### Golang dependencies
 
