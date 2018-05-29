@@ -85,7 +85,7 @@ pool_ref_count_test(void **state)
 	int			num = 10;
 
 	uuid_generate(uuid);
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0);
 	for (i = 0; i < num; i++) {
 		ret = vos_pool_open(arg->fname[0], uuid,
 				    &arg->poh[i]);
@@ -136,14 +136,14 @@ pool_ops_run(void **state)
 					assert_int_equal(ret, 0);
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
-							      0);
+							      0, 0);
 				} else {
 					ret =
 					vts_alloc_gen_fname(&arg->fname[j]);
 					assert_int_equal(ret, 0);
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
-							      VPOOL_16M);
+							      VPOOL_16M, 0);
 				}
 				break;
 			case OPEN:
@@ -162,7 +162,7 @@ pool_ops_run(void **state)
 				ret = vos_pool_query(arg->poh[j], &pinfo);
 				assert_int_equal(ret, 0);
 				assert_int_equal(pinfo.pif_cont_nr, 0);
-				assert_false(pinfo.pif_size != VPOOL_16M);
+				assert_false(pinfo.pif_scm_sz != VPOOL_16M);
 				assert_false(pinfo.pif_avail !=
 				     (VPOOL_16M - sizeof(struct vos_pool_df)));
 				break;

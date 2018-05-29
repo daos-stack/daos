@@ -163,14 +163,27 @@ void eio_xsctxt_free(struct eio_xs_context *ctxt);
 size_t eio_nvme_poll(struct eio_xs_context *ctxt);
 
 /*
- * Create per VOS instance I/O context.
+ * Create per VOS instance blob.
+ *
+ * \param[IN] uuid	Pool UUID
+ * \param[IN] xs_ctxt	Per-xstream NVMe context
+ * \param[IN] blob_sz	Size of the blob to be created
+ *
+ * \returns		Zero on success, negative value on error
+ */
+int eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt,
+		    uint64_t blob_sz);
+
+/*
+ * Delete per VOS instance blob.
  *
  * \param[IN] uuid	Pool UUID
  * \param[IN] xs_ctxt	Per-xstream NVMe context
  *
- * \returns		Zero on success, negative value on error
+ * \returns		N/A
  */
-int eio_ioctxt_create(uuid_t uuid, struct eio_xs_context *xs_ctxt);
+void eio_blob_delete(uuid_t uuid, struct eio_xs_context *xs_ctxt);
+
 /*
  * Open per VOS instance I/O context.
  *

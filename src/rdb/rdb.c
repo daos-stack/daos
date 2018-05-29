@@ -55,7 +55,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 		DP_UUID(uuid), path, replicas->rl_nr);
 
 	/* Create and open a VOS pool. */
-	rc = vos_pool_create(path, (unsigned char *)uuid, size);
+	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0);
 	if (rc != 0)
 		goto out;
 	rc = vos_pool_open(path, (unsigned char *)uuid, &pool);

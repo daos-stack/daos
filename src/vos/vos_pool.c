@@ -64,8 +64,11 @@ pool_hop_free(struct d_ulink *hlink)
 
 	D_ASSERT(pool->vp_opened == 0);
 
-	if (pool->vp_io_ctxt != NULL)
+	if (pool->vp_io_ctxt != NULL) {
+		D_DEBUG(DB_MGMT, "Closing VOS I/O context:%p pool:"DF_UUID"\n",
+			pool->vp_io_ctxt, DP_UUID(pool->vp_id));
 		eio_ioctxt_close(pool->vp_io_ctxt);
+	}
 
 	if (pool->vp_vea_info != NULL)
 		vea_unload(pool->vp_vea_info);
@@ -155,47 +158,56 @@ pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
 	return 0;
 }
 
+static int
+vos_blob_format_cb(void *cb_data)
+{
+	/* TODO: complete this */
+	return 0;
+}
+
 /**
  * Create a Versioning Object Storage Pool (VOSP) and its root object.
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
+		daos_size_t blob_sz)
 {
 	struct vea_space_df	*vea_md = NULL;
 	PMEMobjpool		*ph;
 	struct umem_attr	 uma;
 	struct umem_instance	 umem;
-	uint64_t		 blob_id, blob_sz;
+	struct eio_xs_context	*xs_ctxt = vos_xsctxt_get();
+	struct vos_blob_hdr	 blob_hdr;
 	int rc = 0;
 
 	if (!path || uuid_is_null(uuid))
 		return -DER_INVAL;
 
-	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64",UUID: "DF_UUID"\n",
-		path, size, DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64", "
+		"UUID: "DF_UUID"\n", path, scm_sz, blob_sz, DP_UUID(uuid));
 
 	/* Path must be a file with a certain size when size argument is 0 */
-	if (!size && access(path, F_OK) == -1) {
+	if (!scm_sz && access(path, F_OK) == -1) {
 		D_ERROR("File not accessible (%d) when size is 0\n", errno);
 		return daos_errno2der(errno);
 	}
 
-	ph = vos_pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout), size,
+	ph = vos_pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout), scm_sz,
 				0666);
 	if (!ph) {
 		D_ERROR("Failed to create pool %s, size="DF_U64", errno=%d\n",
-			path, size, errno);
+			path, scm_sz, errno);
 		return daos_errno2der(errno);
 	}
 
 	/* If the file is fallocated seperately we need the fallocated size
 	 * for setting in the root object.
 	 */
-	if (!size) {
+	if (!scm_sz) {
 		struct stat lstat;
 
 		stat(path, &lstat);
-		size = lstat.st_size;
+		scm_sz = lstat.st_size;
 	}
 
 	TX_BEGIN(ph) {
@@ -214,9 +226,11 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 			pmemobj_tx_abort(EFAULT);
 
 		uuid_copy(pool_df->pd_id, uuid);
-		pool_df->pd_pool_info.pif_size  = size;
+		pool_df->pd_pool_info.pif_scm_sz  = scm_sz;
+		pool_df->pd_pool_info.pif_blob_sz = blob_sz;
 		/* XXX we don't really maintain the available size */
-		pool_df->pd_pool_info.pif_avail = size - pmemobj_root_size(ph);
+		pool_df->pd_pool_info.pif_avail = scm_sz -
+				pmemobj_root_size(ph);
 		vea_md = &pool_df->pd_vea_df;
 
 	} TX_ONABORT {
@@ -232,33 +246,34 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 	if (rc != 0)
 		goto close;
 
-	/* NVMe device isn't configured */
-	if (vos_xsctxt_get() == NULL)
+	/* SCM only pool or NVMe device isn't configured */
+	if (blob_sz == 0 || xs_ctxt == NULL)
 		goto close;
 
-	/*
-	 * The blob size should be NVME_RATIO * total_pool_size, we just set
-	 * it as pool size for this moment.
-	 */
-	blob_sz = size;
+	rc = umem_class_init(&uma, &umem);
+	if (rc != 0)
+		goto close;
 
-	/* TODO: Create SPDK blob on NVMe device */
-	blob_id = 1;
+	/* Create SPDK blob on NVMe device */
+	D_DEBUG(DB_MGMT, "Creating blob for xs:%p pool:"DF_UUID"\n",
+		xs_ctxt, DP_UUID(uuid));
+	rc = eio_blob_create(uuid, xs_ctxt, blob_sz);
+	if (rc != 0) {
+		D_ERROR("Error creating blob for xs:%p pool:"DF_UUID" rc:%d\n",
+			xs_ctxt, DP_UUID(uuid), rc);
+		goto close;
+	}
 
 	/* Format SPDK blob */
 	D_ASSERT(vea_md != NULL);
-	rc = umem_class_init(&uma, &umem);
-	if (rc != 0)
-		goto delete_blob;
-
-	rc = vea_format(&umem, vea_md, blob_id, VOS_BLK_SZ,
-			VOS_BLOB_HDR_BLKS, blob_sz, NULL, NULL, false);
-	if (rc)
-		D_ERROR("Format blob for "DF_UUID" error: %d\n",
-			DP_UUID(uuid), rc);
-
-delete_blob:
-	/* Destroy the SPDK blob on error */
+	rc = vea_format(&umem, vea_md, VOS_BLK_SZ, VOS_BLOB_HDR_BLKS, blob_sz,
+			vos_blob_format_cb, &blob_hdr, false);
+	if (rc) {
+		D_ERROR("Format blob error for xs:%p pool:"DF_UUID" rc:%d\n",
+			xs_ctxt, DP_UUID(uuid), rc);
+		/* Destroy the SPDK blob on error */
+		eio_blob_delete(uuid, xs_ctxt);
+	}
 close:
 	/* Close this local handle, opened using pool_open */
 	vos_pmemobj_close(ph);
@@ -335,7 +350,7 @@ exit:
 int
 vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 {
-
+	struct eio_xs_context	*xs_ctxt;
 	struct vos_pool_df	*pool_df;
 	struct vos_pool		*pool;
 	struct umem_attr	*uma;
@@ -348,7 +363,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	}
 
 	uuid_copy(ukey.uuid, uuid);
-	D_DEBUG(DB_MGMT, "open pool %s, uuid "DF_UUID"\n", path, DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: "DF_UUID"\n", path,
+		DP_UUID(uuid));
 
 	rc = pool_lookup(&ukey, &pool);
 	if (rc == 0) {
@@ -397,14 +413,19 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		D_GOTO(failed, rc);
 	}
 
-	rc = eio_ioctxt_open(&pool->vp_io_ctxt, vos_xsctxt_get(),
-			     &pool->vp_umm, uuid);
+	xs_ctxt = pool_df->pd_pool_info.pif_blob_sz == 0 ?
+			NULL : vos_xsctxt_get();
+
+	D_DEBUG(DB_MGMT, "Opening VOS I/O context for xs:%p pool:"DF_UUID"\n",
+		xs_ctxt, DP_UUID(uuid));
+	rc = eio_ioctxt_open(&pool->vp_io_ctxt, xs_ctxt, &pool->vp_umm, uuid);
 	if (rc) {
-		D_ERROR("Failed to open io context. %d\n", rc);
+		D_ERROR("Failed to open VOS I/O context for xs:%p "
+			"pool:"DF_UUID" rc=%d\n", xs_ctxt, DP_UUID(uuid), rc);
 		goto failed;
 	}
 
-	if (vos_xsctxt_get() != NULL) {
+	if (xs_ctxt != NULL) {
 		struct vea_unmap_context unmap_ctxt;
 
 		/* TODO: unmap callback */

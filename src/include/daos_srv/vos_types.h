@@ -39,9 +39,11 @@ enum vos_oi_attr {
 typedef struct {
 	/** # of containers in this pool */
 	uint64_t		pif_cont_nr;
-	/** Total space available */
-	daos_size_t		pif_size;
-	/** Current vailable space */
+	/** Total space available on SCM */
+	daos_size_t		pif_scm_sz;
+	/** Total space available on NVMe */
+	daos_size_t		pif_blob_sz;
+	/** Current available space */
 	daos_size_t		pif_avail;
 	/** TODO */
 } vos_pool_info_t;

@@ -51,6 +51,19 @@ extern umem_class_id_t vos_mem_class;
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
 #define VOS_BLOB_HDR_BLKS	1	/* block */
 
+/**
+ * Header for SPDK blob per VOS pool
+ */
+struct vos_blob_hdr {
+	uint32_t	vbh_magic;
+	uint32_t	vbh_blk_sz;
+	uint32_t	vbh_hdr_sz; /* blocks reserved for blob header */
+	uint32_t	vbh_vos_id; /* Service xstream id */
+	uuid_t		vbh_blobstore;
+	uint64_t	vbh_blob_id;
+	uuid_t		vbh_pool;
+};
+
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
 	D_ASSERT(bytes != 0);

@@ -70,12 +70,14 @@ vos_fini(void);
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
- * \param size	[IN]	Size of the pool
+ * \param scm_sz [IN]	Size of SCM for the pool
+ * \param blob_sz[IN]	Size of blob for the pool
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t size);
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
+		daos_size_t blob_sz);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)

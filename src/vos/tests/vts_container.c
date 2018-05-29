@@ -193,7 +193,7 @@ setup(void **state)
 
 	uuid_generate_time_safe(test_arg->pool_uuid);
 	vts_pool_fallocate(&test_arg->fname);
-	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0);
+	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0, 0);
 	assert_int_equal(ret, 0);
 	ret = vos_pool_open(test_arg->fname, test_arg->pool_uuid,
 			    &test_arg->poh);

@@ -52,11 +52,23 @@ struct eio_dma_buffer {
 	unsigned int		 edb_tot_cnt;
 };
 
+/*
+ * SPDK blobstore isn't thread safe and there can be only one SPDK
+ * blobstore for certain NVMe device.
+ */
+struct eio_blobstore {
+	ABT_mutex		 eb_mutex;
+	struct spdk_blob_store	*eb_bs;
+	struct eio_xs_context	*eb_ctxt;
+	int			 eb_ref;
+};
+
 /* Per-xstream NVMe context */
 struct eio_xs_context {
+	int			 exc_xs_id;
 	struct spdk_ring	*exc_msg_ring;
 	struct spdk_thread	*exc_thread;
-	struct spdk_blob_store	*exc_blobstore;
+	struct eio_blobstore	*exc_blobstore;
 	struct spdk_io_channel	*exc_io_channel;
 	d_list_t		 exc_pollers;
 	struct eio_dma_buffer	*exc_dma_buf;
@@ -107,9 +119,8 @@ struct eio_desc {
 	/* DMA buffers reserved by this io descriptor */
 	struct eio_rsrvd_dma	 ed_rsrvd;
 	/*
-	 * We currently always issue SPDK I/O from the channel
-	 * created within same thread. The mutex is just in case
-	 * of support multiple I/O channels in the future.
+	 * SPDK blob io completion could run on different xstream
+	 * when the NVMe device is shared by multiple xstreams.
 	 */
 	ABT_mutex		 ed_mutex;
 	ABT_cond		 ed_dma_done;

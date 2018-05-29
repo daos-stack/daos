@@ -267,14 +267,42 @@ ds_mgmt_tgt_pool_iterate(int (*cb)(const uuid_t uuid, void *arg), void *arg)
 	return rc == 0 ? rc_tmp : rc;
 }
 
+struct vos_pool_arg {
+	uuid_t		vpa_uuid;
+	daos_size_t	vpa_scm_sz;
+	daos_size_t	vpa_blob_sz;
+};
+
+static int
+tgt_vos_create_one(void *varg)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct vos_pool_arg	*vpa = varg;
+	char			*path = NULL;
+	int			 rc;
+
+	rc = path_gen(vpa->vpa_uuid, newborns_path, VOS_FILE, &info->dmi_tid,
+		      &path);
+	if (rc)
+		return rc;
+
+	rc = vos_pool_create(path, (unsigned char *)vpa->vpa_uuid,
+			     vpa->vpa_scm_sz, vpa->vpa_blob_sz);
+	if (rc)
+		D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
+			DP_UUID(vpa->vpa_uuid), path, rc);
+
+	if (path)
+		free(path);
+	return rc;
+}
+
 static int
 tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 {
 	daos_size_t	 size;
-	int		 i;
 	char		*path = NULL;
-	int		 fd = -1;
-	int		 rc = 0;
+	int		 i, fd = -1, rc = 0;
 
 	/**
 	 * Create one VOS file per execution stream
@@ -316,14 +344,6 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 			break;
 		}
 
-		/* A zero size accommodates the existing file */
-		rc = vos_pool_create(path, (unsigned char *)uuid, 0 /* size */);
-		if (rc) {
-			D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
-				DP_UUID(uuid), path, rc);
-			break;
-		}
-
 		rc = fsync(fd);
 		(void)close(fd);
 		fd = -1;
@@ -338,6 +358,21 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		free(path);
 	if (fd >= 0)
 		(void)close(fd);
+
+	if (!rc) {
+		struct vos_pool_arg	vpa;
+
+		uuid_copy(vpa.vpa_uuid, uuid);
+		/* A zero size accommodates the existing file */
+		vpa.vpa_scm_sz = 0;
+		/*
+		 * The blob size should be NVME_RATIO * total_pool_size, we
+		 * just set it as pool size for this moment.
+		 */
+		vpa.vpa_blob_sz = size;
+
+		rc = dss_thread_collective(tgt_vos_create_one, &vpa);
+	}
 
 	/** brute force cleanup to be done by the caller */
 	return rc;
@@ -544,6 +579,8 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 	rc = path_gen(pool_uuid, zombies_path, NULL, NULL, &zombie);
 	if (rc)
 		return rc;
+
+	/* TODO: Call dss_thread_collective() to destroy blobIDs first */
 
 	rc = rename(path, zombie);
 	if (rc < 0)

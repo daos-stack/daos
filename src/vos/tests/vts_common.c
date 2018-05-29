@@ -120,8 +120,7 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	uuid_generate_time_safe(tcx->tc_po_uuid);
 	uuid_generate_time_safe(tcx->tc_co_uuid);
 
-	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid,
-			     psize);
+	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, 0);
 	if (rc) {
 		print_error("vpool create %s failed with error : %d\n",
 			    tcx->tc_po_name, rc);

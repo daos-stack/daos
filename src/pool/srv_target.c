@@ -226,7 +226,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
 
-	rc = dss_task_collective(pool_child_add_one, &collective_arg);
+	rc = dss_thread_collective(pool_child_add_one, &collective_arg);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: %d\n",
 			DP_UUID(key), rc);

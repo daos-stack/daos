@@ -732,7 +732,7 @@ io_obj_cache_test(void **state)
 	assert_int_equal(rc, 0);
 
 	uuid_generate_time_safe(pool_uuid);
-	rc = vos_pool_create(po_name, pool_uuid, VPOOL_16M);
+	rc = vos_pool_create(po_name, pool_uuid, VPOOL_16M, 0);
 	assert_int_equal(rc, 0);
 
 	rc = vos_pool_open(po_name, pool_uuid, &l_poh);
@@ -1360,7 +1360,7 @@ pool_cont_same_uuid(void **state)
 	uuid_generate(pool_uuid);
 	uuid_copy(co_uuid, pool_uuid);
 
-	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_16M);
+	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_16M, 0);
 	assert_int_equal(ret, 0);
 
 	ret = vos_pool_open(arg->fname, pool_uuid, &poh);

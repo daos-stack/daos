@@ -59,9 +59,8 @@ erase_md(struct umem_instance *umem, struct vea_space_df *md)
  */
 int
 vea_format(struct umem_instance *umem, struct vea_space_df *md,
-	   uint64_t dev_id, uint32_t blk_sz, uint32_t hdr_blks,
-	   uint64_t capacity, vea_format_callback_t cb, void *cb_data,
-	   bool force)
+	   uint32_t blk_sz, uint32_t hdr_blks, uint64_t capacity,
+	   vea_format_callback_t cb, void *cb_data, bool force)
 {
 	struct vea_free_extent free_ext;
 	struct umem_attr uma;
@@ -73,16 +72,12 @@ vea_format(struct umem_instance *umem, struct vea_space_df *md,
 	/* Can't reformat without 'force' specified */
 	if (md->vsd_magic == VEA_MAGIC) {
 		D_DEBUG(force ? DLOG_WARN : DLOG_ERR,
-			"reformat "DF_U64" force=%d\n", dev_id, force);
+			"reformat %p force=%d\n", md, force);
 		if (!force)
 			return -DER_EXIST;
 
 		erase_md(umem, md);
 	}
-
-	/* Parameters sanity check */
-	if (dev_id == 0)
-		return -DER_INVAL;
 
 	/* Block size should be aligned with 4K and <= 1M */
 	if (blk_sz && ((blk_sz % VEA_BLK_SZ) != 0 || blk_sz > (1U << 20)))
@@ -126,7 +121,6 @@ vea_format(struct umem_instance *umem, struct vea_space_df *md,
 
 	md->vsd_magic = VEA_MAGIC;
 	md->vsd_blk_sz = blk_sz;
-	md->vsd_dev_id = dev_id;
 	md->vsd_tot_blks = tot_blks;
 	md->vsd_tot_used = 0;
 	md->vsd_free_frags = 0;
@@ -229,6 +223,7 @@ vea_load(struct umem_instance *umem, struct vea_space_df *md,
 	vsi->vsi_vec_btr = DAOS_HDL_INVAL;
 	vsi->vsi_tot_resrvd = 0;
 	vsi->vsi_agg_time = 0;
+	D_ASSERT(unmap_ctxt != NULL);
 	vsi->vsi_unmap_ctxt = *unmap_ctxt;
 
 	rc = create_free_class(&vsi->vsi_class, md);

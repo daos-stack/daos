@@ -109,8 +109,6 @@ struct vea_space_df {
 	uint32_t	vsd_magic;
 	/* Block size, 4k bytes by default */
 	uint32_t	vsd_blk_sz;
-	/* Block device ID */
-	uint64_t	vsd_dev_id;
 	/* Block device capacity */
 	uint64_t	vsd_tot_blks;
 	/* Allocated blocks */
@@ -136,7 +134,6 @@ typedef int (*vea_format_callback_t)(void *cb_data);
  *
  * \param umem     [IN]	An instance of SCM
  * \param md       [IN]	The allocation metadata on SCM
- * \param dev_id   [IN]	Block device ID
  * \param blk_sz   [IN]	Block size in bytes (4k by default)
  * \param hdr_blks [IN] How many blocks reserved for device header
  * \param capacity [IN]	Block device capacity in bytes
@@ -149,9 +146,8 @@ typedef int (*vea_format_callback_t)(void *cb_data);
  *			true; Appropriated negative value for other errors
  */
 int vea_format(struct umem_instance *umem, struct vea_space_df *md,
-	       uint64_t dev_id, uint32_t blk_sz, uint32_t hdr_blks,
-	       uint64_t capacity, vea_format_callback_t cb, void *cb_data,
-	       bool force);
+	       uint32_t blk_sz, uint32_t hdr_blks, uint64_t capacity,
+	       vea_format_callback_t cb, void *cb_data, bool force);
 
 /**
  * Load space tracking information from SCM to initialize the in-memory compound

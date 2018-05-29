@@ -58,9 +58,10 @@ unsigned int eio_chk_cnt_max;
 static unsigned int eio_chk_cnt_init;
 
 struct eio_bdev {
-	d_list_t	 eb_link;
-	uuid_t		 eb_uuid;
-	char		*eb_name;
+	d_list_t		 eb_link;
+	uuid_t			 eb_uuid;
+	char			*eb_name;
+	struct eio_blobstore	*eb_blobstore;
 };
 
 struct eio_nvme_data {
@@ -468,7 +469,38 @@ init_eio_bdevs(struct eio_xs_context *ctxt)
 }
 
 static void
-fini_eio_bdevs(void)
+put_eio_blobstore(struct eio_blobstore *eb, struct eio_xs_context *ctxt)
+{
+	struct spdk_blob_store *bs = NULL;
+	bool last = false;
+
+	/*
+	 * Unload the blobstore within the same thread where is't loaded,
+	 * all server xstreams which should have stopped using the blobstore.
+	 */
+	ABT_mutex_lock(eb->eb_mutex);
+	if (eb->eb_ctxt == ctxt && eb->eb_bs != NULL) {
+		bs = eb->eb_bs;
+		eb->eb_bs = NULL;
+	}
+
+	D_ASSERT(eb->eb_ref > 0);
+	eb->eb_ref--;
+	if (eb->eb_ref == 0)
+		last = true;
+	ABT_mutex_unlock(eb->eb_mutex);
+
+	if (bs != NULL)
+		unload_blobstore(ctxt, bs);
+
+	if (last) {
+		ABT_mutex_free(&eb->eb_mutex);
+		D_FREE_PTR(eb);
+	}
+}
+
+static void
+fini_eio_bdevs(struct eio_xs_context *ctxt)
 {
 	struct eio_bdev *d_bdev, *tmp;
 
@@ -477,16 +509,52 @@ fini_eio_bdevs(void)
 
 		if (d_bdev->eb_name != NULL)
 			free(d_bdev->eb_name);
+
+		if (d_bdev->eb_blobstore != NULL)
+			put_eio_blobstore(d_bdev->eb_blobstore, ctxt);
+
 		D_FREE_PTR(d_bdev);
 	}
+}
+
+static struct eio_blobstore *
+alloc_eio_blobstore(struct eio_xs_context *ctxt)
+{
+	struct eio_blobstore *eb;
+	int rc;
+
+	D_ASSERT(ctxt != NULL);
+	D_ALLOC_PTR(eb);
+	if (eb == NULL)
+		return NULL;
+
+	rc = ABT_mutex_create(&eb->eb_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_FREE_PTR(eb);
+		return NULL;
+	}
+
+	eb->eb_ref = 1;
+	eb->eb_ctxt = ctxt;
+
+	return eb;
+}
+
+static struct eio_blobstore *
+get_eio_blobstore(struct eio_blobstore *eb)
+{
+	ABT_mutex_lock(eb->eb_mutex);
+	eb->eb_ref++;
+	ABT_mutex_unlock(eb->eb_mutex);
+	return eb;
 }
 
 static int
 init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
 {
-	struct eio_bdev *d_bdev;
-	struct spdk_bdev *bdev;
-	struct spdk_blob_store *bs;
+	struct eio_bdev		*d_bdev;
+	struct spdk_bdev	*bdev;
+	struct spdk_blob_store	*bs;
 
 	D_ASSERT(ctxt->exc_blobstore == NULL);
 	D_ASSERT(ctxt->exc_io_channel == NULL);
@@ -508,20 +576,31 @@ init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
 	d_bdev = d_list_entry(nvme_glb.ed_bdevs.next, struct eio_bdev,
 			      eb_link);
 
-	D_ASSERT(d_bdev->eb_name != NULL);
-	bdev = spdk_bdev_get_by_name(d_bdev->eb_name);
-	if (bdev == NULL) {
-		D_ERROR("failed to find bdev named %s\n", d_bdev->eb_name);
-		return -DER_NONEXIST;
+	if (d_bdev->eb_blobstore == NULL) {
+		d_bdev->eb_blobstore = alloc_eio_blobstore(ctxt);
+		if (d_bdev->eb_blobstore == NULL)
+			return -DER_NOMEM;
+
+		D_ASSERT(d_bdev->eb_name != NULL);
+		bdev = spdk_bdev_get_by_name(d_bdev->eb_name);
+		if (bdev == NULL) {
+			D_ERROR("failed to find bdev named %s\n",
+				d_bdev->eb_name);
+			return -DER_NONEXIST;
+		}
+
+		/* Load blobstore with bstype specified for sanity check */
+		bs = load_blobstore(ctxt, bdev, &d_bdev->eb_uuid, false);
+		if (bs == NULL)
+			return -DER_INVAL;
+
+		d_bdev->eb_blobstore->eb_bs = bs;
 	}
 
-	/* Load blobstore with bstype specified for sanity check */
-	bs = load_blobstore(ctxt, bdev, &d_bdev->eb_uuid, false);
-	if (bs == NULL)
-		return -DER_INVAL;
-
-	ctxt->exc_blobstore = bs;
-	ctxt->exc_io_channel = spdk_bs_alloc_io_channel(ctxt->exc_blobstore);
+	ctxt->exc_blobstore = get_eio_blobstore(d_bdev->eb_blobstore);
+	bs = ctxt->exc_blobstore->eb_bs;
+	D_ASSERT(bs != NULL);
+	ctxt->exc_io_channel = spdk_bs_alloc_io_channel(bs);
 	if (ctxt->exc_io_channel == NULL) {
 		D_ERROR("failed to create io channel\n");
 		return -DER_NOMEM;
@@ -549,7 +628,7 @@ init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
 void
 eio_xsctxt_free(struct eio_xs_context *ctxt)
 {
-	struct common_cp_arg cp_arg;
+	struct common_cp_arg	cp_arg;
 
 	/* NVMe context setup was skipped */
 	if (ctxt == NULL)
@@ -561,7 +640,7 @@ eio_xsctxt_free(struct eio_xs_context *ctxt)
 	}
 
 	if (ctxt->exc_blobstore != NULL) {
-		unload_blobstore(ctxt, ctxt->exc_blobstore);
+		put_eio_blobstore(ctxt->exc_blobstore, ctxt);
 		ctxt->exc_blobstore = NULL;
 	}
 
@@ -578,7 +657,7 @@ eio_xsctxt_free(struct eio_xs_context *ctxt)
 				ABT_cond_wait(nvme_glb.ed_barrier,
 					      nvme_glb.ed_mutex);
 
-			fini_eio_bdevs();
+			fini_eio_bdevs(ctxt);
 
 			memset(&cp_arg, 0, sizeof(cp_arg));
 			spdk_copy_engine_finish(common_fini_cb, &cp_arg);
@@ -589,6 +668,7 @@ eio_xsctxt_free(struct eio_xs_context *ctxt)
 			xs_poll_completion(ctxt, &cp_arg);
 
 			nvme_glb.ed_init_thread = NULL;
+
 		} else if (nvme_glb.ed_xstream_cnt == 0) {
 			ABT_cond_broadcast(nvme_glb.ed_barrier);
 		}
@@ -635,6 +715,7 @@ eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id)
 		return -DER_NOMEM;
 
 	D_INIT_LIST_HEAD(&ctxt->exc_pollers);
+	ctxt->exc_xs_id = xs_id;
 
 	ABT_mutex_lock(nvme_glb.ed_mutex);
 

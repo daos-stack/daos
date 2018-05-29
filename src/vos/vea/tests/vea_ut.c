@@ -65,24 +65,23 @@ ut_format(void **state)
 	uint32_t blk_sz = 0; /* use the default size */
 	uint32_t hdr_blks = 1;
 	uint64_t capacity = ((VEA_LARGE_EXT_MB * 2) << 20);
-	uint64_t dev_id = 101;
 	int rc;
 
 	/* format */
 	print_message("format\n");
-	rc = vea_format(&args->vua_umm, args->vua_md, dev_id, blk_sz,
+	rc = vea_format(&args->vua_umm, args->vua_md, blk_sz,
 			hdr_blks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, 0);
 
 	/* reformat without setting 'force' */
 	print_message("reformat without setting 'force'\n");
-	rc = vea_format(&args->vua_umm, args->vua_md, dev_id, blk_sz,
+	rc = vea_format(&args->vua_umm, args->vua_md, blk_sz,
 			hdr_blks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, -DER_EXIST);
 
 	/* reformat with 'force' */
 	print_message("reformat with 'force'\n");
-	rc = vea_format(&args->vua_umm, args->vua_md, dev_id, blk_sz,
+	rc = vea_format(&args->vua_umm, args->vua_md, blk_sz,
 			hdr_blks, capacity, NULL, NULL, true);
 	assert_int_equal(rc, 0);
 
