@@ -46,6 +46,8 @@
 /* Describes internal structure of the value */
 #define MAX_DATA_SIZE 1024
 
+#define IV_GRP_NAME "IV_TEST"
+
 /* Describes internal structure of a key */
 struct iv_key_struct {
 	d_rank_t	rank;

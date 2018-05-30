@@ -501,7 +501,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON);
+	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SINGLETON);
 	assert(rc == 0);
 
 	rc = crt_context_create(&g_crt_ctx);
@@ -510,7 +510,7 @@ int main(int argc, char **argv)
 	attach_retries_left = NUM_ATTACH_RETRIES;
 
 	while (attach_retries_left-- > 0) {
-		rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &srv_grp);
+		rc = crt_group_attach(IV_GRP_NAME, &srv_grp);
 		if (rc == 0)
 			break;
 

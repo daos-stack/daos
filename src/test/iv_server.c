@@ -1158,7 +1158,7 @@ int main(int argc, char **argv)
 
 	init_hostname(g_hostname, sizeof(g_hostname));
 
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
+	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SERVER);
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting\n");
