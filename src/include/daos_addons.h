@@ -211,7 +211,8 @@ typedef struct {
  * the metadata. But this adds extra overhead).
  *
  * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object ID.
+ * \param[in]	oid	Object ID. It is required that the feat for dkey type
+ *			be set to DAOS_OF_DKEY_UINT64.
  * \param[in]	epoch	Epoch to open object.
  * \param[in]	cell_size
  *			Record size of the array.
@@ -243,7 +244,8 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  * metadata exists), this will fail.
  *
  * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object ID.
+ * \param[in]	oid	Object ID. It is required that the feat for dkey type
+ *			be set to DAOS_OF_DKEY_UINT64.
  * \param[in]	epoch	Epoch to open object.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW/EXCL/IO_RAND/IO_SEQ
  * \param[out]	cell_size

@@ -236,9 +236,10 @@ incr_epoch(dfs_t *dfs)
  * hence discarded when the dfs is unmounted.
  */
 int
-oid_gen(dfs_t *dfs, uint16_t oclass, daos_obj_id_t *oid)
+oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 {
-	int rc = 0;
+	daos_ofeat_t	feat = 0;
+	int		rc = 0;
 
 	if (oclass == 0)
 		oclass = DAOS_OC_REPL_MAX_RW;
@@ -261,8 +262,12 @@ oid_gen(dfs_t *dfs, uint16_t oclass, daos_obj_id_t *oid)
 	oid->hi = dfs->oid.hi++;
 	D_MUTEX_UNLOCK(&dfs->lock);
 
+	/** if a regular file, use UINT64 typed dkeys for the array object */
+	if (file)
+		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_HASHED;
+
 	/** generate the daos object ID (set the DAOS owned bits) */
-	daos_obj_id_generate(oid, 0, oclass);
+	daos_obj_id_generate(oid, feat, oclass);
 
 	return rc;
 }
@@ -697,7 +702,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		incr_epoch(dfs);
 
 		/** Get new OID for the file */
-		rc = oid_gen(dfs, cid, &file->oid);
+		rc = oid_gen(dfs, cid, true, &file->oid);
 		if (rc != 0)
 			D_GOTO(err, rc);
 		oid_cp(&entry.oid, file->oid);
@@ -797,7 +802,7 @@ create_dir(dfs_t *dfs, daos_handle_t parent_oh, daos_oclass_id_t cid,
 			return -DER_EXIST;
 	}
 
-	rc = oid_gen(dfs, cid, &dir->oid);
+	rc = oid_gen(dfs, cid, false, &dir->oid);
 	if (rc != 0)
 		return rc;
 	rc = daos_obj_open(dfs->coh, dir->oid, dfs->epoch, DAOS_OO_RW, &dir->oh,

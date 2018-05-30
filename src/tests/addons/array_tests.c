@@ -32,13 +32,14 @@
 #include "daos_addons_test.h"
 
 /** number of elements to write to array */
-#define NUM_ELEMS 64
+#define NUM_ELEMS	64
 /** num of mem segments for strided access - Must evenly divide NUM_ELEMS */
-#define NUM_SEGS 4
+#define NUM_SEGS	4
+/** Object class to use in tests */
+#define DTS_OCLASS_DEF	DAOS_OC_REPL_MAX_RW
 
-#define DTS_OCLASS_DEF		DAOS_OC_REPL_MAX_RW
-
-daos_size_t block_size = 16;
+static daos_size_t chunk_size = 16;
+static daos_ofeat_t feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_HASHED;
 
 static void simple_array_mgmt(void **state);
 static void contig_mem_contig_arr_io(void **state);
@@ -93,16 +94,26 @@ simple_array_mgmt(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	daos_size_t	cell_size = 0, chunk_size = 0;
+	daos_size_t	cell_size = 0, csize = 0;
 	daos_size_t	size;
-	daos_epoch_t	epoch;
+	daos_epoch_t	epoch = 1;
 	int		rc;
 
+	/** create the array with HASHED DKEY, should FAIL */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
-	epoch = 1;
+	rc = daos_array_create(arg->coh, oid, epoch, 4, chunk_size, &oh, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	/** create the array with LEXICAL DKEY, should FAIL */
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, DAOS_OF_DKEY_LEXICAL,
+			  arg->myrank);
+	rc = daos_array_create(arg->coh, oid, epoch, 4, chunk_size, &oh, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, arg->myrank);
 
 	/** create the array */
-	rc = daos_array_create(arg->coh, oid, epoch, 4, 16, &oh, NULL);
+	rc = daos_array_create(arg->coh, oid, epoch, 4, chunk_size, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	rc = daos_array_set_size(oh, epoch, 265, NULL);
@@ -120,10 +131,10 @@ simple_array_mgmt(void **state)
 
 	/** open the array */
 	rc = daos_array_open(arg->coh, oid, epoch, DAOS_OO_RW,
-			     &cell_size, &chunk_size, &oh, NULL);
+			     &cell_size, &csize, &oh, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(4, cell_size);
-	assert_int_equal(16, chunk_size);
+	assert_int_equal(chunk_size, csize);
 
 	rc = daos_array_set_size(oh, epoch, 112, NULL);
 	assert_int_equal(rc, 0);
@@ -165,7 +176,7 @@ simple_array_mgmt(void **state)
 
 	epoch++;
 	rc = daos_array_open(arg->coh, oid, epoch, DAOS_OO_RW,
-			     &cell_size, &chunk_size, &temp_oh, NULL);
+			     &cell_size, &csize, &temp_oh, NULL);
 	assert_int_equal(rc, -DER_NO_PERM);
 
 	rc = daos_array_close(oh, NULL);
@@ -179,7 +190,7 @@ static void
 small_io(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch;
+	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -190,8 +201,7 @@ small_io(void **state)
 	daos_size_t	array_size;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
-	epoch = 25;
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, epoch, 1, 1048576, &oh, NULL);
@@ -292,9 +302,9 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
+		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, 0);
 		rc = daos_array_create(arg->coh, oid, epoch, cell_size,
-				       block_size, &oh, NULL);
+				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
 	}
 	array_oh_share(arg->coh, arg->myrank, &oh);
@@ -446,9 +456,9 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
+		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, 0);
 		rc = daos_array_create(arg->coh, oid, epoch, cell_size,
-				       block_size, &oh, NULL);
+				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
 	}
 	array_oh_share(arg->coh, arg->myrank, &oh);
@@ -469,7 +479,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	for (i = 0; i < NUM_ELEMS; i++) {
 		iod.arr_rgs[i].rg_len = sizeof(int) / cell_size;
 		iod.arr_rgs[i].rg_idx = i * arg->rank_size * 4 +
-			arg->myrank * 4 + i * block_size;
+			arg->myrank * 4 + i * chunk_size;
 	}
 
 	/** set memory location */
@@ -536,7 +546,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	expected_size = ((NUM_ELEMS - 1) * arg->rank_size * 4) +
 		((arg->rank_size - 1) * 4) +
-		((NUM_ELEMS - 1) * block_size) +
+		((NUM_ELEMS - 1) * chunk_size) +
 		(sizeof(int) / cell_size);
 
 	rc = daos_array_get_size(oh, epoch, &array_size, NULL);
@@ -604,9 +614,9 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
+		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, 0);
 		rc = daos_array_create(arg->coh, oid, epoch, cell_size,
-				       block_size, &oh, NULL);
+				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
 	}
 	array_oh_share(arg->coh, arg->myrank, &oh);
@@ -630,7 +640,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	for (i = 0; i < NUM_ELEMS; i++) {
 		iod.arr_rgs[i].rg_len = sizeof(int) / cell_size;
 		iod.arr_rgs[i].rg_idx = i * arg->rank_size * 4 +
-			arg->myrank * 4 + i * block_size;
+			arg->myrank * 4 + i * chunk_size;
 	}
 
 	/** set memory location */
@@ -711,7 +721,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	expected_size = ((NUM_ELEMS - 1) * arg->rank_size * 4) +
 		((arg->rank_size - 1) * 4) +
-		(NUM_ELEMS - 1) * block_size +
+		(NUM_ELEMS - 1) * chunk_size +
 		sizeof(int) / cell_size;
 
 	rc = daos_array_get_size(oh, epoch, &array_size, NULL);
@@ -747,7 +757,7 @@ static void
 read_empty_records(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch;
+	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -758,8 +768,7 @@ read_empty_records(void **state)
 	daos_event_t	ev;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
-	epoch = 1;
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
@@ -767,7 +776,7 @@ read_empty_records(void **state)
 	}
 
 	/** create the array */
-	rc = daos_array_create(arg->coh, oid, epoch, 1, block_size,
+	rc = daos_array_create(arg->coh, oid, epoch, 1, chunk_size,
 			       &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -861,7 +870,7 @@ static void
 strided_array(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch;
+	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -870,8 +879,7 @@ strided_array(void **state)
 	daos_size_t	i, j, nerrors = 0;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
-	epoch = 1;
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, epoch, 1, 1048576, &oh,
