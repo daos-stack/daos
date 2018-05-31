@@ -170,7 +170,7 @@ iobuf_zc_fetch(struct iod_buf *iobuf, daos_iov_t *iov)
 		if (iovs == NULL)
 			return -DER_NOMEM;
 
-		memcpy(iovs, &sgl->sg_iovs[0], nr * 2 * sizeof(*iovs));
+		memcpy(iovs, &sgl->sg_iovs[0], nr * sizeof(*iovs));
 		D_FREE(sgl->sg_iovs);
 
 		sgl->sg_iovs	= iovs;
