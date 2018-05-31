@@ -255,6 +255,8 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 		rpc_priv->crp_state = RPC_STATE_CANCELED;
 	else if (rc == -DER_TIMEDOUT)
 		rpc_priv->crp_state = RPC_STATE_TIMEOUT;
+	else if (rc == -DER_UNREACH)
+		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 	else
 		rpc_priv->crp_state = RPC_STATE_COMPLETED;
 
@@ -591,7 +593,7 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 		return false;
 	}
 	if (rpc_priv->crp_state == RPC_STATE_CANCELED ||
-		rpc_priv->crp_state == RPC_STATE_COMPLETED) {
+	    rpc_priv->crp_state == RPC_STATE_COMPLETED) {
 		D_DEBUG(DB_NET,
 			"rpc_priv %p state %#x, not reseting timer.\n",
 			rpc_priv, rpc_priv->crp_state);
@@ -668,9 +670,22 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		break;
+	case RPC_STATE_FWD_UNREACH:
+		D_ERROR("rpc opc: %#x to group %s, rank %d, tgt_uri %s "
+			"can't reach the target.\n",
+			rpc_priv->crp_pub.cr_opc, grp_priv->gp_pub.cg_grpid,
+			tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+		crt_context_req_untrack(&rpc_priv->crp_pub);
+		crt_rpc_complete(rpc_priv, -DER_UNREACH);
+		RPC_DECREF(rpc_priv);
+		break;
 	default:
-		/* At this point, RPC should always be completed by Mercury */
-		crt_req_abort(&rpc_priv->crp_pub);
+		if (rpc_priv->crp_on_wire) {
+			/* At this point, RPC should always be completed by
+			 * Mercury
+			 */
+			crt_req_abort(&rpc_priv->crp_pub);
+		}
 		break;
 	}
 }
@@ -703,7 +718,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(&rpc_priv->crp_pub);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
-		D_ERROR("ctx_id %d, rpc_priv %p (status: %d) (opc %#x) "
+		D_ERROR("ctx_id %d, rpc_priv %p (status: %#x) (opc %#x) "
 			"timed out, tgt rank %d, tag %d.\n", crt_ctx->cc_idx,
 			rpc_priv, rpc_priv->crp_state,
 			rpc_priv->crp_pub.cr_opc,
@@ -861,7 +876,8 @@ crt_context_req_untrack(crt_rpc_t *req)
 		 rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
 		 rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
 		 rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
-		 rpc_priv->crp_state == RPC_STATE_CANCELED);
+		 rpc_priv->crp_state == RPC_STATE_CANCELED ||
+		 rpc_priv->crp_state == RPC_STATE_FWD_UNREACH);
 	epi = rpc_priv->crp_epi;
 	D_ASSERT(epi != NULL);
 
@@ -1259,11 +1275,13 @@ crt_req_force_timeout(struct crt_rpc_priv *rpc_priv)
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	/**
-	 * untrack it so that the timeout_check() in crt_progress() won't catch
-	 * it again
+	 *  set the RPC's expiration time stamp to the past, move it to the top
+	 *  of the heap.
 	 */
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	crt_req_timeout_untrack(&rpc_priv->crp_pub);
+	rpc_priv->crp_timeout_ts = 0;
+	crt_req_timeout_track(&rpc_priv->crp_pub);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	crt_exec_timeout_cb(rpc_priv);

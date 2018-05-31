@@ -1309,8 +1309,6 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	if (rc != DER_SUCCESS)
 		D_ERROR("crt_hg_req_send failed, rc: %d, rpc_priv: %p,"
 			"opc: %#x.\n", rc, rpc_priv, req->cr_opc);
-	else
-		rpc_priv->crp_on_wire = 1;
 
 out:
 	if (rc != 0)
@@ -1523,6 +1521,13 @@ crt_req_abort(crt_rpc_t *req)
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+
+	if (rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) {
+		D_DEBUG(DB_NET,
+			"req (rpc_priv %p, opc: %#x) failed to send, no need to abort.\n",
+			rpc_priv, req->cr_opc);
+		D_GOTO(out, 0);
+	}
 
 	if (crt_req_aborted(req)) {
 		D_DEBUG(DB_NET, "req (rpc_priv %p, opc: %#x) aborted, need not "

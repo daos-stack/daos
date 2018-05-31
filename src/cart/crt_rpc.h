@@ -116,6 +116,7 @@ typedef enum {
 	RPC_STATE_TIMEOUT,
 	RPC_STATE_ADDR_LOOKUP,
 	RPC_STATE_URI_LOOKUP,
+	RPC_STATE_FWD_UNREACH,
 } crt_rpc_state_t;
 
 /* corpc info to track the tree topo and child RPCs info */
@@ -429,7 +430,8 @@ crt_req_timedout(crt_rpc_t *rpc)
 	return (rpc_priv->crp_state == RPC_STATE_REQ_SENT ||
 		rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
 		rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
-		rpc_priv->crp_state == RPC_STATE_TIMEOUT) &&
+		rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
+		rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) &&
 	       !rpc_priv->crp_in_binheap;
 }
 

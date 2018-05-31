@@ -1245,10 +1245,15 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 		D_DEBUG(DB_NET, "rpc_priv %p sent.\n", rpc_priv);
 
 	if (hg_ret == HG_NA_ERROR) {
-		rc = -DER_UNREACH;
+		/* error will be reported to the completion callback in
+		 * crt_req_timeout_hdlr()
+		 */
 		crt_req_force_timeout(rpc_priv);
+		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 	} else if (hg_ret != HG_SUCCESS) {
 		rc = -DER_HG;
+	} else {
+		rpc_priv->crp_on_wire = 1;
 	}
 
 	return rc;
