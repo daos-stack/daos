@@ -116,6 +116,9 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 		return rc;
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_UPDATE))
+		return 0;
+
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
 		return -DER_INVAL;
 
@@ -239,12 +242,15 @@ rebuild_one(struct rebuild_tgt_pool_tracker *rpt,
 	if (rc)
 		D_GOTO(obj_close, rc);
 
-	data_size = daos_iods_len(rdone->ro_iods, rdone->ro_iod_num);
-	D_ASSERT(data_size != (uint64_t)(-1));
-	if (data_size < MAX_BUF_SIZE)
-		rc = rebuild_fetch_update_inline(rdone, oh, rebuild_cont);
-	else
-		rc = rebuild_fetch_update_bulk(rdone, oh, rebuild_cont);
+	/* DAOS_REBUILD_TGT_NO_REBUILD are for testing purpose */
+	if (!DAOS_FAIL_CHECK(DAOS_REBUILD_NO_REBUILD)) {
+		data_size = daos_iods_len(rdone->ro_iods, rdone->ro_iod_num);
+		D_ASSERT(data_size != (uint64_t)(-1));
+		if (data_size < MAX_BUF_SIZE)
+			rc = rebuild_fetch_update_inline(rdone, oh, rebuild_cont);
+		else
+			rc = rebuild_fetch_update_bulk(rdone, oh, rebuild_cont);
+	}
 
 	tls->rebuild_pool_rec_count += rdone->ro_rec_cnt;
 	ds_cont_put(rebuild_cont);

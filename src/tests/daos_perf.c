@@ -84,6 +84,11 @@ daos_unit_oid_t		 ts_uoid;		/* object shard ID (for VOS) */
 
 struct dts_context	 ts_ctx;
 
+/* rebuild only with iteration */
+bool			ts_rebuild_only_iteration = false;
+/* rebuild without update */
+bool			ts_rebuild_no_update = false;
+
 static int
 ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		       enum ts_op_type_t update_or_fetch)
@@ -649,6 +654,15 @@ ts_rebuild_perf(double *start_time, double *end_time)
 	if (rc)
 		return rc;
 
+	if (ts_rebuild_only_iteration)
+		daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC,
+				     DAOS_REBUILD_NO_REBUILD | DAOS_FAIL_VALUE,
+				     NULL);
+	else if (ts_rebuild_no_update)
+		daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC,
+				     DAOS_REBUILD_NO_UPDATE | DAOS_FAIL_VALUE,
+				     NULL);
+
 	rc = ts_exclude_server(RANK_ZERO);
 	if (rc)
 		return rc;
@@ -658,6 +672,8 @@ ts_rebuild_perf(double *start_time, double *end_time)
 	*end_time = dts_time_now();
 
 	rc = ts_add_server(RANK_ZERO);
+
+	daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC, 0, NULL); 
 
 	return rc;
 }
@@ -911,7 +927,7 @@ main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
-	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:ztf:hUFRBvI",
+	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:ztf:hUFRBvIiu",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -990,6 +1006,12 @@ main(int argc, char **argv)
 			break;
 		case 'R':
 			perf_tests[REBUILD_TEST] = ts_rebuild_perf;
+			break;
+		case 'i':
+			ts_rebuild_only_iteration = true;
+			break;
+		case 'u':
+			ts_rebuild_no_update = true;
 			break;
 		case 'B':
 			perf_tests[UPDATE_FETCH_TEST] = ts_update_fetch_perf;
