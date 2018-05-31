@@ -497,22 +497,7 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	hg_proc = proc;
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_magic);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_version);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_opc);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_cksum);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_HG);
@@ -523,11 +508,6 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 		D_GOTO(out, rc = -DER_HG);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_rank);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_grp_id);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_HG);
@@ -613,26 +593,12 @@ crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 	out->crp_pub.cr_ctx = in->crp_pub.cr_ctx;
 	out->crp_flags = in->crp_flags;
 
-	out->crp_req_hdr.cch_magic = in->crp_req_hdr.cch_magic;
-	out->crp_req_hdr.cch_version = in->crp_req_hdr.cch_version;
-	out->crp_req_hdr.cch_opc = in->crp_req_hdr.cch_opc;
-	out->crp_req_hdr.cch_cksum = in->crp_req_hdr.cch_cksum;
-	out->crp_req_hdr.cch_flags = in->crp_req_hdr.cch_flags;
-	out->crp_req_hdr.cch_rank = in->crp_req_hdr.cch_rank;
-	out->crp_req_hdr.cch_grp_id = in->crp_req_hdr.cch_grp_id;
-	out->crp_req_hdr.cch_rc = in->crp_req_hdr.cch_rc;
+	out->crp_req_hdr = in->crp_req_hdr;
 
 	if (!(out->crp_flags & CRT_RPC_FLAG_COLL))
 		return;
 
-	out->crp_coreq_hdr.coh_int_grpid = in->crp_coreq_hdr.coh_int_grpid;
-	out->crp_coreq_hdr.coh_bulk_hdl = in->crp_coreq_hdr.coh_bulk_hdl;
-	out->crp_coreq_hdr.coh_excluded_ranks = in->crp_coreq_hdr.coh_excluded_ranks;
-	out->crp_coreq_hdr.coh_inline_ranks = in->crp_coreq_hdr.coh_inline_ranks;
-	out->crp_coreq_hdr.coh_grp_ver = in->crp_coreq_hdr.coh_grp_ver;
-	out->crp_coreq_hdr.coh_tree_topo = in->crp_coreq_hdr.coh_tree_topo;
-	out->crp_coreq_hdr.coh_root = in->crp_coreq_hdr.coh_root;
-	out->crp_coreq_hdr.coh_padding = in->crp_coreq_hdr.coh_padding;
+	out->crp_coreq_hdr = in->crp_coreq_hdr;
 }
 
 void

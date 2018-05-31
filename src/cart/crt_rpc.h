@@ -46,9 +46,6 @@
 #include <gurt/heap.h>
 #include "gurt/common.h"
 
-#define CRT_RPC_MAGIC			(0xAB0C01EC)
-#define CRT_RPC_VERSION			(0x00000001)
-
 /* default RPC timeout 60 seconds */
 #define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
 #define CRT_DEFAULT_TIMEOUT_US	(CRT_DEFAULT_TIMEOUT_S * 1e6) /* micro-second */
@@ -92,16 +89,11 @@ struct crt_corpc_hdr {
 
 /* CaRT layer common header */
 struct crt_common_hdr {
-	uint32_t	cch_magic;
-	uint32_t	cch_version; /* RPC version */
 	uint32_t	cch_opc;
-	uint32_t	cch_cksum;
 	/* RPC request flag, see enum crt_rpc_flags_internal */
 	uint32_t	cch_flags;
 	/* gid and rank identify the rpc request sender */
 	d_rank_t	cch_rank;
-	/* TODO: maybe used as a tier ID or something else, ignore for now */
-	uint32_t	cch_grp_id;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };
@@ -439,12 +431,12 @@ void crt_req_destroy(struct crt_rpc_priv *rpc_priv);
 static inline void
 crt_common_hdr_init(struct crt_common_hdr *hdr, crt_opcode_t opc)
 {
+	int rc;
+
 	D_ASSERT(hdr != NULL);
 	hdr->cch_opc = opc;
-	hdr->cch_magic = CRT_RPC_MAGIC;
-	hdr->cch_version = CRT_RPC_VERSION;
-	hdr->cch_grp_id = 0;
-	D_ASSERT(crt_group_rank(0, &hdr->cch_rank) == 0);
+	rc = crt_group_rank(0, &hdr->cch_rank);
+	D_ASSERT(rc == 0);
 }
 
 static inline bool

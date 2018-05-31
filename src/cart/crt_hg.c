@@ -992,8 +992,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		rc = crt_hg_unpack_body(rpc_priv, proc);
 		if (rc == 0) {
 			rpc_priv->crp_input_got = 1;
-			rpc_pub->cr_ep.ep_rank =
-					rpc_priv->crp_req_hdr.cch_rank;
+			rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_rank;
 			rpc_pub->cr_ep.ep_grp = NULL;
 			/* TODO lookup by rpc_priv->crp_req_hdr.cch_grp_id */
 		} else {
