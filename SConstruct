@@ -28,7 +28,7 @@ def preload_prereqs(prereqs):
                    package='readline')
     components = os.path.join(Dir('#').abspath, 'scons_local', 'components.py')
     reqs = ['ompi', 'cart', 'argobots', 'pmdk', 'cmocka',
-            'uuid', 'crypto', 'protobuf']
+            'uuid', 'crypto']
     if not is_platform_arm():
         reqs.extend(['spdk'])
     prereqs.preload(components, prebuild=reqs)
@@ -57,11 +57,6 @@ def scons():
     prereqs = PreReqComponent(env, opts, commits_file)
     prereqs = preload_prereqs(prereqs)
     opts.Save(opts_file, env)
-
-    # Add our GOPATH bin directory our path.and load our tool
-    gobin = "%s/bin" % env['GOPATH']
-    env.AppendENVPath('PATH', gobin)
-    env.Tool('protoc')
 
     # Define this now, and then the individual components can import this
     # through prereqs when they need it.
