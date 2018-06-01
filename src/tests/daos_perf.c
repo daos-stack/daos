@@ -46,8 +46,12 @@
 #define RANK_ZERO	(0)
 #define WITHOUT_FETCH	(false)
 #define WITH_FETCH	(true)
-#define DO_UPDATE	(false)
-#define DO_FETCH	(true)
+#define TEST_VAL_SIZE	(3)
+
+enum ts_op_type_t {
+	TS_DO_UPDATE = 0,
+	TS_DO_FETCH
+};
 
 /* Test class, can be:
  *	vos  : pure storage
@@ -68,6 +72,10 @@ bool			 ts_single	= true;
 bool			 ts_overwrite;
 /* use zero-copy API for VOS, ignored for "echo" or "daos" */
 bool			 ts_zero_copy;
+/* verify the output of fetch */
+bool			 ts_verify_fetch;
+char			*ts_verification_buf;
+uint64_t		 ts_ver_buf_idx;
 
 uuid_t			 ts_cookie;		/* update cookie for VOS */
 daos_handle_t		 ts_oh;			/* object open handle */
@@ -78,12 +86,12 @@ struct dts_context	 ts_ctx;
 
 static int
 ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
-		       bool update_or_fetch)
+		       enum ts_op_type_t update_or_fetch)
 {
 	int	rc;
 
 	if (!ts_zero_copy) {
-		if (update_or_fetch == DO_UPDATE) {
+		if (update_or_fetch == TS_DO_UPDATE) {
 			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoid, epoch,
 				ts_cookie, 0, &cred->tc_dkey, 1,
 				&cred->tc_iod, &cred->tc_sgl);
@@ -99,7 +107,7 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		daos_sg_list_t	*sgl;
 		daos_handle_t	 ioh;
 
-		if (update_or_fetch == DO_UPDATE) {
+		if (update_or_fetch == TS_DO_UPDATE) {
 			rc = vos_obj_zc_update_begin(ts_ctx.tsc_coh, ts_uoid,
 				epoch, &cred->tc_dkey, 1, &cred->tc_iod, &ioh);
 		} else {
@@ -116,11 +124,17 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		D_ASSERT(cred->tc_sgl.sg_nr == 1);
 		D_ASSERT(sgl->sg_nr_out == 1);
 
-		memcpy(sgl->sg_iovs[0].iov_buf,
-		       cred->tc_sgl.sg_iovs[0].iov_buf,
-		       cred->tc_sgl.sg_iovs[0].iov_len);
+		if (update_or_fetch == TS_DO_FETCH) {
+			memcpy(cred->tc_sgl.sg_iovs[0].iov_buf,
+				sgl->sg_iovs[0].iov_buf,
+				sgl->sg_iovs[0].iov_len);
+		} else {
+			memcpy(sgl->sg_iovs[0].iov_buf,
+				cred->tc_sgl.sg_iovs[0].iov_buf,
+				cred->tc_sgl.sg_iovs[0].iov_len);
+		}
 
-		if (update_or_fetch == DO_UPDATE) {
+		if (update_or_fetch == TS_DO_UPDATE) {
 			rc = vos_obj_zc_update_end(ioh, ts_cookie, 0,
 				&cred->tc_dkey, 1, &cred->tc_iod, 0);
 		} else {
@@ -154,8 +168,33 @@ ts_daos_fetch(struct dts_io_credit *cred, daos_epoch_t epoch)
 	return rc;
 }
 
+static void
+ts_verification_buf_append(char *the_string)
+{
+	memcpy(&ts_verification_buf[ts_ver_buf_idx], the_string,
+		TEST_VAL_SIZE);
+	ts_ver_buf_idx += TEST_VAL_SIZE;
+}
+
+static void
+ts_set_value_buffer(char *buffer, int idx)
+{
+	/* Sets a pattern of Aa, Bb, ..., Yy, Zz, Aa, ... */
+	buffer[0] = 'A' + idx % 26;
+	buffer[1] = 'a' + idx % 26;
+	buffer[TEST_VAL_SIZE - 1] = 0;
+}
+
 static int
-ts_key_update_or_fetch(bool update_or_fetch, bool with_fetch)
+ts_hold_epoch(daos_epoch_t *epoch)
+{
+	if (ts_ctx.tsc_mpi_rank == 0)
+		return daos_epoch_hold(ts_ctx.tsc_coh, epoch, NULL, NULL);
+	return 0;
+}
+
+static int
+ts_key_update_or_fetch(enum ts_op_type_t update_or_fetch, bool with_fetch)
 {
 	int		*indices;
 	char		 dkey_buf[DTS_KEY_LEN];
@@ -183,7 +222,8 @@ ts_key_update_or_fetch(bool update_or_fetch, bool with_fetch)
 
 			cred = dts_credit_take(&ts_ctx);
 			if (!cred) {
-				fprintf(stderr, "test failed\n");
+				fprintf(stderr,
+					"credit cannot be NULL for IO\n");
 				rc = -1;
 				D_GOTO(failed, rc);
 			}
@@ -213,17 +253,18 @@ ts_key_update_or_fetch(bool update_or_fetch, bool with_fetch)
 				iod->iod_type = DAOS_IOD_ARRAY;
 				iod->iod_size = 1;
 				recx->rx_nr  = vsize;
-				recx->rx_idx = (ts_overwrite && !with_fetch) ?
+				recx->rx_idx = ts_overwrite ?
 					       0 : indices[j] * vsize;
 			}
 			iod->iod_nr    = 1;
 			iod->iod_recxs = recx;
 
-			if (update_or_fetch == DO_UPDATE) {
+			if (update_or_fetch == TS_DO_UPDATE) {
 				/* initialize value buffer and setup sgl */
-				cred->tc_vbuf[0] = 'A' + j % 26;
-				cred->tc_vbuf[1] = 'a' + j % 26;
-				cred->tc_vbuf[2] = cred->tc_vbuf[vsize - 1] = 0;
+				ts_set_value_buffer(cred->tc_vbuf, j);
+			} else {
+				/* Clear the buffer for fetch */
+				memset(cred->tc_vbuf, 0, vsize);
 			}
 
 			daos_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
@@ -233,31 +274,41 @@ ts_key_update_or_fetch(bool update_or_fetch, bool with_fetch)
 			/* overwrite can replace orignal data and reduce space
 			 * consumption.
 			 */
-			if (!ts_overwrite && !with_fetch)
+			if (!ts_overwrite)
 				epoch++;
 
 			if (ts_class == DAOS_OC_RAW) {
 				rc = ts_vos_update_or_fetch(cred, epoch,
 					update_or_fetch);
 			} else {
-				if (update_or_fetch == DO_UPDATE)
+				if (update_or_fetch == TS_DO_UPDATE) {
+					rc = ts_hold_epoch(&epoch);
+					if (rc)
+						D_GOTO(failed, rc);
 					rc = ts_daos_update(cred, epoch);
+				}
 				else
 					rc = ts_daos_fetch(cred, epoch);
 			}
+
 			if (rc)
 				D_GOTO(failed, rc);
+
+			if (ts_verify_fetch && update_or_fetch == TS_DO_FETCH)
+				ts_verification_buf_append(cred->tc_vbuf);
+
 			/* Flush and commit, if needed */
-			if (update_or_fetch == DO_UPDATE &&
+			if (update_or_fetch == TS_DO_UPDATE &&
 			    with_fetch == WITH_FETCH) {
-				if (ts_class != DAOS_OC_RAW) {
-					rc = daos_epoch_flush(ts_oh, epoch,
-						NULL, NULL);
+				if (ts_class != DAOS_OC_RAW &&
+				    ts_ctx.tsc_mpi_rank == 0) {
+					rc = daos_epoch_flush(ts_ctx.tsc_coh,
+						epoch, NULL, NULL);
 					if (rc)
 						D_GOTO(failed, rc);
 
-					rc = daos_epoch_commit(ts_oh, epoch,
-						NULL, NULL);
+					rc = daos_epoch_commit(ts_ctx.tsc_coh,
+						epoch, NULL, NULL);
 					if (rc)
 						D_GOTO(failed, rc);
 				}
@@ -301,7 +352,7 @@ ts_write_records_internal(d_rank_t rank, bool with_fetch)
 				ts_uoid.id_pub = ts_oid;
 			}
 
-			rc = ts_key_update_or_fetch(DO_UPDATE, with_fetch);
+			rc = ts_key_update_or_fetch(TS_DO_UPDATE, with_fetch);
 			if (rc)
 				return rc;
 
@@ -321,6 +372,43 @@ ts_write_records_internal(d_rank_t rank, bool with_fetch)
 }
 
 static int
+ts_verify_recx_p_akey()
+{
+	int	i;
+	char	ground_truth[TEST_VAL_SIZE];
+
+	for (i = 0; i < ts_recx_p_akey; i++) {
+		ts_set_value_buffer(ground_truth, i);
+
+		if (memcmp(&ts_verification_buf[ts_ver_buf_idx],
+			   ground_truth, TEST_VAL_SIZE) != 0) {
+			return -1;
+		}
+		ts_ver_buf_idx += TEST_VAL_SIZE;
+	}
+	return 0;
+}
+
+static int
+ts_verify_all_fetches(void)
+{
+	int	i;
+	int	j;
+	int	k;
+
+	ts_ver_buf_idx = 0;
+	for (i = 0; i < ts_obj_p_cont; i++) {
+		for (j = 0; j < ts_dkey_p_obj; j++) {
+			for (k = 0; k < ts_akey_p_dkey; k++) {
+				if (ts_verify_recx_p_akey() != 0)
+					return -1;
+			}
+		}
+	}
+	return 0;
+}
+
+static int
 ts_read_records_internal(d_rank_t rank)
 {
 	int i;
@@ -330,7 +418,7 @@ ts_read_records_internal(d_rank_t rank)
 	dts_reset_key();
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		for (j = 0; j < ts_dkey_p_obj; j++)
-			rc = ts_key_update_or_fetch(DO_FETCH, WITH_FETCH);
+			rc = ts_key_update_or_fetch(TS_DO_FETCH, WITH_FETCH);
 	}
 	if (ts_class != DAOS_OC_RAW)
 		rc = daos_obj_close(ts_oh, NULL);
@@ -360,6 +448,13 @@ ts_fetch_perf(double *start_time, double *end_time)
 	*start_time = dts_time_now();
 	rc = ts_read_records_internal(RANK_ZERO);
 	*end_time = dts_time_now();
+	if (rc)
+		return rc;
+	if (ts_verify_fetch) {
+		rc = ts_verify_all_fetches();
+		fprintf(stdout, "Fetch verification: %s\n", rc ? "Failed" :
+			"Success");
+	}
 	return rc;
 }
 
@@ -512,6 +607,8 @@ Description:\n\
 	different layers of the DAOS stack.\n\
 \n\
 The options are as follows:\n\
+-h	Print this help message.\n\
+\n\
 -P number\n\
 	Pool size, which can have M (megatbytes)or G (gigabytes) as postfix\n\
 	of number. E.g. -P 512M, -P 8G.\n\
@@ -560,13 +657,15 @@ The options are as follows:\n\
 -U	Only run update performance test.\n\
 \n\
 -F	Only run fetch performance test. This does an update first, but only\n\
-	measures the time for the fetch portion. The overwrite '-t' option is\n\
-	ignored if this used.\n\
+	measures the time for the fetch portion.\n\
+\n\
+-v	Verify fetch. Checks that what was read from the filesystem is what\n\
+	was written to it. This verifcation is not part of timed\n\
+	performance measurement. This is turned off by default.\n\
 \n\
 -R	Only run rebuild performance test.\n\
 \n\
--B	Profile performance of both update and fetch. The overwrite '-t'\n\
-	option is ignored if this used.\n\
+-B	Profile performance of both update and fetch.\n\
 \n\
 -f pathname\n\
 	Full path name of the VOS file.\n");
@@ -586,6 +685,7 @@ static struct option ts_ops[] = {
 	{ "overwrite",	no_argument,		NULL,	't' },
 	{ "file",	required_argument,	NULL,	'f' },
 	{ "help",	no_argument,		NULL,	'h' },
+	{ "verify",	no_argument,		NULL,	'v' },
 	{ NULL,		0,			NULL,	0   },
 };
 
@@ -646,11 +746,11 @@ void show_result(double now, double then, int vsize, char *test_name)
 			test_name, agg_duration, bandwidth, rate, latency);
 
 		fprintf(stdout, "Duration across processes:\n");
-		fprintf(stdout, "MAX duration : %-10.6f sec\n",
+		fprintf(stdout, "\tMAX duration : %-10.6f sec\n",
 			duration_max);
-		fprintf(stdout, "MIN duration : %-10.6f sec\n",
+		fprintf(stdout, "\tMIN duration : %-10.6f sec\n",
 			duration_min);
-		fprintf(stdout, "Average duration : %-10.6f sec\n",
+		fprintf(stdout, "\tAverage duration : %-10.6f sec\n",
 			duration_sum / ts_ctx.tsc_mpi_size);
 	}
 }
@@ -690,7 +790,7 @@ main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
-	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:ztf:hUFRB",
+	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:ztf:hUFRBv",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -746,6 +846,11 @@ main(int argc, char **argv)
 		case 's':
 			vsize = strtoul(optarg, &endp, 0);
 			vsize = ts_val_factor(vsize, *endp);
+			if (vsize < TEST_VAL_SIZE) {
+				fprintf(stderr, "ERROR: value size must be >= "
+					"%d\n", TEST_VAL_SIZE);
+				return -1;
+			}
 			break;
 		case 't':
 			ts_overwrite = true;
@@ -768,6 +873,9 @@ main(int argc, char **argv)
 		case 'B':
 			perf_tests[UPDATE_FETCH_TEST] = ts_update_fetch_perf;
 			break;
+		case 'v':
+			ts_verify_fetch = true;
+			break;
 		case 'h':
 			if (ts_ctx.tsc_mpi_rank == 0)
 				ts_print_usage();
@@ -784,8 +892,9 @@ main(int argc, char **argv)
 	if ((perf_tests[FETCH_TEST] != NULL ||
 	     perf_tests[UPDATE_FETCH_TEST] != NULL) && ts_overwrite) {
 		fprintf(stdout, "Note: Fetch tests are incompatible with "
-			"the overwrite option (-t). Overwrite will be ignored "
-			"for all tests involving fetch.\n");
+			"the overwrite option (-t).\n      Remove the -t option"
+			" and try again.\n");
+		return -1;
 	}
 
 	if (perf_tests[REBUILD_TEST] && ts_class != DAOS_OC_TINY_RW) {
@@ -842,6 +951,7 @@ main(int argc, char **argv)
 			"\tvalue size    : %u\n"
 			"\tzero copy     : %s\n"
 			"\toverwrite     : %s\n"
+			"\tverify fetch  : %s\n"
 			"\tVOS file      : %s\n",
 			ts_class_name(),
 			(unsigned int)(pool_size >> 20),
@@ -855,7 +965,15 @@ main(int argc, char **argv)
 			vsize,
 			ts_yes_or_no(ts_zero_copy),
 			ts_yes_or_no(ts_overwrite),
+			ts_yes_or_no(ts_verify_fetch),
 			ts_class == DAOS_OC_RAW ? ts_pmem_file : "<NULL>");
+	}
+
+	if (ts_verify_fetch) {
+		/* Allocate memory for the verification buffer */
+		ts_verification_buf = malloc(ts_obj_p_cont * ts_dkey_p_obj *
+					ts_akey_p_dkey * ts_recx_p_akey *
+					TEST_VAL_SIZE);
 	}
 
 	rc = dts_ctx_init(&ts_ctx);
@@ -887,7 +1005,7 @@ main(int argc, char **argv)
 
 		show_result(now, then, vsize, perf_tests_name[i]);
 	}
-
+	free(ts_verification_buf);
 	dts_ctx_fini(&ts_ctx);
 	MPI_Finalize();
 
