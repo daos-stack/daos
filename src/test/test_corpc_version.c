@@ -582,7 +582,7 @@ test_run(void)
 	int			rc = 0;
 
 	if (test.t_my_group_size < 5 || test.t_my_rank != 3)
-		D_GOTO(out, rc);
+		D_GOTO(out, 0);
 
 	/* root: rank 3, participants: rank 1, rank 2, rank 4 */
 	sub_grp_membs.rl_nr = 4;

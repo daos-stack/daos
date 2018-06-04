@@ -739,7 +739,7 @@ d_hash_table_traverse(struct d_hash_table *htable, d_hash_traverse_cb_t cb,
 		d_list_for_each(rlink, &buckets[i].hb_head) {
 			rc = cb(rlink, arg);
 			if (rc != 0)
-				D_GOTO(unlock, rc);
+				D_GOTO(unlock, 0);
 		}
 	}
 

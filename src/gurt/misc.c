@@ -46,42 +46,37 @@
 int
 d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 {
-	d_rank_list_t		*rank_list;
-	uint32_t		 rank_num;
-	int			 rc = 0;
+	d_rank_list_t	*rank_list = NULL;
+	int		 rc = 0;
 
 	if (dst == NULL) {
 		D_ERROR("Invalid parameter, dst: %p, src: %p.\n", dst, src);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (src == NULL) {
-		*dst = NULL;
-		D_GOTO(out, rc);
-	}
+	if (src == NULL)
+		D_GOTO(out, 0);
 
 	D_ALLOC_PTR(rank_list);
 	if (rank_list == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rank_num = src->rl_nr;
-	rank_list->rl_nr = rank_num;
-	if (rank_num == 0) {
-		rank_list->rl_ranks = NULL;
-		*dst = rank_list;
-		D_GOTO(out, rc);
-	}
+	rank_list->rl_nr = src->rl_nr;
+	if (rank_list->rl_nr == 0)
+		D_GOTO(out, 0);
 
-	D_ALLOC_ARRAY(rank_list->rl_ranks, rank_num);
+	D_ALLOC_ARRAY(rank_list->rl_ranks, rank_list->rl_nr);
 	if (rank_list->rl_ranks == NULL) {
 		D_FREE_PTR(rank_list);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	memcpy(rank_list->rl_ranks, src->rl_ranks,
-	       rank_num * sizeof(*rank_list->rl_ranks));
-	*dst = rank_list;
+		rank_list->rl_nr * sizeof(*rank_list->rl_ranks));
+
 out:
+	if (rc == 0)
+		*dst = rank_list;
 	return rc;
 }
 
@@ -97,19 +92,19 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 	rc = d_rank_list_dup(dst, src);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out, 0);
 	}
 
 	rank_list = *dst;
 	if (rank_list == NULL || rank_list->rl_ranks == NULL)
-		D_GOTO(out, rc);
+		D_GOTO(out, 0);
 
 	d_rank_list_sort(rank_list);
 
 	/* uniq - remove same rank number in the list */
 	rank_num = src->rl_nr;
 	if (rank_num <= 1)
-		D_GOTO(out, rc);
+		D_GOTO(out, 0);
 	identical_num = 0;
 	rank_tmp = rank_list->rl_ranks[0];
 	for (i = 1; i < rank_num - identical_num; i++) {
@@ -333,7 +328,7 @@ d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 	}
 	if (!d_rank_list_find(rank_list, rank, &idx)) {
 		D_DEBUG(DB_TRACE, "Rank %d not in the rank list.\n", rank);
-		D_GOTO(out, rc);
+		D_GOTO(out, 0);
 	}
 	new_num = rank_list->rl_nr - 1;
 	src = &rank_list->rl_ranks[idx + 1];

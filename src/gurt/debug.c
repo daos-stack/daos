@@ -360,7 +360,7 @@ debug_mask_load_env(void)
 static void
 d_log_sync_mask_helper(bool acquire_lock)
 {
-	static char	*log_mask;
+	static char *log_mask;
 
 	if (acquire_lock)
 		D_MUTEX_LOCK(&d_log_lock);
@@ -471,12 +471,12 @@ int
 d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 		 uint64_t def_mask, uint64_t err_mask)
 {
-	int	 rc = 0;
+	int rc = 0;
 
 	D_MUTEX_LOCK(&d_log_lock);
 	d_log_refcount++;
 	if (d_log_refcount > 1) /* Already initialized */
-		D_GOTO(out, rc);
+		D_GOTO(out, 0);
 
 	/* Load priority error from environment variable (DD_STDERR)
 	 * A Priority error will be output to stderr by the debug system.
@@ -510,7 +510,7 @@ out:
 int
 d_log_init(void)
 {
-	char	*log_file;
+	char *log_file;
 	int flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
 
 	log_file = getenv(D_LOG_FILE_ENV);

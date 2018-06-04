@@ -155,7 +155,7 @@ crt_fake_event_fini(int rank)
 	if (rc != 0) {
 		D_ERROR("Couldn't join fake_event_thread, return code: %d\n",
 			rc);
-		D_GOTO(out, rc);
+		D_GOTO(out, 0);
 	}
 
 	length = snprintf(NULL, 0, "/tmp/fake_event_pipe_%02d", 0);
