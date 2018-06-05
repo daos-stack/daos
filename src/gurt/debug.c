@@ -357,13 +357,12 @@ debug_mask_load_env(void)
 	D_FREE(mask_str);
 }
 
-static void
-d_log_sync_mask_helper(bool acquire_lock)
+void
+d_log_sync_mask(void)
 {
 	static char *log_mask;
 
-	if (acquire_lock)
-		D_MUTEX_LOCK(&d_log_lock);
+	D_MUTEX_LOCK(&d_log_lock);
 
 	/* Load debug mask environment (DD_MASK); only the facility log mask
 	 * will be returned and debug mask will be set iff fac mask = DEBUG
@@ -374,20 +373,9 @@ d_log_sync_mask_helper(bool acquire_lock)
 	/* load facility mask environment (D_LOG_MASK) */
 	log_mask = getenv(D_LOG_MASK_ENV);
 	if (log_mask != NULL)
-		goto out;
-
-out:
-	if (log_mask != NULL)
 		d_log_setmasks(log_mask, -1);
 
-	if (acquire_lock)
-		D_MUTEX_UNLOCK(&d_log_lock);
-}
-
-void
-d_log_sync_mask(void)
-{
-	d_log_sync_mask_helper(true);
+	D_MUTEX_UNLOCK(&d_log_lock);
 }
 
 /* this macro contains a return statement */
@@ -428,9 +416,6 @@ setup_clog_facnamemask(void)
 		D_PRINT_ERR("MEM log facility failed to init; rc=%d\n", rc);
 		return rc;
 	}
-
-	/* Lock is already held */
-	d_log_sync_mask_helper(false);
 
 	return 0;
 }
