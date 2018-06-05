@@ -31,183 +31,6 @@
 extern "C" {
 #endif
 
-typedef struct {
-	daos_size_t		rg_len;
-	daos_off_t		rg_idx;
-} daos_range_t;
-
-/** describe ranges of an array object to access */
-typedef struct {
-	/** Number of ranges to access */
-	daos_size_t		arr_nr;
-	/** Array of index/len pairs */
-	daos_range_t	       *arr_rgs;
-} daos_array_ranges_t;
-
-/**
- * Create an Array object. This creates a DAOS KV object and adds metadata to
- * define the cell size and chunk size. Further access to that object using the
- * handle will use that metadata to store the array elements.
- *
- * The metadata are just entries in the KV object, meaning that any user can
- * open the object and overwrite that metadata. The user can recreate the array;
- * however changing the metadata will cause undefined access issues later. (MSC
- * - we can force an error in this case once we can query the value of the the
- * metadata entries and determine they are holes/unwritten and the array size is
- * 0).
- *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	Object ID.
- * \param epoch	[IN]	Epoch to open object.
- * \param cell_size [IN]
- *			Record size of the array.
- * \param chunk_size [IN]
- *			Contiguous bytes to store per DKey before moving to a
- *			different dkey.
- * \param oh	[OUT]	Returned object open handle.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid container handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Cannot find object
- *			-DER_EP_OLD	Epoch is too old and has no data for
- *					this object
- */
-int
-daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-		  daos_size_t cell_size, daos_size_t chunk_size,
-		  daos_handle_t *oh, daos_event_t *ev);
-
-/**
- * Open an Array object. If the array has not been created before, this will be
- * equivalent to a DAOS KV object, and the metadata will be set to default
- * values, but not written to the KV.
- *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	Object ID.
- * \param epoch	[IN]	Epoch to open object.
- * \param mode	[IN]	Open mode: DAOS_OO_RO/RW/EXCL/IO_RAND/IO_SEQ
- * \param cell_size [OUT]
- *			Record size of the array.
- * \param chunk_size [OUT]
- *			Contiguous bytes to store per DKey before moving to a
- *			differen dkey.
- * \param oh	[OUT]	Returned object open handle.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid container handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Cannot find object
- *			-DER_EP_OLD	Epoch is too old and has no data for
- *					this object
- */
-int
-daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-		unsigned int mode, daos_size_t *elem_size,
-		daos_size_t *chunk_size, daos_handle_t *oh, daos_event_t *ev);
-
-/**
- * Close an opened object.
- *
- * \param oh	[IN]	Object open handle.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- */
-int
-daos_array_close(daos_handle_t oh, daos_event_t *ev);
-
-/**
- * Read data from an array object.
- *
- * \param oh	[IN]	Object open handle.
- *
- * \param epoch	[IN]	Epoch for the read.
- *
- * \param range	[IN]	Ranges to read from the array.
- *
- * \param sgl   [IN/OUT]
- *			A scatter/gather list (sgl) to the store array data.
- *			Buffer sizes do not have to match the indiviual range
- *			sizes as long as the total size does. User allocates the
- *			buffer(s) and sets the length of each buffer.
- *
- * \param csums	[OUT]	Array of checksums for each buffer in the sgl.
- *			This is optional (pass NULL to ignore).
- *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_REC2BIG	Record is too large and can't be
- *					fit into output buffer
- *			-DER_EP_OLD	Epoch is too old and has no data
- */
-int
-daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
-		daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
-		daos_csum_buf_t *csums, daos_event_t *ev);
-
-/**
- * Write data to an array object.
- *
- * \param oh	[IN]	Object open handle.
- *
- * \param epoch	[IN]	Epoch for the write.
- *
- * \param range	[IN]	Ranges to write to the array.
- *
- * \param sgl   [IN]	A scatter/gather list (sgl) to the store array data.
- *			Buffer sizes do not have to match the indiviual range
- *			sizes as long as the total size does.
- *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \param csums	[IN]	Array of checksums for each buffer in the sgl.
- *			This is optional (pass NULL to ignore).
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_REC2BIG	Record is too large and can't be
- *					fit into output buffer
- *			-DER_EP_OLD	Epoch is too old and has no data
- */
-int
-daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
-		 daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
-		 daos_csum_buf_t *csums, daos_event_t *ev);
-
-int
-daos_array_get_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t *size,
-		    daos_event_t *ev);
-int
-daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
-		    daos_event_t *ev);
-
 /**
  * Insert or update a single object KV pair. The key specified will be mapped to
  * a dkey in DAOS. The object akey will be the same as the dkey. If a value
@@ -373,6 +196,198 @@ int
 daos_obj_update_multi(daos_handle_t oh, daos_epoch_t epoch,
 		      unsigned int num_dkeys, daos_dkey_io_t *io_array,
 		      daos_event_t *ev);
+
+typedef struct {
+	daos_size_t		rg_len;
+	daos_off_t		rg_idx;
+} daos_range_t;
+
+/** describe ranges of an array object to access */
+typedef struct {
+	/** Number of ranges to access */
+	daos_size_t		arr_nr;
+	/** Array of index/len pairs */
+	daos_range_t	       *arr_rgs;
+} daos_array_ranges_t;
+
+/**
+ * Create an Array object. This creates a DAOS KV object and adds metadata to
+ * define the cell size and chunk size. Further access to that object using the
+ * handle will use that metadata to store the array elements.
+ *
+ * The metadata are just entries in the KV object, meaning that any user can
+ * open the object and overwrite that metadata. The user can recreate the array;
+ * This will not punch the existing raw data; just overwrite the metadata.
+ * However changing the metadata will cause undefined access issues. (MSC - we
+ * can force an error in this case by checking for object existence by reading
+ * the metadata. But this adds extra overhead).
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	Object ID.
+ * \param epoch	[IN]	Epoch to open object.
+ * \param cell_size [IN]
+ *			Record size of the array.
+ * \param chunk_size [IN]
+ *			Contiguous bytes to store per DKey before moving to a
+ *			different dkey.
+ * \param oh	[OUT]	Returned object open handle.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Cannot find object
+ *			-DER_EP_OLD	Epoch is too old and has no data for
+ *					this object
+ */
+int
+daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+		  daos_size_t cell_size, daos_size_t chunk_size,
+		  daos_handle_t *oh, daos_event_t *ev);
+
+/**
+ * Open an Array object. If the array has not been created before (no array
+ * metadata exists), this will fail.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	Object ID.
+ * \param epoch	[IN]	Epoch to open object.
+ * \param mode	[IN]	Open mode: DAOS_OO_RO/RW/EXCL/IO_RAND/IO_SEQ
+ * \param cell_size [OUT]
+ *			Record size of the array.
+ * \param chunk_size [OUT]
+ *			Contiguous bytes to store per DKey before moving to a
+ *			differen dkey.
+ * \param oh	[OUT]	Returned object open handle.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Cannot find object
+ *			-DER_EP_OLD	Epoch is too old and has no data for
+ *					this object
+ */
+int
+daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+		unsigned int mode, daos_size_t *elem_size,
+		daos_size_t *chunk_size, daos_handle_t *oh, daos_event_t *ev);
+
+/**
+ * Close an opened array object.
+ *
+ * \param oh	[IN]	Array object open handle.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ */
+int
+daos_array_close(daos_handle_t oh, daos_event_t *ev);
+
+/**
+ * Read data from an array object.
+ *
+ * \param oh	[IN]	Array object open handle.
+ * \param epoch	[IN]	Epoch for the read.
+ * \param range	[IN]	Ranges to read from the array.
+ * \param sgl   [IN/OUT]
+ *			A scatter/gather list (sgl) to the store array data.
+ *			Buffer sizes do not have to match the indiviual range
+ *			sizes as long as the total size does. User allocates the
+ *			buffer(s) and sets the length of each buffer.
+ * \param csums	[OUT]	Array of checksums for each buffer in the sgl.
+ *			This is optional (pass NULL to ignore).
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_REC2BIG	Record is too large and can't be
+ *					fit into output buffer
+ *			-DER_EP_OLD	Epoch is too old and has no data
+ */
+int
+daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
+		daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
+		daos_csum_buf_t *csums, daos_event_t *ev);
+
+/**
+ * Write data to an array object.
+ *
+ * \param oh	[IN]	Array object open handle.
+ * \param epoch	[IN]	Epoch for the write.
+ * \param range	[IN]	Ranges to write to the array.
+ * \param sgl   [IN]	A scatter/gather list (sgl) to the store array data.
+ *			Buffer sizes do not have to match the indiviual range
+ *			sizes as long as the total size does.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ * \param csums	[IN]	Array of checksums for each buffer in the sgl.
+ *			This is optional (pass NULL to ignore).
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_REC2BIG	Record is too large and can't be
+ *					fit into output buffer
+ *			-DER_EP_OLD	Epoch is too old and has no data
+ */
+int
+daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
+		 daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
+		 daos_csum_buf_t *csums, daos_event_t *ev);
+
+/**
+ * Query the number of records in the array object.
+ *
+ * \param oh	[IN]	Array object open handle.
+ * \param epoch	[IN]	Epoch for the query.
+ * \param size	[OUT]	Returned array size (number of records).
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on Success, negative on failure.
+ */
+int
+daos_array_get_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t *size,
+		    daos_event_t *ev);
+
+/**
+ * Set the array size (truncate) in records. If array is shrinking, we punch
+ * dkeys/records above the required size. If the array is epxanding, we insert 1
+ * record at the corresponding size. This is NOT equivalent to an allocate.
+ *
+ *
+ * \param oh	[IN]	Array object open handle.
+ * \param epoch	[IN]	Epoch for the set_size.
+ * \param size	[IN]	Size (number of records) to set array to.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on Success, negative on failure.
+ */
+int
+daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
+		    daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

@@ -850,10 +850,13 @@ tse_task_register_deps(tse_task_t *task, int num_deps,
 		       tse_task_t *dep_tasks[])
 {
 	int i;
+	int rc;
 
-	for (i = 0; i < num_deps; i++)
-		tse_task_add_dependent(task, dep_tasks[i]);
-
+	for (i = 0; i < num_deps; i++) {
+		rc = tse_task_add_dependent(task, dep_tasks[i]);
+		if (rc)
+			return rc;
+	}
 	return 0;
 }
 
