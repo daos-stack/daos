@@ -171,7 +171,7 @@ cmd_create_container(int argc, const char **argv, void *ctx)
 		char uuid_str[100];
 
 		uuid_unparse(cont_uuid, uuid_str);
-		printf("Success, container UUID: %s\n", uuid_str);
+		printf("%s\n", uuid_str);
 	}
 
 done:

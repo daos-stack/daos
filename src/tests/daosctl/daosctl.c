@@ -71,6 +71,7 @@ static struct cmd_struct commands[] = {
 	{ "kill-leader", cmd_kill_pool_leader },
 	{ "test-evict-pool", cmd_test_evict_pool },
 	{ "test-query-pool", cmd_test_query_pool },
+	{ "write-pattern", cmd_write_pattern },
 	{ "help", cmd_help }
 };
 int command_count = ARRAY_SIZE(commands);
@@ -181,12 +182,14 @@ process_cmd(int argc, const char **argv)
 	int i;
 
 	for (i = 0; i < command_count; i++) {
-		if (!strcmp(commands[i].cmd, argv[1]))
+		if (!strcmp(commands[i].cmd, argv[1])) {
 			rc = commands[i].fn(argc, argv, NULL);
+			break;
+		}
 	}
 
 	if (rc == EINVAL) {
-		D_PRINT("Unknown command: %s\n\n", argv[1]);
+		D_PRINT("Unknown command or missing argument: %s\n\n", argv[1]);
 		print_help();
 	}
 
