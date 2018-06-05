@@ -155,38 +155,50 @@ struct ivf_key_in_progress {
 /* Internal ivns structure */
 struct crt_ivns_internal {
 	/* IV Classes registered with this iv namespace */
-	struct crt_iv_class	*cii_iv_classes;
+	struct crt_iv_class		*cii_iv_classes;
 	/* Context associated with IV namesapce */
-	crt_context_t		 cii_ctx;
+	crt_context_t			 cii_ctx;
 
 	/* Private group struct associated with IV namespace */
-	struct crt_grp_priv	*cii_grp_priv;
+	struct crt_grp_priv		*cii_grp_priv;
 
 	/* Global namespace identifier */
-	struct crt_global_ns	 cii_gns;
+	struct crt_global_ns		 cii_gns;
 
 	/* Link list of all keys in progress */
-	d_list_t		 cii_keys_in_progress_list;
+	d_list_t			 cii_keys_in_progress_list;
 
 	/* Lock for modification of pending list */
-	pthread_mutex_t		 cii_lock;
+	pthread_mutex_t			 cii_lock;
 
 	/* Link to ns_list */
-	d_list_t		 cii_link;
+	d_list_t			 cii_link;
 
 	/* ref count spinlock */
-	pthread_spinlock_t	cii_ref_lock;
+	pthread_spinlock_t		 cii_ref_lock;
 
 	/* reference count */
-	int			cii_ref_count;
+	int				 cii_ref_count;
+	/* completion callback for crt_iv_namespace_destroy() */
+	crt_iv_namespace_destroy_cb_t	 cii_destroy_cb;
+	/* user data for cii_destroy_cb() */
+	void				*cii_destroy_cb_arg;
 };
 
 static void
 ivns_destroy(struct crt_ivns_internal *ivns_internal)
 {
+	crt_iv_namespace_destroy_cb_t	 destroy_cb;
+	crt_iv_namespace_t		 ivns;
+	void				*cb_arg;
+
 	D_MUTEX_LOCK(&ns_list_lock);
 	d_list_del(&ivns_internal->cii_link);
 	D_MUTEX_UNLOCK(&ns_list_lock);
+
+	ivns = ivns_internal;
+	destroy_cb = ivns_internal->cii_destroy_cb;
+	cb_arg = ivns_internal->cii_destroy_cb_arg;
 
 	/* addref in crt_grp_lookup_int_grpid or crt_iv_namespace_create */
 	crt_grp_priv_decref(ivns_internal->cii_grp_priv);
@@ -196,6 +208,9 @@ ivns_destroy(struct crt_ivns_internal *ivns_internal)
 
 	D_FREE_PTR(ivns_internal->cii_iv_classes);
 	D_FREE_PTR(ivns_internal);
+
+	if (destroy_cb)
+		destroy_cb(ivns, cb_arg);
 }
 
 
@@ -876,7 +891,9 @@ exit:
 }
 
 int
-crt_iv_namespace_destroy(crt_iv_namespace_t ivns)
+crt_iv_namespace_destroy(crt_iv_namespace_t ivns,
+			 crt_iv_namespace_destroy_cb_t destroy_cb,
+			 void *cb_arg)
 {
 	struct crt_ivns_internal	*ivns_internal;
 	int				rc = 0;
@@ -886,6 +903,9 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns)
 		D_ERROR("Invalid ivns passed\n");
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
+
+	ivns_internal->cii_destroy_cb = destroy_cb;
+	ivns_internal->cii_destroy_cb_arg = cb_arg;
 
 	/* addref done in crt_ivns_internal_get() and at attach/create time  */
 	IVNS_DECREF_N(ivns_internal, 2);

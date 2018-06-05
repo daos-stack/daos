@@ -735,11 +735,22 @@ init_iv(void)
 }
 
 static void
+iv_destroy_cb(crt_iv_namespace_t ivns, void *arg)
+{
+	D_ASSERT(ivns != NULL);
+	D_ASSERT(arg != NULL);
+	D_ASSERT(ivns == ivns);
+
+	D_DEBUG(DB_TRACE, "ivns %p was destroyed, arg %p\n", ivns, arg);
+}
+
+
+static void
 deinit_iv(void) {
 	int rc = 0;
 
 	if (g_ivns != NULL) {
-		rc = crt_iv_namespace_destroy(g_ivns);
+		rc = crt_iv_namespace_destroy(g_ivns, iv_destroy_cb, g_ivns);
 		assert(rc == 0);
 	}
 }

@@ -388,16 +388,32 @@ crt_iv_namespace_attach(crt_context_t crt_ctx, d_iov_t *g_ivns,
 			crt_iv_namespace_t *ivns);
 
 /**
+ * Completion callback for \ref crt_iv_namespace_destroy.
+ *
+ * \param[in] ivns		the local handle of the IV namespace that has
+ *				been destroyed. The value is an address, but
+ *				can't be dereferenced.
+ * \param[in] cb_arg		pointer to argument provide by the user to
+ *				crt_iv_namespace_destroy.
+ */
+typedef void (*crt_iv_namespace_destroy_cb_t)(crt_iv_namespace_t ivns,
+					      void *cb_arg);
+
+/**
  * Destroy an IV namespace, after that all related resources of the namespace
  * (including all IVs in the namespace) are released. It is a local operation,
  * every node in the group needs to do the destroy respectively.
  *
  * \param[in] ivns		the local handle of the IV namespace
- *
+ * \param[in] cb		pointer to completion callback
+ * \param[in] cb_arg		pointer to completion callback argument, will be
+ *				available as cb_arg in \a cb.
  * \return			DER_SUCCESS on success, negative value if error
  */
 int
-crt_iv_namespace_destroy(crt_iv_namespace_t ivns);
+crt_iv_namespace_destroy(crt_iv_namespace_t ivns,
+			 crt_iv_namespace_destroy_cb_t cb,
+			 void *cb_arg);
 
 /**
  * IV fetch/update/invalidate completion callback
