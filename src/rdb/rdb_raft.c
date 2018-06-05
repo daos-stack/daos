@@ -78,7 +78,7 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 	int				rc;
 
 	D_ASSERT(db->d_raft == raft);
-	D_DEBUG(DB_ANY, DF_DB": sending rv to node %d rank %u: term=%d\n",
+	D_DEBUG(DB_TRACE, DF_DB": sending rv to node %d rank %u: term=%d\n",
 		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
 		msg->term);
 
@@ -161,7 +161,7 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 	int				rc;
 
 	D_ASSERT(db->d_raft == raft);
-	D_DEBUG(DB_ANY, DF_DB": sending ae to node %u rank %u: term=%d\n",
+	D_DEBUG(DB_TRACE, DF_DB": sending ae to node %u rank %u: term=%d\n",
 		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
 		msg->term);
 
@@ -356,10 +356,10 @@ rdb_raft_cb_debug(raft_server_t *raft, raft_node_t *node, void *arg,
 	if (node != NULL) {
 		struct rdb_raft_node *rdb_node = raft_node_get_udata(node);
 
-		D_DEBUG(DB_ANY, DF_DB": %s: rank=%u\n", DP_DB(db), buf,
+		D_DEBUG(DB_TRACE, DF_DB": %s: rank=%u\n", DP_DB(db), buf,
 			rdb_node->dn_rank);
 	} else {
-		D_DEBUG(DB_ANY, DF_DB": %s\n", DP_DB(db), buf);
+		D_DEBUG(DB_TRACE, DF_DB": %s\n", DP_DB(db), buf);
 	}
 }
 
@@ -489,7 +489,7 @@ rdb_callbackd(void *arg)
 {
 	struct rdb *db = arg;
 
-	D_DEBUG(DB_ANY, DF_DB": callbackd starting\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB": callbackd starting\n", DP_DB(db));
 	for (;;) {
 		struct rdb_raft_event	event;
 		bool			stop;
@@ -511,7 +511,7 @@ rdb_callbackd(void *arg)
 		rdb_raft_process_event(db, &event);
 		ABT_thread_yield();
 	}
-	D_DEBUG(DB_ANY, DF_DB": callbackd stopping\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB": callbackd stopping\n", DP_DB(db));
 }
 
 static int
@@ -599,7 +599,7 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 	D_ASSERTF(committed >= state->drs_committed, DF_U64" >= "DF_U64"\n",
 		  committed, state->drs_committed);
 	if (committed != state->drs_committed) {
-		D_DEBUG(DB_ANY, DF_DB": committed/applied to entry "DF_U64"\n",
+		D_DEBUG(DB_TRACE, DF_DB": committed/applied to "DF_U64"\n",
 			DP_DB(db), committed);
 		db->d_applied = committed;
 	}
@@ -787,7 +787,7 @@ rdb_timerd(void *arg)
 	double		t_prev;		/* timestamp of previous beat (s) */
 	int		rc;
 
-	D_DEBUG(DB_ANY, DF_DB": timerd starting\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB": timerd starting\n", DP_DB(db));
 	t = ABT_get_wtime();
 	t_prev = t;
 	do {
@@ -811,7 +811,7 @@ rdb_timerd(void *arg)
 		while ((t = ABT_get_wtime()) < t_prev + d && !db->d_stop)
 			ABT_thread_yield();
 	} while (!db->d_stop);
-	D_DEBUG(DB_ANY, DF_DB": timerd stopping\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB": timerd stopping\n", DP_DB(db));
 }
 
 /*
@@ -1143,9 +1143,9 @@ rdb_raft_start(struct rdb *db)
 
 	election_timeout = rdb_raft_get_election_timeout(self_id, nreplicas);
 	request_timeout = rdb_raft_get_request_timeout();
-	D_DEBUG(DB_ANY, DF_DB": election timeout %d ms\n", DP_DB(db),
+	D_DEBUG(DB_MD, DF_DB": election timeout %d ms\n", DP_DB(db),
 		election_timeout);
-	D_DEBUG(DB_ANY, DF_DB": request timeout %d ms\n", DP_DB(db),
+	D_DEBUG(DB_MD, DF_DB": request timeout %d ms\n", DP_DB(db),
 		request_timeout);
 	raft_set_election_timeout(db->d_raft, election_timeout);
 	raft_set_request_timeout(db->d_raft, request_timeout);
@@ -1290,7 +1290,7 @@ rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term)
 {
 	int rc = 0;
 
-	D_DEBUG(DB_ANY, DF_DB": waiting for entry "DF_U64" to be applied\n",
+	D_DEBUG(DB_TRACE, DF_DB": waiting for entry "DF_U64" to be applied\n",
 		DP_DB(db), index);
 	ABT_mutex_lock(db->d_mutex);
 	for (;;) {
@@ -1343,7 +1343,7 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	if (db->d_stop)
 		D_GOTO(out_db, rc = -DER_CANCELED);
 
-	D_DEBUG(DB_ANY, DF_DB": handling raft rv from rank %u\n", DP_DB(db),
+	D_DEBUG(DB_TRACE, DF_DB": handling raft rv from rank %u\n", DP_DB(db),
 		rpc->cr_ep.ep_rank);
 	node = rdb_raft_find_node(db, rpc->cr_ep.ep_rank);
 	if (node == NULL)
@@ -1386,7 +1386,7 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	if (db->d_stop)
 		D_GOTO(out_db, rc = -DER_CANCELED);
 
-	D_DEBUG(DB_ANY, DF_DB": handling raft ae from rank %u\n", DP_DB(db),
+	D_DEBUG(DB_TRACE, DF_DB": handling raft ae from rank %u\n", DP_DB(db),
 		rpc->cr_ep.ep_rank);
 	node = rdb_raft_find_node(db, rpc->cr_ep.ep_rank);
 	if (node == NULL)

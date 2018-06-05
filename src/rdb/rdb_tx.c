@@ -733,7 +733,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 	const void     *p = buf;
 	int		rc = 0;
 
-	D_DEBUG(DB_ANY, DF_DB": applying entry "DF_U64": buf=%p len="DF_U64"\n",
+	D_DEBUG(DB_TRACE, DF_DB": applying "DF_U64": buf=%p len="DF_U64"\n",
 		DP_DB(db), index, buf, len);
 
 	while (p < buf + len) {

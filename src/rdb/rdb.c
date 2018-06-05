@@ -334,7 +334,7 @@ rdb_stop(struct rdb *db)
 {
 	bool deleted;
 
-	D_DEBUG(DB_ANY, DF_DB": stopping db %p\n", DP_DB(db), db);
+	D_DEBUG(DB_MD, DF_DB": stopping db %p\n", DP_DB(db), db);
 	ABT_mutex_lock(rdb_hash_lock);
 	deleted = d_hash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
 	ABT_mutex_unlock(rdb_hash_lock);

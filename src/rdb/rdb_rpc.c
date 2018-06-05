@@ -293,7 +293,7 @@ rdb_recvd(void *arg)
 {
 	struct rdb *db = arg;
 
-	D_DEBUG(DB_ANY, DF_DB": recvd starting\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB": recvd starting\n", DP_DB(db));
 	for (;;) {
 		struct rdb_raft_rpc    *rrpc = NULL;
 		bool			stop;
@@ -330,7 +330,7 @@ rdb_recvd(void *arg)
 		rdb_free_raft_rpc(rrpc);
 		ABT_thread_yield();
 	}
-	D_DEBUG(DB_ANY, DF_DB": recvd stopping\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB": recvd stopping\n", DP_DB(db));
 }
 
 static void
