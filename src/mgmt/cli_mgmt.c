@@ -56,8 +56,11 @@ dc_mgmt_svc_rip(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
-	if (rc != 0)
-		return rc;
+	if (rc != 0) {
+		D_ERROR("failed to attach to grp %s, rc %d.\n", args->grp, rc);
+		rc = DER_INVAL;
+		goto out_task;
+	}
 
 	svr_ep.ep_rank = args->rank;
 	svr_ep.ep_tag = 0;
@@ -90,6 +93,8 @@ err_rpc:
 	crt_req_decref(rpc);
 err_grp:
 	daos_group_detach(svr_ep.ep_grp);
+out_task:
+	tse_task_complete(task, rc);
 	return rc;
 }
 
@@ -105,8 +110,11 @@ dc_mgmt_params_set(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	rc = daos_group_attach(args->grp, &ep.ep_grp);
-	if (rc != 0)
-		return rc;
+	if (rc != 0) {
+		D_ERROR("failed to attach to grp %s, rc %d.\n", args->grp, rc);
+		rc = -DER_INVAL;
+		goto out_task;
+	}
 
 	/* if rank == -1 means it will set params on all servers, which we will
 	 * send it to 0 temporarily.
@@ -145,6 +153,8 @@ err_rpc:
 	crt_req_decref(rpc);
 err_grp:
 	daos_group_detach(ep.ep_grp);
+out_task:
+	tse_task_complete(task, rc);
 	return rc;
 }
 

@@ -71,7 +71,6 @@ static struct cmd_struct commands[] = {
 	{ "kill-leader", cmd_kill_pool_leader },
 	{ "test-evict-pool", cmd_test_evict_pool },
 	{ "test-query-pool", cmd_test_query_pool },
-	{ "kill-server", cmd_kill_server },
 	{ "help", cmd_help }
 };
 int command_count = ARRAY_SIZE(commands);
