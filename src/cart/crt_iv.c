@@ -401,6 +401,9 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 	if (rpc) {
 		/* If there is child to respond to - bulk transfer to it */
 		if (output_rc == 0) {
+			/* decref done in crt_ivf_bulk_transfer_done_cb */
+			IVNS_ADDREF(iv_info->ifc_ivns_internal);
+
 			/* Note: function will increment ref count on 'rpc' */
 			rc = crt_ivf_bulk_transfer(iv_info->ifc_ivns_internal,
 						iv_info->ifc_class_id,
@@ -408,6 +411,12 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 						iv_info->ifc_child_bulk,
 						rpc,
 						iv_info->ifc_user_priv);
+
+			if (!rc) {
+				D_ERROR("Bulk transfer failed for key=%p\n",
+					iv_key);
+				IVNS_DECREF(iv_info->ifc_ivns_internal);
+			}
 		} else {
 			struct iv_fetch_out *output;
 
