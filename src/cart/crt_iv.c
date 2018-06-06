@@ -1311,20 +1311,21 @@ crt_iv_parent_get(struct crt_ivns_internal *ivns_internal,
 				       root_node, ret_node);
 }
 
-/* Internal handler for CRT_OPC_IV_FETCH RPC call*/
-void
-crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
+static void
+crt_hdlr_iv_fetch_aux(void *arg)
 {
 	struct iv_fetch_in		*input;
 	struct iv_fetch_out		*output;
 	struct crt_ivns_id		*ivns_id;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops = NULL;
-	d_sg_list_t			iv_value = {0};
-	int				rc = 0;
-	bool				put_needed = false;
+	d_sg_list_t			 iv_value = {0};
+	bool				 put_needed = false;
 	void				*user_priv = NULL;
+	crt_rpc_t			*rpc_req;
+	int				 rc = 0;
 
+	rpc_req = arg;
 	input = crt_req_get(rpc_req);
 	output = crt_reply_get(rpc_req);
 
@@ -1434,7 +1435,10 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		D_GOTO(send_error, rc);
 	}
 
+	/* addref in crt_hdlr_iv_fetch */
+	RPC_PUB_DECREF(rpc_req);
 	IV_DBG(&input->ifi_key, "fetch handler exiting\n");
+
 	return;
 
 send_error:
@@ -1442,7 +1446,69 @@ send_error:
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 	output->ifo_rc = rc;
 	rc = crt_reply_send(rpc_req);
-	D_ASSERT(rc == 0);
+	if (rc != DER_SUCCESS) {
+		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
+			rc, rpc_req->cr_opc);
+	}
+
+	IVNS_DECREF(ivns_internal);
+
+	/* addref in crt_hdlr_iv_fetch */
+	RPC_PUB_DECREF(rpc_req);
+}
+
+
+/* Internal handler for CRT_OPC_IV_FETCH RPC call*/
+void
+crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
+{
+	struct iv_fetch_in		*input;
+	struct iv_fetch_out		*output;
+	struct crt_ivns_id		*ivns_id;
+	struct crt_ivns_internal	*ivns_internal;
+	struct crt_iv_ops		*iv_ops;
+	int				 rc;
+
+	input = crt_req_get(rpc_req);
+	output = crt_reply_get(rpc_req);
+
+	ivns_id = (struct crt_ivns_id *)input->ifi_nsid.iov_buf;
+
+	ivns_internal = crt_ivns_internal_lookup(ivns_id);
+	if (ivns_internal == NULL) {
+		D_ERROR("Failed to look up ivns_id! ivns_id=%d:%d\n",
+			ivns_id->ii_rank, ivns_id->ii_nsid);
+		D_GOTO(send_error, rc = -DER_NONEXIST);
+	}
+
+	iv_ops = crt_iv_ops_get(ivns_internal, input->ifi_class_id);
+	if (iv_ops == NULL) {
+		D_ERROR("Returned iv_ops were NULL, class_id: %d\n",
+			input->ifi_class_id);
+		D_GOTO(send_error, rc = -DER_INVAL);
+	}
+
+	/* prevent rpc_req from being destroyed, dec ref in
+	 * crt_hdlr_iv_fetch_aux
+	 */
+	RPC_PUB_ADDREF(rpc_req);
+	if (iv_ops->ivo_pre_fetch != NULL) {
+		D_DEBUG(DB_TRACE, "Executing ivo_pre_fetch\n");
+		iv_ops->ivo_pre_fetch(ivns_internal,
+				      &input->ifi_key,
+				      crt_hdlr_iv_fetch_aux,
+				      rpc_req);
+	} else {
+		crt_hdlr_iv_fetch_aux(rpc_req);
+	}
+
+	return;
+send_error:
+	output->ifo_rc = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != DER_SUCCESS)
+		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
+			rc, rpc_req->cr_opc);
 
 	IVNS_DECREF(ivns_internal);
 }
@@ -1670,9 +1736,8 @@ struct iv_sync_out {
 	int	rc;
 };
 
-/* Handler for internal SYNC CORPC */
-void
-crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
+static void
+crt_hdlr_iv_sync_aux(void *arg)
 {
 	int				rc = 0;
 	struct iv_sync_in		*input;
@@ -1684,7 +1749,9 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 	d_sg_list_t			iv_value = {0};
 	bool				 need_put = false;
 	void				*user_priv = NULL;
+	crt_rpc_t			*rpc_req;
 
+	rpc_req = arg;
 	/* This is an internal call. All errors are fatal */
 	input = crt_req_get(rpc_req);
 	D_ASSERT(input != NULL);
@@ -1780,6 +1847,70 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 exit:
 	if (need_put && iv_ops)
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
+
+	output->rc = rc;
+	crt_reply_send(rpc_req);
+
+	IVNS_DECREF(ivns_internal);
+
+	/* add ref in crt_hdlr_iv_sync */
+	RPC_PUB_DECREF(rpc_req);
+}
+
+/* Handler for internal SYNC CORPC */
+void
+crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
+{
+	struct iv_sync_in		*input;
+	struct iv_sync_out		*output;
+	struct crt_ivns_internal	*ivns_internal;
+	struct crt_iv_ops		*iv_ops = NULL;
+	struct crt_ivns_id		*ivns_id;
+	crt_iv_sync_t			*sync_type;
+	int				 rc = 0;
+
+	/* This is an internal call. All errors are fatal */
+	input = crt_req_get(rpc_req);
+	D_ASSERT(input != NULL);
+
+	output = crt_reply_get(rpc_req);
+	D_ASSERT(output != NULL);
+
+	ivns_id = (struct crt_ivns_id *)input->ivs_nsid.iov_buf;
+	sync_type = (crt_iv_sync_t *)input->ivs_sync_type.iov_buf;
+
+	ivns_internal = crt_ivns_internal_lookup(ivns_id);
+
+	/* In some use-cases sync can arrive to a node that hasn't attached
+	* iv namespace yet. Treat such errors as fatal if the flag is set.
+	**/
+	if (ivns_internal == NULL) {
+		D_ERROR("ivns_internal was NULL. ivns_id=%d:%d\n",
+			ivns_id->ii_rank, ivns_id->ii_nsid);
+
+		D_ASSERT(!(sync_type->ivs_flags &
+			   CRT_IV_SYNC_FLAG_NS_ERRORS_FATAL));
+		D_GOTO(exit, rc = -DER_NONEXIST);
+	}
+
+
+	iv_ops = crt_iv_ops_get(ivns_internal, input->ivs_class_id);
+	D_ASSERT(iv_ops != NULL);
+
+	/* prevent rpc_req from being destroyed, decref in
+	 * crt_hdlr_iv_sync_aux()
+	 */
+	RPC_PUB_ADDREF(rpc_req);
+	if (iv_ops->ivo_pre_refresh != NULL) {
+		D_DEBUG(DB_TRACE, "Executing ivo_pre_refresh\n");
+		iv_ops->ivo_pre_refresh(ivns_internal, &input->ivs_key,
+					crt_hdlr_iv_sync_aux, rpc_req);
+	} else {
+		crt_hdlr_iv_sync_aux(rpc_req);
+	}
+
+	return;
+exit:
 
 	output->rc = rc;
 	crt_reply_send(rpc_req);
@@ -2337,7 +2468,7 @@ struct bulk_update_cb_info {
 };
 
 static int
-bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
+bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 {
 	struct bulk_update_cb_info	*cb_info;
 	struct crt_ivns_internal	*ivns_internal;
@@ -2362,12 +2493,6 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 
 	output = crt_reply_get(info->bci_bulk_desc->bd_rpc);
 	D_ASSERT(output != NULL);
-
-	if (info->bci_rc != 0) {
-		D_ERROR("bulk update transfer failed; rc = %d",
-			info->bci_rc);
-		D_GOTO(send_error, rc = info->bci_rc);
-	}
 
 	update_rc = iv_ops->ivo_on_update(ivns_internal,
 			&input->ivu_key, 0, false, &cb_info->buc_iv_value,
@@ -2436,6 +2561,87 @@ send_error:
 	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
 	D_FREE_PTR(cb_info);
 	D_FREE_PTR(update_cb_info);
+
+	output->rc = rc;
+
+	crt_reply_send(info->bci_bulk_desc->bd_rpc);
+	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
+
+	/* addref done by crt_hdlr_iv_update:crt_ivns_internal_lookup() */
+	IVNS_DECREF(ivns_internal);
+	return rc;
+}
+
+static void
+bulk_update_transfer_done_aux_wrapper(void *info)
+{
+	struct crt_bulk_cb_info *bulk_cb_info;
+
+	D_DEBUG(DB_TRACE, "Triggering bulk_update_transfer_done_aux()\n");
+	bulk_cb_info = info;
+	bulk_update_transfer_done_aux(bulk_cb_info);
+	D_FREE_PTR(bulk_cb_info->bci_bulk_desc);
+	D_FREE_PTR(bulk_cb_info);
+}
+
+static int
+bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
+{
+	struct crt_bulk_cb_info		*info_dup;
+	struct bulk_update_cb_info	*cb_info;
+	struct crt_ivns_internal	*ivns_internal;
+	struct crt_iv_ops		*iv_ops;
+	struct iv_update_in		*input;
+	struct iv_update_out		*output;
+	int				 rc = DER_SUCCESS;
+
+	cb_info = info->bci_arg;
+
+	input = cb_info->buc_input;
+
+	ivns_internal = cb_info->buc_ivns;
+	D_ASSERT(ivns_internal != NULL);
+
+	iv_ops = crt_iv_ops_get(ivns_internal, input->ivu_class_id);
+	D_ASSERT(iv_ops != NULL);
+
+	output = crt_reply_get(info->bci_bulk_desc->bd_rpc);
+	D_ASSERT(output != NULL);
+
+	if (info->bci_rc != 0) {
+		D_ERROR("bulk update transfer failed; rc = %d",
+			info->bci_rc);
+		D_GOTO(send_error, rc = info->bci_rc);
+	}
+
+	if (iv_ops->ivo_pre_update != NULL) {
+		D_ALLOC_PTR(info_dup);
+		if (info_dup == NULL)
+			D_GOTO(send_error, rc = -DER_NOMEM);
+
+		D_ALLOC_PTR(info_dup->bci_bulk_desc);
+		if (info_dup->bci_bulk_desc == NULL) {
+			D_FREE_PTR(info_dup);
+			D_GOTO(send_error, rc = -DER_NOMEM);
+		}
+
+		info_dup->bci_arg = info->bci_arg;
+		info_dup->bci_rc = info->bci_rc;
+		crt_bulk_desc_dup(info_dup->bci_bulk_desc,
+				  info->bci_bulk_desc);
+		IV_DBG(&input->ivu_key, "Executing ivo_pre_update\n");
+		iv_ops->ivo_pre_update(ivns_internal, &input->ivu_key,
+				       bulk_update_transfer_done_aux_wrapper,
+				       info_dup);
+	} else {
+		bulk_update_transfer_done_aux(info);
+	}
+
+	return rc;
+
+send_error:
+	crt_bulk_free(cb_info->buc_bulk_hdl);
+	D_FREE_PTR(cb_info);
 
 	output->rc = rc;
 

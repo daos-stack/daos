@@ -413,6 +413,8 @@ struct crt_bulk_cb_info {
  */
 typedef void (*crt_cb_t)(const struct crt_cb_info *cb_info);
 
+typedef void (*crt_generic_cb_t)(void *cb_info);
+
 struct crt_lm_attach_cb_info {
 	void			*lac_arg;  /**< user-provided data */
 	int			 lac_rc;   /**< return code */

@@ -165,6 +165,67 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
 				     void *arg);
 
 /**
+ * If provided, this callback is executed on intermediate nodes during
+ * crt_iv_fetch() before ivo_on_fetch(). This callback has to call cb(cb_arg),
+ * either synchronously or asynchronously. cb(cb_arg) will execute user-provided
+ * ivo_on_fetch(). This callback gives the user a chance to execute
+ * ivo_on_fetch() outside the crt_progress() function.
+ *
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] iv_key		key of the IV
+ * \param[in] cb		a callback which must be called or scheduled by
+ *				the user in order to compelete the handling of
+ *				the crt_iv_fetch() request.
+ * \param[in] cb_arg		arguments for \a cb.
+ *
+ * \note Here pre_fetch() merely means it will be executed before
+ * ivo_on_fetch(). It's not related to the notion of prefeching data. Same for
+ * pre_update() and pre_refresh().
+ */
+typedef void (*crt_iv_pre_fetch_cb_t)(crt_iv_namespace_t ivns,
+				     crt_iv_key_t *iv_key,
+				     crt_generic_cb_t cb,
+				     void *cb_arg);
+
+/**
+ * If provided, this callback is executed on intermediate nodes during
+ * crt_iv_update() before ivo_on_update(). This callback has to call cb(cb_arg),
+ * either synchronously or asynchronously. cb(cb_arg) will execute user-provided
+ * ivo_on_update(). This callback gives the user a chance to execute
+ * ivo_on_update() outside the crt_progress() function.
+ *
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] iv_key		key of the IV
+ * \param[in] cb		a callback which must be called or scheduled by
+ *				the user in order to compelete the handling of
+ *				the crt_iv_update() request.
+ * \param[in] cb_arg		arguments for \a cb.
+ */
+typedef void (*crt_iv_pre_update_cb_t)(crt_iv_namespace_t ivns,
+				     crt_iv_key_t *iv_key,
+				     crt_generic_cb_t cb,
+				     void *cb_arg);
+
+/**
+ * If provided, this callback is executed on intermediate nodes during
+ * IV request before ivo_on_refresh(). This callback has to call cb(cb_arg),
+ * either synchronously or asynchronously. cb(cb_arg) will execute user-provided
+ * ivo_on_refresh(). This callback gives the user a chance to execute
+ * ivo_on_refresh() outside the crt_progress() function.
+ *
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] iv_key		key of the IV
+ * \param[in] cb		a callback which must be called or scheduled by
+ *				the user in order to compelete the handling of
+ *				the crt_iv_sync() request.
+ * \param[in] cb_arg		arguments for \a cb.
+ */
+typedef void (*crt_iv_pre_refresh_cb_t)(crt_iv_namespace_t ivns,
+				     crt_iv_key_t *iv_key,
+				     crt_generic_cb_t cb,
+				     void *cb_arg);
+
+/**
  * Incast variable on_refresh callback which will be called when the
  * synchronization/notification propagated to the node (flowing down from root
  * to leaf), or when serving invalidate request. It also will be called when the
@@ -275,7 +336,7 @@ typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
  *
  * \param[in] ivns		the local handle to the IV namespace
  * \param[in] key1		first iv key
- * \param[in] iv_ver		second iv key
+ * \param[in] key2		second iv key
  *
  * \return			true if keys match, false otherwise
  */
@@ -283,8 +344,11 @@ typedef bool (*crt_iv_keys_match_cb_t)(crt_iv_namespace_t ivns,
 				crt_iv_key_t *key1, crt_iv_key_t *key2);
 
 struct crt_iv_ops {
+	crt_iv_pre_fetch_cb_t	ivo_pre_fetch;
 	crt_iv_on_fetch_cb_t	ivo_on_fetch;
+	crt_iv_pre_update_cb_t	ivo_pre_update;
 	crt_iv_on_update_cb_t	ivo_on_update;
+	crt_iv_pre_refresh_cb_t	ivo_pre_refresh;
 	crt_iv_on_refresh_cb_t	ivo_on_refresh;
 	crt_iv_on_hash_cb_t	ivo_on_hash;
 	crt_iv_on_get_cb_t	ivo_on_get;

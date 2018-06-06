@@ -667,9 +667,20 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 	return 0;
 }
 
+static void
+iv_pre_common(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+	      crt_generic_cb_t cb_func, void *cb_arg)
+{
+	cb_func(cb_arg);
+}
+
+
 struct crt_iv_ops g_ivc_ops = {
+	.ivo_pre_fetch = iv_pre_common,
 	.ivo_on_fetch = iv_on_fetch,
+	.ivo_pre_update = iv_pre_common,
 	.ivo_on_update = iv_on_update,
+	.ivo_pre_refresh = iv_pre_common,
 	.ivo_on_refresh = iv_on_refresh,
 	.ivo_on_hash = iv_on_hash,
 	.ivo_on_get = iv_on_get,
