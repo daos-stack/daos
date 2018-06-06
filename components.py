@@ -271,7 +271,7 @@ REQS.define('argobots',
             libs=['abt'],
             headers=['abt.h'])
 
-RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/coral/cppr",
+RETRIEVER = GitRepoRetriever("https://review.hpdd.intel.com/coral/cppr",
                              True)
 REQS.define('cppr',
             retriever=RETRIEVER,
@@ -285,7 +285,7 @@ REQS.define('cppr',
             libs=["cppr"],
             requires=['iof', 'cart', 'ompi', 'fuse'])
 
-RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/daos/iof",
+RETRIEVER = GitRepoRetriever("https://review.hppd.intel.com/daos/iof",
                              True)
 REQS.define('iof',
             retriever=RETRIEVER,
@@ -297,7 +297,7 @@ REQS.define('iof',
             headers=['cnss_plugin.h'],
             requires=['cart', 'fuse', 'ompi'])
 
-RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/daos/daos_m",
+RETRIEVER = GitRepoRetriever("https://review.hpdd.intel.com/daos/daos_m",
                              True)
 REQS.define('daos',
             retriever=RETRIEVER,
@@ -334,7 +334,7 @@ REQS.define('ofi',
             libs=['fabric'],
             headers=['rdma/fabric.h'])
 
-RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/daos/cart", True)
+RETRIEVER = GitRepoRetriever("https://review.hpdd.intel.com/daos/cart", True)
 REQS.define('cart',
             retriever=RETRIEVER,
             commands=["scons "
