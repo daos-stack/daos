@@ -93,14 +93,6 @@ struct crt_req_format MY_CRF_1 =
 struct crt_req_format MY_CRF_2 =
 	DEFINE_CRT_REQ_FMT("RPC_2", ping_in_fmt, ping_out_fmt);
 
-struct crt_req_format *MY_CRF_ARRAY_0[] = {
-	&MY_CRF_0, &MY_CRF_1, NULL,
-};
-
-struct crt_req_format *MY_CRF_ARRAY_1[] = {
-	&MY_CRF_0, &MY_CRF_1, &MY_CRF_2, NULL,
-};
-
 static void
 ping_hdlr_0(crt_rpc_t *rpc_req)
 {
@@ -202,6 +194,7 @@ struct crt_proto_format my_proto_fmt_0 = {
 	.cpf_ver = 0,
 	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_0),
 	.cpf_prf = &my_proto_rpc_fmt_0[0],
+	.cpf_base = OPC_MY_PROTO,
 };
 
 struct crt_proto_format my_proto_fmt_1 = {
@@ -209,6 +202,7 @@ struct crt_proto_format my_proto_fmt_1 = {
 	.cpf_ver = 1,
 	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_1),
 	.cpf_prf = &my_proto_rpc_fmt_1[0],
+	.cpf_base = OPC_MY_PROTO,
 };
 int
 test_parse_args(int argc, char **argv)

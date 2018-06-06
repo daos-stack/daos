@@ -252,29 +252,6 @@ struct crt_opc_info {
 	struct crt_req_format	*coi_crf;
 };
 
-/* specifies a member RPC of the built-in protocol. */
-struct crt_internal_rpc_format {
-	crt_opcode_t		 irf_opc;
-	uint32_t		 irf_flags;
-	struct crt_req_format	*irf_req_fmt;
-	crt_rpc_cb_t		 irf_hdlr;
-	struct crt_corpc_ops	*irf_co_ops;
-};
-
-/* specify an RPC protocol */
-struct crt_proto_internal_format {
-	const char				*cpf_name;
-	uint32_t				 cpf_ver;
-	/* number of RPCs in this protocol, i.e. size of cpf_crf */
-	uint32_t				 cpf_count;
-	/* 0 means user protocol, 1 means internal protocol */
-	enum proto_type				 cpf_type;
-	union {
-		struct crt_proto_rpc_format	*cpf_prf;
-		struct crt_internal_rpc_format	*cpf_irf;
-	};
-};
-
 /* opcode map (three-level array) */
 struct crt_opc_map_L3 {
 	unsigned int		 L3_num_slots_total;

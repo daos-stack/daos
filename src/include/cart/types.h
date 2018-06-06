@@ -192,7 +192,6 @@ enum cmf_flags {
 };
 
 struct crt_msg_field {
-	const char		*cmf_name;
 	const uint32_t		cmf_flags;
 	const uint32_t		cmf_size;
 	crt_proc_cb_t		cmf_proc;
@@ -203,15 +202,9 @@ struct crf_field {
 	struct crt_msg_field	**crf_msg;
 };
 
-enum {
-	CRT_IN = 0,
-	CRT_OUT = 1,
-};
-
 struct crt_req_format {
-	const char		*crf_name;
-	uint32_t		 crf_idx;
-	struct crf_field	 crf_fields[2];
+	struct crf_field	 crf_in;
+	struct crf_field	 crf_out;
 };
 
 struct crt_array {
@@ -219,30 +212,23 @@ struct crt_array {
 	void		*ca_arrays;
 };
 
-#define DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, in_size,			\
-				 crt_out, out_size) {			\
-	crf_name :	(name),						\
-	crf_idx :	0,						\
-	crf_fields : {							\
-		/* [CRT_IN] = */ {					\
-			crf_count :	(in_size),			\
-			crf_msg :	(crt_in)			\
-		},							\
-		/* [CRT_OUT] = */ {					\
-			crf_count :	(out_size),			\
-			crf_msg :	(crt_out)			\
-		}							\
+#define DEFINE_CRT_REQ_FMT_ARRAY(crt_in, in_size,			\
+				crt_out, out_size) {			\
+	crf_in : {		crf_count :	(in_size),		\
+				crf_msg :	(crt_in)		\
+				},					\
+	crf_out: {		crf_count :	(out_size),		\
+				crf_msg :	(crt_out)		\
+				}					\
 	}								\
-}
 
 #define DEFINE_CRT_REQ_FMT(name, crt_in, crt_out)			\
-DEFINE_CRT_REQ_FMT_ARRAY((name), (crt_in),				\
+DEFINE_CRT_REQ_FMT_ARRAY((crt_in),					\
 			 ((crt_in) == NULL) ? 0 : ARRAY_SIZE(crt_in),	\
 			 (crt_out),					\
 			 ((crt_out) == NULL) ? 0 : ARRAY_SIZE(crt_out))
 
 #define DEFINE_CRT_MSG(name, flags, size, proc) {			\
-	cmf_name :	(name),						\
 	cmf_flags :	(flags),					\
 	cmf_size :	(size),						\
 	cmf_proc :	(crt_proc_cb_t)(proc)				\
@@ -266,22 +252,19 @@ struct crt_proto_rpc_format {
 	uint32_t		 prf_flags;
 };
 
-enum proto_type {
-	CRT_PROTO_TYPE_USER	= 0U,
-	CRT_PROTO_TYPE_INTERNAL	= 1U,
-};
-
 /** specify an RPC protocol */
 struct crt_proto_format {
-	const char				*cpf_name;
-	uint32_t				 cpf_ver;
-	/** number of RPCs in this protocol, i.e. number of entreis in
+	const char			*cpf_name;
+	uint32_t			 cpf_ver;
+	/** number of RPCs in this protocol, i.e. number of entries in
 	 * cpf_prf
 	 */
-	uint32_t				 cpf_count;
-	/** 0 means user protocol, 1 means internal protocol */
-	enum proto_type				 cpf_type;
-	struct crt_proto_rpc_format		*cpf_prf;
+	uint32_t			 cpf_count;
+	/** Array of RPC definitions */
+	struct crt_proto_rpc_format	*cpf_prf;
+	/** protocol base opcode */
+	crt_opcode_t			cpf_base;
+
 };
 
 /**
@@ -327,8 +310,6 @@ extern struct crt_msg_field CMF_RANK;
 extern struct crt_msg_field CMF_RANK_LIST;
 extern struct crt_msg_field CMF_BULK_ARRAY;
 extern struct crt_msg_field CMF_IOVEC;
-
-extern struct crt_msg_field *crt_single_out_fields[];
 
 /** Bulk transfer modes */
 typedef enum {

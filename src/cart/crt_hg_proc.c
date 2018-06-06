@@ -426,10 +426,6 @@ struct crt_msg_field CMF_BULK_ARRAY =
 struct crt_msg_field CMF_IOVEC =
 	DEFINE_CRT_MSG("crt_iov", 0, sizeof(d_iov_t), crt_proc_crt_iov_t);
 
-struct crt_msg_field *crt_single_out_fields[] = {
-	&CMF_INT,	/* status */
-};
-
 int
 crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 {
@@ -730,7 +726,7 @@ crt_proc_input(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 	struct crt_req_format *crf = rpc_priv->crp_opc_info->coi_crf;
 
 	D_ASSERT(crf != NULL);
-	return crt_proc_internal(&crf->crf_fields[CRT_IN],
+	return crt_proc_internal(&crf->crf_in,
 				 proc, rpc_priv->crp_pub.cr_input);
 }
 
@@ -740,7 +736,7 @@ crt_proc_output(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 	struct crt_req_format *crf = rpc_priv->crp_opc_info->coi_crf;
 
 	D_ASSERT(crf != NULL);
-	return crt_proc_internal(&crf->crf_fields[CRT_OUT],
+	return crt_proc_internal(&crf->crf_out,
 				 proc, rpc_priv->crp_pub.cr_output);
 }
 
@@ -824,8 +820,8 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 
 	rc = crt_proc_input(rpc_priv, proc);
 	if (rc != 0) {
-		D_ERROR("unpack input fails for opc: %s\n",
-			rpc_priv->crp_opc_info->coi_crf->crf_name);
+		D_ERROR("unpack input fails for opc: %#x\n",
+			rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
 out:

@@ -211,42 +211,90 @@ struct crt_rpc_priv {
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
 
+/* LIST of internal RPCS in form of:
+ * OPCODE, flags, FMT, handler, corpc_hdlr,
+ */
+#define CRT_INTERNAL_RPCS_LIST						\
+	X(CRT_OPC_GRP_CREATE,						\
+		0, &CQF_CRT_GRP_CREATE,					\
+		crt_hdlr_grp_create, &crt_grp_create_co_ops),		\
+	X(CRT_OPC_GRP_DESTROY,						\
+		0,  &CQF_CRT_GRP_DESTROY,				\
+		crt_hdlr_grp_destroy, &crt_grp_destroy_co_ops),		\
+	X(CRT_OPC_URI_LOOKUP,						\
+		0, &CQF_CRT_URI_LOOKUP,					\
+		crt_hdlr_uri_lookup, NULL),				\
+	X(CRT_OPC_SELF_TEST_BOTH_EMPTY,					\
+		0, NULL, crt_self_test_msg_handler, NULL),		\
+	X(CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV,			\
+		0,  &CQF_CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV,		\
+		crt_self_test_msg_handler, NULL),			\
+	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,			\
+		0, &CQF_CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY,		\
+		crt_self_test_msg_handler, NULL),			\
+	X(CRT_OPC_SELF_TEST_BOTH_IOV,					\
+		0, &CQF_CRT_SELF_TEST_BOTH_IOV,				\
+		crt_self_test_msg_handler, NULL),			\
+	X(CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,			\
+		0, &CQF_CRT_SELF_TEST_SEND_BULK_REPLY_IOV,		\
+		crt_self_test_msg_handler, NULL),			\
+	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,			\
+		0, &CQF_CRT_SELF_TEST_SEND_IOV_REPLY_BULK,		\
+		crt_self_test_msg_handler, NULL),			\
+	X(CRT_OPC_SELF_TEST_BOTH_BULK,					\
+		0, &CQF_CRT_SELF_TEST_BOTH_BULK,			\
+		crt_self_test_msg_handler, NULL),			\
+	X(CRT_OPC_SELF_TEST_OPEN_SESSION,				\
+		0, &CQF_CRT_SELF_TEST_OPEN_SESSION,			\
+		crt_self_test_open_session_handler, NULL),		\
+	X(CRT_OPC_SELF_TEST_CLOSE_SESSION,				\
+		0, &CQF_CRT_SELF_TEST_CLOSE_SESSION,			\
+		crt_self_test_close_session_handler, NULL),		\
+	X(CRT_OPC_SELF_TEST_START,					\
+		0, &CQF_CRT_SELF_TEST_START,				\
+		crt_self_test_start_handler, NULL),			\
+	X(CRT_OPC_SELF_TEST_STATUS_REQ,					\
+		0, &CQF_CRT_SELF_TEST_STATUS_REQ,			\
+		crt_self_test_status_req_handler, NULL),		\
+	X(CRT_OPC_IV_FETCH,						\
+		0, &CQF_CRT_IV_FETCH, crt_hdlr_iv_fetch, NULL),		\
+	X(CRT_OPC_IV_UPDATE,						\
+		0, &CQF_CRT_IV_UPDATE, crt_hdlr_iv_update, NULL),	\
+	X(CRT_OPC_IV_SYNC,						\
+		0, &CQF_CRT_IV_SYNC,					\
+		crt_hdlr_iv_sync, &crt_iv_sync_co_ops),			\
+	X(CRT_OPC_BARRIER_ENTER,					\
+		0, &CQF_CRT_BARRIER,					\
+		crt_hdlr_barrier_enter, &crt_barrier_corpc_ops),	\
+	X(CRT_OPC_BARRIER_EXIT,						\
+		0, &CQF_CRT_BARRIER,					\
+		crt_hdlr_barrier_exit, &crt_barrier_corpc_ops),		\
+	X(CRT_OPC_RANK_EVICT,						\
+		0, &CQF_CRT_LM_EVICT,					\
+		crt_hdlr_rank_evict, &crt_rank_evict_co_ops),		\
+	X(CRT_OPC_MEMB_SAMPLE,						\
+		0, &CQF_CRT_LM_MEMB_SAMPLE,				\
+		crt_hdlr_memb_sample, NULL),				\
+	X(CRT_OPC_CTL_LS,						\
+		0, &CQF_CRT_CTL_LS, crt_hdlr_ctl_ls, NULL),		\
+	X(CRT_OPC_CTL_GET_HOSTNAME,					\
+		0, &CQF_CRT_CTL_GET_HOSTNAME,				\
+		crt_hdlr_ctl_get_hostname, NULL),			\
+	X(CRT_OPC_CTL_GET_PID,						\
+		0, &CQF_CRT_CTL_GET_PID, crt_hdlr_ctl_get_pid, NULL),	\
+	X(CRT_OPC_PROTO_QUERY,						\
+		0, &CQF_CRT_PROTO_QUERY, crt_hdlr_proto_query, NULL)
+
+/* Define for RPC enum population below */
+#define X(a, b, c, d, e) a
+
 /* CRT internal opcode definitions, must be 0xFF00xxxx.*/
 enum {
-	CRT_OPC_GRP_CREATE	= CRT_OPC_INTERNAL_BASE,
-	CRT_OPC_GRP_DESTROY,
-
-	CRT_OPC_GRP_ATTACH,
-	CRT_OPC_GRP_DETACH,
-	CRT_OPC_URI_LOOKUP,
-
-	CRT_OPC_SELF_TEST_BOTH_EMPTY,
-	CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV,
-	CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,
-	CRT_OPC_SELF_TEST_BOTH_IOV,
-	CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,
-	CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,
-	CRT_OPC_SELF_TEST_BOTH_BULK,
-	CRT_OPC_SELF_TEST_OPEN_SESSION,
-	CRT_OPC_SELF_TEST_CLOSE_SESSION,
-	CRT_OPC_SELF_TEST_START,
-	CRT_OPC_SELF_TEST_STATUS_REQ,
-
-	CRT_OPC_IV_FETCH,
-	CRT_OPC_IV_UPDATE,
-	CRT_OPC_IV_INVALIDATE,
-	CRT_OPC_IV_REFRESH,
-	CRT_OPC_IV_SYNC,
-	CRT_OPC_BARRIER_ENTER,
-	CRT_OPC_BARRIER_EXIT,
-
-	CRT_OPC_RANK_EVICT,
-	CRT_OPC_MEMB_SAMPLE,
-	CRT_OPC_CTL_LS,
-	CRT_OPC_CTL_GET_HOSTNAME,
-	CRT_OPC_CTL_GET_PID,
-	CRT_OPC_PROTO_QUERY,
+	__FIRST  = CRT_PROTO_OPC(CRT_OPC_INTERNAL_BASE, 0, 0) - 1,
+	CRT_INTERNAL_RPCS_LIST,
 };
+
+#undef X
 
 /* CRT internal RPC definitions */
 struct crt_grp_create_in {
@@ -467,8 +515,9 @@ void crt_hdlr_iv_update(crt_rpc_t *rpc_req);
 void crt_hdlr_iv_sync(crt_rpc_t *rpc_req);
 int crt_iv_sync_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 				void *arg);
+
+/* crt_register.c */
 int
-crt_proto_register_internal(crt_opcode_t base_opc,
-		struct crt_proto_internal_format *internal_format);
+crt_proto_register_internal(struct crt_proto_format *crf);
 
 #endif /* __CRT_RPC_H__ */

@@ -1347,16 +1347,14 @@ crt_lm_attach(crt_group_t *tgt_grp, crt_lm_attach_cb_t completion_cb,
 /**
  * Register a protocol. Can be called on a server or a client.
  *
- * \param[in] base_opc         protocol base opcode
- * \param[in] proto_format     protocol format description. (See \ref
+ * \param[in] cpf              protocol format description. (See \ref
  *                             crt_proto_format)
  *
  * \return                     DER_SUCCESS on success, negative value
  *                             on failure.
  */
 int
-crt_proto_register(crt_opcode_t base_opc,
-		   struct crt_proto_format *proto_format);
+crt_proto_register(struct crt_proto_format *cpf);
 
 /**
  * query tgt_ep if it has registered base_opc with version.

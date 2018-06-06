@@ -91,9 +91,9 @@ test_init()
 	rc = crt_group_rank(NULL, &test.tg_my_rank);
 	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 
-	rc = crt_proto_register(OPC_MY_PROTO, &my_proto_fmt_0);
+	rc = crt_proto_register(&my_proto_fmt_0);
 	D_ASSERT(rc == 0);
-	rc = crt_proto_register(OPC_MY_PROTO, &my_proto_fmt_1);
+	rc = crt_proto_register(&my_proto_fmt_1);
 	D_ASSERT(rc == 0);
 	rc = crt_context_create(&test.tg_crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
