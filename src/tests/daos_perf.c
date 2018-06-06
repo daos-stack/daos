@@ -426,6 +426,110 @@ ts_read_records_internal(d_rank_t rank)
 	return rc;
 }
 
+typedef int (*iterate_cb_t)(daos_handle_t ih, vos_iter_entry_t *key_ent,
+			    vos_iter_param_t *param);
+
+static int
+ts_iterate_internal(uint32_t type, vos_iter_param_t *param,
+		    iterate_cb_t iter_cb)
+{
+	daos_hash_out_t		*probe_hash = NULL;
+	vos_iter_entry_t	key_ent;
+	daos_handle_t		ih;
+	int			rc;
+
+	rc = vos_iter_prepare(type, param, &ih);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		else
+			D_ERROR("Failed to prepare d-key iterator: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = vos_iter_probe(ih, probe_hash);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST || rc == -DER_AGAIN)
+			rc = 0;
+		D_GOTO(out_iter_fini, rc);
+	}
+
+	while (1) {
+		rc = vos_iter_fetch(ih, &key_ent, NULL);
+		if (rc != 0)
+			break;
+
+		/* fill the key to iov if there are enough space */
+		if (iter_cb) {
+			rc = iter_cb(ih, &key_ent, param);
+			if (rc != 0)
+				break;
+		}
+
+		rc = vos_iter_next(ih);
+		if (rc)
+			break;
+	}
+
+	if (rc == -DER_NONEXIST)
+		rc = 0;
+
+out_iter_fini:
+	vos_iter_finish(ih);
+out:
+	return rc;
+}
+
+static int
+iter_akey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent,
+	     vos_iter_param_t *param)
+{
+	int	rc;
+
+	param->ip_akey = key_ent->ie_key;
+	/* iterate array record */
+	rc = ts_iterate_internal(VOS_ITER_RECX, param, NULL);
+
+	ts_iterate_internal(VOS_ITER_SINGLE, param, NULL);
+
+	return rc;
+}
+
+static int
+iter_dkey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent,
+	     vos_iter_param_t *param)
+{
+	int	rc;
+
+	param->ip_dkey = key_ent->ie_key;
+	/* iterate akey */
+	rc = ts_iterate_internal(VOS_ITER_AKEY, param, iter_akey_cb);
+
+	return rc;
+}
+
+/* Iterate all of dkey/akey/record */
+static int
+ts_iterate_records_internal(d_rank_t rank)
+{
+	vos_iter_param_t	param;
+	int			rc = 0;
+
+	assert_int_equal(ts_class, DAOS_OC_RAW);
+
+	/* prepare iterate parameters */
+	memset(&param, 0, sizeof(param));
+	param.ip_hdl = ts_ctx.tsc_coh;
+	param.ip_oid = ts_uoid;
+
+	param.ip_epr.epr_lo = 0;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_epc_expr = VOS_IT_EPC_RE;
+
+	rc = ts_iterate_internal(VOS_ITER_DKEY, &param, iter_dkey_cb);
+	return rc;
+}
+
 static int
 ts_write_perf(double *start_time, double *end_time)
 {
@@ -455,6 +559,20 @@ ts_fetch_perf(double *start_time, double *end_time)
 		fprintf(stdout, "Fetch verification: %s\n", rc ? "Failed" :
 			"Success");
 	}
+	return rc;
+}
+
+static int
+ts_iterate_perf(double *start_time, double *end_time)
+{
+	int	rc;
+
+	rc = ts_write_records_internal(RANK_ZERO, WITH_FETCH);
+	if (rc)
+		return rc;
+	*start_time = dts_time_now();
+	rc = ts_iterate_records_internal(RANK_ZERO);
+	*end_time = dts_time_now();
 	return rc;
 }
 
@@ -668,6 +786,8 @@ The options are as follows:\n\
 \n\
 -B	Profile performance of both update and fetch.\n\
 \n\
+-I	Only run iterate performance test. This can only in vos mode.\n\
+\n\
 -f pathname\n\
 	Full path name of the VOS file.\n");
 }
@@ -791,7 +911,7 @@ main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
-	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:ztf:hUFRBv",
+	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:ztf:hUFRBvI",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -876,6 +996,8 @@ main(int argc, char **argv)
 			break;
 		case 'v':
 			ts_verify_fetch = true;
+		case 'I':
+			perf_tests[ITERATE_TEST] = ts_iterate_perf;
 			break;
 		case 'h':
 			if (ts_ctx.tsc_mpi_rank == 0)
@@ -887,7 +1009,8 @@ main(int argc, char **argv)
 	/* It will run write tests by default */
 	if (perf_tests[REBUILD_TEST] == NULL &&
 	    perf_tests[FETCH_TEST] == NULL && perf_tests[UPDATE_TEST] == NULL &&
-	    perf_tests[UPDATE_FETCH_TEST] == NULL)
+	    perf_tests[UPDATE_FETCH_TEST] == NULL &&
+	    perf_tests[ITERATE_TEST] == NULL)
 		perf_tests[UPDATE_TEST] = ts_write_perf;
 
 	if ((perf_tests[FETCH_TEST] != NULL ||
@@ -900,6 +1023,13 @@ main(int argc, char **argv)
 
 	if (perf_tests[REBUILD_TEST] && ts_class != DAOS_OC_TINY_RW) {
 		fprintf(stderr, "rebuild can only run with -T \"daos\"\n");
+		if (ts_ctx.tsc_mpi_rank == 0)
+			ts_print_usage();
+		return -1;
+	}
+
+	if (perf_tests[ITERATE_TEST] && ts_class != DAOS_OC_RAW) {
+		fprintf(stderr, "iterate can only run with -T \"vos\"\n");
 		if (ts_ctx.tsc_mpi_rank == 0)
 			ts_print_usage();
 		return -1;
