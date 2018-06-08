@@ -720,10 +720,28 @@ io_obj_cache_test(void **state)
 	struct daos_lru_cache	*occ = NULL;
 	struct vos_object	*objs[20];
 	daos_unit_oid_t		 oids[2];
-	int			 i;
-	int			 rc;
+	char			*po_name;
+	uuid_t			 pool_uuid;
+	daos_handle_t		 l_poh, l_coh;
+	int			 i, rc;
 
 	rc = vos_obj_cache_create(10, &occ);
+	assert_int_equal(rc, 0);
+
+	rc = vts_alloc_gen_fname(&po_name);
+	assert_int_equal(rc, 0);
+
+	uuid_generate_time_safe(pool_uuid);
+	rc = vos_pool_create(po_name, pool_uuid, VPOOL_16M);
+	assert_int_equal(rc, 0);
+
+	rc = vos_pool_open(po_name, pool_uuid, &l_poh);
+	assert_int_equal(rc, 0);
+
+	rc = vos_cont_create(l_poh, ctx->tc_co_uuid);
+	assert_int_equal(rc, 0);
+
+	rc = vos_cont_open(l_poh, ctx->tc_co_uuid, &l_coh);
 	assert_int_equal(rc, 0);
 
 	oids[0] = gen_oid(arg->ofeat);
@@ -734,6 +752,10 @@ io_obj_cache_test(void **state)
 
 	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 10, 15);
 	assert_int_equal(rc, 0);
+
+	rc = vos_obj_hold(occ, l_coh, oids[1], 1, true, &objs[16]);
+	assert_int_equal(rc, 0);
+	vos_obj_release(occ, objs[16]);
 
 	for (i = 0; i < 5; i++)
 		vos_obj_release(occ, objs[i]);
@@ -748,6 +770,9 @@ io_obj_cache_test(void **state)
 	for (i = 15; i < 20; i++)
 		vos_obj_release(occ, objs[i]);
 
+	vos_cont_close(l_coh);
+	vos_pool_close(l_poh);
+	vos_pool_destroy(po_name, pool_uuid);
 	vos_obj_cache_destroy(occ);
 }
 

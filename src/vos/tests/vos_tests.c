@@ -45,6 +45,8 @@ print_usage()
 	print_message("vos_tests -p|--pool_tests\n");
 	print_message("vos_tests -c|--container_tests\n");
 	print_message("vos_tests -i|--io_tests <ofeat>\n");
+	print_message("ofeats = DAOS_OF_DKEY_UINT64, DAOS_OF_DKEY_LEXICAL\n");
+	print_message("%8s DAOS_OF_AKEY_UINT64, DAOS_OF_AKEY_LEXICAL\n", " ");
 	print_message("vos_tests -d |--discard-tests\n");
 	print_message("vos_tests -a |--aggregate-tests\n");
 	print_message("vos_tests -A|--all_tests\n");

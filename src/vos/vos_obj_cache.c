@@ -49,8 +49,8 @@
  * Object ID and container UUID
  */
 struct obj_lru_key {
-	/* Container UUID */
-	uuid_t		olk_co_uuid;
+	/* container handle */
+	daos_handle_t	olk_coh;
 	/* Object ID */
 	daos_unit_oid_t	olk_obj_id;
 };
@@ -95,16 +95,18 @@ obj_lop_cmp_key(const void *key, unsigned int ksize, struct daos_llink *llink)
 {
 	struct vos_object	*obj;
 	struct obj_lru_key	*hkey = (struct obj_lru_key *) key;
+	struct vos_container	*key_cont;
 
 	D_DEBUG(DB_TRACE, "LRU compare keys\n");
 	D_ASSERT(llink);
 	D_ASSERT(ksize == sizeof(struct obj_lru_key));
 
-	obj = container_of(llink, struct vos_object, obj_llink);
+	key_cont = vos_hdl2cont(hkey->olk_coh);
+	obj  = container_of(llink, struct vos_object, obj_llink);
 
-	return !(memcmp(&hkey->olk_obj_id, &obj->obj_id,
-			sizeof(daos_unit_oid_t)) ||
-		 uuid_compare(hkey->olk_co_uuid, obj->obj_cont->vc_id));
+	return ((key_cont == obj->obj_cont) &&
+		(memcmp(&hkey->olk_obj_id, &obj->obj_id,
+		       sizeof(daos_unit_oid_t)) == 0));
 }
 
 static void
@@ -127,10 +129,12 @@ static void
 obj_lop_print_key(void *key, unsigned int ksize)
 {
 	struct obj_lru_key	*lkey = (struct obj_lru_key *)key;
+	struct vos_container	*cont = vos_hdl2cont(lkey->olk_coh);
 
 	D_ASSERT(lkey != NULL);
-	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
-		DP_UUID(lkey->olk_co_uuid), DP_UOID(lkey->olk_obj_id));
+	D_DEBUG(DB_TRACE, "pool="DF_UUID" cont="DF_UUID", obj="DF_UOID"\n",
+		DP_UUID(cont->vc_pool->vp_id),
+		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_obj_id));
 }
 
 static struct daos_llink_ops obj_lru_ops = {
@@ -217,7 +221,7 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		DP_UUID(cont->vc_id), DP_UOID(oid));
 
 	/* Create the key for obj cache */
-	uuid_copy(lkey.olk_co_uuid, cont->vc_id);
+	lkey.olk_coh  = coh;
 	lkey.olk_obj_id = oid;
 
 	while (1) {
