@@ -112,38 +112,12 @@ REQS.define('isal',
             required_progs=['nasm', 'yasm'],
             libs=["isal"])
 
-# Save this old definition for now.
 RETRIEVER = \
     GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
                      True)
-REQS.define('mercury_old',
-            retriever=RETRIEVER,
-            commands=['cmake -DMCHECKSUM_USE_ZLIB=1 '
-                      '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a '
-                      '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
-                      '-DCMAKE_INSTALL_PREFIX=$MERCURY_OLD_PREFIX '
-                      '-DBUILD_EXAMPLES=OFF '
-                      '-DMERCURY_USE_BOOST_PP=ON '
-                      '-DMERCURY_USE_SELF_FORWARD=ON '
-                      '-DMERCURY_ENABLE_VERBOSE_ERROR=ON '
-                      '-DBUILD_TESTING=ON '
-                      '-DBUILD_DOCUMENTATION=OFF '
-                      '-DBUILD_SHARED_LIBS=ON $MERCURY_OLD_SRC '
-                      '-DCMAKE_INSTALL_RPATH=$MERCURY_OLD_PREFIX/lib '
-                      '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE'
-                      , 'make', 'make install'],
-            libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
-            requires=['openpa', 'boost'] + RT,
-            extra_include_path=[os.path.join('include', 'na')],
-            out_of_src_build=True)
-
-RETRIEVER = \
-    GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
-                     True)
-
 REQS.define('mercury',
             retriever=RETRIEVER,
-            commands=['cmake -DMCHECKSUM_USE_ZLIB=1 '
+            commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
                       '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a '
                       '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
                       '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX '
@@ -160,32 +134,7 @@ REQS.define('mercury',
                       '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
                       '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'
                       , 'make', 'make install'],
-            libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
-            requires=['openpa', 'boost', 'ofi'] + RT,
-            extra_include_path=[os.path.join('include', 'na')],
-            out_of_src_build=True)
-
-# Duplicate for now to keep some new Jenkins jobs building.
-REQS.define('mercury_ofi',
-            retriever=RETRIEVER,
-            commands=['cmake -DMCHECKSUM_USE_ZLIB=1 '
-                      '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a '
-                      '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
-                      '-DCMAKE_INSTALL_PREFIX=$MERCURY_OFI_PREFIX '
-                      '-DBUILD_EXAMPLES=OFF '
-                      '-DMERCURY_USE_BOOST_PP=ON '
-                      '-DMERCURY_USE_SELF_FORWARD=ON '
-                      '-DMERCURY_ENABLE_VERBOSE_ERROR=OFF '
-                      '-DBUILD_TESTING=ON '
-                      '-DNA_USE_OFI=ON '
-                      '-DBUILD_DOCUMENTATION=OFF '
-                      '-DBUILD_SHARED_LIBS=ON $MERCURY_OFI_SRC '
-                      '-DCMAKE_INSTALL_RPATH=$MERCURY_OFI_PREFIX/lib '
-                      '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE '
-                      '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
-                      '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'
-                      , 'make', 'make install'],
-            libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
+            libs=['mercury', 'na', 'mercury_util'],
             requires=['openpa', 'boost', 'ofi'] + RT,
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
