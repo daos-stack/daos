@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2016 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 /**
- * DAOS main header file.
+ * \file
+ *
+ * DAOS API
  */
 
 #ifndef __DAOS_H__

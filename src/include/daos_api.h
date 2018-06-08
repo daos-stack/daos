@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2015-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,9 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * DAOS APIs
+ * \file
+ *
+ * DAOS API methods
  */
 
 #ifndef __DAOS_API_H__
@@ -48,14 +50,14 @@ daos_fini(void);
  * completion, \a poh returns the pool handle, and \a info returns the latest
  * pool information.
  *
- * \param uuid	[IN]	UUID to identify a pool.
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param svc	[IN]	Pool service replica ranks, as reported by
+ * \param[in]	uuid	UUID to identify a pool.
+ * \param[in]	grp	Process set name of the DAOS servers managing the pool
+ * \param[in]	svc	Pool service replica ranks, as reported by
  *			daos_pool_create().
- * \param flags	[IN]	Connect mode represented by the DAOS_PC_ bits.
- * \param poh	[OUT]	Returned open handle.
- * \param info	[OUT]	Returned pool info.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
+ * \param[out]	poh	Returned open handle.
+ * \param[out]	info	Returned pool info.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -75,8 +77,8 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
  * Disconnect from the DAOS pool. It should revoke all the container open
  * handles of this pool.
  *
- * \param poh	[IN]	Pool connection handle
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	poh	Pool connection handle
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -88,7 +90,7 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
 
-/**
+/*
  * Handle API
  */
 
@@ -99,8 +101,8 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
  * returned through glob->iov_buf_len.
  * This function does not involve any communication and does not block.
  *
- * \param poh	[IN]	Valid local pool connection handle to be shared
- * \param glob	[OUT]	Pointer to iov of the buffer to store handle information
+ * \param[in]	poh	Valid local pool connection handle to be shared
+ * \param[out]	glob	Pointer to iov of the buffer to store handle information
  *
  * \return		These values will be returned:
  *			non-blocking mode:
@@ -118,9 +120,9 @@ daos_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
 /**
  * Create a local pool connection for global representation data.
  *
- * \param glob	[IN]	Global (shared) representation of a collective handle
+ * \param[in]	glob	Global (shared) representation of a collective handle
  *			to be extracted
- * \param poh	[OUT]	Returned local pool connection handle
+ * \param[out]	poh	Returned local pool connection handle
  *
  * \return		These values will be returned:
  *			non-blocking mode:
@@ -137,8 +139,8 @@ daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
  * returned through glob->iov_buf_len.
  * This function does not involve any communication and does not block.
  *
- * \param coh	[IN]	valid local container handle to be shared
- * \param glob	[OUT]	pointer to iov of the buffer to store handle information
+ * \param[in]	coh	valid local container handle to be shared
+ * \param[out]	glob	pointer to iov of the buffer to store handle information
  *
  * \return		These values will be returned:
  *			non-blocking mode:
@@ -156,10 +158,10 @@ daos_cont_local2global(daos_handle_t coh, daos_iov_t *glob);
 /**
  * Create a local container handle for global representation data.
  *
- * \param poh	[IN]	Pool connection handle the container belong to
- * \param glob	[IN]	Global (shared) representation of a collective handle
+ * \param[in]	poh	Pool connection handle the container belong to
+ * \param[in]	glob	Global (shared) representation of a collective handle
  *			to be extracted
- * \param coh	[OUT]	Returned local container handle
+ * \param[out]	coh	Returned local container handle
  *
  * \return		These values will be returned:
  *			non-blocking mode:
@@ -174,10 +176,10 @@ daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
  * Query pool information. User should provide at least one of \a info and
  * \a tgts as output buffer.
  *
- * \param poh	[IN]	Pool connection handle.
- * \param tgts	[OUT]	Optional, returned storage targets in this pool.
- * \param info	[OUT]	Optional, returned pool information.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	poh	Pool connection handle.
+ * \param[out]	tgts	Optional, returned storage targets in this pool.
+ * \param[out]	info	Optional, returned pool information.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -194,14 +196,13 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts,
 /**
  * Query information of storage targets within a DAOS pool.
  *
- * \param poh	[IN]	Pool connection handle.
- * \param tgts	[IN]	A list of targets to query.
- * \param failed
- *		[OUT]	Optional, buffer to store faulty targets on failure.
- * \param info_list
- *		[OUT]	Returned storage information of \a tgts, it is an array
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	tgts	A list of targets to query.
+ * \param[out]	failed	Optional, buffer to store faulty targets on failure.
+ * \param[out]	info_list
+ *			Returned storage information of \a tgts, it is an array
  *			and array size must equal to tgts::rl_llen.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -220,17 +221,18 @@ daos_pool_target_query(daos_handle_t poh, d_rank_list_t *tgts,
 /**
  * List the names of all user-defined pool attributes.
  *
- * \param poh	 [IN]	Pool handle.
- * \param buffer [OUT]	Buffer containing concatenation of all attribute
+ * \param[in]	poh	Pool handle.
+ * \param[out]	buffer	Buffer containing concatenation of all attribute
  *			names, each being null-terminated. No truncation is
  *			performed and only full names will be returned.
  *			NULL is permitted in which case only the aggregate
  *			size will be retrieved.
- * \param size	 [IN]	Buffer size.
- *		 [OUT]	Aggregate size of all attribute names (excluding
- *			terminating null characters), regardless of the
- *			actual buffer size.
- * \param ev	 [IN]	Completion event, it is optional and can be NULL.
+ * \param[in,out]
+ *		size	[in]: Buffer size. [out]: Aggregate size of all
+ *			attribute names (excluding terminating null
+ *			characters), regardless of the actual buffer
+ *			size.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -240,19 +242,19 @@ daos_pool_attr_list(daos_handle_t poh, char *buffer, size_t *size,
 /**
  * Retrieve a list of user-defined pool attribute values.
  *
- * \param poh	  [IN]	Pool handle
- * \param n	  [IN]	Number of attributes
- * \param names	  [IN]	Array of \a n null-terminated attribute names.
- * \param buffers [OUT]	Array of \a n buffers to store attribute values.
- *			Attribute values larger than corresponding
- *			buffer sizes will be truncated. NULL values are
- *			permitted and will be treated identical to
- *			zero-length buffers, in which case only the
- *			sizes of attribute values will be retrieved.
- * \param sizes	  [IN]	Array of \a n buffer sizes.
- *		  [OUT]	Array of actual sizes of \a n attribute values,
- *			regardless of given buffer sizes.
- * \param ev	  [IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	poh	Pool handle
+ * \param[in]	n	Number of attributes
+ * \param[in]	names	Array of \a n null-terminated attribute names.
+ * \param[out]	buffers	Array of \a n buffers to store attribute values.
+ *			Attribute values larger than corresponding buffer sizes
+ *			will be truncated. NULL values are permitted and will be
+ *			treated identical to zero-length buffers, in which case
+ *			only the sizes of attribute values will be retrieved.
+ * \param[in,out]
+ *		sizes	[in]: Array of \a n buffer sizes. [out]: Array of actual
+ *			sizes of \a n attribute values, regardless of given
+ *			buffer sizes.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -262,13 +264,13 @@ daos_pool_attr_get(daos_handle_t poh, int n, char const *const names[],
 /**
  * Create or update a list of user-defined pool attributes.
  *
- * \param poh	  [IN]	Pool handle
- * \param n	  [IN]	Number of attributes
- * \param names	  [IN]	Array of \a n null-terminated attribute names.
- * \param values  [IN]	Array of \a n attribute values
- * \param sizes	  [IN]	Array of \a n elements containing the
- *			sizes of respective attribute values.
- * \param ev	  [IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	poh	Pool handle
+ * \param[in]	n	Number of attributes
+ * \param[in]	names	Array of \a n null-terminated attribute names.
+ * \param[in]	values	Array of \a n attribute values
+ * \param[in]	sizes	Array of \a n elements containing the sizes of
+ *			respective attribute values.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -276,7 +278,7 @@ daos_pool_attr_set(daos_handle_t poh, int n, char const *const names[],
 		   void const *const values[], size_t const sizes[],
 		   daos_event_t *ev);
 
-/**
+/*
  * Container API
  */
 
@@ -284,9 +286,9 @@ daos_pool_attr_set(daos_handle_t poh, int n, char const *const names[],
  * Create a new container with uuid \a uuid on the storage pool connected
  * by \a poh.
  *
- * \param poh	[IN]	Pool connection handle.
- * \param uuid	[IN]	UUID of the new Container.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	uuid	UUID of the new Container.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -307,12 +309,12 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev);
  * respectively. The resulting container handle has an HCE equal to GHCE, an
  * LHE equal to DAOS_EPOCH_MAX, and an LRE equal to GHCE.
  *
- * \param poh	[IN]	Pool connection handle.
- * \param uuid	[IN]	UUID to identify container.
- * \param flags	[IN]	Open mode, represented by the DAOS_COO_ bits.
- * \param coh	[OUT]	Returned open handle.
- * \param info	[OUT]	Optional, return container information
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	uuid	UUID to identify container.
+ * \param[in]	flags	Open mode, represented by the DAOS_COO_ bits.
+ * \param[out]	coh	Returned open handle.
+ * \param[out]	info	Optional, return container information
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -332,8 +334,8 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
  * epoch hold (i.e., if LHE < DAOS_EPOCH_MAX) is released, and any uncommitted
  * updates from the container handle are discarded.
  *
- * \param coh	[IN]	Container open handle.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -352,13 +354,13 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev);
  * the operation completes with DER_BUSY. Otherwise, the container is destroyed
  * when the operation completes.
  *
- * \param poh	[IN]	Pool connection handle.
- * \param uuid	[IN]	Container UUID.
- * \param force	[IN]	Container destroy will return failure if the container
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	uuid	Container UUID.
+ * \param[in]	force	Container destroy will return failure if the container
  *			is still busy (outstanding open handles). This parameter
  *			will force the destroy to proceed even if there is an
  *			outstanding open handle.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -376,13 +378,13 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 /**
  * Query container information.
  *
- * \param coh	[IN]	Container open handle.
- * \param info	[OUT]	Returned container information.
+ * \param[in]	coh	Container open handle.
+ * \param[out]	info	Returned container information.
  *			If \a info::ci_snapshots is not NULL, epochs of
  *			snapshots will be stored in it.
  *			If \a info::ci_snapshots is NULL, number of snapshots
  *			will be returned by \a info::ci_nsnapshots.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -399,17 +401,17 @@ daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
 /**
  * List the names of all user-defined container attributes.
  *
- * \param coh	 [IN]	Container handle.
- * \param buffer [OUT]	Buffer containing concatenation of all attribute
+ * \param[in]	coh	Container handle.
+ * \param[out]	buffer	Buffer containing concatenation of all attribute
  *			names, each being null-terminated. No truncation is
  *			performed and only full names will be returned.
  *			NULL is permitted in which case only the aggregate
  *			size will be retrieved.
- * \param size	 [IN]	Buffer size.
- *		 [OUT]	Aggregate size of all attribute names (excluding
- *			terminating null characters), regardless of the
- *			actual buffer size.
- * \param ev	 [IN]	Completion event, it is optional and can be NULL.
+ * \param[in,out]
+ *		size	[in]: Buffer size. [out]: Aggregate size of all
+ *			attribute names (excluding terminating null characters),
+ *			regardless of the actual buffer size.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -419,19 +421,19 @@ daos_cont_attr_list(daos_handle_t coh, char *buffer, size_t *size,
 /**
  * Retrieve a list of user-defined container attribute values.
  *
- * \param coh	  [IN]	Container handle
- * \param n	  [IN]	Number of attributes
- * \param names	  [IN]	Array of \a n null-terminated attribute names.
- * \param buffers [OUT]	Array of \a n buffers to store attribute values.
- *			Attribute values larger than corresponding
- *			buffer sizes will be truncated. NULL values are
- *			permitted and will be treated identical to
- *			zero-length buffers, in which case only the
- *			sizes of attribute values will be retrieved.
- * \param sizes	  [IN]	Array of \a n buffer sizes.
- *		  [OUT]	Array of actual sizes of \a n attribute values,
- *			regardless of given buffer sizes.
- * \param ev	  [IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[in]	n	Number of attributes
+ * \param[in]	names	Array of \a n null-terminated attribute names.
+ * \param[out]	buffers	Array of \a n buffers to store attribute values.
+ *			Attribute values larger than corresponding buffer sizes
+ *			will be truncated. NULL values are permitted and will be
+ *			treated identical to zero-length buffers, in which case
+ *			only the sizes of attribute values will be retrieved.
+ * \param[in,out]
+ *		sizes	[in]: Array of \a n buffer sizes. [out]: Array of actual
+ *			sizes of \a n attribute values, regardless of given
+ *			buffer sizes.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -441,13 +443,13 @@ daos_cont_attr_get(daos_handle_t coh, int n, char const *const names[],
 /**
  * Create or update a list of user-defined container attributes.
  *
- * \param coh	  [IN]	Container handle
- * \param n	  [IN]	Number of attributes
- * \param names	  [IN]	Array of \a n null-terminated attribute names.
- * \param values  [IN]	Array of \a n attribute values
- * \param sizes	  [IN]	Array of \a n elements containing the
- *			sizes of respective attribute values.
- * \param ev	  [IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[in]	n	Number of attributes
+ * \param[in]	names	Array of \a n null-terminated attribute names.
+ * \param[in]	values	Array of \a n attribute values
+ * \param[in]	sizes	Array of \a n elements containing the sizes of
+ *			respective attribute values.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -464,10 +466,11 @@ daos_cont_attr_set(daos_handle_t coh, int n, char const *const names[],
  * doesn't guarantee that the IDs allocated are sequential; and several ID
  * ranges could be discarded at container close.
  *
- * \param coh   [IN]    Container open handle.
- * \param num_oids [IN]	Number of unique IDs requested.
- * \param oid	[OUT]	starting oid that was allocated up to oid + num_oids.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container open handle.
+ * \param[in]	num_oids
+ *			Number of unique IDs requested.
+ * \param[out]	oid	starting oid that was allocated up to oid + num_oids.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -480,17 +483,17 @@ int
 daos_cont_oid_alloc(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid,
 		    daos_event_t *ev);
 
-/**
+/*
  * Epoch API
  */
 
 /**
  * Flush an epoch of a container handle.
  *
- * \param coh	[IN]	Container handle
- * \param epoch	[IN]	Epoch to flush
- * \param state	[OUT]	Latest epoch state
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[in]	epoch	Epoch to flush
+ * \param[out]	state	Latest epoch state
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -500,10 +503,10 @@ daos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch,
 /**
  * Discard an epoch of a container handle.
  *
- * \param coh	[IN]	Container handle
- * \param epoch	[IN]	Epoch to discard
- * \param state	[OUT]	Optional, latest epoch state
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[in]	epoch	Epoch to discard
+ * \param[out]	state	Optional, latest epoch state
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -513,9 +516,9 @@ daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
 /**
  * Query latest epoch state.
  *
- * \param coh	[IN]	Container handle
- * \param state	[OUT]	Optional, latest epoch state
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[out]	state	Optional, latest epoch state
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -528,11 +531,12 @@ daos_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
  * is responsible for releasing its held epochs by either committing them or
  * setting LHE to DAOS_EPOCH_MAX.
  *
- * \param coh	[IN]	Container handle
- * \param epoch	[IN]	Minimum requested LHE, set to 0 if no requirement
- *		[OUT]	returned LHE of the container handle
- * \param state	[OUT]	Optional, latest epoch state
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[in,out]
+ *		epoch	[in]: Minimum requested LHE, set to 0 if no requirement
+ *			[out]: returned LHE of the container handle
+ * \param[out]	state	Optional, latest epoch state
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -544,10 +548,10 @@ daos_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
  * \a epoch is lower than current LRE, then the epoch state of the container
  * handle is unchanged.
  *
- * \param coh	[IN]	Container handle
- * \param epoch	[IN]	Epoch to increase LRE to
- * \param state	[OUT]	Optional, latest epoch state
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[in]	epoch	Epoch to increase LRE to
+ * \param[out]	state	Optional, latest epoch state
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -562,10 +566,10 @@ daos_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
  * specified when opening this container handle) of the container handle
  * becomes epoch, epoch + 1, and epoch, respectively.
  *
- * \param coh	[IN]	Container handle
- * \param epoch	[IN]	Epoch to commit
- * \param state	[OUT]	Optional, latest epoch state
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[in]	epoch	Epoch to commit
+ * \param[out]	state	Optional, latest epoch state
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -576,29 +580,31 @@ daos_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
  * Wait for an epoch to be committed. This function is typically used by a
  * consumer application waiting for the producer to commit a specific epoch.
  *
- * \param coh	[IN]	Container handle
- * \param epoch	[IN]	Epoch to wait on
- * \param state	[OUT]	Optional, latest epoch state
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[in]	epoch	Epoch to wait on
+ * \param[out]	state	Optional, latest epoch state
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
 daos_epoch_wait(daos_handle_t coh, daos_epoch_t epoch,
 		daos_epoch_state_t *state, daos_event_t *ev);
 
-/**
+/*
  * Snapshot API
  */
 
 /**
  * List epochs of all the snapshots of a container.
  *
- * \param coh	[IN]	Container handle
- * \param buf	[IN]	Buffer to hold the epochs
- *		[OUT]	Array of epochs of snapshots
- * \param n	[IN]	Number of epochs the buffer can hold
- *		[OUT]	Number of all snapshots (regardless of buffer size)
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[in,out]
+ *		buf	[in]: Buffer to hold the epochs. [out]: Array of epochs
+ *			of snapshots
+ * \param[in,out]
+ *		n	[in]: Number of epochs the buffer can hold. [out]:
+ *			Number of all snapshots (regardless of buffer size)
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -607,9 +613,9 @@ daos_snap_list(daos_handle_t coh, daos_epoch_t *buf, int *n, daos_event_t *ev);
 /**
  * Take a snapshot of a container at an epoch.
  *
- * \param coh	[IN]	Container handle
- * \param epoch	[IN]	Epoch to snapshot
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[in]	epoch	Epoch to snapshot
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -619,15 +625,15 @@ daos_snap_create(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  * Destroy a snapshot. The epoch corresponding to the snapshot is not
  * discarded, but may be aggregated.
  *
- * \param coh	[IN]	Container handle
- * \param epoch	[IN]	Epoch of snapshot to destroy
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container handle
+ * \param[in]	epoch	Epoch of snapshot to destroy
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
 daos_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
 
-/**
+/*
  * Object API
  */
 
@@ -635,10 +641,10 @@ daos_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  * Register a new object class in addition to the default ones (see DAOS_OC_*).
  * An object class cannot be unregistered for the time being.
  *
- * \param coh	[IN]	Container open handle.
- * \param cid	[IN]	ID for the new object class.
- * \param cattr	[IN]	Attributes for the new object class.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container open handle.
+ * \param[in]	cid	ID for the new object class.
+ * \param[in]	cattr	Attributes for the new object class.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -657,10 +663,10 @@ daos_obj_class_register(daos_handle_t coh, daos_oclass_id_t cid,
 /**
  * Query attributes of an object class by its ID.
  *
- * \param coh	[IN]	Container open handle.
- * \param cid	[IN]	Class ID to query.
- * \param cattr	[OUT]	Returned attributes of the object class.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container open handle.
+ * \param[in]	cid	Class ID to query.
+ * \param[out]	cattr	Returned attributes of the object class.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -678,13 +684,13 @@ daos_obj_class_query(daos_handle_t coh, daos_oclass_id_t cid,
 /**
  * List existing object classes.
  *
- * \param coh	[IN]	Container open handle.
- * \param clist	[OUT]	Sink buffer for returned class list.
- * \param anchor [IN/OUT]
- *			Hash anchor for the next call. It should be set to
+ * \param[in]	coh	Container open handle.
+ * \param[out]	clist	Sink buffer for returned class list.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call. It should be set to
  *			zeroes for the first call. It should not be altered
  *			by caller between calls.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -702,13 +708,13 @@ daos_obj_class_list(daos_handle_t coh, daos_oclass_list_t *clist,
  * Generate a DAOS object ID by encoding the private DAOS bits of the object
  * address space.
  *
- * \param oid	[IN]	Object ID with low 160 bits set and unique inside the
- *			container.
- *		[OUT]	Fully populated DAOS object identifier with the the low
- *			96 bits untouched and the DAOS private	bits (the high
- *			32 bits) encoded.
- * \param ofeat	[IN]	Feature bits specific to object
- * \param cid	[IN]	Class Identifier
+ * \param[in,out]
+ *		oid	[in]: Object ID with low 160 bits set and unique inside
+ *			the container. [out]: Fully populated DAOS object
+ *			identifier with the the low 96 bits untouched and the
+ *			DAOS private bits (the high 32 bits) encoded.
+ * \param[in]	ofeat	Feature bits specific to object
+ * \param[in]	cid	Class Identifier
  */
 static inline void
 daos_obj_id_generate(daos_obj_id_t *oid, daos_ofeat_t ofeats,
@@ -760,11 +766,11 @@ daos_obj_id2version(daos_obj_id_t oid)
 /**
  * Declare a new object based on attributes \a oa.
  *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	Object ID generated by daos_objid_generate().
- * \param epoch	[IN]	Epoch to create object.
- * \param oa	[IN]	Optional, object creation parameters.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object ID generated by daos_objid_generate().
+ * \param[in]	epoch	Epoch to create object.
+ * \param[in]	oa	Optional, object creation parameters.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -789,12 +795,12 @@ daos_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 /**
  * Open an declared DAOS-SR object.
  *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	Object ID.
- * \param epoch	[IN]	Epoch to open object.
- * \param mode	[IN]	Open mode: DAOS_OO_RO/RW/EXCL/IO_RAND/IO_SEQ
- * \param oh	[OUT]	Returned object open handle.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object ID.
+ * \param[in]	epoch	Epoch to open object.
+ * \param[in]	mode	Open mode: DAOS_OO_RO/RW/EXCL/IO_RAND/IO_SEQ
+ * \param[out]	oh	Returned object open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -815,8 +821,8 @@ daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 /**
  * Close an opened object.
  *
- * \param oh	[IN]	Object open handle.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	oh	Object open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -830,9 +836,9 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
 /**
  * Punch an entire object with all keys associated with it.
  *
- * \param oh	[IN]	Object open handle.
- * \param epoch	[IN]	Epoch to punch the object in.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	oh	Object open handle.
+ * \param[in]	epoch	Epoch to punch the object in.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -849,11 +855,11 @@ daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
 /**
  * Punch dkeys (with all akeys) from an object.
  *
- * \param oh	[IN]	Object open handle.
- * \param epoch	[IN]	Epoch to punch records.
- * \param nr	[IN]	number of dkeys to punch.
- * \param dkeys	[IN]	Array of dkeys to punch.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	oh	Object open handle.
+ * \param[in]	epoch	Epoch to punch records.
+ * \param[in]	nr	number of dkeys to punch.
+ * \param[in]	dkeys	Array of dkeys to punch.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -871,12 +877,12 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_epoch_t epoch, unsigned int nr,
 /**
  * Punch akeys (with all records) from an object.
  *
- * \param oh	[IN]	Object open handle.
- * \param epoch	[IN]	Epoch to punch records.
- * \param dkey	[IN]	dkey to punch akeys from.
- * \param nr	[IN]	number of akeys to punch.
- * \param akeys	[IN]	Array of akeys to punch.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	oh	Object open handle.
+ * \param[in]	epoch	Epoch to punch records.
+ * \param[in]	dkey	dkey to punch akeys from.
+ * \param[in]	nr	number of akeys to punch.
+ * \param[in]	akeys	Array of akeys to punch.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -895,11 +901,11 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  * Query attributes of an object.
  * Caller should provide at least one of the output parameters.
  *
- * \param oh	[IN]	Object open handle.
- * \param epoch	[IN]	Epoch to query.
- * \param oa	[OUT]	Returned object attributes.
- * \param ranks	[OUT]	Ordered list of ranks where the object is stored.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	oh	Object open handle.
+ * \param[in]	epoch	Epoch to query.
+ * \param[out]	oa	Returned object attributes.
+ * \param[out]	ranks	Ordered list of ranks where the object is stored.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -913,37 +919,37 @@ int
 daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
 	       d_rank_list_t *ranks, daos_event_t *ev);
 
-/**
+/*
  * Object I/O API
  */
 
 /**
  * Fetch object records from co-located arrays.
  *
- * \param oh	[IN]	Object open handle.
+ * \param[in]	oh	Object open handle.
  *
- * \param epoch	[IN]	Epoch for the fetch. It is ignored if epoch range is
+ * \param[in]	epoch	Epoch for the fetch. It is ignored if epoch range is
  *			provided for each extent through the I/O descriptor
  *			\a iods[]::iod_eprs[]).
  *
- * \param dkey	[IN]	Distribution key associated with the fetch operation.
+ * \param[in]	dkey	Distribution key associated with the fetch operation.
  *
- * \param nr	[IN]	Number of I/O descriptor and scatter/gather lists in
+ * \param[in]	nr	Number of I/O descriptor and scatter/gather lists in
  *			respectively \a iods and \a sgls.
  *
- * \param iods	[IN]	Array of I/O descriptors. Each descriptor is associated
- *			with a given akey and describes the list of record
- *			extents to fetch from the array.
+ * \param[in,out]
+ *		iods	[in]: Array of I/O descriptors. Each descriptor is
+ *			associated with a given akey and describes the list of
+ *			record extents to fetch from the array.
  *			A different epoch can be passed for each extent via
  *			\a iods[]::iod_eprs[] and in this case, \a epoch will be
- *			ignored.
- *		[OUT]	Checksum of each extent is returned via
+ *			ignored. [out]: Checksum of each extent is returned via
  *			\a iods[]::iod_csums[]. If the record size of an
  *			extent is unknown (i.e. set to DAOS_REC_ANY as input),
  *			then the actual record size will be returned in
  *			\a iods[]::iod_size.
  *
- * \param sgls	[IN]	Scatter/gather lists (sgl) to store records. Each array
+ * \param[in]	sgls	Scatter/gather lists (sgl) to store records. Each array
  *			is associated with a separate sgl in \a sgls.
  *			I/O descs in each sgl can be arbitrary as long as their
  *			total size is sufficient to fill in all returned data.
@@ -954,7 +960,7 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  *			For an unfound record, the output length of the
  *			corresponding sgl is set to zero.
  *
- * \param map	[OUT]	Optional, this parameter is mostly for the cache and
+ * \param[out]	map	Optional, this parameter is mostly for the cache and
  *			tiering layer, other upper layers can simply pass in
  *			NULL.
  *			It is the sink buffer to store the returned actual
@@ -966,7 +972,7 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  *			allow to discriminate punched extents from punched
  *			holes.
  *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -989,18 +995,18 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 /**
  * Insert or update object records stored in co-located arrays.
  *
- * \param oh	[IN]	Object open handle.
+ * \param[in]	oh	Object open handle.
  *
- * \param epoch	[IN]	Epoch for the update. It is ignored if epoch range is
+ * \param[in]	epoch	Epoch for the update. It is ignored if epoch range is
  *			provided for each extent through the I/O descriptor
  *			\a iods[]::iod_eprs[]).
  *
- * \param dkey	[IN]	Distribution key associated with the update operation.
+ * \param[in]	dkey	Distribution key associated with the update operation.
  *
- * \param nr	[IN]	Number of descriptors and scatter/gather lists in
+ * \param[in]	nr	Number of descriptors and scatter/gather lists in
  *			respectively \a iods and \a sgls.
  *
- * \param iods	[IN]	Array of I/O descriptor. Each descriptor is associated
+ * \param[in]	iods	Array of I/O descriptor. Each descriptor is associated
  *			with an array identified by its akey and describes the
  *			list of record extent to update.
  *			A different epoch can be passed for each extent via
@@ -1011,7 +1017,7 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *			is zero, then it is effectively a punch	for the
  *			specified index range.
  *
- * \param sgls	[IN]	Scatter/gather list (sgl) to store the input data
+ * \param[in]	sgls	Scatter/gather list (sgl) to store the input data
  *			records. Each I/O descriptor owns a separate sgl in
  *			\a sgls.
  *			Different records of the same extent can either be
@@ -1019,7 +1025,7 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *			stored in arbitrary iods as long as total buffer size
  *			can match the total extent size.
  *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -1039,27 +1045,29 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 /**
  * Distribution key enumeration.
  *
- * \param oh	[IN]	Object open handle.
+ * \param[in]	oh	Object open handle.
  *
- * \param epoch	[IN]	Epoch for the enumeration.
+ * \param[in]	epoch	Epoch for the enumeration.
  *
- * \param nr	[IN]    number of key descriptors in \a kds
- *		[OUT]   number of returned key descriptors.
+ * \param[in,out]
+ *		nr	[in]: number of key descriptors in \a kds. [out]: number
+ *			of returned key descriptors.
  *
- * \param kds	[IN]	preallocated array of \nr key descriptors.
- *		[OUT]	size of each individual key along with checksum type
+ * \param[in,out]
+ *		kds	[in]: preallocated array of \nr key descriptors. [out]:
+ *			size of each individual key along with checksum type
  *			and size stored just after the key in \a sgl.
  *
- * \param sgl	[IN]	Scatter/gather list to store the dkey list.
+ * \param[in]	sgl	Scatter/gather list to store the dkey list.
  *			All dkeys are written contiguously with their checksum,
  *			actual boundaries can be calculated thanks to \a kds.
  *
- * \param anchor [IN/OUT]
- *			Hash anchor for the next call, it should be set to
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
  *			zeroes for the first call, it should not be changed
  *			by caller between calls.
  *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -1079,29 +1087,31 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 /**
  * Attribute key enumeration.
  *
- * \param oh	[IN]	Object open handle.
+ * \param[in]	oh	Object open handle.
  *
- * \param epoch	[IN]	Epoch for the enumeration.
+ * \param[in]	epoch	Epoch for the enumeration.
  *
- * \param dkey	[IN]	distribution key for the akey enumeration
+ * \param[in]	dkey	distribution key for the akey enumeration
  *
- * \param nr	[IN]	number of key descriptors in \a kds
- *		[OUT]	number of returned key descriptors.
+ * \param[in,out]
+ *		nr	[in]: number of key descriptors in \a kds. [out]: number
+ *			of returned key descriptors.
  *
- * \param kds	[IN]	preallocated array of \nr key descriptors.
- *		[OUT]	size of each individual key along with checksum type,
+ * \param[in,out]
+ *		kds	[in]: preallocated array of \nr key descriptors. [out]:
+ *			size of each individual key along with checksum type,
  *			size, and type stored just after the key in \a sgl.
  *
- * \param sgl	[IN]	Scatter/gather list to store the akey list.
+ * \param[in]	sgl	Scatter/gather list to store the akey list.
  *			All akeys are written contiguously with their checksum,
  *			actual boundaries can be calculated thanks to \a kds.
  *
- * \param anchor [IN/OUT]
- *			Hash anchor for the next call, it should be set to
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
  *			zeroes for the first call, it should not be changed
  *			by caller between calls.
  *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -1121,38 +1131,41 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 /**
  * Extent enumeration of valid records in the array.
  *
- * \param oh	[IN]	Object open handle.
+ * \param[in]	oh	Object open handle.
  *
- * \param epoch	[IN]	Epoch for the enumeration.
+ * \param[in]	epoch	Epoch for the enumeration.
  *
- * \param dkey	[IN]	distribution key for the enumeration
+ * \param[in]	dkey	distribution key for the enumeration
  *
- * \param akey	[IN]	attribute key for the enumeration
+ * \param[in]	akey	attribute key for the enumeration
  *
- * \param size	[OUT]	record size
+ * \param[out]	size	record size
  *
- * \param nr	[IN]	number of records in \a recxs
- *		[OUT]	number of returned recxs.
+ * \param[in,out]
+ *		nr	[in]: number of records in \a recxs. [out]: number of
+ *			returned recxs.
  *
- * \param recxs	[IN]	preallocated array of \nr records.
- *		[OUT]	returned records.
+ * \param[in,out]
+ *		recxs	[in]: preallocated array of \nr records. [out]: returned
+ *			records.
  *
- * \param eprs	[IN]	preallocated array of \nr epoch ranges.
- *		[OUT]	returned epoch ranges.
+ * \param[in,out]
+ *		eprs	[in]: preallocated array of \nr epoch ranges. [out]:
+ *			returned epoch ranges.
  *
- * \param anchor [IN/OUT]
- *			Hash anchor for the next call, it should be set to
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
  *			zeroes for the first call, it should not be changed
  *			by caller between calls.
  *
- * \param incr_order [IN]
+ * \param[in]	incr_order
  *			If this is set to true, extents will be listed in
  *			increasing index order, otherwise if false, they are
  *			listed in decreasing order. Once an anchor is associated
  *			with an order, further calls with that anchor should use
  *			the same order setting.
  *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
