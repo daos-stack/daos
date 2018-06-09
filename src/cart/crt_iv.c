@@ -412,7 +412,7 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 						rpc,
 						iv_info->ifc_user_priv);
 
-			if (!rc) {
+			if (rc != 0) {
 				D_ERROR("Bulk transfer failed for key=%p\n",
 					iv_key);
 				IVNS_DECREF(iv_info->ifc_ivns_internal);
