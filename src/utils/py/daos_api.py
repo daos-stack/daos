@@ -153,6 +153,21 @@ def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
     qfunc = context.get_function('destroy-eq')
     qfunc(ctypes.byref(qhandle))
 
+def c_uuid_to_str(uuid):
+    """ utility function to convert a C uuid into a standard string format """
+    uuid_str = '{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}'\
+               '{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}'.format(
+                   uuid[0], uuid[1], uuid[2], uuid[3], uuid[4], uuid[5],
+                   uuid[6], uuid[7], uuid[8], uuid[9], uuid[10], uuid[11],
+                   uuid[12], uuid[13], uuid[14], uuid[15])
+    return uuid_str
+
+def c_uuid(p_uuid, c_uuid):
+    """ utility function to create a UUID in C format from a python UUID """
+    hexstr = p_uuid.hex
+    for i in range (0,31,2):
+        c_uuid[i/2] = int(hexstr[i:i+2], 16)
+
 # python API starts here
 class CallbackEvent(object):
     def __init__(self, obj, event):
@@ -175,13 +190,7 @@ class DaosPool(object):
         self.target_info = None
 
     def get_uuid_str(self):
-        mystr = '{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}'\
-                '{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}'.format(
-                    self.uuid[0],self.uuid[1],self.uuid[2],self.uuid[3],
-                    self.uuid[4],self.uuid[5],self.uuid[6],self.uuid[7],
-                    self.uuid[8],self.uuid[9],self.uuid[10],self.uuid[11],
-                    self.uuid[12],self.uuid[13],self.uuid[14],self.uuid[15])
-        return mystr
+        return c_uuid_to_str(self.uuid)
 
     def create(self, mode, uid, gid, size, group, target_list=None,
                cb_func=None):
@@ -271,7 +280,6 @@ class DaosPool(object):
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,params,self.context,cb_func,self))
             t.start()
-
 
     def local2global(self, poh):
         """ Create a local pool connection for global representation data. """
@@ -448,6 +456,76 @@ class DaosPool(object):
 
         return (ctypes.c_uint32 * len(pylist))(*pylist)
 
+
+class DaosContainer(object):
+    """ A python object representing a DAOS container."""
+
+    def __init__(self, context):
+        """ setup the python container object, not the real container. """
+        self.context = context
+        self.uuid = (ctypes.c_ubyte * 1)()
+        self.coh = ctypes.c_uint64(0)
+        self.poh = ctypes.c_uint64(0)
+
+    def get_uuid_str(self):
+        return c_uuid_to_str(self.uuid)
+
+    def create(self, poh, con_uuid=None, cb_func=None):
+        """ send a container creation request to the daos server group """
+
+        # create a random uuid if none is provided
+        self.uuid = (ctypes.c_ubyte * 16)()
+        if con_uuid is None:
+            c_uuid(uuid.uuid4(), self.uuid)
+        else:
+            c_uuid(con_uuid, self.uuid)
+
+        self.poh = poh
+
+        func = self.context.get_function('create-cont')
+
+        # the callback function is optional, if not supplied then run the
+        # create synchronously, if its there then run it in a thread
+        if cb_func == None:
+            rc = func(self.poh, self.uuid, None)
+            if rc != 0:
+                raise ValueError("Container create returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.poh, self.uuid, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,params,self.context,cb_func,self))
+            t.start()
+
+    def destroy(self, force=1, poh=None, con_uuid=None, cb_func=None):
+        """ send a container destroy request to the daos server group """
+
+        # caller can override pool handle and uuid
+        if poh is not None:
+            self.poh = poh
+        if con_uuid is not None:
+            c_uuid(con_uuid, self.uuid)
+
+        c_force = ctypes.c_uint(force)
+
+        func = self.context.get_function('destroy-cont')
+
+        # the callback function is optional, if not supplied then run the
+        # create synchronously, if its there then run it in a thread
+        if cb_func == None:
+            rc = func(self.poh, self.uuid, c_force, None)
+            if rc != 0:
+                raise ValueError("Pool create returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.poh, self.uuid, c_force, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,params,self.context,cb_func,self))
+            t.start()
+
+
 class DaosServer(object):
     """Represents a DAOS Server"""
 
@@ -484,8 +562,10 @@ class DaosContext(object):
              'connect-pool'   : self.libdaos.daos_pool_connect,
              'convert-global' : self.libdaos.daos_pool_global2local,
              'covert-local'   : self.libdaos.daos_pool_local2global,
+             'create-cont'    : self.libdaos.daos_cont_create,
              'create-pool'    : self.libdaos.daos_pool_create,
              'create-eq'      : self.libdaos.daos_eq_create,
+             'destroy-cont'   : self.libdaos.daos_cont_destroy,
              'destroy-pool'   : self.libdaos.daos_pool_destroy,
              'destroy-eq'     : self.libdaos.daos_eq_destroy,
              'disconnect-pool': self.libdaos.daos_pool_disconnect,
@@ -524,29 +604,37 @@ if __name__ == '__main__':
         CONTEXT = DaosContext(data['PREFIX'] + '/lib/')
         print("initialized!!!\n")
 
-        #POOL = DaosPool(CONTEXT)
-        #tgt_list=[1]
-        #POOL.create(448, 11374638, 11374638, 1024 * 1024 * 1024,
-        #            b'daos_server')
-        #time.sleep(15)
-        #print ("Pool create called\n")
-        #print ("uuid is " + POOL.get_uuid_str())
-        #print ("In main pool uuid 1st digit {:02X}".format(POOL.uuid[0]))
+        POOL = DaosPool(CONTEXT)
+        tgt_list=[1]
+        POOL.create(448, 11374638, 11374638, 1024 * 1024 * 1024,
+                    b'daos_server')
+        time.sleep(2)
+        print ("Pool create called\n")
+        print ("uuid is " + POOL.get_uuid_str())
 
         #time.sleep(5)
-        #print ("handle before connect {0}\n".format(POOL.handle))
+        print ("handle before connect {0}\n".format(POOL.handle))
 
-        #POOL.connect(1 << 1)
+        POOL.connect(1 << 1)
         #POOL.connect(1 << 1, rubbish)
-        #print ("Main past connect\n");
+        print ("Main past connect\n");
 
-        #print ("Main: handle after connect {0}\n".format(POOL.handle))
+        print ("Main: handle after connect {0}\n".format(POOL.handle))
         #time.sleep(5)
+
+        CONTAINER = DaosContainer(CONTEXT)
+        CONTAINER.create(POOL.handle)
+
+        print("container created {}".format(CONTAINER.get_uuid_str()))
 
         #POOL.pool_svc_stop();
         #POOL.pool_query()
 
-        #time.sleep(5)
+        time.sleep(5)
+
+        CONTAINER.destroy()
+
+        print("container destroyed ")
 
         #POOL.disconnect(rubbish)
         #POOL.disconnect()
@@ -571,9 +659,9 @@ if __name__ == '__main__':
         #POOL.destroy(1)
         #print("Pool destroyed")
 
-        SERVICE = DaosServer(CONTEXT, b'daos_server', 5)
-        SERVICE.kill(1)
-        print ("server killed!\n")
+        #SERVICE = DaosServer(CONTEXT, b'daos_server', 5)
+        #SERVICE.kill(1)
+        #print ("server killed!\n")
 
     except Exception as EXCEP:
         print ("Something horrible happened\n")
