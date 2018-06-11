@@ -24,6 +24,7 @@
 from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
 import os
+import platform
 
 if "prereqs" not in globals():
     from prereq_tools import PreReqComponent
@@ -198,6 +199,29 @@ REQS.define('ompi_pmix',
             libs_cc='$OMPI_PMIX_PREFIX/bin/mpicc',
             headers=['pmix.h'],
             required_progs=['g++', 'flex', 'autoreconf', 'aclocal', 'libtool'])
+
+# Check if this is an ARM platform
+PROCESSOR = platform.machine()
+ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
+ARM_PLATFORM = False
+if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
+    ARM_PLATFORM = True
+
+if ARM_PLATFORM:
+    RETRIEVER = GitRepoRetriever("https://github.com/mercury-hpc/mchecksum.git")
+    REQS.define('mchecksum',
+                retriever=RETRIEVER,
+                commands=['cmake -DBUILD_SHARED_LIBS=ON $MCHECKSUM_SRC'
+                          '-DBUILD_TESTING=ON '
+                          '-DCMAKE_INSTALL_PREFIX=$MCHECKSUM_PREFIX '
+                          '-DMCHECKSUM_ENABLE_COVERAGE=OFF '
+                          '-DMCHECKSUM_ENABLE_VERBOSE_ERROR=ON '
+                          '-DMCHECKSUM_USE_ZLIB=OFF '
+                          '-DCMAKE_INSTALL_RPATH=$MCHECKSUM_PREFIX/lib '
+                          '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ',
+                          'make', 'make install'],
+                libs=['mchecksum'],
+                out_of_src_build=True)
 
 RETRIEVER = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 
