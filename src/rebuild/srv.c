@@ -253,6 +253,64 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 	return 0;
 }
 
+static struct daos_rebuild_status *
+rebuild_status_completed_lookup(const uuid_t pool_uuid)
+{
+	struct rebuild_status_completed	*rsc;
+	struct daos_rebuild_status	*rs = NULL;
+
+	d_list_for_each_entry(rsc, &rebuild_gst.rg_completed_list, rsc_list) {
+		if (uuid_compare(rsc->rsc_pool_uuid, pool_uuid) == 0) {
+			rs = &rsc->rsc_status;
+			break;
+		}
+	}
+
+	return rs;
+}
+
+int
+rebuild_status_completed_update(const uuid_t pool_uuid,
+				struct daos_rebuild_status *rs)
+{
+	struct rebuild_status_completed	*rsc;
+	struct daos_rebuild_status	*rs_inlist;
+
+	rs_inlist = rebuild_status_completed_lookup(pool_uuid);
+	if (rs_inlist != NULL) {
+		/* ignore the older version as IV update/refresh in async */
+		if (rs->rs_version >= rs_inlist->rs_version)
+			memcpy(rs_inlist, rs, sizeof(*rs));
+		return 0;
+	}
+
+	D_ALLOC_PTR(rsc);
+	if (rsc == NULL)
+		return -DER_NOMEM;
+
+	uuid_copy(rsc->rsc_pool_uuid, pool_uuid);
+	D_INIT_LIST_HEAD(&rsc->rsc_list);
+	memcpy(&rsc->rsc_status, rs, sizeof(*rs));
+	d_list_add(&rsc->rsc_list, &rebuild_gst.rg_completed_list);
+	return 0;
+}
+
+static void
+rebuild_status_completed_remove(const uuid_t pool_uuid)
+{
+	struct rebuild_status_completed	*rsc;
+	struct rebuild_status_completed	*next;
+
+	d_list_for_each_entry_safe(rsc, next, &rebuild_gst.rg_completed_list,
+				   rsc_list) {
+		if (uuid_is_null(pool_uuid) ||
+		    uuid_compare(rsc->rsc_pool_uuid, pool_uuid) == 0) {
+			d_list_del(&rsc->rsc_list);
+			D_FREE_PTR(rsc);
+		}
+	}
+}
+
 bool
 is_rebuild_container(uuid_t pool_uuid, uuid_t coh_uuid)
 {
@@ -406,20 +464,26 @@ int
 ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 {
 	struct rebuild_global_pool_tracker	*rgt;
+	struct daos_rebuild_status		*rs_inlist;
 	int					rc = 0;
 
 	memset(status, 0, sizeof(*status));
 
 	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, -1);
 	if (rgt == NULL) {
-		if (d_list_empty(&rebuild_gst.rg_queue_list) &&
-		    rebuild_gst.rg_inflight == 0)
-			status->rs_done = 1;
-		D_GOTO(out, rc = 0);
+		rs_inlist = rebuild_status_completed_lookup(pool_uuid);
+		if (rs_inlist != NULL) {
+			memcpy(status, rs_inlist, sizeof(*status));
+		} else {
+			if (d_list_empty(&rebuild_gst.rg_queue_list) &&
+			    rebuild_gst.rg_inflight == 0)
+				status->rs_done = 1;
+			D_GOTO(out, rc = 0);
+		}
+	} else {
+		memcpy(status, &rgt->rgt_status, sizeof(*status));
+		status->rs_version = rgt->rgt_rebuild_ver;
 	}
-
-	memcpy(status, &rgt->rgt_status, sizeof(*status));
-	status->rs_version = rgt->rgt_rebuild_ver;
 
 	/* If there are still rebuild task queued for the pool, let's reset
 	 * the done status.
@@ -955,12 +1019,12 @@ out:
 static void
 rebuild_one_ult(void *arg)
 {
-	struct rebuild_task	  *task = arg;
-	struct ds_pool_create_arg pc_arg;
-	struct ds_pool		  *pool;
-	struct rebuild_global_pool_tracker *rgt = NULL;
-	struct rebuild_iv	  iv;
-	int			  rc;
+	struct rebuild_task			*task = arg;
+	struct ds_pool_create_arg		 pc_arg;
+	struct ds_pool				*pool;
+	struct rebuild_global_pool_tracker	*rgt = NULL;
+	struct rebuild_iv			 iv;
+	int					 rc;
 
 	memset(&pc_arg, 0, sizeof(pc_arg));
 	pc_arg.pca_map_version = task->dst_map_ver;
@@ -997,18 +1061,29 @@ rebuild_one_ult(void *arg)
 
 	memset(&iv, 0, sizeof(iv));
 	uuid_copy(iv.riv_pool_uuid, task->dst_pool_uuid);
-	iv.riv_master_rank = pool->sp_iv_ns->iv_master_rank;
-	iv.riv_ver = rgt->rgt_rebuild_ver;
-	iv.riv_global_done = 1;
-	iv.riv_leader_term = rgt->rgt_leader_term;
+	iv.riv_master_rank	= pool->sp_iv_ns->iv_master_rank;
+	iv.riv_ver		= rgt->rgt_rebuild_ver;
+	iv.riv_global_done	= 1;
+	iv.riv_leader_term	= rgt->rgt_leader_term;
+	iv.riv_obj_count	= rgt->rgt_status.rs_obj_nr;
+	iv.riv_rec_count	= rgt->rgt_status.rs_rec_nr;
 
 	rc = rebuild_iv_update(pool->sp_iv_ns,
 			       &iv, CRT_IV_SHORTCUT_NONE,
 			       CRT_IV_SYNC_LAZY);
 out:
 	ds_pool_put(pool);
-	if (rgt)
+	if (rgt) {
+		rgt->rgt_status.rs_version = rgt->rgt_rebuild_ver;
+		rc = rebuild_status_completed_update(task->dst_pool_uuid,
+						     &rgt->rgt_status);
+		if (rc != 0) {
+			D_ERROR("rebuild_status_completed_update, "DF_UUID" "
+				"failed, rc %d.\n",
+				DP_UUID(task->dst_pool_uuid), rc);
+		}
 		rebuild_global_pool_tracker_destroy(rgt);
+	}
 
 	d_list_del(&task->dst_list);
 	daos_rank_list_free(task->dst_tgts_failed);
@@ -1350,7 +1425,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	return rc;
 }
 
-#define RBLD_CHECK_INTV		2	/* seocnds interval to check puller */
+#define RBLD_CHECK_INTV		2	/* seconds interval to check puller */
 void
 rebuild_tgt_status_check(void *arg)
 {
@@ -1702,6 +1777,7 @@ init(void)
 
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_tgt_tracker_list);
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_global_tracker_list);
+	D_INIT_LIST_HEAD(&rebuild_gst.rg_completed_list);
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_queue_list);
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_running_list);
 
@@ -1716,6 +1792,8 @@ init(void)
 static int
 fini(void)
 {
+	rebuild_status_completed_remove(NULL);
+
 	if (rebuild_gst.rg_stop_cond)
 		ABT_cond_free(&rebuild_gst.rg_stop_cond);
 

@@ -495,9 +495,11 @@ rebuild_pool_wait(test_arg_t *arg)
 	rc = test_pool_get_info(arg, &pinfo);
 	rst = &pinfo.pi_rebuild_st;
 	if (rst->rs_done || rc != 0) {
-		print_message("Rebuild "DF_UUIDF" (ver=%d) is done %d/%d\n",
-			       DP_UUID(arg->pool.pool_uuid), rst->rs_version, rc,
-			       rst->rs_errno);
+		print_message("Rebuild "DF_UUIDF" (ver=%d) is done %d/%d, "
+			      "obj="DF_U64", rec="DF_U64".\n",
+			       DP_UUID(arg->pool.pool_uuid), rst->rs_version,
+			       rc, rst->rs_errno, rst->rs_obj_nr,
+			       rst->rs_rec_nr);
 		done = true;
 	} else {
 		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u), "

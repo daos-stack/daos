@@ -1124,7 +1124,7 @@ rebuild_change_leader_cb(void *arg)
 		daos_mgmt_params_set(test_arg->group, leader, DSS_KEY_FAIL_LOC,
 				     DAOS_RDB_SKIP_APPENDENTRIES_FAIL |
 				     DAOS_FAIL_VALUE, NULL);
-		print_message("sleep 15 seconds for re-election leader");
+		print_message("sleep 15 seconds for re-election leader\n");
 		/* Sleep 15 seconds to make sure the leader is changed */
 		sleep(15);
 		/* Continue the rebuild */
@@ -1227,13 +1227,19 @@ rebuild_io_post_cb(void *arg)
 static void
 rebuild_master_failure(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oids[OBJ_NR];
-	daos_obj_id_t	cb_arg_oids[OBJ_NR];
-	int		i;
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		oids[OBJ_NR];
+	daos_obj_id_t		cb_arg_oids[OBJ_NR];
+	daos_pool_info_t	pinfo = { 0 };
+	daos_pool_info_t	pinfo_new = { 0 };
+	int			i;
+	int			rc;
 
-	if (!test_runable(arg, 6) || arg->pool.svc.rl_nr == 1)
+	/* need 5 svc replicas, as will kill the leader 2 times */
+	if (!test_runable(arg, 6) || arg->pool.svc.rl_nr < 5) {
+		print_message("testing skipped ...\n");
 		skip();
+	}
 
 	test_get_leader(arg, &ranks_to_kill[0]);
 	for (i = 0; i < OBJ_NR; i++) {
@@ -1254,6 +1260,23 @@ rebuild_master_failure(void **state)
 
 	arg->rebuild_cb = NULL;
 	arg->rebuild_post_cb = NULL;
+
+	/* Verify the POOL_QUERY get same rebuild status after leader change */
+	rc = test_pool_get_info(arg, &pinfo);
+	assert_int_equal(rc, 0);
+	assert_int_equal(pinfo.pi_rebuild_st.rs_done, 1);
+	rc = rebuild_change_leader_cb(arg);
+	assert_int_equal(rc, 0);
+	rc = test_pool_get_info(arg, &pinfo_new);
+	assert_int_equal(rc, 0);
+	assert_int_equal(pinfo_new.pi_rebuild_st.rs_done, 1);
+	assert_int_not_equal(pinfo.pi_leader, pinfo_new.pi_leader);
+	rc = memcmp(&pinfo.pi_rebuild_st, &pinfo_new.pi_rebuild_st,
+		    sizeof(pinfo.pi_rebuild_st));
+	print_message("svc leader changed from %d to %d, should get same "
+		      "rebuild status (memcmp result %d).\n", pinfo.pi_leader,
+		      pinfo_new.pi_leader, rc);
+	assert_int_equal(rc, 0);
 
 	/* Verify the data */
 	rebuild_io_validate(arg, oids, OBJ_NR);
@@ -1497,7 +1520,7 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_fail_all_replicas_before_rebuild, NULL, test_case_teardown},
 	{"REBUILD29: rebuild fail all replicas",
 	 rebuild_fail_all_replicas, NULL, test_case_teardown},
-	{"REBUILD28: multi-pools rebuild concurrently",
+	{"REBUILD30: multi-pools rebuild concurrently",
 	 multi_pools_rebuild_concurrently, NULL, test_case_teardown},
 };
 

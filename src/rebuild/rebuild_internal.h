@@ -138,18 +138,37 @@ struct rebuild_global_pool_tracker {
 			rgt_abort:1;
 };
 
+/* Structure on raft replica nodes to serve completed rebuild status querying */
+struct rebuild_status_completed {
+	/* rebuild status */
+	struct daos_rebuild_status	rsc_status;
+
+	/* link to rebuild_global.rg_completed_list */
+	d_list_t			rsc_list;
+
+	/* the pool uuid */
+	uuid_t				rsc_pool_uuid;
+};
+
 /* Structure on all targets to track all pool rebuilding */
 struct rebuild_global {
 	/* Link rebuild_tgt_pool_tracker on all targets.
-	 * Only operated by stream 0, no need lock
+	 * Only operated by stream 0, no need lock.
 	 */
 	d_list_t	rg_tgt_tracker_list;
 
 	/* Linked rebuild_global_pool_tracker on the master node,
 	 * empty on other nodes.
-	 * Only operated by stream 0, no need lock
+	 * Only operated by stream 0, no need lock.
 	 */
 	d_list_t	rg_global_tracker_list;
+
+	/**
+	 * Completed rebuild status list on raft replica nodes,
+	 * empty on other nodes.
+	 * Only operated by stream 0, no need lock.
+	 */
+	d_list_t	rg_completed_list;
 
 	/* Rebuild task running list */
 	d_list_t	rg_running_list;
@@ -279,6 +298,9 @@ rpt_lookup(uuid_t pool_uuid, unsigned int ver);
 struct rebuild_global_pool_tracker *
 rebuild_global_pool_tracker_lookup(uuid_t pool_uuid, unsigned int ver);
 
+int
+rebuild_status_completed_update(const uuid_t pool_uuid,
+				struct daos_rebuild_status *rs);
 int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *master_rpt,
 			     struct rebuild_iv *iv);

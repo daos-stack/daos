@@ -185,7 +185,7 @@ typedef struct {
 } daos_target_info_t;
 
 struct daos_rebuild_status {
-	/** pool map version in rebuild */
+	/** pool map version in rebuilding or last completed rebuild */
 	uint32_t		rs_version;
 	/** padding bytes */
 	uint32_t		rs_pad_32;
@@ -195,9 +195,9 @@ struct daos_rebuild_status {
 	 * rebuild is done or not, it is valid only if @rs_version is non-zero
 	 */
 	int32_t			rs_done;
-	/** # rebuilt objects, it's non-zero only if rs_status is 1 */
+	/** # rebuilt objects, it's non-zero only if rs_done is 1 */
 	uint64_t		rs_obj_nr;
-	/** # rebuilt records, it's non-zero only if rs_status is 1 */
+	/** # rebuilt records, it's non-zero only if rs_done is 1 */
 	uint64_t		rs_rec_nr;
 };
 
