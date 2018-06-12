@@ -1372,7 +1372,8 @@ dc_pool_evict(tse_task_t *task)
 	state = dc_task_get_priv(task);
 
 	if (state == NULL) {
-		if (uuid_is_null(args->uuid) || args->svc->rl_nr == 0)
+		if (uuid_is_null(args->uuid) || args->svc == NULL ||
+		    args->svc->rl_ranks == NULL || args->svc->rl_nr == 0)
 			D_GOTO(out_task, rc = -DER_INVAL);
 
 		D_DEBUG(DF_DSMC, DF_UUID": evicting\n", DP_UUID(args->uuid));
