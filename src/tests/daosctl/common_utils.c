@@ -55,6 +55,18 @@ parse_rank_list(char *str_rank_list, d_rank_list_t *num_rank_list)
 }
 
 int
+parse_oid(char *oid_str, daos_obj_id_t *oid)
+{
+	char *token;
+
+	token = strtok(oid_str, "-");
+	oid->hi = strtoul(token, NULL, 0);
+	token = strtok(NULL, "-");
+	oid->lo = strtoul(token, NULL, 0);
+	return 0;
+}
+
+int
 parse_size(uint64_t *size, char *arg)
 {
 	char *unit;

@@ -52,5 +52,6 @@ int cmd_test_evict_pool(int argc, const char **argv, void *ctx);
 int cmd_test_query_pool(int argc, const char **argv, void *ctx);
 int cmd_kill_server(int argc, const char **argv, void *ctx);
 int cmd_write_pattern(int argc, const char **argv, void *ctx);
+int cmd_verify_pattern(int argc, const char **argv, void *ctx);
 
 #endif /* _DAOSCTL_BUILTIN_H_ */

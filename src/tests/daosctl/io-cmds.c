@@ -23,6 +23,7 @@
 
 /* generic */
 #include <stdio.h>
+#include <string.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -57,7 +58,7 @@
  * at present.
  */
 
-static int dts_obj_class	= DAOS_OC_TINY_RW;
+static int dts_obj_class = DAOS_OC_TINY_RW;
 
 struct io_cmd_options {
 	char          *server_group;
@@ -65,6 +66,7 @@ struct io_cmd_options {
 	char          *cont_uuid;
 	char          *server_list;
 	uint64_t      size;
+	daos_obj_id_t *oid;
 	char          *pattern;
 };
 
@@ -139,6 +141,9 @@ parse_cont_args_cb(int key, char *arg,
 		break;
 	case 'l':
 		options->server_list = arg;
+		break;
+	case 'o':
+		parse_oid(arg, options->oid);
 		break;
 	case 'p':
 		options->pattern = arg;
@@ -236,7 +241,7 @@ open_container(struct container_info *oc_info)
 	daos_cont_info_t cinfo;
 
 	rc = daos_pool_connect(oc_info->pool_uuid, oc_info->server_group,
-			       &oc_info->pool_service_list, flag, 
+			       &oc_info->pool_service_list, flag,
 			       &oc_info->poh, &pinfo, NULL);
 	if (rc) {
 		printf("Pool connect fail, result: %d\n", rc);
@@ -252,6 +257,18 @@ open_container(struct container_info *oc_info)
 	return 0;
 }
 
+void
+ioreq_fini(struct ioreq *req)
+{
+	int rc;
+
+	rc = daos_obj_close(req->oh, NULL);
+	if (rc != 0)
+		printf("problem closing object %i\n", rc);
+	daos_fail_loc_set(0);
+
+}
+
 /* no wait for async insert, for sync insert it still will block */
 static int
 insert_internal_nowait(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
@@ -262,7 +279,32 @@ insert_internal_nowait(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 	/** execute update operation */
 	rc = daos_obj_update(req->oh, epoch, dkey, nr, iods, sgls,
 			     NULL);
+
 	return rc;
+}
+
+static void
+lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
+		daos_iod_t *iods, daos_epoch_t epoch, struct ioreq *req,
+		bool empty)
+{
+	int rc;
+
+
+	/** execute fetch operation */
+	rc = daos_obj_fetch(req->oh, epoch, dkey, nr, iods, sgls,
+			    NULL, NULL);
+	if (rc != 0) {
+		printf("object fetch failed with %i\n", rc);
+		exit(1);
+	}
+
+	/* Only single iov for each sgls during the test */
+	if (!empty && req->ev.ev_error == 0)
+		if (sgls->sg_nr_out != 1) {
+			printf("something went wrong, I don't know what\n");
+			exit(1);
+		}
 }
 
 static void
@@ -282,6 +324,7 @@ ioreq_sgl_simple_set(struct ioreq *req, void **value,
 		daos_iov_set(&sgl[i].sg_iovs[0], value[i], size[i]);
 	}
 }
+
 static void
 ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size, bool lookup,
 		     uint64_t *idx, daos_epoch_t *epoch, int nr)
@@ -302,10 +345,8 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size, bool lookup,
 			iod[i].iod_recxs[0].rx_idx = idx[i] + i * 10485760;
 			iod[i].iod_recxs[0].rx_nr = 1;
 		}
-
 		iod[i].iod_eprs[0].epr_lo = *epoch;
 		iod[i].iod_eprs[0].epr_hi = DAOS_EPOCH_MAX;
-
 		iod[i].iod_nr = 1;
 	}
 }
@@ -330,12 +371,34 @@ insert_single(const char *dkey, const char *akey, uint64_t idx,
 	/* set iod */
 	ioreq_iod_simple_set(req, &size, false, &idx, &epoch, nr);
 
-	int rc = insert_internal_nowait(&req->dkey, nr, value == NULL ? NULL : req->sgl,
-		       req->iod, epoch, req);
+	int rc = insert_internal_nowait(&req->dkey, nr,
+					value == NULL ? NULL : req->sgl,
+					req->iod, epoch, req);
 
 	if (rc != 0)
 		printf("object update failed \n");
+}
 
+void
+lookup_single(const char *dkey, const char *akey, uint64_t idx,
+	      void *val, daos_size_t size, daos_epoch_t epoch,
+	      struct ioreq *req)
+{
+	/*daos_size_t read_size = DAOS_REC_ANY;*/
+	daos_size_t read_size = 128;
+
+	fflush(stdout);
+	/* dkey */
+	ioreq_dkey_set(req, dkey);
+	/* akey */
+	ioreq_io_akey_set(req, &akey, 1);
+	/* set sgl */
+	ioreq_sgl_simple_set(req, &val, &size, 1);
+
+	/* set iod */
+	ioreq_iod_simple_set(req, &read_size, true, &idx, &epoch, 1);
+	lookup_internal(&req->dkey, 1, req->sgl, req->iod, epoch, req,
+			false);
 }
 
 /**
@@ -373,7 +436,10 @@ cmd_write_pattern(int argc, const char **argv, void *ctx)
 
 	struct io_cmd_options io_options = {"daos_server",
 					    NULL, NULL, NULL,
-					    0, "all_zeros"};
+					    0, NULL, "all_zeros"};
+
+	cinfo.server_group = io_options.server_group;
+	cinfo.pool_service_list = (d_rank_list_t){NULL, 0};
 
 	cinfo.server_group = io_options.server_group;
 	cinfo.pool_service_list = (d_rank_list_t){NULL, 0};
@@ -411,12 +477,11 @@ cmd_write_pattern(int argc, const char **argv, void *ctx)
 		rec = PATTERN_0;
 	else if (!strncmp("sequential", io_options.pattern, 3))
 		rec = PATTERN_1;
-	
+
 	ioreq_init(&req, cinfo.coh, oid, DAOS_IOD_SINGLE);
 
 	/** Insert */
 	insert_single(dkey, akey, 0, (void *)rec, 64, 0, &req);
-
 
 	/** done with the container */
 	daos_cont_close(cinfo.coh, NULL);
@@ -424,5 +489,99 @@ cmd_write_pattern(int argc, const char **argv, void *ctx)
 
 	if (cinfo.poh.cookie != 0)
 		daos_pool_disconnect(cinfo.poh, NULL);
-return rc;
+	return rc;
+}
+
+/**
+ * Read data written with the write-pattern command and verify
+ * that its correct.
+ */
+int
+cmd_verify_pattern(int argc, const char **argv, void *ctx)
+{
+	char buf[128];
+	int rc = 0;
+	struct container_info cinfo;
+	struct ioreq	 req;
+	const char	 dkey[] = "test_update dkey";
+	const char	 akey[] = "test_update akey";
+
+	struct argp_option options[] = {
+		{"server-group", 's', "SERVER-GROUP", 0,
+		 "ID of the server group that owns the pool"},
+		{"servers",       'l',   "server rank-list", 0,
+		 "pool service ranks, comma separated, no spaces e.g. -l 1,2"},
+		{"p-uuid", 'i', "UUID", 0,
+		 "ID of the pool that hosts the container to be read from."},
+		{"c-uuid", 'c', "UUID", 0,
+		 "ID of the container."},
+		{"oid", 'o', "OID", 0, "ID of the object."},
+		{"size",           'z',    "size",             0,
+		 "how much to read in bytes or with k/m/g (e.g. 10g)"},
+		{"pattern",       'p',   "pattern",           0,
+		 "which of the available data patterns to verify"},
+		{0}
+	};
+	daos_obj_id_t	 oid;
+	struct argp argp = {options, parse_cont_args_cb};
+	struct io_cmd_options io_options = {"daos_server",
+					    NULL, NULL, NULL,
+					    0, &oid, "all_zeros"};
+
+	cinfo.server_group = io_options.server_group;
+	cinfo.pool_service_list = (d_rank_list_t){NULL, 0};
+
+	/* adjust the arguments to skip over the command */
+	argv++;
+	argc--;
+
+	/* once the command is removed the remaining arguments conform
+	 * to GNU standards and can be parsed with argp
+	 */
+	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &io_options);
+
+	/* uuid needs extra parsing */
+	if (io_options.pool_uuid == NULL)
+		return -EINVAL;
+	rc = uuid_parse(io_options.pool_uuid, cinfo.pool_uuid);
+	if (io_options.cont_uuid == NULL)
+		return -EINVAL;
+	rc = uuid_parse(io_options.cont_uuid, cinfo.cont_uuid);
+
+	/* turn the list of pool service nodes into a rank list */
+	rc = parse_rank_list(io_options.server_list,
+			     &cinfo.pool_service_list);
+	if (rc < 0) {
+		D_PRINT("Rank list parameter parsing failed with %i\n", rc);
+		return rc;
+	}
+
+	rc = open_container(&cinfo);
+
+	printf("%" PRIu64 "-%" PRIu64 "\n", oid.hi, oid.lo);
+	ioreq_init(&req, cinfo.coh, oid, DAOS_IOD_SINGLE);
+
+	memset(buf, 0, sizeof(buf));
+	lookup_single(dkey, akey, 0, buf, sizeof(buf), 0, &req);
+
+	/** Verify data consistency */
+	printf("size = %lu\n", req.iod[0].iod_size);
+	if (req.iod[0].iod_size != TEST_PATTERN_SIZE) {
+		printf("sizes don't match\n");
+		exit(1);
+	}
+
+	for (int i = 0; i < TEST_PATTERN_SIZE; i++) {
+		if (buf[i] != PATTERN_1[i]) {
+			printf("Data mismatch at position %i value %i",
+			       i, buf[i]);
+			break;
+		}
+	}
+
+	ioreq_fini(&req);
+	if (cinfo.poh.cookie != 0)
+		daos_pool_disconnect(cinfo.poh, NULL);
+
+	return rc;
 }

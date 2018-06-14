@@ -72,6 +72,7 @@ static struct cmd_struct commands[] = {
 	{ "test-evict-pool", cmd_test_evict_pool },
 	{ "test-query-pool", cmd_test_query_pool },
 	{ "write-pattern", cmd_write_pattern },
+	{ "verify-pattern", cmd_verify_pattern },
 	{ "help", cmd_help }
 };
 int command_count = ARRAY_SIZE(commands);

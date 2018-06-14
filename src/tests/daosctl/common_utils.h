@@ -32,5 +32,7 @@
 
 int parse_rank_list(char *str_rank_list, d_rank_list_t *num_rank_list);
 int parse_size(uint64_t *size, char *arg);
+int parse_oid(char *oid_str, daos_obj_id_t *oid);
+
 
 #endif /* __DAOS_API_H__ */
