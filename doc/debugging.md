@@ -1,42 +1,90 @@
 # DAOS Debugging
 
-D_LOG_FILE:
-	DAOS debug logs are written by default to /tmp/daos.log, this can be
-	modified by specifying a different path through D_LOG_FILE.
+DAOS uses the debug system defined in [CaRT](https://github.com/daos-stack/cart)
+but more specifically the GURT library. Logging for both client and server are
+written to "/tmp/daos.log" unless otherwise set by `D_LOG_FILE`.
 
-D_LOG_MASK:
-	Used to set logging mask for either all subsystems (ie D_LOG_MASK=INFO
-	will set all subsystems log level to INFO) or specific subsystems
-	(ie D_LOG_MASK=ERR,RPC=DEBUG,BULK=INFO).
+## Registered Subsystems/Facilities
 
-DD_MASK:
-	Can enable different debug streams for finer-grained debugging per
-	subsystem, for example "DD_MASK=trace" will log only debug messages
-	with the bit mask DB_TRACE associated with them. Multiple streams can be
-	set as well, for example: "DD_MASK=io,mem" will allow logging of a
-	subset of debug messages related to io path (bit mask=DB_IO) and memory
-	operations (bit mask=DB_MEM). Since these are debug masks, the
-	subsystem/facility must have the debug log set ("D_LOG_MASK=DEBUG"),
-	otherwise other priorities take precedence. The bit streams are passed
-	as a parameter to D_DEBUG(mask, fmt, ...).
+The debug logging system includes a series of subsystems or facilities which
+define groups for related log messages (defined per source file). There are
+common facilities which are defined in GURT, as well as other facilities that
+can be defined on a per-project basis (such as those for CaRT and DAOS).
+`DD_SUBSYS` can be used to set which subsystems to enable logging for. By
+default all subsystems are enabled ("DD_SUBSYS=all").
+- DAOS Facilities: [common, tree, vos, client, server, rdb, pool, container,
+		    object, placement, rebuild, tier, mgmt, eio, tests]
+- Common Facilities (GURT): [MISC, MEM]
+- CaRT Facilities: [RPC, BULK, CORPC, GRP, LM, HG, PMIX, ST, IV]
 
-	Current DAOS debug masks:
-		md/metadata, pl/placement, mgmt/management, epc/epoch,
-		df/durafmt, rebuild
-	Current GURT/common debug masks:
-		any, all, mem, net, io, trace, test
+## Priority Logging
 
-DD_STDERR:
-	User can specify the priority level to output to stderr, for example:
-	"DD_STDERR=info" will log all DLOG_INFO priority messages to stderr.
+All macros which output logs have a priority level, shown in decending order
+below.
+- D_FATAL(fmt, ...)		FATAL
+- D_CRIT(fmt, ...)		CRIT
+- D_ERROR(fmt, ...)		ERR
+- D_WARN(fmt, ...)		WARN
+- D_NOTE(fmt, ...)		NOTE
+- D_INFO(fmt, ...)		INFO
+- D_DEBUG(mask, fmt, ...)	DEBUG
 
-DD_SUBSYS:
-	User can specify which subsystems to enable.
-	DAOS facilites disabled by default:
-		common, tree, vos, utils, tests
-	DAOS facilites enabled by default:
-		null, client, server, rdb, pool, container, object, placement,
-		rebuild, tier, mgmt
-	DD_SUBSYS=all will enable all facilities.
+The priority level that outputs to stderr can be set with `DD_STDERR`. By
+default in DAOS (specific to project), this is set to CRIT ("DD_STDERR=CRIT")
+meaning that all CRIT and more severe log messages will dump to stderr. This
+however is separate from the priority of logging to "/tmp/daos.log". The
+priority level of logging can be set with `D_LOG_MASK`, which by default is set
+to INFO ("D_LOG_MASK=INFO"), which will result in all messages excluding DEBUG
+messages being logged. `D_LOG_MASK` can also be used to specify the level of
+logging on a per-subsystem basis as well ("D_LOG_MASK=DEBUG,MEM=ERR").
 
-More information available on debugging envs in CaRT README.
+## Debug Masks/Streams:
+
+DEBUG messages account for a majority of the log messages, and finer-granularity
+might be desired. Mask bits are set as the first argument passed in
+D_DEBUG(mask, ...). In order to accomplish this, `DD_MASK` can be set to enable
+different debug streams. Similar to facilities, there are common debug streams
+defined in GURT, as well as other streams that can defined on a per-project
+basis (CaRT and DAOS). All debug streams are enabled by default ("DD_MASK=all").
+- DAOS Debug Masks:
+	- md = metadata operations
+	- pl = placement operations
+	- mgmt = pool management
+	- epc = epoch system
+	- df = durable format
+	- rebuild = rebuild process
+	- daos_default = (group mask) io, md, pl, and rebuild operations
+- Common Debug Masks (GURT):
+	- any = generic messages, no classification
+	- trace = function trace, tree/hash/lru operations
+	- mem = memory operations
+	- net = network operations
+	- io = object I/O
+	- test = test programs
+
+## Common Use Cases
+
+- Generic setup for all messages (default settings)
+	$ D_LOG_MASK=DEBUG
+	$ DD_SUBSYS=all
+	$ DD_MASK=all
+
+- Disable all logs for performance tuning
+	$ D_LOG_MASK=ERR -> will only log error messages from all facilities
+	$ D_LOG_MASK=FATAL -> will only log system fatal messages
+
+- Disable a noisy debug logging subsystem
+	$ D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by restricting all
+	logs from that facility to ERROR or higher priority only
+
+- Enable a subset of facilities of interest
+	$ DD_SUBSYS=rpc,tests
+	$ D_LOG_MASK=DEBUG -> required to see logs for RPC and TESTS less severe
+	than INFO (majority of log messages)
+
+- Fine-tune the debug messages by setting a debug mask
+	$ D_LOG_MASK=DEBUG
+	$ DD_MASK=mgmt -> only logs DEBUG messages related to pool management
+
+**See [DAOS Environment Variables](./environ.md) documentation for more info
+about debug system environment.**
