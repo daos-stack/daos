@@ -28,6 +28,7 @@ import traceback
 import sys
 import fnmatch
 import subprocess
+import json
 
 def filelist(directory):
     """
@@ -90,6 +91,18 @@ if __name__ == "__main__":
 
     # make it easy to specify a directory as a parameter later
     test_directory = os.getcwd()
+
+    # setup some aspects of the environment
+    with open('../../../.build_vars.json') as f:
+        envdata = json.load(f)
+
+    BINDIR = envdata['PREFIX'] + '/bin'
+    SBINDIR = envdata['PREFIX'] + '/sbin'
+    PATH = os.environ.get('PATH')
+    os.environ['PATH'] = BINDIR + ':' + SBINDIR + ':' + PATH
+    os.environ['DAOS_SINGLETON_CLI'] = "1"
+    os.environ['CRT_CTX_SHARE_ADDR'] = "1"
+    os.environ['CRT_ATTACH_INFO_PATH'] = envdata['PREFIX'] + '/tmp'
 
     # build a list of test classes
     test_files = filelist(test_directory)
