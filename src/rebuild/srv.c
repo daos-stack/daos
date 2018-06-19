@@ -289,7 +289,6 @@ rebuild_status_completed_update(const uuid_t pool_uuid,
 		return -DER_NOMEM;
 
 	uuid_copy(rsc->rsc_pool_uuid, pool_uuid);
-	D_INIT_LIST_HEAD(&rsc->rsc_list);
 	memcpy(&rsc->rsc_status, rs, sizeof(*rs));
 	d_list_add(&rsc->rsc_list, &rebuild_gst.rg_completed_list);
 	return 0;
@@ -901,8 +900,14 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 {
 	D_ASSERT(rpt->rt_refcount == 0);
 	D_ASSERT(d_list_empty(&rpt->rt_list));
-	if (!daos_handle_is_inval(rpt->rt_local_root_hdl))
-		dbtree_destroy(rpt->rt_local_root_hdl);
+	if (!daos_handle_is_inval(rpt->rt_tobe_rb_root_hdl)) {
+		dbtree_destroy(rpt->rt_tobe_rb_root_hdl);
+		rpt->rt_tobe_rb_root_hdl = DAOS_HDL_INVAL;
+	}
+	if (!daos_handle_is_inval(rpt->rt_rebuilt_root_hdl)) {
+		rebuilt_btr_destroy(rpt->rt_rebuilt_root_hdl);
+		rpt->rt_rebuilt_root_hdl = DAOS_HDL_INVAL;
+	}
 
 	uuid_clear(rpt->rt_pool_uuid);
 	if (rpt->rt_svc_list)

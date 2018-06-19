@@ -160,7 +160,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_ALLOC(uuids, sizeof(*uuids) * REBUILD_SEND_LIMIT);
-	if (oids == NULL)
+	if (uuids == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_ALLOC(shards, sizeof(*shards) * REBUILD_SEND_LIMIT);
@@ -393,31 +393,16 @@ rebuild_uuid_tree_create(daos_handle_t toh, uuid_t uuid,
 }
 
 int
-rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
-			daos_unit_oid_t oid, unsigned int shard)
+rebuild_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
+		      daos_unit_oid_t oid, unsigned int shard,
+		      unsigned int *cnt, int ref)
 {
-	struct rebuild_root *cont_root;
-	daos_iov_t	key_iov;
-	daos_iov_t	val_iov;
-	int		rc;
-
-	daos_iov_set(&key_iov, co_uuid, sizeof(uuid_t));
-	daos_iov_set(&val_iov, NULL, 0);
-	rc = dbtree_lookup(toh, &key_iov, &val_iov);
-	if (rc < 0) {
-		if (rc != -DER_NONEXIST)
-			D_GOTO(out, rc);
-
-		rc = rebuild_uuid_tree_create(toh, co_uuid,
-					      &cont_root);
-		if (rc)
-			D_GOTO(out, rc);
-	} else {
-		cont_root = val_iov.iov_buf;
-	}
+	daos_iov_t		key_iov;
+	daos_iov_t		val_iov;
+	int			rc;
 
 	oid.id_shard = shard;
-	/* Finally look up the object under the container tree */
+	/* look up the object under the container tree */
 	daos_iov_set(&key_iov, &oid, sizeof(oid));
 	daos_iov_set(&val_iov, &shard, sizeof(shard));
 	rc = dbtree_lookup(cont_root->root_hdl, &key_iov, &val_iov);
@@ -436,6 +421,43 @@ rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 			DP_UUID(co_uuid), cont_root, cont_root->count);
 		return 1;
 	}
+
+out:
+	return rc;
+}
+
+int
+rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
+			unsigned int shard, unsigned int *cnt, int ref,
+			rebuild_obj_insert_cb_t obj_cb)
+{
+	struct rebuild_root	*cont_root;
+	daos_iov_t		key_iov;
+	daos_iov_t		val_iov;
+	int			rc;
+
+	daos_iov_set(&key_iov, co_uuid, sizeof(uuid_t));
+	daos_iov_set(&val_iov, NULL, 0);
+	rc = dbtree_lookup(toh, &key_iov, &val_iov);
+	if (rc < 0) {
+		if (rc != -DER_NONEXIST) {
+			D_ERROR("lookup cont "DF_UUID" failed, rc %d\n",
+				DP_UUID(co_uuid), rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = rebuild_uuid_tree_create(toh, co_uuid,
+					      &cont_root);
+		if (rc) {
+			D_ERROR("tree_create cont "DF_UUID" failed, rc %d\n",
+				DP_UUID(co_uuid), rc);
+			D_GOTO(out, rc);
+		}
+	} else {
+		cont_root = val_iov.iov_buf;
+	}
+
+	rc = obj_cb(cont_root, co_uuid, oid, shard, cnt, ref);
 out:
 	return rc;
 }
@@ -471,8 +493,8 @@ rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 		tgt_root = val_iov.iov_buf;
 	}
 
-	rc = rebuild_cont_obj_insert(tgt_root->root_hdl, co_uuid,
-				     oid, shard);
+	rc = rebuild_cont_obj_insert(tgt_root->root_hdl, co_uuid, oid, shard,
+				     NULL, 0, rebuild_obj_insert_cb);
 	ABT_mutex_unlock(arg->scan_lock);
 	if (rc <= 0)
 		D_GOTO(out, rc);
@@ -551,7 +573,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 	 * might exist on some illegal target, so they might use its "own"
 	 * target as the spare target, let's skip these object now.
 	 * When we have better support from CART exclude/addback, myrank
-	 * should always equal to tgt_rebuild. XXX
+	 * should always not equal to tgt_rebuild. XXX
 	 */
 	if (myrank != tgt_rebuild) {
 		rc = rebuild_object_insert(arg, tgt_rebuild, shard_rebuild,

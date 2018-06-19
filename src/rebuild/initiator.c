@@ -45,12 +45,16 @@ typedef int (*rebuild_obj_iter_cb_t)(daos_unit_oid_t oid, unsigned int shard,
 				     void *arg);
 
 /* Argument for pool/container/object iteration */
-struct rebuild_iter_arg {
-	uuid_t			cont_uuid;
+struct puller_iter_arg {
+	uuid_t				cont_uuid;
 	struct rebuild_tgt_pool_tracker *rpt;
-	rebuild_obj_iter_cb_t	obj_cb;
-	daos_handle_t		cont_hdl;
-	int			yield_freq;
+	rebuild_obj_iter_cb_t		obj_cb;
+	daos_handle_t			cont_hdl;
+	struct rebuild_root		*cont_root;
+	unsigned int			yield_freq;
+	unsigned int			obj_cnt;
+	bool				yielded;
+	bool				re_iter;
 };
 
 /* Argument for dkey/akey/record iteration */
@@ -765,7 +769,7 @@ free:
 static int
 rebuild_obj_callback(daos_unit_oid_t oid, unsigned int shard, void *data)
 {
-	struct rebuild_iter_arg		*iter_arg = data;
+	struct puller_iter_arg		*iter_arg = data;
 	struct rebuild_iter_obj_arg	*obj_arg;
 	unsigned int			stream_id;
 	int				rc;
@@ -794,53 +798,80 @@ rebuild_obj_callback(daos_unit_oid_t oid, unsigned int shard, void *data)
 	return rc;
 }
 
+#define DEFAULT_YIELD_FREQ			128
 static int
-rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
-		    daos_iov_t *val_iov, void *data)
+puller_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
+		   daos_iov_t *val_iov, void *data)
 {
-	struct rebuild_iter_arg		*arg = data;
+	struct puller_iter_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
 	daos_unit_oid_t			*oid = key_iov->iov_buf;
 	unsigned int			*shard = val_iov->iov_buf;
-	int				rc;
+	bool				 scheduled = false;
+	int				 rc;
 
 	D_DEBUG(DB_REBUILD, "obj rebuild "DF_UUID"/"DF_UOID" %"PRIx64
 		" start\n", DP_UUID(arg->cont_uuid), DP_UOID(*oid),
 		ih.cookie);
 	D_ASSERT(arg->obj_cb != NULL);
 
-	/* NB: if rebuild for this object fail, let's continue rebuilding
-	 * other objects, anyway the failure will be remembered in
-	 * tls_pool_status.
+	/* NB: if rebuild for this obj fail, let's continue rebuilding
+	 * other objs, and rebuild this obj again later.
 	 */
 	rc = arg->obj_cb(*oid, *shard, arg);
-	if (rc)
-		D_DEBUG(DB_REBUILD, "obj "DF_UOID" cb callback rc %d\n",
+	if (rc == 0) {
+		scheduled = true;
+		--arg->yield_freq;
+	} else {
+		D_ERROR("obj "DF_UOID" cb callback rc %d\n",
 			DP_UOID(*oid), rc);
+	}
 
-	rc = dbtree_iter_delete(ih, NULL);
-	if (rc)
-		return rc;
+	/* possibly get more req in case of reply lost */
+	if (scheduled) {
+		rc = dbtree_iter_delete(ih, NULL);
+		if (rc)
+			return rc;
 
-	/* re-probe the dbtree after deletion */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
-	if (rc == -DER_NONEXIST)
+		if (arg->yield_freq == 0) {
+			arg->yield_freq = DEFAULT_YIELD_FREQ;
+			ABT_thread_yield();
+			arg->yielded = true;
+			if (arg->cont_root->count > arg->obj_cnt) {
+				arg->obj_cnt = arg->cont_root->count;
+				/* re-iterate after new oid inserted */
+				arg->re_iter = true;
+				return 1;
+			}
+		}
+
+		/* re-probe the dbtree after deletion */
+		rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+		if (rc == 0) {
+			arg->re_iter = true;
+			return 0;
+		} else if (rc == -DER_NONEXIST) {
+			arg->re_iter = false;
+			return 1;
+		} else {
+			return rc;
+		}
+	}
+
+	if (rpt->rt_abort) {
+		arg->re_iter = false;
 		return 1;
-
-	if (--arg->yield_freq == 0 || rpt->rt_abort)
-		return 1;
+	}
 
 	return 0;
 }
 
-#define DEFAULT_YIELD_FREQ 100
-
 static int
-rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
-		     daos_iov_t *val_iov, void *data)
+puller_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
+		    daos_iov_t *val_iov, void *data)
 {
 	struct rebuild_root		*root = val_iov->iov_buf;
-	struct rebuild_iter_arg		*arg = data;
+	struct puller_iter_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 	struct rebuild_pool_tls		*tls;
 	daos_handle_t			coh = DAOS_HDL_INVAL;
@@ -850,8 +881,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" %"PRIx64" start\n",
 		DP_UUID(arg->cont_uuid), ih.cookie, root->root_hdl.cookie);
 
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
-				      rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 	/* Create dc_pool locally */
 	if (daos_handle_is_inval(tls->rebuild_pool_hdl)) {
@@ -871,35 +901,25 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 				0, tls->rebuild_pool_hdl, &coh);
 	if (rc)
 		return rc;
-	arg->cont_hdl = coh;
 
-	arg->yield_freq = DEFAULT_YIELD_FREQ;
-	while (!dbtree_is_empty(root->root_hdl)) {
+	arg->cont_hdl	= coh;
+	arg->yield_freq	= DEFAULT_YIELD_FREQ;
+	arg->obj_cnt	= root->count;
+	arg->cont_root	= root;
+	arg->yielded	= false;
+
+	do {
+		arg->re_iter = false;
 		rc = dbtree_iterate(root->root_hdl, false,
-				    rebuild_obj_iter_cb, arg);
+				    puller_obj_iter_cb, arg);
 		if (rc) {
 			if (tls->rebuild_pool_status == 0 && rc < 0)
 				tls->rebuild_pool_status = rc;
 			D_ERROR("iterate cont "DF_UUID" failed: rc %d\n",
 				DP_UUID(arg->cont_uuid), rc);
-
 			break;
 		}
-
-		if (rpt->rt_abort)
-			break;
-
-		if (arg->yield_freq == 0) {
-			ABT_thread_yield();
-			/* re-probe the dbtree */
-			rc = dbtree_iter_probe(root->root_hdl,
-					       BTR_PROBE_FIRST,
-					       NULL, NULL);
-			if (rc == -DER_NONEXIST)
-				break;
-			arg->yield_freq = DEFAULT_YIELD_FREQ;
-		}
-	}
+	} while (arg->re_iter);
 
 	rc = dc_cont_local_close(tls->rebuild_pool_hdl, coh);
 	if (rc)
@@ -908,11 +928,13 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" finish.\n",
 		DP_UUID(arg->cont_uuid), ih.cookie);
 
-	/* Some one might insert new record to the tree let's reprobe */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
-	if (rc) {
-		D_ASSERT(rc != -DER_NONEXIST);
-		return rc;
+	if (arg->yielded) {
+		/* Some one might insert new record to the tree let's reprobe */
+		rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
+		if (rc) {
+			D_ASSERT(rc != -DER_NONEXIST);
+			return rc;
+		}
 	}
 
 	rc = dbtree_iter_delete(ih, NULL);
@@ -928,19 +950,18 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 }
 
 static void
-rebuild_puller(void *arg)
+rebuild_puller_ult(void *arg)
 {
+	struct puller_iter_arg		*iter_arg = arg;
 	struct rebuild_pool_tls		*tls;
-	struct rebuild_iter_arg		*iter_arg = arg;
 	struct rebuild_tgt_pool_tracker *rpt = iter_arg->rpt;
 	int				rc;
 
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
-				      rpt->rt_rebuild_ver);
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
-	while (!dbtree_is_empty(rpt->rt_local_root_hdl)) {
-		rc = dbtree_iterate(rpt->rt_local_root_hdl, false,
-				    rebuild_cont_iter_cb, iter_arg);
+	while (!dbtree_is_empty(rpt->rt_tobe_rb_root_hdl)) {
+		rc = dbtree_iterate(rpt->rt_tobe_rb_root_hdl, false,
+				    puller_cont_iter_cb, iter_arg);
 		if (rc) {
 			D_ERROR("dbtree iterate fails %d\n", rc);
 			if (tls->rebuild_pool_status == 0)
@@ -955,28 +976,181 @@ rebuild_puller(void *arg)
 }
 
 static int
-rebuild_obj_hdl_get(struct rebuild_tgt_pool_tracker *rpt, daos_handle_t *hdl)
+rebuilt_btr_destory_cb(daos_handle_t ih, daos_iov_t *key_iov,
+		       daos_iov_t *val_iov, void *data)
+{
+	struct rebuild_root		*root = val_iov->iov_buf;
+	int				rc;
+
+	rc = dbtree_destroy(root->root_hdl);
+	if (rc)
+		D_ERROR("dbtree_destroy, cont "DF_UUID" failed, rc %d.\n",
+			DP_UUID(*(uuid_t *)key_iov->iov_buf), rc);
+
+	return rc;
+}
+
+int
+rebuilt_btr_destroy(daos_handle_t btr_hdl)
+{
+	int	rc;
+
+	rc = dbtree_iterate(btr_hdl, false, rebuilt_btr_destory_cb, NULL);
+	if (rc) {
+		D_ERROR("dbtree iterate fails %d\n", rc);
+		goto out;
+	}
+
+	rc = dbtree_destroy(btr_hdl);
+
+out:
+	return rc;
+}
+
+static int
+rebuild_btr_hdl_get(struct rebuild_tgt_pool_tracker *rpt, daos_handle_t *hdl,
+		    daos_handle_t *rebuilt_hdl)
 {
 	struct umem_attr	uma;
-	int rc;
+	int			rc;
 
-	if (!daos_handle_is_inval(rpt->rt_local_root_hdl)) {
-		*hdl = rpt->rt_local_root_hdl;
-		return 0;
+	if (daos_handle_is_inval(rpt->rt_tobe_rb_root_hdl)) {
+		memset(&uma, 0, sizeof(uma));
+		uma.uma_id = UMEM_CLASS_VMEM;
+		rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0, 4, &uma,
+					   &rpt->rt_tobe_rb_root,
+					   &rpt->rt_tobe_rb_root_hdl);
+		if (rc != 0) {
+			D_ERROR("failed to create rebuild tree: %d\n", rc);
+			return rc;
+		}
 	}
+	*hdl = rpt->rt_tobe_rb_root_hdl;
 
-	memset(&uma, 0, sizeof(uma));
-	uma.uma_id = UMEM_CLASS_VMEM;
-	rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0, 4, &uma,
-				   &rpt->rt_local_root,
-				   &rpt->rt_local_root_hdl);
-	if (rc != 0) {
-		D_ERROR("failed to create rebuild tree: %d\n", rc);
-		return rc;
+	if (daos_handle_is_inval(rpt->rt_rebuilt_root_hdl)) {
+		memset(&uma, 0, sizeof(uma));
+		uma.uma_id = UMEM_CLASS_VMEM;
+		rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0, 4, &uma,
+					   &rpt->rt_rebuilt_root,
+					   &rpt->rt_rebuilt_root_hdl);
+		if (rc != 0) {
+			D_ERROR("failed to create rebuild tree: %d\n", rc);
+			return rc;
+		}
 	}
+	*rebuilt_hdl = rpt->rt_rebuilt_root_hdl;
 
-	*hdl = rpt->rt_local_root_hdl;
 	return 0;
+}
+
+/* keep at most 512K rebuilt OID records per rpt as memory limit */
+#define REBUILT_MAX_OIDS_KEPT		(1024 << 9)
+
+/* the per oid record in rebuilt btree */
+struct rebuilt_oid {
+	uint32_t	ro_shard;
+	/*
+	 * ro_req_expect - the number of pending REBUILD_OBJECTS reqs expected
+	 * from alive replicas of the oid.
+	 * ro_req_recv - the number of received REBUILD_OBJECTS, When it reaches
+	 * ro_req_expect the record can be deleted from btree.
+	 */
+	uint32_t	ro_req_expect:15,
+			ro_req_recv:15;
+};
+
+static int
+rebuild_scheduled_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
+				daos_unit_oid_t oid, unsigned int shard,
+				unsigned int *cnt, int ref)
+{
+	struct rebuilt_oid	*roid;
+	struct rebuilt_oid	roid_tmp;
+	uint32_t		req_cnt;
+	daos_iov_t		key_iov;
+	daos_iov_t		val_iov;
+	int			rc;
+
+	/* ignore the DAOS_OBJ_REPL_MAX case for now */
+	req_cnt = daos_oclass_grp_size(daos_oclass_attr_find(oid.id_pub));
+	D_ASSERT(req_cnt >= 2);
+	req_cnt--; /* reduce the failed one */
+	if (req_cnt == 1) {
+		D_DEBUG(DB_REBUILD, "ignore "DF_UOID" in cont "DF_UUID
+			", total objs %d\n",
+			DP_UOID(oid), DP_UUID(co_uuid), *cnt);
+		return 1;
+	}
+
+	oid.id_shard = shard;
+	/* Finally look up the object under the container tree */
+	daos_iov_set(&key_iov, &oid, sizeof(oid));
+	daos_iov_set(&val_iov, NULL, 0);
+	rc = dbtree_lookup(cont_root->root_hdl, &key_iov, &val_iov);
+	D_DEBUG(DB_REBUILD, "lookup "DF_UOID" in cont "DF_UUID" rc %d\n",
+		DP_UOID(oid), DP_UUID(co_uuid), rc);
+	if (rc == 0) {
+		roid = val_iov.iov_buf;
+		D_ASSERT(roid != NULL);
+		D_ASSERTF(roid->ro_shard == shard, "obj "DF_UOID"/"DF_UUID
+			  "shard %d mismatch with shard in tree %d.\n",
+			  DP_UOID(oid), DP_UUID(co_uuid), shard,
+			  roid->ro_shard);
+		D_ASSERT(*cnt >= 1);
+		roid->ro_req_recv += ref;
+		/* possible get more req due to reply lost */
+		if (roid->ro_req_recv >= roid_tmp.ro_req_expect ||
+		    roid->ro_req_recv == 0) {
+			rc = dbtree_delete(cont_root->root_hdl,
+					   &key_iov, NULL);
+			if (rc == 0) {
+				*cnt -= 1;
+				D_DEBUG(DB_REBUILD, "deleted "DF_UOID
+					" in cont "DF_UUID", total objs %d\n",
+					DP_UOID(oid), DP_UUID(co_uuid),
+					*cnt);
+			} else {
+				D_ERROR("delete "DF_UOID" in cont "
+					DF_UUID" failed rc %d.\n",
+					DP_UOID(oid), DP_UUID(co_uuid),
+					rc);
+			}
+		}
+	} else if (rc == -DER_NONEXIST) {
+		/* when rollback the ref, possibly no record existed
+		 * for example only one alive replica.
+		 */
+		if (ref < 0)
+			return 0;
+
+		/* if exceed limit just ignore it - this object possibly
+		 * be rebuilt multiple times.
+		 */
+		if (*cnt >= REBUILT_MAX_OIDS_KEPT) {
+			D_DEBUG(DB_REBUILD, "ignore "DF_UOID
+				" in cont "DF_UUID", total objs %d\n",
+				DP_UOID(oid), DP_UUID(co_uuid), *cnt);
+			return 1;
+		}
+		roid_tmp.ro_req_expect = req_cnt;
+		roid_tmp.ro_req_recv = 1;
+		roid_tmp.ro_shard = shard;
+		daos_iov_set(&val_iov, &roid_tmp, sizeof(roid_tmp));
+		rc = dbtree_update(cont_root->root_hdl, &key_iov, &val_iov);
+		if (rc < 0) {
+			D_ERROR("failed to insert "DF_UOID": rc %d\n",
+				DP_UOID(oid), rc);
+			D_GOTO(out, rc);
+		}
+		*cnt += 1;
+		D_DEBUG(DB_REBUILD, "update "DF_UOID"/"DF_UUID
+			", total count %d\n", DP_UOID(oid),
+			DP_UUID(co_uuid), *cnt);
+		return 1;
+	}
+
+out:
+	return rc;
 }
 
 /* Got the object list from scanner and rebuild the objects */
@@ -994,6 +1168,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 	uint32_t			*shards;
 	unsigned int			shards_count;
 	daos_handle_t			btr_hdl;
+	daos_handle_t			rebuilt_btr_hdl;
 	unsigned int			i;
 	int				rc;
 
@@ -1022,7 +1197,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_AGAIN);
 
 	/* Initialize the local rebuild tree */
-	rc = rebuild_obj_hdl_get(rpt, &btr_hdl);
+	rc = rebuild_btr_hdl_get(rpt, &btr_hdl, &rebuilt_btr_hdl);
 	if (rc)
 		D_GOTO(out_put, rc);
 
@@ -1032,8 +1207,28 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 
 	/* Insert these oids/conts into the local rebuild tree */
 	for (i = 0; i < oids_count; i++) {
+		/* firstly insert/check rebuilt tree */
+		rc = rebuild_cont_obj_insert(rebuilt_btr_hdl, co_uuids[i],
+					     oids[i], shards[i],
+					     &rpt->rt_rebuilt_obj_cnt, 1,
+					     rebuild_scheduled_obj_insert_cb);
+		if (rc == 0) {
+			D_DEBUG(DB_REBUILD, "already rebuilt "DF_UOID" "DF_UUID
+				" shard %u.\n", DP_UOID(oids[i]),
+				DP_UUID(co_uuids[i]), shards[i]);
+			continue;
+		} else if (rc < 0) {
+			D_ERROR("insert "DF_UOID" "DF_UUID" shard %u to rebuilt"
+				" tree failed, rc %d.\n", DP_UOID(oids[i]),
+				DP_UUID(co_uuids[i]), shards[i], rc);
+			break;
+		}
+		D_ASSERT(rc == 1);
+
+		/* for un-rebuilt objs insert to to-be-rebuilt tree */
 		rc = rebuild_cont_obj_insert(btr_hdl, co_uuids[i],
-					     oids[i], shards[i]);
+					     oids[i], shards[i], NULL, 0,
+					     rebuild_obj_insert_cb);
 		if (rc == 1) {
 			D_DEBUG(DB_REBUILD, "insert local "DF_UOID" "DF_UUID
 				" %u hdl %"PRIx64"\n", DP_UOID(oids[i]),
@@ -1041,19 +1236,25 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 				btr_hdl.cookie);
 			rc = 0;
 		} else if (rc == 0) {
-			D_DEBUG(DB_REBUILD, DF_UOID" "DF_UUID" %u exist.\n",
-				DP_UOID(oids[i]), DP_UUID(co_uuids[i]),
-				shards[i]);
-		} else if (rc < 0) {
+			D_DEBUG(DB_REBUILD, DF_UOID" "DF_UUID", shard %u "
+				"exist.\n", DP_UOID(oids[i]),
+				DP_UUID(co_uuids[i]), shards[i]);
+		} else {
+			D_ASSERT(rc < 0);
+			/* rollback the ref in rebuilt tree taken above */
+			rebuild_cont_obj_insert(rebuilt_btr_hdl, co_uuids[i],
+					oids[i], shards[i],
+					&rpt->rt_rebuilt_obj_cnt, -1,
+					rebuild_scheduled_obj_insert_cb);
 			break;
 		}
 	}
 	if (rc < 0)
 		D_GOTO(out_put, rc);
 
-	/* Check and create task to iterate the local rebuild tree */
+	/* Check and create task to iterate the to-be-rebuilt tree */
 	if (!rpt->rt_lead_puller_running) {
-		struct rebuild_iter_arg *arg;
+		struct puller_iter_arg *arg;
 
 		D_ALLOC_PTR(arg);
 		if (arg == NULL)
@@ -1065,7 +1266,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 
 		rpt->rt_lead_puller_running = 1;
 		D_ASSERT(rpt->rt_pullers != NULL);
-		rc = dss_ult_create(rebuild_puller, arg, -1, 0, NULL);
+		rc = dss_ult_create(rebuild_puller_ult, arg, -1, 0, NULL);
 		if (rc) {
 			rpt_put(rpt);
 			D_FREE_PTR(arg);

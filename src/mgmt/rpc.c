@@ -144,7 +144,7 @@ struct daos_rpc mgmt_rpcs[] = {
 		.dr_name	= "MGMT_PARAMS_SET",
 		.dr_opc		= MGMT_PARAMS_SET,
 		.dr_ver		= 1,
-		.dr_flags	= DAOS_RPC_NO_REPLY,
+		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_MGMT_PARAMS_SET,
 	}, {
 		.dr_opc		= 0

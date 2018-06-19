@@ -80,8 +80,14 @@ struct rebuild_tgt_pool_tracker {
 	d_list_t		rt_list;
 	ABT_mutex		rt_lock;
 	uuid_t			rt_pool_uuid;
-	struct btr_root		rt_local_root;
-	daos_handle_t		rt_local_root_hdl;
+	/* to be rebuilt tree */
+	struct btr_root		rt_tobe_rb_root;
+	daos_handle_t		rt_tobe_rb_root_hdl;
+	/* already rebuilt tree, only used for initiator */
+	struct btr_root		rt_rebuilt_root;
+	daos_handle_t		rt_rebuilt_root_hdl;
+	/* number of obj records in rebuilt tree */
+	unsigned int		rt_rebuilt_obj_cnt;
 	d_rank_list_t		*rt_svc_list;
 	d_rank_t		rt_rank;
 	int			rt_errno;
@@ -288,9 +294,20 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt);
 int
 rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt);
 
+typedef int (*rebuild_obj_insert_cb_t)(struct rebuild_root *cont_root,
+				       uuid_t co_uuid, daos_unit_oid_t oid,
+				       unsigned int shard, unsigned int *cnt,
+				       int ref);
 int
-rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
-			daos_unit_oid_t oid, unsigned int shard);
+rebuild_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
+		      daos_unit_oid_t oid, unsigned int shard,
+		      unsigned int *cnt, int ref);
+int
+rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
+			unsigned int shard, unsigned int *cnt, int ref,
+			rebuild_obj_insert_cb_t obj_cb);
+int
+rebuilt_btr_destroy(daos_handle_t btr_hdl);
 
 struct rebuild_tgt_pool_tracker *
 rpt_lookup(uuid_t pool_uuid, unsigned int ver);
