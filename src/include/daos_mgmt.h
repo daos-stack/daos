@@ -71,8 +71,8 @@ extern "C" {
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
-		 const char *grp, const d_rank_list_t *tgts, const char *dev,
+daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
+		 const d_rank_list_t *tgts, const char *dev,
 		 daos_size_t size, d_rank_list_t *svc, uuid_t uuid,
 		 daos_event_t *ev);
 

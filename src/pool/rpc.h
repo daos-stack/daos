@@ -100,6 +100,8 @@ struct pool_connect_in {
 
 struct pool_connect_out {
 	struct pool_op_out		pco_op;
+	uint32_t			pco_uid;
+	uint32_t			pco_gid;
 	uint32_t			pco_mode;
 	/* only set on -DER_TRUNC */
 	uint32_t			pco_map_buf_size;
@@ -121,6 +123,8 @@ struct pool_query_in {
 
 struct pool_query_out {
 	struct pool_op_out		pqo_op;
+	uint32_t			pqo_uid;
+	uint32_t			pqo_gid;
 	uint32_t			pqo_mode;
 	/* only set on -DER_TRUNC */
 	uint32_t			pqo_map_buf_size;

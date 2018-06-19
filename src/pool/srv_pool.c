@@ -1908,6 +1908,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
+	out->pco_uid = attr.pa_uid;
+	out->pco_gid = attr.pa_gid;
 	out->pco_mode = attr.pa_mode;
 
 	/*
@@ -2188,6 +2190,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
+	out->pqo_uid = attr.pa_uid;
+	out->pqo_gid = attr.pa_gid;
 	out->pqo_mode = attr.pa_mode;
 
 	rc = transfer_map_buf(&tx, svc, rpc, in->pqi_map_bulk,

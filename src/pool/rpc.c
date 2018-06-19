@@ -61,6 +61,8 @@ struct crt_msg_field *pool_connect_out_fields[] = {
 	&CMF_INT,	/* op.rc */
 	&CMF_UINT32,	/* op.map_version */
 	&DMF_RSVC_HINT,	/* op.hint */
+	&CMF_UINT32,	/* uid */
+	&CMF_UINT32,	/* gid */
 	&CMF_UINT32,	/* mode */
 	&CMF_UINT32,	/* map_buf_size */
 	&CMF_UINT32,	/* rebuild_st.version */
@@ -92,6 +94,8 @@ struct crt_msg_field *pool_query_out_fields[] = {
 	&CMF_INT,	/* op.rc */
 	&CMF_UINT32,	/* op.map_version */
 	&DMF_RSVC_HINT,	/* op.hint */
+	&CMF_UINT32,	/* uid */
+	&CMF_UINT32,	/* gid */
 	&CMF_UINT32,	/* mode */
 	&CMF_UINT32,	/* map_buf_size */
 	&CMF_UINT32,	/* rebuild_st.version */

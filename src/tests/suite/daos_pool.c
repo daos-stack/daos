@@ -78,6 +78,8 @@ pool_connect(void **state)
 				    sizeof(info.pi_uuid));
 		/** TODO: assert_int_equal(info.pi_ntargets, arg->...); */
 		assert_int_equal(info.pi_ndisabled, 0);
+		assert_int_equal(info.pi_uid, arg->uid);
+		assert_int_equal(info.pi_gid, arg->gid);
 		assert_int_equal(info.pi_mode, arg->mode);
 		print_message("success\n");
 
@@ -88,6 +90,9 @@ pool_connect(void **state)
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
 		assert_int_equal(info.pi_ndisabled, 0);
+		assert_int_equal(info.pi_uid, arg->uid);
+		assert_int_equal(info.pi_gid, arg->gid);
+		assert_int_equal(info.pi_mode, arg->mode);
 		print_message("success\n");
 	}
 

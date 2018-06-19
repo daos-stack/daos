@@ -73,7 +73,7 @@ test_setup_pool_create(void **state, struct test_pool *pool)
 
 		print_message("setup: creating pool size="DF_U64" GB\n",
 			      (arg->pool.pool_size >> 30));
-		rc = daos_pool_create(0731, geteuid(), getegid(), arg->group,
+		rc = daos_pool_create(arg->mode, arg->uid, arg->gid, arg->group,
 				      NULL, "pmem", arg->pool.pool_size,
 				      &arg->pool.svc, arg->pool.pool_uuid,
 				      NULL);
