@@ -97,16 +97,19 @@ struct lm_grp_priv_t {
 	crt_group_t		*lgp_grp;
 	uint32_t		 lgp_mvs;
 	uint32_t		 lgp_lm_ver;
-	/* PSR rank in attached group */
-	d_rank_t		 lgp_psr_rank;
 	/* PSR phy addr address in attached group */
 	crt_phy_addr_t		 lgp_psr_phy_addr;
+	/* PSR rank in attached group */
+	d_rank_t		 lgp_psr_rank;
 	/* PSR candidates for PSR failures */
 	uint32_t		 lgp_num_psr;
 	struct lm_psr_cand	*lgp_psr_cand;
+	/* the index of psr candidate who has a pending resample RPC */
+	int32_t			 lgp_last_tried_index;
 	/* the target rank of each sample RPC is in this hash table */
 	pthread_rwlock_t	 lgp_rwlock;
 	sem_t			 lgp_sem;
+	bool			 lgp_sampling;
 };
 
 struct crt_lm_gdata_t {
@@ -673,14 +676,12 @@ lm_sample_flag_unmark(struct lm_grp_priv_t *lm_grp_priv, d_rank_t rank)
 
 	D_ASSERT(lm_grp_priv != NULL);
 	psr_cand = lm_grp_priv->lgp_psr_cand;
+	/* unmark all PSRs */
 	D_RWLOCK_WRLOCK(&lm_grp_priv->lgp_rwlock);
-	for (i = 0; i < lm_grp_priv->lgp_num_psr; i++) {
-		if (psr_cand[i].pc_rank != rank)
-			continue;
-		D_ASSERT(psr_cand[i].pc_pending_sample == true);
+	for (i = 0; i < lm_grp_priv->lgp_num_psr; i++)
 		psr_cand[i].pc_pending_sample = false;
-		break;
-	}
+	lm_grp_priv->lgp_last_tried_index = -1;
+	lm_grp_priv->lgp_sampling = 0;
 	D_RWLOCK_UNLOCK(&lm_grp_priv->lgp_rwlock);
 }
 
@@ -1073,6 +1074,8 @@ lm_grp_priv_init(crt_group_t *grp, crt_lm_attach_cb_t completion_cb, void *arg)
 		D_GOTO(error_out, rc);
 	}
 
+	lm_grp_priv->lgp_last_tried_index = -1;
+
 	return lm_grp_priv;
 
 error_out:
@@ -1098,16 +1101,17 @@ lm_grp_priv_destroy(struct lm_grp_priv_t *lm_grp_priv)
  * determine if should send sample RPC. if true, *tgt_psr will contain the
  * target of the sample RPC
  * The decision logic is:
- *	if no more live PSRs, return false
- *	else if every live PSR has a pending sample RPC, return false
- *	else if timed out target has a pending sample, return true
- *	else if no live PSR has a pending sample RPC, return true
- *	else return false
+ *	if there is sampling RPC in progress, and the caller's opcode is not
+ *		CRT_OPC_MEMB_SAMPLE, return false
+ *	if there are live PSRs haven't been tried, try them
+ *	else if every live PSR has a pending sampling RPC, try them in
+ *		round-robin manner
+ *	else if no more live PSRs, return false
  *
  */
 static bool
 should_sample(struct lm_grp_priv_t *lm_grp_priv, d_rank_t tgt_rank,
-	      d_rank_t *tgt_psr)
+	      struct crt_rpc_priv *rpc_priv, d_rank_t *tgt_psr)
 {
 	int			 i;
 	int			 pending_count = 0;
@@ -1115,6 +1119,8 @@ should_sample(struct lm_grp_priv_t *lm_grp_priv, d_rank_t tgt_rank,
 	struct lm_psr_cand	*psr_cand;
 	int			 picked_index = -1;
 	bool			 evicted;
+	int			 index_first_live = -1;
+	int			 index_next_psr = -1;
 	bool			 ret = false;
 
 
@@ -1123,6 +1129,16 @@ should_sample(struct lm_grp_priv_t *lm_grp_priv, d_rank_t tgt_rank,
 	psr_cand = lm_grp_priv->lgp_psr_cand;
 	live_count = lm_grp_priv->lgp_num_psr;
 	D_RWLOCK_WRLOCK(&lm_grp_priv->lgp_rwlock);
+	/* if sampling is in progress, only RPCs with opcode CRT_OPC_MEMB_SAMPLE
+	 * should send new sampling RPCs
+	 */
+	if (rpc_priv->crp_pub.cr_opc != CRT_OPC_MEMB_SAMPLE &&
+	    lm_grp_priv->lgp_sampling) {
+		D_DEBUG(DB_TRACE, "should not resample. rpc_priv:%p opc: %#x\n",
+			rpc_priv, rpc_priv->crp_pub.cr_opc);
+		D_GOTO(out, ret);
+	}
+	lm_grp_priv->lgp_sampling = 1;
 	for (i = 0; i < lm_grp_priv->lgp_num_psr; i++) {
 		evicted = crt_rank_evicted(lm_grp_priv->lgp_grp,
 					   psr_cand[i].pc_rank);
@@ -1130,6 +1146,15 @@ should_sample(struct lm_grp_priv_t *lm_grp_priv, d_rank_t tgt_rank,
 			live_count--;
 			continue;
 		}
+		/* record the smallest live PSR candidate */
+		if (index_first_live == -1)
+			index_first_live = i;
+
+		/* record the next smallest live PSR after the last tried PSR */
+		if (lm_grp_priv->lgp_last_tried_index != -1 &&
+		    index_next_psr == -1 &&
+		    i > lm_grp_priv->lgp_last_tried_index)
+			index_next_psr = i;
 		/* pick the first free PSR as sample target */
 		if (!psr_cand[i].pc_pending_sample) {
 			if (picked_index == -1) {
@@ -1140,13 +1165,35 @@ should_sample(struct lm_grp_priv_t *lm_grp_priv, d_rank_t tgt_rank,
 		}
 		pending_count++;
 	}
+
+	/* picked a live PSRs that hasn't been contacted */
 	if (pending_count < live_count) {
 		ret = true;
+		D_ASSERTF(picked_index != -1, "picked_index is -1.\n");
 		psr_cand[picked_index].pc_pending_sample = true;
+		lm_grp_priv->lgp_last_tried_index = picked_index;
 		D_DEBUG(DB_TRACE, "psr rank %d is selected.\n",
 			psr_cand[picked_index].pc_rank);
+		D_GOTO(out, ret);
 	}
 
+	D_ASSERT(pending_count == live_count);
+	if (live_count == 0)
+		D_GOTO(out, ret = false);
+
+	/*
+	 * all live PSRs candidates have been contacted, pick the next
+	 * live PSR candidate in round-robin manner
+	 */
+	ret = true;
+	picked_index = MAX(index_first_live, index_next_psr);
+	D_ASSERTF(picked_index != -1, "picked_index is -1.\n");
+
+	lm_grp_priv->lgp_last_tried_index = picked_index;
+	*tgt_psr = psr_cand[picked_index].pc_rank;
+	D_DEBUG(DB_TRACE, "psr rank %d is selected.\n", *tgt_psr);
+
+out:
 	D_RWLOCK_UNLOCK(&lm_grp_priv->lgp_rwlock);
 
 	return ret;
@@ -1163,6 +1210,7 @@ lm_membs_sample(crt_context_t ctx, crt_rpc_t *rpc, void *arg)
 	d_rank_t			 tgt_psr = 0;
 	struct lm_grp_priv_t		*lm_grp_priv;
 	int				 rc = 0;
+	struct crt_rpc_priv		*rpc_priv;
 
 	D_ASSERT(rpc != NULL);
 	tgt_grp = rpc->cr_ep.ep_grp;
@@ -1180,7 +1228,9 @@ lm_membs_sample(crt_context_t ctx, crt_rpc_t *rpc, void *arg)
 	D_RWLOCK_UNLOCK(&crt_lm_gdata.clg_rwlock);
 	D_ASSERT(lm_grp_priv != NULL);
 
-	if (!should_sample(lm_grp_priv, tgt_rank, &tgt_psr))
+	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	D_DEBUG(DB_TRACE, "rpc_priv %p\n", rpc_priv);
+	if (!should_sample(lm_grp_priv, tgt_rank, rpc_priv, &tgt_psr))
 		return;
 	/* start a sample RPC */
 	rc = lm_sample_rpc(ctx, lm_grp_priv, tgt_psr);

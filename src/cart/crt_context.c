@@ -742,6 +742,11 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			/* At this point, RPC should always be completed by
 			 * Mercury
 			 */
+			D_ERROR("aborting rpc opc: %#x  to group %s,"
+				" rank %d, tgt_uri %s .\n",
+				rpc_priv->crp_pub.cr_opc,
+				grp_priv->gp_pub.cg_grpid,
+				tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
 			crt_req_abort(&rpc_priv->crp_pub);
 		}
 		break;
@@ -1341,8 +1346,6 @@ crt_req_force_timeout(struct crt_rpc_priv *rpc_priv)
 	rpc_priv->crp_timeout_ts = 0;
 	crt_req_timeout_track(&rpc_priv->crp_pub);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-
-	crt_exec_timeout_cb(rpc_priv);
 
 	RPC_DECREF(rpc_priv);
 }
