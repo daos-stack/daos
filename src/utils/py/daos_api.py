@@ -48,13 +48,26 @@ class TargetInfo(ctypes.Structure):
                 ("ta_space", ctypes.c_int)]
 
 class Info(ctypes.Structure):
-    """ Structure to represent information about a pool"""
+    """ Structure to represent information about a pool """
     _fields_ = [("pi_uuid", ctypes.c_ubyte * 16),
                 ("pi_ntargets", ctypes.c_uint32),
                 ("pi_ndisabled", ctypes.c_uint32),
                 ("pi_mode", ctypes.c_uint),
                 ("pi_space", ctypes.c_int),
                 ("pi_rebuild_st", ctypes.c_ubyte * 32)]
+
+class ContInfo(ctypes.Structure):
+    """ Structure to represent information about a container """
+    _fields_ = [("ci_uuid", ctypes.c_ubyte * 16),
+                ("es_hce", ctypes.c_uint64),
+                ("es_lre", ctypes.c_uint64),
+                ("es_lhe", ctypes.c_uint64),
+                ("es_ghce", ctypes.c_uint64),
+                ("es_glre", ctypes.c_uint64),
+                ("es_ghpce", ctypes.c_uint64),
+                ("ci_nsnapshots", ctypes.c_uint32),
+                ("ci_snapshots", ctypes.POINTER(ctypes.c_uint64)),
+                ("ci_min_slipped_epoch", ctypes.c_uint64)]
 
 class DaosEvent(ctypes.Structure):
     _fields_ = [("ev_error", ctypes.c_int),
@@ -461,12 +474,16 @@ class DaosPool(object):
 class DaosContainer(object):
     """ A python object representing a DAOS container."""
 
-    def __init__(self, context):
+
+    def __init__(self, context, cuuid=None, poh=None, coh=None):
         """ setup the python container object, not the real container. """
         self.context = context
+
+        # ignoring caller parameters for now
         self.uuid = (ctypes.c_ubyte * 1)()
         self.coh = ctypes.c_uint64(0)
         self.poh = ctypes.c_uint64(0)
+        self.info = ContInfo()
 
     def get_uuid_str(self):
         return c_uuid_to_str(self.uuid)
@@ -526,6 +543,85 @@ class DaosContainer(object):
                                  args=(func,params,self.context,cb_func,self))
             t.start()
 
+    def open(self, poh=None, cuuid=None, flags=None, cb_func=None):
+        """ send a container open request to the daos server group """
+
+        # parameters can be used to associate this python object with a
+        # DAOS container or they may already have been set
+        if poh is not None:
+            self.poh = poh
+        if cuuid is not None:
+            c_uuid(cuuid, self.uuid)
+
+        # Note that 1 is read-only
+        c_flags = ctypes.c_uint(1)
+        if flags is not None:
+            c_flags = ctypes.c_uint(flags)
+
+        func = self.context.get_function('open-cont')
+
+        # the callback function is optional, if not supplied then run the
+        # create synchronously, if its there then run it in a thread
+        if cb_func == None:
+            rc = func(self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
+                      ctypes.byref(self.info), None)
+            if rc != 0:
+                raise ValueError("container open returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
+                      ctypes.byref(c_info), event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,params,self.context,cb_func,self))
+            t.start()
+
+    def close(self, coh=None, cb_func=None):
+        """ send a container close request to the daos server group """
+
+        # parameters can be used to associate this python object with a
+        # DAOS container or they may already have been set
+        if coh is not None:
+            self.coh = coh
+
+        func = self.context.get_function('close-cont')
+
+        # the callback function is optional, if not supplied then run the
+        # create synchronously, if its there then run it in a thread
+        if cb_func == None:
+            rc = func(self.coh, None)
+            if rc != 0:
+                raise ValueError("container close returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.coh, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,params,self.context,cb_func,self))
+            t.start()
+
+    def query(self, coh=None, cb_func=None):
+        """Query container information."""
+
+        # allow caller to override the handle
+        if coh is not None:
+            self.coh = coh
+
+        func = self.context.get_function('query-cont')
+
+        if cb_func is None:
+            rc = func(self.coh, ctypes.byref(self.info), None)
+            if rc != 0:
+                raise ValueError("Container query returned non-zero. RC: {0}"
+                                 .format(rc))
+            return self.info
+        else:
+            event = DaosEvent()
+            params = [self.coh, ctypes.byref(self.info), event]
+            t = threading.Thread(target=AsyncWorker1, args=(func, params,
+                      self.context, cb_func, self))
+            t.start()
+        return None
 
 class DaosServer(object):
     """Represents a DAOS Server"""
@@ -560,6 +656,7 @@ class DaosContext(object):
         # Note: action-subject format
         self.ftable = {
              'add-target'     : self.libdaos.daos_pool_tgt_add,
+             'close-cont'     : self.libdaos.daos_cont_close,
              'connect-pool'   : self.libdaos.daos_pool_connect,
              'convert-global' : self.libdaos.daos_pool_global2local,
              'covert-local'   : self.libdaos.daos_pool_local2global,
@@ -576,7 +673,9 @@ class DaosContext(object):
              'init-event'     : self.libdaos.daos_event_init,
              'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
              'kill-target'    : self.libdaos.daos_pool_exclude_out,
+             'open-cont'      : self.libdaos.daos_cont_open,
              'poll-eq'        : self.libdaos.daos_eq_poll,
+             'query-cont'     : self.libdaos.daos_cont_query,
              'query-pool'     : self.libdaos.daos_pool_query,
              'query-target'   : self.libdaos.daos_pool_target_query,
              'stop-service'   : self.libdaos.daos_pool_svc_stop,
@@ -633,7 +732,18 @@ if __name__ == '__main__':
 
         time.sleep(5)
 
-        CONTAINER.destroy()
+        CONTAINER.open()
+        print("container opened {}".format(CONTAINER.get_uuid_str()))
+
+        time.sleep(5)
+
+        CONTAINER.query()
+        print("Epoch highest committed: {}".format(CONTAINER.info.es_hce))
+
+        CONTAINER.close()
+        print("container closed {}".format(CONTAINER.get_uuid_str()))
+
+        CONTAINER.destroy(1)
 
         print("container destroyed ")
 
