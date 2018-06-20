@@ -351,7 +351,7 @@ rebuild_one_ult(void *arg)
 static int
 rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t oid,
 		  daos_key_t *dkey, daos_iod_t *iods, int iod_num,
-		  uuid_t cookie, uint64_t *version)
+		  uuid_t cookie, uint32_t *version)
 {
 	struct rebuild_puller		*puller;
 	struct rebuild_tgt_pool_tracker *rpt = iter_arg->rpt;
@@ -465,7 +465,7 @@ free:
 
 static int
 rebuild_iod_pack(daos_iod_t *iod, daos_key_t *akey, daos_key_desc_t *kds,
-		 void **data, uuid_t cookie, uint64_t *version, int count)
+		 void **data, uuid_t cookie, uint32_t *version, int count)
 {
 	struct obj_enum_rec	*rec = *data;
 	int			i;
@@ -496,7 +496,7 @@ rebuild_iod_pack(daos_iod_t *iod, daos_key_t *akey, daos_key_desc_t *kds,
 		} else if (uuid_compare(cookie, rec[i].rec_cookie) != 0 ||
 			   *version != rec[i].rec_version) {
 			D_DEBUG(DB_REBUILD, "different cookie or version"
-				DF_UUIDF" "DF_UUIDF" "DF_U64" != "DF_U64"\n",
+				DF_UUIDF" "DF_UUIDF" %u != %u\n",
 				DP_UUID(cookie), DP_UUID(rec[i].rec_cookie),
 				*version, rec[i].rec_version);
 			break;
@@ -542,7 +542,7 @@ rebuild_iod_pack(daos_iod_t *iod, daos_key_t *akey, daos_key_desc_t *kds,
 
 	rc = i;
 	D_DEBUG(DB_REBUILD, "pack nr %d total %d cookie/version "DF_UUID"/"
-		DF_U64" packed %d\n", iod->iod_nr, count, DP_UUID(cookie),
+		"/%u packed %d\n", iod->iod_nr, count, DP_UUID(cookie),
 		*version, rc);
 free:
 	if (rc < 0) {
@@ -560,7 +560,7 @@ rebuild_list_buf_process(daos_unit_oid_t oid, daos_epoch_t epoch,
 			 daos_iov_t *iov, daos_key_desc_t *kds,
 			 int num, struct rebuild_iter_obj_arg *iter_arg,
 			 daos_key_t *dkey, daos_iod_t *iods, int *iod_idx,
-			 uuid_t cookie, uint64_t *version)
+			 uuid_t cookie, uint32_t *version)
 {
 	daos_key_t		akey = {0};
 	void			*ptr;
@@ -708,7 +708,7 @@ rebuild_obj_ult(void *data)
 	daos_key_t		dkey = { 0 };
 	char			buf[ITER_BUF_SIZE];
 	uuid_t			cookie;
-	uint64_t		version = 0;
+	uint32_t		version = 0;
 	int			rc;
 
 	tls = rebuild_pool_tls_lookup(arg->rpt->rt_pool_uuid,
