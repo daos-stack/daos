@@ -573,10 +573,11 @@ struct crt_iv_ops iv_cache_ops = {
 };
 
 static void
-iv_ns_destroy_internal(struct ds_iv_ns *ns)
+iv_ns_destroy_cb(crt_iv_namespace_t iv_ns, void *arg)
 {
-	struct ds_iv_entry *entry;
-	struct ds_iv_entry *tmp;
+	struct ds_iv_ns		*ns = arg;
+	struct ds_iv_entry	*entry;
+	struct ds_iv_entry	*tmp;
 
 	d_list_del(&ns->iv_ns_link);
 	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
@@ -584,10 +585,15 @@ iv_ns_destroy_internal(struct ds_iv_ns *ns)
 		iv_entry_free(entry);
 	}
 
-	if (ns->iv_ns)
-		crt_iv_namespace_destroy(ns->iv_ns);
-
 	ABT_mutex_free(&ns->iv_lock);
+	D_FREE_PTR(ns);
+}
+
+static void
+iv_ns_destroy_internal(struct ds_iv_ns *ns)
+{
+	if (ns->iv_ns)
+		crt_iv_namespace_destroy(ns->iv_ns, iv_ns_destroy_cb, ns);
 }
 
 static int
@@ -631,7 +637,6 @@ ds_iv_ns_destroy(void *ns)
 
 	D_DEBUG(DB_TRACE, "destroy ivns %d\n", iv_ns->iv_ns_id);
 	iv_ns_destroy_internal(iv_ns);
-	D_FREE_PTR(ns);
 }
 
 /**
