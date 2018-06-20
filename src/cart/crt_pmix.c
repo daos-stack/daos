@@ -621,7 +621,7 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	if (strncmp(source->nspace, pmix_gdata->pg_proc.nspace,
 		    PMIX_MAX_NSLEN)) {
 		D_DEBUG(DB_TRACE, "PMIx event not relevant to my namespace.\n");
-		return;
+		D_GOTO(out, 0);
 	}
 
 	/* This seems to often happen immediatly after the PROC_ABORTED event
@@ -630,25 +630,25 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	if (status == PMIX_ERR_UNREACH) {
 		D_DEBUG(DB_TRACE, "PMIx event is PMIX_ERR_UNREACH %d\n",
 			source->rank);
-		return;
+		D_GOTO(out, 0);
 	}
 
 	if (status != PMIX_ERR_PROC_ABORTED) {
 		D_DEBUG(DB_TRACE, "PMIx event is %d not PMIX_ERR_PROC_ABORTED."
 			"\n", status);
-		return;
+		D_GOTO(out, 0);
 	}
 
 	if (source->rank >= pmix_gdata->pg_univ_size) {
 		D_ERROR("pmix rank %d out of range [0, %d].\n",
 			source->rank, pmix_gdata->pg_univ_size - 1);
-		return;
+		D_GOTO(out, 0);
 	}
 
 	if (grp_priv->gp_rank_map[source->rank].rm_status == CRT_RANK_NOENT) {
 		D_DEBUG(DB_TRACE, "PMIx event not relevant to cart group: "
 			"%s.\n", grp_priv->gp_pub.cg_grpid);
-		return;
+		D_GOTO(out, 0);
 	}
 
 	/* convert source->rank from pmix rank to cart rank */
@@ -666,6 +666,8 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 		D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 	}
 	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+
+out:
 	if (cbfunc)
 		cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
 }
