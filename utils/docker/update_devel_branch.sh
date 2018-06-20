@@ -72,7 +72,7 @@ my_path_abs="$(readlink -f "${my_path_back2}")"
 # Make the internal name shorter.
 bsx=${BRANCH_SUFFIX}
 
-repo_base='ssh://review.whamcloud.com:29418'
+repo_base='ssh://review.hpdd.intel.com:29418'
 
 component_script="${PWD}/component_info.sh"
 
@@ -81,6 +81,7 @@ pushd "${SCONS_LOCAL}"
     --output-script="${component_script}"
 popd
 
+# shellcheck disable=SC1090
 . "${component_script}"
 
 # Keep public_repo_xxx arrays in same order and count.
@@ -139,6 +140,9 @@ pushd "${TARGET}"
     scons_local_commit_raw=$(git submodule status scons_local)
     scons_local_commit1="${scons_local_commit_raw#"-"}"
     scons_local_commit="${scons_local_commit1% *}"
+    scons_local_commit="${scons_local_commit% *}"
+    slc="${scons_local_commit#"${scons_local_commit%%[![:space:]]*}"}"
+    scons_local_commit="${slc}"
     branch_name="${TARGET}_${bsx}"
   fi
 popd
@@ -215,8 +219,8 @@ my_branch=""
 # Loop through the repos in use.
 for i in "${!std_repo_name[@]}"; do
   repo="${std_repo_name[i]}"
-  if [ ! -d ${repo} ]; then
-    git clone ${repo_base}/${std_repo_dir[i]} ${std_repo_name[i]}
+  if [ ! -d "${repo}" ]; then
+    git clone "${repo_base}/${std_repo_dir[i]}" "${std_repo_name[i]}"
   fi
   set +u
   my_wanted_commit="${repo}_git_hash"
@@ -227,7 +231,7 @@ for i in "${!std_repo_name[@]}"; do
 
   branch_name="${TARGET}_${bsx}"
 
-  pushd ${repo}
+  pushd "${repo}"
     git config advise.detachedHead false
     git clean -dfx
     git reset --hard
