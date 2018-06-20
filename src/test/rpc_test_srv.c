@@ -257,12 +257,6 @@ srv_rpc_finalize(void)
 	D_ASSERTF(rc == 0, "crt_group_rank failed %d\n", rc);
 
 	if (rpc_srv.target_multitier_grp != NULL) {
-		if (myrank == 0) {
-			rc = crt_group_config_remove(
-					rpc_srv.target_multitier_grp);
-			assert(rc == 0);
-		}
-
 		rc = crt_group_detach(rpc_srv.target_multitier_grp);
 		D_ASSERTF(rc == 0, "crt_group_detach failed %d\n", rc);
 	}
@@ -595,10 +589,7 @@ srv_rpc_init(void)
 
 	} while (rc != 0);
 	if (rc == 0 && rpc_srv.target_multitier_grp != NULL) {
-
-		rc = crt_group_config_save(rpc_srv.target_multitier_grp, false);
-		D_ASSERTF(rc == 0, "crt_group_config_save failed %d\n", rc);
-
+		D_DEBUG(DB_ALL, "testing multitier io.\n");
 		srv_rpc_multitier_io();
 	} else {
 		dbg("multitier group attachment failed:=%d", rc);
