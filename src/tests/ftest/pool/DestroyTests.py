@@ -27,26 +27,41 @@ import time
 import traceback
 import sys
 import json
+import threading
 
 from avocado       import Test
 from avocado       import main
 from avocado.utils import process
-from avocado.utils import git
 
-import aexpect
-from aexpect.client import run_bg
-
+# covers running from different directories
 sys.path.append('./util')
+sys.path.append('../util')
+sys.path.append('./../../utils/py')
+sys.path.append('../../../utils/py')
 import ServerUtils
 import CheckForPool
 import GetHostsFromFile
 import WriteHostFile
+import daos_api
+from daos_api import DaosContainer
+from daos_api import DaosContext
+from daos_api import DaosPool
+from daos_api import RankList
+
+GLOB_SIGNAL = None
+GLOB_RC = -99000000
+
+
+def cb_func(event):
+    global GLOB_SIGNAL
+    global GLOB_RC
+
+    GLOB_RC = event.event.ev_error
+    GLOB_SIGNAL.set()
 
 class DestroyTests(Test):
     """
     Tests DAOS pool removal
-
-    :avocado: tags=pool,pooldestroy
     """
 
     # super wasteful since its doing this for every variation
@@ -61,6 +76,9 @@ class DestroyTests(Test):
 
         self.server_group = self.params.get("server_group",'/server/',
                                        'daos_server')
+
+        # setup the DAOS python API
+        self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
     def tearDown(self):
            pass
@@ -81,7 +99,7 @@ class DestroyTests(Test):
         time.sleep(1)
 
         setid = self.params.get("setname",
-                                '/run/testparams/setnames/validsetname/')
+                                '/run/setnames/validsetname/')
 
         try:
                # use the uid/gid of the user running the test, these should
@@ -123,7 +141,6 @@ class DestroyTests(Test):
                ServerUtils.stopServer()
                os.remove(hostfile)
 
-
     def test_delete_doesnt_exist(self):
         """
         Test destroying a pool uuid that doesn't exist.
@@ -139,7 +156,7 @@ class DestroyTests(Test):
         time.sleep(1)
 
         setid = self.params.get("setname",
-                                '/run/testparams/setnames/validsetname/')
+                                '/run/setnames/validsetname/')
 
         try:
                # randomly selected uuid, that is exceptionally unlikely to exist
@@ -185,10 +202,10 @@ class DestroyTests(Test):
 
         # need both a good and bad set
         goodsetid = self.params.get("setname",
-                                '/run/testparams/setnames/validsetname/')
+                                '/run/setnames/validsetname/')
 
         badsetid = self.params.get("setname",
-                                '/run/testparams/setnames/badsetname/')
+                                '/run/setnames/badsetname/')
 
         uuid_str = ""
 
@@ -251,7 +268,7 @@ class DestroyTests(Test):
         time.sleep(1)
 
         setid = self.params.get("setname",
-                                '/run/testparams/setnames/validsetname/')
+                                '/run/setnames/validsetname/')
 
         # TODO make these params in the yaml
         daosctl = self.basepath + '/install/bin/daosctl'
@@ -308,9 +325,8 @@ class DestroyTests(Test):
         :avocado: tags=pool,pooldestroy
         """
 
-        # TODO make this a param in YAML
         setid2 = self.basepath + self.params.get("setname",
-                              '/run/testparams/setnames/othersetname/')
+                              '/run/setnames/othersetname/')
 
         hostlist1 = self.params.get("test_machines1",'/run/hosts/')
         hostfile1 = WriteHostFile.WriteHostFile(hostlist1, self.tmp)
@@ -381,85 +397,305 @@ class DestroyTests(Test):
                os.remove(hostfile1)
                os.remove(hostfile2)
 
-    # this test won't work as designed, the connection is dropped
-    # when the daosctl connect call exits
-    # renaming it temporarily until its reworked (renaming
-    # keeps it from being called)
-    def dontrun_test_destroy_connect(self):
+    def test_destroy_connect(self):
         """
         Test destroying a pool that has a connected client with force == false.
         Should fail.
 
-        :avocado: tags=pool,pooldestroy
+        :avocado: tags=pool,pooldestroy,x
         """
-        hostlist = self.params.get("test_machines1",'/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
-        ServerUtils.runServer(hostfile, self.server_group, self.basepath)
-
-        host = hostlist[0]
-
-        daosctl = self.basepath + '/install/bin/daosctl'
-
-        # not sure I need to do this but ... give it time to start
-        time.sleep(1)
-
-        uuid_str = ""
-        failed = 0;
         try:
-               uid = os.geteuid()
-               gid = os.getegid()
 
-               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
-                             format(daosctl, 0x731, uid, gid,
-                                    self.server_group))
-               uuid_str = """{0}""".format(process.system_output(create_cmd))
-               print("uuid is {0}\n".format(uuid_str))
+            # write out a hostfile and start the servers with it
+            hostlist = self.params.get("test_machines1",'/run/hosts/')
+            hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
-               exists = CheckForPool.checkForPool(host, uuid_str)
-               if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".
-                                format(uuid_str, host))
+            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
-               connect_cmd = ('{0} connect-pool -i {1} -s {2} -r'.
-                              format(daosctl, uuid_str, self.server_group))
-               process.system(connect_cmd)
+            # give it time to reach steady state
+            time.sleep(1)
 
-               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.format(
-                   daosctl, uuid_str, self.server_group))
+            # parameters used in pool create
+            createmode = self.params.get("mode",'/run/poolparams/createmode/')
+            createuid  = self.params.get("uid",'/run/poolparams/createuid/')
+            creategid  = self.params.get("gid",'/run/poolparams/creategid/')
+            createsetid = self.params.get("setname",
+                                          '/run/poolparams/createset/')
+            createsize  = self.params.get("size",'/run/poolparams/createsize/')
 
-               process.system(delete_cmd)
+            # initialize a python pool object then create the underlying
+            # daos storage
+            POOL = DaosPool(self.Context)
+            POOL.create(createmode, createuid, creategid,
+                        createsize, createsetid, None)
 
-               exists = CheckForPool.checkForPool(host, uuid_str)
-               if exists == 0:
-                      print("Didn't return the right code but also didn't "
-                            "delete the pool")
+            # need a connection to create container
+            POOL.connect(1 << 1)
 
-               # should throw an exception and not hit this
-               fail = 1
-               self.fail("Shouldn't hit this line.\n")
+            # destroy pool with connection open
+            POOL.destroy(0)
+
+            # should throw an exception and not hit this
+            self.fail("Shouldn't hit this line.\n")
+
+        except ValueError as e:
+            print("got exception which is expected so long as it is BUSY")
+            print(e)
+            print(traceback.format_exc())
+            # pool should still be there
+            exists = CheckForPool.checkForPool(host, uuid_str)
+            if exists != 0:
+                self.fail("Pool gone, but destroy should have failed.\n")
+
+        # no matter what happens cleanup
+        finally:
+               ServerUtils.stopServer()
+               os.remove(hostfile)
+
+    def test_destroy_recreate(self):
+        """
+        Test destroy and recreate one right after the other multiple times
+        Should fail.
+
+        :avocado: tags=pool,pooldestroy,destroyredo
+        """
+
+        try:
+            # write out a hostfile and start the servers with it
+            hostlist = self.params.get("test_machines1",'/run/hosts/')
+            hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+
+            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+
+            # give it time to reach steady state
+            time.sleep(1)
+
+            # parameters used in pool create
+            createmode = self.params.get("mode",'/run/poolparams/createmode/')
+            createuid  = self.params.get("uid",'/run/poolparams/createuid/')
+            creategid  = self.params.get("gid",'/run/poolparams/creategid/')
+            createsetid = self.params.get("setname",
+                                          '/run/poolparams/createset/')
+            createsize  = self.params.get("size",'/run/poolparams/createsize/')
+
+            # initialize a python pool object then create the underlying
+            # daos storage
+            POOL = DaosPool(self.Context)
+            POOL.create(createmode, createuid, creategid,
+                        createsize, createsetid, None)
+
+            # blow it away immediately
+            POOL.destroy(1)
+
+            # now recreate
+            POOL.create(createmode, createuid, creategid,
+                        createsize, createsetid, None)
+
+            # blow it away immediately
+            POOL.destroy(1)
+
+            # now recreate
+            POOL.create(createmode, createuid, creategid,
+                        createsize, createsetid, None)
+
+            # blow it away immediately
+            POOL.destroy(1)
+
+        except ValueError as e:
+            print(e)
+            print(traceback.format_exc())
+            self.fail("create/destroy/create/destroy test failed.\n")
 
         except Exception as e:
-               print("got exception which is expected so long as it relates "
-                     "to delete cmd")
-               print(e)
-               print(traceback.format_exc())
+            self.fail("Daos code segfaulted most likely.  Error: %s" % e)
 
-               # this time force = 1, should work
-               delete_cmd =  ('{0} destroy-pool -i {1} -s {2} -f'.
-                              format(daosctl, uuid_str, self.server_group))
+        # no matter what happens cleanup
+        finally:
+               ServerUtils.stopServer()
+               os.remove(hostfile)
 
-               process.system(delete_cmd)
+    def test_many_servers(self):
+        """
+        Test destroy on a large (relative) number of servers.
 
-               exists = CheckForPool.checkForPool(host, uuid_str)
-               if exists == 0:
-                      self.fail("Pool {0} found on host {1} after delete.\n".
-                                format(uuid_str, host))
+        :avocado: tags=pool,pooldestroy,destroybig
+        """
+        try:
+            # write out a hostfile and start the servers with it
+            hostlist = self.params.get("test_machines6",'/run/hosts/')
+            hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
-               if fail == 1:
-                      self.fail("Didn't return DER_BUSY.\n")
+            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
-        # no matter what happens shutdown the server
+            # give it time to reach steady state
+            time.sleep(1)
+
+            # parameters used in pool create
+            createmode = self.params.get("mode",'/run/poolparams/createmode/')
+            createuid  = self.params.get("uid",'/run/poolparams/createuid/')
+            creategid  = self.params.get("gid",'/run/poolparams/creategid/')
+            createsetid = self.params.get("setname",
+                                          '/run/poolparams/createset/')
+            createsize  = self.params.get("size",'/run/poolparams/createsize/')
+
+            # initialize a python pool object then create the underlying
+            # daos storage
+            POOL = DaosPool(self.Context)
+            POOL.create(createmode, createuid, creategid,
+                        createsize, createsetid, None)
+
+            time.sleep(1)
+
+            # okay, get rid of it
+            POOL.destroy(1)
+
+        except ValueError as e:
+            print(e)
+            print(traceback.format_exc())
+            self.fail("6 server test failed.\n")
+
+        except Exception as e:
+            self.fail("Daos code segfaulted most likely.  Error: %s" % e)
+
+        # no matter what happens cleanup
+        finally:
+               ServerUtils.stopServer()
+               os.remove(hostfile)
+
+
+    def test_destroy_withdata(self):
+        """
+        Test destroy and recreate one right after the other multiple times
+        Should fail.
+
+        :avocado: tags=pool,pooldestroy,destroydata
+        """
+        try:
+            # write out a hostfile and start the servers with it
+            hostlist = self.params.get("test_machines1",'/run/hosts/')
+            hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+
+            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+
+            # give it time to reach steady state
+            time.sleep(1)
+
+            # parameters used in pool create
+            createmode = self.params.get("mode",'/run/poolparams/createmode/')
+            createuid  = self.params.get("uid",'/run/poolparams/createuid/')
+            creategid  = self.params.get("gid",'/run/poolparams/creategid/')
+            createsetid = self.params.get("setname",
+                                          '/run/poolparams/createset/')
+            createsize  = self.params.get("size",'/run/poolparams/createsize/')
+
+            # initialize a python pool object then create the underlying
+            # daos storage
+            POOL = DaosPool(self.Context)
+            POOL.create(createmode, createuid, creategid,
+                        createsize, createsetid, None)
+
+            # need a connection to create container
+            POOL.connect(1 << 1)
+
+            # create a container
+            CONTAINER = DaosContainer(self.Context)
+            CONTAINER.create(POOL.handle)
+
+            POOL.disconnect()
+
+            daosctl = self.basepath + '/install/bin/daosctl'
+
+            write_cmd = ('{0} write-pattern -i {1} -l 0 -c {2} -p sequential'.
+                         format(daosctl, daos_api.c_uuid_to_str(POOL.uuid),
+                                daos_api.c_uuid_to_str(CONTAINER.uuid)))
+
+            process.system_output(write_cmd)
+
+            # blow it away
+            POOL.destroy(1)
+
+        except ValueError as e:
+            print(e)
+            print(traceback.format_exc())
+            self.fail("create/destroy/create/destroy test failed.\n")
+
+        except Exception as e:
+            self.fail("Daos code segfaulted most likely.  Error: %s" % e)
+
+        # no matter what happens cleanup
+        finally:
+               ServerUtils.stopServer()
+               os.remove(hostfile)
+
+    def test_destroy_async(self):
+        """
+        Performn destroy asynchronously, successful and failed.
+
+        :avocado: tags=pool,pooldestroy,destroyasync
+        """
+
+        global GLOB_SIGNAL
+        global GLOB_RC
+
+        try:
+            # write out a hostfile and start the servers with it
+            hostlist = self.params.get("test_machines1",'/run/hosts/')
+            hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+
+            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+
+            # give it time to reach steady state
+            time.sleep(1)
+
+            # parameters used in pool create
+            createmode = self.params.get("mode",'/run/poolparams/createmode/')
+            createuid  = self.params.get("uid",'/run/poolparams/createuid/')
+            creategid  = self.params.get("gid",'/run/poolparams/creategid/')
+            createsetid = self.params.get("setname",
+                                          '/run/poolparams/createset/')
+            createsize  = self.params.get("size",'/run/poolparams/createsize/')
+
+            # initialize a python pool object then create the underlying
+            # daos storage
+            POOL = DaosPool(self.Context)
+            POOL.create(createmode, createuid, creategid,
+                        createsize, createsetid, None)
+
+            # allow the callback to tell us when its been called
+            GLOB_SIGNAL = threading.Event()
+
+            # blow it away but this time get return code via callback function
+            POOL.destroy(1, cb_func)
+
+            # wait for callback
+            GLOB_SIGNAL.wait()
+            if GLOB_RC != 0:
+                self.fail("RC not as expected in async test")
+
+            # recreate the pool, reset the signal, shutdown the
+            # servers so call will fail and then check rc in the callback
+            POOL.create(createmode, createuid, creategid,
+                        createsize, createsetid, None)
+            GLOB_SIGNAL = threading.Event()
+            GLOB_RC = -9900000
+            ServerUtils.stopServer()
+            POOL.destroy(1, cb_func)
+
+            # wait for callback, expecting a timeout since servers are down
+            GLOB_SIGNAL.wait()
+            if GLOB_RC != -1011:
+                self.fail("RC not as expected in async test")
+
+        except ValueError as e:
+            print(e)
+            print(traceback.format_exc())
+            self.fail("destroy async test failed.\n")
+
+        except Exception as e:
+            self.fail("Daos code segfaulted most likely. Error: %s" % e)
+
+        # no matter what happens cleanup
         finally:
                ServerUtils.stopServer()
                os.remove(hostfile)

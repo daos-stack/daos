@@ -107,7 +107,7 @@ def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
 
     # signal the caller that api function has completed
     if cb_func is not None:
-        cb_event = CallbackEvent(obj, anotherEvent)
+        cb_event = CallbackEvent(obj, the_event)
         cb_func(cb_event)
 
     # clean up
@@ -447,6 +447,7 @@ class DaosPool(object):
         else:
             event = DaosEvent()
             params = [self.uuid, self.group, c_force, event]
+
             t = threading.Thread(target=AsyncWorker1, args=(func, params,
                       self.context, cb_func, self))
             t.start()
