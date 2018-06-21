@@ -58,6 +58,9 @@ def scons():
     # Build utilities
     SConscript('utils/SConscript')
 
+    # Build the control plane components
+    SConscript('control/SConscript')
+
     # Build test
     SConscript('tests/SConscript')
 

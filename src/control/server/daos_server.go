@@ -1,0 +1,96 @@
+//
+// (C) Copyright 2018 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. B609815.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+
+package main
+
+import (
+	"log"
+	"net"
+	"os"
+	"os/exec"
+	"os/signal"
+	"runtime"
+	"syscall"
+
+	"google.golang.org/grpc"
+
+	"modules/security"
+	secpb "modules/security/proto"
+)
+
+func main() {
+	runtime.GOMAXPROCS(1)
+
+	lis, err := net.Listen("tcp", "0.0.0.0:10000")
+	if err != nil {
+		log.Fatalf("Unable to listen on management interface: %s", err)
+	}
+
+	// Create a new server register our service and listen for connections.
+	// TODO: This will need to be extended to take certificat information for
+	// the TLS protected channel. Currently it is an "insecure" channel.
+	var opts []grpc.ServerOption
+	grpcServer := grpc.NewServer(opts...)
+	secpb.RegisterSecurityControlServer(grpcServer, security.NewControlServer())
+	go grpcServer.Serve(lis)
+	defer grpcServer.GracefulStop()
+
+	// create a channel to retrieve signals
+	sigchan := make(chan os.Signal, 2)
+	signal.Notify(sigchan,
+		syscall.SIGTERM,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+		syscall.SIGKILL,
+		syscall.SIGHUP)
+
+	// setup cmd line to start the DAOS I/O server
+	srv := exec.Command("daos_io_server", os.Args[1:]...)
+	srv.Stdout = os.Stdout
+	srv.Stderr = os.Stderr
+
+	// I/O server should get a SIGTERM if this process dies
+	srv.SysProcAttr = &syscall.SysProcAttr{
+		Pdeathsig: syscall.SIGTERM,
+	}
+
+	// start the DAOS I/O server
+	err = srv.Start()
+	if err != nil {
+		log.Fatal("DAOS I/O server failed to start: ", err)
+	}
+
+	// catch signals
+	go func() {
+		<-sigchan
+		if err := srv.Process.Kill(); err != nil {
+			log.Fatal("Failed to kill DAOS I/O server: ", err)
+		}
+	}()
+
+	// wait for I/O server to return
+	err = srv.Wait()
+	if err != nil {
+		log.Fatal("DAOS I/O server exited with error: ", err)
+	}
+}

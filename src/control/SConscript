@@ -1,0 +1,31 @@
+"""Build DAOS components"""
+#pylint: disable=no-member
+#pylint: disable=invalid-sequence-index
+
+
+import os
+
+def scons():
+    """Execute build"""
+
+    Import('env')
+
+    gopath = "%s/build/control" % Dir('#').abspath
+    gosrc = "%s/src/control" % Dir('#').abspath
+
+    if os.path.isdir(gopath) is False:
+        os.makedirs(gopath)
+    if os.path.isdir("%s/src" % gopath) is False:
+        os.symlink(gosrc, "%s/src" % gopath)
+
+    env.Append(GOPATH=[gopath])
+    env.AppendENVPath('GOPATH', env['GOPATH'])
+    env['ENV']['GOBIN'] = "%s/bin" % gopath
+
+    serverbin = "%s/bin/server" % gopath
+    serversrc = "%s/server/daos_server.go" % gosrc
+    env.Command(serverbin, serversrc, "go install server")
+    env.InstallAs("$PREFIX/bin/daos_server", serverbin)
+
+if __name__ == "SCons.Script":
+    scons()
