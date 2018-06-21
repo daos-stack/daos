@@ -22,6 +22,11 @@ def scons():
     env.AppendENVPath('GOPATH', env['GOPATH'])
     env['ENV']['GOBIN'] = "%s/bin" % gopath
 
+    agentbin = "%s/bin/agent" % gopath
+    agentsrc = "%s/agent/daos_agent.go" % gosrc
+    env.Command(agentbin, agentsrc, "go install agent")
+    env.InstallAs("$PREFIX/bin/daos_agent", agentbin)
+
     serverbin = "%s/bin/server" % gopath
     serversrc = "%s/server/daos_server.go" % gosrc
     env.Command(serverbin, serversrc, "go install server")

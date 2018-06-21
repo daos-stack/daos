@@ -29,6 +29,8 @@ import (
 
 	uuid "github.com/satori/go.uuid"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/peer"
 )
 
 // Object which implements our gRPC security control service interface
@@ -141,5 +143,43 @@ func (s *controlService) SecurityAction(ctx context.Context, request *pb.Securit
 // NewControlServer creates a new instance of our serverService struct.
 func NewControlServer() *controlService {
 	s := &controlService{NewContextMap()}
+	return s
+}
+
+// Object which implements our service interface and holds
+// our client to contact the management server.
+type agentServiceServer struct {
+	client pb.SecurityControlClient
+}
+
+// gRPC service handler for RequestSecurityContext RPC
+func (s *agentServiceServer) RequestSecurityContext(ctx context.Context, request *pb.AuthToken) (*pb.SecurityReply, error) {
+	pr, _ := peer.FromContext(ctx)
+	creds := pr.AuthInfo.(*DomainInfo)
+
+	action, err := AuthSysRequestFromCreds(creds)
+
+	if err != nil {
+		return nil, err
+	}
+	result, err := s.client.SecurityAction(context.Background(), action)
+	return result, err
+}
+
+// gRPC service handler for VerifySecurityHandle RPC
+func (s *agentServiceServer) VerifySecurityHandle(ctx context.Context, handle *pb.SecurityHandle) (*pb.SecurityReply, error) {
+	action := &pb.SecurityRequest{
+		Action: pb.AuthAction_AUTH_GET,
+		Data:   &pb.SecurityRequest_Handle{handle},
+	}
+
+	result, err := s.client.SecurityAction(context.Background(), action)
+	return result, err
+}
+
+// NewAgentServer constructor for instantiating an agentSericeServer object
+func NewAgentServer(conn *grpc.ClientConn) *agentServiceServer {
+	client := pb.NewSecurityControlClient(conn)
+	s := &agentServiceServer{client: client}
 	return s
 }
