@@ -233,6 +233,9 @@ do {								\
 	int __ref;						\
 	struct crt_ivns_internal *__ivns = xx;			\
 								\
+	if (__ivns == NULL)					\
+		break;						\
+								\
 	D_SPIN_LOCK(&__ivns->cii_ref_lock);			\
 	D_ASSERTF(__ivns->cii_ref_count >= (num),		\
 		"%p decref(%d) from %d\n",			\
