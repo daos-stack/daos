@@ -11,10 +11,20 @@ function print_usage {
 #set the default values
 GOPATH="$HOME/go"
 VERIFY=false
+
+# go.uuid: MIT Licensed and used for UUID generation in Go components
+# protoc-gen-go: 3 Clause BSD Licensed and provides go GRPC compiler support
+# grpc: Apache 2.0 used as communication channel between Go components.
+# sys/unix: 3 Clause BSD Official Golang package for unix os support
+# ishell: MIT License used for the frontend shell interface for Go components.
+# go-flags: 3 Clause BSD used for command line parsing with ishell.
 packages=('github.com/satori/go.uuid'
-'github.com/zpatrick/go-config'
 'github.com/golang/protobuf/protoc-gen-go'
-'google.golang.org/grpc')
+'google.golang.org/grpc'
+'golang.org/x/sys/unix'
+'github.com/abiosoft/ishell'
+'github.com/jessevdk/go-flags'
+)
 
 
 while getopts ":i:g:vh" opt; do
@@ -39,13 +49,13 @@ while getopts ":i:g:vh" opt; do
         esac
 done
 
-REALGOPATH=`realpath -ms $GOPATH`
+REALGOPATH=$(realpath -ms "$GOPATH")
 GOPATH=$REALGOPATH
 export GOPATH
 
 echo "Using the GOPATH location of $GOPATH" 1>&2
 if [[ $VERIFY = true ]] ; then
-	for package in ${packages[@]}; do
+	for package in "${packages[@]}"; do
 		go list ... | grep ${package} > /dev/null
 		if [[ $? -ne 0 ]]; then
 			echo "Cannot find ${package} in GOPATH=${GOPATH}" 1>&2
@@ -57,10 +67,10 @@ if [[ $VERIFY = true ]] ; then
 fi
 
 if [[ ! -d $GOPATH ]] ; then
-	mkdir -p $GOPATH
+	mkdir -p "$GOPATH"
 fi
 
-for package in ${packages[@]}; do
+for package in "${packages[@]}"; do
 	echo "Fetching Package: $package" 1>&2
-	go get -u $package
+	go get -u "$package"
 done
