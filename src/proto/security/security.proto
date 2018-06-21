@@ -1,5 +1,5 @@
 syntax = "proto3";
-package security;
+package proto;
 
 // Encapsulation of reply status including sub status for specific error types
 message ReplyStatus {
@@ -58,15 +58,14 @@ message SecurityRequest {
 	}
 }
 message SecurityReply {
-    ReplyStatus status = 0;
-    AuthToken response = 1;
-
+    ReplyStatus status = 1;
+    AuthToken response = 2;
 }
 message SecurityContext {
 	SecurityHandle handle = 1;
 	AuthToken context = 2;
 }
 message SecurityHandle {
-	string handle = 1;
-	string verifier = 2;
+	bytes handle = 1;
+	bytes verifier = 2;
 }

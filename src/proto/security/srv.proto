@@ -1,5 +1,5 @@
 syntax = "proto3";
-package security;
+package proto;
 
 import "security.proto";
 
@@ -8,6 +8,6 @@ import "security.proto";
 // definition below. Currently the SecurityAction RPC is a multiplexed request interface.
 // This does not mean that you are limited to rely on a single rpc for your entire module.
 // This may even change for the Security mechanism in the future.
-service ManagementService {
+service SecurityControl {
     rpc SecurityAction(SecurityRequest) returns (SecurityReply) {};
 }

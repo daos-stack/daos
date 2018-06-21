@@ -1,5 +1,5 @@
 syntax = "proto3";
-package security;
+package proto;
 
 import "security.proto";
 
@@ -7,6 +7,7 @@ import "security.proto";
 // In order to add RPCs associated with your service add them in the AgentService
 // definition below. You are not limited by the number of RPCs you add to the service.
 
-service AgentService {
+service SecurityAgent {
     rpc RequestSecurityContext(AuthToken) returns (SecurityReply) {};
+    rpc VerifySecurityHandle(SecurityHandle) returns (SecurityReply) {};
 }
