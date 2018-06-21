@@ -32,5 +32,10 @@ def scons():
     env.Command(serverbin, serversrc, "go install server")
     env.InstallAs("$PREFIX/bin/daos_server", serverbin)
 
+    shellbin = "%s/bin/shell" % gopath
+    shellsrc = "%s/shell/DAOSShell.go" % gosrc
+    env.Command(shellbin, shellsrc, "go install shell")
+    env.InstallAs("$PREFIX/bin/DAOSShell", shellbin)
+
 if __name__ == "SCons.Script":
     scons()
