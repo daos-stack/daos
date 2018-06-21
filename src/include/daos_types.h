@@ -46,6 +46,9 @@ extern "C" {
 /** Scatter/gather list for memory buffers */
 #define daos_sg_list_t d_sg_list_t
 
+/** free function for d_rank_list_t */
+#define daos_rank_list_free d_rank_list_free
+
 /**
  * Generic data type definition
  */

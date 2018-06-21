@@ -736,6 +736,21 @@ daos_obj_id_generate(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	oid->hi |= hdr;
 }
 
+/**
+ * Generate a rank list from a string with a seprator argument. This is a
+ * convenience function to generate the rank list required by
+ * daos_pool_connect().
+ *
+ * \param[in]	str	string with the rank list
+ * \param[in]	sep	separator of the ranks in \a str.
+ *			dmg uses ":" as the separator.
+ *
+ * \return		allocated rank list that user is responsible to free
+ *			with daos_rank_list_free().
+ */
+d_rank_list_t *
+daos_rank_list_parse(const char *str, const char *sep);
+
 static inline daos_oclass_id_t
 daos_obj_id2class(daos_obj_id_t oid)
 {
