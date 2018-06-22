@@ -78,8 +78,9 @@ class TestGroup(commontestsuite.CommonTestSuite):
         self.pass_env = ' -x D_LOG_MASK={!s} -x CRT_PHY_ADDR_STR={!s}' \
                         ' -x OFI_INTERFACE={!s}' \
                         ' -x CRT_CTX_SHARE_ADDR={!s} -x CRT_CTX_NUM={!s}' \
+                        ' -x CRT_TIMEOUT={!s}' \
                             .format(log_mask, crt_phy_addr, ofi_interface, \
-                                    ofi_share_addr, ofi_ctx_num)
+                                    ofi_share_addr, ofi_ctx_num, crt_timeout)
 
     def tearDown(self):
         """tear down the test"""
