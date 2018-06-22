@@ -857,8 +857,9 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 	D_ASSERT(!btr_node_is_full(tcx, trace->tr_node));
 
 	leaf = btr_node_is_leaf(tcx, trace->tr_node);
-	btr_trace_debug(tcx, trace, "insert %s now\n",
-			btr_rec_string(tcx, rec, leaf, sbuf, BTR_PRINT_BUF));
+	btr_trace_debug(tcx, trace, "insert %s now size %d\n",
+			btr_rec_string(tcx, rec, leaf, sbuf, BTR_PRINT_BUF),
+			btr_rec_size(tcx));
 
 	rec_a = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
 	rec_b = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at + 1);

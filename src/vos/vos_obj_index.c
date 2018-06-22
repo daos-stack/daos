@@ -134,6 +134,9 @@ obj_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 	daos_iov_set(val_iov, obj_df, sizeof(struct vos_obj_df));
 	rec->rec_mmid = umem_id_t2u(obj_mmid);
+
+	D_DEBUG(DB_TRACE, "alloc "DF_UOID" rec "UMMID_PF"\n",
+		DP_UOID(obj_df->vo_id), UMMID_P(rec->rec_mmid));
 	return 0;
 }
 
@@ -174,6 +177,8 @@ obj_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 	obj_df = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 	daos_iov_set(val_iov, obj_df, sizeof(struct vos_obj_df));
+	D_DEBUG(DB_TRACE, "fetch "DF_UOID" rec "UMMID_PF"\n",
+		DP_UOID(obj_df->vo_id), UMMID_P(rec->rec_mmid));
 
 	return 0;
 }

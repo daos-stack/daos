@@ -922,6 +922,8 @@ next:
 		eiov->ei_type = media;
 		eiov->ei_off = off;
 		eiov->ei_data_len = size;
+		D_DEBUG(DB_IO, "media %hu offset "DF_X64" size %zd\n",
+			media, off, size);
 		esgl->es_nr_out++;
 		D_ASSERT(esgl->es_nr_out <= esgl->es_nr);
 	}
@@ -1005,6 +1007,8 @@ vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
 	if (ioc->ic_actv_at != 0) {
 		err = umem_tx_publish(umem, ioc->ic_actv, ioc->ic_actv_at);
 		ioc->ic_actv_at = 0;
+		D_DEBUG(DB_TRACE, "publish ioc %p actv_at %d rc %d\n",
+			ioc, ioc->ic_actv_cnt, err);
 		if (err)
 			goto abort;
 	}

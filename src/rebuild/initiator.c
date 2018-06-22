@@ -100,7 +100,7 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 		sgls[i].sg_iovs = &iov[i];
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %*.s nr %d\n",
+	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %.*s nr %d\n",
 		DP_UOID(rdone->ro_oid), rdone, (int)rdone->ro_dkey.iov_len,
 		(char *)rdone->ro_dkey.iov_buf, rdone->ro_iod_num);
 	rc = ds_obj_fetch(oh, rdone->ro_epoch, &rdone->ro_dkey,
@@ -148,7 +148,7 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 		memcpy(&sgls[i], sgl, sizeof(*sgl));
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %*.s nr %d\n",
+	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %.*s nr %d\n",
 		DP_UOID(rdone->ro_oid), rdone, (int)rdone->ro_dkey.iov_len,
 		(char *)rdone->ro_dkey.iov_buf, rdone->ro_iod_num);
 
@@ -423,6 +423,9 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t oid,
 	uuid_copy(rdone->ro_cont_uuid, iter_arg->cont_uuid);
 	rdone->ro_epoch = DAOS_EPOCH_MAX;
 
+	D_DEBUG(DB_REBUILD, DF_UOID"%p dkey %.*s rebuild on idx %d\n",
+		DP_UOID(oid), rdone, (int)dkey->iov_len, (char *)dkey->iov_buf,
+		idx);
 	ABT_mutex_lock(puller->rp_lock);
 	d_list_add_tail(&rdone->ro_list, &puller->rp_one_list);
 	ABT_mutex_unlock(puller->rp_lock);
@@ -432,6 +435,8 @@ free:
 		 * so in the following iods_packing, it will check different
 		 * version/cookie correctly see rebuild_list_buf_process().
 		 */
+		for (i = 0; i < iod_num; i++)
+			daos_iov_free(&iods[i].iod_name);  
 		memset(iods, 0, iod_num * sizeof(*iods));
 		uuid_clear(*cookie);
 		*version = 0;

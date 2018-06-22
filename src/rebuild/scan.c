@@ -710,7 +710,8 @@ out_map:
 	D_ASSERT(tls != NULL);
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
-
+	D_DEBUG(DB_REBUILD, DF_UUID"scan leader done %d\n",
+		DP_UUID(rpt->rt_pool_uuid), rc);
 	ABT_mutex_free(&arg->scan_lock);
 	D_FREE_PTR(arg);
 	rpt_put(rpt);

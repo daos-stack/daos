@@ -243,7 +243,13 @@ umem_has_tx(struct umem_instance *umm)
 static inline umem_id_t
 umem_alloc_verb(struct umem_instance *umm, uint64_t flags, size_t size)
 {
-	return umm->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY);
+	umem_id_t __ummid;
+
+	__ummid = umm->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY);
+
+	D_DEBUG(DB_MEM, "allocate %s mmid "UMMID_PF" size %zd\n",
+		(umm)->umm_name, UMMID_P(__ummid), size);
+	return __ummid;
 }
 
 #define umem_alloc(umm, size)						\
@@ -263,8 +269,8 @@ umem_alloc_typed_verb(umm, type, flags, size)				\
 									\
 	__ummid = (umm)->umm_ops->mo_tx_alloc(umm, size, flags,		\
 					   TMMID_TYPE_NUM(type));	\
-	D_DEBUG(DB_MEM, "allocate %s mmid "UMMID_PF"\n",		\
-		(umm)->umm_name, UMMID_P(__ummid));			\
+	D_DEBUG(DB_MEM, "allocate %s mmid "UMMID_PF" size %d\n",	\
+		(umm)->umm_name, UMMID_P(__ummid), (int)size);		\
 	__tmmid.oid = __ummid;						\
 	__tmmid;							\
 })

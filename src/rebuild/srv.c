@@ -943,10 +943,6 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 void
 rpt_get(struct rebuild_tgt_pool_tracker	*rpt)
 {
-	/* rpt_get should not be called once rpt is
-	 * about to be destroyed.
-	 */
-	D_ASSERT(rpt->rt_finishing == 0);
 	D_ASSERT(rpt->rt_refcount >= 0);
 	rpt->rt_refcount++;
 
@@ -1373,7 +1369,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	rpt->rt_finishing = 1;
 	/* Wait until all ult/tasks finish and release the rpt.
 	 * NB: Because rebuild_tgt_fini will be only called in
-	 * rebuild_tgt_status_check, which will make sure if
+	 * rebuild_tgt_status_check, which will make sure when 
 	 * rt_refcount reaches to 1, either all rebuild is done or
 	 * all ult/task has been aborted by rt_abort, i.e. no new
 	 * ULT/task will be created after this check. So it is safe
@@ -1554,8 +1550,8 @@ rebuild_prepare_one(void *data)
 	if (rc)
 		pool_tls->rebuild_pool_status = rc;
 
-	D_DEBUG(DB_REBUILD, "open local container "DF_UUID"/"DF_UUID"\n",
-		DP_UUID(rpt->rt_pool_uuid), DP_UUID(rpt->rt_coh_uuid));
+	D_DEBUG(DB_REBUILD, "open local container "DF_UUID"/"DF_UUID" rc %d\n",
+		DP_UUID(rpt->rt_pool_uuid), DP_UUID(rpt->rt_coh_uuid), rc);
 	return rc;
 }
 

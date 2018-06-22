@@ -674,6 +674,8 @@ copy_one(struct eio_desc *eiod, struct eio_iov *eiov,
 
 		nob = min(size, buf_len - arg->ca_iov_off);
 		if (addr != NULL) {
+			D_DEBUG(DB_IO, "eio copy "DF_X64" size %zd\n",
+				eiov->ei_off, nob);
 			eio_memcpy(eiod, media, addr, iov->iov_buf +
 					arg->ca_iov_off, nob);
 			addr += nob;

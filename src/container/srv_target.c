@@ -1186,15 +1186,17 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 			break;
 		}
 
+		D_DEBUG(DB_ANY, "iter "DF_UOID"/"DF_UUID"\n",
+			DP_UOID(ent.ie_oid), DP_UUID(co_uuid));
+
 		rc = callback(co_uuid, ent.ie_oid, arg);
 		if (rc) {
+			D_DEBUG(DB_ANY, "iter "DF_UOID" rc %d\n",
+				DP_UOID(ent.ie_oid), rc);
 			if (rc > 0)
 				rc = 0;
 			break;
 		}
-
-		D_DEBUG(DB_ANY, "iter "DF_UOID" rc: %d\n",
-			DP_UOID(ent.ie_oid), rc);
 
 		vos_iter_next(iter_h);
 	}
