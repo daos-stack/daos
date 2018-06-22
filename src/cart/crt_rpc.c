@@ -983,7 +983,8 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 	 */
 	if (base_addr != NULL && *base_addr == NULL && !grp_priv->gp_local) {
 		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank) {
+		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank &&
+		    tgt_ep->ep_tag == 0) {
 			D_STRNDUP(uri, grp_priv->gp_psr_phy_addr,
 				  CRT_ADDR_STR_MAX_LEN);
 			*base_addr = uri;
