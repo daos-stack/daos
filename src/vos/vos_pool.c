@@ -122,7 +122,7 @@ pool_link(struct vos_pool *pool, struct d_uuid *ukey, daos_handle_t *poh)
 {
 	int	rc;
 
-	rc = d_uhash_link_insert(vos_pool_hhash_get(), ukey,
+	rc = d_uhash_link_insert(vos_pool_hhash_get(), ukey, NULL,
 				 &pool->vp_hlink);
 	if (rc) {
 		D_ERROR("uuid hash table insert failed: %d\n", rc);
@@ -145,7 +145,7 @@ pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
 {
 	struct d_ulink *hlink;
 
-	hlink = d_uhash_link_lookup(vos_pool_hhash_get(), ukey);
+	hlink = d_uhash_link_lookup(vos_pool_hhash_get(), ukey, NULL);
 	if (hlink == NULL) {
 		D_DEBUG(DB_MGMT, "can't find "DF_UUID"\n", DP_UUID(ukey->uuid));
 		return -DER_NONEXIST;

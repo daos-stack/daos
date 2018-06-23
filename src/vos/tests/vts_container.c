@@ -399,7 +399,7 @@ cookie_table_test(void **state)
 		j = (rand()%VCT_COOKIES) - 1;
 		epochs[i] = rand()%100;
 
-		l_ulink = d_uhash_link_lookup(uhtab, &cookie_array[j]);
+		l_ulink = d_uhash_link_lookup(uhtab, &cookie_array[j], NULL);
 		if (l_ulink != NULL) {
 			l_entry = container_of(l_ulink, struct cookie_entry,
 					       ulink);
@@ -412,7 +412,7 @@ cookie_table_test(void **state)
 			cookie_entries[k].max_epoch = epochs[i];
 			d_uhash_ulink_init(&cookie_entries[k].ulink,
 					   &cookie_uh_ops);
-			ret = d_uhash_link_insert(uhtab, &cookie_array[j],
+			ret = d_uhash_link_insert(uhtab, &cookie_array[j], NULL,
 						  &cookie_entries[k].ulink);
 			if (ret != 0)
 				D_ERROR("Inserting handle to UUID hash\n");

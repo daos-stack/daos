@@ -771,6 +771,7 @@ io_obj_cache_test(void **state)
 		vos_obj_release(occ, objs[i]);
 
 	vos_cont_close(l_coh);
+	vos_cont_destroy(l_poh, ctx->tc_co_uuid);
 	vos_pool_close(l_poh);
 	vos_pool_destroy(po_name, pool_uuid);
 	vos_obj_cache_destroy(occ);

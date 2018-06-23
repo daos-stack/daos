@@ -155,6 +155,21 @@ cont_df_lookup(struct vos_pool *vpool, struct d_uuid *ukey,
 }
 
 /**
+ * Container cache secondary key
+ * comparison
+ */
+bool
+cont_cmp(struct d_ulink *ulink, void *cmp_args)
+{
+	struct vos_container *cont;
+	struct d_uuid	     *pkey;
+
+	pkey = (struct d_uuid *)cmp_args;
+	cont = container_of(ulink, struct vos_container, vc_uhlink);
+	return !uuid_compare(cont->vc_pool->vp_id, pkey->uuid);
+}
+
+/**
  * Container cache functions
  */
 void
@@ -172,18 +187,20 @@ cont_free(struct d_ulink *ulink)
 
 struct d_ulink_ops   co_hdl_uh_ops = {
 	.uop_free       = cont_free,
+	.uop_cmp	= cont_cmp,
 };
 
 int
-cont_insert(struct vos_container *cont, struct d_uuid *key, daos_handle_t *coh)
+cont_insert(struct vos_container *cont, struct d_uuid *key, struct d_uuid *pkey,
+	    daos_handle_t *coh)
 {
-	int	rc = 0;
+	int	rc	= 0;
 
 	D_ASSERT(cont != NULL && coh != NULL);
 
 	d_uhash_ulink_init(&cont->vc_uhlink, &co_hdl_uh_ops);
 	rc = d_uhash_link_insert(vos_cont_hhash_get(), key,
-				 &cont->vc_uhlink);
+				 pkey, &cont->vc_uhlink);
 	if (rc) {
 		D_ERROR("UHASH table container handle insert failed\n");
 		D_GOTO(exit, rc);
@@ -194,12 +211,15 @@ exit:
 	return rc;
 }
 
+
+
 static int
-cont_lookup(struct d_uuid *key, struct vos_container **cont)
-{
+cont_lookup(struct d_uuid *key, struct d_uuid *pkey,
+	    struct vos_container **cont) {
+
 	struct d_ulink *ulink;
 
-	ulink = d_uhash_link_lookup(vos_cont_hhash_get(), key);
+	ulink = d_uhash_link_lookup(vos_cont_hhash_get(), key, pkey);
 	if (ulink == NULL)
 		return -DER_NONEXIST;
 
@@ -285,6 +305,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	int				rc = 0;
 	struct vos_pool			*vpool = NULL;
 	struct d_uuid			ukey;
+	struct d_uuid			pkey;
 	struct cont_df_args		args;
 	struct vos_container		*cont = NULL;
 
@@ -295,13 +316,14 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		D_ERROR("Empty pool handle?\n");
 		return -DER_INVAL;
 	}
+	uuid_copy(pkey.uuid, vpool->vp_id);
 	uuid_copy(ukey.uuid, co_uuid);
 
 	/**
 	 * Check if handle exists
 	 * then return the handle immediately
 	 */
-	rc = cont_lookup(&ukey, &cont);
+	rc = cont_lookup(&ukey, &pkey, &cont);
 	if (rc == 0) {
 		D_DEBUG(DB_TRACE, "Found handle in DRAM UUID hash\n");
 		*coh = vos_cont2hdl(cont);
@@ -346,7 +368,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		}
 	}
 
-	rc = cont_insert(cont, &ukey, coh);
+	rc = cont_insert(cont, &ukey, &pkey, coh);
 	if (rc) {
 		D_ERROR("Error inserting vos container handle to uuid hash\n");
 		D_GOTO(exit, rc);
@@ -408,27 +430,29 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	struct vos_pool			*vpool;
 	struct vos_container		*cont = NULL;
 	struct cont_df_args		 args;
-	struct d_uuid			 uuid;
+	struct d_uuid			 pkey;
+	struct d_uuid			 key;
 	int				 rc;
 
-	uuid_copy(uuid.uuid, co_uuid);
+	uuid_copy(key.uuid, co_uuid);
 	D_DEBUG(DB_TRACE, "Destroying CO ID in container index "DF_UUID"\n",
-		DP_UUID(uuid.uuid));
+		DP_UUID(key.uuid));
 
 	vpool = vos_hdl2pool(poh);
 	if (vpool == NULL) {
 		D_ERROR("Empty pool handle for destroying container?\n");
 		return -DER_INVAL;
 	}
+	uuid_copy(pkey.uuid, vpool->vp_id);
 
-	rc = cont_lookup(&uuid, &cont);
+	rc = cont_lookup(&key, &pkey, &cont);
 	if (rc != -DER_NONEXIST) {
 		D_ERROR("Open reference exists, cannot destroy\n");
 		cont_decref(cont);
 		D_GOTO(exit, rc = -DER_BUSY);
 	}
 
-	rc = cont_df_lookup(vpool, &uuid, &args);
+	rc = cont_df_lookup(vpool, &key, &args);
 	if (rc) {
 		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
 			DP_UUID(co_uuid));
@@ -445,7 +469,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 			pmemobj_tx_abort(EFAULT);
 		}
 
-		daos_iov_set(&iov, &uuid, sizeof(struct d_uuid));
+		daos_iov_set(&iov, &key, sizeof(struct d_uuid));
 		rc = dbtree_delete(vpool->vp_cont_th, &iov, NULL);
 	}  TX_ONABORT {
 		rc = umem_tx_errno(rc);
