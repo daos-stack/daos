@@ -1085,6 +1085,12 @@ int d_hhash_key_type(uint64_t key)
  * locking.
  ******************************************************************************/
 
+struct d_uhash_bundle {
+	struct d_uuid	*key;
+	/* additional args for comparison function */
+	void		*cmp_args;
+};
+
 static struct d_ulink *
 uh_link2ptr(d_list_t *link)
 {
@@ -1097,9 +1103,10 @@ uh_link2ptr(d_list_t *link)
 static unsigned int
 uh_op_key_hash(struct d_hash_table *uhtab, const void *key, unsigned int ksize)
 {
-	struct d_uuid *lkey = (struct d_uuid *)key;
+	struct d_uhash_bundle	*uhbund	= (struct d_uhash_bundle *)key;
+	struct d_uuid		*lkey	= uhbund->key;
 
-	D_ASSERT(ksize == sizeof(struct d_uuid));
+	D_ASSERT(ksize == sizeof(struct d_uhash_bundle));
 	D_DEBUG(DB_TRACE, "uuid_key: "CF_UUID"\n", CP_UUID(lkey->uuid));
 
 	return (unsigned int)(d_hash_string_u32((const char *)lkey->uuid,
@@ -1110,15 +1117,22 @@ static bool
 uh_op_key_cmp(struct d_hash_table *uhtab, d_list_t *link, const void *key,
 	      unsigned int ksize)
 {
-	struct d_ulink *ulink = uh_link2ptr(link);
-	struct d_uuid  *lkey = (struct d_uuid *)key;
+	struct d_ulink		*ulink	= uh_link2ptr(link);
+	struct d_uhash_bundle	*uhbund	= (struct d_uhash_bundle *)key;
+	struct d_uuid		*lkey	= (struct d_uuid *)uhbund->key;
+	bool			res	= true;
 
-	D_ASSERT(ksize == sizeof(struct d_uuid));
+	D_ASSERT(ksize == sizeof(struct d_uhash_bundle));
 	D_DEBUG(DB_TRACE, "Link key, Key:"CF_UUID","CF_UUID"\n",
 		CP_UUID(lkey->uuid),
 		CP_UUID(ulink->ul_uuid.uuid));
 
-	return !uuid_compare(ulink->ul_uuid.uuid, lkey->uuid);
+	res = ((uuid_compare(ulink->ul_uuid.uuid, lkey->uuid)) == 0);
+	if (res && ulink->ul_ops != NULL &&
+	    ulink->ul_ops->uop_cmp != NULL)
+		res = ulink->ul_ops->uop_cmp(ulink, uhbund->cmp_args);
+
+	return res;
 }
 
 static void
@@ -1182,9 +1196,15 @@ d_ulink_find(struct d_hash_table *htable, void *key, size_t size)
 }
 
 struct d_ulink*
-d_uhash_link_lookup(struct d_hash_table *uhtab, struct d_uuid *key)
+d_uhash_link_lookup(struct d_hash_table *uhtab, struct d_uuid *key,
+		    void *cmp_args)
 {
-	return d_ulink_find(uhtab, (void *)key, sizeof(struct d_uuid));
+	struct d_uhash_bundle	uhbund;
+
+	uhbund.key	= key;
+	uhbund.cmp_args	= cmp_args;
+	return d_ulink_find(uhtab, (void *)(&uhbund),
+			    sizeof(struct d_uhash_bundle));
 }
 
 void
@@ -1201,14 +1221,19 @@ d_uhash_link_putref(struct d_hash_table *uhtab, struct d_ulink *ulink)
 
 int
 d_uhash_link_insert(struct d_hash_table *uhtab, struct d_uuid *key,
-		    struct d_ulink *ulink)
+		    void *cmp_args, struct d_ulink *ulink)
 {
-	int	rc = 0;
+	int			rc = 0;
+	struct d_uhash_bundle	uhbund;
 
 	D_ASSERT(ulink->ul_link.rl_initialized);
 
 	uuid_copy(ulink->ul_uuid.uuid, key->uuid);
-	rc = d_hash_rec_insert(uhtab, (void *)key, sizeof(struct d_uuid),
+	uhbund.key	= key;
+	uhbund.cmp_args = cmp_args;
+
+	rc = d_hash_rec_insert(uhtab, (void *)(&uhbund),
+			       sizeof(struct d_uhash_bundle),
 			       &ulink->ul_link.rl_link, true);
 
 	if (rc)

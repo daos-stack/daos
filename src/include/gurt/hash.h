@@ -559,11 +559,15 @@ struct d_ulink;
 struct d_ulink_ops {
 	/** free callback */
 	void	(*uop_free)(struct d_ulink *ulink);
+	/** optional compare callback -- for any supplement comparison */
+	bool	(*uop_cmp)(struct d_ulink *ulink, void *cmp_args);
 };
 
 struct d_ulink {
 	struct d_rlink		 ul_link;
 	struct d_uuid		 ul_uuid;
+	/** optional agrument for compare callback */
+	void			*ul_cmp_args;
 	struct d_ulink_ops	*ul_ops;
 };
 
@@ -576,9 +580,9 @@ void d_uhash_link_addref(struct d_hash_table *uhtab, struct d_ulink *hlink);
 void d_uhash_link_putref(struct d_hash_table *uhtab, struct d_ulink *hlink);
 void d_uhash_link_delete(struct d_hash_table *uhtab, struct d_ulink *hlink);
 int  d_uhash_link_insert(struct d_hash_table *uhtab, struct d_uuid *key,
-			 struct d_ulink *hlink);
+			 void *cmp_args, struct d_ulink *hlink);
 struct d_ulink *d_uhash_link_lookup(struct d_hash_table *uhtab,
-				    struct d_uuid *key);
+				    struct d_uuid *key, void *cmp_args);
 
 #if defined(__cplusplus)
 }
