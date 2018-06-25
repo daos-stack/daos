@@ -30,7 +30,7 @@ def preload_prereqs(prereqs):
     reqs = ['ompi', 'cart', 'argobots', 'pmdk', 'cmocka',
             'uuid', 'crypto']
     if not is_platform_arm():
-        reqs.extend(['spdk'])
+        reqs.extend(['spdk', 'isal'])
     prereqs.preload(components, prebuild=reqs)
     return prereqs
 
