@@ -56,7 +56,6 @@ struct rebuild_send_arg {
 struct rebuild_scan_arg {
 	daos_handle_t		rebuild_tree_hdl;
 	struct rebuild_tgt_pool_tracker *rpt;
-	struct pl_target_grp	*tgp_failed;
 	d_rank_list_t	*failed_ranks;
 	ABT_mutex		scan_lock;
 };
@@ -515,6 +514,7 @@ out:
 	return rc;
 }
 
+#define LOCAL_ARRAY_SIZE	128
 static int
 placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 {
@@ -523,71 +523,78 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 	struct pl_obj_layout	*layout = NULL;
 	struct pl_map		*map = NULL;
 	struct daos_obj_md	md;
-	uint32_t		tgt_rebuild;
-	unsigned int		shard_rebuild;
+	unsigned int		tgt_array[LOCAL_ARRAY_SIZE];
+	unsigned int		shard_array[LOCAL_ARRAY_SIZE];
+	unsigned int		*tgts = NULL;
+	unsigned int		*shards = NULL;
+	int			rebuild_nr;
 	d_rank_t		myrank;
+	int			i;
 	int			rc;
 
 	if (rpt->rt_abort)
 		return 1;
 
-	dc_obj_fetch_md(oid.id_pub, &md);
-	while (1) {
-		struct pool_map *poolmap;
-
-		map = pl_map_find(rpt->rt_pool_uuid, oid.id_pub);
-		if (map == NULL) {
-			D_ERROR(DF_UOID"Cannot find valid placement map"
-				DF_UUID"\n", DP_UOID(oid),
-				DP_UUID(rpt->rt_pool_uuid));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-
-		poolmap = rebuild_pool_map_get(rpt->rt_pool);
-		if (pl_map_version(map) >= pool_map_get_version(poolmap)) {
-			/* very likely we just break out from here, unless
-			 * there is a cascading failure.
-			 */
-			rebuild_pool_map_put(poolmap);
-			break;
-		}
-		pl_map_decref(map);
-
-		pl_map_update(rpt->rt_pool_uuid, poolmap, false);
-		rebuild_pool_map_put(poolmap);
+	map = pl_map_find(rpt->rt_pool_uuid, oid.id_pub);
+	if (map == NULL) {
+		D_ERROR(DF_UOID"Cannot find valid placement map"
+			DF_UUID"\n", DP_UOID(oid),
+			DP_UUID(rpt->rt_pool_uuid));
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	dc_obj_fetch_md(oid.id_pub, &md);
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
-
-	rc = pl_obj_find_rebuild(map, &md, NULL, arg->tgp_failed->tg_ver,
-				 &tgt_rebuild, &shard_rebuild);
-	if (rc <= 0) /* No need rebuild */
-		D_GOTO(out, rc);
-
-	D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
-		" on %d for shard %d\n", DP_UOID(oid), DP_UUID(co_uuid),
-		DP_UUID(rpt->rt_pool_uuid), tgt_rebuild, shard_rebuild);
-
-	/* During rebuild test, it will manually exclude some target to
-	 * trigger the rebuild, then later add it back, so some objects
-	 * might exist on some illegal target, so they might use its "own"
-	 * target as the spare target, let's skip these object now.
-	 * When we have better support from CART exclude/addback, myrank
-	 * should always not equal to tgt_rebuild. XXX
-	 */
-	if (myrank != tgt_rebuild) {
-		rc = rebuild_object_insert(arg, tgt_rebuild, shard_rebuild,
-					   rpt->rt_pool_uuid, co_uuid, oid);
-		if (rc)
-			D_GOTO(out, rc);
+	md.omd_ver = rpt->rt_rebuild_ver;
+	if (arg->failed_ranks->rl_nr > LOCAL_ARRAY_SIZE) {
+		D_ALLOC(tgts, arg->failed_ranks->rl_nr * sizeof(*tgts));
+		D_ALLOC(shards, arg->failed_ranks->rl_nr * sizeof(*shards));
+		if (tgts == NULL || shards == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	} else {
-		D_DEBUG(DB_REBUILD, "skip "DF_UOID", not send it to its own.\n",
-			DP_UOID(oid));
-		rc = 0;
+		tgts = tgt_array;
+		shards = shard_array;
+	}
+
+	rebuild_nr = pl_obj_find_rebuild(map, &md, NULL, rpt->rt_rebuild_ver,
+					 tgts, shards,
+					 arg->failed_ranks->rl_nr);
+	if (rebuild_nr <= 0) /* No need rebuild */
+		D_GOTO(out, rc = rebuild_nr);
+
+	D_ASSERT(rebuild_nr <= arg->failed_ranks->rl_nr);
+	for (i = 0; i < rebuild_nr; i++) {
+		D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
+			" on %d for shard %d\n", DP_UOID(oid), DP_UUID(co_uuid),
+			DP_UUID(rpt->rt_pool_uuid), tgts[i], shards[i]);
+
+		/* During rebuild test, it will manually exclude some target to
+		 * trigger the rebuild, then later add it back, so some objects
+		 * might exist on some illegal target, so they might use its
+		 * "own" target as the spare target, let's skip these object
+		 * now. When we have better support from CART exclude/addback,
+		 * myrank should always not equal to tgt_rebuild. XXX
+		 */
+		if (myrank != tgts[i]) {
+			rc = rebuild_object_insert(arg, tgts[i], shards[i],
+						   rpt->rt_pool_uuid, co_uuid,
+						   oid);
+			if (rc)
+				D_GOTO(out, rc);
+		} else {
+			D_DEBUG(DB_REBUILD, "skip "DF_UOID".\n", DP_UOID(oid));
+			rc = 0;
+		}
 	}
 out:
 	if (layout != NULL)
 		pl_obj_layout_free(layout);
+
+	if (tgts != tgt_array && tgts != NULL)
+		D_FREE(tgts);
+
+	if (shards != shard_array && shards != NULL)
+		D_FREE(shards);
 
 	if (map != NULL)
 		pl_map_decref(map);
@@ -638,12 +645,10 @@ static void
 rebuild_scan_leader(void *data)
 {
 	struct rebuild_scan_arg	  *arg = data;
-	struct pl_target_grp	  *tgp;
 	struct pool_map		  *map;
 	struct rebuild_tgt_pool_tracker *rpt;
 	struct rebuild_pool_tls	  *tls;
 	struct rebuild_iter_arg    iter_arg;
-	int			   i;
 	int			   rc;
 
 	D_ASSERT(arg != NULL);
@@ -662,39 +667,12 @@ rebuild_scan_leader(void *data)
 	}
 	ABT_mutex_unlock(rpt->rt_lock);
 
-	/* initialize parameters for scanners */
-	D_ALLOC_PTR(tgp);
-	if (tgp == NULL)
-		D_GOTO(put_plmap, rc = -DER_NOMEM);
-
-	arg->tgp_failed = tgp;
-	tgp->tg_ver = rpt->rt_rebuild_ver;
-	tgp->tg_target_nr = arg->failed_ranks->rl_nr;
-
-	D_ALLOC(tgp->tg_targets, tgp->tg_target_nr * sizeof(*tgp->tg_targets));
-	if (tgp->tg_targets == NULL)
-		D_GOTO(out_group, rc = -DER_NOMEM);
-
-	for (i = 0; i < arg->failed_ranks->rl_nr; i++) {
-		struct pool_target      *target;
-		d_rank_t		 rank;
-
-		rank = arg->failed_ranks->rl_ranks[i];
-		target = pool_map_find_target_by_rank(map, rank);
-		if (target == NULL) {
-			D_ERROR("Nonexistent target rank=%d\n", rank);
-			D_GOTO(out_group, rc = -DER_NONEXIST);
-		}
-
-		tgp->tg_targets[i].pt_pos = target - pool_map_targets(map);
-	}
-
 	iter_arg.arg = arg;
 	iter_arg.callback = placement_check;
 
 	rc = dss_thread_collective(rebuild_scanner, &iter_arg);
 	if (rc)
-		D_GOTO(out_group, rc);
+		D_GOTO(put_plmap, rc);
 
 	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
 		DP_UUID(rpt->rt_pool_uuid));
@@ -704,7 +682,7 @@ rebuild_scan_leader(void *data)
 		rc = dbtree_iterate(arg->rebuild_tree_hdl, false,
 				    rebuild_tgt_iter_cb, arg);
 		if (rc)
-			D_GOTO(out_group, rc);
+			D_GOTO(put_plmap, rc);
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
@@ -713,15 +691,12 @@ rebuild_scan_leader(void *data)
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
 			DP_UUID(rpt->rt_pool_uuid), rc);
-		D_GOTO(out_group, rc);
+		D_GOTO(put_plmap, rc);
 	}
 
 	D_DEBUG(DB_REBUILD, DF_UUID" sent objects to initiator %d\n",
 		DP_UUID(rpt->rt_pool_uuid), rc);
-out_group:
-	if (tgp->tg_targets != NULL)
-		D_FREE(tgp->tg_targets);
-	D_FREE_PTR(tgp);
+
 put_plmap:
 	pl_map_disconnect(rpt->rt_pool_uuid);
 out_map:

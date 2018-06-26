@@ -594,6 +594,10 @@ dc_obj_open(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	rc = obj_ptr2pm_ver(obj, &obj->cob_md.omd_ver);
+	if (rc)
+		D_GOTO(out, rc);
+
 	rc = obj_layout_create(obj);
 	if (rc != 0)
 		D_GOTO(out, rc);

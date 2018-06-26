@@ -236,7 +236,7 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 		 * both scan and pull status to the leader, i.e. they
 		 * both can be trusted.
 		 */
-		if (iv->riv_status == 0 && !rgt->rgt_scan_done)
+		if (iv->riv_status == 0)
 			return 0;
 	}
 
@@ -1242,7 +1242,36 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 		    d_rank_list_t *tgts_failed, d_rank_list_t *svc_list)
 {
 	struct rebuild_task	*task;
+	struct rebuild_task	*found = NULL;
 	int			rc;
+
+	/* Check if the pool already in the queue list */
+	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list,
+			      dst_list) {
+		if (uuid_compare(task->dst_pool_uuid, uuid) == 0) {
+			found = task;
+			break;
+		}
+	}
+
+	if (found) {
+		int i;
+
+		/* Merge the failed ranks to existing rebuild task */
+		for (i = 0; i < tgts_failed->rl_nr; i++) {
+			rc = daos_rank_list_append(task->dst_tgts_failed,
+						   tgts_failed->rl_ranks[i]);
+			if (rc)
+				return rc;
+		}
+		if (task->dst_map_ver < map_ver)
+			found->dst_map_ver = map_ver;
+
+		D_PRINT("Rebuild [queued] ("DF_UUID" ver=%u) failed rank %u\n",
+			DP_UUID(uuid), map_ver, tgts_failed->rl_ranks[0]);
+
+		return 0;
+	}
 
 	D_ALLOC_PTR(task);
 	if (task == NULL)
@@ -1263,6 +1292,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 		D_FREE_PTR(task);
 		return rc;
 	}
+
 
 	D_PRINT("Rebuild [queued] ("DF_UUID" ver=%u) failed rank %u\n",
 		 DP_UUID(uuid), map_ver, tgts_failed->rl_ranks[0]);

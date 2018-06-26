@@ -78,7 +78,8 @@ struct pl_map_ops {
 				      struct daos_obj_shard_md *shard_md,
 				      uint32_t rebuild_ver,
 				      uint32_t *tgt_rank,
-				      uint32_t *shard_id);
+				      uint32_t *shard_id,
+				      unsigned int array_size);
 	int	(*o_obj_find_reint)(struct pl_map *map,
 				    struct daos_obj_md *md,
 				    struct daos_obj_shard_md *shard_md,

@@ -1250,6 +1250,71 @@ rebuild_master_change_during_rebuild(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR);
 }
 
+static void
+rebuild_multiple_tgts(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct daos_obj_layout *layout;
+	d_rank_t	leader;
+	d_rank_t	exclude_ranks[2];
+	int		i;
+
+	if (!test_runable(arg, 6))
+		skip();
+
+	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
+
+	rebuild_io(arg, &oid, 1);
+
+	test_get_leader(arg, &leader);
+	daos_obj_layout_get(arg->coh, oid, &layout);
+
+	if (arg->myrank == 0) {
+		int fail_cnt = 0;
+
+		/* All ranks should wait before rebuild */
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     DAOS_REBUILD_HANG | DAOS_FAIL_VALUE,
+				     NULL);
+		/* kill 2 ranks at the same time */
+		D_ASSERT(layout->ol_shards[0]->os_replica_nr > 2);
+		for (i = 0; i < 3; i++) {
+			d_rank_t rank = layout->ol_shards[0]->os_ranks[i];
+
+			if (rank != leader) {
+				exclude_ranks[fail_cnt] = rank;
+				daos_exclude_server(arg->pool.pool_uuid,
+						    arg->group, &arg->pool.svc,
+						    rank);
+				if (++fail_cnt >= 2)
+					break;
+			}
+		}
+
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, 0, NULL);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* Rebuild 2 ranks at the same time */
+	if (arg->myrank == 0)
+		test_rebuild_wait(&arg, 1);
+
+	/* Verify the data */
+	rebuild_io_validate(arg, &oid, 1);
+
+	daos_obj_layout_free(layout);
+
+	/* Add back the target if it is not being killed */
+	if (arg->myrank == 0) {
+		for (i = 0; i < 2; i++)
+			rebuild_test_add_tgt(&arg, 1, exclude_ranks[i]);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static int
 rebuild_io_cb(void *arg)
 {
@@ -1559,25 +1624,27 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_master_change_during_scan, NULL, test_case_teardown},
 	{"REBUILD21: rebuild with master change during rebuild",
 	rebuild_master_change_during_rebuild, NULL, test_case_teardown},
-	{"REBUILD22: disconnect pool during scan",
+	{"REBUILD22: rebuild multiple tgts",
+	rebuild_multiple_tgts, NULL, test_case_teardown},
+	{"REBUILD23: disconnect pool during scan",
 	 rebuild_tgt_pool_disconnect_in_scan, NULL, test_case_teardown},
-	{"REBUILD23: disconnect pool during rebuild",
+	{"REBUILD24: disconnect pool during rebuild",
 	 rebuild_tgt_pool_disconnect_in_rebuild, NULL, test_case_teardown},
-	{"REBUILD24: connect pool during scan for offline rebuild",
+	{"REBUILD25: connect pool during scan for offline rebuild",
 	 rebuild_offline_pool_connect_in_scan, NULL, test_case_teardown},
-	{"REBUILD25: connect pool during rebuild for offline rebuild",
+	{"REBUILD26: connect pool during rebuild for offline rebuild",
 	 rebuild_offline_pool_connect_in_rebuild, NULL, test_case_teardown},
-	{"REBUILD26: offline rebuild",
+	{"REBUILD27: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD27: rebuild with master failure",
+	{"REBUILD28: rebuild with master failure",
 	 rebuild_master_failure, NULL, test_case_teardown},
-	{"REBUILD28: rebuild with two failures",
+	{"REBUILD29: rebuild with two failures",
 	 rebuild_multiple_failures, NULL, test_case_teardown},
-	{"REBUILD29: rebuild fail all replicas before rebuild",
+	{"REBUILD30: rebuild fail all replicas before rebuild",
 	 rebuild_fail_all_replicas_before_rebuild, NULL, test_case_teardown},
-	{"REBUILD30: rebuild fail all replicas",
+	{"REBUILD31: rebuild fail all replicas",
 	 rebuild_fail_all_replicas, NULL, test_case_teardown},
-	{"REBUILD31: multi-pools rebuild concurrently",
+	{"REBUILD32: multi-pools rebuild concurrently",
 	 multi_pools_rebuild_concurrently, NULL, test_case_teardown},
 };
 

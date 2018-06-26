@@ -145,18 +145,20 @@ pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
  * \param  md  [IN]		object metadata
  * \param  shard_md [IN]	shard metadata (optional)
  * \param  rebuild_ver [IN]	current rebuild version
- * \param  tgt_rank [OUT]	spare target rank
- * \param  shard_id [OUT]	shard id to be reuilt
+ * \param  tgt_rank [OUT]	spare target ranks
+ * \param  shard_id [OUT]	shard ids to be rebuilt
+ * \param  array_size [IN]	array size of tgt_rank & shard_id
 
- * \return	1	Rebuild the @shard_id on the target @tgt_rank.
- *		0	No shard needs be rebuilt.
+ * \return	> 0	the array size of tgt_rank & shard_id, so it means
+ *                      getting the spare targets for the failure shards.
+ *		0	No need rebuild or find spare tgts successfully.
  *		-ve	error code.
  */
 int
 pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
 		    uint32_t rebuild_ver, uint32_t *tgt_rank,
-		    uint32_t *shard_id)
+		    uint32_t *shard_id, unsigned int array_size)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
@@ -164,7 +166,7 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, rebuild_ver,
-					       tgt_rank, shard_id);
+					       tgt_rank, shard_id, array_size);
 }
 
 /**
