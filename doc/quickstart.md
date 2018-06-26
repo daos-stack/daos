@@ -199,7 +199,7 @@ Include the daos.h header file in your program and link with -Ldaos. Examples ar
 
 For development, it is recommended to build and install each dependency in a unique subdirectory. The DAOS build system supports this through the TARGET\_PREFIX variable. Once the submodules have been initialized and updated, run the following:
 
-    $ scons PREFIX=$(daos_prefix_path} TARGET_PREFIX=${daos_prefix_path}/opt install --build-deps=yes
+    $ scons PREFIX=${daos_prefix_path} TARGET_PREFIX=${daos_prefix_path}/opt install --build-deps=yes
 
 Installing the components into seperate directories allow to upgrade the components individually replacing --build-deps=yes with --update-prereq={component\_name}. This requires change to the environment configuration from before. For automated environment setup, source scons_local/utils/setup_local.sh.
 
