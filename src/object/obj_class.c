@@ -223,7 +223,7 @@ daos_oclass_attr_find(daos_obj_id_t oid)
 			break;
 	}
 
-	if (ocid == DAOS_OC_UNKNOWN) {
+	if (oc->oc_id == DAOS_OC_UNKNOWN) {
 		D_DEBUG(DB_PL, "Unknown object class %d for "DF_OID"\n",
 			ocid, DP_OID(oid));
 		return NULL;
