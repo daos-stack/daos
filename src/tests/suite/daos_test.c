@@ -29,7 +29,7 @@
 #include <getopt.h>
 #include "daos_test.h"
 
-/** All tests in default order ('d' must be the last one) */
+/** All tests in default order (tests that kill nodes must be last) */
 static const char *all_tests = "mpceiACoROdr";
 
 /** Server crt group ID */
