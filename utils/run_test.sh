@@ -41,6 +41,7 @@ if [ -d "/mnt/daos" ]; then
     run_test build/src/common/tests/sched
     run_test build/src/client/tests/eq_tests
     run_test src/vos/tests/evt_ctl.sh
+    run_test build/src/vos/vea/tests/vea_ut
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for
