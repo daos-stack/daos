@@ -372,17 +372,36 @@ dss_srv_handler(void *arg)
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("failed to progress network context: %d\n",
 				rc);
-			/* XXX if it exists the loop here, then tls to be freed,
-			 * other ULTs on this xstream might get freed TLS, so
-			 * let's not break here until we have proper server stop
-			 * procedures, i.e. this server xstream should wait until
-			 * all ULTs DAOS-769 */
+			/* XXX Sometimes the failure might be just temporary,
+			 * Let's still keep for progressing for now.
+			 */
 		}
 		eio_nvme_poll(dmi->dmi_nvme_ctxt);
 
 		rc = ABT_future_test(dx->dx_shutdown, &state);
 		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		if (state == ABT_TRUE)
+			break;
+
+		ABT_thread_yield();
+	}
+
+	/* Let's wait until all of queue ULTs has been executed, in case dmi_ctx
+	 * might be used by some other ULTs.
+	 */
+	while (1) {
+		size_t total_size = 0;
+		int i;
+
+		for (i = 0; i < DSS_POOL_CNT; i++) {
+			size_t pool_size;
+
+			rc = ABT_pool_get_total_size(dx->dx_pools[i],
+						     &pool_size);
+			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+			total_size += pool_size;
+		}
+		if (total_size == 0)
 			break;
 
 		ABT_thread_yield();
@@ -1187,8 +1206,16 @@ dss_tse_progress_ult(void *arg)
 	struct dss_module_info *dmi = arg;
 
 	while (true) {
+		ABT_bool	state;
+		int		rc;
+
+		rc = ABT_future_test(dmi->dmi_xstream->dx_shutdown, &state);
+		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+		if (state == ABT_TRUE)
+			break;
+
 		tse_sched_progress(&dmi->dmi_sched);
-		/* XXX Check if this needs to be stopped */
+
 		ABT_thread_yield();
 	}
 }

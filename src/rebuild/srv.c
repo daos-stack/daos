@@ -1804,6 +1804,14 @@ fini(void)
 	return 0;
 }
 
+static int
+rebuild_cleanup(void)
+{
+	/* stop all rebuild process */
+	ds_rebuild_leader_stop_all();
+	return 0;
+}
+
 struct dss_module rebuild_module =  {
 	.sm_name	= "rebuild",
 	.sm_mod_id	= DAOS_REBUILD_MODULE,
@@ -1813,4 +1821,5 @@ struct dss_module rebuild_module =  {
 	.sm_srv_rpcs	= rebuild_rpcs,
 	.sm_handlers	= rebuild_handlers,
 	.sm_key		= &rebuild_module_key,
+	.sm_cleanup	= rebuild_cleanup,
 };
