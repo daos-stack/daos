@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2018 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,8 +19,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-if [ -n "$*" ]; then
-  ./check_python.sh $*
+if [ $# -ne 0 ]; then
+  ./check_python.sh "$@"
   exit $?
 fi
 
@@ -51,6 +51,7 @@ fi
                   -P3 "test_runner/CmdRunner.py" \
                   -P3 "test_runner/NodeRunner.py" \
                   -P3 "test_runner/findTestLogs.py"\
+                  -s "utils/SConstruct_info"\
                   -s "utils/docker/SConstruct_info"
 
 exit $?
