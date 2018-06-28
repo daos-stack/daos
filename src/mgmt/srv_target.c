@@ -336,10 +336,10 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		 */
 		rc = fallocate(fd, 0, 0, size);
 		if (rc) {
-			D_ERROR(DF_UUID": failed to allocate vos file %s with "
-				"size: "DF_U64", rc: %d.\n",
-				DP_UUID(uuid), path, size, rc);
 			rc = daos_errno2der(errno);
+			D_ERROR(DF_UUID": failed to allocate vos file %s with "
+				"size: "DF_U64", rc: %d, %s.\n",
+				DP_UUID(uuid), path, size, rc, strerror(errno));
 			break;
 		}
 
