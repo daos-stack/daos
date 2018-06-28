@@ -596,21 +596,29 @@ iv_ns_destroy_internal(struct ds_iv_ns *ns)
 		crt_iv_namespace_destroy(ns->iv_ns, iv_ns_destroy_cb, ns);
 }
 
+static struct ds_iv_ns *
+ds_iv_ns_lookup(unsigned int ns_id, d_rank_t master_rank)
+{
+	struct ds_iv_ns *ns;
+
+	d_list_for_each_entry(ns, &ds_iv_ns_list, iv_ns_link) {
+		if (ns->iv_ns_id == ns_id &&
+		    ns->iv_master_rank == master_rank)
+			return ns;
+	}
+
+	return NULL;
+}
+
 static int
 iv_ns_create_internal(unsigned int ns_id, d_rank_t master_rank,
 		      struct ds_iv_ns **pns)
 {
 	struct ds_iv_ns	*ns;
-	struct ds_iv_ns	*tmp;
 
-	/* Destroy the ns with the same id, probably because the new
-	 * is elected.
-	 */
-	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
-		if (ns->iv_ns_id == ns_id &&
-		    ns->iv_master_rank == master_rank)
-			return -DER_EXIST;
-	}
+	ns = ds_iv_ns_lookup(ns_id, master_rank);
+	if (ns)
+		return -DER_EXIST;
 
 	D_ALLOC_PTR(ns);
 	if (ns == NULL)
@@ -687,6 +695,15 @@ ds_iv_ns_attach(crt_context_t ctx, unsigned int ns_id,
 	/* the ns for master will be created in ds_iv_ns_create() */
 	if (master_rank == myrank)
 		return 0;
+
+	ns = ds_iv_ns_lookup(ns_id, master_rank);
+	if (ns) {
+		D_DEBUG(DB_TRACE, "lookup iv_ns %d master rank %d"
+			" myrank %d ns %p\n", ns_id, master_rank,
+			myrank, ns);
+		*p_iv_ns = ns;
+		return 0;
+	}
 
 	rc = iv_ns_create_internal(ns_id, master_rank, &ns);
 	if (rc)
