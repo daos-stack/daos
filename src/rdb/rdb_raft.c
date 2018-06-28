@@ -333,14 +333,35 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 {
 	struct rdb	       *db = arg;
 	uint64_t		i = index;
+	uint64_t		tail = db->d_lc_record.dlr_tail;
+	daos_iov_t		value;
 	int			rc;
 
+	D_ASSERTF(i > db->d_lc_record.dlr_base, DF_U64" > "DF_U64"\n", i,
+		  db->d_lc_record.dlr_base);
+	D_ASSERTF(i == db->d_lc_record.dlr_tail - 1, DF_U64" == "DF_U64"\n", i,
+		  db->d_lc_record.dlr_tail);
+
+	/* Update the log tail. */
+	db->d_lc_record.dlr_tail = i;
+	daos_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
+			   &value);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to update log tail "DF_U64": %d\n",
+			DP_DB(db), db->d_lc_record.dlr_tail, rc);
+		db->d_lc_record.dlr_tail = tail;
+		return rc;
+	}
+
+	/* Discard the entry. */
 	rc = rdb_lc_discard(db->d_lc, i, i);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to delete entry "DF_U64": %d\n",
 			DP_DB(db), i, rc);
 		return rc;
 	}
+
 	D_DEBUG(DB_TRACE, DF_DB": deleted entry "DF_U64": term=%d type=%d "
 		"buf=%p len=%u\n", DP_DB(db), i, entry->term, entry->type,
 		entry->data.buf, entry->data.len);
