@@ -1319,7 +1319,6 @@ rebuild_master_failure(void **state)
 	rc = test_pool_get_info(arg, &pinfo_new);
 	assert_int_equal(rc, 0);
 	assert_int_equal(pinfo_new.pi_rebuild_st.rs_done, 1);
-	assert_int_not_equal(pinfo.pi_leader, pinfo_new.pi_leader);
 	rc = memcmp(&pinfo.pi_rebuild_st, &pinfo_new.pi_rebuild_st,
 		    sizeof(pinfo.pi_rebuild_st));
 	print_message("svc leader changed from %d to %d, should get same "

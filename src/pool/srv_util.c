@@ -248,7 +248,7 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	rc = crt_corpc_req_create(ctx, pool->sp_group,
 			  excluded.rl_nr == 0 ? NULL : &excluded,
 			  opc, bulk_hdl/* co_bulk_hdl */, NULL /* priv */,
-			  0 /* flags */, crt_tree_topo(CRT_TREE_KNOMIAL, 4),
+			  0 /* flags */, crt_tree_topo(CRT_TREE_KNOMIAL, 32),
 			  rpc);
 
 	map_ranks_fini(&excluded);
