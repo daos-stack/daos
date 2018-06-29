@@ -726,10 +726,43 @@ daos_obj_id_is_null(daos_obj_id_t oid)
 	return oid.lo == 0 && oid.hi == 0;
 }
 
+static inline int
+daos_obj_id_compare(daos_obj_id_t a, daos_obj_id_t b)
+{
+	if (a.hi < b.hi)
+		return -1;
+	else if (a.hi > b.hi)
+		return 1;
+
+	if (a.lo < b.lo)
+		return -1;
+	else if (a.lo > b.lo)
+		return 1;
+
+	return 0;
+}
+
 static inline bool
 daos_unit_oid_is_null(daos_unit_oid_t oid)
 {
 	return oid.id_shard == 0 && daos_obj_id_is_null(oid.id_pub);
+}
+
+static inline int
+daos_unit_oid_compare(daos_unit_oid_t a, daos_unit_oid_t b)
+{
+	int rc;
+
+	rc = daos_obj_id_compare(a.id_pub, b.id_pub);
+	if (rc != 0)
+		return rc;
+
+	if (a.id_shard < b.id_shard)
+		return -1;
+	else if (a.id_shard > b.id_shard)
+		return 1;
+
+	return 0;
 }
 
 /**

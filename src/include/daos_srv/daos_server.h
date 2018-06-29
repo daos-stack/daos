@@ -436,4 +436,43 @@ struct dss_enum_arg {
 
 int dss_enum_pack(vos_iter_type_t type, struct dss_enum_arg *arg);
 
+/**
+ * Used by dss_enum_unpack to accumulate recxs that can be stored with a single
+ * VOS update.
+ *
+ * ui_oid and ui_dkey are only filled by dss_enum_unpack for certain
+ * enumeration types, as commented after each field. Callers may fill ui_oid,
+ * for instance, when the enumeration type is VOS_ITER_DKEY, to pass the object
+ * ID to the callback.
+ *
+ * ui_iods, ui_recxs_caps, and ui_sgls are arrays of the same capacity
+ * (ui_iods_cap) and length (ui_iods_len). That is, the iod in ui_iods[i] can
+ * hold at most ui_recxs_caps[i] recxs, which have their inline data described
+ * by ui_sgls[i]. ui_sgls is optional. If ui_iods[i].iod_recxs[j] has no inline
+ * data, then ui_sgls[i].sg_iovs[j] will be empty.
+ */
+struct dss_enum_unpack_io {
+	daos_unit_oid_t	ui_oid;		/**< type <= OBJ */
+	daos_key_t	ui_dkey;	/**< type <= DKEY */
+	daos_iod_t     *ui_iods;
+	int		ui_iods_cap;
+	int		ui_iods_len;
+	int	       *ui_recxs_caps;
+	daos_sg_list_t *ui_sgls;	/**< optional */
+	uuid_t		ui_cookie;
+	uint32_t	ui_version;
+};
+
+void dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
+			     int *recxs_caps, daos_sg_list_t *sgls,
+			     int iods_cap);
+void dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io);
+void dss_enum_unpack_io_fini(struct dss_enum_unpack_io *io);
+
+typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
+
+int dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
+		    struct dss_enum_unpack_io *io, dss_enum_unpack_cb_t cb,
+		    void *cb_arg);
+
 #endif /* __DSS_API_H__ */
