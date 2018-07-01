@@ -98,6 +98,18 @@ daos_power2_nbits(unsigned int val)
 	return val == LOWEST_BIT_SET(val) ? shift - 1 : shift;
 }
 
+static inline bool
+daos_uuid_valid(const uuid_t uuid)
+{
+	return uuid && !uuid_is_null(uuid);
+}
+
+static inline bool
+daos_rank_list_valid(const d_rank_list_t *rl)
+{
+	return rl && rl->rl_ranks && rl->rl_nr;
+}
+
 /** Function table for combsort and binary search */
 typedef struct {
 	void    (*so_swap)(void *array, int a, int b);

@@ -77,7 +77,7 @@ dc_pool_create(tse_task_t *task)
 	int				rc = 0;
 
 	args = dc_task_get_args(task);
-	if (args->dev == NULL || strlen(args->dev) == 0) {
+	if (!args->uuid || args->dev == NULL || strlen(args->dev) == 0) {
 		D_ERROR("Invalid parameter of dev (NULL or empty string).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -173,7 +173,7 @@ dc_pool_destroy(tse_task_t *task)
 	int				 rc = 0;
 
 	args = dc_task_get_args(task);
-	if (uuid_is_null(args->uuid)) {
+	if (!daos_uuid_valid(args->uuid)) {
 		D_ERROR("Invalid parameter of uuid (NULL).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
