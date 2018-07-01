@@ -51,7 +51,7 @@
 static char			 pmem_file[PATH_MAX];
 static bool			 daos_mode = true;
 
-static daos_epoch_t		 ctl_epoch;
+static long			 ctl_epoch;
 static daos_unit_oid_t		 ctl_oid;
 static uuid_t			 ctl_cookie;
 static daos_handle_t		 ctl_oh;	/* object open handle */
@@ -127,8 +127,21 @@ ctl_punch(struct dts_io_credit *cred)
 						  akey, NULL);
 		}
 	} else {
+		int	flags;
+
+		if (ctl_epoch < 0) {
+			flags = VOS_OF_REPLAY_PC;
+			ctl_epoch *= -1;
+		} else {
+			flags = 0;
+		}
+
 		rc = vos_obj_punch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
-				   ctl_cookie, 0, dkey, 1, akey);
+				   ctl_cookie, 0, flags, dkey, 1, akey);
+		if (rc == -DER_NO_PERM) {
+			D_PRINT("permission denied\n");
+			rc = 0; /* ignore it */
+		}
 	}
 	return rc;
 }
@@ -321,7 +334,7 @@ ctl_cmd_run(char opc, char *args)
 		case 'e':
 		case 'E':
 			ctl_abits |= CTL_ARG_EPOCH;
-			ctl_epoch = strtoul(&str[2], NULL, 0);
+			ctl_epoch = strtol(&str[2], NULL, 0);
 			break;
 		case 'o':
 		case 'O':

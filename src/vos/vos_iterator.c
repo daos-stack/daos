@@ -47,7 +47,7 @@ static struct vos_iter_dict vos_iterators[] = {
 	{
 		.id_type	= VOS_ITER_OBJ,
 		.id_name	= "obj",
-		.id_ops		= &vos_oid_iter_ops,
+		.id_ops		= &vos_oi_iter_ops,
 	},
 	{
 		.id_type	= VOS_ITER_DKEY,

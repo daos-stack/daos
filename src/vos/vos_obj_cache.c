@@ -49,10 +49,10 @@
  * Object ID and container UUID
  */
 struct obj_lru_key {
-	/* container handle */
-	daos_handle_t	olk_coh;
+	/* container the object belongs to */
+	struct vos_container	*olk_cont;
 	/* Object ID */
-	daos_unit_oid_t	olk_obj_id;
+	daos_unit_oid_t		 olk_oid;
 };
 
 static int
@@ -71,7 +71,7 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	D_ASSERT(lkey != NULL);
 
 	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
-		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_obj_id));
+		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_oid));
 
 	D_ALLOC_PTR(obj);
 	if (!obj)
@@ -80,7 +80,7 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	 * Saving a copy of oid to avoid looking up in vos_obj_df, which
 	 * is a direct pointer to pmem data structure
 	 */
-	obj->obj_id	= lkey->olk_obj_id;
+	obj->obj_id	= lkey->olk_oid;
 	obj->obj_cont	= cont;
 	vos_cont_addref(cont);
 
@@ -94,19 +94,13 @@ static bool
 obj_lop_cmp_key(const void *key, unsigned int ksize, struct daos_llink *llink)
 {
 	struct vos_object	*obj;
-	struct obj_lru_key	*hkey = (struct obj_lru_key *) key;
-	struct vos_container	*key_cont;
+	struct obj_lru_key	*lkey = (struct obj_lru_key *)key;
 
-	D_DEBUG(DB_TRACE, "LRU compare keys\n");
-	D_ASSERT(llink);
 	D_ASSERT(ksize == sizeof(struct obj_lru_key));
 
-	key_cont = vos_hdl2cont(hkey->olk_coh);
-	obj  = container_of(llink, struct vos_object, obj_llink);
-
-	return ((key_cont == obj->obj_cont) &&
-		(memcmp(&hkey->olk_obj_id, &obj->obj_id,
-		       sizeof(daos_unit_oid_t)) == 0));
+	obj = container_of(llink, struct vos_object, obj_llink);
+	return lkey->olk_cont == obj->obj_cont &&
+	       !memcmp(&lkey->olk_oid, &obj->obj_id, sizeof(obj->obj_id));
 }
 
 static void
@@ -115,7 +109,6 @@ obj_lop_free(struct daos_llink *llink)
 	struct vos_object	*obj;
 
 	D_DEBUG(DB_TRACE, "lru free callback for vos_obj_cache\n");
-	D_ASSERT(llink);
 
 	obj = container_of(llink, struct vos_object, obj_llink);
 	if (obj->obj_cont != NULL)
@@ -129,12 +122,11 @@ static void
 obj_lop_print_key(void *key, unsigned int ksize)
 {
 	struct obj_lru_key	*lkey = (struct obj_lru_key *)key;
-	struct vos_container	*cont = vos_hdl2cont(lkey->olk_coh);
+	struct vos_container	*cont = lkey->olk_cont;
 
-	D_ASSERT(lkey != NULL);
 	D_DEBUG(DB_TRACE, "pool="DF_UUID" cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(cont->vc_pool->vp_id),
-		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_obj_id));
+		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_oid));
 }
 
 static struct daos_llink_ops obj_lru_ops = {
@@ -207,13 +199,11 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	     bool no_create, struct vos_object **obj_p)
 {
 
-	struct vos_object	*obj = NULL;
-	struct daos_llink	*lret = NULL;
+	struct vos_object	*obj;
 	struct vos_container	*cont;
 	struct obj_lru_key	 lkey;
 	int			 rc;
 
-	D_ASSERT(occ != NULL);
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
@@ -221,24 +211,36 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		DP_UUID(cont->vc_id), DP_UOID(oid));
 
 	/* Create the key for obj cache */
-	lkey.olk_coh  = coh;
-	lkey.olk_obj_id = oid;
+	lkey.olk_cont = cont;
+	lkey.olk_oid = oid;
 
 	while (1) {
+		struct daos_llink *lret;
+
 		rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), cont, &lret);
 		if (rc)
 			D_GOTO(failed, rc);
 
 		obj = container_of(lret, struct vos_object, obj_llink);
-		if (!obj->obj_df) /* empty object */
+		if (obj->obj_epoch == 0) /* new cache element */
+			obj->obj_epoch = epoch;
+
+		if (!obj->obj_df) /* new object */
 			break;
 
-		if (obj->obj_df->vo_epc_lo <= epoch &&
-		    obj->obj_df->vo_epc_hi >= epoch)
-			D_GOTO(found, rc = 0);
+		if (obj->obj_df->vo_punched >= epoch &&
+		    obj->obj_df->vo_incarnation == obj->obj_incarnation) {
+			if (obj->obj_epoch <= epoch)
+				goto out; /* belong to the same incarnation */
 
-		D_DEBUG(DB_IO, "Evict obj ["DF_U64":"DF_U64" -> "DF_U64"]\n",
-			obj->obj_df->vo_epc_lo, obj->obj_df->vo_epc_hi, epoch);
+			if (obj->obj_incarnation == 0) { /* never punched */
+				obj->obj_epoch = epoch;
+				goto out;
+			}
+		}
+
+		D_DEBUG(DB_IO, "Evict obj ["DF_U64" -> "DF_U64"]\n",
+			obj->obj_epoch, epoch);
 
 		/* NB: we don't expect user wants to access many versions
 		 * of the same object at the same time, so just evict the
@@ -264,11 +266,21 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 
 	if (rc) {
 		vos_obj_release(occ, obj);
-		D_GOTO(failed, rc);
+		goto failed;
 	}
-found:
+
+	if (!obj->obj_df)
+		goto out;
+
+	D_ASSERTF(epoch <= obj->obj_df->vo_punched, "e="DF_U64", p="DF_U64"\n",
+		  epoch, obj->obj_df->vo_punched);
+
+	obj->obj_incarnation = obj->obj_df->vo_incarnation;
+out:
 	*obj_p = obj;
+	return 0;
 failed:
+	D_ERROR("failed to hold object, rc=%d\n", rc);
 	return	rc;
 }
 

@@ -56,6 +56,19 @@ struct obj_enum_rec {
 	uint64_t	rec_version;
 };
 
+static inline bool
+daos_obj_id_equal(daos_obj_id_t oid1, daos_obj_id_t oid2)
+{
+	return oid1.lo == oid2.lo && oid1.hi == oid2.hi;
+}
+
+static inline bool
+daos_unit_obj_id_equal(daos_unit_oid_t oid1, daos_unit_oid_t oid2)
+{
+	return daos_obj_id_equal(oid1.id_pub, oid2.id_pub) &&
+	       oid1.id_shard == oid2.id_shard;
+}
+
 struct pl_obj_layout;
 
 struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);

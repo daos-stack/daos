@@ -164,12 +164,47 @@ struct btr_rec_stat {
 
 struct btr_instance;
 
+typedef enum {
+	/** probe a specific key */
+	BTR_PROBE_SPEC		= (1 << 8),
+	/**
+	 * Require key/hkey compare function to return BTR_CMP_MATCHED for
+	 * matched fetch and upsert.
+	 */
+	BTR_PROBE_MATCHED	= (1 << 9),
+	/**
+	 * Public probe opcodes, user can combine BTR_PROBE_MATCHED with any
+	 * of the rest opcodes.
+	 */
+	/** the first record in the tree */
+	BTR_PROBE_FIRST		= 1,
+	/** the last record in the tree */
+	BTR_PROBE_LAST		= 2,
+	/** probe the record whose key equals to the provide key */
+	BTR_PROBE_EQ		= BTR_PROBE_SPEC,
+	/** probe the record whose key is great to the provided key */
+	BTR_PROBE_GT		= BTR_PROBE_SPEC | 1,
+	/** probe the record whose key is less to the provided key */
+	BTR_PROBE_LT		= BTR_PROBE_SPEC | 2,
+	/** probe the record whose key is great/equal to the provided key */
+	BTR_PROBE_GE		= BTR_PROBE_SPEC | 3,
+	/** probe the record whose key is less/equal to the provided key */
+	BTR_PROBE_LE		= BTR_PROBE_SPEC | 4,
+} dbtree_probe_opc_t;
+
 /** the return value of to_hkey_cmp/to_key_cmp callback */
 enum btr_key_cmp_rc {
-	BTR_CMP_EQ = 0,	/* equal */
-	BTR_CMP_LT,	/* less than */
-	BTR_CMP_GT,	/* greater than */
-	BTR_CMP_ERR,	/* error */
+	BTR_CMP_EQ	= (0),		/* equal */
+	BTR_CMP_LT	= (1 << 0),	/* less than */
+	BTR_CMP_GT	= (1 << 1),	/* greater than */
+	/**
+	 * User can return it combined with BTR_CMP_LT/GT. If it is set,
+	 * dbtree can fetch/update value even the provided key is less/greater
+	 * than the compared key.
+	 */
+	BTR_CMP_MATCHED	= (1 << 2),
+	BTR_CMP_UNKNOWN	= (1 << 3),	/* unset */
+	BTR_CMP_ERR	= (1 << 4),	/* error */
 };
 
 /**
@@ -423,27 +458,6 @@ struct btr_instance {
 	btr_ops_t			*ti_ops;
 };
 
-typedef enum {
-	/**
-	 * Public probe opcodes
-	 */
-	/** the first record in the tree */
-	BTR_PROBE_FIRST		= 1,
-	/** the last record in the tree */
-	BTR_PROBE_LAST		= 2,
-	/** probe the record whose key equals to the provide key */
-	BTR_PROBE_EQ		= 0x100,
-	/** probe the record whose key is great/equal to the provided key */
-	BTR_PROBE_GE		= BTR_PROBE_EQ | 1,
-	/** probe the record whose key is less/equal to the provided key */
-	BTR_PROBE_LE		= BTR_PROBE_EQ | 2,
-	/**
-	 * private probe opcodes, don't pass them into APIs
-	 */
-	/** probe the record for update */
-	BTR_PROBE_UPDATE	= BTR_PROBE_EQ | 3,
-} dbtree_probe_opc_t;
-
 /* Features are passed as 64-bit unsigned integer.   Only the bits below are
  * reserved.   A specific class can define its own bits to customize behavior.
  * For example, VOS can use bits to indicate the type of key comparison used
@@ -490,10 +504,12 @@ int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 			    void *info, daos_handle_t *toh);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh);
+int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out);
 int  dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val);
 int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc,
 		  daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out);
-int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out);
+int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc,
+		   daos_iov_t *key, daos_iov_t *val);
 int  dbtree_delete(daos_handle_t toh, daos_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);

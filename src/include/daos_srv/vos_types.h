@@ -97,6 +97,11 @@ typedef enum {
 	VOS_IT_EPC_EQ,
 } vos_it_epc_expr_t;
 
+enum {
+	/** replay punch (underwrite) */
+	VOS_OF_REPLAY_PC	= (1 << 0),
+};
+
 /**
  * Parameters for returning anchor
  * from aggregation/discard

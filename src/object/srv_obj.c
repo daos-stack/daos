@@ -1369,7 +1369,7 @@ ds_obj_punch(void *punch_args)
 	case DAOS_OBJ_RPC_PUNCH:
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
 				   opi->opi_epoch, cont_hdl->sch_uuid,
-				   opi->opi_map_ver, NULL, 0, NULL);
+				   opi->opi_map_ver, 0, NULL, 0, NULL);
 		break;
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -1381,7 +1381,7 @@ ds_obj_punch(void *punch_args)
 					   opi->opi_oid,
 					   opi->opi_epoch,
 					   cont_hdl->sch_uuid,
-					   opi->opi_map_ver, dkey,
+					   opi->opi_map_ver, 0, dkey,
 					   opi->opi_akeys.ca_count,
 					   opi->opi_akeys.ca_arrays);
 			if (rc)

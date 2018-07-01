@@ -168,8 +168,7 @@ enum {
 #define VOS_OFEAT_BITS		(0x0ffffULL << VOS_OFEAT_SHIFT)
 
 /**
- * Reference of a cached object.
- * NB: DRAM data structure.
+ * A cached object (DRAM data structure).
  */
 struct vos_object {
 	/** llink for daos lru cache */
@@ -180,15 +179,19 @@ struct vos_object {
 	daos_handle_t			obj_toh;
 	/** btree iterator handle */
 	daos_handle_t			obj_ih;
-	/** Persistent memory ID for the object */
+	/** epoch when the object(cache) is initialized */
+	daos_epoch_t			obj_epoch;
+	/** cached vos_obj_df::vo_incarnation, for revalidation. */
+	uint64_t			obj_incarnation;
+	/** Persistent memory address of the object */
 	struct vos_obj_df		*obj_df;
-	/** Container Handle - Convenience */
+	/** backref to container */
 	struct vos_container		*obj_cont;
 };
 
 /** Iterator ops for objects and OIDs */
+extern struct vos_iter_ops vos_oi_iter_ops;
 extern struct vos_iter_ops vos_obj_iter_ops;
-extern struct vos_iter_ops vos_oid_iter_ops;
 extern struct vos_iter_ops vos_cont_iter_ops;
 
 /** VOS thread local storage structure */

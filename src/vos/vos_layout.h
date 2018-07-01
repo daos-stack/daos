@@ -194,12 +194,14 @@ struct vos_irec_df {
  */
 struct vos_obj_df {
 	daos_unit_oid_t			vo_id;
-	/** the first updated epoch of this object */
-	daos_epoch_t			vo_epc_lo;
-	/** the punched epoch of this object */
-	daos_epoch_t			vo_epc_hi;
 	/** Attributes of object.  See vos_oi_attr */
 	uint64_t			vo_oi_attr;
+	/** Epoch when this object was punched, it's infinity by defaut. */
+	uint64_t			vo_punched;
+	/**
+	 * Incarnation of the object, it's increased each time it's punched.
+	 */
+	uint64_t			vo_incarnation;
 	/** VOS object btree root */
 	struct btr_root			vo_tree;
 };

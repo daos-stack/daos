@@ -323,6 +323,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *			that might in future be discarded together.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
+ * \param flags [IN]	Object punch flags, VOS_OF_REPLAY_PC is the only
+ *			currently supported flag.
  * \param dkey	[IN]	Optional, the dkey will be punched if \a akeys is not
  *			provided.
  * \param akey_nr [IN]	Number of akeys in \a akeys.
@@ -331,8 +333,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      uuid_t cookie, uint32_t pm_ver, daos_key_t *dkey,
-	      unsigned int akey_nr, daos_key_t *akeys);
+	      uuid_t cookie, uint32_t pm_ver, uint32_t flags,
+	      daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys);
 
 /**
  * I/O APIs

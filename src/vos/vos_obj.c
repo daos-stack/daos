@@ -222,13 +222,13 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 
 static int
 obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
-	  uuid_t cookie)
+	  uuid_t cookie, uint32_t flags)
 {
 	struct vos_container	*cont;
 	int			 rc;
 
 	cont = vos_hdl2cont(coh);
-	rc = vos_oi_punch(cont, obj->obj_id, epoch, obj->obj_df);
+	rc = vos_oi_punch(cont, obj->obj_id, epoch, flags, obj->obj_df);
 	if (rc)
 		D_GOTO(failed, rc);
 
@@ -245,7 +245,7 @@ failed:
  */
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      uuid_t cookie, uint32_t pm_ver, daos_key_t *dkey,
+	      uuid_t cookie, uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys)
 {
 	PMEMobjpool	  *pop;
@@ -255,13 +255,11 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Punch "DF_UOID", cookie "DF_UUID" epoch "
 		DF_U64"\n", DP_UOID(oid), DP_UUID(cookie), epoch);
 
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, true,
-			  &obj);
+	/* NB: punch always generate a new incarnation of the object */
+	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch,
+			  false, &obj);
 	if (rc != 0)
 		return rc;
-
-	if (vos_obj_is_empty(obj)) /* nothing to do */
-		D_GOTO(out, rc = 0);
 
 	pop = vos_obj2pop(obj);
 	TX_BEGIN(pop) {
@@ -269,14 +267,14 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			rc = key_punch(obj, epoch, cookie, pm_ver, dkey,
 				       akey_nr, akeys);
 		} else { /* object punch */
-			rc = obj_punch(coh, obj, epoch, cookie);
+			rc = obj_punch(coh, obj, epoch, cookie, flags);
 		}
 
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DB_IO, "Failed to punch object: %d\n", rc);
 	} TX_END
- out:
+
 	vos_obj_release(vos_obj_cache_current(), obj);
 	return rc;
 }
