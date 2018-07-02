@@ -2160,7 +2160,6 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 			      gp_link) {
 		if (crt_grp_id_identical(srv_grpid,
 					 grp_priv->gp_pub.cg_grpid)) {
-			crt_grp_detach(grp_at);
 			if (grp_priv->gp_finalizing == 0) {
 				crt_grp_priv_addref(grp_priv);
 				*attached_grp = &grp_priv->gp_pub;
@@ -2171,6 +2170,7 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 				rc = -DER_AGAIN;
 			}
 			D_RWLOCK_UNLOCK(&grp_gdata->gg_rwlock);
+			crt_grp_detach(grp_at);
 			D_GOTO(out, rc);
 		}
 	}
