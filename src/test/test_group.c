@@ -447,7 +447,13 @@ test_fini()
 		if (rc != 0)
 			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
 		D_DEBUG(DB_TEST, "joined progress thread.\n");
-		rc = crt_context_destroy(test_g.t_crt_ctx[ii], 1);
+
+		/* try to flush indefinitely */
+		rc = crt_context_flush(test_g.t_crt_ctx[ii], 0);
+		D_ASSERTF(rc == 0 || rc == -DER_TIMEDOUT,
+			  "crt_context_flush() failed. rc: %d\n", rc);
+
+		rc = crt_context_destroy(test_g.t_crt_ctx[ii], 0);
 		D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n",
 			  rc);
 		D_DEBUG(DB_TEST, "destroyed crt_ctx.\n");

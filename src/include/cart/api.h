@@ -164,6 +164,35 @@ int
 crt_context_destroy(crt_context_t crt_ctx, int force);
 
 /**
+ * check if the endpoint associated with \a crt_ctx is empty i.e. has no pending
+ * RPCs
+ *
+ * \param[in] crt_ctx           CRT transport context to check
+ *
+ * \return                      true if \a crt_ctx is empty, false if \a crt_ctx
+ *                              is not empty
+ */
+bool
+crt_context_ep_empty(crt_context_t crt_ctx);
+
+/**
+ * Flush pending RPCs associated with the specified context.
+ *
+ * \param[in] crt_ctx           CRT transport context to flush
+ * \param[in] timeout           max time duration (in micro seconds) to try to
+ *                              flush. 0 means infinite timeout. After
+ *                              \a timeout amount of time, this function will
+ *                              return even if there are still RPCs pending.
+ *
+ * \return                      DER_SUCCESS if there are no more pending RPCs,
+ *                              -DER_TIMEDOUT if time out is reached before all
+ *                              RPCs are processed, other negative value on
+ *                              error
+ */
+int
+crt_context_flush(crt_context_t crt_ctx, uint64_t timeout);
+
+/**
  * Query the index of the transport context, the index value ranges in
  * [0, ctx_num - 1].
  *

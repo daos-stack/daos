@@ -3,6 +3,7 @@ description: "crt_barrier tests"
 defaultENV:
     OMPI_MCA_rmaps_base_oversubscribe: "1"
     D_LOG_MASK: "DEBUG,MEM=ERR"
+    TR_REDIRECT_OUTPUT: "yes"
     CRT_PHY_ADDR_STR: "ofi+sockets"
     OFI_INTERFACE: "eth0"
     CRT_CTX_SHARE_ADDR: "1"

@@ -134,6 +134,33 @@ crt_epi_destroy(struct crt_ep_inflight *epi)
 }
 
 static int
+crt_ep_empty(d_list_t *rlink, void *arg)
+{
+	struct crt_ep_inflight	*epi;
+
+	epi = epi_link2ptr(rlink);
+
+	return (d_list_empty(&epi->epi_req_waitq) &&
+		epi->epi_req_wait_num == 0 &&
+		d_list_empty(&epi->epi_req_q) &&
+		epi->epi_req_num >= epi->epi_reply_num) ? 0 : 1;
+}
+
+bool
+crt_context_ep_empty(crt_context_t crt_ctx)
+{
+	struct crt_context	*ctx;
+	int			 rc;
+
+	ctx = crt_ctx;
+	D_MUTEX_LOCK(&ctx->cc_mutex);
+	rc = d_hash_table_traverse(&ctx->cc_epi_table, crt_ep_empty, NULL);
+	D_MUTEX_UNLOCK(&ctx->cc_mutex);
+
+	return rc == 0;
+}
+
+static int
 crt_context_init(crt_context_t crt_ctx)
 {
 	struct crt_context	*ctx;
@@ -456,6 +483,37 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	}
 
 out:
+	return rc;
+}
+
+int
+crt_context_flush(crt_context_t crt_ctx, uint64_t timeout)
+{
+	uint64_t	ts_now = 0;
+	uint64_t	ts_deadline = 0;
+	int		rc = 0;
+
+	if (timeout > 0)
+		ts_deadline = d_timeus_secdiff(timeout);
+
+	do {
+		rc = crt_progress(crt_ctx, 1, NULL, NULL);
+		if (rc != DER_SUCCESS && rc != -DER_TIMEDOUT) {
+			D_ERROR("crt_progress() failed, rc: %d\n", rc);
+			break;
+		}
+		if (crt_context_ep_empty(crt_ctx)) {
+			rc = DER_SUCCESS;
+			break;
+		}
+		if (timeout == 0)
+			continue;
+		ts_now = d_timeus_secdiff(0);
+	} while (ts_now >= ts_deadline);
+
+	if (timeout > 0 && ts_now >= ts_deadline)
+		rc = -DER_TIMEDOUT;
+
 	return rc;
 }
 
