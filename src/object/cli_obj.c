@@ -839,7 +839,7 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 		D_DEBUG(DB_IO, "next shard %d grp %d nr %u\n",
 			shard, grp_size, obj->cob_layout->ol_nr);
 
-		enum_anchor_reset_hkey(anchor);
+		daos_hash_set_zero(anchor);
 		enum_anchor_set_tag(anchor, 0);
 		dc_obj_shard2anchor(anchor, shard);
 	} else {

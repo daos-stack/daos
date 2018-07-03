@@ -31,6 +31,7 @@
 #include <daos/common.h>
 #include <daos/rpc.h>
 #include <daos_srv/iv.h>
+#include <daos_srv/vos_types.h>
 #include <daos_event.h>
 #include <daos_task.h>
 
@@ -391,4 +392,48 @@ int ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		    daos_key_desc_t *kds, d_sg_list_t *sgl,
 		    daos_hash_out_t *anchor, daos_hash_out_t *dkey_anchor,
 		    daos_hash_out_t *akey_anchor);
+
+typedef int (*dss_vos_iterate_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
+				    vos_iter_type_t type,
+				    vos_iter_param_t *param, void *arg);
+
+int dss_vos_iterate(vos_iter_type_t type, vos_iter_param_t *param,
+		    daos_hash_out_t *anchor, dss_vos_iterate_cb_t cb,
+		    void *arg);
+
+struct dss_enum_arg {
+	/* Iteration fields */
+	vos_iter_param_t	param;
+	bool			recursive;	/* enumerate lower levels */
+	bool			recxs_eprs;	/* type == S||R */
+	daos_hash_out_t		obj_anchor;	/* type == OBJ (<= if recur) */
+	daos_hash_out_t		dkey_anchor;	/* type == DKEY (<= if recur) */
+	daos_hash_out_t		akey_anchor;	/* type == AKEY (<= if recur) */
+	daos_hash_out_t		recx_anchor;	/* type == S||R (<= if recur) */
+
+	/* Buffer fields */
+	union {
+		struct {	/* !recxs_eprs */
+			daos_key_desc_t	       *kds;
+			int			kds_cap;
+			int			kds_len;
+			daos_sg_list_t	       *sgl;
+			int			sgl_idx;
+		};
+		struct {	/* recxs_eprs && type == S||R */
+			daos_epoch_range_t     *eprs;
+			int			eprs_cap;
+			int			eprs_len;
+			daos_recx_t	       *recxs;
+			int			recxs_cap;
+			int			recxs_len;
+		};
+	};
+	daos_size_t		inline_thres;	/* type == S||R || recursive */
+	int			rnum;		/* records num (type == S||R) */
+	daos_size_t		rsize;		/* record size (type == S||R) */
+};
+
+int dss_enum_pack(vos_iter_type_t type, struct dss_enum_arg *arg);
+
 #endif /* __DSS_API_H__ */

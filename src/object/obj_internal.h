@@ -35,6 +35,7 @@
 #include <daos/placement.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
+#include <daos_srv/daos_server.h>
 #include <daos_types.h>
 
 /**
@@ -100,42 +101,6 @@ struct dc_object {
 	struct dc_obj_shard	**cob_obj_shards;
 };
 
-#if 1 /* TODO: Move to iosrv. */
-#include <daos_srv/vos_types.h>
-struct dss_enum_arg {
-	/* Iteration fields */
-	vos_iter_param_t	param;
-	bool			recursive;	/* enumerate lower levels */
-	bool			recxs_eprs;	/* type == S||R */
-	daos_hash_out_t		obj_anchor;	/* type == OBJ (<= if recur) */
-	daos_hash_out_t		dkey_anchor;	/* type == DKEY (<= if recur) */
-	daos_hash_out_t		akey_anchor;	/* type == AKEY (<= if recur) */
-	daos_hash_out_t		recx_anchor;	/* type == S||R (<= if recur) */
-
-	/* Buffer fields */
-	union {
-		struct {	/* !recxs_eprs */
-			daos_key_desc_t	       *kds;
-			int			kds_cap;
-			int			kds_len;
-			daos_sg_list_t	       *sgl;
-			int			sgl_idx;
-		};
-		struct {	/* recxs_eprs && type == S||R */
-			daos_epoch_range_t     *eprs;
-			int			eprs_cap;
-			int			eprs_len;
-			daos_recx_t	       *recxs;
-			int			recxs_cap;
-			int			recxs_len;
-		};
-	};
-	daos_size_t		inline_thres;	/* type == S||R || recursive */
-	int			rnum;		/* records num (type == S||R) */
-	daos_size_t		rsize;		/* record size (type == S||R) */
-};
-#endif
-
 struct ds_iter_arg {
 	struct obj_key_enum_in	*oei;
 	struct obj_key_enum_out	*oeo;
@@ -173,13 +138,6 @@ enum_anchor_copy_hkey(daos_hash_out_t *dst, daos_hash_out_t *src)
 {
 	memcpy(&dst->body[DAOS_HASH_HKEY_START],
 	       &src->body[DAOS_HASH_HKEY_START], DAOS_HASH_HKEY_LENGTH);
-}
-
-static inline void
-enum_anchor_reset_hkey(daos_hash_out_t *hash_out)
-{
-	memset(&hash_out->body[DAOS_HASH_HKEY_START], 0,
-	       DAOS_HASH_HKEY_LENGTH);
 }
 
 static inline uint32_t
