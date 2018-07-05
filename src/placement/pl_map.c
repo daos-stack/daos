@@ -56,12 +56,10 @@ static struct pl_map_dict pl_maps[] = {
 	},
 };
 
-/**
- * Create a placement map based on attributes in \a mia
- */
-int
-pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
-	      struct pl_map **pl_mapp)
+
+static int
+pl_map_create_inited(struct pool_map *pool_map, struct pl_map_init_attr *mia,
+		    struct pl_map **pl_mapp)
 {
 	struct pl_map_dict	*dict = pl_maps;
 	struct pl_map		*map;
@@ -94,6 +92,7 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 	map->pl_connects = 0;
 	map->pl_type = mia->ia_type;
 	map->pl_ops  = dict->pd_ops;
+	D_INIT_LIST_HEAD(&map->pl_link);
 
 	*pl_mapp = map;
 	return 0;
@@ -363,6 +362,43 @@ static d_hash_table_ops_t pl_hash_ops = {
 };
 
 #define PL_HTABLE_BITS		7
+
+static int
+pl_htable_init()
+{
+	/* NB: this hash table is created on demand, it will never
+	 * be destroyed.
+	 */
+	D_ASSERT(pl_htable.ht_ops == NULL);
+	return d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
+					   PL_HTABLE_BITS, NULL,
+					   &pl_hash_ops, &pl_htable);
+}
+
+/**
+ * Create a placement map based on attributes in \a mia
+ */
+int
+pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
+	      struct pl_map **pl_mapp)
+{
+	int rc = 0;
+
+	D_RWLOCK_WRLOCK(&pl_rwlock);
+	if (!pl_htable.ht_ops)
+		rc = pl_htable_init();
+	D_RWLOCK_UNLOCK(&pl_rwlock);
+
+	if (rc) {
+		D_ERROR("pl_htable_init failed, rc %d.\n", rc);
+		return rc;
+	}
+
+	return pl_map_create_inited(pool_map, mia, pl_mapp);
+
+
+}
+
 /**
  * Generate a new placement map from the pool map @pool_map, and replace the
  * original placement map for the same pool.
@@ -381,12 +417,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 
 	D_RWLOCK_WRLOCK(&pl_rwlock);
 	if (!pl_htable.ht_ops) {
-		/* NB: this hash table is created on demand, it will never
-		 * be destroyed.
-		 */
-		rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
-						 PL_HTABLE_BITS, NULL,
-						 &pl_hash_ops, &pl_htable);
+		rc = pl_htable_init();
 		if (rc)
 			D_GOTO(out, rc);
 
@@ -398,7 +429,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 
 	if (!link) {
 		pl_map_attr_init(pool_map, PL_TYPE_RING, &mia);
-		rc = pl_map_create(pool_map, &mia, &map);
+		rc = pl_map_create_inited(pool_map, &mia, &map);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	} else {
@@ -413,7 +444,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 		}
 
 		pl_map_attr_init(pool_map, PL_TYPE_RING, &mia);
-		rc = pl_map_create(pool_map, &mia, &map);
+		rc = pl_map_create_inited(pool_map, &mia, &map);
 		if (rc != 0) {
 			d_hash_rec_decref(&pl_htable, link);
 			D_GOTO(out, rc);
