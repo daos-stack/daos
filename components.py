@@ -344,10 +344,12 @@ REQS.define('spdk',
                       'make', 'make install'],
             libs=["spdk"])
 
-URL = 'https://github.com/google/protobuf/releases/download/' \
-    'v3.5.1/protobuf-all-3.5.1.tar.gz'
+URL = 'https://github.com/protobuf-c/protobuf-c/releases/download/' \
+    'v1.3.0/protobuf-c-1.3.0.tar.gz'
 WEB_RETRIEVER = \
     WebRetriever(URL)
-REQS.define('protobuf', retriever=WEB_RETRIEVER,
-            commands=['./autogen.sh', './configure --prefix=$PROTOBUF_PREFIX',
-                      'make', 'make install'])
+REQS.define('protobufc', retriever=WEB_RETRIEVER,
+            commands=['./configure --prefix=$PROTOBUFC_PREFIX --disable-protoc',
+                      'make', 'make install'],
+			libs=['protobuf-c'],
+			headers=['protobuf-c/protobuf-c.h'])
