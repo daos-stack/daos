@@ -25,7 +25,7 @@
  *
  * src/addons/dac_hl.c
  */
-#define D_LOGFAC	DD_FAC(client)
+#define D_LOGFAC	DD_FAC(addons)
 
 #include <daos/common.h>
 #include <daos/tse.h>

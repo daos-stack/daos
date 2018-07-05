@@ -40,6 +40,7 @@ static pthread_mutex_t dd_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #define DECLARE_FAC(name)	int DD_FAC(name)
 /** predefined log facilities */
+DECLARE_FAC(addons);
 DECLARE_FAC(common);
 DECLARE_FAC(tree);
 DECLARE_FAC(vos);
@@ -91,6 +92,7 @@ static struct d_debug_bit daos_bit_dict[] = {
 	d_init_log_facility(idp, name, name);
 
 #define FOREACH_DAOS_LOG_FAC(ACTION)			\
+	ACTION("addons", d_addons_logfac)		\
 	ACTION("common", d_common_logfac)		\
 	ACTION("tree", d_tree_logfac)			\
 	ACTION("vos", d_vos_logfac)			\

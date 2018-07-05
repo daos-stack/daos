@@ -9,6 +9,9 @@ def scons():
     libraries += ['uuid', 'mpi']
     libraries += ['cmocka']
 
+    daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
+    Export('daos_test_tgt')
+
     test = daos_build.program(denv, 'daos_test', Glob('*.c'), LIBS=libraries)
     denv.Install('$PREFIX/bin/', test)
 

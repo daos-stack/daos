@@ -25,7 +25,7 @@
  *
  * src/addons/dac_array.c
  */
-#define D_LOGFAC	DD_FAC(client)
+#define D_LOGFAC	DD_FAC(addons)
 
 #include <daos/common.h>
 #include <daos/tse.h>
@@ -33,8 +33,6 @@
 #include <daos_api.h>
 #include <daos_addons.h>
 #include <daos_task.h>
-
-/* #define ARRAY_DEBUG */
 
 #define AKEY_MAGIC_V	0xdaca55a9daca55a9
 #define ARRAY_MD_KEY	"daos_array_metadata"
@@ -612,41 +610,37 @@ err:
 }
 
 static bool
-io_extent_same(daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
+io_extent_same(daos_array_iod_t *iod, daos_sg_list_t *sgl,
 	       daos_size_t cell_size)
 {
-	daos_size_t ranges_len;
+	daos_size_t rgs_len;
 	daos_size_t sgl_len;
 	daos_size_t u;
 
-	ranges_len = 0;
-#ifdef ARRAY_DEBUG
-	printf("USER ARRAY RANGE -----------------------\n");
-	printf("ranges_nr = %zu\n", ranges->arr_nr);
-#endif
-	for (u = 0 ; u < ranges->arr_nr ; u++) {
-		ranges_len += ranges->arr_rgs[u].rg_len;
-#ifdef ARRAY_DEBUG
-		printf("%zu: length %zu, index %d\n",
-			u, ranges->arr_rgs[u].rg_len,
-		       (int)ranges->arr_rgs[u].rg_idx);
-#endif
+	rgs_len = 0;
+
+	D_DEBUG(DB_IO, "USER ARRAY RANGE -----------------------\n");
+	D_DEBUG(DB_IO, "Array IOD nr = %zu\n", iod->arr_nr);
+
+	for (u = 0 ; u < iod->arr_nr ; u++) {
+		rgs_len += iod->arr_rgs[u].rg_len;
+		D_DEBUG(DB_IO, "%zu: length %zu, index %d\n",
+			u, iod->arr_rgs[u].rg_len,
+			(int)iod->arr_rgs[u].rg_idx);
 	}
-#ifdef ARRAY_DEBUG
-	printf("------------------------------------\n");
-	printf("USER SGL -----------------------\n");
-	printf("sg_nr = %u\n", sgl->sg_nr);
-#endif
+
+	D_DEBUG(DB_IO, "------------------------------------\n");
+	D_DEBUG(DB_IO, "USER SGL -----------------------\n");
+	D_DEBUG(DB_IO, "sg_nr = %u\n", sgl->sg_nr);
+
 	sgl_len = 0;
 	for (u = 0 ; u < sgl->sg_nr; u++) {
 		sgl_len += sgl->sg_iovs[u].iov_len;
-#ifdef ARRAY_DEBUG
-		printf("%zu: length %zu, Buf %p\n",
-			u, sgl->sg_iovs[u].iov_len, sgl->sg_iovs[u].iov_buf);
-#endif
+		D_DEBUG(DB_IO, "%zu: length %zu, Buf %p\n", u,
+			sgl->sg_iovs[u].iov_len, sgl->sg_iovs[u].iov_buf);
 	}
 
-	return (ranges_len * cell_size == sgl_len);
+	return (rgs_len * cell_size == sgl_len);
 }
 
 /**
@@ -744,7 +738,7 @@ create_sgl(daos_sg_list_t *user_sgl, daos_size_t cell_size,
 
 static int
 dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
-	     daos_array_ranges_t *ranges, daos_sg_list_t *user_sgl,
+	     daos_array_iod_t *rg_iod, daos_sg_list_t *user_sgl,
 	     daos_opc_t op_type, tse_task_t *task)
 {
 	struct dac_array *array = NULL;
@@ -761,8 +755,8 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 	daos_size_t	num_ios;
 	int		rc;
 
-	if (ranges == NULL) {
-		D_ERROR("NULL ranges passed\n");
+	if (rg_iod == NULL) {
+		D_ERROR("NULL iod passed\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
 	}
 	if (user_sgl == NULL) {
@@ -774,7 +768,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 	if (array == NULL)
 		return -DER_NO_HDL;
 
-	if (!io_extent_same(ranges, user_sgl, array->cell_size)) {
+	if (!io_extent_same(rg_iod, user_sgl, array->cell_size)) {
 		D_ERROR("Unequal extents of memory and array descriptors\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
 	}
@@ -785,8 +779,8 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 	cur_i = 0;
 	u = 0;
 	num_ios = 0;
-	records = ranges->arr_rgs[0].rg_len;
-	array_idx = ranges->arr_rgs[0].rg_idx;
+	records = rg_iod->arr_rgs[0].rg_len;
+	array_idx = rg_iod->arr_rgs[0].rg_idx;
 	daos_csum_set(&null_csum, NULL, 0);
 
 	head = NULL;
@@ -797,7 +791,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 	 * are not increasing in offset, they probably won't be combined unless
 	 * the separating ranges also belong to the same dkey.
 	 */
-	while (u < ranges->arr_nr) {
+	while (u < rg_iod->arr_nr) {
 		daos_iod_t	*iod;
 		daos_sg_list_t	*sgl;
 		char		*dkey_str;
@@ -807,11 +801,11 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		struct io_params *params;
 		daos_size_t	i;
 
-		if (ranges->arr_rgs[u].rg_len == 0) {
+		if (rg_iod->arr_rgs[u].rg_len == 0) {
 			u++;
-			if (u < ranges->arr_nr) {
-				records = ranges->arr_rgs[u].rg_len;
-				array_idx = ranges->arr_rgs[u].rg_idx;
+			if (u < rg_iod->arr_nr) {
+				records = rg_iod->arr_rgs[u].rg_len;
+				array_idx = rg_iod->arr_rgs[u].rg_idx;
 			}
 			continue;
 		}
@@ -848,11 +842,12 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			D_GOTO(err_task, rc);
 		}
 		dkey_str = params->dkey_str;
-#ifdef ARRAY_DEBUG
-		printf("DKEY IOD %s ---------------------------\n", dkey_str);
-		printf("array_idx = %d\t num_records = %zu\t record_i = %d\n",
-		       (int)array_idx, num_records, (int)record_i);
-#endif
+
+		D_DEBUG(DB_IO, "DKEY IOD %s ---------------------------\n",
+			dkey_str);
+		D_DEBUG(DB_IO, "idx = %d\t num_records = %zu\t record_i = %d\n",
+			(int)array_idx, num_records, (int)record_i);
+
 		daos_iov_set(dkey, (void *)dkey_str, strlen(dkey_str));
 
 		/* set descriptor for KV object */
@@ -891,11 +886,11 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			iod->iod_recxs[i].rx_idx = record_i;
 			iod->iod_recxs[i].rx_nr = (num_records > records) ?
 				records : num_records;
-#ifdef ARRAY_DEBUG
-			printf("Add %zu to ARRAY IOD (size = %zu index = %d)\n",
-			       u, iod->iod_recxs[i].rx_nr,
-			       (int)iod->iod_recxs[i].rx_idx);
-#endif
+
+			D_DEBUG(DB_IO, "%zu: index = %"PRIu64", size = %zu\n",
+				u, iod->iod_recxs[i].rx_idx,
+				iod->iod_recxs[i].rx_nr);
+
 			/**
 			 * if the current range is bigger than what the dkey can
 			 * hold, update the array index and number of records in
@@ -914,12 +909,12 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			dkey_records += records;
 
 			/** if there are no more ranges to write, then break */
-			if (ranges->arr_nr <= u)
+			if (rg_iod->arr_nr <= u)
 				break;
 
 			old_array_idx = array_idx;
-			records = ranges->arr_rgs[u].rg_len;
-			array_idx = ranges->arr_rgs[u].rg_idx;
+			records = rg_iod->arr_rgs[u].rg_len;
+			array_idx = rg_iod->arr_rgs[u].rg_idx;
 
 			/**
 			 * Boundary case where number of records align with the
@@ -957,21 +952,23 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 				break;
 			}
 		} while (1);
-#ifdef ARRAY_DEBUG
-		printf("END DKEY IOD %s ---------------------------\n",
-		       dkey_str);
-#endif
+
+		D_DEBUG(DB_IO, "END DKEY IOD %s ---------------------------\n",
+			dkey_str);
+
 		/**
 		 * if the user sgl maps directly to the array range, no need to
 		 * partition it.
 		 */
-		if (1 == ranges->arr_nr && 1 == user_sgl->sg_nr &&
-		    dkey_records == ranges->arr_rgs[0].rg_len) {
+		if (1 == rg_iod->arr_nr && 1 == user_sgl->sg_nr &&
+		    dkey_records == rg_iod->arr_rgs[0].rg_len) {
 			sgl = user_sgl;
 			params->user_sgl_used = true;
 		}
 		/** create an sgl from the user sgl for the current IOD */
 		else {
+			daos_size_t s;
+
 			/* set sgl for current dkey */
 			rc = create_sgl(user_sgl, array->cell_size,
 					dkey_records, &cur_off, &cur_i, sgl);
@@ -979,18 +976,15 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 				D_ERROR("Failed to create sgl\n");
 				D_GOTO(err_task, rc);
 			}
-#ifdef ARRAY_DEBUG
-			daos_size_t s;
 
-			printf("DKEY SGL -----------------------\n");
-			printf("sg_nr = %u\n", sgl->sg_nr);
+			D_DEBUG(DB_IO, "DKEY SGL -----------------------\n");
+			D_DEBUG(DB_IO, "sg_nr = %u\n", sgl->sg_nr);
 			for (s = 0; s < sgl->sg_nr; s++) {
-				printf("%zu: length %zu, Buf %p\n",
-				       s, sgl->sg_iovs[s].iov_len,
-				       sgl->sg_iovs[s].iov_buf);
+				D_DEBUG(DB_IO, "%zu: length %zu, Buf %p\n",
+					s, sgl->sg_iovs[s].iov_len,
+					sgl->sg_iovs[s].iov_buf);
 			}
-			printf("------------------------------------\n");
-#endif
+			D_DEBUG(DB_IO, "--------------------------------\n");
 		}
 
 		/* issue KV IO to DAOS */
@@ -1057,7 +1051,7 @@ dac_array_read(tse_task_t *task)
 {
 	daos_array_io_t *args = daos_task_get_args(task);
 
-	return dac_array_io(args->oh, args->epoch, args->ranges, args->sgl,
+	return dac_array_io(args->oh, args->epoch, args->iod, args->sgl,
 			    DAOS_OPC_ARRAY_READ, task);
 }
 
@@ -1066,7 +1060,7 @@ dac_array_write(tse_task_t *task)
 {
 	daos_array_io_t *args = daos_task_get_args(task);
 
-	return dac_array_io(args->oh, args->epoch, args->ranges, args->sgl,
+	return dac_array_io(args->oh, args->epoch, args->iod, args->sgl,
 			    DAOS_OPC_ARRAY_WRITE, task);
 }
 
@@ -1123,12 +1117,6 @@ list_recxs_cb(tse_task_t *task, void *data)
 	int ret;
 	int rc = task->dt_result;
 	daos_size_t cur_size;
-
-#ifdef ARRAY_DEBUG
-	printf("cell size %d recx idx = %d NR = %d\n",
-	       (int)params->cell_size, (int)params->recx.rx_idx,
-	       (int)params->recx.rx_nr);
-#endif
 
 	ret = sscanf(params->dkey_str, "%zu", &dkey_num);
 	D_ASSERT(ret == 1);
@@ -1187,10 +1175,6 @@ get_array_size_cb(tse_task_t *task, void *data)
 		int ret;
 
 		snprintf(props->key, args->kds[i].kd_key_len + 1, "%s", ptr);
-#ifdef ARRAY_DEBUG
-		printf("%d: key %s len %d\n", i, props->key,
-		       (int)args->kds[i].kd_key_len);
-#endif
 		ptr += args->kds[i].kd_key_len;
 
 		if (!strcmp(ARRAY_MD_KEY, props->key))
@@ -1229,9 +1213,6 @@ get_array_size_cb(tse_task_t *task, void *data)
 		return rc;
 	}
 
-#ifdef ARRAY_DEBUG
-	printf("DKEY NUM %zu\n", props->dkey_num);
-#endif
 	if (!props->found_dkey)
 		return 0;
 
@@ -1451,10 +1432,6 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		int ret;
 
 		snprintf(props->key, args->kds[j].kd_key_len + 1, "%s", ptr);
-#ifdef ARRAY_DEBUG
-		printf("%d: key %s len %d\n", j, props->key,
-		       (int)args->kds[j].kd_key_len);
-#endif
 		ptr += args->kds[j].kd_key_len;
 
 		if (!strcmp(ARRAY_MD_KEY, props->key))
@@ -1485,9 +1462,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 				     strlen(params->dkey_str));
 
 			/** Punch this entire dkey */
-#ifdef ARRAY_DEBUG
-			printf("Punching Key %s\n", params->dkey_str);
-#endif
+			D_DEBUG(DB_IO, "Punching Key %s\n", params->dkey_str);
 
 			daos_opc_t opc = DAOS_OPC_OBJ_PUNCH_DKEYS;
 
@@ -1641,10 +1616,9 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		daos_key_t	*dkey;
 		daos_csum_buf_t	null_csum;
 
-#ifdef ARRAY_DEBUG
-		printf("Extending array key %zu, rec = %d\n",
-		       props->dkey_num, (int)props->record_i);
-#endif
+		D_DEBUG(DB_IO, "Extending array key %zu, rec = %d\n",
+			props->dkey_num, (int)props->record_i);
+
 		daos_csum_set(&null_csum, NULL, 0);
 
 		D_ALLOC_PTR(params);

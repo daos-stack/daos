@@ -25,7 +25,7 @@
  *
  * src/addons/daos_obj.c
  */
-#define D_LOGFAC	DD_FAC(client)
+#define D_LOGFAC	DD_FAC(addons)
 
 #include <daos/common.h>
 #include <daos/event.h>

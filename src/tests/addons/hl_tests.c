@@ -26,8 +26,9 @@
  * src/tests/addons/
  */
 
-#include <daos_test.h>
+#include <daos_types.h>
 #include <daos_addons.h>
+#include "daos_test.h"
 #include "daos_addons_test.h"
 
 #define DTS_OCLASS_DEF		DAOS_OC_REPL_MAX_RW
@@ -303,7 +304,8 @@ static const struct CMUnitTest hl_tests[] = {
 int
 hl_setup(void **state)
 {
-	return setup(state, SETUP_CONT_CONNECT, true);
+	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 int
@@ -312,7 +314,7 @@ run_hl_test(int rank, int size)
 	int rc = 0;
 
 	rc = cmocka_run_group_tests_name("High Level API tests", hl_tests,
-					 hl_setup, teardown);
+					 hl_setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

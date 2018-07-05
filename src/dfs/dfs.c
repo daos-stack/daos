@@ -1586,7 +1586,7 @@ static int
 io_internal(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off,
 	    int flag)
 {
-	daos_array_ranges_t	ranges;
+	daos_array_iod_t	ranges;
 	daos_range_t		rg;
 	daos_size_t		buf_size;
 	int			i;

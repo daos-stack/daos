@@ -25,7 +25,7 @@
  *
  * src/addons/daos_array.c
  */
-#define D_LOGFAC	DD_FAC(client)
+#define D_LOGFAC	DD_FAC(addons)
 
 #include <daos/common.h>
 #include <daos/event.h>
@@ -103,7 +103,7 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev)
 
 int
 daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
-		daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
+		daos_array_iod_t *iod, daos_sg_list_t *sgl,
 		daos_csum_buf_t *csums, daos_event_t *ev)
 {
 	daos_array_io_t	*args;
@@ -117,7 +117,7 @@ daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
 	args = dc_task_get_args(task);
 	args->oh	= oh;
 	args->epoch	= epoch;
-	args->ranges	= ranges;
+	args->iod	= iod;
 	args->sgl	= sgl;
 	args->csums	= csums;
 
@@ -126,7 +126,7 @@ daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
 
 int
 daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
-		 daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
+		 daos_array_iod_t *iod, daos_sg_list_t *sgl,
 		 daos_csum_buf_t *csums, daos_event_t *ev)
 {
 	daos_array_io_t	*args;
@@ -140,7 +140,7 @@ daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
 	args = dc_task_get_args(task);
 	args->oh	= oh;
 	args->epoch	= epoch;
-	args->ranges	= ranges;
+	args->iod	= iod;
 	args->sgl	= sgl;
 	args->csums	= csums;
 

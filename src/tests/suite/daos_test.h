@@ -41,6 +41,12 @@
 #include <daos/tests_lib.h>
 #include <daos.h>
 
+/** Server crt group ID */
+extern const char *server_group;
+
+/** Pool service replicas */
+extern unsigned int svc_nreplicas;
+
 extern int daos_event_priv_reset(void);
 #define TEST_RANKS_MAX_NUM	(13)
 

@@ -26,8 +26,9 @@
  * src/tests/addons/
  */
 
-#include <daos_test.h>
+#include <daos_types.h>
 #include <daos_addons.h>
+#include "daos_test.h"
 #include "daos_addons_test.h"
 
 /** number of elements to write to array */
@@ -121,32 +122,33 @@ change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size,
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	if (arg->myrank == 0) {
-		epoch++;
-		expected_size = array_size*2;
-		rc = daos_array_set_size(oh, epoch, expected_size, NULL);
-		assert_int_equal(rc, 0);
-		rc = daos_array_get_size(oh, epoch, &new_size, NULL);
-		assert_int_equal(rc, 0);
-		if (new_size != expected_size) {
-			fprintf(stderr, "(%d) Size = %zu, expected: %zu\n",
-				arg->myrank, new_size, expected_size);
-			rc = -1;
-			goto out;
-		}
+	if (arg->myrank != 0)
+		goto out;
 
-		epoch++;
-		expected_size = array_size/2;
-		rc = daos_array_set_size(oh, epoch, expected_size, NULL);
-		assert_int_equal(rc, 0);
-		rc = daos_array_get_size(oh, epoch, &new_size, NULL);
-		assert_int_equal(rc, 0);
-		if (new_size != expected_size) {
-			fprintf(stderr, "(%d) Size = %zu, expected: %zu\n",
-				arg->myrank, new_size, expected_size);
-			rc = -1;
-			goto out;
-		}
+	epoch++;
+	expected_size = array_size*2;
+	rc = daos_array_set_size(oh, epoch, expected_size, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_array_get_size(oh, epoch, &new_size, NULL);
+	assert_int_equal(rc, 0);
+	if (new_size != expected_size) {
+		fprintf(stderr, "Size = %zu, expected: %zu\n",
+			new_size, expected_size);
+		rc = -1;
+		goto out;
+	}
+
+	epoch++;
+	expected_size = array_size/2;
+	rc = daos_array_set_size(oh, epoch, expected_size, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_array_get_size(oh, epoch, &new_size, NULL);
+	assert_int_equal(rc, 0);
+	if (new_size != expected_size) {
+		fprintf(stderr, "Size = %zu, expected: %zu\n",
+			new_size, expected_size);
+		rc = -1;
+		goto out;
 	}
 
 out:
@@ -160,7 +162,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_epoch_t	epoch;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	daos_array_ranges_t ranges;
+	daos_array_iod_t iod;
 	daos_range_t	rg;
 	daos_sg_list_t	sgl;
 	daos_iov_t	iov;
@@ -186,10 +188,10 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 		wbuf[i] = i+1;
 
 	/** set array location */
-	ranges.arr_nr = 1;
+	iod.arr_nr = 1;
 	rg.rg_len = NUM_ELEMS * sizeof(int) / cell_size;
 	rg.rg_idx = arg->myrank * rg.rg_len;
-	ranges.arr_rgs = &rg;
+	iod.arr_rgs = &rg;
 
 	/** set memory location */
 	sgl.sg_nr = 1;
@@ -201,7 +203,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_write(oh, epoch, &ranges, &sgl, NULL,
+	rc = daos_array_write(oh, epoch, &iod, &sgl, NULL,
 			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -222,7 +224,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
 	sgl.sg_iovs = &iov;
-	rc = daos_array_read(oh, epoch, &ranges, &sgl, NULL,
+	rc = daos_array_read(oh, epoch, &iod, &sgl, NULL,
 			     arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -293,7 +295,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_epoch_t	epoch;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	daos_array_ranges_t ranges;
+	daos_array_iod_t iod;
 	daos_sg_list_t	sgl;
 	daos_iov_t	iov;
 	int		*wbuf = NULL, *rbuf = NULL;
@@ -318,14 +320,14 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		wbuf[i] = i+1;
 
 	/** set array location */
-	ranges.arr_nr = NUM_ELEMS;
-	ranges.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) *
+	iod.arr_nr = NUM_ELEMS;
+	iod.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) *
 					       NUM_ELEMS);
-	assert_non_null(ranges.arr_rgs);
+	assert_non_null(iod.arr_rgs);
 
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.arr_rgs[i].rg_len = sizeof(int) / cell_size;
-		ranges.arr_rgs[i].rg_idx = i * arg->rank_size * 4 +
+		iod.arr_rgs[i].rg_len = sizeof(int) / cell_size;
+		iod.arr_rgs[i].rg_idx = i * arg->rank_size * 4 +
 			arg->myrank * 4 + i * block_size;
 	}
 
@@ -339,7 +341,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_write(oh, epoch, &ranges, &sgl, NULL,
+	rc = daos_array_write(oh, epoch, &iod, &sgl, NULL,
 			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -359,7 +361,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		assert_int_equal(rc, 0);
 	}
 	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
-	rc = daos_array_read(oh, epoch, &ranges, &sgl, NULL,
+	rc = daos_array_read(oh, epoch, &iod, &sgl, NULL,
 			     arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -385,7 +387,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	free(rbuf);
 	free(wbuf);
-	free(ranges.arr_rgs);
+	free(iod.arr_rgs);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -434,7 +436,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_epoch_t	epoch;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	daos_array_ranges_t ranges;
+	daos_array_iod_t iod;
 	daos_sg_list_t	sgl;
 	int		*wbuf[NUM_SEGS], *rbuf[NUM_SEGS];
 	daos_size_t	i, j;
@@ -460,14 +462,14 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	/** set array location */
-	ranges.arr_nr = NUM_ELEMS;
-	ranges.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) *
+	iod.arr_nr = NUM_ELEMS;
+	iod.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) *
 					       NUM_ELEMS);
-	assert_non_null(ranges.arr_rgs);
+	assert_non_null(iod.arr_rgs);
 
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.arr_rgs[i].rg_len = sizeof(int) / cell_size;
-		ranges.arr_rgs[i].rg_idx = i * arg->rank_size * 4 +
+		iod.arr_rgs[i].rg_len = sizeof(int) / cell_size;
+		iod.arr_rgs[i].rg_idx = i * arg->rank_size * 4 +
 			arg->myrank * 4 + i * block_size;
 	}
 
@@ -486,7 +488,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_write(oh, epoch, &ranges, &sgl, NULL,
+	rc = daos_array_write(oh, epoch, &iod, &sgl, NULL,
 			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -509,7 +511,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_read(oh, epoch, &ranges, &sgl, NULL,
+	rc = daos_array_read(oh, epoch, &iod, &sgl, NULL,
 			     arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -539,7 +541,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		free(rbuf[i]);
 		free(wbuf[i]);
 	}
-	free(ranges.arr_rgs);
+	free(iod.arr_rgs);
 	free(sgl.sg_iovs);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -588,7 +590,7 @@ read_empty_records(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	daos_array_ranges_t ranges;
+	daos_array_iod_t iod;
 	daos_sg_list_t	sgl;
 	daos_iov_t	iov;
 	int		*wbuf = NULL, *rbuf = NULL;
@@ -624,19 +626,19 @@ read_empty_records(void **state)
 	sgl.sg_iovs = &iov;
 
 	/** set array location */
-	ranges.arr_nr = NUM_ELEMS;
-	ranges.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) *
-					       NUM_ELEMS);
-	assert_non_null(ranges.arr_rgs);
+	iod.arr_nr = NUM_ELEMS;
+	iod.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) *
+					     NUM_ELEMS);
+	assert_non_null(iod.arr_rgs);
 
 	/** Read from empty array */
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.arr_rgs[i].rg_len = sizeof(int);
-		ranges.arr_rgs[i].rg_idx = i * arg->rank_size * sizeof(int) +
+		iod.arr_rgs[i].rg_len = sizeof(int);
+		iod.arr_rgs[i].rg_idx = i * arg->rank_size * sizeof(int) +
 			arg->myrank * sizeof(int);
 	}
 	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
-	rc = daos_array_read(oh, DAOS_EPOCH_MAX, &ranges, &sgl, NULL, NULL);
+	rc = daos_array_read(oh, DAOS_EPOCH_MAX, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -653,24 +655,24 @@ read_empty_records(void **state)
 
 	/** Write segmented */
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.arr_rgs[i].rg_len = sizeof(int);
-		ranges.arr_rgs[i].rg_idx = i * arg->rank_size * sizeof(int) +
+		iod.arr_rgs[i].rg_len = sizeof(int);
+		iod.arr_rgs[i].rg_idx = i * arg->rank_size * sizeof(int) +
 			arg->myrank * sizeof(int) +
 			i * NUM_ELEMS * sizeof(int);
 	}
-	rc = daos_array_write(oh, DAOS_EPOCH_MAX, &ranges, &sgl, NULL, NULL);
+	rc = daos_array_write(oh, DAOS_EPOCH_MAX, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** Read from empty records */
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.arr_rgs[i].rg_len = sizeof(int);
-		ranges.arr_rgs[i].rg_idx = i * sizeof(int) +
+		iod.arr_rgs[i].rg_len = sizeof(int);
+		iod.arr_rgs[i].rg_idx = i * sizeof(int) +
 			arg->myrank * sizeof(int);
 	}
 	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
-	rc = daos_array_read(oh, DAOS_EPOCH_MAX, &ranges, &sgl, NULL, NULL);
+	rc = daos_array_read(oh, DAOS_EPOCH_MAX, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	/** Verify data */
@@ -680,7 +682,7 @@ read_empty_records(void **state)
 
 	free(rbuf);
 	free(wbuf);
-	free(ranges.arr_rgs);
+	free(iod.arr_rgs);
 
 	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
@@ -700,7 +702,7 @@ strided_array(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	daos_array_ranges_t ranges;
+	daos_array_iod_t iod;
 	daos_sg_list_t	sgl;
 	int		*buf;
 	daos_size_t	i, j, nerrors = 0;
@@ -721,15 +723,15 @@ strided_array(void **state)
 		buf[i] = i+1;
 
 	/** set array location */
-	ranges.arr_nr = NUM;
-	ranges.arr_rgs = malloc(sizeof(daos_range_t) * NUM);
-	assert_non_null(ranges.arr_rgs);
+	iod.arr_nr = NUM;
+	iod.arr_rgs = malloc(sizeof(daos_range_t) * NUM);
+	assert_non_null(iod.arr_rgs);
 
 	j = 0;
 	for (i = 0; i < NUM; i++) {
 		j = 2 * sizeof(int) * i;
-		ranges.arr_rgs[i].rg_len = sizeof(int);
-		ranges.arr_rgs[i].rg_idx = j;
+		iod.arr_rgs[i].rg_len = sizeof(int);
+		iod.arr_rgs[i].rg_idx = j;
 	}
 
 	/** set memory location */
@@ -742,14 +744,14 @@ strided_array(void **state)
 	}
 
 	/** Write */
-	rc = daos_array_write(oh, DAOS_EPOCH_MAX, &ranges, &sgl, NULL, NULL);
+	rc = daos_array_write(oh, DAOS_EPOCH_MAX, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < NUM * 2; i++)
 		buf[i] = -1;
 
 	/** Read */
-	rc = daos_array_read(oh, DAOS_EPOCH_MAX, &ranges, &sgl, NULL, NULL);
+	rc = daos_array_read(oh, DAOS_EPOCH_MAX, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	/** Verify data */
@@ -771,7 +773,7 @@ strided_array(void **state)
 		print_message("Data verification found %zu errors\n", nerrors);
 
 	free(buf);
-	free(ranges.arr_rgs);
+	free(iod.arr_rgs);
 
 	assert_int_equal(nerrors, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -801,7 +803,8 @@ static const struct CMUnitTest array_io_tests[] = {
 int
 array_setup(void **state)
 {
-	return setup(state, SETUP_CONT_CONNECT, true);
+	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+			  NULL);
 }
 
 int
@@ -810,7 +813,7 @@ run_array_test(int rank, int size)
 	int rc = 0;
 
 	rc = cmocka_run_group_tests_name("Array io tests", array_io_tests,
-					 array_setup, teardown);
+					 array_setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

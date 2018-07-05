@@ -498,7 +498,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		oh;
 	daos_epoch_t		epoch;
-	daos_array_ranges_t	*ranges;
+	daos_array_iod_t	*iod;
 	daos_sg_list_t		*sgl;
 	daos_csum_buf_t		*csums;
 } daos_array_io_t;

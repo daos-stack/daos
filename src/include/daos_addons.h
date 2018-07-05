@@ -197,18 +197,21 @@ daos_obj_update_multi(daos_handle_t oh, daos_epoch_t epoch,
 		      unsigned int num_dkeys, daos_dkey_io_t *io_array,
 		      daos_event_t *ev);
 
+/** Range of contiguous records */
 typedef struct {
-	daos_size_t		rg_len;
+	/** Index of the first record in the range */
 	daos_off_t		rg_idx;
+	/** Number of records in the range */
+	daos_size_t		rg_len;
 } daos_range_t;
 
-/** describe ranges of an array object to access */
+/** IO descriptor of ranges in a DAOS array object to access */
 typedef struct {
-	/** Number of ranges to access */
+	/** Number of entries in arr_rgs */
 	daos_size_t		arr_nr;
-	/** Array of index/len pairs */
+	/** Array of ranges; each range defines a starting index and length. */
 	daos_range_t	       *arr_rgs;
-} daos_array_ranges_t;
+} daos_array_iod_t;
 
 /**
  * Create an Array object. This creates a DAOS KV object and adds metadata to
@@ -301,7 +304,7 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  *
  * \param oh	[IN]	Array object open handle.
  * \param epoch	[IN]	Epoch for the read.
- * \param range	[IN]	Ranges to read from the array.
+ * \param iod	[IN]	IO descriptor of ranges to read from the array.
  * \param sgl   [IN/OUT]
  *			A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the indiviual range
@@ -324,7 +327,7 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  */
 int
 daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
-		daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
+		daos_array_iod_t *iod, daos_sg_list_t *sgl,
 		daos_csum_buf_t *csums, daos_event_t *ev);
 
 /**
@@ -332,7 +335,7 @@ daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
  *
  * \param oh	[IN]	Array object open handle.
  * \param epoch	[IN]	Epoch for the write.
- * \param range	[IN]	Ranges to write to the array.
+ * \param iod	[IN]	IO descriptor of ranges to write to the array.
  * \param sgl   [IN]	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the indiviual range
  *			sizes as long as the total size does.
@@ -353,7 +356,7 @@ daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
  */
 int
 daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
-		 daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
+		 daos_array_iod_t *iod, daos_sg_list_t *sgl,
 		 daos_csum_buf_t *csums, daos_event_t *ev);
 
 /**

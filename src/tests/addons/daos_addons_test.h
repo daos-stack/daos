@@ -22,11 +22,13 @@
  */
 /**
  * This file is part of DAOS
+ * src/tests/addons/daos_addons_test.h
  */
-
-int setup(void **state, unsigned int step, bool multi_rank);
-int teardown(void **state);
+#ifndef __DAOS_ADDONS_TEST_H
+#define __DAOS_ADDONS_TEST_H
 
 /** Addons tests */
 int run_array_test(int rank, int size);
 int run_hl_test(int rank, int size);
+
+#endif

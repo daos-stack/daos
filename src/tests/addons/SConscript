@@ -11,7 +11,11 @@ def scons():
 
     denv.Append(CPPPATH=['#/src/addons/tests/'])
 
-    daos_addons_test = daos_build.program(denv, 'daos_addons_test', Glob('*.c'),
+    Import('daos_test_tgt')
+
+    addons = denv.SharedObject(Glob('*.c'))
+    daos_addons_test = daos_build.program(denv, 'daos_addons_test',
+                                          daos_test_tgt + addons,
                                           LIBS=libraries)
     denv.Install('$PREFIX/bin/', daos_addons_test)
 
