@@ -54,7 +54,7 @@ static int
 dma_buffer_grow(struct eio_dma_buffer *buf, unsigned int cnt)
 {
 	struct eio_dma_chunk *chunk;
-	ssize_t chk_bytes = eio_chk_sz * EIO_DMA_PAGE_SZ;
+	ssize_t chk_bytes = eio_chk_sz << EIO_DMA_PAGE_SHIFT;
 	int i, rc = 0;
 
 	if ((buf->edb_tot_cnt + cnt) > eio_chk_cnt_max) {
@@ -230,8 +230,13 @@ iod_release_buffer(struct eio_desc *eiod)
 		D_ASSERT(chunk->edc_ref > 0);
 		chunk->edc_ref--;
 
+		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u\n", chunk,
+			chunk->edc_ptr, chunk->edc_pg_idx, chunk->edc_ref);
+
 		if (chunk->edc_ref == 0) {
 			chunk->edc_pg_idx = 0;
+			if (chunk == edb->edb_cur_chk)
+				edb->edb_cur_chk = NULL;
 			d_list_move_tail(&chunk->edc_link, &edb->edb_idle_list);
 		}
 		rsrvd_dma->erd_dma_chks[i] = NULL;
@@ -310,8 +315,11 @@ chunk_reserve(struct eio_dma_chunk *chk, unsigned int chk_pg_idx,
 	if (chk_pg_idx + pg_cnt > eio_chk_sz)
 		return NULL;
 
+	D_DEBUG(DB_IO, "Reserved on chunk:%p[%p], idx:%u, cnt:%u, off:%u\n",
+		chk, chk->edc_ptr, chk_pg_idx, pg_cnt, pg_off);
+
 	chk->edc_pg_idx = chk_pg_idx + pg_cnt;
-	return chk->edc_ptr + chk_pg_idx * EIO_DMA_PAGE_SZ + pg_off;
+	return chk->edc_ptr + (chk_pg_idx << EIO_DMA_PAGE_SHIFT) + pg_off;
 }
 
 static inline struct eio_rsrvd_region *
@@ -319,7 +327,7 @@ iod_last_region(struct eio_desc *eiod)
 {
 	unsigned int cnt = eiod->ed_rsrvd.erd_rg_cnt;
 
-	D_ASSERT(cnt < eiod->ed_rsrvd.erd_rg_max);
+	D_ASSERT(!cnt || cnt < eiod->ed_rsrvd.erd_rg_max);
 	return (cnt != 0) ? &eiod->ed_rsrvd.erd_regions[cnt - 1] : NULL;
 }
 
@@ -361,18 +369,19 @@ iod_add_chunk(struct eio_desc *eiod, struct eio_dma_chunk *chk)
 	if (cnt == max) {
 		struct eio_dma_chunk **chunks;
 		int size = sizeof(struct eio_dma_chunk *);
+		unsigned new_cnt = cnt + 10;
 
-		cnt += 10;
-		D_ALLOC(chunks, cnt * size);
+		D_ALLOC(chunks, new_cnt * size);
 		if (chunks == NULL)
 			return -DER_NOMEM;
 
-		if (max != 0)
+		if (max != 0) {
 			memcpy(chunks, rsrvd_dma->erd_dma_chks, max * size);
+			D_FREE(rsrvd_dma->erd_dma_chks);
+		}
 
-		D_FREE(rsrvd_dma->erd_dma_chks);
 		rsrvd_dma->erd_dma_chks = chunks;
-		rsrvd_dma->erd_chk_max = cnt;
+		rsrvd_dma->erd_chk_max = new_cnt;
 	}
 
 	chk->edc_ref++;
@@ -383,7 +392,7 @@ iod_add_chunk(struct eio_desc *eiod, struct eio_dma_chunk *chk)
 
 static int
 iod_add_region(struct eio_desc *eiod, struct eio_dma_chunk *chk,
-	       uint64_t off, uint64_t end)
+	       unsigned int chk_pg_idx, uint64_t off, uint64_t end)
 {
 	struct eio_rsrvd_dma *rsrvd_dma = &eiod->ed_rsrvd;
 	unsigned int max, cnt;
@@ -394,22 +403,23 @@ iod_add_region(struct eio_desc *eiod, struct eio_dma_chunk *chk,
 	if (cnt == max) {
 		struct eio_rsrvd_region *rgs;
 		int size = sizeof(struct eio_rsrvd_region);
+		unsigned new_cnt = cnt + 20;
 
-		cnt += 20;
-		D_ALLOC(rgs, cnt * size);
+		D_ALLOC(rgs, new_cnt * size);
 		if (rgs == NULL)
 			return -DER_NOMEM;
 
-		if (max != 0)
+		if (max != 0) {
 			memcpy(rgs, rsrvd_dma->erd_regions, max * size);
+			D_FREE(rsrvd_dma->erd_regions);
+		}
 
-		D_FREE(rsrvd_dma->erd_regions);
 		rsrvd_dma->erd_regions = rgs;
-		rsrvd_dma->erd_rg_max = cnt;
+		rsrvd_dma->erd_rg_max = new_cnt;
 	}
 
 	rsrvd_dma->erd_regions[cnt].err_chk = chk;
-	rsrvd_dma->erd_regions[cnt].err_pg_idx = chk->edc_pg_idx;
+	rsrvd_dma->erd_regions[cnt].err_pg_idx = chk_pg_idx;
 	rsrvd_dma->erd_regions[cnt].err_off = off;
 	rsrvd_dma->erd_regions[cnt].err_end = end;
 	rsrvd_dma->erd_rg_cnt++;
@@ -423,9 +433,9 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 {
 	struct eio_rsrvd_region *last_rg;
 	struct eio_dma_buffer *edb;
-	struct eio_dma_chunk *chk = NULL, *cur_chk;
+	struct eio_dma_chunk *chk = NULL;
 	uint64_t off, end;
-	unsigned int pg_cnt, pg_off;
+	unsigned int pg_cnt, pg_off, chk_pg_idx;
 	int rc;
 
 	D_ASSERT(arg == NULL);
@@ -449,13 +459,12 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 
 	D_ASSERT(eiov->ei_addr.ea_type == EIO_ADDR_NVME);
 	edb = iod_dma_buf(eiod);
-	cur_chk = edb->edb_cur_chk;
 
 	off = eio_iov2off(eiov);
 	end = eio_iov2off(eiov) + eiov->ei_data_len;
-	pg_cnt = (end + EIO_DMA_PAGE_SZ - 1) / EIO_DMA_PAGE_SZ -
-			off / EIO_DMA_PAGE_SZ;
-	pg_off = off & ~(EIO_DMA_PAGE_SZ - 1);
+	pg_cnt = ((end + EIO_DMA_PAGE_SZ - 1) >> EIO_DMA_PAGE_SHIFT) -
+			(off >> EIO_DMA_PAGE_SHIFT);
+	pg_off = off & ((uint64_t)EIO_DMA_PAGE_SZ - 1);
 
 	if (pg_cnt > eio_chk_sz) {
 		D_ERROR("IOV is too large "DF_U64"\n", eiov->ei_data_len);
@@ -463,21 +472,23 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 	}
 
 	last_rg = iod_last_region(eiod);
-	if (last_rg != NULL) {
-		chk = last_rg->err_chk;
-		D_ASSERT(chk == cur_chk);
-	}
 
 	/* First, try consecutive reserve from the last reserved region */
 	if (last_rg) {
 		uint64_t cur_pg, prev_pg_start, prev_pg_end;
-		unsigned int chk_pg_idx = last_rg->err_pg_idx;
 
+		D_DEBUG(DB_IO, "Last region %p:%d ["DF_U64","DF_U64")\n",
+			last_rg->err_chk, last_rg->err_pg_idx,
+			last_rg->err_off, last_rg->err_end);
+
+		chk = last_rg->err_chk;
+		chk_pg_idx = last_rg->err_pg_idx;
 		D_ASSERT(chk_pg_idx < eio_chk_sz);
-		prev_pg_start = last_rg->err_off / EIO_DMA_PAGE_SZ;
-		prev_pg_end = last_rg->err_end / EIO_DMA_PAGE_SZ;
+
+		prev_pg_start = last_rg->err_off >> EIO_DMA_PAGE_SHIFT;
+		prev_pg_end = last_rg->err_end >> EIO_DMA_PAGE_SHIFT;
+		cur_pg = off >> EIO_DMA_PAGE_SHIFT;
 		D_ASSERT(prev_pg_start <= prev_pg_end);
-		cur_pg = off / EIO_DMA_PAGE_SZ;
 
 		/* Consecutive in page */
 		if (cur_pg == prev_pg_end) {
@@ -485,6 +496,8 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 			eiov->ei_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt,
 						     pg_off);
 			if (eiov->ei_buf != NULL) {
+				D_DEBUG(DB_IO, "Consecutive reserve %p.\n",
+					eiov->ei_buf);
 				last_rg->err_end = end;
 				return 0;
 			}
@@ -493,20 +506,30 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 
 	/* Try to reserve from the last DMA chunk in io descriptor */
 	if (chk != NULL) {
-		eiov->ei_buf = chunk_reserve(chk, chk->edc_pg_idx, pg_cnt,
-					     pg_off);
-		if (eiov->ei_buf != NULL)
+		chk_pg_idx = chk->edc_pg_idx;
+		eiov->ei_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off);
+		if (eiov->ei_buf != NULL) {
+			D_DEBUG(DB_IO, "Last chunk reserve %p.\n",
+				eiov->ei_buf);
 			goto add_region;
+		}
 	}
 
 	/*
 	 * Try to reserve the DMA buffer from the 'current chunk' of the
-	 * per-xstream DMA buffer.
+	 * per-xstream DMA buffer. It could be different with the last chunk
+	 * in io descripotr, because dma_map_one() may yield in the future.
 	 */
-	chk = cur_chk;
-	eiov->ei_buf = chunk_reserve(chk, chk->edc_pg_idx, pg_cnt, pg_off);
-	if (eiov->ei_buf != NULL)
-		goto add_chunk;
+	if (edb->edb_cur_chk != NULL && edb->edb_cur_chk != chk) {
+		chk = edb->edb_cur_chk;
+		chk_pg_idx = chk->edc_pg_idx;
+		eiov->ei_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off);
+		if (eiov->ei_buf != NULL) {
+			D_DEBUG(DB_IO, "Current chunk reserve %p.\n",
+				eiov->ei_buf);
+			goto add_chunk;
+		}
+	}
 
 	/*
 	 * Switch to another idle chunk, if there isn't any idle chunk
@@ -515,12 +538,16 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 	chk = chunk_get_idle(edb);
 	if (chk == NULL)
 		return -DER_OVERFLOW;
-	edb->edb_cur_chk = chk;
 
-	D_ASSERT(chk->edc_pg_idx == 0);
-	eiov->ei_buf = chunk_reserve(chk, chk->edc_pg_idx, pg_cnt, pg_off);
-	if (eiov->ei_buf != NULL)
+	edb->edb_cur_chk = chk;
+	chk_pg_idx = chk->edc_pg_idx;
+
+	D_ASSERT(chk_pg_idx == 0);
+	eiov->ei_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off);
+	if (eiov->ei_buf != NULL) {
+		D_DEBUG(DB_IO, "New chunk reserve %p.\n", eiov->ei_buf);
 		goto add_chunk;
+	}
 
 	return -DER_OVERFLOW;
 
@@ -529,7 +556,7 @@ add_chunk:
 	if (rc)
 		return rc;
 add_region:
-	return iod_add_region(eiod, chk, off, end);
+	return iod_add_region(eiod, chk, chk_pg_idx, off, end);
 }
 
 static void
@@ -553,35 +580,46 @@ rw_completion(void *cb_arg, int err)
 static void
 dma_rw(struct eio_desc *eiod, bool prep)
 {
-	struct spdk_blob *blob;
-	struct spdk_io_channel *channel;
-	struct eio_rsrvd_dma *rsrvd_dma = &eiod->ed_rsrvd;
-	struct eio_rsrvd_region *rg;
-	uint64_t pg_idx, pg_cnt, pg_end;
-	void *payload, *pg_rmw = NULL;
-	bool rmw_read = (prep && eiod->ed_update);
-	unsigned int pg_off;
-	int i;
+	struct spdk_io_channel	*channel;
+	struct spdk_blob	*blob;
+	struct eio_rsrvd_dma	*rsrvd_dma = &eiod->ed_rsrvd;
+	struct eio_rsrvd_region	*rg;
+	uint64_t		 pg_idx, pg_cnt, pg_end;
+	void			*payload, *pg_rmw = NULL;
+	bool			 rmw_read = (prep && eiod->ed_update);
+	unsigned int		 pg_off;
+	int			 i;
 
 	D_ASSERT(eiod->ed_ctxt->eic_xs_ctxt);
 	blob = eiod->ed_ctxt->eic_blob;
 	channel = eiod->ed_ctxt->eic_xs_ctxt->exc_io_channel;
 	D_ASSERT(blob != NULL && channel != NULL);
 
+	D_DEBUG(DB_IO, "DMA start, blob:%p, update:%d, rmw:%d\n",
+		blob, eiod->ed_update, rmw_read);
+
 	for (i = 0; i < rsrvd_dma->erd_rg_cnt; i++) {
 		rg = &rsrvd_dma->erd_regions[i];
 
-		pg_idx = rg->err_off / EIO_DMA_PAGE_SZ;
+		D_ASSERT(rg->err_chk != NULL);
+		pg_idx = rg->err_off >> EIO_DMA_PAGE_SHIFT;
 		payload = rg->err_chk->edc_ptr +
-			rg->err_pg_idx * EIO_DMA_PAGE_SZ;
+			(rg->err_pg_idx << EIO_DMA_PAGE_SHIFT);
 
 		if (!rmw_read) {
-			pg_cnt = rg->err_end + EIO_DMA_PAGE_SZ - 1;
-			pg_cnt = pg_cnt / EIO_DMA_PAGE_SZ - pg_idx;
+			pg_cnt = (rg->err_end + EIO_DMA_PAGE_SZ - 1) >>
+					EIO_DMA_PAGE_SHIFT;
+			D_ASSERT(pg_cnt > pg_idx);
+			pg_cnt -= pg_idx;
 
 			ABT_mutex_lock(eiod->ed_mutex);
 			eiod->ed_inflights++;
 			ABT_mutex_unlock(eiod->ed_mutex);
+
+			D_DEBUG(DB_IO, "%s blob:%p payload:%p, "
+				"pg_idx:"DF_U64", pg_cnt:"DF_U64"\n",
+				eiod->ed_update ? "Write" : "Read",
+				blob, payload, pg_idx, pg_cnt);
 
 			if (eiod->ed_update)
 				spdk_blob_io_write(blob, channel, payload,
@@ -595,34 +633,31 @@ dma_rw(struct eio_desc *eiod, bool prep)
 		}
 
 		/*
-		 * RMW read for partial page update, don't need to worry
-		 * about race of RMW to same page for now, since we don't
-		 * support partial overwrite within same epoch.
+		 * Since DAOS doesn't support partial overwrite yet, we don't
+		 * do RMW for partial update, only zeroing the page instead.
 		 */
-		pg_off = rg->err_off & ~(EIO_DMA_PAGE_SZ - 1);
+		pg_off = rg->err_off & ((uint64_t)EIO_DMA_PAGE_SZ - 1);
 
 		if (pg_off != 0 && payload != pg_rmw) {
-			ABT_mutex_lock(eiod->ed_mutex);
-			eiod->ed_inflights++;
-			ABT_mutex_unlock(eiod->ed_mutex);
+			D_DEBUG(DB_IO, "Front partial blob:%p payload:%p, "
+				"pg_idx:"DF_U64" pg_off:%d\n",
+				blob, payload, pg_idx, pg_off);
 
-			spdk_blob_io_read(blob, channel, payload, pg_idx, 1,
-					  rw_completion, eiod);
+			memset(payload, 0, EIO_DMA_PAGE_SZ);
 			pg_rmw = payload;
 		}
 
-		pg_end = rg->err_end / EIO_DMA_PAGE_SZ;
+		pg_end = rg->err_end >> EIO_DMA_PAGE_SHIFT;
 		D_ASSERT(pg_end >= pg_idx);
-		payload += (pg_end - pg_idx) * EIO_DMA_PAGE_SZ;
-		pg_off = rg->err_end & ~(EIO_DMA_PAGE_SZ - 1);
+		payload += (pg_end - pg_idx) << EIO_DMA_PAGE_SHIFT;
+		pg_off = rg->err_end & ((uint64_t)EIO_DMA_PAGE_SZ - 1);
 
 		if (pg_off != 0 && payload != pg_rmw) {
-			ABT_mutex_lock(eiod->ed_mutex);
-			eiod->ed_inflights++;
-			ABT_mutex_unlock(eiod->ed_mutex);
+			D_DEBUG(DB_IO, "Rear partial blob:%p payload:%p, "
+				"pg_idx:"DF_U64" pg_off:%d\n",
+				blob, payload, pg_idx, pg_off);
 
-			spdk_blob_io_read(blob, channel, payload, pg_end, 1,
-					  rw_completion, eiod);
+			memset(payload, 0, EIO_DMA_PAGE_SZ);
 			pg_rmw = payload;
 		}
 	}

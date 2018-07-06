@@ -132,7 +132,7 @@ eio_nvme_init(void)
 		eio_chk_cnt_max = 32;
 	}
 
-	eio_chk_sz = (size_mb << 20) / EIO_DMA_PAGE_SZ;
+	eio_chk_sz = (size_mb << 20) >> EIO_DMA_PAGE_SHIFT;
 
 	return 0;
 }

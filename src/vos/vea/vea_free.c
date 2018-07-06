@@ -366,9 +366,13 @@ migrate_free_exts(struct vea_space_info *vsi)
 				break;
 			}
 		}
+
+		D_DEBUG(DB_IO, "Migrate free extent ["DF_U64", %u]\n",
+			vfe.vfe_blk_off, vfe.vfe_blk_cnt);
+
 	}
 
-	D_DEBUG(rc ? DLOG_ERR : DB_IO,
-		"failed to migrate ["DF_U64", %u] op:%s rc:%d\n",
-		vfe.vfe_blk_off, vfe.vfe_blk_cnt, op, rc);
+	if (rc && strlen(op))
+		D_ERROR("Failed to migrate ["DF_U64", %u] op:%s rc:%d\n",
+			vfe.vfe_blk_off, vfe.vfe_blk_cnt, op, rc);
 }

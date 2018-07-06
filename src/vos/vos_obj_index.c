@@ -137,7 +137,8 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		daos_handle_t	 toh;
 
 		umem_attr_get(&tins->ti_umm, &uma);
-		rc = dbtree_open_inplace(&obj->vo_tree, &uma, &toh);
+		rc = dbtree_open_inplace_ex(&obj->vo_tree, &uma,
+					    tins->ti_blks_info, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open OI tree: %d\n", rc);
 		else

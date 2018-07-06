@@ -309,7 +309,7 @@ reserve_small(struct vea_space_info *vsi, uint32_t blk_cnt,
 	struct vea_free_extent vfe;
 	struct vea_entry *entry;
 	struct free_ext_cursor *cursor;
-	int rc = -DER_NOMEM;
+	int rc = 0;
 
 	cursor = cursor_prepare(&vsi->vsi_class, blk_cnt);
 	D_ASSERT(cursor != NULL);
@@ -342,7 +342,7 @@ reserve_vector(struct vea_space_info *vsi, uint32_t blk_cnt,
 	       struct vea_resrvd_ext *resrvd)
 {
 	/* TODO reserve extent vector for non-contiguous allocation */
-	return -DER_NOMEM;
+	return -DER_NOSPACE;
 }
 
 int
@@ -360,6 +360,9 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 
 	btr_hdl = vsi->vsi_md_free_btr;
 	D_ASSERT(!daos_handle_is_inval(btr_hdl));
+
+	D_DEBUG(DB_IO, "Persistent alloc ["DF_U64", %u]\n",
+		vfe->vfe_blk_off, vfe->vfe_blk_cnt);
 
 	/* Fetch & operate on the copied record */
 	daos_iov_set(&key_in, &vfe->vfe_blk_off, sizeof(vfe->vfe_blk_off));

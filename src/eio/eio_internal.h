@@ -27,7 +27,8 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/eio.h>
 
-#define	EIO_DMA_PAGE_SZ		(4UL << 10)	/* 4K */
+#define EIO_DMA_PAGE_SHIFT	12		/* 4K */
+#define	EIO_DMA_PAGE_SZ		(1UL << EIO_DMA_PAGE_SHIFT)
 
 /* DMA buffer is managed in chunks */
 struct eio_dma_chunk {
@@ -35,7 +36,7 @@ struct eio_dma_chunk {
 	d_list_t	 edc_link;
 	/* Base pointer of the chunk address */
 	void		*edc_ptr;
-	/* Page offset (4K page)  to unused fraction */
+	/* Page offset (4K page) to unused fraction */
 	unsigned int	 edc_pg_idx;
 	/* Being used by how many I/O descriptors */
 	unsigned int	 edc_ref;

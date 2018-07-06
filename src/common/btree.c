@@ -1451,6 +1451,18 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
 	}
 
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
+	if (opc == BTR_PROBE_EQ && rc == PROBE_RC_OK) {
+		/*
+		 * Don't need to return the key address if the found
+		 * key is same to the specified key, so that caller won't
+		 * need to do key comparison.
+		 *
+		 * Still need to copy back the found key if the key_out
+		 * buffer is already provided by caller.
+		 */
+		if (key_out != NULL && key_out->iov_buf == NULL)
+			key_out = NULL;
+	}
 
 	return btr_rec_fetch(tcx, rec, key_out, val_out);
 }

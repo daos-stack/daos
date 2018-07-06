@@ -895,7 +895,7 @@ iod_reserve(struct vos_io_context *ioc, struct eio_iov *eiov)
 	ioc->ic_iov_at++;
 	esgl->es_nr_out++;
 
-	D_DEBUG(DB_IO, "media %hu offset "DF_X64" size %zd\n",
+	D_DEBUG(DB_IO, "media %hu offset "DF_U64" size %zd\n",
 		eiov->ei_addr.ea_type, eiov->ei_addr.ea_off,
 		eiov->ei_data_len);
 	return 0;
