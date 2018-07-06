@@ -1,9 +1,10 @@
+#!/bin/bash
 
-test_results=`find . -name test_output`
+test_results=$(find . -name test_output)
 
-ls ${test_results}
+ls "${test_results}"
 set +e
-grep FAILED ${test_results}
+grep FAILED "${test_results}"
 rc=$?
 set -e
 if [ ${rc} == 0 ]; then

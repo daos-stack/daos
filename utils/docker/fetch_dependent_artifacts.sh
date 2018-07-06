@@ -72,42 +72,45 @@ set +u -x
 job_real_name=""
 if [ -n "${JOB_NAME}" ];then
   job_real_name=${JOB_NAME%/*}
-  : ${JOB_SUFFIX:="-${job_real_name#*-}"}
+  # shellcheck disable=SC2153
+  : "${JOB_SUFFIX:="-${job_real_name#*-}"}"
 fi
 
-: ${TARGET:="${job_real_name%-*}"}
-: ${JOB_SUFFIX:="-master"}
+: "${TARGET:="${job_real_name%-*}"}"
+: "${JOB_SUFFIX:="-master"}"
 job_suffix=${JOB_SUFFIX#-}
 
-: ${DEPEND_JOBS:=""}
+: "${DEPEND_JOBS:=""}"
 
 if [ -z "${TARGET}" ]; then
   echo "Either JOB_NAME or TARGET environment variables must exist."
   exit 1
 fi
 
-: ${WORK_TARGET:="dist_target"}
+: "${WORK_TARGET:="dist_target"}"
 
-: ${CORAL_ARTIFACTS:="/scratch/jenkins-2/artifacts"}
+: "${CORAL_ARTIFACTS:="/scratch/jenkins-2/artifacts"}"
 
-: ${arch:="x86_64"}
+# shellcheck disable=SC2154
+: "${arch:="x86_64"}"
 
 def_distro="el7"
 if [ -e "/etc/SuSE-release" ]; then
   def_distro="sles12"
 fi
-: ${distro="${def_distro}"}
+# shellcheck disable=SC2154
+: "${distro="${def_distro}"}"
 
-: ${DEPEND_RPMS:="depend_rpms"}
+: "${DEPEND_RPMS:="depend_rpms"}"
 
-: ${DEPEND_INFO:="depend_info"}
+: "${DEPEND_INFO:="depend_info"}"
 
-: ${DEPEND_TARBALLS:="depend_tarballs"}
+: "${DEPEND_TARBALLS:="depend_tarballs"}"
 
 set -u
 
-def_build_config=`find . -name 'build.config' -print -quit`
-: ${BUILD_CONFIG:="${def_build_config}"}
+def_build_config=$(find . -name 'build.config' -print -quit)
+: "${BUILD_CONFIG:="${def_build_config}"}"
 
 set + u
 if [ -z "${BUILD_CONFIG}" ]; then
@@ -138,41 +141,41 @@ function fetch_job_artifacts {
   fi
 
   # Copy over any RPMs
-  if [ -d ${DEPEND_RPMS} ];then
-    rpm_files=`find ${artifact} -name "*.rpm" -print`
+  if [ -d "${DEPEND_RPMS}" ];then
+    rpm_files=$(find "${artifact}" -name "*.rpm" -print)
     if [ -n "${rpm_files}" ]; then
-      cp ${artifact}/*.rpm ${DEPEND_RPMS}
+      cp "${artifact}"/*.rpm "${DEPEND_RPMS}"
     fi
   fi
   # Unpack any tarballs
-  tar_files=`find ${artifact} -name "*_files.tar.gz" -print`
+  tar_files=$(find "${artifact}" -name "*_files.tar.gz" -print)
   mapfile -t tar_file_lines <<< "${tar_files}"
   for tar_file in "${tar_file_lines[@]}"; do
-    dest_filename=`basename ${tar_file}`
+    dest_filename=$(basename "${tar_file}")
     dest_name=${dest_filename%_files.tar.gz}
     if [ ! -d "${WORK_TARGET}/${dest_name}" ]; then
-      if [ -e ${tar_file} ]; then
-        mkdir -p ${WORK_TARGET}/${dest_name}
-        tar -C ${WORK_TARGET}/${dest_name} -xzf ${tar_file}
+      if [ -e "${tar_file}" ]; then
+        mkdir -p "${WORK_TARGET}/${dest_name}"
+        tar -C "${WORK_TARGET}/${dest_name}" -xzf "${tar_file}"
         if [ -d "${DEPEND_TARBALLS}" ]; then
-          cp ${tar_file} ${DEPEND_TARBALLS}
+          cp "${tar_file}" "${DEPEND_TARBALLS}"
         fi
       fi
       if [ -d "${DEPEND_INFO}" ]; then
-        #git_files=`find ${artifact} -name "*_git_*" -print`
+        #git_files=$(find "${artifact}" -name "*_git_*" -print)
         #mapfile -t git_file_lines <<< "${git_files}"
         #for git_file in "${get_file_lines[@]}"; do
         git_file="${dest_name}_git_commit"
-        if [ -e ${artifact}/${git_file} ]; then
-          cp ${artifact}/${git_file} ${DEPEND_INFO}
-          dest_filename=`basename ${git_file}`
+        if [ -e "${artifact}/${git_file}" ]; then
+          cp "${artifact}/${git_file}" "${DEPEND_INFO}"
+          dest_filename=$(basename "${git_file}")
           if [[ $dest_filename == *"_git_commit" ]]; then
             test_git=${dest_name}_git_hash
             set +u
             test_hash=${!test_git}
             set -u
             if [ -n "${test_hash}" ] && [ "${test_hash}" != "latest" ]; then
-              art_hash=`cat ${DEPEND_INFO}/${git_file}`
+              art_hash=$(cat "${DEPEND_INFO}/${git_file}")
               if [ "${art_hash}" != "${test_hash}" ]; then
                 # mpi4py is using the ompi commit hash for wanted commit
                 # Which will not match any saved mpi4py commit hash.
@@ -180,8 +183,8 @@ function fetch_job_artifacts {
                 # use a commit hash.
                 if [ "${dest_name}" != "mpi4py" ]; then
                   printf "###\n%s commit should be '%s' was '%s'\n###\n" \
-                    ${dest_name} ${test_hash} ${art_hash}
-                  printf "${dest_name} ${test_hash} not found\n" >> \
+                    "${dest_name}" "${test_hash}" "${art_hash}"
+                  printf "%s %s not found\n" "${dest_name}" "${test_hash}">> \
                     commit_not_found
                 fi
               fi
@@ -189,8 +192,8 @@ function fetch_job_artifacts {
           fi
         fi
         git_branch="${dest_name}_git_branch"
-        if [ -e ${artifact}/${git_branch} ]; then
-          cp ${artifact}/${git_branch} ${DEPEND_INFO}
+        if [ -e "${artifact}/${git_branch}" ]; then
+          cp "${artifact}/${git_branch}" "${DEPEND_INFO}"
         fi
       fi
     fi
@@ -200,10 +203,11 @@ function fetch_job_artifacts {
 # Read and parse the git commit hashes from build.config
 gr1='grep -v depends='
 gr2='grep -v component='
-depend_hashes=`grep -i "\s*=\s*" ${BUILD_CONFIG} | ${gr1} | ${gr2}`
+depend_hashes=$(grep -i "\s*=\s*" "${BUILD_CONFIG}" | ${gr1} | ${gr2})
 mapfile -t depend_lines <<< "${depend_hashes}"
 depend_names=""
 for line in "${depend_lines[@]}"; do
+  # shellcheck disable=SC1001
   if [[ "${line}" != \#* ]]; then
     depend_name=${line%=*}
     depend_name=${depend_name% *}
@@ -214,7 +218,7 @@ for line in "${depend_lines[@]}"; do
     declare ${depend_name}_git_hash=${depend_hash}
     depend_names="${depend_names} ${depend_name}"
     if [ -d "${WORK_TARGET}/${depend_name}" ]; then
-      rm -rf ${WORK_TARGET}/${depend_name}
+      rm -rf "${WORK_TARGET:?}/${depend_name}"
     fi
   fi
 done
@@ -225,6 +229,7 @@ if [[ ${depend_names} =~ ompi ]]; then
   # by the ompi hash
   if [[ ! ${depend_names} =~ mpi4py ]]; then
     depend_names=" mpi4py ${depend_names}"
+    # shellcheck disable=SC2034 disable=SC2154
     declare mpi4py_git_hash=${ompi_git_hash}
   fi
 fi
@@ -234,12 +239,13 @@ if [[ ${depend_names} =~ openpa ]]; then
   # building the appropriate commit hash.
   if [[ ! ${depend_names} =~ mercury ]]; then
     depend_names=" mercury ${depend_names}"
+    # shellcheck disable=SC2034
     declare mercury_git_hash="latest"
   fi
 fi
 # bmi not being built so ignore
 depend_names=${depend_names// bmi/}
-: ${DEPEND_COMPS:="${depend_names}"}
+: "${DEPEND_COMPS:="${depend_names}"}"
 export DEPEND_COMPS
 
 test_distro="arch=x86_64,distro=el7"
@@ -262,12 +268,12 @@ if [ -n "${DEPEND_JOBS}" ]; then
       artifact_test_base="${artifact_base}/${test_distro}"
       artifact_test=${artifact_test_base}/${wanted_commit}
       if [ -d "${artifact_test}" ]; then
-        artifact_dir=`readlink -f ${artifact_test}`
+        artifact_dir=$(readlink -f "${artifact_test}")
         artifact_no="${artifact_dir##*/}"
         artifact_distro="${artifact_base}/${wanted_distro}"
         artifact="${artifact_distro}/${artifact_no}"
         if [ -n "${artifact_no}" ]; then
-          fetch_job_artifacts ${artifact}
+          fetch_job_artifacts "${artifact}"
         fi
       fi
     fi
@@ -294,24 +300,25 @@ for test_name in ${DEPEND_COMPS}; do
       artifact_base="${CORAL_ARTIFACTS}/${test_job_name}"
       artifact_test_base="${artifact_base}/${test_distro}"
       artifact_test=${artifact_test_base}/${wanted_commit}
-      if [ -d ${artifact_test} ]; then
+      if [ -d "${artifact_test}" ]; then
         break
       fi
     done
-    if [ ! -d ${artifact_test} ]; then
+    if [ ! -d "${artifact_test}" ]; then
       if [ "${test_name}" != "mpi4py" ]; then
-        printf "${test_name} ${wanted_commit} not found\n" >> commit_not_found
+        printf "%s %s not found\n" "${test_name}" "${wanted_commit}" >> \
+          commit_not_found
       fi
       artifact_test="${artifact_test_base}/latest"
     fi
-    artifact_dir=`readlink -f ${artifact_test}`
+    artifact_dir=$(readlink -f "${artifact_test}")
     artifact_no="${artifact_dir##*/}"
   fi
 
   artifact_distro="${artifact_base}/${wanted_distro}"
   if [ -n "${artifact_no}" ]; then
     artifact="${artifact_distro}/${artifact_no}"
-    fetch_job_artifacts ${artifact}
+    fetch_job_artifacts "${artifact}"
   fi
 done
 

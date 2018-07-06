@@ -12,6 +12,7 @@ function print_status()
 
 docker_setup_file="/work/docker_setup.sh"
 if [ -e ${docker_setup_file} ]; then
+  # shellcheck disable=SC1090
   source ${docker_setup_file}
 fi
 
@@ -36,10 +37,10 @@ set -e
 pushd ${scons_local_dir}
 if [ ${kw_build} -eq 1 ];
 then
-  # shellcheck disable=SC2086 disable=SC2048
+  # shellcheck disable=SC2086 disable=SC2048 disable=SC2154
   kwinject -o "${KWINJECT_OUT}" scons ${option} $*
 else
-  # shellcheck disable=SC2086 disable=SC2048
+  # shellcheck disable=SC2086 disable=SC2048 disable=SC2154
   scons ${option} $*
 fi
 
@@ -51,6 +52,7 @@ popd
 if [ -n "${CUSTOM_BUILD_STEP}" ];then
   if [ -e "${CUSTOM_BUILD_STEP}" ]; then
     print_status "Running custom build step"
+    # shellcheck disable=SC1090
     source "${CUSTOM_BUILD_STEP}"
   else
     print_status "Custom build step file not found!"
