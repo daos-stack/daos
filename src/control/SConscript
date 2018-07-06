@@ -27,6 +27,11 @@ def scons():
     env.Command(agentbin, agentsrc, "go install agent")
     env.InstallAs("$PREFIX/bin/daos_agent", agentbin)
 
+    modulemgmt = "%s/modules/mgmt" % gosrc
+    mgmtinitdb = "mgmtinit_db.json"
+    env.InstallAs(os.path.join("$PREFIX/share/control", mgmtinitdb),
+                  os.path.join(modulemgmt, mgmtinitdb))
+
     serverbin = "%s/bin/server" % gopath
     serversrc = "%s/server/daos_server.go" % gosrc
     env.Command(serverbin, serversrc, "go install server")

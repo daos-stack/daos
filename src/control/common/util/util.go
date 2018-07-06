@@ -21,16 +21,30 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-syntax = "proto3";
-package proto;
+package util
 
-import "security.proto";
+import (
+	"fmt"
+	"log"
+	"runtime"
 
-// This is the main service definition for adding services to the management server
-// In order to add RPCs associated with your service add them in the ManagementService
-// definition below. Currently the SecurityAction RPC is a multiplexed request interface.
-// This does not mean that you are limited to rely on a single rpc for your entire module.
-// This may even change for the Security mechanism in the future.
-service SecurityControl {
-    rpc SecurityAction(SecurityRequest) returns (SecurityReply) {};
+	"google.golang.org/grpc/status"
+)
+
+// LogGrpcErr is a decorator that adds function name to gRPC error context.
+func LogGrpcErr(err error) error {
+	errStatus, _ := status.FromError(err)
+	function, _, _, _ := runtime.Caller(1)
+
+	// replace with new elaborated error
+	err = status.Errorf(
+		errStatus.Code(),
+		fmt.Sprintf(
+			"%v(_): %v",
+			runtime.FuncForPC(function).Name(),
+			errStatus.Message()))
+
+	log.Println(err)
+
+	return err
 }

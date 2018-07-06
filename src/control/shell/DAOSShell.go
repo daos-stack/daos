@@ -25,6 +25,7 @@ package main
 
 import (
 	"common/agent"
+	"common/control"
 	"modules/security"
 
 	"github.com/abiosoft/ishell"
@@ -33,7 +34,8 @@ import (
 )
 
 var (
-	client *agent.DAOSAgentClient
+	agentClient   *agent.DAOSAgentClient
+	controlClient *control.DAOSMgmtClient
 )
 
 func setupShell() *ishell.Shell {
@@ -47,7 +49,7 @@ func setupShell() *ishell.Shell {
 		Local bool   `short:"l" long:"local" description:"Host represents a local daos_agent"`
 		Host  string `short:"t" long:"host" description:"Host to connect to" required:"true"`
 	}
-	// register a function for "connect" command.
+
 	shell.AddCmd(&ishell.Cmd{
 		Name: "connect",
 		Help: "Connect to management infrastructure",
@@ -58,17 +60,25 @@ func setupShell() *ishell.Shell {
 				return
 			}
 			if ConnectOpts.Local {
-				if client.Connected() {
+				if agentClient.Connected() {
 					c.Println("Already connected to local agent")
 					return
 				}
 
-				err = client.Connect(ConnectOpts.Host)
+				err = agentClient.Connect(ConnectOpts.Host)
 				if err != nil {
 					c.Println("Unable to connect to ", ConnectOpts.Host, err.Error())
 				}
 			} else {
-				c.Println("Connecting to Management infrastructure not yet implemented.")
+				if controlClient.Connected() {
+					c.Println("Already connected to mgmt server")
+					return
+				}
+
+				err = controlClient.Connect(ConnectOpts.Host)
+				if err != nil || controlClient.Connected() == false {
+					c.Println("Unable to connect to ", ConnectOpts.Host, err.Error())
+				}
 			}
 		},
 	})
@@ -80,11 +90,11 @@ func setupShell() *ishell.Shell {
 		Name: "gethandle",
 		Help: "Command to test requesting a security handle",
 		Func: func(c *ishell.Context) {
-			if client.Connected() == false {
+			if agentClient.Connected() == false {
 				c.Println("Connection to local agent required")
 				return
 			}
-			token, err := client.RequestSecurityContext()
+			token, err := agentClient.RequestSecurityContext()
 			if err != nil {
 				c.Println("Unable to request security context: ", err.Error())
 				return
@@ -107,7 +117,7 @@ func setupShell() *ishell.Shell {
 		Name: "getsecctx",
 		Help: "Command to test requesting a security context from a handle",
 		Func: func(c *ishell.Context) {
-			if client.Connected() == false {
+			if agentClient.Connected() == false {
 				c.Println("Connection to local agent required")
 				return
 			}
@@ -115,7 +125,7 @@ func setupShell() *ishell.Shell {
 				c.Println(c.HelpText())
 				return
 			}
-			ctx, err := client.VerifySecurityHandle(c.Args[0])
+			ctx, err := agentClient.VerifySecurityHandle(c.Args[0])
 			if err != nil {
 				c.Println("Unable to validate security handle: ", err.Error())
 				return
@@ -127,17 +137,58 @@ func setupShell() *ishell.Shell {
 		},
 	})
 
+	shell.AddCmd(&ishell.Cmd{
+		Name: "getmgmtfeature",
+		Help: "Command to retrieve the description of a given feature",
+		Func: func(c *ishell.Context) {
+			if controlClient.Connected() == false {
+				c.Println("Connection to management server required")
+				return
+			}
+
+			if len(c.Args) < 1 {
+				c.Println(c.HelpText())
+				return
+			}
+
+			ctx, err := controlClient.GetFeature(c.Args[0])
+			if err != nil {
+				c.Println("Unable to retrieve feature details", err.Error())
+				return
+			}
+			c.Printf(
+				"Feature Name: %s\nFeature Description: %s\n",
+				c.Args[0], ctx.GetDescription())
+		},
+	})
+
+	shell.AddCmd(&ishell.Cmd{
+		Name: "listmgmtfeatures",
+		Help: "Command to retrieve all supported management features",
+		Func: func(c *ishell.Context) {
+			if controlClient.Connected() == false {
+				c.Println("Connection to management server required")
+				return
+			}
+
+			err := controlClient.ListFeatures()
+			if err != nil {
+				c.Println("Unable to retrieve features", err.Error())
+				return
+			}
+		},
+	})
+
 	return shell
 }
+
 func main() {
-	// create new shell.
 	// by default, new shell includes 'exit', 'help' and 'clear' commands.
-	client = agent.NewDAOSAgentClient()
+	agentClient = agent.NewDAOSAgentClient()
+	controlClient = control.NewDAOSMgmtClient()
 	shell := setupShell()
 
-	// display welcome info.
 	shell.Println("DAOS Management Shell")
 
-	// run shell
 	shell.Run()
 }

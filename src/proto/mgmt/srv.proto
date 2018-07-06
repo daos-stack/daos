@@ -24,13 +24,23 @@
 syntax = "proto3";
 package proto;
 
-import "security.proto";
-
 // This is the main service definition for adding services to the management server
 // In order to add RPCs associated with your service add them in the ManagementService
-// definition below. Currently the SecurityAction RPC is a multiplexed request interface.
-// This does not mean that you are limited to rely on a single rpc for your entire module.
-// This may even change for the Security mechanism in the future.
-service SecurityControl {
-    rpc SecurityAction(SecurityRequest) returns (SecurityReply) {};
+// definition below.
+service MgmtControl {
+	rpc GetFeature(FeatureName) returns (Feature) {};
+	rpc ListFeatures(ListFeaturesParams) returns (stream Feature) {};
+}
+
+message ListFeaturesParams {}
+
+message FeatureName {
+	string name = 1;
+}
+
+message Feature {
+	// The name of the feature.
+	FeatureName fname = 1;
+	// The description of the feature.
+	string description = 2;
 }

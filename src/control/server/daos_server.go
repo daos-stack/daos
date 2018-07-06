@@ -34,6 +34,8 @@ import (
 
 	"google.golang.org/grpc"
 
+	"modules/mgmt"
+	mgmtpb "modules/mgmt/proto"
 	"modules/security"
 	secpb "modules/security/proto"
 )
@@ -52,6 +54,7 @@ func main() {
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
 	secpb.RegisterSecurityControlServer(grpcServer, security.NewControlServer())
+	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmt.NewControlServer())
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
 

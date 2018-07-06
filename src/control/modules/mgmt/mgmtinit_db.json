@@ -1,0 +1,18 @@
+[{
+    "description": "Discover NVMe drives on local controllers",
+    "fname": {
+        "name": "discovery"
+    }
+},
+{
+    "description": "Burn-in NVMe drives",
+    "fname": {
+        "name": "burn-in"
+    }
+},
+{
+    "description": "Start DAOS IO Service",
+    "fname": {
+        "name": "start-io-server"
+    }
+}]
