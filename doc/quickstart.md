@@ -88,6 +88,7 @@ On CentOS and openSuSE:
     $ yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
     $ yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
     $ yum install -y doxygen pandoc flex patch nasm yasm
+    $ yum install -y ninja-build meson
     # Additionally required SPDK packages
     $ yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
     $ yum install -y python clang-analyzer sg3_utils libiscsi-devel
@@ -99,6 +100,7 @@ On Ubuntu and Debian:
     $ apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
     $ apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
     $ apt-get install -y curl doxygen pandoc flex patch nasm yasm
+    $ apt-get install -y ninja-build meson
     # Additionally required SPDK packages
     $ apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
     $ apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen
