@@ -62,6 +62,13 @@ struct eio_bdev {
 	uuid_t			 eb_uuid;
 	char			*eb_name;
 	struct eio_blobstore	*eb_blobstore;
+	/* FIXME
+	 * spdk_bdev_get_io_stat() resets the io stat on each call, so we
+	 * have to keep an cumulative stat here. That'll be fixed in SPDK
+	 * v18.07.
+	 */
+	struct spdk_bdev_io_stat eb_stat;
+	struct spdk_bdev_desc	*eb_desc; /* for io stat only */
 };
 
 struct eio_nvme_data {
@@ -81,6 +88,50 @@ struct eio_nvme_data {
 };
 
 static struct eio_nvme_data nvme_glb;
+static uint64_t io_stat_period;
+
+/* Print the io stat every few seconds, for debug only */
+static void
+print_io_stat(uint64_t now)
+{
+	struct spdk_bdev_io_stat	 bdev_stat, *stat;
+	struct eio_bdev			*d_bdev;
+	struct spdk_io_channel		*channel;
+	static uint64_t			 stat_age;
+
+	if (io_stat_period == 0)
+		return;
+
+	if (stat_age + io_stat_period >= now)
+		return;
+
+	d_list_for_each_entry(d_bdev, &nvme_glb.ed_bdevs, eb_link) {
+		D_ASSERT(d_bdev->eb_desc != NULL);
+		D_ASSERT(d_bdev->eb_name != NULL);
+
+		channel = spdk_bdev_get_io_channel(d_bdev->eb_desc);
+		spdk_bdev_get_io_stat(NULL, channel, &bdev_stat);
+
+		stat = &d_bdev->eb_stat;
+		stat->bytes_read += bdev_stat.bytes_read;
+		stat->num_read_ops += bdev_stat.num_read_ops;
+		stat->bytes_written += bdev_stat.bytes_written;
+		stat->num_write_ops += bdev_stat.num_write_ops;
+		stat->read_latency_ticks += bdev_stat.read_latency_ticks;
+		stat->write_latency_ticks += bdev_stat.write_latency_ticks;
+		stat->ticks_rate = bdev_stat.ticks_rate;
+
+		D_PRINT("SPDK IO STAT: dev[%s] read_bytes["DF_U64"], "
+			"read_ops["DF_U64"], write_bytes["DF_U64"], "
+			"write_ops["DF_U64"], read_latency_ticks["DF_U64"], "
+			"write_latency_ticks["DF_U64"]\n",
+			d_bdev->eb_name, stat->bytes_read, stat->num_read_ops,
+			stat->bytes_written, stat->num_write_ops,
+			stat->read_latency_ticks, stat->write_latency_ticks);
+	}
+
+	stat_age = now;
+}
 
 int
 eio_nvme_init(void)
@@ -133,6 +184,10 @@ eio_nvme_init(void)
 	}
 
 	eio_chk_sz = (size_mb << 20) >> EIO_DMA_PAGE_SHIFT;
+
+	env = getenv("IO_STAT_PERIOD");
+	io_stat_period = env ? atoi(env) : 0;
+	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	return 0;
 }
@@ -266,6 +321,9 @@ eio_nvme_poll(struct eio_xs_context *ctxt)
 		if (poller->enp_period_us != 0)
 			poller->enp_expire_us = now + poller->enp_period_us;
 	}
+
+	if (nvme_glb.ed_init_thread == ctxt->exc_thread)
+		print_io_stat(now);
 
 	return count;
 }
@@ -436,6 +494,13 @@ create_eio_bdev(struct eio_xs_context *ctxt, struct spdk_bdev *bdev)
 	if (rc != 0)
 		goto error;
 
+	rc = spdk_bdev_open(bdev, false, NULL, NULL, &d_bdev->eb_desc);
+	if (rc != 0) {
+		D_ERROR("failed to open bdev %s, %d\n",
+			spdk_bdev_get_name(bdev), rc);
+		goto error;
+	}
+
 	d_bdev->eb_name = strdup(spdk_bdev_get_name(bdev));
 	if (d_bdev->eb_name == NULL) {
 		D_ERROR("failed to allocate eb_name\n");
@@ -446,6 +511,8 @@ create_eio_bdev(struct eio_xs_context *ctxt, struct spdk_bdev *bdev)
 	d_list_add(&d_bdev->eb_link, &nvme_glb.ed_bdevs);
 	return 0;
 error:
+	if (d_bdev->eb_desc != NULL)
+		spdk_bdev_close(d_bdev->eb_desc);
 	D_FREE_PTR(d_bdev);
 	return rc;
 }
@@ -506,6 +573,9 @@ fini_eio_bdevs(struct eio_xs_context *ctxt)
 
 	d_list_for_each_entry_safe(d_bdev, tmp, &nvme_glb.ed_bdevs, eb_link) {
 		d_list_del_init(&d_bdev->eb_link);
+
+		if (d_bdev->eb_desc != NULL)
+			spdk_bdev_close(d_bdev->eb_desc);
 
 		if (d_bdev->eb_name != NULL)
 			free(d_bdev->eb_name);
@@ -595,6 +665,9 @@ init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
 			return -DER_INVAL;
 
 		d_bdev->eb_blobstore->eb_bs = bs;
+
+		D_DEBUG(DB_MGMT, "Loaded bs, xs_id: %d, xs:%p dev:%s\n",
+			xs_id, ctxt, d_bdev->eb_name);
 	}
 
 	ctxt->exc_blobstore = get_eio_blobstore(d_bdev->eb_blobstore);
