@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -746,8 +746,8 @@ tier_proc_akey(void *ctx, vos_iter_entry_t *ie)
 				      &dei->del_recs[j].der_rec);
 			tier_csum(&p->iod_csums[p->iod_nr], &dei->del_recs[j],
 				   sizeof(daos_recx_t));
-			p->iod_eprs[p->iod_nr].epr_hi = ie->ie_epr.epr_hi;
-			p->iod_eprs[p->iod_nr].epr_lo = ie->ie_epr.epr_lo;
+			p->iod_eprs[p->iod_nr].epr_hi = DAOS_EPOCH_MAX;
+			p->iod_eprs[p->iod_nr].epr_lo = ie->ie_epoch;
 			p->iod_nr++;
 
 		}

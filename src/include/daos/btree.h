@@ -176,6 +176,22 @@ typedef enum {
 	 * Public probe opcodes, user can combine BTR_PROBE_MATCHED with any
 	 * of the rest opcodes.
 	 */
+	/**
+	 * unconditionally trust the probe result from the previous call,
+	 * bypass probe process for dbtree_upsert (or delete) in the future.
+	 *
+	 * This can reduce search overhead for use cases like this:
+	 *    rc = dbtree_fetch(...key...);
+	 *    if (rc == -DER_NONEXIST) {
+	 *	    do_something_else(...);
+	 *	    rc = dbtree_upsert(..., BTR_PROBE_BYPASS, key...);
+	 *    }
+	 *
+	 * Please be careful while using this flag, because it could break
+	 * the correctness of dbtree if inserting a new key to a mismatched
+	 * probe path.
+	 */
+	BTR_PROBE_BYPASS	= 0,
 	/** the first record in the tree */
 	BTR_PROBE_FIRST		= 1,
 	/** the last record in the tree */

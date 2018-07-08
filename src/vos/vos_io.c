@@ -275,7 +275,7 @@ iod_fetch(struct vos_io_context *ioc, struct eio_iov *eiov)
 
 /** Fetch the single value within the specified epoch range of an key */
 static int
-akey_fetch_single(daos_handle_t toh, daos_epoch_range_t *epr,
+akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
 		  daos_size_t *rsize, struct vos_io_context *ioc)
 {
 	struct vos_key_bundle	 kbund;
@@ -287,7 +287,7 @@ akey_fetch_single(daos_handle_t toh, daos_epoch_range_t *epr,
 	int			 rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epr	= epr;
+	kbund.kb_epoch	= epoch;
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_eiov	= &eiov;
@@ -323,7 +323,7 @@ eiov_set_hole(struct eio_iov *eiov, ssize_t len)
 
 /** Fetch an extent from an akey */
 static int
-akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
+akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 		daos_size_t *rsize_p, struct vos_io_context *ioc)
 {
 	struct evt_entry	*ent;
@@ -345,7 +345,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 
 	rect.rc_off_lo = index;
 	rect.rc_off_hi = end - 1;
-	rect.rc_epc_lo = epr->epr_lo;
+	rect.rc_epc_lo = epoch;
 
 	evt_ent_list_init(&ent_list);
 	rc = evt_find(toh, &rect, &ent_list, &covered);
@@ -426,19 +426,19 @@ failed:
 static int
 akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 {
-	daos_epoch_range_t epr;
-	daos_handle_t toh;
-	int i, rc, flags = 0;
-	daos_iod_t *iod = &ioc->ic_iods[ioc->ic_sgl_at];
-	bool is_array = (iod->iod_type == DAOS_IOD_ARRAY);
+	daos_iod_t	*iod = &ioc->ic_iods[ioc->ic_sgl_at];
+	daos_epoch_t	 epoch = ioc->ic_epoch;
+	daos_handle_t	 toh;
+	int		 i, rc;
+	int		 flags = 0;
+	bool		 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 
 	D_DEBUG(DB_TRACE, "Fetch %s value\n", is_array ? "array" : "single");
 	if (is_array)
 		flags |= SUBTR_EVT;
 
-	epr.epr_lo = epr.epr_hi = ioc->ic_epoch;
-	rc = tree_prepare(ioc->ic_obj, &epr, ak_toh, VOS_BTR_AKEY,
-			  &iod->iod_name, flags, &toh);
+	rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
+			      &iod->iod_name, flags, &toh);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_IO, "Nonexistent akey\n");
 		iod_empty_sgl(ioc, ioc->ic_sgl_at);
@@ -451,17 +451,20 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		rc = akey_fetch_single(toh, &epr, &iod->iod_size, ioc);
+		if (iod->iod_eprs)
+			epoch = iod->iod_eprs[0].epr_lo;
+		rc = akey_fetch_single(toh, ioc->ic_epoch, &iod->iod_size, ioc);
 		goto out;
 	} /* else: array */
 
 	for (i = 0; i < iod->iod_nr; i++) {
-		daos_epoch_range_t *etmp;
 		daos_size_t rsize;
 
-		etmp = iod->iod_eprs ? &iod->iod_eprs[i] : &epr;
-		rc = akey_fetch_recx(toh, etmp, &iod->iod_recxs[i], &rsize,
-				     ioc);
+		if (iod->iod_eprs)
+			epoch = iod->iod_eprs[i].epr_lo;
+
+		rc = akey_fetch_recx(toh, epoch, &iod->iod_recxs[i],
+				     &rsize, ioc);
 		if (rc != 0) {
 			D_DEBUG(DB_IO, "Failed to fetch index %d: %d\n", i, rc);
 			goto out;
@@ -481,7 +484,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		}
 	}
 out:
-	tree_release(toh, is_array);
+	key_tree_release(toh, is_array);
 	return rc;
 }
 
@@ -498,17 +501,16 @@ iod_set_cursor(struct vos_io_context *ioc, unsigned int sgl_at)
 static int
 dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 {
-	daos_handle_t toh;
-	daos_epoch_range_t epr;
 	struct vos_object *obj = ioc->ic_obj;
-	int i, rc;
+	daos_handle_t	   toh;
+	int		   i, rc;
 
-	rc = vos_obj_tree_init(obj);
+	rc = obj_tree_init(obj);
 	if (rc != 0)
 		return rc;
 
-	epr.epr_lo = epr.epr_hi = ioc->ic_epoch;
-	rc = tree_prepare(obj, &epr, obj->obj_toh, VOS_BTR_DKEY, dkey, 0, &toh);
+	rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh, VOS_BTR_DKEY,
+			      dkey, 0, &toh);
 	if (rc == -DER_NONEXIST) {
 		for (i = 0; i < ioc->ic_iod_nr; i++)
 			iod_empty_sgl(ioc, i);
@@ -528,7 +530,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 			break;
 	}
 
-	tree_release(toh, false);
+	key_tree_release(toh, false);
 	return rc;
 }
 
@@ -668,7 +670,7 @@ iod_update_eiov(struct vos_io_context *ioc)
 }
 
 static int
-akey_update_single(daos_handle_t toh, daos_epoch_range_t *epr,
+akey_update_single(daos_handle_t toh, daos_epoch_t epoch,
 		   uuid_t cookie, uint32_t pm_ver, daos_size_t rsize,
 		   struct vos_io_context *ioc)
 {
@@ -681,7 +683,7 @@ akey_update_single(daos_handle_t toh, daos_epoch_range_t *epr,
 	int rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epr	= epr;
+	kbund.kb_epoch	= epoch;
 
 	daos_csum_set(&csum, NULL, 0);
 
@@ -711,7 +713,7 @@ akey_update_single(daos_handle_t toh, daos_epoch_range_t *epr,
  * See comment of vos_recx_fetch for explanation of @off_p.
  */
 static int
-akey_update_recx(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
+akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uuid_t cookie,
 		 uint32_t pm_ver, daos_recx_t *recx, daos_size_t rsize,
 		 struct vos_io_context *ioc)
 {
@@ -720,7 +722,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 	int rc;
 
 	D_ASSERT(recx->rx_nr > 0);
-	rect.rc_epc_lo = epr->epr_lo;
+	rect.rc_epc_lo = epoch;
 	rect.rc_off_lo = recx->rx_idx;
 	rect.rc_off_hi = recx->rx_idx + recx->rx_nr - 1;
 
@@ -734,42 +736,43 @@ static int
 akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	    daos_handle_t ak_toh)
 {
-	struct vos_object *obj = ioc->ic_obj;
-	daos_epoch_range_t epr;
-	daos_handle_t toh;
-	int i, rc, flags = SUBTR_CREATE;
-	daos_iod_t *iod = &ioc->ic_iods[ioc->ic_sgl_at];
-	bool is_array = (iod->iod_type == DAOS_IOD_ARRAY);
+	struct vos_object  *obj = ioc->ic_obj;
+	daos_iod_t	   *iod = &ioc->ic_iods[ioc->ic_sgl_at];
+	bool		    is_array = (iod->iod_type == DAOS_IOD_ARRAY);
+	int		    flags = SUBTR_CREATE;
+	daos_epoch_t	    epoch = ioc->ic_epoch;
+	int		    i, rc;
+	daos_handle_t	    toh;
 
 	if (is_array)
 		flags |= SUBTR_EVT;
 
 	D_DEBUG(DB_TRACE, "Update %s value\n", is_array ? "array" : "single");
 
-	epr.epr_lo = ioc->ic_epoch;
-	epr.epr_hi = DAOS_EPOCH_MAX;
-	rc = tree_prepare(obj, &epr, ak_toh, VOS_BTR_AKEY, &iod->iod_name,
-			  flags, &toh);
+	rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
+			      &iod->iod_name, flags, &toh);
 	if (rc != 0)
 		return rc;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		rc = akey_update_single(toh, &epr, cookie, pm_ver,
+		if (iod->iod_eprs) /* NB: an akey only has one (single)value */
+			epoch = iod->iod_eprs[0].epr_lo;
+		rc = akey_update_single(toh, epoch, cookie, pm_ver,
 					iod->iod_size, ioc);
 		goto out;
 	} /* else: array */
 
 	for (i = 0; i < iod->iod_nr; i++) {
-		daos_epoch_range_t *etmp;
+		if (iod->iod_eprs)
+			epoch = iod->iod_eprs[i].epr_lo;
 
-		etmp = iod->iod_eprs ? &iod->iod_eprs[i] : &epr;
-		rc = akey_update_recx(toh, etmp, cookie, pm_ver,
+		rc = akey_update_recx(toh, epoch, cookie, pm_ver,
 				      &iod->iod_recxs[i], iod->iod_size, ioc);
 		if (rc != 0)
 			goto out;
 	}
 out:
-	tree_release(toh, is_array);
+	key_tree_release(toh, is_array);
 	return rc;
 }
 
@@ -778,18 +781,15 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	    daos_key_t *dkey)
 {
 	struct vos_object *obj = ioc->ic_obj;
-	daos_epoch_range_t epr;
-	daos_handle_t ak_toh, ck_toh;
-	int i, rc;
+	daos_handle_t	   ak_toh, ck_toh;
+	int		   i, rc;
 
-	rc = vos_obj_tree_init(obj);
+	rc = obj_tree_init(obj);
 	if (rc != 0)
 		return rc;
 
-	epr.epr_lo = ioc->ic_epoch;
-	epr.epr_hi = DAOS_EPOCH_MAX;
-	rc = tree_prepare(obj, &epr, obj->obj_toh, VOS_BTR_DKEY, dkey,
-			  SUBTR_CREATE, &ak_toh);
+	rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh, VOS_BTR_DKEY,
+			      dkey, SUBTR_CREATE, &ak_toh);
 	if (rc != 0)
 		return rc;
 
@@ -808,7 +808,7 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 		goto out;
 	}
 out:
-	tree_release(ak_toh, false);
+	key_tree_release(ak_toh, false);
 	return rc;
 }
 

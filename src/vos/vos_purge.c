@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -598,9 +598,9 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 
 		if (pcx->pc_type == VOS_ITER_SINGLE) {
 			/* Delete the record pointed to by regular iterator */
-			empty = (ent_max.ie_epr.epr_lo != ent.ie_epr.epr_lo);
+			empty = (ent_max.ie_epoch != ent.ie_epoch);
 			/* Delete the record pinter by max iterator */
-			max_reset = (ent_max.ie_epr.epr_lo < ent.ie_epr.epr_lo);
+			max_reset = (ent_max.ie_epoch < ent.ie_epoch);
 		} else {
 			rc = purge_ctx_init(pcx, &ent);
 			if (rc != 0) {

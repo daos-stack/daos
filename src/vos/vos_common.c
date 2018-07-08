@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -229,7 +229,7 @@ vos_mod_init(void)
 		return rc;
 	}
 
-	rc = vos_obj_tree_register();
+	rc = obj_tree_register();
 	if (rc)
 		D_ERROR("Failed to register vos trees\n");
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,7 +114,7 @@ obj_lop_free(struct daos_llink *llink)
 	if (obj->obj_cont != NULL)
 		vos_cont_decref(obj->obj_cont);
 
-	vos_obj_tree_fini(obj);
+	obj_tree_fini(obj);
 	D_FREE_PTR(obj);
 }
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -836,7 +836,9 @@ fill_recxs_eprs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 		return 1;
 	}
 
-	arg->eprs[arg->eprs_len] = key_ent->ie_epr;
+	arg->eprs[arg->eprs_len].epr_lo = key_ent->ie_epoch;
+	arg->eprs[arg->eprs_len].epr_hi = DAOS_EPOCH_MAX;
+
 	arg->eprs_len++;
 	arg->recxs[arg->recxs_len] = key_ent->ie_recx;
 	arg->recxs_len++;
@@ -1002,7 +1004,7 @@ copy_data(vos_iter_type_t type, vos_iter_param_t *param,
 		iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_nr = 1;
 	iod.iod_recxs = &entry->ie_recx;
-	iod.iod_eprs = &entry->ie_epr;
+	iod.iod_eprs = NULL;
 
 	iov.iov_buf = buf;
 	iov.iov_buf_len = len;
@@ -1011,7 +1013,7 @@ copy_data(vos_iter_type_t type, vos_iter_param_t *param,
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
-	rc = vos_obj_fetch(param->ip_hdl, param->ip_oid, entry->ie_epr.epr_lo,
+	rc = vos_obj_fetch(param->ip_hdl, param->ip_oid, entry->ie_epoch,
 			   &param->ip_dkey, 1 /* iod_nr */, &iod, &sgl);
 	/* This vos_obj_fetch call is a workaround anyway. */
 	D_ASSERTF(rc == 0, "%d\n", rc);
@@ -1048,10 +1050,13 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	/* Append the recx record to iovs. */
 	D_ASSERT(iovs[arg->sgl_idx].iov_len + sizeof(*rec) <
 		 iovs[arg->sgl_idx].iov_buf_len);
+
 	rec = iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len;
 	rec->rec_recx = key_ent->ie_recx;
 	rec->rec_size = key_ent->ie_rsize;
-	rec->rec_epr = key_ent->ie_epr;
+	rec->rec_epr.epr_lo = key_ent->ie_epoch;
+	rec->rec_epr.epr_hi = DAOS_EPOCH_MAX;
+
 	uuid_copy(rec->rec_cookie, key_ent->ie_cookie);
 	rec->rec_version = key_ent->ie_ver;
 	rec->rec_flags = 0;

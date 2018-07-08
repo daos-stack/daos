@@ -473,9 +473,9 @@ enum vos_tree_class {
 	VOS_BTR_END,
 };
 
-int vos_obj_tree_init(struct vos_object *obj);
-int vos_obj_tree_fini(struct vos_object *obj);
-int vos_obj_tree_register(void);
+int obj_tree_init(struct vos_object *obj);
+int obj_tree_fini(struct vos_object *obj);
+int obj_tree_register(void);
 
 /**
  * Data structure which carries the keys, epoch ranges to the multi-nested
@@ -484,8 +484,8 @@ int vos_obj_tree_register(void);
 struct vos_key_bundle {
 	/** key for the current tree, could be @kb_dkey or @kb_akey */
 	daos_key_t		*kb_key;
-	/** epoch for the I/O operation */
-	daos_epoch_range_t	*kb_epr;
+	/** epoch of the I/O */
+	daos_epoch_t		 kb_epoch;
 };
 
 /**
@@ -507,14 +507,9 @@ struct vos_rec_bundle {
 	 * Single value record IOV.
 	 */
 	struct eio_iov		*rb_eiov;
-	/** returned btree root */
-	struct btr_root		*rb_btr;
-	/** returned evtree root */
-	struct evt_root		*rb_evt;
-	/**
-	 * update : input record size
-	 * fetch  : return size of records
-	 */
+	/** Returned durable address of the btree record */
+	struct vos_krec_df	*rb_krec;
+	/** input record size */
 	daos_size_t		 rb_rsize;
 	/** update cookie of this recx (input for update, output for fetch) */
 	uuid_t			 rb_cookie;
@@ -546,18 +541,14 @@ vos_rec2irec(struct btr_instance *tins, struct btr_record *rec)
 }
 
 static inline uint64_t
-vos_krec_size(enum vos_tree_class tclass, uint64_t feats,
-	      struct vos_rec_bundle *rbund)
+vos_krec_size(enum vos_tree_class tclass, struct vos_rec_bundle *rbund)
 {
 	daos_iov_t	*key;
 	uint64_t	 size;
-	uint64_t	 epr_size = 0;
 	bool		 has_evt = (tclass == VOS_BTR_AKEY);
 
-	if (feats & BTR_FEAT_DIRECT_KEY)
-		epr_size = sizeof(daos_epoch_range_t);
 	key = rbund->rb_iov;
-	size = vos_size_round(rbund->rb_csum->cs_len) + epr_size + key->iov_len;
+	size = vos_size_round(rbund->rb_csum->cs_len) + key->iov_len;
 	return size + offsetof(struct vos_krec_df, kr_evt[has_evt]);
 }
 
@@ -580,27 +571,6 @@ vos_krec2key(struct vos_krec_df *krec)
 
 	return &payload[vos_size_round(krec->kr_cs_size)];
 }
-
-static inline char *
-vos_krec2directkey(struct vos_krec_df *krec)
-{
-	size_t	 size;
-	char	*payload = vos_krec2payload(krec);
-
-	size = vos_size_round(krec->kr_cs_size) + sizeof(daos_epoch_range_t);
-
-	return &payload[size];
-}
-
-
-static inline daos_epoch_range_t *
-vos_krec2epr(struct vos_krec_df *krec)
-{
-	char *payload = vos_krec2payload(krec);
-
-	return (daos_epoch_range_t *)&payload[vos_size_round(krec->kr_cs_size)];
-}
-
 
 static inline uint64_t
 vos_irec_size(struct vos_rec_bundle *rbund)
@@ -832,10 +802,13 @@ enum {
 
 /* vos_obj.c */
 int
-tree_prepare(struct vos_object *obj, daos_epoch_range_t *epr,
-	     daos_handle_t toh, enum vos_tree_class tclass,
-	     daos_key_t *key, int flags, daos_handle_t *sub_toh);
+key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
+		 daos_handle_t toh, enum vos_tree_class tclass,
+		 daos_key_t *key, int flags, daos_handle_t *sub_toh);
 void
-tree_release(daos_handle_t toh, bool is_array);
+key_tree_release(daos_handle_t toh, bool is_array);
+int
+key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
+	       daos_iov_t *val_iov, int flags);
 
 #endif /* __VOS_INTERNAL_H__ */

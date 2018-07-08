@@ -42,6 +42,7 @@ enum btr_node_type {
 };
 
 enum btr_probe_rc {
+	PROBE_RC_UNKNOWN,
 	PROBE_RC_NONE,
 	PROBE_RC_OK,
 	PROBE_RC_ERR,
@@ -121,10 +122,15 @@ struct btr_context {
 	short				 tc_order;
 	/** cached tree depth, avoid loading from slow memory */
 	short				 tc_depth;
+	/**
+	 * returned value of the probe, it should be reset after upsert
+	 * or delete because the probe path could have been changed.
+	 */
+	int				 tc_probe_rc;
 	/** refcount, used by iterator */
-	unsigned short			 tc_ref;
+	int				 tc_ref;
 	/** cached tree class, avoid loading from slow memory */
-	unsigned short			 tc_class;
+	int				 tc_class;
 	/** cached feature bits, avoid loading from slow memory */
 	uint64_t			 tc_feats;
 	/** trace for the tree root */
@@ -1121,11 +1127,16 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	int			 level;
 	bool			 next_level;
 	char			 hkey[DAOS_HKEY_MAX];
+	struct btr_trace	 traces[BTR_TRACE_MAX];
+	struct btr_trace	*trace = NULL;
 	TMMID(struct btr_node)	 nd_mmid;
 
-	if (!btr_probe_valid(probe_opc))
-		return PROBE_RC_ERR;
+	if (!btr_probe_valid(probe_opc)) {
+		rc = PROBE_RC_ERR;
+		goto out;
+	}
 
+	level = -1;
 	memset(&tcx->tc_traces[0], 0,
 	       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
 
@@ -1137,7 +1148,8 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 
 	if (btr_root_empty(tcx)) { /* empty tree */
 		D_DEBUG(DB_TRACE, "Empty tree\n");
-		return PROBE_RC_NONE;
+		rc = PROBE_RC_NONE;
+		goto out;
 	}
 
 	if (probe_opc & BTR_PROBE_SPEC) {
@@ -1153,7 +1165,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 
 	nd_mmid = tcx->tc_tins.ti_root->tr_node;
 
-	for (start = end = 0, next_level = true, level = 0 ;;) {
+	for (start = end = 0, level = 0, next_level = true ;;) {
 		if (next_level) { /* search a new level of the tree */
 			next_level = false;
 			start	= 0;
@@ -1238,7 +1250,9 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			rc = PROBE_RC_OK;
 			goto out;
 		}
-		/* for follow-on insert */
+		/* point at the first key which is larger than the probed one,
+		 * this if for follow-on insert if applicable.
+		 */
 		btr_trace_set(tcx, level, nd_mmid, at + !(cmp & BTR_CMP_GT));
 		rc = PROBE_RC_NONE;
 		goto out;
@@ -1253,10 +1267,18 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		if (cmp & BTR_CMP_GT)
 			break;
 
+		/* point at the next position in the current leaf node, this is
+		 * for follow-on insert if applicable.
+		 */
+		at += 1;
+		/* backup the probe trace because probe_next will change it */
+		memcpy(traces, tcx->tc_trace, sizeof(*trace) * tcx->tc_depth);
 		if (btr_probe_next(tcx)) {
+			trace = traces;
 			cmp = BTR_CMP_UNKNOWN;
 			break;
 		}
+		btr_trace_set(tcx, level, nd_mmid, at);
 		rc = PROBE_RC_NONE;
 		goto out;
 
@@ -1285,14 +1307,26 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	if (cmp & BTR_CMP_MATCHED) {
 		rc = PROBE_RC_OK;
 	} else {
-		if (probe_opc & BTR_PROBE_MATCHED)
+		if (probe_opc & BTR_PROBE_MATCHED) {
 			rc = PROBE_RC_NONE;
-		else
+			/* restore the probe trace for follow-on insert. */
+			if (trace) {
+				memcpy(tcx->tc_trace, trace,
+				       tcx->tc_depth * sizeof(*trace));
+				btr_trace_set(tcx, level, nd_mmid, at);
+			}
+		} else {
+			/* GT/GE/LT/LE without MATCHED */
 			rc = PROBE_RC_OK;
+		}
 	}
  out:
-	if (rc != PROBE_RC_ERR)
+	tcx->tc_probe_rc = rc;
+	if (rc != PROBE_RC_ERR && level >= 0)
 		btr_trace_debug(tcx, &tcx->tc_trace[level], "\n");
+	else
+		D_ERROR("Failed to probe\n");
+
 	return rc;
 }
 
@@ -1449,20 +1483,7 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
 	}
-
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
-	if (opc == BTR_PROBE_EQ && rc == PROBE_RC_OK) {
-		/*
-		 * Don't need to return the key address if the found
-		 * key is same to the specified key, so that caller won't
-		 * need to do key comparison.
-		 *
-		 * Still need to copy back the found key if the key_out
-		 * buffer is already provided by caller.
-		 */
-		if (key_out != NULL && key_out->iov_buf == NULL)
-			key_out = NULL;
-	}
 
 	return btr_rec_fetch(tcx, rec, key_out, val_out);
 }
@@ -1580,20 +1601,37 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 {
 	int	rc;
 
-	rc = btr_probe(tcx, probe_opc, key, NULL);
-	if (rc == PROBE_RC_OK) {
+	if (probe_opc == BTR_PROBE_BYPASS)
+		rc = tcx->tc_probe_rc; /* trust previous probe... */
+	else
+		rc = btr_probe(tcx, probe_opc, key, NULL);
+
+	switch (rc) {
+	default:
+		D_ASSERTF(false, "unknown returned value: %d\n", rc);
+		break;
+
+	case PROBE_RC_OK:
 		rc = btr_update(tcx, key, val);
+		break;
 
-	} else if (rc == PROBE_RC_NONE) {
+	case PROBE_RC_NONE:
 		rc = btr_insert(tcx, key, val);
+		break;
 
-	} else {
-		D_ASSERT(rc == PROBE_RC_ERR);
+	case PROBE_RC_UNKNOWN:
+		rc = -DER_NO_PERM;
+		break;
+
+	case PROBE_RC_ERR:
 		D_DEBUG(DB_TRACE, "btr_probe got PROBE_RC_ERR, probably due to "
 			"key_cmp returned BTR_CMP_ERR, treats it as invalid "
 			"operation.\n");
 		rc = -DER_INVAL;
+		break;
 	}
+
+	tcx->tc_probe_rc = PROBE_RC_UNKNOWN; /* path changed */
 	return rc;
 }
 
@@ -2421,6 +2459,7 @@ dbtree_delete(daos_handle_t toh, daos_iov_t *key,
 	else
 		rc = btr_delete(tcx, args);
 
+	tcx->tc_probe_rc = PROBE_RC_UNKNOWN;
 	return rc;
 }
 

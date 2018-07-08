@@ -156,8 +156,10 @@ struct vos_krec_df {
 	uint8_t				kr_cs_size;
 	/** padding bytes */
 	uint8_t				kr_pad_8;
-	/** akey length */
+	/** key length */
 	uint32_t			kr_size;
+	/** punched epoch, it's infinity if it's never been punched */
+	uint64_t			kr_punched;
 	/** btree root under the key */
 	struct btr_root			kr_btr;
 	/** evtree root, which is only used by akey */

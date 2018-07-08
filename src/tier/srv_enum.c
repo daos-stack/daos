@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,8 +73,6 @@ ds_tier_enum(daos_handle_t coh, struct tier_enum_params *params)
 		D_GOTO(out_iter, rc);
 	}
 	do {
-		eo.ie_epr.epr_lo = 0;
-		eo.ie_epr.epr_hi = DAOS_EPOCH_MAX;
 		rc = vos_iter_fetch(hio, &eo, NULL);
 		if (rc) {
 			D_ERROR("failed to fetch iter %d\n", rc);
@@ -132,14 +130,17 @@ ds_tier_enum_dkeys(daos_handle_t coh, struct tier_enum_params *params,
 		D_GOTO(out_iter, rc);
 	}
 	do {
-		edk.ie_epr.epr_lo = 0;
-		edk.ie_epr.epr_hi = DAOS_EPOCH_MAX;
+		daos_epoch_range_t epr;
+
 		rc = vos_iter_fetch(hidk, &edk, NULL);
 		if (rc) {
 			D_ERROR("failed to fetch iter %d\n", rc);
 			D_GOTO(out_iter, rc);
 		}
-		if (tier_rangein(&edk.ie_epr, params->dep_ev)) {
+
+		epr.epr_lo = edk.ie_epoch;
+		epr.epr_hi = DAOS_EPOCH_MAX;
+		if (tier_rangein(&epr, params->dep_ev)) {
 			rc = tier_safecb(params->dep_dkey_pre,
 					 params->dep_cbctx, &edk);
 			if (rc)
@@ -195,14 +196,17 @@ ds_tier_enum_akeys(daos_handle_t coh, struct tier_enum_params *params,
 		D_GOTO(out_iter, rc);
 	}
 	do {
-		eak.ie_epr.epr_lo = 0;
-		eak.ie_epr.epr_hi = DAOS_EPOCH_MAX;
+		daos_epoch_range_t epr;
+
 		rc = vos_iter_fetch(hiak, &eak, NULL);
 		if (rc) {
 			D_ERROR("failed to fetch iter %d\n", rc);
 			D_GOTO(out_iter, rc);
 		}
-		if (tier_rangein(&eak.ie_epr, params->dep_ev)) {
+
+		epr.epr_lo = eak.ie_epoch;
+		epr.epr_hi = DAOS_EPOCH_MAX;
+		if (tier_rangein(&epr, params->dep_ev)) {
 			rc = tier_safecb(params->dep_akey_pre,
 					 params->dep_cbctx, &eak);
 			if (rc) {
@@ -261,14 +265,17 @@ ds_tier_enum_recs(daos_handle_t coh, struct tier_enum_params *params,
 		D_GOTO(out_iter, rc);
 	}
 	do {
-		er.ie_epr.epr_lo = 0;
-		er.ie_epr.epr_hi = DAOS_EPOCH_MAX;
+		daos_epoch_range_t epr;
+
 		rc = vos_iter_fetch(hir, &er, NULL);
 		if (rc) {
 			D_ERROR("failed to fetch iter %d\n", rc);
 			D_GOTO(out_iter, rc);
 		}
-		if (tier_rangein(&er.ie_epr, params->dep_ev)) {
+
+		epr.epr_lo = er.ie_epoch;
+		epr.epr_hi = DAOS_EPOCH_MAX;
+		if (tier_rangein(&epr, params->dep_ev)) {
 			rc = tier_safecb(params->dep_recx_cbfn,
 					 params->dep_cbctx, &er);
 			if (rc)

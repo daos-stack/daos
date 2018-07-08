@@ -264,6 +264,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	daos_iov_t	key_iov;
 	daos_iov_t	val_iov;
 	int		rc;
+	bool		replay = (flags & VOS_OF_REPLAY_PC);
 
 	D_DEBUG(DB_TRACE, "Punch obj "DF_UOID", epoch="DF_U64".\n",
 		DP_UOID(oid), epoch);
@@ -273,8 +274,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 		goto out;
 	}
 
-	if (obj->vo_punched != DAOS_EPOCH_MAX &&
-	    !(flags & VOS_OF_REPLAY_PC)) {
+	if (obj->vo_punched != DAOS_EPOCH_MAX && !replay) {
 		D_ERROR("Underwrite is allowed only for replaying punch\n");
 		rc = -DER_NO_PERM;
 		goto failed;
@@ -290,12 +290,13 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	if (rc != 0)
 		goto out;
 
-	if (!(flags & VOS_OF_REPLAY_PC)) {
+	if (!replay) {
 		struct vos_obj_df *tmp;
+
+		D_ASSERT(obj->vo_punched == DAOS_EPOCH_MAX);
 
 		tmp = (struct vos_obj_df *)val_iov.iov_buf;
 		D_ASSERT(tmp != obj);
-
 		/* the new incarnation should take over the subtree from
 		 * the originally highest incarnation.
 		 */
@@ -529,7 +530,7 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 
 	it_entry->ie_oid = obj->vo_id;
-	it_entry->ie_epr.epr_lo = obj->vo_punched;
+	it_entry->ie_epoch = obj->vo_punched;
 	return 0;
 }
 

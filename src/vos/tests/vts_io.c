@@ -302,8 +302,7 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 				(unsigned int)ent.ie_recx.rx_idx,
 				ent.ie_iov.iov_len == 0 ?
 				"[NULL]" : (char *)ent.ie_iov.iov_buf);
-			D_PRINT("\tepoch: "DF_U64"\n",
-				ent.ie_epr.epr_lo);
+			D_PRINT("\tepoch: "DF_U64"\n", ent.ie_epoch);
 		}
 
 		rc = vos_iter_next(ih);

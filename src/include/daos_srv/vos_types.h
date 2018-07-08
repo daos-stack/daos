@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,11 +147,8 @@ typedef struct {
  * Returned entry of a VOS iterator
  */
 typedef struct {
-	/**
-	 * Returned epoch range. It is ignored for container & obj
-	 * iteration for the time being.
-	 */
-	daos_epoch_range_t	ie_epr;
+	/** Returned epoch. It is ignored for container iteration. */
+	daos_epoch_t		ie_epoch;
 	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;
