@@ -466,6 +466,17 @@ ivc_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				     false, 0, priv);
 }
 
+static void
+ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
+	   crt_generic_cb_t cb_func, void *cb_arg)
+{
+	int rc;
+
+	rc = dss_ult_create(cb_func, cb_arg, -1, 0, NULL);
+	if (rc)
+		D_ERROR("dss_ult_create failed, rc %d.\n", rc);
+}
+
 static int
 ivc_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 {
@@ -564,12 +575,15 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 }
 
 struct crt_iv_ops iv_cache_ops = {
-	.ivo_on_fetch	= ivc_on_fetch,
-	.ivo_on_update	= ivc_on_update,
-	.ivo_on_refresh	= ivc_on_refresh,
-	.ivo_on_hash	= ivc_on_hash,
-	.ivo_on_get	= ivc_on_get,
-	.ivo_on_put	= ivc_on_put,
+	.ivo_pre_fetch		= ivc_pre_cb,
+	.ivo_on_fetch		= ivc_on_fetch,
+	.ivo_pre_update		= ivc_pre_cb,
+	.ivo_on_update		= ivc_on_update,
+	.ivo_pre_refresh	= ivc_pre_cb,
+	.ivo_on_refresh		= ivc_on_refresh,
+	.ivo_on_hash		= ivc_on_hash,
+	.ivo_on_get		= ivc_on_get,
+	.ivo_on_put		= ivc_on_put,
 };
 
 static void
