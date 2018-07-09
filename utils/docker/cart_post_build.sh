@@ -1,6 +1,6 @@
 #!/bin/bash
 
-test_results=$(find . -name test_output)
+test_results=$(find . -name test_output -print -quit)
 
 ls "${test_results}"
 set +e

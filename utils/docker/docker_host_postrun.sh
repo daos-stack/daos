@@ -14,6 +14,20 @@ set -x
     if [ -e "${repo}" ]; then
       pushd "${repo}"
         git rev-parse HEAD > "${artifact_dest}${repo}_git_commit"
+        #
+        # There may or may not be a tag matching this commit.
+        # If there is a tag, we want to use it.
+        # As there are two types of tags, there are two ways to look
+        # them up.  We will use the first tag we find.
+        # Check for an exact match tag first
+        tag_file="${artifact_dest}/${TARGET}_git_tag"
+        if ! git describe --exact-match HEAD > "${tag_file}"; then
+          rm "${artifact_dest}/${TARGET}_git_tag"
+          # Look for a simple tag
+          if ! git describe --contains HEAD > "${tag_file}"; then
+            rm "${artifact_dest}/${TARGET}_git_tag"
+          fi
+        fi
       popd
     else
       git rev-parse HEAD > "${artifact_dest}${repo}_git_commit"

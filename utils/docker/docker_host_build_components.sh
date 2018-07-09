@@ -2,8 +2,8 @@
 
 set -uex
 
-docker_pre_script=$(find . -name docker_host_prerun.sh)
-docker_post_script=$(find . -name docker_host_postrun.sh)
+docker_pre_script=$(find . -name docker_host_prerun.sh -print -quit)
+docker_post_script=$(find . -name docker_host_postrun.sh -print -quit)
 
 : "${JOB_SUFFIX:="-update-scratch"}"
 
@@ -103,7 +103,7 @@ if [ -n "${NEED_ARTIFACTS}" ]; then
 fi
 
 set +u
-target_post_build=$(find . -name "${TARGET}_post_build.sh")
+target_post_build=$(find . -name "${TARGET}_post_build.sh" -print -quit)
 if [ -n "${target_post_build}" ]; then
   # shellcheck disable=SC1090
   source "${target_post_build}"

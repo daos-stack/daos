@@ -34,8 +34,8 @@ job_artifact="${CORAL_ARTIFACTS}/${JOB_NAME}"
 build_artifact="${job_artifact}/${BUILD_NUMBER}"
 
 # Archve anything in workspace artifacts directory to CORAL_ARTIFACTS
-# shellcheck disable=SC2174
 if [ -n "$(ls -A "${WORKSPACE}/artifacts")"  ];then
+  # shellcheck disable=SC2174
   mkdir -p "${build_artifact}" -m 775
 
   cp -r "${WORKSPACE}"/artifacts/* "${build_artifact}"
@@ -57,6 +57,16 @@ find "${CORAL_ARTIFACTS}/${JOB_NAME}" -maxdepth 2 -name "${BUILD_NUMBER}" \
 # Optionaly create a GIT commit hash link.
 if [ -e "${build_artifact}/${COMMIT_REPO}_git_commit" ]; then
   commit=$(cat "${build_artifact}/${COMMIT_REPO}_git_commit")
+
+  # ln -f not working reliably on NFS volume.
+  if [ -L "${job_artifact}/${commit}" ]; then
+    rm "${job_artifact}/${commit}"
+  fi
+  ln -f -s "${build_artifact}" "${job_artifact}/${commit}"
+fi
+# Optionally create a GIT tag link.
+if [ -e "${build_artifact}/${COMMIT_REPO}_git_tag" ]; then
+  commit=$(cat "${build_artifact}/${COMMIT_REPO}_git_tag")
 
   # ln -f not working reliably on NFS volume.
   if [ -L "${job_artifact}/${commit}" ]; then
