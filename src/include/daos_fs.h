@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,9 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-
-/*
+/**
+ * \file
+ *
  * DAOS File System API
  *
  * The DFS API provides an encapuslated namespace with a POSIX like API directly
@@ -50,9 +51,9 @@ typedef struct dfs dfs_t;
  * The mount will create a root directory (DAOS object) for the file system. The
  * user will associate the dfs object returned with a mount point.
  *
- * \param poh	[IN]	Pool connection handle
- * \param coh	[IN]	Container open handle.
- * \param dfs	[OUT]	Pointer to the file system object created.
+ * \param[in]	poh	Pool connection handle
+ * \param[in]	coh	Container open handle.
+ * \param[out]	dfs	Pointer to the file system object created.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -64,7 +65,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, dfs_t **dfs);
  * commits the latest epoch. The internal dfs struct is freed, so further access
  * to that dfs will be invalid.
  *
- * \param dfs   [IN]	Pointer to the mounted file system.
+ * \param[in]	dfs	Pointer to the mounted file system.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -75,11 +76,11 @@ dfs_umount(dfs_t *dfs);
  * Lookup a path in the DFS and return the associated open object and mode.
  * The object must be released with dfs_release().
  *
- * \param dfs   [IN]	Pointer to the mounted file system.
- * \param path	[IN]	Path to lookup.
- * \param flags	[IN]	access flags to open with (O_RDONLY or O_RDWR).
- * \param obj	[OUT]	pointer to the object looked up.
- * \params mode	[OUT]	mode_t (permissions + type).
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	path	Path to lookup.
+ * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
+ * \param[out]	obj	Pointer to the object looked up.
+ * \params[out]	mode	mode_t (permissions + type).
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -91,13 +92,13 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
  * Create/Open a directory, file, or Symlink.
  * The object must be released with dfs_release().
  *
- * \param dfs   [IN]	Pointer to the mounted file system.
- * \param parent[IN]	Opened parent directory object.
- * \param name	[IN]	Link name of the object to create/open.
- * \param mode	[IN]	mode_t (permissions + type).
- * \param flags	[IN]	access flags (O_RDONLY, O_RDWR, O_EXCL).
- * \param value	[IN]	Symlink value (NULL if not syml).
- * \param obj	[OUT]	pointer to object opened.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object.
+ * \param[in]	name	Link name of the object to create/open.
+ * \param[in]	mode	mode_t (permissions + type).
+ * \param[in]	flags	Access flags (O_RDONLY, O_RDWR, O_EXCL).
+ * \param[in]	value	Symlink value (NULL if not syml).
+ * \param[out]	obj	Pointer to object opened.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -108,7 +109,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 /*
  * Close/release open object.
  *
- * \param obj	[IN]	Object to release.
+ * \param[in]	obj	Object to release.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -118,11 +119,12 @@ dfs_release(dfs_obj_t *obj);
 /**
  * Read data from the file object, and return actual data read.
  *
- * \param dfs		[IN]	Pointer to the mounted file system.
- * \param obj		[IN]	Opened file object.
- * \param sgl		[IN]	Scatter/Gather list for data buffer.
- * \param off		[IN]	Offset into the file to read from.
- * \param read_size	[OUT]	How much data is actually read.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	sgl	Scatter/Gather list for data buffer.
+ * \param[in]	off	Offset into the file to read from.
+ * \param[out]	read_size
+ *			How much data is actually read.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -133,10 +135,10 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off,
 /**
  * Write data to the file object.
  *
- * \param dfs		[IN]	Pointer to the mounted file system.
- * \param obj		[IN]	Opened file object.
- * \param sgl		[IN]	Scatter/Gather list for data buffer.
- * \param off		[IN]	Offset into the file to write to.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	sgl	Scatter/Gather list for data buffer.
+ * \param[in]	off	Offset into the file to write to.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -146,9 +148,9 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off);
 /**
  * Query size of file data.
  *
- * \param dfs	[IN]	Pointer to the mounted file system.
- * \param obj	[IN]	Opened file object.
- * \param size	[OUT]	Size of file.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[out]	size	Size of file.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -161,10 +163,10 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size);
  * file above offset. If the file size is smaller than offset, the file is
  * extended to offset and len is ignored.
  *
- * \param dfs	[IN]	Pointer to the mounted file system.
- * \param obj	[IN]	Opened file object.
- * \param offset[IN]	offset of file to punch at.
- * \param len	[IN]	number of bytes to punch.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	offset	offset of file to punch at.
+ * \param[in]	len	number of bytes to punch.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -174,9 +176,9 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len);
 /**
  * Query number of link in dir object.
  *
- * \param dfs	[IN]	Pointer to the mounted file system.
- * \param obj	[IN]	Opened directory object.
- * \param nlinks[OUT]	Number of links returned.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened directory object.
+ * \param[out]	nlinks	Number of links returned.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -186,16 +188,18 @@ dfs_nlinks(dfs_t *dfs, dfs_obj_t *obj, uint32_t *nlinks);
 /**
  * directory readdir.
  *
- * \param dfs	[IN]	Pointer to the mounted file system.
- * \param obj	[IN]	Opened directory object.
- * \param anchor[IN/OUT]
- *			Hash anchor for the next call, it should be set to
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened directory object.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
  *			zeroes for the first call, it should not be changed
  *			by caller between calls.
- * \param nr	[IN]	number of dirents allocated in \a dirs
- *		[OUT]	number of returned dirents.
- * \param dirs	[IN]	preallocated array of dirents.
- *		[OUT]	dirents returned with d_name filled only.
+ * \param[in,out]
+ *		nr	[in]: number of dirents allocated in \a dirs.
+ *			[out]: number of returned dirents.
+ * \param[in,out]
+ *		dirs	[in] preallocated array of dirents.
+ *			[out]: dirents returned with d_name filled only.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -206,10 +210,10 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_hash_out_t *anchor,
 /**
  * Create a directory.
  *
- * \param dfs	[IN]	Pointer to the mounted file system.
- * \param parent[IN]	Opened parent directory object.
- * \param name	[IN]	Link name of new dir.
- * \param mode	[IN]	mkdir mode.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object.
+ * \param[in]	name	Link name of new dir.
+ * \param[in]	mode	mkdir mode.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -220,10 +224,10 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
  * Remove an object from parent directory. If object is a directory and is
  * non-empty; this will fail unless force option is true.
  *
- * \param dfs	[IN]	Pointer to the mounted file system.
- * \param parent[IN]	Opened parent directory object.
- * \param name	[IN]	Name of object to remove in parent dir.
- * \param force [IN]	If true, remove dir even if non-empty.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object.
+ * \param[in]	name	Name of object to remove in parent dir.
+ * \param[in]	force	If true, remove dir even if non-empty.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -233,11 +237,12 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force);
 /**
  * Move an object possible between different dirs with a new link name
  *
- * \param dfs		[IN]	Pointer to the mounted file system.
- * \param parent	[IN]	Opened source parent directory object.
- * \param name		[IN]	Link name of object.
- * \param new_parent	[IN]	Opened target parent directory object.
- * \param name		[IN]	New link name of object.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened source parent directory object.
+ * \param[in]	name	Link name of object.
+ * \param[in]	new_parent
+ *			Opened target parent directory object.
+ * \param[in]	name	New link name of object.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -248,11 +253,11 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 /**
  * Exchange an object possible between different dirs with a new link name
  *
- * \param dfs		[IN]	Pointer to the mounted file system.
- * \param parent1	[IN]	Opened parent directory object of name1.
- * \param name1		[IN]	Link name of first object.
- * \param parent2	[IN]	Opened parent directory object of name2.
- * \param name2		[IN]	link name of second object.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent1	Opened parent directory object of name1.
+ * \param[in]	name1	Link name of first object.
+ * \param[in]	parent2	Opened parent directory object of name2.
+ * \param[in]	name2	link name of second object.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -263,8 +268,8 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1,
 /**
  * Retrieve mode of an open object.
  *
- * \param obj	[IN]	Open object to query.
- * \param mode	[OUT]	Returned mode_t.
+ * \param[in]	obj	Open object to query.
+ * \param[out]	mode	mode_t (permissions + type).
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -276,9 +281,11 @@ dfs_get_obj_type(dfs_obj_t *obj, mode_t *mode);
  * in is not large enough, we copy up to size of the buffer, and update the size
  * to actual value size.
  *
- * \param obj	[IN]	Open object to query.
- * \param buf	[IN]	user buffer to copy the symlink value in.
- * \param size	[IN/OUT]size of buffer pased in, return actual size of value.
+ * \param[in]	obj	Open object to query.
+ * \param[in]	buf	user buffer to copy the symlink value in.
+ * \param[in,out]
+ *		size	[in]: Size of buffer pased in. [out]: Actual size of
+ *			value.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -292,14 +299,15 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
  * uid_t     st_uid;
  * gid_t     st_gid;
  * off_t     st_size;
+ * blkcnt_t  st_blocks
  * struct timespec st_atim;
  * struct timespec st_mtim;
  * struct timespec st_ctim;
  *
- * \param dfs   [IN]	Pointer to the mounted file system.
- * \param parent[IN]	Opened parent directory object.
- * \param name	[IN]	Link name of the object to stat.
- * \param stbuf [IN/OUT] stat struct to fill the members of.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object.
+ * \param[in]	name	Link name of the object to stat.
+ * \param[out]	stbuf	Stat struct with the members above filled.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -310,9 +318,9 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name,
 /**
  * Same as dfs_stat but works directly on an open object.
  *
- * \param dfs   [IN]	Pointer to the mounted file system.
- * \param obj	[IN]	Open object (File, dir or syml) to stat.
- * \param stbuf [IN/OUT] stat struct to fill the members of.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Open object (File, dir or syml) to stat.
+ * \param[out]	stbuf	Stat struct with the members above filled.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -323,7 +331,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
  * Sync to commit the latest epoch on the container. This applies to the entire
  * namespace and not to a particular file/directory.
  *
- * \param dfs   [IN]    Pointer to the mounted file system.
+ * \param[in]	dfs	Pointer to the mounted file system.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -333,14 +341,14 @@ dfs_sync(dfs_t *dfs);
 /**
  * Set extended attribute on an open object (File, dir, syml).
  *
- * \param dfs   [IN]    Pointer to the mounted file system.
- * \param obj   [IN]    Open object where xattr will be added.
- * \param name	[IN]	Name of xattr to add.
- * \param value	[IN]	Value of xattr.
- * \param size	[IN]	Size in bytes of the value.
- * \param flags	[IN]	Set flags:
- *			XATTR_CREATE - create or fail if xattr exists.
- *			XATTR_REPLACE - replace or fail if xattr does not exist.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Open object where xattr will be added.
+ * \param[in]	name	Name of xattr to add.
+ * \param[in]	value	Value of xattr.
+ * \param[in]	size	Size in bytes of the value.
+ * \param[in]	flags	Set flags. passing 0 does not check for xattr existence.
+ *			XATTR_CREATE: create or fail if xattr exists.
+ *			XATTR_REPLACE: replace or fail if xattr does not exist.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -351,12 +359,12 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 /**
  * Get extended attribute of an open object.
  *
- * \param dfs   [IN]    Pointer to the mounted file system.
- * \param obj   [IN]    Open object where xattr is checked.
- * \param name	[IN]	Name of xattr to get.
- * \param value	[OUT]	Buffer to place value of xattr.
- * \param size	[IN]	Size of buffer value,
- *		[OUT]	Actual size of xattr.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Open object where xattr is checked.
+ * \param[in]	name	Name of xattr to get.
+ * \param[out]	value	Buffer to place value of xattr.
+ * \param[in,out]
+ *		size	[in]: Size of buffer value. [out]: Actual size of xattr.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -367,9 +375,9 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 /**
  * Remove extended attribute of an open object.
  *
- * \param dfs   [IN]    Pointer to the mounted file system.
- * \param obj   [IN]    Open object where xattr will be removed.
- * \param name	[IN]	Name of xattr to remove.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Open object where xattr will be removed.
+ * \param[in]	name	Name of xattr to remove.
  *
  * \return		0 on Success. Negative on Failure.
  */
@@ -380,12 +388,13 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
  * list extended attributes of an open object and place them all in a buffer
  * NULL terminated one after the other.
  *
- * \param dfs   [IN]    Pointer to the mounted file system.
- * \param obj   [IN]    Open object where xattrs will be listed.
- * \param list	[IN]	Allocated buffer for all xattr names.
- *		[OUT]	Xattr names placed after each other (null terminated).
- * \param size	[IN]	Size of buffer list,
- *		[OUT]	Actual size of list.
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Open object where xattrs will be listed.
+ * \param[in,out]
+ *		list	[in]: Allocated buffer for all xattr names.
+ *			[out]: Names placed after each other (null terminated).
+ * \param[in,out]
+ *		size    [in]: Size of list. [out]: Actual size of list.
  *
  * \return		0 on Success. Negative on Failure.
  */
