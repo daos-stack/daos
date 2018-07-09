@@ -91,7 +91,7 @@ docker_exit_status=0
 # Some jobs used to not need artifacts based on JOB_SUFFIX.
 # Review jobs feeding maloo need artifacts.
 if [[ "${job_real_name}" == *${JOB_SUFFIX} ]]; then
-  : i"${NEED_ARTIFACTS="1"}"
+  : "${NEED_ARTIFACTS="1"}"
 else
   : "${NEED_ARTIFACTS=""}"
 fi

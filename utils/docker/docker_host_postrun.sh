@@ -5,7 +5,7 @@ set -uex
 : "${ARTIFACT_NEEDED:="lib/lib*"}"
 
 # Now save the specific git commit information used.
-artifact_dest="${PWD}/artifacts"
+artifact_dest="${PWD}/artifacts/"
 rm -rf "${artifact_dest}"
 mkdir -p "${artifact_dest}"
 
@@ -13,10 +13,10 @@ set -x
   for repo in ${REPO_LIST} ; do
     if [ -e "${repo}" ]; then
       pushd "${repo}"
-        git rev-parse HEAD > "${artifact_dest}/${repo}_git_commit"
+        git rev-parse HEAD > "${artifact_dest}${repo}_git_commit"
       popd
     else
-      git rev-parse HEAD > "${artifact_dest}/${repo}_git_commit"
+      git rev-parse HEAD > "${artifact_dest}${repo}_git_commit"
     fi
 done
 
