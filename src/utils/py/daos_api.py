@@ -52,7 +52,11 @@ class Info(ctypes.Structure):
     _fields_ = [("pi_uuid", ctypes.c_ubyte * 16),
                 ("pi_ntargets", ctypes.c_uint32),
                 ("pi_ndisabled", ctypes.c_uint32),
-                ("pi_mode", ctypes.c_uint),
+                ("pi_map_ver", ctypes.c_uint32),
+                ("pi_uid", ctypes.c_uint32),
+                ("pi_gid", ctypes.c_uint32),
+                ("pi_mode", ctypes.c_uint32),
+                ("pi_leader", ctypes.c_uint32),
                 ("pi_space", ctypes.c_int),
                 ("pi_rebuild_st", ctypes.c_ubyte * 32)]
 
