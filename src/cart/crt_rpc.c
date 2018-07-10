@@ -829,6 +829,9 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 			container_of(cb_info->cci_rpc, struct crt_rpc_priv,
 				     crp_pub),
 			cb_info->cci_rpc->cr_opc, cb_info->cci_rc);
+		if (cb_info->cci_rc == -DER_OOG)
+			D_GOTO(out, rc = -DER_OOG);
+
 		if (rpc_priv->crp_ul_retry++ < CRT_URI_LOOKUP_RETRY_MAX) {
 			rc = crt_req_uri_lookup_retry(grp_priv, rpc_priv);
 			ul_retried = true;

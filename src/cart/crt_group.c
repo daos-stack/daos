@@ -549,7 +549,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 				rlink);
 			D_ERROR("tag %d on rank %d already evicted.\n", tag,
 				rank);
-			D_GOTO(out, rc = -DER_OOG);
+			D_GOTO(out, rc = -DER_EVICTED);
 		}
 		D_MUTEX_UNLOCK(&li->li_mutex);
 		if (uri != NULL)
@@ -1882,7 +1882,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		D_WARN("Lookup of invalid rank %d in group %s (%d)\n",
 		       ul_in->ul_rank, grp_priv->gp_pub.cg_grpid,
 		       grp_priv->gp_size);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_OOG);
 	}
 
 	if (ul_in->ul_tag >= CRT_SRV_CONTEXT_NUM) {
@@ -3147,10 +3147,10 @@ crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 				D_GOTO(out, rc = -DER_NOMEM);
 			crt_grp_psr_set(grp_priv, psr_rank, psr_phy_addr);
 			D_GOTO(out, rc = 0);
-		} else if (rc != -DER_OOG) {
+		} else if (rc != -DER_EVICTED) {
 			/*
-			 * DER_OOG means the psr_rank being evicted then can try
-			 * next one, for other errno just treats as failure.
+			 * DER_EVICTED means the psr_rank being evicted then can
+			 * try next one, for other errno just treats as failure.
 			 */
 			D_ERROR("crt_grp_lc_lookup(grp %s, rank %d tag 0) "
 				"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
