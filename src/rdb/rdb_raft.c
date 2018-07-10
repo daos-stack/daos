@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -235,11 +235,10 @@ rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, int term, int vote)
 }
 
 static int
-rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entry,
-		      int index)
+rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
+			  raft_entry_t *entry, uint64_t index)
 {
 	struct rdb	       *db = arg;
-	uint64_t		i = index;
 	daos_iov_t		keys[2];
 	daos_iov_t		values[2];
 	struct rdb_entry	header;
@@ -247,22 +246,21 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	int			rc;
 	int			rc_tmp;
 
-	D_ASSERTF(i == db->d_lc_record.dlr_tail, DF_U64" == "DF_U64"\n", i,
-		  db->d_lc_record.dlr_tail);
-
+	D_ASSERTF(index == db->d_lc_record.dlr_tail, DF_U64" == "DF_U64"\n",
+		  index, db->d_lc_record.dlr_tail);
 	/*
 	 * If this is an rdb_tx entry, apply it. Note that the updates involved
-	 * won't become visible to queries until entry i is committed.
+	 * won't become visible to queries until entry index is committed.
 	 * (Implicit queries resulted from rdb_kvs cache lookups won't happen
 	 * until the TX releases the locks for the updates after the
 	 * rdb_tx_commit() call returns.)
 	 */
 	if (entry->type == RAFT_LOGTYPE_NORMAL) {
-		rc = rdb_tx_apply(db, i, entry->data.buf, entry->data.len,
-				  rdb_raft_lookup_result(db, i));
+		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
+				  rdb_raft_lookup_result(db, index));
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to apply entry "DF_U64": %d\n",
-				DP_DB(db), i, rc);
+				DP_DB(db), index, rc);
 			goto err_discard;
 		}
 	}
@@ -280,21 +278,21 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		daos_iov_set(&values[n], entry->data.buf, entry->data.len);
 		n++;
 	}
-	rc = rdb_lc_update(db->d_lc, i, RDB_LC_ATTRS, n, keys, values);
+	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, n, keys, values);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to persist entry "DF_U64": %d\n",
-			DP_DB(db), i, rc);
+			DP_DB(db), index, rc);
 		goto err_discard;
 	}
 
 	/* Replace entry->data.buf with the data's persistent memory address. */
 	if (entry->data.len > 0) {
 		daos_iov_set(&values[0], NULL, entry->data.len);
-		rc = rdb_lc_lookup(db->d_lc, i, RDB_LC_ATTRS,
+		rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
 				   &rdb_lc_entry_data, &values[0]);
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to look up entry "DF_U64
-				" data: %d\n", DP_DB(db), i, rc);
+				" data: %d\n", DP_DB(db), index, rc);
 			goto err_discard;
 		}
 		entry->data.buf = values[0].iov_buf;
@@ -315,21 +313,37 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	}
 
 	D_DEBUG(DB_TRACE, DF_DB": appended entry "DF_U64": term=%d type=%d "
-		"buf=%p len=%u\n", DP_DB(db), i, entry->term, entry->type,
+		"buf=%p len=%u\n", DP_DB(db), index, entry->term, entry->type,
 		entry->data.buf, entry->data.len);
 	return 0;
 
 err_discard:
-	rc_tmp = rdb_lc_discard(db->d_lc, i, i);
+	rc_tmp = rdb_lc_discard(db->d_lc, index, index);
 	if (rc_tmp != 0)
 		D_ERROR(DF_DB": failed to discard entry "DF_U64": %d\n",
-			DP_DB(db), i, rc_tmp);
+			DP_DB(db), index, rc_tmp);
+	return rc;
+}
+
+static int
+rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entry,
+		      int index, int *n_entries)
+{
+	int i;
+	int rc = 0;
+
+	for (i = 0; i < *n_entries; ++i) {
+		rc = rdb_raft_log_offer_single(raft, arg, entry, index + i);
+		if (rc != 0)
+			break;
+	}
+	*n_entries = i;
 	return rc;
 }
 
 static int
 rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
-		    int index)
+		    int index, int *n_entries)
 {
 	struct rdb	       *db = arg;
 	uint64_t		i = index;
@@ -339,7 +353,8 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 
 	D_ASSERTF(i > db->d_lc_record.dlr_base, DF_U64" > "DF_U64"\n", i,
 		  db->d_lc_record.dlr_base);
-	D_ASSERTF(i == db->d_lc_record.dlr_tail - 1, DF_U64" == "DF_U64"\n", i,
+	D_ASSERTF(i + *n_entries <= db->d_lc_record.dlr_tail,
+		  DF_U64" <= "DF_U64"\n", i + *n_entries,
 		  db->d_lc_record.dlr_tail);
 
 	/* Update the log tail. */
@@ -354,17 +369,17 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		return rc;
 	}
 
-	/* Discard the entry. */
-	rc = rdb_lc_discard(db->d_lc, i, i);
+	/* Ignore *n_entries; discard everything starting from index. */
+	rc = rdb_lc_discard(db->d_lc, i, RDB_LC_INDEX_MAX);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to delete entry "DF_U64": %d\n",
-			DP_DB(db), i, rc);
+		D_ERROR(DF_DB": failed to delete %d entries starting at "
+			DF_U64": %d\n", DP_DB(db), *n_entries, i, rc);
 		return rc;
 	}
 
-	D_DEBUG(DB_TRACE, DF_DB": deleted entry "DF_U64": term=%d type=%d "
-		"buf=%p len=%u\n", DP_DB(db), i, entry->term, entry->type,
-		entry->data.buf, entry->data.len);
+	/* Actual number of discarded entries is `tail - i` */
+	D_DEBUG(DB_TRACE, DF_DB": deleted "DF_U64" entries"
+		" starting at "DF_U64"\n", DP_DB(db), (tail - i), i);
 	return 0;
 }
 
@@ -889,6 +904,7 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 	daos_iov_t		value;
 	struct rdb_entry	header;
 	raft_entry_t		entry;
+	int			n_entries;
 	int			rc;
 
 	/* Look up the header. */
@@ -924,7 +940,8 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 	 * Since rdb_raft_cbs is not registered yet, we won't enter
 	 * rdb_raft_cb_log_offer().
 	 */
-	rc = raft_append_entry(db->d_raft, &entry);
+	n_entries = 1;
+	rc = raft_append_entries(db->d_raft, &entry, &n_entries);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to load entry "DF_U64": %d\n", DP_DB(db),
 			index, rc);
