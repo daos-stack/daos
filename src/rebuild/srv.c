@@ -149,7 +149,7 @@ rpt_lookup(uuid_t pool_uuid, unsigned int ver)
 }
 
 struct rebuild_global_pool_tracker *
-rebuild_global_pool_tracker_lookup(uuid_t pool_uuid, unsigned int ver)
+rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver)
 {
 	struct rebuild_global_pool_tracker	*rgt;
 	struct rebuild_global_pool_tracker	*found = NULL;
@@ -1165,7 +1165,7 @@ rebuild_ults(void *arg)
 }
 
 void
-ds_rebuild_leader_stop(uuid_t pool_uuid, unsigned int version)
+ds_rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version)
 {
 	struct rebuild_global_pool_tracker	*rgt;
 	struct rebuild_task			*task;

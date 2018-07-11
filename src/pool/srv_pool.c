@@ -554,6 +554,7 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 	crt_group_t    *group;
 	int		rc;
 
+	ds_rebuild_leader_stop(pool_uuid, -1);
 	rc = rdb_dist_stop(pool_uuid, NULL /* ranks */, true /* destroy */);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to destroy pool service: %d\n",

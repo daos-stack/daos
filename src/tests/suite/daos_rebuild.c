@@ -85,7 +85,7 @@ rebuild_io_internal(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 	struct ioreq	req;
 	int		i;
 	int		j;
-	daos_epoch_t	eph = arg->index;
+	daos_epoch_t	eph = 0; /* FIXME: use arg->index once LU-1092 fixed. */
 
 	print_message("%s obj %d eph "DF_U64" for rebuild test\n",
 		      validate ? "validate" : "update", oids_nr, eph);
@@ -564,7 +564,7 @@ static void
 rebuild_multiple_pools(void **state)
 {
 	test_arg_t	*arg = *state;
-	test_arg_t	*args[2];
+	test_arg_t	*args[2] = { 0 };
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 	int		rc;

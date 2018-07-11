@@ -296,7 +296,7 @@ struct rebuild_tgt_pool_tracker *
 rpt_lookup(uuid_t pool_uuid, unsigned int ver);
 
 struct rebuild_global_pool_tracker *
-rebuild_global_pool_tracker_lookup(uuid_t pool_uuid, unsigned int ver);
+rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver);
 
 int
 rebuild_status_completed_update(const uuid_t pool_uuid,
