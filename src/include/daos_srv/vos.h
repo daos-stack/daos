@@ -250,7 +250,6 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
  */
 /**
  * Fetch records from the specified object.
- * TODO: Deprecated, will be replaced by ds_obj_fetch()
  */
 /**
  * Fetch values for the given keys and their indices.
@@ -285,7 +284,6 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * If input buffer is not provided in \a sgl, then this function returns
  * the new allocated addresses to store the records, upper layer can
  * directly write data into these addresses (rdma mode).
- * TODO: Deprecated, will be replaced by ds_obj_update()
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID
@@ -425,16 +423,6 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
 	       daos_key_t *dkey, int err);
-/**
- * Get the scatter/gather list associated with a given I/O descriptor.
- * TODO: Deprecated, will be replaced with vos_iod_sgl_at().
- *
- * \param ioh	[IN]	The I/O handle.
- * \param iod	[IN]	Index of the I/O descriptor array.
- * \param sgl_pp [OUT]	The returned scatter/gather list.
- */
-int
-vos_obj_zc_sgl_at(daos_handle_t ioh, unsigned int idx, daos_sg_list_t **sgl_pp);
 
 /**
  * Get the I/O descriptor.

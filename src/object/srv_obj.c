@@ -122,11 +122,9 @@ bulk_complete_cb(const struct crt_bulk_cb_info *cb_info)
 	struct crt_bulk_desc		*bulk_desc;
 	crt_rpc_t			*rpc;
 	crt_bulk_t			local_bulk_hdl;
-	int				rc = 0;
 
-	rc = cb_info->bci_rc;
-	if (rc != 0)
-		D_ERROR("bulk transfer failed: rc = %d\n", rc);
+	if (cb_info->bci_rc != 0)
+		D_ERROR("bulk transfer failed: %d\n", cb_info->bci_rc);
 
 	bulk_desc = cb_info->bci_bulk_desc;
 	local_bulk_hdl = bulk_desc->bd_local_hdl;
@@ -137,22 +135,23 @@ bulk_complete_cb(const struct crt_bulk_cb_info *cb_info)
 	 * it should be safe here.
 	 **/
 	if (arg->result == 0)
-		arg->result = rc;
+		arg->result = cb_info->bci_rc;
 
 	D_ASSERT(arg->bulks_inflight > 0);
 	arg->bulks_inflight--;
 	if (arg->bulks_inflight == 0)
-		ABT_eventual_set(arg->eventual, &rc, sizeof(rc));
+		ABT_eventual_set(arg->eventual, &arg->result,
+				 sizeof(arg->result));
 
 	crt_bulk_free(local_bulk_hdl);
 	crt_req_decref(rpc);
-	return rc;
+	return cb_info->bci_rc;
 }
 
 /**
  * Simulate bulk transfer by memcpy, all data are actually dropped.
  */
-static int
+static void
 bulk_bypass(daos_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 {
 	static const int  dummy_buf_len = 4096;
@@ -162,13 +161,12 @@ bulk_bypass(daos_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 	if (!dummy_buf) {
 		dummy_buf = malloc(dummy_buf_len);
 		if (!dummy_buf)
-			return 0; /* ignore error */
+			return; /* ignore error */
 	}
 
 	for (i = 0; i < sgl->sg_nr_out; i++) {
 		char	*buf;
-		int	 total;
-		int	 nob;
+		int	 total, nob;
 
 		if (sgl->sg_iovs[i].iov_buf == NULL ||
 		    sgl->sg_iovs[i].iov_len == 0)
@@ -187,7 +185,6 @@ bulk_bypass(daos_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 			buf   += nob;
 		}
 	}
-	return 0;
 }
 
 static int
@@ -195,24 +192,22 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		 crt_bulk_t *remote_bulks, daos_handle_t ioh,
 		 daos_sg_list_t **sgls, int sgl_nr)
 {
+	struct ds_bulk_async_args arg = { 0 };
 	crt_bulk_opid_t		bulk_opid;
 	crt_bulk_perm_t		bulk_perm;
-	struct ds_bulk_async_args arg = { 0 };
-	int			i;
-	int			rc;
-	int			*status;
+	int			i, rc, *status, ret;
 
 	bulk_perm = bulk_op == CRT_BULK_PUT ? CRT_BULK_RO : CRT_BULK_RW;
 	rc = ABT_eventual_create(sizeof(*status), &arg.eventual);
 	if (rc != 0)
 		return dss_abterr2der(rc);
 
-	D_DEBUG(DB_IO, "sgl nr is %d\n", sgl_nr);
+	D_DEBUG(DB_IO, "bulk_op:%d sgl_nr%d\n", bulk_op, sgl_nr);
+
 	for (i = 0; i < sgl_nr; i++) {
-		daos_sg_list_t		*sgl;
+		daos_sg_list_t		*sgl, tmp_sgl;
 		struct crt_bulk_desc	 bulk_desc;
 		crt_bulk_t		 local_bulk_hdl;
-		int			 ret = 0;
 		daos_size_t		 offset = 0;
 		unsigned int		 idx = 0;
 
@@ -222,14 +217,16 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		if (sgls != NULL) {
 			sgl = sgls[i];
 		} else {
+			struct eio_sglist *esgl;
+
 			D_ASSERT(!daos_handle_is_inval(ioh));
-			ret = vos_obj_zc_sgl_at(ioh, i, &sgl);
-			if (ret) {
-				if (rc == 0)
-					rc = ret;
-				continue;
-			}
-			D_ASSERT(sgl != NULL);
+			esgl = vos_iod_sgl_at(ioh, i);
+			D_ASSERT(esgl != NULL);
+
+			sgl = &tmp_sgl;
+			rc = eio_sgl_convert(esgl, sgl);
+			if (rc)
+				break;
 		}
 
 		if (srv_bypass_bulk) {
@@ -237,18 +234,15 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			 * only copy data from/to dummy buffer. This is for
 			 * performance evaluation on low bandwidth network.
 			 */
-			ret = bulk_bypass(sgl, bulk_op);
-			if (rc == 0)
-				rc = ret;
-			continue;
+			bulk_bypass(sgl, bulk_op);
+			goto next;
 		}
 
 		/**
 		 * Let's walk through the sgl to check if the iov is empty,
 		 * which is usually gotten from punched/empty records (see
-		 * vos_recx_fetch()), and skip these empty iov during bulk
+		 * akey_fetch()), and skip these empty iov during bulk
 		 * transfer to avoid touching the input buffer.
-		 *
 		 */
 		while (idx < sgl->sg_nr_out) {
 			daos_sg_list_t	sgl_sent;
@@ -257,8 +251,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 
 			/**
 			 * Skip the punched/empty record, let's also skip the
-			 * them record in the input buffer instead of memset
-			 * it to 0.
+			 * record in the input buffer instead of memset to 0.
 			 */
 			while (sgl->sg_iovs[idx].iov_buf == NULL &&
 			       idx < sgl->sg_nr_out) {
@@ -281,16 +274,13 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			sgl_sent.sg_nr = idx - start;
 			sgl_sent.sg_nr_out = idx - start;
 
-			ret = crt_bulk_create(rpc->cr_ctx,
-					      daos2crt_sg(&sgl_sent),
-					      bulk_perm, &local_bulk_hdl);
-			if (ret != 0) {
-				D_ERROR("crt_bulk_create %d failed;rc: %d\n",
-					 i, ret);
-				if (rc == 0)
-					rc = ret;
-				offset += length;
-				continue;
+			rc = crt_bulk_create(rpc->cr_ctx,
+					     daos2crt_sg(&sgl_sent),
+					     bulk_perm, &local_bulk_hdl);
+			if (rc != 0) {
+				D_ERROR("crt_bulk_create %d error (%d).\n",
+					i, rc);
+				break;
 			}
 
 			crt_req_addref(rpc);
@@ -304,33 +294,32 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			bulk_desc.bd_local_off	= 0;
 
 			arg.bulks_inflight++;
-			ret = crt_bulk_transfer(&bulk_desc, bulk_complete_cb,
-						&arg, &bulk_opid);
-			if (ret < 0) {
-				D_ERROR("crt_bulk_transfer failed, rc: %d.\n",
-					ret);
+			rc = crt_bulk_transfer(&bulk_desc, bulk_complete_cb,
+					       &arg, &bulk_opid);
+			if (rc < 0) {
+				D_ERROR("crt_bulk_transfer %d error (%d).\n",
+					i, rc);
 				arg.bulks_inflight--;
 				crt_bulk_free(local_bulk_hdl);
 				crt_req_decref(rpc);
-				if (rc == 0)
-					rc = ret;
+				break;
 			}
 			offset += length;
 		}
+next:
+		if (sgls == NULL)
+			daos_sgl_fini(sgl, false);
+		if (rc)
+			break;
 	}
 
 	if (arg.bulks_inflight == 0)
 		ABT_eventual_set(arg.eventual, &rc, sizeof(rc));
 
-	rc = ABT_eventual_wait(arg.eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-
-	rc = *status;
-	/* arg.result might not be set through bulk_complete_cb */
+	ret = ABT_eventual_wait(arg.eventual, (void **)&status);
 	if (rc == 0)
-		rc = arg.result;
-out_eventual:
+		rc = ret ? dss_abterr2der(ret) : *status;
+
 	ABT_eventual_free(&arg.eventual);
 	return rc;
 }
@@ -408,7 +397,6 @@ ds_obj_update_nrs_in_reply(crt_rpc_t *rpc, daos_handle_t ioh,
 	uint32_t		*nrs;
 	uint32_t		nrs_count = orw->orw_nr;
 	int			i;
-	int			rc = 0;
 
 	if (nrs_count == 0)
 		return 0;
@@ -419,25 +407,25 @@ ds_obj_update_nrs_in_reply(crt_rpc_t *rpc, daos_handle_t ioh,
 		nrs_count * sizeof(uint32_t));
 
 	if (orwo->orw_nrs.ca_arrays == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		return -DER_NOMEM;
 
 	nrs = orwo->orw_nrs.ca_arrays;
 	for (i = 0; i < nrs_count; i++) {
-		daos_sg_list_t	*sgl;
+		struct eio_sglist	*esgl;
+		daos_sg_list_t		*sgl;
 
 		if (sgls != NULL) {
 			sgl = &sgls[i];
+			D_ASSERT(sgl != NULL);
+			nrs[i] = sgl->sg_nr_out;
 		} else {
-			rc = vos_obj_zc_sgl_at(ioh, i, &sgl);
-			if (rc)
-				D_GOTO(out, rc);
+			esgl = vos_iod_sgl_at(ioh, i);
+			D_ASSERT(esgl != NULL);
+			nrs[i] = esgl->es_nr_out;
 		}
-
-		D_ASSERT(sgl != NULL);
-		nrs[i] = sgl->sg_nr_out;
 	}
-out:
-	return rc;
+
+	return 0;
 }
 
 /**
@@ -691,8 +679,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		rc = eio_iod_copy(eiod, orw->orw_sgls.ca_arrays, orw->orw_nr);
 
 	err = eio_iod_post(eiod);
-	if (!rc)
-		rc = err;
+	rc = rc ? : err;
 out:
 	ds_obj_rw_complete(rpc, cont_hdl, ioh, rc, map_ver);
 	if (cont_hdl) {

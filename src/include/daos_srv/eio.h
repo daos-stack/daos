@@ -120,6 +120,36 @@ eio_sgl_fini(struct eio_sglist *sgl)
 	memset(sgl, 0, sizeof(*sgl));
 }
 
+/*
+ * Convert eio_sglist into daos_sg_list_t, caller is responsible to
+ * call daos_sgl_fini(sgl, false) to free iovs.
+ */
+static inline int
+eio_sgl_convert(struct eio_sglist *esgl, daos_sg_list_t *sgl)
+{
+	int i, rc;
+
+	D_ASSERT(sgl != NULL);
+	D_ASSERT(esgl && esgl->es_nr_out != 0);
+
+	rc = daos_sgl_init(sgl, esgl->es_nr_out);
+	if (rc != 0)
+		return -DER_NOMEM;
+
+	sgl->sg_nr_out = esgl->es_nr_out;
+
+	for (i = 0; i < sgl->sg_nr_out; i++) {
+		struct eio_iov	*eiov = &esgl->es_iovs[i];
+		daos_iov_t	*iov = &sgl->sg_iovs[i];
+
+		iov->iov_buf = eiov->ei_buf;
+		iov->iov_len = eiov->ei_data_len;
+		iov->iov_buf_len = eiov->ei_data_len;
+	}
+
+	return 0;
+}
+
 /**
  * Global NVMe initialization.
  *

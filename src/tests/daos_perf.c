@@ -88,64 +88,61 @@ static int
 ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		       enum ts_op_type_t update_or_fetch)
 {
-	int	rc;
+	int	rc = 0;
 
 	if (!ts_zero_copy) {
-		if (update_or_fetch == TS_DO_UPDATE) {
+		if (update_or_fetch == TS_DO_UPDATE)
 			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoid, epoch,
 				ts_cookie, 0, &cred->tc_dkey, 1,
 				&cred->tc_iod, &cred->tc_sgl);
-		} else {
+		else
 			rc = vos_obj_fetch(ts_ctx.tsc_coh, ts_uoid, epoch,
 				&cred->tc_dkey, 1, &cred->tc_iod,
 				&cred->tc_sgl);
-		}
-		if (rc)
-			return rc;
-
 	} else { /* zero-copy */
-		daos_sg_list_t	*sgl;
-		daos_handle_t	 ioh;
+		struct eio_sglist	*esgl;
+		daos_handle_t		 ioh;
 
-		if (update_or_fetch == TS_DO_UPDATE) {
+		if (update_or_fetch == TS_DO_UPDATE)
 			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					      &cred->tc_dkey, 1, &cred->tc_iod,
 					      &ioh);
-		} else {
+		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					     &cred->tc_dkey, 1, &cred->tc_iod,
 					     false, &ioh);
-		}
 		if (rc)
 			return rc;
 
-		rc = vos_obj_zc_sgl_at(ioh, 0, &sgl);
+		rc = eio_iod_prep(vos_ioh2desc(ioh));
 		if (rc)
-			return rc;
+			goto end;
 
+		esgl = vos_iod_sgl_at(ioh, 0);
+		D_ASSERT(esgl != NULL);
+		D_ASSERT(esgl->es_nr_out == 1);
 		D_ASSERT(cred->tc_sgl.sg_nr == 1);
-		D_ASSERT(sgl->sg_nr_out == 1);
 
 		if (update_or_fetch == TS_DO_FETCH) {
 			memcpy(cred->tc_sgl.sg_iovs[0].iov_buf,
-				sgl->sg_iovs[0].iov_buf,
-				sgl->sg_iovs[0].iov_len);
+			       esgl->es_iovs[0].ei_buf,
+			       esgl->es_iovs[0].ei_data_len);
 		} else {
-			memcpy(sgl->sg_iovs[0].iov_buf,
-				cred->tc_sgl.sg_iovs[0].iov_buf,
-				cred->tc_sgl.sg_iovs[0].iov_len);
+			memcpy(esgl->es_iovs[0].ei_buf,
+			       cred->tc_sgl.sg_iovs[0].iov_buf,
+			       cred->tc_sgl.sg_iovs[0].iov_len);
 		}
 
-		if (update_or_fetch == TS_DO_UPDATE) {
+		rc = eio_iod_post(vos_ioh2desc(ioh));
+end:
+		if (update_or_fetch == TS_DO_UPDATE)
 			rc = vos_update_end(ioh, ts_cookie, 0, &cred->tc_dkey,
-					    0);
-		} else {
-			rc = vos_fetch_end(ioh, 0);
-		}
-		if (rc)
-			return rc;
+					    rc);
+		else
+			rc = vos_fetch_end(ioh, rc);
 	}
-	return 0;
+
+	return rc;
 }
 
 static int

@@ -495,7 +495,8 @@ tf_obj_update_cb(tse_task_t *task, void *data)
 	int j;
 
 	D_DEBUG(DF_TIERS, "object update complete\n");
-	rc = vos_fetch_end(cba->ioh, 0);
+	rc = eio_iod_post(vos_ioh2desc(cba->ioh));
+	rc = vos_fetch_end(cba->ioh, rc);
 	if (rc)
 		D_ERROR("vos_fetch_end returned %d\n", rc);
 
@@ -603,8 +604,9 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 	int				 nrecs = fctx->dfc_na;
 	d_list_t			*iter;
 	d_list_t			*tmp;
-	int				 j;
+	int				 j, sgl_cnt = 0;
 	daos_epoch_t			 epoch = DAOS_EPOCH_MAX;
+	daos_sg_list_t			*sgl;
 
 
 	D_ALLOC(ptmp, tier_key_iod_size(nrecs));
@@ -633,20 +635,37 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 		D_ERROR("vos_obj_zc_fetch returned %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	for (j = 0; j < nrecs; j++) {
-		daos_sg_list_t *psg;
 
-		rc = vos_obj_zc_sgl_at(fctx->dfc_ioh, j, &psg);
-		if (rc != 0) {
-			D_ERROR("vos_obj_zc_sgl_at returned %d\n", rc);
+	rc = eio_iod_prep(vos_ioh2desc(fctx->dfc_ioh));
+	if (rc)
+		D_GOTO(out, rc);
+
+	for (j = 0; j < nrecs; j++) {
+		struct eio_sglist	*esgl;
+
+		esgl = vos_iod_sgl_at(fctx->dfc_ioh, j);
+		D_ASSERT(esgl != NULL);
+		sgl = &ptmp->dki_sgs[j];
+
+		rc = eio_sgl_convert(esgl, sgl);
+		if (rc)
 			break;
-		}
-		ptmp->dki_sgs[j].sg_nr_out   = psg->sg_nr_out;
-		ptmp->dki_sgs[j].sg_nr       = psg->sg_nr_out;
-		ptmp->dki_sgs[j].sg_iovs         = psg->sg_iovs;
+		sgl_cnt++;
 	}
-	tf_obj_update(fctx, ptmp);
+
+	if (!rc)
+		tf_obj_update(fctx, ptmp);
+
+	for (j = 0; j < sgl_cnt; j++) {
+		sgl = &ptmp->dki_sgs[j];
+		daos_sgl_fini(sgl, false);
+	}
+
+	if (rc != 0)
+		eio_iod_post(vos_ioh2desc(fctx->dfc_ioh));
 out:
+	if (rc != 0)
+		vos_fetch_end(fctx->dfc_ioh, rc);
 	return rc;
 }
 

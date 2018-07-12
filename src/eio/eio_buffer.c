@@ -773,12 +773,8 @@ eio_iod_prep(struct eio_desc *eiod)
 {
 	int rc;
 
-	/*
-	 * FIXME: eio_iod_prep() could be called multiple times for now,
-	 * once we removed vos_obj_zc_sgl_at(), we'd return -EINVAL here.
-	 */
 	if (eiod->ed_buffer_prep)
-		return 0;
+		return -EINVAL;
 
 	rc = iterate_eiov(eiod, dma_map_one, NULL);
 	if (rc) {

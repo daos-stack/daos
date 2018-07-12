@@ -56,8 +56,6 @@ struct vos_io_context {
 	unsigned int		 ic_mmids_at;
 	/** reserved NVMe extents */
 	d_list_t		 ic_blk_exts;
-	/** TODO: remove this once vos_obj_zc_sgl() is replaced */
-	daos_sg_list_t		*ic_sgls;
 	/** flags */
 	unsigned int		 ic_update:1,
 				 ic_size_fetch:1;
@@ -153,16 +151,6 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 static void
 vos_ioc_destroy(struct vos_io_context *ioc)
 {
-	/* TODO: Remove this once vos_obj_zc_sgl_at() is replaced */
-	if (ioc->ic_sgls != NULL) {
-		int i;
-
-		eio_iod_post(ioc->ic_eiod);
-		for (i = 0; i < ioc->ic_iod_nr; i++)
-			daos_sgl_fini(&ioc->ic_sgls[i], false);
-		D_FREE(ioc->ic_sgls);
-	}
-
 	if (ioc->ic_eiod != NULL)
 		eio_iod_free(ioc->ic_eiod);
 
@@ -572,73 +560,6 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	return 0;
 error:
 	return vos_fetch_end(vos_ioc2ioh(ioc), rc);
-}
-
-/* Caveat: EIO APIs may yield! */
-static int
-vos_obj_copy(struct vos_io_context *ioc, daos_sg_list_t *sgls,
-	     unsigned int sgl_nr)
-{
-	int rc, err;
-
-	D_ASSERT(sgl_nr == ioc->ic_iod_nr);
-	rc = eio_iod_prep(ioc->ic_eiod);
-	if (rc)
-		return rc;
-
-	err = eio_iod_copy(ioc->ic_eiod, sgls, sgl_nr);
-	rc = eio_iod_post(ioc->ic_eiod);
-
-	/* TODO: add back checksum */
-	return err ? err : rc;
-}
-
-/**
- * Fetch an array of records from the specified object.
- * TODO: Deprecated, should be replaced by ds_obj_fetch()
- */
-int
-vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-	      daos_sg_list_t *sgls)
-{
-	daos_handle_t ioh;
-	bool size_fetch = (sgls == NULL);
-	int rc;
-
-	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
-		DP_UOID(oid), iod_nr, epoch);
-
-	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods, size_fetch,
-			     &ioh);
-	if (rc) {
-		D_ERROR("Fetch "DF_UOID" failed %d\n", DP_UOID(oid), rc);
-		return rc;
-	}
-
-	if (!size_fetch) {
-		struct vos_io_context *ioc = vos_ioh2ioc(ioh);
-		int i, j;
-
-		for (i = 0; i < iod_nr; i++) {
-			struct eio_sglist *esgl = eio_iod_sgl(ioc->ic_eiod, i);
-			daos_sg_list_t *sgl = &sgls[i];
-
-			/* Inform caller the nonexistent of object/key */
-			if (esgl->es_nr_out == 0) {
-				for (j = 0; j < sgl->sg_nr; j++)
-					sgl->sg_iovs[j].iov_len = 0;
-			}
-		}
-
-		rc = vos_obj_copy(ioc, sgls, iod_nr);
-		if (rc)
-			D_ERROR("Copy "DF_UOID" failed %d\n",
-				DP_UOID(oid), rc);
-	}
-
-	rc = vos_fetch_end(ioh, rc);
-	return rc;
 }
 
 static umem_id_t
@@ -1217,10 +1138,57 @@ error:
 	return rc;
 }
 
+struct eio_desc *
+vos_ioh2desc(daos_handle_t ioh)
+{
+	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
+
+	D_ASSERT(ioc->ic_eiod != NULL);
+	return ioc->ic_eiod;
+}
+
+struct eio_sglist *
+vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx)
+{
+	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
+
+	if (idx > ioc->ic_iod_nr) {
+		D_ERROR("Invalid SGL index %d >= %d\n",
+			idx, ioc->ic_iod_nr);
+		return NULL;
+	}
+	return eio_iod_sgl(ioc->ic_eiod, idx);
+}
+
 /**
- * Update an array of records for the specified object.
- * TODO: Deprecated, should be replaced by ds_obj_update()
+ * @defgroup vos_obj_update() & vos_obj_fetch() functions
+ * @{
  */
+
+/**
+ * vos_obj_update() & vos_obj_fetch() are two helper functions used
+ * for inline update and fetch, so far it's used by rdb, rebuild and
+ * some test programs (daos_perf, vos tests, etc).
+ *
+ * Caveat: These two functions may yield, please use with caution.
+ */
+static int
+vos_obj_copy(struct vos_io_context *ioc, daos_sg_list_t *sgls,
+	     unsigned int sgl_nr)
+{
+	int rc, err;
+
+	D_ASSERT(sgl_nr == ioc->ic_iod_nr);
+	rc = eio_iod_prep(ioc->ic_eiod);
+	if (rc)
+		return rc;
+
+	err = eio_iod_copy(ioc->ic_eiod, sgls, sgl_nr);
+	rc = eio_iod_post(ioc->ic_eiod);
+
+	return err ? err : rc;
+}
+
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uuid_t cookie, uint32_t pm_ver, daos_key_t *dkey,
@@ -1246,77 +1214,50 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	return rc;
 }
 
-struct eio_desc *
-vos_ioh2desc(daos_handle_t ioh)
-{
-	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
-
-	D_ASSERT(ioc->ic_eiod != NULL);
-	return ioc->ic_eiod;
-}
-
-struct eio_sglist *
-vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx)
-{
-	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
-
-	if (idx > ioc->ic_iod_nr) {
-		D_ERROR("Invalid SGL index %d >= %d\n",
-			idx, ioc->ic_iod_nr);
-		return NULL;
-	}
-	return eio_iod_sgl(ioc->ic_eiod, idx);
-}
-
-/* TODO: Deprecated, will be replaced by vos_iod_sgl_at(). */
 int
-vos_obj_zc_sgl_at(daos_handle_t ioh, unsigned int idx, daos_sg_list_t **sgl_pp)
+vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
+	      daos_sg_list_t *sgls)
 {
-	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
+	daos_handle_t ioh;
+	bool size_fetch = (sgls == NULL);
+	int rc;
 
-	/* Convert array of eio_sglist into array of daos_sg_list_t */
-	if (ioc->ic_sgls == NULL) {
-		int i, j, rc;
+	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
+		DP_UOID(oid), iod_nr, epoch);
 
-		D_ALLOC(ioc->ic_sgls, sizeof(*ioc->ic_sgls) * ioc->ic_iod_nr);
-		if (ioc->ic_sgls == NULL)
-			return -DER_NOMEM;
+	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods, size_fetch,
+			     &ioh);
+	if (rc) {
+		D_ERROR("Fetch "DF_UOID" failed %d\n", DP_UOID(oid), rc);
+		return rc;
+	}
 
-		rc = eio_iod_prep(ioc->ic_eiod);
-		if (rc)
-			return rc;
+	if (!size_fetch) {
+		struct vos_io_context *ioc = vos_ioh2ioc(ioh);
+		int i, j;
 
-		for (i = 0; i < ioc->ic_iod_nr; i++) {
-			struct eio_sglist *esgl;
-			daos_sg_list_t *sgl;
+		for (i = 0; i < iod_nr; i++) {
+			struct eio_sglist *esgl = eio_iod_sgl(ioc->ic_eiod, i);
+			daos_sg_list_t *sgl = &sgls[i];
 
-			esgl = eio_iod_sgl(ioc->ic_eiod, i);
-			D_ASSERT(esgl != NULL);
-			sgl = &ioc->ic_sgls[i];
-
-			rc = daos_sgl_init(sgl, esgl->es_nr_out);
-			if (rc != 0)
-				return -DER_NOMEM;
-			sgl->sg_nr_out = esgl->es_nr_out;
-
-			for (j = 0; j < sgl->sg_nr_out; j++) {
-				struct eio_iov *eiov = &esgl->es_iovs[j];
-				daos_iov_t *iov = &sgl->sg_iovs[j];
-
-				iov->iov_buf = eiov->ei_buf;
-				iov->iov_len = eiov->ei_data_len;
-				iov->iov_buf_len = eiov->ei_data_len;
+			/* Inform caller the nonexistent of object/key */
+			if (esgl->es_nr_out == 0) {
+				for (j = 0; j < sgl->sg_nr; j++)
+					sgl->sg_iovs[j].iov_len = 0;
 			}
 		}
+
+		rc = vos_obj_copy(ioc, sgls, iod_nr);
+		if (rc)
+			D_ERROR("Copy "DF_UOID" failed %d\n",
+				DP_UOID(oid), rc);
 	}
 
-	if (idx >= ioc->ic_iod_nr) {
-		*sgl_pp = NULL;
-		D_DEBUG(DB_IO, "Invalid iod index %d/%d.\n",
-			idx, ioc->ic_iod_nr);
-		return -DER_NONEXIST;
-	}
-
-	*sgl_pp = &ioc->ic_sgls[idx];
-	return 0;
+	rc = vos_fetch_end(ioh, rc);
+	return rc;
 }
+
+/**
+ * @} vos_obj_update() & vos_obj_fetch() functions
+ */

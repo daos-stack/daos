@@ -128,10 +128,9 @@ static int
 rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 			  struct ds_cont *ds_cont)
 {
-	daos_sg_list_t	sgls[MAX_IOD_NUM];
-	daos_handle_t	ioh;
-	int		i;
-	int		rc;
+	daos_sg_list_t	 sgls[MAX_IOD_NUM], *sgl;
+	daos_handle_t	 ioh;
+	int		 rc, i, ret, sgl_cnt = 0;
 
 	D_ASSERT(rdone->ro_iod_num <= MAX_IOD_NUM);
 	rc = vos_update_begin(ds_cont->sc_hdl, rdone->ro_oid, 0,
@@ -143,14 +142,24 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 		return rc;
 	}
 
+	rc = eio_iod_prep(vos_ioh2desc(ioh));
+	if (rc) {
+		D_ERROR("Prepare EIOD for "DF_UOID" error: %d\n",
+			DP_UOID(rdone->ro_oid), rc);
+		goto end;
+	}
+
 	for (i = 0; i < rdone->ro_iod_num; i++) {
-		daos_sg_list_t *sgl;
+		struct eio_sglist	*esgl;
 
-		rc = vos_obj_zc_sgl_at(ioh, i, &sgl);
+		esgl = vos_iod_sgl_at(ioh, i);
+		D_ASSERT(esgl != NULL);
+		sgl = &sgls[i];
+
+		rc = eio_sgl_convert(esgl, sgl);
 		if (rc)
-			D_GOTO(end, rc);
-
-		memcpy(&sgls[i], sgl, sizeof(*sgl));
+			goto post;
+		sgl_cnt++;
 	}
 
 	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %.*s nr %d eph "DF_U64"\n",
@@ -161,11 +170,21 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 	rc = ds_obj_fetch(oh, rdone->ro_epoch, &rdone->ro_dkey,
 			  rdone->ro_iod_num, rdone->ro_iods,
 			  sgls, NULL);
-	if (rc) {
+	if (rc)
 		D_ERROR("rebuild dkey %.*s failed rc %d\n",
 			(int)rdone->ro_dkey.iov_len,
 			(char *)rdone->ro_dkey.iov_buf, rc);
-		D_GOTO(end, rc);
+post:
+	for (i = 0; i < sgl_cnt; i++) {
+		sgl = &sgls[i];
+		daos_sgl_fini(sgl, false);
+	}
+
+	ret = eio_iod_post(vos_ioh2desc(ioh));
+	if (ret) {
+		D_ERROR("Post EIOD for "DF_UOID" error: %d\n",
+			DP_UOID(rdone->ro_oid), ret);
+		rc = rc ? : ret;
 	}
 end:
 	vos_update_end(ioh, rdone->ro_cookie, rdone->ro_version,

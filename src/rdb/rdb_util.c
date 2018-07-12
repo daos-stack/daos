@@ -284,7 +284,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	daos_unit_oid_t	uoid;
 	daos_iod_t	iod;
 	daos_handle_t	io;
-	daos_sg_list_t *sgl;
+	struct eio_sglist *esgl;
 	daos_iov_t	value_orig = *value;
 	int		rc;
 
@@ -295,21 +295,37 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	if (rc != 0)
 		return rc;
 
-	rc = vos_obj_zc_sgl_at(io, 0 /* idx */, &sgl);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	if (sgl->sg_nr_out == 0) {
+	rc = eio_iod_prep(vos_ioh2desc(io));
+	if (rc) {
+		D_ERROR("prep io descriptor error:%d\n", rc);
+		goto out;
+	}
+
+	esgl = vos_iod_sgl_at(io, 0 /* idx */);
+	D_ASSERT(esgl != NULL);
+
+	if (esgl->es_nr_out == 0) {
 		D_ASSERTF(iod.iod_size == 0, DF_U64"\n", iod.iod_size);
 		value->iov_buf = NULL;
 		value->iov_buf_len = 0;
 		value->iov_len = 0;
 	} else {
-		D_ASSERTF(sgl->sg_nr_out == 1, "%u\n", sgl->sg_nr_out);
-		D_ASSERTF(iod.iod_size == sgl->sg_iovs[0].iov_len,
+		struct eio_iov *eiov = &esgl->es_iovs[0];
+
+		D_ASSERTF(esgl->es_nr_out == 1, "%u\n", esgl->es_nr_out);
+		D_ASSERTF(iod.iod_size == eiov->ei_data_len,
 			  DF_U64" == "DF_U64"\n", iod.iod_size,
-			  sgl->sg_iovs[0].iov_len);
-		*value = sgl->sg_iovs[0];
+			  eiov->ei_data_len);
+		D_ASSERT(eiov->ei_addr.ea_type == EIO_ADDR_SCM);
+
+		value->iov_buf = eiov->ei_buf;
+		value->iov_buf_len = eiov->ei_data_len;
+		value->iov_len = eiov->ei_data_len;
 	}
 
+	rc = eio_iod_post(vos_ioh2desc(io));
+	D_ASSERTF(rc == 0, "%d\n", rc);
+out:
 	rc = vos_fetch_end(io, 0 /* err */);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 

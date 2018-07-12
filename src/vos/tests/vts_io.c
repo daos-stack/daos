@@ -483,8 +483,8 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 		   daos_iod_t *iod, daos_sg_list_t *sgl,
 		   struct d_uuid *dsm_cookie, bool verbose)
 {
-	daos_sg_list_t		*iod_sgl;
-	daos_iov_t		*iod_iov;
+	struct eio_sglist	*esgl;
+	struct eio_iov		*eiov;
 	daos_iov_t		*srv_iov;
 	daos_handle_t		ioh;
 	unsigned int		off;
@@ -509,19 +509,24 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	}
 
 	srv_iov = &sgl->sg_iovs[0];
+	rc = eio_iod_prep(vos_ioh2desc(ioh));
+	if (rc)
+		goto end;
 
-	rc = vos_obj_zc_sgl_at(ioh, 0, &iod_sgl);
-	assert_int_equal(rc, 0);
+	esgl = vos_iod_sgl_at(ioh, 0);
+	assert_true(esgl != NULL);
 
-	for (i = off = 0; i < iod_sgl->sg_nr_out; i++) {
-		iod_iov = &iod_sgl->sg_iovs[i];
-		memcpy(iod_iov->iov_buf, srv_iov->iov_buf + off,
-		       iod_iov->iov_len);
-		off += iod_iov->iov_len;
+	for (i = off = 0; i < esgl->es_nr_out; i++) {
+		eiov = &esgl->es_iovs[i];
+		memcpy(eiov->ei_buf, srv_iov->iov_buf + off,
+		       eiov->ei_data_len);
+		off += eiov->ei_data_len;
 	}
 	assert_true(srv_iov->iov_len == off);
 
-	rc = vos_update_end(ioh, dsm_cookie->uuid, 0, dkey, 0);
+	rc = eio_iod_post(vos_ioh2desc(ioh));
+end:
+	rc = vos_update_end(ioh, dsm_cookie->uuid, 0, dkey, rc);
 	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
@@ -532,8 +537,8 @@ int
 io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 		  daos_iod_t *iod, daos_sg_list_t *sgl, bool verbose)
 {
-	daos_sg_list_t	*iod_sgl;
-	daos_iov_t	*iod_iov;
+	struct eio_sglist *esgl;
+	struct eio_iov	*eiov;
 	daos_iov_t	*dst_iov;
 	daos_handle_t	 ioh;
 	unsigned int	 off;
@@ -558,19 +563,25 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	}
 
 	dst_iov = &sgl->sg_iovs[0];
+	rc = eio_iod_prep(vos_ioh2desc(ioh));
+	if (rc)
+		goto end;
 
-	vos_obj_zc_sgl_at(ioh, 0, &iod_sgl);
+	esgl = vos_iod_sgl_at(ioh, 0);
+	assert_true(esgl != NULL);
 
-	for (i = off = 0; i < iod_sgl->sg_nr_out; i++) {
-		iod_iov = &iod_sgl->sg_iovs[i];
-		memcpy(dst_iov->iov_buf + off, iod_iov->iov_buf,
-		       iod_iov->iov_len);
-		off += iod_iov->iov_len;
+	for (i = off = 0; i < esgl->es_nr_out; i++) {
+		eiov = &esgl->es_iovs[i];
+		memcpy(dst_iov->iov_buf + off, eiov->ei_buf,
+		       eiov->ei_data_len);
+		off += eiov->ei_data_len;
 	}
 	dst_iov->iov_len = off;
 	assert_true(dst_iov->iov_buf_len >= dst_iov->iov_len);
 
-	rc = vos_fetch_end(ioh, 0);
+	rc = eio_iod_post(vos_ioh2desc(ioh));
+end:
+	rc = vos_fetch_end(ioh, rc);
 	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
