@@ -31,7 +31,7 @@
 #include <gurt/common.h>
 
 int parse_rank_list(char *str_rank_list, d_rank_list_t *num_rank_list);
-int parse_size(uint64_t *size, char *arg);
+int parse_size(char *arg, uint64_t *size);
 int parse_oid(char *oid_str, daos_obj_id_t *oid);
 
 
