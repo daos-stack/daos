@@ -62,12 +62,6 @@ struct eio_bdev {
 	uuid_t			 eb_uuid;
 	char			*eb_name;
 	struct eio_blobstore	*eb_blobstore;
-	/* FIXME
-	 * spdk_bdev_get_io_stat() resets the io stat on each call, so we
-	 * have to keep an cumulative stat here. That'll be fixed in SPDK
-	 * v18.07.
-	 */
-	struct spdk_bdev_io_stat eb_stat;
 	struct spdk_bdev_desc	*eb_desc; /* for io stat only */
 };
 
@@ -94,7 +88,7 @@ static uint64_t io_stat_period;
 static void
 print_io_stat(uint64_t now)
 {
-	struct spdk_bdev_io_stat	 bdev_stat, *stat;
+	struct spdk_bdev_io_stat	 stat;
 	struct eio_bdev			*d_bdev;
 	struct spdk_io_channel		*channel;
 	static uint64_t			 stat_age;
@@ -110,24 +104,15 @@ print_io_stat(uint64_t now)
 		D_ASSERT(d_bdev->eb_name != NULL);
 
 		channel = spdk_bdev_get_io_channel(d_bdev->eb_desc);
-		spdk_bdev_get_io_stat(NULL, channel, &bdev_stat);
-
-		stat = &d_bdev->eb_stat;
-		stat->bytes_read += bdev_stat.bytes_read;
-		stat->num_read_ops += bdev_stat.num_read_ops;
-		stat->bytes_written += bdev_stat.bytes_written;
-		stat->num_write_ops += bdev_stat.num_write_ops;
-		stat->read_latency_ticks += bdev_stat.read_latency_ticks;
-		stat->write_latency_ticks += bdev_stat.write_latency_ticks;
-		stat->ticks_rate = bdev_stat.ticks_rate;
+		spdk_bdev_get_io_stat(NULL, channel, &stat);
 
 		D_PRINT("SPDK IO STAT: dev[%s] read_bytes["DF_U64"], "
 			"read_ops["DF_U64"], write_bytes["DF_U64"], "
 			"write_ops["DF_U64"], read_latency_ticks["DF_U64"], "
 			"write_latency_ticks["DF_U64"]\n",
-			d_bdev->eb_name, stat->bytes_read, stat->num_read_ops,
-			stat->bytes_written, stat->num_write_ops,
-			stat->read_latency_ticks, stat->write_latency_ticks);
+			d_bdev->eb_name, stat.bytes_read, stat.num_read_ops,
+			stat.bytes_written, stat.num_write_ops,
+			stat.read_latency_ticks, stat.write_latency_ticks);
 	}
 
 	stat_age = now;
