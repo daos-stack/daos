@@ -534,7 +534,7 @@ class DaosContainer(object):
         if cb_func == None:
             rc = func(self.poh, self.uuid, c_force, None)
             if rc != 0:
-                raise ValueError("Pool create returned non-zero. RC: {0}"
+                raise ValueError("Container destroy returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -566,7 +566,7 @@ class DaosContainer(object):
             rc = func(self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
                       ctypes.byref(self.info), None)
             if rc != 0:
-                raise ValueError("container open returned non-zero. RC: {0}"
+                raise ValueError("Container open returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -591,7 +591,7 @@ class DaosContainer(object):
         if cb_func == None:
             rc = func(self.coh, None)
             if rc != 0:
-                raise ValueError("container close returned non-zero. RC: {0}"
+                raise ValueError("Container close returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
