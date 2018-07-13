@@ -378,6 +378,40 @@ int
 daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
 		    daos_event_t *ev);
 
+/**
+ * Destroy the array object by punching all data (keys) in the array object
+ * including the metadata associated with the array. daos_obj_punch() is called
+ * underneath. The oh still needs to be closed with a call to
+ * daos_array_close(), but any other access with that handle, or other array
+ * open handles, will fail. The destroy will happen regardless of any open
+ * handle, so it's the user responsibility to ensure that there is no further
+ * access to the array before the destory is called.
+ *
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	epoch	Epoch for the destroy.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on Success, negative on failure.
+ */
+int
+daos_array_destroy(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
+
+/**
+ * Punch a hole in the array indicated by the range in the iod.
+ *
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	epoch	Epoch for the punch op.
+ * \param[in]	iod	IO descriptor of ranges to punch in the array.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on Success, negative on failure.
+ */
+int
+daos_array_punch(daos_handle_t oh, daos_epoch_t epoch, daos_array_iod_t *iod,
+		 daos_event_t *ev);
+
 #if defined(__cplusplus)
 }
 #endif

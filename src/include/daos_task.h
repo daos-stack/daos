@@ -108,8 +108,10 @@ typedef enum {
 	DAOS_OPC_ARRAY_CREATE,
 	DAOS_OPC_ARRAY_OPEN,
 	DAOS_OPC_ARRAY_CLOSE,
+	DAOS_OPC_ARRAY_DESTROY,
 	DAOS_OPC_ARRAY_READ,
 	DAOS_OPC_ARRAY_WRITE,
+	DAOS_OPC_ARRAY_PUNCH,
 	DAOS_OPC_ARRAY_GET_SIZE,
 	DAOS_OPC_ARRAY_SET_SIZE,
 
@@ -514,6 +516,11 @@ typedef struct {
 	daos_epoch_t            epoch;
 	daos_size_t		size;
 } daos_array_set_size_t;
+
+typedef struct {
+	daos_handle_t	oh;
+	daos_epoch_t	epoch;
+} daos_array_destroy_t;
 
 typedef struct {
 	daos_handle_t	oh;

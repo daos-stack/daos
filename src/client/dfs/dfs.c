@@ -1586,7 +1586,7 @@ static int
 io_internal(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off,
 	    int flag)
 {
-	daos_array_iod_t	ranges;
+	daos_array_iod_t	iod;
 	daos_range_t		rg;
 	daos_size_t		buf_size;
 	int			i;
@@ -1597,24 +1597,24 @@ io_internal(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off,
 		buf_size += sgl.sg_iovs[i].iov_len;
 
 	/** set array location */
-	ranges.arr_nr = 1;
+	iod.arr_nr = 1;
 	rg.rg_len = buf_size;
 	rg.rg_idx = off;
-	ranges.arr_rgs = &rg;
+	iod.arr_rgs = &rg;
 
 	D_DEBUG(DB_TRACE, "IO Epoch %"PRIu64" OP %d, Off %"PRIu64", Len %zu\n",
 		dfs->epoch, flag, off, buf_size);
 
 	if (flag == DFS_WRITE) {
 		incr_epoch(dfs);
-		rc = daos_array_write(obj->oh, dfs->epoch, &ranges, &sgl,
+		rc = daos_array_write(obj->oh, dfs->epoch, &iod, &sgl,
 				      NULL, NULL);
 		if (rc) {
 			daos_epoch_discard(dfs->coh, dfs->epoch, NULL, NULL);
 			D_ERROR("daos_array_write() failed (%d)\n", rc);
 		}
 	} else if (flag == DFS_READ) {
-		rc = daos_array_read(obj->oh, dfs->epoch, &ranges, &sgl, NULL,
+		rc = daos_array_read(obj->oh, dfs->epoch, &iod, &sgl, NULL,
 				     NULL);
 		if (rc)
 			D_ERROR("daos_array_write() failed (%d)\n", rc);
@@ -1754,8 +1754,10 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 int
 dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 {
-	daos_size_t size;
-	int rc;
+	daos_size_t		size;
+	daos_array_iod_t	iod;
+	daos_range_t		rg;
+	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
@@ -1793,9 +1795,16 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 	D_ASSERT(size > offset + len);
 
 	/** Punch offset -> len */
-	/** TODO - need to add support for that in array API */
-	D_ASSERT(0);
-	return -DER_INVAL;
+	iod.arr_nr = 1;
+	rg.rg_len = offset + len;
+	rg.rg_idx = offset;
+	iod.arr_rgs = &rg;
+
+	rc = daos_array_punch(obj->oh, dfs->epoch, &iod, NULL);
+	if (rc) {
+		D_ERROR("daos_array_punch() failed (%d)\n", rc);
+		D_GOTO(out, rc);
+	}
 
 out:
 	if (rc)

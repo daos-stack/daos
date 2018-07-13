@@ -82,6 +82,7 @@ struct daos_task_args {
 		daos_array_create_t	array_create;
 		daos_array_open_t	array_open;
 		daos_array_close_t	array_close;
+		daos_array_destroy_t	array_destroy;
 		daos_array_io_t		array_io;
 		daos_array_get_size_t	array_get_size;
 		daos_array_set_size_t	array_set_size;

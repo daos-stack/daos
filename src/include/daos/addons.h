@@ -31,8 +31,10 @@
 int dac_array_create(tse_task_t *task);
 int dac_array_open(tse_task_t *task);
 int dac_array_close(tse_task_t *task);
+int dac_array_destroy(tse_task_t *task);
 int dac_array_read(tse_task_t *task);
 int dac_array_write(tse_task_t *task);
+int dac_array_punch(tse_task_t *task);
 int dac_array_get_size(tse_task_t *task);
 int dac_array_set_size(tse_task_t *task);
 

@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
+/*
  * This file is part of daos_m
  *
  * src/addons/dac_array.c
@@ -579,7 +579,7 @@ dac_array_close(tse_task_t *task)
 			      0, NULL, &close_task);
 	if (rc != 0) {
 		D_ERROR("Failed to create object_close task\n");
-		return rc;
+		D_GOTO(out, rc);
 	}
 	close_args = daos_task_get_args(close_task);
 	close_args->oh = array->daos_oh;
@@ -601,12 +601,58 @@ dac_array_close(tse_task_t *task)
 
 	tse_task_schedule(close_task, false);
 	tse_sched_progress(tse_task2sched(task));
-	array_decref(array);
 
+out:
+	array_decref(array);
 	return rc;
 err:
 	D_FREE_PTR(close_task);
+	goto out;
+}
+
+int
+dac_array_destroy(tse_task_t *task)
+{
+	daos_array_destroy_t	*args = daos_task_get_args(task);
+	struct dac_array	*array;
+	tse_task_t		*punch_task;
+	daos_obj_punch_t	*punch_args;
+	int			rc;
+
+	array = array_hdl2ptr(args->oh);
+	if (array == NULL)
+		return -DER_NO_HDL;
+
+	/** Create task to punch object */
+	rc = daos_task_create(DAOS_OPC_OBJ_PUNCH, tse_task2sched(task),
+			      0, NULL, &punch_task);
+	if (rc != 0) {
+		D_ERROR("Failed to create object_punch task\n");
+		D_GOTO(out, rc);
+	}
+	punch_args = daos_task_get_args(punch_task);
+	punch_args->oh		= array->daos_oh;
+	punch_args->epoch	= args->epoch;
+	punch_args->dkey	= NULL;
+	punch_args->akeys	= NULL;
+	punch_args->akey_nr	= 0;
+
+	/** The upper task completes when the punch task completes */
+	rc = tse_task_register_deps(task, 1, &punch_task);
+	if (rc != 0) {
+		D_ERROR("Failed to register dependency\n");
+		D_GOTO(err, rc);
+	}
+
+	tse_task_schedule(punch_task, false);
+	tse_sched_progress(tse_task2sched(task));
+
+out:
+	array_decref(array);
 	return rc;
+err:
+	D_FREE_PTR(punch_task);
+	goto out;
 }
 
 static bool
@@ -643,7 +689,7 @@ io_extent_same(daos_array_iod_t *iod, daos_sg_list_t *sgl,
 	return (rgs_len * cell_size == sgl_len);
 }
 
-/**
+/*
  * Compute the dkey given the array index for this range. Also compute: - the
  * number of records that the dkey can hold starting at the index where we start
  * writing. - the record index relative to the dkey.
@@ -693,7 +739,7 @@ create_sgl(daos_sg_list_t *user_sgl, daos_size_t cell_size,
 	sgl->sg_iovs = NULL;
 	rem_records = num_records;
 
-	/**
+	/*
 	 * Keep iterating through the user sgl till we populate our sgl to
 	 * satisfy the number of records to read/write from the KV object
 	 */
@@ -743,11 +789,11 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 {
 	struct dac_array *array = NULL;
 	daos_handle_t	oh;
-	daos_off_t	cur_off;/* offset into user buf to track current pos */
-	daos_size_t	cur_i;	/* index into user sgl to track current pos */
+	daos_off_t	cur_off; /* offset into user buf to track current pos */
+	daos_size_t	cur_i; /* index into user sgl to track current pos */
 	daos_size_t	records; /* Number of records to access in cur range */
 	daos_off_t	array_idx; /* object array index of current range */
-	daos_size_t	u;
+	daos_size_t	u; /* index in the array range rg_iod->arr_nr*/
 	daos_size_t	num_records;
 	daos_off_t	record_i;
 	daos_csum_buf_t	null_csum;
@@ -759,16 +805,17 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		D_ERROR("NULL iod passed\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
 	}
-	if (user_sgl == NULL) {
-		D_ERROR("NULL scatter-gather list passed\n");
-		D_GOTO(err_task, rc = -DER_INVAL);
-	}
 
 	array = array_hdl2ptr(array_oh);
 	if (array == NULL)
 		return -DER_NO_HDL;
 
-	if (!io_extent_same(rg_iod, user_sgl, array->cell_size)) {
+	if (op_type == DAOS_OPC_ARRAY_PUNCH) {
+		D_ASSERT(user_sgl == NULL);
+	} else if (user_sgl == NULL) {
+		D_ERROR("NULL scatter-gather list passed\n");
+		D_GOTO(err_task, rc = -DER_INVAL);
+	} else if (!io_extent_same(rg_iod, user_sgl, array->cell_size)) {
 		D_ERROR("Unequal extents of memory and array descriptors\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
 	}
@@ -785,7 +832,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 
 	head = NULL;
 
-	/**
+	/*
 	 * Loop over every range, but at the same time combine consecutive
 	 * ranges that belong to the same dkey. If the user gives ranges that
 	 * are not increasing in offset, they probably won't be combined unless
@@ -799,8 +846,9 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		daos_size_t	dkey_records;
 		tse_task_t	*io_task;
 		struct io_params *params;
-		daos_size_t	i;
+		daos_size_t	i; /* index for iod recx */
 
+		/** In some cases, users can pass an empty range, so skip it. */
 		if (rg_iod->arr_rgs[u].rg_len == 0) {
 			u++;
 			if (u < rg_iod->arr_nr) {
@@ -810,12 +858,17 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			continue;
 		}
 
+		/** allocate params for this dkey io */
 		D_ALLOC_PTR(params);
 		if (params == NULL) {
 			D_ERROR("Failed memory allocation\n");
 			D_GOTO(err_task, rc = -DER_NOMEM);
 		}
 
+		/*
+		 * since we probably have multiple dkey ios, put them in linked
+		 * list to free later.
+		 */
 		if (num_ios == 0) {
 			head = params;
 			current = head;
@@ -857,13 +910,16 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		iod->iod_csums = NULL;
 		iod->iod_eprs = NULL;
 		iod->iod_recxs = NULL;
-		iod->iod_size = array->cell_size;
 		iod->iod_type = DAOS_IOD_ARRAY;
+		if (op_type == DAOS_OPC_ARRAY_PUNCH)
+			iod->iod_size = 0;
+		else
+			iod->iod_size = array->cell_size;
 
 		i = 0;
 		dkey_records = 0;
 
-		/**
+		/*
 		 * Create the IO descriptor for this dkey. If the entire range
 		 * fits in the dkey, continue to the next range to see if we can
 		 * combine it fully or partially in the current dkey IOD.
@@ -891,11 +947,11 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 				u, iod->iod_recxs[i].rx_idx,
 				iod->iod_recxs[i].rx_nr);
 
-			/**
+			/*
 			 * if the current range is bigger than what the dkey can
 			 * hold, update the array index and number of records in
 			 * the current range and break to issue the I/O on the
-			 * current KV.
+			 * current dkey.
 			 */
 			if (records > num_records) {
 				array_idx += num_records;
@@ -904,6 +960,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 				break;
 			}
 
+			/** bump the index for the iods */
 			u++;
 			i++;
 			dkey_records += records;
@@ -916,21 +973,21 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			records = rg_iod->arr_rgs[u].rg_len;
 			array_idx = rg_iod->arr_rgs[u].rg_idx;
 
-			/**
+			/*
 			 * Boundary case where number of records align with the
-			 * end boundary of the KV. break after advancing to the
-			 * next range
+			 * end boundary of the dkey. break after we have
+			 * advanced to the next range in the array iod.
 			 */
 			if (records == num_records)
 				break;
 
-			/** cont processing the next range in the cur dkey */
+			/** process the next range in the cur dkey */
 			if (array_idx < old_array_idx + num_records &&
-			   array_idx >= ((old_array_idx + num_records) -
-				       array->chunk_size)) {
+			    array_idx >= ((old_array_idx + num_records) -
+					  array->chunk_size)) {
 				char	*dkey_str_tmp = NULL;
 
-				/**
+				/*
 				 * verify that the dkey is the same as the one
 				 * we are working on given the array index, and
 				 * also compute the number of records left in
@@ -956,12 +1013,13 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		D_DEBUG(DB_IO, "END DKEY IOD %s ---------------------------\n",
 			dkey_str);
 
-		/**
+		/*
 		 * if the user sgl maps directly to the array range, no need to
 		 * partition it.
 		 */
-		if (1 == rg_iod->arr_nr && 1 == user_sgl->sg_nr &&
-		    dkey_records == rg_iod->arr_rgs[0].rg_len) {
+		if ((op_type == DAOS_OPC_ARRAY_PUNCH) ||
+		    (1 == rg_iod->arr_nr && 1 == user_sgl->sg_nr &&
+		     dkey_records == rg_iod->arr_rgs[0].rg_len)) {
 			sgl = user_sgl;
 			params->user_sgl_used = true;
 		}
@@ -987,7 +1045,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			D_DEBUG(DB_IO, "--------------------------------\n");
 		}
 
-		/* issue KV IO to DAOS */
+		/* issue IO to DAOS */
 		if (op_type == DAOS_OPC_ARRAY_READ) {
 			daos_obj_fetch_t *io_arg;
 
@@ -1007,8 +1065,8 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			io_arg->iods	= iod;
 			io_arg->sgls	= sgl;
 			io_arg->maps	= NULL;
-
-		} else if (op_type == DAOS_OPC_ARRAY_WRITE) {
+		} else if (op_type == DAOS_OPC_ARRAY_WRITE ||
+			   op_type == DAOS_OPC_ARRAY_PUNCH) {
 			daos_obj_update_t *io_arg;
 
 			rc = daos_task_create(DAOS_OPC_OBJ_UPDATE,
@@ -1026,7 +1084,6 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			io_arg->nr	= 1;
 			io_arg->iods	= iod;
 			io_arg->sgls	= sgl;
-
 		} else {
 			D_ASSERTF(0, "Invalid array operation.\n");
 		}
@@ -1062,6 +1119,15 @@ dac_array_write(tse_task_t *task)
 
 	return dac_array_io(args->oh, args->epoch, args->iod, args->sgl,
 			    DAOS_OPC_ARRAY_WRITE, task);
+}
+
+int
+dac_array_punch(tse_task_t *task)
+{
+	daos_array_io_t *args = daos_task_get_args(task);
+
+	return dac_array_io(args->oh, args->epoch, args->iod, NULL,
+			    DAOS_OPC_ARRAY_PUNCH, task);
 }
 
 #define ENUM_KEY_BUF	32
@@ -1130,7 +1196,7 @@ list_recxs_cb(tse_task_t *task, void *data)
 		params->nr = 1;
 		rc = tse_task_reinit(task);
 		if (rc != 0) {
-			D_ERROR("FAILED to continue enumrating task\n");
+			D_ERROR("FAILED to reinit task\n");
 			D_GOTO(out, rc);
 		}
 
@@ -1594,7 +1660,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 
 		rc = tse_task_reinit(task);
 		if (rc) {
-			D_ERROR("FAILED to continue enumrating task\n");
+			D_ERROR("FAILED to reinit task\n");
 			D_GOTO(err, rc);
 		}
 
