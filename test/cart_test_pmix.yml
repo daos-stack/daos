@@ -3,6 +3,7 @@ description: "pmix test"
 defaultENV:
     OMPI_MCA_rmaps_base_oversubscribe: "1"
     D_LOG_MASK: "DEBUG,MEM=ERR"
+    TR_REDIRECT_OUTPUT: "no"
 
 module:
     name: "cart_test_pmix"

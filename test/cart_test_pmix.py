@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2017 Intel Corporation
+# Copyright (C) 2017-2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -70,7 +70,6 @@ class TestPMIx(commontestsuite.CommonTestSuite):
         """tear down the test"""
         self.logger.info("tearDown begin")
         os.environ.pop("D_LOG_MASK", "")
-        self.free_port()
         self.logger.info("tearDown end\n")
 
     def test_pmix_one_node(self):

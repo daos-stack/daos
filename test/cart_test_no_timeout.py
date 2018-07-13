@@ -70,17 +70,20 @@ class TestGroup(commontestsuite.CommonTestSuite):
         """setup the test"""
         self.get_test_info()
         log_mask = os.getenv("D_LOG_MASK", "INFO")
+        log_file = self.get_cart_long_log_name()
         crt_timeout = os.getenv("CRT_TIMEOUT", "60")
         crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
         ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
         ofi_share_addr = os.getenv("CRT_CTX_SHARE_ADDR", "0")
         ofi_ctx_num = os.getenv("CRT_CTX_NUM", "0")
-        self.pass_env = ' -x D_LOG_MASK={!s} -x CRT_PHY_ADDR_STR={!s}' \
+        self.pass_env = ' -x D_LOG_MASK={!s} -x D_LOG_FILE={!s}' \
+                        ' -x CRT_PHY_ADDR_STR={!s}' \
                         ' -x OFI_INTERFACE={!s}' \
                         ' -x CRT_CTX_SHARE_ADDR={!s} -x CRT_CTX_NUM={!s}' \
                         ' -x CRT_TIMEOUT={!s}' \
-                            .format(log_mask, crt_phy_addr, ofi_interface, \
-                                    ofi_share_addr, ofi_ctx_num, crt_timeout)
+                            .format(log_mask, log_file, crt_phy_addr, \
+                                    ofi_interface, ofi_share_addr, \
+                                    ofi_ctx_num, crt_timeout)
 
     def tearDown(self):
         """tear down the test"""

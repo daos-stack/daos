@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2016-2017 Intel Corporation
+# Copyright (C) 2016-2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -85,17 +85,18 @@ class TestSingleton(commontestsuite.CommonTestSuite):
         self.get_test_info()
         self.tempdir = tempfile.mkdtemp(dir=os.getenv("CRT_TESTLOG"))
         self.log_mask = os.getenv("D_LOG_MASK", "INFO")
+        log_file = self.get_cart_long_log_name()
         self.crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
         self.ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
         self.ofi_share_addr = os.getenv("CRT_CTX_SHARE_ADDR", "0")
         self.ofi_ctx_num = os.getenv("CRT_CTX_NUM", "0")
-        baseport = self.generate_port_numbers(self.ofi_interface)
-        self.pass_env = ' -x D_LOG_MASK={!s} -x CRT_PHY_ADDR_STR={!s}' \
-                        ' -x OFI_INTERFACE={!s} -x OFI_PORT={!s}' \
+        self.pass_env = ' -x D_LOG_MASK={!s} -x D_LOG_FILE={!s}' \
+                        ' -x CRT_PHY_ADDR_STR={!s}' \
+                        ' -x OFI_INTERFACE={!s}' \
                         ' -x CRT_CTX_SHARE_ADDR={!s}' \
                         ' -x CRT_CTX_NUM={!s}'.format(
-                            self.log_mask, self.crt_phy_addr,
-                            self.ofi_interface, baseport, self.ofi_share_addr,
+                            self.log_mask, log_file, self.crt_phy_addr,
+                            self.ofi_interface, self.ofi_share_addr,
                             self.ofi_ctx_num)
 
     def tearDown(self):
@@ -103,7 +104,6 @@ class TestSingleton(commontestsuite.CommonTestSuite):
         self.logger.info("tearDown begin")
         self.logger.info("tearDown removing temp directory")
         shutil.rmtree(self.tempdir)
-        self.free_port()
         self.logger.info("tearDown end\n")
 
     def test_singleton_attach(self):
@@ -136,6 +136,8 @@ class TestSingleton(commontestsuite.CommonTestSuite):
                        % procrtn)
         self.logger.info("Server running")
 
+        cli_log = os.path.join(self.get_cart_long_log_path(), 'cli.log')
+        os.environ['D_LOG_FILE'] = cli_log
         self.logger.info("Client env CRT_PHY_ADDR_STR: %s OFI_INTERFACE %s ",
                          os.environ["CRT_PHY_ADDR_STR"],
                          os.environ["OFI_INTERFACE"])
@@ -192,6 +194,8 @@ class TestSingleton(commontestsuite.CommonTestSuite):
                        % procrtn)
         self.logger.info("Server running")
 
+        cli_log = os.path.join(self.get_cart_long_log_path(), 'cli.log')
+        os.environ['D_LOG_FILE'] = cli_log
         # Launch the client without orterun
         cli_args = 'tests/crt_echo_cli' + ' -p ' + self.tempdir + ' -s -m'
         cli_rtn = self.execute_cmd(testmsg, cli_args)

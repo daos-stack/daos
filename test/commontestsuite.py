@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2016-2017 Intel Corporation
+# Copyright (C) 2016-2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -65,12 +65,10 @@ By default the output is displayed on the screen.
 
 import os
 import unittest
-import socket
 import subprocess
 import shlex
 import time
 import getpass
-import hashlib
 import logging
 
 #pylint: disable=broad-except
@@ -90,68 +88,6 @@ class CommonTestSuite(unittest.TestCase):
         self.logger.info("test name: %s", self.id())
         test_id = self.id()
         (self.testprocess, self.testsuite, self.testTitle) = test_id.split(".")
-
-    def generate_port_numbers(self, port_name):
-        """
-        Function to generate port numbers
-        """
-        assert self.reservedSocket is None
-
-        username = getpass.getuser()
-
-        md5hash = hashlib.md5()
-        md5hash.update(str(username).encode('utf-8'))
-        md5hash.update(str(os.getenv("JOB_NAME", "noname")).encode('utf-8'))
-        md5hash.update(str(port_name).encode('utf-8'))
-
-        #First, pick a range of 1009 ports "unique" to job, user, and port_name
-        #We use 1009 and 53 which are prime numbers.  There are slightly more
-        #than 53 1009 port ranges between 12000 and 65535
-        hash_value = int(md5hash.hexdigest(), 16) % 53
-        base_port = 12000 + (1009 * hash_value)
-
-        md5hash.update(str(self.testTitle).encode('utf-8'))
-
-        avail_socket = None
-        s = None
-
-        # Get a unique value and "reserve" 34 ports within the job's range
-        # There are at least 29 such ranges in 1009 ports.  Use 29 because
-        # it's a prime number.
-        # This only tests the availability of the 1st port in the range but
-        # it is assumed that if the first port is free the others likely
-        # are as well.  The socket is kept reserved for the duration of
-        # the test.
-        start_range = int(md5hash.hexdigest(), 16) % 29
-        for i in range(29):
-            port_offset = ((start_range + i) % 29) * 34
-            port_number = base_port + port_offset
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                s.bind(("127.0.0.1", port_number))
-                avail_socket = port_number + 1
-                break
-            except socket.error as e:
-                s.close()
-                s = None
-                if e.errno == 98:
-                    self.logger.info("Port %d is already in use", port_number)
-                else:
-                    # something else raised the socket.error exception
-                    self.logger.info(e)
-
-        self.logger.info("Setting OFI ports to %s: %s", port_name, avail_socket)
-
-        self.reservedSocket = s
-
-        assert avail_socket != None
-        return avail_socket
-
-    def free_port(self):
-        """Free the reserved port"""
-        if self.reservedSocket != None:
-            self.reservedSocket.close()
-            self.reservedSocket = None
 
     def launch_test(self, testdesc, NPROC, env, **kwargs):
         """Method creates the Client or Client and Server arguments
@@ -319,6 +255,20 @@ class CommonTestSuite(unittest.TestCase):
         names = fullname.split('.')
         items = names[-1].split('_', maxsplit=2)
         return items[2]
+
+    def get_cart_long_log_path(self):
+        """get the long format log path"""
+        testcase_id = self.id()
+        log_path = os.path.join(os.getenv("CRT_TESTLOG", self.testprocess),
+                                self.logdir_name(testcase_id))
+        return log_path
+
+    def get_cart_long_log_name(self):
+        """get cart log file name with the long format log path"""
+        long_log_name = os.path.join(self.get_cart_long_log_path(),
+                                     'output.log')
+
+        return long_log_name
 
     def add_prefix_logdir(self):
         """add the log directory to the prefix"""

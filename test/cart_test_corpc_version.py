@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2017 Intel Corporation
+# Copyright (C) 2017-2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -66,11 +66,13 @@ class TestCorpcVersion(commontestsuite.CommonTestSuite):
         """setup the test"""
         self.get_test_info()
         log_mask = os.getenv("D_LOG_MASK", "INFO")
+        log_file = self.get_cart_long_log_name()
         crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
         ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
-        self.pass_env = ' -x D_LOG_MASK={!s} -x CRT_PHY_ADDR_STR={!s}' \
+        self.pass_env = ' -x D_LOG_MASK={!s} -x D_LOG_FILE={!s}' \
+                        ' -x CRT_PHY_ADDR_STR={!s}' \
                         ' -x OFI_INTERFACE={!s} '.format(
-                            log_mask, crt_phy_addr, ofi_interface)
+                            log_mask, log_file, crt_phy_addr, ofi_interface)
 
     def tearDown(self):
         """tear down the test"""
@@ -79,7 +81,6 @@ class TestCorpcVersion(commontestsuite.CommonTestSuite):
         os.environ.pop("OFI_INTERFACE", "")
         os.environ.pop("D_LOG_MASK", "")
         os.environ.pop("CRT_TEST_SERVER", "")
-        self.free_port()
         self.logger.info("tearDown end\n")
 
     def test_corpc_version(self):
