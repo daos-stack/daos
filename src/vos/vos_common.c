@@ -33,6 +33,7 @@
 #include <daos_srv/daos_server.h>
 #include <vos_internal.h>
 #include <daos/lru.h>
+#include <daos/btree_class.h>
 
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 /**
@@ -268,12 +269,19 @@ vos_nvme_init(void)
 {
 	int rc;
 
+	/* IV tree used by VEA */
+	rc = dbtree_class_register(DBTREE_CLASS_IV,
+				   BTR_FEAT_UINT_KEY,
+				   &dbtree_iv_ops);
+	if (rc != 0 && rc != -DER_EXIST)
+		return rc;
+
 	rc = eio_nvme_init();
 	if (rc)
 		return rc;
 	vsa_nvme_init = true;
 
-	rc = eio_xsctxt_alloc(&vsa_xsctxt_inst, 1);
+	rc = eio_xsctxt_alloc(&vsa_xsctxt_inst, -1 /* Self poll */);
 	return rc;
 }
 

@@ -584,6 +584,7 @@ dma_rw(struct eio_desc *eiod, bool prep)
 	struct spdk_blob	*blob;
 	struct eio_rsrvd_dma	*rsrvd_dma = &eiod->ed_rsrvd;
 	struct eio_rsrvd_region	*rg;
+	struct eio_xs_context	*xs_ctxt;
 	uint64_t		 pg_idx, pg_cnt, pg_end;
 	void			*payload, *pg_rmw = NULL;
 	bool			 rmw_read = (prep && eiod->ed_update);
@@ -591,12 +592,17 @@ dma_rw(struct eio_desc *eiod, bool prep)
 	int			 i;
 
 	D_ASSERT(eiod->ed_ctxt->eic_xs_ctxt);
+	xs_ctxt = eiod->ed_ctxt->eic_xs_ctxt;
 	blob = eiod->ed_ctxt->eic_blob;
-	channel = eiod->ed_ctxt->eic_xs_ctxt->exc_io_channel;
+	channel = xs_ctxt->exc_io_channel;
 	D_ASSERT(blob != NULL && channel != NULL);
 
 	D_DEBUG(DB_IO, "DMA start, blob:%p, update:%d, rmw:%d\n",
 		blob, eiod->ed_update, rmw_read);
+
+	eiod->ed_inflights = 0;
+	eiod->ed_dma_issued = 0;
+	eiod->ed_result = 0;
 
 	for (i = 0; i < rsrvd_dma->erd_rg_cnt; i++) {
 		rg = &rsrvd_dma->erd_regions[i];
@@ -661,6 +667,20 @@ dma_rw(struct eio_desc *eiod, bool prep)
 			pg_rmw = payload;
 		}
 	}
+
+	if (xs_ctxt->exc_xs_id == -1) {
+		D_DEBUG(DB_IO, "Self poll completion, blob:%p\n", blob);
+		xs_poll_completion(xs_ctxt, &eiod->ed_inflights);
+	} else {
+		ABT_mutex_lock(eiod->ed_mutex);
+		eiod->ed_dma_issued = 1;
+		if (eiod->ed_inflights != 0)
+			ABT_cond_wait(eiod->ed_dma_done, eiod->ed_mutex);
+		ABT_mutex_unlock(eiod->ed_mutex);
+	}
+
+	D_DEBUG(DB_IO, "DMA done, blob:%p, update:%d, rmw:%d\n",
+		blob, eiod->ed_update, rmw_read);
 }
 
 static void
@@ -771,17 +791,7 @@ eio_iod_prep(struct eio_desc *eiod)
 	if (eiod->ed_rsrvd.erd_rg_cnt == 0)
 		return 0;
 
-	eiod->ed_inflights = 0;
-	eiod->ed_dma_issued = 0;
-	eiod->ed_result = 0;
 	dma_rw(eiod, true);
-
-	ABT_mutex_lock(eiod->ed_mutex);
-	eiod->ed_dma_issued = 1;
-	if (eiod->ed_inflights != 0)
-		ABT_cond_wait(eiod->ed_dma_done, eiod->ed_mutex);
-	ABT_mutex_unlock(eiod->ed_mutex);
-
 	if (eiod->ed_result)
 		iod_release_buffer(eiod);
 
@@ -800,17 +810,7 @@ eio_iod_post(struct eio_desc *eiod)
 		return 0;
 	}
 
-	eiod->ed_inflights = 0;
-	eiod->ed_dma_issued = 0;
-	eiod->ed_result = 0;
 	dma_rw(eiod, false);
-
-	ABT_mutex_lock(eiod->ed_mutex);
-	eiod->ed_dma_issued = 1;
-	if (eiod->ed_inflights != 0)
-		ABT_cond_wait(eiod->ed_dma_done, eiod->ed_mutex);
-	ABT_mutex_unlock(eiod->ed_mutex);
-
 	iod_release_buffer(eiod);
 
 	return eiod->ed_result;

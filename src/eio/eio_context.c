@@ -41,7 +41,7 @@ struct blob_cp_arg {
 	 */
 	ABT_mutex		 bca_mutex;
 	ABT_cond		 bca_done;
-	int			 bca_inflight;
+	unsigned int		 bca_inflights;
 	int			 bca_rc;
 };
 
@@ -86,8 +86,8 @@ blob_common_cb(struct blob_cp_arg *ba, int rc)
 
 	ba->bca_rc = rc;
 
-	D_ASSERT(ba->bca_inflight == 1);
-	ba->bca_inflight--;
+	D_ASSERT(ba->bca_inflights == 1);
+	ba->bca_inflights--;
 	ABT_cond_broadcast(ba->bca_done);
 
 	ABT_mutex_unlock(ba->bca_mutex);
@@ -120,12 +120,18 @@ blob_close_cb(void *arg, int rc)
 }
 
 static void
-blob_wait_completion(struct blob_cp_arg *ba)
+blob_wait_completion(struct eio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 {
-	ABT_mutex_lock(ba->bca_mutex);
-	if (ba->bca_inflight)
-		ABT_cond_wait(ba->bca_done, ba->bca_mutex);
-	ABT_mutex_unlock(ba->bca_mutex);
+	D_ASSERT(xs_ctxt != NULL);
+	if (xs_ctxt->exc_xs_id == -1) {
+		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
+		xs_poll_completion(xs_ctxt, &ba->bca_inflights);
+	} else {
+		ABT_mutex_lock(ba->bca_mutex);
+		if (ba->bca_inflights)
+			ABT_cond_wait(ba->bca_done, ba->bca_mutex);
+		ABT_mutex_unlock(ba->bca_mutex);
+	}
 }
 
 int
@@ -178,7 +184,7 @@ eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt, uint64_t blob_sz)
 	if (ba == NULL)
 		return -DER_NOMEM;
 
-	ba->bca_inflight = 1;
+	ba->bca_inflights = 1;
 	ABT_mutex_lock(ebs->eb_mutex);
 	if (ebs->eb_bs != NULL)
 		spdk_bs_create_blob_ext(ebs->eb_bs, &opts, blob_create_cb, ba);
@@ -187,7 +193,7 @@ eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt, uint64_t blob_sz)
 	ABT_mutex_unlock(ebs->eb_mutex);
 
 	/* Wait for blob creation done */
-	blob_wait_completion(ba);
+	blob_wait_completion(xs_ctxt, ba);
 	if (ba->bca_rc != 0) {
 		D_ERROR("Create blob failed for xs:%p pool:"DF_UUID" rc:%d\n",
 			xs_ctxt, DP_UUID(uuid), ba->bca_rc);
@@ -259,7 +265,7 @@ eio_ioctxt_open(struct eio_io_context **pctxt, struct eio_xs_context *xs_ctxt,
 	ebs = xs_ctxt->exc_blobstore;
 	D_ASSERT(ebs != NULL);
 
-	ba->bca_inflight = 1;
+	ba->bca_inflights = 1;
 	ABT_mutex_lock(ebs->eb_mutex);
 	if (ebs->eb_bs != NULL)
 		spdk_bs_open_blob(ebs->eb_bs, blob_id, blob_open_cb, ba);
@@ -268,7 +274,7 @@ eio_ioctxt_open(struct eio_io_context **pctxt, struct eio_xs_context *xs_ctxt,
 	ABT_mutex_unlock(ebs->eb_mutex);
 
 	/* Wait for blob open done */
-	blob_wait_completion(ba);
+	blob_wait_completion(xs_ctxt, ba);
 	if (ba->bca_rc != 0) {
 		D_ERROR("Open blobID "DF_U64" failed for xs:%p pool:"DF_UUID" "
 			"rc:%d\n", blob_id, xs_ctxt, DP_UUID(uuid), ba->bca_rc);
@@ -311,7 +317,7 @@ eio_ioctxt_close(struct eio_io_context *ctxt)
 	ebs = ctxt->eic_xs_ctxt->exc_blobstore;
 	D_ASSERT(ebs != NULL);
 
-	ba->bca_inflight = 1;
+	ba->bca_inflights = 1;
 	ABT_mutex_lock(ebs->eb_mutex);
 	if (ebs->eb_bs != NULL)
 		spdk_blob_close(ctxt->eic_blob, blob_close_cb, ba);
@@ -320,7 +326,7 @@ eio_ioctxt_close(struct eio_io_context *ctxt)
 	ABT_mutex_unlock(ebs->eb_mutex);
 
 	/* Wait for blob close done */
-	blob_wait_completion(ba);
+	blob_wait_completion(ctxt->eic_xs_ctxt, ba);
 	if (ba->bca_rc != 0)
 		D_ERROR("Close blob %p failed for xs:%p rc:%d\n",
 			ctxt->eic_blob, ctxt->eic_xs_ctxt, ba->bca_rc);

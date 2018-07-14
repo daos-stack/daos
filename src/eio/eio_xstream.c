@@ -104,7 +104,9 @@ print_io_stat(uint64_t now)
 		D_ASSERT(d_bdev->eb_name != NULL);
 
 		channel = spdk_bdev_get_io_channel(d_bdev->eb_desc);
+		D_ASSERT(channel != NULL);
 		spdk_bdev_get_io_stat(NULL, channel, &stat);
+		spdk_put_io_channel(channel);
 
 		D_PRINT("SPDK IO STAT: dev[%s] read_bytes["DF_U64"], "
 			"read_ops["DF_U64"], write_bytes["DF_U64"], "
@@ -314,19 +316,26 @@ eio_nvme_poll(struct eio_xs_context *ctxt)
 }
 
 struct common_cp_arg {
+	unsigned int		 cca_inflights;
 	int			 cca_rc;
 	struct spdk_blob_store	*cca_bs;
-	bool			 cca_done;
 };
+
+static void
+common_prep_arg(struct common_cp_arg *arg)
+{
+	memset(arg, 0, sizeof(*arg));
+	arg->cca_inflights = 1;
+}
 
 static void
 common_init_cb(void *arg, int rc)
 {
 	struct common_cp_arg *cp_arg = arg;
 
-	D_ASSERT(!cp_arg->cca_done);
+	D_ASSERT(cp_arg->cca_inflights == 1);
 	D_ASSERT(cp_arg->cca_rc == 0);
-	cp_arg->cca_done = true;
+	cp_arg->cca_inflights--;
 	cp_arg->cca_rc = rc;
 }
 
@@ -335,8 +344,8 @@ common_fini_cb(void *arg)
 {
 	struct common_cp_arg *cp_arg = arg;
 
-	D_ASSERT(!cp_arg->cca_done);
-	cp_arg->cca_done = true;
+	D_ASSERT(cp_arg->cca_inflights == 1);
+	cp_arg->cca_inflights--;
 }
 
 static void
@@ -344,22 +353,22 @@ common_bs_cb(void *arg, struct spdk_blob_store *bs, int rc)
 {
 	struct common_cp_arg *cp_arg = arg;
 
-	D_ASSERT(!cp_arg->cca_done);
+	D_ASSERT(cp_arg->cca_inflights == 1);
 	D_ASSERT(cp_arg->cca_rc == 0);
 	D_ASSERT(cp_arg->cca_bs == NULL);
-	cp_arg->cca_done = true;
+	cp_arg->cca_inflights--;
 	cp_arg->cca_rc = rc;
 	cp_arg->cca_bs = bs;
 }
 
-static void
-xs_poll_completion(struct eio_xs_context *ctxt, struct common_cp_arg *cp_arg)
+void
+xs_poll_completion(struct eio_xs_context *ctxt, unsigned int *inflights)
 {
 	size_t count;
 
 	/* Wait for the completion callback done */
-	if (cp_arg != NULL) {
-		while (!cp_arg->cca_done)
+	if (inflights != NULL) {
+		while (*inflights != 0)
 			eio_nvme_poll(ctxt);
 	}
 
@@ -410,12 +419,12 @@ load_blobstore(struct eio_xs_context *ctxt, struct spdk_bdev *bdev,
 		memcpy(bs_opts.bstype.bstype, bs_uuid,
 		       SPDK_BLOBSTORE_TYPE_LENGTH);
 
-	memset(&cp_arg, 0, sizeof(cp_arg));
+	common_prep_arg(&cp_arg);
 	if (create)
 		spdk_bs_init(bs_dev, &bs_opts, common_bs_cb, &cp_arg);
 	else
 		spdk_bs_load(bs_dev, &bs_opts, common_bs_cb, &cp_arg);
-	xs_poll_completion(ctxt, &cp_arg);
+	xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 
 	if (cp_arg.cca_rc != 0) {
 		D_DEBUG(bs_uuid == NULL ? DB_IO : DLOG_ERR,
@@ -433,9 +442,9 @@ unload_blobstore(struct eio_xs_context *ctxt, struct spdk_blob_store *bs)
 {
 	struct common_cp_arg cp_arg;
 
-	memset(&cp_arg, 0, sizeof(cp_arg));
+	common_prep_arg(&cp_arg);
 	spdk_bs_unload(bs, common_init_cb, &cp_arg);
-	xs_poll_completion(ctxt, &cp_arg);
+	xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 
 	if (cp_arg.cca_rc != 0)
 		D_ERROR("failed to unload blobstore %d\n", cp_arg.cca_rc);
@@ -459,8 +468,15 @@ create_eio_bdev(struct eio_xs_context *ctxt, struct spdk_bdev *bdev)
 	}
 	D_INIT_LIST_HEAD(&d_bdev->eb_link);
 
+	/*
+	 * TODO: Let's always create new blobstore each time before the
+	 * blob deletion & per-server metadata is done, otherwise, the
+	 * blobstore will be filled up after many rounds of tests.
+	 */
+	bs = NULL;
+
 	/* Try to load blobstore without specifying 'bstype' first */
-	bs = load_blobstore(ctxt, bdev, NULL, false);
+	/* bs = load_blobstore(ctxt, bdev, NULL, false); */
 	if (bs == NULL) {
 		/* Create blobstore if it wasn't created before */
 		uuid_generate(bs_uuid);
@@ -686,8 +702,6 @@ init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
 void
 eio_xsctxt_free(struct eio_xs_context *ctxt)
 {
-	struct common_cp_arg	cp_arg;
-
 	/* NVMe context setup was skipped */
 	if (ctxt == NULL)
 		return;
@@ -707,6 +721,8 @@ eio_xsctxt_free(struct eio_xs_context *ctxt)
 
 	if (nvme_glb.ed_init_thread != NULL) {
 		if (nvme_glb.ed_init_thread == ctxt->exc_thread) {
+			struct common_cp_arg	cp_arg;
+
 			/*
 			 * The xstream initialized SPDK env will have to
 			 * wait for all other xstreams finalized first.
@@ -717,13 +733,13 @@ eio_xsctxt_free(struct eio_xs_context *ctxt)
 
 			fini_eio_bdevs(ctxt);
 
-			memset(&cp_arg, 0, sizeof(cp_arg));
+			common_prep_arg(&cp_arg);
 			spdk_copy_engine_finish(common_fini_cb, &cp_arg);
-			xs_poll_completion(ctxt, &cp_arg);
+			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 
-			memset(&cp_arg, 0, sizeof(cp_arg));
+			common_prep_arg(&cp_arg);
 			spdk_bdev_finish(common_fini_cb, &cp_arg);
-			xs_poll_completion(ctxt, &cp_arg);
+			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 
 			nvme_glb.ed_init_thread = NULL;
 
@@ -860,16 +876,16 @@ eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id)
 		}
 
 		/* Initialize all types of devices */
-		memset(&cp_arg, 0, sizeof(cp_arg));
+		common_prep_arg(&cp_arg);
 		spdk_bdev_initialize(common_init_cb, &cp_arg);
-		xs_poll_completion(ctxt, &cp_arg);
+		xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 
 		if (cp_arg.cca_rc != 0) {
 			rc = cp_arg.cca_rc;
 			D_ERROR("failed to init bdevs, rc:%d\n", rc);
-			memset(&cp_arg, 0, sizeof(cp_arg));
+			common_prep_arg(&cp_arg);
 			spdk_copy_engine_finish(common_fini_cb, &cp_arg);
-			xs_poll_completion(ctxt, &cp_arg);
+			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 			goto out;
 		}
 

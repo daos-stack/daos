@@ -137,6 +137,7 @@ struct eio_desc {
 /* eio_xstream.c */
 extern unsigned int	eio_chk_sz;
 extern unsigned int	eio_chk_cnt_max;
+void xs_poll_completion(struct eio_xs_context *ctxt, unsigned int *inflights);
 
 /* eio_buffer.c */
 void dma_buffer_destroy(struct eio_dma_buffer *buf);
