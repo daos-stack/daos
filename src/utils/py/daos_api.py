@@ -27,6 +27,7 @@ import threading
 import time
 import uuid
 import json
+import random
 
 # DAOS api C structures
 class RankList(ctypes.Structure):
@@ -39,6 +40,14 @@ class IOV(ctypes.Structure):
                 ("iov_buf_len", ctypes.c_size_t),
                 ("iov_len", ctypes.c_size_t)]
 
+class SGL(ctypes.Structure):
+    _fields_ = [("sg_nr", ctypes.c_uint32),
+                ("sg_nr_out", ctypes.c_uint32),
+                ("sg_iovs", ctypes.POINTER(IOV))]
+
+class EpochRange(ctypes.Structure):
+    _fields_ = [("epr_lo", ctypes.c_uint64),
+                ("epr_hi", ctypes.c_uint64)]
 
 class TargetInfo(ctypes.Structure):
     """ Represents info about a given target """
@@ -52,7 +61,11 @@ class Info(ctypes.Structure):
     _fields_ = [("pi_uuid", ctypes.c_ubyte * 16),
                 ("pi_ntargets", ctypes.c_uint32),
                 ("pi_ndisabled", ctypes.c_uint32),
-                ("pi_mode", ctypes.c_uint),
+                ("pi_map_ver", ctypes.c_uint32),
+                ("pi_uid", ctypes.c_uint32),
+                ("pi_gid", ctypes.c_uint32),
+                ("pi_mode", ctypes.c_uint32),
+                ("pi_leader", ctypes.c_uint32),
                 ("pi_space", ctypes.c_int),
                 ("pi_rebuild_st", ctypes.c_ubyte * 32)]
 
@@ -73,6 +86,26 @@ class DaosEvent(ctypes.Structure):
     _fields_ = [("ev_error", ctypes.c_int),
                 ("ev_private", ctypes.c_ulonglong * 19),
                 ("ev_debug", ctypes.c_ulonglong)]
+
+class DaosObjId(ctypes.Structure):
+    _fields_ = [("lo", ctypes.c_uint64),
+                ("hi", ctypes.c_uint64)]
+
+class CheckSum(ctypes.Structure):
+    _fields_ = [("cs_type", ctypes.c_uint),
+                ("cs_len", ctypes.c_ushort),
+                ("cs_buf_len", ctypes.c_ushort),
+                ("cs_csum", ctypes.c_void_p)]
+
+class DaosIODescriptor(ctypes.Structure):
+    _fields_ = [("iod_name", IOV),
+                ("iod_kcsum", CheckSum),
+                ("iod_type", ctypes.c_int),
+                ("iod_size", ctypes.c_uint64),
+                ("iod_nr", ctypes.c_uint32),
+                ("iod_recxs", ctypes.c_void_p),
+                ("iod_csums", ctypes.POINTER(CheckSum)),
+                ("iod_eprs", ctypes.c_void_p)]
 
 def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
     """ Wrapper function that calls the daos C code.  This can
@@ -165,6 +198,13 @@ def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
     # cleanup
     qfunc = context.get_function('destroy-eq')
     qfunc(ctypes.byref(qhandle))
+
+def create_oid(context):
+    """ generate a random oid """
+    func = context.get_function('generate-oid')
+    func.restype = DaosObjId
+    c_oid = func(1, 0, 0);
+    return c_oid
 
 def c_uuid_to_str(uuid):
     """ utility function to convert a C uuid into a standard string format """
@@ -471,6 +511,136 @@ class DaosPool(object):
         return (ctypes.c_uint32 * len(pylist))(*pylist)
 
 
+class IORequest(object):
+    """ Python object that centralizes details about an I/O """
+
+    def __init__(self, context, coh, oid):
+        self.context = context
+        self.coh = coh
+
+        if oid is None:
+            # create a new object
+            self.oid = create_oid(self.context)
+        else:
+            self.oid = oid
+
+        # 1 is DAOS_IOD_SINGLE from daos_types.h
+        self.io_type = ctypes.c_int(1)
+
+        self.sgl = SGL()
+
+        self.iod = DaosIODescriptor()
+        ctypes.memset(ctypes.byref(self.iod.iod_kcsum), 0, 16)
+
+        self.epoch_range = EpochRange()
+        self.oh = ctypes.c_uint64(0)
+
+        cs = CheckSum()
+        cs.cs_sum = ctypes.pointer(ctypes.create_string_buffer(32))
+        cs.cs_buf_len = 32
+        cs.cs_len = 0
+        self.iod.iod_csums = ctypes.pointer(cs)
+
+        func = self.context.get_function('open-obj')
+
+        c_epoch = ctypes.c_uint64(0)
+        c_mode = ctypes.c_uint(4)
+        rc = func(self.coh, self.oid, c_epoch, c_mode, ctypes.byref(self.oh),
+                  None)
+        if rc != 0:
+            raise ValueError("Object open returned non-zero. RC: {0}"
+                             .format(rc))
+
+    def __del__(self):
+        """ cleanup this request """
+        func = self.context.get_function('close-obj')
+        rc = func(self.oh, None)
+        if rc != 0:
+            raise ValueError("Object close returned non-zero. RC: {0}"
+                             .format(rc))
+
+    def single_insert(self, dkey, akey, value, size, epoch):
+
+        # put the data into the scatter gather list
+        sgl_iov = IOV()
+        sgl_iov.iov_len = size
+        sgl_iov.iov_buf_len = size
+        sgl_iov.iov_buf = ctypes.cast(value, ctypes.c_void_p)
+        self.sgl.sg_iovs = ctypes.pointer(sgl_iov)
+        self.sgl.sg_nr = 1
+        self.sgl.sg_nr_out = 1
+
+        self.epoch_range.epr_lo = epoch
+        self.epoch_range.epr_hi = ~0
+
+        # setup the descriptor
+        self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
+        self.iod.iod_name.iov_buf_len = ctypes.sizeof(akey)
+        self.iod.iod_name.iov_len = ctypes.sizeof(akey)
+        self.iod.iod_type = 1
+        self.iod.iod_size = size
+        self.iod.iod_nr = 1
+        self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
+                                        ctypes.c_void_p)
+
+        # now do it
+        func = self.context.get_function('update-obj')
+
+        dkey_iov = IOV()
+        dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
+        dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
+        dkey_iov.iov_len = ctypes.sizeof(dkey)
+
+        rc = func(self.oh, self.epoch_range.epr_lo, ctypes.byref(dkey_iov),
+                  self.iod.iod_nr,
+                  ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
+        if rc != 0:
+            raise ValueError("Object update returned non-zero. RC: {0}"
+                             .format(rc))
+
+    def single_fetch(self, dkey, akey, size, epoch):
+
+        sgl_iov = IOV()
+        sgl_iov.iov_len = ctypes.c_size_t(size)
+        sgl_iov.iov_buf_len = ctypes.c_size_t(size)
+
+        #buf = (ctypes.c_ubyte * size)(0)
+        buf = ctypes.create_string_buffer(size)
+        sgl_iov.iov_buf = ctypes.cast(buf, ctypes.c_void_p)
+        self.sgl.sg_iovs = ctypes.pointer(sgl_iov)
+        self.sgl.sg_nr = 1
+        self.sgl.sg_nr_out = 1
+
+        self.epoch_range.epr_lo = epoch
+        self.epoch_range.epr_hi = ~0
+
+        # setup the descriptor
+        self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
+        self.iod.iod_name.iov_buf_len = ctypes.sizeof(akey)
+        self.iod.iod_name.iov_len = ctypes.sizeof(akey)
+        self.iod.iod_type = 1
+        self.iod.iod_size = ctypes.c_size_t(size)
+        self.iod.iod_nr = 1
+        self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
+                                        ctypes.c_void_p)
+
+        # now do it
+        func = self.context.get_function('fetch-obj')
+
+        dkey_iov = IOV()
+        dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
+        dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
+        dkey_iov.iov_len = ctypes.sizeof(dkey)
+
+        rc = func(self.oh, self.epoch_range.epr_lo, ctypes.byref(dkey_iov),
+                  self.iod.iod_nr,
+                  ctypes.byref(self.iod), ctypes.byref(self.sgl), None, None)
+        if rc != 0:
+            raise ValueError("Object fetch returned non-zero. RC: {0}"
+                             .format(rc))
+        return buf
+
+
 class DaosContainer(object):
     """ A python object representing a DAOS container."""
 
@@ -480,6 +650,7 @@ class DaosContainer(object):
         self.context = context
 
         # ignoring caller parameters for now
+
         self.uuid = (ctypes.c_ubyte * 1)()
         self.coh = ctypes.c_uint64(0)
         self.poh = ctypes.c_uint64(0)
@@ -553,8 +724,8 @@ class DaosContainer(object):
         if cuuid is not None:
             c_uuid(cuuid, self.uuid)
 
-        # Note that 1 is read-only
-        c_flags = ctypes.c_uint(1)
+        # Note that 2 is read/write
+        c_flags = ctypes.c_uint(2)
         if flags is not None:
             c_flags = ctypes.c_uint(flags)
 
@@ -623,6 +794,74 @@ class DaosContainer(object):
             t.start()
         return None
 
+    def get_new_epoch(self):
+        """ get the next epoch for this container """
+
+        # container should be  in the open state
+        if self.coh == 0:
+            raise ValueError("Container needs to be open.")
+
+        epoch = 0
+        c_epoch = ctypes.c_uint64(epoch)
+
+        func = self.context.get_function('get-epoch')
+        rc = func(self.coh, ctypes.byref(c_epoch), None, None)
+        if rc != 0:
+            raise ValueError("Epoch hold returned non-zero. RC: {0}"
+                             .format(rc))
+        return c_epoch.value;
+
+    def commit_epoch(self, epoch):
+        """ close out an epoch that is done being modified """
+
+        # container should be  in the open state
+        if self.coh == 0:
+            raise ValueError("Container needs to be open.")
+
+        func = self.context.get_function('commit-epoch')
+        rc = func(self.coh, epoch, None, None)
+        if rc != 0:
+            raise ValueError("Epoch commit returned non-zero. RC: {0}"
+                             .format(rc))
+
+    def write_an_obj(self, thedata, size, dkey, akey, oid=None):
+        """ create a really simple obj in this container and commit """
+
+        # container should be  in the open state
+        if self.coh == 0:
+            raise ValueError("Container needs to be open.")
+
+        epoch = self.get_new_epoch()
+
+        c_value = ctypes.create_string_buffer(thedata)
+        c_size = ctypes.c_size_t(size)
+        c_dkey = ctypes.create_string_buffer(dkey)
+        c_akey = ctypes.create_string_buffer(akey)
+        c_epoch = ctypes.c_uint64(epoch)
+
+        # oid can be None in which case a new one is created
+        ioreq = IORequest(self.context, self.coh, oid)
+        ioreq.single_insert(c_dkey, c_akey, c_value, c_size, c_epoch)
+
+        self.commit_epoch(c_epoch)
+        return ioreq.oid, c_epoch.value
+
+    def read_an_obj(self, size, dkey, akey, oid, epoch):
+        """ create a really simple obj in this container and commit """
+
+        # container should be  in the open state
+        if self.coh == 0:
+            raise ValueError("Container needs to be open.")
+
+        c_size = ctypes.c_size_t(size)
+        c_dkey = ctypes.create_string_buffer(dkey)
+        c_akey = ctypes.create_string_buffer(akey)
+        c_epoch = ctypes.c_uint64(epoch)
+
+        ioreq = IORequest(self.context, self.coh, oid)
+        buf = ioreq.single_fetch(c_dkey, c_akey, size, c_epoch)
+        return buf
+
 class DaosServer(object):
     """Represents a DAOS Server"""
 
@@ -652,11 +891,18 @@ class DaosContext(object):
 
         self.libdaos = ctypes.CDLL(path+"libdaos.so.0.0.2",
                                    mode=ctypes.DEFAULT_MODE)
+        ctypes.CDLL(path+"libdaos_common.so",
+                    mode=ctypes.RTLD_GLOBAL)
+
+        self.libtest = ctypes.CDLL(path+"libdaos_tests.so",
+                                   mode=ctypes.DEFAULT_MODE)
         self.libdaos.daos_init()
         # Note: action-subject format
         self.ftable = {
              'add-target'     : self.libdaos.daos_pool_tgt_add,
              'close-cont'     : self.libdaos.daos_cont_close,
+             'close-obj'      : self.libdaos.daos_obj_close,
+             'commit-epoch'   : self.libdaos.daos_epoch_commit,
              'connect-pool'   : self.libdaos.daos_pool_connect,
              'convert-global' : self.libdaos.daos_pool_global2local,
              'covert-local'   : self.libdaos.daos_pool_local2global,
@@ -670,16 +916,22 @@ class DaosContext(object):
              'evict-client'   : self.libdaos.daos_pool_evict,
              'exclude-target' : self.libdaos.daos_pool_exclude,
              'extend-pool'    : self.libdaos.daos_pool_extend,
+             'fetch-obj'      : self.libdaos.daos_obj_fetch,
+             'generate-oid'   : self.libtest.dts_oid_gen,
+             'get-epoch'      : self.libdaos.daos_epoch_hold,
              'init-event'     : self.libdaos.daos_event_init,
+             'generate-oid'   : self.libtest.dts_oid_gen,
              'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
              'kill-target'    : self.libdaos.daos_pool_exclude_out,
              'open-cont'      : self.libdaos.daos_cont_open,
+             'open-obj'       : self.libdaos.daos_obj_open,
              'poll-eq'        : self.libdaos.daos_eq_poll,
              'query-cont'     : self.libdaos.daos_cont_query,
              'query-pool'     : self.libdaos.daos_pool_query,
              'query-target'   : self.libdaos.daos_pool_target_query,
              'stop-service'   : self.libdaos.daos_pool_svc_stop,
-             'test-event'     : self.libdaos.daos_event_test
+             'test-event'     : self.libdaos.daos_event_test,
+             'update-obj'     : self.libdaos.daos_obj_update
         }
 
     def __del__(self):
@@ -716,11 +968,8 @@ if __name__ == '__main__':
         print ("handle before connect {0}\n".format(POOL.handle))
 
         POOL.connect(1 << 1)
-        #POOL.connect(1 << 1, rubbish)
-        print ("Main past connect\n");
 
         print ("Main: handle after connect {0}\n".format(POOL.handle))
-        #time.sleep(5)
 
         CONTAINER = DaosContainer(CONTEXT)
         CONTAINER.create(POOL.handle)
@@ -740,8 +989,39 @@ if __name__ == '__main__':
         CONTAINER.query()
         print("Epoch highest committed: {}".format(CONTAINER.info.es_hce))
 
+        thedata = "a string that I want to stuff into an object"
+        size = 45
+        dkey = "this is the dkey"
+        akey = "this is the akey"
+
+        oid, epoch = CONTAINER.write_an_obj(thedata, size, dkey, akey)
+        print("data write finished with epoch {}".format(epoch))
+
+        time.sleep(5)
+
+        thedata2 = CONTAINER.read_an_obj(size, dkey, akey, oid, epoch)
+        print(repr(thedata2.value))
+
+        thedata3 = "a different string that I want to stuff into an object"
+        size = 55
+        dkey2 = "this is the dkey"
+        akey2 = "this is the akey"
+
+        oid2, epoch2 = CONTAINER.write_an_obj(thedata3, size, dkey2, akey2, oid)
+        print("data write finished, in epoch {}".format(epoch2))
+
+        time.sleep(5)
+
+        thedata4 = CONTAINER.read_an_obj(size, dkey2, akey2, oid2, epoch2)
+        print(repr(thedata4.value))
+
+        thedata5 = CONTAINER.read_an_obj(size, dkey2, akey2, oid, epoch)
+        print(repr(thedata5.value))
+
         CONTAINER.close()
         print("container closed {}".format(CONTAINER.get_uuid_str()))
+
+        time.sleep(15)
 
         CONTAINER.destroy(1)
 
