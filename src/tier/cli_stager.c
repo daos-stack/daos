@@ -38,7 +38,7 @@
 #include "cli_internal.h"
 #include <daos_errno.h>
 #include <daos_task.h>
-#include "../client/task_internal.h"
+#include "../client/api/task_internal.h"
 
 struct tier_fetch_arg {
 	crt_rpc_t	*rpc;

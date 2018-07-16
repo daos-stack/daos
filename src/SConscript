@@ -49,10 +49,7 @@ def scons():
     # Build multi-tier support
     SConscript('tier/SConscript')
 
-    # Build addons
-    SConscript('addons/SConscript')
-
-    # Build DAOS client library
+    # Build DAOS client libraries
     SConscript('client/SConscript')
 
     # Then the DAOS I/O server executable
@@ -63,9 +60,6 @@ def scons():
 
     # Build test
     SConscript('tests/SConscript')
-
-    # Build DFS & Fuse Client
-    SConscript('dfs/SConscript')
 
 if __name__ == "SCons.Script":
     scons()

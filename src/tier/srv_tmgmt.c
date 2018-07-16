@@ -29,8 +29,8 @@
 #include <daos/tier.h>
 #include <daos.h>
 #include "rpc.h"
-#include "../client/client_internal.h"
-#include "../client/task_internal.h"
+#include "../client/api/client_internal.h"
+#include "../client/api/task_internal.h"
 #include "srv_internal.h"
 #include <daos_srv/daos_ct_srv.h>
 

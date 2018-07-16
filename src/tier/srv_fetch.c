@@ -39,8 +39,8 @@
 #include <daos/container.h>
 #include <daos/object.h>
 #include <daos/task.h>
-#include "../client/client_internal.h"
-#include "../client/task_internal.h"
+#include "../client/api/client_internal.h"
+#include "../client/api/task_internal.h"
 
 /* holds extents as returned by VOS. plus spc for a checksum */
 struct tier_ext_rec {

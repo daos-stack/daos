@@ -1,13 +1,12 @@
-"""Build addons"""
+"""Build DAOS Addons"""
 
 def scons():
     """Execute build"""
-
     Import('env', 'prereqs')
 
-    env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
+    denv.AppendUnique(LIBPATH=[Dir('.')])
     prereqs.require(denv, 'ompi')
 
     addons_tgts = denv.SharedObject(['dac_array.c', 'dac_hl.c'])
