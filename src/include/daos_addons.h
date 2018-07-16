@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2016 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,14 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * DAOS ADDONS
+ * \file
+ *
+ * DAOS addons
+ *
+ * The DAOS addons include APIs that are built on top of the existing DAOS
+ * API. No internal library functionality is used. The addons include a
+ * simplified DAOS object API and a DAOS Array object abstraction on top of the
+ * DAOS Key-Array object.
  */
 
 #ifndef __DAOS_ADDONS_H__
@@ -37,17 +44,12 @@ extern "C" {
  * existed before it will be overwritten (punched first if not previously an
  * atomic value) with the new atomic value described by the sgl.
  *
- * \param oh	[IN]	Object open handle.
- *
- * \param epoch	[IN]	Epoch for the update.
- *
- * \param key	[IN]	key associated with the update operation.
- *
- * \param buf_size [IN] Size of the buffer to be inserted as an atomic val.
- *
- * \param buf	[IN]	pointer to user buffer of the atomic value.
- *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	oh	Object open handle.
+ * \param[in]	epoch	Epoch for the update.
+ * \param[in]	key	Key associated with the update operation.
+ * \param[in]	size	Size of the buffer to be inserted as an atomic val.
+ * \param[in]	buf	Pointer to user buffer of the atomic value.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -61,24 +63,19 @@ extern "C" {
  */
 int
 daos_kv_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
-	    daos_size_t buf_size, const void *buf, daos_event_t *ev);
+	    daos_size_t size, const void *buf, daos_event_t *ev);
 
 /**
  * Fetch value of a key.
  *
- * \param oh	[IN]	Object open handle.
- *
- * \param epoch	[IN]	Epoch for the read.
- *
- * \param key	[IN]	key associated with the update operation.
- *
- * \param buf_size [IN/OUT]
- *			Size of the user buf. if the size is unknown (set to
- *			DAOS_REC_ANY), the actual size of the value is returned.
- *
- * \param buf	[IN]	pointer to user buffer. If NULL, only size is returned.
- *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	oh	Object open handle.
+ * \param[in]	epoch	Epoch for the read.
+ * \param[in]	key	key associated with the update operation.
+ * \param[in,out]
+ *		size	[in]: Size of the user buf. if the size is unknown, set
+ *			to DAOS_REC_ANY). [out]: The actual size of the value.
+ * \param[in]	buf	Pointer to user buffer. If NULL, only size is returned.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -92,20 +89,17 @@ daos_kv_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
  */
 int
 daos_kv_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
-	    daos_size_t *buf_size, void *buf, daos_event_t *ev);
+	    daos_size_t *size, void *buf, daos_event_t *ev);
 
 /**
  * Remove a Key and it's value from the KV store
  *
- * \param oh	[IN]	Object open handle.
- *
- * \param epoch	[IN]	Epoch for the update. It is ignored if epoch range is
+ * \param[in]	oh	Object open handle.
+ * \param[in]	epoch	Epoch for the update. It is ignored if epoch range is
  *			provided for each extent through the vector I/O
  *			descriptor (i.e. \a iods[]::vd_eprs[]).
- *
- * \param key	[IN]	key to be punched/removed.
- *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	key	Key to be punched/removed.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -133,20 +127,16 @@ typedef struct {
  * Fetch Multiple Dkeys in a single call. Behaves the same as daos_obj_fetch but
  * for multiple dkeys.
  *
- * \param oh	[IN]	Object open handle.
- *
- * \param epoch	[IN]	Epoch for the update. It is ignored if epoch range is
+ * \param[in]	oh	Object open handle.
+ * \param[in]	epoch	Epoch for the update. It is ignored if epoch range is
  *			provided for each extent through the vector I/O
  *			descriptor (i.e. \a iods[]::vd_eprs[]).
- *
- * \param num_dkeys
- *		[IN]	Number of dkeys in \a io_array.
- *
- * \param daos_dkey_io_t *io_array [IN\OUT]
+ * \param[in]	nr	Number of dkeys in \a io_array.
+ * \param[in,out]
+ *		io_array
  *			Array of io descriptors for all dkeys, which describes
  *			another array of iods for akeys within each dkey.
- *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -160,27 +150,22 @@ typedef struct {
  */
 int
 daos_obj_fetch_multi(daos_handle_t oh, daos_epoch_t epoch,
-		     unsigned int num_dkeys, daos_dkey_io_t *io_array,
+		     unsigned int nr, daos_dkey_io_t *io_array,
 		     daos_event_t *ev);
 
 /**
  * Update/Insert/Punch Multiple Dkeys in a single call. Behaves the same as
  * daos_obj_fetch but for multiple dkeys.
  *
- * \param oh	[IN]	Object open handle.
- *
- * \param epoch	[IN]	Epoch for the update. It is ignored if epoch range is
+ * \param[in]	oh	Object open handle.
+ * \param[in]	epoch	Epoch for the update. It is ignored if epoch range is
  *			provided for each extent through the vector I/O
  *			descriptor (i.e. \a iods[]::vd_eprs[]).
- *
- * \param num_dkeys
- *		[IN]	Number of dkeys in \a io_array.
- *
- * \param daos_dkey_io_t *io_array [IN\OUT]
+ * \param[in]	nr	Number of dkeys in \a io_array.
+ * \param[in]	io_array
  *			Array of io descriptors for all dkeys, which describes
  *			another array of iods for akeys within each dkey.
- *
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -194,7 +179,7 @@ daos_obj_fetch_multi(daos_handle_t oh, daos_epoch_t epoch,
  */
 int
 daos_obj_update_multi(daos_handle_t oh, daos_epoch_t epoch,
-		      unsigned int num_dkeys, daos_dkey_io_t *io_array,
+		      unsigned int nr, daos_dkey_io_t *io_array,
 		      daos_event_t *ev);
 
 /** Range of contiguous records */
@@ -225,17 +210,18 @@ typedef struct {
  * can force an error in this case by checking for object existence by reading
  * the metadata. But this adds extra overhead).
  *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	Object ID.
- * \param epoch	[IN]	Epoch to open object.
- * \param cell_size [IN]
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object ID.
+ * \param[in]	epoch	Epoch to open object.
+ * \param[in]	cell_size
  *			Record size of the array.
- * \param chunk_size [IN]
+ * \param[in]	chunk_size
  *			Contiguous bytes to store per DKey before moving to a
  *			different dkey.
- * \param oh	[OUT]	Returned object open handle.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[out]	oh	Returned array object open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
+ *
  * \return		These values will be returned by \a ev::ev_error in
  *			non-blocking mode:
  *			0		Success
@@ -256,18 +242,19 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  * Open an Array object. If the array has not been created before (no array
  * metadata exists), this will fail.
  *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	Object ID.
- * \param epoch	[IN]	Epoch to open object.
- * \param mode	[IN]	Open mode: DAOS_OO_RO/RW/EXCL/IO_RAND/IO_SEQ
- * \param cell_size [OUT]
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object ID.
+ * \param[in]	epoch	Epoch to open object.
+ * \param[in]	mode	Open mode: DAOS_OO_RO/RW/EXCL/IO_RAND/IO_SEQ
+ * \param[out]	cell_size
  *			Record size of the array.
- * \param chunk_size [OUT]
+ * \param[out]	chunk_size
  *			Contiguous bytes to store per DKey before moving to a
  *			differen dkey.
- * \param oh	[OUT]	Returned object open handle.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[out]	oh	Returned array object open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
+ *
  * \return		These values will be returned by \a ev::ev_error in
  *			non-blocking mode:
  *			0		Success
@@ -287,8 +274,8 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 /**
  * Close an opened array object.
  *
- * \param oh	[IN]	Array object open handle.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -302,17 +289,16 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
 /**
  * Read data from an array object.
  *
- * \param oh	[IN]	Array object open handle.
- * \param epoch	[IN]	Epoch for the read.
- * \param iod	[IN]	IO descriptor of ranges to read from the array.
- * \param sgl   [IN/OUT]
- *			A scatter/gather list (sgl) to the store array data.
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	epoch	Epoch for the read.
+ * \param[in]	iod	IO descriptor of ranges to read from the array.
+ * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the indiviual range
  *			sizes as long as the total size does. User allocates the
  *			buffer(s) and sets the length of each buffer.
- * \param csums	[OUT]	Array of checksums for each buffer in the sgl.
+ * \param[in]	csums	Array of checksums for each buffer in the sgl.
  *			This is optional (pass NULL to ignore).
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -333,15 +319,15 @@ daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
 /**
  * Write data to an array object.
  *
- * \param oh	[IN]	Array object open handle.
- * \param epoch	[IN]	Epoch for the write.
- * \param iod	[IN]	IO descriptor of ranges to write to the array.
- * \param sgl   [IN]	A scatter/gather list (sgl) to the store array data.
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	epoch	Epoch for the write.
+ * \param[in]	iod	IO descriptor of ranges to write to the array.
+ * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the indiviual range
  *			sizes as long as the total size does.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
- * \param csums	[IN]	Array of checksums for each buffer in the sgl.
+ * \param[in]	csums	Array of checksums for each buffer in the sgl.
  *			This is optional (pass NULL to ignore).
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -362,10 +348,10 @@ daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
 /**
  * Query the number of records in the array object.
  *
- * \param oh	[IN]	Array object open handle.
- * \param epoch	[IN]	Epoch for the query.
- * \param size	[OUT]	Returned array size (number of records).
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	epoch	Epoch for the query.
+ * \param[out]	size	Returned array size (number of records).
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		0 on Success, negative on failure.
@@ -380,10 +366,10 @@ daos_array_get_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t *size,
  * record at the corresponding size. This is NOT equivalent to an allocate.
  *
  *
- * \param oh	[IN]	Array object open handle.
- * \param epoch	[IN]	Epoch for the set_size.
- * \param size	[IN]	Size (number of records) to set array to.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	epoch	Epoch for the set_size.
+ * \param[in]	size	Size (number of records) to set array to.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		0 on Success, negative on failure.

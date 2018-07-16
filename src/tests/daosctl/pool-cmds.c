@@ -115,7 +115,7 @@ parse_pool_args_cb(int key, char *arg,
 		options->verbose = 1;
 		break;
 	case 'z':
-		parse_size(&(options->size), arg);
+		parse_size(arg, &(options->size));
 		break;
 	}
 	return 0;

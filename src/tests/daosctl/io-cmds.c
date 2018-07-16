@@ -152,7 +152,7 @@ parse_cont_args_cb(int key, char *arg,
 		options->server_group = arg;
 		break;
 	case 'z':
-		parse_size(&(options->size), arg);
+		parse_size(arg, &(options->size));
 		break;
 	}
 	return 0;

@@ -181,6 +181,7 @@ print_usage(int rank)
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("daos_test -g|--group GROUP\n");
 	print_message("daos_test -s|--svcn NSVCREPLICAS\n");
+	print_message("daos_test -E|--exclude TESTS\n");
 	print_message("daos_test -h|--help\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 }
@@ -329,6 +330,7 @@ main(int argc, char **argv)
 	test_arg_t	*arg;
 	char		 tests[64];
 	char		*sub_tests_str = NULL;
+	char		*exclude_str = NULL;
 	int		 sub_tests[1024];
 	int		 sub_tests_idx = 0;
 	int		 ntests = 0;
@@ -362,6 +364,7 @@ main(int argc, char **argv)
 		{"group",	required_argument,	NULL,	'g'},
 		{"svcn",	required_argument,	NULL,	's'},
 		{"subtests",	required_argument,	NULL,	'u'},
+		{"exclude",	required_argument,	NULL,	'E'},
 		{"help",	no_argument,		NULL,	'h'}
 	};
 
@@ -373,7 +376,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "ampcCdiAeoROg:s:u:hr",
+	while ((opt = getopt_long(argc, argv, "ampcCdiAeoROg:s:u:E:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
@@ -395,11 +398,18 @@ main(int argc, char **argv)
 		case 'u':
 			sub_tests_str = optarg;
 			break;
+		case 'E':
+			exclude_str = optarg;
+			break;
 		default:
 			daos_test_print(rank, "Unknown Option\n");
 			print_usage(rank);
 			goto exit;
 		}
+	}
+
+	if (strlen(tests) == 0) {
+		strcpy(tests , all_tests);
 	}
 
 	if (svc_nreplicas > ARRAY_SIZE(arg->pool.ranks) && rank == 0) {
@@ -461,6 +471,22 @@ main(int argc, char **argv)
 				end = -1;
 			}
 		}
+	}
+
+	/*Exclude tests mentioned in exclude list*/
+	/* Example: daos_test -E mpc */
+	if(exclude_str != NULL){
+		int old_idx , new_idx=0;
+		printf("\n==============");
+		printf("\n Excluding tests %s" , exclude_str);
+		printf("\n==============");
+		for (old_idx=0;tests[old_idx]!=0;old_idx++){
+			if (!strchr(exclude_str , tests[old_idx])){
+				tests[new_idx]=tests[old_idx];
+				new_idx++;
+			}
+		}
+		tests[new_idx]='\0';
 	}
 
 	nr_failed = run_specified_tests(tests, rank, size,

@@ -92,7 +92,7 @@ class DaosTest(object):
         daos_test_cmd = nodes.start_cmd_list(self.log_dir_base, testname, prefix)
         daos_test_cmd.add_param(parameters)
         daos_test_cmd.add_env_vars(self.setup_env())
-        daos_test_cmd.add_cmd("daos_test -mpceiACoRO")
+        daos_test_cmd.add_cmd("daos_test -E dr")
 
         daos_test_cmd.start_process()
         if daos_test_cmd.check_process():

@@ -523,7 +523,7 @@ rebuild_drop_obj(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
-	/* Set drop scan reply on all servers */
+	/* Set drop REBUILD_OBJECTS reply on all servers */
 	if (arg->myrank == 0)
 		daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_DROP_OBJ | DAOS_FAIL_ONCE,
@@ -1577,7 +1577,7 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_fail_all_replicas_before_rebuild, NULL, test_case_teardown},
 	{"REBUILD30: rebuild fail all replicas",
 	 rebuild_fail_all_replicas, NULL, test_case_teardown},
-	{"REBUILD30: multi-pools rebuild concurrently",
+	{"REBUILD31: multi-pools rebuild concurrently",
 	 multi_pools_rebuild_concurrently, NULL, test_case_teardown},
 };
 

@@ -67,7 +67,7 @@ parse_oid(char *oid_str, daos_obj_id_t *oid)
 }
 
 int
-parse_size(uint64_t *size, char *arg)
+parse_size(char *arg, uint64_t *size)
 {
 	char *unit;
 	*size = strtoul(arg, &unit, 0);
