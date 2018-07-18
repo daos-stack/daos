@@ -173,10 +173,8 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	arg->shards = shards;
 
 	while (!dbtree_is_empty(root->root_hdl)) {
-		ABT_mutex_lock(scan_arg->scan_lock);
 		rc = dbtree_iterate(root->root_hdl, false, rebuild_cont_iter_cb,
 				    arg);
-		ABT_mutex_unlock(scan_arg->scan_lock);
 		if (rc < 0)
 			D_GOTO(out, rc);
 
@@ -283,8 +281,8 @@ out:
 }
 
 static int
-rebuild_tgt_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
-		    daos_iov_t *val_iov, void *data)
+rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, daos_iov_t *key_iov,
+			     daos_iov_t *val_iov, void *data)
 {
 	struct rebuild_root *root;
 	struct rebuild_scan_arg *arg = data;
@@ -494,9 +492,10 @@ rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 
 	rc = rebuild_cont_obj_insert(tgt_root->root_hdl, co_uuid, oid, shard,
 				     NULL, 0, rebuild_obj_insert_cb);
-	ABT_mutex_unlock(arg->scan_lock);
-	if (rc <= 0)
+	if (rc <= 0) {
+		ABT_mutex_unlock(arg->scan_lock);
 		D_GOTO(out, rc);
+	}
 
 	if (rc == 1) {
 		/* Check if we need send the object list */
@@ -507,6 +506,7 @@ rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 		}
 		rc = 0;
 	}
+	ABT_mutex_unlock(arg->scan_lock);
 
 	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u cnt %d rc %d\n",
 		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, tgt_root->count, rc);
@@ -677,10 +677,13 @@ rebuild_scan_leader(void *data)
 	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
 		DP_UUID(rpt->rt_pool_uuid));
 
+	/* NB: only leading xstream will operate the scan tree since then,
+	 * so no need lock rebuild tgt tree.
+	 */
 	while (!dbtree_is_empty(arg->rebuild_tree_hdl)) {
 		/* walk through the rebuild tree and send the rebuild objects */
 		rc = dbtree_iterate(arg->rebuild_tree_hdl, false,
-				    rebuild_tgt_iter_cb, arg);
+				    rebuild_tgt_fini_obj_send_cb, arg);
 		if (rc)
 			D_GOTO(put_plmap, rc);
 	}

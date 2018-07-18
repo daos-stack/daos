@@ -351,7 +351,7 @@ rebuild_one_ult(void *arg)
 static int
 rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t oid,
 		  daos_key_t *dkey, daos_iod_t *iods, int iod_num,
-		  uuid_t *cookie, uint64_t *version)
+		  uuid_t cookie, uint64_t *version)
 {
 	struct rebuild_puller		*puller;
 	struct rebuild_tgt_pool_tracker *rpt = iter_arg->rpt;
@@ -364,19 +364,21 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t oid,
 	D_DEBUG(DB_REBUILD, "rebuild dkey %.*s iod nr %d\n",
 		(int)dkey->iov_buf_len, (char *)dkey->iov_buf, iod_num);
 
-	if (iods->iod_nr == 0)
+	if (iod_num == 0)
 		return 0;
 
 	D_ALLOC_PTR(rdone);
 	if (rdone == NULL)
 		return -DER_NOMEM;
 
-	rdone->ro_iod_num = iod_num;
 	D_ALLOC(rdone->ro_iods, iod_num * sizeof(*rdone->ro_iods));
 	if (rdone->ro_iods == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 	for (i = 0; i < iod_num; i++) {
 		int j;
+
+		if (iods[i].iod_nr == 0)
+			continue;
 
 		rc = daos_iov_copy(&rdone->ro_iods[i].iod_name,
 				   &iods[i].iod_name);
@@ -394,17 +396,22 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t oid,
 		for (j = 0; j < iods[i].iod_nr; j++)
 			rec_cnt += iods[i].iod_recxs[j].rx_nr;
 
-		D_DEBUG(DB_REBUILD, "rebuild akey %.*s nr %d size "
+		D_DEBUG(DB_REBUILD, "idx %d akey %.*s nr %d size "
 			DF_U64" type %d eph "DF_U64"/"DF_U64"\n",
-			(int)iods[i].iod_name.iov_len,
+			i, (int)iods[i].iod_name.iov_len,
 			(char *)iods[i].iod_name.iov_buf, iods[i].iod_nr,
 			iods[i].iod_size, iods[i].iod_type,
 			iods[i].iod_eprs->epr_lo, iods[i].iod_eprs->epr_hi);
+
+		rdone->ro_iod_num++;
 	}
+
+	if (rdone->ro_iod_num == 0)
+		D_GOTO(free, rc = 0);
 
 	rdone->ro_rec_cnt = rec_cnt;
 	rdone->ro_version = *version;
-	uuid_copy(rdone->ro_cookie, *cookie);
+	uuid_copy(rdone->ro_cookie, cookie);
 	idx = rebuild_get_nstream_idx(dkey);
 	puller = &rpt->rt_pullers[idx];
 	if (puller->rp_ult == NULL) {
@@ -446,7 +453,7 @@ free:
 		for (i = 0; i < iod_num; i++)
 			daos_iov_free(&iods[i].iod_name);  
 		memset(iods, 0, iod_num * sizeof(*iods));
-		uuid_clear(*cookie);
+		uuid_clear(cookie);
 		*version = 0;
 	}
 
@@ -458,10 +465,9 @@ free:
 
 static int
 rebuild_iod_pack(daos_iod_t *iod, daos_key_t *akey, daos_key_desc_t *kds,
-		 void **data, uuid_t *cookie, uint64_t *version)
+		 void **data, uuid_t cookie, uint64_t *version, int count)
 {
 	struct obj_enum_rec	*rec = *data;
-	unsigned int		count;
 	int			i;
 	int			rc = 0;
 
@@ -470,16 +476,13 @@ rebuild_iod_pack(daos_iod_t *iod, daos_key_t *akey, daos_key_desc_t *kds,
 	else
 		D_ASSERT(daos_key_match(&iod->iod_name, akey));
 
-	count = kds->kd_key_len / sizeof(*rec);
-	iod->iod_recxs = realloc(iod->iod_recxs,
-				(count + iod->iod_nr) *
-				 sizeof(*iod->iod_recxs));
+	iod->iod_recxs = realloc(iod->iod_recxs, (count + iod->iod_nr) *
+						 sizeof(*iod->iod_recxs));
 	if (iod->iod_recxs == NULL)
 		return -DER_NOMEM;
 
-	iod->iod_eprs = realloc(iod->iod_eprs,
-				(count + iod->iod_nr) *
-				 sizeof(*iod->iod_eprs));
+	iod->iod_eprs = realloc(iod->iod_eprs, (count + iod->iod_nr) *
+						sizeof(*iod->iod_eprs));
 	if (iod->iod_eprs == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
@@ -487,18 +490,25 @@ rebuild_iod_pack(daos_iod_t *iod, daos_key_t *akey, daos_key_desc_t *kds,
 	for (i = 0; i < count; i++) {
 		int idx = i + iod->iod_nr;
 
-		if (uuid_is_null(*cookie)) {
-			uuid_copy(*cookie, rec[i].rec_cookie);
+		if (uuid_is_null(cookie)) {
+			uuid_copy(cookie, rec[i].rec_cookie);
 			*version = rec[i].rec_version;
-		} else if (uuid_compare(*cookie, rec[i].rec_cookie) != 0 ||
+		} else if (uuid_compare(cookie, rec[i].rec_cookie) != 0 ||
 			   *version != rec[i].rec_version) {
 			D_DEBUG(DB_REBUILD, "different cookie or version"
 				DF_UUIDF" "DF_UUIDF" "DF_U64" != "DF_U64"\n",
-				DP_UUID(*cookie), DP_UUID(rec[i].rec_cookie),
+				DP_UUID(cookie), DP_UUID(rec[i].rec_cookie),
 				*version, rec[i].rec_version);
-			rc = 1;
 			break;
 		}
+
+		/* Iteration might return multiple single record with same
+		 * dkey/akeks but different epoch. But fetch & update only
+		 * allow 1 SINGLE type record per IOD. Let's put these
+		 * single records in different IODs.
+		 */
+		if (kds->kd_val_types == VOS_ITER_SINGLE && i > 0)
+			break;
 
 		if (iod->iod_size != 0 && iod->iod_size != rec[i].rec_size)
 			D_WARN("rsize "DF_U64" != "DF_U64" are different"
@@ -519,7 +529,6 @@ rebuild_iod_pack(daos_iod_t *iod, daos_key_t *akey, daos_key_desc_t *kds,
 			iod->iod_recxs[idx].rx_idx, iod->iod_recxs[idx].rx_nr,
 			iod->iod_eprs[idx].epr_lo, iod->iod_eprs[idx].epr_hi,
 			iod->iod_size);
-
 	}
 
 	if (kds->kd_val_types == VOS_ITER_RECX)
@@ -531,8 +540,9 @@ rebuild_iod_pack(daos_iod_t *iod, daos_key_t *akey, daos_key_desc_t *kds,
 
 	*data = &rec[i];
 
+	rc = i;
 	D_DEBUG(DB_REBUILD, "pack nr %d total %d cookie/version "DF_UUID"/"
-		DF_U64" rc %d\n", iod->iod_nr, count, DP_UUID(*cookie),
+		DF_U64" packed %d\n", iod->iod_nr, count, DP_UUID(cookie),
 		*version, rc);
 free:
 	if (rc < 0) {
@@ -550,7 +560,7 @@ rebuild_list_buf_process(daos_unit_oid_t oid, daos_epoch_t epoch,
 			 daos_iov_t *iov, daos_key_desc_t *kds,
 			 int num, struct rebuild_iter_obj_arg *iter_arg,
 			 daos_key_t *dkey, daos_iod_t *iods, int *iod_idx,
-			 uuid_t *cookie, uint64_t *version)
+			 uuid_t cookie, uint64_t *version)
 {
 	daos_key_t		akey = {0};
 	void			*ptr;
@@ -619,36 +629,47 @@ rebuild_list_buf_process(daos_unit_oid_t oid, daos_epoch_t epoch,
 			}
 		} else if (kds[i].kd_val_types == VOS_ITER_SINGLE ||
 			   kds[i].kd_val_types == VOS_ITER_RECX) {
+			int total_cnt = kds[i].kd_key_len /
+					sizeof(struct obj_enum_rec);
+			void *data = ptr;
+
 			if (dkey->iov_len == 0 || akey.iov_len == 0) {
 				D_ERROR("invalid list buf for kds %d\n", i);
 				rc = -DER_INVAL;
 				break;
 			}
 
-			while (1) {
-				void *data = ptr;
-
+			while (total_cnt > 0) {
+				int packed_cnt;
 				/* Because vos_obj_update only accept single
 				 * cookie/version, let's go through the records
 				 * to check different cookie and version, and
 				 * queue rebuild.
 				 */
-				rc = rebuild_iod_pack(&iods[*iod_idx],
-						      &akey, &kds[i], &data,
-						      cookie, version);
-				if (rc == 0)
-					/* Nice. No diff cookie and version */
+				packed_cnt = rebuild_iod_pack(&iods[*iod_idx],
+							&akey, &kds[i], &data,
+							cookie, version,
+							total_cnt);
+				if (packed_cnt < 0)
+					D_GOTO(out, rc = packed_cnt);
+
+				/* All records referred by this kds has been
+				 * packed, then it does not need to send
+				 * right away, might pack more next round.
+				 */
+				if (packed_cnt == total_cnt)
 					break;
 
-				if (rc != 1)
-					D_GOTO(out, rc);
-
+				/* Otherwise let's queue current iods, and go
+				 * next round.
+				 */
 				rc = rebuild_one_queue(iter_arg, oid, dkey,
 						       iods, *iod_idx + 1,
 						       cookie, version);
 				if (rc < 0)
 					D_GOTO(out, rc);
 				*iod_idx = 0;
+				total_cnt -= packed_cnt;
 			}
 		} else {
 			D_ERROR("unknow kds type %d\n", kds[i].kd_val_types);
@@ -737,7 +758,7 @@ rebuild_obj_ult(void *data)
 		iov.iov_len = size;
 		rc = rebuild_list_buf_process(arg->oid, epoch, &iov, kds, num,
 					      arg, &dkey, iods, &iod_idx,
-					      &cookie, &version);
+					      cookie, &version);
 		if (rc) {
 			D_ERROR("rebuild "DF_UOID" failed: %d\n",
 				DP_UOID(arg->oid), rc);
@@ -750,7 +771,7 @@ rebuild_obj_ult(void *data)
 
 	if (iods[0].iod_nr > 0) {
 		rc = rebuild_one_queue(arg, arg->oid, &dkey, iods,
-				       iod_idx + 1, &cookie, &version);
+				       iod_idx + 1, cookie, &version);
 		if (rc < 0)
 			D_GOTO(free, rc);
 	}
