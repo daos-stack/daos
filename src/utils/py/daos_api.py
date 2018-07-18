@@ -259,7 +259,7 @@ class DaosPool(object):
         """ setup the python pool object, not the real pool. """
         self.attached = 0
         self.context = context
-        self.uuid = (ctypes.c_ubyte * 1)()
+        self.uuid = (ctypes.c_ubyte * 1)(0)
         self.group = ctypes.create_string_buffer(b"not set")
         self.handle = ctypes.c_uint64(0)
         self.glob = None
@@ -304,6 +304,7 @@ class DaosPool(object):
                       c_whatever, c_size, ctypes.byref(self.svc),
                       self.uuid, None)
             if rc != 0:
+                self.uuid = (ctypes.c_ubyte * 1)(0)
                 raise ValueError("Pool create returned non-zero. RC: {0}"
                                  .format(rc))
             else:
@@ -749,7 +750,7 @@ class DaosContainer(object):
 
         # ignoring caller parameters for now
 
-        self.uuid = (ctypes.c_ubyte * 1)()
+        self.uuid = (ctypes.c_ubyte * 1)(0)
         self.coh = ctypes.c_uint64(0)
         self.poh = ctypes.c_uint64(0)
         self.info = ContInfo()
@@ -776,6 +777,7 @@ class DaosContainer(object):
         if cb_func == None:
             rc = func(self.poh, self.uuid, None)
             if rc != 0:
+                self.uuid = (ctypes.c_ubyte * 1)(0)
                 raise ValueError("Container create returned non-zero. RC: {0}"
                                  .format(rc))
         else:
