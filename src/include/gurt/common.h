@@ -61,6 +61,7 @@
 
 #include <gurt/errno.h>
 #include <gurt/debug.h>
+#include <gurt/fault_inject.h>
 
 /** @addtogroup GURT
  * @{

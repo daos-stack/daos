@@ -132,6 +132,12 @@ static int data_init(crt_init_options_t *opt)
 		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
 		       "is not set or set to 0\n");
 
+	if (opt) {
+		if (opt->cio_fault_inject)
+			d_fault_inject_enable();
+		else
+			d_fault_inject_disable();
+	}
 
 	gdata_init_flag = 1;
 exit:
@@ -200,6 +206,14 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	}
 
 	crt_setup_log_fac();
+
+	/* d_fault_inject_init() is reference counted */
+	rc = d_fault_inject_init();
+	if (rc != DER_SUCCESS) {
+		D_ERROR("d_fault_inject_init() failed, rc: %d.\n", rc);
+		D_GOTO(out, rc);
+	}
+
 	if (grpid != NULL) {
 		if (crt_validate_grpid(grpid) != 0) {
 			D_ERROR("grpid contains invalid characters "
@@ -363,6 +377,7 @@ unlock:
 out:
 	if (rc != 0) {
 		D_ERROR("crt_init failed, rc: %d.\n", rc);
+		d_fault_inject_fini();
 		d_log_fini();
 	}
 	return rc;
@@ -428,6 +443,7 @@ crt_plugin_fini(void)
 int
 crt_finalize(void)
 {
+	int local_rc;
 	int rc = 0;
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
@@ -435,7 +451,7 @@ crt_finalize(void)
 	if (!crt_initialized()) {
 		D_ERROR("cannot finalize before initializing.\n");
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-		D_GOTO(out, rc = -DER_UNINIT);
+		D_GOTO(direct_out, rc = -DER_UNINIT);
 	}
 	crt_lm_finalize();
 
@@ -498,6 +514,12 @@ crt_finalize(void)
 	}
 
 out:
+	/* d_fault_inject_fini() is reference counted */
+	local_rc = d_fault_inject_fini();
+	if (local_rc != 0)
+		D_ERROR("d_fault_inject_fini() failed, rc: %d\n", local_rc);
+
+direct_out:
 	if (rc == 0)
 		d_log_fini(); /* d_log_fini is reference counted */
 	else

@@ -408,7 +408,7 @@ rank_evict_cb(crt_rpc_t *rpc_req)
 	D_ASSERT(rc == 0 && corpc_req != NULL);
 	corpc_in = crt_req_get(corpc_req);
 	D_ASSERT(corpc_in != NULL);
-	corpc_in->magic = rand()%100;
+	corpc_in->magic = random()%100;
 
 	rc = crt_req_send(corpc_req, client_cb, NULL);
 	D_ASSERT(rc == 0);

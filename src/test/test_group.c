@@ -46,6 +46,7 @@
 #include <semaphore.h>
 
 #include <gurt/common.h>
+#include <gurt/fault_inject.h>
 #include <cart/api.h>
 #include "crt_fake_events.h"
 #include "test_group_rpc.h"
@@ -135,6 +136,12 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 		  e_reply);
 	e_reply->ret = 0;
 	e_reply->room_no = test_g.t_roomno++;
+	if (D_SHOULD_FAIL(5000)) {
+		e_reply->ret = -DER_MISC;
+		e_reply->room_no = -1;
+	} else {
+		D_DEBUG(DB_ALL, "No fault injected.\n");
+	}
 
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
@@ -349,7 +356,19 @@ check_in(crt_group_t *remote_group, int rank)
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
 			" rpc_req_input: %p\n", rpc_req_input);
-	D_ALLOC(buffer, 256);
+
+	/**
+	 * example to inject faults to D_ALLOC. To turn it on, edit the fault
+	 * config file: under fault id 1000, change the probability from 0 to
+	 * anything in [1, 100]
+	 */
+	if (D_SHOULD_FAIL(1000)) {
+		buffer = NULL;
+	} else {
+		D_ALLOC(buffer, 256);
+		D_ERROR("not injecting fault.\n");
+	}
+
 	D_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
 	snprintf(buffer,  256, "Guest %d", test_g.t_my_rank);
 	rpc_req_input->name = buffer;

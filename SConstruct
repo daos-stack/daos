@@ -116,7 +116,8 @@ def scons():
     SConscript('%s/test/SConscript' % arch_dir)
     SConscript('%s/scons_local/test_runner/SConscript' % arch_dir)
 
-    env.Install('$PREFIX/etc', ['utils/memcheck-cart.supp'])
+    env.Install('$PREFIX/etc', ['utils/memcheck-cart.supp',
+                                'utils/fault-inject-cart.yaml'])
 
     # Put this after all SConscript calls so that any imports they require can
     # be included.

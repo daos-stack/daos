@@ -1,0 +1,27 @@
+# fault injection configuration file
+seed: 123
+
+fault_config:
+  - id:           0
+    probability:  12
+    interval:     34
+    max_faults:   80
+
+  - id:           1
+    probability:  50
+    interval:     120
+    max_faults:   300
+
+  - id:           5000
+    probability:  100
+    interval:     1
+    max_faults:   2
+    err_code:     1011
+
+    # change the value of probability from 0 to anything in [1, 100] to turn on
+    # the A_ALLOC injection in test_group.c
+  - id:           1000
+    probability:  0
+    interval:     1
+    max_faults:   2
+    err_code:     1011

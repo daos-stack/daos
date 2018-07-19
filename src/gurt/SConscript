@@ -37,7 +37,8 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Build libgurt"""
 
-SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c']
+SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
+       'fault_inject.c']
 
 def scons():
     """Scons function"""
@@ -48,7 +49,7 @@ def scons():
 
     denv = env.Clone()
 
-    denv.AppendUnique(LIBS='pthread')
+    denv.AppendUnique(LIBS=['pthread', 'yaml'])
     prereqs.require(denv, 'uuid')
 
     gurt_targets = denv.SharedObject(SRC)

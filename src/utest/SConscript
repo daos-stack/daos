@@ -86,6 +86,7 @@ def scons():
                                     wrap_obj + \
                                     crt_targets + \
                                     gurt_targets,
+                                    LIBS=test_env["LIBS"] + ['yaml'],
                                     LINKFLAGS=flags)
         tests.append(testprog)
 

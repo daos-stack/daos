@@ -49,6 +49,7 @@ static int d_log_refcount;
 
 int d_misc_logfac;
 int d_mem_logfac;
+int d_fi_logfac;
 
 /* An alternative assert function. Set with d_register_alt_assert() */
 void (*d_alt_assert)(const int, const char*, const char*, const int);
@@ -499,6 +500,12 @@ setup_clog_facnamemask(void)
 	rc = D_INIT_LOG_FAC(mem, "MEM", "memory");
 	if (rc != 0) {
 		D_PRINT_ERR("MEM log facility failed to init; rc=%d\n", rc);
+		return rc;
+	}
+
+	rc = D_INIT_LOG_FAC(fi, "FI", "fault_inject");
+	if (rc != 0) {
+		D_PRINT_ERR("FI log facility failed to init; rc=%d\n", rc);
 		return rc;
 	}
 

@@ -57,6 +57,7 @@
 
 extern int DD_FAC(misc);
 extern int DD_FAC(mem);
+extern int DD_FAC(fi);
 
 #ifndef D_LOGFAC
 #define D_LOGFAC	DD_FAC(misc)

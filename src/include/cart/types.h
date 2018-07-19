@@ -71,17 +71,19 @@ typedef struct crt_init_options {
 	/**
 	 * if cio_sep_override is 0, the two fields following it won't be used.
 	 */
-	uint32_t	cio_sep_override:1,
-			/**
-			 * overrides the value of the environment variable
-			 * CRT_CTX_SHARE_ADDR
-			 */
-			cio_use_sep:1;
-			/**
-			 * overrides the value of the environment variable
-			 * CRT_CTX_NUM
-			 */
-	int		cio_ctx_max_num;
+	uint32_t	 cio_sep_override:1,
+			 /**
+			  * overrides the value of the environment variable
+			  * CRT_CTX_SHARE_ADDR
+			  */
+			 cio_use_sep:1,
+			 /** whether or not to inject faults */
+			 cio_fault_inject:1;
+			 /**
+			  * overrides the value of the environment variable
+			  * CRT_CTX_NUM
+			  */
+	int		 cio_ctx_max_num;
 } crt_init_options_t;
 
 typedef int		 crt_status_t;

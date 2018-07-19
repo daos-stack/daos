@@ -45,7 +45,8 @@
 
 #include "crt_debug.h"
 
-#include "gurt/common.h"
+#include <gurt/common.h>
+#include <gurt/fault_inject.h>
 #include <cart/api.h>
 
 #include "crt_hg.h"

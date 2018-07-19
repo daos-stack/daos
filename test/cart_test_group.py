@@ -71,6 +71,10 @@ class TestGroup(commontestsuite.CommonTestSuite):
         self.get_test_info()
         log_mask = os.getenv("D_LOG_MASK", "INFO")
         log_file = self.get_cart_long_log_name()
+        fault_config = os.getenv("D_FI_CONFIG")
+        if not fault_config:
+            fault_config = os.path.join(os.getenv('CRT_PREFIX', ".."), "etc", \
+                           "fault-inject-cart.yaml")
         crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
         ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
         ofi_share_addr = os.getenv("CRT_CTX_SHARE_ADDR", "0")
@@ -79,8 +83,10 @@ class TestGroup(commontestsuite.CommonTestSuite):
                         ' -x CRT_PHY_ADDR_STR={!s}' \
                         ' -x OFI_INTERFACE={!s}' \
                         ' -x CRT_CTX_SHARE_ADDR={!s} -x CRT_CTX_NUM={!s}' \
+                        ' -x D_FI_CONFIG={!s}'  \
                             .format(log_mask, log_file, crt_phy_addr, \
-                                    ofi_interface, ofi_share_addr, ofi_ctx_num)
+                                    ofi_interface, ofi_share_addr, ofi_ctx_num,
+                                    fault_config)
 
     def tearDown(self):
         """tear down the test"""
@@ -88,6 +94,8 @@ class TestGroup(commontestsuite.CommonTestSuite):
         os.environ.pop("CRT_PHY_ADDR_STR", "")
         os.environ.pop("OFI_INTERFACE", "")
         os.environ.pop("D_LOG_MASK", "")
+        os.environ.pop("D_FI", "")
+        os.environ.pop("D_FI_CONFIG", "")
         self.logger.info("tearDown end\n")
 
     def test_group_one_node(self):

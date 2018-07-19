@@ -313,7 +313,7 @@ rpc_err_rpc_issue()
 		rpc_req_input = crt_req_get(rpc_req);
 		D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed. "
 			  "rpc_req_input: %p\n", rpc_req_input);
-		rpc_req_input->magic = rand()%100;
+		rpc_req_input->magic = random()%100;
 		D_DEBUG(DB_TEST, "client rank %d sending magic number %d to "
 			"rank %d, tag %d.\n",
 			rpc_err.re_my_rank, rpc_req_input->magic,
