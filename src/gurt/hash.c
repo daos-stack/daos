@@ -749,6 +749,34 @@ out:
 	return rc;
 }
 
+static bool
+d_hash_table_is_empty(struct d_hash_table *htable)
+{
+	struct d_hash_bucket    *buckets = htable->ht_buckets;
+	int			 nr;
+	int			 i;
+	bool			 res = true;
+
+	if (buckets == NULL) {
+		D_ERROR("d_hash_table %p not initialized (NULL buckets).\n",
+			htable);
+		return true;
+	}
+
+	ch_lock(htable, true);
+
+	nr = 1U << htable->ht_bits;
+	for (i = 0; i < nr; i++)
+		if (!d_list_empty(&buckets[i].hb_head)) {
+			res = false;
+			break;
+		}
+
+	ch_unlock(htable, true);
+
+	return res;
+}
+
 int
 d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 {
@@ -808,6 +836,8 @@ d_hash_table_debug(struct d_hash_table *htable)
 struct d_hhash {
 	uint64_t                ch_cookie;
 	struct d_hash_table	ch_htable;
+	/* server-side uses D_HTYPE_PTR handle */
+	bool			ch_ptrtype;
 };
 
 static struct d_rlink*
@@ -945,6 +975,7 @@ d_hhash_create(unsigned int bits, struct d_hhash **htable_pp)
 		goto failed;
 
 	hhtab->ch_cookie = 1;
+	hhtab->ch_ptrtype = false;
 	*htable_pp = hhtab;
 	return 0;
  failed:
@@ -958,6 +989,26 @@ d_hhash_destroy(struct d_hhash *hhtab)
 	d_hash_table_debug(&hhtab->ch_htable);
 	d_hash_table_destroy_inplace(&hhtab->ch_htable, true);
 	D_FREE_PTR(hhtab);
+}
+
+int
+d_hhash_set_ptrtype(struct d_hhash *hhtab)
+{
+	if (!d_hash_table_is_empty(&hhtab->ch_htable) &&
+	    hhtab->ch_ptrtype == false) {
+		D_ERROR("d_hash_table %p not empty with non-ptr objects.\n",
+			&hhtab->ch_htable);
+		return -DER_ALREADY;
+	}
+
+	hhtab->ch_ptrtype = true;
+	return 0;
+}
+
+bool
+d_hhash_is_ptrtype(struct d_hhash *hhtab)
+{
+	return hhtab->ch_ptrtype;
 }
 
 void
@@ -978,16 +1029,21 @@ d_hhash_link_insert(struct d_hhash *hhtab, struct d_hlink *hlink, int type)
 {
 	D_ASSERT(hlink->hl_link.rl_initialized);
 
-	if (type == D_HTYPE_PTR) {
+	if (d_hhash_is_ptrtype(hhtab)) {
 		uint64_t ptr_key = (uintptr_t)hlink;
 
+		D_ASSERTF(type == D_HTYPE_PTR, "direct/ptr-based htable can "
+			  "only contain D_HTYPE_PTR type entries");
 		D_ASSERTF(d_hhash_key_isptr(ptr_key), "hlink ptr %p is invalid "
 			  "D_HTYPE_PTR type", hlink);
 		ch_lock(&hhtab->ch_htable, false);
 		ch_rec_addref(&hhtab->ch_htable, &hlink->hl_link.rl_link);
 		hlink->hl_key = ptr_key;
 		ch_unlock(&hhtab->ch_htable, false);
+
 	} else {
+		D_ASSERTF(type != D_HTYPE_PTR, "PTR type key being inserted "
+			  "in a non ptr-based htable.\n");
 		d_hash_rec_insert_anonym(&hhtab->ch_htable,
 			&hlink->hl_link.rl_link, (void *)&type);
 	}
@@ -1014,6 +1070,11 @@ d_hhash_link_lookup(struct d_hhash *hhtab, uint64_t key)
 	if (d_hhash_key_isptr(key)) {
 		struct d_hlink *hlink;
 
+		if (!d_hhash_is_ptrtype(hhtab)) {
+			D_ERROR("invalid PTR type key being lookup in a "
+				"non ptr-based htable.\n");
+			return NULL;
+		}
 		hlink = (struct d_hlink *)key;
 		if (hlink->hl_key != key) {
 			D_ERROR("invalid PTR type key.\n");
@@ -1035,6 +1096,11 @@ bool
 d_hhash_link_delete(struct d_hhash *hhtab, struct d_hlink *hlink)
 {
 	if (d_hhash_key_isptr(hlink->hl_key)) {
+		if (!d_hhash_is_ptrtype(hhtab)) {
+			D_ERROR("invalid PTR type key being lookup in a "
+				"non ptr-based htable.\n");
+			return false;
+		}
 		d_hhash_link_putref(hhtab, hlink);
 		return true;
 	} else {

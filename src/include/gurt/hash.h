@@ -543,6 +543,8 @@ bool d_hhash_link_empty(struct d_hlink *hlink);
 void d_hhash_link_key(struct d_hlink *hlink, uint64_t *key);
 int  d_hhash_key_type(uint64_t key);
 bool d_hhash_key_isptr(uint64_t key);
+int  d_hhash_set_ptrtype(struct d_hhash *hhtab);
+bool d_hhash_is_ptrtype(struct d_hhash *hhtab);
 
 /******************************************************************************
  * UUID Hash Table Wrapper
