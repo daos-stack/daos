@@ -15,3 +15,4 @@ protobuf-all-3.5.1.tar.gz
 /tests/ftest/*/*.pyc
 src/utils/py/*.pyc
 *.un~
+*.*~

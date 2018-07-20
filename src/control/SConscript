@@ -1,14 +1,19 @@
-"""Build DAOS components"""
+#!/bin/env python
+"""Build DAOS Control Plane"""
 #pylint: disable=no-member
 #pylint: disable=invalid-sequence-index
-
-
+from SCons.Script import Literal
 import os
+import daos_build
 
 def scons():
     """Execute build"""
+    Import('env', 'prereqs')
 
-    Import('env')
+    env.AppendUnique(LIBPATH=[Dir('.')])
+
+    denv = env.Clone()
+    prereqs.require(denv, 'spdk')
 
     gopath = "%s/build/control" % Dir('#').abspath
     gosrc = "%s/src/control" % Dir('#').abspath
@@ -18,29 +23,49 @@ def scons():
     if os.path.isdir("%s/src" % gopath) is False:
         os.symlink(gosrc, "%s/src" % gopath)
 
-    env.Append(GOPATH=[gopath])
-    env.AppendENVPath('GOPATH', env['GOPATH'])
-    env['ENV']['GOBIN'] = "%s/bin" % gopath
+    denv.Append(GOPATH=[gopath])
+    denv.AppendENVPath('GOPATH', denv['GOPATH'])
+    denv['ENV']['GOBIN'] = "%s/bin" % gopath
 
     agentbin = "%s/bin/agent" % gopath
     agentsrc = "%s/agent/daos_agent.go" % gosrc
-    env.Command(agentbin, agentsrc, "go install agent")
-    env.InstallAs("$PREFIX/bin/daos_agent", agentbin)
+    denv.Command(agentbin, agentsrc, "go install agent")
+    denv.InstallAs("$PREFIX/bin/daos_agent", agentbin)
 
+    gospdkpath = "%s/go-spdk/spdk" % gosrc
+
+    # CGO prerequisite lib
+    denv.AppendUnique(CPPPATH=['%s/include' % gospdkpath])
+    nvmediscover = daos_build.library(
+        denv, "nvme_discover", Glob('%s/src/*.c' % gospdkpath),
+        LIBS=['spdk'])
+    nd_installed = denv.Install('$PREFIX/lib', nvmediscover)
+
+    # CGO shell env vars.
+    denv.AppendENVPath(
+        "CGO_LDFLAGS",
+        denv.subst("-L$SPDK_PREFIX/lib -L$PREFIX/lib $_RPATH"))
+    denv.AppendENVPath(
+        "CGO_CFLAGS",
+        denv.subst("-I$SPDK_PREFIX/include"))
+    print(denv['ENV'])
+
+    # initialise management server db
     modulemgmt = "%s/modules/mgmt" % gosrc
     mgmtinitdb = "mgmtinit_db.json"
-    env.InstallAs(os.path.join("$PREFIX/share/control", mgmtinitdb),
-                  os.path.join(modulemgmt, mgmtinitdb))
+    denv.InstallAs(
+        os.path.join("$PREFIX/share/control", mgmtinitdb),
+        os.path.join(modulemgmt, mgmtinitdb))
 
     serverbin = "%s/bin/server" % gopath
     serversrc = "%s/server/daos_server.go" % gosrc
-    env.Command(serverbin, serversrc, "go install server")
-    env.InstallAs("$PREFIX/bin/daos_server", serverbin)
+    denv.Command(serverbin, [serversrc, nd_installed], "go install server")
+    denv.InstallAs("$PREFIX/bin/daos_server", serverbin)
 
     shellbin = "%s/bin/shell" % gopath
     shellsrc = "%s/shell/DAOSShell.go" % gosrc
-    env.Command(shellbin, shellsrc, "go install shell")
-    env.InstallAs("$PREFIX/bin/DAOSShell", shellbin)
+    denv.Command(shellbin, shellsrc, "go install shell")
+    denv.InstallAs("$PREFIX/bin/DAOSShell", shellbin)
 
 if __name__ == "SCons.Script":
     scons()

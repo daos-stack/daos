@@ -26,7 +26,6 @@ package control
 import (
 	"fmt"
 	"io"
-	"log"
 	"time"
 
 	"common/util"
@@ -56,13 +55,14 @@ func (mc *DAOSMgmtClient) Connect(addr string) error {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithInsecure())
 
-	if conn, err := grpc.Dial(addr, opts...); err != nil {
+	conn, err := grpc.Dial(addr, opts...)
+	if err != nil {
 		return util.LogGrpcErr(err)
-	} else {
-		mc.client = mgmtpb.NewMgmtControlClient(conn)
-		mc.gconn = conn
-		return nil
 	}
+	mc.client = mgmtpb.NewMgmtControlClient(conn)
+	mc.gconn = conn
+
+	return nil
 }
 
 // Close terminates the underlying channel used by the grpc client service.
@@ -73,11 +73,6 @@ func (mc *DAOSMgmtClient) Close() error {
 // Connected determines if the underlying socket connection is alive and well.
 func (mc *DAOSMgmtClient) Connected() bool {
 	if mc.gconn == nil {
-		util.LogGrpcErr(
-			status.Errorf(
-				codes.FailedPrecondition,
-				"No client connection was found. Please connect."))
-
 		return false
 	}
 
@@ -87,8 +82,8 @@ func (mc *DAOSMgmtClient) Connected() bool {
 			status.Errorf(
 				codes.FailedPrecondition,
 				fmt.Sprintf(
-					"There is a problem with the client connection, ",
-					"please check. (current state is %v)", state)))
+					"There is a problem with the client connection (%v)",
+					state)))
 
 		return false
 	}
@@ -99,6 +94,7 @@ func (mc *DAOSMgmtClient) Connected() bool {
 // GetFeature returns a feature from a requested name.
 func (mc *DAOSMgmtClient) GetFeature(name string) (*mgmtpb.Feature, error) {
 	if mc.Connected() == false {
+		println("No client connection was found. Please connect.")
 		return nil, nil
 	}
 
@@ -116,6 +112,7 @@ func (mc *DAOSMgmtClient) GetFeature(name string) (*mgmtpb.Feature, error) {
 // ListFeatures prints all supported management features.
 func (mc *DAOSMgmtClient) ListFeatures() error {
 	if mc.Connected() == false {
+		println("No client connection was found. Please connect.")
 		return nil
 	}
 
@@ -126,16 +123,45 @@ func (mc *DAOSMgmtClient) ListFeatures() error {
 	if err != nil {
 		return util.LogGrpcErr(err)
 	}
+	println("Listing supported mgmt features:")
 	for {
 		feature, err := stream.Recv()
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			util.LogGrpcErr(err)
-			continue
+			return util.LogGrpcErr(err)
 		}
 
-		log.Println(feature)
+		fmt.Println(feature.Fname.Name, ":", feature.Description)
+	}
+
+	return nil
+}
+
+// ListNVMe prints all attached NVMe devices.
+func (mc *DAOSMgmtClient) ListNVMe() error {
+	if mc.Connected() == false {
+		println("No client connection was found. Please connect.")
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	stream, err := mc.client.ListNVMe(ctx, &mgmtpb.ListNVMeParams{})
+	if err != nil {
+		return util.LogGrpcErr(err)
+	}
+	println("Listing NVMe Namespaces:")
+	for {
+		dev, err := stream.Recv()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return util.LogGrpcErr(err)
+		}
+
+		fmt.Println(dev)
 	}
 
 	return nil

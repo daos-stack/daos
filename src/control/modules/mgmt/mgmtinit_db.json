@@ -1,18 +1,18 @@
 [{
-    "description": "Discover NVMe drives on local controllers",
+    "description": "Discover NVMe namespaces on local controllers",
     "fname": {
-        "name": "discovery"
+        "name": "discovernvme"
     }
 },
 {
     "description": "Burn-in NVMe drives",
     "fname": {
-        "name": "burn-in"
+        "name": "burninnvme"
     }
 },
 {
     "description": "Start DAOS IO Service",
     "fname": {
-        "name": "start-io-server"
+        "name": "startio"
     }
 }]

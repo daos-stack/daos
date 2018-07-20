@@ -4,3 +4,6 @@
 [submodule "raft"]
 	path = src/rdb/raft
 	url = https://github.com/daos-stack/raft.git
+[submodule "go-spdk"]
+	path = src/control/go-spdk
+	url = https://github.com/daos-stack/go-spdk

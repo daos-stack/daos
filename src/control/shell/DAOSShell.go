@@ -179,6 +179,23 @@ func setupShell() *ishell.Shell {
 		},
 	})
 
+	shell.AddCmd(&ishell.Cmd{
+		Name: "discovernvme",
+		Help: "Command to retrieve all NVMe devices",
+		Func: func(c *ishell.Context) {
+			if controlClient.Connected() == false {
+				c.Println("Connection to management server required")
+				return
+			}
+
+			err := controlClient.ListNVMe()
+			if err != nil {
+				c.Println("Unable to retrieve devices", err.Error())
+				return
+			}
+		},
+	})
+
 	return shell
 }
 

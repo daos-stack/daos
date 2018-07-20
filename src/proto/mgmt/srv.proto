@@ -30,6 +30,7 @@ package proto;
 service MgmtControl {
 	rpc GetFeature(FeatureName) returns (Feature) {};
 	rpc ListFeatures(ListFeaturesParams) returns (stream Feature) {};
+	rpc ListNVMe(ListNVMeParams) returns (stream NVMeNamespace) {};
 }
 
 message ListFeaturesParams {}
@@ -43,4 +44,26 @@ message Feature {
 	FeatureName fname = 1;
 	// The description of the feature.
 	string description = 2;
+}
+
+message ListNVMeParams {}
+
+// NVMeCtrlr represents a NVMe Controller.
+message NVMeCtrlr {
+	// The model name of the controller.
+	string model = 1;
+	// The serial number of the controller.
+	string serial = 2;
+}
+
+// NVMeNamespace represent NVMe namespaces
+// available on controller. Results are
+// streamed rather than returned at once.
+message NVMeNamespace {
+	// controller
+	NVMeCtrlr controller = 1;
+	// namespace id
+	int32 id = 2;
+	// device capacity in GBytes
+	int32 capacity = 3;
 }

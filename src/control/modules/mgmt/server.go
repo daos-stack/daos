@@ -25,11 +25,12 @@ package mgmt
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
+
+	"common/util"
+	"go-spdk/spdk"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -41,12 +42,15 @@ var (
 	jsonDBRelPath = "share/control/mgmtinit_db.json"
 )
 
-type controlService struct {
-	supportedFeatures []*pb.Feature // read-only after initialized
+// ControlService type is the data container for the service.
+type ControlService struct {
+	// read-only after initialized
+	supportedFeatures []*pb.Feature
+	nvmeNamespaces    []*pb.NVMeNamespace
 }
 
 // GetFeature returns the feature from feature name.
-func (s *controlService) GetFeature(ctx context.Context, name *pb.FeatureName) (*pb.Feature, error) {
+func (s *ControlService) GetFeature(ctx context.Context, name *pb.FeatureName) (*pb.Feature, error) {
 	for _, feature := range s.supportedFeatures {
 		if proto.Equal(feature.GetFname(), name) {
 			return feature, nil
@@ -57,7 +61,7 @@ func (s *controlService) GetFeature(ctx context.Context, name *pb.FeatureName) (
 }
 
 // ListFeatures lists all features supported by the management server.
-func (s *controlService) ListFeatures(empty *pb.ListFeaturesParams, stream pb.MgmtControl_ListFeaturesServer) error {
+func (s *ControlService) ListFeatures(empty *pb.ListFeaturesParams, stream pb.MgmtControl_ListFeaturesServer) error {
 	for _, feature := range s.supportedFeatures {
 		if err := stream.Send(feature); err != nil {
 			return err
@@ -66,24 +70,48 @@ func (s *controlService) ListFeatures(empty *pb.ListFeaturesParams, stream pb.Mg
 	return nil
 }
 
+// ListNVMe lists all namespaces discovered on attached NVMe controllers.
+func (s *ControlService) ListNVMe(empty *pb.ListNVMeParams, stream pb.MgmtControl_ListNVMeServer) error {
+	if err := spdk.InitSPDKEnv(); err != nil {
+		return err
+	}
+
+	var protoNamespaces []*pb.NVMeNamespace
+	spdkNamespaces, err := spdk.NVMeDiscover()
+	if err != nil {
+		return err
+	}
+	for _, ns := range spdkNamespaces {
+		c := &pb.NVMeCtrlr{Model: ns.CtrlrModel, Serial: ns.CtrlrSerial}
+		d := &pb.NVMeNamespace{Controller: c, Id: ns.Id, Capacity: ns.Size}
+
+		protoNamespaces = append(protoNamespaces, d)
+
+		if err := stream.Send(d); err != nil {
+			return err
+		}
+	}
+	s.nvmeNamespaces = protoNamespaces
+
+	return nil
+}
+
 // loadInitData retrieves initial data from file.
-func (s *controlService) loadInitData(filePath string) {
+func (s *ControlService) loadInitData(filePath string) {
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		log.Fatalf("Failed to load default data: %v", err)
+		util.LogGrpcErr(err)
+		return
 	}
 	if err := json.Unmarshal(file, &s.supportedFeatures); err != nil {
-		log.Fatalf("Failed to load default data: %v", err)
+		util.LogGrpcErr(err)
+		return
 	}
-	fmt.Printf(
-		"loaded %d items from %s\n",
-		len(s.supportedFeatures),
-		filePath)
 }
 
 // NewControlServer creates a new instance of our controlServer struct.
-func NewControlServer() *controlService {
-	s := &controlService{}
+func NewControlServer() *ControlService {
+	s := &ControlService{}
 
 	// Retrieve absolute path of init DB file and load data
 	ex, err := os.Executable()
