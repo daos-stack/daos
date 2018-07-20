@@ -379,10 +379,6 @@ daos_file_is_dax(const char *pathname)
 /**
  * Some helper functions for daos handle hash-table.
  */
-struct daos_hhash_table {
-	struct d_hhash	*dht_hhash;
-	bool		 dht_ptrtype;
-};
 
 struct daos_hhash_table	daos_ht;
 static pthread_mutex_t	daos_ht_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -428,24 +424,11 @@ daos_hhash_fini(void)
 	D_ASSERT(daos_ht.dht_hhash != NULL);
 	d_hhash_destroy(daos_ht.dht_hhash);
 	daos_ht.dht_hhash = NULL;
-	daos_ht.dht_ptrtype = false;
 
 	daos_ht_ref = 0;
 unlock:
 	D_MUTEX_UNLOCK(&daos_ht_lock);
 	return rc;
-}
-
-void
-daos_hhash_set_ptrtype(void)
-{
-	daos_ht.dht_ptrtype = true;
-}
-
-static bool
-daos_hhash_is_ptrtype()
-{
-	return daos_ht.dht_ptrtype;
 }
 
 struct d_hlink *
@@ -459,7 +442,9 @@ void
 daos_hhash_link_insert(struct d_hlink *hlink, int type)
 {
 	D_ASSERT(daos_ht.dht_hhash != NULL);
-	if (daos_hhash_is_ptrtype() && d_hhash_key_isptr((uintptr_t)hlink))
+
+	if (d_hhash_is_ptrtype(daos_ht.dht_hhash) &&
+	    d_hhash_key_isptr((uintptr_t)hlink))
 		type = D_HTYPE_PTR;
 
 	d_hhash_link_insert(daos_ht.dht_hhash, hlink, type);

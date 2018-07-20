@@ -338,10 +338,16 @@ static inline int __is_po2(unsigned long long val)
 
 bool daos_file_is_dax(const char *pathname);
 
+/* daos handle hash table */
+struct daos_hhash_table {
+	struct d_hhash  *dht_hhash;
+};
+
+extern struct daos_hhash_table daos_ht;
+
 /* daos handle hash table helpers */
 int daos_hhash_init(void);
 int daos_hhash_fini(void);
-void daos_hhash_set_ptrtype(void);
 struct d_hlink *daos_hhash_link_lookup(uint64_t key);
 void daos_hhash_link_insert(struct d_hlink *hlink, int type);
 void daos_hhash_link_getref(struct d_hlink *hlink);

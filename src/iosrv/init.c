@@ -255,7 +255,7 @@ server_init()
 		D_INFO("daos handle hash-table initialized\n");
 	}
 	/* server-side uses D_HTYPE_PTR handle */
-	daos_hhash_set_ptrtype();
+	d_hhash_set_ptrtype(daos_ht.dht_hhash);
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
