@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,12 +87,86 @@ pmem_tx_abort(struct umem_instance *umm, int err)
 	return pmemobj_tx_end();
 }
 
+static void
+pmem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt,
+		    bool noop)
+{
+	struct umem_tx_stage_item	*txi;
+	int				 i;
+
+	for (i = 0; i < *cnt; i++) {
+		txi = &vec[i];
+
+		D_ASSERT(txi->txi_magic == UMEM_TX_DATA_MAGIC);
+		D_ASSERT(txi->txi_fn != NULL);
+
+		/* When 'noop' is true, callback will only free txi_data */
+		txi->txi_fn(txi->txi_data, noop);
+	}
+
+	if (*cnt != 0) {
+		memset(vec, 0, sizeof(*txi) * (*cnt));
+		*cnt = 0;
+	}
+}
+
+/*
+ * This callback will be called on the outermost transaction commit (stage
+ * == TX_STAGE_ONCOMMIT), abort (stage == TX_STAGE_ONABORT) and end (stage
+ * == TX_STAGE_NONE).
+ */
+static void
+pmem_stage_callback(PMEMobjpool *pop, int stage, void *data)
+{
+	struct umem_tx_stage_data	*txd = data;
+	struct umem_tx_stage_item	*vec, *noop_vec;
+	unsigned int			*cnt, *noop_cnt;
+
+	D_ASSERT(stage >= TX_STAGE_NONE && stage < MAX_TX_STAGE);
+	D_ASSERT(txd != NULL);
+	D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
+
+	switch (stage) {
+	case TX_STAGE_ONCOMMIT:
+		vec = txd->txd_commit_vec;
+		cnt = &txd->txd_commit_cnt;
+		noop_vec = txd->txd_abort_vec;
+		noop_cnt = &txd->txd_abort_cnt;
+		break;
+	case TX_STAGE_ONABORT:
+		vec = txd->txd_abort_vec;
+		cnt = &txd->txd_abort_cnt;
+		noop_vec = txd->txd_commit_vec;
+		noop_cnt = &txd->txd_commit_cnt;
+		break;
+	case TX_STAGE_NONE:
+		D_ASSERT(txd->txd_commit_cnt == 0);
+		D_ASSERT(txd->txd_abort_cnt == 0);
+		/* fall-through */
+	default:
+		/* Ignore all other stages */
+		return;
+	}
+
+	/*
+	 * Once transaction started, the stage callback must be called
+	 * either on outermost commit or outermost abort, so here we just
+	 * process one vector and abandon another.
+	 */
+	pmem_process_cb_vec(vec, cnt, false);
+	pmem_process_cb_vec(noop_vec, noop_cnt, true);
+}
+
 static int
-pmem_tx_begin(struct umem_instance *umm)
+pmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {
 	int rc;
 
-	rc = pmemobj_tx_begin(umm->umm_u.pmem_pool, NULL, TX_PARAM_NONE);
+	D_ASSERT(txd != NULL);
+	D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
+
+	rc = pmemobj_tx_begin(umm->umm_u.pmem_pool, NULL, TX_PARAM_CB,
+			      pmem_stage_callback, txd, TX_PARAM_NONE);
 	if (rc != 0) {
 		/*
 		 * pmemobj_tx_end() needs be called to re-initialize the
@@ -131,6 +205,54 @@ pmem_tx_publish(struct umem_instance *umm, struct pobj_action *actv,
 	return pmemobj_tx_publish(actv, actv_cnt);
 }
 
+static int
+pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
+		     int stage, umem_tx_cb_t cb, void *data)
+{
+	struct umem_tx_stage_item	*txi, *vec;
+	unsigned int			*cnt;
+
+	D_ASSERT(txd != NULL);
+	D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
+
+	if (cb == NULL)
+		return -DER_INVAL;
+
+	switch (stage) {
+	case TX_STAGE_ONCOMMIT:
+		vec = txd->txd_commit_vec;
+		cnt = &txd->txd_commit_cnt;
+		break;
+	case TX_STAGE_ONABORT:
+		vec = txd->txd_abort_vec;
+		cnt = &txd->txd_abort_cnt;
+		break;
+	default:
+		D_ERROR("Invalid stage %d\n", stage);
+		return -DER_INVAL;
+	}
+
+	D_ASSERT(*cnt <= UMEM_TX_CB_MAX);
+	/*
+	 * I don't suppose there will be so many callbacks, not necessary
+	 * to expand the vector on demand.
+	 */
+	if (*cnt == UMEM_TX_CB_MAX) {
+		D_ERROR("Too many transaction callbacks cnt:%u, stage:%d\n",
+			*cnt, stage);
+		return -DER_OVERFLOW;
+	}
+
+	txi = &vec[*cnt];
+	(*cnt)++;
+	txi->txi_magic = UMEM_TX_DATA_MAGIC;
+	txi->txi_fn = cb;
+	txi->txi_data = data;
+
+	return 0;
+}
+
 static umem_ops_t	pmem_ops = {
 	.mo_addr		= pmem_addr,
 	.mo_equal		= pmem_equal,
@@ -144,6 +266,7 @@ static umem_ops_t	pmem_ops = {
 	.mo_reserve		= pmem_reserve,
 	.mo_cancel		= pmem_cancel,
 	.mo_tx_publish		= pmem_tx_publish,
+	.mo_tx_add_callback	= pmem_tx_add_callback,
 };
 
 int
@@ -204,6 +327,27 @@ vmem_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
 	return ummid;
 }
 
+static int
+vmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
+		     int stage, umem_tx_cb_t cb, void *data)
+{
+	if (cb == NULL)
+		return -DER_INVAL;
+
+	/*
+	 * vmem doesn't support transaction, so we just execute the commit
+	 * callback instantly and drop the abort callback.
+	 */
+	if (stage == TX_STAGE_ONCOMMIT)
+		cb(data, false);
+	else if (stage == TX_STAGE_ONABORT)
+		cb(data, true);
+	else
+		return -DER_INVAL;
+
+	return 0;
+}
+
 static umem_ops_t	vmem_ops = {
 	.mo_addr	= vmem_addr,
 	.mo_equal	= vmem_equal,
@@ -211,6 +355,7 @@ static umem_ops_t	vmem_ops = {
 	.mo_tx_alloc	= vmem_alloc,
 	.mo_tx_add	= NULL,
 	.mo_tx_abort	= NULL,
+	.mo_tx_add_callback = vmem_tx_add_callback,
 };
 
 /** Unified memory class definition */

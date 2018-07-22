@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -266,8 +266,9 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 
 	/* Format SPDK blob */
 	D_ASSERT(vea_md != NULL);
-	rc = vea_format(&umem, vea_md, VOS_BLK_SZ, VOS_BLOB_HDR_BLKS, blob_sz,
-			vos_blob_format_cb, &blob_hdr, false);
+	rc = vea_format(&umem, vos_txd_get(), vea_md, VOS_BLK_SZ,
+			VOS_BLOB_HDR_BLKS, blob_sz, vos_blob_format_cb,
+			&blob_hdr, false);
 	if (rc) {
 		D_ERROR("Format blob error for xs:%p pool:"DF_UUID" rc:%d\n",
 			xs_ctxt, DP_UUID(uuid), rc);
@@ -431,8 +432,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		/* TODO: unmap callback */
 		unmap_ctxt.vnc_unmap = NULL;
 		unmap_ctxt.vnc_data = NULL;
-		rc = vea_load(&pool->vp_umm, &pool_df->pd_vea_df, &unmap_ctxt,
-			      &pool->vp_vea_info);
+		rc = vea_load(&pool->vp_umm, vos_txd_get(), &pool_df->pd_vea_df,
+			      &unmap_ctxt, &pool->vp_vea_info);
 		if (rc) {
 			D_ERROR("Failed to load block space info: %d\n", rc);
 			goto failed;

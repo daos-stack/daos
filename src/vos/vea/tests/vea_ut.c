@@ -41,13 +41,14 @@ char		pool_file[PATH_MAX];
 #define IO_STREAM_CNT	(3)
 
 struct vea_ut_args {
-	struct umem_instance	 vua_umm;
-	struct vea_space_df	*vua_md;
-	struct vea_hint_df	*vua_hint[IO_STREAM_CNT];
-	struct vea_space_info	*vua_vsi;
-	struct vea_hint_context *vua_hint_ctxt[IO_STREAM_CNT];
-	d_list_t		 vua_resrvd_list[IO_STREAM_CNT];
-	d_list_t		 vua_alloc_list;
+	struct umem_instance		 vua_umm;
+	struct umem_tx_stage_data	 vua_txd;
+	struct vea_space_df		*vua_md;
+	struct vea_hint_df		*vua_hint[IO_STREAM_CNT];
+	struct vea_space_info		*vua_vsi;
+	struct vea_hint_context		*vua_hint_ctxt[IO_STREAM_CNT];
+	d_list_t			 vua_resrvd_list[IO_STREAM_CNT];
+	d_list_t			 vua_alloc_list;
 };
 
 static struct vea_ut_args	ut_args;
@@ -69,19 +70,19 @@ ut_format(void **state)
 
 	/* format */
 	print_message("format\n");
-	rc = vea_format(&args->vua_umm, args->vua_md, blk_sz,
+	rc = vea_format(&args->vua_umm, &args->vua_txd, args->vua_md, blk_sz,
 			hdr_blks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, 0);
 
 	/* reformat without setting 'force' */
 	print_message("reformat without setting 'force'\n");
-	rc = vea_format(&args->vua_umm, args->vua_md, blk_sz,
+	rc = vea_format(&args->vua_umm, &args->vua_txd, args->vua_md, blk_sz,
 			hdr_blks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, -DER_EXIST);
 
 	/* reformat with 'force' */
 	print_message("reformat with 'force'\n");
-	rc = vea_format(&args->vua_umm, args->vua_md, blk_sz,
+	rc = vea_format(&args->vua_umm, &args->vua_txd, args->vua_md, blk_sz,
 			hdr_blks, capacity, NULL, NULL, true);
 	assert_int_equal(rc, 0);
 
@@ -97,7 +98,7 @@ ut_load(void **state)
 
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
-	rc = vea_load(&args->vua_umm, args->vua_md, &unmap_ctxt,
+	rc = vea_load(&args->vua_umm, &args->vua_txd, args->vua_md, &unmap_ctxt,
 		      &args->vua_vsi);
 	assert_int_equal(rc, 0);
 
@@ -255,7 +256,7 @@ ut_tx_publish(void **state)
 	uint32_t blk_cnt;
 	int rc, i;
 
-	rc = umem_tx_begin(&args->vua_umm);
+	rc = umem_tx_begin(&args->vua_umm, &args->vua_txd);
 	assert_int_equal(rc, 0);
 
 	for (i = 1; i < IO_STREAM_CNT; i++) {
@@ -428,6 +429,8 @@ ut_setup(struct vea_ut_args *test_args)
 
 		root_addr += sizeof(struct vea_hint_df);
 	}
+
+	umem_init_txd(&test_args->vua_txd);
 	return 0;
 error:
 	pmemobj_close(uma.uma_u.pmem_pool);
@@ -476,6 +479,7 @@ ut_teardown(struct vea_ut_args *test_args)
 		pmemobj_close(test_args->vua_umm.umm_u.pmem_pool);
 		test_args->vua_umm.umm_u.pmem_pool = NULL;
 	}
+	umem_fini_txd(&test_args->vua_txd);
 }
 
 static int
@@ -508,13 +512,13 @@ ut_reserve_too_big(void **state)
 
 	ut_setup(&args);
 
-	rc = vea_format(&args.vua_umm, args.vua_md, blk_sz,
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, blk_sz,
 			hdr_blks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, 0);
 
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
-	rc = vea_load(&args.vua_umm, args.vua_md, &unmap_ctxt,
+	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
 		      &args.vua_vsi);
 	assert_int_equal(rc, 0);
 
@@ -545,51 +549,51 @@ ut_inval_params_format(void **state)
 	print_message("Testing invalid parameters to vea_format\n");
 
 	/* vea_format: Test null umem */
-	expect_assert_failure(vea_format(NULL, args.vua_md, block_size,
-					 header_blocks, capacity, NULL, NULL,
-					 false));
+	expect_assert_failure(vea_format(NULL, &args.vua_txd, args.vua_md,
+					 block_size, header_blocks, capacity,
+					 NULL, NULL, false));
 
 	/* vea_format: Test null md */
-	expect_assert_failure(vea_format(&args.vua_umm, NULL, block_size,
-					 header_blocks, capacity, NULL, NULL,
-					 false));
+	expect_assert_failure(vea_format(&args.vua_umm, &args.vua_txd, NULL,
+					 block_size, header_blocks, capacity,
+					 NULL, NULL, false));
 
 	/* vea_format: Test large block_size */
 	block_size = UINT32_MAX;
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size, header_blocks,
-			capacity, NULL, NULL, false);
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
+			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, -DER_INVAL);
 
 	/* vea_format: Test non-4k aligned block_size */
 	block_size = 4095;
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size, header_blocks,
-			capacity, NULL, NULL, false);
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
+			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, -DER_INVAL);
 
 	/* vea_format: Test no header blocks */
 	block_size = 0; /* Set to 0 to use the default 4K block size */
 	header_blocks = 0;
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size, header_blocks,
-			capacity, NULL, NULL, false);
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
+			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, -DER_INVAL);
 
 	/* vea_format: Test large value for header_blocks */
 	header_blocks = UINT32_MAX;
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size, header_blocks,
-			capacity, NULL, NULL, false);
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
+			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, -DER_NOSPACE);
 
 	/* vea_format: Test small value for capacity */
 	header_blocks = 1;
 	capacity = 0;
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size, header_blocks,
-			capacity, NULL, NULL, false);
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
+			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, -DER_NOSPACE);
 
 	/* vea_format: Make capacity and block_size equal */
 	capacity = 4096;
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size, header_blocks,
-			capacity, NULL, NULL, false);
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
+			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, -DER_NOSPACE);
 
 	ut_teardown(&args);
@@ -609,29 +613,30 @@ ut_inval_params_load(void **state)
 	print_message("Testing invalid parameters to vea_load\n");
 
 	/* vea_load: Test unformatted blob */
-	rc = vea_load(&args.vua_umm, args.vua_md, &unmap_ctxt, &args.vua_vsi);
+	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
+		      &args.vua_vsi);
 	assert_int_equal(rc, -DER_UNINIT);
 
 	/* vea_load: Test umem is NULL */
 	/* First correctly format the blob */
 	capacity = ((VEA_LARGE_EXT_MB * 2) << 20); /* 128 MB */
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size, header_blocks,
-			capacity, NULL, NULL, false);
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
+			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, 0);
-	expect_assert_failure(vea_load(NULL, args.vua_md, &unmap_ctxt,
-				       &args.vua_vsi));
+	expect_assert_failure(vea_load(NULL, &args.vua_txd, args.vua_md,
+				       &unmap_ctxt, &args.vua_vsi));
 
 	/* vea_load: Test md is NULL */
-	expect_assert_failure(vea_load(&args.vua_umm, NULL, &unmap_ctxt,
-				       &args.vua_vsi));
+	expect_assert_failure(vea_load(&args.vua_umm, &args.vua_txd, NULL,
+				       &unmap_ctxt, &args.vua_vsi));
 
 	/* vea_load: Test unmap_ctxt is NULL */
-	expect_assert_failure(vea_load(&args.vua_umm, args.vua_md, NULL,
-				       &args.vua_vsi));
+	expect_assert_failure(vea_load(&args.vua_umm, &args.vua_txd,
+				       args.vua_md, NULL, &args.vua_vsi));
 
 	/* vea_load: Test vsip is NULL */
-	expect_assert_failure(vea_load(&args.vua_umm, args.vua_md, &unmap_ctxt,
-				       NULL));
+	expect_assert_failure(vea_load(&args.vua_umm, &args.vua_txd,
+				       args.vua_md, &unmap_ctxt, NULL));
 
 	/* vea_unload: Test is vsi NULL */
 	expect_assert_failure(vea_unload(args.vua_vsi));
@@ -653,13 +658,13 @@ ut_inval_params_reserve(void **state)
 
 	ut_setup(&args);
 	print_message("Testing invalid parameters to vea_reserve\n");
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size,
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
 			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, 0);
 
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
-	rc = vea_load(&args.vua_umm, args.vua_md, &unmap_ctxt,
+	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
 		      &args.vua_vsi);
 	assert_int_equal(rc, 0);
 
@@ -689,13 +694,13 @@ ut_inval_params_cancel(void **state)
 
 	print_message("Testing invalid parameters to vea_cancel\n");
 	ut_setup(&args);
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size,
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
 			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, 0);
 
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
-	rc = vea_load(&args.vua_umm, args.vua_md, &unmap_ctxt,
+	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
 		      &args.vua_vsi);
 	assert_int_equal(rc, 0);
 	r_list = &args.vua_resrvd_list[0];
@@ -721,13 +726,13 @@ ut_inval_params_tx_publish(void **state)
 
 	print_message("Testing invalid parameters to vea_tx_publish\n");
 	ut_setup(&args);
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size,
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
 			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, 0);
 
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
-	rc = vea_load(&args.vua_umm, args.vua_md, &unmap_ctxt,
+	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
 		      &args.vua_vsi);
 	assert_int_equal(rc, 0);
 	r_list = &args.vua_resrvd_list[0];
@@ -735,7 +740,7 @@ ut_inval_params_tx_publish(void **state)
 	rc = vea_reserve(args.vua_vsi, block_count, NULL, r_list);
 	assert_int_equal(rc, 0);
 
-	rc = umem_tx_begin(&args.vua_umm);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
 	assert_int_equal(rc, 0);
 
 	expect_assert_failure(vea_tx_publish(NULL, NULL, r_list));
@@ -763,13 +768,13 @@ ut_inval_params_free(void **state)
 
 	print_message("Testing invalid parameters to vea_free\n");
 	ut_setup(&args);
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size,
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
 			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, 0);
 
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
-	rc = vea_load(&args.vua_umm, args.vua_md, &unmap_ctxt,
+	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
 		      &args.vua_vsi);
 	assert_int_equal(rc, 0);
 	r_list = &args.vua_resrvd_list[0];
@@ -855,13 +860,13 @@ ut_free_invalid_space(void **state)
 
 	print_message("Try to free space that's not valid\n");
 	ut_setup(&args);
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size,
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
 			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, 0);
 
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
-	rc = vea_load(&args.vua_umm, args.vua_md, &unmap_ctxt,
+	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
 		      &args.vua_vsi);
 	assert_int_equal(rc, 0);
 
@@ -904,17 +909,17 @@ ut_interleaved_ops(void **state)
 
 	print_message("Test interleaved operations\n");
 	ut_setup(&args);
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size,
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
 			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, 0);
 
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
-	rc = vea_load(&args.vua_umm, args.vua_md, &unmap_ctxt,
+	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
 		      &args.vua_vsi);
 	assert_int_equal(rc, 0);
 
-	rc = umem_tx_begin(&args.vua_umm);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
 	assert_int_equal(rc, 0);
 
 	/*
@@ -1058,13 +1063,13 @@ ut_fragmentation(void **state)
 
 	print_message("Test allocation on fragmented device\n");
 	ut_setup(&args);
-	rc = vea_format(&args.vua_umm, args.vua_md, block_size,
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
 			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, 0);
 
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
-	rc = vea_load(&args.vua_umm, args.vua_md, &unmap_ctxt,
+	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
 		      &args.vua_vsi);
 	assert_int_equal(rc, 0);
 
@@ -1092,7 +1097,7 @@ ut_fragmentation(void **state)
 	}
 
 	/* Publish the ones to persist */
-	rc = umem_tx_begin(&args.vua_umm);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
 	assert_int_equal(rc, 0);
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, &persist_list);
 	assert_int_equal(rc, 0);

@@ -58,9 +58,10 @@ erase_md(struct umem_instance *umem, struct vea_space_df *md)
  * block device.
  */
 int
-vea_format(struct umem_instance *umem, struct vea_space_df *md,
-	   uint32_t blk_sz, uint32_t hdr_blks, uint64_t capacity,
-	   vea_format_callback_t cb, void *cb_data, bool force)
+vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
+	   struct vea_space_df *md, uint32_t blk_sz, uint32_t hdr_blks,
+	   uint64_t capacity, vea_format_callback_t cb, void *cb_data,
+	   bool force)
 {
 	struct vea_free_extent free_ext;
 	struct umem_attr uma;
@@ -111,7 +112,7 @@ vea_format(struct umem_instance *umem, struct vea_space_df *md,
 	}
 
 	/* Start transaction to initialize allocation metadata */
-	rc = umem_tx_begin(umem);
+	rc = umem_tx_begin(umem, txd);
 	if (rc != 0)
 		return rc;
 
@@ -200,14 +201,16 @@ vea_unload(struct vea_space_info *vsi)
  * compound index.
  */
 int
-vea_load(struct umem_instance *umem, struct vea_space_df *md,
-	 struct vea_unmap_context *unmap_ctxt, struct vea_space_info **vsip)
+vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
+	 struct vea_space_df *md, struct vea_unmap_context *unmap_ctxt,
+	 struct vea_space_info **vsip)
 {
 	struct umem_attr uma;
 	struct vea_space_info *vsi;
 	int rc;
 
 	D_ASSERT(umem != NULL);
+	D_ASSERT(txd != NULL);
 	D_ASSERT(md != NULL);
 	D_ASSERT(unmap_ctxt != NULL);
 	D_ASSERT(vsip != NULL);
@@ -222,6 +225,7 @@ vea_load(struct umem_instance *umem, struct vea_space_df *md,
 		return -DER_NOMEM;
 
 	vsi->vsi_umem = umem;
+	vsi->vsi_txd = txd;
 	vsi->vsi_md = md;
 	vsi->vsi_md_free_btr = DAOS_HDL_INVAL;
 	vsi->vsi_md_vec_btr = DAOS_HDL_INVAL;
@@ -455,6 +459,41 @@ vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	return process_resrvd_list(vsi, hint, resrvd_list, true);
 }
 
+struct free_commit_cb_arg {
+	struct vea_space_info	*fca_vsi;
+	struct vea_free_extent	 fca_vfe;
+};
+
+static void
+free_commit_cb(void *data, bool noop)
+{
+	struct free_commit_cb_arg *fca = data;
+	int rc;
+
+	/* Transaction aborted, only need to free callback arg */
+	if (noop)
+		goto free;
+
+	/*
+	 * Aggregated free will be executed on outermost transaction
+	 * commit.
+	 *
+	 * If it fails, the freed space on persistent free tree won't
+	 * be added in in-memory free tree, hence the space won't be
+	 * visible for allocation until the tree sync up on next server
+	 * restart. Such temporary space leak is tolerable, what we must
+	 * avoid is the contrary case: in-memory tree update succeeds
+	 * but persistent tree update fails, which risks data corruption.
+	 */
+	rc = aggregated_free(fca->fca_vsi, &fca->fca_vfe);
+
+	D_DEBUG(rc ? DLOG_ERR : DB_IO,
+		"Aggregated free on vsi:%p rc %d\n",
+		fca->fca_vsi, rc);
+free:
+	D_FREE_PTR(fca);
+}
+
 /*
  * Free allocated extent.
  *
@@ -471,32 +510,47 @@ vea_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt)
 {
 	D_ASSERT(vsi != NULL);
 	struct umem_instance *umem = vsi->vsi_umem;
-	struct vea_free_extent vfe;
+	struct free_commit_cb_arg *fca;
 	int rc;
 
-	vfe.vfe_blk_off = blk_off;
-	vfe.vfe_blk_cnt = blk_cnt;
+	D_ALLOC_PTR(fca);
+	if (fca == NULL)
+		return -DER_NOMEM;
 
-	rc = verify_free_entry(NULL, &vfe);
+	fca->fca_vsi = vsi;
+	fca->fca_vfe.vfe_blk_off = blk_off;
+	fca->fca_vfe.vfe_blk_cnt = blk_cnt;
+
+	rc = verify_free_entry(NULL, &fca->fca_vfe);
 	if (rc)
-		return rc;
+		goto error;
 
-	/* Start transaction */
-	rc = umem_tx_begin(umem);
+	/*
+	 * The transaction may have been started by caller already, here
+	 * we start the nested transaction to ensure the stage callback
+	 * and stage callback data being set to transaction properly.
+	 */
+	rc = umem_tx_begin(umem, vsi->vsi_txd);
 	if (rc != 0)
-		return rc;
+		goto error;
 
 	/* Add the free extent in persistent free extent tree */
-	rc = persistent_free(vsi, &vfe);
+	rc = persistent_free(vsi, &fca->fca_vfe);
+	if (rc)
+		goto done;
 
+	rc = umem_tx_add_callback(umem, vsi->vsi_txd, TX_STAGE_ONCOMMIT,
+				  free_commit_cb, fca);
+	if (rc == 0)
+		fca = NULL;	/* Will be freed by commit callback */
+done:
 	/* Commit/Abort transaction on success/error */
 	rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
-	if (rc == 0)
-		rc = aggregated_free(vsi, &vfe);
-
 	/* Migrate the expired aggregated free extents to compound index */
 	migrate_free_exts(vsi);
-
+error:
+	if (fca != NULL)
+		D_FREE_PTR(fca);
 	return rc;
 }
 

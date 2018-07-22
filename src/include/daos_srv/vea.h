@@ -133,6 +133,7 @@ typedef int (*vea_format_callback_t)(void *cb_data);
  * block device.
  *
  * \param umem     [IN]	An instance of SCM
+ * \param txd      [IN]	Stage callback data for PMDK transaction
  * \param md       [IN]	The allocation metadata on SCM
  * \param blk_sz   [IN]	Block size in bytes (4k by default)
  * \param hdr_blks [IN] How many blocks reserved for device header
@@ -145,15 +146,17 @@ typedef int (*vea_format_callback_t)(void *cb_data);
  *			already initialized device without setting @force to
  *			true; Appropriated negative value for other errors
  */
-int vea_format(struct umem_instance *umem, struct vea_space_df *md,
-	       uint32_t blk_sz, uint32_t hdr_blks, uint64_t capacity,
-	       vea_format_callback_t cb, void *cb_data, bool force);
+int vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
+	       struct vea_space_df *md, uint32_t blk_sz, uint32_t hdr_blks,
+	       uint64_t capacity, vea_format_callback_t cb, void *cb_data,
+	       bool force);
 
 /**
  * Load space tracking information from SCM to initialize the in-memory compound
  * index.
  *
  * \param umem       [IN]	An instance of SCM
+ * \param txd        [IN]	Stage callback data for PMDK transaction
  * \param md         [IN]	Space tracking information on SCM
  * \param unmap_ctxt [IN]	Context for unmap operation
  * \param vsip       [OUT]	In-memory compound index
@@ -162,8 +165,8 @@ int vea_format(struct umem_instance *umem, struct vea_space_df *md,
  *				index returned by @vsi; Appropriated negative
  *				value on error
  */
-int vea_load(struct umem_instance *umem, struct vea_space_df *md,
-	     struct vea_unmap_context *unmap_ctxt,
+int vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
+	     struct vea_space_df *md, struct vea_unmap_context *unmap_ctxt,
 	     struct vea_space_info **vsip);
 
 /**

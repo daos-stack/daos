@@ -171,6 +171,7 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 		D_FREE_PTR(tls);
 		return NULL;
 	}
+	umem_init_txd(&tls->vtl_txd);
 
 	return tls;
 }
@@ -182,6 +183,7 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 	struct vos_tls *tls = data;
 
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
+	umem_fini_txd(&tls->vtl_txd);
 	D_FREE_PTR(tls);
 }
 
@@ -295,6 +297,7 @@ vos_fini(void)
 	}
 	vos_nvme_fini();
 	ABT_finalize();
+	umem_fini_txd(&vsa_txd_inst);
 	D_MUTEX_UNLOCK(&mutex);
 }
 
@@ -313,6 +316,8 @@ vos_init(void)
 
 	if (is_init && vsa_imems_inst)
 		D_GOTO(exit, rc);
+
+	umem_init_txd(&vsa_txd_inst);
 
 	rc = ABT_init(0, NULL);
 	if (rc != 0) {

@@ -154,8 +154,9 @@ struct vos_imem_strts {
 
 
 /* in-memory structures standalone instance */
-struct vos_imem_strts	*vsa_imems_inst;
-struct eio_xs_context	*vsa_xsctxt_inst;
+struct vos_imem_strts		*vsa_imems_inst;
+struct eio_xs_context		*vsa_xsctxt_inst;
+struct umem_tx_stage_data	 vsa_txd_inst;
 bool vsa_nvme_init;
 
 static inline struct eio_xs_context *
@@ -210,7 +211,9 @@ extern struct vos_iter_ops vos_cont_iter_ops;
 /** VOS thread local storage structure */
 struct vos_tls {
 	/* in-memory structures TLS instance */
-	struct vos_imem_strts	vtl_imems_inst;
+	struct vos_imem_strts		vtl_imems_inst;
+	/* PMDK transaction stage callback data */
+	struct umem_tx_stage_data	vtl_txd;
 };
 
 static inline struct vos_tls *
@@ -241,6 +244,16 @@ vos_cont_hhash_get(void)
 	return vsa_imems_inst->vis_cont_hhash;
 #else
 	return vos_tls_get()->vtl_imems_inst.vis_cont_hhash;
+#endif
+}
+
+static inline struct umem_tx_stage_data *
+vos_txd_get(void)
+{
+#ifdef VOS_STANDALONE
+	return &vsa_txd_inst;
+#else
+	return &(vos_tls_get()->vtl_txd);
 #endif
 }
 

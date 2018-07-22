@@ -94,6 +94,13 @@ struct vea_free_class {
 struct vea_space_info {
 	/* Instance for the pmemobj pool on SCM */
 	struct umem_instance	*vsi_umem;
+	/*
+	 * Stage callback data used by PMDK transaction.
+	 *
+	 * No public API offered by PMDK to get transaction stage callback
+	 * data, so we have to pass it around.
+	 */
+	struct umem_tx_stage_data	*vsi_txd;
 	/* Free space information stored on SCM */
 	struct vea_space_df	*vsi_md;
 	/* Open handles for the persistent free extent tree */

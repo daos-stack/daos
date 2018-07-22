@@ -1058,7 +1058,7 @@ update_cancel(struct vos_io_context *ioc)
 		struct umem_instance *umem = vos_obj2umm(ioc->ic_obj);
 		int i, rc;
 
-		rc = umem_tx_begin(umem);
+		rc = umem_tx_begin(umem, vos_txd_get());
 		if (rc) {
 			D_ERROR("TX start for update rollback: %d\n", rc);
 			return;
@@ -1100,7 +1100,7 @@ vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
 		goto out;
 
 	umem = vos_obj2umm(ioc->ic_obj);
-	err = umem_tx_begin(umem);
+	err = umem_tx_begin(umem, vos_txd_get());
 	if (err)
 		goto out;
 
@@ -1153,7 +1153,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	} else {
 		struct umem_instance *umem = vos_obj2umm(ioc->ic_obj);
 
-		rc = umem_tx_begin(umem);
+		rc = umem_tx_begin(umem, vos_txd_get());
 		if (rc)
 			goto error;
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,6 +122,51 @@ typedef enum {
 
 struct umem_instance;
 
+typedef void (*umem_tx_cb_t)(void *data, bool noop);
+
+#define UMEM_TX_DATA_MAGIC	(0xc01df00d)
+#define UMEM_TX_CB_MAX		30
+
+struct umem_tx_stage_item {
+	int		 txi_magic;
+	umem_tx_cb_t	 txi_fn;
+	void		*txi_data;
+};
+
+struct umem_tx_stage_data {
+	int				txd_magic;
+	unsigned int			txd_commit_cnt;
+	unsigned int			txd_abort_cnt;
+	struct umem_tx_stage_item	txd_commit_vec[UMEM_TX_CB_MAX];
+	struct umem_tx_stage_item	txd_abort_vec[UMEM_TX_CB_MAX];
+};
+
+/*
+ * To avoid allocating stage data for each transaction, umem user should
+ * prepare per-xstream stage data and initialize it by umem_init_txd(),
+ * this per-xstream stage data will be used for all transactions within
+ * the same xstream.
+ *
+ * umem_fini_txd() is only for sanity check for this momnet.
+ */
+static inline void
+umem_init_txd(struct umem_tx_stage_data *txd)
+{
+	D_ASSERT(txd != NULL);
+	memset(txd, 0, sizeof(*txd));
+	txd->txd_magic = UMEM_TX_DATA_MAGIC;
+}
+
+static inline void
+umem_fini_txd(struct umem_tx_stage_data *txd)
+{
+	D_ASSERT(txd != NULL);
+	if (txd->txd_magic == UMEM_TX_DATA_MAGIC) {
+		D_ASSERT(txd->txd_commit_cnt == 0);
+		D_ASSERT(txd->txd_abort_cnt == 0);
+	}
+}
+
 typedef struct {
 	/** convert ummid to directly accessible address */
 	void		*(*mo_addr)(struct umem_instance *umm,
@@ -166,7 +211,8 @@ typedef struct {
 	/** abort memory transaction */
 	int		 (*mo_tx_abort)(struct umem_instance *umm, int error);
 	/** start memory transaction */
-	int		 (*mo_tx_begin)(struct umem_instance *umm);
+	int		 (*mo_tx_begin)(struct umem_instance *umm,
+					struct umem_tx_stage_data *txd);
 	/** commit memory transaction */
 	int		 (*mo_tx_commit)(struct umem_instance *umm);
 
@@ -202,6 +248,22 @@ typedef struct {
 	int		 (*mo_tx_publish)(struct umem_instance *umm,
 					  struct pobj_action *actv,
 					  int actv_cnt);
+
+	/**
+	 * Add one commit or abort callback to current transaction.
+	 *
+	 * PMDK doesn't provide public API to get stage_callback_arg, so
+	 * we have to make @txd as an input parameter.
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param txd	[IN]	transaction stage data.
+	 * \param cb	[IN]	commit or abort callback.
+	 * \param data	[IN]	callback data.
+	 */
+	int		 (*mo_tx_add_callback)(struct umem_instance *umm,
+					       struct umem_tx_stage_data *txd,
+					       int stage, umem_tx_cb_t cb,
+					       void *data);
 } umem_ops_t;
 
 /** attributes to initialise an unified memroy class */
@@ -332,10 +394,10 @@ umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 	umem_tx_add_typed(umm, tmmid, sizeof(*(tmmid)._type))
 
 static inline int
-umem_tx_begin(struct umem_instance *umm)
+umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {
 	if (umm->umm_ops->mo_tx_begin)
-		return umm->umm_ops->mo_tx_begin(umm);
+		return umm->umm_ops->mo_tx_begin(umm, txd);
 	else
 		return 0;
 }
@@ -408,6 +470,14 @@ umem_tx_publish(struct umem_instance *umm, struct pobj_action *actv,
 	if (umm->umm_ops->mo_tx_publish)
 		return umm->umm_ops->mo_tx_publish(umm, actv, actv_cnt);
 	return 0;
+}
+
+static inline int
+umem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
+		     int stage, umem_tx_cb_t cb, void *data)
+{
+	D_ASSERT(umm->umm_ops->mo_tx_add_callback != NULL);
+	return umm->umm_ops->mo_tx_add_callback(umm, txd, stage, cb, data);
 }
 
 #endif /* __DAOS_MEM_H__ */
