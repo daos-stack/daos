@@ -22,8 +22,5 @@ def scons():
     dc_obj_tgts += common_tgts
     Export('dc_obj_tgts')
 
-    # Build tests
-    SConscript('tests/SConscript', exports=['denv', 'common_tgts'])
-
 if __name__ == "SCons.Script":
     scons()

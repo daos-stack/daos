@@ -9,9 +9,10 @@ def scons():
     denv.AppendUnique(LIBPATH=['#/build/src/client/api'])
 
     test_tgt = denv.SharedObject('place_obj.c')
-    daos_build.program(denv, 'pl_map', test_tgt + common_tgts,
-                       LIBS=['daos', 'daos_common', 'gurt', 'cart',
-                             'placement'])
+    pl_test = daos_build.program(denv, 'pl_map', test_tgt + common_tgts,
+                                 LIBS=['daos', 'daos_common', 'gurt', 'cart',
+                                 'placement', 'uuid', 'pthread'])
+    denv.Install('$PREFIX/bin/', pl_test)
 
 if __name__ == "SCons.Script":
     scons()

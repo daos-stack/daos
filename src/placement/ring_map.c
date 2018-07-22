@@ -1002,9 +1002,8 @@ ring_remap_next_spare(struct pl_ring_map *rimap,
 	 */
 	if (!((dist + rop->rop_grp_size) % rimap->rmp_domain_nr))
 		dist += rop->rop_grp_size;
-	else
-		dist++;
 
+	dist++;
 	if (dist > max_dist)
 		return false;
 
