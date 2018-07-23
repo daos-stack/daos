@@ -91,6 +91,18 @@
    fun:crt_init_opt
 }
 {
+   FI leak 3
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:sock_rx_new_buffered_entry
+   fun:sock_pe_progress_rx_pe_entry
+   fun:sock_pe_progress_rx_ctx
+   fun:sock_pe_progress_thread
+   fun:start_thread
+   fun:clone
+}
+{
     CRYPTO leaks malloc
     Memcheck:Leak
     match-leak-kinds: reachable
