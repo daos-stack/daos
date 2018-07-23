@@ -382,12 +382,12 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 		if (seq_min == 0) {
 			seq_min = resrvd->vre_hint_seq;
 			off_c = resrvd->vre_hint_off;
-		} else {
+		} else if (hint != NULL) {
 			D_ASSERT(seq_min < resrvd->vre_hint_seq);
 		}
 
 		seq_max = resrvd->vre_hint_seq;
-		off_p = resrvd->vre_hint_off;
+		off_p = resrvd->vre_blk_off + resrvd->vre_blk_cnt;
 
 		if (vfe.vfe_blk_cnt == 0) {
 			vfe.vfe_blk_off = resrvd->vre_blk_off;

@@ -143,10 +143,12 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 	D_DEBUG(DB_IO, "largest free extent ["DF_U64", %u]\n",
 	       entry->ve_ext.vfe_blk_off, entry->ve_ext.vfe_blk_cnt);
 	/*
-	 * Reserve from the largest free extent when it's idle, otherwise,
-	 * divide it in half-and-half and reserve from the second half.
+	 * Reserve from the largest free extent when it's idle or too
+	 * small for splitting, otherwise, divide it in half-and-half
+	 * and reserve from the second half.
 	 */
-	if (ext_is_idle(&entry->ve_ext)) {
+	if (ext_is_idle(&entry->ve_ext) ||
+	    (entry->ve_ext.vfe_blk_cnt <= (blk_cnt * 2))) {
 		vfe.vfe_blk_off = entry->ve_ext.vfe_blk_off;
 		vfe.vfe_blk_cnt = blk_cnt;
 
@@ -162,6 +164,7 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 		blk_off = entry->ve_ext.vfe_blk_off;
 		tot_blks = entry->ve_ext.vfe_blk_cnt;
 		half_blks = tot_blks >> 1;
+		D_ASSERT(tot_blks >= (half_blks + blk_cnt));
 
 		vfe.vfe_blk_off = blk_off;
 		vfe.vfe_blk_cnt = tot_blks;
