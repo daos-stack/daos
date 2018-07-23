@@ -166,6 +166,57 @@ static struct crt_req_format DQF_RDB_APPENDENTRIES =
 	DEFINE_CRT_REQ_FMT("RDB_APPENDENTRIES", rdb_appendentries_in_fields,
 			   rdb_appendentries_out_fields);
 
+static int
+rdb_proc_local_type(crt_proc_t proc, void *data)
+{
+	/* Ignore this local field. */
+	return 0;
+}
+
+static struct crt_msg_field DMF_LOCAL_POINTER =
+	DEFINE_CRT_MSG("local void *", 0, sizeof(void *),
+		       rdb_proc_local_type);
+
+static struct crt_msg_field DMF_LOCAL_UINT64 =
+	DEFINE_CRT_MSG("local uint64_t", 0, sizeof(uint64_t),
+		       rdb_proc_local_type);
+
+static struct crt_msg_field *rdb_installsnapshot_in_fields[] = {
+	&CMF_UUID,		/* op.uuid */
+	&CMF_INT,		/* msg.term */
+	&CMF_INT,		/* msg.last_idx */
+	&CMF_INT,		/* msg.last_term */
+	&CMF_UINT32,		/* padding */
+	&CMF_UINT64,		/* seq */
+	&DMF_ANCHOR,		/* anchor.object */
+	&DMF_ANCHOR,		/* anchor.akey */
+	&CMF_BULK,		/* kds */
+	&CMF_BULK,		/* data */
+	&DMF_LOCAL_POINTER,	/* kds_iov.iov_buf */
+	&DMF_LOCAL_UINT64,	/* kds_iov.iov_buf_len */
+	&DMF_LOCAL_UINT64,	/* kds_iov.iov_len */
+	&DMF_LOCAL_POINTER,	/* data_iov.iov_buf */
+	&DMF_LOCAL_UINT64,	/* data_iov.iov_buf_len */
+	&DMF_LOCAL_UINT64	/* data_iov.iov_len */
+};
+
+static struct crt_msg_field *rdb_installsnapshot_out_fields[] = {
+	&CMF_INT,	/* op.rc */
+	&CMF_UINT32,	/* op.padding */
+	&CMF_INT,	/* msg.term */
+	&CMF_INT,	/* msg.last_idx */
+	&CMF_INT,	/* msg.complete */
+	&CMF_UINT32,	/* padding */
+	&CMF_UINT64,	/* success */
+	&CMF_UINT64,	/* seq */
+	&DMF_ANCHOR,	/* anchor.object */
+	&DMF_ANCHOR	/* anchor.akey */
+};
+
+static struct crt_req_format DQF_RDB_INSTALLSNAPSHOT =
+	DEFINE_CRT_REQ_FMT("RDB_INSTALLSNAPSHOT", rdb_installsnapshot_in_fields,
+			   rdb_installsnapshot_out_fields);
+
 struct daos_rpc rdb_srv_rpcs[] = {
 	{
 		.dr_name	= "RDB_REQUESTVOTE",
@@ -179,7 +230,12 @@ struct daos_rpc rdb_srv_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_RDB_APPENDENTRIES
-	},  {
+	}, {
+		.dr_name	= "RDB_INSTALLSNAPSHOT",
+		.dr_opc		= RDB_INSTALLSNAPSHOT,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_RDB_INSTALLSNAPSHOT
 	}
 };
 

@@ -49,6 +49,13 @@
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
+static int rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc,
+			      daos_iov_t *key, uint64_t base,
+			      uint64_t base_term, uint64_t term,
+			      struct rdb_lc_record *record);
+static int rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc,
+			       daos_iov_t *key, uuid_t uuid,
+			       struct rdb_lc_record *record);
 static void *rdb_raft_lookup_result(struct rdb *db, uint64_t index);
 static void rdb_raft_unload_replicas(struct rdb *db);
 
@@ -345,6 +352,614 @@ rdb_raft_unload_snapshot(struct rdb *db)
 }
 
 static int
+rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, daos_iov_t *kds,
+		    daos_iov_t *data, struct rdb_anchor *anchor)
+{
+	daos_sg_list_t		sgl;
+	struct dss_enum_arg	arg;
+	int			rc;
+
+	/*
+	 * Set up the iteration for everything in the log container at
+	 * is->dis_index.
+	 */
+	memset(&arg, 0, sizeof(arg));
+	arg.param.ip_hdl = lc;
+	rdb_anchor_to_hashes(&is->dis_anchor, &arg.obj_anchor, &arg.dkey_anchor,
+			     &arg.akey_anchor, &arg.recx_anchor);
+	arg.param.ip_epr.epr_lo = is->dis_index;
+	arg.param.ip_epr.epr_hi = is->dis_index;
+	arg.param.ip_epc_expr = VOS_IT_EPC_LE;
+	arg.recursive = true;
+
+	/* Set up the buffers. */
+	arg.kds = kds->iov_buf;
+	arg.kds_cap = kds->iov_buf_len / sizeof(*arg.kds);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = data;
+	arg.sgl = &sgl;
+
+	/* Attempt to inline all values until recx bulks are implemented. */
+	arg.inline_thres = 1 * 1024 * 1024;
+
+	/* Enumerate from the object level. */
+	rc = dss_enum_pack(VOS_ITER_OBJ, &arg);
+	if (rc < 0)
+		return rc;
+
+	/*
+	 * Report the new anchor. When rc == 0, dss_enum_pack doesn't guarantee
+	 * all the anchors to be EOF.
+	 */
+	if (rc == 0)
+		rdb_anchor_set_eof(anchor);
+	else /* rc == 1 */
+		rdb_anchor_from_hashes(anchor, &arg.obj_anchor,
+				       &arg.dkey_anchor, &arg.akey_anchor,
+				       &arg.recx_anchor);
+
+	/* Report the buffer lengths. data.iov_len is set by dss_enum_pack. */
+	kds->iov_len = sizeof(*arg.kds) * arg.kds_len;
+
+	return 0;
+}
+
+static int
+rdb_raft_cb_send_installsnapshot(raft_server_t *raft, void *arg,
+				 raft_node_t *node, msg_installsnapshot_t *msg)
+{
+	struct rdb		       *db = arg;
+	struct rdb_raft_node	       *rdb_node = raft_node_get_udata(node);
+	struct rdb_raft_is	       *is = &rdb_node->dn_is;
+	crt_rpc_t		       *rpc;
+	struct rdb_installsnapshot_in  *in;
+	daos_iov_t			kds;
+	daos_iov_t			data;
+	daos_sg_list_t			sgl;
+	struct dss_module_info	       *info = dss_get_module_info();
+	int				rc;
+
+	rc = rdb_create_raft_rpc(RDB_INSTALLSNAPSHOT, node, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to create IS RPC to rank %u: %d\n",
+			DP_DB(db), rdb_node->dn_rank, rc);
+		goto err;
+	}
+
+	/* Start filling the request. */
+	in = crt_req_get(rpc);
+	uuid_copy(in->isi_op.ri_uuid, db->d_uuid);
+	in->isi_msg = *msg;
+
+	/*
+	 * Allocate the data buffers. The sizes mustn't change during the term
+	 * of the leadership.
+	 */
+	kds.iov_buf_len = 4 * 1024;
+	kds.iov_len = 0;
+	D_ALLOC(kds.iov_buf, kds.iov_buf_len);
+	if (kds.iov_buf == NULL)
+		goto err_rpc;
+	data.iov_buf_len = 1 * 1024 * 1024;
+	data.iov_len = 0;
+	D_ALLOC(data.iov_buf, data.iov_buf_len);
+	if (data.iov_buf == NULL)
+		goto err_kds;
+
+	/*
+	 * If the INSTALLSNAPSHOT state tracks a different term or snapshot,
+	 * reinitialize it for the current term and snapshot.
+	 */
+	if (rdb_node->dn_term != raft_get_current_term(raft) ||
+	    is->dis_index != msg->last_idx) {
+		rdb_node->dn_term = raft_get_current_term(raft);
+		is->dis_index = msg->last_idx;
+		is->dis_seq = 0;
+		rdb_anchor_set_zero(&is->dis_anchor);
+	}
+
+	/* Pack the chunk's data, anchor, and seq. */
+	rc = rdb_raft_pack_chunk(db->d_lc, is, &kds, &data, &in->isi_anchor);
+	if (rc != 0)
+		goto err_data;
+	in->isi_seq = is->dis_seq + 1;
+
+	/*
+	 * Create bulks for the buffers. crt_bulk_create looks at iov_buf_len
+	 * instead of iov_len.
+	 */
+	kds.iov_buf_len = kds.iov_len;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &kds;
+	rc = crt_bulk_create(info->dmi_ctx, daos2crt_sg(&sgl), CRT_BULK_RO,
+			     &in->isi_kds);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to create key descriptor bulk for rank "
+			"%u: %d\n", DP_DB(db), rdb_node->dn_rank, rc);
+		goto err_data;
+	}
+	data.iov_buf_len = data.iov_len;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &data;
+	rc = crt_bulk_create(info->dmi_ctx, daos2crt_sg(&sgl), CRT_BULK_RO,
+			     &in->isi_data);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to create key bulk for rank %u: %d\n",
+			DP_DB(db), rdb_node->dn_rank, rc);
+		goto err_kds_bulk;
+	}
+
+	rc = rdb_send_raft_rpc(rpc, db, node);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to send IS RPC to rank %u: %d\n",
+			DP_DB(db), rdb_node->dn_rank, rc);
+		goto err_data_bulk;
+	}
+
+	D_DEBUG(DB_TRACE, DF_DB": sent is to node %u rank %u: term=%d "
+		"last_idx=%d seq="DF_U64" kds.len="DF_U64" data.len="DF_U64"\n",
+		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
+		in->isi_msg.term, in->isi_msg.last_idx, in->isi_seq,
+		kds.iov_len, data.iov_len);
+	return 0;
+
+err_data_bulk:
+	crt_bulk_free(in->isi_data);
+err_kds_bulk:
+	crt_bulk_free(in->isi_kds);
+err_data:
+	D_FREE(data.iov_buf);
+err_kds:
+	D_FREE(kds.iov_buf);
+err_rpc:
+	crt_req_decref(rpc);
+err:
+	return rc;
+}
+
+struct rdb_raft_bulk {
+	ABT_eventual	drb_eventual;
+	int		drb_n;
+	int		drb_rc;
+};
+
+static int
+rdb_raft_recv_is_bulk_cb(const struct crt_bulk_cb_info *cb_info)
+{
+	struct rdb_raft_bulk   *arg = cb_info->bci_arg;
+
+	if (cb_info->bci_rc != 0) {
+		if (arg->drb_rc == 0)
+			arg->drb_rc = cb_info->bci_rc;
+	}
+	arg->drb_n--;
+	if (arg->drb_n == 0) {
+		int rc;
+
+		rc = ABT_eventual_set(arg->drb_eventual, NULL /* value */,
+				      0 /* nbytes */);
+		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	}
+	return 0;
+}
+
+/*
+ * Receive the bulk in->isi_kds and in->isi_data into kds and data,
+ * respectively. The buffers are allocated with the exact sizes. Callers are
+ * responsible for freeing these buffers.
+ *
+ * TODO: Implement and use a "parallel bulk" helper.
+ */
+static int
+rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, daos_iov_t *kds,
+		 daos_iov_t *data)
+{
+	struct rdb_installsnapshot_in  *in = crt_req_get(rpc);
+	crt_bulk_t			kds_bulk;
+	struct crt_bulk_desc		kds_desc;
+	crt_bulk_opid_t			kds_opid;
+	crt_bulk_t			data_bulk;
+	struct crt_bulk_desc		data_desc;
+	crt_bulk_opid_t			data_opid;
+	daos_sg_list_t			sgl;
+	struct rdb_raft_bulk		arg;
+	int				rc;
+
+	/* Allocate the data buffers. */
+	rc = crt_bulk_get_len(in->isi_kds, &kds->iov_buf_len);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	kds->iov_len = kds->iov_buf_len;
+	D_ALLOC(kds->iov_buf, kds->iov_buf_len);
+	if (kds->iov_buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	rc = crt_bulk_get_len(in->isi_data, &data->iov_buf_len);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	data->iov_len = data->iov_buf_len;
+	D_ALLOC(data->iov_buf, data->iov_buf_len);
+	if (data->iov_buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out_kds;
+	}
+
+	/* Create bulks for the buffers. */
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &in->isi_kds_iov;
+	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl), CRT_BULK_RW,
+			     &kds_bulk);
+	if (rc != 0)
+		goto out_data;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &in->isi_data_iov;
+	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl), CRT_BULK_RW,
+			     &data_bulk);
+	if (rc != 0)
+		goto out_kds_bulk;
+
+	/* Prepare the bulk callback argument. */
+	rc = ABT_eventual_create(0 /* nbytes */, &arg.drb_eventual);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_data_bulk;
+	}
+	arg.drb_n = 2;
+	arg.drb_rc = 0;
+
+	/* Transfer the data. */
+	memset(&kds_desc, 0, sizeof(kds_desc));
+	kds_desc.bd_rpc = rpc;
+	kds_desc.bd_bulk_op = CRT_BULK_GET;
+	kds_desc.bd_remote_hdl = in->isi_kds;
+	kds_desc.bd_local_hdl = kds_bulk;
+	kds_desc.bd_len = kds->iov_buf_len;
+	rc = crt_bulk_transfer(&kds_desc, rdb_raft_recv_is_bulk_cb, &arg,
+			       &kds_opid);
+	if (rc != 0)
+		goto out_eventual;
+	memset(&data_desc, 0, sizeof(data_desc));
+	data_desc.bd_rpc = rpc;
+	data_desc.bd_bulk_op = CRT_BULK_GET;
+	data_desc.bd_remote_hdl = in->isi_data;
+	data_desc.bd_local_hdl = data_bulk;
+	data_desc.bd_len = data->iov_buf_len;
+	rc = crt_bulk_transfer(&data_desc, rdb_raft_recv_is_bulk_cb, &arg,
+			       &data_opid);
+	if (rc != 0) {
+		if (arg.drb_rc == 0)
+			arg.drb_rc = rc;
+		arg.drb_n--;
+		if (arg.drb_n == 0)
+			goto out_eventual;
+		crt_bulk_abort(rpc->cr_ctx, kds_opid);
+	}
+
+	/* Wait for all transfers to complete. */
+	rc = ABT_eventual_wait(arg.drb_eventual, NULL /* value */);
+	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	rc = arg.drb_rc;
+
+out_eventual:
+	ABT_eventual_free(&arg.drb_eventual);
+out_data_bulk:
+	crt_bulk_free(data_bulk);
+out_kds_bulk:
+	crt_bulk_free(kds_bulk);
+out_data:
+	if (rc != 0)
+		D_FREE(data->iov_buf);
+out_kds:
+	if (rc != 0)
+		D_FREE(kds->iov_buf);
+out:
+	return rc;
+}
+
+static int
+rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
+{
+	daos_handle_t  *slc = arg;
+
+#if 0
+	int i;
+
+	D_ASSERT(daos_key_match(&io->ui_dkey, &rdb_dkey));
+	D_ASSERT(uuid_compare(io->ui_cookie, rdb_cookie) == 0);
+	D_ASSERTF(io->ui_version == RDB_PM_VER, "%u\n", io->ui_version);
+	for (i = 0; i < io->ui_iods_len; i++) {
+		D_ASSERT(io->ui_iods[i].iod_type == DAOS_IOD_SINGLE);
+		D_ASSERTF(io->ui_iods[i].iod_nr == 1, "%u\n",
+			 io->ui_iods[i].iod_nr);
+		D_ASSERTF(io->ui_iods[i].iod_recxs[0].rx_idx == 0, DF_U64"\n",
+			 io->ui_iods[i].iod_recxs[0].rx_idx);
+		D_ASSERTF(io->ui_iods[i].iod_recxs[0].rx_nr == 1, DF_U64"\n",
+			 io->ui_iods[i].iod_recxs[0].rx_nr);
+
+		D_ASSERT(io->ui_sgls != NULL);
+		D_ASSERTF(io->ui_sgls[i].sg_nr == 1, "%u\n",
+			  io->ui_sgls[i].sg_nr);
+		D_ASSERT(io->ui_sgls[i].sg_iovs[0].iov_buf != NULL);
+		D_ASSERT(io->ui_sgls[i].sg_iovs[0].iov_len > 0);
+	}
+#endif
+
+	return vos_obj_update(*slc, io->ui_oid, 0 /* epoch */, io->ui_cookie,
+			      io->ui_version, &io->ui_dkey, io->ui_iods_len,
+			      io->ui_iods, io->ui_sgls);
+}
+
+static int
+rdb_raft_unpack_chunk(daos_handle_t slc, daos_iov_t *kds, daos_iov_t *data)
+{
+	struct dss_enum_arg	arg;
+	daos_sg_list_t		sgl;
+
+	/* Set up the same iteration as rdb_raft_pack_chunk. */
+	memset(&arg, 0, sizeof(arg));
+	arg.recursive = true;
+
+	/* Set up the buffers. */
+	arg.kds = kds->iov_buf;
+	arg.kds_cap = kds->iov_buf_len / sizeof(*arg.kds);
+	arg.kds_len = kds->iov_len / sizeof(*arg.kds);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = data;
+	arg.sgl = &sgl;
+
+	/* Unpack from the object level. */
+	return dss_enum_unpack(VOS_ITER_OBJ, &arg, rdb_raft_exec_unpack_io,
+			       &slc);
+}
+
+static int
+rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
+				 raft_node_t *node, msg_installsnapshot_t *msg,
+				 msg_installsnapshot_response_t *resp)
+{
+	struct rdb		       *db = arg;
+	struct rdb_raft_node	       *rdb_node = raft_node_get_udata(node);
+	struct rdb_installsnapshot_in  *in;
+	struct rdb_installsnapshot_out *out;
+	daos_handle_t		       *slc = &db->d_slc;
+	struct rdb_lc_record	       *slc_record = &db->d_slc_record;
+	uint64_t			seq;
+	struct rdb_anchor		anchor;
+	daos_iov_t			keys[2];
+	daos_iov_t			values[2];
+	int				rc;
+
+	in = container_of(msg, struct rdb_installsnapshot_in, isi_msg);
+	out = container_of(resp, struct rdb_installsnapshot_out, iso_msg);
+
+	D_DEBUG(DB_TRACE, DF_DB": receiving is from rank %u: term=%d "
+		"last_idx=%d seq="DF_U64"\n", DP_DB(db), rdb_node->dn_rank,
+		in->isi_msg.term, in->isi_msg.last_idx, in->isi_seq);
+
+	/* Is there an existing SLC? */
+	if (!daos_handle_is_inval(*slc)) {
+		bool destroy = false;
+
+		/* As msg->term == currentTerm and currentTerm >= dlr_term... */
+		D_ASSERTF(msg->term >= slc_record->dlr_term, "%d >= "DF_U64"\n",
+			  msg->term, slc_record->dlr_term);
+
+		if (msg->term == slc_record->dlr_term) {
+			if (msg->last_idx < slc_record->dlr_base) {
+				D_DEBUG(DB_TRACE, DF_DB": stale snapshot: %d < "
+					DF_U64"\n", DP_DB(db), msg->last_idx,
+					slc_record->dlr_base);
+				/* Ask the leader to fast-forward matchIndex. */
+				return 1;
+			} else if (msg->last_idx > slc_record->dlr_base) {
+				D_DEBUG(DB_TRACE, DF_DB": new snapshot: %d > "
+					DF_U64"\n", DP_DB(db), msg->last_idx,
+					slc_record->dlr_base);
+				destroy = true;
+			}
+		} else {
+			D_DEBUG(DB_TRACE, DF_DB": new leader: %d != "DF_U64"\n",
+				DP_DB(db), msg->term, slc_record->dlr_term);
+			/*
+			 * We destroy the SLC anyway, even when the index
+			 * matches, as the new leader may use a different
+			 * maximal chunk size (once tunable).
+			 */
+			destroy = true;
+		}
+
+		if (destroy) {
+			D_DEBUG(DB_TRACE, DF_DB": destroying slc: "DF_U64"\n",
+				DP_DB(db), slc_record->dlr_base);
+			vos_cont_close(*slc);
+			*slc = DAOS_HDL_INVAL;
+			rc = rdb_raft_destroy_lc(db->d_pool, db->d_mc,
+						 &rdb_mc_slc,
+						 slc_record->dlr_uuid,
+						 slc_record);
+			if (rc != 0)
+				return rc;
+		}
+	}
+
+	/* If necessary, create a new SLC. */
+	if (daos_handle_is_inval(*slc)) {
+		D_DEBUG(DB_TRACE, DF_DB": creating slc: %d\n", DP_DB(db),
+			msg->last_idx);
+		rc = rdb_raft_create_lc(db->d_pool, db->d_mc, &rdb_mc_slc,
+					msg->last_idx, msg->last_term,
+					msg->term, slc_record);
+		if (rc != 0)
+			return rc;
+		rc = vos_cont_open(db->d_pool, slc_record->dlr_uuid, slc);
+		/* Not good, but we've just created it ourself... */
+		D_ASSERTF(rc == 0, "%d\n", rc);
+	}
+
+	/* We have an SLC matching this chunk. */
+	if (in->isi_seq <= slc_record->dlr_seq) {
+		D_DEBUG(DB_TRACE, DF_DB": already has: "DF_U64" <= "DF_U64"\n",
+			DP_DB(db), in->isi_seq, slc_record->dlr_seq);
+		/* Ask the leader to fast-forward seq. */
+		out->iso_success = 1;
+		out->iso_seq = slc_record->dlr_seq;
+		out->iso_anchor = slc_record->dlr_anchor;
+		return 0;
+	} else if (in->isi_seq > slc_record->dlr_seq + 1) {
+		/* Chunks are sent one by one for now. */
+		D_ERROR(DF_DB": might have lost chunks: "DF_U64" > "DF_U64"\n",
+			DP_DB(db), in->isi_seq, slc_record->dlr_seq);
+		return -DER_IO;
+	}
+
+	/* Save this chunk but do not update the SLC record yet. */
+	rc = rdb_raft_unpack_chunk(*slc, &in->isi_kds_iov, &in->isi_data_iov);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to unpack IS chunk %d/"DF_U64": %d\n",
+			DP_DB(db), in->isi_msg.last_idx, in->isi_seq, rc);
+		return rc;
+	}
+
+	/*
+	 * Update the seq and anchor in the SLC record. If the SLC is complete,
+	 * promote it to LC.
+	 */
+	seq = slc_record->dlr_seq;
+	anchor = slc_record->dlr_anchor;
+	slc_record->dlr_seq = in->isi_seq;
+	slc_record->dlr_anchor = in->isi_anchor;
+	if (rdb_anchor_is_eof(&slc_record->dlr_anchor)) {
+		daos_handle_t	       *lc = &db->d_lc;
+		struct rdb_lc_record   *lc_record = &db->d_lc_record;
+		struct rdb_lc_record	r;
+		daos_handle_t		h;
+
+		D_DEBUG(DB_TRACE, DF_DB": slc complete: "DF_U64"/"DF_U64"\n",
+			DP_DB(db), slc_record->dlr_base, slc_record->dlr_seq);
+
+		/* Swap the records. */
+		keys[0] = rdb_mc_lc;
+		daos_iov_set(&values[0], slc_record, sizeof(*slc_record));
+		keys[1] = rdb_mc_slc;
+		daos_iov_set(&values[1], lc_record, sizeof(*lc_record));
+		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys,
+				   values);
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to swap LC records: %d\n",
+				DP_DB(db), rc);
+			slc_record->dlr_seq = seq;
+			slc_record->dlr_anchor = anchor;
+			return rc;
+		}
+		r = *lc_record;
+		*lc_record = *slc_record;
+		*slc_record = r;
+
+		/* Swap the handles. */
+		h = *lc;
+		*lc = *slc;
+		*slc = h;
+
+		/* The chunk is successfully stored. */
+		out->iso_success = 1;
+		out->iso_seq = lc_record->dlr_seq;
+		out->iso_anchor = lc_record->dlr_anchor;
+
+		/* Load this snapshot. */
+		rc = rdb_raft_load_snapshot(db);
+		if (rc != 0)
+			return rc;
+
+		/* Destroy the previous LC, which is the SLC now. */
+		vos_cont_close(*slc);
+		*slc = DAOS_HDL_INVAL;
+		rc = rdb_raft_destroy_lc(db->d_pool, db->d_mc, &rdb_mc_slc,
+					 slc_record->dlr_uuid, slc_record);
+		if (rc != 0)
+			return rc;
+
+		/* Inform raft that this snapshot is complete. */
+		rc = 1;
+	} else {
+		D_DEBUG(DB_TRACE, DF_DB": chunk complete: "DF_U64"/"DF_U64"\n",
+			DP_DB(db), slc_record->dlr_base, slc_record->dlr_seq);
+
+		daos_iov_set(&values[0], slc_record, sizeof(*slc_record));
+		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */,
+				   &rdb_mc_slc, &values[0]);
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to update SLC record: %d\n",
+				DP_DB(db), rc);
+			slc_record->dlr_seq = seq;
+			slc_record->dlr_anchor = anchor;
+			return rc;
+		}
+
+		/* The chunk is successfully stored. */
+		out->iso_success = 1;
+		out->iso_seq = slc_record->dlr_seq;
+		out->iso_anchor = slc_record->dlr_anchor;
+	}
+
+	return rc;
+}
+
+static int
+rdb_raft_cb_recv_installsnapshot_resp(raft_server_t *raft, void *arg,
+				      raft_node_t *node,
+				      msg_installsnapshot_response_t *resp)
+{
+	struct rdb		       *db = arg;
+	struct rdb_raft_node	       *rdb_node = raft_node_get_udata(node);
+	struct rdb_raft_is	       *is = &rdb_node->dn_is;
+	struct rdb_installsnapshot_out *out;
+
+	out = container_of(resp, struct rdb_installsnapshot_out, iso_msg);
+
+	/* If no longer transferring this snapshot, ignore this response. */
+	if (rdb_node->dn_term != raft_get_current_term(raft) ||
+	    is->dis_index != resp->last_idx) {
+		D_DEBUG(DB_TRACE, DF_DB": rank %u: stale term "DF_U64
+			" != %d or index "DF_U64" != %d\n", DP_DB(db),
+			rdb_node->dn_rank, rdb_node->dn_term,
+			raft_get_current_term(raft), is->dis_index,
+			resp->last_idx);
+		return 0;
+	}
+
+	/* If this chunk isn't successfully stored, ignore this response. */
+	if (!out->iso_success) {
+		D_DEBUG(DB_TRACE, DF_DB": rank %u: unsuccessful chunk %d/"DF_U64
+			"("DF_U64")\n", DP_DB(db), rdb_node->dn_rank,
+			resp->last_idx, out->iso_seq, is->dis_seq);
+		return 0;
+	}
+
+	/* Ignore this stale response. */
+	if (out->iso_seq <= is->dis_seq) {
+		D_DEBUG(DB_TRACE, DF_DB": rank %u: stale chunk %d/"DF_U64"("
+			DF_U64")\n", DP_DB(db), rdb_node->dn_rank,
+			resp->last_idx, out->iso_seq, is->dis_seq);
+		return 0;
+	}
+
+	D_DEBUG(DB_TRACE, DF_DB": rank %u: completed chunk %d/"DF_U64"("DF_U64
+		")\n", DP_DB(db), rdb_node->dn_rank, resp->last_idx,
+		out->iso_seq, is->dis_seq);
+
+	/* Update the last sequence number and anchor. */
+	is->dis_seq = out->iso_seq;
+	is->dis_anchor = out->iso_anchor;
+
+	return 0;
+}
+
+static int
 rdb_raft_cb_persist_vote(raft_server_t *raft, void *arg, int vote)
 {
 	struct rdb     *db = arg;
@@ -582,14 +1197,17 @@ rdb_raft_cb_debug(raft_server_t *raft, raft_node_t *node, void *arg,
 }
 
 static raft_cbs_t rdb_raft_cbs = {
-	.send_requestvote	= rdb_raft_cb_send_requestvote,
-	.send_appendentries	= rdb_raft_cb_send_appendentries,
-	.persist_vote		= rdb_raft_cb_persist_vote,
-	.persist_term		= rdb_raft_cb_persist_term,
-	.log_offer		= rdb_raft_cb_log_offer,
-	.log_poll		= rdb_raft_cb_log_poll,
-	.log_pop		= rdb_raft_cb_log_pop,
-	.log			= rdb_raft_cb_debug
+	.send_requestvote		= rdb_raft_cb_send_requestvote,
+	.send_appendentries		= rdb_raft_cb_send_appendentries,
+	.send_installsnapshot		= rdb_raft_cb_send_installsnapshot,
+	.recv_installsnapshot		= rdb_raft_cb_recv_installsnapshot,
+	.recv_installsnapshot_response	= rdb_raft_cb_recv_installsnapshot_resp,
+	.persist_vote			= rdb_raft_cb_persist_vote,
+	.persist_term			= rdb_raft_cb_persist_term,
+	.log_offer			= rdb_raft_cb_log_offer,
+	.log_poll			= rdb_raft_cb_log_poll,
+	.log_pop			= rdb_raft_cb_log_pop,
+	.log				= rdb_raft_cb_debug
 };
 
 /*
@@ -1159,6 +1777,97 @@ rdb_timerd(void *arg)
 }
 
 /*
+ * Create an LC or SLC, depending on key. If not NULL, record shall point to
+ * the cache of the LC or SLC record.
+ *
+ * Note that this function doesn't attempt to rollback the record if the
+ * container creation fails.
+ */
+static int
+rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc, daos_iov_t *key,
+		   uint64_t base, uint64_t base_term, uint64_t term,
+		   struct rdb_lc_record *record)
+{
+	struct rdb_lc_record	r = {
+		.dlr_base	= base,
+		.dlr_base_term	= base_term,
+		.dlr_tail	= base + 1,
+		.dlr_aggregated	= base,
+		.dlr_term	= term
+	};
+	daos_iov_t		value;
+	int			rc;
+
+	D_ASSERTF(key == &rdb_mc_lc || key == &rdb_mc_slc, "%p\n", key);
+
+	if (key == &rdb_mc_lc) {
+		/* A new LC is complete. */
+		r.dlr_seq = 1;
+		rdb_anchor_set_eof(&r.dlr_anchor);
+	} else {
+		/* A new SLC is empty. */
+		r.dlr_seq = 0;
+		rdb_anchor_set_zero(&r.dlr_anchor);
+	}
+
+	/* Create the record before creating the container. */
+	uuid_generate(r.dlr_uuid);
+	daos_iov_set(&value, &r, sizeof(r));
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, key, &value);
+	if (rc != 0) {
+		D_ERROR("failed to create %s record: %d\n",
+			key == &rdb_mc_lc ? "LC" : "SLC", rc);
+		return rc;
+	}
+	if (record != NULL)
+		*record = r;
+
+	/* Create the container. Ignore record rollbacks for now. */
+	rc = vos_cont_create(pool, r.dlr_uuid);
+	if (rc != 0) {
+		D_ERROR("failed to create %s "DF_UUID": %d\n",
+			key == &rdb_mc_lc ? "LC" : "SLC", DP_UUID(r.dlr_uuid),
+			rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+static int
+rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc, daos_iov_t *key,
+		    uuid_t uuid, struct rdb_lc_record *record)
+{
+	struct rdb_lc_record	r = {};
+	daos_iov_t		value;
+	int			rc;
+
+	D_ASSERTF(key == &rdb_mc_lc || key == &rdb_mc_slc, "%p\n", key);
+
+	/* Destroy the container first. */
+	rc = vos_cont_destroy(pool, uuid);
+	if (rc != 0) {
+		D_ERROR("failed to destroy %s "DF_UUID": %d\n",
+			key == &rdb_mc_lc ? "LC" : "SLC", DP_UUID(uuid), rc);
+		return rc;
+	}
+
+	/* Clear the record. We cannot rollback the destroy. */
+	uuid_clear(r.dlr_uuid);
+	daos_iov_set(&value, &r, sizeof(r));
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, key, &value);
+	if (rc != 0) {
+		D_ERROR("failed to clear %s record: %d\n",
+			key == &rdb_mc_lc ? "LC" : "SLC", rc);
+		return rc;
+	}
+	if (record != NULL)
+		*record = r;
+
+	return 0;
+}
+
+/*
  * The caller, rdb_create(), will remove the VOS pool file if we return an
  * error.
  */
@@ -1169,9 +1878,6 @@ rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
 	daos_iov_t		keys[2];
 	daos_iov_t		values[2];
 	uint8_t			nreplicas = replicas->rl_nr;
-	uuid_t			lc_uuid;
-	daos_handle_t		lc;
-	struct rdb_lc_record	lc_record;
 	int			rc;
 
 	/* Record the configuration in the metadata container. */
@@ -1182,29 +1888,12 @@ rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
 		     sizeof(*replicas->rl_ranks) * nreplicas);
 	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 2 /* n */, keys, values);
 	if (rc != 0)
-		goto out;
+		return rc;
 
-	/* Create and open a log container. */
-	uuid_generate(lc_uuid);
-	rc = vos_cont_create(pool, lc_uuid);
-	if (rc != 0)
-		goto out;
-	rc = vos_cont_open(pool, lc_uuid, &lc);
-	if (rc != 0)
-		goto out;
-
-	/* Record the log container in the metadata container. */
-	uuid_copy(lc_record.dlr_uuid, lc_uuid);
-	lc_record.dlr_base = 0;
-	lc_record.dlr_base_term = 0;
-	lc_record.dlr_tail = 1;
-	lc_record.dlr_aggregated = 0;
-	daos_iov_set(&values[0], &lc_record, sizeof(lc_record));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &values[0]);
-
-	vos_cont_close(lc);
-out:
-	return rc;
+	/* Create the log container. */
+	return rdb_raft_create_lc(pool, mc, &rdb_mc_lc, 0 /* base */,
+				  0 /* base_term */, 0 /* term */,
+				  NULL /* lc_record */);
 }
 
 static int
@@ -1263,6 +1952,7 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 	return 0;
 }
 
+/* Load the LC and the SLC (if one exists). */
 static int
 rdb_raft_load_lc(struct rdb *db)
 {
@@ -1270,18 +1960,41 @@ rdb_raft_load_lc(struct rdb *db)
 	uint64_t	i;
 	int		rc;
 
+	/* Look up and open the SLC. */
+	daos_iov_set(&value, &db->d_slc_record, sizeof(db->d_slc_record));
+	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_slc, &value);
+	if (rc == -DER_NONEXIST) {
+		D_DEBUG(DB_MD, DF_DB": no SLC record\n", DP_DB(db));
+		db->d_slc = DAOS_HDL_INVAL;
+		goto lc;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up SLC: %d\n", DP_DB(db), rc);
+		goto err;
+	}
+	rc = vos_cont_open(db->d_pool, db->d_slc_record.dlr_uuid, &db->d_slc);
+	if (rc == -DER_NONEXIST) {
+		D_DEBUG(DB_MD, DF_DB": dangling SLC record: "DF_UUID"\n",
+			DP_DB(db), DP_UUID(db->d_slc_record.dlr_uuid));
+		db->d_slc = DAOS_HDL_INVAL;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to open SLC "DF_UUID": %d\n", DP_DB(db),
+			DP_UUID(db->d_slc_record.dlr_uuid), rc);
+		goto err;
+	}
+
+lc:
 	/* Look up and open the LC. */
 	daos_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_lc, &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to look up LC: %d\n", DP_DB(db), rc);
-		goto err;
+		goto err_slc;
 	}
 	rc = vos_cont_open(db->d_pool, db->d_lc_record.dlr_uuid, &db->d_lc);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to open LC "DF_UUID": %d\n", DP_DB(db),
 			DP_UUID(db->d_lc_record.dlr_uuid), rc);
-		goto err;
+		goto err_slc;
 	}
 
 	/* Recover the LC by discarding any partially appended entries. */
@@ -1310,6 +2023,9 @@ rdb_raft_load_lc(struct rdb *db)
 
 err_lc:
 	vos_cont_close(db->d_lc);
+err_slc:
+	if (!daos_handle_is_inval(db->d_slc))
+		vos_cont_close(db->d_slc);
 err:
 	return rc;
 }
@@ -1318,6 +2034,8 @@ static void
 rdb_raft_unload_lc(struct rdb *db)
 {
 	rdb_raft_unload_snapshot(db);
+	if (!daos_handle_is_inval(db->d_slc))
+		vos_cont_close(db->d_slc);
 	vos_cont_close(db->d_lc);
 }
 
@@ -1703,6 +2421,70 @@ out:
 }
 
 void
+rdb_installsnapshot_handler(crt_rpc_t *rpc)
+{
+	struct rdb_installsnapshot_in  *in = crt_req_get(rpc);
+	struct rdb_installsnapshot_out *out = crt_reply_get(rpc);
+	struct rdb		       *db;
+	raft_node_t		       *node;
+	struct rdb_raft_state		state;
+	int				rc;
+
+	db = rdb_lookup(in->isi_op.ri_uuid);
+	if (db == NULL) {
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+	if (db->d_stop) {
+		rc = -DER_CANCELED;
+		goto out_db;
+	}
+
+	D_DEBUG(DB_TRACE, DF_DB": handling raft is from rank %u\n", DP_DB(db),
+		rpc->cr_ep.ep_rank);
+
+	/* Receive the bulk data buffers before entering raft. */
+	rc = rdb_raft_recv_is(db, rpc, &in->isi_kds_iov, &in->isi_data_iov);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to receive INSTALLSNAPSHOT chunk %d/"
+			DF_U64": %d\n", DP_DB(db), in->isi_msg.last_idx,
+			in->isi_seq, rc);
+		goto out_db;
+	}
+
+	node = rdb_raft_find_node(db, rpc->cr_ep.ep_rank);
+	if (node == NULL) {
+		rc = -DER_UNKNOWN;
+		goto out_is;
+	}
+	rdb_raft_save_state(db, &state);
+	rc = raft_recv_installsnapshot(db->d_raft, node, &in->isi_msg,
+				       &out->iso_msg);
+	rc = rdb_raft_check_state(db, &state, rc);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to process INSTALLSNAPSHOT from rank "
+			"%u: %d\n", DP_DB(db), rpc->cr_ep.ep_rank, rc);
+		/*
+		 * raft_recv_installsnapshot() always generates a valid reply.
+		 */
+		rc = 0;
+	}
+
+out_is:
+	D_FREE(in->isi_data_iov.iov_buf);
+	D_FREE(in->isi_kds_iov.iov_buf);
+out_db:
+	rdb_put(db);
+out:
+	out->iso_op.ro_rc = rc;
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to send INSTALLSNAPSHOT reply to rank "
+			"%u: %d\n", DP_UUID(in->isi_op.ri_uuid),
+			rpc->cr_ep.ep_rank, rc);
+}
+
+void
 rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 {
 	struct rdb_raft_state		state;
@@ -1710,6 +2492,7 @@ rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 	void			       *out = crt_reply_get(rpc);
 	struct rdb_requestvote_out     *out_rv;
 	struct rdb_appendentries_out   *out_ae;
+	struct rdb_installsnapshot_out *out_is;
 	int				rc;
 
 	rc = ((struct rdb_op_out *)out)->ro_rc;
@@ -1731,6 +2514,11 @@ rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 		rc = raft_recv_appendentries_response(db->d_raft, node,
 						      &out_ae->aeo_msg);
 		break;
+	case RDB_INSTALLSNAPSHOT:
+		out_is = out;
+		rc = raft_recv_installsnapshot_response(db->d_raft, node,
+							&out_is->iso_msg);
+		break;
 	default:
 		D_ASSERTF(0, DF_DB": unexpected opc: %u\n", DP_DB(db), opc);
 	}
@@ -1740,12 +2528,38 @@ rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 			DP_DB(db), opc, rc);
 }
 
+/* The buffer belonging to bulk must a single daos_iov_t. */
+static void
+rdb_raft_free_bulk_and_buffer(crt_bulk_t bulk)
+{
+	daos_iov_t	iov;
+	daos_sg_list_t	sgl;
+	int		rc;
+
+	/* Save the buffer address in iov.iov_buf. */
+	daos_iov_set(&iov, NULL /* buf */, 0 /* size */);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+	rc = crt_bulk_access(bulk, &sgl);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(sgl.sg_nr_out == 1, "%d\n", sgl.sg_nr_out);
+	D_ASSERT(iov.iov_buf != NULL);
+
+	/* Free the bulk. */
+	crt_bulk_free(bulk);
+
+	/* Free the buffer. */
+	D_FREE(iov.iov_buf);
+}
+
 /* Free any additional memory we allocated for the request. */
 void
 rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc)
 {
 	crt_opcode_t			opc = opc_get(rpc->cr_opc);
 	struct rdb_appendentries_in    *in_ae;
+	struct rdb_installsnapshot_in  *in_is;
 
 	switch (opc) {
 	case RDB_REQUESTVOTE:
@@ -1754,6 +2568,11 @@ rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc)
 	case RDB_APPENDENTRIES:
 		in_ae = crt_req_get(rpc);
 		rdb_raft_fini_ae(&in_ae->aei_msg);
+		break;
+	case RDB_INSTALLSNAPSHOT:
+		in_is = crt_req_get(rpc);
+		rdb_raft_free_bulk_and_buffer(in_is->isi_data);
+		rdb_raft_free_bulk_and_buffer(in_is->isi_kds);
 		break;
 	default:
 		D_ASSERTF(0, DF_DB": unexpected opc: %u\n", DP_DB(db), opc);

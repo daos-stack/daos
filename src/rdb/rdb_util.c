@@ -191,6 +191,47 @@ rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 	daos_obj_id_generate(&uoid->id_pub, feat, 0 /* cid */);
 }
 
+void
+rdb_anchor_set_zero(struct rdb_anchor *anchor)
+{
+	memset(&anchor->da_object, 0, sizeof(anchor->da_object));
+	memset(&anchor->da_akey, 0, sizeof(anchor->da_akey));
+}
+
+void
+rdb_anchor_set_eof(struct rdb_anchor *anchor)
+{
+	daos_anchor_set_eof(&anchor->da_object);
+	daos_anchor_set_eof(&anchor->da_akey);
+}
+
+bool
+rdb_anchor_is_eof(const struct rdb_anchor *anchor)
+{
+	return (daos_anchor_is_eof((daos_anchor_t *)&anchor->da_object) &&
+		daos_anchor_is_eof((daos_anchor_t *)&anchor->da_akey));
+}
+
+void
+rdb_anchor_to_hashes(const struct rdb_anchor *anchor, daos_anchor_t *obj_anchor,
+		     daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor,
+		     daos_anchor_t *recx_anchor)
+{
+	*obj_anchor = anchor->da_object;
+	memset(dkey_anchor, 0, sizeof(*dkey_anchor));
+	*akey_anchor = anchor->da_akey;
+	memset(recx_anchor, 0, sizeof(*recx_anchor));
+}
+
+void
+rdb_anchor_from_hashes(struct rdb_anchor *anchor, daos_anchor_t *obj_anchor,
+		       daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor,
+		       daos_anchor_t *recx_anchor)
+{
+	anchor->da_object = *obj_anchor;
+	anchor->da_akey = *akey_anchor;
+}
+
 enum rdb_vos_op {
 	RDB_VOS_QUERY,
 	RDB_VOS_UPDATE

@@ -65,6 +65,8 @@ struct rdb {
 	raft_server_t	       *d_raft;
 	daos_handle_t		d_lc;		/* log container */
 	struct rdb_lc_record	d_lc_record;	/* of d_lc */
+	daos_handle_t		d_slc;		/* staging log container */
+	struct rdb_lc_record	d_slc_record;	/* of d_slc */
 	d_rank_list_t	       *d_replicas;
 	uint64_t		d_applied;	/* last applied index */
 	uint64_t		d_debut;	/* first entry in a term */
@@ -117,9 +119,25 @@ int rdb_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
 
 /* rdb_raft.c *****************************************************************/
 
+/*
+ * Per-raft_node_t INSTALLSNAPSHOT state
+ *
+ * dis_seq and dis_anchor track the last chunk successfully received by the
+ * follower.
+ */
+struct rdb_raft_is {
+	uint64_t		dis_index;	/* snapshot index */
+	uint64_t		dis_seq;	/* last sequence number */
+	struct rdb_anchor	dis_anchor;	/* last anchor */
+};
+
 /* Per-raft_node_t data */
 struct rdb_raft_node {
-	d_rank_t	dn_rank;
+	d_rank_t		dn_rank;
+
+	/* Leader fields */
+	uint64_t		dn_term;	/* of leader */
+	struct rdb_raft_is	dn_is;
 };
 
 int rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
@@ -133,6 +151,7 @@ int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,
 int rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term);
 void rdb_requestvote_handler(crt_rpc_t *rpc);
 void rdb_appendentries_handler(crt_rpc_t *rpc);
+void rdb_installsnapshot_handler(crt_rpc_t *rpc);
 void rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc);
 void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
 
@@ -147,6 +166,7 @@ void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
 enum rdb_operation {
 	RDB_REQUESTVOTE		= 1,
 	RDB_APPENDENTRIES	= 2,
+	RDB_INSTALLSNAPSHOT	= 3
 };
 
 struct rdb_op_in {
@@ -176,6 +196,29 @@ struct rdb_appendentries_in {
 struct rdb_appendentries_out {
 	struct rdb_op_out		aeo_op;
 	msg_appendentries_response_t	aeo_msg;
+};
+
+struct rdb_installsnapshot_in {
+	struct rdb_op_in	isi_op;
+	msg_installsnapshot_t	isi_msg;
+	uint32_t		isi_padding;
+	uint64_t		isi_seq;	/* chunk sequence number */
+	struct rdb_anchor	isi_anchor;	/* chunk anchor */
+	crt_bulk_t		isi_kds;	/* daos_key_desc_t[] */
+	crt_bulk_t		isi_data;	/* described by isi_kds */
+
+	/* Local fields (not sent over the network) */
+	daos_iov_t		isi_kds_iov;	/* isi_kds buffer */
+	daos_iov_t		isi_data_iov;	/* isi_data buffer */
+};
+
+struct rdb_installsnapshot_out {
+	struct rdb_op_out		iso_op;
+	msg_installsnapshot_response_t	iso_msg;
+	uint32_t			iso_padding;
+	uint64_t			iso_success;	/* chunk saved? */
+	uint64_t			iso_seq;	/* last seq number */
+	struct rdb_anchor		iso_anchor;	/* last anchor */
 };
 
 extern struct daos_rpc rdb_srv_rpcs[];
@@ -229,6 +272,19 @@ ssize_t rdb_decode_iov_backward(const void *buf_end, size_t len,
 				daos_iov_t *iov);
 
 void rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid);
+
+void rdb_anchor_set_zero(struct rdb_anchor *anchor);
+void rdb_anchor_set_eof(struct rdb_anchor *anchor);
+bool rdb_anchor_is_eof(const struct rdb_anchor *anchor);
+void rdb_anchor_to_hashes(const struct rdb_anchor *anchor,
+			  daos_anchor_t *obj_anchor, daos_anchor_t *dkey_anchor,
+			  daos_anchor_t *akey_anchor,
+			  daos_anchor_t *recx_anchor);
+void rdb_anchor_from_hashes(struct rdb_anchor *anchor,
+			    daos_anchor_t *obj_anchor,
+			    daos_anchor_t *dkey_anchor,
+			    daos_anchor_t *akey_anchor,
+			    daos_anchor_t *recx_anchor);
 
 int rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		  daos_key_t *akey, daos_iov_t *value);

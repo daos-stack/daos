@@ -104,6 +104,12 @@ extern uuid_t rdb_cookie;
 /* pm_ver for all VOS calls taking a pm_ver argument */
 #define RDB_PM_VER 0
 
+/* Anchor for iterating a container */
+struct rdb_anchor {
+	daos_anchor_t	da_object;
+	daos_anchor_t	da_akey;
+};
+
 /* Metadata container (MC) ****************************************************/
 
 /*
@@ -127,14 +133,18 @@ extern daos_iov_t rdb_mc_replicas;	/* uint32_t[] */
 extern daos_iov_t rdb_mc_term;		/* int */
 extern daos_iov_t rdb_mc_vote;		/* int */
 extern daos_iov_t rdb_mc_lc;		/* rdb_lc_record */
+extern daos_iov_t rdb_mc_slc;		/* rdb_lc_record */
 
 /* Log container record */
 struct rdb_lc_record {
-	uuid_t		dlr_uuid;	/* of log container */
-	uint64_t	dlr_base;	/* base index */
-	uint64_t	dlr_base_term;	/* base term */
-	uint64_t	dlr_tail;	/* last index + 1 */
-	uint64_t	dlr_aggregated;	/* last aggregated index */
+	uuid_t			dlr_uuid;	/* of log container */
+	uint64_t		dlr_base;	/* base index */
+	uint64_t		dlr_base_term;	/* base term */
+	uint64_t		dlr_tail;	/* last index + 1 */
+	uint64_t		dlr_aggregated;	/* last aggregated index */
+	uint64_t		dlr_term;	/* in which LC was created */
+	uint64_t		dlr_seq;	/* last chunk sequence number */
+	struct rdb_anchor	dlr_anchor;	/* last chunk anchor */
 };
 
 /* Log container (LC) *********************************************************/
