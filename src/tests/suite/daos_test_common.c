@@ -341,6 +341,12 @@ test_teardown(void **state)
 	int		 rc = 0;
 	int              rc_reduce = 0;
 
+	if (arg == NULL) {
+		print_message("state not set, likely due to group-setup"
+			      " issue\n");
+		return 0;
+	}
+
 	if (arg->multi_rank)
 		MPI_Barrier(MPI_COMM_WORLD);
 

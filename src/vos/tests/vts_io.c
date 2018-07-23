@@ -231,6 +231,12 @@ teardown_io(void **state)
 {
 	struct io_test_args *arg = *state;
 
+	if (arg == NULL) {
+		print_message("state not set, likely due to group-setup"
+			      " issue\n");
+		return 0;
+	}
+
 	assert_ptr_equal(arg, &test_args);
 	vts_ctx_fini(&arg->ctx);
 	return 0;

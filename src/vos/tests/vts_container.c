@@ -208,6 +208,12 @@ teardown(void **state)
 	int			ret = 0;
 	struct vc_test_args	*test_arg = *state;
 
+	if (test_arg == NULL) {
+		print_message("state not set, likely due to group-setup"
+			      " issue\n");
+		return 0;
+	}
+
 	ret = vos_pool_close(test_arg->poh);
 	assert_int_equal(ret, 0);
 

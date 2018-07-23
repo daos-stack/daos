@@ -462,6 +462,12 @@ vea_ut_teardown(void **state)
 	struct vea_resrvd_ext *ext, *tmp;
 	d_list_t *r_list;
 
+	if (args == NULL) {
+		print_message("state not set, likely due to group-setup"
+			      " issue\n");
+		return 0;
+	}
+
 	r_list = &args->vua_alloc_list;
 	d_list_for_each_entry_safe(ext, tmp, r_list, vre_link) {
 		d_list_del_init(&ext->vre_link);

@@ -229,6 +229,12 @@ teardown(void **state)
 {
 	struct vp_test_args	*arg = *state;
 
+	if (arg == NULL) {
+		print_message("state not set, likely due to group-setup"
+			      " issue\n");
+		return 0;
+	}
+
 	free(arg);
 	return 0;
 }
