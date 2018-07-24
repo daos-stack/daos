@@ -37,6 +37,9 @@ daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 	memset(sgl, 0, sizeof(*sgl));
 
 	sgl->sg_nr = nr;
+	if (nr == 0)
+		return 0;
+
 	D_ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;

@@ -130,7 +130,7 @@ eio_sgl_convert(struct eio_sglist *esgl, daos_sg_list_t *sgl)
 	int i, rc;
 
 	D_ASSERT(sgl != NULL);
-	D_ASSERT(esgl && esgl->es_nr_out != 0);
+	D_ASSERT(esgl != NULL);
 
 	rc = daos_sgl_init(sgl, esgl->es_nr_out);
 	if (rc != 0)
