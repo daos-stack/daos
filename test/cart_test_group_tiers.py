@@ -94,7 +94,7 @@ class TestGroup(commontestsuite.CommonTestSuite):
             self.skipTest('requires three or more nodes.')
 
         client = self.get_client_list()
-        if not client or len(client) < 1:
+        if not client:
             self.skipTest('requires three or more nodes.')
 
         testmsg = self.shortDescription()
