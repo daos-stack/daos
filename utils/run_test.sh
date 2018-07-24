@@ -18,6 +18,11 @@
 
 #check for existence of /mnt/daos first:
 failed=0
+
+if [ -d /work ]; then
+    export D_LOG_FILE=/work/daos.log
+fi
+
 run_test()
 {
     time flock /mnt/daos/jenkins.lock "$@" > tmp_test_file 2>&1
@@ -44,6 +49,10 @@ if [ -d "/mnt/daos" ]; then
     run_test src/vos/tests/evt_ctl.sh
     run_test build/src/vos/vea/tests/vea_ut
     run_test src/rdb/raft_tests/raft_tests.py
+    # Environment variables specific to the rdb tests
+    export PATH=$SL_PREFIX/bin:$PATH
+    export OFI_INTERFACE=lo
+    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for
