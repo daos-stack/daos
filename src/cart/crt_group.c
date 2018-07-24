@@ -153,7 +153,7 @@ static int
 crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 {
 	struct d_hash_table	**htables;
-	int			  i, rc = 0;
+	int			  rc = 0, rc2, i, j;
 
 	D_ASSERT(grp_priv != NULL);
 	if (grp_priv->gp_primary == 0) {
@@ -171,22 +171,32 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 					 NULL, &lookup_table_ops, &htables[i]);
 		if (rc != 0) {
 			D_ERROR("d_hash_table_create failed, rc: %d.\n", rc);
-			D_GOTO(out, rc);
+			D_GOTO(free_htables, rc);
 		}
 		D_ASSERT(htables[i] != NULL);
 	}
 	grp_priv->gp_lookup_cache = htables;
+	return 0;
+
+free_htables:
+	for (j = 0; j < i; j++) {
+		rc2 = d_hash_table_destroy(htables[j], true /* force */);
+		if (rc2 != 0)
+			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
+	}
+	D_FREE(htables);
 
 out:
 	if (rc != 0)
 		D_ERROR("crt_grp_lc_create failed, rc: %d.\n", rc);
+
 	return rc;
 }
 
 static int
 crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 {
-	int	rc = 0, i;
+	int	rc = 0, rc2, i;
 
 	D_ASSERT(grp_priv != NULL);
 
@@ -194,17 +204,15 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 		return 0;
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc = d_hash_table_destroy(grp_priv->gp_lookup_cache[i],
+		rc2 = d_hash_table_destroy(grp_priv->gp_lookup_cache[i],
 					  true /* force */);
-		if (rc != 0) {
-			D_ERROR("d_hash_table_destroy_inplace failed, "
-				"rc: %d.\n", rc);
-			D_GOTO(out, rc);
+		if (rc2 != 0) {
+			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
+			rc = rc ? rc : rc2;
 		}
 	}
 	D_FREE(grp_priv->gp_lookup_cache);
 
-out:
 	return rc;
 }
 
