@@ -39,10 +39,8 @@ def checkForPool(host, uuid):
         print ('%s does not exist' % file)
     return resp
 
+def CleanupPools(hosts):
 
-def main():
-    checkForPool('vm1', 'rubbish')
-
-
-if __name__ == "__main__":
-    main()
+    for host in hosts:
+        cmd="rm -rf /mnt/daos/*"
+        resp = subprocess.call(["ssh", host, cmd])

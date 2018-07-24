@@ -55,11 +55,17 @@ def ContinousIo(container, seconds):
             print "data2>{}".format(data2.value)
             raise ValueError("Data mismatch in ContinousIo")
 
+        # collapse down the commited epochs
+        container.slip_epoch()
+
         total_written += size
+
     return total_written
 
 def WriteUntilFull(container):
-    """ write until we get enospace back """
+    """ write until we get enospace back
+
+    """
 
     total_written = 0
     size = 2048
@@ -77,6 +83,47 @@ def WriteUntilFull(container):
 
             oid, epoch = container.write_an_obj(data, size, dkey, akey)
             total_written += size
+
+            # collapse down the commited epochs
+            container.slip_epoch()
+
+
+    except ValueError as exp:
+        print exp
+
+    return total_written
+
+def WriteQuantity(container,size_in_bytes):
+    """ Write a specific number of bytes.  Note the minimum amount
+        that will be written is 2048 bytes.
+
+        container --which container to write to, it should be in an open
+                    state prior to the call
+        size_in_bytes --number of bytes to be written, although no less that
+                        2048 will be written.
+    """
+
+    total_written = 0
+    size = 2048
+    oid = None
+
+    try:
+        while total_written < size_in_bytes:
+
+            # make some stuff up and write
+            dkey = ''.join(random.choice(string.ascii_uppercase + string.digits)
+                           for _ in range(5))
+            akey = ''.join(random.choice(string.ascii_uppercase + string.digits)
+                           for _ in range(5))
+            data = ''.join(random.choice(string.ascii_uppercase + string.digits)
+                       for _ in range(size))
+
+            oid, epoch = container.write_an_obj(data, size, dkey, akey)
+            total_written += size
+
+            # collapse down the commited epochs
+            container.slip_epoch()
+
 
     except ValueError as exp:
         print exp

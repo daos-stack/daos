@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2017 Intel Corporation.
+  (C) Copyright 2018 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 
 import os
 import time
+import subprocess
 
 import aexpect
 from avocado.utils import genio
@@ -39,6 +40,10 @@ def printFunc(thestring):
        print "<SERVER>" + thestring
 
 def runServer(hostfile, setname, basepath):
+    """
+    Launches DAOS servers in accordance with the supplied hostfile.
+
+    """
 
     global sessions
     try:
@@ -69,6 +74,11 @@ def runServer(hostfile, setname, basepath):
         raise ServerFailed("Server didn't start!")
 
 def stopServer(setname=None):
+    """
+    orterun says that if you send a ctrl-c to it, it will
+    initiate an orderly shutdown of all the processes it
+    has spawned.  Doesn't always work though.
+    """
 
     global sessions
     try:
@@ -85,3 +95,16 @@ def stopServer(setname=None):
     except Exception as e:
         print "<SERVER> Exception occurred: {0}".format(str(e))
         raise ServerFailed("Server didn't stop!")
+
+def killServer(hosts):
+    """
+    Sometimes stop doesn't get everything.  Really whack everything
+    with this.
+
+    hosts -- list of host names where servers are running
+    """
+    kill_cmds = ["pkill daos_server --signal 9",
+                 "pkill daos_io_server --signal 9"]
+    for host in hosts:
+        for cmd in kill_cmds:
+            resp = subprocess.call(["ssh", host, cmd])
