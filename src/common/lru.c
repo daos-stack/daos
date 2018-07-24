@@ -161,9 +161,11 @@ daos_lru_cache_evict(struct daos_lru_cache *lcache,
 
 	cntr = 0;
 	d_list_for_each_entry(llink, &lcache->dlc_busy_list, ll_qlink) {
-		if (cond == NULL || cond(llink, args))
+		if (cond == NULL || cond(llink, args)) {
 			/* will be evicted later in daos_lru_ref_release */
 			daos_lru_ref_evict(llink);
+			cntr++;
+		}
 	}
 	D_DEBUG(DB_TRACE, "Marked %d busy items as evicted\n", cntr);
 
