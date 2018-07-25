@@ -302,31 +302,37 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	return 0;
 }
 
+struct vea_unmap_extent {
+	struct vea_free_extent	vue_ext;
+	d_list_t		vue_link;
+};
+
 void
-migrate_free_exts(struct vea_space_info *vsi)
+migrate_end_cb(void *data, bool noop)
 {
-	struct vea_free_extent vfe;
-	struct vea_entry *entry, *tmp;
-	uint64_t cur_time;
-	uint32_t blk_sz = vsi->vsi_md->vsd_blk_sz;
-	unsigned int flags = VEA_FL_GEN_AGE;
-	int rc = 0;
-	char *op = "";
+	struct vea_space_info	*vsi = data;
+	struct vea_entry	*entry, *tmp;
+	struct vea_free_extent	 vfe;
+	struct vea_unmap_extent	*vue, *tmp_vue;
+	d_list_t		 unmap_list;
+	uint64_t		 cur_time;
+	int			 rc;
+
+	if (noop)
+		return;
 
 	rc = get_current_age(&cur_time);
 	if (rc)
 		return;
 
-	D_ASSERT(cur_time >= vsi->vsi_agg_time);
-	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
-		return;
-
-	vsi->vsi_agg_time = cur_time;
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+	D_ASSERT(vsi != NULL);
+	D_INIT_LIST_HEAD(&unmap_list);
 
 	d_list_for_each_entry_safe(entry, tmp, &vsi->vsi_agg_lru, ve_link) {
-		vfe = entry->ve_ext;
-		daos_iov_t key;
+		daos_iov_t	key;
 
+		vfe = entry->ve_ext;
 		/* The oldest extent isn't expired */
 		if (cur_time < (vfe.vfe_age + VEA_MIGRATE_INTVL))
 			break;
@@ -341,38 +347,95 @@ migrate_free_exts(struct vea_space_info *vsi)
 		D_ASSERT(!daos_handle_is_inval(vsi->vsi_agg_btr));
 		rc = dbtree_delete(vsi->vsi_agg_btr, &key, NULL);
 		if (rc) {
-			op = "delete";
-			break;
-		}
-
-		rc = compound_free(vsi, &vfe, flags);
-		if (rc) {
-			op = "add";
+			D_ERROR("Remove ["DF_U64", %u] from aggregated "
+				"tree error: %d\n", vfe.vfe_blk_off,
+				vfe.vfe_blk_cnt, rc);
 			break;
 		}
 
 		/*
-		 * Unmap isn't a expensive non-queue command anymore, do unmap
-		 * as soon as the extent is freed.
+		 * Unmap callback may yield, so we can't call it directly in
+		 * this tight loop.
 		 */
 		if (vsi->vsi_unmap_ctxt.vnc_unmap != NULL) {
-			uint64_t off = vfe.vfe_blk_off * blk_sz;
-			uint64_t cnt = vfe.vfe_blk_cnt * blk_sz;
+			D_ALLOC_PTR(vue);
+			if (vue == NULL) {
+				rc = -DER_NOMEM;
+				break;
+			}
 
-			rc = vsi->vsi_unmap_ctxt.vnc_unmap(off, cnt,
-					vsi->vsi_unmap_ctxt.vnc_data);
+			vue->vue_ext = vfe;
+			d_list_add_tail(&vue->vue_link, &unmap_list);
+		} else {
+			rc = compound_free(vsi, &vfe, VEA_FL_GEN_AGE);
 			if (rc) {
-				op = "unmap";
+				D_ERROR("Compound free ["DF_U64", %u] error: "
+					"%d\n", vfe.vfe_blk_off,
+					vfe.vfe_blk_cnt, rc);
 				break;
 			}
 		}
-
-		D_DEBUG(DB_IO, "Migrate free extent ["DF_U64", %u]\n",
-			vfe.vfe_blk_off, vfe.vfe_blk_cnt);
-
 	}
 
-	if (rc && strlen(op))
-		D_ERROR("Failed to migrate ["DF_U64", %u] op:%s rc:%d\n",
-			vfe.vfe_blk_off, vfe.vfe_blk_cnt, op, rc);
+	/*
+	 * According to NVMe spec, unmap isn't an expensive non-queue command
+	 * anymore, so we should just unmap as soon as the extent is freed.
+	 */
+	d_list_for_each_entry_safe(vue, tmp_vue, &unmap_list, vue_link) {
+		uint32_t blk_sz = vsi->vsi_md->vsd_blk_sz;
+		uint64_t off = vue->vue_ext.vfe_blk_off * blk_sz;
+		uint64_t cnt = (uint64_t)vue->vue_ext.vfe_blk_cnt * blk_sz;
+
+		d_list_del(&vue->vue_link);
+
+		/*
+		 * Since unmap could yield, it must be called before
+		 * compound_free(), otherwise, the extent could be visible
+		 * for allocation before unmap done.
+		 */
+		rc = vsi->vsi_unmap_ctxt.vnc_unmap(off, cnt,
+					vsi->vsi_unmap_ctxt.vnc_data);
+		if (rc)
+			D_ERROR("Unmap ["DF_U64", "DF_U64"] error: %d\n",
+				off, cnt, rc);
+
+		rc = compound_free(vsi, &vue->vue_ext, VEA_FL_GEN_AGE);
+		if (rc)
+			D_ERROR("Compund free ["DF_U64", %u] error: %d\n",
+				vue->vue_ext.vfe_blk_off,
+				vue->vue_ext.vfe_blk_cnt, rc);
+		D_FREE_PTR(vue);
+	}
+}
+
+void
+migrate_free_exts(struct vea_space_info *vsi)
+{
+	uint64_t	cur_time;
+	int		rc;
+
+	rc = get_current_age(&cur_time);
+	if (rc)
+		return;
+
+	D_ASSERT(cur_time >= vsi->vsi_agg_time);
+	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
+		return;
+
+	vsi->vsi_agg_time = cur_time;
+
+	/* Perform the migration instantly if not in a transaction */
+	if (pmemobj_tx_stage() == TX_STAGE_NONE) {
+		migrate_end_cb((void *)vsi, false);
+		return;
+	}
+
+	/*
+	 * Perform the migration in transaction end callback, since the
+	 * migration could yield on blob unmap.
+	 */
+	rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, TX_STAGE_NONE,
+				  migrate_end_cb, vsi);
+	if (rc)
+		D_ERROR("Add transaction end callback error %d\n", rc);
 }

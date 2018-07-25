@@ -136,9 +136,11 @@ struct umem_tx_stage_item {
 struct umem_tx_stage_data {
 	int				txd_magic;
 	unsigned int			txd_commit_cnt;
-	unsigned int			txd_abort_cnt;
 	struct umem_tx_stage_item	txd_commit_vec[UMEM_TX_CB_MAX];
+	unsigned int			txd_abort_cnt;
 	struct umem_tx_stage_item	txd_abort_vec[UMEM_TX_CB_MAX];
+	unsigned int			txd_end_cnt;
+	struct umem_tx_stage_item	txd_end_vec[UMEM_TX_CB_MAX];
 };
 
 /*

@@ -119,8 +119,8 @@ static void
 pmem_stage_callback(PMEMobjpool *pop, int stage, void *data)
 {
 	struct umem_tx_stage_data	*txd = data;
-	struct umem_tx_stage_item	*vec, *noop_vec;
-	unsigned int			*cnt, *noop_cnt;
+	struct umem_tx_stage_item	*vec;
+	unsigned int			*cnt;
 
 	D_ASSERT(stage >= TX_STAGE_NONE && stage < MAX_TX_STAGE);
 	D_ASSERT(txd != NULL);
@@ -130,31 +130,29 @@ pmem_stage_callback(PMEMobjpool *pop, int stage, void *data)
 	case TX_STAGE_ONCOMMIT:
 		vec = txd->txd_commit_vec;
 		cnt = &txd->txd_commit_cnt;
-		noop_vec = txd->txd_abort_vec;
-		noop_cnt = &txd->txd_abort_cnt;
+		/* Abandon the abort callbacks */
+		pmem_process_cb_vec(txd->txd_abort_vec, &txd->txd_abort_cnt,
+				    true);
 		break;
 	case TX_STAGE_ONABORT:
 		vec = txd->txd_abort_vec;
 		cnt = &txd->txd_abort_cnt;
-		noop_vec = txd->txd_commit_vec;
-		noop_cnt = &txd->txd_commit_cnt;
+		/* Abandon the commit callbacks */
+		pmem_process_cb_vec(txd->txd_commit_vec, &txd->txd_commit_cnt,
+				    true);
 		break;
 	case TX_STAGE_NONE:
 		D_ASSERT(txd->txd_commit_cnt == 0);
 		D_ASSERT(txd->txd_abort_cnt == 0);
-		/* fall-through */
+		vec = txd->txd_end_vec;
+		cnt = &txd->txd_end_cnt;
+		break;
 	default:
 		/* Ignore all other stages */
 		return;
 	}
 
-	/*
-	 * Once transaction started, the stage callback must be called
-	 * either on outermost commit or outermost abort, so here we just
-	 * process one vector and abandon another.
-	 */
 	pmem_process_cb_vec(vec, cnt, false);
-	pmem_process_cb_vec(noop_vec, noop_cnt, true);
 }
 
 static int
@@ -227,6 +225,10 @@ pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 	case TX_STAGE_ONABORT:
 		vec = txd->txd_abort_vec;
 		cnt = &txd->txd_abort_cnt;
+		break;
+	case TX_STAGE_NONE:
+		vec = txd->txd_end_vec;
+		cnt = &txd->txd_end_cnt;
 		break;
 	default:
 		D_ERROR("Invalid stage %d\n", stage);
@@ -336,9 +338,9 @@ vmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 
 	/*
 	 * vmem doesn't support transaction, so we just execute the commit
-	 * callback instantly and drop the abort callback.
+	 * callback & end callback instantly and drop the abort callback.
 	 */
-	if (stage == TX_STAGE_ONCOMMIT)
+	if (stage == TX_STAGE_ONCOMMIT || stage == TX_STAGE_NONE)
 		cb(data, false);
 	else if (stage == TX_STAGE_ONABORT)
 		cb(data, true);
