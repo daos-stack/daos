@@ -85,6 +85,18 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 }
 
 int
+daos_array_local2global(daos_handle_t oh, daos_iov_t *glob)
+{
+	return dac_array_local2global(oh, glob);
+}
+
+int
+daos_array_global2local(daos_handle_t coh, daos_iov_t glob, daos_handle_t *oh)
+{
+	return dac_array_global2local(coh, glob, oh);
+}
+
+int
 daos_array_close(daos_handle_t oh, daos_event_t *ev)
 {
 	daos_array_close_t	*args;

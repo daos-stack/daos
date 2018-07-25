@@ -272,6 +272,47 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		daos_size_t *chunk_size, daos_handle_t *oh, daos_event_t *ev);
 
 /**
+ * Convert a local array handle to global representation data which can be
+ * shared with peer processes.
+ * If glob->iov_buf is set to NULL, the actual size of the global handle is
+ * returned through glob->iov_buf_len.
+ * This function does not involve any communication and does not block.
+ *
+ * \param[in]	oh	valid local array object open handle to be shared
+ * \param[out]	glob	pointer to iov of the buffer to store handle information
+ *
+ * \return		These values will be returned:
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_HDL	Array handle is nonexistent
+ *			-DER_TRUNC	Buffer in \a glob is too short, larger
+ *					buffer required. In this case the
+ *					required buffer size is returned through
+ *					glob->iov_buf_len.
+ */
+int
+daos_array_local2global(daos_handle_t oh, daos_iov_t *glob);
+
+/**
+ * Create a local array open handle for global representation data. This handle
+ * has to be closed with daos_array_close().
+ *
+ * \param[in]	coh	Container open handle the array belongs to
+ * \param[in]	glob	Global (shared) representation of a collective handle
+ *			to be extracted
+ * \param[out]	coh	Returned local array open handle
+ *
+ * \return		These values will be returned:
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_HDL	Container handle is nonexistent
+ */
+int
+daos_array_global2local(daos_handle_t coh, daos_iov_t glob, daos_handle_t *oh);
+
+/**
  * Close an opened array object.
  *
  * \param[in]	oh	Array object open handle.

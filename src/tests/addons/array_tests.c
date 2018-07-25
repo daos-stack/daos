@@ -47,6 +47,47 @@ static void str_mem_str_arr_io(void **state);
 static void read_empty_records(void **state);
 
 static void
+array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
+{
+	daos_iov_t	ghdl = { NULL, 0, 0 };
+	int		rc;
+
+	if (rank == 0) {
+		/** fetch size of global handle */
+		rc = daos_array_local2global(*oh, &ghdl);
+		assert_int_equal(rc, 0);
+	}
+
+	/** broadcast size of global handle to all peers */
+	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	assert_int_equal(rc, MPI_SUCCESS);
+
+	/** allocate buffer for global pool handle */
+	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	ghdl.iov_len = ghdl.iov_buf_len;
+
+	if (rank == 0) {
+		/** generate actual global handle to share with peer tasks */
+		rc = daos_array_local2global(*oh, &ghdl);
+		assert_int_equal(rc, 0);
+	}
+
+	/** broadcast global handle to all peers */
+	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0, MPI_COMM_WORLD);
+	assert_int_equal(rc, MPI_SUCCESS);
+
+	if (rank != 0) {
+		/** unpack global handle */
+		rc = daos_array_global2local(coh, ghdl, oh);
+		assert_int_equal(rc, 0);
+	}
+
+	free(ghdl.iov_buf);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
 simple_array_mgmt(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -180,7 +221,7 @@ static void
 contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch;
+	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -192,13 +233,14 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_event_t	ev, *evp;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
-
-	epoch = 1;
-	/** create the array */
-	rc = daos_array_create(arg->coh, oid, epoch, cell_size,
-			       block_size, &oh, NULL);
-	assert_int_equal(rc, 0);
+	/** create the array on rank 0 and share the oh. */
+	if (arg->myrank == 0) {
+		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
+		rc = daos_array_create(arg->coh, oid, epoch, cell_size,
+				       block_size, &oh, NULL);
+		assert_int_equal(rc, 0);
+	}
+	array_oh_share(arg->coh, arg->myrank, &oh);
 
 	/** Allocate and set buffer */
 	wbuf = malloc(NUM_ELEMS*sizeof(int));
@@ -334,7 +376,7 @@ static void
 contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch;
+	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -345,13 +387,14 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_event_t	ev, *evp;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
-
-	epoch = 1;
-	/** create the array */
-	rc = daos_array_create(arg->coh, oid, epoch, cell_size, block_size, &oh,
-			       NULL);
-	assert_int_equal(rc, 0);
+	/** create the array on rank 0 and share the oh. */
+	if (arg->myrank == 0) {
+		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
+		rc = daos_array_create(arg->coh, oid, epoch, cell_size,
+				       block_size, &oh, NULL);
+		assert_int_equal(rc, 0);
+	}
+	array_oh_share(arg->coh, arg->myrank, &oh);
 
 	/** Allocate and set buffer */
 	wbuf = malloc(NUM_ELEMS * sizeof(int));
@@ -492,7 +535,7 @@ static void
 str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch;
+	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -502,13 +545,14 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_event_t	ev, *evp;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
-
-	epoch = 1;
-	/** create the array */
-	rc = daos_array_create(arg->coh, oid, epoch, cell_size, block_size, &oh,
-			       NULL);
-	assert_int_equal(rc, 0);
+	/** create the array on rank 0 and share the oh. */
+	if (arg->myrank == 0) {
+		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
+		rc = daos_array_create(arg->coh, oid, epoch, cell_size,
+				       block_size, &oh, NULL);
+		assert_int_equal(rc, 0);
+	}
+	array_oh_share(arg->coh, arg->myrank, &oh);
 
 	/** Allocate and set buffer */
 	for (i = 0; i < NUM_SEGS; i++) {

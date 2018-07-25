@@ -28,6 +28,7 @@
 #define D_LOGFAC	DD_FAC(addons)
 
 #include <daos/common.h>
+#include <daos/container.h>
 #include <daos/tse.h>
 #include <daos/addons.h>
 #include <daos_api.h>
@@ -46,6 +47,12 @@ struct dac_array {
 	daos_size_t		cell_size;
 	/** elems to store in 1 dkey before moving to the next one in the grp */
 	daos_size_t		chunk_size;
+	/** DAOS container handle of array */
+	daos_handle_t		coh;
+	/** DAOS object ID of array */
+	daos_obj_id_t		oid;
+	/** object handle access mode */
+	unsigned int		mode;
 	/** ref count on array */
 	unsigned int		cob_ref;
 	/** protect ref count */
@@ -190,9 +197,13 @@ create_handle_cb(tse_task_t *task, void *data)
 	if (array == NULL)
 		D_GOTO(err_obj, rc = -DER_NOMEM);
 
-	array->daos_oh = *args->oh;
+	array->coh = args->coh;
+	array->oid.hi = args->oid.hi;
+	array->oid.lo = args->oid.lo;
+	array->mode = DAOS_OO_RW;
 	array->cell_size = args->cell_size;
 	array->chunk_size = args->chunk_size;
+	array->daos_oh = *args->oh;
 
 	*args->oh = array_ptr2hdl(array);
 
@@ -231,6 +242,217 @@ free_handle_cb(tse_task_t *task, void *data)
 	array_decref(array);
 
 	return 0;
+}
+
+#define DAC_ARRAY_GLOB_MAGIC	(0xdaca0387)
+
+/* Structure of global buffer for dac_array */
+struct dac_array_glob {
+	uint32_t	magic;
+	uint32_t	mode;
+	daos_obj_id_t	oid;
+	daos_size_t	cell_size;
+	daos_size_t	chunk_size;
+	uuid_t		cont_uuid;
+	uuid_t		coh_uuid;
+};
+
+static inline daos_size_t
+dac_array_glob_buf_size()
+{
+	return sizeof(struct dac_array_glob);
+}
+
+static inline void
+swap_array_glob(struct dac_array_glob *array_glob)
+{
+	D_ASSERT(array_glob != NULL);
+
+	D_SWAP32S(&array_glob->magic);
+	D_SWAP32S(&array_glob->mode);
+	D_SWAP64S(&array_glob->cell_size);
+	D_SWAP64S(&array_glob->chunk_size);
+	D_SWAP64S(&array_glob->oid.hi);
+	D_SWAP64S(&array_glob->oid.lo);
+	/* skip cont_uuid */
+	/* skip coh_uuid */
+}
+
+static int
+dac_array_l2g(daos_handle_t oh, daos_iov_t *glob)
+{
+	struct dac_array	*array;
+	struct dac_array_glob	*array_glob;
+	uuid_t			 coh_uuid;
+	uuid_t			 cont_uuid;
+	daos_size_t		 glob_buf_size;
+	int			 rc = 0;
+
+	D_ASSERT(glob != NULL);
+
+	array = array_hdl2ptr(oh);
+	if (array == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+
+	rc = dc_cont_hdl2uuid(array->coh, &coh_uuid, &cont_uuid);
+	if (rc != 0)
+		D_GOTO(out_array, rc);
+
+	glob_buf_size = dac_array_glob_buf_size();
+
+	if (glob->iov_buf == NULL) {
+		glob->iov_buf_len = glob_buf_size;
+		D_GOTO(out_array, rc = 0);
+	}
+
+	if (glob->iov_buf_len < glob_buf_size) {
+		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+			"provided, "DF_U64" required).\n", glob->iov_buf_len,
+			glob_buf_size);
+		glob->iov_buf_len = glob_buf_size;
+		D_GOTO(out_array, rc = -DER_TRUNC);
+	}
+	glob->iov_len = glob_buf_size;
+
+	/* init global handle */
+	array_glob = (struct dac_array_glob *)glob->iov_buf;
+	array_glob->magic	= DAC_ARRAY_GLOB_MAGIC;
+	array_glob->cell_size	= array->cell_size;
+	array_glob->chunk_size	= array->chunk_size;
+	array_glob->mode	= array->mode;
+	array_glob->oid.hi	= array->oid.hi;
+	array_glob->oid.lo	= array->oid.lo;
+	uuid_copy(array_glob->coh_uuid, coh_uuid);
+	uuid_copy(array_glob->cont_uuid, cont_uuid);
+
+out_array:
+	array_decref(array);
+out:
+	if (rc)
+		D_ERROR("daos_array_l2g failed, rc: %d\n", rc);
+	return rc;
+}
+
+int
+dac_array_local2global(daos_handle_t oh, daos_iov_t *glob)
+{
+	int rc = 0;
+
+	if (glob == NULL) {
+		D_ERROR("Invalid parameter, NULL glob pointer.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
+	    glob->iov_buf_len < glob->iov_len)) {
+		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len "
+			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
+			glob->iov_buf_len, glob->iov_len);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = dac_array_l2g(oh, glob);
+
+out:
+	return rc;
+}
+
+static int
+dac_array_g2l(daos_handle_t coh, struct dac_array_glob *array_glob,
+	      daos_handle_t *oh)
+{
+	struct dac_array	*array;
+	uuid_t			coh_uuid;
+	uuid_t			cont_uuid;
+	int			rc = 0;
+
+	D_ASSERT(array_glob != NULL);
+	D_ASSERT(oh != NULL);
+
+	/** Check container uuid mismatch */
+	rc = dc_cont_hdl2uuid(coh, &coh_uuid, &cont_uuid);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	if (uuid_compare(cont_uuid, array_glob->cont_uuid) != 0) {
+		D_ERROR("Container uuid mismatch, in coh: "DF_UUID", "
+			"in array_glob:" DF_UUID"\n", DP_UUID(cont_uuid),
+			DP_UUID(array_glob->cont_uuid));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (uuid_compare(coh_uuid, array_glob->coh_uuid) != 0) {
+		D_ERROR("Container handle mismatch, in coh: "DF_UUID", "
+			"in array_glob:" DF_UUID"\n", DP_UUID(coh_uuid),
+			DP_UUID(array_glob->coh_uuid));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	/** create an array open handle */
+	array = array_alloc();
+	if (array == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_obj_open(coh, array_glob->oid, 0, array_glob->mode,
+			   &array->daos_oh, NULL);
+	if (rc) {
+		D_ERROR("Failed local object open (%d).\n", rc);
+		D_GOTO(out_array, rc);
+	}
+	array->coh = coh;
+	array->cell_size = array_glob->cell_size;
+	array->chunk_size = array_glob->chunk_size;
+	array->oid.hi = array_glob->oid.hi;
+	array->oid.lo = array_glob->oid.lo;
+	array->mode = array_glob->mode;
+	*oh = array_ptr2hdl(array);
+
+out_array:
+	if (rc)
+		array_decref(array);
+out:
+	return rc;
+}
+
+int
+dac_array_global2local(daos_handle_t coh, daos_iov_t glob, daos_handle_t *oh)
+{
+	struct dac_array_glob	*array_glob;
+	int			 rc = 0;
+
+	if (oh == NULL) {
+		D_DEBUG(DF_DSMC, "Invalid parameter, NULL coh.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len ||
+	    glob.iov_len != dac_array_glob_buf_size()) {
+		D_DEBUG(DF_DSMC, "Invalid parameter of glob, iov_buf %p, "
+			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
+			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	array_glob = (struct dac_array_glob *)glob.iov_buf;
+	if (array_glob->magic == D_SWAP32(DAC_ARRAY_GLOB_MAGIC)) {
+		swap_array_glob(array_glob);
+		D_ASSERT(array_glob->magic == DAC_ARRAY_GLOB_MAGIC);
+
+	} else if (array_glob->magic != DAC_ARRAY_GLOB_MAGIC) {
+		D_ERROR("Bad magic value: 0x%x.\n", array_glob->magic);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (array_glob->cell_size == 0 ||
+	    array_glob->chunk_size == 0) {
+		D_ERROR("Invalid parameter, cell/chunk size is 0.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = dac_array_g2l(coh, array_glob, oh);
+	if (rc != 0)
+		D_ERROR("dac_array_g2l failed (%d).\n", rc);
+
+out:
+	return rc;
 }
 
 static int
@@ -397,9 +619,13 @@ open_handle_cb(tse_task_t *task, void *data)
 	if (array == NULL)
 		D_GOTO(err_obj, rc = -DER_NOMEM);
 
-	array->daos_oh = *args->oh;
+	array->coh = args->coh;
+	array->oid.hi = args->oid.hi;
+	array->oid.lo = args->oid.lo;
+	array->mode = args->mode;
 	array->cell_size = *args->cell_size;
 	array->chunk_size = *args->chunk_size;
+	array->daos_oh = *args->oh;
 
 	*args->oh = array_ptr2hdl(array);
 
