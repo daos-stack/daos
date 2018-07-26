@@ -64,7 +64,7 @@ ut_format(void **state)
 	struct vea_ut_args *args = *state;
 	uint32_t blk_sz = 0; /* use the default size */
 	uint32_t hdr_blks = 1;
-	uint64_t capacity = ((VEA_LARGE_EXT_MB * 2) << 20);
+	uint64_t capacity = ((VEA_LARGE_EXT_MB * 2) << 20); /* 128MB */
 	int rc;
 
 	/* format */
@@ -371,20 +371,8 @@ ut_unload(void **state)
 	args->vua_vsi = NULL;
 }
 
-static const struct CMUnitTest vea_uts[] = {
-	{ "vea_format", ut_format, NULL, NULL},
-	{ "vea_load", ut_load, NULL, NULL},
-	{ "vea_hint_load", ut_hint_load, NULL, NULL},
-	{ "vea_reserve", ut_reserve, NULL, NULL},
-	{ "vea_cancel", ut_cancel, NULL, NULL},
-	{ "vea_tx_publish", ut_tx_publish, NULL, NULL},
-	{ "vea_free", ut_free, NULL, NULL},
-	{ "vea_hint_unload", ut_hint_unload, NULL, NULL},
-	{ "vea_unload", ut_unload, NULL, NULL},
-};
-
 static int
-vea_ut_setup(void **state)
+ut_setup(struct vea_ut_args *test_args)
 {
 	daos_size_t pool_size = (50 << 20); /* 50MB */
 	struct umem_attr uma;
@@ -392,10 +380,59 @@ vea_ut_setup(void **state)
 	void *root_addr;
 	int rc, i;
 
-	memset(&ut_args, 0, sizeof(ut_args));
-	D_INIT_LIST_HEAD(&ut_args.vua_alloc_list);
+	memset(test_args, 0, sizeof(struct vea_ut_args));
+	D_INIT_LIST_HEAD(&test_args->vua_alloc_list);
 
 	unlink(pool_file);
+
+	uma.uma_id = UMEM_CLASS_PMEM;
+	uma.uma_u.pmem_pool = pmemobj_create(pool_file, "vea_ut",
+					     pool_size, 0666);
+	if (uma.uma_u.pmem_pool == NULL) {
+		fprintf(stderr, "create pmemobj pool error\n");
+		return -1;
+	}
+
+	rc = umem_class_init(&uma, &test_args->vua_umm);
+	if (rc) {
+		fprintf(stderr, "initialize umm error %d\n", rc);
+		goto error;
+	}
+
+	root = pmemobj_root(test_args->vua_umm.umm_u.pmem_pool,
+			    sizeof(struct vea_space_df) +
+			    sizeof(struct vea_hint_df) * IO_STREAM_CNT);
+	if (OID_IS_NULL(root)) {
+		fprintf(stderr, "get root error\n");
+		rc = -1;
+		goto error;
+	}
+
+	root_addr = pmemobj_direct(root);
+	test_args->vua_md = root_addr;
+	root_addr += sizeof(struct vea_space_df);
+
+	for (i = 0; i < IO_STREAM_CNT; i++) {
+		test_args->vua_hint[i] = root_addr;
+
+		test_args->vua_hint[i]->vhd_off = 0;
+		test_args->vua_hint[i]->vhd_seq = 0;
+		D_INIT_LIST_HEAD(&test_args->vua_resrvd_list[i]);
+
+		root_addr += sizeof(struct vea_hint_df);
+	}
+	return 0;
+error:
+	pmemobj_close(uma.uma_u.pmem_pool);
+	test_args->vua_umm.umm_u.pmem_pool = NULL;
+
+	return rc;
+}
+
+static int
+vea_ut_setup(void **state)
+{
+	int rc;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -409,80 +446,97 @@ vea_ut_setup(void **state)
 		return rc;
 	}
 
-	uma.uma_id = UMEM_CLASS_PMEM;
-	uma.uma_u.pmem_pool = pmemobj_create(pool_file, "vea_ut",
-					     pool_size, 0666);
-	if (uma.uma_u.pmem_pool == NULL) {
-		fprintf(stderr, "create pmemobj pool error\n");
-		return -1;
-	}
-
-	rc = umem_class_init(&uma, &ut_args.vua_umm);
-	if (rc) {
-		fprintf(stderr, "initialize umm error %d\n", rc);
-		goto error;
-	}
-
-	root = pmemobj_root(ut_args.vua_umm.umm_u.pmem_pool,
-			    sizeof(struct vea_space_df) +
-			    sizeof(struct vea_hint_df) * IO_STREAM_CNT);
-	if (OID_IS_NULL(root)) {
-		fprintf(stderr, "get root error\n");
-		rc = -1;
-		goto error;
-	}
-
-	root_addr = pmemobj_direct(root);
-	ut_args.vua_md = root_addr;
-	root_addr += sizeof(struct vea_space_df);
-
-	for (i = 0; i < IO_STREAM_CNT; i++) {
-		ut_args.vua_hint[i] = root_addr;
-
-		ut_args.vua_hint[i]->vhd_off = 0;
-		ut_args.vua_hint[i]->vhd_seq = 0;
-		D_INIT_LIST_HEAD(&ut_args.vua_resrvd_list[i]);
-
-		root_addr += sizeof(struct vea_hint_df);
-	}
-
-	*state = &ut_args;
-	return 0;
-error:
-	pmemobj_close(uma.uma_u.pmem_pool);
-	ut_args.vua_umm.umm_u.pmem_pool = NULL;
-
+	rc = ut_setup(&ut_args);
+	if (rc == 0)
+		*state = &ut_args;
 	return rc;
+
+}
+
+static void
+ut_teardown(struct vea_ut_args *test_args)
+{
+	struct vea_resrvd_ext *ext, *tmp;
+	d_list_t *r_list;
+
+	r_list = &test_args->vua_alloc_list;
+	d_list_for_each_entry_safe(ext, tmp, r_list, vre_link) {
+		d_list_del_init(&ext->vre_link);
+		D_FREE_PTR(ext);
+	}
+
+	if (test_args->vua_umm.umm_u.pmem_pool != NULL) {
+		pmemobj_close(test_args->vua_umm.umm_u.pmem_pool);
+		test_args->vua_umm.umm_u.pmem_pool = NULL;
+	}
 }
 
 static int
 vea_ut_teardown(void **state)
 {
 	struct vea_ut_args *args = *state;
-	struct vea_resrvd_ext *ext, *tmp;
-	d_list_t *r_list;
 
 	if (args == NULL) {
 		print_message("state not set, likely due to group-setup"
 			      " issue\n");
 		return 0;
 	}
-
-	r_list = &args->vua_alloc_list;
-	d_list_for_each_entry_safe(ext, tmp, r_list, vre_link) {
-		d_list_del_init(&ext->vre_link);
-		D_FREE_PTR(ext);
-	}
-
-	if (args->vua_umm.umm_u.pmem_pool != NULL) {
-		pmemobj_close(args->vua_umm.umm_u.pmem_pool);
-		args->vua_umm.umm_u.pmem_pool = NULL;
-	}
-
+	ut_teardown(args);
 	daos_debug_fini();
-
 	return 0;
 }
+
+static void
+ut_reserve_too_big(void **state)
+{
+	/* Use a temporary device instead of the main one the other tests use */
+	struct vea_ut_args args;
+	uint32_t blk_cnt = 0;
+	d_list_t *r_list;
+	uint32_t hdr_blks = 1;
+	uint64_t capacity = 4 << 20; /* 4MB */
+	struct vea_unmap_context unmap_ctxt;
+	uint32_t blk_sz = 0; /* use the default size */
+	int rc;
+
+	ut_setup(&args);
+
+	rc = vea_format(&args.vua_umm, args.vua_md, blk_sz,
+			hdr_blks, capacity, NULL, NULL, true);
+	assert_int_equal(rc, 0);
+
+	unmap_ctxt.vnc_unmap = NULL;
+	unmap_ctxt.vnc_data = NULL;
+	rc = vea_load(&args.vua_umm, args.vua_md, &unmap_ctxt,
+		      &args.vua_vsi);
+	assert_int_equal(rc, 0);
+
+	print_message("Try to reserve extent larger than available space\n");
+
+	r_list = &args.vua_resrvd_list[0];
+
+	/* reserve should fail */
+	blk_cnt = 15000; /* 15000 * 4k >> 4MB */
+	rc = vea_reserve(args.vua_vsi, blk_cnt, NULL, r_list);
+	/* expect -DER_NOSPACE or -DER_INVAL (if blk_cnt > VEA_LARGE_EXT_MB) */
+	assert_true((rc == -DER_NOSPACE) | (rc == -DER_INVAL));
+	print_message("correctly failed to reserve extent\n");
+	vea_unload(args.vua_vsi);
+	ut_teardown(&args);
+}
+
+static const struct CMUnitTest vea_uts[] = {
+	{ "vea_format", ut_format, NULL, NULL},
+	{ "vea_load", ut_load, NULL, NULL},
+	{ "vea_hint_load", ut_hint_load, NULL, NULL},
+	{ "vea_reserve", ut_reserve, NULL, NULL},
+	{ "vea_cancel", ut_cancel, NULL, NULL},
+	{ "vea_tx_publish", ut_tx_publish, NULL, NULL},
+	{ "vea_free", ut_free, NULL, NULL},
+	{ "vea_hint_unload", ut_hint_unload, NULL, NULL},
+	{ "vea_unload", ut_unload, NULL, NULL},
+	{ "vea_reserve_too_big", ut_reserve_too_big, NULL, NULL}
+};
 
 int main(int argc, char **argv)
 {
