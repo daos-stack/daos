@@ -2237,7 +2237,7 @@ pool_map_update(crt_context_t ctx, struct pool_svc *svc,
 	iv_entry->piv_pool_map_ver = map_version;
 	memcpy(&iv_entry->piv_pool_buf, buf, pool_buf_size(buf->pb_nr));
 	rc = pool_iv_update(svc->ps_pool->sp_iv_ns, iv_entry,
-			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_LAZY);
 
 	/* Some nodes ivns does not exist, might because of the disconnection,
 	 * let's ignore it
@@ -2254,7 +2254,7 @@ pool_map_update(crt_context_t ctx, struct pool_svc *svc,
 static int
 ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 			unsigned int opc, d_rank_list_t *tgts_out,
-			struct pool_op_out *pto_op, bool *updated,
+			struct pool_op_out *pto_op, bool *p_updated,
 			d_rank_list_t **replicasp)
 {
 	struct pool_svc	       *svc;
@@ -2264,6 +2264,7 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 	uint32_t		map_version;
 	struct pool_buf	       *map_buf = NULL;
 	struct pool_map	       *map_tmp;
+	bool			updated = false;
 	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
 
@@ -2301,11 +2302,8 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 	D_DEBUG(DF_DSMS, DF_UUID": version=%u->%u failed=%d\n",
 		DP_UUID(svc->ps_uuid), map_version_before, map_version,
 		tgts_out == NULL ? -1 : tgts_out->rl_nr);
-	if (map_version == map_version_before) {
-		if (updated)
-			*updated = false;
+	if (map_version == map_version_before)
 		D_GOTO(out_map, rc = 0);
-	}
 
 	/* Write the new pool map. */
 	rc = pool_buf_extract(map, &map_buf);
@@ -2322,6 +2320,8 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 		D_GOTO(out_map, rc);
 	}
 
+	updated = true;
+
 	/*
 	 * The new pool map is now committed and can be publicized. Swap the
 	 * new pool map with the old one in the cache.
@@ -2333,16 +2333,7 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 	svc->ps_pool->sp_map_version = map_version;
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 
-	if (updated)
-		*updated = true;
-	/*
-	 * Ignore the return code as we are more about committing a pool map
-	 * change than its dissemination.
-	 */
-	pool_map_update(info->dmi_ctx, svc, map_version, map_buf);
 out_map:
-	if (map_buf != NULL)
-		pool_buf_free(map_buf);
 	pool_map_decref(map);
 out_replicas:
 	if (rc) {
@@ -2355,11 +2346,24 @@ out_map_version:
 			pool_map_get_version(svc->ps_pool->sp_map);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
+
+	/*
+	 * Distribute pool map to other targets, and ignore the return code
+	 * as we are more about committing a pool map change than its
+	 * dissemination.
+	 */
+	if (updated)
+		pool_map_update(info->dmi_ctx, svc, map_version, map_buf);
+
+	if (map_buf != NULL)
+		pool_buf_free(map_buf);
 out_svc:
 	if (pto_op != NULL)
 		ds_pool_set_hint(svc->ps_db, &pto_op->po_hint);
 	pool_svc_put_leader(svc);
 out:
+	if (p_updated)
+		*p_updated = updated;
 	return rc;
 }
 
