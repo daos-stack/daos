@@ -241,24 +241,22 @@ d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src)
 {
 	int		rc = 0;
 
-	if (dst == NULL || src == NULL) {
-		D_DEBUG(DB_TRACE, "d_rank_list_copy do nothing, dst: %p, "
-			"src: %p.\n", dst, src);
-		D_GOTO(out, rc = -DER_INVAL);
+	if (src == NULL || src->rl_ranks == NULL || src->rl_nr == 0) {
+		D_WARN("Nothing to do; empty source list"
+		       ", src: %p, src arr: %p, src len %u\n",
+		       src, src->rl_ranks, src->rl_nr);
+		D_GOTO(out, rc);
 	}
 
-	if (dst->rl_nr > src->rl_nr) {
-		D_DEBUG(DB_TRACE, "Not enough space allocated by user for rank "
-			"list: ");
-		D_DEBUG(DB_TRACE, "dst: %" PRIu32 ", ", dst->rl_nr);
-		D_DEBUG(DB_TRACE, "src: %" PRIu32 "\n", src->rl_nr);
+	if (dst == NULL || dst->rl_ranks == NULL || dst->rl_nr < src->rl_nr) {
+		D_ERROR("Not enough space in destination list "
+			", dst: %p, dst arr: %p, dst len %u, src len %u\n",
+			dst, dst->rl_ranks, dst->rl_nr, src->rl_nr);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	dst->rl_nr = src->rl_nr;
-	memcpy(dst->rl_ranks, src->rl_ranks,
-	       dst->rl_nr * sizeof(d_rank_t));
-
+	memcpy(dst->rl_ranks, src->rl_ranks, dst->rl_nr * sizeof(d_rank_t));
 out:
 	return rc;
 }
