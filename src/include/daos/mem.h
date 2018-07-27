@@ -125,7 +125,8 @@ struct umem_instance;
 typedef void (*umem_tx_cb_t)(void *data, bool noop);
 
 #define UMEM_TX_DATA_MAGIC	(0xc01df00d)
-#define UMEM_TX_CB_MAX		30
+#define UMEM_TX_CB_SHIFT_MAX	20	/* 1m callbacks */
+#define UMEM_TX_CB_SHIFT_INIT	5	/* 32 callbacks */
 
 struct umem_tx_stage_item {
 	int		 txi_magic;
@@ -134,39 +135,85 @@ struct umem_tx_stage_item {
 };
 
 struct umem_tx_stage_data {
-	int				txd_magic;
-	unsigned int			txd_commit_cnt;
-	struct umem_tx_stage_item	txd_commit_vec[UMEM_TX_CB_MAX];
-	unsigned int			txd_abort_cnt;
-	struct umem_tx_stage_item	txd_abort_vec[UMEM_TX_CB_MAX];
-	unsigned int			txd_end_cnt;
-	struct umem_tx_stage_item	txd_end_vec[UMEM_TX_CB_MAX];
+	int				 txd_magic;
+	unsigned int			 txd_commit_cnt;
+	unsigned int			 txd_commit_max;
+	unsigned int			 txd_abort_cnt;
+	unsigned int			 txd_abort_max;
+	unsigned int			 txd_end_cnt;
+	unsigned int			 txd_end_max;
+	struct umem_tx_stage_item	*txd_commit_vec;
+	struct umem_tx_stage_item	*txd_abort_vec;
+	struct umem_tx_stage_item	*txd_end_vec;
 };
+
+static inline void
+umem_fini_txd(struct umem_tx_stage_data *txd)
+{
+	D_ASSERT(txd != NULL);
+	if (txd->txd_magic != UMEM_TX_DATA_MAGIC)
+		return;
+
+	D_ASSERT(txd->txd_commit_cnt == 0);
+	D_ASSERT(txd->txd_abort_cnt == 0);
+	D_ASSERT(txd->txd_end_cnt == 0);
+
+	if (txd->txd_commit_max) {
+		D_ASSERT(txd->txd_commit_vec != NULL);
+		D_FREE(txd->txd_commit_vec);
+		txd->txd_commit_vec = NULL;
+		txd->txd_commit_max = 0;
+	}
+
+	if (txd->txd_abort_max) {
+		D_ASSERT(txd->txd_abort_vec != NULL);
+		D_FREE(txd->txd_abort_vec);
+		txd->txd_abort_vec = NULL;
+		txd->txd_abort_max = 0;
+	}
+
+	if (txd->txd_end_max) {
+		D_ASSERT(txd->txd_end_vec != NULL);
+		D_FREE(txd->txd_end_vec);
+		txd->txd_end_vec = NULL;
+		txd->txd_end_max = 0;
+	}
+}
 
 /*
  * To avoid allocating stage data for each transaction, umem user should
  * prepare per-xstream stage data and initialize it by umem_init_txd(),
  * this per-xstream stage data will be used for all transactions within
  * the same xstream.
- *
- * umem_fini_txd() is only for sanity check for this momnet.
  */
-static inline void
+static inline int
 umem_init_txd(struct umem_tx_stage_data *txd)
 {
+	unsigned int cnt = (1UL << UMEM_TX_CB_SHIFT_INIT);
+
 	D_ASSERT(txd != NULL);
 	memset(txd, 0, sizeof(*txd));
 	txd->txd_magic = UMEM_TX_DATA_MAGIC;
-}
 
-static inline void
-umem_fini_txd(struct umem_tx_stage_data *txd)
-{
-	D_ASSERT(txd != NULL);
-	if (txd->txd_magic == UMEM_TX_DATA_MAGIC) {
-		D_ASSERT(txd->txd_commit_cnt == 0);
-		D_ASSERT(txd->txd_abort_cnt == 0);
-	}
+	D_ALLOC(txd->txd_commit_vec, cnt * sizeof(*txd->txd_commit_vec));
+	if (txd->txd_commit_vec == NULL)
+		goto fail;
+	txd->txd_commit_max = cnt;
+
+	D_ALLOC(txd->txd_abort_vec, cnt * sizeof(*txd->txd_abort_vec));
+	if (txd->txd_abort_vec == NULL)
+		goto fail;
+	txd->txd_abort_max = cnt;
+
+	D_ALLOC(txd->txd_end_vec, cnt * sizeof(txd->txd_end_vec));
+	if (txd->txd_end_vec == NULL)
+		goto fail;
+	txd->txd_end_max = cnt;
+
+	return 0;
+fail:
+	umem_fini_txd(txd);
+	return -DER_NOMEM;
 }
 
 typedef struct {

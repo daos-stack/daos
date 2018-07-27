@@ -207,8 +207,9 @@ static int
 pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 		     int stage, umem_tx_cb_t cb, void *data)
 {
-	struct umem_tx_stage_item	*txi, *vec;
-	unsigned int			*cnt;
+	struct umem_tx_stage_item	*txi, **pvec;
+	unsigned int			*cnt, *cnt_max;
+	unsigned int			 limit = (1UL << UMEM_TX_CB_SHIFT_MAX);
 
 	D_ASSERT(txd != NULL);
 	D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
@@ -219,34 +220,47 @@ pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 
 	switch (stage) {
 	case TX_STAGE_ONCOMMIT:
-		vec = txd->txd_commit_vec;
+		pvec = &txd->txd_commit_vec;
 		cnt = &txd->txd_commit_cnt;
+		cnt_max = &txd->txd_commit_max;
 		break;
 	case TX_STAGE_ONABORT:
-		vec = txd->txd_abort_vec;
+		pvec = &txd->txd_abort_vec;
 		cnt = &txd->txd_abort_cnt;
+		cnt_max = &txd->txd_abort_max;
 		break;
 	case TX_STAGE_NONE:
-		vec = txd->txd_end_vec;
+		pvec = &txd->txd_end_vec;
 		cnt = &txd->txd_end_cnt;
+		cnt_max = &txd->txd_end_max;
 		break;
 	default:
 		D_ERROR("Invalid stage %d\n", stage);
 		return -DER_INVAL;
 	}
 
-	D_ASSERT(*cnt <= UMEM_TX_CB_MAX);
-	/*
-	 * I don't suppose there will be so many callbacks, not necessary
-	 * to expand the vector on demand.
-	 */
-	if (*cnt == UMEM_TX_CB_MAX) {
-		D_ERROR("Too many transaction callbacks cnt:%u, stage:%d\n",
-			*cnt, stage);
-		return -DER_OVERFLOW;
+	D_ASSERT(*cnt <= limit);
+	if (*cnt == *cnt_max) {
+		unsigned int new_max;
+
+		if (*cnt_max == limit) {
+			D_ERROR("Too many transaction callbacks "
+				"cnt:%u, stage:%d\n", *cnt, stage);
+			return -DER_OVERFLOW;
+		}
+
+		new_max = min((*cnt_max) << 1, limit);
+		D_REALLOC(txi, *pvec,
+			  new_max * sizeof(struct umem_tx_stage_item));
+
+		if (txi == NULL)
+			return -DER_NOMEM;
+
+		*pvec = txi;
+		*cnt_max = new_max;
 	}
 
-	txi = &vec[*cnt];
+	txi = &(*pvec)[*cnt];
 	(*cnt)++;
 	txi->txi_magic = UMEM_TX_DATA_MAGIC;
 	txi->txi_fn = cb;

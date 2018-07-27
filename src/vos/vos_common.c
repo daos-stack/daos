@@ -162,6 +162,7 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 	     struct dss_module_key *key)
 {
 	struct vos_tls *tls;
+	int rc;
 
 	D_ALLOC_PTR(tls);
 	if (tls == NULL)
@@ -171,7 +172,13 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 		D_FREE_PTR(tls);
 		return NULL;
 	}
-	umem_init_txd(&tls->vtl_txd);
+
+	rc = umem_init_txd(&tls->vtl_txd);
+	if (rc) {
+		vos_imem_strts_destroy(&tls->vtl_imems_inst);
+		D_FREE_PTR(tls);
+		return NULL;
+	}
 
 	return tls;
 }
@@ -295,9 +302,9 @@ vos_fini(void)
 		vos_imem_strts_destroy(vsa_imems_inst);
 		D_FREE_PTR(vsa_imems_inst);
 	}
+	umem_fini_txd(&vsa_txd_inst);
 	vos_nvme_fini();
 	ABT_finalize();
-	umem_fini_txd(&vsa_txd_inst);
 	D_MUTEX_UNLOCK(&mutex);
 }
 
@@ -316,8 +323,6 @@ vos_init(void)
 
 	if (is_init && vsa_imems_inst)
 		D_GOTO(exit, rc);
-
-	umem_init_txd(&vsa_txd_inst);
 
 	rc = ABT_init(0, NULL);
 	if (rc != 0) {
@@ -341,6 +346,10 @@ vos_init(void)
 		D_GOTO(exit, rc);
 
 	rc = vos_nvme_init();
+	if (rc)
+		D_GOTO(exit, rc);
+
+	rc = umem_init_txd(&vsa_txd_inst);
 	if (rc)
 		D_GOTO(exit, rc);
 
