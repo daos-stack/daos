@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # A Script that runs a series of simple tests that
 #  can be executed in the Jenkins environment.
 #  The flock is to ensure that only one jenkins builder
@@ -18,20 +18,21 @@
 
 #check for existence of /mnt/daos first:
 failed=0
-function run_test()
+run_test()
 {
-    time flock /mnt/daos/jenkins.lock $* > tmp_test_file 2>&1
+    time flock /mnt/daos/jenkins.lock "$@" > tmp_test_file 2>&1
     if [ $? -ne 0 ]; then
         echo "Test $* failed"
-        failed=$[ $failed + 1 ]
+        ((failed = failed + 1))
     fi
     #Hack so I don't need to update scons_local script
-    cat tmp_test_file | grep -v SUCCESS
+    grep -v SUCCESS tmp_test_file
 }
 
 if [ -d "/mnt/daos" ]; then
+    # shellcheck disable=SC1091
     source ./.build_vars.sh
-    run_test ${SL_PREFIX}/bin/vos_tests -A 500
+    run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test src/common/tests/btree.sh ukey -s 20000
     run_test src/common/tests/btree.sh direct -s 20000
     run_test src/common/tests/btree.sh -s 20000
