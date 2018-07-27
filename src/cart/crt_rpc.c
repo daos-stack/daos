@@ -698,6 +698,12 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 	rank = rpc_priv->crp_pub.cr_ep.ep_rank;
 	tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 
+	if (rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) {
+		D_ERROR("rpc_priv %p, opc: %#x with status of FWD_UNREACH.\n",
+			rpc_priv, rpc_priv->crp_pub.cr_opc);
+		D_GOTO(unreach, rc);
+	}
+
 	if (rpc_priv->crp_pub.cr_ep.ep_grp == NULL)
 		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
 	else
@@ -729,6 +735,7 @@ out:
 		RPC_DECREF(rpc_priv);
 	}
 
+unreach:
 	/* addref in crt_req_hg_addr_lookup */
 	RPC_DECREF(rpc_priv);
 	return rc;
@@ -1245,8 +1252,8 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 		rc = crt_req_send_immediately(rpc_priv);
 		break;
 	default:
-		D_ERROR("bad rpc state: %#x, opc: %#x.\n",
-			rpc_priv->crp_state, req->cr_opc);
+		D_ERROR("bad rpc state: %#x, rpc_priv %p,  opc: %#x.\n",
+			rpc_priv->crp_state, rpc_priv, req->cr_opc);
 		rc = -DER_PROTO;
 		break;
 	}

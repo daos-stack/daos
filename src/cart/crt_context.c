@@ -708,9 +708,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		ul_req = rpc_priv->crp_ul_req;
 		D_ASSERT(ul_req != NULL);
 		ul_in = crt_req_get(ul_req);
-		D_ERROR("rpc opc: %#x timedout due to URI_LOOKUP to group %s, "
-			"rank %d through PSR %d timedout.\n",
-			rpc_priv->crp_pub.cr_opc, ul_in->ul_grp_id,
+		D_ERROR("rpc_priv %p opc: %#x timedout due to URI_LOOKUP to "
+			"group %s, rank %d through PSR %d timedout.\n",
+			rpc_priv, rpc_priv->crp_pub.cr_opc, ul_in->ul_grp_id,
 			ul_in->ul_rank, ul_req->cr_ep.ep_rank);
 		crt_req_abort(ul_req);
 		/*
@@ -722,17 +722,21 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		/* crt_rpc_complete(rpc_priv, -DER_PROTO); */
 		break;
 	case RPC_STATE_ADDR_LOOKUP:
-		D_ERROR("rpc opc: %#x timedout due to ADDR_LOOKUP to group %s,"
-			" rank %d, tgt_uri %s timedout.\n",
-			rpc_priv->crp_pub.cr_opc, grp_priv->gp_pub.cg_grpid,
-			tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+		D_ERROR("rpc_priv %p opc: %#x timedout due to ADDR_LOOKUP to "
+			"group %s, rank %d, tgt_uri %s timedout.\n",
+			rpc_priv, rpc_priv->crp_pub.cr_opc,
+			grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank,
+			rpc_priv->crp_tgt_uri);
+		crt_context_req_untrack(&rpc_priv->crp_pub);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
+		RPC_DECREF(rpc_priv);
 		break;
 	case RPC_STATE_FWD_UNREACH:
-		D_ERROR("rpc opc: %#x to group %s, rank %d, tgt_uri %s "
+		D_ERROR("rpc_priv %p opc: %#x to group %s, rank %d, tgt_uri %s "
 			"can't reach the target.\n",
-			rpc_priv->crp_pub.cr_opc, grp_priv->gp_pub.cg_grpid,
-			tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+			rpc_priv, rpc_priv->crp_pub.cr_opc,
+			grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank,
+			rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(&rpc_priv->crp_pub);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		RPC_DECREF(rpc_priv);
@@ -1334,7 +1338,6 @@ crt_req_force_timeout(struct crt_rpc_priv *rpc_priv)
 	}
 
 	/* Handle unreachable rpcs similarly to timed out rpcs */
-	RPC_ADDREF(rpc_priv);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	/**
@@ -1346,6 +1349,4 @@ crt_req_force_timeout(struct crt_rpc_priv *rpc_priv)
 	rpc_priv->crp_timeout_ts = 0;
 	crt_req_timeout_track(&rpc_priv->crp_pub);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-
-	RPC_DECREF(rpc_priv);
 }

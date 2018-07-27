@@ -1167,14 +1167,16 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	case HG_CANCELED:
 		if (crt_rank_evicted(rpc_pub->cr_ep.ep_grp,
 				     rpc_pub->cr_ep.ep_rank)) {
-			D_DEBUG(DB_NET, "request target evicted, opc: %#x.\n",
-				opc);
+			D_DEBUG(DB_NET, "request target evicted, rpc_priv %p, "
+				"opc: %#x.\n", rpc_priv, opc);
 			rc = -DER_EVICTED;
 		} else if (crt_req_timedout(rpc_pub)) {
-			D_DEBUG(DB_NET, "request timedout, opc: %#x.\n", opc);
+			D_DEBUG(DB_NET, "request timedout, rpc_priv %p, "
+				"opc: %#x.\n", rpc_priv, opc);
 			rc = -DER_TIMEDOUT;
 		} else {
-			D_DEBUG(DB_NET, "request canceled, opc: %#x.\n", opc);
+			D_DEBUG(DB_NET, "request canceled, rpc_priv %p, "
+				"opc: %#x.\n", rpc_priv, opc);
 			rc = -DER_CANCELED;
 		}
 		state = RPC_STATE_CANCELED;
@@ -1185,7 +1187,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		state = RPC_STATE_COMPLETED;
 		rc = -DER_HG;
 		hg_ret = hg_cbinfo->ret;
-		D_DEBUG(DB_NET, "hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
+		D_DEBUG(DB_NET, "rpc_priv %p, hg_cbinfo->ret: %d.\n",
+				rpc_priv, hg_cbinfo->ret);
 		break;
 	}
 
@@ -1204,8 +1207,9 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				rpc_priv->crp_output_got = 1;
 				rc = rpc_priv->crp_reply_hdr.cch_rc;
 			} else {
-				D_ERROR("HG_Get_output failed, hg_ret: %d, opc:"
-					" %#x.\n", hg_ret, opc);
+				D_ERROR("HG_Get_output failed, rpc_priv %p, "
+					"hg_ret: %d, opc: %#x.\n",
+					rpc_priv, hg_ret, opc);
 				rc = -DER_HG;
 			}
 		}
@@ -1236,6 +1240,12 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL);
 
+	/* take a ref ahead to make sure rpc_priv be valid even if timeout
+	 * happen before HG_Forward returns (it is possible due to blocking
+	 * in socket provider now).
+	 */
+	RPC_ADDREF(rpc_priv);
+
 	hg_ret = HG_Forward(rpc_priv->crp_hg_hdl, crt_hg_req_send_cb, rpc_priv,
 			    &rpc_priv->crp_pub.cr_input);
 	if (hg_ret != HG_SUCCESS)
@@ -1246,16 +1256,20 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 		D_DEBUG(DB_NET, "rpc_priv %p sent.\n", rpc_priv);
 
 	if (hg_ret == HG_NA_ERROR) {
-		/* error will be reported to the completion callback in
-		 * crt_req_timeout_hdlr()
-		 */
-		crt_req_force_timeout(rpc_priv);
+		if (!crt_req_timedout(&rpc_priv->crp_pub)) {
+			/* error will be reported to the completion callback in
+			 * crt_req_timeout_hdlr()
+			 */
+			crt_req_force_timeout(rpc_priv);
+		}
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 	} else if (hg_ret != HG_SUCCESS) {
 		rc = -DER_HG;
 	} else {
 		rpc_priv->crp_on_wire = 1;
 	}
+
+	RPC_DECREF(rpc_priv);
 
 	return rc;
 }

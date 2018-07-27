@@ -56,7 +56,7 @@
 /* uri lookup RPC timeout 500mS */
 #define CRT_URI_LOOKUP_TIMEOUT		(1000 * 500)
 /* uri lookup max retry times */
-#define CRT_URI_LOOKUP_RETRY_MAX	(3)
+#define CRT_URI_LOOKUP_RETRY_MAX	(8)
 
 extern struct d_binheap_ops crt_timeout_bh_ops;
 void crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
