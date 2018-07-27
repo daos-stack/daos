@@ -36,6 +36,7 @@
 #include <getopt.h>
 
 #include <daos_srv/evtree.h>
+#include <daos_srv/eio.h>
 #include <daos/tests_lib.h>
 
 /**
@@ -55,6 +56,7 @@ static TMMID(struct evt_root)	ts_root_mmid;
 static struct evt_root		ts_root;
 static daos_handle_t		ts_toh;
 static uuid_t			ts_uuid;
+static struct umem_instance	ts_umm;
 
 #define EVT_SEP			','
 #define EVT_SEP_VAL		':'
@@ -205,10 +207,31 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p, bool *should_pass)
 }
 
 static int
-evt_insert_sgl(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
-	       struct evt_rect *rect, uint32_t inob, daos_sg_list_t *sgl)
+eio_strdup(eio_addr_t *addr, const char *str)
 {
-	/* TODO: complete this */
+	umem_id_t	mmid;
+	int		len;
+
+	/* This should probably be transactional but it's just a test and not
+	 * really the point of the test.
+	 */
+	addr->ea_type = EIO_ADDR_SCM;
+
+	if (str == NULL) {
+		addr->ea_hole = 1;
+		return 0;
+	}
+
+	len = strlen(str) + 1;
+	mmid = umem_alloc(&ts_umm, len);
+
+	if (UMMID_IS_NULL(mmid))
+		return -DER_NOMEM;
+
+	memcpy(umem_id2ptr(&ts_umm, mmid), str, len);
+
+	addr->ea_off = mmid.off;
+
 	return 0;
 }
 
@@ -216,9 +239,8 @@ static int
 ts_add_rect(char *args)
 {
 	char		*val;
+	eio_addr_t	 eio_addr = {0}; /* Fake eio addr */
 	struct evt_rect	 rect;
-	daos_sg_list_t	 sgl;
-	daos_iov_t	 iov;
 	int		 rc;
 	bool		 should_pass;
 	static int	 total_added;
@@ -234,11 +256,14 @@ ts_add_rect(char *args)
 		DP_RECT(&rect), val ? val : "<NULL>",
 		should_pass ? "true" : "false", total_added);
 
-	daos_iov_set(&iov, val, rect.rc_off_hi - rect.rc_off_lo + 1);
-	sgl.sg_nr = 1;
-	sgl.sg_iovs = &iov;
 
-	rc = evt_insert_sgl(ts_toh, ts_uuid, 0, &rect, val ? 1 : 0, &sgl);
+	rc = eio_strdup(&eio_addr, val);
+	if (rc != 0) {
+		D_FATAL("Insufficient memory for test\n");
+		return rc;
+	}
+
+	rc = evt_insert(ts_toh, ts_uuid, 0, &rect, 1, eio_addr);
 	if (rc == 0)
 		total_added++;
 	if (should_pass) {
@@ -282,10 +307,11 @@ ts_find_rect(char *args)
 
 	evt_ent_list_for_each(ent, &enlist) {
 		D_PRINT("Find rect "DF_RECT" (sel="DF_RECT") width=%d "
-			"val_addr="DF_U64"\n", DP_RECT(&ent->en_rect),
+			"val=%.*s\n", DP_RECT(&ent->en_rect),
 			DP_RECT(&ent->en_sel_rect),
 			(int)evt_rect_width(&ent->en_sel_rect),
-			eio_iov2off(&ent->en_eiov));
+			(int)evt_rect_width(&ent->en_sel_rect),
+			(char *)eio_iov2off(&ent->en_eiov));
 	}
 
 	evt_ent_list_fini(&enlist);
@@ -356,8 +382,7 @@ ts_many_add(char *args)
 	char		*tmp;
 	int		*seq;
 	struct evt_rect	 rect;
-	daos_sg_list_t	 sgl;
-	daos_iov_t	 iov;
+	eio_addr_t	 eio_addr = {0}; /* Fake eio addr */
 	long		 offset = 0;
 	int		 size;
 	int		 nr;
@@ -424,11 +449,15 @@ ts_many_add(char *args)
 		rect.rc_epc_lo = (seq[i] % TS_VAL_CYCLE) + 1;
 
 		memset(buf, 'a' + seq[i] % TS_VAL_CYCLE, size);
-		daos_iov_set(&iov, buf, size);
-		sgl.sg_nr = 1;
-		sgl.sg_iovs = &iov;
 
-		rc = evt_insert_sgl(ts_toh, ts_uuid, 0, &rect, 1, &sgl);
+		rc = eio_strdup(&eio_addr, buf);
+		if (rc != 0) {
+			D_FATAL("Insufficient memory for test\n");
+			return rc;
+		}
+
+		rc = evt_insert(ts_toh, ts_uuid, 0, &rect, 1,
+				eio_addr);
 		if (rc != 0) {
 			D_FATAL("Add rect %d failed %d\n", i, rc);
 			break;
@@ -519,6 +548,9 @@ main(int argc, char **argv)
 	ts_root_mmid = TMMID_NULL(struct evt_root);
 
 	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		return rc;
+	rc = umem_class_init(&ts_uma, &ts_umm);
 	if (rc != 0)
 		return rc;
 
