@@ -51,6 +51,9 @@ struct eio_dma_buffer {
 	d_list_t		 edb_used_list;
 	struct eio_dma_chunk	*edb_cur_chk;
 	unsigned int		 edb_tot_cnt;
+	unsigned int		 edb_active_iods;
+	ABT_cond		 edb_wait_iods;
+	ABT_mutex		 edb_mutex;
 };
 
 /*
@@ -131,7 +134,8 @@ struct eio_desc {
 	/* Flags */
 	unsigned int		 ed_buffer_prep:1,
 				 ed_update:1,
-				 ed_dma_issued:1;
+				 ed_dma_issued:1,
+				 ed_retry:1;
 };
 
 /* eio_xstream.c */

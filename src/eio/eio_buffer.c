@@ -90,10 +90,13 @@ void
 dma_buffer_destroy(struct eio_dma_buffer *buf)
 {
 	D_ASSERT(d_list_empty(&buf->edb_used_list));
+	D_ASSERT(buf->edb_active_iods == 0);
 	dma_buffer_shrink(buf, buf->edb_tot_cnt);
 
 	D_ASSERT(buf->edb_tot_cnt == 0);
 	buf->edb_cur_chk = NULL;
+	ABT_mutex_free(&buf->edb_mutex);
+	ABT_cond_free(&buf->edb_wait_iods);
 
 	D_FREE_PTR(buf);
 }
@@ -112,10 +115,24 @@ dma_buffer_create(unsigned int init_cnt)
 	D_INIT_LIST_HEAD(&buf->edb_used_list);
 	buf->edb_cur_chk = NULL;
 	buf->edb_tot_cnt = 0;
+	buf->edb_active_iods = 0;
+
+	rc = ABT_mutex_create(&buf->edb_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_FREE_PTR(buf);
+		return NULL;
+	}
+
+	rc = ABT_cond_create(&buf->edb_wait_iods);
+	if (rc != ABT_SUCCESS) {
+		ABT_mutex_free(&buf->edb_mutex);
+		D_FREE_PTR(buf);
+		return NULL;
+	}
 
 	rc = dma_buffer_grow(buf, init_cnt);
 	if (rc != 0) {
-		D_FREE_PTR(buf);
+		dma_buffer_destroy(buf);
 		return NULL;
 	}
 
@@ -332,15 +349,19 @@ iod_last_region(struct eio_desc *eiod)
 }
 
 static struct eio_dma_chunk *
-chunk_get_idle(struct eio_dma_buffer *edb)
+chunk_get_idle(struct eio_dma_buffer *edb, struct eio_desc *eiod)
 {
 	struct eio_dma_chunk *chk;
 	int rc;
 
 	if (d_list_empty(&edb->edb_idle_list)) {
-		/* TODO: Wait for the in-flight I/O being drained off? */
 		if (edb->edb_tot_cnt == eio_chk_cnt_max) {
-			D_ERROR("Reaching maximum DMA buffer size\n");
+			D_CRIT("Maximum per-xstream DMA buffer isn't big "
+			       "enough (chk_sz:%u chk_cnt:%u iods:%u) to "
+			       "sustain the workload.\n", eio_chk_sz,
+			       eio_chk_cnt_max, edb->edb_active_iods);
+
+			eiod->ed_retry = 1;
 			return NULL;
 		}
 
@@ -535,7 +556,7 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 	 * Switch to another idle chunk, if there isn't any idle chunk
 	 * available, grow buffer.
 	 */
-	chk = chunk_get_idle(edb);
+	chk = chunk_get_idle(edb, eiod);
 	if (chk == NULL)
 		return -DER_OVERFLOW;
 
@@ -768,18 +789,57 @@ copy_one(struct eio_desc *eiod, struct eio_iov *eiov,
 	return -DER_INVAL;
 }
 
+static void
+dma_drop_iod(struct eio_dma_buffer *edb)
+{
+	D_ASSERT(edb->edb_active_iods > 0);
+	edb->edb_active_iods--;
+
+	ABT_mutex_lock(edb->edb_mutex);
+	ABT_cond_broadcast(edb->edb_wait_iods);
+	ABT_mutex_unlock(edb->edb_mutex);
+}
+
 int
 eio_iod_prep(struct eio_desc *eiod)
 {
-	int rc;
+	struct eio_dma_buffer *edb;
+	int rc, retry_cnt = 0;
 
 	if (eiod->ed_buffer_prep)
 		return -EINVAL;
 
+retry:
 	rc = iterate_eiov(eiod, dma_map_one, NULL);
 	if (rc) {
+		/*
+		 * To avoid deadlock, held buffers need be released
+		 * before waiting for other active IODs.
+		 */
 		iod_release_buffer(eiod);
-		return rc;
+
+		if (!eiod->ed_retry)
+			return rc;
+
+		eiod->ed_retry = 0;
+		edb = iod_dma_buf(eiod);
+		if (!edb->edb_active_iods) {
+			D_ERROR("Per-xstream DMA buffer isn't large enough "
+				"to satisfy large IOD %p\n", eiod);
+			return rc;
+		}
+
+		D_DEBUG(DB_IO, "IOD %p waits for active IODs. %d\n",
+			eiod, retry_cnt++);
+
+		ABT_mutex_lock(edb->edb_mutex);
+		ABT_cond_wait(edb->edb_wait_iods, edb->edb_mutex);
+		ABT_mutex_unlock(edb->edb_mutex);
+
+		D_DEBUG(DB_IO, "IOD %p finished waiting. %d\n",
+			eiod, retry_cnt);
+
+		goto retry;
 	}
 	eiod->ed_buffer_prep = 1;
 
@@ -787,9 +847,14 @@ eio_iod_prep(struct eio_desc *eiod)
 	if (eiod->ed_rsrvd.erd_rg_cnt == 0)
 		return 0;
 
+	edb = iod_dma_buf(eiod);
+	edb->edb_active_iods++;
+
 	dma_rw(eiod, true);
-	if (eiod->ed_result)
+	if (eiod->ed_result) {
 		iod_release_buffer(eiod);
+		dma_drop_iod(edb);
+	}
 
 	return eiod->ed_result;
 }
@@ -797,17 +862,25 @@ eio_iod_prep(struct eio_desc *eiod)
 int
 eio_iod_post(struct eio_desc *eiod)
 {
+	struct eio_dma_buffer *edb;
+
 	if (!eiod->ed_buffer_prep)
 		return -DER_INVAL;
 
-	/* No more actions for fetch or SCM IOVs */
-	if (!eiod->ed_update || eiod->ed_rsrvd.erd_rg_cnt == 0) {
+	/* No more actions for SCM IOVs */
+	if (eiod->ed_rsrvd.erd_rg_cnt == 0) {
 		iod_release_buffer(eiod);
 		return 0;
 	}
 
-	dma_rw(eiod, false);
+	if (eiod->ed_update)
+		dma_rw(eiod, false);
+	else
+		eiod->ed_result = 0;
+
 	iod_release_buffer(eiod);
+	edb = iod_dma_buf(eiod);
+	dma_drop_iod(edb);
 
 	return eiod->ed_result;
 }

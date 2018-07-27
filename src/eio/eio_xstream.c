@@ -165,7 +165,7 @@ eio_nvme_init(const char *storage_path)
 	nvme_glb.ed_bs_opts.num_md_pages = DAOS_BS_MD_PAGES_LARGE;
 
 	eio_chk_cnt_init = 1;
-	eio_chk_cnt_max = 8;
+	eio_chk_cnt_max = 16;
 
 	env = getenv("VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "MALLOC") == 0) {
@@ -173,7 +173,7 @@ eio_nvme_init(const char *storage_path)
 		nvme_glb.ed_bdev_class = BDEV_CLASS_MALLOC;
 		nvme_glb.ed_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SMALL;
 		nvme_glb.ed_bs_opts.num_md_pages = DAOS_BS_MD_PAGES_SMALL;
-		size_mb = 1;
+		size_mb = 2;
 		eio_chk_cnt_max = 32;
 	}
 

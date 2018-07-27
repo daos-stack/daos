@@ -41,6 +41,18 @@ Memory class used by VOS. `STRING`. Default to persistent memory.
 
 If the value is set to `DRAM`, all data will be stored in volatile memory; otherwise, all data will be stored to persistent memory.
 
+### `VOS_BDEV_CLASS`
+
+SPDK bdev class used by VOS. `STRING`. Default to NVMe bdev.
+
+When testing on node without NVMe device available, it can be set to `MALLOC` to make VOS using SPDK malloc device.
+
+### `IO_STAT_PERIOD`
+
+Print SPDK bdev io statistics periodically. `INTEGER`. Default to 0 (disabled).
+
+If it is set to N (non-zero), SPDK bdev io statistics will be printed on server console in every N seconds.
+
 ### `RDB_ELECTION_TIMEOUT`
 
 Raft election timeout used by RDBs in milliseconds. `INTEGER`. Default to 7000 ms.
