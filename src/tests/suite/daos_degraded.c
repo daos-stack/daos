@@ -44,14 +44,16 @@ enum {
 
 void
 daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
-		 const d_rank_list_t *svc, d_rank_t rank)
+		 d_rank_list_t *svc, d_rank_t rank)
 {
 	int	rc;
 
 	arg->srv_disabled_ntgts++;
+	if (d_rank_in_rank_list(svc, rank))
+		svc->rl_nr--;
 	print_message("\tKilling target %d (total of %d with %d already "
-		      "disabled)!\n", rank, arg->srv_ntgts,
-		       arg->srv_disabled_ntgts - 1);
+		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
+		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
 	/** kill server */
 	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
@@ -88,7 +90,7 @@ daos_add_server(const uuid_t pool_uuid, const char *grp,
 
 void
 daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			 const char *grp, const d_rank_list_t *svc)
+			 const char *grp, d_rank_list_t *svc)
 {
 	int		failures = 0;
 	int		max_failure;

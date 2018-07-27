@@ -302,7 +302,7 @@ rebuild_status_completed_remove(const uuid_t pool_uuid)
 
 	d_list_for_each_entry_safe(rsc, next, &rebuild_gst.rg_completed_list,
 				   rsc_list) {
-		if (uuid_is_null(pool_uuid) ||
+		if (pool_uuid == NULL ||
 		    uuid_compare(rsc->rsc_pool_uuid, pool_uuid) == 0) {
 			d_list_del(&rsc->rsc_list);
 			D_FREE_PTR(rsc);

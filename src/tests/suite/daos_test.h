@@ -206,11 +206,11 @@ int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
-		      const d_rank_list_t *svc, d_rank_t rank);
+		      d_rank_list_t *svc, d_rank_t rank);
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 			 const d_rank_list_t *svc, d_rank_t rank);
 void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			      const char *grp, const d_rank_list_t *svc);
+			      const char *grp, d_rank_list_t *svc);
 void daos_add_server(const uuid_t pool_uuid, const char *grp,
 		     const d_rank_list_t *svc, d_rank_t rank);
 typedef int (*test_setup_cb_t)(void **state);
