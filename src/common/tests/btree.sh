@@ -1,6 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 
-DAOS_DIR=${DAOS_DIR:-$(cd $(dirname $0)/../../..; echo $PWD)}
+cwd=$(dirname "$0")
+DAOS_DIR=${DAOS_DIR:-$(cd "$cwd/../../.." && echo "$PWD")}
 BTR=$DAOS_DIR/build/src/common/tests/btree
 
 ORDER=${ORDER:-3}
@@ -11,12 +12,12 @@ BAT_NUM=${BAT_NUM:-"200000"}
 
 IPL=""
 if [ "x$INPLACE" == "xyes" ]; then
-	IPL="i,"
+    IPL="i,"
 fi
 
 IDIR="f"
 if [ "x$BACKWARD" == "xyes" ]; then
-	IDIR="b"
+    IDIR="b"
 fi
 
 KEYS=${KEYS:-"3,6,5,7,2,1,4"}
@@ -75,39 +76,39 @@ set -x
 if [ -z ${PERF} ]; then
 
     echo "B+tree functional test..."
-    DAOS_DEBUG=$DDEBUG			\
-    $BTR	-C ${UINT}${IPL}o:$ORDER		\
-	-c				\
-	-o				\
-	-u $RECORDS			\
-	-i $IDIR			\
-	-q				\
-	-f $KEYS			\
-	-d $KEYS			\
-	-u $RECORDS         \
-	-f $KEYS            \
-	-r $KEYS            \
-	-q				\
-	-u $RECORDS			\
-	-q				\
-	-i $IDIR:3			\
-	-D
+    DAOS_DEBUG="$DDEBUG"              \
+    "$BTR" -C "${UINT}${IPL}o:$ORDER" \
+    -c                                \
+    -o                                \
+    -u "$RECORDS"                     \
+    -i "$IDIR"                        \
+    -q                                \
+    -f "$KEYS"                        \
+    -d "$KEYS"                        \
+    -u "$RECORDS"                     \
+    -f "$KEYS"                        \
+    -r "$KEYS"                        \
+    -q                                \
+    -u "$RECORDS"                     \
+    -q                                \
+    -i "$IDIR:3"                      \
+    -D
 
     echo "B+tree batch operations test..."
-    $BTR	-C ${UINT}${IPL}o:$ORDER		\
-	-c				\
-	-o				\
-	-b $BAT_NUM			\
-	-D
+    "$BTR" -C "${UINT}${IPL}o:$ORDER" \
+    -c                                \
+    -o                                \
+    -b "$BAT_NUM"                     \
+    -D
 else
     echo "B+tree performance test..."
-    $BTR	-C ${UINT}${IPL}o:$ORDER		\
-	-p $BAT_NUM			\
-	-D
+    "$BTR" -C "${UINT}${IPL}o:$ORDER" \
+    -p "$BAT_NUM"                     \
+    -D
 
     echo "B+tree performance test using pmemobj"
-    $BTR    -m                      \
-	-C ${UINT}${IPL}o:$ORDER   \
-	-p $BAT_NUM             \
-	-D
+    "$BTR" -m                  \
+    -C "${UINT}${IPL}o:$ORDER" \
+    -p "$BAT_NUM"              \
+    -D
 fi

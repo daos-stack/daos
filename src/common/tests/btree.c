@@ -893,6 +893,10 @@ main(int argc, char **argv)
 			ik_uma.uma_u.pmem_pool = pmemobj_create(POOL_NAME,
 						"btree-perf-test", POOL_SIZE,
 						0666);
+			if (ik_uma.uma_u.pmem_pool == NULL) {
+				perror("Btree test pool creation failed");
+				return 1;
+			}
 			break;
 		default:
 			D_PRINT("Unsupported command %c\n", rc);
