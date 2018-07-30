@@ -25,6 +25,7 @@
 import os
 import time
 import subprocess
+import json
 
 import aexpect
 from avocado.utils import genio
@@ -44,21 +45,37 @@ def runServer(hostfile, setname, basepath):
     Launches DAOS servers in accordance with the supplied hostfile.
 
     """
-
     global sessions
     try:
         server_count = len(genio.read_all_lines(hostfile))
 
+        # pile of build time variables
+        with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
+            build_vars = json.load(json_vars)
+        orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin/orterun")
+        daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin/daos_server")
+        ld_lib_path = os.path.join(build_vars["PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["PREFIX"], "lib/daos_srv") + os.pathsep + \
+            os.path.join(build_vars["OMPI_PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["MERCURY_PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["HWLOC_PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["ARGOBOTS_PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["SPDK_PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["PMDK_PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["OPENPA_PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["CART_PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["ISAL_PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["OFI_PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["FUSE_PREFIX"], "lib") + os.pathsep + \
+            os.path.join(build_vars["PMIX_PREFIX"], "lib")
+
         initial_cmd = "/bin/sh"
-        server_cmd = basepath + "/install/bin/orterun --np {0} ".format(
-            server_count)
+        server_cmd = orterun_bin + " --np {0} ".format(server_count)
         server_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
         server_cmd += "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR -x D_LOG_FILE="
         server_cmd += basepath + "/install/tmp/daos.log "
-        server_cmd += "-x LD_LIBRARY_PATH={0}/install/lib:".format(basepath)
-        server_cmd += "{0}/install/lib/daos_srv ".format(basepath)
-        server_cmd += basepath + "/install/bin/daos_server -g {0} -c 1 ".format(
-            setname)
+        server_cmd += "-x LD_LIBRARY_PATH={0} ".format(ld_lib_path)
+        server_cmd += daos_srv_bin + " -g {0} -c 1 ".format(setname)
         server_cmd += " -a" + basepath + "/install/tmp/"
 
         print "Start CMD>>>>{0}".format(server_cmd)
@@ -108,3 +125,4 @@ def killServer(hosts):
     for host in hosts:
         for cmd in kill_cmds:
             resp = subprocess.call(["ssh", host, cmd])
+

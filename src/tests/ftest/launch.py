@@ -93,8 +93,9 @@ if __name__ == "__main__":
     test_directory = os.getcwd()
 
     # setup some aspects of the environment
-    with open('../../../.build_vars.json') as f:
-        envdata = json.load(f)
+    with open(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                           "../../../.build_vars.json")) as f:
+	envdata = json.load(f)
 
     BINDIR = envdata['PREFIX'] + '/bin'
     SBINDIR = envdata['PREFIX'] + '/sbin'

@@ -1,8 +1,8 @@
 server:
    server_group: scott_server
-files:
-   local:
-      hostfile: /install/tmp/hostfile6
+hosts:
+  test_machines:
+    - boro-A
 excludetests:
    tgtlist: !mux
      goodlist:
@@ -58,3 +58,4 @@ excludetests:
      setname: scott_server
    createsize:
      size: 1073741824
+

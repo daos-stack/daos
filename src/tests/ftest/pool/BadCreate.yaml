@@ -2,9 +2,9 @@
 # should be addedded back when daos code is fixed
 server:
    server_group: daos_server
-files:
-   local:
-      hostfile: /install/tmp/hostfile1
+hosts:
+  test_machines:
+    - boro-A
 createtests:
    modes: !mux
       badmode1:
@@ -91,3 +91,4 @@ createtests:
          rankptr:
              - VALID
              - PASS
+

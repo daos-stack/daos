@@ -2,9 +2,9 @@
 # cause issues and will be uncommented as the daos code is fixed
 server:
    server_group: scott_server
-files:
-   local:
-      hostfile: /install/tmp/hostfile1
+hosts:
+  test_machines:
+    - boro-A
 connecttests:
    createmode:
      mode: 511
@@ -97,3 +97,4 @@ connecttests:
    psize:
      createsize:
          size: 1073741824
+
