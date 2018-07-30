@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <errno.h>
+#include <execinfo.h>
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
@@ -391,6 +392,99 @@ parse(int argc, char **argv)
 	return 0;
 }
 
+struct sigaction old_handlers[_NSIG];
+
+static int
+daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
+{
+	struct sigaction	act;
+	int			rc;
+
+	if ((signo < 0) || (signo >= _NSIG)) {
+		D_ERROR("invalid signo %d to register\n", signo);
+		return -DER_INVAL;
+	}
+
+	act.sa_flags = SA_SIGINFO;
+	act.sa_sigaction = handler;
+
+	/* register new and save old handler */
+	rc = sigaction(signo, &act, &old_handlers[signo]);
+	if (rc != 0) {
+		D_ERROR("sigaction() failure registering new and reading "
+			"old %d signal handler\n", signo);
+		return rc;
+	}
+	return 0;
+}
+
+static void
+print_backtrace(int signo, siginfo_t *info, void *p)
+{
+	void	*bt[128];
+	int	 bt_size, i, rc;
+
+	fprintf(stderr, "*** Process %d received signal %d ***\n", getpid(),
+		signo);
+
+	if (info != NULL) {
+		fprintf(stderr, "Associated errno: %s (%d)\n",
+			strerror(info->si_errno), info->si_errno);
+
+		/* XXX we could get more signal/fault specific details from
+		 * info->si_code decode
+		 */
+
+		switch (signo) {
+		case SIGILL:
+		case SIGFPE:
+			fprintf(stderr, "Failing at address: %p\n",
+				info->si_addr);
+			break;
+		case SIGSEGV:
+		case SIGBUS:
+			fprintf(stderr, "Failing for address: %p\n",
+				info->si_addr);
+			break;
+		}
+	} else {
+		fprintf(stderr, "siginfo is NULL, additional information "
+			"unavailable\n");
+	}
+
+	bt_size = backtrace(bt, 128);
+	if (bt_size >= 128)
+		fprintf(stderr, "backtrace may have been truncated\n");
+
+	/* start at 1 to forget about me! */
+	for (i = 1; i < bt_size; i++)
+		backtrace_symbols_fd(&bt[i], 1, fileno(stderr));
+
+	/* re-register old handler */
+	rc = sigaction(signo, &old_handlers[signo], NULL);
+	if (rc != 0) {
+		D_ERROR("sigaction() failure registering new and reading old "
+			"%d signal handler\n", signo);
+		/* XXX it is weird, we may end-up in a loop handling same
+		 * signal with this handler if we return
+		 */
+		exit(EXIT_FAILURE);
+	}
+
+	/* XXX we may choose to forget about old handler and simply register
+	 * signal again as SIG_DFL and raise it for corefile creation
+	 */
+	if (old_handlers[signo].sa_sigaction != NULL ||
+	    old_handlers[signo].sa_handler != SIG_IGN) {
+		/* XXX will old handler get accurate siginfo_t/ucontext_t ?
+		 * we may prefer to call it with the same params we got ?
+		 */
+		raise(signo);
+	}
+
+	memset(&old_handlers[signo], 0, sizeof(struct sigaction));
+}
+
 int
 main(int argc, char **argv)
 {
@@ -403,13 +497,28 @@ main(int argc, char **argv)
 	if (rc)
 		exit(EXIT_FAILURE);
 
-	/** block all possible signals */
+	/** block all possible signals but faults */
 	sigfillset(&set);
+	sigdelset(&set, SIGILL);
+	sigdelset(&set, SIGFPE);
+	sigdelset(&set, SIGBUS);
+	sigdelset(&set, SIGSEGV);
+	/** also allow abort()/assert() to trigger */
+	sigdelset(&set, SIGABRT);
+
 	rc = pthread_sigmask(SIG_BLOCK, &set, NULL);
 	if (rc) {
 		perror("failed to mask signals");
 		exit(EXIT_FAILURE);
 	}
+
+	/* register our own handler for faults and abort()/assert() */
+	/* errors are harmless */
+	daos_register_sighand(SIGILL, print_backtrace);
+	daos_register_sighand(SIGFPE, print_backtrace);
+	daos_register_sighand(SIGBUS, print_backtrace);
+	daos_register_sighand(SIGSEGV, print_backtrace);
+	daos_register_sighand(SIGABRT, print_backtrace);
 
 	rc = ABT_init(argc, argv);
 	if (rc != 0) {

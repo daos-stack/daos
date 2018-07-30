@@ -26,6 +26,7 @@ Python wrapper to launch the daos server on some number of nodes.
 """
 
 import os
+import resource
 import socket
 import logging
 import subprocess
@@ -144,6 +145,13 @@ class DaosServer(object):
         self.logger.info("<DAOS Server> Server launch string: %s", server_cmd)
         logfileout = os.path.join(self.dir_path, "daos_server.out")
         logfileerr = os.path.join(self.dir_path, "daos_server.out")
+
+        """ Allow to get core files """
+        try:
+            resource.setrlimit(resource.RLIMIT_CORE,
+                               (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+        except (ValueError, resource.error):
+            print("Unable to set infinite corefile limit")
 
         with open(logfileout, mode='w') as outfile, \
              open(logfileerr, mode='w') as errfile:

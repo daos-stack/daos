@@ -35,6 +35,22 @@
 #include <setjmp.h>
 #include <time.h>
 #include <cmocka.h>
+/* redefine cmocka's skip() so it will no longer abort()
+ * if CMOCKA_TEST_ABORT=1
+ *
+ * it can't be redefined as a function as it must return from current context
+ */
+#undef skip
+#define skip() \
+	do { \
+		const char *abort_test = getenv("CMOCKA_TEST_ABORT"); \
+		if (abort_test != NULL && abort_test[0] == '1') \
+			print_message("Skipped !!!\n"); \
+		else \
+			_skip(__FILE__, __LINE__); \
+		return; \
+	} while  (0)
+
 #include <mpi.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>

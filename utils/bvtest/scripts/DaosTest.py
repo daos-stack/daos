@@ -26,6 +26,7 @@ Python wrapper to run the daos_test continous integration test suite.
 """
 
 import os
+import resource
 import logging
 import socket
 import getpass
@@ -72,6 +73,10 @@ class DaosTest(object):
         #    self.test_info.get_defaultENV('OFI_PORT')
         envlist['OFI_INTERFACE']= \
             self.test_info.get_defaultENV('OFI_INTERFACE', "eth0")
+
+        """ Force cmocka to abort upon handling signal/fault """
+        envlist['CMOCKA_TEST_ABORT']= "1"
+
         return envlist
 
     def test_all(self):
@@ -93,6 +98,13 @@ class DaosTest(object):
         daos_test_cmd.add_param(parameters)
         daos_test_cmd.add_env_vars(self.setup_env())
         daos_test_cmd.add_cmd("daos_test -E dr")
+
+        """ Allow to get core files """
+        try:
+            resource.setrlimit(resource.RLIMIT_CORE,
+                               (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+        except (ValueError, resource.error):
+            print("Unable to set infinite corefile limit")
 
         daos_test_cmd.start_process()
         if daos_test_cmd.check_process():
