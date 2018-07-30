@@ -534,6 +534,7 @@ rechoose:
 	}
 
 	rc = daos_rank_list_copy(svc_addrs, ranks);
+	D_ASSERTF(rc == 0, "daos_rank_list_copy: %d\n", rc);
 out_rpc:
 	crt_req_decref(rpc);
 out_client:
