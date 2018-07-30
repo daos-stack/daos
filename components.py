@@ -225,7 +225,7 @@ if ARM_PLATFORM:
 
 RETRIEVER = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 
-PMDK_BUILD = ["make \"BUILD_RPMEM=n\" \"NDCTL_DISABLE=y\" "
+PMDK_BUILD = ["make \"BUILD_RPMEM=n\" \"NDCTL_ENABLE=n\" \"NDCTL_DISABLE=y\" "
               "install prefix=$PMDK_PREFIX"]
 
 REQS.define('pmdk',
