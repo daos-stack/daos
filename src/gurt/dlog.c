@@ -758,6 +758,8 @@ int d_log_setmasks(char *mstr, int mlen0)
 	char *m, *current, *fac, *pri, pbuf[8];
 	int mlen, facno, clen, elen, prino, rv, tmp;
 	unsigned int faclen, prilen;
+	int log_flags;
+
 	/* not open? */
 	if (!d_log_xst.tag)
 		return -1;
@@ -818,9 +820,12 @@ int d_log_setmasks(char *mstr, int mlen0)
 			prino = d_log_str2pri(pbuf);
 		}
 		if (prino == -1) {
-			d_log(DLOG_ERR,
-			     "d_log_setmasks: %.*s: unknown priority %.*s",
-			     faclen, fac, prilen, pri);
+			log_flags = d_log_check(DLOG_ERR);
+
+			if (log_flags)
+				d_log(log_flags, "d_log_setmasks: %.*s: "
+				      "unknown priority %.*s",
+				      faclen, fac, prilen, pri);
 			continue;
 		}
 		/* process facility */
@@ -853,9 +858,12 @@ int d_log_setmasks(char *mstr, int mlen0)
 				 * as an error.  To see these messages, either
 				 * use DEBUG or CLOG=DEBUG
 				 */
-				d_log(DLOG_DBG,
-				     "d_log_setmasks: unknown facility %.*s",
-				     faclen, fac);
+				log_flags = d_log_check(DLOG_DBG);
+
+				if (log_flags)
+					d_log(log_flags, "d_log_setmasks: "
+					      "unknown facility %.*s",
+					      faclen, fac);
 				rv = -1;
 				continue;
 			}

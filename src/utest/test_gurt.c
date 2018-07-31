@@ -555,10 +555,16 @@ test_binheap(void **state)
 }
 
 #define LOG_DEBUG(fac, ...) \
-	d_log(fac | DLOG_DBG, __VA_ARGS__)
+	do {								\
+		if (d_log_check((fac) | DLOG_DBG))			\
+			d_log(d_log_check((fac) | DLOG_DBG), __VA_ARGS__);\
+	} while (0)
 
 #define LOG_INFO(fac, ...) \
-	d_log(fac | DLOG_INFO, __VA_ARGS__)
+	do {								\
+		if (d_log_check((fac) | DLOG_INFO))			\
+			d_log(d_log_check((fac) | DLOG_INFO), __VA_ARGS__);\
+	} while (0)
 
 static void
 test_log(void **state)

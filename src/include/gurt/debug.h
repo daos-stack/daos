@@ -93,9 +93,12 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
  * \#define DSR_DEBUG(...) d_log(DSR_DEBUG, ...)
  */
 #define D_DEBUG(mask, fmt, ...)						\
-	d_log((mask) | D_LOGFAC,					\
-	     "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,		\
-	     ##__VA_ARGS__)
+	do {								\
+		if (d_log_check((mask) | D_LOGFAC))			\
+			d_log(d_log_check((mask) | D_LOGFAC),		\
+			      "%s:%d %s() " fmt, __FILE__, __LINE__,	\
+			      __func__, ##__VA_ARGS__);			\
+	} while (0)
 
 /** macros to output logs which are more important than D_DEBUG */
 #define D_INFO(fmt, ...)	D_DEBUG(DLOG_INFO, fmt, ## __VA_ARGS__)

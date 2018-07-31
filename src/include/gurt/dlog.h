@@ -290,7 +290,8 @@ void d_vlog(int flags, const char *fmt, va_list ap);
  * A log line cannot be larger than DLOG_TBSZ (4096), if it is larger it will be
  * (silently) truncated].
  *
- * \param[in] flags		facility+level+misc flags
+ * \param[in] flags		returned by d_log_check(facility+level+misc
+ *				flags), 0 indicates no log.
  * \param[in] fmt		printf-style format string
  * \param[in] ap		stdarg list
  */
@@ -299,11 +300,6 @@ static inline void d_log(int flags, const char *fmt, ...)
 static inline void d_log(int flags, const char *fmt, ...)
 {
 	va_list ap;
-
-	flags = d_log_check(flags);
-
-	if (flags == 0)
-		return;
 
 	va_start(ap, fmt);
 	d_vlog(flags, fmt, ap);
