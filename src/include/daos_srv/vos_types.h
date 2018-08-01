@@ -162,8 +162,8 @@ typedef struct {
 			daos_recx_t		ie_recx;
 			/** iovec to return data or ZC address */
 			daos_iov_t		ie_iov;
-			/** eiov to return address for single value rec */
-			struct eio_iov		ie_eiov;
+			/** biov to return address for single value rec */
+			struct bio_iov		ie_biov;
 			/** update cookie */
 			uuid_t			ie_cookie;
 			/** checksum */

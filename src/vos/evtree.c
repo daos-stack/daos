@@ -412,7 +412,7 @@ evt_split_entry(struct evt_entry *current, struct evt_entry *next,
 	*split = *current;
 	diff = next->en_sel_rect.rc_off_hi + 1 - split->en_sel_rect.rc_off_lo;
 	split->en_sel_rect.rc_off_lo = next->en_sel_rect.rc_off_hi + 1;
-	ptr->pt_ex_addr.ea_off += diff * ptr->pt_inob;
+	ptr->pt_ex_addr.ba_off += diff * ptr->pt_inob;
 	/* Mark the split entry so we don't keep it in covered list */
 	ptr->pt_inob |= EVT_PARTIAL_FLAG;
 
@@ -507,7 +507,7 @@ evt_uncover_entries(struct evt_entry_list *ent_list, d_list_t *covered)
 			ptr = &next_ent->en_ptr;
 			diff = this_rect->rc_off_hi + 1 - next_rect->rc_off_lo;
 			next_rect->rc_off_lo = this_rect->rc_off_hi + 1;
-			ptr->pt_ex_addr.ea_off +=
+			ptr->pt_ex_addr.ba_off +=
 				diff * ptr->pt_inob;
 			/* current now points at next_ent.  Remove it and
 			 * reinsert it in the list in case truncation moved
@@ -742,13 +742,13 @@ evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
  */
 static int
 evt_ptr_init(struct evt_context *tcx, uuid_t cookie, uint32_t pm_ver,
-	     eio_addr_t addr, uint32_t idx_nob, uint64_t idx_num,
+	     bio_addr_t addr, uint32_t idx_nob, uint64_t idx_num,
 	     struct evt_ptr *ptr)
 {
 	D_ASSERT(idx_num > 0);
-	D_ASSERTF((idx_nob && !eio_addr_is_hole(&addr)) ||
-		  (!idx_nob && eio_addr_is_hole(&addr)), "nob: %u hole: %d\n",
-		  idx_nob, eio_addr_is_hole(&addr));
+	D_ASSERTF((idx_nob && !bio_addr_is_hole(&addr)) ||
+		  (!idx_nob && bio_addr_is_hole(&addr)), "nob: %u hole: %d\n",
+		  idx_nob, bio_addr_is_hole(&addr));
 
 	memset(ptr, 0, sizeof(*ptr));
 
@@ -764,27 +764,27 @@ evt_ptr_init(struct evt_context *tcx, uuid_t cookie, uint32_t pm_ver,
 static int
 evt_ptr_free(struct evt_context *tcx, struct evt_ptr *ptr)
 {
-	eio_addr_t	*addr = &ptr->pt_ex_addr;
+	bio_addr_t	*addr = &ptr->pt_ex_addr;
 	int		 rc = 0;
 
-	if (eio_addr_is_hole(addr))
+	if (bio_addr_is_hole(addr))
 		return 0;
 
-	if (addr->ea_type == EIO_ADDR_SCM) {
+	if (addr->ba_type == BIO_ADDR_SCM) {
 		umem_id_t mmid;
 
 		mmid.pool_uuid_lo = tcx->tc_pmempool_uuid;
-		mmid.off = addr->ea_off;
+		mmid.off = addr->ba_off;
 		rc = umem_free(evt_umm(tcx), mmid);
 	} else {
 		struct vea_space_info *vsi = tcx->tc_blks_info;
 		uint64_t blk_off;
 		uint32_t blk_cnt;
 
-		D_ASSERT(addr->ea_type == EIO_ADDR_NVME);
+		D_ASSERT(addr->ba_type == BIO_ADDR_NVME);
 		D_ASSERT(vsi != NULL);
 
-		blk_off = vos_byte2blkoff(addr->ea_off);
+		blk_off = vos_byte2blkoff(addr->ba_off);
 		blk_cnt = vos_byte2blkcnt(ptr->pt_inum * ptr->pt_inob);
 
 		rc = vea_free(vsi, blk_off, blk_cnt);
@@ -1535,7 +1535,7 @@ evt_insert_entry(struct evt_context *tcx, struct evt_entry *ent)
  */
 int
 evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
-	   struct evt_rect *rect, uint32_t inob, eio_addr_t addr)
+	   struct evt_rect *rect, uint32_t inob, bio_addr_t addr)
 {
 	struct evt_context	*tcx;
 	struct evt_entry_list	 ent_list;
@@ -1628,12 +1628,12 @@ evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	entry->en_ptr = *ptr;
 	ptr = &entry->en_ptr; /* We have the data cached, so use it now */
 
-	if (offset != 0 && !eio_addr_is_hole(&ptr->pt_ex_addr)) {
+	if (offset != 0 && !bio_addr_is_hole(&ptr->pt_ex_addr)) {
 		D_ASSERT(ptr->pt_inob != 0); /* Ensure not punched */
 		/* Adjust cached pointer since we're only referencing a
 		 * part of the extent
 		 */
-		ptr->pt_ex_addr.ea_off += offset * ptr->pt_inob;
+		ptr->pt_ex_addr.ba_off += offset * ptr->pt_inob;
 	}
 }
 
@@ -1953,7 +1953,7 @@ try_again:
 				continue;
 
 			saved_rect.mr_valid = true;
-			if (eio_addr_is_hole(&ent.en_ptr.pt_ex_addr))
+			if (bio_addr_is_hole(&ent.en_ptr.pt_ex_addr))
 				saved_rect.mr_punched = true;
 			else
 				saved_rect.mr_punched = false;

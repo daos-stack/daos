@@ -342,7 +342,7 @@ dss_srv_handler(void *arg)
 	}
 
 	/* Initialize NVMe context */
-	rc = eio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tid);
+	rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tid);
 	if (rc != 0) {
 		D_ERROR("failed to init spdk context for xstream(%d) rc:%d\n",
 			dx->dx_idx, rc);
@@ -378,7 +378,7 @@ dss_srv_handler(void *arg)
 			 * Let's still keep for progressing for now.
 			 */
 		}
-		eio_nvme_poll(dmi->dmi_nvme_ctxt);
+		bio_nvme_poll(dmi->dmi_nvme_ctxt);
 
 		rc = ABT_future_test(dx->dx_shutdown, &state);
 		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
@@ -409,7 +409,7 @@ dss_srv_handler(void *arg)
 		ABT_thread_yield();
 	}
 
-	eio_xsctxt_free(dmi->dmi_nvme_ctxt);
+	bio_xsctxt_free(dmi->dmi_nvme_ctxt);
 tse_fini:
 	tse_sched_fini(&dmi->dmi_sched);
 crt_destroy:
@@ -1385,7 +1385,7 @@ dss_srv_fini(bool force)
 		dss_xstreams_fini(force);
 		/* fall through */
 	case XD_INIT_NVME:
-		eio_nvme_fini();
+		bio_nvme_fini();
 		/* fall through */
 	case XD_INIT_REG_KEY:
 		dss_unregister_key(&daos_srv_modkey);
@@ -1439,7 +1439,7 @@ dss_srv_init(int nr)
 	dss_register_key(&daos_srv_modkey);
 	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
-	rc = eio_nvme_init(dss_storage_path);
+	rc = bio_nvme_init(dss_storage_path);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;

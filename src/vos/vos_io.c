@@ -41,8 +41,8 @@ struct vos_io_context {
 	daos_iod_t		*ic_iods;
 	/** reference on the object */
 	struct vos_object	*ic_obj;
-	/** EIO descriptor, has ic_iod_nr SGLs */
-	struct eio_desc		*ic_eiod;
+	/** BIO descriptor, has ic_iod_nr SGLs */
+	struct bio_desc		*ic_biod;
 	/** cursor of SGL & IOV in EIO descriptor */
 	unsigned int		 ic_sgl_at;
 	unsigned int		 ic_iov_at;
@@ -79,12 +79,12 @@ vos_ioc2ioh(struct vos_io_context *ioc)
 static void
 iod_empty_sgl(struct vos_io_context *ioc, unsigned int sgl_at)
 {
-	struct eio_sglist *esgl;
+	struct bio_sglist *bsgl;
 
 	D_ASSERT(sgl_at < ioc->ic_iod_nr);
 	ioc->ic_iods[sgl_at].iod_size = 0;
-	esgl = eio_iod_sgl(ioc->ic_eiod, sgl_at);
-	esgl->es_nr_out = 0;
+	bsgl = bio_iod_sgl(ioc->ic_biod, sgl_at);
+	bsgl->bs_nr_out = 0;
 }
 
 static void
@@ -151,8 +151,8 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 static void
 vos_ioc_destroy(struct vos_io_context *ioc)
 {
-	if (ioc->ic_eiod != NULL)
-		eio_iod_free(ioc->ic_eiod);
+	if (ioc->ic_biod != NULL)
+		bio_iod_free(ioc->ic_biod);
 
 	if (ioc->ic_obj)
 		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj);
@@ -167,7 +167,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	       bool size_fetch, struct vos_io_context **ioc_pp)
 {
 	struct vos_io_context *ioc;
-	struct eio_io_context *eioc;
+	struct bio_io_context *bioc;
 	int i, rc;
 
 	D_ALLOC_PTR(ioc);
@@ -189,17 +189,17 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	if (rc != 0)
 		goto error;
 
-	eioc = ioc->ic_obj->obj_cont->vc_pool->vp_io_ctxt;
-	D_ASSERT(eioc != NULL);
-	ioc->ic_eiod = eio_iod_alloc(eioc, iod_nr, !read_only);
-	if (ioc->ic_eiod == NULL) {
+	bioc = ioc->ic_obj->obj_cont->vc_pool->vp_io_ctxt;
+	D_ASSERT(bioc != NULL);
+	ioc->ic_biod = bio_iod_alloc(bioc, iod_nr, !read_only);
+	if (ioc->ic_biod == NULL) {
 		rc = -DER_NOMEM;
 		goto error;
 	}
 
 	for (i = 0; i < iod_nr; i++) {
 		int iov_nr = iods[i].iod_nr;
-		struct eio_sglist *esgl;
+		struct bio_sglist *bsgl;
 
 		if (iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1) {
 			D_ERROR("Invalid sv iod_nr=%d\n", iov_nr);
@@ -211,8 +211,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		if (ioc->ic_size_fetch)
 			continue;
 
-		esgl = eio_iod_sgl(ioc->ic_eiod, i);
-		rc = eio_sgl_init(esgl, iov_nr);
+		bsgl = bio_iod_sgl(ioc->ic_biod, i);
+		rc = bio_sgl_init(bsgl, iov_nr);
 		if (rc != 0)
 			goto error;
 	}
@@ -225,38 +225,38 @@ error:
 }
 
 static int
-iod_fetch(struct vos_io_context *ioc, struct eio_iov *eiov)
+iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 {
-	struct eio_sglist *esgl;
+	struct bio_sglist *bsgl;
 	int iov_nr, iov_at;
 
 	if (ioc->ic_size_fetch)
 		return 0;
 
-	esgl = eio_iod_sgl(ioc->ic_eiod, ioc->ic_sgl_at);
-	D_ASSERT(esgl != NULL);
-	iov_nr = esgl->es_nr;
+	bsgl = bio_iod_sgl(ioc->ic_biod, ioc->ic_sgl_at);
+	D_ASSERT(bsgl != NULL);
+	iov_nr = bsgl->bs_nr;
 	iov_at = ioc->ic_iov_at;
 
 	D_ASSERT(iov_nr > iov_at);
-	D_ASSERT(iov_nr >= esgl->es_nr_out);
+	D_ASSERT(iov_nr >= bsgl->bs_nr_out);
 
 	if (iov_at == iov_nr - 1) {
-		struct eio_iov *eiovs;
+		struct bio_iov *biovs;
 
-		D_ALLOC(eiovs, iov_nr * 2 * sizeof(*eiovs));
-		if (eiovs == NULL)
+		D_ALLOC(biovs, iov_nr * 2 * sizeof(*biovs));
+		if (biovs == NULL)
 			return -DER_NOMEM;
 
-		memcpy(eiovs, &esgl->es_iovs[0], iov_nr * sizeof(*eiovs));
-		D_FREE(esgl->es_iovs);
+		memcpy(biovs, &bsgl->bs_iovs[0], iov_nr * sizeof(*biovs));
+		D_FREE(bsgl->bs_iovs);
 
-		esgl->es_iovs = eiovs;
-		esgl->es_nr = iov_nr * 2;
+		bsgl->bs_iovs = biovs;
+		bsgl->bs_nr = iov_nr * 2;
 	}
 
-	esgl->es_iovs[iov_at] = *eiov;
-	esgl->es_nr_out++;
+	bsgl->bs_iovs[iov_at] = *biov;
+	bsgl->bs_nr_out++;
 	ioc->ic_iov_at++;
 	return 0;
 }
@@ -271,28 +271,28 @@ akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
 	daos_csum_buf_t		 csum;
 	daos_iov_t		 kiov; /* iov to carry key bundle */
 	daos_iov_t		 riov; /* iov to carray record bundle */
-	struct eio_iov		 eiov; /* iov to return data buffer */
+	struct bio_iov		 biov; /* iov to return data buffer */
 	int			 rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epoch	= epoch;
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	rbund.rb_eiov	= &eiov;
+	rbund.rb_biov	= &biov;
 	rbund.rb_csum	= &csum;
-	memset(&eiov, 0, sizeof(eiov));
+	memset(&biov, 0, sizeof(biov));
 	daos_csum_set(&csum, NULL, 0);
 
 	rc = dbtree_fetch(toh, BTR_PROBE_LE, &kiov, &kiov, &riov);
 	if (rc == -DER_NONEXIST) {
 		rbund.rb_rsize = 0;
-		eio_addr_set_hole(&eiov.ei_addr, 1);
+		bio_addr_set_hole(&biov.bi_addr, 1);
 		rc = 0;
 	} else if (rc != 0) {
 		goto out;
 	}
 
-	rc = iod_fetch(ioc, &eiov);
+	rc = iod_fetch(ioc, &biov);
 	if (rc != 0)
 		goto out;
 
@@ -302,11 +302,11 @@ out:
 }
 
 static inline void
-eiov_set_hole(struct eio_iov *eiov, ssize_t len)
+biov_set_hole(struct bio_iov *biov, ssize_t len)
 {
-	memset(eiov, 0, sizeof(*eiov));
-	eiov->ei_data_len = len;
-	eio_addr_set_hole(&eiov->ei_addr, 1);
+	memset(biov, 0, sizeof(*biov));
+	biov->bi_data_len = len;
+	bio_addr_set_hole(&biov->bi_addr, 1);
 }
 
 /** Fetch an extent from an akey */
@@ -321,7 +321,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 	d_list_t		 covered;
 	struct evt_entry_list	 ent_list;
 	struct evt_rect		 rect;
-	struct eio_iov		 eiov = {0};
+	struct bio_iov		 biov = {0};
 	daos_size_t		 holes; /* hole width */
 	daos_off_t		 index;
 	daos_off_t		 end;
@@ -376,17 +376,17 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 		}
 
 		if (holes != 0) {
-			eiov_set_hole(&eiov, holes * rsize);
+			biov_set_hole(&biov, holes * rsize);
 			/* skip the hole */
-			rc = iod_fetch(ioc, &eiov);
+			rc = iod_fetch(ioc, &biov);
 			if (rc != 0)
 				goto failed;
 			holes = 0;
 		}
 
-		eiov.ei_data_len = nr * rsize;
-		eiov.ei_addr = ptr->pt_ex_addr;
-		rc = iod_fetch(ioc, &eiov);
+		biov.bi_data_len = nr * rsize;
+		biov.bi_addr = ptr->pt_ex_addr;
+		rc = iod_fetch(ioc, &biov);
 		if (rc != 0)
 			goto failed;
 
@@ -401,8 +401,8 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 		if (rsize == 0) { /* nothing but holes */
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
 		} else {
-			eiov_set_hole(&eiov, holes * rsize);
-			rc = iod_fetch(ioc, &eiov);
+			biov_set_hole(&biov, holes * rsize);
+			rc = iod_fetch(ioc, &biov);
 			if (rc != 0)
 				goto failed;
 		}
@@ -581,20 +581,20 @@ iod_update_mmid(struct vos_io_context *ioc)
 	return mmid;
 }
 
-static struct eio_iov *
-iod_update_eiov(struct vos_io_context *ioc)
+static struct bio_iov *
+iod_update_biov(struct vos_io_context *ioc)
 {
-	struct eio_sglist *esgl;
-	struct eio_iov *eiov;
+	struct bio_sglist *bsgl;
+	struct bio_iov *biov;
 
-	esgl = eio_iod_sgl(ioc->ic_eiod, ioc->ic_sgl_at);
-	D_ASSERT(esgl->es_nr_out != 0);
-	D_ASSERT(esgl->es_nr_out > ioc->ic_iov_at);
+	bsgl = bio_iod_sgl(ioc->ic_biod, ioc->ic_sgl_at);
+	D_ASSERT(bsgl->bs_nr_out != 0);
+	D_ASSERT(bsgl->bs_nr_out > ioc->ic_iov_at);
 
-	eiov = &esgl->es_iovs[ioc->ic_iov_at];
+	biov = &bsgl->bs_iovs[ioc->ic_iov_at];
 	ioc->ic_iov_at++;
 
-	return eiov;
+	return biov;
 }
 
 static int
@@ -602,13 +602,13 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch,
 		   uuid_t cookie, uint32_t pm_ver, daos_size_t rsize,
 		   struct vos_io_context *ioc)
 {
-	struct vos_key_bundle kbund;
-	struct vos_rec_bundle rbund;
-	daos_csum_buf_t csum;
-	daos_iov_t kiov, riov;
-	struct eio_iov *eiov;
-	umem_id_t mmid;
-	int rc;
+	struct vos_key_bundle	 kbund;
+	struct vos_rec_bundle	 rbund;
+	daos_csum_buf_t		 csum;
+	daos_iov_t		 kiov, riov;
+	struct bio_iov		*biov;
+	umem_id_t		 mmid;
+	int			 rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epoch	= epoch;
@@ -619,11 +619,11 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch,
 	D_ASSERT(!UMMID_IS_NULL(mmid));
 
 	D_ASSERT(ioc->ic_iov_at == 0);
-	eiov = iod_update_eiov(ioc);
+	biov = iod_update_biov(ioc);
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_csum	= &csum;
-	rbund.rb_eiov	= eiov;
+	rbund.rb_biov	= biov;
 	rbund.rb_rsize	= rsize;
 	rbund.rb_mmid	= mmid;
 	uuid_copy(rbund.rb_cookie, cookie);
@@ -646,7 +646,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uuid_t cookie,
 		 struct vos_io_context *ioc)
 {
 	struct evt_rect rect;
-	struct eio_iov *eiov;
+	struct bio_iov *biov;
 	int rc;
 
 	D_ASSERT(recx->rx_nr > 0);
@@ -654,8 +654,8 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uuid_t cookie,
 	rect.rc_off_lo = recx->rx_idx;
 	rect.rc_off_hi = recx->rx_idx + recx->rx_nr - 1;
 
-	eiov = iod_update_eiov(ioc);
-	rc = evt_insert(toh, cookie, pm_ver, &rect, rsize, eiov->ei_addr);
+	biov = iod_update_biov(ioc);
+	rc = evt_insert(toh, cookie, pm_ver, &rect, rsize, biov->bi_addr);
 
 	return rc;
 }
@@ -795,7 +795,7 @@ vos_reserve(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	umem_id_t		 mmid;
 	int			 rc;
 
-	if (media == EIO_ADDR_SCM) {
+	if (media == BIO_ADDR_SCM) {
 		if (ioc->ic_actv_cnt > 0) {
 			struct pobj_action *act;
 
@@ -819,7 +819,7 @@ vos_reserve(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 		return UMMID_IS_NULL(mmid) ? -DER_NOSPACE : 0;
 	}
 
-	D_ASSERT(media == EIO_ADDR_NVME);
+	D_ASSERT(media == BIO_ADDR_NVME);
 
 	vsi = obj->obj_cont->vc_pool->vp_vea_info;
 	D_ASSERT(vsi);
@@ -842,22 +842,22 @@ vos_reserve(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 }
 
 static int
-iod_reserve(struct vos_io_context *ioc, struct eio_iov *eiov)
+iod_reserve(struct vos_io_context *ioc, struct bio_iov *biov)
 {
-	struct eio_sglist *esgl;
+	struct bio_sglist *bsgl;
 
-	esgl = eio_iod_sgl(ioc->ic_eiod, ioc->ic_sgl_at);
-	D_ASSERT(esgl->es_nr != 0);
-	D_ASSERT(esgl->es_nr > esgl->es_nr_out);
-	D_ASSERT(esgl->es_nr > ioc->ic_iov_at);
+	bsgl = bio_iod_sgl(ioc->ic_biod, ioc->ic_sgl_at);
+	D_ASSERT(bsgl->bs_nr != 0);
+	D_ASSERT(bsgl->bs_nr > bsgl->bs_nr_out);
+	D_ASSERT(bsgl->bs_nr > ioc->ic_iov_at);
 
-	esgl->es_iovs[ioc->ic_iov_at] = *eiov;
+	bsgl->bs_iovs[ioc->ic_iov_at] = *biov;
 	ioc->ic_iov_at++;
-	esgl->es_nr_out++;
+	bsgl->bs_nr_out++;
 
 	D_DEBUG(DB_IO, "media %hu offset "DF_U64" size %zd\n",
-		eiov->ei_addr.ea_type, eiov->ei_addr.ea_off,
-		eiov->ei_data_len);
+		biov->bi_addr.ba_type, biov->bi_addr.ba_off,
+		biov->bi_data_len);
 	return 0;
 }
 
@@ -866,13 +866,13 @@ static int
 vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 		   daos_size_t size)
 {
-	struct vos_object *obj = ioc->ic_obj;
-	struct vos_irec_df *irec;
-	daos_size_t scm_size;
-	umem_id_t mmid;
-	struct eio_iov eiov;
-	uint64_t off = 0;
-	int rc;
+	struct vos_object	*obj = ioc->ic_obj;
+	struct vos_irec_df	*irec;
+	daos_size_t		 scm_size;
+	umem_id_t		 mmid;
+	struct bio_iov		 biov;
+	uint64_t		 off = 0;
+	int			 rc;
 
 	/*
 	 * TODO:
@@ -882,10 +882,10 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	 * vos_irec_df->ir_ex_addr, small unaligned part will be stored on SCM
 	 * along with vos_irec_df, being referenced by vos_irec_df->ir_body.
 	 */
-	scm_size = (media == EIO_ADDR_SCM) ? vos_recx2irec_size(size, NULL) :
+	scm_size = (media == BIO_ADDR_SCM) ? vos_recx2irec_size(size, NULL) :
 					     vos_recx2irec_size(0, NULL);
 
-	rc = vos_reserve(ioc, EIO_ADDR_SCM, scm_size, &off);
+	rc = vos_reserve(ioc, BIO_ADDR_SCM, scm_size, &off);
 	if (rc) {
 		D_ERROR("Reserve SCM for SV failed. %d\n", rc);
 		return rc;
@@ -897,13 +897,13 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	irec->ir_cs_size = 0;
 	irec->ir_cs_type = 0;
 
-	memset(&eiov, 0, sizeof(eiov));
+	memset(&biov, 0, sizeof(biov));
 	if (size == 0) { /* punch */
-		eio_addr_set_hole(&eiov.ei_addr, 1);
+		bio_addr_set_hole(&biov.bi_addr, 1);
 		goto done;
 	}
 
-	if (media == EIO_ADDR_SCM) {
+	if (media == BIO_ADDR_SCM) {
 		char *payload_addr;
 
 		/* Get the record payload offset */
@@ -911,16 +911,16 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 		D_ASSERT(payload_addr >= (char *)irec);
 		off = mmid.off + (payload_addr - (char *)irec);
 	} else {
-		rc = vos_reserve(ioc, EIO_ADDR_NVME, size, &off);
+		rc = vos_reserve(ioc, BIO_ADDR_NVME, size, &off);
 		if (rc) {
 			D_ERROR("Reserve NVMe for SV failed. %d\n", rc);
 			return rc;
 		}
 	}
 done:
-	eio_addr_set(&eiov.ei_addr, media, off);
-	eiov.ei_data_len = size;
-	rc = iod_reserve(ioc, &eiov);
+	bio_addr_set(&biov.bi_addr, media, off);
+	biov.bi_data_len = size;
+	rc = iod_reserve(ioc, &biov);
 
 	return rc;
 }
@@ -928,16 +928,16 @@ done:
 static int
 vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 {
-	struct eio_iov eiov;
-	uint64_t off = 0;
-	int rc;
+	struct bio_iov	biov;
+	uint64_t	off = 0;
+	int		rc;
 
-	memset(&eiov, 0, sizeof(eiov));
+	memset(&biov, 0, sizeof(biov));
 	/* recx punch */
 	if (size == 0) {
 		ioc->ic_mmids[ioc->ic_mmids_cnt] = UMMID_NULL;
 		ioc->ic_mmids_cnt++;
-		eio_addr_set_hole(&eiov.ei_addr, 1);
+		bio_addr_set_hole(&biov.bi_addr, 1);
 		goto done;
 	}
 
@@ -953,9 +953,9 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 		return rc;
 	}
 done:
-	eio_addr_set(&eiov.ei_addr, media, off);
-	eiov.ei_data_len = size;
-	rc = iod_reserve(ioc, &eiov);
+	bio_addr_set(&biov.bi_addr, media, off);
+	biov.bi_data_len = size;
+	rc = iod_reserve(ioc, &biov);
 
 	return rc;
 }
@@ -972,9 +972,9 @@ akey_media_select(struct vos_io_context *ioc, daos_iod_type_t type,
 
 	vsi = ioc->ic_obj->obj_cont->vc_pool->vp_vea_info;
 	if (vsi == NULL)
-		return EIO_ADDR_SCM;
+		return BIO_ADDR_SCM;
 	else
-		return (size >= VOS_BLK_SZ) ? EIO_ADDR_NVME : EIO_ADDR_SCM;
+		return (size >= VOS_BLK_SZ) ? BIO_ADDR_NVME : BIO_ADDR_SCM;
 }
 
 static int
@@ -1177,16 +1177,16 @@ error:
 	return rc;
 }
 
-struct eio_desc *
+struct bio_desc *
 vos_ioh2desc(daos_handle_t ioh)
 {
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 
-	D_ASSERT(ioc->ic_eiod != NULL);
-	return ioc->ic_eiod;
+	D_ASSERT(ioc->ic_biod != NULL);
+	return ioc->ic_biod;
 }
 
-struct eio_sglist *
+struct bio_sglist *
 vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx)
 {
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
@@ -1196,7 +1196,7 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx)
 			idx, ioc->ic_iod_nr);
 		return NULL;
 	}
-	return eio_iod_sgl(ioc->ic_eiod, idx);
+	return bio_iod_sgl(ioc->ic_biod, idx);
 }
 
 /**
@@ -1218,12 +1218,12 @@ vos_obj_copy(struct vos_io_context *ioc, daos_sg_list_t *sgls,
 	int rc, err;
 
 	D_ASSERT(sgl_nr == ioc->ic_iod_nr);
-	rc = eio_iod_prep(ioc->ic_eiod);
+	rc = bio_iod_prep(ioc->ic_biod);
 	if (rc)
 		return rc;
 
-	err = eio_iod_copy(ioc->ic_eiod, sgls, sgl_nr);
-	rc = eio_iod_post(ioc->ic_eiod);
+	err = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
+	rc = bio_iod_post(ioc->ic_biod);
 
 	return err ? err : rc;
 }
@@ -1277,11 +1277,11 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		int i, j;
 
 		for (i = 0; i < iod_nr; i++) {
-			struct eio_sglist *esgl = eio_iod_sgl(ioc->ic_eiod, i);
+			struct bio_sglist *bsgl = bio_iod_sgl(ioc->ic_biod, i);
 			daos_sg_list_t *sgl = &sgls[i];
 
 			/* Inform caller the nonexistent of object/key */
-			if (esgl->es_nr_out == 0) {
+			if (bsgl->bs_nr_out == 0) {
 				for (j = 0; j < sgl->sg_nr; j++)
 					sgl->sg_iovs[j].iov_len = 0;
 			}

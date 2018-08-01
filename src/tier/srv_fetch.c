@@ -495,7 +495,7 @@ tf_obj_update_cb(tse_task_t *task, void *data)
 	int j;
 
 	D_DEBUG(DF_TIERS, "object update complete\n");
-	rc = eio_iod_post(vos_ioh2desc(cba->ioh));
+	rc = bio_iod_post(vos_ioh2desc(cba->ioh));
 	rc = vos_fetch_end(cba->ioh, rc);
 	if (rc)
 		D_ERROR("vos_fetch_end returned %d\n", rc);
@@ -636,18 +636,18 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 		D_GOTO(out, rc);
 	}
 
-	rc = eio_iod_prep(vos_ioh2desc(fctx->dfc_ioh));
+	rc = bio_iod_prep(vos_ioh2desc(fctx->dfc_ioh));
 	if (rc)
 		D_GOTO(out, rc);
 
 	for (j = 0; j < nrecs; j++) {
-		struct eio_sglist	*esgl;
+		struct bio_sglist	*bsgl;
 
-		esgl = vos_iod_sgl_at(fctx->dfc_ioh, j);
-		D_ASSERT(esgl != NULL);
+		bsgl = vos_iod_sgl_at(fctx->dfc_ioh, j);
+		D_ASSERT(bsgl != NULL);
 		sgl = &ptmp->dki_sgs[j];
 
-		rc = eio_sgl_convert(esgl, sgl);
+		rc = bio_sgl_convert(bsgl, sgl);
 		if (rc)
 			break;
 		sgl_cnt++;
@@ -662,7 +662,7 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 	}
 
 	if (rc != 0)
-		eio_iod_post(vos_ioh2desc(fctx->dfc_ioh));
+		bio_iod_post(vos_ioh2desc(fctx->dfc_ioh));
 out:
 	if (rc != 0)
 		vos_fetch_end(fctx->dfc_ioh, rc);

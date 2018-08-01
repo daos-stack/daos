@@ -114,10 +114,10 @@ blob_close_or_delete_cb(void *arg, int rc)
 }
 
 static void
-blob_wait_completion(struct eio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
+blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 {
 	D_ASSERT(xs_ctxt != NULL);
-	if (xs_ctxt->exc_xs_id == -1) {
+	if (xs_ctxt->bxc_xs_id == -1) {
 		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
 		xs_poll_completion(xs_ctxt, &ba->bca_inflights);
 	} else {
@@ -129,23 +129,23 @@ blob_wait_completion(struct eio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 }
 
 int
-eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt, uint64_t blob_sz)
+bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 {
 	struct blob_cp_arg		*ba;
 	struct spdk_blob_opts		 opts;
-	struct eio_blobstore		*ebs;
+	struct bio_blobstore		*bbs;
 	struct smd_nvme_pool_info	 smd_pool;
 	uint64_t			 cluster_sz;
 	int				 rc;
 
 	D_ASSERT(xs_ctxt != NULL);
-	ebs = xs_ctxt->exc_blobstore;
-	D_ASSERT(ebs != NULL);
+	bbs = xs_ctxt->bxc_blobstore;
+	D_ASSERT(bbs != NULL);
 
-	ABT_mutex_lock(ebs->eb_mutex);
-	cluster_sz = ebs->eb_bs != NULL ?
-		spdk_bs_get_cluster_size(ebs->eb_bs) : 0;
-	ABT_mutex_unlock(ebs->eb_mutex);
+	ABT_mutex_lock(bbs->bb_mutex);
+	cluster_sz = bbs->bb_bs != NULL ?
+		spdk_bs_get_cluster_size(bbs->bb_bs) : 0;
+	ABT_mutex_unlock(bbs->bb_mutex);
 
 	if (cluster_sz == 0) {
 		D_ERROR("Blobstore is already closed?\n");
@@ -166,7 +166,7 @@ eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt, uint64_t blob_sz)
 	 * Query per-server metadata to make sure the blob for this pool:xstream
 	 * hasn't been created yet.
 	 */
-	rc = smd_nvme_get_pool(uuid, xs_ctxt->exc_xs_id, &smd_pool);
+	rc = smd_nvme_get_pool(uuid, xs_ctxt->bxc_xs_id, &smd_pool);
 	if (rc == 0) {
 		D_ERROR("Duplicated blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
@@ -178,12 +178,12 @@ eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt, uint64_t blob_sz)
 		return -DER_NOMEM;
 
 	ba->bca_inflights = 1;
-	ABT_mutex_lock(ebs->eb_mutex);
-	if (ebs->eb_bs != NULL)
-		spdk_bs_create_blob_ext(ebs->eb_bs, &opts, blob_create_cb, ba);
+	ABT_mutex_lock(bbs->bb_mutex);
+	if (bbs->bb_bs != NULL)
+		spdk_bs_create_blob_ext(bbs->bb_bs, &opts, blob_create_cb, ba);
 	else
 		blob_create_cb(ba, 0, -DER_NO_HDL);
-	ABT_mutex_unlock(ebs->eb_mutex);
+	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob creation done */
 	blob_wait_completion(xs_ctxt, ba);
@@ -198,13 +198,13 @@ eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt, uint64_t blob_sz)
 			ba->bca_id, xs_ctxt, DP_UUID(uuid), opts.num_clusters);
 		rc = 0;
 		/* Update per-server metadata */
-		smd_nvme_set_pool_info(uuid, xs_ctxt->exc_xs_id, ba->bca_id,
+		smd_nvme_set_pool_info(uuid, xs_ctxt->bxc_xs_id, ba->bca_id,
 				       &smd_pool);
 		rc = smd_nvme_add_pool(&smd_pool);
 		if (rc != 0) {
 			/* Delete newly created blob */
 			D_ERROR("Failure adding SMD pool table entry\n");
-			if (eio_blob_delete(uuid, xs_ctxt))
+			if (bio_blob_delete(uuid, xs_ctxt))
 				D_ERROR("Unable to delete newly created blobID "
 					""DF_U64" for xs:%p pool:"DF_UUID"\n",
 					ba->bca_id, xs_ctxt, DP_UUID(uuid));
@@ -213,7 +213,7 @@ eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt, uint64_t blob_sz)
 
 		D_DEBUG(DB_MGMT, "Successfully added entry to SMD pool table, "
 			"pool:"DF_UUID", xs_id:%d, blobID:"DF_U64"\n",
-			DP_UUID(uuid), xs_ctxt->exc_xs_id, ba->bca_id);
+			DP_UUID(uuid), xs_ctxt->bxc_xs_id, ba->bca_id);
 	}
 
 error:
@@ -222,12 +222,12 @@ error:
 }
 
 int
-eio_ioctxt_open(struct eio_io_context **pctxt, struct eio_xs_context *xs_ctxt,
+bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 		struct umem_instance *umem, uuid_t uuid)
 {
-	struct eio_io_context		*ctxt;
+	struct bio_io_context		*ctxt;
 	struct blob_cp_arg		*ba;
-	struct eio_blobstore		*ebs;
+	struct bio_blobstore		*bbs;
 	struct smd_nvme_pool_info	 smd_pool;
 	spdk_blob_id			 blob_id;
 	int				 rc;
@@ -236,10 +236,10 @@ eio_ioctxt_open(struct eio_io_context **pctxt, struct eio_xs_context *xs_ctxt,
 	if (ctxt == NULL)
 		return -DER_NOMEM;
 
-	ctxt->eic_umem = umem;
-	ctxt->eic_pmempool_uuid = umem_get_uuid(umem);
-	ctxt->eic_blob = NULL;
-	ctxt->eic_xs_ctxt = xs_ctxt;
+	ctxt->bic_umem = umem;
+	ctxt->bic_pmempool_uuid = umem_get_uuid(umem);
+	ctxt->bic_blob = NULL;
+	ctxt->bic_xs_ctxt = xs_ctxt;
 
 	/* NVMe isn't configured */
 	if (xs_ctxt == NULL) {
@@ -250,7 +250,7 @@ eio_ioctxt_open(struct eio_io_context **pctxt, struct eio_xs_context *xs_ctxt,
 	/*
 	 * Query per-server metadata to get blobID for this pool:xstream.
 	 */
-	rc = smd_nvme_get_pool(uuid, xs_ctxt->exc_xs_id, &smd_pool);
+	rc = smd_nvme_get_pool(uuid, xs_ctxt->bxc_xs_id, &smd_pool);
 	if (rc != 0) {
 		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
@@ -266,16 +266,16 @@ eio_ioctxt_open(struct eio_io_context **pctxt, struct eio_xs_context *xs_ctxt,
 	D_DEBUG(DB_MGMT, "Opening blobID "DF_U64" for xs:%p pool:"DF_UUID"\n",
 		blob_id, xs_ctxt, DP_UUID(uuid));
 
-	ebs = xs_ctxt->exc_blobstore;
-	D_ASSERT(ebs != NULL);
+	bbs = xs_ctxt->bxc_blobstore;
+	D_ASSERT(bbs != NULL);
 
 	ba->bca_inflights = 1;
-	ABT_mutex_lock(ebs->eb_mutex);
-	if (ebs->eb_bs != NULL)
-		spdk_bs_open_blob(ebs->eb_bs, blob_id, blob_open_cb, ba);
+	ABT_mutex_lock(bbs->bb_mutex);
+	if (bbs->bb_bs != NULL)
+		spdk_bs_open_blob(bbs->bb_bs, blob_id, blob_open_cb, ba);
 	else
 		blob_open_cb(ba, NULL, -DER_NO_HDL);
-	ABT_mutex_unlock(ebs->eb_mutex);
+	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob open done */
 	blob_wait_completion(xs_ctxt, ba);
@@ -288,7 +288,7 @@ eio_ioctxt_open(struct eio_io_context **pctxt, struct eio_xs_context *xs_ctxt,
 		D_DEBUG(DB_MGMT, "Successfully opened blobID "DF_U64" for xs:%p"
 			" pool:"DF_UUID" blob:%p\n", blob_id, xs_ctxt,
 			DP_UUID(uuid), ba->bca_blob);
-		ctxt->eic_blob = ba->bca_blob;
+		ctxt->bic_blob = ba->bca_blob;
 		*pctxt = ctxt;
 		rc = 0;
 	}
@@ -301,44 +301,44 @@ out:
 }
 
 int
-eio_ioctxt_close(struct eio_io_context *ctxt)
+bio_ioctxt_close(struct bio_io_context *ctxt)
 {
 	struct blob_cp_arg	*ba;
-	struct eio_blobstore	*ebs;
+	struct bio_blobstore	*bbs;
 	int			 rc;
 
 	/* NVMe isn't configured */
-	if (ctxt->eic_blob == NULL)
+	if (ctxt->bic_blob == NULL)
 		D_GOTO(out, rc = 0);
 
 	ba = alloc_blob_cp_arg();
 	if (ba == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_DEBUG(DB_MGMT, "Closing blob %p for xs:%p\n", ctxt->eic_blob,
-		ctxt->eic_xs_ctxt);
+	D_DEBUG(DB_MGMT, "Closing blob %p for xs:%p\n", ctxt->bic_blob,
+		ctxt->bic_xs_ctxt);
 
-	D_ASSERT(ctxt->eic_xs_ctxt != NULL);
-	ebs = ctxt->eic_xs_ctxt->exc_blobstore;
-	D_ASSERT(ebs != NULL);
+	D_ASSERT(ctxt->bic_xs_ctxt != NULL);
+	bbs = ctxt->bic_xs_ctxt->bxc_blobstore;
+	D_ASSERT(bbs != NULL);
 
 	ba->bca_inflights = 1;
-	ABT_mutex_lock(ebs->eb_mutex);
-	if (ebs->eb_bs != NULL)
-		spdk_blob_close(ctxt->eic_blob, blob_close_or_delete_cb, ba);
+	ABT_mutex_lock(bbs->bb_mutex);
+	if (bbs->bb_bs != NULL)
+		spdk_blob_close(ctxt->bic_blob, blob_close_or_delete_cb, ba);
 	else
 		blob_close_or_delete_cb(ba, -DER_NO_HDL);
-	ABT_mutex_unlock(ebs->eb_mutex);
+	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob close done */
-	blob_wait_completion(ctxt->eic_xs_ctxt, ba);
+	blob_wait_completion(ctxt->bic_xs_ctxt, ba);
 	if (ba->bca_rc != 0) {
 		D_ERROR("Close blob %p failed for xs:%p rc:%d\n",
-			ctxt->eic_blob, ctxt->eic_xs_ctxt, ba->bca_rc);
+			ctxt->bic_blob, ctxt->bic_xs_ctxt, ba->bca_rc);
 		rc = -DER_IO;
 	} else {
 		D_DEBUG(DB_MGMT, "Successfully closed blob %p for xs:%p\n",
-			ctxt->eic_blob, ctxt->eic_xs_ctxt);
+			ctxt->bic_blob, ctxt->bic_xs_ctxt);
 		rc = 0;
 	}
 
@@ -349,22 +349,22 @@ out:
 }
 
 int
-eio_blob_delete(uuid_t uuid, struct eio_xs_context *xs_ctxt)
+bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 {
 	struct blob_cp_arg		*ba;
-	struct eio_blobstore		*ebs;
+	struct bio_blobstore		*bbs;
 	struct smd_nvme_pool_info	 smd_pool;
 	spdk_blob_id			 blob_id;
 	int				 rc;
 
 	D_ASSERT(xs_ctxt != NULL);
-	ebs = xs_ctxt->exc_blobstore;
-	D_ASSERT(ebs != NULL);
+	bbs = xs_ctxt->bxc_blobstore;
+	D_ASSERT(bbs != NULL);
 
 	/**
 	 * Query per-server metadata to get blobID for this pool:xstream
 	 */
-	rc = smd_nvme_get_pool(uuid, xs_ctxt->exc_xs_id, &smd_pool);
+	rc = smd_nvme_get_pool(uuid, xs_ctxt->bxc_xs_id, &smd_pool);
 	if (rc != 0) {
 		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
@@ -381,13 +381,13 @@ eio_blob_delete(uuid_t uuid, struct eio_xs_context *xs_ctxt)
 		blob_id, DP_UUID(uuid), xs_ctxt);
 
 	ba->bca_inflights = 1;
-	ABT_mutex_lock(ebs->eb_mutex);
-	if (ebs->eb_bs != NULL)
-		spdk_bs_delete_blob(ebs->eb_bs, blob_id,
+	ABT_mutex_lock(bbs->bb_mutex);
+	if (bbs->bb_bs != NULL)
+		spdk_bs_delete_blob(bbs->bb_bs, blob_id,
 				    blob_close_or_delete_cb, ba);
 	else
 		blob_close_or_delete_cb(ba, -DER_NO_HDL);
-	ABT_mutex_unlock(ebs->eb_mutex);
+	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob delete done */
 	blob_wait_completion(xs_ctxt, ba);

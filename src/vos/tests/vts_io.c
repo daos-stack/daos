@@ -483,8 +483,8 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 		   daos_iod_t *iod, daos_sg_list_t *sgl,
 		   struct d_uuid *dsm_cookie, bool verbose)
 {
-	struct eio_sglist	*esgl;
-	struct eio_iov		*eiov;
+	struct bio_sglist	*bsgl;
+	struct bio_iov		*biov;
 	daos_iov_t		*srv_iov;
 	daos_handle_t		ioh;
 	unsigned int		off;
@@ -509,22 +509,22 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	}
 
 	srv_iov = &sgl->sg_iovs[0];
-	rc = eio_iod_prep(vos_ioh2desc(ioh));
+	rc = bio_iod_prep(vos_ioh2desc(ioh));
 	if (rc)
 		goto end;
 
-	esgl = vos_iod_sgl_at(ioh, 0);
-	assert_true(esgl != NULL);
+	bsgl = vos_iod_sgl_at(ioh, 0);
+	assert_true(bsgl != NULL);
 
-	for (i = off = 0; i < esgl->es_nr_out; i++) {
-		eiov = &esgl->es_iovs[i];
-		memcpy(eiov->ei_buf, srv_iov->iov_buf + off,
-		       eiov->ei_data_len);
-		off += eiov->ei_data_len;
+	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
+		biov = &bsgl->bs_iovs[i];
+		memcpy(biov->bi_buf, srv_iov->iov_buf + off,
+		       biov->bi_data_len);
+		off += biov->bi_data_len;
 	}
 	assert_true(srv_iov->iov_len == off);
 
-	rc = eio_iod_post(vos_ioh2desc(ioh));
+	rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
 	rc = vos_update_end(ioh, dsm_cookie->uuid, 0, dkey, rc);
 	if (rc != 0 && verbose)
@@ -537,8 +537,8 @@ int
 io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 		  daos_iod_t *iod, daos_sg_list_t *sgl, bool verbose)
 {
-	struct eio_sglist *esgl;
-	struct eio_iov	*eiov;
+	struct bio_sglist *bsgl;
+	struct bio_iov	*biov;
 	daos_iov_t	*dst_iov;
 	daos_handle_t	 ioh;
 	unsigned int	 off;
@@ -563,23 +563,23 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	}
 
 	dst_iov = &sgl->sg_iovs[0];
-	rc = eio_iod_prep(vos_ioh2desc(ioh));
+	rc = bio_iod_prep(vos_ioh2desc(ioh));
 	if (rc)
 		goto end;
 
-	esgl = vos_iod_sgl_at(ioh, 0);
-	assert_true(esgl != NULL);
+	bsgl = vos_iod_sgl_at(ioh, 0);
+	assert_true(bsgl != NULL);
 
-	for (i = off = 0; i < esgl->es_nr_out; i++) {
-		eiov = &esgl->es_iovs[i];
-		memcpy(dst_iov->iov_buf + off, eiov->ei_buf,
-		       eiov->ei_data_len);
-		off += eiov->ei_data_len;
+	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
+		biov = &bsgl->bs_iovs[i];
+		memcpy(dst_iov->iov_buf + off, biov->bi_buf,
+		       biov->bi_data_len);
+		off += biov->bi_data_len;
 	}
 	dst_iov->iov_len = off;
 	assert_true(dst_iov->iov_buf_len >= dst_iov->iov_len);
 
-	rc = eio_iod_post(vos_ioh2desc(ioh));
+	rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
 	rc = vos_fetch_end(ioh, rc);
 	if (rc != 0 && verbose)

@@ -208,7 +208,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p, bool *should_pass)
 }
 
 static int
-eio_strdup(eio_addr_t *addr, const char *str)
+bio_strdup(bio_addr_t *addr, const char *str)
 {
 	umem_id_t	mmid;
 	int		len;
@@ -216,10 +216,10 @@ eio_strdup(eio_addr_t *addr, const char *str)
 	/* This should probably be transactional but it's just a test and not
 	 * really the point of the test.
 	 */
-	addr->ea_type = EIO_ADDR_SCM;
+	addr->ba_type = BIO_ADDR_SCM;
 
 	if (str == NULL) {
-		addr->ea_hole = 1;
+		addr->ba_hole = 1;
 		return 0;
 	}
 
@@ -231,7 +231,7 @@ eio_strdup(eio_addr_t *addr, const char *str)
 
 	memcpy(umem_id2ptr(&ts_umm, mmid), str, len);
 
-	addr->ea_off = mmid.off;
+	addr->ba_off = mmid.off;
 
 	return 0;
 }
@@ -240,7 +240,7 @@ static int
 ts_add_rect(char *args)
 {
 	char		*val;
-	eio_addr_t	 eio_addr = {0}; /* Fake eio addr */
+	bio_addr_t	 bio_addr = {0}; /* Fake bio addr */
 	struct evt_rect	 rect;
 	int		 rc;
 	bool		 should_pass;
@@ -258,14 +258,14 @@ ts_add_rect(char *args)
 		should_pass ? "true" : "false", total_added);
 
 
-	rc = eio_strdup(&eio_addr, val);
+	rc = bio_strdup(&bio_addr, val);
 	if (rc != 0) {
 		D_FATAL("Insufficient memory for test\n");
 		return rc;
 	}
 
 	rc = evt_insert(ts_toh, ts_uuid, 0, &rect, val == NULL ? 0 : 1,
-			eio_addr);
+			bio_addr);
 	if (rc == 0)
 		total_added++;
 	if (should_pass) {
@@ -317,10 +317,10 @@ ts_delete_rect(char *args)
 			D_FATAL("Returned rectangle width doesn't match\n");
 		}
 
-		if (!eio_addr_is_hole(&ent.en_ptr.pt_ex_addr)) {
+		if (!bio_addr_is_hole(&ent.en_ptr.pt_ex_addr)) {
 			umem_id_t	mmid;
 
-			mmid.off = ent.en_ptr.pt_ex_addr.ea_off;
+			mmid.off = ent.en_ptr.pt_ex_addr.ba_off;
 			mmid.pool_uuid_lo = ts_pool_uuid;
 			umem_free(&ts_umm, mmid);
 		}
@@ -340,7 +340,7 @@ ts_find_rect(char *args)
 {
 	struct evt_entry	*ent;
 	char			*val;
-	eio_addr_t		 addr;
+	bio_addr_t		 addr;
 	d_list_t		 covered;
 	struct evt_rect		 rect;
 	struct evt_entry_list	 enlist;
@@ -365,13 +365,13 @@ ts_find_rect(char *args)
 		bool punched;
 		addr = ent->en_ptr.pt_ex_addr;
 
-		punched = eio_addr_is_hole(&addr);
+		punched = bio_addr_is_hole(&addr);
 		D_PRINT("Find rect "DF_RECT" (sel="DF_RECT") width=%d "
 			"val=%.*s\n", DP_RECT(&ent->en_rect),
 			DP_RECT(&ent->en_sel_rect),
 			(int)evt_rect_width(&ent->en_sel_rect),
 			punched ? 4 : (int)evt_rect_width(&ent->en_sel_rect),
-			punched ? "None" : (char *)addr.ea_off);
+			punched ? "None" : (char *)addr.ba_off);
 	}
 
 	evt_ent_list_fini(&enlist);
@@ -408,7 +408,7 @@ ts_list_rect(void)
 		if (rc == 0) {
 			D_PRINT("%d) "DF_RECT", val_addr="DF_U64"\n",
 				i, DP_RECT(&ent.en_rect),
-				ent.en_ptr.pt_ex_addr.ea_off);
+				ent.en_ptr.pt_ex_addr.ba_off);
 
 			if (i % 3 == 0)
 				rc = evt_iter_probe(ih, EVT_ITER_FIND,
@@ -442,7 +442,7 @@ ts_many_add(char *args)
 	char		*tmp;
 	int		*seq;
 	struct evt_rect	 rect;
-	eio_addr_t	 eio_addr = {0}; /* Fake eio addr */
+	bio_addr_t	 bio_addr = {0}; /* Fake bio addr */
 	long		 offset = 0;
 	int		 size;
 	int		 nr;
@@ -510,14 +510,14 @@ ts_many_add(char *args)
 
 		memset(buf, 'a' + seq[i] % TS_VAL_CYCLE, size);
 
-		rc = eio_strdup(&eio_addr, buf);
+		rc = bio_strdup(&bio_addr, buf);
 		if (rc != 0) {
 			D_FATAL("Insufficient memory for test\n");
 			return rc;
 		}
 
 		rc = evt_insert(ts_toh, ts_uuid, 0, &rect, 1,
-				eio_addr);
+				bio_addr);
 		if (rc != 0) {
 			D_FATAL("Add rect %d failed %d\n", i, rc);
 			break;

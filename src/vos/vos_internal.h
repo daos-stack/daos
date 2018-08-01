@@ -110,7 +110,7 @@ struct vos_pool {
 	/** btr handle for the cookie table \a vp_cookie_tab */
 	daos_handle_t		vp_cookie_th;
 	/** I/O context */
-	struct eio_io_context	*vp_io_ctxt;
+	struct bio_io_context	*vp_io_ctxt;
 	/** In-memory free space tracking for NVMe device */
 	struct vea_space_info	*vp_vea_info;
 };
@@ -155,11 +155,11 @@ struct vos_imem_strts {
 };
 /* in-memory structures standalone instance */
 struct vos_imem_strts		*vsa_imems_inst;
-struct eio_xs_context		*vsa_xsctxt_inst;
+struct bio_xs_context		*vsa_xsctxt_inst;
 struct umem_tx_stage_data	 vsa_txd_inst;
 bool vsa_nvme_init;
 
-static inline struct eio_xs_context *
+static inline struct bio_xs_context *
 vos_xsctxt_get(void)
 {
 #ifdef VOS_STANDALONE
@@ -519,7 +519,7 @@ struct vos_rec_bundle {
 	/**
 	 * Single value record IOV.
 	 */
-	struct eio_iov		*rb_eiov;
+	struct bio_iov		*rb_biov;
 	/** Returned durable address of the btree record */
 	struct vos_krec_df	*rb_krec;
 	/** input record size */

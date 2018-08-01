@@ -473,10 +473,10 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
-	struct eio_iov		*eiov	= rbund->rb_eiov;
+	struct bio_iov		*biov	= rbund->rb_biov;
 	struct svt_hkey		*skey;
 
-	if (eiov->ei_data_len != rbund->rb_rsize)
+	if (biov->bi_data_len != rbund->rb_rsize)
 		return -DER_IO_INVAL;
 
 	skey = (struct svt_hkey *)&rec->rec_hkey[0];
@@ -486,8 +486,8 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	/** XXX: fix this after CSUM is added to iterator */
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
-	irec->ir_size	 = eiov->ei_data_len;
-	irec->ir_ex_addr = eiov->ei_addr;
+	irec->ir_size	 = biov->bi_data_len;
+	irec->ir_ex_addr = biov->bi_addr;
 	irec->ir_ver	 = rbund->rb_ver;
 
 	if (irec->ir_size == 0) { /* it is a punch */
@@ -509,7 +509,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	struct svt_hkey    *skey = (struct svt_hkey *)&rec->rec_hkey[0];
 	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
 	daos_csum_buf_t    *csum = rbund->rb_csum;
-	struct eio_iov     *eiov = rbund->rb_eiov;
+	struct bio_iov     *biov = rbund->rb_biov;
 
 	if (kbund != NULL) /* called from iterator */
 		kbund->kb_epoch = skey->sv_epoch;
@@ -517,9 +517,9 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	uuid_copy(rbund->rb_cookie, skey->sv_cookie);
 
 	/* NB: return record address, caller should copy/rma data for it */
-	eiov->ei_data_len = irec->ir_size;
-	eiov->ei_addr = irec->ir_ex_addr;
-	eiov->ei_buf = NULL;
+	biov->bi_data_len = irec->ir_size;
+	biov->bi_addr = irec->ir_ex_addr;
+	biov->bi_buf = NULL;
 
 	if (irec->ir_size != 0) {
 		csum->cs_len	= irec->ir_cs_size;
@@ -601,7 +601,7 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec,
 	      void *args)
 {
 	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
-	eio_addr_t *addr = &irec->ir_ex_addr;
+	bio_addr_t *addr = &irec->ir_ex_addr;
 
 	if (UMMID_IS_NULL(rec->rec_mmid))
 		return 0;
@@ -612,7 +612,7 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec,
 		return 0;
 	}
 
-	if (addr->ea_type == EIO_ADDR_NVME && !eio_addr_is_hole(addr)) {
+	if (addr->ba_type == BIO_ADDR_NVME && !bio_addr_is_hole(addr)) {
 		struct vea_space_info *vsi = tins->ti_blks_info;
 		uint64_t blk_off;
 		uint32_t blk_cnt;
@@ -620,7 +620,7 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec,
 
 		D_ASSERT(vsi != NULL);
 
-		blk_off = vos_byte2blkoff(addr->ea_off);
+		blk_off = vos_byte2blkoff(addr->ba_off);
 		blk_cnt = vos_byte2blkcnt(irec->ir_size);
 
 		rc = vea_free(vsi, blk_off, blk_cnt);

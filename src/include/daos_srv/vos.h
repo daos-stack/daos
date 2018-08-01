@@ -439,9 +439,9 @@ vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
  *
  * \param ioh	[IN]	The I/O handle.
  *
- * \return		EIO IO descriptor
+ * \return		BIO IO descriptor
  */
-struct eio_desc *
+struct bio_desc *
 vos_ioh2desc(daos_handle_t ioh);
 
 /**
@@ -450,9 +450,9 @@ vos_ioh2desc(daos_handle_t ioh);
  * \param ioh	[IN]	The I/O handle.
  * \param idx	[IN]	SGL index.
  *
- * \return		EIO SGL
+ * \return		BIO SGL
  */
-struct eio_sglist *
+struct bio_sglist *
 vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
 
 /**

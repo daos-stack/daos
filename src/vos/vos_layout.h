@@ -188,7 +188,7 @@ struct vos_irec_df {
 	/** length of value */
 	uint64_t			ir_size;
 	/** external payload address */
-	eio_addr_t			ir_ex_addr;
+	bio_addr_t			ir_ex_addr;
 	/** placeholder for the key checksum & internal value */
 	char				ir_body[0];
 };

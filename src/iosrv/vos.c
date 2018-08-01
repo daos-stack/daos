@@ -301,7 +301,7 @@ fill_key_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 }
 
 /* Copy the data of the recx into buf. */
-/* TODO: Use entry->ie_eiov when implemented. */
+/* TODO: Use entry->ie_biov when implemented. */
 static void
 copy_data(vos_iter_type_t type, vos_iter_param_t *param,
 	  vos_iter_entry_t *entry, void *buf, size_t len)

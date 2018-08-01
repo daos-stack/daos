@@ -103,7 +103,7 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 				&cred->tc_dkey, 1, &cred->tc_iod,
 				&cred->tc_sgl);
 	} else { /* zero-copy */
-		struct eio_sglist	*esgl;
+		struct bio_sglist	*bsgl;
 		daos_handle_t		 ioh;
 
 		if (update_or_fetch == TS_DO_UPDATE)
@@ -117,26 +117,26 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		if (rc)
 			return rc;
 
-		rc = eio_iod_prep(vos_ioh2desc(ioh));
+		rc = bio_iod_prep(vos_ioh2desc(ioh));
 		if (rc)
 			goto end;
 
-		esgl = vos_iod_sgl_at(ioh, 0);
-		D_ASSERT(esgl != NULL);
-		D_ASSERT(esgl->es_nr_out == 1);
+		bsgl = vos_iod_sgl_at(ioh, 0);
+		D_ASSERT(bsgl != NULL);
+		D_ASSERT(bsgl->bs_nr_out == 1);
 		D_ASSERT(cred->tc_sgl.sg_nr == 1);
 
 		if (update_or_fetch == TS_DO_FETCH) {
 			memcpy(cred->tc_sgl.sg_iovs[0].iov_buf,
-			       esgl->es_iovs[0].ei_buf,
-			       esgl->es_iovs[0].ei_data_len);
+			       bsgl->bs_iovs[0].bi_buf,
+			       bsgl->bs_iovs[0].bi_data_len);
 		} else {
-			memcpy(esgl->es_iovs[0].ei_buf,
+			memcpy(bsgl->bs_iovs[0].bi_buf,
 			       cred->tc_sgl.sg_iovs[0].iov_buf,
 			       cred->tc_sgl.sg_iovs[0].iov_len);
 		}
 
-		rc = eio_iod_post(vos_ioh2desc(ioh));
+		rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
 		if (update_or_fetch == TS_DO_UPDATE)
 			rc = vos_update_end(ioh, ts_cookie, 0, &cred->tc_dkey,

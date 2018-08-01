@@ -27,37 +27,37 @@
 #include "eio_internal.h"
 
 static void
-dma_buffer_shrink(struct eio_dma_buffer *buf, unsigned int cnt)
+dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
 {
-	struct eio_dma_chunk *chunk, *tmp;
+	struct bio_dma_chunk *chunk, *tmp;
 
-	d_list_for_each_entry_safe(chunk, tmp, &buf->edb_idle_list, edc_link) {
+	d_list_for_each_entry_safe(chunk, tmp, &buf->bdb_idle_list, bdc_link) {
 		if (cnt == 0)
 			break;
 
-		d_list_del_init(&chunk->edc_link);
+		d_list_del_init(&chunk->bdc_link);
 
-		D_ASSERT(chunk->edc_ptr != NULL);
-		D_ASSERT(chunk->edc_pg_idx == 0);
-		D_ASSERT(chunk->edc_ref == 0);
+		D_ASSERT(chunk->bdc_ptr != NULL);
+		D_ASSERT(chunk->bdc_pg_idx == 0);
+		D_ASSERT(chunk->bdc_ref == 0);
 
-		spdk_dma_free(chunk->edc_ptr);
+		spdk_dma_free(chunk->bdc_ptr);
 		D_FREE_PTR(chunk);
 
-		D_ASSERT(buf->edb_tot_cnt > 0);
-		buf->edb_tot_cnt--;
+		D_ASSERT(buf->bdb_tot_cnt > 0);
+		buf->bdb_tot_cnt--;
 		cnt--;
 	}
 }
 
 static int
-dma_buffer_grow(struct eio_dma_buffer *buf, unsigned int cnt)
+dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt)
 {
-	struct eio_dma_chunk *chunk;
-	ssize_t chk_bytes = eio_chk_sz << EIO_DMA_PAGE_SHIFT;
+	struct bio_dma_chunk *chunk;
+	ssize_t chk_bytes = bio_chk_sz << BIO_DMA_PAGE_SHIFT;
 	int i, rc = 0;
 
-	if ((buf->edb_tot_cnt + cnt) > eio_chk_cnt_max) {
+	if ((buf->bdb_tot_cnt + cnt) > bio_chk_cnt_max) {
 		D_ERROR("Exceeding per-xstream DMA buffer size\n");
 		return -DER_OVERFLOW;
 	}
@@ -70,62 +70,62 @@ dma_buffer_grow(struct eio_dma_buffer *buf, unsigned int cnt)
 			break;
 		}
 
-		chunk->edc_ptr = spdk_dma_malloc(chk_bytes, EIO_DMA_PAGE_SZ,
+		chunk->bdc_ptr = spdk_dma_malloc(chk_bytes, BIO_DMA_PAGE_SZ,
 						 NULL);
-		if (chunk->edc_ptr == NULL) {
+		if (chunk->bdc_ptr == NULL) {
 			D_ERROR("Failed to allocate DMA buffer\n");
 			D_FREE_PTR(chunk);
 			rc = -DER_NOMEM;
 			break;
 		}
 
-		d_list_add_tail(&chunk->edc_link, &buf->edb_idle_list);
-		buf->edb_tot_cnt++;
+		d_list_add_tail(&chunk->bdc_link, &buf->bdb_idle_list);
+		buf->bdb_tot_cnt++;
 	}
 
 	return rc;
 }
 
 void
-dma_buffer_destroy(struct eio_dma_buffer *buf)
+dma_buffer_destroy(struct bio_dma_buffer *buf)
 {
-	D_ASSERT(d_list_empty(&buf->edb_used_list));
-	D_ASSERT(buf->edb_active_iods == 0);
-	dma_buffer_shrink(buf, buf->edb_tot_cnt);
+	D_ASSERT(d_list_empty(&buf->bdb_used_list));
+	D_ASSERT(buf->bdb_active_iods == 0);
+	dma_buffer_shrink(buf, buf->bdb_tot_cnt);
 
-	D_ASSERT(buf->edb_tot_cnt == 0);
-	buf->edb_cur_chk = NULL;
-	ABT_mutex_free(&buf->edb_mutex);
-	ABT_cond_free(&buf->edb_wait_iods);
+	D_ASSERT(buf->bdb_tot_cnt == 0);
+	buf->bdb_cur_chk = NULL;
+	ABT_mutex_free(&buf->bdb_mutex);
+	ABT_cond_free(&buf->bdb_wait_iods);
 
 	D_FREE_PTR(buf);
 }
 
-struct eio_dma_buffer *
+struct bio_dma_buffer *
 dma_buffer_create(unsigned int init_cnt)
 {
-	struct eio_dma_buffer *buf;
+	struct bio_dma_buffer *buf;
 	int rc;
 
 	D_ALLOC_PTR(buf);
 	if (buf == NULL)
 		return NULL;
 
-	D_INIT_LIST_HEAD(&buf->edb_idle_list);
-	D_INIT_LIST_HEAD(&buf->edb_used_list);
-	buf->edb_cur_chk = NULL;
-	buf->edb_tot_cnt = 0;
-	buf->edb_active_iods = 0;
+	D_INIT_LIST_HEAD(&buf->bdb_idle_list);
+	D_INIT_LIST_HEAD(&buf->bdb_used_list);
+	buf->bdb_cur_chk = NULL;
+	buf->bdb_tot_cnt = 0;
+	buf->bdb_active_iods = 0;
 
-	rc = ABT_mutex_create(&buf->edb_mutex);
+	rc = ABT_mutex_create(&buf->bdb_mutex);
 	if (rc != ABT_SUCCESS) {
 		D_FREE_PTR(buf);
 		return NULL;
 	}
 
-	rc = ABT_cond_create(&buf->edb_wait_iods);
+	rc = ABT_cond_create(&buf->bdb_wait_iods);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&buf->edb_mutex);
+		ABT_mutex_free(&buf->bdb_mutex);
 		D_FREE_PTR(buf);
 		return NULL;
 	}
@@ -139,134 +139,134 @@ dma_buffer_create(unsigned int init_cnt)
 	return buf;
 }
 
-struct eio_sglist *
-eio_iod_sgl(struct eio_desc *eiod, unsigned int idx)
+struct bio_sglist *
+bio_iod_sgl(struct bio_desc *biod, unsigned int idx)
 {
-	if (idx >= eiod->ed_sgl_cnt) {
-		D_ERROR("Invalid sgl index %d/%d\n", idx, eiod->ed_sgl_cnt);
+	if (idx >= biod->bd_sgl_cnt) {
+		D_ERROR("Invalid sgl index %d/%d\n", idx, biod->bd_sgl_cnt);
 		return NULL;
 	}
-	return &eiod->ed_sgls[idx];
+	return &biod->bd_sgls[idx];
 }
 
-struct eio_desc *
-eio_iod_alloc(struct eio_io_context *ctxt, unsigned int sgl_cnt, bool update)
+struct bio_desc *
+bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, bool update)
 {
-	struct eio_desc *eiod;
+	struct bio_desc *biod;
 	int rc;
 
-	D_ASSERT(ctxt != NULL && ctxt->eic_umem != NULL);
+	D_ASSERT(ctxt != NULL && ctxt->bic_umem != NULL);
 	D_ASSERT(sgl_cnt != 0);
 
-	D_ALLOC_PTR(eiod);
-	if (eiod == NULL)
+	D_ALLOC_PTR(biod);
+	if (biod == NULL)
 		return NULL;
 
-	eiod->ed_ctxt = ctxt;
-	eiod->ed_update = update;
-	eiod->ed_sgl_cnt = sgl_cnt;
+	biod->bd_ctxt = ctxt;
+	biod->bd_update = update;
+	biod->bd_sgl_cnt = sgl_cnt;
 
-	D_ALLOC(eiod->ed_sgls, sizeof(*eiod->ed_sgls) * sgl_cnt);
-	if (eiod->ed_sgls == NULL) {
-		D_FREE_PTR(eiod);
+	D_ALLOC(biod->bd_sgls, sizeof(*biod->bd_sgls) * sgl_cnt);
+	if (biod->bd_sgls == NULL) {
+		D_FREE_PTR(biod);
 		return NULL;
 	}
 
-	rc = ABT_mutex_create(&eiod->ed_mutex);
+	rc = ABT_mutex_create(&biod->bd_mutex);
 	if (rc != ABT_SUCCESS)
 		goto free_sgls;
 
-	rc = ABT_cond_create(&eiod->ed_dma_done);
+	rc = ABT_cond_create(&biod->bd_dma_done);
 	if (rc != ABT_SUCCESS)
 		goto free_mutex;
 
-	return eiod;
+	return biod;
 
 free_mutex:
-	ABT_mutex_free(&eiod->ed_mutex);
+	ABT_mutex_free(&biod->bd_mutex);
 free_sgls:
-	D_FREE(eiod->ed_sgls);
-	D_FREE_PTR(eiod);
+	D_FREE(biod->bd_sgls);
+	D_FREE_PTR(biod);
 	return NULL;
 }
 
 void
-eio_iod_free(struct eio_desc *eiod)
+bio_iod_free(struct bio_desc *biod)
 {
 	int i;
 
-	D_ASSERT(!eiod->ed_buffer_prep);
+	D_ASSERT(!biod->bd_buffer_prep);
 
-	ABT_cond_free(&eiod->ed_dma_done);
-	ABT_mutex_free(&eiod->ed_mutex);
+	ABT_cond_free(&biod->bd_dma_done);
+	ABT_mutex_free(&biod->bd_mutex);
 
-	for (i = 0; i < eiod->ed_sgl_cnt; i++)
-		eio_sgl_fini(&eiod->ed_sgls[i]);
-	D_FREE(eiod->ed_sgls);
-	D_FREE_PTR(eiod);
+	for (i = 0; i < biod->bd_sgl_cnt; i++)
+		bio_sgl_fini(&biod->bd_sgls[i]);
+	D_FREE(biod->bd_sgls);
+	D_FREE_PTR(biod);
 }
 
-static inline struct eio_dma_buffer *
-iod_dma_buf(struct eio_desc *eiod)
+static inline struct bio_dma_buffer *
+iod_dma_buf(struct bio_desc *biod)
 {
-	D_ASSERT(eiod->ed_ctxt->eic_xs_ctxt);
-	D_ASSERT(eiod->ed_ctxt->eic_xs_ctxt->exc_dma_buf);
+	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
+	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt->bxc_dma_buf);
 
-	return eiod->ed_ctxt->eic_xs_ctxt->exc_dma_buf;
+	return biod->bd_ctxt->bic_xs_ctxt->bxc_dma_buf;
 }
 
 /*
- * Release all the DMA chunks held by @eiod, once the use count of any
+ * Release all the DMA chunks held by @biod, once the use count of any
  * chunk drops to zero, put it back to free list.
  */
 static void
-iod_release_buffer(struct eio_desc *eiod)
+iod_release_buffer(struct bio_desc *biod)
 {
-	struct eio_dma_buffer *edb;
-	struct eio_rsrvd_dma *rsrvd_dma = &eiod->ed_rsrvd;
+	struct bio_dma_buffer *bdb;
+	struct bio_rsrvd_dma *rsrvd_dma = &biod->bd_rsrvd;
 	int i;
 
-	if (rsrvd_dma->erd_chk_max == 0) {
-		D_ASSERT(rsrvd_dma->erd_rg_max == 0);
-		eiod->ed_buffer_prep = 0;
+	if (rsrvd_dma->brd_chk_max == 0) {
+		D_ASSERT(rsrvd_dma->brd_rg_max == 0);
+		biod->bd_buffer_prep = 0;
 		return;
 	}
 
-	D_ASSERT(rsrvd_dma->erd_regions != NULL);
-	D_FREE(rsrvd_dma->erd_regions);
-	rsrvd_dma->erd_regions = NULL;
-	rsrvd_dma->erd_rg_max = rsrvd_dma->erd_rg_cnt = 0;
+	D_ASSERT(rsrvd_dma->brd_regions != NULL);
+	D_FREE(rsrvd_dma->brd_regions);
+	rsrvd_dma->brd_regions = NULL;
+	rsrvd_dma->brd_rg_max = rsrvd_dma->brd_rg_cnt = 0;
 
-	edb = iod_dma_buf(eiod);
-	D_ASSERT(rsrvd_dma->erd_dma_chks != NULL);
-	for (i = 0; i < rsrvd_dma->erd_chk_cnt; i++) {
-		struct eio_dma_chunk *chunk = rsrvd_dma->erd_dma_chks[i];
+	bdb = iod_dma_buf(biod);
+	D_ASSERT(rsrvd_dma->brd_dma_chks != NULL);
+	for (i = 0; i < rsrvd_dma->brd_chk_cnt; i++) {
+		struct bio_dma_chunk *chunk = rsrvd_dma->brd_dma_chks[i];
 
 		D_ASSERT(chunk != NULL);
-		D_ASSERT(!d_list_empty(&chunk->edc_link));
-		D_ASSERT(chunk->edc_ref > 0);
-		chunk->edc_ref--;
+		D_ASSERT(!d_list_empty(&chunk->bdc_link));
+		D_ASSERT(chunk->bdc_ref > 0);
+		chunk->bdc_ref--;
 
 		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u\n", chunk,
-			chunk->edc_ptr, chunk->edc_pg_idx, chunk->edc_ref);
+			chunk->bdc_ptr, chunk->bdc_pg_idx, chunk->bdc_ref);
 
-		if (chunk->edc_ref == 0) {
-			chunk->edc_pg_idx = 0;
-			if (chunk == edb->edb_cur_chk)
-				edb->edb_cur_chk = NULL;
-			d_list_move_tail(&chunk->edc_link, &edb->edb_idle_list);
+		if (chunk->bdc_ref == 0) {
+			chunk->bdc_pg_idx = 0;
+			if (chunk == bdb->bdb_cur_chk)
+				bdb->bdb_cur_chk = NULL;
+			d_list_move_tail(&chunk->bdc_link, &bdb->bdb_idle_list);
 		}
-		rsrvd_dma->erd_dma_chks[i] = NULL;
+		rsrvd_dma->brd_dma_chks[i] = NULL;
 	}
 
-	D_FREE(rsrvd_dma->erd_dma_chks);
-	rsrvd_dma->erd_dma_chks = NULL;
-	rsrvd_dma->erd_chk_max = rsrvd_dma->erd_chk_cnt = 0;
+	D_FREE(rsrvd_dma->brd_dma_chks);
+	rsrvd_dma->brd_dma_chks = NULL;
+	rsrvd_dma->brd_chk_max = rsrvd_dma->brd_chk_cnt = 0;
 
-	eiod->ed_buffer_prep = 0;
+	biod->bd_buffer_prep = 0;
 }
 
-struct eio_copy_args {
+struct bio_copy_args {
 	/* DRAM sg lists to be copied to/from */
 	d_sg_list_t	*ca_sgls;
 	int		 ca_sgl_cnt;
@@ -279,35 +279,35 @@ struct eio_copy_args {
 };
 
 static int
-iterate_eiov(struct eio_desc *eiod,
-	     int (*cb_fn)(struct eio_desc *, struct eio_iov *,
-			  struct eio_copy_args *),
-	     struct eio_copy_args *arg)
+iterate_biov(struct bio_desc *biod,
+	     int (*cb_fn)(struct bio_desc *, struct bio_iov *,
+			  struct bio_copy_args *),
+	     struct bio_copy_args *arg)
 {
 	int i, j, rc = 0;
 
-	for (i = 0; i < eiod->ed_sgl_cnt; i++) {
-		struct eio_sglist *esgl = &eiod->ed_sgls[i];
+	for (i = 0; i < biod->bd_sgl_cnt; i++) {
+		struct bio_sglist *bsgl = &biod->bd_sgls[i];
 
 		if (arg != NULL) {
 			D_ASSERT(i < arg->ca_sgl_cnt);
 			arg->ca_sgl_idx = i;
 			arg->ca_iov_idx = 0;
 			arg->ca_iov_off = 0;
-			if (!eiod->ed_update)
+			if (!biod->bd_update)
 				arg->ca_sgls[i].sg_nr_out = 0;
 		}
 
-		if (esgl->es_nr_out == 0)
+		if (bsgl->bs_nr_out == 0)
 			continue;
 
-		for (j = 0; j < esgl->es_nr_out; j++) {
-			struct eio_iov *eiov = &esgl->es_iovs[j];
+		for (j = 0; j < bsgl->bs_nr_out; j++) {
+			struct bio_iov *biov = &bsgl->bs_iovs[j];
 
-			if (eiov->ei_data_len == 0)
+			if (biov->bi_data_len == 0)
 				continue;
 
-			rc = cb_fn(eiod, eiov, arg);
+			rc = cb_fn(biod, biov, arg);
 			if (rc)
 				break;
 		}
@@ -317,79 +317,79 @@ iterate_eiov(struct eio_desc *eiod,
 }
 
 static void *
-chunk_reserve(struct eio_dma_chunk *chk, unsigned int chk_pg_idx,
+chunk_reserve(struct bio_dma_chunk *chk, unsigned int chk_pg_idx,
 	      unsigned int pg_cnt, unsigned int pg_off)
 {
 	D_ASSERT(chk != NULL);
-	D_ASSERTF(chk->edc_pg_idx <= eio_chk_sz, "%u > %u\n",
-		  chk->edc_pg_idx, eio_chk_sz);
+	D_ASSERTF(chk->bdc_pg_idx <= bio_chk_sz, "%u > %u\n",
+		  chk->bdc_pg_idx, bio_chk_sz);
 
-	D_ASSERTF(chk_pg_idx == chk->edc_pg_idx ||
-		  (chk_pg_idx + 1) == chk->edc_pg_idx, "%u, %u\n",
-		  chk_pg_idx, chk->edc_pg_idx);
+	D_ASSERTF(chk_pg_idx == chk->bdc_pg_idx ||
+		  (chk_pg_idx + 1) == chk->bdc_pg_idx, "%u, %u\n",
+		  chk_pg_idx, chk->bdc_pg_idx);
 
 	/* The chunk doesn't have enough unused pages */
-	if (chk_pg_idx + pg_cnt > eio_chk_sz)
+	if (chk_pg_idx + pg_cnt > bio_chk_sz)
 		return NULL;
 
 	D_DEBUG(DB_IO, "Reserved on chunk:%p[%p], idx:%u, cnt:%u, off:%u\n",
-		chk, chk->edc_ptr, chk_pg_idx, pg_cnt, pg_off);
+		chk, chk->bdc_ptr, chk_pg_idx, pg_cnt, pg_off);
 
-	chk->edc_pg_idx = chk_pg_idx + pg_cnt;
-	return chk->edc_ptr + (chk_pg_idx << EIO_DMA_PAGE_SHIFT) + pg_off;
+	chk->bdc_pg_idx = chk_pg_idx + pg_cnt;
+	return chk->bdc_ptr + (chk_pg_idx << BIO_DMA_PAGE_SHIFT) + pg_off;
 }
 
-static inline struct eio_rsrvd_region *
-iod_last_region(struct eio_desc *eiod)
+static inline struct bio_rsrvd_region *
+iod_last_region(struct bio_desc *biod)
 {
-	unsigned int cnt = eiod->ed_rsrvd.erd_rg_cnt;
+	unsigned int cnt = biod->bd_rsrvd.brd_rg_cnt;
 
-	D_ASSERT(!cnt || cnt < eiod->ed_rsrvd.erd_rg_max);
-	return (cnt != 0) ? &eiod->ed_rsrvd.erd_regions[cnt - 1] : NULL;
+	D_ASSERT(!cnt || cnt < biod->bd_rsrvd.brd_rg_max);
+	return (cnt != 0) ? &biod->bd_rsrvd.brd_regions[cnt - 1] : NULL;
 }
 
-static struct eio_dma_chunk *
-chunk_get_idle(struct eio_dma_buffer *edb, struct eio_desc *eiod)
+static struct bio_dma_chunk *
+chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_desc *biod)
 {
-	struct eio_dma_chunk *chk;
+	struct bio_dma_chunk *chk;
 	int rc;
 
-	if (d_list_empty(&edb->edb_idle_list)) {
-		if (edb->edb_tot_cnt == eio_chk_cnt_max) {
+	if (d_list_empty(&bdb->bdb_idle_list)) {
+		if (bdb->bdb_tot_cnt == bio_chk_cnt_max) {
 			D_CRIT("Maximum per-xstream DMA buffer isn't big "
 			       "enough (chk_sz:%u chk_cnt:%u iods:%u) to "
-			       "sustain the workload.\n", eio_chk_sz,
-			       eio_chk_cnt_max, edb->edb_active_iods);
+			       "sustain the workload.\n", bio_chk_sz,
+			       bio_chk_cnt_max, bdb->bdb_active_iods);
 
-			eiod->ed_retry = 1;
+			biod->bd_retry = 1;
 			return NULL;
 		}
 
-		rc = dma_buffer_grow(edb, 1);
+		rc = dma_buffer_grow(bdb, 1);
 		if (rc != 0)
 			return NULL;
 	}
 
-	D_ASSERT(!d_list_empty(&edb->edb_idle_list));
-	chk = d_list_entry(edb->edb_idle_list.next, struct eio_dma_chunk,
-			   edc_link);
-	d_list_move_tail(&chk->edc_link, &edb->edb_used_list);
+	D_ASSERT(!d_list_empty(&bdb->bdb_idle_list));
+	chk = d_list_entry(bdb->bdb_idle_list.next, struct bio_dma_chunk,
+			   bdc_link);
+	d_list_move_tail(&chk->bdc_link, &bdb->bdb_used_list);
 
 	return chk;
 }
 
 static int
-iod_add_chunk(struct eio_desc *eiod, struct eio_dma_chunk *chk)
+iod_add_chunk(struct bio_desc *biod, struct bio_dma_chunk *chk)
 {
-	struct eio_rsrvd_dma *rsrvd_dma = &eiod->ed_rsrvd;
+	struct bio_rsrvd_dma *rsrvd_dma = &biod->bd_rsrvd;
 	unsigned int max, cnt;
 
-	max = rsrvd_dma->erd_chk_max;
-	cnt = rsrvd_dma->erd_chk_cnt;
+	max = rsrvd_dma->brd_chk_max;
+	cnt = rsrvd_dma->brd_chk_cnt;
 
 	if (cnt == max) {
-		struct eio_dma_chunk **chunks;
-		int size = sizeof(struct eio_dma_chunk *);
+		struct bio_dma_chunk **chunks;
+		int size = sizeof(struct bio_dma_chunk *);
 		unsigned new_cnt = cnt + 10;
 
 		D_ALLOC(chunks, new_cnt * size);
@@ -397,33 +397,33 @@ iod_add_chunk(struct eio_desc *eiod, struct eio_dma_chunk *chk)
 			return -DER_NOMEM;
 
 		if (max != 0) {
-			memcpy(chunks, rsrvd_dma->erd_dma_chks, max * size);
-			D_FREE(rsrvd_dma->erd_dma_chks);
+			memcpy(chunks, rsrvd_dma->brd_dma_chks, max * size);
+			D_FREE(rsrvd_dma->brd_dma_chks);
 		}
 
-		rsrvd_dma->erd_dma_chks = chunks;
-		rsrvd_dma->erd_chk_max = new_cnt;
+		rsrvd_dma->brd_dma_chks = chunks;
+		rsrvd_dma->brd_chk_max = new_cnt;
 	}
 
-	chk->edc_ref++;
-	rsrvd_dma->erd_dma_chks[cnt] = chk;
-	rsrvd_dma->erd_chk_cnt++;
+	chk->bdc_ref++;
+	rsrvd_dma->brd_dma_chks[cnt] = chk;
+	rsrvd_dma->brd_chk_cnt++;
 	return 0;
 }
 
 static int
-iod_add_region(struct eio_desc *eiod, struct eio_dma_chunk *chk,
+iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 	       unsigned int chk_pg_idx, uint64_t off, uint64_t end)
 {
-	struct eio_rsrvd_dma *rsrvd_dma = &eiod->ed_rsrvd;
+	struct bio_rsrvd_dma *rsrvd_dma = &biod->bd_rsrvd;
 	unsigned int max, cnt;
 
-	max = rsrvd_dma->erd_rg_max;
-	cnt = rsrvd_dma->erd_rg_cnt;
+	max = rsrvd_dma->brd_rg_max;
+	cnt = rsrvd_dma->brd_rg_cnt;
 
 	if (cnt == max) {
-		struct eio_rsrvd_region *rgs;
-		int size = sizeof(struct eio_rsrvd_region);
+		struct bio_rsrvd_region *rgs;
+		int size = sizeof(struct bio_rsrvd_region);
 		unsigned new_cnt = cnt + 20;
 
 		D_ALLOC(rgs, new_cnt * size);
@@ -431,95 +431,95 @@ iod_add_region(struct eio_desc *eiod, struct eio_dma_chunk *chk,
 			return -DER_NOMEM;
 
 		if (max != 0) {
-			memcpy(rgs, rsrvd_dma->erd_regions, max * size);
-			D_FREE(rsrvd_dma->erd_regions);
+			memcpy(rgs, rsrvd_dma->brd_regions, max * size);
+			D_FREE(rsrvd_dma->brd_regions);
 		}
 
-		rsrvd_dma->erd_regions = rgs;
-		rsrvd_dma->erd_rg_max = new_cnt;
+		rsrvd_dma->brd_regions = rgs;
+		rsrvd_dma->brd_rg_max = new_cnt;
 	}
 
-	rsrvd_dma->erd_regions[cnt].err_chk = chk;
-	rsrvd_dma->erd_regions[cnt].err_pg_idx = chk_pg_idx;
-	rsrvd_dma->erd_regions[cnt].err_off = off;
-	rsrvd_dma->erd_regions[cnt].err_end = end;
-	rsrvd_dma->erd_rg_cnt++;
+	rsrvd_dma->brd_regions[cnt].brr_chk = chk;
+	rsrvd_dma->brd_regions[cnt].brr_pg_idx = chk_pg_idx;
+	rsrvd_dma->brd_regions[cnt].brr_off = off;
+	rsrvd_dma->brd_regions[cnt].brr_end = end;
+	rsrvd_dma->brd_rg_cnt++;
 	return 0;
 }
 
-/* Convert offset of @eiov into memory pointer */
+/* Convert offset of @biov into memory pointer */
 static int
-dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
-	    struct eio_copy_args *arg)
+dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
+	    struct bio_copy_args *arg)
 {
-	struct eio_rsrvd_region *last_rg;
-	struct eio_dma_buffer *edb;
-	struct eio_dma_chunk *chk = NULL;
+	struct bio_rsrvd_region *last_rg;
+	struct bio_dma_buffer *bdb;
+	struct bio_dma_chunk *chk = NULL;
 	uint64_t off, end;
 	unsigned int pg_cnt, pg_off, chk_pg_idx;
 	int rc;
 
 	D_ASSERT(arg == NULL);
-	D_ASSERT(eiov && eiov->ei_data_len != 0);
+	D_ASSERT(biov && biov->bi_data_len != 0);
 
-	if (eio_addr_is_hole(&eiov->ei_addr)) {
-		eiov->ei_buf = NULL;
+	if (bio_addr_is_hole(&biov->bi_addr)) {
+		biov->bi_buf = NULL;
 		return 0;
 	}
 
-	if (eiov->ei_addr.ea_type == EIO_ADDR_SCM) {
-		struct umem_instance *umem = eiod->ed_ctxt->eic_umem;
+	if (biov->bi_addr.ba_type == BIO_ADDR_SCM) {
+		struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 		umem_id_t ummid;
 
-		ummid.pool_uuid_lo = eiod->ed_ctxt->eic_pmempool_uuid;
-		ummid.off = eio_iov2off(eiov);
+		ummid.pool_uuid_lo = biod->bd_ctxt->bic_pmempool_uuid;
+		ummid.off = bio_iov2off(biov);
 
-		eiov->ei_buf = umem_id2ptr(umem, ummid);
+		biov->bi_buf = umem_id2ptr(umem, ummid);
 		return 0;
 	}
 
-	D_ASSERT(eiov->ei_addr.ea_type == EIO_ADDR_NVME);
-	edb = iod_dma_buf(eiod);
+	D_ASSERT(biov->bi_addr.ba_type == BIO_ADDR_NVME);
+	bdb = iod_dma_buf(biod);
 
-	off = eio_iov2off(eiov);
-	end = eio_iov2off(eiov) + eiov->ei_data_len;
-	pg_cnt = ((end + EIO_DMA_PAGE_SZ - 1) >> EIO_DMA_PAGE_SHIFT) -
-			(off >> EIO_DMA_PAGE_SHIFT);
-	pg_off = off & ((uint64_t)EIO_DMA_PAGE_SZ - 1);
+	off = bio_iov2off(biov);
+	end = bio_iov2off(biov) + biov->bi_data_len;
+	pg_cnt = ((end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
+			(off >> BIO_DMA_PAGE_SHIFT);
+	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
 
-	if (pg_cnt > eio_chk_sz) {
-		D_ERROR("IOV is too large "DF_U64"\n", eiov->ei_data_len);
+	if (pg_cnt > bio_chk_sz) {
+		D_ERROR("IOV is too large "DF_U64"\n", biov->bi_data_len);
 		return -DER_OVERFLOW;
 	}
 
-	last_rg = iod_last_region(eiod);
+	last_rg = iod_last_region(biod);
 
 	/* First, try consecutive reserve from the last reserved region */
 	if (last_rg) {
 		uint64_t cur_pg, prev_pg_start, prev_pg_end;
 
 		D_DEBUG(DB_IO, "Last region %p:%d ["DF_U64","DF_U64")\n",
-			last_rg->err_chk, last_rg->err_pg_idx,
-			last_rg->err_off, last_rg->err_end);
+			last_rg->brr_chk, last_rg->brr_pg_idx,
+			last_rg->brr_off, last_rg->brr_end);
 
-		chk = last_rg->err_chk;
-		chk_pg_idx = last_rg->err_pg_idx;
-		D_ASSERT(chk_pg_idx < eio_chk_sz);
+		chk = last_rg->brr_chk;
+		chk_pg_idx = last_rg->brr_pg_idx;
+		D_ASSERT(chk_pg_idx < bio_chk_sz);
 
-		prev_pg_start = last_rg->err_off >> EIO_DMA_PAGE_SHIFT;
-		prev_pg_end = last_rg->err_end >> EIO_DMA_PAGE_SHIFT;
-		cur_pg = off >> EIO_DMA_PAGE_SHIFT;
+		prev_pg_start = last_rg->brr_off >> BIO_DMA_PAGE_SHIFT;
+		prev_pg_end = last_rg->brr_end >> BIO_DMA_PAGE_SHIFT;
+		cur_pg = off >> BIO_DMA_PAGE_SHIFT;
 		D_ASSERT(prev_pg_start <= prev_pg_end);
 
 		/* Consecutive in page */
 		if (cur_pg == prev_pg_end) {
 			chk_pg_idx += (prev_pg_end - prev_pg_start);
-			eiov->ei_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt,
+			biov->bi_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt,
 						     pg_off);
-			if (eiov->ei_buf != NULL) {
+			if (biov->bi_buf != NULL) {
 				D_DEBUG(DB_IO, "Consecutive reserve %p.\n",
-					eiov->ei_buf);
-				last_rg->err_end = end;
+					biov->bi_buf);
+				last_rg->brr_end = end;
 				return 0;
 			}
 		}
@@ -527,11 +527,11 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 
 	/* Try to reserve from the last DMA chunk in io descriptor */
 	if (chk != NULL) {
-		chk_pg_idx = chk->edc_pg_idx;
-		eiov->ei_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off);
-		if (eiov->ei_buf != NULL) {
+		chk_pg_idx = chk->bdc_pg_idx;
+		biov->bi_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off);
+		if (biov->bi_buf != NULL) {
 			D_DEBUG(DB_IO, "Last chunk reserve %p.\n",
-				eiov->ei_buf);
+				biov->bi_buf);
 			goto add_region;
 		}
 	}
@@ -541,13 +541,13 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 	 * per-xstream DMA buffer. It could be different with the last chunk
 	 * in io descripotr, because dma_map_one() may yield in the future.
 	 */
-	if (edb->edb_cur_chk != NULL && edb->edb_cur_chk != chk) {
-		chk = edb->edb_cur_chk;
-		chk_pg_idx = chk->edc_pg_idx;
-		eiov->ei_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off);
-		if (eiov->ei_buf != NULL) {
+	if (bdb->bdb_cur_chk != NULL && bdb->bdb_cur_chk != chk) {
+		chk = bdb->bdb_cur_chk;
+		chk_pg_idx = chk->bdc_pg_idx;
+		biov->bi_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off);
+		if (biov->bi_buf != NULL) {
 			D_DEBUG(DB_IO, "Current chunk reserve %p.\n",
-				eiov->ei_buf);
+				biov->bi_buf);
 			goto add_chunk;
 		}
 	}
@@ -556,106 +556,106 @@ dma_map_one(struct eio_desc *eiod, struct eio_iov *eiov,
 	 * Switch to another idle chunk, if there isn't any idle chunk
 	 * available, grow buffer.
 	 */
-	chk = chunk_get_idle(edb, eiod);
+	chk = chunk_get_idle(bdb, biod);
 	if (chk == NULL)
 		return -DER_OVERFLOW;
 
-	edb->edb_cur_chk = chk;
-	chk_pg_idx = chk->edc_pg_idx;
+	bdb->bdb_cur_chk = chk;
+	chk_pg_idx = chk->bdc_pg_idx;
 
 	D_ASSERT(chk_pg_idx == 0);
-	eiov->ei_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off);
-	if (eiov->ei_buf != NULL) {
-		D_DEBUG(DB_IO, "New chunk reserve %p.\n", eiov->ei_buf);
+	biov->bi_buf = chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off);
+	if (biov->bi_buf != NULL) {
+		D_DEBUG(DB_IO, "New chunk reserve %p.\n", biov->bi_buf);
 		goto add_chunk;
 	}
 
 	return -DER_OVERFLOW;
 
 add_chunk:
-	rc = iod_add_chunk(eiod, chk);
+	rc = iod_add_chunk(biod, chk);
 	if (rc)
 		return rc;
 add_region:
-	return iod_add_region(eiod, chk, chk_pg_idx, off, end);
+	return iod_add_region(biod, chk, chk_pg_idx, off, end);
 }
 
 static void
 rw_completion(void *cb_arg, int err)
 {
-	struct eio_desc *eiod = cb_arg;
+	struct bio_desc *biod = cb_arg;
 
-	ABT_mutex_lock(eiod->ed_mutex);
+	ABT_mutex_lock(biod->bd_mutex);
 
-	D_ASSERT(eiod->ed_inflights > 0);
-	eiod->ed_inflights--;
-	if (eiod->ed_result == 0 && err != 0)
-		eiod->ed_result = err;
+	D_ASSERT(biod->bd_inflights > 0);
+	biod->bd_inflights--;
+	if (biod->bd_result == 0 && err != 0)
+		biod->bd_result = err;
 
-	if (eiod->ed_inflights == 0 && eiod->ed_dma_issued)
-		ABT_cond_broadcast(eiod->ed_dma_done);
+	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
+		ABT_cond_broadcast(biod->bd_dma_done);
 
-	ABT_mutex_unlock(eiod->ed_mutex);
+	ABT_mutex_unlock(biod->bd_mutex);
 }
 
 static void
-dma_rw(struct eio_desc *eiod, bool prep)
+dma_rw(struct bio_desc *biod, bool prep)
 {
 	struct spdk_io_channel	*channel;
 	struct spdk_blob	*blob;
-	struct eio_rsrvd_dma	*rsrvd_dma = &eiod->ed_rsrvd;
-	struct eio_rsrvd_region	*rg;
-	struct eio_xs_context	*xs_ctxt;
+	struct bio_rsrvd_dma	*rsrvd_dma = &biod->bd_rsrvd;
+	struct bio_rsrvd_region	*rg;
+	struct bio_xs_context	*xs_ctxt;
 	uint64_t		 pg_idx, pg_cnt, pg_end;
 	void			*payload, *pg_rmw = NULL;
-	bool			 rmw_read = (prep && eiod->ed_update);
+	bool			 rmw_read = (prep && biod->bd_update);
 	unsigned int		 pg_off;
 	int			 i;
 
-	D_ASSERT(eiod->ed_ctxt->eic_xs_ctxt);
-	xs_ctxt = eiod->ed_ctxt->eic_xs_ctxt;
-	blob = eiod->ed_ctxt->eic_blob;
-	channel = xs_ctxt->exc_io_channel;
+	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
+	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
+	blob = biod->bd_ctxt->bic_blob;
+	channel = xs_ctxt->bxc_io_channel;
 	D_ASSERT(blob != NULL && channel != NULL);
 
 	D_DEBUG(DB_IO, "DMA start, blob:%p, update:%d, rmw:%d\n",
-		blob, eiod->ed_update, rmw_read);
+		blob, biod->bd_update, rmw_read);
 
-	eiod->ed_inflights = 0;
-	eiod->ed_dma_issued = 0;
-	eiod->ed_result = 0;
+	biod->bd_inflights = 0;
+	biod->bd_dma_issued = 0;
+	biod->bd_result = 0;
 
-	for (i = 0; i < rsrvd_dma->erd_rg_cnt; i++) {
-		rg = &rsrvd_dma->erd_regions[i];
+	for (i = 0; i < rsrvd_dma->brd_rg_cnt; i++) {
+		rg = &rsrvd_dma->brd_regions[i];
 
-		D_ASSERT(rg->err_chk != NULL);
-		pg_idx = rg->err_off >> EIO_DMA_PAGE_SHIFT;
-		payload = rg->err_chk->edc_ptr +
-			(rg->err_pg_idx << EIO_DMA_PAGE_SHIFT);
+		D_ASSERT(rg->brr_chk != NULL);
+		pg_idx = rg->brr_off >> BIO_DMA_PAGE_SHIFT;
+		payload = rg->brr_chk->bdc_ptr +
+			(rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
 
 		if (!rmw_read) {
-			pg_cnt = (rg->err_end + EIO_DMA_PAGE_SZ - 1) >>
-					EIO_DMA_PAGE_SHIFT;
+			pg_cnt = (rg->brr_end + BIO_DMA_PAGE_SZ - 1) >>
+					BIO_DMA_PAGE_SHIFT;
 			D_ASSERT(pg_cnt > pg_idx);
 			pg_cnt -= pg_idx;
 
-			ABT_mutex_lock(eiod->ed_mutex);
-			eiod->ed_inflights++;
-			ABT_mutex_unlock(eiod->ed_mutex);
+			ABT_mutex_lock(biod->bd_mutex);
+			biod->bd_inflights++;
+			ABT_mutex_unlock(biod->bd_mutex);
 
 			D_DEBUG(DB_IO, "%s blob:%p payload:%p, "
 				"pg_idx:"DF_U64", pg_cnt:"DF_U64"\n",
-				eiod->ed_update ? "Write" : "Read",
+				biod->bd_update ? "Write" : "Read",
 				blob, payload, pg_idx, pg_cnt);
 
-			if (eiod->ed_update)
+			if (biod->bd_update)
 				spdk_blob_io_write(blob, channel, payload,
 						   pg_idx, pg_cnt,
-						   rw_completion, eiod);
+						   rw_completion, biod);
 			else
 				spdk_blob_io_read(blob, channel, payload,
 						  pg_idx, pg_cnt,
-						  rw_completion, eiod);
+						  rw_completion, biod);
 			continue;
 		}
 
@@ -663,58 +663,58 @@ dma_rw(struct eio_desc *eiod, bool prep)
 		 * Since DAOS doesn't support partial overwrite yet, we don't
 		 * do RMW for partial update, only zeroing the page instead.
 		 */
-		pg_off = rg->err_off & ((uint64_t)EIO_DMA_PAGE_SZ - 1);
+		pg_off = rg->brr_off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
 
 		if (pg_off != 0 && payload != pg_rmw) {
 			D_DEBUG(DB_IO, "Front partial blob:%p payload:%p, "
 				"pg_idx:"DF_U64" pg_off:%d\n",
 				blob, payload, pg_idx, pg_off);
 
-			memset(payload, 0, EIO_DMA_PAGE_SZ);
+			memset(payload, 0, BIO_DMA_PAGE_SZ);
 			pg_rmw = payload;
 		}
 
-		pg_end = rg->err_end >> EIO_DMA_PAGE_SHIFT;
+		pg_end = rg->brr_end >> BIO_DMA_PAGE_SHIFT;
 		D_ASSERT(pg_end >= pg_idx);
-		payload += (pg_end - pg_idx) << EIO_DMA_PAGE_SHIFT;
-		pg_off = rg->err_end & ((uint64_t)EIO_DMA_PAGE_SZ - 1);
+		payload += (pg_end - pg_idx) << BIO_DMA_PAGE_SHIFT;
+		pg_off = rg->brr_end & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
 
 		if (pg_off != 0 && payload != pg_rmw) {
 			D_DEBUG(DB_IO, "Rear partial blob:%p payload:%p, "
 				"pg_idx:"DF_U64" pg_off:%d\n",
 				blob, payload, pg_idx, pg_off);
 
-			memset(payload, 0, EIO_DMA_PAGE_SZ);
+			memset(payload, 0, BIO_DMA_PAGE_SZ);
 			pg_rmw = payload;
 		}
 	}
 
-	if (xs_ctxt->exc_xs_id == -1) {
+	if (xs_ctxt->bxc_xs_id == -1) {
 		D_DEBUG(DB_IO, "Self poll completion, blob:%p\n", blob);
-		xs_poll_completion(xs_ctxt, &eiod->ed_inflights);
+		xs_poll_completion(xs_ctxt, &biod->bd_inflights);
 	} else {
-		ABT_mutex_lock(eiod->ed_mutex);
-		eiod->ed_dma_issued = 1;
-		if (eiod->ed_inflights != 0)
-			ABT_cond_wait(eiod->ed_dma_done, eiod->ed_mutex);
-		ABT_mutex_unlock(eiod->ed_mutex);
+		ABT_mutex_lock(biod->bd_mutex);
+		biod->bd_dma_issued = 1;
+		if (biod->bd_inflights != 0)
+			ABT_cond_wait(biod->bd_dma_done, biod->bd_mutex);
+		ABT_mutex_unlock(biod->bd_mutex);
 	}
 
 	D_DEBUG(DB_IO, "DMA done, blob:%p, update:%d, rmw:%d\n",
-		blob, eiod->ed_update, rmw_read);
+		blob, biod->bd_update, rmw_read);
 }
 
 static void
-eio_memcpy(struct eio_desc *eiod, uint16_t media, void *media_addr,
+bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 	   void *addr, ssize_t n)
 {
-	struct umem_instance *umem = eiod->ed_ctxt->eic_umem;
+	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 
-	if (eiod->ed_update && media == EIO_ADDR_SCM) {
+	if (biod->bd_update && media == BIO_ADDR_SCM) {
 		pmemobj_memcpy_persist(umem->umm_u.pmem_pool, media_addr,
 				       addr, n);
 	} else {
-		if (eiod->ed_update)
+		if (biod->bd_update)
 			memcpy(media_addr, addr, n);
 		else
 			memcpy(addr, media_addr, n);
@@ -722,13 +722,13 @@ eio_memcpy(struct eio_desc *eiod, uint16_t media, void *media_addr,
 }
 
 static int
-copy_one(struct eio_desc *eiod, struct eio_iov *eiov,
-	 struct eio_copy_args *arg)
+copy_one(struct bio_desc *biod, struct bio_iov *biov,
+	 struct bio_copy_args *arg)
 {
-	d_sg_list_t *sgl;
-	void *addr = eiov->ei_buf;
-	ssize_t size = eiov->ei_data_len;
-	uint16_t media = eiov->ei_addr.ea_type;
+	d_sg_list_t	*sgl;
+	void		*addr = biov->bi_buf;
+	ssize_t		 size = biov->bi_data_len;
+	uint16_t	 media = biov->bi_addr.ba_type;
 
 	D_ASSERT(arg->ca_sgl_idx < arg->ca_sgl_cnt);
 	sgl = &arg->ca_sgls[arg->ca_sgl_idx];
@@ -739,29 +739,29 @@ copy_one(struct eio_desc *eiod, struct eio_iov *eiov,
 		ssize_t nob, buf_len;
 
 		iov = &sgl->sg_iovs[arg->ca_iov_idx];
-		buf_len = eiod->ed_update ? iov->iov_len : iov->iov_buf_len;
+		buf_len = biod->bd_update ? iov->iov_len : iov->iov_buf_len;
 
 		if (buf_len <= arg->ca_iov_off) {
 			D_ERROR("Invalid iov[%d] "DF_U64"/"DF_U64" %d\n",
 				arg->ca_iov_idx, arg->ca_iov_off,
-				buf_len, eiod->ed_update);
+				buf_len, biod->bd_update);
 			return -DER_INVAL;
 		}
 
 		nob = min(size, buf_len - arg->ca_iov_off);
 		if (addr != NULL) {
-			D_DEBUG(DB_IO, "eio copy %p size %zd\n",
+			D_DEBUG(DB_IO, "bio copy %p size %zd\n",
 				addr, nob);
-			eio_memcpy(eiod, media, addr, iov->iov_buf +
+			bio_memcpy(biod, media, addr, iov->iov_buf +
 					arg->ca_iov_off, nob);
 			addr += nob;
 		} else {
 			/* fetch on hole */
-			D_ASSERT(!eiod->ed_update);
+			D_ASSERT(!biod->bd_update);
 		}
 
 		arg->ca_iov_off += nob;
-		if (!eiod->ed_update) {
+		if (!biod->bd_update) {
 			/* the first population for fetch */
 			if (arg->ca_iov_off == nob)
 				sgl->sg_nr_out++;
@@ -790,115 +790,115 @@ copy_one(struct eio_desc *eiod, struct eio_iov *eiov,
 }
 
 static void
-dma_drop_iod(struct eio_dma_buffer *edb)
+dma_drop_iod(struct bio_dma_buffer *bdb)
 {
-	D_ASSERT(edb->edb_active_iods > 0);
-	edb->edb_active_iods--;
+	D_ASSERT(bdb->bdb_active_iods > 0);
+	bdb->bdb_active_iods--;
 
-	ABT_mutex_lock(edb->edb_mutex);
-	ABT_cond_broadcast(edb->edb_wait_iods);
-	ABT_mutex_unlock(edb->edb_mutex);
+	ABT_mutex_lock(bdb->bdb_mutex);
+	ABT_cond_broadcast(bdb->bdb_wait_iods);
+	ABT_mutex_unlock(bdb->bdb_mutex);
 }
 
 int
-eio_iod_prep(struct eio_desc *eiod)
+bio_iod_prep(struct bio_desc *biod)
 {
-	struct eio_dma_buffer *edb;
+	struct bio_dma_buffer *bdb;
 	int rc, retry_cnt = 0;
 
-	if (eiod->ed_buffer_prep)
+	if (biod->bd_buffer_prep)
 		return -EINVAL;
 
 retry:
-	rc = iterate_eiov(eiod, dma_map_one, NULL);
+	rc = iterate_biov(biod, dma_map_one, NULL);
 	if (rc) {
 		/*
 		 * To avoid deadlock, held buffers need be released
 		 * before waiting for other active IODs.
 		 */
-		iod_release_buffer(eiod);
+		iod_release_buffer(biod);
 
-		if (!eiod->ed_retry)
+		if (!biod->bd_retry)
 			return rc;
 
-		eiod->ed_retry = 0;
-		edb = iod_dma_buf(eiod);
-		if (!edb->edb_active_iods) {
+		biod->bd_retry = 0;
+		bdb = iod_dma_buf(biod);
+		if (!bdb->bdb_active_iods) {
 			D_ERROR("Per-xstream DMA buffer isn't large enough "
-				"to satisfy large IOD %p\n", eiod);
+				"to satisfy large IOD %p\n", biod);
 			return rc;
 		}
 
 		D_DEBUG(DB_IO, "IOD %p waits for active IODs. %d\n",
-			eiod, retry_cnt++);
+			biod, retry_cnt++);
 
-		ABT_mutex_lock(edb->edb_mutex);
-		ABT_cond_wait(edb->edb_wait_iods, edb->edb_mutex);
-		ABT_mutex_unlock(edb->edb_mutex);
+		ABT_mutex_lock(bdb->bdb_mutex);
+		ABT_cond_wait(bdb->bdb_wait_iods, bdb->bdb_mutex);
+		ABT_mutex_unlock(bdb->bdb_mutex);
 
 		D_DEBUG(DB_IO, "IOD %p finished waiting. %d\n",
-			eiod, retry_cnt);
+			biod, retry_cnt);
 
 		goto retry;
 	}
-	eiod->ed_buffer_prep = 1;
+	biod->bd_buffer_prep = 1;
 
 	/* All SCM IOVs, no DMA transfer prepared */
-	if (eiod->ed_rsrvd.erd_rg_cnt == 0)
+	if (biod->bd_rsrvd.brd_rg_cnt == 0)
 		return 0;
 
-	edb = iod_dma_buf(eiod);
-	edb->edb_active_iods++;
+	bdb = iod_dma_buf(biod);
+	bdb->bdb_active_iods++;
 
-	dma_rw(eiod, true);
-	if (eiod->ed_result) {
-		iod_release_buffer(eiod);
-		dma_drop_iod(edb);
+	dma_rw(biod, true);
+	if (biod->bd_result) {
+		iod_release_buffer(biod);
+		dma_drop_iod(bdb);
 	}
 
-	return eiod->ed_result;
+	return biod->bd_result;
 }
 
 int
-eio_iod_post(struct eio_desc *eiod)
+bio_iod_post(struct bio_desc *biod)
 {
-	struct eio_dma_buffer *edb;
+	struct bio_dma_buffer *bdb;
 
-	if (!eiod->ed_buffer_prep)
+	if (!biod->bd_buffer_prep)
 		return -DER_INVAL;
 
 	/* No more actions for SCM IOVs */
-	if (eiod->ed_rsrvd.erd_rg_cnt == 0) {
-		iod_release_buffer(eiod);
+	if (biod->bd_rsrvd.brd_rg_cnt == 0) {
+		iod_release_buffer(biod);
 		return 0;
 	}
 
-	if (eiod->ed_update)
-		dma_rw(eiod, false);
+	if (biod->bd_update)
+		dma_rw(biod, false);
 	else
-		eiod->ed_result = 0;
+		biod->bd_result = 0;
 
-	iod_release_buffer(eiod);
-	edb = iod_dma_buf(eiod);
-	dma_drop_iod(edb);
+	iod_release_buffer(biod);
+	bdb = iod_dma_buf(biod);
+	dma_drop_iod(bdb);
 
-	return eiod->ed_result;
+	return biod->bd_result;
 }
 
 int
-eio_iod_copy(struct eio_desc *eiod, d_sg_list_t *sgls, unsigned int nr_sgl)
+bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 {
-	struct eio_copy_args arg;
+	struct bio_copy_args arg;
 
-	if (!eiod->ed_buffer_prep)
+	if (!biod->bd_buffer_prep)
 		return -DER_INVAL;
 
-	if (eiod->ed_sgl_cnt != nr_sgl)
+	if (biod->bd_sgl_cnt != nr_sgl)
 		return -DER_INVAL;
 
 	memset(&arg, 0, sizeof(arg));
 	arg.ca_sgls = sgls;
 	arg.ca_sgl_cnt = nr_sgl;
 
-	return iterate_eiov(eiod, copy_one, &arg);
+	return iterate_biov(biod, copy_one, &arg);
 }

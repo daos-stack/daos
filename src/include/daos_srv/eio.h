@@ -22,8 +22,8 @@
  */
 
 /*
- * Extent I/O library provides NVMe or SCM extent I/O functionality, PMDK and
- * SPDK are used for SCM and NVMe I/O respectively.
+ * Bulk I/O library provides functionality of bulk I/O over SG list consists
+ * of SCM or NVMe IOVs, PMDK & SPDK are used for SCM and NVMe I/O respectively.
  */
 
 #ifndef __EIO_API_H__
@@ -34,8 +34,8 @@
 
 /* Address types for various medias */
 enum {
-	EIO_ADDR_SCM	= 0,
-	EIO_ADDR_NVME,
+	BIO_ADDR_SCM	= 0,
+	BIO_ADDR_NVME,
 };
 
 typedef struct {
@@ -43,108 +43,108 @@ typedef struct {
 	 * Byte offset within PMDK pmemobj pool for SCM;
 	 * Byte offset within SPDK blob for NVMe.
 	 */
-	uint64_t	ea_off;
-	/* EIO_ADDR_SCM or EIO_ADDR_NVME */
-	uint16_t	ea_type;
+	uint64_t	ba_off;
+	/* BIO_ADDR_SCM or BIO_ADDR_NVME */
+	uint16_t	ba_type;
 	/* Is the address a hole ? */
-	uint16_t	ea_hole;
-	uint32_t	ea_padding;
-} eio_addr_t;
+	uint16_t	ba_hole;
+	uint32_t	ba_padding;
+} bio_addr_t;
 
-struct eio_iov {
+struct bio_iov {
 	/*
-	 * For SCM, it's direct memory address of 'ea_off';
+	 * For SCM, it's direct memory address of 'ba_off';
 	 * For NVMe, it's a DMA buffer allocated by SPDK malloc API.
 	 */
-	void		*ei_buf;
+	void		*bi_buf;
 	/* Data length in bytes */
-	size_t		 ei_data_len;
-	eio_addr_t	 ei_addr;
+	size_t		 bi_data_len;
+	bio_addr_t	 bi_addr;
 };
 
-struct eio_sglist {
-	struct eio_iov	*es_iovs;
-	unsigned int	 es_nr;
-	unsigned int	 es_nr_out;
+struct bio_sglist {
+	struct bio_iov	*bs_iovs;
+	unsigned int	 bs_nr;
+	unsigned int	 bs_nr_out;
 };
 
 /* Opaque I/O descriptor */
-struct eio_desc;
+struct bio_desc;
 /* Opaque I/O context */
-struct eio_io_context;
+struct bio_io_context;
 /* Opaque per-xstream context */
-struct eio_xs_context;
+struct bio_xs_context;
 
 static inline void
-eio_addr_set(eio_addr_t *addr, uint16_t type, uint64_t off)
+bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
 {
-	addr->ea_type = type;
-	addr->ea_off = off;
+	addr->ba_type = type;
+	addr->ba_off = off;
 }
 
 static inline bool
-eio_addr_is_hole(eio_addr_t *addr)
+bio_addr_is_hole(bio_addr_t *addr)
 {
-	return addr->ea_hole != 0;
+	return addr->ba_hole != 0;
 }
 
 static inline void
-eio_addr_set_hole(eio_addr_t *addr, uint16_t hole)
+bio_addr_set_hole(bio_addr_t *addr, uint16_t hole)
 {
-	addr->ea_hole = hole;
+	addr->ba_hole = hole;
 }
 
 static inline uint64_t
-eio_iov2off(struct eio_iov *eiov)
+bio_iov2off(struct bio_iov *biov)
 {
-	return eiov->ei_addr.ea_off;
+	return biov->bi_addr.ba_off;
 }
 
 static inline int
-eio_sgl_init(struct eio_sglist *sgl, unsigned int nr)
+bio_sgl_init(struct bio_sglist *sgl, unsigned int nr)
 {
 	memset(sgl, 0, sizeof(*sgl));
 
-	sgl->es_nr = nr;
-	D_ALLOC(sgl->es_iovs, nr * sizeof(*sgl->es_iovs));
-	return sgl->es_iovs == NULL ? -DER_NOMEM : 0;
+	sgl->bs_nr = nr;
+	D_ALLOC(sgl->bs_iovs, nr * sizeof(*sgl->bs_iovs));
+	return sgl->bs_iovs == NULL ? -DER_NOMEM : 0;
 }
 
 static inline void
-eio_sgl_fini(struct eio_sglist *sgl)
+bio_sgl_fini(struct bio_sglist *sgl)
 {
-	if (sgl->es_iovs == NULL)
+	if (sgl->bs_iovs == NULL)
 		return;
 
-	D_FREE(sgl->es_iovs);
+	D_FREE(sgl->bs_iovs);
 	memset(sgl, 0, sizeof(*sgl));
 }
 
 /*
- * Convert eio_sglist into daos_sg_list_t, caller is responsible to
+ * Convert bio_sglist into daos_sg_list_t, caller is responsible to
  * call daos_sgl_fini(sgl, false) to free iovs.
  */
 static inline int
-eio_sgl_convert(struct eio_sglist *esgl, daos_sg_list_t *sgl)
+bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
 {
 	int i, rc;
 
 	D_ASSERT(sgl != NULL);
-	D_ASSERT(esgl != NULL);
+	D_ASSERT(bsgl != NULL);
 
-	rc = daos_sgl_init(sgl, esgl->es_nr_out);
+	rc = daos_sgl_init(sgl, bsgl->bs_nr_out);
 	if (rc != 0)
 		return -DER_NOMEM;
 
-	sgl->sg_nr_out = esgl->es_nr_out;
+	sgl->sg_nr_out = bsgl->bs_nr_out;
 
 	for (i = 0; i < sgl->sg_nr_out; i++) {
-		struct eio_iov	*eiov = &esgl->es_iovs[i];
+		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		daos_iov_t	*iov = &sgl->sg_iovs[i];
 
-		iov->iov_buf = eiov->ei_buf;
-		iov->iov_len = eiov->ei_data_len;
-		iov->iov_buf_len = eiov->ei_data_len;
+		iov->iov_buf = biov->bi_buf;
+		iov->iov_len = biov->bi_data_len;
+		iov->iov_buf_len = biov->bi_data_len;
 	}
 
 	return 0;
@@ -157,14 +157,14 @@ eio_sgl_convert(struct eio_sglist *esgl, daos_sg_list_t *sgl)
  *
  * \return		Zero on success, negative value on error
  */
-int eio_nvme_init(const char *storage_path);
+int bio_nvme_init(const char *storage_path);
 
 /**
  * Global NVMe finilization.
  *
  * \return		N/A
  */
-void eio_nvme_fini(void);
+void bio_nvme_fini(void);
 
 /*
  * Initialize SPDK env and per-xstream NVMe context.
@@ -174,7 +174,7 @@ void eio_nvme_fini(void);
  *
  * \returns		Zero on success, negative value on error
  */
-int eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id);
+int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id);
 
 /*
  * Finalize per-xstream NVMe context and SPDK env.
@@ -183,7 +183,7 @@ int eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id);
  *
  * \returns		N/A
  */
-void eio_xsctxt_free(struct eio_xs_context *ctxt);
+void bio_xsctxt_free(struct bio_xs_context *ctxt);
 
 /**
  * NVMe poller to poll NVMe I/O completions.
@@ -192,7 +192,7 @@ void eio_xsctxt_free(struct eio_xs_context *ctxt);
  *
  * \return		Executed message count
  */
-size_t eio_nvme_poll(struct eio_xs_context *ctxt);
+size_t bio_nvme_poll(struct bio_xs_context *ctxt);
 
 /*
  * Create per VOS instance blob.
@@ -203,7 +203,7 @@ size_t eio_nvme_poll(struct eio_xs_context *ctxt);
  *
  * \returns		Zero on success, negative value on error
  */
-int eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt,
+int bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt,
 		    uint64_t blob_sz);
 
 /*
@@ -214,7 +214,7 @@ int eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt,
  *
  * \returns		Zero on success, negative value on error
  */
-int eio_blob_delete(uuid_t uuid, struct eio_xs_context *xs_ctxt);
+int bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt);
 
 /*
  * Open per VOS instance I/O context.
@@ -226,8 +226,8 @@ int eio_blob_delete(uuid_t uuid, struct eio_xs_context *xs_ctxt);
  *
  * \returns		Zero on success, negative value on error
  */
-int eio_ioctxt_open(struct eio_io_context **pctxt,
-		    struct eio_xs_context *xs_ctxt,
+int bio_ioctxt_open(struct bio_io_context **pctxt,
+		    struct bio_xs_context *xs_ctxt,
 		    struct umem_instance *umem, uuid_t uuid);
 
 /*
@@ -237,7 +237,7 @@ int eio_ioctxt_open(struct eio_io_context **pctxt,
  *
  * \returns		Zero on success, negative value on error
  */
-int eio_ioctxt_close(struct eio_io_context *ctxt);
+int bio_ioctxt_close(struct bio_io_context *ctxt);
 
 /**
  * Allocate & initialize an io descriptor
@@ -248,16 +248,16 @@ int eio_ioctxt_close(struct eio_io_context *ctxt);
  *
  * \return			Opaque io descriptor or NULL on error
  */
-struct eio_desc *eio_iod_alloc(struct eio_io_context *ctxt,
+struct bio_desc *bio_iod_alloc(struct bio_io_context *ctxt,
 			       unsigned int sgl_cnt, bool update);
 /**
  * Free an io descriptor
  *
- * \param eiod       [IN]	io descriptor to be freed
+ * \param biod       [IN]	io descriptor to be freed
  *
  * \return			N/A
  */
-void eio_iod_free(struct eio_desc *eiod);
+void bio_iod_free(struct bio_desc *biod);
 
 /**
  * Prepare all the SG lists of an io descriptor.
@@ -267,46 +267,46 @@ void eio_iod_free(struct eio_desc *eiod);
  * internally maintained DMA buffer, it also needs fill the buffer for fetch
  * operation.
  *
- * \param eiod       [IN]	io descriptor
+ * \param biod       [IN]	io descriptor
  *
  * \return			Zero on success, negative value on error
  */
-int eio_iod_prep(struct eio_desc *eiod);
+int bio_iod_prep(struct bio_desc *biod);
 
 /*
  * Post operation after the RDMA transfer or local copy done for the io
  * descriptor.
  *
  * For SCM IOV, it's a noop operation; For NVMe IOV, it releases the DMA buffer
- * held in eio_iod_prep(), it also needs to write back the data from DMA buffer
+ * held in bio_iod_prep(), it also needs to write back the data from DMA buffer
  * to the NVMe device for update operation.
  *
- * \param eiod       [IN]	io descriptor
+ * \param biod       [IN]	io descriptor
  *
  * \return			Zero on success, negative value on error
  */
-int eio_iod_post(struct eio_desc *eiod);
+int bio_iod_post(struct bio_desc *biod);
 
 /*
  * Helper function to copy data between SG lists of io descriptor and user
  * specified DRAM SG lists.
  *
- * \param eiod       [IN]	io descriptor
+ * \param biod       [IN]	io descriptor
  * \param sgls       [IN]	DRAM SG lists
  * \param nr_sgl     [IN]	Number of SG lists
  *
  * \return			Zero on success, negative value on error
  */
-int eio_iod_copy(struct eio_desc *eiod, d_sg_list_t *sgls, unsigned int nr_sgl);
+int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
 
 /*
  * Helper function to get the specified SG list of an io descriptor
  *
- * \param eiod       [IN]	io descriptor
+ * \param biod       [IN]	io descriptor
  * \param idx        [IN]	Index of the SG list
  *
  * \return			SG list, or NULL on error
  */
-struct eio_sglist *eio_iod_sgl(struct eio_desc *eiod, unsigned int idx);
+struct bio_sglist *bio_iod_sgl(struct bio_desc *biod, unsigned int idx);
 
 #endif /* __EIO_API_H__ */

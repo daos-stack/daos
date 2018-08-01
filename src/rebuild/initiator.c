@@ -157,7 +157,7 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 		return rc;
 	}
 
-	rc = eio_iod_prep(vos_ioh2desc(ioh));
+	rc = bio_iod_prep(vos_ioh2desc(ioh));
 	if (rc) {
 		D_ERROR("Prepare EIOD for "DF_UOID" error: %d\n",
 			DP_UOID(rdone->ro_oid), rc);
@@ -165,13 +165,13 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 	}
 
 	for (i = 0; i < rdone->ro_iod_num; i++) {
-		struct eio_sglist	*esgl;
+		struct bio_sglist	*bsgl;
 
-		esgl = vos_iod_sgl_at(ioh, i);
-		D_ASSERT(esgl != NULL);
+		bsgl = vos_iod_sgl_at(ioh, i);
+		D_ASSERT(bsgl != NULL);
 		sgl = &sgls[i];
 
-		rc = eio_sgl_convert(esgl, sgl);
+		rc = bio_sgl_convert(bsgl, sgl);
 		if (rc)
 			goto post;
 		sgl_cnt++;
@@ -195,7 +195,7 @@ post:
 		daos_sgl_fini(sgl, false);
 	}
 
-	ret = eio_iod_post(vos_ioh2desc(ioh));
+	ret = bio_iod_post(vos_ioh2desc(ioh));
 	if (ret) {
 		D_ERROR("Post EIOD for "DF_UOID" error: %d\n",
 			DP_UOID(rdone->ro_oid), ret);

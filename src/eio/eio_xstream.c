@@ -52,38 +52,38 @@ enum {
 };
 
 /* Chunk size of DMA buffer in pages */
-unsigned int eio_chk_sz;
+unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
-unsigned int eio_chk_cnt_max;
+unsigned int bio_chk_cnt_max;
 /* Per-xstream initial DMA buffer size (in chunk count) */
-static unsigned int eio_chk_cnt_init;
+static unsigned int bio_chk_cnt_init;
 
-struct eio_bdev {
-	d_list_t		 eb_link;
-	uuid_t			 eb_uuid;
-	char			*eb_name;
-	struct eio_blobstore	*eb_blobstore;
-	struct spdk_bdev_desc	*eb_desc; /* for io stat only */
-	int			 eb_xs_cnt; /* count of xstreams per device */
+struct bio_bdev {
+	d_list_t		 bb_link;
+	uuid_t			 bb_uuid;
+	char			*bb_name;
+	struct bio_blobstore	*bb_blobstore;
+	struct spdk_bdev_desc	*bb_desc; /* for io stat only */
+	int			 bb_xs_cnt; /* count of xstreams per device */
 };
 
-struct eio_nvme_data {
-	ABT_mutex		 ed_mutex;
-	ABT_cond		 ed_barrier;
+struct bio_nvme_data {
+	ABT_mutex		 bd_mutex;
+	ABT_cond		 bd_barrier;
 	/* SPDK bdev type */
-	int			 ed_bdev_class;
+	int			 bd_bdev_class;
 	/* How many xstreams has intialized NVMe context */
-	int			 ed_xstream_cnt;
+	int			 bd_xstream_cnt;
 	/* The thread responsible for SPDK bdevs init/fini */
-	struct spdk_thread	*ed_init_thread;
+	struct spdk_thread	*bd_init_thread;
 	/* Default SPDK blobstore options */
-	struct spdk_bs_opts	 ed_bs_opts;
+	struct spdk_bs_opts	 bd_bs_opts;
 	/* All bdevs can be used by DAOS server */
-	d_list_t		 ed_bdevs;
-	unsigned int		 ed_skip_setup:1;
+	d_list_t		 bd_bdevs;
+	unsigned int		 bd_skip_setup:1;
 };
 
-static struct eio_nvme_data nvme_glb;
+static struct bio_nvme_data nvme_glb;
 static uint64_t io_stat_period;
 
 /* Print the io stat every few seconds, for debug only */
@@ -91,7 +91,7 @@ static void
 print_io_stat(uint64_t now)
 {
 	struct spdk_bdev_io_stat	 stat;
-	struct eio_bdev			*d_bdev;
+	struct bio_bdev			*d_bdev;
 	struct spdk_io_channel		*channel;
 	static uint64_t			 stat_age;
 
@@ -101,11 +101,11 @@ print_io_stat(uint64_t now)
 	if (stat_age + io_stat_period >= now)
 		return;
 
-	d_list_for_each_entry(d_bdev, &nvme_glb.ed_bdevs, eb_link) {
-		D_ASSERT(d_bdev->eb_desc != NULL);
-		D_ASSERT(d_bdev->eb_name != NULL);
+	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
+		D_ASSERT(d_bdev->bb_desc != NULL);
+		D_ASSERT(d_bdev->bb_name != NULL);
 
-		channel = spdk_bdev_get_io_channel(d_bdev->eb_desc);
+		channel = spdk_bdev_get_io_channel(d_bdev->bb_desc);
 		D_ASSERT(channel != NULL);
 		spdk_bdev_get_io_stat(NULL, channel, &stat);
 		spdk_put_io_channel(channel);
@@ -114,7 +114,7 @@ print_io_stat(uint64_t now)
 			"read_ops["DF_U64"], write_bytes["DF_U64"], "
 			"write_ops["DF_U64"], read_latency_ticks["DF_U64"], "
 			"write_latency_ticks["DF_U64"]\n",
-			d_bdev->eb_name, stat.bytes_read, stat.num_read_ops,
+			d_bdev->bb_name, stat.bytes_read, stat.num_read_ops,
 			stat.bytes_written, stat.num_write_ops,
 			stat.read_latency_ticks, stat.write_latency_ticks);
 	}
@@ -123,7 +123,7 @@ print_io_stat(uint64_t now)
 }
 
 int
-eio_nvme_init(const char *storage_path)
+bio_nvme_init(const char *storage_path)
 {
 	char		*env;
 	int		rc, fd;
@@ -135,19 +135,19 @@ eio_nvme_init(const char *storage_path)
 		return rc;
 	}
 
-	nvme_glb.ed_xstream_cnt = 0;
-	nvme_glb.ed_init_thread = NULL;
-	D_INIT_LIST_HEAD(&nvme_glb.ed_bdevs);
+	nvme_glb.bd_xstream_cnt = 0;
+	nvme_glb.bd_init_thread = NULL;
+	D_INIT_LIST_HEAD(&nvme_glb.bd_bdevs);
 
-	rc = ABT_mutex_create(&nvme_glb.ed_mutex);
+	rc = ABT_mutex_create(&nvme_glb.bd_mutex);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
 		return rc;
 	}
 
-	rc = ABT_cond_create(&nvme_glb.ed_barrier);
+	rc = ABT_cond_create(&nvme_glb.bd_barrier);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&nvme_glb.ed_mutex);
+		ABT_mutex_free(&nvme_glb.bd_mutex);
 		rc = dss_abterr2der(rc);
 		return rc;
 	}
@@ -156,29 +156,29 @@ eio_nvme_init(const char *storage_path)
 	if (fd < 0) {
 		D_WARN("Open %s failed(%d), skip DAOS NVMe setup.\n",
 		       DAOS_NVME_CONF, daos_errno2der(errno));
-		nvme_glb.ed_skip_setup = 1;
+		nvme_glb.bd_skip_setup = 1;
 		return 0;
 	}
 	close(fd);
 
-	spdk_bs_opts_init(&nvme_glb.ed_bs_opts);
-	nvme_glb.ed_bs_opts.cluster_sz = DAOS_BS_CLUSTER_LARGE;
-	nvme_glb.ed_bs_opts.num_md_pages = DAOS_BS_MD_PAGES_LARGE;
+	spdk_bs_opts_init(&nvme_glb.bd_bs_opts);
+	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_LARGE;
+	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES_LARGE;
 
-	eio_chk_cnt_init = 1;
-	eio_chk_cnt_max = 16;
+	bio_chk_cnt_init = 1;
+	bio_chk_cnt_max = 16;
 
 	env = getenv("VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "MALLOC") == 0) {
 		D_WARN("Malloc device will be used!\n");
-		nvme_glb.ed_bdev_class = BDEV_CLASS_MALLOC;
-		nvme_glb.ed_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SMALL;
-		nvme_glb.ed_bs_opts.num_md_pages = DAOS_BS_MD_PAGES_SMALL;
+		nvme_glb.bd_bdev_class = BDEV_CLASS_MALLOC;
+		nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SMALL;
+		nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES_SMALL;
 		size_mb = 2;
-		eio_chk_cnt_max = 32;
+		bio_chk_cnt_max = 32;
 	}
 
-	eio_chk_sz = (size_mb << 20) >> EIO_DMA_PAGE_SHIFT;
+	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
 	env = getenv("IO_STAT_PERIOD");
 	io_stat_period = env ? atoi(env) : 0;
@@ -188,21 +188,21 @@ eio_nvme_init(const char *storage_path)
 }
 
 void
-eio_nvme_fini(void)
+bio_nvme_fini(void)
 {
-	ABT_cond_free(&nvme_glb.ed_barrier);
-	ABT_mutex_free(&nvme_glb.ed_mutex);
-	nvme_glb.ed_skip_setup = 0;
-	D_ASSERT(nvme_glb.ed_xstream_cnt == 0);
-	D_ASSERT(nvme_glb.ed_init_thread == NULL);
-	D_ASSERT(d_list_empty(&nvme_glb.ed_bdevs));
+	ABT_cond_free(&nvme_glb.bd_barrier);
+	ABT_mutex_free(&nvme_glb.bd_mutex);
+	nvme_glb.bd_skip_setup = 0;
+	D_ASSERT(nvme_glb.bd_xstream_cnt == 0);
+	D_ASSERT(nvme_glb.bd_init_thread == NULL);
+	D_ASSERT(d_list_empty(&nvme_glb.bd_bdevs));
 	smd_fini();
 
 }
 
-struct eio_msg {
-	spdk_thread_fn	 em_fn;
-	void		*em_arg;
+struct bio_msg {
+	spdk_thread_fn	 bm_fn;
+	void		*bm_arg;
 };
 
 /*
@@ -213,8 +213,8 @@ struct eio_msg {
 static void
 send_msg(spdk_thread_fn fn, void *arg, void *ctxt)
 {
-	struct eio_xs_context *nvme_ctxt = ctxt;
-	struct eio_msg *msg;
+	struct bio_xs_context *nvme_ctxt = ctxt;
+	struct bio_msg *msg;
 	size_t count;
 
 	D_ALLOC_PTR(msg);
@@ -223,11 +223,11 @@ send_msg(spdk_thread_fn fn, void *arg, void *ctxt)
 		return;
 	}
 
-	msg->em_fn = fn;
-	msg->em_arg = arg;
+	msg->bm_fn = fn;
+	msg->bm_arg = arg;
 
-	D_ASSERT(nvme_ctxt->exc_msg_ring != NULL);
-	count = spdk_ring_enqueue(nvme_ctxt->exc_msg_ring, (void **)&msg, 1);
+	D_ASSERT(nvme_ctxt->bxc_msg_ring != NULL);
+	count = spdk_ring_enqueue(nvme_ctxt->bxc_msg_ring, (void **)&msg, 1);
 	if (count != 1)
 		D_ERROR("failed to enqueue msg %lu\n", count);
 };
@@ -241,20 +241,20 @@ send_msg(spdk_thread_fn fn, void *arg, void *ctxt)
  * will be created for submitting I/O requests against the nvme_bdev, and the
  * device completion poller will be registered on channel creation callback.
  */
-struct eio_nvme_poller {
-	spdk_poller_fn	 enp_fn;
-	void		*enp_arg;
-	uint64_t	 enp_period_us;
-	uint64_t	 enp_expire_us;
-	d_list_t	 enp_link;
+struct bio_nvme_poller {
+	spdk_poller_fn	 bnp_fn;
+	void		*bnp_arg;
+	uint64_t	 bnp_period_us;
+	uint64_t	 bnp_expire_us;
+	d_list_t	 bnp_link;
 };
 
 /* SPDK bdev will register various poll functions through this callback */
 static struct spdk_poller *
 start_poller(void *ctxt, spdk_poller_fn fn, void *arg, uint64_t period_us)
 {
-	struct eio_xs_context *nvme_ctxt = ctxt;
-	struct eio_nvme_poller *poller;
+	struct bio_xs_context *nvme_ctxt = ctxt;
+	struct bio_nvme_poller *poller;
 
 	D_ALLOC_PTR(poller);
 	if (poller == NULL) {
@@ -262,11 +262,11 @@ start_poller(void *ctxt, spdk_poller_fn fn, void *arg, uint64_t period_us)
 		return NULL;
 	}
 
-	poller->enp_fn = fn;
-	poller->enp_arg = arg;
-	poller->enp_period_us = period_us;
-	poller->enp_expire_us = d_timeus_secdiff(0) + period_us;
-	d_list_add(&poller->enp_link, &nvme_ctxt->exc_pollers);
+	poller->bnp_fn = fn;
+	poller->bnp_arg = arg;
+	poller->bnp_period_us = period_us;
+	poller->bnp_expire_us = d_timeus_secdiff(0) + period_us;
+	d_list_add(&poller->bnp_link, &nvme_ctxt->bxc_pollers);
 
 	return (struct spdk_poller *)poller;
 }
@@ -275,10 +275,10 @@ start_poller(void *ctxt, spdk_poller_fn fn, void *arg, uint64_t period_us)
 static void
 stop_poller(struct spdk_poller *poller, void *ctxt)
 {
-	struct eio_nvme_poller *nvme_poller;
+	struct bio_nvme_poller *nvme_poller;
 
-	nvme_poller = (struct eio_nvme_poller *)poller;
-	d_list_del_init(&nvme_poller->enp_link);
+	nvme_poller = (struct bio_nvme_poller *)poller;
+	d_list_del_init(&nvme_poller->bnp_link);
 	D_FREE_PTR(nvme_poller);
 }
 
@@ -290,10 +290,10 @@ stop_poller(struct spdk_poller *poller, void *ctxt)
  * \returns		Executed message count
  */
 size_t
-eio_nvme_poll(struct eio_xs_context *ctxt)
+bio_nvme_poll(struct bio_xs_context *ctxt)
 {
-	struct eio_msg *msg;
-	struct eio_nvme_poller *poller;
+	struct bio_msg *msg;
+	struct bio_nvme_poller *poller;
 	size_t count;
 	uint64_t now = d_timeus_secdiff(0);
 
@@ -302,24 +302,24 @@ eio_nvme_poll(struct eio_xs_context *ctxt)
 		return 0;
 
 	/* Process one msg on the msg ring */
-	count = spdk_ring_dequeue(ctxt->exc_msg_ring, (void **)&msg, 1);
+	count = spdk_ring_dequeue(ctxt->bxc_msg_ring, (void **)&msg, 1);
 	if (count > 0) {
-		msg->em_fn(msg->em_arg);
+		msg->bm_fn(msg->bm_arg);
 		D_FREE_PTR(msg);
 	}
 
 	/* Call all registered poller one by one */
-	d_list_for_each_entry(poller, &ctxt->exc_pollers, enp_link) {
-		if (poller->enp_period_us != 0 && poller->enp_expire_us < now)
+	d_list_for_each_entry(poller, &ctxt->bxc_pollers, bnp_link) {
+		if (poller->bnp_period_us != 0 && poller->bnp_expire_us < now)
 			continue;
 
-		poller->enp_fn(poller->enp_arg);
+		poller->bnp_fn(poller->bnp_arg);
 
-		if (poller->enp_period_us != 0)
-			poller->enp_expire_us = now + poller->enp_period_us;
+		if (poller->bnp_period_us != 0)
+			poller->bnp_expire_us = now + poller->bnp_period_us;
 	}
 
-	if (nvme_glb.ed_init_thread == ctxt->exc_thread)
+	if (nvme_glb.bd_init_thread == ctxt->bxc_thread)
 		print_io_stat(now);
 
 	return count;
@@ -372,19 +372,19 @@ common_bs_cb(void *arg, struct spdk_blob_store *bs, int rc)
 }
 
 void
-xs_poll_completion(struct eio_xs_context *ctxt, unsigned int *inflights)
+xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights)
 {
 	size_t count;
 
 	/* Wait for the completion callback done */
 	if (inflights != NULL) {
 		while (*inflights != 0)
-			eio_nvme_poll(ctxt);
+			bio_nvme_poll(ctxt);
 	}
 
 	/* Continue to drain all msgs in the msg ring */
 	do {
-		count = eio_nvme_poll(ctxt);
+		count = bio_nvme_poll(ctxt);
 	} while (count > 0);
 }
 
@@ -400,7 +400,7 @@ get_bdev_type(struct spdk_bdev *bdev)
 }
 
 static struct spdk_blob_store *
-load_blobstore(struct eio_xs_context *ctxt, struct spdk_bdev *bdev,
+load_blobstore(struct bio_xs_context *ctxt, struct spdk_bdev *bdev,
 	       uuid_t *bs_uuid, bool create)
 {
 	struct spdk_bs_dev *bs_dev;
@@ -417,7 +417,7 @@ load_blobstore(struct eio_xs_context *ctxt, struct spdk_bdev *bdev,
 		return NULL;
 	}
 
-	bs_opts = nvme_glb.ed_bs_opts;
+	bs_opts = nvme_glb.bd_bs_opts;
 	/*
 	 * A little bit hacke here, we store a UUID in the 16 bytes 'bstype'
 	 * and use it as the block device ID.
@@ -448,7 +448,7 @@ load_blobstore(struct eio_xs_context *ctxt, struct spdk_bdev *bdev,
 }
 
 static int
-unload_blobstore(struct eio_xs_context *ctxt, struct spdk_blob_store *bs)
+unload_blobstore(struct bio_xs_context *ctxt, struct spdk_blob_store *bs)
 {
 	struct common_cp_arg cp_arg;
 
@@ -463,9 +463,9 @@ unload_blobstore(struct eio_xs_context *ctxt, struct spdk_blob_store *bs)
 }
 
 static int
-create_eio_bdev(struct eio_xs_context *ctxt, struct spdk_bdev *bdev)
+create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 {
-	struct eio_bdev			*d_bdev;
+	struct bio_bdev			*d_bdev;
 	struct spdk_blob_store		*bs = NULL;
 	struct spdk_bs_type		 bstype;
 	uuid_t				 bs_uuid;
@@ -474,10 +474,10 @@ create_eio_bdev(struct eio_xs_context *ctxt, struct spdk_bdev *bdev)
 
 	D_ALLOC_PTR(d_bdev);
 	if (d_bdev == NULL) {
-		D_ERROR("failed to allocate eio_bdev\n");
+		D_ERROR("failed to allocate bio_bdev\n");
 		return -DER_NOMEM;
 	}
-	D_INIT_LIST_HEAD(&d_bdev->eb_link);
+	D_INIT_LIST_HEAD(&d_bdev->bb_link);
 
 	/* Try to load blobstore without specifying 'bstype' first */
 	bs = load_blobstore(ctxt, bdev, NULL, false);
@@ -512,44 +512,44 @@ create_eio_bdev(struct eio_xs_context *ctxt, struct spdk_bdev *bdev)
 	if (rc != 0)
 		goto error;
 
-	rc = spdk_bdev_open(bdev, false, NULL, NULL, &d_bdev->eb_desc);
+	rc = spdk_bdev_open(bdev, false, NULL, NULL, &d_bdev->bb_desc);
 	if (rc != 0) {
 		D_ERROR("Failed to open bdev %s, %d\n",
 			spdk_bdev_get_name(bdev), rc);
 		goto error;
 	}
 
-	d_bdev->eb_name = strdup(spdk_bdev_get_name(bdev));
-	if (d_bdev->eb_name == NULL) {
-		D_ERROR("Failed to allocate eb_name\n");
+	d_bdev->bb_name = strdup(spdk_bdev_get_name(bdev));
+	if (d_bdev->bb_name == NULL) {
+		D_ERROR("Failed to allocate bdev name\n");
 		rc = -DER_NOMEM;
 		goto error;
 	}
 
-	uuid_copy(d_bdev->eb_uuid, bs_uuid);
-	d_list_add(&d_bdev->eb_link, &nvme_glb.ed_bdevs);
+	uuid_copy(d_bdev->bb_uuid, bs_uuid);
+	d_list_add(&d_bdev->bb_link, &nvme_glb.bd_bdevs);
 
 	return 0;
 
 error:
-	if (d_bdev->eb_desc != NULL)
-		spdk_bdev_close(d_bdev->eb_desc);
+	if (d_bdev->bb_desc != NULL)
+		spdk_bdev_close(d_bdev->bb_desc);
 	D_FREE_PTR(d_bdev);
 	return rc;
 }
 
 static int
-init_eio_bdevs(struct eio_xs_context *ctxt)
+init_bio_bdevs(struct bio_xs_context *ctxt)
 {
 	struct spdk_bdev *bdev;
 	int rc = 0;
 
 	for (bdev = spdk_bdev_first(); bdev != NULL;
 	     bdev = spdk_bdev_next(bdev)) {
-		if (nvme_glb.ed_bdev_class != get_bdev_type(bdev))
+		if (nvme_glb.bd_bdev_class != get_bdev_type(bdev))
 			continue;
 
-		rc = create_eio_bdev(ctxt, bdev);
+		rc = create_bio_bdev(ctxt, bdev);
 		if (rc)
 			break;
 	}
@@ -557,7 +557,7 @@ init_eio_bdevs(struct eio_xs_context *ctxt)
 }
 
 static void
-put_eio_blobstore(struct eio_blobstore *eb, struct eio_xs_context *ctxt)
+put_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 {
 	struct spdk_blob_store *bs = NULL;
 	bool last = false;
@@ -566,78 +566,78 @@ put_eio_blobstore(struct eio_blobstore *eb, struct eio_xs_context *ctxt)
 	 * Unload the blobstore within the same thread where is't loaded,
 	 * all server xstreams which should have stopped using the blobstore.
 	 */
-	ABT_mutex_lock(eb->eb_mutex);
-	if (eb->eb_ctxt == ctxt && eb->eb_bs != NULL) {
-		bs = eb->eb_bs;
-		eb->eb_bs = NULL;
+	ABT_mutex_lock(bb->bb_mutex);
+	if (bb->bb_ctxt == ctxt && bb->bb_bs != NULL) {
+		bs = bb->bb_bs;
+		bb->bb_bs = NULL;
 	}
 
-	D_ASSERT(eb->eb_ref > 0);
-	eb->eb_ref--;
-	if (eb->eb_ref == 0)
+	D_ASSERT(bb->bb_ref > 0);
+	bb->bb_ref--;
+	if (bb->bb_ref == 0)
 		last = true;
-	ABT_mutex_unlock(eb->eb_mutex);
+	ABT_mutex_unlock(bb->bb_mutex);
 
 	if (bs != NULL)
 		unload_blobstore(ctxt, bs);
 
 	if (last) {
-		ABT_mutex_free(&eb->eb_mutex);
-		D_FREE_PTR(eb);
+		ABT_mutex_free(&bb->bb_mutex);
+		D_FREE_PTR(bb);
 	}
 }
 
 static void
-fini_eio_bdevs(struct eio_xs_context *ctxt)
+fini_bio_bdevs(struct bio_xs_context *ctxt)
 {
-	struct eio_bdev *d_bdev, *tmp;
+	struct bio_bdev *d_bdev, *tmp;
 
-	d_list_for_each_entry_safe(d_bdev, tmp, &nvme_glb.ed_bdevs, eb_link) {
-		d_list_del_init(&d_bdev->eb_link);
+	d_list_for_each_entry_safe(d_bdev, tmp, &nvme_glb.bd_bdevs, bb_link) {
+		d_list_del_init(&d_bdev->bb_link);
 
-		if (d_bdev->eb_desc != NULL)
-			spdk_bdev_close(d_bdev->eb_desc);
+		if (d_bdev->bb_desc != NULL)
+			spdk_bdev_close(d_bdev->bb_desc);
 
-		if (d_bdev->eb_name != NULL)
-			free(d_bdev->eb_name);
+		if (d_bdev->bb_name != NULL)
+			free(d_bdev->bb_name);
 
-		if (d_bdev->eb_blobstore != NULL)
-			put_eio_blobstore(d_bdev->eb_blobstore, ctxt);
+		if (d_bdev->bb_blobstore != NULL)
+			put_bio_blobstore(d_bdev->bb_blobstore, ctxt);
 
 		D_FREE_PTR(d_bdev);
 	}
 }
 
-static struct eio_blobstore *
-alloc_eio_blobstore(struct eio_xs_context *ctxt)
+static struct bio_blobstore *
+alloc_bio_blobstore(struct bio_xs_context *ctxt)
 {
-	struct eio_blobstore *eb;
+	struct bio_blobstore *bb;
 	int rc;
 
 	D_ASSERT(ctxt != NULL);
-	D_ALLOC_PTR(eb);
-	if (eb == NULL)
+	D_ALLOC_PTR(bb);
+	if (bb == NULL)
 		return NULL;
 
-	rc = ABT_mutex_create(&eb->eb_mutex);
+	rc = ABT_mutex_create(&bb->bb_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_FREE_PTR(eb);
+		D_FREE_PTR(bb);
 		return NULL;
 	}
 
-	eb->eb_ref = 1;
-	eb->eb_ctxt = ctxt;
+	bb->bb_ref = 1;
+	bb->bb_ctxt = ctxt;
 
-	return eb;
+	return bb;
 }
 
-static struct eio_blobstore *
-get_eio_blobstore(struct eio_blobstore *eb)
+static struct bio_blobstore *
+get_bio_blobstore(struct bio_blobstore *bb)
 {
-	ABT_mutex_lock(eb->eb_mutex);
-	eb->eb_ref++;
-	ABT_mutex_unlock(eb->eb_mutex);
-	return eb;
+	ABT_mutex_lock(bb->bb_mutex);
+	bb->bb_ref++;
+	ABT_mutex_unlock(bb->bb_mutex);
+	return bb;
 }
 
 /**
@@ -647,63 +647,63 @@ get_eio_blobstore(struct eio_blobstore *eb)
 static int
 assign_dev_to_xs(int xs_id)
 {
-	struct eio_bdev			*d_bdev;
-	struct eio_bdev			*chosen_bdev;
+	struct bio_bdev			*d_bdev;
+	struct bio_bdev			*chosen_bdev;
 	struct smd_nvme_stream_bond	 xs_bond;
 	int				 lowest_xs_cnt;
 	int				 rc;
 
-	D_ASSERT(!d_list_empty(&nvme_glb.ed_bdevs));
-	chosen_bdev = d_list_entry(nvme_glb.ed_bdevs.next, struct eio_bdev,
-				  eb_link);
-	lowest_xs_cnt = chosen_bdev->eb_xs_cnt;
+	D_ASSERT(!d_list_empty(&nvme_glb.bd_bdevs));
+	chosen_bdev = d_list_entry(nvme_glb.bd_bdevs.next, struct bio_bdev,
+				  bb_link);
+	lowest_xs_cnt = chosen_bdev->bb_xs_cnt;
 
 	/*
 	 * Traverse the list and return the device with the least amount of
 	 * mapped xstreams.
 	 */
-	d_list_for_each_entry(d_bdev, &nvme_glb.ed_bdevs, eb_link) {
-		if (d_bdev->eb_xs_cnt < lowest_xs_cnt) {
-			lowest_xs_cnt = d_bdev->eb_xs_cnt;
+	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
+		if (d_bdev->bb_xs_cnt < lowest_xs_cnt) {
+			lowest_xs_cnt = d_bdev->bb_xs_cnt;
 			chosen_bdev = d_bdev;
 		}
 	}
 
 	/* Update mapping for this xstream in NVMe device table */
-	smd_nvme_set_stream_bond(xs_id, chosen_bdev->eb_uuid, &xs_bond);
+	smd_nvme_set_stream_bond(xs_id, chosen_bdev->bb_uuid, &xs_bond);
 	rc = smd_nvme_add_stream_bond(&xs_bond);
 	if (rc) {
 		D_ERROR("Failure adding entry to SMD stream table\n");
 		return rc;
 	}
 
-	chosen_bdev->eb_xs_cnt++;
+	chosen_bdev->bb_xs_cnt++;
 
 	D_DEBUG(DB_MGMT, "Successfully added entry to SMD stream table,"
 		" xs_id:%d, dev:"DF_UUID", xs_cnt:%d\n",
-		xs_id, DP_UUID(xs_bond.nsm_dev_id), chosen_bdev->eb_xs_cnt);
+		xs_id, DP_UUID(xs_bond.nsm_dev_id), chosen_bdev->bb_xs_cnt);
 
 	return 0;
 }
 
 static int
-init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
+init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 {
-	struct eio_bdev			*d_bdev;
+	struct bio_bdev			*d_bdev;
 	struct spdk_bdev		*bdev;
 	struct spdk_blob_store		*bs;
 	struct smd_nvme_stream_bond	 xs_bond;
 	int				 rc;
 	bool				 found = false;
 
-	D_ASSERT(ctxt->exc_blobstore == NULL);
-	D_ASSERT(ctxt->exc_io_channel == NULL);
+	D_ASSERT(ctxt->bxc_blobstore == NULL);
+	D_ASSERT(ctxt->bxc_io_channel == NULL);
 
 	/*
 	 * Lookup @xs_id in the NVMe device table (per-server metadata),
 	 * if found, create blobstore on the mapped device.
 	 */
-	if (d_list_empty(&nvme_glb.ed_bdevs))
+	if (d_list_empty(&nvme_glb.bd_bdevs))
 		return -DER_UNINIT;
 
 	rc = smd_nvme_get_stream_bond(xs_id, &xs_bond);
@@ -732,8 +732,8 @@ init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
 		"dev:"DF_UUID"\n", xs_id, DP_UUID(xs_bond.nsm_dev_id));
 
 	/* Iterate thru device list to find matching dev */
-	d_list_for_each_entry(d_bdev, &nvme_glb.ed_bdevs, eb_link) {
-		if (uuid_compare(d_bdev->eb_uuid, xs_bond.nsm_dev_id) == 0) {
+	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
+		if (uuid_compare(d_bdev->bb_uuid, xs_bond.nsm_dev_id) == 0) {
 			found = true;
 			break;
 		}
@@ -751,34 +751,34 @@ init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
 		return -DER_NONEXIST;
 	}
 
-	if (d_bdev->eb_blobstore == NULL) {
-		d_bdev->eb_blobstore = alloc_eio_blobstore(ctxt);
-		if (d_bdev->eb_blobstore == NULL)
+	if (d_bdev->bb_blobstore == NULL) {
+		d_bdev->bb_blobstore = alloc_bio_blobstore(ctxt);
+		if (d_bdev->bb_blobstore == NULL)
 			return -DER_NOMEM;
 
-		D_ASSERT(d_bdev->eb_name != NULL);
-		bdev = spdk_bdev_get_by_name(d_bdev->eb_name);
+		D_ASSERT(d_bdev->bb_name != NULL);
+		bdev = spdk_bdev_get_by_name(d_bdev->bb_name);
 		if (bdev == NULL) {
-			D_ERROR("Failure finding bdev: %s\n", d_bdev->eb_name);
+			D_ERROR("Failure finding bdev: %s\n", d_bdev->bb_name);
 			return -DER_NONEXIST;
 		}
 
 		/* Load blobstore with bstype specified for sanity check */
-		bs = load_blobstore(ctxt, bdev, &d_bdev->eb_uuid, false);
+		bs = load_blobstore(ctxt, bdev, &d_bdev->bb_uuid, false);
 		if (bs == NULL)
 			return -DER_INVAL;
 
-		d_bdev->eb_blobstore->eb_bs = bs;
+		d_bdev->bb_blobstore->bb_bs = bs;
 
 		D_DEBUG(DB_MGMT, "Loaded bs, xs_id:%d, xs:%p dev:%s\n",
-			xs_id, ctxt, d_bdev->eb_name);
+			xs_id, ctxt, d_bdev->bb_name);
 	}
 
-	ctxt->exc_blobstore = get_eio_blobstore(d_bdev->eb_blobstore);
-	bs = ctxt->exc_blobstore->eb_bs;
+	ctxt->bxc_blobstore = get_bio_blobstore(d_bdev->bb_blobstore);
+	bs = ctxt->bxc_blobstore->bb_bs;
 	D_ASSERT(bs != NULL);
-	ctxt->exc_io_channel = spdk_bs_alloc_io_channel(bs);
-	if (ctxt->exc_io_channel == NULL) {
+	ctxt->bxc_io_channel = spdk_bs_alloc_io_channel(bs);
+	if (ctxt->bxc_io_channel == NULL) {
 		D_ERROR("Failed to create io channel\n");
 		return -DER_NOMEM;
 	}
@@ -794,38 +794,38 @@ init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
  * \returns		N/A
  */
 void
-eio_xsctxt_free(struct eio_xs_context *ctxt)
+bio_xsctxt_free(struct bio_xs_context *ctxt)
 {
 	/* NVMe context setup was skipped */
 	if (ctxt == NULL)
 		return;
 
-	if (ctxt->exc_io_channel != NULL) {
-		spdk_bs_free_io_channel(ctxt->exc_io_channel);
-		ctxt->exc_io_channel = NULL;
+	if (ctxt->bxc_io_channel != NULL) {
+		spdk_bs_free_io_channel(ctxt->bxc_io_channel);
+		ctxt->bxc_io_channel = NULL;
 	}
 
-	if (ctxt->exc_blobstore != NULL) {
-		put_eio_blobstore(ctxt->exc_blobstore, ctxt);
-		ctxt->exc_blobstore = NULL;
+	if (ctxt->bxc_blobstore != NULL) {
+		put_bio_blobstore(ctxt->bxc_blobstore, ctxt);
+		ctxt->bxc_blobstore = NULL;
 	}
 
-	ABT_mutex_lock(nvme_glb.ed_mutex);
-	nvme_glb.ed_xstream_cnt--;
+	ABT_mutex_lock(nvme_glb.bd_mutex);
+	nvme_glb.bd_xstream_cnt--;
 
-	if (nvme_glb.ed_init_thread != NULL) {
-		if (nvme_glb.ed_init_thread == ctxt->exc_thread) {
+	if (nvme_glb.bd_init_thread != NULL) {
+		if (nvme_glb.bd_init_thread == ctxt->bxc_thread) {
 			struct common_cp_arg	cp_arg;
 
 			/*
 			 * The xstream initialized SPDK env will have to
 			 * wait for all other xstreams finalized first.
 			 */
-			if (nvme_glb.ed_xstream_cnt != 0)
-				ABT_cond_wait(nvme_glb.ed_barrier,
-					      nvme_glb.ed_mutex);
+			if (nvme_glb.bd_xstream_cnt != 0)
+				ABT_cond_wait(nvme_glb.bd_barrier,
+					      nvme_glb.bd_mutex);
 
-			fini_eio_bdevs(ctxt);
+			fini_bio_bdevs(ctxt);
 
 			common_prep_arg(&cp_arg);
 			spdk_copy_engine_finish(common_fini_cb, &cp_arg);
@@ -835,45 +835,45 @@ eio_xsctxt_free(struct eio_xs_context *ctxt)
 			spdk_bdev_finish(common_fini_cb, &cp_arg);
 			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 
-			nvme_glb.ed_init_thread = NULL;
+			nvme_glb.bd_init_thread = NULL;
 
-		} else if (nvme_glb.ed_xstream_cnt == 0) {
-			ABT_cond_broadcast(nvme_glb.ed_barrier);
+		} else if (nvme_glb.bd_xstream_cnt == 0) {
+			ABT_cond_broadcast(nvme_glb.bd_barrier);
 		}
 	}
 
-	ABT_mutex_unlock(nvme_glb.ed_mutex);
+	ABT_mutex_unlock(nvme_glb.bd_mutex);
 
-	if (ctxt->exc_thread != NULL) {
+	if (ctxt->bxc_thread != NULL) {
 		xs_poll_completion(ctxt, NULL);
 		spdk_free_thread();
-		ctxt->exc_thread = NULL;
+		ctxt->bxc_thread = NULL;
 	}
 
-	if (ctxt->exc_msg_ring != NULL) {
-		spdk_ring_free(ctxt->exc_msg_ring);
-		ctxt->exc_msg_ring = NULL;
+	if (ctxt->bxc_msg_ring != NULL) {
+		spdk_ring_free(ctxt->bxc_msg_ring);
+		ctxt->bxc_msg_ring = NULL;
 	}
-	D_ASSERT(d_list_empty(&ctxt->exc_pollers));
+	D_ASSERT(d_list_empty(&ctxt->bxc_pollers));
 
-	if (ctxt->exc_dma_buf != NULL) {
-		dma_buffer_destroy(ctxt->exc_dma_buf);
-		ctxt->exc_dma_buf = NULL;
+	if (ctxt->bxc_dma_buf != NULL) {
+		dma_buffer_destroy(ctxt->bxc_dma_buf);
+		ctxt->bxc_dma_buf = NULL;
 	}
 
 	D_FREE_PTR(ctxt);
 }
 
 int
-eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id)
+bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
 {
 	struct spdk_conf *config = NULL;
-	struct eio_xs_context *ctxt;
+	struct bio_xs_context *ctxt;
 	char name[32];
 	int rc;
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
-	if (nvme_glb.ed_skip_setup) {
+	if (nvme_glb.bd_skip_setup) {
 		*pctxt = NULL;
 		return 0;
 	}
@@ -882,22 +882,22 @@ eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id)
 	if (ctxt == NULL)
 		return -DER_NOMEM;
 
-	D_INIT_LIST_HEAD(&ctxt->exc_pollers);
-	ctxt->exc_xs_id = xs_id;
+	D_INIT_LIST_HEAD(&ctxt->bxc_pollers);
+	ctxt->bxc_xs_id = xs_id;
 
-	ABT_mutex_lock(nvme_glb.ed_mutex);
+	ABT_mutex_lock(nvme_glb.bd_mutex);
 
-	nvme_glb.ed_xstream_cnt++;
+	nvme_glb.bd_xstream_cnt++;
 
 	D_INFO("Initialize NVMe context, xs_id:%d, init_thread:%p\n",
-	       xs_id, nvme_glb.ed_init_thread);
+	       xs_id, nvme_glb.bd_init_thread);
 
 	/* Initialize SPDK env in first started xstream */
-	if (nvme_glb.ed_init_thread == NULL) {
+	if (nvme_glb.bd_init_thread == NULL) {
 		struct spdk_env_opts opts;
 
-		D_ASSERTF(nvme_glb.ed_xstream_cnt == 1, "%d",
-			  nvme_glb.ed_xstream_cnt);
+		D_ASSERTF(nvme_glb.bd_xstream_cnt == 1, "%d",
+			  nvme_glb.bd_xstream_cnt);
 
 		config = spdk_conf_allocate();
 		if (config == NULL) {
@@ -935,21 +935,21 @@ eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id)
 	 * Register SPDK thread beforehand, it could be used for poll device
 	 * admin commands completions and hotplugged events in following
 	 * spdk_bdev_initialize() call, it also could be used for blobstore
-	 * metadata io channel in following init_eio_bdevs() call.
+	 * metadata io channel in following init_bio_bdevs() call.
 	 */
-	ctxt->exc_msg_ring = spdk_ring_create(SPDK_RING_TYPE_MP_SC,
+	ctxt->bxc_msg_ring = spdk_ring_create(SPDK_RING_TYPE_MP_SC,
 					      DAOS_MSG_RING_SZ,
 					      SPDK_ENV_SOCKET_ID_ANY);
-	if (ctxt->exc_msg_ring == NULL) {
+	if (ctxt->bxc_msg_ring == NULL) {
 		D_ERROR("failed to allocate msg ring\n");
 		rc = -DER_NOMEM;
 		goto out;
 	}
 
 	snprintf(name, sizeof(name), "daos_spdk_%d", xs_id);
-	ctxt->exc_thread = spdk_allocate_thread(send_msg, start_poller,
+	ctxt->bxc_thread = spdk_allocate_thread(send_msg, start_poller,
 						stop_poller, ctxt, name);
-	if (ctxt->exc_thread == NULL) {
+	if (ctxt->bxc_thread == NULL) {
 		D_ERROR("failed to alloc SPDK thread\n");
 		rc = -DER_NOMEM;
 		goto out;
@@ -959,7 +959,7 @@ eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id)
 	 * The first started xstream will scan all bdevs and create blobstores,
 	 * it's a prequisite for all per-xstream blobstore initialization.
 	 */
-	if (nvme_glb.ed_init_thread == NULL) {
+	if (nvme_glb.bd_init_thread == NULL) {
 		struct common_cp_arg cp_arg;
 
 		/* The SPDK 'Malloc' device relies on copy engine. */
@@ -983,10 +983,10 @@ eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id)
 			goto out;
 		}
 
-		nvme_glb.ed_init_thread = ctxt->exc_thread;
-		rc = init_eio_bdevs(ctxt);
+		nvme_glb.bd_init_thread = ctxt->bxc_thread;
+		rc = init_bio_bdevs(ctxt);
 		if (rc != 0) {
-			D_ERROR("failed to init eio_bdevs, rc:%d\n", rc);
+			D_ERROR("failed to init bio_bdevs, rc:%d\n", rc);
 			goto out;
 		}
 	}
@@ -996,12 +996,12 @@ eio_xsctxt_alloc(struct eio_xs_context **pctxt, int xs_id)
 	if (rc)
 		goto out;
 
-	ctxt->exc_dma_buf = dma_buffer_create(eio_chk_cnt_init);
+	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
 out:
-	ABT_mutex_unlock(nvme_glb.ed_mutex);
+	ABT_mutex_unlock(nvme_glb.bd_mutex);
 	spdk_conf_free(config);
 	if (rc != 0)
-		eio_xsctxt_free(ctxt);
+		bio_xsctxt_free(ctxt);
 
 	*pctxt = (rc != 0) ? NULL : ctxt;
 	return rc;

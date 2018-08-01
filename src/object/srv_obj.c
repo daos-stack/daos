@@ -217,14 +217,14 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		if (sgls != NULL) {
 			sgl = sgls[i];
 		} else {
-			struct eio_sglist *esgl;
+			struct bio_sglist *bsgl;
 
 			D_ASSERT(!daos_handle_is_inval(ioh));
-			esgl = vos_iod_sgl_at(ioh, i);
-			D_ASSERT(esgl != NULL);
+			bsgl = vos_iod_sgl_at(ioh, i);
+			D_ASSERT(bsgl != NULL);
 
 			sgl = &tmp_sgl;
-			rc = eio_sgl_convert(esgl, sgl);
+			rc = bio_sgl_convert(bsgl, sgl);
 			if (rc)
 				break;
 		}
@@ -411,7 +411,7 @@ ds_obj_update_nrs_in_reply(crt_rpc_t *rpc, daos_handle_t ioh,
 
 	nrs = orwo->orw_nrs.ca_arrays;
 	for (i = 0; i < nrs_count; i++) {
-		struct eio_sglist	*esgl;
+		struct bio_sglist	*bsgl;
 		daos_sg_list_t		*sgl;
 
 		if (sgls != NULL) {
@@ -419,9 +419,9 @@ ds_obj_update_nrs_in_reply(crt_rpc_t *rpc, daos_handle_t ioh,
 			D_ASSERT(sgl != NULL);
 			nrs[i] = sgl->sg_nr_out;
 		} else {
-			esgl = vos_iod_sgl_at(ioh, i);
-			D_ASSERT(esgl != NULL);
-			nrs[i] = esgl->es_nr_out;
+			bsgl = vos_iod_sgl_at(ioh, i);
+			D_ASSERT(bsgl != NULL);
+			nrs[i] = bsgl->bs_nr_out;
 		}
 	}
 
@@ -584,7 +584,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	crt_bulk_op_t		 bulk_op;
 	uint32_t		 map_ver = 0;
 	bool			 rma, update;
-	struct eio_desc		*eiod;
+	struct bio_desc		*biod;
 	int			 rc, err;
 
 	orw = crt_req_get(rpc);
@@ -667,8 +667,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	eiod = vos_ioh2desc(ioh);
-	rc = eio_iod_prep(eiod);
+	biod = vos_ioh2desc(ioh);
+	rc = bio_iod_prep(biod);
 	if (rc)
 		goto out;
 
@@ -676,9 +676,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		rc = ds_bulk_transfer(rpc, bulk_op, orw->orw_bulks.ca_arrays,
 				      ioh, NULL, orw->orw_nr);
 	else if (orw->orw_sgls.ca_arrays != NULL)
-		rc = eio_iod_copy(eiod, orw->orw_sgls.ca_arrays, orw->orw_nr);
+		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
 
-	err = eio_iod_post(eiod);
+	err = bio_iod_post(biod);
 	rc = rc ? : err;
 out:
 	ds_obj_rw_complete(rpc, cont_hdl, ioh, rc, map_ver);

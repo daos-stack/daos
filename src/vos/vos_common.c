@@ -264,11 +264,11 @@ static void
 vos_nvme_fini(void)
 {
 	if (vsa_xsctxt_inst != NULL) {
-		eio_xsctxt_free(vsa_xsctxt_inst);
+		bio_xsctxt_free(vsa_xsctxt_inst);
 		vsa_xsctxt_inst = NULL;
 	}
 	if (vsa_nvme_init) {
-		eio_nvme_fini();
+		bio_nvme_fini();
 		vsa_nvme_init = false;
 	}
 }
@@ -285,12 +285,12 @@ vos_nvme_init(void)
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = eio_nvme_init("/mnt/daos");
+	rc = bio_nvme_init("/mnt/daos");
 	if (rc)
 		return rc;
 	vsa_nvme_init = true;
 
-	rc = eio_xsctxt_alloc(&vsa_xsctxt_inst, -1 /* Self poll */);
+	rc = bio_xsctxt_alloc(&vsa_xsctxt_inst, -1 /* Self poll */);
 	return rc;
 }
 

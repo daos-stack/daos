@@ -128,7 +128,7 @@ void dss_unregister_key(struct dss_module_key *key);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
-	struct eio_xs_context	*dmi_nvme_ctxt;
+	struct bio_xs_context	*dmi_nvme_ctxt;
 	struct dss_xstream	*dmi_xstream;
 	int			dmi_tid;
 	tse_sched_t		dmi_sched;

@@ -64,7 +64,7 @@ struct evt_ptr {
 	/** Pool map version for the record */
 	uint32_t			pt_ver;
 	/** buffer on SCM or NVMe */
-	eio_addr_t			pt_ex_addr;
+	bio_addr_t			pt_ex_addr;
 	/** padding to cache line */
 	uint64_t			pt_padding;
 };
@@ -312,7 +312,7 @@ int evt_destroy(daos_handle_t toh);
  * \param addr		[IN]	Address of the input data.
  */
 int evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
-	       struct evt_rect *rect, uint32_t inob, eio_addr_t addr);
+	       struct evt_rect *rect, uint32_t inob, bio_addr_t addr);
 
 /**
  * Delete an extent \a rect from an opened tree.
@@ -324,7 +324,7 @@ int evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
  *
  * Note that the upon successful return, the node is removed
  * from the tree.   The data in referenced in \a ent is not removed.
- * The user could free the associated eio_addr_t.
+ * The user could free the associated bio_addr_t.
  */
 int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent);
 

@@ -27,124 +27,124 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/eio.h>
 
-#define EIO_DMA_PAGE_SHIFT	12		/* 4K */
-#define	EIO_DMA_PAGE_SZ		(1UL << EIO_DMA_PAGE_SHIFT)
+#define BIO_DMA_PAGE_SHIFT	12		/* 4K */
+#define	BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
 
 /* DMA buffer is managed in chunks */
-struct eio_dma_chunk {
+struct bio_dma_chunk {
 	/* Link to edb_idle_list or edb_used_list */
-	d_list_t	 edc_link;
+	d_list_t	 bdc_link;
 	/* Base pointer of the chunk address */
-	void		*edc_ptr;
+	void		*bdc_ptr;
 	/* Page offset (4K page) to unused fraction */
-	unsigned int	 edc_pg_idx;
+	unsigned int	 bdc_pg_idx;
 	/* Being used by how many I/O descriptors */
-	unsigned int	 edc_ref;
+	unsigned int	 bdc_ref;
 };
 
 /*
  * Per-xstream DMA buffer, used as SPDK dma I/O buffer or as temporary
  * RDMA buffer for ZC fetch/update over NVMe devices.
  */
-struct eio_dma_buffer {
-	d_list_t		 edb_idle_list;
-	d_list_t		 edb_used_list;
-	struct eio_dma_chunk	*edb_cur_chk;
-	unsigned int		 edb_tot_cnt;
-	unsigned int		 edb_active_iods;
-	ABT_cond		 edb_wait_iods;
-	ABT_mutex		 edb_mutex;
+struct bio_dma_buffer {
+	d_list_t		 bdb_idle_list;
+	d_list_t		 bdb_used_list;
+	struct bio_dma_chunk	*bdb_cur_chk;
+	unsigned int		 bdb_tot_cnt;
+	unsigned int		 bdb_active_iods;
+	ABT_cond		 bdb_wait_iods;
+	ABT_mutex		 bdb_mutex;
 };
 
 /*
  * SPDK blobstore isn't thread safe and there can be only one SPDK
  * blobstore for certain NVMe device.
  */
-struct eio_blobstore {
-	ABT_mutex		 eb_mutex;
-	struct spdk_blob_store	*eb_bs;
-	struct eio_xs_context	*eb_ctxt;
-	int			 eb_ref;
+struct bio_blobstore {
+	ABT_mutex		 bb_mutex;
+	struct spdk_blob_store	*bb_bs;
+	struct bio_xs_context	*bb_ctxt;
+	int			 bb_ref;
 };
 
 /* Per-xstream NVMe context */
-struct eio_xs_context {
-	int			 exc_xs_id;
-	struct spdk_ring	*exc_msg_ring;
-	struct spdk_thread	*exc_thread;
-	struct eio_blobstore	*exc_blobstore;
-	struct spdk_io_channel	*exc_io_channel;
-	d_list_t		 exc_pollers;
-	struct eio_dma_buffer	*exc_dma_buf;
+struct bio_xs_context {
+	int			 bxc_xs_id;
+	struct spdk_ring	*bxc_msg_ring;
+	struct spdk_thread	*bxc_thread;
+	struct bio_blobstore	*bxc_blobstore;
+	struct spdk_io_channel	*bxc_io_channel;
+	d_list_t		 bxc_pollers;
+	struct bio_dma_buffer	*bxc_dma_buf;
 };
 
 /* Per VOS instance I/O context */
-struct eio_io_context {
-	struct umem_instance	*eic_umem;
-	uint64_t		 eic_pmempool_uuid;
-	struct spdk_blob	*eic_blob;
-	struct eio_xs_context	*eic_xs_ctxt;
+struct bio_io_context {
+	struct umem_instance	*bic_umem;
+	uint64_t		 bic_pmempool_uuid;
+	struct spdk_blob	*bic_blob;
+	struct bio_xs_context	*bic_xs_ctxt;
 };
 
 /* A contiguous DMA buffer region reserved by certain io descriptor */
-struct eio_rsrvd_region {
+struct bio_rsrvd_region {
 	/* The DMA chunk where the region is located */
-	struct eio_dma_chunk	*err_chk;
+	struct bio_dma_chunk	*brr_chk;
 	/* Start page idx within the DMA chunk */
-	unsigned int		 err_pg_idx;
+	unsigned int		 brr_pg_idx;
 	/* Offset within the SPDK blob in bytes */
-	uint64_t		 err_off;
+	uint64_t		 brr_off;
 	/* End (not included) in bytes */
-	uint64_t		 err_end;
+	uint64_t		 brr_end;
 };
 
 /* Reserved DMA buffer for certain io descriptor */
-struct eio_rsrvd_dma {
+struct bio_rsrvd_dma {
 	/* DMA regions reserved by the io descriptor */
-	struct eio_rsrvd_region	 *erd_regions;
+	struct bio_rsrvd_region	 *brd_regions;
 	/* Capacity of the region array */
-	unsigned int		  erd_rg_max;
+	unsigned int		  brd_rg_max;
 	/* Total number of reserved regions */
-	unsigned int		  erd_rg_cnt;
+	unsigned int		  brd_rg_cnt;
 	/* Pointer array for all referenced DMA chunks */
-	struct eio_dma_chunk	**erd_dma_chks;
+	struct bio_dma_chunk	**brd_dma_chks;
 	/* Capacity of the pointer array */
-	unsigned int		  erd_chk_max;
+	unsigned int		  brd_chk_max;
 	/* Total number of chunks being referenced */
-	unsigned int		  erd_chk_cnt;
+	unsigned int		  brd_chk_cnt;
 };
 
 /* I/O descriptor */
-struct eio_desc {
-	struct eio_io_context	*ed_ctxt;
+struct bio_desc {
+	struct bio_io_context	*bd_ctxt;
 	/* SG lists involved in this io descriptor */
-	unsigned int		 ed_sgl_cnt;
-	struct eio_sglist	*ed_sgls;
+	unsigned int		 bd_sgl_cnt;
+	struct bio_sglist	*bd_sgls;
 	/* DMA buffers reserved by this io descriptor */
-	struct eio_rsrvd_dma	 ed_rsrvd;
+	struct bio_rsrvd_dma	 bd_rsrvd;
 	/*
 	 * SPDK blob io completion could run on different xstream
 	 * when the NVMe device is shared by multiple xstreams.
 	 */
-	ABT_mutex		 ed_mutex;
-	ABT_cond		 ed_dma_done;
+	ABT_mutex		 bd_mutex;
+	ABT_cond		 bd_dma_done;
 	/* Inflight SPDK DMA transfers */
-	unsigned int		 ed_inflights;
-	int			 ed_result;
+	unsigned int		 bd_inflights;
+	int			 bd_result;
 	/* Flags */
-	unsigned int		 ed_buffer_prep:1,
-				 ed_update:1,
-				 ed_dma_issued:1,
-				 ed_retry:1;
+	unsigned int		 bd_buffer_prep:1,
+				 bd_update:1,
+				 bd_dma_issued:1,
+				 bd_retry:1;
 };
 
 /* eio_xstream.c */
-extern unsigned int	eio_chk_sz;
-extern unsigned int	eio_chk_cnt_max;
-void xs_poll_completion(struct eio_xs_context *ctxt, unsigned int *inflights);
+extern unsigned int	bio_chk_sz;
+extern unsigned int	bio_chk_cnt_max;
+void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
 
 /* eio_buffer.c */
-void dma_buffer_destroy(struct eio_dma_buffer *buf);
-struct eio_dma_buffer *dma_buffer_create(unsigned int init_cnt);
+void dma_buffer_destroy(struct bio_dma_buffer *buf);
+struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt);
 
 #endif /* __EIO_INTERNAL_H__ */

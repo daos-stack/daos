@@ -66,7 +66,7 @@ pool_hop_free(struct d_ulink *hlink)
 	D_ASSERT(pool->vp_opened == 0);
 
 	if (pool->vp_io_ctxt != NULL) {
-		rc = eio_ioctxt_close(pool->vp_io_ctxt);
+		rc = bio_ioctxt_close(pool->vp_io_ctxt);
 		if (rc)
 			D_ERROR("Closing VOS I/O context:%p pool:"DF_UUID"\n",
 				pool->vp_io_ctxt, DP_UUID(pool->vp_id));
@@ -182,7 +182,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	PMEMobjpool		*ph;
 	struct umem_attr	 uma;
 	struct umem_instance	 umem;
-	struct eio_xs_context	*xs_ctxt = vos_xsctxt_get();
+	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	struct vos_blob_hdr	 blob_hdr;
 	int rc = 0;
 
@@ -263,7 +263,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	/* Create SPDK blob on NVMe device */
 	D_DEBUG(DB_MGMT, "Creating blob for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(uuid));
-	rc = eio_blob_create(uuid, xs_ctxt, blob_sz);
+	rc = bio_blob_create(uuid, xs_ctxt, blob_sz);
 	if (rc != 0) {
 		D_ERROR("Error creating blob for xs:%p pool:"DF_UUID" rc:%d\n",
 			xs_ctxt, DP_UUID(uuid), rc);
@@ -279,7 +279,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		D_ERROR("Format blob error for xs:%p pool:"DF_UUID" rc:%d\n",
 			xs_ctxt, DP_UUID(uuid), rc);
 		/* Destroy the SPDK blob on error */
-		rc = eio_blob_delete(uuid, xs_ctxt);
+		rc = bio_blob_delete(uuid, xs_ctxt);
 	}
 close:
 	/* Close this local handle, opened using pool_open */
@@ -294,7 +294,7 @@ int
 vos_blob_destroy(void *uuid)
 {
 	uuid_t			*pool_uuid = uuid;
-	struct eio_xs_context	*xs_ctxt = vos_xsctxt_get();
+	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	int			 rc;
 
 	/* NVMe device isn't configured */
@@ -303,7 +303,7 @@ vos_blob_destroy(void *uuid)
 
 	D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(*pool_uuid));
-	rc = eio_blob_delete(*pool_uuid, xs_ctxt);
+	rc = bio_blob_delete(*pool_uuid, xs_ctxt);
 
 	return rc;
 }
@@ -380,7 +380,7 @@ exit:
 int
 vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 {
-	struct eio_xs_context	*xs_ctxt;
+	struct bio_xs_context	*xs_ctxt;
 	struct vos_pool_df	*pool_df;
 	struct vos_pool		*pool;
 	struct umem_attr	*uma;
@@ -448,7 +448,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	D_DEBUG(DB_MGMT, "Opening VOS I/O context for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(uuid));
-	rc = eio_ioctxt_open(&pool->vp_io_ctxt, xs_ctxt, &pool->vp_umm, uuid);
+	rc = bio_ioctxt_open(&pool->vp_io_ctxt, xs_ctxt, &pool->vp_umm, uuid);
 	if (rc) {
 		D_ERROR("Failed to open VOS I/O context for xs:%p "
 			"pool:"DF_UUID" rc=%d\n", xs_ctxt, DP_UUID(uuid), rc);
