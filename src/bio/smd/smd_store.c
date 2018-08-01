@@ -23,7 +23,7 @@
  * DAOS Server Persistent Metadata
  * NVMe Device Persistent Metadata Storage
  */
-#define D_LOGFAC	DD_FAC(eio)
+#define D_LOGFAC	DD_FAC(bio)
 
 #include <sys/stat.h>
 #include <unistd.h>

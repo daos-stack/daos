@@ -36,7 +36,7 @@
 #include <getopt.h>
 
 #include <daos_srv/evtree.h>
-#include <daos_srv/eio.h>
+#include <daos_srv/bio.h>
 #include <daos/tests_lib.h>
 
 /**

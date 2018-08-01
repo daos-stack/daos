@@ -20,11 +20,11 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define D_LOGFAC	DD_FAC(eio)
+#define D_LOGFAC	DD_FAC(bio)
 
 #include <spdk/env.h>
 #include <spdk/blob.h>
-#include "eio_internal.h"
+#include "bio_internal.h"
 
 static void
 dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)

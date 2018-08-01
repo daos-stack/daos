@@ -37,7 +37,7 @@
 #include <daos/checksum.h>
 #include <daos/lru.h>
 #include <daos_srv/daos_server.h>
-#include <daos_srv/eio.h>
+#include <daos_srv/bio.h>
 #include <vos_layout.h>
 #include <vos_obj.h>
 

@@ -20,7 +20,7 @@ def scons():
     daosbench = daos_build.program(denv, 'daosbench', 'daosbench.c', LIBS=libs)
     denv.Install('$PREFIX/bin/', daosbench)
 
-    libs += ['vos', 'eio', 'pthread', 'abt', 'daos_tests']
+    libs += ['vos', 'bio', 'pthread', 'abt', 'daos_tests']
 
     dts_common = denv.Object('dts_common.c')
     daos_perf = daos_build.program(denv, 'daos_perf',

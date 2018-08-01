@@ -33,7 +33,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos_errno.h>
-#include <daos_srv/eio.h>
+#include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
 #include <gurt/list.h>
 #include "srv_internal.h"

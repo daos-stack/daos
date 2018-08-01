@@ -20,10 +20,10 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define D_LOGFAC	DD_FAC(eio)
+#define D_LOGFAC	DD_FAC(bio)
 
 #include <spdk/blob.h>
-#include "eio_internal.h"
+#include "bio_internal.h"
 #include "smd/smd_internal.h"
 
 struct blob_cp_arg {

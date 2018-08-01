@@ -8,7 +8,7 @@ def scons():
     libraries = ['smd', 'pmemobj', 'cmocka', 'daos_common',
                  'uuid', 'abt', 'gurt']
 
-    denv.Append(CPPPATH=['#/src/eio/smd/tests/'])
+    denv.Append(CPPPATH=['#/src/bio/smd/tests/'])
     denv.AppendUnique(LIBPATH=['..'])
     smd_ut = daos_build.test(denv, 'smd_ut', 'smd_ut.c', LIBS=libraries)
     denv.Install('$PREFIX/bin/', smd_ut)

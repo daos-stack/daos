@@ -21,11 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __EIO_INTERNAL_H__
-#define __EIO_INTERNAL_H__
+#ifndef __BIO_INTERNAL_H__
+#define __BIO_INTERNAL_H__
 
 #include <daos_srv/daos_server.h>
-#include <daos_srv/eio.h>
+#include <daos_srv/bio.h>
 
 #define BIO_DMA_PAGE_SHIFT	12		/* 4K */
 #define	BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
@@ -138,13 +138,13 @@ struct bio_desc {
 				 bd_retry:1;
 };
 
-/* eio_xstream.c */
+/* bio_xstream.c */
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
 
-/* eio_buffer.c */
+/* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
 struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt);
 
-#endif /* __EIO_INTERNAL_H__ */
+#endif /* __BIO_INTERNAL_H__ */

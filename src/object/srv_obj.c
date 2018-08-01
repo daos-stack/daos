@@ -36,7 +36,7 @@
 #include <daos_srv/rebuild.h>
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
-#include <daos_srv/eio.h>
+#include <daos_srv/bio.h>
 #include <daos_srv/daos_server.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"

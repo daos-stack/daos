@@ -22,12 +22,12 @@
  */
 
 /*
- * Bulk I/O library provides functionality of bulk I/O over SG list consists
+ * Blob I/O library provides functionality of blob I/O over SG list consists
  * of SCM or NVMe IOVs, PMDK & SPDK are used for SCM and NVMe I/O respectively.
  */
 
-#ifndef __EIO_API_H__
-#define __EIO_API_H__
+#ifndef __BIO_API_H__
+#define __BIO_API_H__
 
 #include <daos/mem.h>
 #include <daos/common.h>
@@ -309,4 +309,4 @@ int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
  */
 struct bio_sglist *bio_iod_sgl(struct bio_desc *biod, unsigned int idx);
 
-#endif /* __EIO_API_H__ */
+#endif /* __BIO_API_H__ */

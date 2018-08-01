@@ -25,7 +25,7 @@
 #define __VOS_TYPES_H__
 
 #include <daos_types.h>
-#include <daos_srv/eio.h>
+#include <daos_srv/bio.h>
 
 enum vos_oi_attr {
 	/** Marks object as failed */

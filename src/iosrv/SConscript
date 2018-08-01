@@ -8,7 +8,7 @@ def scons():
     denv = env.Clone()
 
     libraries = ['daos_common', 'gurt', 'cart', 'vos_srv', 'daos']
-    libraries += ['eio', 'dl', 'uuid', 'pthread', 'abt']
+    libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
     libraries += ['hwloc', 'pmemobj']
 
     prereqs.require(denv, 'hwloc', 'cart', 'argobots')

@@ -31,7 +31,7 @@
 #include <daos_types.h>
 #include <daos/mem.h>
 #include <gurt/list.h>
-#include <daos_srv/eio.h>
+#include <daos_srv/bio.h>
 
 enum {
 	EVT_UMEM_TYPE	= 150,

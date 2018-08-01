@@ -1,4 +1,4 @@
-"""Build extent I/O"""
+"""Build blob I/O"""
 import os
 import daos_build
 
@@ -14,9 +14,9 @@ def scons():
     SConscript('smd/SConscript')
     denv.AppendUnique(LIBPATH=['smd'])
 
-    eio = daos_build.library(denv, "eio", Glob('*.c'),
+    bio = daos_build.library(denv, "bio", Glob('*.c'),
                              LIBS=['numa', 'spdk', 'smd'])
-    denv.Install('$PREFIX/lib/daos_srv', eio)
+    denv.Install('$PREFIX/lib/daos_srv', bio)
 
 if __name__ == "SCons.Script":
     scons()
