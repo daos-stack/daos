@@ -139,7 +139,8 @@ pushd "${TARGET}"
   if [ -d "scons_local" ]; then
     scons_local_commit_raw=$(git submodule status scons_local)
     scons_local_commit1="${scons_local_commit_raw#"-"}"
-    scons_local_commit="${scons_local_commit1% *}"
+    scons_local_commit2="${scons_local_commit1#+}"
+    scons_local_commit="${scons_local_commit2% *}"
     scons_local_commit="${scons_local_commit% *}"
     slc="${scons_local_commit#"${scons_local_commit%%[![:space:]]*}"}"
     scons_local_commit="${slc}"
