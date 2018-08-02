@@ -70,6 +70,18 @@ extern uint64_t DB_IO;
 extern uint64_t DB_TEST;
 extern uint64_t DB_ALL;
 
+/**
+ * d_alt_assert is a pointer to an alternative assert function, meaning an
+ * alternative to the C library assert(). It is declared in gurt/debug.c. See
+ * the example in D_ASSERT for how this is called from a macro.
+ *
+ * \param[in] result		The expression to assert
+ * \param[in] expression	The expression as string
+ * \param[in] file		The file which calls the alternative assert
+ * \param[in] line		The line which calls the alternative assert
+ */
+extern void (*d_alt_assert)(const int, const char*, const char*, const int);
+
 #define DB_ALL_BITS	"all"
 
 #define D_LOG_FILE_ENV	"D_LOG_FILE"	/**< Env to specify log file */
@@ -97,7 +109,7 @@ extern uint64_t DB_ALL;
  * Add a new log facility.
  *
  * \param[in] aname	abbr. name for the facility, for example DSR.
- * \param[ib] lname	long name for the facility, for example DSR.
+ * \param[in] lname	long name for the facility, for example DSR.
  *
  * \return		new positive facility number on success, -1 on error.
  */
@@ -112,7 +124,7 @@ d_add_log_facility(const char *aname, const char *lname)
  *
  * \param[out fac	facility number to be returned
  * \param[in] aname	abbr. name for the facility, for example DSR.
- * \param[ib] lname	long name for the facility, for example DSR.
+ * \param[in] lname	long name for the facility, for example DSR.
  *
  * \return		0 on success, -1 on error.
  */
@@ -141,6 +153,18 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
 int d_log_getdbgbit(uint64_t *dbgbit, char *bitname);
 
 /**
+ * Set an alternative assert function. This is useful in unit testing when you
+ * may want to replace assert() with cmocka's mock_assert() so that you can
+ * test if a function throws an assertion with cmocka's expect_assert_failure().
+ *
+ * \param[in] *alt_assert	Function pointer to the alternative assert
+ *
+ * \return			0 on success, -DER_INVAL on error
+ */
+int d_register_alt_assert(void (*alt_assert)(const int, const char*,
+			  const char*, const int));
+
+/**
  * D_PRINT_ERR must be used for any error logging before clog is enabled or
  * after it is disabled
  */
@@ -160,7 +184,12 @@ int d_log_getdbgbit(uint64_t *dbgbit, char *bitname);
 		fflush(stdout);						\
 	} while (0)
 
-#define D_ASSERT(e)	assert(e)
+#define D_ASSERT(e)							\
+	do {								\
+		if (d_alt_assert != NULL)				\
+			d_alt_assert((int64_t)(e), #e, __FILE__, __LINE__);\
+		assert(e);						\
+	} while (0)
 
 #define D_ASSERTF(cond, fmt, ...)					\
 do {									\

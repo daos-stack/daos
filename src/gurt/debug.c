@@ -50,6 +50,9 @@ static int d_log_refcount;
 int d_misc_logfac;
 int d_mem_logfac;
 
+/* An alternative assert function. Set with d_register_alt_assert() */
+void (*d_alt_assert)(const int, const char*, const char*, const int);
+
 /*
  * Debug bits for common logic paths, can only have up to 16 different bits.
  */
@@ -546,4 +549,14 @@ int d_log_getdbgbit(uint64_t *dbgbit, char *bitname)
 	}
 
 	return -1;
+}
+
+int d_register_alt_assert(void (*alt_assert)(const int, const char*,
+			  const char*, const int))
+{
+	if (alt_assert != NULL) {
+		d_alt_assert = alt_assert;
+		return 0;
+	}
+	return -DER_INVAL;
 }
