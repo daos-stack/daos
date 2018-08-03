@@ -60,8 +60,8 @@ class RebuildStatus(ctypes.Structure):
     """ Structure to represent rebuild status info """
     _fields_ = [("rs_version", ctypes.c_uint32),
                 ("rs_pad_32", ctypes.c_uint32),
-                ("rs_errno", ctypes.c_uint32),
-                ("rs_done", ctypes.c_uint32),
+                ("rs_errno", ctypes.c_int32),
+                ("rs_done", ctypes.c_int32),
                 ("rs_obj_nr", ctypes.c_uint64),
                 ("rs_rec_nr", ctypes.c_uint64)]
 
@@ -231,6 +231,20 @@ def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
     qfunc = context.get_function('destroy-eq')
     qfunc(ctypes.byref(qhandle))
 
+def c_uuid(puuid, cuuid):
+    """ utility function to create a UUID in C format from a python UUID """
+    hexstr = puuid.hex
+    for i in range (0,31,2):
+        cuuid[i/2] = int(hexstr[i:i+2], 16)
+
+def str_to_c_uuid(uuidstr):
+    """ utility function to convert string format uuid to a C uuid """
+    uuidstr2 = '{' + uuidstr + '}'
+    puuid = uuid.UUID(uuidstr2)
+    cuuid = (ctypes.c_ubyte * 16)()
+    c_uuid(puuid, cuuid)
+    return cuuid
+
 def c_uuid_to_str(uuid):
     """ utility function to convert a C uuid into a standard string format """
     uuid_str = '{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}'\
@@ -239,12 +253,6 @@ def c_uuid_to_str(uuid):
                    uuid[6], uuid[7], uuid[8], uuid[9], uuid[10], uuid[11],
                    uuid[12], uuid[13], uuid[14], uuid[15])
     return uuid_str
-
-def c_uuid(p_uuid, c_uuid):
-    """ utility function to create a UUID in C format from a python UUID """
-    hexstr = p_uuid.hex
-    for i in range (0,31,2):
-        c_uuid[i/2] = int(hexstr[i:i+2], 16)
 
 # python API starts here
 class CallbackEvent(object):
@@ -270,6 +278,9 @@ class DaosPool(object):
     def get_uuid_str(self):
         return c_uuid_to_str(self.uuid)
 
+    def set_uuid_str(self, uuidstr):
+        return c_uuid_to_str(self.uuid)
+
     def create(self, mode, uid, gid, size, group, target_list=None,
                cb_func=None):
         """ send a pool creation request to the daos server group """
@@ -282,7 +293,7 @@ class DaosPool(object):
         else:
             self.group = None
         self.uuid = (ctypes.c_ubyte * 16)()
-        rank = ctypes.c_uint(1)
+        rank = ctypes.c_uint(99)
         rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
         c_whatever = ctypes.create_string_buffer(b"rubbish")
         self.svc = RankList(rl_ranks, 1)
@@ -909,6 +920,7 @@ class DaosContainer(object):
         if rc != 0:
             raise ValueError("Epoch hold returned non-zero. RC: {0}"
                              .format(rc))
+
         return c_epoch.value;
 
     def commit_epoch(self, epoch):

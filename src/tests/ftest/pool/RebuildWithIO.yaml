@@ -12,30 +12,17 @@ timeout: 5000
 server:
   server_group: daos_server
 testparams:
-  ranks: !mux
-    rank1:
+  ranks:
+    rank5:
       rank: 5
-    rank4:
-      rank: 4
-    rank3:
-      rank: 3
   createmode:
     mode: 511
   createset:
     setname: daos_server
   createsize:
     size: 1073741824
-  numobjects: !mux
-    zero:
-      objcount: 0
+  numobjects:
     one:
       objcount: 1
-    fifty:
-      objcount: 20
-  numrecords: !mux
-    one:
-      reccount: 1
-    fifty:
-      reccount: 10
   datasize:
     size: 250

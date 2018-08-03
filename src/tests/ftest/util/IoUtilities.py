@@ -22,8 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-#import os
-#import sys
 import time
 import random
 import string
@@ -46,17 +44,15 @@ def ContinousIo(container, seconds):
                        for _ in range(size))
 
         # write it then read it back
-        oid, epoch = container.write_an_obj(data, size, dkey, akey, oid)
+        oid, epoch = container.write_an_obj(data, size, dkey, akey, oid, 5)
         data2 = container.read_an_obj(size, dkey, akey, oid, epoch)
 
         # verify it came back correctly
         if data != data2.value:
-            print "data>{}".format(data)
-            print "data2>{}".format(data2.value)
             raise ValueError("Data mismatch in ContinousIo")
 
         # collapse down the commited epochs
-        container.slip_epoch()
+        container.consolidate_epochs()
 
         total_written += size
 

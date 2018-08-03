@@ -74,6 +74,9 @@ def runServer(hostfile, setname, basepath):
         server_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
         server_cmd += "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR -x D_LOG_FILE="
         server_cmd += basepath + "/install/tmp/daos.log "
+        # uncomment if you prefer separate logs per server (and comment above)
+        #server_cmd += "/tmp/daos.log "
+        server_cmd += "-x DD_SUBSYS=all -x DD_MASK=all "
         server_cmd += "-x LD_LIBRARY_PATH={0} ".format(ld_lib_path)
         server_cmd += daos_srv_bin + " -g {0} -c 1 ".format(setname)
         server_cmd += " -a" + basepath + "/install/tmp/"
