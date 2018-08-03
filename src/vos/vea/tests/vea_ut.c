@@ -85,8 +85,6 @@ ut_format(void **state)
 	rc = vea_format(&args->vua_umm, &args->vua_txd, args->vua_md, blk_sz,
 			hdr_blks, capacity, NULL, NULL, true);
 	assert_int_equal(rc, 0);
-
-	/* TODO: Test VOS format callback */
 }
 
 static void
@@ -101,8 +99,40 @@ ut_load(void **state)
 	rc = vea_load(&args->vua_umm, &args->vua_txd, args->vua_md, &unmap_ctxt,
 		      &args->vua_vsi);
 	assert_int_equal(rc, 0);
+}
 
-	/* TODO: Test VOS unmap callback */
+static void
+ut_query(void **state)
+{
+	struct vea_ut_args	*args = *state;
+	struct vea_attr		 attr;
+	struct vea_stat		 stat;
+	uint32_t		 blk_sz, hdr_blks, tot_blks;
+	int			 rc;
+
+	rc = vea_query(args->vua_vsi, &attr, &stat);
+	assert_int_equal(rc, 0);
+
+	/* the values from ut_format() */
+	blk_sz = (1 << 12);
+	hdr_blks = 1;
+	tot_blks = ((VEA_LARGE_EXT_MB * 2) << 20) / blk_sz - hdr_blks;
+
+	/* verify the attributes */
+	assert_int_equal(attr.va_blk_sz, blk_sz);
+	assert_int_equal(attr.va_hdr_blks, hdr_blks);
+	assert_int_equal(attr.va_large_thresh,
+			 (VEA_LARGE_EXT_MB << 20) / blk_sz);
+	assert_int_equal(attr.va_tot_blks, tot_blks);
+
+	/* verify the statistics */
+	assert_int_equal(stat.vs_large_frags, 1);
+	assert_int_equal(stat.vs_small_frags, 0);
+	assert_int_equal(stat.vs_resrv_hint, 0);
+	assert_int_equal(stat.vs_resrv_large, 0);
+	assert_int_equal(stat.vs_resrv_small, 0);
+	assert_int_equal(stat.vs_resrv_vec, 0);
+	assert_int_equal(stat.vs_largest_blks, tot_blks);
 }
 
 static void
@@ -121,13 +151,14 @@ ut_hint_load(void **state)
 static void
 ut_reserve(void **state)
 {
-	struct vea_ut_args *args = *state;
-	uint64_t off_a, off_b;
-	uint32_t blk_cnt;
-	struct vea_resrvd_ext *ext;
-	struct vea_hint_context *h_ctxt;
-	d_list_t *r_list;
-	int rc, ext_cnt;
+	struct vea_ut_args	*args = *state;
+	uint64_t		 off_a, off_b;
+	uint32_t		 blk_cnt;
+	struct vea_resrvd_ext	*ext;
+	struct vea_hint_context	*h_ctxt;
+	d_list_t		*r_list;
+	struct vea_stat		 stat;
+	int			 rc, ext_cnt;
 
 	/*
 	 * Reserve two extents from I/O stream 0 and I/O stream 1 in
@@ -215,6 +246,21 @@ ut_reserve(void **state)
 	/* Verify persistent is not allocated */
 	rc = vea_verify_alloc(args->vua_vsi, false, off_a, blk_cnt);
 	assert_int_equal(rc, 1);
+
+	/* Verify statistics */
+	rc = vea_query(args->vua_vsi, NULL, &stat);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(stat.vs_large_frags, 0);
+	assert_int_equal(stat.vs_largest_blks, 0);
+	assert_int_equal(stat.vs_small_frags, 2);
+	/* 2 hint from the second reserve for io stream 0 & 1 */
+	assert_int_equal(stat.vs_resrv_hint, 2);
+	/* 2 large from the first reserve for io stream 0 & 1 */
+	assert_int_equal(stat.vs_resrv_large, 2);
+	/* 1 small from the reserve for io stream 2 */
+	assert_int_equal(stat.vs_resrv_small, 1);
+	assert_int_equal(stat.vs_resrv_vec, 0);
 }
 
 static void
@@ -892,7 +938,27 @@ ut_free_invalid_space(void **state)
 	ut_teardown(&args);
 }
 
-#define EXTENT_COUNT (4)
+static void
+print_stats(struct vea_ut_args *args, bool verbose)
+{
+	struct vea_stat	stat;
+	int		rc;
+
+	rc = vea_query(args->vua_vsi, NULL, &stat);
+	assert_int_equal(rc, 0);
+	print_message("large_frags:"DF_U64", small_frags:"DF_U64", "
+		      "largest_ext_blks:%u\n"
+		      "resrv_hint:"DF_U64"\nresrv_large:"DF_U64"\n"
+		      "resrv_small:"DF_U64"\nresrv_vec:"DF_U64"\n",
+		      stat.vs_large_frags, stat.vs_small_frags,
+		      stat.vs_largest_blks,
+		      stat.vs_resrv_hint, stat.vs_resrv_large,
+		      stat.vs_resrv_small, stat.vs_resrv_vec);
+
+	if (verbose)
+		vea_dump(args->vua_vsi, true);
+}
+
 static void
 ut_interleaved_ops(void **state)
 {
@@ -1037,6 +1103,7 @@ ut_interleaved_ops(void **state)
 
 	rc = umem_tx_commit(&args.vua_umm);
 	assert_int_equal(rc, 0);
+	print_stats(&args, true);
 
 	vea_hint_unload(args.vua_hint_ctxt[0]);
 	vea_unload(args.vua_vsi);
@@ -1048,7 +1115,6 @@ ut_fragmentation(void **state)
 {
 	struct vea_ut_args args;
 	struct vea_unmap_context unmap_ctxt;
-	struct vea_hint_context *h_ctxt;
 	struct vea_resrvd_ext *ext;
 	struct vea_resrvd_ext *tmp_ext;
 	d_list_t *r_list;
@@ -1077,13 +1143,12 @@ ut_fragmentation(void **state)
 	srand(time(0));
 	cur_stream = 0;
 	r_list = &args.vua_resrvd_list[cur_stream];
-	h_ctxt = args.vua_hint_ctxt[cur_stream];
 	max_blocks = args.vua_vsi->vsi_class.vfc_large_thresh;
 	/* Keep reserving until we run out of space */
 	while (rc == 0) {
 		/* Get a random number greater than 2 */
 		block_count = (rand() % max_blocks - 1) + 2;
-		rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list);
+		rc = vea_reserve(args.vua_vsi, block_count, NULL, r_list);
 	}
 
 	/* Free some of the fragments. The cancelled ones remain in r_list */
@@ -1099,7 +1164,7 @@ ut_fragmentation(void **state)
 	/* Publish the ones to persist */
 	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
 	assert_int_equal(rc, 0);
-	rc = vea_tx_publish(args.vua_vsi, h_ctxt, &persist_list);
+	rc = vea_tx_publish(args.vua_vsi, NULL, &persist_list);
 	assert_int_equal(rc, 0);
 	rc = umem_tx_commit(&args.vua_umm);
 	assert_int_equal(rc, 0);
@@ -1112,16 +1177,15 @@ ut_fragmentation(void **state)
 	}
 
 	print_message("Fragments:\n");
-	vea_dump(args.vua_vsi, true);
+	print_stats(&args, false);
 
 	/* Try to allocate on multiple I/O streams until no space available*/
 	while (rc == 0) {
 		for (cur_stream = 0; cur_stream < IO_STREAM_CNT; cur_stream++) {
 			r_list = &args.vua_resrvd_list[cur_stream];
-			h_ctxt = args.vua_hint_ctxt[cur_stream];
 			/* Get a random number greater than 2 */
 			block_count = (rand() % max_blocks - 1) + 2;
-			rc = vea_reserve(args.vua_vsi, block_count, h_ctxt,
+			rc = vea_reserve(args.vua_vsi, block_count, NULL,
 					 r_list);
 			if (rc != 0) {
 				assert_true(rc == -DER_NOSPACE);
@@ -1130,7 +1194,7 @@ ut_fragmentation(void **state)
 		}
 	}
 	print_message("Fragments after more reservations:\n");
-	vea_dump(args.vua_vsi, true);
+	print_stats(&args, false);
 
 	vea_unload(args.vua_vsi);
 	ut_teardown(&args);
@@ -1139,6 +1203,7 @@ ut_fragmentation(void **state)
 static const struct CMUnitTest vea_uts[] = {
 	{ "vea_format", ut_format, NULL, NULL},
 	{ "vea_load", ut_load, NULL, NULL},
+	{ "vea_query", ut_query, NULL, NULL},
 	{ "vea_hint_load", ut_hint_load, NULL, NULL},
 	{ "vea_reserve", ut_reserve, NULL, NULL},
 	{ "vea_cancel", ut_cancel, NULL, NULL},

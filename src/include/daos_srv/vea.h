@@ -107,20 +107,37 @@ struct vea_unmap_context {
 /* Free space tracking information on SCM */
 struct vea_space_df {
 	uint32_t	vsd_magic;
+	uint32_t	vsd_compat;
 	/* Block size, 4k bytes by default */
 	uint32_t	vsd_blk_sz;
+	/* Reserved blocks for the block device header */
+	uint32_t	vsd_hdr_blks;
 	/* Block device capacity */
 	uint64_t	vsd_tot_blks;
-	/* Allocated blocks */
-	uint64_t	vsd_tot_used;
-	/* Total free fragments */
-	uint64_t	vsd_free_frags;
-	/* Reserved blocks for the block device header */
-	uint64_t	vsd_hdr_blks;
 	/* Free extent tree, sorted by offset */
 	struct btr_root	vsd_free_tree;
 	/* Allocated extent vector tree, for non-contiguous allocation */
 	struct btr_root	vsd_vec_tree;
+};
+
+/* VEA attributes */
+struct vea_attr {
+	uint32_t	va_compat;	/* VEA compatibility*/
+	uint32_t	va_blk_sz;	/* Block size in bytes */
+	uint32_t	va_hdr_blks;	/* Blocks for header */
+	uint32_t	va_large_thresh;/* Large extent threshold in blocks */
+	uint64_t	va_tot_blks;	/* Total capacity in blocks */
+};
+
+/* VEA statistics */
+struct vea_stat {
+	uint64_t	vs_large_frags;	/* Large free frags */
+	uint64_t	vs_small_frags;	/* Small free frags */
+	uint64_t	vs_resrv_hint;	/* Number of hint reserve */
+	uint64_t	vs_resrv_large;	/* Number of large reserve */
+	uint64_t	vs_resrv_small;	/* Number of small reserve */
+	uint64_t	vs_resrv_vec;	/* Number of vector reserve */
+	uint32_t	vs_largest_blks;/* Largest free frag size in blocks */
 };
 
 struct vea_space_info;
@@ -284,5 +301,17 @@ int vea_set_ext_age(struct vea_space_info *vsi, uint64_t blk_off, uint64_t age);
 int vea_get_ext_vector(struct vea_space_info *vsi, uint64_t blk_off,
 		       uint32_t blk_cnt, struct vea_ext_vector *ext_vector);
 
-#endif /* __VEA_API_H__ */
+/**
+ * Query space attributes and allocation statistics.
+ *
+ * \param vsi       [IN]	In-memory compound index
+ * \param attr      [OUT]	Space attributes
+ * \param stat      [OUT]	Allocation statistics
+ *
+ * \return			Zero on success; Appropriated negative value
+ *				on error
+ */
+int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
+	      struct vea_stat *stat);
 
+#endif /* __VEA_API_H__ */

@@ -90,10 +90,18 @@ struct vea_free_class {
 	struct free_ext_cursor	*vfc_cursor;
 };
 
+enum {
+	STAT_RESRV_HINT	= 0,
+	STAT_RESRV_LARGE,
+	STAT_RESRV_SMALL,
+	STAT_RESRV_VEC,
+	STAT_MAX,
+};
+
 /* In-memory compound index */
 struct vea_space_info {
 	/* Instance for the pmemobj pool on SCM */
-	struct umem_instance	*vsi_umem;
+	struct umem_instance		*vsi_umem;
 	/*
 	 * Stage callback data used by PMDK transaction.
 	 *
@@ -102,30 +110,30 @@ struct vea_space_info {
 	 */
 	struct umem_tx_stage_data	*vsi_txd;
 	/* Free space information stored on SCM */
-	struct vea_space_df	*vsi_md;
+	struct vea_space_df		*vsi_md;
 	/* Open handles for the persistent free extent tree */
-	daos_handle_t		 vsi_md_free_btr;
+	daos_handle_t			 vsi_md_free_btr;
 	/* Open handles for the persistent extent vector tree */
-	daos_handle_t		 vsi_md_vec_btr;
+	daos_handle_t			 vsi_md_vec_btr;
 	/* Free extent tree sorted by offset, for all free extents. */
-	daos_handle_t		 vsi_free_btr;
+	daos_handle_t			 vsi_free_btr;
 	/* Extent vector tree, for non-contiguous allocation */
-	daos_handle_t		 vsi_vec_btr;
-	/* Reserved blocks in total */
-	uint64_t		 vsi_tot_resrvd;
+	daos_handle_t			 vsi_vec_btr;
 	/* Index for searching free extent by size & age */
-	struct vea_free_class	 vsi_class;
+	struct vea_free_class		 vsi_class;
 	/* LRU to aggergate just recent freed extents */
-	d_list_t		 vsi_agg_lru;
+	d_list_t			 vsi_agg_lru;
 	/*
 	 * Free extent tree sorted by offset, for coalescing the just recent
 	 * free extents.
 	 */
-	daos_handle_t		 vsi_agg_btr;
+	daos_handle_t			 vsi_agg_btr;
 	/* Last aggregation time */
-	uint64_t		 vsi_agg_time;
+	uint64_t			 vsi_agg_time;
 	/* Unmap context to performe unmap against freed extent */
-	struct vea_unmap_context	vsi_unmap_ctxt;
+	struct vea_unmap_context	 vsi_unmap_ctxt;
+	/* Statistics */
+	uint64_t			 vsi_stat[STAT_MAX];
 };
 
 static inline bool ext_is_idle(struct vea_free_extent *vfe)

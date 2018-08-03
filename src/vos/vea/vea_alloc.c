@@ -114,6 +114,8 @@ reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 	resrvd->vre_blk_off = vfe.vfe_blk_off;
 	resrvd->vre_blk_cnt = vfe.vfe_blk_cnt;
 
+	vsi->vsi_stat[STAT_RESRV_HINT] += 1;
+
 	D_DEBUG(DB_IO, "["DF_U64", %u]\n", resrvd->vre_blk_off,
 		resrvd->vre_blk_cnt);
 
@@ -195,6 +197,8 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 
 	resrvd->vre_blk_off = vfe.vfe_blk_off;
 	resrvd->vre_blk_cnt = blk_cnt;
+
+	vsi->vsi_stat[STAT_RESRV_LARGE] += 1;
 
 	D_DEBUG(DB_IO, "["DF_U64", %u]\n", resrvd->vre_blk_off,
 		resrvd->vre_blk_cnt);
@@ -329,6 +333,8 @@ reserve_small(struct vea_space_info *vsi, uint32_t blk_cnt,
 
 			resrvd->vre_blk_off = vfe.vfe_blk_off;
 			resrvd->vre_blk_cnt = blk_cnt;
+
+			vsi->vsi_stat[STAT_RESRV_SMALL] += 1;
 
 			D_DEBUG(DB_IO, "["DF_U64", %u]\n",
 				resrvd->vre_blk_off, resrvd->vre_blk_cnt);

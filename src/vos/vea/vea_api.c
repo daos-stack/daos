@@ -123,10 +123,9 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 		goto out;
 
 	md->vsd_magic = VEA_MAGIC;
+	md->vsd_compat = 0;
 	md->vsd_blk_sz = blk_sz;
 	md->vsd_tot_blks = tot_blks;
-	md->vsd_tot_used = 0;
-	md->vsd_free_frags = 0;
 	md->vsd_hdr_blks = hdr_blks;
 
 	/* Create free extent tree */
@@ -233,7 +232,6 @@ vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	D_INIT_LIST_HEAD(&vsi->vsi_agg_lru);
 	vsi->vsi_agg_btr = DAOS_HDL_INVAL;
 	vsi->vsi_vec_btr = DAOS_HDL_INVAL;
-	vsi->vsi_tot_resrvd = 0;
 	vsi->vsi_agg_time = 0;
 	vsi->vsi_unmap_ctxt = *unmap_ctxt;
 
@@ -597,4 +595,59 @@ void
 vea_hint_unload(struct vea_hint_context *thc)
 {
 	D_FREE_PTR(thc);
+}
+
+/* Query attributes and statistics */
+int
+vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
+	  struct vea_stat *stat)
+{
+	D_ASSERT(vsi != NULL);
+	if (attr == NULL && stat == NULL)
+		return -DER_INVAL;
+
+	/* Trigger free extents migration */
+	migrate_free_exts(vsi);
+
+	if (attr != NULL) {
+		struct vea_space_df *vsd = vsi->vsi_md;
+
+		attr->va_compat = vsd->vsd_compat;
+		attr->va_blk_sz = vsd->vsd_blk_sz;
+		attr->va_hdr_blks = vsd->vsd_hdr_blks;
+		attr->va_large_thresh = vsi->vsi_class.vfc_large_thresh;
+		attr->va_tot_blks = vsd->vsd_tot_blks;
+	}
+
+	if (stat != NULL) {
+		struct vea_free_class	*vfc = &vsi->vsi_class;
+		int			 i;
+
+		stat->vs_large_frags = d_binheap_size(&vfc->vfc_heap);
+
+		stat->vs_small_frags = 0;
+		for (i = 0; i < vfc->vfc_lru_cnt; i++) {
+			d_list_t *pos, *lru = &vfc->vfc_lrus[i];
+
+			d_list_for_each(pos, lru)
+				stat->vs_small_frags++;
+		}
+
+		stat->vs_largest_blks = 0;
+		if (!d_binheap_is_empty(&vfc->vfc_heap)) {
+			struct d_binheap_node	*root;
+			struct vea_entry	*entry;
+
+			root = d_binheap_root(&vfc->vfc_heap);
+			entry = container_of(root, struct vea_entry, ve_node);
+			stat->vs_largest_blks = entry->ve_ext.vfe_blk_cnt;
+		}
+
+		stat->vs_resrv_hint = vsi->vsi_stat[STAT_RESRV_HINT];
+		stat->vs_resrv_large = vsi->vsi_stat[STAT_RESRV_LARGE];
+		stat->vs_resrv_small = vsi->vsi_stat[STAT_RESRV_SMALL];
+		stat->vs_resrv_vec = vsi->vsi_stat[STAT_RESRV_VEC];
+	}
+
+	return 0;
 }
