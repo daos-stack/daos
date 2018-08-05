@@ -149,7 +149,8 @@ pool_create(void)
 			      DSS_PSETID /* daos server process set ID */,
 			      NULL /* list of targets, NULL = all */,
 			      NULL /* storage type to use, use default */,
-			      10 * 1024 * 1024 * 1024UL /* target size, 10G */,
+			      10ULL << 30 /* target SCM size, 10G */,
+			      40ULL << 30 /* target NVMe size, 40G */,
 			      &svcl /* pool service nodes, used for connect */,
 			      pool_uuid, /* the uuid of the pool created */
 			      NULL /* event, use blocking call for now */);

@@ -172,8 +172,8 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 
 	rc = daos_pool_create(cp_options.mode, cp_options.uid,
 			      cp_options.gid, cp_options.server_group,
-				   NULL, "rubbish", cp_options.size, &svc,
-				   uuid, NULL);
+			      NULL, "rubbish", cp_options.size, 0, &svc,
+			      uuid, NULL);
 
 	if (rc) {
 		printf("Pool create fail, result: %s\n", d_errstr(rc));

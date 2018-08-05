@@ -4,7 +4,8 @@ D_DEBUG=${D_DEBUG:-""}
 D_SUBSYS=${D_SUBSYS:-""}
 D_LOG=${D_LOG:-"/tmp/daos_perf.log"}
 
-POOL_SIZE=${POOL_SIZE:-2}
+POOL_SCM_SIZE=${POOL_SCM_SIZE:-2}
+POOL_NVME_SIZE=${POOL_NVME_SIZE:-8}
 TCLASS=${TCLASS:-"vos"}
 AKEY_P_DKEY=${AKEY_P_DKEY:-200}
 RECX_P_AKEY=${RECX_P_AKEY:-1000}
@@ -45,7 +46,8 @@ $ORTERUN 				\
 	-x D_LOG_FILE=$D_LOG		\
 	${DAOS_PERF}			\
 	-T $TCLASS			\
-	-P "${POOL_SIZE}G"		\
+	-P "${POOL_SCM_SIZE}G"		\
+	-N "${POOL_NVME_SIZE}G"		\
 	-d 1				\
 	-a $AKEY_P_DKEY			\
 	-r $RECX_P_AKEY			\

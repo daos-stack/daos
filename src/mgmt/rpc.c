@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,8 @@ struct crt_msg_field *mgmt_pool_create_in_fields[] = {
 	&CMF_STRING,		/* pc_grp */
 	&CMF_STRING,		/* pc_tgt_dev */
 	&CMF_RANK_LIST,		/* pc_tgts */
-	&DMF_DAOS_SIZE,		/* pc_tgt_size */
+	&DMF_DAOS_SIZE,		/* pc_scm_size */
+	&DMF_DAOS_SIZE,		/* pc_nvme_size */
 	&CMF_UINT32,		/* pc_svc_nr */
 	&CMF_UINT32,		/* pc_mode */
 	&CMF_UINT32,		/* pc_uid */
@@ -58,7 +59,8 @@ struct crt_msg_field *mgmt_pool_destroy_out_fields[] = {
 struct crt_msg_field *mgmt_tgt_create_in_fields[] = {
 	&CMF_UUID,		/* tc_pool_uuid */
 	&CMF_STRING,		/* tc_tgt_dev */
-	&DMF_DAOS_SIZE		/* tc_tgt_size */
+	&DMF_DAOS_SIZE,		/* tc_scm_size */
+	&DMF_DAOS_SIZE		/* tc_nvme_size */
 };
 
 struct crt_msg_field *mgmt_tgt_create_out_fields[] = {

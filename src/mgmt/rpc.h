@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,8 +55,9 @@ struct mgmt_pool_create_in {
 	uuid_t			 pc_pool_uuid;
 	d_string_t		 pc_grp;
 	d_string_t		 pc_tgt_dev;
-	d_rank_list_t	*pc_tgts;
-	daos_size_t		 pc_tgt_size;
+	d_rank_list_t		*pc_tgts;
+	daos_size_t		 pc_scm_size;
+	daos_size_t		 pc_nvme_size;
 	uint32_t		 pc_svc_nr;
 	uint32_t		 pc_mode;
 	uint32_t		 pc_uid;
@@ -81,7 +82,8 @@ struct mgmt_pool_destroy_out {
 struct mgmt_tgt_create_in {
 	uuid_t			tc_pool_uuid;
 	d_string_t		tc_tgt_dev;
-	daos_size_t		tc_tgt_size;
+	daos_size_t		tc_scm_size;
+	daos_size_t		tc_nvme_size;
 };
 
 struct mgmt_tgt_create_out {

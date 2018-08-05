@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ mdr_stop_pool_svc(void **argv)
 	if (arg->myrank == 0) {
 		print_message("creating pool\n");
 		rc = daos_pool_create(0731, geteuid(), getegid(), arg->group,
-				      NULL, "pmem", 128*1024*1024,
+				      NULL, "pmem", 128*1024*1024, 0,
 				      &arg->pool.svc, uuid, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -135,8 +135,8 @@ mdr_stop_cont_svc(void **argv)
 
 	print_message("creating pool\n");
 	rc = daos_pool_create(0731, geteuid(), getegid(), arg->group, NULL,
-			      "pmem", 128*1024*1024, &arg->pool.svc, pool_uuid,
-			      NULL);
+			      "pmem", 128*1024*1024, 0, &arg->pool.svc,
+			      pool_uuid, NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->pool.svc.rl_nr < 3) {

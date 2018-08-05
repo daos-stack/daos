@@ -268,8 +268,8 @@ ds_mgmt_tgt_pool_iterate(int (*cb)(const uuid_t uuid, void *arg), void *arg)
 
 struct vos_pool_arg {
 	uuid_t		vpa_uuid;
-	daos_size_t	vpa_scm_sz;
-	daos_size_t	vpa_blob_sz;
+	daos_size_t	vpa_scm_size;
+	daos_size_t	vpa_nvme_size;
 };
 
 static int
@@ -286,7 +286,7 @@ tgt_vos_create_one(void *varg)
 		return rc;
 
 	rc = vos_pool_create(path, (unsigned char *)vpa->vpa_uuid,
-			     vpa->vpa_scm_sz, vpa->vpa_blob_sz);
+			     vpa->vpa_scm_size, vpa->vpa_nvme_size);
 	if (rc)
 		D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
 			DP_UUID(vpa->vpa_uuid), path, rc);
@@ -297,17 +297,19 @@ tgt_vos_create_one(void *varg)
 }
 
 static int
-tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
+tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 {
-	daos_size_t	 size;
+	daos_size_t	 scm_size, nvme_size;
 	char		*path = NULL;
 	int		 i, fd = -1, rc = 0;
 
 	/**
 	 * Create one VOS file per execution stream
-	 * 16MB minimum per file
+	 * 16MB minimum per pmemobj file (SCM partition)
 	 */
-	size = max(tgt_size / dss_nxstreams, 1 << 24);
+	D_ASSERT(dss_nxstreams > 0);
+	scm_size = max(tgt_scm_size / dss_nxstreams, 1 << 24);
+	nvme_size = tgt_nvme_size / dss_nxstreams;
 	/** tc_in->tc_tgt_dev is assumed to point at PMEM for now */
 
 	for (i = 0; i < dss_nxstreams; i++) {
@@ -334,12 +336,12 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		 * Use fallocate(2) instead of posix_fallocate(3) since the
 		 * latter is bogus with tmpfs.
 		 */
-		rc = fallocate(fd, 0, 0, size);
+		rc = fallocate(fd, 0, 0, scm_size);
 		if (rc) {
 			rc = daos_errno2der(errno);
 			D_ERROR(DF_UUID": failed to allocate vos file %s with "
-				"size: "DF_U64", rc: %d, %s.\n",
-				DP_UUID(uuid), path, size, rc, strerror(errno));
+				"size: "DF_U64", rc: %d, %s.\n", DP_UUID(uuid),
+				path, scm_size, rc, strerror(errno));
 			break;
 		}
 
@@ -363,12 +365,8 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 
 		uuid_copy(vpa.vpa_uuid, uuid);
 		/* A zero size accommodates the existing file */
-		vpa.vpa_scm_sz = 0;
-		/*
-		 * The blob size should be NVME_RATIO * total_pool_size, we
-		 * just set it as pool size for this moment.
-		 */
-		vpa.vpa_blob_sz = size;
+		vpa.vpa_scm_size = 0;
+		vpa.vpa_nvme_size = nvme_size;
 
 		rc = dss_thread_collective(tgt_vos_create_one, &vpa);
 	}
@@ -378,7 +376,8 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 }
 
 static int
-tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t size, char *path)
+tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
+	   daos_size_t nvme_size, char *path)
 {
 	char	*newborn = NULL;
 	int	 rc;
@@ -397,7 +396,7 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t size, char *path)
 	}
 
 	/** create VOS files */
-	rc = tgt_vos_create(pool_uuid, size);
+	rc = tgt_vos_create(pool_uuid, scm_size, nvme_size);
 	if (rc)
 		D_GOTO(out_tree, rc);
 
@@ -534,7 +533,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	} else if (errno == ENOENT) {
 		/** target doesn't exist, create one */
 		rc = tgt_create(tc_in->tc_pool_uuid, tgt_uuid,
-				tc_in->tc_tgt_size, path);
+				tc_in->tc_scm_size, tc_in->tc_nvme_size, path);
 	} else {
 		rc = daos_errno2der(errno);
 	}

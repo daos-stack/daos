@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,8 +69,10 @@ struct dts_context {
 	int			 tsc_mpi_size;
 	uuid_t			 tsc_pool_uuid;	/**< pool uuid */
 	uuid_t			 tsc_cont_uuid;	/**< container uuid */
-	/** pool size to create */
-	uint64_t		 tsc_pool_size;
+	/** pool SCM partition size */
+	uint64_t		 tsc_scm_size;
+	/** pool NVMe partition size */
+	uint64_t		 tsc_nvme_size;
 	/** number of I/O credits (tsc_credits) */
 	int			 tsc_cred_nr;
 	/** value size for \a tsc_credits */

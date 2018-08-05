@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,8 +75,8 @@ daos_mgmt_params_set(const char *grp, d_rank_t rank, unsigned int key_id,
 int
 daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 		 const d_rank_list_t *tgts, const char *dev,
-		 daos_size_t size, d_rank_list_t *svc, uuid_t uuid,
-		 daos_event_t *ev)
+		 daos_size_t scm_size, daos_size_t nvme_size,
+		 d_rank_list_t *svc, uuid_t uuid, daos_event_t *ev)
 {
 	daos_pool_create_t	*args;
 	tse_task_t		*task;
@@ -94,7 +94,8 @@ daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 	args->grp	= grp;
 	args->tgts	= tgts;
 	args->dev	= dev;
-	args->size	= size;
+	args->scm_size	= scm_size;
+	args->nvme_size	= nvme_size;
 	args->svc	= svc;
 	args->uuid	= uuid;
 

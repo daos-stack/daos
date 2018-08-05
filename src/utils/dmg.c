@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,8 @@
 #include <daos/mgmt.h>
 
 const unsigned int	 default_mode = 0731;
-const char		*default_size = "256M";
+const char		*default_scm_size = "256M";
+const char		*default_nvme_size = "8G";
 const char		*default_group;
 const unsigned int	 default_svc_nreplicas = 1;
 
@@ -99,6 +100,7 @@ create_hdlr(int argc, char *argv[])
 		{"group",	required_argument,	NULL,	'G'},
 		{"mode",	required_argument,	NULL,	'm'},
 		{"size",	required_argument,	NULL,	's'},
+		{"nvme",	required_argument,	NULL,	'n'},
 		{"target",	required_argument,	NULL,	't'},
 		{"svcn",	required_argument,	NULL,	'v'},
 		{"uid",		required_argument,	NULL,	'u'},
@@ -107,7 +109,8 @@ create_hdlr(int argc, char *argv[])
 	unsigned int		mode = default_mode;
 	unsigned int		uid = geteuid();
 	unsigned int		gid = getegid();
-	daos_size_t		size = tobytes(default_size);
+	daos_size_t		scm_size = tobytes(default_scm_size);
+	daos_size_t		nvme_size = tobytes(default_nvme_size);
 	const char	       *group = default_group;
 	const char	       *targets_str = NULL;
 	d_rank_list_t	       *targets = NULL;
@@ -133,11 +136,14 @@ create_hdlr(int argc, char *argv[])
 			mode = strtoul(optarg, NULL /* endptr */, 0 /* base */);
 			break;
 		case 's':
-			size = tobytes(optarg);
-			if (size == 0) {
+			scm_size = tobytes(optarg);
+			if (scm_size == 0) {
 				fprintf(stderr, "Invalid size: %s\n", optarg);
 				return 2;
 			}
+			break;
+		case 'n':
+			nvme_size = tobytes(optarg);
 			break;
 		case 't':
 			targets_str = optarg;
@@ -169,8 +175,8 @@ create_hdlr(int argc, char *argv[])
 		return 2;
 	}
 
-	rc = daos_pool_create(mode, uid, gid, group, targets, "pmem", size,
-			      &svc, pool_uuid, NULL /* ev */);
+	rc = daos_pool_create(mode, uid, gid, group, targets, "pmem", scm_size,
+			      nvme_size, &svc, pool_uuid, NULL /* ev */);
 	if (targets != NULL)
 		daos_rank_list_free(targets);
 	if (rc != 0) {
@@ -628,13 +634,14 @@ create options:\n\
   --gid=GID	pool GID (getegid()) \n\
   --group=STR	pool server process group (\"%s\")\n\
   --mode=MODE	pool mode (%#o)\n\
-  --size=BYTES	target size in bytes (%s)\n\
+  --size=BYTES	target SCM size in bytes (%s)\n\
 		supports K (KB), M (MB), G (GB), T (TB) and P (PB) suffixes\n\
+  --nvme=BYTES	target NVMe size in bytes (%s)\n\
   --svcn=N	number of pool service replicas (\"%u\")\n\
   --target=RANKS\n\
 		pool targets like 0:1:2:3:4 (whole group)\n\
   --uid=UID	pool UID (geteuid())\n", default_group, default_mode,
-	       default_size, default_svc_nreplicas);
+	       default_scm_size, default_nvme_size, default_svc_nreplicas);
 	printf("\
 destroy options:\n\
   --force	destroy the pool even if there are connections\n\

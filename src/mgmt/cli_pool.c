@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,7 +110,8 @@ dc_pool_create(tse_task_t *task)
 	pc_in->pc_grp = (d_string_t)args->grp;
 	pc_in->pc_tgt_dev = (d_string_t)args->dev;
 	pc_in->pc_tgts = (d_rank_list_t *)args->tgts;
-	pc_in->pc_tgt_size = args->size;
+	pc_in->pc_scm_size = args->scm_size;
+	pc_in->pc_nvme_size = args->nvme_size;
 	pc_in->pc_svc_nr = args->svc->rl_nr;
 
 	crt_req_addref(rpc_req);

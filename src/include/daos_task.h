@@ -146,7 +146,8 @@ typedef struct {
 	const char		*grp;
 	const d_rank_list_t	*tgts;
 	const char		*dev;
-	daos_size_t		size;
+	daos_size_t		scm_size;
+	daos_size_t		nvme_size;
 	d_rank_list_t		*svc;
 	unsigned char		*uuid;
 } daos_pool_create_t;

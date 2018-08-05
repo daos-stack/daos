@@ -507,7 +507,8 @@ main(int argc, char **argv)
 	uuid_generate(ctl_ctx.tsc_pool_uuid);
 	uuid_generate(ctl_ctx.tsc_cont_uuid);
 
-	ctl_ctx.tsc_pool_size	= (128 << 20); /* small one should be enough */
+	ctl_ctx.tsc_scm_size	= (128 << 20); /* small one should be enough */
+	ctl_ctx.tsc_nvme_size	= (4ULL << 30);
 	ctl_ctx.tsc_cred_vsize	= 1024;	/* long enough for console input */
 	ctl_ctx.tsc_cred_nr	= -1;	/* sync mode all the time */
 	ctl_ctx.tsc_mpi_rank	= 0;

@@ -1,4 +1,4 @@
-.\" (C) Copyright 2017 Intel Corporation.
+.\" (C) Copyright 2017-2018 Intel Corporation.
 .\"
 .\" Licensed under the Apache License, Version 2.0 (the "License");
 .\" you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@ daos_pool_create \- create a DAOS pool
 .BI "int daos_pool_create(unsigned int "mode ", unsigned int "uid ",
 .BI "	unsigned int "gid ", const char * "grp ",
 .BI "	const daos_rank_list_t * "tgts ", const char * "dev ",
-.BI "	daos_size_t "size ", daos_rank_list_t * "svc ", uuid_t "uuid ",
-.BI "	daos_event_t * "ev);
+.BI "	daos_size_t "scm_size ", daos_size_t "nvme_size ",
+.BI "	daos_rank_list_t * "svc ", uuid_t "uuid ", daos_event_t * "ev);
 .fi
 .SH DESCRIPTION
 The function
@@ -49,9 +49,11 @@ managing the pool is given by
 will allocate targets on this list of ranks.  If set to NULL, the pool will be created over all the ranks available in the service group.  String
 .I dev
 identifies the target devices to use.  While
-.I size
-specifies the maximum amount of storage space the targets can consume
-in bytes. Passing 0 will use the minimal supported target size.  The
+.I scm_size
+and
+.I nvme_size
+specifies the maximum amount of SCM and NVMe storage space the targets can consume
+in bytes. Passing 0 to SCM storage size  will use the minimal supported target size.  The
 .I svc
 parameter indicates the servers where the pool is located.  This is both
 an in and out parameter.

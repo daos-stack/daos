@@ -286,7 +286,7 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 
 	rc = daos_pool_create(cp_options.mode,
 			cp_options.uid, cp_options.gid, cp_options.server_group,
-			      NULL, "rubbish", cp_options.size,
+			      NULL, "rubbish", cp_options.size, 0,
 			      &pool_service_list, uuid, NULL);
 	if (rc) {
 		printf("<<<daosctl>>> Pool create fail, result: %d\n", rc);
@@ -419,7 +419,8 @@ cmd_test_create_pool(int argc, const char **argv, void *ctx)
 
 	rc = daos_pool_create(cp_options.mode, cp_options.uid, cp_options.gid,
 			      cp_options.server_group, NULL, "rubbish",
-			      cp_options.size, &pool_service_list, uuid, NULL);
+			      cp_options.size, 0, &pool_service_list, uuid,
+			      NULL);
 	if (rc) {
 		printf("<<<daosctl>>> Pool create fail, result: %d\n", rc);
 	} else {
@@ -499,7 +500,7 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 
 	rc = daos_pool_create(ep_options.mode, ep_options.uid, ep_options.gid,
 			      ep_options.server_group,
-			      NULL, "rubbish", ep_options.size,
+			      NULL, "rubbish", ep_options.size, 0,
 			      &pool_service_list, uuid, NULL);
 	if (rc) {
 		printf("<<<daosctl>>> Pool create fail, result: %d\n", rc);

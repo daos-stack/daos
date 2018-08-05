@@ -55,24 +55,38 @@ test_setup_pool_create(void **state, struct test_pool *pool)
 	}
 
 	if (arg->myrank == 0) {
-		char	*env;
+		char		*env;
+		int		 size_gb;
+		daos_size_t	 nvme_size;
 
-		env = getenv("POOL_SIZE");
+		env = getenv("POOL_SCM_SIZE");
 		if (env) {
-			int size_gb;
-
 			size_gb = atoi(env);
 			if (size_gb != 0)
 				arg->pool.pool_size =
 					(daos_size_t)size_gb << 30;
 		}
 
-		print_message("setup: creating pool size="DF_U64" GB\n",
-			      (arg->pool.pool_size >> 30));
+		/*
+		 * Set the default NVMe partition size to "2 * scm_size", so
+		 * that we need to specify SCM size only for each test case.
+		 *
+		 * Set env POOL_NVME_SIZE to overwrite the default NVMe size.
+		 */
+		nvme_size = arg->pool.pool_size * 2;
+		env = getenv("POOL_NVME_SIZE");
+		if (env) {
+			size_gb = atoi(env);
+			nvme_size = (daos_size_t)size_gb << 30;
+		}
+
+		print_message("setup: creating pool, SCM size="DF_U64" GB, "
+			      "NVMe size="DF_U64" GB\n",
+			      (arg->pool.pool_size >> 30), nvme_size >> 30);
 		rc = daos_pool_create(arg->mode, arg->uid, arg->gid, arg->group,
 				      NULL, "pmem", arg->pool.pool_size,
-				      &arg->pool.svc, arg->pool.pool_uuid,
-				      NULL);
+				      nvme_size, &arg->pool.svc,
+				      arg->pool.pool_uuid, NULL);
 		if (rc)
 			print_message("daos_pool_create failed, rc: %d\n", rc);
 		else

@@ -789,8 +789,11 @@ The options are as follows:\n\
 -h	Print this help message.\n\
 \n\
 -P number\n\
-	Pool size, which can have M (megatbytes)or G (gigabytes) as postfix\n\
-	of number. E.g. -P 512M, -P 8G.\n\
+	Pool SCM partition size, which can have M(megatbytes) or \n\
+	G(gigabytes) as postfix of number. E.g. -P 512M, -P 8G.\n\
+\n\
+-N number\n\
+	Pool NVMe partition size.\n\
 \n\
 -T vos|echo|daos\n\
 	Tyes of test, it can be 'vos', 'echo' and 'daos'.\n\
@@ -853,7 +856,8 @@ The options are as follows:\n\
 }
 
 static struct option ts_ops[] = {
-	{ "pool",	required_argument,	NULL,	'P' },
+	{ "pool_scm",	required_argument,	NULL,	'P' },
+	{ "pool_nvme",	required_argument,	NULL,	'N' },
 	{ "type",	required_argument,	NULL,	'T' },
 	{ "credits",	required_argument,	NULL,	'C' },
 	{ "obj",	required_argument,	NULL,	'o' },
@@ -957,7 +961,8 @@ char	*perf_tests_name[] = {
 int
 main(int argc, char **argv)
 {
-	daos_size_t	pool_size = (2ULL << 30); /* default pool size */
+	daos_size_t	scm_size = (2ULL << 30); /* default pool SCM size */
+	daos_size_t	nvme_size = (8ULL << 30); /* default pool NVMe size */
 	int		credits   = -1;	/* sync mode */
 	int		vsize	   = 32;	/* default value size */
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
@@ -1002,8 +1007,12 @@ main(int argc, char **argv)
 			credits = strtoul(optarg, &endp, 0);
 			break;
 		case 'P':
-			pool_size = strtoul(optarg, &endp, 0);
-			pool_size = ts_val_factor(pool_size, *endp);
+			scm_size = strtoul(optarg, &endp, 0);
+			scm_size = ts_val_factor(scm_size, *endp);
+			break;
+		case 'N':
+			nvme_size = strtoul(optarg, &endp, 0);
+			scm_size = ts_val_factor(nvme_size, *endp);
 			break;
 		case 'o':
 			ts_obj_p_cont = strtoul(optarg, &endp, 0);
@@ -1133,13 +1142,14 @@ main(int argc, char **argv)
 		ts_ctx.tsc_svc.rl_ranks  = &svc_rank;
 	}
 	ts_ctx.tsc_cred_vsize	= vsize;
-	ts_ctx.tsc_pool_size	= pool_size;
+	ts_ctx.tsc_scm_size	= scm_size;
+	ts_ctx.tsc_nvme_size	= nvme_size;
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,
 			"Test :\n\t%s\n"
 			"Parameters :\n"
-			"\tpool size     : %u MB\n"
+			"\tpool size     : SCM: %u MB, NVMe: %u MB\n"
 			"\tcredits       : %d (sync I/O for -ve)\n"
 			"\tobj_per_cont  : %u x %d (procs)\n"
 			"\tdkey_per_obj  : %u\n"
@@ -1152,7 +1162,8 @@ main(int argc, char **argv)
 			"\tverify fetch  : %s\n"
 			"\tVOS file      : %s\n",
 			ts_class_name(),
-			(unsigned int)(pool_size >> 20),
+			(unsigned int)(scm_size >> 20),
+			(unsigned int)(nvme_size >> 20),
 			credits,
 			ts_obj_p_cont,
 			ts_ctx.tsc_mpi_size,

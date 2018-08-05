@@ -169,7 +169,8 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	 * to directly use it here.
 	 */
 	tc_in->tc_tgt_dev = pc_in->pc_tgt_dev;
-	tc_in->tc_tgt_size = pc_in->pc_tgt_size;
+	tc_in->tc_scm_size = pc_in->pc_scm_size;
+	tc_in->tc_nvme_size = pc_in->pc_nvme_size;
 	rc = dss_rpc_send(tc_req);
 	if (rc != 0) {
 		crt_req_decref(tc_req);

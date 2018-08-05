@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,8 +57,9 @@ pool_create_all(void **state)
 		      arg->async ? "a" : "");
 	rc = daos_pool_create(0 /* mode */, 0 /* uid */, 0 /* gid */,
 			      arg->group, NULL /* tgts */, "pmem" /* dev */,
-			      0 /* minimal size */, &arg->pool.svc /* svc */,
-			      uuid, arg->async ? &ev : NULL);
+			      0 /* minimal size */, 0 /* nvme size */,
+			      &arg->pool.svc /* svc */, uuid,
+			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {

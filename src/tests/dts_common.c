@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,8 +195,8 @@ pool_init(struct dts_context *tsc)
 	daos_handle_t	poh = DAOS_HDL_INVAL;
 	int		rc;
 
-	if (tsc->tsc_pool_size == 0)
-		tsc->tsc_pool_size = (1ULL << 30);
+	if (tsc->tsc_scm_size == 0)
+		tsc->tsc_scm_size = (1ULL << 30);
 
 	if (tsc->tsc_pmem_file) { /* VOS mode */
 		char	*pmem_file = tsc->tsc_pmem_file;
@@ -208,14 +208,14 @@ pool_init(struct dts_context *tsc)
 				goto out;
 
 			fd = rc;
-			rc = fallocate(fd, 0, 0, tsc->tsc_pool_size);
+			rc = fallocate(fd, 0, 0, tsc->tsc_scm_size);
 			if (rc)
 				goto out;
 		}
 
 		/* Use pool size as blob size for this moment. */
 		rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
-				     tsc->tsc_pool_size);
+				     tsc->tsc_nvme_size);
 		if (rc)
 			goto out;
 
@@ -228,8 +228,8 @@ pool_init(struct dts_context *tsc)
 
 		rc = daos_pool_create(0731, geteuid(), getegid(),
 				      NULL, NULL, "pmem",
-				      tsc->tsc_pool_size, svc,
-				      tsc->tsc_pool_uuid, NULL);
+				      tsc->tsc_scm_size, tsc->tsc_nvme_size,
+				      svc, tsc->tsc_pool_uuid, NULL);
 		if (rc)
 			goto bcast;
 
