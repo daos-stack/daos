@@ -1013,7 +1013,7 @@ rdb_raft_unload_lc(struct rdb *db)
 }
 
 static int
-rdb_raft_get_election_timeout(d_rank_t self, uint8_t nreplicas)
+rdb_raft_get_election_timeout(void)
 {
 	const char     *s;
 	int		t;
@@ -1179,7 +1179,7 @@ rdb_raft_start(struct rdb *db)
 		goto err_nodes;
 	}
 
-	election_timeout = rdb_raft_get_election_timeout(self_id, nreplicas);
+	election_timeout = rdb_raft_get_election_timeout();
 	request_timeout = rdb_raft_get_request_timeout();
 	D_DEBUG(DB_MD, DF_DB": election timeout %d ms\n", DP_DB(db),
 		election_timeout);
