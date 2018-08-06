@@ -24,14 +24,17 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"syscall"
 
+	"github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
 
 	"modules/mgmt"
@@ -40,10 +43,45 @@ import (
 	secpb "modules/security/proto"
 )
 
+type daosOptions struct {
+	Port    uint16  `short:"p" long:"port" default:"10000" description:"Port for the gRPC management interfect to listen on"`
+	Modules *string `short:"m" long:"modules" description:"List of server modules to load"`
+	Cores   uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
+	Group   string  `short:"g" long:"group" default:"daos_server" description:"Server group name"`
+	Storage string  `short:"s" long:"storage" default:"/mnt/daos" description:"Storage path"`
+	Attach  *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
+}
+
+var opts daosOptions
+
+func ioArgsFromOpts(opts daosOptions) []string {
+
+	cores := strconv.FormatUint(uint64(opts.Cores), 10)
+
+	ioArgStr := []string{"-c", cores, "-g", opts.Group, "-s", opts.Storage}
+
+	if opts.Modules != nil {
+		ioArgStr = append(ioArgStr, "-m", *opts.Modules)
+	}
+	if opts.Attach != nil {
+		ioArgStr = append(ioArgStr, "-a", *opts.Attach)
+	}
+	return ioArgStr
+}
+
 func main() {
 	runtime.GOMAXPROCS(1)
 
-	lis, err := net.Listen("tcp", "0.0.0.0:10000")
+	_, err := flags.Parse(&opts)
+	if err != nil {
+		log.Fatalf("%s", err)
+	}
+
+	addr := fmt.Sprintf("0.0.0.0:%d", opts.Port)
+
+	log.Printf("Management interface listening on: %s", addr)
+
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("Unable to listen on management interface: %s", err)
 	}
@@ -51,8 +89,8 @@ func main() {
 	// Create a new server register our service and listen for connections.
 	// TODO: This will need to be extended to take certificat information for
 	// the TLS protected channel. Currently it is an "insecure" channel.
-	var opts []grpc.ServerOption
-	grpcServer := grpc.NewServer(opts...)
+	var sOpts []grpc.ServerOption
+	grpcServer := grpc.NewServer(sOpts...)
 	secpb.RegisterSecurityControlServer(grpcServer, security.NewControlServer())
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmt.NewControlServer())
 	go grpcServer.Serve(lis)
@@ -68,7 +106,8 @@ func main() {
 		syscall.SIGHUP)
 
 	// setup cmd line to start the DAOS I/O server
-	srv := exec.Command("daos_io_server", os.Args[1:]...)
+	ioArgs := ioArgsFromOpts(opts)
+	srv := exec.Command("daos_io_server", ioArgs...)
 	srv.Stdout = os.Stdout
 	srv.Stderr = os.Stderr
 
