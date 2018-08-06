@@ -115,12 +115,14 @@ if __name__ == "__main__":
     ignore_errors = ' --ignore-missing-references on'
     category = ' --filter-by-tags=' + test_request
 
-    for f in test_files:
-        param_file = yamlforpy(f)
-        params = ' --mux-yaml ' + param_file
+    # run only provided tagged tests.
+    for _file in test_files:
+        list_cmd = 'avocado list {0} {1}'.format(category, _file)
+        if _file in subprocess.check_output(list_cmd, shell=True):
+            param_file = yamlforpy(_file)
+            params = ' --mux-yaml ' + param_file
+            test_cmd = avocado + ignore_errors + output_options +\
+                       category + params + ' -- ' + _file
 
-        test_cmd = avocado + ignore_errors + output_options +\
-                   category + params + ' -- ' + f
-
-        print("Running: " + test_cmd + "\n\n")
-        subprocess.call(test_cmd, shell=True)
+            print("Running: " + test_cmd + "\n\n")
+            subprocess.call(test_cmd, shell=True)
