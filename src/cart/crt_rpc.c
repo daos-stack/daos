@@ -533,10 +533,13 @@ static int check_ep(crt_endpoint_t *tgt_ep)
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
-	if (tgt_ep->ep_rank >= grp_priv->gp_size) {
-		D_ERROR("invalid parameter, rank %d, group_size: %d.\n",
-			tgt_ep->ep_rank, grp_priv->gp_size);
-		D_GOTO(out, rc = -DER_INVAL);
+
+	if (CRT_PMIX_ENABLED()) {
+		if (tgt_ep->ep_rank >= grp_priv->gp_size) {
+			D_ERROR("invalid parameter, rank %d, group_size: %d.\n",
+				tgt_ep->ep_rank, grp_priv->gp_size);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
 	}
 
 out:
@@ -1052,10 +1055,11 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	crt_endpoint_t		*tgt_ep;
 	struct crt_grp_priv	*grp_priv;
 	struct crt_grp_priv	*default_grp_priv;
-	crt_group_id_t		 grp_id;
 	char			*uri = NULL;
+	crt_group_id_t		 grp_id;
 	struct crt_context	*crt_ctx;
 	int			 rc = 0;
+	d_rank_list_t		*membs;
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	if (tgt_ep->ep_grp == NULL)
@@ -1086,8 +1090,9 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	/* this is a local group */
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	rank = tgt_ep->ep_rank;
+	membs = grp_priv_get_membs(grp_priv);
 	if (grp_priv->gp_primary == 0)
-		rank = grp_priv->gp_membs->rl_ranks[rank];
+		rank = membs->rl_ranks[rank];
 
 	if (crt_req_is_self(rpc_priv)) {
 		/* rpc is sent to self */
@@ -1097,6 +1102,10 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 	} else {
+		/* If pmix is disabled - return error at this point */
+		if (!CRT_PMIX_ENABLED())
+			D_GOTO(out, rc = -DER_INVAL);
+
 		/* lookup through PMIx */
 		grp_id = default_grp_priv->gp_pub.cg_grpid;
 		rc = crt_pmix_uri_lookup(grp_id, rank, &uri);
@@ -1105,6 +1114,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 			D_GOTO(out, rc);
 		}
 	}
+
 	rc = crt_grp_lc_uri_insert(default_grp_priv, crt_ctx->cc_idx,
 				   rank, 0, uri);
 	if (rc != 0) {

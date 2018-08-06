@@ -56,6 +56,11 @@ struct crt_opc_info *crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc,
 struct crt_opc_info *crt_opc_lookup_legacy(struct crt_opc_map_legacy *map,
 					   crt_opcode_t opc, int locked);
 
+/** crt_hg.c */
+int
+crt_na_class_get_addr(na_class_t *na_class,
+		char *addr_str, na_size_t *str_size);
+
 /** crt_context.c */
 /* return value of crt_context_req_track */
 enum {

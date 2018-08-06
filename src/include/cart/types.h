@@ -504,8 +504,23 @@ enum crt_init_flag_bits {
 	 * When it is true, will not enable the LM module which internally
 	 * broadcast RAS failure event to all ranks to evict the failed ranks.
 	 */
-	CRT_FLAG_BIT_LM_DISABLE	= 1U << 2
+	CRT_FLAG_BIT_LM_DISABLE	= 1U << 2,
+
+	/**
+	 * When set, disables PMIX support internally. Ranks and associated
+	 * URIs are not discovered. Instead those have to be added manually
+	 * via \a crt_group_node_add() API call.
+	 */
+	CRT_FLAG_BIT_PMIX_DISABLE = 1U << 3,
 };
+
+
+/** Union describing node information; either uri or primary rank */
+typedef union {
+	d_rank_t	rank;	/**< Primary rank */
+	char		*uri;	/**< URI string */
+} crt_node_info_t;
+
 
 /** @}
  */

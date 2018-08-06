@@ -52,19 +52,30 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 			       bool *allocated)
 {
 	d_rank_list_t		*grp_rank_list = NULL;
+	d_rank_list_t		*live_ranks;
+	d_rank_list_t		*membs;
+	d_rank_t		pri_self, pri_root;
 	int			 rc = 0;
 
-	if (exclude_ranks == NULL || exclude_ranks->rl_nr == 0) {
-		grp_rank_list = grp_priv->gp_live_ranks;
+	if (CRT_PMIX_ENABLED()) {
+		live_ranks = grp_priv_get_live_ranks(grp_priv);
+		membs = grp_priv_get_membs(grp_priv);
+	} else {
+		membs = grp_priv_get_membs(grp_priv);
+		live_ranks = membs;
+	}
 
+	if (exclude_ranks == NULL || exclude_ranks->rl_nr == 0) {
+		grp_rank_list = live_ranks;
 		*grp_size = grp_rank_list->rl_nr;
+
 		D_ASSERT(*grp_size == grp_rank_list->rl_nr);
 		*allocated = false;
 	} else {
 		/* grp_priv->gp_live_ranks/exclude_ranks already sorted
 		 * and unique
 		 */
-		rc = d_rank_list_dup(&grp_rank_list, grp_priv->gp_live_ranks);
+		rc = d_rank_list_dup(&grp_rank_list, live_ranks);
 
 		if (rc != 0) {
 			D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
@@ -86,16 +97,19 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		*grp_size = grp_rank_list->rl_nr;
 	}
 
-	rc = d_idx_in_rank_list(grp_rank_list,
-				grp_priv->gp_membs->rl_ranks[root], grp_root);
+
+	pri_root = grp_priv_get_primary_rank(grp_priv, root);
+	pri_self = grp_priv_get_primary_rank(grp_priv, self);
+
+	rc = d_idx_in_rank_list(grp_rank_list, pri_root, grp_root);
 	if (rc != 0) {
 		D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
 			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
 			root, rc);
 		D_GOTO(out, rc);
 	}
-	rc = d_idx_in_rank_list(grp_rank_list,
-				grp_priv->gp_membs->rl_ranks[self], grp_self);
+
+	rc = d_idx_in_rank_list(grp_rank_list, pri_self, grp_self);
 	if (rc != 0)
 		D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
 			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
@@ -107,20 +121,21 @@ out:
 	return rc;
 }
 
-#define CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self)	       \
-	do {								       \
-		D_ASSERT(grp_priv != NULL && grp_priv->gp_membs != NULL	       \
-			 && grp_priv->gp_live_ranks != NULL);		       \
-									       \
-		D_ASSERT(root < grp_priv->gp_size && self < grp_priv->gp_size);\
-		D_ASSERT(crt_tree_topo_valid(tree_topo));		       \
-		tree_type = crt_tree_type(tree_topo);			       \
-		tree_ratio = crt_tree_ratio(tree_topo);			       \
-		D_ASSERT(tree_type >= CRT_TREE_MIN &&			       \
-			 tree_type <= CRT_TREE_MAX);			       \
-		D_ASSERT(tree_type == CRT_TREE_FLAT ||			       \
-			 (tree_ratio >= CRT_TREE_MIN_RATIO &&		       \
-			  tree_ratio <= CRT_TREE_MAX_RATIO));		       \
+
+#define CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self)	\
+	do {								\
+									\
+		D_ASSERT(crt_tree_topo_valid(tree_topo));		\
+		if (CRT_PMIX_ENABLED())					\
+			D_ASSERT(root < grp_priv->gp_size &&		\
+				self < grp_priv->gp_size);		\
+		tree_type = crt_tree_type(tree_topo);			\
+		tree_ratio = crt_tree_ratio(tree_topo);			\
+		D_ASSERT(tree_type >= CRT_TREE_MIN &&			\
+			 tree_type <= CRT_TREE_MAX);			\
+		D_ASSERT(tree_type == CRT_TREE_FLAT ||			\
+			 (tree_ratio >= CRT_TREE_MIN_RATIO &&		\
+			  tree_ratio <= CRT_TREE_MAX_RATIO));		\
 	} while (0)
 
 /*
@@ -247,6 +262,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	}
 
 	tops = crt_tops[tree_type];
+
 	rc = tops->to_get_children_cnt(grp_size, tree_ratio, grp_root, grp_self,
 				       &nchildren);
 	if (rc != 0) {

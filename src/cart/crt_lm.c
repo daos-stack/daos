@@ -882,7 +882,7 @@ lm_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 		D_GOTO(out, rc);
 	}
 	/* insert the uri into the address cache */
-	rc = crt_grp_lc_uri_insert_all(lm_grp_priv->lgp_grp, ul_in->ul_rank,
+	rc = crt_grp_lc_uri_insert_all(lm_grp_priv->lgp_grp, ul_in->ul_rank, 0,
 				       psr_phy_addr);
 	if (rc != 0) {
 		D_ERROR("crt_grp_lc_uri_insert failed, grp: %p, "

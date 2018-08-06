@@ -54,6 +54,8 @@ crt_pmix_init(void)
 	bool			 flag = true;
 	int			 rc = 0;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
+
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
 	D_ASSERT(grp_gdata->gg_pmix_inited == 0);
@@ -140,6 +142,8 @@ crt_pmix_fini(void)
 	struct crt_pmix_gdata	*pmix_gdata;
 	int			 rc = 0;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
+
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
 	D_ASSERT(grp_gdata->gg_pmix_inited == 1);
@@ -176,6 +180,7 @@ crt_pmix_fence(void)
 	bool		flag;
 	int		rc = 0;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
 	myproc = &crt_gdata.cg_grp->gg_pmix->pg_proc;
 
 	/* PMIx_Commit(); */
@@ -223,13 +228,14 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	struct crt_rank_map	 *rank_map;
 	int			 i, rc = 0;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
 	D_ASSERT(grp_priv != NULL);
 	D_ASSERT(crt_gdata.cg_grp != NULL);
 	pmix_gdata = crt_gdata.cg_grp->gg_pmix;
 	myproc = &pmix_gdata->pg_proc;
 	unpublish_key[0] = NULL;
 	unpublish_key[1] = NULL;
-	rank_map = grp_priv->gp_rank_map;
+	rank_map = grp_priv->gp_pmix_rank_map;
 	D_ASSERT(rank_map != NULL);
 
 	/* get incorrect result (grp_priv->gp_self = -1), so disable it */
@@ -396,6 +402,7 @@ crt_pmix_publish_self(struct crt_grp_priv *grp_priv)
 	int			nkeys = 1;
 	int			rc;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
 	D_ASSERT(grp_priv != NULL);
 
 	D_ASSERT(crt_gdata.cg_grp != NULL);
@@ -478,6 +485,7 @@ crt_pmix_uri_lookup(crt_group_id_t srv_grpid, d_rank_t rank, char **uri)
 	size_t		 len;
 	int		 rc = 0;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
 	if (srv_grpid == NULL || uri == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 	len = strlen(srv_grpid);
@@ -522,6 +530,7 @@ crt_pmix_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 	crt_phy_addr_t	uri = NULL;
 	int		rc;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
 	D_ASSERT(grp_priv != NULL);
 	D_ASSERT(psr_rank < grp_priv->gp_size);
 
@@ -545,6 +554,7 @@ crt_pmix_attach(struct crt_grp_priv *grp_priv)
 	d_rank_t		 myrank;
 	int			 rc = 0;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
 	D_ASSERT(grp_priv != NULL);
 
 	PMIX_PDATA_CREATE(pdata, 1);
@@ -607,6 +617,8 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	struct crt_event_cb_priv	*event_cb_priv;
 	void				*arg;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
+
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
 	D_ASSERT(grp_gdata->gg_pmix_inited == 1);
@@ -645,14 +657,15 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 		D_GOTO(out, 0);
 	}
 
-	if (grp_priv->gp_rank_map[source->rank].rm_status == CRT_RANK_NOENT) {
+	if (grp_priv->gp_pmix_rank_map[source->rank].rm_status ==
+		CRT_RANK_NOENT) {
 		D_DEBUG(DB_TRACE, "PMIx event not relevant to cart group: "
 			"%s.\n", grp_priv->gp_pub.cg_grpid);
 		D_GOTO(out, 0);
 	}
 
 	/* convert source->rank from pmix rank to cart rank */
-	crt_rank = grp_priv->gp_rank_map[source->rank].rm_rank;
+	crt_rank = grp_priv->gp_pmix_rank_map[source->rank].rm_rank;
 	D_DEBUG(DB_TRACE, "received pmix notification about rank %d.\n",
 		crt_rank);
 	/* walk the global list to execute the user callbacks */
@@ -679,6 +692,7 @@ crt_plugin_pmix_errhdlr_reg_cb(pmix_status_t status, size_t errhdlr_ref,
 	sem_t *token_to_proceed = arg;
 	int rc;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
 	D_DEBUG(DB_TRACE, "crt_plugin_pmix_errhdlr_reg_cb() called with status"
 		" %d, ref=%zu.\n", status, errhdlr_ref);
 	if (status != 0)
@@ -698,6 +712,7 @@ crt_plugin_pmix_init(void)
 	sem_t	token_to_proceed;
 	int	rc;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
 	if (!crt_is_service() || crt_is_singleton())
 		return -DER_INVAL;
 
@@ -738,6 +753,7 @@ crt_plugin_pmix_errhdlr_dereg_cb(pmix_status_t status, void *arg)
 	sem_t	*token_to_proceed = arg;
 	int	 rc;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
 	D_DEBUG(DB_TRACE, "crt_plugin_pmix_errhdlr_dereg_cb() called with "
 		"status %d", status);
 
@@ -752,6 +768,7 @@ crt_plugin_pmix_fini(void)
 	sem_t	token_to_proceed;
 	int	rc;
 
+	D_ASSERT(CRT_PMIX_ENABLED());
 	if (!crt_is_service() || crt_is_singleton())
 		return;
 
@@ -796,6 +813,8 @@ crt_register_event_cb(crt_event_cb event_handler, void *arg)
 	 */
 	struct crt_event_cb_priv *event_cb_priv;
 	int rc;
+
+	D_ASSERT(CRT_PMIX_ENABLED());
 
 	rc = crt_plugin_pmix_init();
 	if (rc)

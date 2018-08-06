@@ -32,3 +32,4 @@ test_list:
   - "scripts/cart_test_proto_non_sep.yml"
   - "scripts/cart_test_no_timeout.yml"
   - "scripts/cart_test_no_timeout_non_sep.yml"
+  - "scripts/cart_test_no_pmix.yml"

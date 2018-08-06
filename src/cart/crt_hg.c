@@ -427,8 +427,8 @@ done:
 	return rc;
 }
 
-static int
-na_class_get_addr(na_class_t *na_class, char *addr_str, na_size_t *str_size)
+int
+crt_na_class_get_addr(na_class_t *na_class, char *addr_str, na_size_t *str_size)
 {
 	na_addr_t	self_addr;
 	na_return_t	na_ret;
@@ -638,9 +638,9 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 		na_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
 
-		rc = na_class_get_addr(na_class, addr_str, &str_size);
+		rc = crt_na_class_get_addr(na_class, addr_str, &str_size);
 		if (rc != 0) {
-			D_ERROR("na_class_get_addr failed, rc: %d.\n", rc);
+			D_ERROR("crt_na_class_get_addr failed, rc: %d.\n", rc);
 			HG_Finalize(hg_class);
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_HG);
@@ -750,9 +750,9 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 			D_GOTO(out, rc = -DER_HG);
 		}
 
-		rc = na_class_get_addr(na_class, addr_str, &str_size);
+		rc = crt_na_class_get_addr(na_class, addr_str, &str_size);
 		if (rc != 0) {
-			D_ERROR("na_class_get_addr failed, rc: %d.\n", rc);
+			D_ERROR("crt_na_class_get_addr failed, rc: %d.\n", rc);
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_HG);
 		}

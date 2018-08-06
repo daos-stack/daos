@@ -1576,6 +1576,121 @@ int
 crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
 
+
+/***
+ * Add rank to a group with provided information (uri or primary rank)
+ *
+ * \param[in] group             The group handle
+ * \param[in] rank              Rank to add information about
+ * \param[in] tag               Tag to add information about
+ * \param[in] info              Information details to add
+ *
+ * \return                      DER_SUCCESS on success, negative value on
+ *                              failure.
+ *
+ * \note                        This API is only available if PMIX is disabled.
+ *                              See CRT_FLAG_BIT_PMIX_DISABLE flag.
+ *
+ * \note                        Currently only primary group is supported
+ */
+int
+crt_group_node_add(crt_group_t *group, d_rank_t rank, int tag,
+		crt_node_info_t info);
+
+/**
+ * Set self rank. This API is only available when PMIX is disabled. See \a
+ * CRT_FLAG_BIT_PMIX_DISABLE for more details.
+ *
+ * \param[in] rank              Rank to set on self.
+ *
+ * \return                      DER_SUCCESS on success, negative value on
+ *                              failure.
+ */
+int
+crt_rank_self_set(d_rank_t rank);
+
+/**
+ * Retrieve URI of the requested rank:tag pair.
+ *
+ * \param[in] grp               Group identifier
+ * \param[in] rank              Rank to get uri for
+ * \param[in] tag               Tag to get uri for
+ * \param[out] uri              Returned uri string
+ *
+ * \note Returned uri string must be de-allocated by the user at some
+ * point once the information is no longer needed.
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int
+crt_rank_uri_get(crt_group_t *grp, d_rank_t rank, int tag, char **uri);
+
+/**
+ * Remove specified rank from the group.
+ *
+ * \param[in] group             Group identifier
+ * \param[in] rank              Rank to remove
+ *
+ * \note This API is only available when PMIX is disabled. See
+ * CRT_FLAG_BIT_PMIX_DISABLE for more details.
+ */
+int
+crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
+
+/**
+ * Retrieve uri of self for the specified tag.
+ *
+ * \param[in] group             Group identifier
+ * \param[in] tag               Tag to get uri for
+ * \param[out] uri              Returned uri string
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_self_uri_get(crt_group_t *grp, int tag, char **uri);
+
+
+/**
+ * Retrieve group information containing ranks and associated uris
+ *
+ * This call will allocate memory for buffers in passed \a grp_info.
+ * User is responsible for freeing the memory once not needed anymore.
+ *
+ * Returned data in \a grp_info can be passed to crt_group_info_set
+ * call in order to setup group on a different node.
+ *
+ * \param[in] group             Group identifier
+ * \param[in] grp_info          group info to be filled.
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
+
+/**
+ * Sets group info (nodes and associated uris) baesd on passed
+ * grp_info data. \a grp_info is to be retrieved via \a crt_group_info_get
+ * call.
+ *
+ * \param[in] grp_info          Group information to set
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_group_info_set(d_iov_t *grp_info);
+
+/**
+ * Retrieve list of ranks that belong to the specified gorup.
+ *
+ * \param[in] group             Group identifier
+ * \param[out] list             Rank list that gets filled with members
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure
+ */
+int crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list);
+
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_crt_rank_t		crt_proc_uint32_t
 #define crt_proc_int			crt_proc_int32_t

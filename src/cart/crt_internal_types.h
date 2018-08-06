@@ -92,6 +92,7 @@ struct crt_gdata {
 	/* refcount to protect crt_init/crt_finalize */
 	volatile unsigned int	cg_refcount;
 	volatile unsigned int	cg_inited:1,
+				cg_pmix_disabled:1,
 				cg_grp_inited:1; /* group initialized */
 
 	/* protects crt_gdata */

@@ -52,6 +52,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	struct crt_corpc_info	*co_info;
 	struct crt_corpc_hdr	*co_hdr;
 	int			 rc = 0;
+	d_rank_list_t		*membs;
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(grp_priv != NULL);
@@ -71,7 +72,9 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		crt_grp_priv_addref(grp_priv);
 	co_info->co_grp_ref_taken = 1;
 	co_info->co_grp_priv = grp_priv;
-	d_rank_list_filter(co_info->co_grp_priv->gp_membs,
+
+	membs = grp_priv_get_membs(grp_priv);
+	d_rank_list_filter(membs,
 			   co_info->co_excluded_ranks, false /* exclude */);
 	co_info->co_grp_ver = grp_ver;
 	co_info->co_tree_topo = tree_topo;
@@ -412,8 +415,11 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 
 
 	/* grp_root is logical rank number in this group */
+
 	grp_root = grp_priv->gp_self;
-	pri_root = grp_priv->gp_membs->rl_ranks[grp_root];
+	pri_root = grp_priv_get_primary_rank(grp_priv, grp_root);
+
+
 	tobe_excluded_ranks = excluded_ranks;
 	/*
 	 * if bcast initiator is in excluded ranks, here we remove it and set
@@ -820,6 +826,8 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 				   co_info->co_tree_topo, co_info->co_root,
 				   co_info->co_grp_priv->gp_self,
 				   &children_rank_list, &ver_match);
+
+
 	if (rc != 0) {
 		D_ERROR("crt_tree_get_children(group %s, opc %#x) failed, "
 			"rc: %d.\n", co_info->co_grp_priv->gp_pub.cg_grpid,

@@ -39,7 +39,7 @@
 
 import os
 
-SIMPLE_TEST_SRC = ['test_crt_barrier.c', 'threaded_client.c',
+SIMPLE_TEST_SRC = ['test_no_pmix.c', 'test_crt_barrier.c', 'threaded_client.c',
                    'threaded_server.c', 'test_pmix.c',
                    'test_corpc_version.c', 'test_corpc_prefwd.c',
                    'test_proto_server.c', 'test_proto_client.c',
