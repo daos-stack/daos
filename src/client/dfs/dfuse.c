@@ -519,7 +519,8 @@ dfuse_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 	}
 
 	mode = S_IFREG | mode;
-	rc = dfs_open(dfs, parent, name, mode, fi->flags, NULL, &obj);
+	rc = dfs_open(dfs, parent, name, mode, fi->flags, DAOS_OC_LARGE_RW,
+		      NULL, &obj);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -560,7 +561,7 @@ dfuse_open(const char *path, struct fuse_file_info *fi)
 		D_GOTO(out, rc);
 	}
 
-	rc = dfs_open(dfs, parent, name, S_IFREG, fi->flags, NULL, &obj);
+	rc = dfs_open(dfs, parent, name, S_IFREG, fi->flags, 0, NULL, &obj);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -604,7 +605,8 @@ dfuse_opendir(const char *path, struct fuse_file_info *fi)
 		fi->fh = (uint64_t)parent;
 		free_parent = false;
 	} else {
-		rc = dfs_open(dfs, parent, name, S_IFDIR, O_RDONLY, NULL, &obj);
+		rc = dfs_open(dfs, parent, name, S_IFDIR, O_RDONLY, 0, NULL,
+			      &obj);
 		if (rc)
 			D_GOTO(out, rc);
 		fi->fh = (uint64_t)obj;
@@ -738,7 +740,7 @@ dfuse_symlink(const char *from, const char *to)
 		D_GOTO(out, rc);
 	}
 
-	rc = dfs_open(dfs, parent, name, S_IFLNK, O_CREAT, from, &sym);
+	rc = dfs_open(dfs, parent, name, S_IFLNK, O_CREAT, 0, from, &sym);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1268,7 +1270,7 @@ int main(int argc, char *argv[])
 		D_GOTO(out_disc, rc = 1);
 	}
 
-	rc = dfs_mount(poh, coh, &dfs);
+	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
 	if (rc) {
 		fprintf(stderr, "dfs_mount failed (%d)\n", rc);
 		D_GOTO(out_cont, rc = 1);
@@ -1299,7 +1301,7 @@ out_fmount:
 out_fdest:
 	fuse_destroy(dfuse_fs.fuse);
 out_dmount:
-	dfs_umount(dfs);
+	dfs_umount(dfs, true);
 out_cont:
 	daos_cont_close(coh, NULL);
 out_disc:

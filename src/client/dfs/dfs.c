@@ -70,6 +70,11 @@
 #define ENUM_DESC_NR    10
 #define ENUM_DESC_BUF   (ENUM_DESC_NR * DFS_MAX_PATH)
 
+/** OIDs for Superblock and Root objects */
+#define RESERVED_LO	0
+#define SB_HI		0
+#define ROOT_HI		1
+
 enum {
 	DFS_WRITE,
 	DFS_READ
@@ -101,6 +106,8 @@ struct dfs {
 	uid_t			uid;
 	/** gid - inherited from pool. TODO - make this from container. */
 	gid_t			gid;
+	/** Access mode (RDONLY, RDWR) */
+	int			amode;
 	/** Open pool handle of the DFS */
 	daos_handle_t		poh;
 	/** Open container handle of the DFS */
@@ -183,6 +190,17 @@ print_stat(struct stat *stbuf)
 	D_DEBUG(DB_TRACE, "Change time %s\n", buf);
 }
 #endif
+
+static inline int
+get_daos_obj_mode(int flags)
+{
+	if ((flags & O_ACCMODE) == O_RDONLY)
+		return DAOS_OO_RO;
+	else if ((flags & O_ACCMODE) == O_RDWR)
+		return DAOS_OO_RW;
+	else
+		return -1;
+}
 
 static inline void
 oid_cp(daos_obj_id_t *dst, daos_obj_id_t src)
@@ -599,7 +617,8 @@ entry_stat(dfs_t *dfs, daos_handle_t oh, const char *name, struct stat *stbuf)
 }
 
 static int
-open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, dfs_obj_t *file)
+open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
+	  dfs_obj_t *file)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -614,33 +633,26 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, dfs_obj_t *file)
 		return rc;
 
 	if (flags & O_CREAT) {
-		/** Create a DAOS byte array for the file */
-		if (exists && (flags & O_EXCL))
-			return -DER_EXIST;
+		if (exists) {
+			if (flags & O_EXCL) {
+				D_ERROR("File Exists (O_EXCL mode passed\n");
+				return -DER_EXIST;
+			}
 
-		if (exists && S_ISDIR(entry.mode)) {
-			D_ERROR("can't overwrite dir %s with non-directory\n",
-				file->name);
-			return -DER_INVAL;
+			if (S_ISDIR(entry.mode)) {
+				D_ERROR("can't overwrite dir %s with "
+					"non-directory\n", file->name);
+				return -DER_INVAL;
+			}
+
+			goto open_file;
 		}
 
 		/** Bump the epoch for this op. */
 		incr_epoch(dfs);
 
-		if (exists) {
-			/** Punch entry and object */
-			rc = remove_entry(dfs, parent->oh, file->name, entry);
-			if (rc)
-				D_GOTO(err, rc);
-			if (entry.value) {
-				D_ASSERT(S_ISLNK(entry.mode));
-				free(entry.value);
-				entry.value = NULL;
-			}
-		}
-
 		/** Get new OID for the file */
-		rc = oid_gen(dfs, 0, &file->oid);
+		rc = oid_gen(dfs, cid, &file->oid);
 		if (rc != 0)
 			D_GOTO(err, rc);
 		oid_cp(&entry.oid, file->oid);
@@ -673,6 +685,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, dfs_obj_t *file)
 	if (!exists)
 		return -DER_NONEXIST;
 
+open_file:
 	if (!S_ISREG(entry.mode)) {
 		if (entry.value) {
 			D_ASSERT(S_ISLNK(entry.mode));
@@ -682,10 +695,11 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, dfs_obj_t *file)
 		return -DER_INVAL;
 	}
 
-	if (flags & O_RDONLY)
-		daos_mode = DAOS_OO_RO;
-	else
-		daos_mode = DAOS_OO_RW;
+	daos_mode = get_daos_obj_mode(flags);
+	if (daos_mode == -1) {
+		D_ERROR("Invalid access mode.\n");
+		return -DER_INVAL;
+	}
 
 	rc = daos_array_open(dfs->coh, entry.oid, dfs->epoch, daos_mode,
 			     &elem_size, &dkey_size, &file->oh, NULL);
@@ -712,7 +726,8 @@ err:
  * object first.
  */
 static int
-create_dir(dfs_t *dfs, daos_handle_t parent_oh, dfs_obj_t *dir)
+create_dir(dfs_t *dfs, daos_handle_t parent_oh, daos_oclass_id_t cid,
+	   dfs_obj_t *dir)
 {
 	struct dfs_entry	entry;
 	bool			exists;
@@ -729,7 +744,7 @@ create_dir(dfs_t *dfs, daos_handle_t parent_oh, dfs_obj_t *dir)
 			return -DER_EXIST;
 	}
 
-	rc = oid_gen(dfs, 0, &dir->oid);
+	rc = oid_gen(dfs, cid, &dir->oid);
 	if (rc != 0)
 		return rc;
 	rc = daos_obj_open(dfs->coh, dir->oid, dfs->epoch, DAOS_OO_RW, &dir->oh,
@@ -743,17 +758,18 @@ create_dir(dfs_t *dfs, daos_handle_t parent_oh, dfs_obj_t *dir)
 }
 
 static int
-open_dir(dfs_t *dfs, daos_handle_t parent_oh, int flags, dfs_obj_t *dir)
+open_dir(dfs_t *dfs, daos_handle_t parent_oh, int flags, daos_oclass_id_t cid,
+	 dfs_obj_t *dir)
 {
 	struct dfs_entry	entry;
 	bool			exists;
-	unsigned int		daos_mode;
+	int			daos_mode;
 	int			rc;
 
 	if (flags & O_CREAT) {
 		incr_epoch(dfs);
 
-		rc = create_dir(dfs, parent_oh, dir);
+		rc = create_dir(dfs, parent_oh, cid, dir);
 		if (rc) {
 			daos_epoch_discard(dfs->coh, dfs->epoch, NULL, NULL);
 			return rc;
@@ -774,10 +790,11 @@ open_dir(dfs_t *dfs, daos_handle_t parent_oh, int flags, dfs_obj_t *dir)
 		return rc;
 	}
 
-	if (flags & O_RDONLY)
-		daos_mode = DAOS_OO_RO;
-	else
-		daos_mode = DAOS_OO_RW;
+	daos_mode = get_daos_obj_mode(flags);
+	if (daos_mode == -1) {
+		D_ERROR("Invalid access mode.\n");
+		return -DER_INVAL;
+	}
 
 	/* Check if parent has the dirname entry */
 	rc = fetch_entry(parent_oh, dfs->epoch, dir->name, false, &exists,
@@ -910,13 +927,21 @@ check_sb(dfs_t *dfs, bool insert, bool *exists)
 }
 
 int
-dfs_mount(daos_handle_t poh, daos_handle_t coh, dfs_t **_dfs)
+dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 {
 	dfs_t			*dfs;
 	daos_pool_info_t	pool_info;
 	struct dfs_entry	entry = {0};
 	bool			sb_exists;
+	int			amode, obj_mode;
 	int			rc;
+
+	amode = (flags & O_ACCMODE);
+	obj_mode = get_daos_obj_mode(flags);
+	if (obj_mode == -1) {
+		D_ERROR("Invalid access mode.\n");
+		return -DER_INVAL;
+	}
 
 	D_ALLOC_PTR(dfs);
 	if (dfs == NULL)
@@ -925,6 +950,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, dfs_t **_dfs)
 	dfs->poh = poh;
 	dfs->coh = coh;
 	dfs->epoch = 0;
+	dfs->amode = amode;
 	rc = D_MUTEX_INIT(&dfs->lock, NULL);
 	if (rc != 0)
 		return rc;
@@ -938,21 +964,33 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, dfs_t **_dfs)
 	dfs->uid = pool_info.pi_uid;
 	dfs->gid = pool_info.pi_gid;
 
-	rc = daos_epoch_hold(coh, &dfs->epoch, NULL, NULL);
-	if (rc) {
-		D_ERROR("daos_epoch_hold() Failed (%d)\n", rc);
-		D_GOTO(err_dfs, rc);
+	/** if mount RW, use epoch hold (LHE) otherwise use HCE for RDONLY. */
+	if (amode == O_RDWR) {
+		rc = daos_epoch_hold(coh, &dfs->epoch, NULL, NULL);
+		if (rc) {
+			D_ERROR("daos_epoch_hold() Failed (%d)\n", rc);
+			D_GOTO(err_dfs, rc);
+		}
+	} else {
+		daos_epoch_state_t state;
+
+		rc = daos_epoch_query(coh, &state, NULL);
+		if (rc) {
+			D_ERROR("daos_epoch_query() Failed (%d)\n", rc);
+			D_GOTO(err_dfs, rc);
+		}
+		dfs->epoch = state.es_ghce;
 	}
 
 	dfs->oid.hi = 0;
 	dfs->oid.lo = 0;
 
-	/** Create special object on container and insert root */
-	dfs->super_oid.lo = 0;
-	dfs->super_oid.hi = 0;
+	/** Open special object on container for SB info */
+	dfs->super_oid.lo = RESERVED_LO;
+	dfs->super_oid.hi = SB_HI;
 	daos_obj_id_generate(&dfs->super_oid, 0, DAOS_OC_REPL_MAX_RW);
 
-	rc = daos_obj_open(dfs->coh, dfs->super_oid, dfs->epoch, DAOS_OO_RW,
+	rc = daos_obj_open(dfs->coh, dfs->super_oid, dfs->epoch, obj_mode,
 			   &dfs->super_oh, NULL);
 	if (rc) {
 		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
@@ -962,8 +1000,17 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, dfs_t **_dfs)
 	D_DEBUG(DB_TRACE, "DFS super object %"PRIu64".%"PRIu64"\n",
 		dfs->super_oid.hi, dfs->super_oid.lo);
 
-	/** Check if SB object exists already */
-	rc = check_sb(dfs, true, &sb_exists);
+	/** if RW, allocate an OID for the namespace */
+	if (amode == O_RDWR) {
+		rc = daos_cont_oid_alloc(dfs->coh, 1, &dfs->oid.lo, NULL);
+		if (rc) {
+			D_ERROR("daos_cont_oid_alloc() Failed (%d)\n", rc);
+			D_GOTO(err_epoch, rc);
+		}
+	}
+
+	/** Check if SB object exists already, and create it if it doesn't */
+	rc = check_sb(dfs, (amode == O_RDWR), &sb_exists);
 	if (rc)
 		D_GOTO(err_epoch, rc);
 
@@ -971,57 +1018,60 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, dfs_t **_dfs)
 	strcpy(dfs->root.name, "/");
 	oid_cp(&dfs->root.parent_oid, dfs->super_oid);
 
-	rc = open_dir(dfs, dfs->super_oh, O_RDWR, &dfs->root);
+	rc = open_dir(dfs, dfs->super_oh, amode, 0, &dfs->root);
 	if (rc == 0) {
-		if (!sb_exists) {
-			D_ERROR("SB does not exist, but root obj does.\n");
-			D_GOTO(err_super, -DER_INVAL);
-		}
-
-		/** Allocate an OID for the namespace */
-		rc = daos_cont_oid_alloc(dfs->coh, 1, &dfs->oid.lo, NULL);
-		if (rc) {
-			D_ERROR("daos_cont_oid_alloc() Failed (%d)\n", rc);
-			D_GOTO(err_super, rc);
+		/** OID should not be 0 since this is an existing namespace. */
+		if (sb_exists && amode == O_RDWR &&
+		    dfs->oid.lo == RESERVED_LO) {
+			D_ERROR("OID should not be 0 in existing namespace\n");
+			D_GOTO(err_super, rc = -DER_INVAL);
 		}
 		D_DEBUG(DB_TRACE, "Namespace exists. OID lo = %"PRIu64".\n",
 			dfs->oid.lo);
 	} else if (rc == -DER_NONEXIST) {
-		if (sb_exists) {
-			D_ERROR("SB exists, but root does not.\n");
-			D_GOTO(err_super, -DER_INVAL);
-		}
-
-		/** Allocate three OIDs (should return 0 since new namespace) */
-		rc = daos_cont_oid_alloc(dfs->coh, 3, &dfs->oid.lo, NULL);
-		if (rc) {
-			D_ERROR("daos_cont_oid_alloc() Failed (%d)\n", rc);
-			D_GOTO(err_super, rc);
-		}
-		if (dfs->oid.lo != 0) {
-			D_ERROR("Container OIDs allocated is not 0\n");
-			D_GOTO(err_super, rc = -DER_INVAL);
-		}
-		dfs->oid.lo += 2;
-
 		D_DEBUG(DB_TRACE, "New Namespace, creating root object..\n");
-		dfs->root.mode = S_IFDIR | 0777;
 
-		dfs->root.oid.lo = 1;
-		dfs->root.oid.hi = 0;
+		if (amode == O_RDWR) {
+			/*
+			 * Set hi when we allocate the reserved oid. Account 0
+			 * for SB, 1 for root obj.
+			 */
+			if (dfs->oid.lo == RESERVED_LO)
+				dfs->oid.hi = ROOT_HI + 1;
+			/*
+			 * if lo is not 0 (reserved), we can use all the hi
+			 * ranks and we can start hi from 0. This happens when
+			 * multiple independent access is mounting the dfs at
+			 * the same time, and races between SB creation and oid
+			 * allocation can happen, leading us to here where the
+			 * mounter did not see the SB, but another one has raced
+			 * and allocated oid 0. One example is the MPI-IO file
+			 * per process case, where every process creates it's
+			 * own file in the same flat namespace.
+			 */
+			else
+				dfs->oid.hi = 0;
+		} else {
+			dfs->oid.hi = MAX_OID_HI;
+		}
+
+		/** Create the root object */
+		dfs->root.mode = S_IFDIR | 0777;
+		dfs->root.oid.lo = RESERVED_LO;
+		dfs->root.oid.hi = ROOT_HI;
 		daos_obj_id_generate(&dfs->root.oid, 0, DAOS_OC_REPL_MAX_RW);
 
 		rc = daos_obj_open(dfs->coh, dfs->root.oid, dfs->epoch,
-				   DAOS_OO_RW, &dfs->root.oh, NULL);
+				   obj_mode, &dfs->root.oh, NULL);
 		if (rc) {
-			D_ERROR("Failed to create root dir (%d).", rc);
+			D_ERROR("Failed to open root dir object (%d).", rc);
 			D_GOTO(err_super, rc);
 		}
 
+		/** Insert root entry in the SB */
 		oid_cp(&entry.oid, dfs->root.oid);
 		entry.mode = S_IFDIR | 0777;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
-
 		rc = insert_entry(dfs->super_oh, dfs->epoch, dfs->root.name,
 				  entry);
 		if (rc) {
@@ -1054,7 +1104,7 @@ err_dfs:
 }
 
 int
-dfs_umount(dfs_t *dfs)
+dfs_umount(dfs_t *dfs, bool commit)
 {
 	int rc;
 
@@ -1062,11 +1112,14 @@ dfs_umount(dfs_t *dfs)
 		return -DER_INVAL;
 
 	D_MUTEX_LOCK(&dfs->lock);
-	rc = daos_epoch_commit(dfs->coh, dfs->epoch, NULL, NULL);
-	if (rc) {
-		D_ERROR("daos_epoch_commit() Failed (%d)\n", rc);
-		D_MUTEX_UNLOCK(&dfs->lock);
-		return rc;
+
+	if (commit && dfs->amode == O_RDWR) {
+		rc = daos_epoch_commit(dfs->coh, dfs->epoch, NULL, NULL);
+		if (rc) {
+			D_ERROR("daos_epoch_commit() Failed (%d)\n", rc);
+			D_MUTEX_UNLOCK(&dfs->lock);
+			return rc;
+		}
 	}
 
 	daos_obj_close(dfs->root.oh, NULL);
@@ -1076,6 +1129,30 @@ dfs_umount(dfs_t *dfs)
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE_PTR(dfs);
 	return rc;
+}
+
+int
+dfs_get_epoch(dfs_t *dfs, daos_epoch_t *epoch)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return -DER_INVAL;
+	if (epoch == NULL)
+		return -DER_INVAL;
+
+	*epoch = dfs->epoch;
+	return 0;
+}
+
+int
+dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh)
+{
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return -DER_INVAL;
+	if (oh == NULL)
+		return -DER_INVAL;
+
+	oh->cookie = obj->oh.cookie;
+	return 0;
 }
 
 int
@@ -1095,7 +1172,8 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	incr_epoch(dfs);
 
 	strcpy(new_dir.name, name);
-	rc = create_dir(dfs, (parent ? parent->oh : DAOS_HDL_INVAL), &new_dir);
+	rc = create_dir(dfs, (parent ? parent->oh : DAOS_HDL_INVAL), 0,
+			&new_dir);
 	if (rc) {
 		daos_epoch_discard(dfs->coh, dfs->epoch, NULL, NULL);
 		return rc;
@@ -1193,10 +1271,13 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
-	if (parent == NULL || !S_ISDIR(parent->mode))
-		return -DER_NOTDIR;
 	if (name == NULL)
 		return -DER_INVAL;
+	/** If parent is NULL, assume it's root object */
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return -DER_NOTDIR;
 
 	D_DEBUG(DB_TRACE, "Remove entry %s from %s\n", name, parent->name);
 
@@ -1263,7 +1344,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	char			*token;
 	char			*rem, *sptr;
 	bool			exists;
-	unsigned int		daos_mode;
+	int			daos_mode;
 	int			rc = 0;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -1273,10 +1354,11 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	if (path == NULL)
 		return -DER_INVAL;
 
-	if (flags & O_RDONLY)
-		daos_mode = DAOS_OO_RO;
-	else
-		daos_mode = DAOS_OO_RW;
+	daos_mode = get_daos_obj_mode(flags);
+	if (daos_mode == -1) {
+		D_ERROR("Invalid access mode.\n");
+		return -DER_INVAL;
+	}
 
 	rem = strdup(path);
 	if (rem == NULL)
@@ -1498,19 +1580,22 @@ out:
 
 int
 dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
-	 int flags, const char *value, dfs_obj_t **_obj)
+	 int flags, daos_oclass_id_t cid, const char *value, dfs_obj_t **_obj)
 {
 	dfs_obj_t *obj;
 	int rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
-	if (parent == NULL || !S_ISDIR(parent->mode))
-		return -DER_NOTDIR;
 	if (name == NULL || _obj == NULL)
 		return -DER_INVAL;
 	if (S_ISLNK(mode) && value == NULL)
 		return -DER_INVAL;
+	/** If parent is NULL, assume it's root object */
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return -DER_NOTDIR;
 
 	D_DEBUG(DB_TRACE, "dfs_open: parent %s obj: %s\n", parent->name, name);
 
@@ -1524,7 +1609,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	switch (mode & S_IFMT) {
 	case S_IFREG:
-		rc = open_file(dfs, parent, flags, obj);
+		rc = open_file(dfs, parent, flags, cid, obj);
 		if (rc) {
 			D_ERROR("Failed to open file (%d)", rc);
 			D_FREE_PTR(obj);
@@ -1532,7 +1617,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		}
 		break;
 	case S_IFDIR:
-		rc = open_dir(dfs, parent->oh, flags, obj);
+		rc = open_dir(dfs, parent->oh, flags, cid, obj);
 		if (rc) {
 			D_ERROR("Failed to open directory (%d)", rc);
 			D_FREE_PTR(obj);
@@ -2061,16 +2146,29 @@ dfs_sync(dfs_t *dfs)
 		return -DER_INVAL;
 
 	D_MUTEX_LOCK(&dfs->lock);
-	rc = daos_epoch_commit(dfs->coh, dfs->epoch, NULL, NULL);
-	if (rc) {
-		D_ERROR("daos_epoch_commit() Failed (%d)\n", rc);
-		D_GOTO(out, rc);
-	}
 
-	rc = daos_epoch_hold(dfs->coh, &dfs->epoch, NULL, NULL);
-	if (rc) {
-		D_ERROR("daos_epoch_hold() Failed (%d)\n", rc);
-		D_GOTO(out, rc);
+	if (dfs->amode == O_RDWR) {
+		rc = daos_epoch_commit(dfs->coh, dfs->epoch, NULL, NULL);
+		if (rc) {
+			D_ERROR("daos_epoch_commit() Failed (%d)\n", rc);
+			D_GOTO(out, rc);
+		}
+
+		dfs->epoch = 0;
+		rc = daos_epoch_hold(dfs->coh, &dfs->epoch, NULL, NULL);
+		if (rc) {
+			D_ERROR("daos_epoch_hold() Failed (%d)\n", rc);
+			D_GOTO(out, rc);
+		}
+	} else {
+		daos_epoch_state_t state;
+
+		rc = daos_epoch_query(dfs->coh, &state, NULL);
+		if (rc) {
+			D_ERROR("daos_epoch_query() Failed (%d)\n", rc);
+			D_GOTO(out, rc);
+		}
+		dfs->epoch = state.es_ghce;
 	}
 
 out:
