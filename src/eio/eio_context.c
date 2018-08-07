@@ -24,13 +24,7 @@
 
 #include <spdk/blob.h>
 #include "eio_internal.h"
-
-/**
- * TODO: Temporarily used to get blobID for certain pool:xstream, can only
- * support single pool for now, will be replaced by per-server metadata.
- */
-#define MAX_BLOBS 64
-static spdk_blob_id	blob_id_array[MAX_BLOBS];
+#include "smd/smd_internal.h"
 
 struct blob_cp_arg {
 	spdk_blob_id		 bca_id;
@@ -137,11 +131,12 @@ blob_wait_completion(struct eio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 int
 eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt, uint64_t blob_sz)
 {
-	struct blob_cp_arg	*ba;
-	struct spdk_blob_opts	 opts;
-	struct eio_blobstore	*ebs;
-	uint64_t		 cluster_sz;
-	int			 rc;
+	struct blob_cp_arg		*ba;
+	struct spdk_blob_opts		 opts;
+	struct eio_blobstore		*ebs;
+	struct smd_nvme_pool_info	 smd_pool;
+	uint64_t			 cluster_sz;
+	int				 rc;
 
 	D_ASSERT(xs_ctxt != NULL);
 	ebs = xs_ctxt->exc_blobstore;
@@ -168,16 +163,14 @@ eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt, uint64_t blob_sz)
 	opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
 
 	/**
-	 * TODO Query per-server metadata to make sure the blob for this
-	 *	pool:xstream hasn't been created yet.
+	 * Query per-server metadata to make sure the blob for this pool:xstream
+	 * hasn't been created yet.
 	 */
-	if (xs_ctxt->exc_xs_id >= MAX_BLOBS) {
-		D_ERROR("Temporary blob array isn't big enough.\n");
-		return -DER_OVERFLOW;
-	} else if (blob_id_array[xs_ctxt->exc_xs_id] != 0) {
+	rc = smd_nvme_get_pool(uuid, xs_ctxt->exc_xs_id, &smd_pool);
+	if (rc == 0) {
 		D_ERROR("Duplicated blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
-		return -DER_NOSYS;
+		return -DER_EXIST;
 	}
 
 	ba = alloc_blob_cp_arg();
@@ -204,10 +197,22 @@ eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt, uint64_t blob_sz)
 			"%p pool:"DF_UUID" blob size:"DF_U64" clusters\n",
 			ba->bca_id, xs_ctxt, DP_UUID(uuid), opts.num_clusters);
 		rc = 0;
-		/* TODO Update per-server metadata */
-		blob_id_array[xs_ctxt->exc_xs_id] = ba->bca_id;
+		/* Update per-server metadata */
+		smd_nvme_set_pool_info(uuid, xs_ctxt->exc_xs_id, ba->bca_id,
+				       &smd_pool);
+		rc = smd_nvme_add_pool(&smd_pool);
+		if (rc != 0) {
+			/* TODO Delete newly created blob */
+			D_ERROR("Failure adding SMD pool table entry\n");
+			D_GOTO(error, rc);
+		}
+
+		D_DEBUG(DB_MGMT, "Successfully added entry to SMD pool table, "
+			"pool:"DF_UUID", xs_id:%d, blobID:"DF_U64"\n",
+			DP_UUID(uuid), xs_ctxt->exc_xs_id, ba->bca_id);
 	}
 
+error:
 	free_blob_cp_arg(ba);
 	return rc;
 }
@@ -216,11 +221,12 @@ int
 eio_ioctxt_open(struct eio_io_context **pctxt, struct eio_xs_context *xs_ctxt,
 		struct umem_instance *umem, uuid_t uuid)
 {
-	struct eio_io_context	*ctxt;
-	struct blob_cp_arg	*ba;
-	struct eio_blobstore	*ebs;
-	spdk_blob_id		 blob_id;
-	int			 rc;
+	struct eio_io_context		*ctxt;
+	struct blob_cp_arg		*ba;
+	struct eio_blobstore		*ebs;
+	struct smd_nvme_pool_info	 smd_pool;
+	spdk_blob_id			 blob_id;
+	int				 rc;
 
 	D_ALLOC_PTR(ctxt);
 	if (ctxt == NULL)
@@ -237,21 +243,18 @@ eio_ioctxt_open(struct eio_io_context **pctxt, struct eio_xs_context *xs_ctxt,
 		return 0;
 	}
 
-	/**
-	 * TODO Query per-server metadata to get blobID for this pool:xstream.
+	/*
+	 * Query per-server metadata to get blobID for this pool:xstream.
 	 */
-	if (xs_ctxt->exc_xs_id >= MAX_BLOBS) {
-		D_ERROR("Temporary blob array isn't big enough.\n");
-		rc = -DER_OVERFLOW;
-		goto out;
-	} else if (blob_id_array[xs_ctxt->exc_xs_id] == 0) {
-		D_ERROR("Fail to find the blobID for "DF_UUID"\n",
-			DP_UUID(uuid));
+	rc = smd_nvme_get_pool(uuid, xs_ctxt->exc_xs_id, &smd_pool);
+	if (rc != 0) {
+		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
+			xs_ctxt, DP_UUID(uuid));
 		rc = -DER_NONEXIST;
 		goto out;
-	} else {
-		blob_id = blob_id_array[xs_ctxt->exc_xs_id];
 	}
+
+	blob_id = smd_pool.npi_blob_id;
 
 	ba = alloc_blob_cp_arg();
 	if (ba == NULL) {

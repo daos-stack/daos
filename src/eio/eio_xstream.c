@@ -64,6 +64,7 @@ struct eio_bdev {
 	char			*eb_name;
 	struct eio_blobstore	*eb_blobstore;
 	struct spdk_bdev_desc	*eb_desc; /* for io stat only */
+	int			 eb_xs_cnt; /* count of xstreams per device */
 };
 
 struct eio_nvme_data {
@@ -437,7 +438,7 @@ load_blobstore(struct eio_xs_context *ctxt, struct spdk_bdev *bdev,
 
 	if (cp_arg.cca_rc != 0) {
 		D_DEBUG(bs_uuid == NULL ? DB_IO : DLOG_ERR,
-			"%s blobsotre failed %d\n", create ? "init" : "load",
+			"%s blobstore failed %d\n", create ? "init" : "load",
 			cp_arg.cca_rc);
 		return NULL;
 	}
@@ -464,11 +465,12 @@ unload_blobstore(struct eio_xs_context *ctxt, struct spdk_blob_store *bs)
 static int
 create_eio_bdev(struct eio_xs_context *ctxt, struct spdk_bdev *bdev)
 {
-	struct eio_bdev *d_bdev;
-	struct spdk_blob_store *bs;
-	struct spdk_bs_type bstype;
-	uuid_t bs_uuid;
-	int rc;
+	struct eio_bdev			*d_bdev;
+	struct spdk_blob_store		*bs = NULL;
+	struct spdk_bs_type		 bstype;
+	uuid_t				 bs_uuid;
+	int				 rc;
+	bool				 new_bs = false;
 
 	D_ALLOC_PTR(d_bdev);
 	if (d_bdev == NULL) {
@@ -477,28 +479,34 @@ create_eio_bdev(struct eio_xs_context *ctxt, struct spdk_bdev *bdev)
 	}
 	D_INIT_LIST_HEAD(&d_bdev->eb_link);
 
-	/*
-	 * TODO: Let's always create new blobstore each time before the
-	 * blob deletion & per-server metadata is done, otherwise, the
-	 * blobstore will be filled up after many rounds of tests.
-	 */
-	bs = NULL;
-
 	/* Try to load blobstore without specifying 'bstype' first */
-	/* bs = load_blobstore(ctxt, bdev, NULL, false); */
+	bs = load_blobstore(ctxt, bdev, NULL, false);
 	if (bs == NULL) {
 		/* Create blobstore if it wasn't created before */
 		uuid_generate(bs_uuid);
 		bs = load_blobstore(ctxt, bdev, &bs_uuid, true);
 		if (bs == NULL) {
+			D_ERROR("Failed to create blobstore on dev: "
+				""DF_UUID"\n", DP_UUID(bs_uuid));
 			rc = -DER_INVAL;
 			goto error;
 		}
+		new_bs = true;
 	}
+
+	/* TODO
+	 * Find the initial xstream count per device.
+	 * This requires a listing function in SMD in order to iterate through
+	 * the stream table entries and find the count of currently mapped
+	 * xstreams to each device.
+	 */
 
 	/* Get the 'bstype' (device ID) of blobstore */
 	bstype = spdk_bs_get_bstype(bs);
 	memcpy(bs_uuid, bstype.bstype, sizeof(bs_uuid));
+	D_DEBUG(DB_MGMT, "%s :"DF_UUID"\n",
+		new_bs ? "Created new blobstore" : "Loaded blobstore",
+		DP_UUID(bs_uuid));
 
 	rc = unload_blobstore(ctxt, bs);
 	if (rc != 0)
@@ -506,20 +514,23 @@ create_eio_bdev(struct eio_xs_context *ctxt, struct spdk_bdev *bdev)
 
 	rc = spdk_bdev_open(bdev, false, NULL, NULL, &d_bdev->eb_desc);
 	if (rc != 0) {
-		D_ERROR("failed to open bdev %s, %d\n",
+		D_ERROR("Failed to open bdev %s, %d\n",
 			spdk_bdev_get_name(bdev), rc);
 		goto error;
 	}
 
 	d_bdev->eb_name = strdup(spdk_bdev_get_name(bdev));
 	if (d_bdev->eb_name == NULL) {
-		D_ERROR("failed to allocate eb_name\n");
+		D_ERROR("Failed to allocate eb_name\n");
 		rc = -DER_NOMEM;
 		goto error;
 	}
+
 	uuid_copy(d_bdev->eb_uuid, bs_uuid);
 	d_list_add(&d_bdev->eb_link, &nvme_glb.ed_bdevs);
+
 	return 0;
+
 error:
 	if (d_bdev->eb_desc != NULL)
 		spdk_bdev_close(d_bdev->eb_desc);
@@ -629,32 +640,116 @@ get_eio_blobstore(struct eio_blobstore *eb)
 	return eb;
 }
 
+/**
+ * Assign a device for xstream->device mapping. Device chosen will be the device
+ * with the least amount of mapped xstreams.
+ */
+static int
+assign_dev_to_xs(int xs_id)
+{
+	struct eio_bdev			*d_bdev;
+	struct eio_bdev			*chosen_bdev;
+	struct smd_nvme_stream_bond	 xs_bond;
+	int				 lowest_xs_cnt;
+	int				 rc;
+
+	D_ASSERT(!d_list_empty(&nvme_glb.ed_bdevs));
+	chosen_bdev = d_list_entry(nvme_glb.ed_bdevs.next, struct eio_bdev,
+				  eb_link);
+	lowest_xs_cnt = chosen_bdev->eb_xs_cnt;
+
+	/*
+	 * Traverse the list and return the device with the least amount of
+	 * mapped xstreams.
+	 */
+	d_list_for_each_entry(d_bdev, &nvme_glb.ed_bdevs, eb_link) {
+		if (d_bdev->eb_xs_cnt < lowest_xs_cnt) {
+			lowest_xs_cnt = d_bdev->eb_xs_cnt;
+			chosen_bdev = d_bdev;
+		}
+	}
+
+	/* Update mapping for this xstream in NVMe device table */
+	smd_nvme_set_stream_bond(xs_id, chosen_bdev->eb_uuid, &xs_bond);
+	rc = smd_nvme_add_stream_bond(&xs_bond);
+	if (rc) {
+		D_ERROR("Failure adding entry to SMD stream table\n");
+		return rc;
+	}
+
+	chosen_bdev->eb_xs_cnt++;
+
+	D_DEBUG(DB_MGMT, "Successfully added entry to SMD stream table,"
+		" xs_id:%d, dev:"DF_UUID", xs_cnt:%d\n",
+		xs_id, DP_UUID(xs_bond.nsm_dev_id), chosen_bdev->eb_xs_cnt);
+
+	return 0;
+}
+
 static int
 init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
 {
-	struct eio_bdev		*d_bdev;
-	struct spdk_bdev	*bdev;
-	struct spdk_blob_store	*bs;
+	struct eio_bdev			*d_bdev;
+	struct spdk_bdev		*bdev;
+	struct spdk_blob_store		*bs;
+	struct smd_nvme_stream_bond	 xs_bond;
+	int				 rc;
+	bool				 found = false;
 
 	D_ASSERT(ctxt->exc_blobstore == NULL);
 	D_ASSERT(ctxt->exc_io_channel == NULL);
 
 	/*
-	 * TODO
 	 * Lookup @xs_id in the NVMe device table (per-server metadata),
 	 * if found, create blobstore on the mapped device.
-	 *
-	 * For simplicity reason, we can assume the mapping in NVMe device
-	 * table is always integrated: either mappings for all xstreams or
-	 * empty.
 	 */
-
-	/* Assign one device to the xstream if there isn't existing mapping */
 	if (d_list_empty(&nvme_glb.ed_bdevs))
 		return -DER_UNINIT;
 
-	d_bdev = d_list_entry(nvme_glb.ed_bdevs.next, struct eio_bdev,
-			      eb_link);
+	rc = smd_nvme_get_stream_bond(xs_id, &xs_bond);
+	if (rc && rc != -DER_NONEXIST)
+		return rc;
+
+	if (rc == -DER_NONEXIST) {
+		/*
+		 * Assign a device to the xstream if there isn't existing
+		 * mapping. Device chosen will be current device that is mapped
+		 * to the least amount of xstreams.
+		 */
+		rc = assign_dev_to_xs(xs_id);
+		if (rc) {
+			D_ERROR("No device assigned to xs_id:%d\n", xs_id);
+			return rc;
+		}
+
+		rc = smd_nvme_get_stream_bond(xs_id, &xs_bond);
+		if (rc)
+			return rc;
+
+	}
+
+	D_DEBUG(DB_MGMT, "SMD stream table entry found, xs_id:%d, "
+		"dev:"DF_UUID"\n", xs_id, DP_UUID(xs_bond.nsm_dev_id));
+
+	/* Iterate thru device list to find matching dev */
+	d_list_for_each_entry(d_bdev, &nvme_glb.ed_bdevs, eb_link) {
+		if (uuid_compare(d_bdev->eb_uuid, xs_bond.nsm_dev_id) == 0) {
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		/* TODO
+		 * Mapping between device table entry and device list
+		 * is inconsistent, either device currently mapped to
+		 * the xstream is not present in the device list or
+		 * stream table entry is invalid. Call per-server
+		 * metadata management tool to rectify.
+		 */
+		D_ERROR("Failure finding dev: "DF_UUID"\n",
+			DP_UUID(xs_bond.nsm_dev_id));
+		return -DER_NONEXIST;
+	}
 
 	if (d_bdev->eb_blobstore == NULL) {
 		d_bdev->eb_blobstore = alloc_eio_blobstore(ctxt);
@@ -664,8 +759,7 @@ init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
 		D_ASSERT(d_bdev->eb_name != NULL);
 		bdev = spdk_bdev_get_by_name(d_bdev->eb_name);
 		if (bdev == NULL) {
-			D_ERROR("failed to find bdev named %s\n",
-				d_bdev->eb_name);
+			D_ERROR("Failure finding bdev: %s\n", d_bdev->eb_name);
 			return -DER_NONEXIST;
 		}
 
@@ -676,7 +770,7 @@ init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
 
 		d_bdev->eb_blobstore->eb_bs = bs;
 
-		D_DEBUG(DB_MGMT, "Loaded bs, xs_id: %d, xs:%p dev:%s\n",
+		D_DEBUG(DB_MGMT, "Loaded bs, xs_id:%d, xs:%p dev:%s\n",
 			xs_id, ctxt, d_bdev->eb_name);
 	}
 
@@ -685,18 +779,9 @@ init_blobstore_ctxt(struct eio_xs_context *ctxt, int xs_id)
 	D_ASSERT(bs != NULL);
 	ctxt->exc_io_channel = spdk_bs_alloc_io_channel(bs);
 	if (ctxt->exc_io_channel == NULL) {
-		D_ERROR("failed to create io channel\n");
+		D_ERROR("Failed to create io channel\n");
 		return -DER_NOMEM;
 	}
-
-	/*
-	 * TODO
-	 * Update mapping for this xstream in NVMe device table.
-	 */
-
-	/* Move the used device to tail */
-	d_list_del_init(&d_bdev->eb_link);
-	d_list_add_tail(&d_bdev->eb_link, &nvme_glb.ed_bdevs);
 
 	return 0;
 }
