@@ -52,7 +52,7 @@ if [ -d "/mnt/daos" ]; then
     # Environment variables specific to the rdb tests
     export PATH=$SL_PREFIX/bin:$PATH
     export OFI_INTERFACE=lo
-    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
+    #run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for
