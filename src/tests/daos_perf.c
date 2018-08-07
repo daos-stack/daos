@@ -283,9 +283,11 @@ ts_key_update_or_fetch(enum ts_op_type_t update_or_fetch, bool with_fetch)
 					update_or_fetch);
 			} else {
 				if (update_or_fetch == TS_DO_UPDATE) {
-					rc = ts_hold_epoch(&epoch);
-					if (rc)
-						D_GOTO(failed, rc);
+					if (with_fetch == WITH_FETCH) {
+						rc = ts_hold_epoch(&epoch);
+						if (rc)
+							D_GOTO(failed, rc);
+					}
 					rc = ts_daos_update(cred, epoch);
 				}
 				else
