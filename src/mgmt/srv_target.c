@@ -571,7 +571,6 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 	char	*zombie = NULL;
 	int	 rc;
 
-
 	/** XXX: many synchronous/blocking operations below */
 
 	/** move target directory to ZOMBIES */
@@ -579,7 +578,10 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 	if (rc)
 		return rc;
 
-	/* TODO: Call dss_thread_collective() to destroy blobIDs first */
+	/* destroy blobIDs first */
+	rc = dss_thread_collective(vos_blob_destroy, pool_uuid);
+	if (rc)
+		D_GOTO(out, rc);
 
 	rc = rename(path, zombie);
 	if (rc < 0)

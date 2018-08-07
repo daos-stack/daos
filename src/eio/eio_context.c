@@ -106,7 +106,7 @@ blob_open_cb(void *arg, struct spdk_blob *blob, int rc)
 }
 
 static void
-blob_close_cb(void *arg, int rc)
+blob_close_or_delete_cb(void *arg, int rc)
 {
 	struct blob_cp_arg	*ba = arg;
 
@@ -202,8 +202,12 @@ eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt, uint64_t blob_sz)
 				       &smd_pool);
 		rc = smd_nvme_add_pool(&smd_pool);
 		if (rc != 0) {
-			/* TODO Delete newly created blob */
+			/* Delete newly created blob */
 			D_ERROR("Failure adding SMD pool table entry\n");
+			if (eio_blob_delete(uuid, xs_ctxt))
+				D_ERROR("Unable to delete newly created blobID "
+					""DF_U64" for xs:%p pool:"DF_UUID"\n",
+					ba->bca_id, xs_ctxt, DP_UUID(uuid));
 			D_GOTO(error, rc);
 		}
 
@@ -250,17 +254,14 @@ eio_ioctxt_open(struct eio_io_context **pctxt, struct eio_xs_context *xs_ctxt,
 	if (rc != 0) {
 		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
-		rc = -DER_NONEXIST;
-		goto out;
+		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	blob_id = smd_pool.npi_blob_id;
 
 	ba = alloc_blob_cp_arg();
-	if (ba == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (ba == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_DEBUG(DB_MGMT, "Opening blobID "DF_U64" for xs:%p pool:"DF_UUID"\n",
 		blob_id, xs_ctxt, DP_UUID(uuid));
@@ -299,19 +300,20 @@ out:
 	return rc;
 }
 
-void
+int
 eio_ioctxt_close(struct eio_io_context *ctxt)
 {
 	struct blob_cp_arg	*ba;
 	struct eio_blobstore	*ebs;
+	int			 rc;
 
 	/* NVMe isn't configured */
 	if (ctxt->eic_blob == NULL)
-		goto done;
+		D_GOTO(out, rc = 0);
 
 	ba = alloc_blob_cp_arg();
 	if (ba == NULL)
-		goto done;
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_DEBUG(DB_MGMT, "Closing blob %p for xs:%p\n", ctxt->eic_blob,
 		ctxt->eic_xs_ctxt);
@@ -323,27 +325,84 @@ eio_ioctxt_close(struct eio_io_context *ctxt)
 	ba->bca_inflights = 1;
 	ABT_mutex_lock(ebs->eb_mutex);
 	if (ebs->eb_bs != NULL)
-		spdk_blob_close(ctxt->eic_blob, blob_close_cb, ba);
+		spdk_blob_close(ctxt->eic_blob, blob_close_or_delete_cb, ba);
 	else
-		blob_close_cb(ba, -DER_NO_HDL);
+		blob_close_or_delete_cb(ba, -DER_NO_HDL);
 	ABT_mutex_unlock(ebs->eb_mutex);
 
 	/* Wait for blob close done */
 	blob_wait_completion(ctxt->eic_xs_ctxt, ba);
-	if (ba->bca_rc != 0)
+	if (ba->bca_rc != 0) {
 		D_ERROR("Close blob %p failed for xs:%p rc:%d\n",
 			ctxt->eic_blob, ctxt->eic_xs_ctxt, ba->bca_rc);
-	else
+		rc = -DER_IO;
+	} else {
 		D_DEBUG(DB_MGMT, "Successfully closed blob %p for xs:%p\n",
 			ctxt->eic_blob, ctxt->eic_xs_ctxt);
+		rc = 0;
+	}
 
 	free_blob_cp_arg(ba);
-done:
+out:
 	D_FREE_PTR(ctxt);
+	return rc;
 }
 
-void
+int
 eio_blob_delete(uuid_t uuid, struct eio_xs_context *xs_ctxt)
 {
-	/* TODO: complete this */
+	struct blob_cp_arg		*ba;
+	struct eio_blobstore		*ebs;
+	struct smd_nvme_pool_info	 smd_pool;
+	spdk_blob_id			 blob_id;
+	int				 rc;
+
+	D_ASSERT(xs_ctxt != NULL);
+	ebs = xs_ctxt->exc_blobstore;
+	D_ASSERT(ebs != NULL);
+
+	/**
+	 * Query per-server metadata to get blobID for this pool:xstream
+	 */
+	rc = smd_nvme_get_pool(uuid, xs_ctxt->exc_xs_id, &smd_pool);
+	if (rc != 0) {
+		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
+			xs_ctxt, DP_UUID(uuid));
+		return -DER_NONEXIST;
+	}
+
+	blob_id = smd_pool.npi_blob_id;
+
+	ba = alloc_blob_cp_arg();
+	if (ba == NULL)
+		return -DER_NOMEM;
+
+	D_DEBUG(DB_MGMT, "Deleting blobID "DF_U64" for pool:"DF_UUID" xs:%p\n",
+		blob_id, DP_UUID(uuid), xs_ctxt);
+
+	ba->bca_inflights = 1;
+	ABT_mutex_lock(ebs->eb_mutex);
+	if (ebs->eb_bs != NULL)
+		spdk_bs_delete_blob(ebs->eb_bs, blob_id,
+				    blob_close_or_delete_cb, ba);
+	else
+		blob_close_or_delete_cb(ba, -DER_NO_HDL);
+	ABT_mutex_unlock(ebs->eb_mutex);
+
+	/* Wait for blob delete done */
+	blob_wait_completion(xs_ctxt, ba);
+	if (ba->bca_rc != 0) {
+		D_ERROR("Delete blobID "DF_U64" failed for pool:"DF_UUID" "
+			"xs:%p rc:%d\n",
+			blob_id, DP_UUID(uuid), xs_ctxt, ba->bca_rc);
+		rc = -DER_IO;
+	} else {
+		D_DEBUG(DB_MGMT, "Successfully deleted blobID "DF_U64" for "
+			"pool:"DF_UUID" xs:%p\n",
+			blob_id, DP_UUID(uuid), xs_ctxt);
+		rc = 0;
+	}
+
+	free_blob_cp_arg(ba);
+	return rc;
 }

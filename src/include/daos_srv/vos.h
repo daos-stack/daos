@@ -80,6 +80,16 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		daos_size_t blob_sz);
 
 /**
+ * Destroy SPDK blob.
+ *
+ * \param uuid	[IN]	Pool UUID
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_blob_destroy(void *uuid);
+
+/**
  * Destroy a Versioned Object Storage Pool (VOSP)
  *
  * \param path	[IN]	Path of the memory pool

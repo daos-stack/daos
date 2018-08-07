@@ -212,9 +212,9 @@ int eio_blob_create(uuid_t uuid, struct eio_xs_context *xs_ctxt,
  * \param[IN] uuid	Pool UUID
  * \param[IN] xs_ctxt	Per-xstream NVMe context
  *
- * \returns		N/A
+ * \returns		Zero on success, negative value on error
  */
-void eio_blob_delete(uuid_t uuid, struct eio_xs_context *xs_ctxt);
+int eio_blob_delete(uuid_t uuid, struct eio_xs_context *xs_ctxt);
 
 /*
  * Open per VOS instance I/O context.
@@ -235,9 +235,9 @@ int eio_ioctxt_open(struct eio_io_context **pctxt,
  *
  * \param[IN] ctxt	I/O context
  *
- * \returns		N/A
+ * \returns		Zero on success, negative value on error
  */
-void eio_ioctxt_close(struct eio_io_context *ctxt);
+int eio_ioctxt_close(struct eio_io_context *ctxt);
 
 /**
  * Allocate & initialize an io descriptor

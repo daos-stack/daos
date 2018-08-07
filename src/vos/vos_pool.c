@@ -61,13 +61,19 @@ static void
 pool_hop_free(struct d_ulink *hlink)
 {
 	struct vos_pool	*pool = pool_hlink2ptr(hlink);
+	int		 rc;
 
 	D_ASSERT(pool->vp_opened == 0);
 
 	if (pool->vp_io_ctxt != NULL) {
-		D_DEBUG(DB_MGMT, "Closing VOS I/O context:%p pool:"DF_UUID"\n",
-			pool->vp_io_ctxt, DP_UUID(pool->vp_id));
-		eio_ioctxt_close(pool->vp_io_ctxt);
+		rc = eio_ioctxt_close(pool->vp_io_ctxt);
+		if (rc)
+			D_ERROR("Closing VOS I/O context:%p pool:"DF_UUID"\n",
+				pool->vp_io_ctxt, DP_UUID(pool->vp_id));
+		else
+			D_DEBUG(DB_MGMT, "Closed VOS I/O context:%p pool:"
+				""DF_UUID"\n",
+				pool->vp_io_ctxt, DP_UUID(pool->vp_id));
 	}
 
 	if (pool->vp_vea_info != NULL)
@@ -273,11 +279,32 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		D_ERROR("Format blob error for xs:%p pool:"DF_UUID" rc:%d\n",
 			xs_ctxt, DP_UUID(uuid), rc);
 		/* Destroy the SPDK blob on error */
-		eio_blob_delete(uuid, xs_ctxt);
+		rc = eio_blob_delete(uuid, xs_ctxt);
 	}
 close:
 	/* Close this local handle, opened using pool_open */
 	vos_pmemobj_close(ph);
+	return rc;
+}
+
+/**
+ * Destroy SPDK blob
+ */
+int
+vos_blob_destroy(void *uuid)
+{
+	uuid_t			*pool_uuid = uuid;
+	struct eio_xs_context	*xs_ctxt = vos_xsctxt_get();
+	int			 rc;
+
+	/* NVMe device isn't configured */
+	if (xs_ctxt == NULL)
+		return 0;
+
+	D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
+		xs_ctxt, DP_UUID(*pool_uuid));
+	rc = eio_blob_delete(*pool_uuid, xs_ctxt);
+
 	return rc;
 }
 
@@ -338,8 +365,10 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	} else {
 		rc = remove(path);
 		if (rc)
-			D_ERROR("While deleting file from PMEM\n");
+			D_ERROR("Failure deleting file from PMEM: %s\n",
+				strerror(errno));
 	}
+
 exit:
 	return rc;
 }

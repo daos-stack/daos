@@ -286,7 +286,7 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 		D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID" succeed.\n",
 			DP_UUID(pd_in->pd_pool_uuid));
 	else
-		D_ERROR("Destroying pool "DF_UUID"failed, rc: %d.\n",
+		D_ERROR("Destroying pool "DF_UUID" failed, rc: %d.\n",
 			DP_UUID(pd_in->pd_pool_uuid), rc);
 out:
 	pd_out->pd_rc = rc;

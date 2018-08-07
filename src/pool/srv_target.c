@@ -282,7 +282,7 @@ pool_free_ref(struct daos_llink *llink)
 	if (pool->sp_iv_ns != NULL)
 		ds_iv_ns_destroy(pool->sp_iv_ns);
 
-	rc = dss_task_collective(pool_child_delete_one, pool->sp_uuid);
+	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid);
 	if (rc == -DER_CANCELED)
 		D_DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
 	else if (rc != 0)
