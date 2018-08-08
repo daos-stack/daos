@@ -60,23 +60,6 @@ def number_of_failures():
         failures = TEST_NOT_RUN
     return failures
 
-def cleanup():
-    """
-    As a byproduct of calling 'make' a number of unneeded files are left
-    lying around in the directory. The tests need to cleanup after themselves.
-    """
-    try:
-        rc = subprocess.call("pushd {}; " \
-                             "git clean -f; " \
-                             "/bin/rm -rf CLinkedListQueue; " \
-                             "popd".format(DIR), shell=True)
-        if rc:
-            print("Unable to clean extraneous files from src/rdb/raft dir")
-        else:
-            print("Cleaning up extraneous files from raft src/rdb/raft dir")
-    except Exception as e:
-        print("Removing extraneous raft files failed due to\n{}".format(e))
-
 def main():
     """
     Run the raft tests, report success or failure, and cleanup the extraneous
@@ -89,7 +72,6 @@ def main():
         print("Raft Tests did not run")
     else:
         print("Raft Tests had {} failures".format(failures))
-    cleanup()
     sys.exit(failures)
 
 if __name__ == "__main__":
