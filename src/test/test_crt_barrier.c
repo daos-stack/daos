@@ -62,7 +62,7 @@ void *progress_thread(void *arg)
 	crt_ctx = (crt_context_t) arg;
 	/* progress loop */
 	do {
-		rc = crt_progress(crt_ctx, 1, NULL, NULL);
+		rc = crt_progress(crt_ctx, 1000, NULL, NULL);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
