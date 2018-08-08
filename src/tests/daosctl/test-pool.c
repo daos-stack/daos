@@ -581,7 +581,7 @@ cmd_test_query_pool(int argc, const char **argv, void *ctx)
 	daos_pool_info_t pool_info;
 	int rc;
 	struct argp_option options[] = {
-		{"handle",   'i',   "INTERNAL-HANDLE",   0,
+		{"handle",   'h',   "INTERNAL-HANDLE",   0,
 		 "test value for the pool handle, just rubbish really"},
 		{0}
 	};
@@ -598,6 +598,10 @@ cmd_test_query_pool(int argc, const char **argv, void *ctx)
 	 * GNU standards and can be parsed with argp
 	 */
 	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &qp_options);
+
+	/* a handle must be provided */
+	if (qp_options.handle == NULL)
+		return EINVAL;
 
 	/* parse the handle internal data and stuff it in the
 	 * expected structure
