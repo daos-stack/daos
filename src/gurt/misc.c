@@ -239,23 +239,22 @@ d_rank_list_free(d_rank_list_t *rank_list)
 int
 d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src)
 {
-	int		rc = 0;
+	int		rc = DER_SUCCESS;
 
-	if (src == NULL || src->rl_ranks == NULL || src->rl_nr == 0) {
-		D_WARN("Nothing to do; empty source list"
-		       ", src: %p, src arr: %p, src len %u\n",
-		       src, src->rl_ranks, src->rl_nr);
-		D_GOTO(out, rc);
-	}
-
-	if (dst == NULL || dst->rl_ranks == NULL || dst->rl_nr < src->rl_nr) {
-		D_ERROR("Not enough space in destination list "
-			", dst: %p, dst arr: %p, dst len %u, src len %u\n",
-			dst, dst->rl_ranks, dst->rl_nr, src->rl_nr);
+	if (dst == NULL || src == NULL) {
+		D_ERROR("Nothing to do, dst: %p, src: %p.\n", dst, src);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	dst->rl_nr = src->rl_nr;
+	if (dst->rl_nr != src->rl_nr) {
+		dst = d_rank_list_realloc(dst, src->rl_nr);
+		if (dst == NULL) {
+			D_ERROR("d_rank_list_realloc() failed.\n");
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		dst->rl_nr = src->rl_nr;
+	}
+
 	memcpy(dst->rl_ranks, src->rl_ranks, dst->rl_nr * sizeof(d_rank_t));
 out:
 	return rc;
