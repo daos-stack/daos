@@ -19,13 +19,13 @@ ARG UID=1000
 RUN apt-get update
 
 # Install basic tools
-RUN apt-get install -y git gcc golang-go make cmake libtool-bin scons autoconf
-RUN apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
-RUN apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
-RUN apt-get install -y curl doxygen pandoc flex patch nasm yasm graphviz doxygen
-RUN apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev libnuma-dev
-RUN apt-get install -y libaio-dev sg3-utils libiscsi-dev python-dev mscgen
-RUN apt-get install -y ninja-build meson
+RUN apt-get install -y git gcc golang-go make cmake libtool-bin scons autoconf   \
+                       libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev \
+                       librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev   \
+                       curl doxygen pandoc flex patch nasm yasm graphviz doxygen \
+                       libibverbs-dev librdmacm-dev libcunit1-dev libnuma-dev    \
+                       libaio-dev sg3-utils libiscsi-dev python-dev mscgen       \
+                       ninja-build meson
 
 # Dependencies
 

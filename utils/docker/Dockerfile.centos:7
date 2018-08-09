@@ -15,15 +15,18 @@ ARG NOBUILD
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
+# Update distribution
+#Nothing to do for CentOS
+
 # Install basic tools
 RUN yum install -y epel-release
-RUN yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
-RUN yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
-RUN yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
-RUN yum install -y doxygen pandoc flex patch nasm yasm ninja-build meson
-RUN yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
-RUN yum install -y python clang-analyzer sg3_utils libiscsi-devel
-RUN yum install -y libibverbs-devel numactl-devel doxygen mscgen graphviz
+RUN yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel   \
+                   libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel \
+                   libcmocka libcmocka-devel readline-devel                      \
+                   doxygen pandoc flex patch nasm yasm ninja-build meson         \
+                   CUnit-devel libaio-devel python-pep8 lcov                     \
+                   python clang-analyzer sg3_utils libiscsi-devel                \
+                   numactl-devel doxygen graphviz
 
 
 # Dependencies
