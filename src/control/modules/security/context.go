@@ -26,6 +26,7 @@ package security
 import (
 	"errors"
 	"fmt"
+
 	pb "modules/security/proto"
 
 	uuid "github.com/satori/go.uuid"
@@ -76,8 +77,7 @@ func (s *ContextMap) AddToken(requestor string, token *pb.AuthToken) (*uuid.UUID
 	key, err := uuid.NewV4()
 
 	if err != nil {
-		fmt.Printf("Unable to generate UUIDv4 UUID: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("Unable to generate UUIDv4 UUID: %s", err.Error())
 	}
 	s.ctxmap[key] = NewContext(requestor, token)
 	return &key, nil

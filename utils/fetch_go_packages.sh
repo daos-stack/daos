@@ -24,6 +24,7 @@ packages=('github.com/satori/go.uuid'
 'golang.org/x/sys/unix'
 'github.com/abiosoft/ishell'
 'github.com/jessevdk/go-flags'
+'github.com/pkg/errors'
 )
 
 

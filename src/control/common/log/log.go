@@ -21,30 +21,70 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package util
+package log
 
 import (
 	"fmt"
 	"log"
+	"os"
 	"runtime"
 
 	"google.golang.org/grpc/status"
 )
 
+// Logger struct contains reference and level
+type Logger struct {
+	logger *log.Logger
+	level  int
+}
+
+// Log levels.
+const (
+	Error = iota
+	Debug
+)
+
+// NewLogger instantiates Logger and returns reference
+func NewLogger() *Logger {
+	var l Logger
+	l.logger = log.New(os.Stderr, "", log.LstdFlags|log.Lshortfile)
+	l.level = Error
+	return &l
+}
+
+// SetLevel configures maximum logging resolution
+func (l *Logger) SetLevel(level int) {
+	if level < Error || level > Debug {
+		panic(level)
+	}
+	l.level = level
+}
+
+// Errorf logs an error message
+func (l Logger) Errorf(format string, v ...interface{}) {
+	if l.level >= Error {
+		l.logger.Output(2, fmt.Sprintf("error: "+format, v...))
+	}
+}
+
+// Debugf logs a debug message
+func (l Logger) Debugf(format string, v ...interface{}) {
+	if l.level >= Debug {
+		l.logger.Output(2, fmt.Sprintf("debug: "+format, v...))
+	}
+}
+
 // LogGrpcErr is a decorator that adds function name to gRPC error context.
-func LogGrpcErr(err error) error {
+func (l Logger) LogGrpcErr(err error) error {
 	errStatus, _ := status.FromError(err)
 	function, _, _, _ := runtime.Caller(1)
+	msg := fmt.Sprintf(
+		"%v(_): %v",
+		runtime.FuncForPC(function).Name(),
+		errStatus.Message())
 
 	// replace with new elaborated error
-	err = status.Errorf(
-		errStatus.Code(),
-		fmt.Sprintf(
-			"%v(_): %v",
-			runtime.FuncForPC(function).Name(),
-			errStatus.Message()))
-
-	log.Println(err)
-
+	err = status.Errorf(errStatus.Code(), msg)
+	l.Errorf(msg)
 	return err
 }

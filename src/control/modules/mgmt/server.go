@@ -29,7 +29,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"common/util"
+	"common/log"
 	"go-spdk/spdk"
 
 	"github.com/golang/protobuf/proto"
@@ -44,7 +44,7 @@ var (
 
 // ControlService type is the data container for the service.
 type ControlService struct {
-	// read-only after initialized
+	logger            *log.Logger
 	supportedFeatures []*pb.Feature
 	nvmeNamespaces    []*pb.NVMeNamespace
 }
@@ -97,19 +97,19 @@ func (s *ControlService) ListNVMe(empty *pb.ListNVMeParams, stream pb.MgmtContro
 }
 
 // loadInitData retrieves initial data from file.
-func (s *ControlService) loadInitData(filePath string) {
+func (s *ControlService) loadInitData(filePath string) error {
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		util.LogGrpcErr(err)
-		return
+		return err
 	}
 	if err := json.Unmarshal(file, &s.supportedFeatures); err != nil {
-		util.LogGrpcErr(err)
-		return
+		return err
 	}
+
+	return nil
 }
 
-// NewControlServer creates a new instance of our controlServer struct.
+// NewControlServer creates a new instance of our ControlServer struct.
 func NewControlServer() *ControlService {
 	s := &ControlService{}
 
@@ -119,7 +119,11 @@ func NewControlServer() *ControlService {
 		panic(err)
 	}
 	dbAbsPath := filepath.Join(filepath.Dir(ex), "..", jsonDBRelPath)
-	s.loadInitData(dbAbsPath)
+	if err := s.loadInitData(dbAbsPath); err != nil {
+		panic(err)
+	}
+
+	s.logger = log.NewLogger()
 
 	return s
 }

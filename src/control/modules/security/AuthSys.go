@@ -26,10 +26,11 @@ package security
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/user"
 	"strconv"
+
+	"common/log"
 
 	pb "modules/security/proto"
 
@@ -39,7 +40,7 @@ import (
 // AuthSysRequestFromCreds takes the domain info credentials gathered
 // during the gRPC handshake and creates an AuthSys security request to obtain
 // a handle from the management service.
-func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityRequest, error) {
+func AuthSysRequestFromCreds(creds *DomainInfo, logger *log.Logger) (*pb.SecurityRequest, error) {
 	uid := strconv.FormatUint(uint64(creds.creds.Uid), 10)
 	userInfo, _ := user.LookupId(uid)
 	groups, _ := userInfo.GroupIds()
@@ -47,7 +48,7 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityRequest, error) {
 	name, err := os.Hostname()
 	if err != nil {
 		name = "unavailable"
-		fmt.Println(err)
+		logger.Errorf(err.Error())
 	}
 
 	var gids = []uint32{}
@@ -56,7 +57,7 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityRequest, error) {
 	for _, gstr := range groups {
 		gid, err := strconv.Atoi(gstr)
 		if err != nil {
-			log.Printf("Was unable to convert %s to an integer\n", gstr)
+			logger.Errorf("Was unable to convert %s to an integer\n", gstr)
 			continue
 		}
 		gids = append(gids, uint32(gid))
@@ -74,7 +75,7 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityRequest, error) {
 	// Marshal our AuthSys token into a byte array
 	tokenBytes, err := proto.Marshal(&sys)
 	if err != nil {
-		log.Println("Unable to marshal AuthSys token", err)
+		logger.Errorf("Unable to marshal AuthSys token (%s)", err.Error())
 		return nil, err
 	}
 	token := pb.AuthToken{
