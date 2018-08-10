@@ -19,13 +19,19 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-
+#
+# GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+# The Government's rights to use, modify, reproduce, release, perform, display,
+# or disclose this software are subject to the terms of the Apache License as
+# provided in Contract No. 8F-30005.
+# Any reproduction of computer software, computer software documentation, or
+# portions thereof marked with this legend must also reproduce the markings.
 """
 This script runs the rdb tests. From the command line the tests are run with:
 
 server:
-orterun -N 1 --enable-recovery --report-uri /tmp/urifile <debug_cmds>
-daos_server -c 1 -m vos,rdb,rdbt
+orterun -N 1 --report-uri /tmp/urifile <debug_cmds> daos_server -c 1
+-m vos,rdb,rdbt
 
 client:
 orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt init
@@ -43,11 +49,12 @@ Where debug_cmds = -x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR -x DD_SUBSYS=all
 This script automates the process.
 """
 
-from multiprocessing import Process
 import subprocess
 import os
 import sys
 import time
+import signal
+import shlex
 
 # If this script is run as part of the Jenkins build using utils/run_tests.sh
 # then SL_OMPI_PREFIX is set and sent into this script as an arg. This is for
@@ -63,24 +70,32 @@ debug_cmds = "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR " + \
 client_prefix = ""
 client_suffix = ""
 
+# In case orterun has quit but the daos_server is still running, save the PID.
+#daos_server = None
+
+class ServerFailedToStart(Exception):
+        pass
+
+class ServerTimedOut(Exception):
+        pass
+
 def start_server():
     """
-    Start the DAOS server with an orterun command as a child process. If the
-    server starts correctly the os.system call never returns. If it does return,
-    an non-None exit code is generated (it could be 0). The parent checks this
-    exit code before running the client operations.
+    Start the DAOS server with an orterun command as a child process. We use
+    subprocess.Popen since it returns control to the calling process and
+    provides access to the polling feature.
     """
+    print("Starting DAOS server\n")
     cmd = PREFIX + "/bin/orterun -N 1 --report-uri {} ".format(urifile)
     cmd += debug_cmds + " daos_server -c 1 -m vos,rdb,rdbt "
     print("Running command:\n{}".format(cmd))
+    sys.stdout.flush()
 
-    # Save the output of the command so we can retrieve the child's PID to kill
-    # the DAOS server process at the end of the test.
-    cmd += " > " + pid_file
-
-    # If this call returns, then the server was not able to start and the parent
-    # will see a not None exit code.
-    os.system(cmd)
+    try:
+        p = subprocess.Popen(shlex.split(cmd))
+        return p
+    except Exception as e:
+        raise ServerFailedToStart("Server failed to start:\n{}".format(e))
 
 def run_client(segment_type):
     """
@@ -104,29 +119,95 @@ def run_client(segment_type):
             cmd, rc))
     return 0
 
-def cleanup():
-    """ Perform cleanup operations. Shut down the DAOS server if necessary by
-    killing the child processes that have been created. If the daos_io_server
-    process is killed, so are the processes for daos_server and orterun. Remove
-    the file that logged the child's PID.
+def pid_info(output_line):
     """
-    # Shut down the DAOS server
-    print("Shutting down DAOS server with kill -9 <PID>")
-    # Get child PID
+    Take a line of 'ps -o pid,comm' output and return the PID number and name.
+    The line looks something like:
+     9108  orterun
+        or
+    10183  daos_server
+    Need both items. Return a tuple (name, pid)
+    Note: there could be leading spaces on the pid.
+    """
+    info = output_line.lstrip().split()
     try:
-        fp = open(pid_file, 'r')
-        line = fp.readline()
-        fp.close()
-        if line:
-            # The line returned when starting the DAOS server is something like:
-            # DAOS server (v0.0.2) process 22343 started on rank 0 (out of 1)
-            # with 1 xstream(s)
-            child_pid = line.split("process ")[1].split()[0]
-            cmd = "kill -9 {}".format(child_pid)
-            os.system(cmd)
-    except:
-        pass
-    os.system("/bin/rm {}".format(pid_file))
+        return info[1], info[0]
+    except Exception as e:
+        print("Unable to retrieve PID info from {}".format(output_line))
+        return "", None
+
+def find_child(parent_pid, child_name):
+    """
+    Given a PID and a process name, see if this PID has any children with the
+    specified name. If is does, return the child PID. If not, return None.
+    ps -o pid,comm --no-headers --ppid <pid> gives output that looks like this:
+     41108 orterun
+     41519 ps
+
+    """
+    child_pid = None
+    cmd = ['ps', '-o', 'pid,comm', '--no-headers', '--ppid', str(parent_pid)]
+
+    try:
+        res = subprocess.check_output(cmd)
+    except subprocess.CalledProcessError:
+        # parent_pid has no children
+        return None
+    except Exception as e:
+        print("ps command failed with: {}".format(e))
+        return None
+
+    # Get rid of the trailing blank line from subprocess.check_output
+    res = [s for s in res.splitlines() if s]
+    for line in res:
+        try:
+            current_name, current_pid = pid_info(line)
+        except Exception as e:
+            print("Unable to extract pid and process name from {}".format(
+                   line))
+            continue
+
+        if current_pid is None:
+            return None
+        if current_name.startswith(child_name):
+            # This is the droid, uh, child we're looking for
+            return current_pid
+        child_pid = find_child(current_pid, child_name)
+        if child_pid is not None:
+            return child_pid
+    return child_pid
+
+def daos_server_pid():
+    """
+    Find the pid for the daos_server. Start drilling down from the parent
+    (current) process until we get output where one line contains
+    "daos_io_server" or "daos_server".
+    """
+    parent_pid = os.getpid()
+    return find_child(parent_pid, "daos_")
+
+def cleanup(daos_server):
+    """ Perform cleanup operations. Shut down the DAOS server by killing the
+    child processes that have been created. If the daos_server process is
+    killed, so are the processes for daos_io_server and orterun (theoretically).
+    It has been observed on occasion to go zombie until orterun itself is
+    killed.
+    """
+    # Get PID of the daos server
+    cmd = "{} signal.SIGKILL".format(daos_server)
+
+    try:
+        os.kill(int(daos_server), signal.SIGKILL)
+        print("Shut down DAOS server with os.kill({} signal.SIGKILL)".format(
+               daos_server))
+    except Exception as e:
+        if daos_server is None:
+            print("No PID was found for the DAOS server")
+        elif "No such process" in e:
+            print("The daos_server process is no longer available"
+                  " and could not be killed.")
+        else:
+            print("Unable to shut down DAOS server: {}".format(e))
 
 if __name__ == "__main__":
     """
@@ -139,55 +220,64 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         PREFIX = sys.argv[1]
 
-    # Start the the server.
-    print("Starting DAOS server\n")
-    sys.stdout.flush()
-    p = Process(target=start_server)
-    p.start()
-    print("Back from start")
+    try:
+        # Server operations
+        p = start_server()
 
-    # Give the server time to start up.
-    counter = 0
-    server_timed_out = False
-    while True:
-        if os.path.isfile(pid_file):
-            break
-        if counter >= 120:
-            server_timed_out = True
-            print("Server timed out")
-            break
-        counter += 1
-        time.sleep(1)
+        counter = 0
+        daos_server = daos_server_pid()
+        while daos_server is None:
+            if counter >= 120:
+                raise ServerTimedOut("No DAOS server process detected before "\
+                                     "timeout")
+            counter += 1
+            time.sleep(1)
+            daos_server = daos_server_pid()
 
-    # If it is anything other than None, even zero, then something has gone
-    # wrong and the server has exited. We can't run the client processes.
-    if p.exitcode is not None or server_timed_out:
-        print("Server unavailable.\nChild process exit code = {}".format(
-            p.exitcode))
-        print("FAIL")
-        rc = 1
-    # If the exitcode of the process running the server is None, the process is
-    # running and everything should be okay.
-    else:
         print("DAOS server started")
-        client_prefix = PREFIX + "/bin/orterun --ompi-server " \
-                        "file:{} {} --np 1 rdbt ".format(urifile, debug_cmds)
-        client_suffix = " --group=daos_server"
 
-        # orterun is called for the client four times: init, update, test, and
-        # fini
+        # Client operations
+        client_prefix = PREFIX + "/bin/orterun --ompi-server " \
+                        "file:{} {} --np 1 rdbt ".format(
+                        urifile, debug_cmds)
+        client_suffix = " --group=daos_server"
+        # orterun is called for the client four times: init, update, test,
+        # and fini
         client_segments = ['init', 'update', 'test', 'fini']
 
         try:
             for segment in client_segments:
                 run_client(segment)
-            print("SUCCESS")
-            print("rbd tests PASSED")
+            print("SUCCESS\nrbd tests PASSED")
         except Exception as e:
             print("rbd tests FAILED")
             print("{}".format(e))
             rc = 1
 
-    cleanup()
+    except ServerFailedToStart as e:
+        print("ServerFailedToStart: {}".format(e.message))
+        print("FAIL")
+        rc = 1
+
+    except ServerTimedOut as e:
+        print("ServerTimedOut: {}".format(e))
+        print("FAIL")
+        rc = 1
+
+    finally:
+        # Shut down the DAOS server when we are finished.
+        try:
+            if not p or p.poll() is not None:
+                # If the server is dead, somthing went very wrong
+                print("The server is unexpectedly absent.")
+                print("FAIL")
+                rc = 1
+        except NameError:
+            rc = 1
+        try:
+            cleanup(daos_server)
+        except NameError:
+            # The daos_server was never defined.
+            rc = 1
 
     sys.exit(rc)
