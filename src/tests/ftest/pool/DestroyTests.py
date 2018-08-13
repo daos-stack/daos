@@ -28,29 +28,22 @@ import traceback
 import sys
 import json
 import threading
-
-from avocado       import Test
-from avocado       import main
+from avocado       import Test, main
 from avocado.utils import process
 
-# covers running from different directories
 sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('./../../utils/py')
 sys.path.append('../../../utils/py')
+
 import ServerUtils
 import CheckForPool
-import GetHostsFromFile
 import WriteHostFile
-import daos_api
-from daos_api import DaosContainer
-from daos_api import DaosContext
-from daos_api import DaosPool
-from daos_api import RankList
+from daos_api import DaosContainer, DaosContext, DaosPool
+from conversion import c_uuid_to_str
 
 GLOB_SIGNAL = None
 GLOB_RC = -99000000
-
 
 def cb_func(event):
     global GLOB_SIGNAL
@@ -63,10 +56,8 @@ class DestroyTests(Test):
     """
     Tests DAOS pool removal
     """
-
     # super wasteful since its doing this for every variation
     def setUp(self):
-
         # there is a presumption that this test lives in a specific
         # spot in the repo
         with open('../../../.build_vars.json') as f:
@@ -74,14 +65,15 @@ class DestroyTests(Test):
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         self.tmp = build_paths['PREFIX'] + '/tmp'
 
-        self.server_group = self.params.get("server_group",'/server/',
-                                       'daos_server')
+        self.server_group = self.params.get("server_group",
+                                            '/server/',
+                                            'daos_server')
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
     def tearDown(self):
-           pass
+        pass
 
     def test_simple_delete(self):
         """
@@ -90,7 +82,7 @@ class DestroyTests(Test):
 
         :avocado: tags=pool,pooldestroy,quick
         """
-        hostlist = self.params.get("test_machines1",'/run/hosts/')
+        hostlist = self.params.get("test_machines1", '/run/hosts/')
         hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
@@ -102,44 +94,44 @@ class DestroyTests(Test):
                                 '/run/setnames/validsetname/')
 
         try:
-               # use the uid/gid of the user running the test, these should
-               # be perfectly valid
-               uid = os.geteuid()
-               gid = os.getegid()
+            # use the uid/gid of the user running the test, these should
+            # be perfectly valid
+            uid = os.geteuid()
+            gid = os.getegid()
 
-               # TODO make these params in the yaml
-               daosctl = self.basepath + '/install/bin/daosctl'
+            # TODO make these params in the yaml
+            daosctl = self.basepath + '/install/bin/daosctl'
 
-               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
-                             format(daosctl, 0x731, uid, gid, setid))
+            create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'
+                          .format(daosctl, 0x731, uid, gid, setid))
 
-               uuid_str = """{0}""".format(process.system_output(create_cmd))
-               print("uuid is {0}\n".format(uuid_str))
+            uuid_str = """{0}""".format(process.system_output(create_cmd))
+            print ("uuid is {0}\n".format(uuid_str))
 
-               host = hostlist[0]
-               exists = CheckForPool.checkForPool(host, uuid_str)
-               if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".
-                                format(uuid_str, host))
+            host = hostlist[0]
+            exists = CheckForPool.checkForPool(host, uuid_str)
+            if exists != 0:
+                self.fail("Pool {0} not found on host {1}.\n"
+                          .format(uuid_str, host))
 
-               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.
-                              format(daosctl, uuid_str, setid))
-               process.system(delete_cmd)
+            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
+                          .format(daosctl, uuid_str, setid))
+            process.system(delete_cmd)
 
-               exists = CheckForPool.checkForPool(host, uuid_str)
-               if exists == 0:
-                      self.fail("Pool {0} found on host {1} when not "
-                                "expected.\n".format(uuid_str, host))
+            exists = CheckForPool.checkForPool(host, uuid_str)
+            if exists == 0:
+                self.fail("Pool {0} found on host {1} when not expected.\n"
+                          .format(uuid_str, host))
 
         except Exception as e:
-               print(e)
-               print(traceback.format_exc())
-               self.fail("Expecting to pass but test has failed.\n")
+            print (e)
+            print (traceback.format_exc())
+            self.fail("Expecting to pass but test has failed.\n")
 
         # no matter what happens shutdown the server
         finally:
-               ServerUtils.stopServer()
-               os.remove(hostfile)
+            ServerUtils.stopServer()
+            os.remove(hostfile)
 
     def test_delete_doesnt_exist(self):
         """
@@ -147,7 +139,7 @@ class DestroyTests(Test):
 
         :avocado: tags=pool,pooldestroy
         """
-        hostlist = self.params.get("test_machines1",'/run/hosts/')
+        hostlist = self.params.get("test_machines1", '/run/hosts/')
         hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
@@ -159,30 +151,31 @@ class DestroyTests(Test):
                                 '/run/setnames/validsetname/')
 
         try:
-               # randomly selected uuid, that is exceptionally unlikely to exist
-               bogus_uuid = '81ef94d7-a59d-4a5e-935b-abfbd12f2105'
+            # randomly selected uuid, that is exceptionally unlikely to exist
+            bogus_uuid = '81ef94d7-a59d-4a5e-935b-abfbd12f2105'
 
-               # TODO make these params in the yaml
-               daosctl = self.basepath + '/install/bin/daosctl'
+            # TODO make these params in the yaml
+            daosctl = self.basepath + '/install/bin/daosctl'
 
-               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.format(
-                   daosctl, bogus_uuid, setid))
+            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'.format(daosctl,
+                                                                  bogus_uuid,
+                                                                  setid))
 
-               process.system(delete_cmd)
+            process.system(delete_cmd)
 
-               # the above command should fail resulting in an exception so if
-               # we get here the test has failed
-               self.fail("Pool {0} found on host {1} when not expected.\n".
-                              format(uuid_str, host))
+            # the above command should fail resulting in an exception so if
+            # we get here the test has failed
+            self.fail("Pool {0} found on host {1} when not expected.\n"
+                      .format(uuid_str, host))
 
         except Exception as e:
-               # expecting an exception so catch and pass the test
-               pass;
+            # expecting an exception so catch and pass the test
+            pass
 
         # no matter what happens shutdown the server
         finally:
-               ServerUtils.stopServer()
-               os.remove(hostfile)
+            ServerUtils.stopServer()
+            os.remove(hostfile)
 
 
     def test_delete_wrong_servers(self):
@@ -192,7 +185,7 @@ class DestroyTests(Test):
         :avocado: tags=pool,pooldestroy
         """
 
-        hostlist = self.params.get("test_machines1",'/run/hosts/')
+        hostlist = self.params.get("test_machines1", '/run/hosts/')
         hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
@@ -202,10 +195,10 @@ class DestroyTests(Test):
 
         # need both a good and bad set
         goodsetid = self.params.get("setname",
-                                '/run/setnames/validsetname/')
+                                    '/run/setnames/validsetname/')
 
         badsetid = self.params.get("setname",
-                                '/run/setnames/badsetname/')
+                                   '/run/setnames/badsetname/')
 
         uuid_str = ""
 
@@ -213,42 +206,43 @@ class DestroyTests(Test):
         daosctl = self.basepath + '/install/bin/daosctl'
 
         try:
-               # use the uid/gid of the user running the test, these should
-               # be perfectly valid
-               uid = os.geteuid()
-               gid = os.getegid()
+            # use the uid/gid of the user running the test, these should
+            # be perfectly valid
+            uid = os.geteuid()
+            gid = os.getegid()
 
-               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
-                      format(daosctl, 0x731, uid, gid, goodsetid))
-               uuid_str = """{0}""".format(process.system_output(create_cmd))
-               print("uuid is {0}\n".format(uuid_str))
+            create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'
+                          .format(daosctl, 0x731, uid, gid, goodsetid))
+            uuid_str = """{0}""".format(process.system_output(create_cmd))
+            print ("uuid is {0}\n".format(uuid_str))
 
-               exists = CheckForPool.checkForPool(host, uuid_str)
-               if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".
-                      format(uuid_str, host))
+            exists = CheckForPool.checkForPool(host, uuid_str)
+            if exists != 0:
+                self.fail("Pool {0} not found on host {1}.\n"
+                          .format(uuid_str, host))
 
-               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.format(
-                             daosctl, uuid_str, badsetid))
+            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'.format(daosctl,
+                                                                  uuid_str,
+                                                                  badsetid))
 
-               process.system(delete_cmd)
+            process.system(delete_cmd)
 
-               # the above command should fail resulting in an exception so if
-               # we get here the test has failed
-               self.fail("Pool {0} found on host {1} when not expected.\n".
-                              format(uuid_str, host))
+            # the above command should fail resulting in an exception so if
+            # we get here the test has failed
+            self.fail("Pool {0} found on host {1} when not expected.\n"
+                      .format(uuid_str, host))
 
         except Exception as e:
-               # expecting an exception, but now need to
-               # clean up the pool for real
-               delete_cmd = ('{0} destroy-pool -i {1} -s {2}'.
-                             format(daosctl, uuid_str, goodsetid))
-               process.system(delete_cmd)
+            # expecting an exception, but now need to
+            # clean up the pool for real
+            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
+                          .format(daosctl, uuid_str, goodsetid))
+            process.system(delete_cmd)
 
         # no matter what happens shutdown the server
         finally:
-               ServerUtils.stopServer()
-               os.remove(hostfile)
+            ServerUtils.stopServer()
+            os.remove(hostfile)
 
 
     def test_multi_server_delete(self):
@@ -259,7 +253,7 @@ class DestroyTests(Test):
 
         :avocado: tags=pool,pooldestroy,multiserver
         """
-        hostlist = self.params.get("test_machines2",'/run/hosts/')
+        hostlist = self.params.get("test_machines2", '/run/hosts/')
         hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
@@ -274,48 +268,47 @@ class DestroyTests(Test):
         daosctl = self.basepath + '/install/bin/daosctl'
 
         try:
-               # use the uid/gid of the user running the test, these should
-               # be perfectly valid
-               uid = os.geteuid()
-               gid = os.getegid()
+            # use the uid/gid of the user running the test, these should
+            # be perfectly valid
+            uid = os.geteuid()
+            gid = os.getegid()
 
-               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
-                             format(daosctl, 0x731, uid, gid, setid))
-               uuid_str = """{0}""".format(process.system_output(create_cmd))
-               print("uuid is {0}\n".format(uuid_str))
+            create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'
+                          .format(daosctl, 0x731, uid, gid, setid))
+            uuid_str = """{0}""".format(process.system_output(create_cmd))
+            print ("uuid is {0}\n".format(uuid_str))
 
-               exists = CheckForPool.checkForPool(hostlist[0], uuid_str)
-               if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".
-                                format(uuid_str, hostlist[0]))
-               exists = CheckForPool.checkForPool(hostlist[1], uuid_str)
-               if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".
-                      format(uuid_str, host2))
+            exists = CheckForPool.checkForPool(hostlist[0], uuid_str)
+            if exists != 0:
+                self.fail("Pool {0} not found on host {1}.\n"
+                          .format(uuid_str, hostlist[0]))
+                exists = CheckForPool.checkForPool(hostlist[1], uuid_str)
+                if exists != 0:
+                    self.fail("Pool {0} not found on host {1}.\n"
+                              .format(uuid_str, host2))
 
-               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.
-                              format(daosctl, uuid_str, setid))
-               process.system(delete_cmd)
+                delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
+                              .format(daosctl, uuid_str, setid))
+                process.system(delete_cmd)
 
-               exists = CheckForPool.checkForPool(hostlist[0], uuid_str)
-               if exists == 0:
-                      self.fail("Pool {0} found on host {1} when not"
-                                " expected.\n".format(uuid_str, hostlist[0]))
-               exists = CheckForPool.checkForPool(hostlist[1], uuid_str)
-               if exists == 0:
-                      self.fail("Pool {0} found on host {1} when not "
-                                "expected.\n".format(uuid_str, hostlist[1]))
+                exists = CheckForPool.checkForPool(hostlist[0], uuid_str)
+                if exists == 0:
+                    self.fail("Pool {0} found on host {1} when not"
+                              " expected.\n".format(uuid_str, hostlist[0]))
+                exists = CheckForPool.checkForPool(hostlist[1], uuid_str)
+                if exists == 0:
+                    self.fail("Pool {0} found on host {1} when not "
+                              "expected.\n".format(uuid_str, hostlist[1]))
 
         except Exception as e:
-               print(e)
-               print(traceback.format_exc())
-               self.fail("Expecting to pass but test has failed.\n")
+            print (e)
+            print (traceback.format_exc())
+            self.fail("Expecting to pass but test has failed.\n")
 
         # no matter what happens shutdown the server
         finally:
-               ServerUtils.stopServer()
-               os.remove(hostfile)
-
+            ServerUtils.stopServer()
+            os.remove(hostfile)
 
     def test_bad_server_group(self):
         """
@@ -326,12 +319,12 @@ class DestroyTests(Test):
         """
 
         setid2 = self.basepath + self.params.get("setname",
-                              '/run/setnames/othersetname/')
+                                                 '/run/setnames/othersetname/')
 
-        hostlist1 = self.params.get("test_machines1",'/run/hosts/')
+        hostlist1 = self.params.get("test_machines1", '/run/hosts/')
         hostfile1 = WriteHostFile.WriteHostFile(hostlist1, self.tmp)
 
-        hostlist2 = self.params.get("test_machines2a",'/run/hosts/')
+        hostlist2 = self.params.get("test_machines2a", '/run/hosts/')
         hostfile2 = WriteHostFile.WriteHostFile(hostlist2, self.tmp)
 
 
@@ -350,52 +343,51 @@ class DestroyTests(Test):
         uuid_str = ""
 
         try:
-               # use the uid/gid of the user running the test, these should
-               # be perfectly valid
-               uid = os.geteuid()
-               gid = os.getegid()
+            # use the uid/gid of the user running the test, these should
+            # be perfectly valid
+            uid = os.geteuid()
+            gid = os.getegid()
 
-               create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'.
-                             format(daosctl, 0x731, uid, gid,
-                                    self.server_group))
-               uuid_str = """{0}""".format(process.system_output(create_cmd))
-               print("uuid is {0}\n".format(uuid_str))
+            create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'
+                          .format(daosctl, 0x731, uid, gid,
+                                  self.server_group))
+            uuid_str = """{0}""".format(process.system_output(create_cmd))
+            print ("uuid is {0}\n".format(uuid_str))
 
-               exists = CheckForPool.checkForPool(host, uuid_str)
-               if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".
-                      format(uuid_str, host))
+            exists = CheckForPool.checkForPool(host, uuid_str)
+            if exists != 0:
+                self.fail("Pool {0} not found on host {1}.\n"
+                          .format(uuid_str, host))
 
-               # try and delete it using the wrong group
-               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.
-                              format(daosctl, uuid_str, setid2))
+            # try and delete it using the wrong group
+            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
+                          .format(daosctl, uuid_str, setid2))
 
-               process.system(delete_cmd)
+            process.system(delete_cmd)
 
-               exists = CheckForPool.checkForPool(host, uuid_str)
-               if exists != 0:
-                      self.fail("Pool {0} not found on host {1} but delete "
-                                "should have failed.\n".format(uuid_str, host))
+            exists = CheckForPool.checkForPool(host, uuid_str)
+            if exists != 0:
+                self.fail("Pool {0} not found on host {1} but delete "
+                          "should have failed.\n".format(uuid_str, host))
 
         except Exception as e:
+            # now issue a good delete command so we clean-up after this test
+            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
+                          .format(daosctl, uuid_str, self.server_group))
 
-               # now issue a good delete command so we clean-up after this test
-               delete_cmd =  ('{0} destroy-pool -i {1} -s {2}'.
-                              format(daosctl, uuid_str, self.server_group))
+            process.system(delete_cmd)
 
-               process.system(delete_cmd)
-
-               exists = CheckForPool.checkForPool(host, uuid_str)
-               if exists == 0:
-                      self.fail("Pool {0} ound on host {1} but delete "
-                                "should have removed it.\n".
-                                format(uuid_str, host))
+            exists = CheckForPool.checkForPool(host, uuid_str)
+            if exists == 0:
+                self.fail("Pool {0} ound on host {1} but delete"
+                          "should have removed it.\n"
+                          .format(uuid_str, host))
 
         # no matter what happens shutdown the server
         finally:
-               ServerUtils.stopServer()
-               os.remove(hostfile1)
-               os.remove(hostfile2)
+            ServerUtils.stopServer()
+            os.remove(hostfile1)
+            os.remove(hostfile2)
 
     def test_destroy_connect(self):
         """
@@ -408,7 +400,7 @@ class DestroyTests(Test):
         try:
 
             # write out a hostfile and start the servers with it
-            hostlist = self.params.get("test_machines1",'/run/hosts/')
+            hostlist = self.params.get("test_machines1", '/run/hosts/')
             hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
@@ -417,12 +409,12 @@ class DestroyTests(Test):
             time.sleep(1)
 
             # parameters used in pool create
-            createmode = self.params.get("mode",'/run/poolparams/createmode/')
-            createuid  = self.params.get("uid",'/run/poolparams/createuid/')
-            creategid  = self.params.get("gid",'/run/poolparams/creategid/')
+            createmode = self.params.get("mode", '/run/poolparams/createmode/')
+            createuid = self.params.get("uid", '/run/poolparams/createuid/')
+            creategid = self.params.get("gid", '/run/poolparams/creategid/')
             createsetid = self.params.get("setname",
                                           '/run/poolparams/createset/')
-            createsize  = self.params.get("size",'/run/poolparams/createsize/')
+            createsize = self.params.get("size", '/run/poolparams/createsize/')
 
             # initialize a python pool object then create the underlying
             # daos storage
@@ -440,9 +432,9 @@ class DestroyTests(Test):
             self.fail("Shouldn't hit this line.\n")
 
         except ValueError as e:
-            print("got exception which is expected so long as it is BUSY")
-            print(e)
-            print(traceback.format_exc())
+            print ("got exception which is expected so long as it is BUSY")
+            print (e)
+            print (traceback.format_exc())
             # pool should still be there
             exists = CheckForPool.checkForPool(host, uuid_str)
             if exists != 0:
@@ -450,8 +442,8 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-               ServerUtils.stopServer()
-               os.remove(hostfile)
+            ServerUtils.stopServer()
+            os.remove(hostfile)
 
     def test_destroy_recreate(self):
         """
@@ -463,7 +455,7 @@ class DestroyTests(Test):
 
         try:
             # write out a hostfile and start the servers with it
-            hostlist = self.params.get("test_machines1",'/run/hosts/')
+            hostlist = self.params.get("test_machines1", '/run/hosts/')
             hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
@@ -472,12 +464,12 @@ class DestroyTests(Test):
             time.sleep(1)
 
             # parameters used in pool create
-            createmode = self.params.get("mode",'/run/poolparams/createmode/')
-            createuid  = self.params.get("uid",'/run/poolparams/createuid/')
-            creategid  = self.params.get("gid",'/run/poolparams/creategid/')
+            createmode = self.params.get("mode", '/run/poolparams/createmode/')
+            createuid = self.params.get("uid", '/run/poolparams/createuid/')
+            creategid = self.params.get("gid", '/run/poolparams/creategid/')
             createsetid = self.params.get("setname",
                                           '/run/poolparams/createset/')
-            createsize  = self.params.get("size",'/run/poolparams/createsize/')
+            createsize = self.params.get("size", '/run/poolparams/createsize/')
 
             # initialize a python pool object then create the underlying
             # daos storage
@@ -503,8 +495,8 @@ class DestroyTests(Test):
             POOL.destroy(1)
 
         except ValueError as e:
-            print(e)
-            print(traceback.format_exc())
+            print (e)
+            print (traceback.format_exc())
             self.fail("create/destroy/create/destroy test failed.\n")
 
         except Exception as e:
@@ -512,8 +504,8 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-               ServerUtils.stopServer()
-               os.remove(hostfile)
+            ServerUtils.stopServer()
+            os.remove(hostfile)
 
     def test_many_servers(self):
         """
@@ -523,7 +515,7 @@ class DestroyTests(Test):
         """
         try:
             # write out a hostfile and start the servers with it
-            hostlist = self.params.get("test_machines6",'/run/hosts/')
+            hostlist = self.params.get("test_machines6", '/run/hosts/')
             hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
@@ -532,12 +524,12 @@ class DestroyTests(Test):
             time.sleep(1)
 
             # parameters used in pool create
-            createmode = self.params.get("mode",'/run/poolparams/createmode/')
-            createuid  = self.params.get("uid",'/run/poolparams/createuid/')
-            creategid  = self.params.get("gid",'/run/poolparams/creategid/')
+            createmode = self.params.get("mode", '/run/poolparams/createmode/')
+            createuid = self.params.get("uid", '/run/poolparams/createuid/')
+            creategid = self.params.get("gid", '/run/poolparams/creategid/')
             createsetid = self.params.get("setname",
                                           '/run/poolparams/createset/')
-            createsize  = self.params.get("size",'/run/poolparams/createsize/')
+            createsize = self.params.get("size", '/run/poolparams/createsize/')
 
             # initialize a python pool object then create the underlying
             # daos storage
@@ -551,8 +543,8 @@ class DestroyTests(Test):
             POOL.destroy(1)
 
         except ValueError as e:
-            print(e)
-            print(traceback.format_exc())
+            print (e)
+            print (traceback.format_exc())
             self.fail("6 server test failed.\n")
 
         except Exception as e:
@@ -560,9 +552,8 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-               ServerUtils.stopServer()
-               os.remove(hostfile)
-
+            ServerUtils.stopServer()
+            os.remove(hostfile)
 
     def test_destroy_withdata(self):
         """
@@ -573,7 +564,7 @@ class DestroyTests(Test):
         """
         try:
             # write out a hostfile and start the servers with it
-            hostlist = self.params.get("test_machines1",'/run/hosts/')
+            hostlist = self.params.get("test_machines1", '/run/hosts/')
             hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
@@ -582,12 +573,12 @@ class DestroyTests(Test):
             time.sleep(1)
 
             # parameters used in pool create
-            createmode = self.params.get("mode",'/run/poolparams/createmode/')
-            createuid  = self.params.get("uid",'/run/poolparams/createuid/')
-            creategid  = self.params.get("gid",'/run/poolparams/creategid/')
+            createmode = self.params.get("mode", '/run/poolparams/createmode/')
+            createuid = self.params.get("uid", '/run/poolparams/createuid/')
+            creategid = self.params.get("gid", '/run/poolparams/creategid/')
             createsetid = self.params.get("setname",
                                           '/run/poolparams/createset/')
-            createsize  = self.params.get("size",'/run/poolparams/createsize/')
+            createsize = self.params.get("size", '/run/poolparams/createsize/')
 
             # initialize a python pool object then create the underlying
             # daos storage
@@ -607,8 +598,8 @@ class DestroyTests(Test):
             daosctl = self.basepath + '/install/bin/daosctl'
 
             write_cmd = ('{0} write-pattern -i {1} -l 0 -c {2} -p sequential'.
-                         format(daosctl, daos_api.c_uuid_to_str(POOL.uuid),
-                                daos_api.c_uuid_to_str(CONTAINER.uuid)))
+                         format(daosctl, c_uuid_to_str(POOL.uuid),
+                                c_uuid_to_str(CONTAINER.uuid)))
 
             process.system_output(write_cmd)
 
@@ -616,8 +607,8 @@ class DestroyTests(Test):
             POOL.destroy(1)
 
         except ValueError as e:
-            print(e)
-            print(traceback.format_exc())
+            print (e)
+            print (traceback.format_exc())
             self.fail("create/destroy/create/destroy test failed.\n")
 
         except Exception as e:
@@ -625,8 +616,8 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-               ServerUtils.stopServer()
-               os.remove(hostfile)
+            ServerUtils.stopServer()
+            os.remove(hostfile)
 
     def test_destroy_async(self):
         """
@@ -640,7 +631,7 @@ class DestroyTests(Test):
 
         try:
             # write out a hostfile and start the servers with it
-            hostlist = self.params.get("test_machines1",'/run/hosts/')
+            hostlist = self.params.get("test_machines1", '/run/hosts/')
             hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
@@ -649,12 +640,12 @@ class DestroyTests(Test):
             time.sleep(1)
 
             # parameters used in pool create
-            createmode = self.params.get("mode",'/run/poolparams/createmode/')
-            createuid  = self.params.get("uid",'/run/poolparams/createuid/')
-            creategid  = self.params.get("gid",'/run/poolparams/creategid/')
+            createmode = self.params.get("mode", '/run/poolparams/createmode/')
+            createuid = self.params.get("uid", '/run/poolparams/createuid/')
+            creategid = self.params.get("gid", '/run/poolparams/creategid/')
             createsetid = self.params.get("setname",
                                           '/run/poolparams/createset/')
-            createsize  = self.params.get("size",'/run/poolparams/createsize/')
+            createsize = self.params.get("size", '/run/poolparams/createsize/')
 
             # initialize a python pool object then create the underlying
             # daos storage
@@ -688,8 +679,8 @@ class DestroyTests(Test):
                 self.fail("RC not as expected in async test")
 
         except ValueError as e:
-            print(e)
-            print(traceback.format_exc())
+            print (e)
+            print (traceback.format_exc())
             self.fail("destroy async test failed.\n")
 
         except Exception as e:
@@ -697,8 +688,8 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-               ServerUtils.stopServer()
-               os.remove(hostfile)
+            ServerUtils.stopServer()
+            os.remove(hostfile)
 
 if __name__ == "__main__":
     main()

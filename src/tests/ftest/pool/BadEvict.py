@@ -28,22 +28,16 @@ import traceback
 import sys
 import json
 import ctypes
-
-from avocado       import Test
-from avocado       import main
-from avocado.utils import process
-from avocado.utils import git
+from avocado import Test, main
 
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./util')
 sys.path.append('./../../utils/py')
+
 import ServerUtils
-import CheckForPool
 import WriteHostFile
-from daos_api import DaosContext
-from daos_api import DaosPool
-from daos_api import RankList
+from daos_api import DaosContext, DaosPool, RankList
 
 class BadEvictTest(Test):
     """

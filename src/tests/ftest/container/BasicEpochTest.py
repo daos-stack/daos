@@ -21,30 +21,22 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-
 import os
 import time
 import traceback
 import sys
 import json
-
-from avocado       import Test
-from avocado       import main
-from avocado.utils import process
+from avocado import Test, main
 
 sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import CheckForPool
-import WriteHostFile
-import daos_api
-from daos_api import DaosContext
-from daos_api import DaosPool
-from daos_api import DaosContainer
-from daos_api import RankList
 
+import ServerUtils
+import WriteHostFile
+from conversion import c_uuid_to_str
+from daos_api import DaosContext, DaosPool, DaosContainer
 
 class BasicEpochTest(Test):
     """
@@ -112,7 +104,7 @@ class BasicEpochTest(Test):
             # that returned by query
             CONTAINER.query()
 
-            if CONTAINER.get_uuid_str() != daos_api.c_uuid_to_str(
+            if CONTAINER.get_uuid_str() != c_uuid_to_str(
                     CONTAINER.info.ci_uuid):
                 self.fail("Container UUID did not match the one in info\n")
 
@@ -171,3 +163,6 @@ class BasicEpochTest(Test):
             print e
             print traceback.format_exc()
             self.fail("Test was expected to pass but it failed.\n")
+
+if __name__ == "__main__":
+    main()

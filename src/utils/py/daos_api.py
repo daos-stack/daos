@@ -27,238 +27,9 @@ import threading
 import time
 import uuid
 import json
-import random
+import os
 
-# DAOS api C structures
-class RankList(ctypes.Structure):
-    """ For those DAOS calls that take a rank list """
-    _fields_ = [("rl_ranks", ctypes.POINTER(ctypes.c_uint32)),
-                ("rl_nr", ctypes.c_uint)]
-
-class IOV(ctypes.Structure):
-    _fields_ = [("iov_buf", ctypes.c_void_p),
-                ("iov_buf_len", ctypes.c_size_t),
-                ("iov_len", ctypes.c_size_t)]
-
-class SGL(ctypes.Structure):
-    _fields_ = [("sg_nr", ctypes.c_uint32),
-                ("sg_nr_out", ctypes.c_uint32),
-                ("sg_iovs", ctypes.POINTER(IOV))]
-
-class EpochRange(ctypes.Structure):
-    _fields_ = [("epr_lo", ctypes.c_uint64),
-                ("epr_hi", ctypes.c_uint64)]
-
-class TargetInfo(ctypes.Structure):
-    """ Represents info about a given target """
-    _fields_ = [("ta_type", ctypes.c_uint),
-                ("ta_state", ctypes.c_uint),
-                ("ta_perf", ctypes.c_int),
-                ("ta_space", ctypes.c_int)]
-
-class RebuildStatus(ctypes.Structure):
-    """ Structure to represent rebuild status info """
-    _fields_ = [("rs_version", ctypes.c_uint32),
-                ("rs_pad_32", ctypes.c_uint32),
-                ("rs_errno", ctypes.c_int32),
-                ("rs_done", ctypes.c_int32),
-                ("rs_obj_nr", ctypes.c_uint64),
-                ("rs_rec_nr", ctypes.c_uint64)]
-
-class PoolInfo(ctypes.Structure):
-    """ Structure to represent information about a pool """
-    _fields_ = [("pi_uuid", ctypes.c_ubyte * 16),
-                ("pi_ntargets", ctypes.c_uint32),
-                ("pi_ndisabled", ctypes.c_uint32),
-                ("pi_map_ver", ctypes.c_uint32),
-                ("pi_uid", ctypes.c_uint32),
-                ("pi_gid", ctypes.c_uint32),
-                ("pi_mode", ctypes.c_uint32),
-                ("pi_leader", ctypes.c_uint32),
-                ("pi_space", ctypes.c_int),
-                ("pi_rebuild_st", RebuildStatus)]
-
-class ContInfo(ctypes.Structure):
-    """ Structure to represent information about a container """
-    _fields_ = [("ci_uuid", ctypes.c_ubyte * 16),
-                ("es_hce", ctypes.c_uint64),
-                ("es_lre", ctypes.c_uint64),
-                ("es_lhe", ctypes.c_uint64),
-                ("es_ghce", ctypes.c_uint64),
-                ("es_glre", ctypes.c_uint64),
-                ("es_ghpce", ctypes.c_uint64),
-                ("ci_nsnapshots", ctypes.c_uint32),
-                ("ci_snapshots", ctypes.POINTER(ctypes.c_uint64)),
-                ("ci_min_slipped_epoch", ctypes.c_uint64)]
-
-class DaosEvent(ctypes.Structure):
-    _fields_ = [("ev_error", ctypes.c_int),
-                ("ev_private", ctypes.c_ulonglong * 19),
-                ("ev_debug", ctypes.c_ulonglong)]
-
-class DaosObjClassAttr(ctypes.Structure):
-    _fields_ = [("ca_schema", ctypes.c_int),
-                ("ca_resil_degree", ctypes.c_int),
-                ("ca_resil", ctypes.c_int),
-                ("ca_grp_nr", ctypes.c_uint),
-                ("u", ctypes.c_uint * 2)]
-
-class DaosObjAttr(ctypes.Structure):
-    _fields_ = [("oa_rank", ctypes.c_int),
-                ("oa_oa", DaosObjClassAttr)]
-
-class DaosObjId(ctypes.Structure):
-    _fields_ = [("lo", ctypes.c_uint64),
-                ("hi", ctypes.c_uint64)]
-
-# Note hard-coded number of ranks, might eventually be a problem
-class DaosObjShard(ctypes.Structure):
-    _fields_ = [("os_replica_nr", ctypes.c_uint32),
-                ("os_ranks", ctypes.c_uint32 * 5)]
-
-# note the hard-coded number of ranks, might eventually be a problem
-class DaosObjLayout(ctypes.Structure):
-    _fields_ = [("ol_ver", ctypes.c_uint32),
-                ("ol_class", ctypes.c_uint32),
-                ("ol_nr", ctypes.c_uint32),
-                ("ol_shards", ctypes.POINTER(DaosObjShard * 5))]
-
-class CheckSum(ctypes.Structure):
-    _fields_ = [("cs_type", ctypes.c_uint),
-                ("cs_len", ctypes.c_ushort),
-                ("cs_buf_len", ctypes.c_ushort),
-                ("cs_csum", ctypes.c_void_p)]
-
-class DaosIODescriptor(ctypes.Structure):
-    _fields_ = [("iod_name", IOV),
-                ("iod_kcsum", CheckSum),
-                ("iod_type", ctypes.c_int),
-                ("iod_size", ctypes.c_uint64),
-                ("iod_nr", ctypes.c_uint32),
-                ("iod_recxs", ctypes.c_void_p),
-                ("iod_csums", ctypes.POINTER(CheckSum)),
-                ("iod_eprs", ctypes.c_void_p)]
-
-def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
-    """ Wrapper function that calls the daos C code.  This can
-        be used to run the DAOS library functions in a thread
-        (or to just run them in the current thread too).
-
-        func_ref   --which daos_api function to call
-        param_list --parameters the c function takes
-        context    --the API context object
-        cb_func    --optional if caller wants notification of completion
-        obj        --optional passed to the callback function
-
-        This is done in a way that exercises the
-        DAOS event code which is cumbersome and done more simply
-        by other means. Its good for testing but replace this
-        implementation if this is used as something other than a test
-        tool.
-    """
-    # TODO insufficient error handling in this function
-
-    # setup the asynchronous infrastructure the API requires
-    the_event = param_list[-1]
-    param_list[-1] = ctypes.byref(the_event)
-
-    qfunc = context.get_function('create-eq')
-    qhandle = ctypes.c_ulonglong(0)
-    rc = qfunc(ctypes.byref(qhandle))
-
-    efunc = context.get_function('init-event')
-    rc = efunc(param_list[-1], qhandle, None)
-
-    # calling the api function here
-    rc = func_ref(*param_list)
-
-    # use the API polling mechanism to tell when its done
-    efunc = context.get_function('poll-eq')
-    c_wait = ctypes.c_int(0)
-    c_timeout = ctypes.c_ulonglong(-1)
-    c_num = ctypes.c_uint(1)
-    anotherEvent = DaosEvent()
-    c_event_ptr = ctypes.pointer(anotherEvent)
-
-    # start polling, wait forever
-    rc = efunc(qhandle, c_wait, c_timeout, c_num, ctypes.byref(c_event_ptr))
-
-    # signal the caller that api function has completed
-    if cb_func is not None:
-        cb_event = CallbackEvent(obj, the_event)
-        cb_func(cb_event)
-
-    # clean up
-    qfunc = context.get_function('destroy-eq')
-    qfunc(ctypes.byref(qhandle))
-
-def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
-    """
-        See AsyncWorker1 for details.  This does the same thing but
-        uses different API functions (test instead of poll) for test
-        coverage purposes.
-    """
-    # TODO insufficient error handling in this function
-
-    # setup the asynchronous infrastructure the API requires
-    the_event = param_list[-1]
-    param_list[-1] = ctypes.byref(the_event)
-
-    qfunc = context.get_function('create-eq')
-    qhandle = ctypes.c_ulonglong(0)
-    rc = qfunc(ctypes.byref(qhandle))
-
-    efunc = context.get_function('init-event')
-    rc = efunc(param_list[-1], qhandle, None)
-
-    # call the api function
-    rc = func_ref(*param_list)
-
-    # -1 means wait forever
-    c_timeout = ctypes.c_ulonglong(-1)
-
-    c_event_ptr = ctypes.byref(the_event)
-    efunc = context.get_function('test-event')
-    c_flag = ctypes.c_bool(0)
-    rc = efunc(c_event_ptr, c_timeout, ctypes.byref(c_flag));
-
-    # signal caller API function has completed
-    if cb_func is not None:
-        cb_event = CallbackEvent(obj, anotherEvent)
-        cb_func(cb_event)
-
-    # cleanup
-    qfunc = context.get_function('destroy-eq')
-    qfunc(ctypes.byref(qhandle))
-
-def c_uuid(puuid, cuuid):
-    """ utility function to create a UUID in C format from a python UUID """
-    hexstr = puuid.hex
-    for i in range (0,31,2):
-        cuuid[i/2] = int(hexstr[i:i+2], 16)
-
-def str_to_c_uuid(uuidstr):
-    """ utility function to convert string format uuid to a C uuid """
-    uuidstr2 = '{' + uuidstr + '}'
-    puuid = uuid.UUID(uuidstr2)
-    cuuid = (ctypes.c_ubyte * 16)()
-    c_uuid(puuid, cuuid)
-    return cuuid
-
-def c_uuid_to_str(uuid):
-    """ utility function to convert a C uuid into a standard string format """
-    uuid_str = '{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}'\
-               '{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}'.format(
-                   uuid[0], uuid[1], uuid[2], uuid[3], uuid[4], uuid[5],
-                   uuid[6], uuid[7], uuid[8], uuid[9], uuid[10], uuid[11],
-                   uuid[12], uuid[13], uuid[14], uuid[15])
-    return uuid_str
-
-# python API starts here
-class CallbackEvent(object):
-    def __init__(self, obj, event):
-        self.obj = obj
-        self.event = event
+from daos_cref import *
 
 class DaosPool(object):
     """ A python object representing a DAOS pool."""
@@ -326,7 +97,11 @@ class DaosPool(object):
                       c_whatever, c_size,
                       ctypes.byref(self.svc), self.uuid, event]
             t = threading.Thread(target=AsyncWorker1,
-                                 args=(func,params,self.context,cb_func,self))
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
 
     def connect(self, flags, cb_func=None):
@@ -347,13 +122,16 @@ class DaosPool(object):
                 raise ValueError("Pool connect returned non-zero. RC: {0}"
                                  .format(rc))
         else:
-           event = DaosEvent()
-           params = [self.uuid, self.group, ctypes.byref(self.svc), c_flags,
+            event = DaosEvent()
+            params = [self.uuid, self.group, ctypes.byref(self.svc), c_flags,
                       ctypes.byref(self.handle), ctypes.byref(c_info), event]
-           t = threading.Thread(target=AsyncWorker1,
-                                args=(func, params, self.context,
-                                                            cb_func, self))
-           t.start()
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
+            t.start()
 
     def disconnect(self, cb_func=None):
         """ undoes the fine work done by the connect function above """
@@ -368,7 +146,11 @@ class DaosPool(object):
             event = DaosEvent()
             params = [self.handle, event]
             t = threading.Thread(target=AsyncWorker1,
-                                 args=(func,params,self.context,cb_func,self))
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
 
     def local2global(self, poh):
@@ -405,13 +187,17 @@ class DaosPool(object):
                       ctypes.byref(c_tgts), None)
             if rc != 0:
                 raise ValueError("Pool exclude returned non-zero. RC: {0}"
-                             .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.uuid, self.group, ctypes.byref(self.svc),
                       ctypes.byref(c_tgts), event]
-            t = threading.Thread(target=AsyncWorker1, args=(func,params,
-                      self.context,cb_func,self))
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
 
     def extend(self):
@@ -432,8 +218,12 @@ class DaosPool(object):
         else:
             event = DaosEvent()
             params = [self.uuid, self.group, ctypes.byref(self.svc), event]
-            t = threading.Thread(target=AsyncWorker1, args=(func,params,
-                      self.context,cb_func,self))
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
 
     def tgt_add(self, tgt_rank_list, cb_func=None):
@@ -448,13 +238,17 @@ class DaosPool(object):
                       ctypes.byref(c_tgts), None)
             if rc != 0:
                 raise ValueError("Pool tgt_add returned non-zero. RC: {0}"
-                             .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.uuid, self.group, ctypes.byref(self.svc),
                       ctypes.byref(c_tgts), event]
-            t = threading.Thread(target=AsyncWorker1, args=(func, params,
-                      self.context, cb_func, self))
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
 
     def exclude_out(self, tgt_rank_list, cb_func=None):
@@ -474,8 +268,12 @@ class DaosPool(object):
             event = DaosEvent()
             params = [self.uuid, self.group, ctypes.byref(self.svc),
                       ctypes.byref(c_tgts), event]
-            t = threading.Thread(target=AsyncWorker1, args=(func, params,
-                      self.context, cb_func, self))
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
 
     def pool_svc_stop(self, cb_func=None):
@@ -491,8 +289,11 @@ class DaosPool(object):
         else:
             event = DaosEvent()
             params = [self.handle, event]
-            t = threading.Thread(target=AsyncWorker1, args=(func, params,
-                      self.context, cb_func, self))
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func, self))
             t.start()
 
     def pool_query(self, cb_func=None):
@@ -510,8 +311,12 @@ class DaosPool(object):
         else:
             event = DaosEvent()
             params = [self.handle, None, ctypes.byref(self.pool_info), event]
-            t = threading.Thread(target=AsyncWorker1, args=(func, params,
-                      self.context, cb_func, self))
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
         return None
 
@@ -538,8 +343,11 @@ class DaosPool(object):
             event = DaosEvent()
             params = [self.uuid, self.group, c_force, event]
 
-            t = threading.Thread(target=AsyncWorker1, args=(func, params,
-                      self.context, cb_func, self))
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func, self))
             t.start()
 
     @staticmethod
@@ -795,7 +603,11 @@ class DaosContainer(object):
             event = DaosEvent()
             params = [self.poh, self.uuid, event]
             t = threading.Thread(target=AsyncWorker1,
-                                 args=(func,params,self.context,cb_func,self))
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
 
     def destroy(self, force=1, poh=None, con_uuid=None, cb_func=None):
@@ -822,7 +634,11 @@ class DaosContainer(object):
             event = DaosEvent()
             params = [self.poh, self.uuid, c_force, event]
             t = threading.Thread(target=AsyncWorker1,
-                                 args=(func,params,self.context,cb_func,self))
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
 
     def open(self, poh=None, cuuid=None, flags=None, cb_func=None):
@@ -855,7 +671,11 @@ class DaosContainer(object):
             params = [self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
                       ctypes.byref(c_info), event]
             t = threading.Thread(target=AsyncWorker1,
-                                 args=(func,params,self.context,cb_func,self))
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
 
     def close(self, coh=None, cb_func=None):
@@ -879,7 +699,11 @@ class DaosContainer(object):
             event = DaosEvent()
             params = [self.coh, event]
             t = threading.Thread(target=AsyncWorker1,
-                                 args=(func,params,self.context,cb_func,self))
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
 
     def query(self, coh=None, cb_func=None):
@@ -900,8 +724,12 @@ class DaosContainer(object):
         else:
             event = DaosEvent()
             params = [self.coh, ctypes.byref(self.info), event]
-            t = threading.Thread(target=AsyncWorker1, args=(func, params,
-                      self.context, cb_func, self))
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
             t.start()
         return None
 
@@ -1022,42 +850,42 @@ class DaosContext(object):
         self.libdaos.daos_init()
         # Note: action-subject format
         self.ftable = {
-             'add-target'     : self.libdaos.daos_pool_tgt_add,
-             'close-cont'     : self.libdaos.daos_cont_close,
-             'close-obj'      : self.libdaos.daos_obj_close,
-             'commit-epoch'   : self.libdaos.daos_epoch_commit,
-             'connect-pool'   : self.libdaos.daos_pool_connect,
-             'convert-global' : self.libdaos.daos_pool_global2local,
-             'covert-local'   : self.libdaos.daos_pool_local2global,
-             'create-cont'    : self.libdaos.daos_cont_create,
-             'create-pool'    : self.libdaos.daos_pool_create,
-             'create-eq'      : self.libdaos.daos_eq_create,
-             'destroy-cont'   : self.libdaos.daos_cont_destroy,
-             'destroy-pool'   : self.libdaos.daos_pool_destroy,
-             'destroy-eq'     : self.libdaos.daos_eq_destroy,
-             'disconnect-pool': self.libdaos.daos_pool_disconnect,
-             'evict-client'   : self.libdaos.daos_pool_evict,
-             'exclude-target' : self.libdaos.daos_pool_exclude,
-             'extend-pool'    : self.libdaos.daos_pool_extend,
-             'fetch-obj'      : self.libdaos.daos_obj_fetch,
-             'generate-oid'   : self.libtest.dts_oid_gen,
-             'get-epoch'      : self.libdaos.daos_epoch_hold,
-             'get-layout'     : self.libdaos.daos_obj_layout_get,
-             'init-event'     : self.libdaos.daos_event_init,
-             'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
-             'kill-target'    : self.libdaos.daos_pool_exclude_out,
-             'open-cont'      : self.libdaos.daos_cont_open,
-             'open-obj'       : self.libdaos.daos_obj_open,
-             'poll-eq'        : self.libdaos.daos_eq_poll,
-             'query-cont'     : self.libdaos.daos_cont_query,
-             'query-pool'     : self.libdaos.daos_pool_query,
-             'query-target'   : self.libdaos.daos_pool_target_query,
-             'query-obj'      : self.libdaos.daos_obj_query,
-             'slip-epoch'     : self.libdaos.daos_epoch_slip,
-             'stop-service'   : self.libdaos.daos_pool_svc_stop,
-             'test-event'     : self.libdaos.daos_event_test,
-             'update-obj'     : self.libdaos.daos_obj_update
-        }
+            'add-target'     : self.libdaos.daos_pool_tgt_add,
+            'close-cont'     : self.libdaos.daos_cont_close,
+            'close-obj'      : self.libdaos.daos_obj_close,
+            'commit-epoch'   : self.libdaos.daos_epoch_commit,
+            'connect-pool'   : self.libdaos.daos_pool_connect,
+            'convert-global' : self.libdaos.daos_pool_global2local,
+            'covert-local'   : self.libdaos.daos_pool_local2global,
+            'create-cont'    : self.libdaos.daos_cont_create,
+            'create-pool'    : self.libdaos.daos_pool_create,
+            'create-eq'      : self.libdaos.daos_eq_create,
+            'destroy-cont'   : self.libdaos.daos_cont_destroy,
+            'destroy-pool'   : self.libdaos.daos_pool_destroy,
+            'destroy-eq'     : self.libdaos.daos_eq_destroy,
+            'disconnect-pool': self.libdaos.daos_pool_disconnect,
+            'evict-client'   : self.libdaos.daos_pool_evict,
+            'exclude-target' : self.libdaos.daos_pool_exclude,
+            'extend-pool'    : self.libdaos.daos_pool_extend,
+            'fetch-obj'      : self.libdaos.daos_obj_fetch,
+            'generate-oid'   : self.libtest.dts_oid_gen,
+            'get-epoch'      : self.libdaos.daos_epoch_hold,
+            'get-layout'     : self.libdaos.daos_obj_layout_get,
+            'init-event'     : self.libdaos.daos_event_init,
+            'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
+            'kill-target'    : self.libdaos.daos_pool_exclude_out,
+            'open-cont'      : self.libdaos.daos_cont_open,
+            'open-obj'       : self.libdaos.daos_obj_open,
+            'poll-eq'        : self.libdaos.daos_eq_poll,
+            'query-cont'     : self.libdaos.daos_cont_query,
+            'query-pool'     : self.libdaos.daos_pool_query,
+            'query-target'   : self.libdaos.daos_pool_target_query,
+            'query-obj'      : self.libdaos.daos_obj_query,
+            'slip-epoch'     : self.libdaos.daos_epoch_slip,
+            'stop-service'   : self.libdaos.daos_pool_svc_stop,
+            'test-event'     : self.libdaos.daos_event_test,
+            'update-obj'     : self.libdaos.daos_obj_update
+            }
 
     def __del__(self):
         """ cleanup the DAOS API """
@@ -1079,11 +907,11 @@ if __name__ == '__main__':
             data = json.load(f)
 
         CONTEXT = DaosContext(data['PREFIX'] + '/lib/')
-        print("initialized!!!\n")
+        print ("initialized!!!\n")
 
         POOL = DaosPool(CONTEXT)
-        tgt_list=[1]
-        POOL.create(448, 11374638, 11374638, 1024 * 1024 * 1024,
+        tgt_list = [1]
+        POOL.create(448, os.getuid(), os.getgid(), 1024 * 1024 * 1024,
                     b'daos_server')
         time.sleep(2)
         print ("Pool create called\n")
@@ -1099,7 +927,7 @@ if __name__ == '__main__':
         CONTAINER = DaosContainer(CONTEXT)
         CONTAINER.create(POOL.handle)
 
-        print("container created {}".format(CONTAINER.get_uuid_str()))
+        print ("container created {}".format(CONTAINER.get_uuid_str()))
 
         #POOL.pool_svc_stop();
         #POOL.pool_query()
@@ -1107,12 +935,12 @@ if __name__ == '__main__':
         time.sleep(5)
 
         CONTAINER.open()
-        print("container opened {}".format(CONTAINER.get_uuid_str()))
+        print ("container opened {}".format(CONTAINER.get_uuid_str()))
 
         time.sleep(5)
 
         CONTAINER.query()
-        print("Epoch highest committed: {}".format(CONTAINER.info.es_hce))
+        print ("Epoch highest committed: {}".format(CONTAINER.info.es_hce))
 
         thedata = "a string that I want to stuff into an object"
         size = 45
@@ -1120,16 +948,16 @@ if __name__ == '__main__':
         akey = "this is the akey"
 
         obj, epoch = CONTAINER.write_an_obj(thedata, size, dkey, akey, None, 5)
-        print("data write finished with epoch {}".format(epoch))
+        print ("data write finished with epoch {}".format(epoch))
 
         obj.get_layout()
         for i in obj.tgt_rank_list:
-            print "rank for obj:{}".format(i)
+            print ("rank for obj:{}".format(i))
 
         time.sleep(5)
 
         thedata2 = CONTAINER.read_an_obj(size, dkey, akey, obj, epoch)
-        print(repr(thedata2.value))
+        print (repr(thedata2.value))
 
         thedata3 = "a different string that I want to stuff into an object"
         size = 55
@@ -1138,30 +966,30 @@ if __name__ == '__main__':
 
         obj2, epoch2 = CONTAINER.write_an_obj(thedata3, size, dkey2,
                                               akey2, obj, 4)
-        print("data write finished, in epoch {}".format(epoch2))
+        print ("data write finished, in epoch {}".format(epoch2))
 
         obj2.get_layout()
 
         time.sleep(5)
 
         thedata4 = CONTAINER.read_an_obj(size, dkey2, akey2, obj2, epoch2)
-        print(repr(thedata4.value))
+        print (repr(thedata4.value))
 
         thedata5 = CONTAINER.read_an_obj(size, dkey2, akey2, obj, epoch)
-        print(repr(thedata5.value))
+        print (repr(thedata5.value))
 
         CONTAINER.close()
-        print("container closed {}".format(CONTAINER.get_uuid_str()))
+        print ("container closed {}".format(CONTAINER.get_uuid_str()))
 
         time.sleep(15)
 
         CONTAINER.destroy(1)
 
-        print("container destroyed ")
+        print ("container destroyed")
 
         #POOL.disconnect(rubbish)
         #POOL.disconnect()
-        #print ("Main past disconnect\n");
+        #print ("Main past disconnect\n")
 
         #time.sleep(5)
 
@@ -1169,7 +997,7 @@ if __name__ == '__main__':
         #POOL.exclude(tgts, rubbish)
         #POOL.exclude_out(tgts, rubbish)
         #POOL.exclude_out(tgts)
-        #print ("Main past exclude\n");
+        #print ("Main past exclude\n")
 
         #POOL.evict(rubbish)
 
@@ -1177,10 +1005,10 @@ if __name__ == '__main__':
 
         #POOL.tgt_add(tgts, rubbish)
 
-        #print ("Main past tgt_add\n");
+        #print ("Main past tgt_add\n")
 
         #POOL.destroy(1)
-        #print("Pool destroyed")
+        #print ("Pool destroyed")
 
         #SERVICE = DaosServer(CONTEXT, b'daos_server', 5)
         #SERVICE.kill(1)

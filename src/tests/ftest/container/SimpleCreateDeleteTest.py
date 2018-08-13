@@ -27,24 +27,17 @@ import time
 import traceback
 import sys
 import json
-
-from avocado       import Test
-from avocado       import main
-from avocado.utils import process
+from avocado import Test, main
 
 sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import CheckForPool
-import WriteHostFile
-import daos_api
-from daos_api import DaosContext
-from daos_api import DaosPool
-from daos_api import DaosContainer
-from daos_api import RankList
 
+import ServerUtils
+import WriteHostFile
+from daos_api import DaosContext, DaosPool, DaosContainer
+from conversion import c_uuid_to_str
 
 class SimpleCreateDeleteTest(Test):
     """
@@ -116,7 +109,7 @@ class SimpleCreateDeleteTest(Test):
             # that returned by query
             CONTAINER.query()
 
-            if CONTAINER.get_uuid_str() != daos_api.c_uuid_to_str(
+            if CONTAINER.get_uuid_str() != c_uuid_to_str(
                     CONTAINER.info.ci_uuid):
                 self.fail("Container UUID did not match the one in info'n")
 

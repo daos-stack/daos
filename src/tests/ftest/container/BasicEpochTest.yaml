@@ -3,7 +3,7 @@
 hosts:
     test_machines1:
       test_machines:
-        - boro-16
+        - boro-A
 server:
    server_group: daos_server
 conttests:

@@ -27,24 +27,15 @@ import time
 import traceback
 import sys
 import json
-
 import subprocess
-
-from avocado       import Test
-from avocado       import main
-from avocado.utils import process
+from avocado import Test, main
 
 sys.path.append('./util')
 sys.path.append('../../utils/py')
+
 import ServerUtils
-import CheckForPool
-import GetHostsFromFile
 import WriteHostFile
-from daos_api import DaosContext
-from daos_api import DaosPool
-from daos_api import DaosServer
-from daos_api import RankList
-from daos_io import  DaosFile
+from daos_api import DaosContext, DaosPool, DaosServer
 
 class RebuildNoCap(Test):
 
