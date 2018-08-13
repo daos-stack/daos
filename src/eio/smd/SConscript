@@ -9,7 +9,7 @@ def scons():
     denv.AppendUnique(CPPPATH=['#/src/eio/smd/'])
     denv.Library('smd', Glob('*.c'), LIBS=['daos_common', 'gurt', 'pmemobj'])
 
-    #SConscript('tests/SConscript', exports='denv')
+    SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
     scons()
