@@ -1888,6 +1888,200 @@ out:
 	return rc;
 }
 
+struct evt_max_rect {
+	struct evt_rect		mr_rect;
+	bool			mr_valid;
+	bool			mr_punched;
+};
+
+static bool
+saved_rect_is_greater(struct evt_max_rect *saved, struct evt_rect *r2)
+{
+	struct evt_rect	*r1;
+	bool		 is_greater = false;
+
+	if (!saved->mr_valid) /* No rectangle saved yet */
+		return false;
+
+	r1 = &saved->mr_rect;
+
+	D_DEBUG(DB_TRACE, "Comparing saved "DF_RECT" to "DF_RECT"\n",
+		DP_RECT(r1), DP_RECT(r2));
+	if (r1->rc_off_hi > r2->rc_off_hi) {
+		is_greater = true;
+		goto out;
+	}
+
+	if (r1->rc_off_hi < r2->rc_off_hi)
+		goto out;
+
+	if (r1->rc_epc_lo > r2->rc_epc_lo)
+		is_greater = true;
+
+out:
+	/* Now we need to update the lower bound of whichever rectangle is
+	 * selected if the chosen rectangle is partially covered
+	 */
+	if (is_greater) {
+		if (r2->rc_epc_lo > r1->rc_epc_lo) {
+			if (r2->rc_off_hi >= r1->rc_off_lo)
+				r1->rc_off_lo = r2->rc_off_hi + 1;
+		}
+	} else {
+		if (r1->rc_epc_lo > r2->rc_epc_lo) {
+			if (r1->rc_off_hi >= r2->rc_off_lo)
+				r2->rc_off_lo = r1->rc_off_hi + 1;
+		}
+	}
+	return is_greater;
+}
+
+
+int
+evt_get_max(daos_handle_t toh, daos_epoch_t epoch, daos_off_t *max_off)
+{
+	struct evt_context	 *tcx;
+	struct evt_rect		  rect; /* specifies range we are searching */
+	struct evt_max_rect	  saved_rect = {0};
+	struct evt_entry	  ent;
+	TMMID(struct evt_node)	  nd_mmid;
+	int			  level;
+	int			  at;
+	int			  i;
+
+	tcx = evt_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	D_DEBUG(DB_TRACE, "Finding evt range at epoch "DF_U64"\n", epoch);
+	/* Start with the whole range.  We'll repeat the algorithm until we
+	 * either we find nothing or we find a non-punched rectangle.
+	 */
+	rect.rc_off_lo = 0;
+	rect.rc_off_hi = (daos_off_t)-1;
+	rect.rc_epc_lo = epoch;
+
+	if (tcx->tc_root->tr_depth == 0)
+		return -DER_ENOENT; /* empty tree */
+
+try_again:
+	D_DEBUG(DB_TRACE, "Scanning for maximum in "DF_RECT"\n",
+		DP_RECT(&rect));
+
+	evt_tcx_reset_trace(tcx);
+
+	saved_rect.mr_valid = false; /* Reset the saved entry */
+
+	level = at = 0;
+	nd_mmid = tcx->tc_root->tr_node;
+	while (1) {
+		struct evt_rect *mbr;
+		struct evt_node	*node;
+		bool		 leaf;
+
+		node = evt_tmmid2ptr(tcx, nd_mmid);
+		leaf = evt_node_is_leaf(tcx, nd_mmid);
+		mbr  = evt_node_mbr_get(tcx, nd_mmid);
+
+		D_DEBUG(DB_TRACE, "Checking mbr="DF_RECT", l=%d, a=%d\n",
+			DP_RECT(mbr), level, at);
+
+		D_ASSERT(!leaf || at == 0);
+
+		for (i = at; i < node->tn_nr; i++) {
+			struct evt_rect		*rtmp;
+			int			 time_overlap;
+			int			 range_overlap;
+
+			rtmp = evt_node_rect_at(tcx, nd_mmid, i);
+			D_DEBUG(DB_TRACE, "Checking rect[%d]="DF_RECT"\n",
+				i, DP_RECT(rtmp));
+
+			evt_rect_overlap(rtmp, &rect, &range_overlap,
+					 &time_overlap);
+			if (range_overlap == RT_OVERLAP_NO)
+				continue;
+			D_ASSERT(time_overlap != RT_OVERLAP_NO);
+
+			if (time_overlap == RT_OVERLAP_UNDER)
+				continue;
+
+			if (!leaf) {
+				/* break the internal loop and enter the
+				 * child node.
+				 */
+				break;
+			}
+
+			memset(&ent, 0, sizeof(ent));
+			evt_fill_entry(tcx, nd_mmid, i, &rect, &ent);
+
+			/* Ok, now that we've potentially trimmed the rectangle
+			 * in ent, let's do the check again
+			 */
+			if (saved_rect_is_greater(&saved_rect,
+						  &ent.en_sel_rect))
+				continue;
+
+			saved_rect.mr_valid = true;
+			if (eio_addr_is_hole(&ent.en_eiov.ei_addr))
+				saved_rect.mr_punched = true;
+			else
+				saved_rect.mr_punched = false;
+			saved_rect.mr_rect = ent.en_sel_rect;
+
+			D_DEBUG(DB_TRACE, "New saved rectangle "DF_RECT
+				" punched? : %s\n",
+				DP_RECT(&saved_rect.mr_rect),
+				saved_rect.mr_punched ? "yes" : "no");
+
+			evt_tcx_set_trace(tcx, level, nd_mmid, i);
+		}
+
+		if (i < node->tn_nr) {
+			/* overlapped with a non-leaf node, dive into it. */
+			evt_tcx_set_trace(tcx, level, nd_mmid, i);
+			nd_mmid = *evt_node_child_at(tcx, nd_mmid, i);
+			at = 0;
+			level++;
+		} else {
+			struct evt_trace *trace;
+
+			if (level == 0) { /* done with the root */
+				daos_off_t	old;
+
+				if (!saved_rect.mr_valid)
+					return -DER_ENOENT;
+
+				old = saved_rect.mr_rect.rc_off_lo;
+
+				if (saved_rect.mr_punched) {
+					D_DEBUG(DB_TRACE,
+						"Final extent in range is"
+						" punched ("DF_RECT")\n",
+						DP_RECT(&saved_rect.mr_rect));
+					if (old == 0)
+						return -DER_ENOENT;
+					rect.rc_off_hi = old - 1;
+
+					goto try_again;
+				}
+				*max_off = saved_rect.mr_rect.rc_off_hi;
+				break;
+			}
+
+			level--;
+			trace = evt_tcx_trace(tcx, level);
+			nd_mmid = trace->tr_node;
+			at = trace->tr_at + 1;
+			D_ASSERT(at <= tcx->tc_order);
+		}
+	}
+	/* Only way to break the outer loop is if we found a valid record */
+	D_ASSERT(saved_rect.mr_valid);
+	return 0;
+}
+
 /**
  * Find all versioned extents intercepting with the input rectangle \a rect
  * and return their data pointers.
@@ -2119,6 +2313,9 @@ evt_destroy(daos_handle_t toh)
 	return rc;
 }
 
+/* Special value to not only print MBRs but also bounds for leaf records */
+#define EVT_DEBUG_LEAF (-2)
+
 /** Output tree node status */
 static void
 evt_node_debug(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
@@ -2141,6 +2338,15 @@ evt_node_debug(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		D_PRINT("node="TMMID_PF", lvl=%d, mbr="DF_RECT", rect_nr=%d\n",
 			TMMID_P(nd_mmid), cur_level, DP_RECT(rect), nd->tn_nr);
 
+		if (leaf && debug_level == EVT_DEBUG_LEAF) {
+			for (i = 0; i < nd->tn_nr; i++) {
+				rect = evt_node_rect_at(tcx, nd_mmid, i);
+
+				D_PRINT("    rect[%d] = "DF_RECT"\n", i,
+					DP_RECT(rect));
+			}
+		}
+
 		if (leaf || cur_level == debug_level)
 			return;
 	}
@@ -2150,6 +2356,7 @@ evt_node_debug(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 
 		child_mmid = *evt_node_child_at(tcx, nd_mmid, i);
 		evt_node_debug(tcx, child_mmid, cur_level + 1, debug_level);
+
 	}
 }
 

@@ -263,7 +263,8 @@ ts_add_rect(char *args)
 		return rc;
 	}
 
-	rc = evt_insert(ts_toh, ts_uuid, 0, &rect, 1, eio_addr);
+	rc = evt_insert(ts_toh, ts_uuid, 0, &rect, val == NULL ? 0 : 1,
+			eio_addr);
 	if (rc == 0)
 		total_added++;
 	if (should_pass) {
@@ -284,6 +285,7 @@ static int
 ts_find_rect(char *args)
 {
 	struct evt_entry	*ent;
+	struct eio_iov		*eiov;
 	char			*val;
 	d_list_t		 covered;
 	struct evt_rect		 rect;
@@ -306,12 +308,16 @@ ts_find_rect(char *args)
 		D_FATAL("Add rect failed %d\n", rc);
 
 	evt_ent_list_for_each(ent, &enlist) {
+		bool punched;
+
+		eiov = &ent->en_eiov;
+		punched = eio_addr_is_hole(&eiov->ei_addr);
 		D_PRINT("Find rect "DF_RECT" (sel="DF_RECT") width=%d "
 			"val=%.*s\n", DP_RECT(&ent->en_rect),
 			DP_RECT(&ent->en_sel_rect),
 			(int)evt_rect_width(&ent->en_sel_rect),
-			(int)evt_rect_width(&ent->en_sel_rect),
-			(char *)eio_iov2off(&ent->en_eiov));
+			punched ? 4 : (int)evt_rect_width(&ent->en_sel_rect),
+			punched ? "None" : (char *)eio_iov2off(eiov));
 	}
 
 	evt_ent_list_fini(&enlist);
@@ -470,6 +476,56 @@ ts_many_add(char *args)
 }
 
 static int
+ts_get_max(char *args)
+{
+	char		*tok;
+	daos_epoch_t	 epoch;
+	daos_off_t	 max_off;
+	daos_off_t	 expected_off;
+	int		 expected_rc = 0;
+	int		 rc;
+	bool		 check_offset = true;
+	bool		 check_rc = true;
+
+	epoch = strtoull(args, NULL, 10);
+
+	tok = strchr(args, EVT_SEP);
+	if (tok == NULL) {
+		check_offset = false;
+	} else {
+		tok++;
+		expected_off = strtoull(tok, NULL, 10);
+	}
+
+	tok = strchr(args, EVT_SEP_VAL);
+	if (tok == NULL) {
+		check_rc = false;
+	} else {
+		tok++;
+		expected_rc = atoi(tok);
+		D_PRINT("Expecting rc %d\n", expected_rc);
+	}
+
+	rc = evt_get_max(ts_toh, epoch, &max_off);
+
+	D_PRINT("evt_get_max returns %s at epoch "DF_U64"\n", d_errstr(rc),
+		epoch);
+	if (rc == 0)
+		D_PRINT("   max_offset is "DF_U64"\n", max_off);
+
+	if (check_rc && expected_rc != rc) {
+		D_PRINT("Expected rc == %s\n", d_errstr(expected_rc));
+		return 1;
+	}
+	if (check_offset && expected_off != max_off) {
+		D_PRINT("Expected offset "DF_U64"\n", expected_off);
+		return 1;
+	}
+
+	return 0;
+}
+
+static int
 ts_tree_debug(char *args)
 {
 	int	level;
@@ -489,6 +545,7 @@ static struct option ts_ops[] = {
 	{ "find",	required_argument,	NULL,	'f'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
 	{ "list",	no_argument,		NULL,	'l'	},
+	{ "get_max",	required_argument,	NULL,	'g'	},
 	{ "debug",	required_argument,	NULL,	'b'	},
 	{ NULL,		0,			NULL,	0	},
 };
@@ -522,6 +579,9 @@ ts_cmd_run(char opc, char *args)
 		break;
 	case 'l':
 		rc = ts_list_rect();
+		break;
+	case 'g':
+		rc = ts_get_max(args);
 		break;
 	case 'b':
 		rc = ts_tree_debug(args);
@@ -560,7 +620,7 @@ main(int argc, char **argv)
 	}
 
 	optind = 0;
-	while ((rc = getopt_long(argc, argv, "C:a:m:f:d:b:Docl",
+	while ((rc = getopt_long(argc, argv, "C:a:m:f:g:d:b:Docl",
 				 ts_ops, NULL)) != -1) {
 		rc = ts_cmd_run(rc, optarg);
 		if (rc != 0)

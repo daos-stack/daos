@@ -64,7 +64,33 @@ EOF
  -f 0-100@$np2			\
  -a 3-28@$np4:abcdefghijklmnopqrstuvwxyz	\
  -a 31-56@$nm3:abcdefghijklmnopqrstuvwxyz	\
- -f 0-100@$np4
+ -f 0-100@$np4          \
+ -g $np4,99             \
+ -g $n,99               \
+ -g 0:-2003             \
+ -g $nm3,99
+EOF
+)
+}
+
+function check_max {
+    first=$base
+    ((second = first + 10))
+    ((third = second + 10))
+    ((fourth = third + 10))
+
+    cmd+=$(cat << EOF
+    -a 0-1@$first:AA            \
+    -a 350-355@$first:evtree    \
+    -a 355-355@$second          \
+    -a 1-360@$third             \
+    -a 0-0@$fourth              \
+    -f 0-355@$first             \
+    -f 0-355@$fourth            \
+    -g $first,355               \
+    -g $second,354              \
+    -g $third,0                 \
+    -g $fourth:-2003
 EOF
 )
 }
@@ -77,9 +103,17 @@ while [ $i -lt 20 ]; do
     ((i = i + 1))
 done
 
+i=1
+while [ $i -lt 20 ]; do
+    ((base = i * 60000))
+    check_max $base
+    ((i = i + 1))
+done
+
+cmd+=" -b -2 -D"
 echo "$cmd"
 
-$cmd -b "-1" -a "20-25@60000:finish" -D
+$cmd
 
 result=$?
 echo Test returned $result

@@ -343,6 +343,20 @@ int evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 int evt_find(daos_handle_t toh, struct evt_rect *rect,
 	     struct evt_entry_list *ent_list, d_list_t *covered);
 
+/** Scan the tree for the non-punched visible rectangle with the highest
+ *  end offset and return the offset.  The returned offset is only valid
+ *  if the function returns 0.
+ *
+ *  \param toh		[IN]	The tree open handle
+ *  \param epoch	[IN]	The epoch at which to scan
+ *  \param max_off	[OUT]	The returned max offset, if available
+ *
+ *  \return		0		Found the max offset
+ *			-DER_ENOENT	Tree is empty at specified epoch
+ *			-rc		Other error code
+ */
+int evt_get_max(daos_handle_t toh, daos_epoch_t epoch, daos_off_t *max_off);
+
 /**
  * Debug function, it outputs status of tree nodes at level \a debug_level,
  * or all levels if \a debug_level is negative.
