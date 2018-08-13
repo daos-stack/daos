@@ -204,6 +204,12 @@ struct daos_rebuild_status {
 	 * rebuild is done or not, it is valid only if @rs_version is non-zero
 	 */
 	int32_t			rs_done;
+	/** # total to-be-rebuilt objects, it's non-zero and increase when
+	 * rebuilding in progress, when rs_done is 1 it will not change anymore
+	 * and should equal to rs_obj_nr. With both rs_toberb_obj_nr and
+	 * rs_obj_nr the user can know the progress of the rebuilding.
+	 */
+	uint64_t		rs_toberb_obj_nr;
 	/** # rebuilt objects, it's non-zero only if rs_done is 1 */
 	uint64_t		rs_obj_nr;
 	/** # rebuilt records, it's non-zero only if rs_done is 1 */

@@ -69,6 +69,7 @@ struct crt_msg_field *pool_connect_out_fields[] = {
 	&CMF_UINT32,	/* rebuild_st.pad_32 */
 	&CMF_INT,	/* rebuild_st.errno */
 	&CMF_INT,	/* rebuild_st.done */
+	&CMF_UINT64,	/* rebuild_st.toberb_obj_nr */
 	&CMF_UINT64,	/* rebuild_st.obj_nr */
 	&CMF_UINT64,	/* rebuild_st.rec_nr */
 };
@@ -102,6 +103,7 @@ struct crt_msg_field *pool_query_out_fields[] = {
 	&CMF_UINT32,	/* rebuild_st.pad_32 */
 	&CMF_INT,	/* rebuild_st.errno */
 	&CMF_INT,	/* rebuild_st.done */
+	&CMF_UINT64,	/* rebuild_st.toberb_obj_nr */
 	&CMF_UINT64,	/* rebuild_st.obj_nr */
 	&CMF_UINT64,	/* rebuild_st.rec_nr */
 };

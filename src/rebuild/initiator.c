@@ -839,7 +839,7 @@ rebuild_obj_callback(daos_unit_oid_t oid, unsigned int shard, void *data)
 	uuid_copy(obj_arg->cont_uuid, iter_arg->cont_uuid);
 	rpt_get(iter_arg->rpt);
 	obj_arg->rpt = iter_arg->rpt;
-	obj_arg->rpt->rt_rebuilding_objs++;
+	obj_arg->rpt->rt_toberb_objs++;
 
 	/* Let's iterate the object on different xstream */
 	stream_id = oid.id_pub.lo % dss_get_threads_number();

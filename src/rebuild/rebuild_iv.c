@@ -134,6 +134,8 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
 	if (rgt && rgt->rgt_leader_term == src_iv->riv_leader_term) {
 		/* update the rebuild global status */
 		if (!src_iv->riv_global_done) {
+			rgt->rgt_status.rs_toberb_obj_nr +=
+				src_iv->riv_toberb_obj_count;
 			rgt->rgt_status.rs_obj_nr += src_iv->riv_obj_count;
 			rgt->rgt_status.rs_rec_nr += src_iv->riv_rec_count;
 		}
@@ -143,9 +145,10 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
 			rgt->rgt_status.rs_errno = src_iv->riv_status;
 
 		D_DEBUG(DB_TRACE, "update rebuild "DF_UUID" ver %d "
-			"obj/rec/global done/status/rank "
-			DF_U64"/"DF_U64"/%d/%d/%d\n",
+			"toberb_obj/rb_obj/rec/global done/status/rank "
+			DF_U64"/"DF_U64"/"DF_U64"/%d/%d/%d\n",
 			DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver,
+			rgt->rgt_status.rs_toberb_obj_nr,
 			rgt->rgt_status.rs_obj_nr, rgt->rgt_status.rs_rec_nr,
 			rgt->rgt_status.rs_done, rgt->rgt_status.rs_errno,
 			src_iv->riv_rank);
@@ -198,6 +201,8 @@ rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc,
 				rs.rs_done	= 1;
 				rs.rs_obj_nr	= src_iv->riv_obj_count;
 				rs.rs_rec_nr	= src_iv->riv_rec_count;
+				rs.rs_toberb_obj_nr	=
+					src_iv->riv_toberb_obj_count;
 
 				rc = rebuild_status_completed_update(
 						src_iv->riv_pool_uuid, &rs);

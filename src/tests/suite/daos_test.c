@@ -121,9 +121,11 @@ rebuild_pool_wait(test_arg_t *arg)
 		done = true;
 	} else {
 		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u), "
-			      "already rebuilt obj="DF_U64", rec="DF_U64"\n",
+			      "to-be-rebuilt obj="DF_U64", already rebuilt obj="
+			      DF_U64", rec="DF_U64"\n",
 			      DP_UUID(arg->pool.pool_uuid), rst->rs_version,
-			      rst->rs_obj_nr, rst->rs_rec_nr);
+			      rst->rs_toberb_obj_nr, rst->rs_obj_nr,
+			      rst->rs_rec_nr);
 	}
 
 	return done;

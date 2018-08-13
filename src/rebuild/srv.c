@@ -424,7 +424,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 	}
 
 	if (!status->scanning && !rpt->rt_lead_puller_running &&
-	    rpt->rt_rebuilding_objs == status->obj_count) {
+	    rpt->rt_toberb_objs == status->obj_count) {
 		int i;
 
 		/* then check pulling status*/
@@ -606,11 +606,12 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 			str = "pulling";
 
 		snprintf(sbuf, RBLD_SBUF_LEN,
-			"Rebuild [%s] (pool "DF_UUID" ver=%u, obj="DF_U64
-			", rec= "DF_U64", done %d status %d duration=%d"
-			" secs)\n", str, DP_UUID(pool->sp_uuid), map_ver,
-			rs->rs_obj_nr, rs->rs_rec_nr, rs->rs_done,
-			rs->rs_errno, (int)(now - begin));
+			"Rebuild [%s] (pool "DF_UUID" ver=%u, toberb_obj="
+			DF_U64", rb_obj="DF_U64", rec= "DF_U64", done %d "
+			"status %d duration=%d secs)\n",
+			str, DP_UUID(pool->sp_uuid), map_ver,
+			rs->rs_toberb_obj_nr, rs->rs_obj_nr, rs->rs_rec_nr,
+			rs->rs_done, rs->rs_errno, (int)(now - begin));
 
 		D_DEBUG(DB_REBUILD, "%s", sbuf);
 		if (rs->rs_done || rebuild_gst.rg_abort || rgt->rgt_abort) {
@@ -1066,8 +1067,12 @@ rebuild_one_ult(void *arg)
 	iv.riv_ver		= rgt->rgt_rebuild_ver;
 	iv.riv_global_done	= 1;
 	iv.riv_leader_term	= rgt->rgt_leader_term;
+	iv.riv_toberb_obj_count	= rgt->rgt_status.rs_toberb_obj_nr;
 	iv.riv_obj_count	= rgt->rgt_status.rs_obj_nr;
 	iv.riv_rec_count	= rgt->rgt_status.rs_rec_nr;
+	D_ASSERTF(iv.riv_toberb_obj_count == iv.riv_obj_count,
+		  "toberb_obj_count "DF_U64"obj_count "DF_U64".\n",
+		  iv.riv_toberb_obj_count, iv.riv_obj_count);
 
 	rc = rebuild_iv_update(pool->sp_iv_ns,
 			       &iv, CRT_IV_SHORTCUT_NONE,
@@ -1498,6 +1503,9 @@ rebuild_tgt_status_check(void *arg)
 
 		D_ASSERT(status.obj_count >= rpt->rt_reported_obj_cnt);
 		D_ASSERT(status.rec_count >= rpt->rt_reported_rec_cnt);
+		D_ASSERT(rpt->rt_toberb_objs >= rpt->rt_reported_toberb_objs);
+		iv.riv_toberb_obj_count =
+			rpt->rt_toberb_objs - rpt->rt_reported_toberb_objs;
 		iv.riv_obj_count = status.obj_count - rpt->rt_reported_obj_cnt;
 		iv.riv_rec_count = status.rec_count - rpt->rt_reported_rec_cnt;
 		iv.riv_status = status.status;
@@ -1530,6 +1538,8 @@ rebuild_tgt_status_check(void *arg)
 						   &iv, CRT_IV_SHORTCUT_TO_ROOT,
 						   CRT_IV_SYNC_NONE);
 			if (rc == 0) {
+				rpt->rt_reported_toberb_objs +=
+					iv.riv_toberb_obj_count;
 				rpt->rt_reported_obj_cnt = status.obj_count;
 				rpt->rt_reported_rec_cnt = status.rec_count;
 			} else {
@@ -1640,7 +1650,8 @@ rpt_create(struct ds_pool *pool, d_rank_list_t *svc_list, uint32_t pm_ver,
 	uuid_copy(rpt->rt_pool_uuid, pool->sp_uuid);
 	daos_rank_list_dup(&rpt->rt_svc_list, svc_list);
 	rpt->rt_lead_puller_running = 0;
-	rpt->rt_rebuilding_objs = 0;
+	rpt->rt_toberb_objs = 0;
+	rpt->rt_reported_toberb_objs = 0;
 	rpt->rt_reported_obj_cnt = 0;
 	rpt->rt_reported_rec_cnt = 0;
 	rpt->rt_rebuild_ver = pm_ver;

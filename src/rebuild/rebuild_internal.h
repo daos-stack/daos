@@ -95,7 +95,10 @@ struct rebuild_tgt_pool_tracker {
 	uint64_t		rt_leader_term;
 	ABT_mutex		rt_fini_lock;
 	ABT_cond		rt_fini_cond;
-	uint64_t		rt_rebuilding_objs;
+	/* # to-be-rebuilt objs */
+	uint64_t		rt_toberb_objs;
+	uint64_t		rt_reported_toberb_objs;
+	/* reported # rebuilt objs */
 	uint64_t		rt_reported_obj_cnt;
 	uint64_t		rt_reported_rec_cnt;
 
@@ -242,6 +245,7 @@ struct rebuild_tgt_query_info {
 
 struct rebuild_iv {
 	uuid_t		riv_pool_uuid;
+	uint64_t	riv_toberb_obj_count;
 	uint64_t	riv_obj_count;
 	uint64_t	riv_rec_count;
 	uint64_t	riv_leader_term;
