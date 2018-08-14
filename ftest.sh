@@ -52,6 +52,25 @@ mkdir -p src/tests/ftest/avocado/job-results
 
 DAOS_BASE=${SL_OMPI_PREFIX%/install}
 pdsh -R ssh -S -w "${HOSTPREFIX}"vm[1-8] "set -x
+sudo bash -c 'set -e
+yum -y install yum-utils
+pkgs=\"openpa libfabric mercury\"
+for ext in \$pkgs; do
+    rm -f /etc/yum.repos.d/jenkins-3.wolf.hpdd.intel.com_8080_job_daos-stack-org_job_\${ext}_job_*.repo
+    yum-config-manager --add-repo=http://jenkins-3.wolf.hpdd.intel.com:8080/job/daos-stack-org/job/\${ext}/job/master/lastSuccessfulBuild/artifact/artifacts/
+    echo \"gpgcheck = False\" >> /etc/yum.repos.d/jenkins-3.wolf.hpdd.intel.com_8080_job_daos-stack-org_job_\${ext}_job_master_lastSuccessfulBuild_artifact_artifacts_.repo
+done
+# for testing with a PR for a dependency:
+depname=     # i.e. depname=mercury
+pr_num=1     # set to which PR number your PR is
+if [ -n \"\$depname\" ]; then
+    rm -f /etc/yum.repos.d/jenkins-3.wolf.hpdd.intel.com_8080_job_daos-stack-org_job_\${depname}_job_PR-\${pr_num}_lastSuccessfulBuild_artifact_artifacts_.repo
+    yum-config-manager --add-repo=http://jenkins-3.wolf.hpdd.intel.com:8080/job/daos-stack-org/job/\${depname}/job/PR-\${pr_num}/lastSuccessfulBuild/artifact/artifacts/
+    echo \"gpgcheck = False\" >> /etc/yum.repos.d/jenkins-3.wolf.hpdd.intel.com_8080_job_daos-stack-org_job_\${depname}_job_PR-\${pr_num}_lastSuccessfulBuild_artifact_artifacts_.repo
+    pkgs+=\" \${depname}\"
+fi
+yum -y erase \$pkgs
+yum -y install \$pkgs'
 sudo mkdir -p $DAOS_BASE
 sudo mount -t nfs $NFS_SERVER:$PWD $DAOS_BASE" 2>&1 | dshbak -c
 

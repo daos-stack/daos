@@ -31,7 +31,9 @@ pipeline {
                               # scons -c is not perfect so get out the big hammer
                               echo rm -rf _build.external install build
                               pushd scons_local
-                              git pull https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/3
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/4
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/22/33022/2
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/43/33043/4
                               popd
                               utils/fetch_go_packages.sh -i .
                               SCONS_ARGS="--update-prereq=all --build-deps=yes USE_INSTALLED=all install"

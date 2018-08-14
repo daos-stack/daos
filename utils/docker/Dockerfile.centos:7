@@ -18,6 +18,17 @@ ARG UID=1000
 # Update distribution
 #Nothing to do for CentOS
 
+# external deps build/repos
+# sadly this doesn't work
+#RUN yum-config-manager --save --setopt=*_job_daos-stack-org_job_${ext}_job_master_lastSuccessfulBuild_artifact_artifacts_.gpgcheck=0
+RUN for ext in openpa libfabric mercury; do \
+    yum-config-manager --add-repo=http://jenkins-3.wolf.hpdd.intel.com:8080/job/daos-stack-org/job/${ext}/job/master/lastSuccessfulBuild/artifact/artifacts/; \
+    echo "gpgcheck = False" >> /etc/yum.repos.d/jenkins-3.wolf.hpdd.intel.com_8080_job_daos-stack-org_job_${ext}_job_master_lastSuccessfulBuild_artifact_artifacts_.repo; \
+done
+
+# for good measure, clean the metadata
+RUN yum clean metadata
+
 # Install basic tools
 RUN yum install -y epel-release
 RUN yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel   \
@@ -26,7 +37,8 @@ RUN yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel  
                    doxygen pandoc flex patch nasm yasm ninja-build meson         \
                    CUnit-devel libaio-devel python-pep8 lcov                     \
                    python clang-analyzer sg3_utils libiscsi-devel                \
-                   numactl-devel doxygen graphviz
+                   numactl-devel doxygen graphviz openpa-devel libfabric-devel   \
+                   mercury-devel
 
 
 # Dependencies
