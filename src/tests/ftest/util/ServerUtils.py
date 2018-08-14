@@ -57,15 +57,12 @@ def runServer(hostfile, setname, basepath):
         ld_lib_path = os.path.join(build_vars["PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["PREFIX"], "lib/daos_srv") + os.pathsep + \
             os.path.join(build_vars["OMPI_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["MERCURY_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["HWLOC_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["ARGOBOTS_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["SPDK_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["PMDK_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["OPENPA_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["CART_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["ISAL_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["OFI_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["FUSE_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["PMIX_PREFIX"], "lib")
 
