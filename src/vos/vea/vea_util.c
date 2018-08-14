@@ -29,10 +29,15 @@ int
 verify_free_entry(uint64_t *off, struct vea_free_extent *vfe)
 {
 	D_ASSERT(vfe != NULL);
-	if ((off != NULL && *off != vfe->vfe_blk_off) ||
-	    vfe->vfe_blk_off == VEA_HINT_OFF_INVAL) {
+	if (off != NULL && *off != vfe->vfe_blk_off) {
 		D_CRIT("corrupted free entry, off: "DF_U64" != "DF_U64"\n",
 		       *off, vfe->vfe_blk_off);
+		return -DER_INVAL;
+	}
+
+	if (vfe->vfe_blk_off == VEA_HINT_OFF_INVAL) {
+		D_CRIT("corrupted free entry, off == VEA_HINT_OFF_INVAL(%d)\n",
+			VEA_HINT_OFF_INVAL);
 		return -DER_INVAL;
 	}
 
@@ -41,7 +46,6 @@ verify_free_entry(uint64_t *off, struct vea_free_extent *vfe)
 		       vfe->vfe_blk_cnt);
 		return -DER_INVAL;
 	}
-
 	return 0;
 }
 
@@ -208,7 +212,7 @@ ext_overlapping(struct vea_free_extent *ext1, struct vea_free_extent *ext2)
  * \param off       [IN]	Block offset of extent
  * \param cnt       [IN]	Block count of extent
  *
- * \return			0 - Alocated
+ * \return			0 - Allocated
  *				1 - Not allcoated
  *				Negative value on error
  */

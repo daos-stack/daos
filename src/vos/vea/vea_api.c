@@ -69,6 +69,8 @@ vea_format(struct umem_instance *umem, struct vea_space_df *md,
 	daos_iov_t key, val;
 	int rc;
 
+	D_ASSERT(umem != NULL);
+	D_ASSERT(md != NULL);
 	/* Can't reformat without 'force' specified */
 	if (md->vsd_magic == VEA_MAGIC) {
 		D_DEBUG(force ? DLOG_WARN : DLOG_ERR,
@@ -168,6 +170,7 @@ out:
 void
 vea_unload(struct vea_space_info *vsi)
 {
+	D_ASSERT(vsi != NULL);
 	unload_space_info(vsi);
 
 	/* Destroy the in-memory free extent tree */
@@ -204,6 +207,11 @@ vea_load(struct umem_instance *umem, struct vea_space_df *md,
 	struct vea_space_info *vsi;
 	int rc;
 
+	D_ASSERT(umem != NULL);
+	D_ASSERT(md != NULL);
+	D_ASSERT(unmap_ctxt != NULL);
+	D_ASSERT(vsip != NULL);
+
 	if (md->vsd_magic != VEA_MAGIC) {
 		D_DEBUG(DB_IO, "load unformated blob\n");
 		return -DER_UNINIT;
@@ -223,7 +231,6 @@ vea_load(struct umem_instance *umem, struct vea_space_df *md,
 	vsi->vsi_vec_btr = DAOS_HDL_INVAL;
 	vsi->vsi_tot_resrvd = 0;
 	vsi->vsi_agg_time = 0;
-	D_ASSERT(unmap_ctxt != NULL);
 	vsi->vsi_unmap_ctxt = *unmap_ctxt;
 
 	rc = create_free_class(&vsi->vsi_class, md);
@@ -286,6 +293,9 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 {
 	struct vea_resrvd_ext *resrvd;
 	int rc = 0;
+
+	D_ASSERT(vsi != NULL);
+	D_ASSERT(resrvd_list != NULL);
 
 	if (blk_cnt > vsi->vsi_class.vfc_large_thresh) {
 		D_ERROR("required blk_cnt: %u > %u, blk_sz: %u\n",
@@ -376,7 +386,6 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 			D_ASSERT(seq_min < resrvd->vre_hint_seq);
 		}
 
-		D_ASSERT(seq_max < resrvd->vre_hint_seq);
 		seq_max = resrvd->vre_hint_seq;
 		off_p = resrvd->vre_hint_off;
 
@@ -420,6 +429,8 @@ int
 vea_cancel(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	   d_list_t *resrvd_list)
 {
+	D_ASSERT(vsi != NULL);
+	D_ASSERT(resrvd_list != NULL);
 	return process_resrvd_list(vsi, hint, resrvd_list, false);
 }
 
@@ -432,6 +443,8 @@ vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	       d_list_t *resrvd_list)
 {
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
+	D_ASSERT(vsi != NULL);
+	D_ASSERT(resrvd_list != NULL);
 	/*
 	 * We choose to don't rollback the in-memory hint updates even if the
 	 * transaction manipulcated by caller is aborted, that'll result in
@@ -456,6 +469,7 @@ vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
 int
 vea_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt)
 {
+	D_ASSERT(vsi != NULL);
 	struct umem_instance *umem = vsi->vsi_umem;
 	struct vea_free_extent vfe;
 	int rc;
@@ -490,6 +504,7 @@ vea_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt)
 int
 vea_set_ext_age(struct vea_space_info *vsi, uint64_t blk_off, uint64_t age)
 {
+	D_ASSERT(vsi != NULL);
 	return 0;
 }
 
@@ -498,6 +513,8 @@ int
 vea_get_ext_vector(struct vea_space_info *vsi, uint64_t blk_off,
 		   uint32_t blk_cnt, struct vea_ext_vector *ext_vector)
 {
+	D_ASSERT(vsi != NULL);
+	D_ASSERT(ext_vector != NULL);
 	return 0;
 }
 
@@ -505,6 +522,8 @@ vea_get_ext_vector(struct vea_space_info *vsi, uint64_t blk_off,
 int
 vea_hint_load(struct vea_hint_df *phd, struct vea_hint_context **thc)
 {
+	D_ASSERT(phd != NULL);
+	D_ASSERT(thc != NULL);
 	struct vea_hint_context *hint_ctxt;
 
 	D_ALLOC_PTR(hint_ctxt);
