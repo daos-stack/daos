@@ -56,6 +56,10 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_str	= "ofi+sockets",
 		.nad_port_bind	= true,
 	}, {
+		.nad_type	= CRT_NA_OFI_VERBS_RXM,
+		.nad_str	= "ofi+verbs;ofi_rxm",
+		.nad_port_bind	= true,
+	}, {
 		.nad_type	= CRT_NA_OFI_VERBS,
 		.nad_str	= "ofi+verbs",
 		.nad_port_bind	= true,

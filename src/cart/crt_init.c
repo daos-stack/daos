@@ -275,6 +275,14 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			}
 		}
 do_init:
+		/* the verbs provider only works with regular EP */
+		if ((crt_gdata.cg_na_plugin == CRT_NA_OFI_VERBS_RXM ||
+		     crt_gdata.cg_na_plugin == CRT_NA_OFI_VERBS) &&
+		    crt_gdata.cg_share_na) {
+			D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
+			       "for verbs provider, ignore it.\n");
+			crt_gdata.cg_share_na = false;
+		}
 		if (crt_na_type_is_ofi(crt_gdata.cg_na_plugin)) {
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {

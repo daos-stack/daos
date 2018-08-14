@@ -69,9 +69,10 @@ struct crt_corpc_hdr;
 enum crt_na_type {
 	CRT_NA_SM		= 0,
 	CRT_NA_OFI_SOCKETS	= 1,
-	CRT_NA_OFI_VERBS	= 2,
-	CRT_NA_OFI_GNI		= 3,
-	CRT_NA_OFI_PSM2		= 4
+	CRT_NA_OFI_VERBS_RXM	= 2,
+	CRT_NA_OFI_VERBS	= 3,
+	CRT_NA_OFI_GNI		= 4,
+	CRT_NA_OFI_PSM2		= 5
 };
 
 static inline bool
