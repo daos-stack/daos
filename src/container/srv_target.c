@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -366,7 +366,7 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
-	rc = dss_task_collective(cont_destroy_one, in);
+	rc = dss_thread_collective(cont_destroy_one, in);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
@@ -667,7 +667,7 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 		rpc, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce,
 		in->tci_recs.ca_count);
 
-	rc = dss_task_collective(cont_close_one, in);
+	rc = dss_thread_collective(cont_close_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 out:
@@ -876,7 +876,7 @@ ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc)
 	else if (in->tii_epoch >= DAOS_EPOCH_MAX)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	rc = dss_task_collective(cont_epoch_discard_one, in);
+	rc = dss_thread_collective(cont_epoch_discard_one, in);
 
 out:
 	out->tio_rc = (rc == 0 ? 0 : 1);

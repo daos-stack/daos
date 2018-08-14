@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,7 +100,7 @@ struct pool_child_lookup_arg {
 };
 
 /*
- * Called via dss_task_collective() to create and add the ds_pool_child object
+ * Called via dss_thread_collective() to create and add the ds_pool_child object
  * for one thread. This opens the matching VOS pool.
  */
 int
@@ -176,7 +176,7 @@ ds_pool_child_close(uuid_t uuid)
 }
 
 /*
- * Called via dss_task_collective() to delete the ds_pool_child object for one
+ * Called via dss_thread_collective() to delete the ds_pool_child object for one
  * thread. If nobody else is referencing this object, then its VOS pool handle
  * is closed and the object itself is freed.
  */
@@ -249,7 +249,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	return 0;
 
 err_collective:
-	rc_tmp = dss_task_collective(pool_child_delete_one, key);
+	rc_tmp = dss_thread_collective(pool_child_delete_one, key);
 	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
 err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
