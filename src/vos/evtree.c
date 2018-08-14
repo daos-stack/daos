@@ -1529,6 +1529,27 @@ evt_insert_entry(struct evt_context *tcx, struct evt_entry *ent)
 	return evt_insert_or_split(tcx, ent);
 }
 
+static void
+evt_ptr_copy(struct evt_context *tcx, struct evt_ptr *src_ptr)
+{
+	struct evt_ptr		*dst_ptr;
+	struct evt_trace	*trace;
+	TMMID(struct evt_node)	 nd_mmid;
+
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	nd_mmid = trace->tr_node;
+	dst_ptr = evt_node_ptr_at(tcx, nd_mmid, trace->tr_at);
+
+	D_DEBUG(DB_IO, "dst num="DF_U64", nob=%d, src num="DF_U64", nob=%d\n",
+		dst_ptr->pt_inum, dst_ptr->pt_inob,
+		src_ptr->pt_inum, src_ptr->pt_inob);
+
+	/* Free the pmem that dst_ptr references */
+	evt_ptr_free(tcx, dst_ptr);
+
+	memcpy(dst_ptr, src_ptr, sizeof(*dst_ptr));
+}
+
 /**
  * Insert a versioned extent (rectangle) and its data mmid into the tree.
  *
@@ -1572,12 +1593,11 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 	}
 
 	if (!d_list_empty(&ent_list.el_list)) {
-		/* NB: We should check checksum here (when available).  For
-		 * now, assume overwrite is due to rebuild.  In that case,
-		 * there is no difference between new and old data so just
-		 * free the new ptr.
+		/*
+		 * NB: This is part of the current hack to keep "supporting"
+		 * overwrite for same epoch, full overwrite.
 		 */
-		rc = evt_ptr_free(tcx, &ent.en_ptr);
+		evt_ptr_copy(tcx, &ent.en_ptr);
 		goto out;
 	}
 
