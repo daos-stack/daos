@@ -545,7 +545,8 @@ done:
 	/* Commit/Abort transaction on success/error */
 	rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
 	/* Migrate the expired aggregated free extents to compound index */
-	migrate_free_exts(vsi);
+	if (rc == 0)
+		migrate_free_exts(vsi);
 error:
 	if (fca != NULL)
 		D_FREE_PTR(fca);
