@@ -148,7 +148,7 @@ exit_1:
 	vos_fini();
 exit_0:
 	daos_debug_fini();
-	return rc;
+	return nr_failed;
 }
 
 
