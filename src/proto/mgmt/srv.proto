@@ -16,7 +16,7 @@
 // GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
 // The Government's rights to use, modify, reproduce, release, perform, display,
 // or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. B609815.
+// provided in Contract No. 8F-30005.
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
@@ -29,31 +29,45 @@ package proto;
 // definition below.
 service MgmtControl {
 	rpc GetFeature(FeatureName) returns (Feature) {};
-	rpc ListFeatures(ListFeaturesParams) returns (stream Feature) {};
-	rpc ListNVMe(ListNVMeParams) returns (stream NVMeNamespace) {};
+	rpc ListAllFeatures(ListAllFeaturesParams) returns (stream Feature) {};
+	rpc ListFeatures(Category) returns (stream Feature) {};
+	rpc ListNVMeCtrlrs(ListNVMeCtrlrsParams) returns (stream NVMeController) {};
+	rpc ListNVMeNss(NVMeController) returns (stream NVMeNamespace) {};
 }
 
-message ListFeaturesParams {}
+message ListAllFeaturesParams {}
 
 message FeatureName {
 	string name = 1;
 }
 
-message Feature {
-	// The name of the feature.
-	FeatureName fname = 1;
-	// The description of the feature.
-	string description = 2;
+message Category {
+	string category = 1;
 }
 
-message ListNVMeParams {}
+message Feature {
+	// The category of capabilities this feature belongs to.
+	Category category = 1;
+	// The name of the feature.
+	FeatureName fname = 2;
+	// The description of the feature.
+	string description = 3;
+}
 
-// NVMeCtrlr represents a NVMe Controller.
-message NVMeCtrlr {
+message ListNVMeCtrlrsParams {}
+
+// NVMeController represents a NVMe Controller.
+message NVMeController {
+	// The id name of the controller.
+	int32 id = 1;
 	// The model name of the controller.
-	string model = 1;
+	string model = 2;
 	// The serial number of the controller.
-	string serial = 2;
+	string serial = 3;
+	// The pci address of the controller.
+	string pciaddr = 4;
+	// The firmware revision of the controller.
+	string fwrev = 5;
 }
 
 // NVMeNamespace represent NVMe namespaces
@@ -61,7 +75,7 @@ message NVMeCtrlr {
 // streamed rather than returned at once.
 message NVMeNamespace {
 	// controller
-	NVMeCtrlr controller = 1;
+	NVMeController controller = 1;
 	// namespace id
 	int32 id = 2;
 	// device capacity in GBytes

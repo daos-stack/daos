@@ -30,7 +30,7 @@ import (
 
 	"common/log"
 
-	mgmtpb "modules/mgmt/proto"
+	pb "modules/mgmt/proto"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -44,7 +44,7 @@ import (
 // minimize their use of protobuf datatypes.
 type DAOSMgmtClient struct {
 	logger *log.Logger
-	client mgmtpb.MgmtControlClient
+	client pb.MgmtControlClient
 	gconn  *grpc.ClientConn
 }
 
@@ -59,7 +59,7 @@ func (mc *DAOSMgmtClient) Connect(addr string) error {
 	if err != nil {
 		return mc.logger.LogGrpcErr(err)
 	}
-	mc.client = mgmtpb.NewMgmtControlClient(conn)
+	mc.client = pb.NewMgmtControlClient(conn)
 	mc.gconn = conn
 
 	return nil
@@ -92,7 +92,7 @@ func (mc *DAOSMgmtClient) Connected() bool {
 }
 
 // GetFeature returns a feature from a requested name.
-func (mc *DAOSMgmtClient) GetFeature(name string) (*mgmtpb.Feature, error) {
+func (mc *DAOSMgmtClient) GetFeature(name string) (*pb.Feature, error) {
 	if mc.Connected() == false {
 		println("No client connection was found. Please connect.")
 		return nil, nil
@@ -101,7 +101,7 @@ func (mc *DAOSMgmtClient) GetFeature(name string) (*mgmtpb.Feature, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	feature, err := mc.client.GetFeature(ctx, &mgmtpb.FeatureName{Name: name})
+	feature, err := mc.client.GetFeature(ctx, &pb.FeatureName{Name: name})
 	if err != nil {
 		return nil, mc.logger.LogGrpcErr(err)
 	}
@@ -109,8 +109,8 @@ func (mc *DAOSMgmtClient) GetFeature(name string) (*mgmtpb.Feature, error) {
 	return feature, nil
 }
 
-// ListFeatures prints all supported management features.
-func (mc *DAOSMgmtClient) ListFeatures() error {
+// ListAllFeatures prints all supported management features.
+func (mc *DAOSMgmtClient) ListAllFeatures() error {
 	if mc.Connected() == false {
 		println("No client connection was found. Please connect.")
 		return nil
@@ -119,7 +119,7 @@ func (mc *DAOSMgmtClient) ListFeatures() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream, err := mc.client.ListFeatures(ctx, &mgmtpb.ListFeaturesParams{})
+	stream, err := mc.client.ListAllFeatures(ctx, &pb.ListAllFeaturesParams{})
 	if err != nil {
 		return mc.logger.LogGrpcErr(err)
 	}
@@ -138,33 +138,86 @@ func (mc *DAOSMgmtClient) ListFeatures() error {
 	return nil
 }
 
-// ListNVMe prints all attached NVMe devices.
-func (mc *DAOSMgmtClient) ListNVMe() error {
+// ListFeatures returns supported management features for a given category.
+func (mc *DAOSMgmtClient) ListFeatures(category string) (map[string]string, error) {
 	if mc.Connected() == false {
-		println("No client connection was found. Please connect.")
-		return nil
+		return nil, fmt.Errorf("no client connection was found, please connect")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream, err := mc.client.ListNVMe(ctx, &mgmtpb.ListNVMeParams{})
+	stream, err := mc.client.ListFeatures(ctx, &pb.Category{Category: category})
 	if err != nil {
-		return mc.logger.LogGrpcErr(err)
+		return nil, mc.logger.LogGrpcErr(err)
 	}
-	println("Listing NVMe Namespaces:")
+
+	fm := make(map[string]string)
 	for {
-		dev, err := stream.Recv()
+		f, err := stream.Recv()
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return mc.logger.LogGrpcErr(err)
+			return nil, mc.logger.LogGrpcErr(err)
 		}
+		fm[f.Fname.Name] = f.Description
+	}
+	return fm, nil
+}
 
-		fmt.Println(dev)
+// ListNVMeCtrlrs returns string representations of NVMe controllers.
+func (mc *DAOSMgmtClient) ListNVMeCtrlrs() ([]*pb.NVMeController, error) {
+	if mc.Connected() == false {
+		return nil, fmt.Errorf("no client connection was found, please connect")
 	}
 
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	stream, err := mc.client.ListNVMeCtrlrs(ctx, &pb.ListNVMeCtrlrsParams{})
+	if err != nil {
+		return nil, mc.logger.LogGrpcErr(err)
+	}
+
+	var cs []*pb.NVMeController
+	for {
+		c, err := stream.Recv()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, mc.logger.LogGrpcErr(err)
+		}
+		cs = append(cs, c)
+	}
+
+	return cs, nil
+}
+
+// ListNVMeNss returns string representations of NVMe namespaces.
+func (mc *DAOSMgmtClient) ListNVMeNss(ctrlr *pb.NVMeController) ([]*pb.NVMeNamespace, error) {
+	if mc.Connected() == false {
+		return nil, fmt.Errorf("no client connection was found, please connect")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	stream, err := mc.client.ListNVMeNss(ctx, ctrlr)
+	if err != nil {
+		return nil, mc.logger.LogGrpcErr(err)
+	}
+	var nss []*pb.NVMeNamespace
+	for {
+		ns, err := stream.Recv()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, mc.logger.LogGrpcErr(err)
+		}
+		nss = append(nss, ns)
+	}
+
+	return nss, nil
 }
 
 // NewDAOSMgmtClient returns an initialized instance of the DAOSMgmtClient

@@ -24,9 +24,13 @@
 package main
 
 import (
+	"fmt"
+
 	"common/agent"
 	"common/control"
 	"modules/security"
+
+	pb "modules/mgmt/proto"
 
 	"github.com/abiosoft/ishell"
 	"github.com/jessevdk/go-flags"
@@ -37,6 +41,31 @@ var (
 	agentClient   *agent.DAOSAgentClient
 	controlClient *control.DAOSMgmtClient
 )
+
+func nvmeTaskLookup(
+	sc *ishell.Context, ctrlrs []*pb.NVMeController, feature string) error {
+
+	switch feature {
+	case "nvme-namespaces":
+		for _, c := range ctrlrs {
+			sc.Printf("Controller: %+v\n", c)
+
+			nss, err := controlClient.ListNVMeNss(c)
+			if err != nil {
+				sc.Println("Problem retrieving namespaces: ", err.Error())
+			}
+
+			for _, ns := range nss {
+				sc.Printf(
+					"\t- Namespace ID: %d, Capacity: %dGB\n", ns.Id, ns.Capacity)
+			}
+		}
+	default:
+		sc.Printf("Sorry, task '%s' has not been implemented.\n", feature)
+	}
+
+	return nil
+}
 
 func setupShell() *ishell.Shell {
 	shell := ishell.New()
@@ -157,8 +186,8 @@ func setupShell() *ishell.Shell {
 				return
 			}
 			c.Printf(
-				"Feature Name: %s\nFeature Description: %s\n",
-				c.Args[0], ctx.GetDescription())
+				"Feature: %s\nDescription: %s\nCategory: %s\n",
+				c.Args[0], ctx.GetDescription(), ctx.Category.Category)
 		},
 	})
 
@@ -171,7 +200,7 @@ func setupShell() *ishell.Shell {
 				return
 			}
 
-			err := controlClient.ListFeatures()
+			err := controlClient.ListAllFeatures()
 			if err != nil {
 				c.Println("Unable to retrieve features", err.Error())
 				return
@@ -180,18 +209,69 @@ func setupShell() *ishell.Shell {
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Name: "discovernvme",
-		Help: "Command to retrieve all NVMe devices",
+		Name: "nvme",
+		Help: "Perform tasks on NVMe controllers",
 		Func: func(c *ishell.Context) {
 			if controlClient.Connected() == false {
 				c.Println("Connection to management server required")
 				return
 			}
 
-			err := controlClient.ListNVMe()
+			cs, err := controlClient.ListNVMeCtrlrs()
 			if err != nil {
-				c.Println("Unable to retrieve devices", err.Error())
+				c.Println("Unable to retrieve controller details", err.Error())
 				return
+			}
+
+			cStrs := make([]string, len(cs))
+			for i, v := range cs {
+				cStrs[i] = fmt.Sprintf("[%d] %+v", i, v)
+			}
+
+			ctrlrIdxs := c.Checklist(
+				cStrs,
+				"Select the controllers you want to run tasks on.",
+				nil)
+
+			// filter list of selected controllers to act on
+			var ctrlrs []*pb.NVMeController
+			for i, c := range cs {
+				for j := range ctrlrIdxs {
+					if i == j {
+						ctrlrs = append(ctrlrs, c)
+					}
+				}
+			}
+
+			featureMap, err := controlClient.ListFeatures("nvme")
+			if err != nil {
+				c.Println("Unable to retrieve nvme features", err.Error())
+				return
+			}
+
+			taskStrs := make([]string, len(featureMap))
+			taskHandlers := make([]string, len(featureMap))
+			i := 0
+			for k, v := range featureMap {
+				taskStrs[i] = fmt.Sprintf("[%d] %s - %s", i, k, v)
+				taskHandlers[i] = k
+				i++
+			}
+
+			taskIdx := c.MultiChoice(
+				taskStrs,
+				"Select the task you would like to run on the selected controllers.")
+
+			c.Printf(
+				"\nRunning task %s on the following controllers:\n",
+				taskHandlers[taskIdx])
+			for _, ctrlr := range ctrlrs {
+				c.Printf("\t- %+v\n", ctrlr)
+			}
+			c.Println("")
+
+			if err := nvmeTaskLookup(c, ctrlrs, taskHandlers[taskIdx]); err != nil {
+				c.Println("Problem running task: ", err.Error())
 			}
 		},
 	})
@@ -200,7 +280,7 @@ func setupShell() *ishell.Shell {
 }
 
 func main() {
-	// by default, new shell includes 'exit', 'help' and 'clear' commands.
+	// by default, shell includes 'exit', 'help' and 'clear' commands.
 	agentClient = agent.NewDAOSAgentClient()
 	controlClient = control.NewDAOSMgmtClient()
 	shell := setupShell()

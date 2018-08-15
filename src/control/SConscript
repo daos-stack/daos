@@ -32,12 +32,12 @@ def scons():
     denv.Command(agentbin, agentsrc, "go install agent")
     denv.InstallAs("$PREFIX/bin/daos_agent", agentbin)
 
-    gospdkpath = "%s/go-spdk/spdk" % gosrc
+    gonvmepath = "%s/go-spdk/nvme" % gosrc
 
-    # CGO prerequisite lib
-    denv.AppendUnique(CPPPATH=['%s/include' % gospdkpath])
+    # CGO prerequisite libs for nvme
+    denv.AppendUnique(CPPPATH=['%s/include' % gonvmepath])
     nvmediscover = daos_build.library(
-        denv, "nvme_discover", Glob('%s/src/*.c' % gospdkpath),
+        denv, "nvme_discover", Glob('%s/src/*.c' % gonvmepath),
         LIBS=['spdk'])
     nd_installed = denv.Install('$PREFIX/lib', nvmediscover)
 
@@ -48,7 +48,6 @@ def scons():
     denv.AppendENVPath(
         "CGO_CFLAGS",
         denv.subst("-I$SPDK_PREFIX/include"))
-    print(denv['ENV'])
 
     # initialise management server db
     modulemgmt = "%s/modules/mgmt" % gosrc
