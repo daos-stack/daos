@@ -582,7 +582,7 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 				   blob_cb, ba);
 	else
 		blob_cb(ba, -DER_NO_HDL);
-	ABT_mutex_lock(bbs->bb_mutex);
+	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob unmap done */
 	blob_wait_completion(ioctxt->bic_xs_ctxt, ba);
