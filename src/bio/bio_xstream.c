@@ -346,7 +346,7 @@ common_init_cb(void *arg, int rc)
 	D_ASSERT(cp_arg->cca_inflights == 1);
 	D_ASSERT(cp_arg->cca_rc == 0);
 	cp_arg->cca_inflights--;
-	cp_arg->cca_rc = rc;
+	cp_arg->cca_rc = daos_errno2der(-rc);
 }
 
 static void
@@ -367,7 +367,7 @@ common_bs_cb(void *arg, struct spdk_blob_store *bs, int rc)
 	D_ASSERT(cp_arg->cca_rc == 0);
 	D_ASSERT(cp_arg->cca_bs == NULL);
 	cp_arg->cca_inflights--;
-	cp_arg->cca_rc = rc;
+	cp_arg->cca_rc = daos_errno2der(-rc);
 	cp_arg->cca_bs = bs;
 }
 
@@ -527,6 +527,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 	if (rc != 0) {
 		D_ERROR("Failed to open bdev %s, %d\n",
 			spdk_bdev_get_name(bdev), rc);
+		rc = daos_errno2der(-rc);
 		goto error;
 	}
 
@@ -921,6 +922,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
 		if (rc != 0) {
 			D_ERROR("failed to read %s, rc:%d\n", DAOS_NVME_CONF,
 				rc);
+			rc = -DER_INVAL; /* spdk_conf_read() returns -1 */
 			goto out;
 		}
 
@@ -938,6 +940,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
 		rc = spdk_env_init(&opts);
 		if (rc != 0) {
 			D_ERROR("failed to initialize SPDK env, rc:%d\n", rc);
+			rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 			goto out;
 		}
 	}

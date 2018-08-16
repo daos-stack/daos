@@ -594,7 +594,7 @@ rw_completion(void *cb_arg, int err)
 	D_ASSERT(biod->bd_inflights > 0);
 	biod->bd_inflights--;
 	if (biod->bd_result == 0 && err != 0)
-		biod->bd_result = err;
+		biod->bd_result = daos_errno2der(-err);
 
 	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
 		ABT_cond_broadcast(biod->bd_dma_done);
@@ -811,7 +811,7 @@ bio_iod_prep(struct bio_desc *biod)
 	int rc, retry_cnt = 0;
 
 	if (biod->bd_buffer_prep)
-		return -EINVAL;
+		return -DER_INVAL;
 
 retry:
 	rc = iterate_biov(biod, dma_map_one, NULL);
