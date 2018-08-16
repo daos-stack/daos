@@ -55,7 +55,7 @@ enum ts_op_type_t {
 
 /* Test class, can be:
  *	vos  : pure storage
- *	ehco : pure network
+ *	echo : pure network
  *	daos : full stack
  */
 int			 ts_class = DAOS_OC_RAW;
@@ -74,8 +74,6 @@ bool			 ts_overwrite;
 bool			 ts_zero_copy;
 /* verify the output of fetch */
 bool			 ts_verify_fetch;
-char			*ts_verification_buf;
-uint64_t		 ts_ver_buf_idx;
 
 uuid_t			 ts_cookie;		/* update cookie for VOS */
 daos_handle_t		 ts_oh;			/* object open handle */
@@ -172,14 +170,6 @@ ts_daos_fetch(struct dts_io_credit *cred, daos_epoch_t epoch)
 }
 
 static void
-ts_verification_buf_append(char *the_string)
-{
-	memcpy(&ts_verification_buf[ts_ver_buf_idx], the_string,
-		TEST_VAL_SIZE);
-	ts_ver_buf_idx += TEST_VAL_SIZE;
-}
-
-static void
 ts_set_value_buffer(char *buffer, int idx)
 {
 	/* Sets a pattern of Aa, Bb, ..., Yy, Zz, Aa, ... */
@@ -197,16 +187,104 @@ ts_hold_epoch(daos_epoch_t *epoch)
 }
 
 static int
-ts_key_update_or_fetch(enum ts_op_type_t update_or_fetch, bool with_fetch)
+update_or_fetch_internal(char *dkey, char *akey, daos_epoch_t *epoch,
+			 int *indices, int idx, char *verify_buff,
+			 enum ts_op_type_t update_or_fetch, bool with_fetch)
+{
+	struct dts_io_credit *cred;
+	daos_iod_t	     *iod;
+	daos_sg_list_t	     *sgl;
+	daos_recx_t	     *recx;
+	int		      vsize = ts_ctx.tsc_cred_vsize;
+	int		      rc = 0;
+
+	cred = dts_credit_take(&ts_ctx);
+	if (!cred) {
+		fprintf(stderr, "credit cannot be NULL for IO\n");
+		rc = -1;
+		return rc;
+	}
+
+	iod  = &cred->tc_iod;
+	sgl  = &cred->tc_sgl;
+	recx = &cred->tc_recx;
+
+	memset(iod, 0, sizeof(*iod));
+	memset(sgl, 0, sizeof(*sgl));
+	memset(recx, 0, sizeof(*recx));
+
+	/* setup dkey */
+	memcpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
+	daos_iov_set(&cred->tc_dkey, cred->tc_dbuf,
+			strlen(cred->tc_dbuf));
+
+	/* setup I/O descriptor */
+	memcpy(cred->tc_abuf, akey, DTS_KEY_LEN);
+	daos_iov_set(&iod->iod_name, cred->tc_abuf,
+			strlen(cred->tc_abuf));
+	iod->iod_size = vsize;
+	recx->rx_nr  = 1;
+	if (ts_single) {
+		iod->iod_type = DAOS_IOD_SINGLE;
+	} else {
+		iod->iod_type = DAOS_IOD_ARRAY;
+		iod->iod_size = 1;
+		recx->rx_nr  = vsize;
+		recx->rx_idx = ts_overwrite ? 0 : indices[idx];
+	}
+
+	iod->iod_nr    = 1;
+	iod->iod_recxs = recx;
+
+	if (update_or_fetch == TS_DO_UPDATE) {
+		/* initialize value buffer and setup sgl */
+		ts_set_value_buffer(cred->tc_vbuf, idx);
+	} else {
+		/* Clear the buffer for fetch */
+		memset(cred->tc_vbuf, 0, vsize);
+	}
+
+	daos_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
+	sgl->sg_iovs = &cred->tc_val;
+	sgl->sg_nr = 1;
+
+	if (ts_class == DAOS_OC_RAW) {
+		rc = ts_vos_update_or_fetch(cred, *epoch, update_or_fetch);
+	} else {
+		if (update_or_fetch == TS_DO_UPDATE)
+			rc = ts_daos_update(cred, *epoch);
+		else
+			rc = ts_daos_fetch(cred, *epoch);
+	}
+
+	if (rc != 0) {
+		fprintf(stderr, "%s failed. rc=%d, epoch=%"PRIu64"\n",
+			update_or_fetch ? "Fetch" : "Update", rc, *epoch);
+		return rc;
+	}
+
+	/* overwrite can replace orignal data and reduce space
+	 * consumption.
+	 */
+	if (!ts_overwrite)
+		(*epoch)++;
+
+	if (verify_buff != NULL)
+		memcpy(verify_buff, cred->tc_vbuf, TEST_VAL_SIZE);
+
+	return rc;
+}
+
+static int
+ts_key_update_or_fetch(enum ts_op_type_t update_or_fetch, daos_epoch_t *epoch,
+		       bool with_fetch)
 {
 	int		*indices;
 	char		 dkey_buf[DTS_KEY_LEN];
 	char		 akey_buf[DTS_KEY_LEN];
-	int		 vsize = ts_ctx.tsc_cred_vsize;
 	int		 i;
 	int		 j;
 	int		 rc = 0;
-	daos_epoch_t	 epoch = 0;
 
 	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0);
 	D_ASSERT(indices != NULL);
@@ -214,119 +292,15 @@ ts_key_update_or_fetch(enum ts_op_type_t update_or_fetch, bool with_fetch)
 	dts_key_gen(dkey_buf, DTS_KEY_LEN, "blade");
 
 	for (i = 0; i < ts_akey_p_dkey; i++) {
-
 		dts_key_gen(akey_buf, DTS_KEY_LEN, "walker");
-
 		for (j = 0; j < ts_recx_p_akey; j++) {
-			struct dts_io_credit *cred;
-			daos_iod_t	     *iod;
-			daos_sg_list_t	     *sgl;
-			daos_recx_t	     *recx;
-
-			cred = dts_credit_take(&ts_ctx);
-			if (!cred) {
-				fprintf(stderr,
-					"credit cannot be NULL for IO\n");
-				rc = -1;
-				D_GOTO(failed, rc);
-			}
-
-			iod  = &cred->tc_iod;
-			sgl  = &cred->tc_sgl;
-			recx = &cred->tc_recx;
-
-			memset(iod, 0, sizeof(*iod));
-			memset(sgl, 0, sizeof(*sgl));
-			memset(recx, 0, sizeof(*recx));
-
-			/* setup dkey */
-			memcpy(cred->tc_dbuf, dkey_buf, DTS_KEY_LEN);
-			daos_iov_set(&cred->tc_dkey, cred->tc_dbuf,
-				     strlen(cred->tc_dbuf));
-
-			/* setup I/O descriptor */
-			memcpy(cred->tc_abuf, akey_buf, DTS_KEY_LEN);
-			daos_iov_set(&iod->iod_name, cred->tc_abuf,
-				     strlen(cred->tc_abuf));
-			iod->iod_size = vsize;
-			recx->rx_nr  = 1;
-			if (ts_single) {
-				iod->iod_type = DAOS_IOD_SINGLE;
-			} else {
-				iod->iod_type = DAOS_IOD_ARRAY;
-				iod->iod_size = 1;
-				recx->rx_nr  = vsize;
-				recx->rx_idx = ts_overwrite ? 0 : indices[j];
-			}
-
-			iod->iod_nr    = 1;
-			iod->iod_recxs = recx;
-
-			if (update_or_fetch == TS_DO_UPDATE) {
-				/* initialize value buffer and setup sgl */
-				ts_set_value_buffer(cred->tc_vbuf, j);
-			} else {
-				/* Clear the buffer for fetch */
-				memset(cred->tc_vbuf, 0, vsize);
-			}
-
-			daos_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
-			sgl->sg_iovs = &cred->tc_val;
-			sgl->sg_nr = 1;
-
-			/* overwrite can replace orignal data and reduce space
-			 * consumption.
-			 */
-			if (!ts_overwrite)
-				epoch++;
-
-			if (ts_class == DAOS_OC_RAW) {
-				rc = ts_vos_update_or_fetch(cred, epoch,
-					update_or_fetch);
-			} else {
-				if (update_or_fetch == TS_DO_UPDATE) {
-					if (with_fetch == WITH_FETCH) {
-						rc = ts_hold_epoch(&epoch);
-						if (rc)
-							D_GOTO(failed, rc);
-					}
-					rc = ts_daos_update(cred, epoch);
-				}
-				else
-					rc = ts_daos_fetch(cred, epoch);
-			}
-
+			rc = update_or_fetch_internal(dkey_buf, akey_buf, epoch,
+				indices, j, NULL, update_or_fetch, with_fetch);
 			if (rc)
-				D_GOTO(failed, rc);
-
-			if (ts_verify_fetch && update_or_fetch == TS_DO_FETCH)
-				ts_verification_buf_append(cred->tc_vbuf);
-
-			/* Flush and commit, if needed */
-			if (update_or_fetch == TS_DO_UPDATE &&
-			    with_fetch == WITH_FETCH) {
-				if (ts_class != DAOS_OC_RAW &&
-				    ts_ctx.tsc_mpi_rank == 0) {
-					rc = daos_epoch_flush(ts_ctx.tsc_coh,
-						epoch, NULL, NULL);
-					if (rc)
-						D_GOTO(failed, rc);
-
-					rc = daos_epoch_commit(ts_ctx.tsc_coh,
-						epoch, NULL, NULL);
-					if (rc)
-						D_GOTO(failed, rc);
-				}
-			}
-
-			if (rc != 0) {
-				fprintf(stderr, "%s failed: %d\n",
-					update_or_fetch ? "Fetch" : "Update",
-					rc);
-				D_GOTO(failed, rc);
-			}
+				goto failed;
 		}
 	}
+
 failed:
 	free(indices);
 	return rc;
@@ -335,11 +309,22 @@ failed:
 static int
 ts_write_records_internal(d_rank_t rank, bool with_fetch)
 {
-	int i;
-	int j;
-	int rc;
+	int		i;
+	int		j;
+	int		rc;
+	daos_epoch_t	epoch = 0;
 
 	dts_reset_key();
+
+	if (!ts_overwrite)
+		++epoch;
+	/* Only hold an epoch if we're in DAOS mode and going to fetch */
+	if (with_fetch == WITH_FETCH && ts_class != DAOS_OC_RAW) {
+		rc = ts_hold_epoch(&epoch);
+		if (rc)
+			return rc;
+	}
+
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		ts_oid = dts_oid_gen(ts_class, 0, ts_ctx.tsc_mpi_rank);
 		if (ts_class == DAOS_OC_R2S_SPEC_RANK)
@@ -357,7 +342,8 @@ ts_write_records_internal(d_rank_t rank, bool with_fetch)
 				ts_uoid.id_pub = ts_oid;
 			}
 
-			rc = ts_key_update_or_fetch(TS_DO_UPDATE, with_fetch);
+			rc = ts_key_update_or_fetch(TS_DO_UPDATE, &epoch,
+						    with_fetch);
 			if (rc)
 				return rc;
 
@@ -367,8 +353,19 @@ ts_write_records_internal(d_rank_t rank, bool with_fetch)
 				if (rc)
 					return rc;
 			}
-
 		}
+	}
+
+	/* Only flush and commit when in DAOS mode and going to fetch */
+	if (with_fetch == WITH_FETCH && ts_class != DAOS_OC_RAW &&
+	    ts_ctx.tsc_mpi_rank == 0) {
+		rc = daos_epoch_flush(ts_ctx.tsc_coh, epoch, NULL, NULL);
+		if (rc)
+			return rc;
+
+		rc = daos_epoch_commit(ts_ctx.tsc_coh, epoch, NULL, NULL);
+		if (rc)
+			return rc;
 	}
 
 	rc = dts_credit_drain(&ts_ctx);
@@ -377,55 +374,97 @@ ts_write_records_internal(d_rank_t rank, bool with_fetch)
 }
 
 static int
-ts_verify_recx_p_akey()
+ts_verify_recx_p_akey(char *dkey, daos_epoch_t *epoch)
 {
-	int	i;
-	char	ground_truth[TEST_VAL_SIZE];
+	int	 i;
+	int	*indices;
+	char	 ground_truth[TEST_VAL_SIZE];
+	char	 test_string[TEST_VAL_SIZE];
+	char	 akey[DTS_KEY_LEN];
+	int	 rc = 0;
+
+	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0);
+	D_ASSERT(indices != NULL);
+	dts_key_gen(akey, DTS_KEY_LEN, "walker");
 
 	for (i = 0; i < ts_recx_p_akey; i++) {
 		ts_set_value_buffer(ground_truth, i);
-
-		if (memcmp(&ts_verification_buf[ts_ver_buf_idx],
-			   ground_truth, TEST_VAL_SIZE) != 0) {
-			return -1;
+		rc = update_or_fetch_internal(dkey, akey, epoch, indices, i,
+			test_string, TS_DO_FETCH, WITH_FETCH);
+		if (rc)
+			goto failed;
+		if (memcmp(test_string, ground_truth, TEST_VAL_SIZE) != 0) {
+			D_PRINT("MISMATCH! ground_truth=%s, test_string=%s\n",
+				ground_truth, test_string);
+			rc = -1;
+			goto failed;
 		}
-		ts_ver_buf_idx += TEST_VAL_SIZE;
 	}
-	return 0;
+failed:
+	free(indices);
+	return rc;
 }
 
 static int
 ts_verify_all_fetches(void)
 {
-	int	i;
-	int	j;
-	int	k;
+	int		i;
+	int		j;
+	int		k;
+	int		rc = 0;
+	char		dkey[DTS_KEY_LEN];
+	daos_epoch_t	epoch = 0;
 
-	ts_ver_buf_idx = 0;
+	dts_reset_key();
+	if (!ts_overwrite)
+		++epoch;
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		for (j = 0; j < ts_dkey_p_obj; j++) {
+			dts_key_gen(dkey, DTS_KEY_LEN, "blade");
 			for (k = 0; k < ts_akey_p_dkey; k++) {
-				if (ts_verify_recx_p_akey() != 0)
-					return -1;
+				rc = ts_verify_recx_p_akey(dkey, &epoch);
+				if (rc != 0)
+					return rc;
 			}
 		}
 	}
-	return 0;
+	return rc;
+}
+
+static int do_verification(void)
+{
+	int rc = 0;
+
+	if (ts_verify_fetch) {
+		rc = ts_verify_all_fetches();
+		fprintf(stdout, "Fetch verification: %s\n", rc ? "Failed" :
+			"Success");
+		if (ts_class != DAOS_OC_RAW)
+			daos_obj_close(ts_oh, NULL);
+	}
+	return rc;
 }
 
 static int
 ts_read_records_internal(d_rank_t rank)
 {
-	int i;
-	int j;
-	int rc = 0;
+	int		i;
+	int		j;
+	int		rc = 0;
+	daos_epoch_t	epoch = 0;
 
 	dts_reset_key();
+	if (!ts_overwrite)
+		++epoch;
 	for (i = 0; i < ts_obj_p_cont; i++) {
-		for (j = 0; j < ts_dkey_p_obj; j++)
-			rc = ts_key_update_or_fetch(TS_DO_FETCH, WITH_FETCH);
+		for (j = 0; j < ts_dkey_p_obj; j++) {
+			rc = ts_key_update_or_fetch(TS_DO_FETCH, &epoch,
+						    WITH_FETCH);
+			if (rc != 0)
+				return rc;
+		}
 	}
-	if (ts_class != DAOS_OC_RAW)
+	if (ts_class != DAOS_OC_RAW && !ts_verify_fetch)
 		rc = daos_obj_close(ts_oh, NULL);
 
 	return rc;
@@ -543,6 +582,10 @@ ts_write_perf(double *start_time, double *end_time)
 	*start_time = dts_time_now();
 	rc = ts_write_records_internal(RANK_ZERO, WITHOUT_FETCH);
 	*end_time = dts_time_now();
+	if (rc)
+		return rc;
+
+	rc = do_verification();
 	return rc;
 }
 
@@ -559,11 +602,8 @@ ts_fetch_perf(double *start_time, double *end_time)
 	*end_time = dts_time_now();
 	if (rc)
 		return rc;
-	if (ts_verify_fetch) {
-		rc = ts_verify_all_fetches();
-		fprintf(stdout, "Fetch verification: %s\n", rc ? "Failed" :
-			"Success");
-	}
+
+	rc = do_verification();
 	return rc;
 }
 
@@ -592,6 +632,10 @@ ts_update_fetch_perf(double *start_time, double *end_time)
 		return rc;
 	rc = ts_read_records_internal(RANK_ZERO);
 	*end_time = dts_time_now();
+	if (rc)
+		return rc;
+
+	rc = do_verification();
 	return rc;
 }
 
@@ -673,7 +717,7 @@ ts_rebuild_perf(double *start_time, double *end_time)
 
 	rc = ts_add_server(RANK_ZERO);
 
-	daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC, 0, NULL); 
+	daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC, 0, NULL);
 
 	return rc;
 }
@@ -1018,6 +1062,7 @@ main(int argc, char **argv)
 			break;
 		case 'v':
 			ts_verify_fetch = true;
+			break;
 		case 'I':
 			perf_tests[ITERATE_TEST] = ts_iterate_perf;
 			break;
@@ -1122,13 +1167,6 @@ main(int argc, char **argv)
 			ts_class == DAOS_OC_RAW ? ts_pmem_file : "<NULL>");
 	}
 
-	if (ts_verify_fetch) {
-		/* Allocate memory for the verification buffer */
-		ts_verification_buf = malloc(ts_obj_p_cont * ts_dkey_p_obj *
-					ts_akey_p_dkey * ts_recx_p_akey *
-					TEST_VAL_SIZE);
-	}
-
 	rc = dts_ctx_init(&ts_ctx);
 	if (rc)
 		return -1;
@@ -1158,7 +1196,7 @@ main(int argc, char **argv)
 
 		show_result(now, then, vsize, perf_tests_name[i]);
 	}
-	free(ts_verification_buf);
+
 	dts_ctx_fini(&ts_ctx);
 	MPI_Finalize();
 
