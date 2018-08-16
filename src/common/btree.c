@@ -1322,10 +1322,10 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	}
  out:
 	tcx->tc_probe_rc = rc;
-	if (rc != PROBE_RC_ERR && level >= 0)
-		btr_trace_debug(tcx, &tcx->tc_trace[level], "\n");
-	else
+	if (rc == PROBE_RC_ERR)
 		D_ERROR("Failed to probe\n");
+	else if (level >= 0)
+		btr_trace_debug(tcx, &tcx->tc_trace[level], "\n");
 
 	return rc;
 }
