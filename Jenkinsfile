@@ -29,7 +29,7 @@ pipeline {
                         sh '''git submodule update --init --recursive
                               scons -c
                               # scons -c is not perfect so get out the big hammer
-                              echo rm -rf _build.external install build
+                              rm -rf _build.external install build
                               pushd scons_local
                               git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/4
                               git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/22/33022/2
