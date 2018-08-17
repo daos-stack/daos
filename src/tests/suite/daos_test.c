@@ -41,6 +41,9 @@ test_runable(test_arg_t *arg, unsigned int required_tgts)
 	static bool	 runable = true;
 
 	if (arg->myrank == 0) {
+		daos_epoch_state_t	epoch_state;
+		int			rc;
+
 		if (arg->srv_ntgts - arg->srv_disabled_ntgts < required_tgts) {
 			if (arg->myrank == 0)
 				print_message("Not enough targets, skipping "
@@ -53,6 +56,10 @@ test_runable(test_arg_t *arg, unsigned int required_tgts)
 		for (i = 0; i < MAX_KILLS; i++)
 			ranks_to_kill[i] = arg->srv_ntgts -
 					   arg->srv_disabled_ntgts - i - 1;
+
+		rc = daos_epoch_query(arg->coh, &epoch_state, NULL);
+		assert_int_equal(rc, 0);
+		arg->hce = epoch_state.es_hce;
 	}
 
 	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);

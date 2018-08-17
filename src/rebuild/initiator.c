@@ -111,16 +111,19 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 	rc = ds_obj_fetch(oh, rdone->ro_epoch, &rdone->ro_dkey,
 			  rdone->ro_iod_num, rdone->ro_iods,
 			  sgls, NULL);
-	if (rc)
+	if (rc) {
+		D_ERROR("ds_obj_fetch %d\n", rc);
 		return rc;
+	}
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
 		return -DER_INVAL;
 
-	rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid, 0,
+	rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid, rdone->ro_epoch,
 			    rdone->ro_cookie, rdone->ro_version,
 			    &rdone->ro_dkey, rdone->ro_iod_num,
 			    rdone->ro_iods, sgls);
+
 	return rc;
 }
 
@@ -133,7 +136,7 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 	int		 rc, i, ret, sgl_cnt = 0;
 
 	D_ASSERT(rdone->ro_iod_num <= MAX_IOD_NUM);
-	rc = vos_update_begin(ds_cont->sc_hdl, rdone->ro_oid, 0,
+	rc = vos_update_begin(ds_cont->sc_hdl, rdone->ro_oid, rdone->ro_epoch,
 			      &rdone->ro_dkey, rdone->ro_iod_num,
 			      rdone->ro_iods, &ioh);
 	if (rc != 0) {
@@ -186,6 +189,7 @@ post:
 			DP_UOID(rdone->ro_oid), ret);
 		rc = rc ? : ret;
 	}
+
 end:
 	vos_update_end(ioh, rdone->ro_cookie, rdone->ro_version,
 		       &rdone->ro_dkey, rc);
@@ -377,6 +381,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t oid,
 	struct rebuild_one		*rdone = NULL;
 	unsigned int			idx;
 	unsigned int			rec_cnt = 0;
+	daos_epoch_t			min_epoch = 0;
 	int				i;
 	int				rc;
 
@@ -412,8 +417,12 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t oid,
 		rdone->ro_iods[i].iod_csums = iods[i].iod_csums;
 		rdone->ro_iods[i].iod_eprs = iods[i].iod_eprs;
 
-		for (j = 0; j < iods[i].iod_nr; j++)
+		for (j = 0; j < iods[i].iod_nr; j++) {
 			rec_cnt += iods[i].iod_recxs[j].rx_nr;
+			if (min_epoch == 0 ||
+			    iods[i].iod_eprs[j].epr_lo < min_epoch)
+				min_epoch = iods[i].iod_eprs[j].epr_lo;
+		}
 
 		D_DEBUG(DB_REBUILD, "idx %d akey %.*s nr %d size "
 			DF_U64" type %d eph "DF_U64"/"DF_U64"\n",
@@ -428,6 +437,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t oid,
 	if (rdone->ro_iod_num == 0)
 		D_GOTO(free, rc = 0);
 
+	rdone->ro_epoch = min_epoch;
 	rdone->ro_rec_cnt = rec_cnt;
 	rdone->ro_version = *version;
 	uuid_copy(rdone->ro_cookie, cookie);
@@ -455,9 +465,8 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t oid,
 
 	rdone->ro_oid = oid;
 	uuid_copy(rdone->ro_cont_uuid, iter_arg->cont_uuid);
-	rdone->ro_epoch = DAOS_EPOCH_MAX;
 
-	D_DEBUG(DB_REBUILD, DF_UOID"%p dkey %.*s rebuild on idx %d\n",
+	D_DEBUG(DB_REBUILD, DF_UOID" %p dkey %.*s rebuild on idx %d\n",
 		DP_UOID(oid), rdone, (int)dkey->iov_len, (char *)dkey->iov_buf,
 		idx);
 	ABT_mutex_lock(puller->rp_lock);
@@ -470,7 +479,7 @@ free:
 		 * version/cookie correctly see rebuild_list_buf_process().
 		 */
 		for (i = 0; i < iod_num; i++)
-			daos_iov_free(&iods[i].iod_name);  
+			daos_iov_free(&iods[i].iod_name);
 		memset(iods, 0, iod_num * sizeof(*iods));
 		uuid_clear(cookie);
 		*version = 0;

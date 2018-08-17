@@ -88,6 +88,7 @@ typedef struct {
 	int			srv_ntgts;
 	int			srv_disabled_ntgts;
 	int			index;
+	daos_epoch_t		hce;
 
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.

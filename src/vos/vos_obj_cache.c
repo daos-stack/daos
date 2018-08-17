@@ -250,15 +250,14 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		vos_obj_evict(obj);
 		vos_obj_release(occ, obj);
 	}
-	D_DEBUG(DB_TRACE, "%s durable object in epoch="DF_U64"\n",
-		no_create ? "find" : "find/create", epoch);
+
+	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" in epoch="DF_U64"\n",
+		no_create ? "find" : "find/create", DP_UOID(oid), epoch);
 
 	if (no_create) {
 		rc = vos_oi_find(cont, oid, epoch, &obj->obj_df);
-		if (rc == -DER_NONEXIST) {
-			obj->obj_df = NULL;
+		if (rc == -DER_NONEXIST)
 			rc = 0;
-		}
 	} else {
 		rc = vos_oi_find_alloc(cont, oid, epoch, &obj->obj_df);
 		D_ASSERT(rc || obj->obj_df);

@@ -79,88 +79,82 @@ rebuild_test_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank)
 }
 
 static int
-rebuild_io_internal(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
-		    bool validate)
+rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
+			daos_epoch_t validate_eph)
 {
-	struct ioreq	req;
-	int		i;
-	int		j;
-	daos_epoch_t	eph = 0; /* FIXME: use arg->index once LU-1092 fixed. */
+#define BULK_SIZE	5000
+#define REC_SIZE	64
+	char	dkey[32];
+	char	akey[32];
+	char	data[REC_SIZE];
+	char	data_verify[REC_SIZE];
+	int	j;
+	int	k;
+	int	l;
 
-	print_message("%s obj %d eph "DF_U64" for rebuild test\n",
-		      validate ? "validate" : "update", oids_nr, eph);
-
-	for (i = 0; i < oids_nr; i++) {
-		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
-		for (j = 0; j < 5; j++) {
-			char	dkey[20];
-			char	akey[20];
-			char	buf[16];
-			int	k;
-			int	l;
-
-			req.iod_type = DAOS_IOD_ARRAY;
-			/* small records */
-			sprintf(dkey, "dkey_%d", j);
-			for (k = 0; k < 2; k++) {
-				sprintf(akey, "akey_%d", k);
-				for (l = 0; l < 10; l++) {
-					if (validate) {
-						memset(buf, 0, 16);
-						lookup_single(dkey, akey, l,
-							     buf, 5, eph, &req);
-						assert_memory_equal(buf, "data",
-								strlen("data"));
-					} else {
-						insert_single(dkey, akey, l,
-							"data",
-							strlen("data") + 1, eph,
-							&req);
-					}
+	for (j = 0; j < 5; j++) {
+		req->iod_type = DAOS_IOD_ARRAY;
+		/* small records */
+		sprintf(dkey, "dkey_%d", j);
+		sprintf(data, "%s_"DF_U64, "data", eph);
+		sprintf(data_verify, "%s_"DF_U64, "data", validate_eph);
+		for (k = 0; k < 2; k++) {
+			sprintf(akey, "akey_%d", k);
+			for (l = 0; l < 10; l++) {
+				if (validate) {
+					memset(data, 0, REC_SIZE);
+					lookup_single(dkey, akey, l, data,
+						      REC_SIZE, eph, req);
+					assert_memory_equal(data, data_verify,
+							  strlen(data_verify));
+				} else {
+					insert_single(dkey, akey, l, data,
+						      strlen(data) + 1,
+						      eph, req);
 				}
-			}
-
-			/* large records */
-			for (k = 0; k < 2; k++) {
-				char bulk[5010];
-				char compare[5000];
-
-				sprintf(akey, "akey_bulk_%d", k);
-				memset(compare, 'a', 5000);
-				for (l = 0; l < 5; l++) {
-					if (validate) {
-						memset(bulk, 0, 5000);
-						lookup_single(dkey, akey, l,
-							      bulk, 5010, eph,
-							      &req);
-						assert_memory_equal(bulk,
-								compare, 5000);
-					} else {
-						memset(bulk, 'a', 5000);
-						insert_single(dkey, akey, l,
-							      bulk, 5000, eph,
-							      &req);
-					}
-				}
-			}
-
-			/* single record */
-			memset(buf, 0, 16);
-			req.iod_type = DAOS_IOD_SINGLE;
-			sprintf(dkey, "dkey_single_%d", j);
-			if (validate) {
-				lookup_single(dkey, "akey_single", 0, buf, 16,
-					      eph, &req);
-				assert_memory_equal(buf, "single_data",
-						    strlen("single_data"));
-			} else {
-				insert_single(dkey, "akey_single", 0,
-					      "single_data",
-					      strlen("single_data") + 1,
-					      eph, &req);
 			}
 		}
-		ioreq_fini(&req);
+
+		/* large records */
+		for (k = 0; k < 2; k++) {
+			char bulk[BULK_SIZE+10];
+			char compare[BULK_SIZE];
+
+			sprintf(akey, "akey_bulk_%d", k);
+			memset(compare, 'a', BULK_SIZE);
+			for (l = 0; l < 5; l++) {
+				if (validate) {
+					memset(bulk, 0, BULK_SIZE);
+					lookup_single(dkey, akey, l,
+						      bulk, BULK_SIZE + 10,
+						      eph, req);
+					assert_memory_equal(bulk, compare,
+							    BULK_SIZE);
+				} else {
+					memset(bulk, 'a', BULK_SIZE);
+					insert_single(dkey, akey, l,
+						      bulk, BULK_SIZE, eph,
+						      req);
+				}
+			}
+		}
+
+		/* single record */
+		sprintf(data, "%s_"DF_U64, "single_data", eph);
+		sprintf(data_verify, "%s_"DF_U64, "single_data",
+			validate_eph);
+		req->iod_type = DAOS_IOD_SINGLE;
+		sprintf(dkey, "dkey_single_%d", j);
+		if (validate) {
+			memset(data, 0, REC_SIZE);
+			lookup_single(dkey, "akey_single", 0, data, REC_SIZE,
+				      eph, req);
+			assert_memory_equal(data, data_verify,
+					    strlen(data_verify));
+		} else {
+			insert_single(dkey, "akey_single", 0, data,
+				      strlen(data) + 1, eph, req);
+		}
 	}
 
 	return 0;
@@ -169,19 +163,80 @@ rebuild_io_internal(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 static void
 rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
-	rebuild_io_internal(arg, oids, oids_nr, false);
+	struct ioreq	req;
+	daos_epoch_t	eph = arg->hce + arg->index * 2 + 1;
+	daos_epoch_t	commit_eph = eph + 1;
+	int		rc;
+	int		i;
+
+	print_message("update obj %d eph "DF_U64" before rebuild\n", oids_nr,
+		      eph);
+
+	/** Disable holding epoch until we totally support epoch discard,
+	 *  see DAOS-1199.
+	 */
+	rc = daos_epoch_hold(arg->coh, &commit_eph, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	for (i = 0; i < oids_nr; i++) {
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		rebuild_io_obj_internal((&req), false, eph, -1);
+		/* eph + 1 is discarded, so it should read the data of eph */
+		rebuild_io_obj_internal((&req), false, eph + 1, -1);
+
+
+		ioreq_fini(&req);
+	}
+
+	/* We may only commit eph, when it support discard */
+	rc = daos_epoch_commit(arg->coh, commit_eph, NULL, NULL);
+	if (rc)
+		print_message("container epoch commit failed "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->co_uuid), rc);
 }
 
 static void
-rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
+rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
+		    bool discard)
 {
-	int i;
+	struct ioreq	req;
+	daos_epoch_t	eph = arg->hce + arg->index * 2 + 1;
+	int		i;
 
+	/* XXX Disable discard until we support ARRAY record discard */
+	discard = false;
+
+	if (discard) {
+		int rc;
+
+		print_message("discard eph "DF_U64"\n", eph + 1);
+		rc = daos_epoch_discard(arg->coh, eph + 1, NULL, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	arg->fail_loc = DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_VALUE;
 	/* Validate data for each shard */
 	for (i = 0; i < OBJ_REPLICAS; i++) {
-		arg->fail_loc = DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_VALUE;
+		int j;
+
 		arg->fail_value = i;
-		rebuild_io_internal(arg, oids, oids_nr, true);
+		for (j = 0; j < oids_nr; j++) {
+			ioreq_init(&req, arg->coh, oids[j], DAOS_IOD_ARRAY,
+				   arg);
+
+			/* Validate eph data */
+			rebuild_io_obj_internal((&req), true, eph, eph);
+#if 0
+			if (discard)
+				/* Discard eph + 1, data should stay in eph */
+				rebuild_io_obj_internal((&req), true, eph + 1,
+							eph);
+			else
+				rebuild_io_obj_internal((&req), true, eph + 1,
+							eph + 1);
+#endif
+			ioreq_fini(&req);
+		}
 	}
 
 	arg->fail_loc = 0;
@@ -419,7 +474,7 @@ rebuild_objects(void **state)
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
-	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_io_validate(arg, oids, OBJ_NR, false);
 }
 
 static void
@@ -447,7 +502,7 @@ rebuild_drop_scan(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
-	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -475,7 +530,7 @@ rebuild_retry_rebuild(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
-	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -503,7 +558,7 @@ rebuild_retry_for_stale_pool(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
-	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -531,7 +586,7 @@ rebuild_drop_obj(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
-	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -591,8 +646,8 @@ rebuild_multiple_pools(void **state)
 
 	rebuild_pools_targets(args, 2, ranks_to_kill, 1);
 
-	rebuild_io_validate(args[0], oids, OBJ_NR);
-	rebuild_io_validate(args[1], oids, OBJ_NR);
+	rebuild_io_validate(args[0], oids, OBJ_NR, true);
+	rebuild_io_validate(args[1], oids, OBJ_NR, true);
 
 	test_teardown((void **)&args[1]);
 }
@@ -871,7 +926,7 @@ rebuild_iv_tgt_fail(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
-	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -899,7 +954,7 @@ rebuild_tgt_start_fail(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0]);
 
-	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -1050,8 +1105,6 @@ rebuild_tgt_pool_disconnect_internal(void **state, unsigned int fail_loc)
 
 	arg->rebuild_cb = NULL;
 	arg->rebuild_post_cb = NULL;
-
-	rebuild_io_validate(arg, oids, OBJ_NR);
 }
 
 static void
@@ -1115,7 +1168,7 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_cb = NULL;
 
-	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_io_validate(arg, oids, OBJ_NR, false);
 }
 
 static void
@@ -1158,7 +1211,7 @@ rebuild_offline(void **state)
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_post_cb = NULL;
 
-	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_io_validate(arg, oids, OBJ_NR, false);
 }
 
 static int
@@ -1215,7 +1268,7 @@ rebuild_master_change_during_scan(void **state)
 	arg->rebuild_cb = NULL;
 
 	/* Verify the data */
-	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -1247,7 +1300,7 @@ rebuild_master_change_during_rebuild(void **state)
 	arg->rebuild_cb = NULL;
 
 	/* Verify the data */
-	rebuild_io_validate(arg, oids, OBJ_NR);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -1303,7 +1356,7 @@ rebuild_multiple_tgts(void **state)
 		test_rebuild_wait(&arg, 1);
 
 	/* Verify the data */
-	rebuild_io_validate(arg, &oid, 1);
+	rebuild_io_validate(arg, &oid, 1, true);
 
 	daos_obj_layout_free(layout);
 
@@ -1334,7 +1387,7 @@ rebuild_io_post_cb(void *arg)
 	daos_obj_id_t	*oids = test_arg->rebuild_post_cb_arg;
 
 	if (!daos_handle_is_inval(test_arg->coh))
-		rebuild_io_validate(test_arg, oids, OBJ_NR);
+		rebuild_io_validate(test_arg, oids, OBJ_NR, true);
 
 	return 0;
 }
@@ -1376,6 +1429,9 @@ rebuild_master_failure(void **state)
 	arg->rebuild_cb = NULL;
 	arg->rebuild_post_cb = NULL;
 
+	/* Verify the data */
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
+
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
 	rc = test_pool_get_info(arg, &pinfo);
 	assert_int_equal(rc, 0);
@@ -1391,9 +1447,6 @@ rebuild_master_failure(void **state)
 		      "rebuild status (memcmp result %d).\n", pinfo.pi_leader,
 		      pinfo_new.pi_leader, rc);
 	assert_int_equal(rc, 0);
-
-	/* Verify the data */
-	rebuild_io_validate(arg, oids, OBJ_NR);
 }
 
 static void
@@ -1425,9 +1478,6 @@ rebuild_multiple_failures(void **state)
 
 	arg->rebuild_cb = NULL;
 	arg->rebuild_post_cb = NULL;
-
-	/* Verify the data */
-	rebuild_io_validate(arg, oids, OBJ_NR);
 }
 
 static void
@@ -1575,7 +1625,7 @@ multi_pools_rebuild_concurrently(void **state)
 	rebuild_pools_targets(args, POOL_NUM * CONT_PER_POOL, ranks_to_kill, 1);
 
 	for (i = POOL_NUM * CONT_PER_POOL - 1; i >= 0; i--) {
-		rebuild_io_validate(args[i], oids, OBJ_PER_CONT);
+		rebuild_io_validate(args[i], oids, OBJ_PER_CONT, true);
 		test_teardown((void **)&args[i]);
 	}
 }

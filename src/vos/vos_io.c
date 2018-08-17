@@ -421,14 +421,18 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	int		 flags = 0;
 	bool		 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 
-	D_DEBUG(DB_TRACE, "Fetch %s value\n", is_array ? "array" : "single");
+	D_DEBUG(DB_IO, "akey %.*s Fetch %s eph "DF_U64"\n",
+		(int)iod->iod_name.iov_len, (char *)iod->iod_name.iov_buf,
+		is_array ? "array" : "single", ioc->ic_epoch);
 	if (is_array)
 		flags |= SUBTR_EVT;
 
 	rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, &toh);
 	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_IO, "Nonexistent akey\n");
+		D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
+			(int)iod->iod_name.iov_len,
+			(char *)iod->iod_name.iov_buf);
 		iod_empty_sgl(ioc, ioc->ic_sgl_at);
 		return 0;
 	}
@@ -451,6 +455,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		if (iod->iod_eprs)
 			epoch = iod->iod_eprs[i].epr_lo;
 
+		D_DEBUG(DB_IO, "fetch %d eph "DF_U64"\n", i, epoch);
 		rc = akey_fetch_recx(toh, epoch, &iod->iod_recxs[i],
 				     &rsize, ioc);
 		if (rc != 0) {
@@ -655,7 +660,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uuid_t cookie,
 
 static int
 akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
-	    daos_handle_t ak_toh)
+	    daos_handle_t ak_toh, daos_epoch_t *max_eph)
 {
 	struct vos_object  *obj = ioc->ic_obj;
 	daos_iod_t	   *iod = &ioc->ic_iods[ioc->ic_sgl_at];
@@ -665,10 +670,12 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	int		    i, rc;
 	daos_handle_t	    toh;
 
+	D_DEBUG(DB_TRACE, "akey %.*s update %s value eph "DF_U64"\n",
+		(int)iod->iod_name.iov_len, (char *)iod->iod_name.iov_buf,
+		is_array ? "array" : "single", ioc->ic_epoch);
+
 	if (is_array)
 		flags |= SUBTR_EVT;
-
-	D_DEBUG(DB_TRACE, "Update %s value\n", is_array ? "array" : "single");
 
 	rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, &toh);
@@ -676,17 +683,27 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 		return rc;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		if (iod->iod_eprs) /* NB: an akey only has one (single)value */
+		if (iod->iod_eprs) {
 			epoch = iod->iod_eprs[0].epr_lo;
+			if ((epoch > ioc->ic_epoch ||
+			     *max_eph == DAOS_EPOCH_MAX) && max_eph != NULL)
+				*max_eph = epoch;
+		}
+
 		rc = akey_update_single(toh, epoch, cookie, pm_ver,
 					iod->iod_size, ioc);
 		goto out;
 	} /* else: array */
 
 	for (i = 0; i < iod->iod_nr; i++) {
-		if (iod->iod_eprs)
+		if (iod->iod_eprs) {
 			epoch = iod->iod_eprs[i].epr_lo;
+			if ((epoch > ioc->ic_epoch ||
+			     *max_eph == DAOS_EPOCH_MAX) && max_eph != NULL)
+				*max_eph = epoch;
+		}
 
+		D_DEBUG(DB_IO, "fetch %d eph "DF_U64"\n", i, epoch);
 		rc = akey_update_recx(toh, epoch, cookie, pm_ver,
 				      &iod->iod_recxs[i], iod->iod_size, ioc);
 		if (rc != 0)
@@ -702,34 +719,54 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	    daos_key_t *dkey)
 {
 	struct vos_object *obj = ioc->ic_obj;
+	daos_epoch_t	  max_eph = ioc->ic_epoch;
 	daos_handle_t	   ak_toh, ck_toh;
+	bool		   subtr_created = false;
 	int		   i, rc;
 
 	rc = obj_tree_init(obj);
 	if (rc != 0)
 		return rc;
 
-	rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh, VOS_BTR_DKEY,
-			      dkey, SUBTR_CREATE, &ak_toh);
-	if (rc != 0)
-		return rc;
-
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
+		daos_iod_t	*iod;
+
 		iod_set_cursor(ioc, i);
-		rc = akey_update(ioc, cookie, pm_ver, ak_toh);
+		iod = &ioc->ic_iods[ioc->ic_sgl_at];
+		/* Skip the empty IOD */
+		if (iod->iod_size == 0)
+			continue;
+
+		if (!subtr_created) {
+			rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh,
+					      VOS_BTR_DKEY, dkey, SUBTR_CREATE,
+					      &ak_toh);
+			if (rc != 0)
+				goto out;
+			subtr_created = true;
+		}
+
+		rc = akey_update(ioc, cookie, pm_ver, ak_toh, &max_eph);
 		if (rc != 0)
 			goto out;
 	}
 
 	/** If dkey update is successful update the cookie tree */
-	ck_toh = vos_obj2cookie_hdl(obj);
-	rc = vos_cookie_find_update(ck_toh, cookie, ioc->ic_epoch, true, NULL);
-	if (rc) {
-		D_ERROR("Failed to record cookie: %d\n", rc);
-		goto out;
+	/** XXX Note: if there are different epochs for akeys during rebuild,
+	 * we might use minium epoch, instead of the ic_epoch?
+	 */
+	if (subtr_created) {
+		ck_toh = vos_obj2cookie_hdl(obj);
+		rc = vos_cookie_find_update(ck_toh, cookie, max_eph, true,
+					    NULL);
+		if (rc) {
+			D_ERROR("Failed to record cookie: %d\n", rc);
+			goto out;
+		}
 	}
 out:
-	key_tree_release(ak_toh, false);
+	if (subtr_created)
+		key_tree_release(ak_toh, false);
 	return rc;
 }
 
