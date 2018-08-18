@@ -386,12 +386,11 @@ int ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		 daos_key_t *dkey, unsigned int nr,
 		 daos_iod_t *iods, daos_sg_list_t *sgls,
 		 daos_iom_t *maps);
-
 int ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		    daos_key_t *akey, daos_size_t *size, uint32_t *nr,
-		    daos_key_desc_t *kds, d_sg_list_t *sgl,
-		    daos_hash_out_t *anchor, daos_hash_out_t *dkey_anchor,
-		    daos_hash_out_t *akey_anchor);
+		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
+		daos_key_desc_t *kds, daos_epoch_range_t *eprs,
+		d_sg_list_t *sgl, daos_hash_out_t *anchor,
+		daos_hash_out_t *dkey_anchor, daos_hash_out_t *akey_anchor);
 
 typedef int (*dss_vos_iterate_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
 				    vos_iter_type_t type,
@@ -405,11 +404,14 @@ struct dss_enum_arg {
 	/* Iteration fields */
 	vos_iter_param_t	param;
 	bool			recursive;	/* enumerate lower levels */
-	bool			recxs_eprs;	/* type == S||R */
+	bool			fill_recxs;	/* type == S||R */
 	daos_hash_out_t		obj_anchor;	/* type == OBJ (<= if recur) */
 	daos_hash_out_t		dkey_anchor;	/* type == DKEY (<= if recur) */
 	daos_hash_out_t		akey_anchor;	/* type == AKEY (<= if recur) */
 	daos_hash_out_t		recx_anchor;	/* type == S||R (<= if recur) */
+	daos_epoch_range_t     *eprs;
+	int			eprs_cap;
+	int			eprs_len;
 
 	/* Buffer fields */
 	union {
@@ -421,9 +423,6 @@ struct dss_enum_arg {
 			int			sgl_idx;
 		};
 		struct {	/* recxs_eprs && type == S||R */
-			daos_epoch_range_t     *eprs;
-			int			eprs_cap;
-			int			eprs_len;
 			daos_recx_t	       *recxs;
 			int			recxs_cap;
 			int			recxs_len;
@@ -458,6 +457,8 @@ struct dss_enum_unpack_io {
 	int		ui_iods_cap;
 	int		ui_iods_len;
 	int	       *ui_recxs_caps;
+	daos_epoch_t	ui_dkey_eph;
+	daos_epoch_t   *ui_akey_ephs;
 	daos_sg_list_t *ui_sgls;	/**< optional */
 	uuid_t		ui_cookie;
 	uint32_t	ui_version;
@@ -465,14 +466,13 @@ struct dss_enum_unpack_io {
 
 void dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
 			     int *recxs_caps, daos_sg_list_t *sgls,
-			     int iods_cap);
+			     daos_epoch_t *ephs, int iods_cap);
 void dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io);
 void dss_enum_unpack_io_fini(struct dss_enum_unpack_io *io);
 
 typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
 
 int dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
-		    struct dss_enum_unpack_io *io, dss_enum_unpack_cb_t cb,
-		    void *cb_arg);
+		    dss_enum_unpack_cb_t cb, void *cb_arg);
 
 #endif /* __DSS_API_H__ */

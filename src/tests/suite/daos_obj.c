@@ -258,6 +258,35 @@ insert_single(const char *dkey, const char *akey, uint64_t idx,
 	insert(dkey, 1, &akey, &idx, &value, &size, &epoch, req);
 }
 
+void
+punch_dkey(const char *dkey, daos_epoch_t eph, struct ioreq *req)
+{
+	int rc;
+
+	ioreq_dkey_set(req, dkey);
+
+	rc = daos_obj_punch_dkeys(req->oh, eph, 1, &req->dkey, NULL);
+	assert_int_equal(rc, 0);
+}
+
+void
+punch_akey(const char *dkey, const char *akey, daos_epoch_t eph,
+	   struct ioreq *req)
+{
+	daos_key_t daos_akey;
+	int rc;
+
+	ioreq_dkey_set(req, dkey);
+
+	daos_akey.iov_buf = (void *)akey;
+	daos_akey.iov_len = strlen(akey);
+	daos_akey.iov_buf_len = strlen(akey);
+
+	rc = daos_obj_punch_akeys(req->oh, eph, &req->dkey, 1, &daos_akey,
+				  NULL);
+	assert_int_equal(rc, 0);
+}
+
 static void
 punch(const char *dkey, const char *akey, uint64_t idx,
       daos_epoch_t epoch, struct ioreq *req)

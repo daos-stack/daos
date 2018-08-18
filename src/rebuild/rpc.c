@@ -58,6 +58,7 @@ static struct crt_msg_field *rebuild_objs_in_fields[] = {
 	&CMF_UINT32,    /* padding */
 	&CMF_UUID,
 	&DMF_OID_ARRAY, /* obj ids to be rebuilt */
+	&DMF_UINT64_ARRAY, /* epochs of obj to be rebuilt */
 	&DMF_UUID_ARRAY, /* cont ids to be rebuilt */
 	&DMF_UINT32_ARRAY, /* obj shards to be rebuilt */
 };

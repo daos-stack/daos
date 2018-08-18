@@ -768,7 +768,7 @@ ds_iter_single_vos(void *data)
 			type = VOS_ITER_SINGLE;
 
 		enum_arg->param.ip_epc_expr = VOS_IT_EPC_RE;
-		enum_arg->recxs_eprs = true;
+		enum_arg->fill_recxs = true;
 	} else if (arg->opc == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
 		type = VOS_ITER_DKEY;
 	} else if (arg->opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
@@ -883,7 +883,8 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	/* TODO: Modify the client side and enable inline recx data. */
 	enum_arg->inline_thres = 0;
 
-	if (task_arg.opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
+	if (task_arg.opc == DAOS_OBJ_RECX_RPC_ENUMERATE ||
+	    task_arg.opc == DAOS_OBJ_RPC_ENUMERATE) {
 		oeo->oeo_eprs.ca_count = 0;
 		D_ALLOC(oeo->oeo_eprs.ca_arrays,
 			oei->oei_nr * sizeof(daos_epoch_range_t));
@@ -892,7 +893,9 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		enum_arg->eprs = oeo->oeo_eprs.ca_arrays;
 		enum_arg->eprs_cap = oei->oei_nr;
 		enum_arg->eprs_len = 0;
+	}
 
+	if (task_arg.opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		oeo->oeo_recxs.ca_count = 0;
 		D_ALLOC(oeo->oeo_recxs.ca_arrays,
 			oei->oei_nr * sizeof(daos_recx_t));
@@ -964,12 +967,16 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	oeo->oeo_akey_anchor = enum_arg->akey_anchor;
 	oeo->oeo_anchor = enum_arg->recx_anchor;
 
-	if (task_arg.opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
+	if (enum_arg->eprs)
 		oeo->oeo_eprs.ca_count = enum_arg->eprs_len;
+
+	if (task_arg.opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		oeo->oeo_recxs.ca_count = enum_arg->recxs_len;
 		oeo->oeo_num = enum_arg->rnum;
 		oeo->oeo_size = enum_arg->rsize;
 	} else {
+		D_ASSERT(enum_arg->eprs_len == 0 ||
+			 enum_arg->eprs_len == enum_arg->kds_len);
 		oeo->oeo_kds.ca_count = enum_arg->kds_len;
 		oeo->oeo_num = enum_arg->kds_len;
 		oeo->oeo_size = oeo->oeo_sgl.sg_iovs[0].iov_len;

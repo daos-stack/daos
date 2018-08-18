@@ -122,8 +122,8 @@ out:
 }
 
 static int
-fill_recxs_eprs(daos_handle_t ih, vos_iter_entry_t *key_ent,
-		struct dss_enum_arg *arg, vos_iter_type_t type)
+fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
+	   struct dss_enum_arg *arg, vos_iter_type_t type)
 {
 	/* check if recxs is full */
 	if (arg->recxs_len >= arg->recxs_cap) {
@@ -135,6 +135,7 @@ fill_recxs_eprs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 	arg->eprs[arg->eprs_len].epr_lo = key_ent->ie_epoch;
 	arg->eprs[arg->eprs_len].epr_hi = DAOS_EPOCH_MAX;
 	arg->eprs_len++;
+
 	arg->recxs[arg->recxs_len] = key_ent->ie_recx;
 	arg->recxs_len++;
 	if (arg->rsize == 0) {
@@ -154,10 +155,10 @@ fill_recxs_eprs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 }
 
 static int
-fill_recxs_eprs_cb(daos_handle_t ih, vos_iter_entry_t *key_ent,
-		   vos_iter_type_t type, vos_iter_param_t *param, void *arg)
+fill_recxs_cb(daos_handle_t ih, vos_iter_entry_t *key_ent,
+	      vos_iter_type_t type, vos_iter_param_t *param, void *arg)
 {
-	return fill_recxs_eprs(ih, key_ent, arg, type);
+	return fill_recxs(ih, key_ent, arg, type);
 }
 
 static int
@@ -256,6 +257,12 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	arg->kds[arg->kds_len].kd_csum_len = 0;
 	arg->kds[arg->kds_len].kd_val_types = type;
 	arg->kds_len++;
+
+	if (arg->eprs != NULL) {
+		arg->eprs[arg->eprs_len].epr_lo = key_ent->ie_epoch;
+		arg->eprs[arg->eprs_len].epr_hi = DAOS_EPOCH_MAX;
+		arg->eprs_len++;
+	}
 
 	D_ASSERT(iovs[arg->sgl_idx].iov_len + key_ent->ie_key.iov_len <
 		 iovs[arg->sgl_idx].iov_buf_len);
@@ -411,8 +418,21 @@ iter_akey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 	rc = dss_vos_iterate(VOS_ITER_RECX, &iter_recx_param, &arg->recx_anchor,
 			     fill_rec_cb, arg);
 
-	if (arg->kds[arg->kds_len].kd_key_len > 0)
+	if (arg->kds[arg->kds_len].kd_key_len > 0) {
 		arg->kds_len++;
+		/** This eprs will not be used during rebuild,
+		 * because the epoch for each record will be returned
+		 * through obj_enum_rec anyway, see fill_rec().
+		 * This "empty" eprs is just for eprs and kds to
+		 * be matched, so it would be easier for unpacking
+		 * see dss_enum_unpack().
+		 */
+		if (arg->eprs != NULL) {
+			arg->eprs[arg->eprs_len].epr_lo = DAOS_EPOCH_MAX;
+			arg->eprs[arg->eprs_len].epr_hi = DAOS_EPOCH_MAX;
+			arg->eprs_len++;
+		}
+	}
 
 	/* Exit either failure or buffer is full */
 	if (rc) {
@@ -434,8 +454,15 @@ iter_akey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 		goto out;
 	}
 
-	if (arg->kds[arg->kds_len].kd_key_len > 0)
+	if (arg->kds[arg->kds_len].kd_key_len > 0) {
 		arg->kds_len++;
+		/** empty eprs, see comments above */
+		if (arg->eprs != NULL) {
+			arg->eprs[arg->eprs_len].epr_lo = DAOS_EPOCH_MAX;
+			arg->eprs[arg->eprs_len].epr_hi = DAOS_EPOCH_MAX;
+			arg->eprs_len++;
+		}
+	}
 out:
 	return rc;
 }
@@ -529,9 +556,8 @@ dss_enum_pack(vos_iter_type_t type, struct dss_enum_arg *arg)
 	dss_vos_iterate_cb_t	cb;
 	int			rc;
 
-	D_ASSERT(!arg->recxs_eprs ||
-		 (type == VOS_ITER_SINGLE || type == VOS_ITER_RECX));
-
+	D_ASSERT(!arg->fill_recxs ||
+		 type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
 	switch (type) {
 	case VOS_ITER_OBJ:
 		anchor = &arg->obj_anchor;
@@ -548,7 +574,7 @@ dss_enum_pack(vos_iter_type_t type, struct dss_enum_arg *arg)
 	case VOS_ITER_SINGLE:
 	case VOS_ITER_RECX:
 		anchor = &arg->recx_anchor;
-		cb = arg->recxs_eprs ? fill_recxs_eprs_cb : fill_rec_cb;
+		cb = arg->fill_recxs ? fill_recxs_cb : fill_rec_cb;
 		break;
 	default:
 		D_ASSERTF(false, "unknown/unsupported type %d\n", type);

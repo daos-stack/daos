@@ -286,8 +286,8 @@ int
 dc_obj_list_obj_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			    daos_key_t *dkey, daos_key_t *akey,
 			    daos_size_t *size, uint32_t *nr,
-			    daos_key_desc_t *kds, daos_sg_list_t *sgl,
-			    daos_hash_out_t *anchor,
+			    daos_key_desc_t *kds, daos_epoch_range_t *eprs,
+			    daos_sg_list_t *sgl, daos_hash_out_t *anchor,
 			    daos_hash_out_t *dkey_anchor,
 			    daos_hash_out_t *akey_anchor,
 			    bool incr_order, daos_event_t *ev, tse_sched_t *tse,
@@ -308,6 +308,7 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_epoch_t epoch,
 	args->size	= size;
 	args->nr	= nr;
 	args->kds	= kds;
+	args->eprs	= eprs;
 	args->sgl	= sgl;
 	args->anchor	= anchor;
 	args->dkey_anchor = dkey_anchor;

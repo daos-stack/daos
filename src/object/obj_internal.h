@@ -229,9 +229,4 @@ obj_dkey2hash(daos_key_t *dkey)
 			       dkey->iov_len, 5731);
 }
 
-struct obj_enum_key {
-	daos_key_desc_t	key_desc;
-	char		key_buf[0];
-};
-
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

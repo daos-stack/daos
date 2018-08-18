@@ -88,6 +88,8 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 	char	akey[32];
 	char	data[REC_SIZE];
 	char	data_verify[REC_SIZE];
+	int	akey_punch_idx = 1;
+	int	dkey_punch_idx = 1;
 	int	j;
 	int	k;
 	int	l;
@@ -98,10 +100,14 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 		sprintf(dkey, "dkey_%d", j);
 		sprintf(data, "%s_"DF_U64, "data", eph);
 		sprintf(data_verify, "%s_"DF_U64, "data", validate_eph);
-		for (k = 0; k < 2; k++) {
+		for (k = 0; k < 3; k++) {
 			sprintf(akey, "akey_%d", k);
 			for (l = 0; l < 10; l++) {
 				if (validate) {
+					/* How to verify punch? XXX */
+					if (k == akey_punch_idx ||
+					    j == dkey_punch_idx)
+						continue;
 					memset(data, 0, REC_SIZE);
 					lookup_single(dkey, akey, l, data,
 						      REC_SIZE, eph, req);
@@ -113,6 +119,10 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 						      eph, req);
 				}
 			}
+
+			/* Punch akey */
+			if (k == akey_punch_idx && !validate)
+				punch_akey(dkey, akey, eph, req);
 		}
 
 		/* large records */
@@ -124,6 +134,10 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 			memset(compare, 'a', BULK_SIZE);
 			for (l = 0; l < 5; l++) {
 				if (validate) {
+					/* How to verify punch? XXX */
+					if (k == akey_punch_idx ||
+					    j == dkey_punch_idx)
+						continue;
 					memset(bulk, 0, BULK_SIZE);
 					lookup_single(dkey, akey, l,
 						      bulk, BULK_SIZE + 10,
@@ -137,7 +151,15 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 						      req);
 				}
 			}
+
+			/* Punch akey */
+			if (k == akey_punch_idx && !validate)
+				punch_akey(dkey, akey, eph, req);
 		}
+
+		/* Punch dkey */
+		if (j == dkey_punch_idx && !validate)
+			punch_dkey(dkey, eph, req);
 
 		/* single record */
 		sprintf(data, "%s_"DF_U64, "single_data", eph);

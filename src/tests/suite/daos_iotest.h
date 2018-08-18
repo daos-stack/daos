@@ -90,6 +90,13 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	daos_size_t *read_size, void **val, daos_size_t *size,
 	daos_epoch_t *epoch, struct ioreq *req, bool empty);
 
+void
+punch_dkey(const char *dkey, daos_epoch_t epoch, struct ioreq *req);
+
+void
+punch_akey(const char *dkey, const char *akey, daos_epoch_t epoch,
+	   struct ioreq *req);
+
 int
 obj_setup(void **state);
 

@@ -89,7 +89,8 @@ ds_cont_lookup(uuid_t pool_uuid, uuid_t cont_uuid, struct ds_cont **ds_cont);
 
 void ds_cont_put(struct ds_cont *cont);
 
-typedef int (*cont_iter_cb_t)(uuid_t co_uuid, daos_unit_oid_t, void *arg);
+typedef int (*cont_iter_cb_t)(uuid_t co_uuid, daos_unit_oid_t,
+			      daos_epoch_t eph, void *arg);
 
 int
 ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,

@@ -73,6 +73,7 @@ struct rebuild_objs_in {
 	uint32_t                roi_pad;
 	uuid_t			roi_pool_uuid;
 	struct crt_array        roi_oids;
+	struct crt_array        roi_ephs;
 	struct crt_array        roi_uuids;
 	struct crt_array	roi_shards;
 };

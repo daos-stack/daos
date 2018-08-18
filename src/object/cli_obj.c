@@ -1467,7 +1467,7 @@ dc_obj_list_obj(tse_task_t *task)
 	return dc_obj_list_internal(args->oh, DAOS_OBJ_RPC_ENUMERATE,
 				    args->epoch, args->dkey, args->akey,
 				    DAOS_IOD_NONE, args->size, args->nr,
-				    args->kds, args->sgl, NULL, NULL,
+				    args->kds, args->sgl, NULL, args->eprs,
 				    args->anchor, args->dkey_anchor,
 				    args->akey_anchor, true, task);
 }

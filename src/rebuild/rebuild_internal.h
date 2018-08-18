@@ -38,10 +38,15 @@ struct rebuild_one {
 	d_list_t	ro_list;
 	uuid_t		ro_cont_uuid;
 	daos_unit_oid_t	ro_oid;
+	daos_epoch_t	ro_max_eph;
 	daos_epoch_t	ro_epoch;
 	daos_iod_t	*ro_iods;
+	daos_epoch_t	*ro_ephs;
+	daos_key_t	*ro_ephs_keys;
+	unsigned int	ro_ephs_num;
 	unsigned int	ro_iod_num;
-	unsigned int	ro_rec_cnt;
+	unsigned int	ro_iod_alloc_num;
+	unsigned int	ro_rec_num;
 	uuid_t		ro_cookie;
 	uint64_t	ro_version;
 };
@@ -54,6 +59,11 @@ struct rebuild_puller {
 	ABT_cond	rp_fini_cond;
 	d_list_t	rp_one_list;
 	unsigned int	rp_ult_running:1;
+};
+
+struct rebuild_obj_key {
+	daos_unit_oid_t oid;
+	daos_epoch_t	eph;
 };
 
 /* Track the pool rebuild status on each target, which exists on
@@ -300,15 +310,16 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt);
 
 typedef int (*rebuild_obj_insert_cb_t)(struct rebuild_root *cont_root,
 				       uuid_t co_uuid, daos_unit_oid_t oid,
-				       unsigned int shard, unsigned int *cnt,
-				       int ref);
+				       daos_epoch_t epoch, unsigned int shard,
+				       unsigned int *cnt, int ref);
 int
 rebuild_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
-		      daos_unit_oid_t oid, unsigned int shard,
+		      daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 		      unsigned int *cnt, int ref);
 int
 rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
-			unsigned int shard, unsigned int *cnt, int ref,
+			daos_epoch_t epoch, unsigned int shard,
+			unsigned int *cnt, int ref,
 			rebuild_obj_insert_cb_t obj_cb);
 int
 rebuilt_btr_destroy(daos_handle_t btr_hdl);

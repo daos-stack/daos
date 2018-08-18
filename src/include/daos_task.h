@@ -466,6 +466,7 @@ typedef struct {
 					 * parameters
 					 */
 	daos_key_desc_t		*kds;
+	daos_epoch_range_t	*eprs;
 	daos_sg_list_t		*sgl;
 	daos_hash_out_t		*anchor;
 	daos_hash_out_t		*dkey_anchor;

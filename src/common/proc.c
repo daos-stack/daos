@@ -611,3 +611,8 @@ struct crt_msg_field DMF_RSVC_HINT =
 struct crt_msg_field DMF_KEY_ARRAY =
 	DEFINE_CRT_MSG("daos_iov_t", CMF_ARRAY_FLAG, sizeof(daos_iov_t),
 		       daos_proc_iovec);
+
+struct crt_msg_field DMF_UINT64_ARRAY =
+	DEFINE_CRT_MSG("daos_uint64", CMF_ARRAY_FLAG,
+		       sizeof(uint64_t), crt_proc_uint64_t);
+

@@ -822,11 +822,12 @@ struct obj_iter_arg {
 };
 
 static int
-cont_obj_iter_cb(uuid_t cont_uuid, daos_unit_oid_t oid, void *data)
+cont_obj_iter_cb(uuid_t cont_uuid, daos_unit_oid_t oid, daos_epoch_t eph,
+		 void *data)
 {
 	struct obj_iter_arg *arg = data;
 
-	return arg->callback(cont_uuid, oid, arg->arg);
+	return arg->callback(cont_uuid, oid, eph, arg->arg);
 }
 
 static int
