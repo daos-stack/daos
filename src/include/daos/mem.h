@@ -79,7 +79,6 @@ struct pobj_action {
 	int		type;
 	uint64_t	off;
 };
-#define POBJ_MAX_ACTIONS	0
 #define POBJ_FLAG_ZERO		(((uint64_t)1) << 0)
 #define POBJ_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
 

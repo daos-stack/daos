@@ -130,16 +130,6 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 	if (vos_obj2umm(ioc->ic_obj)->umm_ops->mo_reserve == NULL)
 		return 0;
 
-	/*
-	 * Too many IODs in one update RPC which exceeds the maximum reserve
-	 * count that PMDK can handle in single transaction, fallback to
-	 * persistent allocation (instead of reserve) in update_begin phase.
-	 */
-	if (total_acts > POBJ_MAX_ACTIONS) {
-		D_WARN("Too many DAOS IODs (%d)!\n", total_acts);
-		return 0;
-	}
-
 	D_ALLOC(ioc->ic_actv, total_acts * sizeof(*ioc->ic_actv));
 	if (ioc->ic_actv == NULL)
 		return -DER_NOMEM;
