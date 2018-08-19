@@ -34,6 +34,10 @@
 #include <stddef.h>
 #include <setjmp.h>
 #include <time.h>
+#include <linux/limits.h>
+#include <sys/stat.h>
+#include <dirent.h>
+
 #include <cmocka.h>
 #include <mpi.h>
 #include <daos/common.h>
@@ -46,6 +50,11 @@ extern const char *server_group;
 
 /** Pool service replicas */
 extern unsigned int svc_nreplicas;
+
+/* the temporary IO dir*/
+extern char test_io_dir[];
+/* the IO conf file*/
+extern const char *test_io_conf;
 
 extern int daos_event_priv_reset(void);
 #define TEST_RANKS_MAX_NUM	(13)
@@ -61,6 +70,17 @@ struct test_pool {
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
 	bool			destroyed;
+};
+
+struct epoch_io_args {
+	d_list_t		 op_list;
+	int			 op_lvl; /* enum test_level */
+	daos_size_t		 op_iod_size;
+	/* now using only one oid, can change later when needed */
+	daos_obj_id_t		 op_oid;
+	/* cached dkey/akey used last time, so need not specify it every time */
+	char			*op_dkey;
+	char			*op_akey;
 };
 
 typedef struct {
@@ -106,6 +126,8 @@ typedef struct {
 	 */
 	int			(*rebuild_post_cb)(void *test_arg);
 	void			*rebuild_post_cb_arg;
+	/* epoch IO OP queue */
+	struct epoch_io_args	eio_args;
 } test_arg_t;
 
 enum {
@@ -198,6 +220,7 @@ int run_daos_pool_test(int rank, int size);
 int run_daos_cont_test(int rank, int size);
 int run_daos_capa_test(int rank, int size);
 int run_daos_io_test(int rank, int size, int *tests, int test_size);
+int run_daos_epoch_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_array_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
@@ -215,10 +238,12 @@ void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 void daos_add_server(const uuid_t pool_uuid, const char *grp,
 		     const d_rank_list_t *svc, d_rank_t rank);
 typedef int (*test_setup_cb_t)(void **state);
+typedef int (*test_teardown_cb_t)(void **state);
 
 int run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 		       daos_size_t pool_size, int *sub_tests,
-		       int sub_tests_size, test_setup_cb_t cb);
+		       int sub_tests_size, test_setup_cb_t setup_cb,
+		       test_teardown_cb_t teardown_cb);
 
 static inline void
 daos_test_print(int rank, char *message)
@@ -306,5 +331,104 @@ int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo);
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
+
+/* make dir including its parent dir */
+static inline int
+test_mkdir(char *dir, mode_t mode)
+{
+	char	*p;
+	mode_t	 stored_mode;
+	char	 parent_dir[PATH_MAX] = { 0 };
+
+	if (dir == NULL || *dir == '\0')
+		return daos_errno2der(errno);
+
+	stored_mode = umask(0);
+	p = strrchr(dir, '/');
+	if (p != NULL) {
+		strncpy(parent_dir, dir, p - dir);
+		if (access(parent_dir, F_OK) != 0)
+			test_mkdir(parent_dir, mode);
+
+		if (access(dir, F_OK) != 0) {
+			if (mkdir(dir, mode) != 0) {
+				print_message("mkdir %s failed %d.\n",
+					      dir, errno);
+				return daos_errno2der(errno);
+			}
+		}
+	}
+	umask(stored_mode);
+
+	return 0;
+}
+
+/* force == 1 to remove non-empty directory */
+static inline int
+test_rmdir(const char *path, bool force)
+{
+	DIR    *dir;
+	struct dirent *ent;
+	char   *fullpath = NULL;
+	int    rc = 0, len;
+
+	D_ASSERT(path != NULL);
+	len = strlen(path);
+	if (len == 0 || len > PATH_MAX)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	if (!force) {
+		rc = rmdir(path);
+		if (rc != 0)
+			rc = errno;
+		D_GOTO(out, rc = daos_errno2der(rc));
+	}
+
+	D_ALLOC(fullpath, PATH_MAX);
+	if (fullpath == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	dir = opendir(path);
+	if (dir == NULL) {
+		free(fullpath);
+		if (errno == ENOENT)
+			D_GOTO(out, rc);
+		D_ERROR("can't open directory %s, %d (%s)",
+			path, errno, strerror(errno));
+		D_GOTO(out, rc = daos_errno2der(errno));
+	}
+
+	while ((ent = readdir(dir)) != NULL) {
+		if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
+			continue;   /* skips the dots */
+
+		sprintf(fullpath, "%s/%s", path, ent->d_name);
+		switch (ent->d_type) {
+		case DT_DIR:
+			rc = test_rmdir(fullpath, force);
+			break;
+		case DT_REG:
+			rc = unlink(fullpath);
+			break;
+		default:
+			D_WARN("find unexpected type %d", ent->d_type);
+		}
+		if (rc != 0)
+			D_ERROR("unlink %s failed, rc %d", fullpath, rc);
+
+		memset(fullpath, 0, PATH_MAX);
+	}
+
+	rc = closedir(dir);
+	if (rc == 0) {
+		rc = rmdir(path);
+		if (rc != 0)
+			rc = errno;
+	}
+	free(fullpath);
+
+out:
+	return rc;
+}
 
 #endif

@@ -422,3 +422,32 @@ test_teardown(void **state)
 	D_FREE_PTR(arg);
 	return 0;
 }
+
+int test_make_dirs(char *dir, mode_t mode)
+{
+	char	*p;
+	mode_t	 stored_mode;
+	char	 parent_dir[PATH_MAX] = { 0 };
+
+	if (dir == NULL || *dir == '\0')
+		return daos_errno2der(errno);
+
+	stored_mode = umask(0);
+	p = strrchr(dir, '/');
+	if (p != NULL) {
+		strncpy(parent_dir, dir, p - dir);
+		if (access(parent_dir, F_OK) != 0)
+			test_make_dirs(parent_dir, mode);
+
+		if (access(dir, F_OK) != 0) {
+			if (mkdir(dir, mode) != 0) {
+				print_message("mkdir %s failed %d.\n",
+					      dir, errno);
+				return daos_errno2der(errno);
+			}
+		}
+	}
+	umask(stored_mode);
+
+	return 0;
+}

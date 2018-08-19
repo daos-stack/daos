@@ -14,6 +14,8 @@ def scons():
 
     test = daos_build.program(denv, 'daos_test', Glob('*.c'), LIBS=libraries)
     denv.Install('$PREFIX/bin/', test)
+    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_1'))
+    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_2'))
 
 if __name__ == "SCons.Script":
     scons()

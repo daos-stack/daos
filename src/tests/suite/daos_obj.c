@@ -28,8 +28,8 @@
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_iotest.h"
 
-static int dts_obj_class	= DAOS_OC_R2S_RW;
-static int dts_obj_replica_cnt	= 2;
+int dts_obj_class	= DAOS_OC_R2S_RW;
+int dts_obj_replica_cnt	= 2;
 
 void
 ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
@@ -196,6 +196,54 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size, bool lookup,
 	}
 }
 
+static void
+ioreq_iod_recxs_set(struct ioreq *req, int idx, daos_size_t size,
+		   daos_recx_t *recxs, daos_epoch_range_t *eprs, int nr)
+{
+	daos_iod_t *iod = &req->iod[idx];
+
+	assert_in_range(nr, 1, IOREQ_IOD_NR);
+	iod->iod_type = req->iod_type;
+	iod->iod_size = size;
+	if (req->iod_type == DAOS_IOD_ARRAY) {
+		iod->iod_nr = nr;
+		iod->iod_recxs = recxs;
+		iod->iod_eprs = eprs;
+	} else {
+		iod->iod_nr = 1;
+	}
+}
+
+void
+insert_recxs_nowait(const char *dkey, const char *akey, daos_size_t iod_size,
+		    daos_epoch_t epoch, daos_recx_t *recxs, int nr, void *data,
+		    daos_size_t data_size, struct ioreq *req)
+{
+	daos_epoch_range_t	eprs[IOREQ_IOD_NR];
+	int			i;
+
+	assert_in_range(nr, 1, IOREQ_IOD_NR);
+
+	/* dkey */
+	ioreq_dkey_set(req, dkey);
+
+	/* akey */
+	ioreq_io_akey_set(req, &akey, 1);
+
+	/* set sgl */
+	assert_int_not_equal(data, NULL);
+	ioreq_sgl_simple_set(req, &data, &data_size, 1);
+
+	/* iod, recxs */
+	for (i = 0; i < nr; i++) {
+		eprs[i].epr_lo = epoch;
+		eprs[i].epr_hi = epoch;
+	}
+	ioreq_iod_recxs_set(req, 0, iod_size, recxs, eprs, nr);
+
+	insert_internal_nowait(&req->dkey, 1, req->sgl, req->iod, epoch, req);
+}
+
 void
 insert_nowait(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	      void **val, daos_size_t *size, daos_epoch_t *epoch,
@@ -247,6 +295,16 @@ insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
        void **val, daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req)
 {
 	insert_nowait(dkey, nr, akey, idx, val, size, epoch, req);
+	insert_wait(req);
+}
+
+void
+insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
+	     daos_epoch_t epoch, daos_recx_t *recxs, int nr, void *data,
+	     daos_size_t data_size, struct ioreq *req)
+{
+	insert_recxs_nowait(dkey, akey, iod_size, epoch, recxs, nr, data,
+			    data_size, req);
 	insert_wait(req);
 }
 
@@ -329,6 +387,36 @@ lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 	/* Only single iov for each sgls during the test */
 	if (!empty && req->ev.ev_error == 0)
 		assert_int_equal(sgls->sg_nr_out, 1);
+}
+
+void
+lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
+	     daos_epoch_t epoch, daos_recx_t *recxs, int nr, void *data,
+	     daos_size_t data_size, struct ioreq *req)
+{
+	daos_epoch_range_t	eprs[IOREQ_IOD_NR];
+	int			i;
+
+	assert_in_range(nr, 1, IOREQ_IOD_NR);
+
+	/* dkey */
+	ioreq_dkey_set(req, dkey);
+
+	/* akey */
+	ioreq_io_akey_set(req, &akey, 1);
+
+	/* set sgl */
+	assert_int_not_equal(data, NULL);
+	ioreq_sgl_simple_set(req, &data, &data_size, 1);
+
+	/* iod, recxs */
+	for (i = 0; i < nr; i++) {
+		eprs[i].epr_lo = epoch;
+		eprs[i].epr_hi = DAOS_EPOCH_MAX;
+	}
+	ioreq_iod_recxs_set(req, 0, iod_size, recxs, eprs, nr);
+
+	lookup_internal(&req->dkey, 1, req->sgl, req->iod, epoch, req, false);
 }
 
 void
@@ -1878,7 +1966,7 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	rc = run_daos_sub_tests(io_tests, ARRAY_SIZE(io_tests),
 				DEFAULT_POOL_SIZE, sub_tests, sub_tests_size,
-				obj_setup_internal);
+				obj_setup_internal, NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

@@ -31,6 +31,7 @@
 
 /** All tests in default order (tests that kill nodes must be last) */
 static const char *all_tests = "mpceiACoROdr";
+static const char *all_tests_defined = "mpceixACoROdr";
 
 d_rank_t ranks_to_kill[MAX_KILLS];
 
@@ -181,6 +182,7 @@ print_usage(int rank)
 	print_message("daos_test -c|--daos_container_tests\n");
 	print_message("daos_test -C|--capa\n");
 	print_message("daos_test -i|--daos_io_tests\n");
+	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -A|--array\n");
 	print_message("daos_test -d|--degraded\n");
 	print_message("daos_test -e|--daos_epoch_tests\n");
@@ -198,7 +200,8 @@ print_usage(int rank)
 int
 run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 		   daos_size_t pool_size, int *sub_tests,
-		   int sub_tests_size, test_setup_cb_t cb)
+		   int sub_tests_size, test_setup_cb_t setup_cb,
+		   test_teardown_cb_t teardown_cb)
 {
 	void *state = NULL;
 	int i;
@@ -209,8 +212,8 @@ run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 	if (rc)
 		return rc;
 
-	if (cb != NULL) {
-		rc = cb(&state);
+	if (setup_cb != NULL) {
+		rc = setup_cb(&state);
 		if (rc)
 			return rc;
 	}
@@ -233,7 +236,15 @@ run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 		if (tests[idx].teardown_func)
 			tests[idx].teardown_func(&state);
 	}
-	test_teardown(&state);
+
+	if (teardown_cb != NULL) {
+		rc = teardown_cb(&state);
+		if (rc)
+			return rc;
+	} else {
+		test_teardown(&state);
+	}
+
 	return 0;
 }
 
@@ -278,6 +289,13 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_io_test(rank, size, sub_tests,
 						      sub_tests_size);
+			break;
+		case 'x':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS Epoch IO test..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_epoch_io_test(rank, size,
+						sub_tests, sub_tests_size);
 			break;
 		case 'A':
 			daos_test_print(rank, "\n\n=================");
@@ -363,6 +381,7 @@ main(int argc, char **argv)
 		{"cont",	no_argument,		NULL,	'c'},
 		{"capa",	no_argument,		NULL,	'C'},
 		{"io",		no_argument,		NULL,	'i'},
+		{"epoch_io",	no_argument,		NULL,	'x'},
 		{"array",	no_argument,		NULL,	'A'},
 		{"epoch",	no_argument,		NULL,	'e'},
 		{"erecov",	no_argument,		NULL,	'o'},
@@ -374,6 +393,8 @@ main(int argc, char **argv)
 		{"svcn",	required_argument,	NULL,	's'},
 		{"subtests",	required_argument,	NULL,	'u'},
 		{"exclude",	required_argument,	NULL,	'E'},
+		{"work_dir",	required_argument,	NULL,	'W'},
+		{"workload_file", required_argument,	NULL,	'w'},
 		{"help",	no_argument,		NULL,	'h'}
 	};
 
@@ -385,9 +406,9 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "ampcCdiAeoROg:s:u:E:hr",
+	while ((opt = getopt_long(argc, argv, "ampcCdixAeoROg:s:u:E:w:W:hr",
 				  long_options, &index)) != -1) {
-		if (strchr(all_tests, opt) != NULL) {
+		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
 			continue;
@@ -409,6 +430,12 @@ main(int argc, char **argv)
 			break;
 		case 'E':
 			exclude_str = optarg;
+			break;
+		case 'w':
+			test_io_conf = optarg;
+			break;
+		case 'W':
+			strncpy(test_io_dir, optarg, PATH_MAX);
 			break;
 		default:
 			daos_test_print(rank, "Unknown Option\n");
