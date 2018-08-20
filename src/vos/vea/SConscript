@@ -2,11 +2,13 @@
 def scons():
     """Execute build"""
     Import('env')
+    Import('install')
 
     denv = env.Clone()
     denv.Library('vea', Glob('*.c'), LIBS=['daos_common', 'gurt'])
 
-    SConscript('tests/SConscript', exports='denv')
+    if install == "lib":
+        SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
     scons()

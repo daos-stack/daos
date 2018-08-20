@@ -8,7 +8,8 @@ def scons():
     libraries = ['vea', 'gurt', 'cart', 'pmemobj', 'cmocka', 'daos_common']
 
     denv.AppendUnique(LIBPATH=['..'])
-    daos_build.test(denv, 'vea_ut', 'vea_ut.c', LIBS=libraries)
+    vea_ut = daos_build.test(denv, 'vea_ut', 'vea_ut.c', LIBS=libraries)
+    denv.Install('$PREFIX/bin/', vea_ut)
 
 if __name__ == "SCons.Script":
     scons()
