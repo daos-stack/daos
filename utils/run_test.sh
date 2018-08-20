@@ -25,13 +25,21 @@ fi
 
 run_test()
 {
-    time flock /mnt/daos/jenkins.lock "$@" > tmp_test_file 2>&1
-    if [ $? -ne 0 ]; then
-        echo "Test $* failed"
+    # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
+    #     at the same time.
+    # We use grep to filter out any potential "SUCCESS! NO TEST FAILURES"
+    #    messages as daos_post_build.sh will look for this and mark the tests
+    #    as passed, which we don't want as we need to check all of the tests
+    #    before deciding this. Also, we intentionally leave off the last 'S'
+    #    in that error message so that we don't guarantee printing that in
+    #    every run's output, thereby making all tests here always pass.
+    time flock /mnt/daos/jenkins.lock "$@" 2>&1 |
+        grep -v "SUCCESS! NO TEST FAILURE"
+    EXIT_STATUS="${PIPESTATUS[0]}"
+    if [ "${EXIT_STATUS}" -ne 0 ]; then
+        echo "Test $* failed with exit status ${EXIT_STATUS}."
         ((failed = failed + 1))
     fi
-    #Hack so I don't need to update scons_local script
-    grep -v SUCCESS tmp_test_file
 }
 
 if [ -d "/mnt/daos" ]; then
