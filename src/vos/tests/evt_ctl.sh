@@ -65,6 +65,7 @@ EOF
  -a 3-28@$np4:abcdefghijklmnopqrstuvwxyz	\
  -a 31-56@$nm3:abcdefghijklmnopqrstuvwxyz	\
  -f 0-100@$np4          \
+ -d -0-100@$np4         \
  -g $np4,99             \
  -g $n,99               \
  -g 0:-2003             \
@@ -109,6 +110,29 @@ while [ $i -lt 20 ]; do
     check_max $base
     ((i = i + 1))
 done
+
+cmd+=$(cat << EOF
+    -d 20-24@2   \
+    -d 90-95@4   \
+    -d 50-56@2   \
+    -d 57-61@2   \
+    -d 96-99@2   \
+    -d 78-82@4   \
+    -d 25-29@3   \
+    -d 10-15@2   \
+    -d 35-40@4   \
+    -d 20-24@20  \
+    -d 90-95@22  \
+    -d 50-56@20  \
+    -d 57-61@20  \
+    -d 96-99@20  \
+    -d 78-82@22  \
+    -d 25-29@21  \
+    -d 10-15@20  \
+    -d 35-40@22  \
+    -d 35-40@40
+EOF
+)
 
 cmd+=" -b -2 -D"
 echo "$cmd"

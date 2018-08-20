@@ -893,6 +893,9 @@ evt_node_rect_update(struct evt_context *tcx, TMMID(struct evt_node) tn_mmid,
 	rtmp = evt_node_rect_at(tcx, tn_mmid, at);
 	*rtmp = *rect;
 
+	/* make adjustments to the position of the rectangle */
+	tcx->tc_ops->po_adjust(tcx, tn_mmid, rtmp, at);
+
 	/* merge the rectangle with the current node */
 	rtmp = evt_node_mbr_get(tcx, tn_mmid);
 	changed = evt_rect_merge(rtmp, rect);
@@ -935,7 +938,8 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	if (TMMID_IS_NULL(nd_mmid))
 		return -DER_NOMEM;
 
-	D_DEBUG(DB_TRACE, "Allocate new node "TMMID_PF"\n", TMMID_P(nd_mmid));
+	D_DEBUG(DB_TRACE, "Allocate new node "TMMID_PF" %d bytes\n",
+		TMMID_P(nd_mmid), evt_node_size(tcx, flags));
 	nd = evt_tmmid2ptr(tcx, nd_mmid);
 	nd->tn_flags = flags;
 
@@ -1252,6 +1256,23 @@ evt_root_activate(struct evt_context *tcx)
 
 	evt_tcx_set_dep(tcx, root->tr_depth);
 	evt_tcx_set_trace(tcx, 0, nd_mmid, 0);
+	return 0;
+}
+
+static int
+evt_root_deactivate(struct evt_context *tcx)
+{
+	struct evt_root	*root = tcx->tc_root;
+
+	D_ASSERT(root->tr_depth != 0);
+	D_ASSERT(!TMMID_IS_NULL(root->tr_node));
+
+	evt_root_tx_add(tcx);
+	root->tr_depth = 0;
+	umem_free_typed(evt_umm(tcx), root->tr_node);
+
+	root->tr_node = TMMID_NULL(struct evt_node);
+	evt_tcx_set_dep(tcx, 0);
 	return 0;
 }
 
@@ -2203,6 +2224,8 @@ evt_destroy(daos_handle_t toh)
 
 /* Special value to not only print MBRs but also bounds for leaf records */
 #define EVT_DEBUG_LEAF (-2)
+/* Number of spaces to add at each level in debug output */
+#define EVT_DEBUG_INDENT (4)
 
 /** Output tree node status */
 static void
@@ -2223,14 +2246,16 @@ evt_node_debug(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		struct evt_rect *rect;
 
 		rect = evt_node_mbr_get(tcx, nd_mmid);
-		D_PRINT("node="TMMID_PF", lvl=%d, mbr="DF_RECT", rect_nr=%d\n",
+		D_PRINT("%*snode="TMMID_PF", lvl=%d, mbr="DF_RECT
+			", rect_nr=%d\n", cur_level * EVT_DEBUG_INDENT, "",
 			TMMID_P(nd_mmid), cur_level, DP_RECT(rect), nd->tn_nr);
 
 		if (leaf && debug_level == EVT_DEBUG_LEAF) {
 			for (i = 0; i < nd->tn_nr; i++) {
 				rect = evt_node_rect_at(tcx, nd_mmid, i);
 
-				D_PRINT("    rect[%d] = "DF_RECT"\n", i,
+				D_PRINT("%*s    rect[%d] = "DF_RECT"\n",
+					cur_level * EVT_DEBUG_INDENT, "", i,
 					DP_RECT(rect));
 			}
 		}
@@ -2405,8 +2430,213 @@ evt_ssof_rect_weight(struct evt_context *tcx, struct evt_rect *rect,
 	return 0;
 }
 
+static void
+evt_ssof_adjust(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
+		struct evt_rect *rect, int at)
+{
+	TMMID(struct evt_node)	*dst_node;
+	TMMID(struct evt_node)	*src_node;
+	TMMID(struct evt_node)	*ntmp;
+	TMMID(struct evt_node)	 cached_node;
+	struct evt_rect		*rtmp;
+	struct evt_node		*nd = evt_tmmid2ptr(tcx, nd_mmid);
+	struct evt_rect		*dst_rect;
+	struct evt_rect		*src_rect;
+	struct evt_rect		 cached_rect;
+	int			 count;
+	int			 i;
+
+	D_ASSERT(!evt_node_is_leaf(tcx, nd_mmid));
+
+	/* Check if we need to move the entry left */
+	for (i = at - 1, rtmp = rect - 1; i >= 0; i--, rtmp--) {
+		if (evt_ssof_cmp_rect(tcx, rtmp, rect) <= 0)
+			break;
+	}
+
+	i++;
+	if (i != at) {
+		/* The entry needs to move left */
+		rtmp++;
+		dst_rect = rtmp + 1;
+		src_rect = rtmp;
+		cached_rect = *rect;
+
+		count = at - i;
+		src_node = evt_node_child_at(tcx, nd_mmid, i);
+		dst_node = src_node + 1;
+		ntmp = src_node;
+		cached_node = *(src_node + count);
+
+		goto move;
+	}
+
+	/* Ok, now check if we need to move the entry right */
+	for (i = at + 1, rtmp = rect + 1; i < nd->tn_nr; i++, rtmp++) {
+		if (evt_ssof_cmp_rect(tcx, rtmp, rect) >= 0)
+			break;
+	}
+
+	i--;
+	if (i != at) {
+		/* the entry needs to move right */
+		rtmp--;
+		count = i - at;
+		dst_rect = rect;
+		src_rect = dst_rect + 1;
+		cached_rect = *rect;
+		dst_node = evt_node_child_at(tcx, nd_mmid, at);
+		src_node = dst_node + 1;
+		ntmp = dst_node + count;
+		cached_node = *dst_node;
+
+		goto move;
+	}
+
+	return;
+move:
+	/* Execute the move */
+	memmove(dst_rect, src_rect, sizeof(*dst_rect) * count);
+	memmove(dst_node, src_node, sizeof(*dst_node) * count);
+	*ntmp = cached_node;
+	*rtmp = cached_rect;
+}
+
 static struct evt_policy_ops evt_ssof_pol_ops = {
 	.po_insert		= evt_ssof_insert,
+	.po_adjust		= evt_ssof_adjust,
 	.po_split		= evt_ssof_split,
 	.po_rect_weight		= evt_ssof_rect_weight,
 };
+
+/* Delete the node pointed to by current trace */
+static int
+evt_node_delete(struct evt_context *tcx)
+{
+	TMMID(struct evt_node)	 nm_cur;
+	struct evt_trace	*trace;
+	struct evt_node		*node;
+	struct evt_rect		*rect_ptr;
+	bool			 leaf;
+	int			 level	= tcx->tc_depth - 1;
+
+	/* We take a simple approach here which may be refined later.
+	 * We simply remove the record, and if it's the last record, we
+	 * bubble up removing any nodes that only have one record.
+	 * Then we check the mbr at each level and make appropriate
+	 * adjustments.
+	 */
+	while (1) {
+		int			 count;
+
+		trace = &tcx->tc_trace[level];
+		nm_cur = trace->tr_node;
+		leaf = evt_node_is_leaf(tcx, nm_cur);
+		node = evt_tmmid2ptr(tcx, nm_cur);
+
+		if (node->tn_nr == 1) {
+			/* this node can be removed so bubble up */
+			if (level == 0) {
+				evt_root_deactivate(tcx);
+				return 0;
+			}
+
+			umem_free_typed(evt_umm(tcx), nm_cur);
+			level--;
+			continue;
+		}
+
+		/* Ok, remove the rect at the current trace */
+		rect_ptr = evt_node_rect_at(tcx, nm_cur, trace->tr_at);
+		count = node->tn_nr - trace->tr_at - 1;
+		node->tn_nr--;
+
+		if (count == 0)
+			break;
+
+		memmove(rect_ptr, rect_ptr + 1, sizeof(*rect_ptr) * count);
+		if (leaf) {
+			struct evt_ptr *ptr;
+
+			ptr = evt_node_ptr_at(tcx, nm_cur, trace->tr_at);
+			memmove(ptr, ptr + 1, sizeof(*ptr) * count);
+		} else {
+			TMMID(struct evt_node)	*child;
+
+			child = evt_node_child_at(tcx, nm_cur, trace->tr_at);
+			memmove(child, child + 1, sizeof(*child) * count);
+		}
+
+		break;
+	};
+
+	/* Update MBR and bubble up */
+	while (1) {
+		struct evt_rect	mbr;
+		int		i;
+
+		rect_ptr -= trace->tr_at;
+		mbr = *rect_ptr;
+		rect_ptr++;
+		for (i = 1; i < node->tn_nr; i++, rect_ptr++)
+			evt_rect_merge(&mbr, rect_ptr);
+
+		if (node->tn_mbr.rc_off_hi == mbr.rc_off_hi &&
+		    node->tn_mbr.rc_off_lo == mbr.rc_off_lo &&
+		    node->tn_mbr.rc_epc_lo == mbr.rc_epc_lo)
+			return 0; /* mbr hasn't changed */
+
+		node->tn_mbr = mbr;
+
+		if (level == 0)
+			return 0;
+
+		level--;
+
+		trace = &tcx->tc_trace[level];
+		nm_cur = trace->tr_node;
+		node = evt_tmmid2ptr(tcx, nm_cur);
+
+		rect_ptr = evt_node_rect_at(tcx, nm_cur, trace->tr_at);
+		*rect_ptr = mbr;
+
+		/* make adjustments to the position of the rectangle */
+		tcx->tc_ops->po_adjust(tcx, nm_cur, rect_ptr, trace->tr_at);
+	}
+
+	return 0;
+}
+
+int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent)
+{
+	struct evt_context	*tcx;
+	struct evt_entry_list	 ent_list;
+	int			 rc;
+
+	/* NB: This function presently only supports exact match on extent. */
+	tcx = evt_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	evt_ent_list_init(&ent_list);
+	rc = evt_find_ent_list(tcx, EVT_FIND_SAME, rect, &ent_list);
+	if (rc != 0)
+		goto out;
+
+	if (d_list_empty(&ent_list.el_list)) {
+		rc = -DER_ENOENT;
+		goto out;
+	}
+
+	if (ent != NULL) {
+		*ent = *d_list_entry(ent_list.el_list.next, struct evt_entry,
+				     en_link);
+		/* NB: Should clean this up so we don't even export it */
+		ent->en_mmid = UMMID_NULL;
+	}
+
+	rc = evt_node_delete(tcx);
+out:
+	evt_ent_list_fini(&ent_list);
+	return rc;
+}

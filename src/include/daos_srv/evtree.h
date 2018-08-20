@@ -216,6 +216,10 @@ struct evt_policy_ops {
 	int	(*po_split)(struct evt_context *tcx, bool leaf,
 			    TMMID(struct evt_node) src_mmid,
 			    TMMID(struct evt_node) dst_mmid);
+	/** Move adjusted \a rect within a node after mbr update */
+	void	(*po_adjust)(struct evt_context *tcx,
+			     TMMID(struct evt_node) nd_mmid,
+			     struct evt_rect *rect, int at);
 	/**
 	 * Calculate weight of a rectangle \a rect and return it to \a weight.
 	 */
@@ -297,16 +301,33 @@ int evt_close(daos_handle_t toh);
 int evt_destroy(daos_handle_t toh);
 
 /**
- * Insert a new extented version \a rect and its data memory ID \a mmid to
+ * Insert a new extented version \a rect and its data memory ID \a addr to
  * a opened tree.
  *
  * \param toh		[IN]	The tree open handle
+ * \param cookie	[IN]	The VOS cookie
+ * \param pm_ver	[IN]	Pool map version
  * \param rect		[IN]	The versioned extent to insert
- * \param inob		[IN]	Number of bytes per index in \a rect
+ * \param inob		[IN]	Number of bytes per index in \a rect.  Set to
+ *                              zero for punched record
  * \param addr		[IN]	Address of the input data.
  */
 int evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 	       struct evt_rect *rect, uint32_t inob, eio_addr_t addr);
+
+/**
+ * Delete an extent \a rect from an opened tree.
+ *
+ * \param toh		[IN]	The tree open handle
+ * \param rect		[IN]	The versioned extent to insert
+ * \param ent		[OUT]	If not NULL, returns the cached
+ *                              entry if deleted
+ *
+ * Note that the upon successful return, the node is removed
+ * from the tree.   The data in referenced in \a ent is not removed.
+ * The user could free the associated eio_addr_t.
+ */
+int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent);
 
 /**
  * Search the tree and return all versioned extents which overlap with \a rect

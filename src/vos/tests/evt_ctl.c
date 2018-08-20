@@ -57,6 +57,7 @@ static struct evt_root		ts_root;
 static daos_handle_t		ts_toh;
 static uuid_t			ts_uuid;
 static struct umem_instance	ts_umm;
+static uint64_t			ts_pool_uuid;
 
 #define EVT_SEP			','
 #define EVT_SEP_VAL		':'
@@ -273,6 +274,59 @@ ts_add_rect(char *args)
 	} else {
 		if (rc == 0) {
 			D_FATAL("Add rect should have failed\n");
+			return -1;
+		}
+		rc = 0;
+	}
+
+	return rc;
+}
+
+static int
+ts_delete_rect(char *args)
+{
+	char			*val;
+	struct evt_entry	 ent;
+	struct evt_rect		 rect;
+	int			 rc;
+	bool			 should_pass;
+	static int		 total_deleted;
+
+	if (args == NULL)
+		return -1;
+
+	rc = ts_parse_rect(args, &rect, &val, &should_pass);
+	if (rc != 0)
+		return -1;
+
+	D_PRINT("Delete "DF_RECT": val=%s expect_pass=%s (total in tree=%d)\n",
+		DP_RECT(&rect), val ? val : "<NULL>",
+		should_pass ? "true" : "false", total_deleted);
+
+	rc = evt_delete(ts_toh, &rect, &ent);
+
+	if (rc == 0)
+		total_deleted++;
+
+	if (should_pass) {
+		if (rc != 0)
+			D_FATAL("Delete rect failed %d\n", rc);
+		else if (evt_rect_width(&rect) !=
+			 evt_rect_width(&ent.en_sel_rect)) {
+			rc = 1;
+			D_FATAL("Returned rectangle width doesn't match\n");
+		}
+
+		if (!eio_addr_is_hole(&ent.en_ptr.pt_ex_addr)) {
+			umem_id_t	mmid;
+
+			mmid.off = ent.en_ptr.pt_ex_addr.ea_off;
+			mmid.pool_uuid_lo = ts_pool_uuid;
+			umem_free(&ts_umm, mmid);
+		}
+	} else {
+		if (rc == 0) {
+			D_FATAL("Delete rect should have failed\n");
 			return -1;
 		}
 		rc = 0;
@@ -583,6 +637,9 @@ ts_cmd_run(char opc, char *args)
 	case 'g':
 		rc = ts_get_max(args);
 		break;
+	case 'd':
+		rc = ts_delete_rect(args);
+		break;
 	case 'b':
 		rc = ts_tree_debug(args);
 		break;
@@ -613,6 +670,8 @@ main(int argc, char **argv)
 	rc = umem_class_init(&ts_uma, &ts_umm);
 	if (rc != 0)
 		return rc;
+
+	ts_pool_uuid = umem_get_uuid(&ts_umm);
 
 	if (argc == 1) {
 		rc = dts_cmd_parser(ts_ops, "$ > ", ts_cmd_run);
