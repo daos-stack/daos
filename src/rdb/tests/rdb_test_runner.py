@@ -30,8 +30,8 @@
 This script runs the rdb tests. From the command line the tests are run with:
 
 server:
-orterun -N 1 --report-uri /tmp/urifile <debug_cmds> daos_server -c 1
--m vos,rdb,rdbt
+orterun -N 1 --report-uri /tmp/urifile <debug_cmds> -x LD_LIBRARY_PATH
+daos_server -c 1 -m vos,rdb,rdbt
 
 client:
 orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt init
@@ -87,7 +87,7 @@ def start_server():
     """
     print("Starting DAOS server\n")
     cmd = PREFIX + "/bin/orterun -N 1 --report-uri {} ".format(urifile)
-    cmd += debug_cmds + " daos_server -c 1 -m vos,rdb,rdbt "
+    cmd += debug_cmds + " -x LD_LIBRARY_PATH daos_server -c 1 -m vos,rdb,rdbt "
     print("Running command:\n{}".format(cmd))
     sys.stdout.flush()
 
