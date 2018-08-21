@@ -281,14 +281,18 @@ REQS.define('daos',
             headers=['daos.h'],
             requires=['cart', 'ompi'])
 
+
+NINJA_NAME = [nn for nn in ["ninja-build", "ninja"]
+              if os.path.isfile("/usr/bin/" + nn)][0]
+
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
             commands=['meson $FUSE_SRC --prefix=$FUSE_PREFIX' \
                       ' -D udevrulesdir=$FUSE_PREFIX/udev' \
                       ' -D disable-mtab=True' \
                       ' -D skip-systemfiles=True',
-                      'ninja-build -v -j1',
-                      'ninja-build install',
+                      NINJA_NAME + ' -v -j1',
+                      NINJA_NAME + ' install',
                       'mv $FUSE_PREFIX/bin/fusermount3' \
                       ' $FUSE_PREFIX/bin/fusermount3.nosuid'],
             patch='$PATCH_PREFIX/fuse.patch',
