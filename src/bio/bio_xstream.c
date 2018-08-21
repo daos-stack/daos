@@ -48,6 +48,7 @@
 enum {
 	BDEV_CLASS_NVME = 0,
 	BDEV_CLASS_MALLOC,
+	BDEV_CLASS_AIO,
 	BDEV_CLASS_UNKNOWN
 };
 
@@ -176,6 +177,9 @@ bio_nvme_init(const char *storage_path)
 		nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES_SMALL;
 		size_mb = 2;
 		bio_chk_cnt_max = 32;
+	} else if (env && strcasecmp(env, "AIO") == 0) {
+		D_WARN("AIO device will be used!\n");
+		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
 
 	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
@@ -395,6 +399,8 @@ get_bdev_type(struct spdk_bdev *bdev)
 		return BDEV_CLASS_NVME;
 	else if (strcmp(spdk_bdev_get_product_name(bdev), "Malloc disk") == 0)
 		return BDEV_CLASS_MALLOC;
+	else if (strcmp(spdk_bdev_get_product_name(bdev), "AIO disk") == 0)
+		return BDEV_CLASS_AIO;
 	else
 		return BDEV_CLASS_UNKNOWN;
 }

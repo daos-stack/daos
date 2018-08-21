@@ -45,7 +45,7 @@ If the value is set to `DRAM`, all data will be stored in volatile memory; other
 
 SPDK bdev class used by VOS. `STRING`. Default to NVMe bdev.
 
-When testing on node without NVMe device available, it can be set to `MALLOC` to make VOS using SPDK malloc device.
+When testing on node without NVMe device available, it can be set to `MALLOC` or `AIO` to make VOS using SPDK malloc or AIO device.
 
 ### `IO_STAT_PERIOD`
 
