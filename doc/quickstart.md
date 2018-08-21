@@ -200,7 +200,7 @@ To build from a local tree stored on the host, a volume must be created to share
 
 And then the following command to export the DAOS source tree to the docker container and build it:
 
-    $ docker run -v ${daospath}:/home/daos/daos:Z daos scons --config=force --build-deps=yes USE_INSTALLED=all install
+    $ docker run -v ${daospath}:/home/daos/daos:Z daos /bin/bash -c "utils/fetch_go_packages.sh -i . && scons --build-deps=yes USE_INSTALLED=all install"
 
 ### Running DAOS in a Container
 
