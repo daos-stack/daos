@@ -6,7 +6,7 @@
 #
 
 # Pull base image
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
 # Build arguments can be set via -build-arg
