@@ -306,7 +306,6 @@ ut_free(void **state)
 	d_list_t *r_list;
 	uint64_t blk_off;
 	uint32_t blk_cnt;
-	uint32_t blk_tot;
 	int rc;
 
 	r_list = &args->vua_alloc_list;
@@ -343,23 +342,18 @@ ut_free(void **state)
 	assert_int_equal(rc, 0);
 
 	r_list = &args->vua_alloc_list;
-	blk_tot = 0;
 	d_list_for_each_entry(ext, r_list, vre_link) {
 		blk_off = ext->vre_blk_off;
 		blk_cnt = ext->vre_blk_cnt;
-		blk_tot += blk_cnt;
 
 		rc = vea_verify_alloc(args->vua_vsi, true, blk_off, blk_cnt);
 		assert_int_equal(rc, 1);
 	}
 
-	/* Verify free space has been merged and is not allocated*/
-	ext = d_list_entry(r_list->prev, struct vea_resrvd_ext, vre_link);
-	blk_off = ext->vre_blk_off;
-	rc = vea_verify_alloc(args->vua_vsi, true, blk_off, blk_tot);
-	assert_int_equal(rc, 1); /* 1 means it is not allocated */
 	print_message("transient free extents after migration:\n");
 	vea_dump(args->vua_vsi, true);
+	print_message("persistent free extents after migration:\n");
+	vea_dump(args->vua_vsi, false);
 }
 
 static void
@@ -851,16 +845,13 @@ ut_free_invalid_space(void **state)
 	struct vea_ut_args args;
 	struct vea_unmap_context unmap_ctxt;
 	struct vea_hint_context *h_ctxt;
-	struct vea_resrvd_ext fake_ext;
+	struct vea_resrvd_ext *fake_ext;
 	d_list_t *r_list;
 	uint32_t block_count = 16;
 	uint32_t block_size = 0; /* use the default size */
 	uint32_t header_blocks = 1;
 	uint64_t capacity = ((VEA_LARGE_EXT_MB * 2) << 20); /* 128 MB */
 	int rc;
-
-	/* Skip until it stops aborting the program */
-	skip();
 
 	print_message("Try to free space that's not valid\n");
 	ut_setup(&args);
@@ -883,11 +874,14 @@ ut_free_invalid_space(void **state)
 	/* Try to free from I/O Stream 1, which hasn't been reserved */
 	r_list = &args.vua_resrvd_list[1];
 	h_ctxt = args.vua_hint_ctxt[1];
-	fake_ext.vre_blk_cnt = 32;
-	fake_ext.vre_blk_off = 64;
-	d_list_add_tail(&fake_ext.vre_link, r_list);
-	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list); /* Causes an abort*/
+	D_ALLOC_PTR(fake_ext);
+	assert_ptr_not_equal(fake_ext, NULL);
+	fake_ext->vre_blk_cnt = 32;
+	fake_ext->vre_blk_off = 64;
+	d_list_add(&fake_ext->vre_link, r_list);
+	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list);
 	assert_true(rc < 0);
+	print_message("vea_cancel returned %d\n", rc);
 
 	vea_unload(args.vua_vsi);
 	ut_teardown(&args);
@@ -900,13 +894,12 @@ ut_interleaved_ops(void **state)
 	struct vea_ut_args args;
 	struct vea_unmap_context unmap_ctxt;
 	struct vea_hint_context *h_ctxt;
-	d_list_t *r_list;
+	d_list_t *r_list_a;
+	d_list_t *r_list_b;
 	uint32_t block_size = 0; /* use the default size */
 	uint32_t header_blocks = 1;
 	uint64_t capacity = ((VEA_LARGE_EXT_MB * 2) << 20); /* 128 MB */
 	uint32_t block_count;
-	uint32_t cur_extent;
-	uint32_t cur_stream;
 	int rc;
 
 	print_message("Test interleaved operations\n");
@@ -924,39 +917,123 @@ ut_interleaved_ops(void **state)
 	rc = umem_tx_begin(&args.vua_umm);
 	assert_int_equal(rc, 0);
 
-	for (cur_extent = 0; cur_extent < EXTENT_COUNT; cur_extent++) {
-		/* stream 0 will have blocks of 2 + 4 + 6 + 8   */
-		/* stream 1 will have blocks of 3 + 6 + 9 + 12  */
-		/* stream 2 will have blocks of 4 + 8 + 12 + 16 */
-		for (cur_stream = 0; cur_stream < IO_STREAM_CNT; cur_stream++) {
-			r_list = &args.vua_resrvd_list[cur_stream];
-			h_ctxt = args.vua_hint_ctxt[cur_stream];
-			block_count = (cur_stream + 2) * (cur_extent + 1);
-			rc = vea_reserve(args.vua_vsi, block_count, h_ctxt,
-					 r_list);
-			assert_int_equal(rc, 0);
+	/*
+	 * Do the following interleaved operations:
+	 * 1. reserve A, reserve B, publish A, publish B
+	 * 2. reserve A, reserve B, publish B, publish A
+	 * 3. reserve A, reserve B, cancel B, publish A
+	 * 4. reserve A, reserve B, publish A, cancel B
+	 * 5. reserve A, reserve B, cancel A, publish B
+	 * 6. reserve A, reserve B, publish B, cancel A
+	 * 7. reserve A, reserve B, cancel A, cancel B
+	 * 8. reserve A, reserve B, cancel B, cancel A
+	 **/
+	block_count = 2;
+	r_list_a = &args.vua_resrvd_list[0];
+	r_list_b = &args.vua_resrvd_list[1];
+	h_ctxt = args.vua_hint_ctxt[0];
+	rc = vea_hint_load(args.vua_hint[0], &h_ctxt);
+	assert_int_equal(rc, 0);
 
-			/* Publish streams 1 and 2 */
-			if (cur_stream != 0) {
-				rc = vea_tx_publish(args.vua_vsi, h_ctxt,
-						    r_list);
-				assert_int_equal(rc, 0);
-			}
-		}
-	}
+	/* Case 1 */
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+
+	/* Case 2 */
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+
+	/* Case 3 */
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+
+	/* Case 4 */
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+
+	/* Case 5 */
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+
+	/* Case 6 */
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+
+	/* Case 7 */
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+
+	/* Case 8 */
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	block_count += 2;
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
 
 	rc = umem_tx_commit(&args.vua_umm);
 	assert_int_equal(rc, 0);
 
-	/* Cancel reservations in stream 0 */
-	cur_stream = 0;
-	r_list = &args.vua_resrvd_list[cur_stream];
-	h_ctxt = args.vua_hint_ctxt[cur_stream];
-	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list);
-	assert_int_equal(rc, 0);
-
-	/* Do I need to verify any memory here? Other tests already did that */
-
+	vea_hint_unload(args.vua_hint_ctxt[0]);
 	vea_unload(args.vua_vsi);
 	ut_teardown(&args);
 }
@@ -968,14 +1045,15 @@ ut_fragmentation(void **state)
 	struct vea_unmap_context unmap_ctxt;
 	struct vea_hint_context *h_ctxt;
 	struct vea_resrvd_ext *ext;
+	struct vea_resrvd_ext *tmp_ext;
 	d_list_t *r_list;
-	uint64_t capacity = ((VEA_LARGE_EXT_MB * 2) << 20); /* 128 MB */
+	d_list_t persist_list;
+	uint64_t capacity = 32llu << 30; /* 32 GB */
 	uint32_t block_size = 4096; /* use the default size */
-	int32_t blocks_remaining = capacity / block_size;
 	uint32_t header_blocks = 1;
 	uint32_t block_count;
-	uint32_t cur_extent;
 	uint32_t cur_stream;
+	uint32_t max_blocks;
 	int rc;
 
 	print_message("Test allocation on fragmented device\n");
@@ -991,46 +1069,59 @@ ut_fragmentation(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Generate random fragments on the same I/O stream */
-	/* Capacity=128 MB, block size=4096 bytes, so I have 32,768 blocks */
-	srand(276593); /* A random prime */
+	srand(time(0));
 	cur_stream = 0;
 	r_list = &args.vua_resrvd_list[cur_stream];
 	h_ctxt = args.vua_hint_ctxt[cur_stream];
-	while (blocks_remaining > 0) {
-		/* Get a random number between 2 and 1024 */
-		block_count = rand() % (1023) + 2;
-		/* Need to check if there are less than 256 blocks remaining. */
-		/* Otherwise, we run out of space */
-		if (blocks_remaining - (int32_t)block_count < 256) {
-			block_count = (uint32_t)blocks_remaining - 256;
-			blocks_remaining = 0;
-		}
+	max_blocks = args.vua_vsi->vsi_class.vfc_large_thresh;
+	/* Keep reserving until we run out of space */
+	while (rc == 0) {
+		/* Get a random number greater than 2 */
+		block_count = (rand() % max_blocks - 1) + 2;
 		rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list);
-		assert_int_equal(rc, 0);
-		blocks_remaining -= block_count;
 	}
 
-	/* Free some of the fragments */
-	d_list_for_each_entry(ext, r_list, vre_link) {
+	/* Free some of the fragments. The cancelled ones remain in r_list */
+	D_INIT_LIST_HEAD(&persist_list);
+
+	d_list_for_each_entry_safe(ext, tmp_ext, r_list, vre_link) {
+		/* Copy the extents to keep to persist_list */
 		/* Remove about every other fragment */
 		if (rand() % 2 == 0)
-			d_list_del(&ext->vre_link);
+			d_list_move_tail(&ext->vre_link, &persist_list);
 	}
+
+	/* Publish the ones to persist */
+	rc = umem_tx_begin(&args.vua_umm);
+	assert_int_equal(rc, 0);
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, &persist_list);
+	assert_int_equal(rc, 0);
+	rc = umem_tx_commit(&args.vua_umm);
+	assert_int_equal(rc, 0);
+
+	/* Cancel the reservations */
 	rc = vea_cancel(args.vua_vsi, NULL, r_list);
+	if (rc != 0) {
+		print_message("vea_cancel() returned %d\n", rc);
+		assert_int_equal(rc, 0);
+	}
 
 	print_message("Fragments:\n");
 	vea_dump(args.vua_vsi, true);
 
-	/* Try to allocate on multiple I/O streams */
-	for (cur_extent = 0; cur_extent < EXTENT_COUNT; cur_extent++) {
+	/* Try to allocate on multiple I/O streams until no space available*/
+	while (rc == 0) {
 		for (cur_stream = 0; cur_stream < IO_STREAM_CNT; cur_stream++) {
 			r_list = &args.vua_resrvd_list[cur_stream];
 			h_ctxt = args.vua_hint_ctxt[cur_stream];
-			/* Get a random number between 2 and 1024 */
-			block_count = rand() % (1023) + 2;
+			/* Get a random number greater than 2 */
+			block_count = (rand() % max_blocks - 1) + 2;
 			rc = vea_reserve(args.vua_vsi, block_count, h_ctxt,
 					 r_list);
-			assert_int_equal(rc, 0);
+			if (rc != 0) {
+				assert_true(rc == -DER_NOSPACE);
+				break;
+			}
 		}
 	}
 	print_message("Fragments after more reservations:\n");
