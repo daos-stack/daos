@@ -5,11 +5,17 @@ pipeline {
         SHELL = '/bin/bash'
     }
 
-    triggers {
+    // triggers {
         // Jenkins instances behind firewalls can't get webhooks
-        pollSCM('* * * * *')
+        // sadly, this doesn't seem to work
+        // pollSCM('* * * * *')
         // See if cron works since pollSCM above isn't
         // cron('H 22 * * *')
+    // }
+
+    options {
+        // preserve stashes so that jobs can be started at the test stage
+        preserveStashes(buildCount: 5)
     }
 
     stages {
@@ -43,9 +49,12 @@ pipeline {
                                       cat config.log || true
                                       exit \$rc
                                   fi
-                              fi'''
+                              fi
+                              make -C src/rdb/raft tests
+                              '''
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: '.build_vars.*'
+                        stash name: 'CentOS-tests', includes: 'src/rdb/raft/tests_main, src/rdb/raft/src/raft_server.c, build/src/common/tests/btree_direct, build/src/common/tests/btree, src/common/tests/btree.sh, build/src/common/tests/sched, build/src/client/api/tests/eq_tests, src/vos/tests/evt_ctl.sh, build/src/vos/vea/tests/vea_ut, src/rdb/raft_tests/raft_tests.py'
                     }
                 }
                 stage('Build on Ubuntu 16.04') {
@@ -80,7 +89,26 @@ pipeline {
                         }
                     }
                 }
-
+                stage('run_test.sh') {
+                    agent {
+                        label 'single'
+                    }
+                    steps {
+                        dir('install') {
+                            deleteDir()
+                        }
+                        unstash 'CentOS-tests'
+                        unstash 'CentOS-install'
+                        unstash 'CentOS-build-vars'
+                        sh '''HOSTPREFIX=wolf-53 bash -x utils/run_test.sh --init
+                              mv /tmp/daos.log daos-run_test.sh.log'''
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'daos-run_test.sh.log'
+                        }
+                    }
+                }
                 stage('DaosTestMulti All') {
                     agent {
                         label 'cluster_provisioner'
