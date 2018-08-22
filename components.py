@@ -25,6 +25,11 @@ from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
 import os
 import platform
+#pylint: disable=import-error
+#pylint: disable=no-name-in-module
+from distutils.spawn import find_executable
+#pylint: enable=import-error
+#pylint: enable=no-name-in-module
 
 if "prereqs" not in globals():
     from prereq_tools import PreReqComponent
@@ -281,9 +286,8 @@ REQS.define('daos',
             headers=['daos.h'],
             requires=['cart', 'ompi'])
 
-
 NINJA_NAME = [nn for nn in ["ninja-build", "ninja"]
-              if os.path.isfile("/usr/bin/" + nn)][0]
+              if find_executable(nn)][0]
 
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
