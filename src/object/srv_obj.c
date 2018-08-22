@@ -957,9 +957,9 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		if (++tag >= dss_get_threads_number())
 			break;
 
-		daos_hash_set_zero(&enum_arg->recx_anchor);
-		daos_hash_set_zero(&enum_arg->dkey_anchor);
-		daos_hash_set_zero(&enum_arg->akey_anchor);
+		daos_anchor_set_zero(&enum_arg->recx_anchor);
+		daos_anchor_set_zero(&enum_arg->dkey_anchor);
+		daos_anchor_set_zero(&enum_arg->akey_anchor);
 	}
 
 	enum_anchor_set_tag(&enum_arg->dkey_anchor, tag);

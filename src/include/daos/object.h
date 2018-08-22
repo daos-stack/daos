@@ -133,11 +133,11 @@ int dc_obj_layout_refresh(daos_handle_t oh);
 
 /** Decode shard number from enumeration anchor */
 static inline uint32_t
-dc_obj_anchor2shard(daos_hash_out_t *anchor)
+dc_obj_anchor2shard(daos_anchor_t *anchor)
 {
 	uint32_t tag;
 
-	memcpy(&tag, &anchor->body[ENUM_ANCHOR_SHARD_OFF],
+	memcpy(&tag, &anchor->da_hkey[ENUM_ANCHOR_SHARD_OFF],
 	       ENUM_ANCHOR_SHARD_LENGTH);
 
 	return tag;
@@ -145,9 +145,9 @@ dc_obj_anchor2shard(daos_hash_out_t *anchor)
 
 /** Encode shard into enumeration anchor. */
 static inline void
-dc_obj_shard2anchor(daos_hash_out_t *anchor, uint32_t shard)
+dc_obj_shard2anchor(daos_anchor_t *anchor, uint32_t shard)
 {
-	memcpy(&anchor->body[ENUM_ANCHOR_SHARD_OFF], &shard,
+	memcpy(&anchor->da_hkey[ENUM_ANCHOR_SHARD_OFF], &shard,
 	       ENUM_ANCHOR_SHARD_LENGTH);
 }
 

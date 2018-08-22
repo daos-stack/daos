@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,9 +92,9 @@ struct obj_key_enum_in {
 	uint32_t		oei_pad;
 	daos_key_t		oei_dkey;
 	daos_key_t		oei_akey;
-	daos_hash_out_t		oei_anchor;
-	daos_hash_out_t		oei_dkey_anchor;
-	daos_hash_out_t		oei_akey_anchor;
+	daos_anchor_t		oei_anchor;
+	daos_anchor_t		oei_dkey_anchor;
+	daos_anchor_t		oei_akey_anchor;
 	daos_sg_list_t		oei_sgl;
 	crt_bulk_t		oei_bulk;
 	crt_bulk_t		oei_kds_bulk;
@@ -106,9 +106,9 @@ struct obj_key_enum_out {
 	uint32_t		oeo_num;
 	uint32_t		oeo_padding;
 	uint64_t		oeo_size;
-	daos_hash_out_t		oeo_anchor;
-	daos_hash_out_t		oeo_dkey_anchor;
-	daos_hash_out_t		oeo_akey_anchor;
+	daos_anchor_t	oeo_anchor;
+	daos_anchor_t	oeo_dkey_anchor;
+	daos_anchor_t	oeo_akey_anchor;
 	struct crt_array	oeo_kds;
 	daos_sg_list_t		oeo_sgl;
 	struct crt_array	oeo_recxs;

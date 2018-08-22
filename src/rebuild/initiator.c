@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1142,9 +1142,9 @@ rebuild_obj_ult(void *data)
 {
 	struct rebuild_iter_obj_arg    *arg = data;
 	struct rebuild_pool_tls	       *tls;
-	daos_hash_out_t			hash;
-	daos_hash_out_t			dkey_hash;
-	daos_hash_out_t			akey_hash;
+	daos_anchor_t			anchor;
+	daos_anchor_t			dkey_anchor;
+	daos_anchor_t			akey_anchor;
 	daos_handle_t			oh;
 	daos_sg_list_t			sgl = { 0 };
 	daos_iov_t			iov = { 0 };
@@ -1169,10 +1169,10 @@ rebuild_obj_ult(void *data)
 
 	D_DEBUG(DB_REBUILD, "start rebuild obj "DF_UOID" for shard %u\n",
 		DP_UOID(arg->oid), arg->shard);
-	memset(&hash, 0, sizeof(hash));
-	memset(&dkey_hash, 0, sizeof(dkey_hash));
-	memset(&akey_hash, 0, sizeof(akey_hash));
-	dc_obj_shard2anchor(&hash, arg->shard);
+	memset(&anchor, 0, sizeof(anchor));
+	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
+	memset(&akey_anchor, 0, sizeof(akey_anchor));
+	dc_obj_shard2anchor(&anchor, arg->shard);
 
 	/* Initialize enum_arg for VOS_ITER_DKEY. */
 	memset(&enum_arg, 0, sizeof(enum_arg));
@@ -1196,8 +1196,8 @@ rebuild_obj_ult(void *data)
 		sgl.sg_iovs = &iov;
 
 		rc = ds_obj_list_obj(oh, arg->epoch, NULL, NULL, &size,
-				     &num, kds, eprs, &sgl, &hash, &dkey_hash,
-				     &akey_hash);
+				     &num, kds, eprs, &sgl, &anchor,
+				     &dkey_anchor, &akey_anchor);
 		if (rc) {
 			/* container might have been destroyed. Or there is
 			 * no spare target left for this object see
@@ -1227,7 +1227,7 @@ rebuild_obj_ult(void *data)
 			break;
 		}
 
-		if (daos_hash_is_eof(&dkey_hash))
+		if (daos_anchor_is_eof(&dkey_anchor))
 			break;
 	}
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -400,13 +400,16 @@ daos_proc_epoch_state(crt_proc_t proc, daos_epoch_state_t *es)
 }
 
 int
-daos_proc_hash_out(crt_proc_t proc, daos_hash_out_t *hash)
+daos_proc_anchor_out(crt_proc_t proc, daos_anchor_t *anchor)
 {
-	int rc;
+	if (crt_proc_uint64_t(proc, &anchor->da_type) != 0)
+		return -DER_HG;
 
-	rc = crt_proc_raw(proc, hash->body, sizeof(hash->body));
+	if (crt_proc_raw(proc, anchor->da_hkey,
+			sizeof(anchor->da_hkey)) != 0)
+		return -DER_HG;
 
-	return (rc == 0) ? 0 : -DER_HG;
+	return 0;
 }
 
 int
@@ -564,9 +567,9 @@ struct crt_msg_field DMF_EPOCH_STATE =
 	DEFINE_CRT_MSG("daos_epoch_state_t", 0, sizeof(daos_epoch_state_t),
 		       daos_proc_epoch_state);
 
-struct crt_msg_field DMF_HASH_OUT =
-	DEFINE_CRT_MSG("daos_hash_out_t", 0, sizeof(daos_hash_out_t),
-			daos_proc_hash_out);
+struct crt_msg_field DMF_ANCHOR =
+	DEFINE_CRT_MSG("daos_anchor_t", 0, sizeof(daos_anchor_t),
+			daos_proc_anchor_out);
 
 struct crt_msg_field DMF_SGL_ARRAY =
 	DEFINE_CRT_MSG("daos_sg_list_t", CMF_ARRAY_FLAG, sizeof(daos_sg_list_t),

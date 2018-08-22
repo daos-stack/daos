@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,14 +134,15 @@ struct ds_task_arg {
  * #define ENUM_ANCHOR_SHARD_LENGTH	4
  */
 static inline void
-enum_anchor_copy_hkey(daos_hash_out_t *dst, daos_hash_out_t *src)
+enum_anchor_copy_hkey(daos_anchor_t *dst, daos_anchor_t *src)
 {
-	memcpy(&dst->body[DAOS_HASH_HKEY_START],
-	       &src->body[DAOS_HASH_HKEY_START], DAOS_HASH_HKEY_LENGTH);
+	memcpy(&dst->da_hkey[DAOS_HASH_HKEY_START],
+	       &src->da_hkey[DAOS_HASH_HKEY_START], DAOS_HASH_HKEY_LENGTH);
+	dst->da_type = src->da_type;
 }
 
 static inline uint32_t
-enum_anchor_get_tag(daos_hash_out_t *anchor)
+enum_anchor_get_tag(daos_anchor_t *anchor)
 {
 	uint32_t tag;
 
@@ -150,16 +151,16 @@ enum_anchor_get_tag(daos_hash_out_t *anchor)
 	D_CASSERT(DAOS_HASH_HKEY_LENGTH + ENUM_ANCHOR_TAG_LENGTH +
 		  ENUM_ANCHOR_SHARD_LENGTH <= DAOS_HKEY_MAX);
 
-	memcpy(&tag, &anchor->body[ENUM_ANCHOR_TAG_OFF],
+	memcpy(&tag, &anchor->da_hkey[ENUM_ANCHOR_TAG_OFF],
 	       ENUM_ANCHOR_TAG_LENGTH);
 
 	return tag;
 }
 
 static inline void
-enum_anchor_set_tag(daos_hash_out_t *anchor, uint32_t tag)
+enum_anchor_set_tag(daos_anchor_t *anchor, uint32_t tag)
 {
-	memcpy(&anchor->body[ENUM_ANCHOR_TAG_OFF], &tag,
+	memcpy(&anchor->da_hkey[ENUM_ANCHOR_TAG_OFF], &tag,
 	       ENUM_ANCHOR_TAG_LENGTH);
 }
 
@@ -188,8 +189,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 		  daos_iod_type_t type, daos_size_t *size, uint32_t *nr,
 		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		  daos_hash_out_t *anchor, daos_hash_out_t *dkey_anchor,
-		  daos_hash_out_t *akey_anchor, unsigned int *map_ver,
+		  daos_anchor_t *anchor, daos_anchor_t  *dkey_anchor,
+		  daos_anchor_t  *akey_anchor, unsigned int *map_ver,
 		  tse_task_t *task);
 
 int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,

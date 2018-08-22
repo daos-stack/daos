@@ -347,8 +347,8 @@ ts_list_rect(void)
 	}
 
 	for (i = 0;; i++) {
-		struct evt_entry ent;
-		daos_hash_out_t	 anchor;
+		struct evt_entry	ent;
+		daos_anchor_t		anchor;
 
 		rc = evt_iter_fetch(ih, &ent, &anchor);
 		if (rc == 0) {

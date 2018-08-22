@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,7 +144,7 @@ vos_iter_finish(daos_handle_t ih)
 }
 
 int
-vos_iter_probe(daos_handle_t ih, daos_hash_out_t *anchor)
+vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int		     rc;
@@ -191,7 +191,7 @@ vos_iter_next(daos_handle_t ih)
 
 int
 vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
-	       daos_hash_out_t *anchor)
+	       daos_anchor_t *anchor)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 

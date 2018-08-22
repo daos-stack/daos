@@ -198,7 +198,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 static int
 key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
-	       daos_hash_out_t *anchor)
+	       daos_anchor_t *anchor)
 {
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
@@ -366,7 +366,7 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 }
 
 static int
-key_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
+key_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 {
 	int	rc;
 
@@ -447,7 +447,7 @@ out:
  */
 static int singv_iter_fetch(struct vos_obj_iter *oiter,
 			   vos_iter_entry_t *it_entry,
-			   daos_hash_out_t *anchor);
+			   daos_anchor_t *anchor);
 /**
  * Prepare the iterator for the recx tree.
  */
@@ -582,10 +582,10 @@ singv_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 }
 
 static int
-singv_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
+singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 {
 	vos_iter_entry_t	entry;
-	daos_hash_out_t		tmp;
+	daos_anchor_t		tmp;
 	int			opc;
 	int			rc;
 
@@ -620,7 +620,7 @@ singv_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 
 static int
 singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
-		daos_hash_out_t *anchor)
+		 daos_anchor_t *anchor)
 {
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
@@ -717,7 +717,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	return rc;
 }
 static int
-recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
+recx_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 {
 	int	opc;
 	int	rc;
@@ -729,7 +729,7 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 
 static int
 recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
-		daos_hash_out_t *anchor)
+		daos_anchor_t *anchor)
 {
 	struct evt_rect	 *rect;
 	struct evt_entry  entry;
@@ -870,7 +870,7 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 }
 
 int
-vos_obj_iter_probe(struct vos_iterator *iter, daos_hash_out_t *anchor)
+vos_obj_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
@@ -915,7 +915,7 @@ vos_obj_iter_next(struct vos_iterator *iter)
 
 static int
 vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
-		   daos_hash_out_t *anchor)
+		   daos_anchor_t *anchor)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 

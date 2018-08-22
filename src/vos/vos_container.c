@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -612,7 +612,7 @@ exit:
 
 static int
 cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
-		  daos_hash_out_t *anchor)
+		  daos_anchor_t *anchor)
 {
 	struct cont_iterator	*co_iter = vos_iter2co_iter(iter);
 	daos_iov_t		key, value;
@@ -647,7 +647,7 @@ cont_iter_next(struct vos_iterator *iter)
 }
 
 static int
-cont_iter_probe(struct vos_iterator *iter, daos_hash_out_t *anchor)
+cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct cont_iterator	*co_iter = vos_iter2co_iter(iter);
 	dbtree_probe_opc_t	opc;

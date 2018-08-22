@@ -233,13 +233,13 @@ ctl_daos_list(struct dts_io_credit *cred)
 	char		 kbuf[CTL_BUF_LEN];
 	uint32_t	 knr = KDS_NR;
 	daos_key_desc_t	 kds[KDS_NR];
-	daos_hash_out_t	 anchor;
+	daos_anchor_t	 anchor;
 	int		 i;
 	int		 rc;
 	int		 total = 0;
 
 	memset(&anchor, 0, sizeof(anchor));
-	while (!daos_hash_is_eof(&anchor)) {
+	while (!daos_anchor_is_eof(&anchor)) {
 		memset(kbuf, 0, CTL_BUF_LEN);
 		daos_iov_set(&cred->tc_val, kbuf, CTL_BUF_LEN);
 

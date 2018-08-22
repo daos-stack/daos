@@ -397,7 +397,7 @@ enum evt_iter_opc {
  *			is provided.
  */
 int evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
-		   struct evt_rect *rect, daos_hash_out_t *anchor);
+		   struct evt_rect *rect, daos_anchor_t *anchor);
 
 /**
  * Move the iterator cursor to the next extent in the evtree.
@@ -414,6 +414,6 @@ int evt_iter_next(daos_handle_t ih);
  * \param anchor [OUT]	Returned hash anchor.
  */
 int evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
-		   daos_hash_out_t *anchor);
+		   daos_anchor_t *anchor);
 
 #endif /* __DAOS_EV_TREE_H__ */

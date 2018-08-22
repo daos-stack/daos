@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -380,7 +380,7 @@ int ds_obj_close(daos_handle_t obj_hl);
 int ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
 		 daos_key_t *dkey, uint32_t *nr,
 		 daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		 daos_hash_out_t *anchor);
+		 daos_anchor_t *anchor);
 
 int ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		 daos_key_t *dkey, unsigned int nr,
@@ -389,15 +389,15 @@ int ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 int ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
 		daos_key_desc_t *kds, daos_epoch_range_t *eprs,
-		d_sg_list_t *sgl, daos_hash_out_t *anchor,
-		daos_hash_out_t *dkey_anchor, daos_hash_out_t *akey_anchor);
+		d_sg_list_t *sgl, daos_anchor_t *anchor,
+		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor);
 
 typedef int (*dss_vos_iterate_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
 				    vos_iter_type_t type,
 				    vos_iter_param_t *param, void *arg);
 
 int dss_vos_iterate(vos_iter_type_t type, vos_iter_param_t *param,
-		    daos_hash_out_t *anchor, dss_vos_iterate_cb_t cb,
+		    daos_anchor_t *anchor, dss_vos_iterate_cb_t cb,
 		    void *arg);
 
 struct dss_enum_arg {
@@ -405,10 +405,10 @@ struct dss_enum_arg {
 	vos_iter_param_t	param;
 	bool			recursive;	/* enumerate lower levels */
 	bool			fill_recxs;	/* type == S||R */
-	daos_hash_out_t		obj_anchor;	/* type == OBJ (<= if recur) */
-	daos_hash_out_t		dkey_anchor;	/* type == DKEY (<= if recur) */
-	daos_hash_out_t		akey_anchor;	/* type == AKEY (<= if recur) */
-	daos_hash_out_t		recx_anchor;	/* type == S||R (<= if recur) */
+	daos_anchor_t		obj_anchor;	/* type == OBJ (<= if recur) */
+	daos_anchor_t		dkey_anchor;	/* type == DKEY (<= if recur) */
+	daos_anchor_t		akey_anchor;	/* type == AKEY (<= if recur) */
+	daos_anchor_t		recx_anchor;	/* type == S||R (<= if recur) */
 	daos_epoch_range_t     *eprs;
 	int			eprs_cap;
 	int			eprs_len;

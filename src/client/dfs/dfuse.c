@@ -447,9 +447,9 @@ dfuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	      off_t offset, struct fuse_file_info *fi,
 	      enum fuse_readdir_flags flags)
 {
-	dfs_obj_t *obj = NULL;
-	bool release = false;
-	daos_hash_out_t anchor = {0};
+	dfs_obj_t	*obj = NULL;
+	bool		 release = false;
+	daos_anchor_t	 anchor = {0};
 	int rc;
 
 	(void) offset;
@@ -474,7 +474,7 @@ dfuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	filler(buf, ".", NULL, 0, 0);
 	filler(buf, "..", NULL, 0, 0);
 
-	while (!daos_hash_is_eof(&anchor)) {
+	while (!daos_anchor_is_eof(&anchor)) {
 		uint32_t i, nr = NUM_DIRENTS;
 		struct dirent dirs[NUM_DIRENTS];
 
