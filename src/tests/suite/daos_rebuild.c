@@ -190,6 +190,7 @@ rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 	daos_epoch_t	commit_eph = eph + 1;
 	int		rc;
 	int		i;
+	int		punch_idx = 1;
 
 	print_message("update obj %d eph "DF_U64" before rebuild\n", oids_nr,
 		      eph);
@@ -202,10 +203,15 @@ rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 
 	for (i = 0; i < oids_nr; i++) {
 		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
-		rebuild_io_obj_internal((&req), false, eph, -1);
-		/* eph + 1 is discarded, so it should read the data of eph */
-		rebuild_io_obj_internal((&req), false, eph + 1, -1);
-
+		if (i == punch_idx) {
+			punch_obj(eph, &req);
+		} else {
+			rebuild_io_obj_internal((&req), false, eph, -1);
+			/* eph + 1 is discarded, so it should read the data
+			 * of eph
+			 **/
+			rebuild_io_obj_internal((&req), false, eph + 1, -1);
+		}
 
 		ioreq_fini(&req);
 	}
@@ -224,6 +230,7 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 	struct ioreq	req;
 	daos_epoch_t	eph = arg->hce + arg->index * 2 + 1;
 	int		i;
+	int		punch_idx = 1;
 
 	/* XXX Disable discard until we support ARRAY record discard */
 	discard = false;
@@ -246,17 +253,11 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			ioreq_init(&req, arg->coh, oids[j], DAOS_IOD_ARRAY,
 				   arg);
 
-			/* Validate eph data */
-			rebuild_io_obj_internal((&req), true, eph, eph);
-#if 0
-			if (discard)
-				/* Discard eph + 1, data should stay in eph */
-				rebuild_io_obj_internal((&req), true, eph + 1,
-							eph);
-			else
-				rebuild_io_obj_internal((&req), true, eph + 1,
-							eph + 1);
-#endif
+			/* how to validate punch object */
+			if (j != punch_idx)
+				/* Validate eph data */
+				rebuild_io_obj_internal((&req), true, eph, eph);
+
 			ioreq_fini(&req);
 		}
 	}
@@ -757,12 +758,12 @@ rebuild_destroy_container(void **state)
 		return;
 	}
 
-	for (i = 0; i < OBJ_NR * 100; i++) {
+	for (i = 0; i < OBJ_NR * 10; i++) {
 		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
-	rebuild_io(args[1], oids, OBJ_NR * 100);
+	rebuild_io(args[1], oids, OBJ_NR * 10);
 
 	args[1]->rebuild_cb = rebuild_destroy_container_cb;
 

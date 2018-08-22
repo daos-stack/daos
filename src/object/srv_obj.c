@@ -880,8 +880,8 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	enum_arg->akey_anchor = oei->oei_akey_anchor;
 	enum_arg->recx_anchor = oei->oei_anchor;
 
-	/* TODO: Modify the client side and enable inline recx data. */
-	enum_arg->inline_thres = 0;
+	/* TODO: Transfer the inline_thres from enumerate RPC */
+	enum_arg->inline_thres = 32;
 
 	if (task_arg.opc == DAOS_OBJ_RECX_RPC_ENUMERATE ||
 	    task_arg.opc == DAOS_OBJ_RPC_ENUMERATE) {

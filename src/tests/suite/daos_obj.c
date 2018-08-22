@@ -259,6 +259,15 @@ insert_single(const char *dkey, const char *akey, uint64_t idx,
 }
 
 void
+punch_obj(daos_epoch_t eph, struct ioreq *req)
+{
+	int rc;
+
+	rc = daos_obj_punch(req->oh, eph, NULL);
+	assert_int_equal(rc, 0);
+}
+
+void
 punch_dkey(const char *dkey, daos_epoch_t eph, struct ioreq *req)
 {
 	int rc;

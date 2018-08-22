@@ -137,6 +137,7 @@ int daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 			    int src_nr);
 int daos_sgl_copy_data_out(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
+int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_len(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_len(d_sg_list_t *sgls, int nr);

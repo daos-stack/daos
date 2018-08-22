@@ -94,27 +94,36 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 	daos_sg_list_t	sgls[MAX_IOD_NUM];
 	daos_iov_t	iov[MAX_IOD_NUM];
 	char		iov_buf[MAX_IOD_NUM][MAX_BUF_SIZE];
+	bool		fetch = false;
 	int		i;
 	int		rc;
 
 	D_ASSERT(rdone->ro_iod_num <= MAX_IOD_NUM);
 	for (i = 0; i < rdone->ro_iod_num; i++) {
-		daos_iov_set(&iov[i], iov_buf[i], MAX_BUF_SIZE);
-		sgls[i].sg_nr = 1;
-		sgls[i].sg_nr_out = 1;
-		sgls[i].sg_iovs = &iov[i];
+		if (rdone->ro_sgls != NULL && rdone->ro_sgls[i].sg_nr > 0) {
+			sgls[i] = rdone->ro_sgls[i];
+		} else {
+			sgls[i].sg_nr = 1;
+			sgls[i].sg_nr_out = 1;
+			daos_iov_set(&iov[i], iov_buf[i], MAX_BUF_SIZE);
+			sgls[i].sg_iovs = &iov[i];
+			fetch = true;
+		}
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %.*s nr %d eph "DF_U64"\n",
-		DP_UOID(rdone->ro_oid), rdone, (int)rdone->ro_dkey.iov_len,
-		(char *)rdone->ro_dkey.iov_buf, rdone->ro_iod_num,
-		rdone->ro_epoch);
-	rc = ds_obj_fetch(oh, rdone->ro_epoch, &rdone->ro_dkey,
-			  rdone->ro_iod_num, rdone->ro_iods,
-			  sgls, NULL);
-	if (rc) {
-		D_ERROR("ds_obj_fetch %d\n", rc);
-		return rc;
+	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %.*s nr %d eph "DF_U64
+		" fetch %s\n", DP_UOID(rdone->ro_oid), rdone,
+		(int)rdone->ro_dkey.iov_len, (char *)rdone->ro_dkey.iov_buf,
+		rdone->ro_iod_num, rdone->ro_epoch, fetch ? "yes":"no");
+
+	if (fetch) {
+		rc = ds_obj_fetch(oh, rdone->ro_epoch, &rdone->ro_dkey,
+				  rdone->ro_iod_num, rdone->ro_iods,
+				  sgls, NULL);
+		if (rc) {
+			D_ERROR("ds_obj_fetch %d\n", rc);
+			return rc;
+		}
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_UPDATE))
@@ -298,7 +307,7 @@ rebuild_one(struct rebuild_tgt_pool_tracker *rpt,
 
 	rc = rebuild_one_punch_keys(rpt, rdone, rebuild_cont);
 	if (rc)
-		D_GOTO(obj_close, rc);
+		D_GOTO(cont_put, rc);
 
 	data_size = daos_iods_len(rdone->ro_iods, rdone->ro_iod_num);
 	D_ASSERT(data_size != (uint64_t)(-1));
@@ -312,6 +321,7 @@ rebuild_one(struct rebuild_tgt_pool_tracker *rpt,
 	}
 
 	tls->rebuild_pool_rec_count += rdone->ro_rec_num;
+cont_put:
 	ds_cont_put(rebuild_cont);
 obj_close:
 	ds_obj_close(oh);
@@ -349,6 +359,12 @@ rebuild_one_destroy(struct rebuild_one *rdone)
 		for (i = 0; i < rdone->ro_ephs_num; i++)
 			daos_iov_free(&rdone->ro_ephs_keys[i]);
 		D_FREE(rdone->ro_ephs);
+	}
+
+	if (rdone->ro_sgls) {
+		for (i = 0; i < rdone->ro_iod_alloc_num; i++)
+			daos_sgl_fini(&rdone->ro_sgls[i], true);
+		D_FREE(rdone->ro_sgls);
 	}
 
 	D_FREE_PTR(rdone);
@@ -446,9 +462,8 @@ rebuild_one_ult(void *arg)
 static int
 rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 		  daos_key_t *dkey, daos_epoch_t dkey_eph, daos_iod_t *iods,
-		  daos_epoch_t *akey_ephs, int iod_eph_total, uuid_t cookie,
-		  uint32_t version)
-
+		  daos_epoch_t *akey_ephs, int iod_eph_total,
+		  daos_sg_list_t *sgls, uuid_t cookie, uint32_t version)
 {
 	struct rebuild_puller		*puller;
 	struct rebuild_tgt_pool_tracker *rpt = iter_arg->rpt;
@@ -530,6 +545,23 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 				iods[i].iod_nr, iods[i].iod_size,
 				iods[i].iod_type, iods[i].iod_eprs->epr_lo,
 				iods[i].iod_eprs->epr_hi, akey_ephs[i]);
+
+			/* Check if data has been retrieved by iteration */
+			if (sgls[i].sg_nr > 0) {
+				if (rdone->ro_sgls == NULL) {
+					D_ALLOC(rdone->ro_sgls,
+						iod_eph_total *
+						sizeof(*rdone->ro_sgls));
+					if (rdone->ro_sgls == NULL)
+						D_GOTO(free, rc = -DER_NOMEM);
+				}
+
+				rc = daos_sgl_alloc_copy_data(
+					&rdone->ro_sgls[iod_cnt], &sgls[i]);
+				if (rc)
+					D_GOTO(free, rc);
+			}
+
 			iod_cnt++;
 			iods[i].iod_recxs = NULL;
 			iods[i].iod_csums = NULL;
@@ -707,12 +739,15 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 		if (sgl != NULL) {
 			daos_iov_t *iov = &sgl->sg_iovs[sgl->sg_nr];
 
-			if (rec->rec_flags & RECX_INLINE)
+			if (rec->rec_flags & RECX_INLINE) {
 				daos_iov_set(iov, *data,
 					     rec->rec_size *
 					     rec->rec_recx.rx_nr);
-			else
+				D_DEBUG(DB_TRACE, "set data iov %p len %d\n",
+					iov, (int)iov->iov_len);
+			} else {
 				daos_iov_set(iov, NULL, 0);
+			}
 			sgl->sg_nr++;
 			D_ASSERTF(sgl->sg_nr == iod->iod_nr, "%u == %u\n",
 				  sgl->sg_nr, iod->iod_nr);
@@ -900,6 +935,7 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 	daos_iod_t			iods[MAX_IOD_NUM];
 	int				recxs_caps[MAX_IOD_NUM];
 	daos_epoch_t			ephs[MAX_IOD_NUM];
+	daos_sg_list_t			sgls[MAX_IOD_NUM];
 	daos_key_t			akey = {0};
 	daos_epoch_range_t		*eprs = arg->eprs;
 	void				*ptr;
@@ -919,7 +955,7 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 		return -DER_INVAL;
 	}
 
-	dss_enum_unpack_io_init(&io, iods, recxs_caps, NULL /* sgls */, ephs,
+	dss_enum_unpack_io_init(&io, iods, recxs_caps, sgls, ephs,
 				MAX_IOD_NUM);
 	if (type > VOS_ITER_OBJ)
 		io.ui_oid = arg->param.ip_oid;
@@ -1100,7 +1136,7 @@ rebuild_one_queue_cb(struct dss_enum_unpack_io *io, void *arg)
 	return rebuild_one_queue(arg, &io->ui_oid, &io->ui_dkey,
 				 io->ui_dkey_eph, io->ui_iods,
 				 io->ui_akey_ephs, io->ui_iods_len,
-				 io->ui_cookie, io->ui_version);
+				 io->ui_sgls, io->ui_cookie, io->ui_version);
 }
 
 static int

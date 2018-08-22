@@ -89,6 +89,8 @@ void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	daos_size_t *read_size, void **val, daos_size_t *size,
 	daos_epoch_t *epoch, struct ioreq *req, bool empty);
+void
+punch_obj(daos_epoch_t epoch, struct ioreq *req);
 
 void
 punch_dkey(const char *dkey, daos_epoch_t epoch, struct ioreq *req);
