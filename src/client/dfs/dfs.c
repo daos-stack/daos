@@ -1164,6 +1164,8 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
+	if (dfs->amode != O_RDWR)
+		return -DER_NO_PERM;
 	if (parent == NULL || !S_ISDIR(parent->mode))
 		return -DER_NOTDIR;
 	if (name == NULL)
@@ -1271,6 +1273,8 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
+	if (dfs->amode != O_RDWR)
+		return -DER_NO_PERM;
 	if (name == NULL)
 		return -DER_INVAL;
 	/** If parent is NULL, assume it's root object */
@@ -1587,6 +1591,8 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
+	if ((dfs->amode != O_RDWR) && (flags & O_CREAT))
+		return -DER_NO_PERM;
 	if (name == NULL || _obj == NULL)
 		return -DER_INVAL;
 	if (S_ISLNK(mode) && value == NULL)
@@ -1768,6 +1774,8 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off)
 {
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
+	if (dfs->amode != O_RDWR)
+		return -DER_NO_PERM;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return -DER_INVAL;
 
@@ -1846,6 +1854,8 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
+	if (dfs->amode != O_RDWR)
+		return -DER_NO_PERM;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return -DER_INVAL;
 
@@ -1941,6 +1951,8 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
+	if (dfs->amode != O_RDWR)
+		return -DER_NO_PERM;
 	if (parent == NULL || !S_ISDIR(parent->mode))
 		return -DER_NOTDIR;
 	if (new_parent == NULL || !S_ISDIR(new_parent->mode))
@@ -2057,6 +2069,8 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
+	if (dfs->amode != O_RDWR)
+		return -DER_NO_PERM;
 	if (parent1 == NULL || !S_ISDIR(parent1->mode))
 		return -DER_NOTDIR;
 	if (parent2 == NULL || !S_ISDIR(parent2->mode))
@@ -2204,6 +2218,8 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
+	if (dfs->amode != O_RDWR)
+		return -DER_NO_PERM;
 	if (obj == NULL)
 		return -DER_INVAL;
 
@@ -2359,6 +2375,8 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
+	if (dfs->amode != O_RDWR)
+		return -DER_NO_PERM;
 	if (obj == NULL)
 		return -DER_INVAL;
 
