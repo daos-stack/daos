@@ -79,6 +79,27 @@ Controller: model:"INTEL SSDPED1K375GA " serial:"PHKS7335006W375AGN  " pciaddr:"
 >>>
 ```
 
+Example command line output when updating NVMe controller firmware:
+
+```
+Select the task you would like to run on the selected controllers.
+   [0] nvme-namespaces - Discover NVMe namespaces on controllers
+   [1] nvme-burn-in - Perform burn-in quality test on NVMe controllers
+ > [2] nvme-fw-update - Perform firmware image update on NVMe controllers
+
+Running task nvme-fw-update on the following controllers:
+        - model:"INTEL SSDPED1K375GA " serial:"PHKS7335006W375AGN  " pciaddr:"0000:81:00.0" fwrev:"E2010420"
+
+Please enter firmware image file-path: /tmp/E2010413_EB3B0408_WFWM0140_EAP7Z412_no_vpd_signed.bin
+Please enter slot you would like to update [default 0]:
+
+Controller: model:"INTEL SSDPED1K375GA " serial:"PHKS7335006W375AGN  " pciaddr:"0000:81:00.0" fwrev:"E2010420"
+        - Updating firmware on slot 0 with image /tmp/E2010413_EB3B0408_WFWM0140_EAP7Z412_no_vpd_signed.bin.
+
+Successfully updated firmware from revision E2010420 to E2010413!
+>>>
+```
+
 ## Architecture
 
 ```

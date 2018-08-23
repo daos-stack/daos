@@ -11,36 +11,61 @@ import (
 	pb "modules/mgmt/proto"
 )
 
-func mockController() Controller {
+
+func mockController(fwrev string) Controller {
 	return Controller{
 		ID:      int32(12345),
 		Model:   "ABC",
 		Serial:  "123ABC",
 		PCIAddr: "1:2:3.0",
-		FWRev:   "1.0.0",
+		FWRev:   fwrev,
 	}
 }
 func mockNamespace(ctrlr *Controller) Namespace {
 	return Namespace{
-		ID:      int32(54321),
+		ID:      ctrlr.ID,
 		Size:    int32(99999),
 		CtrlrID: int32(12345),
 	}
 }
-
-// MockNvme struct implements Nvme interface
-type mockNvme struct{}
-
-func (mock *mockNvme) SpdkInit() error {
-	return nil
+func mockControllerPB(fwRev string) *pb.NVMeController {
+	c := mockController(fwRev)
+	return &pb.NVMeController{
+		Id:      c.ID,
+		Model:   c.Model,
+		Serial:  c.Serial,
+		Pciaddr: c.PCIAddr,
+		Fwrev:   c.FWRev,
+	}
 }
-func (mock *mockNvme) Discover() ([]Controller, []Namespace, error) {
-	c := mockController()
-	return []Controller{c}, []Namespace{mockNamespace(&c)}, nil
+func mockNamespacePB(fwRev string) *pb.NVMeNamespace {
+	c := mockController(fwRev)
+	ns := mockNamespace(&c)
+	return &pb.NVMeNamespace{
+		Controller: mockControllerPB(fwRev),
+		Id: ns.ID,
+		Capacity: ns.Size,
+	}
 }
 
-func NewTestControlServer() *ControlService {
-	return &ControlService{Nvme: &mockNvme{}}
+// MockStorage struct implements Storage interface
+type mockStorage struct {
+	fwRevBefore string
+	fwRevAfter string
+}
+
+func (mock *mockStorage) Init() error { return nil }
+func (mock *mockStorage) Discover() interface{} {
+	c := mockController(mock.fwRevBefore)
+	return NVMeReturn{[]Controller{c}, []Namespace{mockNamespace(&c)}, nil}
+}
+func (mock *mockStorage) Update(interface{}) interface{} {
+	c := mockController(mock.fwRevAfter)
+	return NVMeReturn{[]Controller{c}, []Namespace{mockNamespace(&c)}, nil}
+}
+
+func NewTestControlServer(storageImpl Storage) *ControlService {
+	return &ControlService{Storage: storageImpl}
 }
 
 func assertEqual(
@@ -58,25 +83,41 @@ func assertEqual(
 	t.Fatal(message)
 }
 
-func TestListNVMe(t *testing.T) {
-	s := NewTestControlServer()
+func TestFetchNVMe(t *testing.T) {
+	s := NewTestControlServer(&mockStorage{"1.0.0", "1.0.1"})
 
-	cs, nss, _ := s.Nvme.Discover()
-
-	nvmeControllers := LoadControllers(cs)
-	nvmeNamespaces := LoadNamespaces(nvmeControllers, nss)
-
-	// expected results
-	c := &pb.NVMeController{
-		Id:      12345,
-		Model:   "ABC",
-		Serial:  "123ABC",
-		Pciaddr: "1:2:3.0",
-		Fwrev:   "1.0.0",
+	if err := s.FetchNVMe(); err != nil {
+		t.Fatal(err.Error())
 	}
-	ns := &pb.NVMeNamespace{
-		Controller: c, Id: 54321, Capacity: 99999}
 
-	assertEqual(t, nvmeControllers[0], c, "")
-	assertEqual(t, nvmeNamespaces[0], ns, "")
+	cExpect := mockControllerPB("1.0.0")
+	nsExpect := mockNamespacePB("1.0.0")
+
+	assertEqual(t, s.NvmeControllers[0], cExpect, "")
+	assertEqual(t, s.NvmeNamespaces[0], nsExpect, "")
+}
+
+func TestUpdateNVMe(t *testing.T) {
+	s := NewTestControlServer(&mockStorage{"1.0.0", "1.0.1"})
+
+	if err := s.FetchNVMe(); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	c := s.NvmeControllers[0]
+
+	// after fetching controller details, simulate updated firmware
+	// version being reported
+	params := &pb.UpdateNVMeCtrlrParams{
+		Ctrlr: c, Path: "/foo/bar", Slot: 0}
+
+	newC, err := s.UpdateNVMeCtrlr(nil, params)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	cExpect := mockControllerPB("1.0.1")
+
+	assertEqual(t, s.NvmeControllers[0], cExpect, "")
+	assertEqual(t, newC, cExpect, "")
 }

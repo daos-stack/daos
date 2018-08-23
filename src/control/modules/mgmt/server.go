@@ -25,6 +25,7 @@ package mgmt
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -43,17 +44,19 @@ var (
 	jsonDBRelPath = "share/control/mgmtinit_db.json"
 )
 
-// Nvme interface represents binding to SPDK NVMe library
-type Nvme interface {
-	SpdkInit() error
-	Discover() ([]nvme.Controller, []nvme.Namespace, error)
+// Storage interface represents a persistent storage that can
+// support relevant operations via a library
+type Storage interface {
+	Init() error
+	Discover() interface{}
+	Update(interface{}) interface{}
 }
 
-// SpdkNvme struct implements Nvme interface
-type SpdkNvme struct{}
+// NvmeStorage is an implementation of the Storage interface
+type NvmeStorage struct{}
 
-// SpdkInit Nvme interface method implementation
-func (sn *SpdkNvme) SpdkInit() error {
+// Init method implementation for NvmeStorage
+func (sn *NvmeStorage) Init() error {
 	if err := spdk.InitSPDKEnv(); err != nil {
 		return err
 	}
@@ -61,19 +64,47 @@ func (sn *SpdkNvme) SpdkInit() error {
 	return nil
 }
 
-// Discover Nvme interface method implementation
-func (sn *SpdkNvme) Discover() ([]nvme.Controller, []nvme.Namespace, error) {
-	return nvme.Discover()
+// NVMeReturn struct contains return values for NvmeStorage
+// Discover method
+type NVMeReturn struct {
+	Ctrlrs []nvme.Controller
+	Nss    []nvme.Namespace
+	Err    error
+}
+
+// Discover method implementation for NvmeStorage
+func (sn *NvmeStorage) Discover() interface{} {
+	cs, ns, err := nvme.Discover()
+	return NVMeReturn{cs, ns, err}
+}
+
+// UpdateParams struct contains input parameters for NvmeStorage
+// Update implementation
+type UpdateParams struct {
+	CtrlrID int32
+	Path    string
+	Slot    int32
+}
+
+// Update method implementation for NvmeStorage
+func (sn *NvmeStorage) Update(params interface{}) interface{} {
+	switch t := params.(type) {
+	default:
+		return fmt.Errorf("unexpected return type")
+	case UpdateParams:
+		cs, ns, err := nvme.Update(t.CtrlrID, t.Path, t.Slot)
+		return NVMeReturn{cs, ns, err}
+	}
 }
 
 // ControlService type is the data container for the service.
 type ControlService struct {
 	logger *log.Logger
-	Nvme
-	nvmeInitialised   bool
-	supportedFeatures []*pb.Feature
-	nvmeNamespaces    []*pb.NVMeNamespace
-	nvmeControllers   []*pb.NVMeController
+	Storage
+	storageInitialised bool
+	supportedFeatures  []*pb.Feature
+	NvmeNamespaces     []*pb.NVMeNamespace
+	NvmeControllers    []*pb.NVMeController
 }
 
 // GetFeature returns the feature from feature name.
@@ -115,9 +146,9 @@ func (s *ControlService) ListFeatures(
 	return nil
 }
 
-// LoadControllers converts slice of Controller into protobuf equivalent.
+// loadControllers converts slice of Controller into protobuf equivalent.
 // Implemented as a pure function.
-func LoadControllers(ctrlrs []nvme.Controller) []*pb.NVMeController {
+func loadControllers(ctrlrs []nvme.Controller) []*pb.NVMeController {
 	var pbCtrlrs []*pb.NVMeController
 	for _, c := range ctrlrs {
 		pbCtrlrs = append(
@@ -134,9 +165,9 @@ func LoadControllers(ctrlrs []nvme.Controller) []*pb.NVMeController {
 	return pbCtrlrs
 }
 
-// LoadNamespaces converts slice of Namespace into protobuf equivalent.
+// loadNamespaces converts slice of Namespace into protobuf equivalent.
 // Implemented as a pure function.
-func LoadNamespaces(
+func loadNamespaces(
 	pbCtrlrs []*pb.NVMeController, nss []nvme.Namespace) []*pb.NVMeNamespace {
 
 	var pbNamespaces []*pb.NVMeNamespace
@@ -157,26 +188,41 @@ func LoadNamespaces(
 	return pbNamespaces
 }
 
-// fetchNVMe populates controllers and namespaces in ControlService
+// populateNVMe unpacks return type and loads protobuf representations.
+func (s *ControlService) populateNVMe(ret interface{}) error {
+	switch ret := ret.(type) {
+	default:
+		return fmt.Errorf("unexpected return type")
+	case NVMeReturn:
+		if ret.Err != nil {
+			return ret.Err
+		}
+
+		s.NvmeControllers = loadControllers(ret.Ctrlrs)
+		s.NvmeNamespaces = loadNamespaces(s.NvmeControllers, ret.Nss)
+		s.storageInitialised = true
+	}
+
+	return nil
+}
+
+// FetchNVMe populates controllers and namespaces in ControlService
 // as side effect.
 //
 // todo: presumably we want to be able to detect namespaces added
 //       during the lifetime of the daos_server process, in that case
 //       will need to rerun discover here (currently SPDK throws).
-func (s *ControlService) fetchNVMe() error {
-	if s.nvmeInitialised != true {
-		if err := s.Nvme.SpdkInit(); err != nil {
+func (s *ControlService) FetchNVMe() error {
+	if s.storageInitialised != true {
+		if err := s.Storage.Init(); err != nil {
 			return err
 		}
 
-		ctrlrs, nss, err := s.Nvme.Discover()
-		if err != nil {
+		ret := s.Storage.Discover()
+
+		if err := s.populateNVMe(ret); err != nil {
 			return err
 		}
-
-		s.nvmeControllers = LoadControllers(ctrlrs)
-		s.nvmeNamespaces = LoadNamespaces(s.nvmeControllers, nss)
-		s.nvmeInitialised = true
 	}
 
 	return nil
@@ -186,10 +232,10 @@ func (s *ControlService) fetchNVMe() error {
 func (s *ControlService) ListNVMeCtrlrs(
 	empty *pb.ListNVMeCtrlrsParams, stream pb.MgmtControl_ListNVMeCtrlrsServer) error {
 
-	if err := s.fetchNVMe(); err != nil {
+	if err := s.FetchNVMe(); err != nil {
 		return err
 	}
-	for _, c := range s.nvmeControllers {
+	for _, c := range s.NvmeControllers {
 		if err := stream.Send(c); err != nil {
 			return err
 		}
@@ -201,10 +247,10 @@ func (s *ControlService) ListNVMeCtrlrs(
 func (s *ControlService) ListNVMeNss(
 	ctrlr *pb.NVMeController, stream pb.MgmtControl_ListNVMeNssServer) error {
 
-	if err := s.fetchNVMe(); err != nil {
+	if err := s.FetchNVMe(); err != nil {
 		return err
 	}
-	for _, ns := range s.nvmeNamespaces {
+	for _, ns := range s.NvmeNamespaces {
 		if ns.Controller.Id == ctrlr.Id {
 			if err := stream.Send(ns); err != nil {
 				return err
@@ -213,6 +259,32 @@ func (s *ControlService) ListNVMeNss(
 	}
 
 	return nil
+}
+
+// UpdateNVMeCtrlr updates the firmware on a NVMe controller, verifying that the
+// fwrev reported changes after update.
+func (s *ControlService) UpdateNVMeCtrlr(
+	ctx context.Context, params *pb.UpdateNVMeCtrlrParams) (*pb.NVMeController, error) {
+
+	id := params.Ctrlr.Id
+
+	ret := s.Storage.Update(UpdateParams{id, params.Path, params.Slot})
+
+	if err := s.populateNVMe(ret); err != nil {
+		return nil, err
+	}
+
+	for _, c := range s.NvmeControllers {
+		if c.Id == id {
+			if c.Fwrev == params.Ctrlr.Fwrev {
+				return nil, fmt.Errorf("update failed, firmware revision unchanged")
+			}
+
+			return c, nil
+		}
+	}
+
+	return nil, fmt.Errorf("update failed, no matching controller found")
 }
 
 // loadInitData retrieves initial data from file.
@@ -230,7 +302,7 @@ func (s *ControlService) loadInitData(filePath string) error {
 
 // NewControlServer creates a new instance of our ControlServer struct.
 func NewControlServer() *ControlService {
-	s := &ControlService{Nvme: &SpdkNvme{}, nvmeInitialised: false}
+	s := &ControlService{Storage: &NvmeStorage{}, storageInitialised: false}
 
 	// Retrieve absolute path of init DB file and load data
 	ex, err := os.Executable()

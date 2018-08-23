@@ -36,10 +36,11 @@ def scons():
 
     # CGO prerequisite libs for nvme
     denv.AppendUnique(CPPPATH=['%s/include' % gonvmepath])
-    nvmediscover = daos_build.library(
-        denv, "nvme_discover", Glob('%s/src/*.c' % gonvmepath),
+    nvmecontrol = daos_build.library(
+        denv, "nvme_control",
+        '%s/src/nvme_control.c' % gonvmepath,
         LIBS=['spdk'])
-    nd_installed = denv.Install('$PREFIX/lib', nvmediscover)
+    nc_installed = denv.Install('$PREFIX/lib', nvmecontrol)
 
     # CGO shell env vars.
     denv.AppendENVPath(
@@ -58,7 +59,7 @@ def scons():
 
     serverbin = "%s/bin/server" % gopath
     serversrc = "%s/server/daos_server.go" % gosrc
-    denv.Command(serverbin, [serversrc, nd_installed], "go install server")
+    denv.Command(serverbin, [serversrc, nc_installed], "go install server")
     denv.InstallAs("$PREFIX/bin/daos_server", serverbin)
 
     shellbin = "%s/bin/shell" % gopath

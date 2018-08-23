@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 
 	"common/agent"
 	"common/control"
@@ -42,6 +43,34 @@ var (
 	controlClient *control.DAOSMgmtClient
 )
 
+func getUpdateParams(sc *ishell.Context) (*pb.UpdateNVMeCtrlrParams, error) {
+	// disable the '>>>' for cleaner same line input.
+	sc.ShowPrompt(false)
+	defer sc.ShowPrompt(true) // revert after user input.
+
+	sc.Print("Please enter firmware image file-path: ")
+	path := sc.ReadLine()
+
+	sc.Print("Please enter slot you would like to update [default 0]: ")
+	slotRaw := sc.ReadLine()
+
+	var slot int32
+
+	if slotRaw != "" {
+		slot, err := strconv.Atoi(slotRaw)
+		if err != nil {
+			return nil, fmt.Errorf("%s is not a number", slotRaw)
+		}
+
+		if slot >= 0 && slot < 7 {
+			return nil, fmt.Errorf("%d needs to be a number between 0 and 7", slot)
+		}
+	}
+
+	return &pb.UpdateNVMeCtrlrParams{
+		Ctrlr: nil, Path: path, Slot: slot}, nil
+}
+
 func nvmeTaskLookup(
 	sc *ishell.Context, ctrlrs []*pb.NVMeController, feature string) error {
 
@@ -58,6 +87,29 @@ func nvmeTaskLookup(
 			for _, ns := range nss {
 				sc.Printf(
 					"\t- Namespace ID: %d, Capacity: %dGB\n", ns.Id, ns.Capacity)
+			}
+		}
+	case "nvme-fw-update":
+		params, err := getUpdateParams(sc)
+		if err != nil {
+			sc.Println("Problem reading user inputs: ", err.Error())
+		}
+
+		for _, c := range ctrlrs {
+			sc.Printf("\nController: %+v\n", c)
+			sc.Printf(
+				"\t- Updating firmware on slot %d with image %s.\n",
+				params.Slot, params.Path)
+
+			params.Ctrlr = c
+
+			newFwrev, err := controlClient.UpdateNVMeCtrlr(params)
+			if err != nil {
+				sc.Println("\nProblem updating firmware: ", err)
+			} else {
+				sc.Printf(
+					"\nSuccessfully updated firmware from revision %s to %s!\n",
+					params.Ctrlr.Fwrev, newFwrev)
 			}
 		}
 	default:

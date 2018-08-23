@@ -37,6 +37,8 @@ import (
 	"github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
 
+	"go-spdk/nvme"
+
 	"modules/mgmt"
 	mgmtpb "modules/mgmt/proto"
 	"modules/security"
@@ -132,6 +134,11 @@ func main() {
 
 	// wait for I/O server to return
 	err = srv.Wait()
+
+	// todo: is this the right place for cleanup?
+	log.Printf("Running SPDK:NVMe cleanup...")
+	nvme.Cleanup()
+
 	if err != nil {
 		log.Fatal("DAOS I/O server exited with error: ", err)
 	}

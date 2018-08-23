@@ -33,6 +33,7 @@ service MgmtControl {
 	rpc ListFeatures(Category) returns (stream Feature) {};
 	rpc ListNVMeCtrlrs(ListNVMeCtrlrsParams) returns (stream NVMeController) {};
 	rpc ListNVMeNss(NVMeController) returns (stream NVMeNamespace) {};
+	rpc UpdateNVMeCtrlr(UpdateNVMeCtrlrParams) returns (NVMeController) {};
 }
 
 message ListAllFeaturesParams {}
@@ -68,6 +69,14 @@ message NVMeController {
 	string pciaddr = 4;
 	// The firmware revision of the controller.
 	string fwrev = 5;
+}
+
+message UpdateNVMeCtrlrParams {
+	NVMeController ctrlr = 1;
+	// Filesystem path containing firmware image
+	string path = 2;
+	// Firmware slot (register) to update
+	int32 slot = 3;
 }
 
 // NVMeNamespace represent NVMe namespaces
