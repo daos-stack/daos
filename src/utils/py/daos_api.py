@@ -31,6 +31,33 @@ import os
 
 from daos_cref import *
 
+# this needs to be removed when conversions module
+# is moved to a better spot
+def c_uuid(p_uuid, c_uuid):
+    """ utility function to create a UUID in C format from a python UUID """
+    hexstr = p_uuid.hex
+    for i in range(0, 31, 2):
+        c_uuid[i/2] = int(hexstr[i:i+2], 16)
+
+# ditto, remove when conversions is moved
+def c_uuid_to_str(uuid):
+    """ utility function to convert a C uuid into a standard string format """
+    uuid_str = '{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}'\
+               '{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}'.format(
+                   uuid[0], uuid[1], uuid[2], uuid[3], uuid[4], uuid[5],
+                   uuid[6], uuid[7], uuid[8], uuid[9], uuid[10], uuid[11],
+                   uuid[12], uuid[13], uuid[14], uuid[15])
+    return uuid_str
+
+# ditto, remove when conversions is moved
+def str_to_c_uuid(uuidstr):
+    """ utility function to convert string format uuid to a C uuid """
+    uuidstr2 = '{' + uuidstr + '}'
+    puuid = uuid.UUID(uuidstr2)
+    cuuid = (ctypes.c_ubyte * 16)()
+    c_uuid(puuid, cuuid)
+    return cuuid
+
 class DaosPool(object):
     """ A python object representing a DAOS pool."""
 
@@ -50,7 +77,7 @@ class DaosPool(object):
         return c_uuid_to_str(self.uuid)
 
     def set_uuid_str(self, uuidstr):
-        return c_uuid_to_str(self.uuid)
+        self.uuid = str_to_c_uuid(uuidstr)
 
     def create(self, mode, uid, gid, size, group, target_list=None,
                cb_func=None):
@@ -153,27 +180,44 @@ class DaosPool(object):
                                        self))
             t.start()
 
-    def local2global(self, poh):
-        """ Create a local pool connection for global representation data. """
+    def local2global(self):
+        """ Create a global pool handle that can be shared. """
 
         c_glob = IOV()
+        c_glob.iov_len = 0
+        c_glob.iov_buf_len = 0
+        c_glob.iov_buf = None
+
         func = self.context.get_function("convert-local")
-        rc = func(poh, ctypes.byref(c_glob))
+        rc = func(self.handle, ctypes.byref(c_glob))
         if rc != 0:
             raise ValueError("Pool local2global returned non-zero. RC: {0}"
                              .format(rc))
-        return c_glob
+        # now call it for real
+        c_buf = ctypes.create_string_buffer(c_glob.iov_buf_len)
+        c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
+        rc = func(self.handle, ctypes.byref(c_glob))
+        buf = bytearray()
+        buf.extend(c_buf.raw)
+        return c_glob.iov_len, c_glob.iov_buf_len, buf
 
-    def global2local(self, glob):
+    def global2local(self, context, iov_len, buf_len, buf):
 
-        c_handle = ctypes.c_uint64(0)
         func = self.context.get_function("convert-global")
 
-        rc = func(glob, ctypes.byref(c_handle))
+        c_glob = IOV()
+        c_glob.iov_len = iov_len
+        c_glob.iov_buf_len = buf_len
+        c_buf = ctypes.create_string_buffer(str(buf))
+        c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
+
+        local_handle = ctypes.c_uint64(0)
+        rc = func(c_glob, ctypes.byref(local_handle))
         if rc != 0:
             raise ValueError("Pool global2local returned non-zero. RC: {0}"
                              .format(rc))
-        return c_handle
+        self.handle = local_handle
+        return local_handle
 
     def exclude(self, tgt_rank_list, cb_func=None):
         """Exclude a set of storage targets from a pool."""
@@ -350,6 +394,14 @@ class DaosPool(object):
                                        cb_func, self))
             t.start()
 
+    def set_svc(self, rank):
+         """
+         note support for a single rank only
+         """
+         svc_rank = ctypes.c_uint(rank)
+         rl_ranks = ctypes.POINTER(ctypes.c_uint)(svc_rank)
+         self.svc = RankList(rl_ranks, 1)
+
     @staticmethod
     def __pylist_to_array(pylist):
 
@@ -377,12 +429,12 @@ class DaosObj(object):
                 raise ValueError("Object close returned non-zero. RC: {0}"
                                  .format(rc))
 
-    def create(self, rank=None):
+    def create(self, rank=None, objcls=13):
         """ generate a random oid """
         func = self.context.get_function('generate-oid')
 
         func.restype = DaosObjId
-        self.c_oid = func(13, 0, 0)
+        self.c_oid = func(objcls, 0, 0)
         if rank is not None:
             self.c_oid.hi |= rank << 24
 
@@ -856,7 +908,7 @@ class DaosContext(object):
             'commit-epoch'   : self.libdaos.daos_epoch_commit,
             'connect-pool'   : self.libdaos.daos_pool_connect,
             'convert-global' : self.libdaos.daos_pool_global2local,
-            'covert-local'   : self.libdaos.daos_pool_local2global,
+            'convert-local'  : self.libdaos.daos_pool_local2global,
             'create-cont'    : self.libdaos.daos_cont_create,
             'create-pool'    : self.libdaos.daos_pool_create,
             'create-eq'      : self.libdaos.daos_eq_create,
