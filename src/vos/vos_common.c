@@ -330,6 +330,13 @@ vos_init(void)
 		return rc;
 	}
 
+	rc = umem_init_txd(&vsa_txd_inst);
+	if (rc) {
+		ABT_finalize();
+		D_MUTEX_UNLOCK(&mutex);
+		return rc;
+	}
+
 	vsa_xsctxt_inst = NULL;
 	vsa_nvme_init = false;
 
@@ -346,10 +353,6 @@ vos_init(void)
 		D_GOTO(exit, rc);
 
 	rc = vos_nvme_init();
-	if (rc)
-		D_GOTO(exit, rc);
-
-	rc = umem_init_txd(&vsa_txd_inst);
 	if (rc)
 		D_GOTO(exit, rc);
 
