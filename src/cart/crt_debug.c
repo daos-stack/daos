@@ -51,6 +51,7 @@ DECLARE_FAC(pmix);
 DECLARE_FAC(self_test);
 DECLARE_FAC(iv);
 DECLARE_FAC(ctl);
+DECLARE_FAC(swim);
 
 #define D_INIT_LOG_FAC(name, lname, idp)	\
 	d_init_log_facility(idp, name, lname);
@@ -64,7 +65,9 @@ DECLARE_FAC(ctl);
 	ACTION("HG", "mercury", d_hg_logfac)		\
 	ACTION("PMIX", "pmix", d_pmix_logfac)		\
 	ACTION("ST", "self_test", d_self_test_logfac)	\
-	ACTION("IV", "iv", d_iv_logfac)
+	ACTION("IV", "iv", d_iv_logfac)			\
+	ACTION("CTL", "ctl", d_ctl_logfac)		\
+	ACTION("SWIM", "swim", d_swim_logfac)
 
 #define CART_SETUP_FAC(name, lname, idp)		\
 	D_INIT_LOG_FAC(name, lname, &idp)

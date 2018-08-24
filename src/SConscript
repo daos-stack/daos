@@ -38,7 +38,7 @@
 """Build cart src"""
 import os
 
-HEADERS = ['api.h', 'iv.h', 'types.h']
+HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h']
 HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'heap.h', 'errno.h', 'fault_inject.h']
 
@@ -58,6 +58,7 @@ def scons():
     # Generate the common libraries used by everyone
     SConscript('gurt/SConscript')
     SConscript('cart/SConscript')
+    SConscript('swim/SConscript')
 
     # Builders
     SConscript('test/SConscript')
@@ -89,7 +90,7 @@ def scons():
             print("Broken local header files, cannot continue")
             Exit(2)
 
-    Default('gurt', 'cart', 'test', 'self_test')
+    Default('gurt', 'cart', 'swim', 'test', 'self_test')
 
 if __name__ == "SCons.Script":
     scons()
