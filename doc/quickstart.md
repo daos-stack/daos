@@ -1,6 +1,6 @@
 # DAOS Quick Start Guide
 
-DAOS runs on both x86 and ARM platforms and has been successfully tested on CentOS7, openSuSE 42.2 and Ubuntu 16.04 distributions.
+DAOS runs on both x86 and ARM platforms and has been successfully tested on CentOS7, openSuSE 42.2 and Ubuntu 18.04 distributions.
 
 ## Hardware Support
 
@@ -33,7 +33,7 @@ This clones the DAOS git repository (path referred as \${daospath} below). Then 
 
 ## DAOS from Scratch
 
-The below instructions have been verified with CentOS. Installations on other Linux distributions might be similar with some variations. Developers of DAOS may want to check additional sections below before beginning for suggestions related specifically to development. Please contact us in our [forum](users@daos.groups.io) if running into issues.
+The below instructions have been verified with CentOS. Installations on other Linux distributions might be similar with some variations. Developers of DAOS may want to check additional sections below before beginning for suggestions related specifically to development. Please contact us in our [forum](https://daos.groups.io/g/daos) if running into issues.
 
 ### Build Prerequisites
 
@@ -192,7 +192,7 @@ To build the Docker image directly from GitHub, run the following command:
     $ docker build -t daos -f Dockerfile.centos\:7 github.com/daos-stack/daos#:utils/docker
 
 This creates a CentOS7 image, fetches the latest DAOS version from GitHub and  builds it in the container.
-For Ubuntu, replace Dockerfile.centos\:7 with Dockerfile.ubuntu\:16.04.
+For Ubuntu, replace Dockerfile.centos\:7 with Dockerfile.ubuntu\:18.04.
 
 To build from a local tree stored on the host, a volume must be created to share the source tree with the Docker container. To do so, execute the following command to create a docker image without checking out the DAOS source tree:
 

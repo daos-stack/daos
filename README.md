@@ -15,22 +15,28 @@ DAOS is licensed under the Apache License Version 2.0. Please see the [LICENSE](
 
 ## Documentations
 
-Operation manual:
-* [building, installing and running DAOS](./doc/quickstart.md)
-* [testing DAOS](./doc/testing.md)
-* [debugging DAOS](./doc/debugging.md)
+#### Operations guide:
+* quick [instructions](doc/quickstart.md) for building, installing and running DAOS
+* [testing](doc/testing.md) DAOS
+* [debugging](doc/debugging.md) DAOS
 
-User guide:
-* [DAOS overview](./doc/overview.md)
-* [I/O middleware integration](./doc/middleware.md)
-* [DAOS API](./src/include/) and [man pages](./doc/man/man3)
+#### User area:
+* [Overview of the DAOS storage model](doc/overview.md)
+* DAOS API
+  * C [native API](src/include/) and [man pages](doc/man/man3)
+  * Python [bindings](src/utils/py/)
+  * Go language [bindings](https://github.com/daos-stack/go-daos) and [documentation](https://godoc.org/github.com/daos-stack/go-daos/pkg/daos)
+* I/O middleware integration
+  * [DAOS VOL plugin](https://bitbucket.hdfgroup.org/projects/HDFFV/repos/hdf5/browse?at=refs%2Fheads%2Fhdf5_daosm) for HDF5
+  * [ROMIO DAOS ADIO driver](https://github.com/daos-stack/mpich/tree/daos_adio) for MPI-IO
+  * The [DFS](src/include/daos_fs.h) library implements POSIX semantics over the DAOS API by encapsulating a POSIX namespace into a DAOS container. This library can be linked directly with the application (e.g. see IOR and mdtest [DAOS backend](https://github.com/daos-stack/ior-hpc/tree/daos)), mounted locally through [FUSE](src/client/dfs/dfuse.c) (one mountpoint per container) or integrated with the [I/O Forwarding service](https://github.com/daos-stack/iof) for transparent access.
 
-Developer zone:
-* [contributing to DAOS](./doc/contributing.md)
-* [DAOS coding rules](./doc/coding.md)
-* [DAOS internals](./doc/internals.md)
+#### Developer zone:
+* [building](https://github.com/johannlombardi/daos/blob/master/doc/quickstart.md#daos-source-code) and [contributing](https://wiki.hpdd.intel.com/display/DC/Contribute) to DAOS
+* [DAOS coding rules](https://wiki.hpdd.intel.com/display/DC/Coding+Rules)
+* [DAOS internals](src/README.md)
 
-More information can be found on the [wiki](https://wiki.hpdd.intel.com/display/DC/Resources).
+More information can be found on the [wiki](https://wiki.hpdd.intel.com/display/DC/DAOS+Community+Home).
 
 ## Contacts
 
