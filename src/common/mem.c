@@ -498,17 +498,17 @@ umem_init_txd(struct umem_tx_stage_data *txd)
 	txd->txd_magic = UMEM_TX_DATA_MAGIC;
 
 #if DAOS_HAS_PMDK
-	D_ALLOC(txd->txd_commit_vec, TXD_CB_NUM * sizeof(*txd->txd_commit_vec));
+	D_ALLOC_ARRAY(txd->txd_commit_vec, TXD_CB_NUM);
 	if (txd->txd_commit_vec == NULL)
 		goto fail;
 	txd->txd_commit_max = TXD_CB_NUM;
 
-	D_ALLOC(txd->txd_abort_vec, TXD_CB_NUM * sizeof(*txd->txd_abort_vec));
+	D_ALLOC_ARRAY(txd->txd_abort_vec, TXD_CB_NUM);
 	if (txd->txd_abort_vec == NULL)
 		goto fail;
 	txd->txd_abort_max = TXD_CB_NUM;
 
-	D_ALLOC(txd->txd_end_vec, TXD_CB_NUM * sizeof(txd->txd_end_vec));
+	D_ALLOC_ARRAY(txd->txd_end_vec, TXD_CB_NUM);
 	if (txd->txd_end_vec == NULL)
 		goto fail;
 	txd->txd_end_max = TXD_CB_NUM;

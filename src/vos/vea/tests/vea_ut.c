@@ -551,7 +551,7 @@ ut_reserve_too_big(void **state)
 	uint32_t blk_cnt = 0;
 	d_list_t *r_list;
 	uint32_t hdr_blks = 1;
-	uint64_t capacity = 4 << 20; /* 4MB */
+	uint64_t capacity = 4 << 20; /* 4MB, 1024 4k blocks in total */
 	struct vea_unmap_context unmap_ctxt;
 	uint32_t blk_sz = 0; /* use the default size */
 	int rc;
@@ -578,6 +578,32 @@ ut_reserve_too_big(void **state)
 	/* expect -DER_NOSPACE or -DER_INVAL (if blk_cnt > VEA_LARGE_EXT_MB) */
 	assert_true((rc == -DER_NOSPACE) || (rc == -DER_INVAL));
 	print_message("correctly failed to reserve extent\n");
+
+	/* allocation should success */
+	blk_cnt = 1000;
+	rc = vea_reserve(args.vua_vsi, blk_cnt, NULL, r_list);
+	assert_int_equal(rc, 0);
+
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
+	assert_int_equal(rc, 0);
+
+	rc = vea_tx_publish(args.vua_vsi, NULL, r_list);
+	assert_int_equal(rc, 0);
+
+	rc = umem_tx_commit(&args.vua_umm);
+	assert_int_equal(rc, 0);
+
+	/* free the allocated space */
+	rc = vea_free(args.vua_vsi, hdr_blks, blk_cnt);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * immediate reserve after free, the free extents should be made
+	 * visible for allocation immediately, reserve should succeed.
+	 */
+	rc = vea_reserve(args.vua_vsi, blk_cnt, NULL, r_list);
+	assert_int_equal(rc, 0);
+
 	vea_unload(args.vua_vsi);
 	ut_teardown(&args);
 }

@@ -325,6 +325,10 @@ migrate_end_cb(void *data, bool noop)
 	if (rc)
 		return;
 
+	D_ASSERT(cur_time >= vsi->vsi_agg_time);
+	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
+		return;
+
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 	D_ASSERT(vsi != NULL);
 	D_INIT_LIST_HEAD(&unmap_list);
@@ -333,8 +337,9 @@ migrate_end_cb(void *data, bool noop)
 		daos_iov_t	key;
 
 		vfe = entry->ve_ext;
-		/* The oldest extent isn't expired */
-		if (cur_time < (vfe.vfe_age + VEA_MIGRATE_INTVL))
+		/* Not force migration, and the oldest extent isn't expired */
+		if (vsi->vsi_agg_time != 0 &&
+		    cur_time < (vfe.vfe_age + VEA_MIGRATE_INTVL))
 			break;
 
 		/* Remove entry from aggregate LRU list */
@@ -377,6 +382,9 @@ migrate_end_cb(void *data, bool noop)
 		}
 	}
 
+	/* Update aggregation time before yield */
+	vsi->vsi_agg_time = cur_time;
+
 	/*
 	 * According to NVMe spec, unmap isn't an expensive non-queue command
 	 * anymore, so we should just unmap as soon as the extent is freed.
@@ -414,6 +422,16 @@ migrate_free_exts(struct vea_space_info *vsi)
 	uint64_t	cur_time;
 	int		rc;
 
+	/* Perform the migration instantly if not in a transaction */
+	if (pmemobj_tx_stage() == TX_STAGE_NONE) {
+		migrate_end_cb((void *)vsi, false);
+		return;
+	}
+
+	/*
+	 * Check aggregation time in advance to avoid unnecessary
+	 * umem_tx_add_callback() calls.
+	 */
 	rc = get_current_age(&cur_time);
 	if (rc)
 		return;
@@ -421,14 +439,6 @@ migrate_free_exts(struct vea_space_info *vsi)
 	D_ASSERT(cur_time >= vsi->vsi_agg_time);
 	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
 		return;
-
-	vsi->vsi_agg_time = cur_time;
-
-	/* Perform the migration instantly if not in a transaction */
-	if (pmemobj_tx_stage() == TX_STAGE_NONE) {
-		migrate_end_cb((void *)vsi, false);
-		return;
-	}
 
 	/*
 	 * Perform the migration in transaction end callback, since the

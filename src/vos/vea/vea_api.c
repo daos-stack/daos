@@ -294,6 +294,7 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 	    struct vea_hint_context *hint, d_list_t *resrvd_list)
 {
 	struct vea_resrvd_ext *resrvd;
+	bool retry = true;
 	int rc = 0;
 
 	D_ASSERT(vsi != NULL);
@@ -306,9 +307,6 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 		return -DER_INVAL;
 	}
 
-	/* Trigger free extents migration */
-	migrate_free_exts(vsi);
-
 	D_ALLOC_PTR(resrvd);
 	if (resrvd == NULL)
 		return -DER_NOMEM;
@@ -318,6 +316,10 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 
 	/* Get hint offset */
 	hint_get(hint, &resrvd->vre_hint_off);
+
+migrate:
+	/* Trigger free extents migration */
+	migrate_free_exts(vsi);
 
 	/* Reserve from hint offset */
 	rc = reserve_hint(vsi, blk_cnt, resrvd);
@@ -342,8 +344,14 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 
 	/* Reserve extent vector as the last resort */
 	rc = reserve_vector(vsi, blk_cnt, resrvd);
-	if (rc != 0)
+
+	if (rc == -DER_NOSPACE && retry) {
+		vsi->vsi_agg_time = 0; /* force free extents migration */
+		retry = false;
+		goto migrate;
+	} else if (rc != 0) {
 		goto error;
+	}
 done:
 	D_ASSERT(resrvd->vre_blk_off != VEA_HINT_OFF_INVAL);
 	D_ASSERT(resrvd->vre_blk_cnt == blk_cnt);
