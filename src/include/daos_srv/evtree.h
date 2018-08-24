@@ -40,11 +40,9 @@ enum {
 	EVT_UMEM_PTR	= (EVT_UMEM_TYPE + 2),
 };
 
-struct evt_ptr;
 struct evt_node;
 struct evt_root;
 
-TMMID_DECLARE(struct evt_ptr, EVT_UMEM_PTR);
 TMMID_DECLARE(struct evt_root, EVT_UMEM_ROOT);
 TMMID_DECLARE(struct evt_node, EVT_UMEM_NODE);
 
@@ -63,23 +61,16 @@ struct evt_ptr {
 	uint64_t			pt_inum;
 	/** number of bytes per index */
 	uint32_t			pt_inob;
-	/** # evt_ptr_ref points to me */
-	uint32_t			pt_ref;
 	/** Pool map version for the record */
 	uint32_t			pt_ver;
-	uint32_t			pt_pad_32;
 	/** buffer on SCM or NVMe */
 	eio_addr_t			pt_ex_addr;
+	/** padding to cache line */
+	uint64_t			pt_padding;
 };
 
-/** Reference on a evtree data pointer, see \a evt_ptr */
-struct evt_ptr_ref {
-	TMMID(struct evt_ptr)		pr_ptr_mmid;
-	/** offset within \a pr_ptr_mmid */
-	uint64_t			pr_offset;
-	/** number of indices being referenced */
-	uint64_t			pr_inum;
-};
+/* A static assert to ensure we notice when evt_ptr exceeds a cache line */
+_Static_assert(sizeof(struct evt_ptr) == 64, "evt_ptr should be aligned");
 
 /** A versioned extent is effectively a rectangle...
  *  The epoch range is always to infinity.   The sequence number
@@ -89,7 +80,12 @@ struct evt_rect {
 	daos_off_t			rc_off_lo;	/**< low offset */
 	daos_off_t			rc_off_hi;	/**< high offset */
 	daos_epoch_t			rc_epc_lo;	/**< low epoch */
+	uint64_t			rc_padding;	/**< alignment */
 };
+
+/* A static assert to ensure we notice when evt_rect exceeds a cache line */
+_Static_assert(sizeof(struct evt_rect) == 32,
+	       "evt_rect should be well aligned");
 
 /** Log format of rectangle */
 #define DF_RECT				\
@@ -133,10 +129,10 @@ struct evt_node {
 	uint32_t			tn_pad_32;
 	/**
 	 * leaf node:
-	 * rect[0], rect[1], ... rect[order - 1], pref[0], pref[1], ...
+	 * ptr[0], ptr[1], ..., ptr[order - 1], rect[0], rect[1], ...
 	 *
 	 * non-leaf node:
-	 * rect[0], rect[1], ... rect[order - 1], child[0], child[1], ...
+	 * child[0], child[1], ..., child[order - 1], rect[0], rect[1], ...
 	 */
 	uint64_t			tn_body[0];
 };
@@ -165,25 +161,14 @@ enum evt_feats {
 struct evt_entry {
 	/** link chain on evt_entry_list */
 	d_list_t			 en_link;
+	/** Cached information about the data */
+	struct evt_ptr			 en_ptr;
 	/** the input/output versioned extent */
 	struct evt_rect			 en_rect;
 	/** the trimmed rect selected by a search */
 	struct evt_rect			 en_sel_rect;
-	/** cookie to insert this extent */
-	uuid_t				 en_cookie;
-	/** pool map version */
-	uint32_t			 en_ver;
-	/** number of bytes per index */
-	uint32_t			 en_inob;
-	/** offset within \a en_mmid */
-	daos_off_t			 en_offset;
-	/**
-	 * the input mmid for \a evt_insert, or the output mmid for
-	 * \a evt_find
-	 */
+	/** mmid of the node */
 	umem_id_t			 en_mmid;
-	/** the returned data buffer address for \a evt_find */
-	struct eio_iov			 en_eiov;
 };
 
 #define ERT_ENT_EMBEDDED		32

@@ -285,8 +285,8 @@ static int
 ts_find_rect(char *args)
 {
 	struct evt_entry	*ent;
-	struct eio_iov		*eiov;
 	char			*val;
+	eio_addr_t		 addr;
 	d_list_t		 covered;
 	struct evt_rect		 rect;
 	struct evt_entry_list	 enlist;
@@ -309,15 +309,15 @@ ts_find_rect(char *args)
 
 	evt_ent_list_for_each(ent, &enlist) {
 		bool punched;
+		addr = ent->en_ptr.pt_ex_addr;
 
-		eiov = &ent->en_eiov;
-		punched = eio_addr_is_hole(&eiov->ei_addr);
+		punched = eio_addr_is_hole(&addr);
 		D_PRINT("Find rect "DF_RECT" (sel="DF_RECT") width=%d "
 			"val=%.*s\n", DP_RECT(&ent->en_rect),
 			DP_RECT(&ent->en_sel_rect),
 			(int)evt_rect_width(&ent->en_sel_rect),
 			punched ? 4 : (int)evt_rect_width(&ent->en_sel_rect),
-			punched ? "None" : (char *)eio_iov2off(eiov));
+			punched ? "None" : (char *)addr.ea_off);
 	}
 
 	evt_ent_list_fini(&enlist);
@@ -354,7 +354,7 @@ ts_list_rect(void)
 		if (rc == 0) {
 			D_PRINT("%d) "DF_RECT", val_addr="DF_U64"\n",
 				i, DP_RECT(&ent.en_rect),
-				eio_iov2off(&ent.en_eiov));
+				ent.en_ptr.pt_ex_addr.ea_off);
 
 			if (i % 3 == 0)
 				rc = evt_iter_probe(ih, EVT_ITER_FIND,

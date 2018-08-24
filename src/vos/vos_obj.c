@@ -745,9 +745,9 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_epoch	 = rect->rc_epc_lo;
 	it_entry->ie_recx.rx_idx = rect->rc_off_lo;
 	it_entry->ie_recx.rx_nr	 = rect->rc_off_hi - rect->rc_off_lo + 1;
-	it_entry->ie_rsize	 = entry.en_inob;
-	uuid_copy(it_entry->ie_cookie, entry.en_cookie);
-	it_entry->ie_ver	= entry.en_ver;
+	it_entry->ie_rsize	 = entry.en_ptr.pt_inob;
+	uuid_copy(it_entry->ie_cookie, entry.en_ptr.pt_cookie);
+	it_entry->ie_ver	= entry.en_ptr.pt_ver;
  out:
 	return rc;
 }

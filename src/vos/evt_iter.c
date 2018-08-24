@@ -222,7 +222,6 @@ evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
 	struct evt_rect		*rect;
-	struct evt_ptr_ref	*pref;
 	struct evt_trace	*trace;
 	int			 rc;
 
@@ -237,8 +236,6 @@ evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
-	pref  = evt_node_pref_at(tcx, trace->tr_node, trace->tr_at);
-	D_ASSERT(pref->pr_offset == 0); /* no clip so far */
 
 	if (entry)
 		evt_fill_entry(tcx, trace->tr_node, trace->tr_at, NULL, entry);
