@@ -976,7 +976,7 @@ main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
-	while ((rc = getopt_long(argc, argv, "P:T:C:o:d:a:r:As:ztf:hUFRBvIiu",
+	while ((rc = getopt_long(argc, argv, "P:N:T:C:o:d:a:r:As:ztf:hUFRBvIiu",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1012,7 +1012,7 @@ main(int argc, char **argv)
 			break;
 		case 'N':
 			nvme_size = strtoul(optarg, &endp, 0);
-			scm_size = ts_val_factor(nvme_size, *endp);
+			nvme_size = ts_val_factor(nvme_size, *endp);
 			break;
 		case 'o':
 			ts_obj_p_cont = strtoul(optarg, &endp, 0);

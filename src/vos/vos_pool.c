@@ -374,6 +374,12 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	}
 
 	D_DEBUG(DB_MGMT, "No open handles. OK to destroy\n");
+
+	rc = vos_blob_destroy(uuid);
+	if (rc)
+		D_ERROR("Destroy blob path: %s UUID: "DF_UUID"\n",
+			path, DP_UUID(uuid));
+
 	/**
 	 * NB: no need to explicitly destroy container index table because
 	 * pool file removal will do this for free.

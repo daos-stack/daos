@@ -367,9 +367,19 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 	 */
 	rc = smd_nvme_get_pool(uuid, xs_ctxt->bxc_xs_id, &smd_pool);
 	if (rc != 0) {
-		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
-			xs_ctxt, DP_UUID(uuid));
-		return -DER_NONEXIST;
+		D_WARN("Blob for xs:%p, pool:"DF_UUID" doesn't exist\n",
+		       xs_ctxt, DP_UUID(uuid));
+		/*
+		 * User may create a pool w/o NVMe partition even with NVMe
+		 * configured.
+		 *
+		 * TODO: Let's simply return success for this moment, the
+		 * pool create & destroy code needs be re-organized later to
+		 * handle various middle failure cases, then we should
+		 * improve this by checking the pif_blob_sz and avoid calling
+		 * into this function when 'pif_blob_sz == 0'.
+		 */
+		return 0;
 	}
 
 	blob_id = smd_pool.npi_blob_id;
