@@ -132,8 +132,6 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 	struct d_binheap_node *root;
 	int rc;
 
-	D_ASSERT(blk_cnt <= vfc->vfc_large_thresh);
-
 	/* No large free extent available */
 	if (d_binheap_is_empty(&vfc->vfc_heap))
 		return 0;
@@ -144,6 +142,11 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 	D_ASSERT(entry->ve_ext.vfe_blk_cnt > vfc->vfc_large_thresh);
 	D_DEBUG(DB_IO, "largest free extent ["DF_U64", %u]\n",
 	       entry->ve_ext.vfe_blk_off, entry->ve_ext.vfe_blk_cnt);
+
+	/* The largest free extent can't satisfy huge allocate request */
+	if (entry->ve_ext.vfe_blk_cnt < blk_cnt)
+		return 0;
+
 	/*
 	 * Reserve from the largest free extent when it's idle or too
 	 * small for splitting, otherwise, divide it in half-and-half
@@ -317,6 +320,10 @@ reserve_small(struct vea_space_info *vsi, uint32_t blk_cnt,
 	struct vea_entry *entry;
 	struct free_ext_cursor *cursor;
 	int rc = 0;
+
+	/* Skip huge allocate request */
+	if (blk_cnt > vsi->vsi_class.vfc_large_thresh)
+		return 0;
 
 	cursor = cursor_prepare(&vsi->vsi_class, blk_cnt);
 	D_ASSERT(cursor != NULL);

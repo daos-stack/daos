@@ -544,14 +544,14 @@ vea_ut_teardown(void **state)
 }
 
 static void
-ut_reserve_too_big(void **state)
+ut_reserve_special(void **state)
 {
 	/* Use a temporary device instead of the main one the other tests use */
 	struct vea_ut_args args;
 	uint32_t blk_cnt = 0;
 	d_list_t *r_list;
 	uint32_t hdr_blks = 1;
-	uint64_t capacity = 4 << 20; /* 4MB, 1024 4k blocks in total */
+	uint64_t capacity = 2UL << 30; /* 2GB, 0.5M 4k blocks in total */
 	struct vea_unmap_context unmap_ctxt;
 	uint32_t blk_sz = 0; /* use the default size */
 	int rc;
@@ -572,15 +572,15 @@ ut_reserve_too_big(void **state)
 
 	r_list = &args.vua_resrvd_list[0];
 
-	/* reserve should fail */
-	blk_cnt = 15000; /* 15000 * 4k >> 4MB */
+	/* reserve too big should fail */
+	blk_cnt = (1 << 20); /* 1M blocks */
 	rc = vea_reserve(args.vua_vsi, blk_cnt, NULL, r_list);
-	/* expect -DER_NOSPACE or -DER_INVAL (if blk_cnt > VEA_LARGE_EXT_MB) */
-	assert_true((rc == -DER_NOSPACE) || (rc == -DER_INVAL));
+	/* expect -DER_NOSPACE */
+	assert_int_equal(rc, -DER_NOSPACE);
 	print_message("correctly failed to reserve extent\n");
 
 	/* allocation should success */
-	blk_cnt = 1000;
+	blk_cnt = (500 * 1024); /* a bit less than 0.5M blocks */
 	rc = vea_reserve(args.vua_vsi, blk_cnt, NULL, r_list);
 	assert_int_equal(rc, 0);
 
@@ -667,6 +667,12 @@ ut_inval_params_format(void **state)
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
 			header_blocks, capacity, NULL, NULL, false);
 	assert_int_equal(rc, -DER_NOSPACE);
+
+	/* vea_format: Test upper bound of largest extent < UINT32_MAX */
+	capacity = (16ULL << 40) + 4096; /* 16TB + 1 4k header block */
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
+			header_blocks, capacity, NULL, NULL, false);
+	assert_int_equal(rc, -DER_INVAL);
 
 	ut_teardown(&args);
 }
@@ -1237,7 +1243,7 @@ static const struct CMUnitTest vea_uts[] = {
 	{ "vea_free", ut_free, NULL, NULL},
 	{ "vea_hint_unload", ut_hint_unload, NULL, NULL},
 	{ "vea_unload", ut_unload, NULL, NULL},
-	{ "vea_reserve_too_big", ut_reserve_too_big, NULL, NULL},
+	{ "vea_reserve_special", ut_reserve_special, NULL, NULL},
 	{ "vea_inval_params_format", ut_inval_params_format, NULL, NULL},
 	{ "vea_inval_params_load", ut_inval_params_load, NULL, NULL},
 	{ "vea_inval_param_reserve", ut_inval_params_reserve, NULL, NULL},

@@ -98,6 +98,15 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 		return -DER_NOSPACE;
 	tot_blks -= hdr_blks;
 
+	/*
+	 * Extent block count is represented by uint32_t, make sure the
+	 * largest extent won't overflow.
+	 */
+	if (tot_blks >= UINT32_MAX) {
+		D_ERROR("Capacity "DF_U64" is too large.\n", capacity);
+		return -DER_INVAL;
+	}
+
 	/* Initialize block device header in callback */
 	if (cb) {
 		/*
@@ -299,13 +308,6 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 
 	D_ASSERT(vsi != NULL);
 	D_ASSERT(resrvd_list != NULL);
-
-	if (blk_cnt > vsi->vsi_class.vfc_large_thresh) {
-		D_ERROR("required blk_cnt: %u > %u, blk_sz: %u\n",
-			blk_cnt, vsi->vsi_class.vfc_large_thresh,
-			vsi->vsi_md->vsd_blk_sz);
-		return -DER_INVAL;
-	}
 
 	D_ALLOC_PTR(resrvd);
 	if (resrvd == NULL)
