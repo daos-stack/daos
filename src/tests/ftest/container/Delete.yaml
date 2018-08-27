@@ -1,0 +1,55 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_machines1:
+    test_machines:
+      - boro-A
+server:
+  server_group: daos_server
+createtests:
+  createmode:
+    mode: 511
+  createset:
+    setname: daos_server
+  createsize:
+    size: 10737418
+  ContainerUUIDS: !mux
+    gooduid:
+      uuid:
+        - 0cf3086e-daa3-44a7-a5d4-cba9d639bf19
+        - PASS
+    nonexistingUUID:
+      uuid:
+        - INVALID
+        - FAIL
+  ConnectionOpened: !mux
+    CTopened:
+      opened:
+        - TRUE
+        - FAIL
+    CTclosed:
+      opened:
+        - FALSE
+        - PASS
+  ForceDestroy: !mux
+    noForce:
+      force:
+        - 0
+        - FAIL
+    validForce:
+      force:
+        - 1
+        - PASS
+    randomForce:
+      force:
+        - 99999999
+        - PASS
+  PoolHandles: !mux
+    validPH:
+      poh:
+        - VALID
+        - PASS
+    invalidPH:
+      poh:
+        - 99999
+        - FAIL
