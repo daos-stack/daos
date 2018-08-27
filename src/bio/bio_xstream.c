@@ -40,10 +40,13 @@
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
 #define DAOS_NVME_CONF		"/etc/daos_nvme.conf"
-#define DAOS_BS_CLUSTER_LARGE	(1024 * 1024 * 1024)	/* 1GB */
-#define DAOS_BS_CLUSTER_SMALL	(1024 * 1024)		/* 1MB */
-#define DAOS_BS_MD_PAGES_LARGE	(1024 * 20)	/* 20k blobs per device */
-#define DAOS_BS_MD_PAGES_SMALL	(10)		/* 10 blobs per device */
+/* SPDK blob parameters */
+#define DAOS_BS_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
+#define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
+/* DMA buffer parameters */
+#define DAOS_DMA_CHUNK_MB	32		/* 32MB DMA chunks */
+#define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
+#define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
 
 enum {
 	BDEV_CLASS_NVME = 0,
@@ -128,7 +131,7 @@ bio_nvme_init(const char *storage_path)
 {
 	char		*env;
 	int		rc, fd;
-	unsigned int	size_mb = 8;
+	uint64_t	size_mb = DAOS_DMA_CHUNK_MB;
 
 	rc = smd_create_initialize(storage_path, NULL, -1);
 	if (rc != 0) {
@@ -163,18 +166,18 @@ bio_nvme_init(const char *storage_path)
 	close(fd);
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts);
-	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_LARGE;
-	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES_LARGE;
+	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
+	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
 
-	bio_chk_cnt_init = 1;
-	bio_chk_cnt_max = 16;
+	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
+	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 
 	env = getenv("VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "MALLOC") == 0) {
 		D_WARN("Malloc device will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_MALLOC;
-		nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SMALL;
-		nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES_SMALL;
+		nvme_glb.bd_bs_opts.cluster_sz = (1ULL << 20);
+		nvme_glb.bd_bs_opts.num_md_pages = 10;
 		size_mb = 2;
 		bio_chk_cnt_max = 32;
 	} else if (env && strcasecmp(env, "AIO") == 0) {

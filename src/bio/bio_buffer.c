@@ -27,6 +27,43 @@
 #include "bio_internal.h"
 
 static void
+dma_free_chunk(struct bio_dma_chunk *chunk)
+{
+	D_ASSERT(chunk->bdc_ptr != NULL);
+	D_ASSERT(chunk->bdc_pg_idx == 0);
+	D_ASSERT(chunk->bdc_ref == 0);
+	D_ASSERT(d_list_empty(&chunk->bdc_link));
+
+	spdk_dma_free(chunk->bdc_ptr);
+	D_FREE_PTR(chunk);
+}
+
+static struct bio_dma_chunk *
+dma_alloc_chunk(unsigned int cnt)
+{
+	struct bio_dma_chunk *chunk;
+	ssize_t bytes = (ssize_t)cnt << BIO_DMA_PAGE_SHIFT;
+
+	D_ASSERT(bytes > 0);
+	D_ALLOC_PTR(chunk);
+	if (chunk == NULL) {
+		D_ERROR("Failed to allocate chunk\n");
+		return NULL;
+	}
+
+	chunk->bdc_ptr = spdk_dma_malloc(bytes, BIO_DMA_PAGE_SZ, NULL);
+	if (chunk->bdc_ptr == NULL) {
+		D_ERROR("Failed to allocate %u pages DMA buffer\n", cnt);
+		D_FREE_PTR(chunk);
+		return NULL;
+	}
+	D_INIT_LIST_HEAD(&chunk->bdc_link);
+
+	return chunk;
+}
+
+
+static void
 dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
 {
 	struct bio_dma_chunk *chunk, *tmp;
@@ -36,13 +73,7 @@ dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
 			break;
 
 		d_list_del_init(&chunk->bdc_link);
-
-		D_ASSERT(chunk->bdc_ptr != NULL);
-		D_ASSERT(chunk->bdc_pg_idx == 0);
-		D_ASSERT(chunk->bdc_ref == 0);
-
-		spdk_dma_free(chunk->bdc_ptr);
-		D_FREE_PTR(chunk);
+		dma_free_chunk(chunk);
 
 		D_ASSERT(buf->bdb_tot_cnt > 0);
 		buf->bdb_tot_cnt--;
@@ -54,7 +85,6 @@ static int
 dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt)
 {
 	struct bio_dma_chunk *chunk;
-	ssize_t chk_bytes = bio_chk_sz << BIO_DMA_PAGE_SHIFT;
 	int i, rc = 0;
 
 	if ((buf->bdb_tot_cnt + cnt) > bio_chk_cnt_max) {
@@ -63,18 +93,8 @@ dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt)
 	}
 
 	for (i = 0; i < cnt; i++) {
-		D_ALLOC_PTR(chunk);
+		chunk = dma_alloc_chunk(bio_chk_sz);
 		if (chunk == NULL) {
-			D_ERROR("Failed to allocate chunk\n");
-			rc = -DER_NOMEM;
-			break;
-		}
-
-		chunk->bdc_ptr = spdk_dma_malloc(chk_bytes, BIO_DMA_PAGE_SZ,
-						 NULL);
-		if (chunk->bdc_ptr == NULL) {
-			D_ERROR("Failed to allocate DMA buffer\n");
-			D_FREE_PTR(chunk);
 			rc = -DER_NOMEM;
 			break;
 		}
@@ -219,6 +239,12 @@ iod_dma_buf(struct bio_desc *biod)
 	return biod->bd_ctxt->bic_xs_ctxt->bxc_dma_buf;
 }
 
+static inline bool
+dma_chunk_is_huge(struct bio_dma_chunk *chunk)
+{
+	return d_list_empty(&chunk->bdc_link);
+}
+
 /*
  * Release all the DMA chunks held by @biod, once the use count of any
  * chunk drops to zero, put it back to free list.
@@ -247,14 +273,16 @@ iod_release_buffer(struct bio_desc *biod)
 		struct bio_dma_chunk *chunk = rsrvd_dma->brd_dma_chks[i];
 
 		D_ASSERT(chunk != NULL);
-		D_ASSERT(!d_list_empty(&chunk->bdc_link));
 		D_ASSERT(chunk->bdc_ref > 0);
 		chunk->bdc_ref--;
 
-		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u\n", chunk,
-			chunk->bdc_ptr, chunk->bdc_pg_idx, chunk->bdc_ref);
+		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u huge:%d\n",
+			chunk, chunk->bdc_ptr, chunk->bdc_pg_idx,
+			chunk->bdc_ref, dma_chunk_is_huge(chunk));
 
-		if (chunk->bdc_ref == 0) {
+		if (dma_chunk_is_huge(chunk)) {
+			dma_free_chunk(chunk);
+		} else if (chunk->bdc_ref == 0) {
 			chunk->bdc_pg_idx = 0;
 			if (chunk == bdb->bdb_cur_chk)
 				bdb->bdb_cur_chk = NULL;
@@ -325,6 +353,11 @@ chunk_reserve(struct bio_dma_chunk *chk, unsigned int chk_pg_idx,
 	      unsigned int pg_cnt, unsigned int pg_off)
 {
 	D_ASSERT(chk != NULL);
+
+	/* Huge chunk is dedicated for single huge IOV */
+	if (dma_chunk_is_huge(chk))
+		return NULL;
+
 	D_ASSERTF(chk->bdc_pg_idx <= bio_chk_sz, "%u > %u\n",
 		  chk->bdc_pg_idx, bio_chk_sz);
 
@@ -491,9 +524,31 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 			(off >> BIO_DMA_PAGE_SHIFT);
 	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
 
+	/*
+	 * For huge IOV, we'll bypass our per-xstream DMA buffer cache and
+	 * allocate chunk from the SPDK reserved huge pages directly, this
+	 * kind of huge chunk will be freed immediately on I/O completion.
+	 *
+	 * We assume the contiguous huge IOV is quite rare, so there won't
+	 * be high contention over the SPDK huge page cache.
+	 */
 	if (pg_cnt > bio_chk_sz) {
-		D_ERROR("IOV is too large "DF_U64"\n", biov->bi_data_len);
-		return -DER_OVERFLOW;
+		chk = dma_alloc_chunk(pg_cnt);
+		if (chk == NULL)
+			return -DER_NOMEM;
+
+		rc = iod_add_chunk(biod, chk);
+		if (rc) {
+			dma_free_chunk(chk);
+			return rc;
+		}
+		biov->bi_buf = chk->bdc_ptr + pg_off;
+		chk_pg_idx = 0;
+
+		D_DEBUG(DB_IO, "Huge chunk:%p[%p], cnt:%u, off:%u\n",
+			chk, chk->bdc_ptr, pg_cnt, pg_off);
+
+		goto add_region;
 	}
 
 	last_rg = iod_last_region(biod);
@@ -578,8 +633,12 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 
 add_chunk:
 	rc = iod_add_chunk(biod, chk);
-	if (rc)
+	if (rc) {
+		/* Revert the reservation in chunk */
+		D_ASSERT(chk->bdc_pg_idx >= pg_cnt);
+		chk->bdc_pg_idx -= pg_cnt;
 		return rc;
+	}
 add_region:
 	return iod_add_region(biod, chk, chk_pg_idx, off, end);
 }
