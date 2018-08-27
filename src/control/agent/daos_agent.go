@@ -30,8 +30,6 @@ import (
 	"syscall"
 
 	"google.golang.org/grpc"
-
-	"github.com/daos-stack/daos/src/control/security"
 )
 
 var (
@@ -64,8 +62,6 @@ func main() {
 	defer syscall.Unlink(*grpcSocket)
 
 	var serverOpts []grpc.ServerOption
-	// Use our custom DomainCredential object instead of the standard one.
-	serverOpts = append(serverOpts, grpc.Creds(security.NewDomainCreds()))
 	grpcServer := grpc.NewServer(serverOpts...)
 	// Nothing to chat with the server about for the moment
 	grpcServer.Serve(lis)
