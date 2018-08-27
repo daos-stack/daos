@@ -273,6 +273,10 @@ vos_nvme_fini(void)
 	}
 }
 
+/* Storage path & NVMe config used by standalone VOS */
+#define VOS_STORAGE_PATH	"/mnt/daos"
+#define VOS_NVME_CONF		"/etc/daos_nvme.conf"
+
 static int
 vos_nvme_init(void)
 {
@@ -285,7 +289,7 @@ vos_nvme_init(void)
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = bio_nvme_init("/mnt/daos");
+	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF);
 	if (rc)
 		return rc;
 	vsa_nvme_init = true;

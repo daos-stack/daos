@@ -57,6 +57,9 @@ static char	       *server_group_id = DAOS_DEFAULT_GROUP_ID;
 /** Storage path (hack) */
 const char	       *dss_storage_path = "/mnt/daos";
 
+/** NVMe config file */
+const char	       *dss_nvme_conf = "/etc/daos_nvme.conf";
+
 /** attach_info path to support singleton client */
 static bool	        save_attach_info;
 const char	       *attach_info_path;
@@ -354,6 +357,8 @@ Options:\n\
       Server group name (default \"%s\")\n\
   --storage=path, -s path\n\
       Storage path (default \"%s\")\n\
+  --nvme=config, -n config\n\
+      NVMe config file (default \"%s\")\n\
   --attach_info=path, -apath\n\
       Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
   --map=path, -y path\n\
@@ -362,7 +367,8 @@ Options:\n\
       [Temporary] Self rank (default none; ignored if no --map|-y)\n\
   --help, -h\n\
       Print this description\n",
-		prog, prog, modules, server_group_id, dss_storage_path);
+		prog, prog, modules, server_group_id, dss_storage_path,
+		dss_nvme_conf);
 }
 
 static int
@@ -373,6 +379,7 @@ parse(int argc, char **argv)
 		{ "cores",		required_argument,	NULL,	'c' },
 		{ "group",		required_argument,	NULL,	'g' },
 		{ "storage",		required_argument,	NULL,	's' },
+		{ "nvme",		required_argument,	NULL,	'n' },
 		{ "attach_info",	required_argument,	NULL,	'a' },
 		{ "map",		required_argument,	NULL,	'y' },
 		{ "rank",		required_argument,	NULL,	'r' },
@@ -384,7 +391,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:m:g:s:a:y:r:h", opts, NULL)) !=
+	while ((c = getopt_long(argc, argv, "c:m:g:s:n:a:y:r:h", opts, NULL)) !=
 		-1) {
 		switch (c) {
 		case 'm':
@@ -412,6 +419,9 @@ parse(int argc, char **argv)
 			break;
 		case 's':
 			dss_storage_path = optarg;
+			break;
+		case 'n':
+			dss_nvme_conf = optarg;
 			break;
 		case 'h':
 			usage(argv[0], stdout);

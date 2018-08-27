@@ -39,7 +39,6 @@
 
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
-#define DAOS_NVME_CONF		"/etc/daos_nvme.conf"
 /* SPDK blob parameters */
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
 #define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
@@ -84,7 +83,7 @@ struct bio_nvme_data {
 	struct spdk_bs_opts	 bd_bs_opts;
 	/* All bdevs can be used by DAOS server */
 	d_list_t		 bd_bdevs;
-	unsigned int		 bd_skip_setup:1;
+	char			*bd_nvme_conf;
 };
 
 static struct bio_nvme_data nvme_glb;
@@ -127,7 +126,7 @@ print_io_stat(uint64_t now)
 }
 
 int
-bio_nvme_init(const char *storage_path)
+bio_nvme_init(const char *storage_path, const char *nvme_conf)
 {
 	char		*env;
 	int		rc, fd;
@@ -146,24 +145,29 @@ bio_nvme_init(const char *storage_path)
 	rc = ABT_mutex_create(&nvme_glb.bd_mutex);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		return rc;
+		goto fini_smd;
 	}
 
 	rc = ABT_cond_create(&nvme_glb.bd_barrier);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&nvme_glb.bd_mutex);
 		rc = dss_abterr2der(rc);
-		return rc;
+		goto free_mutex;
 	}
 
-	fd = open(DAOS_NVME_CONF, O_RDONLY, 0600);
+	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
 		D_WARN("Open %s failed(%d), skip DAOS NVMe setup.\n",
-		       DAOS_NVME_CONF, daos_errno2der(errno));
-		nvme_glb.bd_skip_setup = 1;
+		       nvme_conf, daos_errno2der(errno));
+		nvme_glb.bd_nvme_conf = NULL;
 		return 0;
 	}
 	close(fd);
+
+	nvme_glb.bd_nvme_conf = strdup(nvme_conf);
+	if (nvme_glb.bd_nvme_conf == NULL) {
+		rc = -DER_NOMEM;
+		goto free_cond;
+	}
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts);
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
@@ -192,6 +196,14 @@ bio_nvme_init(const char *storage_path)
 	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	return 0;
+
+free_cond:
+	ABT_cond_free(&nvme_glb.bd_barrier);
+free_mutex:
+	ABT_mutex_free(&nvme_glb.bd_mutex);
+fini_smd:
+	smd_fini();
+	return rc;
 }
 
 void
@@ -199,12 +211,14 @@ bio_nvme_fini(void)
 {
 	ABT_cond_free(&nvme_glb.bd_barrier);
 	ABT_mutex_free(&nvme_glb.bd_mutex);
-	nvme_glb.bd_skip_setup = 0;
+	if (nvme_glb.bd_nvme_conf != NULL) {
+		free(nvme_glb.bd_nvme_conf);
+		nvme_glb.bd_nvme_conf = NULL;
+	}
 	D_ASSERT(nvme_glb.bd_xstream_cnt == 0);
 	D_ASSERT(nvme_glb.bd_init_thread == NULL);
 	D_ASSERT(d_list_empty(&nvme_glb.bd_bdevs));
 	smd_fini();
-
 }
 
 struct bio_msg {
@@ -724,8 +738,11 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 	 * Lookup @xs_id in the NVMe device table (per-server metadata),
 	 * if found, create blobstore on the mapped device.
 	 */
-	if (d_list_empty(&nvme_glb.bd_bdevs))
+	if (d_list_empty(&nvme_glb.bd_bdevs)) {
+		D_ERROR("No available SPDK bdevs, please check whether "
+			"VOS_BDEV_CLASS is set properly.\n");
 		return -DER_UNINIT;
+	}
 
 	rc = smd_nvme_get_stream_bond(xs_id, &xs_bond);
 	if (rc && rc != -DER_NONEXIST)
@@ -894,7 +911,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
 	int rc;
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
-	if (nvme_glb.bd_skip_setup) {
+	if (nvme_glb.bd_nvme_conf == NULL) {
 		*pctxt = NULL;
 		return 0;
 	}
@@ -927,17 +944,17 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
 			goto out;
 		}
 
-		rc = spdk_conf_read(config, DAOS_NVME_CONF);
+		rc = spdk_conf_read(config, nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
-			D_ERROR("failed to read %s, rc:%d\n", DAOS_NVME_CONF,
-				rc);
+			D_ERROR("failed to read %s, rc:%d\n",
+				nvme_glb.bd_nvme_conf, rc);
 			rc = -DER_INVAL; /* spdk_conf_read() returns -1 */
 			goto out;
 		}
 
 		if (spdk_conf_first_section(config) == NULL) {
-			D_ERROR("invalid format %s, rc:%d\n", DAOS_NVME_CONF,
-				rc);
+			D_ERROR("invalid format %s, rc:%d\n",
+				nvme_glb.bd_nvme_conf, rc);
 			rc = -DER_INVAL;
 			goto out;
 		}

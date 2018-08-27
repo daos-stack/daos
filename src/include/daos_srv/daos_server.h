@@ -49,6 +49,9 @@ extern hwloc_topology_t	dss_topo;
 /** Storage path (hack) */
 extern const char      *dss_storage_path;
 
+/** NVMe config file */
+extern const char      *dss_nvme_conf;
+
 /**
  * Stackable Module API
  * Provides a modular interface to load and register server-side code on

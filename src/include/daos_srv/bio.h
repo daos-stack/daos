@@ -167,10 +167,11 @@ bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
  * Global NVMe initialization.
  *
  * \param[IN] storage_path	daos storage directory path
+ * \param[IN] nvme_conf		NVMe config file
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *storage_path);
+int bio_nvme_init(const char *storage_path, const char *nvme_conf);
 
 /**
  * Global NVMe finilization.
