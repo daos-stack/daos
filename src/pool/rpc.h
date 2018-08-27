@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,10 @@ enum pool_operation {
 
 	POOL_TGT_CONNECT	= 14,
 	POOL_TGT_DISCONNECT	= 15,
-	POOL_TGT_UPDATE_MAP	= 16
+	POOL_TGT_UPDATE_MAP	= 16,
+
+	POOL_RDB_START		= 17,
+	POOL_RDB_STOP		= 18,
 };
 
 struct pool_op_in {
@@ -211,6 +214,28 @@ struct pool_tgt_update_map_in {
 
 struct pool_tgt_update_map_out {
 	int32_t	tuo_rc;	/* number of errors */
+};
+
+struct pool_rdb_start_in {
+	uuid_t		 dai_dbid;
+	uuid_t		 dai_pool;
+	uint32_t	 dai_flags;
+	uint32_t	 dai_padding;
+	uint64_t	 dai_size;
+	d_rank_list_t	*dai_ranks;
+};
+
+struct pool_rdb_start_out {
+	int		dao_rc;
+};
+
+struct pool_rdb_stop_in {
+	uuid_t		doi_pool;
+	uint32_t	doi_flags;
+};
+
+struct pool_rdb_stop_out {
+	int		doo_rc;
 };
 
 int pool_req_create(crt_context_t dtp_ctx, crt_endpoint_t *tgt_ep,

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,35 +166,6 @@ static struct crt_req_format DQF_RDB_APPENDENTRIES =
 	DEFINE_CRT_REQ_FMT("RDB_APPENDENTRIES", rdb_appendentries_in_fields,
 			   rdb_appendentries_out_fields);
 
-static struct crt_msg_field *rdb_start_in_fields[] = {
-	&CMF_UUID,	/* uuid */
-	&CMF_UUID,	/* pool */
-	&CMF_UINT32,	/* flags */
-	&CMF_UINT32,	/* padding */
-	&CMF_UINT64,	/* size */
-	&CMF_RANK_LIST	/* ranks */
-};
-
-static struct crt_msg_field *rdb_start_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-static struct crt_req_format DQF_RDB_START =
-	DEFINE_CRT_REQ_FMT("RDB_START", rdb_start_in_fields,
-			   rdb_start_out_fields);
-
-static struct crt_msg_field *rdb_stop_in_fields[] = {
-	&CMF_UUID,	/* pool */
-	&CMF_UINT32	/* flags */
-};
-
-static struct crt_msg_field *rdb_stop_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-static struct crt_req_format DQF_RDB_STOP =
-	DEFINE_CRT_REQ_FMT("RDB_STOP", rdb_stop_in_fields, rdb_stop_out_fields);
-
 struct daos_rpc rdb_srv_rpcs[] = {
 	{
 		.dr_name	= "RDB_REQUESTVOTE",
@@ -208,19 +179,7 @@ struct daos_rpc rdb_srv_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_RDB_APPENDENTRIES
-	}, {
-		.dr_name	= "RDB_START",
-		.dr_opc		= RDB_START,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_RDB_START
-	}, {
-		.dr_name	= "RDB_STOP",
-		.dr_opc		= RDB_STOP,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_RDB_STOP
-	}, {
+	},  {
 	}
 };
 

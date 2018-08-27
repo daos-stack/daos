@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -481,8 +481,8 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 		D_GOTO(out, rc);
 
 	uuid_generate(rdb_uuid);
-	rc = rdb_dist_start(rdb_uuid, pool_uuid, ranks, true /* create */,
-			    get_md_cap());
+	rc = ds_pool_rdb_dist_start(rdb_uuid, pool_uuid, ranks,
+				    true /* create */, get_md_cap());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
@@ -541,7 +541,7 @@ out_client:
 	rsvc_client_fini(&client);
 out_creation:
 	if (rc != 0)
-		rdb_dist_stop(pool_uuid, ranks, true /* destroy */);
+		ds_pool_rdb_dist_stop(pool_uuid, ranks, true /* destroy */);
 out_ranks:
 	daos_rank_list_free(ranks);
 out:
@@ -556,7 +556,8 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 	int		rc;
 
 	ds_rebuild_leader_stop(pool_uuid, -1);
-	rc = rdb_dist_stop(pool_uuid, NULL /* ranks */, true /* destroy */);
+	rc = ds_pool_rdb_dist_stop(pool_uuid, NULL /* ranks */,
+				   true /* destroy */);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to destroy pool service: %d\n",
 			DP_UUID(pool_uuid), rc);

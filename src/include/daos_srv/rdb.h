@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -268,11 +268,5 @@ int rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs,
 		 daos_iov_t *key_out, daos_iov_t *value);
 int rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward,
 		   rdb_iterate_cb_t cb, void *arg);
-
-/** Distributed helper methods */
-int rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
-		   const d_rank_list_t *ranks, bool create, size_t size);
-int rdb_dist_stop(const uuid_t pool_uuid, const d_rank_list_t *ranks,
-		  bool destroy);
 
 #endif /* DAOS_SRV_RDB_H */

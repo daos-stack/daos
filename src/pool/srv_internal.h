@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,6 +93,24 @@ void ds_pool_tgt_update_map_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
 void ds_pool_child_purge(struct pool_tls *tls);
+
+/*
+ * srv_rdb.c
+ */
+
+int ds_pool_rdb_dist_start(const uuid_t dbid, const uuid_t pool_uuid,
+			   const d_rank_list_t *ranks, bool create,
+			   size_t size);
+int ds_pool_rdb_dist_stop(const uuid_t pool_uuid, const d_rank_list_t *ranks,
+			  bool destroy);
+
+void ds_pool_rdb_start_handler(crt_rpc_t *rpc);
+int ds_pool_rdb_start_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				 void *priv);
+void ds_pool_rdb_stop_handler(crt_rpc_t *rpc);
+int ds_pool_rdb_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				 void *priv);
+
 /*
  * srv_util.c
  */

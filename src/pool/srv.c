@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,6 +149,20 @@ static struct daos_rpc_handler pool_handlers[] = {
 		.dr_hdlr	= ds_pool_tgt_update_map_handler,
 		.dr_corpc_ops	= {
 			.co_aggregate	= ds_pool_tgt_update_map_aggregator,
+			.co_pre_forward	= NULL,
+		}
+	}, {
+		.dr_opc		= POOL_RDB_START,
+		.dr_hdlr	= ds_pool_rdb_start_handler,
+		.dr_corpc_ops	= {
+			.co_aggregate	= ds_pool_rdb_start_aggregator,
+			.co_pre_forward	= NULL,
+		}
+	}, {
+		.dr_opc		= POOL_RDB_STOP,
+		.dr_hdlr	= ds_pool_rdb_stop_handler,
+		.dr_corpc_ops	= {
+			.co_aggregate	= ds_pool_rdb_stop_aggregator,
 			.co_pre_forward	= NULL,
 		}
 	}, {

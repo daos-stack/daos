@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,8 +144,6 @@ void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
 enum rdb_operation {
 	RDB_REQUESTVOTE		= 1,
 	RDB_APPENDENTRIES	= 2,
-	RDB_START		= 3,
-	RDB_STOP		= 4
 };
 
 struct rdb_op_in {
@@ -175,36 +173,6 @@ struct rdb_appendentries_in {
 struct rdb_appendentries_out {
 	struct rdb_op_out		aeo_op;
 	msg_appendentries_response_t	aeo_msg;
-};
-
-enum rdb_start_flag {
-	RDB_AF_CREATE	= 1
-};
-
-struct rdb_start_in {
-	uuid_t			dai_uuid;
-	uuid_t			dai_pool;
-	uint32_t		dai_flags;	/* rdb_start_flag */
-	uint32_t		dai_padding;
-	uint64_t		dai_size;
-	d_rank_list_t	       *dai_ranks;
-};
-
-struct rdb_start_out {
-	int	dao_rc;
-};
-
-enum rdb_stop_flag {
-	RDB_OF_DESTROY	= 1
-};
-
-struct rdb_stop_in {
-	uuid_t		doi_pool;
-	uint32_t	doi_flags;	/* rdb_stop_flag */
-};
-
-struct rdb_stop_out {
-	int	doo_rc;
 };
 
 extern struct daos_rpc rdb_srv_rpcs[];

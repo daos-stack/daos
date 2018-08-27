@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -216,6 +216,28 @@ struct crt_msg_field *pool_tgt_update_map_out_fields[] = {
 	&CMF_INT	/* rc */
 };
 
+static struct crt_msg_field *pool_rdb_start_in_fields[] = {
+	&CMF_UUID,	/* dbid */
+	&CMF_UUID,	/* pool */
+	&CMF_UINT32,	/* flags */
+	&CMF_UINT32,	/* padding */
+	&CMF_UINT64,	/* size */
+	&CMF_RANK_LIST	/* ranks */
+};
+
+static struct crt_msg_field *pool_rdb_start_out_fields[] = {
+	&CMF_INT	/* rc */
+};
+
+static struct crt_msg_field *pool_rdb_stop_in_fields[] = {
+	&CMF_UUID,	/* pool */
+	&CMF_UINT32	/* flags */
+};
+
+static struct crt_msg_field *pool_rdb_stop_out_fields[] = {
+	&CMF_INT	/* rc */
+};
+
 struct crt_req_format DQF_POOL_CREATE =
 	DEFINE_CRT_REQ_FMT("POOL_CREATE", pool_create_in_fields,
 			   pool_create_out_fields);
@@ -278,6 +300,16 @@ struct crt_req_format DQF_POOL_TGT_DISCONNECT =
 struct crt_req_format DQF_POOL_TGT_UPDATE_MAP =
 	DEFINE_CRT_REQ_FMT("POOL_TGT_UPDATE_MAP", pool_tgt_update_map_in_fields,
 			   pool_tgt_update_map_out_fields);
+
+struct crt_req_format DQF_POOL_RDB_START =
+	DEFINE_CRT_REQ_FMT("POOL_RDB_START",
+			   pool_rdb_start_in_fields,
+			   pool_rdb_start_out_fields);
+
+struct crt_req_format DQF_POOL_RDB_STOP =
+	DEFINE_CRT_REQ_FMT("POOL_RDB_STOP",
+			   pool_rdb_stop_in_fields,
+			   pool_rdb_stop_out_fields);
 
 int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
@@ -387,6 +419,18 @@ struct daos_rpc pool_srv_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_POOL_TGT_UPDATE_MAP
+	}, {
+		.dr_name	= "POOL_RDB_START",
+		.dr_opc		= POOL_RDB_START,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_RDB_START
+	}, {
+		.dr_name	= "POOL_RDB_STOP",
+		.dr_opc		= POOL_RDB_STOP,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_RDB_STOP
 	}, {
 		.dr_opc		= 0
 	}
