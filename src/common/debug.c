@@ -116,6 +116,22 @@ static struct d_debug_bit daos_bit_dict[] = {
 static void
 debug_fini_locked(void)
 {
+	int	i;
+	int	rc;
+
+	/* Unregister DAOS debug bits */
+	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
+		rc = d_log_dbg_bit_dealloc(daos_bit_dict[i].db_name);
+		if (rc < 0)
+			D_PRINT_ERR("Error deallocating daos debug bit for %s",
+				    daos_bit_dict[i].db_name);
+	}
+
+	/* Unregister DAOS debug bit groups */
+	rc = d_log_dbg_grp_dealloc("daos_default");
+	if (rc < 0)
+		D_PRINT_ERR("Error deallocating daos debug group\n");
+
 	d_log_fini();
 }
 
@@ -167,7 +183,7 @@ daos_debug_init(char *logfile)
 					 daos_bit_dict[i].db_name,
 					 daos_bit_dict[i].db_lname);
 		if (rc < 0) {
-			D_PRINT_ERR("Error allocating daos debug bit for %s",
+			D_PRINT_ERR("Error allocating daos debug bit for %s\n",
 				    daos_bit_dict[i].db_name);
 			return -DER_UNINIT;
 		}
