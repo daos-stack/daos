@@ -68,115 +68,6 @@ vos_hdl2oiter(daos_handle_t hdl)
 }
 
 /**
- * @defgroup vos_tree_helper Helper functions for tree operations
- * @{
- */
-
-/**
- * Load the subtree roots embedded in the parent tree record.
- *
- * akey tree	: all akeys under the same dkey
- * recx tree	: all record extents under the same akey, this function will
- *		  load both btree and evtree root.
- */
-int
-key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
-		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, daos_handle_t *sub_toh)
-{
-	struct umem_attr	*uma = vos_obj2uma(obj);
-	struct vos_krec_df	*krec;
-	daos_csum_buf_t		 csum;
-	struct vos_key_bundle	 kbund;
-	struct vos_rec_bundle	 rbund;
-	daos_iov_t		 kiov;
-	daos_iov_t		 riov;
-	struct vea_space_info	*info;
-	int			 rc;
-
-	D_DEBUG(DB_IO, "prepare tree, flags=%x, tclass=%d\n", flags, tclass);
-	if (tclass != VOS_BTR_AKEY && (flags & SUBTR_EVT))
-		D_GOTO(out, rc = -DER_INVAL);
-
-	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_key	= key;
-	kbund.kb_epoch	= epoch;
-
-	tree_rec_bundle2iov(&rbund, &riov);
-	rbund.rb_mmid	= UMMID_NULL;
-	rbund.rb_csum	= &csum;
-	rbund.rb_tclass	= tclass;
-	memset(&csum, 0, sizeof(csum));
-
-	/* NB: In order to avoid complexities of passing parameters to the
-	 * multi-nested tree, tree operations are not nested, instead:
-	 *
-	 * - In the case of fetch, we load the subtree root stored in the
-	 *   parent tree leaf.
-	 * - In the case of update/insert, we call dbtree_update() which may
-	 *   create the root for the subtree, or just return it if it's already
-	 *   there.
-	 */
-	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED, &kiov, NULL,
-			  &riov);
-	switch (rc) {
-	default:
-		D_ERROR("fetch failed: %d\n", rc);
-		goto out;
-
-	case -DER_NONEXIST:
-		if (!(flags & SUBTR_CREATE))
-			goto out;
-
-		kbund.kb_epoch	= DAOS_EPOCH_MAX;
-		rbund.rb_iov	= key;
-		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, &kiov, &riov);
-		if (rc) {
-			D_ERROR("Failed to upsert: %d\n", rc);
-			goto out;
-		}
-		krec = rbund.rb_krec;
-		break;
-	case 0:
-		krec = rbund.rb_krec;
-		if (krec->kr_punched == epoch && epoch != DAOS_EPOCH_MAX) {
-			/* already punched in this epoch */
-			rc = -DER_NONEXIST;
-			goto out;
-		}
-		break;
-	}
-
-	info = obj->obj_cont->vc_pool->vp_vea_info;
-	if (flags & SUBTR_EVT) {
-		rc = evt_open_inplace(&krec->kr_evt[0], uma, info, sub_toh);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	} else {
-		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, info, sub_toh);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
- out:
-	return rc;
-}
-
-/** Close the opened trees */
-void
-key_tree_release(daos_handle_t toh, bool is_array)
-{
-	int	rc;
-
-	if (is_array)
-		rc = evt_close(toh);
-	else
-		rc = dbtree_close(toh);
-
-	D_ASSERT(rc == 0 || rc == -DER_NO_HDL);
-}
-
-/**
  * @} vos_tree_helper
  */
 
@@ -562,7 +453,7 @@ static int singv_iter_fetch(struct vos_obj_iter *oiter,
  */
 static int
 singv_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
-		  daos_key_t *akey)
+		   daos_key_t *akey)
 {
 	struct vos_object	*obj = oiter->it_obj;
 	daos_handle_t		 dk_toh;
