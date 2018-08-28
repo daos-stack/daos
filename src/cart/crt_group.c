@@ -1001,7 +1001,7 @@ gc_corpc_err_cb(void *arg, int status)
 	if (grp_priv->gp_create_cb != NULL)
 		grp_priv->gp_create_cb(NULL,
 				       grp_priv->gp_priv, grp_priv->gp_rc);
-	crt_grp_priv_destroy(grp_priv);
+	crt_grp_priv_decref(grp_priv);
 
 	return status;
 }
