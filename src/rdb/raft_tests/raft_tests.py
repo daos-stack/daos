@@ -42,15 +42,11 @@ def number_of_failures():
     """
     failures = 0
     successes = 0
-    if not os.path.isfile(os.path.join(DIR, "tests_main")):
-        try:
-            res = subprocess.check_output(['make', '-C', DIR, 'tests'])
-        except Exception as e:
-            print("Building Raft Tests failed due to\n{}".format(e))
-            return TEST_NOT_RUN
-    else:
-        os.chdir(DIR)
-        res = subprocess.check_output("./tests_main; gcov raft_server.c", shell=True)
+    try:
+        res = subprocess.check_output(['make', '-C', DIR, 'tests'])
+    except Exception as e:
+        print("Building/running Raft Tests failed due to\n{}".format(e))
+        return TEST_NOT_RUN
 
     for line in res.split('\n'):
         if line.startswith("not ok"):
