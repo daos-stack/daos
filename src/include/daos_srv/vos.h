@@ -551,7 +551,7 @@ vos_iter_next(daos_handle_t ih);
  * Return the current data entry of the iterator.
  *
  * \param ih	[IN]	Iterator handle
- * \param entry [OUT]	Optional, returned data entry fo the current cursor
+ * \param entry [OUT]	Returned data entry for the current cursor
  * \param anchor [OUT]	Optional, position anchor for this entry
  *
  * \return		Zero on success
@@ -561,6 +561,21 @@ vos_iter_next(daos_handle_t ih);
 int
 vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *entry,
 	       daos_anchor_t *anchor);
+
+/**
+ * Copy out the data fetched by vos_iter_fetch()
+ *
+ * \param ih	[IN]	Iterator handle
+ * \param entry [IN]	Data entry for the current cursor
+ * \param iov_out [OUT]	Buffer for holding the entry data
+ *
+ * \return		Zero on success
+ *			-DER_NONEXIST if no more entry
+ *			negative value if error
+ */
+int
+vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
+	      daos_iov_t *iov_out);
 
 /**
  * Delete the current data entry of the iterator

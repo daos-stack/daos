@@ -258,21 +258,29 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 	return rc;
 }
 
+static inline int
+iter_verify_state(struct vos_iterator *iter)
+{
+	if (iter->it_state == VOS_ITS_NONE) {
+		D_ERROR("Please call vos_iter_probe to initialise cursor\n");
+		return -DER_NO_PERM;
+	} else if (iter->it_state == VOS_ITS_END) {
+		D_DEBUG(DB_TRACE, "The end of iteration\n");
+		return -DER_NONEXIST;
+	} else {
+		return 0;
+	}
+}
+
 int
 vos_iter_next(daos_handle_t ih)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int		     rc;
 
-	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialise cursor\n");
-		return -DER_NO_PERM;
-	}
-
-	if (iter->it_state == VOS_ITS_END) {
-		D_DEBUG(DB_TRACE, "The end of iteration\n");
-		return -DER_NONEXIST;
-	}
+	rc = iter_verify_state(iter);
+	if (rc)
+		return rc;
 
 	D_ASSERT(iter->it_ops != NULL);
 	rc = iter->it_ops->iop_next(iter);
@@ -291,38 +299,45 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 	       daos_anchor_t *anchor)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
+	int rc;
 
-	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialise cursor\n");
-		return -DER_NO_PERM;
-	}
-
-	if (iter->it_state == VOS_ITS_END) {
-		D_DEBUG(DB_TRACE, "The end of iteration\n");
-		return -DER_NONEXIST;
-	}
+	rc = iter_verify_state(iter);
+	if (rc)
+		return rc;
 
 	D_ASSERT(iter->it_ops != NULL);
 	return iter->it_ops->iop_fetch(iter, it_entry, anchor);
 }
 
 int
+vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *it_entry,
+	      daos_iov_t *iov_out)
+{
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+	int rc;
+
+	rc = iter_verify_state(iter);
+	if (rc)
+		return rc;
+
+	D_ASSERT(iter->it_ops != NULL);
+	if (iter->it_ops->iop_copy == NULL)
+		return -DER_NOSYS;
+
+	return iter->it_ops->iop_copy(iter, it_entry, iov_out);
+}
+
+int
 vos_iter_delete(daos_handle_t ih, void *args)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
+	int rc;
 
-	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialize the cursor");
-		return -DER_NO_PERM;
-	}
-
-	if (iter->it_state == VOS_ITS_END) {
-		D_DEBUG(DB_TRACE, "The end of iteration\n");
-		return -DER_NONEXIST;
-	}
+	rc = iter_verify_state(iter);
+	if (rc)
+		return rc;
 
 	D_ASSERT(iter->it_ops != NULL);
-
 	if (iter->it_ops->iop_delete == NULL)
 		return -DER_NOSYS;
 

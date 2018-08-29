@@ -269,6 +269,21 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	return 0;
 }
 
+static int
+key_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
+	      daos_iov_t *iov_out)
+{
+	if (ent->ie_key.iov_len > iov_out->iov_buf_len)
+		return -DER_OVERFLOW;
+
+	D_ASSERT(ent->ie_key.iov_buf != NULL);
+	D_ASSERT(iov_out->iov_buf != NULL);
+
+	memcpy(iov_out->iov_buf, ent->ie_key.iov_buf, ent->ie_key.iov_len);
+	iov_out->iov_len = ent->ie_key.iov_len;
+	return 0;
+}
+
 /**
  * Check if the current entry can match the iterator condition, this function
  * retuns IT_OPC_NOOP for true, returns IT_OPC_NEXT or IT_OPC_PROBE if further
@@ -803,8 +818,40 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_rsize	 = entry.en_ptr.pt_inob;
 	uuid_copy(it_entry->ie_cookie, entry.en_ptr.pt_cookie);
 	it_entry->ie_ver	= entry.en_ptr.pt_ver;
+
+	it_entry->ie_biov.bi_buf = NULL;
+	it_entry->ie_biov.bi_data_len = it_entry->ie_recx.rx_nr *
+					it_entry->ie_rsize;
+	it_entry->ie_biov.bi_addr = entry.en_ptr.pt_ex_addr;
  out:
 	return rc;
+}
+
+static int
+recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
+	       daos_iov_t *iov_out)
+{
+	struct bio_io_context	*bioc;
+	struct bio_iov		*biov = &it_entry->ie_biov;
+
+	D_ASSERT(biov->bi_buf == NULL);
+	D_ASSERT(iov_out->iov_buf != NULL);
+
+	/* Skip copy and return success for a punched record */
+	if (bio_addr_is_hole(&biov->bi_addr))
+		return 0;
+	else if (iov_out->iov_buf_len < biov->bi_data_len)
+		return -DER_OVERFLOW;
+
+	/*
+	 * Set 'iov_len' beforehand, cause it will be used as copy
+	 * size in bio_readv().
+	 */
+	iov_out->iov_len = biov->bi_data_len;
+	bioc = oiter->it_obj->obj_cont->vc_pool->vp_io_ctxt;
+	D_ASSERT(bioc != NULL);
+
+	return bio_readv(bioc, biov->bi_addr, iov_out);
 }
 
 static int
@@ -1149,6 +1196,25 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 }
 
 static int
+vos_obj_iter_copy(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
+		  daos_iov_t *iov_out)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+
+	switch (iter->it_type) {
+	case VOS_ITER_DKEY:
+	case VOS_ITER_AKEY:
+		return key_iter_copy(oiter, it_entry, iov_out);
+	case VOS_ITER_SINGLE:
+	case VOS_ITER_RECX:
+		return recx_iter_copy(oiter, it_entry, iov_out);
+	default:
+		D_ASSERT(0);
+		return -DER_INVAL;
+	}
+}
+
+static int
 obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 {
 	int		rc = 0;
@@ -1216,6 +1282,7 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_probe		= vos_obj_iter_probe,
 	.iop_next		= vos_obj_iter_next,
 	.iop_fetch		= vos_obj_iter_fetch,
+	.iop_copy		= vos_obj_iter_copy,
 	.iop_delete		= vos_obj_iter_delete,
 	.iop_empty		= vos_obj_iter_empty,
 };

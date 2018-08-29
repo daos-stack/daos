@@ -306,43 +306,6 @@ fill_key_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 	return fill_key(ih, key_ent, arg, type);
 }
 
-/* Copy the data of the recx into buf. */
-/* TODO: Use entry->ie_biov when implemented. */
-static void
-copy_data(vos_iter_type_t type, vos_iter_param_t *param,
-	  vos_iter_entry_t *entry, void *buf, size_t len)
-{
-	daos_iod_t	iod;
-	daos_iov_t	iov;
-	daos_sg_list_t	sgl;
-	int		rc;
-
-	D_ASSERT(type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
-
-	memset(&iod, 0, sizeof(iod));
-	iod.iod_name = param->ip_akey;
-	if (type == VOS_ITER_SINGLE)
-		iod.iod_type = DAOS_IOD_SINGLE;
-	else
-		iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_nr = 1;
-	iod.iod_recxs = &entry->ie_recx;
-	iod.iod_eprs = NULL;
-
-	iov.iov_buf = buf;
-	iov.iov_buf_len = len;
-	iov.iov_len = 0;
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = &iov;
-
-	rc = vos_obj_fetch(param->ip_hdl, param->ip_oid, entry->ie_epoch,
-			   &param->ip_dkey, 1 /* iod_nr */, &iod, &sgl);
-	/* This vos_obj_fetch call is a workaround anyway. */
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	D_ASSERT(iod.iod_size == entry->ie_rsize);
-}
-
 /* Callers are responsible for incrementing arg->kds_len. See iter_akey_cb. */
 static int
 fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
@@ -353,6 +316,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	daos_size_t		 data_size;
 	daos_size_t		 size = sizeof(*rec);
 	bool			 inline_data = false;
+	int			 rc = 0;
 
 	D_ASSERT(type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
 
@@ -398,11 +362,16 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		arg->kds[arg->kds_len].kd_key_len += data_size;
 		rec->rec_flags |= RECX_INLINE;
 		/* Punched recxs do not have any data to copy. */
-		if (data_size > 0)
-			copy_data(type, param, key_ent,
-				  iovs[arg->sgl_idx].iov_buf +
-				  iovs[arg->sgl_idx].iov_len, data_size);
-		iovs[arg->sgl_idx].iov_len += data_size;
+		if (data_size > 0) {
+			daos_iov_t iov_out;
+
+			daos_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
+				     iovs[arg->sgl_idx].iov_len, data_size);
+			rc = vos_iter_copy(ih, key_ent, &iov_out);
+			if (rc != 0)
+				D_ERROR("Copy recx data failed %d\n", rc);
+			iovs[arg->sgl_idx].iov_len += data_size;
+		}
 	}
 
 	D_DEBUG(DB_IO, "Pack rec "DF_U64"/"DF_U64
@@ -414,7 +383,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		arg->kds[arg->kds_len].kd_key_len, type, arg->sgl_idx,
 		arg->kds_len, rec->rec_flags & RECX_INLINE ? data_size : 0,
 		rec->rec_epr.epr_lo, rec->rec_epr.epr_hi);
-	return 0;
+	return rc;
 }
 
 static int

@@ -170,9 +170,7 @@ typedef struct {
 			/** record size */
 			daos_size_t		ie_rsize;
 			daos_recx_t		ie_recx;
-			/** iovec to return data or ZC address */
-			daos_iov_t		ie_iov;
-			/** biov to return address for single value rec */
+			/** biov to return address for single value or recx */
 			struct bio_iov		ie_biov;
 			/** update cookie */
 			uuid_t			ie_cookie;

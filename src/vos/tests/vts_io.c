@@ -248,6 +248,8 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		daos_key_t *akey, int akey_id, int *recs, bool print_ent)
 {
 	daos_handle_t	ih;
+	char		fetch_buf[8192];
+	daos_iov_t	iov_out;
 	int		itype;
 	int		nr = 0;
 	int		rc;
@@ -270,6 +272,9 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		goto out;
 	}
 
+	/* 8k fetch_buf is large enough to hold largest recx */
+	daos_iov_set(&iov_out, fetch_buf, sizeof(fetch_buf));
+
 	while (rc == 0) {
 		vos_iter_entry_t  ent;
 
@@ -277,6 +282,12 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		rc = vos_iter_fetch(ih, &ent, NULL);
 		if (rc != 0) {
 			print_error("Failed to fetch recx: %d\n", rc);
+			goto out;
+		}
+
+		rc = vos_iter_copy(ih, &ent, &iov_out);
+		if (rc != 0) {
+			print_error("Failed to copy recx: %d\n", rc);
 			goto out;
 		}
 
@@ -301,8 +312,8 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 
 			D_PRINT("\trecx %u : %s\n",
 				(unsigned int)ent.ie_recx.rx_idx,
-				ent.ie_iov.iov_len == 0 ?
-				"[NULL]" : (char *)ent.ie_iov.iov_buf);
+				ent.ie_biov.bi_buf == NULL ?
+				"[NULL]" : (char *)ent.ie_biov.bi_buf);
 			D_PRINT("\tepoch: "DF_U64"\n", ent.ie_epoch);
 		}
 

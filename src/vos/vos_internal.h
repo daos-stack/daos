@@ -806,6 +806,9 @@ struct vos_iter_ops {
 	int	(*iop_fetch)(struct vos_iterator *iter,
 			     vos_iter_entry_t *it_entry,
 			     daos_anchor_t *anchor);
+	/** copy out the record data */
+	int	(*iop_copy)(struct vos_iterator *iter,
+			    vos_iter_entry_t *it_entry, daos_iov_t *iov_out);
 	/** Delete the record that the cursor points to */
 	int	(*iop_delete)(struct vos_iterator *iter,
 			      void *args);
