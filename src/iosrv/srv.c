@@ -38,10 +38,11 @@
 #include <gurt/list.h>
 #include "srv_internal.h"
 
+#define REBUILD_DEFAULT_SCHEDULE_RATIO 30
+
 /** Number of started xstreams or cores used */
 unsigned int	dss_nxstreams;
-
-unsigned int	dss_rebuild_res_percentage = 30;
+unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
 
 /** Per-xstream configuration data */
 struct dss_xstream {
@@ -149,7 +150,7 @@ dss_sched_unit_pop(ABT_pool *pools, ABT_pool *pool)
 		return ABT_UNIT_NULL;
 
 	if (rebuild_cnt == 0 ||
-	    rand() % 100 > dss_rebuild_res_percentage)
+	    rand() % 100 >= dss_rebuild_res_percentage)
 		return normal_unit_pop(pools, pool);
 	else
 		return rebuild_unit_pop(pools, pool);
@@ -501,7 +502,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 	for (i = 0; i < DSS_POOL_CNT; i++) {
 		ABT_pool_access access;
 
-		access = i == DSS_POOL_SHARE ?
+		access = (i == DSS_POOL_SHARE || i == DSS_POOL_REBUILD) ?
 			 ABT_POOL_ACCESS_MPSC : ABT_POOL_ACCESS_PRIV;
 
 		rc = ABT_pool_create_basic(ABT_POOL_FIFO, access, ABT_TRUE,
@@ -729,11 +730,13 @@ dss_xstream_get(int stream_id)
  * \param[in]	stream_id on which xstream to create the ULT.
  * \param[in]	stack_size stacksize of the ULT, if it is 0, then create
  *			default size of ULT.
+ * \param[in]	pool	ULT pool type indicates where the ULT is created.
+ *
  * \param[out]	ult	ULT handle if not NULL
  */
 int
-dss_ult_create(void (*func)(void *), void *arg, int stream_id,
-	       size_t stack_size, ABT_thread *ult)
+dss_ult_pool_create(void (*func)(void *), void *arg, int stream_id,
+		    size_t stack_size, ABT_thread *ult, int pool)
 {
 	ABT_thread_attr		attr;
 	struct dss_xstream	*dx;
@@ -758,7 +761,7 @@ dss_ult_create(void (*func)(void *), void *arg, int stream_id,
 		attr = ABT_THREAD_ATTR_NULL;
 	}
 
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE], func, arg,
+	rc = ABT_thread_create(dx->dx_pools[pool], func, arg,
 			       attr, ult);
 
 free:
@@ -769,6 +772,24 @@ free:
 	}
 
 	return dss_abterr2der(rc);
+}
+
+/* Create the pool in the normal share pool */
+int
+dss_ult_create(void (*func)(void *), void *arg, int stream_id,
+	       size_t stack_size, ABT_thread *ult)
+{
+	return dss_ult_pool_create(func, arg, stream_id, stack_size, ult,
+				   DSS_POOL_SHARE);
+}
+
+/* Create the pool in the rebuild pool */
+int
+dss_rebuild_ult_create(void (*func)(void *), void *arg, int stream_id,
+		       size_t stack_size, ABT_thread *ult)
+{
+	return dss_ult_pool_create(func, arg, stream_id, stack_size, ult,
+				   DSS_POOL_REBUILD);
 }
 
 /**
@@ -1315,11 +1336,12 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 		daos_fail_loc_set(value);
 		break;
 	case DSS_REBUILD_RES_PERCENTAGE:
-		if (value >= 100 || value == 0) {
+		if (value >= 100) {
 			D_ERROR("invalid value "DF_U64"\n", value);
 			rc = -DER_INVAL;
 			break;
 		}
+		D_WARN("set rebuild percentage to "DF_U64"\n", value);
 		dss_rebuild_res_percentage = value;
 		break;
 	default:

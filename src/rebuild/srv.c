@@ -1070,9 +1070,6 @@ rebuild_one_ult(void *arg)
 	iv.riv_toberb_obj_count	= rgt->rgt_status.rs_toberb_obj_nr;
 	iv.riv_obj_count	= rgt->rgt_status.rs_obj_nr;
 	iv.riv_rec_count	= rgt->rgt_status.rs_rec_nr;
-	D_ASSERTF(iv.riv_toberb_obj_count == iv.riv_obj_count,
-		  "toberb_obj_count "DF_U64"obj_count "DF_U64".\n",
-		  iv.riv_toberb_obj_count, iv.riv_obj_count);
 
 	rc = rebuild_iv_update(pool->sp_iv_ns,
 			       &iv, CRT_IV_SHORTCUT_NONE,
@@ -1141,7 +1138,8 @@ rebuild_ults(void *arg)
 			if (pool_is_rebuilding(task->dst_pool_uuid))
 				continue;
 
-			rc = dss_ult_create(rebuild_one_ult, task, -1, 0, NULL);
+			rc = dss_rebuild_ult_create(rebuild_one_ult, task, -1,
+						    0, NULL);
 			if (rc == 0) {
 				rebuild_gst.rg_inflight++;
 				d_list_move(&task->dst_list,
@@ -1309,7 +1307,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 			D_GOTO(free, rc = dss_abterr2der(rc));
 
 		rebuild_gst.rg_rebuild_running = 1;
-		rc = dss_ult_create(rebuild_ults, NULL, -1, 0, NULL);
+		rc = dss_rebuild_ult_create(rebuild_ults, NULL, -1, 0, NULL);
 		if (rc) {
 			ABT_cond_free(&rebuild_gst.rg_stop_cond);
 			rebuild_gst.rg_rebuild_running = 0;
@@ -1368,6 +1366,14 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, d_rank_list_t *svc_list)
 	}
 
 	return rc;
+}
+
+/* Hang rebuild ULT on the current xstream */
+void
+rebuild_hang(void)
+{
+	D_DEBUG(DB_REBUILD, "Hang current rebuild process.\n");
+	dss_parameters_set(DSS_REBUILD_RES_PERCENTAGE, 0);
 }
 
 static int

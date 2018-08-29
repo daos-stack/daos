@@ -211,6 +211,8 @@ void dss_abt_pool_choose_cb_register(unsigned int mod_id,
 				     dss_abt_pool_choose_cb_t cb);
 int dss_ult_create(void (*func)(void *), void *arg,
 		   int stream_id, size_t stack_size, ABT_thread *ult);
+int dss_rebuild_ult_create(void (*func)(void *), void *arg,
+			   int stream_id, size_t stack_size, ABT_thread *ult);
 int dss_ult_create_all(void (*func)(void *), void *arg);
 int dss_ult_create_execute(int (*func)(void *), void *arg,
 			   void (*user_cb)(void *), void *cb_args,

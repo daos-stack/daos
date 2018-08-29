@@ -809,7 +809,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 
 	rpt_get(rpt);
-	rc = dss_ult_create(rebuild_tgt_status_check, rpt, -1, 0, NULL);
+	rc = dss_rebuild_ult_create(rebuild_tgt_status_check, rpt, -1, 0, NULL);
 	if (rc) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);

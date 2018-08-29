@@ -299,6 +299,9 @@ rebuild_one(struct rebuild_tgt_pool_tracker *rpt,
 	if (rc)
 		D_GOTO(cont_close, rc);
 
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_TGT_NOSPACE))
+		D_GOTO(obj_close, rc = -DER_NOSPACE);
+
 	rc = ds_cont_lookup(rpt->rt_pool_uuid, rdone->ro_cont_uuid,
 			    &rebuild_cont);
 	if (rc)
@@ -407,15 +410,39 @@ rebuild_one_ult(void *arg)
 			if (!rpt->rt_abort) {
 				rc = rebuild_one(rpt, rdone);
 				D_DEBUG(DB_REBUILD, DF_UOID" rebuild dkey %.*s "
-					"rc %d tag %d\n",
+					"rc %d tag %d rpt %p\n",
 					DP_UOID(rdone->ro_oid),
 					(int)rdone->ro_dkey.iov_len,
 					(char *)rdone->ro_dkey.iov_buf, rc,
-					idx);
+					idx, rpt);
 			}
 
 			D_ASSERT(puller->rp_inflight > 0);
 			puller->rp_inflight--;
+
+			if (rc == -DER_NOSPACE) {
+				/* If there are no space on current VOS, let's
+				 * hang the rebuild ULT on the current xstream,
+				 * and waitting for the space is reclaimed or
+				 * the drive is replaced.
+				 *
+				 * If the space is reclaimed, then it will
+				 * resume the rebuild ULT.
+				 * If the drive is replaced, then it will
+				 * abort the current rebuild by other process.
+				 */
+				rebuild_hang();
+				ABT_thread_yield();
+				D_DEBUG(DB_REBUILD, "%p rebuild got back.\n",
+					rpt);
+				rc = 0;
+				/* Added it back to rdone */
+				ABT_mutex_lock(puller->rp_lock);
+				d_list_add_tail(&rdone->ro_list,
+						&puller->rp_one_list);
+				ABT_mutex_unlock(puller->rp_lock);
+				continue;
+			}
 
 			/* Ignore nonexistent error because puller could race
 			 * with user's container destroy:
@@ -593,8 +620,8 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 		D_ASSERT(puller->rp_ult_running == 0);
 		D_DEBUG(DB_REBUILD, "create rebuild dkey ult %d\n", idx);
 		rpt_get(rpt);
-		rc = dss_ult_create(rebuild_one_ult, rpt, idx,
-				    PULLER_STACK_SIZE, &puller->rp_ult);
+		rc = dss_rebuild_ult_create(rebuild_one_ult, rpt, idx,
+					    PULLER_STACK_SIZE, &puller->rp_ult);
 		if (rc) {
 			rpt_put(rpt);
 			D_GOTO(free, rc);
@@ -817,8 +844,8 @@ rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 
 	/* Let's iterate the object on different xstream */
 	stream_id = oid.id_pub.lo % dss_get_threads_number();
-	rc = dss_ult_create(rebuild_obj_ult, obj_arg, stream_id,
-			    PULLER_STACK_SIZE, NULL);
+	rc = dss_rebuild_ult_create(rebuild_obj_ult, obj_arg, stream_id,
+				    PULLER_STACK_SIZE, NULL);
 	if (rc) {
 		rpt_put(iter_arg->rpt);
 		D_FREE_PTR(obj_arg);
@@ -1306,7 +1333,8 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 
 		rpt->rt_lead_puller_running = 1;
 		D_ASSERT(rpt->rt_pullers != NULL);
-		rc = dss_ult_create(rebuild_puller_ult, arg, -1, 0, NULL);
+		rc = dss_rebuild_ult_create(rebuild_puller_ult, arg, -1, 0,
+					    NULL);
 		if (rc) {
 			rpt_put(rpt);
 			D_FREE_PTR(arg);

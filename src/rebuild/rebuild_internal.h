@@ -339,5 +339,6 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *master_rpt,
 			     struct rebuild_iv *iv);
 void
 rebuild_one_destroy(struct rebuild_one *rdone);
-
+void
+rebuild_hang(void);
 #endif /* __REBUILD_INTERNAL_H_ */
