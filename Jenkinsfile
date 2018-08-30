@@ -53,7 +53,7 @@ pipeline {
                               '''
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: '.build_vars.*'
-                        stash name: 'CentOS-tests', includes: 'build/src/rdb/raft/src/raft_server.gcno, build/src/rdb/raft/src/tests_main, src/rdb/raft/src/raft_server.c, build/src/common/tests/btree_direct, build/src/common/tests/btree, src/common/tests/btree.sh, build/src/common/tests/sched, build/src/client/api/tests/eq_tests, src/vos/tests/evt_ctl.sh, build/src/vos/vea/tests/vea_ut, src/rdb/raft_tests/raft_tests.py'
+                        stash name: 'CentOS-tests', includes: 'build/src/rdb/raft/src/, src/rdb/raft/src/raft_server.c, build/src/common/tests/btree_direct, build/src/common/tests/btree, src/common/tests/btree.sh, build/src/common/tests/sched, build/src/client/api/tests/eq_tests, src/vos/tests/evt_ctl.sh, build/src/vos/vea/tests/vea_ut, src/rdb/raft_tests/raft_tests.py'
                     }
                 }
                 stage('Build on Ubuntu 16.04') {
