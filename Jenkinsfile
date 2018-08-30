@@ -19,6 +19,12 @@ pipeline {
     }
 
     stages {
+        stage('Pre-build') {
+            agent any
+            steps {
+                sh 'utils/check_modules.sh'
+            }
+        }
         stage('Build') {
             parallel {
                 stage('Build on CentOS 7') {
