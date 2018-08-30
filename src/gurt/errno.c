@@ -39,6 +39,7 @@
  * This file is part of GURT.
  */
 #include "gurt/errno.h"
+#include "gurt/debug.h"
 
 #define D_DEFINE_GURT_ERRSTR(name, value) #name,
 
@@ -46,7 +47,7 @@
 	static const char * const g_##name##_errstr[] = {		\
 		D_FOREACH_##name##_ERR(D_DEFINE_GURT_ERRSTR)		\
 	};								\
-	_Static_assert((sizeof(g_##name##_errstr) /			\
+	D_CASSERT((sizeof(g_##name##_errstr) /			\
 			 sizeof(g_##name##_errstr[0])) ==		\
 	      ((DER_ERR_##name##_LIMIT - DER_ERR_##name##_BASE - 1)),	\
 			#name "is not contiguous");

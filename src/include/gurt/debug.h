@@ -201,8 +201,9 @@ do {									\
 	assert(cond);							\
 } while (0)
 
-#define D_CASSERT(cond)							\
-	do {switch (1) {case (cond): case 0: break; } } while (0)
+
+#define D_CASSERT(cond, ...)						\
+	_Static_assert(cond, #cond ": " __VA_ARGS__)
 
 #define DF_U64		"%" PRIu64
 #define DF_X64		"%" PRIx64
