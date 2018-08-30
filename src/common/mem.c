@@ -97,7 +97,9 @@ pmem_tx_abort(struct umem_instance *umm, int err)
 	 */
 	if (pmemobj_tx_stage() != TX_STAGE_ONABORT)
 		pmemobj_tx_abort(err);
-	return pmemobj_tx_end();
+
+	err = pmemobj_tx_end();
+	return err ? umem_tx_errno(err) : 0;
 }
 
 static void
@@ -187,8 +189,8 @@ pmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 		 * pmemobj_tx_end() needs be called to re-initialize the
 		 * tx state when pmemobj_tx_begin() failed.
 		 */
-		pmemobj_tx_end();
-		return pmemobj_tx_errno() ? : rc;
+		rc = pmemobj_tx_end();
+		return rc ? umem_tx_errno(rc) : 0;
 	}
 	return 0;
 }
@@ -196,8 +198,12 @@ pmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 static int
 pmem_tx_commit(struct umem_instance *umm)
 {
+	int rc;
+
 	pmemobj_tx_commit();
-	return pmemobj_tx_end();
+	rc = pmemobj_tx_end();
+
+	return rc ? umem_tx_errno(rc) : 0;
 }
 
 static umem_id_t
