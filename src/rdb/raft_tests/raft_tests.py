@@ -50,7 +50,7 @@ def number_of_failures():
             return TEST_NOT_RUN
     else:
         os.chdir(DIR)
-        res = subprocess.check_output("./tests_main; gcov raft_server.c", shell=True)
+        res = subprocess.check_output("./tests_main", shell=True)
 
     for line in res.split('\n'):
         if line.startswith("not ok"):
