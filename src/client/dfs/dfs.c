@@ -196,7 +196,8 @@ get_daos_obj_mode(int flags)
 {
 	if ((flags & O_ACCMODE) == O_RDONLY)
 		return DAOS_OO_RO;
-	else if ((flags & O_ACCMODE) == O_RDWR)
+	else if ((flags & O_ACCMODE) == O_RDWR ||
+		 (flags & O_ACCMODE) == O_WRONLY)
 		return DAOS_OO_RW;
 	else
 		return -1;
@@ -971,7 +972,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			D_ERROR("daos_epoch_hold() Failed (%d)\n", rc);
 			D_GOTO(err_dfs, rc);
 		}
-	} else {
+	} else if (amode == O_RDONLY) {
 		daos_epoch_state_t state;
 
 		rc = daos_epoch_query(coh, &state, NULL);
@@ -980,6 +981,9 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			D_GOTO(err_dfs, rc);
 		}
 		dfs->epoch = state.es_ghce;
+	} else {
+		D_ERROR("Invalid dfs_mount access mode\n");
+		D_GOTO(err_dfs, rc = -DER_INVAL);
 	}
 
 	dfs->oid.hi = 0;
