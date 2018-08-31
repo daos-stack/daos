@@ -36,26 +36,28 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+set -e
+
 if [ ! -d "scons_local" ];then
   cd ..
 fi
-export PYTHONPATH=`pwd`/utils:${PYTHONPATH}
+PYTHONPATH=$(pwd)/utils:${PYTHONPATH}
+export PYTHONPATH
 
 if [ -z "$*" ]; then
   flist="utils/daos_build.py -s SConstruct"
   #Exclude raft and scons_local
-  scripts=`find . -name SConscript | grep -v scons_local| grep -v raft | \
-           grep -v _build.external`
+  scripts=$(find . -name SConscript | grep -v scons_local| grep -v raft | \
+           grep -v _build.external)
   for file in $scripts; do
+    #shellcheck disable=SC2039
     flist+=" -s $file"
   done
 else
   flist=$*
 fi
 
-./scons_local/check_python.sh $flist
-
-if [ $? -ne 0 ]; then
+if ! ./scons_local/check_python.sh "$flist"; then
   exit 1
 fi
 exit 0
