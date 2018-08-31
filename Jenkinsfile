@@ -20,10 +20,21 @@ pipeline {
 
     stages {
         stage('Pre-build') {
-            agent any
-            steps {
-                sh '''git submodule update --init --recursive
-                      utils/check_modules.sh'''
+            parallel {
+                stage('check_modules.sh') {
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos:7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs  '--build-arg NOBUILD=1 --build-arg UID=$(id -u)'
+                        }
+                    }
+                    steps {
+                        sh '''git submodule update --init --recursive
+                              utils/check_modules.sh'''
+                   }
+               }
             }
         }
         stage('Build') {
