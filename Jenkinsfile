@@ -36,8 +36,13 @@ pipeline {
                               popd
                               git submodule update --init --recursive
                               utils/check_modules.sh'''
-                   }
-               }
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: true
+                        }
+                    }
+                }
             }
         }
         stage('Build') {
