@@ -22,7 +22,8 @@ pipeline {
         stage('Pre-build') {
             agent any
             steps {
-                sh 'utils/check_modules.sh'
+                sh '''git submodule update --init --recursive
+                      utils/check_modules.sh'''
             }
         }
         stage('Build') {
