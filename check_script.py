@@ -218,11 +218,12 @@ def check_script(fname, *args, **kw):
 
     if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
         print cmd
-    os.system(cmd)
-    if wrap:
-        wrapper.fix_log(fname)
-    error_count = parse_report()
-    print ""
+    error_count = os.WEXITSTATUS(os.system(cmd))
+    if not error_count:
+        if wrap:
+            wrapper.fix_log(fname)
+        error_count = parse_report()
+        print ""
     return error_count
 
 

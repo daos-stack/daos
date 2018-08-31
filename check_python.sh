@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2018 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,8 +19,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-SCRIPT_DIR=$(dirname $0)
-export PYTHONPATH=$SCRIPT_DIR:$SCRIPT_DIR/fake_scons:$PYTHONPATH
+set -e
+
+SCRIPT_DIR=$(dirname "$0")
+export PYTHONPATH="$SCRIPT_DIR:$SCRIPT_DIR"/fake_scons:$PYTHONPATH
 rm -f pylint.log
 
 fail=0
@@ -29,45 +31,49 @@ while [ $# != 0 ]; do
         #Run the self check on prereq_tools and various
         #helper scripts
         echo Run self check
-        $SCRIPT_DIR/check_script.py -s
-	[ $? -ne 0 ] && fail=1
+        if ! "$SCRIPT_DIR"/check_script.py -s; then
+	    fail=1
+        fi
     elif [ "$1" = "-s" ]; then
         #Check a SCons file
         shift
-        if [ ! -f $1 ]; then
-            echo skipping non-existent file: $1
+        if [ ! -f "$1" ]; then
+            echo skipping non-existent file: "$1"
             fail=1
         else
-            echo Check $1
-            $SCRIPT_DIR/check_script.py -w $1
-	    [ $? -ne 0 ] && fail=1
+            echo Check "$1"
+            if ! "$SCRIPT_DIR"/check_script.py -w "$1"; then
+	        fail=1
+            fi
         fi
     elif [ "$1" = "-P3" ]; then
         #Check a test file
         shift
-        if [ ! -f $1 ]; then
-            echo skipping non-existent file: $1
+        if [ ! -f "$1" ]; then
+            echo skipping non-existent file: "$1"
             fail=1
         else
-            echo Check $1
-            $SCRIPT_DIR/check_script.py -p3 $1
-	    [ $? -ne 0 ] && fail=1
+            echo Check "$1"
+            if ! "$SCRIPT_DIR"/check_script.py -p3 "$1"; then
+	        fail=1
+            fi
         fi
     else
-        if [ ! -f $1 ]; then
-            echo skipping non-existent file: $1
+        if [ ! -f "$1" ]; then
+            echo skipping non-existent file: "$1"
             fail=1
         else
-            echo Check $1
-            $SCRIPT_DIR/check_script.py $1
-	    [ $? -ne 0 ] && fail=1
+            echo Check "$1"
+            if ! "$SCRIPT_DIR"/check_script.py "$1"; then
+	        fail=1
+            fi
         fi
     fi
     shift
 done
 
 echo "See pylint.log report"
-list=`grep rated pylint.log | grep -v "rated at 10"`
+list=$(grep rated pylint.log | grep -v "rated at 10")
 if [ $fail -eq 1 ] || [ "$list" != "" ]; then
 echo Fail
 exit 1
