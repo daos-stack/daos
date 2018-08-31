@@ -57,7 +57,10 @@ else
   flist=$*
 fi
 
-if ! ./scons_local/check_python.sh "$flist"; then
+# shellcheck disable=SC2086 # $flist is a list of switches and
+                            # arguments; quoting will make it a
+                            # single argument
+if ! ./scons_local/check_python.sh $flist; then
   exit 1
 fi
 exit 0
