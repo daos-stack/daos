@@ -157,6 +157,48 @@ struct d_debug_data d_dbglog_data = {
 #define BIT_CNT_TO_BIT_MASK(cnt)	(1 << (DLOG_DPRISHIFT + cnt))
 
 /**
+ * Reset optional debug bit
+ *
+ * \param[in]	name	debug mask short name
+ *
+ * \return		0 on success, -1 on error
+ */
+int
+d_log_dbg_bit_dealloc(char *name)
+{
+	struct d_debug_bit	*d;
+	int			 i;
+	size_t			 name_sz;
+
+	if (name == NULL)
+		return -1;
+
+	name_sz = strlen(name) + 1;
+
+	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
+		d = &d_dbg_bit_dict[i];
+		if (d->db_name != NULL) {
+			if (strncasecmp(d->db_name, name, name_sz) == 0) {
+				d->db_name = NULL;
+				d->db_lname = NULL;
+				d->db_name_size = 0;
+				d->db_lname_size = 0;
+				*(d->db_bit) = 0;
+
+				D_ASSERT(d_dbglog_data.dbg_bit_cnt > 0);
+				d_dbglog_data.dbg_bit_cnt--;
+
+				return 0;
+			}
+		}
+	}
+
+	D_PRINT_ERR("Failed to dealloc debug mask:%s\n", name);
+
+	return -1;
+}
+
+/**
  * Allocate optional debug bit, register name and return available bit
  *
  * \param[in]	name	debug mask short name
@@ -168,8 +210,8 @@ struct d_debug_data d_dbglog_data = {
 int
 d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname)
 {
-	size_t		   name_len;
-	size_t		   lname_len;
+	size_t		   name_sz;
+	size_t		   lname_sz;
 	int		   i;
 	uint64_t	   bit = 0;
 	struct d_debug_bit *d;
@@ -177,11 +219,11 @@ d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname)
 	if (name == NULL || dbgbit == NULL)
 		return -1;
 
-	name_len = strlen(name);
+	name_sz = strlen(name) + 1;
 	if (lname != NULL)
-		lname_len = strlen(lname);
+		lname_sz = strlen(lname) + 1;
 	else
-		lname_len = 0;
+		lname_sz = 0;
 
 	/**
 	 * Allocate debug bit in gurt for given debug mask name.
@@ -197,7 +239,7 @@ d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname)
 	/**
 	 * DB_ALL = DLOG_DBG, does not require a specific bit
 	 */
-	if (strncasecmp(name, DB_ALL_BITS, name_len) != 0) {
+	if (strncasecmp(name, DB_ALL_BITS, name_sz) != 0) {
 		bit = BIT_CNT_TO_BIT_MASK(d_dbglog_data.dbg_bit_cnt);
 		d_dbglog_data.dbg_bit_cnt++;
 	}
@@ -209,11 +251,11 @@ d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname)
 		 */
 		d = &d_dbg_bit_dict[i];
 		if (d->db_name != NULL) {
-			if (strncasecmp(d->db_name, name, name_len) == 0) {
+			if (strncasecmp(d->db_name, name, name_sz) == 0) {
 				if (*(d->db_bit) == 0) {
 					/* DB_ALL = DLOG_DBG */
 					if (strncasecmp(name, DB_ALL_BITS,
-							name_len) == 0)
+							name_sz) == 0)
 						*dbgbit = DLOG_DBG;
 					else
 						*dbgbit = bit;
@@ -226,14 +268,54 @@ d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname)
 		} else {
 			d->db_name = name;
 			d->db_lname = lname;
-			d->db_name_size = name_len;
-			d->db_lname_size = lname_len;
+			d->db_name_size = name_sz;
+			d->db_lname_size = lname_sz;
 			*(d->db_bit) = bit;
 
 			*dbgbit = bit;
 			return 0;
 		}
 	}
+
+	return -1;
+}
+
+/**
+ * Reset optional debug group
+ *
+ * \param[in]	grpname	debug mask group name
+ *
+ * \return		0 on success, -1 on error
+ */
+int
+d_log_dbg_grp_dealloc(char *name)
+{
+	struct d_debug_grp	*g;
+	int			 i;
+	size_t			 name_sz;
+
+	if (name == NULL)
+		return -1;
+
+	name_sz = strlen(name) + 1;
+
+	for (i = 0; i < NUM_DBG_GRP_ENTRIES; i++) {
+		g = &d_dbg_grp_dict[i];
+		if (g->dg_name != NULL) {
+			if (strncasecmp(g->dg_name, name, name_sz) == 0) {
+				g->dg_name = NULL;
+				g->dg_name_size = 0;
+				g->dg_mask = 0;
+
+				D_ASSERT(d_dbglog_data.dbg_bit_cnt > 0);
+				d_dbglog_data.dbg_grp_cnt--;
+
+				return 0;
+			}
+		}
+	}
+
+	D_PRINT_ERR("Failed to dealloc debug group mask:%s\n", name);
 
 	return -1;
 }
@@ -250,13 +332,13 @@ int
 d_log_dbg_grp_alloc(uint64_t dbgmask, char *grpname)
 {
 	int		   i;
-	size_t		   name_len;
+	size_t		   name_sz;
 	struct d_debug_grp *g;
 
 	if (grpname == NULL || dbgmask == 0)
 		return -1;
 
-	name_len = strlen(grpname);
+	name_sz = strlen(grpname) + 1;
 
 	/**
 	 * Allocate debug group in gurt for given debug mask name.
@@ -273,7 +355,7 @@ d_log_dbg_grp_alloc(uint64_t dbgmask, char *grpname)
 		g = &d_dbg_grp_dict[i];
 		if (g->dg_name == NULL) {
 			g->dg_name = grpname;
-			g->dg_name_size = name_len;
+			g->dg_name_size = name_sz;
 			g->dg_mask = dbgmask;
 			return 0;
 		}
@@ -424,6 +506,35 @@ setup_clog_facnamemask(void)
 }
 
 /**
+ * Cleanup gurt mask bits. Names of gurt debug masks are already defined
+ * and should not be reset.
+ */
+static void
+cleanup_dbg_namebit(void)
+{
+	struct d_debug_bit *d;
+	int		    i;
+
+	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
+		d = &d_dbg_bit_dict[i];
+		if (d->db_name != NULL) {
+			/**
+			 * DB_ALL is a special case, does not require a
+			 * specific bit, therefore is not considered in bit cnt.
+			 */
+			if (strncasecmp(d->db_name, DB_ALL_BITS,
+					d->db_name_size) != 0) {
+				*(d->db_bit) = 0;
+
+				D_ASSERT(d_dbglog_data.dbg_bit_cnt > 0);
+				d_dbglog_data.dbg_bit_cnt--;
+			}
+		}
+	}
+}
+
+
+/**
  * Setup the debug names and mask bits.
  *
  * \return	 -DER_UNINIT on error, 0 on success
@@ -431,10 +542,12 @@ setup_clog_facnamemask(void)
 static inline int
 setup_dbg_namebit(void)
 {
-	int		   i;
-	int		   rc;
-	uint64_t	   allocd_dbg_bit;
 	struct d_debug_bit *d;
+	uint64_t	    allocd_dbg_bit;
+	int		    i;
+	int		    rc;
+
+	D_ASSERT(d_dbglog_data.dbg_bit_cnt == 0);
 
 	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
 		d = &d_dbg_bit_dict[i];
@@ -443,7 +556,7 @@ setup_dbg_namebit(void)
 			rc = d_log_dbg_bit_alloc(&allocd_dbg_bit, d->db_name,
 						 d->db_lname);
 			if (rc < 0) {
-				D_PRINT_ERR("Error allocating debug bit for %s",
+				D_PRINT_ERR("Debug bit for %s not allocated\n",
 					    d->db_name);
 				return -DER_UNINIT;
 			}
@@ -516,8 +629,11 @@ void d_log_fini(void)
 
 	D_MUTEX_LOCK(&d_log_lock);
 	d_log_refcount--;
-	if (d_log_refcount == 0)
+	if (d_log_refcount == 0) {
+		cleanup_dbg_namebit();
 		d_log_close();
+	}
+
 	D_MUTEX_UNLOCK(&d_log_lock);
 }
 

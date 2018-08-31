@@ -196,6 +196,15 @@ extern struct d_log_xstate d_log_xst;
 extern struct d_debug_data d_dbglog_data;
 
 /**
+ * Reset optional debug bit
+ *
+ * \param[in]	name	debug mask short name
+ *
+ * \return		0 on success, -1 on error
+ */
+int d_log_dbg_bit_dealloc(char *name);
+
+/**
  * Allocate optional debug bit, register name and return available bit
  *
  * \param[in] name	name of bit (determined by sub-project)
@@ -206,6 +215,15 @@ extern struct d_debug_data d_dbglog_data;
  *
  */
 int d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname);
+
+/**
+ * Reset optional debug group
+ *
+ * \param[in]	grpname	debug mask group name
+ *
+ * \return		0 on success, -1 on error
+ */
+int d_log_dbg_grp_dealloc(char *grpname);
 
 /**
  * Create an identifier/group name for muliple debug bits

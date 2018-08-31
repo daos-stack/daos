@@ -1391,6 +1391,11 @@ crt_lm_finalize(void)
 	}
 	D_RWLOCK_UNLOCK(&crt_lm_gdata.clg_rwlock);
 	lm_gdata_destroy();
+	/**
+	 * Reset to allow for crt_lm_gdata to be re-initialized upon multiple
+	 * crt_lm_init() calls.
+	 */
+	lm_gdata_init_once = PTHREAD_ONCE_INIT;
 
 out:
 	return;
