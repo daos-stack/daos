@@ -15,7 +15,7 @@ def scons():
                     pmdk_libs=['pmemobj', 'pmem'])
 
     if platform_arm:
-        prereqs.require(env, 'mercury', mercury_lib=['mchecksum'])
+        prereqs.require(env, 'mchecksum')
     else:
         prereqs.require(env, 'isal')
 

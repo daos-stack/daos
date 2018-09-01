@@ -175,7 +175,7 @@ dts_cmd_parser(struct option *opts, const char *prompt,
 	int	 rc;
 
 	for (rc = 0; rc == 0;) {
-		char	*args;
+		char	*args = NULL;
 		char	*cmd;
 		char	 opc;
 		int	 i;
