@@ -23,6 +23,7 @@
 #define D_LOGFAC	DD_FAC(bio)
 
 #include <spdk/blob.h>
+#include <spdk/thread.h>
 #include "bio_internal.h"
 #include "smd/smd_internal.h"
 
@@ -41,38 +42,28 @@ struct blob_cp_arg {
 	int			 bca_rc;
 };
 
-static struct blob_cp_arg *
-alloc_blob_cp_arg(void)
+static int
+blob_cp_arg_init(struct blob_cp_arg *ba)
 {
-	struct blob_cp_arg	*ba;
-	int			 rc;
-
-	D_ALLOC_PTR(ba);
-	if (ba == NULL)
-		return NULL;
+	int	rc;
 
 	rc = ABT_mutex_create(&ba->bca_mutex);
-	if (rc != ABT_SUCCESS) {
-		D_FREE(ba);
-		return NULL;
-	}
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
 
 	rc = ABT_cond_create(&ba->bca_done);
 	if (rc != ABT_SUCCESS) {
 		ABT_mutex_free(&ba->bca_mutex);
-		D_FREE(ba);
-		return NULL;
+		return dss_abterr2der(rc);
 	}
-
-	return ba;
+	return 0;
 }
 
 static void
-free_blob_cp_arg(struct blob_cp_arg *ba)
+blob_cp_arg_fini(struct blob_cp_arg *ba)
 {
 	ABT_cond_free(&ba->bca_done);
 	ABT_mutex_free(&ba->bca_mutex);
-	D_FREE(ba);
 }
 
 static void
@@ -130,11 +121,54 @@ blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 	}
 }
 
+struct blob_msg_arg {
+	struct spdk_blob_opts	 bma_opts;
+	struct spdk_blob_store	*bma_bs;
+	struct spdk_blob	*bma_blob;
+	spdk_blob_id		 bma_blob_id;
+	void			*bma_cp_arg;
+};
+
+static void
+blob_msg_create(void *msg_arg)
+{
+	struct blob_msg_arg *arg = msg_arg;
+
+	spdk_bs_create_blob_ext(arg->bma_bs, &arg->bma_opts, blob_create_cb,
+				arg->bma_cp_arg);
+}
+
+static void
+blob_msg_delete(void *msg_arg)
+{
+	struct blob_msg_arg *arg = msg_arg;
+
+	spdk_bs_delete_blob(arg->bma_bs, arg->bma_blob_id, blob_cb,
+			    arg->bma_cp_arg);
+}
+
+static void
+blob_msg_open(void *msg_arg)
+{
+	struct blob_msg_arg *arg = msg_arg;
+
+	spdk_bs_open_blob(arg->bma_bs, arg->bma_blob_id, blob_open_cb,
+			  arg->bma_cp_arg);
+}
+
+static void
+blob_msg_close(void *msg_arg)
+{
+	struct blob_msg_arg *arg = msg_arg;
+
+	spdk_blob_close(arg->bma_blob, blob_cb, arg->bma_cp_arg);
+}
+
 int
 bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 {
-	struct blob_cp_arg		*ba;
-	struct spdk_blob_opts		 opts;
+	struct blob_msg_arg		 bma = { 0 };
+	struct blob_cp_arg		 ba = { 0 };
 	struct bio_blobstore		*bbs;
 	struct smd_nvme_pool_info	 smd_pool;
 	uint64_t			 cluster_sz;
@@ -161,8 +195,8 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 		return -DER_INVAL;
 	}
 
-	spdk_blob_opts_init(&opts);
-	opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
+	spdk_blob_opts_init(&bma.bma_opts);
+	bma.bma_opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
 
 	/**
 	 * Query per-server metadata to make sure the blob for this pool:xstream
@@ -175,32 +209,39 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 		return -DER_EXIST;
 	}
 
-	ba = alloc_blob_cp_arg();
-	if (ba == NULL)
-		return -DER_NOMEM;
+	rc = blob_cp_arg_init(&ba);
+	if (rc != 0)
+		return rc;
 
-	ba->bca_inflights = 1;
+	ba.bca_inflights = 1;
 	ABT_mutex_lock(bbs->bb_mutex);
-	if (bbs->bb_bs != NULL)
-		spdk_bs_create_blob_ext(bbs->bb_bs, &opts, blob_create_cb, ba);
-	else
-		blob_create_cb(ba, 0, -DER_NO_HDL);
+	if (bbs->bb_bs != NULL) {
+		bma.bma_bs = bbs->bb_bs;
+		bma.bma_cp_arg = &ba;
+
+		spdk_thread_send_msg(bbs->bb_ctxt->bxc_thread,
+				     blob_msg_create, &bma);
+	} else {
+		blob_create_cb(&ba, 0, -DER_NO_HDL);
+	}
 	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob creation done */
-	blob_wait_completion(xs_ctxt, ba);
-	if (ba->bca_rc != 0) {
+	blob_wait_completion(xs_ctxt, &ba);
+	rc = ba.bca_rc;
+
+	if (rc != 0) {
 		D_ERROR("Create blob failed for xs:%p pool:"DF_UUID" rc:%d\n",
-			xs_ctxt, DP_UUID(uuid), ba->bca_rc);
-		rc = ba->bca_rc;
+			xs_ctxt, DP_UUID(uuid), ba.bca_rc);
 	} else {
-		D_ASSERT(ba->bca_id != 0);
+		D_ASSERT(ba.bca_id != 0);
 		D_DEBUG(DB_MGMT, "Successfully created blobID "DF_U64" for xs:"
 			"%p pool:"DF_UUID" blob size:"DF_U64" clusters\n",
-			ba->bca_id, xs_ctxt, DP_UUID(uuid), opts.num_clusters);
+			ba.bca_id, xs_ctxt, DP_UUID(uuid),
+			bma.bma_opts.num_clusters);
 
 		/* Update per-server metadata */
-		smd_nvme_set_pool_info(uuid, xs_ctxt->bxc_xs_id, ba->bca_id,
+		smd_nvme_set_pool_info(uuid, xs_ctxt->bxc_xs_id, ba.bca_id,
 				       &smd_pool);
 		rc = smd_nvme_add_pool(&smd_pool);
 		if (rc != 0) {
@@ -209,16 +250,16 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 			if (bio_blob_delete(uuid, xs_ctxt))
 				D_ERROR("Unable to delete newly created blobID "
 					""DF_U64" for xs:%p pool:"DF_UUID"\n",
-					ba->bca_id, xs_ctxt, DP_UUID(uuid));
+					ba.bca_id, xs_ctxt, DP_UUID(uuid));
 		} else {
 			D_DEBUG(DB_MGMT, "Successfully added entry to SMD pool "
 				"table, pool:"DF_UUID", xs_id:%d, "
 				"blobID:"DF_U64"\n", DP_UUID(uuid),
-				xs_ctxt->bxc_xs_id, ba->bca_id);
+				xs_ctxt->bxc_xs_id, ba.bca_id);
 		}
 	}
 
-	free_blob_cp_arg(ba);
+	blob_cp_arg_fini(&ba);
 	return rc;
 }
 
@@ -227,7 +268,8 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 		struct umem_instance *umem, uuid_t uuid)
 {
 	struct bio_io_context		*ctxt;
-	struct blob_cp_arg		*ba;
+	struct blob_msg_arg		 bma = { 0 };
+	struct blob_cp_arg		 ba = { 0 };
 	struct bio_blobstore		*bbs;
 	struct smd_nvme_pool_info	 smd_pool;
 	spdk_blob_id			 blob_id;
@@ -260,9 +302,9 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 
 	blob_id = smd_pool.npi_blob_id;
 
-	ba = alloc_blob_cp_arg();
-	if (ba == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	rc = blob_cp_arg_init(&ba);
+	if (rc != 0)
+		goto out;
 
 	D_DEBUG(DB_MGMT, "Opening blobID "DF_U64" for xs:%p pool:"DF_UUID"\n",
 		blob_id, xs_ctxt, DP_UUID(uuid));
@@ -270,31 +312,37 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	bbs = xs_ctxt->bxc_blobstore;
 	D_ASSERT(bbs != NULL);
 
-	ba->bca_inflights = 1;
+	ba.bca_inflights = 1;
 	ABT_mutex_lock(bbs->bb_mutex);
-	if (bbs->bb_bs != NULL)
-		spdk_bs_open_blob(bbs->bb_bs, blob_id, blob_open_cb, ba);
-	else
-		blob_open_cb(ba, NULL, -DER_NO_HDL);
+	if (bbs->bb_bs != NULL) {
+		bma.bma_bs = bbs->bb_bs;
+		bma.bma_blob_id = blob_id;
+		bma.bma_cp_arg = &ba;
+
+		spdk_thread_send_msg(bbs->bb_ctxt->bxc_thread,
+				     blob_msg_open, &bma);
+	} else {
+		blob_open_cb(&ba, NULL, -DER_NO_HDL);
+	}
 	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob open done */
-	blob_wait_completion(xs_ctxt, ba);
-	if (ba->bca_rc != 0) {
+	blob_wait_completion(xs_ctxt, &ba);
+	rc = ba.bca_rc;
+
+	if (rc != 0) {
 		D_ERROR("Open blobID "DF_U64" failed for xs:%p pool:"DF_UUID" "
-			"rc:%d\n", blob_id, xs_ctxt, DP_UUID(uuid), ba->bca_rc);
-		rc = ba->bca_rc;
+			"rc:%d\n", blob_id, xs_ctxt, DP_UUID(uuid), rc);
 	} else {
-		D_ASSERT(ba->bca_blob != NULL);
+		D_ASSERT(ba.bca_blob != NULL);
 		D_DEBUG(DB_MGMT, "Successfully opened blobID "DF_U64" for xs:%p"
 			" pool:"DF_UUID" blob:%p\n", blob_id, xs_ctxt,
-			DP_UUID(uuid), ba->bca_blob);
-		ctxt->bic_blob = ba->bca_blob;
+			DP_UUID(uuid), ba.bca_blob);
+		ctxt->bic_blob = ba.bca_blob;
 		*pctxt = ctxt;
-		rc = 0;
 	}
 
-	free_blob_cp_arg(ba);
+	blob_cp_arg_fini(&ba);
 out:
 	if (rc != 0)
 		D_FREE(ctxt);
@@ -304,7 +352,8 @@ out:
 int
 bio_ioctxt_close(struct bio_io_context *ctxt)
 {
-	struct blob_cp_arg	*ba;
+	struct blob_msg_arg	 bma = { 0 };
+	struct blob_cp_arg	 ba = { 0 };
 	struct bio_blobstore	*bbs;
 	int			 rc;
 
@@ -312,9 +361,9 @@ bio_ioctxt_close(struct bio_io_context *ctxt)
 	if (ctxt->bic_blob == NULL)
 		D_GOTO(out, rc = 0);
 
-	ba = alloc_blob_cp_arg();
-	if (ba == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	rc = blob_cp_arg_init(&ba);
+	if (rc != 0)
+		goto out;
 
 	D_DEBUG(DB_MGMT, "Closing blob %p for xs:%p\n", ctxt->bic_blob,
 		ctxt->bic_xs_ctxt);
@@ -323,27 +372,31 @@ bio_ioctxt_close(struct bio_io_context *ctxt)
 	bbs = ctxt->bic_xs_ctxt->bxc_blobstore;
 	D_ASSERT(bbs != NULL);
 
-	ba->bca_inflights = 1;
+	ba.bca_inflights = 1;
 	ABT_mutex_lock(bbs->bb_mutex);
-	if (bbs->bb_bs != NULL)
-		spdk_blob_close(ctxt->bic_blob, blob_cb, ba);
-	else
-		blob_cb(ba, -DER_NO_HDL);
+	if (bbs->bb_bs != NULL) {
+		bma.bma_blob = ctxt->bic_blob;
+		bma.bma_cp_arg = &ba;
+
+		spdk_thread_send_msg(bbs->bb_ctxt->bxc_thread,
+				     blob_msg_close, &bma);
+	} else {
+		blob_cb(&ba, -DER_NO_HDL);
+	}
 	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob close done */
-	blob_wait_completion(ctxt->bic_xs_ctxt, ba);
-	if (ba->bca_rc != 0) {
+	blob_wait_completion(ctxt->bic_xs_ctxt, &ba);
+	rc = ba.bca_rc;
+
+	if (rc != 0)
 		D_ERROR("Close blob %p failed for xs:%p rc:%d\n",
-			ctxt->bic_blob, ctxt->bic_xs_ctxt, ba->bca_rc);
-		rc = ba->bca_rc;
-	} else {
+			ctxt->bic_blob, ctxt->bic_xs_ctxt, ba.bca_rc);
+	else
 		D_DEBUG(DB_MGMT, "Successfully closed blob %p for xs:%p\n",
 			ctxt->bic_blob, ctxt->bic_xs_ctxt);
-		rc = 0;
-	}
 
-	free_blob_cp_arg(ba);
+	blob_cp_arg_fini(&ba);
 out:
 	D_FREE(ctxt);
 	return rc;
@@ -352,7 +405,8 @@ out:
 int
 bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 {
-	struct blob_cp_arg		*ba;
+	struct blob_msg_arg		 bma = { 0 };
+	struct blob_cp_arg		 ba = { 0 };
 	struct bio_blobstore		*bbs;
 	struct smd_nvme_pool_info	 smd_pool;
 	spdk_blob_id			 blob_id;
@@ -384,36 +438,41 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 
 	blob_id = smd_pool.npi_blob_id;
 
-	ba = alloc_blob_cp_arg();
-	if (ba == NULL)
-		return -DER_NOMEM;
+	rc = blob_cp_arg_init(&ba);
+	if (rc != 0)
+		return rc;
 
 	D_DEBUG(DB_MGMT, "Deleting blobID "DF_U64" for pool:"DF_UUID" xs:%p\n",
 		blob_id, DP_UUID(uuid), xs_ctxt);
 
-	ba->bca_inflights = 1;
+	ba.bca_inflights = 1;
 	ABT_mutex_lock(bbs->bb_mutex);
-	if (bbs->bb_bs != NULL)
-		spdk_bs_delete_blob(bbs->bb_bs, blob_id, blob_cb, ba);
-	else
-		blob_cb(ba, -DER_NO_HDL);
+	if (bbs->bb_bs != NULL) {
+		bma.bma_bs = bbs->bb_bs;
+		bma.bma_blob_id = blob_id;
+		bma.bma_cp_arg = &ba;
+
+		spdk_thread_send_msg(bbs->bb_ctxt->bxc_thread,
+				     blob_msg_delete, &bma);
+	} else {
+		blob_cb(&ba, -DER_NO_HDL);
+	}
 	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob delete done */
-	blob_wait_completion(xs_ctxt, ba);
-	if (ba->bca_rc != 0) {
+	blob_wait_completion(xs_ctxt, &ba);
+	rc = ba.bca_rc;
+
+	if (rc != 0)
 		D_ERROR("Delete blobID "DF_U64" failed for pool:"DF_UUID" "
 			"xs:%p rc:%d\n",
-			blob_id, DP_UUID(uuid), xs_ctxt, ba->bca_rc);
-		rc = ba->bca_rc;
-	} else {
+			blob_id, DP_UUID(uuid), xs_ctxt, rc);
+	else
 		D_DEBUG(DB_MGMT, "Successfully deleted blobID "DF_U64" for "
 			"pool:"DF_UUID" xs:%p\n",
 			blob_id, DP_UUID(uuid), xs_ctxt);
-		rc = 0;
-	}
 
-	free_blob_cp_arg(ba);
+	blob_cp_arg_fini(&ba);
 	return rc;
 }
 
@@ -557,7 +616,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 int
 bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 {
-	struct blob_cp_arg	*ba;
+	struct blob_cp_arg	 ba;
 	struct bio_blobstore	*bbs;
 	struct spdk_io_channel	*channel;
 	uint64_t		 pg_off;
@@ -578,35 +637,33 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 	bbs = ioctxt->bic_xs_ctxt->bxc_blobstore;
 	channel = ioctxt->bic_xs_ctxt->bxc_io_channel;
 
-	ba = alloc_blob_cp_arg();
-	if (ba == NULL)
-		return -DER_NOMEM;
+	rc = blob_cp_arg_init(&ba);
+	if (rc != 0)
+		return rc;
 
 	D_DEBUG(DB_MGMT, "Unmapping blob %p pgoff:"DF_U64" pgcnt:"DF_U64"\n",
 		ioctxt->bic_blob, pg_off, pg_cnt);
 
-	ba->bca_inflights = 1;
+	ba.bca_inflights = 1;
 	ABT_mutex_lock(bbs->bb_mutex);
 	if (bbs->bb_bs != NULL)
 		spdk_blob_io_unmap(ioctxt->bic_blob, channel, pg_off, pg_cnt,
-				   blob_cb, ba);
+				   blob_cb, &ba);
 	else
-		blob_cb(ba, -DER_NO_HDL);
+		blob_cb(&ba, -DER_NO_HDL);
 	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob unmap done */
-	blob_wait_completion(ioctxt->bic_xs_ctxt, ba);
-	if (ba->bca_rc != 0) {
+	blob_wait_completion(ioctxt->bic_xs_ctxt, &ba);
+	rc = ba.bca_rc;
+
+	if (rc != 0)
 		D_ERROR("Unmap blob %p failed for xs: %p rc:%d\n",
-			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, ba->bca_rc);
-		rc = ba->bca_rc;
-	} else {
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
+	else
 		D_DEBUG(DB_MGMT, "Successfully unmapped blob %p for xs:%p\n",
 			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
-		rc = 0;
-	}
 
-	free_blob_cp_arg(ba);
-
+	blob_cp_arg_fini(&ba);
 	return rc;
 }
