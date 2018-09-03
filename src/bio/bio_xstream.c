@@ -64,9 +64,8 @@ static unsigned int bio_chk_cnt_init;
 struct bio_bdev {
 	d_list_t		 bb_link;
 	uuid_t			 bb_uuid;
-	char			*bb_name;
+	struct spdk_bdev	*bb_bdev;
 	struct bio_blobstore	*bb_blobstore;
-	struct spdk_bdev_desc	*bb_desc; /* for io stat only */
 	int			 bb_xs_cnt; /* count of xstreams per device */
 };
 
@@ -91,38 +90,37 @@ static uint64_t io_stat_period;
 
 /* Print the io stat every few seconds, for debug only */
 static void
-print_io_stat(uint64_t now)
+print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct spdk_bdev_io_stat	 stat;
-	struct bio_bdev			*d_bdev;
+	struct spdk_bdev		*bdev;
 	struct spdk_io_channel		*channel;
-	static uint64_t			 stat_age;
 
 	if (io_stat_period == 0)
 		return;
 
-	if (stat_age + io_stat_period >= now)
+	if (ctxt->bxc_stat_age + io_stat_period >= now)
 		return;
 
-	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
-		D_ASSERT(d_bdev->bb_desc != NULL);
-		D_ASSERT(d_bdev->bb_name != NULL);
-
-		channel = spdk_bdev_get_io_channel(d_bdev->bb_desc);
+	if (ctxt->bxc_desc != NULL) {
+		channel = spdk_bdev_get_io_channel(ctxt->bxc_desc);
 		D_ASSERT(channel != NULL);
 		spdk_bdev_get_io_stat(NULL, channel, &stat);
 		spdk_put_io_channel(channel);
 
-		D_PRINT("SPDK IO STAT: dev[%s] read_bytes["DF_U64"], "
+		bdev = spdk_bdev_desc_get_bdev(ctxt->bxc_desc);
+
+		D_PRINT("SPDK IO STAT: xs_id[%d] dev[%s] read_bytes["DF_U64"], "
 			"read_ops["DF_U64"], write_bytes["DF_U64"], "
 			"write_ops["DF_U64"], read_latency_ticks["DF_U64"], "
 			"write_latency_ticks["DF_U64"]\n",
-			d_bdev->bb_name, stat.bytes_read, stat.num_read_ops,
-			stat.bytes_written, stat.num_write_ops,
-			stat.read_latency_ticks, stat.write_latency_ticks);
+			ctxt->bxc_xs_id, spdk_bdev_get_name(bdev),
+			stat.bytes_read, stat.num_read_ops, stat.bytes_written,
+			stat.num_write_ops, stat.read_latency_ticks,
+			stat.write_latency_ticks);
 	}
 
-	stat_age = now;
+	ctxt->bxc_stat_age = now;
 }
 
 int
@@ -340,8 +338,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 			poller->bnp_expire_us = now + poller->bnp_period_us;
 	}
 
-	if (nvme_glb.bd_init_thread == ctxt->bxc_thread)
-		print_io_stat(now);
+	print_io_stat(ctxt, now);
 
 	return count;
 }
@@ -546,29 +543,13 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 	D_DEBUG(DB_MGMT, "Initial xstream count for "DF_UUID" set at %d\n",
 		DP_UUID(bs_uuid), d_bdev->bb_xs_cnt);
 
-	rc = spdk_bdev_open(bdev, false, NULL, NULL, &d_bdev->bb_desc);
-	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, %d\n",
-			spdk_bdev_get_name(bdev), rc);
-		rc = daos_errno2der(-rc);
-		goto error;
-	}
-
-	d_bdev->bb_name = strdup(spdk_bdev_get_name(bdev));
-	if (d_bdev->bb_name == NULL) {
-		D_ERROR("Failed to allocate bdev name\n");
-		rc = -DER_NOMEM;
-		goto error;
-	}
-
+	d_bdev->bb_bdev = bdev;
 	uuid_copy(d_bdev->bb_uuid, bs_uuid);
 	d_list_add(&d_bdev->bb_link, &nvme_glb.bd_bdevs);
 
 	return 0;
 
 error:
-	if (d_bdev->bb_desc != NULL)
-		spdk_bdev_close(d_bdev->bb_desc);
 	D_FREE(d_bdev);
 	return rc;
 }
@@ -629,12 +610,6 @@ fini_bio_bdevs(struct bio_xs_context *ctxt)
 
 	d_list_for_each_entry_safe(d_bdev, tmp, &nvme_glb.bd_bdevs, bb_link) {
 		d_list_del_init(&d_bdev->bb_link);
-
-		if (d_bdev->bb_desc != NULL)
-			spdk_bdev_close(d_bdev->bb_desc);
-
-		if (d_bdev->bb_name != NULL)
-			D_FREE(d_bdev->bb_name);
 
 		if (d_bdev->bb_blobstore != NULL)
 			put_bio_blobstore(d_bdev->bb_blobstore, ctxt);
@@ -725,12 +700,12 @@ static int
 init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 {
 	struct bio_bdev			*d_bdev;
-	struct spdk_bdev		*bdev;
 	struct spdk_blob_store		*bs;
 	struct smd_nvme_stream_bond	 xs_bond;
 	int				 rc;
 	bool				 found = false;
 
+	D_ASSERT(ctxt->bxc_desc == NULL);
 	D_ASSERT(ctxt->bxc_blobstore == NULL);
 	D_ASSERT(ctxt->bxc_io_channel == NULL);
 
@@ -789,27 +764,30 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 		return -DER_NONEXIST;
 	}
 
+	D_ASSERT(d_bdev->bb_bdev != NULL);
+	rc = spdk_bdev_open(d_bdev->bb_bdev, false, NULL, NULL,
+			    &ctxt->bxc_desc);
+	if (rc != 0) {
+		D_ERROR("Failed to open bdev %s, %d\n",
+			spdk_bdev_get_name(d_bdev->bb_bdev), rc);
+		return daos_errno2der(-rc);
+	}
+
 	if (d_bdev->bb_blobstore == NULL) {
 		d_bdev->bb_blobstore = alloc_bio_blobstore(ctxt);
 		if (d_bdev->bb_blobstore == NULL)
 			return -DER_NOMEM;
 
-		D_ASSERT(d_bdev->bb_name != NULL);
-		bdev = spdk_bdev_get_by_name(d_bdev->bb_name);
-		if (bdev == NULL) {
-			D_ERROR("Failure finding bdev: %s\n", d_bdev->bb_name);
-			return -DER_NONEXIST;
-		}
-
 		/* Load blobstore with bstype specified for sanity check */
-		bs = load_blobstore(ctxt, bdev, &d_bdev->bb_uuid, false);
+		bs = load_blobstore(ctxt, d_bdev->bb_bdev, &d_bdev->bb_uuid,
+				    false);
 		if (bs == NULL)
 			return -DER_INVAL;
 
 		d_bdev->bb_blobstore->bb_bs = bs;
 
 		D_DEBUG(DB_MGMT, "Loaded bs, xs_id:%d, xs:%p dev:%s\n",
-			xs_id, ctxt, d_bdev->bb_name);
+			xs_id, ctxt, spdk_bdev_get_name(d_bdev->bb_bdev));
 	}
 
 	ctxt->bxc_blobstore = get_bio_blobstore(d_bdev->bb_blobstore);
@@ -846,6 +824,11 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	if (ctxt->bxc_blobstore != NULL) {
 		put_bio_blobstore(ctxt->bxc_blobstore, ctxt);
 		ctxt->bxc_blobstore = NULL;
+	}
+
+	if (ctxt->bxc_desc != NULL) {
+		spdk_bdev_close(ctxt->bxc_desc);
+		ctxt->bxc_desc = NULL;
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);

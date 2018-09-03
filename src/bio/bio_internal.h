@@ -76,6 +76,8 @@ struct bio_xs_context {
 	struct spdk_io_channel	*bxc_io_channel;
 	d_list_t		 bxc_pollers;
 	struct bio_dma_buffer	*bxc_dma_buf;
+	struct spdk_bdev_desc	*bxc_desc; /* for io stat only */
+	uint64_t		 bxc_stat_age;
 };
 
 /* Per VOS instance I/O context */
