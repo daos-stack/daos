@@ -32,7 +32,7 @@ pipeline {
                     }
                     steps {
                         sh '''pushd scons_local
-                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/8
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/9
                               popd
                               git submodule update --init --recursive
                               utils/check_modules.sh'''
