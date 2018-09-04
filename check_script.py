@@ -24,7 +24,9 @@ import re
 import os
 import sys
 import argparse
-
+import subprocess
+import errno
+from distutils.spawn import find_executable
 
 class WrapScript(object):
     """Create a wrapper for a scons file and maintain a line mapping"""
@@ -165,8 +167,8 @@ from SCons.Variables import *
 def parse_report():
     """Create the report"""
     error_count = 0
-    pylint = open("pylint.log", "a")
-    with open("tmp.log", "r") as log:
+    with open("pylint.log", "a") as pylint, \
+         open("tmp.log", "r") as log:
         for line in log.readlines():
             if re.search("rated", line):
                 sys.stdout.write(line)
@@ -176,7 +178,6 @@ def parse_report():
                 error_count += 1
             else:
                 sys.stdout.write(line)
-    pylint.close()
     os.unlink("tmp.log")
     return error_count
 
@@ -195,12 +196,16 @@ def check_script(fname, *args, **kw):
 
     if os.path.exists('/usr/bin/pylint'):
         if not kw.get("P3", False):
-            pylint = "python2 /usr/bin/pylint"
+            python = find_executable("python2")
             rc_file = "pylint.rc"
         else:
             print "use python3"
-            pylint = "python3 /usr/bin/pylint"
+            python = find_executable("python3")
             rc_file = "pylint3.rc"
+        if not python:
+            print "python{2|3} could not be found in $PATH"
+            return 1
+        pylint = python + " /usr/bin/pylint"
     else:
         if not kw.get("P3", False):
             pylint = "pylint"
@@ -211,19 +216,31 @@ def check_script(fname, *args, **kw):
 
     rc_dir = os.path.dirname(os.path.realpath(__file__))
 
-    cmd = "%s %s --rcfile=%s/%s " \
-          "--msg-template '{C}: %s:{line}: pylint-{symbol}: {msg}' " \
-          "%s > tmp.log 2>&1" % \
-          (pylint, " ".join(args), rc_dir, rc_file, pylint_path, tmp_fname)
+    cmd = pylint.split() + \
+          list(args) + \
+          ["--rcfile=%s/%s" % (rc_dir, rc_file),
+           "--msg-template", "{C}: %s:{line}: pylint-{symbol}: {msg}" % pylint_path,
+           tmp_fname]
 
     if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
-        print cmd
-    error_count = os.WEXITSTATUS(os.system(cmd))
-    if not error_count:
-        if wrap:
-            wrapper.fix_log(fname)
-        error_count = parse_report()
-        print ""
+        print " ".join(cmd)
+
+    try:
+        with open("tmp.log", "w") as log:
+            subprocess.check_call(cmd, stdout=log)
+    except OSError, exception:
+        if exception.errno == errno.ENOENT:
+            print "pylint could not be found"
+            return 1
+    # pylint: disable=bare-except
+    except:
+        print "Unknown error running pylint"
+        return 1
+
+    if wrap:
+        wrapper.fix_log(fname)
+    error_count = parse_report()
+    print ""
     return error_count
 
 

@@ -73,9 +73,9 @@ while [ $# != 0 ]; do
 done
 
 echo "See pylint.log report"
-list=$(grep rated pylint.log | grep -v "rated at 10")
+list=$(grep rated pylint.log | grep -v "rated at 10" || true)
 if [ $fail -eq 1 ] || [ "$list" != "" ]; then
-echo Fail
-exit 1
+    echo Fail
+    exit 1
 fi
 exit 0
