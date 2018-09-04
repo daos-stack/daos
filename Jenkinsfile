@@ -31,16 +31,13 @@ pipeline {
                         }
                     }
                     steps {
-                        sh '''githubNotify description: 'checkmodules.sh',  status: 'PENDING'
-                              pushd scons_local
+                        githubNotify description: 'checkmodules.sh',  status: 'PENDING'
+                        sh '''pushd scons_local
                               git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/9
                               popd
                               git submodule update --init --recursive
-                              if ! utils/check_modules.sh
-                                  githubNotify description: 'checkmodules.sh',  status: 'SUCCESS'
-                              else
-                                  githubNotify description: 'checkmodules.sh',  status: 'FAILURE'
-                              fi'''
+                              utils/check_modules.sh'''
+                              githubNotify description: 'checkmodules.sh',  status: 'SUCCESS'
                     }
                     post {
                         always {
