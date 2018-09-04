@@ -1,4 +1,3 @@
-# Trial run
 pipeline {
     agent any
         stages {
