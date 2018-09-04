@@ -1477,9 +1477,16 @@ evt_insert_entry(struct evt_context *tcx, struct evt_entry *ent)
 }
 
 static void
-evt_ptr_copy(struct evt_context *tcx, struct evt_ptr *dst_ptr,
-	     struct evt_ptr *src_ptr)
+evt_ptr_copy(struct evt_context *tcx, struct evt_ptr *src_ptr)
 {
+	struct evt_ptr		*dst_ptr;
+	struct evt_trace	*trace;
+	TMMID(struct evt_node)	 nd_mmid;
+
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	nd_mmid = trace->tr_node;
+	dst_ptr = evt_node_ptr_at(tcx, nd_mmid, trace->tr_at);
+
 	D_DEBUG(DB_IO, "dst num="DF_U64", nob=%d, src num="DF_U64", nob=%d\n",
 		dst_ptr->pt_inum, dst_ptr->pt_inob,
 		src_ptr->pt_inum, src_ptr->pt_inob);
@@ -1500,7 +1507,6 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 	   struct evt_rect *rect, uint32_t inob, eio_addr_t addr)
 {
 	struct evt_context	*tcx;
-	struct evt_entry	*entmp;
 	struct evt_entry	 ent;
 	int			 rc;
 
@@ -1525,19 +1531,16 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 	if (rc != 0)
 		return rc;
 
+	evt_ptr_init(tcx, cookie, pm_ver, addr, inob,
+		     evt_rect_width(&ent.en_rect), &ent.en_ptr);
+
 	if (!d_list_empty(&tcx->tc_ent_list.el_list)) {
 		/* NB: This is part of the current hack to keep "supporting"
 		 * overwrite for same epoch, full overwrite
 		 */
-		entmp = d_list_entry(tcx->tc_ent_list.el_list.next,
-				     struct evt_entry, en_link);
-		d_list_del_init(&entmp->en_link);
-		evt_ptr_copy(tcx, &entmp->en_ptr, &ent.en_ptr);
+		evt_ptr_copy(tcx, &ent.en_ptr);
 		goto out;
 	}
-
-	evt_ptr_init(tcx, cookie, pm_ver, addr, inob,
-		     evt_rect_width(&ent.en_rect), &ent.en_ptr);
 
 	/* Phase-2: Inserting */
 	rc = evt_insert_entry(tcx, &ent);
