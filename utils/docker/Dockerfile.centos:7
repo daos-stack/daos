@@ -38,7 +38,7 @@ RUN yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel  
                    CUnit-devel libaio-devel python-pep8 lcov                     \
                    python clang-analyzer sg3_utils libiscsi-devel                \
                    numactl-devel doxygen graphviz openpa-devel libfabric-devel   \
-                   mercury-devel
+                   mercury-devel pylint
 
 
 # Dependencies
