@@ -31,17 +31,26 @@ pipeline {
                         }
                     }
                     steps {
-                        githubNotify description: 'checkmodules.sh',  status: 'PENDING'
+                        githubNotify description: 'checkmodules.sh',  context: 'checkmodules.sh', status: 'PENDING'
                         sh '''pushd scons_local
                               git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/9
                               popd
                               git submodule update --init --recursive
                               utils/check_modules.sh'''
-                              githubNotify description: 'checkmodules.sh',  status: 'SUCCESS'
                     }
                     post {
                         always {
                             archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: true
+                        }
+                    }
+                    post {
+                        success {
+                            githubNotify description: 'checkmodules.sh',  context: 'checkmodules.sh', status: 'SUCCESS'
+                        }
+                    }
+                    post {
+                        unstable {
+                            githubNotify description: 'checkmodules.sh',  context: 'checkmodules.sh', status: 'FAILURE'
                         }
                     }
                 }
@@ -59,6 +68,7 @@ pipeline {
                         }
                     }
                     steps {
+                        githubNotify description: 'CentOS 7 Build',  context: 'build/centos7', status: 'PENDING'
                         checkout scm
                         /* don't need to keep rebuilding this while testing the pipeline
                         sh '''git submodule update --init --recursive
@@ -82,13 +92,34 @@ pipeline {
                         stash name: 'CentOS-build-vars', includes: '.build_vars.*'
                         stash name: 'CentOS-tests', includes: 'build/src/rdb/raft/src/tests_main, build/src/common/tests/btree_direct, build/src/common/tests/btree, src/common/tests/btree.sh, build/src/common/tests/sched, build/src/client/api/tests/eq_tests, src/vos/tests/evt_ctl.sh, build/src/vos/vea/tests/vea_ut, src/rdb/raft_tests/raft_tests.py'
                     }
+                    post {
+                        success {
+                            githubNotify description: 'CentOS 7 Build',  context: 'build/centos7', status: 'SUCCESS'
+                        }
+                    }
+                    post {
+                        unstable {
+                            githubNotify description: 'CentOS 7 Build',  context: 'build/centos7', status: 'FAILURE'
+                        }
+                    }
                 }
                 stage('Build on Ubuntu 16.04') {
                     agent {
                         label 'docker_runner'
                     }
                     steps {
+                        githubNotify description: 'Ubuntu 18 Build',  context: 'build/ubuntu18', status: 'PENDING'
                         echo "Building on Ubuntu is broken for the moment"
+                    }
+                    post {
+                        success {
+                            githubNotify description: 'Ubuntu 18 Build',  context: 'build/ubuntu18', status: 'SUCCESS'
+                        }
+                    }
+                    post {
+                        unstable {
+                            githubNotify description: 'Ubuntu 18 Build',  context: 'build/ubuntu18', status: 'FAILURE'
+                        }
                     }
                 }
             }
