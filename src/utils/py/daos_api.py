@@ -162,7 +162,7 @@ class DaosPool(object):
         c_glob.iov_buf_len = 0
         c_glob.iov_buf = None
 
-        func = self.context.get_function("convert-local")
+        func = self.context.get_function("convert-plocal")
         rc = func(self.handle, ctypes.byref(c_glob))
         if rc != 0:
             raise ValueError("Pool local2global returned non-zero. RC: {0}"
@@ -177,7 +177,7 @@ class DaosPool(object):
 
     def global2local(self, context, iov_len, buf_len, buf):
 
-        func = self.context.get_function("convert-global")
+        func = self.context.get_function("convert-pglobal")
 
         c_glob = IOV()
         c_glob.iov_len = iov_len
@@ -841,6 +841,47 @@ class DaosContainer(object):
         buf = ioreq.single_fetch(c_dkey, c_akey, size, c_epoch)
         return buf
 
+    def local2global(self):
+        """ Create a global container handle that can be shared. """
+
+        c_glob = IOV()
+        c_glob.iov_len = 0
+        c_glob.iov_buf_len = 0
+        c_glob.iov_buf = None
+
+        func = self.context.get_function("convert-clocal")
+        rc = func(self.coh, ctypes.byref(c_glob))
+        if rc != 0:
+            raise ValueError("Container local2global returned non-zero. RC: {0}"
+                             .format(rc))
+        # now call it for real
+        c_buf = ctypes.create_string_buffer(c_glob.iov_buf_len)
+        c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
+        rc = func(self.coh, ctypes.byref(c_glob))
+        buf = bytearray()
+        buf.extend(c_buf.raw)
+        return c_glob.iov_len, c_glob.iov_buf_len, buf
+
+    def global2local(self, context, iov_len, buf_len, buf):
+        """ Convert a global container handle to a local handle. """
+
+        func = self.context.get_function("convert-cglobal")
+
+        c_glob = IOV()
+        c_glob.iov_len = iov_len
+        c_glob.iov_buf_len = buf_len
+        c_buf = ctypes.create_string_buffer(str(buf))
+        c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
+
+        local_handle = ctypes.c_uint64(0)
+
+        rc = func(self.poh, c_glob, ctypes.byref(local_handle))
+        if rc != 0:
+            raise ValueError("Container global2local returned non-zero. RC: {0}"
+                             .format(rc))
+        self.coh = local_handle
+        return local_handle
+
 class DaosServer(object):
     """Represents a DAOS Server"""
 
@@ -883,8 +924,10 @@ class DaosContext(object):
             'close-obj'      : self.libdaos.daos_obj_close,
             'commit-epoch'   : self.libdaos.daos_epoch_commit,
             'connect-pool'   : self.libdaos.daos_pool_connect,
-            'convert-global' : self.libdaos.daos_pool_global2local,
-            'convert-local'  : self.libdaos.daos_pool_local2global,
+            'convert-cglobal': self.libdaos.daos_cont_global2local,
+            'convert-clocal' : self.libdaos.daos_cont_local2global,
+            'convert-pglobal': self.libdaos.daos_pool_global2local,
+            'convert-plocal' : self.libdaos.daos_pool_local2global,
             'create-cont'    : self.libdaos.daos_cont_create,
             'create-pool'    : self.libdaos.daos_pool_create,
             'create-eq'      : self.libdaos.daos_eq_create,
