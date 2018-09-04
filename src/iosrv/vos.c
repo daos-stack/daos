@@ -258,8 +258,15 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
 	size = key_ent->ie_key.iov_len;
 
-	if (is_sgl_kds_full(arg, size))
-		return 1;
+	if (is_sgl_kds_full(arg, size)) {
+		if (arg->kds_len == 0) {
+			/* one extra byte for '\0' */
+			arg->kds[0].kd_key_len = size + 1;
+			return -DER_KEY2BIG;
+		} else {
+			return 1;
+		}
+	}
 
 	D_ASSERT(arg->kds_len < arg->kds_cap);
 	arg->kds[arg->kds_len].kd_key_len = size;

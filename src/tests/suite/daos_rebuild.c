@@ -84,15 +84,22 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 {
 #define BULK_SIZE	5000
 #define REC_SIZE	64
+#define LARGE_KEY_SIZE	(512 * 1024)
 	char	dkey[32];
 	char	akey[32];
 	char	data[REC_SIZE];
 	char	data_verify[REC_SIZE];
+	char	*large_key;
 	int	akey_punch_idx = 1;
 	int	dkey_punch_idx = 1;
 	int	j;
 	int	k;
 	int	l;
+
+	D_ALLOC(large_key, LARGE_KEY_SIZE);
+	if (large_key == NULL)
+		return -DER_NOMEM;
+	memset(large_key, 'L', LARGE_KEY_SIZE - 1);
 
 	for (j = 0; j < 5; j++) {
 		req->iod_type = DAOS_IOD_ARRAY;
@@ -109,14 +116,26 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 					    j == dkey_punch_idx)
 						continue;
 					memset(data, 0, REC_SIZE);
-					lookup_single(dkey, akey, l, data,
-						      REC_SIZE, eph, req);
+					if (l == 7)
+						lookup_single(large_key, akey,
+							l, data, REC_SIZE, eph,
+							req);
+					else
+						lookup_single(dkey, akey, l,
+							data, REC_SIZE, eph,
+							req);
 					assert_memory_equal(data, data_verify,
 							  strlen(data_verify));
 				} else {
-					insert_single(dkey, akey, l, data,
-						      strlen(data) + 1,
-						      eph, req);
+					if (l == 7)
+						insert_single(large_key, akey,
+							l, data,
+							strlen(data) + 1,
+							eph, req);
+					else
+						insert_single(dkey, akey, l,
+							data, strlen(data) + 1,
+							eph, req);
 				}
 			}
 
@@ -179,6 +198,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 		}
 	}
 
+	D_FREE(large_key);
 	return 0;
 }
 

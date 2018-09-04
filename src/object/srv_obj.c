@@ -984,6 +984,9 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 
 	rc = obj_enum_reply_bulk(rpc);
 out:
+	/* for KEY2BIG case, just reuse the oeo_size to reply the key len */
+	if (rc == -DER_KEY2BIG)
+		oeo->oeo_size = enum_arg->kds[0].kd_key_len;
 	ds_eu_complete(rpc, rc, &task_arg.u.iter_arg);
 }
 

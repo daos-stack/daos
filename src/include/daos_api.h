@@ -996,8 +996,6 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_KEY2BIG	Key is too large and can't be
- *					fit into output buffer
  *			-DER_REC2BIG	Record is too large and can't be
  *					fit into output buffer
  *			-DER_EP_OLD	Epoch is too old and has no data
@@ -1091,8 +1089,15 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_KEY2BIG	Key is too large and can't be
- *					fit into the \a sgl
+ *			-DER_KEY2BIG	Key is too large and can't be fit into
+ *					the \a sgl, the required minimal length
+ *					to fit the key is returned by
+ *					\a kds[0].kd_key_len. This error code
+ *					only returned for the first key in this
+ *					enumeration, then user can provide a
+ *					larger buffer (for example two or three
+ *					times \a kds[0].kd_key_len) and do the
+ *					enumerate again.
  */
 int
 daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
@@ -1135,8 +1140,15 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_KEY2BIG	Key is too large and can't be
- *					fit into the \a sgl
+ *			-DER_KEY2BIG	Key is too large and can't be fit into
+ *					the \a sgl, the required minimal length
+ *					to fit the key is returned by
+ *					\a kds[0].kd_key_len. This error code
+ *					only returned for the first key in this
+ *					enumeration, then user can provide a
+ *					larger buffer (for example two or three
+ *					times \a kds[0].kd_key_len) and do the
+ *					enumerate again.
  */
 int
 daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,

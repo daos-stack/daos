@@ -550,7 +550,7 @@ io_var_akey_size(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	daos_size_t	 size;
-	const int	 max_size = 1 << 10;
+	const int	 max_size = 1 << 20;
 	char		*key;
 
 	/** akey not supported yet */
@@ -561,7 +561,7 @@ io_var_akey_size(void **state)
 	assert_non_null(key);
 	memset(key, 'a', max_size);
 
-	for (size = 1; size <= max_size; size <<= 1) {
+	for (size = 1; size <= max_size; size <<= 2) {
 		char buf[10];
 
 		print_message("akey size: %lu\n", size);
@@ -594,7 +594,7 @@ io_var_dkey_size(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	daos_size_t	 size;
-	const int	 max_size = 1 << 10;
+	const int	 max_size = 1 << 20;
 	char		*key;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
@@ -604,7 +604,7 @@ io_var_dkey_size(void **state)
 	assert_non_null(key);
 	memset(key, 'a', max_size);
 
-	for (size = 1; size <= max_size; size <<= 1) {
+	for (size = 1; size <= max_size; size <<= 2) {
 		char buf[10];
 
 		print_message("dkey size: %lu\n", size);
@@ -723,7 +723,7 @@ io_simple(void **state)
 	io_simple_internal(state, oid, 64);
 }
 
-void
+int
 enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	       daos_anchor_t *anchor, void *buf, daos_size_t len,
 	       struct ioreq *req)
@@ -734,19 +734,23 @@ enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	/** execute fetch operation */
 	rc = daos_obj_list_dkey(req->oh, epoch, number, kds, req->sgl, anchor,
 				req->arg->async ? &req->ev : NULL);
-	assert_int_equal(rc, 0);
-
 	if (req->arg->async) {
 		bool ev_flag;
 
+		assert_int_equal(rc, 0);
 		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
 		assert_int_equal(rc, 0);
 		assert_int_equal(ev_flag, true);
-		assert_int_equal(req->ev.ev_error, 0);
+		rc = req->ev.ev_error;
 	}
+
+	if (rc != -DER_KEY2BIG)
+		assert_int_equal(rc, 0);
+
+	return rc;
 }
 
-static void
+static int
 enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 	       daos_key_desc_t *kds, daos_anchor_t *anchor, void *buf,
 	       daos_size_t len, struct ioreq *req)
@@ -759,16 +763,20 @@ enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 	rc = daos_obj_list_akey(req->oh, epoch, &req->dkey, number, kds,
 				req->sgl, anchor,
 				req->arg->async ? &req->ev : NULL);
-	assert_int_equal(rc, 0);
-
 	if (req->arg->async) {
 		bool ev_flag;
 
+		assert_int_equal(rc, 0);
 		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
 		assert_int_equal(rc, 0);
 		assert_int_equal(ev_flag, true);
-		assert_int_equal(req->ev.ev_error, 0);
+		rc = req->ev.ev_error;
 	}
+
+	if (rc != -DER_KEY2BIG)
+		assert_int_equal(rc, 0);
+
+	return rc;
 }
 
 static void
@@ -796,22 +804,27 @@ enumerate_rec(daos_epoch_t epoch, char *dkey, char *akey,
 	}
 }
 
-#define ENUM_KEY_BUF	32
-#define ENUM_KEY_NR	1000
+#define ENUM_KEY_BUF		32
+#define ENUM_LARGE_KEY_BUF	(512 * 1024)
+#define ENUM_KEY_NR		1000
 
-#define ENUM_REC_NR	1000
+#define ENUM_REC_NR		1000
 
-#define ENUM_DESC_BUF	512
-#define ENUM_DESC_NR	5
+#define ENUM_DESC_BUF		512
+#define ENUM_DESC_NR		5
 
 /** very basic enumerate */
 static void
 enumerate_simple(void **state)
 {
 	test_arg_t	*arg = *state;
+	char		*small_buf;
 	char		*buf;
+	daos_size_t	 buf_len;
 	char		*ptr;
 	char		 key[ENUM_KEY_BUF];
+	char		*large_key = NULL;
+	char		*large_buf = NULL;
 	daos_key_desc_t  kds[ENUM_DESC_NR];
 	daos_anchor_t	 anchor;
 	daos_obj_id_t	 oid;
@@ -819,37 +832,65 @@ enumerate_simple(void **state)
 	uint32_t	 number;
 	int		 key_nr;
 	int		 i;
+	int		 rc;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	small_buf = malloc(ENUM_DESC_BUF);
+	large_key = malloc(ENUM_LARGE_KEY_BUF);
+	memset(large_key, 'L', ENUM_LARGE_KEY_BUF);
+	large_key[ENUM_LARGE_KEY_BUF - 1] = '\0';
+	large_buf = malloc(ENUM_LARGE_KEY_BUF * 2);
 
 	/** Insert record*/
 	print_message("Insert %d kv record in object "DF_OID"\n", ENUM_KEY_NR,
 		      DP_OID(oid));
 	for (i = 0; i < ENUM_KEY_NR; i++) {
 		sprintf(key, "%d", i);
-		insert_single(key, "a_key", 0, "data",
-			      strlen("data") + 1, 0, &req);
+		if (i == ENUM_KEY_NR/3)
+			insert_single(large_key, "a_key", 0, "data",
+				      strlen("data") + 1, 0, &req);
+		else
+			insert_single(key, "a_key", 0, "data",
+				      strlen("data") + 1, 0, &req);
 	}
 
 	print_message("Enumerate records\n");
-	buf = malloc(ENUM_DESC_BUF);
 
 	memset(&anchor, 0, sizeof(anchor));
-	/** enumerate records */
+	buf = small_buf;
+	buf_len = ENUM_DESC_BUF;
+	/** enumerate dkey */
 	for (number = ENUM_DESC_NR, key_nr = 0;
 	     !daos_anchor_is_eof(&anchor);
 	     number = ENUM_DESC_NR) {
-		memset(buf, 0, ENUM_DESC_BUF);
-		enumerate_dkey(0, &number, kds, &anchor, buf, ENUM_DESC_BUF,
-			       &req);
+		memset(buf, 0, buf_len);
+		rc = enumerate_dkey(0, &number, kds, &anchor, buf,
+				    buf_len, &req);
+		if (rc == -DER_KEY2BIG) {
+			print_message("got -DER_KEY2BIG, key_len "DF_U64".\n",
+				      kds[0].kd_key_len);
+			assert_int_equal((int)kds[0].kd_key_len,
+					 ENUM_LARGE_KEY_BUF);
+			buf = large_buf;
+			buf_len = ENUM_LARGE_KEY_BUF * 2;
+			continue;
+		}
 		if (number == 0)
 			continue; /* loop should break for EOF */
 
 		for (ptr = buf, i = 0; i < number; i++) {
-			snprintf(key, kds[i].kd_key_len + 1, "%s", ptr);
-			print_message("i %d key %s len %d\n", i + key_nr, key,
-				      (int)kds[i].kd_key_len);
+			if (kds[i].kd_key_len > ENUM_KEY_BUF) {
+				print_message("i %d large key %c... len %d\n",
+					      i + key_nr, ptr[0],
+					      (int)kds[i].kd_key_len);
+			} else if ((i + key_nr) % 100 == 0) {
+				snprintf(key, kds[i].kd_key_len + 1, "%s", ptr);
+				print_message("i %d key %s len %d\n",
+					      i + key_nr, key,
+					      (int)kds[i].kd_key_len);
+			}
 			ptr += kds[i].kd_key_len;
 		}
 		key_nr += number;
@@ -859,25 +900,47 @@ enumerate_simple(void **state)
 	print_message("Insert %d kv record\n", ENUM_KEY_NR);
 	for (i = 0; i < ENUM_KEY_NR; i++) {
 		sprintf(key, "%d", i);
-		insert_single("d_key", key, 0, "data",
-			      strlen("data") + 1, 0, &req);
+		if (i == ENUM_KEY_NR/7)
+			insert_single("d_key", large_key, 0, "data",
+				      strlen("data") + 1, 0, &req);
+		else
+			insert_single("d_key", key, 0, "data",
+				      strlen("data") + 1, 0, &req);
 	}
 
 	memset(&anchor, 0, sizeof(anchor));
-	/** enumerate records */
+	buf = small_buf;
+	buf_len = ENUM_DESC_BUF;
+	/** enumerate akey */
 	for (number = ENUM_DESC_NR, key_nr = 0;
 	     !daos_anchor_is_eof(&anchor);
 	     number = ENUM_DESC_NR) {
-		memset(buf, 0, ENUM_DESC_BUF);
-		enumerate_akey(0, "d_key", &number, kds, &anchor,
-			       buf, ENUM_DESC_BUF, &req);
+		memset(buf, 0, buf_len);
+		rc = enumerate_akey(0, "d_key", &number, kds, &anchor,
+				    buf, buf_len, &req);
+		if (rc == -DER_KEY2BIG) {
+			print_message("got -DER_KEY2BIG, key_len "DF_U64".\n",
+				      kds[0].kd_key_len);
+			assert_int_equal((int)kds[0].kd_key_len,
+					 ENUM_LARGE_KEY_BUF);
+			buf = large_buf;
+			buf_len = ENUM_LARGE_KEY_BUF * 2;
+			continue;
+		}
 		if (number == 0)
 			break; /* loop should break for EOF */
 
 		for (ptr = buf, i = 0; i < number; i++) {
-			snprintf(key, kds[i].kd_key_len + 1, "%s", ptr);
-			print_message("i %d key %s len %d\n", i + key_nr, key,
-				     (int)kds[i].kd_key_len);
+			if (kds[i].kd_key_len > ENUM_KEY_BUF) {
+				print_message("i %d large key %c... len %d\n",
+					      i + key_nr, ptr[0],
+					      (int)kds[i].kd_key_len);
+			} else if ((i + key_nr) % 100 == 0) {
+				snprintf(key, kds[i].kd_key_len + 1, "%s", ptr);
+				print_message("i %d key %s len %d\n",
+					      i + key_nr, key,
+					     (int)kds[i].kd_key_len);
+			}
 			ptr += kds[i].kd_key_len;
 		}
 		key_nr += number;
@@ -906,14 +969,18 @@ enumerate_simple(void **state)
 			break; /* loop should break for EOF */
 
 		for (i = 0; i < number; i++) {
+			assert_int_equal(size, strlen("data") + 1);
+			if ((i + key_nr) % 100 != 0)
+				continue;
 			print_message("i %d size %d idx %d\n", i + key_nr,
 				      (int)size, (int)recxs[i].rx_idx);
-			assert_int_equal(size, strlen("data") + 1);
 		}
 		key_nr += number;
 	}
 
-	free(buf);
+	free(small_buf);
+	free(large_buf);
+	free(large_key);
 	/** XXX Verify kds */
 	ioreq_fini(&req);
 	assert_int_equal(key_nr, ENUM_REC_NR);
@@ -931,6 +998,7 @@ punch_simple(void **state)
 	daos_anchor_t	 anchor_out;
 	char		*buf;
 	int		 total_keys = 0;
+	int		 rc;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -953,7 +1021,9 @@ punch_simple(void **state)
 	/** enumerate records */
 	print_message("Enumerate records\n");
 	while (number > 0) {
-		enumerate_dkey(0, &number, kds, &anchor_out, buf, 512, &req);
+		rc = enumerate_dkey(0, &number, kds, &anchor_out, buf, 512,
+				    &req);
+		assert_int_equal(rc, 0);
 		total_keys += number;
 		if (daos_anchor_is_eof(&anchor_out))
 			break;
@@ -973,7 +1043,9 @@ punch_simple(void **state)
 	/** enumerate records */
 	print_message("Enumerate records again\n");
 	while (number > 0) {
-		enumerate_dkey(0, &number, kds, &anchor_out, buf, 512, &req);
+		rc = enumerate_dkey(0, &number, kds, &anchor_out, buf, 512,
+				    &req);
+		assert_int_equal(rc, 0);
 		total_keys += number;
 		if (daos_anchor_is_eof(&anchor_out))
 			break;
@@ -1489,8 +1561,9 @@ epoch_discard(void **state)
 			daos_key_desc_t		kd;
 			char			*buf[64];
 
-			enumerate_dkey(e, &n, &kd, &anchor, buf,
-				       sizeof(buf), &req);
+			rc = enumerate_dkey(e, &n, &kd, &anchor, buf,
+					    sizeof(buf), &req);
+			assert_int_equal(rc, 0);
 			print_message("  n %u\n", n);
 			found += n;
 		}

@@ -81,7 +81,7 @@ lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
 		    void *val, daos_size_t size, daos_epoch_t epoch,
 		    struct ioreq *req);
 
-void
+int
 enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	       daos_anchor_t *anchor, void *buf, daos_size_t len,
 	       struct ioreq *req);

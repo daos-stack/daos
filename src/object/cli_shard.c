@@ -597,15 +597,17 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		D_GOTO(out, ret);
 	}
 
+	oeo = crt_reply_get(enum_args->rpc);
 	rc = obj_reply_get_status(enum_args->rpc);
 	if (rc != 0) {
 		D_ERROR("rpc %p RPC %d failed: %d\n", enum_args->rpc,
 			 opc_get(enum_args->rpc->cr_opc), rc);
+		if (rc == -DER_KEY2BIG)
+			enum_args->eaa_kds[0].kd_key_len = oeo->oeo_size;
 		D_GOTO(out, rc);
 	}
 	*enum_args->eaa_map_ver = obj_reply_map_version_get(enum_args->rpc);
 
-	oeo = crt_reply_get(enum_args->rpc);
 	if (enum_args->eaa_size)
 		*enum_args->eaa_size = oeo->oeo_size;
 

@@ -472,6 +472,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	unsigned int			ephs_cnt = 0;
 	unsigned int			rec_cnt = 0;
 	daos_epoch_t			min_epoch = 0;
+	bool				inline_copy = true;
 	int				i;
 	int				rc;
 
@@ -497,6 +498,14 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 		D_GOTO(free, rc = -DER_NOMEM);
 
 	rdone->ro_iod_alloc_num = iod_eph_total;
+	/* only do the copy below when each with inline recx data */
+	for (i = 0; i < iod_eph_total; i++) {
+		if (sgls[i].sg_nr == 0) {
+			inline_copy = false;
+			break;
+		}
+	}
+
 	for (i = 0; i < iod_eph_total; i++) {
 		int j;
 
@@ -546,7 +555,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 				iods[i].iod_eprs->epr_hi, akey_ephs[i]);
 
 			/* Check if data has been retrieved by iteration */
-			if (sgls[i].sg_nr > 0) {
+			if (inline_copy) {
 				if (rdone->ro_sgls == NULL) {
 					D_ALLOC(rdone->ro_sgls,
 						iod_eph_total *
@@ -662,17 +671,19 @@ rebuild_obj_punch(struct rebuild_iter_obj_arg *arg)
 static void
 rebuild_obj_ult(void *data)
 {
-	struct rebuild_iter_obj_arg    *arg = data;
-	struct rebuild_pool_tls	       *tls;
-	daos_anchor_t			anchor;
-	daos_anchor_t			dkey_anchor;
-	daos_anchor_t			akey_anchor;
-	daos_handle_t			oh;
-	daos_sg_list_t			sgl = { 0 };
-	daos_iov_t			iov = { 0 };
-	char				buf[ITER_BUF_SIZE];
-	struct dss_enum_arg		enum_arg;
-	int				rc;
+	struct rebuild_iter_obj_arg	*arg = data;
+	struct rebuild_pool_tls		*tls;
+	daos_anchor_t			 anchor;
+	daos_anchor_t			 dkey_anchor;
+	daos_anchor_t			 akey_anchor;
+	daos_handle_t			 oh;
+	daos_sg_list_t			 sgl = { 0 };
+	daos_iov_t			 iov = { 0 };
+	char				 stack_buf[ITER_BUF_SIZE];
+	char				*buf = NULL;
+	daos_size_t			 buf_len;
+	struct dss_enum_arg		 enum_arg;
+	int				 rc;
 
 	tls = rebuild_pool_tls_lookup(arg->rpt->rt_pool_uuid,
 				      arg->rpt->rt_rebuild_ver);
@@ -702,16 +713,18 @@ rebuild_obj_ult(void *data)
 	enum_arg.param.ip_oid = arg->oid;
 	enum_arg.recursive = true;
 
+	buf = stack_buf;
+	buf_len = ITER_BUF_SIZE;
 	while (1) {
 		daos_key_desc_t	kds[KDS_NUM] = { 0 };
 		daos_epoch_range_t eprs[KDS_NUM];
 		uint32_t	num = KDS_NUM;
 		daos_size_t	size;
 
-		memset(buf, 0, ITER_BUF_SIZE);
+		memset(buf, 0, buf_len);
 		iov.iov_len = 0;
 		iov.iov_buf = buf;
-		iov.iov_buf_len = ITER_BUF_SIZE;
+		iov.iov_buf_len = buf_len;
 
 		sgl.sg_nr = 1;
 		sgl.sg_nr_out = 1;
@@ -720,7 +733,21 @@ rebuild_obj_ult(void *data)
 		rc = ds_obj_list_obj(oh, arg->epoch, NULL, NULL, &size,
 				     &num, kds, eprs, &sgl, &anchor,
 				     &dkey_anchor, &akey_anchor);
-		if (rc) {
+
+		if (rc == -DER_KEY2BIG) {
+			D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID" got "
+				"-DER_KEY2BIG, key_len "DF_U64"\n",
+				DP_UOID(arg->oid), kds[0].kd_key_len);
+			buf_len = roundup(kds[0].kd_key_len * 2, 8);
+			if (buf != stack_buf)
+				D_FREE(buf);
+			D_ALLOC(buf, buf_len);
+			if (buf == NULL) {
+				rc = -DER_NOMEM;
+				break;
+			}
+			continue;
+		} else if (rc) {
 			/* container might have been destroyed. Or there is
 			 * no spare target left for this object see
 			 * obj_grp_valid_shard_get()
@@ -755,6 +782,8 @@ rebuild_obj_ult(void *data)
 
 	ds_obj_close(oh);
 free:
+	if (buf != NULL && buf != stack_buf)
+		D_FREE(buf);
 	tls->rebuild_pool_obj_count++;
 	if (tls->rebuild_pool_status == 0 && rc < 0)
 		tls->rebuild_pool_status = rc;

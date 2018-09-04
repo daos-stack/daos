@@ -51,6 +51,9 @@ extern umem_class_id_t vos_mem_class;
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
 #define VOS_BLOB_HDR_BLKS	1	/* block */
 
+/** hash seed for murmur hash */
+#define VOS_BTR_MUR_SEED	0xC0FFEE
+
 /**
  * Header for SPDK blob per VOS pool
  */

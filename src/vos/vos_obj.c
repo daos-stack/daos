@@ -33,8 +33,6 @@
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
 
-#define ITER_KEY_SIZE		2048
-
 /** iterator for dkey/akey/recx */
 struct vos_obj_iter {
 	/* public part of the iterator */
@@ -47,10 +45,8 @@ struct vos_obj_iter {
 	daos_epoch_range_t	 it_epr;
 	/** condition of the iterator: attribute key */
 	daos_key_t		 it_akey;
-	/** XXX workaround, buffer to store the previous key */
-	char			 it_key_prev[ITER_KEY_SIZE];
-	/** length of previous key */
-	int			 it_key_len;
+	/** previous hkey */
+	uint64_t		 it_hkey_prev[2];
 	/* reference on the object */
 	struct vos_object	*it_obj;
 };
@@ -255,17 +251,17 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 		ent->ie_epoch = epr->epr_lo;
 
 	} else if (ent->ie_epoch > epr->epr_hi) {
-		daos_key_t *key = &ent->ie_key;
+		daos_key_t	*key = &ent->ie_key;
+		uint64_t	 hkey[2];
 
-		if (key->iov_len != oiter->it_key_len ||
-		    memcmp(key->iov_buf, oiter->it_key_prev, key->iov_len)) {
-			/* previous key is not the same key, it's a match.
-			 * XXX this is a workaround, we just copy the whole
-			 * key and always assume it can fit into the buffer.
-			 */
-			D_ASSERT(key->iov_len < ITER_KEY_SIZE);
-			memcpy(oiter->it_key_prev, key->iov_buf, key->iov_len);
-			oiter->it_key_len = key->iov_len;
+		hkey[0] = d_hash_murmur64(key->iov_buf, key->iov_len,
+					  VOS_BTR_MUR_SEED);
+		hkey[1] = d_hash_string_u32(key->iov_buf, key->iov_len);
+		if (hkey[0] != oiter->it_hkey_prev[0] ||
+		    hkey[1] != oiter->it_hkey_prev[1]) {
+			/* previous key is not the same key */
+			oiter->it_hkey_prev[0] = hkey[0];
+			oiter->it_hkey_prev[1] = hkey[1];
 		} else {
 			/* GT + EPOCH_MAX will effectively probe the next key */
 			ent->ie_epoch = DAOS_EPOCH_MAX;

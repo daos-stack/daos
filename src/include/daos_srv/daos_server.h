@@ -415,14 +415,14 @@ struct dss_enum_arg {
 
 	/* Buffer fields */
 	union {
-		struct {	/* !recxs_eprs */
+		struct {	/* !fill_recxs */
 			daos_key_desc_t	       *kds;
 			int			kds_cap;
 			int			kds_len;
 			daos_sg_list_t	       *sgl;
 			int			sgl_idx;
 		};
-		struct {	/* recxs_eprs && type == S||R */
+		struct {	/* fill_recxs && type == S||R */
 			daos_recx_t	       *recxs;
 			int			recxs_cap;
 			int			recxs_len;
