@@ -31,6 +31,7 @@ pipeline {
                         }
                     }
                     steps {
+                        githubNotify description: 'checkmodules.sh',  context: 'checkmodules.sh', status: 'PENDING'
                         sh '''pushd scons_local
                               git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/10
                               popd
@@ -40,6 +41,12 @@ pipeline {
                     post {
                         always {
                             archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: true
+                        }
+                        success {
+                            githubNotify description: 'checkmodules.sh',  context: 'checkmodules.sh', status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify description: 'checkmodules.sh',  context: 'checkmodules.sh', status: 'FAILURE'
                         }
                     }
                 }
@@ -57,6 +64,7 @@ pipeline {
                         }
                     }
                     steps {
+                        githubNotify description: 'CentOS 7 Build',  context: 'build/centos7', status: 'PENDING'
                         checkout scm
                         sh '''git submodule update --init --recursive
                               scons -c
@@ -78,6 +86,14 @@ pipeline {
                         stash name: 'CentOS-build-vars', includes: '.build_vars.*'
                         stash name: 'CentOS-tests', includes: 'build/src/rdb/raft/src/tests_main, build/src/common/tests/btree_direct, build/src/common/tests/btree, src/common/tests/btree.sh, build/src/common/tests/sched, build/src/client/api/tests/eq_tests, src/vos/tests/evt_ctl.sh, build/src/vos/vea/tests/vea_ut, src/rdb/raft_tests/raft_tests.py'
                     }
+                    post {
+                        success {
+                            githubNotify description: 'CentOS 7 Build',  context: 'build/centos7', status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify description: 'CentOS 7 Build',  context: 'build/centos7', status: 'FAILURE'
+                        }
+                    }
                 }
                 stage('Build on Ubuntu 18.04') {
                     agent {
@@ -89,6 +105,7 @@ pipeline {
                         }
                     }
                     steps {
+                        githubNotify description: 'Ubuntu 18 Build',  context: 'build/ubuntu18', status: 'PENDING'
                         checkout scm
                         sh '''git submodule update --init --recursive
                               scons -c
@@ -107,6 +124,14 @@ pipeline {
                                   fi
                               fi'''
                     }
+                    post {
+                        success {
+                            githubNotify description: 'Ubuntu 18 Build',  context: 'build/ubuntu18', status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify description: 'Ubuntu 18 Build',  context: 'build/ubuntu18', status: 'FAILURE'
+                        }
+                    }
                 }
             }
         }
@@ -117,6 +142,7 @@ pipeline {
                         label 'cluster_provisioner'
                     }
                     steps {
+                        githubNotify description: 'Functional quick',  context: 'test/functional_quick', status: 'PENDING'
                         dir('install') {
                             deleteDir()
                         }
@@ -131,6 +157,12 @@ pipeline {
                             archiveArtifacts artifacts: 'daos-Functional-quick.log, src/tests/ftest/avocado/job-results/**'
                             junit 'src/tests/ftest/avocado/job-results/*/results.xml'
                         }
+                        success {
+                            githubNotify description: 'Functional quick',  context: 'test/functional_quick', status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify description: 'Functional quick',  context: 'test/functional_quick', status: 'FAILURE'
+                        }
                     }
                 }
                 stage('run_test.sh') {
@@ -138,6 +170,7 @@ pipeline {
                         label 'single'
                     }
                     steps {
+                        githubNotify description: 'run_test.sh',  context: 'test/run_test.sh', status: 'PENDING'
                         dir('install') {
                             deleteDir()
                         }
@@ -151,6 +184,12 @@ pipeline {
                         always {
                             archiveArtifacts artifacts: 'daos-run_test.sh.log'
                         }
+                        success {
+                            githubNotify description: 'run_test.sh',  context: 'test/run_test.sh', status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify description: 'run_test.sh',  context: 'test/run_test.sh', status: 'FAILURE'
+                        }
                     }
                 }
                 stage('DaosTestMulti All') {
@@ -158,6 +197,7 @@ pipeline {
                         label 'cluster_provisioner'
                     }
                     steps {
+                        githubNotify description: 'DaosTestMulti All',  context: 'test/daostestmulti_all', status: 'PENDING'
                         dir('install') {
                             deleteDir()
                         }
@@ -171,6 +211,12 @@ pipeline {
                             archiveArtifacts artifacts: 'daos-DaosTestMulti-All.log, results-DaosTestMulti-All.xml'
                             junit allowEmptyResults: true, testResults: 'results-DaosTestMulti-All.xml'
                         }
+                        success {
+                            githubNotify description: 'DaosTestMulti All',  context: 'test/daostestmulti_all', status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify description: 'DaosTestMulti All',  context: 'test/daostestmulti_all', status: 'FAILURE'
+                        }
                     }
                 }
                 stage('DaosTestMulti Degraded') {
@@ -178,6 +224,7 @@ pipeline {
                         label 'cluster_provisioner'
                     }
                     steps {
+                        githubNotify description: 'DaosTestMulti Degraded',  context: 'test/daostestmulti_degraded', status: 'PENDING'
                         dir('install') {
                             deleteDir()
                         }
@@ -191,6 +238,12 @@ pipeline {
                             archiveArtifacts artifacts: 'daos-DaosTestMulti-Degraded.log, results-DaosTestMulti-Degraded.xml'
                             junit allowEmptyResults: true, testResults: 'results-DaosTestMulti-Degraded.xml'
                         }
+                        success {
+                            githubNotify description: 'DaosTestMulti Degraded',  context: 'test/daostestmulti_degraded', status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify description: 'DaosTestMulti Degraded',  context: 'test/daostestmulti_degraded', status: 'FAILURE'
+                        }
                     }
                 }
                 stage('DaosTestMulti Rebuild') {
@@ -198,6 +251,7 @@ pipeline {
                         label 'cluster_provisioner'
                     }
                     steps {
+                        githubNotify description: 'DaosTestMulti Rebuild',  context: 'test/daostestmulti_rebuild', status: 'PENDING'
                         dir('install') {
                             deleteDir()
                         }
@@ -210,6 +264,12 @@ pipeline {
                         always {
                             archiveArtifacts artifacts: 'daos-DaosTestMulti-Rebuild.log, results-DaosTestMulti-Rebuild.xml'
                             junit allowEmptyResults: true, testResults: 'results-DaosTestMulti-Rebuild.xml'
+                        }
+                        success {
+                            githubNotify description: 'DaosTestMulti Rebuild',  context: 'test/daostestmulti_rebuild', status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify description: 'DaosTestMulti Rebuild',  context: 'test/daostestmulti_rebuild', status: 'FAILURE'
                         }
                     }
                 }
