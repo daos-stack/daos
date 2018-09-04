@@ -77,6 +77,7 @@ struct io_params {
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
 	bool			user_sgl_used;
+	daos_size_t		cell_size;
 	tse_task_t		*task;
 	struct io_params	*next;
 };
@@ -152,10 +153,20 @@ free_md_params_cb(tse_task_t *task, void *data)
 }
 
 static int
+free_val_cb(tse_task_t *task, void *data)
+{
+	char	*val = *((char **)data);
+	int	rc = task->dt_result;
+
+	free(val);
+	return rc;
+}
+
+static int
 free_io_params_cb(tse_task_t *task, void *data)
 {
-	struct io_params *io_list = *((struct io_params **)data);
-	int rc = task->dt_result;
+	struct	io_params *io_list = *((struct io_params **)data);
+	int	rc = task->dt_result;
 
 	while (io_list) {
 		struct io_params *current = io_list;
@@ -1706,18 +1717,436 @@ free_set_size_cb(tse_task_t *task, void *data)
 }
 
 static int
+punch_key(daos_handle_t oh, daos_epoch_t epoch, const char *key, int dkey_num,
+	  tse_task_t *task)
+{
+	daos_obj_punch_t	*p_args;
+	daos_key_t		*dkey;
+	struct io_params	*params = NULL;
+	tse_task_t		*io_task = NULL;
+	daos_opc_t		opc = DAOS_OPC_OBJ_PUNCH_DKEYS;
+	int			rc;
+
+	D_ALLOC_PTR(params);
+	if (params == NULL) {
+		D_ERROR("Failed memory allocation\n");
+		return -DER_NOMEM;
+	}
+
+	io_task = params->task;
+	params->dkey_str = strdup(key);
+	dkey = &params->dkey;
+	daos_iov_set(dkey, (void *)params->dkey_str,
+		     strlen(params->dkey_str));
+
+	/** Punch this entire dkey */
+	D_DEBUG(DB_IO, "Punching Key %s\n", params->dkey_str);
+
+	/*
+	 * If this is dkey "0", punch only the akey "0" because
+	 * it contains other metadata keys that we don't want to
+	 * punch.
+	 */
+	if (dkey_num == 0)
+		opc = DAOS_OPC_OBJ_PUNCH_AKEYS;
+
+	rc = daos_task_create(opc, tse_task2sched(task), 0, NULL, &io_task);
+	if (rc) {
+		D_ERROR("daos_task_create() failed (%d)\n", rc);
+		D_GOTO(err, rc);
+	}
+
+	p_args = daos_task_get_args(io_task);
+	p_args->oh	= oh;
+	p_args->epoch	= epoch;
+	p_args->dkey	= dkey;
+
+	/** set akey if we punch akey "0" only */
+	if (dkey_num == 0) {
+		daos_key_t *akey;
+
+		akey = &params->iod.iod_name;
+		params->akey_str = '0';
+		daos_iov_set(akey, &params->akey_str, 1);
+		p_args->akey_nr = 1;
+		p_args->akeys = akey;
+	}
+
+	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
+				       sizeof(params));
+	if (rc)
+		D_GOTO(err, rc);
+
+	rc = tse_task_register_deps(task, 1, &io_task);
+	if (rc)
+		D_GOTO(err, rc);
+
+	rc = tse_task_schedule(io_task, false);
+	if (rc)
+		D_GOTO(err, rc);
+
+	return rc;
+err:
+	if (params) {
+		if (params->dkey_str)
+			free(params->dkey_str);
+		if (io_task)
+			tse_task_complete(io_task, rc);
+		D_FREE_PTR(params);
+	}
+	return rc;
+}
+
+static int
+punch_extent(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+	     daos_off_t record_i, daos_size_t num_records, tse_task_t *task)
+{
+	daos_obj_update_t	*io_arg;
+	daos_iod_t		*iod;
+	daos_sg_list_t		*sgl;
+	daos_key_t		*dkey;
+	daos_csum_buf_t		null_csum;
+	struct io_params	*params = NULL;
+	tse_task_t		*io_task = NULL;
+	int			rc;
+
+	D_DEBUG(DB_IO, "Punching (%zu, %zu) in Key %s\n",
+		record_i + 1, num_records, key);
+
+	D_ALLOC_PTR(params);
+	if (params == NULL) {
+		D_ERROR("Failed memory allocation\n");
+		return -DER_NOMEM;
+	}
+
+	daos_csum_set(&null_csum, NULL, 0);
+
+	iod = &params->iod;
+	sgl = NULL;
+	dkey = &params->dkey;
+	io_task = params->task;
+	params->akey_str = '0';
+	params->user_sgl_used = false;
+	params->dkey_str = strdup(key);
+	dkey = &params->dkey;
+	daos_iov_set(dkey, (void *)params->dkey_str,
+		     strlen(params->dkey_str));
+
+	/* set descriptor for KV object */
+	daos_iov_set(&iod->iod_name, &params->akey_str, 1);
+	iod->iod_kcsum = null_csum;
+	iod->iod_nr = 1;
+	iod->iod_csums = NULL;
+	iod->iod_eprs = NULL;
+	iod->iod_size = 0; /* 0 to punch */
+	iod->iod_type = DAOS_IOD_ARRAY;
+	iod->iod_recxs = malloc(sizeof(daos_recx_t));
+	iod->iod_recxs[0].rx_idx = record_i + 1;
+	iod->iod_recxs[0].rx_nr = num_records;
+
+	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0,
+			      NULL, &io_task);
+	if (rc)
+		D_GOTO(err, rc);
+
+	io_arg = daos_task_get_args(io_task);
+	io_arg->oh	= oh;
+	io_arg->epoch	= epoch;
+	io_arg->dkey	= dkey;
+	io_arg->nr	= 1;
+	io_arg->iods	= iod;
+	io_arg->sgls	= sgl;
+
+	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
+				       sizeof(params));
+	if (rc)
+		D_GOTO(err, rc);
+
+	rc = tse_task_register_deps(task, 1, &io_task);
+	if (rc)
+		D_GOTO(err, rc);
+
+	rc = tse_task_schedule(io_task, false);
+	if (rc)
+		D_GOTO(err, rc);
+
+	return rc;
+err:
+	if (params) {
+		if (params->dkey_str)
+			free(params->dkey_str);
+		if (io_task)
+			tse_task_complete(io_task, rc);
+		D_FREE_PTR(params);
+	}
+	return rc;
+}
+
+static int
+check_record_cb(tse_task_t *task, void *data)
+{
+	daos_obj_fetch_t	*args = daos_task_get_args(task);
+	struct io_params	*params = *((struct io_params **)data);
+	daos_obj_update_t	*io_arg;
+	tse_task_t		*io_task;
+	daos_iod_t		*iod;
+	daos_sg_list_t		*sgl;
+	daos_key_t		*dkey;
+	char			*val;
+	int			rc = task->dt_result;
+
+	/** Last record is there, no need to add it */
+	if (rc || params->iod.iod_size != 0)
+		D_GOTO(out, rc);
+
+	/** add record with value 0 */
+	iod = &params->iod;
+	sgl = &params->sgl;
+	dkey = &params->dkey;
+
+	/** update the iod size, rest should be already set */
+	iod->iod_size = params->cell_size;
+
+	/** set memory location */
+	val = calloc(1, params->cell_size);
+	sgl->sg_nr = 1;
+	sgl->sg_iovs = malloc(sizeof(daos_iov_t));
+	daos_iov_set(&sgl->sg_iovs[0], val, params->cell_size);
+
+	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0,
+			      NULL, &io_task);
+	if (rc) {
+		D_ERROR("Task create failed (%d)\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	io_arg = daos_task_get_args(io_task);
+	io_arg->oh	= args->oh;
+	io_arg->epoch	= args->epoch;
+	io_arg->dkey	= dkey;
+	io_arg->nr	= 1;
+	io_arg->iods	= iod;
+	io_arg->sgls	= sgl;
+
+	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
+				       sizeof(params));
+	if (rc)
+		D_GOTO(err_task, rc);
+
+	rc = tse_task_register_comp_cb(io_task, free_val_cb, &val, sizeof(val));
+	if (rc)
+		D_GOTO(err_task, rc);
+
+	rc = tse_task_register_deps(task, 1, &io_task);
+	if (rc)
+		D_GOTO(err_task, rc);
+
+	rc = tse_task_schedule(io_task, false);
+	if (rc)
+		D_GOTO(err_task, rc);
+
+	return rc;
+
+err_task:
+	if (io_task)
+		tse_task_complete(io_task, rc);
+out:
+	if (params) {
+		if (params->dkey_str)
+			free(params->dkey_str);
+		D_FREE_PTR(params);
+	}
+	return rc;
+}
+
+static int
+check_record(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+	     daos_off_t record_i, daos_size_t cell_size, tse_task_t *task)
+{
+	daos_obj_fetch_t	*io_arg;
+	daos_iod_t		*iod;
+	daos_sg_list_t		*sgl;
+	daos_key_t		*dkey;
+	daos_csum_buf_t		null_csum;
+	struct io_params	*params = NULL;
+	tse_task_t		*io_task = NULL;
+	int			rc;
+
+	D_ALLOC_PTR(params);
+	if (params == NULL) {
+		D_ERROR("Failed memory allocation\n");
+		return -DER_NOMEM;
+	}
+
+	iod = &params->iod;
+	sgl = NULL;
+	dkey = &params->dkey;
+	io_task = params->task;
+	params->akey_str = '0';
+	params->user_sgl_used = false;
+	params->dkey_str = strdup(key);
+	params->cell_size = cell_size;
+	dkey = &params->dkey;
+	daos_iov_set(dkey, (void *)params->dkey_str,
+		     strlen(params->dkey_str));
+
+	/* set descriptor for KV object */
+	daos_iov_set(&iod->iod_name, &params->akey_str, 1);
+	daos_csum_set(&null_csum, NULL, 0);
+	iod->iod_kcsum = null_csum;
+	iod->iod_nr = 1;
+	iod->iod_csums = NULL;
+	iod->iod_eprs = NULL;
+	iod->iod_size = DAOS_REC_ANY;
+	iod->iod_type = DAOS_IOD_ARRAY;
+	iod->iod_recxs = malloc(sizeof(daos_recx_t));
+	iod->iod_recxs[0].rx_idx = record_i;
+	iod->iod_recxs[0].rx_nr = 1;
+
+	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task), 0, NULL,
+			      &io_task);
+	if (rc) {
+		D_ERROR("Task create failed (%d)\n", rc);
+		D_GOTO(err, rc);
+	}
+
+	io_arg = daos_task_get_args(io_task);
+	io_arg->oh	= oh;
+	io_arg->epoch	= epoch;
+	io_arg->dkey	= dkey;
+	io_arg->nr	= 1;
+	io_arg->iods	= iod;
+	io_arg->sgls	= sgl;
+	io_arg->maps	= NULL;
+
+	rc = tse_task_register_comp_cb(io_task, check_record_cb, &params,
+				       sizeof(params));
+	if (rc)
+		D_GOTO(err, rc);
+
+	rc = tse_task_register_deps(task, 1, &io_task);
+	if (rc)
+		D_GOTO(err, rc);
+
+	rc = tse_task_schedule(io_task, false);
+	if (rc)
+		D_GOTO(err, rc);
+
+	return rc;
+err:
+	if (params) {
+		if (params->dkey_str)
+			free(params->dkey_str);
+		if (io_task)
+			tse_task_complete(io_task, rc);
+		D_FREE_PTR(params);
+	}
+	return rc;
+}
+
+
+static int
+add_record(daos_handle_t oh, daos_epoch_t epoch, struct set_size_props *props)
+{
+	daos_obj_update_t	*io_arg;
+	daos_iod_t		*iod;
+	daos_sg_list_t		*sgl;
+	daos_key_t		*dkey;
+	daos_csum_buf_t		null_csum;
+	struct io_params	*params = NULL;
+	tse_task_t		*io_task = NULL;
+	int			rc;
+
+	daos_csum_set(&null_csum, NULL, 0);
+
+	D_ALLOC_PTR(params);
+	if (params == NULL) {
+		D_ERROR("Failed memory allocation\n");
+		return -DER_NOMEM;
+	}
+
+	iod = &params->iod;
+	sgl = &params->sgl;
+	dkey = &params->dkey;
+
+	io_task = params->task;
+	params->akey_str = '0';
+	params->next = NULL;
+	params->user_sgl_used = false;
+
+	rc = asprintf(&params->dkey_str, "%zu", props->dkey_num);
+	if (rc < 0 || params->dkey_str == NULL) {
+		D_ERROR("Failed memory allocation\n");
+		D_GOTO(err, -DER_NOMEM);
+	}
+
+	daos_iov_set(dkey, (void *)params->dkey_str, strlen(params->dkey_str));
+
+	/** set memory location */
+	props->val = calloc(1, props->cell_size);
+	sgl->sg_nr = 1;
+	sgl->sg_iovs = malloc(sizeof(daos_iov_t));
+	daos_iov_set(&sgl->sg_iovs[0], props->val, props->cell_size);
+
+	/* set descriptor for KV object */
+	daos_iov_set(&iod->iod_name, &params->akey_str, 1);
+	iod->iod_kcsum = null_csum;
+	iod->iod_nr = 1;
+	iod->iod_csums = NULL;
+	iod->iod_eprs = NULL;
+	iod->iod_size = props->cell_size;
+	iod->iod_type = DAOS_IOD_ARRAY;
+	iod->iod_recxs = malloc(sizeof(daos_recx_t));
+	iod->iod_recxs[0].rx_idx = props->record_i;
+	iod->iod_recxs[0].rx_nr = 1;
+
+	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(props->ptask),
+			      0, NULL, &io_task);
+	if (rc) {
+		free(sgl->sg_iovs);
+		D_GOTO(err, rc);
+	}
+	io_arg = daos_task_get_args(io_task);
+	io_arg->oh	= oh;
+	io_arg->epoch	= epoch;
+	io_arg->dkey	= dkey;
+	io_arg->nr	= 1;
+	io_arg->iods	= iod;
+	io_arg->sgls	= sgl;
+
+	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
+				       sizeof(params));
+	if (rc)
+		D_GOTO(err, rc);
+
+	rc = tse_task_register_deps(props->ptask, 1, &io_task);
+	if (rc)
+		D_GOTO(err, rc);
+
+	rc = tse_task_schedule(io_task, false);
+	if (rc)
+		D_GOTO(err, rc);
+
+	return rc;
+err:
+	if (params) {
+		if (params->dkey_str)
+			free(params->dkey_str);
+		if (io_task)
+			tse_task_complete(io_task, rc);
+		D_FREE_PTR(params);
+	}
+	return rc;
+}
+
+static int
 adjust_array_size_cb(tse_task_t *task, void *data)
 {
 	daos_obj_list_dkey_t	*args = daos_task_get_args(task);
 	struct set_size_props	*props = *((struct set_size_props **)data);
 	char			*ptr;
-	tse_task_t		*io_task = NULL;
-	struct io_params	*params = NULL;
 	uint32_t		j;
 	int			rc = task->dt_result;
-
-	if (props->size == 0)
-		props->update_dkey = false;
 
 	for (ptr = props->buf, j = 0; j < props->nr; j++) {
 		daos_size_t dkey_num;
@@ -1733,147 +2162,32 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		D_ASSERT(ret == 1);
 
 		if (props->size == 0 || dkey_num > props->dkey_num) {
-			daos_obj_punch_t	*p_args;
-			daos_key_t		*dkey;
-
 			/*
 			 * Punch the entire dkey since it's in a higher dkey
 			 * group than the intended size.
 			 */
-
-			D_ALLOC_PTR(params);
-			if (params == NULL) {
-				D_ERROR("Failed memory allocation\n");
-				return -DER_NOMEM;
-			}
-
-			io_task = params->task;
-			params->dkey_str = strdup(props->key);
-			dkey = &params->dkey;
-			daos_iov_set(dkey, (void *)params->dkey_str,
-				     strlen(params->dkey_str));
-
-			/** Punch this entire dkey */
-			D_DEBUG(DB_IO, "Punching Key %s\n", params->dkey_str);
-
-			daos_opc_t opc = DAOS_OPC_OBJ_PUNCH_DKEYS;
-
-			/*
-			 * If this is dkey "0", punch only the akey "0" because
-			 * it contains other metadata keys that we don't want to
-			 * punch.
-			 */
-			if (dkey_num == 0)
-				opc = DAOS_OPC_OBJ_PUNCH_AKEYS;
-
-			rc = daos_task_create(opc, tse_task2sched(task), 0,
-					      NULL, &io_task);
-			if (rc != 0) {
-				D_ERROR("daos_task_create() failed (%d)\n", rc);
-				D_GOTO(err, rc);
-			}
-
-			p_args = daos_task_get_args(io_task);
-			p_args->oh	= args->oh;
-			p_args->epoch	= args->epoch;
-			p_args->dkey	= dkey;
-
-			/** set akey if we punch akey "0" only */
-			if (dkey_num == 0) {
-				daos_key_t *akey;
-
-				akey = &params->iod.iod_name;
-				params->akey_str = '0';
-				daos_iov_set(akey, &params->akey_str, 1);
-				p_args->akey_nr = 1;
-				p_args->akeys = akey;
-			}
-
-			rc = tse_task_register_comp_cb(io_task,
-						       free_io_params_cb,
-						       &params,
-						       sizeof(params));
-			if (rc != 0)
-				D_GOTO(err, rc);
-
-			rc = tse_task_register_deps(props->ptask, 1,
-						    &io_task);
-			if (rc != 0)
-				D_GOTO(err, rc);
-
-			rc = tse_task_schedule(io_task, false);
-			if (rc != 0)
-				D_GOTO(err, rc);
+			rc = punch_key(args->oh, args->epoch, props->key,
+				       dkey_num, props->ptask);
+			if (rc)
+				return rc;
 		} else if (dkey_num == props->dkey_num && props->record_i) {
-			/* punch all records above record_i */
-			daos_obj_update_t *io_arg;
-			daos_iod_t	*iod;
-			daos_sg_list_t	*sgl;
-			daos_key_t	*dkey;
-			daos_csum_buf_t	null_csum;
-
 			props->update_dkey = false;
 
-			daos_csum_set(&null_csum, NULL, 0);
+			/*
+			 * Punch all records above record_i, then check if
+			 * record_i exists and insert a record if it doesn't.
+			 */
+			rc = punch_extent(args->oh, args->epoch, props->key,
+					  props->record_i, props->num_records,
+					  props->ptask);
+			if (rc)
+				return rc;
 
-			D_ALLOC_PTR(params);
-			if (params == NULL) {
-				D_ERROR("Failed memory allocation\n");
-				return -DER_NOMEM;
-			}
-
-			iod = &params->iod;
-			sgl = NULL;
-			dkey = &params->dkey;
-			io_task = params->task;
-			params->akey_str = '0';
-			params->user_sgl_used = false;
-			params->dkey_str = strdup(props->key);
-			dkey = &params->dkey;
-			daos_iov_set(dkey, (void *)params->dkey_str,
-				     strlen(params->dkey_str));
-
-			/* set descriptor for KV object */
-			daos_iov_set(&iod->iod_name, &params->akey_str, 1);
-			iod->iod_kcsum = null_csum;
-			iod->iod_nr = 1;
-			iod->iod_csums = NULL;
-			iod->iod_eprs = NULL;
-			iod->iod_size = 0; /* 0 to punch */
-			iod->iod_type = DAOS_IOD_ARRAY;
-			iod->iod_recxs = malloc(sizeof(daos_recx_t));
-			iod->iod_recxs[0].rx_idx = props->record_i;
-			iod->iod_recxs[0].rx_nr = props->num_records;
-
-			rc = daos_task_create(DAOS_OPC_OBJ_UPDATE,
-					      tse_task2sched(task),
-					      0, NULL, &io_task);
-			if (rc != 0) {
-				D_ERROR("punch recs failed (%d)\n", rc);
-				D_GOTO(err, rc);
-			}
-
-			io_arg = daos_task_get_args(io_task);
-			io_arg->oh	= args->oh;
-			io_arg->epoch	= args->epoch;
-			io_arg->dkey	= dkey;
-			io_arg->nr	= 1;
-			io_arg->iods	= iod;
-			io_arg->sgls	= sgl;
-
-			rc = tse_task_register_comp_cb(io_task,
-						       free_io_params_cb,
-						       &params, sizeof(params));
-			if (rc != 0)
-				D_GOTO(err, rc);
-
-			rc = tse_task_register_deps(props->ptask, 1, &io_task);
-			if (rc != 0)
-				D_GOTO(err, rc);
-
-			rc = tse_task_schedule(io_task, false);
-			if (rc != 0)
-				D_GOTO(err, rc);
+			rc = check_record(args->oh, args->epoch, props->key,
+					  props->record_i, props->cell_size,
+					  props->ptask);
+			if (rc)
+				return rc;
 		}
 		continue;
 	}
@@ -1887,7 +2201,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		rc = tse_task_reinit(task);
 		if (rc) {
 			D_ERROR("FAILED to reinit task\n");
-			D_GOTO(err, rc);
+			return rc;
 		}
 
 		rc = tse_task_register_cbs(task, NULL, NULL, 0,
@@ -1895,104 +2209,21 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 					   sizeof(props));
 		if (rc) {
 			tse_task_complete(task, rc);
-			D_GOTO(err, rc);
+			return rc;
 		}
+
 		return rc;
 	}
 
 	/** if array is smaller, write a record at the new size */
 	if (props->update_dkey) {
-		daos_obj_update_t *io_arg;
-		daos_iod_t	*iod;
-		daos_sg_list_t	*sgl;
-		daos_key_t	*dkey;
-		daos_csum_buf_t	null_csum;
-
 		D_DEBUG(DB_IO, "Extending array key %zu, rec = %d\n",
 			props->dkey_num, (int)props->record_i);
 
-		daos_csum_set(&null_csum, NULL, 0);
-
-		D_ALLOC_PTR(params);
-		if (params == NULL) {
-			D_ERROR("Failed memory allocation\n");
-			return -DER_NOMEM;
-		}
-
-		iod = &params->iod;
-		sgl = &params->sgl;
-		dkey = &params->dkey;
-
-		io_task = params->task;
-		params->akey_str = '0';
-		params->next = NULL;
-		params->user_sgl_used = false;
-
-		rc = asprintf(&params->dkey_str, "%zu", props->dkey_num);
-		if (rc < 0 || params->dkey_str == NULL) {
-			D_ERROR("Failed memory allocation\n");
-			D_GOTO(err, -DER_NOMEM);
-		}
-		daos_iov_set(dkey, (void *)params->dkey_str,
-			     strlen(params->dkey_str));
-
-		/** set memory location */
-		props->val = calloc(1, props->cell_size);
-		sgl->sg_nr = 1;
-		sgl->sg_iovs = malloc(sizeof(daos_iov_t));
-		daos_iov_set(&sgl->sg_iovs[0], props->val, props->cell_size);
-
-		/* set descriptor for KV object */
-		daos_iov_set(&iod->iod_name, &params->akey_str, 1);
-		iod->iod_kcsum = null_csum;
-		iod->iod_nr = 1;
-		iod->iod_csums = NULL;
-		iod->iod_eprs = NULL;
-		iod->iod_size = props->cell_size;
-		iod->iod_type = DAOS_IOD_ARRAY;
-		iod->iod_recxs = malloc(sizeof(daos_recx_t));
-		iod->iod_recxs[0].rx_idx = props->record_i;
-		iod->iod_recxs[0].rx_nr = 1;
-
-		rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
-				      0, NULL, &io_task);
-		if (rc != 0) {
-			D_ERROR("KV Update of dkey %s failed (%d)\n",
-				params->dkey_str, rc);
-			free(sgl->sg_iovs);
-			D_GOTO(err, rc);
-		}
-		io_arg = daos_task_get_args(io_task);
-		io_arg->oh	= args->oh;
-		io_arg->epoch	= args->epoch;
-		io_arg->dkey	= dkey;
-		io_arg->nr	= 1;
-		io_arg->iods	= iod;
-		io_arg->sgls	= sgl;
-
-		rc = tse_task_register_comp_cb(io_task, free_io_params_cb,
-					       &params, sizeof(params));
-		if (rc != 0)
-			D_GOTO(err, rc);
-
-		rc = tse_task_register_deps(props->ptask, 1, &io_task);
-		if (rc != 0)
-			D_GOTO(err, rc);
-
-		rc = tse_task_schedule(io_task, false);
-		if (rc != 0)
-			D_GOTO(err, rc);
-	}
-
-	return rc;
-
-err:
-	if (params) {
-		if (params->dkey_str)
-			free(params->dkey_str);
-		if (io_task)
-			tse_task_complete(io_task, rc);
-		D_FREE_PTR(params);
+		/** no need to check the record, we know it's not there */
+		rc = add_record(args->oh, args->epoch, props);
+		if (rc)
+			return rc;
 	}
 	return rc;
 }
@@ -2026,7 +2257,7 @@ dac_array_set_size(tse_task_t *task)
 	} else {
 		rc = compute_dkey(array, args->size-1, &num_records, &record_i,
 				  &dkey_str);
-		if (rc != 0) {
+		if (rc) {
 			D_ERROR("Failed to compute dkey\n");
 			D_GOTO(err_task, rc);
 		}
@@ -2049,11 +2280,14 @@ dac_array_set_size(tse_task_t *task)
 	set_size_props->num_records = num_records;
 	set_size_props->record_i = record_i;
 	set_size_props->chunk_size = array->chunk_size;
-	set_size_props->update_dkey = true;
 	set_size_props->nr = ENUM_DESC_NR;
 	set_size_props->size = args->size;
 	set_size_props->ptask = task;
 	set_size_props->val = NULL;
+	if (args->size == 0)
+		set_size_props->update_dkey = false;
+	else
+		set_size_props->update_dkey = true;
 	memset(set_size_props->buf, 0, ENUM_DESC_BUF);
 	memset(&set_size_props->anchor, 0, sizeof(set_size_props->anchor));
 	set_size_props->sgl.sg_nr = 1;
@@ -2063,7 +2297,7 @@ dac_array_set_size(tse_task_t *task)
 
 	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task),
 			      0, NULL, &enum_task);
-	if (rc != 0)
+	if (rc)
 		D_GOTO(err_task, rc);
 
 	enum_args = daos_task_get_args(enum_task);
@@ -2077,20 +2311,20 @@ dac_array_set_size(tse_task_t *task)
 	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0,
 				   adjust_array_size_cb, &set_size_props,
 				   sizeof(set_size_props));
-	if (rc != 0)
+	if (rc)
 		D_GOTO(err_enum_task, rc);
 
 	rc = tse_task_register_deps(task, 1, &enum_task);
-	if (rc != 0)
+	if (rc)
 		D_GOTO(err_enum_task, rc);
 
 	rc = tse_task_register_comp_cb(task, free_set_size_cb, &set_size_props,
 				       sizeof(set_size_props));
-	if (rc != 0)
+	if (rc)
 		D_GOTO(err_enum_task, rc);
 
 	rc = tse_task_schedule(enum_task, false);
-	if (rc != 0)
+	if (rc)
 		D_GOTO(err_enum_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
