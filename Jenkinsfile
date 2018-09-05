@@ -118,35 +118,6 @@ pipeline {
         }
         stage('Test') {
             parallel {
-/* skip all failing stages to debug commit statuses
-                stage('Functional quick') {
-                    agent {
-                        label 'cluster_provisioner'
-                    }
-                    steps {
-                        githubNotify description: 'Functional quick',  context: 'test/functional_quick', status: 'PENDING'
-                        dir('install') {
-                            deleteDir()
-                        }
-                        unstash 'CentOS-install'
-                        unstash 'CentOS-build-vars'
-                        sh '''bash ftest.sh quick
-                              mv install/tmp/daos.log daos-Functional-quick.log'''
-                    }
-                    post {
-                        always {
-                            archiveArtifacts artifacts: 'daos-Functional-quick.log, src/tests/ftest/avocado/job-results/**'
-                            junit 'src/tests/ftest/avocado/job-results/*/results.xml'
-                        }
-                        success {
-                            githubNotify description: 'Functional quick',  context: 'test/functional_quick', status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify description: 'Functional quick',  context: 'test/functional_quick', status: 'FAILURE'
-                        }
-                    }
-                }
-*/
                 stage('run_test.sh') {
                     agent {
                         label 'single'
