@@ -838,15 +838,17 @@ ds_eu_complete(crt_rpc_t *rpc, int status, int map_version)
 }
 
 static int
-ds_iter_vos(crt_rpc_t *rpc, struct dss_enum_arg *enum_arg,
-	    uint32_t *map_version)
+ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
+	    struct dss_enum_arg *enum_arg, uint32_t *map_version)
 {
+	vos_iter_param_t	param = { 0 };
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
 	int			opc = opc_get(rpc->cr_opc);
 	struct ds_cont_hdl	*cont_hdl;
 	struct ds_cont		*cont;
 	int			type;
 	int			rc;
+	bool			recursive = false;
 
 	rc = ds_check_container(oei->oei_co_hdl, oei->oei_co_uuid,
 				&cont_hdl, &cont);
@@ -860,16 +862,15 @@ ds_iter_vos(crt_rpc_t *rpc, struct dss_enum_arg *enum_arg,
 			oei->oei_map_ver, *map_version);
 
 	/* prepare enumeration parameters */
-	memset(&enum_arg->param, 0, sizeof(enum_arg->param));
-	enum_arg->param.ip_hdl = cont->sc_hdl;
-	enum_arg->param.ip_oid = oei->oei_oid;
+	param.ip_hdl = cont->sc_hdl;
+	param.ip_oid = oei->oei_oid;
 	if (oei->oei_dkey.iov_len > 0)
-		enum_arg->param.ip_dkey = oei->oei_dkey;
+		param.ip_dkey = oei->oei_dkey;
 	if (oei->oei_akey.iov_len > 0)
-		enum_arg->param.ip_akey = oei->oei_akey;
-	enum_arg->param.ip_epr.epr_lo = oei->oei_epoch;
-	enum_arg->param.ip_epr.epr_hi = oei->oei_epoch;
-	enum_arg->param.ip_epc_expr = VOS_IT_EPC_LE;
+		param.ip_akey = oei->oei_akey;
+	param.ip_epr.epr_lo = oei->oei_epoch;
+	param.ip_epr.epr_hi = oei->oei_epoch;
+	param.ip_epc_expr = VOS_IT_EPC_LE;
 
 	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		if (oei->oei_dkey.iov_len == 0 ||
@@ -881,14 +882,14 @@ ds_iter_vos(crt_rpc_t *rpc, struct dss_enum_arg *enum_arg,
 			/* To capture everything visible, we must search from
 			 * 0 to our epoch
 			 */
-			enum_arg->param.ip_epr.epr_lo = 0;
+			param.ip_epr.epr_lo = 0;
 		} else {
 			type = VOS_ITER_SINGLE;
 		}
 
-		enum_arg->param.ip_epc_expr = VOS_IT_EPC_RE;
+		param.ip_epc_expr = VOS_IT_EPC_RE;
 		/** Only show visible records and skip punches */
-		enum_arg->param.ip_recx_flags = VOS_IT_RECX_VISIBLE |
+		param.ip_recx_flags = VOS_IT_RECX_VISIBLE |
 			VOS_IT_RECX_SKIP_HOLES;
 		enum_arg->fill_recxs = true;
 	} else if (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
@@ -899,12 +900,13 @@ ds_iter_vos(crt_rpc_t *rpc, struct dss_enum_arg *enum_arg,
 		/* object iteration for rebuild */
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
-		enum_arg->param.ip_epr.epr_lo = 0;
-		enum_arg->param.ip_epc_expr = VOS_IT_EPC_RE;
-		enum_arg->recursive = true;
+		param.ip_epr.epr_lo = 0;
+		param.ip_epc_expr = VOS_IT_EPC_RE;
+		recursive = true;
+		enum_arg->chk_key2big = true;
 	}
 
-	rc = dss_enum_pack(type, enum_arg);
+	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg);
 
 	D_DEBUG(DB_IO, ""DF_UOID" iterate type %d tag %d rc %d\n",
 		DP_UOID(oei->oei_oid), type, dss_get_module_info()->dmi_tid,
@@ -980,6 +982,7 @@ void
 ds_obj_enum_handler(crt_rpc_t *rpc)
 {
 	struct dss_enum_arg	enum_arg = { 0 };
+	struct vos_iter_anchors	anchors = { 0 };
 	struct obj_key_enum_in	*oei;
 	struct obj_key_enum_out	*oeo;
 	int			opc = opc_get(rpc->cr_opc);
@@ -992,9 +995,9 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	D_ASSERT(oeo != NULL);
 	/* prepare buffer for enumerate */
 
-	enum_arg.dkey_anchor = oei->oei_dkey_anchor;
-	enum_arg.akey_anchor = oei->oei_akey_anchor;
-	enum_arg.recx_anchor = oei->oei_anchor;
+	anchors.ia_dkey = oei->oei_dkey_anchor;
+	anchors.ia_akey = oei->oei_akey_anchor;
+	anchors.ia_recx = oei->oei_anchor;
 
 	/* TODO: Transfer the inline_thres from enumerate RPC */
 	enum_arg.inline_thres = 32;
@@ -1041,7 +1044,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	/* keep trying until the key_buffer is fully filled or
 	 * reaching the end of the stream
 	 */
-	rc = ds_iter_vos(rpc, &enum_arg, &map_version);
+	rc = ds_iter_vos(rpc, &anchors, &enum_arg, &map_version);
 	if (rc == 1) {
 		/* If the buffer is full, exit and
 		 * reset failure.
@@ -1052,9 +1055,9 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
-	oeo->oeo_dkey_anchor = enum_arg.dkey_anchor;
-	oeo->oeo_akey_anchor = enum_arg.akey_anchor;
-	oeo->oeo_anchor = enum_arg.recx_anchor;
+	oeo->oeo_dkey_anchor = anchors.ia_dkey;
+	oeo->oeo_akey_anchor = anchors.ia_akey;
+	oeo->oeo_anchor = anchors.ia_recx;
 
 	if (enum_arg.eprs)
 		oeo->oeo_eprs.ca_count = enum_arg.eprs_len;

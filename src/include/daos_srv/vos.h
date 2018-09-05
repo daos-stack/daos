@@ -611,6 +611,31 @@ int
 vos_iter_empty(daos_handle_t ih);
 
 /**
+ * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
+ * cb(\a arg) for each entry.
+ *
+ * If \a cb returns a nonzero (either > 0 or < 0) value that is not
+ * -DER_NONEXIST, this function stops the iteration and returns that nonzero
+ * value from \a cb. If \a cb returns -DER_NONEXIST, this function completes
+ * the iteration and returns 0. If \a cb returns 0, the iteration continues.
+ *
+ * \param[in]		param		iteration parameters
+ * \param[in]		type		entry type of starting level
+ * \param[in]		recursive	iterate in lower level recursively
+ * \param[in]		anchors		array of anchors, one for each
+ *					iteration level
+ * \param[in]		cb		iteration callback
+ * \param[in]		arg		callback argument
+ *
+ * \retval		0	iteration complete
+ * \retval		> 0	callback return value
+ * \retval		-DER_*	error (but never -DER_NONEXIST)
+ */
+int
+vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg);
+
+/**
  * VOS object index set attributes
  * Add a new object ID entry in the object index table
  * Creates an empty tree for the object

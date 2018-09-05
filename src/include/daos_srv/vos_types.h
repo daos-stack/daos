@@ -198,4 +198,24 @@ typedef struct {
 	};
 } vos_iter_entry_t;
 
+/**
+ * Iteration callback function
+ */
+typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
+			     vos_iter_type_t type, vos_iter_param_t *param,
+			     void *cb_arg, bool *reprobe);
+/**
+ * Anchors for whole iteration, one for each entry type
+ */
+struct vos_iter_anchors {
+	/** Anchor for obj */
+	daos_anchor_t	ia_obj;
+	/** Anchor for dkey */
+	daos_anchor_t	ia_dkey;
+	/** Anchor for akey */
+	daos_anchor_t	ia_akey;
+	/** Anchor for recx (SV tree or EV tree) */
+	daos_anchor_t	ia_recx;
+};
+
 #endif /* __VOS_TYPES_H__ */

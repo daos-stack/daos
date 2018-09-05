@@ -543,7 +543,8 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 
 static int
 rdb_vos_aggregate_obj(daos_handle_t ih, vos_iter_entry_t *entry,
-		      vos_iter_type_t type, vos_iter_param_t *param, void *arg)
+		      vos_iter_type_t type, vos_iter_param_t *param,
+		      void *arg, bool *reprobe)
 {
 	const unsigned int	run_max = 64;
 	unsigned int		total = 0;
@@ -576,15 +577,14 @@ rdb_vos_aggregate_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 int
 rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 {
-	vos_iter_param_t	param;
-	daos_anchor_t		anchor;
+	struct vos_iter_anchors	anchors = { 0 };
+	vos_iter_param_t	param = { 0};
 
 	D_ASSERTF(high < DAOS_EPOCH_MAX, DF_U64"\n", high);
-	memset(&param, 0, sizeof(param));
 	param.ip_hdl = cont;
 	param.ip_epr.epr_hi = high;
 	param.ip_epc_expr = VOS_IT_EPC_LE;
-	daos_anchor_set_zero(&anchor);
-	return dss_vos_iterate(VOS_ITER_OBJ, &param, &anchor,
-			       rdb_vos_aggregate_obj, NULL /* arg */);
+
+	return vos_iterate(&param, VOS_ITER_OBJ, false, &anchors,
+			   rdb_vos_aggregate_obj, NULL /* arg */);
 }

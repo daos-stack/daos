@@ -398,26 +398,13 @@ int ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		d_sg_list_t *sgl, daos_anchor_t *anchor,
 		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor);
 
-typedef int (*dss_vos_iterate_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
-				    vos_iter_type_t type,
-				    vos_iter_param_t *param, void *arg);
-
-int dss_vos_iterate(vos_iter_type_t type, vos_iter_param_t *param,
-		    daos_anchor_t *anchor, dss_vos_iterate_cb_t cb,
-		    void *arg);
-
 struct dss_enum_arg {
-	/* Iteration fields */
-	vos_iter_param_t	param;
-	bool			recursive;	/* enumerate lower levels */
 	bool			fill_recxs;	/* type == S||R */
-	daos_anchor_t		obj_anchor;	/* type == OBJ (<= if recur) */
-	daos_anchor_t		dkey_anchor;	/* type == DKEY (<= if recur) */
-	daos_anchor_t		akey_anchor;	/* type == AKEY (<= if recur) */
-	daos_anchor_t		recx_anchor;	/* type == S||R (<= if recur) */
+	bool			chk_key2big;
 	daos_epoch_range_t     *eprs;
 	int			eprs_cap;
 	int			eprs_len;
+	int			last_type;	/* hack for tweaking kds_len */
 
 	/* Buffer fields */
 	union {
@@ -434,12 +421,15 @@ struct dss_enum_arg {
 			int			recxs_len;
 		};
 	};
-	daos_size_t		inline_thres;	/* type == S||R || recursive */
+	daos_size_t		inline_thres;	/* type == S||R || chk_key2big*/
 	int			rnum;		/* records num (type == S||R) */
 	daos_size_t		rsize;		/* record size (type == S||R) */
+	daos_unit_oid_t		oid;		/* for unpack */
 };
 
-int dss_enum_pack(vos_iter_type_t type, struct dss_enum_arg *arg);
+int
+dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	      struct vos_iter_anchors *anchors, struct dss_enum_arg *arg);
 
 /** Maximal number of iods (i.e., akeys) in dss_enum_unpack_io.ui_iods */
 #define DSS_ENUM_UNPACK_MAX_IODS 16

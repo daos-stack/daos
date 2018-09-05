@@ -376,21 +376,22 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, daos_iov_t *kds,
 		    daos_iov_t *data, struct rdb_anchor *anchor)
 {
 	daos_sg_list_t		sgl;
-	struct dss_enum_arg	arg;
+	struct dss_enum_arg	arg = { 0 };
+	struct vos_iter_anchors	anchors = { 0 };
+	vos_iter_param_t	param = { 0 };
 	int			rc;
 
 	/*
 	 * Set up the iteration for everything in the log container at
 	 * is->dis_index.
 	 */
-	memset(&arg, 0, sizeof(arg));
-	arg.param.ip_hdl = lc;
-	rdb_anchor_to_hashes(&is->dis_anchor, &arg.obj_anchor, &arg.dkey_anchor,
-			     &arg.akey_anchor, &arg.recx_anchor);
-	arg.param.ip_epr.epr_lo = is->dis_index;
-	arg.param.ip_epr.epr_hi = is->dis_index;
-	arg.param.ip_epc_expr = VOS_IT_EPC_LE;
-	arg.recursive = true;
+	param.ip_hdl = lc;
+	rdb_anchor_to_hashes(&is->dis_anchor, &anchors.ia_obj, &anchors.ia_dkey,
+			     &anchors.ia_akey, &anchors.ia_recx);
+	param.ip_epr.epr_lo = is->dis_index;
+	param.ip_epr.epr_hi = is->dis_index;
+	param.ip_epc_expr = VOS_IT_EPC_LE;
+	arg.chk_key2big = true;	/* see fill_key() & fill_rec() */
 
 	/* Set up the buffers. */
 	arg.kds = kds->iov_buf;
@@ -404,7 +405,7 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, daos_iov_t *kds,
 	arg.inline_thres = 1 * 1024 * 1024;
 
 	/* Enumerate from the object level. */
-	rc = dss_enum_pack(VOS_ITER_OBJ, &arg);
+	rc = dss_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg);
 	if (rc < 0)
 		return rc;
 
@@ -415,9 +416,9 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, daos_iov_t *kds,
 	if (rc == 0)
 		rdb_anchor_set_eof(anchor);
 	else /* rc == 1 */
-		rdb_anchor_from_hashes(anchor, &arg.obj_anchor,
-				       &arg.dkey_anchor, &arg.akey_anchor,
-				       &arg.recx_anchor);
+		rdb_anchor_from_hashes(anchor, &anchors.ia_obj,
+				       &anchors.ia_dkey, &anchors.ia_akey,
+				       &anchors.ia_recx);
 
 	/* Report the buffer lengths. data.iov_len is set by dss_enum_pack. */
 	kds->iov_len = sizeof(*arg.kds) * arg.kds_len;
@@ -721,7 +722,7 @@ rdb_raft_unpack_chunk(daos_handle_t slc, daos_iov_t *kds, daos_iov_t *data)
 
 	/* Set up the same iteration as rdb_raft_pack_chunk. */
 	memset(&arg, 0, sizeof(arg));
-	arg.recursive = true;
+	arg.chk_key2big = true;
 
 	/* Set up the buffers. */
 	arg.kds = kds->iov_buf;

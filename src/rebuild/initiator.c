@@ -801,9 +801,8 @@ rebuild_obj_ult(void *data)
 
 	/* Initialize enum_arg for VOS_ITER_DKEY. */
 	memset(&enum_arg, 0, sizeof(enum_arg));
-	enum_arg.param.ip_hdl = arg->cont_hdl;
-	enum_arg.param.ip_oid = arg->oid;
-	enum_arg.recursive = true;
+	enum_arg.oid = arg->oid;
+	enum_arg.chk_key2big = true;
 
 	buf = stack_buf;
 	buf_len = ITER_BUF_SIZE;
