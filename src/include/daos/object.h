@@ -48,19 +48,6 @@ struct daos_obj_shard_md {
 	uint32_t		smd_padding;
 };
 
-#if 1 /* TODO: Move to dss. These will become private. */
-#define RECX_INLINE	(1U << 0)
-
-struct obj_enum_rec {
-	daos_recx_t		rec_recx;
-	daos_epoch_range_t	rec_epr;
-	uuid_t			rec_cookie;
-	uint64_t		rec_size;
-	uint32_t		rec_version;
-	uint32_t		rec_flags;
-};
-#endif
-
 static inline bool
 daos_obj_id_equal(daos_obj_id_t oid1, daos_obj_id_t oid2)
 {

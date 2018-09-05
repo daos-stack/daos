@@ -435,6 +435,9 @@ struct dss_enum_arg {
 
 int dss_enum_pack(vos_iter_type_t type, struct dss_enum_arg *arg);
 
+/** Maximal number of iods (i.e., akeys) in dss_enum_unpack_io.ui_iods */
+#define DSS_ENUM_UNPACK_MAX_IODS 16
+
 /**
  * Used by dss_enum_unpack to accumulate recxs that can be stored with a single
  * VOS update.
@@ -463,12 +466,6 @@ struct dss_enum_unpack_io {
 	uuid_t		ui_cookie;
 	uint32_t	ui_version;
 };
-
-void dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
-			     int *recxs_caps, daos_sg_list_t *sgls,
-			     daos_epoch_t *ephs, int iods_cap);
-void dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io);
-void dss_enum_unpack_io_fini(struct dss_enum_unpack_io *io);
 
 typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
 
