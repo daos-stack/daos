@@ -87,6 +87,11 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define D_LOG_FILE_ENV	"D_LOG_FILE"	/**< Env to specify log file */
 #define D_LOG_MASK_ENV	"D_LOG_MASK"	/**< Env to specify log mask */
 
+/* Enable shadow warning where users use same variable name in nested
+ * scope.   This enables use of a variable in the macro below and is
+ * just good coding practice.
+ */
+#pragma GCC diagnostic warning "-Wshadow"
 /**
  * D_DEBUG/D_ERROR etc can-only be used when clog enabled. User can define other
  * similar macros using different subsystem and log-level, for example:
@@ -94,8 +99,10 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
  */
 #define D_DEBUG(mask, fmt, ...)						\
 	do {								\
-		if (d_log_check((mask) | D_LOGFAC))			\
-			d_log(d_log_check((mask) | D_LOGFAC),		\
+		int __tmp_mask = d_log_check((mask) | D_LOGFAC);	\
+									\
+		if (__tmp_mask)						\
+			d_log(__tmp_mask,				\
 			      "%s:%d %s() " fmt, __FILE__, __LINE__,	\
 			      __func__, ##__VA_ARGS__);			\
 	} while (0)

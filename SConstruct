@@ -96,7 +96,8 @@ def scons():
         env.Append(SHLIBSUFFIX='.so')
 
     # Compiler options
-    env.Append(CCFLAGS=['-g3', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
+    env.Append(CCFLAGS=['-g3', '-Wshadow', '-Wall', '-Werror', '-fpic',
+                        '-D_GNU_SOURCE'])
     env.Append(CCFLAGS=['-O2', '-pthread'])
     env.Append(CFLAGS=['-std=gnu99'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
