@@ -68,6 +68,7 @@ pipeline {
                         githubNotify description: 'CentOS 7 Build',  context: 'build/centos7', status: 'PENDING'
                         checkout scm
                         /* don't need to keep rebuilding this while testing the pipeline
+                        */
                         sh '''git submodule update --init --recursive
                               scons -c
                               # scons -c is not perfect so get out the big hammer
@@ -84,7 +85,7 @@ pipeline {
                                       exit \$rc
                                   fi
                               fi'''
-                        */
+                        /* */
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: '.build_vars.*'
                         stash name: 'CentOS-tests', includes: 'build/src/rdb/raft/src/tests_main, build/src/common/tests/btree_direct, build/src/common/tests/btree, src/common/tests/btree.sh, build/src/common/tests/sched, build/src/client/api/tests/eq_tests, src/vos/tests/evt_ctl.sh, build/src/vos/vea/tests/vea_ut, src/rdb/raft_tests/raft_tests.py'
@@ -117,6 +118,7 @@ pipeline {
                 }
             }
         }
+        /* Phyl skip the tests
         stage('Test') {
             parallel {
                 stage('run_test.sh') {
@@ -228,6 +230,6 @@ pipeline {
                     }
                 }
             }
-        }
+        } Phyl */
     }
 }
