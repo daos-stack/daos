@@ -126,6 +126,8 @@ ut_query(void **state)
 	assert_int_equal(attr.va_tot_blks, tot_blks);
 
 	/* verify the statistics */
+	assert_int_equal(stat.vs_free_persistent, tot_blks);
+	assert_int_equal(stat.vs_free_transient, tot_blks);
 	assert_int_equal(stat.vs_large_frags, 1);
 	assert_int_equal(stat.vs_small_frags, 0);
 	assert_int_equal(stat.vs_resrv_hint, 0);
@@ -252,7 +254,6 @@ ut_reserve(void **state)
 	assert_int_equal(rc, 0);
 
 	assert_int_equal(stat.vs_large_frags, 0);
-	assert_int_equal(stat.vs_largest_blks, 0);
 	assert_int_equal(stat.vs_small_frags, 2);
 	/* 2 hint from the second reserve for io stream 0 & 1 */
 	assert_int_equal(stat.vs_resrv_hint, 2);
@@ -978,10 +979,11 @@ print_stats(struct vea_ut_args *args, bool verbose)
 
 	rc = vea_query(args->vua_vsi, NULL, &stat);
 	assert_int_equal(rc, 0);
-	print_message("large_frags:"DF_U64", small_frags:"DF_U64", "
-		      "largest_ext_blks:%u\n"
+	print_message("free_blks:"DF_U64"/"DF_U64", large_frags:"DF_U64", "
+		      "small_frags:"DF_U64", largest_ext_blks:%u\n"
 		      "resrv_hint:"DF_U64"\nresrv_large:"DF_U64"\n"
 		      "resrv_small:"DF_U64"\nresrv_vec:"DF_U64"\n",
+		      stat.vs_free_persistent, stat.vs_free_transient,
 		      stat.vs_large_frags, stat.vs_small_frags,
 		      stat.vs_largest_blks,
 		      stat.vs_resrv_hint, stat.vs_resrv_large,

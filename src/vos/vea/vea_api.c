@@ -608,6 +608,41 @@ vea_hint_unload(struct vea_hint_context *thc)
 	D_FREE(thc);
 }
 
+static int
+count_free_persistent(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+		      void *arg)
+{
+	struct vea_free_extent	*vfe;
+	uint64_t		*off, *free_blks = arg;
+	int			 rc;
+
+	off = (uint64_t *)key->iov_buf;
+	vfe = (struct vea_free_extent *)val->iov_buf;
+
+	rc = verify_free_entry(off, vfe);
+	if (rc != 0)
+		return rc;
+
+	D_ASSERT(free_blks != NULL);
+	*free_blks += vfe->vfe_blk_cnt;
+
+	return 0;
+}
+
+static int
+count_free_transient(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+		     void *arg)
+{
+	struct vea_entry	*ve;
+	uint64_t		*free_blks = arg;
+
+	ve = (struct vea_entry *)val->iov_buf;
+	D_ASSERT(free_blks != NULL);
+	*free_blks += ve->ve_ext.vfe_blk_cnt;
+
+	return 0;
+}
+
 /* Query attributes and statistics */
 int
 vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
@@ -632,19 +667,39 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 
 	if (stat != NULL) {
 		struct vea_free_class	*vfc = &vsi->vsi_class;
-		int			 i;
+		int			 i, rc;
+
+		stat->vs_free_persistent = 0;
+		rc = dbtree_iterate(vsi->vsi_md_free_btr, false,
+				    count_free_persistent,
+				    (void *)&stat->vs_free_persistent);
+		if (rc != 0)
+			return rc;
+
+		stat->vs_free_transient = 0;
+		rc = dbtree_iterate(vsi->vsi_free_btr, false,
+				    count_free_transient,
+				    (void *)&stat->vs_free_transient);
+		if (rc != 0)
+			return rc;
 
 		stat->vs_large_frags = d_binheap_size(&vfc->vfc_heap);
 
 		stat->vs_small_frags = 0;
+		stat->vs_largest_blks = 0;
 		for (i = 0; i < vfc->vfc_lru_cnt; i++) {
-			d_list_t *pos, *lru = &vfc->vfc_lrus[i];
+			struct vea_entry	*ve;
+			d_list_t		*lru = &vfc->vfc_lrus[i];
 
-			d_list_for_each(pos, lru)
+			d_list_for_each_entry(ve, lru, ve_link) {
 				stat->vs_small_frags++;
+				if (ve->ve_ext.vfe_blk_cnt >
+						stat->vs_largest_blks)
+					stat->vs_largest_blks =
+						ve->ve_ext.vfe_blk_cnt;
+			}
 		}
 
-		stat->vs_largest_blks = 0;
 		if (!d_binheap_is_empty(&vfc->vfc_heap)) {
 			struct d_binheap_node	*root;
 			struct vea_entry	*entry;
