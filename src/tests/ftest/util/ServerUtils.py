@@ -57,22 +57,19 @@ def runServer(hostfile, setname, basepath):
         ld_lib_path = os.path.join(build_vars["PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["PREFIX"], "lib/daos_srv") + os.pathsep + \
             os.path.join(build_vars["OMPI_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["MERCURY_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["HWLOC_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["ARGOBOTS_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["SPDK_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["PMDK_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["OPENPA_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["CART_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["ISAL_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["OFI_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["FUSE_PREFIX"], "lib") + os.pathsep + \
             os.path.join(build_vars["PMIX_PREFIX"], "lib")
 
         initial_cmd = "/bin/sh"
         server_cmd = orterun_bin + " --np {0} ".format(server_count)
         server_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
-        server_cmd += "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR -x D_LOG_FILE="
+        server_cmd += "-x D_LOG_MASK=DEBUG,MEM=ERR -x D_LOG_FILE="
         server_cmd += basepath + "/install/tmp/daos.log "
         # uncomment if you prefer separate logs per server (and comment above)
         #server_cmd += "/tmp/daos.log "

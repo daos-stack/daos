@@ -422,8 +422,8 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 	}
 
 	while (1) {
-		vos_iter_entry_t  ent;
-		daos_hash_out_t	  anchor;
+		vos_iter_entry_t	ent;
+		daos_anchor_t		anchor;
 
 		rc = vos_iter_fetch(ih, &ent, NULL);
 		if (rc == -DER_NONEXIST) {
@@ -1224,7 +1224,7 @@ io_oid_iter_test(struct io_test_args *arg)
 
 	while (1) {
 		vos_iter_entry_t	ent;
-		daos_hash_out_t		anchor;
+		daos_anchor_t		anchor;
 
 		rc = vos_iter_fetch(ih, &ent, NULL);
 		if (rc == -DER_NONEXIST) {

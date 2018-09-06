@@ -196,7 +196,8 @@ get_daos_obj_mode(int flags)
 {
 	if ((flags & O_ACCMODE) == O_RDONLY)
 		return DAOS_OO_RO;
-	else if ((flags & O_ACCMODE) == O_RDWR)
+	else if ((flags & O_ACCMODE) == O_RDWR ||
+		 (flags & O_ACCMODE) == O_WRONLY)
 		return DAOS_OO_RW;
 	else
 		return -1;
@@ -475,7 +476,7 @@ get_nlinks(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nlinks,
 	   bool check_empty)
 {
 	daos_key_desc_t	kds[ENUM_DESC_NR];
-	daos_hash_out_t anchor = {0};
+	daos_anchor_t	anchor = {0};
 	uint32_t	key_nr = 0;
 	daos_sg_list_t	sgl;
 	daos_iov_t	iov;
@@ -488,7 +489,7 @@ get_nlinks(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nlinks,
 	sgl.sg_iovs = &iov;
 
 	/** TODO - Enum of links is expensive. Need to make this faster */
-	while (!daos_hash_is_eof(&anchor)) {
+	while (!daos_anchor_is_eof(&anchor)) {
 		uint32_t number = ENUM_DESC_NR;
 
 		rc = daos_obj_list_dkey(oh, epoch, &number, kds, &sgl, &anchor,
@@ -971,7 +972,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			D_ERROR("daos_epoch_hold() Failed (%d)\n", rc);
 			D_GOTO(err_dfs, rc);
 		}
-	} else {
+	} else if (amode == O_RDONLY) {
 		daos_epoch_state_t state;
 
 		rc = daos_epoch_query(coh, &state, NULL);
@@ -980,6 +981,9 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			D_GOTO(err_dfs, rc);
 		}
 		dfs->epoch = state.es_ghce;
+	} else {
+		D_ERROR("Invalid dfs_mount access mode\n");
+		D_GOTO(err_dfs, rc = -DER_INVAL);
 	}
 
 	dfs->oid.hi = 0;
@@ -1200,7 +1204,7 @@ remove_dir_contents(dfs_t *dfs, struct dfs_entry entry)
 {
 	daos_handle_t	oh;
 	daos_key_desc_t	kds[ENUM_DESC_NR];
-	daos_hash_out_t anchor = {0};
+	daos_anchor_t	anchor = {0};
 	daos_iov_t	iov;
 	char		enum_buf[ENUM_DESC_BUF] = {0};
 	daos_sg_list_t	sgl;
@@ -1218,7 +1222,7 @@ remove_dir_contents(dfs_t *dfs, struct dfs_entry entry)
 	daos_iov_set(&iov, enum_buf, ENUM_DESC_BUF);
 	sgl.sg_iovs = &iov;
 
-	while (!daos_hash_is_eof(&anchor)) {
+	while (!daos_anchor_is_eof(&anchor)) {
 		uint32_t	number = ENUM_DESC_NR;
 		uint32_t	i;
 		char		*ptr;
@@ -1515,8 +1519,8 @@ dfs_nlinks(dfs_t *dfs, dfs_obj_t *obj, uint32_t *nlinks)
 }
 
 int
-dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_hash_out_t *anchor, uint32_t *nr,
-	    struct dirent *dirs)
+dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
+	struct dirent *dirs)
 {
 	daos_key_desc_t *kds;
 	char *enum_buf;
@@ -1545,7 +1549,7 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_hash_out_t *anchor, uint32_t *nr,
 
 	key_nr = 0;
 	number = *nr;
-	while (!daos_hash_is_eof(anchor)) {
+	while (!daos_anchor_is_eof(anchor)) {
 		daos_iov_t iov;
 		char *ptr;
 
@@ -2424,7 +2428,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 	daos_key_t	dkey;
 	daos_handle_t	oh;
 	daos_key_desc_t	kds[ENUM_DESC_NR];
-	daos_hash_out_t anchor = {0};
+	daos_anchor_t	anchor = {0};
 	daos_size_t	list_size, ret_size;
 	char		*ptr_list;
 	int		rc;
@@ -2451,7 +2455,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 	ret_size = 0;
 	ptr_list = list;
 
-	while (!daos_hash_is_eof(&anchor)) {
+	while (!daos_anchor_is_eof(&anchor)) {
 		uint32_t	number = ENUM_DESC_NR;
 		uint32_t	i;
 		daos_iov_t	iov;

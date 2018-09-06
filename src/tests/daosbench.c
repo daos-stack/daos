@@ -638,7 +638,7 @@ insert(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req, int sync)
 
 static void
 enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
-	  daos_hash_out_t *anchor, char *buf, int len, struct a_ioreq *req)
+	  daos_anchor_t *anchor, char *buf, int len, struct a_ioreq *req)
 {
 	int	rc;
 
@@ -1181,7 +1181,7 @@ static void
 kv_dkey_enumerate(struct test *test)
 {
 	uint32_t		number = 5;
-	daos_hash_out_t		hash_out;
+	daos_anchor_t		anchor_out;
 	daos_key_desc_t		kds[5];
 	char			*buf, *ptr;
 	int			total_keys = 0;
@@ -1217,14 +1217,14 @@ kv_dkey_enumerate(struct test *test)
 	alloc_buffers(test, 1);
 
 	/* All updates completed. Starting to enumerate */
-	memset(&hash_out, 0, sizeof(hash_out));
+	memset(&anchor_out, 0, sizeof(anchor_out));
 	buf = calloc(5 * test->t_dkey_size, 1);
 	ioreq_init(&e_ioreq, test, 0);
 
 	chrono_record("begin");
 
 	/** enumerate records */
-	while (!daos_hash_is_eof(&hash_out)) {
+	while (!daos_anchor_is_eof(&anchor_out)) {
 
 		if (!enum_pause &&
 		    (number >= total_keys / 2) && t_kill_enum) {
@@ -1236,7 +1236,7 @@ kv_dkey_enumerate(struct test *test)
 		}
 
 		enumerate(test->t_epoch,
-			  &number, kds, &hash_out, buf, 5*test->t_dkey_size,
+			  &number, kds, &anchor_out, buf, 5*test->t_dkey_size,
 			  &e_ioreq);
 		if (number == 0)
 			goto next;
@@ -1259,7 +1259,7 @@ kv_dkey_enumerate(struct test *test)
 			}
 		}
 next:
-		if (daos_hash_is_eof(&hash_out))
+		if (daos_anchor_is_eof(&anchor_out))
 			break;
 		memset(buf, 0, 5 * test->t_dkey_size);
 		number = 5;

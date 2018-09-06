@@ -159,12 +159,6 @@ bool evt_move_trace(struct evt_context *tcx, bool forward);
 struct evt_rect *evt_node_rect_at(struct evt_context *tcx,
 				  TMMID(struct evt_node) nd_mmid,
 				  unsigned int at);
-struct evt_ptr_ref *evt_node_pref_at(struct evt_context *tcx,
-				     TMMID(struct evt_node) nd_mmid,
-				     unsigned int at);
-TMMID(struct evt_node) *evt_node_child_at(struct evt_context *tcx,
-					  TMMID(struct evt_node) nd_mmid,
-					  unsigned int at);
 
 void evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		    unsigned int at, struct evt_rect *rect_srch,

@@ -546,11 +546,11 @@ int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
 			daos_handle_t *ih);
 int dbtree_iter_finish(daos_handle_t ih);
 int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
-		      daos_iov_t *key, daos_hash_out_t *anchor);
+		      daos_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
 int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
-		      daos_iov_t *val, daos_hash_out_t *anchor);
+		      daos_iov_t *val, daos_anchor_t *anchor);
 int dbtree_iter_delete(daos_handle_t ih, void *args);
 int dbtree_iter_empty(daos_handle_t ih);
 

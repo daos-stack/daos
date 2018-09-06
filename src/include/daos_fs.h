@@ -215,7 +215,7 @@ dfs_nlinks(dfs_t *dfs, dfs_obj_t *obj, uint32_t *nlinks);
  * \return		0 on Success. Negative on Failure.
  */
 int
-dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_hash_out_t *anchor,
+dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	    uint32_t *nr, struct dirent *dirs);
 
 /**

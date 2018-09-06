@@ -748,13 +748,13 @@ struct vos_iter_ops {
 	int	(*iop_finish)(struct vos_iterator *iter);
 	/** Set the iterating cursor to the provided @anchor */
 	int	(*iop_probe)(struct vos_iterator *iter,
-			     daos_hash_out_t *anchor);
+			     daos_anchor_t *anchor);
 	/** move forward the iterating cursor */
 	int	(*iop_next)(struct vos_iterator *iter);
 	/** fetch the record that the cursor points to */
 	int	(*iop_fetch)(struct vos_iterator *iter,
 			     vos_iter_entry_t *it_entry,
-			     daos_hash_out_t *anchor);
+			     daos_anchor_t *anchor);
 	/** Delete the record that the cursor points to */
 	int	(*iop_delete)(struct vos_iterator *iter,
 			      void *args);

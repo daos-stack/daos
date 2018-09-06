@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
 
 void
 enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
-	       daos_hash_out_t *anchor, void *buf, daos_size_t len,
+	       daos_anchor_t *anchor, void *buf, daos_size_t len,
 	       struct ioreq *req);
 
 void
@@ -89,6 +89,8 @@ void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	daos_size_t *read_size, void **val, daos_size_t *size,
 	daos_epoch_t *epoch, struct ioreq *req, bool empty);
+void
+punch_obj(daos_epoch_t epoch, struct ioreq *req);
 
 void
 punch_dkey(const char *dkey, daos_epoch_t epoch, struct ioreq *req);

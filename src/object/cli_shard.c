@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -564,9 +564,9 @@ struct obj_enum_args {
 	daos_handle_t		*hdlp;
 	uint32_t		*eaa_nr;
 	daos_key_desc_t		*eaa_kds;
-	daos_hash_out_t		*eaa_anchor;
-	daos_hash_out_t		*eaa_dkey_anchor;
-	daos_hash_out_t		*eaa_akey_anchor;
+	daos_anchor_t		*eaa_anchor;
+	daos_anchor_t		*eaa_dkey_anchor;
+	daos_anchor_t		*eaa_akey_anchor;
 	struct dc_obj_shard	*eaa_obj;
 	daos_sg_list_t		*eaa_sgl;
 	daos_recx_t		*eaa_recxs;
@@ -681,8 +681,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 		  daos_iod_type_t type, daos_size_t *size, uint32_t *nr,
 		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		  daos_hash_out_t *anchor, daos_hash_out_t *dkey_anchor,
-		  daos_hash_out_t *akey_anchor, unsigned int *map_ver,
+		  daos_anchor_t *anchor, daos_anchor_t *dkey_anchor,
+		  daos_anchor_t *akey_anchor, unsigned int *map_ver,
 		  tse_task_t *task)
 {
 	crt_endpoint_t		tgt_ep;

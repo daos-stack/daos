@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1361,18 +1361,18 @@ dac_array_punch(tse_task_t *task)
 #define ENUM_DESC_NR	5
 
 struct get_size_props {
-	struct dac_array *array;
-	char		key[ENUM_DESC_BUF];
-	char		buf[ENUM_DESC_BUF];
-	daos_key_desc_t kds[ENUM_DESC_NR];
-	daos_iov_t	iov;
-	daos_sg_list_t  sgl;
-	uint32_t	nr;
-	bool		found_dkey;
-	daos_hash_out_t anchor;
-	daos_size_t	dkey_num;
-	daos_size_t	*size;
-	tse_task_t	*ptask;
+	struct dac_array	*array;
+	char			key[ENUM_DESC_BUF];
+	char			buf[ENUM_DESC_BUF];
+	daos_key_desc_t		kds[ENUM_DESC_NR];
+	daos_iov_t		iov;
+	daos_sg_list_t		sgl;
+	uint32_t		nr;
+	bool			found_dkey;
+	daos_anchor_t		anchor;
+	daos_size_t		dkey_num;
+	daos_size_t		*size;
+	tse_task_t		*ptask;
 };
 
 struct list_recxs_params {
@@ -1384,7 +1384,7 @@ struct list_recxs_params {
 	uint32_t		nr;
 	daos_size_t		cell_size;
 	daos_size_t		chunk_size;
-	daos_hash_out_t		anchor;
+	daos_anchor_t		anchor;
 	daos_size_t		*size;
 	tse_task_t		*task;
 };
@@ -1418,7 +1418,7 @@ list_recxs_cb(tse_task_t *task, void *data)
 		*params->size = cur_size;
 
 	/** if enumeration is not done, re-init this task to continue */
-	if (!daos_hash_is_eof(args->anchor)) {
+	if (!daos_anchor_is_eof(args->anchor)) {
 		params->nr = 1;
 		rc = tse_task_reinit(task);
 		if (rc != 0) {
@@ -1482,7 +1482,7 @@ get_array_size_cb(tse_task_t *task, void *data)
 	}
 
 	/** if enumeration is not done, re-init this task to continue */
-	if (!daos_hash_is_eof(args->anchor)) {
+	if (!daos_anchor_is_eof(args->anchor)) {
 		props->nr = ENUM_DESC_NR;
 		memset(props->buf, 0, ENUM_DESC_BUF);
 		args->sgl->sg_nr = 1;
@@ -1681,7 +1681,7 @@ struct set_size_props {
 	daos_iov_t	iov;
 	daos_sg_list_t  sgl;
 	uint32_t	nr;
-	daos_hash_out_t anchor;
+	daos_anchor_t	anchor;
 	bool		update_dkey;
 	daos_size_t	dkey_num;
 	daos_size_t	size;
@@ -1878,7 +1878,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		continue;
 	}
 
-	if (!daos_hash_is_eof(args->anchor)) {
+	if (!daos_anchor_is_eof(args->anchor)) {
 		props->nr = ENUM_DESC_NR;
 		memset(props->buf, 0, ENUM_DESC_BUF);
 		args->sgl->sg_nr = 1;

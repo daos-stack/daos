@@ -1117,7 +1117,7 @@ btr_probe_valid(dbtree_probe_opc_t opc)
  */
 static enum btr_probe_rc
 btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	  daos_iov_t *key, daos_hash_out_t *anchor)
+	  daos_iov_t *key, daos_anchor_t *anchor)
 {
 	int			 start;
 	int			 end;
@@ -1159,7 +1159,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			D_ASSERT(anchor != NULL);
 			D_ASSERT(!btr_is_direct_key(tcx));
 
-			btr_hkey_copy(tcx, hkey, &anchor->body[0]);
+			btr_hkey_copy(tcx, hkey, &anchor->da_hkey[0]);
 		}
 	}
 
@@ -3015,7 +3015,7 @@ dbtree_iter_finish(daos_handle_t ih)
  */
 int
 dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
-		  daos_iov_t *key, daos_hash_out_t *anchor)
+		  daos_iov_t *key, daos_anchor_t *anchor)
 {
 	struct btr_iterator *itr;
 	struct btr_context  *tcx;
@@ -3113,7 +3113,7 @@ dbtree_iter_prev(daos_handle_t ih)
  */
 int
 dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
-		  daos_iov_t *val, daos_hash_out_t *anchor)
+		  daos_iov_t *val, daos_anchor_t *anchor)
 {
 	struct btr_context  *tcx;
 	struct btr_record   *rec;
@@ -3136,7 +3136,8 @@ dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 	rc = btr_rec_fetch(tcx, rec, key, val);
 	if (rc == 0 && anchor != NULL) {
 		memset(anchor, 0, sizeof(*anchor));
-		btr_hkey_copy(tcx, &anchor->body[0], &rec->rec_hkey[0]);
+		anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
+		btr_hkey_copy(tcx, &anchor->da_hkey[0], &rec->rec_hkey[0]);
 	}
 	return 0;
 }

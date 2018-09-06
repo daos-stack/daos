@@ -275,7 +275,7 @@ co_uuid_iter_test(struct vc_test_args *arg)
 
 	while (1) {
 		vos_iter_entry_t	ent;
-		daos_hash_out_t		anchor;
+		daos_anchor_t		anchor;
 
 		rc = vos_iter_fetch(ih, &ent, NULL);
 		if (rc == -DER_NONEXIST) {

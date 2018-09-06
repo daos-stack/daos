@@ -83,52 +83,46 @@ daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
 	csum->cs_len = csum->cs_buf_len = size;
 }
 
-/** Generic hash format */
+
+typedef enum {
+	DAOS_ANCHOR_TYPE_ZERO	= 0,
+	DAOS_ANCHOR_TYPE_HKEY	= 1,
+	DAOS_ANCHOR_TYPE_KEY	= 2,
+	DAOS_ANCHOR_TYPE_EOF	= 3,
+} daos_anchor_type_t;
+
+/** Iteration Anchor */
 typedef struct {
-	char		body[DAOS_HKEY_MAX];
-} daos_hash_out_t;
+	uint64_t	da_type; /** daos_anchor_type_t */
+	char da_hkey[DAOS_HKEY_MAX];
+} daos_anchor_t;
 
 #define DAOS_HASH_HKEY_START	0
 #define DAOS_HASH_HKEY_LENGTH	24
 
+
 static inline void
-daos_hash_set_zero(daos_hash_out_t *hash_out)
+daos_anchor_set_zero(daos_anchor_t *anchor)
 {
-	memset(&hash_out->body[DAOS_HASH_HKEY_START], 0,
-	       DAOS_HASH_HKEY_LENGTH);
+	anchor->da_type = DAOS_ANCHOR_TYPE_ZERO;
 }
 
 static inline void
-daos_hash_set_eof(daos_hash_out_t *hash_out)
+daos_anchor_set_eof(daos_anchor_t *anchor)
 {
-	memset(&hash_out->body[DAOS_HASH_HKEY_START], -1,
-	       DAOS_HASH_HKEY_LENGTH);
+	anchor->da_type = DAOS_ANCHOR_TYPE_EOF;
 }
 
 static inline bool
-daos_hash_is_zero(daos_hash_out_t *hash_out)
+daos_anchor_is_zero(daos_anchor_t *anchor)
 {
-	int i;
-
-	for (i = DAOS_HASH_HKEY_START; i < DAOS_HASH_HKEY_LENGTH; i++) {
-		if (hash_out->body[i] != 0)
-			return false;
-	}
-
-	return true;
+	return anchor->da_type == DAOS_ANCHOR_TYPE_ZERO;
 }
 
 static inline bool
-daos_hash_is_eof(daos_hash_out_t *hash_out)
+daos_anchor_is_eof(daos_anchor_t *anchor)
 {
-	int i;
-
-	for (i = DAOS_HASH_HKEY_START; i < DAOS_HASH_HKEY_LENGTH; i++) {
-		if (hash_out->body[i] != (char)-1)
-			return false;
-	}
-
-	return true;
+	return anchor->da_type == DAOS_ANCHOR_TYPE_EOF;
 }
 
 /** Generic handle for various DAOS components like container, object, etc. */

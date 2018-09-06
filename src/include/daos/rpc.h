@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ extern struct crt_msg_field DMF_OID;
 extern struct crt_msg_field DMF_IOVEC;
 extern struct crt_msg_field DMF_IOD_ARRAY;
 extern struct crt_msg_field DMF_EPOCH_STATE;
-extern struct crt_msg_field DMF_HASH_OUT;
+extern struct crt_msg_field DMF_ANCHOR;
 extern struct crt_msg_field DMF_KEY_DESC_ARRAY;
 extern struct crt_msg_field DMF_REC_SIZE_ARRAY;
 extern struct crt_msg_field DMF_SGL;
