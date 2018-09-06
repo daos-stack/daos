@@ -667,7 +667,7 @@ class DaosContainer(object):
                                        self))
             t.start()
 
-    def open(self, poh=None, cuuid=None, flags=None, cb_func=None):
+    def open(self, poh=None, cuuid=None, flags=None, cb_func=None, coh=None):
         """ send a container open request to the daos server group """
 
         # parameters can be used to associate this python object with a
@@ -676,6 +676,8 @@ class DaosContainer(object):
             self.poh = poh
         if cuuid is not None:
             c_uuid(cuuid, self.uuid)
+        if coh is not None:
+            self.coh = coh
 
         # Note that 2 is read/write
         c_flags = ctypes.c_uint(2)

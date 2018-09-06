@@ -471,7 +471,7 @@ oi_iter_match_probe(struct vos_iterator *iter)
 }
 
 static int
-oi_iter_probe(struct vos_iterator *iter, daos_hash_out_t *anchor)
+oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	dbtree_probe_opc_t	 opc;
@@ -510,7 +510,7 @@ oi_iter_next(struct vos_iterator *iter)
 
 static int
 oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
-	   daos_hash_out_t *anchor)
+	      daos_anchor_t *anchor)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_obj_df	*obj;

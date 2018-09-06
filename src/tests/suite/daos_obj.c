@@ -259,6 +259,15 @@ insert_single(const char *dkey, const char *akey, uint64_t idx,
 }
 
 void
+punch_obj(daos_epoch_t eph, struct ioreq *req)
+{
+	int rc;
+
+	rc = daos_obj_punch(req->oh, eph, NULL);
+	assert_int_equal(rc, 0);
+}
+
+void
 punch_dkey(const char *dkey, daos_epoch_t eph, struct ioreq *req)
 {
 	int rc;
@@ -628,7 +637,7 @@ io_simple(void **state)
 
 void
 enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
-	       daos_hash_out_t *anchor, void *buf, daos_size_t len,
+	       daos_anchor_t *anchor, void *buf, daos_size_t len,
 	       struct ioreq *req)
 {
 	int rc;
@@ -651,7 +660,7 @@ enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 
 static void
 enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
-	       daos_key_desc_t *kds, daos_hash_out_t *anchor, void *buf,
+	       daos_key_desc_t *kds, daos_anchor_t *anchor, void *buf,
 	       daos_size_t len, struct ioreq *req)
 {
 	int rc;
@@ -677,7 +686,7 @@ enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 static void
 enumerate_rec(daos_epoch_t epoch, char *dkey, char *akey,
 	      daos_size_t *size, uint32_t *number, daos_recx_t *recxs,
-	      daos_epoch_range_t *eprs, daos_hash_out_t *anchor, bool incr,
+	      daos_epoch_range_t *eprs, daos_anchor_t *anchor, bool incr,
 	      struct ioreq *req)
 {
 	int rc;
@@ -716,7 +725,7 @@ enumerate_simple(void **state)
 	char		*ptr;
 	char		 key[ENUM_KEY_BUF];
 	daos_key_desc_t  kds[ENUM_DESC_NR];
-	daos_hash_out_t  hash_out;
+	daos_anchor_t	 anchor;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	uint32_t	 number;
@@ -738,12 +747,13 @@ enumerate_simple(void **state)
 	print_message("Enumerate records\n");
 	buf = malloc(ENUM_DESC_BUF);
 
-	memset(&hash_out, 0, sizeof(hash_out));
+	memset(&anchor, 0, sizeof(anchor));
 	/** enumerate records */
-	for (number = ENUM_DESC_NR, key_nr = 0; !daos_hash_is_eof(&hash_out);
+	for (number = ENUM_DESC_NR, key_nr = 0;
+	     !daos_anchor_is_eof(&anchor);
 	     number = ENUM_DESC_NR) {
 		memset(buf, 0, ENUM_DESC_BUF);
-		enumerate_dkey(0, &number, kds, &hash_out, buf, ENUM_DESC_BUF,
+		enumerate_dkey(0, &number, kds, &anchor, buf, ENUM_DESC_BUF,
 			       &req);
 		if (number == 0)
 			continue; /* loop should break for EOF */
@@ -765,12 +775,13 @@ enumerate_simple(void **state)
 			      strlen("data") + 1, 0, &req);
 	}
 
-	memset(&hash_out, 0, sizeof(hash_out));
+	memset(&anchor, 0, sizeof(anchor));
 	/** enumerate records */
-	for (number = ENUM_DESC_NR, key_nr = 0; !daos_hash_is_eof(&hash_out);
+	for (number = ENUM_DESC_NR, key_nr = 0;
+	     !daos_anchor_is_eof(&anchor);
 	     number = ENUM_DESC_NR) {
 		memset(buf, 0, ENUM_DESC_BUF);
-		enumerate_akey(0, "d_key", &number, kds, &hash_out,
+		enumerate_akey(0, "d_key", &number, kds, &anchor,
 			       buf, ENUM_DESC_BUF, &req);
 		if (number == 0)
 			break; /* loop should break for EOF */
@@ -791,10 +802,10 @@ enumerate_simple(void **state)
 			      strlen("data") + 1, 0, &req);
 	}
 
-	key_nr = 0;
-	memset(&hash_out, 0, sizeof(hash_out));
+	memset(&anchor, 0, sizeof(anchor));
 	/** enumerate records */
-	for (number = ENUM_DESC_NR, key_nr = 0; !daos_hash_is_eof(&hash_out);
+	for (number = ENUM_DESC_NR, key_nr = 0;
+	     !daos_anchor_is_eof(&anchor);
 	     number = ENUM_DESC_NR) {
 		daos_epoch_range_t eprs[5];
 		daos_recx_t recxs[5];
@@ -802,7 +813,7 @@ enumerate_simple(void **state)
 
 		number = 5;
 		enumerate_rec(0, "d_key", "a_rec", &size,
-			      &number, recxs, eprs, &hash_out, true, &req);
+			      &number, recxs, eprs, &anchor, true, &req);
 		if (number == 0)
 			break; /* loop should break for EOF */
 
@@ -827,11 +838,11 @@ punch_simple(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
-	uint32_t	number = 2;
-	daos_key_desc_t kds[2];
-	daos_hash_out_t hash_out;
+	uint32_t	 number = 2;
+	daos_key_desc_t  kds[2];
+	daos_anchor_t	 anchor_out;
 	char		*buf;
-	int		total_keys = 0;
+	int		 total_keys = 0;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -849,14 +860,14 @@ punch_simple(void **state)
 	insert_single("punch_test4", "a_key", 0, "data",
 		      strlen("data") + 1, 0, &req);
 
-	memset(&hash_out, 0, sizeof(hash_out));
+	memset(&anchor_out, 0, sizeof(anchor_out));
 	buf = calloc(512, 1);
 	/** enumerate records */
 	print_message("Enumerate records\n");
 	while (number > 0) {
-		enumerate_dkey(0, &number, kds, &hash_out, buf, 512, &req);
+		enumerate_dkey(0, &number, kds, &anchor_out, buf, 512, &req);
 		total_keys += number;
-		if (daos_hash_is_eof(&hash_out))
+		if (daos_anchor_is_eof(&anchor_out))
 			break;
 		number = 2;
 	}
@@ -870,13 +881,13 @@ punch_simple(void **state)
 	punch("punch_test3", "a_key", 0, 1, &req);
 	punch("punch_test4", "a_key", 0, 1, &req);
 
-	memset(&hash_out, 0, sizeof(hash_out));
+	memset(&anchor_out, 0, sizeof(anchor_out));
 	/** enumerate records */
 	print_message("Enumerate records again\n");
 	while (number > 0) {
-		enumerate_dkey(0, &number, kds, &hash_out, buf, 512, &req);
+		enumerate_dkey(0, &number, kds, &anchor_out, buf, 512, &req);
 		total_keys += number;
-		if (daos_hash_is_eof(&hash_out))
+		if (daos_anchor_is_eof(&anchor_out))
 			break;
 		number = 2;
 	}
@@ -1380,18 +1391,18 @@ epoch_discard(void **state)
 
 	/** Verify that the three epochs are empty. */
 	for (e = epoch; e < epoch + 3; e++) {
-		daos_hash_out_t	hash_out;
+		daos_anchor_t	anchor;
 		int		found = 0;
 
 		print_message("verifying epoch "DF_U64"\n", e);
-		memset(&hash_out, 0, sizeof(hash_out));
-		while (!daos_hash_is_eof(&hash_out)) {
+		memset(&anchor, 0, sizeof(anchor));
+		while (!daos_anchor_is_eof(&anchor)) {
 			uint32_t		n = 1;
 			daos_key_desc_t		kd;
 			char			*buf[64];
 
-			enumerate_dkey(e, &n, &kd, &hash_out, buf, sizeof(buf),
-				       &req);
+			enumerate_dkey(e, &n, &kd, &anchor, buf,
+				       sizeof(buf), &req);
 			print_message("  n %u\n", n);
 			found += n;
 		}

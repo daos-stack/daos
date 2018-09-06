@@ -91,7 +91,7 @@ evt_iter_finish(daos_handle_t ih)
 
 int
 evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
-	       daos_hash_out_t *anchor)
+	       daos_anchor_t *anchor)
 {
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
@@ -130,7 +130,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 		 */
 		fopc = EVT_FIND_SAME;
 		if (rect == NULL)
-			rect = (struct evt_rect *)&anchor->body[0];
+			rect = (struct evt_rect *)&anchor->da_hkey[0];
 
 		rtmp = *rect;
 	}
@@ -217,12 +217,11 @@ evt_iter_next(daos_handle_t ih)
  */
 int
 evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
-	       daos_hash_out_t *anchor)
+	       daos_anchor_t *anchor)
 {
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
 	struct evt_rect		*rect;
-	struct evt_ptr_ref	*pref;
 	struct evt_trace	*trace;
 	int			 rc;
 
@@ -237,8 +236,6 @@ evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
-	pref  = evt_node_pref_at(tcx, trace->tr_node, trace->tr_at);
-	D_ASSERT(pref->pr_offset == 0); /* no clip so far */
 
 	if (entry)
 		evt_fill_entry(tcx, trace->tr_node, trace->tr_at, NULL, entry);
@@ -247,7 +244,8 @@ evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
 		struct evt_rect rtmp = *rect;
 
 		memset(anchor, 0, sizeof(*anchor));
-		memcpy(&anchor->body[0], &rtmp, sizeof(rtmp));
+		memcpy(&anchor->da_hkey[0], &rtmp, sizeof(rtmp));
+		anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
 	}
 	rc = 0;
  out:

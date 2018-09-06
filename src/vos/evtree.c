@@ -338,13 +338,15 @@ evt_find_next_uncovered(struct evt_entry *this_ent, d_list_t *head,
 	struct evt_rect		*this_rect;
 	struct evt_rect		*next_rect;
 	struct evt_entry	*next_ent;
+	struct evt_ptr		*next_ptr;
 
 	while (*next != head) {
 		next_ent = d_list_entry(*next, struct evt_entry, en_link);
+		next_ptr = &next_ent->en_ptr;
 
 		/* NB: Flag is set if part of the extent is visible */
-		*flag_bit = next_ent->en_inob & EVT_PARTIAL_FLAG;
-		next_ent->en_inob &= ~(EVT_PARTIAL_FLAG);
+		*flag_bit = next_ptr->pt_inob & EVT_PARTIAL_FLAG;
+		next_ptr->pt_inob &= ~(EVT_PARTIAL_FLAG);
 
 		this_rect = &this_ent->en_sel_rect;
 		next_rect = &next_ent->en_sel_rect;
@@ -381,16 +383,15 @@ static void
 evt_split_entry(struct evt_entry *current, struct evt_entry *next,
 		struct evt_entry *split)
 {
-	daos_off_t	diff;
+	struct evt_ptr	*ptr = &split->en_ptr;
+	daos_off_t	 diff;
 
 	*split = *current;
 	diff = next->en_sel_rect.rc_off_hi + 1 - split->en_sel_rect.rc_off_lo;
 	split->en_sel_rect.rc_off_lo = next->en_sel_rect.rc_off_hi + 1;
-	split->en_offset += diff;
-	split->en_eiov.ei_addr.ea_off = eio_iov2off(&split->en_eiov) +
-					diff * split->en_inob;
+	ptr->pt_ex_addr.ea_off += diff * ptr->pt_inob;
 	/* Mark the split entry so we don't keep it in covered list */
-	split->en_inob |= EVT_PARTIAL_FLAG;
+	ptr->pt_inob |= EVT_PARTIAL_FLAG;
 
 	current->en_sel_rect.rc_off_hi = next->en_sel_rect.rc_off_lo - 1;
 }
@@ -427,6 +428,7 @@ evt_uncover_entries(struct evt_entry_list *ent_list, d_list_t *covered)
 	struct evt_entry	*this_ent;
 	struct evt_entry	*next_ent;
 	struct evt_entry	*temp_ent;
+	struct evt_ptr		*ptr;
 	d_list_t		*current;
 	d_list_t		*next;
 	d_list_t		 unused;
@@ -479,12 +481,11 @@ evt_uncover_entries(struct evt_entry_list *ent_list, d_list_t *covered)
 			/* Case #2, next rect is partially under this rect,
 			 * Truncate left end of next_rec, reinsert.
 			 */
+			ptr = &next_ent->en_ptr;
 			diff = this_rect->rc_off_hi + 1 - next_rect->rc_off_lo;
 			next_rect->rc_off_lo = this_rect->rc_off_hi + 1;
-			next_ent->en_offset += diff;
-			next_ent->en_eiov.ei_addr.ea_off =
-				eio_iov2off(&next_ent->en_eiov) +
-				diff * next_ent->en_inob;
+			ptr->pt_ex_addr.ea_off +=
+				diff * ptr->pt_inob;
 			/* current now points at next_ent.  Remove it and
 			 * reinsert it in the list in case truncation moved
 			 * it to a new position
@@ -492,7 +493,7 @@ evt_uncover_entries(struct evt_entry_list *ent_list, d_list_t *covered)
 			d_list_del(current);
 			next = evt_insert_sorted(next_ent, covered, next);
 			/* Reset the flag bit */
-			next_ent->en_inob |= flag_bit;
+			ptr->pt_inob |= flag_bit;
 
 			/* Now we need to rerun this iteration without
 			 * inserting this_ent again
@@ -722,44 +723,39 @@ evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
  * \param ptr_mmid_p	[OUT]	The returned memory ID of extent pointer.
  */
 static int
-evt_ptr_create(struct evt_context *tcx, uuid_t cookie, uint32_t pm_ver,
-	       eio_addr_t addr, uint32_t idx_nob, uint64_t idx_num,
-	       TMMID(struct evt_ptr) *ptr_mmid_p)
+evt_ptr_init(struct evt_context *tcx, uuid_t cookie, uint32_t pm_ver,
+	     eio_addr_t addr, uint32_t idx_nob, uint64_t idx_num,
+	     struct evt_ptr *ptr)
 {
-	struct evt_ptr		*ptr;
-	TMMID(struct evt_ptr)	 ptr_mmid;
-
 	D_ASSERT(idx_num > 0);
 	D_ASSERTF((idx_nob && !eio_addr_is_hole(&addr)) ||
 		  (!idx_nob && eio_addr_is_hole(&addr)), "nob: %u hole: %d\n",
 		  idx_nob, eio_addr_is_hole(&addr));
 
-	ptr_mmid = umem_znew_typed(evt_umm(tcx), struct evt_ptr);
-	if (TMMID_IS_NULL(ptr_mmid))
-		return -DER_NOMEM;
+	memset(ptr, 0, sizeof(*ptr));
 
-	ptr = evt_tmmid2ptr(tcx, ptr_mmid);
 	ptr->pt_inob = idx_nob;
 	ptr->pt_inum = idx_num;
 	uuid_copy(ptr->pt_cookie, cookie);
 	ptr->pt_ver = pm_ver;
 	ptr->pt_ex_addr = addr;
 
-	*ptr_mmid_p = ptr_mmid;
 	return 0;
 }
 
 static void
-evt_data_free(struct evt_context *tcx, eio_addr_t addr, uint64_t size)
+evt_ptr_free(struct evt_context *tcx, struct evt_ptr *ptr)
 {
-	if (eio_addr_is_hole(&addr))
+	eio_addr_t	*addr = &ptr->pt_ex_addr;
+
+	if (eio_addr_is_hole(addr))
 		return;
 
-	if (addr.ea_type == EIO_ADDR_SCM) {
+	if (addr->ea_type == EIO_ADDR_SCM) {
 		umem_id_t mmid;
 
 		mmid.pool_uuid_lo = tcx->tc_pmempool_uuid;
-		mmid.off = addr.ea_off;
+		mmid.off = addr->ea_off;
 		umem_free(evt_umm(tcx), mmid);
 	} else {
 		struct vea_space_info *vsi = tcx->tc_blks_info;
@@ -767,80 +763,16 @@ evt_data_free(struct evt_context *tcx, eio_addr_t addr, uint64_t size)
 		uint32_t blk_cnt;
 		int rc;
 
-		D_ASSERT(addr.ea_type == EIO_ADDR_NVME);
+		D_ASSERT(addr->ea_type == EIO_ADDR_NVME);
 		D_ASSERT(vsi != NULL);
 
-		blk_off = vos_byte2blkoff(addr.ea_off);
-		blk_cnt = vos_byte2blkcnt(size);
+		blk_off = vos_byte2blkoff(addr->ea_off);
+		blk_cnt = vos_byte2blkcnt(ptr->pt_inum * ptr->pt_inob);
 
 		rc = vea_free(vsi, blk_off, blk_cnt);
 		if (rc)
 			D_ERROR("Error on block free. %d\n", rc);
 	}
-}
-
-/**
- * Free a data pointer. It also frees the data buffer if \a free_data is true.
- */
-static void
-evt_ptr_free(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid,
-	     bool free_data)
-{
-	struct evt_ptr	*ptr = evt_tmmid2ptr(tcx, ptr_mmid);
-
-	D_ASSERT(ptr->pt_ref == 0);
-	if (free_data)
-		evt_data_free(tcx, ptr->pt_ex_addr,
-			      ptr->pt_inum * ptr->pt_inob);
-	umem_free_typed(evt_umm(tcx), ptr_mmid);
-}
-
-/**
- * Return the eio_iov pointed by \a ptr_mmid.
- */
-static void
-evt_ptr2eiov(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid,
-	     struct eio_iov *eiov)
-{
-	struct evt_ptr *ptr = evt_tmmid2ptr(tcx, ptr_mmid);
-
-	D_ASSERT(ptr->pt_inum != 0);
-	memset(eiov, 0, sizeof(*eiov));
-
-	if (ptr->pt_inob == 0) {
-		/* punched extent */
-		D_ASSERT(eio_addr_is_hole(&ptr->pt_ex_addr));
-	} else {
-		/* externally allocated extent */
-		D_ASSERT(!eio_addr_is_hole(&ptr->pt_ex_addr));
-		eiov->ei_data_len = ptr->pt_inum * ptr->pt_inob;
-	}
-
-	eiov->ei_addr = ptr->pt_ex_addr;
-}
-
-/** Take refcount on the specified extent pointer */
-static void
-evt_ptr_addref(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid)
-{
-	struct evt_ptr	*ptr = evt_tmmid2ptr(tcx, ptr_mmid);
-
-	ptr->pt_ref++;
-}
-
-/**
- * Release refcount on an extent pointer, it will release the extent pointer
- * and its data on releasing of the last refcount.
- */
-static void
-evt_ptr_decref(struct evt_context *tcx, TMMID(struct evt_ptr) ptr_mmid)
-{
-	struct evt_ptr	*ptr = evt_tmmid2ptr(tcx, ptr_mmid);
-
-	D_ASSERTF(ptr->pt_ref > 0, "ptr=%p, ref=%u\n", ptr, ptr->pt_ref);
-	ptr->pt_ref--;
-	if (ptr->pt_ref == 0)
-		evt_ptr_free(tcx, ptr_mmid, true);
 }
 
 /** check if a node is full */
@@ -894,15 +826,46 @@ evt_node_is_root(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid)
 	return evt_node_is_set(tcx, nd_mmid, EVT_NODE_ROOT);
 }
 
+/** Return the address of child mmid at the offset of @at */
+static TMMID(struct evt_node) *
+evt_node_child_at(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
+		  unsigned int at)
+{
+	struct evt_node		*nd = evt_tmmid2ptr(tcx, nd_mmid);
+	TMMID(struct evt_node)	*mmids;
+
+	D_ASSERT(!evt_node_is_leaf(tcx, nd_mmid));
+	mmids = (TMMID(struct evt_node) *)(&nd[1]);
+	return &mmids[at];
+}
+
+/** Return the data pointer at the offset of @at */
+static struct evt_ptr *
+evt_node_ptr_at(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
+		 unsigned int at)
+{
+	struct evt_ptr		*ptrs;
+	struct evt_node		*nd = evt_tmmid2ptr(tcx, nd_mmid);
+
+	D_ASSERT(evt_node_is_leaf(tcx, nd_mmid));
+	ptrs = (struct evt_ptr *)(&nd[1]);
+	return &ptrs[at];
+}
+
 /** Return the rectangle at the offset of @at */
 struct evt_rect *
 evt_node_rect_at(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		 unsigned int at)
 {
-	struct evt_node		*nd = evt_tmmid2ptr(tcx, nd_mmid);
 	struct evt_rect		*rects;
 
-	rects = (struct evt_rect *)(&nd[1]);
+	if (evt_node_is_leaf(tcx, nd_mmid))
+		rects = (struct evt_rect *)evt_node_ptr_at(tcx, nd_mmid,
+							   tcx->tc_order);
+	else
+		rects = (struct evt_rect *)evt_node_child_at(tcx, nd_mmid,
+							   tcx->tc_order);
+
 	return &rects[at];
 }
 
@@ -937,36 +900,8 @@ evt_node_rect_update(struct evt_context *tcx, TMMID(struct evt_node) tn_mmid,
 	return changed;
 }
 
-/** Return the adress of child mmid at the offset of @at */
-TMMID(struct evt_node) *
-evt_node_child_at(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
-		  unsigned int at)
-{
-	struct evt_rect		*rects;
-	TMMID(struct evt_node)	*mmids;
-
-	D_ASSERT(!evt_node_is_leaf(tcx, nd_mmid));
-	rects = evt_node_rect_at(tcx, nd_mmid, tcx->tc_order);
-	mmids = (TMMID(struct evt_node) *)rects;
-
-	return &mmids[at];
-}
-
-/** Return the data pointer at the offset of @at */
-struct evt_ptr_ref *
-evt_node_pref_at(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
-		 unsigned int at)
-{
-	struct evt_rect		*rects;
-	struct evt_ptr_ref	*prefs;
-
-	D_ASSERT(evt_node_is_leaf(tcx, nd_mmid));
-	rects = evt_node_rect_at(tcx, nd_mmid, tcx->tc_order);
-	prefs = (struct evt_ptr_ref *)rects;
-
-	return &prefs[at];
-}
-
+_Static_assert(sizeof(struct evt_ptr) >= sizeof(TMMID(struct evt_node)),
+	       "struct evt_ptr be at least as large as a TOID");
 /**
  * Return the size of evtree node, leaf node has different size with internal
  * node.
@@ -979,9 +914,8 @@ evt_node_size(struct evt_context *tcx, unsigned int flags)
 	size = sizeof(struct evt_node) +
 	       sizeof(struct evt_rect) * tcx->tc_order;
 
-	D_ASSERT(sizeof(struct evt_ptr_ref) >= sizeof(TMMID(struct evt_node)));
 	if (flags & EVT_NODE_LEAF)
-		size += sizeof(struct evt_ptr_ref) * tcx->tc_order;
+		size += sizeof(struct evt_ptr) * tcx->tc_order;
 	else
 		size += sizeof(TMMID(struct evt_node)) * tcx->tc_order;
 
@@ -1035,10 +969,11 @@ evt_node_destroy(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 
 	for (i = 0; i < nd->tn_nr; i++) {
 		if (leaf) {
-			struct evt_ptr_ref *pref;
+			struct evt_ptr	*ptr;
 
-			pref = evt_node_pref_at(tcx, nd_mmid, i);
-			evt_ptr_decref(tcx, pref->pr_ptr_mmid);
+			ptr = evt_node_ptr_at(tcx, nd_mmid, i);
+			/* NB: This will be replaced with a callback */
+			evt_ptr_free(tcx, ptr);
 		} else {
 			TMMID(struct evt_node) child_mmid;
 
@@ -1542,84 +1477,17 @@ evt_insert_entry(struct evt_context *tcx, struct evt_entry *ent)
 }
 
 static void
-evt_ptr_copy(struct evt_context *tcx, TMMID(struct evt_ptr) dst_mmid,
-	     TMMID(struct evt_ptr) src_mmid)
+evt_ptr_copy(struct evt_context *tcx, struct evt_ptr *dst_ptr,
+	     struct evt_ptr *src_ptr)
 {
-	struct evt_ptr	*src_ptr	= evt_tmmid2ptr(tcx, src_mmid);
-	struct evt_ptr	*dst_ptr	= evt_tmmid2ptr(tcx, dst_mmid);
-	int		 ref		= dst_ptr->pt_ref;
-
-	D_DEBUG(DB_IO, "dst r=%d, num=%d, nob=%d, src r=%d, num=%d, nob=%d\n",
-		dst_ptr->pt_ref, (int)dst_ptr->pt_inum, dst_ptr->pt_inob,
-		src_ptr->pt_ref, (int)src_ptr->pt_inum, src_ptr->pt_inob);
+	D_DEBUG(DB_IO, "dst num="DF_U64", nob=%d, src num="DF_U64", nob=%d\n",
+		dst_ptr->pt_inum, dst_ptr->pt_inob,
+		src_ptr->pt_inum, src_ptr->pt_inob);
 
 	/* Free the pmem that dst_ptr references */
-	evt_data_free(tcx, dst_ptr->pt_ex_addr,
-		      dst_ptr->pt_inum * dst_ptr->pt_inob);
+	evt_ptr_free(tcx, dst_ptr);
 
 	memcpy(dst_ptr, src_ptr, sizeof(*dst_ptr));
-	dst_ptr->pt_ref = ref;
-}
-
-/**
- * Insert a rectangle \a rect and data pointed by \a ptr_mmid to the tree.
- * It consists of two phases:
- *
- * - clipping phase:
- *   clip all overlapped rectangles, attach rectangles ready to be inserted
- *   on tcx::tc_ent_inserting.
- *
- * - inserting phase:
- *   Insert all rectangles attached on tcx::tc_ent_inserting.
- */
-static int
-evt_insert_ptr(struct evt_context *tcx, struct evt_rect *rect,
-	       TMMID(struct evt_ptr) ptr_mmid, TMMID(struct evt_ptr) *out_mmid)
-{
-	struct evt_entry	*entmp;
-	struct evt_entry	 ent;
-	int			 rc;
-
-	evt_ent_list_init(&tcx->tc_ent_list);
-
-	if (tcx->tc_depth == 0) { /* empty tree */
-		rc = evt_root_activate(tcx);
-		if (rc != 0)
-			goto out;
-	}
-
-	memset(&ent, 0, sizeof(ent));
-	ent.en_mmid = umem_id_t2u(ptr_mmid);
-	ent.en_rect = *rect;
-
-	/* Phase-1: Check for overwrite */
-	rc = evt_find_ent_list(tcx, EVT_FIND_OVERWRITE, &ent.en_rect,
-			       &tcx->tc_ent_list);
-	if (rc != 0)
-		goto out;
-
-	if (!d_list_empty(&tcx->tc_ent_list.el_list)) {
-		/* NB: This is part of the current hack to keep "supporting"
-		 * overwrite for same epoch, full overwrite
-		 */
-		entmp = d_list_entry(tcx->tc_ent_list.el_list.next,
-				     struct evt_entry, en_link);
-		d_list_del_init(&entmp->en_link);
-		evt_ptr_copy(tcx, umem_id_u2t(entmp->en_mmid, struct evt_ptr),
-			     umem_id_u2t(ent.en_mmid, struct evt_ptr));
-		if (out_mmid)
-			*out_mmid = umem_id_u2t(entmp->en_mmid, struct evt_ptr);
-		goto out;
-	}
-
-	if (out_mmid)
-		*out_mmid = umem_id_u2t(ent.en_mmid, struct evt_ptr);
-
-	/* Phase-2: Inserting */
-	rc = evt_insert_entry(tcx, &ent);
-out:
-	evt_ent_list_fini(&tcx->tc_ent_list);
-	return rc;
 }
 
 /**
@@ -1632,25 +1500,50 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 	   struct evt_rect *rect, uint32_t inob, eio_addr_t addr)
 {
 	struct evt_context	*tcx;
-	TMMID(struct evt_ptr)	 ptr_mmid;
+	struct evt_entry	*entmp;
+	struct evt_entry	 ent;
 	int			 rc;
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = evt_ptr_create(tcx, cookie, pm_ver, addr, inob,
-			    evt_rect_width(rect), &ptr_mmid);
+	evt_ent_list_init(&tcx->tc_ent_list);
+
+	if (tcx->tc_depth == 0) { /* empty tree */
+		rc = evt_root_activate(tcx);
+		if (rc != 0)
+			return rc;
+	}
+
+	memset(&ent, 0, sizeof(ent));
+	ent.en_rect = *rect;
+
+	/* Phase-1: Check for overwrite */
+	rc = evt_find_ent_list(tcx, EVT_FIND_OVERWRITE, &ent.en_rect,
+			       &tcx->tc_ent_list);
 	if (rc != 0)
 		return rc;
 
-	rc = evt_insert_ptr(tcx, rect, ptr_mmid, NULL);
-	if (rc != 0)
-		D_GOTO(failed, rc);
+	if (!d_list_empty(&tcx->tc_ent_list.el_list)) {
+		/* NB: This is part of the current hack to keep "supporting"
+		 * overwrite for same epoch, full overwrite
+		 */
+		entmp = d_list_entry(tcx->tc_ent_list.el_list.next,
+				     struct evt_entry, en_link);
+		d_list_del_init(&entmp->en_link);
+		evt_ptr_copy(tcx, &entmp->en_ptr, &ent.en_ptr);
+		goto out;
+	}
 
-	return 0;
- failed:
-	evt_ptr_free(tcx, ptr_mmid, false);
+	evt_ptr_init(tcx, cookie, pm_ver, addr, inob,
+		     evt_rect_width(&ent.en_rect), &ent.en_ptr);
+
+	/* Phase-2: Inserting */
+	rc = evt_insert_entry(tcx, &ent);
+out:
+	evt_ent_list_fini(&tcx->tc_ent_list);
+
 	return rc;
 }
 
@@ -1660,17 +1553,14 @@ evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	       unsigned int at, struct evt_rect *rect_srch,
 	       struct evt_entry *entry)
 {
-	struct evt_ptr_ref *pref;
 	struct evt_ptr	   *ptr;
 	struct evt_rect	   *rect;
-	struct eio_iov      eiov;
 	daos_off_t	    offset;
 	daos_size_t	    width;
 	daos_size_t	    nr;
 
-	pref = evt_node_pref_at(tcx, nd_mmid, at);
 	rect = evt_node_rect_at(tcx, nd_mmid, at);
-	ptr  = evt_tmmid2ptr(tcx, pref->pr_ptr_mmid);
+	ptr = evt_node_ptr_at(tcx, nd_mmid, at);
 
 	offset = 0;
 	width = evt_rect_width(rect);
@@ -1691,20 +1581,15 @@ evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	entry->en_sel_rect.rc_off_lo += offset;
 	entry->en_sel_rect.rc_off_hi = entry->en_sel_rect.rc_off_lo + width - 1;
 
-	entry->en_mmid = umem_id_t2u(pref->pr_ptr_mmid);
-	uuid_copy(entry->en_cookie, ptr->pt_cookie);
-	entry->en_ver = ptr->pt_ver;
-	entry->en_inob = ptr->pt_inob;
+	entry->en_ptr = *ptr;
+	ptr = &entry->en_ptr; /* We have the data cached, so use it now */
 
-	evt_ptr2eiov(tcx, pref->pr_ptr_mmid, &eiov);
-	if (eio_addr_is_hole(&eiov.ei_addr)) { /* punched */
-		entry->en_eiov = eiov;
-		entry->en_offset = 0;
-	} else {
-		D_ASSERT(entry->en_inob != 0);
-		entry->en_offset = pref->pr_offset + offset;
-		eiov.ei_addr.ea_off += entry->en_offset * entry->en_inob;
-		entry->en_eiov = eiov;
+	if (offset != 0 && !eio_addr_is_hole(&ptr->pt_ex_addr)) {
+		D_ASSERT(ptr->pt_inob != 0); /* Ensure not punched */
+		/* Adjust cached pointer since we're only referencing a
+		 * part of the extent
+		 */
+		ptr->pt_ex_addr.ea_off += offset * ptr->pt_inob;
 	}
 }
 
@@ -2024,7 +1909,7 @@ try_again:
 				continue;
 
 			saved_rect.mr_valid = true;
-			if (eio_addr_is_hole(&ent.en_eiov.ei_addr))
+			if (eio_addr_is_hole(&ent.en_ptr.pt_ex_addr))
 				saved_rect.mr_punched = true;
 			else
 				saved_rect.mr_punched = false;
@@ -2410,7 +2295,7 @@ evt_ssof_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 {
 	struct evt_node		*nd   = evt_tmmid2ptr(tcx, nd_mmid);
 	struct evt_rect		*rect = NULL;
-	struct evt_ptr_ref	*pref = NULL;
+	struct evt_ptr		*ptr  = NULL;
 	TMMID(struct evt_node)	*nmid = NULL;
 	int			 i;
 	int			 rc;
@@ -2432,8 +2317,8 @@ evt_ssof_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		nr = nd->tn_nr - i;
 		memmove(rect + 1, rect, nr * sizeof(*rect));
 		if (leaf) {
-			pref = evt_node_pref_at(tcx, nd_mmid, i);
-			memmove(pref + 1, pref, nr * sizeof(*pref));
+			ptr = evt_node_ptr_at(tcx, nd_mmid, i);
+			memmove(ptr + 1, ptr, nr * sizeof(*ptr));
 		} else {
 			nmid = evt_node_child_at(tcx, nd_mmid, i);
 			memmove(nmid + 1, nmid, nr * sizeof(*nmid));
@@ -2444,20 +2329,16 @@ evt_ssof_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	if (i == nd->tn_nr) { /* attach at the end */
 		rect = evt_node_rect_at(tcx, nd_mmid, nd->tn_nr);
 		if (leaf)
-			pref = evt_node_pref_at(tcx, nd_mmid, nd->tn_nr);
+			ptr = evt_node_ptr_at(tcx, nd_mmid, nd->tn_nr);
 		else
 			nmid = evt_node_child_at(tcx, nd_mmid, nd->tn_nr);
 	}
 
 	*rect = ent->en_rect;
-	if (leaf) {
-		pref->pr_offset   = ent->en_offset;
-		pref->pr_inum	  = evt_rect_width(&ent->en_rect);
-		pref->pr_ptr_mmid = umem_id_u2t(ent->en_mmid, struct evt_ptr),
-		evt_ptr_addref(tcx, pref->pr_ptr_mmid);
-	} else {
+	if (leaf)
+		*ptr = ent->en_ptr;
+	else
 		*nmid = umem_id_u2t(ent->en_mmid, struct evt_node);
-	}
 
 	nd->tn_nr++;
 	return 0;
@@ -2488,11 +2369,11 @@ evt_ssof_split(struct evt_context *tcx, bool leaf,
 	memcpy(rt_dst, rt_src, sizeof(*rt_dst) * (nd_src->tn_nr - nr));
 
 	if (leaf) {
-		struct evt_ptr_ref	*src;
-		struct evt_ptr_ref	*dst;
+		struct evt_ptr	*src;
+		struct evt_ptr	*dst;
 
-		src = evt_node_pref_at(tcx, src_mmid, nr);
-		dst = evt_node_pref_at(tcx, dst_mmid, 0);
+		src = evt_node_ptr_at(tcx, src_mmid, nr);
+		dst = evt_node_ptr_at(tcx, dst_mmid, 0);
 		memcpy(dst, src, sizeof(*dst) * (nd_src->tn_nr - nr));
 	} else {
 		TMMID(struct evt_node)	*src;

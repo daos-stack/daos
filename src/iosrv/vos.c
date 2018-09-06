@@ -55,9 +55,9 @@
  */
 int
 dss_vos_iterate(vos_iter_type_t type, vos_iter_param_t *param,
-		daos_hash_out_t *anchor, dss_vos_iterate_cb_t cb, void *arg)
+		daos_anchor_t *anchor, dss_vos_iterate_cb_t cb, void *arg)
 {
-	daos_hash_out_t		*probe_hash = NULL;
+	daos_anchor_t		*probe_hash = NULL;
 	vos_iter_entry_t	key_ent;
 	daos_handle_t		ih;
 	int			rc;
@@ -65,7 +65,7 @@ dss_vos_iterate(vos_iter_type_t type, vos_iter_param_t *param,
 	rc = vos_iter_prepare(type, param, &ih);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			daos_hash_set_eof(anchor);
+			daos_anchor_set_eof(anchor);
 			rc = 0;
 		} else {
 			D_ERROR("failed to prepare iterator (type=%d): %d\n",
@@ -74,13 +74,13 @@ dss_vos_iterate(vos_iter_type_t type, vos_iter_param_t *param,
 		D_GOTO(out, rc);
 	}
 
-	if (!daos_hash_is_zero(anchor))
+	if (!daos_anchor_is_zero(anchor))
 		probe_hash = anchor;
 
 	rc = vos_iter_probe(ih, probe_hash);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST || rc == -DER_AGAIN) {
-			daos_hash_set_eof(anchor);
+			daos_anchor_set_eof(anchor);
 			rc = 0;
 		} else {
 			D_ERROR("failed to probe iterator (type=%d anchor=%p): "
@@ -111,7 +111,7 @@ dss_vos_iterate(vos_iter_type_t type, vos_iter_param_t *param,
 	}
 
 	if (rc == -DER_NONEXIST) {
-		daos_hash_set_eof(anchor);
+		daos_anchor_set_eof(anchor);
 		rc = 0;
 	}
 
@@ -399,7 +399,7 @@ iter_akey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 {
 	struct dss_enum_arg	*arg = varg;
 	vos_iter_param_t	 iter_recx_param;
-	daos_hash_out_t		 single_anchor = { 0 };
+	daos_anchor_t		 single_anchor = { 0 };
 	int			 rc;
 
 	D_DEBUG(DB_IO, "enum key %.*s type %d\n",
@@ -441,8 +441,8 @@ iter_akey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 		goto out;
 	}
 
-	D_ASSERT(daos_hash_is_eof(&arg->recx_anchor));
-	daos_hash_set_zero(&arg->recx_anchor);
+	D_ASSERT(daos_anchor_is_eof(&arg->recx_anchor));
+	daos_anchor_set_zero(&arg->recx_anchor);
 
 	/* iterate single record */
 	rc = dss_vos_iterate(VOS_ITER_SINGLE, &iter_recx_param, &single_anchor,
@@ -495,9 +495,9 @@ iter_dkey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 		return rc;
 	}
 
-	D_ASSERT(daos_hash_is_eof(&arg->akey_anchor));
-	daos_hash_set_zero(&arg->akey_anchor);
-	daos_hash_set_zero(&arg->recx_anchor);
+	D_ASSERT(daos_anchor_is_eof(&arg->akey_anchor));
+	daos_anchor_set_zero(&arg->akey_anchor);
+	daos_anchor_set_zero(&arg->recx_anchor);
 
 	return rc;
 }
@@ -527,10 +527,10 @@ iter_obj_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		return rc;
 	}
 
-	D_ASSERT(daos_hash_is_eof(&arg->dkey_anchor));
-	daos_hash_set_zero(&arg->dkey_anchor);
-	daos_hash_set_zero(&arg->akey_anchor);
-	daos_hash_set_zero(&arg->recx_anchor);
+	D_ASSERT(daos_anchor_is_eof(&arg->dkey_anchor));
+	daos_anchor_set_zero(&arg->dkey_anchor);
+	daos_anchor_set_zero(&arg->akey_anchor);
+	daos_anchor_set_zero(&arg->recx_anchor);
 
 	return 0;
 }
@@ -552,7 +552,7 @@ iter_obj_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 int
 dss_enum_pack(vos_iter_type_t type, struct dss_enum_arg *arg)
 {
-	daos_hash_out_t	       *anchor;
+	daos_anchor_t	       *anchor;
 	dss_vos_iterate_cb_t	cb;
 	int			rc;
 

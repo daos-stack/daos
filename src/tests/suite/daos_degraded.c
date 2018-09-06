@@ -138,7 +138,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	char			*rec[g_dkeys];
 	char			*val[g_dkeys];
 	daos_key_desc_t		kds[g_dkeys];
-	daos_hash_out_t		hash_out;
+	daos_anchor_t		anchor_out;
 	daos_size_t		rec_size[g_dkeys];
 	daos_off_t		offset[g_dkeys];
 	const char		*val_fmt = "degraded val%d";
@@ -247,15 +247,16 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		print_message("lookup done\nNow enumerating %d keys ...\n",
 			      g_dkeys * size);
 
-	memset(&hash_out, 0, sizeof(hash_out));
+	memset(&anchor_out, 0, sizeof(anchor_out));
 	D_ALLOC(buf, 512);
 	D_ALLOC(dkey_enum, strlen(dkey_fmt) + g_dkeys_strlen + 1);
 
 	/** enumerate records */
-	for (number = 5, key_nr = 0; !daos_hash_is_eof(&hash_out);
+	for (number = 5, key_nr = 0; !daos_anchor_is_eof(&anchor_out);
 	     number = 5) {
 		memset(buf, 0, 512);
-		enumerate_dkey(epoch, &number, kds, &hash_out, buf, 512, &req);
+		enumerate_dkey(epoch, &number, kds,
+			       &anchor_out, buf, 512, &req);
 		if (number == 0)
 			continue;
 

@@ -261,11 +261,11 @@ purge_ctx_anchor_is_set(struct purge_context *pcx,
  */
 static void
 purge_ctx_anchor_ctl(struct purge_context *pcx, vos_purge_anchor_t *vp_anchor,
-		     daos_hash_out_t *anchor, int op)
+		     daos_anchor_t *anchor, int op)
 {
 
-	daos_hash_out_t		*purge_anchor;
-	unsigned int		bits;
+	daos_anchor_t	*purge_anchor;
+	unsigned int	 bits;
 
 	switch (pcx->pc_type) {
 	default:
@@ -406,7 +406,7 @@ purge_ctx_set_complete(struct purge_context *pcx, bool *finish,
  */
 static int
 recx_max_iter_probe(int opc, vos_iter_entry_t *ent, vos_iter_entry_t *ent_max,
-		    vos_purge_anchor_t *vp_anchor, daos_hash_out_t *anchor,
+		    vos_purge_anchor_t *vp_anchor, daos_anchor_t *anchor,
 		    vos_it_epc_expr_t epc, daos_handle_t *ih_max)
 {
 
@@ -461,7 +461,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 	int			aggregated, found;
 	int			opc;
 	daos_handle_t		ih, ih_max;
-	daos_hash_out_t		anchor;
+	daos_anchor_t		anchor;
 	vos_iter_entry_t	ent_max;
 	unsigned int		credits = *credits_ret;
 	bool			val_tree = (pcx->pc_type == VOS_ITER_SINGLE);
@@ -688,7 +688,7 @@ static int
 epoch_discard(struct purge_context *pcx, int *empty_ret)
 {
 	daos_handle_t	ih;
-	daos_hash_out_t	anchor;
+	daos_anchor_t	anchor;
 	int		found;
 	int		discarded;
 	int		opc;

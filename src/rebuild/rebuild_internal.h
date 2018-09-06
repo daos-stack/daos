@@ -43,6 +43,7 @@ struct rebuild_one {
 	daos_iod_t	*ro_iods;
 	daos_epoch_t	*ro_ephs;
 	daos_key_t	*ro_ephs_keys;
+	d_sg_list_t	*ro_sgls;
 	unsigned int	ro_ephs_num;
 	unsigned int	ro_iod_num;
 	unsigned int	ro_iod_alloc_num;

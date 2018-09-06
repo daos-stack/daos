@@ -70,7 +70,7 @@ daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 static int
 daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 			d_sg_list_t *src_sgl, uint32_t src_nr,
-			bool copy_data, bool by_out)
+			bool copy_data, bool by_out, bool alloc)
 {
 	int i;
 
@@ -90,6 +90,9 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 		if (num == 0)
 			continue;
 
+		if (alloc)
+			daos_sgl_init(&dst_sgl[i], src_sgl[i].sg_nr);
+
 		if (src_sgl[i].sg_nr > dst_sgl[i].sg_nr) {
 			D_ERROR("%d : %u > %u\n", i,
 				src_sgl[i].sg_nr, dst_sgl[i].sg_nr);
@@ -106,6 +109,12 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 			for (j = 0; j < num; j++) {
 				if (src_sgl[i].sg_iovs[j].iov_len == 0)
 					continue;
+
+				if (alloc) {
+					daos_iov_copy(&dst_sgl[i].sg_iovs[j],
+						      &src_sgl[i].sg_iovs[j]);
+					continue;
+				}
 
 				if (src_sgl[i].sg_iovs[j].iov_len >
 				    dst_sgl[i].sg_iovs[j].iov_buf_len) {
@@ -132,26 +141,33 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 int
 daos_sgl_copy_ptr(d_sg_list_t *dst, d_sg_list_t *src)
 {
-	return daos_sgls_copy_internal(dst, 1, src, 1, false, false);
+	return daos_sgls_copy_internal(dst, 1, src, 1, false, false, false);
 }
 
 int
 daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 		       int src_nr)
 {
-	return daos_sgls_copy_internal(dst, dst_nr, src, src_nr, true, true);
+	return daos_sgls_copy_internal(dst, dst_nr, src, src_nr, true, true,
+				       false);
 }
 
 int
 daos_sgl_copy_data_out(d_sg_list_t *dst, d_sg_list_t *src)
 {
-	return daos_sgls_copy_internal(dst, 1, src, 1, true, true);
+	return daos_sgls_copy_internal(dst, 1, src, 1, true, true, false);
 }
 
 int
 daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src)
 {
-	return daos_sgls_copy_internal(dst, 1, src, 1, true, false);
+	return daos_sgls_copy_internal(dst, 1, src, 1, true, false, false);
+}
+
+int
+daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src)
+{
+	return daos_sgls_copy_internal(dst, 1, src, 1, true, false, true);
 }
 
 daos_size_t
@@ -271,6 +287,7 @@ daos_iov_copy(daos_iov_t *dst, daos_iov_t *src)
 	dst->iov_buf_len = src->iov_buf_len;
 	memcpy(dst->iov_buf, src->iov_buf, src->iov_len);
 	dst->iov_len = src->iov_len;
+	D_DEBUG(DB_TRACE, "iov_len %d\n", (int)dst->iov_len);
 	return 0;
 }
 

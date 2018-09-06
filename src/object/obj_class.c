@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -266,7 +266,7 @@ dc_oclass_query(daos_handle_t coh, daos_oclass_id_t cid,
 
 int
 dc_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
-	       daos_hash_out_t *anchor, daos_event_t *ev)
+	       daos_anchor_t *anchor, daos_event_t *ev)
 {
 	return -DER_NOSYS;
 }

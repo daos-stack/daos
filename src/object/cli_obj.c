@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -765,9 +765,9 @@ struct shard_auxi_args {
 
 struct obj_list_arg {
 	struct dc_object	*obj;
-	daos_hash_out_t		*anchor;	/* anchor for record */
-	daos_hash_out_t		*dkey_anchor;	/* anchor for dkey */
-	daos_hash_out_t		*akey_anchor;	/* anchor for akey */
+	daos_anchor_t		*anchor;	/* anchor for record */
+	daos_anchor_t		*dkey_anchor;	/* anchor for dkey */
+	daos_anchor_t		*akey_anchor;	/* anchor for akey */
 };
 
 struct shard_update_args {
@@ -821,7 +821,7 @@ static void
 obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 {
 	struct dc_object       *obj = arg->obj;
-	daos_hash_out_t	       *anchor = arg->dkey_anchor;
+	daos_anchor_t	       *anchor = arg->dkey_anchor;
 	uint32_t		shard = dc_obj_anchor2shard(anchor);
 	int			grp_size;
 
@@ -831,7 +831,7 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
 
-	if (!daos_hash_is_eof(anchor)) {
+	if (!daos_anchor_is_eof(anchor)) {
 		D_DEBUG(DB_IO, "More keys in shard %d\n", shard);
 	} else if ((shard < obj->cob_layout->ol_nr - grp_size) &&
 		   opc != DAOS_OBJ_RPC_ENUMERATE) {
@@ -839,7 +839,7 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 		D_DEBUG(DB_IO, "next shard %d grp %d nr %u\n",
 			shard, grp_size, obj->cob_layout->ol_nr);
 
-		daos_hash_set_zero(anchor);
+		daos_anchor_set_zero(anchor);
 		enum_anchor_set_tag(anchor, 0);
 		dc_obj_shard2anchor(anchor, shard);
 	} else {
@@ -867,19 +867,19 @@ obj_comp_cb(tse_task_t *task, void *data)
 	case DAOS_OBJ_RPC_ENUMERATE:
 		arg = data;
 		obj = arg->obj;
-		if (daos_hash_is_eof(arg->dkey_anchor))
+		if (daos_anchor_is_eof(arg->dkey_anchor))
 			D_DEBUG(DB_IO, "Enumerated completed\n");
 		break;
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 		arg = data;
 		obj = arg->obj;
-		if (daos_hash_is_eof(arg->akey_anchor))
+		if (daos_anchor_is_eof(arg->akey_anchor))
 			D_DEBUG(DB_IO, "Enumerated completed\n");
 		break;
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		arg = data;
 		obj = arg->obj;
-		if (daos_hash_is_eof(arg->anchor))
+		if (daos_anchor_is_eof(arg->anchor))
 			D_DEBUG(DB_IO, "Enumerated completed\n");
 		break;
 	case DAOS_OBJ_RPC_FETCH:
@@ -1340,8 +1340,8 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 		     daos_iod_type_t type, daos_size_t *size,
 		     uint32_t *nr, daos_key_desc_t *kds,
 		     daos_sg_list_t *sgl, daos_recx_t *recxs,
-		     daos_epoch_range_t *eprs, daos_hash_out_t *anchor,
-		     daos_hash_out_t *dkey_anchor, daos_hash_out_t *akey_anchor,
+		     daos_epoch_range_t *eprs, daos_anchor_t *anchor,
+		     daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor,
 		     bool incr_order, tse_task_t *task)
 {
 	struct dc_object	*obj;

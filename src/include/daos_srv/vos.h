@@ -503,7 +503,7 @@ vos_iter_finish(daos_handle_t ih);
  *			negative value if error
  */
 int
-vos_iter_probe(daos_handle_t ih, daos_hash_out_t *anchor);
+vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor);
 
 /**
  * Move forward the iterator cursor.
@@ -530,7 +530,7 @@ vos_iter_next(daos_handle_t ih);
  */
 int
 vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *entry,
-	       daos_hash_out_t *anchor);
+	       daos_anchor_t *anchor);
 
 /**
  * Delete the current data entry of the iterator

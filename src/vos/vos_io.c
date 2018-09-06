@@ -321,7 +321,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 	d_list_t		 covered;
 	struct evt_entry_list	 ent_list;
 	struct evt_rect		 rect;
-	struct eio_iov		 eiov;
+	struct eio_iov		 eiov = {0};
 	daos_size_t		 holes; /* hole width */
 	daos_off_t		 index;
 	daos_off_t		 end;
@@ -343,9 +343,10 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 	rsize = 0;
 	holes = 0;
 	evt_ent_list_for_each(ent, &ent_list) {
-		daos_off_t	lo = ent->en_sel_rect.rc_off_lo;
-		daos_off_t	hi = ent->en_sel_rect.rc_off_hi;
-		daos_size_t	nr;
+		struct evt_ptr	*ptr = &ent->en_ptr;
+		daos_off_t	 lo = ent->en_sel_rect.rc_off_lo;
+		daos_off_t	 hi = ent->en_sel_rect.rc_off_hi;
+		daos_size_t	 nr;
 
 		D_ASSERT(hi >= lo);
 		nr = hi - lo + 1;
@@ -358,18 +359,18 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 			holes += lo - index;
 		}
 
-		if (ent->en_inob == 0) { /* hole extent */
+		if (ptr->pt_inob == 0) { /* hole extent */
 			index = lo + nr;
 			holes += nr;
 			continue;
 		}
 
 		if (rsize == 0)
-			rsize = ent->en_inob;
+			rsize = ptr->pt_inob;
 
-		if (rsize != ent->en_inob) {
+		if (rsize != ptr->pt_inob) {
 			D_ERROR("Record sizes of all indices must be "
-				"the same: %u/%u\n", rsize, ent->en_inob);
+				"the same: %u/%u\n", rsize, ptr->pt_inob);
 			rc = -DER_IO_INVAL;
 			goto failed;
 		}
@@ -383,8 +384,9 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 			holes = 0;
 		}
 
-		ent->en_eiov.ei_data_len = nr * rsize;
-		rc = iod_fetch(ioc, &ent->en_eiov);
+		eiov.ei_data_len = nr * rsize;
+		eiov.ei_addr = ptr->pt_ex_addr;
+		rc = iod_fetch(ioc, &eiov);
 		if (rc != 0)
 			goto failed;
 

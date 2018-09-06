@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,9 +63,9 @@ static struct crt_msg_field *obj_key_enum_in_fields[] = {
 	&CMF_UINT32,	/* pad  */
 	&DMF_IOVEC,     /* dkey */
 	&DMF_IOVEC,     /* akey */
-	&DMF_HASH_OUT,	/* hash anchor */
-	&DMF_HASH_OUT,	/* dkey anchor */
-	&DMF_HASH_OUT,	/* akey anchor */
+	&DMF_ANCHOR,	/* hash anchor */
+	&DMF_ANCHOR,	/* dkey anchor */
+	&DMF_ANCHOR,	/* akey anchor */
 	&DMF_SGL_DESC,	/* sgl_descriptor */
 	&CMF_BULK,	/* BULK for key buf */
 	&CMF_BULK,	/* BULK for kds arrary */
@@ -77,9 +77,9 @@ static struct crt_msg_field *obj_key_enum_out_fields[] = {
 	&CMF_UINT32,		/* number of records */
 	&CMF_UINT32,		/* padding */
 	&CMF_UINT64,		/* rec size */
-	&DMF_HASH_OUT,		/* hash anchor */
-	&DMF_HASH_OUT,		/* dkey hash anchor */
-	&DMF_HASH_OUT,		/* akey hash anchor */
+	&DMF_ANCHOR,		/* hash anchor */
+	&DMF_ANCHOR,		/* dkey hash anchor */
+	&DMF_ANCHOR,		/* akey hash anchor */
 	&DMF_KEY_DESC_ARRAY,	/* kds array */
 	&DMF_SGL,		/* SGL buffer */
 	&DMF_RECX_ARRAY,	/* recx buffer */

@@ -438,7 +438,7 @@ static int
 ts_iterate_internal(uint32_t type, vos_iter_param_t *param,
 		    iterate_cb_t iter_cb)
 {
-	daos_hash_out_t		*probe_hash = NULL;
+	daos_anchor_t		*probe_hash = NULL;
 	vos_iter_entry_t	key_ent;
 	daos_handle_t		ih;
 	int			rc;

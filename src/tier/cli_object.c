@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ dc_tier_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 int
 dc_tier_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t nr,
 		      daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		      daos_hash_out_t *anchor, daos_event_t *ev)
+		      daos_anchor_t *anchor, daos_event_t *ev)
 {
 	return 0;
 }
@@ -100,7 +100,7 @@ dc_tier_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t nr,
 int
 dc_tier_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		      uint32_t nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		      daos_hash_out_t *anchor, daos_event_t *ev)
+		      daos_anchor_t *anchor, daos_event_t *ev)
 {
 	return 0;
 }

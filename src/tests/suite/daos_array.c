@@ -421,6 +421,60 @@ replicator(void **state)
 	print_message("all good\n");
 }
 
+static void
+read_empty(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	daos_epoch_t	 epoch = time(NULL);
+	daos_iov_t	 dkey;
+	daos_sg_list_t	 sgl;
+	daos_iov_t	 sg_iov;
+	daos_iod_t	 iod;
+	daos_recx_t	 recx;
+	char		 *buf;
+	int		 rc;
+
+	buf = malloc(4194304);
+
+	/** open object */
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	/** init I/O descriptor */
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
+	iod.iod_size	= 1;
+	recx.rx_idx	= 0;
+	recx.rx_nr	= 4194304;
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	/** fetch */
+	print_message("reading empty object ...\n");
+	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("all good\n");
+}
+
 static const struct CMUnitTest array_tests[] = {
 	{ "ARRAY1: byte array with buffer on stack",
 	  byte_array_simple_stack, NULL, test_case_teardown},
@@ -440,6 +494,8 @@ static const struct CMUnitTest array_tests[] = {
 	  array_partial, NULL, test_case_teardown},
 	{ "ARRAY9: segfault replicator",
 	  replicator, NULL, test_case_teardown},
+	{ "ARRAY10: read from empty object",
+	  read_empty, NULL, test_case_teardown},
 };
 
 int

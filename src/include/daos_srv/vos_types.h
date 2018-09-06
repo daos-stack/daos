@@ -112,15 +112,15 @@ typedef struct {
 	/** anchor status mask */
 	unsigned int		pa_mask;
 	/** Anchor for obj */
-	daos_hash_out_t		pa_obj;
+	daos_anchor_t		pa_obj;
 	/** Anchor for dkey */
-	daos_hash_out_t		pa_dkey;
+	daos_anchor_t		pa_dkey;
 	/** Anchor for akey */
-	daos_hash_out_t		pa_akey;
+	daos_anchor_t		pa_akey;
 	/** Anchor for recx */
-	daos_hash_out_t		pa_recx;
+	daos_anchor_t		pa_recx;
 	/** Anchor for retained recx (max epoch) */
-	daos_hash_out_t		pa_recx_max;
+	daos_anchor_t		pa_recx_max;
 	/** Save OID for aggregation optimization */
 	daos_unit_oid_t		pa_oid;
 } vos_purge_anchor_t;

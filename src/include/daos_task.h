@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -356,7 +356,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		coh;
 	daos_oclass_list_t	*clist;
-	daos_hash_out_t		*anchor;
+	daos_anchor_t		*anchor;
 } daos_obj_class_list_t;
 
 typedef struct {
@@ -424,7 +424,7 @@ typedef struct {
 	uint32_t		*nr;
 	daos_key_desc_t		*kds;
 	daos_sg_list_t		*sgl;
-	daos_hash_out_t		*anchor;
+	daos_anchor_t		*anchor;
 } daos_obj_list_dkey_t;
 
 typedef struct {
@@ -434,7 +434,7 @@ typedef struct {
 	uint32_t		*nr;
 	daos_key_desc_t		*kds;
 	daos_sg_list_t		*sgl;
-	daos_hash_out_t		*anchor;
+	daos_anchor_t		*anchor;
 } daos_obj_list_akey_t;
 
 typedef struct {
@@ -447,7 +447,7 @@ typedef struct {
 	uint32_t		*nr;
 	daos_recx_t		*recxs;
 	daos_epoch_range_t	*eprs;
-	daos_hash_out_t		*anchor;
+	daos_anchor_t		*anchor;
 	uint32_t		*versions;
 	bool			incr_order;
 } daos_obj_list_recx_t;
@@ -468,9 +468,9 @@ typedef struct {
 	daos_key_desc_t		*kds;
 	daos_epoch_range_t	*eprs;
 	daos_sg_list_t		*sgl;
-	daos_hash_out_t		*anchor;
-	daos_hash_out_t		*dkey_anchor;
-	daos_hash_out_t		*akey_anchor;
+	daos_anchor_t		*anchor;
+	daos_anchor_t		*dkey_anchor;
+	daos_anchor_t		*akey_anchor;
 	uint32_t		*versions;
 	bool			incr_order;
 } daos_obj_list_obj_t;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,20 +86,20 @@ dc_obj_update_task_create(daos_handle_t oh, daos_epoch_t epoch,
 int
 dc_obj_list_dkey_task_create(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 			     daos_key_desc_t *kds, daos_sg_list_t *sgl,
-			     daos_hash_out_t *anchor, daos_event_t *ev,
+			     daos_anchor_t *anchor, daos_event_t *ev,
 			     tse_sched_t *tse, tse_task_t **task);
 int
 dc_obj_list_akey_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			     daos_key_t *dkey, uint32_t *nr,
 			     daos_key_desc_t *kds, daos_sg_list_t *sgl,
-			     daos_hash_out_t *anchor, daos_event_t *ev,
+			     daos_anchor_t *anchor, daos_event_t *ev,
 			     tse_sched_t *tse, tse_task_t **task);
 int
 dc_obj_list_recx_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			     daos_key_t *dkey, daos_key_t *akey,
 			     daos_iod_type_t type, daos_size_t *size,
 			     uint32_t *nr, daos_recx_t *recx,
-			     daos_epoch_range_t *eprs, daos_hash_out_t *anchor,
+			     daos_epoch_range_t *eprs, daos_anchor_t *anchor,
 			     bool incr_order, daos_event_t *ev,
 			     tse_sched_t *tse, tse_task_t **task);
 int
@@ -107,9 +107,10 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			    daos_key_t *dkey, daos_key_t *akey,
 			    daos_size_t *size, uint32_t *nr,
 			    daos_key_desc_t *kds, daos_epoch_range_t *eprs,
-			    daos_sg_list_t *sgl, daos_hash_out_t *anchor,
-			    daos_hash_out_t *dkeay_anchor,
-			    daos_hash_out_t *akey_anchor,
+			    daos_sg_list_t *sgl,
+			    daos_anchor_t *anchor,
+			    daos_anchor_t *dkeay_anchor,
+			    daos_anchor_t *akey_anchor,
 			    bool incr_order, daos_event_t *ev, tse_sched_t *tse,
 			    tse_task_t **task);
 

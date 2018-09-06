@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ daos_obj_class_query(daos_handle_t coh, daos_oclass_id_t cid,
 
 int
 daos_obj_class_list(daos_handle_t coh, daos_oclass_list_t *clist,
-		    daos_hash_out_t *anchor, daos_event_t *ev)
+		    daos_anchor_t *anchor, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
@@ -190,7 +190,7 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 int
 daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		   daos_hash_out_t *anchor, daos_event_t *ev)
+		   daos_anchor_t *anchor, daos_event_t *ev)
 {
 	tse_task_t	*task;
 	int		rc;
@@ -206,7 +206,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 int
 daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		   uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		   daos_hash_out_t *anchor, daos_event_t *ev)
+		   daos_anchor_t *anchor, daos_event_t *ev)
 {
 	tse_task_t	*task;
 	int		rc;
@@ -221,9 +221,9 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 
 int
 daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		   daos_key_t *akey, daos_size_t *size, uint32_t *nr,
-		   daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		   daos_hash_out_t *anchor, bool incr_order, daos_event_t *ev)
+	daos_key_t *akey, daos_size_t *size, uint32_t *nr,
+	daos_recx_t *recxs, daos_epoch_range_t *eprs,
+	daos_anchor_t *anchor, bool incr_order, daos_event_t *ev)
 {
 	tse_task_t	*task;
 	int		rc;
