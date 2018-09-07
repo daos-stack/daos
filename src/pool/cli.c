@@ -265,8 +265,9 @@ out:
 static int
 process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		    uint32_t map_version, uint32_t uid, uint32_t gid,
-		    uint32_t mode, uint32_t leader_rank, d_rank_list_t *tgts,
-		    daos_pool_info_t *info, bool connect)
+		    uint32_t mode, uint32_t leader_rank,
+		    struct daos_pool_space *ps, struct daos_rebuild_status *rs,
+		    d_rank_list_t *tgts, daos_pool_info_t *info, bool connect)
 {
 	struct pool_map	       *map;
 	int			rc;
@@ -308,6 +309,8 @@ out_unlock:
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	if (info != NULL && rc == 0) {
+		D_ASSERT(ps != NULL);
+		D_ASSERT(rs != NULL);
 		uuid_copy(info->pi_uuid, pool->dp_pool);
 		info->pi_ntargets	= map_buf->pb_target_nr;
 		info->pi_nnodes		= map_buf->pb_node_nr;
@@ -316,6 +319,8 @@ out_unlock:
 		info->pi_gid		= gid;
 		info->pi_mode		= mode;
 		info->pi_leader		= leader_rank;
+		info->pi_space		= *ps;
+		info->pi_rebuild_st	= *rs;
 	}
 
 	return rc;
@@ -401,16 +406,12 @@ pool_connect_cp(tse_task_t *task, void *data)
 	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
 				 pco->pco_uid, pco->pco_gid, pco->pco_mode,
 				 pco->pco_op.po_hint.sh_rank,
+				 &pco->pco_space, &pco->pco_rebuild_st,
 				 NULL /* tgts */, info, true);
 	if (rc != 0) {
 		/* TODO: What do we do about the remote connection state? */
 		D_ERROR("failed to create local pool map: %d\n", rc);
 		D_GOTO(out, rc);
-	}
-
-	if (arg->pca_info != NULL) {
-		memcpy(&arg->pca_info->pi_rebuild_st, &pco->pco_rebuild_st,
-		       sizeof(pco->pco_rebuild_st));
 	}
 
 	/* add pool to hhash */
@@ -1266,11 +1267,8 @@ pool_query_cb(tse_task_t *task, void *data)
 				 out->pqo_op.po_map_version,
 				 out->pqo_uid, out->pqo_gid, out->pqo_mode,
 				 out->pqo_op.po_hint.sh_rank,
+				 &out->pqo_space, &out->pqo_rebuild_st,
 				 arg->dqa_tgts, arg->dqa_info, false);
-	if (arg->dqa_info != NULL) {
-		memcpy(&arg->dqa_info->pi_rebuild_st, &out->pqo_rebuild_st,
-		       sizeof(out->pqo_rebuild_st));
-	}
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(arg->dqa_pool);

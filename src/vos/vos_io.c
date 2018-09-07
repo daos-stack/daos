@@ -901,7 +901,7 @@ vos_reserve(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	umem_id_t		 mmid;
 	int			 rc;
 
-	if (media == BIO_ADDR_SCM) {
+	if (media == DAOS_MEDIA_SCM) {
 		if (ioc->ic_actv_cnt > 0) {
 			struct pobj_action *act;
 
@@ -925,7 +925,7 @@ vos_reserve(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 		return UMMID_IS_NULL(mmid) ? -DER_NOSPACE : 0;
 	}
 
-	D_ASSERT(media == BIO_ADDR_NVME);
+	D_ASSERT(media == DAOS_MEDIA_NVME);
 
 	vsi = obj->obj_cont->vc_pool->vp_vea_info;
 	D_ASSERT(vsi);
@@ -990,11 +990,11 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	 * vos_irec_df->ir_ex_addr, small unaligned part will be stored on SCM
 	 * along with vos_irec_df, being referenced by vos_irec_df->ir_body.
 	 */
-	scm_size = (media == BIO_ADDR_SCM) ?
+	scm_size = (media == DAOS_MEDIA_SCM) ?
 		vos_recx2irec_size(size, iod->iod_csums) :
 		vos_recx2irec_size(0, iod->iod_csums);
 
-	rc = vos_reserve(ioc, BIO_ADDR_SCM, scm_size, &off);
+	rc = vos_reserve(ioc, DAOS_MEDIA_SCM, scm_size, &off);
 	if (rc) {
 		D_ERROR("Reserve SCM for SV failed. %d\n", rc);
 		return rc;
@@ -1011,7 +1011,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 		goto done;
 	}
 
-	if (media == BIO_ADDR_SCM) {
+	if (media == DAOS_MEDIA_SCM) {
 		char *payload_addr;
 
 		/* Get the record payload offset */
@@ -1019,7 +1019,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 		D_ASSERT(payload_addr >= (char *)irec);
 		off = mmid.off + (payload_addr - (char *)irec);
 	} else {
-		rc = vos_reserve(ioc, BIO_ADDR_NVME, size, &off);
+		rc = vos_reserve(ioc, DAOS_MEDIA_NVME, size, &off);
 		if (rc) {
 			D_ERROR("Reserve NVMe for SV failed. %d\n", rc);
 			return rc;
@@ -1080,9 +1080,9 @@ akey_media_select(struct vos_io_context *ioc, daos_iod_type_t type,
 
 	vsi = ioc->ic_obj->obj_cont->vc_pool->vp_vea_info;
 	if (vsi == NULL)
-		return BIO_ADDR_SCM;
+		return DAOS_MEDIA_SCM;
 	else
-		return (size >= VOS_BLK_SZ) ? BIO_ADDR_NVME : BIO_ADDR_SCM;
+		return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
 }
 
 static int

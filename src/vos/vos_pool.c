@@ -214,7 +214,7 @@ vos_blob_unmap_cb(uint64_t off, uint64_t cnt, void *data)
  */
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t blob_sz)
+		daos_size_t nvme_sz)
 {
 	struct vea_space_df	*vea_md = NULL;
 	PMEMobjpool		*ph;
@@ -222,13 +222,13 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	struct umem_instance	 umem;
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	struct bio_blob_hdr	 blob_hdr;
-	int			 rc = 0;
+	int			 rc = 0, enabled = 1;
 
 	if (!path || uuid_is_null(uuid))
 		return -DER_INVAL;
 
 	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64", "
-		"UUID: "DF_UUID"\n", path, scm_sz, blob_sz, DP_UUID(uuid));
+		"UUID: "DF_UUID"\n", path, scm_sz, nvme_sz, DP_UUID(uuid));
 
 	/* Path must be a file with a certain size when size argument is 0 */
 	if (!scm_sz && access(path, F_OK) == -1) {
@@ -242,6 +242,13 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		D_ERROR("Failed to create pool %s, size="DF_U64", errno=%d\n",
 			path, scm_sz, errno);
 		return daos_errno2der(errno);
+	}
+
+	rc = pmemobj_ctl_set(ph, "stats.enabled", &enabled);
+	if (rc) {
+		D_ERROR("Enable SCM usage statistics failed. rc:%d\n", rc);
+		rc = umem_tx_errno(rc);
+		goto close;
 	}
 
 	/* If the file is fallocated seperately we need the fallocated size
@@ -270,11 +277,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 			pmemobj_tx_abort(EFAULT);
 
 		uuid_copy(pool_df->pd_id, uuid);
-		pool_df->pd_pool_info.pif_scm_sz  = scm_sz;
-		pool_df->pd_pool_info.pif_blob_sz = blob_sz;
-		/* XXX we don't really maintain the available size */
-		pool_df->pd_pool_info.pif_avail = scm_sz -
-				pmemobj_root_size(ph);
+		pool_df->pd_scm_sz = scm_sz;
+		pool_df->pd_nvme_sz = nvme_sz;
 		vea_md = &pool_df->pd_vea_df;
 
 	} TX_ONABORT {
@@ -291,7 +295,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		goto close;
 
 	/* SCM only pool or NVMe device isn't configured */
-	if (blob_sz == 0 || xs_ctxt == NULL)
+	if (nvme_sz == 0 || xs_ctxt == NULL)
 		goto close;
 
 	rc = umem_class_init(&uma, &umem);
@@ -301,7 +305,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	/* Create SPDK blob on NVMe device */
 	D_DEBUG(DB_MGMT, "Creating blob for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(uuid));
-	rc = bio_blob_create(uuid, xs_ctxt, blob_sz);
+	rc = bio_blob_create(uuid, xs_ctxt, nvme_sz);
 	if (rc != 0) {
 		D_ERROR("Error creating blob for xs:%p pool:"DF_UUID" rc:%d\n",
 			xs_ctxt, DP_UUID(uuid), rc);
@@ -316,7 +320,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	/* Format SPDK blob*/
 	D_ASSERT(vea_md != NULL);
 	rc = vea_format(&umem, vos_txd_get(), vea_md, VOS_BLK_SZ,
-			VOS_BLOB_HDR_BLKS, blob_sz, vos_blob_format_cb,
+			VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
 			&blob_hdr, false);
 	if (rc) {
 		D_ERROR("Format blob error for xs:%p pool:"DF_UUID" rc:%d\n",
@@ -434,7 +438,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	struct vos_pool		*pool;
 	struct umem_attr	*uma;
 	struct d_uuid		 ukey;
-	int			 rc;
+	int			 rc, enabled = 1;
 
 	if (path == NULL || poh == NULL) {
 		D_ERROR("Invalid parameters.\n");
@@ -477,6 +481,13 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		D_GOTO(failed, rc);
 	}
 
+	rc = pmemobj_ctl_set(uma->uma_pool, "stats.enabled", &enabled);
+	if (rc) {
+		D_ERROR("Enable SCM usage statistics failed. rc:%d\n",
+			umem_tx_errno(rc));
+		D_GOTO(failed, rc);
+	}
+
 	pool_df = vos_pool_ptr2df(pool);
 	if (uuid_compare(uuid, pool_df->pd_id)) {
 		D_ERROR("Mismatch uuid, user="DF_UUID", pool="DF_UUID"\n",
@@ -492,8 +503,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		D_GOTO(failed, rc);
 	}
 
-	xs_ctxt = pool_df->pd_pool_info.pif_blob_sz == 0 ?
-			NULL : vos_xsctxt_get();
+	xs_ctxt = pool_df->pd_nvme_sz == 0 ? NULL : vos_xsctxt_get();
 
 	D_DEBUG(DB_MGMT, "Opening VOS I/O context for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(uuid));
@@ -563,15 +573,62 @@ vos_pool_close(daos_handle_t poh)
 int
 vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 {
-
 	struct vos_pool		*pool;
 	struct vos_pool_df	*pool_df;
+	daos_size_t		 scm_used;
+	struct vea_attr		 attr;
+	struct vea_stat		 stat;
+	int			 rc;
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL)
-		return -DER_NONEXIST;
+		return -DER_NO_HDL;
 
 	pool_df = vos_pool_ptr2df(pool);
-	memcpy(pinfo, &pool_df->pd_pool_info, sizeof(pool_df->pd_pool_info));
+
+	D_ASSERT(pinfo != NULL);
+	pinfo->pif_scm_sz = pool_df->pd_scm_sz;
+	pinfo->pif_nvme_sz = pool_df->pd_nvme_sz;
+	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
+
+	/* query SCM free space */
+	rc = pmemobj_ctl_get(pool->vp_umm.umm_pool,
+			     "stats.heap.curr_allocated", &scm_used);
+	if (rc) {
+		D_ERROR("Failed to get SCM usage. rc:%d\n", rc);
+		return umem_tx_errno(rc);
+	}
+
+	/*
+	 * FIXME: pmemobj_ctl_get() sometimes return an insane large
+	 * value, I suspect it's a PMDK defect. Let's ignore the error
+	 * and return success for this moment.
+	 */
+	if (pinfo->pif_scm_sz < scm_used) {
+		D_CRIT("scm_sz:"DF_U64" < scm_used:"DF_U64"\n",
+		       pinfo->pif_scm_sz, scm_used);
+		pinfo->pif_scm_free = 0;
+	} else {
+		pinfo->pif_scm_free = pinfo->pif_scm_sz - scm_used;
+	}
+
+	/* NVMe isn't configured for this VOS */
+	if (pool->vp_vea_info == NULL) {
+		pinfo->pif_nvme_free = 0;
+		return 0;
+	}
+
+	/* query NVMe free space */
+	rc = vea_query(pool->vp_vea_info, &attr, &stat);
+	if (rc) {
+		D_ERROR("Failed to get NVMe usage. rc:%d\n", rc);
+		return rc;
+	}
+	D_ASSERT(attr.va_blk_sz != 0);
+	pinfo->pif_nvme_free = attr.va_blk_sz * stat.vs_free_persistent;
+	D_ASSERTF(pinfo->pif_nvme_free <= pinfo->pif_nvme_sz,
+		  "nvme_free:"DF_U64", nvme_sz:"DF_U64", blk_sz:%u\n",
+		  pinfo->pif_nvme_free, pinfo->pif_nvme_sz, attr.va_blk_sz);
+
 	return 0;
 }

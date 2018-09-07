@@ -358,7 +358,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		D_ASSERTF(iod.iod_size == biov->bi_data_len,
 			  DF_U64" == "DF_U64"\n", iod.iod_size,
 			  biov->bi_data_len);
-		D_ASSERT(biov->bi_addr.ba_type == BIO_ADDR_SCM);
+		D_ASSERT(biov->bi_addr.ba_type == DAOS_MEDIA_SCM);
 
 		value->iov_buf = biov->bi_buf;
 		value->iov_buf_len = biov->bi_data_len;

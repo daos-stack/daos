@@ -1702,7 +1702,7 @@ permitted(const struct pool_attr *attr, uint32_t uid, uint32_t gid,
 static int
 pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 		   const uuid_t pool_hdl, uint64_t capas,
-		   daos_iov_t *global_ns)
+		   daos_iov_t *global_ns, struct daos_pool_space *ps)
 {
 	struct pool_tgt_connect_in     *in;
 	struct pool_tgt_connect_out    *out;
@@ -1741,6 +1741,9 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 		D_ERROR(DF_UUID": failed to connect to %d targets\n",
 			DP_UUID(svc->ps_uuid), rc);
 		rc = -DER_IO;
+	} else {
+		D_ASSERT(ps != NULL);
+		*ps = out->tco_space;
 	}
 
 out_rpc:
@@ -1985,7 +1988,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
-				in->pci_capas, &iv_iov);
+				in->pci_capas, &iv_iov, &out->pco_space);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: %d\n",
 			DP_UUID(in->pci_op.pi_uuid), rc);
@@ -2169,6 +2172,46 @@ out:
 	crt_reply_send(rpc);
 }
 
+static int
+pool_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
+		 struct daos_pool_space *ps)
+{
+	struct pool_tgt_query_in	*in;
+	struct pool_tgt_query_out	*out;
+	crt_rpc_t			*rpc;
+	int				 rc;
+
+	D_DEBUG(DB_MD, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
+
+	rc = bcast_create(ctx, svc, POOL_TGT_QUERY, &rpc);
+	if (rc != 0)
+		goto out;
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
+	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		goto out_rpc;
+
+	out = crt_reply_get(rpc);
+	rc = out->tqo_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to query from %d targets\n",
+			DP_UUID(svc->ps_uuid), rc);
+		rc = -DER_IO;
+	} else {
+		D_ASSERT(ps != NULL);
+		*ps = out->tqo_space;
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out:
+	D_DEBUG(DB_MD, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
+	return rc;
+}
+
 void
 ds_pool_query_handler(crt_rpc_t *rpc)
 {
@@ -2235,6 +2278,9 @@ out_lock:
 	rdb_tx_end(&tx);
 out_svc:
 	ds_pool_set_hint(svc->ps_db, &out->pqo_op.po_hint);
+	if (rc == 0)
+		rc = pool_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
+				      &out->pqo_space);
 	pool_svc_put_leader(svc);
 out:
 	out->pqo_op.po_rc = rc;

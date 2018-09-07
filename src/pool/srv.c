@@ -102,6 +102,11 @@ static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
 	.co_pre_forward	= NULL,
 };
 
+static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
+	.co_aggregate	= ds_pool_tgt_query_aggregator,
+	.co_pre_forward	= NULL,
+};
+
 static struct crt_corpc_ops ds_pool_tgt_update_map_co_ops = {
 	.co_aggregate	= ds_pool_tgt_update_map_aggregator,
 	.co_pre_forward	= NULL,

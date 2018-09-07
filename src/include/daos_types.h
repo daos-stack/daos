@@ -179,18 +179,42 @@ typedef struct {
 	int			foo;
 } daos_target_perf_t;
 
-typedef struct {
-	/** TODO: space usage */
-	int			foo;
-} daos_space_t;
+enum {
+	DAOS_MEDIA_SCM	= 0,
+	DAOS_MEDIA_NVME,
+	DAOS_MEDIA_MAX
+};
+
+/** Pool target space usage information */
+struct daos_space {
+	/* Total space in bytes */
+	uint64_t	s_total[DAOS_MEDIA_MAX];
+	/* Free space in bytes */
+	uint64_t	s_free[DAOS_MEDIA_MAX];
+};
 
 /** Target information */
 typedef struct {
 	daos_target_type_t	ta_type;
 	daos_target_state_t	ta_state;
 	daos_target_perf_t	ta_perf;
-	daos_space_t		ta_space;
+	struct daos_space	ta_space;
 } daos_target_info_t;
+
+/** Pool space usage information */
+struct daos_pool_space {
+	/* Aggregated space for all live targets */
+	struct daos_space	ps_space;
+	/* Min target free space in bytes */
+	uint64_t	ps_free_min[DAOS_MEDIA_MAX];
+	/* Max target free space in bytes */
+	uint64_t	ps_free_max[DAOS_MEDIA_MAX];
+	/* Average target free space in bytes */
+	uint64_t	ps_free_mean[DAOS_MEDIA_MAX];
+	/* Target(VOS) count */
+	uint32_t	ps_ntargets;
+	uint32_t	ps_padding;
+};
 
 struct daos_rebuild_status {
 	/** pool map version in rebuilding or last completed rebuild */
@@ -238,7 +262,7 @@ typedef struct {
 	/** current raft leader */
 	uint32_t			pi_leader;
 	/** Space usage */
-	daos_space_t			pi_space;
+	struct daos_pool_space		pi_space;
 	/** rebuild status */
 	struct daos_rebuild_status	pi_rebuild_st;
 } daos_pool_info_t;

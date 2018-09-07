@@ -102,6 +102,10 @@
 		0, &CQF_pool_tgt_update_map,				\
 		ds_pool_tgt_update_map_handler,				\
 		&ds_pool_tgt_update_map_co_ops),			\
+	X(POOL_TGT_QUERY,						\
+		0, &CQF_pool_tgt_query,					\
+		ds_pool_tgt_query_handler,				\
+		&ds_pool_tgt_query_co_ops),				\
 	X(POOL_RDB_START,						\
 		0, &CQF_pool_rdb_start,					\
 		ds_pool_rdb_start_handler,				\
@@ -167,6 +171,7 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 	((uint32_t)		(pco_mode)		CRT_VAR) \
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pco_map_buf_size)	CRT_VAR) \
+	((struct daos_pool_space) (pco_space)		CRT_VAR) \
 	((struct daos_rebuild_status) (pco_rebuild_st)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
@@ -191,6 +196,7 @@ CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 	((uint32_t)		(pqo_mode)		CRT_VAR) \
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pqo_map_buf_size)	CRT_VAR) \
+	((struct daos_pool_space) (pqo_space)		CRT_VAR) \
 	((struct daos_rebuild_status) (pqo_rebuild_st)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
@@ -294,6 +300,7 @@ CRT_RPC_DECLARE(pool_svc_stop, DAOS_ISEQ_POOL_SVC_STOP, DAOS_OSEQ_POOL_SVC_STOP)
 	((daos_iov_t)		(tci_iv_ctxt)		CRT_VAR)
 
 #define DAOS_OSEQ_POOL_TGT_CONNECT /* output fields */		 \
+	((struct daos_pool_space) (tco_space)		CRT_VAR) \
 	((int32_t)		(tco_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_tgt_connect, DAOS_ISEQ_POOL_TGT_CONNECT,
@@ -308,6 +315,16 @@ CRT_RPC_DECLARE(pool_tgt_connect, DAOS_ISEQ_POOL_TGT_CONNECT,
 
 CRT_RPC_DECLARE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 		DAOS_OSEQ_POOL_TGT_DISCONNECT)
+
+#define DAOS_ISEQ_POOL_TGT_QUERY	/* input fields */	 \
+	((struct pool_op_in)	(tqi_op)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_TGT_QUERY	/* output fields */	 \
+	((struct daos_pool_space) (tqo_space)		CRT_VAR) \
+	((uint32_t)		(tqo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
+		DAOS_OSEQ_POOL_TGT_QUERY)
 
 #define DAOS_ISEQ_POOL_TGT_UPDATE_MAP /* input fields */	 \
 	((uuid_t)		(tui_uuid)		CRT_VAR) \

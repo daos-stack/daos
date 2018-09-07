@@ -414,8 +414,10 @@ pool_op_hdlr(int argc, char *argv[])
 
 
 	if (op == POOL_QUERY) {
-		daos_pool_info_t		pinfo;
-		struct daos_rebuild_status     *rstat = &pinfo.pi_rebuild_st;
+		daos_pool_info_t		 pinfo;
+		struct daos_pool_space		*ps = &pinfo.pi_space;
+		struct daos_rebuild_status	*rstat = &pinfo.pi_rebuild_st;
+		int				 i;
 
 		rc = daos_pool_query(pool, NULL, &pinfo, NULL);
 		if (rc != 0) {
@@ -425,6 +427,19 @@ pool_op_hdlr(int argc, char *argv[])
 		D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u\n",
 			DP_UUID(pinfo.pi_uuid), pinfo.pi_ntargets,
 			pinfo.pi_ndisabled);
+
+		D_PRINT("Pool space info:\n");
+		D_PRINT("- Target(VOS) count:%d\n", ps->ps_ntargets);
+		for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
+			D_PRINT("- %s:\n",
+				i == DAOS_MEDIA_SCM ? "SCM" : "NVMe");
+			D_PRINT("  Total size: "DF_U64"\n",
+				ps->ps_space.s_total[i]);
+			D_PRINT("  Free: "DF_U64", min:"DF_U64", max:"DF_U64", "
+				"mean:"DF_U64"\n", ps->ps_space.s_free[i],
+				ps->ps_free_min[i], ps->ps_free_max[i],
+				ps->ps_free_mean[i]);
+		}
 
 		if (rstat->rs_errno == 0) {
 			char	*sstr;

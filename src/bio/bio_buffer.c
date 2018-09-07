@@ -504,7 +504,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 		return 0;
 	}
 
-	if (biov->bi_addr.ba_type == BIO_ADDR_SCM) {
+	if (biov->bi_addr.ba_type == DAOS_MEDIA_SCM) {
 		struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 		umem_id_t ummid;
 
@@ -515,7 +515,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 		return 0;
 	}
 
-	D_ASSERT(biov->bi_addr.ba_type == BIO_ADDR_NVME);
+	D_ASSERT(biov->bi_addr.ba_type == DAOS_MEDIA_NVME);
 	bdb = iod_dma_buf(biod);
 
 	off = bio_iov2off(biov);
@@ -773,7 +773,7 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 {
 	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 
-	if (biod->bd_update && media == BIO_ADDR_SCM) {
+	if (biod->bd_update && media == DAOS_MEDIA_SCM) {
 		pmemobj_memcpy_persist(umem->umm_pool, media_addr,
 				       addr, n);
 	} else {

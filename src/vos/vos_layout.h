@@ -109,10 +109,14 @@ struct vos_pool_df {
 	uint64_t				pd_compat_flags;
 	/* Flags for incompatibility features */
 	uint64_t				pd_incompat_flags;
+	/* Total space in bytes on SCM */
+	uint64_t				pd_scm_sz;
+	/* Total space in bytes on NVMe */
+	uint64_t				pd_nvme_sz;
+	/* # of containers in this pool */
+	uint64_t				pd_cont_nr;
 	/* Typed PMEMoid pointer for the container index table */
 	struct vos_cont_table_df		pd_ctab_df;
-	/* Pool info of objects, containers, space availability */
-	vos_pool_info_t				pd_pool_info;
 	/* Free space tracking for NVMe device */
 	struct vea_space_df			pd_vea_df;
 };

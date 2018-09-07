@@ -243,7 +243,7 @@ bio_strdup(bio_addr_t *addr, const char *str)
 	/* This should probably be transactional but it's just a test and not
 	 * really the point of the test.
 	 */
-	addr->ba_type = BIO_ADDR_SCM;
+	addr->ba_type = DAOS_MEDIA_SCM;
 
 	if (str == NULL) {
 		addr->ba_hole = 1;

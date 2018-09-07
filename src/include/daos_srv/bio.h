@@ -32,19 +32,13 @@
 #include <daos/mem.h>
 #include <daos/common.h>
 
-/* Address types for various medias */
-enum {
-	BIO_ADDR_SCM	= 0,
-	BIO_ADDR_NVME,
-};
-
 typedef struct {
 	/*
 	 * Byte offset within PMDK pmemobj pool for SCM;
 	 * Byte offset within SPDK blob for NVMe.
 	 */
 	uint64_t	ba_off;
-	/* BIO_ADDR_SCM or BIO_ADDR_NVME */
+	/* DAOS_MEDIA_SCM or DAOS_MEDIA_NVME */
 	uint16_t	ba_type;
 	/* Is the address a hole ? */
 	uint16_t	ba_hole;

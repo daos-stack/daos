@@ -684,7 +684,7 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec,
 		return 0;
 	}
 
-	if (addr->ba_type == BIO_ADDR_NVME && !bio_addr_is_hole(addr)) {
+	if (addr->ba_type == DAOS_MEDIA_NVME && !bio_addr_is_hole(addr)) {
 		struct vea_space_info *vsi = tins->ti_blks_info;
 		uint64_t blk_off;
 		uint32_t blk_cnt;

@@ -493,6 +493,148 @@ ds_pool_hdl_put(struct ds_pool_hdl *hdl)
 	d_hash_rec_decref(pool_hdl_hash, &hdl->sph_entry);
 }
 
+static void
+aggregate_pool_space(struct daos_pool_space *agg_ps,
+		     struct daos_pool_space *ps)
+{
+	int	i;
+	bool	first;
+
+	D_ASSERT(agg_ps && ps);
+
+	if (ps->ps_ntargets == 0) {
+		D_ERROR("Skip emtpy space info\n");
+		return;
+	}
+
+	first = (agg_ps->ps_ntargets == 0);
+	agg_ps->ps_ntargets += ps->ps_ntargets;
+
+	for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
+		agg_ps->ps_space.s_total[i] += ps->ps_space.s_total[i];
+		agg_ps->ps_space.s_free[i] += ps->ps_space.s_free[i];
+
+		if (agg_ps->ps_free_max[i] < ps->ps_free_max[i])
+			agg_ps->ps_free_max[i] = ps->ps_free_max[i];
+		if (agg_ps->ps_free_min[i] > ps->ps_free_min[i] || first)
+			agg_ps->ps_free_min[i] = ps->ps_free_min[i];
+
+		agg_ps->ps_free_mean[i] = agg_ps->ps_space.s_free[i] /
+					  agg_ps->ps_ntargets;
+	}
+}
+
+struct pool_query_xs_arg {
+	struct ds_pool		*qxa_pool;
+	struct daos_pool_space	 qxa_space;
+};
+
+static void
+pool_query_xs_reduce(void *agg_arg, void *xs_arg)
+{
+	struct pool_query_xs_arg	*a_arg = agg_arg;
+	struct pool_query_xs_arg	*x_arg = xs_arg;
+
+	D_ASSERT(x_arg->qxa_space.ps_ntargets == 1);
+	aggregate_pool_space(&a_arg->qxa_space, &x_arg->qxa_space);
+}
+
+static int
+pool_query_xs_arg_alloc(struct dss_stream_arg_type *xs, void *agg_arg)
+{
+	struct pool_query_xs_arg	*x_arg, *a_arg = agg_arg;
+
+	D_ALLOC_PTR(x_arg);
+	if (x_arg == NULL)
+		return -DER_NOMEM;
+
+	xs->st_arg = x_arg;
+	x_arg->qxa_pool = a_arg->qxa_pool;
+	return 0;
+}
+
+static void
+pool_query_xs_arg_free(struct dss_stream_arg_type *xs)
+{
+	D_ASSERT(xs->st_arg != NULL);
+	D_FREE(xs->st_arg);
+}
+
+static int
+pool_query_one(void *vin)
+{
+	struct dss_coll_stream_args	*reduce = vin;
+	struct dss_stream_arg_type	*streams = reduce->csa_streams;
+	struct dss_module_info		*info = dss_get_module_info();
+	int				 xs_id = info->dmi_tid;
+	struct pool_query_xs_arg	*x_arg = streams[xs_id].st_arg;
+	struct ds_pool			*pool = x_arg->qxa_pool;
+	struct ds_pool_child		*pool_child;
+	struct daos_pool_space		*x_ps = &x_arg->qxa_space;
+	vos_pool_info_t			 vos_pool_info = { 0 };
+	int				 rc, i;
+
+	pool_child = ds_pool_child_lookup(pool->sp_uuid);
+	if (pool_child == NULL)
+		return -DER_NO_HDL;
+
+	rc = vos_pool_query(pool_child->spc_hdl, &vos_pool_info);
+	if (rc != 0) {
+		D_ERROR("Failed to query pool "DF_UUID", xs_id: %d, rc: %d\n",
+			DP_UUID(pool->sp_uuid), xs_id, rc);
+		goto out;
+	}
+
+	x_ps->ps_ntargets = 1;
+	x_ps->ps_space.s_total[DAOS_MEDIA_SCM] = vos_pool_info.pif_scm_sz;
+	x_ps->ps_space.s_total[DAOS_MEDIA_NVME] = vos_pool_info.pif_nvme_sz;
+	x_ps->ps_space.s_free[DAOS_MEDIA_SCM] = vos_pool_info.pif_scm_free;
+	x_ps->ps_space.s_free[DAOS_MEDIA_NVME] = vos_pool_info.pif_nvme_free;
+
+	for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
+		x_ps->ps_free_max[i] = x_ps->ps_space.s_free[i];
+		x_ps->ps_free_min[i] = x_ps->ps_space.s_free[i];
+	}
+out:
+	ds_pool_child_put(pool_child);
+	return rc;
+}
+
+static int
+pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
+{
+	struct dss_coll_ops		coll_ops;
+	struct dss_coll_args		coll_args;
+	struct pool_query_xs_arg	agg_arg = { 0 };
+	int				rc;
+
+	D_ASSERT(ps != NULL);
+	memset(ps, 0, sizeof(*ps));
+
+	/* collective operations */
+	coll_ops.co_func		= pool_query_one;
+	coll_ops.co_reduce		= pool_query_xs_reduce;
+	coll_ops.co_reduce_arg_alloc	= pool_query_xs_arg_alloc;
+	coll_ops.co_reduce_arg_free	= pool_query_xs_arg_free;
+
+	/* packing arguments for aggregator args */
+	agg_arg.qxa_pool		= pool;
+
+	/* setting aggregator args */
+	coll_args.ca_aggregator		= &agg_arg;
+	coll_args.ca_func_args		= &coll_args.ca_stream_args;
+
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args);
+	if (rc) {
+		D_ERROR("Pool query on pool "DF_UUID" failed, rc:%d\n",
+			DP_UUID(pool->sp_uuid), rc);
+		return rc;
+	}
+
+	*ps = agg_arg.qxa_space;
+	return rc;
+}
+
 void
 ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 {
@@ -558,6 +700,8 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc);
 		}
 	}
+
+	rc = pool_tgt_query(pool, &out->tco_space);
 out:
 	out->tco_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
@@ -568,10 +712,14 @@ out:
 int
 ds_pool_tgt_connect_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct pool_tgt_connect_out    *out_source = crt_reply_get(source);
-	struct pool_tgt_connect_out    *out_result = crt_reply_get(result);
+	struct pool_tgt_connect_out	*out_source = crt_reply_get(source);
+	struct pool_tgt_connect_out	*out_result = crt_reply_get(result);
 
 	out_result->tco_rc += out_source->tco_rc;
+	if (out_source->tco_rc != 0)
+		return 0;
+
+	aggregate_pool_space(&out_result->tco_space, &out_source->tco_space);
 	return 0;
 }
 
@@ -755,6 +903,43 @@ ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	struct pool_tgt_update_map_out *out_result = crt_reply_get(result);
 
 	out_result->tuo_rc += out_source->tuo_rc;
+	return 0;
+}
+
+void
+ds_pool_tgt_query_handler(crt_rpc_t *rpc)
+{
+	struct pool_tgt_query_in	*in = crt_req_get(rpc);
+	struct pool_tgt_query_out	*out = crt_reply_get(rpc);
+	struct ds_pool_hdl		*hdl;
+	int				 rc;
+
+	hdl = ds_pool_hdl_lookup(in->tqi_op.pi_hdl);
+	if (hdl == NULL) {
+		D_ERROR("Failed to find pool hdl "DF_UUID"\n",
+			DP_UUID(in->tqi_op.pi_hdl));
+		D_GOTO(out, rc = -DER_NO_HDL);
+	}
+
+	D_ASSERT(hdl->sph_pool != NULL);
+	rc = pool_tgt_query(hdl->sph_pool, &out->tqo_space);
+	ds_pool_hdl_put(hdl);
+out:
+	out->tqo_rc = (rc == 0 ? 0 : 1);
+	crt_reply_send(rpc);
+}
+
+int
+ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct pool_tgt_query_out	*out_source = crt_reply_get(source);
+	struct pool_tgt_query_out	*out_result = crt_reply_get(result);
+
+	out_result->tqo_rc += out_source->tqo_rc;
+	if (out_source->tqo_rc != 0)
+		return 0;
+
+	aggregate_pool_space(&out_result->tqo_space, &out_source->tqo_space);
 	return 0;
 }
 

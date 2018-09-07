@@ -65,6 +65,44 @@ crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
 }
 
 static int
+crt_proc_struct_daos_pool_space(crt_proc_t proc, struct daos_pool_space *ps)
+{
+	int i, rc;
+
+	for (i = 0; i < DAOS_MEDIA_MAX; i++) {
+		rc = crt_proc_uint64_t(proc, &ps->ps_space.s_total[i]);
+		if (rc)
+			return -DER_HG;
+
+		rc = crt_proc_uint64_t(proc, &ps->ps_space.s_free[i]);
+		if (rc)
+			return -DER_HG;
+
+		rc = crt_proc_uint64_t(proc, &ps->ps_free_min[i]);
+		if (rc)
+			return -DER_HG;
+
+		rc = crt_proc_uint64_t(proc, &ps->ps_free_max[i]);
+		if (rc)
+			return -DER_HG;
+
+		rc = crt_proc_uint64_t(proc, &ps->ps_free_mean[i]);
+		if (rc)
+			return -DER_HG;
+	}
+
+	rc = crt_proc_uint32_t(proc, &ps->ps_ntargets);
+	if (rc)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &ps->ps_padding);
+	if (rc)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
 crt_proc_struct_daos_rebuild_status(crt_proc_t proc,
 				    struct daos_rebuild_status *drs)
 {
@@ -128,6 +166,8 @@ CRT_RPC_DEFINE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 		DAOS_OSEQ_POOL_TGT_DISCONNECT)
 CRT_RPC_DEFINE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
 		DAOS_OSEQ_POOL_TGT_UPDATE_MAP)
+CRT_RPC_DEFINE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
+		DAOS_OSEQ_POOL_TGT_QUERY)
 CRT_RPC_DEFINE(pool_rdb_start, DAOS_ISEQ_POOL_RDB_START,
 		DAOS_OSEQ_POOL_RDB_START)
 CRT_RPC_DEFINE(pool_rdb_stop, DAOS_ISEQ_POOL_RDB_STOP, DAOS_OSEQ_POOL_RDB_STOP)

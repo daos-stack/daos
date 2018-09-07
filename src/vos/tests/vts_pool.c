@@ -163,8 +163,10 @@ pool_ops_run(void **state)
 				assert_int_equal(ret, 0);
 				assert_int_equal(pinfo.pif_cont_nr, 0);
 				assert_false(pinfo.pif_scm_sz != VPOOL_16M);
-				assert_false(pinfo.pif_avail !=
+				assert_false(pinfo.pif_nvme_sz != 0);
+				assert_false(pinfo.pif_scm_free >
 				     (VPOOL_16M - sizeof(struct vos_pool_df)));
+				assert_false(pinfo.pif_nvme_free != 0);
 				break;
 			default:
 				fail_msg("Shoudln't be here Unkown ops?\n");

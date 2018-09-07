@@ -869,7 +869,7 @@ evt_desc_free(struct evt_context *tcx, struct evt_desc *desc, daos_size_t size)
 	if (bio_addr_is_hole(addr))
 		return 0;
 
-	if (addr->ba_type == BIO_ADDR_SCM) {
+	if (addr->ba_type == DAOS_MEDIA_SCM) {
 		umem_id_t mmid;
 
 		mmid.pool_uuid_lo = tcx->tc_pmempool_uuid;
@@ -880,7 +880,7 @@ evt_desc_free(struct evt_context *tcx, struct evt_desc *desc, daos_size_t size)
 		uint64_t blk_off;
 		uint32_t blk_cnt;
 
-		D_ASSERT(addr->ba_type == BIO_ADDR_NVME);
+		D_ASSERT(addr->ba_type == DAOS_MEDIA_NVME);
 		D_ASSERT(vsi != NULL);
 
 		blk_off = vos_byte2blkoff(addr->ba_off);
