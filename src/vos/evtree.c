@@ -74,7 +74,7 @@ evt_rect_is_wider(struct evt_rect *rt1, struct evt_rect *rt2)
 }
 
 static bool
-evt_rect_equal_width(struct evt_rect *rt1, struct evt_rect *rt2)
+evt_rect_same_extent(struct evt_rect *rt1, struct evt_rect *rt2)
 {
 	return (rt1->rc_off_lo == rt2->rc_off_lo &&
 		rt1->rc_off_hi == rt2->rc_off_hi);
@@ -107,7 +107,7 @@ evt_rect_overlap(struct evt_rect *rt1, struct evt_rect *rt2, int *range,
 	else
 		*time = RT_OVERLAP_UNDER;
 
-	if (evt_rect_equal_width(rt1, rt2))
+	if (evt_rect_same_extent(rt1, rt2))
 		*range = RT_OVERLAP_SAME;
 	else if (evt_rect_is_wider(rt1, rt2))
 		*range = RT_OVERLAP_INCLUDED;
@@ -894,7 +894,8 @@ evt_node_rect_update(struct evt_context *tcx, TMMID(struct evt_node) tn_mmid,
 	*rtmp = *rect;
 
 	/* make adjustments to the position of the rectangle */
-	tcx->tc_ops->po_adjust(tcx, tn_mmid, rtmp, at);
+	if (tcx->tc_ops->po_adjust)
+		tcx->tc_ops->po_adjust(tcx, tn_mmid, rtmp, at);
 
 	/* merge the rectangle with the current node */
 	rtmp = evt_node_mbr_get(tcx, tn_mmid);
@@ -1065,7 +1066,8 @@ evt_node_split(struct evt_context *tcx, bool leaf,
  */
 static int
 evt_node_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
-		struct evt_entry *ent, bool *mbr_changed)
+		TMMID(struct evt_node) in_mmid, struct evt_entry *ent,
+		bool *mbr_changed)
 {
 	struct evt_rect *mbr;
 	struct evt_node *nd;
@@ -1078,7 +1080,7 @@ evt_node_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	D_DEBUG(DB_TRACE, "Insert "DF_RECT" into "DF_RECT"("TMMID_PF")\n",
 		DP_RECT(&ent->en_rect), DP_RECT(mbr), TMMID_P(nd_mmid));
 
-	rc = tcx->tc_ops->po_insert(tcx, nd_mmid, ent);
+	rc = tcx->tc_ops->po_insert(tcx, nd_mmid, in_mmid, ent);
 	if (rc == 0) {
 		if (nd->tn_nr == 1) {
 			nd->tn_mbr = ent->en_rect;
@@ -1314,11 +1316,12 @@ evt_select_node(struct evt_context *tcx, struct evt_rect *rect,
 static int
 evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 {
-	struct evt_rect	 *mbr	  = NULL;
-	struct evt_entry  entry	  = *ent_new;
-	int		  rc	  = 0;
-	int		  level	  = tcx->tc_depth - 1;
-	bool		  mbr_changed = false;
+	TMMID(struct evt_node)	 nm_save  = TMMID_NULL(struct evt_node);
+	struct evt_rect		*mbr	  = NULL;
+	struct evt_entry	 entry	  = *ent_new;
+	int			 rc	  = 0;
+	int			 level	  = tcx->tc_depth - 1;
+	bool			 mbr_changed = false;
 
 	while (1) {
 		struct evt_trace	*trace;
@@ -1349,7 +1352,8 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 		if (!evt_node_is_full(tcx, nm_cur)) {
 			bool	changed;
 
-			rc = evt_node_insert(tcx, nm_cur, &entry, &changed);
+			rc = evt_node_insert(tcx, nm_cur, nm_save,
+					     &entry, &changed);
 			if (rc != 0)
 				D_GOTO(failed, rc);
 
@@ -1384,7 +1388,7 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 		 * new created node.
 		 */
 		nm_ins = evt_select_node(tcx, &entry.en_rect, nm_cur, nm_new);
-		rc = evt_node_insert(tcx, nm_ins, &entry, NULL);
+		rc = evt_node_insert(tcx, nm_ins, nm_save, &entry, NULL);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 
@@ -1392,7 +1396,7 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 		 * - If the current node is not root, insert it to its parent
 		 * - If the current node is root, create a new root
 		 */
-		entry.en_mmid = umem_id_t2u(nm_new);
+		nm_save = nm_new;
 		entry.en_rect = *evt_node_mbr_get(tcx, nm_new);
 		if (level != 0) { /* not root */
 			level--;
@@ -1419,7 +1423,7 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 		if (rc != 0)
 			D_GOTO(failed, rc);
 
-		rc = evt_node_insert(tcx, nm_new, &entry, NULL);
+		rc = evt_node_insert(tcx, nm_new, nm_save, &entry, NULL);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 
@@ -1434,7 +1438,7 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 		 * the new root node.
 		 */
 		entry.en_rect = *evt_node_mbr_get(tcx, nm_cur);
-		entry.en_mmid = umem_id_t2u(nm_cur);
+		nm_save = nm_cur;
 	}
  out:
 	return 0;
@@ -1497,27 +1501,6 @@ evt_insert_entry(struct evt_context *tcx, struct evt_entry *ent)
 	return evt_insert_or_split(tcx, ent);
 }
 
-static void
-evt_ptr_copy(struct evt_context *tcx, struct evt_ptr *src_ptr)
-{
-	struct evt_ptr		*dst_ptr;
-	struct evt_trace	*trace;
-	TMMID(struct evt_node)	 nd_mmid;
-
-	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-	nd_mmid = trace->tr_node;
-	dst_ptr = evt_node_ptr_at(tcx, nd_mmid, trace->tr_at);
-
-	D_DEBUG(DB_IO, "dst num="DF_U64", nob=%d, src num="DF_U64", nob=%d\n",
-		dst_ptr->pt_inum, dst_ptr->pt_inob,
-		src_ptr->pt_inum, src_ptr->pt_inob);
-
-	/* Free the pmem that dst_ptr references */
-	evt_ptr_free(tcx, dst_ptr);
-
-	memcpy(dst_ptr, src_ptr, sizeof(*dst_ptr));
-}
-
 /**
  * Insert a versioned extent (rectangle) and its data mmid into the tree.
  *
@@ -1556,10 +1539,12 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 		     evt_rect_width(&ent.en_rect), &ent.en_ptr);
 
 	if (!d_list_empty(&tcx->tc_ent_list.el_list)) {
-		/* NB: This is part of the current hack to keep "supporting"
-		 * overwrite for same epoch, full overwrite
+		/* NB: We should check checksum here (when available).  For
+		 * now, assume overwrite is due to rebuild.  In that case,
+		 * there is no difference between new and old data so just
+		 * free the new ptr.
 		 */
-		evt_ptr_copy(tcx, &ent.en_ptr);
+		evt_ptr_free(tcx, &ent.en_ptr);
 		goto out;
 	}
 
@@ -2319,7 +2304,7 @@ evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *rt1,
 
 static int
 evt_ssof_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
-		struct evt_entry *ent)
+		TMMID(struct evt_node) in_mmid, struct evt_entry *ent)
 {
 	struct evt_node		*nd   = evt_tmmid2ptr(tcx, nd_mmid);
 	struct evt_rect		*rect = NULL;
@@ -2366,7 +2351,7 @@ evt_ssof_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	if (leaf)
 		*ptr = ent->en_ptr;
 	else
-		*nmid = umem_id_u2t(ent->en_mmid, struct evt_node);
+		*nmid = in_mmid;
 
 	nd->tn_nr++;
 	return 0;
@@ -2581,8 +2566,7 @@ evt_node_delete(struct evt_context *tcx)
 		for (i = 1; i < node->tn_nr; i++, rect_ptr++)
 			evt_rect_merge(&mbr, rect_ptr);
 
-		if (node->tn_mbr.rc_off_hi == mbr.rc_off_hi &&
-		    node->tn_mbr.rc_off_lo == mbr.rc_off_lo &&
+		if (evt_rect_same_extent(&node->tn_mbr, &mbr) &&
 		    node->tn_mbr.rc_epc_lo == mbr.rc_epc_lo)
 			return 0; /* mbr hasn't changed */
 
@@ -2601,6 +2585,9 @@ evt_node_delete(struct evt_context *tcx)
 		*rect_ptr = mbr;
 
 		/* make adjustments to the position of the rectangle */
+		if (!tcx->tc_ops->po_adjust)
+			continue;
+
 		tcx->tc_ops->po_adjust(tcx, nm_cur, rect_ptr, trace->tr_at);
 	}
 
@@ -2631,8 +2618,9 @@ int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent)
 	if (ent != NULL) {
 		*ent = *d_list_entry(ent_list.el_list.next, struct evt_entry,
 				     en_link);
-		/* NB: Should clean this up so we don't even export it */
-		ent->en_mmid = UMMID_NULL;
+		/* Ensure there is only one entry that matches exactly */
+		d_list_del(&ent->en_link);
+		D_ASSERT(d_list_empty(&ent_list.el_list));
 	}
 
 	rc = evt_node_delete(tcx);

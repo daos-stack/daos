@@ -167,8 +167,6 @@ struct evt_entry {
 	struct evt_rect			 en_rect;
 	/** the trimmed rect selected by a search */
 	struct evt_rect			 en_sel_rect;
-	/** mmid of the node */
-	umem_id_t			 en_mmid;
 };
 
 #define ERT_ENT_EMBEDDED		32
@@ -208,6 +206,7 @@ struct evt_policy_ops {
 	 */
 	int	(*po_insert)(struct evt_context *tcx,
 			     TMMID(struct evt_node) nd_mmid,
+			     TMMID(struct evt_node) in_mmid,
 			     struct evt_entry *entry);
 	/**
 	 * move half entries of the current node \a src_mmid to the new
@@ -319,7 +318,7 @@ int evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
  * Delete an extent \a rect from an opened tree.
  *
  * \param toh		[IN]	The tree open handle
- * \param rect		[IN]	The versioned extent to insert
+ * \param rect		[IN]	The versioned extent to delete
  * \param ent		[OUT]	If not NULL, returns the cached
  *                              entry if deleted
  *
