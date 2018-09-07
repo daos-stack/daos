@@ -47,11 +47,12 @@ pmem_equal(struct umem_instance *umm, umem_id_t ummid1, umem_id_t ummid2)
 	return OID_EQUALS(ummid1, ummid2);
 }
 
-static void
+static int
 pmem_tx_free(struct umem_instance *umm, umem_id_t ummid)
 {
 	if (!OID_IS_NULL(ummid))
-		pmemobj_tx_free(ummid);
+		return pmemobj_tx_free(ummid);
+	return 0;
 }
 
 static umem_id_t
@@ -160,11 +161,15 @@ pmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {
 	int rc;
 
-	D_ASSERT(txd != NULL);
-	D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
+	if (txd != NULL) {
+		D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
+		rc = pmemobj_tx_begin(umm->umm_u.pmem_pool, NULL, TX_PARAM_CB,
+				      pmem_stage_callback, txd, TX_PARAM_NONE);
+	} else {
+		rc = pmemobj_tx_begin(umm->umm_u.pmem_pool, NULL,
+				      TX_PARAM_NONE);
+	}
 
-	rc = pmemobj_tx_begin(umm->umm_u.pmem_pool, NULL, TX_PARAM_CB,
-			      pmem_stage_callback, txd, TX_PARAM_NONE);
 	if (rc != 0) {
 		/*
 		 * pmemobj_tx_end() needs be called to re-initialize the
@@ -325,11 +330,12 @@ vmem_equal(struct umem_instance *umm, umem_id_t ummid1, umem_id_t ummid2)
 	return ummid1.off == ummid2.off;
 }
 
-static void
+static int
 vmem_free(struct umem_instance *umm, umem_id_t ummid)
 {
 	if (ummid.off != 0)
 		free((void *)ummid.off);
+	return 0;
 }
 
 umem_id_t

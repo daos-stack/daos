@@ -62,6 +62,29 @@ static struct evt_policy_ops *evt_policies[] = {
 static struct evt_rect *evt_node_mbr_get(struct evt_context *tcx,
 					 TMMID(struct evt_node) nd_mmid);
 
+/** Helper function for starting a PMDK transaction, if applicable */
+static inline int
+evt_tx_begin(struct evt_context *tcx)
+{
+	if (!evt_has_tx(tcx))
+		return 0;
+
+	return umem_tx_begin(evt_umm(tcx), NULL);
+}
+
+/** Helper function for ending a PMDK transaction, if applicable */
+static inline int
+evt_tx_end(struct evt_context *tcx, int rc)
+{
+	if (!evt_has_tx(tcx))
+		return rc;
+
+	if (rc != 0)
+		return umem_tx_abort(evt_umm(tcx), rc);
+
+	return umem_tx_commit(evt_umm(tcx));
+}
+
 /**
  * Returns true if the first rectangle \a rt1 is at least as wide as the second
  * rectangle \a rt2.
@@ -654,11 +677,6 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 	/* XXX choose ops based on feature bits */
 	tcx->tc_ops = evt_policies[0];
 
-	evt_ent_list_init(&tcx->tc_ent_list);
-	D_INIT_LIST_HEAD(&tcx->tc_ent_clipping);
-	D_INIT_LIST_HEAD(&tcx->tc_ent_inserting);
-	D_INIT_LIST_HEAD(&tcx->tc_ent_dropping);
-
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
 		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
@@ -743,25 +761,25 @@ evt_ptr_init(struct evt_context *tcx, uuid_t cookie, uint32_t pm_ver,
 	return 0;
 }
 
-static void
+static int
 evt_ptr_free(struct evt_context *tcx, struct evt_ptr *ptr)
 {
 	eio_addr_t	*addr = &ptr->pt_ex_addr;
+	int		 rc = 0;
 
 	if (eio_addr_is_hole(addr))
-		return;
+		return 0;
 
 	if (addr->ea_type == EIO_ADDR_SCM) {
 		umem_id_t mmid;
 
 		mmid.pool_uuid_lo = tcx->tc_pmempool_uuid;
 		mmid.off = addr->ea_off;
-		umem_free(evt_umm(tcx), mmid);
+		rc = umem_free(evt_umm(tcx), mmid);
 	} else {
 		struct vea_space_info *vsi = tcx->tc_blks_info;
 		uint64_t blk_off;
 		uint32_t blk_cnt;
-		int rc;
 
 		D_ASSERT(addr->ea_type == EIO_ADDR_NVME);
 		D_ASSERT(vsi != NULL);
@@ -773,6 +791,8 @@ evt_ptr_free(struct evt_context *tcx, struct evt_ptr *ptr)
 		if (rc)
 			D_ERROR("Error on block free. %d\n", rc);
 	}
+
+	return rc;
 }
 
 /** check if a node is full */
@@ -948,23 +968,39 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	return 0;
 }
 
-static void
+static inline int
+evt_node_tx_add(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid)
+{
+	struct evt_node	*nd;
+	int		 rc;
+
+	if (!evt_has_tx(tcx))
+		return 0;
+
+	nd = evt_tmmid2ptr(tcx, nd_mmid);
+	rc = umem_tx_add_typed(evt_umm(tcx), nd_mmid,
+			       evt_node_size(tcx, nd->tn_flags));
+	return rc;
+}
+
+static int
 evt_node_free(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid)
 {
-	umem_free_typed(evt_umm(tcx), nd_mmid);
+	return umem_free_typed(evt_umm(tcx), nd_mmid);
 }
 
 /**
  * Destroy a tree node and all its desendants nodes, or leaf records and
  * data extents.
  */
-static void
+static int
 evt_node_destroy(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		 int level)
 {
 	struct evt_node	*nd;
 	bool		 leaf;
 	int		 i;
+	int		 rc = 0;
 
 	nd = evt_tmmid2ptr(tcx, nd_mmid);
 	leaf = evt_node_is_leaf(tcx, nd_mmid);
@@ -978,30 +1014,20 @@ evt_node_destroy(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 
 			ptr = evt_node_ptr_at(tcx, nd_mmid, i);
 			/* NB: This will be replaced with a callback */
-			evt_ptr_free(tcx, ptr);
+			rc = evt_ptr_free(tcx, ptr);
+			if (rc != 0)
+				return rc;
 		} else {
 			TMMID(struct evt_node) child_mmid;
 
 			child_mmid = *evt_node_child_at(tcx, nd_mmid, i);
-			evt_node_destroy(tcx, child_mmid, level + 1);
+			rc = evt_node_destroy(tcx, child_mmid, level + 1);
+			if (rc != 0)
+				return rc;
 		}
 	}
-	evt_node_free(tcx, nd_mmid);
+	return evt_node_free(tcx, nd_mmid);
 }
-
-#if 0
-static inline int
-evt_node_tx_add(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid)
-{
-	struct evt_node	*nd;
-	int		 rc;
-
-	nd = evt_tmmid2ptr(tcx, nd_mmid);
-	rc = umem_tx_add_typed(evt_umm(tcx), nd_mmid,
-			       evt_node_size(tcx, nd->tn_flags));
-	return rc;
-}
-#endif
 
 /** Return the MBR of a node */
 static struct evt_rect *
@@ -1154,6 +1180,9 @@ evt_root_tx_add(struct evt_context *tcx)
 	struct umem_instance *umm = evt_umm(tcx);
 	int		      rc;
 
+	if (!evt_has_tx(tcx))
+		return 0;
+
 	if (!TMMID_IS_NULL(tcx->tc_root_mmid)) {
 		rc = umem_tx_add_mmid_typed(umm, tcx->tc_root_mmid);
 	} else {
@@ -1163,42 +1192,15 @@ evt_root_tx_add(struct evt_context *tcx)
 	return rc;
 }
 
-/** Free the tree root, or reset it if it's been created inplace */
-void
-evt_root_fini(struct evt_context *tcx)
-{
-	if (TMMID_IS_NULL(tcx->tc_root_mmid)) {
-		struct evt_root *root = tcx->tc_root;
-
-		D_DEBUG(DB_TRACE, "Destroy inplace created tree root\n");
-		if (root == NULL)
-			return;
-
-		if (evt_has_tx(tcx))
-			evt_root_tx_add(tcx);
-
-		memset(root, 0, sizeof(*root));
-
-	} else {
-		D_DEBUG(DB_TRACE, "Destroy tree root\n");
-		umem_free_typed(evt_umm(tcx), tcx->tc_root_mmid);
-	}
-
-	tcx->tc_root_mmid = EVT_ROOT_NULL;
-	tcx->tc_root = NULL;
-}
-
 /** Initialize the tree root */
 static int
 evt_root_init(struct evt_context *tcx)
 {
 	int	rc;
 
-	if (evt_has_tx(tcx)) {
-		rc = evt_root_tx_add(tcx);
-		if (rc != 0)
-			return rc;
-	}
+	rc = evt_root_tx_add(tcx);
+	if (rc != 0)
+		return rc;
 
 	tcx->tc_root->tr_feats = tcx->tc_feats;
 	tcx->tc_root->tr_order = tcx->tc_order;
@@ -1221,14 +1223,19 @@ evt_root_alloc(struct evt_context *tcx)
 static int
 evt_root_free(struct evt_context *tcx)
 {
+	int	rc;
 	if (!TMMID_IS_NULL(tcx->tc_root_mmid)) {
-		umem_free_typed(evt_umm(tcx), tcx->tc_root_mmid);
+		rc = umem_free_typed(evt_umm(tcx), tcx->tc_root_mmid);
 		tcx->tc_root_mmid = EVT_ROOT_NULL;
 	} else {
+		rc = evt_root_tx_add(tcx);
+		if (rc != 0)
+			goto out;
 		memset(tcx->tc_root, 0, sizeof(*tcx->tc_root));
 	}
+out:
 	tcx->tc_root = NULL;
-	return 0;
+	return rc;
 }
 
 /**
@@ -1252,7 +1259,10 @@ evt_root_activate(struct evt_context *tcx)
 	if (rc != 0)
 		return rc;
 
-	evt_root_tx_add(tcx);
+	rc = evt_root_tx_add(tcx);
+	if (rc != 0)
+		return rc;
+
 	root->tr_node = nd_mmid;
 	root->tr_depth = 1;
 
@@ -1265,13 +1275,19 @@ static int
 evt_root_deactivate(struct evt_context *tcx)
 {
 	struct evt_root	*root = tcx->tc_root;
+	int		 rc;
 
 	D_ASSERT(root->tr_depth != 0);
 	D_ASSERT(!TMMID_IS_NULL(root->tr_node));
 
-	evt_root_tx_add(tcx);
+	rc = evt_root_tx_add(tcx);
+	if (rc != 0)
+		return rc;
+
 	root->tr_depth = 0;
-	umem_free_typed(evt_umm(tcx), root->tr_node);
+	rc = umem_free_typed(evt_umm(tcx), root->tr_node);
+	if (rc != 0)
+		return rc;
 
 	root->tr_node = TMMID_NULL(struct evt_node);
 	evt_tcx_set_dep(tcx, 0);
@@ -1282,13 +1298,15 @@ evt_root_deactivate(struct evt_context *tcx)
 static int
 evt_root_destroy(struct evt_context *tcx)
 {
+	int	rc;
 	if (!TMMID_IS_NULL(tcx->tc_root->tr_node)) {
 		/* destroy the root node and all descendants */
-		evt_node_destroy(tcx, tcx->tc_root->tr_node, 0);
+		rc = evt_node_destroy(tcx, tcx->tc_root->tr_node, 0);
+		if (rc != 0)
+			return rc;
 	}
 
-	evt_root_free(tcx);
-	return 0;
+	return evt_root_free(tcx);
 }
 
 /** Select a node from two for the rectangle \a rect being inserted */
@@ -1332,6 +1350,12 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 
 		trace	= &tcx->tc_trace[level];
 		nm_cur	= trace->tr_node;
+		if (!trace->tr_tx_added) {
+			rc = evt_node_tx_add(tcx, nm_cur);
+			if (rc != 0)
+				return rc;
+			trace->tr_tx_added = true;
+		}
 
 		if (mbr) { /* This is set only if no more insert or split */
 			D_ASSERT(mbr_changed);
@@ -1431,6 +1455,9 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 		tcx->tc_trace->tr_node = nm_new;
 		tcx->tc_trace->tr_at = 0;
 
+		rc = evt_root_tx_add(tcx);
+		if (rc != 0)
+			D_GOTO(failed, rc);
 		tcx->tc_root->tr_node = nm_new;
 		tcx->tc_root->tr_depth++;
 
@@ -1511,6 +1538,7 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 	   struct evt_rect *rect, uint32_t inob, eio_addr_t addr)
 {
 	struct evt_context	*tcx;
+	struct evt_entry_list	 ent_list;
 	struct evt_entry	 ent;
 	int			 rc;
 
@@ -1518,42 +1546,49 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	evt_ent_list_init(&tcx->tc_ent_list);
-
-	if (tcx->tc_depth == 0) { /* empty tree */
-		rc = evt_root_activate(tcx);
-		if (rc != 0)
-			return rc;
-	}
+	evt_ent_list_init(&ent_list);
 
 	memset(&ent, 0, sizeof(ent));
 	ent.en_rect = *rect;
 
 	/* Phase-1: Check for overwrite */
 	rc = evt_find_ent_list(tcx, EVT_FIND_OVERWRITE, &ent.en_rect,
-			       &tcx->tc_ent_list);
+			       &ent_list);
 	if (rc != 0)
 		return rc;
 
 	evt_ptr_init(tcx, cookie, pm_ver, addr, inob,
 		     evt_rect_width(&ent.en_rect), &ent.en_ptr);
 
-	if (!d_list_empty(&tcx->tc_ent_list.el_list)) {
+	rc = evt_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+
+	if (tcx->tc_depth == 0) { /* empty tree */
+		rc = evt_root_activate(tcx);
+		if (rc != 0)
+			goto out;
+	}
+
+	if (!d_list_empty(&ent_list.el_list)) {
 		/* NB: We should check checksum here (when available).  For
 		 * now, assume overwrite is due to rebuild.  In that case,
 		 * there is no difference between new and old data so just
 		 * free the new ptr.
 		 */
-		evt_ptr_free(tcx, &ent.en_ptr);
+		rc = evt_ptr_free(tcx, &ent.en_ptr);
 		goto out;
 	}
 
 	/* Phase-2: Inserting */
 	rc = evt_insert_entry(tcx, &ent);
-out:
-	evt_ent_list_fini(&tcx->tc_ent_list);
 
-	return rc;
+	/* Only one entry in ent_list so nothing to deallocate */
+	D_ASSERT(ent_list.el_ent_nr < ERT_ENT_EMBEDDED);
+	D_ASSERT(d_list_empty(&ent_list.el_pool));
+
+out:
+	return evt_tx_end(tcx, rc);
 }
 
 /** Fill the entry with the extent at the specified position of \a nd_mmid */
@@ -2141,6 +2176,10 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 	if (rc != 0)
 		return rc;
 
+	rc = evt_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+
 	rc = evt_root_alloc(tcx);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -2148,6 +2187,8 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 	*root_mmid_p = tcx->tc_root_mmid;
 	*toh = evt_tcx2hdl(tcx); /* take refcount for open */
  out:
+	rc = evt_tx_end(tcx, rc);
+
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
 	return rc;
 }
@@ -2177,12 +2218,17 @@ evt_create_inplace(uint64_t feats, unsigned int order, struct umem_attr *uma,
 	if (rc != 0)
 		return rc;
 
+	rc = evt_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+
 	rc = evt_root_init(tcx);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	*toh = evt_tcx2hdl(tcx); /* take refcount for open */
  out:
+	rc = evt_tx_end(tcx, rc);
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
 	return rc;
 }
@@ -2201,9 +2247,17 @@ evt_destroy(daos_handle_t toh)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
+	rc = evt_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+
 	rc = evt_root_destroy(tcx);
 
+	rc = evt_tx_end(tcx, rc);
+
+	/* Close the tcx even if the destroy failed */
 	evt_tcx_decref(tcx);
+
 	return rc;
 }
 
@@ -2504,6 +2558,7 @@ evt_node_delete(struct evt_context *tcx)
 	struct evt_rect		*rect_ptr;
 	bool			 leaf;
 	int			 level	= tcx->tc_depth - 1;
+	int			 rc;
 
 	/* We take a simple approach here which may be refined later.
 	 * We simply remove the record, and if it's the last record, we
@@ -2526,9 +2581,18 @@ evt_node_delete(struct evt_context *tcx)
 				return 0;
 			}
 
-			umem_free_typed(evt_umm(tcx), nm_cur);
+			rc = umem_free_typed(evt_umm(tcx), nm_cur);
+			if (rc != 0)
+				return rc;
 			level--;
 			continue;
+		}
+
+		if (!trace->tr_tx_added) {
+			rc = evt_node_tx_add(tcx, nm_cur);
+			if (rc != 0)
+				return rc;
+			trace->tr_tx_added = true;
 		}
 
 		/* Ok, remove the rect at the current trace */
@@ -2588,6 +2652,13 @@ evt_node_delete(struct evt_context *tcx)
 		if (!tcx->tc_ops->po_adjust)
 			continue;
 
+		if (!trace->tr_tx_added) {
+			rc = evt_node_tx_add(tcx, nm_cur);
+			if (rc != 0)
+				return rc;
+			trace->tr_tx_added = true;
+		}
+
 		tcx->tc_ops->po_adjust(tcx, nm_cur, rect_ptr, trace->tr_at);
 	}
 
@@ -2600,20 +2671,19 @@ int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent)
 	struct evt_entry_list	 ent_list;
 	int			 rc;
 
-	/* NB: This function presently only supports exact match on extent. */
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
+	/* NB: This function presently only supports exact match on extent. */
 	evt_ent_list_init(&ent_list);
+
 	rc = evt_find_ent_list(tcx, EVT_FIND_SAME, rect, &ent_list);
 	if (rc != 0)
-		goto out;
+		return rc;
 
-	if (d_list_empty(&ent_list.el_list)) {
-		rc = -DER_ENOENT;
-		goto out;
-	}
+	if (d_list_empty(&ent_list.el_list))
+		return -DER_ENOENT;
 
 	if (ent != NULL) {
 		*ent = *d_list_entry(ent_list.el_list.next, struct evt_entry,
@@ -2623,8 +2693,15 @@ int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent)
 		D_ASSERT(d_list_empty(&ent_list.el_list));
 	}
 
+	rc = evt_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+
 	rc = evt_node_delete(tcx);
-out:
-	evt_ent_list_fini(&ent_list);
-	return rc;
+
+	/* Only one entry in ent_list so nothing to deallocate */
+	D_ASSERT(ent_list.el_ent_nr < ERT_ENT_EMBEDDED);
+	D_ASSERT(d_list_empty(&ent_list.el_pool));
+
+	return evt_tx_end(tcx, rc);
 }

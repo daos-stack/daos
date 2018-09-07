@@ -224,7 +224,7 @@ typedef struct {
 	bool		 (*mo_equal)(struct umem_instance *umm,
 				     umem_id_t ummid1, umem_id_t ummid2);
 	/** free ummid */
-	void		 (*mo_tx_free)(struct umem_instance *umm,
+	int		 (*mo_tx_free)(struct umem_instance *umm,
 				       umem_id_t ummid);
 	/**
 	 * allocate ummid with the specified size & flags
@@ -399,13 +399,13 @@ umem_alloc_typed_verb(umm, type, flags, size)				\
 #define umem_znew_typed(umm, type)					\
 	umem_alloc_typed_verb(umm, type, POBJ_FLAG_ZERO, sizeof(type))
 
-static inline void
+static inline int
 umem_free(struct umem_instance *umm, umem_id_t ummid)
 {
 	D_DEBUG(DB_MEM, "Free %s mmid "UMMID_PF"\n",
 		umm->umm_name, UMMID_P(ummid));
 
-	umm->umm_ops->mo_tx_free(umm, ummid);
+	return umm->umm_ops->mo_tx_free(umm, ummid);
 }
 
 #define umem_free_typed(umm, tmmid)					\

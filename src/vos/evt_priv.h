@@ -55,8 +55,8 @@ struct evt_trace {
 	TMMID(struct evt_node)		tr_node;
 	/** child position of the searching trace */
 	unsigned int			tr_at;
-	/** reserved for insert, whether the rectangle is included by parent */
-	bool				tr_included;
+	/** Indicates whether node has been added to tx */
+	bool				tr_tx_added;
 };
 
 struct evt_context {
@@ -64,17 +64,6 @@ struct evt_context {
 	struct evt_root			*tc_root;
 	/** memory ID of the tree root */
 	TMMID(struct evt_root)		 tc_root_mmid;
-	/**
-	 * The embedded entry list for entry allocation, it's used by clipping
-	 * of new rectangle during insert.
-	 */
-	struct evt_entry_list		 tc_ent_list;
-	/** reserved: entries being checking for clip */
-	d_list_t			 tc_ent_clipping;
-	/** reserved: entries ready to be inserted */
-	d_list_t			 tc_ent_inserting;
-	/** reserved: entries that should be dropped */
-	d_list_t			 tc_ent_dropping;
 	/** magic number to identify invalid tree open handle */
 	unsigned int			 tc_magic;
 	/** refcount on the context */
