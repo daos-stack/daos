@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1439,7 +1439,7 @@ dss_srv_init(int nr)
 	dss_register_key(&daos_srv_modkey);
 	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
-	rc = eio_nvme_init(storage_path);
+	rc = eio_nvme_init(dss_storage_path);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;

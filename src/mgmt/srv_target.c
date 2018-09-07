@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,10 +103,10 @@ ds_mgmt_tgt_init(void)
 	int	rc;
 
 	/** create the path string */
-	rc = asprintf(&newborns_path, "%s/NEWBORNS", storage_path);
+	rc = asprintf(&newborns_path, "%s/NEWBORNS", dss_storage_path);
 	if (rc < 0)
 		D_GOTO(err, rc = -DER_NOMEM);
-	rc = asprintf(&zombies_path, "%s/ZOMBIES", storage_path);
+	rc = asprintf(&zombies_path, "%s/ZOMBIES", dss_storage_path);
 	if (rc < 0)
 		D_GOTO(err_newborns, rc = -DER_NOMEM);
 
@@ -201,7 +201,7 @@ int
 ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
 		 char **fpath)
 {
-	return path_gen(pool_uuid, storage_path, fname, idx, fpath);
+	return path_gen(pool_uuid, dss_storage_path, fname, idx, fpath);
 }
 
 /**
@@ -222,9 +222,9 @@ ds_mgmt_tgt_pool_iterate(int (*cb)(const uuid_t uuid, void *arg), void *arg)
 	int	rc;
 	int	rc_tmp;
 
-	storage = opendir(storage_path);
+	storage = opendir(dss_storage_path);
 	if (storage == NULL) {
-		D_ERROR("failed to open %s: %d\n", storage_path, errno);
+		D_ERROR("failed to open %s: %d\n", dss_storage_path, errno);
 		return daos_errno2der(errno);
 	}
 
@@ -237,8 +237,8 @@ ds_mgmt_tgt_pool_iterate(int (*cb)(const uuid_t uuid, void *arg), void *arg)
 		entry = readdir(storage);
 		if (entry == NULL) {
 			if (errno != 0) {
-				D_ERROR("failed to read %s: %d\n", storage_path,
-					errno);
+				D_ERROR("failed to read %s: %d\n",
+					dss_storage_path, errno);
 				rc = daos_errno2der(errno);
 			}
 			break;
@@ -259,7 +259,7 @@ ds_mgmt_tgt_pool_iterate(int (*cb)(const uuid_t uuid, void *arg), void *arg)
 
 	rc_tmp = closedir(storage);
 	if (rc_tmp != 0) {
-		D_ERROR("failed to close %s: %d\n", storage_path, errno);
+		D_ERROR("failed to close %s: %d\n", dss_storage_path, errno);
 		rc_tmp = daos_errno2der(errno);
 	}
 

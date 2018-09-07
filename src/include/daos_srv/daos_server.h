@@ -47,7 +47,7 @@ extern unsigned int	dss_nxstreams;
 extern hwloc_topology_t	dss_topo;
 
 /** Storage path (hack) */
-extern const char      *storage_path;
+extern const char      *dss_storage_path;
 
 /**
  * Stackable Module API

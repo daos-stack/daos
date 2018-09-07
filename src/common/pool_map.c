@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -751,7 +751,6 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 	     tree = tree[0].do_children) {
 		struct pool_domain *prev = &tree[0];
 		int		    child_nr = 0;
-		int		    i;
 
 		if (parent != NULL &&
 		    parent->do_comp.co_type >= tree[0].do_comp.co_type) {

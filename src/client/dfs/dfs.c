@@ -533,11 +533,11 @@ entry_stat(dfs_t *dfs, daos_handle_t oh, const char *name, struct stat *stbuf)
 	switch (entry.mode & S_IFMT) {
 	case S_IFDIR:
 	{
-		daos_handle_t oh;
+		daos_handle_t	dir_oh;
 
 		size = sizeof(entry);
 		rc = daos_obj_open(dfs->coh, entry.oid, dfs->epoch, DAOS_OO_RO,
-				   &oh, NULL);
+				   &dir_oh, NULL);
 		if (rc)
 			return rc;
 
@@ -545,43 +545,43 @@ entry_stat(dfs_t *dfs, daos_handle_t oh, const char *name, struct stat *stbuf)
 		 * TODO - This makes stat very slow now. Need to figure out a
 		 * different way to get/maintain nlinks.
 		 */
-		rc = get_nlinks(oh, dfs->epoch, &nlinks, false);
+		rc = get_nlinks(dir_oh, dfs->epoch, &nlinks, false);
 		if (rc) {
-			daos_obj_close(oh, NULL);
+			daos_obj_close(dir_oh, NULL);
 			return rc;
 		}
 
-		rc = daos_obj_close(oh, NULL);
+		rc = daos_obj_close(dir_oh, NULL);
 		if (rc)
 			return rc;
 		break;
 	}
 	case S_IFREG:
 	{
-		daos_handle_t	oh;
+		daos_handle_t	file_oh;
 		daos_size_t	elem_size, dkey_size;
 
 		rc = daos_array_open(dfs->coh, entry.oid, dfs->epoch,
 				     DAOS_OO_RO, &elem_size, &dkey_size,
-				     &oh, NULL);
+				     &file_oh, NULL);
 		if (rc) {
 			D_ERROR("daos_array_open() failed (%d)\n", rc);
 			return rc;
 		}
 		if (elem_size != 1) {
-			daos_array_close(oh, NULL);
+			daos_array_close(file_oh, NULL);
 			D_ERROR("Elem size is not 1 in a byte array (%zu)\n",
 				 elem_size);
 			return rc;
 		}
 
-		rc = daos_array_get_size(oh, dfs->epoch, &size, NULL);
+		rc = daos_array_get_size(file_oh, dfs->epoch, &size, NULL);
 		if (rc) {
-			daos_array_close(oh, NULL);
+			daos_array_close(file_oh, NULL);
 			return rc;
 		}
 
-		rc = daos_array_close(oh, NULL);
+		rc = daos_array_close(file_oh, NULL);
 		if (rc)
 			return rc;
 

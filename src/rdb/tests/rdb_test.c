@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,7 +173,7 @@ rdbt_path(uuid_t uuid)
 	int	rc;
 
 	uuid_unparse_lower(uuid, uuid_string);
-	rc = asprintf(&path, "%s/rdbt-%s", storage_path, uuid_string);
+	rc = asprintf(&path, "%s/rdbt-%s", dss_storage_path, uuid_string);
 	D_ASSERT(rc > 0 && path != NULL);
 	return path;
 }

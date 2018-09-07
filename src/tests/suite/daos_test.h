@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,16 +142,16 @@ enum {
 
 #define WAIT_ON_ASYNC_ERR(arg, ev, err)			\
 	do {						\
-		int rc;					\
+		int _rc;					\
 		daos_event_t *evp;			\
 							\
 		if (!arg->async)			\
 			break;				\
 							\
-		rc = daos_eq_poll(arg->eq, 1,		\
+		_rc = daos_eq_poll(arg->eq, 1,		\
 				  DAOS_EQ_WAIT,		\
 				  1, &evp);		\
-		assert_int_equal(rc, 1);		\
+		assert_int_equal(_rc, 1);		\
 		assert_ptr_equal(evp, &ev);		\
 		assert_int_equal(ev.ev_error, err);	\
 	} while (0)

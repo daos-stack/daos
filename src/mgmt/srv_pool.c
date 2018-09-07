@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,8 +126,6 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		rank_list = pc_in->pc_tgts;
 		ranks_size = pc_in->pc_tgts->rl_nr;
 	} else {
-		int	i;
-
 		rc = crt_group_size(NULL, &ranks_size);
 		D_ASSERT(rc == 0);
 

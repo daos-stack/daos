@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ static unsigned int	nr_threads;
 static char	       *server_group_id = DAOS_DEFAULT_GROUP_ID;
 
 /** Storage path (hack) */
-const char	       *storage_path = "/mnt/daos";
+const char	       *dss_storage_path = "/mnt/daos";
 
 /** attach_info path to support singleton client */
 static bool	        save_attach_info;
@@ -324,7 +324,7 @@ Options:\n\
       Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
   --help, -h\n\
       Print this description\n",
-		prog, prog, modules, server_group_id, storage_path);
+		prog, prog, modules, server_group_id, dss_storage_path);
 }
 
 static int
@@ -371,7 +371,7 @@ parse(int argc, char **argv)
 			server_group_id = optarg;
 			break;
 		case 's':
-			storage_path = optarg;
+			dss_storage_path = optarg;
 			break;
 		case 'h':
 			usage(argv[0], stdout);
