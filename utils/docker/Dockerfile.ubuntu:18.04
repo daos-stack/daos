@@ -26,7 +26,9 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y git gcc golang-go make  \
                        pandoc flex patch nasm yasm graphviz doxygen           \
                        libibverbs-dev librdmacm-dev libcunit1-dev libnuma-dev \
                        libaio-dev sg3-utils libiscsi-dev python-dev mscgen    \
-                       ninja-build meson pylint
+                       ninja-build meson pylint bash
+# set default shell to bash instead of dash
+SHELL ["/bin/bash", "-c"]
 
 # Dependencies
 
