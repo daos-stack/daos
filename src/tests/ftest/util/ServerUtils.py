@@ -26,6 +26,8 @@ import os
 import time
 import subprocess
 import json
+import re
+import time
 
 import aexpect
 from avocado.utils import genio
@@ -86,8 +88,20 @@ def runServer(hostfile, setname, basepath):
         sessions[setname] = aexpect.ShellSession(initial_cmd)
         if (sessions[setname].is_responsive()):
             sessions[setname].sendline(server_cmd)
-            sessions[setname].read_until_any_line_matches(
-                "DAOS server (v0.0.2) started on rank 0*", print_func=printFunc)
+            timeout = time.time() + 300
+            result = 0
+            expected_data = "Starting Servers\n"
+            while True:
+                pattern = "DAOS server"
+                output = sessions[setname].read_nonblocking(2,2)
+                match = re.findall(pattern, output)
+                expected_data = expected_data + output
+                result += len(match)
+                if result == server_count or time.time() > timeout:
+                    print ("<SERVER>: {}".format(expected_data))
+                    if result != server_count:
+                        raise ServerFailed("Server didn't start!")
+                    break
             print "<SERVER> server started"
     except Exception as e:
         print "<SERVER> Exception occurred: {0}".format(str(e))
