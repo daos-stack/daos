@@ -76,6 +76,8 @@ pipeline {
                               git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/46/33146/4
                               popd
                               utils/fetch_go_packages.sh -i .
+                              # verify whether RPMs are installed or not
+                              rpm -q {openpa,libfabric,mercury}{,-devel}
                               SCONS_ARGS="--update-prereq=all --build-deps=yes USE_INSTALLED=all install"
                               if ! scons $SCONS_ARGS; then
                                   if ! scons --config=force $SCONS_ARGS; then

@@ -27,8 +27,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y git gcc golang-go make  \
                        libibverbs-dev librdmacm-dev libcunit1-dev libnuma-dev \
                        libaio-dev sg3-utils libiscsi-dev python-dev mscgen    \
                        ninja-build meson pylint bash
-# set default shell to bash instead of dash
-SHELL ["/bin/bash", "-c"]
+# hack the default shell to bash instead of dash
+RUN rm /bin/sh && ln -s bash /bin/sh
 
 # Dependencies
 
