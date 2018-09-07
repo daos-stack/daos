@@ -419,9 +419,9 @@ class DaosObj(object):
         c_epoch = ctypes.c_uint64(0)
         c_mode = ctypes.c_uint(4)
         self.oh = ctypes.c_uint64(0)
+
         rc = func(self.container.coh, self.c_oid, c_epoch, c_mode,
-                  ctypes.byref(self.oh),
-                  None)
+                  ctypes.byref(self.oh), None)
         if rc != 0:
             raise ValueError("Object open returned non-zero. RC: {0}"
                              .format(rc))
@@ -470,22 +470,33 @@ class DaosObj(object):
             raise ValueError("get_layout returned non-zero. RC: {0}".format(rc))
 
 class IORequest(object):
-    """ Python object that centralizes details about an I/O """
+    """
+    Python object that centralizes details about an I/O
+    type is either 1 (single) or 2 (array)
+    """
 
-    def __init__(self, context, container, obj, rank=None):
+    def __init__(self, context, container, obj, rank=None, iotype=1,
+                 objtype=13):
+        """
+        container --which container the object is (or will be) in
+        obj --None to create a new object or the OID of an existing obj
+        rank --utilize with certain object types to force obj to a specific
+               server
+        iotype --1 for single, 2 for array
+        objtype --specifies the attributes for the object
+        """
         self.context = context
         self.container = container
 
         if obj is None:
             # create a new object
             self.obj = DaosObj(context, container)
-            self.obj.create(rank)
+            self.obj.create(rank, objtype)
             self.obj.open()
         else:
             self.obj = obj
 
-        # 1 is DAOS_IOD_SINGLE from daos_types.h
-        self.io_type = ctypes.c_int(1)
+        self.io_type = ctypes.c_int(iotype)
 
         self.sgl = SGL()
 
@@ -504,7 +515,125 @@ class IORequest(object):
         """ cleanup this request """
         pass
 
+    def insert_array(self, dkey, akey, c_data, epoch):
+        """
+        Setup the I/O Vector and I/O descriptor for an array insertion.
+        This function is limited to a single descriptor and a single
+        scatter gather list.  The single SGL can have any number of
+        entries as dictated by the c_data parameter.
+        """
+
+        sgl_iov_list = (IOV * len(c_data))()
+        idx = 0
+        for item in c_data:
+             sgl_iov_list[idx].iov_len = item[1]
+             sgl_iov_list[idx].iov_buf_len = item[1]
+             sgl_iov_list[idx].iov_buf = ctypes.cast(item[0], ctypes.c_void_p)
+             idx += 1
+
+        self.sgl.sg_iovs = ctypes.cast(ctypes.pointer(sgl_iov_list),
+                                       ctypes.POINTER(IOV))
+        self.sgl.sg_nr = len(c_data)
+        self.sgl.sg_nr_out = len(c_data)
+
+        self.epoch_range.epr_lo = epoch
+        self.epoch_range.epr_hi = ~0
+
+        extent = Extent()
+        extent.rx_idx = 0
+        extent.rx_nr = len(c_data)
+
+        # setup the descriptor
+        self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
+        self.iod.iod_name.iov_buf_len = ctypes.sizeof(akey)
+        self.iod.iod_name.iov_len = ctypes.sizeof(akey)
+        self.iod.iod_type = 2
+        self.iod.iod_size = c_data[0][1]
+        self.iod.iod_nr = 1
+        self.iod.iod_recxs = ctypes.pointer(extent)
+        self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
+                                        ctypes.c_void_p)
+
+        # now do it
+        func = self.context.get_function('update-obj')
+
+        dkey_iov = IOV()
+        dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
+        dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
+        dkey_iov.iov_len = ctypes.sizeof(dkey)
+
+        rc = func(self.obj.oh, self.epoch_range.epr_lo, ctypes.byref(dkey_iov),
+                  1, ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
+        if rc != 0:
+            raise ValueError("Object update returned non-zero. RC: {0}"
+                             .format(rc))
+
+    def fetch_array(self, dkey, akey, rec_count, rec_size, epoch):
+        """
+        dkey --1st level key for the array value
+        akey --2nd level key for the array value
+        rec_count --how many array indices (records) to retrieve
+        rec_size --size in bytes of a single record
+        epoch --which epoch to read the value from
+        """
+
+        # setup the descriptor, we are only handling a single descriptor that
+        # covers an arbitrary number of consecutive array entries
+        extent = Extent()
+        extent.rx_idx = 0
+        extent.rx_nr = ctypes.c_ulong(rec_count.value)
+
+        self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
+        self.iod.iod_name.iov_buf_len = ctypes.sizeof(akey)
+        self.iod.iod_name.iov_len = ctypes.sizeof(akey)
+        self.iod.iod_type = 2
+        self.iod.iod_size = rec_size
+        self.iod.iod_nr = 1
+        self.iod.iod_recxs = ctypes.pointer(extent)
+
+        # setup the scatter/gather list, we are only handling an
+        # an arbitrary number of consecutive array entries of the same size
+        sgl_iov_list = (IOV * rec_count.value)()
+        for i in range(rec_count.value):
+             sgl_iov_list[i].iov_buf_len = rec_size
+             sgl_iov_list[i].iov_buf = ctypes.cast(
+                 ctypes.create_string_buffer(rec_size.value),
+                 ctypes.c_void_p)
+        self.sgl.sg_iovs = ctypes.cast(ctypes.pointer(sgl_iov_list),
+                                       ctypes.POINTER(IOV))
+        self.sgl.sg_nr = rec_count
+        self.sgl.sg_nr_out = rec_count
+
+        dkey_iov = IOV()
+        dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
+        dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
+        dkey_iov.iov_len = ctypes.sizeof(dkey)
+
+        # now do it
+        func = self.context.get_function('fetch-obj')
+
+        rc = func(self.obj.oh, epoch, ctypes.byref(dkey_iov), 1,
+                  ctypes.byref(self.iod), ctypes.byref(self.sgl), None, None)
+        if rc != 0:
+            raise ValueError("Array fetch returned non-zero. RC: {0}"
+                             .format(rc))
+
+        # convert the output into a python list rather than return C types
+        # outside this file
+        output = []
+        for i in range(rec_count.value):
+            output.append(ctypes.string_at(sgl_iov_list[i].iov_buf,
+                                           rec_size.value))
+        return output
+
     def single_insert(self, dkey, akey, value, size, epoch):
+        """
+        dkey --1st level key for the array value
+        akey --2nd level key for the array value
+        value --string value to insert
+        size --size of the string
+        epoch --which epoch to write to
+        """
 
         # put the data into the scatter gather list
         sgl_iov = IOV()
@@ -544,12 +673,18 @@ class IORequest(object):
                              .format(rc))
 
     def single_fetch(self, dkey, akey, size, epoch):
+        """
+        dkey --1st level key for the array value
+        akey --2nd level key for the array value
+        size --size of the string
+        epoch --which epoch to read from
 
+        a string containing the value is returned
+        """
         sgl_iov = IOV()
         sgl_iov.iov_len = ctypes.c_size_t(size)
         sgl_iov.iov_buf_len = ctypes.c_size_t(size)
 
-        #buf = (ctypes.c_ubyte * size)(0)
         buf = ctypes.create_string_buffer(size)
         sgl_iov.iov_buf = ctypes.cast(buf, ctypes.c_void_p)
         self.sgl.sg_iovs = ctypes.pointer(sgl_iov)
@@ -804,8 +939,44 @@ class DaosContainer(object):
             raise ValueError("Epoch slip returned non-zero. RC: {0}"
                              .format(rc))
 
+    def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None):
+        """
+        Write an array of data to an object.  If an object is not supplied
+        a new one is created.  The update occurs in its own epoch and the epoch
+        is committed once the update is complete.
+
+        As a simplification I'm expecting the datalist values, dkey and akey
+        to be strings.  The datalist values should all be the same size.
+        """
+
+        # container should be  in the open state
+        if self.coh == 0:
+            raise ValueError("Container needs to be open.")
+
+        epoch = self.get_new_epoch()
+
+        # build a list of tuples where each tuple contains one of the array
+        # values and its length in bytes (characters since really expecting
+        # strings as the data)
+        c_values = []
+        for item in datalist:
+            c_values.append((ctypes.create_string_buffer(item), len(item)+1))
+        c_dkey = ctypes.create_string_buffer(dkey)
+        c_akey = ctypes.create_string_buffer(akey)
+        c_epoch = ctypes.c_uint64(epoch)
+
+        # oid can be None in which case a new one is created
+        ioreq = IORequest(self.context, self, obj, rank, 2, 1)
+        ioreq.insert_array(c_dkey, c_akey, c_values, c_epoch)
+        self.commit_epoch(c_epoch)
+        return ioreq.obj, c_epoch.value
+
     def write_an_obj(self, thedata, size, dkey, akey, obj=None, rank=None):
-        """ create a really simple obj in this container and commit """
+        """
+        Write a single value to an object, if an object isn't supplied a new
+        one is created.  The update occurs in its own epoch and the epoch is
+        committed once the update is complete.
+        """
 
         # container should be  in the open state
         if self.coh == 0:
@@ -824,6 +995,30 @@ class DaosContainer(object):
         ioreq.single_insert(c_dkey, c_akey, c_value, c_size, c_epoch)
         self.commit_epoch(c_epoch)
         return ioreq.obj, c_epoch.value
+
+    def read_an_array(self, rec_count, rec_size, dkey, akey, obj, epoch):
+        """
+        Reads an array value from the specified object.
+
+        rec_count --number of records (array indicies) to read
+        rec_size --each value in the array must be this size
+
+        """
+
+        # container should be  in the open state
+        if self.coh == 0:
+            raise ValueError("Container needs to be open.")
+
+        c_rec_count = ctypes.c_uint(rec_count)
+        c_rec_size = ctypes.c_size_t(rec_size)
+        c_dkey = ctypes.create_string_buffer(dkey)
+        c_akey = ctypes.create_string_buffer(akey)
+        c_epoch = ctypes.c_uint64(epoch)
+
+        ioreq = IORequest(self.context, self, obj)
+        buf = ioreq.fetch_array(c_dkey, c_akey, c_rec_count,
+                                c_rec_size, c_epoch)
+        return buf
 
     def read_an_obj(self, size, dkey, akey, obj, epoch):
         """ create a really simple obj in this container and commit """

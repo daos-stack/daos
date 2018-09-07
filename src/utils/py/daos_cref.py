@@ -127,13 +127,17 @@ class CheckSum(ctypes.Structure):
                 ("cs_buf_len", ctypes.c_ushort),
                 ("cs_csum", ctypes.c_void_p)]
 
+class Extent(ctypes.Structure):
+    _fields_ = [("rx_idx", ctypes.c_uint64),
+                ("rx_nr", ctypes.c_uint64)]
+
 class DaosIODescriptor(ctypes.Structure):
     _fields_ = [("iod_name", IOV),
                 ("iod_kcsum", CheckSum),
                 ("iod_type", ctypes.c_int),
                 ("iod_size", ctypes.c_uint64),
                 ("iod_nr", ctypes.c_uint32),
-                ("iod_recxs", ctypes.c_void_p),
+                ("iod_recxs", ctypes.POINTER(Extent)),
                 ("iod_csums", ctypes.POINTER(CheckSum)),
                 ("iod_eprs", ctypes.c_void_p)]
 
