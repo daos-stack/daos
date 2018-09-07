@@ -54,7 +54,7 @@ class DaosPool(object):
         self.uuid = str_to_c_uuid(uuidstr)
 
     def create(self, mode, uid, gid, size, group, target_list=None,
-               cb_func=None):
+               cb_func=None, svcn=1):
         """ send a pool creation request to the daos server group """
         c_mode = ctypes.c_uint(mode)
         c_uid = ctypes.c_uint(uid)
@@ -68,7 +68,7 @@ class DaosPool(object):
         rank = ctypes.c_uint(99)
         rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
         c_whatever = ctypes.create_string_buffer(b"rubbish")
-        self.svc = RankList(rl_ranks, 1)
+        self.svc = RankList(rl_ranks, svcn)
 
         # assuming for now target list is a server rank list
         if target_list is not None:
