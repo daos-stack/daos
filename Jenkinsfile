@@ -34,6 +34,7 @@ pipeline {
                         githubNotify description: 'checkmodules.sh',  context: 'checkmodules.sh', status: 'PENDING'
                         sh '''pushd scons_local
                               git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/10
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/46/33146/1
                               popd
                               git submodule update --init --recursive
                               utils/check_modules.sh'''
@@ -72,6 +73,7 @@ pipeline {
                               rm -rf _build.external install build
                               pushd scons_local
                               git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/10
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/46/33146/1
                               popd
                               utils/fetch_go_packages.sh -i .
                               SCONS_ARGS="--update-prereq=all --build-deps=yes USE_INSTALLED=all install"
@@ -95,13 +97,36 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Ubuntu 16.04') {
+                stage('Build on Ubuntu 18.04') {
                     agent {
-                        label 'docker_runner'
+                        dockerfile {
+                            filename 'Dockerfile.ubuntu:18.04'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs  '--build-arg NOBUILD=1 --build-arg UID=$(id -u)'
+                        }
                     }
                     steps {
-                        githubNotify description: 'Ubuntu 18 Build',  context: 'build/ubuntu18', status: 'PENDING'
-                        echo "Building on Ubuntu is broken for the moment"
+                        githubNotify description: 'Ubuntu 18.04 Build',  context: 'build/ubuntu18', status: 'PENDING'
+                        //echo "Building on Ubuntu is broken for the moment"
+                        checkout scm
+                        sh '''git submodule update --init --recursive
+                              scons -c
+                              # scons -c is not perfect so get out the big hammer
+                              rm -rf _build.external install build
+                              pushd scons_local
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/10
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/46/33146/1
+                              popd
+                              utils/fetch_go_packages.sh -i .
+                              SCONS_ARGS="--update-prereq=all --build-deps=yes USE_INSTALLED=all install"
+                              if ! scons $SCONS_ARGS; then
+                                  if ! scons --config=force $SCONS_ARGS; then
+                                      rc=\${PIPESTATUS[0]}
+                                      cat config.log || true
+                                      exit \$rc
+                                  fi
+                              fi'''
                     }
                     post {
                         success {
