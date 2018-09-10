@@ -440,7 +440,8 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	rc = crt_grp_ctx_invalid(ctx, false /* locked */);
 	if (rc != 0) {
 		D_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n", rc);
-		D_GOTO(out, rc);
+		if (!force)
+			D_GOTO(out, rc);
 	}
 
 	flags = (force != 0) ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
@@ -453,7 +454,8 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		D_MUTEX_UNLOCK(&ctx->cc_mutex);
-		D_GOTO(out, rc);
+		if (!force)
+			D_GOTO(out, rc);
 	}
 
 	rc = d_hash_table_destroy_inplace(&ctx->cc_epi_table,
@@ -463,7 +465,8 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			"d_hash_table_destroy_inplace failed, rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		D_MUTEX_UNLOCK(&ctx->cc_mutex);
-		D_GOTO(out, rc);
+		if (!force)
+			D_GOTO(out, rc);
 	}
 
 	d_binheap_destroy_inplace(&ctx->cc_bh_timeout);
