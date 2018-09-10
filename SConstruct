@@ -27,7 +27,7 @@ def preload_prereqs(prereqs):
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
     components = os.path.join(Dir('#').abspath, 'scons_local', 'components.py')
-    reqs = ['ompi', 'cart', 'argobots', 'pmdk', 'cmocka',
+    reqs = ['cart', 'argobots', 'pmdk', 'cmocka',
             'uuid', 'crypto', 'fuse']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal'])
