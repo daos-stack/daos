@@ -1510,10 +1510,18 @@ rebuild_tgt_status_check(void *arg)
 		D_ASSERT(status.obj_count >= rpt->rt_reported_obj_cnt);
 		D_ASSERT(status.rec_count >= rpt->rt_reported_rec_cnt);
 		D_ASSERT(rpt->rt_toberb_objs >= rpt->rt_reported_toberb_objs);
-		iv.riv_toberb_obj_count =
-			rpt->rt_toberb_objs - rpt->rt_reported_toberb_objs;
-		iv.riv_obj_count = status.obj_count - rpt->rt_reported_obj_cnt;
-		iv.riv_rec_count = status.rec_count - rpt->rt_reported_rec_cnt;
+		if (rpt->rt_re_report) {
+			iv.riv_toberb_obj_count = rpt->rt_toberb_objs;
+			iv.riv_obj_count = status.obj_count;
+			iv.riv_rec_count = status.rec_count;
+		} else {
+			iv.riv_toberb_obj_count = rpt->rt_toberb_objs -
+						  rpt->rt_reported_toberb_objs;
+			iv.riv_obj_count = status.obj_count -
+					   rpt->rt_reported_obj_cnt;
+			iv.riv_rec_count = status.rec_count -
+					   rpt->rt_reported_rec_cnt;
+		}
 		iv.riv_status = status.status;
 		if (status.scanning == 0 || rpt->rt_abort)
 			iv.riv_scan_done = 1;
@@ -1544,8 +1552,14 @@ rebuild_tgt_status_check(void *arg)
 						   &iv, CRT_IV_SHORTCUT_TO_ROOT,
 						   CRT_IV_SYNC_NONE);
 			if (rc == 0) {
-				rpt->rt_reported_toberb_objs +=
-					iv.riv_toberb_obj_count;
+				if (rpt->rt_re_report) {
+					rpt->rt_reported_toberb_objs =
+						iv.riv_toberb_obj_count;
+					rpt->rt_re_report = 0;
+				} else {
+					rpt->rt_reported_toberb_objs +=
+						iv.riv_toberb_obj_count;
+				}
 				rpt->rt_reported_obj_cnt = status.obj_count;
 				rpt->rt_reported_rec_cnt = status.rec_count;
 			} else {

@@ -115,6 +115,8 @@ struct rebuild_tgt_pool_tracker {
 
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,
+				/* re-report #rebuilt cnt per master change */
+				rt_re_report:1,
 				rt_finishing:1,
 				rt_scan_done:1,
 				rt_global_scan_done:1,

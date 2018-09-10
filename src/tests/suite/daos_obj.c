@@ -872,7 +872,7 @@ enumerate_simple(void **state)
 			print_message("got -DER_KEY2BIG, key_len "DF_U64".\n",
 				      kds[0].kd_key_len);
 			assert_int_equal((int)kds[0].kd_key_len,
-					 ENUM_LARGE_KEY_BUF);
+					 ENUM_LARGE_KEY_BUF - 1);
 			buf = large_buf;
 			buf_len = ENUM_LARGE_KEY_BUF * 2;
 			continue;
@@ -922,7 +922,7 @@ enumerate_simple(void **state)
 			print_message("got -DER_KEY2BIG, key_len "DF_U64".\n",
 				      kds[0].kd_key_len);
 			assert_int_equal((int)kds[0].kd_key_len,
-					 ENUM_LARGE_KEY_BUF);
+					 ENUM_LARGE_KEY_BUF - 1);
 			buf = large_buf;
 			buf_len = ENUM_LARGE_KEY_BUF * 2;
 			continue;

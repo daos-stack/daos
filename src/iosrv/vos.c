@@ -260,8 +260,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 
 	if (is_sgl_kds_full(arg, size)) {
 		if (arg->kds_len == 0) {
-			/* one extra byte for '\0' */
-			arg->kds[0].kd_key_len = size + 1;
+			arg->kds[0].kd_key_len = size;
 			return -DER_KEY2BIG;
 		} else {
 			return 1;

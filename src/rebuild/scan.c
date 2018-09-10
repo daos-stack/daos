@@ -781,6 +781,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 				rsi->rsi_master_rank,
 				rpt->rt_leader_term,
 				rsi->rsi_leader_term);
+			/* re-report the #rebuilt cnt next time */
+			rpt->rt_re_report = 1;
 			/* Update master rank */
 			rc = ds_pool_iv_ns_update(rpt->rt_pool,
 						  rsi->rsi_master_rank,
