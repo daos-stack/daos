@@ -1164,6 +1164,14 @@ class PreReqComponent(object):
             return None
         return self.configs.get(section, name)
 
+    def load_config(self, comp, src_opt):
+        """If the component has a config file to load, load it"""
+        config_path = self.get_config("configs", comp)
+        if config_path is None:
+            return
+        full_path = self.__env.subst("$%s/%s" % (src_opt, config_path))
+        print "Reading config file for %s from %s" % (comp, full_path)
+        self.configs.read(full_path)
 
 class _Component(object):
     """A class to define attributes of an external component
@@ -1557,6 +1565,11 @@ class _Component(object):
 
             self._check_prereqs_build_deps()
 
+            if not self.src_exists():
+                self.get()
+
+            self.prereqs.load_config(self.name, self.src_opt);
+
             if self.requires:
                 changes = self.prereqs.require(envcopy, *self.requires,
                                                needed_libs=None)
@@ -1565,8 +1578,6 @@ class _Component(object):
             if self.has_missing_system_deps(self.prereqs.system_env):
                 raise MissingSystemLibs(self.name)
 
-            if not self.src_exists():
-                self.get()
             changes = True
             if has_changes and self.out_of_src_build:
                 self._rm_old_dir(self.build_path)
