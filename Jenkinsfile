@@ -247,6 +247,7 @@ pipeline {
                         }
                     }
                 }
+                /*
                 stage('DaosTestMulti Rebuild') {
                     agent {
                         label 'cluster_provisioner'
@@ -274,6 +275,7 @@ pipeline {
                         }
                     }
                 }
+                */
             }
         }
     }
