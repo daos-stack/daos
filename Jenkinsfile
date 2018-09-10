@@ -33,8 +33,7 @@ pipeline {
                     steps {
                         githubNotify description: 'checkmodules.sh',  context: 'checkmodules.sh', status: 'PENDING'
                         sh '''pushd scons_local
-                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/10
-                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/46/33146/4
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/11
                               popd
                               git submodule update --init --recursive
                               utils/check_modules.sh'''
@@ -67,17 +66,14 @@ pipeline {
                     steps {
                         githubNotify description: 'CentOS 7 Build',  context: 'build/centos7', status: 'PENDING'
                         checkout scm
-                        sh '''env; git submodule update --init --recursive
+                        sh '''git submodule update --init --recursive
                               scons -c
                               # scons -c is not perfect so get out the big hammer
                               rm -rf _build.external install build
                               pushd scons_local
-                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/10
-                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/46/33146/4
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/11
                               popd
                               utils/fetch_go_packages.sh -i .
-                              # verify whether RPMs are installed or not
-                              rpm -q {openpa,libfabric,mercury}{,-devel}
                               SCONS_ARGS="--update-prereq=all --build-deps=yes USE_INSTALLED=all install"
                               if ! scons $SCONS_ARGS; then
                                   if ! scons --config=force $SCONS_ARGS; then
@@ -112,13 +108,12 @@ pipeline {
                         githubNotify description: 'Ubuntu 18.04 Build',  context: 'build/ubuntu18', status: 'PENDING'
                         //echo "Building on Ubuntu is broken for the moment"
                         checkout scm
-                        sh '''env; git submodule update --init --recursive
+                        sh '''git submodule update --init --recursive
                               scons -c
                               # scons -c is not perfect so get out the big hammer
                               rm -rf _build.external install build
                               pushd scons_local
-                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/10
-                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/46/33146/4
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/11
                               popd
                               utils/fetch_go_packages.sh -i .
                               SCONS_ARGS="--update-prereq=all --build-deps=yes USE_INSTALLED=all install"
