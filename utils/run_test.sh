@@ -42,9 +42,45 @@ run_test()
     fi
 }
 
+if [ "$1" = "--init" ]; then
+    INIT=true
+else
+    INIT=false
+fi
+
+# shellcheck disable=SC1091
+source ./.build_vars.sh
+
+if $INIT; then
+    NFS_SERVER=${NFS_SERVER:-$HOSTPREFIX}
+    daospath=${SL_OMPI_PREFIX%/install}
+    sudo bash -c 'echo "1" > /proc/sys/kernel/sysrq'
+    if grep /mnt/daos\  /proc/mounts; then
+        sudo umount /mnt/daos
+    else
+        if [ ! -d /mnt/daos ]; then
+            sudo mkdir -p /mnt/daos
+        fi
+    fi
+    sudo mkdir -p "$daospath"
+    sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
+    df -h /mnt/daos
+    sudo bash -c 'yum -y install yum-utils
+pkgs="openpa libfabric mercury"
+for ext in $pkgs; do
+    rm -f /etc/yum.repos.d/jenkins-3.wolf.hpdd.intel.com_8080_job_daos-stack-org_job_"${ext}"_job_*.repo
+    yum-config-manager --add-repo=http://jenkins-3.wolf.hpdd.intel.com:8080/job/daos-stack-org/job/"${ext}"/job/master/lastSuccessfulBuild/artifact/artifacts/
+    echo "gpgcheck = False" >> /etc/yum.repos.d/jenkins-3.wolf.hpdd.intel.com_8080_job_daos-stack-org_job_"${ext}"_job_master_lastSuccessfulBuild_artifact_artifacts_.repo
+done
+yum -y erase $pkgs
+yum -y install $pkgs'
+    # shellcheck disable=SC2154
+    trap 'sudo umount /mnt/daos
+sudo rmdir $daospath' EXIT
+fi
+
 if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
-    source ./.build_vars.sh
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test src/common/tests/btree.sh ukey -s 20000
     run_test src/common/tests/btree.sh direct -s 20000
@@ -63,6 +99,7 @@ if [ -d "/mnt/daos" ]; then
     #This is to temporarily solve the No such file error for
     # libnvme_discover.so
     export LD_LIBRARY_PATH=$SL_PREFIX/lib:${LD_LIBRARY_PATH}
+    rm -f /tmp/daos.log
     run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
 
     if [ $failed -eq 0 ]; then
@@ -70,6 +107,7 @@ if [ -d "/mnt/daos" ]; then
         echo "SUCCESS! NO TEST FAILURES"
     else
         echo "FAILURE: $failed tests failed"
+        exit 1
     fi
 else
     echo "/mnt/daos isn't present for unit tests"
