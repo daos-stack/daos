@@ -882,6 +882,154 @@ class DaosContainer(object):
         self.coh = local_handle
         return local_handle
 
+    def list_attr(self, coh=None, cb_func=None):
+        """
+        Retrieve a list of user-defined container attribute values.
+        Args:
+            coh [Optional]:     Container Handler.
+            cb_func[Optional]:  To run API in Asynchronous mode.
+        return:
+            total_size[int]: Total aggregate size of attributes names.
+            buffer[String]: Complete aggregated attributes names.
+        """
+        if coh is not None:
+            self.coh = coh
+        func = self.context.get_function('list-attr')
+
+        '''
+        This is for getting the Aggregate size of all attributes names first
+        if it's not passed as a dictionary.
+        '''
+        sbuf = ctypes.create_string_buffer(100).raw
+        t_size = ctypes.pointer(ctypes.c_size_t(100))
+        rc = func(self.coh, sbuf, t_size)
+        if rc != 0:
+            raise ValueError("Container List-attr returned non-zero. RC:{0}"
+                             .format(rc))
+        buf = t_size[0]
+
+        buffer = ctypes.create_string_buffer(buf  + 1).raw
+        total_size = ctypes.pointer(ctypes.c_size_t(buf + 1))
+
+        #This will retrieve the list of attributes names.
+        if cb_func is None:
+            rc = func(self.coh, buffer, total_size, None)
+            if rc != 0:
+                raise ValueError("Container List Attribute returned non-zero.\
+                RC: {0}".format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.coh, buffer, total_size, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
+            t.start()
+        return total_size[0], buffer
+
+    def set_attr(self, data, coh=None, cb_func=None):
+        """
+        Set a list of user-defined container attributes.
+        Args:
+            data[Required]:     Dictionary of Attribute name and value.
+            coh [Optional]:     Container Handler
+            cb_func[Optional]:  To run API in Asynchronous mode.
+        return:
+            None
+        """
+        if coh is not None:
+            self.coh = coh
+
+        func = self.context.get_function('set-attr')
+
+        att_names = (ctypes.c_char_p * len(data))(*list(data.keys()))
+        names = ctypes.cast(att_names, ctypes.POINTER(ctypes.c_char_p))
+
+        no_of_att = ctypes.c_int(len(data))
+
+        att_values = (ctypes.c_char_p * len(data))(*list(data.values()))
+        values = ctypes.cast(att_values, ctypes.POINTER(ctypes.c_char_p))
+
+        size_of_att_val = []
+        for key in data.keys():
+            if data[key] is not None:
+                size_of_att_val.append(len(data[key]))
+            else:
+                size_of_att_val.append(0)
+        sizes = (ctypes.c_size_t * len(data))(*size_of_att_val)
+
+        # the callback function is optional, if not supplied then run the
+        # create synchronously, if its there then run it in a thread
+        if cb_func is None:
+            rc = func(self.coh, no_of_att, names, values, sizes, None)
+            if rc != 0:
+                raise ValueError("Container Set Attribute returned non-zero"
+                                 "RC: {0}".format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.coh, no_of_att, names, values, sizes, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
+            t.start()
+
+    def get_attr(self, coh=None, data=None, cb_func=None):
+        """
+        Retrieve a list of user-defined container attribute values.
+        Args:
+            coh [Optional]:     Container Handler
+            data[Required]:     Dictionary of Attribute name and value.
+            cb_func[Optional]:  To run API in Asynchronous mode.
+        return:
+            buffer[list]:       Requested Attributes value.
+        """
+        if not data:
+            raise ValueError("Attribute data should not be blank")
+
+        if coh is not None:
+            self.coh = coh
+
+        func = self.context.get_function('get-attr')
+        att_names = (ctypes.c_char_p * len(data))(*list(data.keys()))
+        names = ctypes.cast(att_names, ctypes.POINTER(ctypes.c_char_p))
+
+        no_of_att = ctypes.c_int(len(data))
+        buffers = ctypes.c_char_p * len(data)
+        buffer = buffers(*[ctypes.c_char_p(ctypes.create_string_buffer(100).raw)
+                           for i in xrange(len(data))])
+
+        size_of_att_val = []
+        for key in data.keys():
+            if data[key] is not None:
+                size_of_att_val.append(len(data[key]))
+            else:
+                size_of_att_val.append(0)
+        sizes = (ctypes.c_size_t * len(data))(*size_of_att_val)
+
+        if cb_func is None:
+            rc = func(self.coh, no_of_att, names, ctypes.byref(buffer), sizes,
+                      None)
+            if rc != 0:
+                raise ValueError("Container Get Attribute returned non-zero.\
+                RC: {0}".format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.coh, no_of_att, names, ctypes.byref(buffer), sizes,
+                      event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
+            t.start()
+        return buffer
+
 class DaosServer(object):
     """Represents a DAOS Server"""
 
@@ -920,42 +1068,45 @@ class DaosContext(object):
         # Note: action-subject format
         self.ftable = {
             'add-target'     : self.libdaos.daos_pool_tgt_add,
-            'close-cont'     : self.libdaos.daos_cont_close,
-            'close-obj'      : self.libdaos.daos_obj_close,
-            'commit-epoch'   : self.libdaos.daos_epoch_commit,
+            'create-pool'    : self.libdaos.daos_pool_create,
             'connect-pool'   : self.libdaos.daos_pool_connect,
-            'convert-cglobal': self.libdaos.daos_cont_global2local,
-            'convert-clocal' : self.libdaos.daos_cont_local2global,
             'convert-pglobal': self.libdaos.daos_pool_global2local,
             'convert-plocal' : self.libdaos.daos_pool_local2global,
-            'create-cont'    : self.libdaos.daos_cont_create,
-            'create-pool'    : self.libdaos.daos_pool_create,
-            'create-eq'      : self.libdaos.daos_eq_create,
-            'destroy-cont'   : self.libdaos.daos_cont_destroy,
             'destroy-pool'   : self.libdaos.daos_pool_destroy,
-            'destroy-eq'     : self.libdaos.daos_eq_destroy,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'evict-client'   : self.libdaos.daos_pool_evict,
             'exclude-target' : self.libdaos.daos_pool_exclude,
             'extend-pool'    : self.libdaos.daos_pool_extend,
-            'fetch-obj'      : self.libdaos.daos_obj_fetch,
-            'generate-oid'   : self.libtest.dts_oid_gen,
-            'get-epoch'      : self.libdaos.daos_epoch_hold,
-            'get-layout'     : self.libdaos.daos_obj_layout_get,
-            'init-event'     : self.libdaos.daos_event_init,
-            'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
+            'stop-service'   : self.libdaos.daos_pool_svc_stop,
             'kill-target'    : self.libdaos.daos_pool_exclude_out,
-            'open-cont'      : self.libdaos.daos_cont_open,
-            'open-obj'       : self.libdaos.daos_obj_open,
-            'poll-eq'        : self.libdaos.daos_eq_poll,
-            'query-cont'     : self.libdaos.daos_cont_query,
             'query-pool'     : self.libdaos.daos_pool_query,
             'query-target'   : self.libdaos.daos_pool_target_query,
+            'close-cont'     : self.libdaos.daos_cont_close,
+            'convert-cglobal': self.libdaos.daos_cont_global2local,
+            'convert-clocal' : self.libdaos.daos_cont_local2global,
+            'create-cont'    : self.libdaos.daos_cont_create,
+            'list-attr'      : self.libdaos.daos_cont_attr_list,
+            'set-attr'       : self.libdaos.daos_cont_attr_set,
+            'get-attr'       : self.libdaos.daos_cont_attr_get,
+            'destroy-cont'   : self.libdaos.daos_cont_destroy,
+            'open-cont'      : self.libdaos.daos_cont_open,
+            'query-cont'     : self.libdaos.daos_cont_query,
+            'close-obj'      : self.libdaos.daos_obj_close,
+            'fetch-obj'      : self.libdaos.daos_obj_fetch,
+            'get-layout'     : self.libdaos.daos_obj_layout_get,
+            'open-obj'       : self.libdaos.daos_obj_open,
             'query-obj'      : self.libdaos.daos_obj_query,
+            'update-obj'     : self.libdaos.daos_obj_update,
+            'commit-epoch'   : self.libdaos.daos_epoch_commit,
+            'get-epoch'      : self.libdaos.daos_epoch_hold,
             'slip-epoch'     : self.libdaos.daos_epoch_slip,
-            'stop-service'   : self.libdaos.daos_pool_svc_stop,
+            'create-eq'      : self.libdaos.daos_eq_create,
+            'destroy-eq'     : self.libdaos.daos_eq_destroy,
+            'poll-eq'        : self.libdaos.daos_eq_poll,
+            'init-event'     : self.libdaos.daos_event_init,
             'test-event'     : self.libdaos.daos_event_test,
-            'update-obj'     : self.libdaos.daos_obj_update
+            'generate-oid'   : self.libtest.dts_oid_gen,
+            'kill-server'    : self.libdaos.daos_mgmt_svc_rip
             }
 
     def __del__(self):
@@ -1048,6 +1199,19 @@ if __name__ == '__main__':
 
         thedata5 = CONTAINER.read_an_obj(size, dkey2, akey2, obj, epoch)
         print (repr(thedata5.value))
+
+        data = {"First":  "1111111111",
+                "Second": "22222222222222222222",
+                "Third":  "333333333333333333333333333333"}
+        print ("=====Set Attr =====")
+        CONTAINER.set_attr(data = data)
+        print ("=====List Attr =====")
+        size, buf = CONTAINER.list_attr(data = data)
+        print size, buf
+        print ("=====Get Attr =====")
+        val = CONTAINER.get_attr(data = data)
+        for i in range(0, len(data)):
+            print val[i]
 
         CONTAINER.close()
         print ("container closed {}".format(CONTAINER.get_uuid_str()))
