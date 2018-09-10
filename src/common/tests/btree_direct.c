@@ -37,6 +37,7 @@
 
 #include <daos/btree.h>
 #include <daos/tests_lib.h>
+#include <gurt/common.h>
 
 /**
  * An example for string key
@@ -62,6 +63,25 @@ struct sk_rec {
 struct umem_attr sk_uma;
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
+
+static void sk_key_encode(struct btr_instance *tins,
+			  daos_iov_t *key, daos_anchor_t *anchor)
+{
+	size_t copy_size = key->iov_len;
+
+	if (key->iov_len > DAOS_ANCHOR_BUF_MAX)
+		copy_size = DAOS_ANCHOR_BUF_MAX;
+
+	memcpy(&anchor->da_buf[0], key->iov_buf, copy_size);
+}
+
+static void sk_key_decode(struct btr_instance *tins,
+			  daos_iov_t *key, daos_anchor_t *anchor)
+{
+	key->iov_buf = &anchor->da_buf[0];
+	key->iov_buf_len = strlen((char *)anchor->da_buf) + 1;
+	key->iov_len = key->iov_buf_len;
+}
 
 static int
 sk_key_cmp(struct btr_instance *tins, struct btr_record *rec,
@@ -147,8 +167,8 @@ sk_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct sk_rec	*srec;
 	char		*val;
-	int		 val_size;
-	int		 key_size;
+	size_t		 val_size;
+	size_t		 key_size;
 
 	if (key_iov == NULL && val_iov == NULL)
 		return -EINVAL;
@@ -160,6 +180,7 @@ sk_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	val = umem_id2ptr(&tins->ti_umm, srec->sr_val_mmid);
 	if (key_iov != NULL) {
 		key_iov->iov_len = key_size;
+		key_iov->iov_buf_len = key_size;
 		if (key_iov->iov_buf == NULL)
 			key_iov->iov_buf = &srec->sr_key[0];
 		else if (key_iov->iov_buf_len >= key_size)
@@ -168,6 +189,7 @@ sk_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 	if (val_iov != NULL) {
 		val_iov->iov_len = val_size;
+		val_iov->iov_buf_len = val_size;
 		if (val_iov->iov_buf == NULL)
 			val_iov->iov_buf = val;
 		else if (val_iov->iov_buf_len >= val_size)
@@ -248,6 +270,8 @@ sk_rec_stat(struct btr_instance *tins, struct btr_record *rec,
 
 static btr_ops_t sk_ops = {
 	.to_key_cmp	= sk_key_cmp,
+	.to_key_encode	= sk_key_encode,
+	.to_key_decode	= sk_key_decode,
 	.to_rec_alloc	= sk_rec_alloc,
 	.to_rec_free	= sk_rec_free,
 	.to_rec_fetch	= sk_rec_fetch,
@@ -551,7 +575,10 @@ sk_btr_iterate(char *args)
 	int		del;
 	int		rc;
 	int		opc;
+	char		*start;
 	char		*err;
+	daos_anchor_t	anchor = {0};
+	daos_key_t	anchor_key = {0};
 
 	if (daos_handle_is_inval(sk_toh)) {
 		D_ERROR("Can't find opened tree\n");
@@ -564,23 +591,39 @@ sk_btr_iterate(char *args)
 		goto failed;
 	}
 
-	if (args[0] == 'b')
+	if (args[0] == 'b') {
 		opc = BTR_PROBE_LAST;
-	else
+		args++;
+	} else if (args[0] == 'f') {
 		opc = BTR_PROBE_FIRST;
+		args++;
+	} else {
+		opc = BTR_PROBE_FIRST;
+	}
 
-	if (strlen(args) >= 3 && args[1] == ':')
+	if (args[0] == 'd' && args[1] == ':' && strlen(args) >= 3)
 		del = atoi(&args[2]);
 	else
 		del = 0;
 
+	if (args[0] == 's' && args[1] == ':' && strlen(args) >= 3) {
+		start = &args[2];
+		opc |= BTR_PROBE_SPEC;
+	} else {
+		start = "";
+	}
+
+	anchor_key.iov_buf = (void *)start;
+	anchor_key.iov_len = anchor_key.iov_buf_len = strlen(start) + 1;
+	sk_key_encode(NULL, &anchor_key, &anchor);
+	anchor.da_type = DAOS_ANCHOR_TYPE_KEY;
 	for (i = d = 0;; i++) {
 		char		*key;
 		daos_iov_t	 key_iov;
 		daos_iov_t	 val_iov;
 
 		if (i == 0 || (del != 0 && d <= del)) {
-			rc = dbtree_iter_probe(ih, opc, NULL, NULL);
+			rc = dbtree_iter_probe(ih, opc, NULL, &anchor);
 			if (rc == -DER_NONEXIST)
 				break;
 
@@ -599,7 +642,8 @@ sk_btr_iterate(char *args)
 
 		daos_iov_set(&key_iov, NULL, 0);
 		daos_iov_set(&val_iov, NULL, 0);
-		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
+		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, &anchor);
+
 		if (rc != 0) {
 			err = "fetch";
 			goto failed;
@@ -1010,6 +1054,7 @@ static struct option btr_ops[] = {
 int
 main(int argc, char **argv)
 {
+	int parse_loc;
 	int	rc;
 
 	sk_toh = DAOS_HDL_INVAL;
@@ -1025,9 +1070,10 @@ main(int argc, char **argv)
 
 	optind = 0;
 	sk_uma.uma_id = UMEM_CLASS_VMEM;
-	while ((rc = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:",
+	D_PRINT("--------------------------------------\n");
+	while ((parse_loc = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:",
 				 btr_ops, NULL)) != -1) {
-		switch (rc) {
+		switch (parse_loc) {
 		case 'C':
 			rc = sk_btr_open_create(true, optarg);
 			break;
@@ -1075,11 +1121,15 @@ main(int argc, char **argv)
 			D_PRINT("Unsupported command %c\n", rc);
 			break;
 		}
+		D_PRINT("--------------------------------------\n");
 	}
 	daos_debug_fini();
 	if (sk_uma.uma_id == UMEM_CLASS_PMEM) {
 		pmemobj_close(sk_uma.uma_u.pmem_pool);
 		remove(POOL_NAME);
 	}
-	return 0;
+	if (rc != 0)
+		printf("Error: %d\n", rc);
+
+	return rc;
 }

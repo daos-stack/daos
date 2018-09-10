@@ -92,18 +92,20 @@ typedef enum {
 } daos_anchor_type_t;
 
 /** Iteration Anchor */
+#define DAOS_ANCHOR_BUF_MAX	120
 typedef struct {
-	uint64_t	da_type; /** daos_anchor_type_t */
-	char da_hkey[DAOS_HKEY_MAX];
+	uint16_t	da_type; /** daos_anchor_type_t */
+	uint16_t	da_tag;
+	uint16_t	da_shard;
+	uint16_t	da_padding;
+	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
 } daos_anchor_t;
-
-#define DAOS_HASH_HKEY_START	0
-#define DAOS_HASH_HKEY_LENGTH	24
 
 
 static inline void
 daos_anchor_set_zero(daos_anchor_t *anchor)
 {
+	memset(anchor, 0, sizeof(*anchor));
 	anchor->da_type = DAOS_ANCHOR_TYPE_ZERO;
 }
 

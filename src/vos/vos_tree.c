@@ -131,6 +131,15 @@ ktr_rec_load(struct btr_instance *tins, struct btr_record *rec,
 
 	kbuf = vos_krec2key(krec);
 	iov->iov_len = krec->kr_size;
+
+	if (kbund != NULL) {
+		if (kbund->kb_key != NULL) {
+			daos_iov_set(kbund->kb_key, kbuf, krec->kr_size);
+		} else {
+			kbund->kb_key = iov;
+		}
+	}
+
 	if (iov->iov_buf == NULL) {
 		iov->iov_buf = kbuf;
 		iov->iov_buf_len = krec->kr_size;
@@ -288,6 +297,40 @@ ktr_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 	return BTR_CMP_EQ;
 }
 
+static void
+ktr_key_encode(struct btr_instance *tins, daos_iov_t *key,
+	       daos_anchor_t *anchor)
+{
+	struct vos_key_bundle *kbund = iov2key_bundle(key);
+
+	if (kbund->kb_key) {
+		struct vos_embedded_key *embedded =
+			(struct vos_embedded_key *)anchor->da_buf;
+		D_ASSERT(kbund->kb_key->iov_len <= sizeof(embedded->ek_key));
+
+		memcpy(embedded->ek_key, kbund->kb_key->iov_buf,
+		       kbund->kb_key->iov_len);
+		embedded->ek_kbund.kb_epoch = kbund->kb_epoch;
+		/** Pointers will have to be set on decode. */
+		embedded->ek_kiov.iov_len = kbund->kb_key->iov_len;
+		embedded->ek_kiov.iov_buf_len = sizeof(embedded->ek_key);
+	}
+}
+
+static void
+ktr_key_decode(struct btr_instance *tins, daos_iov_t *key,
+	       daos_anchor_t *anchor)
+{
+	struct vos_embedded_key *embedded =
+		(struct vos_embedded_key *) anchor->da_buf;
+
+	embedded->ek_kiov.iov_buf = &embedded->ek_key[0];
+	embedded->ek_kbund.kb_key = &embedded->ek_kiov;
+
+	key->iov_buf = &embedded->ek_kbund;
+	key->iov_len = key->iov_buf_len = sizeof(embedded->ek_kbund);
+}
+
 /** create a new key-record, or install an externally allocated key-record */
 static int
 ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
@@ -407,10 +450,9 @@ ktr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	      daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
 	struct vos_krec_df	*krec = vos_rec2krec(tins, rec);
-	struct vos_rec_bundle	*rbund;
-	struct vos_key_bundle	*kbund;
+	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
+	struct vos_key_bundle	*kbund = NULL;
 
-	rbund = iov2rec_bundle(val_iov);
 	rbund->rb_krec = krec;
 
 	if (key_iov != NULL) {
@@ -441,6 +483,8 @@ static btr_ops_t key_btr_ops = {
 	.to_hkey_gen		= ktr_hkey_gen,
 	.to_hkey_cmp		= ktr_hkey_cmp,
 	.to_key_cmp		= ktr_key_cmp,
+	.to_key_encode		= ktr_key_encode,
+	.to_key_decode		= ktr_key_decode,
 	.to_rec_alloc		= ktr_rec_alloc,
 	.to_rec_free		= ktr_rec_free,
 	.to_rec_fetch		= ktr_rec_fetch,

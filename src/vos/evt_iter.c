@@ -130,7 +130,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 		 */
 		fopc = EVT_FIND_SAME;
 		if (rect == NULL)
-			rect = (struct evt_rect *)&anchor->da_hkey[0];
+			rect = (struct evt_rect *)&anchor->da_buf[0];
 
 		rtmp = *rect;
 	}
@@ -244,7 +244,7 @@ evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
 		struct evt_rect rtmp = *rect;
 
 		memset(anchor, 0, sizeof(*anchor));
-		memcpy(&anchor->da_hkey[0], &rtmp, sizeof(rtmp));
+		memcpy(&anchor->da_buf[0], &rtmp, sizeof(rtmp));
 		anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
 	}
 	rc = 0;

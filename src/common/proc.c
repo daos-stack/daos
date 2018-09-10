@@ -399,14 +399,31 @@ daos_proc_epoch_state(crt_proc_t proc, daos_epoch_state_t *es)
 	return 0;
 }
 
+/**
+ * typedef struct {
+ *	uint16_t	da_type;
+ *	uint16_t	da_tag;
+ *	uint16_t	da_shard;
+ *	uint16_t	da_padding;
+ *	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
+ */
 int
-daos_proc_anchor_out(crt_proc_t proc, daos_anchor_t *anchor)
+daos_proc_anchor(crt_proc_t proc, daos_anchor_t *anchor)
 {
-	if (crt_proc_uint64_t(proc, &anchor->da_type) != 0)
+	if (crt_proc_uint16_t(proc, &anchor->da_type) != 0)
 		return -DER_HG;
 
-	if (crt_proc_raw(proc, anchor->da_hkey,
-			sizeof(anchor->da_hkey)) != 0)
+	if (crt_proc_uint16_t(proc, &anchor->da_tag) != 0)
+		return -DER_HG;
+
+	if (crt_proc_uint16_t(proc, &anchor->da_shard) != 0)
+		return -DER_HG;
+
+	if (crt_proc_uint16_t(proc, &anchor->da_padding) != 0)
+		return -DER_HG;
+
+	if (crt_proc_raw(proc, anchor->da_buf,
+			sizeof(anchor->da_buf)) != 0)
 		return -DER_HG;
 
 	return 0;
@@ -569,7 +586,7 @@ struct crt_msg_field DMF_EPOCH_STATE =
 
 struct crt_msg_field DMF_ANCHOR =
 	DEFINE_CRT_MSG("daos_anchor_t", 0, sizeof(daos_anchor_t),
-			daos_proc_anchor_out);
+			daos_proc_anchor);
 
 struct crt_msg_field DMF_SGL_ARRAY =
 	DEFINE_CRT_MSG("daos_sg_list_t", CMF_ARRAY_FLAG, sizeof(daos_sg_list_t),

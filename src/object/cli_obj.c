@@ -840,7 +840,7 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 			shard, grp_size, obj->cob_layout->ol_nr);
 
 		daos_anchor_set_zero(anchor);
-		enum_anchor_set_tag(anchor, 0);
+		anchor->da_tag = 0;
 		dc_obj_shard2anchor(anchor, shard);
 	} else {
 		D_DEBUG(DB_IO, "Enumerated All shards\n");

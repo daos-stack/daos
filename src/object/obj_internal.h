@@ -115,53 +115,10 @@ struct ds_task_arg {
 	} u;
 };
 
-/**
- * Temporary solution for packing the tag/shard into the hash out,
- * tag stays at 25-28 bytes of daos_hash_out_t->body; shard stays
- * at 29-32 bytes of daos_hash_out_t->body; and the first 24 bytes
- * are hash key, see DAOS_HASH_HKEY_LENGTH.
- */
-
-/* XXX This is a nasty workaround: shard is encoded in the highest
- * four bytes of the hash anchor. It is ok for now because VOS does
- * not use those bytes. We need a cleaner way to store shard index.
- */
-#define ENUM_ANCHOR_TAG_OFF		24
-#define ENUM_ANCHOR_TAG_LENGTH		4
-
-/*
- * #define ENUM_ANCHOR_SHARD_OFF	28
- * #define ENUM_ANCHOR_SHARD_LENGTH	4
- */
 static inline void
-enum_anchor_copy_hkey(daos_anchor_t *dst, daos_anchor_t *src)
+enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)
 {
-	memcpy(&dst->da_hkey[DAOS_HASH_HKEY_START],
-	       &src->da_hkey[DAOS_HASH_HKEY_START], DAOS_HASH_HKEY_LENGTH);
-	dst->da_type = src->da_type;
-}
-
-static inline uint32_t
-enum_anchor_get_tag(daos_anchor_t *anchor)
-{
-	uint32_t tag;
-
-	D_CASSERT(DAOS_HASH_HKEY_START + DAOS_HASH_HKEY_LENGTH <=
-		  ENUM_ANCHOR_TAG_OFF);
-	D_CASSERT(DAOS_HASH_HKEY_LENGTH + ENUM_ANCHOR_TAG_LENGTH +
-		  ENUM_ANCHOR_SHARD_LENGTH <= DAOS_HKEY_MAX);
-
-	memcpy(&tag, &anchor->da_hkey[ENUM_ANCHOR_TAG_OFF],
-	       ENUM_ANCHOR_TAG_LENGTH);
-
-	return tag;
-}
-
-static inline void
-enum_anchor_set_tag(daos_anchor_t *anchor, uint32_t tag)
-{
-	memcpy(&anchor->da_hkey[ENUM_ANCHOR_TAG_OFF], &tag,
-	       ENUM_ANCHOR_TAG_LENGTH);
+	memcpy(dst, src, sizeof(*dst));
 }
 
 extern struct dss_module_key obj_module_key;

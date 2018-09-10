@@ -646,19 +646,19 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 
 	/* Update dkey hash and tag */
 	if (enum_args->eaa_dkey_anchor) {
-		enum_anchor_copy_hkey(enum_args->eaa_dkey_anchor,
-				      &oeo->oeo_dkey_anchor);
-		tgt_tag = enum_anchor_get_tag(&oeo->oeo_dkey_anchor);
-		enum_anchor_set_tag(enum_args->eaa_dkey_anchor, tgt_tag);
+		enum_anchor_copy(enum_args->eaa_dkey_anchor,
+				 &oeo->oeo_dkey_anchor);
+		tgt_tag = oeo->oeo_dkey_anchor.da_tag;
+		enum_args->eaa_dkey_anchor->da_tag = tgt_tag;
 	}
 
 	if (enum_args->eaa_akey_anchor)
-		enum_anchor_copy_hkey(enum_args->eaa_akey_anchor,
-				      &oeo->oeo_akey_anchor);
+		enum_anchor_copy(enum_args->eaa_akey_anchor,
+				 &oeo->oeo_akey_anchor);
 
 	if (enum_args->eaa_anchor)
-		enum_anchor_copy_hkey(enum_args->eaa_anchor,
-				      &oeo->oeo_anchor);
+		enum_anchor_copy(enum_args->eaa_anchor,
+				 &oeo->oeo_anchor);
 out:
 	if (enum_args->eaa_obj != NULL)
 		obj_shard_decref(enum_args->eaa_obj);
@@ -712,7 +712,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 	tgt_ep.ep_grp = pool->dp_group;
 	tgt_ep.ep_rank = obj_shard->do_rank;
 	if (dkey == NULL) {
-		tgt_ep.ep_tag = enum_anchor_get_tag(dkey_anchor);
+		tgt_ep.ep_tag = dkey_anchor->da_tag;
 	} else {
 		tse_task_stack_pop_data(task, &dkey_hash, sizeof(dkey_hash));
 		tgt_ep.ep_tag = obj_shard_dkeyhash2tag(obj_shard, dkey_hash);
@@ -743,11 +743,11 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 	oei->oei_rec_type = type;
 
 	if (anchor != NULL)
-		enum_anchor_copy_hkey(&oei->oei_anchor, anchor);
+		enum_anchor_copy(&oei->oei_anchor, anchor);
 	if (dkey_anchor != NULL)
-		enum_anchor_copy_hkey(&oei->oei_dkey_anchor, dkey_anchor);
+		enum_anchor_copy(&oei->oei_dkey_anchor, dkey_anchor);
 	if (akey_anchor != NULL)
-		enum_anchor_copy_hkey(&oei->oei_akey_anchor, akey_anchor);
+		enum_anchor_copy(&oei->oei_akey_anchor, akey_anchor);
 
 	if (sgl != NULL) {
 		oei->oei_sgl = *sgl;

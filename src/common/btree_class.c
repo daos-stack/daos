@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1417,6 +1417,20 @@ recx_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static void
+recx_key_encode(struct btr_instance *tins, daos_iov_t *key,
+	daos_anchor_t *anchor)
+{
+	D_ASSERTF(0, "recx_key_encode should never be called.\n");
+}
+
+static void
+recx_key_decode(struct btr_instance *tins, daos_iov_t *key,
+	daos_anchor_t *anchor)
+{
+	D_ASSERTF(0, "recx_key_decode should never be called.\n");
+}
+
 static char *
 recx_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 		char *buf, int buf_len)
@@ -1445,4 +1459,6 @@ btr_ops_t dbtree_recx_ops = {
 	.to_rec_fetch	= recx_rec_fetch,
 	.to_rec_update	= recx_rec_update,
 	.to_rec_string	= recx_rec_string,
+	.to_key_encode	= recx_key_encode,
+	.to_key_decode	= recx_key_decode
 };

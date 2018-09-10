@@ -287,6 +287,33 @@ typedef struct {
 	 */
 	int		(*to_key_cmp)(struct btr_instance *tins,
 				      struct btr_record *rec, daos_iov_t *key);
+
+	/**
+	 * Required if using direct keys. (Should only be called for direct key)
+	 * The encoding/decoding of direct keys is required so that the key can
+	 * be serialized.
+	 *
+	 * @param tins		[IN]	Tree instance which contains the
+	 *				root mmid and memory class etc.
+	 * @param key		[IN]	The current key of iteration.
+	 * @param anchor	[OUT]	Anchor for the iteration
+	 */
+	void		(*to_key_encode)(struct btr_instance *tins,
+					 daos_iov_t *key,
+					 daos_anchor_t *anchor);
+	/**
+	 * Required if using direct keys. (Should only be called for direct key)
+	 *
+	 * @param tins		[IN]	Tree instance which contains the root
+	 *				mmid and memory class etc.
+	 * @param key		[OUT]	The key of iteration. Anchor will
+	 *				be decoded to key.
+	 * @param anchor	[IN]	Anchor of where iteration process is.
+	 */
+	void		(*to_key_decode)(struct btr_instance *tins,
+					 daos_iov_t *key,
+					 daos_anchor_t *anchor);
+
 	/**
 	 * Allocate record body for \a key and \a val.
 	 *

@@ -936,7 +936,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 						    &task_arg,
 						    NULL /* user callback */,
 						    NULL /* user cb args */,
-						    tag/* async */, 0);
+						    tag  /* async */, 0);
 		if (rc != 0) {
 			if (rc == 1) {
 				/* If the buffer is full, exit and
@@ -962,7 +962,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		daos_anchor_set_zero(&enum_arg->akey_anchor);
 	}
 
-	enum_anchor_set_tag(&enum_arg->dkey_anchor, tag);
+	enum_arg->dkey_anchor.da_tag = tag;
 	oeo->oeo_dkey_anchor = enum_arg->dkey_anchor;
 	oeo->oeo_akey_anchor = enum_arg->akey_anchor;
 	oeo->oeo_anchor = enum_arg->recx_anchor;

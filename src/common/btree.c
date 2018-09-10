@@ -435,6 +435,20 @@ btr_hkey_cmp(struct btr_context *tcx, struct btr_record *rec, void *hkey)
 			memcmp(&rec->rec_hkey[0], hkey, btr_hkey_size(tcx)));
 }
 
+static void
+btr_key_encode(struct btr_context *tcx, daos_iov_t *key, daos_anchor_t *anchor)
+{
+	D_ASSERT(btr_ops(tcx)->to_key_encode);
+	btr_ops(tcx)->to_key_encode(&tcx->tc_tins, key, anchor);
+}
+
+static void
+btr_key_decode(struct btr_context *tcx, daos_iov_t *key, daos_anchor_t *anchor)
+{
+	D_ASSERT(btr_ops(tcx)->to_key_decode);
+	btr_ops(tcx)->to_key_decode(&tcx->tc_tins, key, anchor);
+}
+
 static int
 btr_key_cmp(struct btr_context *tcx, struct btr_record *rec, daos_iov_t *key)
 {
@@ -1117,7 +1131,7 @@ btr_probe_valid(dbtree_probe_opc_t opc)
  */
 static enum btr_probe_rc
 btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	  daos_iov_t *key, daos_anchor_t *anchor)
+	  daos_iov_t *key, char hkey[DAOS_HKEY_MAX])
 {
 	int			 start;
 	int			 end;
@@ -1126,7 +1140,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	int			 cmp;
 	int			 level;
 	bool			 next_level;
-	char			 hkey[DAOS_HKEY_MAX];
 	struct btr_trace	 traces[BTR_TRACE_MAX];
 	struct btr_trace	*trace = NULL;
 	TMMID(struct btr_node)	 nd_mmid;
@@ -1150,17 +1163,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		D_DEBUG(DB_TRACE, "Empty tree\n");
 		rc = PROBE_RC_NONE;
 		goto out;
-	}
-
-	if (probe_opc & BTR_PROBE_SPEC) {
-		if (key != NULL) {
-			btr_hkey_gen(tcx, key, hkey);
-		} else {
-			D_ASSERT(anchor != NULL);
-			D_ASSERT(!btr_is_direct_key(tcx));
-
-			btr_hkey_copy(tcx, hkey, &anchor->da_hkey[0]);
-		}
 	}
 
 	nd_mmid = tcx->tc_tins.ti_root->tr_node;
@@ -1330,6 +1332,16 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	return rc;
 }
 
+static enum btr_probe_rc
+btr_probe_key(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
+	       daos_iov_t *key)
+{
+	char hkey[DAOS_HKEY_MAX];
+
+	btr_hkey_gen(tcx, key, hkey);
+	return btr_probe(tcx, probe_opc, key, hkey);
+}
+
 static bool
 btr_probe_next(struct btr_context *tcx)
 {
@@ -1478,7 +1490,7 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = btr_probe(tcx, opc, key, NULL);
+	rc = btr_probe_key(tcx, opc, key);
 	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
@@ -1604,7 +1616,7 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	if (probe_opc == BTR_PROBE_BYPASS)
 		rc = tcx->tc_probe_rc; /* trust previous probe... */
 	else
-		rc = btr_probe(tcx, probe_opc, key, NULL);
+		rc = btr_probe_key(tcx, probe_opc, key);
 
 	switch (rc) {
 	default:
@@ -2448,7 +2460,7 @@ dbtree_delete(daos_handle_t toh, daos_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = btr_probe(tcx, BTR_PROBE_EQ, key, NULL);
+	rc = btr_probe_key(tcx, BTR_PROBE_EQ, key);
 	if (rc != PROBE_RC_OK) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
@@ -3008,10 +3020,11 @@ dbtree_iter_finish(daos_handle_t ih)
  *
  * \param opc	[IN]	Probe opcode, see dbtree_probe_opc_t for the details.
  * \param key	[IN]	The key to probe, it will be ignored if opc is
- *			BTR_PROBE_FIRST or BTR_PROBE_LAST.  Otherwise, it is
- *			required if BTR_FEAT_DIRECT_KEY is used.
+ *			BTR_PROBE_FIRST or BTR_PROBE_LAST.
  * \param anchor [IN]	the anchor point to probe, it will be ignored if
  *			\a key is provided.
+ * \note		If opc is not BTR_PROBE_FIRST or BTR_PROBE_LAST,
+ *			key or anchor is required.
  */
 int
 dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
@@ -3031,7 +3044,29 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 	if (itr->it_state < BTR_ITR_INIT)
 		return -DER_NO_HDL;
 
-	rc = btr_probe(tcx, opc, key, anchor);
+	if (opc == BTR_PROBE_FIRST || opc == BTR_PROBE_LAST)
+		rc = btr_probe(tcx, opc, NULL, NULL);
+	else if (btr_is_direct_key(tcx)) {
+		D_ASSERT(key != NULL || anchor != NULL);
+		if (key)
+			rc = btr_probe(tcx, opc, key, NULL);
+		else {
+			daos_iov_t direct_key;
+
+			btr_key_decode(tcx, &direct_key, anchor);
+			rc = btr_probe(tcx, opc, &direct_key, NULL);
+		}
+	} else {
+		D_ASSERT(key != NULL || anchor != NULL);
+		char hkey[DAOS_HKEY_MAX];
+
+		if (key)
+			btr_hkey_gen(tcx, key, hkey);
+		else
+			btr_hkey_copy(tcx, hkey, (char *)&anchor->da_buf[0]);
+		rc = btr_probe(tcx, opc, key, hkey);
+	}
+
 	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
 		itr->it_state = BTR_ITR_FINI;
 		return -DER_NONEXIST;
@@ -3109,7 +3144,7 @@ dbtree_iter_prev(daos_handle_t ih)
  *			returned if buffer address is NULL.
  * \param val	[OUT]	Sink buffer for the returned value, the value address
  *			is returned if buffer address is NULL.
- * \param anchor [OUT]	Returned hash anchor.
+ * \param anchor [OUT]	Returned iteration anchor.
  */
 int
 dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
@@ -3134,11 +3169,22 @@ dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 		return -DER_AGAIN; /* invalid cursor */
 
 	rc = btr_rec_fetch(tcx, rec, key, val);
-	if (rc == 0 && anchor != NULL) {
-		memset(anchor, 0, sizeof(*anchor));
+	if (rc)
+		return rc;
+
+	if (!anchor)
+		return 0;
+
+	if (btr_is_direct_key(tcx)) {
+		btr_key_encode(tcx, key, anchor);
+		anchor->da_type = DAOS_ANCHOR_TYPE_KEY;
+
+	} else {
+		btr_hkey_copy(tcx, (char *)&anchor->da_buf[0],
+			      &rec->rec_hkey[0]);
 		anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
-		btr_hkey_copy(tcx, &anchor->da_hkey[0], &rec->rec_hkey[0]);
 	}
+
 	return 0;
 }
 
@@ -3372,8 +3418,11 @@ dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 		D_ASSERT(ops->to_hkey_gen != NULL);
 		D_ASSERT(ops->to_hkey_size != NULL);
 	}
-	if (tree_feats & BTR_FEAT_DIRECT_KEY)
+	if (tree_feats & BTR_FEAT_DIRECT_KEY) {
 		D_ASSERT(ops->to_key_cmp != NULL);
+		D_ASSERT(ops->to_key_encode != NULL);
+		D_ASSERT(ops->to_key_decode != NULL);
+	}
 	D_ASSERT(ops->to_rec_fetch != NULL);
 	D_ASSERT(ops->to_rec_alloc != NULL);
 	D_ASSERT(ops->to_rec_free != NULL);

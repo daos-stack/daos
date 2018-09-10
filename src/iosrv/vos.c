@@ -54,7 +54,7 @@ int
 dss_vos_iterate(vos_iter_type_t type, vos_iter_param_t *param,
 		daos_anchor_t *anchor, dss_vos_iterate_cb_t cb, void *arg)
 {
-	daos_anchor_t		*probe_hash = NULL;
+	daos_anchor_t		*probe_anchor = NULL;
 	vos_iter_entry_t	key_ent;
 	daos_handle_t		ih;
 	int			rc;
@@ -72,16 +72,15 @@ dss_vos_iterate(vos_iter_type_t type, vos_iter_param_t *param,
 	}
 
 	if (!daos_anchor_is_zero(anchor))
-		probe_hash = anchor;
-
-	rc = vos_iter_probe(ih, probe_hash);
+		probe_anchor = anchor;
+	rc = vos_iter_probe(ih, probe_anchor);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST || rc == -DER_AGAIN) {
 			daos_anchor_set_eof(anchor);
 			rc = 0;
 		} else {
 			D_ERROR("failed to probe iterator (type=%d anchor=%p): "
-				"%d\n", type, probe_hash, rc);
+				"%d\n", type, probe_anchor, rc);
 		}
 		D_GOTO(out_iter_fini, rc);
 	}

@@ -115,27 +115,18 @@ int dc_obj_layout_get(daos_handle_t oh, struct pl_obj_layout **layout,
 		      unsigned int *grp_nr, unsigned int *grp_size);
 int dc_obj_layout_refresh(daos_handle_t oh);
 
-#define ENUM_ANCHOR_SHARD_OFF		28
-#define ENUM_ANCHOR_SHARD_LENGTH	4
-
 /** Decode shard number from enumeration anchor */
 static inline uint32_t
 dc_obj_anchor2shard(daos_anchor_t *anchor)
 {
-	uint32_t tag;
-
-	memcpy(&tag, &anchor->da_hkey[ENUM_ANCHOR_SHARD_OFF],
-	       ENUM_ANCHOR_SHARD_LENGTH);
-
-	return tag;
+	return anchor->da_shard;
 }
 
 /** Encode shard into enumeration anchor. */
 static inline void
 dc_obj_shard2anchor(daos_anchor_t *anchor, uint32_t shard)
 {
-	memcpy(&anchor->da_hkey[ENUM_ANCHOR_SHARD_OFF], &shard,
-	       ENUM_ANCHOR_SHARD_LENGTH);
+	anchor->da_shard = shard;
 }
 
 #endif /* __DAOS_OBJECT_H__ */

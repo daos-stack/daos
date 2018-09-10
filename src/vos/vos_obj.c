@@ -199,12 +199,14 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
 	daos_iov_t		kiov;
+	daos_iov_t		kbund_kiov;
 	daos_iov_t		riov;
 	daos_csum_buf_t		csum;
 	int			rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
 	tree_rec_bundle2iov(&rbund, &riov);
+	kbund.kb_key = &kbund_kiov;
 
 	rbund.rb_iov	= &ent->ie_key;
 	rbund.rb_csum	= &csum;
