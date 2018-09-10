@@ -27,13 +27,13 @@ pipeline {
                             filename 'Dockerfile.centos:7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs  '--build-arg NOBUILD=1 --build-arg UID=$(id -u)'
+                            additionalBuildArgs  '--build-arg NOBUILD=1 --build-arg UID=$(id -u) --build-arg DONT_USE_RPMS=false'
                         }
                     }
                     steps {
                         githubNotify description: 'checkmodules.sh',  context: 'checkmodules.sh', status: 'PENDING'
                         sh '''pushd scons_local
-                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/10
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/11
                               popd
                               git submodule update --init --recursive
                               utils/check_modules.sh'''
@@ -60,7 +60,7 @@ pipeline {
                             filename 'Dockerfile.centos:7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs  '--build-arg NOBUILD=1 --build-arg UID=$(id -u)'
+                            additionalBuildArgs  '--build-arg NOBUILD=1 --build-arg UID=$(id -u) --build-arg DONT_USE_RPMS=false'
                         }
                     }
                     steps {
@@ -71,7 +71,7 @@ pipeline {
                               # scons -c is not perfect so get out the big hammer
                               rm -rf _build.external install build
                               pushd scons_local
-                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/10
+                              git fetch https://review.hpdd.intel.com/coral/scons_local refs/changes/13/33013/11
                               popd
                               utils/fetch_go_packages.sh -i .
                               SCONS_ARGS="--update-prereq=all --build-deps=yes USE_INSTALLED=all install"
