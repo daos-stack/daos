@@ -61,7 +61,7 @@ On Ubuntu and Debian:
     apt-get install -y ninja-build meson
     # Additionally required SPDK packages
     apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
-    apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen
+    apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen libnuma-dev
 
 Moreover, please make sure all the auto tools listed below are at the appropriate versions.
 
