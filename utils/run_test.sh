@@ -100,7 +100,8 @@ if [ -d "/mnt/daos" ]; then
     # libnvme_discover.so
     export LD_LIBRARY_PATH=$SL_PREFIX/lib:${LD_LIBRARY_PATH}
     rm -f /tmp/daos.log
-    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
+# Phyl
+#    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for
