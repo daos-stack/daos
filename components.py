@@ -76,40 +76,16 @@ else:
     REQS.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'],
                 package='libuuid-devel')
 
-CCI_BUILD = ['patch -N -p1 < $PATCH_PREFIX/cci_port_number.patch; '
-             'if [ $? -gt 1 ]; then false; else true; fi;',
-             'patch -N -p1 < $PATCH_PREFIX/cci_ib.patch; '
-             'if [ $? -gt 1 ]; then false; else true; fi;',
-             './autogen.pl']
-CCI_REQUIRED = ['ltdl']
-if REQS.get_env('PLATFORM') == 'darwin':
-    CCI_BUILD.append('./configure --prefix=$CCI_PREFIX')
-else:
-    CCI_BUILD.append('./configure --with-verbs --prefix=$CCI_PREFIX')
-    CCI_REQUIRED += ['rdmacm']
-CCI_LIB = 'libcci$SHLIBSUFFIX'
-
-CCI_BUILD += ['make', 'make install']
-RETRIEVER = GitRepoRetriever('https://github.com/CCI/cci')
-REQS.define('cci',
-            retriever=RETRIEVER,
-            commands=CCI_BUILD,
-            required_libs=CCI_REQUIRED,
-            required_progs=['cmake'],
-            headers=['cci.h'],
-            libs=["cci"])
-
-
 REQS.define('openpa',
             retriever=GitRepoRetriever(
                 'http://git.mcs.anl.gov/radix/openpa.git'),
             commands=['$LIBTOOLIZE', './autogen.sh',
-                      './configure --prefix=$OPENPA_PREFIX', 'make',
+                      './configure --prefix=$OPENPA_PREFIX', 'make $JOBS_OPT',
                       'make install'], libs=['opa'])
 
 ISAL_BUILD = ['./autogen.sh ',
               './configure --prefix=$ISAL_PREFIX --libdir=$ISAL_PREFIX/lib',
-              'make', 'make install']
+              'make $JOBS_OPT', 'make install']
 
 REQS.define('isal',
             retriever=GitRepoRetriever(
@@ -139,7 +115,7 @@ REQS.define('mercury',
                       '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE '
                       '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
                       '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'
-                      , 'make', 'make install'],
+                      , 'make $JOBS_OPT', 'make install'],
             libs=['mercury', 'na', 'mercury_util'],
             requires=['openpa', 'boost', 'ofi'] + RT,
             extra_include_path=[os.path.join('include', 'na')],
@@ -150,7 +126,7 @@ URL = 'https://www.open-mpi.org/software/hwloc/v1.11' \
 WEB_RETRIEVER = \
     WebRetriever(URL)
 REQS.define('hwloc', retriever=WEB_RETRIEVER,
-            commands=['./configure --prefix=$HWLOC_PREFIX', 'make',
+            commands=['./configure --prefix=$HWLOC_PREFIX', 'make $JOBS_OPT',
                       'make install'],
             headers=['hwloc.h'],
             libs=['hwloc'])
@@ -162,7 +138,7 @@ REQS.define('pmix',
                       './configure --with-platform=optimized '
                       '--prefix=$PMIX_PREFIX '
                       '--with-hwloc=$HWLOC_PREFIX',
-                      'make', 'make install'],
+                      'make $JOBS_OPT', 'make install'],
             libs=['pmix'],
             required_progs=['autoreconf', 'aclocal', 'libtool'],
             headers=['pmix.h'],
@@ -183,7 +159,7 @@ REQS.define('ompi',
                       '--enable-contrib-no-build=vt '
                       '--with-libevent=external '
                       '--with-hwloc=$HWLOC_PREFIX',
-                      'make', 'make install'],
+                      'make $JOBS_OPT', 'make install'],
             libs=['open-rte'],
             required_progs=['g++', 'flex'],
             requires=['pmix', 'hwloc', 'event'])
@@ -199,7 +175,7 @@ REQS.define('ompi_pmix',
                       '--enable-orterun-prefix-by-default '
                       '--prefix=$OMPI_PMIX_PREFIX '
                       '--disable-mpi-fortran ',
-                      'make', 'make install'],
+                      'make $JOBS_OPT', 'make install'],
             libs=['pmix'],
             libs_cc='$OMPI_PMIX_PREFIX/bin/mpicc',
             headers=['pmix.h'],
@@ -224,14 +200,14 @@ if ARM_PLATFORM:
                           '-DMCHECKSUM_USE_ZLIB=OFF '
                           '-DCMAKE_INSTALL_RPATH=$MCHECKSUM_PREFIX/lib '
                           '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ',
-                          'make', 'make install'],
+                          'make $JOBS_OPT', 'make install'],
                 libs=['mchecksum'],
                 out_of_src_build=True)
 
 RETRIEVER = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 
 PMDK_BUILD = ["make \"BUILD_RPMEM=n\" \"NDCTL_ENABLE=n\" \"NDCTL_DISABLE=y\" "
-              "install prefix=$PMDK_PREFIX"]
+              "$JOBS_OPT install prefix=$PMDK_PREFIX"]
 
 REQS.define('pmdk',
             retriever=RETRIEVER,
@@ -244,8 +220,8 @@ REQS.define('argobots',
             commands=['git clean -dxf ',
                       './autogen.sh',
                       './configure --prefix=$ARGOBOTS_PREFIX',
-                      'make -j4',
-                      'make -j4 install'],
+                      'make $JOBS_OPT',
+                      'make $JOBS_OPT install'],
             libs=['abt'],
             headers=['abt.h'])
 
@@ -253,7 +229,7 @@ RETRIEVER = GitRepoRetriever("https://review.hpdd.intel.com/coral/cppr",
                              True)
 REQS.define('cppr',
             retriever=RETRIEVER,
-            commands=["scons "
+            commands=["scons $JOBS_OPT "
                       "OMPI_PREBUILT=$OMPI_PREFIX "
                       "CART_PREBUILT=$CART_PREFIX "
                       "FUSE_PREBUILT=$FUSE_PREFIX "
@@ -267,7 +243,7 @@ RETRIEVER = GitRepoRetriever("https://review.hppd.intel.com/daos/iof",
                              True)
 REQS.define('iof',
             retriever=RETRIEVER,
-            commands=["scons "
+            commands=["scons $JOBS_OPT "
                       "OMPI_PREBUILT=$OMPI_PREFIX "
                       "CART_PREBUILT=$CART_PREFIX "
                       "FUSE_PREBUILT=$FUSE_PREFIX "
@@ -279,7 +255,7 @@ RETRIEVER = GitRepoRetriever("https://review.hpdd.intel.com/daos/daos_m",
                              True)
 REQS.define('daos',
             retriever=RETRIEVER,
-            commands=["scons "
+            commands=["scons $JOBS_OPT "
                       "OMPI_PREBUILT=$OMPI_PREFIX "
                       "CART_PREBUILT=$CART_PREFIX "
                       "PREFIX=$DAOS_PREFIX install"],
@@ -295,7 +271,7 @@ REQS.define('fuse',
                       ' -D udevrulesdir=$FUSE_PREFIX/udev' \
                       ' -D disable-mtab=True' \
                       ' -D skip-systemfiles=True',
-                      NINJA_NAME + ' -v -j1',
+                      NINJA_NAME + ' -v $JOBS_OPT',
                       NINJA_NAME + ' install',
                       'mv $FUSE_PREFIX/bin/fusermount3' \
                       ' $FUSE_PREFIX/bin/fusermount3.nosuid'],
@@ -310,7 +286,7 @@ REQS.define('ofi',
             retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
             commands=['./autogen.sh',
                       './configure --prefix=$OFI_PREFIX',
-                      'make',
+                      'make $JOBS_OPT',
                       'make install'],
             libs=['fabric'],
             headers=['rdma/fabric.h'])
@@ -318,7 +294,7 @@ REQS.define('ofi',
 RETRIEVER = GitRepoRetriever("https://review.hpdd.intel.com/daos/cart", True)
 REQS.define('cart',
             retriever=RETRIEVER,
-            commands=["scons "
+            commands=["scons $JOBS_OPT "
                       "ARGOBOTS_PREBUILT=$ARGOBOTS_PREFIX "
                       "OMPI_PREBUILT=$OMPI_PREFIX "
                       "MERCURY_PREBUILT=$MERCURY_PREFIX "
@@ -341,7 +317,7 @@ RETRIEVER = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
 REQS.define('spdk',
             retriever=RETRIEVER,
             commands=['./configure --prefix=$SPDK_PREFIX',
-                      'make', 'make install'],
+                      'make $JOBS_OPT', 'make install'],
             libs=["spdk"])
 
 URL = 'https://github.com/protobuf-c/protobuf-c/releases/download/' \
@@ -350,6 +326,6 @@ WEB_RETRIEVER = \
     WebRetriever(URL)
 REQS.define('protobufc', retriever=WEB_RETRIEVER,
             commands=['./configure --prefix=$PROTOBUFC_PREFIX --disable-protoc',
-                      'make', 'make install'],
+                      'make $JOBS_OPT', 'make install'],
 			libs=['protobuf-c'],
 			headers=['protobuf-c/protobuf-c.h'])

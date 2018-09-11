@@ -713,6 +713,7 @@ class PreReqComponent(object):
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
 
         self._setup_compiler()
+        self.setup_parallel_build()
 
         self.add_opts(PathVariable('ENV_SCRIPT',
                                    "Location of environment script",
@@ -779,6 +780,11 @@ class PreReqComponent(object):
         if self.__check_only:
             # Restore the dry run state
             env.SetOption('no_exec', True)
+
+    def setup_parallel_build(self):
+        """Set the JOBS_OPT variable for builds"""
+        jobs_opt = GetOption('num_jobs')
+        self.__env["JOBS_OPT"] = "-j %d" % jobs_opt
 
     def get_build_info(self):
         """Retrieve the BuildInfo"""
