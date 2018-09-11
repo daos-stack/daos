@@ -1223,6 +1223,18 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_cbinfo.cci_arg = rpc_priv->crp_arg;
 	crt_cbinfo.cci_rc = rc;
 
+	if (crt_cbinfo.cci_rc != 0)
+		D_ERROR("RPC failed; rpc_priv: %p rc: %d\n",
+			rpc_priv, crt_cbinfo.cci_rc);
+
+	D_DEBUG(DB_TRACE, "Invoking RPC callback rpc_priv: %p "
+		"(opc: %#x, to rank %d tag %d) "
+		"rpc_pub: %p rc: %d.\n", rpc_priv,
+		rpc_priv->crp_pub.cr_opc,
+		rpc_priv->crp_pub.cr_ep.ep_rank,
+		rpc_priv->crp_pub.cr_ep.ep_tag,
+		crt_cbinfo.cci_rpc, crt_cbinfo.cci_rc);
+
 	rpc_priv->crp_complete_cb(&crt_cbinfo);
 
 	rpc_priv->crp_state = state;
