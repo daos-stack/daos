@@ -78,7 +78,6 @@ struct io_params {
 	daos_sg_list_t		sgl;
 	bool			user_sgl_used;
 	daos_size_t		cell_size;
-	tse_task_t		*task;
 	struct io_params	*next;
 };
 
@@ -1081,7 +1080,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		char		*dkey_str;
 		daos_key_t	*dkey;
 		daos_size_t	dkey_records;
-		tse_task_t	*io_task;
+		tse_task_t	*io_task = NULL;
 		struct io_params *params;
 		daos_size_t	i; /* index for iod recx */
 
@@ -1118,7 +1117,6 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 
 		iod = &params->iod;
 		sgl = &params->sgl;
-		io_task = params->task;
 		dkey = &params->dkey;
 		params->akey_str = '0';
 		params->user_sgl_used = false;
@@ -1540,7 +1538,6 @@ get_array_size_cb(tse_task_t *task, void *data)
 	akey = &params->akey;
 	dkey = &params->dkey;
 
-	io_task = params->task;
 	params->akey_str = '0';
 	params->dkey_str = strdup(key);
 	if (params->dkey_str == NULL)
@@ -1733,7 +1730,6 @@ punch_key(daos_handle_t oh, daos_epoch_t epoch, const char *key, int dkey_num,
 		return -DER_NOMEM;
 	}
 
-	io_task = params->task;
 	params->dkey_str = strdup(key);
 	dkey = &params->dkey;
 	daos_iov_set(dkey, (void *)params->dkey_str,
@@ -1790,10 +1786,10 @@ err:
 	if (params) {
 		if (params->dkey_str)
 			free(params->dkey_str);
-		if (io_task)
-			tse_task_complete(io_task, rc);
 		D_FREE_PTR(params);
 	}
+	if (io_task)
+		tse_task_complete(io_task, rc);
 	return rc;
 }
 
@@ -1824,7 +1820,6 @@ punch_extent(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 	iod = &params->iod;
 	sgl = NULL;
 	dkey = &params->dkey;
-	io_task = params->task;
 	params->akey_str = '0';
 	params->user_sgl_used = false;
 	params->dkey_str = strdup(key);
@@ -1875,10 +1870,10 @@ err:
 	if (params) {
 		if (params->dkey_str)
 			free(params->dkey_str);
-		if (io_task)
-			tse_task_complete(io_task, rc);
 		D_FREE_PTR(params);
 	}
+	if (io_task)
+		tse_task_complete(io_task, rc);
 	return rc;
 }
 
@@ -1888,7 +1883,7 @@ check_record_cb(tse_task_t *task, void *data)
 	daos_obj_fetch_t	*args = daos_task_get_args(task);
 	struct io_params	*params = *((struct io_params **)data);
 	daos_obj_update_t	*io_arg;
-	tse_task_t		*io_task;
+	tse_task_t		*io_task = NULL;
 	daos_iod_t		*iod;
 	daos_sg_list_t		*sgl;
 	daos_key_t		*dkey;
@@ -1981,7 +1976,6 @@ check_record(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 	iod = &params->iod;
 	sgl = NULL;
 	dkey = &params->dkey;
-	io_task = params->task;
 	params->akey_str = '0';
 	params->user_sgl_used = false;
 	params->dkey_str = strdup(key);
@@ -2037,10 +2031,10 @@ err:
 	if (params) {
 		if (params->dkey_str)
 			free(params->dkey_str);
-		if (io_task)
-			tse_task_complete(io_task, rc);
 		D_FREE_PTR(params);
 	}
+	if (io_task)
+		tse_task_complete(io_task, rc);
 	return rc;
 }
 
@@ -2068,8 +2062,6 @@ add_record(daos_handle_t oh, daos_epoch_t epoch, struct set_size_props *props)
 	iod = &params->iod;
 	sgl = &params->sgl;
 	dkey = &params->dkey;
-
-	io_task = params->task;
 	params->akey_str = '0';
 	params->next = NULL;
 	params->user_sgl_used = false;
@@ -2132,10 +2124,10 @@ err:
 	if (params) {
 		if (params->dkey_str)
 			free(params->dkey_str);
-		if (io_task)
-			tse_task_complete(io_task, rc);
 		D_FREE_PTR(params);
 	}
+	if (io_task)
+		tse_task_complete(io_task, rc);
 	return rc;
 }
 
