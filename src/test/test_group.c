@@ -78,27 +78,15 @@ struct test_t {
 struct test_t test_g = { .t_hold_time = 0, .t_ctx_num = 1,
 			     .t_roomno = 1082 };
 
-struct crt_msg_field *test_ping_checkin[] = {
-	&CMF_UINT32,
-	&CMF_UINT32,
-	&CMF_STRING,
-};
-struct crt_test_checkin_req {
-	int		age;
-	int		days;
-	d_string_t	name;
-};
-struct crt_msg_field *test_ping_checkout[] = {
-	&CMF_INT,
-	&CMF_UINT32,
-};
-struct crt_test_checkin_reply {
-	int		ret;
-	uint32_t	room_no;
-};
-struct crt_req_format CQF_TEST_PING_CHECK =
-	DEFINE_CRT_REQ_FMT("TEST_PING_CHECK", test_ping_checkin,
-			   test_ping_checkout);
+CRT_RPC_PREP(test_ping_check,
+		/* input fields */
+	     ((uint32_t)	(age))
+	     ((uint32_t)	(days))
+	     ((d_string_t)	(name)),
+		/* output fields */
+	     ((int32_t)		(ret))
+	     ((uint32_t)	(room_no))
+	    );
 
 static inline void
 test_sem_timedwait(sem_t *sem, int sec, int line_number)
@@ -118,8 +106,8 @@ test_sem_timedwait(sem_t *sem, int sec, int line_number)
 void
 test_checkin_handler(crt_rpc_t *rpc_req)
 {
-	struct crt_test_checkin_req	*e_req;
-	struct crt_test_checkin_reply	*e_reply;
+	struct test_ping_check_in	*e_req;
+	struct test_ping_check_out	*e_reply;
 	int				 rc = 0;
 
 	/* CaRT internally already allocated the input/output buffer */
@@ -185,9 +173,9 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 void
 client_cb_common(const struct crt_cb_info *cb_info)
 {
-	crt_rpc_t				*rpc_req;
-	struct crt_test_checkin_req		*rpc_req_input;
-	struct crt_test_checkin_reply		*rpc_req_output;
+	crt_rpc_t			*rpc_req;
+	struct test_ping_check_in	*rpc_req_input;
+	struct test_ping_check_out	*rpc_req_output;
 
 	rpc_req = cb_info->cci_rpc;
 
@@ -300,9 +288,8 @@ test_init(void)
 
 	/* register RPCs */
 	if (test_g.t_is_service) {
-		rc = crt_rpc_srv_register(TEST_OPC_CHECKIN, 0,
-					  &CQF_TEST_PING_CHECK,
-					  test_checkin_handler);
+		rc = CRT_RPC_SRV_REGISTER(TEST_OPC_CHECKIN, 0, test_ping_check,
+				      test_checkin_handler);
 		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
 			  rc);
 		rc = crt_rpc_srv_register(TEST_OPC_SHUTDOWN,
@@ -318,8 +305,7 @@ test_init(void)
 		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
 			  rc);
 	} else {
-		rc = crt_rpc_register(TEST_OPC_CHECKIN, 0,
-				      &CQF_TEST_PING_CHECK);
+		rc = CRT_RPC_REGISTER(TEST_OPC_CHECKIN, 0, test_ping_check);
 		D_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
 		rc = crt_rpc_register(TEST_OPC_SHUTDOWN, CRT_RPC_FEAT_NO_REPLY,
 				      NULL);
@@ -341,7 +327,7 @@ void
 check_in(crt_group_t *remote_group, int rank)
 {
 	crt_rpc_t			*rpc_req = NULL;
-	struct crt_test_checkin_req	*rpc_req_input;
+	struct test_ping_check_in	*rpc_req_input;
 	crt_endpoint_t			 server_ep = {0};
 	char				*buffer;
 	int				 rc;

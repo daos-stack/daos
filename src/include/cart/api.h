@@ -59,6 +59,8 @@
 extern "C" {
 #endif
 
+#include <boost/preprocessor.hpp>
+
 /** @defgroup CART CART API */
 
 /** @addtogroup CART
@@ -428,6 +430,161 @@ crt_req_abort(crt_rpc_t *req);
  */
 int
 crt_ep_abort(crt_endpoint_t *ep);
+
+/**
+ * CART provides a set of macros for RPC registration. Using the macro interface
+ * to register RPCs is much simpler and reduces the opportunities for mistakes.
+ *
+ * public macros:
+ *
+ *     preparation group A:
+ *         - CRT_RPC_PREP()
+ *         - CRT_RPC_IN_FMT()
+ *         - CRT_RPC_OUT_FMT()
+ *
+ *     preparation group B:
+ *         - CRT_RPC_ARG_DESC()
+ *         - CRT_RPC_REQ_FMT()
+ *
+ *     registration:
+ *         - CRT_RPC_REGISTER()
+ *         - CRT_RPC_SRV_REGISTER()
+ *
+ * 1) To register an RPC using group A macros:
+ *         CRT_RPC_PREP(my_first_rpc, list_of_inputs, list_of_outputs);
+ *         CRT_RPC_REGISTER(opcode, flags, my_first_rpc);
+ *
+ *    The input/output structs can be accessed using the following pointers:
+ *         struct my_first_rpc_in *rpc_in;
+ *         struct my_first_rpc_out *rpc_out;
+ *
+ * 2) To register an RPC using group B macros:
+ *         CRT_RPC_ARG_DESC(my_second_rpc_in, list_of_inputs);
+ *         CRT_RPC_ARG_DESC(my_second_rpc_out, list_of_outputs);
+ *         CRT_RPC_REQ_FMT(my_second_rpc, my_second_rpc_in, my_second_rpc_out);
+ *         CRT_RPC_REGISTER(opcode, flags, my_second_rpc);
+ *
+ *    The input/output structs can be accessed using the following pointers:
+ *         struct my_second_rpc_in  *rpc_in;
+ *         struct my_second_rpc_out *rpc_out;
+ *
+ * 3) To register an RPC using group B macros and reuse the output definition of
+ * my_first_rpc:
+ *         CRT_RPC_ARG_DESC(my_third_rpc_in, list_of_inputs);
+ *         CRT_RPC_REQ_FMT(my_third_rpc, my_third_rpc_in,
+ *                         CRT_RPC_OUT_FMT(my_first_rpc));
+ *         CRT_RPC_REGISTER(opcode, flags, my_third_rpc);
+ *
+ *    The input/output structs can be accessed using the following pointers:
+ *         struct my_third_rpc_in    *rpc_in;
+ *         struct my_first_rpc_out   *rpc_out;
+ */
+
+#define CRT_GEN_GET_CMF_TYPE(field) BOOST_PP_SEQ_HEAD(field)
+
+#define CRT_GEN_FMT_ARR_ITEM(r, data, field)				\
+	BOOST_PP_CAT(&CMF_OF_, CRT_GEN_GET_CMF_TYPE(field)),
+
+#define CRT_GEN_FMT_ARR(fmt_arr_name, fields)				\
+	struct crt_msg_field *fmt_arr_name##_fmt[] = {			\
+		BOOST_PP_SEQ_FOR_EACH(CRT_GEN_FMT_ARR_ITEM, , fields)	\
+	};
+
+#define CRT_GEN_GET_TYPE(field) BOOST_PP_SEQ_HEAD(field)
+#define CRT_GEN_GET_NAME(field) BOOST_PP_SEQ_CAT(BOOST_PP_SEQ_TAIL(field))
+
+#define CRT_GEN_STRUCT_FIELD(r, data, field)				\
+	CRT_GEN_GET_TYPE(field) CRT_GEN_GET_NAME(field);		\
+
+#define CRT_GEN_STRUCT(struct_type_name, fields)			\
+	struct struct_type_name {					\
+		BOOST_PP_SEQ_FOR_EACH(CRT_GEN_STRUCT_FIELD, , fields)	\
+	};
+
+#define CRT_GEN_REQ_FMT(rpc_name)					\
+	struct crt_req_format CQF_##rpc_name =				\
+		DEFINE_CRT_REQ_FMT(#rpc_name, rpc_name##_in_fmt,	\
+				   rpc_name##_out_fmt);
+
+/**
+ * Prepare struct types and format description for the input/output of an RPC.
+ * Supported types in the fields_in/fields_out list can be found in
+ * include/cart/types.h
+ *
+ *
+ * Example usage:
+ *     CRT_RPC_PREP(my_rpc, ((int32_t)		(mr_arg_1))
+ *                          ((uint32_t)		(mr_arg_2))
+ *                          ((d_rank_t)		(mr_rank))
+ *                          ((d_rank_list_t)	(*mr_rank_list))
+ *                          ((d_string_t)	(mr_name)),
+ *                          ((int32_t)		(mr_ret)));
+ *     CRT_RPC_REGISTER(opcode, flags, my_rpc);
+ *
+ *     these two macros above expand to:
+ *
+ *     struct crt_msg_field *my_rpc_in_fmt[] = {
+ *             &CMF_INT,
+ *             &CMF_UINT32,
+ *             &CMF_RANK,
+ *             &CMF_RANK_LIST,
+ *             &CMF_STRING,
+ *     };
+ *
+ *     struct crt_msg_field *my_rpc_out_fmt[] = {
+ *             &CMF_INT,
+ *     };
+ *
+ *     struct my_rpc_in {
+ *             int32_t		 mr_arg_1;
+ *             uint32_t		 mr_arg_2;
+ *             d_rank_t		 mr_rank;
+ *             d_rank_list_t	*mr_rank_list;
+ *             d_string_t	 mr_name;
+ *     };
+ *
+ *     struct my_rpc_out {
+ *             int32_t		mr_ret;
+ *     };
+ *
+ *     struct crt_req_format CQF_my_rpc_ =
+ *             DEFINE_CRT_REQ_FMT("my_rpc", my_rpc_in_fmt, my_rpc_out_fmt);
+ *
+ *     crt_register(opcode, flags, &CQF_my_rpc);
+ *
+ * \param[in] rpc_name          name of the RPC.
+ * \param[in] fields_in         list of fields in the RPC input. The list is in
+ *                              the format of:
+ *               ((type_1)(name_1)) ((type_2)(name_2)) ((type_3)(name_3)) ...
+ *
+ * \param[in] fields_out        list of fields in the RPC output. The list is in
+ *                              the format of:
+ *               ((type_1)(name_1)) ((type_2)(name_2)) ((type_3)(name_3)) ...
+ */
+#define CRT_RPC_PREP(rpc_name, fields_in, fields_out)			\
+	CRT_GEN_FMT_ARR(rpc_name##_in, fields_in)			\
+	CRT_GEN_STRUCT(rpc_name##_in, fields_in)			\
+	CRT_GEN_FMT_ARR(rpc_name##_out, fields_out)			\
+	CRT_GEN_STRUCT(rpc_name##_out, fields_out)			\
+	CRT_GEN_REQ_FMT(rpc_name)
+
+#define CRT_RPC_ARG_DESC(type_name, fields)				\
+	CRT_GEN_FMT_ARR(type_name, fields)				\
+	CRT_GEN_STRUCT(type_name, fields)
+
+#define CRT_RPC_REQ_FMT(rpc_name, in_type_name, out_type_name)		\
+	struct crt_req_format CQF_##rpc_name =				\
+		DEFINE_CRT_REQ_FMT(#rpc_name, in_type_name##_fmt,	\
+				   out_type_name##_fmt);
+
+#define CRT_RPC_SRV_REGISTER(opcode, flags, rpc_name, rpc_handler)	\
+	crt_rpc_srv_register(opcode, flags, &CQF_##rpc_name, rpc_handler)
+
+#define CRT_RPC_REGISTER(opcode, flags, rpc_name)			\
+	crt_rpc_register(opcode, flags, &CQF_##rpc_name)
+
+#define CRT_RPC_IN_FMT(rpc_name)	rpc_name##_in_fmt
+#define CRT_RPC_OUT_FMT(rpc_name)	rpc_name##_out_fmt
 
 /**
  * Dynamically register an RPC with features at client-side.

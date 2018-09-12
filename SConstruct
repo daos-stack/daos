@@ -87,7 +87,7 @@ def scons():
                                  'scons_local',
                                  'components.py'),
                     prebuild=['ompi', 'mercury', 'uuid', 'crypto',
-                              'pmix'])
+                              'pmix', 'boost'])
     opts.Save(opts_file, env)
     env.Alias('install', '$PREFIX')
 

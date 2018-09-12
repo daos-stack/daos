@@ -313,6 +313,21 @@ extern struct crt_msg_field CMF_RANK_LIST;
 extern struct crt_msg_field CMF_BULK_ARRAY;
 extern struct crt_msg_field CMF_IOVEC;
 
+/** used to obtain the CMF name of a data type in the RPC registration macro */
+#define CMF_OF_uuid_t			CMF_UUID
+#define CMF_OF_crt_group_id_t		CMF_GRP_ID
+#define CMF_OF_int32_t			CMF_INT
+#define CMF_OF_uint32_t			CMF_UINT32
+#define CMF_OF_uint64_t			CMF_UINT64
+#define CMF_OF_crt_bulk_t		CMF_BULK
+#define CMF_OF_bool			CMF_BOOL
+#define CMF_OF_d_string_t		CMF_STRING
+#define CMF_OF_crt_phy_addr_t		CMF_PHY_ADDR
+#define CMF_OF_d_rank_t			CMF_RANK
+#define CMF_OF_d_rank_list_t		CMF_RANK_LIST
+#define CMF_OF_crt_bulk_array_t		CMF_BULK_ARRAY
+#define CMF_OF_d_iov_t			CMF_IOVEC
+
 /** Bulk transfer modes */
 typedef enum {
 	CRT_BULK_PUT = 0x68,
