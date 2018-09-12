@@ -57,27 +57,22 @@ def runServer(hostfile, setname, basepath):
         orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin/orterun")
         daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin/daos_server")
         ld_lib_path = os.path.join(build_vars["PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["PREFIX"], "lib/daos_srv") + os.pathsep + \
-            os.path.join(build_vars["OMPI_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["MERCURY_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["HWLOC_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["ARGOBOTS_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["SPDK_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["PMDK_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["OPENPA_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["CART_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["ISAL_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["OFI_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["FUSE_PREFIX"], "lib") + os.pathsep + \
-            os.path.join(build_vars["PMIX_PREFIX"], "lib")
+                      os.path.join(build_vars["PREFIX"], "lib/daos_srv")
+
+        env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'DD_(STDERR|LOG)', 'D_LOG_.*',
+                    'OFI_.*']
+
+        env_args = ""
+        for env_var in os.environ.items():
+            for pat in env_vars:
+                if not re.match(pat, env_var[0]):
+                    continue
+                env_args += "-x {0}=\"{1}\" ".format(env_var, os.environ[env_var])
 
         initial_cmd = "/bin/sh"
         server_cmd = orterun_bin + " --np {0} ".format(server_count)
         server_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
-        server_cmd += "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR -x D_LOG_FILE="
-        server_cmd += basepath + "/install/tmp/daos.log "
-        # uncomment if you prefer separate logs per server (and comment above)
-        #server_cmd += "/tmp/daos.log "
+        server_cmd += env_args
         server_cmd += "-x DD_SUBSYS=all -x DD_MASK=all "
         server_cmd += "-x LD_LIBRARY_PATH={0} ".format(ld_lib_path)
         server_cmd += daos_srv_bin + " -g {0} -c 1 ".format(setname)
@@ -86,23 +81,25 @@ def runServer(hostfile, setname, basepath):
         print "Start CMD>>>>{0}".format(server_cmd)
 
         sessions[setname] = aexpect.ShellSession(initial_cmd)
-        if (sessions[setname].is_responsive()):
+        if sessions[setname].is_responsive():
             sessions[setname].sendline(server_cmd)
-            timeout = time.time() + 300
+            timeout = 300
+            start_time = time.time()
             result = 0
             expected_data = "Starting Servers\n"
             while True:
                 pattern = "DAOS server"
-                output = sessions[setname].read_nonblocking(2,2)
+                output = sessions[setname].read_nonblocking(2, 2)
                 match = re.findall(pattern, output)
                 expected_data = expected_data + output
                 result += len(match)
-                if result == server_count or time.time() > timeout:
+                if result == server_count or time.time() - start_time > timeout:
                     print ("<SERVER>: {}".format(expected_data))
                     if result != server_count:
                         raise ServerFailed("Server didn't start!")
                     break
-            print "<SERVER> server started"
+            print "<SERVER> server started and took %s seconds to start" % \
+                  (time.time() - start_time)
     except Exception as e:
         print "<SERVER> Exception occurred: {0}".format(str(e))
         raise ServerFailed("Server didn't start!")
