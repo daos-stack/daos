@@ -285,7 +285,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1,
  * \return		0 on Success. Negative on Failure.
  */
 int
-dfs_get_obj_type(dfs_obj_t *obj, mode_t *mode);
+dfs_get_mode(dfs_obj_t *obj, mode_t *mode);
 
 /**
  * Retrieve the DAOS open handle of a DFS file object. User should not close
@@ -351,6 +351,22 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name,
  */
 int
 dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
+
+/**
+ * Check access permissions on an object. Similar to Linux access(2).
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object.
+ *			If NULL, will use root object as parent.
+ * \param[in]	name	Link name of the object to access.
+ * \param[in]	mask	accessibility check(s) to be performed.
+ *			It should be either the value F_OK, or a mask with
+ *			bitwise OR of one or more of R_OK, W_OK, and X_OK.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
 
 /**
  * Sync to commit the latest epoch on the container. This applies to the entire

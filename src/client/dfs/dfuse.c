@@ -38,9 +38,6 @@
 #include "daos_fs.h"
 #include "daos_api.h"
 
-#define FUNC_ENTER(fmt, ...) \
-	fprintf(stderr, "%s [%d]: "fmt, __func__, __LINE__, ##__VA_ARGS__)
-
 struct dfuse_data {
 	int		show_help;
 	int		show_version;
@@ -57,6 +54,13 @@ struct dfuse_data {
 
 static struct dfuse_data dfuse_fs;
 static dfs_t *dfs;
+
+#define FUNC_ENTER(fmt, ...)					\
+do {								\
+	if (dfuse_fs.debug)					\
+		fprintf(stderr, "%s [%d]: "fmt, __func__,	\
+			__LINE__, ##__VA_ARGS__);		\
+} while (0)
 
 #define UINT64ENCODE(p, n)					\
 do {								\
@@ -369,6 +373,49 @@ out:
 }
 
 static int
+dfuse_access(const char *path, int mask)
+{
+	char		*name = NULL, *dir_name = NULL;
+	dfs_obj_t	*parent = NULL;
+	mode_t		pmode;
+	int		rc;
+
+	FUNC_ENTER("path = %s\n", path);
+
+	if (path == NULL)
+		return -ENOENT;
+
+	rc = parse_filename(path, &name, &dir_name);
+	if (rc)
+		return rc;
+
+	if (strcmp(dir_name, "/") != 0) {
+		rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode);
+		if (rc) {
+			fprintf(stderr, "Failed to lookup path %s (%d)\n",
+				dir_name, rc);
+			D_GOTO(out, rc);
+		}
+		if (!S_ISDIR(pmode)) {
+			fprintf(stderr, "%s does not resolve to a dir\n",
+				dir_name);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
+
+	rc = dfs_access(dfs, parent, name, mask);
+
+out:
+	if (name)
+		free(name);
+	if (dir_name)
+		free(dir_name);
+	if (parent)
+		dfs_release(parent);
+	return error_convert(rc);
+}
+
+static int
 dfuse_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 {
 	char *name = NULL, *dir_name = NULL;
@@ -391,9 +438,13 @@ dfuse_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 		return rc;
 
 	rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode)) {
-		fprintf(stderr, "Failed to lookup path %s (%d)\n", path, rc);
+	if (rc) {
+		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
+	}
+	if (!S_ISDIR(pmode)) {
+		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = dfs_stat(dfs, parent, name, stbuf);
@@ -513,9 +564,13 @@ dfuse_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 		D_GOTO(out, rc = -EINVAL);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode)) {
-		fprintf(stderr, "Failed to lookup path %s (%d)\n", path, rc);
+	if (rc) {
+		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
+	}
+	if (!S_ISDIR(pmode)) {
+		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	mode = S_IFREG | mode;
@@ -556,9 +611,13 @@ dfuse_open(const char *path, struct fuse_file_info *fi)
 		D_GOTO(out, rc = -EINVAL);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode)) {
-		fprintf(stderr, "Failed to lookup path %s (%d)\n", path, rc);
+	if (rc) {
+		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
+	}
+	if (!S_ISDIR(pmode)) {
+		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = dfs_open(dfs, parent, name, S_IFREG, fi->flags, 0, NULL, &obj);
@@ -596,9 +655,13 @@ dfuse_opendir(const char *path, struct fuse_file_info *fi)
 	D_ASSERT(dir_name);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode)) {
-		fprintf(stderr, "Failed to lookup path %s (%d)\n", path, rc);
+	if (rc) {
+		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
+	}
+	if (!S_ISDIR(pmode)) {
+		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (name == NULL) {
@@ -696,9 +759,13 @@ dfuse_mkdir(const char *path, mode_t mode)
 		D_GOTO(out, rc = -EINVAL);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode)) {
-		fprintf(stderr, "Failed to lookup path %s (%d)\n", path, rc);
+	if (rc) {
+		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
+	}
+	if (!S_ISDIR(pmode)) {
+		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = dfs_mkdir(dfs, parent, name, mode);
@@ -735,9 +802,13 @@ dfuse_symlink(const char *from, const char *to)
 		D_GOTO(out, rc = -EINVAL);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode)) {
-		fprintf(stderr, "Failed to lookup path %s (%d)\n", to, rc);
+	if (rc) {
+		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
+	}
+	if (!S_ISDIR(pmode)) {
+		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = dfs_open(dfs, parent, name, S_IFLNK, O_CREAT, 0, from, &sym);
@@ -766,9 +837,13 @@ dfuse_readlink(const char *path, char *buf, size_t size)
 	FUNC_ENTER("path = %s\n", path);
 
 	rc = dfs_lookup(dfs, path, O_RDONLY, &obj, &mode);
-	if (rc || !S_ISLNK(mode)) {
-		fprintf(stderr, "Failed to lookup symlink %s (%d)\n", path, rc);
+	if (rc) {
+		fprintf(stderr, "Failed path lookup %s (%d)\n", path, rc);
 		D_GOTO(out, rc);
+	}
+	if (!S_ISLNK(mode)) {
+		fprintf(stderr, "%s does not resolve to a symlink\n", path);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = dfs_get_symlink_value(obj, buf, &size);
@@ -800,9 +875,13 @@ dfuse_unlink(const char *path)
 		D_GOTO(out, rc = -EINVAL);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode)) {
-		fprintf(stderr, "Failed to lookup path %s (%d)\n", path, rc);
+	if (rc) {
+		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
+	}
+	if (!S_ISDIR(pmode)) {
+		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = dfs_remove(dfs, parent, name, false);
@@ -840,9 +919,13 @@ dfuse_rmdir(const char *path)
 		D_GOTO(out, rc = -EINVAL);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode)) {
-		fprintf(stderr, "Failed to lookup path %s (%d)\n", path, rc);
+	if (rc) {
+		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
+	}
+	if (!S_ISDIR(pmode)) {
+		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = dfs_remove(dfs, parent, name, false);
@@ -896,10 +979,13 @@ dfuse_rename(const char *old_path, const char *new_path, unsigned int flags)
 		D_GOTO(out, rc = -EINVAL);
 
 	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
-	if (rc || !S_ISDIR(pmode)) {
-		fprintf(stderr, "Failed to lookup path %s (%d)\n", dir_name,
-			rc);
+	if (rc) {
+		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
+	}
+	if (!S_ISDIR(pmode)) {
+		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = parse_filename(new_path, &new_name, &new_dir_name);
@@ -911,10 +997,14 @@ dfuse_rename(const char *old_path, const char *new_path, unsigned int flags)
 		D_GOTO(out, rc = -EINVAL);
 
 	rc = dfs_lookup(dfs, new_dir_name, O_RDWR, &new_parent, &pmode);
-	if (rc || !S_ISDIR(pmode)) {
-		fprintf(stderr, "Failed to lookup path %s (%d)\n", new_dir_name,
+	if (rc) {
+		fprintf(stderr, "Failed path lookup %s (%d)\n", new_dir_name,
 			rc);
 		D_GOTO(out, rc);
+	}
+	if (!S_ISDIR(pmode)) {
+		fprintf(stderr, "%s does not resolve to a dir\n", new_dir_name);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 #ifdef RENAME_NOREPLACE
@@ -1074,6 +1164,7 @@ dfuse_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
 }
 
 static struct fuse_operations dfuse_ops = {
+	.access		= dfuse_access,
 	.create		= dfuse_create,
 	.fsync		= dfuse_sync,
 	.fsyncdir	= dfuse_sync,
@@ -1110,7 +1201,7 @@ static void usage(const char *progname)
 "	-s		disable multi-threaded operation\n"
 "	-d, --debug	print some debugging information (implies -f)\n"
 "	-p		DAOS pool uuid to connect with\n"
-"	-l		rank list of DAOS pool service ranks\n"
+"	-l		DAOS pool service rank list\n"
 "	-g		DAOS server group name to connect to\n"
 "	-r		Remove/Destroy the DAOS container when unmounted\n"
 "\n"

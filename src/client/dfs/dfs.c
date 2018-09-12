@@ -173,6 +173,7 @@ print_mode(mode_t mode)
 	D_DEBUG(DB_TRACE, (mode & S_IXOTH) ? "x" : "-");
 	D_DEBUG(DB_TRACE, "\n");
 }
+
 static void
 print_stat(struct stat *stbuf)
 {
@@ -618,6 +619,49 @@ entry_stat(dfs_t *dfs, daos_handle_t oh, const char *name, struct stat *stbuf)
 }
 
 static int
+check_access(dfs_t *dfs, uid_t uid, gid_t gid, mode_t mode, int mask)
+{
+	mode_t	base_mask;
+
+	/** Root can access everything */
+	if (uid == 0)
+		return 0;
+
+	if (mode == 0)
+		return -DER_NO_PERM;
+
+	/** set base_mask to others at first step */
+	base_mask = S_IRWXO;
+	/** update base_mask if uid matches */
+	if (uid == dfs->uid)
+		base_mask |= S_IRWXU;
+	/** update base_mask if gid matches */
+	if (gid == dfs->gid)
+		base_mask |= S_IRWXG;
+
+	/** AND the object mode with the base_mask to determine access */
+	mode &= base_mask;
+
+	/** Execute check */
+	if (X_OK == (mask & X_OK))
+		if (0 == (mode & (S_IXUSR | S_IXGRP | S_IXOTH)))
+			return -DER_NO_PERM;
+
+	/** Write check */
+	if (W_OK == (mask & W_OK))
+		if (0 == (mode & (S_IWUSR | S_IWGRP | S_IWOTH)))
+			return -DER_NO_PERM;
+
+	/** Read check */
+	if (R_OK == (mask & R_OK))
+		if (0 == (mode & (S_IRUSR | S_IRGRP | S_IROTH)))
+			return -DER_NO_PERM;
+
+	/** TODO - check ACL, attributes (immutable, append) etc. */
+	return 0;
+}
+
+static int
 open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 	  dfs_obj_t *file)
 {
@@ -702,6 +746,14 @@ open_file:
 		return -DER_INVAL;
 	}
 
+	rc = check_access(dfs, geteuid(), getegid(), entry.mode,
+			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
+
+	file->mode = entry.mode;
 	rc = daos_array_open(dfs->coh, entry.oid, dfs->epoch, daos_mode,
 			     &elem_size, &dkey_size, &file->oh, NULL);
 	if (rc != 0) {
@@ -808,6 +860,13 @@ open_dir(dfs_t *dfs, daos_handle_t parent_oh, int flags, daos_oclass_id_t cid,
 
 	if (!S_ISDIR(entry.mode))
 		return -DER_NOTDIR;
+
+	rc = check_access(dfs, geteuid(), getegid(), entry.mode,
+			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
 
 	rc = daos_obj_open(dfs->coh, entry.oid, dfs->epoch, daos_mode, &dir->oh,
 			   NULL);
@@ -1175,6 +1234,12 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	if (name == NULL)
 		return -DER_INVAL;
 
+	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
+
 	incr_epoch(dfs);
 
 	strcpy(new_dir.name, name);
@@ -1289,6 +1354,12 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 
 	D_DEBUG(DB_TRACE, "Remove entry %s from %s\n", name, parent->name);
 
+	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
+
 	rc = fetch_entry(parent->oh, dfs->epoch, name, false, &exists, &entry);
 	if (rc)
 		return rc;
@@ -1353,6 +1424,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	char			*rem, *sptr;
 	bool			exists;
 	int			daos_mode;
+	uid_t			uid = geteuid();
+	gid_t			gid = getegid();
 	int			rc = 0;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -1386,6 +1459,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		D_GOTO(err_obj, rc);
 
 	parent.oh = obj->oh;
+	parent.mode = obj->mode;
 	oid_cp(&parent.oid, obj->oid);
 	oid_cp(&parent.parent_oid, obj->parent_oid);
 
@@ -1394,6 +1468,13 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	     token != NULL;
 	     token = strtok_r(NULL, "/", &sptr)) {
 dfs_lookup_loop:
+
+		rc = check_access(dfs, uid, gid, parent.mode, X_OK);
+		if (rc) {
+			D_ERROR("Permission Denied.\n");
+			return rc;
+		}
+
 		D_DEBUG(DB_TRACE, "looking up %s in %"PRIu64".%"PRIu64"\n",
 			token, parent.oid.hi, parent.oid.lo);
 		rc = fetch_entry(parent.oh, dfs->epoch, token, true,
@@ -1415,6 +1496,7 @@ dfs_lookup_loop:
 		oid_cp(&obj->oid, entry.oid);
 		oid_cp(&obj->parent_oid, parent.oid);
 		strcpy(obj->name, token);
+		obj->mode = entry.mode;
 
 		/** if entry is a file, open the array object and return */
 		if (S_ISREG(entry.mode)) {
@@ -1491,6 +1573,7 @@ dfs_lookup_loop:
 		oid_cp(&parent.oid, obj->oid);
 		oid_cp(&parent.parent_oid, obj->parent_oid);
 		parent.oh = obj->oh;
+		parent.mode = entry.mode;
 	}
 
 	if (mode)
@@ -1536,6 +1619,12 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 		return 0;
 	if (dirs == NULL || anchor == NULL)
 		return -DER_INVAL;
+
+	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
 
 	D_ALLOC_ARRAY(kds, *nr);
 	if (kds == NULL)
@@ -1608,6 +1697,13 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		return -DER_NOTDIR;
 
 	D_DEBUG(DB_TRACE, "dfs_open: parent %s obj: %s\n", parent->name, name);
+
+	rc = check_access(dfs, geteuid(), getegid(), parent->mode,
+			  (flags & O_CREAT) ? W_OK | X_OK : X_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
 
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
@@ -1789,12 +1885,19 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off)
 int
 dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 {
-	daos_handle_t		oh;
+	daos_handle_t	oh;
+	int		rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
 	if (parent == NULL || !S_ISDIR(parent->mode))
 		return -DER_NOTDIR;
+
+	rc = check_access(dfs, geteuid(), getegid(), parent->mode, X_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
 
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
@@ -1822,7 +1925,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (obj == NULL)
 		return -DER_INVAL;
 
-	/* Open parent object and fetch entry of obj from it */
+	/** Open parent object and fetch entry of obj from it */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, dfs->epoch, DAOS_OO_RO,
 			   &oh, NULL);
 	if (rc)
@@ -1838,12 +1941,63 @@ out:
 }
 
 int
+dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
+{
+	daos_handle_t		oh;
+	bool			exists;
+	struct dfs_entry	entry;
+	int			rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return -DER_INVAL;
+	if (((mask & W_OK) == W_OK) && dfs->amode != O_RDWR)
+		return -DER_NO_PERM;
+	/** If parent is NULL, assume it's root object */
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return -DER_NOTDIR;
+	if (name == NULL) {
+		if (strcmp(parent->name, "/") != 0) {
+			D_ERROR("Invalid path %s and entry name %s)\n",
+				parent->name, name);
+			return -DER_INVAL;
+		}
+		name = parent->name;
+		oh = dfs->super_oh;
+	} else {
+		oh = parent->oh;
+	}
+
+	/* Check if parent has the entry */
+	rc = fetch_entry(oh, dfs->epoch, name, true, &exists, &entry);
+	if (rc)
+		return rc;
+
+	if (!exists)
+		return -DER_NONEXIST;
+	if (mask == F_OK)
+		return 0;
+
+	/** Use real uid and gid for access() */
+	return check_access(dfs, getuid(), getgid(), entry.mode, mask);
+}
+
+int
 dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 {
+	int rc;
+
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return -DER_INVAL;
+
+	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
 
 	return daos_array_get_size(obj->oh, dfs->epoch, size, NULL);
 }
@@ -1862,6 +2016,12 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 		return -DER_NO_PERM;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return -DER_INVAL;
+
+	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
 
 	incr_epoch(dfs);
 
@@ -1963,6 +2123,24 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 		return -DER_NOTDIR;
 	if (name == NULL || new_name == NULL)
 		return -DER_INVAL;
+
+	/*
+	 * TODO - more permission checks for source & target attributes needed
+	 * (immutable, append).
+	 */
+
+	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
+
+	rc = check_access(dfs, geteuid(), getegid(), new_parent->mode,
+			  W_OK | X_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
 
 	rc = fetch_entry(parent->oh, dfs->epoch, name, true, &exists, &entry);
 	if (rc) {
@@ -2081,6 +2259,19 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 		return -DER_NOTDIR;
 	if (name1 == NULL || name2 == NULL)
 		return -DER_INVAL;
+
+	rc = check_access(dfs, geteuid(), getegid(), parent1->mode,
+			  W_OK | X_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
+	rc = check_access(dfs, geteuid(), getegid(), parent2->mode,
+			  W_OK | X_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
 
 	rc = fetch_entry(parent1->oh, dfs->epoch, name1, true,
 			 &exists, &entry1);
@@ -2227,6 +2418,12 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	if (obj == NULL)
 		return -DER_INVAL;
 
+	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
+
 	/** prefix name with x: to avoid collision with internal attrs */
 	xname = concat("x:", name);
 	if (xname == NULL)
@@ -2313,11 +2510,17 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	if (obj == NULL)
 		return -DER_INVAL;
 
+	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
+
 	xname = concat("x:", name);
 	if (xname == NULL)
 		return -DER_NOMEM;
 
-	/** Open parent object and insert xattr in the entry of the object */
+	/** Open parent object and get xattr from the entry of the object */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, dfs->epoch, DAOS_OO_RO,
 			   &oh, NULL);
 	if (rc)
@@ -2384,11 +2587,17 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	if (obj == NULL)
 		return -DER_INVAL;
 
+	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
+
 	xname = concat("x:", name);
 	if (xname == NULL)
 		return -DER_NOMEM;
 
-	/** Open parent object and insert xattr in the entry of the object */
+	/** Open parent object and remove xattr from the entry of the object */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, dfs->epoch, DAOS_OO_RW,
 			   &oh, NULL);
 	if (rc)
@@ -2442,7 +2651,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 	if (list == NULL)
 		return -DER_INVAL;
 
-	/** Open parent object and insert xattr in the entry of the object */
+	/** Open parent object and list from entry */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, dfs->epoch, DAOS_OO_RW,
 			   &oh, NULL);
 	if (rc)
