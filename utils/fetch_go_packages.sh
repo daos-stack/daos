@@ -22,7 +22,7 @@ packages=('github.com/satori/go.uuid'
 'github.com/golang/protobuf/protoc-gen-go'
 'google.golang.org/grpc'
 'golang.org/x/sys/unix'
-'github.com/abiosoft/ishell'
+'github.com/daos-stack/ishell'
 'github.com/jessevdk/go-flags'
 'github.com/pkg/errors'
 )

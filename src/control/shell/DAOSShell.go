@@ -32,7 +32,7 @@ import (
 
 	pb "modules/mgmt/proto"
 
-	"github.com/abiosoft/ishell"
+	"github.com/daos-stack/ishell"
 	"github.com/jessevdk/go-flags"
 	"github.com/satori/go.uuid"
 )
