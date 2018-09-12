@@ -50,3 +50,9 @@ for result in ${TARGET_LIST}; do
   ls "artifacts/${result}/"${ARTIFACT_NEEDED}
 done
 
+# Find any build logs
+find "${WORKSPACE}/${TARGET}" -name '*.log' -size -500k \
+  -exec cp {} "${artifact_dest}" \;
+find "${WORKSPACE}/${TARGET}" -name '*.log' -size +500k \
+  -exec printf "%s\n" \; >> "${artifact_dest}/log_files_over_500k.log"
+
