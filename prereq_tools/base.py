@@ -724,6 +724,7 @@ class PreReqComponent(object):
         if os.path.exists(env_script):
             SConscript(env_script, exports=['env'])
 
+        self.config_file = config_file
         if config_file is not None:
             self.configs = ConfigParser.ConfigParser()
             self.configs.read(config_file)
@@ -789,6 +790,10 @@ class PreReqComponent(object):
     def get_build_info(self):
         """Retrieve the BuildInfo"""
         return self.__build_info
+
+    def get_config_file(self):
+        """Retrieve the Config File"""
+        return self.config_file
 
     @staticmethod
     def add_options():
