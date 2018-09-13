@@ -113,3 +113,8 @@ if [ -e extra_exports.sh ]; then
   cat extra_exports.sh >> "${docker_setup_file}"
 fi
 
+# Clear out the old artifacts to prevent stale files if a build fails.
+artifact_dest="${PWD}/artifacts/"
+rm -rf "${artifact_dest}"
+
+
