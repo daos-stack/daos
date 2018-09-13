@@ -530,25 +530,25 @@ ts_many_add(char *args)
 }
 
 static int
-ts_get_max(char *args)
+ts_get_size(char *args)
 {
 	char		*tok;
 	daos_epoch_t	 epoch;
-	daos_off_t	 max_off;
-	daos_off_t	 expected_off;
+	daos_size_t	 size;
+	daos_size_t	 expected_size;
 	int		 expected_rc = 0;
 	int		 rc;
-	bool		 check_offset = true;
+	bool		 check_size = true;
 	bool		 check_rc = true;
 
 	epoch = strtoull(args, NULL, 10);
 
 	tok = strchr(args, EVT_SEP);
 	if (tok == NULL) {
-		check_offset = false;
+		check_size = false;
 	} else {
 		tok++;
-		expected_off = strtoull(tok, NULL, 10);
+		expected_size = strtoull(tok, NULL, 10);
 	}
 
 	tok = strchr(args, EVT_SEP_VAL);
@@ -560,19 +560,19 @@ ts_get_max(char *args)
 		D_PRINT("Expecting rc %d\n", expected_rc);
 	}
 
-	rc = evt_get_max(ts_toh, epoch, &max_off);
+	rc = evt_get_size(ts_toh, epoch, &size);
 
-	D_PRINT("evt_get_max returns %s at epoch "DF_U64"\n", d_errstr(rc),
+	D_PRINT("evt_get_size returns %s at epoch "DF_U64"\n", d_errstr(rc),
 		epoch);
 	if (rc == 0)
-		D_PRINT("   max_offset is "DF_U64"\n", max_off);
+		D_PRINT("   size is "DF_U64"\n", size);
 
 	if (check_rc && expected_rc != rc) {
 		D_PRINT("Expected rc == %s\n", d_errstr(expected_rc));
 		return 1;
 	}
-	if (check_offset && expected_off != max_off) {
-		D_PRINT("Expected offset "DF_U64"\n", expected_off);
+	if (check_size && expected_size != size) {
+		D_PRINT("Expected size "DF_U64"\n", expected_size);
 		return 1;
 	}
 
@@ -599,7 +599,7 @@ static struct option ts_ops[] = {
 	{ "find",	required_argument,	NULL,	'f'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
 	{ "list",	no_argument,		NULL,	'l'	},
-	{ "get_max",	required_argument,	NULL,	'g'	},
+	{ "get_size",	required_argument,	NULL,	'g'	},
 	{ "debug",	required_argument,	NULL,	'b'	},
 	{ NULL,		0,			NULL,	0	},
 };
@@ -635,7 +635,7 @@ ts_cmd_run(char opc, char *args)
 		rc = ts_list_rect();
 		break;
 	case 'g':
-		rc = ts_get_max(args);
+		rc = ts_get_size(args);
 		break;
 	case 'd':
 		rc = ts_delete_rect(args);

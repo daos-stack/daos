@@ -276,7 +276,7 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 	if (rc != 0)
 		return -DER_HG;
 
-	if (dvi->iod_nr == 0) {
+	if (dvi->iod_nr == 0 && dvi->iod_type != DAOS_IOD_ARRAY) {
 		D_ERROR("invalid I/O descriptor, iod_nr = 0\n");
 		return -DER_HG;
 	}
