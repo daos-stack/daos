@@ -1703,7 +1703,7 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 		D_ERROR("HG_Bulk_transfer failed, hg_ret: %d.\n", hg_ret);
 		D_FREE_PTR(bulk_cbinfo);
 		D_FREE_PTR(bulk_desc_dup);
-		rc = -DER_HG;
+		rc = crt_hgret_2_der(hg_ret);
 	}
 
 out:

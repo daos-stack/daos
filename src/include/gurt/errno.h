@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -86,7 +86,7 @@
 	ACTION(DER_UNINIT,		(DER_ERR_GURT_BASE + 15))	\
 	/** buffer too short (larger buffer needed) */			\
 	ACTION(DER_TRUNC,		(DER_ERR_GURT_BASE + 16))	\
-	/** value too large for defined data type */			\
+	/** data too long for defined data type or buffer size */	\
 	ACTION(DER_OVERFLOW,		(DER_ERR_GURT_BASE + 17))	\
 	/** operation canceled */					\
 	ACTION(DER_CANCELED,		(DER_ERR_GURT_BASE + 18))	\

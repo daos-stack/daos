@@ -249,4 +249,25 @@ crt_hg_bulk_cancel(crt_bulk_opid_t opid)
 	return HG_Bulk_cancel(opid);
 }
 
+static inline int
+crt_hgret_2_der(int hg_ret)
+{
+	switch (hg_ret) {
+	case HG_SUCCESS:
+		return 0;
+	case HG_TIMEOUT:
+		return -DER_TIMEDOUT;
+	case HG_INVALID_PARAM:
+		return -DER_INVAL;
+	case HG_SIZE_ERROR:
+		return -DER_OVERFLOW;
+	case HG_NOMEM_ERROR:
+		return -DER_NOMEM;
+	case HG_CANCELED:
+		return -DER_CANCELED;
+	default:
+		return -DER_HG;
+	};
+}
+
 #endif /* __CRT_MERCURY_H__ */
