@@ -87,7 +87,6 @@ popd
 # Keep public_repo_xxx arrays in same order and count.
 public_repo_name=(\
   'argobots' \
-  'cci' \
   'fuse' \
   'mercury' \
   'pmdk' \
@@ -100,7 +99,6 @@ public_repo_name=(\
 
 public_repo_dir=(\
   'daos/argobots' \
-  'daos/cci' \
   'coral/libfuse' \
   'daos/mercury' \
   'coral/nvml' \
@@ -118,15 +116,13 @@ comp_repo_dir=('daos/cart' 'coral/cppr' 'daos/daos_m' 'daos/iof')
 std_repo_name=("${public_repo_name[@]}" "${comp_repo_name[@]}")
 std_repo_dir=("${public_repo_dir[@]}" "${comp_repo_dir[@]}")
 
-# repo_base='ssh://review.whamcloud.com:29418'
-
-for i in "${!comp_repo_name[@]}"; do
-  if [[ "${TARGET}" = "${comp_repo_name[i]}" ]]; then
-    if [ ! -d "${TARGET}" ]; then
+if [ ! -d "${TARGET}" ]; then
+  for i in "${!comp_repo_name[@]}"; do
+    if [[ "${TARGET}" = "${comp_repo_name[i]}" ]]; then
       git clone "${repo_base}/${comp_repo_dir[i]}" "${comp_repo_name[i]}"
     fi
-  fi
-done
+  done
+fi
 
 pushd "${TARGET}"
   git config advise.detachedHead false
@@ -192,24 +188,55 @@ if [ -z "${BUILD_CONFIG}" ]; then
   exit 1
 fi
 
-# Read and parse the git commit hashes from build.config
-gr1='grep -v depends='
-gr2='grep -v component='
-depend_hashes=$(grep -i "\s*=\s*" "${BUILD_CONFIG}" | ${gr1} | ${gr2})
-mapfile -t depend_lines <<< "${depend_hashes}"
-depend_names=""
-for line in "${depend_lines[@]}"; do
-  # shellcheck disable=SC1001
-  if [[ "${line}" != \#* ]]; then
-    depend_name=${line%=*}
-    depend_name=${depend_name% *}
-    depend_name=${depend_name,,}
-    depend_hash=${line#*=}
-    depend_hash=${depend_hash#* }
-    depend_hash=${depend_hash,,}
-    declare ${depend_name}_git_hash=${depend_hash}
-    depend_names="${depend_names} ${depend_name}"
+build_config_script="${PWD}/tmp_build_config.sh"
+"${SCONS_LOCAL}/utils/get_build_config_info.py" \
+  --build-config="${BUILD_CONFIG}" > "${build_config_script}"
+
+config_filekeys=""
+old_config_filekeys="<>"
+
+count=0
+# shellcheck disable=SC1090
+source "${build_config_script}"
+while [ "${config_filekeys}" != "${old_config_filekeys}" ]; do
+
+  let count=count+1
+  if [ ${count} -gt 5 ]; then
+    echo "More than 5 loops.  We know we don't have that many!"
+    break;
   fi
+
+  # Skip if no additional config files.
+  if [ -z "${config_filekeys}" ]; then
+    break;
+  fi
+
+  old_config_filekeys=${config_filekeys}
+
+  for filekey in ${config_filekeys}; do
+    if [ ! -d "${filekey}" ]; then
+      for i in "${!comp_repo_name[@]}"; do
+        if [[ "${filekey}" = "${comp_repo_name[i]}" ]]; then
+          git clone "${repo_base}/${comp_repo_dir[i]}" "${comp_repo_name[i]}"
+        fi
+      done
+    fi
+    commit_sym="${filekey}_git_hash"
+    pushd "${filekey}"
+      git config advise.detachedHead false
+      git clean -dfx
+      git reset --hard
+      git checkout master
+      git fetch origin "${!commit_sym}"
+      git reset --hard FETCH_HEAD
+      git clean -df
+    popd
+
+  done
+  old_config_filekeys=${config_filekeys}
+  config_filekeys=""
+  # shellcheck disable=SC1090
+  source "${build_config_script}"
 done
 
 

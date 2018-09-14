@@ -65,6 +65,10 @@
 # DEPEND_TARBALLS This is where to place any tarballs found with dependent
 #                 jobs.  Default is "depend_tarballs".
 #                 This directory is cleared at the start of the script.
+#
+# SCONS_LOCAL     Specifies where the scons_local directory to use is.
+#                 Default is to the use scons_local from the parent directory
+#                 of this script.
 
 
 set +u -x
@@ -85,6 +89,18 @@ job_suffix=${JOB_SUFFIX#-}
 if [ -z "${TARGET}" ]; then
   echo "Either JOB_NAME or TARGET environment variables must exist."
   exit 1
+fi
+
+if [ -z "${SCONS_LOCAL}" ]; then
+   test_scl="${TARGET}/scons_local"
+   if [ ! -e "${test_scl}" ]; then
+     test_scl=$(find . -name 'scons_local' -print -quit)
+     if [ ! -e "${test_scl}" ]; then
+       echo "Unable to find scons_local directory."
+       exit 1
+     fi
+   fi
+   SCONS_LOCAL="${test_scl}"
 fi
 
 : "${WORK_TARGET:="dist_target"}"
@@ -201,27 +217,47 @@ function fetch_job_artifacts {
 }
 
 # Read and parse the git commit hashes from build.config
-gr1='grep -v depends='
-gr2='grep -v component='
-depend_hashes=$(grep -i "\s*=\s*" "${BUILD_CONFIG}" | ${gr1} | ${gr2})
-mapfile -t depend_lines <<< "${depend_hashes}"
-depend_names=""
-for line in "${depend_lines[@]}"; do
-  # shellcheck disable=SC1001
-  if [[ "${line}" != \#* ]]; then
-    depend_name=${line%=*}
-    depend_name=${depend_name% *}
-    depend_name=${depend_name,,}
-    depend_hash=${line#*=}
-    depend_hash=${depend_hash#* }
-    depend_hash=${depend_hash,,}
-    declare ${depend_name}_git_hash=${depend_hash}
-    depend_names="${depend_names} ${depend_name}"
+if [ -e "${SCONS_LOCAL}/utils/get_build_config_info.py" ]; then
+  build_config_script="${PWD}/tmp_build_config.sh"
+  "${SCONS_LOCAL}/utils/get_build_config_info.py" \
+    --build-config="${BUILD_CONFIG}" > "${build_config_script}"
+
+  source "${build_config_script}"
+
+  for depend_name in ${depend_names}; do
     if [ -d "${WORK_TARGET}/${depend_name}" ]; then
       rm -rf "${WORK_TARGET:?}/${depend_name}"
     fi
-  fi
-done
+  done
+else
+  # scons_local/utils/docker is updated more often
+  # than scons_local/utils for some jobs, so needs to be backwards
+  # compatible for a short time.
+  # Read and parse the git commit hashes from build.config
+  gr1='grep -v depends='
+  gr2='grep -v component='
+  depend_hashes=$(grep -i "\s*=\s*" "${BUILD_CONFIG}" | ${gr1} | ${gr2})
+  mapfile -t depend_lines <<< "${depend_hashes}"
+  depend_names=""
+  for line in "${depend_lines[@]}"; do
+    # shellcheck disable=SC1001
+    if [[ "${line}" != \#* ]]; then
+      if [[ "${line}" != *config ]] ; then
+        depend_name=${line%=*}
+        depend_name=${depend_name% *}
+        depend_name=${depend_name,,}
+        depend_hash=${line#*=}
+        depend_hash=${depend_hash#* }
+        depend_hash=${depend_hash,,}
+        declare ${depend_name}_git_hash=${depend_hash}
+        depend_names="${depend_names} ${depend_name}"
+        if [ -d "${WORK_TARGET}/${depend_name}" ]; then
+          rm -rf "${WORK_TARGET:?}/${depend_name}"
+        fi
+      fi
+    fi
+  done
+fi
 
 # Some special cases needed
 if [[ ${depend_names} =~ ompi ]]; then
