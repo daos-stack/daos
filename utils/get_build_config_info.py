@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 
 """Utility to parse build.config files in to a shell script"""
 
