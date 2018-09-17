@@ -2,8 +2,11 @@
 seed: 123
 
 fault_config:
+    # id 0 controls global fault injection for D_ALLOC() and D_ALLOC_ARRAY().
+    # It's turned off by default. Change probability to anythin in [0, 100] to
+    # turn it on.
   - id:           0
-    probability:  12
+    probability:  0
     interval:     34
     max_faults:   80
 
@@ -14,14 +17,19 @@ fault_config:
 
   - id:           5000
     probability:  100
+    argument:     without-quoting-only-one-word-is-allowed
     interval:     1
     max_faults:   2
     err_code:     1011
 
     # change the value of probability from 0 to anything in [1, 100] to turn on
-    # the A_ALLOC injection in test_group.c
+    # the D_ALLOC injection in test_group.c
   - id:           1000
     probability:  0
+    # without quoting, no space is allowed here, leading and trailing white
+    # spaces are ignored.  with quoting, anything between quotes is preserved,
+    # including white spaces.
+    argument:     "anything on this line is parsed as one single string"
     interval:     1
     max_faults:   2
     err_code:     1011

@@ -126,7 +126,11 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 		      on_error)						\
 	do {								\
-		if (cond) {						\
+		if (D_SHOULD_FAIL(0)) {					\
+			free(ptr);					\
+			ptr = NULL;					\
+		}							\
+		if ((cond) && (ptr) != NULL) {				\
 			if (count <= 1)					\
 				D_DEBUG(DB_MEM,				\
 					"alloc(" #func ") '" name "': %i at %p.\n", \
@@ -151,14 +155,14 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 #define D_ALLOC_CORE(ptr, size, count)					\
 	do {								\
 		(ptr) = (__typeof__(ptr))calloc(count, (size));		\
-		D_CHECK_ALLOC(calloc, (ptr) != NULL, ptr, #ptr, size,	\
+		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size,		\
 			      count, #count, 0);			\
 	} while (0)
 
 #define D_STRNDUP(ptr, s, n)						\
 	do {								\
 		(ptr) = strndup(s, n);					\
-		D_CHECK_ALLOC(strndup, (ptr) != NULL, ptr, #ptr,	\
+		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\
 			      strnlen(s, n + 1) + 1, 0, #ptr, 0);	\
 	} while (0)
 
@@ -166,7 +170,7 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 	do {								\
 		int _rc;						\
 		_rc = asprintf(&(ptr), __VA_ARGS__);			\
-		D_CHECK_ALLOC(asprintf, _rc != -1 && (ptr) != NULL,	\
+		D_CHECK_ALLOC(asprintf, _rc != -1,			\
 			      ptr, #ptr, _rc + 1, 0, #ptr,		\
 			      (ptr) = NULL);				\
 	} while (0)
@@ -177,7 +181,7 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 		(ptr) = realpath((path), NULL);				\
 		_size = (ptr) != NULL ?					\
 			strnlen((ptr), PATH_MAX + 1) + 1 : 0;		\
-		D_CHECK_ALLOC(realpath, (ptr) != NULL, ptr, #ptr, _size,\
+		D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,		\
 			      0, #ptr, 0);				\
 	} while (0)
 

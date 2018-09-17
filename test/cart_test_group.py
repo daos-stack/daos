@@ -94,7 +94,6 @@ class TestGroup(commontestsuite.CommonTestSuite):
         os.environ.pop("CRT_PHY_ADDR_STR", "")
         os.environ.pop("OFI_INTERFACE", "")
         os.environ.pop("D_LOG_MASK", "")
-        os.environ.pop("D_FI", "")
         os.environ.pop("D_FI_CONFIG", "")
         self.logger.info("tearDown end\n")
 

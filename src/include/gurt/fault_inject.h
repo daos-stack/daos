@@ -86,6 +86,8 @@ struct d_fault_attr_t {
 	uint64_t		fa_num_faults;
 	/** number of times this injection point has been evaluated */
 	uint64_t		fa_num_hits;
+	/** argument string. Interpretation of content is up to the user */
+	char			*fa_argument;
 	/** spin lock to protect this struct */
 	pthread_spinlock_t	fa_lock;
 	/**

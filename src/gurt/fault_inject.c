@@ -40,6 +40,9 @@
  */
 
 #define D_LOGFAC     DD_FAC(fi)
+/** max length of argument string in the yaml config file */
+#define FI_CONFIG_ARG_STR_MAX_LEN 4096
+
 #include <gurt/common.h>
 
 struct d_fi_gdata_t {
@@ -116,6 +119,12 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 	fault_attr->fa_interval = fa_in.fa_interval;
 	fault_attr->fa_max_faults = fa_in.fa_max_faults;
 	fault_attr->fa_err_code = fa_in.fa_err_code;
+	if (fa_in.fa_argument) {
+		D_STRNDUP(fault_attr->fa_argument, fa_in.fa_argument,
+			  FI_CONFIG_ARG_STR_MAX_LEN);
+		if (fault_attr->fa_argument == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
 	/* nrand48() only takes the high order 48 bits for its seed */
 	memcpy(fault_attr->fa_rand_state, &d_fault_inject_seed, 4);
 	D_SPIN_UNLOCK(&fault_attr->fa_lock);
@@ -167,7 +176,13 @@ one_fault_attr_parse(yaml_parser_t *parser)
 					 .fa_probability = 100,
 					 .fa_err_code = 0,
 					 .fa_max_faults = 0};
-	char			*key_str;
+	const char		*id = "id";
+	const char		*probability = "probability";
+	const char		*interval = "interval";
+	const char		*max_faults = "max_faults";
+	const char		*err_code = "err_code";
+	const char		*argument = "argument";
+	const char		*key_str;
 	const char		*val_str;
 	uint64_t		 val;
 	int			 has_id = 0;
@@ -213,26 +228,29 @@ one_fault_attr_parse(yaml_parser_t *parser)
 		key_str = (char *) first.data.scalar.value;
 		val_str = (const char *) second.data.scalar.value;
 		val = strtoul(val_str, NULL, 10);
-		if (!strncmp(key_str, "id", strlen("id") + 1)) {
+		if (!strcmp(key_str, id)) {
 			D_DEBUG(DB_ALL, "id: %lu\n", val);
 			attr.fa_id = val;
 			has_id = 1;
-		} else if (!strncmp(key_str, "probability",
-				    strlen("probability") + 1)) {
+		} else if (!strcmp(key_str, probability)) {
 			attr.fa_probability = val;
 			D_DEBUG(DB_ALL, "probability: %lu\n", val);
-		} else if (!strncmp(key_str, "interval",
-			   strlen("interval") + 1)) {
+		} else if (!strcmp(key_str, interval)) {
 			attr.fa_interval = val;
 			D_DEBUG(DB_ALL, "interval: %lu\n", val);
-		} else if (!strncmp(key_str, "max_faults",
-			   strlen("max_faults") + 1)) {
+		} else if (!strcmp(key_str, max_faults)) {
 			attr.fa_max_faults = val;
 			D_DEBUG(DB_ALL, "max_faults: %lu\n", val);
-		} else if (!strncmp(key_str, "err_code",
-			   strlen("err_code") + 1)) {
+		} else if (!strcmp(key_str, err_code)) {
 			attr.fa_err_code = val;
 			D_DEBUG(DB_ALL, "err_code: %lu\n", val);
+		} else if (!strcmp(key_str, argument)) {
+			D_STRNDUP(attr.fa_argument, val_str,
+				  FI_CONFIG_ARG_STR_MAX_LEN);
+			if (attr.fa_argument == NULL)
+				rc = -DER_NOMEM;
+			D_DEBUG(DB_ALL, "argument: %s\n", attr.fa_argument);
+
 		} else {
 			D_ERROR("Unknown key: %s\n", key_str);
 			rc = -DER_MISC;
@@ -254,6 +272,8 @@ one_fault_attr_parse(yaml_parser_t *parser)
 		D_ERROR("d_set_fault_attr(%u) failed, rc %d\n", attr.fa_id,
 			rc);
 out:
+	D_FREE(attr.fa_argument);
+
 	return rc;
 }
 
@@ -473,6 +493,9 @@ d_fault_inject_fini()
 			D_ERROR("Can't destroy spinlock for fault id: %d\n", i);
 		if (rc == 0 && local_rc)
 			rc = local_rc;
+		if (d_fi_gdata.dfg_fa[i]->fa_argument)
+			D_FREE(d_fi_gdata.dfg_fa[i]->fa_argument);
+
 		D_FREE(d_fi_gdata.dfg_fa[i]);
 	}
 	D_FREE(d_fi_gdata.dfg_fa);
