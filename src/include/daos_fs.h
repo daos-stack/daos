@@ -222,7 +222,7 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  * Create a directory.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
- * \param[in]	parent	Opened parent directory object.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
  * \param[in]	name	Link name of new dir.
  * \param[in]	mode	mkdir mode.
  *
@@ -236,7 +236,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
  * non-empty; this will fail unless force option is true.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
- * \param[in]	parent	Opened parent directory object.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
  * \param[in]	name	Name of object to remove in parent dir.
  * \param[in]	force	If true, remove dir even if non-empty.
  *
@@ -249,10 +249,10 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force);
  * Move an object possible between different dirs with a new link name
  *
  * \param[in]	dfs	Pointer to the mounted file system.
- * \param[in]	parent	Opened source parent directory object.
+ * \param[in]	parent	Source parent directory object. If NULL, use root obj.
  * \param[in]	name	Link name of object.
  * \param[in]	new_parent
- *			Opened target parent directory object.
+ *			Target parent directory object. If NULL, use root obj.
  * \param[in]	name	New link name of object.
  *
  * \return		0 on Success. Negative on Failure.
@@ -265,9 +265,9 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
  * Exchange an object possible between different dirs with a new link name
  *
  * \param[in]	dfs	Pointer to the mounted file system.
- * \param[in]	parent1	Opened parent directory object of name1.
+ * \param[in]	parent1	Parent directory object of name1. If NULL, use root obj.
  * \param[in]	name1	Link name of first object.
- * \param[in]	parent2	Opened parent directory object of name2.
+ * \param[in]	parent2	Parent directory object of name2. If NULL, use root obj.
  * \param[in]	name2	link name of second object.
  *
  * \return		0 on Success. Negative on Failure.
@@ -330,8 +330,9 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
  * struct timespec st_ctim;
  *
  * \param[in]	dfs	Pointer to the mounted file system.
- * \param[in]	parent	Opened parent directory object.
- * \param[in]	name	Link name of the object to stat.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ * \param[in]	name	Link name of the object. Can be NULL if parent is root,
+ *			which means operation will be on root object.
  * \param[out]	stbuf	Stat struct with the members above filled.
  *
  * \return		0 on Success. Negative on Failure.
@@ -356,9 +357,9 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
  * Check access permissions on an object. Similar to Linux access(2).
  *
  * \param[in]	dfs	Pointer to the mounted file system.
- * \param[in]	parent	Opened parent directory object.
- *			If NULL, will use root object as parent.
- * \param[in]	name	Link name of the object to access.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ * \param[in]	name	Link name of the object. Can be NULL if parent is root,
+ *			which means operation will be on root object.
  * \param[in]	mask	accessibility check(s) to be performed.
  *			It should be either the value F_OK, or a mask with
  *			bitwise OR of one or more of R_OK, W_OK, and X_OK.
@@ -367,6 +368,21 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
  */
 int
 dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
+
+/**
+ * Change permission access bits.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ * \param[in]	name	Link name of the object. Can be NULL if parent is root,
+ *			which means operation will be on root object.
+ * \param[in]	mode	New permission access modes. For now, we don't support
+ *			the sticky bit, setuid, and setgid.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
 
 /**
  * Sync to commit the latest epoch on the container. This applies to the entire

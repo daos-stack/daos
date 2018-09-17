@@ -557,8 +557,8 @@ typedef struct {
  * For synchronous operations please use the specific API for that operation.
  * Typically this API is used for use cases where a list of daos operations need
  * to be queued into the DAOS async engines with specific dependencies for order
- * of execution between those tasks. For example, a use can create task to open
- * and object then update that object with a dependency inserted on the update
+ * of execution between those tasks. For example, a user can create task to open
+ * an object then update that object with a dependency inserted on the update
  * to the open task.
  * For a simpler workflow, users can use the event based API instead of tasks.
  *

@@ -416,6 +416,57 @@ out:
 }
 
 static int
+dfuse_chmod(const char *path, mode_t mode, struct fuse_file_info *fi)
+{
+	char		*name = NULL, *dir_name = NULL;
+	dfs_obj_t	*parent = NULL;
+	mode_t		pmode;
+	int		rc;
+
+	FUNC_ENTER("path = %s\n", path);
+
+#if 0
+	/** TODO - maybe add a dfs_fchmod() for this */
+	if (fi != NULL) {
+		rc = dfs_chmod(dfs, (dfs_obj_t *)fi->fh, mode);
+		return error_convert(rc);
+	}
+#endif
+
+	if (path == NULL)
+		return -ENOENT;
+
+	rc = parse_filename(path, &name, &dir_name);
+	if (rc)
+		return rc;
+
+	if (strcmp(dir_name, "/") != 0) {
+		rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
+		if (rc) {
+			fprintf(stderr, "Failed to lookup path %s (%d)\n",
+				dir_name, rc);
+			D_GOTO(out, rc);
+		}
+		if (!S_ISDIR(pmode)) {
+			fprintf(stderr, "%s does not resolve to a dir\n",
+				dir_name);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
+
+	rc = dfs_chmod(dfs, parent, name, mode);
+
+out:
+	if (name)
+		free(name);
+	if (dir_name)
+		free(dir_name);
+	if (parent)
+		dfs_release(parent);
+	return error_convert(rc);
+}
+
+static int
 dfuse_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 {
 	char *name = NULL, *dir_name = NULL;
@@ -1165,6 +1216,7 @@ dfuse_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
 
 static struct fuse_operations dfuse_ops = {
 	.access		= dfuse_access,
+	.chmod		= dfuse_chmod,
 	.create		= dfuse_create,
 	.fsync		= dfuse_sync,
 	.fsyncdir	= dfuse_sync,

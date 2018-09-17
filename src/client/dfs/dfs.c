@@ -1229,10 +1229,12 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		return -DER_INVAL;
 	if (dfs->amode != O_RDWR)
 		return -DER_NO_PERM;
-	if (parent == NULL || !S_ISDIR(parent->mode))
-		return -DER_NOTDIR;
 	if (name == NULL)
 		return -DER_INVAL;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return -DER_NOTDIR;
 
 	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
 	if (rc) {
@@ -1346,7 +1348,6 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 		return -DER_NO_PERM;
 	if (name == NULL)
 		return -DER_INVAL;
-	/** If parent is NULL, assume it's root object */
 	if (parent == NULL)
 		parent = &dfs->root;
 	else if (!S_ISDIR(parent->mode))
@@ -1690,7 +1691,6 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		return -DER_INVAL;
 	if (S_ISLNK(mode) && value == NULL)
 		return -DER_INVAL;
-	/** If parent is NULL, assume it's root object */
 	if (parent == NULL)
 		parent = &dfs->root;
 	else if (!S_ISDIR(parent->mode))
@@ -1890,7 +1890,9 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
-	if (parent == NULL || !S_ISDIR(parent->mode))
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
 		return -DER_NOTDIR;
 
 	rc = check_access(dfs, geteuid(), getegid(), parent->mode, X_OK);
@@ -1952,14 +1954,13 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 		return -DER_INVAL;
 	if (((mask & W_OK) == W_OK) && dfs->amode != O_RDWR)
 		return -DER_NO_PERM;
-	/** If parent is NULL, assume it's root object */
 	if (parent == NULL)
 		parent = &dfs->root;
 	else if (!S_ISDIR(parent->mode))
 		return -DER_NOTDIR;
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
-			D_ERROR("Invalid path %s and entry name %s)\n",
+			D_ERROR("Invalid path %s and entry name %s\n",
 				parent->name, name);
 			return -DER_INVAL;
 		}
@@ -1981,6 +1982,91 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 
 	/** Use real uid and gid for access() */
 	return check_access(dfs, getuid(), getgid(), entry.mode, mask);
+}
+
+int
+dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
+{
+	uid_t			euid;
+	daos_handle_t		oh;
+	bool			exists;
+	struct dfs_entry	entry;
+	daos_sg_list_t		sgl;
+	daos_iov_t		sg_iov;
+	daos_iod_t		iod;
+	daos_key_t		dkey;
+	int			rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return -DER_INVAL;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return -DER_NOTDIR;
+	if (name == NULL) {
+		if (strcmp(parent->name, "/") != 0) {
+			D_ERROR("Invalid path %s and entry name %s)\n",
+				parent->name, name);
+			return -DER_INVAL;
+		}
+		name = parent->name;
+		oh = dfs->super_oh;
+	} else {
+		oh = parent->oh;
+	}
+
+	euid = geteuid();
+	/** only root or owner can change mode */
+	if (euid != 0 && dfs->uid != euid)
+		return -DER_NO_PERM;
+
+	/** sticky bit, set-user-id and set-group-id, not supported yet */
+	if (mode & S_ISVTX || mode & S_ISGID || mode & S_ISUID) {
+		D_ERROR("setuid, setgid, & sticky bit are not supported.\n");
+		return -DER_INVAL;
+	}
+
+	/* Check if parent has the entry */
+	rc = fetch_entry(oh, dfs->epoch, name, true, &exists, &entry);
+	if (rc)
+		return rc;
+
+	if (!exists)
+		return -DER_NONEXIST;
+
+	/** TODO - need to resolve symlinks */
+	if (S_ISLNK(entry.mode)) {
+		D_ERROR("Symlinks need to be resolved.\n");
+		return -DER_INVAL;
+	}
+
+	incr_epoch(dfs);
+
+	/** set dkey as the entry name */
+	daos_iov_set(&dkey, (void *)name, strlen(name));
+
+	/** set akey as the mode attr name */
+	daos_iov_set(&iod.iod_name, MODE_NAME, strlen(MODE_NAME));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= NULL;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_SINGLE;
+	iod.iod_size	= sizeof(mode_t);
+
+	/** set sgl for update */
+	daos_iov_set(&sg_iov, &mode, sizeof(mode_t));
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iov;
+
+	rc = daos_obj_update(oh, dfs->epoch, &dkey, 1, &iod, &sgl, NULL);
+	if (rc) {
+		D_ERROR("Failed to update mode.\n");
+		daos_epoch_discard(dfs->coh, dfs->epoch, NULL, NULL);
+	}
+	return rc;
 }
 
 int
@@ -2117,12 +2203,16 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 		return -DER_INVAL;
 	if (dfs->amode != O_RDWR)
 		return -DER_NO_PERM;
-	if (parent == NULL || !S_ISDIR(parent->mode))
-		return -DER_NOTDIR;
-	if (new_parent == NULL || !S_ISDIR(new_parent->mode))
-		return -DER_NOTDIR;
 	if (name == NULL || new_name == NULL)
 		return -DER_INVAL;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return -DER_NOTDIR;
+	if (new_parent == NULL)
+		new_parent = &dfs->root;
+	else if (!S_ISDIR(new_parent->mode))
+		return -DER_NOTDIR;
 
 	/*
 	 * TODO - more permission checks for source & target attributes needed
@@ -2253,12 +2343,16 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 		return -DER_INVAL;
 	if (dfs->amode != O_RDWR)
 		return -DER_NO_PERM;
-	if (parent1 == NULL || !S_ISDIR(parent1->mode))
-		return -DER_NOTDIR;
-	if (parent2 == NULL || !S_ISDIR(parent2->mode))
-		return -DER_NOTDIR;
 	if (name1 == NULL || name2 == NULL)
 		return -DER_INVAL;
+	if (parent1 == NULL)
+		parent1 = &dfs->root;
+	else if (!S_ISDIR(parent1->mode))
+		return -DER_NOTDIR;
+	if (parent2 == NULL)
+		parent2 = &dfs->root;
+	else if (!S_ISDIR(parent2->mode))
+		return -DER_NOTDIR;
 
 	rc = check_access(dfs, geteuid(), getegid(), parent1->mode,
 			  W_OK | X_OK);
