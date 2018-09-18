@@ -53,19 +53,21 @@ class DvmRunner():
         self.info.set_config('setKeyFromConfig', 'TR_USE_URI', self.report)
         self.logfileout = os.path.join(log_path, "orte-dvm.out")
         ompi_path = self.info.get_info('OMPI_PREFIX')
-        dvm = os.path.join(ompi_path, "bin", "orte-dvm")
         self.hostlist = ",".join(self.info.get_config('host_list'))
         if not self.hostlist:
             self.hostlist = gethostname().split('.')[0]
-        cmdstr = "%s --prefix %s --report-uri %s --host %s" % \
-                 (dvm, ompi_path, self.report, self.hostlist)
-        cmdarg = shlex.split(cmdstr)
+        cmd = [os.path.join(ompi_path, 'bin', 'orte-dvm'),
+               '--mca', 'btl', 'self,tcp',
+               '--prefix', ompi_path,
+               '--report-uri', self.report,
+               '--host', self.host_list]
+        cmdstr = ' '.join(cmd)
         with open(self.logfileout, mode='w') as outfile:
             outfile.write("=======================================\n " + \
                           " Command: " + str(cmdstr) + \
                           "\n======================================\n")
             outfile.flush()
-            self.ortedvm = subprocess.Popen(cmdarg,
+            self.ortedvm = subprocess.Popen(cmd,
                                             stdin=subprocess.DEVNULL,
                                             stdout=outfile,
                                             stderr=subprocess.STDOUT)
