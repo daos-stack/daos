@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,8 +31,6 @@
  *       Object RDB_MC_ATTRS		// attribute object
  *         D-key rdb_dkey
  *           A-key rdb_mc_uuid		// <db_uuid> (see rdb_create())
- *           A-key rdb_mc_nreplicas	// number of replicas
- *           A-key rdb_mc_replicas	// replica ranks
  *           A-key rdb_mc_term		// term
  *           A-key rdb_mc_vote		// vote for term
  *           A-key rdb_mc_lc		// log container record
@@ -41,6 +39,8 @@
  *         D-key rdb_dkey
  *           A-key rdb_lc_entry_header	// log entry header
  *           A-key rdb_lc_entry_data	// log entry data
+ *           A-key rdb_lc_nreplicas	// number of replicas
+ *           A-key rdb_lc_replicas	// replica ranks
  *           A-key rdb_lc_oid_next	// result for next object ID allocation
  *           A-key rdb_lc_root		// <root_oid>
  *       Object <root_oid>		// root KVS
@@ -128,8 +128,6 @@ struct rdb_anchor {
  * rdb_layout.c using RDB_STRING_KEY().
  */
 extern daos_iov_t rdb_mc_uuid;		/* uuid_t */
-extern daos_iov_t rdb_mc_nreplicas;	/* uint8_t */
-extern daos_iov_t rdb_mc_replicas;	/* uint32_t[] */
 extern daos_iov_t rdb_mc_term;		/* int */
 extern daos_iov_t rdb_mc_vote;		/* int */
 extern daos_iov_t rdb_mc_lc;		/* rdb_lc_record */
@@ -161,6 +159,8 @@ struct rdb_lc_record {
 /* Attribute a-keys under RDB_LC_ATTRS */
 extern daos_iov_t rdb_lc_entry_header;	/* rdb_entry */
 extern daos_iov_t rdb_lc_entry_data;	/* uint8_t[] */
+extern daos_iov_t rdb_lc_nreplicas;	/* uint8_t */
+extern daos_iov_t rdb_lc_replicas;	/* uint32_t[] */
 extern daos_iov_t rdb_lc_oid_next;	/* rdb_oid_t (classless) */
 extern daos_iov_t rdb_lc_root;		/* rdb_oid_t */
 

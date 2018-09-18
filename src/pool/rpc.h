@@ -81,7 +81,13 @@
 		ds_pool_attr_get_handler, NULL),			\
 	X(POOL_ATTR_SET,						\
 		0, &CQF_pool_attr_set,					\
-		ds_pool_attr_set_handler, NULL)
+		ds_pool_attr_set_handler, NULL),			\
+	X(POOL_REPLICAS_ADD,						\
+		0, &CQF_pool_replicas_add,				\
+		ds_pool_replicas_update_handler, NULL),			\
+	X(POOL_REPLICAS_REMOVE,						\
+		0, &CQF_pool_replicas_remove,				\
+		ds_pool_replicas_update_handler, NULL)
 
 #define POOL_PROTO_SRV_RPC_LIST						\
 	X(POOL_TGT_CONNECT,						\
@@ -215,6 +221,22 @@ CRT_RPC_DECLARE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
 
 CRT_RPC_DECLARE(pool_attr_set, DAOS_ISEQ_POOL_ATTR_SET, DAOS_OSEQ_POOL_OP)
 
+#define DAOS_ISEQ_POOL_MEMBERSHIP /* input fields */		 \
+	((uuid_t)		(pmi_uuid)		CRT_VAR) \
+	((d_rank_list_t)	(pmi_targets)		CRT_PTR)
+
+#define DAOS_OSEQ_POOL_MEMBERSHIP /* output fields */		 \
+	((int32_t)		(pmo_rc)		CRT_VAR) \
+	((struct rsvc_hint)	(pmo_hint)		CRT_VAR) \
+	((d_rank_list_t)	(pmo_failed)		CRT_PTR)
+
+CRT_RPC_DECLARE(pool_membership, DAOS_ISEQ_POOL_MEMBERSHIP,
+		DAOS_OSEQ_POOL_MEMBERSHIP)
+CRT_RPC_DECLARE(pool_replicas_add, DAOS_ISEQ_POOL_MEMBERSHIP,
+		DAOS_OSEQ_POOL_MEMBERSHIP)
+CRT_RPC_DECLARE(pool_replicas_remove, DAOS_ISEQ_POOL_MEMBERSHIP,
+		DAOS_OSEQ_POOL_MEMBERSHIP)
+
 /** Target address for each pool target */
 struct pool_target_addr {
 	/** rank of the node where the target resides */
@@ -313,7 +335,9 @@ CRT_RPC_DECLARE(pool_rdb_start, DAOS_ISEQ_POOL_RDB_START,
 
 #define DAOS_ISEQ_POOL_RDB_STOP /* input fields */		 \
 	((uuid_t)		(doi_pool)		CRT_VAR) \
-	((uint32_t)		(doi_flags)		CRT_VAR)
+	((uint32_t)		(doi_flags)		CRT_VAR) \
+	((uint32_t)		(doi_padding)		CRT_VAR) \
+	((d_rank_list_t)	(doi_ranks)		CRT_PTR)
 
 #define DAOS_OSEQ_POOL_RDB_STOP /* output fields */		 \
 	((int32_t)		(doo_rc)		CRT_VAR)

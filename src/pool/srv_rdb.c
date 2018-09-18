@@ -39,11 +39,12 @@
 
 
 enum rdb_start_flag {
-	RDB_AF_CREATE	= 1
+	RDB_AF_CREATE		= 0x1,
+	RDB_AF_BOOTSTRAP	= 0x2
 };
 
 enum rdb_stop_flag {
-	RDB_OF_DESTROY	= 1
+	RDB_OF_DESTROY		= 0x1
 };
 
 static int
@@ -58,11 +59,13 @@ bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc);
  * \param[in]	pool_uuid	pool UUID (for ds_mgmt_tgt_file())
  * \param[in]	ranks		list of replica ranks
  * \param[in]	create		create replicas first
+ * \param[in]	bootstrap	start with an initial list of replicas
  * \param[in]	size		size of each replica in bytes if \a create
  */
 int
 ds_pool_rdb_dist_start(const uuid_t dbid, const uuid_t pool_uuid,
-		       const d_rank_list_t *ranks, bool create, size_t size)
+		       const d_rank_list_t *ranks, bool create, bool bootstrap,
+		       size_t size)
 {
 	crt_rpc_t			*rpc;
 	struct pool_rdb_start_in	*in;
@@ -85,6 +88,8 @@ ds_pool_rdb_dist_start(const uuid_t dbid, const uuid_t pool_uuid,
 	uuid_copy(in->dai_pool, pool_uuid);
 	if (create)
 		in->dai_flags |= RDB_AF_CREATE;
+	if (bootstrap)
+		in->dai_flags |= RDB_AF_BOOTSTRAP;
 	in->dai_size = size;
 	in->dai_ranks = (d_rank_list_t *)ranks;
 
@@ -136,9 +141,9 @@ ds_pool_rdb_start_handler(crt_rpc_t *rpc)
 			rc = -DER_NOMEM;
 			goto out;
 		}
-
 		rc = rdb_create(path, in->dai_dbid, in->dai_size,
-				in->dai_ranks);
+				(in->dai_flags & RDB_AF_BOOTSTRAP) ?
+				 in->dai_ranks : NULL);
 		if (rc == 0) {
 			rc = ds_pool_svc_rdb_uuid_store(in->dai_pool,
 							in->dai_dbid);
@@ -215,6 +220,7 @@ ds_pool_rdb_dist_stop(const uuid_t pool_uuid, const d_rank_list_t *ranks,
 	uuid_copy(in->doi_pool, pool_uuid);
 	if (destroy)
 		in->doi_flags |= RDB_OF_DESTROY;
+	in->doi_ranks = (d_rank_list_t *)ranks;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -240,6 +246,17 @@ ds_pool_rdb_stop_handler(crt_rpc_t *rpc)
 	struct pool_rdb_stop_in		*in = crt_req_get(rpc);
 	struct pool_rdb_stop_out	*out = crt_reply_get(rpc);
 	int				 rc = 0;
+
+	if (in->doi_ranks != NULL) {
+		d_rank_t	rank;
+		int		i;
+
+		/* Do nothing if I'm not one of the replicas. */
+		rc = crt_group_rank(NULL /* grp */, &rank);
+		D_ASSERTF(rc == 0, "%d\n", rc);
+		if (!daos_rank_list_find(in->doi_ranks, rank, &i))
+			D_GOTO(out, rc = 0);
+	}
 
 	ds_pool_svc_stop(in->doi_pool);
 

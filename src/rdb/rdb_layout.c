@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,6 @@ RDB_STRING_KEY(rdb_, dkey);
 uuid_t rdb_cookie;
 
 RDB_STRING_KEY(rdb_mc_, uuid);
-RDB_STRING_KEY(rdb_mc_, nreplicas);
-RDB_STRING_KEY(rdb_mc_, replicas);
 RDB_STRING_KEY(rdb_mc_, term);
 RDB_STRING_KEY(rdb_mc_, vote);
 RDB_STRING_KEY(rdb_mc_, lc);
@@ -46,4 +44,6 @@ RDB_STRING_KEY(rdb_mc_, slc);
 RDB_STRING_KEY(rdb_lc_, oid_next);
 RDB_STRING_KEY(rdb_lc_, entry_header);
 RDB_STRING_KEY(rdb_lc_, entry_data);
+RDB_STRING_KEY(rdb_lc_, nreplicas);
+RDB_STRING_KEY(rdb_lc_, replicas);
 RDB_STRING_KEY(rdb_lc_, root);

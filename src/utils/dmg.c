@@ -29,11 +29,12 @@
 #include <daos/common.h>
 #include <daos/object.h>
 #include <daos/mgmt.h>
+#include <daos/rpc.h>
 
 const unsigned int	 default_mode = 0731;
 const char		*default_scm_size = "256M";
 const char		*default_nvme_size = "8G";
-const char		*default_group;
+const char		*default_group = DAOS_DEFAULT_GROUP_ID;
 const unsigned int	 default_svc_nreplicas = 1;
 
 const int max_svc_nreplicas = 13;
@@ -258,7 +259,9 @@ destroy_hdlr(int argc, char *argv[])
 enum pool_op {
 	POOL_EVICT,
 	POOL_EXCLUDE,
-	POOL_QUERY
+	POOL_QUERY,
+	REPLICA_ADD,
+	REPLICA_DEL
 };
 
 static enum pool_op
@@ -270,6 +273,10 @@ pool_op_parse(const char *str)
 		return POOL_EXCLUDE;
 	else if (strcmp(str, "query") == 0)
 		return POOL_QUERY;
+	else if (strcmp(str, "add") == 0)
+		return REPLICA_ADD;
+	else if (strcmp(str, "remove") == 0)
+		return REPLICA_DEL;
 	assert(0);
 	return -1;
 }
@@ -287,10 +294,11 @@ pool_op_hdlr(int argc, char *argv[])
 	};
 	const char	       *group = default_group;
 	uuid_t			pool_uuid;
-	d_rank_t		target = -1;
 	daos_handle_t		pool;
 	const char	       *svc_str = NULL;
-	d_rank_list_t       *svc;
+	d_rank_list_t	       *svc;
+	const char	       *tgt_str = NULL;
+	d_rank_list_t	       *targets;
 	enum pool_op		op = pool_op_parse(argv[1]);
 	int			rc;
 
@@ -302,7 +310,7 @@ pool_op_hdlr(int argc, char *argv[])
 			group = optarg;
 			break;
 		case 't':
-			target = atoi(optarg);
+			tgt_str = optarg;
 			break;
 		case 'p':
 			if (uuid_parse(optarg, pool_uuid) != 0) {
@@ -340,48 +348,72 @@ pool_op_hdlr(int argc, char *argv[])
 		daos_rank_list_free(svc);
 		return 2;
 	}
-	/* Check the target rank for POOL_EXCLUDE. */
-	if (target == -1 && op == POOL_EXCLUDE) {
-		fprintf(stderr, "valid target rank required\n");
+
+	targets = NULL;
+	if (tgt_str != NULL) {
+		targets = daos_rank_list_parse(tgt_str, ":");
+		if (targets != NULL && targets->rl_nr == 0) {
+			daos_rank_list_free(targets);
+			targets = NULL;
+		}
+	}
+
+	/* Check the targets for POOL_EXCLUDE, REPLICA_ADD & REPLICA_DEL. */
+	if (targets == NULL &&
+	    (op == POOL_EXCLUDE || op == REPLICA_ADD || op == REPLICA_DEL)) {
+		fprintf(stderr, "valid target ranks required\n");
 		daos_rank_list_free(svc);
 		return 2;
 	}
 
-	/* Make a pool connection for operations that need one. */
-	if (op == POOL_QUERY) {
-		rc = daos_pool_connect(pool_uuid, group, svc, DAOS_PC_RO, &pool,
-				       NULL /* info */, NULL /* ev */);
-		daos_rank_list_free(svc);
-		if (rc != 0) {
-			fprintf(stderr, "failed to connect to pool: %d\n", rc);
-			return rc;
-		}
-	}
-
-	/* Do the operation. */
-	if (op == POOL_EVICT) {
+	switch (op) {
+	case POOL_EVICT:
 		rc = daos_pool_evict(pool_uuid, group, svc, NULL /* ev */);
-		daos_rank_list_free(svc);
-		if (rc != 0) {
+		if (rc != 0)
 			fprintf(stderr, "failed to evict pool connections: "
 				"%d\n", rc);
-			return rc;
-		}
-	} else if (op == POOL_EXCLUDE) {
-		d_rank_list_t targets;
+		break;
 
-		memset(&targets, 0, sizeof(targets));
-		targets.rl_nr = 1;
-		targets.rl_ranks = &target;
-
-		rc = daos_pool_exclude(pool_uuid, group, svc, &targets,
+	case POOL_EXCLUDE:
+		targets->rl_nr = 1;
+		rc = daos_pool_exclude(pool_uuid, group, svc, targets,
 				       NULL /* ev */);
-		daos_rank_list_free(svc);
-		if (rc != 0) {
-			fprintf(stderr, "failed to exclude target: %d\n", rc);
-			return rc;
-		}
-	} else if (op == POOL_QUERY) {
+		if (rc != 0)
+			fprintf(stderr, "failed to exclude target: "
+					"%d\n", rc);
+		break;
+
+	case REPLICA_ADD:
+		rc = daos_pool_add_replicas(pool_uuid, group, svc, targets,
+					    NULL /* failed */, NULL /* ev */);
+		if (rc != 0)
+			fprintf(stderr, "failed to add replicas: "
+					"%d\n", rc);
+		break;
+
+	case REPLICA_DEL:
+		rc = daos_pool_remove_replicas(pool_uuid, group, svc, targets,
+					       NULL /* failed */,
+					       NULL /* ev */);
+		if (rc != 0)
+			fprintf(stderr, "failed to remove replicas: %d\n", rc);
+		break;
+
+	/* Make a pool connection for operations that need one. */
+	case POOL_QUERY:
+		rc = daos_pool_connect(pool_uuid, group, svc, DAOS_PC_RO, &pool,
+				       NULL /* info */, NULL /* ev */);
+		if (rc != 0)
+			fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		break;
+	}
+	daos_rank_list_free(svc);
+	daos_rank_list_free(targets);
+	if (rc != 0)
+		return rc;
+
+
+	if (op == POOL_QUERY) {
 		daos_pool_info_t		pinfo;
 		struct daos_rebuild_status     *rstat = &pinfo.pi_rebuild_st;
 
@@ -636,7 +668,10 @@ commands:\n\
   destroy	destroy a pool\n\
   evict		evict all pool connections to a pool\n\
   exclude	exclude a target from a pool\n\
+  add		add a replica to a pool service\n\
+  remove	remove a replica from a pool service\n\
   kill		kill remote daos server\n\
+  query		query pool information\n\
   layout	get object layout\n\
   help		print this message and exit\n");
 	printf("\
@@ -664,6 +699,18 @@ evict options:\n\
   --svc=RANKS	pool service replicas like 1:2:3\n", default_group);
 	printf("\
 exclude options:\n\
+  --group=STR	pool server process group (\"%s\")\n\
+  --pool=UUID	pool UUID\n\
+  --svc=RANKS	pool service replicas like 1:2:3\n\
+  --target=RANK	target rank\n", default_group);
+	printf("\
+add options:\n\
+  --group=STR	pool server process group (\"%s\")\n\
+  --pool=UUID	pool UUID\n\
+  --svc=RANKS	pool service replicas like 1:2:3\n\
+  --target=RANK	target rank\n", default_group);
+	printf("\
+remove options:\n\
   --group=STR	pool server process group (\"%s\")\n\
   --pool=UUID	pool UUID\n\
   --svc=RANKS	pool service replicas like 1:2:3\n\
@@ -701,6 +748,10 @@ main(int argc, char *argv[])
 	else if (strcmp(argv[1], "evict") == 0)
 		hdlr = pool_op_hdlr;
 	else if (strcmp(argv[1], "exclude") == 0)
+		hdlr = pool_op_hdlr;
+	else if (strcmp(argv[1], "add") == 0)
+		hdlr = pool_op_hdlr;
+	else if (strcmp(argv[1], "remove") == 0)
 		hdlr = pool_op_hdlr;
 	else if (strcmp(argv[1], "kill") == 0)
 		hdlr = kill_hdlr;

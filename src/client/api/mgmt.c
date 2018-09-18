@@ -242,3 +242,53 @@ daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
 {
 	return -DER_NOSYS;
 }
+
+int
+daos_pool_add_replicas(const uuid_t uuid, const char *group,
+		       d_rank_list_t *svc, d_rank_list_t *targets,
+		       d_rank_list_t *failed, daos_event_t *ev)
+{
+	daos_pool_replicas_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_ADD_REPLICAS);
+
+	rc = dc_task_create(dc_pool_add_replicas, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	uuid_copy((unsigned char *)args->uuid, uuid);
+	args->group	= group;
+	args->svc	= svc;
+	args->targets	= targets;
+	args->failed	= failed;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_pool_remove_replicas(const uuid_t uuid, const char *group,
+			  d_rank_list_t *svc, d_rank_list_t *targets,
+			  d_rank_list_t *failed, daos_event_t *ev)
+{
+	daos_pool_replicas_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_REMOVE_REPLICAS);
+
+	rc = dc_task_create(dc_pool_remove_replicas, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	uuid_copy((unsigned char *)args->uuid, uuid);
+	args->group	= group;
+	args->svc	= svc;
+	args->targets	= targets;
+	args->failed	= failed;
+
+	return dc_task_schedule(task, true);
+}

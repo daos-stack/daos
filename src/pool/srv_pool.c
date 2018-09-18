@@ -507,7 +507,8 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 
 	uuid_generate(rdb_uuid);
 	rc = ds_pool_rdb_dist_start(rdb_uuid, pool_uuid, ranks,
-				    true /* create */, get_md_cap());
+				    true /* create */, true /* bootstrap */,
+				    get_md_cap());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
@@ -3213,5 +3214,69 @@ out:
 	out->palo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pali_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
+}
+
+void
+ds_pool_replicas_update_handler(crt_rpc_t *rpc)
+{
+	struct pool_membership_in	*in = crt_req_get(rpc);
+	struct pool_membership_out	*out = crt_reply_get(rpc);
+	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
+	struct pool_svc			*svc;
+	struct rdb			*db;
+	d_rank_list_t			*ranks;
+	uuid_t				 dbid;
+	uuid_t				 psid;
+	int				 rc;
+
+	D_DEBUG(DB_MD, DF_UUID": Replica Rank: %u\n", DP_UUID(in->pmi_uuid),
+				 in->pmi_targets->rl_ranks[0]);
+
+	rc = daos_rank_list_dup(&ranks, in->pmi_targets);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/*
+	 * Do this locally and release immediately; otherwise if we try to
+	 * remove the leader replica, the call never returns since the service
+	 * won't stop until all references have been released
+	 */
+	rc = pool_svc_lookup_leader(in->pmi_uuid, &svc, &out->pmo_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	/* TODO: Use rdb_get() to track references? */
+	db = svc->ps_db;
+	rdb_get_uuid(db, dbid);
+	uuid_copy(psid, svc->ps_uuid);
+	pool_svc_put_leader(svc);
+
+	switch (opc) {
+	case POOL_REPLICAS_ADD:
+		rc = ds_pool_rdb_dist_start(dbid, psid, in->pmi_targets,
+					    true /* create */,
+					    false /* bootstrap */,
+					    get_md_cap());
+		if (rc != 0)
+			break;
+		rc = rdb_add_replicas(db, ranks);
+		break;
+
+	case POOL_REPLICAS_REMOVE:
+		rc = rdb_remove_replicas(db, ranks);
+		if (rc != 0)
+			break;
+		/* ignore return code */
+		ds_pool_rdb_dist_stop(psid, in->pmi_targets, true /*destroy*/);
+		break;
+
+	default:
+		D_ASSERT(0);
+	}
+
+	ds_pool_set_hint(db, &out->pmo_hint);
+out:
+	out->pmo_failed = ranks;
+	out->pmo_rc = rc;
 	crt_reply_send(rpc);
 }

@@ -149,8 +149,9 @@ struct rdb_cbs {
 };
 
 /** Database methods */
+void rdb_get_uuid(struct rdb *db, uuid_t uuid);
 int rdb_create(const char *path, const uuid_t uuid, size_t size,
-	       const d_rank_list_t *ranks);
+	       const d_rank_list_t *replicas);
 int rdb_destroy(const char *path, const uuid_t uuid);
 int rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs,
 	      void *arg, struct rdb **dbp);
@@ -159,6 +160,8 @@ void rdb_resign(struct rdb *db, uint64_t term);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
+int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
+int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
 
 /**
  * Path (opaque)

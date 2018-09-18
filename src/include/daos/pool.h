@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,6 +81,9 @@ int dc_pool_exclude_out(tse_task_t *task);
 int dc_pool_add(tse_task_t *task);
 int dc_pool_evict(tse_task_t *task);
 int dc_pool_stop_svc(tse_task_t *task);
+
+int dc_pool_add_replicas(tse_task_t *task);
+int dc_pool_remove_replicas(tse_task_t *task);
 
 int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);

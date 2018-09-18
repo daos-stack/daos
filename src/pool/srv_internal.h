@@ -100,7 +100,7 @@ void ds_pool_child_purge(struct pool_tls *tls);
 
 int ds_pool_rdb_dist_start(const uuid_t dbid, const uuid_t pool_uuid,
 			   const d_rank_list_t *ranks, bool create,
-			   size_t size);
+			   bool bootstrap, size_t size);
 int ds_pool_rdb_dist_stop(const uuid_t pool_uuid, const d_rank_list_t *ranks,
 			  bool destroy);
 
@@ -110,6 +110,7 @@ int ds_pool_rdb_start_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_pool_rdb_stop_handler(crt_rpc_t *rpc);
 int ds_pool_rdb_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
+void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 
 /*
  * srv_util.c

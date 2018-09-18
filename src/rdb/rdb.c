@@ -52,7 +52,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	int		rc;
 
 	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas\n",
-		DP_UUID(uuid), path, replicas->rl_nr);
+		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr);
 
 	/* Create and open a VOS pool. */
 	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0);
@@ -302,7 +302,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 
 	*dbp = db;
 	D_DEBUG(DB_MD, DF_DB": started db %s %p with %u replicas\n", DP_DB(db),
-		path, db, db->d_replicas->rl_nr);
+		path, db, db->d_replicas == NULL ? 0 : db->d_replicas->rl_nr);
 	return 0;
 
 err_raft:
@@ -346,6 +346,91 @@ rdb_stop(struct rdb *db)
 	ABT_cond_free(&db->d_ref_cv);
 	ABT_mutex_free(&db->d_mutex);
 	D_FREE_PTR(db);
+}
+
+int
+rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
+{
+	msg_entry_t	 entry = {};
+	int		 i;
+	int		 result;
+	int		 rc = -DER_INVAL;
+
+	D_DEBUG(DB_MD, DF_DB": Adding %d replicas\n",
+		DP_DB(db), replicas->rl_nr);
+
+	for (i = 0; i < replicas->rl_nr; ++i) {
+		D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n",
+			DP_DB(db), replicas->rl_ranks[i]);
+
+		/* TODO: Check if rank exists and not a replica before adding */
+		/* Phase 1: Add non voting rank */
+		entry.type = RAFT_LOGTYPE_ADD_NONVOTING_NODE;
+		entry.data.buf = &replicas->rl_ranks[i];
+		entry.data.len = sizeof(d_rank_t);
+		rc = rdb_raft_append_apply(db, &entry, &result);
+		rc = (rc != 0) ? rc : result;
+		if (rc != 0)
+			break;
+
+		/* Phase 2: Promote to voting rank */
+		entry.type = RAFT_LOGTYPE_ADD_NODE;
+		rc = rdb_raft_append_apply(db, &entry, NULL);
+		if (rc != 0) {
+			/*
+			 * Rank was successfully added, and will get promoted
+			 * automatically when a new leader steps up.
+			 */
+			++i;
+			break;
+		}
+
+		/* Can't make voting cfg change before applying previous one */
+		raft_apply_all(db->d_raft);
+	}
+
+	/* Update list to only contain ranks which could not be added. */
+	replicas->rl_nr -= i;
+	if (replicas->rl_nr > 0 && i > 0)
+		memmove(&replicas->rl_ranks[0], &replicas->rl_ranks[i],
+			replicas->rl_nr * sizeof(d_rank_t));
+	return rc;
+}
+
+int
+rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas)
+{
+	msg_entry_t	 entry = {};
+	int		 i;
+	int		 result;
+	int		 rc = -DER_INVAL;
+
+	D_DEBUG(DB_MD, DF_DB": Removing %d replicas\n",
+		DP_DB(db), replicas->rl_nr);
+
+	for (i = 0; i < replicas->rl_nr; ++i) {
+		D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n",
+			DP_DB(db), replicas->rl_ranks[i]);
+
+		/* TODO: Check if replica with rank exists before removing */
+		entry.type = RAFT_LOGTYPE_REMOVE_NODE;
+		entry.data.buf = &replicas->rl_ranks[i];
+		entry.data.len = sizeof(d_rank_t);
+		rc = rdb_raft_append_apply(db, &entry, &result);
+		rc = (rc != 0) ? rc : result;
+		if (rc != 0)
+			break;
+
+		/* Can't make voting cfg change before applying previous one */
+		raft_apply_all(db->d_raft);
+	}
+
+	/* Update list to only contain ranks which could not be removed. */
+	replicas->rl_nr -= i;
+	if (replicas->rl_nr > 0 && i > 0)
+		memmove(&replicas->rl_ranks[0], &replicas->rl_ranks[i],
+			replicas->rl_nr * sizeof(d_rank_t));
+	return rc;
 }
 
 /**
@@ -413,4 +498,16 @@ int
 rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 {
 	return daos_rank_list_dup(ranksp, db->d_replicas);
+}
+
+/**
+ * Get the UUID of the database.
+ *
+ * \param[in]	db	database
+ * \param[out]	uuid	UUID
+ */
+
+void rdb_get_uuid(struct rdb *db, uuid_t uuid)
+{
+	uuid_copy(uuid, db->d_uuid);
 }
