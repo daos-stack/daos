@@ -145,7 +145,5 @@ func (ac *DAOSAgentClient) VerifySecurityHandle(handle string) (*secpb.AuthToken
 // NewDAOSAgentClient returns an initialized instance of the DAOSAgentClient
 // object
 func NewDAOSAgentClient() *DAOSAgentClient {
-	ac := &DAOSAgentClient{}
-	ac.logger = log.NewLogger()
-	return ac
+	return &DAOSAgentClient{logger: log.NewLogger()}
 }

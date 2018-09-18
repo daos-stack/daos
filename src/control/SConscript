@@ -50,7 +50,7 @@ def scons():
         "CGO_CFLAGS",
         denv.subst("-I$SPDK_PREFIX/include"))
 
-    # initialise management server db
+    # install management server db
     modulemgmt = "%s/modules/mgmt" % gosrc
     mgmtinitdb = "mgmtinit_db.json"
     denv.InstallAs(

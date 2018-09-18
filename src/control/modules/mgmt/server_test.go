@@ -11,7 +11,6 @@ import (
 	pb "modules/mgmt/proto"
 )
 
-
 func mockController(fwrev string) Controller {
 	return Controller{
 		ID:      int32(12345),
@@ -43,15 +42,15 @@ func mockNamespacePB(fwRev string) *pb.NVMeNamespace {
 	ns := mockNamespace(&c)
 	return &pb.NVMeNamespace{
 		Controller: mockControllerPB(fwRev),
-		Id: ns.ID,
-		Capacity: ns.Size,
+		Id:         ns.ID,
+		Capacity:   ns.Size,
 	}
 }
 
 // MockStorage struct implements Storage interface
 type mockStorage struct {
 	fwRevBefore string
-	fwRevAfter string
+	fwRevAfter  string
 }
 
 func (mock *mockStorage) Init() error { return nil }
