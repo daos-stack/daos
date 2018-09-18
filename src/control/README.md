@@ -144,10 +144,11 @@ TODO: include details of `daos_agent` interaction
 * [Golang](https://golang.org/) 1.9 or higher
 * [gRPC](https://grpc.io/)
 * [Protocol Buffers](https://developers.google.com/protocol-buffers/)
+* [Dep](https://github.com/golang/dep/) for managing dependencies in vendor directory.
 
 ## Development setup
 
-* Install Go dependencies: `utils/fetch_go_packages.sh -i .` from daos checkout root directory.
+* Update vendor directory if needed: `utils/fetch_go_packages.sh -i .` from daos checkout root directory.
 * (Optional) protoc protocol buffer compiler
 
 ### Building the app

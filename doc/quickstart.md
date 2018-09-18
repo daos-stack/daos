@@ -74,19 +74,25 @@ Moreover, please make sure all the auto tools listed below are at the appropriat
 
 ### Protobuf Compiler
 
-The DAOS control plane infrastrucure will be using protobuf as the data serialization format for its RPC requests. The DAOS proto files use protobuf 3 syntax which is not supported by the platform protobuf compiler in all cases. Not all developers will need to build the proto files into the various source files. However if changes are made to the proto files they will need to be regenerated with a protobuf 3.* or higher compiler. To setup support for compiling protobuf files download the following precompiled package for Linux and install it somewhere accessible by your PATH variable.
+The DAOS control plane infrastructure will be using protobuf as the data serialization format for its RPC requests. The DAOS proto files use protobuf 3 syntax which is not supported by the platform protobuf compiler in all cases. Not all developers will need to build the proto files into the various source files. However if changes are made to the proto files they will need to be regenerated with a protobuf 3.* or higher compiler. To setup support for compiling protobuf files download the following precompiled package for Linux and install it somewhere accessible by your PATH variable.
 
     https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip
 
 ### Golang dependencies
 
-The utilities/fetch_go_packages.sh script is provided to prep a GOPATH location for DAOS development.
+The DAOS codebase uses [dep](https://github.com/golang/dep) to manage dependencies in the Go codebase.
 
-By default scons will look for a GOPATH located under _build.external/go. To setup your build GOPATh execute the command below from the top level directory.
+On Fedora 27 and later:
 
-    utils/fetch_go_packages.sh -i .
+    dnf install dep
 
-Once complete verify the install worked by running the same command with an additional -v flag for verification.
+On Ubuntu 18.04 and later:
+
+    apt-get install go-dep
+
+For OSes that don't supply a package: [Installation instructions on Github](https://github.com/golang/dep)
+
+The utils/fetch_go_packages.sh script is provided to populate and/or update the vendor directory using dep.
 
 ### Building DAOS & Dependencies
 
