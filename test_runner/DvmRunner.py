@@ -60,7 +60,7 @@ class DvmRunner():
                '--mca', 'btl', 'self,tcp',
                '--prefix', ompi_path,
                '--report-uri', self.report,
-               '--host', self.host_list]
+               '--host', self.hostlist]
         cmdstr = ' '.join(cmd)
         with open(self.logfileout, mode='w') as outfile:
             outfile.write("=======================================\n " + \
