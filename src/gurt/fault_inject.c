@@ -543,6 +543,10 @@ d_should_fail(uint32_t fault_id)
 	fault_attr = d_fi_gdata.dfg_fa[fault_id];
 	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 
+	if (!fault_attr) {
+		return false;
+	}
+
 	D_SPIN_LOCK(&fault_attr->fa_lock);
 	if (fault_attr->fa_probability == 0)
 		D_GOTO(out, rc = false);
