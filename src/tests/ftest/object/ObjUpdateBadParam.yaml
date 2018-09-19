@@ -10,10 +10,6 @@ server:
 conttests:
    createmode:
      mode: 511
-   createuid:
-     uid: 11374638
-   creategid:
-     gid: 11374638
    createset:
      setname: daos_server
    createsize:

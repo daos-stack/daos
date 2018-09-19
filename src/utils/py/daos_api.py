@@ -639,7 +639,11 @@ class IORequest(object):
         sgl_iov = IOV()
         sgl_iov.iov_len = size
         sgl_iov.iov_buf_len = size
-        sgl_iov.iov_buf = ctypes.cast(value, ctypes.c_void_p)
+        if value is not None:
+            sgl_iov.iov_buf = ctypes.cast(value, ctypes.c_void_p)
+        # testing only path
+        else:
+            sgl_iov.iov_buf = None
         self.sgl.sg_iovs = ctypes.pointer(sgl_iov)
         self.sgl.sg_nr = 1
         self.sgl.sg_nr_out = 1
@@ -648,25 +652,32 @@ class IORequest(object):
         self.epoch_range.epr_hi = ~0
 
         # setup the descriptor
-        self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
-        self.iod.iod_name.iov_buf_len = ctypes.sizeof(akey)
-        self.iod.iod_name.iov_len = ctypes.sizeof(akey)
-        self.iod.iod_type = 1
-        self.iod.iod_size = size
-        self.iod.iod_nr = 1
-        self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-                                        ctypes.c_void_p)
+        if akey is not None:
+            self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
+            self.iod.iod_name.iov_buf_len = ctypes.sizeof(akey)
+            self.iod.iod_name.iov_len = ctypes.sizeof(akey)
+            self.iod.iod_type = 1
+            self.iod.iod_size = size
+            self.iod.iod_nr = 1
+            self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
+                                            ctypes.c_void_p)
+            iod_ptr = ctypes.pointer(self.iod)
+        else:
+            iod_ptr = None
 
         # now do it
         func = self.context.get_function('update-obj')
 
-        dkey_iov = IOV()
-        dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
-        dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
-        dkey_iov.iov_len = ctypes.sizeof(dkey)
+        if dkey is not None:
+            dkey_iov = IOV()
+            dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
+            dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
+            dkey_iov.iov_len = ctypes.sizeof(dkey)
+            dkey_ptr = ctypes.pointer(dkey_iov)
+        else:
+            dkey_ptr = None
 
-        rc = func(self.obj.oh, self.epoch_range.epr_lo, ctypes.byref(dkey_iov),
-                  self.iod.iod_nr,
+        rc = func(self.obj.oh, self.epoch_range.epr_lo, dkey_ptr, 1,
                   ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if rc != 0:
             raise ValueError("Object update returned non-zero. RC: {0}"
@@ -954,6 +965,7 @@ class DaosContainer(object):
             raise ValueError("Container needs to be open.")
 
         epoch = self.get_new_epoch()
+        c_epoch = ctypes.c_uint64(epoch)
 
         # build a list of tuples where each tuple contains one of the array
         # values and its length in bytes (characters since really expecting
@@ -963,7 +975,6 @@ class DaosContainer(object):
             c_values.append((ctypes.create_string_buffer(item), len(item)+1))
         c_dkey = ctypes.create_string_buffer(dkey)
         c_akey = ctypes.create_string_buffer(akey)
-        c_epoch = ctypes.c_uint64(epoch)
 
         # oid can be None in which case a new one is created
         ioreq = IORequest(self.context, self, obj, rank, 2, 1)
@@ -983,14 +994,24 @@ class DaosContainer(object):
             raise ValueError("Container needs to be open.")
 
         epoch = self.get_new_epoch()
-
-        c_value = ctypes.create_string_buffer(thedata)
-        c_size = ctypes.c_size_t(size)
-        c_dkey = ctypes.create_string_buffer(dkey)
-        c_akey = ctypes.create_string_buffer(akey)
         c_epoch = ctypes.c_uint64(epoch)
 
-        # oid can be None in which case a new one is created
+        if thedata is not None:
+            c_value = ctypes.create_string_buffer(thedata)
+        else:
+            c_value = None
+        c_size = ctypes.c_size_t(size)
+
+        if dkey is None:
+            c_dkey = None
+        else:
+            c_dkey = ctypes.create_string_buffer(dkey)
+        if akey is None:
+            c_akey = None
+        else:
+            c_akey = ctypes.create_string_buffer(akey)
+
+        # obj can be None in which case a new one is created
         ioreq = IORequest(self.context, self, obj, rank)
         ioreq.single_insert(c_dkey, c_akey, c_value, c_size, c_epoch)
         self.commit_epoch(c_epoch)
@@ -1263,46 +1284,45 @@ class DaosContext(object):
         # Note: action-subject format
         self.ftable = {
             'add-target'     : self.libdaos.daos_pool_tgt_add,
-            'create-pool'    : self.libdaos.daos_pool_create,
+            'close-cont'     : self.libdaos.daos_cont_close,
+            'close-obj'      : self.libdaos.daos_obj_close,
+            'commit-epoch'   : self.libdaos.daos_epoch_commit,
             'connect-pool'   : self.libdaos.daos_pool_connect,
+            'convert-cglobal': self.libdaos.daos_cont_global2local,
+            'convert-clocal' : self.libdaos.daos_cont_local2global,
             'convert-pglobal': self.libdaos.daos_pool_global2local,
             'convert-plocal' : self.libdaos.daos_pool_local2global,
+            'create-cont'    : self.libdaos.daos_cont_create,
+            'create-eq'      : self.libdaos.daos_eq_create,
+            'create-pool'    : self.libdaos.daos_pool_create,
+            'destroy-cont'   : self.libdaos.daos_cont_destroy,
+            'destroy-eq'     : self.libdaos.daos_eq_destroy,
             'destroy-pool'   : self.libdaos.daos_pool_destroy,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'evict-client'   : self.libdaos.daos_pool_evict,
             'exclude-target' : self.libdaos.daos_pool_exclude,
             'extend-pool'    : self.libdaos.daos_pool_extend,
-            'stop-service'   : self.libdaos.daos_pool_svc_stop,
+            'fetch-obj'      : self.libdaos.daos_obj_fetch,
+            'generate-oid'   : self.libtest.dts_oid_gen,
+            'get-attr'       : self.libdaos.daos_cont_attr_get,
+            'get-epoch'      : self.libdaos.daos_epoch_hold,
+            'get-layout'     : self.libdaos.daos_obj_layout_get,
+            'init-event'     : self.libdaos.daos_event_init,
+            'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
             'kill-target'    : self.libdaos.daos_pool_exclude_out,
+            'list-attr'      : self.libdaos.daos_cont_attr_list,
+            'open-cont'      : self.libdaos.daos_cont_open,
+            'open-obj'       : self.libdaos.daos_obj_open,
+            'poll-eq'        : self.libdaos.daos_eq_poll,
+            'query-cont'     : self.libdaos.daos_cont_query,
+            'query-obj'      : self.libdaos.daos_obj_query,
             'query-pool'     : self.libdaos.daos_pool_query,
             'query-target'   : self.libdaos.daos_pool_target_query,
-            'close-cont'     : self.libdaos.daos_cont_close,
-            'convert-cglobal': self.libdaos.daos_cont_global2local,
-            'convert-clocal' : self.libdaos.daos_cont_local2global,
-            'create-cont'    : self.libdaos.daos_cont_create,
-            'list-attr'      : self.libdaos.daos_cont_attr_list,
             'set-attr'       : self.libdaos.daos_cont_attr_set,
-            'get-attr'       : self.libdaos.daos_cont_attr_get,
-            'destroy-cont'   : self.libdaos.daos_cont_destroy,
-            'open-cont'      : self.libdaos.daos_cont_open,
-            'query-cont'     : self.libdaos.daos_cont_query,
-            'close-obj'      : self.libdaos.daos_obj_close,
-            'fetch-obj'      : self.libdaos.daos_obj_fetch,
-            'get-layout'     : self.libdaos.daos_obj_layout_get,
-            'open-obj'       : self.libdaos.daos_obj_open,
-            'query-obj'      : self.libdaos.daos_obj_query,
-            'update-obj'     : self.libdaos.daos_obj_update,
-            'commit-epoch'   : self.libdaos.daos_epoch_commit,
-            'get-epoch'      : self.libdaos.daos_epoch_hold,
             'slip-epoch'     : self.libdaos.daos_epoch_slip,
-            'create-eq'      : self.libdaos.daos_eq_create,
-            'destroy-eq'     : self.libdaos.daos_eq_destroy,
-            'poll-eq'        : self.libdaos.daos_eq_poll,
-            'init-event'     : self.libdaos.daos_event_init,
+            'stop-service'   : self.libdaos.daos_pool_svc_stop,
             'test-event'     : self.libdaos.daos_event_test,
-            'generate-oid'   : self.libtest.dts_oid_gen,
-            'kill-server'    : self.libdaos.daos_mgmt_svc_rip
-            }
+            'update-obj'     : self.libdaos.daos_obj_update}
 
     def __del__(self):
         """ cleanup the DAOS API """
