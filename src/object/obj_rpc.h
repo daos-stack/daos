@@ -106,9 +106,9 @@ struct obj_key_enum_out {
 	uint32_t		oeo_num;
 	uint32_t		oeo_padding;
 	uint64_t		oeo_size;
-	daos_anchor_t	oeo_anchor;
-	daos_anchor_t	oeo_dkey_anchor;
-	daos_anchor_t	oeo_akey_anchor;
+	daos_anchor_t		oeo_anchor;
+	daos_anchor_t		oeo_dkey_anchor;
+	daos_anchor_t		oeo_akey_anchor;
 	struct crt_array	oeo_kds;
 	daos_sg_list_t		oeo_sgl;
 	struct crt_array	oeo_recxs;

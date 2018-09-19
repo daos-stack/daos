@@ -32,7 +32,19 @@
 #include <daos/common.h>
 #include <daos/mem.h>
 
+#define UMEM_TX_DATA_MAGIC	(0xc01df00d)
+
 #if DAOS_HAS_PMDK
+
+#define TXD_CB_NUM		(1 << 5)	/* 32 callbacks */
+#define TXD_CB_MAX		(1 << 20)	/* 1 million callbacks */
+
+struct umem_tx_stage_item {
+	int		 txi_magic;
+	umem_tx_cb_t	 txi_fn;
+	void		*txi_data;
+};
+
 /** persistent memory operations (depends on pmdk) */
 
 static void *
@@ -214,7 +226,6 @@ pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 {
 	struct umem_tx_stage_item	*txi, **pvec;
 	unsigned int			*cnt, *cnt_max;
-	unsigned int			 limit = (1UL << UMEM_TX_CB_SHIFT_MAX);
 
 	D_ASSERT(txd != NULL);
 	D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
@@ -244,17 +255,17 @@ pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 		return -DER_INVAL;
 	}
 
-	D_ASSERT(*cnt <= limit);
+	D_ASSERT(*cnt <= TXD_CB_MAX);
 	if (*cnt == *cnt_max) {
 		unsigned int new_max;
 
-		if (*cnt_max == limit) {
+		if (*cnt_max == TXD_CB_MAX) {
 			D_ERROR("Too many transaction callbacks "
 				"cnt:%u, stage:%d\n", *cnt, stage);
 			return -DER_OVERFLOW;
 		}
 
-		new_max = min((*cnt_max) << 1, limit);
+		new_max = min((*cnt_max) << 1, TXD_CB_MAX);
 		D_REALLOC(txi, *pvec,
 			  new_max * sizeof(struct umem_tx_stage_item));
 
@@ -471,4 +482,76 @@ umem_get_uuid(struct umem_instance *umm)
 	root_oid = pmemobj_root(umm->umm_u.pmem_pool, 0);
 	D_ASSERT(!UMMID_IS_NULL(root_oid));
 	return root_oid.pool_uuid_lo;
+}
+
+/*
+ * To avoid allocating stage data for each transaction, umem user should
+ * prepare per-xstream stage data and initialize it by umem_init_txd(),
+ * this per-xstream stage data will be used for all transactions within
+ * the same xstream.
+ */
+int
+umem_init_txd(struct umem_tx_stage_data *txd)
+{
+	D_ASSERT(txd != NULL);
+	memset(txd, 0, sizeof(*txd));
+	txd->txd_magic = UMEM_TX_DATA_MAGIC;
+
+#if DAOS_HAS_PMDK
+	D_ALLOC(txd->txd_commit_vec, TXD_CB_NUM * sizeof(*txd->txd_commit_vec));
+	if (txd->txd_commit_vec == NULL)
+		goto fail;
+	txd->txd_commit_max = TXD_CB_NUM;
+
+	D_ALLOC(txd->txd_abort_vec, TXD_CB_NUM * sizeof(*txd->txd_abort_vec));
+	if (txd->txd_abort_vec == NULL)
+		goto fail;
+	txd->txd_abort_max = TXD_CB_NUM;
+
+	D_ALLOC(txd->txd_end_vec, TXD_CB_NUM * sizeof(txd->txd_end_vec));
+	if (txd->txd_end_vec == NULL)
+		goto fail;
+	txd->txd_end_max = TXD_CB_NUM;
+
+	return 0;
+fail:
+	umem_fini_txd(txd);
+	return -DER_NOMEM;
+#else /* !DAOS_HAS_PMDK */
+	return 0;
+#endif /* DAOS_HAS_PMDK */
+}
+
+void
+umem_fini_txd(struct umem_tx_stage_data *txd)
+{
+	D_ASSERT(txd != NULL);
+	D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
+
+#if DAOS_HAS_PMDK
+	D_ASSERT(txd->txd_commit_cnt == 0);
+	D_ASSERT(txd->txd_abort_cnt == 0);
+	D_ASSERT(txd->txd_end_cnt == 0);
+
+	if (txd->txd_commit_max) {
+		D_ASSERT(txd->txd_commit_vec != NULL);
+		D_FREE(txd->txd_commit_vec);
+		txd->txd_commit_vec = NULL;
+		txd->txd_commit_max = 0;
+	}
+
+	if (txd->txd_abort_max) {
+		D_ASSERT(txd->txd_abort_vec != NULL);
+		D_FREE(txd->txd_abort_vec);
+		txd->txd_abort_vec = NULL;
+		txd->txd_abort_max = 0;
+	}
+
+	if (txd->txd_end_max) {
+		D_ASSERT(txd->txd_end_vec != NULL);
+		D_FREE(txd->txd_end_vec);
+		txd->txd_end_vec = NULL;
+		txd->txd_end_max = 0;
+	}
+#endif /* DAOS_HAS_PMDK */
 }

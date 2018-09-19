@@ -335,7 +335,7 @@ typedef struct {
 	 *
 	 * \param tins	[IN]	Tree instance which contains the root mmid
 	 *			and memory class etc.
-	 * \param rec	[IN]	Record to be read update.
+	 * \param rec	[IN]	Record to be updated.
 	 * \param val	[IN]	New value to be stored for the record.
 	 * \a return	0	success.
 	 *		-DER_NO_PERM
