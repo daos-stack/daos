@@ -468,6 +468,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 	struct bio_bdev			*d_bdev;
 	struct spdk_blob_store		*bs = NULL;
 	struct spdk_bs_type		 bstype;
+	struct smd_nvme_device_info	 info;
 	uuid_t				 bs_uuid;
 	int				 rc;
 	bool				 new_bs = false;
@@ -494,13 +495,6 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 		new_bs = true;
 	}
 
-	/* TODO
-	 * Find the initial xstream count per device.
-	 * This requires a listing function in SMD in order to iterate through
-	 * the stream table entries and find the count of currently mapped
-	 * xstreams to each device.
-	 */
-
 	/* Get the 'bstype' (device ID) of blobstore */
 	bstype = spdk_bs_get_bstype(bs);
 	memcpy(bs_uuid, bstype.bstype, sizeof(bs_uuid));
@@ -509,8 +503,25 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 		DP_UUID(bs_uuid));
 
 	rc = unload_blobstore(ctxt, bs);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Unable to unload blobstore\n");
 		goto error;
+	}
+
+	/* Find the initial xstream count per device */
+	rc = smd_nvme_get_device(bs_uuid, &info);
+	if (rc == 0) {
+		d_bdev->bb_xs_cnt = info.ndi_xs_cnt;
+	} else if (rc == -DER_NONEXIST) {
+		/* device not present in table, first xstream mapped to dev */
+		d_bdev->bb_xs_cnt = 0;
+	} else {
+		D_ERROR("Unable to get dev info for "DF_UUID"\n",
+			DP_UUID(bs_uuid));
+		goto error;
+	}
+	D_DEBUG(DB_MGMT, "Initial xstream count for "DF_UUID" set at %d\n",
+		DP_UUID(bs_uuid), d_bdev->bb_xs_cnt);
 
 	rc = spdk_bdev_open(bdev, false, NULL, NULL, &d_bdev->bb_desc);
 	if (rc != 0) {
