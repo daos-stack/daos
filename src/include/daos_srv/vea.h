@@ -126,7 +126,7 @@ struct vea_space_df {
 struct vea_space_info;
 
 /* Callback to initialize block device header */
-typedef int (*vea_format_callback_t)(void *cb_data);
+typedef int (*vea_format_callback_t)(void *cb_data, struct umem_instance *umem);
 
 /**
  * Initialize the space tracking information on SCM and the header of the

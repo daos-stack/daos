@@ -54,19 +54,6 @@ extern umem_class_id_t vos_mem_class;
 /** hash seed for murmur hash */
 #define VOS_BTR_MUR_SEED	0xC0FFEE
 
-/**
- * Header for SPDK blob per VOS pool
- */
-struct vos_blob_hdr {
-	uint32_t	vbh_magic;
-	uint32_t	vbh_blk_sz;
-	uint32_t	vbh_hdr_sz; /* blocks reserved for blob header */
-	uint32_t	vbh_vos_id; /* Service xstream id */
-	uuid_t		vbh_blobstore;
-	uint64_t	vbh_blob_id;
-	uuid_t		vbh_pool;
-};
-
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
 	D_ASSERT(bytes != 0);

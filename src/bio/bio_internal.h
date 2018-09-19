@@ -146,5 +146,7 @@ void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
 struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt);
+void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
+		void *addr, ssize_t n);
 
 #endif /* __BIO_INTERNAL_H__ */

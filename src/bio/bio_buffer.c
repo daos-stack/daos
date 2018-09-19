@@ -704,7 +704,7 @@ dma_rw(struct bio_desc *biod, bool prep)
 		blob, biod->bd_update, rmw_read);
 }
 
-static void
+void
 bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 	   void *addr, ssize_t n)
 {
