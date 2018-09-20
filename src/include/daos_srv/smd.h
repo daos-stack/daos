@@ -33,7 +33,7 @@
 #define	DEV_MAX_STREAMS 64
 
 /** NVMe metadata table type */
-enum {
+enum smd_device_status {
 	SMD_NVME_UNKNOWN = 5000,
 	/** NVMe device normal */
 	SMD_NVME_NORMAL,
@@ -52,9 +52,13 @@ struct smd_nvme_stream_bond {
 
 struct smd_nvme_device_info {
 	/** Device ID of the NVMe SSD device */
-	uuid_t	ndi_dev_id;
+	uuid_t			ndi_dev_id;
 	/** Status of this device */
-	int	ndi_status;
+	enum smd_device_status	ndi_status;
+	/** Number of streams bound to this device */
+	int			ndi_xs_cnt;
+	/** Stream ID(s) bound to this device */
+	int			ndi_xstreams[DEV_MAX_STREAMS];
 };
 
 struct smd_nvme_pool_info {
@@ -68,7 +72,7 @@ struct smd_nvme_pool_info {
 
 static inline void
 smd_nvme_set_stream_bond(int stream_id, uuid_t uid,
-			    struct smd_nvme_stream_bond *mapping)
+			 struct smd_nvme_stream_bond *mapping)
 {
 	mapping->nsm_stream_id = stream_id;
 	uuid_copy(mapping->nsm_dev_id, uid);
@@ -119,6 +123,9 @@ void smd_remove(const char *path, const char *file);
 
 /**
  * Server NMVe add Stream to Device mapping SMD stream table
+ * Check for the device entry in device table and
+ * Adds a device entry to the SMD device table if device
+ * is not found.
  *
  * \param	[IN]	stream_bond	SMD NVMe device/stream
  *					mapping
@@ -138,17 +145,18 @@ int smd_nvme_add_stream_bond(struct smd_nvme_stream_bond *mapping);
  *					negative value on error
  */
 int smd_nvme_get_stream_bond(int stream_id,
-				struct smd_nvme_stream_bond *mapping);
-
+			     struct smd_nvme_stream_bond *mapping);
 /**
- * Server NVMe add device into SMD device table
+ * Server NVMe set device status will update the status of the NVMe device
+ * in the SMD device table, if the device is not found it adds a new entry
  *
- * \param	[IN]	 device_info	SMD NVMe device info
+ * \param	[IN]	device_id	UUID of device
+ * \param	[IN]	status		Status of device
  *
  * \returns				Zero on success,
  *					negative value on error
  */
-int smd_nvme_add_device(struct smd_nvme_device_info *device_info);
+int smd_nvme_set_device_status(uuid_t device_id, enum smd_device_status status);
 
 /**
  * Server NVMe get device info using device ID

@@ -45,6 +45,11 @@
 #define	SRV_NVME_META	"nvme-meta"
 #define SMD_FILE_SIZE (256 * 1024 * 1024UL)
 
+
+#define DBTREE_CLASS_SMD_DTAB (DBTREE_SMD_BEGIN + 0)
+#define DBTREE_CLASS_SMD_PTAB (DBTREE_SMD_BEGIN + 1)
+#define DBTREE_CLASS_SMD_STAB (DBTREE_SMD_BEGIN + 2)
+
 enum {
 	SMD_PTAB_LOCK,
 	SMD_DTAB_LOCK,
@@ -103,7 +108,12 @@ struct smd_nvme_pool_df {
 };
 
 struct smd_nvme_dev_df {
-	struct smd_nvme_device_info	nd_info;
+	/** device ID of the NVMe SSD device */
+	uuid_t			nd_dev_id;
+	/** status of this device */
+	uint32_t		nd_status;
+	/** padding bytes */
+	uint32_t		nd_padding;
 };
 
 struct smd_nvme_stream_df {
@@ -133,12 +143,6 @@ struct smd_df {
 	struct smd_nvme_stream_tab_df	smd_stream_tab_df;
 };
 
-/** Pool table key type */
-struct pool_tab_key {
-	uuid_t	ptk_pid;
-	int	ptk_sid;
-};
-
 /**
  * Device Persistent metadata pool handle
  */
@@ -150,7 +154,7 @@ struct smd_store {
 	daos_handle_t		sms_stream_tab;
 };
 
-struct smd_store *get_sm_obj();
+struct smd_store *get_smd_store();
 /** PMEM to direct point conversion of md ROOT */
 static inline struct smd_df *
 pmempool_pop2df(PMEMobjpool *pop)
@@ -175,7 +179,37 @@ smd_store_ptr2df(struct smd_store *sms_obj)
 
 void	smd_lock(int table_type);
 void	smd_unlock(int table_type);
-int	smd_nvme_md_tables_register(void);
+
+extern  btr_ops_t dtab_ops;
+extern  btr_ops_t ptab_ops;
+extern  btr_ops_t stab_ops;
+
+static inline int
+smd_nvme_md_tables_register(void)
+{
+	int	rc;
+
+	D_DEBUG(DB_DF, "Register persistent metadata device index: %d\n",
+		DBTREE_CLASS_SMD_DTAB);
+
+	rc = dbtree_class_register(DBTREE_CLASS_SMD_DTAB, 0, &dtab_ops);
+	if (rc)
+		D_ERROR("DBTREE DTAB creation failed\n");
+
+	D_DEBUG(DB_DF, "Register peristent metadata pool index: %d\n",
+		DBTREE_CLASS_SMD_PTAB);
+
+	rc = dbtree_class_register(DBTREE_CLASS_SMD_PTAB, 0, &ptab_ops);
+	if (rc)
+		D_ERROR("DBTREE PTAB creation failed\n");
+
+	rc = dbtree_class_register(DBTREE_CLASS_SMD_STAB, 0, &stab_ops);
+	if (rc)
+		D_ERROR("DBTREE STAB creation failed\n");
+
+	return rc;
+
+}
 
 /* Server Metadata Library destroy a Metadata store */
 int	smd_nvme_md_dtab_create(struct umem_attr *d_umem_attr,
@@ -184,5 +218,35 @@ int	smd_nvme_md_ptab_create(struct umem_attr *p_umem_attr,
 				struct smd_nvme_pool_tab_df *table);
 int	smd_nvme_md_stab_create(struct umem_attr *p_umem_attr,
 				struct smd_nvme_stream_tab_df *table);
+
+/** device lookup internal function -- find and update in single transaction */
+int	smd_dtab_df_find_update(struct smd_store *nvme_obj, struct d_uuid *ukey,
+				uint32_t status);
+
+/**
+ * List all the Xstreams from the stream table
+ *
+ * \param nr		[IN, OUT]	[in]:	number of stream mappings.
+ *					[out]:	number of stream mappings
+ *						returned.
+ *
+ * \param streams	[IN, OUT]	[in]:	preallocated array of \nr
+ *						stream mappings.
+ *					[out]:	returned list of out \nr
+ *						stream mappings.
+ *
+ * \param anchor	[IN, OUT]		hash anchor for the next call,
+ *					        it must be set to zeroes for the
+ *						first call, it should not be
+ *						changed by caller between calls.
+ *
+ * \return					Zero on success, negative value
+ *						on error.
+ */
+int
+smd_nvme_list_streams(uint32_t *nr, struct smd_nvme_stream_bond *streams,
+		      daos_anchor_t *anchor);
+
+
 
 #endif /** __SMD_INTERNAL_H__ */

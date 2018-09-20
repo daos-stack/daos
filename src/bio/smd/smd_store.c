@@ -331,7 +331,7 @@ smd_fini(void)
 }
 
 struct smd_store *
-get_sm_obj()
+get_smd_store()
 {
 	return sm_obj;
 }

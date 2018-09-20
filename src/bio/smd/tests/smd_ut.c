@@ -46,8 +46,10 @@ print_usage(void)
 	print_message("--help	     | -h Print this message and exit.\n");
 }
 
-daos_size_t	size = -1;
-char		*fname;
+daos_size_t		size = -1;
+char			*fname;
+uuid_t			global_uuid;
+int			global_stream_list[11];
 
 static int
 smd_ut_setup(void **state)
@@ -92,6 +94,68 @@ static int
 smd_ut_addfetch_teardown(void **state)
 {
 	return 0;
+}
+
+static int
+smd_ut_listing_setup(void **state)
+{
+	int				i, rc = 0;
+	int				stream;
+	struct smd_nvme_stream_bond	bond;
+
+
+	/** Adding 10 streams to the stream table */
+	for (i = 0; i < 10; i++) {
+		stream = (i + 1);
+		smd_nvme_set_stream_bond(stream, global_uuid, &bond);
+		rc = smd_nvme_add_stream_bond(&bond);
+		if (rc) {
+			print_error("Add stream bond failure\n");
+			return rc;
+		}
+	}
+	return 0;
+}
+
+static void
+smd_ut_listing_test(void **state)
+{
+	int				i, rc = 0, stream;
+	uint32_t			nr = 5;
+	daos_anchor_t			anchor;
+	struct smd_nvme_stream_bond	*bonds, streams[10];
+
+	daos_anchor_set_zero(&anchor);
+	bonds = &streams[0];
+	rc = smd_nvme_list_streams(&nr, bonds, &anchor);
+	assert_int_equal(rc, 0);
+	assert_int_equal(nr, 5);
+	for (i = 0; i < nr; i++) {
+		stream = global_stream_list[i] = (i + 1);
+		assert_int_equal(stream, streams[i].nsm_stream_id);
+		rc = uuid_compare(global_uuid, streams[i].nsm_dev_id);
+		assert_int_equal(rc, 0);
+	}
+	bonds = &streams[5];
+	rc = smd_nvme_list_streams(&nr, bonds, &anchor);
+	assert_int_equal(rc, 0);
+	assert_int_equal(nr, 5);
+	for (i = nr; i < nr*2; i++) {
+		stream = global_stream_list[i] = (i + 1);
+		assert_int_equal(stream, streams[i].nsm_stream_id);
+		rc = uuid_compare(global_uuid, streams[i].nsm_dev_id);
+		assert_int_equal(rc, 0);
+	}
+
+	memset(&streams[0], '0', (10 * sizeof(struct smd_nvme_stream_bond)));
+	bonds = &streams[0];
+	rc = smd_nvme_list_streams(&nr, bonds, &anchor);
+	assert_int_equal(rc, 0);
+	assert_int_equal(nr, 1);
+	assert_int_equal(streams[0].nsm_stream_id, 2000);
+	global_stream_list[10] = 2000;
+	rc = uuid_compare(global_uuid, streams[0].nsm_dev_id);
+	assert_int_equal(rc, 0);
 }
 
 static void
@@ -153,6 +217,25 @@ smd_ut_fetch_empty_devtab(void **state)
 }
 
 static void
+smd_ut_fetch_devtab_streams(void **state)
+{
+	int				i, rc	= 0;
+	struct smd_nvme_device_info	info;
+
+	memset(&info, 0, sizeof(struct smd_nvme_device_info));
+	rc = smd_nvme_get_device(global_uuid, &info);
+	assert_int_equal(rc, 0);
+	assert_int_equal(uuid_compare(info.ndi_dev_id, global_uuid), 0);
+	assert_int_equal(info.ndi_xs_cnt, 11);
+	for (i = 0; i < info.ndi_xs_cnt; i++) {
+		print_message("streams[%d]: %d, gstreams[%d]: %d\n",
+		       i, info.ndi_xstreams[i], i, global_stream_list[i]);
+		assert_int_equal(info.ndi_xstreams[i], global_stream_list[i]);
+	}
+}
+
+
+static void
 smd_ut_add_and_fetch_devtab(void **state)
 {
 	int				rc	= 0;
@@ -160,31 +243,30 @@ smd_ut_add_and_fetch_devtab(void **state)
 	struct smd_nvme_device_info	info;
 
 	uuid_generate(dev_uuid);
-	smd_nvme_set_device_info(dev_uuid, SMD_NVME_NORMAL, &info);
-	rc = smd_nvme_add_device(&info);
+	rc = smd_nvme_set_device_status(dev_uuid, SMD_NVME_NORMAL);
 	assert_int_equal(rc, 0);
 
-	memset(&info, '0', sizeof(struct smd_nvme_device_info));
+	memset(&info, 0, sizeof(struct smd_nvme_device_info));
 	rc = smd_nvme_get_device(dev_uuid, &info);
 	assert_int_equal(rc, 0);
 
 	rc = uuid_compare(dev_uuid, info.ndi_dev_id);
 	assert_int_equal(rc, 0);
 	assert_int_equal(info.ndi_status, SMD_NVME_NORMAL);
+	assert_int_equal(info.ndi_xs_cnt, 0);
 }
 
 static void
 smd_ut_add_and_fetch_stab(void **state)
 {
 	int					rc	= 0;
-	uuid_t					dev_uuid;
 	int					stream;
 	struct smd_nvme_stream_bond		bond;
 
-	uuid_generate(dev_uuid);
-	stream = 4;
+	stream = 2000;
+	uuid_generate(global_uuid);
 
-	smd_nvme_set_stream_bond(stream, dev_uuid, &bond);
+	smd_nvme_set_stream_bond(stream, global_uuid, &bond);
 	rc = smd_nvme_add_stream_bond(&bond);
 	assert_int_equal(rc, 0);
 
@@ -192,7 +274,7 @@ smd_ut_add_and_fetch_stab(void **state)
 	rc = smd_nvme_get_stream_bond(stream, &bond);
 	assert_int_equal(rc, 0);
 
-	rc = uuid_compare(dev_uuid, bond.nsm_dev_id);
+	rc = uuid_compare(global_uuid, bond.nsm_dev_id);
 	assert_int_equal(rc, 0);
 	assert_int_equal(bond.nsm_stream_id, stream);
 }
@@ -210,8 +292,6 @@ smd_ut_fetch_empty_stab(void **state)
 	rc = smd_nvme_get_stream_bond(stream, &bond);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
-
-
 
 
 static const struct CMUnitTest smd_uts[] = {
@@ -232,6 +312,12 @@ static const struct CMUnitTest smd_uts[] = {
 		smd_ut_addfetch_teardown},
 	{"SMD 3.1: Stream table empty fetch test",
 		smd_ut_fetch_empty_stab, smd_ut_addfetch_setup,
+		smd_ut_addfetch_teardown},
+	{"SMD 3.2: Stream table listing test",
+		smd_ut_listing_test, smd_ut_listing_setup,
+		smd_ut_addfetch_teardown},
+	{"SMD 4.1: Device table fetch test",
+		smd_ut_fetch_devtab_streams, smd_ut_addfetch_setup,
 		smd_ut_addfetch_teardown},
 
 };
