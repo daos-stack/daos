@@ -317,7 +317,9 @@ RETRIEVER = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
 REQS.define('spdk',
             retriever=RETRIEVER,
             commands=['./configure --prefix=$SPDK_PREFIX',
-                      'make $JOBS_OPT', 'make install'],
+                      'make $JOBS_OPT', 'make install',
+                      'mkdir -p "$SPDK_PREFIX/share/spdk"',
+                      'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
             libs=["spdk"])
 
 URL = 'https://github.com/protobuf-c/protobuf-c/releases/download/' \
