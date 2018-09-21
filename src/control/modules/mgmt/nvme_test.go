@@ -24,12 +24,11 @@
 package mgmt_test
 
 import (
-	"fmt"
-	"reflect"
 	"testing"
 
 	. "go-spdk/nvme"
 	. "modules/mgmt"
+	. "common/test"
 
 	pb "modules/mgmt/proto"
 )
@@ -91,21 +90,6 @@ func NewTestControlServer(storageImpl Storage) *ControlService {
 	return &ControlService{Storage: storageImpl}
 }
 
-func assertEqual(
-	t *testing.T, a interface{}, b interface{}, message string) {
-
-	// reflect.DeepEqual() may not be suitable for nontrivial
-	// struct element comparisons, go-cmp should then be used
-	// but will introduce a third party dep.
-	if reflect.DeepEqual(a, b) {
-		return
-	}
-	if len(message) == 0 {
-		message = fmt.Sprintf("%v != %v", a, b)
-	}
-	t.Fatal(message)
-}
-
 func TestFetchNVMe(t *testing.T) {
 	s := NewTestControlServer(&mockStorage{"1.0.0", "1.0.1"})
 
@@ -116,8 +100,8 @@ func TestFetchNVMe(t *testing.T) {
 	cExpect := mockControllerPB("1.0.0")
 	nsExpect := mockNamespacePB("1.0.0")
 
-	assertEqual(t, s.NvmeControllers[cExpect.Id], cExpect, "")
-	assertEqual(t, s.NvmeNamespaces[nsExpect.Id], nsExpect, "")
+	AssertEqual(t, s.NvmeControllers[cExpect.Id], cExpect, "")
+	AssertEqual(t, s.NvmeNamespaces[nsExpect.Id], nsExpect, "")
 }
 
 func TestUpdateNVMe(t *testing.T) {
@@ -140,8 +124,8 @@ func TestUpdateNVMe(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	assertEqual(t, s.NvmeControllers[cExpect.Id], cExpect, "")
-	assertEqual(t, newC, cExpect, "")
+	AssertEqual(t, s.NvmeControllers[cExpect.Id], cExpect, "")
+	AssertEqual(t, newC, cExpect, "")
 }
 
 func TestUpdateNVMeFail(t *testing.T) {
