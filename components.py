@@ -65,6 +65,8 @@ REQS.define('jemalloc', libs=['jemalloc'], package='jemalloc-devel')
 
 REQS.define('boost', headers=['boost/preprocessor.hpp'], package='boost-devel')
 
+REQS.define('yaml', headers=['yaml.h'], package='libyaml-devel')
+
 REQS.define('event', libs=['event'], package='libevent-devel')
 
 REQS.define('crypto', libs=['crypto'], headers=['openssl/md5.h'],
@@ -295,7 +297,6 @@ RETRIEVER = GitRepoRetriever("https://review.hpdd.intel.com/daos/cart", True)
 REQS.define('cart',
             retriever=RETRIEVER,
             commands=["scons $JOBS_OPT "
-                      "ARGOBOTS_PREBUILT=$ARGOBOTS_PREFIX "
                       "OMPI_PREBUILT=$OMPI_PREFIX "
                       "MERCURY_PREBUILT=$MERCURY_PREFIX "
                       "PMIX_PREBUILT=$PMIX_PREFIX "
@@ -303,7 +304,7 @@ REQS.define('cart',
             headers=["cart/api.h", "gurt/list.h"],
             libs=["cart", "gurt"],
             requires=['mpi4py', 'mercury', 'crypto', 'ompi',
-                      'pmix'])
+                      'pmix', 'boost', 'yaml'])
 
 URL = 'https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-2.0.0.tar.gz'
 WEB_RETRIEVER = WebRetriever(URL)
