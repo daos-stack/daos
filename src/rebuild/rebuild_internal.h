@@ -214,7 +214,7 @@ extern struct rebuild_global rebuild_gst;
 struct rebuild_task {
 	d_list_t	dst_list;
 	uuid_t		dst_pool_uuid;
-	d_rank_list_t	*dst_tgts_failed;
+	struct pool_target_id_list	dst_tgts;
 	d_rank_list_t	*dst_svc_list;
 	uint32_t	dst_map_ver;
 };

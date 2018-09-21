@@ -393,7 +393,8 @@ int
 pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		unsigned int comp_nr)
 {
-	unsigned int	nr = buf->pb_domain_nr + buf->pb_target_nr;
+	unsigned int	nr = buf->pb_domain_nr + buf->pb_node_nr +
+			     buf->pb_target_nr;
 
 	if (buf->pb_nr < nr + comp_nr)
 		return -DER_NOSPACE;
@@ -408,10 +409,17 @@ pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 
 		if (comps[0].co_type == PO_COMP_TP_TARGET)
 			buf->pb_target_nr++;
-		else
+		else if (comps[0].co_type == PO_COMP_TP_NODE)
+			buf->pb_node_nr++;
+		else if (comps[0].co_type == PO_COMP_TP_RACK)
 			buf->pb_domain_nr++;
+		else
+			D_ASSERTF(0, "invalid type %d\n", comps[0].co_type);
 
 		buf->pb_comps[nr] = comps[0];
+
+		D_DEBUG(DB_MGMT, "nr %d %s\n", nr,
+			pool_comp_type2str(comps[0].co_type));
 	}
 	return 0;
 }
@@ -419,7 +427,8 @@ pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 int
 pool_buf_pack(struct pool_buf *buf)
 {
-	if (buf->pb_nr != buf->pb_target_nr + buf->pb_domain_nr)
+	if (buf->pb_nr != buf->pb_target_nr + buf->pb_domain_nr +
+			  buf->pb_node_nr)
 		return -DER_INVAL;
 
 	/* TODO: checksum, swab... */
@@ -450,39 +459,50 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 	pool_comp_type_t    type;
 	int		    size;
 	int		    i;
-	int		    rc;
+	int		    rc = 0;
 
-	if (buf->pb_target_nr == 0 ||
-	    buf->pb_domain_nr + buf->pb_target_nr != buf->pb_nr) {
-		D_DEBUG(DB_MGMT, "Invalid number of components: %d/%d/%d\n",
-			buf->pb_nr, buf->pb_domain_nr, buf->pb_target_nr);
+	if (buf->pb_target_nr == 0 || buf->pb_node_nr == 0 ||
+	    buf->pb_domain_nr + buf->pb_node_nr + buf->pb_target_nr !=
+								buf->pb_nr) {
+		D_DEBUG(DB_MGMT, "Invalid number of components: %d/%d/%d/%d\n",
+			buf->pb_nr, buf->pb_domain_nr, buf->pb_node_nr,
+			buf->pb_target_nr);
 		return -DER_INVAL;
 	}
 
-	size = sizeof(struct pool_target) * (buf->pb_target_nr) +
-	       sizeof(struct pool_domain) * (buf->pb_domain_nr + 1); /* root */
+	size = sizeof(struct pool_domain) * (buf->pb_domain_nr + 1) + /* root */
+	       sizeof(struct pool_domain) * (buf->pb_node_nr) +
+	       sizeof(struct pool_target) * (buf->pb_target_nr);
+
+	D_DEBUG(DB_MGMT, "domain %d node %d target %d\n", buf->pb_domain_nr,
+		buf->pb_node_nr, buf->pb_target_nr);
 
 	D_ALLOC(tree, size);
 	if (tree == NULL)
 		return -DER_NOMEM;
 
-	targets	= (struct pool_target *)&tree[buf->pb_domain_nr + 1];
+	targets	= (struct pool_target *)&tree[buf->pb_domain_nr +
+					      buf->pb_node_nr + 1];
 	for (i = 0; i < buf->pb_target_nr; i++)
-		targets[i].ta_comp = buf->pb_comps[buf->pb_domain_nr + i];
+		targets[i].ta_comp = buf->pb_comps[buf->pb_domain_nr +
+						buf->pb_node_nr + i];
 
+	/* Initialize the root */
 	parent = &tree[0]; /* root */
 	parent->do_comp.co_type   = PO_COMP_TP_ROOT;
 	parent->do_comp.co_status = PO_COMP_ST_UP;
-
 	if (buf->pb_domain_nr == 0) {
-		/* targets are directly attached under the root */
-		parent->do_target_nr = buf->pb_target_nr;
-		parent->do_targets = targets;
-		goto out;
+		/* nodes are directly attached under the root */
+		parent->do_target_nr = buf->pb_node_nr;
+		parent->do_child_nr = buf->pb_node_nr;
+	} else {
+		parent->do_child_nr = buf->pb_domain_nr;
 	}
 	parent->do_children = &tree[1];
 
+	parent++;
 	type = buf->pb_comps[0].co_type;
+
 	for (i = 1;; i++) {
 		struct pool_component *comp = &tree[i].do_comp;
 		int		       nr = 0;
@@ -492,27 +512,25 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 			D_DEBUG(DB_MGMT, "Invalid type %d/%d\n",
 				type, comp->co_type);
 			rc = -DER_INVAL;
-			goto failed;
+			goto out;
 		}
 
-		D_DEBUG(DB_MGMT, "Parse %s[%d]\n",
-			pool_comp_type2str(comp->co_type), comp->co_id);
+		D_DEBUG(DB_MGMT, "Parse %s[%d] i %d nr %d\n",
+			pool_comp_type2str(comp->co_type), comp->co_id,
+			i, comp->co_nr);
 
 		if (comp->co_type == type)
 			continue;
 
 		type = comp->co_type;
 
-		if (parent == &tree[0]) {
-			parent->do_child_nr = i - 1;
-			parent++;
-		}
-
 		for (; parent < &tree[i]; parent++) {
 			if (type != PO_COMP_TP_TARGET) {
-				D_DEBUG(DB_MGMT, "Setup children for %s[%d]\n",
+				D_DEBUG(DB_MGMT, "Setup children for %s[%d]"
+					" child nr %d\n",
 					pool_domain_name(parent),
-					parent->do_comp.co_id);
+					parent->do_comp.co_id,
+					parent->do_child_nr);
 
 				parent->do_children = &tree[i + nr];
 				nr += parent->do_child_nr;
@@ -564,11 +582,12 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 				parent->do_comp.co_id);
 		}
 	}
- out:
+
+out:
+	if (rc)
+		D_FREE(tree);
+
 	*tree_pp = &tree[0];
-	return 0;
- failed:
-	D_FREE(tree);
 	return rc;
 }
 
@@ -626,7 +645,8 @@ pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp)
 	for (i = 0; i < cntr.cc_targets; i++)
 		pool_buf_attach(buf, &tree->do_targets[i].ta_comp, 1);
 
-	if (buf->pb_nr != buf->pb_target_nr + buf->pb_domain_nr) {
+	if (buf->pb_nr != buf->pb_target_nr + buf->pb_domain_nr +
+			  buf->pb_node_nr) {
 		D_DEBUG(DB_MGMT, "Invalid pool map format.\n");
 		D_GOTO(failed, rc = -DER_INVAL);
 	}
@@ -662,7 +682,8 @@ pool_tree_count(struct pool_domain *tree, struct pool_comp_cntr *cntr)
 		int      child_nr;
 		int      i;
 
-		D_DEBUG(0, "%s, nr = %d\n", pool_domain_name(&tree[0]), dom_nr);
+		D_DEBUG(DB_MGMT, "%s, nr = %d\n", pool_domain_name(&tree[0]),
+			dom_nr);
 		for (i = child_nr = 0; i < dom_nr; i++) {
 			if (tree[i].do_children != NULL) {
 				cntr->cc_domains += tree[i].do_child_nr;
@@ -809,7 +830,9 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 			    prev->do_targets != NULL &&
 			    prev->do_targets + prev->do_target_nr !=
 			    tree[i].do_targets) {
-				D_DEBUG(DB_MGMT, "Invalid children pointer\n");
+				D_DEBUG(DB_MGMT, "Invalid children pointer i"
+					" %d target nr %d\n", i,
+					prev->do_target_nr);
 				return false;
 			}
 
@@ -824,15 +847,15 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 
 	for (i = 0; i < cntr.cc_targets; i++) {
 		if (targets[i].ta_comp.co_type != PO_COMP_TP_TARGET) {
-			D_DEBUG(DB_MGMT, "Invalid leaf type %d(%s)\n",
+			D_DEBUG(DB_MGMT, "Invalid leaf type %d(%s) i %d\n",
 				targets[i].ta_comp.co_type,
-				pool_comp_name(&targets[i].ta_comp));
+				pool_comp_name(&targets[i].ta_comp), i);
 			return false;
 		}
 
 		if (targets[i].ta_comp.co_ver > version) {
-			D_DEBUG(DB_MGMT, "Invalid version %u/%u\n",
-				targets[i].ta_comp.co_ver, version);
+			D_DEBUG(DB_MGMT, "Invalid version %u/%u i %d\n",
+				targets[i].ta_comp.co_ver, version, i);
 			return false;
 		}
 	}
@@ -1483,6 +1506,24 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
 }
 
 /**
+ * Find all nodes in the pool map.
+ *
+ * \param map	[IN]	pool map to search.
+ * \param id	[IN]	id to search.
+ * \param domain_pp [OUT] returned node domain address.
+ *
+ * \return		number of the node domains.
+ *                      0 if none.
+ */
+int
+pool_map_find_nodes(struct pool_map *map, uint32_t id,
+		    struct pool_domain **domain_pp)
+{
+	return pool_map_find_domain(map, PO_COMP_TP_NODE, id,
+				    domain_pp);
+}
+
+/**
  * Find a target whose id equals to \a id by the binary search.
  * If id is PO_COMP_ID_ALL, it returns the contiguously stored target array
  * to \a target_pp.
@@ -1519,6 +1560,129 @@ pool_map_find_target(struct pool_map *map, uint32_t id,
 	if (target_pp != NULL)
 		*target_pp = target;
 	return 1;
+}
+
+/**
+ * Find all nodes under the doms.
+ *
+ * \param doms	[IN]	domains to find the node.
+ * \param nodes_pp [OUT] returned domain array for nodes.
+ *
+ * \return		number in nodes_pp.
+ *			negative errno if failed.
+ */
+int
+pool_map_domain_find_all_nodes(struct pool_domain *doms,
+			       struct pool_domain **node_pp)
+{
+	struct pool_domain	*dom = doms;
+	struct pool_domain	*dom_end = doms;
+	int			node_cnt = 0;
+
+	if (doms == NULL || dom->do_child_nr == 0)
+		return 0;
+
+	while (dom->do_comp.co_type != PO_COMP_TP_NODE &&
+	       dom->do_children != NULL) {
+		dom_end = &dom_end->do_children[dom->do_child_nr - 1];
+		dom = &dom->do_children[0];
+	}
+
+	if (dom->do_comp.co_type != PO_COMP_TP_NODE)
+		return 0;
+
+	node_cnt = dom_end - dom + 1;
+
+	D_DEBUG(DB_MGMT, "get node %d\n", node_cnt);
+
+	if (node_pp != NULL)
+		*node_pp = dom;
+
+	return node_cnt;
+}
+
+/**
+ * Find pool domain node by rank in the pool map.
+ * \params [IN] map	pool map to find the node by rank.
+ * \params [IN] rank	rank to use to search the pool domain.
+ *
+ * \return              domain found by rank.
+ */
+struct pool_domain *
+pool_map_find_node_by_rank(struct pool_map *map, uint32_t rank)
+{
+	struct pool_domain	*doms;
+	struct pool_domain	*found = NULL;
+	int			doms_cnt;
+	int			i;
+
+	doms_cnt = pool_map_find_nodes(map, PO_COMP_ID_ALL, &doms);
+	if (doms_cnt <= 0)
+		return NULL;
+
+	for (i = 0; i < doms_cnt; i++) {
+		/* FIXME add rank sorter to the pool map */
+		if (doms[i].do_comp.co_rank == rank) {
+			found = &doms[i];
+			break;
+		}
+	}
+
+	return found;
+}
+
+/**
+ * Find the target by rank & idx.
+ *
+ * \param map	[IN]	pool map to find the target.
+ * \param rank	[IN]	rank to be used to find target.
+ * \param tgt_idx [IN]	tgt_idx to be used to find target.
+ * \param tgts	[OUT]	targets found by rank/tgt_idx.
+ *
+ * \return		number of targets.
+ *                      negative errno if failed.
+ */
+int
+pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
+				 uint32_t tgt_idx, struct pool_target **tgts)
+{
+	struct pool_domain	*dom;
+
+	dom = pool_map_find_node_by_rank(map, rank);
+	if (dom == NULL)
+		return 0;
+
+	if (tgt_idx == -1) {
+		*tgts = dom->do_targets;
+		return dom->do_target_nr;
+	}
+
+	if (tgt_idx >= dom->do_target_nr)
+		return 0;
+
+	*tgts = &dom->do_targets[tgt_idx];
+
+	return 1;
+}
+
+/**
+ * Check if all targets under one node matching the status.
+ * \params [IN] dom	node domain to be checked.
+ * \param [IN] status	status to be checked.
+ *
+ * \return		true if matches, otherwise false.
+ */
+bool
+pool_map_node_status_match(struct pool_domain *dom, unsigned int status)
+{
+	int i;
+
+	for (i = 0; i < dom->do_target_nr; i++) {
+		if (!(dom->do_targets[i].ta_comp.co_status & status))
+			return false;
+	}
+
+	return true;
 }
 
 static void
@@ -1794,30 +1958,77 @@ pool_map_empty(struct pool_map *map)
 	return map->po_tree == NULL;
 }
 
-/**
- * Find a target whose rank equals \a rank by an unoptimized linear search.
- *
- * \param map	[IN]		The pool map to search
- * \param rank	[IN]		Target rank to search
- * \return			NULL if not found; target address if found
- */
-struct pool_target *
-pool_map_find_target_by_rank(struct pool_map *map, uint32_t rank)
+static bool
+pool_target_id_found(struct pool_target_id_list *id_list,
+		     struct pool_target_id *tgt)
 {
-	struct pool_target	*targets;
-	int			 i;
+	int i;
 
-	if (pool_map_empty(map)) {
-		D_ERROR("Uninitialized pool map\n");
-		return NULL;
+	for (i = 0; i < id_list->pti_number; i++)
+		if (id_list->pti_ids[i].pti_id == tgt->pti_id)
+			return true;
+	return false;
+}
+
+int
+pool_target_id_list_append(struct pool_target_id_list *id_list,
+			   struct pool_target_id *id)
+{
+	struct pool_target_id *new_ids;
+	int rc = 0;
+
+	if (pool_target_id_found(id_list, id))
+		return 0;
+
+	new_ids = realloc(id_list->pti_ids, (id_list->pti_number + 1) *
+			  sizeof(*id_list->pti_ids));
+	if (new_ids == NULL)
+		return -DER_NOMEM;
+
+	new_ids[id_list->pti_number] = *id;
+	id_list->pti_ids = new_ids;
+	id_list->pti_number++;
+
+	return rc;
+}
+
+int
+pool_target_id_list_merge(struct pool_target_id_list *dst_list,
+			  struct pool_target_id_list *src_list)
+{
+	int i;
+	int rc = 0;
+
+	for (i = 0; i < src_list->pti_number; i++) {
+		rc = pool_target_id_list_append(dst_list,
+						&src_list->pti_ids[i]);
+		if (rc)
+			break;
 	}
 
-	targets = map->po_tree[0].do_targets;
+	return rc;
+}
 
-	for (i = 0; i < map->po_tree[0].do_target_nr; i++) {
-		if (targets[i].ta_comp.co_rank == rank)
-			return &targets[i];
-	}
+int
+pool_target_id_list_alloc(unsigned int num,
+			  struct pool_target_id_list *id_list)
+{
+	D_ALLOC(id_list->pti_ids,
+		num * sizeof(struct pool_target_id));
+	if (id_list->pti_ids == NULL)
+		return -DER_NOMEM;
 
-	return NULL;
+	id_list->pti_number = num;
+
+	return 0;
+}
+
+void
+pool_target_id_list_free(struct pool_target_id_list *id_list)
+{
+	if (id_list == NULL)
+		return;
+
+	if (id_list->pti_ids)
+		D_FREE(id_list->pti_ids);
 }

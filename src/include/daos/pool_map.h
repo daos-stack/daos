@@ -115,6 +115,29 @@ struct pool_domain {
 #define do_child_nr		do_comp.co_nr
 #define do_cpu_nr		do_comp.co_nr
 
+struct pool_target_id {
+	uint32_t	pti_id;
+};
+
+struct pool_target_id_list {
+	int			pti_number;
+	struct pool_target_id	*pti_ids;
+};
+
+int
+pool_target_id_list_append(struct pool_target_id_list *id_list,
+			   struct pool_target_id *id);
+int
+pool_target_id_list_merge(struct pool_target_id_list *dst_list,
+			  struct pool_target_id_list *src_list);
+
+int
+pool_target_id_list_alloc(unsigned int num,
+			  struct pool_target_id_list *id_list);
+
+void
+pool_target_id_list_free(struct pool_target_id_list *id_list);
+
 /**
  * pool component buffer, it's a contiguous buffer which includes portion of
  * or all components of a pool map.
@@ -122,10 +145,12 @@ struct pool_domain {
 struct pool_buf {
 	/** checksum of components */
 	uint32_t		pb_csum;
-	/** summary of domain_nr and target_nr, buffer size */
+	/** summary of domain_nr, node_nr, target_nr, buffer size */
 	uint32_t		pb_nr;
 	uint32_t		pb_domain_nr;
+	uint32_t		pb_node_nr;
 	uint32_t		pb_target_nr;
+	uint32_t		pb_padding;
 	/** buffer body */
 	struct pool_component	pb_comps[0];
 };
@@ -159,16 +184,25 @@ uint32_t pool_map_get_version(struct pool_map *map);
 
 int pool_map_find_target(struct pool_map *map, uint32_t id,
 			 struct pool_target **target_pp);
-struct pool_target *pool_map_find_target_by_rank(struct pool_map *map,
-						 uint32_t rank);
 int pool_map_find_domain(struct pool_map *map, pool_comp_type_t type,
 			 uint32_t id, struct pool_domain **domain_pp);
+int pool_map_find_nodes(struct pool_map *map, uint32_t id,
+			struct pool_domain **domain_pp);
 int pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			    unsigned int *tgt_cnt);
 int pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			      unsigned int *tgt_cnt);
 int pool_map_find_up_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			  unsigned int *tgt_cnt);
+int pool_map_domain_find_all_nodes(struct pool_domain *doms,
+				   struct pool_domain **node_pp);
+int pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
+				 uint32_t tgt_idx, struct pool_target **tgts);
+bool
+pool_map_node_status_match(struct pool_domain *dom, unsigned int status);
+
+struct pool_domain *
+pool_map_find_node_by_rank(struct pool_map *map, uint32_t rank);
 
 static inline struct pool_target *
 pool_map_targets(struct pool_map *map)

@@ -51,7 +51,7 @@ pool_iv_value_alloc_internal(d_sg_list_t *sgl)
 
 	/* XXX Let's use primary group  + 1 domain per target now. */
 	crt_group_size(NULL, &pool_nr);
-	buf_size = pool_iv_ent_size((int)pool_nr * 2);
+	buf_size = pool_iv_ent_size((int)pool_nr * 2 * 10);
 	D_ALLOC(sgl->sg_iovs[0].iov_buf, buf_size);
 	if (sgl->sg_iovs[0].iov_buf == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);

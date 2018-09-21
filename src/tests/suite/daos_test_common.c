@@ -134,6 +134,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 
 			if (rc == 0) {
 				arg->srv_ntgts = info.pi_ntargets;
+				arg->srv_nnodes = info.pi_nnodes;
 				arg->srv_disabled_ntgts = info.pi_ndisabled;
 			}
 		}
@@ -455,16 +456,21 @@ int test_make_dirs(char *dir, mode_t mode)
 d_rank_t ranks_to_kill[MAX_KILLS];
 
 bool
-test_runable(test_arg_t *arg, unsigned int required_tgts)
+test_runable(test_arg_t *arg, unsigned int required_nodes)
 {
 	int		 i;
 	static bool	 runable = true;
 
 	if (arg->myrank == 0) {
 		daos_epoch_state_t	epoch_state;
+		int			tgts_per_node;
+		int			disable_nodes;
 		int			rc;
 
-		if (arg->srv_ntgts - arg->srv_disabled_ntgts < required_tgts) {
+		tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
+		disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
+				tgts_per_node;
+		if (arg->srv_nnodes - disable_nodes < required_nodes) {
 			if (arg->myrank == 0)
 				print_message("No enough targets, skipping "
 					      "(%d/%d)\n",
@@ -474,8 +480,8 @@ test_runable(test_arg_t *arg, unsigned int required_tgts)
 		}
 
 		for (i = 0; i < MAX_KILLS; i++)
-			ranks_to_kill[i] = arg->srv_ntgts -
-					   arg->srv_disabled_ntgts - i - 1;
+			ranks_to_kill[i] = arg->srv_nnodes -
+					   disable_nodes - i - 1;
 
 		rc = daos_epoch_query(arg->coh, &epoch_state, NULL);
 		assert_int_equal(rc, 0);
@@ -650,6 +656,8 @@ daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 	targets.rl_nr = 1;
 	targets.rl_ranks = &rank;
 	rc = daos_pool_exclude(pool_uuid, grp, svc, &targets, NULL);
+	if (rc)
+		print_message("exclude pool failed rc %d\n", rc);
 	assert_int_equal(rc, 0);
 }
 
@@ -664,6 +672,60 @@ daos_add_server(const uuid_t pool_uuid, const char *grp,
 	targets.rl_nr = 1;
 	targets.rl_ranks = &rank;
 	rc = daos_pool_tgt_add(pool_uuid, grp, svc, &targets, NULL);
+	if (rc)
+		print_message("add pool failed rc %d\n", rc);
 	assert_int_equal(rc, 0);
 }
 
+void
+daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
+		 d_rank_list_t *svc, d_rank_t rank)
+{
+	int tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
+	int rc;
+
+	arg->srv_disabled_ntgts += tgts_per_node;
+	if (d_rank_in_rank_list(svc, rank))
+		svc->rl_nr--;
+	print_message("\tKilling target %d (total of %d with %d already "
+		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
+		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
+
+	/** kill server */
+	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
+	assert_int_equal(rc, 0);
+}
+
+void
+daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
+			 const char *grp, d_rank_list_t *svc)
+{
+	int		tgts_per_node;
+	int		disable_nodes;
+	int		failures = 0;
+	int		max_failure;
+	int		i;
+	d_rank_t	rank;
+
+	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
+	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
+			tgts_per_node;
+	max_failure = (svc->rl_nr - 1) / 2;
+	for (i = 0; i < svc->rl_nr; i++) {
+		if (svc->rl_ranks[i] >=
+		    arg->srv_nnodes - disable_nodes - 1)
+			failures++;
+	}
+
+	if (failures > max_failure) {
+		print_message("Already kill %d targets with %d replica,"
+			      " (max_kill %d) can not kill anymore\n",
+			      arg->srv_disabled_ntgts, svc->rl_nr, max_failure);
+		return;
+	}
+
+	rank = arg->srv_nnodes - disable_nodes - 1;
+
+	daos_kill_server(arg, pool_uuid, grp, svc, rank);
+	daos_exclude_server(pool_uuid, grp, svc, rank);
+}

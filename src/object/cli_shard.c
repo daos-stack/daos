@@ -39,7 +39,7 @@ obj_shard_free(struct dc_obj_shard *shard)
 }
 
 static struct dc_obj_shard *
-obj_shard_alloc(d_rank_t rank, daos_unit_oid_t id, uint32_t part_nr)
+obj_shard_alloc(daos_unit_oid_t id, uint32_t part_nr)
 {
 	struct dc_obj_shard *shard;
 
@@ -47,7 +47,6 @@ obj_shard_alloc(d_rank_t rank, daos_unit_oid_t id, uint32_t part_nr)
 	if (shard == NULL)
 		return NULL;
 
-	shard->do_rank	  = rank;
 	shard->do_part_nr = part_nr;
 	shard->do_id	  = id;
 	D_INIT_LIST_HEAD(&shard->do_co_list);
@@ -81,23 +80,33 @@ obj_shard_addref(struct dc_obj_shard *shard)
 }
 
 int
-dc_obj_shard_open(struct dc_object *obj, uint32_t tgt, daos_unit_oid_t id,
+dc_obj_shard_open(struct dc_object *obj, uint32_t shard_idx, daos_unit_oid_t id,
 		  unsigned int mode, struct dc_obj_shard **shard)
 {
+	struct pl_obj_shard	*layout;
 	struct dc_obj_shard	*obj_shard;
-	struct pool_target	*map_tgt;
-	int			 rc;
+	int			i;
 
 	D_ASSERT(obj != NULL && shard != NULL);
-	rc = dc_cont_tgt_idx2ptr(obj->cob_coh, tgt, &map_tgt);
-	if (rc != 0)
-		return rc;
+	D_ASSERT(obj->cob_layout != NULL);
+	D_ASSERT(shard_idx < obj->cob_layout->ol_nr);
+	layout = &obj->cob_layout->ol_shards[shard_idx];
 
-	obj_shard = obj_shard_alloc(map_tgt->ta_comp.co_rank, id,
-				    map_tgt->ta_comp.co_nr);
+	obj_shard = obj_shard_alloc(id, layout->po_shard_tgt_nr);
 	if (obj_shard == NULL)
 		return -DER_NOMEM;
 
+	D_ALLOC(obj_shard->do_shard_tgts,
+		layout->po_shard_tgt_nr * sizeof(obj_shard->do_shard_tgts));
+	if (obj_shard->do_shard_tgts == NULL) {
+		obj_shard_free(obj_shard);
+		return -DER_NOMEM;
+	}
+
+	for (i = 0; i < layout->po_shard_tgt_nr; i++)
+		obj_shard->do_shard_tgts[i].do_rank = (d_rank_t)(-1);
+
+	obj_shard->do_layout = layout;
 	obj_shard->do_obj = obj;
 	obj_shard->do_co_hdl = obj->cob_coh;
 	obj_shard_addref(obj_shard);
@@ -317,6 +326,41 @@ obj_shard_ptr2pool(struct dc_obj_shard *shard)
 }
 
 static int
+obj_shard_rank_get(struct dc_obj_shard *shard, int tgt_idx, int opc)
+{
+	struct pool_target *tgt;
+	int rc;
+
+	D_ASSERT(shard->do_layout != NULL);
+	D_ASSERT(shard->do_layout->po_shard_tgts != NULL);
+	D_ASSERT(shard->do_layout->po_shard_tgt_nr > tgt_idx);
+	/* If the current target is being rebuilt, let's return
+	 * STALE, so rebuild the layout and retry
+	 */
+	if (opc != DAOS_OBJ_RPC_UPDATE &&
+	    shard->do_layout->po_shard_tgts[tgt_idx].pot_rebuilding) {
+		D_DEBUG(DB_IO, "obj "DF_UOID" tgt_idx %d rebuilding.\n",
+			DP_UOID(shard->do_id), tgt_idx);
+		if (obj_get_grp_size(shard->do_obj) > 1)
+			return -DER_STALE;
+		else
+			return -DER_NONEXIST;
+	}
+
+	if (shard->do_shard_tgts[tgt_idx].do_rank != (d_rank_t)(-1))
+		return shard->do_shard_tgts[tgt_idx].do_rank;
+
+	rc = dc_cont_tgt_idx2ptr(shard->do_co_hdl,
+		shard->do_layout->po_shard_tgts[tgt_idx].pot_target,
+		&tgt);
+	D_ASSERT(rc == 0);
+
+	shard->do_shard_tgts[tgt_idx].do_rank = tgt->ta_comp.co_rank;
+
+	return shard->do_shard_tgts[tgt_idx].do_rank;
+}
+
+static int
 obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	     daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
 	     daos_iod_t *iods, daos_sg_list_t *sgls, unsigned int *map_ver,
@@ -346,8 +390,10 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_GOTO(out_obj, rc);
 
 	tgt_ep.ep_grp = pool->dp_group;
-	tgt_ep.ep_rank = shard->do_rank;
 	tgt_ep.ep_tag = obj_shard_dkeyhash2tag(shard, dkey_hash);
+	tgt_ep.ep_rank = obj_shard_rank_get(shard, tgt_ep.ep_tag, opc);
+	if ((int)tgt_ep.ep_rank < 0)
+		D_GOTO(out_pool, rc = (int)tgt_ep.ep_rank);
 
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" %.*s rank %d tag %d eph "DF_U64"\n",
 		opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
@@ -503,8 +549,10 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc, daos_epoch_t epoch,
 
 	oid = shard->do_id;
 	tgt_ep.ep_grp	= pool->dp_group;
-	tgt_ep.ep_rank	= shard->do_rank;
 	tgt_ep.ep_tag	= obj_shard_dkeyhash2tag(shard, dkey_hash);
+	tgt_ep.ep_rank = obj_shard_rank_get(shard, tgt_ep.ep_tag, opc);
+	if ((int)tgt_ep.ep_rank < 0)
+		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
 	dc_pool_put(pool);
 
@@ -721,13 +769,15 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 		D_GOTO(out_put, rc);
 
 	tgt_ep.ep_grp = pool->dp_group;
-	tgt_ep.ep_rank = obj_shard->do_rank;
 	if (dkey == NULL) {
 		tgt_ep.ep_tag = dkey_anchor->da_tag;
 	} else {
 		tse_task_stack_pop_data(task, &dkey_hash, sizeof(dkey_hash));
 		tgt_ep.ep_tag = obj_shard_dkeyhash2tag(obj_shard, dkey_hash);
 	}
+	tgt_ep.ep_rank = obj_shard_rank_get(obj_shard, tgt_ep.ep_tag, opc);
+	if ((int)tgt_ep.ep_rank < 0)
+		D_GOTO(out_pool, rc = (int)tgt_ep.ep_rank);
 
 	D_DEBUG(DB_IO, "opc %d "DF_UOID" rank %d tag %d\n",
 		opc, DP_UOID(obj_shard->do_id), tgt_ep.ep_rank, tgt_ep.ep_tag);
@@ -965,10 +1015,12 @@ dc_obj_shard_key_query(struct dc_obj_shard *shard, daos_epoch_t epoch,
 
 	oid = shard->do_id;
 	tgt_ep.ep_grp	= pool->dp_group;
-	tgt_ep.ep_rank	= shard->do_rank;
 	tgt_ep.ep_tag	= obj_shard_dkeyhash2tag(shard, dkey_hash);
-
+	tgt_ep.ep_rank = obj_shard_rank_get(shard, tgt_ep.ep_tag,
+					    DAOS_OBJ_RPC_KEY_QUERY);
 	dc_pool_put(pool);
+	if ((int)tgt_ep.ep_rank < 0)
+		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
 	D_DEBUG(DB_IO, "OBJ_KEY_QUERY_RPC, rank=%d tag=%d.\n",
 		tgt_ep.ep_rank, tgt_ep.ep_tag);

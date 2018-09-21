@@ -76,7 +76,7 @@ extern struct crt_msg_field DMF_UINT32_ARRAY;
 extern struct crt_msg_field DMF_UINT64_ARRAY;
 extern struct crt_msg_field DMF_RSVC_HINT;
 extern struct crt_msg_field DMF_KEY_ARRAY;
-
+extern struct crt_msg_field DMF_TGT_ADDR_LIST;
 #define DMF_DAOS_SIZE CMF_UINT64
 
 enum daos_module_id {

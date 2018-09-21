@@ -157,14 +157,27 @@ struct pool_attr_set_in {
 	crt_bulk_t		pasi_bulk;
 };
 
+/** Target address for each pool target */
+struct pool_target_addr {
+	/** rank of the node where the target resides */
+	d_rank_t	pta_rank;
+	/** target index in each node */
+	uint32_t	pta_target;
+};
+
+struct pool_target_addr_list {
+	int			pta_number;
+	struct pool_target_addr	*pta_addrs;
+};
+
 struct pool_tgt_update_in {
 	struct pool_op_in	pti_op;		/* .pi_hdl unused */
-	d_rank_list_t       *pti_targets;
+	struct crt_array	pti_addr_list; /* addr list */
 };
 
 struct pool_tgt_update_out {
 	struct pool_op_out	pto_op;
-	d_rank_list_t       *pto_targets;	/* that are not found in pool */
+	struct crt_array	pto_addr_list;
 };
 
 struct pool_evict_in {
@@ -243,5 +256,14 @@ int pool_req_create(crt_context_t dtp_ctx, crt_endpoint_t *tgt_ep,
 
 extern struct daos_rpc pool_rpcs[];
 extern struct daos_rpc pool_srv_rpcs[];
+
+int
+pool_target_addr_list_alloc(unsigned int num,
+			    struct pool_target_addr_list *list);
+int
+pool_target_addr_list_append(struct pool_target_addr_list *dst_list,
+			     struct pool_target_addr *src);
+void
+pool_target_addr_list_free(struct pool_target_addr_list *list);
 
 #endif /* __POOL_RPC_H__ */

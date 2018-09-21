@@ -49,14 +49,15 @@ struct rebuild_scan_in {
 	uuid_t		rsi_pool_uuid;
 	uuid_t		rsi_pool_hdl_uuid;
 	uuid_t		rsi_cont_hdl_uuid;
-	d_rank_list_t	*rsi_tgts_failed;
 	d_rank_list_t	*rsi_svc_list;
 	daos_iov_t	rsi_ns_iov;
+	uint64_t	rsi_leader_term;
+	uint32_t	rsi_tgts_num;
 	uint32_t	rsi_ns_id;
 	uint32_t	rsi_pool_map_ver;
 	uint32_t	rsi_rebuild_ver;
 	uint32_t	rsi_master_rank;
-	uint64_t	rsi_leader_term;
+	uint32_t	rsi_padding;
 };
 
 struct rebuild_scan_out {

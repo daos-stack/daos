@@ -28,6 +28,27 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
+static int
+proc_pool_target_addr(crt_proc_t proc, struct pool_target_addr *tgt)
+{
+	int rc;
+
+	rc = crt_proc_uint32_t(proc, &tgt->pta_rank);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &tgt->pta_target);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+struct crt_msg_field DMF_TGT_ADDR_LIST =
+	DEFINE_CRT_MSG("pool_tgt_addr_list", CMF_ARRAY_FLAG,
+			sizeof(struct pool_target_addr),
+			proc_pool_target_addr);
+
 struct crt_msg_field *pool_create_in_fields[] = {
 	&CMF_UUID,		/* op.uuid */
 	&CMF_UUID,		/* op.hdl */
@@ -151,14 +172,14 @@ struct crt_msg_field *pool_attr_set_out_fields[] = {
 struct crt_msg_field *pool_tgt_update_in_fields[] = {
 	&CMF_UUID,	/* op.uuid */
 	&CMF_UUID,	/* op.handle */
-	&CMF_RANK_LIST	/* targets */
+	&DMF_TGT_ADDR_LIST,	/* tgt addr list */
 };
 
 struct crt_msg_field *pool_tgt_update_out_fields[] = {
 	&CMF_INT,	/* op.rc */
 	&CMF_UINT32,	/* op.map_version */
 	&DMF_RSVC_HINT,	/* op.hint */
-	&CMF_RANK_LIST	/* targets */
+	&DMF_TGT_ADDR_LIST,	/* tgt addr list */
 };
 
 struct crt_msg_field *pool_evict_in_fields[] = {
@@ -435,3 +456,68 @@ struct daos_rpc pool_srv_rpcs[] = {
 		.dr_opc		= 0
 	}
 };
+
+static bool
+pool_target_addr_equal(struct pool_target_addr *addr1,
+		       struct pool_target_addr *addr2)
+{
+	return addr1->pta_rank == addr2->pta_rank &&
+	       addr1->pta_target == addr2->pta_target;
+}
+
+static bool
+pool_target_addr_found(struct pool_target_addr_list *addr_list,
+		       struct pool_target_addr *tgt)
+{
+	int i;
+
+	for (i = 0; i < addr_list->pta_number; i++)
+		if (pool_target_addr_equal(&addr_list->pta_addrs[i], tgt))
+			return true;
+	return false;
+}
+
+int
+pool_target_addr_list_append(struct pool_target_addr_list *addr_list,
+			     struct pool_target_addr *addr)
+{
+	struct pool_target_addr	*new_addrs;
+
+	if (pool_target_addr_found(addr_list, addr))
+		return 0;
+
+	new_addrs = realloc(addr_list->pta_addrs, (addr_list->pta_number + 1) *
+			    sizeof(*addr_list->pta_addrs));
+	if (addr_list == NULL)
+		return -DER_NOMEM;
+
+	new_addrs[addr_list->pta_number] = *addr;
+	addr_list->pta_addrs = new_addrs;
+	addr_list->pta_number++;
+
+	return 0;
+}
+
+int
+pool_target_addr_list_alloc(unsigned int num,
+			    struct pool_target_addr_list *addr_list)
+{
+	D_ALLOC(addr_list->pta_addrs,
+		num * sizeof(struct pool_target_addr));
+	if (addr_list->pta_addrs == NULL)
+		return -DER_NOMEM;
+
+	addr_list->pta_number = num;
+
+	return 0;
+}
+
+void
+pool_target_addr_list_free(struct pool_target_addr_list *addr_list)
+{
+	if (addr_list == NULL)
+		return;
+
+	if (addr_list->pta_addrs)
+		D_FREE(addr_list->pta_addrs);
+}

@@ -56,22 +56,29 @@ extern bool	cli_bypass_rpc;
  */
 extern bool	srv_bypass_bulk;
 
+struct dc_obj_shard_tgt {
+	d_rank_t	do_rank;
+};
+
 /** client object shard */
 struct dc_obj_shard {
-	/** rank of the target this object belongs to */
-	d_rank_t		do_rank;
 	/* Metadata for this shard */
 	struct daos_obj_shard_md do_md;
 	/** refcount */
 	unsigned int		do_ref;
 	/** number of partitions on the remote target */
 	int			do_part_nr;
+	/** targets on this shard node */
+	struct dc_obj_shard_tgt	*do_shard_tgts;
 	/** object id */
 	daos_unit_oid_t		do_id;
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
 	/** list to the container */
 	d_list_t		do_co_list;
+	/* layout for this shard */
+	struct pl_obj_shard	*do_layout;
+
 	/** point back to object */
 	struct dc_object	*do_obj;
 };
@@ -173,6 +180,7 @@ void obj_shard_decref(struct dc_obj_shard *shard);
 void obj_shard_addref(struct dc_obj_shard *shard);
 void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
+int obj_get_grp_size(struct dc_object *obj);
 
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);

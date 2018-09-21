@@ -638,4 +638,3 @@ struct crt_msg_field DMF_KEY_ARRAY =
 struct crt_msg_field DMF_UINT64_ARRAY =
 	DEFINE_CRT_MSG("daos_uint64", CMF_ARRAY_FLAG,
 		       sizeof(uint64_t), crt_proc_uint64_t);
-

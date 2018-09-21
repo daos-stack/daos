@@ -1960,6 +1960,43 @@ dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
 	return 0;
 }
 
+/**
+ * Get pool_domain by container handle and node id.
+ *
+ * \param coh [IN]	container handle.
+ * \param node_id [IN]	node id.
+ * \param dom [OUT]	pool domain pointer.
+ *
+ * \return		0 if get the pool_target.
+ * \return		errno if it does not get the pool_target.
+ */
+int
+dc_cont_node_id2ptr(daos_handle_t coh, uint32_t node_id,
+		    struct pool_domain **dom)
+{
+	struct dc_cont	*dc;
+	struct dc_pool	*pool;
+	int		 n;
+
+	dc = dc_hdl2cont(coh);
+	if (dc == NULL)
+		return -DER_NO_HDL;
+
+	/* Get node so that we can have the rank of the target. */
+	pool = dc_hdl2pool(dc->dc_pool_hdl);
+	D_ASSERT(pool != NULL);
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+	n = pool_map_find_nodes(pool->dp_map, node_id, dom);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+	dc_pool_put(pool);
+	dc_cont_put(dc);
+	if (n != 1) {
+		D_ERROR("failed to find target %u\n", node_id);
+		return -DER_INVAL;
+	}
+	return 0;
+}
+
 int
 dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *hdl_uuid, uuid_t *uuid)
 {

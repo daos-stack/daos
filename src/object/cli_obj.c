@@ -88,7 +88,7 @@ open_retry:
 		/* NB: obj open is a local operation, so it is ok to call
 		 * it in sync mode, at least for now.
 		 */
-		rc = dc_obj_shard_open(obj, layout->ol_shards[shard].po_target,
+		rc = dc_obj_shard_open(obj, shard,
 				       oid, obj->cob_mode, &obj_shard);
 		if (rc == 0) {
 			D_ASSERT(obj_shard != NULL);
@@ -121,8 +121,15 @@ obj_layout_free(struct dc_object *obj)
 
 	if (obj->cob_obj_shards != NULL) {
 		for (i = 0; i < layout->ol_nr; i++) {
-			if (obj->cob_obj_shards[i] != NULL)
-				obj_shard_close(obj->cob_obj_shards[i]);
+			struct dc_obj_shard *shard;
+
+			if (obj->cob_obj_shards[i] == NULL)
+				continue;
+
+			shard = obj->cob_obj_shards[i];
+
+			D_FREE(shard->do_shard_tgts);
+			obj_shard_close(shard);
 		}
 		D_FREE(obj->cob_obj_shards);
 		obj->cob_obj_shards = NULL;
@@ -277,7 +284,7 @@ obj_layout_refresh(struct dc_object *obj)
 	return rc;
 }
 
-static int
+int
 obj_get_grp_size(struct dc_object *obj)
 {
 	struct daos_oclass_attr *oc_attr;
@@ -321,20 +328,13 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 			unsigned int map_ver, uint32_t op)
 {
 	int idx_first;
-	int idx_last;
 	int grp_size;
 	int i = 0;
 
 	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
 
-	idx_first = (idx / grp_size) * grp_size;
-	idx_last = idx_first + grp_size - 1;
-
 	D_ASSERT(obj->cob_layout->ol_nr > 0);
-	D_ASSERTF(idx_last < obj->cob_layout->ol_nr,
-		  "idx %d, first %d, last %d, shard_nr %d\n",
-		  idx, idx_first, idx_last, obj->cob_layout->ol_nr);
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
 	if (obj->cob_layout->ol_ver != map_ver) {
@@ -343,6 +343,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 		return -DER_STALE;
 	}
 
+	idx_first = (idx / grp_size) * grp_size;
 	if (DAOS_FAIL_CHECK(DAOS_OBJ_SPECIAL_SHARD)) {
 		idx = daos_fail_value_get();
 
@@ -356,18 +357,17 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 			D_RWLOCK_UNLOCK(&obj->cob_lock);
 			return idx;
 		}
+	} else {
+		idx = idx_first + random() % grp_size;
 	}
 
-	for (i = 0; i < grp_size; i++,
-	     idx = (idx + 1) % grp_size + idx_first) {
-		/* let's skip the rebuild shard for non-update op */
-		if (op != DAOS_OBJ_RPC_UPDATE &&
-		    obj->cob_layout->ol_shards[idx].po_rebuilding)
-			continue;
-
+	for (i = 0; i < grp_size; i++) {
 		if (obj->cob_layout->ol_shards[idx].po_shard != -1)
 			break;
+
+		idx = idx_first + (idx + 1 - idx_first) % grp_size;
 	}
+
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	if (i == grp_size)

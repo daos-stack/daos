@@ -122,6 +122,7 @@ typedef struct {
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
+	int			srv_nnodes;
 	int			srv_ntgts;
 	int			srv_disabled_ntgts;
 	int			index;

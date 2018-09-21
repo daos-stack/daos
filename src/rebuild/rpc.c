@@ -34,18 +34,19 @@ static struct crt_msg_field *rebuild_scan_in_fields[] = {
 	&CMF_UUID,	/* pool uuid */
 	&CMF_UUID,	/* pool hdl uuid */
 	&CMF_UUID,	/* cont hdl uuid */
-	&CMF_RANK_LIST,	/* target failed list */
 	&CMF_RANK_LIST,	/* service list */
 	&CMF_IOVEC,	/* iv ns context */
+	&CMF_UINT64,	/* term of leader */
+	&CMF_UINT32,	/* rebuild target number */
 	&CMF_UINT32,	/* pool iv ns id */
 	&CMF_UINT32,	/* pool map version */
 	&CMF_UINT32,	/* rebuild version */
 	&CMF_UINT32,	/* master rank */
-	&CMF_UINT64,	/* term of leader */
+	&CMF_UINT32,	/* padding */
 };
 
 static struct crt_msg_field *rebuild_scan_out_fields[] = {
-	&CMF_RANK_LIST,	/* failed list */
+	&CMF_RANK_LIST, /* failed rank list */
 	&CMF_INT,	/* status */
 };
 

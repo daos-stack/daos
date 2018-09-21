@@ -42,53 +42,6 @@ enum {
 	ENUMERATE
 };
 
-void
-daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
-		 d_rank_list_t *svc, d_rank_t rank)
-{
-	int	rc;
-
-	arg->srv_disabled_ntgts++;
-	if (d_rank_in_rank_list(svc, rank))
-		svc->rl_nr--;
-	print_message("\tKilling target %d (total of %d with %d already "
-		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
-		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
-
-	/** kill server */
-	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
-	assert_int_equal(rc, 0);
-}
-
-void
-daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
-			 const char *grp, d_rank_list_t *svc)
-{
-	int		failures = 0;
-	int		max_failure;
-	int		i;
-	d_rank_t	rank;
-
-	max_failure = (svc->rl_nr - 1) / 2;
-	for (i = 0; i < svc->rl_nr; i++) {
-		if (svc->rl_ranks[i] >=
-		    arg->srv_ntgts - arg->srv_disabled_ntgts - 1)
-			failures++;
-	}
-
-	if (failures > max_failure) {
-		print_message("Already kill %d targets with %d replica,"
-			      " (max_kill %d) can not kill anymore\n",
-			      arg->srv_disabled_ntgts, svc->rl_nr, max_failure);
-		return;
-	}
-
-	rank = arg->srv_ntgts - arg->srv_disabled_ntgts - 1;
-
-	daos_kill_server(arg, pool_uuid, grp, svc, rank);
-	daos_exclude_server(pool_uuid, grp, svc, rank);
-}
-
 /**
  * Performs insert, lookup, enum of g_dkeys and allow
  * custom operations to be introduced in-between updates/lookups/enum

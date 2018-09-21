@@ -57,8 +57,8 @@ struct rebuild_send_arg {
 struct rebuild_scan_arg {
 	daos_handle_t		rebuild_tree_hdl;
 	struct rebuild_tgt_pool_tracker *rpt;
-	d_rank_list_t	*failed_ranks;
 	ABT_mutex		scan_lock;
+	int			rebuild_tgt_nr;
 };
 
 static int
@@ -565,9 +565,9 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid,
 	dc_obj_fetch_md(oid.id_pub, &md);
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
-	if (arg->failed_ranks->rl_nr > LOCAL_ARRAY_SIZE) {
-		D_ALLOC(tgts, arg->failed_ranks->rl_nr * sizeof(*tgts));
-		D_ALLOC(shards, arg->failed_ranks->rl_nr * sizeof(*shards));
+	if (arg->rebuild_tgt_nr > LOCAL_ARRAY_SIZE) {
+		D_ALLOC(tgts, arg->rebuild_tgt_nr * sizeof(*tgts));
+		D_ALLOC(shards, arg->rebuild_tgt_nr * sizeof(*shards));
 		if (tgts == NULL || shards == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	} else {
@@ -576,12 +576,11 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid,
 	}
 
 	rebuild_nr = pl_obj_find_rebuild(map, &md, NULL, rpt->rt_rebuild_ver,
-					 tgts, shards,
-					 arg->failed_ranks->rl_nr);
+					 tgts, shards, arg->rebuild_tgt_nr);
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
 
-	D_ASSERT(rebuild_nr <= arg->failed_ranks->rl_nr);
+	D_ASSERT(rebuild_nr <= arg->rebuild_tgt_nr);
 	for (i = 0; i < rebuild_nr; i++) {
 		D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
 			" on %d for shard %d\n", DP_UOID(oid), DP_UUID(co_uuid),
@@ -671,7 +670,6 @@ rebuild_scan_leader(void *data)
 	int			   rc;
 
 	D_ASSERT(arg != NULL);
-	D_ASSERT(arg->failed_ranks);
 	D_ASSERT(!daos_handle_is_inval(arg->rebuild_tree_hdl));
 
 	rpt = arg->rpt;
@@ -723,7 +721,6 @@ put_plmap:
 	pl_map_disconnect(rpt->rt_pool_uuid);
 out_map:
 	rebuild_pool_map_put(map);
-	daos_rank_list_free(arg->failed_ranks);
 	dbtree_destroy(arg->rebuild_tree_hdl);
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
@@ -838,22 +835,17 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out_lock, rc);
 	}
 
-	rc = daos_rank_list_dup(&scan_arg->failed_ranks, rsi->rsi_tgts_failed);
-	if (rc != 0)
-		D_GOTO(out_tree, rc);
-
+	scan_arg->rebuild_tgt_nr = rsi->rsi_tgts_num;
 	rpt_get(rpt);
 	scan_arg->rpt = rpt;
 	/* step-3: start scann leader */
 	rc = dss_ult_create(rebuild_scan_leader, scan_arg, -1, 0, NULL);
 	if (rc != 0) {
 		rpt_put(rpt);
-		D_GOTO(out_f_rankfs, rc);
+		D_GOTO(out_tree, rc);
 	}
 
 	D_GOTO(out, rc);
-out_f_rankfs:
-	daos_rank_list_free(scan_arg->failed_ranks);
 out_tree:
 	dbtree_destroy(scan_arg->rebuild_tree_hdl);
 out_lock:

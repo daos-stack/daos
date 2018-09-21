@@ -298,6 +298,7 @@ out_unlock:
 	if (info != NULL && rc == 0) {
 		uuid_copy(info->pi_uuid, pool->dp_pool);
 		info->pi_ntargets	= map_buf->pb_target_nr;
+		info->pi_nnodes		= map_buf->pb_node_nr;
 		info->pi_map_ver	= map_version;
 		info->pi_uid		= uid;
 		info->pi_gid		= gid;
@@ -1040,12 +1041,19 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID": updated: hdl="DF_UUID" failed=%u\n",
+	D_DEBUG(DF_DSMC, DF_UUID": updated: hdl="DF_UUID" failed=%d\n",
 		DP_UUID(in->pti_op.pi_uuid), DP_UUID(in->pti_op.pi_hdl),
-		out->pto_targets == NULL ? 0 : out->pto_targets->rl_nr);
+		(int)out->pto_addr_list.ca_count);
 
-	if (out->pto_targets != NULL && out->pto_targets->rl_nr > 0)
+	if (in->pti_addr_list.ca_arrays)
+		D_FREE(in->pti_addr_list.ca_arrays);
+
+	if (out->pto_addr_list.ca_arrays != NULL &&
+	    out->pto_addr_list.ca_count > 0) {
+		D_ERROR("tgt update failed count %zd\n",
+			out->pto_addr_list.ca_count);
 		rc = -DER_INVAL;
+	}
 
 out:
 	crt_req_decref(rpc);
@@ -1065,7 +1073,9 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	crt_endpoint_t			 ep;
 	crt_rpc_t			*rpc;
 	struct pool_tgt_update_in	*in;
-	int				 rc;
+	struct pool_target_addr_list	list;
+	int				i;
+	int				rc;
 
 	if (state == NULL) {
 		if (args->tgts == NULL || args->tgts->rl_nr == 0) {
@@ -1109,7 +1119,20 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->pti_op.pi_uuid, args->uuid);
-	in->pti_targets = args->tgts;
+
+	rc = pool_target_addr_list_alloc(args->tgts->rl_nr, &list);
+	if (rc) {
+		crt_req_decref(rpc);
+		D_GOTO(out_client, rc);
+	}
+
+	/* XXX Let's update all targets on the node */
+	for (i = 0; i < args->tgts->rl_nr; i++) {
+		list.pta_addrs[i].pta_rank = args->tgts->rl_ranks[i];
+		list.pta_addrs[i].pta_target = -1;
+	}
+	in->pti_addr_list.ca_arrays = list.pta_addrs;
+	in->pti_addr_list.ca_count = (size_t)list.pta_number;
 
 	crt_req_addref(rpc);
 
@@ -1120,12 +1143,14 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);
+
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
 	return rc;
 
 out_rpc:
+	pool_target_addr_list_free(&list);
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 out_client:

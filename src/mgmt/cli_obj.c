@@ -111,15 +111,20 @@ daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
 		shard = (*layout)->ol_shards[i];
 		shard->os_replica_nr = grp_size;
 		for (j = 0; j < grp_size; j++) {
-			struct pool_target *map_tgt;
+			struct pool_domain *dom;
 
-			rc = dc_cont_tgt_idx2ptr(coh,
+			if (pl_layout->ol_shards[k].po_target == -1) {
+				k++;
+				continue;
+			}
+
+			rc = dc_cont_node_id2ptr(coh,
 					pl_layout->ol_shards[k++].po_target,
-					&map_tgt);
+					&dom);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
-			shard->os_ranks[j] = map_tgt->ta_comp.co_rank;
+			shard->os_ranks[j] = dom->do_comp.co_rank;
 		}
 	}
 out:

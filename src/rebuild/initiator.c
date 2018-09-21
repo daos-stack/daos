@@ -1265,7 +1265,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 	/* Initialize the local rebuild tree */
 	rc = rebuild_btr_hdl_get(rpt, &btr_hdl, &rebuilt_btr_hdl);
 	if (rc)
-		D_GOTO(out_put, rc);
+		D_GOTO(out, rc);
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 				      rpt->rt_rebuild_ver);
@@ -1317,7 +1317,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		}
 	}
 	if (rc < 0)
-		D_GOTO(out_put, rc);
+		D_GOTO(out, rc);
 
 	/* Check and create task to iterate the to-be-rebuilt tree */
 	if (!rpt->rt_lead_puller_running) {
@@ -1325,7 +1325,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 
 		D_ALLOC_PTR(arg);
 		if (arg == NULL)
-			D_GOTO(out_put, rc = -DER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 
 		arg->obj_cb = rebuild_obj_callback;
 		rpt_get(rpt);
@@ -1339,12 +1339,12 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 			rpt_put(rpt);
 			D_FREE_PTR(arg);
 			rpt->rt_lead_puller_running = 0;
-			D_GOTO(out_put, rc);
+			D_GOTO(out, rc);
 		}
 	}
-out_put:
-	rpt_put(rpt);
 out:
+	if (rpt)
+		rpt_put(rpt);
 	rebuild_out = crt_reply_get(rpc);
 	rebuild_out->ro_status = rc;
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_OBJ);

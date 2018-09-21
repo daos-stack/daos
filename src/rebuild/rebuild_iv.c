@@ -175,49 +175,54 @@ rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc,
 
 	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done) {
 		struct rebuild_tgt_pool_tracker *rpt;
+		d_rank_t	rank;
+		int		rc;
 
 		rpt = rpt_lookup(src_iv->riv_pool_uuid, src_iv->riv_ver);
-		if (rpt && rpt->rt_leader_term == src_iv->riv_leader_term) {
-			d_rank_t	rank;
-			int		rc;
+		if (rpt == NULL)
+			return 0;
 
-			D_DEBUG(DB_TRACE, DF_UUID" rebuild finished"
-				" sgl/gl %d/%d\n",
-				 DP_UUID(src_iv->riv_pool_uuid),
-				 dst_iv->riv_global_scan_done,
-				 dst_iv->riv_global_done);
-
-			/* on svc nodes update the rebuild status completed list
-			 * to serve rebuild status querying in case of master
-			 * node changed.
-			 */
-			rc = crt_group_rank(NULL, &rank);
-			if (dst_iv->riv_global_done && rc == 0 &&
-			    d_rank_in_rank_list(rpt->rt_svc_list, rank)) {
-				struct daos_rebuild_status rs;
-
-				rs.rs_version	= src_iv->riv_ver;
-				rs.rs_errno	= src_iv->riv_status;
-				rs.rs_done	= 1;
-				rs.rs_obj_nr	= src_iv->riv_obj_count;
-				rs.rs_rec_nr	= src_iv->riv_rec_count;
-				rs.rs_toberb_obj_nr	=
-					src_iv->riv_toberb_obj_count;
-
-				rc = rebuild_status_completed_update(
-						src_iv->riv_pool_uuid, &rs);
-				if (rc != 0) {
-					D_ERROR("_status_completed_update, "
-						DF_UUID" failed, rc %d.\n",
-						DP_UUID(src_iv->riv_pool_uuid),
-						rc);
-				}
-			}
-
-			rpt->rt_global_done = dst_iv->riv_global_done;
-			rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
+		if (rpt->rt_leader_term != src_iv->riv_leader_term) {
 			rpt_put(rpt);
+			return 0;
 		}
+
+		D_DEBUG(DB_TRACE, DF_UUID" rebuild finished"
+			" sgl/gl %d/%d\n",
+			 DP_UUID(src_iv->riv_pool_uuid),
+			 dst_iv->riv_global_scan_done,
+			 dst_iv->riv_global_done);
+
+		/* on svc nodes update the rebuild status completed list
+		 * to serve rebuild status querying in case of master
+		 * node changed.
+		 */
+		rc = crt_group_rank(NULL, &rank);
+		if (dst_iv->riv_global_done && rc == 0 &&
+		    d_rank_in_rank_list(rpt->rt_svc_list, rank)) {
+			struct daos_rebuild_status rs;
+
+			rs.rs_version	= src_iv->riv_ver;
+			rs.rs_errno	= src_iv->riv_status;
+			rs.rs_done	= 1;
+			rs.rs_obj_nr	= src_iv->riv_obj_count;
+			rs.rs_rec_nr	= src_iv->riv_rec_count;
+			rs.rs_toberb_obj_nr	=
+				src_iv->riv_toberb_obj_count;
+
+			rc = rebuild_status_completed_update(
+					src_iv->riv_pool_uuid, &rs);
+			if (rc != 0) {
+				D_ERROR("_status_completed_update, "
+					DF_UUID" failed, rc %d.\n",
+					DP_UUID(src_iv->riv_pool_uuid),
+					rc);
+			}
+		}
+
+		rpt->rt_global_done = dst_iv->riv_global_done;
+		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
+		rpt_put(rpt);
 	}
 
 	return 0;

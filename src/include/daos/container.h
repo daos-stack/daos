@@ -37,6 +37,8 @@ void dc_cont_fini(void);
 
 int dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
 			struct pool_target **tgt);
+int dc_cont_node_id2ptr(daos_handle_t coh, uint32_t node_id,
+			struct pool_domain **dom);
 int dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *hdl_uuid, uuid_t *con_uuid);
 daos_handle_t dc_cont_hdl2pool_hdl(daos_handle_t coh);
 

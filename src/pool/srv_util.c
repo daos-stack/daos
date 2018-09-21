@@ -57,22 +57,23 @@ static int
 map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	       d_rank_list_t *ranks)
 {
-	struct pool_target     *targets;
-	int			ntargets;
+	struct pool_domain     *domains = NULL;
+	int			nnodes;
 	int			n = 0;
 	int			i;
 	d_rank_t	       *rs;
 
-	ntargets = pool_map_find_target((struct pool_map *)map, PO_COMP_ID_ALL,
-					&targets);
-	if (ntargets == 0) {
-		D_ERROR("no targets in pool map\n");
+	nnodes = pool_map_find_nodes((struct pool_map *)map,
+				      PO_COMP_ID_ALL, &domains);
+	if (nnodes == 0) {
+		D_ERROR("no nodes in pool map\n");
 		return -DER_IO;
 	}
 
-	for (i = 0; i < ntargets; i++)
-		if (map_ranks_include(class, targets[i].ta_comp.co_status))
+	for (i = 0; i < nnodes; i++) {
+		if (map_ranks_include(class, domains[i].do_comp.co_status))
 			n++;
+	}
 
 	if (n == 0) {
 		memset(ranks, 0, sizeof(*ranks));
@@ -87,10 +88,10 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	ranks->rl_ranks = rs;
 
 	n = 0;
-	for (i = 0; i < ntargets; i++) {
-		if (map_ranks_include(class, targets[i].ta_comp.co_status)) {
+	for (i = 0; i < nnodes; i++) {
+		if (map_ranks_include(class, domains[i].do_comp.co_status)) {
 			D_ASSERT(n < ranks->rl_nr);
-			ranks->rl_ranks[n] = targets[i].ta_comp.co_rank;
+			ranks->rl_ranks[n] = domains[i].do_comp.co_rank;
 			n++;
 		}
 	}
@@ -255,34 +256,6 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	return rc;
 }
 
-static int
-map_exclude_create_sanitized_tgts(const d_rank_list_t *tgts,
-				  d_rank_list_t **tgts_sanitized,
-				  uint32_t *tgts_sanitized_size)
-{
-	d_rank_list_t       *ts;
-	int			rc;
-
-	rc = d_rank_list_dup_sort_uniq(&ts, tgts);
-	if (rc != 0)
-		return rc;
-
-	/* Save the size of this rank list */
-	*tgts_sanitized_size = ts->rl_nr;
-
-	*tgts_sanitized = ts;
-	return 0;
-}
-
-static void
-map_exclude_destroy_sanitized_tgts(d_rank_list_t *tgts,
-				   uint32_t tgts_sanitized_size)
-{
-	/* Restore the size of this rank list. */
-	tgts->rl_nr = tgts_sanitized_size;
-	d_rank_list_free(tgts);
-}
-
 /*
  * Exclude "tgts" in "map". A new map version is generated only if actual
  * changes have been made. If "tgts_failed" is not NULL, then targets that are
@@ -290,77 +263,75 @@ map_exclude_destroy_sanitized_tgts(d_rank_list_t *tgts,
  * as large that of "tgts".
  */
 int
-ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
-			d_rank_list_t *tgts_failed, int opc)
+ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
+			int opc)
 {
-	d_rank_list_t       *tgts_sanitized;
-	uint32_t		version;
-	int			i;
-	int			nchanges = 0;
-	int			rc;
-	uint32_t		tgts_failed_out;
-	uint32_t		tgts_sanitized_size = 0;
+	uint32_t	version;
+	int		nchanges = 0;
+	int		i;
+	int		rc;
 
-	D_ASSERT(tgts != NULL && tgts->rl_nr > 0 && tgts->rl_ranks != NULL);
-	D_ASSERT(tgts_failed == NULL ||
-		 (tgts_failed->rl_nr >= tgts->rl_nr &&
-		  tgts_failed->rl_ranks != NULL));
-
-	if (tgts_failed != NULL)
-		tgts_failed_out = 0;
-
-	rc = map_exclude_create_sanitized_tgts(tgts, &tgts_sanitized,
-					       &tgts_sanitized_size);
-	if (rc != 0)
-		return rc;
+	D_ASSERT(tgts != NULL);
 
 	version = pool_map_get_version(map) + 1;
 
-	for (i = 0; i < tgts_sanitized->rl_nr; i++) {
-		struct pool_target     *target;
-		d_rank_t		rank = tgts_sanitized->rl_ranks[i];
+	for (i = 0; i < tgts->pti_number; i++) {
+		struct pool_target	*target = NULL;
+		struct pool_domain	*dom = NULL;
 
-		target = pool_map_find_target_by_rank(map, rank);
-		if (target == NULL) {
-			D_DEBUG(DF_DSMS, "failed to find rank %u in map %p\n",
-				rank, map);
-			if (tgts_failed != NULL) {
-				int j = tgts_failed_out;
+		rc = pool_map_find_target(map, tgts->pti_ids[i].pti_id,
+					  &target);
+		if (rc <= 0) {
+			D_DEBUG(DF_DSMS, "not find target %u in map %p\n",
+				tgts->pti_ids[i].pti_id, map);
+			continue;
+		}
 
-				tgts_failed->rl_ranks[j] = rank;
-				tgts_failed_out++;
-			}
+		dom = pool_map_find_node_by_rank(map, target->ta_comp.co_rank);
+		if (dom == NULL) {
+			D_DEBUG(DF_DSMS, "not find rank %u in map %p\n",
+				target->ta_comp.co_rank, map);
 			continue;
 		}
 
 		D_ASSERTF(target->ta_comp.co_status == PO_COMP_ST_UP ||
-			  target->ta_comp.co_status == PO_COMP_ST_UPIN ||
-			  target->ta_comp.co_status == PO_COMP_ST_DOWN ||
-			  target->ta_comp.co_status == PO_COMP_ST_DOWNOUT,
-			  "%u\n", target->ta_comp.co_status);
+			target->ta_comp.co_status == PO_COMP_ST_UPIN ||
+			target->ta_comp.co_status == PO_COMP_ST_DOWN ||
+			target->ta_comp.co_status == PO_COMP_ST_DOWNOUT,
+			"%u\n", target->ta_comp.co_status);
 		if (opc == POOL_EXCLUDE &&
 		    target->ta_comp.co_status != PO_COMP_ST_DOWN &&
 		    target->ta_comp.co_status != PO_COMP_ST_DOWNOUT) {
-			D_DEBUG(DF_DSMS, "changing rank %u to DOWN in map %p\n",
+			D_DEBUG(DF_DSMS, "change rank %u to DOWN %p\n",
 				target->ta_comp.co_rank, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWN;
 			target->ta_comp.co_fseq = version;
 			nchanges++;
+			if (pool_map_node_status_match(dom,
+				PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
+				dom->do_comp.co_status = PO_COMP_ST_DOWN;
+				dom->do_comp.co_fseq = version;
+			}
 		} else if (opc == POOL_ADD &&
-			   target->ta_comp.co_status != PO_COMP_ST_UP &&
-			   target->ta_comp.co_status != PO_COMP_ST_UPIN) {
-			D_DEBUG(DF_DSMS, "changing rank %u to UP in map %p\n",
+			 target->ta_comp.co_status != PO_COMP_ST_UP &&
+			 target->ta_comp.co_status != PO_COMP_ST_UPIN) {
+			D_DEBUG(DF_DSMS, "change rank %u to UP %p\n",
 				target->ta_comp.co_rank, map);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_ver = version;
 			target->ta_comp.co_fseq = 0;
 			nchanges++;
+			dom->do_comp.co_status = PO_COMP_ST_UP;
+			dom->do_comp.co_ver = version;
 		} else if (opc == POOL_EXCLUDE_OUT &&
-			   target->ta_comp.co_status == PO_COMP_ST_DOWN) {
-			D_DEBUG(DF_DSMS, "changing rank %u to DOWNOUT map %p\n",
+			 target->ta_comp.co_status == PO_COMP_ST_DOWN) {
+			D_DEBUG(DF_DSMS, "change rank %u DOWNOUT %p\n",
 				target->ta_comp.co_rank, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
 			nchanges++;
+			if (pool_map_node_status_match(dom,
+						PO_COMP_ST_DOWNOUT))
+				dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
 		}
 	}
 
@@ -372,8 +343,6 @@ ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 		D_ASSERTF(rc == 0, "%d\n", rc);
 	}
 
-	if (tgts_failed != NULL)
-		tgts_failed->rl_nr = tgts_failed_out;
-	map_exclude_destroy_sanitized_tgts(tgts_sanitized, tgts_sanitized_size);
 	return 0;
 }
+
