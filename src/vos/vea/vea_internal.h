@@ -130,7 +130,7 @@ struct vea_space_info {
 	daos_handle_t			 vsi_agg_btr;
 	/* Last aggregation time */
 	uint64_t			 vsi_agg_time;
-	/* Unmap context to performe unmap against freed extent */
+	/* Unmap context to perform unmap against freed extent */
 	struct vea_unmap_context	 vsi_unmap_ctxt;
 	/* Statistics */
 	uint64_t			 vsi_stat[STAT_MAX];

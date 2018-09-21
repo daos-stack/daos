@@ -252,6 +252,17 @@ int bio_ioctxt_open(struct bio_io_context **pctxt,
  */
 int bio_ioctxt_close(struct bio_io_context *ctxt);
 
+/*
+ * Unmap (TRIM) the extent being freed.
+ *
+ * \param[IN] ctxt	I/O context
+ * \param[IN] off	Offset in bytes
+ * \param[IN] len	Length in bytes
+ *
+ * \returns		Zero on success, negative value on error
+ */
+int bio_blob_unmap(struct bio_io_context *ctxt, uint64_t off, uint64_t len);
+
 /**
  * Write to per VOS instance blob created.
  *

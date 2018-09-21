@@ -108,7 +108,7 @@ blob_open_cb(void *arg, struct spdk_blob *blob, int rc)
 }
 
 static void
-blob_close_or_delete_cb(void *arg, int rc)
+blob_cb(void *arg, int rc)
 {
 	struct blob_cp_arg	*ba = arg;
 
@@ -327,9 +327,9 @@ bio_ioctxt_close(struct bio_io_context *ctxt)
 	ba->bca_inflights = 1;
 	ABT_mutex_lock(bbs->bb_mutex);
 	if (bbs->bb_bs != NULL)
-		spdk_blob_close(ctxt->bic_blob, blob_close_or_delete_cb, ba);
+		spdk_blob_close(ctxt->bic_blob, blob_cb, ba);
 	else
-		blob_close_or_delete_cb(ba, -DER_NO_HDL);
+		blob_cb(ba, -DER_NO_HDL);
 	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob close done */
@@ -385,10 +385,9 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 	ba->bca_inflights = 1;
 	ABT_mutex_lock(bbs->bb_mutex);
 	if (bbs->bb_bs != NULL)
-		spdk_bs_delete_blob(bbs->bb_bs, blob_id,
-				    blob_close_or_delete_cb, ba);
+		spdk_bs_delete_blob(bbs->bb_bs, blob_id, blob_cb, ba);
 	else
-		blob_close_or_delete_cb(ba, -DER_NO_HDL);
+		blob_cb(ba, -DER_NO_HDL);
 	ABT_mutex_unlock(bbs->bb_mutex);
 
 	/* Wait for blob delete done */
@@ -542,6 +541,64 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	daos_iov_set(&iov, (void *)bio_bh, sizeof(*bio_bh));
 
 	rc = bio_writev(ioctxt, addr, &iov);
+
+	return rc;
+}
+
+int
+bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
+{
+	struct blob_cp_arg	*ba;
+	struct bio_blobstore	*bbs;
+	struct spdk_io_channel	*channel;
+	uint64_t		 pg_off;
+	uint64_t		 pg_cnt;
+	int			 rc;
+
+	D_ASSERT(len > 0);
+
+	/* blob unmap can only support page aligned offset and length */
+	D_ASSERT(((len >> BIO_DMA_PAGE_SHIFT) << BIO_DMA_PAGE_SHIFT) == len);
+	D_ASSERT(((off >> BIO_DMA_PAGE_SHIFT) << BIO_DMA_PAGE_SHIFT) == off);
+
+	/* convert byte to blob/page offset */
+	pg_off = off >> BIO_DMA_PAGE_SHIFT;
+	pg_cnt = ((off + len + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
+			pg_off;
+
+	D_ASSERT(ioctxt->bic_xs_ctxt != NULL);
+	bbs = ioctxt->bic_xs_ctxt->bxc_blobstore;
+	channel = ioctxt->bic_xs_ctxt->bxc_io_channel;
+
+	ba = alloc_blob_cp_arg();
+	if (ba == NULL)
+		return -DER_NOMEM;
+
+	D_DEBUG(DB_MGMT, "Unmapping blob %p pgoff:"DF_U64" pgcnt:"DF_U64"\n",
+		ioctxt->bic_blob, pg_off, pg_cnt);
+
+	ba->bca_inflights = 1;
+	ABT_mutex_lock(bbs->bb_mutex);
+	if (bbs->bb_bs != NULL)
+		spdk_blob_io_unmap(ioctxt->bic_blob, channel, pg_off, pg_cnt,
+				   blob_cb, ba);
+	else
+		blob_cb(ba, -DER_NO_HDL);
+	ABT_mutex_lock(bbs->bb_mutex);
+
+	/* Wait for blob unmap done */
+	blob_wait_completion(ioctxt->bic_xs_ctxt, ba);
+	if (ba->bca_rc != 0) {
+		D_ERROR("Unmap blob %p failed for xs: %p rc:%d\n",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, ba->bca_rc);
+		rc = -DER_IO;
+	} else {
+		D_DEBUG(DB_MGMT, "Successfully unmapped blob %p for xs:%p\n",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+		rc = 0;
+	}
+
+	free_blob_cp_arg(ba);
 
 	return rc;
 }

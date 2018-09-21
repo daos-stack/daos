@@ -193,6 +193,23 @@ vos_blob_format_cb(void *cb_data, struct umem_instance *umem)
 }
 
 /**
+ * Unmap (TRIM) the extent being freed
+ */
+static int
+vos_blob_unmap_cb(uint64_t off, uint64_t cnt, void *data)
+{
+	struct bio_io_context	*ioctxt = data;
+	int			 rc;
+
+	/* unmap unused pages for NVMe media to perform more efficiently */
+	rc = bio_blob_unmap(ioctxt, off, cnt);
+	if (rc)
+		D_ERROR("Failed to unmap blob\n");
+
+	return rc;
+}
+
+/**
  * Create a Versioning Object Storage Pool (VOSP) and its root object.
  */
 int
@@ -484,9 +501,9 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	if (xs_ctxt != NULL) {
 		struct vea_unmap_context unmap_ctxt;
 
-		/* TODO: unmap callback */
-		unmap_ctxt.vnc_unmap = NULL;
-		unmap_ctxt.vnc_data = NULL;
+		/* set unmap callback fp */
+		unmap_ctxt.vnc_unmap = vos_blob_unmap_cb;
+		unmap_ctxt.vnc_data = pool->vp_io_ctxt;
 		rc = vea_load(&pool->vp_umm, vos_txd_get(), &pool_df->pd_vea_df,
 			      &unmap_ctxt, &pool->vp_vea_info);
 		if (rc) {
