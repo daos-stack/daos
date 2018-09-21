@@ -76,6 +76,10 @@ func createAuthResponse(status pb.AuthStatus, token *pb.AuthToken, err error) *p
 // SecurityAction handler for the RPC which is a multiplexed call for performaing security Actionse
 func (s *ControlService) SecurityAction(ctx context.Context, request *pb.SecurityRequest) (*pb.SecurityReply, error) {
 
+	if request == nil {
+		return nil, errors.New("No request provided")
+	}
+
 	var response *pb.SecurityReply
 
 	switch action := request.Action; action {

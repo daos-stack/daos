@@ -41,6 +41,14 @@ import (
 // during the gRPC handshake and creates an AuthSys security request to obtain
 // a handle from the management service.
 func AuthSysRequestFromCreds(creds *DomainInfo, logger *log.Logger) (*pb.SecurityRequest, error) {
+	if creds == nil {
+		return nil, errors.New("No credentials supplied")
+	}
+
+	if logger == nil {
+		return nil, errors.New("No logger supplied")
+	}
+
 	uid := strconv.FormatUint(uint64(creds.creds.Uid), 10)
 	userInfo, _ := user.LookupId(uid)
 	groups, _ := userInfo.GroupIds()
