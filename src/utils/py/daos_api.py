@@ -687,54 +687,68 @@ class IORequest(object):
             raise ValueError("Object update returned non-zero. RC: {0}"
                              .format(rc))
 
-    def single_fetch(self, dkey, akey, size, epoch):
+    def single_fetch(self, dkey, akey, size, epoch, test_hints=[]):
         """
         dkey --1st level key for the array value
         akey --2nd level key for the array value
         size --size of the string
         epoch --which epoch to read from
+        test_hints --optional set of values that allow for error injection,
+            supported values 'sglnull', 'iodnull'.
 
         a string containing the value is returned
         """
-        sgl_iov = IOV()
-        sgl_iov.iov_len = ctypes.c_size_t(size)
-        sgl_iov.iov_buf_len = ctypes.c_size_t(size)
+        if any("sglnull" in s for s in test_hints):
+            sgl_ptr = None
+            buf = ctypes.create_string_buffer(0)
+        else:
+            sgl_iov = IOV()
+            sgl_iov.iov_len = ctypes.c_size_t(size)
+            sgl_iov.iov_buf_len = ctypes.c_size_t(size)
 
-        buf = ctypes.create_string_buffer(size)
-        sgl_iov.iov_buf = ctypes.cast(buf, ctypes.c_void_p)
-        self.sgl.sg_iovs = ctypes.pointer(sgl_iov)
-        self.sgl.sg_nr = 1
-        self.sgl.sg_nr_out = 1
+            buf = ctypes.create_string_buffer(size)
+            sgl_iov.iov_buf = ctypes.cast(buf, ctypes.c_void_p)
+            self.sgl.sg_iovs = ctypes.pointer(sgl_iov)
+            self.sgl.sg_nr = 1
+            self.sgl.sg_nr_out = 1
+
+            sgl_ptr = ctypes.pointer(self.sgl)
 
         self.epoch_range.epr_lo = epoch
         self.epoch_range.epr_hi = ~0
 
         # setup the descriptor
-        self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
-        self.iod.iod_name.iov_buf_len = ctypes.sizeof(akey)
-        self.iod.iod_name.iov_len = ctypes.sizeof(akey)
-        self.iod.iod_type = 1
-        self.iod.iod_size = ctypes.c_size_t(size)
-        self.iod.iod_nr = 1
-        self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-                                        ctypes.c_void_p)
+
+        if any("iodnull" in s for s in test_hints):
+            iod_ptr = None
+        else:
+            self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
+            self.iod.iod_name.iov_buf_len = ctypes.sizeof(akey)
+            self.iod.iod_name.iov_len = ctypes.sizeof(akey)
+            self.iod.iod_type = 1
+            self.iod.iod_size = ctypes.c_size_t(size)
+            self.iod.iod_nr = 1
+            self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
+                                            ctypes.c_void_p)
+            iod_ptr = ctypes.pointer(self.iod)
+
+        if dkey is not None:
+            dkey_iov = IOV()
+            dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
+            dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
+            dkey_iov.iov_len = ctypes.sizeof(dkey)
+            dkey_ptr = ctypes.pointer(dkey_iov)
+        else:
+            dkey_ptr = None
 
         # now do it
         func = self.context.get_function('fetch-obj')
-
-        dkey_iov = IOV()
-        dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
-        dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
-        dkey_iov.iov_len = ctypes.sizeof(dkey)
-
-        rc = func(self.obj.oh, self.epoch_range.epr_lo, ctypes.byref(dkey_iov),
-                  self.iod.iod_nr,
-                  ctypes.byref(self.iod), ctypes.byref(self.sgl), None, None)
+        rc = func(self.obj.oh, self.epoch_range.epr_lo, dkey_ptr,
+                  1, iod_ptr, sgl_ptr, None, None)
         if rc != 0:
             raise ValueError("Object fetch returned non-zero. RC: {0}"
                              .format(rc))
         return buf
-
 
 class DaosContainer(object):
     """ A python object representing a DAOS container."""
@@ -1045,7 +1059,7 @@ class DaosContainer(object):
                                 c_rec_size, c_epoch)
         return buf
 
-    def read_an_obj(self, size, dkey, akey, obj, epoch):
+    def read_an_obj(self, size, dkey, akey, obj, epoch, test_hints=[]):
         """ create a really simple obj in this container and commit """
 
         # container should be  in the open state
@@ -1053,12 +1067,15 @@ class DaosContainer(object):
             raise ValueError("Container needs to be open.")
 
         c_size = ctypes.c_size_t(size)
-        c_dkey = ctypes.create_string_buffer(dkey)
+        if dkey is None:
+            c_dkey = None
+        else:
+            c_dkey = ctypes.create_string_buffer(dkey)
         c_akey = ctypes.create_string_buffer(akey)
         c_epoch = ctypes.c_uint64(epoch)
 
         ioreq = IORequest(self.context, self, obj)
-        buf = ioreq.single_fetch(c_dkey, c_akey, size, c_epoch)
+        buf = ioreq.single_fetch(c_dkey, c_akey, size, c_epoch, test_hints)
         return buf
 
     def local2global(self):
