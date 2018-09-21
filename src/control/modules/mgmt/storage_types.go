@@ -23,7 +23,11 @@
 
 package mgmt
 
-import "go-spdk/nvme"
+import (
+	"go-spdk/nvme"
+
+	pb "modules/mgmt/proto"
+)
 
 // Storage interface represents a persistent storage that can
 // support relevant operations.
@@ -33,6 +37,11 @@ type Storage interface {
 	Update(interface{}) interface{}
 	Teardown() error
 }
+
+// NsMap is a type alias
+type NsMap map[int32]*pb.NVMeNamespace
+// CtrlrMap is a type alias
+type CtrlrMap map[int32]*pb.NVMeController
 
 // NvmeStorage is an implementation of the Storage interface.
 type NvmeStorage struct{}

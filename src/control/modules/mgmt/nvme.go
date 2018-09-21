@@ -98,41 +98,43 @@ func (sn *NvmeStorage) Teardown() error {
 
 // loadControllers converts slice of Controller into protobuf equivalent.
 // Implemented as a pure function.
-func loadControllers(ctrlrs []nvme.Controller) []*pb.NVMeController {
-	var pbCtrlrs []*pb.NVMeController
+func loadControllers(ctrlrs []nvme.Controller) (CtrlrMap, error) {
+	pbCtrlrs := make(CtrlrMap)
 	for _, c := range ctrlrs {
-		pbCtrlrs = append(
-			pbCtrlrs,
-			&pb.NVMeController{
-				Id:      c.ID,
-				Model:   c.Model,
-				Serial:  c.Serial,
-				Pciaddr: c.PCIAddr,
-				Fwrev:   c.FWRev,
-			})
+		pbCtrlrs[c.ID] = &pb.NVMeController{
+			Id:      c.ID,
+			Model:   c.Model,
+			Serial:  c.Serial,
+			Pciaddr: c.PCIAddr,
+			Fwrev:   c.FWRev,
+		}
 	}
-	return pbCtrlrs
+	if len(pbCtrlrs) != len(ctrlrs) {
+		return nil, fmt.Errorf("loadControllers: map is not of expected length")
+	}
+	return pbCtrlrs, nil
 }
 
 // loadNamespaces converts slice of Namespace into protobuf equivalent.
 // Implemented as a pure function.
-func loadNamespaces(
-	pbCtrlrs []*pb.NVMeController, nss []nvme.Namespace) []*pb.NVMeNamespace {
-	var pbNamespaces []*pb.NVMeNamespace
+func loadNamespaces(pbCtrlrs CtrlrMap, nss []nvme.Namespace) (NsMap, error) {
+	pbNamespaces := make(NsMap)
 	for _, ns := range nss {
-		for _, c := range pbCtrlrs {
-			if c.Id == ns.CtrlrID {
-				pbNamespaces = append(
-					pbNamespaces,
-					&pb.NVMeNamespace{
-						Controller: c,
-						Id:         ns.ID,
-						Capacity:   ns.Size,
-					})
-			}
+		c, exists := pbCtrlrs[ns.CtrlrID]
+		if !exists {
+			return nil, fmt.Errorf(
+				"loadNamespaces: missing controller with ID %d", ns.CtrlrID)
+		}
+		pbNamespaces[ns.ID] = &pb.NVMeNamespace{
+			Controller: c,
+			Id:         ns.ID,
+			Capacity:   ns.Size,
 		}
 	}
-	return pbNamespaces
+	if len(pbNamespaces) != len(nss) {
+		return nil, fmt.Errorf("loadNamespaces: map is not of expected length")
+	}
+	return pbNamespaces, nil
 }
 
 // populateNVMe unpacks return type and loads protobuf representations.
@@ -142,8 +144,19 @@ func (s *ControlService) populateNVMe(ret interface{}) error {
 		if ret.Err != nil {
 			return ret.Err
 		}
-		s.NvmeControllers = loadControllers(ret.Ctrlrs)
-		s.NvmeNamespaces = loadNamespaces(s.NvmeControllers, ret.Nss)
+
+		NvmeControllers, err := loadControllers(ret.Ctrlrs)
+		if err != nil {
+			return err
+		}
+		s.NvmeControllers = NvmeControllers
+
+		NvmeNamespaces, err := loadNamespaces(s.NvmeControllers, ret.Nss)
+		if err != nil {
+			return err
+		}
+		s.NvmeNamespaces = NvmeNamespaces
+
 		s.storageInitialised = true
 	default:
 		return fmt.Errorf("unexpected return type")
@@ -211,13 +224,12 @@ func (s *ControlService) UpdateNVMeCtrlr(
 	if err := s.populateNVMe(ret); err != nil {
 		return nil, err
 	}
-	for _, c := range s.NvmeControllers {
-		if c.Id == id {
-			if c.Fwrev == params.Ctrlr.Fwrev {
-				return nil, fmt.Errorf("update failed, firmware revision unchanged")
-			}
-			return c, nil
-		}
+	c, exists := s.NvmeControllers[id]
+	if !exists {
+		return nil, fmt.Errorf("update failed, no matching controller found")
 	}
-	return nil, fmt.Errorf("update failed, no matching controller found")
+	if c.Fwrev == params.Ctrlr.Fwrev {
+		return nil, fmt.Errorf("update failed, firmware revision unchanged")
+	}
+	return c, nil
 }

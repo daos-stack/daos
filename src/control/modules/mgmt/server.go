@@ -51,21 +51,25 @@ type ControlService struct {
 	Storage
 	logger             *log.Logger
 	storageInitialised bool
-	supportedFeatures  []*pb.Feature
-	NvmeNamespaces     []*pb.NVMeNamespace
-	NvmeControllers    []*pb.NVMeController
+	SupportedFeatures  FeatureMap
+	NvmeNamespaces     NsMap
+	NvmeControllers    CtrlrMap
 }
 
 // loadInitData retrieves initial data from file.
 func (s *ControlService) loadInitData(filePath string) error {
+	s.SupportedFeatures = make(FeatureMap)
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(file, &s.supportedFeatures); err != nil {
+	var features []*pb.Feature
+	if err := json.Unmarshal(file, &features); err != nil {
 		return err
 	}
-
+	for _, f := range features {
+		s.SupportedFeatures[f.Fname.Name] = f
+	}
 	return nil
 }
 

@@ -32,21 +32,23 @@ import (
 	pb "modules/mgmt/proto"
 )
 
+// FeatureMap is a type alias
+type FeatureMap map[string]*pb.Feature
+
 // GetFeature returns the feature from feature name.
 func (s *ControlService) GetFeature(
 	ctx context.Context, name *pb.FeatureName) (*pb.Feature, error) {
-	for _, feature := range s.supportedFeatures {
-		if proto.Equal(feature.GetFname(), name) {
-			return feature, nil
-		}
+	f, exists := s.SupportedFeatures[name.Name]
+	if !exists {
+		return nil, fmt.Errorf("no feature with name %s", name.Name)
 	}
-	return nil, fmt.Errorf("no feature with name %s", name.Name)
+	return f, nil
 }
 
 // ListAllFeatures lists all features supported by the management server.
 func (s *ControlService) ListAllFeatures(
 	empty *pb.ListAllFeaturesParams, stream pb.MgmtControl_ListAllFeaturesServer) error {
-	for _, feature := range s.supportedFeatures {
+	for _, feature := range s.SupportedFeatures {
 		if err := stream.Send(feature); err != nil {
 			return err
 		}
@@ -57,7 +59,7 @@ func (s *ControlService) ListAllFeatures(
 // ListFeatures lists all features supported by the management server.
 func (s *ControlService) ListFeatures(
 	category *pb.Category, stream pb.MgmtControl_ListFeaturesServer) error {
-	for _, feature := range s.supportedFeatures {
+	for _, feature := range s.SupportedFeatures {
 		if proto.Equal(feature.GetCategory(), category) {
 			if err := stream.Send(feature); err != nil {
 				return err
