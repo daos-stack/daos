@@ -13,6 +13,7 @@ Storage-class memory (SCM) can be emulated with DRAM by creating tmpfs mountpoin
 DAOS requires a C99-capable compiler, a golang compiler and the scons build tool. Moreover, the DAOS stack leverages the following open source projects:
 - [CaRT](https://github.com/daos-stack/cart) that relies on both [Mercury](https://mercury-hpc.github.io) and [Libfabric](https://ofiwg.github.io/libfabric/) for lightweight network transport and [PMIx](https://github.com/pmix/master) for process set management. See the CaRT repository for more information on how to build the CaRT library.
 - [PMDK](https://github.com/pmem/pmdk.git) for persistent memory programming.
+- [FIO](https://github.com/axboe/fio) for flexible testing of Linux I/O subsystems, specifically enabling validation of userspace NVMe device performance through fio-spdk plugin.
 - [SPDK](http://spdk.io) for userspace NVMe device access and management.
 - [ISA-L](https://github.com/01org/isa-l) for checksum and erasure code computation.
 - [Argobots](https://github.com/pmodels/argobots) for thread management.
@@ -191,6 +192,7 @@ Installing the components into seperate directories allow to upgrade the compone
     OMPI=${daos_prefix_path}/opt/ompi
     OPA=${daos_prefix_path}/opt/openpa
     PMIX=${daos_prefix_path}/opt/pmix
+    FIO=${daos_prefix_path}/opt/fio
     SPDK=${daos_prefix_path}/opt/spdk
 
     PATH=$CART/bin/:$OMPI/bin/:${daos_prefix_path}/bin/:$PATH
