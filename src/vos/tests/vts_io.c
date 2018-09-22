@@ -1435,9 +1435,11 @@ static void
 io_fetch_no_exist_dkey_base(void **state, unsigned long flags)
 {
 	struct io_test_args	*arg = *state;
+	int			rc;
 
 	arg->ta_flags = flags;
-	io_update_and_fetch_incorrect_dkey(arg, 1, 1);
+	rc = io_update_and_fetch_incorrect_dkey(arg, 1, 1);
+	assert_int_equal(rc, 0);
 }
 
 static void
@@ -1649,6 +1651,283 @@ io_simple_near_epoch(void **state)
 	}
 }
 
+#define SGL_TEST_BUF_SIZE (1024)
+#define SGL_TEST_BUF_COUNT (4)
+static void
+io_sgl_update(void **state)
+{
+	/* This tests uses multiple buffers for the update/write */
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	int			i;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rex;
+	daos_iod_t		iod;
+	daos_sg_list_t		sgl;
+	struct d_uuid		dsm_cookie;
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_AKEY_SIZE];
+	char			*update_buffs[SGL_TEST_BUF_COUNT];
+	char			fetch_buf[SGL_TEST_BUF_COUNT *
+					  SGL_TEST_BUF_SIZE];
+	char			ground_truth[SGL_TEST_BUF_COUNT *
+					     SGL_TEST_BUF_SIZE];
+
+	memset(&rex, 0, sizeof(rex));
+	memset(&iod, 0, sizeof(iod));
+
+	/* Set up dkey and akey */
+	dts_key_gen(&dkey_buf[0], arg->dkey_size, arg->dkey);
+	dts_key_gen(&akey_buf[0], arg->akey_size, arg->akey);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+
+	rex.rx_idx = hash_key(&dkey, arg->ofeat & DAOS_OF_DKEY_UINT64);
+	rex.rx_nr = 1;
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = SGL_TEST_BUF_COUNT * SGL_TEST_BUF_SIZE;
+	iod.iod_name = akey;
+	iod.iod_recxs = &rex;
+	iod.iod_nr = 1;
+
+	/* Allocate memory for the scatter-gather list */
+	rc = daos_sgl_init(&sgl, SGL_TEST_BUF_COUNT);
+	assert_int_equal(rc, 0);
+
+	/* Allocate memory for the SGL_TEST_BUF_COUNT buffers */
+	for (i = 0; i < SGL_TEST_BUF_COUNT; i++) {
+		D_ALLOC_ARRAY(update_buffs[i], SGL_TEST_BUF_SIZE);
+		assert_non_null(update_buffs[i]);
+		/* Fill the buffer with random letters */
+		dts_buf_render(update_buffs[i], SGL_TEST_BUF_SIZE);
+		/* Set ground truth */
+		memcpy(&ground_truth[i * SGL_TEST_BUF_SIZE], update_buffs[i],
+			SGL_TEST_BUF_SIZE);
+		/* Attach the buffer to the scatter-gather list */
+		daos_iov_set(&sgl.sg_iovs[i], update_buffs[i],
+			SGL_TEST_BUF_SIZE);
+	}
+
+	/* Write/Update */
+	uuid_copy(dsm_cookie.uuid, cookie_dict[(rand() % NUM_UNIQUE_COOKIES)]);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, dsm_cookie.uuid,
+				0, &dkey, 1, &iod, &sgl);
+	daos_sgl_fini(&sgl, true);
+
+	if (rc) {
+		print_error("Failed to update: %d\n", rc);
+		goto exit;
+	}
+	inc_cntr(arg->ta_flags);
+
+	/* Now fetch */
+	memset(fetch_buf, 0, SGL_TEST_BUF_COUNT * SGL_TEST_BUF_SIZE);
+	rc = daos_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+	daos_iov_set(sgl.sg_iovs, &fetch_buf[0], SGL_TEST_BUF_COUNT *
+		     SGL_TEST_BUF_SIZE);
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
+				&sgl);
+	if (rc) {
+		print_error("Failed to fetch: %d\n", rc);
+		goto exit;
+	}
+	daos_sgl_fini(&sgl, false);
+	/* Test if ground truth matches fetch_buf */
+	assert_memory_equal(ground_truth, fetch_buf, SGL_TEST_BUF_COUNT *
+			    SGL_TEST_BUF_SIZE);
+exit:
+	assert_int_equal(rc, 0);
+}
+
+static void
+io_sgl_fetch(void **state)
+{
+	/* This tests uses multiple buffers for the fetch/read */
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	int			i;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rex;
+	daos_iod_t		iod;
+	daos_sg_list_t		sgl;
+	struct d_uuid		dsm_cookie;
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_AKEY_SIZE];
+	char			*fetch_buffs[SGL_TEST_BUF_COUNT];
+	char			update_buf[SGL_TEST_BUF_COUNT *
+					  SGL_TEST_BUF_SIZE];
+	char			ground_truth[SGL_TEST_BUF_COUNT *
+					     SGL_TEST_BUF_SIZE];
+
+	memset(&rex, 0, sizeof(rex));
+	memset(&iod, 0, sizeof(iod));
+
+	/* Set up dkey and akey */
+	dts_key_gen(&dkey_buf[0], arg->dkey_size, arg->dkey);
+	dts_key_gen(&akey_buf[0], arg->akey_size, arg->akey);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+
+	rex.rx_idx = hash_key(&dkey, arg->ofeat & DAOS_OF_DKEY_UINT64);
+	rex.rx_nr = 1;
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = SGL_TEST_BUF_COUNT * SGL_TEST_BUF_SIZE;
+	iod.iod_name = akey;
+	iod.iod_recxs = &rex;
+	iod.iod_nr = 1;
+
+	/* Fill the buffer with random letters */
+	dts_buf_render(&update_buf[0], SGL_TEST_BUF_COUNT * SGL_TEST_BUF_SIZE);
+	/* Set ground truth */
+	memcpy(&ground_truth[0], &update_buf[0], SGL_TEST_BUF_COUNT *
+		SGL_TEST_BUF_SIZE);
+	/* Attach the buffer to the scatter-gather list */
+	daos_sgl_init(&sgl, 1);
+	daos_iov_set(sgl.sg_iovs, &update_buf[0], SGL_TEST_BUF_COUNT *
+		     SGL_TEST_BUF_SIZE);
+
+	/* Write/Update */
+	uuid_copy(dsm_cookie.uuid, cookie_dict[(rand() % NUM_UNIQUE_COOKIES)]);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, dsm_cookie.uuid,
+				0, &dkey, 1, &iod, &sgl);
+	if (rc)
+		goto exit;
+	daos_sgl_fini(&sgl, false);
+	inc_cntr(arg->ta_flags);
+
+	/* Allocate memory for the scatter-gather list */
+	daos_sgl_init(&sgl, SGL_TEST_BUF_COUNT);
+
+	/* Allocate memory for the SGL_TEST_BUF_COUNT fetch buffers */
+	for (i = 0; i < SGL_TEST_BUF_COUNT; i++) {
+		D_ALLOC_ARRAY(fetch_buffs[i], SGL_TEST_BUF_SIZE);
+		assert_non_null(fetch_buffs[i]);
+		memset(fetch_buffs[i], 0, SGL_TEST_BUF_SIZE);
+		/* Attach the buffer to the scatter-gather list */
+		daos_iov_set(&sgl.sg_iovs[i], fetch_buffs[i],
+			SGL_TEST_BUF_SIZE);
+	}
+	/* Now fetch */
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
+				&sgl);
+	if (rc)
+		goto exit;
+	/* Test if ground truth matches fetch_buffs */
+	for (i = 0; i < SGL_TEST_BUF_COUNT; i++) {
+		assert_memory_equal(&ground_truth[i * SGL_TEST_BUF_SIZE],
+			fetch_buffs[i], SGL_TEST_BUF_SIZE);
+	}
+	daos_sgl_fini(&sgl, true);
+exit:
+	assert_int_equal(rc, 0);
+}
+
+static void
+io_fetch_hole(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_iov_t		val_iov;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rexs[3];
+	daos_iod_t		iod;
+	daos_sg_list_t		sgl;
+	struct d_uuid		dsm_cookie;
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_AKEY_SIZE];
+	char			update_buf[3 * 1024];
+	char			fetch_buf[3 * 1024];
+	char			ground_truth[3 * 1024];
+
+	memset(&rexs, 0, 2 * sizeof(daos_recx_t));
+	memset(&iod, 0, sizeof(iod));
+	memset(&sgl, 0, sizeof(sgl));
+
+	/* Set up dkey and akey */
+	dts_key_gen(&dkey_buf[0], arg->dkey_size, arg->dkey);
+	dts_key_gen(&akey_buf[0], arg->akey_size, arg->akey);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+
+	/* Set up rexs */
+	rexs[0].rx_idx = 0;
+	rexs[0].rx_nr = 1024;
+	rexs[1].rx_idx = 1024;
+	rexs[1].rx_nr = 1024;
+	rexs[2].rx_idx = 2 * 1024;
+	rexs[2].rx_nr = 1024;
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_name = akey;
+	iod.iod_recxs = rexs;
+	iod.iod_nr = 3;
+
+	/* Fill the update buffer */
+	dts_buf_render(&update_buf[0], 3 * 1024);
+	/* Set ground truth */
+	memcpy(&ground_truth[0], &update_buf[0], 3 * 1024);
+
+	/* Attach buffer to sgl */
+	daos_iov_set(&val_iov, &update_buf[0], 3 * 1024);
+	sgl.sg_iovs = &val_iov;
+	sgl.sg_nr = 1;
+
+	/* Write/Update */
+	uuid_copy(dsm_cookie.uuid, cookie_dict[(rand() % NUM_UNIQUE_COOKIES)]);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, dsm_cookie.uuid,
+				0, &dkey, 1, &iod, &sgl);
+	assert_int_equal(rc, 0);
+	inc_cntr(arg->ta_flags);
+
+	/* Fetch */
+	daos_iov_set(&val_iov, &fetch_buf[0], 3 * 1024);
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
+				&sgl);
+	assert_int_equal(rc, 0);
+
+	assert_memory_equal(ground_truth, fetch_buf, 3 * 1024);
+
+	/* Now just update the first and third extents */
+	memset(update_buf, 0, 3 * 1024);
+	/* This time only render enough for two extents */
+	memset(&update_buf[0], 97, 1024); /* 97 = 'a' */
+	memset(&update_buf[1024], 99, 1024); /* 99 = 'c' */
+	update_buf[2047] = '\0';
+	/* Update ground truth */
+	memcpy(&ground_truth[0], &update_buf[0], 1024);
+	memcpy(&ground_truth[2 * 1024], &update_buf[1024], 1024);
+
+	/* Update the IOD */
+	rexs[1].rx_idx = 2 * 1024;
+	iod.iod_nr = 2;
+	daos_iov_set(&val_iov, &update_buf[0], 2 * 1024);
+	sgl.sg_iovs = &val_iov;
+	/* Update using epoch 2 */
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 2, dsm_cookie.uuid,
+				0, &dkey, 1, &iod, &sgl);
+	assert_int_equal(rc, 0);
+
+	/* Now fetch all three and test that the "hole" is untouched */
+	rexs[0].rx_nr = 3 * 1024;
+	iod.iod_nr = 1;
+	memset(fetch_buf, 0, 3 * 1024);
+	daos_iov_set(&val_iov, &fetch_buf[0], 3 * 1024);
+	/* Fetch using epoch 2 */
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 2, &dkey, 1, &iod,
+				&sgl);
+	assert_int_equal(rc, 0);
+
+	/* Test if ground truth matches fetch_buf */
+	assert_memory_equal(ground_truth, fetch_buf, 3 * 1024);
+}
+
 static int
 io_iter_cookie_test(void **state)
 {
@@ -1745,6 +2024,12 @@ static const struct CMUnitTest io_tests[] = {
 		io_simple_punch, NULL, NULL},
 	{ "VOS205: Simple near-epoch retrieval test",
 		io_simple_near_epoch, NULL, NULL},
+	{ "VOS206: Simple scatter-gather list test, multiple update buffers",
+		io_sgl_update, NULL, NULL},
+	{ "VOS207: Simple scatter-gather list test, multiple fetch buffers",
+		io_sgl_fetch, NULL, NULL},
+	{ "VOS208: Extent hole test",
+		io_fetch_hole, NULL, NULL},
 	{ "VOS220: 100K update/fetch/verify test",
 		io_multiple_dkey, NULL, NULL},
 	{ "VOS222: overwrite test",
