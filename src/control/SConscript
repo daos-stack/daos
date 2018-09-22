@@ -56,6 +56,10 @@ def scons():
     denv.InstallAs(
         os.path.join("$PREFIX/share/control", mgmtinitdb),
         os.path.join(modulemgmt, mgmtinitdb))
+    denv.Install(
+        "$PREFIX/share/spdk/fio_plugin",
+        [os.path.join(modulemgmt, n) for n in
+         ['example_config.fio', 'full_bench.fio']])
 
     serverbin = "%s/bin/server" % gopath
     serversrc = "%s/server/daos_server.go" % gosrc

@@ -29,14 +29,16 @@ package proto;
 // definition below.
 service MgmtControl {
 	rpc GetFeature(FeatureName) returns (Feature) {};
-	rpc ListAllFeatures(ListAllFeaturesParams) returns (stream Feature) {};
+	rpc ListAllFeatures(EmptyParams) returns (stream Feature) {};
 	rpc ListFeatures(Category) returns (stream Feature) {};
-	rpc ListNVMeCtrlrs(ListNVMeCtrlrsParams) returns (stream NVMeController) {};
+	rpc ListNVMeCtrlrs(EmptyParams) returns (stream NVMeController) {};
 	rpc ListNVMeNss(NVMeController) returns (stream NVMeNamespace) {};
 	rpc UpdateNVMeCtrlr(UpdateNVMeCtrlrParams) returns (NVMeController) {};
+	rpc FetchFioConfigPaths(EmptyParams) returns (stream FioConfigPath) {};
+	rpc BurnInNVMe(BurnInNVMeParams) returns (stream BurnInNVMeReport) {};
 }
 
-message ListAllFeaturesParams {}
+message EmptyParams {}
 
 message FeatureName {
 	string name = 1;
@@ -55,8 +57,6 @@ message Feature {
 	string description = 3;
 }
 
-message ListNVMeCtrlrsParams {}
-
 // NVMeController represents a NVMe Controller.
 message NVMeController {
 	// The id name of the controller.
@@ -71,14 +71,6 @@ message NVMeController {
 	string fwrev = 5;
 }
 
-message UpdateNVMeCtrlrParams {
-	NVMeController ctrlr = 1;
-	// Filesystem path containing firmware image
-	string path = 2;
-	// Firmware slot (register) to update
-	int32 slot = 3;
-}
-
 // NVMeNamespace represent NVMe namespaces
 // available on controller. Results are
 // streamed rather than returned at once.
@@ -89,4 +81,27 @@ message NVMeNamespace {
 	int32 id = 2;
 	// device capacity in GBytes
 	int32 capacity = 3;
+}
+
+message UpdateNVMeCtrlrParams {
+	NVMeController ctrlr = 1;
+	// Filesystem path containing firmware image
+	string path = 2;
+	// Firmware slot (register) to update
+	int32 slot = 3;
+}
+
+message FioConfigPath {
+	// Filesystem path containing fio job configuration
+	string path = 1;
+}
+
+message BurnInNVMeParams {
+	int32 ctrlrid = 1;
+	FioConfigPath path = 2;
+}
+
+message BurnInNVMeReport {
+	// Report from running burn-in reported by fio
+	string report = 1;
 }

@@ -26,9 +26,9 @@ package mgmt_test
 import (
 	"testing"
 
+	. "common/test"
 	. "go-spdk/nvme"
 	. "modules/mgmt"
-	. "common/test"
 
 	pb "modules/mgmt/proto"
 )
@@ -69,23 +69,6 @@ func mockNamespacePB(fwRev string) *pb.NVMeNamespace {
 	}
 }
 
-// MockStorage struct implements Storage interface
-type mockStorage struct {
-	fwRevBefore string
-	fwRevAfter  string
-}
-
-func (mock *mockStorage) Init() error { return nil }
-func (mock *mockStorage) Discover() interface{} {
-	c := mockController(mock.fwRevBefore)
-	return NVMeReturn{[]Controller{c}, []Namespace{mockNamespace(&c)}, nil}
-}
-func (mock *mockStorage) Update(interface{}) interface{} {
-	c := mockController(mock.fwRevAfter)
-	return NVMeReturn{[]Controller{c}, []Namespace{mockNamespace(&c)}, nil}
-}
-func (mock *mockStorage) Teardown() error { return nil }
-
 func NewTestControlServer(storageImpl Storage) *ControlService {
 	return &ControlService{Storage: storageImpl}
 }
@@ -100,8 +83,8 @@ func TestFetchNVMe(t *testing.T) {
 	cExpect := mockControllerPB("1.0.0")
 	nsExpect := mockNamespacePB("1.0.0")
 
-	AssertEqual(t, s.NvmeControllers[cExpect.Id], cExpect, "")
-	AssertEqual(t, s.NvmeNamespaces[nsExpect.Id], nsExpect, "")
+	AssertEqual(t, s.NvmeControllers[cExpect.Id], cExpect, "unexpected Controller populated")
+	AssertEqual(t, s.NvmeNamespaces[nsExpect.Id], nsExpect, "unexpected Namespace populated")
 }
 
 func TestUpdateNVMe(t *testing.T) {
@@ -124,8 +107,8 @@ func TestUpdateNVMe(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	AssertEqual(t, s.NvmeControllers[cExpect.Id], cExpect, "")
-	AssertEqual(t, newC, cExpect, "")
+	AssertEqual(t, s.NvmeControllers[cExpect.Id], cExpect, "unexpected Controller populated")
+	AssertEqual(t, newC, cExpect, "unexpected Controller returned")
 }
 
 func TestUpdateNVMeFail(t *testing.T) {
@@ -144,8 +127,5 @@ func TestUpdateNVMeFail(t *testing.T) {
 		Ctrlr: c, Path: "/foo/bar", Slot: 0}
 
 	_, err := s.UpdateNVMeCtrlr(nil, params)
-	// expect error
-	if err == nil {
-		t.Fatal(err.Error())
-	}
+	ExpectError(t, err, "update failed, firmware revision unchanged")
 }

@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-// Utility functions for unit tests
+// Package testutils contains utility functions for unit tests
 package testutils
 
 import (
@@ -30,12 +30,28 @@ import (
 	"testing"
 )
 
+// AssertTrue asserts b is true
+func AssertTrue(t *testing.T, b bool, message string) {
+	if !b {
+		t.Fatal(message)
+	}
+}
+
+// AssertFalse asserts b is false
+func AssertFalse(t *testing.T, b bool, message string) {
+	if b {
+		t.Fatal(message)
+	}
+}
+
+// AssertEqual asserts b is equal to a
+//
+// Whilst suitable in most situations, reflect.DeepEqual() may not be
+// suitable for nontrivial struct element comparisons, go-cmp should
+// then be used but will introduce a third party dep.
 func AssertEqual(
 	t *testing.T, a interface{}, b interface{}, message string) {
 
-	// reflect.DeepEqual() may not be suitable for nontrivial
-	// struct element comparisons, go-cmp should then be used
-	// but will introduce a third party dep.
 	if reflect.DeepEqual(a, b) {
 		return
 	}
@@ -46,6 +62,7 @@ func AssertEqual(
 	t.Fatal(message)
 }
 
+// ExpectError asserts error contains expected message
 func ExpectError(t *testing.T, actualErr error, expectedMessage string) {
 	if actualErr == nil {
 		t.Error("Expected a non-nil error")

@@ -24,146 +24,16 @@
 package mgmt
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
-
-	"go-spdk/nvme"
-	"go-spdk/spdk"
 
 	"golang.org/x/net/context"
 
 	pb "modules/mgmt/proto"
 )
-
-var spdkSetupPath = "share/spdk/scripts/setup.sh"
-
-// Init method implementation for NvmeStorage.
-//
-// Setup available NVMe devices to be used by SPDK
-// and initialise SPDK environment before probing controllers.
-func (sn *NvmeStorage) Init() error {
-	absSetupPath, err := getAbsInstallPath(spdkSetupPath)
-	if err != nil {
-		return err
-	}
-	// run setup to allocate hugepages and bind PCI devices
-	// (that don't have active mountpoints) to generic kernel driver
-	//
-	// todo: we need to be sure that we want to do this, it
-	//       will make the controller invisible to other
-	//       consumers.
-	if err := exec.Command(absSetupPath).Run(); err != nil {
-		return err
-	}
-	if err := spdk.InitSPDKEnv(); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Discover method implementation for NvmeStorage
-func (sn *NvmeStorage) Discover() interface{} {
-	cs, ns, err := nvme.Discover()
-	return NVMeReturn{cs, ns, err}
-}
-
-// Update method implementation for NvmeStorage
-func (sn *NvmeStorage) Update(params interface{}) interface{} {
-	switch t := params.(type) {
-	case UpdateParams:
-		cs, ns, err := nvme.Update(t.CtrlrID, t.Path, t.Slot)
-		return NVMeReturn{cs, ns, err}
-	default:
-		return fmt.Errorf("unexpected return type")
-	}
-}
-
-// Teardown method implementation for NvmeStorage.
-//
-// Cleanup references to NVMe devices held by go-spdk
-// bindings, rebind PCI devices back to their original drivers
-// and cleanup any leftover spdk files/resources.
-func (sn *NvmeStorage) Teardown() error {
-	nvme.Cleanup()
-
-	absSetupPath, err := getAbsInstallPath(spdkSetupPath)
-	if err != nil {
-		return err
-	}
-	if err := exec.Command(absSetupPath, "reset").Run(); err != nil {
-		return err
-	}
-	return nil
-}
-
-// loadControllers converts slice of Controller into protobuf equivalent.
-// Implemented as a pure function.
-func loadControllers(ctrlrs []nvme.Controller) (CtrlrMap, error) {
-	pbCtrlrs := make(CtrlrMap)
-	for _, c := range ctrlrs {
-		pbCtrlrs[c.ID] = &pb.NVMeController{
-			Id:      c.ID,
-			Model:   c.Model,
-			Serial:  c.Serial,
-			Pciaddr: c.PCIAddr,
-			Fwrev:   c.FWRev,
-		}
-	}
-	if len(pbCtrlrs) != len(ctrlrs) {
-		return nil, fmt.Errorf("loadControllers: map is not of expected length")
-	}
-	return pbCtrlrs, nil
-}
-
-// loadNamespaces converts slice of Namespace into protobuf equivalent.
-// Implemented as a pure function.
-func loadNamespaces(pbCtrlrs CtrlrMap, nss []nvme.Namespace) (NsMap, error) {
-	pbNamespaces := make(NsMap)
-	for _, ns := range nss {
-		c, exists := pbCtrlrs[ns.CtrlrID]
-		if !exists {
-			return nil, fmt.Errorf(
-				"loadNamespaces: missing controller with ID %d", ns.CtrlrID)
-		}
-		pbNamespaces[ns.ID] = &pb.NVMeNamespace{
-			Controller: c,
-			Id:         ns.ID,
-			Capacity:   ns.Size,
-		}
-	}
-	if len(pbNamespaces) != len(nss) {
-		return nil, fmt.Errorf("loadNamespaces: map is not of expected length")
-	}
-	return pbNamespaces, nil
-}
-
-// populateNVMe unpacks return type and loads protobuf representations.
-func (s *ControlService) populateNVMe(ret interface{}) error {
-	switch ret := ret.(type) {
-	case NVMeReturn:
-		if ret.Err != nil {
-			return ret.Err
-		}
-
-		NvmeControllers, err := loadControllers(ret.Ctrlrs)
-		if err != nil {
-			return err
-		}
-		s.NvmeControllers = NvmeControllers
-
-		NvmeNamespaces, err := loadNamespaces(s.NvmeControllers, ret.Nss)
-		if err != nil {
-			return err
-		}
-		s.NvmeNamespaces = NvmeNamespaces
-
-		s.storageInitialised = true
-	default:
-		return fmt.Errorf("unexpected return type")
-	}
-
-	return nil
-}
 
 // FetchNVMe populates controllers and namespaces in ControlService
 // as side effect.
@@ -174,6 +44,7 @@ func (s *ControlService) populateNVMe(ret interface{}) error {
 //		 exception if you try to probe a second time).
 func (s *ControlService) FetchNVMe() error {
 	if s.storageInitialised != true {
+		// todo: pass shm_id to Init()
 		if err := s.Storage.Init(); err != nil {
 			return err
 		}
@@ -187,7 +58,7 @@ func (s *ControlService) FetchNVMe() error {
 
 // ListNVMeCtrlrs lists all NVMe controllers.
 func (s *ControlService) ListNVMeCtrlrs(
-	empty *pb.ListNVMeCtrlrsParams, stream pb.MgmtControl_ListNVMeCtrlrsServer) error {
+	empty *pb.EmptyParams, stream pb.MgmtControl_ListNVMeCtrlrsServer) error {
 	if err := s.FetchNVMe(); err != nil {
 		return err
 	}
@@ -232,4 +103,71 @@ func (s *ControlService) UpdateNVMeCtrlr(
 		return nil, fmt.Errorf("update failed, firmware revision unchanged")
 	}
 	return c, nil
+}
+
+// FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
+func (s *ControlService) FetchFioConfigPaths(
+	empty *pb.EmptyParams, stream pb.MgmtControl_FetchFioConfigPathsServer) error {
+	pluginDir, err := getAbsInstallPath(spdkFioPluginDir)
+	if err != nil {
+		return err
+	}
+	paths, err := getFilePaths(pluginDir, "fio")
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		if err := stream.Send(&pb.FioConfigPath{Path: path}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// BurnInNVMe runs burn-in validation on NVMe Namespace and returns cmd output
+// in a stream to the gRPC consumer.
+func (s *ControlService) BurnInNVMe(
+	params *pb.BurnInNVMeParams, stream pb.MgmtControl_BurnInNVMeServer) error {
+	// retrieve command components
+	cmdName, args, env, err := s.Storage.BurnIn(
+		BurnInParams{
+			PciAddr: s.NvmeControllers[params.Ctrlrid].Pciaddr,
+			// hardcode first Namespace on controller for the moment
+			NsID:       1,
+			ConfigPath: params.Path.Path,
+		})
+	if err != nil {
+		return err
+	}
+	// construct command executer and init env/reader
+	cmd := exec.Command(cmdName, args...)
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, env)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmdReader, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("Error creating StdoutPipe for Cmd %v", err)
+	}
+	// run text scanner as goroutine
+	scanner := bufio.NewScanner(cmdReader)
+	go func() {
+		for scanner.Scan() {
+			stream.Send(&pb.BurnInNVMeReport{Report: scanner.Text()})
+		}
+	}()
+	// start command and wait for finish
+	err = cmd.Start()
+	if err != nil {
+		return fmt.Errorf(
+			"Error starting Cmd: %s, Args: %v, Env: %s (%v)",
+			cmdName, args, env, err)
+	}
+	err = cmd.Wait()
+	if err != nil {
+		return fmt.Errorf(
+			"Error waiting for completion of Cmd: %s, Args: %v, Env: %s (%v, %q)",
+			cmdName, args, env, err, stderr.String())
+	}
+	return nil
 }

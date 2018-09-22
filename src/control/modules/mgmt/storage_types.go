@@ -24,6 +24,8 @@
 package mgmt
 
 import (
+	"common/log"
+
 	"go-spdk/nvme"
 
 	pb "modules/mgmt/proto"
@@ -35,16 +37,20 @@ type Storage interface {
 	Init() error
 	Discover() interface{}
 	Update(interface{}) interface{}
+	// this assumes that the output is to be executed on Shell
+	// (cmdName, cmdArgs, envStr, err)
+	BurnIn(interface{}) (string, []string, string, error)
 	Teardown() error
 }
 
 // NsMap is a type alias
 type NsMap map[int32]*pb.NVMeNamespace
+
 // CtrlrMap is a type alias
 type CtrlrMap map[int32]*pb.NVMeController
 
 // NvmeStorage is an implementation of the Storage interface.
-type NvmeStorage struct{}
+type NvmeStorage struct{ Logger *log.Logger }
 
 // NVMeReturn struct contains return values for NvmeStorage
 // Discover and Update methods.
@@ -60,4 +66,12 @@ type UpdateParams struct {
 	CtrlrID int32
 	Path    string
 	Slot    int32
+}
+
+// BurnInParams struct contains input parameters for NvmeStorage
+// BurnIn implementation.
+type BurnInParams struct {
+	PciAddr    string
+	NsID       int32
+	ConfigPath string
 }

@@ -25,10 +25,13 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"common/agent"
 	"common/control"
+	"common/functional"
 	"modules/security"
 
 	pb "modules/mgmt/proto"
@@ -43,16 +46,16 @@ var (
 	controlClient *control.DAOSMgmtClient
 )
 
-func getUpdateParams(sc *ishell.Context) (*pb.UpdateNVMeCtrlrParams, error) {
+func getUpdateParams(c *ishell.Context) (*pb.UpdateNVMeCtrlrParams, error) {
 	// disable the '>>>' for cleaner same line input.
-	sc.ShowPrompt(false)
-	defer sc.ShowPrompt(true) // revert after user input.
+	c.ShowPrompt(false)
+	defer c.ShowPrompt(true) // revert after user input.
 
-	sc.Print("Please enter firmware image file-path: ")
-	path := sc.ReadLine()
+	c.Print("Please enter firmware image file-path: ")
+	path := c.ReadLine()
 
-	sc.Print("Please enter slot you would like to update [default 0]: ")
-	slotRaw := sc.ReadLine()
+	c.Print("Please enter slot you would like to update [default 0]: ")
+	slotRaw := c.ReadLine()
 
 	var slot int32
 
@@ -68,52 +71,114 @@ func getUpdateParams(sc *ishell.Context) (*pb.UpdateNVMeCtrlrParams, error) {
 	}
 
 	return &pb.UpdateNVMeCtrlrParams{
-		Ctrlr: nil, Path: path, Slot: slot}, nil
+		Ctrlr: nil, Path: strings.TrimSpace(path), Slot: slot}, nil
+}
+
+func getFioConfig(c *ishell.Context) (configPath string, err error) {
+	// fetch existing configuration files
+	paths, err := controlClient.FetchFioConfigPaths()
+	if err != nil {
+		return
+	}
+	// cut prefix to display filenames not full path
+	configChoices := functional.Map(
+		paths, func(p string) string { return filepath.Base(p) })
+	// add custom path option
+	configChoices = append(configChoices, "custom path")
+
+	choiceIdx := c.MultiChoice(
+		configChoices,
+		"Select the fio configuration you would like to run on the selected controllers.")
+
+	// if custom path selected (last index), process input
+	if choiceIdx == len(configChoices)-1 {
+		// disable the '>>>' for cleaner same line input.
+		c.ShowPrompt(false)
+		defer c.ShowPrompt(true) // revert after user input.
+
+		c.Print("Please enter fio configuration file-path [has file extension .fio]: ")
+		path := c.ReadLine()
+
+		if path == "" {
+			return "", fmt.Errorf("no filepath provided")
+		}
+		if filepath.Ext(path) != ".fio" {
+			return "", fmt.Errorf("provided filepath does not end in .fio")
+		}
+		if !filepath.IsAbs(path) {
+			return "", fmt.Errorf("provided filepath is not absolute")
+		}
+
+		configPath = path
+	} else {
+		configPath = paths[choiceIdx]
+	}
+
+	return
 }
 
 func nvmeTaskLookup(
-	sc *ishell.Context, ctrlrs []*pb.NVMeController, feature string) error {
+	c *ishell.Context, ctrlrs []*pb.NVMeController, feature string) error {
 
 	switch feature {
 	case "nvme-namespaces":
-		for _, c := range ctrlrs {
-			sc.Printf("Controller: %+v\n", c)
+		for _, ctrlr := range ctrlrs {
+			c.Printf("Controller: %+v\n", ctrlr)
 
-			nss, err := controlClient.ListNVMeNss(c)
+			nss, err := controlClient.ListNVMeNss(ctrlr)
 			if err != nil {
-				sc.Println("Problem retrieving namespaces: ", err.Error())
+				c.Println("Problem retrieving namespaces: ", err.Error())
+				return err
 			}
 
 			for _, ns := range nss {
-				sc.Printf(
+				c.Printf(
 					"\t- Namespace ID: %d, Capacity: %dGB\n", ns.Id, ns.Capacity)
 			}
 		}
 	case "nvme-fw-update":
-		params, err := getUpdateParams(sc)
+		params, err := getUpdateParams(c)
 		if err != nil {
-			sc.Println("Problem reading user inputs: ", err.Error())
+			c.Println("Problem reading user inputs: ", err.Error())
+			return err
 		}
 
-		for _, c := range ctrlrs {
-			sc.Printf("\nController: %+v\n", c)
-			sc.Printf(
+		for _, ctrlr := range ctrlrs {
+			c.Printf("\nController: %+v\n", ctrlr)
+			c.Printf(
 				"\t- Updating firmware on slot %d with image %s.\n",
 				params.Slot, params.Path)
 
-			params.Ctrlr = c
+			params.Ctrlr = ctrlr
 
 			newFwrev, err := controlClient.UpdateNVMeCtrlr(params)
 			if err != nil {
-				sc.Println("\nProblem updating firmware: ", err)
-			} else {
-				sc.Printf(
-					"\nSuccessfully updated firmware from revision %s to %s!\n",
-					params.Ctrlr.Fwrev, newFwrev)
+				c.Println("\nProblem updating firmware: ", err)
+				return err
+			}
+			c.Printf(
+				"\nSuccessfully updated firmware from revision %s to %s!\n",
+				params.Ctrlr.Fwrev, newFwrev)
+		}
+	case "nvme-burn-in":
+		configPath, err := getFioConfig(c)
+		if err != nil {
+			c.Println("Problem reading user inputs: ", err.Error())
+			return err
+		}
+
+		for _, ctrlr := range ctrlrs {
+			c.Printf("\nController: %+v\n", ctrlr)
+			c.Printf(
+				"\t- Running burn-in validation with spdk fio plugin using job file %s.\n\n",
+				filepath.Base(configPath))
+			_, err := controlClient.BurnInNVMe(ctrlr.Id, configPath)
+			if err != nil {
+				return err
 			}
 		}
 	default:
-		sc.Printf("Sorry, task '%s' has not been implemented.\n", feature)
+		c.Printf("Sorry, task '%s' has not been implemented.\n", feature)
 	}
 
 	return nil
@@ -275,6 +340,7 @@ func setupShell() *ishell.Shell {
 				return
 			}
 
+			// record strings that make up the option list
 			cStrs := make([]string, len(cs))
 			for i, v := range cs {
 				cStrs[i] = fmt.Sprintf("[%d] %+v", i, v)
@@ -284,13 +350,17 @@ func setupShell() *ishell.Shell {
 				cStrs,
 				"Select the controllers you want to run tasks on.",
 				nil)
+			if len(ctrlrIdxs) == 0 {
+				c.Println("No controllers selected!")
+				return
+			}
 
 			// filter list of selected controllers to act on
 			var ctrlrs []*pb.NVMeController
-			for i, c := range cs {
+			for i, ctrlr := range cs {
 				for j := range ctrlrIdxs {
 					if i == j {
-						ctrlrs = append(ctrlrs, c)
+						ctrlrs = append(ctrlrs, ctrlr)
 					}
 				}
 			}

@@ -25,6 +25,7 @@ package mgmt
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -44,6 +45,29 @@ func getAbsInstallPath(relPath string) (string, error) {
 	}
 
 	return filepath.Join(filepath.Dir(ex), "..", relPath), nil
+}
+
+// getFilePaths return full file paths in given directory with
+// matching file extensions
+func getFilePaths(dir string, ext string) ([]string, error) {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	extension := ext
+	// if extension has been provided without '.' prefix, add one
+	if filepath.Ext(ext) == "" {
+		extension = fmt.Sprintf(".%s", ext)
+	}
+	var matchingFiles []string
+	for _, file := range files {
+		if filepath.Ext(file.Name()) == extension {
+			matchingFiles = append(
+				matchingFiles,
+				fmt.Sprintf("%s/%s", dir, file.Name()))
+		}
+	}
+	return matchingFiles, nil
 }
 
 // ControlService type is the data container for the service.
@@ -75,10 +99,13 @@ func (s *ControlService) loadInitData(filePath string) error {
 
 // NewControlServer creates a new instance of our ControlServer struct.
 func NewControlServer() *ControlService {
+	logger := log.NewLogger()
+	logger.SetLevel(log.Debug)
+
 	s := &ControlService{
-		Storage:            &NvmeStorage{},
+		Storage:            &NvmeStorage{Logger: logger},
 		storageInitialised: false,
-		logger:             log.NewLogger(),
+		logger:             logger,
 	}
 
 	// Retrieve absolute path of init DB file and load data
