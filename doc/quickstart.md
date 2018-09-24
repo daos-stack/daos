@@ -82,6 +82,12 @@ The DAOS control plane infrastructure will be using protobuf as the data seriali
 
 The DAOS codebase uses [dep](https://github.com/golang/dep) to manage dependencies in the Go codebase.
 
+On EL7 and later:
+
+    yum install yum-plugin-copr
+    yum copr enable hnakamur/golang-dep
+    yum install golang-dep
+
 On Fedora 27 and later:
 
     dnf install dep
@@ -90,7 +96,13 @@ On Ubuntu 18.04 and later:
 
     apt-get install go-dep
 
-For OSes that don't supply a package: [Installation instructions on Github](https://github.com/golang/dep)
+For OSes that don't supply a package:
+* Ensure that you have a personal GOPATH (typically $HOME/go) and a GOBIN ($GOPATH/bin) set up and included in your PATH:
+
+    mkdir -p $HOME/go/bin
+    export PATH=$HOME/go/bin:$PATH
+
+* Then follow the [installation instructions on Github](https://github.com/golang/dep).
 
 The utils/fetch_go_packages.sh script is provided to populate and/or update the vendor directory using dep.
 
