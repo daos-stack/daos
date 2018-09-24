@@ -300,7 +300,7 @@ class CommonTestSuite(unittest.TestCase):
             allow_root = " --allow-run-as-root"
         else:
             allow_root = ""
-        cmdstr = "%sorterun %s--output-filename %s%s" % \
+        cmdstr = "%sorterun --mca btl self,tcp %s--output-filename %s%s" % \
                  (ompi_bin, dvmfile, log_path, allow_root)
 
         return (cmdstr, prefix)
