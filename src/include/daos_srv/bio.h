@@ -75,6 +75,19 @@ struct bio_io_context;
 /* Opaque per-xstream context */
 struct bio_xs_context;
 
+/**
+ * Header for SPDK blob per VOS pool
+ */
+struct bio_blob_hdr {
+	uint32_t	bbh_magic;
+	uint32_t	bbh_blk_sz;
+	uint32_t	bbh_hdr_sz; /* blocks reserved for blob header */
+	uint32_t	bbh_vos_id; /* service xstream id */
+	uint64_t	bbh_blob_id;
+	uuid_t		bbh_blobstore;
+	uuid_t		bbh_pool;
+};
+
 static inline void
 bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
 {
@@ -238,6 +251,38 @@ int bio_ioctxt_open(struct bio_io_context **pctxt,
  * \returns		Zero on success, negative value on error
  */
 int bio_ioctxt_close(struct bio_io_context *ctxt);
+
+/**
+ * Write to per VOS instance blob created.
+ *
+ * \param[IN] ctxt	VOS instance I/O context
+ * \param[IN] addr	SPDK blob addr info including byte offset
+ * \param[IN] iov	IO vector containing buffer to be written
+ *
+ * \returns		Zero on success, negative value on error
+ */
+int bio_writev(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
+
+/**
+ * Read from per VOS instance blob created.
+ *
+ * \param[IN] ctxt	VOS instance I/O context
+ * \param[IN] addr	SPDK blob addr info including byte offset
+ * \param[IN] iov	IO vector containing buffer from read
+ *
+ * \returns		Zero on success, negative value on error
+ */
+int bio_readv(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
+
+/*
+ * Finish setting up blob header and write info to blob offset 0.
+ *
+ * \param[IN] ctxt	I/O context
+ * \param[IN] hdr	VOS blob header struct
+ *
+ * \returns		Zero on success, negative value on error
+ */
+int bio_write_blob_hdr(struct bio_io_context *ctxt, struct bio_blob_hdr *hdr);
 
 /**
  * Allocate & initialize an io descriptor

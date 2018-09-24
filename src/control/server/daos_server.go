@@ -37,8 +37,6 @@ import (
 	"github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
 
-	"go-spdk/nvme"
-
 	"modules/mgmt"
 	mgmtpb "modules/mgmt/proto"
 	"modules/security"
@@ -94,7 +92,9 @@ func main() {
 	var sOpts []grpc.ServerOption
 	grpcServer := grpc.NewServer(sOpts...)
 	secpb.RegisterSecurityControlServer(grpcServer, security.NewControlServer())
-	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmt.NewControlServer())
+
+	mgmtControlServer := mgmt.NewControlServer()
+	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
 
@@ -136,8 +136,8 @@ func main() {
 	err = srv.Wait()
 
 	// todo: is this the right place for cleanup?
-	log.Printf("Running SPDK:NVMe cleanup...")
-	nvme.Cleanup()
+	log.Printf("Running storage teardown...")
+	mgmtControlServer.Storage.Teardown()
 
 	if err != nil {
 		log.Fatal("DAOS I/O server exited with error: ", err)

@@ -26,6 +26,8 @@
 #include "bio_internal.h"
 #include "smd/smd_internal.h"
 
+#define BIO_BLOB_HDR_MAGIC	(0xb0b51ed5)
+
 struct blob_cp_arg {
 	spdk_blob_id		 bca_id;
 	struct spdk_blob	*bca_blob;
@@ -404,5 +406,142 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 	}
 
 	free_blob_cp_arg(ba);
+	return rc;
+}
+
+static int
+bio_rw_iov(struct bio_io_context *ioctxt, bio_addr_t addr, daos_iov_t *iov,
+	   bool update)
+{
+	struct bio_desc		*biod;
+	struct bio_sglist	*bsgl;
+	unsigned int		 iod_cnt = 1;
+	int			 rc;
+
+	/* allocate blob I/O descriptor */
+	biod = bio_iod_alloc(ioctxt, iod_cnt, update);
+	if (biod == NULL)
+		return -DER_NOMEM;
+
+	/* setup bio sgl in bio descriptor */
+	bsgl = bio_iod_sgl(biod, 0); /* bsgl = &biod->bd_sgls[0] */
+	rc = bio_sgl_init(bsgl, iod_cnt); /* sets up bsgl->bs_iovs */
+	if (rc)
+		goto out; /* rc = -DER_NOMEM */
+
+	/* store byte offset and device type */
+	bsgl->bs_iovs[0].bi_addr = addr;
+	bsgl->bs_iovs[0].bi_data_len = iov->iov_len;
+	bsgl->bs_nr_out++;
+
+	/* map the biov to DMA safe buffer, fill DMA buffer if read operation */
+	rc = bio_iod_prep(biod);
+	if (rc)
+		goto out;
+	D_ASSERT(bsgl->bs_iovs[0].bi_buf != NULL);
+
+	/* copy data from/to iov and DMA safe buffer for write/read */
+	bio_memcpy(biod, addr.ba_type, bsgl->bs_iovs[0].bi_buf,
+		   iov->iov_buf, iov->iov_len);
+
+	/* release DMA buffer, write data back to NVMe device for write */
+	rc = bio_iod_post(biod);
+
+out:
+	bio_iod_free(biod); /* also calls bio_sgl_fini */
+
+	return rc;
+}
+
+int
+bio_readv(struct bio_io_context *ioctxt, bio_addr_t addr, daos_iov_t *iov)
+{
+	int	rc;
+
+	D_DEBUG(DB_MGMT, "Reading from blob %p for xs:%p\n", ioctxt->bic_blob,
+		ioctxt->bic_xs_ctxt);
+
+	rc = bio_rw_iov(ioctxt, addr, iov, false);
+	if (rc != 0)
+		D_ERROR("Read from blob:%p failed for xs:%p rc:%d\n",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
+	else
+		D_DEBUG(DB_MGMT, "Successfully read from blob %p for xs:%p\n",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+
+	return rc;
+
+}
+
+int
+bio_writev(struct bio_io_context *ioctxt, bio_addr_t addr, daos_iov_t *iov)
+{
+	int	rc;
+
+	D_DEBUG(DB_MGMT, "Writing to blob %p for xs:%p\n", ioctxt->bic_blob,
+		ioctxt->bic_xs_ctxt);
+
+	rc = bio_rw_iov(ioctxt, addr, iov, true);
+	if (rc != 0)
+		D_ERROR("Write to blob:%p failed for xs:%p rc:%d\n",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
+	else
+		D_DEBUG(DB_MGMT, "Successfully wrote to blob %p for xs:%p\n",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+
+	return rc;
+}
+
+int
+bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
+{
+	struct smd_nvme_pool_info	smd_pool;
+	struct smd_nvme_stream_bond	smd_xs_mapping;
+	daos_iov_t			iov;
+	bio_addr_t			addr;
+	uint64_t			off = 0; /* byte offset in SPDK blob */
+	uint16_t			dev_type = BIO_ADDR_NVME;
+	int				rc = 0;
+
+	D_DEBUG(DB_MGMT, "Writing header blob:%p, xs:%p\n",
+		ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+
+	/* check that all VOS blob header vars are set */
+	D_ASSERT(uuid_is_null(bio_bh->bbh_pool) == 0);
+	if (bio_bh->bbh_blk_sz == 0 || bio_bh->bbh_hdr_sz == 0)
+		return -DER_INVAL;
+
+	bio_addr_set(&addr, dev_type, off);
+
+	/*
+	 * Set all BIO-related members of blob header.
+	 */
+	bio_bh->bbh_magic = BIO_BLOB_HDR_MAGIC;
+	bio_bh->bbh_vos_id = (uint32_t)ioctxt->bic_xs_ctxt->bxc_xs_id;
+	/* Query per-server metadata to get blobID for this pool:xstream */
+	rc = smd_nvme_get_pool(bio_bh->bbh_pool, bio_bh->bbh_vos_id, &smd_pool);
+	if (rc) {
+		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
+			ioctxt->bic_xs_ctxt, DP_UUID(bio_bh->bbh_pool));
+		return rc;
+	}
+
+	bio_bh->bbh_blob_id = smd_pool.npi_blob_id;
+
+	/* Query per-server metadata to get device id for xs */
+	rc = smd_nvme_get_stream_bond(bio_bh->bbh_vos_id, &smd_xs_mapping);
+	if (rc) {
+		D_ERROR("Not able to find device id/blobstore for xs_id:%d\n",
+			bio_bh->bbh_vos_id);
+		return rc;
+	}
+
+	uuid_copy(bio_bh->bbh_blobstore, smd_xs_mapping.nsm_dev_id);
+
+	/* Create an iov to store blob header structure */
+	daos_iov_set(&iov, (void *)bio_bh, sizeof(*bio_bh));
+
+	rc = bio_writev(ioctxt, addr, &iov);
+
 	return rc;
 }

@@ -165,10 +165,31 @@ pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
 }
 
 static int
-vos_blob_format_cb(void *cb_data)
+vos_blob_format_cb(void *cb_data, struct umem_instance *umem)
 {
-	/* TODO: complete this */
-	return 0;
+	struct bio_blob_hdr	*blob_hdr = cb_data;
+	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
+	struct bio_io_context	*ioctxt;
+	int			 rc;
+
+	/* Create a bio_io_context to get the blob */
+	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, umem, blob_hdr->bbh_pool);
+	if (rc) {
+		D_ERROR("Failed to create an ioctxt for writing blob header\n");
+		return rc;
+	}
+
+	/* Write the blob header info to blob offset 0 */
+	rc = bio_write_blob_hdr(ioctxt, blob_hdr);
+	if (rc)
+		D_ERROR("Failed to write header for blob:"DF_U64"\n",
+			blob_hdr->bbh_blob_id);
+
+	rc = bio_ioctxt_close(ioctxt);
+	if (rc)
+		D_ERROR("Failed to free ioctxt\n");
+
+	return rc;
 }
 
 /**
@@ -183,8 +204,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	struct umem_attr	 uma;
 	struct umem_instance	 umem;
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
-	struct vos_blob_hdr	 blob_hdr;
-	int rc = 0;
+	struct bio_blob_hdr	 blob_hdr;
+	int			 rc = 0;
 
 	if (!path || uuid_is_null(uuid))
 		return -DER_INVAL;
@@ -270,7 +291,12 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		goto close;
 	}
 
-	/* Format SPDK blob */
+	/* Format SPDK blob header */
+	blob_hdr.bbh_blk_sz = VOS_BLK_SZ;
+	blob_hdr.bbh_hdr_sz = VOS_BLOB_HDR_BLKS;
+	uuid_copy(blob_hdr.bbh_pool, uuid);
+
+	/* Format SPDK blob*/
 	D_ASSERT(vea_md != NULL);
 	rc = vea_format(&umem, vos_txd_get(), vea_md, VOS_BLK_SZ,
 			VOS_BLOB_HDR_BLKS, blob_sz, vos_blob_format_cb,

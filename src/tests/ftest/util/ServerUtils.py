@@ -63,11 +63,10 @@ def runServer(hostfile, setname, basepath):
                     'OFI_.*']
 
         env_args = ""
-        for env_var in os.environ.items():
+        for (env_var, env_val) in os.environ.items():
             for pat in env_vars:
-                if not re.match(pat, env_var[0]):
-                    continue
-                env_args += "-x {0}=\"{1}\" ".format(env_var, os.environ[env_var])
+                if re.match(pat, env_var):
+                    env_args += "-x {}='{}' ".format(env_var, env_val)
 
         initial_cmd = "/bin/sh"
         server_cmd = orterun_bin + " --np {0} ".format(server_count)

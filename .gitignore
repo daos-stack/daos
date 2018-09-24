@@ -16,3 +16,5 @@ protobuf-all-3.5.1.tar.gz
 src/utils/py/*.pyc
 *.un~
 *.*~
+/pkg/
+Gopkg.lock

@@ -594,11 +594,11 @@ typedef struct {
 /** Type of the value accessed in an IOD */
 typedef enum {
 	/** is a dkey */
-	DAOS_IOD_NONE	= 0,
+	DAOS_IOD_NONE		= 0,
 	/** one indivisble value udpate atomically */
-	DAOS_IOD_SINGLE = (1 << 0),
+	DAOS_IOD_SINGLE		= (1 << 0),
 	/** an array of records where each record is update atomically */
-	DAOS_IOD_ARRAY	= (1 << 1),
+	DAOS_IOD_ARRAY		= (1 << 1),
 } daos_iod_type_t;
 
 /**
@@ -621,11 +621,15 @@ typedef struct {
 	 * value. The idx is ignored and the rx_nr is also required to be 1.
 	 */
 	daos_iod_type_t		iod_type;
-	/** Size of the single value or the record size of the akey */
+	/* DAOS_IOD_SINGLE:	Size of the value
+	 * DAOS_IOD_ARRAY:	iod_nr > 0:  Record size
+	 *			iod_nr == 0: Array size
+	 */
 	daos_size_t		iod_size;
 	/*
 	 * Number of entries in the \a iod_recxs, \a iod_csums, and \a iod_eprs
-	 * arrays, should be 1 if single value.
+	 * arrays, should be 1 if single value,
+	 * 0 for array size query
 	 */
 	unsigned int		iod_nr;
 	/*

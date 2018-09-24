@@ -349,18 +349,17 @@ int evt_find(daos_handle_t toh, struct evt_rect *rect,
 	     struct evt_entry_list *ent_list, d_list_t *covered);
 
 /** Scan the tree for the non-punched visible rectangle with the highest
- *  end offset and return the offset.  The returned offset is only valid
- *  if the function returns 0.
+ *  end offset and return the offset + 1 as the size.  Size is set to 0
+ *  if no entries exist.   Size is undefined if an error is returned.
  *
  *  \param toh		[IN]	The tree open handle
  *  \param epoch	[IN]	The epoch at which to scan
- *  \param max_off	[OUT]	The returned max offset, if available
+ *  \param size		[OUT]	The size of the evtree
  *
- *  \return		0		Found the max offset
- *			-DER_ENOENT	Tree is empty at specified epoch
+ *  \return		0		Size is valid
  *			-rc		Other error code
  */
-int evt_get_max(daos_handle_t toh, daos_epoch_t epoch, daos_off_t *max_off);
+int evt_get_size(daos_handle_t toh, daos_epoch_t epoch, daos_size_t *size);
 
 /**
  * Debug function, it outputs status of tree nodes at level \a debug_level,

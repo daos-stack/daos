@@ -1299,6 +1299,7 @@ static int
 evt_root_destroy(struct evt_context *tcx)
 {
 	int	rc;
+
 	if (!TMMID_IS_NULL(tcx->tc_root->tr_node)) {
 		/* destroy the root node and all descendants */
 		rc = evt_node_destroy(tcx, tcx->tc_root->tr_node, 0);
@@ -1583,8 +1584,8 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 	/* Phase-2: Inserting */
 	rc = evt_insert_entry(tcx, &ent);
 
-	/* Only one entry in ent_list so nothing to deallocate */
-	D_ASSERT(ent_list.el_ent_nr < ERT_ENT_EMBEDDED);
+	/* At most one entry in ent_list so nothing to deallocate */
+	D_ASSERT(ent_list.el_ent_nr <= 1);
 	D_ASSERT(d_list_empty(&ent_list.el_pool));
 
 out:
@@ -1867,7 +1868,7 @@ out:
 
 
 int
-evt_get_max(daos_handle_t toh, daos_epoch_t epoch, daos_off_t *max_off)
+evt_get_size(daos_handle_t toh, daos_epoch_t epoch, daos_size_t *size)
 {
 	struct evt_context	 *tcx;
 	struct evt_rect		  rect; /* specifies range we are searching */
@@ -1878,9 +1879,14 @@ evt_get_max(daos_handle_t toh, daos_epoch_t epoch, daos_off_t *max_off)
 	int			  at;
 	int			  i;
 
+	if (size == NULL)
+		return -DER_INVAL;
+
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
+
+	*size = 0;
 
 	D_DEBUG(DB_TRACE, "Finding evt range at epoch "DF_U64"\n", epoch);
 	/* Start with the whole range.  We'll repeat the algorithm until we
@@ -1891,7 +1897,7 @@ evt_get_max(daos_handle_t toh, daos_epoch_t epoch, daos_off_t *max_off)
 	rect.rc_epc_lo = epoch;
 
 	if (tcx->tc_root->tr_depth == 0)
-		return -DER_ENOENT; /* empty tree */
+		return 0; /* empty tree */
 
 try_again:
 	D_DEBUG(DB_TRACE, "Scanning for maximum in "DF_RECT"\n",
@@ -1980,7 +1986,7 @@ try_again:
 				daos_off_t	old;
 
 				if (!saved_rect.mr_valid)
-					return -DER_ENOENT;
+					return 0;
 
 				old = saved_rect.mr_rect.rc_off_lo;
 
@@ -1990,12 +1996,12 @@ try_again:
 						" punched ("DF_RECT")\n",
 						DP_RECT(&saved_rect.mr_rect));
 					if (old == 0)
-						return -DER_ENOENT;
+						return 0;
 					rect.rc_off_hi = old - 1;
 
 					goto try_again;
 				}
-				*max_off = saved_rect.mr_rect.rc_off_hi;
+				*size = saved_rect.mr_rect.rc_off_hi + 1;
 				break;
 			}
 
@@ -2178,7 +2184,7 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
-		return rc;
+		goto err;
 
 	rc = evt_root_alloc(tcx);
 	if (rc != 0)
@@ -2186,9 +2192,10 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 
 	*root_mmid_p = tcx->tc_root_mmid;
 	*toh = evt_tcx2hdl(tcx); /* take refcount for open */
- out:
+out:
 	rc = evt_tx_end(tcx, rc);
 
+err:
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
 	return rc;
 }
@@ -2220,15 +2227,16 @@ evt_create_inplace(uint64_t feats, unsigned int order, struct umem_attr *uma,
 
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
-		return rc;
+		goto err;
 
 	rc = evt_root_init(tcx);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	*toh = evt_tcx2hdl(tcx); /* take refcount for open */
- out:
+out:
 	rc = evt_tx_end(tcx, rc);
+err:
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
 	return rc;
 }
@@ -2700,7 +2708,7 @@ int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent)
 	rc = evt_node_delete(tcx);
 
 	/* Only one entry in ent_list so nothing to deallocate */
-	D_ASSERT(ent_list.el_ent_nr < ERT_ENT_EMBEDDED);
+	D_ASSERT(ent_list.el_ent_nr == 1);
 	D_ASSERT(d_list_empty(&ent_list.el_pool));
 
 	return evt_tx_end(tcx, rc);

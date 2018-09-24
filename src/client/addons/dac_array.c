@@ -1384,18 +1384,14 @@ struct get_size_props {
 	tse_task_t		*ptask;
 };
 
-struct list_recxs_params {
-	daos_key_t		dkey;
-	char			*dkey_str;
-	daos_key_t		akey;
-	char			akey_str;
-	daos_recx_t		recx;
-	uint32_t		nr;
-	daos_size_t		cell_size;
-	daos_size_t		chunk_size;
-	daos_anchor_t		anchor;
+struct array_size_params {
 	daos_size_t		*size;
 	tse_task_t		*task;
+	daos_size_t		chunk_size;
+	daos_key_t		dkey;
+	daos_iod_t		iod;
+	char			dkey_str[ENUM_KEY_BUF];
+	char			akey_str;
 };
 
 static int
@@ -1410,47 +1406,26 @@ free_get_size_cb(tse_task_t *task, void *data)
 }
 
 static int
-list_recxs_cb(tse_task_t *task, void *data)
+array_size_query_cb(tse_task_t *task, void *data)
 {
-	daos_obj_list_recx_t *args = daos_task_get_args(task);
-	struct list_recxs_params *params = *((struct list_recxs_params **)data);
+	daos_obj_fetch_t *args = daos_task_get_args(task);
+	struct array_size_params *params = *((struct array_size_params **)data);
 	daos_size_t dkey_num;
 	int ret;
 	int rc = task->dt_result;
-	daos_size_t cur_size;
+
+	if (rc != 0)
+		goto out;
 
 	ret = sscanf(params->dkey_str, "%zu", &dkey_num);
 	D_ASSERT(ret == 1);
-	cur_size = dkey_num * params->chunk_size + params->recx.rx_idx +
-		params->recx.rx_nr;
-	if (*params->size < cur_size)
-		*params->size = cur_size;
-
-	/** if enumeration is not done, re-init this task to continue */
-	if (!daos_anchor_is_eof(args->anchor)) {
-		params->nr = 1;
-		rc = tse_task_reinit(task);
-		if (rc != 0) {
-			D_ERROR("FAILED to reinit task\n");
-			D_GOTO(out, rc);
-		}
-
-		rc = tse_task_register_cbs(task, NULL, NULL, 0, list_recxs_cb,
-					   &params, sizeof(params));
-		if (rc) {
-			tse_task_complete(task, rc);
-			D_GOTO(out, rc);
-		}
-
-		return rc;
-	}
+	D_DEBUG(DB_IO, "array_size_query got size %zu for dkey %zu\n",
+		args->iods[0].iod_size, dkey_num);
+	*params->size = params->chunk_size * dkey_num +
+		args->iods[0].iod_size;
 
 out:
-	if (params->dkey_str) {
-		free(params->dkey_str);
-		params->dkey_str = NULL;
-	}
-	D_FREE_PTR(params);
+	D_FREE(params);
 
 	return rc;
 }
@@ -1517,60 +1492,47 @@ get_array_size_cb(tse_task_t *task, void *data)
 	if (!props->found_dkey)
 		return 0;
 
-	char key[ENUM_KEY_BUF];
-
-	sprintf(key, "%zu", props->dkey_num);
-
 	/** retrieve the highest index from the highest key */
 	props->nr = ENUM_DESC_NR;
 
 	tse_task_t *io_task = NULL;
-	struct list_recxs_params *params = NULL;
-	daos_key_t *dkey, *akey;
-	daos_obj_list_recx_t *list_args;
+	struct array_size_params *params;
+	daos_key_t *dkey;
+	daos_obj_fetch_t *fetch_args;
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
-	akey = &params->akey;
+
 	dkey = &params->dkey;
 
 	params->akey_str = '0';
-	params->dkey_str = strdup(key);
-	if (params->dkey_str == NULL)
-		D_GOTO(err, rc = -DER_NOMEM);
+	sprintf(params->dkey_str, "%zu", props->dkey_num);
 	daos_iov_set(dkey, (void *)params->dkey_str, strlen(params->dkey_str));
-	daos_iov_set(akey, &params->akey_str, 1);
-	params->nr = 1;
+	daos_iov_set(&params->iod.iod_name, &params->akey_str, 1);
 	params->chunk_size = array->chunk_size;
 	params->size = props->size;
+	params->iod.iod_type = DAOS_IOD_ARRAY;
+	/* D_ALLOC handles iod_nr = 0 for size query */
 
-	rc = daos_task_create(DAOS_OPC_OBJ_LIST_RECX, tse_task2sched(task),
+	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),
 			      0, NULL, &io_task);
 	if (rc != 0) {
-		D_ERROR("punch recs failed (%d)\n", rc);
+		D_ERROR("get array size failed (%d)\n", rc);
 		D_GOTO(err, rc);
 	}
 
-	list_args = daos_task_get_args(io_task);
-	list_args->oh		= args->oh;
-	list_args->epoch	= args->epoch;
-	list_args->dkey		= dkey;
-	list_args->akey		= akey;
-	list_args->type		= DAOS_IOD_ARRAY;
-	list_args->size		= &params->cell_size;
-	list_args->nr		= &params->nr;
-	list_args->recxs	= &params->recx;
-	list_args->eprs		= NULL;
-	list_args->incr_order	= false;
-	list_args->versions	= NULL;
-	list_args->anchor	= &params->anchor;
-	memset(&params->anchor, 0, sizeof(params->anchor));
+	fetch_args = daos_task_get_args(io_task);
+	fetch_args->oh		= args->oh;
+	fetch_args->epoch	= args->epoch;
+	fetch_args->dkey		= dkey;
+	fetch_args->nr		= 1;
+	fetch_args->iods	= &params->iod;
+	fetch_args->sgls	= NULL;
+	fetch_args->maps	= NULL;
 
-	rc = tse_task_register_comp_cb(io_task, list_recxs_cb, &params,
+	rc = tse_task_register_comp_cb(io_task, array_size_query_cb, &params,
 				       sizeof(params));
 	if (rc != 0)
 		D_GOTO(err, rc);
@@ -1583,11 +1545,9 @@ get_array_size_cb(tse_task_t *task, void *data)
 	return rc;
 
 err:
-	if (params->dkey_str)
-		free(params->dkey_str);
 	if (io_task)
 		tse_task_complete(io_task, rc);
-	D_FREE_PTR(params);
+	D_FREE(params);
 	return rc;
 }
 
@@ -2158,6 +2118,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			 * Punch the entire dkey since it's in a higher dkey
 			 * group than the intended size.
 			 */
+			D_DEBUG(DB_IO, "Punching key\n");
 			rc = punch_key(args->oh, args->epoch, props->key,
 				       dkey_num, props->ptask);
 			if (rc)
@@ -2165,6 +2126,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		} else if (dkey_num == props->dkey_num && props->record_i) {
 			props->update_dkey = false;
 
+			D_DEBUG(DB_IO, "Punching extent\n");
 			/*
 			 * Punch all records above record_i, then check if
 			 * record_i exists and insert a record if it doesn't.

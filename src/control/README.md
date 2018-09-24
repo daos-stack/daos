@@ -10,7 +10,15 @@ The [shell](shell/DAOSShell) is an example client application which can connect 
 
 ## Usage
 
-In order to run the shell to perform administrative tasks, build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md). Then the shell can be used to connect to and interact with the gRPC server (running on port 10000 by default) as follows:
+In order to run the shell to perform administrative tasks, build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md).
+
+`daos_server` is to be run as root in order to perform administrative tasks, to be run through `orterun` as root, the following command can be used (assuming the quickstart_guide instructions have already been performed):
+
+```
+root$ orterun -np 1 -c 1 --hostfile hostfile --enable-recovery --allow-run-as-root --report-uri /tmp/urifile daos_server -c 1
+```
+
+DAOSShell (the client application) is to be run as a standard, unprivileged user.  The shell can be used to connect to and interact with the gRPC server (running on port 10000 by default) as follows:
 
 ```
 $ projects/daos_m/install/bin/DAOSShell
@@ -41,6 +49,7 @@ Category: nvme
 ```
 
 To use a supported management feature, run the relevant top-level command e.g. `nvme` and follow the interactive prompts:
+NOTE: SPDK is used to manage NVMe devices and will unbind them from currently bound drivers while performing management tasks (but won't unbind PCI devices that have active mountpoint), they will be rebound to original drivers when management tasks are complete.
 
 ```
 >>> nvme
@@ -135,10 +144,11 @@ TODO: include details of `daos_agent` interaction
 * [Golang](https://golang.org/) 1.9 or higher
 * [gRPC](https://grpc.io/)
 * [Protocol Buffers](https://developers.google.com/protocol-buffers/)
+* [Dep](https://github.com/golang/dep/) for managing dependencies in vendor directory.
 
 ## Development setup
 
-* Install Go dependencies: `utils/fetch_go_packages.sh -i .` from daos checkout root directory.
+* Update vendor directory if needed: `utils/fetch_go_packages.sh -i .` from daos checkout root directory.
 * (Optional) protoc protocol buffer compiler
 
 ### Building the app
