@@ -97,6 +97,7 @@ typedef enum {
 	DAOS_OPC_OBJ_PUNCH_DKEYS,
 	DAOS_OPC_OBJ_PUNCH_AKEYS,
 	DAOS_OPC_OBJ_QUERY,
+	DAOS_OPC_OBJ_KEY_QUERY,
 	DAOS_OPC_OBJ_FETCH,
 	DAOS_OPC_OBJ_UPDATE,
 	DAOS_OPC_OBJ_LIST_DKEY,
@@ -398,6 +399,15 @@ typedef struct {
 	daos_obj_attr_t		*oa;
 	d_rank_list_t		*ranks;
 } daos_obj_query_t;
+
+typedef struct {
+	daos_handle_t		oh;
+	daos_epoch_t		epoch;
+	daos_key_t		*dkey;
+	daos_key_t		*akey;
+	daos_recx_t		*recx;
+	uint32_t		flags;
+} daos_obj_key_query_t;
 
 typedef struct {
 	daos_handle_t		oh;

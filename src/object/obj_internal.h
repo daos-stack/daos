@@ -156,6 +156,12 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
 		       unsigned int *map_ver, tse_task_t *task);
 
+int dc_obj_shard_key_query(struct dc_obj_shard *shard, daos_epoch_t epoch,
+			   uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
+			   daos_recx_t *recx, const uuid_t coh_uuid,
+			   const uuid_t cont_uuid, unsigned int *map_ver,
+			   tse_task_t *task);
+
 static inline bool
 obj_retry_error(int err)
 {
@@ -172,6 +178,7 @@ void obj_decref(struct dc_object *obj);
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
+void ds_obj_key_query_handler(crt_rpc_t *rpc);
 
 ABT_pool
 ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);

@@ -68,6 +68,7 @@ extern struct crt_msg_field DMF_SGL_DESC;
 extern struct crt_msg_field DMF_SGL_DESC_ARRAY;
 extern struct crt_msg_field DMF_NR_ARRAY;
 extern struct crt_msg_field DMF_RECX_ARRAY;
+extern struct crt_msg_field DMF_RECX;
 extern struct crt_msg_field DMF_EPR_ARRAY;
 extern struct crt_msg_field DMF_UUID_ARRAY;
 extern struct crt_msg_field DMF_OID_ARRAY;

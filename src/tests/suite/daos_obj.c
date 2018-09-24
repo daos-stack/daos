@@ -1973,6 +1973,87 @@ update_overlapped_recxs(void **state)
 	print_message("all good\n");
 }
 
+/** very basic key query test */
+static void
+io_obj_key_query(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	daos_epoch_t	epoch = 2;
+	daos_iov_t	dkey;
+	daos_iov_t	akey;
+	daos_recx_t	recx;
+	uint64_t	dkey_val, akey_val;
+	uint32_t	flags;
+	int		rc;
+
+	/** open object */
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey, akey */
+	dkey_val = akey_val = 0;
+	daos_iov_set(&dkey, &dkey_val, sizeof(uint64_t));
+	daos_iov_set(&akey, &akey_val, sizeof(uint64_t));
+
+	flags = DAOS_GET_DKEY;
+	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	flags = DAOS_GET_MAX;
+	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	flags = DAOS_GET_MAX | DAOS_GET_MIN;
+	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	flags = DAOS_GET_DKEY | DAOS_GET_MAX | DAOS_GET_MIN;
+	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	flags = DAOS_GET_AKEY | DAOS_GET_MIN;
+	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
+	rc = daos_obj_key_query(oh, epoch, flags, &dkey, &akey, NULL, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	flags = DAOS_GET_DKEY | DAOS_GET_MIN;
+	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW,
+			  DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64,
+			  arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	flags = 0;
+	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MIN;
+	rc = daos_obj_key_query(oh, epoch, flags, &dkey, &akey, &recx, NULL);
+	assert_int_equal(rc, 0);
+
+	dkey_val = *((uint64_t *)dkey.iov_buf);
+	print_message("DKEY Query = %"PRIu64"\n", dkey_val);
+	akey_val = *((uint64_t *)akey.iov_buf);
+	print_message("AKEY Query = %"PRIu64"\n", akey_val);
+	print_message("RECX Query (idx = %"PRIu64"); (nr = %"PRIu64")\n",
+		      recx.rx_idx, recx.rx_nr);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("all good\n");
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -2025,11 +2106,13 @@ static const struct CMUnitTest io_tests[] = {
 	  async_disable, test_case_teardown},
 	{ "IO26: echo fetch/update", echo_fetch_update,
 	  async_disable, test_case_teardown},
-	{ "IO27: shard target idx change cause retry", tgt_idx_change_retry,
+	{ "IO27: basic object key query testing",
+	  io_obj_key_query, async_disable, test_case_teardown},
+	{ "IO28: shard target idx change cause retry", tgt_idx_change_retry,
 	  async_enable, test_case_teardown},
-	{ "IO28: fetch when all replicas unavailable", fetch_replica_unavail,
+	{ "IO29: fetch when all replicas unavailable", fetch_replica_unavail,
 	  async_enable, test_case_teardown},
-	{ "IO29: update with overlapped recxs", update_overlapped_recxs,
+	{ "IO30: update with overlapped recxs", update_overlapped_recxs,
 	  async_enable, test_case_teardown},
 };
 

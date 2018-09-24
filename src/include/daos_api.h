@@ -1211,6 +1211,53 @@ daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		   daos_anchor_t *anchor, bool incr_order,
 		   daos_event_t *ev);
 
+/**
+ * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
+ * object. If object does not have an array value, 0 is returned in extent. User
+ * has to specify what is being queried (dkey, akey, and/or recx) along with the
+ * query type (max or min) in flags. If one of those is not provided the
+ * function will fail. If the dkey or akey are not being queried, there value
+ * must be provided by the user.
+ *
+ * If searching in a particular dkey for the max akey and max offset in that
+ * akey, user would supply the dkey value and a flag of: DAOS_GET_MAX |
+ * DAOS_GET_AKEY | DAOS_GET_RECX.
+ *
+ * \param[in]	oh	Object open handle.
+ * \param[in]	epoch	Epoch for the query.
+ * \param[in]	flags	mask with the following options:
+ *			DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
+ *			DAOS_GET_MAX, DAOS_GET_MIN
+ *			User has to indicate whether to query the MAX or MIN, in
+ *			addition to what needs to be queried. Providing
+ *			(MAX | MIN) in any combination will return an error.
+ *			i.e. user can only query MAX or MIN in one call.
+ * \param[in,out]
+ *		dkey	[in]: allocated integer dkey. User can provide the dkey
+ *			if not querying the max or min dkey.
+ *			[out]: max or min dkey (if flag includes dkey query).
+ * \param[in,out]
+ *		akey	[in]: allocated integer akey. User can provide the akey
+ *			if not querying the max or min akey.
+ *			[out]: max or min akey (if flag includes akey query).
+ * \param[out]	recx	max or min offset in dkey/akey, and the size of the
+ *			extent at the offset. If there are no visible array
+ *			records, the size in the recx returned will be 0.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ */
+int
+daos_obj_key_query(daos_handle_t oh, daos_epoch_t epoch, uint32_t flags,
+		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
+		   daos_event_t *ev);
+
 #if defined(__cplusplus)
 }
 #endif

@@ -102,6 +102,27 @@ static struct crt_msg_field *obj_punch_out_fields[] = {
 	&CMF_UINT32,	/* map version */
 };
 
+static struct crt_msg_field *obj_key_query_in_fields[] = {
+	&CMF_UUID,	/* container handle uuid */
+	&CMF_UUID,	/* container uuid */
+	&DMF_OID,	/* object ID */
+	&CMF_UINT64,	/* epoch */
+	&CMF_UINT32,	/* map_version */
+	&CMF_UINT32,    /* flags */
+	&DMF_IOVEC,     /* dkey */
+	&DMF_IOVEC,     /* akey */
+};
+
+static struct crt_msg_field *obj_key_query_out_fields[] = {
+	&CMF_INT,	/* status of the request */
+	&CMF_UINT32,	/* map version */
+	&CMF_UINT32,	/* number of records */
+	&CMF_UINT32,	/* padding */
+	&DMF_IOVEC,     /* dkey */
+	&DMF_IOVEC,     /* akey */
+	&DMF_RECX,	/* recx */
+};
+
 static struct crt_req_format DQF_OBJ_UPDATE =
 	DEFINE_CRT_REQ_FMT("DAOS_OBJ_UPDATE",
 			   obj_rw_in_fields,
@@ -131,6 +152,11 @@ static struct crt_req_format DQF_OBJ_PUNCH_AKEYS =
 	DEFINE_CRT_REQ_FMT("DAOS_OBJ_PUNCH_AKEYS",
 			   obj_punch_in_fields,
 			   obj_punch_out_fields);
+
+static struct crt_req_format DQF_OBJ_KEY_QUERY =
+	DEFINE_CRT_REQ_FMT("DAOS_OBJ_KEY_QUERY",
+			   obj_key_query_in_fields,
+			   obj_key_query_out_fields);
 
 struct daos_rpc daos_obj_rpcs[] = {
 	{
@@ -188,6 +214,12 @@ struct daos_rpc daos_obj_rpcs[] = {
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_OBJ_PUNCH_AKEYS,
 	}, {
+		.dr_name	= "DAOS_OBJ_KEY_QUERY",
+		.dr_opc		= DAOS_OBJ_RPC_KEY_QUERY,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_OBJ_KEY_QUERY,
+	}, {
 		.dr_opc		= 0
 	}
 };
@@ -227,6 +259,9 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_ret = status;
 		break;
+	case DAOS_OBJ_RPC_KEY_QUERY:
+		((struct obj_key_query_out *)reply)->okqo_ret = status;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -250,6 +285,8 @@ obj_reply_get_status(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_ret;
+	case DAOS_OBJ_RPC_KEY_QUERY:
+		return ((struct obj_key_query_out *)reply)->okqo_ret;
 	default:
 		D_ASSERT(0);
 	}
@@ -278,6 +315,10 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_map_version = map_version;
 		break;
+	case DAOS_OBJ_RPC_KEY_QUERY:
+		((struct obj_key_query_out *)reply)->okqo_map_version =
+			map_version;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -301,6 +342,8 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_map_version;
+	case DAOS_OBJ_RPC_KEY_QUERY:
+		return ((struct obj_key_query_out *)reply)->okqo_map_version;
 	default:
 		D_ASSERT(0);
 	}

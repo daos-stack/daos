@@ -93,6 +93,10 @@ static struct daos_rpc_handler obj_handlers[] = {
 		.dr_hdlr	= ds_obj_punch_handler,
 	},
 	{
+		.dr_opc		= DAOS_OBJ_RPC_KEY_QUERY,
+		.dr_hdlr	= ds_obj_key_query_handler,
+	},
+	{
 		.dr_opc		= 0
 	}
 };

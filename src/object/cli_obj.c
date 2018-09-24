@@ -889,6 +889,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_KEY_QUERY:
 		obj = *((struct dc_object **)data);
 		if (task->dt_result != 0)
 			break;
@@ -1683,4 +1684,237 @@ dc_obj_punch_akeys(tse_task_t *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return obj_punch_internal(task, DAOS_OBJ_RPC_PUNCH_AKEYS, args);
+}
+
+static int
+check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
+		  daos_key_t *akey, daos_recx_t *recx)
+{
+	daos_ofeat_t ofeat = (oid.hi & DAOS_OFEAT_MASK) >> DAOS_OFEAT_SHIFT;
+
+	if (!(flags & (DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX))) {
+		D_ERROR("Key type or recx not specified in flags.\n");
+		return -DER_INVAL;
+	}
+
+	if (!(flags & (DAOS_GET_MIN | DAOS_GET_MAX))) {
+		D_ERROR("Query type not specified in flags.\n");
+		return -DER_INVAL;
+	}
+
+	if ((flags & DAOS_GET_MIN) && (flags & DAOS_GET_MAX)) {
+		D_ERROR("Invalid Query.\n");
+		return -DER_INVAL;
+	}
+
+	if (dkey == NULL) {
+		D_ERROR("dkey can't be NULL.\n");
+		return -DER_INVAL;
+	}
+
+	if (akey == NULL && (flags & (DAOS_GET_AKEY | DAOS_GET_RECX))) {
+		D_ERROR("akey can't be NULL with query type.\n");
+		return -DER_INVAL;
+	}
+
+	if (recx == NULL && flags & DAOS_GET_RECX) {
+		D_ERROR("recx can't be NULL with query type.\n");
+		return -DER_INVAL;
+	}
+
+	if (flags & DAOS_GET_DKEY) {
+		if (!(ofeat & DAOS_OF_DKEY_UINT64)) {
+			D_ERROR("Can't query non UINT64 typed Dkeys.\n");
+			return -DER_INVAL;
+		}
+		if (dkey->iov_buf_len < sizeof(uint64_t) ||
+		    dkey->iov_buf == NULL) {
+			D_ERROR("Invalid Dkey iov.\n");
+			return -DER_INVAL;
+		}
+	}
+
+	if (flags & DAOS_GET_AKEY) {
+		if (!(ofeat & DAOS_OF_AKEY_UINT64)) {
+			D_ERROR("Can't query non UINT64 typed Akeys.\n");
+			return -DER_INVAL;
+		}
+		if (akey->iov_buf_len < sizeof(uint64_t) ||
+		    akey->iov_buf == NULL) {
+			D_ERROR("Invalid Akey iov.\n");
+			return -DER_INVAL;
+		}
+	}
+
+	return 0;
+}
+
+struct shard_key_query_args {
+	struct shard_auxi_args	 kqa_auxi;
+	uuid_t			 kqa_coh_uuid;
+	uuid_t			 kqa_cont_uuid;
+	daos_obj_key_query_t	*kqa_api_args;
+	uint64_t		 kqa_dkey_hash;
+};
+
+static int
+shard_key_query_task(tse_task_t *task)
+{
+	struct shard_key_query_args	*args;
+	daos_obj_key_query_t		*api_args;
+	struct dc_object		*obj;
+	struct dc_obj_shard		*obj_shard;
+	int				 rc;
+
+	args = tse_task_buf_embedded(task, sizeof(*args));
+	obj = args->kqa_auxi.obj;
+
+	rc = obj_shard_open(obj, args->kqa_auxi.shard, args->kqa_auxi.map_ver,
+			    &obj_shard);
+	if (rc != 0) {
+		/* skip a failed target */
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+
+		tse_task_complete(task, rc);
+		return rc;
+	}
+
+	tse_task_stack_push_data(task, &args->kqa_dkey_hash,
+				 sizeof(args->kqa_dkey_hash));
+	api_args = args->kqa_api_args;
+	rc = dc_obj_shard_key_query(obj_shard, api_args->epoch, api_args->flags,
+				    api_args->dkey, api_args->akey,
+				    api_args->recx, args->kqa_coh_uuid,
+				    args->kqa_cont_uuid,
+				    &args->kqa_auxi.obj_auxi->map_ver_reply,
+				    task);
+
+	obj_shard_close(obj_shard);
+	return rc;
+}
+
+int
+dc_obj_key_query(tse_task_t *api_task)
+{
+	daos_obj_key_query_t	*api_args;
+	tse_sched_t		*sched = tse_task2sched(api_task);
+	struct obj_auxi_args	*obj_auxi;
+	struct dc_object	*obj;
+	d_list_t		*head = NULL;
+	daos_handle_t		coh;
+	uuid_t			coh_uuid;
+	uuid_t			cont_uuid;
+	unsigned int		shard_first;
+	unsigned int		shard_nr;
+	unsigned int		map_ver;
+	uint64_t		dkey_hash;
+	int			i = 0;
+	int			rc;
+
+	api_args = dc_task_get_args(api_task);
+	D_ASSERTF(api_args != NULL,
+		  "Task Argument OPC does not match DC OPC\n");
+
+	obj = obj_hdl2ptr(api_args->oh);
+	if (obj == NULL)
+		D_GOTO(out_task, rc = -DER_NO_HDL);
+
+	rc = check_query_flags(obj->cob_md.omd_id, api_args->flags,
+			       api_args->dkey, api_args->akey, api_args->recx);
+	if (rc)
+		D_GOTO(out_task, rc);
+
+	obj_auxi = tse_task_stack_push(api_task, sizeof(*obj_auxi));
+	obj_auxi->opc = DAOS_OBJ_RPC_KEY_QUERY;
+	shard_task_list_init(obj_auxi);
+
+	rc = tse_task_register_comp_cb(api_task, obj_comp_cb, &obj,
+				       sizeof(obj));
+	if (rc) {
+		/* NB: obj_comp_cb() will release refcount in other cases */
+		obj_decref(obj);
+		D_GOTO(out_task, rc);
+	}
+
+	coh = obj_hdl2cont_hdl(api_args->oh);
+	if (daos_handle_is_inval(coh))
+		D_GOTO(out_task, rc = -DER_NO_HDL);
+
+	rc = dc_cont_hdl2uuid(coh, &coh_uuid, &cont_uuid);
+	if (rc != 0)
+		D_GOTO(out_task, rc);
+
+	rc = obj_ptr2pm_ver(obj, &map_ver);
+	if (rc)
+		D_GOTO(out_task, rc);
+
+	D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
+	dkey_hash = obj_dkey2hash(api_args->dkey);
+	if (api_args->flags & DAOS_GET_DKEY) {
+		obj_ptr2shards(obj, &shard_first, &shard_nr);
+		/** set data len to 0 before retrieving dkey. */
+		api_args->dkey->iov_len = 0;
+	} else {
+		rc = obj_dkeyhash2update_grp(obj, dkey_hash, map_ver,
+					     &shard_first, &shard_nr);
+		if (rc != 0)
+			D_GOTO(out_task, rc);
+	}
+
+	obj_auxi->map_ver_req = map_ver;
+	obj_auxi->obj_task = api_task;
+
+	D_DEBUG(DB_IO, "Object Key Query "DF_OID" start %u cnt %u\n",
+		DP_OID(obj->cob_md.omd_id), shard_first, shard_nr);
+
+	head = &obj_auxi->shard_task_head;
+
+	/* for retried obj IO, reuse the previous shard tasks and resched it */
+	if (obj_auxi->io_retry)
+		goto task_sched;
+
+	for (i = 0; i < shard_nr; i++) {
+		tse_task_t			*task;
+		struct shard_key_query_args	*args;
+		unsigned int			 shard;
+
+		shard = shard_first + i;
+		rc = tse_task_create(shard_key_query_task, sched, NULL, &task);
+		if (rc != 0)
+			D_GOTO(out_task, rc);
+
+		args = tse_task_buf_embedded(task, sizeof(*args));
+		args->kqa_api_args	= api_args;
+		args->kqa_auxi.shard	= shard;
+		args->kqa_auxi.target	= obj_shard2tgt(obj, shard);
+		args->kqa_auxi.map_ver	= map_ver;
+		args->kqa_auxi.obj	= obj;
+		args->kqa_auxi.obj_auxi	= obj_auxi;
+		args->kqa_dkey_hash	= dkey_hash;
+		uuid_copy(args->kqa_coh_uuid, coh_uuid);
+		uuid_copy(args->kqa_cont_uuid, cont_uuid);
+
+		rc = tse_task_register_deps(api_task, 1, &task);
+		if (rc != 0) {
+			tse_task_complete(task, rc);
+			D_GOTO(out_task, rc);
+		}
+
+		/* decref and delete from head at shard_task_remove */
+		tse_task_addref(task);
+		tse_task_list_add(task, head);
+	}
+
+task_sched:
+	obj_shard_task_sched(obj_auxi);
+	return rc;
+
+out_task:
+	if (head == NULL || d_list_empty(head)) /* nothing has been started */
+		tse_task_complete(api_task, rc);
+	else
+		tse_task_list_traverse(head, shard_task_abort, &rc);
+
+	return rc;
 }

@@ -156,6 +156,22 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
 }
 
 int
+daos_obj_key_query(daos_handle_t oh, daos_epoch_t epoch, uint32_t flags,
+		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
+		   daos_event_t *ev)
+{
+	tse_task_t	*task;
+	int		rc;
+
+	rc = dc_obj_key_query_task_create(oh, epoch, flags, dkey, akey, recx,
+					  ev, NULL, &task);
+	if (rc)
+		return rc;
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	       unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_iom_t *maps, daos_event_t *ev)

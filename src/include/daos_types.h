@@ -414,6 +414,20 @@ enum {
 	DAOS_OF_MASK		= ((1 << 4) - 1),
 };
 
+/** Mask for daos_obj_key_query() flags to indicate what is being queried */
+enum {
+	/** retrieve the max of dkey, akey, and/or idx of array value */
+	DAOS_GET_MAX	= (1 << 0),
+	/** retrieve the min of dkey, akey, and/or idx of array value */
+	DAOS_GET_MIN	= (1 << 1),
+	/** retrieve the dkey */
+	DAOS_GET_DKEY	= (1 << 2),
+	/** retrieve the akey */
+	DAOS_GET_AKEY	= (1 << 3),
+	/** retrieve the idx of array value */
+	DAOS_GET_RECX	= (1 << 4),
+};
+
 /** Number of reserved by daos in object id for version */
 #define DAOS_OVERSION_BITS	8
 /** Number of reserved by daos in object id for features */

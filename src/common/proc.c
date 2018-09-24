@@ -608,6 +608,9 @@ struct crt_msg_field DMF_RECX_ARRAY =
 	DEFINE_CRT_MSG("daos_recx_t", CMF_ARRAY_FLAG, sizeof(daos_recx_t),
 			daos_proc_recx);
 
+struct crt_msg_field DMF_RECX =
+	DEFINE_CRT_MSG("daos_recx_t", 0, sizeof(daos_recx_t), daos_proc_recx);
+
 struct crt_msg_field DMF_EPR_ARRAY =
 	DEFINE_CRT_MSG("daos_epoch_range_t", CMF_ARRAY_FLAG,
 		       sizeof(daos_epoch_range_t), daos_proc_epoch_range);

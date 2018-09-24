@@ -737,21 +737,19 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 		D_GOTO(out_pool, rc);
 
 	oei = crt_req_get(req);
+	D_ASSERT(oei != NULL);
+
 	if (dkey != NULL)
 		oei->oei_dkey = *dkey;
-
 	if (akey != NULL)
 		oei->oei_akey = *akey;
-
-	D_ASSERT(oei != NULL);
-	oei->oei_oid = obj_shard->do_id;
+	oei->oei_oid		= obj_shard->do_id;
+	oei->oei_map_ver	= *map_ver;
+	oei->oei_epoch		= epoch;
+	oei->oei_nr		= *nr;
+	oei->oei_rec_type	= type;
 	uuid_copy(oei->oei_co_hdl, cont_hdl_uuid);
 	uuid_copy(oei->oei_co_uuid, cont_uuid);
-
-	oei->oei_map_ver = *map_ver;
-	oei->oei_epoch = epoch;
-	oei->oei_nr = *nr;
-	oei->oei_rec_type = type;
 
 	if (anchor != NULL)
 		enum_anchor_copy(&oei->oei_anchor, anchor);
@@ -827,6 +825,197 @@ out_pool:
 	dc_pool_put(pool);
 out_put:
 	obj_shard_decref(obj_shard);
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+struct obj_key_query_cb_args {
+	crt_rpc_t	*rpc;
+	unsigned int	*map_ver;
+	daos_unit_oid_t	oid;
+	uint32_t	flags;
+	daos_key_t	*dkey;
+	daos_key_t	*akey;
+	daos_recx_t	*recx;
+};
+
+static int
+obj_shard_key_query_cb(tse_task_t *task, void *data)
+{
+	struct obj_key_query_cb_args	*cb_args;
+	struct obj_key_query_in		*okqi;
+	struct obj_key_query_out	*okqo;
+	uint32_t			flags;
+	int				ret = task->dt_result;
+	int				rc = 0;
+	crt_rpc_t			*rpc;
+
+	cb_args = (struct obj_key_query_cb_args *)data;
+	rpc = cb_args->rpc;
+
+	okqi = crt_req_get(cb_args->rpc);
+	D_ASSERT(okqi != NULL);
+
+	flags = okqi->okqi_flags;
+
+	if (ret != 0) {
+		D_ERROR("RPC %d failed: %d\n",
+			opc_get(cb_args->rpc->cr_opc), ret);
+		D_GOTO(out, ret);
+	}
+
+	okqo = crt_reply_get(cb_args->rpc);
+	rc = obj_reply_get_status(rpc);
+	if (rc != 0) {
+		D_ERROR("rpc %p RPC %d failed: %d\n", cb_args->rpc,
+			 opc_get(cb_args->rpc->cr_opc), rc);
+		D_GOTO(out, rc);
+	}
+	*cb_args->map_ver = obj_reply_map_version_get(rpc);
+
+	bool check = true;
+	bool changed = false;
+	bool first = (cb_args->dkey->iov_len == 0);
+
+	if (flags & DAOS_GET_DKEY) {
+		uint64_t *val = (uint64_t *)okqo->okqo_dkey.iov_buf;
+		uint64_t *cur = (uint64_t *)cb_args->dkey->iov_buf;
+
+		if (okqo->okqo_dkey.iov_len != sizeof(uint64_t)) {
+			D_ERROR("Invalid Dkey obtained\n");
+			D_GOTO(out, rc = -DER_IO);
+		}
+
+		/** for first cb, just set the dkey */
+		if (first) {
+			*cur = *val;
+			cb_args->dkey->iov_len = okqo->okqo_dkey.iov_len;
+		} else if (flags & DAOS_GET_MAX) {
+			if (*val > *cur) {
+				*cur = *val;
+				/** set to change akey and recx */
+				changed = true;
+			} else {
+				/** no change, don't check akey and recx */
+				check = false;
+			}
+		} else if (flags & DAOS_GET_MIN) {
+			if (*val < *cur) {
+				*cur = *val;
+				/** set to change akey and recx */
+				changed = true;
+			} else {
+				/** no change, don't check akey and recx */
+				check = false;
+			}
+		} else {
+			D_ASSERT(0);
+		}
+	}
+
+	if (check && flags & DAOS_GET_AKEY) {
+		uint64_t *val = (uint64_t *)okqo->okqo_akey.iov_buf;
+		uint64_t *cur = (uint64_t *)cb_args->akey->iov_buf;
+
+		/** if first cb, or dkey changed, set akey */
+		if (first || changed)
+			*cur = *val;
+		else
+			D_ASSERT(0);
+	}
+
+	if (check && flags & DAOS_GET_RECX) {
+		/** if first cb, set recx */
+		if (first || changed) {
+			cb_args->recx->rx_nr = okqo->okqo_recx.rx_nr;
+			cb_args->recx->rx_idx = okqo->okqo_recx.rx_idx;
+		} else {
+			D_ASSERT(0);
+		}
+	}
+
+out:
+	crt_req_decref(rpc);
+	if (ret == 0 || obj_retry_error(rc))
+		ret = rc;
+	return ret;
+}
+
+int
+dc_obj_shard_key_query(struct dc_obj_shard *shard, daos_epoch_t epoch,
+		       uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
+		       daos_recx_t *recx, const uuid_t coh_uuid,
+		       const uuid_t cont_uuid, unsigned int *map_ver,
+		       tse_task_t *task)
+{
+	struct dc_pool			*pool;
+	struct obj_key_query_in		*okqi;
+	crt_rpc_t			*req;
+	struct obj_key_query_cb_args	 cb_args;
+	daos_unit_oid_t			 oid;
+	crt_endpoint_t			 tgt_ep;
+	uint64_t			 dkey_hash;
+	int				 rc;
+
+	tse_task_stack_pop_data(task, &dkey_hash, sizeof(dkey_hash));
+
+	pool = obj_shard_ptr2pool(shard);
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+
+	oid = shard->do_id;
+	tgt_ep.ep_grp	= pool->dp_group;
+	tgt_ep.ep_rank	= shard->do_rank;
+	tgt_ep.ep_tag	= obj_shard_dkeyhash2tag(shard, dkey_hash);
+
+	dc_pool_put(pool);
+
+	D_DEBUG(DB_IO, "OBJ_KEY_QUERY_RPC, rank=%d tag=%d.\n",
+		tgt_ep.ep_rank, tgt_ep.ep_tag);
+
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep,
+			    DAOS_OBJ_RPC_KEY_QUERY, &req);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	crt_req_addref(req);
+	cb_args.rpc	= req;
+	cb_args.map_ver = map_ver;
+	cb_args.oid	= shard->do_id;
+	cb_args.flags	= flags;
+	cb_args.dkey	= dkey;
+	cb_args.akey	= akey;
+	cb_args.recx	= recx;
+
+	rc = tse_task_register_comp_cb(task, obj_shard_key_query_cb, &cb_args,
+				       sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_req, rc);
+
+	okqi = crt_req_get(req);
+	D_ASSERT(okqi != NULL);
+
+	okqi->okqi_map_ver		= *map_ver;
+	okqi->okqi_epoch		= epoch;
+	okqi->okqi_flags		= flags;
+	okqi->okqi_oid			= oid;
+	if (dkey != NULL)
+		okqi->okqi_dkey		= *dkey;
+	if (akey != NULL)
+		okqi->okqi_akey		= *akey;
+	uuid_copy(okqi->okqi_co_hdl, coh_uuid);
+	uuid_copy(okqi->okqi_co_uuid, cont_uuid);
+
+	rc = daos_rpc_send(req, task);
+	if (rc != 0) {
+		D_ERROR("key_query rpc failed rc %d\n", rc);
+		D_GOTO(out_req, rc);
+	}
+	return rc;
+
+out_req:
+	crt_req_decref(req);
+out:
 	tse_task_complete(task, rc);
 	return rc;
 }

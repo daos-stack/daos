@@ -1104,6 +1104,69 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	obj_punch_complete(rpc, rc, args.map_version);
 }
 
+void
+ds_obj_key_query_handler(crt_rpc_t *rpc)
+{
+	struct obj_key_query_in		*okqi;
+	struct obj_key_query_out	*okqo;
+	struct ds_cont_hdl		*cont_hdl = NULL;
+	struct ds_cont			*cont = NULL;
+	uint32_t			map_version = 0;
+	int				rc;
+
+	okqi = crt_req_get(rpc);
+	D_ASSERT(okqi != NULL);
+	okqo = crt_reply_get(rpc);
+	D_ASSERT(okqo != NULL);
+
+	D_DEBUG(DB_IO, "ds_obj_key_query_handler: flags = %d\n",
+		okqi->okqi_flags);
+
+	rc = ds_check_container(okqi->okqi_co_hdl, okqi->okqi_co_uuid,
+				&cont_hdl, &cont);
+	if (rc)
+		D_GOTO(out, rc);
+
+	D_ASSERT(cont_hdl->sch_pool != NULL);
+	map_version = cont_hdl->sch_pool->spc_map_version;
+
+	okqo->okqo_dkey.iov_buf = NULL;
+	okqo->okqo_akey.iov_buf = NULL;
+	/* MSC - remove, just temp set before server side implementation */
+	if (okqi->okqi_flags & DAOS_GET_DKEY) {
+		uint64_t key_val = (rand()%1000)+1;
+
+		printf("DKEY returned = %d\n", (int)key_val);
+		okqo->okqo_dkey.iov_buf = malloc(sizeof(uint64_t));
+		daos_iov_set(&okqo->okqo_dkey, &key_val, sizeof(uint64_t));
+	}
+	if (okqi->okqi_flags & DAOS_GET_AKEY) {
+		uint64_t key_val = (rand()%1000)+1;
+
+		printf("AKEY returned = %d\n", (int)key_val);
+		okqo->okqo_akey.iov_buf = malloc(sizeof(uint64_t));
+		daos_iov_set(&okqo->okqo_akey, &key_val, sizeof(uint64_t));
+	}
+	if (okqi->okqi_flags & DAOS_GET_RECX) {
+		okqo->okqo_recx.rx_idx = (rand()%1000)+1;
+		printf("RECX returned = %d\n", (int)okqo->okqo_recx.rx_idx);
+		okqo->okqo_recx.rx_nr = 1048576;
+	}
+out:
+	if (cont_hdl) {
+		if (!cont_hdl->sch_cont)
+			ds_cont_put(cont); /* -1 for rebuild container */
+		ds_cont_hdl_put(cont_hdl);
+	}
+
+	obj_reply_set_status(rpc, rc);
+	obj_reply_map_version_set(rpc, map_version);
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("send reply failed: %d\n", rc);
+}
+
 /**
  * Choose abt pools for object RPC. Because dkey enumeration might create ULT
  * on other xstream pools, so we have to put it to the shared pool. For other

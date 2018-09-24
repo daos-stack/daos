@@ -89,6 +89,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_obj_punch_dkeys, sizeof(daos_obj_punch_t)},
 	{dc_obj_punch_akeys, sizeof(daos_obj_punch_t)},
 	{dc_obj_query, sizeof(daos_obj_query_t)},
+	{dc_obj_key_query, sizeof(daos_obj_key_query_t)},
 	{dc_obj_fetch, sizeof(daos_obj_fetch_t)},
 	{dc_obj_update, sizeof(daos_obj_update_t)},
 	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},

@@ -55,6 +55,7 @@ enum obj_rpc_opc {
 	DAOS_OBJ_RPC_PUNCH		= 7,
 	DAOS_OBJ_RPC_PUNCH_DKEYS	= 8,
 	DAOS_OBJ_RPC_PUNCH_AKEYS	= 9,
+	DAOS_OBJ_RPC_KEY_QUERY		= 10,
 };
 
 struct obj_rw_in {
@@ -130,6 +131,30 @@ struct obj_punch_in {
 struct obj_punch_out {
 	int32_t			opo_ret;
 	uint32_t		opo_map_version;
+};
+
+/* object key query in */
+struct obj_key_query_in {
+	uuid_t			okqi_co_hdl;
+	uuid_t			okqi_co_uuid;
+	daos_unit_oid_t		okqi_oid;
+	uint64_t		okqi_epoch;
+	uint32_t		okqi_map_ver;
+	uint32_t		okqi_flags;
+	daos_key_t		okqi_dkey;
+	daos_key_t		okqi_akey;
+	daos_recx_t		okqi_recx;
+};
+
+/* object key query out */
+struct obj_key_query_out {
+	int32_t			okqo_ret;
+	uint32_t		okqo_map_version;
+	uint32_t		okqo_flags;
+	uint32_t		okqo_pad32_1;
+	daos_key_t              okqo_dkey;
+	daos_key_t              okqo_akey;
+	daos_recx_t             okqo_recx;
 };
 
 extern struct daos_rpc daos_obj_rpcs[];

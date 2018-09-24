@@ -69,7 +69,11 @@ dc_obj_punch_akeys_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			       daos_key_t *dkey, unsigned int nr,
 			       daos_key_t *akeys, daos_event_t *ev,
 			       tse_sched_t *tse, tse_task_t **task);
-
+int
+dc_obj_key_query_task_create(daos_handle_t oh, daos_epoch_t epoch,
+			     uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
+			     daos_recx_t *recx, daos_event_t *ev,
+			     tse_sched_t *tse, tse_task_t **task);
 int
 dc_obj_fetch_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			 daos_key_t *dkey, unsigned int nr,
