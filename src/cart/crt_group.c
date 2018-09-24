@@ -861,7 +861,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 	if (grp_priv->gp_psr_phy_addr != NULL)
 		free(grp_priv->gp_psr_phy_addr);
 	D_RWLOCK_DESTROY(&grp_priv->gp_rwlock);
-	free(grp_priv->gp_pub.cg_grpid);
+	D_FREE(grp_priv->gp_pub.cg_grpid);
 
 	crt_barrier_info_destroy(grp_priv);
 
@@ -2688,7 +2688,7 @@ done:
 		rc = d_errno2der(errno);
 	}
 out:
-	free(filename);
+	D_FREE(filename);
 	if (tmp_name != NULL) {
 		if (rc != 0)
 			unlink(tmp_name);

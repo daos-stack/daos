@@ -313,7 +313,6 @@ do_init:
 		}
 		D_ASSERT(addr != NULL);
 		crt_gdata.cg_addr = addr;
-		crt_gdata.cg_addr_len = strlen(addr);
 
 		rc = crt_grp_init(grpid);
 		if (rc != 0) {
@@ -489,8 +488,7 @@ crt_finalize(void)
 		}
 
 		D_ASSERT(crt_gdata.cg_addr != NULL);
-		free(crt_gdata.cg_addr);
-		crt_gdata.cg_addr = NULL;
+		D_FREE(crt_gdata.cg_addr);
 		crt_gdata.cg_server = false;
 
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);

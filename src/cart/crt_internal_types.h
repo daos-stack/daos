@@ -58,7 +58,6 @@ struct crt_grp_gdata;
 /* CaRT global data */
 struct crt_gdata {
 	crt_phy_addr_t		cg_addr;
-	uint32_t		cg_addr_len;
 
 	bool			cg_server;
 	bool			cg_singleton; /* true for singleton client */
