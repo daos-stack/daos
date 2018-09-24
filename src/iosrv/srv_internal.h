@@ -37,6 +37,7 @@ int dss_module_cleanup_all(void);
 /* srv.c */
 int dss_srv_init(int);
 int dss_srv_fini(bool force);
+void dss_dump_ABT_state(void);
 
 /* tls.c */
 void dss_tls_fini(struct dss_thread_local_storage *dtls);

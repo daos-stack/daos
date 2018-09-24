@@ -1525,3 +1525,108 @@ failed:
 	dss_srv_fini(true);
 	return rc;
 }
+
+void
+dss_dump_ABT_state()
+{
+	int			rc, num_pools, i;
+	struct dss_xstream	*dx;
+	ABT_sched		sched;
+	ABT_pool		pools[DSS_POOL_CNT];
+
+	rc = ABT_info_print_all_xstreams(stderr);
+	if (rc != ABT_SUCCESS)
+		D_ERROR("ABT_info_print_all_xstreams() error, rc = %d\n", rc);
+
+	ABT_mutex_lock(xstream_data.xd_mutex);
+	d_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
+		rc = ABT_info_print_xstream(stderr, dx->dx_xstream);
+		if (rc != ABT_SUCCESS)
+			D_ERROR("ABT_info_print_xstream() error, rc = %d, for "
+				"DAOS xstream %p, ABT xstream %p\n", rc, dx,
+				dx->dx_xstream);
+		/* one progress ULT per xstream */
+		if (dx->dx_progress != ABT_THREAD_NULL) {
+			rc = ABT_info_print_thread(stderr, dx->dx_progress);
+			if (rc != ABT_SUCCESS)
+				D_ERROR("ABT_info_print_thread() error, "
+					"rc = %d, for DAOS xstream %p, ABT "
+					"xstream %p, progress ULT %p\n", rc, dx,
+					dx->dx_xstream, dx->dx_progress);
+		}
+		/* only one sched per xstream */
+		rc = ABT_xstream_get_main_sched(dx->dx_xstream, &sched);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_xstream_get_main_sched() error, rc = %d, "
+				"for DAOS xstream %p, ABT xstream %p\n", rc, dx,
+				dx->dx_xstream);
+		} else if (sched != dx->dx_sched) {
+			/* it's unexpected, unless DAOS will use stacked
+			 * schedulers at some point of time, but try to
+			 * continue anyway instead to abort
+			 */
+			D_WARN("DAOS xstream main sched %p differs from ABT "
+			       "registered one %p, dumping both\n",
+			       dx->dx_sched, sched);
+			rc = ABT_info_print_sched(stderr, sched);
+			if (rc != ABT_SUCCESS)
+				D_ERROR("ABT_info_print_sched() error, rc = "
+					"%d, for DAOS xstream %p, ABT xstream "
+					"%p, sched %p\n", rc, dx,
+					dx->dx_xstream, sched);
+		}
+		rc = ABT_info_print_sched(stderr, dx->dx_sched);
+		if (rc != ABT_SUCCESS)
+			D_ERROR("ABT_info_print_sched() error, rc = %d, for "
+				"DAOS xstream %p, ABT xstream %p, sched %p\n",
+				rc, dx, dx->dx_xstream, dx->dx_sched);
+
+		/* only DSS_POOL_CNT (DSS_POOL_PRIV/DSS_POOL_SHARE/
+		 * DSS_POOL_REBUILD) per sched/xstream
+		 */
+		rc = ABT_sched_get_num_pools(dx->dx_sched, &num_pools);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_sched_get_num_pools() error, rc = %d, for "
+				"DAOS xstream %p, ABT xstream %p, sched %p\n",
+				rc, dx, dx->dx_xstream, dx->dx_sched);
+			continue;
+		}
+		if (num_pools != DSS_POOL_CNT)
+			D_WARN("DAOS xstream %p, ABT xstream %p, sched %p "
+				"number of pools %d != %d\n", dx,
+				dx->dx_xstream, dx->dx_sched, num_pools,
+				DSS_POOL_CNT);
+		rc = ABT_sched_get_pools(dx->dx_sched, num_pools, 0, pools);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_sched_get_pools() error, rc = %d, for "
+				"DAOS xstream %p, ABT xstream %p, sched %p\n",
+				rc, dx, dx->dx_xstream, dx->dx_sched);
+			continue;
+		}
+		for (i = 0; i < num_pools; i++) {
+			if (pools[i] == ABT_POOL_NULL) {
+				D_WARN("DAOS xstream %p, ABT xstream %p, "
+				       "sched %p, no pool[%d]\n", dx,
+				       dx->dx_xstream, dx->dx_sched, i);
+				continue;
+			}
+			if (pools[i] != dx->dx_pools[i]) {
+				D_WARN("DAOS xstream pool[%d]=%p differs from "
+				       "ABT registered one %p for sched %p\n",
+				       i, dx->dx_pools[i], pools[i],
+				       dx->dx_sched);
+			}
+			rc = ABT_info_print_pool(stderr, pools[i]);
+			if (rc != ABT_SUCCESS)
+				D_ERROR("ABT_info_print_pool() error, rc = %d, "
+					"for DAOS xstream %p, ABT xstream %p, "
+					"sched %p, pool[%d]\n", rc, dx,
+					dx->dx_xstream, dx->dx_sched, i);
+		}
+		/* XXX last, each pool's ULTs infos (and stacks?!) will need to
+		 * be also dumped, when a new pool method will be available to
+		 * list all ULTs in a pool (ABT issue #12)
+		 */
+	}
+	ABT_mutex_unlock(xstream_data.xd_mutex);
+}

@@ -591,9 +591,24 @@ main(int argc, char **argv)
 	sigaddset(&set, SIGTERM);
 	sigaddset(&set, SIGUSR1);
 	sigaddset(&set, SIGUSR2);
-	rc = sigwait(&set, &sig);
-	if (rc)
-		D_ERROR("failed to wait for signals: %d\n", rc);
+	while (1) {
+		rc = sigwait(&set, &sig);
+		if (rc) {
+			D_ERROR("failed to wait for signals: %d\n", rc);
+			break;
+		}
+
+		/* use this iosrv main thread's context to dump Argobot internal
+		 * infos upon SIGUSR1
+		 */
+		if (sig == SIGUSR1) {
+			dss_dump_ABT_state();
+			continue;
+		}
+
+		/* SIGINT/SIGTERM/SIGUSR2 cause server shutdown */
+		break;
+	}
 
 	/** shutdown */
 	server_fini(true);
