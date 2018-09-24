@@ -34,10 +34,8 @@ sys.path.append('../../../utils/py')
 
 import ServerUtils
 import WriteHostFile
-from daos_api import DaosContext, DaosPool
+from daos_api import DaosContext, DaosPool, DaosLog
 from conversion import c_uuid_to_str
-
-PROGRESS_LOG = logging.getLogger("progress")
 
 class InfoTests(Test):
     """
@@ -54,9 +52,9 @@ class InfoTests(Test):
                                             'daos_server')
 
         context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        print ("initialized!!!\n")
 
         self.pool = DaosPool(context)
+        self.d_log = DaosLog(context)
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
@@ -73,79 +71,72 @@ class InfoTests(Test):
 
         :avocado: tags=pool,poolquery,infotest
         """
-        # there is a presumption that this test lives in a specific spot
-        # in the repo
-
         # create pool
         mode = self.params.get("mode", '/run/testparams/modes/*', 0731)
         uid = os.geteuid()
         gid = os.getegid()
         size = self.params.get("size", '/run/testparams/sizes/*', 0)
-        tgt_list = None
         group = self.server_group
 
-        self.pool.create(mode, uid, gid, size, group, tgt_list)
-        PROGRESS_LOG.info("created pool")
+        self.pool.create(mode, uid, gid, size, group, None)
 
         # connect to the pool
         flags = self.params.get("perms", '/run/testparams/connectperms/*', '')
         connect_flags = 1 << flags
         self.pool.connect(connect_flags)
-        PROGRESS_LOG.info("connected to pool")
 
         # query the pool
         pool_info = self.pool.pool_query()
-        PROGRESS_LOG.info("queried pool info")
 
         # check uuid
         uuid_str = c_uuid_to_str(pool_info.pi_uuid)
-        PROGRESS_LOG.info("pool uuid pool_info.pi_uuid: {0}".format(uuid_str))
-        PROGRESS_LOG.info("pool uuid saved in api at create time: "
-                          "{0}".format(self.pool.get_uuid_str()))
         if uuid_str != self.pool.get_uuid_str():
+            self.d_log.error("UUID str does not match expected string")
             self.fail("UUID str does not match expected string")
 
-        # validate size of pool is what we expect
-        PROGRESS_LOG.info("pool should be {0} bytes".format(size))
-        PROGRESS_LOG.info("pool actual space is {0} bytes"
-                          .format(pool_info.pi_space))
         '''
+        # validate size of pool is what we expect
         This check is currently disabled, as space is not implemented in
         DAOS C API yet.
         if size != pool_info.pi_space:
+            self.d_log.error("expected size {0} did not match actual size {1}"
+                      .format(size, pool_info.pi_space))
             self.fail("expected size {0} did not match actual size {1}"
                       .format(size, pool_info.pi_space))
         '''
 
         # number of targets
-        PROGRESS_LOG.info("number of targets in pool: %s",
-                          pool_info.pi_ntargets)
         if pool_info.pi_ntargets != len(self.hostlist):
+            self.d_log.error("found number of targets in pool did not match "
+                      	     "expected number, 1. num targets: {0}"
+                      	     .format(pool_info.pi_ntargets))
             self.fail("found number of targets in pool did not match "
                       "expected number, 1. num targets: {0}"
                       .format(pool_info.pi_ntargets))
 
         # number of disabled targets
-        PROGRESS_LOG.info("number of disabled targets in pool: %s",
-                          pool_info.pi_ndisabled)
         if pool_info.pi_ndisabled > 0:
+            self.d_log.error("found disabled targets, none expected to be")
             self.fail("found disabled targets, none expected to be disabled")
 
         # mode
-        PROGRESS_LOG.info("pool mode: %s", pool_info.pi_mode)
         if pool_info.pi_mode != mode:
+            self.d_log.error("found different mode than expected. expected {0}, "
+                      	     "found {1}.".format(mode, pool_info.pi_mode))
             self.fail("found different mode than expected. expected {0}, "
                       "found {1}.".format(mode, pool_info.pi_mode))
 
         # uid
-        PROGRESS_LOG.info("expected uid is {0}".format(uid))
         if pool_info.pi_uid != uid:
+            self.d_log.error("found actual pool uid {0} does not match expected "
+                      	     "uid {1}".format(pool_info.pi_uid, uid))
             self.fail("found actual pool uid {0} does not match expected uid "
                       "{1}".format(pool_info.pi_uid, uid))
 
         # gid
-        PROGRESS_LOG.info("expected gid is {0}".format(gid))
         if pool_info.pi_gid != gid:
+            self.d_log.error("found actual pool gid {0} does not match expected "
+                      	     "gid {1}".format(pool_info.pi_gid, gid))
             self.fail("found actual pool gid {0} does not match expected gid "
                       "{1}".format(pool_info.pi_gid, gid))
 

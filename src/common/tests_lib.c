@@ -29,6 +29,7 @@
 #include <daos/object.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+#include <gurt/debug.h>
 
 #define DTS_OCLASS_DEF		DAOS_OC_REPL_MAX_RW
 
@@ -269,4 +270,31 @@ void
 dts_reset_key(void)
 {
 	int_key_gen = 1;
+}
+
+void
+dts_log(const char *msg, const char *file, const char *func, int line,
+		uint64_t py_logfac)
+{
+	int logfac = 0;
+
+	switch (py_logfac) {
+	case 0:
+		logfac = DB_ANY;
+		break;
+	case 1:
+		logfac = DLOG_INFO;
+		break;
+	case 2:
+		logfac = DLOG_WARN;
+		break;
+	case 3:
+		logfac = DLOG_ERR;
+		break;
+	}
+
+	int mask = d_log_check(logfac | D_LOGFAC);
+
+	if (mask)
+		d_log(mask, "%s:%d %s() %s", file, line, func, msg);
 }

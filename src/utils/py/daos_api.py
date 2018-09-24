@@ -28,6 +28,8 @@ import time
 import uuid
 import json
 import os
+import inspect
+import sys
 
 from daos_cref import *
 from conversion import *
@@ -1324,7 +1326,9 @@ class DaosContext(object):
             'slip-epoch'     : self.libdaos.daos_epoch_slip,
             'stop-service'   : self.libdaos.daos_pool_svc_stop,
             'test-event'     : self.libdaos.daos_event_test,
-            'update-obj'     : self.libdaos.daos_obj_update}
+            'update-obj'     : self.libdaos.daos_obj_update,
+            'd_log'          : self.libtest.dts_log
+	    }
 
     def __del__(self):
         """ cleanup the DAOS API """
@@ -1333,6 +1337,45 @@ class DaosContext(object):
     def get_function(self, function):
         """ call a function through the API """
         return self.ftable[function]
+
+class DaosLog:
+
+    def __init__(self, context):
+        """ setup the log object """
+        self.context = context
+
+    def debug(self, msg):
+        """ entry point for debug msgs """
+        self.daos_log(msg, Logfac.DEBUG)
+
+    def info(self, msg):
+        """ entry point for info msgs """
+        self.daos_log(msg, Logfac.INFO)
+
+    def warning(self, msg):
+        """ entry point for warning msgs """
+        self.daos_log(msg, Logfac.WARNING)
+
+    def error(self, msg):
+        """ entry point for error msgs """
+        self.daos_log(msg, Logfac.ERROR)
+
+    def daos_log(self, msg, level):
+        """ write specified message to client daos.log """
+
+        func = self.context.get_function("d_log")
+
+        caller = inspect.getframeinfo(inspect.stack()[2][0])
+        caller_func = sys._getframe(1).f_back.f_code.co_name
+        filename = os.path.basename(caller.filename)
+
+        c_filename = ctypes.create_string_buffer(filename)
+        c_line = ctypes.c_int(caller.lineno)
+        c_msg = ctypes.create_string_buffer(msg)
+        c_caller_func = ctypes.create_string_buffer(caller_func)
+        c_level = ctypes.c_uint64(level)
+
+        func(c_msg, c_filename, c_caller_func, c_line, c_level)
 
 if __name__ == '__main__':
     # this file is not intended to be run in normal circumstances

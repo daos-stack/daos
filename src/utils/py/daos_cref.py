@@ -237,3 +237,9 @@ def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
     # cleanup
     qfunc = context.get_function('destroy-eq')
     qfunc(ctypes.byref(qhandle))
+
+class Logfac:
+    DEBUG = 0
+    INFO = 1
+    WARNING = 2
+    ERROR = 3
