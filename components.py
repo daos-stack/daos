@@ -314,14 +314,21 @@ REQS.define('mpi4py',
                       'python setup.py install --prefix $MPI4PY_PREFIX'],
             requires=['ompi'])
 
+REQS.define('fio',
+            retriever=GitRepoRetriever(
+                'https://github.com/axboe/fio.git'),
+            commands=['git checkout fio-3.3', './configure --prefix="$FIO_PREFIX"',
+                      'make $JOBS_OPT', 'make install'])
+
 RETRIEVER = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
 REQS.define('spdk',
             retriever=RETRIEVER,
-            commands=['./configure --prefix=$SPDK_PREFIX',
+            commands=['./configure --prefix="$SPDK_PREFIX" --with-fio="$FIO_SRC"',
                       'make $JOBS_OPT', 'make install',
                       'mkdir -p "$SPDK_PREFIX/share/spdk"',
-                      'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
-            libs=["spdk"])
+                      'cp -r  include scripts examples/nvme/fio_plugin "$SPDK_PREFIX/share/spdk"'],
+            libs=['spdk'],
+            requires=['fio'])
 
 URL = 'https://github.com/protobuf-c/protobuf-c/releases/download/' \
     'v1.3.0/protobuf-c-1.3.0.tar.gz'
