@@ -65,7 +65,9 @@ class DaosPool(object):
         else:
             self.group = None
         self.uuid = (ctypes.c_ubyte * 16)()
-        rank = ctypes.c_uint(99)
+        rank_t = ctypes.c_uint * svcn
+        # initializing with default values
+        rank = rank_t(*list([99 for i in range(svcn)]))
         rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
         c_whatever = ctypes.create_string_buffer(b"rubbish")
         self.svc = RankList(rl_ranks, svcn)

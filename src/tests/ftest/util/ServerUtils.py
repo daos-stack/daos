@@ -75,7 +75,7 @@ def runServer(hostfile, setname, basepath):
         server_cmd += "-x DD_SUBSYS=all -x DD_MASK=all "
         server_cmd += "-x LD_LIBRARY_PATH={0} ".format(ld_lib_path)
         server_cmd += daos_srv_bin + " -g {0} -c 1 ".format(setname)
-        server_cmd += " -a" + basepath + "/install/tmp/"
+        server_cmd += " -a " + basepath + "/install/tmp/"
 
         print "Start CMD>>>>{0}".format(server_cmd)
 
