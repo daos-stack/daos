@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1494,27 +1494,39 @@ out:
 }
 
 /*
- * Check for valid inputs. If normalize is true,
- * sets corresponding size to zero for NULL values
- * (or the entire 'values' array is NULL).
+ * Check for valid inputs. If readonly is true, normalizes
+ * by setting corresponding size to zero for NULL values.
+ * Otherwise, values may not be NULL.
  */
 static int
 attr_check_input(int n, char const *const names[], void const *const values[],
-		 size_t sizes[], bool normalize)
+		 size_t sizes[], bool readonly)
 {
 	int i;
 
-	if (n <= 0 || names == NULL || sizes == NULL)
+	if (n <= 0 || names == NULL || sizes == NULL
+	    || (values == NULL && !readonly)) {
+		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p"
+			", sizes = %p", n, names, values, sizes);
 		return -DER_INVAL;
-	if (values == NULL && !normalize)
-		return -DER_INVAL;
+	}
 
 	for (i = 0; i < n; i++) {
-		if (names[i] == NULL || *(names[i]) == '\0')
+		if (names[i] == NULL || *(names[i]) == '\0') {
+			D_ERROR("Invalid Arguments: names[%d] = %s",
+				i, names[i] == NULL ? "NULL" : "\'\\0\'");
+
 			return -DER_INVAL;
-		if (values == NULL || values[i] == NULL) {
-			if (sizes[i] != 0 && !normalize)
+		}
+		if (values == NULL)
+			sizes[i] = 0; /* executes only if 'readonly' is true */
+		else if (values[i] == NULL || sizes[i] == 0) {
+			if (!readonly) {
+				D_ERROR("Invalid Arguments: values[%d] = %p"
+					", sizes[%d] = %lu",
+					i, values[i], i, sizes[i]);
 				return -DER_INVAL;
+			}
 			sizes[i] = 0;
 		}
 	}
