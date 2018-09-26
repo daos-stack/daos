@@ -12,13 +12,38 @@ The [shell](shell/DAOSShell) is an example client application which can connect 
 
 In order to run the shell to perform administrative tasks, build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md).
 
-`daos_server` is to be run as root in order to perform administrative tasks, to be run through `orterun` as root, the following command can be used (assuming the quickstart_guide instructions have already been performed):
+`daos_server` is to be run as root in order to perform administrative tasks, to be run through `orterun` as root:
 
 ```
 root$ orterun -np 1 -c 1 --hostfile hostfile --enable-recovery --allow-run-as-root --report-uri /tmp/urifile daos_server -c 1
 ```
 
 DAOSShell (the client application) is to be run as a standard, unprivileged user.  The shell can be used to connect to and interact with the gRPC server (running on port 10000 by default) as follows:
+```
+$ projects/daos_m/install/bin/DAOSShell
+DAOS Management Shell
+>>> connect -t '127.0.0.1:10000'
+>>> help
+Commands:
+  clear                 clear the screen
+  connect               Connect to management infrastructure
+  exit                  exit the program
+  gethandle             Command to test requesting a security handle
+  getmgmtfeature        Command to retrieve the description of a given feature
+  getsecctx             Command to test requesting a security context from a handle
+  help                  display help
+  listmgmtfeatures      Command to retrieve all supported management features
+  nvme                  Perform tasks on NVMe controllers
+>>>
+```
+
+### NVMe Controller and Namespace Discovery
+
+The following animation illustrates starting the control server and using the management shell to view the NVMe Namespaces discovered on a locally available NVMe Controller (assuming the quickstart_guide instructions have already been performed):
+
+![Demo: List NVMe Controllers and Namespaces](./media/daosshellnamespaces.svg)
+
+The following is a text listing of the commands used in the above animation:
 
 ```
 $ projects/daos_m/install/bin/DAOSShell
@@ -88,7 +113,14 @@ Controller: model:"INTEL SSDPED1K375GA " serial:"PHKS7335006W375AGN  " pciaddr:"
 >>>
 ```
 
-Example command line output when updating NVMe controller firmware:
+
+### NVMe Controller Firmware Update
+
+The following animation illustrates starting the control server and using the management shell to update the firmware on a locally available NVMe Controller (assuming the quickstart_guide instructions have already been performed):
+
+![Demo: Updating NVMe Controller Firmware](./media/daosshellfwupdate.svg)
+
+The following is a text listing of command line output when updating NVMe controller firmware as in the above animation:
 
 ```
 Select the task you would like to run on the selected controllers.
@@ -111,6 +143,12 @@ Successfully updated firmware from revision E2010420 to E2010413!
 
 ## Architecture
 
+First a view of software component architecture:
+
+![Architecture diagram](./media/control_architecture.PNG)
+
+Then communication interfaces:
+
 ```
     ┌───────────────┐ ┌───────────────┐
     │  Go Shell     │ │ Other Client  │
@@ -119,22 +157,22 @@ Successfully updated firmware from revision E2010420 to E2010413!
             └────────┬────────┘
                      ▼
           ┌─────────────────────┐
-          │    Go daos_server   │
-          └─────────────────────┘
-                     │
-                     ▼
-       ┌───────────────────────────┐
-       │     Unix Domain Socket    │
-       └───────────────────────────┘
-                     │
-                     ▼
-          ┌─────────────────────┐
-          │   C daos_io_server  │
-          └─────────────────────┘
-                     │
-                     ▼
-           ┌────────────────────┐
-           │ Persistent Storage │
+          │    Go daos_server   │----|
+          └─────────────────────┘    |
+                     │               |
+                     ▼               |
+       ┌───────────────────────────┐ |
+       │     Unix Domain Socket    │ |
+       └───────────────────────────┘ |
+                     │               |
+                     ▼               |
+          ┌─────────────────────┐    |
+          │   C daos_io_server  │    |
+          └─────────────────────┘    |
+                     │               |
+                     ▼               |
+           ┌────────────────────┐    |
+           │ Persistent Storage │<---|
            └────────────────────┘
 ```
 TODO: include details of `daos_agent` interaction
