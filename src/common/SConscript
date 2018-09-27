@@ -24,6 +24,7 @@ def scons():
                   'misc.c', 'pool_map.c', 'proc.c', 'sort.c', 'btree.c',
                   'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
                   'drpc.c', 'drpc.pb-c.c']
+
     common = daos_build.library(denv, 'libdaos_common', common_src)
     denv.Install('$PREFIX/lib/', common)
 

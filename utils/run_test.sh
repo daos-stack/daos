@@ -65,6 +65,7 @@ if [ -d "/mnt/daos" ]; then
     export LD_LIBRARY_PATH=$SL_PREFIX/lib:${LD_LIBRARY_PATH}
     run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test src/control/run_go_tests.sh
+    run_test build/src/security/tests/cli_security_tests
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for

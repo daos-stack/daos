@@ -50,6 +50,7 @@ unixcomm_connect(char *sockaddr, int flags)
 
 	address.sun_family = AF_UNIX;
 	strncpy(address.sun_path, sockaddr, UNIX_PATH_MAX-1);
+	address.sun_path[UNIX_PATH_MAX-1] = '\0';
 
 	fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (fd < 0) {

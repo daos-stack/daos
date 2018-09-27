@@ -45,6 +45,7 @@ def scons():
     SConscript('placement/SConscript')
     SConscript('object/SConscript')
     SConscript('rebuild/SConscript')
+    SConscript('security/SConscript')
 
     # Build DAOS client libraries
     SConscript('client/SConscript')
