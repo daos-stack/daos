@@ -744,18 +744,15 @@ unreach:
 static inline int
 crt_req_get_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 {
-	char		*tgt_uri = NULL;
-
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(base_uri != NULL);
 
-	D_ALLOC(tgt_uri, CRT_ADDR_STR_MAX_LEN);
-	if (tgt_uri == NULL)
+	D_STRNDUP(rpc_priv->crp_tgt_uri, base_uri, CRT_ADDR_STR_MAX_LEN);
+
+	if (rpc_priv->crp_tgt_uri == NULL) {
 		return -DER_NOMEM;
+	}
 
-	strncpy(tgt_uri, base_uri, CRT_ADDR_STR_MAX_LEN - 1);
-
-	rpc_priv->crp_tgt_uri = tgt_uri;
 	rpc_priv->crp_uri_free = 1;
 
 	return DER_SUCCESS;
