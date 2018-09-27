@@ -272,6 +272,16 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
 #define d_list_entry(ptr, type, member) \
 	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
+#define d_list_pop_entry(list, type, member)			\
+	({							\
+		type *__r = NULL;				\
+		if (!d_list_empty(list)) {				\
+			__r = d_list_entry((list)->next, type, member);	\
+			d_list_del_init((list)->next);			\
+		}						\
+		__r;						\
+	})
+
 /**
  * Iterate over a list
  * Behaviour is undefined if \p pos is removed from the list in the body of the
@@ -406,7 +416,7 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 		n->next->pprev  = &n->next;
 }
 
-#define d_hlist_entry(ptr, type, member) container_of(ptr, type, member)
+#define d_hlist_entry(ptr, type, member) d_list_entry(ptr, type, member)
 
 #define dhlist_for_each(pos, head) \
 	for (pos = (head)->first; pos && (prefetch(pos->next), 1); \

@@ -140,7 +140,7 @@ static inline void
 crt_hg_pool_disable(struct crt_hg_context *hg_ctx)
 {
 	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
-	struct crt_hg_hdl	*hdl, *next;
+	struct crt_hg_hdl	*hdl;
 	d_list_t		 destroy_list;
 	hg_return_t		 hg_ret = HG_SUCCESS;
 
@@ -155,7 +155,9 @@ crt_hg_pool_disable(struct crt_hg_context *hg_ctx)
 		hg_pool);
 	D_SPIN_UNLOCK(&hg_pool->chp_lock);
 
-	d_list_for_each_entry_safe(hdl, next, &destroy_list, chh_link) {
+	while ((hdl = d_list_pop_entry(&destroy_list,
+				       struct crt_hg_hdl,
+				       chh_link))) {
 		D_ASSERT(hdl->chh_hdl != HG_HANDLE_NULL);
 		hg_ret = HG_Destroy(hdl->chh_hdl);
 		if (hg_ret != HG_SUCCESS)
@@ -163,8 +165,7 @@ crt_hg_pool_disable(struct crt_hg_context *hg_ctx)
 				hdl->chh_hdl, hg_ret);
 		else
 			D_DEBUG(DB_NET, "hg_hdl %p destroyed.\n", hdl->chh_hdl);
-		d_list_del_init(&hdl->chh_link);
-		D_FREE_PTR(hdl);
+		D_FREE(hdl);
 	}
 }
 

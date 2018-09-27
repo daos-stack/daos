@@ -181,15 +181,10 @@ crt_opc_map_destroy_legacy(struct crt_opc_map_legacy *map)
 		D_GOTO(skip, 0);
 
 	for (i = 0; i < (1 << map->com_bits); i++) {
-		while (!d_list_empty(&map->com_hash[i])) {
-			info = d_list_entry(map->com_hash[i].next,
-					    struct crt_opc_info, coi_link);
-			d_list_del_init(&info->coi_link);
-			/*
-			D_DEBUG("deleted opc: %#x from map(hash %d).\n",
-				info->coi_opc, i);
-			*/
-			D_FREE_PTR(info);
+		while ((info = d_list_pop_entry(&map->com_hash[i],
+						struct crt_opc_info,
+						coi_link))) {
+			D_FREE(info);
 		}
 	}
 	D_FREE(map->com_hash);

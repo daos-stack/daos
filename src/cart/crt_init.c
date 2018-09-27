@@ -392,46 +392,34 @@ crt_initialized()
 void
 crt_plugin_fini(void)
 {
-	d_list_t			*curr_node;
-	d_list_t			*tmp_node;
 	struct crt_prog_cb_priv		*prog_cb_priv;
 	struct crt_timeout_cb_priv	*timeout_cb_priv;
 	struct crt_event_cb_priv	*event_cb_priv;
 	struct crt_plugin_cb_priv	*cb_priv;
-	struct crt_plugin_cb_priv	*cb_priv_tmp;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
 
 	crt_plugin_pmix_fini();
 
-	d_list_for_each_safe(curr_node, tmp_node,
-			     &crt_plugin_gdata.cpg_prog_cbs) {
-		d_list_del(curr_node);
-		prog_cb_priv = container_of(curr_node, struct crt_prog_cb_priv,
-					    cpcp_link);
-		D_FREE_PTR(prog_cb_priv);
+	while ((prog_cb_priv = d_list_pop_entry(&crt_plugin_gdata.cpg_prog_cbs,
+						struct crt_prog_cb_priv,
+						cpcp_link))) {
+		D_FREE(prog_cb_priv);
 	}
-	d_list_for_each_safe(curr_node, tmp_node,
-			     &crt_plugin_gdata.cpg_timeout_cbs) {
-		d_list_del(curr_node);
-		timeout_cb_priv =
-			container_of(curr_node, struct crt_timeout_cb_priv,
-				     ctcp_link);
-		D_FREE_PTR(timeout_cb_priv);
+	while ((timeout_cb_priv = d_list_pop_entry(&crt_plugin_gdata.cpg_timeout_cbs,
+						   struct crt_timeout_cb_priv,
+						   ctcp_link))) {
+		D_FREE(timeout_cb_priv);
 	}
-	d_list_for_each_safe(curr_node, tmp_node,
-			     &crt_plugin_gdata.cpg_event_cbs) {
-		d_list_del(curr_node);
-		event_cb_priv =
-			container_of(curr_node, struct crt_event_cb_priv,
-				     cecp_link);
-		D_FREE_PTR(event_cb_priv);
+	while ((event_cb_priv = d_list_pop_entry(&crt_plugin_gdata.cpg_event_cbs,
+						 struct crt_event_cb_priv,
+						 cecp_link))) {
+		D_FREE(event_cb_priv);
 	}
-	d_list_for_each_entry_safe(cb_priv, cb_priv_tmp,
-				   &crt_plugin_gdata.cpg_eviction_cbs,
-				   cp_link) {
-		d_list_del(&cb_priv->cp_link);
-		D_FREE_PTR(cb_priv);
+	while ((cb_priv = d_list_pop_entry(&crt_plugin_gdata.cpg_eviction_cbs,
+					   struct crt_plugin_cb_priv,
+					   cp_link))) {
+		D_FREE(cb_priv);
 	}
 
 	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock);

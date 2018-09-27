@@ -483,7 +483,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	if (rc == 0) {
 		D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 		crt_gdata.cg_ctx_num--;
-		d_list_del_init(&ctx->cc_link);
+		d_list_del(&ctx->cc_link);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_FREE_PTR(ctx);
 	} else {
@@ -615,9 +615,7 @@ crt_req_timeout_untrack(crt_rpc_t *req)
 static void
 crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_timeout_cb_priv	*timeout_cb_priv;
-	d_list_t			*curr_node;
-	d_list_t			*tmp_node;
+	struct crt_timeout_cb_priv *cb_priv, *cb_priv_next;
 
 	if (crt_plugin_gdata.cpg_inited == 0)
 		return;
@@ -626,15 +624,13 @@ crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
 		return;
 	}
 	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
-	d_list_for_each_safe(curr_node, tmp_node,
-			     &crt_plugin_gdata.cpg_timeout_cbs) {
-		timeout_cb_priv =
-			container_of(curr_node, struct crt_timeout_cb_priv,
-				     ctcp_link);
+	d_list_for_each_entry_safe(cb_priv, cb_priv_next,
+				   &crt_plugin_gdata.cpg_timeout_cbs,
+				   ctcp_link) {
 		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
-		timeout_cb_priv->ctcp_func(rpc_priv->crp_pub.cr_ctx,
-					   &rpc_priv->crp_pub,
-					   timeout_cb_priv->ctcp_args);
+		cb_priv->ctcp_func(rpc_priv->crp_pub.cr_ctx,
+				   &rpc_priv->crp_pub,
+				   cb_priv->ctcp_args);
 		D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
 	}
 	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
@@ -768,7 +764,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 static void
 crt_context_timeout_check(struct crt_context *crt_ctx)
 {
-	struct crt_rpc_priv		*rpc_priv, *next;
+	struct crt_rpc_priv		*rpc_priv;
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
@@ -803,11 +799,11 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	/* handle the timeout RPCs */
-	d_list_for_each_entry_safe(rpc_priv, next, &timeout_list,
-				   crp_tmp_link) {
+	while ((rpc_priv = d_list_pop_entry(&timeout_list,
+					    struct crt_rpc_priv,
+					    crp_tmp_link))) {
 		/* check for and execute RPC timeout callbacks here */
 		crt_exec_timeout_cb(rpc_priv);
-		d_list_del_init(&rpc_priv->crp_tmp_link);
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
 	}
@@ -1100,9 +1096,7 @@ crt_context_empty(int locked)
 static void
 crt_exec_progress_cb(crt_context_t ctx)
 {
-	struct crt_prog_cb_priv	*crt_prog_cb_priv;
-	d_list_t		*curr_node;
-	d_list_t		*tmp_node;
+	struct crt_prog_cb_priv	*cb_priv, *cb_priv_next;
 
 	if (crt_plugin_gdata.cpg_inited == 0)
 		return;
@@ -1112,13 +1106,11 @@ crt_exec_progress_cb(crt_context_t ctx)
 		return;
 	}
 	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
-	d_list_for_each_safe(curr_node, tmp_node,
-			     &crt_plugin_gdata.cpg_prog_cbs) {
-		crt_prog_cb_priv =
-			container_of(curr_node, struct crt_prog_cb_priv,
-				     cpcp_link);
+	d_list_for_each_entry_safe(cb_priv, cb_priv_next,
+				   &crt_plugin_gdata.cpg_prog_cbs,
+				   cpcp_link) {
 		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
-		crt_prog_cb_priv->cpcp_func(ctx, crt_prog_cb_priv->cpcp_args);
+		cb_priv->cpcp_func(ctx, cb_priv->cpcp_args);
 		D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
 	}
 	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
