@@ -142,11 +142,15 @@ dma_buffer_create(unsigned int init_cnt)
 struct bio_sglist *
 bio_iod_sgl(struct bio_desc *biod, unsigned int idx)
 {
-	if (idx >= biod->bd_sgl_cnt) {
+	struct bio_sglist	*bsgl = NULL;
+
+	if (idx >= biod->bd_sgl_cnt)
 		D_ERROR("Invalid sgl index %d/%d\n", idx, biod->bd_sgl_cnt);
-		return NULL;
-	}
-	return &biod->bd_sgls[idx];
+	else
+		bsgl = &biod->bd_sgls[idx];
+
+	D_ASSERT(bsgl != NULL);
+	return bsgl;
 }
 
 struct bio_desc *
