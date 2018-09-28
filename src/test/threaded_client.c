@@ -87,7 +87,7 @@ struct msg_info {
 void complete_cb(const struct crt_cb_info *cb_info)
 {
 	struct msg_info	*info = cb_info->cci_arg;
-	struct rpc_out	*output;
+	struct threaded_rpc_out	*output;
 
 	if (cb_info->cci_rc == -DER_TIMEDOUT) {
 		printf("timeout detected\n");
@@ -115,10 +115,10 @@ static int	msg_counts[MSG_COUNT];
 
 static bool send_message(int msg)
 {
-	crt_rpc_t	*req;
-	struct rpc_in	*input;
-	int		 rc;
-	struct msg_info	 info = {0};
+	crt_rpc_t		*req;
+	struct threaded_rpc_in	*input;
+	int			 rc;
+	struct msg_info		 info = {0};
 
 	rc = crt_req_create(crt_ctx, &target_ep, RPC_ID, &req);
 	if (rc != 0) {
@@ -193,7 +193,6 @@ int main(int argc, char **argv)
 	pthread_t		 thread[NUM_THREADS];
 	pthread_t		 progress_thread;
 	crt_group_t		*grp;
-	struct crt_req_format	 fmt = INIT_FMT();
 	void			*ret;
 	int			 saved_rc;
 	int			 status = RESET;
@@ -205,7 +204,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	crt_rpc_register(RPC_ID, 0, &fmt);
+	CRT_RPC_REGISTER(RPC_ID, 0, threaded_rpc);
 
 	pthread_create(&progress_thread, NULL, progress, &status);
 	while (status != STARTED)

@@ -491,27 +491,27 @@ cli_rpc_init(void)
 
 	D_ASSERT(rc == 0 || !rpc_cli.progress_thid);
 
-	rc = crt_rpc_register(CRT_RPC_TEST_IO, 0, &CRT_TEST_IO);
+	rc = CRT_RPC_REGISTER(CRT_RPC_TEST_IO, 0, crt_rpc_io);
 	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
 
-	rc = crt_rpc_register(CRT_RPC_TEST_ERR, 0, &CRT_TEST_ERR);
+	rc = CRT_RPC_REGISTER(CRT_RPC_TEST_ERR, 0, crt_test_err);
 	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
 
-	rc = crt_rpc_register(CRT_RPC_TEST_NO_IO, 0, &CRT_TEST_NO_IO);
+	rc = CRT_RPC_REGISTER(CRT_RPC_TEST_NO_IO, 0, crt_test_no_io);
 	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
 
-	rc = crt_rpc_register(CRT_RPC_TEST_TIMEOUT, 0, &CRT_TEST_TIMEOUT);
+	rc = CRT_RPC_REGISTER(CRT_RPC_TEST_TIMEOUT, 0, crt_test_timeout);
 	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
 
-	rc = crt_rpc_register(CRT_RPC_TEST_SHUTDOWN,
-			      CRT_RPC_FEAT_NO_REPLY, NULL);
+	rc = CRT_RPC_REGISTER(CRT_RPC_TEST_SHUTDOWN,
+			      CRT_RPC_FEAT_NO_REPLY, crt_test_shutdown);
 	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
 
 	rc = sem_init(&rpc_cli.cli_sem, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.%d\n", rc);
 
-	rc = crt_rpc_register(CRT_RPC_MULTITIER_TEST_IO, 0,
-			&CRT_MULTITIER_TEST_IO);
+	rc = CRT_RPC_REGISTER(CRT_RPC_MULTITIER_TEST_IO, 0,
+			      crt_multitier_test_io);
 	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
 
 	rc = crt_group_config_path_set(rpc_cli.config_path);

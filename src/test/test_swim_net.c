@@ -54,25 +54,21 @@
 #define DEBUG		1
 #define FAILED_MEMBER	1
 
-struct crt_rpc_swim_in {
-	d_string_t	msg;
-	uint64_t	src;
-};
+#define CRT_ISEQ_RPC_SWIM	/* input fields */		 \
+	((d_string_t)		(msg)			CRT_VAR) \
+	((uint64_t)		(src)			CRT_VAR)
 
-static struct crt_msg_field *crt_rpc_swim_in[] = {
-	&CMF_STRING,
-	&CMF_UINT64,
-};
+#define CRT_OSEQ_RPC_SWIM	/* output fields */
 
-static struct crt_req_format CFQ_CRT_SWIM_PING =
-	DEFINE_CRT_REQ_FMT(crt_rpc_swim_in, NULL);
+CRT_RPC_DECLARE(crt_rpc_swim, CRT_ISEQ_RPC_SWIM, CRT_OSEQ_RPC_SWIM)
+CRT_RPC_DEFINE(crt_rpc_swim, CRT_ISEQ_RPC_SWIM, CRT_OSEQ_RPC_SWIM)
 
 static void swim_srv_cb(crt_rpc_t *rpc_req);
 
 static struct crt_proto_rpc_format swim_proto_rpc_fmt[] = {
 	{
 		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
-		.prf_req_fmt	= &CFQ_CRT_SWIM_PING,
+		.prf_req_fmt	= &CQF_crt_rpc_swim,
 		.prf_hdlr	= swim_srv_cb,
 		.prf_co_ops	= NULL,
 	}

@@ -61,26 +61,6 @@ static uint32_t ns_id;
 /* Lock for manimuplation of ns_list and ns_id */
 static pthread_mutex_t ns_list_lock = PTHREAD_MUTEX_INITIALIZER;
 
-/* Data structure for internal iv fetch rpc input */
-struct iv_fetch_in {
-	/* Namespace ID */
-	d_iov_t		ifi_nsid;
-	/* IV Key */
-	d_iov_t		ifi_key;
-	/* Bulk handle for iv value */
-	crt_bulk_t	ifi_value_bulk;
-	/* Class id */
-	uint32_t	ifi_class_id;
-	/* Root node for current fetch operation */
-	d_rank_t	ifi_root_node;
-};
-
-/* Data structure for internal iv fetch rpc output*/
-struct iv_fetch_out {
-	/* Resultant return code of fetch rpc */
-	uint32_t	ifo_rc;
-};
-
 /* Structure for uniquely identifying iv namespace */
 struct crt_ivns_id {
 	/* Rank of the namespace */
@@ -436,7 +416,7 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 				IVNS_DECREF(iv_info->ifc_ivns_internal);
 			}
 		} else {
-			struct iv_fetch_out *output;
+			struct crt_iv_fetch_out *output;
 
 			iv_ops->ivo_on_put(iv_info->ifc_ivns_internal,
 					   iv_value, iv_info->ifc_user_priv);
@@ -475,7 +455,7 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 	struct crt_iv_ops		*iv_ops;
 	struct pending_fetch		*pending_fetch;
 	struct iv_fetch_cb_info		*iv_info;
-	struct iv_fetch_out		*output;
+	struct crt_iv_fetch_out		*output;
 	int				 rc = 0;
 	bool				 put_needed = false;
 
@@ -949,7 +929,7 @@ static int
 crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 {
 	struct crt_ivf_transfer_cb_info	*cb_info;
-	struct iv_fetch_out		*output;
+	struct crt_iv_fetch_out		*output;
 	struct crt_iv_ops		*iv_ops;
 	crt_rpc_t			*rpc;
 	int				rc = 0;
@@ -1001,7 +981,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 	struct crt_bulk_desc		bulk_desc;
 	crt_bulk_opid_t			opid;
 	crt_bulk_t			bulk_hdl;
-	struct iv_fetch_out		*output;
+	struct crt_iv_fetch_out		*output;
 	int				size;
 	int				i;
 	int				rc = 0;
@@ -1075,8 +1055,8 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 {
 	struct iv_fetch_cb_info		*iv_info = cb_info->cci_arg;
 	crt_rpc_t			*rpc = cb_info->cci_rpc;
-	struct iv_fetch_in		*input = crt_req_get(rpc);
-	struct iv_fetch_out		*output = crt_reply_get(rpc);
+	struct crt_iv_fetch_in		*input = crt_req_get(rpc);
+	struct crt_iv_fetch_out		*output = crt_reply_get(rpc);
 	struct crt_iv_ops		*iv_ops;
 	struct crt_ivns_internal	*ivns;
 	struct ivf_key_in_progress	*kip_entry;
@@ -1146,7 +1126,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 		  struct iv_fetch_cb_info *cb_info)
 {
 	struct crt_ivns_internal	*ivns_internal;
-	struct iv_fetch_in		*input;
+	struct crt_iv_fetch_in		*input;
 	crt_bulk_t			local_bulk = CRT_BULK_NULL;
 	crt_endpoint_t			ep = {0};
 	crt_rpc_t			*rpc;
@@ -1306,8 +1286,8 @@ crt_iv_parent_get(struct crt_ivns_internal *ivns_internal,
 static void
 crt_hdlr_iv_fetch_aux(void *arg)
 {
-	struct iv_fetch_in		*input;
-	struct iv_fetch_out		*output;
+	struct crt_iv_fetch_in		*input;
+	struct crt_iv_fetch_out		*output;
 	struct crt_ivns_id		*ivns_id;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops = NULL;
@@ -1454,8 +1434,8 @@ send_error:
 void
 crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 {
-	struct iv_fetch_in		*input;
-	struct iv_fetch_out		*output;
+	struct crt_iv_fetch_in		*input;
+	struct crt_iv_fetch_out		*output;
 	struct crt_ivns_id		*ivns_id;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;
@@ -1680,60 +1660,13 @@ exit:
 /***************************************************************
  * IV UPDATE codebase
  **************************************************************/
-struct iv_update_in {
-	/* IV namespace ID */
-	d_iov_t		ivu_nsid;
-
-	/* IOV for key */
-	d_iov_t		ivu_key;
-
-	/* IOV for sync */
-	d_iov_t		ivu_sync_type;
-
-	/* Bulk handle for iv value */
-	crt_bulk_t	ivu_iv_value_bulk;
-
-	/* Root node for IV UPDATE */
-	d_rank_t	ivu_root_node;
-
-	/* Original node that issued crt_iv_update call */
-	d_rank_t	ivu_caller_node;
-
-	/* Class ID */
-	uint32_t	ivu_class_id;
-
-	uint32_t	padding;
-
-};
-
-struct iv_update_out {
-	uint64_t		rc;
-};
-
-struct iv_sync_in {
-	/* IV Namespace ID */
-	d_iov_t		ivs_nsid;
-
-	/* IOV for key */
-	d_iov_t		ivs_key;
-
-	/* IOV for sync type */
-	d_iov_t		ivs_sync_type;
-
-	/* IV Class ID */
-	uint32_t	ivs_class_id;
-};
-
-struct iv_sync_out {
-	int	rc;
-};
 
 static void
 crt_hdlr_iv_sync_aux(void *arg)
 {
 	int				rc = 0;
-	struct iv_sync_in		*input;
-	struct iv_sync_out		*output;
+	struct crt_iv_sync_in		*input;
+	struct crt_iv_sync_out		*output;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops = NULL;
 	struct crt_ivns_id		*ivns_id;
@@ -1853,8 +1786,8 @@ exit:
 void
 crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 {
-	struct iv_sync_in		*input;
-	struct iv_sync_out		*output;
+	struct crt_iv_sync_in		*input;
+	struct crt_iv_sync_out		*output;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops = NULL;
 	struct crt_ivns_id		*ivns_id;
@@ -1914,8 +1847,8 @@ exit:
 int
 crt_iv_sync_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *arg)
 {
-	struct iv_sync_out *output_source;
-	struct iv_sync_out *output_result;
+	struct crt_iv_sync_out *output_source;
+	struct crt_iv_sync_out *output_result;
 
 	output_source = crt_reply_get(source);
 	output_result = crt_reply_get(result);
@@ -2006,7 +1939,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		     void *user_priv, int update_rc)
 {
 	crt_rpc_t		*corpc_req;
-	struct iv_sync_in	*input;
+	struct crt_iv_sync_in	*input;
 	int			rc = 0;
 	bool			delay_completion = false;
 	struct iv_sync_cb_info	*iv_sync_cb = NULL;
@@ -2186,7 +2119,7 @@ finalize_transfer_back(struct update_cb_info *cb_info, int rc)
 {
 	struct crt_ivns_internal	*ivns;
 	struct crt_iv_ops		*iv_ops;
-	struct iv_update_out		*child_output;
+	struct crt_iv_update_out	*child_output;
 
 	child_output = crt_reply_get(cb_info->uci_child_rpc);
 	child_output->rc = rc;
@@ -2226,7 +2159,7 @@ void transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
 			bool do_refresh, int update_rc)
 {
 	struct crt_bulk_desc		bulk_desc = {0};
-	struct iv_update_in		*child_input;
+	struct crt_iv_update_in		*child_input;
 	struct crt_ivns_internal	*ivns;
 	struct crt_iv_ops		*iv_ops;
 	int				size = 0;
@@ -2292,9 +2225,9 @@ static void
 handle_ivupdate_response(const struct crt_cb_info *cb_info)
 {
 	struct update_cb_info	*iv_info = cb_info->cci_arg;
-	struct iv_update_in	*input = crt_req_get(cb_info->cci_rpc);
-	struct iv_update_out	*output = crt_reply_get(cb_info->cci_rpc);
-	struct iv_update_out	*child_output;
+	struct crt_iv_update_in	*input = crt_req_get(cb_info->cci_rpc);
+	struct crt_iv_update_out *output = crt_reply_get(cb_info->cci_rpc);
+	struct crt_iv_update_out *child_output;
 	struct crt_iv_ops	*iv_ops;
 	int			rc;
 	struct crt_ivns_internal *ivns;
@@ -2377,7 +2310,7 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 		  d_rank_t root_rank, struct update_cb_info *cb_info)
 {
 	struct crt_ivns_internal	*ivns_internal;
-	struct iv_update_in		*input;
+	struct crt_iv_update_in		*input;
 	crt_bulk_t			local_bulk = CRT_BULK_NULL;
 	crt_endpoint_t			ep = {0};
 	crt_rpc_t			*rpc;
@@ -2450,7 +2383,7 @@ struct bulk_update_cb_info {
 	struct crt_ivns_internal *buc_ivns;
 
 	/* Input buffer for iv update rpc */
-	struct iv_update_in	*buc_input;
+	struct crt_iv_update_in	*buc_input;
 	/* Local bulk handle to free */
 	crt_bulk_t		buc_bulk_hdl;
 	/* IV value */
@@ -2465,8 +2398,8 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 	struct bulk_update_cb_info	*cb_info;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;
-	struct iv_update_in		*input;
-	struct iv_update_out		*output;
+	struct crt_iv_update_in		*input;
+	struct crt_iv_update_out	*output;
 	struct update_cb_info		*update_cb_info = NULL;
 	int				rc = 0;
 	d_rank_t			next_rank;
@@ -2583,8 +2516,8 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 	struct bulk_update_cb_info	*cb_info;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;
-	struct iv_update_in		*input;
-	struct iv_update_out		*output;
+	struct crt_iv_update_in		*input;
+	struct crt_iv_update_out	*output;
 	int				 rc = DER_SUCCESS;
 
 	cb_info = info->bci_arg;
@@ -2649,8 +2582,8 @@ send_error:
 void
 crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 {
-	struct iv_update_in		*input;
-	struct iv_update_out		*output;
+	struct crt_iv_update_in		*input;
+	struct crt_iv_update_out	*output;
 	struct crt_ivns_id		*ivns_id;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;

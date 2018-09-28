@@ -72,7 +72,7 @@ bulk_test_req_cb(const struct crt_cb_info *cb_info)
 {
 	struct bulk_test_cli_cbinfo	*bulk_test_cbinfo;
 	crt_rpc_t			*rpc_req;
-	struct crt_echo_bulk_out_reply	*e_reply;
+	struct crt_echo_bulk_out	*e_reply;
 	int				rc;
 
 	rpc_req = cb_info->cci_rpc;
@@ -109,8 +109,8 @@ static void run_client(void)
 	d_rank_t			myrank;
 	uint32_t			grp_size_cli = 0;
 	uint32_t			grp_size_srv = 0;
-	struct crt_echo_checkin_req	*e_req;
-	struct crt_echo_bulk_in_req	*e_bulk_req;
+	struct crt_echo_checkin_in	*e_req;
+	struct crt_echo_bulk_in		*e_bulk_req;
 	int				rc = 0, i;
 
 	rc = crt_group_rank(NULL, &myrank);

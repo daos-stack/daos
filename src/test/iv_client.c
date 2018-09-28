@@ -100,8 +100,8 @@ print_usage(const char *err_msg)
 static void
 test_iv_shutdown()
 {
-	struct rpc_shutdown_in	*input;
-	struct rpc_shutdown_out	*output;
+	struct RPC_SHUTDOWN_in	*input;
+	struct RPC_SHUTDOWN_out	*output;
 	crt_rpc_t		*rpc_req;
 	int			 rc;
 
@@ -125,8 +125,8 @@ test_iv_shutdown()
 static void
 test_iv_invalidate(struct iv_key_struct *key)
 {
-	struct rpc_test_invalidate_iv_in	*input;
-	struct rpc_test_invalidate_iv_out	*output;
+	struct RPC_TEST_INVALIDATE_IV_in	*input;
+	struct RPC_TEST_INVALIDATE_IV_out	*output;
 	crt_rpc_t				*rpc_req;
 	int					 rc;
 
@@ -265,8 +265,8 @@ static void print_result_as_json(int64_t return_code, d_iov_t *key,
 static void
 test_iv_fetch(struct iv_key_struct *key, FILE *log_file)
 {
-	struct rpc_test_fetch_iv_in	*input;
-	struct rpc_test_fetch_iv_out	*output;
+	struct RPC_TEST_FETCH_IV_in	*input;
+	struct RPC_TEST_FETCH_IV_out	*output;
 	crt_rpc_t			*rpc_req = NULL;
 	uint8_t				*buf = NULL;
 	d_sg_list_t			 sg_list;
@@ -321,8 +321,8 @@ static int
 test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 	       char *arg_sync)
 {
-	struct rpc_test_update_iv_in	*input;
-	struct rpc_test_update_iv_out	*output;
+	struct RPC_TEST_UPDATE_IV_in	*input;
+	struct RPC_TEST_UPDATE_IV_out	*output;
 	crt_rpc_t			*rpc_req;
 	crt_iv_sync_t			 sync = {0, 0, 0};
 	size_t				 len;

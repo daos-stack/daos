@@ -67,28 +67,14 @@ struct test_global_t {
 
 struct test_global_t test = {0};
 
+#define CRT_ISEQ_PING		/* input fields */		 \
+	((uint32_t)		(pi_magic)		CRT_VAR)
 
-struct crt_msg_field *ping_in_fmt[] = {
-	&CMF_UINT32
-};
+#define CRT_OSEQ_PING		/* output fields */		 \
+	((uint32_t)		(po_magic)		CRT_VAR)
 
-struct crt_msg_field *ping_out_fmt[] = {
-	&CMF_UINT32
-};
-
-struct ping_in_t {
-	uint32_t pi_magic;
-};
-
-struct ping_out_t {
-	uint32_t po_magic;
-};
-
-struct crt_req_format MY_CRF_0 = DEFINE_CRT_REQ_FMT(ping_in_fmt, ping_out_fmt);
-
-struct crt_req_format MY_CRF_1 = DEFINE_CRT_REQ_FMT(ping_in_fmt, ping_out_fmt);
-
-struct crt_req_format MY_CRF_2 = DEFINE_CRT_REQ_FMT(ping_in_fmt, ping_out_fmt);
+CRT_RPC_DECLARE(ping, CRT_ISEQ_PING, CRT_OSEQ_PING)
+CRT_RPC_DEFINE(ping, CRT_ISEQ_PING, CRT_OSEQ_PING)
 
 static void
 ping_hdlr_0(crt_rpc_t *rpc_req)
@@ -104,8 +90,8 @@ ping_hdlr_0(crt_rpc_t *rpc_req)
 static void
 ping_hdlr_1(crt_rpc_t *rpc_req)
 {
-	struct ping_in_t	*rpc_req_input;
-	struct ping_out_t	*rpc_req_output;
+	struct ping_in	*rpc_req_input;
+	struct ping_out	*rpc_req_output;
 	int			 rc;
 
 	D_DEBUG(DB_TRACE, "entered %s().\n", __func__);
@@ -145,12 +131,12 @@ shutdown_handler(crt_rpc_t *rpc_req)
 struct crt_proto_rpc_format my_proto_rpc_fmt_0[] = {
 	{
 		.prf_flags	= 0,
-		.prf_req_fmt	= &MY_CRF_0,
+		.prf_req_fmt	= &CQF_ping,
 		.prf_hdlr	= ping_hdlr_0,
 		.prf_co_ops	= NULL,
 	}, {
 		.prf_flags	= 0,
-		.prf_req_fmt	= &MY_CRF_1,
+		.prf_req_fmt	= &CQF_ping,
 		.prf_hdlr	= ping_hdlr_1,
 		.prf_co_ops	= NULL,
 	}, {
@@ -164,17 +150,17 @@ struct crt_proto_rpc_format my_proto_rpc_fmt_0[] = {
 struct crt_proto_rpc_format my_proto_rpc_fmt_1[] = {
 	{
 		.prf_flags	= 0,
-		.prf_req_fmt	= &MY_CRF_0,
+		.prf_req_fmt	= &CQF_ping,
 		.prf_hdlr	= ping_hdlr_0,
 		.prf_co_ops	= NULL,
 	}, {
 		.prf_flags	= 0,
-		.prf_req_fmt	= &MY_CRF_1,
+		.prf_req_fmt	= &CQF_ping,
 		.prf_hdlr	= ping_hdlr_1,
 		.prf_co_ops	= NULL,
 	}, {
 		.prf_flags	= 0,
-		.prf_req_fmt	= &MY_CRF_2,
+		.prf_req_fmt	= &CQF_ping,
 		.prf_hdlr	= ping_hdlr_2,
 		.prf_co_ops	= NULL,
 	}, {
@@ -201,6 +187,7 @@ struct crt_proto_format my_proto_fmt_1 = {
 	.cpf_prf = &my_proto_rpc_fmt_1[0],
 	.cpf_base = OPC_MY_PROTO,
 };
+
 int
 test_parse_args(int argc, char **argv)
 {

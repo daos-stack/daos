@@ -83,8 +83,8 @@ echo_srv_shutdown(crt_rpc_t *rpc_req)
 int g_roomno = 2082;
 void echo_srv_checkin(crt_rpc_t *rpc_req)
 {
-	struct crt_echo_checkin_req *e_req;
-	struct crt_echo_checkin_reply *e_reply;
+	struct crt_echo_checkin_in *e_req;
+	struct crt_echo_checkin_out *e_reply;
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);

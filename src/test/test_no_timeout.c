@@ -94,9 +94,9 @@ test_sem_timedwait(sem_t *sem, int sec, int line_number)
 void
 client_cb_common(const struct crt_cb_info *cb_info)
 {
-	crt_rpc_t				*rpc_req;
-	struct crt_test_ping_delay_req		*rpc_req_input;
-	struct crt_test_ping_delay_reply	*rpc_req_output;
+	crt_rpc_t			*rpc_req;
+	struct crt_test_ping_delay_in	*rpc_req_input;
+	struct crt_test_ping_delay_out	*rpc_req_output;
 
 	rpc_req = cb_info->cci_rpc;
 
@@ -211,9 +211,9 @@ test_init(void)
 	if (test_g.t_is_service) {
 		D_ERROR("Can't run as service.\n");
 	} else {
-		rc = crt_rpc_register(TEST_OPC_PING_DELAY,
+		rc = CRT_RPC_REGISTER(TEST_OPC_PING_DELAY,
 				      CRT_RPC_FEAT_NO_TIMEOUT,
-				      &CQF_TEST_PING_DELAY);
+				      crt_test_ping_delay);
 		D_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
 		rc = crt_rpc_register(TEST_OPC_SHUTDOWN, CRT_RPC_FEAT_NO_REPLY,
 				      NULL);
@@ -235,7 +235,7 @@ static void
 ping_delay_reply(crt_group_t *remote_group, int rank, uint32_t delay)
 {
 	crt_rpc_t			*rpc_req = NULL;
-	struct crt_test_ping_delay_req	*rpc_req_input;
+	struct crt_test_ping_delay_in	*rpc_req_input;
 	crt_endpoint_t			 server_ep = {0};
 	char				*buffer;
 	int				 rc;

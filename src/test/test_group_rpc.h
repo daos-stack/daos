@@ -39,31 +39,17 @@
 #define TEST_OPC_PING_DELAY	0xA2
 #define TEST_OPC_SHUTDOWN	0x100
 
-struct crt_msg_field *test_ping_delay_checkin[] = {
-	&CMF_INT,
-	&CMF_INT,
-	&CMF_STRING,
-	&CMF_UINT32,
-};
+#define CRT_ISEQ_TEST_PING_DELAY /* input fields */		 \
+	((int32_t)		(age)			CRT_VAR) \
+	((int32_t)		(days)			CRT_VAR) \
+	((d_string_t)		(name)			CRT_VAR) \
+	((uint32_t)		(delay)			CRT_VAR)
 
-struct crt_test_ping_delay_req {
-	int		age;
-	int		days;
-	d_string_t	name;
-	uint32_t	delay;
-};
+#define CRT_OSEQ_TEST_PING_DELAY /* output fields */		 \
+	((int32_t)		(ret)			CRT_VAR) \
+	((uint32_t)		(room_no)		CRT_VAR)
 
-struct crt_msg_field *test_ping_delay_checkout[] = {
-	&CMF_INT,
-	&CMF_UINT32,
-};
-
-struct crt_test_ping_delay_reply {
-	int		ret;
-	uint32_t	room_no;
-};
-
-struct crt_req_format CQF_TEST_PING_DELAY =
-	DEFINE_CRT_REQ_FMT(test_ping_delay_checkin, test_ping_delay_checkout);
-
-
+CRT_RPC_DECLARE(crt_test_ping_delay,
+		CRT_ISEQ_TEST_PING_DELAY, CRT_OSEQ_TEST_PING_DELAY)
+CRT_RPC_DEFINE(crt_test_ping_delay,
+		CRT_ISEQ_TEST_PING_DELAY, CRT_OSEQ_TEST_PING_DELAY)

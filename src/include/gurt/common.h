@@ -104,8 +104,6 @@ typedef struct {
 	uint32_t	rl_nr;
 } d_rank_list_t;
 
-typedef d_rank_list_t	*d_rank_list_ptr_t;
-
 typedef char		*d_string_t;
 typedef const char	*d_const_string_t;
 

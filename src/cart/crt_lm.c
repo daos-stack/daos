@@ -44,26 +44,6 @@
 
 #include "crt_internal.h"
 
-struct crt_lm_evict_in {
-	d_rank_t		clei_rank;
-	uint32_t		clei_ver;
-};
-
-struct crt_lm_evict_out {
-	int cleo_succeeded;
-	int cleo_rc;
-};
-
-struct crt_lm_memb_sample_in {
-	uint32_t		msi_ver;
-};
-
-struct crt_lm_memb_sample_out {
-	d_iov_t			mso_delta;
-	uint32_t		mso_ver;
-	int			mso_rc;
-};
-
 /* global data for liveness map management of the primary service group */
 struct lm_grp_srv_t {
 	/* ptr to the public primary service group structure */

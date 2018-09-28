@@ -76,66 +76,35 @@ struct test_t {
 
 struct test_t test;
 
-struct crt_msg_field *corpc_ver_mismatch_in_fields[] = {
-	&CMF_UINT32,
-};
+#define CRT_ISEQ_CORPC_VER_MISMATCH /* input fields */		 \
+	((uint32_t)		(magic)			CRT_VAR)
 
-struct crt_msg_field *corpc_ver_mismatch_out_fields[] = {
-	&CMF_UINT32,
-};
+#define CRT_OSEQ_CORPC_VER_MISMATCH /* output fields */		 \
+	((uint32_t)		(magic)			CRT_VAR) \
+	((uint32_t)		(result)		CRT_VAR)
 
-struct crt_req_format CQF_CORPC_VER_MISMATCH =
-	DEFINE_CRT_REQ_FMT(corpc_ver_mismatch_in_fields,
-			   corpc_ver_mismatch_out_fields);
+CRT_RPC_DECLARE(corpc_ver_mismatch,
+		CRT_ISEQ_CORPC_VER_MISMATCH, CRT_OSEQ_CORPC_VER_MISMATCH)
+CRT_RPC_DEFINE(corpc_ver_mismatch,
+		CRT_ISEQ_CORPC_VER_MISMATCH, CRT_OSEQ_CORPC_VER_MISMATCH)
 
-struct corpc_ver_mismatch_in_t {
-	uint32_t	magic;
-};
+#define CRT_ISEQ_RANK_EVICT	/* input fields */		 \
+	((uint32_t)		(rank)			CRT_VAR)
 
-struct corpc_ver_mismatch_out_t {
-	uint32_t	magic;
-	uint32_t	result;
-};
+#define CRT_OSEQ_RANK_EVICT	/* output fields */		 \
+	((uint32_t)		(rc)			CRT_VAR)
 
-struct crt_msg_field *rank_evict_in_fields[] = {
-	&CMF_UINT32,
-};
+CRT_RPC_DECLARE(rank_evict, CRT_ISEQ_RANK_EVICT, CRT_OSEQ_RANK_EVICT)
+CRT_RPC_DEFINE(rank_evict, CRT_ISEQ_RANK_EVICT, CRT_OSEQ_RANK_EVICT)
 
-struct crt_msg_field *rank_evict_out_fields[] = {
-	&CMF_INT,
-};
+#define CRT_ISEQ_SUBGRP_PING	/* input fields */		 \
+	((uint32_t)		(magic)			CRT_VAR)
 
-struct crt_req_format CQF_TEST_RANK_EVICT =
-	DEFINE_CRT_REQ_FMT(rank_evict_in_fields,
-			rank_evict_out_fields);
+#define CRT_OSEQ_SUBGRP_PING	/* output fields */		 \
+	((uint32_t)		(magic)			CRT_VAR)
 
-struct rank_evict_in_t {
-	uint32_t	rank;
-};
-
-struct rank_evict_out_t {
-	int		rc;
-};
-
-struct crt_msg_field *subgrp_ping_in_fields[] = {
-	&CMF_UINT32,
-};
-
-struct crt_msg_field *subgrp_ping_out_fields[] = {
-	&CMF_UINT32,
-};
-
-struct crt_req_format CQF_SUBGRP_PING =
-	DEFINE_CRT_REQ_FMT(subgrp_ping_in_fields,
-			subgrp_ping_out_fields);
-
-struct subgrp_ping_in_t {
-	uint32_t	magic;
-};
-
-struct subgrp_ping_out_t {
-	uint32_t	magic;
-};
+CRT_RPC_DECLARE(subgrp_ping, CRT_ISEQ_SUBGRP_PING, CRT_OSEQ_SUBGRP_PING)
+CRT_RPC_DEFINE(subgrp_ping, CRT_ISEQ_SUBGRP_PING, CRT_OSEQ_SUBGRP_PING)
 
 static void client_cb(const struct crt_cb_info *cb_info);
 
@@ -213,9 +182,9 @@ static void *progress_thread(void *arg)
 static void
 corpc_ver_mismatch_hdlr(crt_rpc_t *rpc_req)
 {
-	struct corpc_ver_mismatch_in_t		*rpc_req_input;
-	struct corpc_ver_mismatch_out_t		*rpc_req_output;
-	int					 rc = 0;
+	struct corpc_ver_mismatch_in	*rpc_req_input;
+	struct corpc_ver_mismatch_out	*rpc_req_output;
+	int				 rc = 0;
 
 	rpc_req_input = crt_req_get(rpc_req);
 	rpc_req_output = crt_reply_get(rpc_req);
@@ -255,9 +224,9 @@ test_shutdown_hdlr(crt_rpc_t *rpc_req)
 static void
 subgrp_ping_hdlr(crt_rpc_t *rpc_req)
 {
-	struct subgrp_ping_in_t		*rpc_req_input;
-	struct subgrp_ping_out_t	*rpc_req_output;
-	int				 rc = 0;
+	struct subgrp_ping_in	*rpc_req_input;
+	struct subgrp_ping_out	*rpc_req_output;
+	int			 rc = 0;
 
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERT(rpc_req_input != NULL);
@@ -273,9 +242,9 @@ subgrp_ping_hdlr(crt_rpc_t *rpc_req)
 static void
 test_rank_evict_hdlr(crt_rpc_t *rpc_req)
 {
-	struct rank_evict_in_t		*rpc_req_input;
-	struct rank_evict_out_t		*rpc_req_output;
-	int				 rc = 0;
+	struct rank_evict_in	*rpc_req_input;
+	struct rank_evict_out	*rpc_req_output;
+	int			 rc = 0;
 
 	rpc_req_input = crt_req_get(rpc_req);
 	rpc_req_output = crt_reply_get(rpc_req);
@@ -299,8 +268,8 @@ test_rank_evict_hdlr(crt_rpc_t *rpc_req)
 static int
 corpc_ver_mismatch_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct corpc_ver_mismatch_out_t *reply_source;
-	struct corpc_ver_mismatch_out_t *reply_result;
+	struct corpc_ver_mismatch_out *reply_source;
+	struct corpc_ver_mismatch_out *reply_result;
 
 	D_ASSERT(source != NULL && result != NULL);
 	reply_source = crt_reply_get(source);
@@ -384,8 +353,8 @@ rank_evict_cb(crt_rpc_t *rpc_req)
 	d_rank_t			 excluded_ranks[3] = {1, 3, 6};
 	d_rank_list_t			 excluded_membs;
 	crt_rpc_t			*corpc_req;
-	struct corpc_ver_mismatch_in_t	*corpc_in;
-	struct rank_evict_out_t		*rpc_req_output;
+	struct corpc_ver_mismatch_in	*corpc_in;
+	struct rank_evict_out		*rpc_req_output;
 	int				 rc = 0;
 
 
@@ -416,8 +385,8 @@ rank_evict_cb(crt_rpc_t *rpc_req)
 static int
 corpc_ver_mismatch_cb(crt_rpc_t *rpc_req)
 {
-	struct corpc_ver_mismatch_in_t		*rpc_req_input;
-	struct corpc_ver_mismatch_out_t		*rpc_req_output;
+	struct corpc_ver_mismatch_in		*rpc_req_input;
+	struct corpc_ver_mismatch_out		*rpc_req_output;
 	int					 rc = 0;
 
 	rpc_req_input = crt_req_get(rpc_req);
@@ -444,7 +413,7 @@ eviction_rpc_issue(void)
 {
 	crt_rpc_t		*rpc_req;
 	crt_endpoint_t		 server_ep;
-	struct rank_evict_in_t	*rpc_req_input;
+	struct rank_evict_in	*rpc_req_input;
 	int			 rc = 0;
 
 	/* tell rank 4 to evict rank 2 */
@@ -469,9 +438,9 @@ eviction_rpc_issue(void)
 static int
 subgrp_ping_cb(crt_rpc_t *rpc_req)
 {
-	struct subgrp_ping_in_t		*rpc_req_input;
-	struct subgrp_ping_out_t	*rpc_req_output;
-	int				 rc = 0;
+	struct subgrp_ping_in	*rpc_req_input;
+	struct subgrp_ping_out	*rpc_req_output;
+	int			 rc = 0;
 
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERT(rpc_req_input != NULL);
@@ -536,7 +505,7 @@ sub_grp_create_cb(crt_group_t *grp, void *priv, int status)
 {
 	crt_endpoint_t			 server_ep;
 	crt_rpc_t			*rpc_req = NULL;
-	struct subgrp_ping_in_t		*rpc_req_input;
+	struct subgrp_ping_in		*rpc_req_input;
 	int				 rc = 0;
 
 
@@ -628,20 +597,20 @@ test_init(void)
 	rc = crt_context_create(&test.t_crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 
-	rc = crt_corpc_register(TEST_OPC_CORPC_VER_MISMATCH,
-				  &CQF_CORPC_VER_MISMATCH,
-				  corpc_ver_mismatch_hdlr,
-				  &corpc_ver_mismatch_ops);
+	rc = CRT_RPC_CORPC_REGISTER(TEST_OPC_CORPC_VER_MISMATCH,
+				    corpc_ver_mismatch,
+				    corpc_ver_mismatch_hdlr,
+				    &corpc_ver_mismatch_ops);
 	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
 	rc = crt_rpc_srv_register(TEST_OPC_SHUTDOWN, 0, NULL,
 				  test_shutdown_hdlr);
 	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
 
-	rc = crt_rpc_srv_register(TEST_OPC_RANK_EVICT, 0, &CQF_TEST_RANK_EVICT,
+	rc = CRT_RPC_SRV_REGISTER(TEST_OPC_RANK_EVICT, 0, rank_evict,
 				  test_rank_evict_hdlr);
 	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
 
-	rc = crt_rpc_srv_register(TEST_OPC_SUBGRP_PING, 0, &CQF_SUBGRP_PING,
+	rc = CRT_RPC_SRV_REGISTER(TEST_OPC_SUBGRP_PING, 0, subgrp_ping,
 				  subgrp_ping_hdlr);
 	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
 

@@ -45,25 +45,16 @@
 #include <cart/api.h>
 #include "common.h"
 
-struct rpc_in {
-	int msg;
-	int payload;
-};
+#define CRT_ISEQ_RPC		/* input fields */		 \
+	((int32_t)		(msg)			CRT_VAR) \
+	((int32_t)		(payload)		CRT_VAR)
 
-struct rpc_out {
-	int msg;
-	int value;
-};
+#define CRT_OSEQ_RPC		/* output fields */		 \
+	((int32_t)		(msg)			CRT_VAR) \
+	((int32_t)		(value)			CRT_VAR)
 
-static struct crt_msg_field *rpc_msg_field_in[] = {
-	&CMF_INT,
-	&CMF_INT,
-};
-
-static struct crt_msg_field *rpc_msg_field_out[] = {
-	&CMF_INT,
-	&CMF_INT,
-};
+CRT_RPC_DECLARE(threaded_rpc, CRT_ISEQ_RPC, CRT_OSEQ_RPC)
+CRT_RPC_DEFINE(threaded_rpc, CRT_ISEQ_RPC, CRT_OSEQ_RPC)
 
 #define FOREACH_MSG_TYPE(ACTION)    \
 	ACTION(MSG_START,  0xf00d)  \
@@ -96,10 +87,6 @@ static const char *msg_strings[MSG_COUNT] = {
 
 #define MSG_IN_VALUE 0xbeef
 #define MSG_OUT_VALUE 0xbead
-
-
-#define INIT_FMT() \
-	DEFINE_CRT_REQ_FMT(rpc_msg_field_in, rpc_msg_field_out)
 
 #define RPC_ID 0x73ff
 

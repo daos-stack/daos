@@ -589,7 +589,7 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	int			 ret;
 
 	D_ASSERT(rpc_req->cr_opc == CRT_OPC_SELF_TEST_BOTH_EMPTY ||
-		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV ||
+		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV ||
 		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY ||
 		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_BOTH_IOV ||
 		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV ||

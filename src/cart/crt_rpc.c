@@ -44,19 +44,7 @@
 /* CRT internal RPC format definitions */
 
 /* group create */
-static struct crt_msg_field *crt_grp_create_in_fields[] = {
-	&CMF_GRP_ID,		/* gc_grp_id */
-	&CMF_UINT64,		/* gc_int_grpid */
-	&CMF_RANK_LIST,		/* gc_membs */
-	&CMF_RANK,		/* gc_initiate_rank */
-};
-
-static struct crt_msg_field *crt_grp_create_out_fields[] = {
-	&CMF_INT,		/* gc_rc */
-};
-
-static struct crt_req_format CQF_CRT_GRP_CREATE =
-	DEFINE_CRT_REQ_FMT(crt_grp_create_in_fields, crt_grp_create_out_fields);
+CRT_RPC_DEFINE(crt_grp_create, CRT_ISEQ_GRP_CREATE, CRT_OSEQ_GRP_CREATE)
 
 static struct crt_corpc_ops crt_grp_create_co_ops = {
 	.co_aggregate = crt_grp_create_corpc_aggregate,
@@ -64,18 +52,7 @@ static struct crt_corpc_ops crt_grp_create_co_ops = {
 };
 
 /* group destroy */
-static struct crt_msg_field *crt_grp_destroy_in_fields[] = {
-	&CMF_GRP_ID,		/* gd_grp_id */
-	&CMF_RANK,		/* gd_initiate_rank */
-};
-
-static struct crt_msg_field *crt_grp_destroy_out_fields[] = {
-	&CMF_INT,		/* gd_rc */
-};
-
-static struct crt_req_format CQF_CRT_GRP_DESTROY =
-	DEFINE_CRT_REQ_FMT(crt_grp_destroy_in_fields,
-			   crt_grp_destroy_out_fields);
+CRT_RPC_DEFINE(crt_grp_destroy, CRT_ISEQ_GRP_DESTROY, CRT_OSEQ_GRP_DESTROY)
 
 static struct crt_corpc_ops crt_grp_destroy_co_ops = {
 	.co_aggregate = crt_grp_destroy_corpc_aggregate,
@@ -83,179 +60,51 @@ static struct crt_corpc_ops crt_grp_destroy_co_ops = {
 };
 
 /* uri lookup */
-static struct crt_msg_field *crt_uri_lookup_in_fields[] = {
-	&CMF_GRP_ID,		/* ul_grp_id */
-	&CMF_RANK,		/* ul_rank */
-	&CMF_UINT32,		/* ul_tag */
-};
-
-static struct crt_msg_field *crt_uri_lookup_out_fields[] = {
-	&CMF_PHY_ADDR,		/* ul_uri */
-	&CMF_INT,		/* ul_rc */
-};
-
-static struct crt_req_format CQF_CRT_URI_LOOKUP =
-	DEFINE_CRT_REQ_FMT(crt_uri_lookup_in_fields, crt_uri_lookup_out_fields);
+CRT_RPC_DEFINE(crt_uri_lookup, CRT_ISEQ_URI_LOOKUP, CRT_OSEQ_URI_LOOKUP)
 
 /* for self-test service */
-static struct crt_msg_field *crt_st_send_id_field[] = {
-	&CMF_UINT64,
-};
+CRT_RPC_DEFINE(crt_st_send_id_reply_iov,
+		CRT_ISEQ_ST_SEND_ID, CRT_OSEQ_ST_REPLY_IOV)
 
-static struct crt_msg_field *crt_st_send_id_iov_field[] = {
-	&CMF_UINT64,
-	&CMF_IOVEC,
-};
+CRT_RPC_DEFINE(crt_st_send_iov_reply_empty,
+		CRT_ISEQ_ST_SEND_ID_IOV, CRT_OSEQ_ST_REPLY_EMPTY)
 
-static struct crt_msg_field *crt_st_send_id_iov_bulk_field[] = {
-	&CMF_UINT64,
-	&CMF_IOVEC,
-	&CMF_BULK,
-};
+CRT_RPC_DEFINE(crt_st_both_iov,
+		CRT_ISEQ_ST_SEND_ID_IOV, CRT_OSEQ_ST_REPLY_IOV)
 
-static struct crt_msg_field *crt_st_send_id_bulk_field[] = {
-	&CMF_UINT64,
-	&CMF_BULK,
-};
+CRT_RPC_DEFINE(crt_st_send_iov_reply_bulk,
+		CRT_ISEQ_ST_SEND_ID_IOV_BULK, CRT_OSEQ_ST_REPLY_EMPTY)
 
-static struct crt_msg_field *crt_st_reply_iov_field[] = {
-	&CMF_IOVEC,
-};
+CRT_RPC_DEFINE(crt_st_send_bulk_reply_iov,
+		CRT_ISEQ_ST_SEND_ID_BULK, CRT_OSEQ_ST_REPLY_IOV)
 
-static struct crt_msg_field *crt_st_open_session_field[] = {
-	&CMF_UINT32,
-	&CMF_UINT32,
-	&CMF_UINT32,
-	&CMF_UINT32,
-};
+CRT_RPC_DEFINE(crt_st_both_bulk,
+		CRT_ISEQ_ST_SEND_ID_BULK, CRT_OSEQ_ST_REPLY_EMPTY)
 
-static struct crt_msg_field *crt_st_session_id_field[] = {
-	&CMF_UINT64,
-};
+CRT_RPC_DEFINE(crt_st_open_session,
+		CRT_ISEQ_ST_SEND_SESSION, CRT_OSEQ_ST_REPLY_ID)
 
-static struct crt_msg_field *crt_st_start_field[] = {
-	&CMF_GRP_ID,
-	&CMF_IOVEC,
-	&CMF_UINT32,
-	&CMF_UINT32,
-	&CMF_UINT32,
-	&CMF_UINT32,
-	&CMF_UINT32,
-};
+CRT_RPC_DEFINE(crt_st_close_session,
+		CRT_ISEQ_ST_SEND_ID, CRT_OSEQ_ST_REPLY_EMPTY)
 
-static struct crt_msg_field *crt_st_start_reply_field[] = {
-	&CMF_INT,
-};
+CRT_RPC_DEFINE(crt_st_start, CRT_ISEQ_ST_START, CRT_OSEQ_ST_START)
 
-static struct crt_msg_field *crt_st_status_req_field[] = {
-	&CMF_BULK,
-};
+CRT_RPC_DEFINE(crt_st_status_req,
+		CRT_ISEQ_ST_STATUS_REQ, CRT_OSEQ_ST_STATUS_REQ)
 
-static struct crt_msg_field *crt_st_status_req_reply_field[] = {
-	&CMF_UINT64,
-	&CMF_UINT32,
-	&CMF_INT,
-};
+CRT_RPC_DEFINE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 
-static struct crt_req_format CQF_CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV =
-	DEFINE_CRT_REQ_FMT(crt_st_send_id_field, crt_st_reply_iov_field);
+CRT_RPC_DEFINE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 
-static struct crt_req_format CQF_CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY =
-	DEFINE_CRT_REQ_FMT(crt_st_send_id_iov_field, NULL);
-
-static struct crt_req_format CQF_CRT_SELF_TEST_BOTH_IOV =
-	DEFINE_CRT_REQ_FMT(crt_st_send_id_iov_field, crt_st_reply_iov_field);
-
-static struct crt_req_format CQF_CRT_SELF_TEST_SEND_IOV_REPLY_BULK =
-	DEFINE_CRT_REQ_FMT(crt_st_send_id_iov_bulk_field, NULL);
-
-static struct crt_req_format CQF_CRT_SELF_TEST_SEND_BULK_REPLY_IOV =
-	DEFINE_CRT_REQ_FMT(crt_st_send_id_bulk_field, crt_st_reply_iov_field);
-
-static struct crt_req_format CQF_CRT_SELF_TEST_BOTH_BULK =
-	DEFINE_CRT_REQ_FMT(crt_st_send_id_bulk_field, NULL);
-
-static struct crt_req_format CQF_CRT_SELF_TEST_OPEN_SESSION =
-	DEFINE_CRT_REQ_FMT(crt_st_open_session_field, crt_st_session_id_field);
-
-static struct crt_req_format CQF_CRT_SELF_TEST_CLOSE_SESSION =
-	DEFINE_CRT_REQ_FMT(crt_st_session_id_field, NULL);
-
-static struct crt_req_format CQF_CRT_SELF_TEST_START =
-	DEFINE_CRT_REQ_FMT(crt_st_start_field, crt_st_start_reply_field);
-
-static struct crt_req_format CQF_CRT_SELF_TEST_STATUS_REQ =
-	DEFINE_CRT_REQ_FMT(crt_st_status_req_field,
-			   crt_st_status_req_reply_field);
-
-
-
-static struct crt_msg_field *crt_iv_fetch_in_fields[] = {
-	&CMF_IOVEC, /* crt_ivns_id */
-	&CMF_IOVEC, /* key */
-	&CMF_BULK, /* iv_value_bulk */
-	&CMF_INT, /* class_id */
-	&CMF_RANK, /* root_rank */
-};
-
-static struct crt_msg_field *crt_iv_fetch_out_fields[] = {
-	&CMF_INT, /* TODO: int for now */
-};
-
-static struct crt_msg_field *crt_iv_update_in_fields[] = {
-	&CMF_IOVEC, /* crt_ivns_id */
-	&CMF_IOVEC, /* key */
-	&CMF_IOVEC, /* iov_sync_type */
-	&CMF_BULK, /* iv_value_bulk */
-	&CMF_RANK, /* root_node */
-	&CMF_RANK, /* caller_node */
-	&CMF_UINT32, /* class_id */
-	&CMF_UINT32, /* padding */
-};
-
-static struct crt_msg_field *crt_iv_update_out_fields[] = {
-	&CMF_UINT64, /* rc */
-};
-
-
-static struct crt_msg_field *crt_iv_sync_in_fields[] = {
-	&CMF_IOVEC, /* crt_ivns_id */
-	&CMF_IOVEC, /* key */
-	&CMF_IOVEC, /* iov_sync_type */
-	&CMF_BULK, /* iv_value_bulk */
-	&CMF_UINT32, /* class_id */
-};
-
-static struct crt_msg_field *crt_iv_sync_out_fields[] = {
-	&CMF_INT,
-};
+CRT_RPC_DEFINE(crt_iv_sync, CRT_ISEQ_IV_SYNC, CRT_OSEQ_IV_SYNC)
 
 static struct crt_corpc_ops crt_iv_sync_co_ops = {
 	.co_aggregate = crt_iv_sync_corpc_aggregate,
 	.co_pre_forward = NULL,
 };
 
-
-static struct crt_req_format CQF_CRT_IV_SYNC =
-	DEFINE_CRT_REQ_FMT(crt_iv_sync_in_fields, crt_iv_sync_out_fields);
-
-static struct crt_req_format CQF_CRT_IV_FETCH =
-	DEFINE_CRT_REQ_FMT(crt_iv_fetch_in_fields, crt_iv_fetch_out_fields);
-
-static struct crt_req_format CQF_CRT_IV_UPDATE =
-	DEFINE_CRT_REQ_FMT(crt_iv_update_in_fields, crt_iv_update_out_fields);
-
 /* barrier */
-static struct crt_msg_field *crt_barrier_in_fields[] = {
-	&CMF_INT,		/* enter_num */
-};
-
-static struct crt_msg_field *crt_barrier_out_fields[] = {
-	&CMF_INT,		/* barrier_rc */
-};
-
-static struct crt_req_format CQF_CRT_BARRIER =
-	DEFINE_CRT_REQ_FMT(crt_barrier_in_fields, crt_barrier_out_fields);
+CRT_RPC_DEFINE(crt_barrier, CRT_ISEQ_BARRIER, CRT_OSEQ_BARRIER)
 
 static struct crt_corpc_ops crt_barrier_corpc_ops = {
 	.co_aggregate = crt_hdlr_barrier_aggregate,
@@ -263,79 +112,20 @@ static struct crt_corpc_ops crt_barrier_corpc_ops = {
 };
 
 /* for broadcasting RAS notifications on rank failures */
-struct crt_msg_field *crt_lm_evict_in_fields[] = {
-	&CMF_RANK,		/* failed rank */
-	&CMF_UINT32,		/* version number */
-};
+CRT_RPC_DEFINE(crt_lm_evict, CRT_ISEQ_LM_EVICT, CRT_OSEQ_LM_EVICT)
 
-struct crt_msg_field *crt_lm_evict_out_fields[] = {
-	&CMF_INT,		/* var for the aggregation function */
-	&CMF_INT,		/* return value */
-};
+CRT_RPC_DEFINE(crt_lm_memb_sample,
+		CRT_ISEQ_LM_MEMB_SAMPLE, CRT_OSEQ_LM_MEMB_SAMPLE)
 
-static struct crt_req_format CQF_CRT_LM_EVICT =
-	DEFINE_CRT_REQ_FMT(crt_lm_evict_in_fields, crt_lm_evict_out_fields);
+/* !! All of three following RPC definition should have the same input fields !!
+ * All of them are verified in one function:
+ * int verify_ctl_in_args(struct crt_ctl_ep_ls_in *in_args)
+ */
+CRT_RPC_DEFINE(crt_ctl_ep_ls,    CRT_ISEQ_CTL, CRT_OSEQ_CTL_EP_LS)
+CRT_RPC_DEFINE(crt_ctl_get_host, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_HOST)
+CRT_RPC_DEFINE(crt_ctl_get_pid,  CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_PID)
 
-struct crt_msg_field *crt_lm_memb_sample_in_fields[] = {
-	&CMF_UINT32,		/* client version NO. */
-};
-
-struct crt_msg_field *crt_lm_memb_sample_out_fields[] = {
-	&CMF_IOVEC,	/* delta between the client's membership list and the
-			 * service rank's membership list
-			 */
-	&CMF_UINT32,	/* server membership list version number */
-	&CMF_INT,	/* return value */
-};
-
-static struct crt_req_format CQF_CRT_LM_MEMB_SAMPLE =
-	DEFINE_CRT_REQ_FMT(crt_lm_memb_sample_in_fields,
-			   crt_lm_memb_sample_out_fields);
-
-struct crt_msg_field *crt_ctl_in_fields[] = {
-	&CMF_GRP_ID,
-	&CMF_RANK,
-};
-
-struct crt_msg_field *crt_ctl_ls_out_fields[] = {
-	&CMF_IOVEC,		/* concatenated addr str */
-	&CMF_INT,		/* num of contexts */
-	&CMF_INT,		/* return value */
-};
-
-struct crt_msg_field *crt_ctl_get_host_out_fields[] = {
-	&CMF_IOVEC,		/* hostname string */
-	&CMF_INT,		/* return code */
-};
-
-struct crt_msg_field *crt_ctl_get_pid_out_fields[] = {
-	&CMF_INT,		/* pid */
-	&CMF_INT,		/* return code */
-};
-
-static struct crt_req_format CQF_CRT_CTL_LS =
-	DEFINE_CRT_REQ_FMT(crt_ctl_in_fields, crt_ctl_ls_out_fields);
-
-static struct crt_req_format CQF_CRT_CTL_GET_HOSTNAME =
-	DEFINE_CRT_REQ_FMT(crt_ctl_in_fields, crt_ctl_get_host_out_fields);
-
-static struct crt_req_format CQF_CRT_CTL_GET_PID =
-	DEFINE_CRT_REQ_FMT(crt_ctl_in_fields, crt_ctl_get_pid_out_fields);
-
-struct crt_msg_field *crt_proto_query_in_fields[] = {
-	&CMF_IOVEC,		/* version array */
-	&CMF_INT,		/* num of enlemtns in version array */
-	&CMF_UINT32,		/* base opcode */
-};
-
-struct crt_msg_field *crt_proto_query_out_fields[] = {
-	&CMF_UINT32,		/* version */
-	&CMF_INT,		/* return value */
-};
-
-static struct crt_req_format CQF_CRT_PROTO_QUERY =
-	DEFINE_CRT_REQ_FMT(crt_proto_query_in_fields,
-			   crt_proto_query_out_fields);
+CRT_RPC_DEFINE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 
 /* Define for crt_internal_rpcs[] array population below.
  * See CRT_INTERNAL_RPCS_LIST macro definition

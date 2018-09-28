@@ -204,7 +204,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_bulk_t *bulk_hdl)
 }
 
 int
-crt_proc_crt_string_t(crt_proc_t proc, d_string_t *data)
+crt_proc_d_string_t(crt_proc_t proc, d_string_t *data)
 {
 	hg_return_t	hg_ret;
 
@@ -214,7 +214,7 @@ crt_proc_crt_string_t(crt_proc_t proc, d_string_t *data)
 }
 
 int
-crt_proc_crt_const_string_t(crt_proc_t proc, d_const_string_t *data)
+crt_proc_d_const_string_t(crt_proc_t proc, d_const_string_t *data)
 {
 	hg_return_t	hg_ret;
 
@@ -230,7 +230,7 @@ crt_proc_uuid_t(crt_proc_t proc, uuid_t *data)
 }
 
 int
-crt_proc_d_rank_list_ptr_t(crt_proc_t proc, d_rank_list_t **data)
+crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 {
 	d_rank_list_t		*rank_list;
 	hg_proc_op_t		 proc_op;
@@ -263,10 +263,9 @@ crt_proc_d_rank_list_ptr_t(crt_proc_t proc, d_rank_list_t **data)
 			D_GOTO(out, rc = -DER_HG);
 		}
 		for (i = 0; i < rank_num; i++) {
-			rc = crt_proc_crt_rank_t(proc,
-						  &rank_list->rl_ranks[i]);
+			rc = crt_proc_d_rank_t(proc, &rank_list->rl_ranks[i]);
 			if (rc != 0) {
-				D_ERROR("crt_proc_crt_rank_t failed,rc: %d.\n",
+				D_ERROR("crt_proc_d_rank_t failed,rc: %d.\n",
 					rc);
 				D_GOTO(out, rc = -DER_HG);
 			}
@@ -293,9 +292,9 @@ crt_proc_d_rank_list_ptr_t(crt_proc_t proc, d_rank_list_t **data)
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		for (i = 0; i < rank_num; i++) {
-			rc = crt_proc_crt_rank_t(proc, &rank_list->rl_ranks[i]);
+			rc = crt_proc_d_rank_t(proc, &rank_list->rl_ranks[i]);
 			if (rc != 0) {
-				D_ERROR("crt_proc_daso_rank_t failed,rc: %d.\n",
+				D_ERROR("crt_proc_d_rank_t failed,rc: %d.\n",
 					rc);
 				D_GOTO(out, rc = -DER_HG);
 			}
@@ -414,12 +413,12 @@ crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = crt_proc_d_rank_list_ptr_t(hg_proc, &hdr->coh_excluded_ranks);
+	rc = crt_proc_d_rank_list_t(hg_proc, &hdr->coh_excluded_ranks);
 	if (rc != 0) {
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = crt_proc_d_rank_list_ptr_t(hg_proc, &hdr->coh_inline_ranks);
+	rc = crt_proc_d_rank_list_t(hg_proc, &hdr->coh_inline_ranks);
 	if (rc != 0) {
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);

@@ -356,10 +356,10 @@ typedef void (*crt_proto_query_cb_t)(struct crt_proto_query_cb_info *cb_info);
 	TYPE_ACTION(ACTION, CMF_UINT64, 0, uint64_t)			\
 	TYPE_ACTION(ACTION, CMF_BULK, 0, crt_bulk_t)			\
 	TYPE_ACTION(ACTION, CMF_BOOL, 0, bool)				\
-	ACTION(CMF_STRING, 0, d_string_t, crt_string_t)			\
+	ACTION(CMF_STRING, 0, d_string_t, d_string_t)			\
 	TYPE_ACTION(ACTION, CMF_PHY_ADDR, 0, crt_phy_addr_t)		\
 	ACTION(CMF_RANK, 0, d_rank_t, uint32_t)				\
-	TYPE_ACTION(ACTION, CMF_RANK_LIST, 0, d_rank_list_ptr_t)	\
+	TYPE_ACTION(ACTION, CMF_RANK_LIST, 0, d_rank_list_t)		\
 	ACTION(CMF_BULK_ARRAY, CMF_ARRAY_FLAG, crt_bulk_array_t,	\
 	       crt_bulk_t)						\
 	TYPE_ACTION(ACTION, CMF_IOVEC, 0, d_iov_t)

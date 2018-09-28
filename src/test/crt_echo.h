@@ -91,73 +91,47 @@ void echo_srv_bulk_test(crt_rpc_t *rpc);
 void echo_srv_shutdown(crt_rpc_t *rpc);
 void echo_srv_corpc_example(crt_rpc_t *rpc);
 
-struct crt_msg_field *echo_ping_checkin[] = {
-	&CMF_UINT32,
-	&CMF_UINT32,
-	&CMF_IOVEC,
-	&CMF_STRING,
-};
-struct crt_echo_checkin_req {
-	int		age;
-	int		days;
-	d_iov_t		raw_package;
-	d_string_t	name;
-};
+#define CRT_ISEQ_ECHO_CHECKIN	/* input fields */		 \
+	((int32_t)		(age)			CRT_VAR) \
+	((int32_t)		(days)			CRT_VAR) \
+	((d_iov_t)		(raw_package)		CRT_VAR) \
+	((d_string_t)		(name)			CRT_VAR)
 
-struct crt_msg_field *echo_ping_checkout[] = {
-	&CMF_INT,
-	&CMF_UINT32,
-};
-struct crt_echo_checkin_reply {
-	int ret;
-	uint32_t room_no;
-};
+#define CRT_OSEQ_ECHO_CHECKIN	/* output fields */		 \
+	((int32_t)		(ret)			CRT_VAR) \
+	((uint32_t)		(room_no)		CRT_VAR)
 
-struct crt_msg_field *echo_corpc_example_in[] = {
-	&CMF_STRING,
-};
-struct crt_echo_corpc_example_req {
-	d_string_t	co_msg;
-};
+CRT_RPC_DECLARE(crt_echo_checkin, CRT_ISEQ_ECHO_CHECKIN, CRT_OSEQ_ECHO_CHECKIN)
+CRT_RPC_DEFINE(crt_echo_checkin, CRT_ISEQ_ECHO_CHECKIN, CRT_OSEQ_ECHO_CHECKIN)
 
-struct crt_msg_field *echo_corpc_example_out[] = {
-	&CMF_UINT32,
-};
-struct crt_echo_corpc_example_reply {
-	uint32_t	co_result;
-};
+#define CRT_ISEQ_ECHO_CORPC_EXAMPLE /* input fields */		 \
+	((d_string_t)		(co_msg)		CRT_VAR)
 
-struct crt_msg_field *echo_bulk_test_in[] = {
-	&CMF_STRING,
-	&CMF_STRING,
-	&CMF_BULK,
-};
-struct crt_echo_bulk_in_req {
-	d_string_t bulk_intro_msg;
-	d_string_t bulk_md5_ptr;
-	crt_bulk_t remote_bulk_hdl;
-};
+#define CRT_OSEQ_ECHO_CORPC_EXAMPLE /* output fields */		 \
+	((uint32_t)		(co_result)		CRT_VAR)
 
-struct crt_msg_field *echo_bulk_test_out[] = {
-	&CMF_STRING,
-	&CMF_INT,
-};
+CRT_RPC_DECLARE(crt_echo_corpc_example,
+		CRT_ISEQ_ECHO_CORPC_EXAMPLE, CRT_OSEQ_ECHO_CORPC_EXAMPLE)
+CRT_RPC_DEFINE(crt_echo_corpc_example,
+		CRT_ISEQ_ECHO_CORPC_EXAMPLE, CRT_OSEQ_ECHO_CORPC_EXAMPLE)
 
-struct crt_echo_bulk_out_reply {
-	char *echo_msg;
-	int ret;
-};
+#define CRT_ISEQ_ECHO_NOOP	/* input fields */
+#define CRT_OSEQ_ECHO_NOOP	/* output fields */
 
-struct crt_req_format CQF_ECHO_NOOP = DEFINE_CRT_REQ_FMT(NULL, NULL);
+CRT_RPC_DECLARE(crt_echo_noop, CRT_ISEQ_ECHO_NOOP, CRT_OSEQ_ECHO_NOOP)
+CRT_RPC_DEFINE(crt_echo_noop, CRT_ISEQ_ECHO_NOOP, CRT_OSEQ_ECHO_NOOP)
 
-struct crt_req_format CQF_ECHO_PING_CHECK =
-	DEFINE_CRT_REQ_FMT(echo_ping_checkin, echo_ping_checkout);
+#define CRT_ISEQ_ECHO_BULK	/* input fields */		 \
+	((d_string_t)		(bulk_intro_msg)	CRT_VAR) \
+	((d_string_t)		(bulk_md5_ptr)		CRT_VAR) \
+	((crt_bulk_t)		(remote_bulk_hdl)	CRT_VAR)
 
-struct crt_req_format CQF_ECHO_CORPC_EXAMPLE =
-	DEFINE_CRT_REQ_FMT(echo_corpc_example_in, echo_corpc_example_out);
+#define CRT_OSEQ_ECHO_BULK	/* output fields */		 \
+	((d_string_t)		(echo_msg)		CRT_VAR) \
+	((int32_t)		(ret)			CRT_VAR)
 
-struct crt_req_format CQF_ECHO_BULK_TEST =
-	DEFINE_CRT_REQ_FMT(echo_bulk_test_in, echo_bulk_test_out);
+CRT_RPC_DECLARE(crt_echo_bulk, CRT_ISEQ_ECHO_BULK, CRT_OSEQ_ECHO_BULK)
+CRT_RPC_DEFINE(crt_echo_bulk, CRT_ISEQ_ECHO_BULK, CRT_OSEQ_ECHO_BULK)
 
 static inline void
 parse_options(int argc, char *argv[])
@@ -262,41 +236,40 @@ echo_init(int server, bool tier2)
 	 * the same crt_rpc_srv_register.
 	 */
 	if (server == 0) {
-		rc = crt_rpc_register(ECHO_OPC_NOOP, 0, &CQF_ECHO_NOOP);
+		rc = CRT_RPC_REGISTER(ECHO_OPC_NOOP, 0, crt_echo_noop);
 		assert(rc == 0);
-		rc = crt_rpc_register(ECHO_OPC_CHECKIN, 0,
-				      &CQF_ECHO_PING_CHECK);
+		rc = CRT_RPC_REGISTER(ECHO_OPC_CHECKIN, 0, crt_echo_checkin);
 		assert(rc == 0);
-		rc = crt_rpc_register(ECHO_OPC_BULK_TEST, 0,
-				      &CQF_ECHO_BULK_TEST);
+		rc = CRT_RPC_REGISTER(ECHO_OPC_BULK_TEST, 0, crt_echo_bulk);
 		assert(rc == 0);
 		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN,
 					    CRT_RPC_FEAT_NO_REPLY,
 					    NULL);
 		assert(rc == 0);
 	} else {
-		rc = crt_rpc_srv_register(ECHO_OPC_NOOP,
+		rc = CRT_RPC_SRV_REGISTER(ECHO_OPC_NOOP,
 					  0,
-					  &CQF_ECHO_NOOP,
+					  crt_echo_noop,
 					  echo_srv_noop);
 		assert(rc == 0);
-		rc = crt_rpc_srv_register(ECHO_OPC_CHECKIN,
+		rc = CRT_RPC_SRV_REGISTER(ECHO_OPC_CHECKIN,
 					  0,
-					  &CQF_ECHO_PING_CHECK,
+					  crt_echo_checkin,
 					  echo_srv_checkin);
 		assert(rc == 0);
-		rc = crt_rpc_srv_register(ECHO_OPC_BULK_TEST,
+		rc = CRT_RPC_SRV_REGISTER(ECHO_OPC_BULK_TEST,
 					  0,
-					  &CQF_ECHO_BULK_TEST,
+					  crt_echo_bulk,
 					  echo_srv_bulk_test);
 		assert(rc == 0);
 		rc = crt_rpc_srv_register(ECHO_OPC_SHUTDOWN,
 					  CRT_RPC_FEAT_NO_REPLY, NULL,
 					  echo_srv_shutdown);
 		assert(rc == 0);
-		rc = crt_corpc_register(ECHO_CORPC_EXAMPLE,
-					&CQF_ECHO_CORPC_EXAMPLE,
-					echo_srv_corpc_example, &echo_co_ops);
+		rc = CRT_RPC_CORPC_REGISTER(ECHO_CORPC_EXAMPLE,
+					    crt_echo_corpc_example,
+					    echo_srv_corpc_example,
+					    &echo_co_ops);
 		assert(rc == 0);
 	}
 }
@@ -360,9 +333,9 @@ void
 client_cb_common(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t		*rpc_req;
-	struct crt_echo_checkin_req *e_req;
-	struct crt_echo_checkin_reply *e_reply;
-	struct crt_echo_corpc_example_reply *corpc_reply;
+	struct crt_echo_checkin_in *e_req;
+	struct crt_echo_checkin_out *e_reply;
+	struct crt_echo_corpc_example_out *corpc_reply;
 
 	rpc_req = cb_info->cci_rpc;
 

@@ -274,7 +274,7 @@ out:
 static void
 ctl_client_cb(const struct crt_cb_info *cb_info)
 {
-	struct crt_ctl_in		*in_args;
+	struct crt_ctl_ep_ls_in		*in_args;
 	struct crt_ctl_ep_ls_out	*out_ls_args;
 	struct crt_ctl_get_host_out	*out_get_host_args;
 	struct crt_ctl_get_pid_out	*out_get_pid_args;
@@ -328,7 +328,7 @@ ctl_issue_cmd(void)
 {
 	int				 i;
 	crt_rpc_t			*rpc_req;
-	struct crt_ctl_in		*in_args;
+	struct crt_ctl_ep_ls_in		*in_args;
 	crt_endpoint_t			 ep;
 	struct cb_info			 info;
 	int				 rc = 0;

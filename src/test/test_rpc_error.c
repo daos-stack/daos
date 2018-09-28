@@ -73,25 +73,16 @@ struct rpc_err_t {
 
 struct rpc_err_t rpc_err;
 
-struct crt_msg_field *rpc_err_noreply_in_fields[] = {
-	&CMF_UINT32,
-};
+#define CRT_ISEQ_RPC_ERR_NOREPLY /* input fields */		 \
+	((uint32_t)		(magic)			CRT_VAR)
 
-struct crt_msg_field *rpc_err_noreply_out_fields[] = {
-	&CMF_UINT32,
-};
+#define CRT_OSEQ_RPC_ERR_NOREPLY /* output fields */		 \
+	((uint32_t)		(magic)			CRT_VAR)
 
-struct crt_req_format CQF_RPC_ERR_NOREPLY =
-	DEFINE_CRT_REQ_FMT(rpc_err_noreply_in_fields,
-			   rpc_err_noreply_out_fields);
-
-struct rpc_err_noreply_in_t {
-	uint32_t	magic;
-};
-
-struct rpc_err_noreply_out_t {
-	uint32_t	magic;
-};
+CRT_RPC_DECLARE(rpc_err_noreply,
+		CRT_ISEQ_RPC_ERR_NOREPLY, CRT_OSEQ_RPC_ERR_NOREPLY)
+CRT_RPC_DEFINE(rpc_err_noreply,
+		CRT_ISEQ_RPC_ERR_NOREPLY, CRT_OSEQ_RPC_ERR_NOREPLY)
 
 int
 rpc_err_parse_args(int argc, char **argv)
@@ -167,7 +158,7 @@ static void *progress_thread(void *arg)
 static void
 rpc_err_noreply_hdlr(crt_rpc_t *rpc_req)
 {
-	struct rpc_err_noreply_in_t		*rpc_req_input;
+	struct rpc_err_noreply_in		*rpc_req_input;
 
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERTF(rpc_req_input != NULL,
@@ -214,7 +205,7 @@ rpc_err_init(void)
 	rc = crt_context_create(&rpc_err.re_crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 
-	rc = crt_rpc_srv_register(RPC_ERR_OPC_NOREPLY, 0, &CQF_RPC_ERR_NOREPLY,
+	rc = CRT_RPC_SRV_REGISTER(RPC_ERR_OPC_NOREPLY, 0, rpc_err_noreply,
 				  rpc_err_noreply_hdlr);
 	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
 
@@ -253,8 +244,8 @@ static void
 client_cb(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*rpc_req;
-	struct rpc_err_noreply_in_t	*rpc_req_input;
-	struct rpc_err_noreply_out_t	*rpc_req_output;
+	struct rpc_err_noreply_in	*rpc_req_input;
+	struct rpc_err_noreply_out	*rpc_req_output;
 	struct rpc_err_t		*re = cb_info->cci_arg;
 
 	rpc_req = cb_info->cci_rpc;
@@ -295,7 +286,7 @@ rpc_err_rpc_issue()
 {
 	crt_endpoint_t			 server_ep;
 	crt_rpc_t			*rpc_req = NULL;
-	struct rpc_err_noreply_in_t	*rpc_req_input;
+	struct rpc_err_noreply_in	*rpc_req_input;
 	int				 i;
 	int				 rc = 0;
 

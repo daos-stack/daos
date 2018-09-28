@@ -524,20 +524,20 @@ srv_rpc_init(void)
 	rc  = crt_group_config_save(NULL, false);
 	D_ASSERTF(rc == 0, "crt_group_config_save failed %d\n", rc);
 
-	rc = crt_rpc_srv_register(CRT_RPC_TEST_IO, 0, &CRT_TEST_IO,
+	rc = CRT_RPC_SRV_REGISTER(CRT_RPC_TEST_IO, 0, crt_rpc_io,
 				srv_common_cb);
 	D_ASSERTF(rc == 0, " crt_rpc_srv_register failed %d\n", rc);
 
-	rc = crt_rpc_srv_register(CRT_RPC_TEST_ERR, 0, &CRT_TEST_ERR,
+	rc = CRT_RPC_SRV_REGISTER(CRT_RPC_TEST_ERR, 0, crt_test_err,
 				srv_common_cb);
 	D_ASSERTF(rc == 0, " crt_rpc_srv_register failed %d\n", rc);
 
-	rc = crt_rpc_srv_register(CRT_RPC_TEST_NO_IO, 0, &CRT_TEST_NO_IO,
+	rc = CRT_RPC_SRV_REGISTER(CRT_RPC_TEST_NO_IO, 0, crt_test_no_io,
 				srv_common_cb);
 	D_ASSERTF(rc == 0, " crt_rpc_srv_register failed %d\n", rc);
 
-	rc = crt_rpc_srv_register(CRT_RPC_TEST_TIMEOUT, 0, &CRT_TEST_TIMEOUT,
-				srv_common_cb);
+	rc = CRT_RPC_SRV_REGISTER(CRT_RPC_TEST_TIMEOUT, 0,
+				  crt_test_timeout, srv_common_cb);
 	D_ASSERTF(rc == 0, " crt_rpc_srv_register failed %d\n", rc);
 
 	rc = crt_rpc_srv_register(CRT_RPC_TEST_SHUTDOWN,
@@ -545,16 +545,16 @@ srv_rpc_init(void)
 				  srv_common_cb);
 	D_ASSERTF(rc == 0, " crt_rpc_srv_register failed %d\n", rc);
 
-	rc = crt_corpc_register(CRT_RPC_TEST_GRP_IO, &CRT_GRP_TEST_IO,
-				srv_common_cb, &grp_co_ops);
+	rc = CRT_RPC_CORPC_REGISTER(CRT_RPC_TEST_GRP_IO, crt_rpc_grp_io,
+				    srv_common_cb, &grp_co_ops);
 	D_ASSERTF(rc == 0, "crt_corpc_register failed %d\n", rc);
 
-	rc = crt_rpc_register(CRT_RPC_MULTITIER_TEST_IO, 0,
-			&CRT_MULTITIER_TEST_IO);
+	rc = CRT_RPC_REGISTER(CRT_RPC_MULTITIER_TEST_IO, 0,
+			      crt_multitier_test_io);
 	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
 
-	rc = crt_rpc_register(CRT_RPC_MULTITIER_TEST_NO_IO, 0,
-			      &CRT_MULTITIER_TEST_NO_IO);
+	rc = CRT_RPC_REGISTER(CRT_RPC_MULTITIER_TEST_NO_IO, 0,
+			      crt_multitier_test_no_io);
 	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
 
 	rc = crt_group_rank(NULL, &rpc_srv.my_rank);

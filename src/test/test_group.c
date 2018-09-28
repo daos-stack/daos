@@ -75,20 +75,23 @@ struct test_t {
 	int		 t_roomno;
 };
 
-struct test_t test_g = { .t_hold_time = 0, .t_ctx_num = 1,
-			     .t_roomno = 1082 };
+struct test_t test_g = { .t_hold_time = 0, .t_ctx_num = 1, .t_roomno = 1082 };
 
-CRT_RPC_PREP(test_ping_check,
-		/* input fields */
-	     ((uint32_t)	(age))
-	     ((uint32_t)	(days))
-	     ((d_string_t)	(name))
-	     ((bool)		(bool_val)),
-		/* output fields */
-	     ((int32_t)		(ret))
-	     ((uint32_t)	(room_no))
-	     ((uint32_t)	(bool_val))
-	    );
+#define CRT_ISEQ_TEST_PING_CHECK /* input fields */		 \
+	((uint32_t)		(age)			CRT_VAR) \
+	((uint32_t)		(days)			CRT_VAR) \
+	((d_string_t)		(name)			CRT_VAR) \
+	((bool)			(bool_val)		CRT_VAR)
+
+#define CRT_OSEQ_TEST_PING_CHECK /* output fields */		 \
+	((int32_t)		(ret)			CRT_VAR) \
+	((uint32_t)		(room_no)		CRT_VAR) \
+	((uint32_t)		(bool_val)		CRT_VAR)
+
+CRT_RPC_DECLARE(test_ping_check,
+		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
+CRT_RPC_DEFINE(test_ping_check,
+		CRT_ISEQ_TEST_PING_CHECK, CRT_OSEQ_TEST_PING_CHECK)
 
 static inline void
 test_sem_timedwait(sem_t *sem, int sec, int line_number)
@@ -145,9 +148,9 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 void
 test_ping_delay_handler(crt_rpc_t *rpc_req)
 {
-	struct crt_test_ping_delay_req		*p_req;
-	struct crt_test_ping_delay_reply	*p_reply;
-	int					 rc = 0;
+	struct crt_test_ping_delay_in	*p_req;
+	struct crt_test_ping_delay_out	*p_reply;
+	int				 rc = 0;
 
 	/* CaRT internally already allocated the input/output buffer */
 	p_req = crt_req_get(rpc_req);
@@ -304,9 +307,9 @@ test_init(void)
 		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
 			  rc);
 
-		rc = crt_rpc_srv_register(TEST_OPC_PING_DELAY,
+		rc = CRT_RPC_SRV_REGISTER(TEST_OPC_PING_DELAY,
 					  CRT_RPC_FEAT_NO_TIMEOUT,
-					  &CQF_TEST_PING_DELAY,
+					  crt_test_ping_delay,
 					  test_ping_delay_handler);
 		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
 			  rc);

@@ -44,7 +44,7 @@
 
 #define MAX_HOSTNAME_SIZE 1024
 
-static int verify_ctl_in_args(struct crt_ctl_in *in_args)
+static int verify_ctl_in_args(struct crt_ctl_ep_ls_in *in_args)
 {
 	struct crt_grp_priv	*grp_priv;
 	int			rc = 0;
@@ -124,7 +124,7 @@ out:
 void
 crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 {
-	struct crt_ctl_in		*in_args;
+	struct crt_ctl_ep_ls_in		*in_args;
 	struct crt_ctl_ep_ls_out	*out_args;
 	char				 addr_str[CRT_ADDR_STR_MAX_LEN]
 						= {'\0'};

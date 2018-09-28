@@ -42,13 +42,12 @@
 
 #include "test_proto_common.h"
 
-
 static void
 rpc_cb_common(const struct crt_cb_info *cb_info)
 {
-	crt_rpc_t			*rpc_req;
-	struct ping_in_t		*rpc_req_input;
-	struct ping_out_t		*rpc_req_output;
+	crt_rpc_t		*rpc_req;
+	struct ping_in		*rpc_req_input;
+	struct ping_out		*rpc_req_output;
 
 	rpc_req = cb_info->cci_rpc;
 	D_ASSERT(rpc_req != NULL);
@@ -139,14 +138,13 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 static void
 test_run()
 {
-	crt_rpc_t		*rpc_req = NULL;
-	struct ping_in_t	*rpc_req_input;
-	crt_endpoint_t		 tgt_ep = {0};
-	crt_opcode_t		 my_opc;
-	uint32_t		 my_ver_array[] = {0, 2, 5, 1, 4, 3, 7};
-	uint32_t		 high_ver = 0xFFFFFFFF;
-	int			 rc;
-
+	crt_rpc_t	*rpc_req = NULL;
+	struct ping_in	*rpc_req_input;
+	crt_endpoint_t	 tgt_ep = {0};
+	crt_opcode_t	 my_opc;
+	uint32_t	 my_ver_array[] = {0, 2, 5, 1, 4, 3, 7};
+	uint32_t	 high_ver = 0xFFFFFFFF;
+	int		 rc;
 
 	D_DEBUG(DB_TRACE, "test_run\n");
 

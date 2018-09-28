@@ -64,7 +64,7 @@ static int run_echo_srver(void)
 	d_rank_t			 myrank;
 	uint32_t			 mysize;
 	int				 rc;
-	struct crt_echo_checkin_req	*e_req;
+	struct crt_echo_checkin_in	*e_req;
 
 	rc = crt_group_rank(NULL, &myrank);
 	assert(rc == 0);
@@ -125,7 +125,7 @@ static int run_echo_srver(void)
 
 	if (mysize >= 8 && myrank == 4) {
 		crt_rpc_t				*corpc_req;
-		struct crt_echo_corpc_example_req	*corpc_in;
+		struct crt_echo_corpc_example_in	*corpc_in;
 		uint32_t				 flags;
 
 		rc = crt_group_create(grp_id, &grp_membs, 0, grp_create_cb,
@@ -175,8 +175,8 @@ int g_roomno = 1082;
 void
 echo_srv_checkin(crt_rpc_t *rpc_req)
 {
-	struct crt_echo_checkin_req	*e_req;
-	struct crt_echo_checkin_reply	*e_reply;
+	struct crt_echo_checkin_in	*e_req;
+	struct crt_echo_checkin_out	*e_reply;
 	char				*raw_buf;
 
 	/* CaRT internally already allocated the input/output buffer */

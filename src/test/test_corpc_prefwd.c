@@ -97,17 +97,14 @@ test_basic_corpc_hdlr(crt_rpc_t *rpc)
 
 #define TEST_BASIC_CORPC 0xC1
 
-struct crt_msg_field *arg_basic_corpc_in[] = {
-	&CMF_UINT32,
-};
+#define CRT_ISEQ_BASIC_CORPC	/* input fields */		 \
+	((uint32_t)		(unused)		CRT_VAR)
 
-struct crt_msg_field *arg_basic_corpc_out[] = {
-	&CMF_UINT32,
-};
+#define CRT_OSEQ_BASIC_CORPC	/* output fields */		 \
+	((uint32_t)		(unused)		CRT_VAR)
 
-
-struct crt_req_format DQF_BASIC_CORPC = DEFINE_CRT_REQ_FMT(arg_basic_corpc_in,
-							arg_basic_corpc_out);
+CRT_RPC_DECLARE(basic_corpc, CRT_ISEQ_BASIC_CORPC, CRT_OSEQ_BASIC_CORPC)
+CRT_RPC_DEFINE(basic_corpc, CRT_ISEQ_BASIC_CORPC, CRT_OSEQ_BASIC_CORPC)
 
 static void
 corpc_response_hdlr(const struct crt_cb_info *info)
@@ -134,9 +131,9 @@ int main(void)
 	rc = crt_group_config_save(NULL, true);
 	assert(rc == 0);
 
-	rc = crt_corpc_register(TEST_BASIC_CORPC, &DQF_BASIC_CORPC,
-				test_basic_corpc_hdlr,
-				&corpc_set_ivns_ops);
+	rc = CRT_RPC_CORPC_REGISTER(TEST_BASIC_CORPC, basic_corpc,
+				    test_basic_corpc_hdlr,
+				    &corpc_set_ivns_ops);
 	assert(rc == 0);
 
 	rc = crt_context_create(&g_main_ctx);

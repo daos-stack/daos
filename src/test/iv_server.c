@@ -151,8 +151,8 @@ shutdown(void)
 int
 iv_shutdown(crt_rpc_t *rpc)
 {
-	struct rpc_shutdown_in	*input;
-	struct rpc_shutdown_out	*output;
+	struct RPC_SHUTDOWN_in	*input;
+	struct RPC_SHUTDOWN_out	*output;
 	int			 rc;
 
 	DBG_ENTRY();
@@ -694,8 +694,8 @@ init_iv(void)
 {
 	struct crt_iv_class	 iv_class;
 	crt_endpoint_t		 server_ep = {0};
-	struct rpc_set_ivns_in	*input;
-	struct rpc_set_ivns_out	*output;
+	struct RPC_SET_IVNS_in	*input;
+	struct RPC_SET_IVNS_out	*output;
 	int			 rc;
 	uint32_t		 rank;
 	crt_rpc_t		*rpc;
@@ -772,8 +772,8 @@ int
 iv_set_ivns(crt_rpc_t *rpc)
 {
 	struct crt_iv_class	 iv_class;
-	struct rpc_set_ivns_in	*input;
-	struct rpc_set_ivns_out	*output;
+	struct RPC_SET_IVNS_in	*input;
+	struct RPC_SET_IVNS_out	*output;
 	int			 rc;
 
 	DBG_ENTRY();
@@ -806,7 +806,7 @@ iv_set_ivns(crt_rpc_t *rpc)
 static int fetch_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	crt_rpc_t			*rpc;
-	struct rpc_test_fetch_iv_out	*output;
+	struct RPC_TEST_FETCH_IV_out	*output;
 	int				 rc;
 
 	rpc = cb_info->bci_bulk_desc->bd_rpc;
@@ -837,8 +837,8 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	   int fetch_rc, void *cb_args)
 {
 	crt_rpc_t			*rpc;
-	struct rpc_test_fetch_iv_in	*input;
-	struct rpc_test_fetch_iv_out	*output;
+	struct RPC_TEST_FETCH_IV_in	*input;
+	struct RPC_TEST_FETCH_IV_out	*output;
 	crt_bulk_perm_t			 perms = CRT_BULK_RO;
 	crt_bulk_t			 bulk_hdl = NULL;
 	struct crt_bulk_desc		 bulk_desc = {0};
@@ -942,7 +942,7 @@ update_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	    int update_rc, void *cb_args)
 {
 	struct update_done_cb_info	*cb_info;
-	struct rpc_test_update_iv_out	*output;
+	struct RPC_TEST_UPDATE_IV_out	*output;
 	int				 rc;
 
 	DBG_ENTRY();
@@ -975,7 +975,7 @@ update_done(crt_iv_namespace_t ivns, uint32_t class_id,
 int
 iv_test_update_iv(crt_rpc_t *rpc)
 {
-	struct rpc_test_update_iv_in	*input;
+	struct RPC_TEST_UPDATE_IV_in	*input;
 	crt_iv_key_t			*key;
 	struct iv_key_struct		*key_struct;
 	int				 rc;
@@ -1035,7 +1035,7 @@ iv_test_update_iv(crt_rpc_t *rpc)
 int
 iv_test_fetch_iv(crt_rpc_t *rpc)
 {
-	struct rpc_test_fetch_iv_in	*input;
+	struct RPC_TEST_FETCH_IV_in	*input;
 	int				 rc;
 
 	wait_for_namespace();
@@ -1062,7 +1062,7 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 		d_sg_list_t *iv_value, int invalidate_rc, void *cb_args)
 {
 	struct invalidate_cb_info		*cb_info;
-	struct rpc_test_invalidate_iv_out	*output;
+	struct RPC_TEST_INVALIDATE_IV_out	*output;
 	struct iv_key_struct			*key_struct;
 	struct iv_key_struct			*expect_key_struct;
 	int					 rc;
@@ -1112,7 +1112,7 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 
 int iv_test_invalidate_iv(crt_rpc_t *rpc)
 {
-	struct rpc_test_invalidate_iv_in	*input;
+	struct RPC_TEST_INVALIDATE_IV_in	*input;
 	struct iv_key_struct			*key_struct;
 	crt_iv_key_t				*key;
 	struct invalidate_cb_info		*cb_info;

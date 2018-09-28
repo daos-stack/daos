@@ -78,76 +78,53 @@ CRT_RPC_MULTITIER_TEST_NO_IO =	(0x54312e71)
 #define FILE_PATH_SIZE		256
 #define CRT_RPC_MULTITIER_GRPID	"rpc_test_multitier0"
 
-struct crt_rpc_io_in {
-	d_string_t	msg;
-	d_iov_t		raw_pkg;
-	int32_t		to_srv;
-	crt_status_t	from_srv;
-};
+#define CRT_ISEQ_TEST_IO	/* input fields */		 \
+	((d_string_t)		(msg)			CRT_VAR) \
+	((d_iov_t)		(raw_pkg)		CRT_VAR) \
+	((int32_t)		(to_srv)		CRT_VAR) \
+	((crt_status_t)		(from_srv)		CRT_VAR)
 
-struct crt_msg_field *crt_rpc_test_io_in[] = {
-	&CMF_STRING,
-	&CMF_IOVEC,
-	&CMF_UINT32,
-	&CMF_INT,
-};
+#define CRT_OSEQ_TEST_IO	/* output fields */		 \
+	((d_string_t)		(msg)			CRT_VAR) \
+	((d_iov_t)		(raw_pkg)		CRT_VAR) \
+	((int32_t)		(to_srv)		CRT_VAR) \
+	((crt_status_t)		(from_srv)		CRT_VAR)
 
-struct crt_rpc_io_out {
-	d_string_t	msg;
-	d_iov_t		raw_pkg;
-	int32_t		to_srv;
-	crt_status_t	from_srv;
-};
+#define CRT_OSEQ_TEST_TIMEOUT	/* output fields */
 
-struct crt_msg_field *crt_rpc_test_io_out[] = {
-	&CMF_STRING,
-	&CMF_IOVEC,
-	&CMF_UINT32,
-	&CMF_INT,
-};
+CRT_RPC_DECLARE(crt_rpc_io, CRT_ISEQ_TEST_IO, CRT_OSEQ_TEST_IO)
+CRT_RPC_DEFINE(crt_rpc_io, CRT_ISEQ_TEST_IO, CRT_OSEQ_TEST_IO)
 
+CRT_RPC_DECLARE(crt_test_err, CRT_ISEQ_TEST_IO, CRT_OSEQ_TEST_IO)
+CRT_RPC_DEFINE(crt_test_err, CRT_ISEQ_TEST_IO, CRT_OSEQ_TEST_IO)
 
-struct crt_rpc_grp_io_in {
-	d_string_t	msg;
-};
+CRT_RPC_DECLARE(crt_test_timeout, CRT_ISEQ_TEST_IO, CRT_OSEQ_TEST_TIMEOUT)
+CRT_RPC_DEFINE(crt_test_timeout, CRT_ISEQ_TEST_IO, CRT_OSEQ_TEST_TIMEOUT)
 
-struct crt_msg_field *crt_rpc_test_grp_io_in[] = {
-	&CMF_STRING,
-};
+CRT_RPC_DECLARE(crt_multitier_test_io, CRT_ISEQ_TEST_IO, CRT_OSEQ_TEST_IO)
+CRT_RPC_DEFINE(crt_multitier_test_io, CRT_ISEQ_TEST_IO, CRT_OSEQ_TEST_IO)
 
+#define CRT_ISEQ_NULL		/* input fields */
 
-struct crt_rpc_grp_io_out {
-	crt_status_t	from_srv;
-};
+#define CRT_OSEQ_NULL		/* output fields */
 
-struct crt_msg_field *crt_rpc_test_grp_io_out[] = {
-	&CMF_INT,
-};
+#define CRT_ISEQ_GRP_IO		/* input fields */		 \
+	((d_string_t)		(msg)			CRT_VAR)
 
-struct crt_req_format CRT_TEST_IO =
-		DEFINE_CRT_REQ_FMT(crt_rpc_test_io_in, crt_rpc_test_io_out);
+#define CRT_OSEQ_GRP_IO		/* output fields */		 \
+	((crt_status_t)		(from_srv)		CRT_VAR)
 
-struct crt_req_format CRT_TEST_ERR =
-		DEFINE_CRT_REQ_FMT(crt_rpc_test_io_in, crt_rpc_test_io_out);
+CRT_RPC_DECLARE(crt_test_no_io, CRT_ISEQ_NULL, CRT_OSEQ_NULL)
+CRT_RPC_DEFINE(crt_test_no_io, CRT_ISEQ_NULL, CRT_OSEQ_NULL)
 
-struct crt_req_format CRT_TEST_NO_IO =
-		DEFINE_CRT_REQ_FMT(NULL, NULL);
+CRT_RPC_DECLARE(crt_test_shutdown, CRT_ISEQ_NULL, CRT_OSEQ_NULL)
+CRT_RPC_DEFINE(crt_test_shutdown, CRT_ISEQ_NULL, CRT_OSEQ_NULL)
 
-struct crt_req_format CRT_TEST_TIMEOUT =
-		DEFINE_CRT_REQ_FMT(crt_rpc_test_io_in, NULL);
+CRT_RPC_DECLARE(crt_rpc_grp_io, CRT_ISEQ_GRP_IO, CRT_OSEQ_GRP_IO)
+CRT_RPC_DEFINE(crt_rpc_grp_io, CRT_ISEQ_GRP_IO, CRT_OSEQ_GRP_IO)
 
-struct crt_req_format CRT_TEST_SHUTDOWN =
-		DEFINE_CRT_REQ_FMT(NULL, NULL);
-
-struct crt_req_format CRT_GRP_TEST_IO =
-	DEFINE_CRT_REQ_FMT(crt_rpc_test_grp_io_in, crt_rpc_test_grp_io_out);
-
-struct crt_req_format CRT_MULTITIER_TEST_IO =
-		DEFINE_CRT_REQ_FMT(crt_rpc_test_io_in, crt_rpc_test_io_out);
-
-struct crt_req_format CRT_MULTITIER_TEST_NO_IO =
-		DEFINE_CRT_REQ_FMT(NULL, NULL);
-
+CRT_RPC_DECLARE(crt_multitier_test_no_io, CRT_ISEQ_NULL, CRT_OSEQ_NULL)
+CRT_RPC_DEFINE(crt_multitier_test_no_io, CRT_ISEQ_NULL, CRT_OSEQ_NULL)
 
 struct rpc_test_cli {
 	char			config_path[FILE_PATH_SIZE];
@@ -167,7 +144,6 @@ struct rpc_test_cli {
 	uint32_t		target_grp_size;
 };
 
-
 struct rpc_test_srv {
 	char			config_path[FILE_PATH_SIZE];
 	char			*local_group_name;
@@ -185,7 +161,6 @@ struct rpc_test_srv {
 	uint32_t		rpc_test_holdtime;
 	uint32_t		target_group_size;
 };
-
 
 void crt_lm_fake_event_notify_fn(d_rank_t pmix_rank, bool *dead);
 

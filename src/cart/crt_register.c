@@ -909,17 +909,6 @@ crt_proto_register_internal(struct crt_proto_format *cpf)
 	return crt_proto_register_common(cpf);
 }
 
-struct crt_proto_query_in_t {
-	d_iov_t		pq_ver;
-	int		pq_ver_count;
-	crt_opcode_t	pq_base_opc;
-};
-
-struct crt_proto_query_out_t {
-	int	pq_ver;
-	int	pq_rc;
-};
-
 struct proto_query_t {
 	crt_proto_query_cb_t	 pq_user_cb;
 	void			*pq_user_arg;
@@ -929,7 +918,7 @@ static void
 proto_query_cb(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*rpc_req = cb_info->cci_rpc;
-	struct crt_proto_query_out_t	*rpc_req_output;
+	struct crt_proto_query_out	*rpc_req_output;
 	struct proto_query_t		*proto_query = cb_info->cci_arg;
 	struct crt_proto_query_cb_info	 user_cb_info;
 
@@ -957,7 +946,7 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 {
 	crt_rpc_t			*rpc_req;
 	crt_context_t			 crt_ctx;
-	struct crt_proto_query_in_t	*rpc_req_input;
+	struct crt_proto_query_in	*rpc_req_input;
 	struct proto_query_t		*proto_query = NULL;
 	int				 rc = DER_SUCCESS;
 
@@ -1020,8 +1009,8 @@ crt_proto_query_local(crt_opcode_t base_opc, uint32_t ver)
 void
 crt_hdlr_proto_query(crt_rpc_t *rpc_req)
 {
-	struct crt_proto_query_in_t	*rpc_req_input;
-	struct crt_proto_query_out_t	*rpc_req_output;
+	struct crt_proto_query_in	*rpc_req_input;
+	struct crt_proto_query_out	*rpc_req_output;
 	uint32_t			*version_array;
 	int				 count;
 	int				 i;

@@ -54,120 +54,59 @@ struct iv_key_struct {
 	uint32_t	key_id;
 };
 
-/* RPC_TEST_FETCH_IV RPC */
-struct rpc_test_fetch_iv_in {
-	d_iov_t		key;		/* IV key to fetch */
-	crt_bulk_t	bulk_hdl;	/* Handle to return fetch contents */
-};
+#define CRT_ISEQ_RPC_TEST_FETCH_IV /* input fields */		 \
+	((d_iov_t)		(key)			CRT_VAR) \
+	((crt_bulk_t)		(bulk_hdl)		CRT_VAR)
 
-struct rpc_test_fetch_iv_out {
-	d_iov_t		key;	/* IV key returned by fetch callback */
-	uint64_t	size;	/* Length of data written to bulk handle */
-	int64_t		rc;	/* Return code */
-};
+#define CRT_OSEQ_RPC_TEST_FETCH_IV /* output fields */		 \
+	((d_iov_t)		(key)			CRT_VAR) \
+	((uint64_t)		(size)			CRT_VAR) \
+	((int64_t)		(rc)			CRT_VAR)
 
-struct crt_msg_field *arg_test_fetch_iv_in[] = {
-	&CMF_IOVEC,
-	&CMF_BULK,
-};
+#define CRT_ISEQ_RPC_TEST_UPDATE_IV /* input fields */		 \
+	((d_iov_t)		(iov_key)		CRT_VAR) \
+	((d_iov_t)		(iov_sync)		CRT_VAR) \
+	((d_iov_t)		(iov_value)		CRT_VAR)
 
-struct crt_msg_field *arg_test_fetch_iv_out[] = {
-	&CMF_IOVEC,
-	&CMF_UINT64,
-	&CMF_UINT64,
-};
+#define CRT_OSEQ_RPC_TEST_UPDATE_IV /* output fields */		 \
+	((int64_t)		(rc)			CRT_VAR)
 
-/* RCP_TEST_INVALIDATE_IV RPC */
-struct rpc_test_invalidate_iv_in {
-	d_iov_t iov_key;
-};
+#define CRT_ISEQ_RPC_TEST_INVALIDATE_IV /* input fields */	 \
+	((d_iov_t)		(iov_key)		CRT_VAR)
 
-struct rpc_test_invalidate_iv_out {
-	int64_t rc;
-};
+#define CRT_OSEQ_RPC_TEST_INVALIDATE_IV /* output fields */	 \
+	((int64_t)		(rc)			CRT_VAR)
 
-struct crt_msg_field *arg_test_invalidate_iv_in[] = {
-	&CMF_IOVEC,
-};
+#define CRT_ISEQ_RPC_SET_IVNS	/* input fields */		 \
+	((d_iov_t)		(global_ivns_iov)	CRT_VAR)
 
-struct crt_msg_field *arg_test_invalidate_iv_out[] = {
-	&CMF_UINT64,
-};
+#define CRT_OSEQ_RPC_SET_IVNS	/* output fields */		 \
+	((uint32_t)		(rc)			CRT_VAR)
 
-/* RPC_TEST_UPDATE_IV RPC */
-struct rpc_test_update_iv_in {
-	d_iov_t iov_key;
-	d_iov_t iov_sync;
-	d_iov_t iov_value;
-};
+#define CRT_ISEQ_RPC_SHUTDOWN	/* input fields */		 \
+	((uint32_t)		(unused)		CRT_VAR)
 
-struct rpc_test_update_iv_out {
-	int64_t rc;
-};
-
-struct crt_msg_field *arg_test_update_iv_in[] = {
-	&CMF_IOVEC,
-	&CMF_IOVEC,
-	&CMF_IOVEC,
-};
-
-struct crt_msg_field *arg_test_update_iv_out[] = {
-	&CMF_UINT64,
-};
-
-/* RPC_SET_IVNS */
-struct rpc_set_ivns_in {
-	d_iov_t global_ivns_iov;
-};
-
-struct rpc_set_ivns_out {
-	uint32_t rc;
-};
-
-struct crt_msg_field *arg_set_ivns_in[] = {
-	&CMF_IOVEC,
-};
-
-struct crt_msg_field *arg_set_ivns_out[] = {
-	&CMF_UINT32,
-};
-
-/* RPC_SHUTDOWN */
-struct rpc_shutdown_in {
-	uint32_t unused;
-};
-
-struct rpc_shutdown_out {
-	uint32_t rc;
-};
-
-struct crt_msg_field *arg_shutdown_in[] = {
-	&CMF_UINT32,
-};
-
-struct crt_msg_field *arg_shutdown_out[] = {
-	&CMF_UINT32,
-};
+#define CRT_OSEQ_RPC_SHUTDOWN	/* output fields */		 \
+	((uint32_t)		(rc)			CRT_VAR)
 
 #ifdef _SERVER
 #define RPC_REGISTER(name) \
-	crt_rpc_srv_register(name, 0, &DQF_##name, DQF_FUNC_##name)
+	CRT_RPC_SRV_REGISTER(name, 0, name, DQF_FUNC_##name)
 #else
 #define RPC_REGISTER(name) \
-	crt_rpc_register(name, 0, &DQF_##name)
+	CRT_RPC_REGISTER(name, 0, name)
 #endif
 
 #ifdef _SERVER
-#define RPC_DECLARE(name, input, output, function)			\
-	struct crt_req_format DQF_##name = DEFINE_CRT_REQ_FMT(input,	\
-							      output);	\
+#define RPC_DECLARE(name, function)					\
+	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)		\
+	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)		\
 	static void *DQF_FUNC_##name = (void *)function
 #else
-#define RPC_DECLARE(name, input, output, function)			\
-	struct crt_req_format DQF_##name = DEFINE_CRT_REQ_FMT(input,	\
-							      output)
+#define RPC_DECLARE(name, function)					\
+	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)		\
+	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)
 #endif
-
 
 enum {
 	RPC_TEST_FETCH_IV = 0xB1, /* Client issues fetch call */
@@ -184,21 +123,11 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc);
 int iv_set_ivns(crt_rpc_t *rpc);
 int iv_shutdown(crt_rpc_t *rpc);
 
-RPC_DECLARE(RPC_TEST_FETCH_IV,
-	    arg_test_fetch_iv_in, arg_test_fetch_iv_out, iv_test_fetch_iv);
-
-RPC_DECLARE(RPC_TEST_UPDATE_IV,
-	    arg_test_update_iv_in, arg_test_update_iv_out, iv_test_update_iv);
-
-RPC_DECLARE(RPC_TEST_INVALIDATE_IV,
-	    arg_test_invalidate_iv_in, arg_test_invalidate_iv_out,
-	    iv_test_invalidate_iv);
-
-RPC_DECLARE(RPC_SET_IVNS,
-	    arg_set_ivns_in, arg_set_ivns_out, iv_set_ivns);
-
-RPC_DECLARE(RPC_SHUTDOWN,
-	    arg_shutdown_in, arg_shutdown_out, iv_shutdown);
+RPC_DECLARE(RPC_TEST_FETCH_IV, iv_test_fetch_iv);
+RPC_DECLARE(RPC_TEST_UPDATE_IV, iv_test_update_iv);
+RPC_DECLARE(RPC_TEST_INVALIDATE_IV, iv_test_invalidate_iv);
+RPC_DECLARE(RPC_SET_IVNS, iv_set_ivns);
+RPC_DECLARE(RPC_SHUTDOWN, iv_shutdown);
 
 void
 rpc_handle_reply(const struct crt_cb_info *info)

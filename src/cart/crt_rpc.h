@@ -206,74 +206,74 @@ struct crt_rpc_priv {
  */
 #define CRT_INTERNAL_RPCS_LIST						\
 	X(CRT_OPC_GRP_CREATE,						\
-		0, &CQF_CRT_GRP_CREATE,					\
+		0, &CQF_crt_grp_create,					\
 		crt_hdlr_grp_create, &crt_grp_create_co_ops),		\
 	X(CRT_OPC_GRP_DESTROY,						\
-		0,  &CQF_CRT_GRP_DESTROY,				\
+		0,  &CQF_crt_grp_destroy,				\
 		crt_hdlr_grp_destroy, &crt_grp_destroy_co_ops),		\
 	X(CRT_OPC_URI_LOOKUP,						\
-		0, &CQF_CRT_URI_LOOKUP,					\
+		0, &CQF_crt_uri_lookup,					\
 		crt_hdlr_uri_lookup, NULL),				\
 	X(CRT_OPC_SELF_TEST_BOTH_EMPTY,					\
 		0, NULL, crt_self_test_msg_handler, NULL),		\
-	X(CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV,			\
-		0,  &CQF_CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV,		\
+	X(CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV,				\
+		0,  &CQF_crt_st_send_id_reply_iov,			\
 		crt_self_test_msg_handler, NULL),			\
 	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,			\
-		0, &CQF_CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY,		\
+		0, &CQF_crt_st_send_iov_reply_empty,			\
 		crt_self_test_msg_handler, NULL),			\
 	X(CRT_OPC_SELF_TEST_BOTH_IOV,					\
-		0, &CQF_CRT_SELF_TEST_BOTH_IOV,				\
+		0, &CQF_crt_st_both_iov,				\
 		crt_self_test_msg_handler, NULL),			\
 	X(CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,			\
-		0, &CQF_CRT_SELF_TEST_SEND_BULK_REPLY_IOV,		\
+		0, &CQF_crt_st_send_bulk_reply_iov,			\
 		crt_self_test_msg_handler, NULL),			\
 	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,			\
-		0, &CQF_CRT_SELF_TEST_SEND_IOV_REPLY_BULK,		\
+		0, &CQF_crt_st_send_iov_reply_bulk,			\
 		crt_self_test_msg_handler, NULL),			\
 	X(CRT_OPC_SELF_TEST_BOTH_BULK,					\
-		0, &CQF_CRT_SELF_TEST_BOTH_BULK,			\
+		0, &CQF_crt_st_both_bulk,				\
 		crt_self_test_msg_handler, NULL),			\
 	X(CRT_OPC_SELF_TEST_OPEN_SESSION,				\
-		0, &CQF_CRT_SELF_TEST_OPEN_SESSION,			\
+		0, &CQF_crt_st_open_session,				\
 		crt_self_test_open_session_handler, NULL),		\
 	X(CRT_OPC_SELF_TEST_CLOSE_SESSION,				\
-		0, &CQF_CRT_SELF_TEST_CLOSE_SESSION,			\
+		0, &CQF_crt_st_close_session,				\
 		crt_self_test_close_session_handler, NULL),		\
 	X(CRT_OPC_SELF_TEST_START,					\
-		0, &CQF_CRT_SELF_TEST_START,				\
+		0, &CQF_crt_st_start,					\
 		crt_self_test_start_handler, NULL),			\
 	X(CRT_OPC_SELF_TEST_STATUS_REQ,					\
-		0, &CQF_CRT_SELF_TEST_STATUS_REQ,			\
+		0, &CQF_crt_st_status_req,				\
 		crt_self_test_status_req_handler, NULL),		\
 	X(CRT_OPC_IV_FETCH,						\
-		0, &CQF_CRT_IV_FETCH, crt_hdlr_iv_fetch, NULL),		\
+		0, &CQF_crt_iv_fetch, crt_hdlr_iv_fetch, NULL),		\
 	X(CRT_OPC_IV_UPDATE,						\
-		0, &CQF_CRT_IV_UPDATE, crt_hdlr_iv_update, NULL),	\
+		0, &CQF_crt_iv_update, crt_hdlr_iv_update, NULL),	\
 	X(CRT_OPC_IV_SYNC,						\
-		0, &CQF_CRT_IV_SYNC,					\
+		0, &CQF_crt_iv_sync,					\
 		crt_hdlr_iv_sync, &crt_iv_sync_co_ops),			\
 	X(CRT_OPC_BARRIER_ENTER,					\
-		0, &CQF_CRT_BARRIER,					\
+		0, &CQF_crt_barrier,					\
 		crt_hdlr_barrier_enter, &crt_barrier_corpc_ops),	\
 	X(CRT_OPC_BARRIER_EXIT,						\
-		0, &CQF_CRT_BARRIER,					\
+		0, &CQF_crt_barrier,					\
 		crt_hdlr_barrier_exit, &crt_barrier_corpc_ops),		\
 	X(CRT_OPC_RANK_EVICT,						\
-		0, &CQF_CRT_LM_EVICT,					\
+		0, &CQF_crt_lm_evict,					\
 		crt_hdlr_rank_evict, &crt_rank_evict_co_ops),		\
 	X(CRT_OPC_MEMB_SAMPLE,						\
-		0, &CQF_CRT_LM_MEMB_SAMPLE,				\
+		0, &CQF_crt_lm_memb_sample,				\
 		crt_hdlr_memb_sample, NULL),				\
 	X(CRT_OPC_CTL_LS,						\
-		0, &CQF_CRT_CTL_LS, crt_hdlr_ctl_ls, NULL),		\
+		0, &CQF_crt_ctl_ep_ls, crt_hdlr_ctl_ls, NULL),		\
 	X(CRT_OPC_CTL_GET_HOSTNAME,					\
-		0, &CQF_CRT_CTL_GET_HOSTNAME,				\
+		0, &CQF_crt_ctl_get_host,				\
 		crt_hdlr_ctl_get_hostname, NULL),			\
 	X(CRT_OPC_CTL_GET_PID,						\
-		0, &CQF_CRT_CTL_GET_PID, crt_hdlr_ctl_get_pid, NULL),	\
+		0, &CQF_crt_ctl_get_pid, crt_hdlr_ctl_get_pid, NULL),	\
 	X(CRT_OPC_PROTO_QUERY,						\
-		0, &CQF_CRT_PROTO_QUERY, crt_hdlr_proto_query, NULL)
+		0, &CQF_crt_proto_query, crt_hdlr_proto_query, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -287,80 +287,246 @@ enum {
 #undef X
 
 /* CRT internal RPC definitions */
-struct crt_grp_create_in {
-	/* user visible grp id (group name) */
-	crt_group_id_t		 gc_grp_id;
-	/* internal subgrp id */
-	uint64_t		 gc_int_grpid;
-	d_rank_list_t		*gc_membs;
-	/* the rank initiated the group create */
-	d_rank_t		 gc_initiate_rank;
-};
+#define CRT_ISEQ_GRP_CREATE	/* input fields */		 \
+	/* user visible grp id (group name) */			 \
+	((crt_group_id_t)	(gc_grp_id)		CRT_VAR) \
+	/* internal subgrp id */				 \
+	((uint64_t)		(gc_int_grpid)		CRT_VAR) \
+	((d_rank_list_t)	(gc_membs)		CRT_PTR) \
+	/* the rank initiated the group create */		 \
+	((d_rank_t)		(gc_initiate_rank)	CRT_VAR)
 
-struct crt_grp_create_out {
-	/* failed rank list, can be used to aggregate the reply from child */
-	d_rank_list_t		*gc_failed_ranks;
-	/* the rank sent out the reply */
-	d_rank_t		 gc_rank;
-	/* return code, if failed the gc_rank should be in gc_failed_ranks */
-	int			 gc_rc;
-};
+#define CRT_OSEQ_GRP_CREATE	/* output fields */		 \
+	/* failed rank list, can be used to aggregate the reply from child */ \
+	((d_rank_list_t)	(gc_failed_ranks)	CRT_PTR) \
+	/* the rank sent out the reply */			 \
+	((d_rank_t)		(gc_rank)		CRT_VAR) \
+	/* return code, if failed the gc_rank should be in gc_failed_ranks */ \
+	((int32_t)		(gc_rc)			CRT_VAR)
 
-struct crt_grp_destroy_in {
-	crt_group_id_t		gd_grp_id;
-	/* the rank initiated the group destroy */
-	d_rank_t		gd_initiate_rank;
-};
+CRT_RPC_DECLARE(crt_grp_create, CRT_ISEQ_GRP_CREATE, CRT_OSEQ_GRP_CREATE)
 
-struct crt_grp_destroy_out {
-	/* failed rank list, can be used to aggregate the reply from child */
-	d_rank_list_t		*gd_failed_ranks;
-	/* the rank sent out the reply */
-	d_rank_t		 gd_rank;
-	/* return code, if failed the gc_rank should be in gc_failed_ranks */
-	int			 gd_rc;
-};
+#define CRT_ISEQ_GRP_DESTROY	/* input fields */		 \
+	((crt_group_id_t)	(gd_grp_id)		CRT_VAR) \
+	/* the rank initiated the group destroy */		 \
+	((d_rank_t)		(gd_initiate_rank)	CRT_VAR)
 
-struct crt_uri_lookup_in {
-	crt_group_id_t		ul_grp_id;
-	d_rank_t		ul_rank;
-	uint32_t		ul_tag;
-};
+#define CRT_OSEQ_GRP_DESTROY	/* output fields */		 \
+	/* failed rank list, can be used to aggregate the reply from child */ \
+	((d_rank_list_t)	(gd_failed_ranks)	CRT_PTR) \
+	/* the rank sent out the reply */			 \
+	((d_rank_t)		(gd_rank)		CRT_VAR) \
+	/* return code, if failed the gc_rank should be in gc_failed_ranks */ \
+	((int32_t)		(gd_rc)			CRT_VAR)
 
-struct crt_uri_lookup_out {
-	crt_phy_addr_t		ul_uri;
-	int			ul_rc;
-};
+CRT_RPC_DECLARE(crt_grp_destroy, CRT_ISEQ_GRP_DESTROY, CRT_OSEQ_GRP_DESTROY)
 
-struct crt_barrier_in {
-	int			b_num;
-};
+#define CRT_ISEQ_URI_LOOKUP	/* input fields */		 \
+	((crt_group_id_t)	(ul_grp_id)		CRT_VAR) \
+	((d_rank_t)		(ul_rank)		CRT_VAR) \
+	((uint32_t)		(ul_tag)		CRT_VAR)
 
-struct crt_barrier_out {
-	int			b_rc;
-};
+#define CRT_OSEQ_URI_LOOKUP	/* output fields */		 \
+	((crt_phy_addr_t)	(ul_uri)		CRT_VAR) \
+	((int32_t)		(ul_rc)			CRT_VAR)
 
-struct crt_ctl_in {
-	crt_group_id_t		cel_grp_id;
-	d_rank_t		cel_rank;
-};
+CRT_RPC_DECLARE(crt_uri_lookup, CRT_ISEQ_URI_LOOKUP, CRT_OSEQ_URI_LOOKUP)
 
-struct crt_ctl_ep_ls_out {
-	d_iov_t			cel_addr_str;
-	int			cel_ctx_num;
-	int			cel_rc;
-};
+#define CRT_ISEQ_ST_SEND_ID	/* input fields */		 \
+	((uint64_t)		(unused1)		CRT_VAR)
 
-struct crt_ctl_get_host_out {
-	d_iov_t			cgh_hostname;
-	int			cgh_rc;
-};
+#define CRT_ISEQ_ST_SEND_ID_IOV	/* input fields */		 \
+	((uint64_t)		(unused1)		CRT_VAR) \
+	((d_iov_t)		(unused2)		CRT_VAR)
 
-struct crt_ctl_get_pid_out {
-	int			cgp_pid;
-	int			cgp_rc;
-};
+#define CRT_ISEQ_ST_SEND_ID_IOV_BULK /* input fields */		 \
+	((uint64_t)		(unused1)		CRT_VAR) \
+	((d_iov_t)		(unused2)		CRT_VAR) \
+	((crt_bulk_t)		(unused3)		CRT_VAR)
 
+#define CRT_ISEQ_ST_SEND_ID_BULK /* input fields */		 \
+	((uint64_t)		(unused1)		CRT_VAR) \
+	((crt_bulk_t)		(unused2)		CRT_VAR)
+
+#define CRT_OSEQ_ST_REPLY_EMPTY	/* output fields */
+
+#define CRT_OSEQ_ST_REPLY_IOV	/* output fields */		 \
+	((d_iov_t)		(unused1)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_st_send_id_reply_iov,
+		CRT_ISEQ_ST_SEND_ID, CRT_OSEQ_ST_REPLY_IOV)
+
+CRT_RPC_DECLARE(crt_st_send_iov_reply_empty,
+		CRT_ISEQ_ST_SEND_ID_IOV, CRT_OSEQ_ST_REPLY_EMPTY)
+
+CRT_RPC_DECLARE(crt_st_both_iov,
+		CRT_ISEQ_ST_SEND_ID_IOV, CRT_OSEQ_ST_REPLY_IOV)
+
+CRT_RPC_DECLARE(crt_st_send_iov_reply_bulk,
+		CRT_ISEQ_ST_SEND_ID_IOV_BULK, CRT_OSEQ_ST_REPLY_EMPTY)
+
+CRT_RPC_DECLARE(crt_st_send_bulk_reply_iov,
+		CRT_ISEQ_ST_SEND_ID_BULK, CRT_OSEQ_ST_REPLY_IOV)
+
+CRT_RPC_DECLARE(crt_st_both_bulk,
+		CRT_ISEQ_ST_SEND_ID_BULK, CRT_OSEQ_ST_REPLY_EMPTY)
+
+#define CRT_ISEQ_ST_SEND_SESSION /* input fields */		 \
+	((uint32_t)		(unused1)		CRT_VAR) \
+	((uint32_t)		(unused2)		CRT_VAR) \
+	((uint32_t)		(unused3)		CRT_VAR) \
+	((uint32_t)		(unused4)		CRT_VAR)
+
+#define CRT_OSEQ_ST_REPLY_ID	/* output fields */		 \
+	((uint64_t)		(unused1)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_st_open_session,
+		CRT_ISEQ_ST_SEND_SESSION, CRT_OSEQ_ST_REPLY_ID)
+
+CRT_RPC_DECLARE(crt_st_close_session,
+		CRT_ISEQ_ST_SEND_ID, CRT_OSEQ_ST_REPLY_EMPTY)
+
+#define CRT_ISEQ_ST_START	/* input fields */		 \
+	((crt_group_id_t)	(unused1)		CRT_VAR) \
+	((d_iov_t)		(unused2)		CRT_VAR) \
+	((uint32_t)		(unused3)		CRT_VAR) \
+	((uint32_t)		(unused4)		CRT_VAR) \
+	((uint32_t)		(unused5)		CRT_VAR) \
+	((uint32_t)		(unused6)		CRT_VAR) \
+	((uint32_t)		(unused7)		CRT_VAR)
+
+#define CRT_OSEQ_ST_START	/* output fields */		 \
+	((int32_t)		(unused1)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_st_start, CRT_ISEQ_ST_START, CRT_OSEQ_ST_START)
+
+#define CRT_ISEQ_ST_STATUS_REQ	/* input fields */		 \
+	((crt_bulk_t)		(unused1)		CRT_VAR)
+
+#define CRT_OSEQ_ST_STATUS_REQ	/* output fields */		 \
+	((uint64_t)		(test_duration_ns)	CRT_VAR) \
+	((uint32_t)		(num_remaining)		CRT_VAR) \
+	((int32_t)		(status)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_st_status_req,
+		CRT_ISEQ_ST_STATUS_REQ, CRT_OSEQ_ST_STATUS_REQ)
+
+#define CRT_ISEQ_IV_FETCH	/* input fields */		 \
+	/* Namespace ID */					 \
+	((d_iov_t)		(ifi_nsid)		CRT_VAR) \
+	/* IV Key */						 \
+	((d_iov_t)		(ifi_key)		CRT_VAR) \
+	/* Bulk handle for iv value */				 \
+	((crt_bulk_t)		(ifi_value_bulk)	CRT_VAR) \
+	/* Class id */						 \
+	((int32_t)		(ifi_class_id)		CRT_VAR) \
+	/* Root node for current fetch operation */		 \
+	((d_rank_t)		(ifi_root_node)		CRT_VAR)
+
+#define CRT_OSEQ_IV_FETCH	/* output fields */		 \
+	((int32_t)		(ifo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
+
+#define CRT_ISEQ_IV_UPDATE	/* input fields */		 \
+	/* IV namespace ID */					 \
+	((d_iov_t)		(ivu_nsid)		CRT_VAR) \
+	/* IOV for key */					 \
+	((d_iov_t)		(ivu_key)		CRT_VAR) \
+	/* IOV for sync */					 \
+	((d_iov_t)		(ivu_sync_type)		CRT_VAR) \
+	/* Bulk handle for iv value */				 \
+	((crt_bulk_t)		(ivu_iv_value_bulk)	CRT_VAR) \
+	/* Root node for IV UPDATE */				 \
+	((d_rank_t)		(ivu_root_node)		CRT_VAR) \
+	/* Original node that issued crt_iv_update call */	 \
+	((d_rank_t)		(ivu_caller_node)	CRT_VAR) \
+	/* Class ID */						 \
+	((uint32_t)		(ivu_class_id)		CRT_VAR) \
+	((uint32_t)		(padding)		CRT_VAR)
+
+#define CRT_OSEQ_IV_UPDATE	/* output fields */		 \
+	((uint64_t)		(rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
+
+#define CRT_ISEQ_IV_SYNC	/* input fields */		 \
+	/* IV Namespace ID */					 \
+	((d_iov_t)		(ivs_nsid)		CRT_VAR) \
+	/* IOV for key */					 \
+	((d_iov_t)		(ivs_key)		CRT_VAR) \
+	/* IOV for sync type */					 \
+	((d_iov_t)		(ivs_sync_type)		CRT_VAR) \
+	/* IV Class ID */					 \
+	((uint32_t)		(ivs_class_id)		CRT_VAR)
+
+#define CRT_OSEQ_IV_SYNC	/* output fields */		 \
+	((int32_t)		(rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(crt_iv_sync, CRT_ISEQ_IV_SYNC, CRT_OSEQ_IV_SYNC)
+
+#define CRT_ISEQ_BARRIER	/* input fields */		 \
+	((int32_t)		(b_num)			CRT_VAR)
+
+#define CRT_OSEQ_BARRIER	/* output fields */		 \
+	((int32_t)		(b_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(crt_barrier, CRT_ISEQ_BARRIER, CRT_OSEQ_BARRIER)
+
+#define CRT_ISEQ_LM_EVICT	/* input fields */		 \
+	((d_rank_t)		(clei_rank)		CRT_VAR) \
+	((uint32_t)		(clei_ver)		CRT_VAR)
+
+#define CRT_OSEQ_LM_EVICT	/* output fields */		 \
+	((int32_t)		(cleo_succeeded)	CRT_VAR) \
+	((int32_t)		(cleo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_lm_evict, CRT_ISEQ_LM_EVICT, CRT_OSEQ_LM_EVICT)
+
+#define CRT_ISEQ_LM_MEMB_SAMPLE	/* input fields */		 \
+	((uint32_t)		(msi_ver)		CRT_VAR)
+
+#define CRT_OSEQ_LM_MEMB_SAMPLE	/* output fields */		 \
+	((d_iov_t)		(mso_delta)		CRT_VAR) \
+	((uint32_t)		(mso_ver)		CRT_VAR) \
+	((int32_t)		(mso_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_lm_memb_sample,
+		CRT_ISEQ_LM_MEMB_SAMPLE, CRT_OSEQ_LM_MEMB_SAMPLE)
+
+#define CRT_ISEQ_CTL		/* input fields */		 \
+	((crt_group_id_t)	(cel_grp_id)		CRT_VAR) \
+	((d_rank_t)		(cel_rank)		CRT_VAR)
+
+#define CRT_OSEQ_CTL_EP_LS	/* output fields */		 \
+	((d_iov_t)		(cel_addr_str)		CRT_VAR) \
+	((int32_t)		(cel_ctx_num)		CRT_VAR) \
+	((int32_t)		(cel_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_ep_ls, CRT_ISEQ_CTL, CRT_OSEQ_CTL_EP_LS)
+
+#define CRT_OSEQ_CTL_GET_HOST	/* output fields */		 \
+	((d_iov_t)		(cgh_hostname)		CRT_VAR) \
+	((int32_t)		(cgh_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_get_host, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_HOST)
+
+#define CRT_OSEQ_CTL_GET_PID	/* output fields */		 \
+	((int32_t)		(cgp_pid)		CRT_VAR) \
+	((int32_t)		(cgp_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_get_pid, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_PID)
+
+#define CRT_ISEQ_PROTO_QUERY	/* input fields */		 \
+	((d_iov_t)		(pq_ver)		CRT_VAR) \
+	((int32_t)		(pq_ver_count)		CRT_VAR) \
+	((uint32_t)		(pq_base_opc)		CRT_VAR)
+
+#define CRT_OSEQ_PROTO_QUERY	/* output fields */		 \
+	((uint32_t)		(pq_ver)		CRT_VAR) \
+	((int32_t)		(pq_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 
 /* CRT internal RPC format definitions */
 struct crt_internal_rpc {

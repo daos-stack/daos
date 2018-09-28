@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,7 +53,7 @@
  *
  * SEND:     REPLY:    OPCODE:
  * EMPTY     EMPTY     CRT_OPC_SELF_TEST_BOTH_EMPTY
- * EMPTY     IOV       CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV
+ * EMPTY     IOV       CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV
  * EMPTY     BULK_PUT  CRT_OPC_SELF_TEST_BOTH_BULK
  * EMPTY     BULK_GET  <invalid>
  * IOV       EMPTY     CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY
@@ -89,7 +89,7 @@
  *    <empty>                                  (NULL)
  *        CRT_OPC_SELF_TEST_BOTH_EMPTY
  *    session_id only                          (int32_t)
- *        CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV
+ *        CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV
  *    session_id, iov                          (int32_t, d_iov_t)
  *        CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY
  *        CRT_OPC_SELF_TEST_BOTH_IOV
@@ -106,7 +106,7 @@
  *        CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK
  *        CRT_OPC_SELF_TEST_BOTH_BULK
  *    iov                                      (d_iov_t)
- *        CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV
+ *        CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV
  *        CRT_OPC_SELF_TEST_BOTH_IOV
  *        CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV
  */
@@ -237,12 +237,6 @@ struct crt_st_start_params {
 	};
 };
 
-struct crt_st_status_req_reply {
-	int64_t test_duration_ns;
-	uint32_t num_remaining;
-	int32_t status;
-};
-
 struct st_latency {
 	int64_t val;
 	uint32_t rank;
@@ -260,7 +254,7 @@ crt_st_compute_opcode(enum crt_st_msg_type send_type,
 	D_ASSERT(reply_type != CRT_SELF_TEST_MSG_TYPE_BULK_GET);
 
 	crt_opcode_t opcodes[4][4] = { { CRT_OPC_SELF_TEST_BOTH_EMPTY,
-					 CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV,
+					 CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV,
 					 CRT_OPC_SELF_TEST_BOTH_BULK,
 					 -1 },
 				       { CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,

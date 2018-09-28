@@ -69,7 +69,7 @@ struct st_endpoint {
 
 struct st_master_endpt {
 	crt_endpoint_t endpt;
-	struct crt_st_status_req_reply reply;
+	struct crt_st_status_req_out reply;
 	int32_t test_failed;
 	int32_t test_completed;
 };
@@ -227,11 +227,10 @@ static void
 status_req_cb(const struct crt_cb_info *cb_info)
 {
 	/* Result returned to main thread */
-	struct crt_st_status_req_reply   *return_status =
-		(struct crt_st_status_req_reply *)cb_info->cci_arg;
+	struct crt_st_status_req_out   *return_status = cb_info->cci_arg;
 
 	/* Status retrieved from the RPC result payload */
-	struct crt_st_status_req_reply   *reply_status;
+	struct crt_st_status_req_out   *reply_status;
 
 	/* Check the status of the RPC transport itself */
 	if (cb_info->cci_rc != 0) {
@@ -240,8 +239,7 @@ status_req_cb(const struct crt_cb_info *cb_info)
 	}
 
 	/* Get the status from the payload */
-	reply_status = (struct crt_st_status_req_reply *)
-		       crt_reply_get(cb_info->cci_rpc);
+	reply_status = crt_reply_get(cb_info->cci_rpc);
 	D_ASSERT(reply_status != NULL);
 
 	/*

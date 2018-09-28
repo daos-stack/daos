@@ -84,10 +84,10 @@ static void signal_done(void)
 
 static void rpc_handler(crt_rpc_t *rpc)
 {
-	struct rpc_in	*in;
-	struct rpc_out	*output;
-	int		 rc;
-	int		 i;
+	struct threaded_rpc_in	*in;
+	struct threaded_rpc_out	*output;
+	int			 rc;
+	int			 i;
 
 	in = crt_req_get(rpc);
 	output = crt_reply_get(rpc);
@@ -118,7 +118,6 @@ static void rpc_handler(crt_rpc_t *rpc)
 int main(int argc, char **argv)
 {
 	pthread_t		thread[NUM_THREADS];
-	struct crt_req_format	fmt = INIT_FMT();
 	int			status = 0;
 	int			rc;
 	int			i;
@@ -129,7 +128,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	crt_rpc_srv_register(RPC_ID, 0, &fmt, rpc_handler);
+	CRT_RPC_SRV_REGISTER(RPC_ID, 0, threaded_rpc, rpc_handler);
 
 	crt_context_create(&crt_ctx);
 	for (rc = 0; rc < NUM_THREADS; rc++)

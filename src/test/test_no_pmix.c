@@ -71,14 +71,14 @@ static int issue_test_ping(d_rank_t target_rank, int target_tag);
 	} while (0)
 
 #define RPC_REGISTER(name) \
-	crt_rpc_srv_register(name, 0, &DQF_##name, DQF_FUNC_##name)
+	CRT_RPC_SRV_REGISTER(name, 0, name, DQF_FUNC_##name)
 
 #define CORPC_REGISTER(name, ops) \
-	crt_corpc_register(name, &DQF_##name, DQF_FUNC_##name, ops)
+	CRT_RPC_CORPC_REGISTER(name, name, DQF_FUNC_##name, ops)
 
-#define RPC_DECLARE(name, input, output, function)			\
-	struct crt_req_format DQF_##name = DEFINE_CRT_REQ_FMT(input,	\
-							      output);	\
+#define RPC_DECLARE(name, function)					\
+	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)		\
+	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)		\
 	static void *DQF_FUNC_##name = (void *)function
 
 enum {
@@ -89,52 +89,35 @@ enum {
 	RPC_SHUTDOWN = 0xE0,
 } rpc_id_t;
 
+#define CRT_ISEQ_RPC_TEST_PING	/* input fields */		 \
+	((uint64_t)		(field)			CRT_VAR)
 
-static
-struct crt_msg_field *arg_set_grp_info_in[] = {
-	&CMF_IOVEC,
-};
+#define CRT_OSEQ_RPC_TEST_PING	/* output fields */		 \
+	((uint64_t)		(field)			CRT_VAR)
 
-static
-struct crt_msg_field *arg_set_grp_info_out[] = {
-	&CMF_UINT64,
-};
+#define CRT_ISEQ_CORPC_TEST_PING /* input fields */		 \
+	((uint64_t)		(field)			CRT_VAR)
 
-static
-struct crt_msg_field *arg_test_ping_in[] = {
-	&CMF_UINT64,
-};
+#define CRT_OSEQ_CORPC_TEST_PING /* output fields */		 \
+	((uint64_t)		(field)			CRT_VAR)
 
-static
-struct crt_msg_field *arg_test_ping_out[] = {
-	&CMF_UINT64,
-};
+#define CRT_ISEQ_RPC_SET_GRP_INFO /* input fields */		 \
+	((d_iov_t)		(grp_info)		CRT_VAR)
 
-static
-struct crt_msg_field *arg_test_indirect_ping_in[] = {
-	&CMF_RANK,
-};
+#define CRT_OSEQ_RPC_SET_GRP_INFO /* output fields */		 \
+	((uint64_t)		(rc)			CRT_VAR)
 
-struct rpc_set_grp_info_in {
-	d_iov_t		grp_info;
-};
+#define CRT_ISEQ_RPC_TEST_INDIRECT_PING	/* input fields */	 \
+	((d_rank_t)		(rank_to_ping)		CRT_VAR)
 
-struct rpc_set_grp_info_out {
-	uint64_t	rc;
-};
+#define CRT_OSEQ_RPC_TEST_INDIRECT_PING	/* output fields */	 \
+	((uint64_t)		(field)			CRT_VAR)
 
-struct rpc_test_ping_in {
-	uint64_t	field;
-};
+#define CRT_ISEQ_RPC_SHUTDOWN	/* input fields */		 \
+	((uint64_t)		(field)			CRT_VAR)
 
-struct rpc_test_ping_out {
-	uint64_t	field;
-};
-
-struct rpc_test_indirect_ping_in {
-	d_rank_t	rank_to_ping;
-};
-
+#define CRT_OSEQ_RPC_SHUTDOWN	/* output fields */		 \
+	((uint64_t)		(field)			CRT_VAR)
 
 static int test_ping_hdlr(crt_rpc_t *rpc);
 static void corpc_test_ping_hdlr(crt_rpc_t *rpc);
@@ -142,19 +125,14 @@ static int set_grp_info_hdlr(crt_rpc_t *rpc);
 static int test_ping_indirect_hdlr(crt_rpc_t *rpc);
 static int shutdown_hdlr(crt_rpc_t *rpc);
 
-RPC_DECLARE(RPC_TEST_PING, arg_test_ping_in, arg_test_ping_out,
-		test_ping_hdlr);
-RPC_DECLARE(CORPC_TEST_PING, arg_test_ping_in, arg_test_ping_out,
-		corpc_test_ping_hdlr);
+RPC_DECLARE(RPC_TEST_PING, test_ping_hdlr);
+RPC_DECLARE(CORPC_TEST_PING, corpc_test_ping_hdlr);
 
-RPC_DECLARE(RPC_SET_GRP_INFO, arg_set_grp_info_in, arg_set_grp_info_out,
-		set_grp_info_hdlr);
+RPC_DECLARE(RPC_SET_GRP_INFO, set_grp_info_hdlr);
 
-RPC_DECLARE(RPC_TEST_INDIRECT_PING, arg_test_indirect_ping_in,
-		arg_test_ping_out, test_ping_indirect_hdlr);
+RPC_DECLARE(RPC_TEST_INDIRECT_PING, test_ping_indirect_hdlr);
 
-RPC_DECLARE(RPC_SHUTDOWN, arg_test_ping_in, arg_test_ping_out, shutdown_hdlr);
-
+RPC_DECLARE(RPC_SHUTDOWN, shutdown_hdlr);
 
 static int
 shutdown_hdlr(crt_rpc_t *rpc)
@@ -168,8 +146,8 @@ shutdown_hdlr(crt_rpc_t *rpc)
 static int
 set_grp_info_hdlr(crt_rpc_t *rpc)
 {
-	struct rpc_set_grp_info_in *input;
-	struct rpc_set_grp_info_out *output;
+	struct RPC_SET_GRP_INFO_in	*input;
+	struct RPC_SET_GRP_INFO_out	*output;
 
 	input = crt_req_get(rpc);
 	output = crt_reply_get(rpc);
@@ -202,7 +180,7 @@ static int
 issue_set_grp_info(d_rank_t target_rank, int target_tag,
 		d_iov_t *iov)
 {
-	struct rpc_set_grp_info_in	*input;
+	struct RPC_SET_GRP_INFO_in	*input;
 	crt_rpc_t			*rpc_req;
 	crt_endpoint_t			server_ep;
 	int rc;
@@ -244,8 +222,8 @@ issue_set_grp_info(d_rank_t target_rank, int target_tag,
 
 static void corpc_test_ping_hdlr(crt_rpc_t *rpc)
 {
-	struct rpc_test_ping_in		*input;
-	struct rpc_test_ping_out	*output;
+	struct RPC_TEST_PING_in		*input;
+	struct RPC_TEST_PING_out	*output;
 	int rc;
 
 	DBG_PRINT("CORPC TEST ping handler called\n");
@@ -268,9 +246,9 @@ static void corpc_test_ping_hdlr(crt_rpc_t *rpc)
 
 void ping_response_hdlr(const struct crt_cb_info *info)
 {
-	crt_rpc_t *rpc = NULL;
-	struct rpc_test_ping_out		*output;
-	struct rpc_test_ping_in			*input;
+	crt_rpc_t			*rpc = NULL;
+	struct RPC_TEST_PING_out	*output;
+	struct RPC_TEST_PING_in		*input;
 
 	DBG_PRINT("Ping respones hdlr\n");
 	rpc = info->cci_arg;
@@ -286,7 +264,7 @@ void ping_response_hdlr(const struct crt_cb_info *info)
 
 int test_ping_indirect_hdlr(crt_rpc_t *rpc)
 {
-	struct rpc_test_indirect_ping_in	*input;
+	struct RPC_TEST_INDIRECT_PING_in	*input;
 	crt_rpc_t				*tgt_req;
 	crt_endpoint_t				ep;
 
@@ -310,8 +288,8 @@ int
 issue_indirect_test_ping(d_rank_t imm_rank, int imm_tag,
 		d_rank_t target_rank)
 {
-	struct rpc_test_indirect_ping_in	*input;
-	struct rpc_test_ping_out		*output;
+	struct RPC_TEST_INDIRECT_PING_in	*input;
+	struct RPC_TEST_PING_out		*output;
 	crt_endpoint_t				server_ep;
 	crt_rpc_t				*rpc_req;
 	int					done;
@@ -360,8 +338,8 @@ issue_indirect_test_ping(d_rank_t imm_rank, int imm_tag,
 
 static int test_ping_hdlr(crt_rpc_t *rpc)
 {
-	struct rpc_test_ping_in		*input;
-	struct rpc_test_ping_out	*output;
+	struct RPC_TEST_PING_in		*input;
+	struct RPC_TEST_PING_out	*output;
 	int				rc;
 
 	DBG_PRINT("TEST_PING_HDLR called\n");
@@ -396,8 +374,8 @@ show_usage(void)
 static int
 issue_test_ping(d_rank_t target_rank, int target_tag)
 {
-	struct rpc_test_ping_in		*input;
-	struct rpc_test_ping_out	*output;
+	struct RPC_TEST_PING_in		*input;
+	struct RPC_TEST_PING_out	*output;
 	crt_endpoint_t			server_ep;
 	crt_rpc_t			*rpc_req;
 	int				done;
@@ -486,8 +464,8 @@ int issue_test_corpc_ping(void)
 	d_rank_list_t	excluded_membs;
 	d_rank_t	excluded_ranks = {0};
 	crt_rpc_t	*rpc;
-	struct rpc_test_ping_in		*input;
-	struct rpc_test_ping_out	*output;
+	struct RPC_TEST_PING_in		*input;
+	struct RPC_TEST_PING_out	*output;
 	int done;
 
 	excluded_ranks = opts.self_rank;
@@ -662,8 +640,8 @@ add_rank_uris(char *rank_uris)
 static int
 corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
 {
-	struct rpc_test_ping_out	*output_src;
-	struct rpc_test_ping_out	*output_result;
+	struct RPC_TEST_PING_out	*output_src;
+	struct RPC_TEST_PING_out	*output_result;
 
 
 	output_src = crt_reply_get(src);

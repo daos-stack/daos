@@ -110,8 +110,8 @@ int grp_destroy_cb(void *arg, int status)
 void
 echo_srv_corpc_example(crt_rpc_t *rpc_req)
 {
-	struct crt_echo_corpc_example_req *req;
-	struct crt_echo_corpc_example_reply *reply;
+	struct crt_echo_corpc_example_in *req;
+	struct crt_echo_corpc_example_out *reply;
 	d_rank_t my_rank;
 	int rc = 0;
 
@@ -130,7 +130,7 @@ echo_srv_corpc_example(crt_rpc_t *rpc_req)
 
 int corpc_example_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *arg)
 {
-	struct crt_echo_corpc_example_reply *reply_source, *reply_result;
+	struct crt_echo_corpc_example_out *reply_source, *reply_result;
 	d_rank_t my_rank;
 
 	D_ASSERT(source != NULL && result != NULL);
@@ -157,8 +157,8 @@ int bulk_test_cb(const struct crt_bulk_cb_info *cb_info)
 	struct crt_bulk_desc		*bulk_desc;
 	crt_bulk_t			 local_bulk_hdl;
 	d_iov_t				*iovs;
-	struct crt_echo_bulk_out_reply	*e_reply;
-	struct crt_echo_bulk_in_req	*e_req;
+	struct crt_echo_bulk_out	*e_reply;
+	struct crt_echo_bulk_in		*e_req;
 	int				 rc = 0;
 
 	rc = cb_info->bci_rc;
@@ -244,7 +244,7 @@ echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	size_t				 bulk_len;
 	unsigned int			 bulk_sgnum;
 	struct crt_bulk_desc		 bulk_desc;
-	struct crt_echo_bulk_in_req	*e_req;
+	struct crt_echo_bulk_in		*e_req;
 	int				 rc = 0;
 
 	e_req = crt_req_get(rpc_req);
