@@ -144,8 +144,7 @@ bool d_should_fail(uint32_t fault_id);
 		bool __rc;						\
 		__rc = d_fault_inject && d_should_fail(fault_id);	\
 		if (__rc)						\
-			D_DEBUG(DB_ALL,					\
-				"fault_id %d, injecting fault.\n",	\
+			D_WARN("fault_id %d, injecting fault.\n",	\
 				fault_id);				\
 		__rc;							\
 	})
