@@ -30,12 +30,15 @@ import (
 	"syscall"
 
 	"google.golang.org/grpc"
+
+	"github.com/daos-stack/daos/src/control/drpc"
 )
 
 var (
 	serverAddr         = flag.String("server_addr", "127.0.0.1:10000", "The server address in the format of host:port")
 	serverHostOverride = flag.String("server_host_override", "", "The server name use to verify the hostname returned by TLS handshake")
-	grpcSocket         = flag.String("grpc_socket", "/tmp/agent/daos_agent.grpc", "The path to the unix socket to be used for receiving local messages")
+	grpcSocket         = flag.String("grpc_socket", "/var/run/daos_agent.grpc", "The path to the unix socket to be used for receiving local messages")
+	unixSocket         = flag.String("unix_socket", "/var/run/daos_agent.sock", "The path to the unix socket to be used for drpc messages")
 )
 
 func main() {
@@ -49,6 +52,16 @@ func main() {
 		log.Fatalf("fail to dial: %v", err)
 	}
 	defer conn.Close()
+
+	drpcServer, err := drpc.NewDomainSocketServer(*unixSocket)
+	if err != nil {
+		log.Fatalf("Unable to create socket server: %v", err)
+	}
+
+	err = drpcServer.Start()
+	if err != nil {
+		log.Fatalf("Unable to start socket server on %s: %v", *unixSocket, err)
+	}
 
 	// We need to ensure the socket file does not exist otherwise
 	// listen will fail.
