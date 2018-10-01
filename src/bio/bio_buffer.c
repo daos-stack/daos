@@ -144,12 +144,12 @@ bio_iod_sgl(struct bio_desc *biod, unsigned int idx)
 {
 	struct bio_sglist	*bsgl = NULL;
 
-	if (idx >= biod->bd_sgl_cnt)
-		D_ERROR("Invalid sgl index %d/%d\n", idx, biod->bd_sgl_cnt);
-	else
-		bsgl = &biod->bd_sgls[idx];
+	D_ASSERTF(idx < biod->bd_sgl_cnt, "Invalid sgl index %d/%d\n",
+		  idx, biod->bd_sgl_cnt);
 
+	bsgl = &biod->bd_sgls[idx];
 	D_ASSERT(bsgl != NULL);
+
 	return bsgl;
 }
 

@@ -558,13 +558,12 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 	D_ASSERT(len > 0);
 
 	/* blob unmap can only support page aligned offset and length */
-	D_ASSERT(((len >> BIO_DMA_PAGE_SHIFT) << BIO_DMA_PAGE_SHIFT) == len);
-	D_ASSERT(((off >> BIO_DMA_PAGE_SHIFT) << BIO_DMA_PAGE_SHIFT) == off);
+	D_ASSERT((len & (BIO_DMA_PAGE_SZ - 1)) == 0);
+	D_ASSERT((off & (BIO_DMA_PAGE_SZ - 1)) == 0);
 
 	/* convert byte to blob/page offset */
 	pg_off = off >> BIO_DMA_PAGE_SHIFT;
-	pg_cnt = ((off + len + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
-			pg_off;
+	pg_cnt = len >> BIO_DMA_PAGE_SHIFT;
 
 	D_ASSERT(ioctxt->bic_xs_ctxt != NULL);
 	bbs = ioctxt->bic_xs_ctxt->bxc_blobstore;
