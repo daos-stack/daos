@@ -100,13 +100,14 @@ def scons():
                         '-D_GNU_SOURCE'])
     env.Append(CCFLAGS=['-O2', '-pthread'])
     env.Append(CFLAGS=['-std=gnu99'])
-    env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+    if not GetOption('clean'):
+        env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
-    print('c Compiler options: %s %s %s' % (env.get('CC'),
-                                            ' '.join(env.get('CFLAGS')),
-                                            ' '.join(env.get('CCFLAGS'))))
-    print('c++ Compiler options: %s %s' % (env.get('CXX'),
-                                           ' '.join(env.get('CCFLAGS'))))
+        print('c Compiler options: %s %s %s' % (env.get('CC'),
+                                                ' '.join(env.get('CFLAGS')),
+                                                ' '.join(env.get('CCFLAGS'))))
+        print('c++ Compiler options: %s %s' % (env.get('CXX'),
+                                               ' '.join(env.get('CCFLAGS'))))
 
     Export('env', 'prereqs')
     # generate targets in specific build dir to avoid polluting the source code
