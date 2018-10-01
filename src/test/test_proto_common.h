@@ -84,14 +84,11 @@ struct ping_out_t {
 	uint32_t po_magic;
 };
 
-struct crt_req_format MY_CRF_0 =
-	DEFINE_CRT_REQ_FMT("RPC_0", ping_in_fmt, ping_out_fmt);
+struct crt_req_format MY_CRF_0 = DEFINE_CRT_REQ_FMT(ping_in_fmt, ping_out_fmt);
 
-struct crt_req_format MY_CRF_1 =
-	DEFINE_CRT_REQ_FMT("RPC_1", ping_in_fmt, ping_out_fmt);
+struct crt_req_format MY_CRF_1 = DEFINE_CRT_REQ_FMT(ping_in_fmt, ping_out_fmt);
 
-struct crt_req_format MY_CRF_2 =
-	DEFINE_CRT_REQ_FMT("RPC_2", ping_in_fmt, ping_out_fmt);
+struct crt_req_format MY_CRF_2 = DEFINE_CRT_REQ_FMT(ping_in_fmt, ping_out_fmt);
 
 static void
 ping_hdlr_0(crt_rpc_t *rpc_req)

@@ -125,33 +125,28 @@ struct crt_msg_field *crt_rpc_test_grp_io_out[] = {
 };
 
 struct crt_req_format CRT_TEST_IO =
-		DEFINE_CRT_REQ_FMT("CRT_RPC_TEST_IO",
-				crt_rpc_test_io_in, crt_rpc_test_io_out);
+		DEFINE_CRT_REQ_FMT(crt_rpc_test_io_in, crt_rpc_test_io_out);
 
 struct crt_req_format CRT_TEST_ERR =
-		DEFINE_CRT_REQ_FMT("CRT_RPC_TEST_ERR",
-				crt_rpc_test_io_in, crt_rpc_test_io_out);
+		DEFINE_CRT_REQ_FMT(crt_rpc_test_io_in, crt_rpc_test_io_out);
 
 struct crt_req_format CRT_TEST_NO_IO =
-		DEFINE_CRT_REQ_FMT("CRT_RPC_TEST_NO_IO", NULL, NULL);
+		DEFINE_CRT_REQ_FMT(NULL, NULL);
 
 struct crt_req_format CRT_TEST_TIMEOUT =
-		DEFINE_CRT_REQ_FMT("CRT_RPC_TEST_TIMEOUT",
-				crt_rpc_test_io_in, NULL);
+		DEFINE_CRT_REQ_FMT(crt_rpc_test_io_in, NULL);
 
 struct crt_req_format CRT_TEST_SHUTDOWN =
-		DEFINE_CRT_REQ_FMT("CRT_RPC_TEST_SHUTDOWN", NULL, NULL);
+		DEFINE_CRT_REQ_FMT(NULL, NULL);
 
 struct crt_req_format CRT_GRP_TEST_IO =
-	DEFINE_CRT_REQ_FMT("CRT_RPC_TEST_GRP_IO", crt_rpc_test_grp_io_in,
-			   crt_rpc_test_grp_io_out);
+	DEFINE_CRT_REQ_FMT(crt_rpc_test_grp_io_in, crt_rpc_test_grp_io_out);
 
 struct crt_req_format CRT_MULTITIER_TEST_IO =
-		DEFINE_CRT_REQ_FMT("CRT_RPC_MULTITIER_TEST_IO",
-				crt_rpc_test_io_in, crt_rpc_test_io_out);
+		DEFINE_CRT_REQ_FMT(crt_rpc_test_io_in, crt_rpc_test_io_out);
 
 struct crt_req_format CRT_MULTITIER_TEST_NO_IO =
-		DEFINE_CRT_REQ_FMT("CRT_RPC_MULTITIER_TEST_NO_IO", NULL, NULL);
+		DEFINE_CRT_REQ_FMT(NULL, NULL);
 
 
 struct rpc_test_cli {

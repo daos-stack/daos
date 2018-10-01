@@ -85,8 +85,7 @@ struct crt_msg_field *corpc_ver_mismatch_out_fields[] = {
 };
 
 struct crt_req_format CQF_CORPC_VER_MISMATCH =
-	DEFINE_CRT_REQ_FMT("CORPC_VER_MISMATCH",
-			   corpc_ver_mismatch_in_fields,
+	DEFINE_CRT_REQ_FMT(corpc_ver_mismatch_in_fields,
 			   corpc_ver_mismatch_out_fields);
 
 struct corpc_ver_mismatch_in_t {
@@ -107,8 +106,7 @@ struct crt_msg_field *rank_evict_out_fields[] = {
 };
 
 struct crt_req_format CQF_TEST_RANK_EVICT =
-	DEFINE_CRT_REQ_FMT("TEST_RANK_EVICT",
-			rank_evict_in_fields,
+	DEFINE_CRT_REQ_FMT(rank_evict_in_fields,
 			rank_evict_out_fields);
 
 struct rank_evict_in_t {
@@ -128,8 +126,7 @@ struct crt_msg_field *subgrp_ping_out_fields[] = {
 };
 
 struct crt_req_format CQF_SUBGRP_PING =
-	DEFINE_CRT_REQ_FMT("SUBGRP_PING",
-			subgrp_ping_in_fields,
+	DEFINE_CRT_REQ_FMT(subgrp_ping_in_fields,
 			subgrp_ping_out_fields);
 
 struct subgrp_ping_in_t {

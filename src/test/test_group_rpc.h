@@ -64,7 +64,6 @@ struct crt_test_ping_delay_reply {
 };
 
 struct crt_req_format CQF_TEST_PING_DELAY =
-	DEFINE_CRT_REQ_FMT("TEST_PING_DELAY", test_ping_delay_checkin,
-			   test_ping_delay_checkout);
+	DEFINE_CRT_REQ_FMT(test_ping_delay_checkin, test_ping_delay_checkout);
 
 

@@ -106,8 +106,7 @@ struct crt_msg_field *arg_basic_corpc_out[] = {
 };
 
 
-struct crt_req_format DQF_BASIC_CORPC = DEFINE_CRT_REQ_FMT("BASIC_CORPC",
-							arg_basic_corpc_in,
+struct crt_req_format DQF_BASIC_CORPC = DEFINE_CRT_REQ_FMT(arg_basic_corpc_in,
 							arg_basic_corpc_out);
 
 static void

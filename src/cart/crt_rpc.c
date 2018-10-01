@@ -56,8 +56,7 @@ static struct crt_msg_field *crt_grp_create_out_fields[] = {
 };
 
 static struct crt_req_format CQF_CRT_GRP_CREATE =
-	DEFINE_CRT_REQ_FMT("CRT_GRP_CREATE", crt_grp_create_in_fields,
-			   crt_grp_create_out_fields);
+	DEFINE_CRT_REQ_FMT(crt_grp_create_in_fields, crt_grp_create_out_fields);
 
 static struct crt_corpc_ops crt_grp_create_co_ops = {
 	.co_aggregate = crt_grp_create_corpc_aggregate,
@@ -75,7 +74,7 @@ static struct crt_msg_field *crt_grp_destroy_out_fields[] = {
 };
 
 static struct crt_req_format CQF_CRT_GRP_DESTROY =
-	DEFINE_CRT_REQ_FMT("CRT_GRP_DESTROY", crt_grp_destroy_in_fields,
+	DEFINE_CRT_REQ_FMT(crt_grp_destroy_in_fields,
 			   crt_grp_destroy_out_fields);
 
 static struct crt_corpc_ops crt_grp_destroy_co_ops = {
@@ -96,8 +95,7 @@ static struct crt_msg_field *crt_uri_lookup_out_fields[] = {
 };
 
 static struct crt_req_format CQF_CRT_URI_LOOKUP =
-	DEFINE_CRT_REQ_FMT("CRT_URI_LOOKUP", crt_uri_lookup_in_fields,
-			   crt_uri_lookup_out_fields);
+	DEFINE_CRT_REQ_FMT(crt_uri_lookup_in_fields, crt_uri_lookup_out_fields);
 
 /* for self-test service */
 static struct crt_msg_field *crt_st_send_id_field[] = {
@@ -160,53 +158,34 @@ static struct crt_msg_field *crt_st_status_req_reply_field[] = {
 };
 
 static struct crt_req_format CQF_CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV",
-			   crt_st_send_id_field,
-			   crt_st_reply_iov_field);
+	DEFINE_CRT_REQ_FMT(crt_st_send_id_field, crt_st_reply_iov_field);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY",
-			   crt_st_send_id_iov_field,
-			   NULL);
+	DEFINE_CRT_REQ_FMT(crt_st_send_id_iov_field, NULL);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_BOTH_IOV =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_BOTH_IOV",
-			   crt_st_send_id_iov_field,
-			   crt_st_reply_iov_field);
+	DEFINE_CRT_REQ_FMT(crt_st_send_id_iov_field, crt_st_reply_iov_field);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_SEND_IOV_REPLY_BULK =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_SEND_IOV_REPLY_BULK",
-			   crt_st_send_id_iov_bulk_field,
-			   NULL);
+	DEFINE_CRT_REQ_FMT(crt_st_send_id_iov_bulk_field, NULL);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_SEND_BULK_REPLY_IOV =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_SEND_BULK_REPLY_IOV",
-			   crt_st_send_id_bulk_field,
-			   crt_st_reply_iov_field);
+	DEFINE_CRT_REQ_FMT(crt_st_send_id_bulk_field, crt_st_reply_iov_field);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_BOTH_BULK =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_BOTH_BULK",
-			   crt_st_send_id_bulk_field,
-			   NULL);
+	DEFINE_CRT_REQ_FMT(crt_st_send_id_bulk_field, NULL);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_OPEN_SESSION =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_OPEN_SESSION",
-			   crt_st_open_session_field,
-			   crt_st_session_id_field);
+	DEFINE_CRT_REQ_FMT(crt_st_open_session_field, crt_st_session_id_field);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_CLOSE_SESSION =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_CLOSE_SESSION",
-			   crt_st_session_id_field,
-			   NULL);
+	DEFINE_CRT_REQ_FMT(crt_st_session_id_field, NULL);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_START =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_START",
-			   crt_st_start_field,
-			   crt_st_start_reply_field);
+	DEFINE_CRT_REQ_FMT(crt_st_start_field, crt_st_start_reply_field);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_STATUS_REQ =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_STATUS_REQ",
-			   crt_st_status_req_field,
+	DEFINE_CRT_REQ_FMT(crt_st_status_req_field,
 			   crt_st_status_req_reply_field);
 
 
@@ -258,16 +237,13 @@ static struct crt_corpc_ops crt_iv_sync_co_ops = {
 
 
 static struct crt_req_format CQF_CRT_IV_SYNC =
-	DEFINE_CRT_REQ_FMT("CRT_IV_SYNC", crt_iv_sync_in_fields,
-			crt_iv_sync_out_fields);
+	DEFINE_CRT_REQ_FMT(crt_iv_sync_in_fields, crt_iv_sync_out_fields);
 
 static struct crt_req_format CQF_CRT_IV_FETCH =
-	DEFINE_CRT_REQ_FMT("CRT_IV_FETCH", crt_iv_fetch_in_fields,
-			crt_iv_fetch_out_fields);
+	DEFINE_CRT_REQ_FMT(crt_iv_fetch_in_fields, crt_iv_fetch_out_fields);
 
 static struct crt_req_format CQF_CRT_IV_UPDATE =
-	DEFINE_CRT_REQ_FMT("CRT_IV_UPDATE", crt_iv_update_in_fields,
-			crt_iv_update_out_fields);
+	DEFINE_CRT_REQ_FMT(crt_iv_update_in_fields, crt_iv_update_out_fields);
 
 /* barrier */
 static struct crt_msg_field *crt_barrier_in_fields[] = {
@@ -279,8 +255,7 @@ static struct crt_msg_field *crt_barrier_out_fields[] = {
 };
 
 static struct crt_req_format CQF_CRT_BARRIER =
-	DEFINE_CRT_REQ_FMT("CRT_BARRIER", crt_barrier_in_fields,
-			   crt_barrier_out_fields);
+	DEFINE_CRT_REQ_FMT(crt_barrier_in_fields, crt_barrier_out_fields);
 
 static struct crt_corpc_ops crt_barrier_corpc_ops = {
 	.co_aggregate = crt_hdlr_barrier_aggregate,
@@ -299,9 +274,7 @@ struct crt_msg_field *crt_lm_evict_out_fields[] = {
 };
 
 static struct crt_req_format CQF_CRT_LM_EVICT =
-	DEFINE_CRT_REQ_FMT("CRT_LM_EVICT",
-			   crt_lm_evict_in_fields,
-			   crt_lm_evict_out_fields);
+	DEFINE_CRT_REQ_FMT(crt_lm_evict_in_fields, crt_lm_evict_out_fields);
 
 struct crt_msg_field *crt_lm_memb_sample_in_fields[] = {
 	&CMF_UINT32,		/* client version NO. */
@@ -316,8 +289,7 @@ struct crt_msg_field *crt_lm_memb_sample_out_fields[] = {
 };
 
 static struct crt_req_format CQF_CRT_LM_MEMB_SAMPLE =
-	DEFINE_CRT_REQ_FMT("CRT_LM_MEMB_SAMPLE",
-			   crt_lm_memb_sample_in_fields,
+	DEFINE_CRT_REQ_FMT(crt_lm_memb_sample_in_fields,
 			   crt_lm_memb_sample_out_fields);
 
 struct crt_msg_field *crt_ctl_in_fields[] = {
@@ -342,19 +314,13 @@ struct crt_msg_field *crt_ctl_get_pid_out_fields[] = {
 };
 
 static struct crt_req_format CQF_CRT_CTL_LS =
-	DEFINE_CRT_REQ_FMT("CRT_CTL_LS",
-			    crt_ctl_in_fields,
-			    crt_ctl_ls_out_fields);
+	DEFINE_CRT_REQ_FMT(crt_ctl_in_fields, crt_ctl_ls_out_fields);
 
 static struct crt_req_format CQF_CRT_CTL_GET_HOSTNAME =
-	DEFINE_CRT_REQ_FMT("CRT_CTL_GET_HOSTNAME",
-			    crt_ctl_in_fields,
-			    crt_ctl_get_host_out_fields);
+	DEFINE_CRT_REQ_FMT(crt_ctl_in_fields, crt_ctl_get_host_out_fields);
 
 static struct crt_req_format CQF_CRT_CTL_GET_PID =
-	DEFINE_CRT_REQ_FMT("CRT_CTL_GET_PID",
-			    crt_ctl_in_fields,
-			    crt_ctl_get_pid_out_fields);
+	DEFINE_CRT_REQ_FMT(crt_ctl_in_fields, crt_ctl_get_pid_out_fields);
 
 struct crt_msg_field *crt_proto_query_in_fields[] = {
 	&CMF_IOVEC,		/* version array */
@@ -368,8 +334,7 @@ struct crt_msg_field *crt_proto_query_out_fields[] = {
 };
 
 static struct crt_req_format CQF_CRT_PROTO_QUERY =
-	DEFINE_CRT_REQ_FMT("CRT_PROTO_QUERY",
-			   crt_proto_query_in_fields,
+	DEFINE_CRT_REQ_FMT(crt_proto_query_in_fields,
 			   crt_proto_query_out_fields);
 
 /* Define for crt_internal_rpcs[] array population below.

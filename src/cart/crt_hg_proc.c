@@ -230,7 +230,7 @@ crt_proc_uuid_t(crt_proc_t proc, uuid_t *data)
 }
 
 int
-crt_proc_crt_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
+crt_proc_d_rank_list_ptr_t(crt_proc_t proc, d_rank_list_t **data)
 {
 	d_rank_list_t		*rank_list;
 	hg_proc_op_t		 proc_op;
@@ -317,7 +317,7 @@ out:
 }
 
 int
-crt_proc_crt_iov_t(crt_proc_t proc, d_iov_t *div)
+crt_proc_d_iov_t(crt_proc_t proc, d_iov_t *div)
 {
 	crt_proc_op_t	proc_op;
 	int		rc;
@@ -375,57 +375,23 @@ crt_proc_crt_iov_t(crt_proc_t proc, d_iov_t *div)
 	return 0;
 }
 
-struct crt_msg_field CMF_UUID =
-	DEFINE_CRT_MSG("crt_uuid", 0, sizeof(uuid_t),
-		       crt_proc_uuid_t);
+/**
+ * CMF_OF_xxx is used to obtain the CMF name of a data type in the RPC
+ * registration macro
+ */
+#define CRT_DEFINE_ONE_FIELD(cmf_name, flags, type, proc_base)	\
+	struct crt_msg_field cmf_name =					\
+		DEFINE_CRT_MSG(flags, sizeof(type),			\
+				BOOST_PP_CAT(crt_proc_, proc_base));	\
+	struct crt_msg_field BOOST_PP_CAT(CMF_OF_, type) =		\
+		DEFINE_CRT_MSG(flags, sizeof(type),			\
+				BOOST_PP_CAT(crt_proc_, proc_base));
 
-struct crt_msg_field CMF_GRP_ID =
-	DEFINE_CRT_MSG("crt_group_id", 0, sizeof(crt_group_id_t),
-		       crt_proc_crt_group_id_t);
+#define CRT_DEFINE_MSG_FIELDS(list)					\
+	list(CRT_DEFINE_ONE_FIELD)
 
-struct crt_msg_field CMF_INT =
-	DEFINE_CRT_MSG("crt_int", 0, sizeof(int32_t),
-		       crt_proc_int);
+CRT_DEFINE_MSG_FIELDS(CRT_CMF_LIST)
 
-struct crt_msg_field CMF_UINT32 =
-	DEFINE_CRT_MSG("crt_uint32", 0, sizeof(uint32_t),
-		       crt_proc_uint32_t);
-
-struct crt_msg_field CMF_UINT64 =
-	DEFINE_CRT_MSG("crt_uint64", 0, sizeof(uint64_t),
-		       crt_proc_uint64_t);
-
-struct crt_msg_field CMF_BULK =
-	DEFINE_CRT_MSG("crt_bulk", 0, sizeof(crt_bulk_t),
-		       crt_proc_crt_bulk_t);
-
-struct crt_msg_field CMF_BOOL =
-	DEFINE_CRT_MSG("crt_bool", 0, sizeof(bool),
-		       crt_proc_bool);
-
-struct crt_msg_field CMF_STRING =
-	DEFINE_CRT_MSG("crt_string", 0,
-		       sizeof(d_string_t), crt_proc_crt_string_t);
-
-struct crt_msg_field CMF_PHY_ADDR =
-	DEFINE_CRT_MSG("crt_phy_addr", 0,
-		       sizeof(crt_phy_addr_t), crt_proc_crt_phy_addr_t);
-
-struct crt_msg_field CMF_RANK =
-	DEFINE_CRT_MSG("crt_rank", 0, sizeof(d_rank_t),
-		       crt_proc_uint32_t);
-
-struct crt_msg_field CMF_RANK_LIST =
-	DEFINE_CRT_MSG("crt_rank_list", 0,
-		       sizeof(d_rank_list_t *), crt_proc_crt_rank_list_t);
-
-struct crt_msg_field CMF_BULK_ARRAY =
-	DEFINE_CRT_MSG("crt_bulks", CMF_ARRAY_FLAG,
-			sizeof(crt_bulk_t),
-			crt_proc_crt_bulk_t);
-
-struct crt_msg_field CMF_IOVEC =
-	DEFINE_CRT_MSG("crt_iov", 0, sizeof(d_iov_t), crt_proc_crt_iov_t);
 
 int
 crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
@@ -448,12 +414,12 @@ crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = crt_proc_crt_rank_list_t(hg_proc, &hdr->coh_excluded_ranks);
+	rc = crt_proc_d_rank_list_ptr_t(hg_proc, &hdr->coh_excluded_ranks);
 	if (rc != 0) {
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = crt_proc_crt_rank_list_t(hg_proc, &hdr->coh_inline_ranks);
+	rc = crt_proc_d_rank_list_ptr_t(hg_proc, &hdr->coh_inline_ranks);
 	if (rc != 0) {
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);

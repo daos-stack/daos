@@ -159,14 +159,12 @@ struct crt_msg_field *arg_shutdown_out[] = {
 
 #ifdef _SERVER
 #define RPC_DECLARE(name, input, output, function)			\
-	struct crt_req_format DQF_##name = DEFINE_CRT_REQ_FMT(#name,	\
-							      input,	\
+	struct crt_req_format DQF_##name = DEFINE_CRT_REQ_FMT(input,	\
 							      output);	\
 	static void *DQF_FUNC_##name = (void *)function
 #else
 #define RPC_DECLARE(name, input, output, function)			\
-	struct crt_req_format DQF_##name = DEFINE_CRT_REQ_FMT(#name,	\
-							      input,	\
+	struct crt_req_format DQF_##name = DEFINE_CRT_REQ_FMT(input,	\
 							      output)
 #endif
 

@@ -77,8 +77,7 @@ static int issue_test_ping(d_rank_t target_rank, int target_tag);
 	crt_corpc_register(name, &DQF_##name, DQF_FUNC_##name, ops)
 
 #define RPC_DECLARE(name, input, output, function)			\
-	struct crt_req_format DQF_##name = DEFINE_CRT_REQ_FMT(#name,	\
-							      input,	\
+	struct crt_req_format DQF_##name = DEFINE_CRT_REQ_FMT(input,	\
 							      output);	\
 	static void *DQF_FUNC_##name = (void *)function
 

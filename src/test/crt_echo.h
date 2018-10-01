@@ -148,20 +148,16 @@ struct crt_echo_bulk_out_reply {
 	int ret;
 };
 
-struct crt_req_format CQF_ECHO_NOOP =
-	DEFINE_CRT_REQ_FMT("ECHO_PING_NOOP", NULL, NULL);
+struct crt_req_format CQF_ECHO_NOOP = DEFINE_CRT_REQ_FMT(NULL, NULL);
 
 struct crt_req_format CQF_ECHO_PING_CHECK =
-	DEFINE_CRT_REQ_FMT("ECHO_PING_CHECK", echo_ping_checkin,
-			   echo_ping_checkout);
+	DEFINE_CRT_REQ_FMT(echo_ping_checkin, echo_ping_checkout);
 
 struct crt_req_format CQF_ECHO_CORPC_EXAMPLE =
-	DEFINE_CRT_REQ_FMT("ECHO_CORPC_EXAMPLE", echo_corpc_example_in,
-			   echo_corpc_example_out);
+	DEFINE_CRT_REQ_FMT(echo_corpc_example_in, echo_corpc_example_out);
 
 struct crt_req_format CQF_ECHO_BULK_TEST =
-	DEFINE_CRT_REQ_FMT("ECHO_BULK_TEST", echo_bulk_test_in,
-			   echo_bulk_test_out);
+	DEFINE_CRT_REQ_FMT(echo_bulk_test_in, echo_bulk_test_out);
 
 static inline void
 parse_options(int argc, char *argv[])

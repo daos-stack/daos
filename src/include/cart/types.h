@@ -54,6 +54,8 @@
 #include <gurt/common.h>
 #include <gurt/list.h>
 
+#include <boost/preprocessor.hpp>
+
 /**
  * Initialization options passed during crt_init() call.
  *
@@ -151,6 +153,7 @@ typedef void *crt_rpc_input_t;
 typedef void *crt_rpc_output_t;
 
 typedef void *crt_bulk_t; /**< abstract bulk handle */
+typedef void *crt_bulk_array_t; /**< abstract bulk array handle */
 
 #define CRT_BULK_NULL            (NULL)
 /**
@@ -224,13 +227,13 @@ struct crt_array {
 				}					\
 	}								\
 
-#define DEFINE_CRT_REQ_FMT(name, crt_in, crt_out)			\
+#define DEFINE_CRT_REQ_FMT(crt_in, crt_out)				\
 DEFINE_CRT_REQ_FMT_ARRAY((crt_in),					\
 			 ((crt_in) == NULL) ? 0 : ARRAY_SIZE(crt_in),	\
 			 (crt_out),					\
 			 ((crt_out) == NULL) ? 0 : ARRAY_SIZE(crt_out))
 
-#define DEFINE_CRT_MSG(name, flags, size, proc) {			\
+#define DEFINE_CRT_MSG(flags, size, proc) {				\
 	cmf_flags :	(flags),					\
 	cmf_size :	(size),						\
 	cmf_proc :	(crt_proc_cb_t)(proc)				\
@@ -298,36 +301,79 @@ struct crt_proto_query_cb_info {
  */
 typedef void (*crt_proto_query_cb_t)(struct crt_proto_query_cb_info *cb_info);
 
-/* Common request format type */
-extern struct crt_msg_field CMF_UUID;
-extern struct crt_msg_field CMF_GRP_ID;
-extern struct crt_msg_field CMF_INT;
-extern struct crt_msg_field CMF_UINT32;
-extern struct crt_msg_field CMF_UINT64;
-extern struct crt_msg_field CMF_BULK;
-extern struct crt_msg_field CMF_BOOL;
-extern struct crt_msg_field CMF_STRING;
-extern struct crt_msg_field CMF_PHY_ADDR;
-extern struct crt_msg_field CMF_RANK;
-extern struct crt_msg_field CMF_RANK_LIST;
-extern struct crt_msg_field CMF_BULK_ARRAY;
-extern struct crt_msg_field CMF_IOVEC;
+/**
+ * Macros to automatically generate CMF definitions for a list of types.
+ * To generate CMF definitions for a list of types:
+ *
+ * 1, create a list of types:
+ *	#define MY_LIST(ACTION)						\
+ *	TYPE_ACTION(ACTION, CMF_MY_TYPE, 0, my_type)			\
+ *	STURCT_ACTION(ACTION, CMF_MY_FOO, 0, my_foo)
+ *
+ * 2, call:
+ *	CRT_DEFINE_MSG_FIELDS(MY_LIST)
+ *
+ * 3, to make CMF definitions available in current scope:
+ *	CRT_DEFINE_MSG_FIELDS(MY_LIST)
+ *
+ */
 
-/** used to obtain the CMF name of a data type in the RPC registration macro */
-#define CMF_OF_uuid_t			CMF_UUID
-#define CMF_OF_crt_group_id_t		CMF_GRP_ID
-#define CMF_OF_int32_t			CMF_INT
-#define CMF_OF_uint32_t			CMF_UINT32
-#define CMF_OF_uint64_t			CMF_UINT64
-#define CMF_OF_crt_bulk_t		CMF_BULK
-#define CMF_OF_bool			CMF_BOOL
-#define CMF_OF__Bool			CMF_BOOL
-#define CMF_OF_d_string_t		CMF_STRING
-#define CMF_OF_crt_phy_addr_t		CMF_PHY_ADDR
-#define CMF_OF_d_rank_t			CMF_RANK
-#define CMF_OF_d_rank_list_t		CMF_RANK_LIST
-#define CMF_OF_crt_bulk_array_t		CMF_BULK_ARRAY
-#define CMF_OF_d_iov_t			CMF_IOVEC
+/** This is for STRUCT_ACTION to remove the keyword struct */
+#define __cart_type_struct
+
+/**
+ * specify entry for a type.
+ *
+ * \param[in] cmf_name		name of the CMF
+ * \param[in] flags		flags of the CMF
+ * \param[in] type		the type which the CMF will describe. type must
+ *				be a single word,  it can't be in the form of:
+ *				struct foo
+ */
+#define TYPE_ACTION(ACTION, cmf_name, flags, type)		\
+	ACTION(cmf_name, flags, type, type)			\
+
+/**
+ * specify entry for a struct.
+ * \param[in] cmf_name		name of the CMF
+ * \param[in] flags		flags of the CMF
+ * \param[in] type		the struct which the CMF will describe.
+ *				type is expected to be in the form of:
+ *				struct foo.
+ */
+#define STRUCT_ACTION(ACTION, cmf_name, flags, type)		\
+	ACTION(cmf_name, flags, type, BOOST_PP_CAT(__cart_type_, type))
+
+/**
+ * List of types to generate CMF definitions for. Entries in this list should
+ * be eigher TYPE_ACTION or STRUCT_ACTION
+ */
+#define CRT_CMF_LIST(ACTION)						\
+	TYPE_ACTION(ACTION, CMF_UUID, 0, uuid_t)			\
+	TYPE_ACTION(ACTION, CMF_GRP_ID, 0, crt_group_id_t)		\
+	TYPE_ACTION(ACTION, CMF_INT, 0, int32_t)			\
+	TYPE_ACTION(ACTION, CMF_UINT32, 0, uint32_t)			\
+	TYPE_ACTION(ACTION, CMF_UINT64, 0, uint64_t)			\
+	TYPE_ACTION(ACTION, CMF_BULK, 0, crt_bulk_t)			\
+	TYPE_ACTION(ACTION, CMF_BOOL, 0, bool)				\
+	ACTION(CMF_STRING, 0, d_string_t, crt_string_t)			\
+	TYPE_ACTION(ACTION, CMF_PHY_ADDR, 0, crt_phy_addr_t)		\
+	ACTION(CMF_RANK, 0, d_rank_t, uint32_t)				\
+	TYPE_ACTION(ACTION, CMF_RANK_LIST, 0, d_rank_list_ptr_t)	\
+	ACTION(CMF_BULK_ARRAY, CMF_ARRAY_FLAG, crt_bulk_array_t,	\
+	       crt_bulk_t)						\
+	TYPE_ACTION(ACTION, CMF_IOVEC, 0, d_iov_t)
+
+#define CRT_DECLARE_ONE_FIELD(cmf_name, flags, type, proc_base)		\
+	extern struct crt_msg_field cmf_name;				\
+	extern struct crt_msg_field BOOST_PP_CAT(CMF_OF_, type);
+
+#define CRT_DECLARE_MSG_FIELDS(list)					\
+	list(CRT_DECLARE_ONE_FIELD)
+
+/* Common request format type */
+CRT_DECLARE_MSG_FIELDS(CRT_CMF_LIST)
+
 
 /** Bulk transfer modes */
 typedef enum {

@@ -99,7 +99,7 @@ static const char *msg_strings[MSG_COUNT] = {
 
 
 #define INIT_FMT() \
-	DEFINE_CRT_REQ_FMT("many", rpc_msg_field_in, rpc_msg_field_out)
+	DEFINE_CRT_REQ_FMT(rpc_msg_field_in, rpc_msg_field_out)
 
 #define RPC_ID 0x73ff
 

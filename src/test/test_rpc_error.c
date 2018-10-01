@@ -82,7 +82,7 @@ struct crt_msg_field *rpc_err_noreply_out_fields[] = {
 };
 
 struct crt_req_format CQF_RPC_ERR_NOREPLY =
-	DEFINE_CRT_REQ_FMT("RPC_ERR_NOREPLY", rpc_err_noreply_in_fields,
+	DEFINE_CRT_REQ_FMT(rpc_err_noreply_in_fields,
 			   rpc_err_noreply_out_fields);
 
 struct rpc_err_noreply_in_t {

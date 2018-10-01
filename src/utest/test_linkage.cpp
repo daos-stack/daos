@@ -64,8 +64,7 @@ struct crt_msg_field *linkage_test_rpc_out[] = {
 };
 
 struct crt_req_format CRF_TEST_RPC =
-	DEFINE_CRT_REQ_FMT("LINKAGE_TEST_RPC", linkage_test_rpc_in,
-			   linkage_test_rpc_out);
+	DEFINE_CRT_REQ_FMT(linkage_test_rpc_in, linkage_test_rpc_out);
 
 static void
 test_crt_api_linkage(void **state)

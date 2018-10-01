@@ -503,8 +503,7 @@ crt_ep_abort(crt_endpoint_t *ep);
 
 #define CRT_GEN_REQ_FMT(rpc_name)					\
 	struct crt_req_format CQF_##rpc_name =				\
-		DEFINE_CRT_REQ_FMT(#rpc_name, rpc_name##_in_fmt,	\
-				   rpc_name##_out_fmt);
+		DEFINE_CRT_REQ_FMT(rpc_name##_in_fmt, rpc_name##_out_fmt);
 
 /**
  * Prepare struct types and format description for the input/output of an RPC.
@@ -548,7 +547,7 @@ crt_ep_abort(crt_endpoint_t *ep);
  *     };
  *
  *     struct crt_req_format CQF_my_rpc_ =
- *             DEFINE_CRT_REQ_FMT("my_rpc", my_rpc_in_fmt, my_rpc_out_fmt);
+ *             DEFINE_CRT_REQ_FMT(my_rpc_in_fmt, my_rpc_out_fmt);
  *
  *     crt_register(opcode, flags, &CQF_my_rpc);
  *
@@ -574,8 +573,7 @@ crt_ep_abort(crt_endpoint_t *ep);
 
 #define CRT_RPC_REQ_FMT(rpc_name, in_type_name, out_type_name)		\
 	struct crt_req_format CQF_##rpc_name =				\
-		DEFINE_CRT_REQ_FMT(#rpc_name, in_type_name##_fmt,	\
-				   out_type_name##_fmt);
+		DEFINE_CRT_REQ_FMT(in_type_name##_fmt, out_type_name##_fmt);
 
 #define CRT_RPC_SRV_REGISTER(opcode, flags, rpc_name, rpc_handler)	\
 	crt_rpc_srv_register(opcode, flags, &CQF_##rpc_name, rpc_handler)
