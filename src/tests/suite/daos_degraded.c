@@ -249,6 +249,10 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 
 	memset(&anchor_out, 0, sizeof(anchor_out));
 	D_ALLOC(buf, 512);
+	if (buf == NULL)
+		print_message("[  ERROR   ] Memory allocation for buf"
+			      " returned NULL\n");
+	assert_non_null(buf);
 	D_ALLOC(dkey_enum, strlen(dkey_fmt) + g_dkeys_strlen + 1);
 
 	/** enumerate records */
