@@ -269,12 +269,9 @@ REQS.define('fuse',
             commands=['meson $FUSE_SRC --prefix=$FUSE_PREFIX' \
                       ' -D udevrulesdir=$FUSE_PREFIX/udev' \
                       ' -D disable-mtab=True' \
-                      ' -D skip-systemfiles=True',
+                      ' -D utils=False',
                       NINJA_NAME + ' -v $JOBS_OPT',
-                      NINJA_NAME + ' install',
-                      'mv $FUSE_PREFIX/bin/fusermount3' \
-                      ' $FUSE_PREFIX/bin/fusermount3.nosuid'],
-            patch='$PATCH_PREFIX/fuse.patch',
+                      NINJA_NAME + ' install'],
             libs=['fuse3'],
             defines=["FUSE_USE_VERSION=32"],
             required_progs=['libtoolize'],
