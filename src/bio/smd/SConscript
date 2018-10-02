@@ -6,7 +6,6 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-    denv.AppendUnique(CPPPATH=['#/src/bio/smd/'])
     denv.Library('smd', Glob('*.c'), LIBS=['daos_common', 'gurt', 'pmemobj'])
 
     SConscript('tests/SConscript', exports='denv')

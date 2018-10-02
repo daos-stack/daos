@@ -43,7 +43,7 @@
 /* XXX For the testing purpose, this test case will use
  * some internal api of event queue, and for real use
  * cases, this daos_eq_internal should not be exposed */
-#include "client_internal.h"
+#include "../client_internal.h"
 
 #define EQT_EV_COUNT		1000
 #define EQ_COUNT		5

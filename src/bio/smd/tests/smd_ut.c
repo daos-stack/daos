@@ -34,7 +34,7 @@
 #include <daos/common.h>
 #include <daos/btree_class.h>
 #include <daos_srv/smd.h>
-#include <../smd_internal.h>
+#include "../smd_internal.h"
 
 static void
 print_usage(void)

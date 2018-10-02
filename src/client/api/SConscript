@@ -23,7 +23,6 @@ def scons():
     else:
         env.Install('$PREFIX/lib/', libdaos)
 
-    denv.Append(CPPPATH=['#/src/client/api'])
     SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":

@@ -14,7 +14,7 @@ def scons():
     denv = env.Clone()
 
     # Compiler options
-    denv.Append(CPPPATH=['#/src/vos/'])
+    denv.Append(CPPPATH=[Dir('../vos').srcnode()])
 
     if lib == "vos":
         # generate standalone library

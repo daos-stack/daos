@@ -33,7 +33,7 @@
 #include <stddef.h>
 #include <setjmp.h>
 #include <cmocka.h>
-#include <vts_common.h>
+#include "vts_common.h"
 #include <cmocka.h>
 #include <getopt.h>
 #include <daos_srv/vos.h>

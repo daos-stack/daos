@@ -34,7 +34,7 @@
 #include <daos/common.h>
 #include <daos/btree_class.h>
 #include <daos_srv/vea.h>
-#include <../vea_internal.h>
+#include "../vea_internal.h"
 
 char		pool_file[PATH_MAX];
 

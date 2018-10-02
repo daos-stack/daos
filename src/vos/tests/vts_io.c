@@ -29,7 +29,7 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
-#include <vts_io.h>
+#include "vts_io.h"
 #include <daos_api.h>
 
 #define SETUP_RANDOM_SEED  (10)

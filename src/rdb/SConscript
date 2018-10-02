@@ -10,8 +10,8 @@ def scons():
 
     # rdb-specific env
     denv = env.Clone()
-    denv.AppendUnique(CPPPATH=['#/src/rdb/raft/include'])
-    denv.AppendUnique(LIBPATH=['raft/src'])
+    denv.AppendUnique(CPPPATH=[Dir('raft/include').srcnode()])
+    denv.AppendUnique(LIBPATH=[Dir('raft/src')])
 
     # rdb
     rdb = daos_build.library(denv, 'rdb',

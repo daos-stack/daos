@@ -30,7 +30,6 @@ def scons():
     tests_lib = daos_build.library(denv, 'libdaos_tests', tests_lib_src)
     denv.Install('$PREFIX/lib/', tests_lib)
 
-    denv.Append(CPPPATH=['#/src/common'])
     SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":

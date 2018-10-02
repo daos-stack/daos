@@ -13,11 +13,11 @@ def scons():
     Import('env', 'prereqs')
 
     # For Common library (tse.h)
-    env.Append(CPPPATH=['#/src/include/daos'])
+    env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
 
     # Generic DAOS includes
-    env.Append(CPPPATH=['#/src/include'])
+    env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include'), 'include/%s' % header)
     for header in HEADERS_SRV:

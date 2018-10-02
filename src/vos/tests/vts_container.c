@@ -35,7 +35,7 @@
 #include <stddef.h>
 #include <setjmp.h>
 #include <cmocka.h>
-#include <vts_common.h>
+#include "vts_common.h"
 #include <vos_internal.h>
 
 #include <daos_srv/vos.h>

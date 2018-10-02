@@ -4,8 +4,6 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    denv.Append(CPPPATH=['#/src/dmg', '#/src/server'])
-
     #Import('build_program')
     #libraries = ['daos_common', 'daos', 'gurt', 'cart']
     #ibraries += ['uuid', 'cmocka']

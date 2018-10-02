@@ -4,8 +4,6 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    denv.Append(CPPPATH=['#/src/tier', '#/src/server'])
-
     #Import('build_program')
     #libraries = ['pthread', 'uuid', 'daos_common', 'daos', 'crt',
     #             'cmocka']

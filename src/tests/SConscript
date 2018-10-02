@@ -13,7 +13,7 @@ def scons():
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib/daos_srv')])
 
-    denv.Append(CPPPATH=['#/src/tests/suite'])
+    denv.Append(CPPPATH=[Dir('suite').srcnode()])
     prereqs.require(denv, 'ompi', 'argobots')
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)

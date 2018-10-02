@@ -7,7 +7,6 @@ def scons():
 
     libraries = ['vea', 'gurt', 'cart', 'pmemobj', 'cmocka', 'daos_common']
 
-    denv.Append(CPPPATH=['#/src/vos/vea/tests/'])
     denv.AppendUnique(LIBPATH=['..'])
     daos_build.test(denv, 'vea_ut', 'vea_ut.c', LIBS=libraries)
 

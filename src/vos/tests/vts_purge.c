@@ -29,7 +29,7 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
-#include <vts_io.h>
+#include "vts_io.h"
 
 /**
  * Stores the last key and can be used for

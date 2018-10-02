@@ -15,8 +15,8 @@ def scons():
     denv = env.Clone()
     prereqs.require(denv, 'spdk')
 
-    gopath = "%s/build/control" % Dir('#').abspath
-    gosrc = "%s/src/control" % Dir('#').abspath
+    gopath = Dir('.').abspath
+    gosrc = Dir('.').srcnode().abspath
 
     if os.path.isdir(gopath) is False:
         os.makedirs(gopath)
