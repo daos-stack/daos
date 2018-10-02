@@ -245,21 +245,19 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 
 		rc = D_MUTEX_INIT(&li->li_mutex, NULL);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(err_free_li, rc);
 
 		D_INIT_LIST_HEAD(&li->li_link);
 		li->li_grp_priv = grp_priv;
 		li->li_rank = rank;
 		D_STRNDUP(li->li_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
 		if (li->li_uri[tag] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(err_destroy_mutex, rc = -DER_NOMEM);
 		if (tag == 0) {
 			D_STRNDUP(li->li_base_phy_addr, uri,
 				  CRT_ADDR_STR_MAX_LEN);
-			if (li->li_base_phy_addr == NULL) {
-				D_FREE(li->li_uri[tag]);
-				D_GOTO(out, rc = -DER_NOMEM);
-			}
+			if (li->li_base_phy_addr == NULL)
+				D_GOTO(err_free_uri, rc = -DER_NOMEM);
 		}
 		li->li_initialized = 1;
 		li->li_evicted = 0;
@@ -290,7 +288,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 		D_STRNDUP(li->li_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
 		if (li->li_uri[tag] == NULL)
 			rc = -DER_NOMEM;
-		if (tag == 0) {
+		if (rc == DER_SUCCESS && tag == 0) {
 			D_STRNDUP(li->li_base_phy_addr, uri,
 				  CRT_ADDR_STR_MAX_LEN);
 			if (li->li_base_phy_addr == NULL) {
@@ -312,6 +310,15 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 unlock:
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 out:
+	return rc;
+
+err_free_uri:
+	D_FREE(li->li_uri[tag]);
+err_destroy_mutex:
+	D_MUTEX_DESTROY(&li->li_mutex);
+err_free_li:
+	D_FREE(li);
+
 	return rc;
 }
 
