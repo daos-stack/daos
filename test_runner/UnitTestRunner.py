@@ -57,7 +57,7 @@ class UnitTestRunner(PostRunner.PostRunner,
     def setenv(self, testcase):
         """ setup testcase environment """
         module_env = testcase.get('setEnvVars')
-        if module_env != None:
+        if module_env is not None:
             for (key, value) in module_env.items():
                 os.environ[str(key)] = value
         setTestPhase = testcase.get('type', self.test_info.get_defaultENV(
@@ -68,7 +68,7 @@ class UnitTestRunner(PostRunner.PostRunner,
         """ reset testcase environment """
         module_env = testcase.get('setEnvVars')
         module_default_env = self.test_info.get_test_info('defaultENV')
-        if module_env != None:
+        if module_env is not None:
             for key in module_env.keys():
                 value = module_default_env.get(key, "")
                 os.environ[str(key)] = value
@@ -106,9 +106,7 @@ class UnitTestRunner(PostRunner.PostRunner,
             results = unittest.TestResult()
             suite.run(results)
 
-            self.logger.info("***************** Results " + \
-                             "*********************************"
-                            )
+            self.logger.info("************ Results *******")
             self.logger.info("Number test run: %s", results.testsRun)
             self.logger.info("Number skipped tests: %d",
                              len(results.skipped))

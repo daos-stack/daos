@@ -137,13 +137,11 @@ class TestInfoRunner(PreRunner.PreRunner):
     def has_section(self, keyname=None, typename=""):
         """ post testcase run cleanup """
         if keyname in self.test_info:
-            if typename == 'list' and isinstance(self.test_info[keyname],
-                                                 list):
+            if typename == 'list' and isinstance(self.test_info[keyname], list):
                 return True
-            elif typename == 'dict' and isinstance(self.test_info[keyname],
-                                                   dict):
+            if typename == 'dict' and isinstance(self.test_info[keyname], dict):
                 return True
-            elif typename == 'none' and self.test_info[keyname] is None:
+            if typename == 'none' and self.test_info[keyname] is None:
                 return True
         return False
 

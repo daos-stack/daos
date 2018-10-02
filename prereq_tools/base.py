@@ -592,6 +592,7 @@ def append_if_supported(env, **kwargs):
 
     config.Finish()
 
+# pylint: disable=too-many-public-methods
 class PreReqComponent(object):
     """A class for defining and managing external components required
        by a project.
@@ -730,6 +731,7 @@ class PreReqComponent(object):
             self.configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
+# pylint: enable=too-many-branches
 
     def _setup_intelc(self):
         """Setup environment to use intel compilers"""
@@ -747,7 +749,7 @@ class PreReqComponent(object):
                                            "-static-intel",
                                            "-diag-disable=10237"])
 
-# pylint: enable=too-many-branches
+
     def _setup_compiler(self):
         """Setup the compiler to use"""
         compiler_map = {'gcc': {'CC' : 'gcc', 'CXX' : 'g++'},
@@ -1186,6 +1188,7 @@ class PreReqComponent(object):
         full_path = self.__env.subst("$%s/%s" % (src_opt, config_path))
         print "Reading config file for %s from %s" % (comp, full_path)
         self.configs.read(full_path)
+# pylint: enable=too-many-public-methods
 
 class _Component(object):
     """A class to define attributes of an external component
@@ -1581,7 +1584,7 @@ class _Component(object):
             if not self.src_exists():
                 self.get()
 
-            self.prereqs.load_config(self.name, self.src_opt);
+            self.prereqs.load_config(self.name, self.src_opt)
 
             if self.requires:
                 changes = self.prereqs.require(envcopy, *self.requires,

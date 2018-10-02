@@ -88,8 +88,8 @@ class ControlTestRunner():
                 node.process_terminate()
                 rtn |= 1
             if node.test_name:
-                self.logger.info(str(node.test_name) + " on " + \
-                                 str(node.node) + " rtn: " +  str(procrtn))
+                self.logger.info("%s on %s rtn: %s", str(node.test_name),
+                                 str(node.node), str(procrtn))
 
         self.logger.info("execution time remaining: %d", loop_count)
         self.logger.info(
@@ -143,7 +143,7 @@ class ControlTestRunner():
                 os.rename(logdir, newname)
                 os.makedirs(logdir)
 
-            self.logger.debug("setup node " + str(node.node) + " " + \
+            self.logger.debug("setup node %s %s", str(node.node),
                               str(logdir))
             node.setup_config(name, logdir, node_type, configKeys=configKeys,
                               setFromConfig=setConfigKeys)

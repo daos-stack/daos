@@ -113,7 +113,7 @@ class PostRunner():
         for stdfile in filelist:
             if 'rank' in stdfile:
                 dumpstd = os.path.abspath(os.path.join(rankdir, stdfile))
-            elif stdfile == "stdout" or stdfile == "stderr":
+            elif stdfile in ("stdout", "stderr"):
                 dumpstd = os.path.abspath(os.path.join(rankdir, stdfile))
             else:
                 continue

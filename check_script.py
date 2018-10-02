@@ -25,8 +25,13 @@ import os
 import sys
 import argparse
 import subprocess
+import tempfile
 import errno
+#pylint: disable=import-error
+#pylint: disable=no-name-in-module
 from distutils.spawn import find_executable
+#pylint: enable=import-error
+#pylint: enable=no-name-in-module
 
 class WrapScript(object):
     """Create a wrapper for a scons file and maintain a line mapping"""
@@ -141,47 +146,46 @@ from SCons.Variables import *
 # pylint: enable=wildcard-import\n""")
         return 5
 
-    def fix_log(self, fname):
+    def fix_log(self, log_file, fname):
         """Get the line number"""
         os.unlink("script")
+        log_file.seek(0)
         output = open("tmp2.log", "w")
-        with open("tmp.log", "r") as log:
-            for line in log.readlines():
-                match = re.search(r":(\d+):", line)
-                if match:
-                    lineno = int(match.group(1))
-                    if int(lineno) in self.line_map.keys():
-                        line = line.replace(str(lineno),
-                                            str(self.line_map[lineno]),
-                                            1)
-                match = re.search("^(.*)Module script(.*)$", line)
-                if match:
-                    line = "%sModule %s%s\n" % (match.group(1),
-                                                fname,
-                                                match.group(2))
-                output.write(line)
+        for line in log_file.readlines():
+            match = re.search(r":(\d+):", line)
+            if match:
+                lineno = int(match.group(1))
+                if int(lineno) in self.line_map.keys():
+                    line = line.replace(str(lineno),
+                                        str(self.line_map[lineno]),
+                                        1)
+            match = re.search("^(.*)Module script(.*)$", line)
+            if match:
+                line = "%sModule %s%s\n" % (match.group(1),
+                                            fname,
+                                            match.group(2))
+            output.write(line)
         output.close()
         os.rename("tmp2.log", "tmp.log")
 
 
-def parse_report():
+def parse_report(log_file):
     """Create the report"""
     error_count = 0
-    with open("pylint.log", "a") as pylint, \
-         open("tmp.log", "r") as log:
-        for line in log.readlines():
+    log_file.seek(0)
+    with open("pylint.log", "a") as pylint:
+        for line in log_file.readlines():
             if re.search("rated", line):
                 sys.stdout.write(line)
-            if re.search("^[WECR]:", line):
+            elif re.search("^[WECR]:", line):
                 sys.stdout.write(line[3:])
                 pylint.write(line[3:])
                 error_count += 1
             else:
                 sys.stdout.write(line)
-    os.unlink("tmp.log")
     return error_count
 
-
+#pylint: disable=too-many-branches
 def check_script(fname, *args, **kw):
     """Check a python script for errors"""
     tmp_fname = fname
@@ -199,7 +203,6 @@ def check_script(fname, *args, **kw):
             python = find_executable("python2")
             rc_file = "pylint.rc"
         else:
-            print "use python3"
             python = find_executable("python3")
             rc_file = "pylint3.rc"
         if not python:
@@ -219,30 +222,31 @@ def check_script(fname, *args, **kw):
     cmd = pylint.split() + \
           list(args) + \
           ["--rcfile=%s/%s" % (rc_dir, rc_file),
-           "--msg-template", "{C}: %s:{line}: pylint-{symbol}: {msg}" % pylint_path,
+           "--msg-template",
+           "{C}: %s:{line}: pylint-{symbol}: {msg}" % pylint_path,
            tmp_fname]
 
     if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
         print " ".join(cmd)
 
+    log_file = tempfile.TemporaryFile()
+
     try:
-        with open("tmp.log", "w") as log:
-            subprocess.check_call(cmd, stdout=log)
+        subprocess.check_call(cmd, stdout=log_file)
     except OSError, exception:
         if exception.errno == errno.ENOENT:
             print "pylint could not be found"
             return 1
-    # pylint: disable=bare-except
-    except:
-        print "Unknown error running pylint"
-        return 1
+        raise
+    except subprocess.CalledProcessError:
+        pass
 
     if wrap:
-        wrapper.fix_log(fname)
-    error_count = parse_report()
+        wrapper.fix_log(log_file, fname)
+    error_count = parse_report(log_file)
     print ""
     return error_count
-
+#pylint: enable=too-many-branches
 
 def main():
     """Run the actual code in a function"""
