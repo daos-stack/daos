@@ -1,19 +1,46 @@
-def step_result(name, result) {
+def step_result(name, context, result) {
 
     println "step_result(" + name + ", " + result + ")"
 
-    if (env.CHANGE_ID &&
-       (result == "ABORTED" ||
-        result == "UNSTABLE" ||
-        result) == "FAILURE") {
-        pullRequest.comment("Test stage " + name +
-                            " completed with status " +
-                            result +
-                            ".  " + env.BUILD_URL +
-                            "display/redirect")
-        currentBuild.result = result
-    } else {
-        println "Not posting a comment for status " + result
+    currentBuild.result = result
+
+    if (env.CHANGE_ID) {
+       if (result == "ABORTED" ||
+           result == "UNSTABLE" ||
+           result == "FAILURE") {
+            pullRequest.comment("Test stage " + name +
+                                " completed with status " +
+                                result +
+                                ".  " + env.BUILD_URL +
+                                "display/redirect")
+        }
+
+        switch(result) {
+            case "UNSTABLE":
+                result = "FAILURE"
+                break
+            case "FAILURE":
+                result = "ERROR"
+                break
+        }
+        /* java.lang.IllegalArgumentException: The supplied credentials are invalid to login
+         * probably due to changing the account from me to daos-jenkins
+         * might need to just recreate the org with the daos-jenkins account
+        githubNotify description: name, context: context + "/" + name, status: result
+        */
+    }
+}
+
+def test(script) {
+    rc = sh(script: script, returnStatus: true)
+    if (rc != 0) {
+        step_result(env.STAGE_NAME, "test", "FAILURE")
+    } else if (rc == 0) {
+        if (sh(script: "grep failed results", returnStatus: true) == 0) {
+            step_result(env.STAGE_NAME, "test", "UNSTABLE")
+        } else {
+            step_result(env.STAGE_NAME, "test", "SUCCESS")
+        }
     }
 }
 
@@ -21,40 +48,20 @@ pipeline {
     agent none
 
     stages {
-        stage('Test FAILURE') {
-            agent any
-            steps {
-                script {
-                    rc = sh(script: '''echo failed > results
-                                       exit 1''',
-                            returnStatus: true)
-                    if (rc != 0) {
-                        println "Job FAILURE"
-                        step_result(env.STAGE_NAME, "FAILURE")
-                    } else {
-                        if (sh(script: "grep failed results", returnStatus: true) == 0) {
-                            println "Job UNSTABLE"
-                            step_result(env.STAGE_NAME, "UNSTABLE")
-                        }
+        stage('Test') {
+            parallel {
+                stage('Test UNSTABLE') {
+                    agent any
+                    steps {
+                        test('''echo failed > results
+                                               exit 0''')
                     }
                 }
-            }
-        }
-        stage('Test UNSTABLE') {
-            agent any
-            steps {
-                script {
-                    rc = sh(script: '''echo failed > results
-                                       exit 0''',
-                            returnStatus: true)
-                    if (rc != 0) {
-                        println "Job FAILURE"
-                        step_result(env.STAGE_NAME, "FAILURE")
-                    } else {
-                        if (sh(script: "grep failed results", returnStatus: true) == 0) {
-                            println "Job UNSTABLE"
-                            step_result(env.STAGE_NAME, "UNSTABLE")
-                        }
+                stage('Test FAILURE') {
+                    agent any
+                    steps {
+                        test('''echo failed > results
+                               exit 1''')
                     }
                 }
             }
