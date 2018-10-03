@@ -215,7 +215,7 @@ int
 daos_csum_compute(daos_csum_t *csum, daos_sg_list_t *sgl)
 {
 	int	i;
-	int	rc;
+	int	rc = 0;
 
 	if (!sgl->sg_iovs)
 		return 0;
