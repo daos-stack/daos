@@ -25,7 +25,7 @@ RUN apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
 RUN apt-get install -y curl doxygen pandoc flex patch nasm yasm graphviz doxygen
 RUN apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev libnuma-dev
 RUN apt-get install -y libaio-dev sg3-utils libiscsi-dev python-dev mscgen
-RUN apt-get install -y ninja-build meson go-dep
+RUN apt-get install -y ninja-build meson libyaml-dev
 
 # Dependencies
 
