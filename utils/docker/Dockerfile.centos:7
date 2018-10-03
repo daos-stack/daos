@@ -24,9 +24,7 @@ RUN yum install -y doxygen pandoc flex patch nasm yasm ninja-build meson
 RUN yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
 RUN yum install -y python clang-analyzer sg3_utils libiscsi-devel
 RUN yum install -y libibverbs-devel numactl-devel doxygen mscgen graphviz
-RUN yum -y install yum-plugin-copr
-RUN yum -y copr enable hnakamur/golang-dep
-RUN yum -y install golang-dep
+RUN yum install -y libyaml-devel
 
 # Dependencies
 # Packages for NVML, PMIx, hwloc and OpenMPI exist in CentOS, but are unfortunately
@@ -52,7 +50,7 @@ WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then utils/fetch_go_packages.sh -i .; scons --build-deps=yes USE_INSTALLED=all install; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes USE_INSTALLED=all install; fi
 
 # Set environment variables
 ENV PATH=/home/daos/daos/install/bin:$PATH

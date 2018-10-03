@@ -47,7 +47,7 @@ On CentOS and openSuSE:
     yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
     yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
     yum install -y doxygen pandoc flex patch nasm yasm
-    yum install -y ninja-build meson
+    yum install -y ninja-build meson libyaml-devel
     # Additionally required SPDK packages
     yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
     yum install -y python clang-analyzer sg3_utils libiscsi-devel
@@ -59,7 +59,7 @@ On Ubuntu and Debian:
     apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
     apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
     apt-get install -y curl doxygen pandoc flex patch nasm yasm
-    apt-get install -y ninja-build meson
+    apt-get install -y ninja-build meson libyaml-dev
     # Additionally required SPDK packages
     apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
     apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen libnuma-dev
@@ -78,34 +78,6 @@ Moreover, please make sure all the auto tools listed below are at the appropriat
 The DAOS control plane infrastructure will be using protobuf as the data serialization format for its RPC requests. The DAOS proto files use protobuf 3 syntax which is not supported by the platform protobuf compiler in all cases. Not all developers will need to build the proto files into the various source files. However if changes are made to the proto files they will need to be regenerated with a protobuf 3.* or higher compiler. To setup support for compiling protobuf files download the following precompiled package for Linux and install it somewhere accessible by your PATH variable.
 
     https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip
-
-### Golang dependencies
-
-The DAOS codebase uses [dep](https://github.com/golang/dep) to manage dependencies in the Go codebase.
-
-On EL7 and later:
-
-    yum install yum-plugin-copr
-    yum copr enable hnakamur/golang-dep
-    yum install golang-dep
-
-On Fedora 27 and later:
-
-    dnf install dep
-
-On Ubuntu 18.04 and later:
-
-    apt-get install go-dep
-
-For OSes that don't supply a package:
-* Ensure that you have a personal GOPATH (typically $HOME/go) and a GOBIN ($GOPATH/bin) set up and included in your PATH:
-
-    mkdir -p $HOME/go/bin
-    export PATH=$HOME/go/bin:$PATH
-
-* Then follow the [installation instructions on Github](https://github.com/golang/dep).
-
-The utils/fetch_go_packages.sh script is provided to populate and/or update the vendor directory using dep.
 
 ### Building DAOS & Dependencies
 
@@ -201,6 +173,34 @@ With this approach DAOS would get built using the prebuilt dependencies in ${dao
 
 If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on the scons command line.   This option is also saved for future compilations.
 
+### Golang dependencies
+
+Developers contributing Go code may need to update the external dependencies located in the src/control/vendor directory. The DAOS codebase uses [dep](https://github.com/golang/dep) to manage these dependencies.
+
+On EL7 and later:
+
+    yum install yum-plugin-copr
+    yum copr enable hnakamur/golang-dep
+    yum install golang-dep
+
+On Fedora 27 and later:
+
+    dnf install dep
+
+On Ubuntu 18.04 and later:
+
+    apt-get install go-dep
+
+For OSes that don't supply a package:
+* Ensure that you have a personal GOPATH (typically $HOME/go) and a GOBIN ($GOPATH/bin) set up and included in your PATH:
+
+    mkdir -p $HOME/go/bin
+    export PATH=$HOME/go/bin:$PATH
+
+* Then follow the [installation instructions on Github](https://github.com/golang/dep).
+
+The utils/fetch_go_packages.sh script is provided as a convenience for developers to update the vendor directory using dep after updating Gopkg.toml.
+
 ## DAOS in Docker
 
 Docker is the fastest way to build, install and run DAOS on a non-Linux system.
@@ -220,7 +220,7 @@ To build from a local tree stored on the host, a volume must be created to share
 
 And then the following command to export the DAOS source tree to the docker container and build it:
 
-    $ docker run -v ${daospath}:/home/daos/daos:Z daos /bin/bash -c "utils/fetch_go_packages.sh -i . && scons --build-deps=yes USE_INSTALLED=all install"
+    $ docker run -v ${daospath}:/home/daos/daos:Z daos /bin/bash -c "scons --build-deps=yes USE_INSTALLED=all install"
 
 ### Running DAOS in a Container
 
