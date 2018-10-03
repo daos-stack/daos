@@ -1024,8 +1024,10 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	if (ops->co_reduce_arg_alloc)
 		for (tid = 0; tid < dss_nxstreams; tid++) {
 			stream = &stream_args->csa_streams[tid];
-			ops->co_reduce_arg_alloc(stream,
-						 aggregator.at_args.st_arg);
+			rc = ops->co_reduce_arg_alloc(stream,
+						     aggregator.at_args.st_arg);
+			if (rc)
+				D_GOTO(out_future, rc);
 		}
 
 	rc = ABT_future_set(future, (void *)&aggregator);
@@ -1057,6 +1059,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 
 	rc = aggregator.at_rc;
 
+out_future:
 	ABT_future_free(&future);
 
 	if (ops->co_reduce_arg_free)

@@ -757,14 +757,18 @@ ds_cont_query_coll_reduce(void *a_args, void *s_args)
 	*min_epoch = MIN(*min_epoch, stream->xcq_purged_epoch);
 }
 
-static void
+static int
 ds_cont_query_stream_alloc(struct dss_stream_arg_type *args,
 			   void *a_arg)
 {
 	struct xstream_cont_query	*rarg = a_arg;
 
 	D_ALLOC(args->st_arg, sizeof(struct xstream_cont_query));
+	if (args->st_arg == NULL)
+		return -DER_NOMEM;
 	memcpy(args->st_arg, rarg, sizeof(struct xstream_cont_query));
+
+	return 0;
 }
 
 static void

@@ -259,7 +259,7 @@ struct dss_coll_ops {
 	 * \param aggregator_args	[IN]	 aggregator args for
 	 *					 initializatuin
 	 */
-	void				(*co_reduce_arg_alloc)
+	int				(*co_reduce_arg_alloc)
 					(struct dss_stream_arg_type *args,
 					 void *a_args);
 	/**
