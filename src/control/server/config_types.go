@@ -67,6 +67,7 @@ type Configuration struct {
 	NvmeInclude  []string `yaml:"nvme_include"`
 	NvmeExclude  []string `yaml:"nvme_exclude"`
 	Hyperthreads bool     `yaml:"hyperthreads"`
+	SocketDir    string   `yaml:"socket_dir"`
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler on Format struct

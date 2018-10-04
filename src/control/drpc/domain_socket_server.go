@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"syscall"
 
 	"github.com/daos-stack/daos/src/control/security"
@@ -159,10 +160,19 @@ func (d *DomainSocketServer) Start() error {
 	addr := &net.UnixAddr{d.sockFile, "unixpacket"}
 
 	// Setup our unix domain socket for our socket server to listen on
-	syscall.Unlink(d.sockFile)
+	err := syscall.Unlink(d.sockFile)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("Unable to unlink %s: %s", d.sockFile, err)
+	}
+
 	lis, err := net.ListenUnix("unixpacket", addr)
 	if err != nil {
 		return fmt.Errorf("Unable to listen on unix socket %s: %s", d.sockFile, err)
+	}
+
+	err = os.Chmod(d.sockFile, 0777)
+	if err != nil {
+		return fmt.Errorf("Unable to set permissions on %s: %s", d.sockFile, err)
 	}
 
 	d.listener = lis

@@ -42,3 +42,4 @@ nvme_include:
 nvme_exclude:
 - pcie1000.0.0.0.1
 hyperthreads: true
+socket_dir: ./.daos/daos_server

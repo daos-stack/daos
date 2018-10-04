@@ -134,7 +134,7 @@ class DaosServer(object):
             hostfilepath))
         server_cmd_list.append("--report-uri {0} ".format(self.urifilepath))
         server_cmd_list += envlist
-        server_cmd_list.append(" {0}/bin/daos_server -g daos_server -c {1}".
+        server_cmd_list.append(" {0}/bin/daos_server -d /tmp/.daos -g daos_server -c {1}".
                                format(base_dir, thread_count))
         server_cmd = ''.join(server_cmd_list)
         cmdarg = shlex.split(server_cmd)

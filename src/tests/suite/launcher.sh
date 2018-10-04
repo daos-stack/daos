@@ -22,7 +22,7 @@ function start_servers {
 	-x FI_PSM2_NAME_SERVER -x FI_SOCKETS_MAX_CONN_RETRY -x PSM2_MULTI_EP \
 	-x CRT_CREDIT_EP_CTX -x FI_LOG_LEVEL -x LD_LIBRARY_PATH \
 	-x DD_SUBSYS -x DD_MASK -x CCI_CONFIG \
-	daos_server -g daos_server -c $4
+	daos_server -d /tmp/.daos -g daos_server -c $4
 }
 
 # this is the elegant way to do this

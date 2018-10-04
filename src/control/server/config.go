@@ -68,5 +68,6 @@ func NewDefaultConfiguration() *Configuration {
 		Key:          "./.daos/daos_server.key",
 		MountPath:    "/mnt/daos",
 		Hyperthreads: false,
+		SocketDir:    "/var/run/daos_server",
 	}
 }

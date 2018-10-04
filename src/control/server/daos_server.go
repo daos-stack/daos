@@ -36,7 +36,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/jessevdk/go-flags"
+	"github.com/daos-stack/daos/src/control/drpc"
+
+	flags "github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/mgmt"
@@ -54,6 +56,7 @@ type cliOptions struct {
 	Attach     *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
 	Map        *string `short:"y" long:"map" description:"[Temporary] System map file"`
 	Rank       *uint   `short:"r" long:"rank" description:"[Temporary] Self rank"`
+	SocketDir  string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
 }
 
 var (
@@ -120,6 +123,13 @@ func main() {
 				"Unable to determine storage mount path from config or cli opts")
 		}
 	}
+	if opts.SocketDir == "" {
+		opts.SocketDir = configOpts.SocketDir
+		if opts.SocketDir == "" {
+			log.Fatalf(
+				"Unable to determine socket directory from config or cli opts")
+		}
+	}
 	// Sync opts
 	configOpts.Port = int(opts.Port)
 	configOpts.MountPath = opts.MountPath
@@ -155,6 +165,29 @@ func main() {
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
+
+	// Create our socket directory if it doesn't exist
+	_, err = os.Stat(opts.SocketDir)
+	if err != nil && os.IsPermission(err) {
+		log.Fatalf("User does not have permission to access %s", opts.SocketDir)
+	} else if err != nil && os.IsNotExist(err) {
+		err = os.MkdirAll(opts.SocketDir, 0755)
+		if err != nil {
+			log.Printf("%s", err)
+			log.Fatalf("Unable to create socket directory: %s", opts.SocketDir)
+		}
+	}
+
+	sockPath := filepath.Join(opts.SocketDir, "daos_server.sock")
+	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
+	if err != nil {
+		log.Fatalf("Unable to create socket server: %v", err)
+	}
+
+	err = drpcServer.Start()
+	if err != nil {
+		log.Fatalf("Unable to start socket server on %s: %v", sockPath, err)
+	}
 
 	// create a channel to retrieve signals
 	sigchan := make(chan os.Signal, 2)

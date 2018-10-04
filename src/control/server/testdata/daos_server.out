@@ -16,3 +16,4 @@ mount_path: /mnt/daos
 nvme_include: []
 nvme_exclude: []
 hyperthreads: false
+socket_dir: /var/run/daos_server
