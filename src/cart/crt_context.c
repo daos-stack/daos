@@ -615,7 +615,7 @@ crt_req_timeout_untrack(crt_rpc_t *req)
 static void
 crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_timeout_cb_priv *cb_priv, *cb_priv_next;
+	struct crt_timeout_cb_priv *cb_priv;
 
 	if (crt_plugin_gdata.cpg_inited == 0)
 		return;
@@ -624,14 +624,12 @@ crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
 		return;
 	}
 	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
-	d_list_for_each_entry_safe(cb_priv, cb_priv_next,
-				   &crt_plugin_gdata.cpg_timeout_cbs,
-				   ctcp_link) {
-		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
+	d_list_for_each_entry(cb_priv,
+			      &crt_plugin_gdata.cpg_timeout_cbs,
+			      ctcp_link) {
 		cb_priv->ctcp_func(rpc_priv->crp_pub.cr_ctx,
 				   &rpc_priv->crp_pub,
 				   cb_priv->ctcp_args);
-		D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
 	}
 	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
 }
@@ -1096,7 +1094,7 @@ crt_context_empty(int locked)
 static void
 crt_exec_progress_cb(crt_context_t ctx)
 {
-	struct crt_prog_cb_priv	*cb_priv, *cb_priv_next;
+	struct crt_prog_cb_priv	*cb_priv;
 
 	if (crt_plugin_gdata.cpg_inited == 0)
 		return;
@@ -1106,12 +1104,10 @@ crt_exec_progress_cb(crt_context_t ctx)
 		return;
 	}
 	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
-	d_list_for_each_entry_safe(cb_priv, cb_priv_next,
-				   &crt_plugin_gdata.cpg_prog_cbs,
-				   cpcp_link) {
-		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
+	d_list_for_each_entry(cb_priv,
+			      &crt_plugin_gdata.cpg_prog_cbs,
+			      cpcp_link) {
 		cb_priv->cpcp_func(ctx, cb_priv->cpcp_args);
-		D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
 	}
 	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
 }
