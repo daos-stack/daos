@@ -352,7 +352,7 @@ check_in(crt_group_t *remote_group, int rank)
 		buffer = NULL;
 	} else {
 		D_ALLOC(buffer, 256);
-		D_ERROR("not injecting fault.\n");
+		D_INFO("not injecting fault.\n");
 	}
 
 	D_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");

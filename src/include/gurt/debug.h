@@ -93,14 +93,16 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
  * just good coding practice.
  */
 #pragma GCC diagnostic warning "-Wshadow"
+
 /**
- * D_DEBUG/D_ERROR etc can-only be used when clog enabled. User can define other
- * similar macros using different subsystem and log-level, for example:
- * \#define DSR_DEBUG(...) d_log(DSR_DEBUG, ...)
+ * The D_LOG checks the specified mask and, if enabled, it logs the
+ * message, prependng the file, line, and function name.  This function
+ * can be used directly by users or by user defined macros if the provided
+ * log level macros are not flexible enough.
  */
-#define D_DEBUG(mask, fmt, ...)						\
+#define D_LOG(mask, fmt, ...)						\
 	do {								\
-		int __tmp_mask = d_log_check((mask) | D_LOGFAC);	\
+		int __tmp_mask = d_log_check(mask);			\
 									\
 		if (__tmp_mask)						\
 			d_log(__tmp_mask,				\
@@ -108,13 +110,51 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 			      __func__, ##__VA_ARGS__);			\
 	} while (0)
 
-/** macros to output logs which are more important than D_DEBUG */
+/**
+ * The D_DEBUG macro takes a mask as the first parameter allowing the user
+ * to use specific debug bits.  It assumes the user has defined D_LOGFAC
+ * for the current file.
+ */
+#define D_DEBUG(mask, fmt, ...)	D_LOG((mask) | D_LOGFAC, fmt, ## __VA_ARGS__)
+
+/** macros to output logs which are more important than D_DEBUG.  These
+ *  assume user has defined D_LOGFAC for the file
+ */
 #define D_INFO(fmt, ...)	D_DEBUG(DLOG_INFO, fmt, ## __VA_ARGS__)
 #define D_NOTE(fmt, ...)	D_DEBUG(DLOG_NOTE, fmt, ## __VA_ARGS__)
 #define D_WARN(fmt, ...)	D_DEBUG(DLOG_WARN, fmt, ## __VA_ARGS__)
 #define D_ERROR(fmt, ...)	D_DEBUG(DLOG_ERR, fmt, ## __VA_ARGS__)
 #define D_CRIT(fmt, ...)	D_DEBUG(DLOG_CRIT, fmt, ## __VA_ARGS__)
 #define D_FATAL(fmt, ...)	D_DEBUG(DLOG_EMERG, fmt, ## __VA_ARGS__)
+
+/**
+ * The D_TRACE macro is like the D_LOG macro except it prints the
+ * address of the supplied pointer in the message
+ */
+#define D_TRACE(mask, ptr, fmt, ...)					\
+	do {								\
+		int __tmp_mask = d_log_check(mask);			\
+									\
+		if (__tmp_mask)						\
+			d_log(__tmp_mask,				\
+			      "%s:%d %s(%p) " fmt, __FILE__, __LINE__,	\
+			      __func__, ptr, ##__VA_ARGS__);		\
+	} while (0)
+
+#define D_TRACE_DEBUG(mask, ptr, fmt, ...) \
+	D_TRACE((mask) | D_LOGFAC, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_INFO(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_INFO, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_NOTE(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_NOTE, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_WARN(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_WARN, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_ERROR(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_ERR, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_CRIT(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_CRIT, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_FATAL(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_EMERG, ptr, fmt, ## __VA_ARGS__)
 
 /**
  * Add a new log facility.
