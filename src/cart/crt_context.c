@@ -925,7 +925,7 @@ out:
 void
 crt_context_req_untrack(crt_rpc_t *req)
 {
-	struct crt_rpc_priv	*rpc_priv, *next;
+	struct crt_rpc_priv	*rpc_priv;
 	struct crt_ep_inflight	*epi;
 	struct crt_context	*crt_ctx;
 	int64_t			 credits, inflight;
@@ -1009,9 +1009,9 @@ crt_context_req_untrack(crt_rpc_t *req)
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* re-submit the rpc req */
-	d_list_for_each_entry_safe(rpc_priv, next, &submit_list,
-				  crp_tmp_link) {
-		d_list_del_init(&rpc_priv->crp_tmp_link);
+	while ((rpc_priv = d_list_pop_entry(&submit_list,
+					    struct crt_rpc_priv,
+					    crp_tmp_link))) {
 
 		rc = crt_req_send_internal(rpc_priv);
 		if (rc == 0)

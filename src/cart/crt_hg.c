@@ -206,23 +206,29 @@ static inline struct crt_hg_hdl *
 crt_hg_pool_get(struct crt_hg_context *hg_ctx)
 {
 	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
-	struct crt_hg_hdl	*hdl = NULL, *next;
+	struct crt_hg_hdl	*hdl = NULL;
 
 	D_SPIN_LOCK(&hg_pool->chp_lock);
-	if (!hg_pool->chp_enabled || d_list_empty(&hg_pool->chp_list)) {
-		D_DEBUG(DB_NET, "hg_pool %p is not enabled or empty, "
-			"cannot get.\n", hg_pool);
+	if (!hg_pool->chp_enabled) {
+		D_DEBUG(DB_NET,
+			"hg_pool %p is not enabled cannot get.\n", hg_pool);
 		D_GOTO(unlock, hdl);
 	}
-	d_list_for_each_entry_safe(hdl, next, &hg_pool->chp_list, chh_link) {
-		D_ASSERT(hdl->chh_hdl != HG_HANDLE_NULL);
-		d_list_del_init(&hdl->chh_link);
-		hg_pool->chp_num--;
-		D_ASSERT(hg_pool->chp_num >= 0);
-		D_DEBUG(DB_NET, "hg_pool %p, remove, chp_num %d.\n",
-			hg_pool, hg_pool->chp_num);
-		break;
+	hdl = d_list_pop_entry(&hg_pool->chp_list,
+			       struct crt_hg_hdl,
+			       chh_link);
+
+	if (hdl == NULL) {
+		D_DEBUG(DB_NET,
+			"hg_pool %p is empty, cannot get.\n", hg_pool);
+		D_GOTO(unlock, hdl);
 	}
+
+	D_ASSERT(hdl->chh_hdl != HG_HANDLE_NULL);
+	hg_pool->chp_num--;
+	D_ASSERT(hg_pool->chp_num >= 0);
+	D_DEBUG(DB_NET, "hg_pool %p, remove, chp_num %d.\n",
+		hg_pool, hg_pool->chp_num);
 
 unlock:
 	D_SPIN_UNLOCK(&hg_pool->chp_lock);

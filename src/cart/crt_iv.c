@@ -473,7 +473,7 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 				uint32_t rc_value)
 {
 	struct crt_iv_ops		*iv_ops;
-	struct pending_fetch		*pending_fetch, *next;
+	struct pending_fetch		*pending_fetch;
 	struct iv_fetch_cb_info		*iv_info;
 	struct iv_fetch_out		*output;
 	int				 rc = 0;
@@ -488,13 +488,10 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 
 	D_DEBUG(DB_TRACE, "Processing requests for kip_entry=%p\n", kip_entry);
 
-	/* If there is nothing pending - exit */
-	if (d_list_empty(&kip_entry->kip_pending_fetch_list))
-		D_GOTO(cleanup, rc);
-
 	/* Go through list of all pending fetches and finalize each one */
-	d_list_for_each_entry_safe(pending_fetch, next,
-				  &kip_entry->kip_pending_fetch_list, pf_link) {
+	while ((pending_fetch = d_list_pop_entry(&kip_entry->kip_pending_fetch_list,
+						 struct pending_fetch,
+						 pf_link))) {
 		d_sg_list_t tmp_iv_value = {0};
 
 		iv_info = pending_fetch->pf_cb_info;
@@ -522,7 +519,6 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 				/* addref done in crt_hdlr_iv_fetch */
 				RPC_PUB_DECREF(iv_info->ifc_child_rpc);
 
-				d_list_del(&pending_fetch->pf_link);
 				D_FREE(pending_fetch->pf_cb_info);
 				D_FREE(pending_fetch);
 				continue;
@@ -578,7 +574,6 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 					&tmp_iv_value, rc_value,
 					iv_info->ifc_comp_cb_arg);
 
-				d_list_del(&pending_fetch->pf_link);
 				D_FREE(pending_fetch->pf_cb_info);
 				D_FREE(pending_fetch);
 				continue;
@@ -615,13 +610,10 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 					   iv_info->ifc_user_priv);
 		}
 
-		d_list_del(&pending_fetch->pf_link);
 		D_FREE(pending_fetch->pf_cb_info);
 		D_FREE(pending_fetch);
 	}
 
-
-cleanup:
 	D_DEBUG(DB_TRACE, "Done processing requests for kip_entry=%p\n",
 		kip_entry);
 

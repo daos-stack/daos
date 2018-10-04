@@ -1310,11 +1310,10 @@ static void
 lm_gdata_destroy(void)
 {
 	struct lm_grp_priv_t	*lm_grp_priv;
-	struct lm_grp_priv_t	*tmp_link;
 
-	d_list_for_each_entry_safe(lm_grp_priv, tmp_link,
-				  &crt_lm_gdata.clg_grp_remotes, lgp_link) {
-		d_list_del(&lm_grp_priv->lgp_link);
+	while ((lm_grp_priv = d_list_pop_entry(&crt_lm_gdata.clg_grp_remotes,
+					       struct lm_grp_priv_t,
+					       lgp_link))) {
 		lm_grp_priv_destroy(lm_grp_priv);
 	}
 	D_RWLOCK_DESTROY(&crt_lm_gdata.clg_rwlock);
