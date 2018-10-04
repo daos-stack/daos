@@ -32,7 +32,7 @@ DAOS is licensed under the Apache License Version 2.0. Please see the [LICENSE](
   * The [DFS](src/include/daos_fs.h) library implements POSIX semantics over the DAOS API by encapsulating a POSIX namespace into a DAOS container. This library can be linked directly with the application (e.g. see IOR and mdtest [DAOS backend](https://github.com/daos-stack/ior-hpc/tree/daos)), mounted locally through [FUSE](src/client/dfs/dfuse.c) (one mountpoint per container) or integrated with the [I/O Forwarding service](https://github.com/daos-stack/iof) for transparent access.
 
 #### Developer zone:
-* [building](https://github.com/johannlombardi/daos/blob/master/doc/quickstart.md#daos-source-code) and [contributing](https://wiki.hpdd.intel.com/display/DC/Contribute) to DAOS
+* [building](doc/quickstart.md#daos-source-code) and [contributing](https://wiki.hpdd.intel.com/display/DC/Contribute) to DAOS
 * [DAOS coding rules](https://wiki.hpdd.intel.com/display/DC/Coding+Rules)
 * [DAOS internals](src/README.md)
 
