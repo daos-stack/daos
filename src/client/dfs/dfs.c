@@ -1039,7 +1039,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			D_ERROR("daos_epoch_query() Failed (%d)\n", rc);
 			D_GOTO(err_dfs, rc);
 		}
-		dfs->epoch = state.es_ghce;
+		dfs->epoch = state.es_ghpce;
 	} else {
 		D_ERROR("Invalid dfs_mount access mode\n");
 		D_GOTO(err_dfs, rc = -DER_INVAL);
@@ -2471,7 +2471,7 @@ dfs_sync(dfs_t *dfs)
 			D_ERROR("daos_epoch_query() Failed (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
-		dfs->epoch = state.es_ghce;
+		dfs->epoch = state.es_ghpce;
 	}
 
 out:
