@@ -34,12 +34,15 @@ def step_result(name, context, result) {
 def test(script) {
     rc = sh(script: script, returnStatus: true)
     if (rc != 0) {
-        step_result(env.STAGE_NAME, "test", "FAILURE")
+        println "Calling stepResult"
+        stepResult name: env.STAGE_NAME, context: "test", result: "FAILURE"
     } else if (rc == 0) {
         if (sh(script: "grep failed results", returnStatus: true) == 0) {
-            step_result(env.STAGE_NAME, "test", "UNSTABLE")
+            println "Calling stepResult"
+            stepResult name: env.STAGE_NAME, context: "test", result: "UNSTABLE"
         } else {
-            step_result(env.STAGE_NAME, "test", "SUCCESS")
+            println "Calling stepResult"
+            stepResult name: env.STAGE_NAME, context: "test", result: "SUCCESS"
         }
     }
 }
