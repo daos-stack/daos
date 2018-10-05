@@ -23,8 +23,5 @@ def scons():
                                       'cli_tmgmt.c']) + common
     Export('dc_tier_tgts')
 
-    # tests
-    SConscript('tests/SConscript', exports='denv')
-
 if __name__ == "SCons.Script":
     scons()

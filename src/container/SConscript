@@ -20,8 +20,5 @@ def scons():
     dc_co_tgts = denv.SharedObject(['cli.c']) + common
     Export('dc_co_tgts')
 
-    # tests
-    SConscript('tests/SConscript', exports=['denv'])
-
 if __name__ == "SCons.Script":
     scons()
