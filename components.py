@@ -301,7 +301,8 @@ REQS.define('fio',
                 'https://github.com/axboe/fio.git'),
             commands=['git checkout fio-3.3',
                       './configure --prefix="$FIO_PREFIX"',
-                      'make $JOBS_OPT', 'make install'])
+                      'make $JOBS_OPT', 'make install'],
+            progs=['genfio', 'fio'])
 
 RETRIEVER = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
 REQS.define('spdk',
