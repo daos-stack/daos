@@ -42,7 +42,7 @@ class ServerFailed(Exception):
 def printFunc(thestring):
        print "<SERVER>" + thestring
 
-def runServer(hostfile, setname, basepath):
+def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
     Launches DAOS servers in accordance with the supplied hostfile.
 
@@ -59,6 +59,12 @@ def runServer(hostfile, setname, basepath):
         ld_lib_path = os.path.join(build_vars["PREFIX"], "lib") + os.pathsep + \
                       os.path.join(build_vars["PREFIX"], "lib/daos_srv")
 
+        # before any set in env are added to env_args, add any user supplied
+        # envirables to environment first
+        if env_dict is not None:
+            for k, v in env_dict.items():
+                os.environ[k] = v
+
         env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'DD_(STDERR|LOG)', 'D_LOG_.*',
                     'OFI_.*']
 
@@ -70,6 +76,8 @@ def runServer(hostfile, setname, basepath):
 
         initial_cmd = "/bin/sh"
         server_cmd = orterun_bin + " --np {0} ".format(server_count)
+        if uri_path is not None:
+            server_cmd += "--report-uri {0} ".format(uri_path)
         server_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
         server_cmd += env_args
         server_cmd += "-x DD_SUBSYS=all -x DD_MASK=all "
@@ -157,4 +165,3 @@ def killServer(hosts):
     for host in hosts:
         for cmd in kill_cmds:
             resp = subprocess.call(["ssh", host, cmd])
-
