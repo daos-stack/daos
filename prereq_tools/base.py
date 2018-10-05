@@ -1227,6 +1227,7 @@ class _Component(object):
         self.prefix = None
         self.component_prefix = None
         self.package = kw.get("package", None)
+        self.progs = kw.get("progs", [])
         self.libs = kw.get("libs", [])
         self.libs_cc = kw.get("libs_cc", None)
         self.required_libs = kw.get("required_libs", [])
@@ -1387,6 +1388,7 @@ class _Component(object):
             env.SetOption('no_exec', True)
         return False
 
+    # pylint: disable=too-many-branches
     def has_missing_targets(self, env):
         """Check for expected build targets (e.g. libraries or headers)"""
         if self.targets_found:
@@ -1402,6 +1404,13 @@ class _Component(object):
             return True
 
         config = Configure(env)
+        for prog in self.progs:
+            if not config.CheckProg(prog):
+                config.Finish()
+                if self.__check_only:
+                    env.SetOption('no_exec', True)
+                return True
+
         for header in self.headers:
             if not config.CheckHeader(header):
                 config.Finish()
@@ -1429,6 +1438,7 @@ class _Component(object):
         if self.__check_only:
             env.SetOption('no_exec', True)
         return False
+    # pylint: enable=too-many-branches
 
     def configure(self):
         """Setup paths for a required component"""
@@ -1462,6 +1472,10 @@ class _Component(object):
         """Modify the specified construction environment to build with
            the external component"""
         lib_paths = []
+
+        # Make sure CheckProg() looks in the component's bin/ dir
+        env.AppendENVPath('PATH', os.path.join(self.component_prefix, 'bin'))
+
         for path in self.include_path:
             env.AppendUnique(CPPPATH=[os.path.join(self.component_prefix,
                                                    path)])
