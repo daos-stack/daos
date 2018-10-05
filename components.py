@@ -147,12 +147,10 @@ REQS.define('pmix',
             requires=['hwloc', 'event'])
 
 RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi',
-                             True, branch='v3.0.x')
+                             True)
 REQS.define('ompi',
             retriever=RETRIEVER,
-            commands=['patch -N -p1 < $PATCH_PREFIX/ompi_version.patch; '
-                      'if [ $? -gt 1 ]; then false; else true; fi;',
-                      './autogen.pl --no-oshmem',
+            commands=['./autogen.pl --no-oshmem',
                       './configure --with-platform=optimized '
                       '--enable-orterun-prefix-by-default '
                       '--prefix=$OMPI_PREFIX '
@@ -166,22 +164,6 @@ REQS.define('ompi',
             required_progs=['g++', 'flex'],
             requires=['pmix', 'hwloc', 'event'])
 
-RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
-REQS.define('ompi_pmix',
-            retriever=RETRIEVER,
-            commands=['patch -N -p1 < $PATCH_PREFIX/ompi_version.patch; '
-                      'if [ $? -gt 1 ]; then false; else true; fi;',
-                      './autogen.pl --no-oshmem',
-                      './configure --with-platform=optimized '
-                      '--with-devel-headers '
-                      '--enable-orterun-prefix-by-default '
-                      '--prefix=$OMPI_PMIX_PREFIX '
-                      '--disable-mpi-fortran ',
-                      'make $JOBS_OPT', 'make install'],
-            libs=['pmix'],
-            libs_cc='$OMPI_PMIX_PREFIX/bin/mpicc',
-            headers=['pmix.h'],
-            required_progs=['g++', 'flex', 'autoreconf', 'aclocal', 'libtool'])
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
