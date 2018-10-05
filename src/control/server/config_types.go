@@ -28,13 +28,12 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/daos-stack/daos/src/control/utils/handlers"
 )
 
 // Format represents enum specifying formatting behaviour
 type Format string
-
-// BdClass enum specifing block device type for storage
-type BdClass string
 
 const (
 	// SAFE state defines cautionary behaviour where formatted devices will not be overwritten.
@@ -43,11 +42,6 @@ const (
 	CONTINUE Format = "continue"
 	// FORCE state defines aggressive/potentially resulting data loss formatting behaviour.
 	FORCE Format = "force"
-
-	NVME   BdClass = "nvme"
-	MALLOC BdClass = "malloc"
-	KDEV   BdClass = "kdev"
-	FILE   BdClass = "file"
 
 	// todo: implement Provider discriminated union
 	// todo: implement LogMask discriminated union
@@ -101,9 +95,11 @@ func NewDefaultServer() server {
 	}
 }
 
+// External interface provides methods to support various os operations.
 type External interface {
 	getenv(string) string
 	checkMount(string) error
+	writeToFile(string, string) error
 }
 
 type ext struct{}
@@ -118,6 +114,12 @@ func (e *ext) checkMount(path string) error {
 // getEnv wraps around os.GetEnv and implements External.getEnv().
 func (e *ext) getenv(key string) string {
 	return os.Getenv(key)
+}
+
+// writeToFile wraps around handlers.WriteString and writes input
+// string to given file pathk.
+func (e *ext) writeToFile(in string, outPath string) error {
+	return handlers.WriteString(outPath, in)
 }
 
 type configuration struct {

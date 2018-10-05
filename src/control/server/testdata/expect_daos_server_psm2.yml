@@ -1,8 +1,8 @@
-name: daos
+name: daos_server
 servers:
 - rank: ""
   cpus:
-  - 1-8
+  - 0-7
   fabric_iface: ib0
   fabric_iface_port: 31416
   log_mask: ERR
@@ -14,7 +14,8 @@ servers:
   - CRT_CREDIT_EP_CTX=0
   scm_mount: /mnt/daos
   bdev_class: nvme
-  bdev_list: []
+  bdev_list:
+  - 0000:81:00.0
   bdev_number: 0
   bdev_size: 0
   cliopts: []

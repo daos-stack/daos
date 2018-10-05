@@ -179,13 +179,13 @@ A DAOS pool can be created and destroyed through the DAOS management API (see  d
 
 To create a pool:
 
-    orterun --ompi-server file:${urifile} dmg create --size=xxG
+    orterun -np 1 --ompi-server file:${urifile} dmg create --size=xxG
 
 This creates a pool distributed across the DAOS servers with a target size on each server of xxGB. The UUID allocated to the newly created pool is printed to stdout (referred as \${pooluuid}).
 
 To destroy a pool:
 
-    orterun --ompi-server file:${urifile} dmg destroy --pool=${pooluuid}
+    orterun -np 1 --ompi-server file:${urifile} dmg destroy --pool=${pooluuid}
 
 (c) Building applications or I/O middleware against the DAOS library
 

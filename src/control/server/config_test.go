@@ -38,15 +38,13 @@ import (
 var (
 	sConfig = "../../../utils/config/daos_server.yml"
 	// sConfigUncomment not written before tests start
-	sConfigUncomment   = "testdata/.daos_server_uncomment.yml"
-	exampleConfigFiles = []string{
-		"../../../utils/config/daos_server.yml",
-		"../../../utils/config/examples/daos_server_sockets.yml",
-		"../../../utils/config/examples/daos_server_psm2.yml",
-	}
-	tmpIn    = "testdata/.tmp_in.yml"
-	tmpOut   = "testdata/.tmp_out.yml"
-	testInit = 0
+	sConfigUncomment = "testdata/.daos_server_uncomment.yml"
+	socketsExample   = "../../../utils/config/examples/daos_server_sockets.yml"
+	psm2Example      = "../../../utils/config/examples/daos_server_psm2.yml"
+	defaultConfig    = "../../../utils/config/daos_server.yml"
+	tmpIn            = "testdata/.tmp_in.yml"
+	tmpOut           = "testdata/.tmp_out.yml"
+	testInit         = 0
 )
 
 func uncommentServerConfig(t *testing.T) {
@@ -72,27 +70,41 @@ func uncommentServerConfig(t *testing.T) {
 			t.Fatal(err)
 		}
 		testInit = 1
-		// add written configUncomment to list of example config files to test
-		exampleConfigFiles = append(exampleConfigFiles, sConfigUncomment)
 	}
 }
 
 type mockExt struct {
 	checkMountRet error
 	getenvRet     string
+	// files is a mock store of written file contents
+	files map[string]string
 }
 
 func (m *mockExt) checkMount(path string) error { return m.checkMountRet }
 func (m *mockExt) getenv(key string) string     { return m.getenvRet }
+func (m *mockExt) writeToFile(in string, outPath string) error {
+	m.files[outPath] = in
+	return nil
+}
 
 // NewMockConfig returns default configuration with mocked external interface
 func NewMockConfig(mountCheckRet error, envCheckRet string) configuration {
-	return NewDefaultConfiguration(&mockExt{mountCheckRet, envCheckRet})
+	return NewDefaultConfiguration(
+		&mockExt{mountCheckRet, envCheckRet, map[string]string{}})
 }
 
 // NewDefaultMockConfig returns MockConfig with default mock return values
 func NewDefaultMockConfig() configuration {
-	return NewMockConfig(nil, "somevalue")
+	return NewMockConfig(nil, "")
+}
+
+func populateMockConfig(t *testing.T, c configuration, path string) configuration {
+	c.Path = path
+	err := c.loadConfig()
+	if err != nil {
+		t.Fatalf("Configuration could not be read (%s)", err.Error())
+	}
+	return c
 }
 
 // TestParseConfigSucceed verifies expected input yaml configs match expected output
@@ -171,21 +183,53 @@ func TestParseConfigFail(t *testing.T) {
 func TestProvidedConfigs(t *testing.T) {
 	uncommentServerConfig(t)
 
-	for _, path := range exampleConfigFiles {
+	tests := []struct {
+		inConfig configuration
+		inPath   string
+		desc     string
+		errMsg   string
+	}{
+		{
+			NewDefaultMockConfig(),
+			sConfigUncomment,
+			"uncommented default config",
+			"",
+		},
+		{
+			NewDefaultMockConfig(),
+			socketsExample,
+			"socket example config",
+			"",
+		},
+		{
+			NewDefaultMockConfig(),
+			psm2Example,
+			"psm2 example config",
+			"",
+		},
+		{
+			NewDefaultMockConfig(),
+			defaultConfig,
+			"default empty config",
+			"required parameters missing from config and os environment (CRT_PHY_ADDR_STR)",
+		},
+		{
+			NewMockConfig(nil, "somevalue"),
+			defaultConfig,
+			"default empty config with os env present",
+			"",
+		},
+	}
+
+	for _, tt := range tests {
 		// compute file path containing expected output to compare with
 		// some input files may be auto generated and prefixed with "."
 		// the relevant expect files will not be so strip here
-		filename := strings.TrimPrefix(filepath.Base(path), ".")
+		filename := strings.TrimPrefix(filepath.Base(tt.inPath), ".")
 		expectedFile := fmt.Sprintf("testdata/expect_%s", filename)
-		// decode target config
-		config := NewDefaultMockConfig()
-		config.Path = path
-		err := config.loadConfig()
-		if err != nil {
-			t.Fatalf("problem when loading %s: %s", path, err.Error())
-		}
+		config := populateMockConfig(t, tt.inConfig, tt.inPath)
 		// encode decoded config to temporary output file to verify parser
-		err = config.saveConfig(tmpOut)
+		err := config.saveConfig(tmpOut)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -213,12 +257,12 @@ func TestProvidedConfigs(t *testing.T) {
 				t, outYamls[0][i], line,
 				fmt.Sprintf(
 					"line %d parsed %s config doesn't match fixture %s:\n\thave %#v\n\twant %#v\n",
-					i, path, expectedFile, outYamls[0][i], line))
+					i, tt.inPath, expectedFile, outYamls[0][i], line))
 		}
 
 		// compute file path containing expected output to compare with
 		expectedFile = fmt.Sprintf(
-			"testdata/ioparams_%s.txt", strings.TrimSuffix(filename, filepath.Ext(path)))
+			"testdata/ioparams_%s.txt", strings.TrimSuffix(filename, filepath.Ext(tt.inPath)))
 		outExpect, err := SplitFile(expectedFile)
 		if err != nil {
 			t.Fatal(
@@ -228,6 +272,10 @@ func TestProvidedConfigs(t *testing.T) {
 		}
 		// now verify expected IO server parameters are generated
 		err = config.getIOParams(&cliOptions{})
+		if tt.errMsg != "" {
+			ExpectError(t, err, tt.errMsg, tt.desc)
+			continue
+		}
 		if err != nil {
 			t.Fatalf(
 				"problem retrieving IO params using conf %s: %s",
@@ -302,16 +350,6 @@ func TestSetNumCores(t *testing.T) {
 	}
 }
 
-func newC(t *testing.T) configuration {
-	config := NewDefaultMockConfig()
-	config.Path = sConfigUncomment
-	err := config.loadConfig()
-	if err != nil {
-		t.Fatalf("Configuration could not be read (%s)", err.Error())
-	}
-	return config
-}
-
 // TestCmdlineOverride verified that cliOpts take precedence over existing
 // configs resulting in overrides appearing in ioparams
 func TestCmdlineOverride(t *testing.T) {
@@ -321,6 +359,12 @@ func TestCmdlineOverride(t *testing.T) {
 	y := "/another/different/file"
 
 	uncommentServerConfig(t)
+
+	// test-local function to generate configuration
+	// (mock with default behaviours populated with uncommented daos_server.yml)
+	newC := func(t *testing.T) configuration {
+		return populateMockConfig(t, NewDefaultMockConfig(), sConfigUncomment)
+	}
 
 	tests := []struct {
 		inCliOpts  *cliOptions
@@ -400,7 +444,7 @@ func TestCmdlineOverride(t *testing.T) {
 		{
 			// no provider set but os env set mock getenv returns not empty string
 			&cliOptions{},
-			NewDefaultMockConfig(),
+			NewMockConfig(nil, "somevalue"),
 			[][]string{
 				{"-c", "0", "-g", "daos_server", "-s", "/mnt/daos"},
 			},
@@ -412,7 +456,7 @@ func TestCmdlineOverride(t *testing.T) {
 			&cliOptions{
 				Cores: 2, Group: "bob", MountPath: "/foo/bar",
 				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
-			NewDefaultMockConfig(),
+			NewMockConfig(nil, "somevalue"),
 			[][]string{
 				{
 					"-c", "2", "-g", "bob", "-s", "/foo/bar",
@@ -481,5 +525,174 @@ func TestCmdlineOverride(t *testing.T) {
 					"cli options for io_server %d unexpected (changed: %s)",
 					i, tt.desc))
 		}
+	}
+}
+
+func TestPopulateEnv(t *testing.T) {
+	tests := []struct {
+		inConfig  configuration
+		ioIdx     int
+		inEnvs    []string
+		outEnvs   []string
+		getParams bool
+		desc      string
+		errMsg    string
+	}{
+		{
+			NewMockConfig(nil, ""),
+			0,
+			[]string{},
+			[]string{},
+			false,
+			"empty config (no envs) and getenv returns empty",
+			"",
+		},
+		{
+			NewMockConfig(nil, ""),
+			0,
+			[]string{"FOO=bar"},
+			[]string{"FOO=bar"},
+			false,
+			"empty config (no envs) and getenv returns empty",
+			"",
+		},
+		{
+			populateMockConfig(t, NewMockConfig(nil, ""), socketsExample),
+			0,
+			[]string{"FOO=bar"},
+			[]string{
+				"FOO=bar",
+				"ABT_MAX_NUM_XSTREAMS=100",
+				"DAOS_MD_CAP=1024",
+				"CRT_TIMEOUT=30",
+				"FI_SOCKETS_MAX_CONN_RETRY=1",
+				"FI_SOCKETS_CONN_TIMEOUT=2000",
+				"CRT_PHY_ADDR_STR=ofi+sockets",
+				"OFI_INTERFACE=eth0",
+				"OFI_PORT=31416",
+				"D_LOG_MASK=ERR",
+				"D_LOG_FILE=/tmp/server.log",
+			},
+			true,
+			"sockets populated config (with envs) and getenv returns empty",
+			"",
+		},
+		{
+			populateMockConfig(t, NewMockConfig(nil, "somevalue"), socketsExample),
+			0,
+			// existing os vars already set, config values should be ignored and
+			// result in no change
+			[]string{
+				"FOO=bar",
+				"ABT_MAX_NUM_XSTREAMS=somevalue",
+				"DAOS_MD_CAP=somevalue",
+				"CRT_TIMEOUT=somevalue",
+				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
+				"FI_SOCKETS_CONN_TIMEOUT=somevalue",
+				"CRT_PHY_ADDR_STR=somevalue",
+				"OFI_INTERFACE=somevalue",
+				"OFI_PORT=somevalue",
+				"D_LOG_MASK=somevalue",
+				"D_LOG_FILE=somevalue",
+			},
+			[]string{
+				"FOO=bar",
+				"ABT_MAX_NUM_XSTREAMS=somevalue",
+				"DAOS_MD_CAP=somevalue",
+				"CRT_TIMEOUT=somevalue",
+				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
+				"FI_SOCKETS_CONN_TIMEOUT=somevalue",
+				"CRT_PHY_ADDR_STR=somevalue",
+				"OFI_INTERFACE=somevalue",
+				"OFI_PORT=somevalue",
+				"D_LOG_MASK=somevalue",
+				"D_LOG_FILE=somevalue",
+			},
+			true,
+			"sockets populated config (with envs) and getenv returns with 'somevalue'",
+			"",
+		},
+		{
+			populateMockConfig(t, NewMockConfig(nil, ""), psm2Example),
+			0,
+			[]string{"FOO=bar"},
+			[]string{
+				"FOO=bar",
+				"ABT_MAX_NUM_XSTREAMS=100",
+				"DAOS_MD_CAP=1024",
+				"CRT_TIMEOUT=30",
+				"CRT_CREDIT_EP_CTX=0",
+				"CRT_PHY_ADDR_STR=ofi+psm2",
+				"OFI_INTERFACE=ib0",
+				"OFI_PORT=31416",
+				"D_LOG_MASK=ERR",
+				"D_LOG_FILE=/tmp/server.log",
+			},
+			true,
+			"psm2 populated config (with envs) and getenv returns empty",
+			"",
+		},
+		{
+			populateMockConfig(t, NewMockConfig(nil, "somevalue"), psm2Example),
+			0,
+			// existing os vars already set, config values should be ignored and
+			// result in no change, as provider is set in os, no changes made
+			[]string{
+				"FOO=bar",
+				"ABT_MAX_NUM_XSTREAMS=somevalue",
+				"DAOS_MD_CAP=somevalue",
+				"CRT_TIMEOUT=somevalue",
+				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
+				"FI_SOCKETS_CONN_TIMEOUT=somevalue",
+				"CRT_PHY_ADDR_STR=somevalue",
+				"OFI_INTERFACE=somevalue",
+				"OFI_PORT=somevalue",
+				"D_LOG_MASK=somevalue",
+				"D_LOG_FILE=somevalue",
+			},
+			[]string{
+				"FOO=bar",
+				"ABT_MAX_NUM_XSTREAMS=somevalue",
+				"DAOS_MD_CAP=somevalue",
+				"CRT_TIMEOUT=somevalue",
+				// "CRT_CREDIT_EP_CTX=0", // whilst this is a new env, it is ignored
+				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
+				"FI_SOCKETS_CONN_TIMEOUT=somevalue",
+				"CRT_PHY_ADDR_STR=somevalue",
+				"OFI_INTERFACE=somevalue",
+				"OFI_PORT=somevalue",
+				"D_LOG_MASK=somevalue",
+				"D_LOG_FILE=somevalue",
+			},
+			true,
+			"psm2 populated config (with envs) and getenv returns with 'somevalue'",
+			"",
+		},
+	}
+
+	for _, tt := range tests {
+		config := tt.inConfig
+		inEnvs := tt.inEnvs
+		if len(config.Servers) == 0 {
+			server := NewDefaultServer()
+			config.Servers = append(config.Servers, server)
+		}
+		// optionally add to server EnvVars from config (with empty cliOptions)
+		if tt.getParams == true {
+			err := config.getIOParams(&cliOptions{})
+			if err != nil {
+				t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err.Error())
+			}
+		}
+		// pass in env and verify output envs is as expected
+		err := config.populateEnv(tt.ioIdx, &inEnvs)
+		if tt.errMsg != "" {
+			ExpectError(t, err, tt.errMsg, tt.desc)
+			continue
+		}
+		if err != nil {
+			t.Fatalf("Envs could not be populated (%s: %s)", tt.desc, err.Error())
+		}
+		AssertEqual(t, inEnvs, tt.outEnvs, tt.desc)
 	}
 }

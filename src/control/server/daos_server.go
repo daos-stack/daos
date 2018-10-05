@@ -31,7 +31,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime"
-	"strings"
 	"syscall"
 
 	flags "github.com/jessevdk/go-flags"
@@ -98,6 +97,11 @@ func main() {
 		syscall.SIGKILL,
 		syscall.SIGHUP)
 
+	// Process configurations parameters for Nvme.
+	if err = config.parseNvme(); err != nil {
+		log.Fatal("NVMe config could not be processed: ", err)
+	}
+
 	// Only start single server for now.
 	ioIdx := 0
 	ioArgs := config.Servers[ioIdx].CliOpts
@@ -106,23 +110,9 @@ func main() {
 	srv.Stderr = os.Stderr
 	srv.Env = os.Environ()
 
-	// Init I/O server environment with values from config before starting.
-	// Environment to be populated from config options but don't overwrite
-	// existing os env vars.
-	for _, env := range config.Servers[ioIdx].EnvVars {
-		kv := strings.Split(env, "=")
-		if kv[1] == "" {
-			continue
-		}
-		existing := config.ext.getenv(kv[0])
-		if existing == "" {
-			// os env value doesn't exist so set
-			srv.Env = append(srv.Env, env)
-			continue
-		}
-		log.Printf(
-			"os env detected %s=%s, ignoring config value %s",
-			kv[0], existing, kv[1])
+	// Populate I/O server environment with values from config before starting.
+	if err = config.populateEnv(ioIdx, &srv.Env); err != nil {
+		log.Fatal("DAOS I/O env vars could not be populated: ", err)
 	}
 
 	// I/O server should get a SIGTERM if this process dies.

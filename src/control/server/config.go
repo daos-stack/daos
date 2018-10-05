@@ -193,35 +193,6 @@ func (c *configuration) populateCliOpts(i int) error {
 	return nil
 }
 
-// populateEnvVars populates environment variable string slice for single server
-func (c *configuration) populateEnvVars(i int) error {
-	server := &c.Servers[i]
-	server.EnvVars = append(
-		server.EnvVars,
-		PROVIDER_ENV_KEY+"="+c.Provider,
-		"OFI_INTERFACE="+server.FabricIface,
-		"OFI_PORT="+strconv.Itoa(server.FabricIfacePort),
-		"D_LOG_MASK="+server.LogMask,
-		"D_LOG_FILE="+server.LogFile)
-	// todo: what is the default for BdevClass, add NONE
-	var class string
-	switch server.BdevClass {
-	case NVME:
-		// standard daos_nvme.conf
-		class = ""
-	case MALLOC:
-		class = "MALLOC"
-	case KDEV, FILE:
-		class = "AIO"
-	default:
-		return fmt.Errorf("unsupported bdev_class: %v", server.BdevClass)
-	}
-	if class != "" {
-		server.EnvVars = append(server.EnvVars, "VOS_BDEV_CLASS="+class)
-	}
-	return nil
-}
-
 // cmdlineOverride mutates configuration options based on commandline
 // options overriding those loaded from configuration file.
 //
@@ -275,25 +246,18 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 // in the case of missing config file info attempts to detect external
 // os environment variables (returns true to skip following env creation)
 func (c *configuration) validateConfig() (bool, error) {
-	// if provider or Servers are missing we may not have sufficient info to
-	// start io server
-	if (c.Provider == "") || (len(c.Servers) == 0) {
-		if c.ext.getenv(PROVIDER_ENV_KEY) == "" {
-			// fail because we don't have enough info to continue
-			return false, fmt.Errorf(
-				"required parameters missing from config and os environment (%s)",
-				PROVIDER_ENV_KEY)
-		}
+	if c.ext.getenv(PROVIDER_ENV_KEY) != "" {
 		if len(c.Servers) == 0 {
 			c.Servers = append(c.Servers, NewDefaultServer())
 		}
-		examplesPath, _ := handlers.GetAbsInstallPath("utils/config/examples/")
-		// user environment variable detected for provider, assume all
-		// necessary environment already exists and skip populateEnvVars
-		log.Print(
-			"Warning: incomplete config file, specify params in config as per ",
-			examplesPath)
 		return true, nil
+	}
+	// if provider or Servers are missing and we can't detect os envs, we don't
+	// have sufficient info to start io servers
+	if (c.Provider == "") || (len(c.Servers) == 0) {
+		return false, fmt.Errorf(
+			"required parameters missing from config and os environment (%s)",
+			PROVIDER_ENV_KEY)
 	}
 	return false, nil
 }
@@ -317,8 +281,11 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 	c.cmdlineOverride(cliOpts)
 
 	for i, _ := range c.Servers {
+		// avoid mutating subject during iteration, instead access through
+		// config/parent object
+		server := &c.Servers[i]
 		// verify scm mount path is valid
-		mntpt := c.Servers[i].ScmMount
+		mntpt := server.ScmMount
 		if err = c.ext.checkMount(mntpt); err != nil {
 			return fmt.Errorf(
 				"server%d scm mount path (%s) not mounted: %s",
@@ -328,10 +295,35 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 			return err
 		}
 		if !skipEnv {
-			if err = c.populateEnvVars(i); err != nil {
-				return err
-			}
+			// add to existing config file EnvVars
+			server.EnvVars = append(
+				server.EnvVars,
+				PROVIDER_ENV_KEY+"="+c.Provider,
+				"OFI_INTERFACE="+server.FabricIface,
+				"OFI_PORT="+strconv.Itoa(server.FabricIfacePort),
+				"D_LOG_MASK="+server.LogMask,
+				"D_LOG_FILE="+server.LogFile)
+			continue
 		}
+		examplesPath, _ := handlers.GetAbsInstallPath("utils/config/examples/")
+		// user environment variable detected for provider, assume all
+		// necessary environment already exists and clear server config EnvVars
+		log.Print(
+			"Warning: using os env vars, specify params in config instead: ",
+			examplesPath)
+		server.EnvVars = []string{}
+	}
+	return nil
+}
+
+// populateEnv adds envs from config options
+func (c *configuration) populateEnv(ioIdx int, envs *[]string) error {
+	for _, env := range c.Servers[ioIdx].EnvVars {
+		kv := strings.Split(env, "=")
+		if kv[1] == "" {
+			log.Printf("Warning: empty value for env %s detected", kv[0])
+		}
+		*envs = append(*envs, env)
 	}
 	return nil
 }

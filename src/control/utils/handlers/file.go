@@ -109,3 +109,8 @@ func WriteSlice(path string, slice []string) (err error) {
 
 	return
 }
+
+// WriteString writes string to specified file, wrapper around WriteSlice.
+func WriteString(path string, s string) (err error) {
+	return WriteSlice(path, []string{s})
+}
