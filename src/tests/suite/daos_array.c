@@ -434,9 +434,12 @@ read_empty(void **state)
 	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	char		 *buf;
+	daos_size_t	 buf_len;
 	int		 rc;
 
-	buf = malloc(4194304);
+	buf_len = 4194304;
+	buf = malloc(buf_len);
+	D_ASSERT(buf != NULL);
 
 	/** open object */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
@@ -447,7 +450,7 @@ read_empty(void **state)
 	daos_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	/** init scatter/gather */
-	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	daos_iov_set(&sg_iov, buf, buf_len);
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
@@ -458,7 +461,7 @@ read_empty(void **state)
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
-	recx.rx_nr	= 4194304;
+	recx.rx_nr	= buf_len;
 	iod.iod_recxs	= &recx;
 	iod.iod_eprs	= NULL;
 	iod.iod_csums	= NULL;
@@ -473,6 +476,7 @@ read_empty(void **state)
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
 	print_message("all good\n");
+	free(buf);
 }
 
 static const struct CMUnitTest array_tests[] = {

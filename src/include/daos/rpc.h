@@ -152,7 +152,7 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 {
 	struct daos_rpc	*rpc;
 	uint32_t	 flags;
-	int		 rc;
+	int		 rc = 0;
 
 	if (rpcs == NULL)
 		return 0;

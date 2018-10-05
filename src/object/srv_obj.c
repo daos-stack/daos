@@ -669,14 +669,23 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	biod = vos_ioh2desc(ioh);
 	rc = bio_iod_prep(biod);
-	if (rc)
+	if (rc) {
+		D_ERROR(DF_UOID" bio_iod_prep failed: %d.\n",
+			DP_UOID(orw->orw_oid), rc);
 		goto out;
+	}
 
 	if (rma)
 		rc = ds_bulk_transfer(rpc, bulk_op, orw->orw_bulks.ca_arrays,
 				      ioh, NULL, orw->orw_nr);
 	else if (orw->orw_sgls.ca_arrays != NULL)
 		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
+
+	if (rc == -DER_OVERFLOW) {
+		rc = -DER_REC2BIG;
+		D_ERROR(DF_UOID" ds_bulk_transfer/bio_iod_copy failed, rc %d",
+			DP_UOID(orw->orw_oid), rc);
+	}
 
 	err = bio_iod_post(biod);
 	rc = rc ? : err;

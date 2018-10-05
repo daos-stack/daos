@@ -455,6 +455,9 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	ret_uuids_nr = ret_out->tc_tgt_uuids.ca_count;
 	ret_uuids = ret_out->tc_tgt_uuids.ca_arrays;
 	ret_ranks = ret_out->tc_ranks.ca_arrays;
+
+	if (tc_out->tc_rc != 0)
+		ret_out->tc_rc = tc_out->tc_rc;
 	if (tc_uuids_nr == 0)
 		return 0;
 

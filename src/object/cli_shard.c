@@ -329,8 +329,10 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	crt_endpoint_t		tgt_ep;
 	uuid_t			cont_hdl_uuid;
 	uuid_t			cont_uuid;
-	daos_size_t		total_len;
+	daos_size_t		iod_len;
+	daos_size_t		sgl_len;
 	uint64_t		dkey_hash;
+	bool			do_bulk = false;
 	int			rc;
 
 	tse_task_stack_pop_data(task, &dkey_hash, sizeof(dkey_hash));
@@ -373,15 +375,24 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_iods.ca_count = nr;
 	orw->orw_iods.ca_arrays = iods;
 
-	total_len = daos_iods_len(iods, nr);
+	iod_len = daos_iods_len(iods, nr);
+	sgl_len = daos_sgls_buf_len(sgls, nr);
 	/* If it is read, let's try to get the size from sg list */
-	if (total_len == -1 && opc == DAOS_OBJ_RPC_FETCH)
-		total_len = daos_sgls_buf_len(sgls, nr);
+	if (iod_len == -1 && opc == DAOS_OBJ_RPC_FETCH)
+		iod_len = daos_sgls_buf_len(sgls, nr);
+	if (iod_len != -1 && iod_len > sgl_len) {
+		rc = -DER_REC2BIG;
+		D_ERROR("Object "DF_UOID", iod_len "DF_U64", sgl_len "
+			DF_U64", failed %d.\n", DP_UOID(shard->do_id),
+			iod_len, sgl_len, rc);
+		D_GOTO(out_req, rc);
+	}
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FAIL))
 		D_GOTO(out_req, rc = -DER_INVAL);
 
-	if (total_len >= OBJ_BULK_LIMIT) {
+	do_bulk = iod_len >= OBJ_BULK_LIMIT;
+	if (do_bulk) {
 		/* Transfer data by bulk */
 		rc = obj_shard_rw_bulk_prep(req, nr, sgls, task);
 		if (rc != 0)
@@ -435,7 +446,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 out_args:
 	crt_req_decref(req);
-	if (total_len >= OBJ_BULK_LIMIT)
+	if (do_bulk)
 		obj_shard_rw_bulk_fini(req);
 out_req:
 	crt_req_decref(req);

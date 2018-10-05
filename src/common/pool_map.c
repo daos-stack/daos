@@ -1354,11 +1354,14 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 	int		    rc;
 
 	rc = pool_buf_parse(buf, &tree);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("pool_buf_parse failed, rc %d.\n", rc);
 		return rc;
+	}
 
 	if (!pool_tree_sane(tree, version)) {
 		rc = -DER_INVAL;
+		D_ERROR("pool_tree_sane failed, rc %d.\n", rc);
 		goto failed;
 	}
 
@@ -1369,8 +1372,12 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 	}
 
 	rc = pool_map_initialise(map, true, tree);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("pool_map_initialise failed, rc %d.\n", rc);
+		/* pool_tree_free() did in pool_map_initialise */
+		tree = NULL;
 		goto failed;
+	}
 
 	map->po_version = version;
 	map->po_ref = 1; /* 1 for caller */

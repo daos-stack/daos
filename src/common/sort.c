@@ -62,7 +62,7 @@ daos_array_sort(void *array, unsigned int len, bool unique,
 		for (i = 0, j = gap; j < len; i++, j++) {
 			rc = ops->so_cmp(array, i, j);
 			if (rc == 0 && unique)
-				return -EINVAL;
+				return -DER_INVAL;
 
 			if (rc > 0) {
 				ops->so_swap(array, i, j);

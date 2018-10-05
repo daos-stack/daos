@@ -1110,7 +1110,8 @@ io_complex(void **state)
 	ioreq_fini(&req);
 }
 
-#define STACK_BUF_LEN	24
+#define STACK_BUF_LEN		24
+#define TEST_BULK_BUF_LEN	(128 * 1024)
 
 static void
 basic_byte_array(void **state)
@@ -1124,11 +1125,22 @@ basic_byte_array(void **state)
 	daos_iov_t	 sg_iov;
 	daos_iod_t	 iod;
 	daos_recx_t	 recx;
-	char		 buf_out[STACK_BUF_LEN];
-	char		 buf[STACK_BUF_LEN];
+	char		 stack_buf_out[STACK_BUF_LEN];
+	char		 stack_buf[STACK_BUF_LEN];
+	char		 *bulk_buf = NULL;
+	char		 *bulk_buf_out = NULL;
+	char		 *buf;
+	char		 *buf_out;
+	int		 buf_len;
+	int		 step = 1;
 	int		 rc;
 
-	dts_buf_render(buf, STACK_BUF_LEN);
+	D_ALLOC(bulk_buf, TEST_BULK_BUF_LEN);
+	D_ASSERT(bulk_buf != NULL);
+	D_ALLOC(bulk_buf_out, TEST_BULK_BUF_LEN);
+	D_ASSERT(bulk_buf_out != NULL);
+	dts_buf_render(stack_buf, STACK_BUF_LEN);
+	dts_buf_render(bulk_buf, TEST_BULK_BUF_LEN);
 
 	/** open object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
@@ -1138,17 +1150,24 @@ basic_byte_array(void **state)
 	/** init dkey */
 	daos_iov_set(&dkey, "dkey", strlen("dkey"));
 
+	/* step 1 to test the inline data transfer, and step 2 to test the
+	 * bulk transfer path.
+	 */
+next_step:
 	/** init scatter/gather */
-	daos_iov_set(&sg_iov, buf, sizeof(buf));
-	sgl.sg_nr		= 1;
-	sgl.sg_nr_out		= 0;
-	sgl.sg_iovs		= &sg_iov;
+	D_ASSERT(step == 1 || step == 2);
+	buf = step == 1 ? stack_buf : bulk_buf;
+	buf_len = step == 1 ? STACK_BUF_LEN : TEST_BULK_BUF_LEN;
+	daos_iov_set(&sg_iov, buf, buf_len);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iov;
 
 	/** init I/O descriptor */
 	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	recx.rx_idx = 0;
-	recx.rx_nr  = STACK_BUF_LEN;
+	recx.rx_nr  = buf_len;
 
 	iod.iod_size	= 1;
 	iod.iod_nr	= 1;
@@ -1158,25 +1177,40 @@ basic_byte_array(void **state)
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
-	print_message("writing %d bytes with one recx per byte\n",
-		      STACK_BUF_LEN);
+	print_message("writing %d bytes with one recx per byte\n", buf_len);
 	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
+	iod.iod_size	= DAOS_REC_ANY;
+	print_message("reading data back with less buffer ...\n");
+	buf_out = step == 1 ? stack_buf_out : bulk_buf_out;
+	memset(buf_out, 0, buf_len);
+	daos_iov_set(&sg_iov, buf_out, buf_len / 2);
+	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	print_message("fetch with less buffer got %d.\n", rc);
+	assert_int_equal(rc, -DER_REC2BIG);
+
 	/** fetch */
 	print_message("reading data back ...\n");
-	memset(buf_out, 0, sizeof(buf_out));
-	daos_iov_set(&sg_iov, buf_out, sizeof(buf_out));
+	memset(buf_out, 0, buf_len);
+	daos_iov_set(&sg_iov, buf_out, buf_len);
 	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** Verify data consistency */
 	print_message("validating data ...\n");
 	assert_memory_equal(buf, buf_out, sizeof(buf));
 
+	if (step++ == 1) {
+		epoch++;
+		goto next_step;
+	}
+
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
 	print_message("all good\n");
+	D_FREE(bulk_buf);
+	D_FREE(bulk_buf_out);
 }
 
 static void

@@ -47,7 +47,7 @@ test_runable(test_arg_t *arg, unsigned int required_tgts)
 
 		if (arg->srv_ntgts - arg->srv_disabled_ntgts < required_tgts) {
 			if (arg->myrank == 0)
-				print_message("Not enough targets, skipping "
+				print_message("No enough targets, skipping "
 					      "(%d/%d)\n",
 					      arg->srv_ntgts,
 					      arg->srv_disabled_ntgts);

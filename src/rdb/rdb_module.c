@@ -54,6 +54,8 @@ static struct daos_rpc_handler rdb_handlers[] = {
 	}, {
 		.dr_opc		= RDB_INSTALLSNAPSHOT,
 		.dr_hdlr	= rdb_installsnapshot_handler
+	}, {
+		.dr_opc		= 0
 	}
 };
 

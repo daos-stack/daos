@@ -236,6 +236,8 @@ struct daos_rpc rdb_srv_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_RDB_INSTALLSNAPSHOT
+	}, {
+		.dr_opc		= 0
 	}
 };
 

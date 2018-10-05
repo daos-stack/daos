@@ -1046,6 +1046,8 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *			0		Success
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_INVAL	Invalid parameter
+ *			-DER_REC2BIG	Record is larger than the buffer in
+ *					input \a sgls buffer.
  *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Epoch is read-only

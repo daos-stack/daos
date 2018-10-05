@@ -786,7 +786,7 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 	}
 
 	D_DEBUG(DB_TRACE, "Consumed all iovs, "DF_U64" bytes left\n", size);
-	return -DER_INVAL;
+	return -DER_OVERFLOW;
 }
 
 static void
