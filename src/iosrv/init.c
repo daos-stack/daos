@@ -336,7 +336,7 @@ parse(int argc, char **argv)
 		{ "cores",		required_argument,	NULL,	'c' },
 		{ "group",		required_argument,	NULL,	'g' },
 		{ "storage",		required_argument,	NULL,	's' },
-		{ "attach_info",	optional_argument,	NULL,	'a' },
+		{ "attach_info",	required_argument,	NULL,	'a' },
 		{ "help",		no_argument,		NULL,	'h' },
 		{ NULL,			0,			NULL,	0}
 	};
@@ -345,7 +345,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:m:g:s:a::h", opts, NULL)) !=
+	while ((c = getopt_long(argc, argv, "c:m:g:s:a:h", opts, NULL)) !=
 		-1) {
 		switch (c) {
 		case 'm':
