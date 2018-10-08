@@ -173,6 +173,63 @@ simple_array_mgmt(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 } /* End simple_array_mgmt */
 
+#define BUFLEN 80
+
+static void
+small_io(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_epoch_t	epoch;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	daos_array_iod_t iod;
+	daos_sg_list_t	sgl;
+	daos_range_t	rg;
+	daos_iov_t	iov;
+	char		buf[BUFLEN], rbuf[BUFLEN];
+	daos_size_t	array_size;
+	int		rc;
+
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
+	epoch = 25;
+
+	/** create the array */
+	rc = daos_array_create(arg->coh, oid, epoch, 1, 1048576, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	memset(buf, 'A', BUFLEN);
+
+	/** set array location */
+	iod.arr_nr = 1;
+	rg.rg_len = BUFLEN;
+	rg.rg_idx = 0;
+	iod.arr_rgs = &rg;
+
+	/** set memory location */
+	sgl.sg_nr = 1;
+	daos_iov_set(&iov, buf, BUFLEN);
+	sgl.sg_iovs = &iov;
+
+	/** Write */
+	rc = daos_array_write(oh, epoch++, &iod, &sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_get_size(oh, epoch++, &array_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(array_size, BUFLEN);
+
+	daos_iov_set(&iov, rbuf, BUFLEN);
+	sgl.sg_iovs = &iov;
+	rc = daos_array_read(oh, epoch, &iod, &sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = memcmp(buf, rbuf, BUFLEN);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_close(oh, NULL);
+	assert_int_equal(rc, 0);
+} /* End str_mem_str_arr_io */
+
 static int
 change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size,
 		  daos_epoch_t epoch)
@@ -888,6 +945,8 @@ strided_array(void **state)
 static const struct CMUnitTest array_io_tests[] = {
 	{"Array I/O: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
+	{"Array I/O: small/simple array IO (blocking)",
+	 small_io, async_disable, NULL},
 	{"Array I/O: Contiguous memory and array (blocking)",
 	 contig_mem_contig_arr_io, async_disable, NULL},
 	{"Array I/O: Contiguous memory and array (non-blocking)",

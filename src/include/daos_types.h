@@ -105,7 +105,6 @@ typedef struct {
 static inline void
 daos_anchor_set_zero(daos_anchor_t *anchor)
 {
-	memset(anchor, 0, sizeof(*anchor));
 	anchor->da_type = DAOS_ANCHOR_TYPE_ZERO;
 }
 
