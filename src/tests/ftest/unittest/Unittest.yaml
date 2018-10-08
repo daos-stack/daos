@@ -1,0 +1,12 @@
+# Unittests Name and Paramter to be mention in this file.
+UnitTest:
+  smd_ut:
+    testname: smd_ut
+  vea_ut:
+    testname: vea_ut
+  pl_map:
+    testname: pl_map
+  eq_tests:
+    testname: eq_tests
+  vos_tests:
+    testname: vos_tests
