@@ -125,7 +125,7 @@ class DaosServer(object):
         self.proc = None
 
         # hard-coded for now, but likely to become test parameters
-        thread_count = 1
+        thread_count = 2
 
         base_dir = self.test_info.get_defaultENV('PREFIX', '')
         ort_dir = self.test_info.get_defaultENV('ORT_PATH', '')
