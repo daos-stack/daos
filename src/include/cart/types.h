@@ -210,7 +210,7 @@ struct crt_req_format {
 };
 
 struct crt_array {
-	size_t		 ca_count;
+	uint64_t	 ca_count;
 	void		*ca_arrays;
 };
 
