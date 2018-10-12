@@ -1,0 +1,52 @@
+#
+# Copyright 2018, Intel Corporation
+#
+# 'recipe' for Docker to build an image of centOS-based
+# environment for building the DAOS project.
+#
+
+# Pull base image
+FROM centos:7
+MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
+
+# Build arguments can be set via -build-arg
+# set NOBUILD to disable git clone & build
+ARG NOBUILD
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
+ENV USER daos
+ENV PASSWD daos
+
+# Install basic tools
+RUN yum install -y epel-release yum-plugin-copr; \
+  yum -y copr enable jhli/ipmctl; \
+  yum -y copr enable jhli/safeclib; \
+  yum install -y  boost-devel clang-analyzer cmake CUnit-devel doxygen flex \
+    gcc gcc-c++ git golang graphviz make lcov meson nasm numactl-devel \
+    ninja-build openssl-devel readline-devel pandoc patch scons sg3_utils \
+    valgrind valgrind-devel yasm \
+    libaio-devel libcmocka libcmocka-devel libevent-devel libibverbs-devel \
+    libiscsi-devel librdmacm-devel libtool libtool-ltdl-devel \
+    libuuid-devel libyaml-devel \
+    python python-jwt python-pep8 python-virtualenv \
+    python2-pip python2-pygithub python34-pip python34-pygithub pylint \
+    libipmctl-devel
+
+RUN useradd -u $UID -ms /bin/bash $USER ;echo "$USER:$PASSWD" | chpasswd
+
+# Create directory for DAOS backend storage
+RUN mkdir -p /mnt/daos; chown $UID /mnt/daos
+
+# Create a target directory for prebuilts
+RUN mkdir -p /testbin; chown $UID /testbin; ls -ld /testbin
+
+# Switch to new user
+USER $USER
+
+WORKDIR /home/$USER
+
+RUN if [ -n "${HTTP_PROXY}" ]; then \
+  git config --global http.proxy "${HTTP_PROXY}"; \
+  printf "proxy = %s\n" "${HTTP_PROXY##*/}" >> ~/.curlrc; fi
+
