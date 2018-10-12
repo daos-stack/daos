@@ -120,7 +120,8 @@
     match-leak-kinds: reachable
     fun:malloc
     ...
-    obj:/lib64/libcrypto.so.1.0.0
+    obj:*/libcrypto.so.1.*
+    ...
 }
 {
     CRYPTO leaks calloc
@@ -128,5 +129,6 @@
     match-leak-kinds: reachable
     fun:calloc
     ...
-    obj:/lib64/libcrypto.so.1.0.0
+    obj:*/libcrypto.so.1.*
+    ...
 }
