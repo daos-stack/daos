@@ -100,6 +100,24 @@ dts_buf_render(char *buf, unsigned int buf_len)
 	buf[i] = '\0';
 }
 
+void
+dts_buf_render_uppercase(char *buf, unsigned int buf_len)
+{
+	int	nr = 'z' - 'a' + 1;
+	int	i;
+
+	srand(time(NULL));
+	for (i = 0; i < buf_len - 1; i++) {
+		int randv = rand() % (2 * nr);
+
+		if (randv < nr)
+			buf[i] = ('a' + randv) - 32;
+		else
+			buf[i] = 'A' + (randv - nr);
+	}
+	buf[i] = '\0';
+}
+
 #define DTS_LINE_SIZE	1024
 
 void

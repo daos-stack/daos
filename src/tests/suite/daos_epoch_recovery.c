@@ -46,6 +46,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
 	char	       *akey[nakeys];
 	char	       *rec[nakeys];
 	daos_size_t	rec_size[nakeys];
+	int		rx_nr[nakeys];
 	daos_off_t	offset[nakeys];
 	const char     *val_fmt = "epoch_recovery val%d '%s'";
 	daos_size_t	rsize;
@@ -60,6 +61,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
 		assert_non_null(akey[i]);
 		sprintf(akey[i], akey_fmt, i);
 		rec_size[i] = rsize;
+		rx_nr[i] = 1;
 		rec[i] = calloc(rec_size[i], 1);
 		assert_non_null(rec[i]);
 		offset[i] = i * 20;
@@ -74,8 +76,8 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
 		}
 
 		print_message("writing records to epoch "DF_U64"\n", epoch);
-		insert(dkey, nakeys, (const char **)akey, offset, (void **)rec,
-		       rec_size, &epoch, &req);
+		insert(dkey, nakeys, (const char **)akey, /*iod_size*/ rec_size,
+		       rx_nr, offset, (void **)rec, &epoch, &req);
 	} else {	/* op == VERIFY */
 		char *rec_verify;
 

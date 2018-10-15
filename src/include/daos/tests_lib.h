@@ -48,6 +48,9 @@ void  dts_freeline(char *line);
 /** Fill in readable random bytes into the buffer */
 void dts_buf_render(char *buf, unsigned int buf_len);
 
+/** Fill in random uppercase chars into the buffer */
+void dts_buf_render_uppercase(char *buf, unsigned int buf_len);
+
 /** generate a unique key */
 void dts_key_gen(char *key, unsigned int key_len, const char *prefix);
 
