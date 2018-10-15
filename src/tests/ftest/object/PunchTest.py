@@ -26,6 +26,7 @@ import time
 import traceback
 import sys
 import json
+import avocado
 from avocado import Test, main
 
 sys.path.append('./util')
@@ -39,7 +40,7 @@ from daos_api import DaosContext, DaosPool, DaosContainer
 
 class PunchTest(Test):
     """
-    Simple test to verify object punch call.
+    Simple test to verify the 3 different punch calls.
     """
     def setUp(self):
 
@@ -111,11 +112,11 @@ class PunchTest(Test):
             print(traceback.format_exc())
             self.fail("Test failed during teardown.\n")
 
-    def test_punch(self):
+    def test_dkey_punch(self):
         """
-        The most basic test of the punch function.
+        The most basic test of the dkey punch function.
 
-        :avocado: tags=object,punch,regression,vm,small
+        :avocado: tags=object,punch,dkeypunch,regression,vm,small
         """
         try:
 
@@ -198,6 +199,114 @@ class PunchTest(Test):
                 self.fail("after punch data in the last epoch should be gone")
 
             # lastly check the first epoch
+            thedata10 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
+                                                  obj, epoch)
+
+            if thedata != thedata10.value:
+                self.fail("Epoch preceeding the punch should still have data\n")
+
+        except ValueError as e:
+            print(e)
+            self.fail("Test failed.\n")
+
+    @avocado.skip('Currently this test fails')
+    def test_obj_punch(self):
+        """
+        The most basic test of the object punch function.  Really similar
+        to above except the whole object is deleted.
+
+        :avocado: tags=object,punch,objpunch,regression,vm,small
+        """
+        try:
+
+            # create an object and write some data into it
+            thedata = "a string that I want to stuff into an object"
+            dkey = "this is the dkey"
+            akey = "this is the akey"
+
+            obj, epoch = self.container.write_an_obj(thedata, len(thedata)+1,
+                                                     dkey, akey)
+
+            # read the data back and make sure its correct
+            thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
+                                                  obj, epoch)
+            if thedata != thedata2.value:
+                print("data I wrote:" + thedata)
+                print("data I read back" + thedata2.value)
+                self.fail("Wrote data, read it back, didn't match\n")
+
+            # repeat above, but know that the write_an_obj call is advancing
+            # the epoch so the original copy remains and the new copy is in
+            # a new epoch.
+            thedata3 = "a different string"
+            # note using the same keys so writing to the same spot
+            obj, epoch2 = self.container.write_an_obj(thedata3, len(thedata3)+1,
+                                                      dkey, akey, obj)
+
+            # read the data back and make sure its correct
+            thedata4 = self.container.read_an_obj(len(thedata3)+1, dkey, akey,
+                                             obj, epoch2)
+            if thedata3 != thedata4.value:
+                print("data I wrote:" + thedata3)
+                print("data I read back" + thedata4.value)
+                self.fail("wrote in new epoch, read it back, didn't match\n")
+
+            # the original data should still be there too
+            thedata5 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
+                                             obj, epoch)
+            if thedata != thedata5.value:
+                self.fail("original data isn't there any more\n")
+
+            # repeat, so there will be 3 epochs
+            thedata6 = "a really different string"
+
+            # note using the same keys so writing to the same spot
+            obj, epoch3 = self.container.write_an_obj(thedata6, len(thedata6)+1,
+                                                      dkey, akey, obj)
+
+            # read the data back and make sure its correct
+            thedata7 = self.container.read_an_obj(len(thedata6)+1, dkey, akey,
+                                                  obj, epoch3)
+            if thedata6 != thedata7.value:
+                print("data I wrote:" + thedata6)
+                print("data I read back" + thedata7.value)
+                self.fail("wrote in new epoch, read it back, didn't match\n")
+
+            # now punch the object from the middle epoch
+            obj.punch(epoch2)
+
+        except ValueError as e:
+            print (e)
+            print (traceback.format_exc())
+            self.fail("Test failed.\n")
+
+        try:
+            # read the data from the middle epoch, should be gone
+            thedata8 = self.container.read_an_obj(len(thedata3)+1, dkey, akey,
+                                                  obj, epoch2)
+            if len(thedata8.value) is not 0:
+                print("data8: {} {}", thedata8.value, len(thedata8.value))
+                self.fail("punch from middle epoch didn't work")
+
+        except ValueError as e:
+            print(e)
+            self.fail("READ FROM DELETED OBJECT FAILED.\n")
+
+        try:
+            # read the data from the last epoch
+            thedata9 = self.container.read_an_obj(len(thedata6)+1, dkey, akey,
+                                                  obj, epoch3)
+
+            if len(thedata9.value) is not 0:
+                print("data9: {} {}", thedata8.value, len(thedata8.value))
+                self.fail("after punch data in the last epoch should be gone")
+
+        except ValueError as e:
+            print(e)
+            self.fail("READ FROM DELETED OBJECT FAILED.\n")
+
+        try:
+            # lastly check the first epoch, this one should still be there
             thedata10 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
                                                   obj, epoch)
 

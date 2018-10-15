@@ -416,11 +416,11 @@ class DaosObj(object):
         if rank is not None:
             self.c_oid.hi |= rank << 24
 
-    def open(self):
+    def open(self, epoch=0):
         """ open the object so we can interact with it """
         func = self.context.get_function('open-obj')
 
-        c_epoch = ctypes.c_uint64(0)
+        c_epoch = ctypes.c_uint64(epoch)
         c_mode = ctypes.c_uint(4)
         self.oh = ctypes.c_uint64(0)
 
@@ -429,6 +429,16 @@ class DaosObj(object):
         if rc != 0:
             raise ValueError("Object open returned non-zero. RC: {0}"
                              .format(rc))
+
+    def close(self):
+        """ close this object """
+        if self.oh is not None:
+            func = self.context.get_function('close-obj')
+            rc = func(self.oh, None)
+            if rc != 0:
+                raise ValueError("Object close returned non-zero. RC: {0}"
+                                 .format(rc))
+            self.oh = None
 
     def refresh_attr(self, epoch):
         """ Get object attributes and save internally
@@ -472,6 +482,40 @@ class DaosObj(object):
                     obj_layout_ptr[0].ol_shards[0][0].os_ranks[i])
         else:
             raise ValueError("get_layout returned non-zero. RC: {0}".format(rc))
+
+
+    def punch(self, epoch, cb_func=None):
+        """ Delete this object but only from the specified epoch
+
+        Function arguments:
+        epoch    --the epoch from which keys will be deleted.
+        cb_func  --an optional callback function
+        """
+
+        if self.oh is None:
+            self.open()
+
+        c_epoch = ctypes.c_uint64(epoch)
+
+        # the callback function is optional, if not supplied then run the
+        # punch synchronously, if its there then run it in a thread
+        func = self.context.get_function('punch-obj')
+        if cb_func == None:
+            rc = func(self.oh, c_epoch, None)
+            if rc != 0:
+                raise ValueError("punch-dkeys returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.oh, c_epoch, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
+            t.start()
+
 
     def punch_dkeys(self, epoch, dkeys, cb_func=None):
         """ Deletes dkeys and associated data from an object for a specific
@@ -1365,6 +1409,7 @@ class DaosContext(object):
             'create-cont'    : self.libdaos.daos_cont_create,
             'create-eq'      : self.libdaos.daos_eq_create,
             'create-pool'    : self.libdaos.daos_pool_create,
+            'd_log'          : self.libtest.dts_log,
             'destroy-cont'   : self.libdaos.daos_cont_destroy,
             'destroy-eq'     : self.libdaos.daos_eq_destroy,
             'destroy-pool'   : self.libdaos.daos_pool_destroy,
@@ -1385,6 +1430,7 @@ class DaosContext(object):
             'open-obj'       : self.libdaos.daos_obj_open,
             'poll-eq'        : self.libdaos.daos_eq_poll,
             'punch-dkeys'    : self.libdaos.daos_obj_punch_dkeys,
+            'punch-obj'      : self.libdaos.daos_obj_punch,
             'query-cont'     : self.libdaos.daos_cont_query,
             'query-obj'      : self.libdaos.daos_obj_query,
             'query-pool'     : self.libdaos.daos_pool_query,
@@ -1393,9 +1439,7 @@ class DaosContext(object):
             'slip-epoch'     : self.libdaos.daos_epoch_slip,
             'stop-service'   : self.libdaos.daos_pool_svc_stop,
             'test-event'     : self.libdaos.daos_event_test,
-            'update-obj'     : self.libdaos.daos_obj_update,
-            'd_log'          : self.libtest.dts_log
-	    }
+            'update-obj'     : self.libdaos.daos_obj_update}
 
     def __del__(self):
         """ cleanup the DAOS API """
