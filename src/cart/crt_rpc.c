@@ -799,8 +799,7 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 
 	if (cb_info->cci_rc != 0) {
 		D_ERROR("rpc_priv %p(opc: %#x), failed cci_rc: %d.\n",
-			container_of(cb_info->cci_rpc, struct crt_rpc_priv,
-				     crp_pub),
+			rpc_priv,
 			cb_info->cci_rpc->cr_opc, cb_info->cci_rc);
 		if (cb_info->cci_rc == -DER_OOG)
 			D_GOTO(out, rc = -DER_OOG);

@@ -50,8 +50,6 @@
 #define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
 #define CRT_DEFAULT_TIMEOUT_US	(CRT_DEFAULT_TIMEOUT_S * 1e6) /* micro-second */
 
-/* uri lookup RPC timeout 500mS */
-#define CRT_URI_LOOKUP_TIMEOUT		(1000 * 500)
 /* uri lookup max retry times */
 #define CRT_URI_LOOKUP_RETRY_MAX	(8)
 
