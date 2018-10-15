@@ -256,6 +256,25 @@ daos_test_cb_fetch(test_arg_t *arg, struct test_op_record *op,
 }
 
 static int
+daos_test_cb_add(test_arg_t *arg, struct test_op_record *op,
+		 char **rbuf, daos_size_t *rbuf_size)
+{
+	test_rebuild_wait(&arg, 1);
+	daos_add_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+			op->ae_arg.ua_rank);
+	return 0;
+}
+
+static int
+daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
+		     char **rbuf, daos_size_t *rbuf_size)
+{
+	daos_exclude_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+			    op->ae_arg.ua_rank);
+	return 0;
+}
+
+static int
 vos_test_cb_fetch(test_arg_t *arg, struct test_op_record *op,
 		  char **rbuf, daos_size_t *rbuf_size)
 {
@@ -315,6 +334,22 @@ struct test_op_dict op_dict[] = {
 		.op_str		= "enumerate",
 		.op_cb		= {
 			test_cb_noop,
+			test_cb_noop,
+			test_cb_noop,
+		},
+	}, {
+		.op_type	= TEST_OP_ADD,
+		.op_str		= "add",
+		.op_cb		= {
+			daos_test_cb_add,
+			test_cb_noop,
+			test_cb_noop,
+		},
+	}, {
+		.op_type	= TEST_OP_EXCLUDE,
+		.op_str		= "exclude",
+		.op_cb		= {
+			daos_test_cb_exclude,
 			test_cb_noop,
 			test_cb_noop,
 		},
@@ -620,6 +655,50 @@ test_op_record_bind(test_arg_t *arg, char *dkey, char *akey,
 }
 
 static int
+cmd_parse_add_exclude(test_arg_t *arg, int argc, char **argv,
+		      unsigned int opc, struct test_op_record **op)
+{
+	struct test_op_record		*op_rec = NULL;
+	struct test_add_exclude_arg	*ae_arg;
+	int				opt;
+	int				rc = 0;
+
+	static struct epoch_io_cmd_option options[] = {
+		{"--rank",	true,	'r'},
+		{"--tgt",	true,	't'},
+		{0}
+	};
+
+	D_ALLOC_PTR(op_rec);
+	if (op_rec == NULL)
+		return -DER_NOMEM;
+
+	D_INIT_LIST_HEAD(&op_rec->or_queue_link);
+	ae_arg = &op_rec->ae_arg;
+	op_rec->or_op = opc;
+
+	eio_optind = 1;
+	while ((opt = epoch_io_getopt(argc, argv, options)) != -1) {
+		switch (opt) {
+		case 'r':
+			ae_arg->ua_rank = atoi(eio_optarg);
+			break;
+		case 't':
+			ae_arg->ua_tgt = atoi(eio_optarg);
+			break;
+		default:
+			print_message("Unknown Option %c\n", opt);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
+	*op = op_rec;
+out:
+	if (rc && op_rec)
+		D_FREE_PTR(op_rec);
+	return rc;
+}
+
+static int
 cmd_parse_update_fetch(test_arg_t *arg, int argc, char **argv, bool update,
 		       struct test_op_record **op)
 {
@@ -716,6 +795,24 @@ out:
 	return rc;
 }
 
+static int
+cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
+{
+	char *ptr = argv[1];
+	char *endp;
+
+	arg->eio_args.op_oid.hi = strtoull(ptr, &endp, 10);
+	if (*endp != '.' || ptr == endp)
+		return -1;
+
+	ptr = ++endp;
+	arg->eio_args.op_oid.lo = strtoull(ptr, &endp, 10);
+	if (ptr == endp)
+		return -1;
+
+	return 0;
+}
+
 /* parse the cmd line to argc argv[] */
 static int
 cmd_parse_argv(char *cmd, int *argc, char *argv[])
@@ -771,7 +868,6 @@ cmd_line_parse(test_arg_t *arg, char *cmd_line, struct test_op_record **op)
 #if CMD_LINE_DBG
 	print_message("parsing cmd: %s.\n", cmd);
 #endif
-
 	rc = cmd_parse_argv(cmd, &argc, argv);
 	if (rc != 0) {
 		print_message("bad format %s.\n", cmd);
@@ -804,10 +900,18 @@ cmd_line_parse(test_arg_t *arg, char *cmd_line, struct test_op_record **op)
 		D_STRNDUP(arg->eio_args.op_akey, akey, strlen(akey));
 	} else if (strcmp(argv[0], "iod_size") == 0) {
 		arg->eio_args.op_iod_size = atoi(argv[1]);
+	} else if (strcmp(argv[0], "oid") == 0) {
+		rc = cmd_parse_oid(arg, argc, argv);
 	} else if (strcmp(argv[0], "update") == 0) {
 		rc = cmd_parse_update_fetch(arg, argc, argv, true, &op_rec);
 	} else if (strcmp(argv[0], "fetch") == 0) {
 		rc = cmd_parse_update_fetch(arg, argc, argv, false, &op_rec);
+	} else if (strcmp(argv[0], "exclude") == 0) {
+		rc = cmd_parse_add_exclude(arg, argc, argv, TEST_OP_EXCLUDE,
+					   &op_rec);
+	} else if (strcmp(argv[0], "add") == 0) {
+		rc = cmd_parse_add_exclude(arg, argc, argv, TEST_OP_ADD,
+					   &op_rec);
 	} else {
 		print_message("unknown cmd %s.\n", argv[0]);
 		rc = -DER_INVAL;
@@ -927,6 +1031,9 @@ cmd_line_run(test_arg_t *arg, struct test_op_record *op_rec)
 			      op, lvl, rc);
 		D_GOTO(out, rc);
 	}
+
+	if (arg->eio_args.op_no_verify)
+		D_GOTO(out, rc = 0);
 
 	/* then replay the modification OPs in the queue, retrieve it through
 	 * fio and compare the result data.

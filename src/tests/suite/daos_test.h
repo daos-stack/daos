@@ -97,6 +97,7 @@ struct epoch_io_args {
 	/* cached dkey/akey used last time, so need not specify it every time */
 	char			*op_dkey;
 	char			*op_akey;
+	int			op_no_verify:1;
 };
 
 typedef struct {
@@ -256,6 +257,15 @@ void daos_add_server(const uuid_t pool_uuid, const char *grp,
 typedef int (*test_setup_cb_t)(void **state);
 typedef int (*test_teardown_cb_t)(void **state);
 
+bool test_runable(test_arg_t *arg, unsigned int required_tgts);
+int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo);
+int test_get_leader(test_arg_t *arg, d_rank_t *rank);
+bool test_rebuild_query(test_arg_t **args, int args_cnt);
+void test_rebuild_wait(test_arg_t **args, int args_cnt);
+void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
+			 const d_rank_list_t *svc, d_rank_t rank);
+void daos_add_server(const uuid_t pool_uuid, const char *grp,
+		     const d_rank_list_t *svc, d_rank_t rank);
 int run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 		       daos_size_t pool_size, int *sub_tests,
 		       int sub_tests_size, test_setup_cb_t setup_cb,

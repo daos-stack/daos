@@ -61,34 +61,6 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 }
 
 void
-daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-		    const d_rank_list_t *svc, d_rank_t rank)
-{
-	int		rc;
-	d_rank_list_t	targets;
-
-	/** exclude from the pool */
-	targets.rl_nr = 1;
-	targets.rl_ranks = &rank;
-	rc = daos_pool_exclude(pool_uuid, grp, svc, &targets, NULL);
-	assert_int_equal(rc, 0);
-}
-
-void
-daos_add_server(const uuid_t pool_uuid, const char *grp,
-		const d_rank_list_t *svc, d_rank_t rank)
-{
-	int		rc;
-	d_rank_list_t	targets;
-
-	/** add tgt to the pool */
-	targets.rl_nr = 1;
-	targets.rl_ranks = &rank;
-	rc = daos_pool_tgt_add(pool_uuid, grp, svc, &targets, NULL);
-	assert_int_equal(rc, 0);
-}
-
-void
 daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 			 const char *grp, d_rank_list_t *svc)
 {

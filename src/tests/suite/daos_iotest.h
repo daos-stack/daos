@@ -120,6 +120,7 @@ obj_setup(void **state);
 int
 obj_teardown(void **state);
 
+int io_conf_run(test_arg_t *arg, const char *io_conf);
 
 /* below list the structure defined for epoch io testing */
 
@@ -139,7 +140,9 @@ enum test_op_type {
 	/* above are modification OP, below are read-only OP */
 	TEST_OP_FETCH		= 3,
 	TEST_OP_ENUMERATE	= 4,
-	TEST_OP_MAX		= 4,
+	TEST_OP_ADD		= 5,
+	TEST_OP_EXCLUDE		= 6,
+	TEST_OP_MAX		= 6,
 };
 
 static inline bool
@@ -183,6 +186,11 @@ struct test_update_fetch_arg {
 				 ua_update:1; /* false for fetch */
 };
 
+struct test_add_exclude_arg {
+	d_rank_t	ua_rank;
+	int		ua_tgt;
+};
+
 /* one OP record per cmd line in the ioconf file */
 struct test_op_record {
 	/* link to test_key_record::or_queue */
@@ -192,6 +200,7 @@ struct test_op_record {
 	enum test_op_type	 or_op;
 	union {
 		struct test_update_fetch_arg	uf_arg;
+		struct test_add_exclude_arg	ae_arg;
 	};
 };
 
