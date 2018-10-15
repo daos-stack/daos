@@ -146,6 +146,22 @@ REQS.define('pmix',
             headers=['pmix.h'],
             requires=['hwloc', 'event'])
 
+
+RETRIEVER = GitRepoRetriever('https://github.com/pmix/prrte')
+REQS.define('prrte',
+            retriever=RETRIEVER,
+            commands=['./autogen.pl',
+                      './configure --with-platform=optimized '
+                      '--prefix=$PRRTE_PREFIX '
+                      '--with-pmix=$PMIX_PREFIX '
+                      '--with-libevent=external '
+                      '--with-hwloc=$HWLOC_PREFIX',
+                      'make $JOBS_OPT', 'make install'],
+            required_progs=['g++', 'flex'],
+            progs=['prun', 'prte', 'prted'],
+            requires=['pmix', 'hwloc', 'event'])
+
+
 RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi',
                              True)
 REQS.define('ompi',
