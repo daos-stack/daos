@@ -473,6 +473,55 @@ class DaosObj(object):
         else:
             raise ValueError("get_layout returned non-zero. RC: {0}".format(rc))
 
+    def punch_dkeys(self, epoch, dkeys, cb_func=None):
+        """ Deletes dkeys and associated data from an object for a specific
+        epoch.
+
+        Function arguments:
+        epoch    --the epoch from which keys will be deleted.
+        dkeys    --the keys to be deleted, None will be passed as NULL
+        cb_func  --an optional callback function
+        """
+        if self.oh is None:
+            self.open()
+
+        c_epoch = ctypes.c_uint64(epoch)
+
+        if dkeys is None:
+            c_len_dkeys = 0
+            c_dkeys = None
+        else:
+            c_len_dkeys = ctypes.c_uint(len(dkeys))
+            c_dkeys = (IOV * len(dkeys))()
+            i = 0
+            for dkey in dkeys:
+                c_dkey = ctypes.create_string_buffer(dkey)
+                c_dkeys[i].iov_buf = ctypes.cast(c_dkey, ctypes.c_void_p)
+                c_dkeys[i].iov_buf_len = ctypes.sizeof(c_dkey)
+                c_dkeys[i].iov_len = ctypes.sizeof(c_dkey)
+                i += 1
+
+        # the callback function is optional, if not supplied then run the
+        # create synchronously, if its there then run it in a thread
+        func = self.context.get_function('punch-dkeys')
+        if cb_func == None:
+            rc = func(self.oh, c_epoch, c_len_dkeys, ctypes.byref(c_dkeys),
+                      None)
+            if rc != 0:
+                self.uuid = (ctypes.c_ubyte * 1)(0)
+                raise ValueError("punch-dkeys returned non-zero. RC: {0}"
+                                 .format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.oh, c_epoch, c_len_dkeys, c_dkeys_ptr, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
+            t.start()
+
 class IORequest(object):
     """
     Python object that centralizes details about an I/O
@@ -1335,6 +1384,7 @@ class DaosContext(object):
             'open-cont'      : self.libdaos.daos_cont_open,
             'open-obj'       : self.libdaos.daos_obj_open,
             'poll-eq'        : self.libdaos.daos_eq_poll,
+            'punch-dkeys'    : self.libdaos.daos_obj_punch_dkeys,
             'query-cont'     : self.libdaos.daos_cont_query,
             'query-obj'      : self.libdaos.daos_obj_query,
             'query-pool'     : self.libdaos.daos_pool_query,
