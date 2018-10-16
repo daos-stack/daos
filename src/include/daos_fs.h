@@ -233,7 +233,8 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
 
 /**
  * Remove an object from parent directory. If object is a directory and is
- * non-empty; this will fail unless force option is true.
+ * non-empty; this will fail unless force option is true. If object is a
+ * symlink, the symlink is removed.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
@@ -246,7 +247,7 @@ int
 dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force);
 
 /**
- * Move an object possible between different dirs with a new link name
+ * Move an object possible between different dirs with a new link name.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	parent	Source parent directory object. If NULL, use root obj.
@@ -318,8 +319,9 @@ int
 dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
 
 /**
- * stat attributes of an entry. The following elements of the stat struct are
- * populated (the rest are set to 0):
+ * stat attributes of an entry. If object is a symlink, the link itself is
+ * interogated. The following elements of the stat struct are populated
+ * (the rest are set to 0):
  * mode_t    st_mode;
  * uid_t     st_uid;
  * gid_t     st_gid;
@@ -355,6 +357,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 
 /**
  * Check access permissions on an object. Similar to Linux access(2).
+ * Symlinks are dereferenced.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
@@ -370,7 +373,7 @@ int
 dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
 
 /**
- * Change permission access bits.
+ * Change permission access bits. Symlinks are dereferenced.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
@@ -410,7 +413,8 @@ int
 dfs_get_epoch(dfs_t *dfs, daos_epoch_t *epoch);
 
 /**
- * Set extended attribute on an open object (File, dir, syml).
+ * Set extended attribute on an open object (File, dir, syml). If object is a
+ * symlink, the value is set on the symlink itself.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Open object where xattr will be added.
@@ -428,7 +432,8 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	     const void *value, daos_size_t size, int flags);
 
 /**
- * Get extended attribute of an open object.
+ * Get extended attribute of an open object. If object is a symlink, the link
+ * itself is interogated.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Open object where xattr is checked.
@@ -444,7 +449,8 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	     daos_size_t *size);
 
 /**
- * Remove extended attribute of an open object.
+ * Remove extended attribute of an open object. If object is a symlink, the link
+ * itself is interogated.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Open object where xattr will be removed.
@@ -457,7 +463,8 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
 
 /**
  * list extended attributes of an open object and place them all in a buffer
- * NULL terminated one after the other.
+ * NULL terminated one after the other. If object is a symlink, the link itself
+ * is interogated.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Open object where xattrs will be listed.

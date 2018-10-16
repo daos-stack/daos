@@ -1982,11 +1982,33 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 
 	if (!exists)
 		return -DER_NONEXIST;
-	if (mask == F_OK)
-		return 0;
 
-	/** Use real uid and gid for access() */
-	return check_access(dfs, getuid(), getgid(), entry.mode, mask);
+	if (!S_ISLNK(entry.mode)) {
+		if (mask == F_OK)
+			return 0;
+
+		/** Use real uid and gid for access() */
+		return check_access(dfs, getuid(), getgid(), entry.mode, mask);
+	}
+
+	dfs_obj_t *sym;
+
+	if (entry.value == NULL) {
+		D_ERROR("Null Symlink value\n");
+		return -DER_IO;
+	}
+
+	rc = dfs_lookup(dfs, entry.value, O_RDONLY, &sym, NULL);
+	if (rc) {
+		D_ERROR("Invalid Symlink %s\n", entry.value);
+		return rc;
+	}
+
+	if (mask != F_OK)
+		rc = check_access(dfs, getuid(), getgid(), sym->mode, mask);
+
+	dfs_release(sym);
+	return rc;
 }
 
 int
@@ -2039,10 +2061,26 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	if (!exists)
 		return -DER_NONEXIST;
 
-	/** TODO - need to resolve symlinks */
+	/** resolve symlink */
 	if (S_ISLNK(entry.mode)) {
-		D_ERROR("Symlinks need to be resolved.\n");
-		return -DER_INVAL;
+		dfs_obj_t *sym;
+
+		if (entry.value == NULL) {
+			D_ERROR("Null Symlink value\n");
+			return -DER_IO;
+		}
+
+		rc = dfs_lookup(dfs, entry.value, O_RDWR, &sym, NULL);
+		if (rc) {
+			D_ERROR("Invalid Symlink %s\n", entry.value);
+			return rc;
+		}
+
+		rc = daos_obj_open(dfs->coh, sym->parent_oid, dfs->epoch,
+				   DAOS_OO_RW, &oh, NULL);
+		dfs_release(sym);
+		if (rc)
+			return rc;
 	}
 
 	incr_epoch(dfs);
@@ -2071,6 +2109,10 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		D_ERROR("Failed to update mode.\n");
 		daos_epoch_discard(dfs->coh, dfs->epoch, NULL, NULL);
 	}
+
+	if (S_ISLNK(entry.mode))
+		daos_obj_close(oh, NULL);
+
 	return rc;
 }
 
@@ -2301,6 +2343,22 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 				new_name, rc);
 			D_GOTO(out, rc);
 		}
+	}
+
+	/** rename symlink */
+	if (S_ISLNK(entry.mode)) {
+		rc = remove_entry(dfs, parent->oh, name, entry);
+		if (rc) {
+			D_ERROR("Failed to remove entry %s (%d)\n",
+				name, rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = insert_entry(parent->oh, dfs->epoch, new_name, entry);
+		if (rc)
+			D_ERROR("Inserting new entry %s failed (%d)\n",
+				new_name, rc);
+		D_GOTO(out, rc);
 	}
 
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
