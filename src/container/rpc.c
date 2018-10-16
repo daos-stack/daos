@@ -45,8 +45,7 @@ proc_cont_tgt_close_rec(crt_proc_t proc, struct cont_tgt_close_rec *rec)
 }
 
 static struct crt_msg_field DMF_CLOSE_RECS =
-	DEFINE_CRT_MSG("cont_tgt_close_rec[]", CMF_ARRAY_FLAG,
-		       sizeof(struct cont_tgt_close_rec),
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(struct cont_tgt_close_rec),
 		       proc_cont_tgt_close_rec);
 
 struct crt_msg_field *cont_op_out_fields[] = {
@@ -265,84 +264,63 @@ struct crt_msg_field *cont_tgt_epoch_aggregate_out_fields[] = {
 };
 
 struct crt_req_format DQF_CONT_CREATE =
-	DEFINE_CRT_REQ_FMT("CONT_CREATE", cont_create_in_fields,
-			   cont_create_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_create_in_fields, cont_create_out_fields);
 
 struct crt_req_format DQF_CONT_DESTROY =
-	DEFINE_CRT_REQ_FMT("CONT_DESTROY", cont_destroy_in_fields,
-			   cont_destroy_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_destroy_in_fields, cont_destroy_out_fields);
 
 struct crt_req_format DQF_CONT_OPEN =
-	DEFINE_CRT_REQ_FMT("CONT_OPEN", cont_open_in_fields,
-			   cont_open_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_open_in_fields, cont_open_out_fields);
 
 struct crt_req_format DQF_CONT_CLOSE =
-	DEFINE_CRT_REQ_FMT("CONT_CLOSE", cont_close_in_fields,
-			   cont_close_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_close_in_fields, cont_close_out_fields);
 
 struct crt_req_format DQF_CONT_QUERY =
-	DEFINE_CRT_REQ_FMT("CONT_QUERY", cont_query_in_fields,
-			   cont_query_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_query_in_fields, cont_query_out_fields);
 
 struct crt_req_format DQF_CONT_OID_ALLOC =
-	DEFINE_CRT_REQ_FMT("CONT_OID_ALLOC", cont_oid_alloc_in_fields,
-			   cont_oid_alloc_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_oid_alloc_in_fields, cont_oid_alloc_out_fields);
 
 struct crt_req_format DQF_CONT_ATTR_LIST =
-	DEFINE_CRT_REQ_FMT("CONT_ATTR_LIST",
-			   cont_attr_list_in_fields,
-			   cont_attr_list_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_attr_list_in_fields, cont_attr_list_out_fields);
 
 struct crt_req_format DQF_CONT_ATTR_GET =
-	DEFINE_CRT_REQ_FMT("CONT_ATTR_GET",
-			   cont_attr_get_in_fields,
-			   cont_attr_get_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_attr_get_in_fields, cont_attr_get_out_fields);
 
 struct crt_req_format DQF_CONT_ATTR_SET =
-	DEFINE_CRT_REQ_FMT("CONT_ATTR_SET",
-			   cont_attr_set_in_fields,
-			   cont_attr_set_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_attr_set_in_fields, cont_attr_set_out_fields);
 
 struct crt_req_format DQF_CONT_EPOCH_OP =
-	DEFINE_CRT_REQ_FMT("CONT_EPOCH_OP", cont_epoch_op_in_fields,
-			   cont_epoch_op_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_epoch_op_in_fields, cont_epoch_op_out_fields);
 
 struct crt_req_format DQF_CONT_SNAP_LIST_OP =
-	DEFINE_CRT_REQ_FMT("CONT_SNAP_LIST", cont_snap_list_in_fields,
-			   cont_snap_list_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_snap_list_in_fields, cont_snap_list_out_fields);
 
 struct crt_req_format DQF_CONT_SNAP_CREATE_OP =
-	DEFINE_CRT_REQ_FMT("CONT_SNAP_CREATE", cont_epoch_op_in_fields,
-			   cont_op_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_epoch_op_in_fields, cont_op_out_fields);
 
 struct crt_req_format DQF_CONT_SNAP_DESTROY_OP =
-	DEFINE_CRT_REQ_FMT("CONT_SNAP_DESTROY", cont_epoch_op_in_fields,
-			   cont_op_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_epoch_op_in_fields, cont_op_out_fields);
 
 struct crt_req_format DQF_CONT_TGT_DESTROY =
-	DEFINE_CRT_REQ_FMT("CONT_TGT_DESTROY", cont_tgt_destroy_in_fields,
+	DEFINE_CRT_REQ_FMT(cont_tgt_destroy_in_fields,
 			   cont_tgt_destroy_out_fields);
 
 struct crt_req_format DQF_CONT_TGT_OPEN =
-	DEFINE_CRT_REQ_FMT("CONT_TGT_OPEN", cont_tgt_open_in_fields,
-			   cont_tgt_open_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_tgt_open_in_fields, cont_tgt_open_out_fields);
 
 struct crt_req_format DQF_CONT_TGT_CLOSE =
-	DEFINE_CRT_REQ_FMT("CONT_TGT_CLOSE", cont_tgt_close_in_fields,
-			   cont_tgt_close_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_tgt_close_in_fields, cont_tgt_close_out_fields);
 
 struct crt_req_format DQF_CONT_TGT_QUERY =
-	DEFINE_CRT_REQ_FMT("CONT_TGT_QUERY", cont_tgt_query_in_fields,
-			   cont_tgt_query_out_fields);
+	DEFINE_CRT_REQ_FMT(cont_tgt_query_in_fields, cont_tgt_query_out_fields);
 
 struct crt_req_format DQF_CONT_TGT_EPOCH_DISCARD =
-	DEFINE_CRT_REQ_FMT("CONT_TGT_EPOCH_DISCARD",
-			   cont_tgt_epoch_discard_in_fields,
+	DEFINE_CRT_REQ_FMT(cont_tgt_epoch_discard_in_fields,
 			   cont_tgt_epoch_discard_out_fields);
 
 struct crt_req_format DQF_CONT_TGT_EPOCH_AGGREGATE =
-	DEFINE_CRT_REQ_FMT("CONT_TGT_EPOCH_AGGREGATE",
-			   cont_tgt_epoch_aggregate_in_fields,
+	DEFINE_CRT_REQ_FMT(cont_tgt_epoch_aggregate_in_fields,
 			   cont_tgt_epoch_aggregate_out_fields);
 
 

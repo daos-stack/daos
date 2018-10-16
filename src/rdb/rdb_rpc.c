@@ -48,7 +48,7 @@ static struct crt_msg_field *rdb_requestvote_out_fields[] = {
 };
 
 static struct crt_req_format DQF_RDB_REQUESTVOTE =
-	DEFINE_CRT_REQ_FMT("RDB_REQUESTVOTE", rdb_requestvote_in_fields,
+	DEFINE_CRT_REQ_FMT(rdb_requestvote_in_fields,
 			   rdb_requestvote_out_fields);
 
 static int
@@ -145,7 +145,7 @@ rdb_proc_msg_appendentries_t(crt_proc_t proc, void *data)
 }
 
 static struct crt_msg_field DMF_MSG_APPENDENTRIES_T =
-	DEFINE_CRT_MSG("msg_appendentries_t", 0, sizeof(msg_appendentries_t),
+	DEFINE_CRT_MSG(0, sizeof(msg_appendentries_t),
 		       rdb_proc_msg_appendentries_t);
 
 static struct crt_msg_field *rdb_appendentries_in_fields[] = {
@@ -163,7 +163,7 @@ static struct crt_msg_field *rdb_appendentries_out_fields[] = {
 };
 
 static struct crt_req_format DQF_RDB_APPENDENTRIES =
-	DEFINE_CRT_REQ_FMT("RDB_APPENDENTRIES", rdb_appendentries_in_fields,
+	DEFINE_CRT_REQ_FMT(rdb_appendentries_in_fields,
 			   rdb_appendentries_out_fields);
 
 static int
@@ -174,12 +174,10 @@ rdb_proc_local_type(crt_proc_t proc, void *data)
 }
 
 static struct crt_msg_field DMF_LOCAL_POINTER =
-	DEFINE_CRT_MSG("local void *", 0, sizeof(void *),
-		       rdb_proc_local_type);
+	DEFINE_CRT_MSG(0, sizeof(void *), rdb_proc_local_type);
 
 static struct crt_msg_field DMF_LOCAL_UINT64 =
-	DEFINE_CRT_MSG("local uint64_t", 0, sizeof(uint64_t),
-		       rdb_proc_local_type);
+	DEFINE_CRT_MSG(0, sizeof(uint64_t), rdb_proc_local_type);
 
 static struct crt_msg_field *rdb_installsnapshot_in_fields[] = {
 	&CMF_UUID,		/* op.uuid */
@@ -214,7 +212,7 @@ static struct crt_msg_field *rdb_installsnapshot_out_fields[] = {
 };
 
 static struct crt_req_format DQF_RDB_INSTALLSNAPSHOT =
-	DEFINE_CRT_REQ_FMT("RDB_INSTALLSNAPSHOT", rdb_installsnapshot_in_fields,
+	DEFINE_CRT_REQ_FMT(rdb_installsnapshot_in_fields,
 			   rdb_installsnapshot_out_fields);
 
 struct daos_rpc rdb_srv_rpcs[] = {

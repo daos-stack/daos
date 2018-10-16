@@ -45,8 +45,7 @@ proc_pool_target_addr(crt_proc_t proc, struct pool_target_addr *tgt)
 }
 
 struct crt_msg_field DMF_TGT_ADDR_LIST =
-	DEFINE_CRT_MSG("pool_tgt_addr_list", CMF_ARRAY_FLAG,
-			sizeof(struct pool_target_addr),
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(struct pool_target_addr),
 			proc_pool_target_addr);
 
 struct crt_msg_field *pool_create_in_fields[] = {
@@ -260,77 +259,62 @@ static struct crt_msg_field *pool_rdb_stop_out_fields[] = {
 };
 
 struct crt_req_format DQF_POOL_CREATE =
-	DEFINE_CRT_REQ_FMT("POOL_CREATE", pool_create_in_fields,
-			   pool_create_out_fields);
+	DEFINE_CRT_REQ_FMT(pool_create_in_fields, pool_create_out_fields);
 
 struct crt_req_format DQF_POOL_CONNECT =
-	DEFINE_CRT_REQ_FMT("POOL_CONNECT", pool_connect_in_fields,
-			   pool_connect_out_fields);
+	DEFINE_CRT_REQ_FMT(pool_connect_in_fields, pool_connect_out_fields);
 
 struct crt_req_format DQF_POOL_DISCONNECT =
-	DEFINE_CRT_REQ_FMT("POOL_DISCONNECT", pool_disconnect_in_fields,
+	DEFINE_CRT_REQ_FMT(pool_disconnect_in_fields,
 			   pool_disconnect_out_fields);
 
 struct crt_req_format DQF_POOL_QUERY =
-	DEFINE_CRT_REQ_FMT("POOL_QUERY", pool_query_in_fields,
-			   pool_query_out_fields);
+	DEFINE_CRT_REQ_FMT(pool_query_in_fields, pool_query_out_fields);
 
 struct crt_req_format DQF_POOL_EXCLUDE =
-	DEFINE_CRT_REQ_FMT("POOL_EXCLUDE", pool_tgt_update_in_fields,
+	DEFINE_CRT_REQ_FMT(pool_tgt_update_in_fields,
 			   pool_tgt_update_out_fields);
 
 struct crt_req_format DQF_POOL_EXCLUDE_OUT =
-	DEFINE_CRT_REQ_FMT("POOL_EXCLUDE_OUT", pool_tgt_update_in_fields,
+	DEFINE_CRT_REQ_FMT(pool_tgt_update_in_fields,
 			   pool_tgt_update_out_fields);
 
 struct crt_req_format DQF_POOL_ADD =
-	DEFINE_CRT_REQ_FMT("POOL_ADD", pool_tgt_update_in_fields,
+	DEFINE_CRT_REQ_FMT(pool_tgt_update_in_fields,
 			   pool_tgt_update_out_fields);
 
 struct crt_req_format DQF_POOL_EVICT =
-	DEFINE_CRT_REQ_FMT("POOL_EVICT", pool_evict_in_fields,
-			   pool_evict_out_fields);
+	DEFINE_CRT_REQ_FMT(pool_evict_in_fields, pool_evict_out_fields);
 
 struct crt_req_format DQF_POOL_SVC_STOP =
-	DEFINE_CRT_REQ_FMT("POOL_SVC_STOP", pool_svc_stop_in_fields,
-			   pool_svc_stop_out_fields);
+	DEFINE_CRT_REQ_FMT(pool_svc_stop_in_fields, pool_svc_stop_out_fields);
 
 struct crt_req_format DQF_POOL_ATTR_LIST =
-	DEFINE_CRT_REQ_FMT("POOL_ATTR_LIST",
-			   pool_attr_list_in_fields,
-			   pool_attr_list_out_fields);
+	DEFINE_CRT_REQ_FMT(pool_attr_list_in_fields, pool_attr_list_out_fields);
 
 struct crt_req_format DQF_POOL_ATTR_GET =
-	DEFINE_CRT_REQ_FMT("POOL_ATTR_GET",
-			   pool_attr_get_in_fields,
-			   pool_attr_get_out_fields);
+	DEFINE_CRT_REQ_FMT(pool_attr_get_in_fields, pool_attr_get_out_fields);
 
 struct crt_req_format DQF_POOL_ATTR_SET =
-	DEFINE_CRT_REQ_FMT("POOL_ATTR_SET",
-			   pool_attr_set_in_fields,
-			   pool_attr_set_out_fields);
+	DEFINE_CRT_REQ_FMT(pool_attr_set_in_fields, pool_attr_set_out_fields);
 
 struct crt_req_format DQF_POOL_TGT_CONNECT =
-	DEFINE_CRT_REQ_FMT("POOL_TGT_CONNECT", pool_tgt_connect_in_fields,
+	DEFINE_CRT_REQ_FMT(pool_tgt_connect_in_fields,
 			   pool_tgt_connect_out_fields);
 
 struct crt_req_format DQF_POOL_TGT_DISCONNECT =
-	DEFINE_CRT_REQ_FMT("POOL_TGT_DISCONNECT", pool_tgt_disconnect_in_fields,
+	DEFINE_CRT_REQ_FMT(pool_tgt_disconnect_in_fields,
 			   pool_tgt_disconnect_out_fields);
 
 struct crt_req_format DQF_POOL_TGT_UPDATE_MAP =
-	DEFINE_CRT_REQ_FMT("POOL_TGT_UPDATE_MAP", pool_tgt_update_map_in_fields,
+	DEFINE_CRT_REQ_FMT(pool_tgt_update_map_in_fields,
 			   pool_tgt_update_map_out_fields);
 
 struct crt_req_format DQF_POOL_RDB_START =
-	DEFINE_CRT_REQ_FMT("POOL_RDB_START",
-			   pool_rdb_start_in_fields,
-			   pool_rdb_start_out_fields);
+	DEFINE_CRT_REQ_FMT(pool_rdb_start_in_fields, pool_rdb_start_out_fields);
 
 struct crt_req_format DQF_POOL_RDB_STOP =
-	DEFINE_CRT_REQ_FMT("POOL_RDB_STOP",
-			   pool_rdb_stop_in_fields,
-			   pool_rdb_stop_out_fields);
+	DEFINE_CRT_REQ_FMT(pool_rdb_stop_in_fields, pool_rdb_stop_out_fields);
 
 int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,

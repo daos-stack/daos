@@ -65,12 +65,10 @@ static struct crt_msg_field *rebuild_objs_in_fields[] = {
 };
 
 struct crt_req_format DQF_REBUILD_OBJECTS_SCAN =
-	DEFINE_CRT_REQ_FMT("REBUILD_OBJECTS_SCAN", rebuild_scan_in_fields,
-			   rebuild_scan_out_fields);
+	DEFINE_CRT_REQ_FMT(rebuild_scan_in_fields, rebuild_scan_out_fields);
 
 struct crt_req_format DQF_REBUILD_OBJECTS =
-	DEFINE_CRT_REQ_FMT("REBUILD_OBJS", rebuild_objs_in_fields,
-			   rebuild_out_fields);
+	DEFINE_CRT_REQ_FMT(rebuild_objs_in_fields, rebuild_out_fields);
 
 int
 rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,

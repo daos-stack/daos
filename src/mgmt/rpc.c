@@ -95,31 +95,29 @@ struct crt_msg_field *mgmt_out_fields[] = {
 };
 
 struct crt_req_format DQF_MGMT_POOL_CREATE =
-	DEFINE_CRT_REQ_FMT("MGMT_POOL_CREATE", mgmt_pool_create_in_fields,
+	DEFINE_CRT_REQ_FMT(mgmt_pool_create_in_fields,
 			   mgmt_pool_create_out_fields);
 
 struct crt_req_format DQF_MGMT_POOL_DESTROY =
-	DEFINE_CRT_REQ_FMT("MGMT_POOL_DESTROY", mgmt_pool_destroy_in_fields,
+	DEFINE_CRT_REQ_FMT(mgmt_pool_destroy_in_fields,
 			   mgmt_pool_destroy_out_fields);
 
 struct crt_req_format DQF_MGMT_TGT_CREATE =
-	DEFINE_CRT_REQ_FMT("MGMT_TGT_CREATE", mgmt_tgt_create_in_fields,
+	DEFINE_CRT_REQ_FMT(mgmt_tgt_create_in_fields,
 			   mgmt_tgt_create_out_fields);
 
 struct crt_req_format DQF_MGMT_TGT_DESTROY =
-	DEFINE_CRT_REQ_FMT("MGMT_TGT_DESTROY", mgmt_tgt_destroy_in_fields,
+	DEFINE_CRT_REQ_FMT(mgmt_tgt_destroy_in_fields,
 			   mgmt_tgt_destroy_out_fields);
 
 struct crt_req_format DQF_MGMT_SVC_RIP =
-	DEFINE_CRT_REQ_FMT("MGMT_SVC_RIP", mgmt_svc_rip_in_fields, NULL);
+	DEFINE_CRT_REQ_FMT(mgmt_svc_rip_in_fields, NULL);
 
 struct crt_req_format DQF_MGMT_PARAMS_SET =
-	DEFINE_CRT_REQ_FMT("MGMT_PARAMS_SET", mgmt_params_set_in_fields,
-			    mgmt_out_fields);
+	DEFINE_CRT_REQ_FMT(mgmt_params_set_in_fields, mgmt_out_fields);
 
 struct crt_req_format DQF_MGMT_TGT_PARAMS_SET =
-	DEFINE_CRT_REQ_FMT("MGMT_TGT_PARAMS_SET", mgmt_tgt_params_set_in_fields,
-			    mgmt_out_fields);
+	DEFINE_CRT_REQ_FMT(mgmt_tgt_params_set_in_fields, mgmt_out_fields);
 
 struct daos_rpc mgmt_rpcs[] = {
 	{

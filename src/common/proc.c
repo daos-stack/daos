@@ -508,83 +508,73 @@ daos_proc_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
 }
 
 struct crt_msg_field DMF_OID =
-	DEFINE_CRT_MSG("daos_unit_oid_t", 0,
-			sizeof(daos_unit_oid_t), daos_proc_unit_oid);
+	DEFINE_CRT_MSG(0, sizeof(daos_unit_oid_t), daos_proc_unit_oid);
 
 struct crt_msg_field DMF_IOVEC =
-	DEFINE_CRT_MSG("daos_iov", 0, sizeof(daos_iov_t), daos_proc_iovec);
+	DEFINE_CRT_MSG(0, sizeof(daos_iov_t), daos_proc_iovec);
 
 struct crt_msg_field DMF_IOD_ARRAY =
-	DEFINE_CRT_MSG("daos_iods", CMF_ARRAY_FLAG, sizeof(daos_iod_t),
-			daos_proc_iod);
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(daos_iod_t), daos_proc_iod);
 
 struct crt_msg_field DMF_REC_SIZE_ARRAY =
-	DEFINE_CRT_MSG("daos_rec_size", CMF_ARRAY_FLAG, sizeof(uint64_t),
-			crt_proc_uint64_t);
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(uint64_t), crt_proc_uint64_t);
 
 struct crt_msg_field DMF_NR_ARRAY =
-	DEFINE_CRT_MSG("daos_rec_size", CMF_ARRAY_FLAG, sizeof(uint32_t),
-			crt_proc_uint32_t);
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(uint32_t), crt_proc_uint32_t);
 
 struct crt_msg_field DMF_KEY_DESC_ARRAY =
-	DEFINE_CRT_MSG("daos_key_desc", CMF_ARRAY_FLAG, sizeof(daos_key_desc_t),
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(daos_key_desc_t),
 			daos_proc_key_desc);
 
 struct crt_msg_field DMF_EPOCH_STATE =
-	DEFINE_CRT_MSG("daos_epoch_state_t", 0, sizeof(daos_epoch_state_t),
-		       daos_proc_epoch_state);
+	DEFINE_CRT_MSG(0, sizeof(daos_epoch_state_t), daos_proc_epoch_state);
 
 struct crt_msg_field DMF_ANCHOR =
-	DEFINE_CRT_MSG("daos_anchor_t", 0, sizeof(daos_anchor_t),
-			daos_proc_anchor);
+	DEFINE_CRT_MSG(0, sizeof(daos_anchor_t), daos_proc_anchor);
 
 struct crt_msg_field DMF_SGL_ARRAY =
-	DEFINE_CRT_MSG("daos_sg_list_t", CMF_ARRAY_FLAG, sizeof(daos_sg_list_t),
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(daos_sg_list_t),
 			daos_proc_sg_list);
 
 struct crt_msg_field DMF_SGL =
-	DEFINE_CRT_MSG("daos_sg_list_t", 0, sizeof(daos_sg_list_t),
-			daos_proc_sg_list);
+	DEFINE_CRT_MSG(0, sizeof(daos_sg_list_t), daos_proc_sg_list);
 
 struct crt_msg_field DMF_SGL_DESC_ARRAY =
-	DEFINE_CRT_MSG("daos_sg_desc_list_t", CMF_ARRAY_FLAG,
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG,
 			sizeof(daos_sg_list_t), daos_proc_sg_desc_list);
 
 struct crt_msg_field DMF_SGL_DESC =
-	DEFINE_CRT_MSG("daos_sg_desc_list_t", 0, sizeof(daos_sg_list_t),
-			daos_proc_sg_desc_list);
+	DEFINE_CRT_MSG(0, sizeof(daos_sg_list_t), daos_proc_sg_desc_list);
 
 struct crt_msg_field DMF_RECX_ARRAY =
-	DEFINE_CRT_MSG("daos_recx_t", CMF_ARRAY_FLAG, sizeof(daos_recx_t),
-			daos_proc_recx);
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(daos_recx_t), daos_proc_recx);
 
 struct crt_msg_field DMF_RECX =
-	DEFINE_CRT_MSG("daos_recx_t", 0, sizeof(daos_recx_t), daos_proc_recx);
+	DEFINE_CRT_MSG(0, sizeof(daos_recx_t), daos_proc_recx);
 
 struct crt_msg_field DMF_EPR_ARRAY =
-	DEFINE_CRT_MSG("daos_epoch_range_t", CMF_ARRAY_FLAG,
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG,
 		       sizeof(daos_epoch_range_t), daos_proc_epoch_range);
 
 struct crt_msg_field DMF_UUID_ARRAY =
-	DEFINE_CRT_MSG("daos_uuid_t", CMF_ARRAY_FLAG, sizeof(uuid_t),
-		       crt_proc_uuid_t);
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(uuid_t), crt_proc_uuid_t);
 
 struct crt_msg_field DMF_OID_ARRAY =
-	DEFINE_CRT_MSG("daos_unit_oid_t", CMF_ARRAY_FLAG,
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG,
 		       sizeof(daos_unit_oid_t), daos_proc_unit_oid);
 
 struct crt_msg_field DMF_UINT32_ARRAY =
-	DEFINE_CRT_MSG("daos_uint32", CMF_ARRAY_FLAG, sizeof(uint32_t),
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(uint32_t),
 			crt_proc_uint32_t);
 
 struct crt_msg_field DMF_RSVC_HINT =
-	DEFINE_CRT_MSG("rsvc_hint", 0, sizeof(struct rsvc_hint),
+	DEFINE_CRT_MSG(0, sizeof(struct rsvc_hint),
 		       daos_proc_rsvc_hint);
 
 struct crt_msg_field DMF_KEY_ARRAY =
-	DEFINE_CRT_MSG("daos_iov_t", CMF_ARRAY_FLAG, sizeof(daos_iov_t),
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(daos_iov_t),
 		       daos_proc_iovec);
 
 struct crt_msg_field DMF_UINT64_ARRAY =
-	DEFINE_CRT_MSG("daos_uint64", CMF_ARRAY_FLAG,
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG,
 		       sizeof(uint64_t), crt_proc_uint64_t);

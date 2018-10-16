@@ -124,39 +124,25 @@ static struct crt_msg_field *obj_key_query_out_fields[] = {
 };
 
 static struct crt_req_format DQF_OBJ_UPDATE =
-	DEFINE_CRT_REQ_FMT("DAOS_OBJ_UPDATE",
-			   obj_rw_in_fields,
-			   obj_rw_out_fields);
+	DEFINE_CRT_REQ_FMT(obj_rw_in_fields, obj_rw_out_fields);
 
 static struct crt_req_format DQF_OBJ_FETCH =
-	DEFINE_CRT_REQ_FMT("DAOS_OBJ_FETCH",
-			   obj_rw_in_fields,
-			   obj_rw_out_fields);
+	DEFINE_CRT_REQ_FMT(obj_rw_in_fields, obj_rw_out_fields);
 
 static struct crt_req_format DQF_ENUMERATE =
-	DEFINE_CRT_REQ_FMT("DAOS_ENUM",
-			   obj_key_enum_in_fields,
-			   obj_key_enum_out_fields);
+	DEFINE_CRT_REQ_FMT(obj_key_enum_in_fields, obj_key_enum_out_fields);
 
 static struct crt_req_format DQF_OBJ_PUNCH =
-	DEFINE_CRT_REQ_FMT("DAOS_OBJ_PUNCH",
-			   obj_punch_in_fields,
-			   obj_punch_out_fields);
+	DEFINE_CRT_REQ_FMT(obj_punch_in_fields, obj_punch_out_fields);
 
 static struct crt_req_format DQF_OBJ_PUNCH_DKEYS =
-	DEFINE_CRT_REQ_FMT("DAOS_OBJ_PUNCH_DKEYS",
-			   obj_punch_in_fields,
-			   obj_punch_out_fields);
+	DEFINE_CRT_REQ_FMT(obj_punch_in_fields, obj_punch_out_fields);
 
 static struct crt_req_format DQF_OBJ_PUNCH_AKEYS =
-	DEFINE_CRT_REQ_FMT("DAOS_OBJ_PUNCH_AKEYS",
-			   obj_punch_in_fields,
-			   obj_punch_out_fields);
+	DEFINE_CRT_REQ_FMT(obj_punch_in_fields, obj_punch_out_fields);
 
 static struct crt_req_format DQF_OBJ_KEY_QUERY =
-	DEFINE_CRT_REQ_FMT("DAOS_OBJ_KEY_QUERY",
-			   obj_key_query_in_fields,
-			   obj_key_query_out_fields);
+	DEFINE_CRT_REQ_FMT(obj_key_query_in_fields, obj_key_query_out_fields);
 
 struct daos_rpc daos_obj_rpcs[] = {
 	{

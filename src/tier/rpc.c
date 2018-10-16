@@ -38,8 +38,7 @@ struct crt_msg_field *tier_ping_out_fields[] = {
 };
 
 struct crt_req_format DQF_TIER_PING =
-	DEFINE_CRT_REQ_FMT("TIER_PING", tier_ping_in_fields,
-			   tier_ping_out_fields);
+	DEFINE_CRT_REQ_FMT(tier_ping_in_fields, tier_ping_out_fields);
 
 struct crt_msg_field *tier_fetch_in_fields[] = {
 	&CMF_UUID,	/* pool uuid */
@@ -52,8 +51,7 @@ struct crt_msg_field *tier_fetch_out_fields[] = {
 };
 
 struct crt_req_format DQF_TIER_FETCH =
-	DEFINE_CRT_REQ_FMT("TIER_FETCH", tier_fetch_in_fields,
-			   tier_fetch_out_fields);
+	DEFINE_CRT_REQ_FMT(tier_fetch_in_fields, tier_fetch_out_fields);
 
 struct crt_msg_field *tier_bcast_fetch_in_fields[] = {
 	&CMF_UUID,	/* pool id    */
@@ -63,8 +61,7 @@ struct crt_msg_field *tier_bcast_fetch_in_fields[] = {
 };
 
 struct crt_req_format DQF_TIER_BCAST_FETCH =
-	DEFINE_CRT_REQ_FMT("TIER_BCAST_FETCH", tier_bcast_fetch_in_fields,
-			   tier_fetch_out_fields);
+	DEFINE_CRT_REQ_FMT(tier_bcast_fetch_in_fields, tier_fetch_out_fields);
 
 struct crt_msg_field *tier_cross_conn_in_fields[] = {
 	&CMF_UUID,	/*cci_warm_id*/
@@ -76,7 +73,7 @@ struct crt_msg_field *tier_cross_conn_out_fields[] = {
 };
 
 struct crt_req_format DQF_TIER_CROSS_CONN =
-	DEFINE_CRT_REQ_FMT("TIER_CROSS_CONN", tier_cross_conn_in_fields,
+	DEFINE_CRT_REQ_FMT(tier_cross_conn_in_fields,
 			   tier_cross_conn_out_fields);
 
 struct crt_msg_field *tier_upstream_conn_in_fields[] = {
@@ -91,7 +88,7 @@ struct crt_msg_field *tier_upstream_conn_out_fields[] = {
 };
 
 struct crt_req_format DQF_TIER_UPSTREAM_CONN =
-	DEFINE_CRT_REQ_FMT("TIER_UPSTREAM_CONN", tier_upstream_conn_in_fields,
+	DEFINE_CRT_REQ_FMT(tier_upstream_conn_in_fields,
 			   tier_upstream_conn_out_fields);
 struct crt_msg_field *tier_register_cold_in_fields[] = {
 	&CMF_UUID,	/*rci_cold_id*/
@@ -104,7 +101,7 @@ struct crt_msg_field *tier_register_cold_out_fields[] = {
 };
 
 struct crt_req_format DQF_TIER_REGISTER_COLD =
-	DEFINE_CRT_REQ_FMT("TIER_REGISTER_COLD", tier_register_cold_in_fields,
+	DEFINE_CRT_REQ_FMT(tier_register_cold_in_fields,
 			   tier_register_cold_out_fields);
 
 struct crt_msg_field *tier_hdl_bcast_in_fields[]  = {
@@ -117,7 +114,7 @@ struct crt_msg_field *tier_hdl_bcast_out_fields[] = {
 };
 
 struct crt_req_format DQF_TIER_BCAST_HDL =
-	DEFINE_CRT_REQ_FMT("TIER_BCAST_HDL", tier_hdl_bcast_in_fields,
+	DEFINE_CRT_REQ_FMT(tier_hdl_bcast_in_fields,
 			   tier_register_cold_out_fields);
 
 int
