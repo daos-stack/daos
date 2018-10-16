@@ -154,7 +154,6 @@ REQS.define('prrte',
                       './configure --with-platform=optimized '
                       '--prefix=$PRRTE_PREFIX '
                       '--with-pmix=$PMIX_PREFIX '
-                      '--with-libevent=external '
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make $JOBS_OPT', 'make install'],
             required_progs=['g++', 'flex'],
