@@ -26,7 +26,7 @@ package mgmt
 import (
 	"common/log"
 
-	"go-spdk/nvme"
+	"go-spdk/spdk"
 
 	pb "modules/mgmt/proto"
 )
@@ -50,13 +50,17 @@ type NsMap map[int32]*pb.NVMeNamespace
 type CtrlrMap map[int32]*pb.NVMeController
 
 // NvmeStorage is an implementation of the Storage interface.
-type NvmeStorage struct{ Logger *log.Logger }
+type NvmeStorage struct {
+	Logger *log.Logger
+	Env    *spdk.Env  // SPDK ENV interface implementation
+	Nvme   *spdk.Nvme // SPDK NVMe interface implementation
+}
 
 // NVMeReturn struct contains return values for NvmeStorage
 // Discover and Update methods.
 type NVMeReturn struct {
-	Ctrlrs []nvme.Controller
-	Nss    []nvme.Namespace
+	Ctrlrs []spdk.Controller
+	Nss    []spdk.Namespace
 	Err    error
 }
 

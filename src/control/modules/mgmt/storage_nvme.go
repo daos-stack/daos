@@ -28,7 +28,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"go-spdk/nvme"
+	"common/log"
+
 	"go-spdk/spdk"
 
 	pb "modules/mgmt/proto"
@@ -44,29 +45,32 @@ var (
 //
 // Setup available NVMe devices to be used by SPDK
 // and initialise SPDK environment before probing controllers.
-func (sn *NvmeStorage) Init() error {
+//
+// 	Note: shm_id currently hardcoded to 1 to enable multiprocess
+//        mode between Discover and Burn-in.
+func (sn *NvmeStorage) Init() (err error) {
 	absSetupPath, err := getAbsInstallPath(spdkSetupPath)
 	if err != nil {
-		return err
+		return
 	}
 	// run setup to allocate hugepages and bind PCI devices
 	// (that don't have active mountpoints) to generic kernel driver
 	//
 	// NOTE: will make the controller disappear from /dev until
 	//       Teardown() is called.
-	if err := exec.Command(absSetupPath).Run(); err != nil {
-		return err
+	if err = exec.Command(absSetupPath).Run(); err != nil {
+		return
 	}
-	// todo: pass shm_id to InitSPDKEnv()
-	if err := spdk.InitSPDKEnv(); err != nil {
-		return err
+	sn.Env.ShmID = 1	// shm_id passed as opt in SPDK env init
+	if err = sn.Env.InitSPDKEnv(); err != nil {
+		return
 	}
-	return nil
+	return
 }
 
 // Discover method implementation for NvmeStorage
 func (sn *NvmeStorage) Discover() interface{} {
-	cs, ns, err := nvme.Discover()
+	cs, ns, err := sn.Nvme.Discover()
 	return NVMeReturn{cs, ns, err}
 }
 
@@ -74,7 +78,7 @@ func (sn *NvmeStorage) Discover() interface{} {
 func (sn *NvmeStorage) Update(params interface{}) interface{} {
 	switch t := params.(type) {
 	case UpdateParams:
-		cs, ns, err := nvme.Update(t.CtrlrID, t.Path, t.Slot)
+		cs, ns, err := sn.Nvme.Update(t.CtrlrID, t.Path, t.Slot)
 		return NVMeReturn{cs, ns, err}
 	default:
 		return fmt.Errorf("unexpected return type")
@@ -128,7 +132,7 @@ func (sn *NvmeStorage) BurnIn(params interface{}) (
 // bindings, rebind PCI devices back to their original drivers
 // and cleanup any leftover spdk files/resources.
 func (sn *NvmeStorage) Teardown() error {
-	nvme.Cleanup()
+	sn.Nvme.Cleanup()
 
 	absSetupPath, err := getAbsInstallPath(spdkSetupPath)
 	if err != nil {
@@ -142,7 +146,7 @@ func (sn *NvmeStorage) Teardown() error {
 
 // loadControllers converts slice of Controller into protobuf equivalent.
 // Implemented as a pure function.
-func loadControllers(ctrlrs []nvme.Controller) (CtrlrMap, error) {
+func loadControllers(ctrlrs []spdk.Controller) (CtrlrMap, error) {
 	pbCtrlrs := make(CtrlrMap)
 	for _, c := range ctrlrs {
 		pbCtrlrs[c.ID] = &pb.NVMeController{
@@ -161,7 +165,7 @@ func loadControllers(ctrlrs []nvme.Controller) (CtrlrMap, error) {
 
 // loadNamespaces converts slice of Namespace into protobuf equivalent.
 // Implemented as a pure function.
-func loadNamespaces(pbCtrlrs CtrlrMap, nss []nvme.Namespace) (NsMap, error) {
+func loadNamespaces(pbCtrlrs CtrlrMap, nss []spdk.Namespace) (NsMap, error) {
 	pbNamespaces := make(NsMap)
 	for _, ns := range nss {
 		c, exists := pbCtrlrs[ns.CtrlrID]
@@ -209,4 +213,13 @@ func (s *ControlService) populateNVMe(ret interface{}) error {
 	}
 
 	return nil
+}
+
+// NewNvmeStorage creates a new instance of our NvmeStorage struct.
+func NewNvmeStorage(logger *log.Logger) *NvmeStorage {
+	return &NvmeStorage{
+		Logger:	logger,
+		Env: &spdk.Env{},
+		Nvme: &spdk.Nvme{},
+	}
 }

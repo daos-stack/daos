@@ -103,7 +103,7 @@ func NewControlServer() *ControlService {
 	logger.SetLevel(log.Debug)
 
 	s := &ControlService{
-		Storage:            &NvmeStorage{Logger: logger},
+		Storage:            NewNvmeStorage(logger),
 		storageInitialised: false,
 		logger:             logger,
 	}

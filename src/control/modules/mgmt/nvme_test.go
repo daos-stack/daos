@@ -27,7 +27,7 @@ import (
 	"testing"
 
 	. "common/test"
-	. "go-spdk/nvme"
+	. "go-spdk/spdk"
 	. "modules/mgmt"
 
 	pb "modules/mgmt/proto"

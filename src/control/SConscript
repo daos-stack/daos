@@ -32,13 +32,13 @@ def scons():
     denv.Command(agentbin, agentsrc, "go install agent")
     denv.InstallAs("$PREFIX/bin/daos_agent", agentbin)
 
-    gonvmepath = "%s/go-spdk/nvme" % gosrc
+    gospdkpath = "%s/go-spdk/spdk" % gosrc
 
     # CGO prerequisite libs for nvme
-    denv.AppendUnique(CPPPATH=['%s/include' % gonvmepath])
+    denv.AppendUnique(CPPPATH=['%s/include' % gospdkpath])
     nvmecontrol = daos_build.library(
         denv, "nvme_control",
-        '%s/src/nvme_control.c' % gonvmepath,
+        '%s/src/nvme_control.c' % gospdkpath,
         LIBS=['spdk'])
     nc_installed = denv.Install('$PREFIX/lib', nvmecontrol)
 

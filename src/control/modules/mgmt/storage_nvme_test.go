@@ -30,7 +30,7 @@ import (
 
 	"common/log"
 	. "common/test"
-	. "go-spdk/nvme"
+	. "go-spdk/spdk"
 	. "modules/mgmt"
 )
 
