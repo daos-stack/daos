@@ -284,7 +284,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	       key_ent->ie_key.iov_buf, key_ent->ie_key.iov_len);
 
 	iovs[arg->sgl_idx].iov_len += key_ent->ie_key.iov_len;
-	D_DEBUG(DB_IO, "Pack key %.*s iov total %zd"
+	D_DEBUG(DB_IO, "Pack key %d %s iov total %zd"
 		" kds len %d\n", (int)key_ent->ie_key.iov_len,
 		(char *)key_ent->ie_key.iov_buf,
 		iovs[arg->sgl_idx].iov_len, arg->kds_len - 1);
@@ -416,7 +416,7 @@ iter_akey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 	daos_anchor_t		 single_anchor = { 0 };
 	int			 rc;
 
-	D_DEBUG(DB_IO, "enum key %.*s type %d\n",
+	D_DEBUG(DB_IO, "enum key %d %s type %d\n",
 		(int)key_ent->ie_key.iov_len,
 		(char *)key_ent->ie_key.iov_buf, type);
 
@@ -489,7 +489,7 @@ iter_dkey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 	vos_iter_param_t	 iter_akey_param;
 	int			 rc;
 
-	D_DEBUG(DB_IO, "enum key %.*s type %d\n",
+	D_DEBUG(DB_IO, "enum key %d %s type %d\n",
 		(int)key_ent->ie_key.iov_len,
 		(char *)key_ent->ie_key.iov_buf, type);
 
@@ -1001,7 +1001,7 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 				}
 			}
 
-			D_DEBUG(DB_REBUILD, "process dkey %.*s eph "DF_U64"\n",
+			D_DEBUG(DB_REBUILD, "process dkey %d %s eph "DF_U64"\n",
 				(int)io.ui_dkey.iov_len,
 				(char *)io.ui_dkey.iov_buf,
 				eprs ? io.ui_dkey_eph : 0);
@@ -1017,7 +1017,7 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 				rc = -DER_INVAL;
 				break;
 			}
-			D_DEBUG(DB_REBUILD, "process akey %.*s\n",
+			D_DEBUG(DB_REBUILD, "process akey %d %s\n",
 				(int)akey.iov_len, (char *)akey.iov_buf);
 
 			if (io.ui_iods_len >= io.ui_iods_cap) {

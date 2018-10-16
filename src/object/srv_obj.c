@@ -613,7 +613,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			orw->orw_map_ver, map_ver);
 	}
 
-	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %.*s tag %d\n",
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d\n",
 		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
 		dss_get_module_info()->dmi_tid);

@@ -367,7 +367,7 @@ ts_find_rect(char *args)
 
 		punched = bio_addr_is_hole(&addr);
 		D_PRINT("Find rect "DF_RECT" (sel="DF_RECT") width=%d "
-			"val=%.*s\n", DP_RECT(&ent->en_rect),
+			"val=%d %s\n", DP_RECT(&ent->en_rect),
 			DP_RECT(&ent->en_sel_rect),
 			(int)evt_rect_width(&ent->en_sel_rect),
 			punched ? 4 : (int)evt_rect_width(&ent->en_sel_rect),

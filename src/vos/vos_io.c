@@ -423,7 +423,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	int		 flags = 0;
 	bool		 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 
-	D_DEBUG(DB_IO, "akey %.*s Fetch %s eph "DF_U64"\n",
+	D_DEBUG(DB_IO, "akey %d %s Fetch %s eph "DF_U64"\n",
 		(int)iod->iod_name.iov_len, (char *)iod->iod_name.iov_buf,
 		is_array ? "array" : "single", ioc->ic_epoch);
 	if (is_array)
@@ -432,7 +432,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, &toh);
 	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
+		D_DEBUG(DB_IO, "Nonexistent akey %d %s\n",
 			(int)iod->iod_name.iov_len,
 			(char *)iod->iod_name.iov_buf);
 		iod_empty_sgl(ioc, ioc->ic_sgl_at);
@@ -680,7 +680,7 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	int		    i, rc;
 	daos_handle_t	    toh;
 
-	D_DEBUG(DB_TRACE, "akey %.*s update %s value eph "DF_U64"\n",
+	D_DEBUG(DB_TRACE, "akey %d %s update %s value eph "DF_U64"\n",
 		(int)iod->iod_name.iov_len, (char *)iod->iod_name.iov_buf,
 		is_array ? "array" : "single", ioc->ic_epoch);
 

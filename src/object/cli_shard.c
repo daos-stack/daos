@@ -395,7 +395,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out_pool, rc = (int)tgt_ep.ep_rank);
 
-	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" %.*s rank %d tag %d eph "DF_U64"\n",
+	D_DEBUG(DB_TRACE, "opc:%d "DF_UOID"%d %s rank:%d tag:%d eph:"DF_U64"\n",
 		opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
 		(char *)dkey->iov_buf, tgt_ep.ep_rank, tgt_ep.ep_tag, epoch);
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);

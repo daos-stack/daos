@@ -1539,7 +1539,7 @@ epoch_discard(void **state)
 		for (i = 0; i < nakeys; i++) {
 			sprintf(rec[i], val_fmt, i, e);
 			rec_size[i] = strlen(rec[i]);
-			print_message("  a-key[%d] '%s' val '%.*s'\n", i,
+			print_message("  a-key[%d] '%s' val '%d %s'\n", i,
 				      akey[i], (int)rec_size[i], rec[i]);
 		}
 		insert(dkey, nakeys, (const char **)akey, offset, (void **)rec,
@@ -1570,7 +1570,7 @@ epoch_discard(void **state)
 				sprintf(rec_verify, val_fmt, i, e);
 			assert_int_equal(req.iod[i].iod_size,
 					 strlen(rec_verify));
-			print_message("  a-key[%d] '%s' val '%.*s'\n", i,
+			print_message("  a-key[%d] '%s' val '%d %s'\n", i,
 				      akey[i], (int)req.iod[i].iod_size,
 				      val[i]);
 			assert_memory_equal(val[i], rec_verify,

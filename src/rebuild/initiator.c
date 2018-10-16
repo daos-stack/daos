@@ -110,7 +110,7 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %.*s nr %d eph "DF_U64
+	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %d %s nr %d eph "DF_U64
 		" fetch %s\n", DP_UOID(rdone->ro_oid), rdone,
 		(int)rdone->ro_dkey.iov_len, (char *)rdone->ro_dkey.iov_buf,
 		rdone->ro_iod_num, rdone->ro_epoch, fetch ? "yes":"no");
@@ -177,7 +177,7 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 		sgl_cnt++;
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %.*s nr %d eph "DF_U64"\n",
+	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey %d %s nr %d eph "DF_U64"\n",
 		DP_UOID(rdone->ro_oid), rdone, (int)rdone->ro_dkey.iov_len,
 		(char *)rdone->ro_dkey.iov_buf, rdone->ro_iod_num,
 		rdone->ro_epoch);
@@ -186,7 +186,7 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 			  rdone->ro_iod_num, rdone->ro_iods,
 			  sgls, NULL);
 	if (rc)
-		D_ERROR("rebuild dkey %.*s failed rc %d\n",
+		D_ERROR("rebuild dkey %d %s failed rc %d\n",
 			(int)rdone->ro_dkey.iov_len,
 			(char *)rdone->ro_dkey.iov_buf, rc);
 post:
@@ -220,7 +220,7 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 
 	/* Punch dkey */
 	if (rdone->ro_max_eph != DAOS_EPOCH_MAX) {
-		D_DEBUG(DB_REBUILD, DF_UOID" punch dkey %.*s eph "DF_U64"\n",
+		D_DEBUG(DB_REBUILD, DF_UOID" punch dkey %d %s eph "DF_U64"\n",
 			DP_UOID(rdone->ro_oid), (int)rdone->ro_dkey.iov_len,
 			(char *)rdone->ro_dkey.iov_buf, rdone->ro_max_eph);
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
@@ -239,7 +239,7 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 
 	/* Punch akeys */
 	for (i = 0; i < rdone->ro_ephs_num; i++) {
-		D_DEBUG(DB_REBUILD, DF_UOID" punch dkey %.*s akey %.*s"
+		D_DEBUG(DB_REBUILD, DF_UOID" punch dkey %d %s akey %d %s"
 			" eph "DF_U64"\n", DP_UOID(rdone->ro_oid),
 			(int)rdone->ro_dkey.iov_len,
 			(char *)rdone->ro_dkey.iov_buf,
@@ -409,8 +409,8 @@ rebuild_one_ult(void *arg)
 			d_list_del_init(&rdone->ro_list);
 			if (!rpt->rt_abort) {
 				rc = rebuild_one(rpt, rdone);
-				D_DEBUG(DB_REBUILD, DF_UOID" rebuild dkey %.*s "
-					"rc %d tag %d rpt %p\n",
+				D_DEBUG(DB_REBUILD, DF_UOID" rebuild dkey %d %s"
+					" rc %d tag %d rpt %p\n",
 					DP_UOID(rdone->ro_oid),
 					(int)rdone->ro_dkey.iov_len,
 					(char *)rdone->ro_dkey.iov_buf, rc,
@@ -503,7 +503,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	int				i;
 	int				rc;
 
-	D_DEBUG(DB_REBUILD, "rebuild dkey %.*s iod nr %d\n",
+	D_DEBUG(DB_REBUILD, "rebuild dkey %d %s iod nr %d\n",
 		(int)dkey->iov_buf_len, (char *)dkey->iov_buf, iod_eph_total);
 
 	if (iod_eph_total == 0)
@@ -545,7 +545,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 				D_GOTO(free, rc);
 
 			ephs_cnt++;
-			D_DEBUG(DB_REBUILD, "punched iod idx %d akey %.*s"
+			D_DEBUG(DB_REBUILD, "punched iod idx %d akey %d %s"
 				" ephs "DF_U64" ephs_cnt %d\n", i,
 				(int)iods[i].iod_name.iov_len,
 				(char *)iods[i].iod_name.iov_buf,
@@ -573,7 +573,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 					min_epoch = iods[i].iod_eprs[j].epr_lo;
 			}
 
-			D_DEBUG(DB_REBUILD, "idx %d akey %.*s nr %d size "
+			D_DEBUG(DB_REBUILD, "idx %d akey %d %s nr %d size "
 				DF_U64" type %d eph "DF_U64"/"DF_U64" ephs "
 				DF_U64"\n", i, (int)iods[i].iod_name.iov_len,
 				(char *)iods[i].iod_name.iov_buf,
@@ -636,7 +636,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	rdone->ro_oid = *oid;
 	uuid_copy(rdone->ro_cont_uuid, iter_arg->cont_uuid);
 
-	D_DEBUG(DB_REBUILD, DF_UOID" %p dkey %.*s rebuild on idx %d max eph "
+	D_DEBUG(DB_REBUILD, DF_UOID" %p dkey %d %s rebuild on idx %d max eph "
 		DF_U64" iod_num %d\n", DP_UOID(rdone->ro_oid), rdone,
 		(int)dkey->iov_len, (char *)dkey->iov_buf, idx,
 		rdone->ro_max_eph, rdone->ro_iod_num);

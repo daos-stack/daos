@@ -69,7 +69,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
 		print_message("preparing records\n");
 		for (i = 0; i < nakeys; i++) {
 			snprintf(rec[i], rec_size[i], val_fmt, i, value);
-			print_message("  akey[%d] '%s' val '%.*s'\n", i,
+			print_message("  akey[%d] '%s' val '%d %s'\n", i,
 				      akey[i], (int)rec_size[i], rec[i]);
 		}
 
@@ -85,7 +85,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
 		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
 		       (void **)rec, rec_size, &epoch, &req, false);
 		for (i = 0; i < nakeys; i++) {
-			print_message("  akey[%d] '%s' val '%.*s'\n", i,
+			print_message("  akey[%d] '%s' val '%d %s'\n", i,
 				      akey[i], (int)req.iod[i].iod_size,
 				      rec[i]);
 			snprintf(rec_verify, rsize, val_fmt, i, value);
