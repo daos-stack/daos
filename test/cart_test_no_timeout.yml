@@ -11,7 +11,7 @@ defaultENV:
     CRT_TIMEOUT: "10"
 
 module:
-    name: "cart_test_group"
+    name: "cart_test_no_timeout"
     subLogKey: "CRT_TESTLOG"
     setKeyFromHost: ["CRT_TEST_SERVER", "CRT_TEST_CLIENT"]
     setKeyFromInfo:

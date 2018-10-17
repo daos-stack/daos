@@ -48,13 +48,13 @@ you will find anything written to stdout and stderr. The output from memcheck
 and callgrind are in the test_group directory. At the end of a test run, the
 last testRun directory is renamed to testRun_<date stamp>
 
-python3 test_runner scripts/cart_test_group.yml
+python3 test_runner scripts/cart_test_no_timeout.yml
 
 To use valgrind memory checking
-set TR_USE_VALGRIND in cart_test_group.yml to memcheck
+set TR_USE_VALGRIND in cart_test_no_timeout.yml to memcheck
 
 To use valgrind call (callgrind) profiling
-set TR_USE_VALGRIND in cart_test_group.yml to callgrind
+set TR_USE_VALGRIND in cart_test_no_timeout.yml to callgrind
 
 """
 
@@ -93,7 +93,7 @@ class TestGroup(commontestsuite.CommonTestSuite):
         os.environ.pop("D_LOG_MASK", "")
         self.logger.info("tearDown end\n")
 
-    def test_group_one_node(self):
+    def test_no_timeout_one_node(self):
         """Simple process group test one node"""
         testmsg = self.shortDescription()
         clients = self.get_client_list()
@@ -112,7 +112,7 @@ class TestGroup(commontestsuite.CommonTestSuite):
         if procrtn:
             self.fail("Failed, return code %d" % procrtn)
 
-    def test_group_two_nodes(self):
+    def test_no_timeout_two_nodes(self):
         """Simple process group test two node"""
 
         if not os.getenv('TR_USE_URI', ""):
