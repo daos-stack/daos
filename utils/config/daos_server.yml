@@ -9,6 +9,46 @@
 #
 name: daos
 
+# Formatted state defined as any of:
+#   * ext4 filesystem on IPMMs
+#   * IPMMs in unexpected configuration
+#   * NVMe device contains a blobstore with uuid in label
+
+# Automatic provisioning
+#
+# If set to "true" then when daos_server starts it will try to perform
+# provision and start servers automatically.
+# During provision, if anything fails or a device is found to be in a
+# "formatted state" then administrator is alerted (with hints as to why and
+# what to do next) and no formatting is performed (behaviour is also
+# dependent on the "format" parameter setting).
+# When provision has been cancelled, administrator has to intervene,
+# perform remediation and subsequently call provision API manually.
+#
+# If set to "false", administrator is fully in control and performs workflow
+# manually through client API (burn-in/fwupdate/provision).
+#
+# default: true
+#
+# auto: false
+
+# Formatting flow control
+#
+# Defines resultant behaviour when device is found to be in a formatted state.
+# If set to "safe" and a device is found to be in a "formatted state", then
+# administrator is alerted (with hints as to why/what to do next) and no
+# formatting is performed.
+#
+# If set to "continue" and device is found to be in a "formatted state",
+# continue to use those devices without reformatting.
+#
+# If set to "force" then automatically reformat and continue regardless of
+# whether device is found to be in a "formatted state".
+#
+# default: safe
+#
+# auto: continue
+
 # Management service replicas.
 # To operate, DAOS will need a quorum of those nodes to be available.
 # Immutable after reformat.
