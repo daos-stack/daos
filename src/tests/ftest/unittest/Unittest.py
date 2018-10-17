@@ -32,75 +32,60 @@ from avocado.utils import process
 
 class UnitTest(Test):
     """
-    Execute Unit Tests
+    Avocado Unit Test class.
     """
-    def setUp(self):
-        pass
-
     def tearDown(self):
         process.system("rm -f /mnt/daos/*")
+
+    def unittest_runner(self, unit_testname):
+        """
+        Common unitetest runner function.
+        Args:
+            unit_testname: unittest name.
+        return:
+            None
+        """
+        name = self.params.get("testname", '/run/UnitTest/{0}/'
+                               .format(unit_testname))
+        bin_path = get_file_path(name, "install/bin")
+
+        cmd = ("{0}".format(bin_path[0]))
+        return_code = process.system(cmd)
+        if return_code is not 0:
+            self.fail("{0} unittest failed with return code={1}.\n"
+                      .format(unit_testname, return_code))
 
     def test_smd_ut(self):
         """
         Test smd unittest.
         :avocado: tags=unittest,nvme,smd_ut
         """
-        name = self.params.get("testname", '/run/UnitTest/smd_ut/*')
-        bin_path = get_file_path(name)
-        cmd = ("{0}".format(bin_path[0]))
-        return_code = process.system(cmd)
-        if return_code is not 0:
-            self.fail("smd_ut unittest failed with return code={0}.\n"
-                      .format(return_code))
+        self.unittest_runner("smd_ut")
 
     def test_vea_ut(self):
         """
         Test vea unittest.
         :avocado: tags=unittest,nvme,vea_ut
         """
-        name = self.params.get("testname", '/run/UnitTest/vea_ut/*')
-        bin_path = get_file_path(name)
-        cmd = ("{0}".format(bin_path[0]))
-        return_code = process.system(cmd)
-        if return_code is not 0:
-            self.fail("vea_ut unittest failed with return code={0}.\n"
-                      .format(return_code))
+        self.unittest_runner("vea_ut")
 
     def test_pl_map(self):
         """
         Test pl_map unittest.
         :avocado: tags=unittest,pl_map
         """
-        name = self.params.get("testname", '/run/UnitTest/pl_map/*')
-        bin_path = get_file_path(name)
-        cmd = ("{0}".format(bin_path[0]))
-        return_code = process.system(cmd)
-        if return_code is not 0:
-            self.fail("pl_map unittest failed with return code={0}.\n"
-                      .format(return_code))
+        self.unittest_runner("pl_map")
 
     def test_eq_tests(self):
         """
         Test eq_tests unittest.
         :avocado: tags=unittest,eq_tests
         """
-        name = self.params.get("testname", '/run/UnitTest/eq_tests/*')
-        bin_path = get_file_path(name)
-        cmd = ("{0}".format(bin_path[0]))
-        return_code = process.system(cmd)
-        if return_code is not 0:
-            self.fail("eq_tests unittest failed with return code={0}.\n"
-                      .format(return_code))
+        self.unittest_runner("eq_tests")
 
     def test_vos_tests(self):
         """
         Test eq_tests unittest.
         :avocado: tags=unittest,vos_tests
         """
-        name = self.params.get("testname", '/run/UnitTest/vos_tests/*')
-        bin_path = get_file_path(name)
-        cmd = ("{0}".format(bin_path[0]))
-        return_code = process.system(cmd)
-        if return_code is not 0:
-            self.fail("vos_tests unittest failed with return code={0}.\n"
-                      .format(return_code))
+        self.unittest_runner("vos_tests")
