@@ -393,9 +393,7 @@ struct crt_internal_rpc {
 			  "%p addref from zero\n", (RPC));		\
 		__ref = ++(RPC)->crp_refcount;				\
 		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
-		D_DEBUG(DB_NET,						\
-			"rpc_priv %p (opc: %#x), addref to %d.\n",	\
-			(RPC), (RPC)->crp_pub.cr_opc, __ref);		\
+		RPC_TRACE(DB_NET, RPC, "addref to %d.\n", __ref);	\
 	} while (0)
 
 #define RPC_DECREF(RPC) do {						\
@@ -404,10 +402,8 @@ struct crt_internal_rpc {
 		D_ASSERTF((RPC)->crp_refcount != 0,			\
 			  "%p decref from zero\n", (RPC));		\
 		__ref = --(RPC)->crp_refcount;				\
+		RPC_TRACE(DB_NET, RPC, "decref to %d.\n", __ref);	\
 		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
-		D_DEBUG(DB_NET,						\
-			"rpc_priv %p (opc: %#x), decref to %d.\n",	\
-			(RPC), (RPC)->crp_pub.cr_opc, __ref);		\
 		if (__ref == 0)						\
 			crt_req_destroy(RPC);				\
 	} while (0)

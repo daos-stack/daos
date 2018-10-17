@@ -971,9 +971,10 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 
 	rpc_priv->crp_opc_info = opc_info;
 
-	D_DEBUG(DB_NET, "rpc_priv %p (opc: %#x),"
-		" allocated per RPC request received.\n",
-		rpc_priv, rpc_priv->crp_opc_info->coi_opc);
+	RPC_TRACE(DB_TRACE, rpc_priv,
+		  "(opc: %#x rpc_pub: %p) allocated per RPC request received.\n",
+		  rpc_priv->crp_opc_info->coi_opc,
+		  &rpc_priv->crp_pub);
 
 	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, true /* srv_flag */);
 	if (rc != 0) {
@@ -1128,9 +1129,9 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 			hg_ctx = &ctx->cc_hg_ctx;
 			rc = crt_hg_pool_put(hg_ctx, rpc_priv);
 			if (rc == 0) {
-				D_DEBUG(DB_NET, "rpc_priv %p, hg_hdl %p put to "
-					"pool.\n", rpc_priv,
-					rpc_priv->crp_hg_hdl);
+				RPC_TRACE(DB_NET, rpc_priv,
+					  "hg_hdl %p put to pool.\n",
+					  rpc_priv->crp_hg_hdl);
 				D_GOTO(mem_free, rc);
 			} else {
 				rc = 0;
@@ -1150,6 +1151,9 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 	}
 
 mem_free:
+
+	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
+
 	crt_rpc_priv_free(rpc_priv);
 
 	return rc;
@@ -1173,7 +1177,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	rpc_pub = &rpc_priv->crp_pub;
 	opc = rpc_pub->cr_opc;
 
-	D_DEBUG(DB_TRACE, "entered, rpc_priv: %p, opc: %#x.\n", rpc_priv, opc);
+	RPC_TRACE(DB_TRACE, rpc_priv, "entered\n");
 	switch (hg_cbinfo->ret) {
 	case HG_SUCCESS:
 		state = RPC_STATE_COMPLETED;
@@ -1181,16 +1185,13 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	case HG_CANCELED:
 		if (crt_rank_evicted(rpc_pub->cr_ep.ep_grp,
 				     rpc_pub->cr_ep.ep_rank)) {
-			D_DEBUG(DB_NET, "request target evicted, rpc_priv %p, "
-				"opc: %#x.\n", rpc_priv, opc);
+			RPC_TRACE(DB_NET, rpc_priv, "request target evicted\n");
 			rc = -DER_EVICTED;
 		} else if (crt_req_timedout(rpc_pub)) {
-			D_DEBUG(DB_NET, "request timedout, rpc_priv %p, "
-				"opc: %#x.\n", rpc_priv, opc);
+			RPC_TRACE(DB_NET, rpc_priv, "request timedout\n");
 			rc = -DER_TIMEDOUT;
 		} else {
-			D_DEBUG(DB_NET, "request canceled, rpc_priv %p, "
-				"opc: %#x.\n", rpc_priv, opc);
+			RPC_TRACE(DB_NET, rpc_priv, "request canceled\n");
 			rc = -DER_CANCELED;
 		}
 		state = RPC_STATE_CANCELED;
@@ -1201,8 +1202,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		state = RPC_STATE_COMPLETED;
 		rc = -DER_HG;
 		hg_ret = hg_cbinfo->ret;
-		D_DEBUG(DB_NET, "rpc_priv %p, hg_cbinfo->ret: %d.\n",
-				rpc_priv, hg_cbinfo->ret);
+		RPC_TRACE(DB_NET, rpc_priv,
+			  "hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
 		break;
 	}
 
@@ -1237,13 +1238,11 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		D_ERROR("RPC failed; rpc_priv: %p rc: %d\n",
 			rpc_priv, crt_cbinfo.cci_rc);
 
-	D_DEBUG(DB_TRACE, "Invoking RPC callback rpc_priv: %p "
-		"(opc: %#x, to rank %d tag %d) "
-		"rpc_pub: %p rc: %d.\n", rpc_priv,
-		rpc_priv->crp_pub.cr_opc,
-		rpc_priv->crp_pub.cr_ep.ep_rank,
-		rpc_priv->crp_pub.cr_ep.ep_tag,
-		crt_cbinfo.cci_rpc, crt_cbinfo.cci_rc);
+	RPC_TRACE(DB_TRACE, rpc_priv,
+		  "Invoking RPC callback (rank %d tag %d) rc: %d.\n",
+		  rpc_priv->crp_pub.cr_ep.ep_rank,
+		  rpc_priv->crp_pub.cr_ep.ep_tag,
+		  crt_cbinfo.cci_rc);
 
 	rpc_priv->crp_complete_cb(&crt_cbinfo);
 
@@ -1279,7 +1278,7 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			"opc: %#x.\n", hg_ret, rpc_priv,
 			rpc_priv->crp_pub.cr_opc);
 	else
-		D_DEBUG(DB_NET, "rpc_priv %p sent.\n", rpc_priv);
+		RPC_TRACE(DB_TRACE, rpc_priv, "sent.\n");
 
 	if (hg_ret == HG_NA_ERROR) {
 		if (!crt_req_timedout(&rpc_priv->crp_pub)) {
@@ -1312,8 +1311,9 @@ crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv)
 
 	if (rpc_priv->crp_state != RPC_STATE_REQ_SENT ||
 	    rpc_priv->crp_on_wire != 1) {
-		D_DEBUG(DB_NET, "rpc_priv->crp_state %#x, "
-			"RPC not sent, skipping.\n", rpc_priv->crp_state);
+		RPC_TRACE(DB_NET, rpc_priv,
+			  "rpc_priv->crp_state %#x, RPC not sent, skipping.\n",
+			  rpc_priv->crp_state);
 		return rc;
 	}
 
@@ -1392,9 +1392,10 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 			"HG_Respond failed, hg_ret: %d, opc: %#x.\n",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
 	else
-		D_DEBUG(DB_NET, "Sent CART level error message back to client. "
-			"rpc_priv %p, opc: %#x, error_code: %d.\n",
-			rpc_priv, rpc_priv->crp_pub.cr_opc, error_code);
+		RPC_TRACE(DB_NET, rpc_priv,
+			  "Sent CART level error message back to client. "
+			  "error_code: %d.\n",
+			  error_code);
 }
 
 static int

@@ -299,13 +299,11 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 			D_ERROR("RPC failed; rpc_priv: %p rc: %d\n",
 				rpc_priv, cbinfo.cci_rc);
 
-		D_DEBUG(DB_TRACE, "Invoking RPC callback rpc_priv: %p "
-			"(opc: %#x, to rank %d tag %d) "
-			"rpc_pub: %p rc: %d.\n", rpc_priv,
-			rpc_priv->crp_pub.cr_opc,
-			rpc_priv->crp_pub.cr_ep.ep_rank,
-			rpc_priv->crp_pub.cr_ep.ep_tag,
-			cbinfo.cci_rpc, cbinfo.cci_rc);
+		RPC_TRACE(DB_TRACE, rpc_priv,
+			  "Invoking RPC callback (rank %d tag %d) rc: %d.\n",
+			  rpc_priv->crp_pub.cr_ep.ep_rank,
+			  rpc_priv->crp_pub.cr_ep.ep_tag,
+			  cbinfo.cci_rc);
 
 		rpc_priv->crp_complete_cb(&cbinfo);
 	}
@@ -648,27 +646,25 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 	D_ASSERT(opc_info != NULL);
 
 	if (opc_info->coi_reset_timer == 0) {
-		D_DEBUG(DB_NET, "rpc_priv %p reset_timer not enabled.\n",
-			rpc_priv);
+		RPC_TRACE(DB_NET, rpc_priv, "reset_timer not enabled.\n");
 		return false;
 	}
 	if (rpc_priv->crp_state == RPC_STATE_CANCELED ||
 	    rpc_priv->crp_state == RPC_STATE_COMPLETED) {
-		D_DEBUG(DB_NET,
-			"rpc_priv %p state %#x, not reseting timer.\n",
-			rpc_priv, rpc_priv->crp_state);
+		RPC_TRACE(DB_NET, rpc_priv, "state %#x, not reseting timer.\n",
+			  rpc_priv->crp_state);
 		return false;
 	}
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	is_evicted = crt_rank_evicted(tgt_ep->ep_grp, tgt_ep->ep_rank);
 	if (is_evicted) {
-		D_DEBUG(DB_NET,
-			"rpc_priv %p grp %p, rank %d already evicted.\n",
-			rpc_priv, tgt_ep->ep_grp, tgt_ep->ep_rank);
+		RPC_TRACE(DB_NET, rpc_priv,
+			  "grp %p, rank %d already evicted.\n",
+			  tgt_ep->ep_grp, tgt_ep->ep_rank);
 		return false;
 	}
-	D_DEBUG(DB_NET, "rpc_priv %p reset_timer enabled.\n", rpc_priv);
+	RPC_TRACE(DB_NET, rpc_priv, "reset_timer enabled.\n");
 
 	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
@@ -692,9 +688,8 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	struct crt_uri_lookup_in	*ul_in;
 
 	if (crt_req_timeout_reset(rpc_priv)) {
-		D_DEBUG(DB_NET,
-			"rpc_opc: %#x reached timeout. Renewed for another cycle.\n",
-			rpc_priv->crp_pub.cr_opc);
+		RPC_TRACE(DB_NET, rpc_priv,
+			  "reached timeout. Renewed for another cycle.\n");
 		return;
 	};
 
@@ -826,9 +821,11 @@ crt_context_req_track(crt_rpc_t *req)
 	D_ASSERT(req != NULL);
 	crt_ctx = req->cr_ctx;
 	D_ASSERT(crt_ctx != NULL);
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
 	if (req->cr_opc == CRT_OPC_URI_LOOKUP) {
-		D_DEBUG(DB_NET, "bypass tracking for URI_LOOKUP.\n");
+		RPC_TRACE(DB_NET, rpc_priv,
+			  "bypass tracking for URI_LOOKUP.\n");
 		D_GOTO(out, rc = CRT_REQ_TRACK_IN_INFLIGHQ);
 	}
 	/* TODO use global rank */
@@ -879,7 +876,6 @@ crt_context_req_track(crt_rpc_t *req)
 		D_GOTO(out, rc);
 
 	/* add the RPC req to crt_ep_inflight */
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	D_MUTEX_LOCK(&epi->epi_mutex);
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
@@ -936,7 +932,8 @@ crt_context_req_untrack(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
 	if (req->cr_opc == CRT_OPC_URI_LOOKUP) {
-		D_DEBUG(DB_NET, "bypass untracking for URI_LOOKUP.\n");
+		RPC_TRACE(DB_NET, rpc_priv,
+			  "bypass untracking for URI_LOOKUP.\n");
 		return;
 	}
 
@@ -1319,8 +1316,7 @@ crt_req_force_timeout(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_context	*crt_ctx;
 
-	D_DEBUG(DB_TRACE, "Handling unreachable rpc, rpc_priv=%p\n",
-			rpc_priv);
+	RPC_TRACE(DB_TRACE, rpc_priv, "Handling unreachable rpc\n");
 
 	if (rpc_priv == NULL) {
 		D_ERROR("Invalid argument, rpc_priv == NULL\n");
@@ -1328,8 +1324,8 @@ crt_req_force_timeout(struct crt_rpc_priv *rpc_priv)
 	}
 
 	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_URI_LOOKUP) {
-		D_DEBUG(DB_TRACE, "Skipping for opcode: %#x",
-			CRT_OPC_URI_LOOKUP);
+		RPC_TRACE(DB_TRACE, rpc_priv, "Skipping for opcode: %#x\n",
+			  CRT_OPC_URI_LOOKUP);
 		return;
 	}
 

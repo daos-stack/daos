@@ -61,4 +61,13 @@
 #include "crt_pmix.h"
 #include "crt_lm.h"
 
+/* A wrapper around D_TRACE_WARN that ensures the ptr option is a RPC */
+#define RPC_TRACE(mask, rpc, fmt, ...)					\
+	do {								\
+									\
+		if (false && (rpc)->crp_opc_info->coi_opc)		\
+			;						\
+		D_TRACE_DEBUG(mask, rpc, fmt,  ## __VA_ARGS__);		\
+	} while (0)
+
 #endif /* __CRT_INTERNAL_H__ */
