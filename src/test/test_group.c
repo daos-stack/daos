@@ -82,10 +82,12 @@ CRT_RPC_PREP(test_ping_check,
 		/* input fields */
 	     ((uint32_t)	(age))
 	     ((uint32_t)	(days))
-	     ((d_string_t)	(name)),
+	     ((d_string_t)	(name))
+	     ((bool)		(bool_val)),
 		/* output fields */
 	     ((int32_t)		(ret))
 	     ((uint32_t)	(room_no))
+	     ((uint32_t)	(bool_val))
 	    );
 
 static inline void
@@ -116,14 +118,16 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 
 	printf("tier1 test_server recv'd checkin, opc: %#x.\n",
 	       rpc_req->cr_opc);
-	printf("tier1 checkin input - age: %d, name: %s, days: %d.\n",
-	       e_req->age, e_req->name, e_req->days);
+	printf("tier1 checkin input - age: %d, name: %s, days: %d, "
+	       "bool_val %d.\n",
+	       e_req->age, e_req->name, e_req->days, e_req->bool_val);
 
 	e_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
 		  e_reply);
 	e_reply->ret = 0;
 	e_reply->room_no = test_g.t_roomno++;
+	e_reply->bool_val = e_req->bool_val;
 	if (D_SHOULD_FAIL(5000)) {
 		e_reply->ret = -DER_MISC;
 		e_reply->room_no = -1;
@@ -196,11 +200,13 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			D_FREE(rpc_req_input->name);
 			break;
 		}
-		printf("%s checkin result - ret: %d, room_no: %d.\n",
+		printf("%s checkin result - ret: %d, room_no: %d, "
+		       "bool_val %d.\n",
 		       rpc_req_input->name, rpc_req_output->ret,
-		       rpc_req_output->room_no);
+		       rpc_req_output->room_no, rpc_req_output->bool_val);
 		D_FREE(rpc_req_input->name);
 		sem_post(&test_g.t_token_to_proceed);
+		D_ASSERT(rpc_req_output->bool_val == true);
 		break;
 	case TEST_OPC_SHUTDOWN:
 		test_g.t_complete = 1;
@@ -360,10 +366,12 @@ check_in(crt_group_t *remote_group, int rank)
 	rpc_req_input->name = buffer;
 	rpc_req_input->age = 21;
 	rpc_req_input->days = 7;
+	rpc_req_input->bool_val = true;
 	D_DEBUG(DB_TEST, "client(rank %d) sending checkin rpc with tag "
-		"%d, name: %s, age: %d, days: %d.\n",
+		"%d, name: %s, age: %d, days: %d, bool_val %d.\n",
 		test_g.t_my_rank, server_ep.ep_tag, rpc_req_input->name,
-		rpc_req_input->age, rpc_req_input->days);
+		rpc_req_input->age, rpc_req_input->days,
+		rpc_req_input->bool_val);
 
 	/* send an rpc, print out reply */
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);

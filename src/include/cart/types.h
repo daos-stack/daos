@@ -321,6 +321,7 @@ extern struct crt_msg_field CMF_IOVEC;
 #define CMF_OF_uint64_t			CMF_UINT64
 #define CMF_OF_crt_bulk_t		CMF_BULK
 #define CMF_OF_bool			CMF_BOOL
+#define CMF_OF__Bool			CMF_BOOL
 #define CMF_OF_d_string_t		CMF_STRING
 #define CMF_OF_crt_phy_addr_t		CMF_PHY_ADDR
 #define CMF_OF_d_rank_t			CMF_RANK

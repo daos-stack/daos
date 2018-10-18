@@ -178,6 +178,7 @@ crt_proc_bool(crt_proc_t proc, bool *data)
 
 	hg_bool = (*data == false) ? 0 : 1;
 	hg_ret = hg_proc_hg_bool_t(proc, &hg_bool);
+	*data = (hg_bool == 0) ? false : true;
 
 	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
 }
