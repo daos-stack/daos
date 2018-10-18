@@ -28,11 +28,11 @@ import (
 	"os/exec"
 	"strings"
 
-	"common/log"
+	"utils/log"
 
 	"go-spdk/spdk"
 
-	pb "modules/mgmt/proto"
+	pb "mgmt/proto"
 )
 
 var (

@@ -26,11 +26,11 @@ package agent
 import (
 	"context"
 	"errors"
-	secpb "modules/security/proto"
+	secpb "security/proto"
 	"net"
 	"time"
 
-	"common/log"
+	"utils/log"
 
 	"github.com/satori/go.uuid"
 	"google.golang.org/grpc"

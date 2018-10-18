@@ -37,10 +37,10 @@ import (
 	"github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
 
-	"modules/mgmt"
-	mgmtpb "modules/mgmt/proto"
-	"modules/security"
-	secpb "modules/security/proto"
+	"mgmt"
+	mgmtpb "mgmt/proto"
+	"security"
+	secpb "security/proto"
 )
 
 type daosOptions struct {

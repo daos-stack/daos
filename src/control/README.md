@@ -6,14 +6,14 @@ The control server implements the [gRPC protocol](https://grpc.io/) to communica
 
 Multiple gRPC server modules are loaded by the control server. Currently included modules are security and management.
 
-The [shell](shell/DAOSShell) is an example client application which can connect to both the [agent](agent/daos_agent.go) to perform security functions (such as providing credentials and retrieving security contexts) and to the local management server to perform management functions (such as storage device discovery).
+The [shell](dmg/daos_shell) is an example client application which can connect to both the [agent](agent/daos_agent.go) to perform security functions (such as providing credentials and retrieving security contexts) and to the local management server to perform management functions (such as storage device discovery).
 
 ## Documentation
 
-- [Management API](https://godoc.org/github.com/daos-stack/daos/src/control/common/control)
-- [Management internals](https://godoc.org/github.com/daos-stack/daos/src/control/modules/mgmt)
-- [Agent API](https://godoc.org/github.com/daos-stack/daos/src/control/common/agent)
-- [Agent internals](https://godoc.org/github.com/daos-stack/daos/src/control/modules/security)
+- [Management API](https://godoc.org/github.com/daos-stack/daos/src/control/client/mgmt)
+- [Management internals](https://godoc.org/github.com/daos-stack/daos/src/control/mgmt)
+- [Agent API](https://godoc.org/github.com/daos-stack/daos/src/control/client/agent)
+- [Agent internals](https://godoc.org/github.com/daos-stack/daos/src/control/security)
 
 ## Shell Usage
 
@@ -25,9 +25,9 @@ In order to run the shell to perform administrative tasks, build and run the `da
 root$ orterun -np 1 -c 1 --hostfile hostfile --enable-recovery --allow-run-as-root --report-uri /tmp/urifile daos_server -c 1
 ```
 
-DAOSShell (the client application) is to be run as a standard, unprivileged user.  The shell can be used to connect to and interact with the gRPC server (running on port 10000 by default) as follows:
+daos_shell (the management tool to exercise the client api) is to be run as a standard, unprivileged user.  The shell can be used to connect to and interact with the gRPC server (running on port 10000 by default) as follows:
 ```
-$ projects/daos_m/install/bin/DAOSShell
+$ projects/daos_m/install/bin/daos_shell
 DAOS Management Shell
 >>> connect -t '127.0.0.1:10000'
 >>> help

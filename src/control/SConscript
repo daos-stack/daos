@@ -51,7 +51,7 @@ def scons():
         denv.subst("-I$SPDK_PREFIX/include"))
 
     # install management server db
-    modulemgmt = "%s/modules/mgmt" % gosrc
+    modulemgmt = "%s/mgmt" % gosrc
     mgmtinitdb = "mgmtinit_db.json"
     denv.InstallAs(
         os.path.join("$PREFIX/share/control", mgmtinitdb),
@@ -59,17 +59,17 @@ def scons():
     denv.Install(
         "$PREFIX/share/spdk/fio_plugin",
         [os.path.join(modulemgmt, n) for n in
-         ['example_config.fio', 'full_bench.fio']])
+         ['fio/example_config.fio', 'fio/full_bench.fio']])
 
     serverbin = "%s/bin/server" % gopath
     serversrc = "%s/server/daos_server.go" % gosrc
     denv.Command(serverbin, [serversrc, nc_installed], "go install server")
     denv.InstallAs("$PREFIX/bin/daos_server", serverbin)
 
-    shellbin = "%s/bin/shell" % gopath
-    shellsrc = "%s/shell/DAOSShell.go" % gosrc
-    denv.Command(shellbin, shellsrc, "go install shell")
-    denv.InstallAs("$PREFIX/bin/DAOSShell", shellbin)
+    shellbin = "%s/bin/dmg" % gopath
+    shellsrc = "%s/dmg/daos_shell.go" % gosrc
+    denv.Command(shellbin, shellsrc, "go install dmg")
+    denv.InstallAs("$PREFIX/bin/daos_shell", shellbin)
 
 if __name__ == "SCons.Script":
     scons()

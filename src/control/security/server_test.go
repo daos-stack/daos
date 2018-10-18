@@ -21,43 +21,23 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt_test
+package security_test
 
 import (
+	. "utils/test"
+	"security"
 	"testing"
-
-	. "common/test"
-	. "modules/mgmt"
-
-	pb "modules/mgmt/proto"
 )
 
-func mockFeaturePB() *pb.Feature {
-	return &pb.Feature{
-		Category:    &pb.Category{Category: "nvme"},
-		Fname:       &pb.FeatureName{Name: "burn-name"},
-		Description: "run workloads on device to test",
-	}
-}
+// SecurityAction tests
+func TestControlService_SecurityAction_NilRequest(t *testing.T) {
+	service := security.NewControlServer()
 
-func TestGetFeature(t *testing.T) {
-	// defined in nvme_test.go
-	s := NewTestControlServer(nil)
+	response, err := service.SecurityAction(nil, nil)
 
-	mockFeature := mockFeaturePB()
-	fMap := make(FeatureMap)
-	fMap[mockFeature.Fname.Name] = mockFeature
-	s.SupportedFeatures = fMap
-
-	feature, err := s.GetFeature(nil, mockFeature.Fname)
-	if err != nil {
-		t.Fatal(err.Error())
+	if response != nil {
+		t.Error("Expected nil reply")
 	}
 
-	AssertEqual(t, feature, mockFeature, "")
-
-	feature, err = s.GetFeature(nil, &pb.FeatureName{Name: "non-existent"})
-	if err == nil {
-		t.Fatal(err.Error())
-	}
+	ExpectError(t, err, "No request provided")
 }

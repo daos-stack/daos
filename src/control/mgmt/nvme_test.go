@@ -26,11 +26,11 @@ package mgmt_test
 import (
 	"testing"
 
-	. "common/test"
+	. "utils/test"
 	. "go-spdk/spdk"
-	. "modules/mgmt"
+	. "mgmt"
 
-	pb "modules/mgmt/proto"
+	pb "mgmt/proto"
 )
 
 func mockController(fwrev string) Controller {

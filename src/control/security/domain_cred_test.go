@@ -24,20 +24,33 @@
 package security_test
 
 import (
-	. "common/test"
-	"modules/security"
+	. "utils/test"
+	"security"
 	"testing"
 )
 
-// SecurityAction tests
-func TestControlService_SecurityAction_NilRequest(t *testing.T) {
-	service := security.NewControlServer()
+// DomainCreds tests
+func TestDomainCreds_Info(t *testing.T) {
+	creds := &security.DomainCreds{}
+	info := creds.Info()
 
-	response, err := service.SecurityAction(nil, nil)
+	AssertEqual(t, info.SecurityProtocol, "domain", "Wrong SecurityProtocol")
+	AssertEqual(t, info.SecurityVersion, "1.0", "Wrong SecurityVersion")
+	AssertEqual(t, info.ServerName, "localhost", "Wrong ServerName")
+}
 
-	if response != nil {
-		t.Error("Expected nil reply")
+func TestDomainCreds_ClientHandshake(t *testing.T) {
+	creds := &security.DomainCreds{}
+	conn, authInfo, err := creds.ClientHandshake(nil, "",
+		nil)
+
+	AssertEqual(t, conn, nil, "Expect the conn to match the nil we passed")
+	AssertEqual(t, err, nil, "Expect no error")
+
+	switch authInfoType := authInfo.(type) {
+	case *security.DomainInfo:
+		// Expected type
+	default:
+		t.Errorf("Bad type: %T", authInfoType)
 	}
-
-	ExpectError(t, err, "No request provided")
 }

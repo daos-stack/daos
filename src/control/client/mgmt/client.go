@@ -28,9 +28,9 @@ import (
 	"io"
 	"time"
 
-	"common/log"
+	"utils/log"
 
-	pb "modules/mgmt/proto"
+	pb "mgmt/proto"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

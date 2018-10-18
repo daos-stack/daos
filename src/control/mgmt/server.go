@@ -30,9 +30,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"common/log"
+	"utils/log"
 
-	pb "modules/mgmt/proto"
+	pb "mgmt/proto"
 )
 
 var jsonDBRelPath = "share/control/mgmtinit_db.json"

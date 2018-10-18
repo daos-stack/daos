@@ -30,9 +30,9 @@ import (
 	"os/user"
 	"strconv"
 
-	"common/log"
+	"utils/log"
 
-	pb "modules/security/proto"
+	pb "security/proto"
 
 	"github.com/golang/protobuf/proto"
 )

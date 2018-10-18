@@ -21,36 +21,43 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package security_test
+package mgmt_test
 
 import (
-	. "common/test"
-	"modules/security"
 	"testing"
+
+	. "utils/test"
+	. "mgmt"
+
+	pb "mgmt/proto"
 )
 
-// DomainCreds tests
-func TestDomainCreds_Info(t *testing.T) {
-	creds := &security.DomainCreds{}
-	info := creds.Info()
-
-	AssertEqual(t, info.SecurityProtocol, "domain", "Wrong SecurityProtocol")
-	AssertEqual(t, info.SecurityVersion, "1.0", "Wrong SecurityVersion")
-	AssertEqual(t, info.ServerName, "localhost", "Wrong ServerName")
+func mockFeaturePB() *pb.Feature {
+	return &pb.Feature{
+		Category:    &pb.Category{Category: "nvme"},
+		Fname:       &pb.FeatureName{Name: "burn-name"},
+		Description: "run workloads on device to test",
+	}
 }
 
-func TestDomainCreds_ClientHandshake(t *testing.T) {
-	creds := &security.DomainCreds{}
-	conn, authInfo, err := creds.ClientHandshake(nil, "",
-		nil)
+func TestGetFeature(t *testing.T) {
+	// defined in nvme_test.go
+	s := NewTestControlServer(nil)
 
-	AssertEqual(t, conn, nil, "Expect the conn to match the nil we passed")
-	AssertEqual(t, err, nil, "Expect no error")
+	mockFeature := mockFeaturePB()
+	fMap := make(FeatureMap)
+	fMap[mockFeature.Fname.Name] = mockFeature
+	s.SupportedFeatures = fMap
 
-	switch authInfoType := authInfo.(type) {
-	case *security.DomainInfo:
-		// Expected type
-	default:
-		t.Errorf("Bad type: %T", authInfoType)
+	feature, err := s.GetFeature(nil, mockFeature.Fname)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	AssertEqual(t, feature, mockFeature, "")
+
+	feature, err = s.GetFeature(nil, &pb.FeatureName{Name: "non-existent"})
+	if err == nil {
+		t.Fatal(err.Error())
 	}
 }

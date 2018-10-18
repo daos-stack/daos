@@ -31,14 +31,14 @@ import (
 
 	"google.golang.org/grpc"
 
-	"modules/security"
-	pbsec "modules/security/proto"
+	"security"
+	pbsec "security/proto"
 )
 
 var (
 	serverAddr         = flag.String("server_addr", "127.0.0.1:10000", "The server address in the format of host:port")
 	serverHostOverride = flag.String("server_host_override", "", "The server name use to verify the hostname returned by TLS handshake")
-	grpcSocket         = flag.String("grpc_socket", "/tmp/daos_agent.grpc", "The path to the unix socket to be used for receiving local messages")
+	grpcSocket         = flag.String("grpc_socket", "/tmp/agent/daos_agent.grpc", "The path to the unix socket to be used for receiving local messages")
 )
 
 func main() {

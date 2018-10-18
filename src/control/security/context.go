@@ -27,7 +27,7 @@ import (
 	"errors"
 	"fmt"
 
-	pb "modules/security/proto"
+	pb "security/proto"
 
 	uuid "github.com/satori/go.uuid"
 )

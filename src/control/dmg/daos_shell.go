@@ -29,12 +29,12 @@ import (
 	"strconv"
 	"strings"
 
-	"common/agent"
-	"common/control"
-	"common/functional"
-	"modules/security"
+	"client/agent"
+	"client/mgmt"
+	"utils/functional"
+	"security"
 
-	pb "modules/mgmt/proto"
+	pb "mgmt/proto"
 
 	"github.com/daos-stack/ishell"
 	"github.com/jessevdk/go-flags"

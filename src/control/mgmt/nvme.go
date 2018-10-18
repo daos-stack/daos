@@ -32,7 +32,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	pb "modules/mgmt/proto"
+	pb "mgmt/proto"
 )
 
 // FetchNVMe populates controllers and namespaces in ControlService

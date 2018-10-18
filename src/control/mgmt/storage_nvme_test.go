@@ -28,10 +28,10 @@ import (
 	"strings"
 	"testing"
 
-	"common/log"
-	. "common/test"
+	"utils/log"
+	. "utils/test"
 	. "go-spdk/spdk"
-	. "modules/mgmt"
+	. "mgmt"
 )
 
 // MockStorage struct implements Storage interface

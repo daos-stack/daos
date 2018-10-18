@@ -26,9 +26,9 @@ package security
 import (
 	"errors"
 
-	"common/log"
+	"utils/log"
 
-	pb "modules/security/proto"
+	pb "security/proto"
 
 	uuid "github.com/satori/go.uuid"
 	"golang.org/x/net/context"

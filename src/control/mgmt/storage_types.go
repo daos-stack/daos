@@ -24,11 +24,11 @@
 package mgmt
 
 import (
-	"common/log"
+	"utils/log"
 
 	"go-spdk/spdk"
 
-	pb "modules/mgmt/proto"
+	pb "mgmt/proto"
 )
 
 // Storage interface represents a persistent storage that can
