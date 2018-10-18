@@ -344,6 +344,48 @@ pool_attribute(void **state)
 	}
 }
 
+/** reconnect to pool after re-initializing DAOS lib */
+static void
+init_fini_conn(void **state)
+{
+	test_arg_t		*arg = *state;
+	int			 rc;
+
+	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
+	arg->pool.poh = DAOS_HDL_INVAL;
+	assert_int_equal(rc, 0);
+
+	rc = daos_eq_destroy(arg->eq, 0);
+	assert_int_equal(rc, 0);
+
+	rc = daos_fini();
+	if (rc)
+		print_message("daos_fini() failed with %d\n", rc);
+	assert_int_equal(rc, 0);
+
+	rc = daos_init();
+	if (rc)
+		print_message("daos_init() failed with %d\n", rc);
+	assert_int_equal(rc, 0);
+
+	/* the eq should re-create after daos reinit, as the hash-table
+	 * re-inited.
+	 */
+	rc = daos_eq_create(&arg->eq);
+	assert_int_equal(rc, 0);
+
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       &arg->pool.svc, DAOS_PC_RW,
+			       &arg->pool.poh, &arg->pool.pool_info,
+			       NULL /* ev */);
+	if (rc)
+		print_message("daos_pool_connect failed, rc: %d\n", rc);
+	else
+		print_message("connected to pool, ntarget=%d\n",
+			      arg->pool.pool_info.pi_ntargets);
+	assert_int_equal(rc, 0);
+}
+
 static int
 pool_setup_sync(void **state)
 {
@@ -385,6 +427,8 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_attribute, pool_setup_sync, test_case_teardown},
 	{ "POOL8: set/get/list user-defined pool attributes (async)",
 	  pool_attribute, pool_setup_async, test_case_teardown},
+	{ "POOL9: pool reconnect after daos re-init",
+	  init_fini_conn, NULL, test_case_teardown},
 };
 
 int

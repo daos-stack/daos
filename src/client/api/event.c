@@ -137,6 +137,7 @@ daos_eq_lib_fini()
 		eq_ref--;
 		D_GOTO(unlock, rc = 0);
 	}
+	ev_thpriv_is_init = false;
 
 	tse_sched_complete(&daos_sched_g, 0, true);
 
@@ -837,11 +838,14 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	int				 rc = 0;
 
 	eqx = daos_eq_lookup(eqh);
-	if (eqx == NULL)
+	if (eqx == NULL) {
+		D_ERROR("eqh nonexist.\n");
 		return -DER_NONEXIST;
+	}
 
 	D_MUTEX_LOCK(&eqx->eqx_lock);
 	if (eqx->eqx_finalizing) {
+		D_ERROR("eqx_finalizing.\n");
 		rc = -DER_NONEXIST;
 		goto out;
 	}
