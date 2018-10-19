@@ -567,7 +567,7 @@ singv_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 
 		case VOS_IT_EPC_LE:
 			if (entry->ie_epoch > epr->epr_lo) {
-				epr->epr_lo = epr->epr_lo;
+				entry->ie_epoch = epr->epr_lo;
 				opc = BTR_PROBE_LE;
 				break;
 			}
