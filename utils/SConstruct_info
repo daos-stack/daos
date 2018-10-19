@@ -107,16 +107,27 @@ def read_component_info(components):
         commit = component.prereqs.get_config("commit_versions", name)
         if commit:
             results['commits'][name] = commit
+        if component.retriever:
+            results['repos'][name] = get_repo_info(components, name)
         if component.requires:
             results['requires'][name] = list(component.requires)
             results['req_comps'] = get_req_comps(components, name)
-            results['repos'][name] = get_repo_info(components, name)
             if results['req_comps']:
                 if name == target_name:
                     for req_comp in results['req_comps']:
                         results['target_comps'][req_comp] = True
                 results['reqs_full'][name] = list(results['req_comps'])
     return results
+
+def print_repo_info(f, prefix, comp, results):
+    """Print out the repo access information"""
+
+    f.write('%s_%s_url="%s"\n' %
+            (prefix, comp, results['repos'][comp]['url']))
+    f.write('%s_%s_has_subs="%s"\n' %
+            (prefix, comp, results['repos'][comp]['has_subs']))
+    f.write('%s_%s_branch="%s"\n' %
+            (prefix, comp, results['repos'][comp]['branch']))
 
 def scons():
     """Get requested prerequisite component info"""
@@ -160,6 +171,11 @@ def scons():
                     results['reqs_full'][target_name].append(comp)
         f.write("#\n")
 
+        for comp in results['repos']:
+            if comp not in results['requires']:
+                print_repo_info(f, prefix, comp, results)
+                f.write("#\n")
+
         for comp in results['requires']:
             rq_list = ' '.join(results['requires'][comp])
             f.write('%s_%s_requires="%s"\n' % (prefix, comp, rq_list))
@@ -167,12 +183,7 @@ def scons():
                 rq_full = ' '.join(results['reqs_full'][comp])
                 f.write('%s_%s_requires_full="%s"\n' % (prefix, comp, rq_full))
             if comp in results['repos']:
-                f.write('%s_%s_url="%s"\n' %
-                        (prefix, comp, results['repos'][comp]['url']))
-                f.write('%s_%s_has_subs="%s"\n' %
-                        (prefix, comp, results['repos'][comp]['has_subs']))
-                f.write('%s_%s_branch="%s"\n' %
-                        (prefix, comp, results['repos'][comp]['branch']))
+                print_repo_info(f, prefix, comp, results)
             f.write("#\n")
 
     # pylint: disable=undefined-variable
