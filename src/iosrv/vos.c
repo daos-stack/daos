@@ -623,6 +623,12 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 	     daos_size_t len, uuid_t cookie, uint32_t *version)
 {
 	int rc = 0;
+	int type;
+
+	if (kds->kd_val_types == VOS_ITER_SINGLE)
+		type = DAOS_IOD_SINGLE;
+	else
+		type = DAOS_IOD_ARRAY;
 
 	if (iod->iod_name.iov_len == 0)
 		daos_iov_copy(&iod->iod_name, akey);
@@ -658,15 +664,19 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 			break;
 		}
 
-		/* Iteration might return multiple single record with same
-		 * dkey/akeks but different epoch. But fetch & update only
-		 * allow 1 SINGLE type record per IOD. Let's put these
-		 * single records in different IODs.
+		/* Note: there can only be one IOD type per IOD, so
+		 * either it would be single or array, and once it
+		 * is changed, it has to return 1 to finish this IOD.
 		 */
-		if (kds->kd_val_types == VOS_ITER_SINGLE && iod->iod_nr > 0) {
+		if (iod->iod_nr > 0 && iod->iod_type != type) {
 			rc = 1;
 			break;
 		}
+
+		if (iod->iod_nr == 0)
+			iod->iod_type = type;
+		else
+			D_ASSERT(iod->iod_type == type);
 
 		if (iod->iod_size != 0 && iod->iod_size != rec->rec_size)
 			D_WARN("rsize "DF_U64" != "DF_U64" are different"
@@ -745,15 +755,17 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 			iod->iod_eprs[iod->iod_nr - 1].epr_lo,
 			iod->iod_eprs[iod->iod_nr - 1].epr_hi, iod->iod_size,
 			sgl != NULL ? sgl->sg_iovs[sgl->sg_nr - 1].iov_len : 0);
+
+		/* Only allow one SINGLE record per IOD, let's close this one */
+		if (iod->iod_type == DAOS_IOD_SINGLE) {
+			rc = 1;
+			break;
+		}
 	}
 
-	if (kds->kd_val_types == VOS_ITER_RECX)
-		iod->iod_type = DAOS_IOD_ARRAY;
-	else
-		iod->iod_type = DAOS_IOD_SINGLE;
-
-	D_DEBUG(DB_REBUILD, "pack nr %d cookie/version "DF_UUID"/%u rc %d\n",
-		iod->iod_nr, DP_UUID(cookie), *version, rc);
+	D_DEBUG(DB_REBUILD, "pack nr %d cookie/version/type "DF_UUID
+		"/%u/%d rc %d\n", iod->iod_nr, DP_UUID(cookie), *version,
+		iod->iod_type, rc);
 	return rc;
 }
 

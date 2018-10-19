@@ -82,12 +82,51 @@ epoch_io_mkdir(char *path)
 static void
 test_buf_init(char *buf, daos_size_t size, daos_epoch_t epoch)
 {
-	memset(buf, 'A' + epoch, size);
+	int offset = epoch % ('Z' - 'A');
+
+	memset(buf, 'A' + offset, size);
+}
+
+static int
+test_buf_verify(char *buf, daos_size_t size, daos_epoch_t epoch,
+		int expect)
+{
+	int i;
+
+	if (expect == -1)
+		expect = 'A' + epoch % ('Z' - 'A');
+
+	for (i = 0; i < size; i++) {
+		if (buf[i] != expect) {
+			print_message("i %d epoch "DF_U64" got %d expect %d\n",
+				      i, epoch, (int)buf[i], expect);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+static int
+daos_test_cb_punch(test_arg_t *arg, struct test_op_record *op, char **rbuf,
+		   daos_size_t *rbuf_size)
+{
+	struct epoch_io_args		*eio_arg = &arg->eio_args;
+	struct test_key_record		*key_rec = op->or_key_rec;
+	struct ioreq			 req;
+
+	ioreq_init(&req, arg->coh, eio_arg->op_oid, 0, arg);
+
+	punch_akey(key_rec->or_dkey, key_rec->or_akey,
+		   op->or_epoch, &req);
+
+	ioreq_fini(&req);
+	return 0;
 }
 
 static int
 daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
-		daos_size_t *rbuf_size, bool update)
+		daos_size_t *rbuf_size)
 {
 	struct epoch_io_args		*eio_arg = &arg->eio_args;
 	struct test_key_record		*key_rec = op->or_key_rec;
@@ -114,11 +153,11 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 	D_ALLOC(buf, buf_size);
 	if (buf == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	if (update)
+	if (op->or_op == TEST_OP_UPDATE)
 		test_buf_init(buf, buf_size, op->or_epoch);
 
 	if (array) {
-		if (update)
+		if (op->or_op == TEST_OP_UPDATE)
 			insert_recxs(dkey, akey, iod_size, op->or_epoch,
 				     uf_arg->ua_recxs, uf_arg->ua_recx_num, buf,
 				     buf_size, &req);
@@ -127,7 +166,7 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 				     uf_arg->ua_recxs, uf_arg->ua_recx_num, buf,
 				     buf_size, &req);
 	} else {
-		if (update)
+		if (op->or_op == TEST_OP_UPDATE)
 			insert_single(dkey, akey, 0, buf, buf_size,
 				      op->or_epoch, &req);
 		else
@@ -135,9 +174,12 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 				      op->or_epoch, &req);
 	}
 
+	if (uf_arg->ua_verify)
+		rc = test_buf_verify(buf, buf_size, op->or_epoch,
+				     uf_arg->ua_expect);
 out:
 	ioreq_fini(&req);
-	if (update) {
+	if (op->or_op == TEST_OP_UPDATE) {
 		if (buf != NULL)
 			D_FREE(buf);
 	} else {
@@ -150,13 +192,6 @@ out:
 }
 
 static int
-daos_test_cb_update(test_arg_t *arg, struct test_op_record *op,
-		    char **rbuf, daos_size_t *rbuf_size)
-{
-	return daos_test_cb_uf(arg, op, rbuf, rbuf_size, true);
-}
-
-static int
 vos_test_cb_update(test_arg_t *arg, struct test_op_record *op,
 		   char **rbuf, daos_size_t *rbuf_size)
 {
@@ -165,7 +200,7 @@ vos_test_cb_update(test_arg_t *arg, struct test_op_record *op,
 
 static int
 fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
-	       daos_size_t *rbuf_size, bool update)
+	       daos_size_t *rbuf_size)
 {
 	struct test_key_record		*key_rec = op->or_key_rec;
 	const char			*dkey = key_rec->or_dkey;
@@ -191,7 +226,7 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 	D_ALLOC(buf, buf_size);
 	if (buf == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	if (update)
+	if (op->or_op == TEST_OP_UPDATE)
 		test_buf_init(buf, buf_size, op->or_epoch);
 	fd = array ? key_rec->or_fd_array : key_rec->or_fd_single;
 	D_ASSERT(fd != 0);
@@ -202,7 +237,7 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 		for (i = 0; i < uf_arg->ua_recx_num; i++) {
 			off = uf_arg->ua_recxs[i].rx_idx * iod_size;
 			len = uf_arg->ua_recxs[i].rx_nr * iod_size;
-			if (update)
+			if (op->or_op == TEST_OP_UPDATE)
 				data_len = pwrite(fd, data, len, off);
 			else
 				data_len = pread(fd, data, len, off);
@@ -216,7 +251,7 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 			total_len += len;
 		}
 	} else {
-		if (update)
+		if (op->or_op == TEST_OP_UPDATE)
 			total_len = pwrite(fd, buf, buf_size, 0);
 		else
 			total_len = pread(fd, buf, buf_size, 0);
@@ -229,7 +264,7 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 
 
 out:
-	if (update) {
+	if (op->or_op == TEST_OP_UPDATE) {
 		if (buf != NULL)
 			D_FREE(buf);
 	} else {
@@ -239,20 +274,6 @@ out:
 		}
 	}
 	return rc;
-}
-
-static int
-fio_test_cb_update(test_arg_t *arg, struct test_op_record *op,
-		   char **rbuf, daos_size_t *rbuf_size)
-{
-	return fio_test_cb_uf(arg, op, rbuf, rbuf_size, true);
-}
-
-static int
-daos_test_cb_fetch(test_arg_t *arg, struct test_op_record *op,
-		   char **rbuf, daos_size_t *rbuf_size)
-{
-	return daos_test_cb_uf(arg, op, rbuf, rbuf_size, false);
 }
 
 static int
@@ -275,19 +296,25 @@ daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 }
 
 static int
+daos_test_cb_query(test_arg_t *arg, struct test_op_record *op,
+		   char **rbuf, daos_size_t *rbuf_size)
+{
+	daos_pool_info_t pinfo = { 0 };
+	int rc;
+
+	rc = daos_pool_query(arg->pool.poh, NULL, &pinfo, NULL);
+	if (rc != 0)
+		print_message("pool query failed %d\n", rc);
+
+	return rc;
+}
+
+static int
 vos_test_cb_fetch(test_arg_t *arg, struct test_op_record *op,
 		  char **rbuf, daos_size_t *rbuf_size)
 {
 	return -DER_NOSYS;
 }
-
-static int
-fio_test_cb_fetch(test_arg_t *arg, struct test_op_record *op,
-		  char **rbuf, daos_size_t *rbuf_size)
-{
-	return fio_test_cb_uf(arg, op, rbuf, rbuf_size, false);
-}
-
 
 static int
 test_cb_noop(test_arg_t *arg, struct test_op_record *op,
@@ -301,15 +328,15 @@ struct test_op_dict op_dict[] = {
 		.op_type	= TEST_OP_UPDATE,
 		.op_str		= "update",
 		.op_cb		= {
-			daos_test_cb_update,
+			daos_test_cb_uf,
 			vos_test_cb_update,
-			fio_test_cb_update,
+			fio_test_cb_uf,
 		},
 	}, {
 		.op_type	= TEST_OP_PUNCH,
 		.op_str		= "punch",
 		.op_cb		= {
-			test_cb_noop,
+			daos_test_cb_punch,
 			test_cb_noop,
 			test_cb_noop,
 		},
@@ -325,9 +352,9 @@ struct test_op_dict op_dict[] = {
 		.op_type	= TEST_OP_FETCH,
 		.op_str		= "fetch",
 		.op_cb		= {
-			daos_test_cb_fetch,
+			daos_test_cb_uf,
 			vos_test_cb_fetch,
-			fio_test_cb_fetch,
+			fio_test_cb_uf,
 		},
 	}, {
 		.op_type	= TEST_OP_ENUMERATE,
@@ -350,6 +377,14 @@ struct test_op_dict op_dict[] = {
 		.op_str		= "exclude",
 		.op_cb		= {
 			daos_test_cb_exclude,
+			test_cb_noop,
+			test_cb_noop,
+		},
+	}, {
+		.op_type	= TEST_OP_POOL_QUERY,
+		.op_str		= "pool_query",
+		.op_cb		= {
+			daos_test_cb_query,
 			test_cb_noop,
 			test_cb_noop,
 		},
@@ -699,7 +734,67 @@ out:
 }
 
 static int
-cmd_parse_update_fetch(test_arg_t *arg, int argc, char **argv, bool update,
+cmd_parse_punch(test_arg_t *arg, int argc, char **argv,
+		struct test_op_record **op)
+{
+	struct test_op_record		*op_rec;
+	char				*dkey = NULL;
+	char				*akey = NULL;
+	daos_epoch_t			 epoch = 1;
+	int				 opt;
+	int				 rc = 0;
+
+	static struct epoch_io_cmd_option options[] = {
+		{"--dkey",	true,	'd'},
+		{"--akey",	true,	'a'},
+		{"--epoch",	true,	'e'},
+		{0}
+	};
+
+	D_ALLOC_PTR(op_rec);
+	if (op_rec == NULL)
+		return -DER_NOMEM;
+	D_INIT_LIST_HEAD(&op_rec->or_queue_link);
+	op_rec->or_op = TEST_OP_PUNCH;
+	eio_optind = 1;
+	while ((opt = epoch_io_getopt(argc, argv, options)) != -1) {
+		switch (opt) {
+		case 'e':
+			epoch = atoi(eio_optarg);
+			break;
+		case 'd':
+			D_STRNDUP(dkey, eio_optarg, strlen(eio_optarg));
+			break;
+		case 'a':
+			D_STRNDUP(akey, eio_optarg, strlen(eio_optarg));
+			break;
+		default:
+			print_message("Unknown Option %c\n", opt);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
+
+	op_rec->or_epoch = epoch;
+
+	rc = test_op_record_bind(arg, dkey, akey, op_rec);
+	if (rc == 0)
+		*op = op_rec;
+	else
+		print_message("test_op_record_bind(dkey %s akey %s failed.\n",
+			      dkey, akey);
+
+out:
+	if (dkey)
+		D_FREE(dkey);
+	if (akey)
+		D_FREE(akey);
+	if (rc && op_rec)
+		test_op_rec_free(op_rec);
+	return rc;
+}
+
+static int
+cmd_parse_update_fetch(test_arg_t *arg, int argc, char **argv, int opc,
 		       struct test_op_record **op)
 {
 	struct test_op_record		*op_rec;
@@ -719,6 +814,8 @@ cmd_parse_update_fetch(test_arg_t *arg, int argc, char **argv, bool update,
 		{"--single",	false,	's'},
 		{"--epoch",	true,	'e'},
 		{"--recx",	true,	'r'},
+		{"--verify",	false,	'v'},
+		{"--expect",	true,	'x'},
 		{0}
 	};
 
@@ -727,6 +824,7 @@ cmd_parse_update_fetch(test_arg_t *arg, int argc, char **argv, bool update,
 		return -DER_NOMEM;
 	D_INIT_LIST_HEAD(&op_rec->or_queue_link);
 	uf_arg = &op_rec->uf_arg;
+	uf_arg->ua_expect = -1;
 
 	eio_optind = 1;
 	while ((opt = epoch_io_getopt(argc, argv, options)) != -1) {
@@ -742,6 +840,12 @@ cmd_parse_update_fetch(test_arg_t *arg, int argc, char **argv, bool update,
 			break;
 		case 's':
 			array = false;
+			break;
+		case 'v':
+			uf_arg->ua_verify = 1;
+			break;
+		case 'x':
+			uf_arg->ua_expect = atoi(eio_optarg);
 			break;
 		case 'r':
 			rc = recx_parse(eio_optarg, &recxs, &recx_num);
@@ -770,9 +874,8 @@ cmd_parse_update_fetch(test_arg_t *arg, int argc, char **argv, bool update,
 	}
 
 	op_rec->or_epoch = epoch;
-	op_rec->or_op = update ? TEST_OP_UPDATE : TEST_OP_FETCH;
+	op_rec->or_op = opc;
 	uf_arg->ua_array = array;
-	uf_arg->ua_update = update;
 	if (uf_arg->ua_array && uf_arg->ua_recxs == NULL) {
 		print_message("no recx specified for array update/fetch.\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -798,19 +901,42 @@ out:
 static int
 cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
 {
-	char *ptr = argv[1];
-	char *endp;
+	struct epoch_io_args	*eio_arg = &arg->eio_args;
+	int			opt;
+	int			type = -1;
+	d_rank_t		rank = -1;
+	int			rc = 0;
 
-	arg->eio_args.op_oid.hi = strtoull(ptr, &endp, 10);
-	if (*endp != '.' || ptr == endp)
-		return -1;
+	static struct epoch_io_cmd_option options[] = {
+		{"--type",	true,	't'},
+		{"--rank",	true,	'r'},
+		{0}
+	};
 
-	ptr = ++endp;
-	arg->eio_args.op_oid.lo = strtoull(ptr, &endp, 10);
-	if (ptr == endp)
-		return -1;
+	eio_optind = 1;
+	while ((opt = epoch_io_getopt(argc, argv, options)) != -1) {
+		switch (opt) {
+		case 'r':
+			rank = atoi(eio_optarg);
+			break;
+		case 't':
+			type = atoi(eio_optarg);
+			break;
+		default:
+			print_message("Unknown Option %c\n", opt);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
 
-	return 0;
+	if (type == -1)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	eio_arg->op_oid = dts_oid_gen(type, 0, arg->myrank);
+	if (rank != -1 && (type == DAOS_OC_R2S_SPEC_RANK ||
+			type == DAOS_OC_R3S_SPEC_RANK))
+		eio_arg->op_oid = dts_oid_set_rank(eio_arg->op_oid, rank);
+out:
+	return rc;
 }
 
 /* parse the cmd line to argc argv[] */
@@ -851,6 +977,50 @@ cmd_parse_argv(char *cmd, int *argc, char *argv[])
 	*argc = idx;
 
 	return 0;
+}
+
+static int
+cmd_parse_pool(test_arg_t *arg, int argc, char *argv[],
+	       struct test_op_record **op)
+{
+	struct test_op_record		*op_rec = NULL;
+	int				opc = -1;
+	int				opt;
+	int				rc = 0;
+
+	static struct epoch_io_cmd_option options[] = {
+		{"--query",	false,	'q'},
+		{0}
+	};
+
+	D_ALLOC_PTR(op_rec);
+	if (op_rec == NULL)
+		return -DER_NOMEM;
+
+	D_INIT_LIST_HEAD(&op_rec->or_queue_link);
+
+	eio_optind = 1;
+	while ((opt = epoch_io_getopt(argc, argv, options)) != -1) {
+		switch (opt) {
+		case 'q':
+			opc = TEST_OP_POOL_QUERY;
+			break;
+		default:
+			print_message("Unknown Option %c\n", opt);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
+	if (opc == -1)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	op_rec->or_op = opc;
+	*op = op_rec;
+out:
+	if (rc && op_rec)
+		D_FREE_PTR(op_rec);
+	return rc;
+
+
 }
 
 static int
@@ -903,15 +1073,21 @@ cmd_line_parse(test_arg_t *arg, char *cmd_line, struct test_op_record **op)
 	} else if (strcmp(argv[0], "oid") == 0) {
 		rc = cmd_parse_oid(arg, argc, argv);
 	} else if (strcmp(argv[0], "update") == 0) {
-		rc = cmd_parse_update_fetch(arg, argc, argv, true, &op_rec);
+		rc = cmd_parse_update_fetch(arg, argc, argv, TEST_OP_UPDATE,
+					    &op_rec);
 	} else if (strcmp(argv[0], "fetch") == 0) {
-		rc = cmd_parse_update_fetch(arg, argc, argv, false, &op_rec);
+		rc = cmd_parse_update_fetch(arg, argc, argv, TEST_OP_FETCH,
+					    &op_rec);
 	} else if (strcmp(argv[0], "exclude") == 0) {
 		rc = cmd_parse_add_exclude(arg, argc, argv, TEST_OP_EXCLUDE,
 					   &op_rec);
 	} else if (strcmp(argv[0], "add") == 0) {
 		rc = cmd_parse_add_exclude(arg, argc, argv, TEST_OP_ADD,
 					   &op_rec);
+	} else if (strcmp(argv[0], "pool") == 0) {
+		rc = cmd_parse_pool(arg, argc, argv, &op_rec);
+	} else if (strcmp(argv[0], "punch") == 0) {
+		rc = cmd_parse_punch(arg, argc, argv, &op_rec);
 	} else {
 		print_message("unknown cmd %s.\n", argv[0]);
 		rc = -DER_INVAL;

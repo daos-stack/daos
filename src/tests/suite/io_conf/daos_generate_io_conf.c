@@ -33,10 +33,12 @@ static int akey_num = 10;
 static int rank_size = 8;
 static int tgt_size = 8;
 static int iod_size = 1;
+static int oid_type = DAOS_OC_R3S_SPEC_RANK;
 
 enum op {
 	UPDATE,
 	FETCH,
+	PUNCH,
 	MAX_OPS,
 };
 
@@ -44,7 +46,13 @@ struct current_status {
 	int		cur_obj_num;
 	int		cur_dkey_num;
 	int		cur_akey_num;
+	int		cur_rank;
 	daos_epoch_t	cur_eph;
+};
+
+enum rec_types {
+	ARRAY_REC = 1 << 0,
+	PUNCH_REC = 1 << 1,
 };
 
 #define MAX_REC_NUM		5
@@ -61,6 +69,7 @@ static struct option long_ops[] = {
 	{ "rec_size",	required_argument,	NULL,	's' },
 	{ "rank_size",	required_argument,	NULL,	'g' },
 	{ "tgt_size",	required_argument,	NULL,	't' },
+	{ "oid_type",	required_argument,	NULL,	'O' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ NULL,		0,			NULL,	0   },
 };
@@ -92,6 +101,7 @@ generate_io_conf_rec(int fd, struct current_status *status)
 	char		line[256];
 	char		rec_buf[256];
 	unsigned int	offset = 0;
+	int		rec_type[MAX_EPOCH_TIMES] = { 0 };
 	daos_epoch_t	eph;
 	int		dist;
 	int		rec_num;
@@ -102,7 +112,6 @@ generate_io_conf_rec(int fd, struct current_status *status)
 	int		i;
 	int		rc1;
 	int		rc = 0;
-	d_rank_t	rank;
 	int		tgt;
 
 	sprintf(line, "iod_size %d\n", iod_size);
@@ -133,18 +142,25 @@ generate_io_conf_rec(int fd, struct current_status *status)
 
 	eph = status->cur_eph;
 	inject_fail_idx = rand() % epoch_times;
-	rank = rand() % rank_size;
 	tgt = rand() % tgt_size;
 	for (i = 0; i < epoch_times; i++) {
+		daos_epoch_t	eph_idx;
 		daos_epoch_t	op_eph;
+		char		expect_line[32] = { 0 };
 		int		op;
 
-		if (rand() % 100 > SINGLE_REC_RATE)
+		if (rand() % 100 > SINGLE_REC_RATE) {
 			sprintf(line, "update --epoch "DF_U64" --recx \"%s\"\n",
 				eph + i, rec_buf);
-		else
+			rec_type[i] |= ARRAY_REC;
+		} else {
 			sprintf(line, "update --epoch "DF_U64" --single\n",
 				eph + i);
+		}
+
+		/* Clear punch flags for later epoch */
+		for (eph_idx = i; eph_idx < eph + MAX_EPOCH_TIMES; eph_idx++)
+			rec_type[i] &= ~PUNCH_REC;
 
 		rc1 = write(fd, line, strlen(line));
 		if (rc1 <= 0) {
@@ -158,7 +174,7 @@ generate_io_conf_rec(int fd, struct current_status *status)
 
 		if (inject_fail_idx == i) {
 			sprintf(line, "exclude --rank %u --tgt %d\n",
-				rank, tgt);
+				status->cur_rank, tgt);
 			rc1 = write(fd, line, strlen(line));
 			if (rc1 <= 0) {
 				rc = -1;
@@ -168,8 +184,20 @@ generate_io_conf_rec(int fd, struct current_status *status)
 
 		switch (op) {
 		case FETCH:
-			sprintf(line, "fetch --epoch "DF_U64" --recx \"%s\"\n",
-				op_eph, rec_buf);
+			if (rec_type[op_eph - eph] & PUNCH_REC)
+				sprintf(expect_line, "-x 0");
+
+			if (rec_type[op_eph - eph] & ARRAY_REC) /* ARRAY type */
+				sprintf(line, "fetch --epoch "DF_U64" -v --recx"
+					" \"%s\" %s\n", op_eph, rec_buf,
+					expect_line);
+			else
+				sprintf(line, "fetch --epoch "DF_U64" -v"
+					" --single %s\n", op_eph, expect_line);
+			break;
+		case PUNCH:
+			rec_type[i] |= PUNCH_REC;
+			sprintf(line, "punch --epoch "DF_U64"\n", eph + i);
 			break;
 		default:
 			break;
@@ -182,9 +210,12 @@ generate_io_conf_rec(int fd, struct current_status *status)
 		}
 	}
 
-	sprintf(line, "add --rank %u --tgt %d\n",
-		rank, tgt);
+	sprintf(line, "add --rank %u --tgt %d\n", status->cur_rank, tgt);
+	rc1 = write(fd, line, strlen(line));
+	if (rc1 <= 0)
+		rc = -1;
 
+	sprintf(line, "pool --query\n");
 	rc1 = write(fd, line, strlen(line));
 	if (rc1 <= 0)
 		rc = -1;
@@ -247,21 +278,19 @@ generate_io_conf_obj(int fd, struct current_status *status)
 	int rc = 0;
 
 	while (status->cur_obj_num < obj_num) {
-		daos_obj_id_t	oid;
-		unsigned int	type;
+		d_rank_t	rank;
 
-		/* Choose one type with more than 1 replica */
-		type = rand() % (DAOS_OC_REPL_MAX_RW - DAOS_OC_R2S_RW) +
-		       DAOS_OC_R2S_RW;
+		rank = rand() % rank_size;
 
-		oid = dts_oid_gen(type, 0, 0);
 		/* Fill the dkey first */
-		sprintf(oid_buf, "oid "DF_OID"\n", DP_OID(oid));
+		sprintf(oid_buf, "oid --type %d --rank %d\n", oid_type, rank);
 		rc = write(fd, oid_buf, strlen(oid_buf));
 		if (rc <= 0) {
 			rc = -1;
 			break;
 		}
+
+		status->cur_rank = rank;
 
 		rc = generate_io_conf_dkey(fd, status);
 		if (rc)
@@ -283,7 +312,7 @@ main(int argc, char **argv)
 	int	fd;
 	int	rc;
 
-	while ((rc = getopt_long(argc, argv, "a:d:o:s:g:t:h",
+	while ((rc = getopt_long(argc, argv, "a:d:o:s:g:t:O:h",
 				 long_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -305,6 +334,9 @@ main(int argc, char **argv)
 			break;
 		case 't':
 			tgt_size = strtoul(optarg, &endp, 0);
+			break;
+		case 'O':
+			oid_type = strtoul(optarg, &endp, 0);
 			break;
 		case 'h':
 			print_usage();

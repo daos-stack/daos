@@ -788,8 +788,9 @@ struct ring_obj_placement {
 	unsigned int	rop_shard_id;
 };
 
-static unsigned int
-ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid)
+static int
+ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid,
+			  unsigned int *begin)
 {
 	struct pool_domain	*doms;
 	unsigned int		doms_nr;
@@ -823,9 +824,11 @@ ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid)
 	if (i == rimap->rmp_target_nr)
 		return -DER_INVAL;
 
-	D_DEBUG(DB_PL, "create obj with rank %d pl pos %d\n", rank, i);
 
-	return i;
+	D_DEBUG(DB_PL, "create obj with rank %d pl pos %d\n", rank, i);
+	*begin = i;
+
+	return 0;
 }
 
 /** calculate the ring map placement for the object */
@@ -848,10 +851,19 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 
 	if (daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
 	    daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
-	    daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK)
-		rop->rop_begin = ring_obj_spec_place_begin(rimap, oid);
-	else
+	    daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK) {
+		int rc;
+
+		rc = ring_obj_spec_place_begin(rimap, oid, &rop->rop_begin);
+		if (rc) {
+			D_ERROR("special oid "DF_OID" failed: rc %d\n",
+				DP_OID(oid), rc);
+			return rc;
+		}
+	} else {
 		rop->rop_begin = ring_obj_place_begin(rimap, oid);
+	}
+
 	rop->rop_dist = ring_obj_place_dist(rimap, oid);
 
 	rop->rop_grp_size = daos_oclass_grp_size(oc_attr);

@@ -142,7 +142,8 @@ enum test_op_type {
 	TEST_OP_ENUMERATE	= 4,
 	TEST_OP_ADD		= 5,
 	TEST_OP_EXCLUDE		= 6,
-	TEST_OP_MAX		= 6,
+	TEST_OP_POOL_QUERY	= 7,
+	TEST_OP_MAX		= 7,
 };
 
 static inline bool
@@ -182,8 +183,9 @@ struct test_key_record {
 struct test_update_fetch_arg {
 	daos_recx_t		*ua_recxs;
 	int			 ua_recx_num;
+	int			 ua_expect;
 	int			 ua_array:1, /* false for single */
-				 ua_update:1; /* false for fetch */
+				 ua_verify:1;
 };
 
 struct test_add_exclude_arg {

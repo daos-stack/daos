@@ -400,7 +400,7 @@ rebuild_one_ult(void *arg)
 		ABT_mutex_lock(puller->rp_lock);
 		d_list_for_each_entry_safe(rdone, tmp, &puller->rp_one_list,
 					   ro_list) {
-			d_list_move(&rdone->ro_list, &rebuild_list);
+			d_list_move_tail(&rdone->ro_list, &rebuild_list);
 			puller->rp_inflight++;
 		}
 		ABT_mutex_unlock(puller->rp_lock);
@@ -527,10 +527,23 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	rdone->ro_iod_alloc_num = iod_eph_total;
 	/* only do the copy below when each with inline recx data */
 	for (i = 0; i < iod_eph_total; i++) {
-		if (sgls[i].sg_nr == 0) {
+		int j;
+
+		if (sgls[i].sg_nr == 0 || sgls[i].sg_iovs == NULL) {
 			inline_copy = false;
 			break;
 		}
+
+		for (j = 0; j < sgls[i].sg_nr; j++) {
+			if (sgls[i].sg_iovs[j].iov_len == 0 ||
+			    sgls[i].sg_iovs[j].iov_buf == NULL) {
+				inline_copy = false;
+				break;
+			}
+		}
+
+		if (!inline_copy)
+			break;
 	}
 
 	for (i = 0; i < iod_eph_total; i++) {
