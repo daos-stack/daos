@@ -273,6 +273,7 @@ for i in "${!std_repo_name[@]}"; do
       git reset --hard FETCH_HEAD
       git clean -df
     fi
+    git fetch --tags
     git checkout -f "${my_commit}"
     git clean -dfx
     set +e
