@@ -5,15 +5,12 @@ hosts:
       test_machines:
         - boro-A
         - boro-B
+timeout: 5000
 server:
    server_group: daos_server
 pool:
    createmode:
      mode: 511
-   createuid:
-     uid: 11374638
-   creategid:
-     gid: 11374638
    createset:
      setname: daos_server
    createsize:

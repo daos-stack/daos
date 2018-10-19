@@ -209,6 +209,65 @@ class PunchTest(Test):
             print(e)
             self.fail("Test failed.\n")
 
+    def test_akey_punch(self):
+        """
+        The most basic test of the akey punch function.
+
+        :avocado: tags=object,punch,akeypunch,regression,vm,small
+        """
+        try:
+            # create an object and write some data into it
+            dkey = "this is the dkey"
+            data1 = [("this is akey 1", "this is data value 1"),
+                    ("this is akey 2", "this is data value 2"),
+                    ("this is akey 3", "this is data value 3")]
+            obj, epoch1 = self.container.write_multi_akeys(dkey, data1)
+
+            # do this again, note that the epoch has been advanced by
+            # the write_multi_akeys function
+            data2 = [("this is akey 1", "this is data value 4"),
+                     ("this is akey 2", "this is data value 5"),
+                     ("this is akey 3", "this is data value 6")]
+            obj, epoch2 = self.container.write_multi_akeys(dkey, data2, obj)
+
+            # do this again, note that the epoch has been advanced by
+            # the write_multi_akeys function
+            data3 = [("this is akey 1", "this is data value 7"),
+                     ("this is akey 2", "this is data value 8"),
+                     ("this is akey 3", "this is data value 9")]
+            obj, epoch3 = self.container.write_multi_akeys(dkey, data3, obj)
+
+            # read back the 1st epoch's data and check 1 value just to make sure
+            # everything is on the up and up
+            readbuf = [(data1[0][0], len(data1[0][1]) + 1),
+                       (data1[1][0], len(data1[1][1]) + 1),
+                       (data1[2][0], len(data1[2][1]) + 1)]
+            retrieved_data = self.container.read_multi_akeys(dkey, readbuf, obj,
+                                                             epoch1)
+            if retrieved_data[data1[1][0]] != data1[1][1]:
+                print("middle akey, 1st epoch {}".format(
+                        retrieved_data[data1[1][0]]))
+                self.fail("data retrieval failure")
+
+            # now punch one akey from the middle epoch
+            print("punching: {}".format([data2[1][0]]))
+            obj.punch_akeys(epoch2, dkey, [data2[1][0]])
+
+            # verify its gone from the epoch where it was punched
+            readbuf = [(data2[1][0], len(data2[1][1]) + 1)]
+            retrieved_data = self.container.read_multi_akeys(dkey, readbuf, obj,
+                                                             epoch2)
+
+            if len(retrieved_data[data2[1][0]]) != 0:
+                print("retrieved: {}".format(retrieved_data))
+                print("retrieved punched data but it was still there")
+                self.fail("punched data still present")
+
+        except ValueError as e:
+            print(e)
+            print(traceback.format_exc())
+            self.fail("Test failed.\n")
+
     @avocado.skip('Currently this test fails')
     def test_obj_punch(self):
         """
