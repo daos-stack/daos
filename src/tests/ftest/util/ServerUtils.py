@@ -103,7 +103,7 @@ def runServer(hostfile, setname, basepath):
         print "<SERVER> Exception occurred: {0}".format(str(e))
         raise ServerFailed("Server didn't start!")
 
-def stopServer(setname=None):
+def stopServer(setname=None, hosts=None):
     """
     orterun says that if you send a ctrl-c to it, it will
     initiate an orderly shutdown of all the processes it
@@ -125,6 +125,25 @@ def stopServer(setname=None):
     except Exception as e:
         print "<SERVER> Exception occurred: {0}".format(str(e))
         raise ServerFailed("Server didn't stop!")
+
+    if not hosts:
+        return
+
+    # make sure they actually stopped
+    found_hosts = []
+    for host in hosts:
+        resp = subprocess.call("ssh {0} "
+                               "pkill no_daos_server --signal 0 || "
+                               "pkill no_daos_io_server "
+                               "--signal 0".format(host),
+                               shell=True)
+        if resp == 0:
+            # a daos process was found hanging around!
+            found_hosts.append(host)
+
+    if found_hosts:
+        raise ServerFailed("daos processes found on hosts "
+                           "{} after stopServer()".format(found_hosts))
 
 def killServer(hosts):
     """
