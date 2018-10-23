@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs')
+    Import('denv')
 
     libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid', 'mpi']
@@ -15,15 +15,15 @@ def scons():
 
     iogen = denv.SharedObject('daos_generate_io_conf.c')
     daos_gen_io_conf = daos_build.test(denv, 'daos_gen_io_conf',
-				       daos_test_tgt + daos_epoch_io +
-				       daos_test_obj + iogen,
-				       LIBS=libraries)
+                                       daos_test_tgt + daos_epoch_io +
+                                       daos_test_obj + iogen,
+                                       LIBS=libraries)
 
     ioconf = denv.SharedObject('daos_run_io_conf.c')
     daos_run_io_conf = daos_build.test(denv, 'daos_run_io_conf',
-				       daos_test_tgt + daos_epoch_io +
-				       daos_test_obj + ioconf,
-				       LIBS=libraries)
+                                       daos_test_tgt + daos_epoch_io +
+                                       daos_test_obj + ioconf,
+                                       LIBS=libraries)
     denv.Install('$PREFIX/bin/', daos_gen_io_conf)
     denv.Install('$PREFIX/bin/', daos_run_io_conf)
 
