@@ -29,20 +29,16 @@ import (
 	"strconv"
 	"strings"
 
-	"client/agent"
 	"client/mgmt"
 	"utils/functional"
-	"security"
 
 	pb "mgmt/proto"
 
 	"github.com/daos-stack/ishell"
 	"github.com/jessevdk/go-flags"
-	"github.com/satori/go.uuid"
 )
 
 var (
-	agentClient   *agent.DAOSAgentClient
 	controlClient *control.DAOSMgmtClient
 )
 
@@ -205,81 +201,16 @@ func setupShell() *ishell.Shell {
 				c.Println("Error parsing Connect args: ", err.Error())
 				return
 			}
-			if ConnectOpts.Local {
-				if agentClient.Connected() {
-					c.Println("Already connected to local agent")
-					return
-				}
 
-				err = agentClient.Connect(ConnectOpts.Host)
-				if err != nil {
-					c.Println("Unable to connect to ", ConnectOpts.Host, err.Error())
-				}
-			} else {
-				if controlClient.Connected() {
-					c.Println("Already connected to mgmt server")
-					return
-				}
-
-				err = controlClient.Connect(ConnectOpts.Host)
-				if err != nil || controlClient.Connected() == false {
-					c.Println("Unable to connect to ", ConnectOpts.Host, err.Error())
-				}
-			}
-		},
-	})
-
-	// The getHandle command requests a handle to security context and returns a UUID.
-	// It does not require any arguments as the agent gatheres the necessary information.
-	// Future version may take parameters as additional security mechanismss are introduced.
-	shell.AddCmd(&ishell.Cmd{
-		Name: "gethandle",
-		Help: "Command to test requesting a security handle",
-		Func: func(c *ishell.Context) {
-			if agentClient.Connected() == false {
-				c.Println("Connection to local agent required")
-				return
-			}
-			token, err := agentClient.RequestSecurityContext()
-			if err != nil {
-				c.Println("Unable to request security context: ", err.Error())
+			if controlClient.Connected() {
+				c.Println("Already connected to mgmt server")
 				return
 			}
 
-			handle, err2 := uuid.FromBytes(token.GetToken())
-			if err2 != nil {
-				c.Println("Unable to convert handle bytes into uuid")
-				return
+			err = controlClient.Connect(ConnectOpts.Host)
+			if err != nil || controlClient.Connected() == false {
+				c.Println("Unable to connect to ", ConnectOpts.Host, err.Error())
 			}
-			c.Println("Security Token Flavor is: ", token.GetFlavor().String())
-			c.Println("Security Token is: ", handle.String())
-		},
-	})
-
-	// The getsecctx command takes in a UUID in string form and
-	// returns the security context information assocuated with
-	// that handle that it receives from the management server.
-	shell.AddCmd(&ishell.Cmd{
-		Name: "getsecctx",
-		Help: "Command to test requesting a security context from a handle",
-		Func: func(c *ishell.Context) {
-			if agentClient.Connected() == false {
-				c.Println("Connection to local agent required")
-				return
-			}
-			if len(c.Args) < 1 {
-				c.Println(c.HelpText())
-				return
-			}
-			ctx, err := agentClient.VerifySecurityHandle(c.Args[0])
-			if err != nil {
-				c.Println("Unable to validate security handle: ", err.Error())
-				return
-			}
-
-			context, err := security.AuthSysFromAuthToken(ctx)
-			c.Printf("Handle: %s\nContext: %s\n", c.Args[0], context.String())
-
 		},
 	})
 
@@ -403,7 +334,6 @@ func setupShell() *ishell.Shell {
 
 func main() {
 	// by default, shell includes 'exit', 'help' and 'clear' commands.
-	agentClient = agent.NewDAOSAgentClient()
 	controlClient = control.NewDAOSMgmtClient()
 	shell := setupShell()
 

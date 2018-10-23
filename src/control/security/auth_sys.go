@@ -40,7 +40,7 @@ import (
 // AuthSysRequestFromCreds takes the domain info credentials gathered
 // during the gRPC handshake and creates an AuthSys security request to obtain
 // a handle from the management service.
-func AuthSysRequestFromCreds(creds *DomainInfo, logger *log.Logger) (*pb.SecurityRequest, error) {
+func AuthSysRequestFromCreds(creds *DomainInfo, logger *log.Logger) (*pb.SecurityCredential, error) {
 	if creds == nil {
 		return nil, errors.New("No credentials supplied")
 	}
@@ -88,12 +88,12 @@ func AuthSysRequestFromCreds(creds *DomainInfo, logger *log.Logger) (*pb.Securit
 	}
 	token := pb.AuthToken{
 		Flavor: pb.AuthFlavor_AUTH_SYS,
-		Token:  tokenBytes}
+		Data:   tokenBytes}
 
-	action := pb.SecurityRequest{
-		Action: pb.AuthAction_AUTH_INIT,
-		Host:   name,
-		Data:   &pb.SecurityRequest_Token{&token}}
+	action := pb.SecurityCredential{
+		Token: &token,
+		// TODO: Add verifier
+	}
 
 	return &action, nil
 }
@@ -106,7 +106,7 @@ func AuthSysFromAuthToken(authToken *pb.AuthToken) (*pb.AuthSys, error) {
 	}
 
 	sysToken := &pb.AuthSys{}
-	err := proto.Unmarshal(authToken.GetToken(), sysToken)
+	err := proto.Unmarshal(authToken.GetData(), sysToken)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshaling %s: %v", authToken.GetFlavor(), err)
 	}

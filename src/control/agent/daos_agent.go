@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc"
 
 	"security"
-	pbsec "security/proto"
 )
 
 var (
@@ -68,7 +67,7 @@ func main() {
 	// Use our custom DomainCredential object instead of the standard one.
 	serverOpts = append(serverOpts, grpc.Creds(security.NewDomainCreds()))
 	grpcServer := grpc.NewServer(serverOpts...)
-	pbsec.RegisterSecurityAgentServer(grpcServer, security.NewAgentServer(conn))
+	// Nothing to chat with the server about for the moment
 	grpcServer.Serve(lis)
 
 }

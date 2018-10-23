@@ -60,7 +60,7 @@ func TestAuthSysFromAuthToken_ErrorsWithWrongAuthTokenFlavor(t *testing.T) {
 func TestAuthSysFromAuthToken_ErrorsIfTokenCannotBeUnmarshaled(t *testing.T) {
 	zeroArray := make([]byte, 16)
 	badToken := pb.AuthToken{Flavor: pb.AuthFlavor_AUTH_SYS,
-		Token: zeroArray}
+		Data: zeroArray}
 	expectAuthSysErrorForToken(t, &badToken,
 		"unmarshaling AUTH_SYS: proto: proto.AuthSys: illegal tag 0 (wire type 0)")
 }
@@ -82,7 +82,7 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 
 	goodToken := pb.AuthToken{
 		Flavor: pb.AuthFlavor_AUTH_SYS,
-		Token:  marshaledToken,
+		Data:   marshaledToken,
 	}
 
 	authSys, err := security.AuthSysFromAuthToken(&goodToken)

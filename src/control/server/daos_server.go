@@ -39,8 +39,6 @@ import (
 
 	"mgmt"
 	mgmtpb "mgmt/proto"
-	"security"
-	secpb "security/proto"
 )
 
 type daosOptions struct {
@@ -91,7 +89,6 @@ func main() {
 	// the TLS protected channel. Currently it is an "insecure" channel.
 	var sOpts []grpc.ServerOption
 	grpcServer := grpc.NewServer(sOpts...)
-	secpb.RegisterSecurityControlServer(grpcServer, security.NewControlServer())
 
 	mgmtControlServer := mgmt.NewControlServer()
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
