@@ -83,7 +83,7 @@
    fun:fi_ibv_init_info
    fun:fi_verbs_ini
    fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.1
+   ...
    fun:na_ofi_getinfo
    fun:na_ofi_check_protocol
    fun:NA_Initialize_opt
