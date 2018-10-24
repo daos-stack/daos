@@ -284,10 +284,11 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	       key_ent->ie_key.iov_buf, key_ent->ie_key.iov_len);
 
 	iovs[arg->sgl_idx].iov_len += key_ent->ie_key.iov_len;
-	D_DEBUG(DB_IO, "Pack key %d %s iov total %zd"
-		" kds len %d\n", (int)key_ent->ie_key.iov_len,
+	D_DEBUG(DB_IO, "Pack key %d %s iov total %zd kds len %d eph "
+		DF_U64"\n", (int)key_ent->ie_key.iov_len,
 		(char *)key_ent->ie_key.iov_buf,
-		iovs[arg->sgl_idx].iov_len, arg->kds_len - 1);
+		iovs[arg->sgl_idx].iov_len, arg->kds_len - 1,
+		key_ent->ie_epoch);
 
 	return 0;
 }
@@ -1029,8 +1030,10 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 				rc = -DER_INVAL;
 				break;
 			}
-			D_DEBUG(DB_REBUILD, "process akey %d %s\n",
-				(int)akey.iov_len, (char *)akey.iov_buf);
+
+			D_DEBUG(DB_REBUILD, "process akey %d %s eph "DF_U64"\n",
+				(int)akey.iov_len, (char *)akey.iov_buf,
+				eprs ? eprs[i].epr_lo : 0);
 
 			if (io.ui_iods_len >= io.ui_iods_cap) {
 				close_iod(&io);
@@ -1044,8 +1047,10 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 			 * i.e. close_iod are not being called.
 			 */
 			iod_akey = &io.ui_iods[io.ui_iods_len].iod_name;
-			if (iod_akey->iov_len != 0 &&
-			    !daos_key_match(iod_akey, &akey))
+			if ((iod_akey->iov_len != 0 &&
+			    !daos_key_match(iod_akey, &akey)) ||
+			    (eprs != NULL &&
+			     io.ui_akey_ephs[io.ui_iods_len] != eprs[i].epr_lo))
 				io.ui_iods_len++;
 
 			rc = unpack_recxs(&io.ui_iods[io.ui_iods_len],
@@ -1111,7 +1116,7 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 		ptr += arg->kds[i].kd_key_len;
 	}
 
-	if (io.ui_iods[0].iod_nr > 0) {
+	if (io.ui_iods_len > 0 || io.ui_iods[0].iod_nr > 0) {
 		close_iod(&io);
 		rc = complete_io(&io, cb, cb_arg);
 	}
