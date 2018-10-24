@@ -68,6 +68,7 @@ class PoolInfo(ctypes.Structure):
     """ Structure to represent information about a pool """
     _fields_ = [("pi_uuid", ctypes.c_ubyte * 16),
                 ("pi_ntargets", ctypes.c_uint32),
+		("pi_nnodes", ctypes.c_uint32),
                 ("pi_ndisabled", ctypes.c_uint32),
                 ("pi_map_ver", ctypes.c_uint32),
                 ("pi_uid", ctypes.c_uint32),
