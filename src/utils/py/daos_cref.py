@@ -56,6 +56,7 @@ class RebuildStatus(ctypes.Structure):
                 ("rs_pad_32", ctypes.c_uint32),
                 ("rs_errno", ctypes.c_uint32),
                 ("rs_done", ctypes.c_uint32),
+                ("rs_toberb_obj_nr", ctypes.c_uint64),
                 ("rs_obj_nr", ctypes.c_uint64),
                 ("rs_rec_nr", ctypes.c_uint64)]
 
