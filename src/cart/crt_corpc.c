@@ -205,8 +205,9 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	rpc_priv->crp_pub.cr_co_bulk_hdl = local_bulk_hdl;
 	rc = crt_corpc_initiate(rpc_priv);
 	if (rc != 0) {
-		D_ERROR("crt_corpc_initiate failed, rpc_priv %p, rc: %d, "
-			"opc: %#x.\n", rpc_priv, rc, rpc_req->cr_opc);
+		RPC_ERROR(rpc_priv,
+			  "crt_corpc_initiate failed, rc: %d\n",
+			  rc);
 		crt_hg_reply_error_send(rpc_priv, rc);
 	}
 

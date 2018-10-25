@@ -296,8 +296,8 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 
 		if (cbinfo.cci_rc != 0)
-			D_ERROR("RPC failed; rpc_priv: %p rc: %d\n",
-				rpc_priv, cbinfo.cci_rc);
+			RPC_ERROR(rpc_priv, "RPC failed; rc: %d\n",
+				  cbinfo.cci_rc);
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: %d.\n",
@@ -577,9 +577,9 @@ crt_req_timeout_track(struct crt_rpc_priv *rpc_priv)
 	if (rc == 0) {
 		rpc_priv->crp_in_binheap = 1;
 	} else {
-		D_ERROR("rpc_priv %p (opc %#x), d_binheap_insert "
-			"failed, rc: %d.\n", rpc_priv,
-			rpc_priv->crp_pub.cr_opc, rc);
+		RPC_ERROR(rpc_priv,
+			  "d_binheap_insert failed, rc: %d\n",
+			  rc);
 		RPC_DECREF(rpc_priv);
 	}
 
@@ -699,10 +699,11 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		ul_req = rpc_priv->crp_ul_req;
 		D_ASSERT(ul_req != NULL);
 		ul_in = crt_req_get(ul_req);
-		D_ERROR("rpc_priv %p opc: %#x timedout due to URI_LOOKUP to "
-			"group %s, rank %d through PSR %d timedout.\n",
-			rpc_priv, rpc_priv->crp_pub.cr_opc, ul_in->ul_grp_id,
-			ul_in->ul_rank, ul_req->cr_ep.ep_rank);
+		RPC_ERROR(rpc_priv,
+			  "timedout due to URI_LOOKUP to group %s, rank %d through PSR %d timedout\n",
+			  ul_in->ul_grp_id,
+			  ul_in->ul_rank,
+			  ul_req->cr_ep.ep_rank);
 		crt_req_abort(ul_req);
 		/*
 		 * don't crt_rpc_complete rpc_priv here, because crt_req_abort
@@ -713,21 +714,21 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		/* crt_rpc_complete(rpc_priv, -DER_PROTO); */
 		break;
 	case RPC_STATE_ADDR_LOOKUP:
-		D_ERROR("rpc_priv %p opc: %#x timedout due to ADDR_LOOKUP to "
-			"group %s, rank %d, tgt_uri %s timedout.\n",
-			rpc_priv, rpc_priv->crp_pub.cr_opc,
-			grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank,
-			rpc_priv->crp_tgt_uri);
+		RPC_ERROR(rpc_priv,
+			  "timedout due to ADDR_LOOKUP to group %s, rank %d, tgt_uri %s timedout\n",
+			  grp_priv->gp_pub.cg_grpid,
+			  tgt_ep->ep_rank,
+			  rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		RPC_DECREF(rpc_priv);
 		break;
 	case RPC_STATE_FWD_UNREACH:
-		D_ERROR("rpc_priv %p opc: %#x to group %s, rank %d, tgt_uri %s "
-			"can't reach the target.\n",
-			rpc_priv, rpc_priv->crp_pub.cr_opc,
-			grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank,
-			rpc_priv->crp_tgt_uri);
+		RPC_ERROR(rpc_priv,
+			  "timedout due to group %s, rank %d, tgt_uri %s can't reach the target\n",
+			  grp_priv->gp_pub.cg_grpid,
+			  tgt_ep->ep_rank,
+			  rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		RPC_DECREF(rpc_priv);
@@ -737,11 +738,10 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			/* At this point, RPC should always be completed by
 			 * Mercury
 			 */
-			D_ERROR("aborting rpc opc: %#x  to group %s,"
-				" rank %d, tgt_uri %s .\n",
-				rpc_priv->crp_pub.cr_opc,
-				grp_priv->gp_pub.cg_grpid,
-				tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+			RPC_ERROR(rpc_priv,
+				  "aborting to group %s, rank %d, tgt_uri %s\n",
+				  grp_priv->gp_pub.cg_grpid,
+				  tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
 			crt_req_abort(&rpc_priv->crp_pub);
 		}
 		break;
@@ -776,12 +776,12 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(rpc_priv);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
-		D_ERROR("ctx_id %d, rpc_priv %p (status: %#x) (opc %#x) "
-			"timed out, tgt rank %d, tag %d.\n", crt_ctx->cc_idx,
-			rpc_priv, rpc_priv->crp_state,
-			rpc_priv->crp_pub.cr_opc,
-			rpc_priv->crp_pub.cr_ep.ep_rank,
-			rpc_priv->crp_pub.cr_ep.ep_tag);
+		RPC_ERROR(rpc_priv,
+			  "ctx_id %d, (status: %#x) timed out, tgt rank %d, tag %d\n",
+			  crt_ctx->cc_idx,
+			  rpc_priv->crp_state,
+			  rpc_priv->crp_pub.cr_ep.ep_rank,
+			  rpc_priv->crp_pub.cr_ep.ep_tag);
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 

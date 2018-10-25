@@ -466,7 +466,8 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */);
 	if (rc != 0) {
-		D_ERROR("crt_rpc_priv_init, rc: %d, opc: %#x.\n", rc, opc);
+		RPC_ERROR(rpc_priv,
+			  "crt_rpc_priv_init, rc: %d, opc: %#x\n", rc, opc);
 		crt_rpc_priv_free(rpc_priv);
 		D_GOTO(out, rc);
 	}
@@ -557,7 +558,7 @@ crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	if (rpc_priv->crp_have_ep == 1) {
-		D_ERROR("target endpoint already set.\n");
+		RPC_ERROR(rpc_priv, "target endpoint already set\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -609,10 +610,15 @@ crt_req_destroy(struct crt_rpc_priv *rpc_priv)
 	}
 
 	rc = crt_hg_req_destroy(rpc_priv);
-	if (rc != 0)
+	if (rc != 0) {
+		/* Be careful with logging here, as rpc_priv might have
+		 * been freed, so do not use RPC_ERROR() or log any values
+		 * from the RPC descriptor.
+		 */
 		D_ERROR("crt_hg_req_destroy failed, rc: %d, "
-			"rpc_priv %p(opc: %#x).\n",
-			rc, rpc_priv, rpc_priv->crp_pub.cr_opc);
+			"rpc_priv %p\n",
+			rc, rpc_priv);
+	}
 }
 
 int
@@ -668,8 +674,9 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 	tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 
 	if (rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) {
-		D_ERROR("rpc_priv %p, opc: %#x with status of FWD_UNREACH.\n",
-			rpc_priv, rpc_priv->crp_pub.cr_opc);
+		RPC_ERROR(rpc_priv,
+			  "opc: %#x with status of FWD_UNREACH\n",
+			  rpc_priv->crp_pub.cr_opc);
 		D_GOTO(unreach, rc);
 	}
 
@@ -691,8 +698,9 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 	rpc_priv->crp_hg_addr = hg_addr;
 	rc = crt_req_send_internal(rpc_priv);
 	if (rc != 0) {
-		D_ERROR("crt_req_send_internal() failed, rc %d, rpc_priv: %p, "
-			"opc: %#x.\n", rc, rpc_priv, rpc_priv->crp_pub.cr_opc);
+		RPC_ERROR(rpc_priv,
+			  "crt_req_send_internal() failed, rc %d\n",
+			  rc);
 		D_GOTO(out, rc);
 	}
 out:
@@ -741,9 +749,9 @@ crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
 
 	rc = crt_grp_psr_reload(grp_priv);
 	if (rc != 0) {
-		D_ERROR("rpc_priv %p(opc: %#x), crt_grp_psr_reload(grp %s) "
-			"failed, rc: %d.\n", rpc_priv, rpc_pub->cr_opc,
-			grp_priv->gp_pub.cg_grpid, rc);
+		RPC_ERROR(rpc_priv,
+			  "crt_grp_psr_reload(grp %s) failed, rc: %d\n",
+			  grp_priv->gp_pub.cg_grpid, rc);
 		D_GOTO(out, rc);
 	}
 
@@ -756,9 +764,9 @@ crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
 	rc = crt_req_timeout_track(rpc_priv);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 	if (rc != 0) {
-		D_ERROR("rpc_priv %p(opc: %#x), crt_req_timeout_track "
-			"failed, rc: %d.\n", rpc_priv, rpc_pub->cr_opc,
-			rc);
+		RPC_ERROR(rpc_priv,
+			  "crt_req_timeout_track failed, rc: %d\n",
+			  rc);
 		D_GOTO(out, rc);
 	}
 
@@ -798,9 +806,9 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	if (cb_info->cci_rc != 0) {
-		D_ERROR("rpc_priv %p(opc: %#x), failed cci_rc: %d.\n",
-			rpc_priv,
-			cb_info->cci_rpc->cr_opc, cb_info->cci_rc);
+		RPC_ERROR(rpc_priv,
+			  "failed cci_rc: %d\n",
+			  cb_info->cci_rc);
 		if (cb_info->cci_rc == -DER_OOG)
 			D_GOTO(out, rc = -DER_OOG);
 
@@ -1152,14 +1160,13 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	/* set state ahead to avoid race with completion cb */
 	rpc_priv->crp_state = RPC_STATE_REQ_SENT;
 	rc = crt_hg_req_send(rpc_priv);
-	if (rc != DER_SUCCESS)
-		D_ERROR("crt_hg_req_send failed, rc: %d, rpc_priv: %p,"
-			"opc: %#x.\n", rc, rpc_priv, req->cr_opc);
-
+	if (rc != DER_SUCCESS) {
+		RPC_ERROR(rpc_priv,
+			  "crt_hg_req_send failed, rc: %d\n",
+			  rc);
+	}
 out:
-	if (rc != 0)
-		D_ERROR("crt_req_send_immediately failed, rc: %d, rpc_priv: %p,"
-			" opc: %#x.\n", rc, rpc_priv, req->cr_opc);
+
 	return rc;
 }
 
@@ -1224,8 +1231,9 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 		rc = crt_req_send_immediately(rpc_priv);
 		break;
 	default:
-		D_ERROR("bad rpc state: %#x, rpc_priv %p,  opc: %#x.\n",
-			rpc_priv->crp_state, rpc_priv, req->cr_opc);
+		RPC_ERROR(rpc_priv,
+			  "bad rpc state: %#x\n",
+			  rpc_priv->crp_state);
 		rc = -DER_PROTO;
 		break;
 	}
