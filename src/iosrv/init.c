@@ -67,6 +67,12 @@ hwloc_topology_t	dss_topo;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 
+/** System map path */
+static const char      *sys_map_path;
+
+/** Self rank */
+static d_rank_t		self_rank = -1;
+
 /*
  * Register the dbtree classes used by native server-side modules (e.g.,
  * ds_pool, ds_cont, etc.). Unregistering is currently not supported.
@@ -174,6 +180,7 @@ static int
 server_init()
 {
 	int		rc;
+	uint32_t	flags = CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE;
 	d_rank_t	rank = -1;
 	uint32_t	size = -1;
 
@@ -197,14 +204,35 @@ server_init()
 	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
-	rc = crt_init(server_group_id,
-		      CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE);
+	if (sys_map_path != NULL)
+		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
+	rc = crt_init(server_group_id, flags);
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
+	if (sys_map_path != NULL) {
+		if (self_rank == -1) {
+			D_ERROR("self rank required\n");
+			D_GOTO(exit_crt_init, rc = -DER_INVAL);
+		}
+		rc = crt_rank_self_set(self_rank);
+		if (rc != 0)
+			D_ERROR("failed to set self rank %u: %d\n", self_rank,
+				rc);
+		rc = dss_sys_map_load(sys_map_path, server_group_id, self_rank,
+				      nr_threads);
+		if (rc) {
+			D_ERROR("failed to load %s: %d\n", sys_map_path, rc);
+			D_GOTO(exit_crt_init, rc);
+		}
+	}
 	D_INFO("Network successfully initialized\n");
 
-	crt_group_rank(NULL, &rank);
-	crt_group_size(NULL, &size);
+	rc = crt_group_rank(NULL, &rank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	if (sys_map_path != NULL)
+		D_ASSERTF(rank == self_rank, "%u == %u\n", rank, self_rank);
+	rc = crt_group_size(NULL, &size);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	/* rank 0 save attach info for singleton client if needed */
 	if (save_attach_info && rank == 0) {
@@ -328,6 +356,10 @@ Options:\n\
       Storage path (default \"%s\")\n\
   --attach_info=path, -apath\n\
       Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
+  --map=path, -y path\n\
+      [Temporary] System map configuration file (default none)\n\
+  --rank=rank, -r rank\n\
+      [Temporary] Self rank (default none; ignored if no --map|-y)\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, server_group_id, dss_storage_path);
@@ -342,6 +374,8 @@ parse(int argc, char **argv)
 		{ "group",		required_argument,	NULL,	'g' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "attach_info",	required_argument,	NULL,	'a' },
+		{ "map",		required_argument,	NULL,	'y' },
+		{ "rank",		required_argument,	NULL,	'r' },
 		{ "help",		no_argument,		NULL,	'h' },
 		{ NULL,			0,			NULL,	0}
 	};
@@ -350,7 +384,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:m:g:s:a:h", opts, NULL)) !=
+	while ((c = getopt_long(argc, argv, "c:m:g:s:a:y:r:h", opts, NULL)) !=
 		-1) {
 		switch (c) {
 		case 'm':
@@ -385,6 +419,12 @@ parse(int argc, char **argv)
 		case 'a':
 			save_attach_info = true;
 			attach_info_path = optarg;
+			break;
+		case 'y':
+			sys_map_path = optarg;
+			break;
+		case 'r':
+			self_rank = atoi(optarg);
 			break;
 		default:
 			usage(argv[0], stderr);

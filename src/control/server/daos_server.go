@@ -51,6 +51,8 @@ type cliOptions struct {
 	Cores      uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
 	Group      string  `short:"g" long:"group" default:"daos_server" description:"Server group name"`
 	Attach     *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
+	Map        *string `short:"y" long:"map" description:"[Temporary] System map file"`
+	Rank       *uint   `short:"r" long:"rank" description:"[Temporary] Self rank"`
 }
 
 var (
@@ -70,6 +72,12 @@ func ioArgsFromOpts(opts cliOptions) []string {
 	}
 	if opts.Attach != nil {
 		ioArgStr = append(ioArgStr, "-a", *opts.Attach)
+	}
+	if opts.Map != nil {
+		ioArgStr = append(ioArgStr, "-y", *opts.Map)
+	}
+	if opts.Rank != nil {
+		ioArgStr = append(ioArgStr, "-r", strconv.FormatUint(uint64(*opts.Rank), 10))
 	}
 	return ioArgStr
 }
