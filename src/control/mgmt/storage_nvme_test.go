@@ -28,10 +28,10 @@ import (
 	"strings"
 	"testing"
 
-	"utils/log"
-	. "utils/test"
 	. "go-spdk/spdk"
 	. "mgmt"
+	"utils/log"
+	. "utils/test"
 )
 
 // MockStorage struct implements Storage interface
@@ -95,7 +95,7 @@ func TestBurnInNVMe(t *testing.T) {
 		cmdName, args, env, err := sn.BurnIn(test.params)
 		if test.shouldFail {
 			ExpectError(t, err, "unexpected params type")
-			return
+			continue
 		}
 		if err != nil {
 			t.Fatal(err.Error())

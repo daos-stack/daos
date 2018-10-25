@@ -33,6 +33,7 @@ import (
 	"golang.org/x/net/context"
 
 	pb "mgmt/proto"
+	"utils/handlers"
 )
 
 // FetchNVMe populates controllers and namespaces in ControlService
@@ -108,11 +109,11 @@ func (s *ControlService) UpdateNVMeCtrlr(
 // FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
 func (s *ControlService) FetchFioConfigPaths(
 	empty *pb.EmptyParams, stream pb.MgmtControl_FetchFioConfigPathsServer) error {
-	pluginDir, err := getAbsInstallPath(spdkFioPluginDir)
+	pluginDir, err := handlers.GetAbsInstallPath(spdkFioPluginDir)
 	if err != nil {
 		return err
 	}
-	paths, err := getFilePaths(pluginDir, "fio")
+	paths, err := handlers.GetFilePaths(pluginDir, "fio")
 	if err != nil {
 		return err
 	}

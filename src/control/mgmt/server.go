@@ -25,50 +25,14 @@ package mgmt
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-
+	pb "mgmt/proto"
+	"utils/handlers"
 	"utils/log"
 
-	pb "mgmt/proto"
+	"io/ioutil"
 )
 
 var jsonDBRelPath = "share/control/mgmtinit_db.json"
-
-// getAbsInstallPath retrieves absolute path of files in daos install dir
-func getAbsInstallPath(relPath string) (string, error) {
-	ex, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(filepath.Dir(ex), "..", relPath), nil
-}
-
-// getFilePaths return full file paths in given directory with
-// matching file extensions
-func getFilePaths(dir string, ext string) ([]string, error) {
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	extension := ext
-	// if extension has been provided without '.' prefix, add one
-	if filepath.Ext(ext) == "" {
-		extension = fmt.Sprintf(".%s", ext)
-	}
-	var matchingFiles []string
-	for _, file := range files {
-		if filepath.Ext(file.Name()) == extension {
-			matchingFiles = append(
-				matchingFiles,
-				fmt.Sprintf("%s/%s", dir, file.Name()))
-		}
-	}
-	return matchingFiles, nil
-}
 
 // ControlService type is the data container for the service.
 type ControlService struct {
@@ -80,21 +44,25 @@ type ControlService struct {
 	NvmeControllers    CtrlrMap
 }
 
-// loadInitData retrieves initial data from file.
-func (s *ControlService) loadInitData(filePath string) error {
-	s.SupportedFeatures = make(FeatureMap)
-	file, err := ioutil.ReadFile(filePath)
+// loadInitData retrieves initial data from relative file path.
+func loadInitData(relPath string) (m FeatureMap, err error) {
+	absPath, err := handlers.GetAbsInstallPath(relPath)
 	if err != nil {
-		return err
+		panic(err)
+	}
+	m = make(FeatureMap)
+	file, err := ioutil.ReadFile(absPath)
+	if err != nil {
+		return
 	}
 	var features []*pb.Feature
-	if err := json.Unmarshal(file, &features); err != nil {
-		return err
+	if err = json.Unmarshal(file, &features); err != nil {
+		return
 	}
 	for _, f := range features {
-		s.SupportedFeatures[f.Fname.Name] = f
+		m[f.Fname.Name] = f
 	}
-	return nil
+	return
 }
 
 // NewControlServer creates a new instance of our ControlServer struct.
@@ -108,15 +76,12 @@ func NewControlServer() *ControlService {
 		logger:             logger,
 	}
 
-	// Retrieve absolute path of init DB file and load data
-	dbAbsPath, err := getAbsInstallPath(jsonDBRelPath)
+	fMap, err := loadInitData(jsonDBRelPath)
 	if err != nil {
 		panic(err)
 	}
 
-	if err := s.loadInitData(dbAbsPath); err != nil {
-		panic(err)
-	}
+	s.SupportedFeatures = fMap
 
 	return s
 }

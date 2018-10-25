@@ -21,16 +21,15 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package control
+package mgmt
 
 import (
 	"fmt"
 	"io"
 	"time"
 
-	"utils/log"
-
 	pb "mgmt/proto"
+	"utils/log"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

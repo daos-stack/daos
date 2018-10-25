@@ -15,6 +15,16 @@ The [shell](dmg/daos_shell) is an example client application which can connect t
 - [Agent API](https://godoc.org/github.com/daos-stack/daos/src/control/client/agent)
 - [Agent internals](https://godoc.org/github.com/daos-stack/daos/src/control/security)
 
+## Configuration
+
+daos_server configuration file is parsed when starting daos_server process, it's location can be specified on the commandline (daos_server -h for usage) or default location (install/etc/daos_server.yml).
+
+Parameters will be parsed and populated with defaults (hardcoded in source) if not present in configuration.
+
+Commandline parameters take precedence over configuration file values but if not specified on commandline, configuration file values will be applied (or parsed defaults).
+
+For convenience, active parsed config values are written to either directory where config file was read from or /tmp/ if that fails.
+
 ## Shell Usage
 
 In order to run the shell to perform administrative tasks, build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md).

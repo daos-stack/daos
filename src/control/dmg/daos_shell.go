@@ -30,17 +30,14 @@ import (
 	"strings"
 
 	"client/mgmt"
-	"utils/functional"
-
 	pb "mgmt/proto"
+	"utils/functional"
 
 	"github.com/daos-stack/ishell"
 	"github.com/jessevdk/go-flags"
 )
 
-var (
-	controlClient *control.DAOSMgmtClient
-)
+var mgmtClient *mgmt.DAOSMgmtClient
 
 func getUpdateParams(c *ishell.Context) (*pb.UpdateNVMeCtrlrParams, error) {
 	// disable the '>>>' for cleaner same line input.
@@ -72,7 +69,7 @@ func getUpdateParams(c *ishell.Context) (*pb.UpdateNVMeCtrlrParams, error) {
 
 func getFioConfig(c *ishell.Context) (configPath string, err error) {
 	// fetch existing configuration files
-	paths, err := controlClient.FetchFioConfigPaths()
+	paths, err := mgmtClient.FetchFioConfigPaths()
 	if err != nil {
 		return
 	}
@@ -121,7 +118,7 @@ func nvmeTaskLookup(
 		for _, ctrlr := range ctrlrs {
 			c.Printf("Controller: %+v\n", ctrlr)
 
-			nss, err := controlClient.ListNVMeNss(ctrlr)
+			nss, err := mgmtClient.ListNVMeNss(ctrlr)
 			if err != nil {
 				c.Println("Problem retrieving namespaces: ", err.Error())
 				return err
@@ -147,7 +144,7 @@ func nvmeTaskLookup(
 
 			params.Ctrlr = ctrlr
 
-			newFwrev, err := controlClient.UpdateNVMeCtrlr(params)
+			newFwrev, err := mgmtClient.UpdateNVMeCtrlr(params)
 			if err != nil {
 				c.Println("\nProblem updating firmware: ", err)
 				return err
@@ -168,7 +165,7 @@ func nvmeTaskLookup(
 			c.Printf(
 				"\t- Running burn-in validation with spdk fio plugin using job file %s.\n\n",
 				filepath.Base(configPath))
-			_, err := controlClient.BurnInNVMe(ctrlr.Id, configPath)
+			_, err := mgmtClient.BurnInNVMe(ctrlr.Id, configPath)
 			if err != nil {
 				return err
 			}
@@ -202,13 +199,13 @@ func setupShell() *ishell.Shell {
 				return
 			}
 
-			if controlClient.Connected() {
+			if mgmtClient.Connected() {
 				c.Println("Already connected to mgmt server")
 				return
 			}
 
-			err = controlClient.Connect(ConnectOpts.Host)
-			if err != nil || controlClient.Connected() == false {
+			err = mgmtClient.Connect(ConnectOpts.Host)
+			if err != nil || mgmtClient.Connected() == false {
 				c.Println("Unable to connect to ", ConnectOpts.Host, err.Error())
 			}
 		},
@@ -218,7 +215,7 @@ func setupShell() *ishell.Shell {
 		Name: "getmgmtfeature",
 		Help: "Command to retrieve the description of a given feature",
 		Func: func(c *ishell.Context) {
-			if controlClient.Connected() == false {
+			if mgmtClient.Connected() == false {
 				c.Println("Connection to management server required")
 				return
 			}
@@ -228,7 +225,7 @@ func setupShell() *ishell.Shell {
 				return
 			}
 
-			ctx, err := controlClient.GetFeature(c.Args[0])
+			ctx, err := mgmtClient.GetFeature(c.Args[0])
 			if err != nil {
 				c.Println("Unable to retrieve feature details", err.Error())
 				return
@@ -243,12 +240,12 @@ func setupShell() *ishell.Shell {
 		Name: "listmgmtfeatures",
 		Help: "Command to retrieve all supported management features",
 		Func: func(c *ishell.Context) {
-			if controlClient.Connected() == false {
+			if mgmtClient.Connected() == false {
 				c.Println("Connection to management server required")
 				return
 			}
 
-			err := controlClient.ListAllFeatures()
+			err := mgmtClient.ListAllFeatures()
 			if err != nil {
 				c.Println("Unable to retrieve features", err.Error())
 				return
@@ -260,12 +257,12 @@ func setupShell() *ishell.Shell {
 		Name: "nvme",
 		Help: "Perform tasks on NVMe controllers",
 		Func: func(c *ishell.Context) {
-			if controlClient.Connected() == false {
+			if mgmtClient.Connected() == false {
 				c.Println("Connection to management server required")
 				return
 			}
 
-			cs, err := controlClient.ListNVMeCtrlrs()
+			cs, err := mgmtClient.ListNVMeCtrlrs()
 			if err != nil {
 				c.Println("Unable to retrieve controller details", err.Error())
 				return
@@ -296,7 +293,7 @@ func setupShell() *ishell.Shell {
 				}
 			}
 
-			featureMap, err := controlClient.ListFeatures("nvme")
+			featureMap, err := mgmtClient.ListFeatures("nvme")
 			if err != nil {
 				c.Println("Unable to retrieve nvme features", err.Error())
 				return
@@ -334,7 +331,7 @@ func setupShell() *ishell.Shell {
 
 func main() {
 	// by default, shell includes 'exit', 'help' and 'clear' commands.
-	controlClient = control.NewDAOSMgmtClient()
+	mgmtClient = mgmt.NewDAOSMgmtClient()
 	shell := setupShell()
 
 	shell.Println("DAOS Management Shell")

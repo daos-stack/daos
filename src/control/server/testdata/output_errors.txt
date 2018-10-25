@@ -1,0 +1,5 @@
+config should exist and be populated with at least SystemName
+
+config should exist and be populated with at least SystemName
+
+format value thrash not supported in config

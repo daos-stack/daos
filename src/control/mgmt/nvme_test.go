@@ -26,9 +26,9 @@ package mgmt_test
 import (
 	"testing"
 
-	. "utils/test"
 	. "go-spdk/spdk"
 	. "mgmt"
+	. "utils/test"
 
 	pb "mgmt/proto"
 )

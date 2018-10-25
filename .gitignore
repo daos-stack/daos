@@ -18,3 +18,4 @@ src/utils/py/*.pyc
 *.*~
 /pkg/
 Gopkg.lock
+src/control/server/testdata/.*.yml

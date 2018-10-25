@@ -1,0 +1,6 @@
+# represent an empty configuration file
+
+Name: daos
+
+name: daos
+format: thrash

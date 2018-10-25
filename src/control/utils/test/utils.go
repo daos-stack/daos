@@ -28,6 +28,8 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"utils/handlers"
 )
 
 // AssertTrue asserts b is true
@@ -71,4 +73,28 @@ func ExpectError(t *testing.T, actualErr error, expectedMessage string) {
 			expectedMessage,
 			actualErr.Error())
 	}
+}
+
+// LoadTestFiles reads inputs and outputs from file and do basic sanity checks.
+// Both files contain entries of multiple lines separated by blank line.
+// Return inputs and outputs, both of which are slices of string slices.
+func LoadTestFiles(inFile string, outFile string) (
+	inputs [][]string, outputs [][]string, err error) {
+
+	inputs, err = handlers.SplitFile(inFile)
+	if err != nil {
+		return
+	}
+	outputs, err = handlers.SplitFile(outFile)
+	if err != nil {
+		return
+	}
+
+	if len(inputs) < 1 {
+		err = fmt.Errorf("no inputs read from file")
+	} else if len(inputs) != len(outputs) {
+		err = fmt.Errorf("number of inputs and outputs not equal")
+	}
+
+	return
 }

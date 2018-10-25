@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"utils/handlers"
 	"utils/log"
 
 	"go-spdk/spdk"
@@ -49,7 +50,7 @@ var (
 // 	Note: shm_id currently hardcoded to 1 to enable multiprocess
 //        mode between Discover and Burn-in.
 func (sn *NvmeStorage) Init() (err error) {
-	absSetupPath, err := getAbsInstallPath(spdkSetupPath)
+	absSetupPath, err := handlers.GetAbsInstallPath(spdkSetupPath)
 	if err != nil {
 		return
 	}
@@ -61,7 +62,7 @@ func (sn *NvmeStorage) Init() (err error) {
 	if err = exec.Command(absSetupPath).Run(); err != nil {
 		return
 	}
-	sn.Env.ShmID = 1	// shm_id passed as opt in SPDK env init
+	sn.Env.ShmID = 1 // shm_id passed as opt in SPDK env init
 	if err = sn.Env.InitSPDKEnv(); err != nil {
 		return
 	}
@@ -92,11 +93,11 @@ func (sn *NvmeStorage) BurnIn(params interface{}) (
 	switch t := params.(type) {
 	case BurnInParams:
 		pluginDir := ""
-		pluginDir, err = getAbsInstallPath(spdkFioPluginDir)
+		pluginDir, err = handlers.GetAbsInstallPath(spdkFioPluginDir)
 		if err != nil {
 			return
 		}
-		fioPath, err = getAbsInstallPath(fioExecPath)
+		fioPath, err = handlers.GetAbsInstallPath(fioExecPath)
 		if err != nil {
 			return
 		}
@@ -134,7 +135,7 @@ func (sn *NvmeStorage) BurnIn(params interface{}) (
 func (sn *NvmeStorage) Teardown() error {
 	sn.Nvme.Cleanup()
 
-	absSetupPath, err := getAbsInstallPath(spdkSetupPath)
+	absSetupPath, err := handlers.GetAbsInstallPath(spdkSetupPath)
 	if err != nil {
 		return err
 	}
@@ -218,8 +219,8 @@ func (s *ControlService) populateNVMe(ret interface{}) error {
 // NewNvmeStorage creates a new instance of our NvmeStorage struct.
 func NewNvmeStorage(logger *log.Logger) *NvmeStorage {
 	return &NvmeStorage{
-		Logger:	logger,
-		Env: &spdk.Env{},
-		Nvme: &spdk.Nvme{},
+		Logger: logger,
+		Env:    &spdk.Env{},
+		Nvme:   &spdk.Nvme{},
 	}
 }

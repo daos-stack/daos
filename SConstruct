@@ -92,6 +92,9 @@ def scons():
     # install the build verification tests
     SConscript('utils/bvtest/scripts/SConscript')
 
+    # install the configuration files
+    SConscript('utils/config/SConscript')
+
     env.Command("fixtest", "./utils/bvtest/OrteRunner.py",
                 [Copy("$PREFIX/TESTING/test_runner/",
                       "./utils/bvtest/OrteRunner.py")])

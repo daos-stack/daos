@@ -24,9 +24,9 @@
 package security_test
 
 import (
-	. "utils/test"
 	"security"
 	"testing"
+	. "utils/test"
 )
 
 // DomainCreds tests

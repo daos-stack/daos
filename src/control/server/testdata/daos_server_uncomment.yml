@@ -32,7 +32,7 @@ name: daos
 # manually through client API (burn-in/fw-update/provision).
 #
 # default: true
-# auto: false
+auto: false
 #
 #
 # Formatting flow control
@@ -50,7 +50,7 @@ name: daos
 # Note: this may result in devices being formatted on reboot
 #
 # default: safe
-# format: continue
+format: continue
 #
 #
 # Access points
@@ -61,8 +61,8 @@ name: daos
 # assumed if not specified.
 #
 # default: hostname of this node at port 10000 for local testing
-# access_points: ['hostname1:10001','hostname2:10001','hostname3:10001']
-# access_points: [hostname1,hostname2,hostname3]
+access_points: ['hostname1:10001','hostname2:10001','hostname3:10001']
+access_points: [hostname1,hostname2,hostname3]
 #
 #
 # Force default port
@@ -71,7 +71,7 @@ name: daos
 # be used when connecting to access points if no port is specified.
 #
 # default: 10000
-# port: 10001
+port: 10001
 #
 #
 # Path to CA certificate
@@ -79,7 +79,7 @@ name: daos
 # If not specified, DAOS will start in insecure way which means that
 # anybody can administrate the DAOS installation and access data
 #
-# ca_cert: ./.daos/ca.crt
+ca_cert: ./.daos/ca.crt
 #
 #
 # Path to server certificate and key file
@@ -87,8 +87,8 @@ name: daos
 # Discarded if no CA certificate is passed.
 #
 # default: ./.daos/daos_server.{crt,key}
-# cert: ./.daosa/daos_server.crt
-# key: ./.daosa/daos_server.key
+cert: ./.daosa/daos_server.crt
+key: ./.daosa/daos_server.key
 #
 #
 # Fault domain path
@@ -96,7 +96,7 @@ name: daos
 # Immutable after reformat.
 #
 # default: /hostname for a local configuration w/o fault domain
-# fault_path: /vcdu0/rack1/hostname
+fault_path: /vcdu0/rack1/hostname
 #
 #
 # Fault domain callback
@@ -104,7 +104,7 @@ name: daos
 # Path to executable which will return fault domain string.
 # Immutable after reformat.
 #
-# fault_cb: ./.daos/fd_callback
+fault_cb: ./.daos/fd_callback
 #
 #
 # Use specific OFI interfaces
@@ -116,7 +116,7 @@ name: daos
 # interfaces if any and fall back to socket on the first eth card
 # otherwise.
 #
-# fabric_ifaces: [qib0,qib1]
+fabric_ifaces: [qib0,qib1]
 #
 #
 # Use specific OFI provider
@@ -126,7 +126,7 @@ name: daos
 # ofi+psm2 for Omni-Path, ofi+verbs;ofi_rxm for Infiniband/RoCE and finally
 # ofi+socket for non-RDMA-capable Ethernet.
 #
-# provider: ofi+verbs;ofi_rxm
+provider: ofi+verbs;ofi_rxm
 #
 #
 # Mountpoint directory
@@ -137,7 +137,7 @@ name: daos
 # preferred path where the mountpoints will be created.
 #
 # default: /mnt/daos
-# mount_path: /mnt/daosa
+mount_path: /mnt/daosa
 #
 #
 # NVMe SSD whitelist
@@ -147,7 +147,7 @@ name: daos
 # By default, DAOS will use all the NVMe-capable SSDs that don't have active
 # mount points.
 #
-# nvme_include: [pcie1000.0.0.0.1,pcie1000.0.0.0.2,pcie1000.0.0.0.3]
+nvme_include: [pcie1000.0.0.0.1,pcie1000.0.0.0.2,pcie1000.0.0.0.3]
 #
 #
 # NVMe SSD blacklist
@@ -156,7 +156,7 @@ name: daos
 # listed in nvme_include and forces auto-detection to skip those drives.
 # Immutable after reformat, colons replaced by dots in PCI identifiers.
 #
-# nvme_exclude: [pcie1000.0.0.0.1]
+nvme_exclude: [pcie1000.0.0.0.1]
 #
 #
 # Use Hyperthreads
@@ -166,7 +166,7 @@ name: daos
 # physical cores (value 0) or hyperthreads (value 1).
 #
 # default: false
-# hyperthreads: true
+hyperthreads: true
 #
 #
 # When per-server definitions exist, auto-allocation of resources is not
@@ -174,80 +174,80 @@ name: daos
 # automatically be assigned to servers based on NUMA ratings, there will
 # be a one-to-one relationship between servers and sockets.
 #
-# servers:
-# -
-#   # Rank to be assigned as identifier for server.
-#   # Immutable after reformat.
-#   # Optional parameter, will be auto generated if not supplied.
-#   #
-#   # rank: 0
-#
-#   # Logical CPU assignments as identified in /proc/cpuinfo
-#   # e.g. [0-24] for CPU 0 to 24.
-#   # Immutable after reformat.
-#   #
-#   cpus: [0-20]
-#
-#   # Use specific OFI interfaces.
-#   # Specify the fabric network interface that will be used by this server.
-#   # Optionally specify the fabric network interface port that will be used
-#   # by this server but please only if you have a specific need, this will
-#   # normally be chosen automatically.
-#   #
-#   fabric_iface: qib0
-#   # fabric_iface_port: 20000
-#
-#   # Force a pre-configured mountpoint to be used by this server.
-#   # Path should be unique to server instance (an use different subdirs).
-#   #
-#   mount_force: /mnt/daos/1
-#
-#   # NVMe SSD list. Force specific SSDs to be used by this server instance.
-#   # List of unique NVMe IDs, should be different across different server
-#   # instances.
-#   # Immutable after reformat, colons replaced by dots in PCI identifiers.
-#   #
-#   nvme_force: [pcie1000.0.0.0.1]
-#
-#   # Force specific debug mask (D_LOG_MASK) at start up time.
-#   # By default, just use the default debug mask used by DAOS.
-#   # Mask specifies minimum level of message significance to pass to logger.
-#   debug_mask: WARN
-# -
-#   # Rank to be assigned as identifier for server.
-#   # Immutable after reformat.
-#   # Optional parameter, will be auto generated if not supplied.
-#   #
-#   # rank: 1
-#
-#   # Logical CPU assignments as identified in /proc/cpuinfo
-#   # e.g. [0-24] for CPU 0 to 24.
-#   # Immutable after reformat.
-#   #
-#   cpus: [21-40]
-#
-#   # Use specific OFI interfaces.
-#   # Specify the fabric network interface that will be used by this server.
-#   # Optionally specify the fabric network interface port that will be used
-#   # by this server but please only if you have a specific need, this will
-#   # normally be chosen automatically.
-#   #
-#   fabric_iface: qib0
-#   # fabric_iface_port: 20000
-#
-#   # Force a pre-configured mountpoint to be used by this server.
-#   # Path should be unique to server instance (an use different subdirs).
-#   #
-#   mount_force: /mnt/daos/2
-#
-#   # NVMe SSD list. Force specific SSDs to be used by this server instance.
-#   # List of unique NVMe IDs, should be different across different server
-#   # instances.
-#   # Immutable after reformat, colons replaced by dots in PCI identifiers.
-#   #
-#   nvme_force: [pcie1000.0.0.0.2]
-#
-#   # Force specific debug mask (D_LOG_MASK) at start up time.
-#   # By default, just use the default debug mask used by DAOS.
-#   # Mask specifies minimum level of message significance to pass to logger.
-#   debug_mask: WARN
+servers:
+-
+  # Rank to be assigned as identifier for server.
+  # Immutable after reformat.
+  # Optional parameter, will be auto generated if not supplied.
+  #
+  rank: 0
+
+  # Logical CPU assignments as identified in /proc/cpuinfo
+  # e.g. [0-24] for CPU 0 to 24.
+  # Immutable after reformat.
+  #
+  cpus: [0-20]
+
+  # Use specific OFI interfaces.
+  # Specify the fabric network interface that will be used by this server.
+  # Optionally specify the fabric network interface port that will be used
+  # by this server but please only if you have a specific need, this will
+  # normally be chosen automatically.
+  #
+  fabric_iface: qib0
+  fabric_iface_port: 20000
+
+  # Force a pre-configured mountpoint to be used by this server.
+  # Path should be unique to server instance (an use different subdirs).
+  #
+  mount_force: /mnt/daos/1
+
+  # NVMe SSD list. Force specific SSDs to be used by this server instance.
+  # List of unique NVMe IDs, should be different across different server
+  # instances.
+  # Immutable after reformat, colons replaced by dots in PCI identifiers.
+  #
+  nvme_force: [pcie1000.0.0.0.1]
+
+  # Force specific debug mask (D_LOG_MASK) at start up time.
+  # By default, just use the default debug mask used by DAOS.
+  # Mask specifies minimum level of message significance to pass to logger.
+  debug_mask: WARN
+-
+  # Rank to be assigned as identifier for server.
+  # Immutable after reformat.
+  # Optional parameter, will be auto generated if not supplied.
+  #
+  rank: 1
+
+  # Logical CPU assignments as identified in /proc/cpuinfo
+  # e.g. [0-24] for CPU 0 to 24.
+  # Immutable after reformat.
+  #
+  cpus: [21-40]
+
+  # Use specific OFI interfaces.
+  # Specify the fabric network interface that will be used by this server.
+  # Optionally specify the fabric network interface port that will be used
+  # by this server but please only if you have a specific need, this will
+  # normally be chosen automatically.
+  #
+  fabric_iface: qib0
+  fabric_iface_port: 20000
+
+  # Force a pre-configured mountpoint to be used by this server.
+  # Path should be unique to server instance (an use different subdirs).
+  #
+  mount_force: /mnt/daos/2
+
+  # NVMe SSD list. Force specific SSDs to be used by this server instance.
+  # List of unique NVMe IDs, should be different across different server
+  # instances.
+  # Immutable after reformat, colons replaced by dots in PCI identifiers.
+  #
+  nvme_force: [pcie1000.0.0.0.2]
+
+  # Force specific debug mask (D_LOG_MASK) at start up time.
+  # By default, just use the default debug mask used by DAOS.
+  # Mask specifies minimum level of message significance to pass to logger.
+  debug_mask: WARN

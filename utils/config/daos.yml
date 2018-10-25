@@ -20,8 +20,8 @@ systems:
 #  # To operate, DAOS will need a quorum of access point nodes to be available.
 #  # Hosts can be specified with or without port, default port below.
 #  #
-#  # accesspts: ['hostname1:10001','hostname2:10001','hostname3:10001']
-#  # accesspts: [hostname1,hostname2,hostname3]
+#  # access_pts: ['hostname1:10001','hostname2:10001','hostname3:10001']
+#  # access_pts: [hostname1,hostname2,hostname3]
 #
 #  # Force default port number to connect to on daos_server, this will also
 #  # be used when connecting to access points if no port is specified.
@@ -32,7 +32,7 @@ systems:
 #  # Path to CA certificate
 #  # Not required if the DAOS server is configured in an insecured way
 #  #
-#  # cacert: ./.daos/ca.crt
+#  # ca_cert: ./.daos/ca.crt
 #
 #  # Path to client certificate and key file.
 #  # Discarded if no CA certificate is passed.

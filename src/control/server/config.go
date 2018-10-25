@@ -21,43 +21,52 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt_test
+package main
 
 import (
-	"testing"
+	"fmt"
+	"io/ioutil"
 
-	. "mgmt"
-	. "utils/test"
-
-	pb "mgmt/proto"
+	"gopkg.in/yaml.v2"
 )
 
-func mockFeaturePB() *pb.Feature {
-	return &pb.Feature{
-		Category:    &pb.Category{Category: "nvme"},
-		Fname:       &pb.FeatureName{Name: "burn-name"},
-		Description: "run workloads on device to test",
+func saveConfig(c Configuration, filename string) error {
+	bytes, err := yaml.Marshal(c)
+	if err != nil {
+		return err
 	}
+	return ioutil.WriteFile(filename, bytes, 0644)
 }
 
-func TestGetFeature(t *testing.T) {
-	// defined in nvme_test.go
-	s := NewTestControlServer(nil)
-
-	mockFeature := mockFeaturePB()
-	fMap := make(FeatureMap)
-	fMap[mockFeature.Fname.Name] = mockFeature
-	s.SupportedFeatures = fMap
-
-	feature, err := s.GetFeature(nil, mockFeature.Fname)
+func loadConfig(filename string) (cPtr *Configuration, err error) {
+	cPtr = NewDefaultConfiguration()
+	bytes, err := ioutil.ReadFile(filename)
 	if err != nil {
-		t.Fatal(err.Error())
+		return
 	}
+	err = yaml.Unmarshal(bytes, cPtr)
+	if err != nil {
+		return
+	}
+	// assert that config exists and is at least populated with SystemName
+	if cPtr.SystemName == "" {
+		err = fmt.Errorf(
+			"config should exist and be populated with at least SystemName")
+	}
+	return
+}
 
-	AssertEqual(t, feature, mockFeature, "")
-
-	feature, err = s.GetFeature(nil, &pb.FeatureName{Name: "non-existent"})
-	if err == nil {
-		t.Fatal(err.Error())
+// NewDefaultConfiguration creates a new instance of Configuration struct
+// populated with defaults.
+func NewDefaultConfiguration() *Configuration {
+	return &Configuration{
+		Auto:         true,
+		Format:       SAFE,
+		AccessPoints: []string{"localhost"},
+		Port:         10000,
+		Cert:         "./.daos/daos_server.crt",
+		Key:          "./.daos/daos_server.key",
+		MountPath:    "/mnt/daos",
+		Hyperhreads:  false,
 	}
 }

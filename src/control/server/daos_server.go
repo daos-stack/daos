@@ -30,6 +30,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"syscall"
@@ -39,24 +40,30 @@ import (
 
 	"mgmt"
 	mgmtpb "mgmt/proto"
+	"utils/handlers"
 )
 
-type daosOptions struct {
-	Port    uint16  `short:"p" long:"port" default:"10000" description:"Port for the gRPC management interfect to listen on"`
-	Modules *string `short:"m" long:"modules" description:"List of server modules to load"`
-	Cores   uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
-	Group   string  `short:"g" long:"group" default:"daos_server" description:"Server group name"`
-	Storage string  `short:"s" long:"storage" default:"/mnt/daos" description:"Storage path"`
-	Attach  *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
+type cliOptions struct {
+	Port       uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
+	MountPath  string  `short:"s" long:"storage" description:"Storage path"`
+	ConfigPath string  `short:"o" long:"config_path" default:"etc/daos_server.yml" description:"Server config file path"`
+	Modules    *string `short:"m" long:"modules" description:"List of server modules to load"`
+	Cores      uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
+	Group      string  `short:"g" long:"group" default:"daos_server" description:"Server group name"`
+	Attach     *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
 }
 
-var opts daosOptions
+var (
+	opts       cliOptions
+	configOpts *Configuration
+	configOut  = ".daos_server.active.yml"
+)
 
-func ioArgsFromOpts(opts daosOptions) []string {
+func ioArgsFromOpts(opts cliOptions) []string {
 
 	cores := strconv.FormatUint(uint64(opts.Cores), 10)
 
-	ioArgStr := []string{"-c", cores, "-g", opts.Group, "-s", opts.Storage}
+	ioArgStr := []string{"-c", cores, "-g", opts.Group, "-s", opts.MountPath}
 
 	if opts.Modules != nil {
 		ioArgStr = append(ioArgStr, "-m", *opts.Modules)
@@ -70,11 +77,59 @@ func ioArgsFromOpts(opts daosOptions) []string {
 func main() {
 	runtime.GOMAXPROCS(1)
 
+	// Parse commandline flags which override options read from config
 	_, err := flags.Parse(&opts)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
 
+	// Parse configuration file, look up absolute path if relative
+	if !filepath.IsAbs(opts.ConfigPath) {
+		opts.ConfigPath, err = handlers.GetAbsInstallPath(opts.ConfigPath)
+		if err != nil {
+			log.Fatalf("%s", err)
+		}
+	}
+	configOpts, err = loadConfig(opts.ConfigPath)
+	if err != nil {
+		log.Fatalf("Configuration could not be read (%s)", err.Error())
+	}
+	log.Printf("DAOS config read from %s", opts.ConfigPath)
+
+	// Populate options that can be provided on both the commandline and config
+	if opts.Port == 0 {
+		opts.Port = uint16(configOpts.Port)
+		if opts.Port == 0 {
+			log.Fatalf(
+				"Unable to determine management port from config or cli opts")
+		}
+	}
+	if opts.MountPath == "" {
+		opts.MountPath = configOpts.MountPath
+		if opts.MountPath == "" {
+			log.Fatalf(
+				"Unable to determine storage mount path from config or cli opts")
+		}
+	}
+	// Sync opts
+	configOpts.Port = int(opts.Port)
+	configOpts.MountPath = opts.MountPath
+
+	// Save read-only active configuration, try config dir then /tmp/
+	activeConfig := filepath.Join(filepath.Dir(opts.ConfigPath), configOut)
+	if err = saveConfig(*configOpts, activeConfig); err != nil {
+		log.Printf("Active config could not be saved (%s)", err.Error())
+
+		activeConfig = filepath.Join("/tmp", configOut)
+		if err = saveConfig(*configOpts, activeConfig); err != nil {
+			log.Printf("Active config could not be saved (%s)", err.Error())
+		}
+	}
+	if err == nil {
+		log.Printf("Active config saved to %s (read-only)", activeConfig)
+	}
+
+	// Create a new server register our service and listen for connections.
 	addr := fmt.Sprintf("0.0.0.0:%d", opts.Port)
 
 	log.Printf("Management interface listening on: %s", addr)
@@ -84,7 +139,6 @@ func main() {
 		log.Fatalf("Unable to listen on management interface: %s", err)
 	}
 
-	// Create a new server register our service and listen for connections.
 	// TODO: This will need to be extended to take certificat information for
 	// the TLS protected channel. Currently it is an "insecure" channel.
 	var sOpts []grpc.ServerOption

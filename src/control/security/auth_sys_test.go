@@ -24,11 +24,11 @@
 package security_test
 
 import (
-	"utils/log"
-	. "utils/test"
 	"security"
 	pb "security/proto"
 	"testing"
+	"utils/log"
+	. "utils/test"
 
 	"github.com/golang/protobuf/proto"
 )

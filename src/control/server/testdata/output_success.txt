@@ -1,0 +1,138 @@
+name: daos
+servers: []
+auto: true
+format: safe
+access_points:
+- localhost
+port: 10000
+ca_cert: ""
+cert: ./.daos/daos_server.crt
+key: ./.daos/daos_server.key
+fault_path: ""
+fault_cb: ""
+fabric_ifaces: []
+provider: ""
+mount_path: /mnt/daos
+nvme_include: []
+nvme_exclude: []
+hyperthreads: false
+
+name: daos
+servers: []
+auto: true
+format: safe
+access_points:
+- localhost
+port: 10000
+ca_cert: ""
+cert: ./.daos/daos_server.crt
+key: ./.daos/daos_server.key
+fault_path: ""
+fault_cb: ""
+fabric_ifaces: []
+provider: ""
+mount_path: /mnt/daos
+nvme_include: []
+nvme_exclude: []
+hyperthreads: false
+
+name: new_daos
+servers: []
+auto: true
+format: safe
+access_points:
+- localhost
+port: 10000
+ca_cert: ""
+cert: ./.daos/daos_server.crt
+key: ./.daos/daos_server.key
+fault_path: ""
+fault_cb: ""
+fabric_ifaces: []
+provider: ""
+mount_path: /mnt/daos
+nvme_include: []
+nvme_exclude: []
+hyperthreads: false
+
+name: daos
+servers: []
+auto: true
+format: safe
+access_points:
+- localhost
+port: 10000
+ca_cert: ""
+cert: ./.daos/daos_server.crt
+key: ./.daos/daos_server.key
+fault_path: ""
+fault_cb: ""
+fabric_ifaces: []
+provider: ""
+mount_path: /mnt/daos
+nvme_include: []
+nvme_exclude: []
+hyperthreads: false
+
+name: daos
+servers: []
+auto: true
+format: continue
+access_points:
+- localhost
+port: 10000
+ca_cert: ""
+cert: ./.daos/daos_server.crt
+key: ./.daos/daos_server.key
+fault_path: ""
+fault_cb: ""
+fabric_ifaces: []
+provider: ""
+mount_path: /mnt/daos
+nvme_include: []
+nvme_exclude: []
+hyperthreads: false
+
+name: daos
+servers: []
+auto: true
+format: force
+access_points:
+- localhost
+port: 10000
+ca_cert: ""
+cert: ./.daos/daos_server.crt
+key: ./.daos/daos_server.key
+fault_path: ""
+fault_cb: ""
+fabric_ifaces: []
+provider: ""
+mount_path: /mnt/daos
+nvme_include: []
+nvme_exclude: []
+hyperthreads: false
+
+name: daos_cust
+servers: []
+auto: false
+format: force
+access_points:
+- foo1.com:9999
+- bar1.com:1111
+port: 11111
+ca_cert: /tmp/ca.crt
+cert: /tmp/serv.crt
+key: /tmp/serv.key
+fault_path: /foo.com
+fault_cb: /tmp/daos_fault_cb.sh
+fabric_ifaces:
+- ib0
+- ib1
+provider: ofi+verbs
+mount_path: /tmp/daos
+nvme_include:
+- pcie1000.0.0.0.8
+- pcie1000.0.0.0.9
+nvme_exclude:
+- pcie1000.0.0.0.7
+hyperthreads: true

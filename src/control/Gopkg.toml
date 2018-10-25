@@ -48,3 +48,8 @@
 [[constraint]]
   name = "google.golang.org/grpc"
   version = "~1.15.0"
+
+# go-yaml: Apache 2.0 used for configuration file support.
+[[constraint]]
+  name = "gopkg.in/yaml.v2"
+  version = "2.2.1"
