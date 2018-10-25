@@ -1229,7 +1229,7 @@ lm_membs_sample(crt_context_t ctx, crt_rpc_t *rpc, void *arg)
 	D_ASSERT(lm_grp_priv != NULL);
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	D_DEBUG(DB_TRACE, "rpc_priv %p\n", rpc_priv);
+	RPC_TRACE(DB_TRACE, rpc_priv, "\n");
 	if (!should_sample(lm_grp_priv, tgt_rank, rpc_priv, &tgt_psr))
 		return;
 	/* start a sample RPC */
