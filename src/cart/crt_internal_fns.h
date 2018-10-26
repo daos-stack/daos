@@ -62,19 +62,21 @@ crt_na_class_get_addr(na_class_t *na_class,
 		char *addr_str, na_size_t *str_size);
 
 /** crt_context.c */
-/* return value of crt_context_req_track */
+/* return values of crt_context_req_track, in addition to standard
+ * gurt error values.
+ */
 enum {
 	CRT_REQ_TRACK_IN_INFLIGHQ = 0,
 	CRT_REQ_TRACK_IN_WAITQ,
 };
 
-int crt_context_req_track(crt_rpc_t *req);
+int crt_context_req_track(struct crt_rpc_priv *rpc_priv);
 bool crt_context_empty(int locked);
-void crt_context_req_untrack(crt_rpc_t *req);
+void crt_context_req_untrack(struct crt_rpc_priv *rpc_priv);
 crt_context_t crt_context_lookup(int ctx_idx);
 void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
-int crt_req_timeout_track(crt_rpc_t *req);
-void crt_req_timeout_untrack(crt_rpc_t *req);
+int crt_req_timeout_track(struct crt_rpc_priv *rpc_priv);
+void crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv);
 void crt_req_force_timeout(struct crt_rpc_priv *rpc_priv);
 
 /** some simple helper functions */

@@ -697,7 +697,7 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 	}
 out:
 	if (rc != 0) {
-		crt_context_req_untrack(&rpc_priv->crp_pub);
+		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, rc);
 
 		/* Corresponds to cleanup in crt_hg_req_send_cb() */
@@ -750,10 +750,10 @@ crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
 	crt_ctx = rpc_pub->cr_ctx;
 
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-	if (!crt_req_timedout(rpc_pub))
-		crt_req_timeout_untrack(rpc_pub);
+	if (!crt_req_timedout(rpc_priv))
+		crt_req_timeout_untrack(rpc_priv);
 	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
-	rc = crt_req_timeout_track(rpc_pub);
+	rc = crt_req_timeout_track(rpc_priv);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 	if (rc != 0) {
 		D_ERROR("rpc_priv %p(opc: %#x), crt_req_timeout_track "
@@ -840,7 +840,7 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	}
 out:
 	if (rc != 0) {
-		crt_context_req_untrack(&rpc_priv->crp_pub);
+		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, rc);
 		RPC_DECREF(rpc_priv); /* destroy */
 	}
@@ -1288,7 +1288,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "submitted.\n");
 
-	rc = crt_context_req_track(req);
+	rc = crt_context_req_track(rpc_priv);
 	if (rc == CRT_REQ_TRACK_IN_INFLIGHQ) {
 		/* tracked in crt_ep_inflight::epi_req_q */
 		rc = crt_req_send_internal(rpc_priv);
@@ -1296,7 +1296,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 			D_ERROR("crt_req_send_internal() failed, "
 				"rc %d, opc: %#x\n",
 				rc, rpc_priv->crp_pub.cr_opc);
-			crt_context_req_untrack(req);
+			crt_context_req_untrack(rpc_priv);
 		}
 	} else if (rc == CRT_REQ_TRACK_IN_WAITQ) {
 		/* queued in crt_hg_context::dhc_req_q */
@@ -1358,7 +1358,7 @@ out:
 int
 crt_req_abort(crt_rpc_t *req)
 {
-	struct crt_rpc_priv	*rpc_priv = NULL;
+	struct crt_rpc_priv	*rpc_priv;
 	int			rc = 0;
 
 	if (req == NULL) {
@@ -1374,7 +1374,7 @@ crt_req_abort(crt_rpc_t *req)
 		D_GOTO(out, 0);
 	}
 
-	if (crt_req_aborted(req)) {
+	if (rpc_priv->crp_state == RPC_STATE_CANCELED) {
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "aborted, need not abort again.\n");
 		D_GOTO(out, rc);

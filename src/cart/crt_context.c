@@ -560,15 +560,12 @@ crt_ep_abort(crt_endpoint_t *ep)
 
 /* caller should already hold crt_ctx->cc_mutex */
 int
-crt_req_timeout_track(crt_rpc_t *req)
+crt_req_timeout_track(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_context	*crt_ctx;
-	struct crt_rpc_priv	*rpc_priv;
-	int			 rc;
+	struct crt_context *crt_ctx = rpc_priv->crp_pub.cr_ctx;
+	int rc;
 
-	crt_ctx = req->cr_ctx;
 	D_ASSERT(crt_ctx != NULL);
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
 	if (rpc_priv->crp_in_binheap == 1)
 		D_GOTO(out, rc = 0);
@@ -592,14 +589,11 @@ out:
 
 /* caller should already hold crt_ctx->cc_mutex */
 void
-crt_req_timeout_untrack(crt_rpc_t *req)
+crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_context	*crt_ctx;
-	struct crt_rpc_priv	*rpc_priv;
+	struct crt_context *crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
-	crt_ctx = req->cr_ctx;
 	D_ASSERT(crt_ctx != NULL);
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
 	/* remove from timeout binheap */
 	if (rpc_priv->crp_in_binheap == 1) {
@@ -668,7 +662,7 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 
 	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-	rc = crt_req_timeout_track(&rpc_priv->crp_pub);
+	rc = crt_req_timeout_track(rpc_priv);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 	if (rc != 0) {
 		D_ERROR("crt_req_timeout_track(opc: %#x) failed, rc: %d.\n",
@@ -724,7 +718,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			rpc_priv, rpc_priv->crp_pub.cr_opc,
 			grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank,
 			rpc_priv->crp_tgt_uri);
-		crt_context_req_untrack(&rpc_priv->crp_pub);
+		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		RPC_DECREF(rpc_priv);
 		break;
@@ -734,7 +728,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			rpc_priv, rpc_priv->crp_pub.cr_opc,
 			grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank,
 			rpc_priv->crp_tgt_uri);
-		crt_context_req_untrack(&rpc_priv->crp_pub);
+		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		RPC_DECREF(rpc_priv);
 		break;
@@ -779,7 +773,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 		/* +1 to prevent it from being released in timeout_untrack */
 		RPC_ADDREF(rpc_priv);
-		crt_req_timeout_untrack(&rpc_priv->crp_pub);
+		crt_req_timeout_untrack(rpc_priv);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
 		D_ERROR("ctx_id %d, rpc_priv %p (status: %#x) (opc %#x) "
@@ -809,27 +803,23 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
  *        negative value            - other error case such as -DER_NOMEM
  */
 int
-crt_context_req_track(crt_rpc_t *req)
+crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_rpc_priv	*rpc_priv;
-	struct crt_context	*crt_ctx;
+	struct crt_context	*crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	struct crt_ep_inflight	*epi;
 	d_list_t		*rlink;
 	d_rank_t		 ep_rank;
 	int			 rc = 0;
 
-	D_ASSERT(req != NULL);
-	crt_ctx = req->cr_ctx;
 	D_ASSERT(crt_ctx != NULL);
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
-	if (req->cr_opc == CRT_OPC_URI_LOOKUP) {
+	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_URI_LOOKUP) {
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "bypass tracking for URI_LOOKUP.\n");
 		D_GOTO(out, rc = CRT_REQ_TRACK_IN_INFLIGHQ);
 	}
 	/* TODO use global rank */
-	ep_rank = req->cr_ep.ep_rank;
+	ep_rank = rpc_priv->crp_pub.cr_ep.ep_rank;
 
 	/* lookup the crt_ep_inflight (create one if not found) */
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
@@ -891,7 +881,7 @@ crt_context_req_track(crt_rpc_t *req)
 		rc = CRT_REQ_TRACK_IN_WAITQ;
 	} else {
 		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-		rc = crt_req_timeout_track(req);
+		rc = crt_req_timeout_track(rpc_priv);
 		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 		if (rc == 0) {
 			d_list_add_tail(&rpc_priv->crp_epi_link,
@@ -917,21 +907,17 @@ out:
 }
 
 void
-crt_context_req_untrack(crt_rpc_t *req)
+crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_rpc_priv	*rpc_priv;
+	struct crt_context	*crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	struct crt_ep_inflight	*epi;
-	struct crt_context	*crt_ctx;
 	int64_t			 credits, inflight;
 	d_list_t		 submit_list;
 	int			 rc;
 
-	D_ASSERT(req != NULL);
-	crt_ctx = req->cr_ctx;
 	D_ASSERT(crt_ctx != NULL);
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
-	if (req->cr_opc == CRT_OPC_URI_LOOKUP) {
+	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_URI_LOOKUP) {
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "bypass untracking for URI_LOOKUP.\n");
 		return;
@@ -958,9 +944,9 @@ crt_context_req_untrack(crt_rpc_t *req)
 		epi->epi_req_num--;
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
-	if (!crt_req_timedout(req)) {
+	if (!crt_req_timedout(rpc_priv)) {
 		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-		crt_req_timeout_untrack(req);
+		crt_req_timeout_untrack(rpc_priv);
 		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 	}
 
@@ -985,7 +971,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 		rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
 
 		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-		rc = crt_req_timeout_track(&rpc_priv->crp_pub);
+		rc = crt_req_timeout_track(rpc_priv);
 		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 		if (rc != 0)
 			D_ERROR("crt_req_timeout_track failed, rc: %d.\n", rc);
@@ -1016,7 +1002,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 		D_ERROR("crt_req_send_internal failed, rc: %d, opc: %#x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 		rpc_priv->crp_state = RPC_STATE_INITED;
-		crt_context_req_untrack(&rpc_priv->crp_pub);
+		crt_context_req_untrack(rpc_priv);
 		/* for error case here */
 		crt_rpc_complete(rpc_priv, rc);
 		RPC_DECREF(rpc_priv);
@@ -1337,8 +1323,8 @@ crt_req_force_timeout(struct crt_rpc_priv *rpc_priv)
 	 *  of the heap.
 	 */
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-	crt_req_timeout_untrack(&rpc_priv->crp_pub);
+	crt_req_timeout_untrack(rpc_priv);
 	rpc_priv->crp_timeout_ts = 0;
-	crt_req_timeout_track(&rpc_priv->crp_pub);
+	crt_req_timeout_track(rpc_priv);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 }

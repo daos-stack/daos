@@ -1187,7 +1187,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				     rpc_pub->cr_ep.ep_rank)) {
 			RPC_TRACE(DB_NET, rpc_priv, "request target evicted\n");
 			rc = -DER_EVICTED;
-		} else if (crt_req_timedout(rpc_pub)) {
+		} else if (crt_req_timedout(rpc_priv)) {
 			RPC_TRACE(DB_NET, rpc_priv, "request timedout\n");
 			rc = -DER_TIMEDOUT;
 		} else {
@@ -1249,7 +1249,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	rpc_priv->crp_state = state;
 
 out:
-	crt_context_req_untrack(rpc_pub);
+	crt_context_req_untrack(rpc_priv);
 
 	/* corresponding to the refcount taken in crt_rpc_priv_init(). */
 	RPC_DECREF(rpc_priv);
@@ -1281,7 +1281,7 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 		RPC_TRACE(DB_TRACE, rpc_priv, "sent.\n");
 
 	if (hg_ret == HG_NA_ERROR) {
-		if (!crt_req_timedout(&rpc_priv->crp_pub)) {
+		if (!crt_req_timedout(rpc_priv)) {
 			/* error will be reported to the completion callback in
 			 * crt_req_timeout_hdlr()
 			 */

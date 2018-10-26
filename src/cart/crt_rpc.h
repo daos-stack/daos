@@ -456,26 +456,14 @@ int crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
 int crt_req_send_internal(struct crt_rpc_priv *rpc_priv);
 
 static inline bool
-crt_req_timedout(crt_rpc_t *rpc)
+crt_req_timedout(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_rpc_priv *rpc_priv;
-
-	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 	return (rpc_priv->crp_state == RPC_STATE_REQ_SENT ||
 		rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
 		rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
 		rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
 		rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) &&
 	       !rpc_priv->crp_in_binheap;
-}
-
-static inline bool
-crt_req_aborted(crt_rpc_t *rpc)
-{
-	struct crt_rpc_priv *rpc_priv;
-
-	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	return rpc_priv->crp_state == RPC_STATE_CANCELED;
 }
 
 static inline uint64_t
