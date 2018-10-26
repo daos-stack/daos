@@ -78,7 +78,7 @@ mdr_stop_pool_svc(void **argv)
 		sleep(1);
 
 		print_message("stopping pool service leader\n");
-		rc = daos_pool_svc_stop(poh, NULL /* ev */);
+		rc = daos_pool_stop_svc(poh, NULL /* ev */);
 		assert_int_equal(rc, 0);
 
 		/* Verify the connection is still usable. */
@@ -128,8 +128,6 @@ mdr_stop_cont_svc(void **argv)
 	uuid_t			uuid;
 	daos_handle_t		poh;
 	daos_handle_t		coh;
-	daos_epoch_state_t	state;
-	daos_epoch_t		epoch;
 	bool			skip = false;
 	int			rc;
 
@@ -158,23 +156,10 @@ mdr_stop_cont_svc(void **argv)
 	rc = daos_cont_open(poh, uuid, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_int_equal(rc, 0);
 
-	epoch = 31415926;
-	print_message("holding epoch "DF_U64"\n", epoch);
-	rc = daos_epoch_hold(coh, &epoch, NULL, NULL);
-	assert_int_equal(rc, 0);
-	print_message("committing epoch "DF_U64"\n", epoch);
-	rc = daos_epoch_commit(coh, epoch, NULL, NULL);
-	assert_int_equal(rc, 0);
-
 	print_message("stopping container service leader\n");
 	/* Currently, the pool and container services are combined. */
-	rc = daos_pool_svc_stop(poh, NULL /* ev */);
+	rc = daos_pool_stop_svc(poh, NULL /* ev */);
 	assert_int_equal(rc, 0);
-
-	print_message("verifying epoch state\n");
-	rc = daos_epoch_query(coh, &state, NULL);
-	assert_int_equal(rc, 0);
-	assert_int_equal(state.es_hce, epoch);
 
 	print_message("closing container\n");
 	rc = daos_cont_close(coh, NULL);

@@ -36,7 +36,6 @@ byte_array_simple_stack(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_epoch_t	 epoch = time(NULL);
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
@@ -50,7 +49,7 @@ byte_array_simple_stack(void **state)
 
 	/** open object */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
@@ -76,13 +75,14 @@ byte_array_simple_stack(void **state)
 
 	/** update record */
 	print_message("writing %d bytes in a single recx\n", STACK_BUF_LEN);
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	/** fetch record size & verify */
 	print_message("fetching record size\n");
 	iod.iod_size	= DAOS_REC_ANY;
-	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, NULL, NULL, NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, NULL, NULL,
+			    NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(iod.iod_size, 1);
 
@@ -90,7 +90,8 @@ byte_array_simple_stack(void **state)
 	print_message("reading data back ...\n");
 	memset(buf_out, 0, sizeof(buf_out));
 	daos_iov_set(&sg_iov, buf_out, sizeof(buf_out));
-	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
 	assert_int_equal(rc, 0);
 	/** Verify data consistency */
 	print_message("validating data ...\n");
@@ -108,7 +109,6 @@ array_simple(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_epoch_t	 epoch = 4;
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
@@ -125,7 +125,7 @@ array_simple(void **state)
 
 	/** open object */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
@@ -153,7 +153,7 @@ array_simple(void **state)
 	/** update record */
 	print_message("writing %lu records of %lu bytes each at offset %lu\n",
 		      recx.rx_nr, iod.iod_size, recx.rx_idx);
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	/** fetch data back */
@@ -163,7 +163,8 @@ array_simple(void **state)
 	memset(buf_out, 0, arg->size * arg->nr);
 	daos_iov_set(&sg_iov, buf_out, arg->size * arg->nr);
 	iod.iod_size	= DAOS_REC_ANY;
-	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
 	assert_int_equal(rc, 0);
 	/** verify record size */
 	print_message("validating record size ...\n");
@@ -189,7 +190,6 @@ array_partial(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_epoch_t	 epoch = 4;
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
@@ -209,7 +209,7 @@ array_partial(void **state)
 
 	/** open object */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
@@ -236,7 +236,7 @@ array_partial(void **state)
 	/** update record */
 	print_message("writing %lu records of %lu bytes each at offset %lu\n",
 		      recx.rx_nr, iod.iod_size, recx.rx_idx);
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	/** fetch 1/2 of the records back */
@@ -253,7 +253,8 @@ array_partial(void **state)
 	}
 
 	iod.iod_recxs = recxs;
-	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
 	print_message("fetch returns %d\n", rc);
 	assert_int_equal(rc, 0);
 	/** verify record size */
@@ -350,7 +351,6 @@ replicator(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_epoch_t	 epoch = time(NULL);
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
@@ -364,7 +364,7 @@ replicator(void **state)
 
 	/** open object */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
@@ -390,19 +390,19 @@ replicator(void **state)
 
 	/** update record */
 	print_message("writing %d bytes in a single recx\n", 192);
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	recx.rx_idx     = 30208;
 	iod.iod_recxs	= &recx;
 	print_message("writing %d bytes in a single recx\n", 192);
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	recx.rx_idx     = 28672;
 	iod.iod_recxs	= &recx;
 	print_message("writing %d bytes in a single recx\n", 192);
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	/** fetch */
@@ -412,7 +412,8 @@ replicator(void **state)
 	recx.rx_idx     = 27136;
 	recx.rx_nr      = sizeof(buf_out);
 	iod.iod_recxs	= &recx;
-	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
 	assert_int_equal(rc, 0);
 
 	/** close object */
@@ -427,7 +428,6 @@ read_empty(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_epoch_t	 epoch = time(NULL);
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
@@ -443,7 +443,7 @@ read_empty(void **state)
 
 	/** open object */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
@@ -469,7 +469,8 @@ read_empty(void **state)
 
 	/** fetch */
 	print_message("reading empty object ...\n");
-	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
 	assert_int_equal(rc, 0);
 
 	/** close object */

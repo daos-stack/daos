@@ -226,7 +226,7 @@ array(void)
 	ioreqs_init(reqs);
 
 	/** open DAOS object */
-	rc = daos_obj_open(coh, oid, epoch, DAOS_OO_RW, &oh, NULL);
+	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	ASSERT(rc == 0, "object open failed with %d", rc);
 
 	/** Transactional overwrite of the array at each iteration */
@@ -275,7 +275,7 @@ array(void)
 			req->recx.rx_idx = sid * SLICE_SIZE;
 
 			/** submit I/O operation */
-			rc = daos_obj_update(oh, epoch, &req->dkey, 1,
+			rc = daos_obj_update(oh, DAOS_TX_NONE, &req->dkey, 1,
 					    &req->iod, &req->sg,
 					    &req->ev);
 			ASSERT(rc == 0, "object update failed with %d", rc);
@@ -426,10 +426,6 @@ committer()
 				ASSERT(ev.ev_error == 0,
 				       "flush failed with %d", ev.ev_error);
 				*state = EP_FLUSHED;
-				/** start commit */
-				rc = daos_epoch_commit(coh, epoch, NULL, &ev);
-				ASSERT(rc == 0,
-				       "commit start failed with %d", rc);
 			} else if (*state == EP_FLUSHED) {
 				/** commit completed */
 				ASSERT(ev.ev_error == 0,
@@ -455,10 +451,6 @@ committer()
 
 			ASSERT(*state == EP_NONE, "invalid epoch state");
 			*state = EP_WR_DONE;
-
-			/** start flush on behalf of everyone */
-			rc = daos_epoch_flush(coh, epoch, NULL, &ev);
-			ASSERT(rc == 0, "flush start failed with %d", rc);
 		}
 	}
 
@@ -525,7 +517,7 @@ main(int argc, char **argv)
 	handle_share(&coh, HANDLE_CO, rank, poh, 1);
 
 	/** generate objid */
-	daos_obj_id_generate(&oid, 0, cid);
+	daos_obj_generate_id(&oid, 0, cid);
 
 	if (rank == 0) {
 		daos_oclass_attr_t	cattr = {
@@ -539,17 +531,10 @@ main(int argc, char **argv)
 			},
 		};
 
-		/** obtain an epoch hold */
-		rc = daos_epoch_hold(coh, &epoch, NULL, NULL);
-		ASSERT(rc == 0, "container open failed with %d", rc);
-
 		/** register a default object class */
-		rc = daos_obj_class_register(coh, cid, &cattr, NULL);
+		rc = daos_obj_register_class(coh, cid, &cattr, NULL);
 		ASSERT(rc == 0, "class register failed with %d", rc);
 
-		/** declare the object */
-		rc = daos_obj_declare(coh, oid, epoch, NULL, NULL);
-		ASSERT(rc == 0, "object declare failed with %d", rc);
 	}
 
 	/** broadcast current LHE to all peers */

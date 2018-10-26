@@ -237,7 +237,7 @@ main(int argc, char **argv)
 	pl_map_print(pl_map);
 
 	/* initial placement when all nodes alive */
-	daos_obj_id_generate(&oid, 0, DAOS_OC_R4_RW);
+	daos_obj_generate_id(&oid, 0, DAOS_OC_R4_RW);
 	D_PRINT("\ntest initial placement when no failed shard ...\n");
 	plt_obj_place(oid, &lo_1);
 	plt_obj_layout_check(lo_1);

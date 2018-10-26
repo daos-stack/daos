@@ -279,7 +279,6 @@ io_invalid_poh(void **state)
 	daos_handle_t		 coh;
 	daos_obj_id_t		 oid;
 	daos_handle_t		 oh;
-	daos_epoch_t		 epoch = time(NULL);
 	daos_iov_t		 dkey;
 	daos_sg_list_t		 sgl;
 	daos_iov_t		 sg_iov;
@@ -322,7 +321,7 @@ io_invalid_poh(void **state)
 	if (arg->myrank == 1) {
 		/** open object */
 		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
-		rc = daos_obj_open(coh, oid, 0, 0, &oh, NULL);
+		rc = daos_obj_open(coh, oid, 0, &oh, NULL);
 		assert_int_equal(rc, 0);
 
 		/** init I/O */
@@ -345,14 +344,15 @@ io_invalid_poh(void **state)
 		/** update record */
 		print_message("Updating %d bytes with invalid pool handle ..."
 			      "\n", STACK_BUF_LEN);
-		rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+				     NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
 
 		/** fetch */
 		print_message("fetching records with invalid pool handle...\n");
-		rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL,
-				    NULL);
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+				    NULL, NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
 
@@ -381,7 +381,6 @@ io_invalid_coh(void **state)
 	daos_handle_t		 coh;
 	daos_obj_id_t		 oid;
 	daos_handle_t		 oh;
-	daos_epoch_t		 epoch = time(NULL);
 	daos_iov_t		 dkey;
 	daos_sg_list_t		 sgl;
 	daos_iov_t		 sg_iov;
@@ -413,7 +412,7 @@ io_invalid_coh(void **state)
 	if (arg->myrank == 1) {
 		/** open object */
 		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
-		rc = daos_obj_open(coh, oid, 0, 0, &oh, NULL);
+		rc = daos_obj_open(coh, oid, 0, &oh, NULL);
 		assert_int_equal(rc, 0);
 
 		/** init I/O */
@@ -436,15 +435,16 @@ io_invalid_coh(void **state)
 		/** update record */
 		print_message("Updating records with stale container handle "
 			      "...\n");
-		rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+				     NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
 
 		/** fetch */
 		print_message("fetching records with stale container handle "
 			      "...\n");
-		rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL,
-				    NULL);
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+				    NULL, NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
 
@@ -469,7 +469,6 @@ update_ro(void **state)
 	daos_handle_t		 coh;
 	daos_obj_id_t		 oid;
 	daos_handle_t		 oh;
-	daos_epoch_t		 epoch = time(NULL);
 	daos_iov_t		 dkey;
 	daos_sg_list_t		 sgl;
 	daos_iov_t		 sg_iov;
@@ -492,7 +491,7 @@ update_ro(void **state)
 
 	/** open object */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
-	rc = daos_obj_open(coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** init I/O */
@@ -514,7 +513,7 @@ update_ro(void **state)
 
 	/** update record */
 	print_message("Updating records with read-only container handle ...\n");
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, -DER_NO_PERM);
 	print_message("got -DER_NO_PERM as expected\n");
 

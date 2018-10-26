@@ -277,7 +277,7 @@ pool_attribute(void **state)
 
 	print_message("setting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
-	rc = daos_pool_attr_set(arg->pool.poh, n, names, in_values, in_sizes,
+	rc = daos_pool_set_attr(arg->pool.poh, n, names, in_values, in_sizes,
 				arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -286,7 +286,7 @@ pool_attribute(void **state)
 		      arg->async ? "a" : "");
 
 	total_size = 0;
-	rc = daos_pool_attr_list(arg->pool.poh, NULL, &total_size,
+	rc = daos_pool_list_attr(arg->pool.poh, NULL, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -294,7 +294,7 @@ pool_attribute(void **state)
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
 
 	total_size = BUFSIZE;
-	rc = daos_pool_attr_list(arg->pool.poh, out_buf, &total_size,
+	rc = daos_pool_list_attr(arg->pool.poh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -303,7 +303,7 @@ pool_attribute(void **state)
 	assert_string_equal(out_buf, names[1]);
 
 	total_size = 10*BUFSIZE;
-	rc = daos_pool_attr_list(arg->pool.poh, out_buf, &total_size,
+	rc = daos_pool_list_attr(arg->pool.poh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -315,7 +315,7 @@ pool_attribute(void **state)
 	print_message("getting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 
-	rc = daos_pool_attr_get(arg->pool.poh, n, names, out_values, out_sizes,
+	rc = daos_pool_get_attr(arg->pool.poh, n, names, out_values, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -329,7 +329,7 @@ pool_attribute(void **state)
 	assert_int_equal(out_sizes[1], in_sizes[1]);
 	assert_memory_equal(out_values[1], in_values[1], BUFSIZE);
 
-	rc = daos_pool_attr_get(arg->pool.poh, n, names, NULL, out_sizes,
+	rc = daos_pool_get_attr(arg->pool.poh, n, names, NULL, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);

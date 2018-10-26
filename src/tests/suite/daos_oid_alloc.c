@@ -79,7 +79,7 @@ simple_oid_allocator(void **state)
 			fprintf(stderr, "%d ---------------------\n", i);
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		rc = daos_cont_oid_alloc(arg->coh, num_oids, &oid, NULL);
+		rc = daos_cont_alloc_oids(arg->coh, num_oids, &oid, NULL);
 		if (rc)
 			print_message("OID alloc failed (%d)\n", rc);
 		assert_int_equal(rc, 0);
@@ -126,7 +126,7 @@ multi_cont_oid_allocator(void **state)
 			goto verify_rc;
 		}
 
-		rc = daos_cont_oid_alloc(coh, num_oids, &oid, NULL);
+		rc = daos_cont_alloc_oids(coh, num_oids, &oid, NULL);
 		if (rc) {
 			print_message("OID alloc failed (%d)\n", rc);
 			daos_cont_close(coh, NULL);
@@ -231,7 +231,8 @@ oid_allocator_checker(void **state)
 
 	for (i = 0; i < NUM_RGS; i++) {
 		num_oids[i] = rand() % 256 + 1;
-		rc = daos_cont_oid_alloc(arg->coh, num_oids[i], &oids[i], NULL);
+		rc = daos_cont_alloc_oids(arg->coh, num_oids[i], &oids[i],
+					  NULL);
 		if (rc) {
 			fprintf(stderr, "%d: %d oids alloc failed (%d)\n",
 				i, num_oids[i], rc);

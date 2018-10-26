@@ -32,6 +32,7 @@
 #include "daos_iotest.h"
 #include <daos/pool.h>
 #include <daos/mgmt.h>
+#include <daos/container.h>
 
 #define KEY_NR		1000
 #define OBJ_NR		10
@@ -80,7 +81,7 @@ rebuild_test_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank)
 
 static int
 rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
-			daos_epoch_t punch_eph, daos_epoch_t validate_eph)
+			daos_epoch_t validate_eph)
 {
 #define BULK_SIZE	5000
 #define REC_SIZE	64
@@ -120,33 +121,36 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 					memset(data, 0, REC_SIZE);
 					if (l == 7)
 						lookup_single(large_key, akey,
-							l, data, REC_SIZE, eph,
-							req);
+							      l, data, REC_SIZE,
+							      DAOS_TX_NONE,
+							      req);
 					else
 						lookup_single(dkey, akey, l,
-							data, REC_SIZE, eph,
-							req);
+							      data, REC_SIZE,
+							      DAOS_TX_NONE,
+							      req);
 					assert_memory_equal(data, data_verify,
-							  strlen(data_verify));
+						    strlen(data_verify));
 				} else {
 					if (l == 7)
 						insert_single(large_key, akey,
 							l, data,
 							strlen(data) + 1,
-							eph, req);
+							DAOS_TX_NONE, req);
 					else if (l == rec_punch_idx)
-						punch_single(dkey, akey, l, eph,
+						punch_single(dkey, akey, l,
+							     DAOS_TX_NONE,
 							     req);
 					else
 						insert_single(dkey, akey, l,
 							data, strlen(data) + 1,
-							eph, req);
+							DAOS_TX_NONE, req);
 				}
 			}
 
 			/* Punch akey */
 			if (k == akey_punch_idx && !validate)
-				punch_akey(dkey, akey, punch_eph, req);
+				punch_akey(dkey, akey, DAOS_TX_NONE, req);
 		}
 
 		/* large records */
@@ -165,25 +169,25 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 					memset(bulk, 0, BULK_SIZE);
 					lookup_single(dkey, akey, l,
 						      bulk, BULK_SIZE + 10,
-						      eph, req);
+						      DAOS_TX_NONE, req);
 					assert_memory_equal(bulk, compare,
 							    BULK_SIZE);
 				} else {
 					memset(bulk, 'a', BULK_SIZE);
 					insert_single(dkey, akey, l,
-						      bulk, BULK_SIZE, eph,
-						      req);
+						      bulk, BULK_SIZE,
+						      DAOS_TX_NONE, req);
 				}
 			}
 
 			/* Punch akey */
 			if (k == akey_punch_idx && !validate)
-				punch_akey(dkey, akey, punch_eph, req);
+				punch_akey(dkey, akey, DAOS_TX_NONE, req);
 		}
 
 		/* Punch dkey */
 		if (j == dkey_punch_idx && !validate)
-			punch_dkey(dkey, punch_eph, req);
+			punch_dkey(dkey, DAOS_TX_NONE, req);
 
 		/* single record */
 		sprintf(data, "%s_"DF_U64, "single_data", eph);
@@ -194,12 +198,12 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 		if (validate) {
 			memset(data, 0, REC_SIZE);
 			lookup_single(dkey, "akey_single", 0, data, REC_SIZE,
-				      eph, req);
+				      DAOS_TX_NONE, req);
 			assert_memory_equal(data, data_verify,
 					    strlen(data_verify));
 		} else {
 			insert_single(dkey, "akey_single", 0, data,
-				      strlen(data) + 1, eph, req);
+				      strlen(data) + 1, DAOS_TX_NONE, req);
 		}
 	}
 
@@ -212,7 +216,6 @@ rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
 	struct ioreq	req;
 	daos_epoch_t	eph = arg->hce + arg->index * 2 + 1;
-	daos_epoch_t	commit_eph = eph + 1;
 	int		rc;
 	int		i;
 	int		punch_idx = 1;
@@ -220,28 +223,21 @@ rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 	print_message("update obj %d eph "DF_U64" before rebuild\n", oids_nr,
 		      eph);
 
-	/** Disable holding epoch until we totally support epoch discard,
-	 *  see DAOS-1199.
-	 */
-	rc = daos_epoch_hold(arg->coh, &commit_eph, NULL, NULL);
-	assert_int_equal(rc, 0);
-
 	for (i = 0; i < oids_nr; i++) {
 		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 		if (i == punch_idx) {
-			punch_obj(eph, &req);
+			punch_obj(DAOS_TX_NONE, &req);
 		} else {
-			rebuild_io_obj_internal((&req), false, eph, eph + 1,
-						-1);
+			rebuild_io_obj_internal((&req), false, eph, -1);
 		}
 
 		ioreq_fini(&req);
 	}
 
-	/* We may only commit eph, when it support discard */
-	rc = daos_epoch_commit(arg->coh, commit_eph, NULL, NULL);
+	/** TODO - should snapshot and rollback on open instead. */
+	rc = daos_cont_sync(arg->coh, NULL);
 	if (rc)
-		print_message("container epoch commit failed "DF_UUIDF
+		print_message("container sync failed "DF_UUIDF
 			      ": %d\n", DP_UUID(arg->co_uuid), rc);
 }
 
@@ -253,17 +249,6 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 	daos_epoch_t	eph = arg->hce + arg->index * 2 + 1;
 	int		i;
 	int		punch_idx = 1;
-
-	/* XXX Disable discard until we support ARRAY record discard */
-	discard = false;
-
-	if (discard) {
-		int rc;
-
-		print_message("discard eph "DF_U64"\n", eph + 1);
-		rc = daos_epoch_discard(arg->coh, eph + 1, NULL, NULL);
-		assert_int_equal(rc, 0);
-	}
 
 	arg->fail_loc = DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_VALUE;
 	/* Validate data for each shard */
@@ -278,8 +263,7 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			/* how to validate punch object XXX */
 			if (j != punch_idx)
 				/* Validate eph data */
-				rebuild_io_obj_internal((&req), true, -1, eph,
-							eph);
+				rebuild_io_obj_internal((&req), true, eph, eph);
 
 			ioreq_fini(&req);
 		}
@@ -360,8 +344,8 @@ rebuild_dkeys(void **state)
 		char	key[16];
 
 		sprintf(key, "%d", i);
-		insert_single(key, "a_key", 0, "data",
-			      strlen("data") + 1, 0, &req);
+		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
 	}
 	ioreq_fini(&req);
 
@@ -390,8 +374,8 @@ rebuild_akeys(void **state)
 		char	akey[16];
 
 		sprintf(akey, "%d", i);
-		insert_single("d_key", akey, 0, "data",
-			      strlen("data") + 1, 0, &req);
+		insert_single("d_key", akey, 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
 	}
 	ioreq_fini(&req);
 
@@ -423,7 +407,7 @@ rebuild_indexes(void **state)
 		sprintf(key, "%d", i);
 		for (j = 0; j < 20; j++)
 			insert_single(key, "a_key", j, "data",
-				      strlen("data") + 1, 0, &req);
+				      strlen("data") + 1, DAOS_TX_NONE, &req);
 	}
 	ioreq_fini(&req);
 
@@ -461,8 +445,8 @@ rebuild_multiple(void **state)
 			sprintf(akey, "akey_%d", j);
 			for (k = 0; k < 10; k++)
 				insert_single(dkey, akey, k, "data",
-					      strlen("data") + 1, 0,
-					      &req);
+					      strlen("data") + 1,
+					      DAOS_TX_NONE, &req);
 		}
 	}
 	ioreq_fini(&req);
@@ -494,7 +478,8 @@ rebuild_large_rec(void **state)
 		char	key[16];
 
 		sprintf(key, "%d", i);
-		insert_single(key, "a_key", 0, buffer, 5000, 0, &req);
+		insert_single(key, "a_key", 0, buffer, 5000, DAOS_TX_NONE,
+			      &req);
 	}
 	ioreq_fini(&req);
 
@@ -542,7 +527,7 @@ rebuild_drop_scan(void **state)
 
 	/* Set drop scan fail_loc on server 0 */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -570,7 +555,7 @@ rebuild_retry_rebuild(void **state)
 
 	/* Set no hdl fail_loc on all servers */
 	if (arg->myrank == 0)	
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_HDL | DAOS_FAIL_ONCE,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -598,7 +583,7 @@ rebuild_retry_for_stale_pool(void **state)
 
 	/* Set no hdl fail_loc on all servers */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_STALE_POOL | DAOS_FAIL_ONCE,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -626,7 +611,7 @@ rebuild_drop_obj(void **state)
 
 	/* Set drop REBUILD_OBJECTS reply on all servers */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_DROP_OBJ | DAOS_FAIL_ONCE,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -654,7 +639,7 @@ rebuild_update_failed(void **state)
 
 	/* Set drop scan reply on all servers */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_UPDATE_FAIL | DAOS_FAIL_ONCE,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -886,7 +871,7 @@ rebuild_destroy_pool_cb(void *data)
 		      DP_UUID(arg->pool.pool_uuid));
 	/* Disable fail_loc and start rebuild */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				     0, 0, NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -924,7 +909,7 @@ rebuild_destroy_pool_internal(void **state, uint64_t fail_loc)
 
 	/* hang the rebuild */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, fail_loc,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC, fail_loc,
 				     0, NULL);
 
 	args[1]->rebuild_cb = rebuild_destroy_pool_cb;
@@ -966,7 +951,7 @@ rebuild_iv_tgt_fail(void **state)
 
 	/* Set no hdl fail_loc on all servers */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_TGT_IV_UPDATE_FAIL |
 				     DAOS_FAIL_ONCE, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -994,7 +979,7 @@ rebuild_tgt_start_fail(void **state)
 
 	/* failed to start rebuild on rank 0 */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, 0, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
 				  DAOS_REBUILD_TGT_START_FAIL | DAOS_FAIL_ONCE,
 				  0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -1022,7 +1007,7 @@ rebuild_send_objects_fail(void **state)
 
 	/* Skip object send on all of the targets */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_TGT_SEND_OBJS_FAIL |
 				     DAOS_FAIL_VALUE, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -1033,7 +1018,7 @@ rebuild_send_objects_fail(void **state)
 
 	/* failed to start rebuild on rank 0 */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -1106,7 +1091,7 @@ rebuild_pool_disconnect_cb(void *data)
 
 	/* Disable fail_loc and start rebuild */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				     0, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1132,7 +1117,7 @@ rebuild_tgt_pool_disconnect_internal(void **state, unsigned int fail_loc)
 
 	/* hang the rebuild during scan */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, fail_loc,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC, fail_loc,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1177,7 +1162,7 @@ rebuild_pool_connect_cb(void *data)
 	rebuild_pool_connect_internal(data);
 	/* Disable fail_loc and start rebuild */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				     0, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return 0;
@@ -1202,7 +1187,7 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 
 	/* hang the rebuild */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, fail_loc,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC, fail_loc,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1270,14 +1255,14 @@ rebuild_change_leader_cb(void *arg)
 
 	/* Skip appendentry to re-elect the leader */
 	if (test_arg->myrank == 0) {
-		daos_mgmt_params_set(test_arg->group, leader, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(test_arg->group, leader, DSS_KEY_FAIL_LOC,
 				     DAOS_RDB_SKIP_APPENDENTRIES_FAIL |
 				     DAOS_FAIL_VALUE, 0, NULL);
 		print_message("sleep 15 seconds for re-election leader\n");
 		/* Sleep 15 seconds to make sure the leader is changed */
 		sleep(15);
 		/* Continue the rebuild */
-		daos_mgmt_params_set(test_arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(test_arg->group, -1, DSS_KEY_FAIL_LOC,
 				     0, 0, NULL);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -1303,7 +1288,7 @@ rebuild_master_change_during_scan(void **state)
 
 	/* All ranks should wait before rebuild */
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				 DAOS_REBUILD_TGT_SCAN_HANG | DAOS_FAIL_VALUE,
 				 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -1335,7 +1320,7 @@ rebuild_master_change_during_rebuild(void **state)
 	rebuild_io(arg, oids, OBJ_NR);
 
 	/* All ranks should wait before rebuild */
-	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+	daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_VALUE,
 			     0, NULL);
 
@@ -1358,7 +1343,7 @@ rebuild_nospace_cb(void *data)
 	sleep(60);
 
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				     0, 0, NULL);
 
 	print_message("re-enable recovery\n");
@@ -1366,7 +1351,7 @@ rebuild_nospace_cb(void *data)
 		/* Resume the rebuild. FIXME: fix this once we have better
 		 * way to resume rebuild through mgmt cmd.
 		 */
-		daos_mgmt_params_set(arg->group, -1, DSS_REBUILD_RES_PERCENTAGE,
+		daos_mgmt_set_params(arg->group, -1, DSS_REBUILD_RES_PERCENTAGE,
 				     30, 0, NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -1392,7 +1377,7 @@ rebuild_nospace(void **state)
 	rebuild_io(arg, oids, OBJ_NR);
 
 	if (arg->myrank == 0)
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_TGT_NOSPACE | DAOS_FAIL_VALUE,
 				     0, NULL);
 
@@ -1430,7 +1415,7 @@ rebuild_multiple_tgts(void **state)
 		int fail_cnt = 0;
 
 		/* All ranks should wait before rebuild */
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_HANG | DAOS_FAIL_VALUE,
 				     0, NULL);
 		/* kill 2 ranks at the same time */
@@ -1448,7 +1433,7 @@ rebuild_multiple_tgts(void **state)
 			}
 		}
 
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	}
 
@@ -1602,7 +1587,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	daos_obj_layout_get(arg->coh, oid, &layout);
 
 	/* HOLD rebuild ULT */
-	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+	daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 			     DAOS_REBUILD_HANG | DAOS_FAIL_VALUE,
 			     0, NULL);
 
@@ -1624,7 +1609,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 			    shard->os_ranks[1]);
 
 	/* Continue rebuild */
-	daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, 0, 0, NULL);
+	daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC, 0, 0, NULL);
 
 	sleep(5);
 	if (arg->myrank == 0)

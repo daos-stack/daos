@@ -39,6 +39,7 @@
 #include <mpi.h>
 
 #include <daos/common.h>
+#include <daos/container.h>
 #include <daos.h>
 #include <errno.h>
 #include "suite/daos_test.h"
@@ -76,8 +77,7 @@ daos_handle_t			oh = DAOS_HDL_INVAL;
 uuid_t				cont_uuid;
 daos_cont_info_t		cont_info;
 daos_obj_id_t			oid;
-daos_epoch_t			ghce;
-d_rank_list_t	       *svcl;
+d_rank_list_t			*svcl;
 void				*buffers;
 void				*dkbuf;
 void				*akbuf;
@@ -118,8 +118,6 @@ struct test {
 	int			t_naios;
 	/* Test ID */
 	int			t_id;
-	/* Current epoch */
-	daos_epoch_t		t_epoch;
 	/* Number of steps for kv-simul test */
 	int			t_steps;
 	/* Container UUID */
@@ -566,11 +564,9 @@ chrono_read(char *key)
 
 
 static int
-object_open(int t_id, daos_epoch_t epoch, int enum_flag, int declare,
-	    daos_handle_t *object)
+object_open(int t_id, int enum_flag, daos_handle_t *object)
 {
 	unsigned int	flags;
-	int		rc;
 
 	if (enum_flag) {
 		oid.hi = t_id + comm_world_rank + 1;
@@ -579,25 +575,12 @@ object_open(int t_id, daos_epoch_t epoch, int enum_flag, int declare,
 		oid.hi = t_id + 1;
 		oid.lo = t_id;
 	}
-	daos_obj_id_generate(&oid, 0, obj_class);
-
-	if (declare) {
-		if (enum_flag) {
-			rc = daos_obj_declare(coh, oid, epoch, NULL, NULL);
-			DBENCH_CHECK(rc, "Failed to declare object");
-		} else {
-			if (comm_world_rank == 0) {
-				rc = daos_obj_declare(coh, oid, epoch, NULL,
-						      NULL);
-				DBENCH_CHECK(rc, "Failed to declare object");
-			}
-		}
-	}
+	daos_obj_generate_id(&oid, 0, obj_class);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	flags = DAOS_OO_RW;
-	return daos_obj_open(coh, oid, epoch, flags, object, NULL);
+	return daos_obj_open(coh, oid, flags, object, NULL);
 }
 
 static void
@@ -610,7 +593,7 @@ object_close(daos_handle_t object)
 }
 
 static void
-insert(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req, int sync)
+insert(uint64_t idx, daos_handle_t th, struct a_ioreq *req, int sync)
 {
 
 	int	rc;
@@ -619,25 +602,25 @@ insert(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req, int sync)
 	req->iod.iod_size = req->val_iov.iov_len;
 	req->rex.rx_idx = idx;
 
-	req->erange.epr_lo = epoch;
+	req->erange.epr_lo = 0;
 
 	DBENCH_INFO("Starting update %p (%d free): dkey '%s' akey '%s' "
-		    "iod <%lu, %lu> sgl <%p, %lu> epoch %lu %s",
+		    "iod <%lu, %lu> sgl <%p, %lu> %s",
 		    req, naios, (char *)req->dkey.iov_buf,
 		    (char *)req->iod.iod_name.iov_buf,
 		    req->iod.iod_recxs->rx_idx, req->iod.iod_recxs->rx_nr,
 		    req->sgl.sg_iovs->iov_buf,
 		    req->sgl.sg_iovs->iov_buf_len,
-		    epoch, sync ? "sync" : "async");
+		    sync ? "sync" : "async");
 
 	/** execute update operation */
-	rc = daos_obj_update(oh, epoch, &req->dkey, 1, &req->iod, &req->sgl,
+	rc = daos_obj_update(oh, th, &req->dkey, 1, &req->iod, &req->sgl,
 			     sync ? NULL : &req->ev);
 	DBENCH_CHECK(rc, "object update failed\n");
 }
 
 static void
-enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
+enumerate(daos_handle_t th, uint32_t *number, daos_key_desc_t *kds,
 	  daos_anchor_t *anchor, char *buf, int len, struct a_ioreq *req)
 {
 	int	rc;
@@ -645,14 +628,13 @@ enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	daos_iov_set(&req->val_iov, buf, len);
 
 	/** execute fetch operation */
-	rc = daos_obj_list_dkey(oh, epoch, number, kds, &req->sgl, anchor,
-				NULL);
+	rc = daos_obj_list_dkey(oh, th, number, kds, &req->sgl, anchor, NULL);
 
 	DBENCH_CHECK(rc, "daos_obj_list_dkey failed\n");
 }
 
 static void
-lookup(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req,
+lookup(uint64_t idx, daos_handle_t th, struct a_ioreq *req,
        struct test *test, int verify)
 {
 	int rc;
@@ -662,19 +644,19 @@ lookup(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req,
 	req->rex.rx_idx = idx;
 
 	/** XXX: to be fixed */
-	req->erange.epr_lo = epoch;
+	req->erange.epr_lo = 0;
 
 	DBENCH_INFO("Starting lookup %p (%d free %d busy): dkey '%s' akey '%s' "
-		    "iod <%lu, %lu> sgl <%p, %lu> epoch %lu %s", req, naios,
+		    "iod <%lu, %lu> sgl <%p, %lu> %s", req, naios,
 		    test->t_naios - naios, (char *)(req->dkey.iov_buf),
 		    (char *)req->iod.iod_name.iov_buf,
 		    req->iod.iod_recxs->rx_idx,
 		    req->iod.iod_recxs->rx_nr, req->sgl.sg_iovs->iov_buf,
-		    req->sgl.sg_iovs->iov_buf_len, epoch,
+		    req->sgl.sg_iovs->iov_buf_len,
 		    verify ? "sync" : "async");
 
 	/** execute fetch operation */
-	rc = daos_obj_fetch(oh, epoch, &req->dkey, 1, &req->iod, &req->sgl,
+	rc = daos_obj_fetch(oh, th, &req->dkey, 1, &req->iod, &req->sgl,
 			    NULL, verify ? NULL : &req->ev);
 	DBENCH_CHECK(rc, "dsr fetch failed\n");
 }
@@ -875,7 +857,7 @@ update_async(struct test *test, int key_type, uint64_t value)
 			     value);
 		insert((key_type == 2) ?
 		       ((comm_world_rank * test->t_nindexes) + i) : 0,
-		       test->t_epoch, ioreq, 0 /* sync */);
+		       DAOS_TX_NONE, ioreq, 0 /* sync */);
 	}
 
 	while (test->t_naios - naios > 0)
@@ -890,19 +872,7 @@ kv_update_async(struct test *test, int key_type, int enum_flag, uint64_t value,
 {
 	int rc;
 
-	ghce = cont_info.ci_epoch_state.es_ghce;
-	DBENCH_INFO("ghce: %"PRIu64, ghce);
-
-	ghce++;
-	test->t_epoch = ghce;
-
-	if (comm_world_rank == 0) {
-		rc = daos_epoch_hold(coh, &test->t_epoch, NULL, NULL);
-		DBENCH_CHECK(rc, "Failed to hold epoch\n");
-	}
-
-	rc = object_open(test->t_id, test->t_epoch, enum_flag, 0 /* declare */,
-			 &oh);
+	rc = object_open(test->t_id, enum_flag, &oh);
 	DBENCH_CHECK(rc, "Failed to open object");
 
 	if (update)
@@ -938,7 +908,7 @@ update_verify(struct test *test, int key_type, uint64_t value)
 
 		lookup((key_type == 2) ?
 		       ((comm_world_rank * test->t_nindexes) + i) : 0,
-		       test->t_epoch, &ioreq, test, 1);
+		       DAOS_TX_NONE, &ioreq, test, 1);
 
 		if (ioreq.val_iov.iov_len != test->t_val_bufsize ||
 		    memcmp(ioreq.val_iov.iov_buf, valbuf,
@@ -961,14 +931,10 @@ kv_flush_and_commit(struct test *test)
 {
 	int	rc = 0;
 
+	/** TODO - should create snapshot instead and rollback on open. */
 	if (comm_world_rank == 0) {
-		DBENCH_INFO("Flushing epoch %lu", test->t_epoch);
-
-		rc = daos_epoch_flush(coh, test->t_epoch, NULL, NULL);
-		DBENCH_CHECK(rc, "Failed to flush epoch");
-
-		DBENCH_INFO("Committing epoch %lu", test->t_epoch);
-		rc = daos_epoch_commit(coh, test->t_epoch, NULL, NULL);
+		DBENCH_INFO("Container Sync...");
+		rc = daos_cont_sync(coh, NULL);
 		DBENCH_CHECK(rc, "Failed to commit object write\n");
 	}
 
@@ -1095,7 +1061,7 @@ kv_multi_dkey_fetch_run(struct test *test)
 		ioreq->r_index = i;
 		kv_set_dkey(test, ioreq, 0, i);
 		kv_set_akey(test, ioreq, 0, i);
-		lookup(/* idx */ 0, test->t_epoch, ioreq, test, 0);
+		lookup(/* idx */ 0, DAOS_TX_NONE, ioreq, test, 0);
 	}
 
 	while (test->t_naios - naios > 0)
@@ -1160,7 +1126,7 @@ kv_multi_akey_fetch_run(struct test *test)
 		ioreq->r_index = i;
 		kv_set_dkey(test, ioreq, 1, i);
 		kv_set_akey(test, ioreq, 1, i);
-		lookup(/* idx */ 0, test->t_epoch, ioreq, test, 0);
+		lookup(/* idx */ 0, DAOS_TX_NONE, ioreq, test, 0);
 	}
 
 	while (test->t_naios - naios > 0)
@@ -1235,9 +1201,8 @@ kv_dkey_enumerate(struct test *test)
 			enum_pause = true;
 		}
 
-		enumerate(test->t_epoch,
-			  &number, kds, &anchor_out, buf, 5*test->t_dkey_size,
-			  &e_ioreq);
+		enumerate(DAOS_TX_NONE, &number, kds, &anchor_out, buf,
+			  5*test->t_dkey_size, &e_ioreq);
 		if (number == 0)
 			goto next;
 		total_keys += number;
@@ -1372,7 +1337,7 @@ kv_simul_rw_step(struct test *test, int rw, int *step)
 	ioreq_init_value(&ioreq, step, sizeof(*step));
 
 	if (rw == READ) {
-		lookup(0 /* idx */, test->t_epoch, &ioreq, test,
+		lookup(0 /* idx */, DAOS_TX_NONE, &ioreq, test,
 		       1 /* verify (sync) */);
 		if (ioreq.val_iov.iov_len == 0) {
 			DBENCH_PRINT("Metadata empty\n");
@@ -1385,7 +1350,7 @@ kv_simul_rw_step(struct test *test, int rw, int *step)
 				   ioreq.val_iov.iov_len);
 		}
 	} else {
-		insert(0 /* idx */, test->t_epoch, &ioreq, 1 /* sync */);
+		insert(0 /* idx */, DAOS_TX_NONE, &ioreq, 1 /* sync */);
 	}
 
 	ioreq_fini_basic(&ioreq);
@@ -1411,25 +1376,16 @@ kv_simul(struct test *test)
 	int		step = 0;
 	int		rc;
 
-	/* Get an epoch hold. */
-	if (comm_world_rank == 0) {
-		test->t_epoch = cont_info.ci_epoch_state.es_ghce + 1;
-		rc = daos_epoch_hold(coh, &test->t_epoch, NULL, NULL);
-		DBENCH_CHECK(rc, "Failed to hold epoch\n");
-	}
-	MPI_Bcast(&test->t_epoch, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	/* Prepare the object. */
-	rc = object_open(test->t_id, test->t_epoch, 0 /* enum_flag */,
-			 0 /* declare */, &oh);
+	rc = object_open(test->t_id, 0, &oh);
 	if (rc == -DER_NONEXIST)
-		rc = object_open(test->t_id, test->t_epoch, 0 /* enum_flag */,
-				 0 /* declare */, &oh);
+		rc = object_open(test->t_id, 0, &oh);
 	DBENCH_CHECK(rc, "Failed to open object");
 
 	/* Determine the step number to start from. */
-	DBENCH_PRINT("Reading last committed step number (epoch %lu)\n",
-		     test->t_epoch);
+	DBENCH_PRINT("Reading last committed step number\n");
 	if (comm_world_rank == 0)
 		kv_simul_rw_step(test, READ, &step);
 	MPI_Bcast(&step, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -1440,28 +1396,24 @@ kv_simul(struct test *test)
 		/* If there is a previous step, then read and verify it. */
 		if (step > 1) {
 			MPI_Barrier(MPI_COMM_WORLD);
-			DBENCH_PRINT("Step %d (epoch %lu): reading and "
-				     "verifying step %d\n", step, test->t_epoch,
-				     step - 1);
+			DBENCH_PRINT("Step %d: reading and verifying step %d\n",
+				     step, step - 1);
 			update_verify(test, key_type, value + step - 1);
 		}
 
 		MPI_Barrier(MPI_COMM_WORLD);
-		DBENCH_PRINT("Step %d (epoch %lu): writing\n", step,
-			     test->t_epoch);
+		DBENCH_PRINT("Step %d: writing\n", step);
 		update_async(test, key_type, value + step);
 
-		DBENCH_PRINT("Step %d (epoch %lu): writing last committed step "
-			     "number\n", step, test->t_epoch);
+		DBENCH_PRINT("Step %d: writing last committed step number\n",
+			     step);
 		if (comm_world_rank == 0)
 			kv_simul_rw_step(test, WRITE, &step);
 
 		MPI_Barrier(MPI_COMM_WORLD);
-		DBENCH_PRINT("Step %d (epoch %lu): committing\n", step,
-			     test->t_epoch);
+		DBENCH_PRINT("Step %d: committing\n", step);
 		kv_flush_and_commit(test);
 
-		test->t_epoch++;
 		step++;
 		DBENCH_PRINT("Sleep "DF_U64" seconds before the next step\n",
 			     t_pause);
@@ -1473,8 +1425,7 @@ kv_simul(struct test *test)
 
 	/* Read and verify the last step. */
 	MPI_Barrier(MPI_COMM_WORLD);
-	DBENCH_PRINT("Final step (epoch %lu): reading and verifying step %d\n",
-		     test->t_epoch, step - 1);
+	DBENCH_PRINT("Final step: reading and verifying step %d\n", step - 1);
 	update_verify(test, key_type, value + step - 1);
 
 	object_close(oh);

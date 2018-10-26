@@ -72,15 +72,15 @@ int dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
 int dc_pool_connect(tse_task_t *task);
 int dc_pool_disconnect(tse_task_t *task);
 int dc_pool_query(tse_task_t *task);
-int dc_pool_target_query(tse_task_t *task);
-int dc_pool_attr_list(tse_task_t *task);
-int dc_pool_attr_get(tse_task_t *task);
-int dc_pool_attr_set(tse_task_t *task);
+int dc_pool_query_target(tse_task_t *task);
+int dc_pool_list_attr(tse_task_t *task);
+int dc_pool_get_attr(tse_task_t *task);
+int dc_pool_set_attr(tse_task_t *task);
 int dc_pool_exclude(tse_task_t *task);
 int dc_pool_exclude_out(tse_task_t *task);
 int dc_pool_add(tse_task_t *task);
 int dc_pool_evict(tse_task_t *task);
-int dc_pool_svc_stop(tse_task_t *task);
+int dc_pool_stop_svc(tse_task_t *task);
 
 int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);

@@ -188,7 +188,7 @@ rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 		feat = DAOS_OF_DKEY_HASHED | DAOS_OF_AKEY_HASHED;
 	else
 		feat = DAOS_OF_DKEY_HASHED | DAOS_OF_AKEY_UINT64;
-	daos_obj_id_generate(&uoid->id_pub, feat, 0 /* cid */);
+	daos_obj_generate_id(&uoid->id_pub, feat, 0 /* cid */);
 }
 
 void

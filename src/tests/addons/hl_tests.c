@@ -43,7 +43,6 @@ simple_put_get(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	daos_epoch_t	epoch = 4;
 	daos_size_t	buf_size = 1024, size;
 	daos_event_t	ev;
 	const char      *key_fmt = "key%d";
@@ -67,7 +66,7 @@ simple_put_get(void **state)
 	}
 
 	/** open the object */
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	print_message("Inserting %d Keys\n", NUM_KEYS);
@@ -76,7 +75,7 @@ simple_put_get(void **state)
 		char key[10];
 
 		sprintf(key, key_fmt, i);
-		rc = daos_kv_put(oh, epoch, key, buf_size, buf,
+		rc = daos_kv_put(oh, DAOS_TX_NONE, key, buf_size, buf,
 				 arg->async ? &ev : NULL);
 
 		if (arg->async) {
@@ -96,7 +95,7 @@ simple_put_get(void **state)
 		int value = NUM_KEYS;
 
 		sprintf(key, key_fmt, NUM_KEYS-1);
-		rc = daos_kv_put(oh, epoch, key, sizeof(int), &value,
+		rc = daos_kv_put(oh, DAOS_TX_NONE, key, sizeof(int), &value,
 				 arg->async ? &ev : NULL);
 
 		if (arg->async) {
@@ -119,7 +118,7 @@ simple_put_get(void **state)
 		sprintf(key, key_fmt, i);
 
 		size = DAOS_REC_ANY;
-		rc = daos_kv_get(oh, epoch, key, &size, NULL,
+		rc = daos_kv_get(oh, DAOS_TX_NONE, key, &size, NULL,
 				 arg->async ? &ev : NULL);
 		if (arg->async) {
 			bool ev_flag;
@@ -135,7 +134,7 @@ simple_put_get(void **state)
 		else
 			assert_int_equal(size, sizeof(int));
 
-		rc = daos_kv_get(oh, epoch, key, &size, buf_out,
+		rc = daos_kv_get(oh, DAOS_TX_NONE, key, &size, buf_out,
 				 arg->async ? &ev : NULL);
 		if (arg->async) {
 			bool ev_flag;
@@ -175,7 +174,6 @@ simple_multi_io(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	daos_epoch_t	epoch = 6;
 	daos_size_t	buf_size = 128;
 	daos_event_t	ev;
 	daos_iov_t	sg_iov[NUM_KEYS];
@@ -196,7 +194,7 @@ simple_multi_io(void **state)
 	}
 
 	/** open the object */
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	recx.rx_idx	= 0;
@@ -238,7 +236,7 @@ simple_multi_io(void **state)
 		io_array[i].ioa_iods[0].iod_type	= DAOS_IOD_ARRAY;
 	}
 
-	rc = daos_obj_update_multi(oh, epoch, NUM_KEYS, io_array,
+	rc = daos_obj_update_multi(oh, DAOS_TX_NONE, NUM_KEYS, io_array,
 				   arg->async ? &ev : NULL);
 	if (arg->async) {
 		bool ev_flag;
@@ -257,7 +255,7 @@ simple_multi_io(void **state)
 		io_array[i].ioa_sgls[0].sg_iovs		= &sg_iov[i];
 	}
 
-	rc = daos_obj_fetch_multi(oh, epoch, NUM_KEYS, io_array,
+	rc = daos_obj_fetch_multi(oh, DAOS_TX_NONE, NUM_KEYS, io_array,
 				  arg->async ? &ev : NULL);
 	if (arg->async) {
 		bool ev_flag;

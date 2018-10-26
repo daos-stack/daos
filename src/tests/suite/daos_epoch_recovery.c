@@ -28,6 +28,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_test.h"
 #include "daos_iotest.h"
+#include <daos/container.h>
 
 enum io_op {
 	UPDATE,
@@ -35,8 +36,8 @@ enum io_op {
 };
 
 static void
-io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
-   daos_obj_id_t oid, const char *value)
+io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_obj_id_t oid,
+	const char *value)
 {
 	struct ioreq	req;
 	const char	dkey[] = "epoch_recovery dkey";
@@ -75,17 +76,16 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
 				      akey[i], (int)rec_size[i], rec[i]);
 		}
 
-		print_message("writing records to epoch "DF_U64"\n", epoch);
 		insert(dkey, nakeys, (const char **)akey, /*iod_size*/ rec_size,
-		       rx_nr, offset, (void **)rec, &epoch, &req);
+		       rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req);
 	} else {	/* op == VERIFY */
 		char *rec_verify;
 
 		rec_verify = calloc(rsize, 1);
 		assert_non_null(rec_verify);
-		print_message("verifying epoch "DF_U64"\n", epoch);
+		print_message("verifying...\n");
 		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
-		       (void **)rec, rec_size, &epoch, &req, false);
+		       (void **)rec, rec_size, DAOS_TX_NONE, &req, false);
 		for (i = 0; i < nakeys; i++) {
 			print_message("  akey[%d] '%s' val '%d %s'\n", i,
 				      akey[i], (int)req.iod[i].iod_size,
@@ -111,7 +111,6 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 {
 	uuid_t		uuid;
 	daos_handle_t	coh;
-	daos_epoch_t	epoch;
 	daos_obj_id_t	oid;
 	int		rc;
 
@@ -126,22 +125,18 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 			    NULL /* info */, NULL /* ev */);
 	assert_int_equal(rc, 0);
 
-	epoch = 1;
-	rc = daos_epoch_hold(coh, &epoch, NULL /* state */,
-			     NULL /* ev */);
-	assert_int_equal(rc, 0);
-	assert_int_equal(epoch, 1);
-
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 
-	/* Every rank updates epoch 1 and commit. */
-	io(UPDATE, arg, coh, 1 /* epoch */, oid, "epoch 1");
-	rc = daos_epoch_commit(coh, 1 /* epoch */, NULL /* state */,
-			       NULL /* ev */);
+	/* Every rank updates timestep 1. */
+	io(UPDATE, arg, coh, oid, "timestamp 1");
+
+	/** TODO - should be removed when rollback is implemented. */
+	/** TODO - take snapshot instead. */
+	rc = daos_cont_sync(coh, NULL);
 	assert_int_equal(rc, 0);
 
-	/* Every rank updates epoch 2 but do not commit. */
-	io(UPDATE, arg, coh, 2 /* epoch */, oid, "epoch 2");
+	/* Every rank updates timestep 2. */
+	io(UPDATE, arg, coh, oid, "timestamp 2");
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -154,10 +149,13 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 		}
 		MPI_Barrier(MPI_COMM_WORLD);
 	}
+
 	print_message("closing container\n");
 	rc = daos_cont_close(coh, NULL /* ev */);
 	assert_int_equal(rc, 0);
+
 	MPI_Barrier(MPI_COMM_WORLD);
+
 	if (op == POOL_DISCONNECT || op == POOL_EVICT) {
 		print_message("disconnecting from pool\n");
 		rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
@@ -173,14 +171,16 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
 			     arg->pool.poh, 1);
 	}
+
 	print_message("reopening container\n");
 	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RO, &coh,
 			    &arg->co_info, NULL /* ev */);
 	assert_int_equal(rc, 0);
-	assert_int_equal(arg->co_info.ci_epoch_state.es_hce, 1);
 
-	/* Every rank verifies that epoch 2 is discarded and epoch 1 remains. */
-	io(VERIFY, arg, coh, 2 /* epoch */, oid, "epoch 1");
+	/** TODO - query last snapshot taken and rollback to that */
+
+	/** Verify that timestep 1 is there (not 2). */
+	io(VERIFY, arg, coh, oid, "timestamp 1");
 
 	rc = daos_cont_close(coh, NULL /* ev */);
 	assert_int_equal(rc, 0);

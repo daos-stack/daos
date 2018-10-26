@@ -207,7 +207,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
 	/** open the object */
-	rc = daos_obj_open(coh, oid, 0, 0, &req->oh, NULL);
+	rc = daos_obj_open(coh, oid, 0, &req->oh, NULL);
 	return rc;
 }
 
@@ -272,28 +272,26 @@ ioreq_fini(struct ioreq *req)
 /* no wait for async insert, for sync insert it still will block */
 static int
 insert_internal_nowait(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
-		       daos_iod_t *iods, daos_epoch_t epoch, struct ioreq *req)
+		       daos_iod_t *iods, daos_handle_t th, struct ioreq *req)
 {
 	int rc;
 
 	/** execute update operation */
-	rc = daos_obj_update(req->oh, epoch, dkey, nr, iods, sgls,
-			     NULL);
+	rc = daos_obj_update(req->oh, th, dkey, nr, iods, sgls, NULL);
 
 	return rc;
 }
 
 static void
 lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
-		daos_iod_t *iods, daos_epoch_t epoch, struct ioreq *req,
+		daos_iod_t *iods, daos_handle_t th, struct ioreq *req,
 		bool empty)
 {
 	int rc;
 
 
 	/** execute fetch operation */
-	rc = daos_obj_fetch(req->oh, epoch, dkey, nr, iods, sgls,
-			    NULL, NULL);
+	rc = daos_obj_fetch(req->oh, th, dkey, nr, iods, sgls, NULL, NULL);
 	if (rc != 0) {
 		printf("object fetch failed with %i\n", rc);
 		exit(1);
@@ -327,7 +325,7 @@ ioreq_sgl_simple_set(struct ioreq *req, void **value,
 
 static void
 ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size, bool lookup,
-		     uint64_t *idx, daos_epoch_t *epoch, int nr)
+		     uint64_t *idx, int nr)
 {
 	daos_iod_t *iod = req->iod;
 	int i;
@@ -345,7 +343,7 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size, bool lookup,
 			iod[i].iod_recxs[0].rx_idx = idx[i] + i * 10485760;
 			iod[i].iod_recxs[0].rx_nr = 1;
 		}
-		iod[i].iod_eprs[0].epr_lo = *epoch;
+		iod[i].iod_eprs[0].epr_lo = 0;
 		iod[i].iod_eprs[0].epr_hi = DAOS_EPOCH_MAX;
 		iod[i].iod_nr = 1;
 	}
@@ -353,7 +351,7 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size, bool lookup,
 
 static void
 insert_single(const char *dkey, const char *akey, uint64_t idx,
-	      void *value, daos_size_t size, daos_epoch_t epoch,
+	      void *value, daos_size_t size, daos_handle_t th,
 	      struct ioreq *req)
 {
 	int nr = 1;
@@ -369,11 +367,11 @@ insert_single(const char *dkey, const char *akey, uint64_t idx,
 		ioreq_sgl_simple_set(req, &value, &size, nr);
 
 	/* set iod */
-	ioreq_iod_simple_set(req, &size, false, &idx, &epoch, nr);
+	ioreq_iod_simple_set(req, &size, false, &idx, nr);
 
 	int rc = insert_internal_nowait(&req->dkey, nr,
 					value == NULL ? NULL : req->sgl,
-					req->iod, epoch, req);
+					req->iod, th, req);
 
 	if (rc != 0)
 		printf("object update failed \n");
@@ -381,7 +379,7 @@ insert_single(const char *dkey, const char *akey, uint64_t idx,
 
 void
 lookup_single(const char *dkey, const char *akey, uint64_t idx,
-	      void *val, daos_size_t size, daos_epoch_t epoch,
+	      void *val, daos_size_t size, daos_handle_t th,
 	      struct ioreq *req)
 {
 	/*daos_size_t read_size = DAOS_REC_ANY;*/
@@ -396,8 +394,8 @@ lookup_single(const char *dkey, const char *akey, uint64_t idx,
 	ioreq_sgl_simple_set(req, &val, &size, 1);
 
 	/* set iod */
-	ioreq_iod_simple_set(req, &read_size, true, &idx, &epoch, 1);
-	lookup_internal(&req->dkey, 1, req->sgl, req->iod, epoch, req,
+	ioreq_iod_simple_set(req, &read_size, true, &idx, 1);
+	lookup_internal(&req->dkey, 1, req->sgl, req->iod, th, req,
 			false);
 }
 
@@ -481,7 +479,7 @@ cmd_write_pattern(int argc, const char **argv, void *ctx)
 	ioreq_init(&req, cinfo.coh, oid, DAOS_IOD_SINGLE);
 
 	/** Insert */
-	insert_single(dkey, akey, 0, (void *)rec, 64, 0, &req);
+	insert_single(dkey, akey, 0, (void *)rec, 64, DAOS_TX_NONE, &req);
 
 	/** done with the container */
 	daos_cont_close(cinfo.coh, NULL);
@@ -562,7 +560,7 @@ cmd_verify_pattern(int argc, const char **argv, void *ctx)
 	ioreq_init(&req, cinfo.coh, oid, DAOS_IOD_SINGLE);
 
 	memset(buf, 0, sizeof(buf));
-	lookup_single(dkey, akey, 0, buf, sizeof(buf), 0, &req);
+	lookup_single(dkey, akey, 0, buf, sizeof(buf), DAOS_TX_NONE, &req);
 
 	/** Verify data consistency */
 	printf("size = %lu\n", req.iod[0].iod_size);

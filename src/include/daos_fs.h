@@ -51,10 +51,6 @@ typedef struct dfs dfs_t;
  * The mount will create a root directory (DAOS object) for the file system. The
  * user will associate the dfs object returned with a mount point.
  *
- * Note: Currently we do not support concurrent access, so RD_ONLY mount will be
- * reading from HCE and will not see updates by another writers. TBD in the
- * future we should be more POSIX like and support reading from global epoch.
- *
  * \param[in]	poh	Pool connection handle
  * \param[in]	coh	Container open handle.
  * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR).
@@ -67,16 +63,15 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
 
 /**
  * Unmount a DAOS file system. This closes open handles to the root object and
- * commits the latest epoch. The internal dfs struct is freed, so further access
- * to that dfs will be invalid.
+ * commits the epoch at current timestamp. The internal dfs struct is freed, so
+ * further access to that dfs will be invalid.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
- * \param[in]	commit	Whether to commit the working epoch or no.
  *
  * \return		0 on Success. Negative on Failure.
  */
 int
-dfs_umount(dfs_t *dfs, bool commit);
+dfs_umount(dfs_t *dfs);
 
 /**
  * Lookup a path in the DFS and return the associated open object and mode.
@@ -391,26 +386,14 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
  * Sync to commit the latest epoch on the container. This applies to the entire
  * namespace and not to a particular file/directory.
  *
+ * TODO: This should take a persistent snapshot at current timestamp.
+ *
  * \param[in]	dfs	Pointer to the mounted file system.
  *
  * \return		0 on Success. Negative on Failure.
  */
 int
 dfs_sync(dfs_t *dfs);
-
-/**
- * Retrieve the current epoch the dfs mount is accessing. This should be used
- * carefully if access to dfs container is done outside of the DFS API (like in
- * MPI-IO), and users should avoid doing that if they are not familiar with the
- * epoch model details.
- *
- * \param[in]	dfs	Pointer to the mounted file system.
- * \param[out]	epoch	Epoch returned.
- *
- * \return		0 on Success. Negative on Failure.
- */
-int
-dfs_get_epoch(dfs_t *dfs, daos_epoch_t *epoch);
 
 /**
  * Set extended attribute on an open object (File, dir, syml). If object is a

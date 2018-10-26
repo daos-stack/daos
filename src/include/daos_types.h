@@ -133,6 +133,7 @@ typedef struct {
 } daos_handle_t;
 
 #define DAOS_HDL_INVAL	((daos_handle_t){0})
+#define DAOS_TX_NONE	DAOS_HDL_INVAL
 
 static inline bool
 daos_handle_is_inval(daos_handle_t hdl)
@@ -264,6 +265,15 @@ typedef struct {
 
 typedef uint64_t	daos_epoch_t;
 
+static inline daos_epoch_t
+daos_ts2epoch(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_REALTIME, &ts);
+	return ts.tv_sec * 1e9 + ts.tv_nsec;
+}
+
 typedef struct {
 	/** Low bound of the epoch range */
 	daos_epoch_t	epr_lo;
@@ -274,56 +284,6 @@ typedef struct {
 /** Highest possible epoch */
 #define DAOS_EPOCH_MAX	(~0ULL)
 #define DAOS_PURGE_CREDITS_MAX 1000
-
-/** Epoch State */
-typedef struct {
-	/**
-	 * Epoch state specific to the container handle.
-	 */
-
-	/**
-	 * Highest Committed Epoch (HCE).
-	 * Any changes submitted by this container handle with an epoch <= HCE
-	 * are guaranteed to be durable. On the other hand, any updates
-	 * submitted with an epoch > HCE are automatically rolled back on
-	 * failure of the container handle.
-	 * The HCE is increased on successful commit.
-	 */
-	daos_epoch_t	es_hce;
-
-	/**
-	 * Lowest Referenced Epoch (LRE).
-	 * Each container handle references all epochs equal to or higher than
-	 * its LRE and thus guarantees these epochs to be readable.
-	 * The LRE is moved forward with the slip operation.
-	 */
-	daos_epoch_t	es_lre;
-
-	/**
-	 * Lowest Held Epoch (LHE).
-	 * Each container handle with write permission holds all epochs equal to
-	 * or higher than its LHE and thus guarantees these epochs to be
-	 * mutable.  The LHE of a new container handle with write permission is
-	 * equal to DAOS_EPOCH_MAX, indicating that the container handle does
-	 * not hold any epochs.
-	 * The LHE can be modified with the epoch hold operation and is
-	 * increased on successful commit.
-	 */
-	daos_epoch_t	es_lhe;
-
-	/**
-	 * Global epoch state for the container.
-	 */
-
-	/** Global Highest Committed Epoch (gHCE). */
-	daos_epoch_t	es_ghce;
-
-	/** Global Lowest Referenced Epoch (gLRE). */
-	daos_epoch_t	es_glre;
-
-	/** Global Highest Partially Committed Epoch (gHPCE) */
-	daos_epoch_t	es_ghpce;
-} daos_epoch_state_t;
 
 /**
  * Container
@@ -347,17 +307,12 @@ typedef struct {
 typedef struct {
 	/** Container UUID */
 	uuid_t			ci_uuid;
-	/** Epoch information (e.g. HCE, LRE & LHE) */
-	daos_epoch_state_t	ci_epoch_state;
+	/** Epoch of latest persisten snapshot */
+	daos_epoch_t		ci_lsnapshot;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
 	/** Epochs of returns snapshots */
 	daos_epoch_t	       *ci_snapshots;
-	/*
-	 * Min GLRE at all streams -
-	 * verify all streams have completed slipping to GLRE.
-	 */
-	daos_epoch_t		ci_min_slipped_epoch;
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 
@@ -743,13 +698,13 @@ typedef struct {
 } daos_unit_oid_t;
 
 static inline bool
-daos_obj_id_is_null(daos_obj_id_t oid)
+daos_obj_is_null_id(daos_obj_id_t oid)
 {
 	return oid.lo == 0 && oid.hi == 0;
 }
 
 static inline int
-daos_obj_id_compare(daos_obj_id_t a, daos_obj_id_t b)
+daos_obj_compare_id(daos_obj_id_t a, daos_obj_id_t b)
 {
 	if (a.hi < b.hi)
 		return -1;
@@ -759,29 +714,6 @@ daos_obj_id_compare(daos_obj_id_t a, daos_obj_id_t b)
 	if (a.lo < b.lo)
 		return -1;
 	else if (a.lo > b.lo)
-		return 1;
-
-	return 0;
-}
-
-static inline bool
-daos_unit_oid_is_null(daos_unit_oid_t oid)
-{
-	return oid.id_shard == 0 && daos_obj_id_is_null(oid.id_pub);
-}
-
-static inline int
-daos_unit_oid_compare(daos_unit_oid_t a, daos_unit_oid_t b)
-{
-	int rc;
-
-	rc = daos_obj_id_compare(a.id_pub, b.id_pub);
-	if (rc != 0)
-		return rc;
-
-	if (a.id_shard < b.id_shard)
-		return -1;
-	else if (a.id_shard > b.id_shard)
 		return 1;
 
 	return 0;

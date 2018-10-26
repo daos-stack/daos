@@ -30,6 +30,7 @@
 
 #include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
+#include <daos/object.h>
 
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a

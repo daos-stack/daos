@@ -31,13 +31,12 @@
 #define MUST(rc) assert_int_equal(rc, 0)
 
 static void
-io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
-		   daos_epoch_t	start_epoch, int gs_dkeys,
-		   daos_epoch_state_t *state, daos_obj_id_t oid,
-		   bool update, bool verify_empty)
+io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
+		   int gs_dkeys, daos_obj_id_t oid, bool update, int *snaps_in,
+		   daos_epoch_t *snaps, bool verify_empty)
 {
 	struct ioreq		req;
-	int			i, g_dkeys_strlen = 6;
+	int			i, g_dkeys_strlen = 16;
 	const char		akey[] = "slip akey";
 	char			dkey[] = "slip dkey";
 	char			*rec, *val, *rec_verify;
@@ -46,34 +45,48 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
 	daos_epoch_t		epoch;
 
 	if (verify_empty)
-		print_message("Check empty records (epr: "DF_U64","DF_U64")\n",
-			      start_epoch, start_epoch + gs_dkeys - 1);
+		print_message("Check empty records (%d)\n", gs_dkeys);
 	else
-		print_message("Check valid records (epr: "DF_U64","DF_U64")\n",
-			      start_epoch, start_epoch + gs_dkeys - 1);
+		print_message("Check valid records (%d)\n", gs_dkeys);
 
 	ioreq_init(&req, coh, oid, DAOS_IOD_SINGLE, arg);
 	if (update && !arg->myrank)
-		print_message("Inserting %d keys...\n",
-			      gs_dkeys);
+		print_message("Inserting %d keys...\n", gs_dkeys);
 
 	D_ALLOC(rec, strlen(val_fmt) + g_dkeys_strlen + 1);
 	assert_non_null(rec);
 	D_ALLOC(val, 64);
 	assert_non_null(val);
 	val_size = 64;
-	epoch = start_epoch;
 
 	if (update) {
+		daos_event_t	ev;
+		int		k = 0;
+
+		if (snaps_in && arg->async)
+			MUST(daos_event_init(&ev, arg->eq, NULL));
+
 		for (i = 0; i < gs_dkeys; i++) {
+			daos_tx_open(arg->coh, &ths[i], NULL);
+			daos_tx_hdl2epoch(ths[i], &epoch);
 			memset(rec, 0, (strlen(val_fmt) + g_dkeys_strlen + 1));
-			sprintf(rec, val_fmt, epoch + i);
+			sprintf(rec, val_fmt, epoch);
 			rec_size = strlen(rec);
 			D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%d %s'\n", i,
 				dkey, (int)rec_size, rec);
-			insert_single(dkey, akey, 1100, rec, rec_size,
-				      (epoch + i), &req);
+			insert_single(dkey, akey, 1100, rec, rec_size, ths[i],
+				      &req);
+
+			if (snaps_in && i == snaps_in[k]) {
+				MUST(daos_cont_create_snap(coh, &snaps[k++],
+						   NULL,
+						   arg->async ? &ev : NULL));
+				WAIT_ON_ASYNC(arg, ev);
+			}
 		}
+
+		if (snaps_in && arg->async)
+			MUST(daos_event_fini(&ev));
 	}
 
 	D_ALLOC(rec_verify, strlen(val_fmt) + g_dkeys_strlen + 1);
@@ -81,12 +94,13 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
 		memset(rec_verify, 0, (strlen(val_fmt) + g_dkeys_strlen + 1));
 		memset(val, 0, 64);
 		if (!verify_empty) {
-			sprintf(rec_verify, val_fmt, (epoch + i));
-			lookup_single(dkey, akey, 1100, val, val_size,
-				      (epoch + i), &req);
+			daos_tx_hdl2epoch(ths[i], &epoch);
+			sprintf(rec_verify, val_fmt, epoch);
+			lookup_single(dkey, akey, 1100, val, val_size, ths[i],
+				      &req);
 		} else {
 			lookup_empty_single(dkey, akey, 1100, val, val_size,
-					    (epoch + i), &req);
+					    ths[i], &req);
 		}
 		assert_int_equal(req.iod[0].iod_size, strlen(rec_verify));
 		assert_memory_equal(val, rec_verify, req.iod[0].iod_size);
@@ -95,17 +109,6 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
 	D_FREE(val);
 	D_FREE(rec_verify);
 	D_FREE(rec);
-}
-
-static void
-assert_epoch_state_equal(daos_epoch_state_t *a, daos_epoch_state_t *b)
-{
-	assert_int_equal(a->es_hce, b->es_hce);
-	assert_int_equal(a->es_lre, b->es_lre);
-	assert_int_equal(a->es_lhe, b->es_lhe);
-	assert_int_equal(a->es_ghce, b->es_ghce);
-	assert_int_equal(a->es_glre, b->es_glre);
-	assert_int_equal(a->es_ghpce, b->es_ghpce);
 }
 
 static int
@@ -147,448 +150,54 @@ cont_query(test_arg_t *arg, daos_handle_t coh, daos_cont_info_t *info)
 	return daos_cont_query(coh, info, NULL);
 }
 
-static int
-epoch_query(test_arg_t *arg, daos_handle_t coh, daos_epoch_state_t *state)
-{
-	daos_event_t	ev;
-	daos_event_t   *evp;
-	int		rc;
-
-	print_message("querying epoch state %ssynchronously ...\n",
-		      arg->async ? "a" : "");
-	if (arg->async)
-		MUST(daos_event_init(&ev, arg->eq, NULL));
-	rc = daos_epoch_query(coh, state, arg->async ? &ev : NULL);
-	if (arg->async) {
-		assert_int_equal(rc, 0);
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		rc = ev.ev_error;
-		MUST(daos_event_fini(&ev));
-	}
-	return rc;
-}
-
-static int
-epoch_hold(test_arg_t *arg, daos_handle_t coh, daos_epoch_t *epoch,
-	   daos_epoch_state_t *state)
-{
-	daos_event_t	ev;
-	daos_event_t   *evp;
-	int		rc;
-
-	print_message("holding epoch "DF_U64" %ssynchronously ...\n", *epoch,
-		      arg->async ? "a" : "");
-	if (arg->async)
-		MUST(daos_event_init(&ev, arg->eq, NULL));
-	rc = daos_epoch_hold(coh, epoch, state, arg->async ? &ev : NULL);
-	if (arg->async) {
-		assert_int_equal(rc, 0);
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		rc = ev.ev_error;
-		MUST(daos_event_fini(&ev));
-	}
-	return rc;
-}
-
-static int
-epoch_slip(test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
-	   daos_epoch_state_t *state)
-{
-	daos_event_t	ev;
-	daos_event_t   *evp;
-	int		rc;
-
-	print_message("slipping to epoch "DF_U64" %ssynchronously ...\n", epoch,
-		      arg->async ? "a" : "");
-	if (arg->async)
-		MUST(daos_event_init(&ev, arg->eq, NULL));
-	rc = daos_epoch_slip(coh, epoch, state, arg->async ? &ev : NULL);
-	if (arg->async) {
-		assert_int_equal(rc, 0);
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		rc = ev.ev_error;
-		MUST(daos_event_fini(&ev));
-	}
-	return rc;
-}
-
-static int
-epoch_commit(test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
-	     daos_epoch_state_t *state)
-{
-	daos_event_t	ev;
-	daos_event_t   *evp;
-	int		rc;
-
-	print_message("committing epoch "DF_U64" %ssynchronously ...\n",
-		      epoch, arg->async ? "a" : "");
-	if (arg->async)
-		MUST(daos_event_init(&ev, arg->eq, NULL));
-	rc = daos_epoch_commit(coh, epoch, state, arg->async ? &ev : NULL);
-	if (arg->async) {
-		assert_int_equal(rc, 0);
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		rc = ev.ev_error;
-		MUST(daos_event_fini(&ev));
-	}
-	return rc;
-}
-
-static void
-test_epoch_init(void **varg)
-{
-	test_arg_t	       *arg = *varg;
-	uuid_t			cont_uuid;
-	daos_handle_t		coh;
-	daos_epoch_state_t     *state = &arg->co_info.ci_epoch_state;
-
-	MUST(cont_create(arg, cont_uuid));
-	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
-	assert_int_equal(state->es_hce, state->es_ghce);
-	assert_int_equal(state->es_lre, state->es_ghce);
-	assert_int_equal(state->es_lhe, DAOS_EPOCH_MAX);
-	assert_int_equal(state->es_ghce, 0);
-	assert_int_equal(state->es_glre, 0);
-	assert_int_equal(state->es_ghpce, 0);
-	MUST(cont_close(arg, coh));
-	MUST(cont_destroy(arg, cont_uuid));
-}
-
-static void
-test_epoch_query(void **varg)
-{
-	test_arg_t	       *arg = *varg;
-	uuid_t			cont_uuid;
-	daos_handle_t		coh;
-	daos_epoch_state_t	state;
-
-	MUST(cont_create(arg, cont_uuid));
-	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
-	MUST(epoch_query(arg, coh, &state));
-	assert_epoch_state_equal(&state, &arg->co_info.ci_epoch_state);
-	MUST(cont_close(arg, coh));
-	MUST(cont_destroy(arg, cont_uuid));
-}
-
-static void
-test_epoch_hold(void **varg)
-{
-	test_arg_t	       *arg = *varg;
-	uuid_t			cont_uuid;
-	daos_handle_t		coh;
-	daos_epoch_t		epoch;
-	daos_epoch_state_t	state;
-	daos_epoch_state_t	state_tmp;
-
-	MUST(cont_create(arg, cont_uuid));
-	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
-
-	print_message("simple hold shall succeed\n");
-	epoch = 10;
-	MUST(epoch_hold(arg, coh, &epoch, &state));
-	assert_int_equal(epoch, 10);
-	/* Only this shall change. */
-	arg->co_info.ci_epoch_state.es_lhe = epoch;
-	assert_epoch_state_equal(&state, &arg->co_info.ci_epoch_state);
-
-	print_message("release some epochs shall succeed\n");
-	epoch = 20;
-	state_tmp = state;
-	MUST(epoch_hold(arg, coh, &epoch, &state));
-	assert_int_equal(epoch, 20);
-	/* Only this shall change. */
-	state_tmp.es_lhe = epoch;
-	assert_epoch_state_equal(&state, &state_tmp);
-
-	print_message("simple release shall succeed\n");
-	epoch = DAOS_EPOCH_MAX;
-	state_tmp = state;
-	MUST(epoch_hold(arg, coh, &epoch, &state));
-	assert_int_equal(epoch, DAOS_EPOCH_MAX);
-	/* Only this shall change. */
-	state_tmp.es_lhe = epoch;
-	assert_epoch_state_equal(&state, &state_tmp);
-
-	MUST(cont_close(arg, coh));
-	MUST(cont_destroy(arg, cont_uuid));
-}
-
-static void
-test_epoch_commit(void **varg)
-{
-	test_arg_t	       *arg = *varg;
-	uuid_t			cont_uuid;
-	daos_handle_t		coh;
-	daos_epoch_t		epoch;
-	daos_epoch_state_t	state;
-	daos_epoch_state_t	state_tmp;
-	int			rc;
-
-	MUST(cont_create(arg, cont_uuid));
-	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
-
-	epoch = 10;
-	MUST(epoch_hold(arg, coh, &epoch, &state_tmp));
-
-	print_message("committing an unheld epoch shall get %d\n", -DER_EP_RO);
-	epoch = 9;
-	rc = epoch_commit(arg, coh, epoch, &state);
-	assert_int_equal(rc, -DER_EP_RO);
-	/* The epoch state shall stay the same. */
-	MUST(epoch_query(arg, coh, &state));
-	assert_epoch_state_equal(&state, &state_tmp);
-
-	print_message("committing a held epoch shall succeed\n");
-	epoch = 10;
-	MUST(epoch_commit(arg, coh, epoch, &state));
-	assert_int_equal(state.es_hce, epoch);
-	assert_int_equal(state.es_lre, epoch);
-	assert_int_equal(state.es_lhe, epoch + 1);
-	assert_int_equal(state.es_ghce, epoch);
-	assert_int_equal(state.es_glre, epoch);
-	assert_int_equal(state.es_ghpce, epoch);
-
-	print_message("committing an already committed epoch shall succeed\n");
-	epoch = 8;
-	state_tmp = state;
-	MUST(epoch_commit(arg, coh, epoch, &state));
-	/* The epoch state shall stay the same. */
-	assert_epoch_state_equal(&state, &state_tmp);
-
-	MUST(cont_close(arg, coh));
-	MUST(cont_destroy(arg, cont_uuid));
-}
-
 static void
 test_epoch_slip(void **argp)
 {
-	test_arg_t	       *arg = *argp;
+	test_arg_t		*arg = *argp;
 	uuid_t			cont_uuid;
 	daos_handle_t		coh;
-	daos_epoch_t		epoch, epoch_tmp;
-	daos_epoch_state_t	state;
-	daos_epoch_state_t	state_tmp;
+	daos_handle_t		*ths = NULL;
 	daos_cont_info_t	info;
 	daos_obj_id_t		oid;
+	int			i;
 
 	MUST(cont_create(arg, cont_uuid));
-	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP,
-		       &coh));
+	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
 
-	epoch = 10;
-	MUST(epoch_hold(arg, coh, &epoch, &state));
-	io_for_aggregation(arg, coh, epoch, 100, &state, oid,
-			   /* update */ true,
+	D_ALLOC_ARRAY(ths, 100);
+	assert_non_null(ths);
+
+	io_for_aggregation(arg, coh, ths, 100, oid,
+			   /* update */ true, NULL, NULL,
 			   /* verify empty record */ false);
-	MUST(epoch_commit(arg, coh, (epoch + 99),
-			  &state));
 
 	memset(&info, 0, sizeof(daos_cont_info_t));
 	print_message("Verfying aggregated epoch before slip.. ");
 	MUST(cont_query(arg, coh, &info));
 	/** aggregated epoch before aggregation */
-	assert_true(info.ci_min_slipped_epoch == 0);
-	print_message(" "DF_U64"\n", info.ci_min_slipped_epoch);
-
-	print_message("slip to (LRE, MAX) shall succeed\n");
-	epoch = 95; /* LRE = 0 and GHCE = 109 */
-	print_message("LRE: "DF_U64", HCE: "DF_U64", epoch: "DF_U64"\n",
-		      state.es_lre, state.es_hce, epoch);
-	assert_true(state.es_lre < epoch && epoch < state.es_hce);
-	state_tmp = state;
-	MUST(epoch_slip(arg, coh, epoch, &state));
-	state_tmp.es_lre = epoch;
-	state_tmp.es_glre = epoch;
-	assert_epoch_state_equal(&state, &state_tmp);
+	/** TODO - add check when aggregation in commit is enabled */
 	memset(&info, 0, sizeof(daos_cont_info_t));
 
-	if (arg->overlap) {
-		epoch_tmp = epoch + 15;
-		MUST(epoch_hold(arg, coh, &epoch_tmp, &state));
-		io_for_aggregation(arg, coh, epoch_tmp, 15, &state, oid,
-				   /* update */true,
-				   /* verify empty record */false);
-		MUST(epoch_commit(arg, coh, epoch_tmp, &state));
-		print_message("LRE: "DF_U64", HCE: "DF_U64", epoch: "DF_U64"\n",
-			      state.es_lre, state.es_hce, epoch_tmp);
+	for (i = 0 ; i < 100; i++)
+		daos_tx_close(ths[i], NULL);
 
+	if (arg->overlap) {
+		io_for_aggregation(arg, coh, ths, 15, oid,
+				   /* update */true, NULL, NULL,
+				   /* verify empty record */false);
+
+		for (i = 0 ; i < 15; i++)
+			daos_tx_close(ths[i], NULL);
 	}
 
 	/** Wait for aggregation completion */
-	print_message("Waiting for epoch_slip to complete .");
-	while (info.ci_min_slipped_epoch < epoch)
-		MUST(cont_query(arg, coh, &info));
-	print_message(". Done!\n");
+	/** TODO - add check when aggregation in commit is enabled */
 
-	/* completed aggregation */
-	print_message("aggregated epoch: " DF_U64"\n",
-		      info.ci_min_slipped_epoch);
-
-	print_message("slip to [0, LRE] shall be no-op\n");
-	epoch = 15; /* LRE = 95 */;
-
-	state_tmp = state;
-	MUST(epoch_slip(arg, coh, epoch, &state));
-	assert_epoch_state_equal(&state, &state_tmp);
-
-	memset(&info, 0, sizeof(daos_cont_info_t));
-	/** Wait for aggregation completion */
-	print_message("Waiting for epoch_slip to complete .");
-	while (info.ci_min_slipped_epoch < epoch)
-		MUST(cont_query(arg, coh, &info));
-	print_message(". Done!\n");
-
-	/* completed aggregation */
-	print_message("aggregated epoch: " DF_U64"\n",
-		      info.ci_min_slipped_epoch);
-
-	/** empty records from 10 -> 94 */
-	epoch = 10;
-	io_for_aggregation(arg, coh, epoch, 85, &state, oid,
-			   /* update */ false,
-			   /* verify empty record */ true);
-
-	/** no-empty records from 95 - 109/124 */
-	epoch = 95;
-	io_for_aggregation(arg, coh, epoch,
-			   (arg->overlap) ? 30 : 15,
-			   &state, oid,
-			   /* update */false,
-			   /* verify empty record */false);
-
+	D_FREE(ths);
 	MUST(cont_close(arg, coh));
-	MUST(cont_destroy(arg, cont_uuid));
-}
-
-static void
-test_epoch_commit_complex(void **varg)
-{
-	test_arg_t	       *arg = *varg;
-	uuid_t			cont_uuid;
-	daos_handle_t		coh_1;
-	daos_handle_t		coh_2;
-	daos_epoch_t		epoch_1;
-	daos_epoch_t		epoch_2;
-	daos_epoch_state_t	state_1;
-	daos_epoch_state_t	state_2;
-	daos_epoch_state_t	state_tmp;
-
-	MUST(cont_create(arg, cont_uuid));
-	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh_1));
-	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh_2));
-
-	epoch_2 = 20;
-	MUST(epoch_hold(arg, coh_2, &epoch_2, &state_2));
-
-	print_message("GHCE shall increase below coh_2's LHE\n");
-	epoch_1 = 10; /* state_2.es_lhe = 20 */
-	MUST(epoch_hold(arg, coh_1, &epoch_1, &state_1));
-	MUST(epoch_commit(arg, coh_1, epoch_1, &state_1));
-	assert_int_equal(state_1.es_hce, epoch_1);
-	assert_int_equal(state_1.es_lre, epoch_1);
-	assert_int_equal(state_1.es_lhe, epoch_1 + 1);
-	assert_int_equal(state_1.es_ghce, state_1.es_hce);
-	assert_int_equal(state_1.es_glre, state_2.es_lre);
-	assert_int_equal(state_1.es_ghpce, state_1.es_hce);
-
-	print_message("GHCE shall be blocked by coh_2's LHE\n");
-	epoch_1 = 30; /* state_2.es_lhe = 20 */
-	MUST(epoch_commit(arg, coh_1, epoch_1, &state_1));
-	assert_int_equal(state_1.es_hce, epoch_1);
-	assert_int_equal(state_1.es_lre, epoch_1);
-	assert_int_equal(state_1.es_lhe, epoch_1 + 1);
-	assert_int_equal(state_1.es_ghce, state_2.es_lhe - 1);
-	assert_int_equal(state_1.es_glre, state_2.es_lre);
-	assert_int_equal(state_1.es_ghpce, state_1.es_hce);
-
-	print_message("GHCE shall catch up once coh_2 releases some of its "
-		      "held epochs\n");
-	epoch_2 = 25; /* state_2.es_lhe = 20 and state_1.es_hce = 30 */
-	MUST(epoch_commit(arg, coh_2, epoch_2, &state_2));
-	assert_int_equal(state_2.es_hce, epoch_2);
-	assert_int_equal(state_2.es_lre, epoch_2);
-	assert_int_equal(state_2.es_lhe, epoch_2 + 1);
-	assert_int_equal(state_2.es_ghce, state_2.es_hce);
-	assert_int_equal(state_2.es_glre, state_2.es_lre);
-	assert_int_equal(state_2.es_ghpce, state_1.es_hce);
-
-	print_message("GHPCE shall not decrease when coh_1 is closed\n");
-	MUST(cont_close(arg, coh_1));
-	state_tmp = state_2;
-	MUST(epoch_query(arg, coh_2, &state_2));
-	/* The epoch state, especially GHPCE, shall not change. */
-	assert_epoch_state_equal(&state_2, &state_tmp);
-
-	print_message("GHCE shall catch up once coh_2 releases its hold\n");
-	epoch_2 = 27; /* state_2.es_hce = GHCE = 25 and GHPCE = 30 */
-	MUST(epoch_commit(arg, coh_2, epoch_2, &state_2));
-	assert_int_equal(state_2.es_hce, epoch_2);
-	assert_int_equal(state_2.es_lre, epoch_2);
-	assert_int_equal(state_2.es_lhe, epoch_2 + 1);
-	assert_int_equal(state_2.es_ghce, state_2.es_lhe - 1);
-	assert_int_equal(state_2.es_glre, state_2.es_lre);
-	assert_int_equal(state_2.es_ghpce, state_1.es_hce);
-
-	print_message("GHCE shall catch up to GHPCE once coh_2 is closed\n");
-	/* state_2.es_hce = GHCE = 27, state_2.es_lhe = 28, and GHPCE = 30 */
-	MUST(cont_close(arg, coh_2));
-	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh_1));
-	assert_int_equal(arg->co_info.ci_epoch_state.es_ghce, state_2.es_ghpce);
-	MUST(cont_close(arg, coh_1));
-
-	MUST(cont_destroy(arg, cont_uuid));
-}
-
-static void
-test_epoch_hold_complex(void **varg)
-{
-	test_arg_t	       *arg = *varg;
-	uuid_t			cont_uuid;
-	daos_handle_t		coh_1;
-	daos_handle_t		coh_2;
-	daos_epoch_t		epoch_1;
-	daos_epoch_t		epoch_2;
-	daos_epoch_state_t	state_1;
-	daos_epoch_state_t	state_2;
-
-	MUST(cont_create(arg, cont_uuid));
-	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh_1));
-	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh_2));
-
-	epoch_1 = 10;
-	MUST(epoch_hold(arg, coh_1, &epoch_1, &state_1));
-	MUST(epoch_commit(arg, coh_1, epoch_1, &state_1));
-	assert_int_equal(state_1.es_ghpce, epoch_1);
-
-	print_message("holding zero shall succeed with LHE = GHPCE + 1");
-	epoch_2 = 0; /* GHPCE = 10 */
-	MUST(epoch_hold(arg, coh_2, &epoch_2, &state_2));
-	assert_int_equal(epoch_2, state_1.es_ghpce + 1);
-	assert_int_equal(state_2.es_lhe, state_1.es_ghpce + 1);
-
-	epoch_2 = DAOS_EPOCH_MAX;
-	MUST(epoch_hold(arg, coh_2, &epoch_2, &state_2));
-	assert_int_equal(epoch_2, DAOS_EPOCH_MAX);
-
-	print_message("holding (0, GHPCE] shall succeed with LHE = GHPCE + 1");
-	epoch_2 = 5; /* GHPCE = 10 */
-	MUST(epoch_hold(arg, coh_2, &epoch_2, &state_2));
-	assert_int_equal(epoch_2, state_1.es_ghpce + 1);
-	assert_int_equal(state_2.es_lhe, state_1.es_ghpce + 1);
-
-	MUST(cont_close(arg, coh_2));
-	MUST(cont_close(arg, coh_1));
 	MUST(cont_destroy(arg, cont_uuid));
 }
 
@@ -599,19 +208,18 @@ test_snapshots(void **argp)
 	uuid_t			co_uuid;
 	daos_handle_t		coh;
 	daos_event_t		ev;
-	daos_epoch_t		epoch;
-	daos_epoch_state_t	state;
-	daos_epoch_state_t	state_tmp;
-	daos_cont_info_t	info;
 	daos_obj_id_t		oid;
-	int			i, rc;
-
+	int			i;
 	daos_epoch_t		garbage	   = 0xAAAAAAAAAAAAAAAAL;
-	daos_epoch_t		snaps_in[] = { 21, 29, 35, 47, 57, 78, 81 };
+	int			snaps_in[] = { 21, 29, 35, 47, 57, 78, 81 };
 	const int		snap_count = ARRAY_SIZE(snaps_in);
+	daos_epoch_range_t	epr;
 	int			snap_count_out;
 	int			snap_split_index = snap_count/2;
+	daos_epoch_t		snaps[snap_count];
 	daos_epoch_t		snaps_out[snap_count];
+	daos_handle_t		*ths = NULL;
+	daos_anchor_t		anchor;
 
 	MUST(cont_create(arg, co_uuid));
 	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
@@ -619,147 +227,96 @@ test_snapshots(void **argp)
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
 
-	epoch = 10;
-	MUST(epoch_hold(arg, coh, &epoch, &state));
-	io_for_aggregation(arg, coh, epoch, 100, &state, oid,
-			   /* update */ true,
+	D_ALLOC_ARRAY(ths, 100);
+	assert_non_null(ths);
+
+	io_for_aggregation(arg, coh, ths, 100, oid,
+			   /* update */ true, snaps_in, snaps,
 			   /* verify empty record */ false);
-	MUST(epoch_commit(arg, coh, (epoch + 99), &state));
-	MUST(epoch_slip(arg, coh, (epoch + 11), &state));
 
 	if (arg->async)
 		MUST(daos_event_init(&ev, arg->eq, NULL));
 
-	print_message("Snapshot creation at [epoch < LRE] shall fail\n");
-	epoch = 20;
-	rc = daos_snap_create(coh, epoch, arg->async ? &ev : NULL);
-	assert_int_equal(rc, arg->async ? 0 : -DER_NONEXIST);
-	WAIT_ON_ASYNC_ERR(arg, ev, -DER_NONEXIST);
-
-	print_message("Snapshot creation at [epoch > HCE] shall fail\n");
-	epoch = 110;
-	rc = daos_snap_create(coh, epoch, arg->async ? &ev : NULL);
-	assert_int_equal(rc, arg->async ? 0 : -DER_NONEXIST);
-	WAIT_ON_ASYNC_ERR(arg, ev, -DER_NONEXIST);
-
-	print_message("Snapshot creation at [epoch >= LRE"
-		      " AND epoch <= HCE] shall succeed\n");
-	for (i = 0; i < snap_count; i++) {
-		MUST(daos_snap_create(coh, snaps_in[i],
-				      arg->async ? &ev : NULL));
-		WAIT_ON_ASYNC(arg, ev);
-	}
-
 	print_message("Snapshot listing shall succeed with no buffer\n");
 	snap_count_out = 0;
-	MUST(daos_snap_list(coh, NULL, &snap_count_out,
-			    arg->async ? &ev : NULL));
+	memset(&anchor, 0, sizeof(anchor));
+	MUST(daos_cont_list_snap(coh, &snap_count_out, NULL, NULL, &anchor,
+				 arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
+	daos_anchor_is_eof(&anchor);
 	assert_int_equal(snap_count_out, snap_count);
 
 	print_message("Snapshot listing shall succeed with a small buffer\n");
 	snap_count_out = snap_split_index;
 	memset(snaps_out, 0xAA, snap_count * sizeof(daos_epoch_t));
-	MUST(daos_snap_list(coh, snaps_out, &snap_count_out,
-			    arg->async ? &ev : NULL));
+	memset(&anchor, 0, sizeof(anchor));
+	MUST(daos_cont_list_snap(coh, &snap_count_out, snaps_out, NULL, &anchor,
+				 arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
+	daos_anchor_is_eof(&anchor);
 	assert_int_equal(snap_count_out, snap_count);
 	for (i = 0; i < snap_split_index; i++)
-		assert_int_equal(snaps_out[i], snaps_in[i]);
+		assert_int_equal(snaps_out[i], snaps[i]);
 	for (i = snap_split_index; i < snap_count; i++)
 		assert_int_equal(snaps_out[i], garbage);
 
 	print_message("Snapshot listing shall succeed with a large buffer\n");
 	snap_count_out = snap_count;
 	memset(snaps_out, 0xAA, snap_count * sizeof(daos_epoch_t));
-	MUST(daos_snap_list(coh, snaps_out, &snap_count_out,
-			    arg->async ? &ev : NULL));
+	memset(&anchor, 0, sizeof(anchor));
+	MUST(daos_cont_list_snap(coh, &snap_count_out, snaps_out, NULL, &anchor,
+				 arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
+	daos_anchor_is_eof(&anchor);
 	assert_int_equal(snap_count_out, snap_count);
 	for (i = 0; i < snap_count; i++)
-		assert_int_equal(snaps_out[i], snaps_in[i]);
-
-	print_message("Slipping to Epoch between snapshots shall succeed\n");
-	epoch = 40;
-	state_tmp = state;
-	MUST(epoch_slip(arg, coh, epoch, &state));
-	state_tmp.es_lre = epoch;
-	state_tmp.es_glre = epoch;
-	assert_epoch_state_equal(&state, &state_tmp);
-
-	/** Wait for aggregation completion */
-	memset(&info, 0, sizeof(daos_cont_info_t));
-	print_message("Waiting for epoch_slip to complete .");
-	while (info.ci_min_slipped_epoch < epoch)
-		MUST(cont_query(arg, coh, &info));
-	print_message(". Done!\n");
-	print_message("Aggregated epoch: " DF_U64"\n",
-		      info.ci_min_slipped_epoch);
-
-	/** empty records from 10 -> 20 */
-	io_for_aggregation(arg, coh, 10UL, 11, &state, oid,
-			   /* update */ false,
-			   /* verify empty record */ true);
+		assert_int_equal(snaps_out[i], snaps[i]);
 
 	/** no-empty records at 21 */
-	io_for_aggregation(arg, coh, 21, 1, &state, oid,
-			   /* update */false,
+	io_for_aggregation(arg, coh, &ths[21], 1, oid,
+			   /* update */false, NULL, NULL,
 			   /* verify empty record */false);
 
 	/** no-empty records at 29 */
-	io_for_aggregation(arg, coh, 29, 1, &state, oid,
-			   /* update */false,
+	io_for_aggregation(arg, coh, &ths[29], 1, oid,
+			   /* update */false, NULL, NULL,
 			   /* verify empty record */false);
 
-	/** no-empty records at 29 */
-	io_for_aggregation(arg, coh, 35, 1, &state, oid,
-			   /* update */false,
+	/** no-empty records at 35 */
+	io_for_aggregation(arg, coh, &ths[35], 1, oid,
+			   /* update */false, NULL, NULL,
 			   /* verify empty record */false);
 
-	/** no-empty records from 40 -> 109 */
-	io_for_aggregation(arg, coh, 40, 70, &state, oid,
-			   /* update */false,
+	/** no-empty records from 40 -> 99 */
+	io_for_aggregation(arg, coh, &ths[40], 60, oid,
+			   /* update */false, NULL, NULL,
 			   /* verify empty record */false);
 
 	print_message("Snapshot deletion shall succeed\n");
-	epoch = 29;
-	MUST(daos_snap_destroy(coh, epoch, arg->async ? &ev : NULL));
+	epr.epr_hi = epr.epr_lo = snaps[2];
+	MUST(daos_cont_destroy_snap(coh, epr, arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
 
 	if (arg->async)
 		MUST(daos_event_fini(&ev));
+	for (i = 0 ; i < 100; i++)
+		daos_tx_close(ths[i], NULL);
+
+	D_FREE(ths);
 	MUST(cont_close(arg, coh));
 	MUST(cont_destroy(arg, co_uuid));
 }
 
 static const struct CMUnitTest epoch_tests[] = {
-	{ "EPOCH1: initial state when opening a new container",
-	  test_epoch_init, async_disable, test_case_teardown},
-	{ "EPOCH2: epoch_query",
-	  test_epoch_query, async_disable, test_case_teardown},
-	{ "EPOCH3: epoch_query (async)",
-	  test_epoch_query, async_enable, test_case_teardown},
-	{ "EPOCH4: epoch_hold",
-	  test_epoch_hold, async_disable, test_case_teardown},
-	{ "EPOCH5: epoch_hold (async)",
-	  test_epoch_hold, async_enable, test_case_teardown},
-	{ "EPOCH6: epoch_commit",
-	  test_epoch_commit, async_disable, test_case_teardown},
-	{ "EPOCH7: epoch_commit (async)",
-	  test_epoch_commit, async_enable, test_case_teardown},
-	{ "EPOCH8: epoch_slip",
+	{ "EPOCH1: epoch_slip",
 	  test_epoch_slip, async_disable, test_case_teardown},
-	{ "EPOCH9: epoch_slip (async)",
+	{ "EPOCH2: epoch_slip (async)",
 	  test_epoch_slip, async_enable, test_case_teardown},
-	{ "EPOCH10: epoch_slip (overlap)",
+	{ "EPOCH3: epoch_slip (overlap)",
 	  test_epoch_slip, async_overlap, test_case_teardown},
-	{ "EPOCH11: epoch_commit complex (multiple writers)",
-	  test_epoch_commit_complex, async_disable, test_case_teardown},
-	{ "EPOCH12: epoch_hold complex (multiple writers)",
-	  test_epoch_hold_complex, async_disable, test_case_teardown},
-	{ "EPOCH13: snapshots",
+	{ "EPOCH4: snapshots",
 	  test_snapshots, async_disable, test_case_teardown},
-	{ "EPOCH14: snapshots (async)",
+	{ "EPOCH5: snapshots (async)",
 	  test_snapshots, async_enable, test_case_teardown},
 };
 

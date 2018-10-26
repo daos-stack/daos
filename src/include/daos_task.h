@@ -46,7 +46,7 @@ typedef enum {
 	DAOS_OPC_POOL_DESTROY,
 	DAOS_OPC_POOL_EXTEND,
 	DAOS_OPC_POOL_EVICT,
-	DAOS_OPC_PARAMS_SET,
+	DAOS_OPC_SET_PARAMS,
 
 	/** Pool APIs */
 	DAOS_OPC_POOL_CONNECT,
@@ -55,11 +55,11 @@ typedef enum {
 	DAOS_OPC_POOL_EXCLUDE_OUT,
 	DAOS_OPC_POOL_ADD,
 	DAOS_OPC_POOL_QUERY,
-	DAOS_OPC_POOL_TARGET_QUERY,
-	DAOS_OPC_POOL_ATTR_LIST,
-	DAOS_OPC_POOL_ATTR_GET,
-	DAOS_OPC_POOL_ATTR_SET,
-	DAOS_OPC_POOL_SVC_STOP,
+	DAOS_OPC_POOL_QUERY_TARGET,
+	DAOS_OPC_POOL_LIST_ATTR,
+	DAOS_OPC_POOL_GET_ATTR,
+	DAOS_OPC_POOL_SET_ATTR,
+	DAOS_OPC_POOL_STOP_SVC,
 
 	/** Container APIs */
 	DAOS_OPC_CONT_CREATE,
@@ -67,37 +67,34 @@ typedef enum {
 	DAOS_OPC_CONT_CLOSE,
 	DAOS_OPC_CONT_DESTROY,
 	DAOS_OPC_CONT_QUERY,
-	DAOS_OPC_CONT_ATTR_LIST,
-	DAOS_OPC_CONT_ATTR_GET,
-	DAOS_OPC_CONT_ATTR_SET,
-	DAOS_OPC_CONT_OID_ALLOC,
+	DAOS_OPC_CONT_ROLLBACK,
+	DAOS_OPC_CONT_SUBSCRIBE,
+	DAOS_OPC_CONT_LIST_ATTR,
+	DAOS_OPC_CONT_GET_ATTR,
+	DAOS_OPC_CONT_SET_ATTR,
+	DAOS_OPC_CONT_ALLOC_OIDS,
+	DAOS_OPC_CONT_LIST_SNAP,
+	DAOS_OPC_CONT_CREATE_SNAP,
+	DAOS_OPC_CONT_DESTROY_SNAP,
 
-	/** Epoch APIs */
-	DAOS_OPC_EPOCH_FLUSH,
-	DAOS_OPC_EPOCH_DISCARD,
-	DAOS_OPC_EPOCH_QUERY,
-	DAOS_OPC_EPOCH_HOLD,
-	DAOS_OPC_EPOCH_SLIP,
-	DAOS_OPC_EPOCH_COMMIT,
-	DAOS_OPC_EPOCH_WAIT,
-
-	/** Snapshot APIs */
-	DAOS_OPC_SNAP_LIST,
-	DAOS_OPC_SNAP_CREATE,
-	DAOS_OPC_SNAP_DESTROY,
+	/** Transaction APIs */
+	DAOS_OPC_TX_OPEN,
+	DAOS_OPC_TX_COMMIT,
+	DAOS_OPC_TX_ABORT,
+	DAOS_OPC_TX_OPEN_SNAP,
+	DAOS_OPC_TX_CLOSE,
 
 	/** Object APIs */
-	DAOS_OPC_OBJ_CLASS_REGISTER,
-	DAOS_OPC_OBJ_CLASS_QUERY,
-	DAOS_OPC_OBJ_CLASS_LIST,
-	DAOS_OPC_OBJ_DECLARE,
+	DAOS_OPC_OBJ_REGISTER_CLASS,
+	DAOS_OPC_OBJ_QUERY_CLASS,
+	DAOS_OPC_OBJ_LIST_CLASS,
 	DAOS_OPC_OBJ_OPEN,
 	DAOS_OPC_OBJ_CLOSE,
 	DAOS_OPC_OBJ_PUNCH,
 	DAOS_OPC_OBJ_PUNCH_DKEYS,
 	DAOS_OPC_OBJ_PUNCH_AKEYS,
 	DAOS_OPC_OBJ_QUERY,
-	DAOS_OPC_OBJ_KEY_QUERY,
+	DAOS_OPC_OBJ_QUERY_KEY,
 	DAOS_OPC_OBJ_FETCH,
 	DAOS_OPC_OBJ_UPDATE,
 	DAOS_OPC_OBJ_LIST_DKEY,
@@ -138,7 +135,7 @@ typedef struct {
 	uint32_t		key_id;
 	uint64_t		value;
 	uint64_t		value_extra;
-} daos_params_set_t;
+} daos_set_params_t;
 
 typedef struct {
 	uint32_t		mode;
@@ -188,8 +185,8 @@ typedef struct {
 typedef struct {
 	const uuid_t		uuid;
 	const char		*grp;
-	d_rank_list_t	*svc;
-	d_rank_list_t	*tgts;
+	d_rank_list_t		*svc;
+	d_rank_list_t		*tgts;
 } daos_pool_update_t;
 
 typedef struct {
@@ -200,16 +197,16 @@ typedef struct {
 
 typedef struct {
 	daos_handle_t		poh;
-	d_rank_list_t	*tgts;
-	d_rank_list_t	*failed;
+	d_rank_list_t		*tgts;
+	d_rank_list_t		*failed;
 	daos_target_info_t	*info_list;
-} daos_pool_target_query_t;
+} daos_pool_query_target_t;
 
 typedef struct {
 	daos_handle_t		poh;
 	char			*buf;
 	size_t			*size;
-} daos_pool_attr_list_t;
+} daos_pool_list_attr_t;
 
 typedef struct {
 	daos_handle_t		poh;
@@ -217,7 +214,7 @@ typedef struct {
 	char    const *const	*names;
 	void   *const		*values;
 	size_t			*sizes;
-} daos_pool_attr_get_t;
+} daos_pool_get_attr_t;
 
 typedef struct {
 	daos_handle_t		poh;
@@ -225,11 +222,11 @@ typedef struct {
 	char   const *const	*names;
 	void   const *const	*values;
 	size_t const		*sizes;
-} daos_pool_attr_set_t;
+} daos_pool_set_attr_t;
 
 typedef struct {
 	daos_handle_t		poh;
-} daos_pool_svc_stop_t;
+} daos_pool_stop_svc_t;
 
 typedef struct {
 	daos_handle_t		poh;
@@ -261,9 +258,19 @@ typedef struct {
 
 typedef struct {
 	daos_handle_t		coh;
+	daos_epoch_t		epoch;
+} daos_cont_rollback_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	daos_epoch_t		*epoch;
+} daos_cont_subscribe_t;
+
+typedef struct {
+	daos_handle_t		coh;
 	char			*buf;
 	size_t			*size;
-} daos_cont_attr_list_t;
+} daos_cont_list_attr_t;
 
 typedef struct {
 	daos_handle_t		coh;
@@ -271,7 +278,7 @@ typedef struct {
 	char    const *const	*names;
 	void   *const		*values;
 	size_t			*sizes;
-} daos_cont_attr_get_t;
+} daos_cont_get_attr_t;
 
 typedef struct {
 	daos_handle_t		coh;
@@ -279,100 +286,77 @@ typedef struct {
 	char   const *const	*names;
 	void   const *const	*values;
 	size_t const		*sizes;
-} daos_cont_attr_set_t;
+} daos_cont_set_attr_t;
 
 typedef struct {
 	daos_handle_t		coh;
 	daos_size_t		num_oids;
 	uint64_t		*oid;
-} daos_cont_oid_alloc_t;
+} daos_cont_alloc_oids_t;
 
 typedef struct {
 	daos_handle_t		coh;
-	daos_epoch_t		epoch;
-	daos_epoch_state_t	*state;
-} daos_epoch_flush_t;
-
-typedef struct {
-	daos_handle_t		coh;
-	daos_epoch_state_t	*state;
-} daos_epoch_query_t;
-
-typedef struct {
-	daos_handle_t		coh;
-	daos_epoch_t		epoch;
-	daos_epoch_state_t	*state;
-} daos_epoch_discard_t;
+	int			*nr;
+	daos_epoch_t		*epochs;
+	char			**names;
+	daos_anchor_t		*anchor;
+} daos_cont_list_snap_t;
 
 typedef struct {
 	daos_handle_t		coh;
 	daos_epoch_t		*epoch;
-	daos_epoch_state_t	*state;
-} daos_epoch_hold_t;
+	char			*name;
+} daos_cont_create_snap_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	daos_epoch_range_t	epr;
+} daos_cont_destroy_snap_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	daos_handle_t		*th;
+} daos_tx_open_t;
+
+typedef struct {
+	daos_handle_t		th;
+} daos_tx_commit_t;
+
+typedef struct {
+	daos_handle_t		th;
+} daos_tx_abort_t;
 
 typedef struct {
 	daos_handle_t		coh;
 	daos_epoch_t		epoch;
-	daos_epoch_state_t	*state;
-} daos_epoch_slip_t;
+	daos_handle_t		*th;
+} daos_tx_open_snap_t;
 
 typedef struct {
-	daos_handle_t		coh;
-	daos_epoch_t		epoch;
-	daos_epoch_state_t	*state;
-} daos_epoch_commit_t;
-
-typedef struct {
-	daos_handle_t		coh;
-	daos_epoch_t		epoch;
-	daos_epoch_state_t	*state;
-} daos_epoch_wait_t;
-
-typedef struct {
-	daos_handle_t		coh;
-	daos_epoch_t		*buf;
-	int			*n;
-} daos_snap_list_t;
-
-typedef struct {
-	daos_handle_t		coh;
-	daos_epoch_t		epoch;
-} daos_snap_create_t;
-
-typedef struct {
-	daos_handle_t		coh;
-	daos_epoch_t		epoch;
-} daos_snap_destroy_t;
+	daos_handle_t		th;
+} daos_tx_close_t;
 
 typedef struct {
 	daos_handle_t		coh;
 	daos_oclass_id_t	cid;
 	daos_oclass_attr_t	*cattr;
-} daos_obj_class_register_t;
+} daos_obj_register_class_t;
 
 typedef struct {
 	daos_handle_t		coh;
 	daos_oclass_id_t	cid;
 	daos_oclass_attr_t	*cattr;
-} daos_obj_class_query_t;
+} daos_obj_query_class_t;
 
 typedef struct {
 	daos_handle_t		coh;
 	daos_oclass_list_t	*clist;
 	daos_anchor_t		*anchor;
-} daos_obj_class_list_t;
+} daos_obj_list_class_t;
 
 typedef struct {
 	daos_handle_t		coh;
 	daos_obj_id_t		oid;
-	daos_epoch_t		epoch;
-	daos_obj_attr_t		*oa;
-} daos_obj_declare_t;
-
-typedef struct {
-	daos_handle_t		coh;
-	daos_obj_id_t		oid;
-	daos_epoch_t		epoch;
 	unsigned int		mode;
 	daos_handle_t		*oh;
 } daos_obj_open_t;
@@ -389,7 +373,7 @@ typedef struct {
  */
 typedef struct {
 	daos_handle_t		 oh;
-	daos_epoch_t		 epoch;
+	daos_handle_t		 th;
 	daos_key_t		*dkey;
 	daos_key_t		*akeys;
 	unsigned int		 akey_nr;
@@ -397,23 +381,23 @@ typedef struct {
 
 typedef struct {
 	daos_handle_t		oh;
-	daos_epoch_t		epoch;
+	daos_handle_t		th;
 	daos_obj_attr_t		*oa;
 	d_rank_list_t		*ranks;
 } daos_obj_query_t;
 
 typedef struct {
 	daos_handle_t		oh;
-	daos_epoch_t		epoch;
+	daos_handle_t		th;
 	daos_key_t		*dkey;
 	daos_key_t		*akey;
 	daos_recx_t		*recx;
 	uint32_t		flags;
-} daos_obj_key_query_t;
+} daos_obj_query_key_t;
 
 typedef struct {
 	daos_handle_t		oh;
-	daos_epoch_t		epoch;
+	daos_handle_t		th;
 	daos_key_t		*dkey;
 	unsigned int		nr;
 	daos_iod_t		*iods;
@@ -423,7 +407,7 @@ typedef struct {
 
 typedef struct {
 	daos_handle_t		oh;
-	daos_epoch_t		epoch;
+	daos_handle_t		th;
 	daos_key_t		*dkey;
 	unsigned int		nr;
 	daos_iod_t		*iods;
@@ -432,7 +416,7 @@ typedef struct {
 
 typedef struct {
 	daos_handle_t		oh;
-	daos_epoch_t		epoch;
+	daos_handle_t		th;
 	uint32_t		*nr;
 	daos_key_desc_t		*kds;
 	daos_sg_list_t		*sgl;
@@ -441,7 +425,7 @@ typedef struct {
 
 typedef struct {
 	daos_handle_t		oh;
-	daos_epoch_t		epoch;
+	daos_handle_t		th;
 	daos_key_t		*dkey;
 	uint32_t		*nr;
 	daos_key_desc_t		*kds;
@@ -451,7 +435,7 @@ typedef struct {
 
 typedef struct {
 	daos_handle_t		oh;
-	daos_epoch_t		epoch;
+	daos_handle_t		th;
 	daos_key_t		*dkey;
 	daos_key_t		*akey;
 	daos_size_t		*size;
@@ -467,7 +451,7 @@ typedef struct {
 /* argument structure for object internal task */
 typedef struct {
 	daos_handle_t		oh;
-	daos_epoch_t		epoch;
+	daos_handle_t		th;
 	daos_key_t		*dkey;
 	daos_key_t		*akey;
 	daos_size_t		*size;	/*total buf size for sgl buf, in case
@@ -488,31 +472,31 @@ typedef struct {
 } daos_obj_list_obj_t;
 
 typedef struct {
-	daos_handle_t	coh;
-	daos_obj_id_t	oid;
-	daos_epoch_t	epoch;
-	daos_size_t	cell_size;
-	daos_size_t	chunk_size;
-	daos_handle_t	*oh;
+	daos_handle_t		coh;
+	daos_obj_id_t		oid;
+	daos_handle_t		th;
+	daos_size_t		cell_size;
+	daos_size_t		chunk_size;
+	daos_handle_t		*oh;
 } daos_array_create_t;
 
 typedef struct {
-	daos_handle_t	coh;
-	daos_obj_id_t	oid;
-	daos_epoch_t	epoch;
-	unsigned int	mode;
-	daos_size_t	*cell_size;
-	daos_size_t	*chunk_size;
-	daos_handle_t	*oh;
+	daos_handle_t		coh;
+	daos_obj_id_t		oid;
+	daos_handle_t		th;
+	unsigned int		mode;
+	daos_size_t		*cell_size;
+	daos_size_t		*chunk_size;
+	daos_handle_t		*oh;
 } daos_array_open_t;
 
 typedef struct {
-	daos_handle_t	oh;
+	daos_handle_t		oh;
 } daos_array_close_t;
 
 typedef struct {
 	daos_handle_t		oh;
-	daos_epoch_t		epoch;
+	daos_handle_t		th;
 	daos_array_iod_t	*iod;
 	daos_sg_list_t		*sgl;
 	daos_csum_buf_t		*csums;
@@ -520,48 +504,48 @@ typedef struct {
 
 typedef struct {
 	daos_handle_t           oh;
-	daos_epoch_t            epoch;
+	daos_handle_t		th;
 	daos_size_t		*size;
 } daos_array_get_size_t;
 
 typedef struct {
 	daos_handle_t           oh;
-	daos_epoch_t            epoch;
+	daos_handle_t		th;
 	daos_size_t		size;
 } daos_array_set_size_t;
 
 typedef struct {
-	daos_handle_t	oh;
-	daos_epoch_t	epoch;
+	daos_handle_t		oh;
+	daos_handle_t		th;
 } daos_array_destroy_t;
 
 typedef struct {
-	daos_handle_t	oh;
-	daos_epoch_t	epoch;
-	const char	*key;
-	daos_size_t	*buf_size;
-	void		*buf;
+	daos_handle_t		oh;
+	daos_handle_t		th;
+	const char		*key;
+	daos_size_t		*buf_size;
+	void			*buf;
 } daos_kv_get_t;
 
 typedef struct {
-	daos_handle_t	oh;
-	daos_epoch_t	epoch;
-	const char	*key;
-	daos_size_t	buf_size;
-	const void	*buf;
+	daos_handle_t		oh;
+	daos_handle_t		th;
+	const char		*key;
+	daos_size_t		buf_size;
+	const void		*buf;
 } daos_kv_put_t;
 
 typedef struct {
-	daos_handle_t	oh;
-	daos_epoch_t	epoch;
-	const char	*key;
+	daos_handle_t		oh;
+	daos_handle_t		th;
+	const char		*key;
 } daos_kv_remove_t;
 
 typedef struct {
-	daos_handle_t	oh;
-	daos_epoch_t	epoch;
-	unsigned int	num_dkeys;
-	daos_dkey_io_t	*io_array;
+	daos_handle_t		oh;
+	daos_handle_t		th;
+	unsigned int		num_dkeys;
+	daos_dkey_io_t		*io_array;
 } daos_obj_multi_io_t;
 
 /**

@@ -68,66 +68,67 @@ ioreq_fini(struct ioreq *req);
 
 void
 insert_single(const char *dkey, const char *akey, uint64_t idx, void *value,
-	      daos_size_t iod_size, daos_epoch_t epoch, struct ioreq *req);
+	      daos_size_t iod_size, daos_handle_t th, struct ioreq *req);
 
 void
 insert_single_with_rxnr(const char *dkey, const char *akey, uint64_t idx,
 			void *value, daos_size_t iod_size, int rx_nr,
-			daos_epoch_t epoch, struct ioreq *req);
+			daos_handle_t th, struct ioreq *req);
 
 void
 lookup_single(const char *dkey, const char *akey, uint64_t idx,
-	      void *val, daos_size_t data_size, daos_epoch_t epoch,
+	      void *val, daos_size_t data_size, daos_handle_t th,
 	      struct ioreq *req);
 
 void
 lookup_single_with_rxnr(const char *dkey, const char *akey, uint64_t idx,
 			void *val, daos_size_t iod_size, daos_size_t data_size,
-			daos_epoch_t epoch, struct ioreq *req);
+			daos_handle_t th, struct ioreq *req);
 
 void
 lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
-		    void *val, daos_size_t data_size, daos_epoch_t epoch,
+		    void *val, daos_size_t data_size, daos_handle_t th,
 		    struct ioreq *req);
 
 int
-enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
+enumerate_dkey(daos_handle_t th, uint32_t *number, daos_key_desc_t *kds,
 	       daos_anchor_t *anchor, void *buf, daos_size_t len,
 	       struct ioreq *req);
 
 void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
-       int *rx_nr, uint64_t *idx, void **val, daos_epoch_t *epoch,
-       struct ioreq *req);
+	int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
+	struct ioreq *req);
 
 void
 insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
-	     daos_epoch_t epoch, daos_recx_t *recxs, int nr, void *data,
+	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req);
 
 void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	daos_size_t *iod_size, void **val, daos_size_t *data_size,
-	daos_epoch_t *epoch, struct ioreq *req, bool empty);
-void
-punch_obj(daos_epoch_t epoch, struct ioreq *req);
+	daos_handle_t th, struct ioreq *req, bool empty);
 
 void
-punch_dkey(const char *dkey, daos_epoch_t epoch, struct ioreq *req);
+punch_obj(daos_handle_t th, struct ioreq *req);
 
 void
-punch_akey(const char *dkey, const char *akey, daos_epoch_t epoch,
+punch_dkey(const char *dkey, daos_handle_t th, struct ioreq *req);
+
+void
+punch_akey(const char *dkey, const char *akey, daos_handle_t th,
 	   struct ioreq *req);
 void
 punch_recxs(const char *dkey, const char *akey, daos_recx_t *recxs,
-	    int nr, daos_epoch_t epoch, struct ioreq *req);
+	    int nr, daos_handle_t th, struct ioreq *req);
 void
 punch_single(const char *dkey, const char *akey, uint64_t idx,
-	     daos_epoch_t epoch, struct ioreq *req);
+	     daos_handle_t th, struct ioreq *req);
 
 void
 lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
-	     daos_epoch_t epoch, daos_recx_t *recxs, int nr, void *data,
+	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req);
 
 int

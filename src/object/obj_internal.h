@@ -153,7 +153,7 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,
 		       unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
 		       uint32_t fw_cnt, tse_task_t *task);
 
-int dc_obj_shard_key_query(struct dc_obj_shard *shard, daos_epoch_t epoch,
+int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			   uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
 			   daos_recx_t *recx, const uuid_t coh_uuid,
 			   const uuid_t cont_uuid, unsigned int *map_ver,
@@ -176,7 +176,7 @@ int obj_get_grp_size(struct dc_object *obj);
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
-void ds_obj_key_query_handler(crt_rpc_t *rpc);
+void ds_obj_query_key_handler(crt_rpc_t *rpc);
 #define OBJ_TGTS_IGNORE		((d_rank_t)-1)
 ABT_pool
 ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);

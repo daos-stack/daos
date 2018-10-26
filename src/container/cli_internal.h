@@ -67,5 +67,7 @@ dc_cont2hdl(struct dc_cont *dc, daos_handle_t *hdl)
 }
 
 void dc_cont_put(struct dc_cont *dc);
+int dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
+		tse_task_t *task);
 
 #endif /* __CONTAINER_CLIENT_INTERNAL_H__ */

@@ -107,6 +107,29 @@ daos_oclass_sr_set_rank(daos_obj_id_t oid, d_rank_t rank)
 	return oid;
 }
 
+static inline bool
+daos_unit_oid_is_null(daos_unit_oid_t oid)
+{
+	return oid.id_shard == 0 && daos_obj_is_null_id(oid.id_pub);
+}
+
+static inline int
+daos_unit_oid_compare(daos_unit_oid_t a, daos_unit_oid_t b)
+{
+	int rc;
+
+	rc = daos_obj_compare_id(a.id_pub, b.id_pub);
+	if (rc != 0)
+		return rc;
+
+	if (a.id_shard < b.id_shard)
+		return -1;
+	else if (a.id_shard > b.id_shard)
+		return 1;
+
+	return 0;
+}
+
 int daos_obj_layout_free(struct daos_obj_layout *layout);
 int daos_obj_layout_alloc(struct daos_obj_layout **layout, uint32_t grp_nr,
 			  uint32_t grp_size);
@@ -116,17 +139,16 @@ int daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
 int dc_obj_init(void);
 void dc_obj_fini(void);
 
-int dc_obj_class_register(tse_task_t *task);
-int dc_obj_class_query(tse_task_t *task);
-int dc_obj_class_list(tse_task_t *task);
-int dc_obj_declare(tse_task_t *task);
+int dc_obj_register_class(tse_task_t *task);
+int dc_obj_query_class(tse_task_t *task);
+int dc_obj_list_class(tse_task_t *task);
 int dc_obj_open(tse_task_t *task);
 int dc_obj_close(tse_task_t *task);
 int dc_obj_punch(tse_task_t *task);
 int dc_obj_punch_dkeys(tse_task_t *task);
 int dc_obj_punch_akeys(tse_task_t *task);
 int dc_obj_query(tse_task_t *task);
-int dc_obj_key_query(tse_task_t *task);
+int dc_obj_query_key(tse_task_t *task);
 int dc_obj_fetch(tse_task_t *task);
 int dc_obj_update(tse_task_t *task);
 int dc_obj_list_dkey(tse_task_t *task);
@@ -136,6 +158,7 @@ int dc_obj_list_obj(tse_task_t *task);
 int dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md);
 int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
+daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
 
 /** Decode shard number from enumeration anchor */
 static inline uint32_t

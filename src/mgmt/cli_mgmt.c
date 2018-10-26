@@ -100,9 +100,9 @@ out_task:
 }
 
 int
-dc_mgmt_params_set(tse_task_t *task)
+dc_mgmt_set_params(tse_task_t *task)
 {
-	daos_params_set_t		*args;
+	daos_set_params_t		*args;
 	struct mgmt_params_set_in	*in;
 	crt_endpoint_t			ep;
 	crt_rpc_t			*rpc = NULL;

@@ -54,7 +54,7 @@ dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed)
 	oid.lo	= obj_id_gen++;
 	oid.lo	|= hdr;
 	oid.hi	= rand() % 100;
-	daos_obj_id_generate(&oid, ofeats, oclass);
+	daos_obj_generate_id(&oid, ofeats, oclass);
 
 	return oid;
 }

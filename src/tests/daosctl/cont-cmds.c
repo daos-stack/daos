@@ -339,18 +339,11 @@ cmd_query_container(int argc, const char **argv, void *ctx)
 	uuid_unparse(cont_uuid, uuid_str);
 	printf("Container UUID: %s\n", uuid_str);
 
-	printf("Highest committed epoch: %llu\n",
-	       (long long int)cont_info.ci_epoch_state.es_hce);
-	printf("Lowest referenced epoch: %llu\n",
-	       (long long int)cont_info.ci_epoch_state.es_lre);
-	printf("Lowest held epoch: %llu\n",
-	       (long long int)cont_info.ci_epoch_state.es_lhe);
-	printf("Global highest committed epoch: %llu\n",
-	       (long long int)cont_info.ci_epoch_state.es_ghce);
-	printf("Global highest partially commited epoch: %llu\n",
-	       (long long int)cont_info.ci_epoch_state.es_ghpce);
 	printf("Number of snapshots: %i\n",
 	       (int)cont_info.ci_nsnapshots);
+
+	printf("Latest Persistent Snapshot: %i\n",
+	       (int)cont_info.ci_lsnapshot);
 
  done1:
 	daos_cont_close(coh, NULL);

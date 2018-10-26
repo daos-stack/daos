@@ -107,34 +107,21 @@ int ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
  * srv_epoch.c
  */
 int ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont,
-			   struct container_hdl *hdl,
-			   daos_epoch_state_t *state);
+			   uuid_t c_hdl, struct container_hdl *hdl);
 int ds_cont_epoch_fini_hdl(struct rdb_tx *tx, struct cont *cont,
 			   crt_context_t ctx, struct container_hdl *hdl);
 int ds_cont_epoch_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			struct cont *cont, struct container_hdl *hdl,
 			crt_rpc_t *rpc);
-int ds_cont_epoch_hold(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		       struct cont *cont, struct container_hdl *hdl,
-		       crt_rpc_t *rpc);
-int ds_cont_epoch_slip(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		       struct cont *cont, struct container_hdl *hdl,
-		       crt_rpc_t *rpc);
 int ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			  struct cont *cont, struct container_hdl *hdl,
 			  crt_rpc_t *rpc);
 int ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			 struct cont *cont, struct container_hdl *hdl,
-			 crt_rpc_t *rpc);
-int ds_cont_epoch_read_state(struct rdb_tx *tx, struct cont *cont,
-			     struct container_hdl *hdl,
-			     daos_epoch_state_t *state);
+			 crt_rpc_t *rpc, bool snapshot);
 int ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		      struct cont *cont, struct container_hdl *hdl,
 		      crt_rpc_t *rpc);
-int ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			struct cont *cont, struct container_hdl *hdl,
-			crt_rpc_t *rpc);
 int ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			 struct cont *cont, struct container_hdl *hdl,
 			 crt_rpc_t *rpc);

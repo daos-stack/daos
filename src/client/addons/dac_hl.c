@@ -102,7 +102,7 @@ dac_kv_put(tse_task_t *task)
 
 	update_args = daos_task_get_args(update_task);
 	update_args->oh		= args->oh;
-	update_args->epoch	= args->epoch;
+	update_args->th		= args->th;
 	update_args->dkey	= &params->dkey;
 	update_args->nr		= 1;
 	update_args->iods	= &params->iod;
@@ -185,7 +185,7 @@ dac_kv_get(tse_task_t *task)
 
 	fetch_args = daos_task_get_args(fetch_task);
 	fetch_args->oh		= args->oh;
-	fetch_args->epoch	= args->epoch;
+	fetch_args->th		= args->th;
 	fetch_args->dkey	= &params->dkey;
 	fetch_args->nr		= 1;
 	fetch_args->iods	= &params->iod;
@@ -232,7 +232,7 @@ dac_kv_remove(tse_task_t *task)
 }
 
 static int
-dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
+dac_multi_io(daos_handle_t oh, daos_handle_t th, unsigned int num_dkeys,
 	     daos_dkey_io_t *io_array, daos_opc_t opc, tse_task_t *task)
 {
 	daos_opc_t	d_opc;
@@ -255,7 +255,7 @@ dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
 
 		args = daos_task_get_args(io_task);
 		args->oh	= oh;
-		args->epoch	= epoch;
+		args->th	= th;
 		args->dkey	= io_array[i].ioa_dkey;
 		args->nr	= io_array[i].ioa_nr;
 		args->iods	= io_array[i].ioa_iods;
@@ -289,7 +289,7 @@ dac_obj_fetch_multi(tse_task_t *task)
 {
 	daos_obj_multi_io_t *args = daos_task_get_args(task);
 
-	return dac_multi_io(args->oh, args->epoch, args->num_dkeys,
+	return dac_multi_io(args->oh, args->th, args->num_dkeys,
 			    args->io_array, DAOS_OPC_OBJ_FETCH_MULTI, task);
 }
 
@@ -298,6 +298,6 @@ dac_obj_update_multi(tse_task_t *task)
 {
 	daos_obj_multi_io_t *args = daos_task_get_args(task);
 
-	return dac_multi_io(args->oh, args->epoch, args->num_dkeys,
+	return dac_multi_io(args->oh, args->th, args->num_dkeys,
 			    args->io_array, DAOS_OPC_OBJ_UPDATE_MULTI, task);
 }

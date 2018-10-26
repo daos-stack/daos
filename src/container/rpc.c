@@ -68,38 +68,6 @@ crt_proc_daos_epoch_range_t(crt_proc_t proc, daos_epoch_range_t *erange)
 }
 
 static int
-crt_proc_daos_epoch_state_t(crt_proc_t proc, daos_epoch_state_t *es)
-{
-	int rc;
-
-	rc = crt_proc_uint64_t(proc, &es->es_hce);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &es->es_lre);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &es->es_lhe);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &es->es_ghce);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &es->es_glre);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &es->es_ghpce);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
 crt_proc_struct_cont_tgt_close_rec(crt_proc_t proc,
 				   struct cont_tgt_close_rec *rec)
 {

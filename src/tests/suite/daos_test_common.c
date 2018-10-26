@@ -476,10 +476,8 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 	static bool	 runable = true;
 
 	if (arg->myrank == 0) {
-		daos_epoch_state_t	epoch_state;
 		int			tgts_per_node;
 		int			disable_nodes;
-		int			rc;
 
 		tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 		disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -497,9 +495,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 			ranks_to_kill[i] = arg->srv_nnodes -
 					   disable_nodes - i - 1;
 
-		rc = daos_epoch_query(arg->coh, &epoch_state, NULL);
-		assert_int_equal(rc, 0);
-		arg->hce = epoch_state.es_hce;
+		arg->hce = daos_ts2epoch();
 	}
 
 	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -704,7 +700,7 @@ daos_add_server(const uuid_t pool_uuid, const char *grp,
 	/** add tgt to the pool */
 	targets.rl_nr = 1;
 	targets.rl_ranks = &rank;
-	rc = daos_pool_tgt_add(pool_uuid, grp, svc, &targets, NULL);
+	rc = daos_pool_add_tgt(pool_uuid, grp, svc, &targets, NULL);
 	if (rc)
 		print_message("add pool failed rc %d\n", rc);
 	assert_int_equal(rc, 0);

@@ -351,6 +351,24 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+static inline void
+daos_sync_ranks(MPI_Comm comm)
+{
+	daos_epoch_t e = daos_ts2epoch();
+	daos_epoch_t ge;
+
+	MPI_Allreduce(&e, &ge, 1, MPI_UINT64_T, MPI_MAX, comm);
+
+	e = daos_ts2epoch();
+	if (ge > e) {
+		struct timespec ts;
+
+		ts.tv_sec = 0;
+		ts.tv_nsec = ge - e;
+		nanosleep(&ts, NULL);
+	}
+}
+
 #define MAX_KILLS	3
 extern d_rank_t ranks_to_kill[MAX_KILLS];
 bool test_runable(test_arg_t *arg, unsigned int required_tgts);

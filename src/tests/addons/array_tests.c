@@ -96,29 +96,31 @@ simple_array_mgmt(void **state)
 	daos_handle_t	oh;
 	daos_size_t	cell_size = 0, csize = 0;
 	daos_size_t	size;
-	daos_epoch_t	epoch = 1;
 	int		rc;
 
 	/** create the array with HASHED DKEY, should FAIL */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
-	rc = daos_array_create(arg->coh, oid, epoch, 4, chunk_size, &oh, NULL);
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
+			       &oh, NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 	/** create the array with LEXICAL DKEY, should FAIL */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, DAOS_OF_DKEY_LEXICAL,
 			  arg->myrank);
-	rc = daos_array_create(arg->coh, oid, epoch, 4, chunk_size, &oh, NULL);
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
+			       &oh, NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, arg->myrank);
 
 	/** create the array */
-	rc = daos_array_create(arg->coh, oid, epoch, 4, chunk_size, &oh, NULL);
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
+			       &oh, NULL);
 	assert_int_equal(rc, 0);
 
-	rc = daos_array_set_size(oh, epoch, 265, NULL);
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, 265, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_array_get_size(oh, epoch, &size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
 	assert_int_equal(rc, 0);
 	if (size != 265) {
 		fprintf(stderr, "Size = %zu, expected: 265\n", size);
@@ -127,55 +129,47 @@ simple_array_mgmt(void **state)
 
 	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
-	epoch++;
 
 	/** open the array */
-	rc = daos_array_open(arg->coh, oid, epoch, DAOS_OO_RW,
+	rc = daos_array_open(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
 			     &cell_size, &csize, &oh, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(4, cell_size);
 	assert_int_equal(chunk_size, csize);
 
-	rc = daos_array_set_size(oh, epoch, 112, NULL);
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, 112, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_array_get_size(oh, epoch, &size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
 	assert_int_equal(rc, 0);
 	if (size != 112) {
 		fprintf(stderr, "Size = %zu, expected: 112\n", size);
 		assert_int_equal(size, 112);
 	}
 
-	epoch++;
-
-	rc = daos_array_set_size(oh, epoch, 0, NULL);
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, 0, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_array_get_size(oh, epoch, &size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
 	assert_int_equal(rc, 0);
 	if (size != 0) {
 		fprintf(stderr, "Size = %zu, expected: 0\n", size);
 		assert_int_equal(size, 0);
 	}
 
-	epoch++;
-
-	rc = daos_array_set_size(oh, epoch, 1048576, NULL);
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, 1048576, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_array_get_size(oh, epoch, &size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
 	assert_int_equal(rc, 0);
 	if (size != 1048576) {
 		fprintf(stderr, "Size = %zu, expected: 1048576\n", size);
 		assert_int_equal(size, 1048576);
 	}
 
-	epoch++;
-
-	rc = daos_array_destroy(oh, epoch, NULL);
+	rc = daos_array_destroy(oh, DAOS_TX_NONE, NULL);
 	assert_int_equal(rc, 0);
 
 	daos_handle_t temp_oh;
 
-	epoch++;
-	rc = daos_array_open(arg->coh, oid, epoch, DAOS_OO_RW,
+	rc = daos_array_open(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
 			     &cell_size, &csize, &temp_oh, NULL);
 	assert_int_equal(rc, -DER_NO_PERM);
 
@@ -190,7 +184,6 @@ static void
 small_io(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -204,7 +197,8 @@ small_io(void **state)
 	oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, arg->myrank);
 
 	/** create the array */
-	rc = daos_array_create(arg->coh, oid, epoch, 1, 1048576, &oh, NULL);
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
+			       NULL);
 	assert_int_equal(rc, 0);
 
 	memset(buf, 'A', BUFLEN);
@@ -221,16 +215,16 @@ small_io(void **state)
 	sgl.sg_iovs = &iov;
 
 	/** Write */
-	rc = daos_array_write(oh, epoch++, &iod, &sgl, NULL, NULL);
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
-	rc = daos_array_get_size(oh, epoch++, &array_size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(array_size, BUFLEN);
 
 	daos_iov_set(&iov, rbuf, BUFLEN);
 	sgl.sg_iovs = &iov;
-	rc = daos_array_read(oh, epoch, &iod, &sgl, NULL, NULL);
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	rc = memcmp(buf, rbuf, BUFLEN);
@@ -241,23 +235,21 @@ small_io(void **state)
 } /* End str_mem_str_arr_io */
 
 static int
-change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size,
-		  daos_epoch_t epoch)
+change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size)
 {
 	daos_size_t expected_size;
 	daos_size_t new_size;
 	int rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	daos_sync_ranks(MPI_COMM_WORLD);
 
 	if (arg->myrank != 0)
 		goto out;
 
-	epoch++;
 	expected_size = array_size*2;
-	rc = daos_array_set_size(oh, epoch, expected_size, NULL);
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, expected_size, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_array_get_size(oh, epoch, &new_size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &new_size, NULL);
 	assert_int_equal(rc, 0);
 	if (new_size != expected_size) {
 		fprintf(stderr, "Size = %zu, expected: %zu\n",
@@ -266,11 +258,10 @@ change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size,
 		goto out;
 	}
 
-	epoch++;
 	expected_size = array_size/2;
-	rc = daos_array_set_size(oh, epoch, expected_size, NULL);
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, expected_size, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_array_get_size(oh, epoch, &new_size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &new_size, NULL);
 	assert_int_equal(rc, 0);
 	if (new_size != expected_size) {
 		fprintf(stderr, "Size = %zu, expected: %zu\n",
@@ -288,7 +279,6 @@ static void
 contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -303,7 +293,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, 0);
-		rc = daos_array_create(arg->coh, oid, epoch, cell_size,
+		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
 	}
@@ -333,7 +323,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_write(oh, epoch, &iod, &sgl, NULL,
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
 			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -354,7 +344,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
 	sgl.sg_iovs = &iov;
-	rc = daos_array_read(oh, epoch, &iod, &sgl, NULL,
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
 			     arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -381,14 +371,14 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	free(rbuf);
 	free(wbuf);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	daos_sync_ranks(MPI_COMM_WORLD);
 
 	daos_size_t array_size;
 	daos_size_t expected_size;
 
 	expected_size = arg->rank_size * (NUM_ELEMS * sizeof(int) / cell_size);
 
-	rc = daos_array_get_size(oh, epoch, &array_size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
 	assert_int_equal(rc, 0);
 
 	if (array_size != expected_size)
@@ -402,12 +392,13 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	rg.rg_idx = arg->myrank * rg.rg_len;
 	iod.arr_rgs = &rg;
 
-	epoch++;
-	rc = daos_array_punch(oh, epoch, &iod, NULL);
+	rc = daos_array_punch(oh, DAOS_TX_NONE, &iod, NULL);
 	assert_int_equal(rc, 0);
 
+	daos_sync_ranks(MPI_COMM_WORLD);
+
 	/** Verify size is still the same */
-	rc = daos_array_get_size(oh, epoch, &array_size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
 	assert_int_equal(rc, 0);
 
 	if (array_size != expected_size)
@@ -417,7 +408,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** TODO - punch at the end to shrink the size and verify. */
 
-	rc = change_array_size(arg, oh, array_size, epoch);
+	rc = change_array_size(arg, oh, array_size);
 	assert_int_equal(rc, 0);
 
 	rc = daos_array_close(oh, NULL);
@@ -442,7 +433,6 @@ static void
 contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -456,7 +446,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, 0);
-		rc = daos_array_create(arg->coh, oid, epoch, cell_size,
+		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
 	}
@@ -491,7 +481,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_write(oh, epoch, &iod, &sgl, NULL,
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
 			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -511,7 +501,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		assert_int_equal(rc, 0);
 	}
 	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
-	rc = daos_array_read(oh, epoch, &iod, &sgl, NULL,
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
 			     arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -538,7 +528,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	free(rbuf);
 	free(wbuf);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	daos_sync_ranks(MPI_COMM_WORLD);
 
 	daos_size_t expected_size;
 	daos_size_t array_size = 0;
@@ -548,7 +538,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		((NUM_ELEMS - 1) * chunk_size) +
 		(sizeof(int) / cell_size);
 
-	rc = daos_array_get_size(oh, epoch, &array_size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
 	assert_int_equal(rc, 0);
 
 	if (array_size != expected_size) {
@@ -559,12 +549,11 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** punch holes in the array, but do not change the size */
 	iod.arr_nr = NUM_ELEMS / 2;
-	epoch++;
-	rc = daos_array_punch(oh, epoch, &iod, NULL);
+	rc = daos_array_punch(oh, DAOS_TX_NONE, &iod, NULL);
 	assert_int_equal(rc, 0);
 
 	/** Verify size is still the same */
-	rc = daos_array_get_size(oh, epoch, &array_size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
 	assert_int_equal(rc, 0);
 
 	if (array_size != expected_size)
@@ -574,7 +563,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** TODO - punch at the end to shrink the size and verify. */
 
-	rc = change_array_size(arg, oh, array_size, epoch);
+	rc = change_array_size(arg, oh, array_size);
 	assert_int_equal(rc, 0);
 
 	rc = daos_array_close(oh, NULL);
@@ -601,7 +590,6 @@ static void
 str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -614,7 +602,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, 0);
-		rc = daos_array_create(arg->coh, oid, epoch, cell_size,
+		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
 	}
@@ -657,7 +645,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_write(oh, epoch, &iod, &sgl, NULL,
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
 			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -680,7 +668,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_read(oh, epoch, &iod, &sgl, NULL,
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
 			     arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -713,7 +701,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	free(iod.arr_rgs);
 	free(sgl.sg_iovs);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	daos_sync_ranks(MPI_COMM_WORLD);
 
 	daos_size_t array_size;
 	daos_size_t expected_size;
@@ -723,7 +711,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		(NUM_ELEMS - 1) * chunk_size +
 		sizeof(int) / cell_size;
 
-	rc = daos_array_get_size(oh, epoch, &array_size, NULL);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
 	assert_int_equal(rc, 0);
 
 	if (array_size != expected_size)
@@ -731,7 +719,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 			arg->myrank, array_size, expected_size);
 	assert_int_equal(array_size, expected_size);
 
-	rc = change_array_size(arg, oh, array_size, epoch);
+	rc = change_array_size(arg, oh, array_size);
 	assert_int_equal(rc, 0);
 
 	rc = daos_array_close(oh, NULL);
@@ -756,7 +744,6 @@ static void
 read_empty_records(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -775,7 +762,7 @@ read_empty_records(void **state)
 	}
 
 	/** create the array */
-	rc = daos_array_create(arg->coh, oid, epoch, 1, chunk_size,
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, chunk_size,
 			       &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -807,7 +794,7 @@ read_empty_records(void **state)
 			arg->myrank * sizeof(int);
 	}
 	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
-	rc = daos_array_read(oh, epoch, &iod, &sgl, NULL, NULL);
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -829,7 +816,7 @@ read_empty_records(void **state)
 			arg->myrank * sizeof(int) +
 			i * NUM_ELEMS * sizeof(int);
 	}
-	rc = daos_array_write(oh, epoch, &iod, &sgl, NULL, NULL);
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -841,7 +828,7 @@ read_empty_records(void **state)
 			arg->myrank * sizeof(int);
 	}
 	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
-	rc = daos_array_read(oh, epoch, &iod, &sgl, NULL, NULL);
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	/** Verify data */
@@ -869,7 +856,6 @@ static void
 strided_array(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_epoch_t	epoch = 1;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
@@ -881,7 +867,7 @@ strided_array(void **state)
 	oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, arg->myrank);
 
 	/** create the array */
-	rc = daos_array_create(arg->coh, oid, epoch, 1, 1048576, &oh,
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
 			       NULL);
 	assert_int_equal(rc, 0);
 
@@ -914,14 +900,14 @@ strided_array(void **state)
 	}
 
 	/** Write */
-	rc = daos_array_write(oh, epoch, &iod, &sgl, NULL, NULL);
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < NUM * 2; i++)
 		buf[i] = -1;
 
 	/** Read */
-	rc = daos_array_read(oh, epoch, &iod, &sgl, NULL, NULL);
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	/** Verify data */

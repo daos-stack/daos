@@ -380,8 +380,7 @@ enum {
 
 /* DAOS object API on the server side */
 int ds_obj_open(daos_handle_t coh, daos_obj_id_t oid,
-		daos_epoch_t epoch, unsigned int mode,
-		daos_handle_t *oh);
+		unsigned int mode, daos_handle_t *oh);
 int ds_obj_close(daos_handle_t obj_hl);
 
 int ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,

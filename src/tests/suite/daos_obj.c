@@ -93,7 +93,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
 	/** open the object */
-	rc = daos_obj_open(coh, oid, 0, 0, &req->oh,
+	rc = daos_obj_open(coh, oid, 0, &req->oh,
 			   req->arg->async ? &req->ev : NULL);
 	assert_int_equal(rc, 0);
 
@@ -125,12 +125,12 @@ ioreq_fini(struct ioreq *req)
 /* no wait for async insert, for sync insert it still will block */
 static void
 insert_internal_nowait(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
-		       daos_iod_t *iods, daos_epoch_t epoch, struct ioreq *req)
+		       daos_iod_t *iods, daos_handle_t th, struct ioreq *req)
 {
 	int rc;
 
 	/** execute update operation */
-	rc = daos_obj_update(req->oh, epoch, dkey, nr, iods, sgls,
+	rc = daos_obj_update(req->oh, th, dkey, nr, iods, sgls,
 			     req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async)
 		assert_int_equal(rc, req->arg->expect_result);
@@ -177,7 +177,7 @@ ioreq_sgl_simple_set(struct ioreq *req, void **value, daos_size_t *data_size,
 
 static void
 ioreq_iod_simple_set(struct ioreq *req, daos_size_t *iod_size, bool lookup,
-		     uint64_t *idx, daos_epoch_t *epoch, int nr, int *rx_nr)
+		     uint64_t *idx, int nr, int *rx_nr)
 {
 	daos_iod_t *iod = req->iod;
 	int i;
@@ -191,17 +191,14 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *iod_size, bool lookup,
 			iod[i].iod_recxs[0].rx_idx = idx[i] + i * SEGMENT_SIZE;
 			iod[i].iod_recxs[0].rx_nr = rx_nr[i];
 		}
-
-		iod[i].iod_eprs[0].epr_lo = *epoch;
-		iod[i].iod_eprs[0].epr_hi = lookup ? *epoch : DAOS_EPOCH_MAX;
-
+		iod[i].iod_eprs = NULL;
 		iod[i].iod_nr = 1;
 	}
 }
 
 static void
 ioreq_iod_recxs_set(struct ioreq *req, int idx, daos_size_t size,
-		   daos_recx_t *recxs, daos_epoch_range_t *eprs, int nr)
+		   daos_recx_t *recxs, int nr)
 {
 	daos_iod_t *iod = &req->iod[idx];
 
@@ -211,7 +208,7 @@ ioreq_iod_recxs_set(struct ioreq *req, int idx, daos_size_t size,
 	if (req->iod_type == DAOS_IOD_ARRAY) {
 		iod->iod_nr = nr;
 		iod->iod_recxs = recxs;
-		iod->iod_eprs = eprs;
+		iod->iod_eprs = NULL;
 	} else {
 		iod->iod_nr = 1;
 	}
@@ -219,12 +216,9 @@ ioreq_iod_recxs_set(struct ioreq *req, int idx, daos_size_t size,
 
 void
 insert_recxs_nowait(const char *dkey, const char *akey, daos_size_t iod_size,
-		    daos_epoch_t epoch, daos_recx_t *recxs, int nr, void *data,
+		    daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 		    daos_size_t data_size, struct ioreq *req)
 {
-	daos_epoch_range_t	eprs[IOREQ_IOD_NR];
-	int			i;
-
 	assert_in_range(nr, 1, IOREQ_IOD_NR);
 
 	/* dkey */
@@ -238,19 +232,15 @@ insert_recxs_nowait(const char *dkey, const char *akey, daos_size_t iod_size,
 		ioreq_sgl_simple_set(req, &data, &data_size, 1);
 
 	/* iod, recxs */
-	for (i = 0; i < nr; i++) {
-		eprs[i].epr_lo = epoch;
-		eprs[i].epr_hi = epoch;
-	}
-	ioreq_iod_recxs_set(req, 0, iod_size, recxs, eprs, nr);
+	ioreq_iod_recxs_set(req, 0, iod_size, recxs, nr);
 
-	insert_internal_nowait(&req->dkey, 1, req->sgl, req->iod, epoch, req);
+	insert_internal_nowait(&req->dkey, 1, req->sgl, req->iod, th, req);
 }
 
 void
 insert_nowait(const char *dkey, int nr, const char **akey,
 	      daos_size_t *iod_size, int *rx_nr, uint64_t *idx, void **val,
-	      daos_epoch_t *epoch, struct ioreq *req)
+	      daos_handle_t th, struct ioreq *req)
 {
 	daos_size_t	data_size[nr];
 	int		i;
@@ -271,10 +261,10 @@ insert_nowait(const char *dkey, int nr, const char **akey,
 		ioreq_sgl_simple_set(req, val, data_size, nr);
 
 	/* set iod */
-	ioreq_iod_simple_set(req, iod_size, false, idx, epoch, nr, rx_nr);
+	ioreq_iod_simple_set(req, iod_size, false, idx, nr, rx_nr);
 
 	insert_internal_nowait(&req->dkey, nr, val == NULL ? NULL : req->sgl,
-			       req->iod, *epoch, req);
+			       req->iod, th, req);
 }
 
 void
@@ -303,10 +293,10 @@ insert_wait(struct ioreq *req)
  */
 void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
-       int *rx_nr, uint64_t *idx, void **val, daos_epoch_t *epoch,
-       struct ioreq *req)
+	int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
+	struct ioreq *req)
 {
-	insert_nowait(dkey, nr, akey, iod_size, rx_nr, idx, val, epoch, req);
+	insert_nowait(dkey, nr, akey, iod_size, rx_nr, idx, val, th, req);
 	insert_wait(req);
 }
 
@@ -317,12 +307,11 @@ insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
  */
 void
 insert_single(const char *dkey, const char *akey, uint64_t idx, void *value,
-	      daos_size_t iod_size, daos_epoch_t epoch, struct ioreq *req)
+	      daos_size_t iod_size, daos_handle_t th, struct ioreq *req)
 {
-	int	rx_nr = 1;
+	int rx_nr = 1;
 
-	insert(dkey, /*nr*/1, &akey, &iod_size, &rx_nr, &idx, &value,
-	       &epoch, req);
+	insert(dkey, 1, &akey, &iod_size, &rx_nr, &idx, &value, th, req);
 }
 
 /**
@@ -332,44 +321,44 @@ insert_single(const char *dkey, const char *akey, uint64_t idx, void *value,
 void
 insert_single_with_rxnr(const char *dkey, const char *akey, uint64_t idx,
 			void *value, daos_size_t iod_size, int rx_nr,
-			daos_epoch_t epoch, struct ioreq *req)
+			 daos_handle_t th, struct ioreq *req)
 {
 	insert(dkey, /*nr*/1, &akey, &iod_size, &rx_nr, &idx,
-	       value != NULL ? &value : NULL, &epoch, req);
+	       value != NULL ? &value : NULL, th, req);
 }
 
 void
 insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
-	     daos_epoch_t epoch, daos_recx_t *recxs, int nr, void *data,
+	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req)
 {
-	insert_recxs_nowait(dkey, akey, iod_size, epoch, recxs, nr, data,
+	insert_recxs_nowait(dkey, akey, iod_size, th, recxs, nr, data,
 			    data_size, req);
 	insert_wait(req);
 }
 
 void
-punch_obj(daos_epoch_t eph, struct ioreq *req)
+punch_obj(daos_handle_t th, struct ioreq *req)
 {
 	int rc;
 
-	rc = daos_obj_punch(req->oh, eph, NULL);
+	rc = daos_obj_punch(req->oh, th, NULL);
 	assert_int_equal(rc, 0);
 }
 
 void
-punch_dkey(const char *dkey, daos_epoch_t eph, struct ioreq *req)
+punch_dkey(const char *dkey, daos_handle_t th, struct ioreq *req)
 {
 	int rc;
 
 	ioreq_dkey_set(req, dkey);
 
-	rc = daos_obj_punch_dkeys(req->oh, eph, 1, &req->dkey, NULL);
+	rc = daos_obj_punch_dkeys(req->oh, th, 1, &req->dkey, NULL);
 	assert_int_equal(rc, 0);
 }
 
 void
-punch_akey(const char *dkey, const char *akey, daos_epoch_t eph,
+punch_akey(const char *dkey, const char *akey, daos_handle_t th,
 	   struct ioreq *req)
 {
 	daos_key_t daos_akey;
@@ -381,46 +370,46 @@ punch_akey(const char *dkey, const char *akey, daos_epoch_t eph,
 	daos_akey.iov_len = strlen(akey);
 	daos_akey.iov_buf_len = strlen(akey);
 
-	rc = daos_obj_punch_akeys(req->oh, eph, &req->dkey, 1, &daos_akey,
+	rc = daos_obj_punch_akeys(req->oh, th, &req->dkey, 1, &daos_akey,
 				  NULL);
 	assert_int_equal(rc, 0);
 }
 
 void
 punch_single(const char *dkey, const char *akey, uint64_t idx,
-	     daos_epoch_t epoch, struct ioreq *req)
+	     daos_handle_t th, struct ioreq *req)
 {
 	daos_size_t size = 0;
 
-	insert_single(dkey, akey, idx, NULL, size, epoch, req);
+	insert_single(dkey, akey, idx, NULL, size, th, req);
 }
 
 void
 punch_recxs(const char *dkey, const char *akey, daos_recx_t *recxs,
-	    int nr, daos_epoch_t epoch, struct ioreq *req)
+	    int nr, daos_handle_t th, struct ioreq *req)
 {
-	insert_recxs(dkey, akey, 0, epoch, recxs, nr, NULL, 0, req);
+	insert_recxs(dkey, akey, 0, th, recxs, nr, NULL, 0, req);
 }
 
 void
 punch_rec_with_rxnr(const char *dkey, const char *akey, uint64_t idx, int rx_nr,
-		    daos_epoch_t eph, struct ioreq *req)
+		    daos_handle_t th, struct ioreq *req)
 {
 
 	insert_single_with_rxnr(dkey, akey, idx, NULL, /*iod_size*/0, rx_nr,
-				eph, req);
+				th, req);
 }
 
 static void
 lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
-		daos_iod_t *iods, daos_epoch_t epoch, struct ioreq *req,
+		daos_iod_t *iods, daos_handle_t th, struct ioreq *req,
 		bool empty)
 {
 	bool ev_flag;
 	int rc;
 
 	/** execute fetch operation */
-	rc = daos_obj_fetch(req->oh, epoch, dkey, nr, iods, sgls,
+	rc = daos_obj_fetch(req->oh, th, dkey, nr, iods, sgls,
 			    NULL, req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async) {
 		assert_int_equal(rc, req->arg->expect_result);
@@ -436,12 +425,9 @@ lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 
 void
 lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
-	     daos_epoch_t epoch, daos_recx_t *recxs, int nr, void *data,
+	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req)
 {
-	daos_epoch_range_t	eprs[IOREQ_IOD_NR];
-	int			i;
-
 	assert_in_range(nr, 1, IOREQ_IOD_NR);
 
 	/* dkey */
@@ -455,13 +441,9 @@ lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 	ioreq_sgl_simple_set(req, &data, &data_size, 1);
 
 	/* iod, recxs */
-	for (i = 0; i < nr; i++) {
-		eprs[i].epr_lo = epoch;
-		eprs[i].epr_hi = DAOS_EPOCH_MAX;
-	}
-	ioreq_iod_recxs_set(req, 0, iod_size, recxs, eprs, nr);
+	ioreq_iod_recxs_set(req, 0, iod_size, recxs, nr);
 
-	lookup_internal(&req->dkey, 1, req->sgl, req->iod, epoch, req, false);
+	lookup_internal(&req->dkey, 1, req->sgl, req->iod, th, req, false);
 }
 
 /**
@@ -469,8 +451,8 @@ lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
  */
 void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
-       daos_size_t *iod_size, void **val, daos_size_t *data_size,
-       daos_epoch_t *epoch, struct ioreq *req, bool empty)
+	daos_size_t *iod_size, void **val, daos_size_t *data_size,
+	daos_handle_t th, struct ioreq *req, bool empty)
 {
 	int		i;
 	int		rx_nr[nr];
@@ -494,10 +476,9 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	ioreq_sgl_simple_set(req, val, data_size, nr);
 
 	/* set iod */
-	ioreq_iod_simple_set(req, iod_size, true, idx, epoch, nr, rx_nr);
+	ioreq_iod_simple_set(req, iod_size, true, idx, nr, rx_nr);
 
-	lookup_internal(&req->dkey, nr, req->sgl, req->iod, *epoch, req,
-			empty);
+	lookup_internal(&req->dkey, nr, req->sgl, req->iod, th, req, empty);
 }
 
 /**
@@ -509,13 +490,13 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
  */
 void
 lookup_single(const char *dkey, const char *akey, uint64_t idx,
-	      void *val, daos_size_t data_size, daos_epoch_t epoch,
+	      void *val, daos_size_t data_size, daos_handle_t th,
 	      struct ioreq *req)
 {
 	daos_size_t read_size = DAOS_REC_ANY; /* extent is unknown */
 
-	lookup(dkey, /*nr*/1, &akey, &idx, &read_size, &val, &data_size, &epoch,
-	       req, /*empty?*/false);
+	lookup(dkey, 1, &akey, &idx, &read_size, &val, &data_size, th, req,
+	       false);
 }
 
 /**
@@ -526,21 +507,21 @@ lookup_single(const char *dkey, const char *akey, uint64_t idx,
 void
 lookup_single_with_rxnr(const char *dkey, const char *akey, uint64_t idx,
 			void *val, daos_size_t iod_size, daos_size_t data_size,
-			daos_epoch_t epoch, struct ioreq *req)
+			daos_handle_t th, struct ioreq *req)
 {
-	lookup(dkey, /*nr*/1, &akey, &idx, &iod_size, &val, &data_size, &epoch,
-	       req, /*empty?*/false);
+	lookup(dkey, 1, &akey, &idx, &iod_size, &val, &data_size, th, req,
+	       false);
 }
 
 void
 lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
-		    void *val, daos_size_t data_size, daos_epoch_t epoch,
+		    void *val, daos_size_t data_size, daos_handle_t th,
 		    struct ioreq *req)
 {
 	daos_size_t read_size = DAOS_REC_ANY; /* extent is unknown */
 
-	lookup(dkey, /*nr*/1, &akey, &idx, &read_size, &val, &data_size, &epoch,
-	       req, /*empty?*/true);
+	lookup(dkey, 1, &akey, &idx, &read_size, &val, &data_size, th,
+	       req, true);
 }
 
 /**
@@ -555,7 +536,7 @@ io_epoch_overwrite_small(void **state, daos_obj_id_t oid)
 	char		 ow_buf[] = "DAOS";
 	char		 fbuf[] = "DAOS";
 	int		 i;
-	daos_epoch_t	 e = 0;
+	daos_handle_t	 th1, th2;
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	size = strlen(ow_buf);
@@ -563,27 +544,31 @@ io_epoch_overwrite_small(void **state, daos_obj_id_t oid)
 	print_message("Test: overwrite in different epochs (rec size: %lu)\n",
 		      size);
 
+	daos_tx_open(arg->coh, &th1, NULL);
 	for (i = 0; i < size; i++)
-		insert_single("d", "a", i, &ow_buf[i], 1, e, &req);
+		insert_single("d", "a", i, &ow_buf[i], 1, th1, &req);
 
+	daos_tx_open(arg->coh, &th2, NULL);
 	for (i = 0; i < size; i++) {
-		e++;
 		ow_buf[i] += 32;
-		insert_single("d", "a", i, &ow_buf[i], 1, e, &req);
+		insert_single("d", "a", i, &ow_buf[i], 1, th2, &req);
 	}
 
 	memset(fbuf, 0, sizeof(fbuf));
-	for (;;) {
-		for (i = 0; i < size; i++)
-			lookup_single("d", "a", i, &fbuf[i], 1, e, &req);
-		print_message("e = %lu, fbuf = %s\n", e, fbuf);
-		assert_string_equal(fbuf, ow_buf);
-		if (e == 0)
-			break;
-		e--;
-		ow_buf[e] -= 32;
-	}
+	for (i = 0; i < size; i++)
+		lookup_single("d", "a", i, &fbuf[i], 1, th2, &req);
+	print_message("fbuf = %s\n", fbuf);
+	assert_string_equal(fbuf, ow_buf);
 
+	for (i = 0; i < size; i++) {
+		ow_buf[i] -= 32;
+		lookup_single("d", "a", i, &fbuf[i], 1, th1, &req);
+	}
+	print_message("fbuf = %s\n", fbuf);
+	assert_string_equal(fbuf, ow_buf);
+
+	daos_tx_close(th1, NULL);
+	daos_tx_close(th2, NULL);
 	ioreq_fini(&req);
 }
 
@@ -598,7 +583,6 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 {
 	test_arg_t	*arg = *state;
 	struct ioreq	 req;
-	daos_epoch_t	 e = 0;
 	char		*ow_buf;
 	char		*fbuf;
 	const char	 dkey[] = "ep_ow_large dkey";
@@ -631,9 +615,9 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 	/* Set and verify the full initial string as epoch 0 */
 	rx_nr = size / OW_IOD_SIZE;
 	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, OW_IOD_SIZE,
-				rx_nr, e, &req);
+				rx_nr, DAOS_TX_NONE, &req);
 	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf, OW_IOD_SIZE, size,
-				e, &req);
+				DAOS_TX_NONE, &req);
 	assert_memory_equal(ow_buf, fbuf, size);
 
 	/**
@@ -644,7 +628,6 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 		overwrite_sz = OW_IOD_SIZE * rx_nr;
 		if (overwrite_sz > size)
 			break;
-		e++;
 		memset(fbuf, 0, size);
 
 		/**
@@ -660,13 +643,14 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 		 * iod_size, all inserted contiguously at the next index.
 		 */
 		insert_single_with_rxnr(dkey, akey, rec_idx, ow_buf + buf_idx,
-					OW_IOD_SIZE, rx_nr, e, &req);
+					OW_IOD_SIZE, rx_nr, DAOS_TX_NONE,
+					&req);
 		/* Fetch entire record with new overwrite for comparison */
 		lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf, OW_IOD_SIZE,
-					size, e, &req);
+					size, DAOS_TX_NONE, &req);
 		assert_memory_equal(ow_buf, fbuf, size);
 		/* Print message upon successful overwrite */
-		print_message("overwrite size:%lu, e:%lu\n", overwrite_sz, e);
+		print_message("overwrite size:%lu\n", overwrite_sz);
 
 		rec_idx += rx_nr; /* next index for insert/lookup */
 		/* Increment next overwrite size by 1 record extent */
@@ -687,7 +671,6 @@ io_epoch_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
 {
 	test_arg_t	*arg = *state;
 	struct ioreq	 req;
-	daos_epoch_t	 e = 0; /* epoch remains the same */
 	char		*ow_buf;
 	char		*fbuf;
 	char		 dkey[25];
@@ -712,9 +695,9 @@ io_epoch_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
 
 	/* Set and verify the full initial string as epoch 0 */
 	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, /*iod_size*/size,
-				/*rx_nr*/1, e, &req);
+				/*rx_nr*/1, DAOS_TX_NONE, &req);
 	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf, /*iod_size*/size,
-				size, e, &req);
+				size, DAOS_TX_NONE, &req);
 	assert_memory_equal(ow_buf, fbuf, size);
 
 	/* Overwrite the entire original buffer to all lowercase chars */
@@ -724,13 +707,13 @@ io_epoch_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
 	memset(fbuf, 0, size);
 	/* Insert full record overwrite at the same epoch. */
 	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, /*iod_size*/size,
-				/*rx_nr*/1, e, &req);
+				/*rx_nr*/1, DAOS_TX_NONE, &req);
 	/* Fetch entire record with new overwrite for comparison */
 	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf, /*iod_size*/size,
-				size, e, &req);
+				size, DAOS_TX_NONE, &req);
 	assert_memory_equal(ow_buf, fbuf, size);
 	/* Print message upon successful overwrite */
-	print_message("overwrite size:%lu, e:%lu\n", size, e);
+	print_message("overwrite size: %lu\n", size);
 
 	free(fbuf);
 	free(ow_buf);
@@ -782,12 +765,12 @@ io_var_idx_offset(void **state)
 
 		/** Insert */
 		insert_single("var_idx_off_d", "var_idx_off_a", offset, "data",
-		       strlen("data") + 1, 0, &req);
+		       strlen("data") + 1, DAOS_TX_NONE, &req);
 
 		/** Lookup */
 		memset(buf, 0, 10);
 		lookup_single("var_idx_off_d", "var_idx_off_a", offset,
-			      buf, 10, 0, &req);
+			      buf, 10, DAOS_TX_NONE, &req);
 		assert_int_equal(req.iod[0].iod_size, strlen(buf) + 1);
 
 		/** Verify data consistency */
@@ -825,12 +808,12 @@ io_var_akey_size(void **state)
 		/** Insert */
 		key[size] = '\0';
 		insert_single("var_akey_size_d", key, 0, "data",
-			      strlen("data") + 1, 0, &req);
+			      strlen("data") + 1, DAOS_TX_NONE, &req);
 
 		/** Lookup */
 		memset(buf, 0, 10);
 		lookup_single("var_akey_size_d", key, 0, buf,
-			      10, 0, &req);
+			      10, DAOS_TX_NONE, &req);
 		assert_int_equal(req.iod[0].iod_size, strlen("data") + 1);
 
 		/** Verify data consistency */
@@ -868,11 +851,12 @@ io_var_dkey_size(void **state)
 		/** Insert */
 		key[size] = '\0';
 		insert_single(key, "var_dkey_size_a", 0, "data",
-			      strlen("data") + 1, 0, &req);
+			      strlen("data") + 1, DAOS_TX_NONE, &req);
 
 		/** Lookup */
 		memset(buf, 0, 10);
-		lookup_single(key, "var_dkey_size_a", 0, buf, 10, 0, &req);
+		lookup_single(key, "var_dkey_size_a", 0, buf, 10,
+			      DAOS_TX_NONE, &req);
 		assert_int_equal(req.iod[0].iod_size, strlen("data") + 1);
 
 		/** Verify data consistency */
@@ -889,8 +873,8 @@ static void
 io_var_rec_size(void **state)
 {
 	test_arg_t	*arg = *state;
+	uint64_t	 dkey_num;
 	daos_obj_id_t	 oid;
-	daos_epoch_t	 epoch;
 	struct ioreq	 req;
 	daos_size_t	 size;
 	const int	 max_size = 1U << 20;
@@ -898,8 +882,7 @@ io_var_rec_size(void **state)
 	char		*update_buf;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
-	/** random epoch as well */
-	epoch = rand();
+	dkey_num = rand();
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -911,21 +894,21 @@ io_var_rec_size(void **state)
 
 	dts_buf_render(update_buf, max_size);
 
-	for (size = 1; size <= max_size; size <<= 1, epoch++) {
+	for (size = 1; size <= max_size; size <<= 1, dkey_num++) {
 		char dkey[30];
 
-		print_message("Record size: %lu val: \'%c\' epoch: %lu\n",
-			      size, update_buf[0], epoch);
+		print_message("Record size: %lu val: \'%c\' dkey: %lu\n",
+			      size, update_buf[0], dkey_num);
 
 		/** Insert */
-		sprintf(dkey, DF_U64, epoch);
+		sprintf(dkey, DF_U64, dkey_num);
 		insert_single(dkey, "var_rec_size_a", 0, update_buf,
-			      size, epoch, &req);
+			      size, DAOS_TX_NONE, &req);
 
 		/** Lookup */
 		memset(fetch_buf, 0, max_size);
 		lookup_single(dkey, "var_rec_size_a", 0, fetch_buf,
-			      max_size, epoch, &req);
+			      max_size, DAOS_TX_NONE, &req);
 		assert_int_equal(req.iod[0].iod_size, size);
 
 		/** Verify data consistency */
@@ -961,11 +944,11 @@ io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 	dts_buf_render(update_buf, size);
 
 	/** Insert */
-	insert_single(dkey, akey, 0, update_buf, size, 0, &req);
+	insert_single(dkey, akey, 0, update_buf, size, DAOS_TX_NONE, &req);
 
 	/** Lookup */
 	memset(fetch_buf, 0, size);
-	lookup_single(dkey, akey, 0, fetch_buf, size, 0, &req);
+	lookup_single(dkey, akey, 0, fetch_buf, size, DAOS_TX_NONE, &req);
 	print_message("\tsize: %lu\n", req.iod[0].iod_size);
 
 	/** Verify data consistency */
@@ -1010,7 +993,7 @@ io_simple(void **state)
 }
 
 int
-enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
+enumerate_dkey(daos_handle_t th, uint32_t *number, daos_key_desc_t *kds,
 	       daos_anchor_t *anchor, void *buf, daos_size_t len,
 	       struct ioreq *req)
 {
@@ -1018,7 +1001,7 @@ enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 
 	ioreq_sgl_simple_set(req, &buf, &len, 1);
 	/** execute fetch operation */
-	rc = daos_obj_list_dkey(req->oh, epoch, number, kds, req->sgl, anchor,
+	rc = daos_obj_list_dkey(req->oh, th, number, kds, req->sgl, anchor,
 				req->arg->async ? &req->ev : NULL);
 	if (req->arg->async) {
 		bool ev_flag;
@@ -1037,7 +1020,7 @@ enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 }
 
 static int
-enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
+enumerate_akey(daos_handle_t th, char *dkey, uint32_t *number,
 	       daos_key_desc_t *kds, daos_anchor_t *anchor, void *buf,
 	       daos_size_t len, struct ioreq *req)
 {
@@ -1046,7 +1029,7 @@ enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 	ioreq_sgl_simple_set(req, &buf, &len, 1);
 	ioreq_dkey_set(req, dkey);
 	/** execute fetch operation */
-	rc = daos_obj_list_akey(req->oh, epoch, &req->dkey, number, kds,
+	rc = daos_obj_list_akey(req->oh, th, &req->dkey, number, kds,
 				req->sgl, anchor,
 				req->arg->async ? &req->ev : NULL);
 	if (req->arg->async) {
@@ -1066,7 +1049,7 @@ enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 }
 
 static void
-enumerate_rec(daos_epoch_t epoch, char *dkey, char *akey,
+enumerate_rec(daos_handle_t th, char *dkey, char *akey,
 	      daos_size_t *size, uint32_t *number, daos_recx_t *recxs,
 	      daos_epoch_range_t *eprs, daos_anchor_t *anchor, bool incr,
 	      struct ioreq *req)
@@ -1075,7 +1058,7 @@ enumerate_rec(daos_epoch_t epoch, char *dkey, char *akey,
 
 	ioreq_dkey_set(req, dkey);
 	ioreq_akey_set(req, akey);
-	rc = daos_obj_list_recx(req->oh, epoch, &req->dkey, &req->akey,
+	rc = daos_obj_list_recx(req->oh, th, &req->dkey, &req->akey,
 				size, number, recxs, eprs, anchor, incr,
 				req->arg->async ? &req->ev : NULL);
 	assert_int_equal(rc, 0);
@@ -1113,7 +1096,6 @@ enumerate_simple(void **state)
 	char		*large_key = NULL;
 	char		*large_buf = NULL;
 	char		*data_buf;
-	daos_epoch_t	 epoch = 1;
 	daos_key_desc_t  kds[ENUM_DESC_NR];
 	daos_anchor_t	 anchor;
 	daos_obj_id_t	 oid;
@@ -1150,11 +1132,11 @@ enumerate_simple(void **state)
 			/* Insert one large dkey (512K "L's") */
 			print_message("Insert (i=%d) dkey=LARGE_KEY\n", i);
 			insert_single(large_key, "a_key", 0, "data",
-				      strlen("data") + 1, epoch, &req);
+				      strlen("data") + 1, DAOS_TX_NONE, &req);
 		} else {
 			/* Insert dkeys 0-999 */
 			insert_single(key, "a_key", 0, "data",
-				      strlen("data") + 1, epoch, &req);
+				      strlen("data") + 1, DAOS_TX_NONE, &req);
 		}
 	}
 
@@ -1171,7 +1153,7 @@ enumerate_simple(void **state)
 		 * Return an array of "number" dkeys to buf, using "kds" for
 		 * index to get the dkey.
 		 */
-		rc = enumerate_dkey(epoch, &number, kds, &anchor, buf,
+		rc = enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf,
 				    buf_len, &req);
 		if (rc == -DER_KEY2BIG) {
 			/**
@@ -1184,8 +1166,8 @@ enumerate_simple(void **state)
 					 ENUM_LARGE_KEY_BUF - 1);
 			buf = large_buf;
 			buf_len = ENUM_LARGE_KEY_BUF * 2;
-			rc = enumerate_dkey(epoch, &number, kds, &anchor, buf,
-					    buf_len, &req);
+			rc = enumerate_dkey(DAOS_TX_NONE, &number, kds,
+					    &anchor, buf, buf_len, &req);
 		}
 		assert_int_equal(rc, 0);
 
@@ -1209,7 +1191,6 @@ enumerate_simple(void **state)
 	}
 	/* Confirm the number of dkeys enumerated equal the number inserted */
 	assert_int_equal(key_nr, ENUM_KEY_REC_NR);
-	epoch++;
 
 	/**
 	 * Insert 1000 akey records, all with the same key value and the same
@@ -1223,11 +1204,11 @@ enumerate_simple(void **state)
 			/* Insert one large akey (512K "L's") */
 			print_message("Insert (i=%d) akey=LARGE_KEY\n", i);
 			insert_single("d_key", large_key, 0, "data",
-				      strlen("data") + 1, epoch, &req);
+				      strlen("data") + 1, DAOS_TX_NONE, &req);
 		} else {
 			/* Insert akeys 0-999 */
 			insert_single("d_key", key, 0, "data",
-				      strlen("data") + 1, epoch, &req);
+				      strlen("data") + 1, DAOS_TX_NONE, &req);
 		}
 	}
 
@@ -1244,8 +1225,8 @@ enumerate_simple(void **state)
 		 * Return an array of "number" akeys to buf, using "kds" for
 		 * index to get the akey.
 		 */
-		rc = enumerate_akey(epoch, "d_key", &number, kds, &anchor,
-				    buf, buf_len, &req);
+		rc = enumerate_akey(DAOS_TX_NONE, "d_key", &number, kds,
+				    &anchor, buf, buf_len, &req);
 		if (rc == -DER_KEY2BIG) {
 			/**
 			 * Retry akey enumeration with a larger buffer since one
@@ -1257,8 +1238,8 @@ enumerate_simple(void **state)
 					 ENUM_LARGE_KEY_BUF - 1);
 			buf = large_buf;
 			buf_len = ENUM_LARGE_KEY_BUF * 2;
-			rc = enumerate_akey(epoch, "d_key", &number, kds,
-					    &anchor, buf, buf_len, &req);
+			rc = enumerate_akey(DAOS_TX_NONE, "d_key", &number,
+					    kds, &anchor, buf, buf_len, &req);
 		}
 		assert_int_equal(rc, 0);
 
@@ -1282,7 +1263,6 @@ enumerate_simple(void **state)
 	}
 	/* Confirm the number of akeys enumerated equal the number inserted */
 	assert_int_equal(key_nr, ENUM_KEY_REC_NR);
-	epoch++;
 
 	/**
 	 * Insert 1000 mixed NVMe and SCM records, all with same dkey and akey.
@@ -1297,25 +1277,24 @@ enumerate_simple(void **state)
 		else
 			num_rec_exts = ENUM_NR_NVME; /* rx_nr=5 for NVMe test */
 		insert_single_with_rxnr("d_key", "a_rec", idx, data_buf,
-					ENUM_IOD_SIZE, num_rec_exts, epoch++,
-					&req);
+					ENUM_IOD_SIZE, num_rec_exts,
+					DAOS_TX_NONE, &req);
 			idx += num_rec_exts;
 	}
 
-	memset(&anchor, 0, sizeof(anchor));
 	/** Enumerate all mixed NVMe and SCM records */
-	for (number = ENUM_DESC_NR, key_nr = 0;
-	     !daos_anchor_is_eof(&anchor);
-	     number = ENUM_DESC_NR) {
-		daos_epoch_range_t eprs[5];
-		daos_recx_t recxs[5];
-		daos_size_t	size;
+	key_nr = 0;
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_epoch_range_t	eprs[5];
+		daos_recx_t		recxs[5];
+		daos_size_t		size;
 
 		number = 5;
-		enumerate_rec(epoch++, "d_key", "a_rec", &size,
+		enumerate_rec(DAOS_TX_NONE, "d_key", "a_rec", &size,
 			      &number, recxs, eprs, &anchor, true, &req);
 		if (number == 0)
-			break; /* loop should break for EOF */
+			continue;
 
 		for (i = 0; i < number; i++) {
 			assert_true(size == ENUM_IOD_SIZE);
@@ -1350,10 +1329,10 @@ enumerate_simple(void **state)
 #define PUNCH_SCM_NUM_EXTS 2 /* SCM 2k record */
 #define PUNCH_NVME_NUM_EXTS 5 /* NVMe 5k record */
 /**
- * Test akey punch, dkey punch, record punch and object punch in different
- * epochs with mixed large NVMe and small SCM record sizes. Verify punched keys
- * with key enumeration. Record enumeration is still under development, so for
- * now verify punched records with lookup only.
+ * Test akey punch, dkey punch, record punch and object punch with mixed large
+ * NVMe and small SCM record sizes. Verify punched keys with key
+ * enumeration. Record enumeration is still under development, so for now verify
+ * punched records with lookup only.
  */
 static void
 punch_simple_internal(void **state, daos_obj_id_t oid)
@@ -1363,7 +1342,6 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	uint32_t	 enum_num;
 	daos_key_desc_t  kds[2];
 	daos_anchor_t	 anchor_out;
-	daos_epoch_t	 epoch = 0;
 	char		*buf;
 	char		*dkeys[PUNCH_NUM_KEYS];
 	char		*data_buf;
@@ -1382,11 +1360,11 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	D_ALLOC(buf, 512);
 
 	/**
-	 * Insert 1 record per akey at different dkeys, all at epoch 0. Record
-	 * sizes are alternating SCM (2 consecutive extents = 2k), and NVME (5
-	 * consecutive record extents = 5k).
+	 * Insert 1 record per akey at different dkeys. Record sizes are
+	 * alternating SCM (2 consecutive extents = 2k), and NVME (5 consecutive
+	 * record extents = 5k).
 	 */
-	print_message("Insert records in epoch %lu:\n", epoch);
+	print_message("Inserting records.\n");
 	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
 		if (i % 2 == 0)
 			num_rec_exts = PUNCH_SCM_NUM_EXTS;
@@ -1396,33 +1374,35 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		print_message("\tinsert dkey:%s, akey:'akey', rx_nr:%d\n",
 			      dkeys[i], num_rec_exts);
 		insert_single_with_rxnr(dkeys[i], "akey",/*idx*/ 0, data_buf,
-					PUNCH_IOD_SIZE, num_rec_exts, epoch,
-					&req);
+					PUNCH_IOD_SIZE, num_rec_exts,
+					DAOS_TX_NONE, &req);
 	}
 	/* Insert a few more unique akeys at the first dkey */
 	num_rec_exts = PUNCH_NVME_NUM_EXTS;
 	print_message("\tinsert dkey:%s, akey:'akey0', rx_nr:%d\n",
 		      dkeys[0], num_rec_exts);
 	insert_single_with_rxnr(dkeys[0], "akey0",/*idx*/ 0, data_buf,
-				PUNCH_IOD_SIZE, num_rec_exts, epoch, &req);
+				PUNCH_IOD_SIZE, num_rec_exts, DAOS_TX_NONE,
+				&req);
 	print_message("\tinsert dkey:%s, akey:'akey1', rx_nr:%d\n",
 		      dkeys[0], num_rec_exts);
 	insert_single_with_rxnr(dkeys[0], "akey1",/*idx*/ 0, data_buf,
-				PUNCH_IOD_SIZE, num_rec_exts, epoch, &req);
+				PUNCH_IOD_SIZE, num_rec_exts, DAOS_TX_NONE,
+				&req);
 
 	/**
 	 * Punch records.
 	 */
 	print_message("Punch a few records:\n");
 	num_rec_exts = PUNCH_NVME_NUM_EXTS;
-	print_message("\tpunch dkey:%s, akey:'akey0', rx_nr:%d, eph:%lu\n",
-		      dkeys[0], num_rec_exts, epoch + 1);
+	print_message("\tpunch dkey:%s, akey:'akey0', rx_nr:%d\n",
+		      dkeys[0], num_rec_exts);
 	punch_rec_with_rxnr(dkeys[0], "akey0", /*idx*/0, num_rec_exts,
-			    epoch + 1, &req);
-	print_message("\tpunch dkey:%s, akey:'akey1', rx_nr:%d, eph:%lu\n",
-			dkeys[0], num_rec_exts, epoch + 1);
+			    DAOS_TX_NONE, &req);
+	print_message("\tpunch dkey:%s, akey:'akey1', rx_nr:%d\n",
+			dkeys[0], num_rec_exts);
 	punch_rec_with_rxnr(dkeys[0], "akey1", /*idx*/0, num_rec_exts,
-			    epoch + 1, &req);
+			    DAOS_TX_NONE, &req);
 
 
 	/* TODO Record enumeration still under development, use lookup. */
@@ -1434,10 +1414,9 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 			num_rec_exts = PUNCH_NVME_NUM_EXTS;
 		size = PUNCH_IOD_SIZE * num_rec_exts;
 		D_ALLOC(rec_fetch, size);
-		print_message("\tlookup:dkey:%s, akey:'akey', eph:%lu\n",
-			      dkeys[i], epoch + 2);
+		print_message("\tlookup:dkey:%s, akey:'akey'\n", dkeys[i]);
 		lookup_single_with_rxnr(dkeys[i], "akey", /*idx*/0, rec_fetch,
-					PUNCH_IOD_SIZE, size, epoch + 2,
+					PUNCH_IOD_SIZE, size, DAOS_TX_NONE,
 					&req);
 		assert_memory_equal(rec_fetch, data_buf, size);
 		D_FREE(rec_fetch);
@@ -1452,30 +1431,28 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	memcpy(rec_fetch, rec_verify, size);
 	assert_memory_equal(rec_fetch, rec_verify, size);
 
-	print_message("\tlookup dkey:%s, akey:'akey0', eph:%lu\n",
-		      dkeys[0], epoch + 2);
+	print_message("\tlookup dkey:%s, akey:'akey0'\n", dkeys[0]);
 	lookup_single_with_rxnr(dkeys[0], "akey0", /*idx*/0, rec_fetch,
-				/*iod_size*/0, size, epoch + 2, &req);
+				/*iod_size*/0, size, DAOS_TX_NONE, &req);
 	assert_memory_equal(rec_fetch, rec_verify, size);
 	print_message("\trecord punched\n");
 
-	print_message("\tlookup dkey:%s, akey:'akey1', eph:%lu\n",
-		      dkeys[0], epoch + 2);
+	print_message("\tlookup dkey:%s, akey:'akey1'\n", dkeys[0]);
 	lookup_single_with_rxnr(dkeys[0], "akey1", /*idx*/0, rec_fetch,
-				/*iod_size*/0, size, epoch + 2, &req);
+				/*iod_size*/0, size, DAOS_TX_NONE, &req);
 	assert_memory_equal(rec_fetch, rec_verify, size);
 	print_message("\trecord punched\n");
 	D_FREE(rec_fetch);
 	D_FREE(rec_verify);
 
 	/**
-	 * Punch akeys (along with all records) from object at next epoch.
+	 * Punch akeys (along with all records) from object.
 	 */
 	print_message("Punch all akeys\n");
 	for (i = 0; i < PUNCH_NUM_KEYS; i++)
-		punch_akey(dkeys[i], "akey", epoch + 2, &req);
-	punch_akey(dkeys[0], "akey0", epoch + 2, &req);
-	punch_akey(dkeys[0], "akey1", epoch + 2, &req);
+		punch_akey(dkeys[i], "akey", DAOS_TX_NONE, &req);
+	punch_akey(dkeys[0], "akey0", DAOS_TX_NONE, &req);
+	punch_akey(dkeys[0], "akey1", DAOS_TX_NONE, &req);
 
 	/* Enumerate akeys */
 	print_message("Enumerate akeys:\n");
@@ -1485,8 +1462,8 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		enum_num = 2;
 		total_keys = 0;
 		while (enum_num > 0) {
-			rc = enumerate_akey(epoch + 3, dkeys[i], &enum_num, kds,
-					    &anchor_out, buf, 512, &req);
+			rc = enumerate_akey(DAOS_TX_NONE, dkeys[i], &enum_num,
+					    kds, &anchor_out, buf, 512, &req);
 			assert_int_equal(rc, 0);
 			total_keys += enum_num;
 			if (daos_anchor_is_eof(&anchor_out))
@@ -1498,11 +1475,11 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	}
 
 	/**
-	 * Punch dkeys (along with all akeys) from object at next epoch.
+	 * Punch dkeys (along with all akeys) from object.
 	 */
 	print_message("Punch all dkeys\n");
 	for (i = 0; i < PUNCH_NUM_KEYS; i++)
-		punch_dkey(dkeys[i], epoch + 3, &req);
+		punch_dkey(dkeys[i], DAOS_TX_NONE, &req);
 
 	/* Enumerate dkeys */
 	print_message("Enumerate dkeys:\n");
@@ -1511,8 +1488,8 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	enum_num = 2;
 	total_keys = 0;
 	while (enum_num > 0) {
-		rc = enumerate_dkey(epoch + 4, &enum_num, kds, &anchor_out, buf,
-				    512, &req);
+		rc = enumerate_dkey(DAOS_TX_NONE, &enum_num, kds, &anchor_out,
+				    buf, 512, &req);
 		assert_int_equal(rc, 0);
 		total_keys += enum_num;
 		if (daos_anchor_is_eof(&anchor_out))
@@ -1523,9 +1500,9 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	assert_int_equal(total_keys, 0);
 
 	/**
-	 * Re-insert 1 record per akey at different dkeys, all at epoch 4.
-	 * Record sizes are alternating SCM (2 consecutive extents = 2k),
-	 * and NVME (5 consecutive record extents = 5k).
+	 * Re-insert 1 record per akey at different dkeys. Record sizes are
+	 * alternating SCM (2 consecutive extents = 2k), and NVME (5 consecutive
+	 * record extents = 5k).
 	 */
 	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
 		if (i % 2 == 0)
@@ -1536,24 +1513,26 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		print_message("insert dkey:%s, akey:'akey', rx_nr:%d\n",
 			      dkeys[i], num_rec_exts);
 		insert_single_with_rxnr(dkeys[i], "akey", /*idx*/ 0, data_buf,
-					PUNCH_IOD_SIZE, num_rec_exts, epoch + 4,
-					&req);
+					PUNCH_IOD_SIZE, num_rec_exts,
+					DAOS_TX_NONE, &req);
 	}
 	/* Insert a few more unique akeys at the first dkey */
 	print_message("insert dkey:%s, akey:'akey0', rx_nr:%d\n",
 		      dkeys[0], num_rec_exts);
 	insert_single_with_rxnr(dkeys[0], "akey0",/*idx*/ 0, data_buf,
-				PUNCH_IOD_SIZE, num_rec_exts, epoch + 4, &req);
+				PUNCH_IOD_SIZE, num_rec_exts, DAOS_TX_NONE,
+				&req);
 	print_message("insert dkey:%s, akey:'akey1', rx_nr:%d\n",
 		      dkeys[0], num_rec_exts);
 	insert_single_with_rxnr(dkeys[0], "akey1",/*idx*/ 0, data_buf,
-				PUNCH_IOD_SIZE, num_rec_exts, epoch + 4, &req);
+				PUNCH_IOD_SIZE, num_rec_exts, DAOS_TX_NONE,
+				&req);
 
 	/**
-	 * Object punch (punch all keys associated with object) at next epoch.
+	 * Object punch (punch all keys associated with object).
 	 */
 	print_message("Punch entire object\n");
-	punch_obj(epoch + 5, &req);
+	punch_obj(DAOS_TX_NONE, &req);
 
 	/* Enumerate dkeys */
 	print_message("Enumerate dkeys:\n");
@@ -1562,8 +1541,8 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	enum_num = 2;
 	total_keys = 0;
 	while (enum_num > 0) {
-		rc = enumerate_dkey(epoch + 6, &enum_num, kds, &anchor_out, buf,
-				    512, &req);
+		rc = enumerate_dkey(DAOS_TX_NONE, &enum_num, kds, &anchor_out,
+				    buf, 512, &req);
 		assert_int_equal(rc, 0);
 		total_keys += enum_num;
 		if (daos_anchor_is_eof(&anchor_out))
@@ -1576,6 +1555,7 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	D_FREE(buf);
 	D_FREE(data_buf);
 	ioreq_fini(&req);
+	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 #define MANYREC_NUMRECS	5
@@ -1587,15 +1567,15 @@ punch_simple(void **state)
 {
 	daos_obj_id_t	 oid;
 
-	oid = dts_oid_gen(dts_obj_class, 0, ((test_arg_t *)state)->myrank);
+	oid = dts_oid_gen(dts_obj_class, 0, ((*(test_arg_t **)state))->myrank);
 
 	punch_simple_internal(state, oid);
 }
 
 /**
- * Test update/fetch with data verification of multiple records in epoch 0 of
- * varing size and IOD type. Size is either small I/O to SCM or larger (>=4k)
- * I/O to NVMe, and IOD type is either array or single value.
+ * Test update/fetch with data verification of multiple records of varing size
+ * and IOD type. Size is either small I/O to SCM or larger (>=4k) I/O to NVMe,
+ * and IOD type is either array or single value.
  */
 static void
 io_manyrec_internal(void **state, daos_obj_id_t oid, unsigned int size,
@@ -1611,7 +1591,6 @@ io_manyrec_internal(void **state, daos_obj_id_t oid, unsigned int size,
 	daos_off_t	offset[MANYREC_NUMRECS];
 	char		*val[MANYREC_NUMRECS];
 	daos_size_t	val_size[MANYREC_NUMRECS];
-	daos_epoch_t	epoch = 0;
 	int		i;
 
 	ioreq_init(&req, arg->coh, oid, iod_type, arg);
@@ -1633,11 +1612,11 @@ io_manyrec_internal(void **state, daos_obj_id_t oid, unsigned int size,
 
 	/** Insert */
 	insert(dkey, MANYREC_NUMRECS, (const char **)akeys,
-	       /*iod_size*/rec_size, rx_nr, offset, (void **)rec, &epoch, &req);
+	       rec_size, rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req);
 
 	/** Lookup */
 	lookup(dkey, MANYREC_NUMRECS, (const char **)akeys, offset, rec_size,
-	       (void **)val, val_size, &epoch, &req, false);
+	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
 
 	/** Verify data consistency */
 	for (i = 0; i < MANYREC_NUMRECS; i++) {
@@ -1702,7 +1681,6 @@ io_complex(void **state)
 	daos_size_t	 rec_size[4];
 	daos_off_t	 offset[4];
 	char		*val[4];
-	daos_epoch_t	 epoch = 0;
 	unsigned int	 size;
 	int		 i;
 
@@ -1729,7 +1707,7 @@ io_complex(void **state)
 		else
 			req.iod_type = DAOS_IOD_ARRAY;
 		insert_single(dkey, akeys[i], offset[i], rec[i], rec_size[i],
-			      epoch, &req);
+			      DAOS_TX_NONE, &req);
 	}
 
 	/** Lookup & verify */
@@ -1745,7 +1723,7 @@ io_complex(void **state)
 		}
 
 		lookup_single(dkey, akeys[i], offset[i], val[i], rec_size[i],
-			      epoch, &req);
+			      DAOS_TX_NONE, &req);
 		print_message("\tsize = %lu\n", rec_size[i]);
 		assert_memory_equal(val[i], rec[i], rec_size[i]);
 		D_FREE(val[i]);
@@ -1766,7 +1744,6 @@ basic_byte_array(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_epoch_t	 epoch = 2;
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
@@ -1791,7 +1768,7 @@ basic_byte_array(void **state)
 
 	/** open object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
@@ -1825,7 +1802,7 @@ next_step:
 
 	/** update record */
 	print_message("writing %d bytes with one recx per byte\n", buf_len);
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	iod.iod_size	= DAOS_REC_ANY;
@@ -1833,7 +1810,8 @@ next_step:
 	buf_out = step == 1 ? stack_buf_out : bulk_buf_out;
 	memset(buf_out, 0, buf_len);
 	daos_iov_set(&sg_iov, buf_out, buf_len / 2);
-	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
 	print_message("fetch with less buffer got %d.\n", rc);
 	assert_int_equal(rc, -DER_REC2BIG);
 
@@ -1841,16 +1819,15 @@ next_step:
 	print_message("reading data back ...\n");
 	memset(buf_out, 0, buf_len);
 	daos_iov_set(&sg_iov, buf_out, buf_len);
-	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
 	assert_int_equal(rc, 0);
 	/** Verify data consistency */
 	print_message("validating data ...\n");
 	assert_memory_equal(buf, buf_out, sizeof(buf));
 
-	if (step++ == 1) {
-		epoch++;
+	if (step++ == 1)
 		goto next_step;
-	}
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
@@ -1868,7 +1845,6 @@ read_empty_records_internal(void **state, unsigned int size)
 	int *buf_out;
 	daos_obj_id_t oid;
 	daos_handle_t oh;
-	daos_epoch_t epoch = 2;
 	daos_iov_t dkey;
 	daos_sg_list_t sgl;
 	daos_iov_t sg_iov;
@@ -1878,7 +1854,7 @@ read_empty_records_internal(void **state, unsigned int size)
 
 	/** open object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
@@ -1904,7 +1880,7 @@ read_empty_records_internal(void **state, unsigned int size)
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	buf_out = malloc(size * sizeof(*buf_out));
@@ -1921,7 +1897,8 @@ read_empty_records_internal(void **state, unsigned int size)
 	recx.rx_nr = sizeof(int) * size;
 	iod.iod_recxs = &recx;
 
-	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < size; i++) {
@@ -1967,7 +1944,6 @@ fetch_size(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_epoch_t	 epoch = 2;
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl[NUM_AKEYS];
 	daos_iov_t	 sg_iov[NUM_AKEYS];
@@ -1980,7 +1956,7 @@ fetch_size(void **state)
 
 	/** open object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
@@ -2013,14 +1989,16 @@ fetch_size(void **state)
 	}
 
 	/** update record */
-	rc = daos_obj_update(oh, epoch, &dkey, NUM_AKEYS, iod, sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, NUM_AKEYS, iod, sgl,
+			     NULL);
 	assert_int_equal(rc, 0);
 
 	/** fetch record size */
 	for (i = 0; i < NUM_AKEYS; i++)
 		iod[i].iod_size	= DAOS_REC_ANY;
 
-	rc = daos_obj_fetch(oh, epoch, &dkey, NUM_AKEYS, iod, NULL, NULL, NULL);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, NUM_AKEYS, iod, NULL,
+			    NULL, NULL);
 	assert_int_equal(rc, 0);
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
@@ -2127,15 +2105,13 @@ close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid)
 	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
 
 	print_message("reopening object\n");
-	rc = daos_obj_open(arg->coh, oid, 0 /* epoch */, 0 /* mode */, &req->oh,
-			   NULL /* ev */);
+	rc = daos_obj_open(arg->coh, oid, 0, &req->oh, NULL);
 	assert_int_equal(rc, 0);
 }
 
 /**
- * Basic test to insert a few large and small records at different epochs, then
- * remove an epoch and verify records in epochs both prior to and after the
- * discarded epoch.
+ * Basic test to insert a few large and small records, then discarding and
+ * verify records in epochs both prior to and after the discarded transaction.
  */
 static void
 epoch_discard(void **state)
@@ -2157,10 +2133,8 @@ epoch_discard(void **state)
 	char		*val[nakeys];
 	daos_size_t	 val_size[nakeys];
 	char		*rec_verify;
-	daos_epoch_state_t epoch_state;
-	daos_epoch_t	 epoch;
-	daos_epoch_t	 e;
-	int		 i;
+	daos_handle_t	 th[3];
+	int		 i, e;
 	int		 rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -2171,18 +2145,6 @@ epoch_discard(void **state)
 	rec_scm = malloc(IO_SIZE_SCM);
 	assert_non_null(rec_scm);
 	dts_buf_render(rec_scm, IO_SIZE_SCM);
-
-
-	/** Get a hold of an epoch. */
-	if (arg->myrank == 0) {
-		rc = daos_epoch_query(arg->coh, &epoch_state, NULL /* ev */);
-		assert_int_equal(rc, 0);
-		epoch = epoch_state.es_hce + 1;
-		rc = daos_epoch_hold(arg->coh, &epoch, NULL /* state */,
-				     NULL /* ev */);
-		assert_int_equal(rc, 0);
-	}
-	MPI_Bcast(&epoch, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
@@ -2203,9 +2165,11 @@ epoch_discard(void **state)
 			val_size[i] = IO_SIZE_SCM;
 	}
 
-	/** Write LHE, LHE + 1, and LHE + 2. To same set of d-key and a-keys. */
-	for (e = epoch; e < epoch + 3; e++) {
-		print_message("writing to epoch "DF_U64"\n", e);
+	/** Write three timestamps to same set of d-key and a-keys. */
+	for (e = 0; e < 3; e++) {
+		rc = daos_tx_open(arg->coh, &th[e], NULL);
+		assert_int_equal(rc, 0);
+
 		for (i = 0; i < nakeys; i++) {
 			if (i % 2 == 0) {
 				memcpy(rec[i], rec_nvme, IO_SIZE_NVME);
@@ -2221,26 +2185,20 @@ epoch_discard(void **state)
 				      i, akey[i], (int)rec_size[i], rec[i][0],
 				      rec[i][1]);
 		}
-		insert(dkey, nakeys, (const char **)akey, /*iod_size*/rec_size,
-			rx_nr, offset, (void **)rec, &e, &req);
+		insert(dkey, nakeys, (const char **)akey, rec_size, rx_nr,
+		       offset, (void **)rec, th[e], &req);
 	}
 
-	/** Discard LHE + 1. */
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (arg->myrank == 0) {
-		print_message("discarding epoch "DF_U64"\n", epoch + 1);
-		rc = daos_epoch_discard(arg->coh, epoch + 1, &epoch_state,
-					NULL /* ev */);
-		assert_int_equal(rc, 0);
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	/** Discard second timestamp. */
+	print_message("discarding transaction.\n");
+	rc = daos_tx_abort(th[1], NULL);
+	assert_int_equal(rc, 0);
 
-	/** Check the three epochs. */
-	for (e = epoch; e < epoch + 3; e++) {
-		print_message("verifying epoch "DF_U64"\n", e);
-		lookup(dkey, nakeys, (const char **)akey, offset,
-		       rec_size, (void **)val, val_size, &e, &req,
-		       false);
+	/** Check the three transactions. */
+	for (e = 0; e < 3; e++) {
+		print_message("verifying transaction %d\n", e);
+		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
+		       (void **)val, val_size, th[e], &req, false);
 		for (i = 0; i < nakeys; i++) {
 			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
 					    IO_SIZE_SCM, 1);
@@ -2250,7 +2208,7 @@ epoch_discard(void **state)
 			else
 				memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
 
-			if (e == epoch + 1) { /* discarded */
+			if (e == 1) { /* discarded */
 				rec_verify[0] = i + '0'; /*akey*/
 				rec_verify[1] = e - 1 + '0'; /*previous epoch*/
 			} else { /* intact */
@@ -2266,26 +2224,28 @@ epoch_discard(void **state)
 					    req.iod[i].iod_size);
 			free(rec_verify);
 		}
+		rc = daos_tx_close(th[e], NULL);
+		assert_int_equal(rc, 0);
 	}
 
 	/** Close and reopen the container and the obj. */
 	MPI_Barrier(MPI_COMM_WORLD);
 	close_reopen_coh_oh(arg, &req, oid);
 
-	/** Verify that the three uncommitted epochs are discarded. */
-	for (e = epoch; e < epoch + 3; e++) {
+	/** Verify that the three uncommitted transactions are discarded. */
+	{
 		daos_anchor_t	anchor;
 		int		found = 0;
 
-		print_message("verifying epoch "DF_U64"\n", e);
+		print_message("verifying discarded after re-open\n");
 		memset(&anchor, 0, sizeof(anchor));
 		while (!daos_anchor_is_eof(&anchor)) {
 			uint32_t		n = 1;
 			daos_key_desc_t		kd;
 			char			*buf[64];
 
-			rc = enumerate_dkey(e, &n, &kd, &anchor, buf,
-					    sizeof(buf), &req);
+			rc = enumerate_dkey(DAOS_TX_NONE, &n, &kd, &anchor,
+					    buf, sizeof(buf), &req);
 			assert_int_equal(rc, 0);
 			print_message("\tdkeys:%u\n", n);
 			found += n;
@@ -2330,10 +2290,8 @@ epoch_commit(void **state)
 	char		*val[nakeys];
 	daos_size_t	 val_size[nakeys];
 	char		*rec_verify;
-	daos_epoch_state_t epoch_state;
-	daos_epoch_t	 epoch;
-	daos_epoch_t	 e;
-	int		 i;
+	daos_handle_t	 th[3];
+	int		 i, e;
 	int		 rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -2344,18 +2302,6 @@ epoch_commit(void **state)
 	rec_scm = malloc(IO_SIZE_SCM);
 	assert_non_null(rec_scm);
 	dts_buf_render(rec_scm, IO_SIZE_SCM);
-
-
-	/** Get a hold of an epoch. */
-	if (arg->myrank == 0) {
-		rc = daos_epoch_query(arg->coh, &epoch_state, NULL /* ev */);
-		assert_int_equal(rc, 0);
-		epoch = epoch_state.es_hce + 1;
-		rc = daos_epoch_hold(arg->coh, &epoch, NULL /* state */,
-				     NULL /* ev */);
-		assert_int_equal(rc, 0);
-	}
-	MPI_Bcast(&epoch, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
@@ -2376,9 +2322,11 @@ epoch_commit(void **state)
 			val_size[i] = IO_SIZE_SCM;
 	}
 
-	/** Write LHE, LHE + 1, and LHE + 2. To same set of d-key and a-keys. */
-	for (e = epoch; e < epoch + 3; e++) {
-		print_message("writing to epoch "DF_U64"\n", e);
+	/** Write at 3 different txs to same set of d-key and a-keys. */
+	for (e = 0; e < 3; e++) {
+		rc = daos_tx_open(arg->coh, &th[e], NULL);
+		assert_int_equal(rc, 0);
+		print_message("writing to TX %d\n", e);
 		for (i = 0; i < nakeys; i++) {
 			if (i % 2 == 0) {
 				memcpy(rec[i], rec_nvme, IO_SIZE_NVME);
@@ -2395,15 +2343,15 @@ epoch_commit(void **state)
 				      rec[i][1]);
 		}
 		insert(dkey, nakeys, (const char **)akey, /*iod_size*/rec_size,
-			rx_nr, offset, (void **)rec, &e, &req);
+			rx_nr, offset, (void **)rec, th[e], &req);
+		daos_sync_ranks(MPI_COMM_WORLD);
 	}
 
-	/** Check the three epochs. */
-	for (e = epoch; e < epoch + 3; e++) {
-		print_message("verifying epoch "DF_U64"\n", e);
-		lookup(dkey, nakeys, (const char **)akey, offset,
-		       rec_size, (void **)val, val_size, &e, &req,
-		       false);
+	/** Check the three transactions. */
+	for (e = 0; e < 3; e++) {
+		print_message("verifying TX %d\n", e);
+		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
+		       (void **)val, val_size, th[e], &req, false);
 		for (i = 0; i < nakeys; i++) {
 			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
 					    IO_SIZE_SCM, 1);
@@ -2426,24 +2374,29 @@ epoch_commit(void **state)
 		}
 	}
 
-	/** Commit only the first 2 epochs */
 	MPI_Barrier(MPI_COMM_WORLD);
-	if (arg->myrank == 0) {
-		for (e = epoch; e < epoch + 2; e++) {
-			print_message("committing epoch "DF_U64"\n", e);
-			rc = daos_epoch_commit(arg->coh, e, &epoch_state,
-						NULL/*ev*/);
+
+	/** Commit only the first 2 transactions */
+	for (e = 0; e < 3; e++) {
+		daos_epoch_t epoch;
+
+		daos_tx_hdl2epoch(th[e], &epoch);
+
+		if (e != 2) {
+			print_message("committing transaction %d\n", e);
+			rc = daos_tx_commit(th[e], NULL);
 			assert_int_equal(rc, 0);
 		}
+		rc = daos_tx_close(th[e], NULL);
+		assert_int_equal(rc, 0);
+		MPI_Barrier(MPI_COMM_WORLD);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** Close and reopen the container and the obj */
-	MPI_Barrier(MPI_COMM_WORLD);
 	close_reopen_coh_oh(arg, &req, oid);
 
-	/** Verify that the three committed epochs are present. */
-	for (e = epoch; e < epoch + 3; e++) {
+	/** enumerate. */
+	{
 		daos_anchor_t	anchor;
 		int		found = 0;
 
@@ -2453,8 +2406,8 @@ epoch_commit(void **state)
 			daos_key_desc_t		kd;
 			char			*buf[64];
 
-			rc = enumerate_akey(e, dkey, &n, &kd, &anchor, buf,
-					    sizeof(buf), &req);
+			rc = enumerate_akey(DAOS_TX_NONE, dkey, &n, &kd,
+					    &anchor, buf, sizeof(buf), &req);
 			assert_int_equal(rc, 0);
 			found += n;
 		}
@@ -2462,40 +2415,30 @@ epoch_commit(void **state)
 	}
 
 	/**
-	 * Check the three epochs after container close. Last epoch was not
-	 * committed and should be discarded, therefore epoch + 2 should equal
-	 * epoch + 1.
+	 * Check data after container close. Last tx was not committed and
+	 * should be discarded, therefore data should be from transaciton 2.
 	 */
-	for (e = epoch; e < epoch + 3; e++) {
-		print_message("verifying epoch "DF_U64" after commit\n", e);
-		lookup(dkey, nakeys, (const char **)akey, offset,
-		       rec_size, (void **)val, val_size, &e, &req,
-		       false);
-		for (i = 0; i < nakeys; i++) {
-			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
-					    IO_SIZE_SCM, 1);
-			assert_non_null(rec_verify);
-			if (i % 2 == 0)
-				memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
-			else
-				memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
+	print_message("verifying after container re-open.\n");
+	lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
+	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
+	e = 1;
+	for (i = 0; i < nakeys; i++) {
+		rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
+		assert_non_null(rec_verify);
+		if (i % 2 == 0)
+			memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
+		else
+			memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
 
-			if (e == epoch + 2) { /* discarded */
-				rec_verify[0] = i + '0'; /*akey*/
-				rec_verify[1] = e - 1 + '0'; /*previous epoch*/
-			} else { /* intact */
-				rec_verify[0] = i + '0';
-				rec_verify[1] = e + '0';
-			}
-			assert_int_equal(req.iod[i].iod_size,
-					 strlen(rec_verify) + 1);
-			print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n", i,
-				      akey[i], (int)req.iod[i].iod_size,
-				      val[i][0], val[i][1]);
-			assert_memory_equal(val[i], rec_verify,
-					    req.iod[i].iod_size);
-			free(rec_verify);
-		}
+		rec_verify[0] = i + '0';
+		rec_verify[1] = e + '0';
+		assert_int_equal(req.iod[i].iod_size, strlen(rec_verify) + 1);
+		print_message("\trank %d: a-key[%d]:'%s' val:(%d) '%c%c'\n",
+			      arg->myrank, i, akey[i], (int)req.iod[i].iod_size,
+			      val[i][0], val[i][1]);
+		assert_memory_equal(val[i], rec_verify,
+				    req.iod[i].iod_size);
+		free(rec_verify);
 	}
 
 	for (i = 0; i < nakeys; i++) {
@@ -2533,9 +2476,9 @@ io_nospace(void **state)
 		/** Insert */
 		arg->expect_result = -DER_NOSPACE;
 		insert_single(key, "akey", 0, "data",
-			      strlen("data") + 1, 0, &req);
+			      strlen("data") + 1, DAOS_TX_NONE, &req);
 		insert_single(key, "akey", 0, large_buf,
-			      buf_size, 0, &req);
+			      buf_size, DAOS_TX_NONE, &req);
 	}
 	free(large_buf);
 	ioreq_fini(&req);
@@ -2555,27 +2498,27 @@ write_record_multiple_times(void **state)
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** write twice */
-	insert_single("dkey", "akey", 0, "data", strlen("data") + 1, 0,
-		      &req);
-	insert_single("dkey", "akey", 0, "data", strlen("data") + 1, 0,
-		      &req);
+	insert_single("dkey", "akey", 0, "data", strlen("data") + 1,
+		      DAOS_TX_NONE, &req);
+	insert_single("dkey", "akey", 0, "data", strlen("data") + 1,
+		      DAOS_TX_NONE, &req);
 	/** Lookup */
 	memset(buf, 0, 10);
-	lookup_single("dkey", "akey", 0, buf, 10, 0, &req);
+	lookup_single("dkey", "akey", 0, buf, 10, DAOS_TX_NONE, &req);
 	assert_int_equal(req.iod[0].iod_size, strlen(buf) + 1);
 	/** Verify data consistency */
 	assert_string_equal(buf, "data");
 
 	dts_buf_render(large_update_buf, 4096);
 	/** write twice */
-	insert_single("dkey_large", "akey_large", 0, large_update_buf, 4096, 0,
-		      &req);
-	insert_single("dkey_large", "akey_large", 0, large_update_buf, 4096, 0,
-		      &req);
+	insert_single("dkey_large", "akey_large", 0, large_update_buf, 4096,
+		      DAOS_TX_NONE, &req);
+	insert_single("dkey_large", "akey_large", 0, large_update_buf, 4096,
+		      DAOS_TX_NONE, &req);
 
 	memset(large_fetch_buf, 0, 4096);
-	lookup_single("dkey_large", "akey_large", 0, large_fetch_buf, 4096, 0,
-		      &req);
+	lookup_single("dkey_large", "akey_large", 0, large_fetch_buf, 4096,
+		      DAOS_TX_NONE, &req);
 
 	assert_int_equal(req.iod[0].iod_size, 4096);
 	assert_memory_equal(large_update_buf, large_fetch_buf, 4096);
@@ -2612,7 +2555,6 @@ tgt_idx_change_retry(void **state)
 	daos_off_t		 offset[5];
 	char			*val[5];
 	daos_size_t		 val_size[5];
-	daos_epoch_t		 epoch = 0;
 	struct daos_obj_layout	*layout;
 	d_rank_t		 rank = 0;
 	int			 replica;
@@ -2643,7 +2585,7 @@ tgt_idx_change_retry(void **state)
 	arg->fail_loc = DAOS_OBJ_TGT_IDX_CHANGE | DAOS_FAIL_VALUE;
 	arg->fail_value = replica;
 	if (arg->myrank == 0) {
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
 				     DAOS_OBJ_TGT_IDX_CHANGE | DAOS_FAIL_VALUE,
 				     replica, NULL);
 	}
@@ -2670,7 +2612,7 @@ tgt_idx_change_retry(void **state)
 
 	/** Insert */
 	insert_nowait(dkey, 5, (const char **)akey, /*iod_size*/rec_size,
-		      rx_nr, offset, (void **)rec, &epoch, &req);
+		      rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req);
 
 	if (arg->myrank == 0) {
 		/** verify the object layout */
@@ -2713,7 +2655,7 @@ tgt_idx_change_retry(void **state)
 
 	daos_fail_loc_set(0);
 	if (arg->myrank == 0) {
-		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -2727,7 +2669,7 @@ tgt_idx_change_retry(void **state)
 			memset(val[i], 0, 64);
 
 		lookup(dkey, 5, (const char **)akey, offset, rec_size,
-		       (void **)val, val_size, &epoch, &req, false);
+		       (void **)val, val_size, DAOS_TX_NONE, &req, false);
 
 		for (i = 0; i < 5; i++) {
 			assert_int_equal(req.iod[i].iod_size, strlen(rec[i]));
@@ -2776,13 +2718,14 @@ fetch_replica_unavail(void **state)
 	/** Insert */
 	print_message("Insert(e=0)/exclude all tgts/lookup(e=0) verify "
 		      "get -DER_NONEXIST\n");
-	insert_single(dkey, akey, 0, (void *)rec, strlen(rec), 0, &req);
+	insert_single(dkey, akey, 0, (void *)rec, strlen(rec), DAOS_TX_NONE,
+		      &req);
 
 	if (arg->myrank == 0) {
 		/** disable rebuild */
 		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL);
 		assert_int_equal(rc, 0);
-		rc = daos_mgmt_params_set(arg->group, info.pi_leader,
+		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
 			DSS_KEY_FAIL_LOC,
 			DAOS_REBUILD_DISABLE | DAOS_FAIL_VALUE, 0,
 			NULL);
@@ -2800,7 +2743,7 @@ fetch_replica_unavail(void **state)
 	/** inject CRT error failure to update pool map + retry */
 	daos_fail_loc_set(DAOS_SHARD_OBJ_RW_CRT_ERROR | DAOS_FAIL_ONCE);
 	arg->expect_result = -DER_NONEXIST;
-	lookup_single(dkey, akey, 0, buf, size, 0, &req);
+	lookup_single(dkey, akey, 0, buf, size, DAOS_TX_NONE, &req);
 
 	if (arg->myrank == 0) {
 		/* add back the excluded targets */
@@ -2808,7 +2751,7 @@ fetch_replica_unavail(void **state)
 				rank);
 
 		/* re-enable rebuild */
-		rc = daos_mgmt_params_set(arg->group, info.pi_leader,
+		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
 			DSS_KEY_FAIL_LOC, 0, 0, NULL);
 		assert_int_equal(rc, 0);
 	}
@@ -2823,7 +2766,6 @@ update_overlapped_recxs(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_epoch_t	 epoch = 2;
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
@@ -2835,7 +2777,7 @@ update_overlapped_recxs(void **state)
 
 	/** open object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
@@ -2865,7 +2807,7 @@ update_overlapped_recxs(void **state)
 	recx[2].rx_idx	= 3;
 	recx[2].rx_nr	= 2;
 	iod.iod_nr	= 3;
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 	for (i = 0; i < 128; i++) {
@@ -2878,7 +2820,7 @@ update_overlapped_recxs(void **state)
 		}
 	}
 	iod.iod_nr	= 128;
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 
@@ -2895,7 +2837,6 @@ io_obj_key_query(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	daos_epoch_t	epoch = 2;
 	daos_iov_t	dkey;
 	daos_iov_t	akey;
 	daos_recx_t	recx;
@@ -2905,7 +2846,7 @@ io_obj_key_query(void **state)
 
 	/** open object */
 	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** init dkey, akey */
@@ -2914,31 +2855,38 @@ io_obj_key_query(void **state)
 	daos_iov_set(&akey, &akey_val, sizeof(uint64_t));
 
 	flags = DAOS_GET_DKEY;
-	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
+				NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_MAX;
-	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
+				NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_MAX | DAOS_GET_MIN;
-	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
+				NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_DKEY | DAOS_GET_MAX | DAOS_GET_MIN;
-	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
+				NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_AKEY | DAOS_GET_MIN;
-	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
+				NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
-	rc = daos_obj_key_query(oh, epoch, flags, &dkey, &akey, NULL, NULL);
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, NULL,
+				NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 	flags = DAOS_GET_DKEY | DAOS_GET_MIN;
-	rc = daos_obj_key_query(oh, epoch, flags, &dkey, NULL, NULL, NULL);
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, NULL, NULL,
+				NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 	/** close object */
@@ -2948,12 +2896,13 @@ io_obj_key_query(void **state)
 	oid = dts_oid_gen(DAOS_OC_LARGE_RW,
 			  DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64,
 			  arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	flags = 0;
 	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MIN;
-	rc = daos_obj_key_query(oh, epoch, flags, &dkey, &akey, &recx, NULL);
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx,
+				NULL);
 	assert_int_equal(rc, 0);
 
 	dkey_val = *((uint64_t *)dkey.iov_buf);
@@ -2978,33 +2927,20 @@ io_obj_key_query(void **state)
 static void
 blob_unmap_trigger(void **state)
 {
-	daos_obj_id_t		 oid;
-	test_arg_t		*arg = *state;
-	struct ioreq		 req;
-	daos_epoch_state_t	 epoch_state;
-	daos_epoch_t		 epoch = 0;
-	daos_epoch_t		 e;
-	char			*update_buf;
-	char			*fetch_buf;
-	char			*enum_buf;
-	char			 dkey[5] = "dkey";
-	char			 akey[20];
-	int			 nvme_recs = 2;
-	int			 i;
-	int			 rc;
+	daos_obj_id_t	 oid;
+	test_arg_t	*arg = *state;
+	struct ioreq	 req;
+	char		*update_buf;
+	char		*fetch_buf;
+	char		*enum_buf;
+	char		 dkey[5] = "dkey";
+	char		 akey[20];
+	int		 nvme_recs = 2;
+	daos_handle_t	 th[3];
+	int		 i, e;
+	int		 rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-
-	/** Get a hold of an epoch. */
-	if (arg->myrank == 0) {
-		rc = daos_epoch_query(arg->coh, &epoch_state, NULL /* ev */);
-		assert_int_equal(rc, 0);
-		epoch = epoch_state.es_hce + 1;
-		rc = daos_epoch_hold(arg->coh, &epoch, NULL /* state */,
-				     NULL /* ev */);
-		assert_int_equal(rc, 0);
-	}
-	MPI_Bcast(&epoch, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	/* Epoch discard only currently supports DAOS_IOD_SINGLE type */
@@ -3018,36 +2954,38 @@ blob_unmap_trigger(void **state)
 	enum_buf = malloc(512);
 	assert_non_null(enum_buf);
 
-
 	/**
 	 * Insert a few NVMe records. Write LHE, LHE + 1, and LHE + 2 at
 	 * different akeys and the same dkey.
 	 */
-	for (e = epoch; e < epoch + 3; e++) {
+	for (e = 0; e < 3; e++) {
+		rc = daos_tx_open(arg->coh, &th[e], NULL);
+		assert_int_equal(rc, 0);
+
 		for (i = 0; i < nvme_recs; i++) {
 			sprintf(akey, "blob_unmap_akey%d", i);
 			print_message("insert dkey:'%s', akey:'%s', eph:%d\n",
 				      dkey, akey, (int)e);
 			insert_single(dkey, akey, 0, update_buf, IO_SIZE_NVME,
-				      e, &req);
+				      th[e], &req);
 			/* Verify record was inserted */
 			memset(fetch_buf, 0, IO_SIZE_NVME);
 			lookup_single(dkey, akey, 0, fetch_buf, IO_SIZE_NVME,
-				      e, &req);
+				      th[e], &req);
 			assert_memory_equal(update_buf, fetch_buf,
 					    IO_SIZE_NVME);
 		}
+		daos_sync_ranks(MPI_COMM_WORLD);
 	}
 
-	/* Discard the NVMe records (Discard LHE + 1) */
-	MPI_Barrier(MPI_COMM_WORLD);
-	if (arg->myrank == 0) {
-		print_message("Discarding epoch "DF_U64"\n", epoch + 1);
-		rc = daos_epoch_discard(arg->coh, epoch + 1, &epoch_state,
-					/*ev*/NULL);
-		assert_int_equal(rc, 0);
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	/* Discard the NVMe records (Discard second tx) */
+	print_message("Discarding second transaction\n");
+	rc = daos_tx_abort(th[1], NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_tx_close(th[1], NULL);
+	assert_int_equal(rc, 0);
+
+	daos_sync_ranks(MPI_COMM_WORLD);
 
 	/* Wait for >= VEA_MIGRATE_INTVL */
 	print_message("Wait for free extents to expire (15 sec)\n");
@@ -3055,15 +2993,21 @@ blob_unmap_trigger(void **state)
 
 	/* Insert another NVMe record, will trigger free extent migration */
 	sprintf(akey, "blob_unmap akey%d", nvme_recs);
-	print_message("insert dkey:'%s', akey:'%s', eph:%d\n",
-		      dkey, akey, (int)epoch + 1);
-	insert_single(dkey, akey, 0, update_buf, IO_SIZE_NVME, epoch + 1, &req);
+	print_message("insert dkey:'%s', akey:'%s'\n", dkey, akey);
+	rc = daos_tx_open(arg->coh, &th[1], NULL);
+	assert_int_equal(rc, 0);
+	insert_single(dkey, akey, 0, update_buf, IO_SIZE_NVME, th[1], &req);
 	/* Verify record was inserted */
 	memset(fetch_buf, 0, IO_SIZE_NVME);
-	lookup_single(dkey, akey, 0, fetch_buf, IO_SIZE_NVME, epoch + 1, &req);
+	lookup_single(dkey, akey, 0, fetch_buf, IO_SIZE_NVME, th[1], &req);
 	assert_memory_equal(update_buf, fetch_buf, IO_SIZE_NVME);
 
 	print_message("blob unmap callback triggered\n");
+
+	for (e = 0; e < 3; e++) {
+		rc = daos_tx_close(th[e], NULL);
+		assert_int_equal(rc, 0);
+	}
 
 	free(enum_buf);
 	free(fetch_buf);

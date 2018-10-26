@@ -326,8 +326,7 @@ rebuild_rdone(struct rebuild_tgt_pool_tracker *rpt,
 	if (rc)
 		D_GOTO(free, rc);
 
-	rc = ds_obj_open(coh, rdone->ro_oid.id_pub, rdone->ro_epoch, DAOS_OO_RW,
-			 &oh);
+	rc = ds_obj_open(coh, rdone->ro_oid.id_pub, DAOS_OO_RW, &oh);
 	if (rc)
 		D_GOTO(cont_close, rc);
 
@@ -792,8 +791,7 @@ rebuild_obj_ult(void *data)
 			D_GOTO(free, rc);
 	}
 
-	rc = ds_obj_open(arg->cont_hdl, arg->oid.id_pub, arg->epoch,
-			 DAOS_OO_RW, &oh);
+	rc = ds_obj_open(arg->cont_hdl, arg->oid.id_pub, DAOS_OO_RW, &oh);
 	if (rc)
 		D_GOTO(free, rc);
 

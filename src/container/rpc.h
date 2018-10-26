@@ -73,32 +73,17 @@
 	X(CONT_ATTR_SET,						\
 		0, &CQF_cont_attr_set,					\
 		ds_cont_op_handler, NULL),				\
-	X(CONT_EPOCH_QUERY,						\
-		0, &CQF_cont_epoch_op,					\
-		ds_cont_op_handler, NULL),				\
-	X(CONT_EPOCH_HOLD,						\
-		0, &CQF_cont_epoch_op,					\
-		ds_cont_op_handler, NULL),				\
-	X(CONT_EPOCH_SLIP,						\
-		0, &CQF_cont_epoch_op,					\
-		ds_cont_op_handler, NULL),				\
-	X(CONT_EPOCH_FLUSH,						\
-		0, &CQF_cont_epoch_op,					\
-		ds_cont_op_handler, NULL),				\
 	X(CONT_EPOCH_DISCARD,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
 	X(CONT_EPOCH_COMMIT,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
-	X(CONT_EPOCH_WAIT,						\
-		0, &CQF_cont_epoch_op,					\
-		ds_cont_op_handler, NULL),				\
 	X(CONT_SNAP_LIST,						\
 		0, &CQF_cont_snap_list,					\
 		ds_cont_op_handler, NULL),				\
 	X(CONT_SNAP_CREATE,						\
-		0, &CQF_cont_snap_create,				\
+		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
 	X(CONT_SNAP_DESTROY,						\
 		0, &CQF_cont_snap_destroy,				\
@@ -187,8 +172,7 @@ CRT_RPC_DECLARE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
 	((uint64_t)		(coi_capas)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_OPEN	/* output fields */		 \
-	((struct cont_op_out)	(coo_op)		CRT_VAR) \
-	((daos_epoch_state_t)	(coo_epoch_state)	CRT_VAR)
+	((struct cont_op_out)	(coo_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
 
@@ -205,10 +189,7 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 
 /** Add more items to query when needed */
 #define DAOS_OSEQ_CONT_QUERY	/* output fields */		 \
-	((struct cont_op_out)	(cqo_op)		CRT_VAR) \
-				/* min slipped epoch at all streams */ \
-	((uint64_t)		(cqo_min_slipped_epoch)	CRT_VAR) \
-	((daos_epoch_state_t)	(cqo_epoch_state)	CRT_VAR)
+	((struct cont_op_out)	(cqo_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
 
@@ -257,12 +238,10 @@ CRT_RPC_DECLARE(cont_attr_set, DAOS_ISEQ_CONT_ATTR_SET, DAOS_OSEQ_CONT_ATTR_SET)
 
 #define DAOS_ISEQ_CONT_EPOCH_OP	/* input fields */		 \
 	((struct cont_op_in)	(cei_op)		CRT_VAR) \
-				/* unused for EPOCH_QUERY */	 \
 	((daos_epoch_t)		(cei_epoch)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_EPOCH_OP	/* output fields */		 \
-	((struct cont_op_out)	(ceo_op)		CRT_VAR) \
-	((daos_epoch_state_t)	(ceo_epoch_state)	CRT_VAR)
+	((struct cont_op_out)	(ceo_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_epoch_op, DAOS_ISEQ_CONT_EPOCH_OP, DAOS_OSEQ_CONT_EPOCH_OP)
 

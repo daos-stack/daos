@@ -147,11 +147,11 @@ daos_test_cb_punch(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 
 	if (pu_arg->pa_recxs_num == 0)
 		punch_akey(key_rec->or_dkey, key_rec->or_akey,
-			   op->or_epoch, &req);
+			   DAOS_TX_NONE, &req);
 	else
 		punch_recxs(key_rec->or_dkey, key_rec->or_akey,
 			    pu_arg->pa_recxs, pu_arg->pa_recxs_num,
-			    op->or_epoch, &req);
+			    DAOS_TX_NONE, &req);
 
 	ioreq_fini(&req);
 	return 0;
@@ -195,20 +195,20 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 
 	if (array) {
 		if (op->or_op == TEST_OP_UPDATE)
-			insert_recxs(dkey, akey, iod_size, op->or_epoch,
+			insert_recxs(dkey, akey, iod_size, DAOS_TX_NONE,
 				     uf_arg->ua_recxs, uf_arg->ua_recx_num, buf,
 				     buf_size, &req);
 		else
-			lookup_recxs(dkey, akey, iod_size, op->or_epoch,
+			lookup_recxs(dkey, akey, iod_size, DAOS_TX_NONE,
 				     uf_arg->ua_recxs, uf_arg->ua_recx_num, buf,
 				     buf_size, &req);
 	} else {
 		if (op->or_op == TEST_OP_UPDATE)
 			insert_single(dkey, akey, 0, buf, buf_size,
-				      op->or_epoch, &req);
+				      DAOS_TX_NONE, &req);
 		else
 			lookup_single(dkey, akey, 0, buf, buf_size,
-				      op->or_epoch, &req);
+				      DAOS_TX_NONE, &req);
 	}
 
 	if (uf_arg->ua_verify)

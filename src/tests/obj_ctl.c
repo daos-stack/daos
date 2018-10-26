@@ -76,7 +76,7 @@ ctl_update(struct dts_io_credit *cred)
 	int	rc;
 
 	if (daos_mode) {
-		rc = daos_obj_update(ctl_oh, ctl_epoch, &cred->tc_dkey, 1,
+		rc = daos_obj_update(ctl_oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
 				     &cred->tc_iod, &cred->tc_sgl, NULL);
 	} else {
 		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
@@ -92,7 +92,7 @@ ctl_fetch(struct dts_io_credit *cred)
 	int	rc;
 
 	if (daos_mode) {
-		rc = daos_obj_fetch(ctl_oh, ctl_epoch, &cred->tc_dkey, 1,
+		rc = daos_obj_fetch(ctl_oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
 				    &cred->tc_iod, &cred->tc_sgl, NULL, NULL);
 	} else {
 		rc = vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
@@ -117,14 +117,14 @@ ctl_punch(struct dts_io_credit *cred)
 
 	if (daos_mode) {
 		if (!dkey) {
-			rc = daos_obj_punch(ctl_oh, ctl_epoch, NULL);
+			rc = daos_obj_punch(ctl_oh, DAOS_TX_NONE, NULL);
 
 		} else if (!akey) {
-			rc = daos_obj_punch_dkeys(ctl_oh, ctl_epoch, 1,
+			rc = daos_obj_punch_dkeys(ctl_oh, DAOS_TX_NONE, 1,
 						  dkey, NULL);
 		} else {
-			rc = daos_obj_punch_akeys(ctl_oh, ctl_epoch, dkey, 1,
-						  akey, NULL);
+			rc = daos_obj_punch_akeys(ctl_oh, DAOS_TX_NONE, dkey,
+						  1, akey, NULL);
 		}
 	} else {
 		int	flags;
@@ -248,11 +248,12 @@ ctl_daos_list(struct dts_io_credit *cred)
 			return -DER_INVAL;
 
 		} else if (!(ctl_abits & CTL_ARG_DKEY)) {
-			rc = daos_obj_list_dkey(ctl_oh, ctl_epoch, &knr, kds,
-						&cred->tc_sgl, &anchor, NULL);
+			rc = daos_obj_list_dkey(ctl_oh, DAOS_TX_NONE, &knr,
+						kds, &cred->tc_sgl, &anchor,
+						NULL);
 
 		} else if (!(ctl_abits & CTL_ARG_AKEY)) {
-			rc = daos_obj_list_akey(ctl_oh, ctl_epoch,
+			rc = daos_obj_list_akey(ctl_oh, DAOS_TX_NONE,
 						&cred->tc_dkey, &knr, kds,
 						&cred->tc_sgl, &anchor, NULL);
 		}
@@ -278,7 +279,7 @@ ctl_obj_open(bool *opened)
 	int rc;
 
 	if (daos_mode) {
-		rc = daos_obj_open(ctl_ctx.tsc_coh, ctl_oid.id_pub, 1,
+		rc = daos_obj_open(ctl_ctx.tsc_coh, ctl_oid.id_pub,
 				   DAOS_OO_RW, &ctl_oh, NULL);
 		D_ASSERT(!rc);
 		*opened = true;
@@ -343,7 +344,7 @@ ctl_cmd_run(char opc, char *args)
 			if (!daos_mode)
 				break;
 
-			daos_obj_id_generate(&ctl_oid.id_pub, 0,
+			daos_obj_generate_id(&ctl_oid.id_pub, 0,
 					     DAOS_OC_TINY_RW);
 			break;
 		case 'd':

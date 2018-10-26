@@ -839,7 +839,7 @@ out_put:
 	return rc;
 }
 
-struct obj_key_query_cb_args {
+struct obj_query_key_cb_args {
 	crt_rpc_t	*rpc;
 	unsigned int	*map_ver;
 	daos_unit_oid_t	oid;
@@ -850,17 +850,17 @@ struct obj_key_query_cb_args {
 };
 
 static int
-obj_shard_key_query_cb(tse_task_t *task, void *data)
+obj_shard_query_key_cb(tse_task_t *task, void *data)
 {
-	struct obj_key_query_cb_args	*cb_args;
-	struct obj_key_query_in		*okqi;
-	struct obj_key_query_out	*okqo;
+	struct obj_query_key_cb_args	*cb_args;
+	struct obj_query_key_in		*okqi;
+	struct obj_query_key_out	*okqo;
 	uint32_t			flags;
 	int				ret = task->dt_result;
 	int				rc = 0;
 	crt_rpc_t			*rpc;
 
-	cb_args = (struct obj_key_query_cb_args *)data;
+	cb_args = (struct obj_query_key_cb_args *)data;
 	rpc = cb_args->rpc;
 
 	okqi = crt_req_get(cb_args->rpc);
@@ -952,16 +952,16 @@ out:
 }
 
 int
-dc_obj_shard_key_query(struct dc_obj_shard *shard, daos_epoch_t epoch,
+dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
 		       daos_recx_t *recx, const uuid_t coh_uuid,
 		       const uuid_t cont_uuid, unsigned int *map_ver,
 		       tse_task_t *task)
 {
 	struct dc_pool			*pool;
-	struct obj_key_query_in		*okqi;
+	struct obj_query_key_in		*okqi;
 	crt_rpc_t			*req;
-	struct obj_key_query_cb_args	 cb_args;
+	struct obj_query_key_cb_args	 cb_args;
 	daos_unit_oid_t			 oid;
 	crt_endpoint_t			 tgt_ep;
 	uint64_t			 dkey_hash;
@@ -981,11 +981,11 @@ dc_obj_shard_key_query(struct dc_obj_shard *shard, daos_epoch_t epoch,
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
-	D_DEBUG(DB_IO, "OBJ_KEY_QUERY_RPC, rank=%d tag=%d.\n",
+	D_DEBUG(DB_IO, "OBJ_QUERY_KEY_RPC, rank=%d tag=%d.\n",
 		tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep,
-			    DAOS_OBJ_RPC_KEY_QUERY, &req);
+			    DAOS_OBJ_RPC_QUERY_KEY, &req);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -998,7 +998,7 @@ dc_obj_shard_key_query(struct dc_obj_shard *shard, daos_epoch_t epoch,
 	cb_args.akey	= akey;
 	cb_args.recx	= recx;
 
-	rc = tse_task_register_comp_cb(task, obj_shard_key_query_cb, &cb_args,
+	rc = tse_task_register_comp_cb(task, obj_shard_query_key_cb, &cb_args,
 				       sizeof(cb_args));
 	if (rc != 0)
 		D_GOTO(out_req, rc);
@@ -1019,7 +1019,7 @@ dc_obj_shard_key_query(struct dc_obj_shard *shard, daos_epoch_t epoch,
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
-		D_ERROR("key_query rpc failed rc %d\n", rc);
+		D_ERROR("query_key rpc failed rc %d\n", rc);
 		D_GOTO(out_req, rc);
 	}
 	return rc;

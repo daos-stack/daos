@@ -1444,7 +1444,7 @@ out_fmount:
 out_fdest:
 	fuse_destroy(dfuse_fs.fuse);
 out_dmount:
-	dfs_umount(dfs, true);
+	dfs_umount(dfs);
 out_cont:
 	daos_cont_close(coh, NULL);
 out_disc:

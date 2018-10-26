@@ -561,7 +561,7 @@ cmd_kill_pool_leader(int argc, const char **argv, void *ctx)
 		return -1;
 	}
 
-	rc = daos_pool_svc_stop(poh, NULL);
+	rc = daos_pool_stop_svc(poh, NULL);
 	if (rc != DER_SUCCESS) {
 		printf("error killing pool: '%s'\n", d_errstr(rc));
 		return -1;

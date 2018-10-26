@@ -34,7 +34,6 @@ typedef int (*command_hdlr_t)(int, char *[]);
 enum cont_op {
 	CONT_CREATE,
 	CONT_DESTROY,
-	CONT_COMMIT,
 	CONT_QUERY
 };
 
@@ -45,8 +44,6 @@ cont_op_parse(const char *str)
 		return CONT_CREATE;
 	else if (strcmp(str, "destroy") == 0)
 		return CONT_DESTROY;
-	else if (strcmp(str, "commit") == 0)
-		return CONT_COMMIT;
 	else if (strcmp(str, "query") == 0)
 		return CONT_QUERY;
 	assert(0);
@@ -62,7 +59,6 @@ cont_op_hdlr(int argc, char *argv[])
 		{"pool",	required_argument,	NULL, 'p'},
 		{"svc",		required_argument,	NULL, 'v'},
 		{"cont",	required_argument,	NULL, 'c'},
-		{"epoch",	required_argument,	NULL, 'e'},
 		{NULL,		0,			NULL,  0}
 	};
 	const char		*group = default_group;
@@ -73,8 +69,6 @@ cont_op_hdlr(int argc, char *argv[])
 	const char		*svc_str = NULL;
 	d_rank_list_t	*svc;
 	daos_cont_info_t	cont_info;
-	daos_epoch_t		commit_epoch = 0;
-	daos_epoch_state_t	state;
 	enum cont_op		op = cont_op_parse(argv[1]);
 	int			rc;
 
@@ -104,9 +98,6 @@ cont_op_hdlr(int argc, char *argv[])
 					optarg);
 				return 2;
 			}
-			break;
-		case 'e':
-			commit_epoch = atol(optarg);
 			break;
 		default:
 			printf("unknown option : %d\n", rc);
@@ -175,35 +166,6 @@ cont_op_hdlr(int argc, char *argv[])
 	}
 
 
-	if (op == CONT_COMMIT || op == CONT_CREATE) {
-		if (commit_epoch == 0) /** handling invalid commit epoch */
-			commit_epoch = cont_info.ci_epoch_state.es_ghce + 1;
-
-		rc = daos_epoch_hold(coh, &commit_epoch, &state, NULL);
-		if (rc != 0) {
-			fprintf(stderr, "failed to hold at epoch "DF_U64"\n",
-				commit_epoch);
-			return rc;
-		}
-
-		rc = daos_epoch_commit(coh, commit_epoch, &state, NULL);
-		if (rc != 0) {
-			fprintf(stderr, "failed to commit at epoch "DF_U64"\n",
-				commit_epoch);
-			return rc;
-		}
-		if (op == CONT_COMMIT) {
-			fprintf(stdout, "Container "DF_UUIDF" GHCE: "DF_U64"\n",
-				DP_UUID(cont_uuid), state.es_ghce);
-		}
-	}
-
-	if (op == CONT_QUERY) {
-		fprintf(stdout, "CONT: "DF_UUIDF" GHCE: "DF_U64"\n",
-			DP_UUID(cont_info.ci_uuid),
-			cont_info.ci_epoch_state.es_ghce);
-	}
-
 	if (op != CONT_DESTROY) {
 		rc = daos_cont_close(coh, NULL);
 		if (rc != 0) {
@@ -240,7 +202,6 @@ usage: dcont COMMAND [OPTIONS]\n\
 commands:\n\
 	create        create a container\n\
 	destroy       destroy a conainer\n\
-	commit        commit a container\n\
 	query         query a container\n\
 	help          print this message and exit\n");
 
@@ -249,8 +210,7 @@ create options:\n\
 	--pool=UUID    pool UUID \n\
 	--cont=UUID    cont UUID \n\
 	--group=STR    pool server process group (\"%s\")\n\
-	--svc=RANKS    pool service replicas like 1:2:3\n\
-	--epoch=epoch  epoch to commit contianer(hce)\n",
+	--svc=RANKS    pool service replicas like 1:2:3\n",
 	default_group);
 
 	printf("\
@@ -259,14 +219,6 @@ destroy options:\n\
 	--group=STR   pool server process group (\"%s\")\n\
 	--svc=RANKS   pool service replicas like 1:2:3\n\
 	--cont=UUID   container UUID\n", default_group);
-
-	printf("\
-commit options:\n\
-	--pool=UUID   pool UUID\n\
-	--group=STR   pool server process group (\"%s\")\n\
-	--svc=RANKS   pool service replicas like 1:2:3\n\
-	--cont=UUID   container UUID\n\
-	--epoch=epoch epoch to commit\n", default_group);
 
 	printf("\
 query options:\n\
@@ -288,8 +240,6 @@ main(int argc, char *argv[])
 	else if (strcmp(argv[1], "create") == 0)
 		hdlr = cont_op_hdlr;
 	else if (strcmp(argv[1], "destroy") == 0)
-		hdlr = cont_op_hdlr;
-	else if (strcmp(argv[1], "commit") == 0)
 		hdlr = cont_op_hdlr;
 	else if (strcmp(argv[1], "query") == 0)
 		hdlr = cont_op_hdlr;

@@ -1513,7 +1513,7 @@ dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
 }
 
 int
-dc_pool_target_query(tse_task_t *task)
+dc_pool_query_target(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
@@ -1590,7 +1590,7 @@ static int
 attr_list_req_complete(tse_task_t *task, void *data)
 {
 	struct pool_req_arg	  *args = data;
-	daos_pool_attr_list_t	  *task_args = dc_task_get_args(task);
+	daos_pool_list_attr_t	  *task_args = dc_task_get_args(task);
 	struct pool_attr_list_out *out = crt_reply_get(args->pra_rpc);
 
 	*task_args->size = out->palo_size;
@@ -1631,9 +1631,9 @@ out:
 }
 
 int
-dc_pool_attr_list(tse_task_t *task)
+dc_pool_list_attr(tse_task_t *task)
 {
-	daos_pool_attr_list_t		*args;
+	daos_pool_list_attr_t		*args;
 	struct pool_attr_list_in	*in;
 	struct pool_req_arg		 cb_args;
 	int				 rc;
@@ -1781,9 +1781,9 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 }
 
 int
-dc_pool_attr_get(tse_task_t *task)
+dc_pool_get_attr(tse_task_t *task)
 {
-	daos_pool_attr_get_t	*args;
+	daos_pool_get_attr_t	*args;
 	struct pool_attr_get_in	*in;
 	struct pool_req_arg	 cb_args;
 	int			 rc;
@@ -1843,9 +1843,9 @@ out:
 }
 
 int
-dc_pool_attr_set(tse_task_t *task)
+dc_pool_set_attr(tse_task_t *task)
 {
-	daos_pool_attr_set_t	*args;
+	daos_pool_set_attr_t	*args;
 	struct pool_attr_set_in	*in;
 	struct pool_req_arg	 cb_args;
 	int			 rc;
@@ -1941,9 +1941,9 @@ out:
 }
 
 int
-dc_pool_svc_stop(tse_task_t *task)
+dc_pool_stop_svc(tse_task_t *task)
 {
-	daos_pool_svc_stop_t	       *args;
+	daos_pool_stop_svc_t	       *args;
 	struct dc_pool		       *pool;
 	crt_endpoint_t			ep;
 	crt_rpc_t		       *rpc;

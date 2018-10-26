@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,120 +28,107 @@
 #include "task_internal.h"
 
 int
-daos_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
-		 daos_event_t *ev)
+daos_tx_open(daos_handle_t coh, daos_handle_t *th, daos_event_t *ev)
 {
-	daos_epoch_query_t	*args;
-	tse_task_t		*task;
-	int			 rc;
+	daos_tx_open_t	*args;
+	tse_task_t	*task;
+	int		 rc;
 
-	DAOS_API_ARG_ASSERT(*args, EPOCH_QUERY);
-	rc = dc_task_create(dc_epoch_query, NULL, ev, &task);
+	DAOS_API_ARG_ASSERT(*args, TX_OPEN);
+	rc = dc_task_create(dc_tx_open, NULL, ev, &task);
 	if (rc)
 		return rc;
 
 	args = dc_task_get_args(task);
 	args->coh	= coh;
-	args->state	= state;
+	args->th	= th;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch,
-		 daos_epoch_state_t *state, daos_event_t *ev)
+daos_tx_close(daos_handle_t th, daos_event_t *ev)
 {
-	/** all updates are synchronous for now, no need to do anything */
-	return daos_epoch_query(coh, state, ev);
-}
-
-int
-daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
-		   daos_epoch_state_t *state, daos_event_t *ev)
-{
-	daos_epoch_discard_t	*args;
+	daos_tx_close_t		*args;
 	tse_task_t		*task;
 	int			 rc;
 
-	DAOS_API_ARG_ASSERT(*args, EPOCH_DISCARD);
-	rc = dc_task_create(dc_epoch_discard, NULL, ev, &task);
+	DAOS_API_ARG_ASSERT(*args, TX_CLOSE);
+	rc = dc_task_create(dc_tx_close, NULL, ev, &task);
 	if (rc)
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->coh	= coh;
-	args->epoch	= epoch;
-	args->state	= state;
+	args->th	= th;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
-		daos_epoch_state_t *state, daos_event_t *ev)
+daos_tx_commit(daos_handle_t th, daos_event_t *ev)
 {
-	daos_epoch_hold_t	*args;
+	daos_tx_commit_t	*args;
 	tse_task_t		*task;
 	int			 rc;
 
-	DAOS_API_ARG_ASSERT(*args, EPOCH_HOLD);
-	rc = dc_task_create(dc_epoch_hold, NULL, ev, &task);
+	DAOS_API_ARG_ASSERT(*args, TX_COMMIT);
+	rc = dc_task_create(dc_tx_commit, NULL, ev, &task);
 	if (rc)
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->coh	= coh;
-	args->epoch	= epoch;
-	args->state	= state;
+	args->th	= th;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
-		daos_epoch_state_t *state, daos_event_t *ev)
+daos_tx_abort(daos_handle_t th, daos_event_t *ev)
 {
-	daos_epoch_slip_t	*args;
+	daos_tx_abort_t		*args;
 	tse_task_t		*task;
 	int			 rc;
 
-	DAOS_API_ARG_ASSERT(*args, EPOCH_SLIP);
-	rc = dc_task_create(dc_epoch_slip, NULL, ev, &task);
+	DAOS_API_ARG_ASSERT(*args, TX_ABORT);
+	rc = dc_task_create(dc_tx_abort, NULL, ev, &task);
 	if (rc)
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->coh	= coh;
-	args->epoch	= epoch;
-	args->state	= state;
+	args->th	= th;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
-		  daos_epoch_state_t *state, daos_event_t *ev)
+daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
+		  daos_event_t *ev)
 {
-	daos_epoch_commit_t	*args;
+	daos_tx_open_snap_t	*args;
 	tse_task_t		*task;
 	int			 rc;
 
-	DAOS_API_ARG_ASSERT(*args, EPOCH_COMMIT);
-	rc = dc_task_create(dc_epoch_commit, NULL, ev, &task);
+	DAOS_API_ARG_ASSERT(*args, TX_OPEN_SNAP);
+	rc = dc_task_create(dc_tx_open_snap, NULL, ev, &task);
 	if (rc)
 		return rc;
 
 	args = dc_task_get_args(task);
 	args->coh	= coh;
 	args->epoch	= epoch;
-	args->state	= state;
+	args->th	= th;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_epoch_wait(daos_handle_t coh, daos_epoch_t epoch,
-		daos_epoch_state_t *state, daos_event_t *ev)
+daos_tx_local2global(daos_handle_t th, daos_iov_t *glob)
+{
+	return -DER_NOSYS;
+}
+
+int
+daos_tx_global2local(daos_handle_t coh, daos_iov_t glob, daos_handle_t *th)
 {
 	return -DER_NOSYS;
 }

@@ -573,18 +573,6 @@ check_epoch_invariant(struct cont *cont, struct epoch_attr *attr,
 	return 0;
 }
 
-static void
-set_epoch_state(struct epoch_attr *attr, struct container_hdl *hdl,
-		daos_epoch_state_t *state)
-{
-	state->es_hce = hdl->ch_hce;
-	state->es_lre = hdl->ch_lre;
-	state->es_lhe = hdl->ch_lhe;
-	state->es_ghce = attr->ea_ghce;
-	state->es_glre = attr->ea_glre;
-	state->es_ghpce = attr->ea_ghpce;
-}
-
 /*
  * Calculate GHCE afresh using attr->ea_ghpce and attr->ea_glhe, and if the
  * result is higher than attr->ea_ghce, update attr->ea_ghce and CONT_GHCE.
@@ -627,8 +615,8 @@ update_ghce(struct rdb_tx *tx, struct cont *cont, struct epoch_attr *attr)
 }
 
 int
-ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont,
-		       struct container_hdl *hdl, daos_epoch_state_t *state)
+ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont, uuid_t c_hdl,
+		       struct container_hdl *hdl)
 {
 	struct epoch_attr	attr;
 	int			rc;
@@ -651,6 +639,24 @@ ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont,
 	if (rc != 0)
 		return rc;
 
+	/*
+	 * TODO - For now, do an epoch hold on container open since
+	 * daos_epoch_hold() is removed from API. Revisit when new epoch model
+	 * implemented.
+	 */
+	if (hdl->ch_capas & DAOS_COO_RW) {
+		daos_iov_t	key;
+		daos_iov_t	value;
+
+		hdl->ch_lhe = attr.ea_ghpce + 1;
+
+		daos_iov_set(&key, c_hdl, sizeof(uuid_t));
+		daos_iov_set(&value, hdl, sizeof(*hdl));
+		rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
+		if (rc != 0)
+			return rc;
+	}
+
 	/* Determine the new GLHE and update the LHE KVS. */
 	rc = ec_update_and_find_lowest(tx, cont, EC_LHE, NULL /* dec */,
 				       &hdl->ch_lhe /* inc */,
@@ -661,7 +667,6 @@ ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont,
 	if (check_epoch_invariant(cont, &attr, hdl) != 0)
 		return -DER_IO;
 
-	set_epoch_state(&attr, hdl, state);
 	return 0;
 }
 
@@ -717,46 +722,10 @@ ds_cont_epoch_fini_hdl(struct rdb_tx *tx, struct cont *cont,
 }
 
 int
-ds_cont_epoch_read_state(struct rdb_tx *tx, struct cont *cont,
-			 struct container_hdl *hdl, daos_epoch_state_t *state)
-{
-	struct epoch_attr	attr;
-	int			rc;
-
-	rc = read_epoch_attr(tx, cont, &attr);
-	if (rc != 0)
-		return rc;
-
-	set_epoch_state(&attr, hdl, state);
-	return 0;
-}
-
-int
-ds_cont_epoch_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		    struct cont *cont, struct container_hdl *hdl,
-		    crt_rpc_t *rpc)
-{
-	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
-	struct epoch_attr		attr;
-	int				rc;
-
-	rc = read_epoch_attr(tx, cont, &attr);
-	if (rc != 0)
-		return rc;
-
-	if (check_epoch_invariant(cont, &attr, hdl) != 0)
-		return -DER_IO;
-
-	set_epoch_state(&attr, hdl, &out->ceo_epoch_state);
-	return 0;
-}
-
-int
 ds_cont_epoch_hold(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		   struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	struct epoch_attr		attr;
 	daos_epoch_t			lhe = hdl->ch_lhe;
 	daos_iov_t			key;
@@ -795,7 +764,7 @@ ds_cont_epoch_hold(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		hdl->ch_lhe = in->cei_epoch;
 
 	if (hdl->ch_lhe == lhe)
-		D_GOTO(out_state, rc = 0);
+		D_GOTO(out_hdl, rc = 0);
 
 	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
 
@@ -821,8 +790,6 @@ ds_cont_epoch_hold(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (check_epoch_invariant(cont, &attr, hdl) != 0)
 		D_GOTO(out_hdl, rc = -DER_IO);
 
-out_state:
-	set_epoch_state(&attr, hdl, &out->ceo_epoch_state);
 out_hdl:
 	if (rc != 0)
 		hdl->ch_lhe = lhe;
@@ -838,7 +805,6 @@ ds_cont_epoch_slip(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		   struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	struct epoch_attr		attr;
 	daos_epoch_t			lre = hdl->ch_lre;
 	daos_epoch_t			glre;
@@ -872,7 +838,7 @@ ds_cont_epoch_slip(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		hdl->ch_lre = in->cei_epoch;
 
 	if (hdl->ch_lre == lre)
-		D_GOTO(out_state, rc = 0);
+		D_GOTO(out_hdl, rc = 0);
 
 	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
 
@@ -898,8 +864,6 @@ ds_cont_epoch_slip(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	 */
 	rc = trigger_aggregation(tx, glre, attr.ea_glre, attr.ea_ghce,
 				 cont, rpc->cr_ctx);
-out_state:
-	set_epoch_state(&attr, hdl, &out->ceo_epoch_state);
 out_hdl:
 	if (rc != 0)
 		hdl->ch_lre = lre;
@@ -959,7 +923,6 @@ ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		      crt_rpc_t *rpc)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	struct epoch_attr		attr;
 	int				rc;
 
@@ -988,8 +951,6 @@ ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = cont_epoch_discard_bcast(rpc->cr_ctx, cont, in->cei_op.ci_hdl,
 				      in->cei_epoch);
 
-	set_epoch_state(&attr, hdl, &out->ceo_epoch_state);
-
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
@@ -1000,10 +961,9 @@ out:
 int
 ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		     struct cont *cont, struct container_hdl *hdl,
-		     crt_rpc_t *rpc)
+		     crt_rpc_t *rpc, bool snapshot)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	struct epoch_attr		attr;
 	daos_epoch_t			hce = hdl->ch_hce;
 	daos_epoch_t			lhe = hdl->ch_lhe;
@@ -1018,7 +978,11 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
 
-	slip_flag = auto_slip_enabled();
+	/*
+	 * TODO - slip_flag should be set to true, but aggregation is not
+	 * working properly, so disable for now.
+	 */
+	slip_flag = false;
 
 	/* Verify the container handle capabilities. */
 	if (!(hdl->ch_capas & DAOS_COO_RW))
@@ -1039,7 +1003,7 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 
 	if (in->cei_epoch <= hdl->ch_hce)
 		/* Committing an already committed epoch is okay and a no-op. */
-		D_GOTO(out_state, rc = 0);
+		D_GOTO(out_hdl, rc = 0);
 	else if (in->cei_epoch < hdl->ch_lhe)
 		/* Committing an unheld epoch is not allowed. */
 		D_GOTO(out, rc = -DER_EP_RO);
@@ -1048,10 +1012,6 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	hdl->ch_lhe = hdl->ch_hce + 1;
 	if (!(hdl->ch_capas & DAOS_COO_NOSLIP))
 		hdl->ch_lre = hdl->ch_hce;
-
-	D_DEBUG(DF_DSMS, "hce="DF_U64" hce'="DF_U64"\n", hce, hdl->ch_hce);
-	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
-	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
 
 	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
 	daos_iov_set(&value, hdl, sizeof(*hdl));
@@ -1094,6 +1054,20 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (check_epoch_invariant(cont, &attr, hdl) != 0)
 		D_GOTO(out_hdl, rc = -DER_IO);
 
+	if (snapshot) {
+		char		zero = 0;
+
+		daos_iov_set(&key, &in->cei_epoch, sizeof(in->cei_epoch));
+		daos_iov_set(&value, &zero, sizeof(zero));
+		rc = rdb_tx_update(tx, &cont->c_snaps, &key, &value);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to create snapshot: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
+			goto out;
+		}
+	}
+
 	if (slip_flag) {
 		rc = trigger_aggregation(tx, glre, attr.ea_glre, attr.ea_ghce,
 					 cont, rpc->cr_ctx);
@@ -1104,8 +1078,6 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		}
 	}
 
-out_state:
-	set_epoch_state(&attr, hdl, &out->ceo_epoch_state);
 out_hdl:
 	if (rc != 0) {
 		hdl->ch_lre = lre;
@@ -1192,43 +1164,6 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		in->cei_epoch, iter_args.sda_range.epr_lo,
 		iter_args.sda_range.epr_hi);
 	rc = epoch_aggregate_bcast(rpc->cr_ctx, cont, &iter_args.sda_range, 1);
-out:
-	return rc;
-}
-
-int
-ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		    struct cont *cont, struct container_hdl *hdl,
-		    crt_rpc_t *rpc)
-{
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	daos_iov_t			key;
-	daos_iov_t			value;
-	char				zero = 0;
-	int				rc;
-
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64
-				" lre="DF_U64" hce'="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
-		rpc, in->cei_epoch, hdl->ch_lre, hdl->ch_hce);
-
-	/*
-	 * If HCE == 0, there are no committed epochs yet for a snapshot
-	 * Otherwise, the epoch to snapshot must lie between LRE and HCE
-	 */
-	if (in->cei_epoch < hdl->ch_lre || in->cei_epoch > hdl->ch_hce) {
-		rc = -DER_NONEXIST;
-		goto out;
-	}
-
-	daos_iov_set(&key, &in->cei_epoch, sizeof(in->cei_epoch));
-	daos_iov_set(&value, &zero, sizeof(zero));
-	rc = rdb_tx_update(tx, &cont->c_snaps, &key, &value);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to create snapshot: %d\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
-		goto out;
-	}
 out:
 	return rc;
 }

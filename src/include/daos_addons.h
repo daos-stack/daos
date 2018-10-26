@@ -45,7 +45,7 @@ extern "C" {
  * atomic value) with the new atomic value described by the sgl.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	epoch	Epoch for the update.
+ * \param[in]	th	Transaction handle.
  * \param[in]	key	Key associated with the update operation.
  * \param[in]	size	Size of the buffer to be inserted as an atomic val.
  * \param[in]	buf	Pointer to user buffer of the atomic value.
@@ -62,14 +62,14 @@ extern "C" {
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_kv_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+daos_kv_put(daos_handle_t oh, daos_handle_t th, const char *key,
 	    daos_size_t size, const void *buf, daos_event_t *ev);
 
 /**
  * Fetch value of a key.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	epoch	Epoch for the read.
+ * \param[in]	th	Transaction handle.
  * \param[in]	key	key associated with the update operation.
  * \param[in,out]
  *		size	[in]: Size of the user buf. if the size is unknown, set
@@ -88,16 +88,14 @@ daos_kv_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_kv_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+daos_kv_get(daos_handle_t oh, daos_handle_t th, const char *key,
 	    daos_size_t *size, void *buf, daos_event_t *ev);
 
 /**
  * Remove a Key and it's value from the KV store
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	epoch	Epoch for the update. It is ignored if epoch range is
- *			provided for each extent through the vector I/O
- *			descriptor (i.e. \a iods[]::vd_eprs[]).
+ * \param[in]	th	Transaction handle.
  * \param[in]	key	Key to be punched/removed.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -112,7 +110,7 @@ daos_kv_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_kv_remove(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
 	       daos_event_t *ev);
 
 typedef struct {
@@ -128,9 +126,7 @@ typedef struct {
  * for multiple dkeys.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	epoch	Epoch for the update. It is ignored if epoch range is
- *			provided for each extent through the vector I/O
- *			descriptor (i.e. \a iods[]::vd_eprs[]).
+ * \param[in]	th	Transaction handle.
  * \param[in]	nr	Number of dkeys in \a io_array.
  * \param[in,out]
  *		io_array
@@ -149,18 +145,15 @@ typedef struct {
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_obj_fetch_multi(daos_handle_t oh, daos_epoch_t epoch,
-		     unsigned int nr, daos_dkey_io_t *io_array,
-		     daos_event_t *ev);
+daos_obj_fetch_multi(daos_handle_t oh, daos_handle_t th, unsigned int nr,
+		     daos_dkey_io_t *io_array, daos_event_t *ev);
 
 /**
  * Update/Insert/Punch Multiple Dkeys in a single call. Behaves the same as
  * daos_obj_fetch but for multiple dkeys.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	epoch	Epoch for the update. It is ignored if epoch range is
- *			provided for each extent through the vector I/O
- *			descriptor (i.e. \a iods[]::vd_eprs[]).
+ * \param[in]	th	Transaction handle.
  * \param[in]	nr	Number of dkeys in \a io_array.
  * \param[in]	io_array
  *			Array of io descriptors for all dkeys, which describes
@@ -178,9 +171,8 @@ daos_obj_fetch_multi(daos_handle_t oh, daos_epoch_t epoch,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_obj_update_multi(daos_handle_t oh, daos_epoch_t epoch,
-		      unsigned int nr, daos_dkey_io_t *io_array,
-		      daos_event_t *ev);
+daos_obj_update_multi(daos_handle_t oh, daos_handle_t th, unsigned int nr,
+		      daos_dkey_io_t *io_array, daos_event_t *ev);
 
 /** Range of contiguous records */
 typedef struct {
@@ -213,7 +205,7 @@ typedef struct {
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
  *			be set to DAOS_OF_DKEY_UINT64.
- * \param[in]	epoch	Epoch to open object.
+ * \param[in]	th	Transaction handle.
  * \param[in]	cell_size
  *			Record size of the array.
  * \param[in]	chunk_size
@@ -235,7 +227,7 @@ typedef struct {
  *					this object
  */
 int
-daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 		  daos_size_t cell_size, daos_size_t chunk_size,
 		  daos_handle_t *oh, daos_event_t *ev);
 
@@ -246,7 +238,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
  *			be set to DAOS_OF_DKEY_UINT64.
- * \param[in]	epoch	Epoch to open object.
+ * \param[in]	th	Transaction handle.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW/EXCL/IO_RAND/IO_SEQ
  * \param[out]	cell_size
  *			Record size of the array.
@@ -269,7 +261,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  *					this object
  */
 int
-daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 		unsigned int mode, daos_size_t *elem_size,
 		daos_size_t *chunk_size, daos_handle_t *oh, daos_event_t *ev);
 
@@ -333,7 +325,7 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  * Read data from an array object.
  *
  * \param[in]	oh	Array object open handle.
- * \param[in]	epoch	Epoch for the read.
+ * \param[in]	th	Transaction handle.
  * \param[in]	iod	IO descriptor of ranges to read from the array.
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the indiviual range
@@ -355,7 +347,7 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
+daos_array_read(daos_handle_t oh, daos_handle_t th,
 		daos_array_iod_t *iod, daos_sg_list_t *sgl,
 		daos_csum_buf_t *csums, daos_event_t *ev);
 
@@ -363,7 +355,7 @@ daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
  * Write data to an array object.
  *
  * \param[in]	oh	Array object open handle.
- * \param[in]	epoch	Epoch for the write.
+ * \param[in]	th	Transaction handle.
  * \param[in]	iod	IO descriptor of ranges to write to the array.
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the indiviual range
@@ -384,7 +376,7 @@ daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
+daos_array_write(daos_handle_t oh, daos_handle_t th,
 		 daos_array_iod_t *iod, daos_sg_list_t *sgl,
 		 daos_csum_buf_t *csums, daos_event_t *ev);
 
@@ -392,7 +384,7 @@ daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
  * Query the number of records in the array object.
  *
  * \param[in]	oh	Array object open handle.
- * \param[in]	epoch	Epoch for the query.
+ * \param[in]	th	Transaction handle.
  * \param[out]	size	Returned array size (number of records).
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -400,7 +392,7 @@ daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
  * \return		0 on Success, negative on failure.
  */
 int
-daos_array_get_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t *size,
+daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
 		    daos_event_t *ev);
 
 /**
@@ -410,7 +402,7 @@ daos_array_get_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t *size,
  *
  *
  * \param[in]	oh	Array object open handle.
- * \param[in]	epoch	Epoch for the set_size.
+ * \param[in]	th	Transaction handle.
  * \param[in]	size	Size (number of records) to set array to.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -418,7 +410,7 @@ daos_array_get_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t *size,
  * \return		0 on Success, negative on failure.
  */
 int
-daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
+daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size,
 		    daos_event_t *ev);
 
 /**
@@ -431,20 +423,20 @@ daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
  * access to the array before the destory is called.
  *
  * \param[in]	oh	Array object open handle.
- * \param[in]	epoch	Epoch for the destroy.
+ * \param[in]	th	Transaction handle.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		0 on Success, negative on failure.
  */
 int
-daos_array_destroy(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
+daos_array_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
 
 /**
  * Punch a hole in the array indicated by the range in the iod.
  *
  * \param[in]	oh	Array object open handle.
- * \param[in]	epoch	Epoch for the punch op.
+ * \param[in]	th	Transaction handle.
  * \param[in]	iod	IO descriptor of ranges to punch in the array.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -452,7 +444,7 @@ daos_array_destroy(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
  * \return		0 on Success, negative on failure.
  */
 int
-daos_array_punch(daos_handle_t oh, daos_epoch_t epoch, daos_array_iod_t *iod,
+daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 		 daos_event_t *ev);
 
 #if defined(__cplusplus)

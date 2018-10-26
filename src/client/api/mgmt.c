@@ -51,15 +51,15 @@ daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
 }
 
 int
-daos_mgmt_params_set(const char *grp, d_rank_t rank, unsigned int key_id,
+daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 		     uint64_t value, uint64_t value_extra, daos_event_t *ev)
 {
-	daos_params_set_t	*args;
+	daos_set_params_t	*args;
 	tse_task_t		*task;
 	int			 rc;
 
-	DAOS_API_ARG_ASSERT(*args, PARAMS_SET);
-	rc = dc_task_create(dc_mgmt_params_set, NULL, ev, &task);
+	DAOS_API_ARG_ASSERT(*args, SET_PARAMS);
+	rc = dc_task_create(dc_mgmt_set_params, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -169,7 +169,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 }
 
 int
-daos_pool_tgt_add(const uuid_t uuid, const char *grp,
+daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 		  const d_rank_list_t *svc, d_rank_list_t *tgts,
 		  daos_event_t *ev)
 {

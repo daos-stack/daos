@@ -214,7 +214,7 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts,
  *			-DER_NONEXIST	No pool on specified targets
  */
 int
-daos_pool_target_query(daos_handle_t poh, d_rank_list_t *tgts,
+daos_pool_query_target(daos_handle_t poh, d_rank_list_t *tgts,
 		       d_rank_list_t *failed, daos_target_info_t *info_list,
 		       daos_event_t *ev);
 
@@ -236,7 +236,7 @@ daos_pool_target_query(daos_handle_t poh, d_rank_list_t *tgts,
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_pool_attr_list(daos_handle_t poh, char *buffer, size_t *size,
+daos_pool_list_attr(daos_handle_t poh, char *buffer, size_t *size,
 		    daos_event_t *ev);
 
 /**
@@ -258,7 +258,7 @@ daos_pool_attr_list(daos_handle_t poh, char *buffer, size_t *size,
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_pool_attr_get(daos_handle_t poh, int n, char const *const names[],
+daos_pool_get_attr(daos_handle_t poh, int n, char const *const names[],
 		   void *const buffers[], size_t sizes[], daos_event_t *ev);
 
 /**
@@ -274,7 +274,7 @@ daos_pool_attr_get(daos_handle_t poh, int n, char const *const names[],
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_pool_attr_set(daos_handle_t poh, int n, char const *const names[],
+daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
 		   void const *const values[], size_t const sizes[],
 		   daos_event_t *ev);
 
@@ -415,7 +415,7 @@ daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_attr_list(daos_handle_t coh, char *buffer, size_t *size,
+daos_cont_list_attr(daos_handle_t coh, char *buffer, size_t *size,
 		    daos_event_t *ev);
 
 /**
@@ -437,7 +437,7 @@ daos_cont_attr_list(daos_handle_t coh, char *buffer, size_t *size,
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_attr_get(daos_handle_t coh, int n, char const *const names[],
+daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[],
 		   void *const buffers[], size_t sizes[], daos_event_t *ev);
 
 /**
@@ -453,7 +453,7 @@ daos_cont_attr_get(daos_handle_t coh, int n, char const *const names[],
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_attr_set(daos_handle_t coh, int n, char const *const names[],
+daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[],
 		   void const *const values[], size_t const sizes[],
 		   daos_event_t *ev);
 
@@ -480,158 +480,189 @@ daos_cont_attr_set(daos_handle_t coh, int n, char const *const names[],
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_cont_oid_alloc(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid,
-		    daos_event_t *ev);
-
-/*
- * Epoch API
- */
+daos_cont_alloc_oids(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid,
+		     daos_event_t *ev);
 
 /**
- * Flush an epoch of a container handle.
+ * Rollback to a specific persistent snapshot.
  *
  * \param[in]	coh	Container handle
- * \param[in]	epoch	Epoch to flush
- * \param[out]	state	Latest epoch state
+ * \param[in]	epoch	Epoch if persistent snapshot to rollback to.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch,
-		 daos_epoch_state_t *state, daos_event_t *ev);
+daos_cont_rollback(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
 
 /**
- * Discard an epoch of a container handle.
- *
- * \param[in]	coh	Container handle
- * \param[in]	epoch	Epoch to discard
- * \param[out]	state	Optional, latest epoch state
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
-		   daos_epoch_state_t *state, daos_event_t *ev);
-
-/**
- * Query latest epoch state.
- *
- * \param[in]	coh	Container handle
- * \param[out]	state	Optional, latest epoch state
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
-		 daos_event_t *ev);
-
-/**
- * Propose a new lowest held epoch (LHE) on a container handle. The resulting
- * LHE may be higher than the one proposed. The owner of the container handle
- * is responsible for releasing its held epochs by either committing them or
- * setting LHE to DAOS_EPOCH_MAX.
+ * Subscribe to the container snapshot state. If user specifies a valid epoch,
+ * the call will return once a persistent snapshot has been taken at that epoch
+ * or a greater one. The epoch value will be updated with that epoch. If
+ * multiple snapshots exist at an epoch greater than the one specified, the
+ * lowest one will be returned in the epoch value. If the epoch value passed in
+ * is 0, this call will return the lowest persistent snapshot on the container,
+ * if any exist, otherwise will just wait till a persistent snapshot is created.
  *
  * \param[in]	coh	Container handle
  * \param[in,out]
- *		epoch	[in]: Minimum requested LHE, set to 0 if no requirement
- *			[out]: returned LHE of the container handle
- * \param[out]	state	Optional, latest epoch state
+ *		epoch	[in]: Epoch of snapshot to wait for. [out]: epoch of
+ *			persistent snapshot that was taken.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
-		daos_epoch_state_t *state, daos_event_t *ev);
+daos_cont_subscribe(daos_handle_t coh, daos_epoch_t *epoch, daos_event_t *ev);
+
+#define DAOS_SNAPSHOT_MAX_LEN 128
 
 /**
- * Increase the lowest referenced epoch (LRE) of a container handle. If
- * \a epoch is lower than current LRE, then the epoch state of the container
- * handle is unchanged.
+ * Create a persistent snapshot at the current epoch and return it. The epoch
+ * that is returned can be used to create a read only transaction to read data
+ * from that persistent snapshot. Optionally the snapshot can be given a name as
+ * an attribute which can be retrieved with daos_cont_list_snap(). Name length
+ * can't exceed DAOS_SNAPSHOT_MAX_LEN.
  *
  * \param[in]	coh	Container handle
- * \param[in]	epoch	Epoch to increase LRE to
- * \param[out]	state	Optional, latest epoch state
+ * \param[out]	epoch	returned epoch of persistent snapshot taken.
+ * \param[in]	name	Optional null terminated name for snapshot.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
-		daos_epoch_state_t *state, daos_event_t *ev);
+daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name,
+		      daos_event_t *ev);
 
 /**
- * Commit to an epoch for a container handle. Unless already committed, in
- * which case the epoch state of the container handle is unchanged, epoch must
- * be equal to or higher than the LHE. Otherwise, an error is returned. Once
- * the commit succeeds, the HCE, LHE, and LRE (unless DAOS_COO_NOSLIP was
- * specified when opening this container handle) of the container handle
- * becomes epoch, epoch + 1, and epoch, respectively.
- *
- * \param[in]	coh	Container handle
- * \param[in]	epoch	Epoch to commit
- * \param[out]	state	Optional, latest epoch state
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
-		  daos_epoch_state_t *state, daos_event_t *ev);
-
-/**
- * Wait for an epoch to be committed. This function is typically used by a
- * consumer application waiting for the producer to commit a specific epoch.
- *
- * \param[in]	coh	Container handle
- * \param[in]	epoch	Epoch to wait on
- * \param[out]	state	Optional, latest epoch state
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_epoch_wait(daos_handle_t coh, daos_epoch_t epoch,
-		daos_epoch_state_t *state, daos_event_t *ev);
-
-/*
- * Snapshot API
- */
-
-/**
- * List epochs of all the snapshots of a container.
+ * List all the snapshots of a container and optionally retrieve the snapshot
+ * name of each one if it was given at create time.
  *
  * \param[in]	coh	Container handle
  * \param[in,out]
- *		buf	[in]: Buffer to hold the epochs. [out]: Array of epochs
- *			of snapshots
+ *		nr	[in]: Number of snapshots in epochs and names.
+ *			[out]: Actual number of snapshots returned.
+ * \param[out]	epochs	preallocated array of epochs to store snapshots.
+ * \param[out]	names	preallocated array of names of the snapshots.
+ *			DAOS_SNAPSHOT_MAX_LEN can be used for each name
+ *			size if not known.
  * \param[in,out]
- *		n	[in]: Number of epochs the buffer can hold. [out]:
- *			Number of all snapshots (regardless of buffer size)
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_snap_list(daos_handle_t coh, daos_epoch_t *buf, int *n, daos_event_t *ev);
-
-/**
- * Take a snapshot of a container at an epoch.
- *
- * \param[in]	coh	Container handle
- * \param[in]	epoch	Epoch to snapshot
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_snap_create(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
+daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs,
+		    char **names, daos_anchor_t *anchor, daos_event_t *ev);
 
 /**
  * Destroy a snapshot. The epoch corresponding to the snapshot is not
  * discarded, but may be aggregated.
  *
  * \param[in]	coh	Container handle
- * \param[in]	epoch	Epoch of snapshot to destroy
+ * \param[in]	epr	Epoch range of snapshots to destroy.
+ *			If epr_lo == epr_hi delete 1 snapshot at epr_lo/hi.
+ *			If epr_lo == 0, delete all snapshots <= epr_hi.
+ *			If epr_hi == DAOS_EPOCH_MAX, delete all snapshots
+ *			>= epr_lo.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
+daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
+		       daos_event_t *ev);
+
+/*
+ * Transaction API
+ */
+
+/**
+ * Open a transaction on a container handle. This returns a transaction handle
+ * that is tagged with the current epoch. The transaction handle can be used
+ * for IOs that need to be committed transactionally.
+ *
+ * \param[in]	coh	Container handle.
+ * \param[out]	th	Returned transaction handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 if Success, negative if failed.
+ */
+int
+daos_tx_open(daos_handle_t coh, daos_handle_t *th, daos_event_t *ev);
+
+/**
+ * Commit the transaction on the container it was created with. The transaction
+ * can't be used for future updates anymore. If -DER_RESTART was returned, the
+ * operations that have been done on this transaction need to be redone with a
+ * newer transaction since a conflict was detected with another transaction.
+ *
+ * \param[in]	th	Transaction handle to commit.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 if Success, negative if failed.
+ *			Possible error values include:
+ *			-DER_NO_HDL     invalid transaction handle.
+ *			-DER_INVAL      Invalid parameter
+ *			-DER_RESTART	transaction conflict detected.
+ */
+int
+daos_tx_commit(daos_handle_t th, daos_event_t *ev);
+
+/**
+ * Create a read-only transaction from a snapshot. This does not create the
+ * snapshot, but only a read transaction to be able to read from a persistent
+ * snapshot in the container. If the user passes an epoch that is not
+ * snapshoted, or the snapshot was deleted, reads using that transaction might
+ * fail if the epoch was aggregated.
+ *
+ * \param[in]	coh	Container handle.
+ * \param[in]	epoch	Epoch of snapshot to read from.
+ * \param[out]	th	Returned read only transaction handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 if Success, negative if failed.
+ */
+int
+daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
+		  daos_event_t *ev);
+
+/**
+ * Abort all updates on the transaction. The transaction can't be used for
+ * future updates anymore.
+ *
+ * \param[in]	th	Transaction handle to abort.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 if Success, negative if failed.
+ */
+int
+daos_tx_abort(daos_handle_t th, daos_event_t *ev);
+
+/**
+ * Close and free the transaction handle. This is a local operation, no RPC
+ * involved.
+ *
+ * \param[in]	th	Transaction handle to free.
+ *
+ * \return		0 if Success, negative if failed.
+ */
+int
+daos_tx_close(daos_handle_t th, daos_event_t *ev);
+
+/**
+ * Return epoch associated with the transaction handle.
+ *
+ * \param[in]	th	Transaction handle.
+ * \param[out]	th	Returned epoch value.
+ *
+ * \return		0 if Success, negative if failed.
+ */
+int
+daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
 
 /*
  * Object API
@@ -657,7 +688,7 @@ daos_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  *			-DER_EXIST	Object class ID already existed
  */
 int
-daos_obj_class_register(daos_handle_t coh, daos_oclass_id_t cid,
+daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
 			daos_oclass_attr_t *cattr, daos_event_t *ev);
 
 /**
@@ -678,7 +709,7 @@ daos_obj_class_register(daos_handle_t coh, daos_oclass_id_t cid,
  *			-DER_NONEXIST	Nonexistent class ID
  */
 int
-daos_obj_class_query(daos_handle_t coh, daos_oclass_id_t cid,
+daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid,
 		     daos_oclass_attr_t *cattr, daos_event_t *ev);
 
 /**
@@ -701,7 +732,7 @@ daos_obj_class_query(daos_handle_t coh, daos_oclass_id_t cid,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_class_list(daos_handle_t coh, daos_oclass_list_t *clist,
+daos_obj_list_class(daos_handle_t coh, daos_oclass_list_t *clist,
 		    daos_anchor_t *anchor, daos_event_t *ev);
 
 /**
@@ -717,7 +748,7 @@ daos_obj_class_list(daos_handle_t coh, daos_oclass_list_t *clist,
  * \param[in]	cid	Class Identifier
  */
 static inline void
-daos_obj_id_generate(daos_obj_id_t *oid, daos_ofeat_t ofeats,
+daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 		     daos_oclass_id_t cid)
 {
 	uint64_t hdr = cid;
@@ -788,40 +819,10 @@ daos_obj_id2version(daos_obj_id_t oid)
 }
 
 /**
- * Declare a new object based on attributes \a oa.
- *
- * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object ID generated by daos_objid_generate().
- * \param[in]	epoch	Epoch to create object.
- * \param[in]	oa	Optional, object creation parameters.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		success
- *			-DER_NO_HDL	Invalid container handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_EXIST	Object ID has been used for another
- *					object.
- *			-DER_NONEXIST	Cannot find container on specified
- *					storage target
- *			-DER_NOTYPE	Unknown object type
- *			-DER_NOSCHEMA	Unknown object schema
- *			-DER_EP_RO	Epoch is read-only
- */
-int
-daos_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-		 daos_obj_attr_t *oa, daos_event_t *ev);
-
-/**
- * Open an declared DAOS-SR object.
+ * Open an DAOS object.
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID.
- * \param[in]	epoch	Epoch to open object.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW/EXCL/IO_RAND/IO_SEQ
  * \param[out]	oh	Returned object open handle.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -839,8 +840,8 @@ daos_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  *					this object
  */
 int
-daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	      unsigned int mode, daos_handle_t *oh, daos_event_t *ev);
+daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
+	      daos_handle_t *oh, daos_event_t *ev);
 
 /**
  * Close an opened object.
@@ -861,7 +862,8 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
  * Punch an entire object with all keys associated with it.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	epoch	Epoch to punch the object in.
+ * \param[in]	th	Optional transaction handle to punch object in.
+ *			Use DAOS_TX_NONE for an independent transaction.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -874,13 +876,14 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
  *			-DER_NOEXIST	Nonexistent object ID
  */
 int
-daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
+daos_obj_punch(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
 
 /**
  * Punch dkeys (with all akeys) from an object.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	epoch	Epoch to punch records.
+ * \param[in]	th	Optional transaction handle to punch dkeys in.
+ *			Use DAOS_TX_NONE for an independent transaction.
  * \param[in]	nr	number of dkeys to punch.
  * \param[in]	dkeys	Array of dkeys to punch.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -895,14 +898,15 @@ daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
  *			-DER_NOEXIST	Nonexistent object ID
  */
 int
-daos_obj_punch_dkeys(daos_handle_t oh, daos_epoch_t epoch, unsigned int nr,
+daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, unsigned int nr,
 		     daos_key_t *dkeys, daos_event_t *ev);
 
 /**
  * Punch akeys (with all records) from an object.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	epoch	Epoch to punch records.
+ * \param[in]	th	Optional transaction handle to punch akeys in.
+ *			Use DAOS_TX_NONE for an independent transaction.
  * \param[in]	dkey	dkey to punch akeys from.
  * \param[in]	nr	number of akeys to punch.
  * \param[in]	akeys	Array of akeys to punch.
@@ -918,7 +922,7 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_epoch_t epoch, unsigned int nr,
  *			-DER_NOEXIST	Nonexistent object ID
  */
 int
-daos_obj_punch_akeys(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 		     unsigned int nr, daos_key_t *akeys, daos_event_t *ev);
 
 /**
@@ -926,7 +930,8 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  * Caller should provide at least one of the output parameters.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	epoch	Epoch to query.
+ * \param[in]	th	Optional transaction handle to query with.
+ *			Use DAOS_TX_NONE for an independent transaction.
  * \param[out]	oa	Returned object attributes.
  * \param[out]	ranks	Ordered list of ranks where the object is stored.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -940,7 +945,7 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
+daos_obj_query(daos_handle_t oh, daos_handle_t th, daos_obj_attr_t *oa,
 	       d_rank_list_t *ranks, daos_event_t *ev);
 
 /*
@@ -952,9 +957,8 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  *
  * \param[in]	oh	Object open handle.
  *
- * \param[in]	epoch	Epoch for the fetch. It is ignored if epoch range is
- *			provided for each extent through the I/O descriptor
- *			\a iods[]::iod_eprs[]).
+ * \param[in]	th	Optional transaction handle to fetch with.
+ *			Use DAOS_TX_NONE for an independent transaction.
  *
  * \param[in]	dkey	Distribution key associated with the fetch operation.
  *
@@ -1008,7 +1012,7 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 	       unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_iom_t *maps, daos_event_t *ev);
 
@@ -1017,9 +1021,8 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *
  * \param[in]	oh	Object open handle.
  *
- * \param[in]	epoch	Epoch for the update. It is ignored if epoch range is
- *			provided for each extent through the I/O descriptor
- *			\a iods[]::iod_eprs[]).
+ * \param[in]	th	Optional transaction handle to update with.
+ *			Use DAOS_TX_NONE for an independent transaction.
  *
  * \param[in]	dkey	Distribution key associated with the update operation.
  *
@@ -1060,7 +1063,7 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+daos_obj_update(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 		unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
 		daos_event_t *ev);
 
@@ -1069,7 +1072,8 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *
  * \param[in]	oh	Object open handle.
  *
- * \param[in]	epoch	Epoch for the enumeration.
+ * \param[in]	th	Optional transaction handle to enumerate with.
+ *			Use DAOS_TX_NONE for an independent transaction.
  *
  * \param[in,out]
  *		nr	[in]: number of key descriptors in \a kds. [out]: number
@@ -1109,7 +1113,7 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *					enumerate again.
  */
 int
-daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
+daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_anchor_t *anchor, daos_event_t *ev);
 
@@ -1118,7 +1122,8 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
  *
  * \param[in]	oh	Object open handle.
  *
- * \param[in]	epoch	Epoch for the enumeration.
+ * \param[in]	th	Optional transaction handle to enumerate with.
+ *			Use DAOS_TX_NONE for an independent transaction.
  *
  * \param[in]	dkey	distribution key for the akey enumeration
  *
@@ -1160,7 +1165,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
  *					enumerate again.
  */
 int
-daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 		   uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_anchor_t *anchor, daos_event_t *ev);
 
@@ -1169,7 +1174,8 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *
  * \param[in]	oh	Object open handle.
  *
- * \param[in]	epoch	Epoch for the enumeration.
+ * \param[in]	th	Optional transaction handle to enumerate with.
+ *			Use DAOS_TX_NONE for an independent transaction.
  *
  * \param[in]	dkey	distribution key for the enumeration
  *
@@ -1212,7 +1218,7 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 		   daos_key_t *akey, daos_size_t *size, uint32_t *nr,
 		   daos_recx_t *recxs, daos_epoch_range_t *eprs,
 		   daos_anchor_t *anchor, bool incr_order,
@@ -1231,7 +1237,8 @@ daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  * DAOS_GET_AKEY | DAOS_GET_RECX.
  *
  * \param[in]	oh	Object open handle.
- * \param[in]	epoch	Epoch for the query.
+ * \param[in]	th	Optional transaction handle to query at.
+ *			Use DAOS_TX_NONE for an independent transaction.
  * \param[in]	flags	mask with the following options:
  *			DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
  *			DAOS_GET_MAX, DAOS_GET_MIN
@@ -1261,7 +1268,7 @@ daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_key_query(daos_handle_t oh, daos_epoch_t epoch, uint32_t flags,
+daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint32_t flags,
 		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		   daos_event_t *ev);
 

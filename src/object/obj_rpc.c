@@ -383,7 +383,7 @@ CRT_RPC_DEFINE(obj_update, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DEFINE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DEFINE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 CRT_RPC_DEFINE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
-CRT_RPC_DEFINE(obj_key_query, DAOS_ISEQ_OBJ_KEY_QUERY, DAOS_OSEQ_OBJ_KEY_QUERY)
+CRT_RPC_DEFINE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 
 /* Define for cont_rpcs[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
@@ -431,8 +431,8 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_ret = status;
 		break;
-	case DAOS_OBJ_RPC_KEY_QUERY:
-		((struct obj_key_query_out *)reply)->okqo_ret = status;
+	case DAOS_OBJ_RPC_QUERY_KEY:
+		((struct obj_query_key_out *)reply)->okqo_ret = status;
 		break;
 	default:
 		D_ASSERT(0);
@@ -457,8 +457,8 @@ obj_reply_get_status(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_ret;
-	case DAOS_OBJ_RPC_KEY_QUERY:
-		return ((struct obj_key_query_out *)reply)->okqo_ret;
+	case DAOS_OBJ_RPC_QUERY_KEY:
+		return ((struct obj_query_key_out *)reply)->okqo_ret;
 	default:
 		D_ASSERT(0);
 	}
@@ -487,8 +487,8 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_map_version = map_version;
 		break;
-	case DAOS_OBJ_RPC_KEY_QUERY:
-		((struct obj_key_query_out *)reply)->okqo_map_version =
+	case DAOS_OBJ_RPC_QUERY_KEY:
+		((struct obj_query_key_out *)reply)->okqo_map_version =
 			map_version;
 		break;
 	default:
@@ -514,8 +514,8 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_map_version;
-	case DAOS_OBJ_RPC_KEY_QUERY:
-		return ((struct obj_key_query_out *)reply)->okqo_map_version;
+	case DAOS_OBJ_RPC_QUERY_KEY:
+		return ((struct obj_query_key_out *)reply)->okqo_map_version;
 	default:
 		D_ASSERT(0);
 	}

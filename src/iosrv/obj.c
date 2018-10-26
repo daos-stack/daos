@@ -73,13 +73,13 @@ ds_obj_retry_cb(tse_task_t *task, void *arg)
 }
 
 int
-ds_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	    unsigned int mode, daos_handle_t *oh)
+ds_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
+	    daos_handle_t *oh)
 {
 	tse_task_t	*task;
 	int		 rc;
 
-	rc = dc_obj_open_task_create(coh, oid, epoch, mode, oh, NULL,
+	rc = dc_obj_open_task_create(coh, oid, mode, oh, NULL,
 				     dss_tse_scheduler(), &task);
 	if (rc)
 		return rc;
@@ -102,18 +102,39 @@ ds_obj_close(daos_handle_t oh)
 			    ABT_EVENTUAL_NULL);
 }
 
+static int
+tx_close_cb(tse_task_t *task, void *data)
+{
+	daos_handle_t *th = (daos_handle_t *)data;
+
+	dc_tx_rebuild_close(*th);
+	return task->dt_result;
+}
+
 int
 ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		 uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		 daos_anchor_t *anchor)
 {
 	tse_task_t	*task;
+	daos_handle_t	coh, th;
 	int		rc;
 
-	rc = dc_obj_list_akey_task_create(oh, epoch, dkey, nr, kds, sgl, anchor,
+	coh = dc_obj_hdl2cont_hdl(oh);
+	rc = dc_tx_rebuild_open(coh, epoch, &th);
+	if (rc)
+		return rc;
+
+	rc = dc_obj_list_akey_task_create(oh, th, dkey, nr, kds, sgl, anchor,
 					  NULL, dss_tse_scheduler(), &task);
 	if (rc)
 		return rc;
+
+	rc = tse_task_register_comp_cb(task, tx_close_cb, &th, sizeof(th));
+	if (rc) {
+		tse_task_complete(task, rc);
+		return rc;
+	}
 
 	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh,
 			    ABT_EVENTUAL_NULL);
@@ -126,12 +147,24 @@ ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 	     daos_iom_t *maps)
 {
 	tse_task_t	*task;
+	daos_handle_t	coh, th;
 	int		rc;
 
-	rc = dc_obj_fetch_task_create(oh, epoch, dkey, nr, iods, sgls, maps,
-				      NULL, dss_tse_scheduler(), &task);
+	coh = dc_obj_hdl2cont_hdl(oh);
+	rc = dc_tx_rebuild_open(coh, epoch, &th);
 	if (rc)
 		return rc;
+
+	rc = dc_obj_fetch_task_create(oh, th, dkey, nr, iods, sgls,
+				      maps, NULL, dss_tse_scheduler(), &task);
+	if (rc)
+		return rc;
+
+	rc = tse_task_register_comp_cb(task, tx_close_cb, &th, sizeof(th));
+	if (rc) {
+		tse_task_complete(task, rc);
+		return rc;
+	}
 
 	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh,
 			    ABT_EVENTUAL_NULL);
@@ -145,14 +178,26 @@ ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor)
 {
 	tse_task_t	*task;
+	daos_handle_t	coh, th;
 	int		rc;
 
-	rc = dc_obj_list_obj_task_create(oh, epoch, dkey, akey, size,
-					 nr, kds, eprs, sgl, anchor,
-					 dkey_anchor, akey_anchor, true, NULL,
+	coh = dc_obj_hdl2cont_hdl(oh);
+	rc = dc_tx_rebuild_open(coh, epoch, &th);
+	if (rc)
+		return rc;
+
+	rc = dc_obj_list_obj_task_create(oh, th, dkey, akey, size, nr, kds,
+					 eprs, sgl, anchor, dkey_anchor,
+					 akey_anchor, true, NULL,
 					 dss_tse_scheduler(), &task);
 	if (rc)
 		return rc;
+
+	rc = tse_task_register_comp_cb(task, tx_close_cb, &th, sizeof(th));
+	if (rc) {
+		tse_task_complete(task, rc);
+		return rc;
+	}
 
 	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh,
 			    ABT_EVENTUAL_NULL);

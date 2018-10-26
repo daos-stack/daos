@@ -156,7 +156,7 @@ ts_daos_update(struct dts_io_credit *cred, daos_epoch_t epoch)
 {
 	int	rc;
 
-	rc = daos_obj_update(ts_oh, epoch, &cred->tc_dkey, 1,
+	rc = daos_obj_update(ts_oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
 			     &cred->tc_iod, &cred->tc_sgl, cred->tc_evp);
 	return rc;
 }
@@ -166,8 +166,8 @@ ts_daos_fetch(struct dts_io_credit *cred, daos_epoch_t epoch)
 {
 	int	rc;
 
-	rc = daos_obj_fetch(ts_oh, epoch, &cred->tc_dkey, 1, &cred->tc_iod,
-			    &cred->tc_sgl, NULL, cred->tc_evp);
+	rc = daos_obj_fetch(ts_oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
+			    &cred->tc_iod, &cred->tc_sgl, NULL, cred->tc_evp);
 
 	return rc;
 }
@@ -179,14 +179,6 @@ ts_set_value_buffer(char *buffer, int idx)
 	buffer[0] = 'A' + idx % 26;
 	buffer[1] = 'a' + idx % 26;
 	buffer[TEST_VAL_SIZE - 1] = 0;
-}
-
-static int
-ts_hold_epoch(daos_epoch_t *epoch)
-{
-	if (ts_ctx.tsc_mpi_rank == 0)
-		return daos_epoch_hold(ts_ctx.tsc_coh, epoch, NULL, NULL);
-	return 0;
 }
 
 static int
@@ -321,12 +313,6 @@ ts_write_records_internal(d_rank_t rank, bool with_fetch)
 
 	if (!ts_overwrite)
 		++epoch;
-	/* Only hold an epoch if we're in DAOS mode and going to fetch */
-	if (with_fetch == WITH_FETCH && ts_class != DAOS_OC_RAW) {
-		rc = ts_hold_epoch(&epoch);
-		if (rc)
-			return rc;
-	}
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		ts_oid = dts_oid_gen(ts_class, 0, ts_ctx.tsc_mpi_rank);
@@ -334,7 +320,7 @@ ts_write_records_internal(d_rank_t rank, bool with_fetch)
 			ts_oid = dts_oid_set_rank(ts_oid, rank);
 		for (j = 0; j < ts_dkey_p_obj; j++) {
 			if (ts_class != DAOS_OC_RAW) {
-				rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid, 1,
+				rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid,
 						   DAOS_OO_RW, &ts_oh, NULL);
 				if (rc) {
 					fprintf(stderr, "object open failed\n");
@@ -357,18 +343,6 @@ ts_write_records_internal(d_rank_t rank, bool with_fetch)
 					return rc;
 			}
 		}
-	}
-
-	/* Only flush and commit when in DAOS mode and going to fetch */
-	if (with_fetch == WITH_FETCH && ts_class != DAOS_OC_RAW &&
-	    ts_ctx.tsc_mpi_rank == 0) {
-		rc = daos_epoch_flush(ts_ctx.tsc_coh, epoch, NULL, NULL);
-		if (rc)
-			return rc;
-
-		rc = daos_epoch_commit(ts_ctx.tsc_coh, epoch, NULL, NULL);
-		if (rc)
-			return rc;
 	}
 
 	rc = dts_credit_drain(&ts_ctx);
@@ -669,7 +643,7 @@ ts_add_server(d_rank_t rank)
 	/** exclude from the pool */
 	targets.rl_nr = 1;
 	targets.rl_ranks = &rank;
-	rc = daos_pool_tgt_add(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
+	rc = daos_pool_add_tgt(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
 			       &targets, NULL);
 	return rc;
 }
@@ -705,11 +679,11 @@ ts_rebuild_perf(double *start_time, double *end_time)
 		return rc;
 
 	if (ts_rebuild_only_iteration)
-		daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_REBUILD | DAOS_FAIL_VALUE,
 				     0, NULL);
 	else if (ts_rebuild_no_update)
-		daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_UPDATE | DAOS_FAIL_VALUE,
 				     0, NULL);
 
@@ -723,7 +697,7 @@ ts_rebuild_perf(double *start_time, double *end_time)
 
 	rc = ts_add_server(RANK_ZERO);
 
-	daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC, 0, 0, NULL);
+	daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC, 0, 0, NULL);
 
 	return rc;
 }

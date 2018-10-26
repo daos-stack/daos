@@ -29,6 +29,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/btree.h>
+#include <daos/object.h>
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
 

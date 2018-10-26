@@ -409,10 +409,11 @@ cont_open_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
-	arg->coa_info->ci_epoch_state = out->coo_epoch_state;
+
 	/* TODO */
 	arg->coa_info->ci_nsnapshots = 0;
 	arg->coa_info->ci_snapshots = NULL;
+	arg->coa_info->ci_lsnapshot = 0;
 
 out:
 	crt_req_decref(arg->rpc);
@@ -782,12 +783,11 @@ cont_query_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
-	arg->cqa_info->ci_epoch_state = out->cqo_epoch_state;
-	arg->cqa_info->ci_min_slipped_epoch = out->cqo_min_slipped_epoch;
 
 	/* TODO */
 	arg->cqa_info->ci_nsnapshots = 0;
 	arg->cqa_info->ci_snapshots = NULL;
+	arg->cqa_info->ci_lsnapshot = 0;
 
 out:
 	crt_req_decref(arg->rpc);
@@ -984,9 +984,9 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 }
 
 int
-dc_cont_oid_alloc(tse_task_t *task)
+dc_cont_alloc_oids(tse_task_t *task)
 {
-	daos_cont_oid_alloc_t		*args;
+	daos_cont_alloc_oids_t		*args;
 	struct cont_oid_alloc_in	*in;
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
@@ -1382,7 +1382,7 @@ static int
 attr_list_req_complete(tse_task_t *task, void *data)
 {
 	struct cont_req_arg	  *args = data;
-	daos_cont_attr_list_t	  *task_args = dc_task_get_args(task);
+	daos_cont_list_attr_t	  *task_args = dc_task_get_args(task);
 	struct cont_attr_list_out *out = crt_reply_get(args->cra_rpc);
 
 	*task_args->size = out->calo_size;
@@ -1390,9 +1390,9 @@ attr_list_req_complete(tse_task_t *task, void *data)
 }
 
 int
-dc_cont_attr_list(tse_task_t *task)
+dc_cont_list_attr(tse_task_t *task)
 {
-	daos_cont_attr_list_t		*args;
+	daos_cont_list_attr_t		*args;
 	struct cont_attr_list_in	*in;
 	struct cont_req_arg		 cb_args;
 	int				 rc;
@@ -1541,9 +1541,9 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 }
 
 int
-dc_cont_attr_get(tse_task_t *task)
+dc_cont_get_attr(tse_task_t *task)
 {
-	daos_cont_attr_get_t	*args;
+	daos_cont_get_attr_t	*args;
 	struct cont_attr_get_in	*in;
 	struct cont_req_arg	 cb_args;
 	int			 rc;
@@ -1604,9 +1604,9 @@ out:
 }
 
 int
-dc_cont_attr_set(tse_task_t *task)
+dc_cont_set_attr(tse_task_t *task)
 {
-	daos_cont_attr_set_t	*args;
+	daos_cont_set_attr_t	*args;
 	struct cont_attr_set_in	*in;
 	struct cont_req_arg	 cb_args;
 	int			 rc;
@@ -1665,56 +1665,22 @@ struct epoch_op_arg {
 	/* eoa_req must always be the first member of epoch_op_arg */
 	struct cont_req_arg	 eoa_req;
 	daos_epoch_t		*eoa_epoch;
-	daos_epoch_state_t	*eoa_state;
 };
 
-static int
-epoch_op_complete(tse_task_t *task, void *data)
-{
-	struct epoch_op_arg	  *args = data;
-	crt_rpc_t		  *rpc  = args->eoa_req.cra_rpc;
-	crt_opcode_t		   opc  = opc_get(rpc->cr_opc);
-	struct cont_epoch_op_out  *out  = crt_reply_get(rpc);
-
-	if (opc == CONT_EPOCH_HOLD)
-		*args->eoa_epoch = out->ceo_epoch_state.es_lhe;
-
-	if (args->eoa_state != NULL)
-		*args->eoa_state = out->ceo_epoch_state;
-	D_DEBUG(DF_DSMC, "completed epoch operation %u\n", opc);
-	return 0;
-}
-
-static int
-epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
-	 daos_epoch_state_t *state, tse_task_t *task)
+int
+dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
+	    tse_task_t *task)
 {
 	struct cont_epoch_op_in	*in;
 	struct epoch_op_arg	 arg;
 	int			 rc;
 
 	/* Check incoming arguments. */
-	switch (opc) {
-	case CONT_EPOCH_QUERY:
-		D_ASSERT(epoch == NULL);
-		break;
-	case CONT_EPOCH_HOLD:
-		if (epoch == NULL)
-			D_GOTO(out, rc = -DER_INVAL);
-		break;
-	case CONT_EPOCH_SLIP:
-	case CONT_EPOCH_DISCARD:
-	case CONT_EPOCH_COMMIT:
-	case CONT_SNAP_CREATE:
-	case CONT_SNAP_DESTROY:
-		D_ASSERT(epoch != NULL);
-		if (*epoch >= DAOS_EPOCH_MAX)
-			D_GOTO(out, rc = -DER_OVERFLOW);
-		break;
-	}
+	D_ASSERT(epoch != NULL);
+	if (*epoch >= DAOS_EPOCH_MAX)
+		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	rc = cont_req_prepare(coh, opc,
-			      daos_task2ctx(task), &arg.eoa_req);
+	rc = cont_req_prepare(coh, opc, daos_task2ctx(task), &arg.eoa_req);
 	if (rc != 0)
 		goto out;
 
@@ -1725,13 +1691,9 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		epoch == NULL ? 0 : *epoch);
 
 	in = crt_req_get(arg.eoa_req.cra_rpc);
-	if (opc != CONT_EPOCH_QUERY)
-		in->cei_epoch = *epoch;
+	in->cei_epoch = *epoch;
 
 	arg.eoa_epoch = epoch;
-	arg.eoa_state = state;
-	if (!(opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY))
-		arg.eoa_req.cra_callback = epoch_op_complete;
 
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &arg, sizeof(arg));
@@ -1755,115 +1717,102 @@ out:
 }
 
 int
-dc_epoch_query(tse_task_t *task)
+dc_cont_sync(tse_task_t *task)
 {
-	daos_epoch_query_t *args;
+	daos_cont_sync_t	*args;
+	daos_epoch_t		epoch;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	return epoch_op(args->coh, CONT_EPOCH_QUERY, NULL, args->state, task);
+	epoch = daos_ts2epoch();
+	return dc_epoch_op(args->coh, CONT_EPOCH_COMMIT, &epoch, task);
 }
 
 int
-dc_epoch_hold(tse_task_t *task)
+dc_cont_rollback(tse_task_t *task)
 {
-	daos_epoch_hold_t *args;
+	D_ERROR("Unsupported API\n");
+	tse_task_complete(task, -DER_NOSYS);
+	return 0;
+}
+
+int
+dc_cont_subscribe(tse_task_t *task)
+{
+	D_ERROR("Unsupported API\n");
+	tse_task_complete(task, -DER_NOSYS);
+	return 0;
+}
+
+int
+dc_cont_create_snap(tse_task_t *task)
+{
+	daos_cont_create_snap_t *args;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	return epoch_op(args->coh, CONT_EPOCH_HOLD, args->epoch, args->state,
-			task);
+	if (args->name != NULL) {
+		D_ERROR("Named Snapshots not yet supported\n");
+		tse_task_complete(task, -DER_NOSYS);
+		return DER_NOSYS;
+	}
+
+	if (args->epoch == NULL) {
+		tse_task_complete(task, -DER_INVAL);
+		return -DER_INVAL;
+	}
+
+	*args->epoch = daos_ts2epoch();
+	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch, task);
 }
 
 int
-dc_epoch_slip(tse_task_t *task)
+dc_cont_destroy_snap(tse_task_t *task)
 {
-	daos_epoch_slip_t *args;
+	daos_cont_destroy_snap_t	*args;
+	int				rc;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	return epoch_op(args->coh, CONT_EPOCH_SLIP, &args->epoch, args->state,
-			task);
-}
+	if (args->epr.epr_lo > args->epr.epr_hi) {
+		D_ERROR("Invalid epoch range.\n");
+		D_GOTO(err, rc = -DER_INVAL);
+	}
 
-int
-dc_epoch_discard(tse_task_t *task)
-{
-	daos_epoch_discard_t *args;
+	/** TODO - add support for valid epoch ranges. */
+	if (args->epr.epr_lo != args->epr.epr_hi || args->epr.epr_lo == 0) {
+		D_ERROR("Unsupported epoch range.\n");
+		D_GOTO(err, rc = -DER_INVAL);
+	}
 
-	args = dc_task_get_args(task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	return dc_epoch_op(args->coh, CONT_SNAP_DESTROY, &args->epr.epr_lo,
+			   task);
 
-	return epoch_op(args->coh, CONT_EPOCH_DISCARD, &args->epoch,
-			args->state, task);
-}
-
-int
-dc_epoch_commit(tse_task_t *task)
-{
-	daos_epoch_commit_t *args;
-
-	args = dc_task_get_args(task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
-	return epoch_op(args->coh, CONT_EPOCH_COMMIT, &args->epoch, args->state,
-			task);
-}
-
-int
-dc_epoch_flush(tse_task_t *task)
-{
-	return -DER_NOSYS;
-}
-
-int
-dc_epoch_wait(tse_task_t *task)
-{
-	return -DER_NOSYS;
-}
-
-int
-dc_snap_create(tse_task_t *task)
-{
-	daos_snap_create_t *args;
-
-	args = dc_task_get_args(task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
-	return epoch_op(args->coh, CONT_SNAP_CREATE,
-			&args->epoch, NULL, task);
-}
-
-int
-dc_snap_destroy(tse_task_t *task)
-{
-	daos_snap_destroy_t *args;
-
-	args = dc_task_get_args(task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
-	return epoch_op(args->coh, CONT_SNAP_DESTROY,
-			&args->epoch, NULL, task);
+err:
+	tse_task_complete(task, -DER_INVAL);
+	return rc;
 }
 
 static int
 snap_list_req_complete(tse_task_t *task, void *data)
 {
 	struct cont_req_arg	  *args = data;
-	daos_snap_list_t	  *task_args = dc_task_get_args(task);
+	daos_cont_list_snap_t	  *task_args = dc_task_get_args(task);
 	struct cont_snap_list_out *out = crt_reply_get(args->cra_rpc);
 
-	*task_args->n = out->slo_count;
+	*task_args->nr = out->slo_count;
+	task_args->anchor->da_type = DAOS_ANCHOR_TYPE_EOF;
+
 	return 0;
 }
 
 int
-dc_snap_list(tse_task_t *task)
+dc_cont_list_snap(tse_task_t *task)
 {
-	daos_snap_list_t		*args;
+	daos_cont_list_snap_t		*args;
 	struct cont_snap_list_in	*in;
 	struct cont_req_arg		 cb_args;
 	int				 rc;
@@ -1871,10 +1820,10 @@ dc_snap_list(tse_task_t *task)
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	if (args->n == NULL)
+	if (args->nr == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
-	if (args->buf == NULL || *args->n < 0)
-		*args->n = 0;
+	if (args->epochs == NULL || *args->nr < 0)
+		*args->nr = 0;
 
 	rc = cont_req_prepare(args->coh, CONT_SNAP_LIST,
 			     daos_task2ctx(task), &cb_args);
@@ -1885,13 +1834,13 @@ dc_snap_list(tse_task_t *task)
 			 DF_UUID "; size=%d\n",
 		DP_CONT(cb_args.cra_pool->dp_pool_hdl,
 			cb_args.cra_cont->dc_uuid),
-		DP_UUID(cb_args.cra_cont->dc_cont_hdl), *args->n);
+		DP_UUID(cb_args.cra_cont->dc_cont_hdl), *args->nr);
 
 	in = crt_req_get(cb_args.cra_rpc);
-	if (*args->n > 0) {
+	if (*args->nr > 0) {
 		daos_iov_t iov = {
-			.iov_buf     = args->buf,
-			.iov_buf_len = *args->n * sizeof(*args->buf),
+			.iov_buf     = args->epochs,
+			.iov_buf_len = *args->nr * sizeof(*args->epochs),
 			.iov_len     = 0
 		};
 		daos_sg_list_t sgl = {

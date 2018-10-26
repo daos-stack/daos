@@ -317,38 +317,6 @@ free:
 	return rc;
 }
 
-static int
-daos_proc_epoch_state(crt_proc_t proc, daos_epoch_state_t *es)
-{
-	int rc;
-
-	rc = crt_proc_uint64_t(proc, &es->es_hce);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &es->es_lre);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &es->es_lhe);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &es->es_ghce);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &es->es_glre);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &es->es_ghpce);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
 /**
  * typedef struct {
  *	uint16_t	da_type;
@@ -521,9 +489,6 @@ struct crt_msg_field DMF_NR_ARRAY =
 struct crt_msg_field DMF_KEY_DESC_ARRAY =
 	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(daos_key_desc_t),
 			daos_proc_key_desc);
-
-struct crt_msg_field DMF_EPOCH_STATE =
-	DEFINE_CRT_MSG(0, sizeof(daos_epoch_state_t), daos_proc_epoch_state);
 
 struct crt_msg_field DMF_ANCHOR =
 	DEFINE_CRT_MSG(0, sizeof(daos_anchor_t), daos_proc_anchor);

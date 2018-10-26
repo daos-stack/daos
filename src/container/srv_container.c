@@ -604,7 +604,6 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	  crt_rpc_t *rpc)
 {
 	struct cont_open_in    *in = crt_req_get(rpc);
-	struct cont_open_out   *out = crt_reply_get(rpc);
 	daos_iov_t		key;
 	daos_iov_t		value;
 	struct container_hdl	chdl;
@@ -646,13 +645,11 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	uuid_copy(chdl.ch_cont, cont->c_uuid);
 	chdl.ch_capas = in->coi_capas;
 
-	rc = ds_cont_epoch_init_hdl(tx, cont, &chdl, &out->coo_epoch_state);
+	rc = ds_cont_epoch_init_hdl(tx, cont, in->coi_op.ci_hdl, &chdl);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
-	if (rc != 0)
-		memset(&out->coo_epoch_state, 0, sizeof(out->coo_epoch_state));
 
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
@@ -872,7 +869,6 @@ cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 		D_GOTO(out_rpc, rc = -DER_IO);
 	}
 
-	query_out->cqo_min_slipped_epoch = out->tqo_min_purged_epoch;
 out_rpc:
 	crt_req_decref(rpc);
 out:
@@ -885,22 +881,13 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 {
 	struct cont_query_in   *in  = crt_req_get(rpc);
 	struct cont_query_out  *out = crt_reply_get(rpc);
-	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cqi_op.ci_uuid), rpc,
 		DP_UUID(in->cqi_op.ci_hdl));
 
-	rc = cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
-			      in->cqi_op.ci_hdl, out);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	rc = ds_cont_epoch_read_state(tx, cont, hdl, &out->cqo_epoch_state);
-	if (rc != 0)
-		D_GOTO(out, rc);
-out:
-	return rc;
+	return cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
+				in->cqi_op.ci_hdl, out);
 }
 
 static int
@@ -1418,20 +1405,16 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		return cont_attr_get(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_ATTR_SET:
 		return cont_attr_set(tx, pool_hdl, cont, hdl, rpc);
-	case CONT_EPOCH_QUERY:
-		return ds_cont_epoch_query(tx, pool_hdl, cont, hdl, rpc);
-	case CONT_EPOCH_HOLD:
-		return ds_cont_epoch_hold(tx, pool_hdl, cont, hdl, rpc);
-	case CONT_EPOCH_SLIP:
-		return ds_cont_epoch_slip(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_DISCARD:
 		return ds_cont_epoch_discard(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_COMMIT:
-		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc);
+		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
+					    false);
 	case CONT_SNAP_LIST:
 		return ds_cont_snap_list(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_CREATE:
-		return ds_cont_snap_create(tx, pool_hdl, cont, hdl, rpc);
+		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
+					    true);
 	 case CONT_SNAP_DESTROY:
 		return ds_cont_snap_destroy(tx, pool_hdl, cont, hdl, rpc);
 	default:
@@ -1509,9 +1492,9 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		D_GOTO(out, rc);
 
 	/* TODO: Implement per-container locking. */
-	if (opc == CONT_EPOCH_QUERY || opc == CONT_QUERY ||
-	    opc == CONT_ATTR_GET || opc == CONT_ATTR_LIST ||
-	    opc == CONT_EPOCH_DISCARD || opc == CONT_SNAP_LIST)
+	if (opc == CONT_QUERY || opc == CONT_ATTR_GET ||
+	    opc == CONT_ATTR_LIST || opc == CONT_EPOCH_DISCARD
+	    || opc == CONT_SNAP_LIST)
 		ABT_rwlock_rdlock(svc->cs_lock);
 	else
 		ABT_rwlock_wrlock(svc->cs_lock);

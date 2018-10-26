@@ -77,9 +77,9 @@
 	X(DAOS_OBJ_RPC_PUNCH_AKEYS,					\
 		0, &CQF_obj_punch,					\
 		ds_obj_punch_handler, NULL),				\
-	X(DAOS_OBJ_RPC_KEY_QUERY,					\
-		0, &CQF_obj_key_query,					\
-		ds_obj_key_query_handler, NULL)
+	X(DAOS_OBJ_RPC_QUERY_KEY,					\
+		0, &CQF_obj_query_key,					\
+		ds_obj_query_key_handler, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -184,7 +184,7 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 
 CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 
-#define DAOS_ISEQ_OBJ_KEY_QUERY	/* input fields */		 \
+#define DAOS_ISEQ_OBJ_QUERY_KEY	/* input fields */		 \
 	((uuid_t)		(okqi_co_hdl)		CRT_VAR) \
 	((uuid_t)		(okqi_co_uuid)		CRT_VAR) \
 	((daos_unit_oid_t)	(okqi_oid)		CRT_VAR) \
@@ -195,7 +195,7 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((daos_key_t)		(okqi_akey)		CRT_VAR) \
 	((daos_recx_t)		(okqi_recx)		CRT_VAR)
 
-#define DAOS_OSEQ_OBJ_KEY_QUERY	/* output fields */		 \
+#define DAOS_OSEQ_OBJ_QUERY_KEY	/* output fields */		 \
 	((int32_t)		(okqo_ret)		CRT_VAR) \
 	((uint32_t)		(okqo_map_version)	CRT_VAR) \
 	((uint32_t)		(okqo_flags)		CRT_VAR) \
@@ -204,7 +204,7 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((daos_key_t)		(okqo_akey)		CRT_VAR) \
 	((daos_recx_t)		(okqo_recx)		CRT_VAR)
 
-CRT_RPC_DECLARE(obj_key_query, DAOS_ISEQ_OBJ_KEY_QUERY, DAOS_OSEQ_OBJ_KEY_QUERY)
+CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 
 static inline int
 obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

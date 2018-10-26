@@ -33,7 +33,7 @@
 #include <daos_addons.h>
 
 int
-daos_kv_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+daos_kv_put(daos_handle_t oh, daos_handle_t th, const char *key,
 	    daos_size_t buf_size, const void *buf, daos_event_t *ev)
 {
 	daos_kv_put_t	*args;
@@ -46,7 +46,7 @@ daos_kv_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 
 	args = dc_task_get_args(task);
 	args->oh	= oh;
-	args->epoch	= epoch;
+	args->th	= th;
 	args->key	= key;
 	args->buf_size	= buf_size;
 	args->buf	= buf;
@@ -55,7 +55,7 @@ daos_kv_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 }
 
 int
-daos_kv_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+daos_kv_get(daos_handle_t oh, daos_handle_t th, const char *key,
 	    daos_size_t *buf_size, void *buf, daos_event_t *ev)
 {
 	daos_kv_get_t	*args;
@@ -68,7 +68,7 @@ daos_kv_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 
 	args = dc_task_get_args(task);
 	args->oh	= oh;
-	args->epoch	= epoch;
+	args->th	= th;
 	args->key	= key;
 	args->buf_size	= buf_size;
 	args->buf	= buf;
@@ -77,7 +77,7 @@ daos_kv_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 }
 
 int
-daos_kv_remove(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
 	       daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
@@ -85,7 +85,7 @@ daos_kv_remove(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 }
 
 int
-daos_obj_fetch_multi(daos_handle_t oh, daos_epoch_t epoch,
+daos_obj_fetch_multi(daos_handle_t oh, daos_handle_t th,
 		     unsigned int num_dkeys, daos_dkey_io_t *io_array,
 		     daos_event_t *ev)
 {
@@ -102,7 +102,7 @@ daos_obj_fetch_multi(daos_handle_t oh, daos_epoch_t epoch,
 
 	args = dc_task_get_args(task);
 	args->oh	= oh;
-	args->epoch	= epoch;
+	args->th	= th;
 	args->num_dkeys	= num_dkeys;
 	args->io_array	= io_array;
 
@@ -110,7 +110,7 @@ daos_obj_fetch_multi(daos_handle_t oh, daos_epoch_t epoch,
 }
 
 int
-daos_obj_update_multi(daos_handle_t oh, daos_epoch_t epoch,
+daos_obj_update_multi(daos_handle_t oh, daos_handle_t th,
 		      unsigned int num_dkeys, daos_dkey_io_t *io_array,
 		      daos_event_t *ev)
 {
@@ -127,7 +127,7 @@ daos_obj_update_multi(daos_handle_t oh, daos_epoch_t epoch,
 
 	args = dc_task_get_args(task);
 	args->oh	= oh;
-	args->epoch	= epoch;
+	args->th	= th;
 	args->num_dkeys	= num_dkeys;
 	args->io_array	= io_array;
 

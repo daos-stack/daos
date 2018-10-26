@@ -198,7 +198,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
  *			-DER_NO_PERM	Permission denied
  */
 int
-daos_pool_tgt_add(const uuid_t uuid, const char *grp,
+daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 		  const d_rank_list_t *svc, d_rank_list_t *tgts,
 		  daos_event_t *ev);
 
@@ -216,7 +216,7 @@ daos_pool_tgt_add(const uuid_t uuid, const char *grp,
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_mgmt_params_set(const char *grp, d_rank_t rank, unsigned int key_id,
+daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 		     uint64_t value, uint64_t value_extra, daos_event_t *ev);
 
 /**
@@ -261,7 +261,7 @@ daos_pool_exclude_out(const uuid_t uuid, const char *grp,
  *			-DER_NO_PERM	Permission denied
  */
 int
-daos_pool_svc_stop(daos_handle_t poh, daos_event_t *ev);
+daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

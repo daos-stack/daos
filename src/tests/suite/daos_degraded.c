@@ -69,7 +69,6 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	const char		*val_fmt = "degraded val%d";
 	daos_size_t		val_size[g_dkeys];
 	char			*rec_verify;
-	daos_epoch_t		epoch;
 	uint32_t		number;
 	int			rank, key_nr;
 	int			enum_op = 1;
@@ -113,14 +112,13 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		val_size[i] = 64;
 	}
 
-	epoch = 100;
 	for (i = 0; i < g_dkeys; i++) {
 		sprintf(rec[i], val_fmt, i);
 		rec_size[i] = strlen(rec[i]);
 		D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%d %s'\n", i,
 			dkey[i], (int)rec_size[i], rec[i]);
 		insert_single(dkey[i], akey, offset[i], rec[i],
-			      rec_size[i], epoch, &req);
+			      rec_size[i], DAOS_TX_NONE, &req);
 
 		if ((i + 1) % (g_dkeys/10) == 0) {
 			MPI_Barrier(MPI_COMM_WORLD);
@@ -147,7 +145,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	for (i = 0; i < g_dkeys; i++) {
 		sprintf(rec_verify, val_fmt, i);
 		lookup_single(dkey[i], akey, offset[i], val[i],
-			      val_size[i], epoch, &req);
+			      val_size[i], DAOS_TX_NONE, &req);
 		assert_int_equal(req.iod[0].iod_size, strlen(rec_verify));
 		assert_memory_equal(val[i], rec_verify, req.iod[0].iod_size);
 
@@ -184,7 +182,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	for (number = 5, key_nr = 0; !daos_anchor_is_eof(&anchor_out);
 	     number = 5) {
 		memset(buf, 0, 512);
-		enumerate_dkey(epoch, &number, kds,
+		enumerate_dkey(DAOS_TX_NONE, &number, kds,
 			       &anchor_out, buf, 512, &req);
 		if (number == 0)
 			continue;

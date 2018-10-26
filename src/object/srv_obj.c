@@ -1237,10 +1237,10 @@ out:
 }
 
 void
-ds_obj_key_query_handler(crt_rpc_t *rpc)
+ds_obj_query_key_handler(crt_rpc_t *rpc)
 {
-	struct obj_key_query_in		*okqi;
-	struct obj_key_query_out	*okqo;
+	struct obj_query_key_in		*okqi;
+	struct obj_query_key_out	*okqo;
 	struct ds_cont_hdl		*cont_hdl = NULL;
 	struct ds_cont			*cont = NULL;
 	uint32_t			map_version = 0;
@@ -1251,7 +1251,7 @@ ds_obj_key_query_handler(crt_rpc_t *rpc)
 	okqo = crt_reply_get(rpc);
 	D_ASSERT(okqo != NULL);
 
-	D_DEBUG(DB_IO, "ds_obj_key_query_handler: flags = %d\n",
+	D_DEBUG(DB_IO, "ds_obj_query_key_handler: flags = %d\n",
 		okqi->okqi_flags);
 
 	rc = ds_check_container(okqi->okqi_co_hdl, okqi->okqi_co_uuid,

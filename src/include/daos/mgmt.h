@@ -40,6 +40,6 @@ int dc_pool_create(tse_task_t *task);
 int dc_pool_destroy(tse_task_t *task);
 int dc_pool_evict(tse_task_t *task);
 int dc_pool_extend(tse_task_t *task);
-int dc_mgmt_params_set(tse_task_t *task);
+int dc_mgmt_set_params(tse_task_t *task);
 
 #endif

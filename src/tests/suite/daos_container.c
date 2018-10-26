@@ -67,17 +67,6 @@ co_create(void **state)
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
 		print_message("contained opened\n");
-
-		print_message("container info:\n");
-		print_message("  hce: "DF_U64"\n", info.ci_epoch_state.es_hce);
-		print_message("  lre: "DF_U64"\n", info.ci_epoch_state.es_lre);
-		print_message("  lhe: "DF_U64"\n", info.ci_epoch_state.es_lhe);
-		print_message("  ghce: "DF_U64"\n",
-			      info.ci_epoch_state.es_ghce);
-		print_message("  glre: "DF_U64"\n",
-			      info.ci_epoch_state.es_glre);
-		print_message("  ghpce: "DF_U64"\n",
-			      info.ci_epoch_state.es_ghpce);
 	}
 
 	if (arg->hdl_share)
@@ -147,7 +136,7 @@ co_attribute(void **state)
 
 	print_message("setting container attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
-	rc = daos_cont_attr_set(arg->coh, n, names, in_values, in_sizes,
+	rc = daos_cont_set_attr(arg->coh, n, names, in_values, in_sizes,
 				arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -156,7 +145,7 @@ co_attribute(void **state)
 		      arg->async ? "a" : "");
 
 	total_size = 0;
-	rc = daos_cont_attr_list(arg->coh, NULL, &total_size,
+	rc = daos_cont_list_attr(arg->coh, NULL, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -164,7 +153,7 @@ co_attribute(void **state)
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
 
 	total_size = BUFSIZE;
-	rc = daos_cont_attr_list(arg->coh, out_buf, &total_size,
+	rc = daos_cont_list_attr(arg->coh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -173,7 +162,7 @@ co_attribute(void **state)
 	assert_string_equal(out_buf, names[1]);
 
 	total_size = 10*BUFSIZE;
-	rc = daos_cont_attr_list(arg->coh, out_buf, &total_size,
+	rc = daos_cont_list_attr(arg->coh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -185,7 +174,7 @@ co_attribute(void **state)
 	print_message("getting container attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 
-	rc = daos_cont_attr_get(arg->coh, n, names, out_values, out_sizes,
+	rc = daos_cont_get_attr(arg->coh, n, names, out_values, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -199,7 +188,7 @@ co_attribute(void **state)
 	assert_int_equal(out_sizes[1], in_sizes[1]);
 	assert_memory_equal(out_values[1], in_values[1], BUFSIZE);
 
-	rc = daos_cont_attr_get(arg->coh, n, names, NULL, out_sizes,
+	rc = daos_cont_get_attr(arg->coh, n, names, NULL, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
