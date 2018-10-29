@@ -57,13 +57,29 @@ def build_ior(basepath):
         subprocess.check_call(configure_cmd, shell=True)
         subprocess.check_call(make_cmd, shell=True)
 
-    except Exception as e:
+    except subprocess.CalledProcessError as e:
         print "<IorBuildFailed> Exception occurred: {0}".format(str(e))
         raise IorFailed("IOR Build process Failed")
 
 def run_ior(client_file, ior_flags, iteration, block_size, transfer_size, pool_uuid, svc_list,
-            record_size, segment_count, stripe_count, async_io, object_class, basepath):
-    """Running Ior tests"""
+            record_size, stripe_size, stripe_count, async_io, object_class, basepath, slots=1):
+    """ Running Ior tests
+        Function Arguments
+        client_file   --client file holding client hostname and slots
+        ior_flags     --all ior specific flags
+        iteration     --number of iterations for ior run
+        block_size    --contiguous bytes to write per task
+        transfer_size --size of transfer in bytes
+        pool_uuid     --Daos Pool UUID
+        svc_list      --Daos Pool SVCL
+        record_size   --Daos Record Size
+        stripe_size   --Daos Stripe Size
+        stripe_count  --Daos Stripe Count
+        async_io      --Concurrent Async IOs
+        object_class  --object class
+        basepath      --Daos basepath
+        slots         --slots on each node
+    """
 
     with open(os.path.join(basepath, ".build_vars.json")) as f:
         build_paths = json.load(f)
@@ -71,17 +87,17 @@ def run_ior(client_file, ior_flags, iteration, block_size, transfer_size, pool_u
     attach_info_path = basepath + "/install/tmp"
     try:
 
-        ior_cmd = orterun_bin + " -N 1 --hostfile {0} -x DAOS_SINGLETON_CLI=1 " \
-                  " -x CRT_ATTACH_INFO_PATH={1} ior {2} -i {3} -a DAOS -o `uuidgen` " \
-                  " -b {4} -t {5} -- -p {6} -v {7} -r {8} -s {9} -c {10} -a {11} -o {12} "\
-                  .format(client_file, attach_info_path, ior_flags, iteration, block_size,
-                  transfer_size, pool_uuid, svc_list, record_size, segment_count, stripe_count,
+        ior_cmd = orterun_bin + " -N {0} --hostfile {1} -x DAOS_SINGLETON_CLI=1 " \
+                  " -x CRT_ATTACH_INFO_PATH={2} ior {3} -i {4} -a DAOS -o `uuidgen` " \
+                  " -b {5} -t {6} -- -p {7} -v {8} -r {9} -s {10} -c {11} -a {12} -o {13} "\
+                  .format(slots, client_file, attach_info_path, ior_flags, iteration, block_size,
+                  transfer_size, pool_uuid, svc_list, record_size, stripe_size, stripe_count,
                   async_io, object_class)
         print ("ior_cmd: {}".format(ior_cmd))
 
         subprocess.check_call(ior_cmd, shell=True)
 
-    except Exception as e:
+    except subprocess.CalledProcessError as e:
         print "<IorRunFailed> Exception occurred: {0}".format(str(e))
         raise IorFailed("IOR Run process Failed")
 
