@@ -2635,6 +2635,109 @@ io_obj_key_query(void **state)
 	print_message("all good\n");
 }
 
+/**
+ * Simple test to trigger the blob unmap callback. This is done by inserting
+ * a few NVMe records all at epoch 0, deleting the records by using
+ * daos_epoch_discard() at epoch 0, waiting a long enough time for the free
+ * extents to expire, and then inserting another record to trigger the callback.
+ */
+static void
+blob_unmap_trigger(void **state)
+{
+	daos_obj_id_t		 oid;
+	test_arg_t		*arg = *state;
+	struct ioreq		 req;
+	daos_epoch_state_t	 epoch_state;
+	daos_epoch_t		 epoch = 0;
+	daos_epoch_t		 e;
+	char			*update_buf;
+	char			*fetch_buf;
+	char			*enum_buf;
+	char			 dkey[5] = "dkey";
+	char			 akey[20];
+	int			 nvme_recs = 2;
+	int			 i;
+	int			 rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** Get a hold of an epoch. */
+	if (arg->myrank == 0) {
+		rc = daos_epoch_query(arg->coh, &epoch_state, NULL /* ev */);
+		assert_int_equal(rc, 0);
+		epoch = epoch_state.es_hce + 1;
+		rc = daos_epoch_hold(arg->coh, &epoch, NULL /* state */,
+				     NULL /* ev */);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Bcast(&epoch, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	/* Epoch discard only currently supports DAOS_IOD_SINGLE type */
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	fetch_buf = malloc(IO_SIZE_NVME);
+	assert_non_null(fetch_buf);
+	update_buf = malloc(IO_SIZE_NVME);
+	assert_non_null(update_buf);
+	dts_buf_render(update_buf, IO_SIZE_NVME);
+	enum_buf = malloc(512);
+	assert_non_null(enum_buf);
+
+
+	/**
+	 * Insert a few NVMe records. Write LHE, LHE + 1, and LHE + 2 at
+	 * different akeys and the same dkey.
+	 */
+	for (e = epoch; e < epoch + 3; e++) {
+		for (i = 0; i < nvme_recs; i++) {
+			sprintf(akey, "blob_unmap_akey%d", i);
+			print_message("insert dkey:'%s', akey:'%s', eph:%d\n",
+				      dkey, akey, (int)e);
+			insert_single(dkey, akey, 0, update_buf, IO_SIZE_NVME,
+				      e, &req);
+			/* Verify record was inserted */
+			memset(fetch_buf, 0, IO_SIZE_NVME);
+			lookup_single(dkey, akey, 0, fetch_buf, IO_SIZE_NVME,
+				      e, &req);
+			assert_memory_equal(update_buf, fetch_buf,
+					    IO_SIZE_NVME);
+		}
+	}
+
+	/* Discard the NVMe records (Discard LHE + 1) */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		print_message("Discarding epoch "DF_U64"\n", epoch + 1);
+		rc = daos_epoch_discard(arg->coh, epoch + 1, &epoch_state,
+					/*ev*/NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* Wait for >= VEA_MIGRATE_INTVL */
+	print_message("Wait for free extents to expire (15 sec)\n");
+	sleep(15);
+
+	/* Insert another NVMe record, will trigger free extent migration */
+	sprintf(akey, "blob_unmap akey%d", nvme_recs);
+	print_message("insert dkey:'%s', akey:'%s', eph:%d\n",
+		      dkey, akey, (int)epoch + 1);
+	insert_single(dkey, akey, 0, update_buf, IO_SIZE_NVME, epoch + 1, &req);
+	/* Verify record was inserted */
+	memset(fetch_buf, 0, IO_SIZE_NVME);
+	lookup_single(dkey, akey, 0, fetch_buf, IO_SIZE_NVME, epoch + 1, &req);
+	assert_memory_equal(update_buf, fetch_buf, IO_SIZE_NVME);
+
+	print_message("blob unmap callback triggered\n");
+
+	free(enum_buf);
+	free(fetch_buf);
+	free(update_buf);
+	ioreq_fini(&req);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -2697,6 +2800,8 @@ static const struct CMUnitTest io_tests[] = {
 	  async_enable, test_case_teardown},
 	{ "IO31: update with overlapped recxs", update_overlapped_recxs,
 	  async_enable, test_case_teardown},
+	{ "IO31: trigger blob unmap", blob_unmap_trigger, async_disable,
+	  test_case_teardown},
 };
 
 int
