@@ -65,7 +65,7 @@ static struct crt_msg_field *crt_rpc_swim_in[] = {
 };
 
 static struct crt_req_format CFQ_CRT_SWIM_PING =
-	DEFINE_CRT_REQ_FMT("CRT_SWIM_PING", crt_rpc_swim_in, NULL);
+	DEFINE_CRT_REQ_FMT(crt_rpc_swim_in, NULL);
 
 static void swim_srv_cb(crt_rpc_t *rpc_req);
 
