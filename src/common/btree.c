@@ -589,6 +589,7 @@ btr_node_alloc(struct btr_context *tcx, TMMID(struct btr_node) *nd_mmid_p)
 static void
 btr_node_free(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid)
 {
+	D_DEBUG(DB_TRACE, "Free node "TMMID_PF"\n", TMMID_P(nd_mmid));
 	if (btr_ops(tcx)->to_node_free)
 		btr_ops(tcx)->to_node_free(&tcx->tc_tins, nd_mmid);
 	else

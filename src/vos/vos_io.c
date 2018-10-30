@@ -408,52 +408,101 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 {
 	daos_iod_t	*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	daos_epoch_t	 epoch = ioc->ic_epoch;
-	daos_handle_t	 toh;
+	struct vos_krec_df *krec = NULL;
+	daos_handle_t	 toh = DAOS_HDL_INVAL;
 	int		 i, rc;
 	int		 flags = 0;
-	bool		 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 
-	D_DEBUG(DB_IO, "akey %d %s Fetch %s eph "DF_U64"\n",
+	D_DEBUG(DB_IO, "akey %d %s fetch %s eph "DF_U64"\n",
 		(int)iod->iod_name.iov_len, (char *)iod->iod_name.iov_buf,
-		is_array ? "array" : "single", ioc->ic_epoch);
-	if (is_array)
+		iod->iod_type == DAOS_IOD_ARRAY ? "array" : "single",
+		ioc->ic_epoch);
+
+	if (iod->iod_type == DAOS_IOD_ARRAY)
 		flags |= SUBTR_EVT;
-
-	rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
-			      &iod->iod_name, flags, NULL, &toh);
-	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_IO, "Nonexistent akey %d %s\n",
-			(int)iod->iod_name.iov_len,
-			(char *)iod->iod_name.iov_buf);
-		iod_empty_sgl(ioc, ioc->ic_sgl_at);
-		return 0;
-	}
-
-	if (rc != 0) {
-		D_ERROR("Failed to open tree root: %d\n", rc);
-		return rc;
-	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		if (iod->iod_eprs)
 			epoch = iod->iod_eprs[0].epr_lo;
-		rc = akey_fetch_single(toh, ioc->ic_epoch, &iod->iod_size, ioc);
-		goto out;
-	} /* else: array */
 
-	if (iod->iod_nr == 0) { /* array size query */
+		rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
+				      &iod->iod_name, flags, NULL, &toh);
+		if (rc != 0) {
+			if (rc == -DER_NONEXIST) {
+				D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
+					(int)iod->iod_name.iov_len,
+					(char *)iod->iod_name.iov_buf);
+				iod_empty_sgl(ioc, ioc->ic_sgl_at);
+				rc = 0;
+			}
+			return rc;
+		}
+
+		rc = akey_fetch_single(toh, ioc->ic_epoch, &iod->iod_size, ioc);
+
+		key_tree_release(toh, false);
+
+		return rc;
+	}
+
+	/* array size query */
+	if (iod->iod_nr == 0) {
+		rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
+				      &iod->iod_name, flags, NULL, &toh);
+		if (rc != 0) {
+			if (rc == -DER_NONEXIST) {
+				D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
+					(int)iod->iod_name.iov_len,
+					(char *)iod->iod_name.iov_buf);
+				iod_empty_sgl(ioc, ioc->ic_sgl_at);
+				rc = 0;
+			}
+			return rc;
+		}
+
 		D_DEBUG(DB_IO, "fetch array size for eph "DF_U64"\n", epoch);
 		rc = evt_get_size(toh, epoch, &iod->iod_size);
 		if (rc != 0)
 			D_DEBUG(DB_IO, "Array size query failed %d\n", rc);
-		goto out;
-	} /* else: array */
+
+		key_tree_release(toh, true);
+		return rc;
+	}
 
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t rsize;
 
-		if (iod->iod_eprs)
-			epoch = iod->iod_eprs[i].epr_lo;
+		/* If epoch on each iod_eprs are out of boundary, then it needs
+		 * to re-prepare the key tree.
+		 */
+		if (daos_handle_is_inval(toh) || (iod->iod_eprs &&
+		    (iod->iod_eprs[i].epr_lo > krec->kr_latest ||
+		     iod->iod_eprs[i].epr_lo < krec->kr_earliest))) {
+			if (!daos_handle_is_inval(toh)) {
+				key_tree_release(toh, true);
+				toh = DAOS_HDL_INVAL;
+			}
+
+			if (iod->iod_eprs)
+				epoch = iod->iod_eprs[i].epr_lo;
+
+			D_DEBUG(DB_IO, "repare the key tree for eph "DF_U64"\n",
+				epoch);
+			rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh,
+					      VOS_BTR_AKEY, &iod->iod_name,
+					      flags, &krec, &toh);
+			if (rc != 0) {
+				if (rc == -DER_NONEXIST) {
+					D_DEBUG(DB_IO, "Nonexist akey %.*s\n",
+						(int)iod->iod_name.iov_len,
+						(char *)iod->iod_name.iov_buf);
+					iod_empty_sgl(ioc, ioc->ic_sgl_at);
+					rc = 0;
+					continue;
+				}
+				return rc;
+			}
+		}
 
 		D_DEBUG(DB_IO, "fetch %d eph "DF_U64"\n", i, epoch);
 		rc = akey_fetch_recx(toh, epoch, &iod->iod_recxs[i],
@@ -477,7 +526,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		}
 	}
 out:
-	key_tree_release(toh, is_array);
+	if (!daos_handle_is_inval(toh))
+		key_tree_release(toh, true);
 	return rc;
 }
 
@@ -687,8 +737,9 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	int		    flags = SUBTR_CREATE;
 	daos_epoch_t	    epoch = ioc->ic_epoch;
 	daos_epoch_range_t  akey_epr = {DAOS_EPOCH_MAX, 0};
-	int		    i, rc;
-	daos_handle_t	    toh;
+	daos_handle_t	    toh = DAOS_HDL_INVAL;
+	int		    i;
+	int		    rc = 0;
 
 	D_DEBUG(DB_TRACE, "akey %d %s update %s value eph "DF_U64"\n",
 		(int)iod->iod_name.iov_len, (char *)iod->iod_name.iov_buf,
@@ -697,23 +748,23 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	if (is_array)
 		flags |= SUBTR_EVT;
 
-	rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
-			      &iod->iod_name, flags, &krec, &toh);
-	if (rc != 0) {
-		D_ERROR("Failed to prepare akey tree: %d\n", rc);
-		return rc;
-	}
-
 	if (iod->iod_eprs == NULL)
 		akey_epr.epr_hi = akey_epr.epr_lo = epoch;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		if (iod->iod_eprs)
+		if (iod->iod_eprs) {
+			epoch = iod->iod_eprs[0].epr_lo;
 			update_bounds(&akey_epr, &iod->iod_eprs[0]);
+		}
+		rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
+				      &iod->iod_name, flags, &krec, &toh);
+		if (rc != 0)
+			return rc;
 
+		D_DEBUG(DB_IO, "Single update eph "DF_U64"\n", epoch);
 		rc = akey_update_single(toh, epoch, cookie, pm_ver,
 					iod->iod_size, ioc);
-		if (rc != 0)
+		if (rc)
 			goto failed;
 		goto out;
 	} /* else: array */
@@ -724,7 +775,22 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 			epoch = iod->iod_eprs[i].epr_lo;
 		}
 
-		D_DEBUG(DB_IO, "update %d eph "DF_U64"\n", i, epoch);
+		if (daos_handle_is_inval(toh) ||
+		    (epoch > krec->kr_latest || epoch < krec->kr_earliest)) {
+			if (!daos_handle_is_inval(toh)) {
+				key_tree_release(toh, is_array);
+				toh = DAOS_HDL_INVAL;
+			}
+
+			/* re-prepare the tree if epoch is different */
+			rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
+					      &iod->iod_name, flags, &krec,
+					      &toh);
+			if (rc != 0)
+				return rc;
+		}
+
+		D_DEBUG(DB_IO, "Array update %d eph "DF_U64"\n", i, epoch);
 		rc = akey_update_recx(toh, epoch, cookie, pm_ver,
 				      &iod->iod_recxs[i], iod->iod_size, ioc);
 		if (rc != 0)
@@ -734,7 +800,9 @@ out:
 	rc = vos_df_ts_update(ioc->ic_obj, &krec->kr_latest, &akey_epr);
 	update_bounds(dkey_epr, &akey_epr);
 failed:
-	key_tree_release(toh, is_array);
+	if (!daos_handle_is_inval(toh))
+		key_tree_release(toh, is_array);
+
 	return rc;
 }
 

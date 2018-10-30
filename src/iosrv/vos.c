@@ -322,7 +322,8 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 
 	/* Inline the data? A 0 threshold disables this completely. */
 	data_size = key_ent->ie_rsize * key_ent->ie_recx.rx_nr;
-	if (arg->inline_thres > 0 && data_size <= arg->inline_thres) {
+	if (arg->inline_thres > 0 && data_size <= arg->inline_thres &&
+	    data_size > 0) {
 		inline_data = true;
 		size += data_size;
 	}
@@ -357,20 +358,22 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	rec->rec_flags = 0;
 	iovs[arg->sgl_idx].iov_len += sizeof(*rec);
 
-	/* If we've decided to inline the data, append the data to iovs. */
-	if (inline_data) {
-		arg->kds[arg->kds_len].kd_key_len += data_size;
-		rec->rec_flags |= RECX_INLINE;
-		/* Punched recxs do not have any data to copy. */
-		if (data_size > 0) {
-			daos_iov_t iov_out;
+	/*
+	 * If we've decided to inline the data, append the data to iovs.
+	 * NB: Punched recxs do not have any data to copy.
+	 */
+	if (inline_data && data_size > 0) {
+		daos_iov_t iov_out;
 
-			daos_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
-				     iovs[arg->sgl_idx].iov_len, data_size);
-			rc = vos_iter_copy(ih, key_ent, &iov_out);
-			if (rc != 0)
-				D_ERROR("Copy recx data failed %d\n", rc);
+		daos_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
+				       iovs[arg->sgl_idx].iov_len, data_size);
+		rc = vos_iter_copy(ih, key_ent, &iov_out);
+		if (rc != 0) {
+			D_ERROR("Copy recx data failed %d\n", rc);
+		} else {
+			rec->rec_flags |= RECX_INLINE;
 			iovs[arg->sgl_idx].iov_len += data_size;
+			arg->kds[arg->kds_len].kd_key_len += data_size;
 		}
 	}
 
@@ -402,9 +405,9 @@ iter_akey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 	daos_anchor_t		 single_anchor = { 0 };
 	int			 rc;
 
-	D_DEBUG(DB_IO, "enum key %d %s type %d\n",
+	D_DEBUG(DB_IO, "enum key %d %s type %d eph "DF_U64"\n",
 		(int)key_ent->ie_key.iov_len,
-		(char *)key_ent->ie_key.iov_buf, type);
+		(char *)key_ent->ie_key.iov_buf, type, key_ent->ie_epoch);
 
 	/* Fill the current key */
 	rc = fill_key(ih, key_ent, arg, VOS_ITER_AKEY);
@@ -414,7 +417,6 @@ iter_akey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 	iter_recx_param = *param;
 	iter_recx_param.ip_akey = key_ent->ie_key;
 	iter_recx_param.ip_ih = ih;
-
 	/* iterate array record */
 	rc = dss_vos_iterate(VOS_ITER_RECX, &iter_recx_param, &arg->recx_anchor,
 			     fill_rec_cb, arg);
@@ -730,10 +732,10 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 			len -= iov->iov_len;
 		}
 
-		D_DEBUG(DB_REBUILD, "pack %p idx/nr "DF_U64"/"DF_U64
+		D_DEBUG(DB_REBUILD, "unpack %p idx/nr "DF_U64"/"DF_U64 "ver %u"
 			" epr lo/hi "DF_U64"/"DF_U64" size %zd inline %zu\n",
 			*data, iod->iod_recxs[iod->iod_nr - 1].rx_idx,
-			iod->iod_recxs[iod->iod_nr - 1].rx_nr,
+			iod->iod_recxs[iod->iod_nr - 1].rx_nr, rec->rec_version,
 			iod->iod_eprs[iod->iod_nr - 1].epr_lo,
 			iod->iod_eprs[iod->iod_nr - 1].epr_hi, iod->iod_size,
 			sgl != NULL ? sgl->sg_iovs[sgl->sg_nr - 1].iov_len : 0);
@@ -1054,7 +1056,7 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 				break;
 			}
 
-			while (1) {
+			while (data < ptr + arg->kds[i].kd_key_len) {
 				daos_size_t	len;
 				int		j = io.ui_iods_len;
 

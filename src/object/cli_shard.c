@@ -510,8 +510,8 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc, daos_epoch_t epoch,
 
 	dc_pool_put(pool);
 
-	D_DEBUG(DB_IO, "opc=%d, rank=%d tag=%d.\n",
-		 opc, tgt_ep.ep_rank, tgt_ep.ep_tag);
+	D_DEBUG(DB_IO, "opc=%d, rank=%d tag=%d epoch "DF_U64".\n",
+		 opc, tgt_ep.ep_rank, tgt_ep.ep_tag, epoch);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)

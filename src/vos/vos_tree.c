@@ -928,8 +928,11 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	krec = rbund->rb_krec;
 
 	if (krec->kr_bmap & KREC_BF_PUNCHED &&
-	    krec->kr_latest == kbund->kb_epoch)
+	    krec->kr_latest == kbund->kb_epoch) {
+		D_DEBUG(DB_TRACE, "epoch "DF_U64" already punched\n",
+			krec->kr_latest);
 		return 0; /* nothing to do */
+	}
 
 	if (krec->kr_latest >= kbund->kb_epoch && !replay) {
 		D_CRIT("Underwrite is only allowed for punch replay: "

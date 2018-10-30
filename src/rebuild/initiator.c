@@ -259,9 +259,9 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 
 	/* Punch akeys */
 	for (i = 0; i < rdone->ro_ephs_num; i++) {
-		D_DEBUG(DB_REBUILD, DF_UOID" punch dkey %d %s akey %d %s"
-			" eph "DF_U64"\n", DP_UOID(rdone->ro_oid),
-			(int)rdone->ro_dkey.iov_len,
+		D_DEBUG(DB_REBUILD, DF_UOID" rdone %p punch dkey %d %s akey"
+			" %d %s  eph "DF_U64"\n", DP_UOID(rdone->ro_oid),
+			rdone, (int)rdone->ro_dkey.iov_len,
 			(char *)rdone->ro_dkey.iov_buf,
 			(int)rdone->ro_ephs_keys[i].iov_len,
 			(char *)rdone->ro_ephs_keys[i].iov_buf,
@@ -605,8 +605,12 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 		(int)dkey->iov_buf_len, (char *)dkey->iov_buf, iod_eph_total,
 		dkey_eph);
 
-	if (iod_eph_total == 0)
+	if (iod_eph_total == 0 || rpt->rt_rebuild_ver <= version) {
+		D_DEBUG(DB_REBUILD, "No need rebuild eph_total %d version %u"
+			" rebuild ver %u\n", iod_eph_total, version,
+			rpt->rt_rebuild_ver);
 		return 0;
+	}
 
 	D_ALLOC_PTR(rdone);
 	if (rdone == NULL)
