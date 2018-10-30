@@ -51,56 +51,6 @@ daos_proc_objid(crt_proc_t proc, daos_obj_id_t *doi)
 
 /**
  * typedef struct {
- *      daos_size_t	 iov_len;
- *      daos_size_t	 iov_buf_len;
- *      void		*iov_buf;
- * } daos_iov_t;
- **/
-int
-daos_proc_iovec(crt_proc_t proc, daos_iov_t *div)
-{
-	crt_proc_op_t   proc_op;
-	int             rc;
-
-	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &div->iov_len);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &div->iov_buf_len);
-	if (rc != 0)
-		return -DER_HG;
-
-	if (div->iov_buf_len < div->iov_len) {
-		D_ERROR("invalid iov buf len "DF_U64" < iov len "DF_U64"\n",
-			div->iov_buf_len, div->iov_len);
-		return -DER_HG;
-	}
-	if (proc_op == CRT_PROC_DECODE && div->iov_buf_len > 0) {
-		D_ALLOC(div->iov_buf, div->iov_buf_len);
-		if (div->iov_buf == NULL)
-			return -DER_NOMEM;
-	} else if (proc_op == CRT_PROC_FREE && div->iov_buf_len > 0) {
-		D_FREE(div->iov_buf);
-	}
-
-	if (div->iov_len > 0) {
-		rc = crt_proc_memcpy(proc, div->iov_buf, div->iov_len);
-		if (rc != 0) {
-			if (proc_op == CRT_PROC_DECODE)
-				D_FREE(div->iov_buf);
-			return -DER_HG;
-		}
-	}
-
-	return 0;
-}
-
-/**
- * typedef struct {
  *	daos_obj_id_t	id_pub;
  *	uint32_t	id_shard;
  *	uint32_t	id_pad_32;
