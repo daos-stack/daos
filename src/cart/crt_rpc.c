@@ -1391,66 +1391,6 @@ out:
 }
 
 static void
-crt_cb_common(const struct crt_cb_info *cb_info)
-{
-	*(int *)cb_info->cci_arg = 1;
-}
-
-/**
- * Send rpc synchronously
- *
- * \param[IN] rpc	point to CRT request.
- * \param[IN] timeout	timeout (Micro-seconds) to wait, if
- *                      timeout <= 0, it will wait infinitely.
- * \return		0 if rpc return successfully.
- * \return		negative errno if sending fails or timeout.
- */
-int
-crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout)
-{
-	uint64_t now;
-	uint64_t end;
-	int rc;
-	int complete = 0;
-
-	/* Send request */
-	rc = crt_req_send(rpc, crt_cb_common, &complete);
-	if (rc != 0)
-		return rc;
-
-	/* Check if we are lucky */
-	if (complete)
-		return 0;
-
-	timeout = timeout ? timeout : CRT_DEFAULT_TIMEOUT_US;
-	/* Wait the request to be completed in timeout milliseconds */
-	end = d_timeus_secdiff(0) + timeout;
-
-	while (1) {
-		uint64_t interval = 1000; /* microseconds */
-
-		rc = crt_progress(rpc->cr_ctx, interval, NULL, NULL);
-		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress failed rc: %d.\n", rc);
-			break;
-		}
-
-		if (complete) {
-			rc = 0;
-			break;
-		}
-
-		now = d_timeus_secdiff(0);
-		if (now >= end) {
-			rc = -DER_TIMEDOUT;
-			break;
-		}
-	}
-
-	return rc;
-}
-
-static void
 crt_rpc_inout_buff_fini(struct crt_rpc_priv *rpc_priv)
 {
 	crt_rpc_t	*rpc_pub;
