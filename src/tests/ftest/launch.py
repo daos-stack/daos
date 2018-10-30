@@ -87,13 +87,20 @@ if __name__ == "__main__":
 
     # not perfect param checking but good enough for now
     sparse = False
+    addnl_tests = []
     if len(sys.argv) == 2:
         if sys.argv[1] == '-h' or sys.argv[1] == '--help':
             printhelp()
         test_request = sys.argv[1]
-    elif len(sys.argv) == 3 and sys.argv[1] == '-s':
-        sparse = True
-        test_request = sys.argv[2]
+    elif len(sys.argv) >= 3:
+        if sys.argv[1] == '-s':
+            sparse = True
+            test_request = sys.argv[2]
+        if sparse:
+            remaining_args = 3
+        else:
+            remaining_args = 2
+        addnl_tests = sys.argv[remaining_args:]
     else:
         printhelp()
 
@@ -127,17 +134,26 @@ if __name__ == "__main__":
     ignore_errors = ' --ignore-missing-references on'
     category = ' --filter-by-tags=' + test_request
 
+    def run_test(_file, use_tags=True):
+        param_file = yamlforpy(_file)
+        params = ' --mux-yaml ' + param_file
+        test_cmd = avocado + ignore_errors + output_options
+        if use_tags:
+            test_cmd += category
+        test_cmd += params + ' -- ' + _file
+
+        start_time = int(time.time())
+        print("Running: " + test_cmd + "\n\n")
+        subprocess.call(test_cmd, shell=True)
+        end_time = int(time.time())
+        print("Total test run-time in seconds: {}".format(end_time - start_time))
+
     # run only provided tagged tests.
     for _file in test_files:
         list_cmd = 'avocado list {0} {1}'.format(category, _file)
         if _file in subprocess.check_output(list_cmd, shell=True):
-            param_file = yamlforpy(_file)
-            params = ' --mux-yaml ' + param_file
-            test_cmd = avocado + ignore_errors + output_options +\
-                       category + params + ' -- ' + _file
+            run_test(_file)
 
-            start_time = int(time.time())
-            print("Running: " + test_cmd + "\n\n")
-            subprocess.call(test_cmd, shell=True)
-            end_time = int(time.time())
-            print("Total test run-time in seconds: {}".format(end_time - start_time))
+    # and explicitly listed tests.
+    for _file in addnl_tests:
+        run_test(_file, use_tags=False)
