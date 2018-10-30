@@ -646,7 +646,7 @@ int crt_grp_lc_uri_remove(struct crt_grp_priv *grp_priv, int ctx_idx,
 		d_rank_t rank);
 
 /* crt_corpc.c */
-int crt_corpc_req_hdlr(crt_rpc_t *req);
+int crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv);
 void crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info);
 int crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
 void crt_corpc_info_fini(struct crt_rpc_priv *rpc_priv);

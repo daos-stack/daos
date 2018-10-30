@@ -1061,7 +1061,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 	rpc_priv->crp_arg = arg;
 
 	if (rpc_priv->crp_coll) {
-		rc = crt_corpc_req_hdlr(req);
+		rc = crt_corpc_req_hdlr(rpc_priv);
 		if (rc != 0)
 			D_ERROR("crt_corpc_req_hdlr failed, "
 				"rc: %d,opc: %#x.\n", rc, req->cr_opc);
