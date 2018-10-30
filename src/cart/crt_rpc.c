@@ -597,7 +597,6 @@ out:
 void
 crt_req_destroy(struct crt_rpc_priv *rpc_priv)
 {
-	int rc;
 
 	if (rpc_priv->crp_reply_pending == 1) {
 		D_WARN("no reply sent for rpc_priv %p (opc: %#x).\n",
@@ -609,16 +608,7 @@ crt_req_destroy(struct crt_rpc_priv *rpc_priv)
 		crt_hg_reply_error_send(rpc_priv, -DER_NOREPLY);
 	}
 
-	rc = crt_hg_req_destroy(rpc_priv);
-	if (rc != 0) {
-		/* Be careful with logging here, as rpc_priv might have
-		 * been freed, so do not use RPC_ERROR() or log any values
-		 * from the RPC descriptor.
-		 */
-		D_ERROR("crt_hg_req_destroy failed, rc: %d, "
-			"rpc_priv %p\n",
-			rc, rpc_priv);
-	}
+	crt_hg_req_destroy(rpc_priv);
 }
 
 int

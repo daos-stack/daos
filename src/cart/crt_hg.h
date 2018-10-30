@@ -141,7 +141,7 @@ int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx);
 int crt_hg_ctx_fini(struct crt_hg_context *hg_ctx);
 int crt_hg_req_create(struct crt_hg_context *hg_ctx,
 		      struct crt_rpc_priv *rpc_priv);
-int crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv);
+void crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv);
 int crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
 void crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code);

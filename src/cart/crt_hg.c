@@ -235,19 +235,22 @@ unlock:
 	return hdl;
 }
 
-static inline int
-crt_hg_pool_put(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
+/* returns true on success */
+static inline bool
+crt_hg_pool_put(struct crt_rpc_priv *rpc_priv)
 {
+	struct crt_context	*ctx = rpc_priv->crp_pub.cr_ctx;
+	struct crt_hg_context	*hg_ctx = &ctx->cc_hg_ctx;
 	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
-	struct crt_hg_hdl	*hdl = NULL;
-	int			 rc = 0;
+	struct crt_hg_hdl	*hdl;
+	bool			 rc = false;
 
 	D_ASSERT(rpc_priv->crp_hg_hdl != HG_HANDLE_NULL);
 
 	if (rpc_priv->crp_hdl_reuse == NULL) {
 		D_ALLOC_PTR(hdl);
 		if (hdl == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out, 0);
 		D_INIT_LIST_HEAD(&hdl->chh_link);
 		hdl->chh_hdl = rpc_priv->crp_hg_hdl;
 	} else {
@@ -261,12 +264,12 @@ crt_hg_pool_put(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		hg_pool->chp_num++;
 		D_DEBUG(DB_NET, "hg_pool %p, add, chp_num %d.\n",
 			hg_pool, hg_pool->chp_num);
+		rc = true;
 	} else {
 		D_FREE_PTR(hdl);
 		D_DEBUG(DB_NET, "hg_pool %p, chp_num %d, max_num %d, "
 			"enabled %d, cannot put.\n", hg_pool, hg_pool->chp_num,
 			hg_pool->chp_max_num, hg_pool->chp_enabled);
-		rc = -DER_OVERFLOW;
 	}
 	D_SPIN_UNLOCK(&hg_pool->chp_lock);
 
@@ -1093,11 +1096,10 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 	return rc;
 }
 
-int
+void
 crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t	hg_ret = HG_SUCCESS;
-	int		rc = 0;
+	hg_return_t hg_ret;
 
 	D_ASSERT(rpc_priv != NULL);
 	if (rpc_priv->crp_output_got != 0) {
@@ -1124,19 +1126,12 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 		(rpc_priv->crp_input_got == 0)) {
 		if (!rpc_priv->crp_srv &&
 		    !rpc_priv->crp_opc_info->coi_no_reply) {
-			struct crt_context	*ctx;
-			struct crt_hg_context	*hg_ctx;
 
-			ctx = rpc_priv->crp_pub.cr_ctx;
-			hg_ctx = &ctx->cc_hg_ctx;
-			rc = crt_hg_pool_put(hg_ctx, rpc_priv);
-			if (rc == 0) {
+			if (crt_hg_pool_put(rpc_priv)) {
 				RPC_TRACE(DB_NET, rpc_priv,
 					  "hg_hdl %p put to pool.\n",
 					  rpc_priv->crp_hg_hdl);
-				D_GOTO(mem_free, rc);
-			} else {
-				rc = 0;
+				D_GOTO(mem_free, 0);
 			}
 		}
 		/* HACK alert:  Do we need to provide a low-level interface
@@ -1157,8 +1152,6 @@ mem_free:
 	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
 
 	crt_rpc_priv_free(rpc_priv);
-
-	return rc;
 }
 
 /* the common completion callback for sending RPC request */
