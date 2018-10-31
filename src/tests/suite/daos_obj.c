@@ -544,7 +544,8 @@ io_epoch_overwrite_small(void **state, daos_obj_id_t oid)
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	size = strlen(ow_buf);
 
-	print_message("Testing overwrite with record size: %lu\n", size);
+	print_message("Test: overwrite in different epochs (rec size: %lu)\n",
+		      size);
 
 	for (i = 0; i < size; i++)
 		insert_single("d", "a", i, &ow_buf[i], 1, e, &req);
@@ -587,7 +588,7 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 	const char	 dkey[] = "ep_ow_large dkey";
 	const char	 akey[] = "ep_ow_large akey";
 	daos_size_t	 overwrite_sz;
-	unsigned int	 size = 12 * 1024; /* record size */
+	daos_size_t	 size = 12 * 1024; /* record size */
 	int		 buf_idx; /* overwrite buffer index */
 	int		 rx_nr; /* number of record extents */
 	int		 rec_idx = 0; /* index for next insert */
@@ -608,7 +609,8 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 	memset(fbuf, 0, size);
 
 	/* Overwrite a variable number of chars to lowercase at a new epoch */
-	print_message("Testing overwrite with record size: %u\n", size);
+	print_message("Test: overwrite in different epochs (rec size: %lu)\n",
+		      size);
 
 	/* Set and verify the full initial string as epoch 0 */
 	rx_nr = size / OW_IOD_SIZE;
@@ -648,8 +650,7 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 					size, e, &req);
 		assert_memory_equal(ow_buf, fbuf, size);
 		/* Print message upon successful overwrite */
-		print_message("overwrite size:%d, e:%lu\n", (int)overwrite_sz,
-			      e);
+		print_message("overwrite size:%lu, e:%lu\n", overwrite_sz, e);
 
 		rec_idx += rx_nr; /* next index for insert/lookup */
 		/* Increment next overwrite size by 1 record extent */
@@ -662,7 +663,66 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 }
 
 /**
- * Test overwrite in different epochs.
+ * Very basic test for full overwrite within the same epoch for both large and
+ * small record sizes.
+ */
+static void
+io_epoch_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	 req;
+	daos_epoch_t	 e = 0; /* epoch remains the same */
+	char		*ow_buf;
+	char		*fbuf;
+	char		 dkey[25];
+	char		 akey[25];
+	int		 i;
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	sprintf(dkey, "ep_ow_full dkey_%d", (int)size);
+	sprintf(akey, "ep_ow_full akey_%d", (int)size);
+
+	/* Alloc and set buffer to be a sting of all uppercase letters */
+	ow_buf = malloc(size);
+	assert_non_null(ow_buf);
+	dts_buf_render_uppercase(ow_buf, size);
+	/* Alloc the fetch buffer */
+	fbuf = malloc(size);
+	assert_non_null(fbuf);
+	memset(fbuf, 0, size);
+
+	print_message("Test: full overwrite in same epoch (rec size: %lu)\n",
+		      size);
+
+	/* Set and verify the full initial string as epoch 0 */
+	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, /*iod_size*/size,
+				/*rx_nr*/1, e, &req);
+	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf, /*iod_size*/size,
+				size, e, &req);
+	assert_memory_equal(ow_buf, fbuf, size);
+
+	/* Overwrite the entire original buffer to all lowercase chars */
+	for (i = 0; i < size; i++)
+		ow_buf[i] += 32;
+
+	memset(fbuf, 0, size);
+	/* Insert full record overwrite at the same epoch. */
+	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, /*iod_size*/size,
+				/*rx_nr*/1, e, &req);
+	/* Fetch entire record with new overwrite for comparison */
+	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf, /*iod_size*/size,
+				size, e, &req);
+	assert_memory_equal(ow_buf, fbuf, size);
+	/* Print message upon successful overwrite */
+	print_message("overwrite size:%lu, e:%lu\n", size, e);
+
+	free(fbuf);
+	free(ow_buf);
+	ioreq_fini(&req);
+}
+
+/**
+ * Test overwrite in both different epochs and full overwrite in the same epoch.
  */
 static void
 io_epoch_overwrite(void **state)
@@ -672,6 +732,12 @@ io_epoch_overwrite(void **state)
 
 	/** choose random object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+
+	/* Full overwrite of a SCM record in the same epoch */
+	io_epoch_overwrite_full(state, oid, IO_SIZE_SCM);
+
+	/* Full overwrite of an NVMe record in the same epoch */
+	io_epoch_overwrite_full(state, oid, IO_SIZE_NVME);
 
 	/* Small 'DAOS' buffer used to show 1 char overwrites*/
 	io_epoch_overwrite_small(state, oid);
@@ -2343,7 +2409,7 @@ static const struct CMUnitTest io_tests[] = {
 	  io_var_akey_size, async_disable, test_case_teardown},
 	{ "IO7: i/o with variable index",
 	  io_var_idx_offset, async_enable, test_case_teardown},
-	{ "IO8: overwrite in different epoch",
+	{ "IO8: variable size record overwrite",
 	  io_epoch_overwrite, async_enable, test_case_teardown},
 	{ "IO9: simple enumerate", enumerate_simple,
 	  async_disable, test_case_teardown},
