@@ -60,10 +60,10 @@ if [ -d "/mnt/daos" ]; then
     # Environment variables specific to the rdb tests
     export PATH=$SL_PREFIX/bin:$PATH
     export OFI_INTERFACE=lo
-    #This is to temporarily solve the No such file error for
-    # libnvme_discover.so
+    # Satisfy CGO Link requirements for go-spdk binding imports
     export LD_LIBRARY_PATH=$SL_PREFIX/lib:${LD_LIBRARY_PATH}
     run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
+    run_test src/control/run_go_tests.sh
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for
