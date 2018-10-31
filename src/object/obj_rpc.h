@@ -37,7 +37,7 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 
-#define OBJ_BULK_LIMIT	(4 * 1024) /* 4KB bytes */
+#define OBJ_BULK_LIMIT	(2 * 1024) /* 2KB bytes */
 
 /*
  * RPC operation codes

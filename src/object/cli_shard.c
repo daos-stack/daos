@@ -291,8 +291,8 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	crt_endpoint_t		tgt_ep;
 	uuid_t			cont_hdl_uuid;
 	uuid_t			cont_uuid;
-	daos_size_t		iod_len;
-	daos_size_t		sgl_len;
+	daos_size_t		data_size;
+	daos_size_t		sgls_size;
 	uint64_t		dkey_hash;
 	bool			do_bulk = false;
 	int			rc;
@@ -320,6 +320,9 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if (rc != 0)
 		D_GOTO(out_pool, rc);
 
+	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FAIL))
+		D_GOTO(out_req, rc = -DER_INVAL);
+
 	orw = crt_req_get(req);
 	D_ASSERT(orw != NULL);
 
@@ -339,23 +342,36 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_iods.ca_count = nr;
 	orw->orw_iods.ca_arrays = iods;
 
-	iod_len = daos_iods_len(iods, nr);
-	sgl_len = daos_sgls_buf_len(sgls, nr);
-	/* If it is read, let's try to get the size from sg list */
-	if (iod_len == -1 && opc == DAOS_OBJ_RPC_FETCH)
-		iod_len = daos_sgls_buf_len(sgls, nr);
-	if (iod_len != -1 && iod_len > sgl_len) {
-		rc = -DER_REC2BIG;
-		D_ERROR("Object "DF_UOID", iod_len "DF_U64", sgl_len "
-			DF_U64", failed %d.\n", DP_UOID(shard->do_id),
-			iod_len, sgl_len, rc);
-		D_GOTO(out_req, rc);
+	data_size = daos_iods_len(iods, nr);
+	sgls_size = daos_sgls_size(sgls, nr);
+	if (data_size == -1) {
+		data_size = sgls_size;
+	} else {
+		/* If the sgl buffer is not big enough, let's return -REC2BIG
+		 * to enlarge the buffer before sending RPC.
+		 */
+		if (data_size > sgls_size) {
+			rc = -DER_REC2BIG;
+			D_ERROR("Object "DF_UOID", iod_size "DF_U64", sg_buf"
+				" "DF_U64", failed %d.\n",
+				DP_UOID(shard->do_id), data_size, sgls_size,
+				rc);
+			D_GOTO(out_req, rc);
+		}
+
+		/* NB: inline fetch needs to pack sgls buffer into RPC, so if
+		 * sgls_size is bigger, let's choose it as the data_size.
+		 */
+		if (data_size < sgls_size)
+			data_size = sgls_size;
 	}
 
-	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FAIL))
-		D_GOTO(out_req, rc = -DER_INVAL);
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
+		DF_U64" data_size "DF_U64"\n", opc, DP_UOID(shard->do_id),
+		(int)dkey->iov_len, (char *)dkey->iov_buf, tgt_ep.ep_rank,
+		tgt_ep.ep_tag, epoch, data_size);
 
-	do_bulk = iod_len >= OBJ_BULK_LIMIT;
+	do_bulk = data_size >= OBJ_BULK_LIMIT;
 	if (do_bulk) {
 		/* Transfer data by bulk */
 		rc = obj_shard_rw_bulk_prep(req, nr, sgls, task);
@@ -671,7 +687,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 	uuid_t			cont_uuid;
 	struct obj_key_enum_in	*oei;
 	struct obj_enum_args	enum_args;
-	daos_size_t		sgl_len = 0;
+	daos_size_t		sgl_size = 0;
 	int			rc;
 
 	D_ASSERT(obj_shard != NULL);
@@ -722,8 +738,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 
 	if (sgl != NULL) {
 		oei->oei_sgl = *sgl;
-		sgl_len = daos_sgls_buf_len(sgl, 1);
-		if (sgl_len >= OBJ_BULK_LIMIT) {
+		sgl_size = daos_sgls_size(sgl, 1);
+		if (sgl_size >= OBJ_BULK_LIMIT) {
 			/* Create bulk */
 			rc = crt_bulk_create(daos_task2ctx(task),
 					     daos2crt_sg(sgl), CRT_BULK_RW,
@@ -779,7 +795,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 
 out_eaa:
 	crt_req_decref(req);
-	if (sgl != NULL && sgl_len >= OBJ_BULK_LIMIT)
+	if (sgl != NULL && sgl_size >= OBJ_BULK_LIMIT)
 		crt_bulk_free(oei->oei_bulk);
 out_req:
 	crt_req_decref(req);

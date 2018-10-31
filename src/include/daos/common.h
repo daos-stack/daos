@@ -139,8 +139,9 @@ int daos_sgl_copy_data_out(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
-daos_size_t daos_sgl_buf_len(d_sg_list_t *sgl);
-daos_size_t daos_sgls_buf_len(d_sg_list_t *sgls, int nr);
+daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
+daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
+daos_size_t daos_sgls_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 
 char *daos_str_trimwhite(char *str);

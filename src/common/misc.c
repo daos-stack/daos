@@ -186,33 +186,56 @@ daos_sgl_data_len(d_sg_list_t *sgl)
 }
 
 daos_size_t
-daos_sgl_buf_len(d_sg_list_t *sgl)
+daos_sgl_buf_size(d_sg_list_t *sgl)
 {
-	daos_size_t	len;
+	daos_size_t	size = 0;
 	int		i;
 
 	if (sgl == NULL || sgl->sg_iovs == NULL)
 		return 0;
 
-	for (i = 0, len = 0; i < sgl->sg_nr; i++)
-		len += sgl->sg_iovs[i].iov_buf_len;
+	for (i = 0, size = 0; i < sgl->sg_nr; i++)
+		size += sgl->sg_iovs[i].iov_buf_len;
 
-	return len;
+	return size;
 }
 
 daos_size_t
-daos_sgls_buf_len(daos_sg_list_t *sgls, int nr)
+daos_sgls_buf_size(daos_sg_list_t *sgls, int nr)
 {
-	daos_size_t sgls_len = 0;
+	daos_size_t size = 0;
 	int	    i;
 
 	if (sgls == NULL)
 		return 0;
 
 	for (i = 0; i < nr; i++)
-		sgls_len += daos_sgl_buf_len(&sgls[i]);
+		size += daos_sgl_buf_size(&sgls[i]);
 
-	return sgls_len;
+	return size;
+}
+
+daos_size_t
+daos_sgls_size(daos_sg_list_t *sgls, int nr)
+{
+	daos_size_t size = 0;
+	int i;
+
+	if (sgls == NULL)
+		return 0;
+
+	for (i = 0; i < nr; i++) {
+		int j;
+
+		size += sizeof(sgls[i].sg_nr) + sizeof(sgls[i].sg_nr_out);
+		for (j = 0; j < sgls[i].sg_nr; j++) {
+			size += sizeof(sgls[i].sg_iovs[j].iov_len) +
+				sizeof(sgls[i].sg_iovs[j].iov_buf_len) +
+				sgls[i].sg_iovs[j].iov_buf_len;
+		}
+	}
+
+	return size;
 }
 
 static daos_size_t
