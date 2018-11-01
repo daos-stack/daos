@@ -49,15 +49,18 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
     global sessions
     try:
-        server_count = len(genio.read_all_lines(hostfile))
+        servers = [line.split(' ')[0]
+                   for line in genio.read_all_lines(hostfile)]
+        server_count = len(servers)
+
+        # first make sure there are no existing servers running
+        killServer(servers)
 
         # pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
             build_vars = json.load(json_vars)
         orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin/orterun")
         daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin/daos_server")
-        ld_lib_path = os.path.join(build_vars["PREFIX"], "lib") + os.pathsep + \
-                      os.path.join(build_vars["PREFIX"], "lib/daos_srv")
 
         # before any set in env are added to env_args, add any user supplied
         # envirables to environment first
@@ -81,7 +84,6 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         server_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
         server_cmd += env_args
         server_cmd += "-x DD_SUBSYS=all -x DD_MASK=all "
-        server_cmd += "-x LD_LIBRARY_PATH={0} ".format(ld_lib_path)
         server_cmd += daos_srv_bin + " -g {0} -c 1 ".format(setname)
         server_cmd += " -a " + basepath + "/install/tmp/"
 
@@ -89,6 +91,7 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
 
         sessions[setname] = aexpect.ShellSession(initial_cmd)
         if sessions[setname].is_responsive():
+            sessions[setname].sendline("ulimit -c unlimited")
             sessions[setname].sendline(server_cmd)
             timeout = 300
             start_time = time.time()
@@ -109,6 +112,13 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
                   (time.time() - start_time)
     except Exception as e:
         print "<SERVER> Exception occurred: {0}".format(str(e))
+        # we need to end the session now -- exit the shell
+        try:
+            sessions[setname].sendline("exit")
+            # for good measure, try to close it
+            sessions[setname].close()
+        except KeyError:
+            pass
         raise ServerFailed("Server didn't start!")
 
 def stopServer(setname=None, hosts=None):
@@ -124,10 +134,14 @@ def stopServer(setname=None, hosts=None):
             for k, v in sessions.items():
                 v.sendcontrol("c")
                 v.sendcontrol("c")
+                # we need to end the session now -- exit the shell
+                v.sendline("exit")
                 v.close()
         else:
             sessions[setname].sendcontrol("c")
             sessions[setname].sendcontrol("c")
+            # we need to end the session now -- exit the shell
+            sessions[setname].sendline("exit")
             sessions[setname].close()
         print "<SERVER> server stopped"
     except Exception as e:
@@ -138,20 +152,30 @@ def stopServer(setname=None, hosts=None):
         return
 
     # make sure they actually stopped
+    # but give them some time to stop first
+    time.sleep(5)
     found_hosts = []
     for host in hosts:
-        resp = subprocess.call("ssh {0} "
-                               "pkill no_daos_server --signal 0 || "
-                               "pkill no_daos_io_server "
-                               "--signal 0".format(host),
-                               shell=True)
+        proc = subprocess.Popen(["ssh", host,
+                                 "pgrep '(daos_server|daos_io_server)'"],
+                                stdout=subprocess.PIPE)
+        stdout = proc.communicate()[0]
+        resp = proc.wait()
         if resp == 0:
             # a daos process was found hanging around!
             found_hosts.append(host)
 
     if found_hosts:
-        raise ServerFailed("daos processes found on hosts "
-                           "{} after stopServer()".format(found_hosts))
+        killServer(found_hosts)
+        raise ServerFailed("daos processes {} found on hosts "
+                           "{} after stopServer() were "
+                           "killed".format(', '.join(stdout.splitlines()),
+                           found_hosts))
+
+    # we can also have orphaned ssh processes that started an orted on a
+    # remote node but never get cleaned up when that remote node spontaneiously
+    # reboots
+    subprocess.call(["pkill", "^ssh$"])
 
 def killServer(hosts):
     """
@@ -160,8 +184,8 @@ def killServer(hosts):
 
     hosts -- list of host names where servers are running
     """
-    kill_cmds = ["pkill daos_server --signal 9",
-                 "pkill daos_io_server --signal 9"]
+    kill_cmds = ["pkill '(daos_server|daos_io_server)' --signal INT",
+                 "sleep 5",
+                 "pkill '(daos_server|daos_io_server)' --signal KILL"]
     for host in hosts:
-        for cmd in kill_cmds:
-            resp = subprocess.call(["ssh", host, cmd])
+        subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)), shell=True)
