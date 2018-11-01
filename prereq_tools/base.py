@@ -592,6 +592,22 @@ def append_if_supported(env, **kwargs):
 
     config.Finish()
 
+class ProgramBinary(object):
+    """Define possible names for a required executable"""
+    def __init__(self, name, possible_names):
+        """ Define a binary allowing for unique names on various platforms """
+        self.name = name
+        self.options = possible_names
+
+    def configure(self, config, prereqs):
+        """ Do configure checks for binary name options to get a match """
+        for option in self.options:
+            if config.CheckProg(option):
+                args = {self.name: option}
+                prereqs.replace_env(**args)
+                return True
+        return False
+
 # pylint: disable=too-many-public-methods
 class PreReqComponent(object):
     """A class for defining and managing external components required
@@ -1374,7 +1390,11 @@ class _Component(object):
 
         try:
             for prog in self.required_progs:
-                if not config.CheckProg(prog):
+                if isinstance(prog, ProgramBinary):
+                    has_bin = prog.configure(config, self.prereqs)
+                else:
+                    has_bin = config.CheckProg(prog)
+                if not has_bin:
                     config.Finish()
                     if self.__check_only:
                         env.SetOption('no_exec', True)
@@ -1631,4 +1651,5 @@ __all__ = ["GitRepoRetriever", "WebRetriever",
            "MissingPath", "BuildFailure",
            "MissingDefinition", "MissingTargets",
            "MissingSystemLibs", "DownloadRequired",
-           "PreReqComponent", "BuildRequired"]
+           "PreReqComponent", "BuildRequired",
+           "ProgramBinary"]

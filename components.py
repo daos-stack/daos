@@ -23,13 +23,9 @@
 
 from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
+from prereq_tools import ProgramBinary
 import os
 import platform
-#pylint: disable=import-error
-#pylint: disable=no-name-in-module
-from distutils.spawn import find_executable
-#pylint: enable=import-error
-#pylint: enable=no-name-in-module
 
 if "prereqs" not in globals():
     from prereq_tools import PreReqComponent
@@ -261,8 +257,7 @@ REQS.define('daos',
             headers=['daos.h'],
             requires=['cart', 'ompi'])
 
-NINJA_NAME = [nn for nn in ["ninja-build", "ninja"]
-              if find_executable(nn)][0]
+NINJA_PROG = ProgramBinary('ninja', ["ninja-build", "ninja"])
 
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
@@ -270,11 +265,11 @@ REQS.define('fuse',
                       ' -D udevrulesdir=$FUSE_PREFIX/udev' \
                       ' -D disable-mtab=True' \
                       ' -D utils=False',
-                      NINJA_NAME + ' -v $JOBS_OPT',
-                      NINJA_NAME + ' install'],
+                      '$ninja -v $JOBS_OPT',
+                      '$ninja install'],
             libs=['fuse3'],
             defines=["FUSE_USE_VERSION=32"],
-            required_progs=['libtoolize'],
+            required_progs=['libtoolize', NINJA_PROG],
             headers=['fuse3/fuse.h'],
             out_of_src_build=True)
 

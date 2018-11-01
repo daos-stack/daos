@@ -25,6 +25,7 @@ sys.path.insert(0, "..")
 from prereq_tools import PreReqComponent
 from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
+from prereq_tools import ProgramBinary
 
 ENV = DefaultEnvironment()
 
@@ -34,11 +35,15 @@ PATH = os.path.realpath(os.path.join(Dir('#').abspath, "..",
                                      "components.py"))
 PREREQS.preload(PATH)
 
+# Not needed but to add test to this capability
+MAKE_PROG = ProgramBinary('make', ['badprogame', 'anotherbadprogname', 'make'])
+
 PREREQS.define("sl_project1",
                retriever="fake",
-               commands=['make install PREFIX=$SL_PROJECT1_PREFIX'],
+               commands=['$make install PREFIX=$SL_PROJECT1_PREFIX'],
                defines=["SL_PROJECT1_REQUIRED_DEFINE"],
-               headers=['sl_project1.h'])
+               headers=['sl_project1.h'],
+               required_progs=[MAKE_PROG])
 
 PREREQS.define("sl_project2",
                retriever="fake",
