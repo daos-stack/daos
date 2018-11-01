@@ -43,6 +43,8 @@
 /** max length of argument string in the yaml config file */
 #define FI_CONFIG_ARG_STR_MAX_LEN 4096
 
+#define FI_MAX_FAULT_ID 8192
+
 #include <gurt/common.h>
 
 struct d_fi_gdata_t {
@@ -68,16 +70,36 @@ static inline int
 fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 {
 	struct d_fault_attr_t	 *fault_attr;
+	struct d_fault_attr_t	 *new_fault_attr;
 	struct d_fault_attr_t	**new_fa_arr;
 	uint32_t		  new_capacity;
 	void			 *start;
 	size_t			  num_bytes;
+	char			 *fa_argument = NULL;
+	bool			  should_free = true;
 	int			  rc = DER_SUCCESS;
 
 	if (fa_in.fa_probability > 100) {
 		D_ERROR("fault probability (%u) out of range [0, 100]\n",
 			fa_in.fa_probability);
 		return -DER_INVAL;
+	}
+
+	if (fault_id > FI_MAX_FAULT_ID) {
+		D_ERROR("fault_id (%u) out of range [0, %d]\n", fault_id,
+			FI_MAX_FAULT_ID);
+		return -DER_INVAL;
+	}
+
+	D_ALLOC_PTR(new_fault_attr);
+	if (new_fault_attr == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (fa_in.fa_argument) {
+		D_STRNDUP(fa_argument, fa_in.fa_argument,
+			  FI_CONFIG_ARG_STR_MAX_LEN);
+		if (fa_argument == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (take_lock)
@@ -87,7 +109,7 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 		new_capacity = fault_id + 1;
 		D_REALLOC_ARRAY(new_fa_arr, d_fi_gdata.dfg_fa, new_capacity);
 		if (new_fa_arr == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_unlock, rc = -DER_NOMEM);
 
 		start = new_fa_arr + d_fi_gdata.dfg_fa_capacity;
 		num_bytes = sizeof(*new_fa_arr)
@@ -99,38 +121,39 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 
 	fault_attr = d_fi_gdata.dfg_fa[fault_id];
 	if (fault_attr == NULL) {
-		D_ALLOC_PTR(fault_attr);
-		if (fault_attr == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+		fault_attr = new_fault_attr;
 
 		rc = D_SPIN_INIT(&fault_attr->fa_lock,
 				 PTHREAD_PROCESS_PRIVATE);
-		if (rc != DER_SUCCESS) {
-			D_FREE(fault_attr);
-			D_GOTO(out, rc);
-		}
+		if (rc != DER_SUCCESS)
+			D_GOTO(out_unlock, rc);
+
 		d_fi_gdata.dfg_fa[fault_id] = fault_attr;
+		should_free = false;
 	}
 
 	D_SPIN_LOCK(&fault_attr->fa_lock);
+
+	/* at this point, global lock is released, per entry lock is held */
 	fault_attr->fa_id = fault_id;
 	fault_attr->fa_probability = fa_in.fa_probability;
 	fault_attr->fa_interval = fa_in.fa_interval;
 	fault_attr->fa_max_faults = fa_in.fa_max_faults;
 	fault_attr->fa_err_code = fa_in.fa_err_code;
-	if (fa_in.fa_argument) {
-		D_STRNDUP(fault_attr->fa_argument, fa_in.fa_argument,
-			  FI_CONFIG_ARG_STR_MAX_LEN);
-		if (fault_attr->fa_argument == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	}
+	fault_attr->fa_argument = fa_argument;
 	/* nrand48() only takes the high order 48 bits for its seed */
 	memcpy(fault_attr->fa_rand_state, &d_fault_inject_seed, 4);
 	D_SPIN_UNLOCK(&fault_attr->fa_lock);
 
-out:
+out_unlock:
 	if (take_lock)
 		D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
+out:
+	if (should_free) {
+		D_FREE(new_fault_attr);
+		if (fa_in.fa_argument)
+			D_FREE(fa_argument);
+	}
 
 	return rc;
 }
@@ -266,7 +289,7 @@ one_fault_attr_parse(yaml_parser_t *parser)
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
-	rc = fault_attr_set(attr.fa_id, attr, false);
+	rc = fault_attr_set(attr.fa_id, attr, true);
 	if (rc != DER_SUCCESS)
 		D_ERROR("d_set_fault_attr(%u) failed, rc %d\n", attr.fa_id,
 			rc);
@@ -383,6 +406,7 @@ d_fault_inject_init(void)
 		D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 		return rc;
 	}
+	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 
 	config_file = getenv(D_FAULT_CONFIG_ENV);
 	if (config_file == NULL || strlen(config_file) == 0) {
@@ -456,8 +480,6 @@ d_fault_inject_init(void)
 	}
 
 out:
-	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
-
 	if (fp)
 		fclose(fp);
 	return rc;
@@ -561,9 +583,7 @@ d_should_fail(uint32_t fault_id)
 		return false;
 	}
 
-	D_RWLOCK_RDLOCK(&d_fi_gdata.dfg_rwlock);
 	fault_attr = d_fi_gdata.dfg_fa[fault_id];
-	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 
 	if (!fault_attr) {
 		return false;

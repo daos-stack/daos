@@ -273,7 +273,14 @@ struct crt_rpc_priv {
 	X(CRT_OPC_CTL_GET_PID,						\
 		0, &CQF_crt_ctl_get_pid, crt_hdlr_ctl_get_pid, NULL),	\
 	X(CRT_OPC_PROTO_QUERY,						\
-		0, &CQF_crt_proto_query, crt_hdlr_proto_query, NULL)
+		0, &CQF_crt_proto_query, crt_hdlr_proto_query, NULL),	\
+	X(CRT_OPC_CTL_FI_TOGGLE,					\
+		0, &CQF_crt_ctl_fi_toggle,				\
+		crt_hdlr_ctl_fi_toggle, NULL),				\
+	X(CRT_OPC_CTL_FI_SET_ATTR,					\
+		0, &CQF_crt_ctl_fi_attr_set, crt_hdlr_ctl_fi_attr_set,	\
+		NULL)
+
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -467,7 +474,6 @@ CRT_RPC_DECLARE(crt_iv_sync, CRT_ISEQ_IV_SYNC, CRT_OSEQ_IV_SYNC)
 
 #define CRT_ISEQ_BARRIER	/* input fields */		 \
 	((int32_t)		(b_num)			CRT_VAR)
-
 #define CRT_OSEQ_BARRIER	/* output fields */		 \
 	((int32_t)		(b_rc)			CRT_VAR)
 
@@ -527,6 +533,29 @@ CRT_RPC_DECLARE(crt_ctl_get_pid, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_PID)
 	((int32_t)		(pq_rc)			CRT_VAR)
 
 CRT_RPC_DECLARE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
+
+#define CRT_ISEQ_CTL_FI_ATTR_SET	/* input fields */	 \
+	((uint32_t)		(fa_fault_id)		CRT_VAR) \
+	((uint32_t)		(fa_interval)		CRT_VAR) \
+	((uint64_t)		(fa_max_faults)		CRT_VAR) \
+	((uint32_t)		(fa_err_code)		CRT_VAR) \
+	((uint32_t)		(fa_probability)	CRT_VAR) \
+	((d_string_t)		(fa_argument)		CRT_VAR)
+
+#define CRT_OSEQ_CTL_FI_ATTR_SET	/* output fields */	 \
+	((int32_t)		(fa_ret)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_fi_attr_set, CRT_ISEQ_CTL_FI_ATTR_SET,
+		CRT_OSEQ_CTL_FI_ATTR_SET)
+
+#define CRT_ISEQ_CTL_FI_TOGGLE		/* input fields */	 \
+	((bool)		(op)			CRT_VAR)
+
+#define CRT_OSEQ_CTL_FI_TOGGLE		/* output fields */	 \
+	((int32_t)		(rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_fi_toggle,
+		CRT_ISEQ_CTL_FI_TOGGLE, CRT_OSEQ_CTL_FI_TOGGLE)
 
 /* CRT internal RPC format definitions */
 struct crt_internal_rpc {

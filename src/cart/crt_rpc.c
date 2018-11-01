@@ -41,6 +41,54 @@
 
 #include "crt_internal.h"
 
+void
+crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_fi_toggle_in	*in_args;
+	struct crt_ctl_fi_toggle_out	*out_args;
+	int				 rc = 0;
+
+	in_args = crt_req_get(rpc_req);
+	out_args = crt_reply_get(rpc_req);
+
+	if (in_args->op)
+		d_fault_inject_enable();
+	else
+		d_fault_inject_disable();
+
+	out_args->rc = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
+}
+
+void
+crt_hdlr_ctl_fi_attr_set(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_fi_attr_set_in	*in_args_fi_attr;
+	struct crt_ctl_fi_attr_set_out	*out_args_fi_attr;
+	struct d_fault_attr_t		 fa_in = {0};
+	int				 rc;
+
+	in_args_fi_attr = crt_req_get(rpc_req);
+	out_args_fi_attr = crt_reply_get(rpc_req);
+
+	fa_in.fa_max_faults = in_args_fi_attr->fa_max_faults;
+	fa_in.fa_probability = in_args_fi_attr->fa_probability;
+	fa_in.fa_err_code = in_args_fi_attr->fa_err_code;
+	fa_in.fa_interval = in_args_fi_attr->fa_interval;
+
+	rc = d_fault_attr_set(in_args_fi_attr->fa_fault_id, fa_in);
+	if (rc != 0)
+		D_ERROR("d_fault_attr_set() failed. rc: %d\n", rc);
+
+	out_args_fi_attr->fa_ret = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
+}
+
+
 /* CRT internal RPC format definitions */
 
 /* group create */
@@ -126,6 +174,12 @@ CRT_RPC_DEFINE(crt_ctl_get_host, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_HOST)
 CRT_RPC_DEFINE(crt_ctl_get_pid,  CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_PID)
 
 CRT_RPC_DEFINE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
+
+CRT_RPC_DEFINE(crt_ctl_fi_attr_set, CRT_ISEQ_CTL_FI_ATTR_SET,
+		CRT_OSEQ_CTL_FI_ATTR_SET)
+CRT_RPC_DEFINE(crt_ctl_fi_toggle,
+	       CRT_ISEQ_CTL_FI_TOGGLE,
+	       CRT_OSEQ_CTL_FI_TOGGLE)
 
 /* Define for crt_internal_rpcs[] array population below.
  * See CRT_INTERNAL_RPCS_LIST macro definition

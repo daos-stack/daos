@@ -61,6 +61,9 @@ enum cmd_t {
 	CMD_LIST_CTX,
 	CMD_GET_HOSTNAME,
 	CMD_GET_PID,
+	CMD_ENABLE_FI,
+	CMD_DISABLE_FI,
+	CMD_SET_FI_ATTR,
 };
 
 struct cmd_info {
@@ -76,6 +79,9 @@ struct cmd_info cmds[] = {
 	DEF_CMD(CMD_LIST_CTX, CRT_OPC_CTL_LS),
 	DEF_CMD(CMD_GET_HOSTNAME, CRT_OPC_CTL_GET_HOSTNAME),
 	DEF_CMD(CMD_GET_PID, CRT_OPC_CTL_GET_PID),
+	DEF_CMD(CMD_ENABLE_FI, CRT_OPC_CTL_FI_TOGGLE),
+	DEF_CMD(CMD_DISABLE_FI, CRT_OPC_CTL_FI_TOGGLE),
+	DEF_CMD(CMD_SET_FI_ATTR, CRT_OPC_CTL_FI_SET_ATTR),
 };
 
 static char *cmd2str(enum cmd_t cmd)
@@ -109,15 +115,17 @@ struct cb_info {
 
 
 struct ctl_g {
-	enum cmd_t	 cg_cmd_code;
-	char		*cg_group_name;
-	crt_group_t	*cg_target_group;
-	int		 cg_num_ranks;
-	d_rank_t	 cg_ranks[CRT_CTL_MAX];
-	crt_context_t	 cg_crt_ctx;
-	pthread_t	 cg_tid;
-	int		 cg_complete;
-	sem_t		 cg_num_reply;
+	enum cmd_t			 cg_cmd_code;
+	char				*cg_group_name;
+	crt_group_t			*cg_target_group;
+	int				 cg_num_ranks;
+	d_rank_t			 cg_ranks[CRT_CTL_MAX];
+	crt_context_t			 cg_crt_ctx;
+	pthread_t			 cg_tid;
+	int				 cg_complete;
+	sem_t				 cg_num_reply;
+	struct crt_ctl_fi_attr_set_in	 cg_fi_attr;
+	int				 cg_fi_attr_inited;
 };
 
 static struct ctl_g ctl_gdata;
@@ -154,6 +162,7 @@ static void
 parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 {
 	char		*token;
+	char		*saveptr;
 	char		*ptr;
 	uint32_t	 num_ranks_l = 0;
 	uint32_t	 index = 0;
@@ -170,7 +179,7 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 		return;
 	}
 	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
-	token = strtok(arg_str, ",");
+	token = strtok_r(arg_str, ",", &saveptr);
 	while (token != NULL) {
 		ptr = strchr(token, '-');
 		if (ptr == NULL) {
@@ -181,7 +190,7 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 			}
 			ranks[index] = atoi(token);
 			index++;
-			token = strtok(NULL, ",");
+			token = strtok_r(NULL, ",", &saveptr);
 			continue;
 		}
 		if (ptr == token || ptr == token + strlen(token)) {
@@ -199,9 +208,65 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 			ranks[index] = i;
 			index++;
 		}
-		token = strtok(NULL, ",");
+		token = strtok_r(NULL, ",", &saveptr);
 	}
 	*num_ranks = num_ranks_l;
+}
+
+static void
+ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
+{
+	char *token;
+	char *endptr;
+	char *saveptr;
+
+	D_ASSERTF(arg_str != NULL, "arg_str is NULL.\n");
+	D_ASSERTF(fi_attr_in != NULL, "fi_attr_in is NULL.\n");
+	if (strnlen(arg_str, CRT_CTL_MAX_ARG_STR_LEN) >=
+		    CRT_CTL_MAX_ARG_STR_LEN) {
+		D_ERROR("arg string too long.\n");
+		return;
+	}
+
+	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
+	fprintf(stderr, "arg_str %s\n", arg_str);
+	token = strtok_r(arg_str, ",", &saveptr);
+	if (token == NULL)
+		D_GOTO(error_out, 0);
+	fi_attr_in->fa_fault_id = strtoull(token, &endptr, 10);
+	fprintf(stderr, "fault_id %d\n", fi_attr_in->fa_fault_id);
+
+	/* get max_faults */
+	token = strtok_r(NULL, ",", &saveptr);
+	if (token == NULL)
+		D_GOTO(error_out, 0);
+	fi_attr_in->fa_max_faults = strtoull(token, &endptr, 10);
+	fprintf(stderr, "max_faults %lu\n", fi_attr_in->fa_max_faults);
+
+	token = strtok_r(NULL, ",", &saveptr);
+	if (token == NULL)
+		D_GOTO(error_out, 0);
+	fi_attr_in->fa_probability = (uint8_t) atol(token);
+
+	token = strtok_r(NULL, ",", &saveptr);
+	if (token == NULL)
+		D_GOTO(error_out, 0);
+	fi_attr_in->fa_err_code = strtoull(token, &endptr, 10);
+
+	token = strtok_r(NULL, ",", &saveptr);
+	if (token == NULL)
+		D_GOTO(error_out, 0);
+	fi_attr_in->fa_interval = strtoull(token, &endptr, 10);
+
+	token = strtok_r(NULL, ",", &saveptr);
+	if (token == NULL)
+		return;
+	fi_attr_in->fa_argument = token;
+
+	return;
+error_out:
+	fprintf(stderr, "Error: --attr has wrong number of arguments, should "
+		"be \t--attr fault_id,max_faults,probability,err_code\n");
 }
 
 static void
@@ -210,14 +275,27 @@ print_usage_msg(const char *msg)
 	if (msg)
 		printf("\nERROR: %s\n", msg);
 	printf("Usage: cart_ctl <cmd> --group-name name --rank "
-	       "start-end,start-end,rank,rank\n");
-	printf("cmds: list_ctx, get_hostname, get_pid\n");
+	       "start-end,start-end,rank,rank\n"
+	       "--path path-to-attach-info\n");
+	printf("\ncmds: list_ctx, get_hostname, get_pid\n");
 	printf("\nlist_ctx:\n");
 	printf("\tPrint # of contexts on each rank and uri for each context\n");
 	printf("\nget_hostname:\n");
 	printf("\tPrint hostnames of specified ranks\n");
 	printf("\nget_pid:\n");
 	printf("\tReturn pids of the specified ranks\n");
+	printf("\nset_fi_attr\n");
+	printf("\tset fault injection attributes for a fault ID. This command\n"
+	       "\tmust be acompanied by the option\n"
+	       "\t--attr fault_id,max_faults,probability,err_code"
+	       "[,argument]\n");
+	printf("\noptions:\n");
+	printf("--group-name name\n");
+	printf("\tspecify the name of the remote group\n");
+	printf("--rank start-end,start-end,rank,rank\n");
+	printf("\tspecify target ranks\n");
+	printf("--path path-to-attach-info\n");
+	printf("\tspecify the location of the attach info file\n");
 }
 
 static int
@@ -238,6 +316,12 @@ parse_args(int argc, char **argv)
 		ctl_gdata.cg_cmd_code = CMD_GET_HOSTNAME;
 	else if (strcmp(argv[1], "get_pid") == 0)
 		ctl_gdata.cg_cmd_code = CMD_GET_PID;
+	else if (strcmp(argv[1], "enable_fi") == 0)
+		ctl_gdata.cg_cmd_code = CMD_ENABLE_FI;
+	else if (strcmp(argv[1], "disable_fi") == 0)
+		ctl_gdata.cg_cmd_code = CMD_DISABLE_FI;
+	else if (strcmp(argv[1], "set_fi_attr") == 0)
+		ctl_gdata.cg_cmd_code = CMD_SET_FI_ATTR;
 	else {
 		print_usage_msg("Invalid command\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -248,10 +332,12 @@ parse_args(int argc, char **argv)
 		static struct option long_options[] = {
 			{"group-name", required_argument, 0, 'g'},
 			{"rank", required_argument, 0, 'r'},
+			{"attr", required_argument, 0, 'a'},
+			{"path", required_argument, 0, 'p'},
 			{0, 0, 0, 0},
 		};
 
-		opt = getopt_long(argc, argv, "g:r:", long_options, NULL);
+		opt = getopt_long(argc, argv, "g:r:a:p:", long_options, NULL);
 		if (opt == -1)
 			break;
 		switch (opt) {
@@ -264,7 +350,27 @@ parse_args(int argc, char **argv)
 		case 'r':
 			parse_rank_string(optarg, ctl_gdata.cg_ranks,
 					  &ctl_gdata.cg_num_ranks);
+			break;
+		case 'a':
+			ctl_parse_fi_attr(optarg, &ctl_gdata.cg_fi_attr);
+			ctl_gdata.cg_fi_attr_inited = 1;
+			break;
+		case 'p':
+			rc = crt_group_config_path_set(optarg);
+			if (rc != 0) {
+				printf("Bad attach prefix: %s\n", optarg);
+				exit(-1);
+			}
+			break;
+		default:
+			break;
 		}
+	}
+
+	if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR &&
+	    ctl_gdata.cg_fi_attr_inited == 0) {
+		D_ERROR("fault attributes missing for set_fi_attr.\n");
+		rc = -DER_INVAL;
 	}
 
 out:
@@ -278,6 +384,8 @@ ctl_client_cb(const struct crt_cb_info *cb_info)
 	struct crt_ctl_ep_ls_out	*out_ls_args;
 	struct crt_ctl_get_host_out	*out_get_host_args;
 	struct crt_ctl_get_pid_out	*out_get_pid_args;
+	struct crt_ctl_fi_attr_set_out	*out_set_fi_attr_args;
+	struct crt_ctl_fi_toggle_out	*out_fi_toggle_args;
 	char				*addr_str;
 	int				 i;
 	struct cb_info			*info;
@@ -288,7 +396,19 @@ ctl_client_cb(const struct crt_cb_info *cb_info)
 
 	fprintf(stdout, "COMMAND: %s\n", cmd2str(info->cmd));
 
-	if (cb_info->cci_rc == 0) {
+	if (info->cmd == CMD_ENABLE_FI) {
+		out_fi_toggle_args = crt_reply_get(cb_info->cci_rpc);
+		fprintf(stdout, "CMD_ENABLE_FI finished. rc %d\n",
+			out_fi_toggle_args->rc);
+	} else if (info->cmd == CMD_DISABLE_FI) {
+		out_fi_toggle_args = crt_reply_get(cb_info->cci_rpc);
+		fprintf(stdout, "CMD_DISABLE_FI finished. rc %d\n",
+			out_fi_toggle_args->rc);
+	} else if (info->cmd == CMD_SET_FI_ATTR) {
+		out_set_fi_attr_args = crt_reply_get(cb_info->cci_rpc);
+		fprintf(stdout, "rc: %d (%s)\n", out_set_fi_attr_args->fa_ret,
+			d_errstr(out_set_fi_attr_args->fa_ret));
+	} else if (cb_info->cci_rc == 0) {
 		fprintf(stdout, "group: %s, rank: %d\n",
 			in_args->cel_grp_id, in_args->cel_rank);
 
@@ -323,12 +443,54 @@ ctl_client_cb(const struct crt_cb_info *cb_info)
 	sem_post(&ctl_gdata.cg_num_reply);
 }
 
+/**
+ * Fill in RPC arguments to turn on / turn off fault injection on target
+ * \param[in/out] rpc_req        pointer to the RPC
+ * \param[in] op                 0 means the RPC will disable fault injection on
+ *                               the target, 1 means the RPc will enable fault
+ *                               injection on the target.
+ */
+static void
+ctl_fill_fi_toggle_rpc_args(crt_rpc_t *rpc_req, int op)
+{
+	struct crt_ctl_fi_toggle_in	*in_args;
+
+	D_ASSERTF(op == 0 || op == 1, "op should be 0 or 1.\n");
+
+	in_args = crt_req_get(rpc_req);
+	in_args->op = op;
+}
+
+static void
+ctl_fill_fi_set_attr_rpc_args(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_fi_attr_set_in	*in_args_fi_attr;
+
+	in_args_fi_attr = crt_req_get(rpc_req);
+
+	in_args_fi_attr->fa_fault_id = ctl_gdata.cg_fi_attr.fa_fault_id;
+	in_args_fi_attr->fa_max_faults = ctl_gdata.cg_fi_attr.fa_max_faults;
+	in_args_fi_attr->fa_probability = ctl_gdata.cg_fi_attr.fa_probability;
+	in_args_fi_attr->fa_err_code = ctl_gdata.cg_fi_attr.fa_err_code;
+	in_args_fi_attr->fa_interval = ctl_gdata.cg_fi_attr.fa_interval;
+}
+
+static void
+ctl_fill_rpc_args(crt_rpc_t *rpc_req, int index)
+{
+	struct crt_ctl_ep_ls_in		*in_args;
+
+	in_args = crt_req_get(rpc_req);
+
+	in_args->cel_grp_id = ctl_gdata.cg_target_group->cg_grpid;
+	in_args->cel_rank = ctl_gdata.cg_ranks[index];
+}
+
 static int
 ctl_issue_cmd(void)
 {
 	int				 i;
 	crt_rpc_t			*rpc_req;
-	struct crt_ctl_ep_ls_in		*in_args;
 	crt_endpoint_t			 ep;
 	struct cb_info			 info;
 	int				 rc = 0;
@@ -348,9 +510,20 @@ ctl_issue_cmd(void)
 			D_GOTO(out, rc);
 		}
 
-		in_args = crt_req_get(rpc_req);
-		in_args->cel_grp_id = ctl_gdata.cg_target_group->cg_grpid;
-		in_args->cel_rank = ctl_gdata.cg_ranks[i];
+		/* fill RPC arguments depending on the opcode */
+		switch (info.cmd) {
+		case (CMD_ENABLE_FI):
+			ctl_fill_fi_toggle_rpc_args(rpc_req, 1);
+			break;
+		case (CMD_DISABLE_FI):
+			ctl_fill_fi_toggle_rpc_args(rpc_req, 0);
+			break;
+		case (CMD_SET_FI_ATTR):
+			ctl_fill_fi_set_attr_rpc_args(rpc_req);
+			break;
+		default:
+			ctl_fill_rpc_args(rpc_req, i);
+		}
 
 		D_DEBUG(DB_NET, "rpc_req %p rank %d tag %d seq %d\n",
 			rpc_req, ep.ep_rank, ep.ep_tag, i);

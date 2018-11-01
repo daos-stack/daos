@@ -353,6 +353,7 @@ typedef void (*crt_proto_query_cb_t)(struct crt_proto_query_cb_info *cb_info);
 #define CRT_CMF_LIST(ACTION)						\
 	TYPE_ACTION(ACTION, CMF_UUID, 0, uuid_t)			\
 	TYPE_ACTION(ACTION, CMF_GRP_ID, 0, crt_group_id_t)		\
+	TYPE_ACTION(ACTION, CMF_UINT8, 0, uint8_t)			\
 	TYPE_ACTION(ACTION, CMF_INT, 0, int32_t)			\
 	TYPE_ACTION(ACTION, CMF_UINT32, 0, uint32_t)			\
 	TYPE_ACTION(ACTION, CMF_UINT64, 0, uint64_t)			\

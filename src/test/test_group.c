@@ -66,6 +66,7 @@ struct test_t {
 	int		 t_is_service;
 	int		 t_infinite_loop;
 	int		 t_hold;
+	int		 t_shut_only;
 	uint32_t	 t_hold_time;
 	unsigned int	 t_ctx_num;
 	crt_context_t	 t_crt_ctx[TEST_CTX_MAX_NUM];
@@ -281,6 +282,8 @@ test_init(void)
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
 	flag = test_g.t_is_service ? CRT_FLAG_BIT_SERVER : 0;
+	if (test_g.t_shut_only)
+		flag |= CRT_FLAG_BIT_SINGLETON;
 	rc = crt_init(test_g.t_local_group_name, flag);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
@@ -413,6 +416,9 @@ test_run(void)
 	fprintf(stderr, "size of %s is %d\n", test_g.t_remote_group_name,
 		test_g.t_remote_group_size);
 
+	/* send shutdown to the target group, don't run any test */
+	if (test_g.t_shut_only)
+		return;
 	for (ii = 0; ii < test_g.t_remote_group_size; ii++)
 		check_in(test_g.t_remote_group, ii);
 
@@ -507,6 +513,7 @@ test_parse_args(int argc, char **argv)
 		{"is_service", no_argument, &test_g.t_is_service, 1},
 		{"ctx_num", required_argument, 0, 'c'},
 		{"loop", no_argument, &test_g.t_infinite_loop, 1},
+		{"shut_only", no_argument, &test_g.t_shut_only, 1},
 		{0, 0, 0, 0}
 	};
 

@@ -63,8 +63,12 @@ class TestCartCtl(commontestsuite.CommonTestSuite):
     def setUp(self):
         """setup the test"""
         self.get_test_info()
-        log_mask = os.getenv("D_LOG_MASK", "INFO")
+        log_mask = os.getenv("D_LOG_MASK", "DEBUG,MEM=ERR")
         log_file = self.get_cart_long_log_name()
+        fault_config = os.getenv("D_FI_CONFIG")
+        if not fault_config:
+            fault_config = os.path.join(os.getenv('CRT_PREFIX', ".."), "etc", \
+                           "fault-inject-cart.yaml")
         crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
         ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
         ofi_share_addr = os.getenv("CRT_CTX_SHARE_ADDR", "0")
@@ -73,9 +77,11 @@ class TestCartCtl(commontestsuite.CommonTestSuite):
                         ' -x CRT_PHY_ADDR_STR={!s}' \
                         ' -x OFI_INTERFACE={!s}' \
                         ' -x CRT_CTX_SHARE_ADDR={!s}' \
-                        ' -x CRT_CTX_NUM={!s}'.format(
+                        ' -x CRT_CTX_NUM={!s}' \
+                        ' -x D_FI_CONFIG={!s}'.format(
                             log_mask, log_file, crt_phy_addr,
-                            ofi_interface, ofi_share_addr, ofi_ctx_num)
+                            ofi_interface, ofi_share_addr, ofi_ctx_num,
+                            fault_config)
 
     def tearDown(self):
         """tear down the test"""
@@ -83,6 +89,7 @@ class TestCartCtl(commontestsuite.CommonTestSuite):
         os.environ.pop("CRT_PHY_ADDR_STR", "")
         os.environ.pop("OFI_INTERFACE", "")
         os.environ.pop("D_LOG_MASK", "")
+        os.environ.pop("D_FI_CONFIG", "")
         self.logger.info("tearDown end\n")
 
     def test_cart_ctl_five_nodes(self):
@@ -126,3 +133,80 @@ class TestCartCtl(commontestsuite.CommonTestSuite):
         self.stop_process(testmsg, server_proc)
         if procrtn:
             self.fail("Failed, return codes server %d" % procrtn)
+
+
+    def test_cart_ctl_one_node(self):
+        """cart_ctl test one node"""
+
+        testmsg = self.shortDescription()
+
+        client = ""
+        server = ""
+        hosts = self.get_server_list()
+
+        # Launch a test_group instance to act as a target in the
+        # background.  This will remain running for the duration.
+        if hosts:
+            client = ''.join([' -H ', hosts[0]])
+            server = ''.join([' -H ', hosts[0]])
+        srv_arg = "tests/test_group --name service-group --is_service"
+        server_proc = self.launch_bg(testmsg, '1', self.pass_env, \
+                                     server, srv_arg)
+        if server_proc is None:
+            self.fail("Server launch failed, return code %s" \
+                       % server_proc.returncode)
+
+        time.sleep(2)
+
+        # Verify the server is still running.
+        if not self.check_process(server_proc):
+            procrtn = self.stop_process(testmsg, server_proc)
+            self.fail("Server did not launch, return code %s" % procrtn)
+        self.logger.info("Server running")
+        procrtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli=client, \
+                                   cli_arg='../bin/cart_ctl list_ctx' + \
+                                           ' --group-name service-group' + \
+                                           ' --rank 0')
+        if procrtn:
+            self.fail("Failed, return codes %d" % procrtn)
+
+        procrtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli=client, \
+                                   cli_arg='../bin/cart_ctl enable_fi' + \
+                                           ' --group-name service-group' + \
+                                           ' --rank 0')
+        if procrtn:
+            self.fail("crt_ctl enable_fi failed, return codes %d"
+                      % procrtn)
+
+        procrtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli=client, \
+                                   cli_arg='../bin/cart_ctl set_fi_attr' + \
+                                           ' --attr 1911,5,0,1,100' + \
+                                           ' --group-name service-group' + \
+                                           ' --rank 0')
+        if procrtn:
+            self.fail("crt_ctl enable_fi failed, return codes %d"
+                      % procrtn)
+
+        procrtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli=client, \
+                                   cli_arg='../bin/cart_ctl disable_fi' + \
+                                           ' --group-name service-group' + \
+                                           ' --rank 0')
+        if procrtn:
+            self.fail("cart_ctl disable_fi failed, return codes %d"
+                      % procrtn)
+
+        ''' notify the server to shutdown '''
+        procrtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli=client, \
+                                   cli_arg='tests/test_group' + \
+                                           ' --name client-group' + \
+                                           ' --attach_to service-group' + \
+                                           ' --shut_only')
+        if procrtn:
+            self.fail("cart_ctl disable_fi failed, return codes %d"
+                      % procrtn)
+        self.stop_process(testmsg, server_proc)
