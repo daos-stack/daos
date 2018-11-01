@@ -478,7 +478,7 @@ class GitRepoRetriever(object):
         """ update a repository """
         #Fetch all changes and then reset head to origin/master
         commands = ['git fetch --all',
-                    'git reset --hard origin/master']
+                    'git reset --hard']
         if not RUNNER.run_commands(commands, subdir=subdir):
             raise DownloadFailure(self.url, subdir)
         self.get_specific(subdir, **kw)
