@@ -152,7 +152,7 @@ crt_li_destroy(struct crt_lookup_item *li)
 static int
 crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 {
-	struct d_hash_table	**htables;
+	struct d_hash_table	*htables;
 	int			  rc = 0, rc2, i, j;
 
 	D_ASSERT(grp_priv != NULL);
@@ -166,21 +166,20 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc = d_hash_table_create(D_HASH_FT_NOLOCK,
-					 CRT_LOOKUP_CACHE_BITS,
-					 NULL, &lookup_table_ops, &htables[i]);
+		rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
+						 CRT_LOOKUP_CACHE_BITS,
+						 NULL, &lookup_table_ops, &htables[i]);
 		if (rc != 0) {
 			D_ERROR("d_hash_table_create failed, rc: %d.\n", rc);
 			D_GOTO(free_htables, rc);
 		}
-		D_ASSERT(htables[i] != NULL);
 	}
 	grp_priv->gp_lookup_cache = htables;
 	return 0;
 
 free_htables:
 	for (j = 0; j < i; j++) {
-		rc2 = d_hash_table_destroy(htables[j], true /* force */);
+		rc2 = d_hash_table_destroy_inplace(&htables[j], true /* force */);
 		if (rc2 != 0)
 			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
 	}
@@ -204,8 +203,8 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 		return 0;
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc2 = d_hash_table_destroy(grp_priv->gp_lookup_cache[i],
-					  true /* force */);
+		rc2 = d_hash_table_destroy_inplace(&grp_priv->gp_lookup_cache[i],
+						   true /* force */);
 		if (rc2 != 0) {
 			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
 			rc = rc ? rc : rc2;
@@ -225,7 +224,7 @@ crt_grp_lc_uri_remove(struct crt_grp_priv *grp_priv, int ctx_idx,
 	struct crt_lookup_item	*li;
 	int i;
 
-	rlink = d_hash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
+	rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[ctx_idx],
 				&rank, sizeof(rank));
 	if (rlink == NULL) {
 		D_ERROR("Record for rank %d is not found\n", rank);
@@ -243,8 +242,7 @@ crt_grp_lc_uri_remove(struct crt_grp_priv *grp_priv, int ctx_idx,
 			D_FREE(li->li_uri[i]);
 	}
 
-	d_hash_rec_delete(grp_priv->gp_lookup_cache[ctx_idx],
-			&rank, sizeof(rank));
+	d_hash_rec_delete_at(&grp_priv->gp_lookup_cache[ctx_idx], rlink);
 	D_MUTEX_DESTROY(&li->li_mutex);
 	D_FREE(li);
 	return 0;
@@ -268,7 +266,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 		return -DER_INVAL;
 	}
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-	rlink = d_hash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
+	rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[ctx_idx],
 				(void *)&rank, sizeof(rank));
 	if (rlink == NULL) {
 		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
@@ -297,7 +295,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 		li->li_evicted = 0;
 
 		D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-		rc = d_hash_rec_insert(grp_priv->gp_lookup_cache[ctx_idx],
+		rc = d_hash_rec_insert(&grp_priv->gp_lookup_cache[ctx_idx],
 				       &rank, sizeof(rank), &li->li_link,
 				       true /* exclusive */);
 		if (rc != 0) {
@@ -347,7 +345,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 			tag, &li->li_link);
 	}
 	D_MUTEX_UNLOCK(&li->li_mutex);
-	d_hash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
+	d_hash_rec_decref(&grp_priv->gp_lookup_cache[ctx_idx], rlink);
 
 unlock:
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
@@ -434,18 +432,16 @@ out:
 static int
 crt_grp_lc_ctx_invalid(struct crt_grp_priv *grp_priv, struct crt_context *ctx)
 {
-	struct d_hash_table	*lc_cache;
-	int			 ctx_idx;
-	int			 rc = 0;
+	int	 ctx_idx;
+	int	 rc = 0;
 
 	D_ASSERT(grp_priv != NULL && grp_priv->gp_primary == 1);
 	D_ASSERT(ctx != NULL);
 	ctx_idx = ctx->cc_idx;
 	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
-	lc_cache = grp_priv->gp_lookup_cache[ctx_idx];
-	D_ASSERT(lc_cache != NULL);
-	rc = d_hash_table_traverse(lc_cache, crt_grp_lc_addr_invalid, ctx);
+	rc = d_hash_table_traverse(&grp_priv->gp_lookup_cache[ctx_idx],
+				   crt_grp_lc_addr_invalid, ctx);
 	if (rc != 0)
 		D_ERROR("d_hash_table_traverse failed, ctx_idx %d, rc: %d.\n",
 			ctx_idx, rc);
@@ -520,7 +516,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
 
 	ctx_idx = crt_ctx->cc_idx;
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-	rlink = d_hash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
+	rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[ctx_idx],
 				(void *)&rank, sizeof(rank));
 	D_ASSERT(rlink != NULL);
 	li = crt_li_link2ptr(rlink);
@@ -548,7 +544,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
 out:
 	D_MUTEX_UNLOCK(&li->li_mutex);
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-	d_hash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
+	d_hash_rec_decref(&grp_priv->gp_lookup_cache[ctx_idx], rlink);
 
 	return rc;
 }
@@ -592,7 +588,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	}
 
 	D_RWLOCK_RDLOCK(&default_grp_priv->gp_rwlock);
-	rlink = d_hash_rec_find(default_grp_priv->gp_lookup_cache[ctx_idx],
+	rlink = d_hash_rec_find(&default_grp_priv->gp_lookup_cache[ctx_idx],
 				(void *)&rank, sizeof(rank));
 	if (rlink != NULL) {
 		li = crt_li_link2ptr(rlink);
@@ -604,9 +600,8 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		if (li->li_evicted == 1) {
 			D_MUTEX_UNLOCK(&li->li_mutex);
 			D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
-			d_hash_rec_decref(
-				default_grp_priv->gp_lookup_cache[ctx_idx],
-				rlink);
+			d_hash_rec_decref(&default_grp_priv->gp_lookup_cache[ctx_idx],
+					  rlink);
 			D_ERROR("tag %d on rank %d already evicted.\n", tag,
 				rank);
 			D_GOTO(out, rc = -DER_EVICTED);
@@ -619,8 +614,8 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		else if (li->li_tag_addr[tag] != NULL)
 			*hg_addr = li->li_tag_addr[tag];
 		D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
-		d_hash_rec_decref(
-			default_grp_priv->gp_lookup_cache[ctx_idx], rlink);
+		d_hash_rec_decref(&default_grp_priv->gp_lookup_cache[ctx_idx],
+				  rlink);
 		D_GOTO(out, rc);
 	}
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
@@ -643,7 +638,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	}
 
 	D_RWLOCK_WRLOCK(&default_grp_priv->gp_rwlock);
-	rc = d_hash_rec_insert(default_grp_priv->gp_lookup_cache[ctx_idx],
+	rc = d_hash_rec_insert(&default_grp_priv->gp_lookup_cache[ctx_idx],
 			       &rank, sizeof(rank), &li->li_link,
 			       true /* exclusive */);
 	if (rc != 0) {
@@ -3005,7 +3000,7 @@ crt_grp_lc_mark_evicted(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	D_ASSERT(rank < grp_priv->gp_size);
 
 	for (ctx_idx = 0; ctx_idx < CRT_SRV_CONTEXT_NUM; ctx_idx++) {
-		htable = grp_priv->gp_lookup_cache[ctx_idx];
+		htable = &grp_priv->gp_lookup_cache[ctx_idx];
 		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 		rlink = d_hash_rec_find(htable, &rank, sizeof(rank));
 		if (rlink == NULL) {
@@ -3762,8 +3757,8 @@ int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info)
 	for (i = 0; i < membs->rl_nr; i++) {
 		rank = membs->rl_ranks[i];
 
-		rlink = d_hash_rec_find(grp_priv->gp_lookup_cache[0],
-				(void *)&rank, sizeof(rank));
+		rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[0],
+					(void *)&rank, sizeof(rank));
 
 		if (rlink == NULL) {
 			D_ERROR("No record found for rank=%d\n", rank);
@@ -3801,7 +3796,7 @@ int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info)
 	for (i = 0; i < membs->rl_nr; i++) {
 		rank = membs->rl_ranks[i];
 
-		rlink = d_hash_rec_find(grp_priv->gp_lookup_cache[0],
+		rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[0],
 					&rank, sizeof(rank));
 
 		if (rlink == NULL) {
