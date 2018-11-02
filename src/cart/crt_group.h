@@ -415,8 +415,6 @@ crt_ep_copy(crt_endpoint_t *dst_ep, crt_endpoint_t *src_ep)
 	dst_ep->ep_tag = src_ep->ep_tag;
 }
 
-void crt_li_destroy(struct crt_lookup_item *li);
-
 struct crt_lookup_item *crt_li_link2ptr(d_list_t *rlink);
 
 static inline uint64_t
