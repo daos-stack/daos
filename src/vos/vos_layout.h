@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,7 +143,10 @@ struct vos_cont_df {
 
 /** btree (d/a-key) record bit flags */
 enum vos_krec_bf {
+	/* The record has an evtree */
 	KREC_BF_EVT			= (1 << 0),
+	/* The key is punched at time kr_latest */
+	KREC_BF_PUNCHED			= (1 << 1),
 };
 
 /**
@@ -161,8 +164,10 @@ struct vos_krec_df {
 	uint8_t				kr_pad_8;
 	/** key length */
 	uint32_t			kr_size;
-	/** punched epoch, it's infinity if it's never been punched */
-	uint64_t			kr_punched;
+	/* Latest known update timestamp or punched timestamp */
+	daos_epoch_t			kr_latest;
+	/* Earliest known modification timestamp */
+	daos_epoch_t			kr_earliest;
 	/** btree root under the key */
 	struct btr_root			kr_btr;
 	/** evtree root, which is only used by akey */

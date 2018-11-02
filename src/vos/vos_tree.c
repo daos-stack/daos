@@ -272,6 +272,7 @@ ktr_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_krec_df	*krec;
 	struct vos_key_bundle	*kbund;
 	uint64_t		 feats = tins->ti_root->tr_feats;
+	daos_epoch_t		 punched = DAOS_EPOCH_MAX;
 	int			 cmp = 0;
 
 	krec  = vos_rec2krec(tins, rec);
@@ -288,10 +289,12 @@ ktr_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 	if (cmp != BTR_CMP_EQ)
 		return cmp;
 
-	if (krec->kr_punched > kbund->kb_epoch)
+	if (krec->kr_bmap & KREC_BF_PUNCHED)
+		punched = krec->kr_latest;
+	if (punched > kbund->kb_epoch)
 		return BTR_CMP_GT | BTR_CMP_MATCHED;
 
-	if (krec->kr_punched < kbund->kb_epoch)
+	if (punched < kbund->kb_epoch)
 		return BTR_CMP_LT | BTR_CMP_MATCHED;
 
 	return BTR_CMP_EQ;
@@ -355,7 +358,19 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		return -DER_NOMEM;
 
 	krec = vos_rec2krec(tins, rec);
-	krec->kr_punched = kbund->kb_epoch;
+	if (kbund->kb_epoch == DAOS_EPOCH_MAX) {
+		/* These will be updated on first update */
+		krec->kr_earliest = DAOS_EPOCH_MAX;
+		krec->kr_latest = 0;
+	} else {
+		/* NB: if it's the first time punch, kr_earliest will be updated
+		 * to timestamp of punched tree.  If it's a replay, we know it
+		 * will never be greater than the punched epoch so it's a
+		 * reasonable starting boundary.
+		 */
+		krec->kr_earliest = krec->kr_latest = kbund->kb_epoch;
+		krec->kr_bmap |= KREC_BF_PUNCHED;
+	}
 	rbund->rb_krec = krec;
 
 	/* Step-1: find the btree attributes and create btree */
@@ -457,7 +472,13 @@ ktr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 	if (key_iov != NULL) {
 		kbund = iov2key_bundle(key_iov);
-		kbund->kb_epoch = krec->kr_punched;
+		/* NB: For now, this preserves previous fetch semantics but
+		 * need to investigate further if it's needed
+		 */
+		if (krec->kr_bmap & KREC_BF_PUNCHED)
+			kbund->kb_epoch = krec->kr_latest;
+		else
+			kbund->kb_epoch = DAOS_EPOCH_MAX;
 
 		ktr_rec_load(tins, rec, kbund, rbund);
 	}
@@ -773,7 +794,8 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 int
 key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, daos_handle_t *sub_toh)
+		 daos_key_t *key, int flags, struct vos_krec_df **krecp,
+		 daos_handle_t *sub_toh)
 {
 	struct umem_attr	*uma = vos_obj2uma(obj);
 	struct vos_krec_df	*krec;
@@ -784,6 +806,9 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 	daos_iov_t		 riov;
 	struct vea_space_info	*info;
 	int			 rc;
+
+	if (krecp != NULL)
+		*krecp = NULL;
 
 	D_DEBUG(DB_IO, "prepare tree, flags=%x, tclass=%d\n", flags, tclass);
 	if (tclass != VOS_BTR_AKEY && (flags & SUBTR_EVT))
@@ -831,13 +856,18 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		break;
 	case 0:
 		krec = rbund.rb_krec;
-		if (krec->kr_punched == epoch && epoch != DAOS_EPOCH_MAX) {
+		if (krec->kr_bmap & KREC_BF_PUNCHED &&
+		    krec->kr_latest == epoch) {
 			/* already punched in this epoch */
 			rc = -DER_NONEXIST;
 			goto out;
 		}
 		break;
 	}
+
+	/* For updates, we need to be able to modify the epoch range */
+	if (krecp != NULL)
+		*krecp = krec;
 
 	info = obj->obj_cont->vc_pool->vp_vea_info;
 	if (flags & SUBTR_EVT) {
@@ -897,11 +927,13 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	rbund = iov2rec_bundle(val_iov);
 	krec = rbund->rb_krec;
 
-	if (krec->kr_punched == kbund->kb_epoch)
+	if (krec->kr_bmap & KREC_BF_PUNCHED &&
+	    krec->kr_latest == kbund->kb_epoch)
 		return 0; /* nothing to do */
 
-	if (krec->kr_punched != DAOS_EPOCH_MAX && !replay) {
-		D_CRIT("Underwrite is only for replay\n");
+	if (krec->kr_latest >= kbund->kb_epoch && !replay) {
+		D_CRIT("Underwrite is only allowed for punch replay: "
+		       DF_U64" >="DF_U64"\n", krec->kr_latest, kbund->kb_epoch);
 		return -DER_NO_PERM;
 	}
 
@@ -927,6 +959,9 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 					sizeof(krec->kr_evt[0]));
 			memset(&krec->kr_evt[0], 0, sizeof(krec->kr_evt[0]));
 		}
+		/* Capture the earliest modification time of the removed key */
+		krec2->kr_earliest = krec->kr_earliest;
+
 		tree_key_bundle2iov(&kbund2, &tmp);
 		kbund2.kb_key	= kbund->kb_key;
 		kbund2.kb_epoch	= DAOS_EPOCH_MAX;

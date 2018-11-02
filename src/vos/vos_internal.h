@@ -819,7 +819,8 @@ enum {
 int
 key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, daos_handle_t *sub_toh);
+		 daos_key_t *key, int flags, struct vos_krec_df **krec,
+		 daos_handle_t *sub_toh);
 void
 key_tree_release(daos_handle_t toh, bool is_array);
 int

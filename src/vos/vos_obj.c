@@ -107,7 +107,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 		int		i;
 
 		rc = key_tree_prepare(obj, epoch, obj->obj_toh, VOS_BTR_DKEY,
-				      dkey, SUBTR_CREATE, &toh);
+				      dkey, SUBTR_CREATE, NULL, &toh);
 		if (rc)
 			D_GOTO(out, rc); /* real failure */
 
@@ -217,7 +217,10 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	rc = dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
 	if (rc == 0) {
 		D_ASSERT(rbund.rb_krec);
-		ent->ie_epoch = rbund.rb_krec->kr_punched;
+		if (rbund.rb_krec->kr_bmap & KREC_BF_PUNCHED)
+			ent->ie_epoch = rbund.rb_krec->kr_latest;
+		else
+			ent->ie_epoch = DAOS_EPOCH_MAX;
 	}
 	return rc;
 }
@@ -289,7 +292,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 	}
 
 	rc = key_tree_prepare(obj, ent->ie_epoch, obj->obj_toh, VOS_BTR_DKEY,
-			      &ent->ie_key, 0, &toh);
+			      &ent->ie_key, 0, NULL, &toh);
 	if (rc != 0) {
 		D_DEBUG(DB_IO, "can't load the akey tree: %d\n", rc);
 		return rc;
@@ -420,7 +423,7 @@ akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
 	int			 rc;
 
 	rc = key_tree_prepare(obj, oiter->it_epr.epr_lo, obj->obj_toh,
-			      VOS_BTR_DKEY, dkey, 0, &toh);
+			      VOS_BTR_DKEY, dkey, 0, NULL, &toh);
 	if (rc != 0) {
 		D_ERROR("Cannot load the akey tree: %d\n", rc);
 		return rc;
@@ -459,12 +462,12 @@ singv_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	int			 rc;
 
 	rc = key_tree_prepare(obj, oiter->it_epr.epr_hi, obj->obj_toh,
-			      VOS_BTR_DKEY, dkey, 0, &dk_toh);
+			      VOS_BTR_DKEY, dkey, 0, NULL, &dk_toh);
 	if (rc != 0)
 		D_GOTO(failed_0, rc);
 
 	rc = key_tree_prepare(obj, oiter->it_epr.epr_hi, dk_toh,
-			      VOS_BTR_AKEY, akey, 0, &ak_toh);
+			      VOS_BTR_AKEY, akey, 0, NULL, &ak_toh);
 	if (rc != 0)
 		D_GOTO(failed_1, rc);
 
@@ -693,12 +696,12 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	int			 rc;
 
 	rc = key_tree_prepare(obj, oiter->it_epr.epr_hi, obj->obj_toh,
-			      VOS_BTR_DKEY, dkey, 0, &dk_toh);
+			      VOS_BTR_DKEY, dkey, 0, NULL, &dk_toh);
 	if (rc != 0)
 		D_GOTO(failed_0, rc);
 
 	rc = key_tree_prepare(obj, oiter->it_epr.epr_hi, dk_toh,
-			      VOS_BTR_AKEY, akey, SUBTR_EVT, &ak_toh);
+			      VOS_BTR_AKEY, akey, SUBTR_EVT, NULL, &ak_toh);
 	if (rc != 0)
 		D_GOTO(failed_1, rc);
 

@@ -420,7 +420,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		flags |= SUBTR_EVT;
 
 	rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
-			      &iod->iod_name, flags, &toh);
+			      &iod->iod_name, flags, NULL, &toh);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_IO, "Nonexistent akey %d %s\n",
 			(int)iod->iod_name.iov_len,
@@ -503,7 +503,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 		return rc;
 
 	rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh, VOS_BTR_DKEY,
-			      dkey, 0, &toh);
+			      dkey, 0, NULL, &toh);
 	if (rc == -DER_NONEXIST) {
 		for (i = 0; i < ioc->ic_iod_nr; i++)
 			iod_empty_sgl(ioc, i);
@@ -659,14 +659,67 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uuid_t cookie,
 }
 
 static int
+krec_update(struct vos_io_context *ioc, struct vos_krec_df *krec,
+	    const daos_epoch_range_t *epr)
+{
+	struct umem_instance	*umm;
+	int			 rc = 0;
+
+	D_ASSERT(krec != NULL);
+
+	if (krec->kr_latest >= epr->epr_hi &&
+	    krec->kr_earliest <= epr->epr_lo)
+		goto out;
+
+	umm = vos_obj2umm(ioc->ic_obj);
+
+	if (krec->kr_latest < epr->epr_hi) {
+		rc = umem_tx_add_ptr(umm, &krec->kr_latest,
+				     sizeof(krec->kr_latest));
+		if (rc != 0)
+			goto out;
+		krec->kr_latest = epr->epr_hi;
+	}
+	if (krec->kr_earliest > epr->epr_lo) {
+		rc = umem_tx_add_ptr(umm, &krec->kr_earliest,
+				     sizeof(krec->kr_earliest));
+		if (rc != 0)
+			goto out;
+		krec->kr_earliest = epr->epr_lo;
+	}
+out:
+	return rc;
+}
+
+static void
+update_bounds(daos_epoch_range_t *epr_bound,
+	      const daos_epoch_range_t *new_epr)
+{
+	daos_epoch_t	epoch;
+
+	D_ASSERT(epr_bound != NULL);
+	D_ASSERT(new_epr != NULL);
+	D_ASSERT(epr_bound->epr_hi != DAOS_EPOCH_MAX);
+
+	epoch = new_epr->epr_lo;
+
+	if (epoch > epr_bound->epr_hi)
+		epr_bound->epr_hi = epoch;
+	if (epoch < epr_bound->epr_lo)
+		epr_bound->epr_lo = epoch;
+}
+
+static int
 akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
-	    daos_handle_t ak_toh, daos_epoch_t *max_eph)
+	    daos_handle_t ak_toh, daos_epoch_range_t *dkey_epr)
 {
 	struct vos_object  *obj = ioc->ic_obj;
+	struct vos_krec_df *krec = NULL;
 	daos_iod_t	   *iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	bool		    is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 	int		    flags = SUBTR_CREATE;
 	daos_epoch_t	    epoch = ioc->ic_epoch;
+	daos_epoch_range_t  akey_epr = {DAOS_EPOCH_MAX, 0};
 	int		    i, rc;
 	daos_handle_t	    toh;
 
@@ -678,17 +731,16 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 		flags |= SUBTR_EVT;
 
 	rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
-			      &iod->iod_name, flags, &toh);
+			      &iod->iod_name, flags, &krec, &toh);
 	if (rc != 0)
 		return rc;
 
+	if (iod->iod_eprs == NULL)
+		akey_epr.epr_hi = akey_epr.epr_lo = epoch;
+
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		if (iod->iod_eprs) {
-			epoch = iod->iod_eprs[0].epr_lo;
-			if ((epoch > ioc->ic_epoch ||
-			     *max_eph == DAOS_EPOCH_MAX) && max_eph != NULL)
-				*max_eph = epoch;
-		}
+		if (iod->iod_eprs)
+			update_bounds(&akey_epr, &iod->iod_eprs[0]);
 
 		rc = akey_update_single(toh, epoch, cookie, pm_ver,
 					iod->iod_size, ioc);
@@ -696,12 +748,8 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	} /* else: array */
 
 	for (i = 0; i < iod->iod_nr; i++) {
-		if (iod->iod_eprs) {
-			epoch = iod->iod_eprs[i].epr_lo;
-			if ((epoch > ioc->ic_epoch ||
-			     *max_eph == DAOS_EPOCH_MAX) && max_eph != NULL)
-				*max_eph = epoch;
-		}
+		if (iod->iod_eprs)
+			update_bounds(&akey_epr, &iod->iod_eprs[i]);
 
 		D_DEBUG(DB_IO, "fetch %d eph "DF_U64"\n", i, epoch);
 		rc = akey_update_recx(toh, epoch, cookie, pm_ver,
@@ -710,6 +758,10 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 			goto out;
 	}
 out:
+	if (rc == 0) {
+		krec_update(ioc, krec, &akey_epr);
+		update_bounds(dkey_epr, &akey_epr);
+	}
 	key_tree_release(toh, is_array);
 	return rc;
 }
@@ -718,11 +770,12 @@ static int
 dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	    daos_key_t *dkey)
 {
-	struct vos_object *obj = ioc->ic_obj;
-	daos_epoch_t	  max_eph = ioc->ic_epoch;
-	daos_handle_t	   ak_toh, ck_toh;
-	bool		   subtr_created = false;
-	int		   i, rc;
+	struct vos_object	*obj = ioc->ic_obj;
+	struct vos_krec_df	*krec = NULL;
+	daos_epoch_range_t	 dkey_epr = {ioc->ic_epoch, ioc->ic_epoch};
+	daos_handle_t		 ak_toh, ck_toh;
+	bool			 subtr_created = false;
+	int			 i, rc;
 
 	rc = obj_tree_init(obj);
 	if (rc != 0)
@@ -740,13 +793,13 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 		if (!subtr_created) {
 			rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh,
 					      VOS_BTR_DKEY, dkey, SUBTR_CREATE,
-					      &ak_toh);
+					      &krec, &ak_toh);
 			if (rc != 0)
 				goto out;
 			subtr_created = true;
 		}
 
-		rc = akey_update(ioc, cookie, pm_ver, ak_toh, &max_eph);
+		rc = akey_update(ioc, cookie, pm_ver, ak_toh, &dkey_epr);
 		if (rc != 0)
 			goto out;
 	}
@@ -757,16 +810,19 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	 */
 	if (subtr_created) {
 		ck_toh = vos_obj2cookie_hdl(obj);
-		rc = vos_cookie_find_update(ck_toh, cookie, max_eph, true,
-					    NULL);
+		rc = vos_cookie_find_update(ck_toh, cookie, dkey_epr.epr_hi,
+					    true, NULL);
 		if (rc) {
 			D_ERROR("Failed to record cookie: %d\n", rc);
 			goto out;
 		}
 	}
 out:
-	if (subtr_created)
+	if (subtr_created) {
+		D_ASSERT(krec != NULL);
+		krec_update(ioc, krec, &dkey_epr);
 		key_tree_release(ak_toh, false);
+	}
 	return rc;
 }
 
