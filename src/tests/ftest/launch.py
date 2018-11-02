@@ -132,7 +132,10 @@ if __name__ == "__main__":
         output_options = ' --show-job-log --html-job-result on'
 
     ignore_errors = ' --ignore-missing-references on'
-    category = ' --filter-by-tags=' + test_request
+    if test_request != 'all':
+        category = ' --filter-by-tags=' + test_request
+    else:
+        category = ''
 
     def run_test(_file, use_tags=True):
         param_file = yamlforpy(_file)
@@ -150,9 +153,12 @@ if __name__ == "__main__":
 
     # run only provided tagged tests.
     for _file in test_files:
-        list_cmd = 'avocado list {0} {1}'.format(category, _file)
-        if _file in subprocess.check_output(list_cmd, shell=True):
+        if test_request == 'all':
             run_test(_file)
+        else:
+            list_cmd = 'avocado list {0} {1}'.format(category, _file)
+            if _file in subprocess.check_output(list_cmd, shell=True):
+                run_test(_file)
 
     # and explicitly listed tests.
     for _file in addnl_tests:
