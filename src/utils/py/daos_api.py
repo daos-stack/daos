@@ -69,7 +69,7 @@ class DaosPool(object):
         self.uuid = (ctypes.c_ubyte * 16)()
         rank_t = ctypes.c_uint * svcn
         # initializing with default values
-        rank = rank_t(*list([99 for i in range(svcn)]))
+        rank = rank_t(*list([999999 for i in range(svcn)]))
         rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
         c_whatever = ctypes.create_string_buffer(b"rubbish")
         self.svc = RankList(rl_ranks, svcn)

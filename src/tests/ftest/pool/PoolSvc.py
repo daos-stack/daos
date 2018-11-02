@@ -64,8 +64,8 @@ class PoolSvc(Test):
         self.POOL = None
 
         self.hostfile = None
-        hostlist = self.params.get("test_machines",'/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+        self.hostlist = self.params.get("test_machines",'/run/hosts/*')
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
         print("Host file is: {}".format(self.hostfile))
 
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
@@ -103,6 +103,23 @@ class PoolSvc(Test):
             self.POOL.create(createmode, createuid, creategid,
                     createsize, createsetid, None, None, createsvc[0])
             self.POOL.connect(1 << 1)
+            # checking returned rank list value for single server
+            if ((len(self.hostlist) == 1) and (int(self.POOL.svc.rl_ranks[i] != 0))):
+                self.fail("Incorrect returned rank list value for single server")
+            # checking returned rank list for server more than 1
+            i = 0
+            while ((int(self.POOL.svc.rl_ranks[i]) > 0) and \
+                  (int(self.POOL.svc.rl_ranks[i]) <= createsvc[0]) and \
+                  (int(self.POOL.svc.rl_ranks[i]) != 999999)):
+                i +=1
+            if i != createsvc[0]:
+                self.fail("Length of Returned Rank list is not equal to" \
+                          " the number of Pool Service members.\n")
+            list = []
+            for j in range(createsvc[0]):
+                list.append(int(self.POOL.svc.rl_ranks[j]))
+                if len(list) != len(set(list)):
+                    self.fail("Duplicate values in returned rank list")
 
             if (createsvc[0] == 3):
                 self.POOL.disconnect()
