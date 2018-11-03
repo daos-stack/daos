@@ -20,5 +20,8 @@ def scons():
     daos_build.test(denv, 'abt_perf', 'abt_perf.c',
                     LIBS=['daos_common', 'gurt', 'abt'])
 
+    daos_build.test(denv, 'drpc_tests', 'drpc_tests.c',
+                    LIBS=['daos_common', 'gurt', 'cmocka'])
+
 if __name__ == "SCons.Script":
     scons()
