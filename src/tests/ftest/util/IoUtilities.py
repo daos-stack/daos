@@ -75,7 +75,7 @@ def WriteUntilFull(container):
             akey = ''.join(random.choice(string.ascii_uppercase + string.digits)
                            for _ in range(5))
             data = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                       for _ in range(size))
+                           for _ in range(size))
 
             oid, epoch = container.write_an_obj(data, size, dkey, akey)
             total_written += size
@@ -112,7 +112,7 @@ def WriteQuantity(container,size_in_bytes):
             akey = ''.join(random.choice(string.ascii_uppercase + string.digits)
                            for _ in range(5))
             data = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                       for _ in range(size))
+                           for _ in range(size))
 
             oid, epoch = container.write_an_obj(data, size, dkey, akey)
             total_written += size

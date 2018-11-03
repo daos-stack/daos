@@ -99,5 +99,3 @@ if __name__ == "__main__":
            status in ("Closed","Done","Resolved")"""
     issues = jira.search_issues(q)
     print("total test stories completed> {}".format(issues.total))
-
-

@@ -67,7 +67,7 @@ class BadConnectTest(Test):
         time.sleep(2)
 
     def tearDown(self):
-       ServerUtils.stopServer(hosts=self.hostlist)
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_connect(self):
         """
@@ -111,7 +111,7 @@ class BadConnectTest(Test):
         # virtually everyone should FAIL since we are testing bad parameters
         expected_result = 'PASS'
         for result in expected_for_param:
-               if result == 'FAIL':
+                if result == 'FAIL':
                       expected_result = 'FAIL'
                       break
 
@@ -145,13 +145,13 @@ class BadConnectTest(Test):
             POOL.connect(connectmode)
 
             if expected_result in ['FAIL']:
-                   self.fail("Test was expected to fail but it passed.\n")
+                    self.fail("Test was expected to fail but it passed.\n")
 
         except ValueError as e:
             print e
             print traceback.format_exc()
             if expected_result in ['PASS']:
-                   self.fail("Test was expected to pass but it failed.\n")
+                    self.fail("Test was expected to pass but it failed.\n")
 
         # cleanup the pool
         finally:

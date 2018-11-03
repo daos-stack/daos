@@ -40,7 +40,7 @@ class ServerFailed(Exception):
 # a callback function used when there is cmd line I/O, not intended
 # to be used outside of this file
 def printFunc(thestring):
-       print "<SERVER>" + thestring
+        print "<SERVER>" + thestring
 
 def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """

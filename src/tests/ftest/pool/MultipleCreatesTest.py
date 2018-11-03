@@ -47,28 +47,28 @@ class MultipleCreatesTest(Test):
     # super wasteful since its doing this for every variation
     def setUp(self):
 
-       # there is a presumption that this test lives in a specific
-       # spot in the repo
-       with open('../../../.build_vars.json') as f:
-           build_paths = json.load(f)
-       basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-       tmp = build_paths['PREFIX'] + '/tmp'
+        # there is a presumption that this test lives in a specific
+        # spot in the repo
+        with open('../../../.build_vars.json') as f:
+            build_paths = json.load(f)
+        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        tmp = build_paths['PREFIX'] + '/tmp'
 
-       self.hostlist = self.params.get("test_machines",'/run/hosts/')
-       self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostlist = self.params.get("test_machines",'/run/hosts/')
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
-       server_group = self.params.get("server_group",'/server/','daos_server')
+        server_group = self.params.get("server_group",'/server/','daos_server')
 
-       ServerUtils.runServer(self.hostfile, server_group, basepath)
-       # not sure I need to do this but ... give it time to start
-       time.sleep(2)
+        ServerUtils.runServer(self.hostfile, server_group, basepath)
+        # not sure I need to do this but ... give it time to start
+        time.sleep(2)
 
-       self.daosctl = basepath + '/install/bin/daosctl'
+        self.daosctl = basepath + '/install/bin/daosctl'
 
 
     def tearDown(self):
-       os.remove(self.hostfile)
-       ServerUtils.stopServer(hosts=self.hostlist)
+        os.remove(self.hostfile)
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_create_one(self):
         """
@@ -96,39 +96,39 @@ class MultipleCreatesTest(Test):
         # if any parameter results in failure then the test should FAIL
         expected_result = 'PASS'
         for result in expected_for_param:
-               if result == 'FAIL':
+                if result == 'FAIL':
                       expected_result = 'FAIL'
                       break
         try:
-               cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4} -c 1'.
-                      format(self.daosctl, mode, uid, gid, setid))
-               uuid_str = """{0}""".format(process.system_output(cmd))
-               print("uuid is {0}\n".format(uuid_str))
+                cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4} -c 1'.
+                       format(self.daosctl, mode, uid, gid, setid))
+                uuid_str = """{0}""".format(process.system_output(cmd))
+                print("uuid is {0}\n".format(uuid_str))
 
-               host = self.hostlist[0]
-               exists = CheckForPool.checkForPool(host, uuid_str)
-               if exists != 0:
+                host = self.hostlist[0]
+                exists = CheckForPool.checkForPool(host, uuid_str)
+                if exists != 0:
                       self.fail("Pool {0} not found on host {1}.\n".
                                 format(uuid_str, host))
 
-               delete_cmd =  ('{0} destroy-pool '
-                              '-i {1} -s {2} -f'.format(self.daosctl,
-                                                        uuid_str, setid))
+                delete_cmd =  ('{0} destroy-pool '
+                               '-i {1} -s {2} -f'.format(self.daosctl,
+                                                         uuid_str, setid))
 
-               process.system(delete_cmd)
+                process.system(delete_cmd)
 
-               exists = CheckForPool.checkForPool(host, uuid_str)
-               if exists == 0:
+                exists = CheckForPool.checkForPool(host, uuid_str)
+                if exists == 0:
                       self.fail("Pool {0} found on host {1} after destroy.\n".
                                 format(uuid_str, host))
 
-               if expected_result == 'FAIL':
+                if expected_result == 'FAIL':
                       self.fail("Expected to fail but passed.\n")
 
         except Exception as e:
-               print e
-               print traceback.format_exc()
-               if expected_result == 'PASS':
+                print e
+                print traceback.format_exc()
+                if expected_result == 'PASS':
                       self.fail("Expecting to pass but test has failed.\n")
 
 
@@ -158,53 +158,53 @@ class MultipleCreatesTest(Test):
         # if any parameter results in failure then the test should FAIL
         expected_result = 'PASS'
         for result in expected_for_param:
-               if result == 'FAIL':
+                if result == 'FAIL':
                       expected_result = 'FAIL'
                       break
         try:
-               cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4} -c 1'.
-               format(self.daosctl, mode, uid, gid, setid))
+                cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4} -c 1'.
+                format(self.daosctl, mode, uid, gid, setid))
 
-               uuid_str_1 = """{0}""".format(process.system_output(cmd))
-               uuid_str_2 = """{0}""".format(process.system_output(cmd))
+                uuid_str_1 = """{0}""".format(process.system_output(cmd))
+                uuid_str_2 = """{0}""".format(process.system_output(cmd))
 
-               host = self.hostlist[0]
-               exists = CheckForPool.checkForPool(host, uuid_str_1)
-               if exists != 0:
+                host = self.hostlist[0]
+                exists = CheckForPool.checkForPool(host, uuid_str_1)
+                if exists != 0:
                       self.fail("Pool {0} not found on host {1}.\n".
                                 format(uuid_str_1, host))
-               exists = CheckForPool.checkForPool(host, uuid_str_2)
-               if exists != 0:
+                exists = CheckForPool.checkForPool(host, uuid_str_2)
+                if exists != 0:
                       self.fail("Pool {0} not found on host {1}.\n".
                                 format(uuid_str_2, host))
 
-               delete_cmd_1 =  ('{0} destroy-pool '
+                delete_cmd_1 =  ('{0} destroy-pool '
                                 ' -i {1} -s {2} -f'.format(
                                      self.daosctl, uuid_str_1, setid))
 
-               delete_cmd_2 =  ('{0} destroy-pool '
+                delete_cmd_2 =  ('{0} destroy-pool '
                                 ' -i {1} -s {2} -f'.format(self.daosctl,
                                                            uuid_str_2, setid))
 
-               process.system(delete_cmd_1)
-               process.system(delete_cmd_2)
+                process.system(delete_cmd_1)
+                process.system(delete_cmd_2)
 
-               exists = CheckForPool.checkForPool(host, uuid_str_1)
-               if exists == 0:
+                exists = CheckForPool.checkForPool(host, uuid_str_1)
+                if exists == 0:
                       self.fail("Pool {0} found on host {1} after destroy.\n".
                                 format(uuid_str_1, host))
-               exists = CheckForPool.checkForPool(host, uuid_str_2)
-               if exists == 0:
+                exists = CheckForPool.checkForPool(host, uuid_str_2)
+                if exists == 0:
                       self.fail("Pool {0} found on host {1} after destroy.\n".
                                 format(uuid_str_2, host))
 
-               if expected_result == 'FAIL':
+                if expected_result == 'FAIL':
                       self.fail("Expected to fail but passed.\n")
 
         except Exception as e:
-               print e
-               print traceback.format_exc()
-               if expected_result == 'PASS':
+                print e
+                print traceback.format_exc()
+                if expected_result == 'PASS':
                       self.fail("Expecting to pass but test has failed.\n")
 
 
@@ -234,68 +234,68 @@ class MultipleCreatesTest(Test):
         # if any parameter results in failure then the test should FAIL
         expected_result = 'PASS'
         for result in expected_for_param:
-               if result == 'FAIL':
+                if result == 'FAIL':
                       expected_result = 'FAIL'
                       break
         try:
-               cmd = ('{0} create-pool '
+                cmd = ('{0} create-pool '
                       '-m {1} -u {2} -g {3} -s {4} -c 1'.
                       format(self.daosctl, mode, uid, gid, setid))
 
-               uuid_str_1 = """{0}""".format(process.system_output(cmd))
-               uuid_str_2 = """{0}""".format(process.system_output(cmd))
-               uuid_str_3 = """{0}""".format(process.system_output(cmd))
+                uuid_str_1 = """{0}""".format(process.system_output(cmd))
+                uuid_str_2 = """{0}""".format(process.system_output(cmd))
+                uuid_str_3 = """{0}""".format(process.system_output(cmd))
 
-               host = self.hostlist[0]
-               exists = CheckForPool.checkForPool(host, uuid_str_1)
-               if exists != 0:
+                host = self.hostlist[0]
+                exists = CheckForPool.checkForPool(host, uuid_str_1)
+                if exists != 0:
                       self.fail("Pool {0} not found on host {1}.\n".
                                 format(uuid_str_1, host))
-               exists = CheckForPool.checkForPool(host, uuid_str_2)
-               if exists != 0:
+                exists = CheckForPool.checkForPool(host, uuid_str_2)
+                if exists != 0:
                       self.fail("Pool {0} not found on host {1}.\n".
                                 format(uuid_str_2, host))
-               exists = CheckForPool.checkForPool(host, uuid_str_3)
-               if exists != 0:
+                exists = CheckForPool.checkForPool(host, uuid_str_3)
+                if exists != 0:
                       self.fail("Pool {0} not found on host {1}.\n".
                                 format(uuid_str_3, host))
 
-               delete_cmd_1 =  ('{0} destroy-pool '
+                delete_cmd_1 =  ('{0} destroy-pool '
                                 '-i {1} -s {2} -f'.format(self.daosctl,
                                                           uuid_str_1, setid))
 
-               delete_cmd_2 =  ('{0} destroy-pool '
+                delete_cmd_2 =  ('{0} destroy-pool '
                                 '-i {1} -s {2} -f'.format(self.daosctl,
                                                           uuid_str_2, setid))
 
-               delete_cmd_3 =  ('{0} destroy-pool '
+                delete_cmd_3 =  ('{0} destroy-pool '
                                 '-i {1} -s {2} -f'.format(self.daosctl,
                                                           uuid_str_3, setid))
 
-               process.system(delete_cmd_1)
-               process.system(delete_cmd_2)
-               process.system(delete_cmd_3)
+                process.system(delete_cmd_1)
+                process.system(delete_cmd_2)
+                process.system(delete_cmd_3)
 
-               exists = CheckForPool.checkForPool(host, uuid_str_1)
-               if exists == 0:
+                exists = CheckForPool.checkForPool(host, uuid_str_1)
+                if exists == 0:
                       self.fail("Pool {0} found on host {1} after destroy.\n".
                                 format(uuid_str_1, host))
-               exists = CheckForPool.checkForPool(host, uuid_str_2)
-               if exists == 0:
+                exists = CheckForPool.checkForPool(host, uuid_str_2)
+                if exists == 0:
                       self.fail("Pool {0} found on host {1} after destroy.\n".
                                 format(uuid_str_2, host))
-               exists = CheckForPool.checkForPool(host, uuid_str_3)
-               if exists == 0:
+                exists = CheckForPool.checkForPool(host, uuid_str_3)
+                if exists == 0:
                       self.fail("Pool {0} found on host {1} after destroy.\n".
                                 format(uuid_str_3, host))
 
-               if expected_result == 'FAIL':
+                if expected_result == 'FAIL':
                       self.fail("Expected to fail but passed.\n")
 
         except Exception as e:
-               print e
-               print traceback.format_exc()
-               if expected_result == 'PASS':
+                print e
+                print traceback.format_exc()
+                if expected_result == 'PASS':
                       self.fail("Expecting to pass but test has failed.\n")
 
     # COMMENTED OUT because test environments don't always have enough

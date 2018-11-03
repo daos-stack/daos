@@ -13,7 +13,7 @@ import aexpect
 from aexpect.client import run_bg
 
 def printFunc(thestring):
-       print thestring
+        print thestring
 
 cpu_count = 0
 
@@ -57,7 +57,7 @@ class ServerLaunch(Test):
             else:
                 self.fail("Server did not start.\n")
         except Exception as e:
-               self.fail("Server did not start.\n")
+                self.fail("Server did not start.\n")
 
         session.sendcontrol("c")
 
