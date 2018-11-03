@@ -658,39 +658,6 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uuid_t cookie,
 	return rc;
 }
 
-static int
-krec_update(struct vos_io_context *ioc, struct vos_krec_df *krec,
-	    const daos_epoch_range_t *epr)
-{
-	struct umem_instance	*umm;
-	int			 rc = 0;
-
-	D_ASSERT(krec != NULL);
-
-	if (krec->kr_latest >= epr->epr_hi &&
-	    krec->kr_earliest <= epr->epr_lo)
-		goto out;
-
-	umm = vos_obj2umm(ioc->ic_obj);
-
-	if (krec->kr_latest < epr->epr_hi) {
-		rc = umem_tx_add_ptr(umm, &krec->kr_latest,
-				     sizeof(krec->kr_latest));
-		if (rc != 0)
-			goto out;
-		krec->kr_latest = epr->epr_hi;
-	}
-	if (krec->kr_earliest > epr->epr_lo) {
-		rc = umem_tx_add_ptr(umm, &krec->kr_earliest,
-				     sizeof(krec->kr_earliest));
-		if (rc != 0)
-			goto out;
-		krec->kr_earliest = epr->epr_lo;
-	}
-out:
-	return rc;
-}
-
 static void
 update_bounds(daos_epoch_range_t *epr_bound,
 	      const daos_epoch_range_t *new_epr)
@@ -759,7 +726,7 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	}
 out:
 	if (rc == 0) {
-		krec_update(ioc, krec, &akey_epr);
+		vos_df_ts_update(ioc->ic_obj, &krec->kr_latest, &akey_epr);
 		update_bounds(dkey_epr, &akey_epr);
 	}
 	key_tree_release(toh, is_array);
@@ -819,8 +786,12 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	}
 out:
 	if (subtr_created) {
+		struct vos_obj_df	*obj_df = obj->obj_df;
+
 		D_ASSERT(krec != NULL);
-		krec_update(ioc, krec, &dkey_epr);
+		D_ASSERT(obj_df != NULL);
+		vos_df_ts_update(obj, &krec->kr_latest, &dkey_epr);
+		vos_df_ts_update(obj, &obj_df->vo_latest, &dkey_epr);
 		key_tree_release(ak_toh, false);
 	}
 	return rc;

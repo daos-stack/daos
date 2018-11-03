@@ -228,7 +228,8 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		if (!obj->obj_df) /* new object */
 			break;
 
-		if (obj->obj_df->vo_punched >= epoch &&
+		if ((!(obj->obj_df->vo_oi_attr & VOS_OI_PUNCHED) ||
+		     obj->obj_df->vo_latest >= epoch) &&
 		    obj->obj_df->vo_incarnation == obj->obj_incarnation) {
 			if (obj->obj_epoch <= epoch)
 				goto out; /* belong to the same incarnation */
@@ -271,8 +272,10 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	if (!obj->obj_df)
 		goto out;
 
-	D_ASSERTF(epoch <= obj->obj_df->vo_punched, "e="DF_U64", p="DF_U64"\n",
-		  epoch, obj->obj_df->vo_punched);
+	D_ASSERTF((obj->obj_df->vo_oi_attr & VOS_OI_PUNCHED) == 0 ||
+		  epoch <= obj->obj_df->vo_latest,
+		  "e="DF_U64", p="DF_U64"\n", epoch,
+		  obj->obj_df->vo_latest);
 
 	obj->obj_incarnation = obj->obj_df->vo_incarnation;
 out:

@@ -30,6 +30,8 @@
 enum vos_oi_attr {
 	/** Marks object as failed */
 	VOS_OI_FAILED		= (1U << 0),
+	/** Marks object as punched */
+	VOS_OI_PUNCHED		= (1U << 1),
 	/** TODO: Additional attributes to support metadata storage for SR */
 };
 

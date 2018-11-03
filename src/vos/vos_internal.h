@@ -827,4 +827,55 @@ int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	       daos_iov_t *val_iov, int flags);
 
+/* Update the timestamp in a key or object.  The latest and earliest must be
+ * contiguous in the struct being updated.  This is ensured at present by
+ * the static assertions on vos_obj_df and vos_krec_df structures
+ */
+static inline int
+vos_df_ts_update(struct vos_object *obj, daos_epoch_t *latest_df,
+		 const daos_epoch_range_t *epr)
+{
+	struct umem_instance	*umm;
+	daos_epoch_t		*earliest_df;
+	daos_epoch_t		*start = NULL;
+	int			 size = 0;
+	int			 rc = 0;
+
+	D_ASSERT(latest_df != NULL && obj != NULL && epr != NULL);
+
+	earliest_df = latest_df + 1;
+
+	if (*latest_df >= epr->epr_hi &&
+	    *earliest_df <= epr->epr_lo)
+		goto out;
+
+	if (*latest_df < epr->epr_hi) {
+		start = latest_df;
+		size = sizeof(*latest_df);
+
+		if (*earliest_df > epr->epr_lo)
+			size += sizeof(*earliest_df);
+		else
+			earliest_df = NULL;
+	} else {
+		latest_df = NULL;
+		start = earliest_df;
+		size = sizeof(*earliest_df);
+
+		D_ASSERT(*earliest_df > epr->epr_lo);
+	}
+
+	umm = vos_obj2umm(obj);
+	rc = umem_tx_add_ptr(umm, start, size);
+	if (rc != 0)
+		goto out;
+
+	if (latest_df)
+		*latest_df = epr->epr_hi;
+	if (earliest_df)
+		*earliest_df = epr->epr_lo;
+out:
+	return rc;
+}
+
 #endif /* __VOS_INTERNAL_H__ */

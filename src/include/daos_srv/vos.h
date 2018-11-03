@@ -583,7 +583,7 @@ vos_iter_empty(daos_handle_t ih);
  * \param coh   [IN]    Container handle
  * \param oid   [IN]    DAOS object ID
  * \param epoch [IN]    Epoch to set
- * \param attr	[IN]	Attributes bitmask
+ * \param attr	[IN]	Attributes bitmask.  May not contain VOS_OI_PUNCHED
  *
  * \return              0 on success and negative on
  *                      failure
@@ -600,7 +600,7 @@ vos_oi_set_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param coh   [IN]    Container handle
  * \param oid   [IN]    DAOS object ID
  * \param epoch [IN]    Epoch to set
- * \param attr	[IN]	Attributes bitmask
+ * \param attr	[IN]	Attributes bitmask.  May not contain VOS_OI_PUNCHED
  *
  * \return              0 on success and negative on
  *                      failure

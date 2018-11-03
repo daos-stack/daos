@@ -57,6 +57,17 @@ struct oi_hkey {
 	daos_epoch_t		oi_epc;
 };
 
+/**
+ * A wrapper around the hash key to pass additional
+ * information for a punch or update
+ */
+struct oi_key {
+	/* The actual key is only the hash key */
+	struct oi_hkey	oi_hkey;
+	/* The low epoch for the update/punch */
+	daos_epoch_t	oi_epc_lo;
+};
+
 static int
 oi_hkey_size(struct btr_instance *tins)
 {
@@ -66,9 +77,13 @@ oi_hkey_size(struct btr_instance *tins)
 static void
 oi_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 {
-	D_ASSERT(key_iov->iov_len == sizeof(struct oi_hkey));
+	/* key can be either oi_hkey or oi_key (for punch and update).
+	 * We only use the hkey part as a key.
+	 */
+	D_ASSERT(key_iov->iov_len == sizeof(struct oi_hkey) ||
+		 key_iov->iov_len == sizeof(struct oi_key));
 
-	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
+	memcpy(hkey, key_iov->iov_buf, sizeof(struct oi_hkey));
 }
 
 static int
@@ -96,6 +111,7 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	     daos_iov_t *val_iov, struct btr_record *rec)
 {
 	struct vos_obj_df	 *obj;
+	struct oi_key		 *key;
 	struct oi_hkey		 *hkey;
 	TMMID(struct vos_obj_df)  obj_mmid;
 
@@ -106,11 +122,19 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 	obj = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
 
-	D_ASSERT(key_iov->iov_len == sizeof(struct oi_hkey));
-	hkey = key_iov->iov_buf;
+	D_ASSERT(key_iov->iov_len == sizeof(struct oi_key));
+	key = key_iov->iov_buf;
+	hkey = &key->oi_hkey;
 
 	obj->vo_id	= hkey->oi_oid;
-	obj->vo_punched	= hkey->oi_epc;
+	obj->vo_earliest = key->oi_epc_lo;
+	if (hkey->oi_epc == DAOS_EPOCH_MAX) {
+		/* Will be updated on first update */
+		obj->vo_latest = 0;
+	} else {
+		obj->vo_latest = hkey->oi_epc;
+		obj->vo_oi_attr |= VOS_OI_PUNCHED;
+	}
 
 	daos_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
 	rec->rec_mmid = umem_id_t2u(obj_mmid);
@@ -221,10 +245,11 @@ int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		  daos_epoch_t epoch, struct vos_obj_df **obj_p)
 {
-	struct oi_hkey	hkey;
-	daos_iov_t	key_iov;
-	daos_iov_t	val_iov;
-	int		rc;
+	struct oi_hkey	*hkey;
+	struct oi_key	 key;
+	daos_iov_t	 key_iov;
+	daos_iov_t	 val_iov;
+	int		 rc;
 
 	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
 		DP_UOID(oid));
@@ -237,9 +262,11 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	D_DEBUG(DB_TRACE, "Object"DF_UOID" not found adding it.. eph "
 		DF_U64"\n", DP_UOID(oid), epoch);
 
-	hkey.oi_oid = oid;
-	hkey.oi_epc = DAOS_EPOCH_MAX; /* max as incarnation */
-	daos_iov_set(&key_iov, &hkey, sizeof(hkey));
+	hkey = &key.oi_hkey;
+	hkey->oi_oid = oid;
+	hkey->oi_epc = DAOS_EPOCH_MAX; /* max as incarnation */
+	key.oi_epc_lo = epoch;
+	daos_iov_set(&key_iov, &key, sizeof(key));
 	daos_iov_set(&val_iov, NULL, 0);
 
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, &val_iov);
@@ -260,30 +287,36 @@ int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	     daos_epoch_t epoch, uint32_t flags, struct vos_obj_df *obj)
 {
-	struct oi_hkey	hkey;
-	daos_iov_t	key_iov;
-	daos_iov_t	val_iov;
-	int		rc;
-	bool		replay = (flags & VOS_OF_REPLAY_PC);
+	struct oi_hkey	*hkey;
+	struct oi_key	 key;
+	daos_iov_t	 key_iov;
+	daos_iov_t	 val_iov;
+	int		 rc;
+	bool		 replay = (flags & VOS_OF_REPLAY_PC);
 
 	D_DEBUG(DB_TRACE, "Punch obj "DF_UOID", epoch="DF_U64".\n",
 		DP_UOID(oid), epoch);
 
-	if (obj->vo_punched == epoch) {
+	if (obj->vo_oi_attr & VOS_OI_PUNCHED &&
+	    obj->vo_latest == epoch) {
 		D_DEBUG(DB_TRACE, "Punch the same epoch.\n");
 		goto out;
 	}
 
-	if (obj->vo_punched != DAOS_EPOCH_MAX && !replay) {
-		D_ERROR("Underwrite is allowed only for replaying punch\n");
+	if (obj->vo_latest >= epoch && !replay) {
+		D_ERROR("Underwrite is allowed only for replaying punch "
+			DF_U64" >= "DF_U64"\n", obj->vo_latest, epoch);
 		rc = -DER_NO_PERM;
 		goto failed;
 	}
 
 	/* create a new incarnation for the punch */
-	hkey.oi_oid	= oid;
-	hkey.oi_epc	= epoch;
-	daos_iov_set(&key_iov, &hkey, sizeof(hkey));
+	hkey = &key.oi_hkey;
+	hkey->oi_oid	= oid;
+	key.oi_epc_lo = hkey->oi_epc = epoch;
+	if (!replay) /* We steal the subtree from the max epoch */
+		key.oi_epc_lo = obj->vo_earliest;
+	daos_iov_set(&key_iov, &key, sizeof(key));
 	daos_iov_set(&val_iov, NULL, 0);
 
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, &val_iov);
@@ -293,7 +326,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	if (!replay) {
 		struct vos_obj_df *tmp;
 
-		D_ASSERT(obj->vo_punched == DAOS_EPOCH_MAX);
+		D_ASSERT((obj->vo_oi_attr & VOS_OI_PUNCHED) == 0);
 
 		tmp = (struct vos_obj_df *)val_iov.iov_buf;
 		D_ASSERT(tmp != obj);
@@ -302,12 +335,13 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 		 */
 		tmp->vo_tree = obj->vo_tree;
 		tmp->vo_incarnation = obj->vo_incarnation;
-
 		/* NB: this changed vos_object_df, which means cache might
 		 * be stale, so other callers should invalidate cache.
 		 */
 		umem_tx_add_ptr(&cont->vc_pool->vp_umm, obj, sizeof(*obj));
 		memset(&obj->vo_tree, 0, sizeof(obj->vo_tree));
+		obj->vo_latest = 0;
+		obj->vo_earliest = DAOS_EPOCH_MAX;
 		obj->vo_incarnation++; /* cache should be revalidated */
 	}
  out:
@@ -417,7 +451,8 @@ oi_iter_match_probe(struct vos_iterator *iter)
 		obj = (struct vos_obj_df *)iov.iov_buf;
 
 		probe = 0;
-		if (obj->vo_punched < epr->epr_lo) {
+		if ((obj->vo_oi_attr & VOS_OI_PUNCHED) &&
+		    obj->vo_latest < epr->epr_lo) {
 			/* NB: object should be invisible in punched epoch */
 			/* epoch range of the returned object is lower than the
 			 * condition, we should call probe() for the epoch
@@ -426,7 +461,8 @@ oi_iter_match_probe(struct vos_iterator *iter)
 			probe = BTR_PROBE_GE;
 			hkey.oi_epc = epr->epr_lo;
 
-		} else if (obj->vo_punched > epr->epr_hi) {
+		} else if ((obj->vo_oi_attr & VOS_OI_PUNCHED) &&
+			   obj->vo_latest > epr->epr_hi) {
 			/* punched epoch is higher than the upper boundary,
 			 * it might or might not match the condition.
 			 */
@@ -530,7 +566,10 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 
 	it_entry->ie_oid = obj->vo_id;
-	it_entry->ie_epoch = obj->vo_punched;
+	if (obj->vo_oi_attr & VOS_OI_PUNCHED)
+		it_entry->ie_epoch = obj->vo_latest;
+	else
+		it_entry->ie_epoch = DAOS_EPOCH_MAX;
 	return 0;
 }
 

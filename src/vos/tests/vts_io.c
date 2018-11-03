@@ -1328,6 +1328,10 @@ io_set_attribute_test(void **state)
 	for (i = 0x8; i > 0; i >>= 1) {
 		rc = vos_oi_set_attr(arg->ctx.tc_co_hdl, arg->oid,
 				     vts_epoch_gen + 1, i);
+		if (i == VOS_OI_PUNCHED) {
+			assert_int_equal(rc, -DER_INVAL);
+			continue;
+		}
 		assert_int_equal(rc, 0);
 		expected |= i;
 
@@ -1340,6 +1344,10 @@ io_set_attribute_test(void **state)
 	for (i = 0x10; i > 0; i >>= 1) {
 		rc = vos_oi_clear_attr(arg->ctx.tc_co_hdl, arg->oid,
 				       vts_epoch_gen + 1, i);
+		if (i == VOS_OI_PUNCHED) {
+			assert_int_equal(rc, -DER_INVAL);
+			continue;
+		}
 		assert_int_equal(rc, 0);
 		if (expected & i)
 			expected ^= i;

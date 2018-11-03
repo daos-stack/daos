@@ -175,6 +175,13 @@ struct vos_krec_df {
 	/* Checksum and key are stored after tree root */
 };
 
+/* Assumptions made about relative placement of these fields so
+ * assert that they are true
+ */
+D_CASSERT(offsetof(struct vos_krec_df, kr_earliest) ==
+	  offsetof(struct vos_krec_df, kr_latest) +
+	  sizeof(((struct vos_krec_df *)0)->kr_latest));
+
 /**
  * Persisted VOS index & epoch record, it is referenced by btr_record::rec_mmid
  * of btree VOS_BTR_IDX.
@@ -206,8 +213,10 @@ struct vos_obj_df {
 	daos_unit_oid_t			vo_id;
 	/** Attributes of object.  See vos_oi_attr */
 	uint64_t			vo_oi_attr;
-	/** Epoch when this object was punched, it's infinity by defaut. */
-	uint64_t			vo_punched;
+	/** Latest known update timestamp or punched timestamp */
+	daos_epoch_t			vo_latest;
+	/** Earliest known update timestamp */
+	daos_epoch_t			vo_earliest;
 	/**
 	 * Incarnation of the object, it's increased each time it's punched.
 	 */
@@ -215,4 +224,11 @@ struct vos_obj_df {
 	/** VOS object btree root */
 	struct btr_root			vo_tree;
 };
+
+/* Assumptions made about relative placement of these fields so
+ * assert that they are true
+ */
+D_CASSERT(offsetof(struct vos_obj_df, vo_earliest) ==
+	  offsetof(struct vos_obj_df, vo_latest) +
+	  sizeof(((struct vos_obj_df *)0)->vo_latest));
 #endif

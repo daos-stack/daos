@@ -1014,9 +1014,10 @@ static int
 vos_oi_set_attr_helper(daos_handle_t coh, daos_unit_oid_t oid,
 		       daos_epoch_t epoch, uint64_t attr, bool set)
 {
-	PMEMobjpool	  *pop;
-	struct vos_object *obj;
-	int		   rc;
+	PMEMobjpool		*pop;
+	struct vos_object	*obj;
+	daos_epoch_range_t	 epr = {epoch, epoch};
+	int			 rc;
 
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, false,
 			  &obj);
@@ -1035,6 +1036,10 @@ vos_oi_set_attr_helper(daos_handle_t coh, daos_unit_oid_t oid,
 
 			obj->obj_df->vo_oi_attr ^= to_clear;
 		}
+		/* Need better error handling on this path but will defer til
+		 * using pmemobj API for transactions
+		 */
+		rc = vos_df_ts_update(obj, &obj->obj_df->vo_latest, &epr);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DB_IO, "Failed to set attributes on object: %d\n", rc);
@@ -1047,6 +1052,10 @@ int
 vos_oi_set_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		uint64_t attr)
 {
+	if (attr & VOS_OI_PUNCHED) {
+		D_ERROR("Setting punched flag not allowed\n");
+		return -DER_INVAL;
+	}
 	D_DEBUG(DB_IO, "Set attributes "DF_UOID", epoch "DF_U64", attributes "
 		 DF_X64"\n", DP_UOID(oid), epoch, attr);
 
@@ -1057,6 +1066,10 @@ int
 vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		uint64_t attr)
 {
+	if (attr & VOS_OI_PUNCHED) {
+		D_ERROR("Reset of punched flag not allowed\n");
+		return -DER_INVAL;
+	}
 	D_DEBUG(DB_IO, "Clear attributes "DF_UOID", epoch "DF_U64
 		 ", attributes "DF_X64"\n", DP_UOID(oid), epoch, attr);
 
