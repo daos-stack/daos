@@ -334,8 +334,8 @@ insert_single_with_rxnr(const char *dkey, const char *akey, uint64_t idx,
 			void *value, daos_size_t iod_size, int rx_nr,
 			daos_epoch_t epoch, struct ioreq *req)
 {
-	insert(dkey, /*nr*/1, &akey, &iod_size, &rx_nr, &idx, &value, &epoch,
-	       req);
+	insert(dkey, /*nr*/1, &akey, &iod_size, &rx_nr, &idx,
+	       value != NULL ? &value : NULL, &epoch, req);
 }
 
 void
@@ -400,6 +400,15 @@ punch_recxs(const char *dkey, const char *akey, daos_recx_t *recxs,
 	    int nr, daos_epoch_t epoch, struct ioreq *req)
 {
 	insert_recxs(dkey, akey, 0, epoch, recxs, nr, NULL, 0, req);
+}
+
+void
+punch_rec_with_rxnr(const char *dkey, const char *akey, uint64_t idx, int rx_nr,
+		    daos_epoch_t eph, struct ioreq *req)
+{
+
+	insert_single_with_rxnr(dkey, akey, idx, NULL, /*iod_size*/0, rx_nr,
+				eph, req);
 }
 
 static void
@@ -1336,77 +1345,253 @@ enumerate_simple(void **state)
 	assert_int_equal(key_nr, ENUM_KEY_REC_NR);
 }
 
-/** basic punch test */
+#define PUNCH_NUM_KEYS 5
+#define PUNCH_IOD_SIZE 1024
+#define PUNCH_SCM_NUM_EXTS 2 /* SCM 2k record */
+#define PUNCH_NVME_NUM_EXTS 5 /* NVMe 5k record */
+/**
+ * Test akey punch, dkey punch, record punch and object punch in different
+ * epochs with mixed large NVMe and small SCM record sizes. Verify punched keys
+ * with key enumeration. Record enumeration is still under development, so for
+ * now verify punched records with lookup only.
+ */
 static void
-punch_simple(void **state)
+punch_simple_internal(void **state, daos_obj_id_t oid)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	 oid;
 	struct ioreq	 req;
-	uint32_t	 number = 2;
+	uint32_t	 enum_num;
 	daos_key_desc_t  kds[2];
 	daos_anchor_t	 anchor_out;
+	daos_epoch_t	 epoch = 0;
 	char		*buf;
+	char		*dkeys[PUNCH_NUM_KEYS];
+	char		*data_buf;
+	char		*rec_fetch;
+	char		*rec_verify;
+	daos_size_t	 size;
+	int		 num_rec_exts = 0;
 	int		 total_keys = 0;
 	int		 rc;
+	int		 i;
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	/** Insert record*/
-	print_message("Insert a few kv record\n");
-	insert_single("punch_test0", "a_key", 0, "data",
-		      strlen("data") + 1, 0, &req);
-	insert_single("punch_test1", "a_key", 0, "data",
-		      strlen("data") + 1, 0, &req);
-	insert_single("punch_test2", "a_key", 0, "data",
-		      strlen("data") + 1, 0, &req);
-	insert_single("punch_test3", "a_key", 0, "data",
-		      strlen("data") + 1, 0, &req);
-	insert_single("punch_test4", "a_key", 0, "data",
-		      strlen("data") + 1, 0, &req);
+	D_ALLOC(data_buf, IO_SIZE_NVME);
+	dts_buf_render(data_buf, IO_SIZE_NVME);
+	D_ALLOC(buf, 512);
 
+	/**
+	 * Insert 1 record per akey at different dkeys, all at epoch 0. Record
+	 * sizes are alternating SCM (2 consecutive extents = 2k), and NVME (5
+	 * consecutive record extents = 5k).
+	 */
+	print_message("Insert records in epoch %lu:\n", epoch);
+	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
+		if (i % 2 == 0)
+			num_rec_exts = PUNCH_SCM_NUM_EXTS;
+		else
+			num_rec_exts = PUNCH_NVME_NUM_EXTS;
+		D_ASPRINTF(dkeys[i], "punch_simple_dkey%d", i);
+		print_message("\tinsert dkey:%s, akey:'akey', rx_nr:%d\n",
+			      dkeys[i], num_rec_exts);
+		insert_single_with_rxnr(dkeys[i], "akey",/*idx*/ 0, data_buf,
+					PUNCH_IOD_SIZE, num_rec_exts, epoch,
+					&req);
+	}
+	/* Insert a few more unique akeys at the first dkey */
+	num_rec_exts = PUNCH_NVME_NUM_EXTS;
+	print_message("\tinsert dkey:%s, akey:'akey0', rx_nr:%d\n",
+		      dkeys[0], num_rec_exts);
+	insert_single_with_rxnr(dkeys[0], "akey0",/*idx*/ 0, data_buf,
+				PUNCH_IOD_SIZE, num_rec_exts, epoch, &req);
+	print_message("\tinsert dkey:%s, akey:'akey1', rx_nr:%d\n",
+		      dkeys[0], num_rec_exts);
+	insert_single_with_rxnr(dkeys[0], "akey1",/*idx*/ 0, data_buf,
+				PUNCH_IOD_SIZE, num_rec_exts, epoch, &req);
+
+	/**
+	 * Punch records.
+	 */
+	print_message("Punch a few records:\n");
+	num_rec_exts = PUNCH_NVME_NUM_EXTS;
+	print_message("\tpunch dkey:%s, akey:'akey0', rx_nr:%d, eph:%lu\n",
+		      dkeys[0], num_rec_exts, epoch + 1);
+	punch_rec_with_rxnr(dkeys[0], "akey0", /*idx*/0, num_rec_exts,
+			    epoch + 1, &req);
+	print_message("\tpunch dkey:%s, akey:'akey1', rx_nr:%d, eph:%lu\n",
+			dkeys[0], num_rec_exts, epoch + 1);
+	punch_rec_with_rxnr(dkeys[0], "akey1", /*idx*/0, num_rec_exts,
+			    epoch + 1, &req);
+
+
+	/* TODO Record enumeration still under development, use lookup. */
+	print_message("Lookup non-punched records:\n");
+	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
+		if (i % 2 == 0)
+			num_rec_exts = PUNCH_SCM_NUM_EXTS;
+		else
+			num_rec_exts = PUNCH_NVME_NUM_EXTS;
+		size = PUNCH_IOD_SIZE * num_rec_exts;
+		D_ALLOC(rec_fetch, size);
+		print_message("\tlookup:dkey:%s, akey:'akey', eph:%lu\n",
+			      dkeys[i], epoch + 2);
+		lookup_single_with_rxnr(dkeys[i], "akey", /*idx*/0, rec_fetch,
+					PUNCH_IOD_SIZE, size, epoch + 2,
+					&req);
+		assert_memory_equal(rec_fetch, data_buf, size);
+		D_FREE(rec_fetch);
+	}
+	/* Lookup punched records */
+	print_message("Lookup punched records:\n");
+	num_rec_exts = PUNCH_NVME_NUM_EXTS;
+	size = PUNCH_IOD_SIZE * num_rec_exts;
+	D_ALLOC(rec_verify, size);
+	dts_buf_render(rec_verify, size);
+	D_ALLOC(rec_fetch, size);
+	memcpy(rec_fetch, rec_verify, size);
+	assert_memory_equal(rec_fetch, rec_verify, size);
+
+	print_message("\tlookup dkey:%s, akey:'akey0', eph:%lu\n",
+		      dkeys[0], epoch + 2);
+	lookup_single_with_rxnr(dkeys[0], "akey0", /*idx*/0, rec_fetch,
+				/*iod_size*/0, size, epoch + 2, &req);
+	assert_memory_equal(rec_fetch, rec_verify, size);
+	print_message("\trecord punched\n");
+
+	print_message("\tlookup dkey:%s, akey:'akey1', eph:%lu\n",
+		      dkeys[0], epoch + 2);
+	lookup_single_with_rxnr(dkeys[0], "akey1", /*idx*/0, rec_fetch,
+				/*iod_size*/0, size, epoch + 2, &req);
+	assert_memory_equal(rec_fetch, rec_verify, size);
+	print_message("\trecord punched\n");
+	D_FREE(rec_fetch);
+	D_FREE(rec_verify);
+
+	/**
+	 * Punch akeys (along with all records) from object at next epoch.
+	 */
+	print_message("Punch all akeys\n");
+	for (i = 0; i < PUNCH_NUM_KEYS; i++)
+		punch_akey(dkeys[i], "akey", epoch + 2, &req);
+	punch_akey(dkeys[0], "akey0", epoch + 2, &req);
+	punch_akey(dkeys[0], "akey1", epoch + 2, &req);
+
+	/* Enumerate akeys */
+	print_message("Enumerate akeys:\n");
+	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
+		memset(&anchor_out, 0, sizeof(anchor_out));
+		memset(buf, 0, 512);
+		enum_num = 2;
+		total_keys = 0;
+		while (enum_num > 0) {
+			rc = enumerate_akey(epoch + 3, dkeys[i], &enum_num, kds,
+					    &anchor_out, buf, 512, &req);
+			assert_int_equal(rc, 0);
+			total_keys += enum_num;
+			if (daos_anchor_is_eof(&anchor_out))
+				break;
+			enum_num = 2;
+		}
+		print_message("\tdkey:%s, #akeys:%d\n", dkeys[i], total_keys);
+		assert_int_equal(total_keys, 0);
+	}
+
+	/**
+	 * Punch dkeys (along with all akeys) from object at next epoch.
+	 */
+	print_message("Punch all dkeys\n");
+	for (i = 0; i < PUNCH_NUM_KEYS; i++)
+		punch_dkey(dkeys[i], epoch + 3, &req);
+
+	/* Enumerate dkeys */
+	print_message("Enumerate dkeys:\n");
 	memset(&anchor_out, 0, sizeof(anchor_out));
-	buf = calloc(512, 1);
-	/** enumerate records */
-	print_message("Enumerate records\n");
-	while (number > 0) {
-		rc = enumerate_dkey(0, &number, kds, &anchor_out, buf, 512,
-				    &req);
+	memset(buf, 0, 512);
+	enum_num = 2;
+	total_keys = 0;
+	while (enum_num > 0) {
+		rc = enumerate_dkey(epoch + 4, &enum_num, kds, &anchor_out, buf,
+				    512, &req);
 		assert_int_equal(rc, 0);
-		total_keys += number;
+		total_keys += enum_num;
 		if (daos_anchor_is_eof(&anchor_out))
 			break;
-		number = 2;
+		enum_num = 2;
 	}
-	assert_int_equal(total_keys, 5);
+	print_message("\t#dkeys:%d\n", total_keys);
+	assert_int_equal(total_keys, 0);
 
-	/** punch records */
-	print_message("Punch records\n");
-	punch_single("punch_test0", "a_key", 0, 1, &req);
-	punch_single("punch_test1", "a_key", 0, 1, &req);
-	punch_single("punch_test2", "a_key", 0, 1, &req);
-	punch_single("punch_test3", "a_key", 0, 1, &req);
-	punch_single("punch_test4", "a_key", 0, 1, &req);
+	/**
+	 * Re-insert 1 record per akey at different dkeys, all at epoch 4.
+	 * Record sizes are alternating SCM (2 consecutive extents = 2k),
+	 * and NVME (5 consecutive record extents = 5k).
+	 */
+	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
+		if (i % 2 == 0)
+			num_rec_exts = PUNCH_SCM_NUM_EXTS;
+		else
+			num_rec_exts = PUNCH_NVME_NUM_EXTS;
+		sprintf(dkeys[i], "punch_simple_dkey%d", i + PUNCH_NUM_KEYS);
+		print_message("insert dkey:%s, akey:'akey', rx_nr:%d\n",
+			      dkeys[i], num_rec_exts);
+		insert_single_with_rxnr(dkeys[i], "akey", /*idx*/ 0, data_buf,
+					PUNCH_IOD_SIZE, num_rec_exts, epoch + 4,
+					&req);
+	}
+	/* Insert a few more unique akeys at the first dkey */
+	print_message("insert dkey:%s, akey:'akey0', rx_nr:%d\n",
+		      dkeys[0], num_rec_exts);
+	insert_single_with_rxnr(dkeys[0], "akey0",/*idx*/ 0, data_buf,
+				PUNCH_IOD_SIZE, num_rec_exts, epoch + 4, &req);
+	print_message("insert dkey:%s, akey:'akey1', rx_nr:%d\n",
+		      dkeys[0], num_rec_exts);
+	insert_single_with_rxnr(dkeys[0], "akey1",/*idx*/ 0, data_buf,
+				PUNCH_IOD_SIZE, num_rec_exts, epoch + 4, &req);
 
+	/**
+	 * Object punch (punch all keys associated with object) at next epoch.
+	 */
+	print_message("Punch entire object\n");
+	punch_obj(epoch + 5, &req);
+
+	/* Enumerate dkeys */
+	print_message("Enumerate dkeys:\n");
 	memset(&anchor_out, 0, sizeof(anchor_out));
-	/** enumerate records */
-	print_message("Enumerate records again\n");
-	while (number > 0) {
-		rc = enumerate_dkey(0, &number, kds, &anchor_out, buf, 512,
-				    &req);
+	memset(buf, 0, 512);
+	enum_num = 2;
+	total_keys = 0;
+	while (enum_num > 0) {
+		rc = enumerate_dkey(epoch + 6, &enum_num, kds, &anchor_out, buf,
+				    512, &req);
 		assert_int_equal(rc, 0);
-		total_keys += number;
+		total_keys += enum_num;
 		if (daos_anchor_is_eof(&anchor_out))
 			break;
-		number = 2;
+		enum_num = 2;
 	}
-	print_message("get keys %d\n", total_keys);
-	free(buf);
+	print_message("\t#dkeys:%d\n", total_keys);
+	assert_int_equal(total_keys, 0);
+
+	D_FREE(buf);
+	D_FREE(data_buf);
 	ioreq_fini(&req);
 }
 
 #define MANYREC_NUMRECS	5
+/**
+ * Basic test for dkey/akey punch and full object punch.
+ */
+static void
+punch_simple(void **state)
+{
+	daos_obj_id_t	 oid;
+
+	oid = dts_oid_gen(dts_obj_class, 0, ((test_arg_t *)state)->myrank);
+
+	punch_simple_internal(state, oid);
+}
+
 /**
  * Test update/fetch with data verification of multiple records in epoch 0 of
  * varing size and IOD type. Size is either small I/O to SCM or larger (>=4k)
