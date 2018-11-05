@@ -21,7 +21,7 @@ DAOS is licensed under the Apache License Version 2.0. Please see the [LICENSE](
 * [debugging](doc/debugging.md) DAOS
 
 #### User area:
-* [Overview of the DAOS storage model](doc/overview.md)
+* [Overview of the DAOS storage model](doc/storage_model.md)
 * DAOS API
   * C [native API](src/include/) and [man pages](doc/man/man3)
   * Python [bindings](src/utils/py/)
@@ -34,7 +34,7 @@ DAOS is licensed under the Apache License Version 2.0. Please see the [LICENSE](
 #### Developer zone:
 * [building](doc/quickstart.md#daos-source-code) and [contributing](https://wiki.hpdd.intel.com/display/DC/Contribute) to DAOS
 * [DAOS coding rules](https://wiki.hpdd.intel.com/display/DC/Coding+Rules)
-* [DAOS internals](src/README.md)
+* [DAOS internals documentation](src/README.md)
 
 More information can be found on the [wiki](https://wiki.hpdd.intel.com/display/DC/DAOS+Community+Home).
 
