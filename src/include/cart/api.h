@@ -1371,7 +1371,7 @@ crt_proc_crt_rank_list_t(crt_proc_t proc, d_rank_list_t **data);
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_proc_crt_iov_t(crt_proc_t proc, d_iov_t *data);
+crt_proc_d_iov_t(crt_proc_t proc, d_iov_t *data);
 
 /**
  * Local operation. Evict rank from the local membership list of grp.
