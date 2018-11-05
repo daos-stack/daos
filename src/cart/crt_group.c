@@ -2064,7 +2064,6 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	ul_out->ul_uri = cached_uri;
 
 	if (cached_uri == NULL && CRT_PMIX_ENABLED()) {
-		D_ERROR("Calling crt_pmix_uri_lookup from here\n");
 		/* tag 0 URI not in cache, resort to PMIx */
 		rc = crt_pmix_uri_lookup(default_grp_priv->gp_pub.cg_grpid,
 					 g_rank, &tmp_uri);
