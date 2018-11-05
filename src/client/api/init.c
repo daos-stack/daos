@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,6 @@
 #include <daos/object.h>
 #include <daos/task.h>
 #include <daos/addons.h>
-#include <daos/tier.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
 #include "task_internal.h"
@@ -164,14 +163,9 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
-	/** set up tiering */
-	rc = dc_tier_init();
-	if (rc != 0)
-		D_GOTO(out_obj, rc);
-
 	module_initialized = true;
 	D_GOTO(unlock, rc = 0);
-out_obj:
+
 	dc_obj_fini();
 out_co:
 	dc_cont_fini();
@@ -202,7 +196,6 @@ daos_fini(void)
 	if (!module_initialized)
 		D_GOTO(unlock, rc = -DER_UNINIT);
 
-	dc_tier_fini();
 	rc = daos_eq_lib_fini();
 	if (rc != 0) {
 		D_ERROR("failed to finalize eq: %d\n", rc);

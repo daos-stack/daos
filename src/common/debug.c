@@ -52,7 +52,6 @@ DECLARE_FAC(container);
 DECLARE_FAC(object);
 DECLARE_FAC(placement);
 DECLARE_FAC(rebuild);
-DECLARE_FAC(tier);
 DECLARE_FAC(mgmt);
 DECLARE_FAC(bio);
 DECLARE_FAC(tests);
@@ -104,7 +103,6 @@ static struct d_debug_bit daos_bit_dict[] = {
 	ACTION("object", d_object_logfac)		\
 	ACTION("placement", d_placement_logfac)		\
 	ACTION("rebuild", d_rebuild_logfac)		\
-	ACTION("tier", d_tier_logfac)			\
 	ACTION("mgmt", d_mgmt_logfac)			\
 	ACTION("tests", d_tests_logfac)			\
 	ACTION("bio", d_bio_logfac)			\

@@ -42,7 +42,6 @@ extern int d_container_logfac;
 extern int d_object_logfac;
 extern int d_placement_logfac;
 extern int d_rebuild_logfac;
-extern int d_tier_logfac;
 extern int d_mgmt_logfac;
 extern int d_bio_logfac;
 extern int d_tests_logfac;
@@ -62,9 +61,6 @@ extern uint64_t DB_REBUILD; /* rebuild process */
 /** XXX Temporary things, should be replaced by debug bits above */
 #define DF_DSMC		DB_ANY
 #define DF_DSMS		DB_ANY
-#define DF_TIER		DB_ANY
-#define DF_TIERC	DB_ANY
-#define DF_TIERS	DB_ANY
 #define DF_MISC		DB_ANY
 
 /** initialize the debug system */

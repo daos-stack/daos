@@ -975,9 +975,7 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  *			For an unfound record, the output length of the
  *			corresponding sgl is set to zero.
  *
- * \param[out]	map	Optional, this parameter is mostly for the cache and
- *			tiering layer, other upper layers can simply pass in
- *			NULL.
+ * \param[out]	map	Optional, upper layers can simply pass in NULL.
  *			It is the sink buffer to store the returned actual
  *			index layouts and their epoch validities. The returned
  *			layout covers the record extents as \a iods.
