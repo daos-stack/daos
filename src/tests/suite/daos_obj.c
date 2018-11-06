@@ -2396,7 +2396,8 @@ obj_setup_internal(void **state)
 	test_arg_t	*arg;
 
 	arg = *state;
-	if (arg->pool.pool_info.pi_ntargets < 2)
+
+	if (arg->pool.pool_info.pi_nnodes < 2)
 		dts_obj_class = DAOS_OC_TINY_RW;
 
 	return 0;
