@@ -626,11 +626,6 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 	int rc = 0;
 	int type;
 
-	if (kds->kd_val_types == VOS_ITER_SINGLE)
-		type = DAOS_IOD_SINGLE;
-	else
-		type = DAOS_IOD_ARRAY;
-
 	if (iod->iod_name.iov_len == 0)
 		daos_iov_copy(&iod->iod_name, akey);
 	else
@@ -638,6 +633,11 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 
 	if (kds == NULL)
 		return 0;
+
+	if (kds->kd_val_types == VOS_ITER_SINGLE)
+		type = DAOS_IOD_SINGLE;
+	else
+		type = DAOS_IOD_ARRAY;
 
 	while (len > 0) {
 		struct obj_enum_rec *rec = *data;
