@@ -1238,7 +1238,8 @@ class DaosContainer(object):
             raise ValueError("Epoch slip returned non-zero. RC: {0}"
                              .format(rc))
 
-    def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None):
+    def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
+			     obj_cls=13):
         """
         Write an array of data to an object.  If an object is not supplied
         a new one is created.  The update occurs in its own epoch and the epoch
@@ -1265,7 +1266,7 @@ class DaosContainer(object):
         c_akey = ctypes.create_string_buffer(akey)
 
         # oid can be None in which case a new one is created
-        ioreq = IORequest(self.context, self, obj, rank, 2, 1)
+        ioreq = IORequest(self.context, self, obj, rank, 2, 1, obj_type=obj_cls)
         ioreq.insert_array(c_dkey, c_akey, c_values, c_epoch)
         self.commit_epoch(c_epoch)
         return ioreq.obj, c_epoch.value
