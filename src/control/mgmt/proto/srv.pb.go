@@ -33,7 +33,7 @@ func (m *EmptyParams) Reset()         { *m = EmptyParams{} }
 func (m *EmptyParams) String() string { return proto.CompactTextString(m) }
 func (*EmptyParams) ProtoMessage()    {}
 func (*EmptyParams) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_14b30b3a8d60aee7, []int{0}
+	return fileDescriptor_srv_05d16b4f341b0fa4, []int{0}
 }
 func (m *EmptyParams) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EmptyParams.Unmarshal(m, b)
@@ -64,7 +64,7 @@ func (m *FeatureName) Reset()         { *m = FeatureName{} }
 func (m *FeatureName) String() string { return proto.CompactTextString(m) }
 func (*FeatureName) ProtoMessage()    {}
 func (*FeatureName) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_14b30b3a8d60aee7, []int{1}
+	return fileDescriptor_srv_05d16b4f341b0fa4, []int{1}
 }
 func (m *FeatureName) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FeatureName.Unmarshal(m, b)
@@ -102,7 +102,7 @@ func (m *Category) Reset()         { *m = Category{} }
 func (m *Category) String() string { return proto.CompactTextString(m) }
 func (*Category) ProtoMessage()    {}
 func (*Category) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_14b30b3a8d60aee7, []int{2}
+	return fileDescriptor_srv_05d16b4f341b0fa4, []int{2}
 }
 func (m *Category) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Category.Unmarshal(m, b)
@@ -129,6 +129,7 @@ func (m *Category) GetCategory() string {
 	return ""
 }
 
+// Feature represents a management task that can be performed by server.
 type Feature struct {
 	// The category of capabilities this feature belongs to.
 	Category *Category `protobuf:"bytes,1,opt,name=category,proto3" json:"category,omitempty"`
@@ -145,7 +146,7 @@ func (m *Feature) Reset()         { *m = Feature{} }
 func (m *Feature) String() string { return proto.CompactTextString(m) }
 func (*Feature) ProtoMessage()    {}
 func (*Feature) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_14b30b3a8d60aee7, []int{3}
+	return fileDescriptor_srv_05d16b4f341b0fa4, []int{3}
 }
 func (m *Feature) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Feature.Unmarshal(m, b)
@@ -186,9 +187,9 @@ func (m *Feature) GetDescription() string {
 	return ""
 }
 
-// NVMeController represents a NVMe Controller.
-type NVMeController struct {
-	// The id name of the controller.
+// NvmeController represents an NVMe Controller.
+type NvmeController struct {
+	// The id of the controller.
 	Id int32 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	// The model name of the controller.
 	Model string `protobuf:"bytes,2,opt,name=model,proto3" json:"model,omitempty"`
@@ -203,71 +204,69 @@ type NVMeController struct {
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *NVMeController) Reset()         { *m = NVMeController{} }
-func (m *NVMeController) String() string { return proto.CompactTextString(m) }
-func (*NVMeController) ProtoMessage()    {}
-func (*NVMeController) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_14b30b3a8d60aee7, []int{4}
+func (m *NvmeController) Reset()         { *m = NvmeController{} }
+func (m *NvmeController) String() string { return proto.CompactTextString(m) }
+func (*NvmeController) ProtoMessage()    {}
+func (*NvmeController) Descriptor() ([]byte, []int) {
+	return fileDescriptor_srv_05d16b4f341b0fa4, []int{4}
 }
-func (m *NVMeController) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_NVMeController.Unmarshal(m, b)
+func (m *NvmeController) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_NvmeController.Unmarshal(m, b)
 }
-func (m *NVMeController) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_NVMeController.Marshal(b, m, deterministic)
+func (m *NvmeController) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_NvmeController.Marshal(b, m, deterministic)
 }
-func (dst *NVMeController) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NVMeController.Merge(dst, src)
+func (dst *NvmeController) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NvmeController.Merge(dst, src)
 }
-func (m *NVMeController) XXX_Size() int {
-	return xxx_messageInfo_NVMeController.Size(m)
+func (m *NvmeController) XXX_Size() int {
+	return xxx_messageInfo_NvmeController.Size(m)
 }
-func (m *NVMeController) XXX_DiscardUnknown() {
-	xxx_messageInfo_NVMeController.DiscardUnknown(m)
+func (m *NvmeController) XXX_DiscardUnknown() {
+	xxx_messageInfo_NvmeController.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_NVMeController proto.InternalMessageInfo
+var xxx_messageInfo_NvmeController proto.InternalMessageInfo
 
-func (m *NVMeController) GetId() int32 {
+func (m *NvmeController) GetId() int32 {
 	if m != nil {
 		return m.Id
 	}
 	return 0
 }
 
-func (m *NVMeController) GetModel() string {
+func (m *NvmeController) GetModel() string {
 	if m != nil {
 		return m.Model
 	}
 	return ""
 }
 
-func (m *NVMeController) GetSerial() string {
+func (m *NvmeController) GetSerial() string {
 	if m != nil {
 		return m.Serial
 	}
 	return ""
 }
 
-func (m *NVMeController) GetPciaddr() string {
+func (m *NvmeController) GetPciaddr() string {
 	if m != nil {
 		return m.Pciaddr
 	}
 	return ""
 }
 
-func (m *NVMeController) GetFwrev() string {
+func (m *NvmeController) GetFwrev() string {
 	if m != nil {
 		return m.Fwrev
 	}
 	return ""
 }
 
-// NVMeNamespace represent NVMe namespaces
-// available on controller. Results are
-// streamed rather than returned at once.
-type NVMeNamespace struct {
+// NvmeNamespace represent NVMe namespaces available on controller.
+type NvmeNamespace struct {
 	// controller
-	Controller *NVMeController `protobuf:"bytes,1,opt,name=controller,proto3" json:"controller,omitempty"`
+	Controller *NvmeController `protobuf:"bytes,1,opt,name=controller,proto3" json:"controller,omitempty"`
 	// namespace id
 	Id int32 `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
 	// device capacity in GBytes
@@ -277,53 +276,53 @@ type NVMeNamespace struct {
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *NVMeNamespace) Reset()         { *m = NVMeNamespace{} }
-func (m *NVMeNamespace) String() string { return proto.CompactTextString(m) }
-func (*NVMeNamespace) ProtoMessage()    {}
-func (*NVMeNamespace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_14b30b3a8d60aee7, []int{5}
+func (m *NvmeNamespace) Reset()         { *m = NvmeNamespace{} }
+func (m *NvmeNamespace) String() string { return proto.CompactTextString(m) }
+func (*NvmeNamespace) ProtoMessage()    {}
+func (*NvmeNamespace) Descriptor() ([]byte, []int) {
+	return fileDescriptor_srv_05d16b4f341b0fa4, []int{5}
 }
-func (m *NVMeNamespace) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_NVMeNamespace.Unmarshal(m, b)
+func (m *NvmeNamespace) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_NvmeNamespace.Unmarshal(m, b)
 }
-func (m *NVMeNamespace) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_NVMeNamespace.Marshal(b, m, deterministic)
+func (m *NvmeNamespace) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_NvmeNamespace.Marshal(b, m, deterministic)
 }
-func (dst *NVMeNamespace) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NVMeNamespace.Merge(dst, src)
+func (dst *NvmeNamespace) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NvmeNamespace.Merge(dst, src)
 }
-func (m *NVMeNamespace) XXX_Size() int {
-	return xxx_messageInfo_NVMeNamespace.Size(m)
+func (m *NvmeNamespace) XXX_Size() int {
+	return xxx_messageInfo_NvmeNamespace.Size(m)
 }
-func (m *NVMeNamespace) XXX_DiscardUnknown() {
-	xxx_messageInfo_NVMeNamespace.DiscardUnknown(m)
+func (m *NvmeNamespace) XXX_DiscardUnknown() {
+	xxx_messageInfo_NvmeNamespace.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_NVMeNamespace proto.InternalMessageInfo
+var xxx_messageInfo_NvmeNamespace proto.InternalMessageInfo
 
-func (m *NVMeNamespace) GetController() *NVMeController {
+func (m *NvmeNamespace) GetController() *NvmeController {
 	if m != nil {
 		return m.Controller
 	}
 	return nil
 }
 
-func (m *NVMeNamespace) GetId() int32 {
+func (m *NvmeNamespace) GetId() int32 {
 	if m != nil {
 		return m.Id
 	}
 	return 0
 }
 
-func (m *NVMeNamespace) GetCapacity() int32 {
+func (m *NvmeNamespace) GetCapacity() int32 {
 	if m != nil {
 		return m.Capacity
 	}
 	return 0
 }
 
-type UpdateNVMeCtrlrParams struct {
-	Ctrlr *NVMeController `protobuf:"bytes,1,opt,name=ctrlr,proto3" json:"ctrlr,omitempty"`
+type UpdateNvmeCtrlrParams struct {
+	Ctrlr *NvmeController `protobuf:"bytes,1,opt,name=ctrlr,proto3" json:"ctrlr,omitempty"`
 	// Filesystem path containing firmware image
 	Path string `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
 	// Firmware slot (register) to update
@@ -333,45 +332,45 @@ type UpdateNVMeCtrlrParams struct {
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *UpdateNVMeCtrlrParams) Reset()         { *m = UpdateNVMeCtrlrParams{} }
-func (m *UpdateNVMeCtrlrParams) String() string { return proto.CompactTextString(m) }
-func (*UpdateNVMeCtrlrParams) ProtoMessage()    {}
-func (*UpdateNVMeCtrlrParams) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_14b30b3a8d60aee7, []int{6}
+func (m *UpdateNvmeCtrlrParams) Reset()         { *m = UpdateNvmeCtrlrParams{} }
+func (m *UpdateNvmeCtrlrParams) String() string { return proto.CompactTextString(m) }
+func (*UpdateNvmeCtrlrParams) ProtoMessage()    {}
+func (*UpdateNvmeCtrlrParams) Descriptor() ([]byte, []int) {
+	return fileDescriptor_srv_05d16b4f341b0fa4, []int{6}
 }
-func (m *UpdateNVMeCtrlrParams) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_UpdateNVMeCtrlrParams.Unmarshal(m, b)
+func (m *UpdateNvmeCtrlrParams) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_UpdateNvmeCtrlrParams.Unmarshal(m, b)
 }
-func (m *UpdateNVMeCtrlrParams) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_UpdateNVMeCtrlrParams.Marshal(b, m, deterministic)
+func (m *UpdateNvmeCtrlrParams) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_UpdateNvmeCtrlrParams.Marshal(b, m, deterministic)
 }
-func (dst *UpdateNVMeCtrlrParams) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_UpdateNVMeCtrlrParams.Merge(dst, src)
+func (dst *UpdateNvmeCtrlrParams) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpdateNvmeCtrlrParams.Merge(dst, src)
 }
-func (m *UpdateNVMeCtrlrParams) XXX_Size() int {
-	return xxx_messageInfo_UpdateNVMeCtrlrParams.Size(m)
+func (m *UpdateNvmeCtrlrParams) XXX_Size() int {
+	return xxx_messageInfo_UpdateNvmeCtrlrParams.Size(m)
 }
-func (m *UpdateNVMeCtrlrParams) XXX_DiscardUnknown() {
-	xxx_messageInfo_UpdateNVMeCtrlrParams.DiscardUnknown(m)
+func (m *UpdateNvmeCtrlrParams) XXX_DiscardUnknown() {
+	xxx_messageInfo_UpdateNvmeCtrlrParams.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_UpdateNVMeCtrlrParams proto.InternalMessageInfo
+var xxx_messageInfo_UpdateNvmeCtrlrParams proto.InternalMessageInfo
 
-func (m *UpdateNVMeCtrlrParams) GetCtrlr() *NVMeController {
+func (m *UpdateNvmeCtrlrParams) GetCtrlr() *NvmeController {
 	if m != nil {
 		return m.Ctrlr
 	}
 	return nil
 }
 
-func (m *UpdateNVMeCtrlrParams) GetPath() string {
+func (m *UpdateNvmeCtrlrParams) GetPath() string {
 	if m != nil {
 		return m.Path
 	}
 	return ""
 }
 
-func (m *UpdateNVMeCtrlrParams) GetSlot() int32 {
+func (m *UpdateNvmeCtrlrParams) GetSlot() int32 {
 	if m != nil {
 		return m.Slot
 	}
@@ -390,7 +389,7 @@ func (m *FioConfigPath) Reset()         { *m = FioConfigPath{} }
 func (m *FioConfigPath) String() string { return proto.CompactTextString(m) }
 func (*FioConfigPath) ProtoMessage()    {}
 func (*FioConfigPath) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_14b30b3a8d60aee7, []int{7}
+	return fileDescriptor_srv_05d16b4f341b0fa4, []int{7}
 }
 func (m *FioConfigPath) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FioConfigPath.Unmarshal(m, b)
@@ -417,7 +416,7 @@ func (m *FioConfigPath) GetPath() string {
 	return ""
 }
 
-type BurnInNVMeParams struct {
+type BurnInNvmeParams struct {
 	Ctrlrid              int32          `protobuf:"varint,1,opt,name=ctrlrid,proto3" json:"ctrlrid,omitempty"`
 	Path                 *FioConfigPath `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
@@ -425,45 +424,45 @@ type BurnInNVMeParams struct {
 	XXX_sizecache        int32          `json:"-"`
 }
 
-func (m *BurnInNVMeParams) Reset()         { *m = BurnInNVMeParams{} }
-func (m *BurnInNVMeParams) String() string { return proto.CompactTextString(m) }
-func (*BurnInNVMeParams) ProtoMessage()    {}
-func (*BurnInNVMeParams) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_14b30b3a8d60aee7, []int{8}
+func (m *BurnInNvmeParams) Reset()         { *m = BurnInNvmeParams{} }
+func (m *BurnInNvmeParams) String() string { return proto.CompactTextString(m) }
+func (*BurnInNvmeParams) ProtoMessage()    {}
+func (*BurnInNvmeParams) Descriptor() ([]byte, []int) {
+	return fileDescriptor_srv_05d16b4f341b0fa4, []int{8}
 }
-func (m *BurnInNVMeParams) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_BurnInNVMeParams.Unmarshal(m, b)
+func (m *BurnInNvmeParams) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_BurnInNvmeParams.Unmarshal(m, b)
 }
-func (m *BurnInNVMeParams) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_BurnInNVMeParams.Marshal(b, m, deterministic)
+func (m *BurnInNvmeParams) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_BurnInNvmeParams.Marshal(b, m, deterministic)
 }
-func (dst *BurnInNVMeParams) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_BurnInNVMeParams.Merge(dst, src)
+func (dst *BurnInNvmeParams) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BurnInNvmeParams.Merge(dst, src)
 }
-func (m *BurnInNVMeParams) XXX_Size() int {
-	return xxx_messageInfo_BurnInNVMeParams.Size(m)
+func (m *BurnInNvmeParams) XXX_Size() int {
+	return xxx_messageInfo_BurnInNvmeParams.Size(m)
 }
-func (m *BurnInNVMeParams) XXX_DiscardUnknown() {
-	xxx_messageInfo_BurnInNVMeParams.DiscardUnknown(m)
+func (m *BurnInNvmeParams) XXX_DiscardUnknown() {
+	xxx_messageInfo_BurnInNvmeParams.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_BurnInNVMeParams proto.InternalMessageInfo
+var xxx_messageInfo_BurnInNvmeParams proto.InternalMessageInfo
 
-func (m *BurnInNVMeParams) GetCtrlrid() int32 {
+func (m *BurnInNvmeParams) GetCtrlrid() int32 {
 	if m != nil {
 		return m.Ctrlrid
 	}
 	return 0
 }
 
-func (m *BurnInNVMeParams) GetPath() *FioConfigPath {
+func (m *BurnInNvmeParams) GetPath() *FioConfigPath {
 	if m != nil {
 		return m.Path
 	}
 	return nil
 }
 
-type BurnInNVMeReport struct {
+type BurnInNvmeReport struct {
 	// Report from running burn-in reported by fio
 	Report               string   `protobuf:"bytes,1,opt,name=report,proto3" json:"report,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -471,35 +470,126 @@ type BurnInNVMeReport struct {
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *BurnInNVMeReport) Reset()         { *m = BurnInNVMeReport{} }
-func (m *BurnInNVMeReport) String() string { return proto.CompactTextString(m) }
-func (*BurnInNVMeReport) ProtoMessage()    {}
-func (*BurnInNVMeReport) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_14b30b3a8d60aee7, []int{9}
+func (m *BurnInNvmeReport) Reset()         { *m = BurnInNvmeReport{} }
+func (m *BurnInNvmeReport) String() string { return proto.CompactTextString(m) }
+func (*BurnInNvmeReport) ProtoMessage()    {}
+func (*BurnInNvmeReport) Descriptor() ([]byte, []int) {
+	return fileDescriptor_srv_05d16b4f341b0fa4, []int{9}
 }
-func (m *BurnInNVMeReport) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_BurnInNVMeReport.Unmarshal(m, b)
+func (m *BurnInNvmeReport) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_BurnInNvmeReport.Unmarshal(m, b)
 }
-func (m *BurnInNVMeReport) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_BurnInNVMeReport.Marshal(b, m, deterministic)
+func (m *BurnInNvmeReport) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_BurnInNvmeReport.Marshal(b, m, deterministic)
 }
-func (dst *BurnInNVMeReport) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_BurnInNVMeReport.Merge(dst, src)
+func (dst *BurnInNvmeReport) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BurnInNvmeReport.Merge(dst, src)
 }
-func (m *BurnInNVMeReport) XXX_Size() int {
-	return xxx_messageInfo_BurnInNVMeReport.Size(m)
+func (m *BurnInNvmeReport) XXX_Size() int {
+	return xxx_messageInfo_BurnInNvmeReport.Size(m)
 }
-func (m *BurnInNVMeReport) XXX_DiscardUnknown() {
-	xxx_messageInfo_BurnInNVMeReport.DiscardUnknown(m)
+func (m *BurnInNvmeReport) XXX_DiscardUnknown() {
+	xxx_messageInfo_BurnInNvmeReport.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_BurnInNVMeReport proto.InternalMessageInfo
+var xxx_messageInfo_BurnInNvmeReport proto.InternalMessageInfo
 
-func (m *BurnInNVMeReport) GetReport() string {
+func (m *BurnInNvmeReport) GetReport() string {
 	if m != nil {
 		return m.Report
 	}
 	return ""
+}
+
+// ScmModule represent Storage Class Memory modules installed.
+type ScmModule struct {
+	// The uid of the module.
+	// string uid = 1;
+	// The physical id of the module.
+	Physicalid uint32 `protobuf:"varint,1,opt,name=physicalid,proto3" json:"physicalid,omitempty"`
+	// The device handle of the module.
+	// string handle = 3;
+	// The channel id where module is installed.
+	Channel uint32 `protobuf:"varint,2,opt,name=channel,proto3" json:"channel,omitempty"`
+	// The channel position where module is installed.
+	Channelpos uint32 `protobuf:"varint,3,opt,name=channelpos,proto3" json:"channelpos,omitempty"`
+	// The memory controller id attached to module.
+	Memctrlr uint32 `protobuf:"varint,4,opt,name=memctrlr,proto3" json:"memctrlr,omitempty"`
+	// The socket id attached to module.
+	Socket uint32 `protobuf:"varint,5,opt,name=socket,proto3" json:"socket,omitempty"`
+	// The serial number of the module.
+	// string serial = 8;
+	// The capacity of the module.
+	Capacity             uint64   `protobuf:"varint,6,opt,name=capacity,proto3" json:"capacity,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ScmModule) Reset()         { *m = ScmModule{} }
+func (m *ScmModule) String() string { return proto.CompactTextString(m) }
+func (*ScmModule) ProtoMessage()    {}
+func (*ScmModule) Descriptor() ([]byte, []int) {
+	return fileDescriptor_srv_05d16b4f341b0fa4, []int{10}
+}
+func (m *ScmModule) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ScmModule.Unmarshal(m, b)
+}
+func (m *ScmModule) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ScmModule.Marshal(b, m, deterministic)
+}
+func (dst *ScmModule) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScmModule.Merge(dst, src)
+}
+func (m *ScmModule) XXX_Size() int {
+	return xxx_messageInfo_ScmModule.Size(m)
+}
+func (m *ScmModule) XXX_DiscardUnknown() {
+	xxx_messageInfo_ScmModule.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ScmModule proto.InternalMessageInfo
+
+func (m *ScmModule) GetPhysicalid() uint32 {
+	if m != nil {
+		return m.Physicalid
+	}
+	return 0
+}
+
+func (m *ScmModule) GetChannel() uint32 {
+	if m != nil {
+		return m.Channel
+	}
+	return 0
+}
+
+func (m *ScmModule) GetChannelpos() uint32 {
+	if m != nil {
+		return m.Channelpos
+	}
+	return 0
+}
+
+func (m *ScmModule) GetMemctrlr() uint32 {
+	if m != nil {
+		return m.Memctrlr
+	}
+	return 0
+}
+
+func (m *ScmModule) GetSocket() uint32 {
+	if m != nil {
+		return m.Socket
+	}
+	return 0
+}
+
+func (m *ScmModule) GetCapacity() uint64 {
+	if m != nil {
+		return m.Capacity
+	}
+	return 0
 }
 
 func init() {
@@ -507,12 +597,13 @@ func init() {
 	proto.RegisterType((*FeatureName)(nil), "proto.FeatureName")
 	proto.RegisterType((*Category)(nil), "proto.Category")
 	proto.RegisterType((*Feature)(nil), "proto.Feature")
-	proto.RegisterType((*NVMeController)(nil), "proto.NVMeController")
-	proto.RegisterType((*NVMeNamespace)(nil), "proto.NVMeNamespace")
-	proto.RegisterType((*UpdateNVMeCtrlrParams)(nil), "proto.UpdateNVMeCtrlrParams")
+	proto.RegisterType((*NvmeController)(nil), "proto.NvmeController")
+	proto.RegisterType((*NvmeNamespace)(nil), "proto.NvmeNamespace")
+	proto.RegisterType((*UpdateNvmeCtrlrParams)(nil), "proto.UpdateNvmeCtrlrParams")
 	proto.RegisterType((*FioConfigPath)(nil), "proto.FioConfigPath")
-	proto.RegisterType((*BurnInNVMeParams)(nil), "proto.BurnInNVMeParams")
-	proto.RegisterType((*BurnInNVMeReport)(nil), "proto.BurnInNVMeReport")
+	proto.RegisterType((*BurnInNvmeParams)(nil), "proto.BurnInNvmeParams")
+	proto.RegisterType((*BurnInNvmeReport)(nil), "proto.BurnInNvmeReport")
+	proto.RegisterType((*ScmModule)(nil), "proto.ScmModule")
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -530,11 +621,12 @@ type MgmtControlClient interface {
 	GetFeature(ctx context.Context, in *FeatureName, opts ...grpc.CallOption) (*Feature, error)
 	ListAllFeatures(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListAllFeaturesClient, error)
 	ListFeatures(ctx context.Context, in *Category, opts ...grpc.CallOption) (MgmtControl_ListFeaturesClient, error)
-	ListNVMeCtrlrs(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListNVMeCtrlrsClient, error)
-	ListNVMeNss(ctx context.Context, in *NVMeController, opts ...grpc.CallOption) (MgmtControl_ListNVMeNssClient, error)
-	UpdateNVMeCtrlr(ctx context.Context, in *UpdateNVMeCtrlrParams, opts ...grpc.CallOption) (*NVMeController, error)
+	ListNvmeCtrlrs(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListNvmeCtrlrsClient, error)
+	ListNvmeNss(ctx context.Context, in *NvmeController, opts ...grpc.CallOption) (MgmtControl_ListNvmeNssClient, error)
+	UpdateNvmeCtrlr(ctx context.Context, in *UpdateNvmeCtrlrParams, opts ...grpc.CallOption) (*NvmeController, error)
 	FetchFioConfigPaths(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_FetchFioConfigPathsClient, error)
-	BurnInNVMe(ctx context.Context, in *BurnInNVMeParams, opts ...grpc.CallOption) (MgmtControl_BurnInNVMeClient, error)
+	BurnInNvme(ctx context.Context, in *BurnInNvmeParams, opts ...grpc.CallOption) (MgmtControl_BurnInNvmeClient, error)
+	ListScmModules(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListScmModulesClient, error)
 }
 
 type mgmtControlClient struct {
@@ -618,12 +710,12 @@ func (x *mgmtControlListFeaturesClient) Recv() (*Feature, error) {
 	return m, nil
 }
 
-func (c *mgmtControlClient) ListNVMeCtrlrs(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListNVMeCtrlrsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[2], "/proto.MgmtControl/ListNVMeCtrlrs", opts...)
+func (c *mgmtControlClient) ListNvmeCtrlrs(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListNvmeCtrlrsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[2], "/proto.MgmtControl/ListNvmeCtrlrs", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &mgmtControlListNVMeCtrlrsClient{stream}
+	x := &mgmtControlListNvmeCtrlrsClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -633,29 +725,29 @@ func (c *mgmtControlClient) ListNVMeCtrlrs(ctx context.Context, in *EmptyParams,
 	return x, nil
 }
 
-type MgmtControl_ListNVMeCtrlrsClient interface {
-	Recv() (*NVMeController, error)
+type MgmtControl_ListNvmeCtrlrsClient interface {
+	Recv() (*NvmeController, error)
 	grpc.ClientStream
 }
 
-type mgmtControlListNVMeCtrlrsClient struct {
+type mgmtControlListNvmeCtrlrsClient struct {
 	grpc.ClientStream
 }
 
-func (x *mgmtControlListNVMeCtrlrsClient) Recv() (*NVMeController, error) {
-	m := new(NVMeController)
+func (x *mgmtControlListNvmeCtrlrsClient) Recv() (*NvmeController, error) {
+	m := new(NvmeController)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *mgmtControlClient) ListNVMeNss(ctx context.Context, in *NVMeController, opts ...grpc.CallOption) (MgmtControl_ListNVMeNssClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[3], "/proto.MgmtControl/ListNVMeNss", opts...)
+func (c *mgmtControlClient) ListNvmeNss(ctx context.Context, in *NvmeController, opts ...grpc.CallOption) (MgmtControl_ListNvmeNssClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[3], "/proto.MgmtControl/ListNvmeNss", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &mgmtControlListNVMeNssClient{stream}
+	x := &mgmtControlListNvmeNssClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -665,26 +757,26 @@ func (c *mgmtControlClient) ListNVMeNss(ctx context.Context, in *NVMeController,
 	return x, nil
 }
 
-type MgmtControl_ListNVMeNssClient interface {
-	Recv() (*NVMeNamespace, error)
+type MgmtControl_ListNvmeNssClient interface {
+	Recv() (*NvmeNamespace, error)
 	grpc.ClientStream
 }
 
-type mgmtControlListNVMeNssClient struct {
+type mgmtControlListNvmeNssClient struct {
 	grpc.ClientStream
 }
 
-func (x *mgmtControlListNVMeNssClient) Recv() (*NVMeNamespace, error) {
-	m := new(NVMeNamespace)
+func (x *mgmtControlListNvmeNssClient) Recv() (*NvmeNamespace, error) {
+	m := new(NvmeNamespace)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *mgmtControlClient) UpdateNVMeCtrlr(ctx context.Context, in *UpdateNVMeCtrlrParams, opts ...grpc.CallOption) (*NVMeController, error) {
-	out := new(NVMeController)
-	err := c.cc.Invoke(ctx, "/proto.MgmtControl/UpdateNVMeCtrlr", in, out, opts...)
+func (c *mgmtControlClient) UpdateNvmeCtrlr(ctx context.Context, in *UpdateNvmeCtrlrParams, opts ...grpc.CallOption) (*NvmeController, error) {
+	out := new(NvmeController)
+	err := c.cc.Invoke(ctx, "/proto.MgmtControl/UpdateNvmeCtrlr", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -723,12 +815,12 @@ func (x *mgmtControlFetchFioConfigPathsClient) Recv() (*FioConfigPath, error) {
 	return m, nil
 }
 
-func (c *mgmtControlClient) BurnInNVMe(ctx context.Context, in *BurnInNVMeParams, opts ...grpc.CallOption) (MgmtControl_BurnInNVMeClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[5], "/proto.MgmtControl/BurnInNVMe", opts...)
+func (c *mgmtControlClient) BurnInNvme(ctx context.Context, in *BurnInNvmeParams, opts ...grpc.CallOption) (MgmtControl_BurnInNvmeClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[5], "/proto.MgmtControl/BurnInNvme", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &mgmtControlBurnInNVMeClient{stream}
+	x := &mgmtControlBurnInNvmeClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -738,17 +830,49 @@ func (c *mgmtControlClient) BurnInNVMe(ctx context.Context, in *BurnInNVMeParams
 	return x, nil
 }
 
-type MgmtControl_BurnInNVMeClient interface {
-	Recv() (*BurnInNVMeReport, error)
+type MgmtControl_BurnInNvmeClient interface {
+	Recv() (*BurnInNvmeReport, error)
 	grpc.ClientStream
 }
 
-type mgmtControlBurnInNVMeClient struct {
+type mgmtControlBurnInNvmeClient struct {
 	grpc.ClientStream
 }
 
-func (x *mgmtControlBurnInNVMeClient) Recv() (*BurnInNVMeReport, error) {
-	m := new(BurnInNVMeReport)
+func (x *mgmtControlBurnInNvmeClient) Recv() (*BurnInNvmeReport, error) {
+	m := new(BurnInNvmeReport)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *mgmtControlClient) ListScmModules(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListScmModulesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[6], "/proto.MgmtControl/ListScmModules", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &mgmtControlListScmModulesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type MgmtControl_ListScmModulesClient interface {
+	Recv() (*ScmModule, error)
+	grpc.ClientStream
+}
+
+type mgmtControlListScmModulesClient struct {
+	grpc.ClientStream
+}
+
+func (x *mgmtControlListScmModulesClient) Recv() (*ScmModule, error) {
+	m := new(ScmModule)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -760,11 +884,12 @@ type MgmtControlServer interface {
 	GetFeature(context.Context, *FeatureName) (*Feature, error)
 	ListAllFeatures(*EmptyParams, MgmtControl_ListAllFeaturesServer) error
 	ListFeatures(*Category, MgmtControl_ListFeaturesServer) error
-	ListNVMeCtrlrs(*EmptyParams, MgmtControl_ListNVMeCtrlrsServer) error
-	ListNVMeNss(*NVMeController, MgmtControl_ListNVMeNssServer) error
-	UpdateNVMeCtrlr(context.Context, *UpdateNVMeCtrlrParams) (*NVMeController, error)
+	ListNvmeCtrlrs(*EmptyParams, MgmtControl_ListNvmeCtrlrsServer) error
+	ListNvmeNss(*NvmeController, MgmtControl_ListNvmeNssServer) error
+	UpdateNvmeCtrlr(context.Context, *UpdateNvmeCtrlrParams) (*NvmeController, error)
 	FetchFioConfigPaths(*EmptyParams, MgmtControl_FetchFioConfigPathsServer) error
-	BurnInNVMe(*BurnInNVMeParams, MgmtControl_BurnInNVMeServer) error
+	BurnInNvme(*BurnInNvmeParams, MgmtControl_BurnInNvmeServer) error
+	ListScmModules(*EmptyParams, MgmtControl_ListScmModulesServer) error
 }
 
 func RegisterMgmtControlServer(s *grpc.Server, srv MgmtControlServer) {
@@ -831,62 +956,62 @@ func (x *mgmtControlListFeaturesServer) Send(m *Feature) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _MgmtControl_ListNVMeCtrlrs_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _MgmtControl_ListNvmeCtrlrs_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(EmptyParams)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MgmtControlServer).ListNVMeCtrlrs(m, &mgmtControlListNVMeCtrlrsServer{stream})
+	return srv.(MgmtControlServer).ListNvmeCtrlrs(m, &mgmtControlListNvmeCtrlrsServer{stream})
 }
 
-type MgmtControl_ListNVMeCtrlrsServer interface {
-	Send(*NVMeController) error
+type MgmtControl_ListNvmeCtrlrsServer interface {
+	Send(*NvmeController) error
 	grpc.ServerStream
 }
 
-type mgmtControlListNVMeCtrlrsServer struct {
+type mgmtControlListNvmeCtrlrsServer struct {
 	grpc.ServerStream
 }
 
-func (x *mgmtControlListNVMeCtrlrsServer) Send(m *NVMeController) error {
+func (x *mgmtControlListNvmeCtrlrsServer) Send(m *NvmeController) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _MgmtControl_ListNVMeNss_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(NVMeController)
+func _MgmtControl_ListNvmeNss_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NvmeController)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MgmtControlServer).ListNVMeNss(m, &mgmtControlListNVMeNssServer{stream})
+	return srv.(MgmtControlServer).ListNvmeNss(m, &mgmtControlListNvmeNssServer{stream})
 }
 
-type MgmtControl_ListNVMeNssServer interface {
-	Send(*NVMeNamespace) error
+type MgmtControl_ListNvmeNssServer interface {
+	Send(*NvmeNamespace) error
 	grpc.ServerStream
 }
 
-type mgmtControlListNVMeNssServer struct {
+type mgmtControlListNvmeNssServer struct {
 	grpc.ServerStream
 }
 
-func (x *mgmtControlListNVMeNssServer) Send(m *NVMeNamespace) error {
+func (x *mgmtControlListNvmeNssServer) Send(m *NvmeNamespace) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _MgmtControl_UpdateNVMeCtrlr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateNVMeCtrlrParams)
+func _MgmtControl_UpdateNvmeCtrlr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateNvmeCtrlrParams)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MgmtControlServer).UpdateNVMeCtrlr(ctx, in)
+		return srv.(MgmtControlServer).UpdateNvmeCtrlr(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.MgmtControl/UpdateNVMeCtrlr",
+		FullMethod: "/proto.MgmtControl/UpdateNvmeCtrlr",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtControlServer).UpdateNVMeCtrlr(ctx, req.(*UpdateNVMeCtrlrParams))
+		return srv.(MgmtControlServer).UpdateNvmeCtrlr(ctx, req.(*UpdateNvmeCtrlrParams))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -912,24 +1037,45 @@ func (x *mgmtControlFetchFioConfigPathsServer) Send(m *FioConfigPath) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _MgmtControl_BurnInNVMe_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(BurnInNVMeParams)
+func _MgmtControl_BurnInNvme_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(BurnInNvmeParams)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MgmtControlServer).BurnInNVMe(m, &mgmtControlBurnInNVMeServer{stream})
+	return srv.(MgmtControlServer).BurnInNvme(m, &mgmtControlBurnInNvmeServer{stream})
 }
 
-type MgmtControl_BurnInNVMeServer interface {
-	Send(*BurnInNVMeReport) error
+type MgmtControl_BurnInNvmeServer interface {
+	Send(*BurnInNvmeReport) error
 	grpc.ServerStream
 }
 
-type mgmtControlBurnInNVMeServer struct {
+type mgmtControlBurnInNvmeServer struct {
 	grpc.ServerStream
 }
 
-func (x *mgmtControlBurnInNVMeServer) Send(m *BurnInNVMeReport) error {
+func (x *mgmtControlBurnInNvmeServer) Send(m *BurnInNvmeReport) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _MgmtControl_ListScmModules_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(EmptyParams)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(MgmtControlServer).ListScmModules(m, &mgmtControlListScmModulesServer{stream})
+}
+
+type MgmtControl_ListScmModulesServer interface {
+	Send(*ScmModule) error
+	grpc.ServerStream
+}
+
+type mgmtControlListScmModulesServer struct {
+	grpc.ServerStream
+}
+
+func (x *mgmtControlListScmModulesServer) Send(m *ScmModule) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -942,8 +1088,8 @@ var _MgmtControl_serviceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtControl_GetFeature_Handler,
 		},
 		{
-			MethodName: "UpdateNVMeCtrlr",
-			Handler:    _MgmtControl_UpdateNVMeCtrlr_Handler,
+			MethodName: "UpdateNvmeCtrlr",
+			Handler:    _MgmtControl_UpdateNvmeCtrlr_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -958,13 +1104,13 @@ var _MgmtControl_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "ListNVMeCtrlrs",
-			Handler:       _MgmtControl_ListNVMeCtrlrs_Handler,
+			StreamName:    "ListNvmeCtrlrs",
+			Handler:       _MgmtControl_ListNvmeCtrlrs_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "ListNVMeNss",
-			Handler:       _MgmtControl_ListNVMeNss_Handler,
+			StreamName:    "ListNvmeNss",
+			Handler:       _MgmtControl_ListNvmeNss_Handler,
 			ServerStreams: true,
 		},
 		{
@@ -973,50 +1119,61 @@ var _MgmtControl_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "BurnInNVMe",
-			Handler:       _MgmtControl_BurnInNVMe_Handler,
+			StreamName:    "BurnInNvme",
+			Handler:       _MgmtControl_BurnInNvme_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ListScmModules",
+			Handler:       _MgmtControl_ListScmModules_Handler,
 			ServerStreams: true,
 		},
 	},
 	Metadata: "srv.proto",
 }
 
-func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_14b30b3a8d60aee7) }
+func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_05d16b4f341b0fa4) }
 
-var fileDescriptor_srv_14b30b3a8d60aee7 = []byte{
-	// 539 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x53, 0xc1, 0x6e, 0xd3, 0x40,
-	0x10, 0x25, 0xa1, 0x6e, 0x9a, 0x31, 0x49, 0xd0, 0x90, 0x82, 0x15, 0x71, 0x28, 0x46, 0x42, 0x11,
-	0x95, 0x2a, 0x94, 0x8a, 0x03, 0x17, 0x10, 0x8d, 0x08, 0x20, 0xd1, 0xa8, 0xb2, 0x44, 0xef, 0x8b,
-	0xbd, 0x49, 0x2d, 0xd9, 0x5e, 0x6b, 0xbd, 0x2d, 0xca, 0x85, 0x03, 0x12, 0xff, 0x8d, 0x76, 0x3c,
-	0x76, 0x9c, 0xd4, 0x70, 0xf2, 0xce, 0xee, 0x9b, 0xf7, 0xde, 0xee, 0x1b, 0x43, 0xbf, 0xd0, 0x77,
-	0x67, 0xb9, 0x56, 0x46, 0xa1, 0x43, 0x1f, 0x7f, 0x00, 0xee, 0xa7, 0x34, 0x37, 0x9b, 0x2b, 0xa1,
-	0x45, 0x5a, 0xf8, 0x2f, 0xc0, 0x5d, 0x48, 0x61, 0x6e, 0xb5, 0x5c, 0x8a, 0x54, 0x22, 0xc2, 0x41,
-	0x26, 0x52, 0xe9, 0x75, 0x4e, 0x3a, 0xd3, 0x7e, 0x40, 0x6b, 0xff, 0x15, 0x1c, 0xcd, 0x85, 0x91,
-	0x6b, 0xa5, 0x37, 0x38, 0x81, 0xa3, 0x90, 0xd7, 0x8c, 0xa9, 0x6b, 0xff, 0x77, 0x07, 0x7a, 0xcc,
-	0x85, 0xa7, 0x7b, 0x38, 0x77, 0x36, 0x2a, 0x6d, 0x9c, 0x55, 0x54, 0xdb, 0x46, 0x9c, 0x82, 0xb3,
-	0x22, 0xd5, 0x2e, 0x21, 0x91, 0x91, 0x0d, 0x5f, 0x41, 0x09, 0xc0, 0x13, 0x70, 0x23, 0x59, 0x84,
-	0x3a, 0xce, 0x4d, 0xac, 0x32, 0xef, 0x21, 0x39, 0x68, 0x6e, 0xf9, 0xbf, 0x60, 0xb8, 0xbc, 0xbe,
-	0x94, 0x73, 0x95, 0x19, 0xad, 0x92, 0x44, 0x6a, 0x1c, 0x42, 0x37, 0x8e, 0xc8, 0x84, 0x13, 0x74,
-	0xe3, 0x08, 0xc7, 0xe0, 0xa4, 0x2a, 0x92, 0x09, 0xa9, 0xf5, 0x83, 0xb2, 0xc0, 0xa7, 0x70, 0x58,
-	0x48, 0x1d, 0x8b, 0x84, 0x49, 0xb9, 0x42, 0x0f, 0x7a, 0x79, 0x18, 0x8b, 0x28, 0xd2, 0xde, 0x01,
-	0x1d, 0x54, 0xa5, 0xe5, 0x59, 0xfd, 0xd4, 0xf2, 0xce, 0x73, 0x4a, 0x1e, 0x2a, 0x7c, 0x0d, 0x03,
-	0xab, 0x6f, 0x4d, 0x17, 0xb9, 0x08, 0x25, 0xbe, 0x05, 0x08, 0x6b, 0x33, 0xfc, 0x16, 0xc7, 0x7c,
-	0xc3, 0x5d, 0xa7, 0x41, 0x03, 0xc8, 0xae, 0xbb, 0xb5, 0x6b, 0x7a, 0xf8, 0x5c, 0x84, 0xb1, 0xd9,
-	0x90, 0x43, 0x27, 0xa8, 0x6b, 0x3f, 0x81, 0xe3, 0xef, 0x79, 0x24, 0x8c, 0x24, 0x3e, 0xa3, 0x13,
-	0x5d, 0x86, 0x8b, 0xa7, 0xe0, 0x84, 0xb6, 0xfc, 0xbf, 0x6c, 0x89, 0xb1, 0xd1, 0xe7, 0xc2, 0xdc,
-	0xf0, 0xb3, 0xd0, 0xda, 0xee, 0x15, 0x89, 0x32, 0xac, 0x48, 0x6b, 0xff, 0x25, 0x0c, 0x16, 0xb1,
-	0x9a, 0xab, 0x6c, 0x15, 0xaf, 0xaf, 0x18, 0x44, 0x8d, 0x9d, 0x6d, 0xa3, 0x7f, 0x0d, 0x8f, 0x2f,
-	0x6e, 0x75, 0xf6, 0x35, 0xb3, 0x5a, 0xec, 0xc6, 0x83, 0x1e, 0x29, 0xd5, 0x69, 0x54, 0x25, 0x4e,
-	0x1b, 0xd2, 0xee, 0x6c, 0x5c, 0xe5, 0xdf, 0x54, 0x61, 0xde, 0xd7, 0x4d, 0xde, 0x40, 0xe6, 0x4a,
-	0x1b, 0x1b, 0x9d, 0xa6, 0x15, 0x3b, 0xe0, 0x6a, 0xf6, 0xe7, 0x00, 0xdc, 0xcb, 0x75, 0x6a, 0xf8,
-	0xaa, 0x38, 0x03, 0xf8, 0x2c, 0x4d, 0x35, 0xa1, 0x2d, 0x53, 0x36, 0x19, 0xee, 0xee, 0xf9, 0x0f,
-	0xf0, 0x1d, 0x8c, 0xbe, 0xc5, 0x85, 0xf9, 0x98, 0x24, 0xbc, 0x57, 0xd4, 0x8d, 0x8d, 0xbf, 0xe8,
-	0x7e, 0xe3, 0x9b, 0x0e, 0x9e, 0xc3, 0x23, 0xdb, 0x5a, 0xf7, 0xed, 0xff, 0x00, 0xad, 0x4d, 0x1f,
-	0x60, 0x68, 0x9b, 0xea, 0x20, 0xdb, 0xe5, 0xda, 0x83, 0x24, 0x82, 0xf7, 0xe0, 0x56, 0x04, 0xcb,
-	0xa2, 0xc0, 0x76, 0xe4, 0x64, 0xdc, 0xd8, 0xae, 0x47, 0x95, 0xfa, 0xbf, 0xc0, 0x68, 0x6f, 0x96,
-	0xf0, 0x39, 0x83, 0x5b, 0x67, 0xec, 0x9f, 0x5e, 0x70, 0x0e, 0x4f, 0x16, 0xd2, 0x84, 0x37, 0x3b,
-	0x31, 0xb6, 0xdf, 0xa7, 0x35, 0x71, 0xb2, 0x73, 0x01, 0xb0, 0xcd, 0x1b, 0x9f, 0x31, 0x6e, 0x7f,
-	0xb4, 0x26, 0xf7, 0x0f, 0xca, 0xd9, 0xb0, 0x1c, 0x3f, 0x0e, 0xe9, 0xec, 0xfc, 0x6f, 0x00, 0x00,
-	0x00, 0xff, 0xff, 0x0b, 0x05, 0xa5, 0xe5, 0x0c, 0x05, 0x00, 0x00,
+var fileDescriptor_srv_05d16b4f341b0fa4 = []byte{
+	// 632 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x53, 0x4f, 0x6f, 0xd3, 0x4e,
+	0x10, 0xfd, 0x39, 0xbf, 0xb8, 0x6d, 0xc6, 0x38, 0xad, 0x96, 0x16, 0xa2, 0x08, 0xa1, 0x62, 0x24,
+	0x14, 0x51, 0xa9, 0x42, 0xa9, 0x38, 0xc0, 0x01, 0x44, 0x23, 0x0a, 0x48, 0xb4, 0xaa, 0x8c, 0xe0,
+	0xbe, 0xd8, 0xdb, 0xc6, 0xc2, 0xf6, 0x5a, 0xbb, 0xdb, 0xa0, 0x5c, 0x38, 0xf0, 0x9d, 0xf8, 0x00,
+	0x7c, 0x33, 0xb4, 0xe3, 0xf1, 0xc6, 0x49, 0x0d, 0xa7, 0xec, 0x1b, 0xbf, 0x37, 0xf3, 0x32, 0x7f,
+	0x60, 0xa0, 0xd5, 0xe2, 0xb8, 0x52, 0xd2, 0x48, 0xe6, 0xe3, 0x4f, 0x14, 0x42, 0xf0, 0xb6, 0xa8,
+	0xcc, 0xf2, 0x92, 0x2b, 0x5e, 0xe8, 0xe8, 0x11, 0x04, 0x67, 0x82, 0x9b, 0x1b, 0x25, 0x2e, 0x78,
+	0x21, 0x18, 0x83, 0x7e, 0xc9, 0x0b, 0x31, 0xf2, 0x0e, 0xbd, 0xc9, 0x20, 0xc6, 0x77, 0xf4, 0x04,
+	0x76, 0x66, 0xdc, 0x88, 0x6b, 0xa9, 0x96, 0x6c, 0x0c, 0x3b, 0x09, 0xbd, 0x89, 0xe3, 0x70, 0xf4,
+	0xd3, 0x83, 0x6d, 0xca, 0xc5, 0x8e, 0x36, 0x78, 0xc1, 0x74, 0xb7, 0xb6, 0x71, 0xdc, 0xa4, 0x5a,
+	0x09, 0xd9, 0x04, 0xfc, 0x2b, 0xac, 0xda, 0x43, 0x26, 0x23, 0x66, 0xcb, 0x57, 0x5c, 0x13, 0xd8,
+	0x21, 0x04, 0xa9, 0xd0, 0x89, 0xca, 0x2a, 0x93, 0xc9, 0x72, 0xf4, 0x3f, 0x3a, 0x68, 0x87, 0xa2,
+	0x1f, 0x30, 0xbc, 0x58, 0x14, 0x62, 0x26, 0x4b, 0xa3, 0x64, 0x9e, 0x0b, 0xc5, 0x86, 0xd0, 0xcb,
+	0x52, 0x34, 0xe1, 0xc7, 0xbd, 0x2c, 0x65, 0xfb, 0xe0, 0x17, 0x32, 0x15, 0x39, 0x56, 0x1b, 0xc4,
+	0x35, 0x60, 0xf7, 0x60, 0x4b, 0x0b, 0x95, 0xf1, 0x9c, 0x92, 0x12, 0x62, 0x23, 0xd8, 0xae, 0x92,
+	0x8c, 0xa7, 0xa9, 0x1a, 0xf5, 0xf1, 0x43, 0x03, 0x6d, 0x9e, 0xab, 0xef, 0x4a, 0x2c, 0x46, 0x7e,
+	0x9d, 0x07, 0x41, 0xa4, 0x20, 0xb4, 0xf5, 0xad, 0x69, 0x5d, 0xf1, 0x44, 0xb0, 0xe7, 0x00, 0x89,
+	0x33, 0x43, 0xbd, 0x38, 0xa0, 0x7f, 0xb8, 0xee, 0x34, 0x6e, 0x11, 0xc9, 0x75, 0xcf, 0xb9, 0xc6,
+	0xc6, 0x57, 0x3c, 0xc9, 0xcc, 0x12, 0x1d, 0xfa, 0xb1, 0xc3, 0x51, 0x0e, 0x07, 0x9f, 0xab, 0x94,
+	0x1b, 0x81, 0xf9, 0x8c, 0xca, 0x55, 0x3d, 0x5c, 0x76, 0x04, 0x7e, 0x62, 0xe1, 0xbf, 0xcb, 0xd6,
+	0x1c, 0x3b, 0xfa, 0x8a, 0x9b, 0x39, 0xb5, 0x05, 0xdf, 0x36, 0xa6, 0x73, 0x69, 0xa8, 0x22, 0xbe,
+	0xa3, 0xc7, 0x10, 0x9e, 0x65, 0x72, 0x26, 0xcb, 0xab, 0xec, 0xfa, 0x92, 0x48, 0x28, 0xf4, 0x56,
+	0xc2, 0xe8, 0x0b, 0xec, 0x9d, 0xde, 0xa8, 0xf2, 0x43, 0x69, 0x6b, 0x91, 0x9b, 0x11, 0x6c, 0x63,
+	0x25, 0x37, 0x8d, 0x06, 0xb2, 0x49, 0xab, 0x74, 0x30, 0xdd, 0x6f, 0xe6, 0xdf, 0xae, 0x42, 0x79,
+	0x9f, 0xb6, 0xf3, 0xc6, 0xa2, 0x92, 0xca, 0xd8, 0xd1, 0x29, 0x7c, 0x91, 0x03, 0x42, 0xd1, 0x2f,
+	0x0f, 0x06, 0x9f, 0x92, 0xe2, 0x5c, 0xa6, 0x37, 0xb9, 0x60, 0x0f, 0x01, 0xaa, 0xf9, 0x52, 0x67,
+	0x09, 0xcf, 0xc9, 0x40, 0x18, 0xb7, 0x22, 0xe8, 0x6e, 0xce, 0xcb, 0x92, 0x16, 0x23, 0x8c, 0x1b,
+	0x68, 0x95, 0xf4, 0xac, 0xa4, 0xc6, 0x56, 0x84, 0x71, 0x2b, 0x62, 0x47, 0x53, 0x88, 0xa2, 0x6e,
+	0x74, 0x1f, 0xbf, 0x3a, 0x8c, 0x6b, 0x25, 0x93, 0x6f, 0xc2, 0xe0, 0x96, 0x84, 0x31, 0xa1, 0xb5,
+	0x71, 0x6e, 0x1d, 0x7a, 0x93, 0xfe, 0x6a, 0x9c, 0xd3, 0xdf, 0x7d, 0x08, 0xce, 0xaf, 0x0b, 0x43,
+	0x23, 0x62, 0x53, 0x80, 0x77, 0xc2, 0x34, 0x97, 0xd5, 0x71, 0x1d, 0xe3, 0xe1, 0x7a, 0x2c, 0xfa,
+	0x8f, 0xbd, 0x80, 0xdd, 0x8f, 0x99, 0x36, 0x6f, 0xf2, 0x9c, 0x62, 0xda, 0x09, 0x5b, 0xd7, 0x7f,
+	0x5b, 0xf8, 0xcc, 0x63, 0x27, 0x70, 0xc7, 0x4a, 0x9d, 0x6e, 0xf3, 0x70, 0x3b, 0x45, 0xaf, 0x61,
+	0x68, 0x45, 0x6e, 0x01, 0xbb, 0xcb, 0x75, 0x2f, 0x20, 0x26, 0x78, 0x05, 0x41, 0x93, 0xe0, 0x42,
+	0x6b, 0xd6, 0xcd, 0x1c, 0xef, 0xb7, 0xc2, 0xee, 0xc4, 0x50, 0xff, 0x1e, 0x76, 0x37, 0x6e, 0x80,
+	0x3d, 0x20, 0x72, 0xe7, 0x6d, 0xfc, 0xd5, 0x0b, 0x9b, 0xc1, 0xdd, 0x33, 0x61, 0x92, 0xf9, 0xda,
+	0xfa, 0x75, 0xff, 0x9f, 0xce, 0x4d, 0x45, 0x3b, 0xa7, 0x00, 0xab, 0x3d, 0x65, 0xf7, 0x89, 0xb7,
+	0x79, 0x12, 0xe3, 0xdb, 0x1f, 0xea, 0x9d, 0xc6, 0x1c, 0x2f, 0xeb, 0x9e, 0xba, 0x15, 0xee, 0xf6,
+	0xb0, 0x47, 0x31, 0x47, 0xb3, 0xda, 0xaf, 0x5b, 0x18, 0x3c, 0xf9, 0x13, 0x00, 0x00, 0xff, 0xff,
+	0xac, 0xf5, 0x73, 0x9d, 0x00, 0x06, 0x00, 0x00,
 }

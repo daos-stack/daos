@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt_test
+package mgmt
 
 import (
 	"fmt"
@@ -29,47 +29,123 @@ import (
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/go-spdk/spdk"
-	. "github.com/daos-stack/daos/src/control/mgmt"
 	"github.com/daos-stack/daos/src/control/utils/log"
 	. "github.com/daos-stack/daos/src/control/utils/test"
+
+	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 )
 
-// MockStorage struct implements Storage interface
-type mockStorage struct {
+// mock external interface implementations for go-spdk/spdk package
+type mockSpdkEnv struct{}
+
+func (m *mockSpdkEnv) InitSPDKEnv(int) error { return nil }
+
+type mockSpdkNvme struct {
 	fwRevBefore string
 	fwRevAfter  string
 }
 
-func (mock *mockStorage) Init() error { return nil }
-func (mock *mockStorage) Discover() interface{} {
-	c := mockController(mock.fwRevBefore)
-	return NVMeReturn{[]Controller{c}, []Namespace{mockNamespace(&c)}, nil}
+func (m *mockSpdkNvme) Discover() ([]Controller, []Namespace, error) {
+	c := mockController(m.fwRevBefore)
+	return []Controller{c}, []Namespace{mockNamespace(&c)}, nil
 }
-func (mock *mockStorage) Update(interface{}) interface{} {
-	c := mockController(mock.fwRevAfter)
-	return NVMeReturn{[]Controller{c}, []Namespace{mockNamespace(&c)}, nil}
+func (m *mockSpdkNvme) Update(ctrlrID int32, path string, slot int32) (
+	[]Controller, []Namespace, error) {
+	c := mockController(m.fwRevAfter)
+	return []Controller{c}, []Namespace{mockNamespace(&c)}, nil
 }
-func (mock *mockStorage) BurnIn(interface{}) (
-	string, []string, string, error) {
-	return "", nil, "", nil
-}
-func (mock *mockStorage) Teardown() error { return nil }
+func (m *mockSpdkNvme) Cleanup() { return }
 
-// FakeParams represents an unexpected type that should trigger an error
-type FakeParams struct {
-	PciAddr    string
-	NsID       int32
-	ConfigPath string
+type mockSpdkSetup struct{}
+
+func (m *mockSpdkSetup) start() error { return nil }
+func (m *mockSpdkSetup) reset() error { return nil }
+
+// mockNvmeStorage factory
+func newMockNvmeStorage(fwRevBefore string, fwRevAfter string) *nvmeStorage {
+	return &nvmeStorage{
+		logger: log.NewLogger(),
+		env:    &mockSpdkEnv{},
+		nvme:   &mockSpdkNvme{fwRevBefore, fwRevAfter},
+		setup:  &mockSpdkSetup{},
+	}
 }
 
-func TestBurnInNVMe(t *testing.T) {
+func mockController(fwrev string) Controller {
+	return Controller{
+		ID:      int32(12345),
+		Model:   "ABC",
+		Serial:  "123ABC",
+		PCIAddr: "1:2:3.0",
+		FWRev:   fwrev,
+	}
+}
+
+func mockNamespace(ctrlr *Controller) Namespace {
+	return Namespace{
+		ID:      ctrlr.ID,
+		Size:    int32(99999),
+		CtrlrID: int32(12345),
+	}
+}
+
+func mockControllerPB(fwRev string) *pb.NvmeController {
+	c := mockController(fwRev)
+	return &pb.NvmeController{
+		Id:      c.ID,
+		Model:   c.Model,
+		Serial:  c.Serial,
+		Pciaddr: c.PCIAddr,
+		Fwrev:   c.FWRev,
+	}
+}
+
+func mockNamespacePB(fwRev string) *pb.NvmeNamespace {
+	c := mockController(fwRev)
+	ns := mockNamespace(&c)
+	return &pb.NvmeNamespace{
+		Controller: mockControllerPB(fwRev),
+		Id:         ns.ID,
+		Capacity:   ns.Size,
+	}
+}
+func TestDiscoveryNvme(t *testing.T) {
+	sn := newMockNvmeStorage("", "")
+	c := mockControllerPB("")
+
+	if err := sn.Discover(); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	AssertTrue(t, sn.initialised, "expected NvmeStorage to have been initialised")
+	AssertEqual(
+		t, sn.Controllers, CtrlrMap{c.Id: c},
+		"unexpected list of protobuf format controllers")
+}
+
+func TestUpdateNvme(t *testing.T) {
+	sn := newMockNvmeStorage("1.0.0", "1.0.1")
+	c := mockControllerPB("1.0.1")
+
+	if err := sn.Update(0, "", 0); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	AssertTrue(t, sn.initialised, "expected NvmeStorage to have been initialised")
+	AssertEqual(
+		t, sn.Controllers, CtrlrMap{c.Id: c},
+		"unexpected list of protobuf format controllers")
+}
+
+// TestBurnInNvme verifies a corner case because BurnIn does not call out
+// to SPDK via bindings.
+// In this case the real NvmeStorage is used as opposed to a mockNvmeStorage.
+func TestBurnInNvme(t *testing.T) {
+	sn := newMockNvmeStorage("", "")
 	c := mockControllerPB("1.0.0")
+
 	configPath := "/foo/bar/conf.fio"
 	nsID := 1
-	goodParams := BurnInParams{
-		PciAddr: c.Pciaddr, NsID: int32(nsID), ConfigPath: configPath}
-	badParams := FakeParams{
-		PciAddr: c.Pciaddr, NsID: int32(nsID), ConfigPath: configPath}
 	expectedArgs := []string{
 		fmt.Sprintf(
 			"--filename=\"trtype=PCIe traddr=%s ns=%d\"",
@@ -80,30 +156,13 @@ func TestBurnInNVMe(t *testing.T) {
 		configPath,
 	}
 
-	tests := map[string]struct {
-		params     interface{}
-		shouldFail bool
-	}{
-		"successful": {goodParams, false},
-		"bad params": {badParams, true},
+	cmdName, args, env, err := sn.BurnIn(c.Pciaddr, int32(nsID), configPath)
+	if err != nil {
+		t.Fatal(err.Error())
 	}
 
-	for _, test := range tests {
-		sn := &NvmeStorage{}
-		sn.Logger = log.NewLogger()
-
-		cmdName, args, env, err := sn.BurnIn(test.params)
-		if test.shouldFail {
-			ExpectError(t, err, "unexpected params type")
-			continue
-		}
-		if err != nil {
-			t.Fatal(err.Error())
-		}
-
-		AssertTrue(t, strings.HasSuffix(cmdName, "bin/fio"), "unexpected fio executable path")
-		AssertEqual(t, args, expectedArgs, "unexpected list of command arguments")
-		AssertTrue(t, strings.HasPrefix(env, "LD_PRELOAD="), "unexpected LD_PRELOAD fio_plugin executable path")
-		AssertTrue(t, strings.HasSuffix(env, "spdk/fio_plugin/fio_plugin"), "unexpected LD_PRELOAD fio_plugin executable path")
-	}
+	AssertTrue(t, strings.HasSuffix(cmdName, "bin/fio"), "unexpected fio executable path")
+	AssertEqual(t, args, expectedArgs, "unexpected list of command arguments")
+	AssertTrue(t, strings.HasPrefix(env, "LD_PRELOAD="), "unexpected LD_PRELOAD fio_plugin executable path")
+	AssertTrue(t, strings.HasSuffix(env, "spdk/fio_plugin/fio_plugin"), "unexpected LD_PRELOAD fio_plugin executable path")
 }

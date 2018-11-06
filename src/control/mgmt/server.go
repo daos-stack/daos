@@ -25,6 +25,7 @@ package mgmt
 
 import (
 	"encoding/json"
+
 	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 	"github.com/daos-stack/daos/src/control/utils/handlers"
 	"github.com/daos-stack/daos/src/control/utils/log"
@@ -36,12 +37,21 @@ var jsonDBRelPath = "share/control/mgmtinit_db.json"
 
 // ControlService type is the data container for the service.
 type ControlService struct {
-	Storage
-	logger             *log.Logger
-	storageInitialised bool
-	SupportedFeatures  FeatureMap
-	NvmeNamespaces     NsMap
-	NvmeControllers    CtrlrMap
+	nvme              *nvmeStorage
+	scm               *scmStorage
+	logger            *log.Logger
+	SupportedFeatures FeatureMap
+}
+
+// Teardown delegates to Storage implementation's Teardowns
+func (c *ControlService) Teardown() (err error) {
+	if err = c.nvme.Teardown(); err != nil {
+		return
+	}
+	if err = c.scm.Teardown(); err != nil {
+		return
+	}
+	return
 }
 
 // loadInitData retrieves initial data from relative file path.
@@ -65,23 +75,20 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 	return
 }
 
-// NewControlServer creates a new instance of our ControlServer struct.
+// NewControlServer creates a new instance of ControlServer struct.
 func NewControlServer() *ControlService {
 	logger := log.NewLogger()
 	logger.SetLevel(log.Debug)
-
-	s := &ControlService{
-		Storage:            NewNvmeStorage(logger),
-		storageInitialised: false,
-		logger:             logger,
-	}
 
 	fMap, err := loadInitData(jsonDBRelPath)
 	if err != nil {
 		panic(err)
 	}
 
-	s.SupportedFeatures = fMap
-
-	return s
+	return &ControlService{
+		nvme:              newNvmeStorage(logger),
+		scm:               newScmStorage(logger),
+		logger:            logger,
+		SupportedFeatures: fMap,
+	}
 }

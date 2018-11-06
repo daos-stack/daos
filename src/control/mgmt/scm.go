@@ -21,36 +21,20 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package security_test
+package mgmt
 
-import (
-	"github.com/daos-stack/daos/src/control/security"
-	. "github.com/daos-stack/daos/src/control/utils/test"
-	"testing"
-)
+import pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 
-// DomainCreds tests
-func TestDomainCreds_Info(t *testing.T) {
-	creds := &security.DomainCreds{}
-	info := creds.Info()
-
-	AssertEqual(t, info.SecurityProtocol, "domain", "Wrong SecurityProtocol")
-	AssertEqual(t, info.SecurityVersion, "1.0", "Wrong SecurityVersion")
-	AssertEqual(t, info.ServerName, "localhost", "Wrong ServerName")
-}
-
-func TestDomainCreds_ClientHandshake(t *testing.T) {
-	creds := &security.DomainCreds{}
-	conn, authInfo, err := creds.ClientHandshake(nil, "",
-		nil)
-
-	AssertEqual(t, conn, nil, "Expect the conn to match the nil we passed")
-	AssertEqual(t, err, nil, "Expect no error")
-
-	switch authInfoType := authInfo.(type) {
-	case *security.DomainInfo:
-		// Expected type
-	default:
-		t.Errorf("Bad type: %T", authInfoType)
+// ListScmModules lists all Storage Class Memory modules installed.
+func (c *ControlService) ListScmModules(
+	empty *pb.EmptyParams, stream pb.MgmtControl_ListScmModulesServer) error {
+	if err := c.scm.Discover(); err != nil {
+		return err
 	}
+	for _, module := range c.scm.Modules {
+		if err := stream.Send(module); err != nil {
+			return err
+		}
+	}
+	return nil
 }

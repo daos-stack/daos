@@ -196,7 +196,7 @@ func main() {
 
 	// todo: is this the right place for cleanup?
 	log.Printf("Running storage teardown...")
-	mgmtControlServer.Storage.Teardown()
+	mgmtControlServer.Teardown()
 
 	if err != nil {
 		log.Fatal("DAOS I/O server exited with error: ", err)

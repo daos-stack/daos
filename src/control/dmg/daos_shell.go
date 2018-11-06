@@ -39,7 +39,7 @@ import (
 
 var mgmtClient *mgmt.DAOSMgmtClient
 
-func getUpdateParams(c *ishell.Context) (*pb.UpdateNVMeCtrlrParams, error) {
+func getUpdateParams(c *ishell.Context) (*pb.UpdateNvmeCtrlrParams, error) {
 	// disable the '>>>' for cleaner same line input.
 	c.ShowPrompt(false)
 	defer c.ShowPrompt(true) // revert after user input.
@@ -63,7 +63,7 @@ func getUpdateParams(c *ishell.Context) (*pb.UpdateNVMeCtrlrParams, error) {
 		}
 	}
 
-	return &pb.UpdateNVMeCtrlrParams{
+	return &pb.UpdateNvmeCtrlrParams{
 		Ctrlr: nil, Path: strings.TrimSpace(path), Slot: slot}, nil
 }
 
@@ -111,14 +111,14 @@ func getFioConfig(c *ishell.Context) (configPath string, err error) {
 }
 
 func nvmeTaskLookup(
-	c *ishell.Context, ctrlrs []*pb.NVMeController, feature string) error {
+	c *ishell.Context, ctrlrs []*pb.NvmeController, feature string) error {
 
 	switch feature {
 	case "nvme-namespaces":
 		for _, ctrlr := range ctrlrs {
 			c.Printf("Controller: %+v\n", ctrlr)
 
-			nss, err := mgmtClient.ListNVMeNss(ctrlr)
+			nss, err := mgmtClient.ListNvmeNss(ctrlr)
 			if err != nil {
 				c.Println("Problem retrieving namespaces: ", err.Error())
 				return err
@@ -144,7 +144,7 @@ func nvmeTaskLookup(
 
 			params.Ctrlr = ctrlr
 
-			newFwrev, err := mgmtClient.UpdateNVMeCtrlr(params)
+			newFwrev, err := mgmtClient.UpdateNvmeCtrlr(params)
 			if err != nil {
 				c.Println("\nProblem updating firmware: ", err)
 				return err
@@ -165,7 +165,7 @@ func nvmeTaskLookup(
 			c.Printf(
 				"\t- Running burn-in validation with spdk fio plugin using job file %s.\n\n",
 				filepath.Base(configPath))
-			_, err := mgmtClient.BurnInNVMe(ctrlr.Id, configPath)
+			_, err := mgmtClient.BurnInNvme(ctrlr.Id, configPath)
 			if err != nil {
 				return err
 			}
@@ -254,6 +254,29 @@ func setupShell() *ishell.Shell {
 	})
 
 	shell.AddCmd(&ishell.Cmd{
+		Name: "listscmmodules",
+		Help: "Command to list installed SCM modules",
+		Func: func(c *ishell.Context) {
+			if mgmtClient.Connected() == false {
+				c.Println("Connection to management server required")
+				return
+			}
+
+			println("Listing installed Scm modules:")
+			mms, err := mgmtClient.ListScmModules()
+			if err != nil {
+				c.Println("Problem retrieving SCM modules: ", err.Error())
+				return
+			}
+
+			for _, mm := range mms {
+				c.Printf(
+					"\t- %+v\n", mm)
+			}
+		},
+	})
+
+	shell.AddCmd(&ishell.Cmd{
 		Name: "nvme",
 		Help: "Perform tasks on NVMe controllers",
 		Func: func(c *ishell.Context) {
@@ -262,7 +285,7 @@ func setupShell() *ishell.Shell {
 				return
 			}
 
-			cs, err := mgmtClient.ListNVMeCtrlrs()
+			cs, err := mgmtClient.ListNvmeCtrlrs()
 			if err != nil {
 				c.Println("Unable to retrieve controller details", err.Error())
 				return
@@ -284,7 +307,7 @@ func setupShell() *ishell.Shell {
 			}
 
 			// filter list of selected controllers to act on
-			var ctrlrs []*pb.NVMeController
+			var ctrlrs []*pb.NvmeController
 			for i, ctrlr := range cs {
 				for j := range ctrlrIdxs {
 					if i == j {

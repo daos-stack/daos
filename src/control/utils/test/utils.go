@@ -60,7 +60,7 @@ func AssertEqual(
 	if len(message) > 0 {
 		message += ", "
 	}
-	message += fmt.Sprintf("%v != %v", a, b)
+	message += fmt.Sprintf("%#v != %#v", a, b)
 	t.Fatal(message)
 }
 

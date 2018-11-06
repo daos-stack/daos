@@ -31,11 +31,12 @@ service MgmtControl {
 	rpc GetFeature(FeatureName) returns (Feature) {};
 	rpc ListAllFeatures(EmptyParams) returns (stream Feature) {};
 	rpc ListFeatures(Category) returns (stream Feature) {};
-	rpc ListNVMeCtrlrs(EmptyParams) returns (stream NVMeController) {};
-	rpc ListNVMeNss(NVMeController) returns (stream NVMeNamespace) {};
-	rpc UpdateNVMeCtrlr(UpdateNVMeCtrlrParams) returns (NVMeController) {};
+	rpc ListNvmeCtrlrs(EmptyParams) returns (stream NvmeController) {};
+	rpc ListNvmeNss(NvmeController) returns (stream NvmeNamespace) {};
+	rpc UpdateNvmeCtrlr(UpdateNvmeCtrlrParams) returns (NvmeController) {};
 	rpc FetchFioConfigPaths(EmptyParams) returns (stream FioConfigPath) {};
-	rpc BurnInNVMe(BurnInNVMeParams) returns (stream BurnInNVMeReport) {};
+	rpc BurnInNvme(BurnInNvmeParams) returns (stream BurnInNvmeReport) {};
+	rpc ListScmModules(EmptyParams) returns (stream ScmModule) {};
 }
 
 message EmptyParams {}
@@ -48,6 +49,7 @@ message Category {
 	string category = 1;
 }
 
+// Feature represents a management task that can be performed by server.
 message Feature {
 	// The category of capabilities this feature belongs to.
 	Category category = 1;
@@ -57,9 +59,9 @@ message Feature {
 	string description = 3;
 }
 
-// NVMeController represents a NVMe Controller.
-message NVMeController {
-	// The id name of the controller.
+// NvmeController represents an NVMe Controller.
+message NvmeController {
+	// The id of the controller.
 	int32 id = 1;
 	// The model name of the controller.
 	string model = 2;
@@ -71,20 +73,18 @@ message NVMeController {
 	string fwrev = 5;
 }
 
-// NVMeNamespace represent NVMe namespaces
-// available on controller. Results are
-// streamed rather than returned at once.
-message NVMeNamespace {
+// NvmeNamespace represent NVMe namespaces available on controller.
+message NvmeNamespace {
 	// controller
-	NVMeController controller = 1;
+	NvmeController controller = 1;
 	// namespace id
 	int32 id = 2;
 	// device capacity in GBytes
 	int32 capacity = 3;
 }
 
-message UpdateNVMeCtrlrParams {
-	NVMeController ctrlr = 1;
+message UpdateNvmeCtrlrParams {
+	NvmeController ctrlr = 1;
 	// Filesystem path containing firmware image
 	string path = 2;
 	// Firmware slot (register) to update
@@ -96,12 +96,36 @@ message FioConfigPath {
 	string path = 1;
 }
 
-message BurnInNVMeParams {
+message BurnInNvmeParams {
 	int32 ctrlrid = 1;
 	FioConfigPath path = 2;
 }
 
-message BurnInNVMeReport {
+message BurnInNvmeReport {
 	// Report from running burn-in reported by fio
 	string report = 1;
+}
+
+// ScmModule represent Storage Class Memory modules installed.
+message ScmModule {
+	// The uid of the module.
+	//string uid = 1;
+	// The physical id of the module.
+	uint32 physicalid = 1;
+	// The device handle of the module.
+	//string handle = 3;
+	// The channel id where module is installed.
+	uint32 channel = 2;
+	// The channel position where module is installed.
+	uint32 channelpos = 3;
+	// The memory controller id attached to module.
+	uint32 memctrlr = 4;
+	// The socket id attached to module.
+	uint32 socket = 5;
+	// The serial number of the module.
+	//string serial = 8;
+	// The capacity of the module.
+	uint64 capacity = 6;
+	// The firmware revision of the module.
+	//string fwrev = 10;
 }

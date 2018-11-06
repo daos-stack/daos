@@ -36,48 +36,47 @@ import (
 	"github.com/daos-stack/daos/src/control/utils/handlers"
 )
 
-// FetchNVMe populates controllers and namespaces in ControlService
+// FetchNvme populates controllers and namespaces in ControlService
 // as side effect.
 //
 // todo: presumably we want to be able to detect namespaces added
 //       during the lifetime of the daos_server process, in that case
 //       will need to rerun discover here (currently SPDK throws
 //		 exception if you try to probe a second time).
-func (s *ControlService) FetchNVMe() error {
-	if s.storageInitialised != true {
+func (c *ControlService) FetchNvme() (err error) {
+	if !c.nvme.initialised {
 		// todo: pass shm_id to Init()
-		if err := s.Storage.Init(); err != nil {
-			return err
+		if err = c.nvme.Init(); err != nil {
+			return
 		}
-		ret := s.Storage.Discover()
-		if err := s.populateNVMe(ret); err != nil {
+		if err = c.nvme.Discover(); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// ListNvmeCtrlrs lists all NVMe controllers.
+func (c *ControlService) ListNvmeCtrlrs(
+	empty *pb.EmptyParams, stream pb.MgmtControl_ListNvmeCtrlrsServer) error {
+	if err := c.FetchNvme(); err != nil {
+		return err
+	}
+	for _, ctrlr := range c.nvme.Controllers {
+		if err := stream.Send(ctrlr); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// ListNVMeCtrlrs lists all NVMe controllers.
-func (s *ControlService) ListNVMeCtrlrs(
-	empty *pb.EmptyParams, stream pb.MgmtControl_ListNVMeCtrlrsServer) error {
-	if err := s.FetchNVMe(); err != nil {
+// ListNvmeNss lists all namespaces discovered on attached NVMe controllers.
+func (c *ControlService) ListNvmeNss(
+	ctrlr *pb.NvmeController, stream pb.MgmtControl_ListNvmeNssServer) error {
+	if err := c.FetchNvme(); err != nil {
 		return err
 	}
-	for _, c := range s.NvmeControllers {
-		if err := stream.Send(c); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// ListNVMeNss lists all namespaces discovered on attached NVMe controllers.
-func (s *ControlService) ListNVMeNss(
-	ctrlr *pb.NVMeController, stream pb.MgmtControl_ListNVMeNssServer) error {
-	if err := s.FetchNVMe(); err != nil {
-		return err
-	}
-	for _, ns := range s.NvmeNamespaces {
+	for _, ns := range c.nvme.Namespaces {
 		if ns.Controller.Id == ctrlr.Id {
 			if err := stream.Send(ns); err != nil {
 				return err
@@ -87,27 +86,26 @@ func (s *ControlService) ListNVMeNss(
 	return nil
 }
 
-// UpdateNVMeCtrlr updates the firmware on a NVMe controller, verifying that the
+// UpdateNvmeCtrlr updates the firmware on a NVMe controller, verifying that the
 // fwrev reported changes after update.
-func (s *ControlService) UpdateNVMeCtrlr(
-	ctx context.Context, params *pb.UpdateNVMeCtrlrParams) (*pb.NVMeController, error) {
+func (c *ControlService) UpdateNvmeCtrlr(
+	ctx context.Context, params *pb.UpdateNvmeCtrlrParams) (*pb.NvmeController, error) {
 	id := params.Ctrlr.Id
-	ret := s.Storage.Update(UpdateParams{id, params.Path, params.Slot})
-	if err := s.populateNVMe(ret); err != nil {
+	if err := c.nvme.Update(id, params.Path, params.Slot); err != nil {
 		return nil, err
 	}
-	c, exists := s.NvmeControllers[id]
+	ctrlr, exists := c.nvme.Controllers[id]
 	if !exists {
 		return nil, fmt.Errorf("update failed, no matching controller found")
 	}
-	if c.Fwrev == params.Ctrlr.Fwrev {
+	if ctrlr.Fwrev == params.Ctrlr.Fwrev {
 		return nil, fmt.Errorf("update failed, firmware revision unchanged")
 	}
-	return c, nil
+	return ctrlr, nil
 }
 
 // FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
-func (s *ControlService) FetchFioConfigPaths(
+func (c *ControlService) FetchFioConfigPaths(
 	empty *pb.EmptyParams, stream pb.MgmtControl_FetchFioConfigPathsServer) error {
 	pluginDir, err := handlers.GetAbsInstallPath(spdkFioPluginDir)
 	if err != nil {
@@ -125,18 +123,16 @@ func (s *ControlService) FetchFioConfigPaths(
 	return nil
 }
 
-// BurnInNVMe runs burn-in validation on NVMe Namespace and returns cmd output
+// BurnInNvme runs burn-in validation on NVMe Namespace and returns cmd output
 // in a stream to the gRPC consumer.
-func (s *ControlService) BurnInNVMe(
-	params *pb.BurnInNVMeParams, stream pb.MgmtControl_BurnInNVMeServer) error {
+func (c *ControlService) BurnInNvme(
+	params *pb.BurnInNvmeParams, stream pb.MgmtControl_BurnInNvmeServer) error {
 	// retrieve command components
-	cmdName, args, env, err := s.Storage.BurnIn(
-		BurnInParams{
-			PciAddr: s.NvmeControllers[params.Ctrlrid].Pciaddr,
-			// hardcode first Namespace on controller for the moment
-			NsID:       1,
-			ConfigPath: params.Path.Path,
-		})
+	cmdName, args, env, err := c.nvme.BurnIn(
+		c.nvme.Controllers[params.Ctrlrid].Pciaddr,
+		// hardcode first Namespace on controller for the moment
+		1,
+		params.Path.Path)
 	if err != nil {
 		return err
 	}
@@ -154,7 +150,7 @@ func (s *ControlService) BurnInNVMe(
 	scanner := bufio.NewScanner(cmdReader)
 	go func() {
 		for scanner.Scan() {
-			stream.Send(&pb.BurnInNVMeReport{Report: scanner.Text()})
+			stream.Send(&pb.BurnInNvmeReport{Report: scanner.Text()})
 		}
 	}()
 	// start command and wait for finish

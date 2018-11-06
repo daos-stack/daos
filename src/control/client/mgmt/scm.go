@@ -21,36 +21,42 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package security_test
+package mgmt
 
 import (
-	"github.com/daos-stack/daos/src/control/security"
-	. "github.com/daos-stack/daos/src/control/utils/test"
-	"testing"
+	"io"
+	"time"
+
+	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+
+	"golang.org/x/net/context"
 )
 
-// DomainCreds tests
-func TestDomainCreds_Info(t *testing.T) {
-	creds := &security.DomainCreds{}
-	info := creds.Info()
-
-	AssertEqual(t, info.SecurityProtocol, "domain", "Wrong SecurityProtocol")
-	AssertEqual(t, info.SecurityVersion, "1.0", "Wrong SecurityVersion")
-	AssertEqual(t, info.ServerName, "localhost", "Wrong ServerName")
-}
-
-func TestDomainCreds_ClientHandshake(t *testing.T) {
-	creds := &security.DomainCreds{}
-	conn, authInfo, err := creds.ClientHandshake(nil, "",
-		nil)
-
-	AssertEqual(t, conn, nil, "Expect the conn to match the nil we passed")
-	AssertEqual(t, err, nil, "Expect no error")
-
-	switch authInfoType := authInfo.(type) {
-	case *security.DomainInfo:
-		// Expected type
-	default:
-		t.Errorf("Bad type: %T", authInfoType)
+// ListScmModules prints all discovered Storage Class Memory modules installed.
+func (mc *DAOSMgmtClient) ListScmModules() (mms []*pb.ScmModule, err error) {
+	if mc.Connected() == false {
+		return mms, errConnect
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	stream, err := mc.client.ListScmModules(ctx, &pb.EmptyParams{})
+	if err != nil {
+		return
+	}
+
+	var mm *pb.ScmModule
+	for {
+		mm, err = stream.Recv()
+		if err == io.EOF {
+			err = nil
+			break
+		} else if err != nil {
+			return
+		}
+		mms = append(mms, mm)
+	}
+
+	return
 }

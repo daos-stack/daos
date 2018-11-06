@@ -21,111 +21,73 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt_test
+package mgmt
 
 import (
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/go-spdk/spdk"
-	. "github.com/daos-stack/daos/src/control/mgmt"
 	. "github.com/daos-stack/daos/src/control/utils/test"
 
 	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 )
 
-func mockController(fwrev string) Controller {
-	return Controller{
-		ID:      int32(12345),
-		Model:   "ABC",
-		Serial:  "123ABC",
-		PCIAddr: "1:2:3.0",
-		FWRev:   fwrev,
-	}
-}
-func mockNamespace(ctrlr *Controller) Namespace {
-	return Namespace{
-		ID:      ctrlr.ID,
-		Size:    int32(99999),
-		CtrlrID: int32(12345),
-	}
-}
-func mockControllerPB(fwRev string) *pb.NVMeController {
-	c := mockController(fwRev)
-	return &pb.NVMeController{
-		Id:      c.ID,
-		Model:   c.Model,
-		Serial:  c.Serial,
-		Pciaddr: c.PCIAddr,
-		Fwrev:   c.FWRev,
-	}
-}
-func mockNamespacePB(fwRev string) *pb.NVMeNamespace {
-	c := mockController(fwRev)
-	ns := mockNamespace(&c)
-	return &pb.NVMeNamespace{
-		Controller: mockControllerPB(fwRev),
-		Id:         ns.ID,
-		Capacity:   ns.Size,
-	}
+func mockNvmeCS(ns *nvmeStorage) *ControlService {
+	return &ControlService{nvme: ns}
 }
 
-func NewTestControlServer(storageImpl Storage) *ControlService {
-	return &ControlService{Storage: storageImpl}
-}
+func TestFetchNvme(t *testing.T) {
+	s := mockNvmeCS(newMockNvmeStorage("1.0.0", "1.0.1"))
 
-func TestFetchNVMe(t *testing.T) {
-	s := NewTestControlServer(&mockStorage{"1.0.0", "1.0.1"})
-
-	if err := s.FetchNVMe(); err != nil {
+	if err := s.FetchNvme(); err != nil {
 		t.Fatal(err.Error())
 	}
 
 	cExpect := mockControllerPB("1.0.0")
 	nsExpect := mockNamespacePB("1.0.0")
 
-	AssertEqual(t, s.NvmeControllers[cExpect.Id], cExpect, "unexpected Controller populated")
-	AssertEqual(t, s.NvmeNamespaces[nsExpect.Id], nsExpect, "unexpected Namespace populated")
+	AssertEqual(t, s.nvme.Controllers[cExpect.Id], cExpect, "unexpected Controller populated")
+	AssertEqual(t, s.nvme.Namespaces[nsExpect.Id], nsExpect, "unexpected Namespace populated")
 }
 
-func TestUpdateNVMe(t *testing.T) {
-	s := NewTestControlServer(&mockStorage{"1.0.0", "1.0.1"})
+func TestUpdateNvmeCtrlr(t *testing.T) {
+	s := mockNvmeCS(newMockNvmeStorage("1.0.0", "1.0.1"))
 
-	if err := s.FetchNVMe(); err != nil {
+	if err := s.FetchNvme(); err != nil {
 		t.Fatal(err.Error())
 	}
 
 	cExpect := mockControllerPB("1.0.1")
-	c := s.NvmeControllers[cExpect.Id]
+	c := s.nvme.Controllers[cExpect.Id]
 
 	// after fetching controller details, simulate updated firmware
 	// version being reported
-	params := &pb.UpdateNVMeCtrlrParams{
+	params := &pb.UpdateNvmeCtrlrParams{
 		Ctrlr: c, Path: "/foo/bar", Slot: 0}
 
-	newC, err := s.UpdateNVMeCtrlr(nil, params)
+	newC, err := s.UpdateNvmeCtrlr(nil, params)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	AssertEqual(t, s.NvmeControllers[cExpect.Id], cExpect, "unexpected Controller populated")
+	AssertEqual(t, s.nvme.Controllers[cExpect.Id], cExpect, "unexpected Controller populated")
 	AssertEqual(t, newC, cExpect, "unexpected Controller returned")
 }
 
-func TestUpdateNVMeFail(t *testing.T) {
-	s := NewTestControlServer(&mockStorage{"1.0.0", "1.0.0"})
+func TestUpdateNvmeCtrlrFail(t *testing.T) {
+	s := mockNvmeCS(newMockNvmeStorage("1.0.0", "1.0.0"))
 
-	if err := s.FetchNVMe(); err != nil {
+	if err := s.FetchNvme(); err != nil {
 		t.Fatal(err.Error())
 	}
 
 	cExpect := mockControllerPB("1.0.0")
-	c := s.NvmeControllers[cExpect.Id]
+	c := s.nvme.Controllers[cExpect.Id]
 
 	// after fetching controller details, simulate the same firmware
 	// version being reported
-	params := &pb.UpdateNVMeCtrlrParams{
+	params := &pb.UpdateNvmeCtrlrParams{
 		Ctrlr: c, Path: "/foo/bar", Slot: 0}
 
-	_, err := s.UpdateNVMeCtrlr(nil, params)
+	_, err := s.UpdateNvmeCtrlr(nil, params)
 	ExpectError(t, err, "update failed, firmware revision unchanged")
 }

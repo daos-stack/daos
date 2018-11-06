@@ -21,42 +21,43 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt_test
+package mgmt
 
 import (
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/mgmt"
+	. "github.com/daos-stack/go-ipmctl/ipmctl"
+	"google.golang.org/grpc"
+
 	. "github.com/daos-stack/daos/src/control/utils/test"
 
 	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 )
 
-func mockFeaturePB() *pb.Feature {
-	return &pb.Feature{
-		Category:    &pb.Category{Category: "nvme"},
-		Fname:       &pb.FeatureName{Name: "burn-name"},
-		Description: "run workloads on device to test",
-	}
+type mockListScmModulesServer struct {
+	grpc.ServerStream
+	Results []*pb.ScmModule
 }
 
-func TestGetFeature(t *testing.T) {
-	s := &ControlService{}
+func (m *mockListScmModulesServer) Send(module *pb.ScmModule) error {
+	m.Results = append(m.Results, module)
+	return nil
+}
 
-	mockFeature := mockFeaturePB()
-	fMap := make(FeatureMap)
-	fMap[mockFeature.Fname.Name] = mockFeature
-	s.SupportedFeatures = fMap
+func mockScmCS(ss *scmStorage) *ControlService {
+	return &ControlService{scm: ss}
+}
 
-	feature, err := s.GetFeature(nil, mockFeature.Fname)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+func TestListScmModules(t *testing.T) {
+	s := mockScmCS(newMockScmStorage([]DeviceDiscovery{mockModule()}))
+	m := mockModulePB()
 
-	AssertEqual(t, feature, mockFeature, "")
+	mock := &mockListScmModulesServer{}
+	s.ListScmModules(nil, mock)
 
-	feature, err = s.GetFeature(nil, &pb.FeatureName{Name: "non-existent"})
-	if err == nil {
-		t.Fatal(err.Error())
-	}
+	AssertTrue(t, s.scm.initialised, "expected ScmStorage to have been initialised")
+	AssertEqual(t, len(s.scm.Modules), 1, "unexpected number of modules")
+	AssertEqual(t, s.scm.Modules, ScmmMap{0: m}, "unexpected list of modules")
+	AssertEqual(t, len(mock.Results), 1, "unexpected number of modules sent")
+	AssertEqual(t, mock.Results, []*pb.ScmModule{m}, "unexpected list of modules sent")
 }

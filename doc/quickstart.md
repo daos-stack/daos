@@ -48,10 +48,15 @@ On CentOS and openSuSE:
     yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
     yum install -y doxygen pandoc flex patch nasm yasm
     yum install -y ninja-build meson libyaml-devel
-    # Additionally required SPDK packages
+    # Required SPDK packages for managing NVMe SSDs
     yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
     yum install -y python clang-analyzer sg3_utils libiscsi-devel
     yum install -y libibverbs-devel numactl-devel doxygen mscgen graphviz
+    # Required IpmCtl packages for managing SCM Modules
+    yum install -y yum-plugin-copr epel-release
+    yum copr -y enable jhli/ipmctl
+    yum copr -y enable jhli/safeclib
+    yum install -y libsafec libipmctl-devel
 
 On Ubuntu and Debian:
 
