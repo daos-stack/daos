@@ -66,7 +66,7 @@ type Configuration struct {
 	MountPath    string   `yaml:"mount_path"`
 	NvmeInclude  []string `yaml:"nvme_include"`
 	NvmeExclude  []string `yaml:"nvme_exclude"`
-	Hyperhreads  bool     `yaml:"hyperthreads"`
+	Hyperthreads bool     `yaml:"hyperthreads"`
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler on Format struct

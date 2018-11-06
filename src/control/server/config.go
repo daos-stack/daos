@@ -67,6 +67,6 @@ func NewDefaultConfiguration() *Configuration {
 		Cert:         "./.daos/daos_server.crt",
 		Key:          "./.daos/daos_server.key",
 		MountPath:    "/mnt/daos",
-		Hyperhreads:  false,
+		Hyperthreads: false,
 	}
 }
