@@ -4,7 +4,7 @@ hosts:
   test_machines:
     - boro-A
     - boro-B
-timeout: 3600
+timeout: 8000
 server:
   server_group: daos_server
 pool:
@@ -13,6 +13,6 @@ pool:
   createset:
     setname: daos_server
   createsize:
-    size: 8589934592
+    size: 2000000000
 dkeys:
   number_of_dkeys: 1000000
