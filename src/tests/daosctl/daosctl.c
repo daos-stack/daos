@@ -129,7 +129,7 @@ done()
 int
 handle_information_options(const char ***argv, int *argc)
 {
-	if (*argc > 0) {
+	if (*argc > 1) {
 		const char *cmd = (*argv)[1];
 
 		if (cmd[0] != '-')
