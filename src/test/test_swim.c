@@ -65,7 +65,8 @@ struct network_pkt {
 	TAILQ_ENTRY(network_pkt)	 np_link;
 	swim_id_t			 np_from;
 	swim_id_t			 np_to;
-	char				*np_msg;
+	struct swim_member_update	*np_upds;
+	size_t				 np_nupds;
 };
 
 struct swim_target {
@@ -89,16 +90,20 @@ static struct global {
 	int shutdown;
 } g;
 
-static int test_send_message(struct swim_context *ctx, swim_id_t to, char *msg)
+static int test_send_message(struct swim_context *ctx, swim_id_t to,
+			     struct swim_member_update *upds,
+			     size_t nupds)
 {
 	struct network_pkt *item;
 	int rc = 0;
 
 	item = malloc(sizeof(*item));
 	if (item != NULL) {
-		item->np_from = swim_self_get(ctx);
-		item->np_to   = to;
-		item->np_msg  = strdup(msg);
+		item->np_from  = swim_self_get(ctx);
+		item->np_to    = to;
+		item->np_upds  = upds;
+		item->np_nupds = nupds;
+
 		pthread_mutex_lock(&g.mutex);
 		TAILQ_INSERT_TAIL(&g.pkts, item, np_link);
 		pthread_mutex_unlock(&g.mutex);
@@ -279,14 +284,15 @@ static void *network_thread(void *arg)
 				   failed_member != item->np_to) {
 				/* emulate RPC receive by target */
 				rc = swim_parse_message(g.swim_ctx[item->np_to],
-						   item->np_from, item->np_msg);
+						   item->np_from, item->np_upds,
+						   item->np_nupds);
 				if (rc) {
 					fprintf(stderr, "swim_parse_message() "
 						" error %d\n", rc);
 				}
 			}
 
-			free(item->np_msg);
+			D_FREE(item->np_upds);
 			free(item);
 		} else {
 			pthread_mutex_unlock(&g.mutex);

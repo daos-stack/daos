@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -146,10 +146,15 @@ struct crt_plugin_cb_priv {
 	void				*cp_args;
 };
 
+/* TODO may use a RPC to query server-side context number */
+#ifndef CRT_SRV_CONTEXT_NUM
+# define CRT_SRV_CONTEXT_NUM		(256)
+#endif
+
 /* structure of global fault tolerance data */
 struct crt_plugin_gdata {
 	/* list of progress callbacks */
-	d_list_t		cpg_prog_cbs;
+	d_list_t		cpg_prog_cbs[CRT_SRV_CONTEXT_NUM];
 	/* list of rpc timeout callbacks */
 	d_list_t		cpg_timeout_cbs;
 	/* list of event notification callbacks */
@@ -168,11 +173,6 @@ struct crt_plugin_gdata {
 
 extern struct crt_plugin_gdata		crt_plugin_gdata;
 
-/* TODO may use a RPC to query server-side context number */
-#ifndef CRT_SRV_CONTEXT_NUM
-# define CRT_SRV_CONTEXT_NUM		(256)
-#endif
-
 /* (1 << CRT_EPI_TABLE_BITS) is the number of buckets of epi hash table */
 #define CRT_EPI_TABLE_BITS		(3)
 #define CRT_DEFAULT_CREDITS_PER_EP_CTX	(32)
@@ -184,7 +184,7 @@ struct crt_context {
 	int			 cc_idx; /* context index */
 	struct crt_hg_context	 cc_hg_ctx; /* HG context */
 	void			*cc_rpc_cb_arg;
-	crt_rpc_task_t		cc_rpc_cb; /* rpc callback */
+	crt_rpc_task_t		 cc_rpc_cb; /* rpc callback */
 	/* in-flight endpoint tracking hash table */
 	struct d_hash_table	 cc_epi_table;
 	/* binheap for inflight RPC timeout tracking */

@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,6 +44,7 @@
 
 #include "crt_barrier.h"
 #include "crt_pmix.h"
+#include "crt_swim.h"
 
 enum crt_grp_status {
 	CRT_GRP_CREATING = 0x66,
@@ -106,6 +107,12 @@ struct crt_grp_priv {
 	 * number of the failed rank list gp_pri_srv->ps_failed_ranks
 	 */
 	uint32_t		 gp_membs_ver;
+	/*
+	 * this structure contains the circular list of member ranks.
+	 * It's used to store SWIM related information and should strictly
+	 * correspond to members in gp_membs.
+	 */
+	struct crt_swim_membs	 gp_membs_swim;
 	/*
 	 * member ranks that are still alive, should be unique and sorted, each
 	 * member is the rank number within the primary group. Only valid for

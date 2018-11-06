@@ -1,5 +1,5 @@
 #!python
-# Copyright (C) 2016-2017 Intel Corporation
+# Copyright (C) 2016-2019 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -37,28 +37,34 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Build cart src"""
 
+SRC = ['crt_barrier.c', 'crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
+       'crt_ctl.c', 'crt_debug.c', 'crt_group.c', 'crt_hg.c', 'crt_hg_proc.c',
+       'crt_init.c', 'crt_iv.c', 'crt_lm.c', 'crt_pmix.c', 'crt_register.c',
+       'crt_rpc.c', 'crt_self_test_client.c', 'crt_self_test_service.c',
+       'crt_swim.c', 'crt_tree.c', 'crt_tree_flat.c', 'crt_tree_kary.c',
+       'crt_tree_knomial.c']
+
 def scons():
     """Scons function"""
-    Import('env', 'prereqs')
+
+    Import('env', 'prereqs', 'swim_targets', 'gurt_lib')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
 
-    libraries = ['gurt']
-
     denv.AppendUnique(CPPPATH=['#/src/cart'])
-    denv.AppendUnique(LIBS=libraries)
+    denv.AppendUnique(LIBS=['gurt'])
     prereqs.require(denv, 'mercury', 'pmix')
     denv.AppendUnique(RPATH=['$PREFIX/lib'])
 
-    crt_targets = denv.SharedObject(Glob('*.c'))
-    crt = denv.SharedLibrary('libcart', crt_targets)
-    denv.Install('$PREFIX/lib/', crt)
+    cart_targets = denv.SharedObject(SRC)
+    cart_lib = denv.SharedLibrary('libcart', [cart_targets, swim_targets])
+    denv.Requires(cart_lib, [swim_targets, gurt_lib])
+    denv.Install('$PREFIX/lib/', cart_lib)
 
-    Default(crt)
-
-    Export('crt_targets')
+    Default(cart_lib)
+    Export('cart_lib', 'cart_targets')
 
 if __name__ == "SCons.Script":
     scons()

@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 Intel Corporation
+/* Copyright (C) 2018-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -55,10 +55,48 @@
 #define FAILED_MEMBER	1
 
 #define CRT_ISEQ_RPC_SWIM	/* input fields */		 \
-	((d_string_t)		(msg)			CRT_VAR) \
-	((uint64_t)		(src)			CRT_VAR)
+	((uint64_t)		     (src)		CRT_VAR) \
+	((struct swim_member_update) (upds)		CRT_ARRAY)
 
 #define CRT_OSEQ_RPC_SWIM	/* output fields */
+
+static int
+crt_proc_struct_swim_member_state(crt_proc_t proc,
+				  struct swim_member_state *data)
+{
+	int rc;
+
+	rc = crt_proc_uint64_t(proc, &data->sms_incarnation);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &data->sms_status);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &data->sms_padding);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_struct_swim_member_update(crt_proc_t proc,
+				   struct swim_member_update *data)
+{
+	int rc;
+
+	rc = crt_proc_uint64_t(proc, &data->smu_id);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_struct_swim_member_state(proc, &data->smu_state);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
 
 CRT_RPC_DECLARE(crt_rpc_swim, CRT_ISEQ_RPC_SWIM, CRT_OSEQ_RPC_SWIM)
 CRT_RPC_DEFINE(crt_rpc_swim, CRT_ISEQ_RPC_SWIM, CRT_OSEQ_RPC_SWIM)
@@ -120,7 +158,8 @@ static void swim_srv_cb(crt_rpc_t *rpc_req)
 	if (global_srv.my_rank != FAILED_MEMBER &&
 	    rpc_cli_input->src != FAILED_MEMBER) {
 		rc = swim_parse_message(global_srv.swim_ctx, rpc_cli_input->src,
-				    rpc_cli_input->msg);
+					rpc_cli_input->upds.ca_arrays,
+					rpc_cli_input->upds.ca_count);
 		D_ASSERTF(rc == 0, "swim_parse_rpc() failed rc=%d", rc);
 	} else {
 		dbg("*** DROP ****");
@@ -140,13 +179,13 @@ static void swim_cli_cb(const struct crt_cb_info *cb_info)
 
 	dbg("opc: %#x cci_rc: %d", cb_info->cci_rpc->cr_opc, cb_info->cci_rc);
 
-	if (rpc_swim_input->msg)
-		free(rpc_swim_input->msg);
+	D_FREE(rpc_swim_input->upds.ca_arrays);
 
 	dbg("<---%s---", __func__);
 }
 
-static int swim_send_message(struct swim_context *ctx, swim_id_t to, char *msg)
+static int swim_send_message(struct swim_context *ctx, swim_id_t to,
+			     struct swim_member_update *upds, size_t nupds)
 {
 	struct swim_global_srv *srv = swim_data(ctx);
 	struct crt_rpc_swim_in *swim_rpc_input;
@@ -174,8 +213,9 @@ static int swim_send_message(struct swim_context *ctx, swim_id_t to, char *msg)
 
 	swim_rpc_input = crt_req_get(rpc_req);
 	D_ASSERT(swim_rpc_input != NULL);
-	swim_rpc_input->msg = strdup(msg); /* will be free in swim_cli_cb() */
 	swim_rpc_input->src = self;
+	swim_rpc_input->upds.ca_arrays = upds;
+	swim_rpc_input->upds.ca_count  = nupds;
 	rc = crt_req_send(rpc_req, swim_cli_cb, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed rc=%d", rc);
 
@@ -319,7 +359,7 @@ static void srv_fini(void)
 	swim_fini(global_srv.swim_ctx);
 	free(global_srv.swim_ms);
 
-	rc = crt_context_destroy(global_srv.crt_ctx, 1);
+	rc = crt_context_destroy(global_srv.crt_ctx, 0);
 	D_ASSERTF(rc == 0, "crt_context_destroy failed rc=%d\n", rc);
 
 	rc = crt_finalize();
@@ -372,7 +412,7 @@ static int srv_init(void)
 		D_ASSERTF(global_srv.swim_ctx != NULL, "swim_init() failed\n");
 	}
 
-	rc = crt_register_progress_cb(swim_progress_cb, &global_srv);
+	rc = crt_register_progress_cb(swim_progress_cb, 0, &global_srv);
 	D_ASSERTF(rc == 0, "crt_register_progress_cb() failed %d\n", rc);
 
 	rc = crt_context_create(&global_srv.crt_ctx);

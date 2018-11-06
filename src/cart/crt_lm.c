@@ -1384,7 +1384,7 @@ crt_lm_init(void)
 			D_GOTO(err_out, rc);
 		}
 		/* servers register callbacks to manage the liveness map */
-		rc = crt_register_progress_cb(lm_prog_cb, grp);
+		rc = crt_register_progress_cb(lm_prog_cb, 0, grp);
 		if (rc != 0) {
 			D_GOTO(err_fini, rc);
 		}
@@ -1407,8 +1407,9 @@ out:
 int
 crt_lm_finalize(void)
 {
-	struct lm_grp_srv_t		*lm_grp_srv;
-	int				 rc = 0;
+	struct	crt_grp_priv	*grp_priv;
+	struct lm_grp_srv_t	*lm_grp_srv;
+	int			 rc = 0;
 
 	if (crt_lm_gdata.clg_inited == 0) {
 		D_DEBUG(DB_TRACE, "cannot finalize before crt_lm_init().\n");
@@ -1421,6 +1422,14 @@ crt_lm_finalize(void)
 		D_GOTO(out, rc = 0);
 	}
 	if (crt_is_service()) {
+		/* this is the only place we need a grp_priv pointer,
+		 * since we need to retrieve the public struct pointer of
+		 * the local primary group at finalization.
+		 */
+		grp_priv = crt_grp_pub2priv(NULL);
+		D_ASSERT(grp_priv != NULL);
+
+		crt_unregister_progress_cb(lm_prog_cb, 0, &grp_priv->gp_pub);
 		lm_grp_srv = &crt_lm_gdata.clg_lm_grp_srv;
 		crt_lm_grp_fini(lm_grp_srv);
 	}

@@ -147,12 +147,13 @@ exit:
 static int
 crt_plugin_init(void)
 {
-	int rc;
+	int i, rc;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 0);
 
 	/** init the lists */
-	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_prog_cbs);
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
+		D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_prog_cbs[i]);
 	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_timeout_cbs);
 	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_event_cbs);
 	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_eviction_cbs);
@@ -358,12 +359,18 @@ do_init:
 		crt_gdata.cg_inited = 1;
 		if ((flags & CRT_FLAG_BIT_LM_DISABLE) == 0) {
 			rc = crt_lm_init();
-			if (rc != 0) {
+			if (rc)
+				D_GOTO(cleanup, rc);
+		}
+
+		if (crt_is_service()) {
+			rc = crt_swim_init(CRT_DETAULT_PROGRESS_CTX_IDX);
+			if (rc) {
+				D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
+				crt_lm_finalize();
 				D_GOTO(cleanup, rc);
 			}
 		}
-
-
 	} else {
 		if (crt_gdata.cg_server == false && server == true) {
 			D_ERROR("CRT initialized as client, cannot set as "
@@ -384,17 +391,16 @@ cleanup:
 	}
 	if (crt_gdata.cg_grp_inited == 1)
 		crt_grp_fini();
-	if (crt_gdata.cg_opc_map != NULL) {
+	if (crt_gdata.cg_opc_map != NULL)
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
-	}
-	if (crt_gdata.cg_opc_map_legacy != NULL) {
+	if (crt_gdata.cg_opc_map_legacy != NULL)
 		crt_opc_map_destroy_legacy(crt_gdata.cg_opc_map_legacy);
-	}
 
 	crt_na_ofi_config_fini();
 
 unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+
 out:
 	if (rc != 0) {
 		D_ERROR("crt_init failed, rc: %d.\n", rc);
@@ -417,17 +423,22 @@ crt_plugin_fini(void)
 	struct crt_timeout_cb_priv	*timeout_cb_priv;
 	struct crt_event_cb_priv	*event_cb_priv;
 	struct crt_plugin_cb_priv	*cb_priv;
+	int				 i;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
 
 	if (CRT_PMIX_ENABLED())
 		crt_plugin_pmix_fini();
 
-	while ((prog_cb_priv = d_list_pop_entry(&crt_plugin_gdata.cpg_prog_cbs,
-						struct crt_prog_cb_priv,
-						cpcp_link))) {
-		D_FREE(prog_cb_priv);
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		while ((prog_cb_priv = d_list_pop_entry(
+					&crt_plugin_gdata.cpg_prog_cbs[i],
+					struct crt_prog_cb_priv,
+					cpcp_link))) {
+			D_FREE(prog_cb_priv);
+		}
 	}
+
 	while ((timeout_cb_priv = d_list_pop_entry(&crt_plugin_gdata.cpg_timeout_cbs,
 						   struct crt_timeout_cb_priv,
 						   ctcp_link))) {
@@ -480,6 +491,9 @@ crt_finalize(void)
 
 		if (crt_plugin_gdata.cpg_inited == 1)
 			crt_plugin_fini();
+
+		if (crt_is_service())
+			crt_swim_fini();
 
 		rc = crt_grp_fini();
 		if (rc != 0) {

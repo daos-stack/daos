@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -55,6 +55,7 @@
  */
 #define DD_FAC(name)	(d_##name##_logfac)
 
+extern int DD_FAC(swim);
 extern int DD_FAC(misc);
 extern int DD_FAC(mem);
 extern int DD_FAC(fi);

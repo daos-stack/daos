@@ -1,5 +1,5 @@
 /* Copyright (c) 2016 UChicago Argonne, LLC
- * Copyright (C) 2018 Intel Corporation
+ * Copyright (C) 2018-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -66,6 +66,12 @@ enum swim_member_status {
 struct swim_member_state {
 	uint64_t		 sms_incarnation; /**< incarnation number */
 	enum swim_member_status	 sms_status;	  /**< status of member */
+	uint32_t		 sms_padding;
+};
+
+struct swim_member_update {
+	uint64_t		 smu_id;
+	struct swim_member_state smu_state;
 };
 
 /** opaque SWIM context type */
@@ -83,10 +89,12 @@ struct swim_ops {
 	 *
 	 * @param[in]  ctx    SWIM context pointer from swim_init()
 	 * @param[in]  to     IDs of selected target for message
-	 * @param[in]  msg    SWIM message for other group member
+	 * @param[in]  upds   SWIM updates to other group member
+	 * @param[in]  nupds  the count of SWIM updates
 	 * @returns           0 on success, negative error ID otherwise
 	 */
-	int (*send_message)(struct swim_context *ctx, swim_id_t to, char *msg);
+	int (*send_message)(struct swim_context *ctx, swim_id_t to,
+			    struct swim_member_update *upds, size_t nupds);
 
 	/**
 	 * Retrieve a (non-dead) random group member from the group
@@ -176,19 +184,20 @@ swim_id_t swim_self_get(struct swim_context *ctx);
  *
  * @param[in]  ctx     SWIM context pointer from swim_init()
  * @param[in]  self_id Self member ID
- * @returns            0 on success, negative error ID otherwise
  */
-int swim_self_set(struct swim_context *ctx, swim_id_t self_id);
+void swim_self_set(struct swim_context *ctx, swim_id_t self_id);
 
 /**
  * Parse a SWIM message from other group member.
  *
- * @param[in]  ctx  SWIM context pointer from swim_init()
- * @param[in]  from IDs of selected target for message
- * @param[in]  msg  SWIM message for other group member
+ * @param[in]  ctx   SWIM context pointer from swim_init()
+ * @param[in]  from  IDs of selected target for message
+ * @param[in]  upds  SWIM updates from other group member
+ * @param[in]  nupds the count of SWIM updates
  * @returns         0 on success, negative error ID otherwise
  */
-int swim_parse_message(struct swim_context *ctx, swim_id_t from, char *msg);
+int swim_parse_message(struct swim_context *ctx, swim_id_t from,
+			struct swim_member_update *upds, size_t nupds);
 
 /**
  * Progress the state machine of SWIM protocol.

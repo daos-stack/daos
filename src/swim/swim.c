@@ -1,5 +1,5 @@
 /* Copyright (c) 2016 UChicago Argonne, LLC
- * Copyright (C) 2018 Intel Corporation
+ * Copyright (C) 2018-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,14 +46,10 @@ extern int DD_FAC(swim);
 static int
 swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 {
-	static const char status2char[] = "ASD";
-	struct swim_member_state id_state;
+	struct swim_member_update *upds;
 	struct swim_item *next, *item;
-	FILE *fp;
-	char *msg;
 	swim_id_t self_id = swim_self_get(ctx);
-	size_t msg_size;
-	size_t count = 0;
+	size_t nupds, i = 0;
 	int rc = 0;
 
 	if (id == SWIM_ID_INVALID || to == SWIM_ID_INVALID) {
@@ -61,39 +57,31 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 		SWIM_GOTO(out, rc = -EINVAL);
 	}
 
-	fp = open_memstream(&msg, &msg_size);
-	if (fp == NULL) {
-		SWIM_ERROR("open_memstream() failed errno=%d\n", -errno);
+	nupds = SWIM_PIGGYBACK_ENTRIES + (id != self_id ? 2 : 1);
+	D_ALLOC_ARRAY(upds, nupds);
+	if (upds == NULL) {
+		SWIM_ERROR("No memory for SWIM updates\n");
 		SWIM_GOTO(out, rc = -ENOMEM);
 	}
 
 	swim_ctx_lock(ctx);
 
-	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
+	rc = ctx->sc_ops->get_member_state(ctx, id, &upds[i].smu_state);
 	if (rc) {
 		SWIM_ERROR("get_member_state() failed rc=%d\n", rc);
 		SWIM_GOTO(out_unlock, rc);
 	}
-
-	rc = fprintf(fp, "%lu %c %lu\n", id,
-		     status2char[id_state.sms_status],
-		     id_state.sms_incarnation);
-	if (rc < 0)
-		SWIM_GOTO(out_unlock, rc = -ENOSPC);
+	upds[i++].smu_id = id;
 
 	if (id != self_id) {
 		/* update self status on target */
-		rc = ctx->sc_ops->get_member_state(ctx, self_id, &id_state);
+		rc = ctx->sc_ops->get_member_state(ctx, self_id,
+						   &upds[i].smu_state);
 		if (rc) {
 			SWIM_ERROR("get_member_state() failed rc=%d\n", rc);
 			SWIM_GOTO(out_unlock, rc);
 		}
-
-		rc = fprintf(fp, "%lu %c %lu\n", self_id,
-			     status2char[id_state.sms_status],
-			     id_state.sms_incarnation);
-		if (rc < 0)
-			SWIM_GOTO(out_unlock, rc = -ENOSPC);
+		upds[i++].smu_id = self_id;
 	}
 
 	item = TAILQ_FIRST(&ctx->sc_updates);
@@ -101,7 +89,7 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 		next = TAILQ_NEXT(item, si_link);
 
 		/* delete entries that are too many */
-		if (++count > SWIM_PIGGYBACK_ENTRIES) {
+		if (i >= nupds) {
 			TAILQ_REMOVE(&ctx->sc_updates, item, si_link);
 			SWIM_FREE(item);
 			item = next;
@@ -111,18 +99,13 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 		/* update with recent updates */
 		if (item->si_id != id && item->si_id != self_id) {
 			rc = ctx->sc_ops->get_member_state(ctx, item->si_id,
-							   &id_state);
+							   &upds[i].smu_state);
 			if (rc) {
 				SWIM_ERROR("get_member_state() failed rc=%d\n",
 					   rc);
 				SWIM_GOTO(out_unlock, rc);
 			}
-
-			rc = fprintf(fp, "%lu %c %lu\n", item->si_id,
-				     status2char[id_state.sms_status],
-				     id_state.sms_incarnation);
-			if (rc < 0)
-				SWIM_GOTO(out_unlock, rc = -ENOSPC);
+			upds[i++].smu_id = item->si_id;
 		}
 
 		if (++item->u.si_count > ctx->sc_piggyback_tx_max) {
@@ -136,11 +119,12 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 
 out_unlock:
 	swim_ctx_unlock(ctx);
-	fclose(fp); /* valid values of msg and msg_size will be set HERE! */
 
-	if (msg_size > 0)
-		rc = ctx->sc_ops->send_message(ctx, to, msg);
-	free(msg); /* allocated by open_memstream() */
+	if (rc == 0)
+		rc = ctx->sc_ops->send_message(ctx, to, upds, i);
+
+	if (rc)
+		D_FREE(upds);
 out:
 	return rc;
 }
@@ -447,19 +431,11 @@ swim_self_get(struct swim_context *ctx)
 	return ctx ? ctx->sc_self : SWIM_ID_INVALID;
 }
 
-int
+void
 swim_self_set(struct swim_context *ctx, swim_id_t self_id)
 {
-	int rc = 0;
-
-	if (ctx == NULL) {
-		SWIM_ERROR("invalid parameter (ctx is NULL)\n");
-		SWIM_GOTO(out, rc = -EINVAL);
-	}
-
-	ctx->sc_self = self_id;
-out:
-	return rc;
+	if (ctx != NULL)
+		ctx->sc_self = self_id;
 }
 
 struct swim_context *
@@ -738,17 +714,16 @@ out:
 }
 
 int
-swim_parse_message(struct swim_context *ctx, swim_id_t from, char *msg)
+swim_parse_message(struct swim_context *ctx, swim_id_t from,
+		   struct swim_member_update *upds, size_t nupds)
 {
-	char *line, *saveptr = NULL;
 	struct swim_item *item;
 	enum swim_context_state ctx_state;
 	struct swim_member_state self_state;
 	swim_id_t self_id = swim_self_get(ctx);
-	swim_id_t id_target, id_sendto, id, to = SWIM_ID_INVALID;
-	uint64_t nr;
+	swim_id_t id_target, id_sendto, to = SWIM_ID_INVALID;
 	bool send_updates = false;
-	char status;
+	size_t i;
 	int rc = 0;
 
 	if (self_id == SWIM_ID_INVALID) /* not initialized yet */
@@ -760,37 +735,35 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from, char *msg)
 	if (ctx_state == SCS_DPINGED && from == ctx->sc_target)
 		ctx_state = SCS_ACKED;
 
-	for (line = strtok_r(msg, "\n", &saveptr);
-	     line != NULL;
-	     line = strtok_r(NULL, "\n", &saveptr)) {
-		if (sscanf(line, "%lu %c %lu", &id, &status, &nr) == EOF) {
-			SWIM_ERROR("Invalid SWIM update line: '%s'\n", line);
-			continue;
-		}
-
-		SWIM_INFO("%lu: update: %lu %c %lu\n", self_id, id, status, nr);
+	for (i = 0; i < nupds; i++) {
+		SWIM_INFO("%lu: update: %lu %c %lu\n", self_id, upds[i].smu_id,
+				"ASD"[upds[i].smu_state.sms_status],
+				upds[i].smu_state.sms_incarnation);
 
 		if (to == SWIM_ID_INVALID)
-			to = id; /* save first index from update */
+			to = upds[i].smu_id; /* save first index from update */
 
-		switch (status) {
-		case 'A': /* SWIM_MEMBER_ALIVE */
+		switch (upds[i].smu_state.sms_status) {
+		case SWIM_MEMBER_ALIVE:
 			/* ignore alive updates for self */
-			if (id == self_id)
+			if (upds[i].smu_id == self_id)
 				break;
 
-			if (ctx_state == SCS_IPINGED && id == ctx->sc_target)
+			if (ctx_state == SCS_IPINGED &&
+			    upds[i].smu_id == ctx->sc_target)
 				ctx_state = SCS_ACKED;
 
-			swim_member_alive(ctx, from, id, nr);
+			swim_member_alive(ctx, from, upds[i].smu_id,
+					  upds[i].smu_state.sms_incarnation);
 			break;
-		case 'S': /* SWIM_MEMBER_SUSPECT */
-			if (id == self_id) {
+		case SWIM_MEMBER_SUSPECT:
+			if (upds[i].smu_id == self_id) {
 				/* increment our incarnation number if we are
 				 * suspected in the current incarnation
 				 */
-				rc = ctx->sc_ops->get_member_state(ctx, id,
-								   &self_state);
+				rc = ctx->sc_ops->get_member_state(ctx,
+								upds[i].smu_id,
+								&self_state);
 				if (rc) {
 					swim_ctx_unlock(ctx);
 					SWIM_ERROR("get_member_state() failed "
@@ -798,7 +771,8 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from, char *msg)
 					SWIM_GOTO(out, rc);
 				}
 
-				if (self_state.sms_incarnation > nr)
+				if (self_state.sms_incarnation >
+				    upds[i].smu_state.sms_incarnation)
 					break; /* already incremented */
 
 				self_state.sms_incarnation++;
@@ -816,23 +790,23 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from, char *msg)
 				break;
 			}
 
-			swim_member_suspect(ctx, from, id, nr);
+			swim_member_suspect(ctx, from, upds[i].smu_id,
+					    upds[i].smu_state.sms_incarnation);
 			break;
-		case 'D': /* SWIM_MEMBER_DEAD */
+		case SWIM_MEMBER_DEAD:
 			/* if we get an update that we are dead,
 			 * just shut down
 			 */
-			if (id == self_id) {
+			if (upds[i].smu_id == self_id) {
 				SWIM_WARN("%lu: self confirmed DEAD "
-					  "(incarnation=%lu)\n", self_id, nr);
+					  "(incarnation=%lu)\n", self_id,
+					  upds[i].smu_state.sms_incarnation);
 				SWIM_GOTO(out, rc = -ESHUTDOWN);
 			}
 
-			swim_member_dead(ctx, from, id, nr);
+			swim_member_dead(ctx, from, upds[i].smu_id,
+					 upds[i].smu_state.sms_incarnation);
 			break;
-		default:
-			SWIM_ERROR("Invalid SWIM member update status: '%c'\n",
-				   status);
 		}
 	}
 

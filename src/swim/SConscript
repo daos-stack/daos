@@ -1,5 +1,5 @@
 #!python
-# Copyright (C) 2018 Intel Corporation
+# Copyright (C) 2018-2019 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -37,28 +37,30 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Build swim src"""
 
+SRC = ['swim.c']
+
 def scons():
     """Scons function"""
-    Import('env', 'prereqs')
+
+    Import('env', 'prereqs', 'gurt_lib')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
 
-    libraries = ['gurt']
-
     denv.AppendUnique(CPPPATH=['#/src/swim'])
-    denv.AppendUnique(LIBS=libraries)
+    denv.AppendUnique(LIBS=['gurt'])
     denv.AppendUnique(RPATH=['$PREFIX/lib'])
     denv.Append(CCFLAGS=['-D_USE_CART_'])
 
-    swim_targets = denv.SharedObject(Glob('*.c'))
-    swim = denv.SharedLibrary('libswim', swim_targets)
-    denv.Install('$PREFIX/lib/', swim)
+    swim_targets = denv.SharedObject(SRC)
+    swim_lib = denv.SharedLibrary('libswim', swim_targets)
+    denv.Requires(swim_lib, gurt_lib)
+    # disabled until it will need to anybody
+    #denv.Install('$PREFIX/lib/', swim_lib)
 
-    Default(swim)
-
-    Export('swim_targets')
+    Default(swim_targets)
+    Export('swim_lib', 'swim_targets')
 
 if __name__ == "SCons.Script":
     scons()

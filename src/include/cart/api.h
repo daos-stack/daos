@@ -1507,7 +1507,14 @@ typedef void
  * Register a callback function which will be called inside crt_progress()
  */
 int
-crt_register_progress_cb(crt_progress_cb cb, void *arg);
+crt_register_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg);
+
+/**
+ * Unregister a callback function. The par of arguments (ctx_idx and arg)
+ * should be equal to remove this callback from the list.
+ */
+int
+crt_unregister_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg);
 
 typedef void
 (*crt_timeout_cb) (crt_context_t ctx, crt_rpc_t *rpc, void *arg);

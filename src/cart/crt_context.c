@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -183,8 +183,7 @@ crt_context_init(crt_context_t crt_ctx)
 				      &ctx->cc_bh_timeout);
 	if (rc != 0) {
 		D_ERROR("d_binheap_create_inplace failed, rc: %d.\n", rc);
-		D_MUTEX_DESTROY(&ctx->cc_mutex);
-		D_GOTO(out, rc);
+		D_GOTO(out_mutex_destroy, rc);
 	}
 
 	/* create epi table, use external lock */
@@ -193,12 +192,14 @@ crt_context_init(crt_context_t crt_ctx)
 					  &ctx->cc_epi_table);
 	if (rc != 0) {
 		D_ERROR("d_hash_table_create_inplace failed, rc: %d.\n", rc);
-		d_binheap_destroy_inplace(&ctx->cc_bh_timeout);
-		D_MUTEX_DESTROY(&ctx->cc_mutex);
-		D_GOTO(out, rc);
+		D_GOTO(out_binheap_destroy, rc);
 	}
+	D_GOTO(out, rc);
 
-
+out_binheap_destroy:
+	d_binheap_destroy_inplace(&ctx->cc_bh_timeout);
+out_mutex_destroy:
+	D_MUTEX_DESTROY(&ctx->cc_mutex);
 out:
 	return rc;
 }
@@ -427,8 +428,9 @@ int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
 	struct crt_context	*ctx;
-	int			flags;
-	int			rc = 0;
+	int			 flags;
+	int			 rc = 0;
+	int			 i;
 
 	if (crt_ctx == CRT_CONTEXT_NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx).\n");
@@ -441,54 +443,67 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	ctx = crt_ctx;
 	rc = crt_grp_ctx_invalid(ctx, false /* locked */);
-	if (rc != 0) {
+	if (rc) {
 		D_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n", rc);
 		if (!force)
 			D_GOTO(out, rc);
 	}
 
-	flags = (force != 0) ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
+	flags = force ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
 	D_MUTEX_LOCK(&ctx->cc_mutex);
+	for (i = 0; i < CRT_SWIM_FLUSH_ATTEMPTS; i++) {
+		rc = d_hash_table_traverse(&ctx->cc_epi_table,
+					   crt_ctx_epi_abort, &flags);
+		if (rc == 0)
+			break; /* ready to destroy */
 
-	rc = d_hash_table_traverse(&ctx->cc_epi_table, crt_ctx_epi_abort,
-				   &flags);
-	if (rc != 0) {
+		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 		D_DEBUG(DB_TRACE, "destroy context (idx %d, force %d), "
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
-		D_MUTEX_UNLOCK(&ctx->cc_mutex);
-		if (!force)
-			D_GOTO(out, rc);
+		/* Flush SWIM RPC already sent */
+		rc = crt_context_flush(crt_ctx, CRT_SWIM_RPC_TIMEOUT);
+		if (rc)
+			/* give a chance to other threads to complete */
+			sleep(CRT_SWIM_RPC_TIMEOUT);
+		D_MUTEX_LOCK(&ctx->cc_mutex);
 	}
 
-	rc = d_hash_table_destroy_inplace(&ctx->cc_epi_table,
-					  true /* force */);
-	if (rc != 0) {
+	if (!force && rc && i == CRT_SWIM_FLUSH_ATTEMPTS)
+		D_GOTO(err_unlock, rc);
+
+	rc = d_hash_table_destroy_inplace(&ctx->cc_epi_table, true /* force */);
+	if (rc) {
 		D_ERROR("destroy context (idx %d, force %d), "
 			"d_hash_table_destroy_inplace failed, rc: %d.\n",
 			ctx->cc_idx, force, rc);
-		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 		if (!force)
-			D_GOTO(out, rc);
+			D_GOTO(err_unlock, rc);
 	}
 
 	d_binheap_destroy_inplace(&ctx->cc_bh_timeout);
 
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
-	D_MUTEX_DESTROY(&ctx->cc_mutex);
 
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
-	if (rc == 0) {
-		D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
-		crt_gdata.cg_ctx_num--;
-		d_list_del(&ctx->cc_link);
-		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-		D_FREE_PTR(ctx);
-	} else {
+	if (rc) {
 		D_ERROR("crt_hg_ctx_fini failed rc: %d.\n", rc);
+		D_GOTO(out, rc);
 	}
 
+	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
+	crt_gdata.cg_ctx_num--;
+	d_list_del(&ctx->cc_link);
+	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+
+	D_MUTEX_DESTROY(&ctx->cc_mutex);
+	D_FREE(ctx);
+
 out:
+	return rc;
+
+err_unlock:
+	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 	return rc;
 }
 
@@ -1108,9 +1123,11 @@ crt_context_empty(int locked)
 }
 
 static void
-crt_exec_progress_cb(crt_context_t ctx)
+crt_exec_progress_cb(struct crt_context *ctx)
 {
 	struct crt_prog_cb_priv	*cb_priv;
+	int ctx_idx;
+	int rc;
 
 	if (crt_plugin_gdata.cpg_inited == 0)
 		return;
@@ -1119,10 +1136,17 @@ crt_exec_progress_cb(crt_context_t ctx)
 		D_ERROR("Invalid parameter.\n");
 		return;
 	}
+
+	rc = crt_context_idx(ctx, &ctx_idx);
+	if (rc) {
+		D_ERROR("crt_context_idx() failed, rc: %d.\n", rc);
+		return;
+	}
+
 	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
-	d_list_for_each_entry(cb_priv,
-			      &crt_plugin_gdata.cpg_prog_cbs,
+	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_prog_cbs[ctx_idx],
 			      cpcp_link) {
+		/* check for and execute progress callbacks here */
 		cb_priv->cpcp_func(ctx, cb_priv->cpcp_args);
 	}
 	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
@@ -1136,7 +1160,6 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	int64_t			 hg_timeout;
 	uint64_t		 now;
 	uint64_t		 end = 0;
-	int			 crt_ctx_idx;
 	int			 rc = 0;
 
 	/** validate input parameters */
@@ -1163,17 +1186,10 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 			D_GOTO(out, rc);
 	}
 
-	rc = crt_context_idx(crt_ctx, &crt_ctx_idx);
-	if (rc != 0) {
-		D_ERROR("crt_context_idx() failed, rc: %d.\n", rc);
-		D_GOTO(out, rc);
-	}
 	ctx = crt_ctx;
 	if (timeout == 0 || cond_cb == NULL) { /** fast path */
 		crt_context_timeout_check(ctx);
-		/* check for and execute progress callbacks here */
-		if (crt_ctx_idx == 0)
-			crt_exec_progress_cb(crt_ctx);
+		crt_exec_progress_cb(ctx);
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
 		if (rc && rc != -DER_TIMEDOUT) {
@@ -1220,9 +1236,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 
 	while (true) {
 		crt_context_timeout_check(ctx);
-		/* check for and execute progress callbacks here */
-		if (crt_ctx_idx == 0)
-			crt_exec_progress_cb(ctx);
+		crt_exec_progress_cb(ctx);
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
 		if (rc && rc != -DER_TIMEDOUT) {
@@ -1260,22 +1274,55 @@ out:
  * 2) call crt_register_progress_cb(user_cb);
  */
 int
-crt_register_progress_cb(crt_progress_cb cb, void *arg)
+crt_register_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg)
 {
 	/* save the function pointer and arg to a global list */
-	struct crt_prog_cb_priv		*crt_prog_cb_priv = NULL;
-	int				 rc = 0;
+	struct crt_prog_cb_priv	*cb_priv = NULL;
+	int			 rc = 0;
 
-	D_ALLOC_PTR(crt_prog_cb_priv);
-	if (crt_prog_cb_priv == NULL)
+	if (ctx_idx >= CRT_SRV_CONTEXT_NUM) {
+		D_ERROR("ctx_idx %d >= %d\n", ctx_idx, CRT_SRV_CONTEXT_NUM);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	D_ALLOC_PTR(cb_priv);
+	if (cb_priv == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	crt_prog_cb_priv->cpcp_func = cb;
-	crt_prog_cb_priv->cpcp_args = arg;
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
-	d_list_add_tail(&crt_prog_cb_priv->cpcp_link,
-			&crt_plugin_gdata.cpg_prog_cbs);
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
 
+	cb_priv->cpcp_func = cb;
+	cb_priv->cpcp_args = arg;
+
+	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
+	d_list_add_tail(&cb_priv->cpcp_link,
+			&crt_plugin_gdata.cpg_prog_cbs[ctx_idx]);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
+out:
+	return rc;
+}
+
+int
+crt_unregister_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg)
+{
+	struct crt_prog_cb_priv *tmp, *cb_priv;
+	int			 rc = -DER_NONEXIST;
+
+	if (ctx_idx >= CRT_SRV_CONTEXT_NUM) {
+		D_ERROR("ctx_idx %d >= %d\n", ctx_idx, CRT_SRV_CONTEXT_NUM);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
+	d_list_for_each_entry_safe(cb_priv, tmp,
+				   &crt_plugin_gdata.cpg_prog_cbs[ctx_idx],
+				   cpcp_link) {
+		if (cb_priv->cpcp_func == cb && cb_priv->cpcp_args == arg) {
+			d_list_del_init(&cb_priv->cpcp_link);
+			D_FREE(cb_priv);
+			D_GOTO(out_unlock, rc = -DER_SUCCESS);
+		}
+	}
+out_unlock:
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
 out:
 	return rc;
 }

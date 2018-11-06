@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -668,6 +668,7 @@ crt_grp_ctx_invalid(struct crt_context *ctx, bool locked)
 		D_RWLOCK_RDLOCK(&grp_gdata->gg_rwlock);
 	grp_priv = grp_gdata->gg_srv_pri_grp;
 	if (grp_priv != NULL) {
+		crt_swim_disable_all(grp_priv);
 		rc = crt_grp_lc_ctx_invalid(grp_priv, ctx);
 		if (rc != 0) {
 			D_ERROR("crt_grp_lc_ctx_invalid failed, group %s, "
@@ -910,6 +911,8 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 		    void *arg)
 {
 	struct crt_grp_priv	*grp_priv;
+	struct crt_swim_membs	*csm;
+	struct crt_swim_target	*cst;
 	int			 rc = 0;
 
 	D_ASSERT(grp_priv_created != NULL);
@@ -924,22 +927,24 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 	grp_priv->gp_local = 1;
 	grp_priv->gp_primary = primary_grp;
 	D_STRNDUP(grp_priv->gp_pub.cg_grpid, grp_id, CRT_GROUP_ID_MAX_LEN + 1);
-	if (grp_priv->gp_pub.cg_grpid == NULL) {
-		D_FREE_PTR(grp_priv);
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
+	if (grp_priv->gp_pub.cg_grpid == NULL)
+		D_GOTO(out_grp_priv, rc = -DER_NOMEM);
+
+	csm = &grp_priv->gp_membs_swim;
+	D_CIRCLEQ_INIT(&csm->csm_head);
+
+	rc = D_RWLOCK_INIT(&csm->csm_rwlock, NULL);
+	if (rc)
+		D_GOTO(out_grpid, rc);
 
 	rc = grp_priv_set_membs(grp_priv, membs);
-	if (rc != 0) {
-		D_ERROR("d_rank_list_dup_sort_uniq failed, rc: %d.\n", rc);
-		D_FREE(grp_priv->gp_pub.cg_grpid);
-		D_FREE_PTR(grp_priv);
-		D_GOTO(out, rc);
+	if (rc) {
+		D_ERROR("grp_priv_set_membs failed, rc: %d.\n", rc);
+		D_GOTO(out_swim_lock, rc);
 	}
 
-	if (membs != NULL) {
+	if (membs != NULL)
 		grp_priv->gp_size = membs->rl_nr;
-	}
 
 	grp_priv->gp_status = CRT_GRP_CREATING;
 	grp_priv->gp_priv = arg;
@@ -949,22 +954,30 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 
 	grp_priv->gp_refcount = 1;
 	rc = D_RWLOCK_INIT(&grp_priv->gp_rwlock, NULL);
-	if (rc != 0) {
-		D_FREE(grp_priv->gp_pub.cg_grpid);
-		D_FREE_PTR(grp_priv);
-		D_GOTO(out, rc);
-	}
+	if (rc)
+		D_GOTO(out_swim_lock, rc);
 
 	rc = crt_barrier_info_init(grp_priv);
-	if (rc != 0) {
-		D_FREE(grp_priv->gp_pub.cg_grpid);
-		D_RWLOCK_DESTROY(&grp_priv->gp_rwlock);
-		D_FREE_PTR(grp_priv);
-		D_GOTO(out, rc);
-	}
+	if (rc)
+		D_GOTO(out_grp_lock, rc);
 
 	*grp_priv_created = grp_priv;
+	D_GOTO(out, rc);
 
+out_grp_lock:
+	D_RWLOCK_DESTROY(&grp_priv->gp_rwlock);
+out_swim_lock:
+	csm->csm_target = NULL;
+	while (!D_CIRCLEQ_EMPTY(&csm->csm_head)) {
+		cst = D_CIRCLEQ_FIRST(&csm->csm_head);
+		D_CIRCLEQ_REMOVE(&csm->csm_head, cst, cst_link);
+		D_FREE(cst);
+	}
+	D_RWLOCK_DESTROY(&csm->csm_rwlock);
+out_grpid:
+	D_FREE(grp_priv->gp_pub.cg_grpid);
+out_grp_priv:
+	D_FREE(grp_priv);
 out:
 	return rc;
 }
@@ -1096,6 +1109,9 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 	crt_grp_del_locked(grp_priv);
 	D_RWLOCK_UNLOCK(&crt_grp_list_rwlock);
 
+	crt_swim_rank_del_all(grp_priv);
+	D_RWLOCK_DESTROY(&grp_priv->gp_membs_swim.csm_rwlock);
+
 	/* destroy the members */
 	grp_priv_fini_membs(grp_priv);
 
@@ -1106,7 +1122,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 
 	crt_barrier_info_destroy(grp_priv);
 
-	D_FREE_PTR(grp_priv);
+	D_FREE(grp_priv);
 }
 
 struct gc_req {
@@ -3590,11 +3606,18 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	}
 
 	D_ASSERT(index >= 0);
-	membs->rl_ranks[index] = rank;
 
-	grp_priv->gp_size++;
+	rc = crt_swim_rank_add(grp_priv, rank);
+	if (rc) {
+		D_ERROR("crt_swim_rank_add() failed: rc=%d\n", rc);
+		grp_add_free_index(&grp_priv->gp_membs.cgm_free_indices,
+				   index, false);
+	} else {
+		membs->rl_ranks[index] = rank;
+		grp_priv->gp_size++;
+	}
 
-	/* Rregenerate linear list*/
+	/* Regenerate linear list*/
 	grp_regen_linear_list(grp_priv);
 
 out:
@@ -3806,6 +3829,8 @@ int crt_group_rank_remove(crt_group_t *group, d_rank_t rank)
 	}
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
+	if (rc == 0)
+		crt_swim_rank_del(grp_priv, rank);
 out:
 	return rc;
 }
