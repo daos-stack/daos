@@ -60,7 +60,7 @@ class MultiServerCreateDeleteTest(Test):
        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
        server_group = self.params.get("server_group",'/server/','daos_server')
 
-       ServerUtils.runServer(hostfile, server_group, basepath)
+       ServerUtils.runServer(self.hostfile, server_group, basepath)
        # not sure I need to do this but ... give it time to start
        time.sleep(1)
 
@@ -137,7 +137,7 @@ class MultiServerCreateDeleteTest(Test):
                                     format(uuid_str, host2))
 
             delete_cmd =  ('{0} destroy-pool '
-                           '-i {1} -s {2} -f'.format(daosctl,
+                           '-i {1} -s {2} -f'.format(self.daosctl,
                                                      uuid_str, setid))
 
             process.system(delete_cmd)
