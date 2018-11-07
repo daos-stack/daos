@@ -461,7 +461,7 @@ crt_ep_abort(crt_endpoint_t *ep);
  *
  * Example usage:
  *
- * #define CRT_ISEQ_MY_RPC
+ * \#define CRT_ISEQ_MY_RPC
  *     ((int32_t)       (mr_arg_1)     CRT_VAR)
  *     ((uint32_t)      (mr_arg_2)     CRT_VAR)
  *     ((d_rank_t)      (mr_rank)      CRT_VAR)
@@ -469,7 +469,7 @@ crt_ep_abort(crt_endpoint_t *ep);
  *     ((uuid_t)        (mr_array)     CRT_ARRAY)
  *     ((d_string_t)    (mr_name)      CRT_VAR)
  *
- * #define CRT_OSEQ_MY_RPC
+ * \#define CRT_OSEQ_MY_RPC
  *     ((int32_t)       (mr_ret)       CRT_VAR)
  *
  * CRT_RPC_DECLARE(my_rpc, CRT_ISEQ_MY_RPC, CRT_OSEQ_MY_RPC)
@@ -1667,7 +1667,7 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
 /**
  * Retrieve uri of self for the specified tag.
  *
- * \param[in] group             Group identifier
+ * \param[in] grp               Group identifier
  * \param[in] tag               Tag to get uri for
  * \param[out] uri              Returned uri string
  *

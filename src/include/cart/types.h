@@ -306,7 +306,7 @@ typedef void (*crt_proto_query_cb_t)(struct crt_proto_query_cb_info *cb_info);
  * To generate CMF definitions for a list of types:
  *
  * 1, create a list of types:
- *	#define MY_LIST(ACTION)						\
+ *	\#define MY_LIST(ACTION)					\
  *	TYPE_ACTION(ACTION, CMF_MY_TYPE, 0, my_type)			\
  *	STURCT_ACTION(ACTION, CMF_MY_FOO, 0, my_foo)
  *
@@ -324,6 +324,7 @@ typedef void (*crt_proto_query_cb_t)(struct crt_proto_query_cb_info *cb_info);
 /**
  * specify entry for a type.
  *
+ * \param[in] ACTION		Wrapper macro
  * \param[in] cmf_name		name of the CMF
  * \param[in] flags		flags of the CMF
  * \param[in] type		the type which the CMF will describe. type must
@@ -335,6 +336,7 @@ typedef void (*crt_proto_query_cb_t)(struct crt_proto_query_cb_info *cb_info);
 
 /**
  * specify entry for a struct.
+ * \param[in] ACTION		Wrapper macro
  * \param[in] cmf_name		name of the CMF
  * \param[in] flags		flags of the CMF
  * \param[in] type		the struct which the CMF will describe.
