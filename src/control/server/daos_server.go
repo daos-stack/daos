@@ -33,6 +33,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/jessevdk/go-flags"
@@ -139,9 +140,6 @@ func main() {
 
 	// Create a new server register our service and listen for connections.
 	addr := fmt.Sprintf("0.0.0.0:%d", opts.Port)
-
-	log.Printf("Management interface listening on: %s", addr)
-
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("Unable to listen on management interface: %s", err)
@@ -153,6 +151,7 @@ func main() {
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtControlServer := mgmt.NewControlServer()
+	defer mgmtControlServer.Teardown()
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
@@ -191,14 +190,113 @@ func main() {
 		}
 	}()
 
+	// If this server is supposed to host an MS replica, format and start
+	// the MS replica. Only performing the check and print the result for now.
+	isReplica, bootstrap, err := checkMgmtSvcReplica(lis.Addr().(*net.TCPAddr), configOpts.AccessPoints)
+	if err != nil {
+		srv.Process.Kill()
+		log.Fatal("Failed to check management service replica: ", err)
+	}
+	var msReplicaCheck string
+	if isReplica {
+		msReplicaCheck = " as access point"
+		if bootstrap {
+			msReplicaCheck += " (bootstrap)"
+		}
+	}
+
+	log.Printf("DAOS server listening on %s%s", addr, msReplicaCheck)
+
 	// wait for I/O server to return
 	err = srv.Wait()
-
-	// todo: is this the right place for cleanup?
-	log.Printf("Running storage teardown...")
-	mgmtControlServer.Teardown()
-
 	if err != nil {
 		log.Fatal("DAOS I/O server exited with error: ", err)
 	}
+}
+
+// getInterfaceAddrs enables TestCheckMgmtSvcReplica to replace the real
+// interface query with a sample data set.
+var getInterfaceAddrs = func() ([]net.Addr, error) {
+	return net.InterfaceAddrs()
+}
+
+// checkMgmtSvcReplica determines if this server is supposed to host an MS
+// replica, based on this server's management address and the system access
+// points. If bootstrap is true, in which case isReplica must be true, this
+// replica shall bootstrap the MS.
+func checkMgmtSvcReplica(self *net.TCPAddr, accessPoints []string) (isReplica, bootstrap bool, err error) {
+	replicas, err := resolveAccessPoints(accessPoints)
+	if err != nil {
+		return false, false, err
+	}
+
+	selves, err := getListenIPs(self)
+	if err != nil {
+		return false, false, err
+	}
+
+	// Check each replica against this server's listen IPs.
+	for i := range replicas {
+		if replicas[i].Port != self.Port {
+			continue
+		}
+		for _, ip := range selves {
+			if ip.Equal(replicas[i].IP) {
+				// The first replica in the access point list
+				// shall bootstrap the MS.
+				if i == 0 {
+					return true, true, nil
+				} else {
+					return true, false, nil
+				}
+			}
+		}
+	}
+
+	return false, false, nil
+}
+
+// resolveAccessPoints resolves the strings in accessPoints into addresses in
+// addrs. If a port isn't specified, assume the default port.
+func resolveAccessPoints(accessPoints []string) (addrs []*net.TCPAddr, err error) {
+	defaultPort := NewDefaultConfiguration().Port
+	for _, ap := range accessPoints {
+		if !hasPort(ap) {
+			ap = net.JoinHostPort(ap, strconv.Itoa(defaultPort))
+		}
+		t, err := net.ResolveTCPAddr("tcp", ap)
+		if err != nil {
+			return nil, err
+		}
+		addrs = append(addrs, t)
+	}
+	return addrs, nil
+}
+
+// hasPort checks if addr specifies a port. This only works with IPv4
+// addresses at the moment.
+func hasPort(addr string) bool {
+	return strings.Contains(addr, ":")
+}
+
+// getListenIPs takes the address this server listens on and returns a list of
+// the corresponding IPs.
+func getListenIPs(listenAddr *net.TCPAddr) (listenIPs []net.IP, err error) {
+	if listenAddr.IP.IsUnspecified() {
+		// Find the IPs of all IP interfaces.
+		addrs, err := getInterfaceAddrs()
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range addrs {
+			// Ignore non-IP interfaces.
+			in, ok := a.(*net.IPNet)
+			if ok {
+				listenIPs = append(listenIPs, in.IP)
+			}
+		}
+	} else {
+		listenIPs = append(listenIPs, listenAddr.IP)
+	}
+	return listenIPs, nil
 }
