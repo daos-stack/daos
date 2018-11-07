@@ -42,9 +42,11 @@ enum {
 
 struct evt_node;
 struct evt_root;
+struct evt_ptr;
 
 TMMID_DECLARE(struct evt_root, EVT_UMEM_ROOT);
 TMMID_DECLARE(struct evt_node, EVT_UMEM_NODE);
+TMMID_DECLARE(struct evt_ptr, EVT_UMEM_PTR);
 
 /** Valid tree order */
 enum {
@@ -65,12 +67,7 @@ struct evt_ptr {
 	uint32_t			pt_ver;
 	/** buffer on SCM or NVMe */
 	bio_addr_t			pt_ex_addr;
-	/** padding to cache line */
-	uint64_t			pt_padding;
 };
-
-/* A static assert to ensure we notice when evt_ptr exceeds a cache line */
-_Static_assert(sizeof(struct evt_ptr) == 64, "evt_ptr should be aligned");
 
 /** A versioned extent is effectively a rectangle...
  *  The epoch range is always to infinity.   The sequence number
@@ -80,12 +77,7 @@ struct evt_rect {
 	daos_off_t			rc_off_lo;	/**< low offset */
 	daos_off_t			rc_off_hi;	/**< high offset */
 	daos_epoch_t			rc_epc_lo;	/**< low epoch */
-	uint64_t			rc_padding;	/**< alignment */
 };
-
-/* A static assert to ensure we notice when evt_rect exceeds a cache line */
-_Static_assert(sizeof(struct evt_rect) == 32,
-	       "evt_rect should be well aligned");
 
 /** Log format of rectangle */
 #define DF_RECT				\
@@ -117,6 +109,20 @@ struct evt_weight {
 	int64_t				wt_minor; /**< minor weight value */
 };
 
+struct evt_node_entry {
+	/* Rectangle for the entry */
+	struct evt_rect	ne_rect;
+	union {
+		/* Pointer to child node (in intermediate node) */
+		TMMID(struct evt_node)	ne_node;
+		/* Pointer to data descriptor (in leaf node) */
+		TMMID(struct evt_ptr)	ne_ptr;
+	};
+	char ne_pad[24];
+};
+
+D_CASSERT(sizeof(struct evt_node_entry) == 64);
+
 /** evtree node: */
 struct evt_node {
 	/** the Minimum Bounding Box (MBR) bounds all its children */
@@ -127,14 +133,8 @@ struct evt_node {
 	uint16_t			tn_nr;
 	/** padding for alignment */
 	uint32_t			tn_pad_32;
-	/**
-	 * leaf node:
-	 * ptr[0], ptr[1], ..., ptr[order - 1], rect[0], rect[1], ...
-	 *
-	 * non-leaf node:
-	 * child[0], child[1], ..., child[order - 1], rect[0], rect[1], ...
-	 */
-	uint64_t			tn_body[0];
+	/** The entries in the node */
+	struct evt_node_entry		tn_rec[0];
 };
 
 struct evt_root {
@@ -215,10 +215,10 @@ struct evt_policy_ops {
 	int	(*po_split)(struct evt_context *tcx, bool leaf,
 			    TMMID(struct evt_node) src_mmid,
 			    TMMID(struct evt_node) dst_mmid);
-	/** Move adjusted \a rect within a node after mbr update */
+	/** Move adjusted \a entry within a node after mbr update */
 	void	(*po_adjust)(struct evt_context *tcx,
 			     TMMID(struct evt_node) nd_mmid,
-			     struct evt_rect *rect, int at);
+			     struct evt_node_entry *ne, int at);
 	/**
 	 * Calculate weight of a rectangle \a rect and return it to \a weight.
 	 */
