@@ -171,6 +171,10 @@ yum -y install \$install_pkgs'" 2>&1 | dshbak -c; then
     exit 1
 fi
 
+args="${1:-quick}"
+shift || true
+args+=" $*"
+
 # shellcheck disable=SC2029
 if ! ssh -i ci_key jenkins@"${nodes[0]}" "set -ex
 ulimit -c unlimited
@@ -197,6 +201,18 @@ mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
 logs_dir = $DAOS_BASE/src/tests/ftest/avocado/job-results
+
+[sysinfo.collectibles]
+# File with list of commands that will be executed and have their output
+# collected
+commands = \$HOME/.config/avocado/sysinfo/commands
+EOF
+
+mkdir -p ~/.config/avocado/sysinfo/
+cat <<EOF > ~/.config/avocado/sysinfo/commands
+ps axf
+dmesg
+df -h
 EOF
 
 # apply fix for https://github.com/avocado-framework/avocado/issues/2908
@@ -219,6 +235,7 @@ pushd src/tests/ftest
 rm -f core.*
 
 # now run it!
+export PYTHONPATH=./util:../../utils/py/:./util/apricot
 if ! ./launch.py -s \"$TEST_TAG\"; then
     rc=\${PIPESTATUS[0]}
 else
