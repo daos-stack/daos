@@ -87,5 +87,6 @@ def scons():
 			"go install %s/src/control/drpc_test" % repopath)
     denv.InstallAs("$PREFIX/bin/drpc_test_server", drpcbin)
 
+    AlwaysBuild([agentbin, serverbin, shellbin, drpcbin])
 if __name__ == "SCons.Script":
     scons()
