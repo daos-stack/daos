@@ -56,22 +56,58 @@ echo_sem_timedwait(sem_t *sem, int sec, int line_number)
 		  line_number, rc);
 }
 
-static int run_echo_srver(void)
+static int
+echo_check_in(d_rank_t src_rank, d_rank_t dst_rank, uint32_t dst_tag)
 {
-	crt_endpoint_t			 svr_ep = {0};
 	crt_rpc_t			*rpc_req = NULL;
 	char				*pchar;
+	crt_endpoint_t			 svr_ep = {0};
+	struct crt_echo_checkin_in	*e_req;
+	int				 rc;
+
+	svr_ep.ep_grp = NULL;
+	svr_ep.ep_rank = dst_rank;
+	svr_ep.ep_tag = dst_tag;
+	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
+	assert(rc == 0 && rpc_req != NULL);
+
+	D_ALLOC(pchar, 256);
+	assert(pchar != NULL);
+	snprintf(pchar, 256, "Guest_%d@server-side", src_rank);
+
+	e_req = crt_req_get(rpc_req);
+	e_req->name = pchar;
+	e_req->age = 32;
+	e_req->days = src_rank;
+	e_req->rank = dst_rank;
+	e_req->tag = dst_tag;
+
+	D_DEBUG(DB_TEST, "server(rank %d) sending checkin request, name: %s, "
+		"age: %d, days: %d.\n", src_rank, e_req->name, e_req->age,
+		e_req->days);
+
+	rc = crt_req_send(rpc_req, client_cb_common, NULL);
+	assert(rc == 0);
+	/* wait for completion */
+	echo_sem_timedwait(&gecho.token_to_proceed, 61, __LINE__);
+
+	D_FREE(pchar);
+
+	return rc;
+}
+
+static int run_echo_srver(void)
+{
 	d_rank_t			 myrank;
 	uint32_t			 mysize;
+	int				 i;
+	int				 j;
 	int				 rc;
-	struct crt_echo_checkin_in	*e_req;
 
 	rc = crt_group_rank(NULL, &myrank);
 	assert(rc == 0);
 	rc = crt_group_size(NULL, &mysize);
 	assert(rc == 0);
-
-	echo_srv.do_shutdown = 0;
 
 	/* create progress thread */
 	rc = pthread_create(&echo_srv.progress_thread, NULL, progress_handler,
@@ -83,32 +119,13 @@ static int run_echo_srver(void)
 
 	/* ============= test-1 ============ */
 
-	/* send checkin RPC */
-	svr_ep.ep_grp = NULL;
-	svr_ep.ep_rank = 0;
-	svr_ep.ep_tag = 0;
-	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
-	assert(rc == 0 && rpc_req != NULL);
-
-	D_ALLOC(pchar, 256);
-	assert(pchar != NULL);
-	snprintf(pchar, 256, "Guest_%d@server-side", myrank);
-
-	e_req = crt_req_get(rpc_req);
-	e_req->name = pchar;
-	e_req->age = 32;
-	e_req->days = myrank;
-
-	D_DEBUG(DB_TEST, "server(rank %d) sending checkin request, name: %s, "
-		"age: %d, days: %d.\n", myrank, e_req->name, e_req->age,
-		e_req->days);
-
-	rc = crt_req_send(rpc_req, client_cb_common, NULL);
-	assert(rc == 0);
-	/* wait for completion */
-	echo_sem_timedwait(&gecho.token_to_proceed, 61, __LINE__);
-
-	D_FREE(pchar);
+	/* send checkin RPC to all tags on all ranks in my group */
+	for (i = 0; i < mysize; i++) {
+		for (j = 0; j < ECHO_EXTRA_CONTEXT_NUM + 1; j++) {
+			rc = echo_check_in(myrank, i, j);
+			assert(rc == 0);
+		}
+	}
 
 	/* ==================================== */
 	/* test group API and bcast RPC */
@@ -159,6 +176,7 @@ static int run_echo_srver(void)
 		}
 	}
 
+	echo_srv.shutdown_by_self = 1;
 	/* ==================================== */
 	printf("main thread wait progress thread ...\n");
 	/* wait progress thread */
@@ -172,12 +190,21 @@ out:
 }
 
 int g_roomno = 1082;
+
 void
 echo_srv_checkin(crt_rpc_t *rpc_req)
 {
 	struct crt_echo_checkin_in	*e_req;
 	struct crt_echo_checkin_out	*e_reply;
 	char				*raw_buf;
+	d_rank_t			 myrank;
+	int				 mytag;
+	int				 rc;
+
+	rc = crt_group_rank(NULL, &myrank);
+	assert(rc == 0);
+	rc = crt_context_idx(rpc_req->cr_ctx, &mytag);
+	assert(rc == 0);
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
@@ -194,10 +221,17 @@ echo_srv_checkin(crt_rpc_t *rpc_req)
 		       raw_buf);
 	}
 
+	D_ASSERTF(e_req->rank == myrank,
+		"rank mismatch, dst_rank %d myrank %d\n", e_req->rank, myrank);
+	D_ASSERTF(e_req->tag == mytag,
+		"tag mismatch, dst_tag %d mytag %d\n", e_req->tag, mytag);
+
 	e_reply = crt_reply_get(rpc_req);
 	D_ASSERT(e_reply != NULL);
 	e_reply->ret = 0;
 	e_reply->room_no = g_roomno++;
+	e_reply->rank = myrank;
+	e_reply->tag = mytag;
 
 	crt_reply_send(rpc_req);
 
@@ -214,7 +248,7 @@ echo_srv_shutdown(crt_rpc_t *rpc_req)
 	assert(rpc_req->cr_input == NULL);
 	assert(rpc_req->cr_output == NULL);
 
-	echo_srv.do_shutdown = 1;
+	echo_srv.shutdown_by_client = 1;
 	printf("tier1 echo_srver set shutdown flag.\n");
 }
 

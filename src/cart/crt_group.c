@@ -2001,28 +2001,10 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	/* step 0, if I am the final target, reply with URI */
 	my_rank = grp_priv->gp_self;
 	if (ul_in->ul_rank == my_rank) {
-		struct crt_context	*tmp_crt_ctx;
-		na_size_t		 uri_len = CRT_ADDR_STR_MAX_LEN;
-
-		tmp_crt_ctx = crt_context_lookup(ul_in->ul_tag);
-		if (tmp_crt_ctx == NULL) {
-			D_ERROR("crt_context_lookup(%d) failed.\n",
-				ul_in->ul_tag);
-			D_GOTO(out, rc = -DER_NONEXIST);
-		}
-
-		D_ALLOC(tmp_uri, CRT_ADDR_STR_MAX_LEN);
-		if (tmp_uri == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-
-		rc = crt_hg_get_addr(tmp_crt_ctx->cc_hg_ctx.chc_hgcla,
-				tmp_uri, &uri_len);
-		if (rc != 0) {
-			D_ERROR("crt_hg_get_addr failed, rc: %d.\n", rc);
-			D_FREE(tmp_uri);
-			D_GOTO(out, rc = -DER_HG);
-		}
-
+		rc = crt_self_uri_get(ul_in->ul_tag, &tmp_uri);
+		if (rc != DER_SUCCESS)
+			D_ERROR("crt_self_uri_get(tag: %d) failed, "
+				"rc %d\n", ul_in->ul_tag, rc);
 		ul_out->ul_uri = tmp_uri;
 		D_GOTO(out, rc);
 	}
@@ -3597,7 +3579,7 @@ crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 	}
 
 	if (rank == grp_priv->gp_self)
-		return crt_self_uri_get(group, tag, uri_str);
+		return crt_self_uri_get(tag, uri_str);
 
 	rc = crt_grp_lc_lookup(grp_priv, 0, rank, tag, &uri, &hg_addr);
 	if (rc != 0) {
@@ -3617,56 +3599,6 @@ crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-
-out:
-	return rc;
-}
-
-int crt_self_uri_get(crt_group_t *group, int tag, char **uri)
-{
-	struct crt_grp_priv	*grp_priv;
-	na_class_t		*na_class;
-	na_size_t		size = CRT_ADDR_STR_MAX_LEN;
-	char			*uri_addr;
-	struct crt_context	*ctx;
-	bool			found = false;
-	int			rc = 0;
-
-	if (group == NULL) {
-		D_ERROR("Passed group is NULL\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	grp_priv = crt_grp_pub2priv(group);
-
-	if (!grp_priv->gp_primary) {
-		D_ERROR("Only available for primary groups\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	D_ALLOC(uri_addr, size);
-	if (!uri_addr) {
-		D_ERROR("Failed to allocate uri string\n");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
-		if (ctx->cc_idx == tag) {
-			na_class =  ctx->cc_hg_ctx.chc_nacla;
-			crt_na_class_get_addr(na_class, uri_addr, &size);
-			*uri = uri_addr;
-			found = true;
-			break;
-		}
-	}
-	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-
-	if (!found) {
-		D_FREE(uri_addr);
-		D_ERROR("URI not found for tag %d\n", tag);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 out:
 	return rc;

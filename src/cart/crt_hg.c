@@ -1267,7 +1267,8 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			  "HG_Forward failed, hg_ret: %d\n",
 			  hg_ret);
 	} else {
-		RPC_TRACE(DB_TRACE, rpc_priv, "sent.\n");
+		RPC_TRACE(DB_TRACE, rpc_priv,
+			  "sent to uri: %s\n", rpc_priv->crp_tgt_uri);
 	}
 
 	if (hg_ret == HG_NA_ERROR) {

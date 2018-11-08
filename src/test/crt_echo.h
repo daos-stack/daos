@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -94,10 +94,14 @@ void echo_srv_corpc_example(crt_rpc_t *rpc);
 #define CRT_ISEQ_ECHO_CHECKIN	/* input fields */		 \
 	((int32_t)		(age)			CRT_VAR) \
 	((int32_t)		(days)			CRT_VAR) \
+	((d_rank_t)		(rank)			CRT_VAR) \
+	((uint32_t)		(tag)			CRT_VAR) \
 	((d_iov_t)		(raw_package)		CRT_VAR) \
 	((d_string_t)		(name)			CRT_VAR)
 
 #define CRT_OSEQ_ECHO_CHECKIN	/* output fields */		 \
+	((d_rank_t)		(rank)			CRT_VAR) \
+	((uint32_t)		(tag)			CRT_VAR) \
 	((int32_t)		(ret)			CRT_VAR) \
 	((uint32_t)		(room_no)		CRT_VAR)
 
@@ -355,6 +359,13 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		e_reply = crt_reply_get(rpc_req);
 		if (e_reply == NULL)
 			return;
+
+		D_ASSERTF(e_req->rank == e_reply->rank,
+			"rank mismatch, sent to rank %d reply from rank %d\n",
+			e_req->rank, e_reply->rank);
+		D_ASSERTF(e_req->tag == e_reply->tag,
+			"tag mismatch, sent to tag %d reply from tag %d\n",
+			e_req->tag, e_reply->tag);
 
 		printf("%s checkin result - ret: %d, room_no: %d.\n",
 		       e_req->name, e_reply->ret, e_reply->room_no);

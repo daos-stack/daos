@@ -47,7 +47,8 @@
 struct gecho gecho;
 
 struct echo_serv {
-	int		do_shutdown;
+	int		shutdown_by_self;
+	int		shutdown_by_client;
 	pthread_t	progress_thread;
 } echo_srv;
 
@@ -76,7 +77,7 @@ static void *progress_handler(void *arg)
 			}
 		}
 
-		if (echo_srv.do_shutdown != 0) {
+		if (echo_srv.shutdown_by_client && echo_srv.shutdown_by_self) {
 			/* to ensure the last SHUTDOWN request be handled */
 			loop++;
 			if (loop >= 100)
@@ -84,8 +85,9 @@ static void *progress_handler(void *arg)
 		}
 	} while (1);
 
-	printf("progress_handler: rc: %d, echo_srv.do_shutdown: %d.\n",
-	       rc, echo_srv.do_shutdown);
+	printf("progress_handler: rc: %d, echo_srv.shutdown_by_client: %d, "
+		"echo_srv.shutdown_by_self: %d.\n",
+	       rc, echo_srv.shutdown_by_client, echo_srv.shutdown_by_self);
 	printf("progress_handler: progress thread exit ...\n");
 
 	pthread_exit(NULL);

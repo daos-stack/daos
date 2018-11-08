@@ -1665,16 +1665,19 @@ int
 crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
 
 /**
- * Retrieve uri of self for the specified tag.
+ * Retrieve uri of self for the specified tag.  The uri must be freed by the
+ * user using D_FREE().
  *
- * \param[in] grp               Group identifier
  * \param[in] tag               Tag to get uri for
- * \param[out] uri              Returned uri string
+ * \param[out] uri              Returned uri string This is a NULL terminated
+ *                              string of size up to CRT_ADDR_STR_MAX_LEN
+ *                              (including the trailing NULL). Must be freed by
+ *                              the user.
  *
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure.
  */
-int crt_self_uri_get(crt_group_t *grp, int tag, char **uri);
+int crt_self_uri_get(int tag, char **uri);
 
 
 /**

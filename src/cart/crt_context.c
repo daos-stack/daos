@@ -688,11 +688,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	};
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
-	if (tgt_ep->ep_grp == NULL)
-		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
-	else
-		grp_priv = container_of(tgt_ep->ep_grp, struct crt_grp_priv,
-					gp_pub);
+	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
 
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_URI_LOOKUP:
@@ -1041,6 +1037,43 @@ crt_context_idx(crt_context_t crt_ctx, int *ctx_idx)
 
 	ctx = crt_ctx;
 	*ctx_idx = ctx->cc_idx;
+
+out:
+	return rc;
+}
+
+int
+crt_self_uri_get(int tag, char **uri)
+{
+	struct crt_context	*tmp_crt_ctx;
+	char			*tmp_uri = NULL;
+	na_size_t		 uri_len = CRT_ADDR_STR_MAX_LEN;
+	int			 rc;
+
+	if (uri == NULL) {
+		D_ERROR("uri can't be NULL.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	tmp_crt_ctx = crt_context_lookup(tag);
+	if (tmp_crt_ctx == NULL) {
+		D_ERROR("crt_context_lookup(%d) failed.\n", tag);
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+	D_ALLOC(tmp_uri, CRT_ADDR_STR_MAX_LEN);
+	if (tmp_uri == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = crt_hg_get_addr(tmp_crt_ctx->cc_hg_ctx.chc_hgcla,
+			tmp_uri, &uri_len);
+	if (rc != 0) {
+		D_ERROR("crt_hg_get_addr failed, rc: %d.\n", rc);
+		D_FREE(tmp_uri);
+		D_GOTO(out, rc = -DER_HG);
+	}
+
+	*uri = tmp_uri;
 
 out:
 	return rc;

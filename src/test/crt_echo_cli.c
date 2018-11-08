@@ -93,6 +93,68 @@ bulk_test_req_cb(const struct crt_cb_info *cb_info)
 	free(bulk_test_cbinfo);
 }
 
+static int
+echo_client_send_checkin(d_rank_t src_rank, crt_group_t *dst_grp,
+			 d_rank_t dst_rank, uint32_t dst_tag)
+{
+	crt_endpoint_t			 svr_ep = {0};
+	char				*raw_buf;
+	struct timespec			 t1, t2;
+	double				 time_us;
+	crt_rpc_t			*rpc_req = NULL;
+	char				*pchar;
+	struct crt_echo_checkin_in	*e_req;
+	int				 rc;
+
+	svr_ep.ep_grp = dst_grp;
+	svr_ep.ep_rank = dst_rank;
+	svr_ep.ep_tag = dst_tag;
+
+	rc = d_gettime(&t1);
+	assert(rc == 0);
+	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_CHECKIN,
+			    &rpc_req);
+	assert(rc == 0 && rpc_req != NULL);
+	rc = d_gettime(&t2);
+	assert(rc == 0);
+	time_us = d_time2us(d_timediff(t1, t2));
+	printf("time for crt_req_create: %.3e uS.\n", time_us);
+
+	e_req = crt_req_get(rpc_req);
+	assert(e_req != NULL);
+
+	D_ALLOC(pchar, 256);
+	assert(pchar != NULL);
+	snprintf(pchar, 256, "Guest_%d_%d@client-side",
+		 src_rank, svr_ep.ep_tag);
+
+	raw_buf = "testing_only ---- data_in_raw_package";
+	e_req->name = pchar;
+	e_req->age = 32 + svr_ep.ep_tag;
+	d_iov_set(&e_req->raw_package, raw_buf, strlen(raw_buf) + 1);
+	e_req->days = src_rank;
+	e_req->rank = dst_rank;
+	e_req->tag = dst_tag;
+
+	D_DEBUG(DB_TEST, "client(rank %d) sending checkin rpc with "
+		"tag %d, name: %s, age: %d, days: %d.\n",
+		src_rank, svr_ep.ep_tag, e_req->name, e_req->age,
+		e_req->days);
+
+	gecho.complete = 0;
+	rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
+	assert(rc == 0);
+	/* wait two minutes (in case of manually starting up clients) */
+	rc = client_wait(120, 1000, &gecho.complete);
+	assert(rc == 0);
+	D_FREE(pchar);
+
+	printf("client(rank %d, tag %d) checkin request sent.\n",
+	       src_rank, svr_ep.ep_tag);
+
+	return rc;
+}
+
 static void run_client(void)
 {
 	crt_group_t			*pri_local_grp = NULL;
@@ -111,7 +173,8 @@ static void run_client(void)
 	uint32_t			grp_size_srv = 0;
 	struct crt_echo_checkin_in	*e_req;
 	struct crt_echo_bulk_in		*e_bulk_req;
-	int				rc = 0, i;
+	int				rc = 0;
+	int				i, j;
 
 	rc = crt_group_rank(NULL, &myrank);
 	D_ASSERT(rc == 0);
@@ -162,54 +225,11 @@ static void run_client(void)
 	 * ============= test-2 ============
 	 * send checkin RPC to different contexts of server
 	 */
-	for (i = 0; i <= ECHO_EXTRA_CONTEXT_NUM; i++) {
-		char		*raw_buf;
-		struct timespec	t1, t2;
-		double		time_us;
-
-		svr_ep.ep_grp = grp_tier1;
-		svr_ep.ep_rank = 0;
-		svr_ep.ep_tag = i;
-
-		rc = d_gettime(&t1);
-		assert(rc == 0);
-		rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_CHECKIN,
-				    &rpc_req);
-		assert(rc == 0 && rpc_req != NULL);
-		rc = d_gettime(&t2);
-		assert(rc == 0);
-		time_us = d_time2us(d_timediff(t1, t2));
-		printf("time for crt_req_create: %.3e uS.\n", time_us);
-
-		e_req = crt_req_get(rpc_req);
-		assert(e_req != NULL);
-
-		D_ALLOC(pchar, 256);
-		assert(pchar != NULL);
-		snprintf(pchar, 256, "Guest_%d_%d@client-side",
-			 myrank, svr_ep.ep_tag);
-
-		raw_buf = "testing_only ---- data_in_raw_package";
-		e_req->name = pchar;
-		e_req->age = 32 + svr_ep.ep_tag;
-		d_iov_set(&e_req->raw_package, raw_buf, strlen(raw_buf) + 1);
-		e_req->days = myrank;
-
-		D_DEBUG(DB_TEST, "client(rank %d) sending checkin rpc with "
-			"tag %d, name: %s, age: %d, days: %d.\n",
-			myrank, svr_ep.ep_tag, e_req->name, e_req->age,
-			e_req->days);
-
-		gecho.complete = 0;
-		rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
-		assert(rc == 0);
-		/* wait two minutes (in case of manually starting up clients) */
-		rc = client_wait(120, 1000, &gecho.complete);
-		assert(rc == 0);
-		D_FREE(pchar);
-
-		printf("client(rank %d, tag %d) checkin request sent.\n",
-		       myrank, svr_ep.ep_tag);
+	for (i = 0; i < grp_size_srv; i++) {
+		for (j = 0; j <= ECHO_EXTRA_CONTEXT_NUM; j++) {
+			rc = echo_client_send_checkin(myrank, grp_tier1, i, j);
+			assert(rc == 0);
+		}
 	}
 
 	/*

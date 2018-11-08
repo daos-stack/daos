@@ -173,11 +173,7 @@ crt_hdlr_barrier_enter(crt_rpc_t *rpc_req)
 	in = crt_req_get(rpc_req);
 	D_ASSERT(in != NULL);
 
-	if (rpc_req->cr_ep.ep_grp == NULL)
-		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
-	else
-		grp_priv = container_of(rpc_req->cr_ep.ep_grp,
-					struct crt_grp_priv, gp_pub);
+	grp_priv = crt_grp_pub2priv(rpc_req->cr_ep.ep_grp);
 
 	if (grp_priv == NULL) {
 		D_ERROR("crt_hdlr_barrier_enter failed, no group\n");
@@ -244,11 +240,7 @@ crt_hdlr_barrier_exit(crt_rpc_t *rpc_req)
 	out = crt_reply_get(rpc_req);
 	D_ASSERT(in != NULL && out != NULL);
 
-	if (rpc_req->cr_ep.ep_grp == NULL)
-		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
-	else
-		grp_priv = container_of(rpc_req->cr_ep.ep_grp,
-					struct crt_grp_priv, gp_pub);
+	grp_priv = crt_grp_pub2priv(rpc_req->cr_ep.ep_grp);
 
 	if (grp_priv == NULL) {
 		D_ERROR("crt_barrier_enter failed, no group\n");
@@ -411,11 +403,7 @@ barrier_exit_cb(const struct crt_cb_info *cb_info)
 	out = crt_reply_get(rpc_req);
 	in = crt_req_get(rpc_req);
 
-	if (rpc_req->cr_ep.ep_grp == NULL)
-		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
-	else
-		grp_priv = container_of(rpc_req->cr_ep.ep_grp,
-					struct crt_grp_priv, gp_pub);
+	grp_priv = crt_grp_pub2priv(rpc_req->cr_ep.ep_grp);
 	D_ASSERT(grp_priv != NULL);
 
 	if (cb_info->cci_rc != 0 || out->b_rc != 0) {
@@ -479,11 +467,7 @@ barrier_enter_cb(const struct crt_cb_info *cb_info)
 	out = crt_reply_get(rpc_req);
 	in = crt_req_get(rpc_req);
 
-	if (rpc_req->cr_ep.ep_grp == NULL)
-		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
-	else
-		grp_priv = container_of(rpc_req->cr_ep.ep_grp,
-					struct crt_grp_priv, gp_pub);
+	grp_priv = crt_grp_pub2priv(rpc_req->cr_ep.ep_grp);
 
 	D_ASSERT(grp_priv != NULL);
 
