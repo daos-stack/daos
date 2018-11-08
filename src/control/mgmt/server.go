@@ -25,9 +25,9 @@ package mgmt
 
 import (
 	"encoding/json"
-	pb "mgmt/proto"
-	"utils/handlers"
-	"utils/log"
+	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	"github.com/daos-stack/daos/src/control/utils/handlers"
+	"github.com/daos-stack/daos/src/control/utils/log"
 
 	"io/ioutil"
 )

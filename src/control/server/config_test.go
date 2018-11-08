@@ -26,8 +26,8 @@ import (
 	"fmt"
 	"testing"
 
-	. "utils/handlers"
-	. "utils/test"
+	. "github.com/daos-stack/daos/src/control/utils/handlers"
+	. "github.com/daos-stack/daos/src/control/utils/test"
 )
 
 var (

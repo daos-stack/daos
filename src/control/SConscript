@@ -15,13 +15,21 @@ def scons():
     denv = env.Clone()
     prereqs.require(denv, 'spdk')
 
+    # GOPATH for SCons builds in the build directory
     gopath = Dir('.').abspath
+    # Version-controlled DAOS Go source directory src/control
     gosrc = Dir('.').srcnode().abspath
+    # Repository path shared by DAOS Go package import paths
+    repopath = "github.com/daos-stack/daos"
 
-    if os.path.isdir(gopath) is False:
-        os.makedirs(gopath)
-    if os.path.isdir("%s/src" % gopath) is False:
-        os.symlink(gosrc, "%s/src" % gopath)
+    # Link the version-controlled DAOS Go source directory src/control into
+    # GOPATH/src/REPOPATH/src/control in the build directory.
+    path = "%s/src/%s/src" % (gopath, repopath)
+    if os.path.isdir(path) is False:
+        os.makedirs(path)
+    path += "/control"
+    if os.path.isdir(path) is False:
+        os.symlink(gosrc, path)
 
     denv.Append(GOPATH=[gopath])
     denv.AppendENVPath('GOPATH', denv['GOPATH'])
@@ -29,7 +37,8 @@ def scons():
 
     agentbin = "%s/bin/agent" % gopath
     agentsrc = "%s/agent/daos_agent.go" % gosrc
-    denv.Command(agentbin, agentsrc, "go install agent")
+    denv.Command(agentbin, agentsrc,
+                 "go install %s/src/control/agent" % repopath)
     denv.InstallAs("$PREFIX/bin/daos_agent", agentbin)
 
     gospdkpath = "%s/go-spdk/spdk" % gosrc
@@ -63,12 +72,13 @@ def scons():
 
     serverbin = "%s/bin/server" % gopath
     serversrc = "%s/server/daos_server.go" % gosrc
-    denv.Command(serverbin, [serversrc, nc_installed], "go install server")
+    denv.Command(serverbin, [serversrc, nc_installed],
+                 "go install %s/src/control/server" % repopath)
     denv.InstallAs("$PREFIX/bin/daos_server", serverbin)
 
     shellbin = "%s/bin/dmg" % gopath
     shellsrc = "%s/dmg/daos_shell.go" % gosrc
-    denv.Command(shellbin, shellsrc, "go install dmg")
+    denv.Command(shellbin, shellsrc, "go install %s/src/control/dmg" % repopath)
     denv.InstallAs("$PREFIX/bin/daos_shell", shellbin)
 
 if __name__ == "SCons.Script":

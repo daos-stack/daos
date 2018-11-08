@@ -29,7 +29,7 @@ import (
 	"reflect"
 	"testing"
 
-	"utils/handlers"
+	"github.com/daos-stack/daos/src/control/utils/handlers"
 )
 
 // AssertTrue asserts b is true

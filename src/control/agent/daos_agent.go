@@ -31,7 +31,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"security"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 var (

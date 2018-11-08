@@ -29,9 +29,9 @@ import (
 	"strconv"
 	"strings"
 
-	"client/mgmt"
-	pb "mgmt/proto"
-	"utils/functional"
+	"github.com/daos-stack/daos/src/control/client/mgmt"
+	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	"github.com/daos-stack/daos/src/control/utils/functional"
 
 	"github.com/daos-stack/ishell"
 	"github.com/jessevdk/go-flags"

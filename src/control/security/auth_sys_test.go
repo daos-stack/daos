@@ -24,11 +24,11 @@
 package security_test
 
 import (
-	"security"
-	pb "security/proto"
+	"github.com/daos-stack/daos/src/control/security"
+	pb "github.com/daos-stack/daos/src/control/security/proto"
 	"testing"
-	"utils/log"
-	. "utils/test"
+	"github.com/daos-stack/daos/src/control/utils/log"
+	. "github.com/daos-stack/daos/src/control/utils/test"
 
 	"github.com/golang/protobuf/proto"
 )

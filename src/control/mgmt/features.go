@@ -29,7 +29,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	pb "mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 )
 
 // FeatureMap is a type alias

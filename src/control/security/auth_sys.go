@@ -30,9 +30,9 @@ import (
 	"os/user"
 	"strconv"
 
-	"utils/log"
+	"github.com/daos-stack/daos/src/control/utils/log"
 
-	pb "security/proto"
+	pb "github.com/daos-stack/daos/src/control/security/proto"
 
 	"github.com/golang/protobuf/proto"
 )

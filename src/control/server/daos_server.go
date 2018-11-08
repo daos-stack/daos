@@ -38,9 +38,9 @@ import (
 	"github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
 
-	"mgmt"
-	mgmtpb "mgmt/proto"
-	"utils/handlers"
+	"github.com/daos-stack/daos/src/control/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	"github.com/daos-stack/daos/src/control/utils/handlers"
 )
 
 type cliOptions struct {

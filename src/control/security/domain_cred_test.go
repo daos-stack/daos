@@ -24,9 +24,9 @@
 package security_test
 
 import (
-	"security"
+	"github.com/daos-stack/daos/src/control/security"
 	"testing"
-	. "utils/test"
+	. "github.com/daos-stack/daos/src/control/utils/test"
 )
 
 // DomainCreds tests

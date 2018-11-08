@@ -32,8 +32,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	pb "mgmt/proto"
-	"utils/handlers"
+	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	"github.com/daos-stack/daos/src/control/utils/handlers"
 )
 
 // FetchNVMe populates controllers and namespaces in ControlService

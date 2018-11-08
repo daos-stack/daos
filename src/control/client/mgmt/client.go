@@ -28,8 +28,8 @@ import (
 	"io"
 	"time"
 
-	pb "mgmt/proto"
-	"utils/log"
+	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	"github.com/daos-stack/daos/src/control/utils/log"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

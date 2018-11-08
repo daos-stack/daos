@@ -26,11 +26,11 @@ package mgmt_test
 import (
 	"testing"
 
-	. "go-spdk/spdk"
-	. "mgmt"
-	. "utils/test"
+	. "github.com/daos-stack/daos/src/control/go-spdk/spdk"
+	. "github.com/daos-stack/daos/src/control/mgmt"
+	. "github.com/daos-stack/daos/src/control/utils/test"
 
-	pb "mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 )
 
 func mockController(fwrev string) Controller {

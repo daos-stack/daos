@@ -27,7 +27,7 @@ import (
 	"errors"
 	"fmt"
 
-	pb "security/proto"
+	pb "github.com/daos-stack/daos/src/control/security/proto"
 
 	uuid "github.com/satori/go.uuid"
 )

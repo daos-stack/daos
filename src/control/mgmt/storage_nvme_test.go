@@ -28,10 +28,10 @@ import (
 	"strings"
 	"testing"
 
-	. "go-spdk/spdk"
-	. "mgmt"
-	"utils/log"
-	. "utils/test"
+	. "github.com/daos-stack/daos/src/control/go-spdk/spdk"
+	. "github.com/daos-stack/daos/src/control/mgmt"
+	"github.com/daos-stack/daos/src/control/utils/log"
+	. "github.com/daos-stack/daos/src/control/utils/test"
 )
 
 // MockStorage struct implements Storage interface

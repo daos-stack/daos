@@ -24,11 +24,11 @@
 package mgmt
 
 import (
-	"utils/log"
+	"github.com/daos-stack/daos/src/control/utils/log"
 
-	"go-spdk/spdk"
+	"github.com/daos-stack/daos/src/control/go-spdk/spdk"
 
-	pb "mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 )
 
 // Storage interface represents a persistent storage that can

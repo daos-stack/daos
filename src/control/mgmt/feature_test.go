@@ -26,10 +26,10 @@ package mgmt_test
 import (
 	"testing"
 
-	. "mgmt"
-	. "utils/test"
+	. "github.com/daos-stack/daos/src/control/mgmt"
+	. "github.com/daos-stack/daos/src/control/utils/test"
 
-	pb "mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 )
 
 func mockFeaturePB() *pb.Feature {
