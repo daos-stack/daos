@@ -65,6 +65,7 @@ struct rebuild_puller {
 struct rebuild_obj_key {
 	daos_unit_oid_t oid;
 	daos_epoch_t	eph;
+	uint32_t	tgt_idx;
 };
 
 /* Track the pool rebuild status on each target, which exists on
@@ -314,15 +315,17 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt);
 typedef int (*rebuild_obj_insert_cb_t)(struct rebuild_root *cont_root,
 				       uuid_t co_uuid, daos_unit_oid_t oid,
 				       daos_epoch_t epoch, unsigned int shard,
-				       unsigned int *cnt, int ref);
+				       unsigned int tgt_idx, unsigned int *cnt,
+				       int ref);
 int
 rebuild_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 		      daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
-		      unsigned int *cnt, int ref);
+		      unsigned int tgt_idx, unsigned int *cnt, int ref);
+
 int
 rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 			daos_epoch_t epoch, unsigned int shard,
-			unsigned int *cnt, int ref,
+			unsigned int tgt_idx, unsigned int *cnt, int ref,
 			rebuild_obj_insert_cb_t obj_cb);
 int
 rebuilt_btr_destroy(daos_handle_t btr_hdl);

@@ -613,10 +613,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			orw->orw_map_ver, map_ver);
 	}
 
-	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d\n",
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d eph "DF_U64"\n",
 		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		dss_get_module_info()->dmi_tid);
+		dss_get_module_info()->dmi_tid, orw->orw_epoch);
 
 	rma = (orw->orw_bulks.ca_arrays != NULL ||
 	       orw->orw_bulks.ca_count != 0);
@@ -699,14 +699,14 @@ out:
 }
 
 static void
-ds_eu_complete(crt_rpc_t *rpc, int status, struct ds_iter_arg *arg)
+ds_eu_complete(crt_rpc_t *rpc, int status, int map_version)
 {
 	struct obj_key_enum_out *oeo;
 	struct obj_key_enum_in *oei;
 	int rc;
 
 	obj_reply_set_status(rpc, status);
-	obj_reply_map_version_set(rpc, arg->map_version);
+	obj_reply_map_version_set(rpc, map_version);
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: %d\n", rc);
@@ -730,12 +730,11 @@ ds_eu_complete(crt_rpc_t *rpc, int status, struct ds_iter_arg *arg)
 }
 
 static int
-ds_iter_single_vos(void *data)
+ds_iter_vos(crt_rpc_t *rpc, struct dss_enum_arg *enum_arg,
+	    uint32_t *map_version)
 {
-	struct ds_task_arg	*arg = data;
-	struct ds_iter_arg	*iter_arg = &arg->u.iter_arg;
-	struct dss_enum_arg	*enum_arg = &iter_arg->enum_arg;
-	struct obj_key_enum_in	*oei = iter_arg->oei;
+	struct obj_key_enum_in	*oei = crt_req_get(rpc);
+	int			opc = opc_get(rpc->cr_opc);
 	struct ds_cont_hdl	*cont_hdl;
 	struct ds_cont		*cont;
 	int			type;
@@ -747,12 +746,10 @@ ds_iter_single_vos(void *data)
 		D_GOTO(out, rc);
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
-	if (iter_arg->map_version == 0)
-		iter_arg->map_version = cont_hdl->sch_pool->spc_map_version;
-
-	if (oei->oei_map_ver < iter_arg->map_version)
+	*map_version = cont_hdl->sch_pool->spc_map_version;
+	if (oei->oei_map_ver < *map_version)
 		D_DEBUG(DB_IO, "stale version req %d map_version %d\n",
-			oei->oei_map_ver, iter_arg->map_version);
+			oei->oei_map_ver, *map_version);
 
 	/* prepare enumeration parameters */
 	memset(&enum_arg->param, 0, sizeof(enum_arg->param));
@@ -766,7 +763,7 @@ ds_iter_single_vos(void *data)
 	enum_arg->param.ip_epr.epr_hi = oei->oei_epoch;
 	enum_arg->param.ip_epc_expr = VOS_IT_EPC_LE;
 
-	if (arg->opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
+	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		if (oei->oei_dkey.iov_len == 0 ||
 		    oei->oei_akey.iov_len == 0)
 			D_GOTO(out_cont_hdl, rc = -DER_PROTO);
@@ -778,13 +775,13 @@ ds_iter_single_vos(void *data)
 
 		enum_arg->param.ip_epc_expr = VOS_IT_EPC_RE;
 		enum_arg->fill_recxs = true;
-	} else if (arg->opc == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
+	} else if (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
 		type = VOS_ITER_DKEY;
-	} else if (arg->opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
+	} else if (opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
 		type = VOS_ITER_AKEY;
 	} else {
 		/* object iteration for rebuild */
-		D_ASSERT(arg->opc == DAOS_OBJ_RPC_ENUMERATE);
+		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
 		enum_arg->param.ip_epr.epr_lo = 0;
 		enum_arg->param.ip_epc_expr = VOS_IT_EPC_RE;
@@ -866,59 +863,54 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 void
 ds_obj_enum_handler(crt_rpc_t *rpc)
 {
-	struct ds_task_arg	task_arg;
-	struct ds_iter_arg	*iter_arg = &task_arg.u.iter_arg;
-	struct dss_enum_arg	*enum_arg = &iter_arg->enum_arg;
+	struct dss_enum_arg	enum_arg = { 0 };
 	struct obj_key_enum_in	*oei;
 	struct obj_key_enum_out	*oeo;
+	int			opc = opc_get(rpc->cr_opc);
+	unsigned int		map_version = 0;
 	int			rc = 0;
 	int			tag;
 
-	memset(&task_arg, 0, sizeof(task_arg));
 	oei = crt_req_get(rpc);
 	D_ASSERT(oei != NULL);
 	oeo = crt_reply_get(rpc);
 	D_ASSERT(oeo != NULL);
 	/* prepare buffer for enumerate */
-	task_arg.opc = opc_get(rpc->cr_opc);
-	iter_arg->oei = crt_req_get(rpc);
-	iter_arg->oeo = crt_reply_get(rpc);
-	iter_arg->map_version = 0;
 
-	enum_arg->dkey_anchor = oei->oei_dkey_anchor;
-	enum_arg->akey_anchor = oei->oei_akey_anchor;
-	enum_arg->recx_anchor = oei->oei_anchor;
+	enum_arg.dkey_anchor = oei->oei_dkey_anchor;
+	enum_arg.akey_anchor = oei->oei_akey_anchor;
+	enum_arg.recx_anchor = oei->oei_anchor;
 
 	/* TODO: Transfer the inline_thres from enumerate RPC */
-	enum_arg->inline_thres = 32;
+	enum_arg.inline_thres = 32;
 
-	if (task_arg.opc == DAOS_OBJ_RECX_RPC_ENUMERATE ||
-	    task_arg.opc == DAOS_OBJ_RPC_ENUMERATE) {
+	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE ||
+	    opc == DAOS_OBJ_RPC_ENUMERATE) {
 		oeo->oeo_eprs.ca_count = 0;
 		D_ALLOC(oeo->oeo_eprs.ca_arrays,
 			oei->oei_nr * sizeof(daos_epoch_range_t));
 		if (oeo->oeo_eprs.ca_arrays == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		enum_arg->eprs = oeo->oeo_eprs.ca_arrays;
-		enum_arg->eprs_cap = oei->oei_nr;
-		enum_arg->eprs_len = 0;
+		enum_arg.eprs = oeo->oeo_eprs.ca_arrays;
+		enum_arg.eprs_cap = oei->oei_nr;
+		enum_arg.eprs_len = 0;
 	}
 
-	if (task_arg.opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
+	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		oeo->oeo_recxs.ca_count = 0;
 		D_ALLOC(oeo->oeo_recxs.ca_arrays,
 			oei->oei_nr * sizeof(daos_recx_t));
 		if (oeo->oeo_recxs.ca_arrays == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		enum_arg->recxs = oeo->oeo_recxs.ca_arrays;
-		enum_arg->recxs_cap = oei->oei_nr;
-		enum_arg->recxs_len = 0;
+		enum_arg.recxs = oeo->oeo_recxs.ca_arrays;
+		enum_arg.recxs_cap = oei->oei_nr;
+		enum_arg.recxs_len = 0;
 	} else {
 		rc = ds_sgls_prep(&oeo->oeo_sgl, &oei->oei_sgl, 1);
 		if (rc != 0)
 			D_GOTO(out, rc);
-		enum_arg->sgl = &oeo->oeo_sgl;
-		enum_arg->sgl_idx = 0;
+		enum_arg.sgl = &oeo->oeo_sgl;
+		enum_arg.sgl_idx = 0;
 
 		/* Prepare key desciptor buffer */
 		oeo->oeo_kds.ca_count = 0;
@@ -926,68 +918,43 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 			oei->oei_nr * sizeof(daos_key_desc_t));
 		if (oeo->oeo_kds.ca_arrays == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		enum_arg->kds = oeo->oeo_kds.ca_arrays;
-		enum_arg->kds_cap = oei->oei_nr;
-		enum_arg->kds_len = 0;
+		enum_arg.kds = oeo->oeo_kds.ca_arrays;
+		enum_arg.kds_cap = oei->oei_nr;
+		enum_arg.kds_len = 0;
 	}
 
 	/* keep trying until the key_buffer is fully filled or
 	 * reaching the end of the stream
 	 */
 	tag = dss_get_module_info()->dmi_tid;
-	while (1) {
-		if (tag == dss_get_module_info()->dmi_tid ||
-		    (task_arg.opc != DAOS_OBJ_DKEY_RPC_ENUMERATE &&
-		     task_arg.opc != DAOS_OBJ_RPC_ENUMERATE))
-			rc = ds_iter_single_vos(&task_arg);
-		else
-			rc = dss_ult_create_execute(ds_iter_single_vos,
-						    &task_arg,
-						    NULL /* user callback */,
-						    NULL /* user cb args */,
-						    tag  /* async */, 0);
-		if (rc != 0) {
-			if (rc == 1) {
-				/* If the buffer is full, exit and
-				 * reset failure.
-				 */
-				rc = 0;
-				break;
-			}
-			D_GOTO(out, rc);
-		}
-
-		/* If the enumeration does not cross the tag */
-		if (task_arg.opc != DAOS_OBJ_DKEY_RPC_ENUMERATE &&
-		    task_arg.opc != DAOS_OBJ_RPC_ENUMERATE)
-			break;
-
-		D_DEBUG(DB_IO, "try next tag %d\n", tag + 1);
-		if (++tag >= dss_get_threads_number())
-			break;
-
-		daos_anchor_set_zero(&enum_arg->recx_anchor);
-		daos_anchor_set_zero(&enum_arg->dkey_anchor);
-		daos_anchor_set_zero(&enum_arg->akey_anchor);
+	rc = ds_iter_vos(rpc, &enum_arg, &map_version);
+	if (rc == 1) {
+		/* If the buffer is full, exit and
+		 * reset failure.
+		 */
+		rc = 0;
 	}
 
-	enum_arg->dkey_anchor.da_tag = tag;
-	oeo->oeo_dkey_anchor = enum_arg->dkey_anchor;
-	oeo->oeo_akey_anchor = enum_arg->akey_anchor;
-	oeo->oeo_anchor = enum_arg->recx_anchor;
+	if (rc)
+		D_GOTO(out, rc);
 
-	if (enum_arg->eprs)
-		oeo->oeo_eprs.ca_count = enum_arg->eprs_len;
+	enum_arg.dkey_anchor.da_tag = tag;
+	oeo->oeo_dkey_anchor = enum_arg.dkey_anchor;
+	oeo->oeo_akey_anchor = enum_arg.akey_anchor;
+	oeo->oeo_anchor = enum_arg.recx_anchor;
 
-	if (task_arg.opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
-		oeo->oeo_recxs.ca_count = enum_arg->recxs_len;
-		oeo->oeo_num = enum_arg->rnum;
-		oeo->oeo_size = enum_arg->rsize;
+	if (enum_arg.eprs)
+		oeo->oeo_eprs.ca_count = enum_arg.eprs_len;
+
+	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
+		oeo->oeo_recxs.ca_count = enum_arg.recxs_len;
+		oeo->oeo_num = enum_arg.rnum;
+		oeo->oeo_size = enum_arg.rsize;
 	} else {
-		D_ASSERT(enum_arg->eprs_len == 0 ||
-			 enum_arg->eprs_len == enum_arg->kds_len);
-		oeo->oeo_kds.ca_count = enum_arg->kds_len;
-		oeo->oeo_num = enum_arg->kds_len;
+		D_ASSERT(enum_arg.eprs_len == 0 ||
+			 enum_arg.eprs_len == enum_arg.kds_len);
+		oeo->oeo_kds.ca_count = enum_arg.kds_len;
+		oeo->oeo_num = enum_arg.kds_len;
 		oeo->oeo_size = oeo->oeo_sgl.sg_iovs[0].iov_len;
 	}
 
@@ -995,8 +962,8 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 out:
 	/* for KEY2BIG case, just reuse the oeo_size to reply the key len */
 	if (rc == -DER_KEY2BIG)
-		oeo->oeo_size = enum_arg->kds[0].kd_key_len;
-	ds_eu_complete(rpc, rc, &task_arg.u.iter_arg);
+		oeo->oeo_size = enum_arg.kds[0].kd_key_len;
+	ds_eu_complete(rpc, rc, map_version);
 }
 
 static void
@@ -1012,22 +979,19 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 		D_ERROR("send reply failed: %d\n", rc);
 }
 
-struct obj_punch_args {
-	struct obj_punch_in	*opi;
-	crt_opcode_t		 opc;
-	uint32_t		 map_version;
-};
-
-static int
-ds_obj_punch(void *punch_args)
+void
+ds_obj_punch_handler(crt_rpc_t *rpc)
 {
-	struct obj_punch_args	*args = punch_args;
-	struct obj_punch_in	*opi = args->opi;
+	struct obj_punch_in	*opi;
 	struct ds_cont_hdl	*cont_hdl = NULL;
 	struct ds_cont		*cont = NULL;
-	uint32_t		 map_version = 0;
-	int			 i;
-	int			 rc;
+	uint32_t		map_version = 0;
+	int			opc;
+	int			i;
+	int			rc;
+
+	opi = crt_req_get(rpc);
+	opc = opc_get(rpc->cr_opc);
 
 	rc = ds_check_container(opi->opi_co_hdl, opi->opi_co_uuid,
 				&cont_hdl, &cont);
@@ -1045,9 +1009,9 @@ ds_obj_punch(void *punch_args)
 			 opi->opi_map_ver, map_version);
 	}
 
-	switch (opc_get(args->opc)) {
+	switch (opc) {
 	default:
-		D_ERROR("opc %#x not supported\n", opc_get(args->opc));
+		D_ERROR("opc %#x not supported\n", opc);
 		D_GOTO(out, rc = -DER_NOSYS);
 
 	case DAOS_OBJ_RPC_PUNCH:
@@ -1080,28 +1044,8 @@ out:
 			ds_cont_put(cont); /* -1 for rebuild container */
 		ds_cont_hdl_put(cont_hdl);
 	}
-	args->map_version = map_version;
-	return rc;
-}
 
-void
-ds_obj_punch_handler(crt_rpc_t *rpc)
-{
-	struct obj_punch_in	*opi;
-	struct obj_punch_args	 args;
-	int			 rc;
-
-	opi = crt_req_get(rpc);
-	D_ASSERT(opi != NULL);
-	args.opi = opi;
-	args.opc = rpc->cr_opc;
-
-	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH)
-		rc = dss_task_collective(ds_obj_punch, &args);
-	else
-		rc = ds_obj_punch(&args);
-
-	obj_punch_complete(rpc, rc, args.map_version);
+	obj_punch_complete(rpc, rc, map_version);
 }
 
 void

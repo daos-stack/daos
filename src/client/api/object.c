@@ -252,3 +252,24 @@ daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 
 	return dc_task_schedule(task, true);
 }
+
+/* Use to query the object layout */
+int
+daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
+		    struct daos_obj_layout **layout)
+{
+	daos_handle_t	oh;
+	int		rc;
+
+	rc = daos_obj_open(coh, oid, 0, 0, &oh, NULL);
+	if (rc)
+		return rc;
+
+	rc = dc_obj_layout_get(oh, layout);
+
+	daos_obj_close(oh, NULL);
+	if (rc != 0 && *layout != NULL)
+		daos_obj_layout_free(*layout);
+
+	return rc;
+}

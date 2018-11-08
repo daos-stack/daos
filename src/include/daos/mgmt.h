@@ -42,29 +42,4 @@ int dc_pool_evict(tse_task_t *task);
 int dc_pool_extend(tse_task_t *task);
 int dc_mgmt_params_set(tse_task_t *task);
 
-/**
- * object layout information.
- **/
-struct daos_obj_shard {
-	uint32_t	os_replica_nr;
-	uint32_t	os_ranks[0];
-};
-
-struct daos_obj_layout {
-	uint32_t	ol_ver;
-	uint32_t	ol_class;
-	uint32_t	ol_nr;
-	struct daos_obj_shard	*ol_shards[0];
-};
-
-int
-daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
-		    struct daos_obj_layout **layout);
-
-int
-daos_obj_layout_free(struct daos_obj_layout *layout);
-
-int
-daos_obj_layout_alloc(struct daos_obj_layout **layout, uint32_t grp_nr,
-		      uint32_t grp_size);
 #endif

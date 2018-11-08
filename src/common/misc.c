@@ -490,3 +490,4 @@ daos_hhash_link_delete(struct d_hlink *hlink)
 	D_ASSERT(daos_ht.dht_hhash != NULL);
 	return d_hhash_link_delete(daos_ht.dht_hhash, hlink);
 }
+

@@ -71,7 +71,7 @@ struct rebuild_out {
 
 struct rebuild_objs_in {
 	uint32_t                roi_rebuild_ver;
-	uint32_t                roi_pad;
+	uint32_t                roi_tgt_idx;
 	uuid_t			roi_pool_uuid;
 	struct crt_array        roi_oids;
 	struct crt_array        roi_ephs;

@@ -146,6 +146,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	struct rebuild_objs_in	*rebuild_in = NULL;
 	struct rebuild_out	*rebuild_out = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = scan_arg->rpt;
+	struct pool_target	*target;
 	struct rebuild_send_arg *arg = NULL;
 	daos_unit_oid_t		*oids = NULL;
 	daos_epoch_t		*ephs = NULL;
@@ -201,7 +202,13 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	D_DEBUG(DB_REBUILD, "send rebuild objects "DF_UUID" to tgt %d"
 		" cnt %d\n", DP_UUID(rpt->rt_pool_uuid), tgt_id, arg->count);
 
-	tgt_ep.ep_rank = tgt_id;
+	rc = pool_map_find_target(rpt->rt_pool->sp_map, tgt_id, &target);
+	D_ASSERT(rc == 1);
+	tgt_ep.ep_rank = target->ta_comp.co_rank;
+	/* NB: let's send object list to 0 xstream to simplify the rebuild
+	 * object handling process for now, for example avoid lock to insert
+	 * objects in the object rebuild tree.
+	 */
 	tgt_ep.ep_tag = 0;
 	while (1) {
 		struct pool_target	*targets = NULL;
@@ -225,7 +232,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		rebuild_in->roi_shards.ca_count = arg->count;
 		rebuild_in->roi_shards.ca_arrays = shards;
 		uuid_copy(rebuild_in->roi_pool_uuid, rpt->rt_pool_uuid);
-		crt_group_rank(NULL, &rebuild_in->roi_pad);
+		rebuild_in->roi_tgt_idx = target->ta_comp.co_index;
 
 		rc = dss_rpc_send(rpc);
 
@@ -406,7 +413,7 @@ rebuild_obj_tree_create(daos_handle_t toh, uuid_t uuid,
 int
 rebuild_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 		      daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
-		      unsigned int *cnt, int ref)
+		      unsigned int tgt_idx, unsigned int *cnt, int ref)
 {
 	struct rebuild_obj_key	key;
 	daos_iov_t		key_iov;
@@ -416,6 +423,7 @@ rebuild_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 	oid.id_shard = shard;
 	key.oid = oid;
 	key.eph = eph;
+	key.tgt_idx = tgt_idx;
 
 	/* look up the object under the container tree */
 	daos_iov_set(&key_iov, &key, sizeof(key));
@@ -444,7 +452,7 @@ out:
 int
 rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 			daos_epoch_t epoch, unsigned int shard,
-			unsigned int *cnt, int ref,
+			unsigned int tgt_idx, unsigned int *cnt, int ref,
 			rebuild_obj_insert_cb_t obj_cb)
 {
 	struct rebuild_root	*cont_root;
@@ -472,7 +480,7 @@ rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 		cont_root = val_iov.iov_buf;
 	}
 
-	rc = obj_cb(cont_root, co_uuid, oid, epoch, shard, cnt, ref);
+	rc = obj_cb(cont_root, co_uuid, oid, epoch, shard, tgt_idx, cnt, ref);
 out:
 	return rc;
 }
@@ -509,7 +517,8 @@ rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 	}
 
 	rc = rebuild_cont_obj_insert(tgt_root->root_hdl, co_uuid, oid, epoch,
-				     shard, NULL, 0, rebuild_obj_insert_cb);
+				     shard, tgt_id, NULL, 0,
+				     rebuild_obj_insert_cb);
 	if (rc <= 0) {
 		ABT_mutex_unlock(arg->scan_lock);
 		D_GOTO(out, rc);

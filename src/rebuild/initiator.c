@@ -42,7 +42,8 @@
 #include "rebuild_internal.h"
 
 typedef int (*rebuild_obj_iter_cb_t)(daos_unit_oid_t oid, daos_epoch_t eph,
-				     unsigned int shard, void *arg);
+				     unsigned int shard, unsigned int tgt_idx,
+				     void *arg);
 
 /* Argument for pool/container/object iteration */
 struct puller_iter_arg {
@@ -64,24 +65,9 @@ struct rebuild_iter_obj_arg {
 	daos_unit_oid_t oid;
 	daos_epoch_t	epoch;
 	unsigned int	shard;
+	unsigned int	tgt_idx;
 	struct rebuild_tgt_pool_tracker *rpt;
 };
-
-/* Get nthream idx from idx */
-static inline unsigned int
-rebuild_get_nstream_idx(daos_key_t *dkey)
-{
-	unsigned int nstream;
-	uint64_t hash;
-
-	nstream = dss_get_threads_number();
-
-	hash = d_hash_murmur64((unsigned char *)dkey->iov_buf,
-				dkey->iov_len, 5731);
-	hash %= nstream;
-
-	return hash;
-}
 
 #define PULLER_STACK_SIZE	131072
 #define MAX_BUF_SIZE		2048
@@ -494,7 +480,6 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	struct rebuild_puller		*puller;
 	struct rebuild_tgt_pool_tracker *rpt = iter_arg->rpt;
 	struct rebuild_one		*rdone = NULL;
-	unsigned int			idx;
 	unsigned int			iod_cnt = 0;
 	unsigned int			ephs_cnt = 0;
 	unsigned int			rec_cnt = 0;
@@ -503,8 +488,9 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	int				i;
 	int				rc;
 
-	D_DEBUG(DB_REBUILD, "rebuild dkey %d %s iod nr %d\n",
-		(int)dkey->iov_buf_len, (char *)dkey->iov_buf, iod_eph_total);
+	D_DEBUG(DB_REBUILD, "rebuild dkey %d %s iod nr %d dkey_eph "DF_U64"\n",
+		(int)dkey->iov_buf_len, (char *)dkey->iov_buf, iod_eph_total,
+		dkey_eph);
 
 	if (iod_eph_total == 0)
 		return 0;
@@ -624,16 +610,17 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	rdone->ro_version = version;
 	rdone->ro_epoch = min_epoch;
 	uuid_copy(rdone->ro_cookie, cookie);
-	idx = rebuild_get_nstream_idx(dkey);
-	puller = &rpt->rt_pullers[idx];
+	puller = &rpt->rt_pullers[iter_arg->tgt_idx];
 	if (puller->rp_ult == NULL) {
 		/* Create puller ULT thread, and destroy ULT until
 		 * rebuild finish in rebuild_fini().
 		 */
 		D_ASSERT(puller->rp_ult_running == 0);
-		D_DEBUG(DB_REBUILD, "create rebuild dkey ult %d\n", idx);
+		D_DEBUG(DB_REBUILD, "create rebuild dkey ult %d\n",
+			iter_arg->tgt_idx);
 		rpt_get(rpt);
-		rc = dss_rebuild_ult_create(rebuild_one_ult, rpt, idx,
+		rc = dss_rebuild_ult_create(rebuild_one_ult, rpt,
+					    iter_arg->tgt_idx,
 					    PULLER_STACK_SIZE, &puller->rp_ult);
 		if (rc) {
 			rpt_put(rpt);
@@ -649,9 +636,9 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	rdone->ro_oid = *oid;
 	uuid_copy(rdone->ro_cont_uuid, iter_arg->cont_uuid);
 
-	D_DEBUG(DB_REBUILD, DF_UOID" %p dkey %d %s rebuild on idx %d max eph "
-		DF_U64" iod_num %d\n", DP_UOID(rdone->ro_oid), rdone,
-		(int)dkey->iov_len, (char *)dkey->iov_buf, idx,
+	D_DEBUG(DB_REBUILD, DF_UOID" %p dkey %d %s rebuild on idx %d max eph"
+		" "DF_U64" iod_num %d\n", DP_UOID(rdone->ro_oid), rdone,
+		(int)dkey->iov_len, (char *)dkey->iov_buf, iter_arg->tgt_idx,
 		rdone->ro_max_eph, rdone->ro_iod_num);
 
 	ABT_mutex_lock(puller->rp_lock);
@@ -835,7 +822,7 @@ free:
 
 static int
 rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
-		     void *data)
+		     unsigned int tgt_idx, void *data)
 {
 	struct puller_iter_arg		*iter_arg = data;
 	struct rebuild_iter_obj_arg	*obj_arg;
@@ -849,6 +836,7 @@ rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 	obj_arg->oid = oid;
 	obj_arg->epoch = eph;
 	obj_arg->shard = shard;
+	obj_arg->tgt_idx = tgt_idx;
 	obj_arg->cont_hdl = iter_arg->cont_hdl;
 	uuid_copy(obj_arg->cont_uuid, iter_arg->cont_uuid);
 	rpt_get(iter_arg->rpt);
@@ -877,6 +865,7 @@ puller_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	struct rebuild_obj_key		*key = key_iov->iov_buf;
 	daos_unit_oid_t			oid = key->oid;
 	daos_epoch_t			epoch = key->eph;
+	unsigned int			tgt_idx = key->tgt_idx;
 	unsigned int			*shard = val_iov->iov_buf;
 	bool				scheduled = false;
 	int				rc;
@@ -889,7 +878,7 @@ puller_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	/* NB: if rebuild for this obj fail, let's continue rebuilding
 	 * other objs, and rebuild this obj again later.
 	 */
-	rc = arg->obj_cb(oid, epoch, *shard, arg);
+	rc = arg->obj_cb(oid, epoch, *shard, tgt_idx, arg);
 	if (rc == 0) {
 		scheduled = true;
 		--arg->yield_freq;
@@ -1133,7 +1122,8 @@ struct rebuilt_oid {
 static int
 rebuild_scheduled_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 				daos_unit_oid_t oid, daos_epoch_t eph,
-				unsigned int shard, unsigned int *cnt, int ref)
+				unsigned int shard, unsigned int tgt_idx,
+				unsigned int *cnt, int ref)
 {
 	struct rebuilt_oid	*roid;
 	struct rebuilt_oid	roid_tmp;
@@ -1266,6 +1256,11 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	if (rebuild_in->roi_tgt_idx >= dss_get_threads_number()) {
+		D_ERROR("Wrong tgt idx %d\n", rebuild_in->roi_tgt_idx);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
 	/* If rpt is NULL, it means the target is not prepared for
 	 * rebuilding yet, i.e. it did not receive scan req to
 	 * prepare rebuild yet (see rebuild_tgt_prepare()).
@@ -1289,6 +1284,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		/* firstly insert/check rebuilt tree */
 		rc = rebuild_cont_obj_insert(rebuilt_btr_hdl, co_uuids[i],
 					     oids[i], ephs[i], shards[i],
+					     rebuild_in->roi_tgt_idx,
 					     &rpt->rt_rebuilt_obj_cnt, 1,
 					     rebuild_scheduled_obj_insert_cb);
 		if (rc == 0) {
@@ -1307,8 +1303,9 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 
 		/* for un-rebuilt objs insert to to-be-rebuilt tree */
 		rc = rebuild_cont_obj_insert(btr_hdl, co_uuids[i],
-					     oids[i], ephs[i], shards[i], NULL,
-					     0, rebuild_obj_insert_cb);
+					     oids[i], ephs[i], shards[i],
+					     rebuild_in->roi_tgt_idx,
+					     NULL, 0, rebuild_obj_insert_cb);
 		if (rc == 1) {
 			D_DEBUG(DB_REBUILD, "insert local "DF_UOID"/"DF_U64" "
 				DF_UUID" %u hdl %"PRIx64"\n", DP_UOID(oids[i]),
@@ -1324,6 +1321,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 			/* rollback the ref in rebuilt tree taken above */
 			rebuild_cont_obj_insert(rebuilt_btr_hdl, co_uuids[i],
 					oids[i], ephs[i], shards[i],
+					rebuild_in->roi_tgt_idx,
 					&rpt->rt_rebuilt_obj_cnt, -1,
 					rebuild_scheduled_obj_insert_cb);
 			break;

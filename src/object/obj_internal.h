@@ -68,17 +68,18 @@ struct dc_obj_shard {
 	unsigned int		do_ref;
 	/** number of partitions on the remote target */
 	int			do_part_nr;
-	/** targets on this shard node */
-	struct dc_obj_shard_tgt	*do_shard_tgts;
+
 	/** object id */
 	daos_unit_oid_t		do_id;
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
 	/** list to the container */
 	d_list_t		do_co_list;
-	/* layout for this shard */
-	struct pl_obj_shard	*do_layout;
-
+	uint32_t		do_shard;	/* shard index */
+	uint32_t		do_target_id;	/* target id */
+	uint32_t		do_target_idx;	/* target xstream index */
+	uint32_t		do_target_rank;
+	uint32_t		do_rebuilding:1;
 	/** point back to object */
 	struct dc_object	*do_obj;
 };
@@ -102,24 +103,11 @@ struct dc_object {
 
 	/* cob_lock protects layout and shard objects ptrs */
 	pthread_rwlock_t	 cob_lock;
-	/** algorithmically generated object layout */
-	struct pl_obj_layout	*cob_layout;
+
+	unsigned int		cob_version;
+	unsigned int		cob_shards_nr;
 	/** shard object ptrs */
-	struct dc_obj_shard	**cob_obj_shards;
-};
-
-struct ds_iter_arg {
-	struct obj_key_enum_in	*oei;
-	struct obj_key_enum_out	*oeo;
-	struct dss_enum_arg	 enum_arg;
-	unsigned int		 map_version;
-};
-
-struct ds_task_arg {
-	unsigned int    opc;
-	union {
-		struct ds_iter_arg iter_arg;
-	} u;
+	struct dc_obj_shard	*cob_shards;
 };
 
 static inline void
@@ -133,8 +121,8 @@ struct obj_tls {
 	d_sg_list_t	ot_echo_sgl;
 };
 
-int dc_obj_shard_open(struct dc_object *obj, uint32_t tgt, daos_unit_oid_t id,
-		      unsigned int mode, struct dc_obj_shard **shard);
+int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
+		      unsigned int mode, struct dc_obj_shard *shard);
 void dc_obj_shard_close(struct dc_obj_shard *shard);
 
 int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,

@@ -194,14 +194,8 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 void
 pl_obj_layout_free(struct pl_obj_layout *layout)
 {
-	if (layout->ol_shards != NULL) {
-		int i;
-
-		for (i = 0; i < layout->ol_nr; i++)
-			if (layout->ol_shards[i].po_shard_tgts)
-				D_FREE(layout->ol_shards[i].po_shard_tgts);
+	if (layout->ol_shards != NULL)
 		D_FREE(layout->ol_shards);
-	}
 	D_FREE_PTR(layout);
 }
 

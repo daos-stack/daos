@@ -68,17 +68,10 @@ struct pl_target_grp {
 	struct pl_target	*tg_targets;
 };
 
-/** targets under the shard */
-struct pl_obj_shard_tgt {
-	uint32_t	pot_target;	/* target id */
-	uint32_t	pot_rebuilding: 1; /* if the shard is being rebuilt */
-};
-
 struct pl_obj_shard {
 	uint32_t	po_shard;	/* shard index */
 	uint32_t	po_target;	/* target id */
-	uint32_t	po_shard_tgt_nr; /* number of the tgt for the shard */
-	struct pl_obj_shard_tgt  *po_shard_tgts; /* targets under the shard */
+	uint32_t	po_rebuilding:1; /* rebuilding status */
 };
 
 struct pl_obj_layout {

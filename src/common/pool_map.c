@@ -1563,45 +1563,6 @@ pool_map_find_target(struct pool_map *map, uint32_t id,
 }
 
 /**
- * Find all nodes under the doms.
- *
- * \param doms	[IN]	domains to find the node.
- * \param nodes_pp [OUT] returned domain array for nodes.
- *
- * \return		number in nodes_pp.
- *			negative errno if failed.
- */
-int
-pool_map_domain_find_all_nodes(struct pool_domain *doms,
-			       struct pool_domain **node_pp)
-{
-	struct pool_domain	*dom = doms;
-	struct pool_domain	*dom_end = doms;
-	int			node_cnt = 0;
-
-	if (doms == NULL || dom->do_child_nr == 0)
-		return 0;
-
-	while (dom->do_comp.co_type != PO_COMP_TP_NODE &&
-	       dom->do_children != NULL) {
-		dom_end = &dom_end->do_children[dom->do_child_nr - 1];
-		dom = &dom->do_children[0];
-	}
-
-	if (dom->do_comp.co_type != PO_COMP_TP_NODE)
-		return 0;
-
-	node_cnt = dom_end - dom + 1;
-
-	D_DEBUG(DB_MGMT, "get node %d\n", node_cnt);
-
-	if (node_pp != NULL)
-		*node_pp = dom;
-
-	return node_cnt;
-}
-
-/**
  * Find pool domain node by rank in the pool map.
  * \params [IN] map	pool map to find the node by rank.
  * \params [IN] rank	rank to use to search the pool domain.
