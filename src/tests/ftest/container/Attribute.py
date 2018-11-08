@@ -50,7 +50,7 @@ def cb_func(event):
     GLOB_RC = event.event.ev_error
     GLOB_SIGNAL.set()
 
-def verify_list_attr(indata, size, buffer, mode):
+def verify_list_attr(indata, size, buffer, mode="sync"):
     """
     verify the length of the Attribute names
     """
@@ -125,6 +125,7 @@ class ContainerAttributeTest(Test):
             os.remove(self.hostfile)
         self.CONTAINER.close()
         ServerUtils.stopServer()
+        ServerUtils.killServer(self.hostlist)
 
     def create_data_set(self):
         """
