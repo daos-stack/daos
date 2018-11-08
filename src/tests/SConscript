@@ -38,5 +38,8 @@ def scons():
     # Build daosctl
     SConscript('daosctl/SConscript')
 
+    # Build drpc_test
+    SConscript('drpc/SConscript')
+
 if __name__ == "SCons.Script":
     scons()
