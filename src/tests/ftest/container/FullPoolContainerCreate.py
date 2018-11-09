@@ -43,6 +43,7 @@ from daos_api import DaosPool
 from daos_api import DaosContainer
 from daos_api import DaosObj
 from daos_api import RankList
+from daos_api import DaosLog
 
 
 class FullPoolContainerCreate(Test):
@@ -56,107 +57,127 @@ class FullPoolContainerCreate(Test):
                                 "../../../../.build_vars.json")) as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
         self.server_group = self.params.get("server_group", '/server/',
                                             'daos_default_oops')
 
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        print("initialized!!!\n")
 
         self.pool = DaosPool(self.context)
+        self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("test_machines1", '/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
-
-        time.sleep(5)
 
     def tearDown(self):
         # shut 'er down
-        ServerUtils.stopServer()
-        if self.hostfile is not None:
-            os.remove(self.hostfile)
+        """
+        wrap pool destroy in a try; in case pool create didn't succeed, we
+        still need the server to be shut down in any case
+        """
+        try:
+            self.pool.destroy(1)
+        finally:
+            ServerUtils.stopServer()
+            ServerUtils.killServer(self.hostlist)
 
     def test_no_space_cont_create(self):
         """
-        :avocado: tags=pool,container,fullpoolcontcreate,small,vm
+        :avocado: tags=pool,cont,fullpoolcontcreate,small,vm
         """
         setid = self.params.get("setname",
                                 '/run/testparams/setnames/validsetname/')
 
+        # full storage rc
+        err = "-1007"
+
         # create pool
         mode = self.params.get("mode", '/conttests/createmode/')
-        print("mode is {0}".format(mode))
+        self.d_log.debug("mode is {0}".format(mode))
         uid = os.geteuid()
         gid = os.getegid()
         # 16 mb pool, minimum size currently possible
         size = 16777216
 
-        print("creating pool")
+        self.d_log.debug("creating pool")
         self.pool.create(mode, uid, gid, size, self.server_group, None)
-        print("created pool")
+        self.d_log.debug("created pool")
 
         # connect to the pool
-        print("connecting to pool")
+        self.d_log.debug("connecting to pool")
         self.pool.connect(1 << 1)
-        print("connected to pool")
+        self.d_log.debug("connected to pool")
 
         # query the pool
-        print("querying pool info")
+        self.d_log.debug("querying pool info")
         pool_info = self.pool.pool_query()
-        print("queried pool info")
+        self.d_log.debug("queried pool info")
 
         # create a container
         try:
-            print("creating container")
+            self.d_log.debug("creating container")
             self.cont = DaosContainer(self.context)
             self.cont.create(self.pool.handle)
-            print("created container")
+            self.d_log.debug("created container")
         except ValueError as e:
+            self.d_log.error("caught exception creating container: "
+                             "{0}".format(e))
             self.fail("caught exception creating container: {0}".format(e))
 
-        print("opening container")
+        self.d_log.debug("opening container")
         self.cont.open()
-        print("opened container")
+        self.d_log.debug("opened container")
 
         # generate random dkey, akey each time
         # write 1mb until no space, then 1kb, etc. to fill pool quickly
         for x in [1048576, 1024, 1]:
             write_count = 0
             while(True):
-                print("writing obj {0}, sz {1} to container".format(write_count, x))
+                self.d_log.debug("writing obj {0}, sz {1} to "
+                                 "container".format(write_count, x))
                 my_str = "a" * x
                 my_str_sz = x
                 dkey = ''.join(random.choice(string.lowercase) for i in range(5))
                 akey = ''.join(random.choice(string.lowercase) for i in range(5))
                 try:
-                    oid, epoch = self.cont.write_an_obj(my_str, my_str_sz, dkey, akey)
-                    print("wrote obj {0}, sz {1}".format(write_count, x))
+                    oid, epoch = self.cont.write_an_obj(my_str, my_str_sz, dkey,
+                                                        akey, obj_cls=1)
+                    self.d_log.debug("wrote obj {0}, sz {1}".format(write_count,
+                                                                    x))
                     write_count += 1
                 except ValueError as e:
-                    if "RC: -1007" not in repr(e):
+                    if not err in repr(e):
+                        self.d_log.error("caught exception while writing "
+                                         "object: {0}".format(repr(e)))
                         self.fail("caught exception while writing object: {0}"
                                   .format(repr(e)))
                     else:
-                        print("pool is too full for {0} byte objects".format(x))
+                        self.d_log.debug("pool is too full for {0} byte "
+                                         "objects".format(x))
                         break
 
-        print("closing container")
+        self.d_log.debug("closing container")
         self.cont.close()
-        print("closed container")
+        self.d_log.debug("closed container")
         # create a 2nd container now that pool is full
         try:
-            print("creating 2nd container")
+            self.d_log.debug("creating 2nd container")
             self.cont2 = DaosContainer(self.context)
             self.cont2.create(self.pool.handle)
-            print("created 2nd container")
+            self.d_log.debug("created 2nd container")
 
-            print("writing one more object, write expected to fail")
-            self.cont2.write_an_obj(my_str, my_str_sz, dkey, akey)
-            print("wrote one more object--this should never print")
+            self.d_log.debug("opening container 2")
+            self.cont2.open()
+            self.d_log.debug("opened container 2")
+
+            self.d_log.debug("writing one more object, write expected to fail")
+            self.cont2.write_an_obj(my_str, my_str_sz, dkey, akey, obj_cls=1)
+            self.d_log.debug("wrote one more object--this should never print")
         except ValueError as e:
-            if "RC: -1007" not in repr(e):
+            if not err in repr(e):
+                    self.d_log.error("caught unexpected exception while "
+                                     "writing object: {0}".format(repr(e)))
                     self.fail("caught unexpected exception while writing "
                               "object: {0}".format(repr(e)))
             else:
-                print("correctly caught -1007 while attempting "
-                      "to write object in full pool")
+                self.d_log.debug("correctly caught -1007 while attempting "
+                                 "to write object in full pool")

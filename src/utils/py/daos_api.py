@@ -1270,11 +1270,13 @@ class DaosContainer(object):
         self.commit_epoch(c_epoch)
         return ioreq.obj, c_epoch.value
 
-    def write_an_obj(self, thedata, size, dkey, akey, obj=None, rank=None):
+    def write_an_obj(self, thedata, size, dkey, akey, obj=None, rank=None,
+                     obj_cls=13):
         """
         Write a single value to an object, if an object isn't supplied a new
         one is created.  The update occurs in its own epoch and the epoch is
-        committed once the update is complete.
+        committed once the update is complete. The default object class
+        specified here, 13, means replication.
         """
 
         # container should be  in the open state
@@ -1300,7 +1302,7 @@ class DaosContainer(object):
             c_akey = ctypes.create_string_buffer(akey)
 
         # obj can be None in which case a new one is created
-        ioreq = IORequest(self.context, self, obj, rank)
+        ioreq = IORequest(self.context, self, obj, rank, objtype=obj_cls)
         ioreq.single_insert(c_dkey, c_akey, c_value, c_size, c_epoch)
         self.commit_epoch(c_epoch)
         return ioreq.obj, c_epoch.value
