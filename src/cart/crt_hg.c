@@ -975,7 +975,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
 
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, true /* srv_flag */);
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
 	if (rc != 0) {
 		D_ERROR("crt_rpc_priv_init rc=%d, opc=%#x\n", rc, opc);
 		crt_hg_reply_error_send(rpc_priv, -DER_MISC);

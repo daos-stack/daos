@@ -363,7 +363,6 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	struct crt_rpc_priv	*rpc_priv = NULL;
 	d_rank_list_t		*tobe_excluded_ranks = NULL;
 	bool			 root_excluded = false;
-	crt_rpc_t		*rpc_pub;
 	d_rank_t		 grp_root, pri_root;
 	uint32_t		 grp_ver;
 	int			 rc = 0;
@@ -407,13 +406,11 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	}
 
 	D_ASSERT(rpc_priv != NULL);
-	rpc_pub = &rpc_priv->crp_pub;
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */);
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
 	if (rc != 0) {
 		D_ERROR("crt_rpc_priv_init, rc: %d, opc: %#x.\n", rc, opc);
 		D_GOTO(out, rc);
 	}
-
 
 	/* grp_root is logical rank number in this group */
 
@@ -457,7 +454,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		D_GOTO(out, rc);
 	}
 
-	*req = rpc_pub;
+	*req = &rpc_priv->crp_pub;
 out:
 	if (rc < 0)
 		crt_rpc_priv_free(rpc_priv);

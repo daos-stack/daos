@@ -319,7 +319,7 @@ crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc, int locked)
 	unsigned int		 L2_idx;
 	unsigned int		 L3_idx;
 
-	D_DEBUG(DB_ALL, "looking up opcode: 0x%x\n", opc);
+	D_DEBUG(DB_ALL, "looking up opcode: %#x\n", opc);
 	L1_idx = opc >> 24;
 	L2_idx = (opc & CRT_PROTO_VER_MASK) >> 16;
 	L3_idx = opc & CRT_PROTO_COUNT_MASK;
@@ -720,6 +720,8 @@ static inline bool
 validate_base_opcode(crt_opcode_t base_opc)
 {
 	/* only the base opc bits could be set*/
+	if (base_opc == 0)
+		return false;
 	if (base_opc & ~CRT_PROTO_BASEOPC_MASK)
 		return false;
 	/* the base opc CRT_PROTO_BASEOPC_MASK is reserved for internal RPCs */
@@ -861,6 +863,17 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 		return -DER_INVAL;
 	}
 
+	if (cpf->cpf_count == 0) {
+		D_ERROR("Invalid member RPC count %d\n",
+			cpf->cpf_count);
+		return -DER_INVAL;
+	}
+
+	if (cpf->cpf_prf == NULL) {
+		D_ERROR("prf can't be NULL\n");
+		return -DER_INVAL;
+	}
+
 	/* reg L1 */
 	rc = crt_proto_reg_L1(crt_gdata.cg_opc_map, cpf);
 	if (rc != 0)
@@ -885,7 +898,7 @@ crt_proto_register(struct crt_proto_format *cpf)
 
 	/* validate base_opc is in range */
 	if (!validate_base_opcode(cpf->cpf_base)) {
-		D_ERROR("Invalid base_opc: %x.\n", cpf->cpf_base);
+		D_ERROR("Invalid base_opc: %#x.\n", cpf->cpf_base);
 		return -DER_INVAL;
 	}
 
@@ -902,7 +915,7 @@ crt_proto_register_internal(struct crt_proto_format *cpf)
 
 	/* validate base_opc is in range */
 	if (cpf->cpf_base ^ CRT_PROTO_BASEOPC_MASK) {
-		D_ERROR("Invalid base_opc: %x.\n", cpf->cpf_base);
+		D_ERROR("Invalid base_opc: %#x.\n", cpf->cpf_base);
 		return -DER_INVAL;
 	}
 

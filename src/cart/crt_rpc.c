@@ -254,7 +254,7 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 	if (tgt_ep != NULL)
 		crt_rpc_priv_set_ep(rpc_priv, tgt_ep);
 
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */);
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
 	if (rc != 0) {
 		RPC_ERROR(rpc_priv,
 			  "crt_rpc_priv_init, rc: %d, opc: %#x\n", rc, opc);
@@ -1230,14 +1230,11 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 
 int
 crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
-		  crt_opcode_t opc, bool srv_flag)
+		  bool srv_flag)
 {
+	crt_opcode_t opc = rpc_priv->crp_opc_info->coi_opc;
+	struct crt_context *ctx = crt_ctx;
 	int rc;
-	struct crt_context *ctx;
-
-	D_ASSERT(rpc_priv != NULL);
-
-	ctx = crt_ctx;
 
 	rc = D_SPIN_INIT(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
 	if (rc != 0)
