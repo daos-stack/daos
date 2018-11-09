@@ -1810,13 +1810,18 @@ close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid)
 	assert_int_equal(rc, 0);
 }
 
+/**
+ * Basic test to insert a few large and small records at different epochs, then
+ * remove an epoch and verify records in epochs both prior to and after the
+ * discarded epoch.
+ */
 static void
 epoch_discard(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
-	const int	 nakeys = 1;
+	const int	 nakeys = 4;
 	const size_t	 nakeys_strlen = 4 /* "9999" */;
 	const char	 dkey[] = "epoch_discard dkey";
 	const char	*akey_fmt = "epoch_discard akey%d";
@@ -1825,8 +1830,8 @@ epoch_discard(void **state)
 	daos_size_t	 rec_size[nakeys];
 	int		 rx_nr[nakeys];
 	daos_off_t	 offset[nakeys];
-	const char	*val_fmt = "epoch_discard val%d epoch"DF_U64;
-	const size_t	 epoch_strlen = 10;
+	char		*rec_nvme;
+	char		*rec_scm;
 	char		*val[nakeys];
 	daos_size_t	 val_size[nakeys];
 	char		*rec_verify;
@@ -1837,6 +1842,14 @@ epoch_discard(void **state)
 	int		 rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	rec_nvme = malloc(IO_SIZE_NVME);
+	assert_non_null(rec_nvme);
+	dts_buf_render(rec_nvme, IO_SIZE_NVME);
+	rec_scm = malloc(IO_SIZE_SCM);
+	assert_non_null(rec_scm);
+	dts_buf_render(rec_scm, IO_SIZE_SCM);
+
 
 	/** Get a hold of an epoch. */
 	if (arg->myrank == 0) {
@@ -1857,24 +1870,34 @@ epoch_discard(void **state)
 		akey[i] = malloc(strlen(akey_fmt) + nakeys_strlen + 1);
 		assert_non_null(akey[i]);
 		sprintf(akey[i], akey_fmt, i);
-		rec[i] = malloc(strlen(val_fmt) + nakeys_strlen + epoch_strlen +
-				1);
+		rec[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
 		assert_non_null(rec[i]);
 		offset[i] = i * 20;
-		val[i] = calloc(64, 1);
+		val[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
 		assert_non_null(val[i]);
-		val_size[i] = 64;
+		if (i % 2 == 0)
+			val_size[i] = IO_SIZE_NVME;
+		else
+			val_size[i] = IO_SIZE_SCM;
 	}
 
 	/** Write LHE, LHE + 1, and LHE + 2. To same set of d-key and a-keys. */
 	for (e = epoch; e < epoch + 3; e++) {
 		print_message("writing to epoch "DF_U64"\n", e);
 		for (i = 0; i < nakeys; i++) {
-			sprintf(rec[i], val_fmt, i, e);
-			rec_size[i] = strlen(rec[i]);
+			if (i % 2 == 0) {
+				memcpy(rec[i], rec_nvme, IO_SIZE_NVME);
+				rec_size[i] = IO_SIZE_NVME;
+			} else {
+				memcpy(rec[i], rec_scm, IO_SIZE_SCM);
+				rec_size[i] = IO_SIZE_SCM;
+			}
+			rec[i][0] = i + '0'; /* akey */
+			rec[i][1] = e + '0'; /* epoch */
 			rx_nr[i] = 1;
-			print_message("  a-key[%d] '%s' val '%d %s'\n", i,
-				      akey[i], (int)rec_size[i], rec[i]);
+			print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n",
+				      i, akey[i], (int)rec_size[i], rec[i][0],
+				      rec[i][1]);
 		}
 		insert(dkey, nakeys, (const char **)akey, /*iod_size*/rec_size,
 			rx_nr, offset, (void **)rec, &e, &req);
@@ -1891,33 +1914,43 @@ epoch_discard(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** Check the three epochs. */
-	rec_verify = malloc(strlen(val_fmt) + nakeys_strlen + epoch_strlen + 1);
 	for (e = epoch; e < epoch + 3; e++) {
 		print_message("verifying epoch "DF_U64"\n", e);
 		lookup(dkey, nakeys, (const char **)akey, offset,
 		       rec_size, (void **)val, val_size, &e, &req,
 		       false);
 		for (i = 0; i < nakeys; i++) {
-			if (e == epoch + 1)	/* discarded */
-				sprintf(rec_verify, val_fmt, i, e - 1);
-			else			/* intact */
-				sprintf(rec_verify, val_fmt, i, e);
+			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
+					    IO_SIZE_SCM, 1);
+			assert_non_null(rec_verify);
+			if (i % 2 == 0)
+				memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
+			else
+				memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
+
+			if (e == epoch + 1) { /* discarded */
+				rec_verify[0] = i + '0'; /*akey*/
+				rec_verify[1] = e - 1 + '0'; /*previous epoch*/
+			} else { /* intact */
+				rec_verify[0] = i + '0';
+				rec_verify[1] = e + '0';
+			}
 			assert_int_equal(req.iod[i].iod_size,
-					 strlen(rec_verify));
-			print_message("  a-key[%d] '%s' val '%d %s'\n", i,
+					 strlen(rec_verify) + 1);
+			print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n", i,
 				      akey[i], (int)req.iod[i].iod_size,
-				      val[i]);
+				      val[i][0], val[i][1]);
 			assert_memory_equal(val[i], rec_verify,
 					    req.iod[i].iod_size);
+			free(rec_verify);
 		}
 	}
-	free(rec_verify);
 
 	/** Close and reopen the container and the obj. */
 	MPI_Barrier(MPI_COMM_WORLD);
 	close_reopen_coh_oh(arg, &req, oid);
 
-	/** Verify that the three epochs are empty. */
+	/** Verify that the three uncommitted epochs are discarded. */
 	for (e = epoch; e < epoch + 3; e++) {
 		daos_anchor_t	anchor;
 		int		found = 0;
@@ -1932,7 +1965,7 @@ epoch_discard(void **state)
 			rc = enumerate_dkey(e, &n, &kd, &anchor, buf,
 					    sizeof(buf), &req);
 			assert_int_equal(rc, 0);
-			print_message("  n %u\n", n);
+			print_message("\tdkeys:%u\n", n);
 			found += n;
 		}
 		assert_int_equal(found, 0);
@@ -1943,6 +1976,9 @@ epoch_discard(void **state)
 		free(akey[i]);
 		free(rec[i]);
 	}
+	free(rec_nvme);
+	free(rec_scm);
+
 	ioreq_fini(&req);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
