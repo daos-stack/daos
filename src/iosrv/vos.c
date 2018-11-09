@@ -995,8 +995,6 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 			tmp_key.iov_buf = ptr;
 			tmp_key.iov_buf_len = arg->kds[i].kd_key_len;
 			tmp_key.iov_len = arg->kds[i].kd_key_len;
-			if (eprs != NULL)
-				io.ui_dkey_eph = eprs[i].epr_lo;
 
 			if (io.ui_dkey.iov_len == 0) {
 				daos_iov_copy(&io.ui_dkey, &tmp_key);
@@ -1013,6 +1011,9 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 					daos_iov_copy(&io.ui_dkey, &tmp_key);
 				}
 			}
+
+			if (eprs != NULL)
+				io.ui_dkey_eph = eprs[i].epr_lo;
 
 			D_DEBUG(DB_REBUILD, "process dkey %d %s eph "DF_U64"\n",
 				(int)io.ui_dkey.iov_len,

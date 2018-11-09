@@ -108,9 +108,12 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 
 		rc = key_tree_prepare(obj, epoch, obj->obj_toh, VOS_BTR_DKEY,
 				      dkey, SUBTR_CREATE, NULL, &toh);
-		if (rc)
-			D_GOTO(out, rc); /* real failure */
-
+		if (rc) {
+			/* If the key is punched, then do nothing */
+			if (rc == -DER_NONEXIST)
+				rc = 0;
+			D_GOTO(out, rc);
+		}
 		rbund.rb_tclass	= VOS_BTR_AKEY;
 		for (i = 0; i < akey_nr; i++) {
 			kbund.kb_key = &akeys[i];
