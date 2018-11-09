@@ -43,8 +43,6 @@ struct vos_oi_iter {
 	daos_handle_t		oit_hdl;
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	oit_epr;
-	/** previous iterated OID */
-	daos_unit_oid_t		oit_id_prev;
 	/** Reference to the container */
 	struct vos_container	*oit_cont;
 };
@@ -451,42 +449,26 @@ oi_iter_match_probe(struct vos_iterator *iter)
 		obj = (struct vos_obj_df *)iov.iov_buf;
 
 		probe = 0;
-		if ((obj->vo_oi_attr & VOS_OI_PUNCHED) &&
-		    obj->vo_latest < epr->epr_lo) {
-			/* NB: object should be invisible in punched epoch */
-			/* epoch range of the returned object is lower than the
-			 * condition, we should call probe() for the epoch
-			 * range condition.
+		if (obj->vo_earliest > epr->epr_hi) {
+			/* NB: The object was created/updated only after the
+			 * range in the condition so the object and all
+			 * remaining incarnations of it can be skipped.
 			 */
-			probe = BTR_PROBE_GE;
+			probe = BTR_PROBE_GT;
+			hkey.oi_epc = DAOS_EPOCH_MAX;
+		} else if (obj->vo_oi_attr & VOS_OI_PUNCHED &&
+			   obj->vo_latest <= epr->epr_lo) {
+			/* NB: Object was punched before our range.
+			 * Probe again using our range condition to select
+			 * either the next object or a subsequent incarnation
+			 * of the current one.
+			 */
+			probe = BTR_PROBE_GT;
 			hkey.oi_epc = epr->epr_lo;
-
-		} else if ((obj->vo_oi_attr & VOS_OI_PUNCHED) &&
-			   obj->vo_latest > epr->epr_hi) {
-			/* punched epoch is higher than the upper boundary,
-			 * it might or might not match the condition.
-			 */
-			if (!daos_unit_obj_id_equal(obj->vo_id,
-						    oiter->oit_id_prev)) {
-				/* the first object incarnation which is
-				 * higher than the upper boundary, it should
-				 * be returned.
-				 */
-				oiter->oit_id_prev = obj->vo_id;
-			} else {
-				/* move to the next object...
-				 *
-				 * combination of DAOS_EPOCH_MAX and
-				 * BTR_PROBE_GT will allow us to find the
-				 * next object.
-				 */
-				probe = BTR_PROBE_GT;
-				hkey.oi_epc = DAOS_EPOCH_MAX;
-			}
-		}
-
-		if (!probe) /* matches the condition */
+		} else {
+			/* Matches the condition. */
 			break;
+		}
 
 		hkey.oi_oid = obj->vo_id;
 		daos_iov_set(&iov, &hkey, sizeof(hkey));
