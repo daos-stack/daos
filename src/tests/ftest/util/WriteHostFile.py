@@ -26,7 +26,7 @@ import os
 import sys
 import random
 
-def WriteHostFile(hostlist, path='/tmp'):
+def WriteHostFile(hostlist, path='/tmp', slots=1):
     """ write out a hostfile suitable for orterun """
 
     unique = random.randint(1,100000)
@@ -40,7 +40,7 @@ def WriteHostFile(hostlist, path='/tmp'):
     f = open(hostfile, 'w')
 
     for host in hostlist:
-        f.write("{0} slots=1\n".format(host))
+        f.write("{0} slots={1}\n".format(host, slots))
         #f.write("{0}\n".format(host))
 
     f.close()
