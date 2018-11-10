@@ -224,6 +224,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 			ent->ie_epoch = rbund.rb_krec->kr_latest;
 		else
 			ent->ie_epoch = DAOS_EPOCH_MAX;
+		ent->ie_earliest = rbund.rb_krec->kr_earliest;
 	}
 	return rc;
 }
@@ -254,27 +255,17 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 	}
 
 	probe = 0;
-	if (ent->ie_epoch <= epr->epr_lo) {
+	if (ent->ie_earliest > epr->epr_hi) {
+		/* The key was created after our range.
+		 * GT + EPOCH_MAX will probe next key.
+		 */
+		ent->ie_epoch = DAOS_EPOCH_MAX;
+		probe = BTR_PROBE_GT;
+	} else if (ent->ie_epoch <= epr->epr_lo) {
+		/* Key is punched.   Probe to next match */
 		probe = BTR_PROBE_GT;
 		ent->ie_epoch = epr->epr_lo;
 
-	} else if (ent->ie_epoch > epr->epr_hi) {
-		daos_key_t	*key = &ent->ie_key;
-		uint64_t	 hkey[2];
-
-		hkey[0] = d_hash_murmur64(key->iov_buf, key->iov_len,
-					  VOS_BTR_MUR_SEED);
-		hkey[1] = d_hash_string_u32(key->iov_buf, key->iov_len);
-		if (hkey[0] != oiter->it_hkey_prev[0] ||
-		    hkey[1] != oiter->it_hkey_prev[1]) {
-			/* previous key is not the same key */
-			oiter->it_hkey_prev[0] = hkey[0];
-			oiter->it_hkey_prev[1] = hkey[1];
-		} else {
-			/* GT + EPOCH_MAX will effectively probe the next key */
-			ent->ie_epoch = DAOS_EPOCH_MAX;
-			probe = BTR_PROBE_GT;
-		}
 	}
 
 	if (probe != 0) {

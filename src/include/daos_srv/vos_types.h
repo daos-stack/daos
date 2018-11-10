@@ -151,6 +151,8 @@ typedef struct {
 typedef struct {
 	/** Returned epoch. It is ignored for container iteration. */
 	daos_epoch_t		ie_epoch;
+	/** Returned earliest update epoch for a key */
+	daos_epoch_t		ie_earliest;
 	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;

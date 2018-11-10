@@ -888,9 +888,6 @@ io_iter_test_with_anchor(void **state)
 {
 	struct io_test_args	*arg = *state;
 
-	if (arg->ofeat & (DAOS_OF_DKEY_UINT64 | DAOS_OF_DKEY_LEXICAL))
-		skip(); /* anchor not supported with direct key */
-
 	arg->ta_flags = TF_IT_ANCHOR | TF_REC_EXT;
 	arg->cookie_flag = false;
 	io_iter_test_base(arg);
@@ -2014,10 +2011,6 @@ oid_iter_test(void **state)
 static void
 oid_iter_test_with_anchor(void **state)
 {
-	struct io_test_args	*arg = *state;
-	if (arg->ofeat & (DAOS_OF_DKEY_UINT64 | DAOS_OF_DKEY_LEXICAL))
-		skip(); /* anchor not supported with direct key */
-
 	oid_iter_test_base(state, TF_IT_ANCHOR);
 }
 
