@@ -212,11 +212,19 @@ grp_priv_get_failed_ranks(struct crt_grp_priv *priv)
 static inline d_rank_t
 grp_priv_get_primary_rank(struct crt_grp_priv *priv, d_rank_t rank)
 {
-	/* TODO: Secondary groups not supported for now */
-	if (CRT_PMIX_ENABLED())
-		return priv->gp_membs.cgm_list->rl_ranks[rank];
+	if (priv->gp_primary)
+		return rank;
 
-	return rank;
+	if (CRT_PMIX_ENABLED()) {
+		D_ASSERT(rank < priv->gp_membs.cgm_list->rl_nr);
+
+		return priv->gp_membs.cgm_list->rl_ranks[rank];
+	}
+
+	D_ASSERT(rank < priv->gp_membs.cgm_linear_list->rl_nr);
+
+	/* NO PMIX, secondary group */
+	return priv->gp_membs.cgm_linear_list->rl_ranks[rank];
 }
 
 /*
@@ -233,7 +241,14 @@ grp_priv_set_membs(struct crt_grp_priv *priv, d_rank_list_t *list)
 		return d_rank_list_dup_sort_uniq(&priv->gp_membs.cgm_list,
 						list);
 
-	/* This case should be called with list = NULL */
+	/* PMIX disabled case */
+	if (!priv->gp_primary) {
+		/* For secondary groups we populate linear list */
+		return d_rank_list_dup_sort_uniq(&priv->gp_membs.cgm_linear_list,
+						list);
+	}
+
+	/* This case should be called with list == NULL */
 	D_ASSERT(list == NULL);
 
 	return 0;
@@ -292,19 +307,24 @@ grp_priv_fini_failed_ranks(struct crt_grp_priv *priv)
 static inline void
 grp_priv_fini_membs(struct crt_grp_priv *priv)
 {
-	struct free_index	*index, *next;
+	struct free_index	*index;
 
-	d_rank_list_free(priv->gp_membs.cgm_list);
-	d_rank_list_free(priv->gp_membs.cgm_linear_list);
+	if (priv->gp_membs.cgm_list != NULL)
+		d_rank_list_free(priv->gp_membs.cgm_list);
+
+	if (priv->gp_membs.cgm_linear_list != NULL)
+		d_rank_list_free(priv->gp_membs.cgm_linear_list);
 
 	if (CRT_PMIX_ENABLED())
 		return;
 
-	/* With PMIX disabled free index list needs to be freed */
-	d_list_for_each_entry_safe(index, next,
-				&priv->gp_membs.cgm_free_indices, fi_link) {
+	/* Secondary groups have no free indices list */
+	if (!priv->gp_primary)
+		return;
 
-		d_list_del(&index->fi_link);
+	/* With PMIX disabled free index list needs to be freed */
+	while ((index = d_list_pop_entry(&priv->gp_membs.cgm_free_indices,
+				struct free_index, fi_link)) != NULL) {
 		D_FREE(index);
 	}
 }

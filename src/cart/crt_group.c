@@ -764,6 +764,10 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 		D_GOTO(out, rc);
 	}
 
+	if (membs != NULL) {
+		grp_priv->gp_size = membs->rl_nr;
+	}
+
 	grp_priv->gp_status = CRT_GRP_CREATING;
 	grp_priv->gp_priv = arg;
 
@@ -919,7 +923,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 	crt_grp_del_locked(grp_priv);
 	D_RWLOCK_UNLOCK(&crt_grp_list_rwlock);
 
-	/* destroy the grp_priv */
+	/* destroy the members */
 	grp_priv_fini_membs(grp_priv);
 
 	if (grp_priv->gp_psr_phy_addr != NULL)
@@ -990,6 +994,7 @@ crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 	grp_priv->gp_size = membs->rl_nr;
 	rc = d_idx_in_rank_list(membs, pri_rank,
 				&grp_priv->gp_self);
+
 	if (rc != 0) {
 		D_ERROR("d_idx_in_rank_list(rank %d, group %s) failed, "
 			"rc: %d.\n", pri_rank, gc_in->gc_grp_id, rc);
@@ -1001,6 +1006,7 @@ out:
 	gc_out->gc_rank = pri_rank;
 	gc_out->gc_rc = rc;
 	rc = crt_reply_send(rpc_req);
+
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
 			rc, rpc_req->cr_opc);
@@ -1115,7 +1121,7 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 	struct crt_grp_priv		*grp_priv = NULL;
 	bool				 gc_req_sent = false;
 	struct crt_grp_priv		*default_grp_priv = NULL;
-	d_rank_t			 myrank;
+	d_rank_t			 myrank, rank;
 	uint32_t			 grp_size;
 	crt_rpc_t			*gc_corpc;
 	struct crt_grp_create_in	*gc_in;
@@ -1123,8 +1129,9 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 	d_rank_list_t			*default_gp_membs;
 	d_rank_list_t			*membs;
 	bool				 in_grp = false;
-	int				 i;
+	int				 i, j;
 	int				 rc = 0;
+	bool				 found;
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
@@ -1147,18 +1154,44 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 	default_grp_priv = crt_grp_pub2priv(NULL);
 	myrank = default_grp_priv->gp_self;
 	grp_size = default_grp_priv->gp_size;
+	default_gp_membs = grp_priv_get_membs(default_grp_priv);
+
+	if (default_gp_membs == NULL) {
+		D_ERROR("Primary group is empty\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	for (i = 0; i < member_ranks->rl_nr; i++) {
-		if (member_ranks->rl_ranks[i] >= grp_size) {
-			D_ERROR("invalid arg, member_ranks[%d]: %d exceed "
-				"primary group size %d.\n",
-				i, member_ranks->rl_ranks[i], grp_size);
-			D_GOTO(out, rc = -DER_INVAL);
+		rank = member_ranks->rl_ranks[i];
+
+		if (CRT_PMIX_ENABLED()) {
+			if (rank >= grp_size) {
+				D_ERROR("invalid arg, member_ranks[%d]: %d "
+					"exceed primary group size %d.\n",
+					i, rank, grp_size);
+				D_GOTO(out, rc = -DER_INVAL);
+			}
+		} else {
+			found = false;
+			for (j = 0; j < default_gp_membs->rl_nr; j++) {
+				if (default_gp_membs->rl_ranks[j] == rank) {
+					found = true;
+					break;
+				}
+			}
+
+			if (!found) {
+				D_ERROR("Rank %d not part of primary group\n",
+					rank);
+				D_GOTO(out, rc = -DER_INVAL);
+			}
 		}
+
 		if (member_ranks->rl_ranks[i] == myrank) {
 			in_grp = true;
 		}
 	}
+
 	if (in_grp == false) {
 		D_ERROR("myrank %d not in member_ranks, cannot create group.\n",
 			myrank);
@@ -1186,12 +1219,12 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 	 * list contains all live ranks minus non subgroup members so that the
 	 * RPC is only sent to subgroup members.
 	 */
-	default_gp_membs = grp_priv_get_membs(default_grp_priv);
 	rc = d_rank_list_dup(&excluded_ranks, default_gp_membs);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup() failed, rc %d\n", rc);
 		D_GOTO(out, rc);
 	}
+
 	d_rank_list_filter(member_ranks, excluded_ranks, true /* exlude */);
 	rc = crt_corpc_req_create(crt_ctx, NULL, excluded_ranks,
 			     CRT_OPC_GRP_CREATE, NULL, NULL, 0,
@@ -1568,7 +1601,6 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 {
 	struct crt_grp_priv	*grp_priv;
 	int			 rc = 0;
-	d_rank_list_t		*membs;
 
 	if (!crt_initialized()) {
 		D_ERROR("CaRT not initialized yet.\n");
@@ -1602,9 +1634,7 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 		return -DER_OOG;
 	}
 
-	membs = grp_priv_get_membs(grp_priv);
-
-	*rank_out = membs->rl_ranks[rank_in];
+	*rank_out = grp_priv_get_primary_rank(grp_priv, rank_in);
 
 	return rc;
 }

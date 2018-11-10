@@ -45,8 +45,10 @@
 #include <assert.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <semaphore.h>
 #include <gurt/common.h>
 #include <cart/api.h>
+
 
 struct test_options {
 	int		self_rank;
@@ -657,6 +659,7 @@ struct crt_corpc_ops corpc_test_ping_ops = {
 };
 
 
+
 static void *
 progress_function(void *data)
 {
@@ -669,6 +672,59 @@ progress_function(void *data)
 	crt_context_destroy(*p_ctx, 1);
 
 	return NULL;
+}
+
+static crt_group_t *secondary_grp;
+
+static int
+grp_create_cb(crt_group_t *grp, void *priv, int status)
+{
+	sem_t *token = (sem_t *)priv;
+
+	DBG_PRINT("group create finished with status=%d\n", status);
+
+	if (status != 0) {
+		D_ERROR("Failed to create subgroup\n");
+		assert(0);
+	}
+
+	secondary_grp = grp;
+	sem_post(token);
+
+	return 0;
+}
+
+static int
+grp_destroy_cb(void *arg, int status)
+{
+	sem_t *token = (sem_t *)arg;
+
+	DBG_PRINT("group destroy finished with status=%d\n", status);
+
+	if (status != 0) {
+		D_ERROR("Failed to destroy subgroup\n");
+		assert(0);
+	}
+
+	secondary_grp = NULL;
+	sem_post(token);
+
+	return 0;
+}
+
+static void
+sem_timed_wait(sem_t *sem, int sec, int line_number)
+{
+	struct timespec			deadline;
+	int				rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &deadline);
+	D_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
+		  line_number, rc);
+	deadline.tv_sec += sec;
+	rc = sem_timedwait(sem, &deadline);
+	D_ASSERTF(rc == 0, "sem_timedwait() failed at line %d rc: %d\n",
+		  line_number, rc);
 }
 
 int main(int argc, char **argv)
@@ -687,6 +743,7 @@ int main(int argc, char **argv)
 	 */
 	char		*default_uri_path = "/tmp/no_pmix_rank";
 	char		*uri_file_path;
+	sem_t		token_to_proceed;
 
 	if (argc < 2) {
 		show_usage();
@@ -701,6 +758,12 @@ int main(int argc, char **argv)
 	}
 
 	DBG_PRINT("Self rank = %d\n", opts.self_rank);
+
+	rc = sem_init(&token_to_proceed, 0, 0);
+	if (rc != 0) {
+		D_ERROR("sem_init() failed; rc=%d\n", rc);
+		assert(0);
+	}
 
 	rc = crt_init(0, CRT_FLAG_BIT_SERVER |
 		CRT_FLAG_BIT_PMIX_DISABLE | CRT_FLAG_BIT_LM_DISABLE);
@@ -803,11 +866,13 @@ int main(int argc, char **argv)
 
 	uri_file_path = default_uri_path;
 	if (opts.is_master) {
-		char tmp_name[256];
-		char tmp_data[256];
-		struct stat file_stat;
-		int fd;
-		int retries = 10;
+		char		tmp_name[256];
+		char		tmp_data[256];
+		struct stat	file_stat;
+		d_rank_t	pri_rank;
+		int		fd;
+		int		retries = 10;
+		crt_group_t	*tmp_grp;
 
 		if (opts.uri_file_prefix != NULL)
 			uri_file_path = opts.uri_file_prefix;
@@ -886,8 +951,7 @@ int main(int argc, char **argv)
 			}
 		}
 
-		D_FREE(rank_list->rl_ranks);
-		D_FREE(rank_list);
+		/* Test subgroup */
 
 		/* Send group info to all ranks */
 		for (i = 0; i < opts.group_ranks.rl_nr; i++) {
@@ -905,7 +969,75 @@ int main(int argc, char **argv)
 
 		DBG_PRINT("---------------------------------\n");
 
+		/* Create subgroup with 1 less member */
+		DBG_PRINT("---------------------------------\n");
+		DBG_PRINT("Attempting to create subgroup\n");
+		rank_list->rl_nr--;
+		rc = crt_group_create("my_grp", rank_list, true,
+					grp_create_cb, &token_to_proceed);
+		if (rc != 0) {
+			DBG_PRINT("crt_group_create() failed; rc=%d\n", rc);
+			assert(0);
+		}
+		sem_timed_wait(&token_to_proceed, 5, __LINE__);
 
+		DBG_PRINT("Subgroup created successfully\n");
+		DBG_PRINT("---------------------------------\n");
+		DBG_PRINT("Attempting to lookup subgroup\n");
+
+		tmp_grp = crt_group_lookup("my_grp");
+		if (tmp_grp == NULL) {
+			D_ERROR("Failed to lookup subgroup\n");
+			assert(0);
+		}
+
+		if (tmp_grp != secondary_grp) {
+			D_ERROR("Wrong subgroup returned\n");
+			assert(0);
+		}
+		DBG_PRINT("Subgroup looked up successfully\n");
+
+		DBG_PRINT("---------------------------------\n");
+		DBG_PRINT("checking crt_group_rank_s2p()\n");
+		for (i = 0; i < rank_list->rl_nr; i++) {
+			rc = crt_group_rank_s2p(secondary_grp, i, &pri_rank);
+			if (rc != 0) {
+				D_ERROR("s2p failed; rc=%d\n", rc);
+				assert(0);
+			}
+
+			if (pri_rank != opts.group_ranks.rl_ranks[i]) {
+				D_ERROR("rank mismatch. expected %d got %d\n",
+					opts.group_ranks.rl_ranks[i], pri_rank);
+				assert(0);
+			}
+
+
+		}
+		DBG_PRINT("crt_group_rank_s2p() passed on %d ranks\n",
+			rank_list->rl_nr);
+
+		/* TODO: Test P2P and CORPCs */
+
+		/* TODO: Test removal of primary rank with secondary grp */
+		DBG_PRINT("---------------------------------\n");
+		DBG_PRINT("Testing crt_group_destroy()\n");
+		rc = crt_group_destroy(secondary_grp, grp_destroy_cb,
+				&token_to_proceed);
+
+		sem_timed_wait(&token_to_proceed, 5, __LINE__);
+
+		if (rc != 0) {
+			D_ERROR("crt_group_destroy() failed; rc=%d\n", rc);
+			assert(0);
+		}
+
+		DBG_PRINT("crt_group_destroy() PASSED\n");
+
+		D_FREE(rank_list->rl_ranks);
+		D_FREE(rank_list);
+
+		DBG_PRINT("---------------------------------\n");
 		/* Instruct rank[0] to ping all ranks */
 		DBG_PRINT("Issuing indirect ping\n");
 		for (x = 1; x < opts.group_ranks.rl_nr; x++) {
@@ -980,6 +1112,12 @@ int main(int argc, char **argv)
 	rc = crt_finalize();
 	if (rc != 0) {
 		D_ERROR("crt_finalize() failed with rc=%d\n", rc);
+		assert(0);
+	}
+
+	rc = sem_destroy(&token_to_proceed);
+	if (rc != 0) {
+		D_ERROR("sem_destroy() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
