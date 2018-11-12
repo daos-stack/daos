@@ -60,7 +60,8 @@ def printhelp():
     """
     Print a list of test categories.
     """
-    print("Tests are launched by specifying a category.  One of:\n")
+    print("\n")
+    print("Tests are launched by specifying a category.  For example:\n")
     print("\tbadconnect --run pool connect tests that pass NULL ptrs, etc.  ")
     print("\tbadevict --run pool client evict tests that pass "
           "NULL ptrs, etc.  ")
@@ -77,15 +78,22 @@ def printhelp():
     print("\tpoolinfo --run all pool info retrieval related tests")
     print("\tquick --run tests that complete quickly, with minimal resources ")
     print("\n")
+    print("You can also specify the sparse flag -s to limit output to pass/fail.")
+    print("Example command: launch.py -s pool")
+    print("\n")
     exit()
 
 if __name__ == "__main__":
 
-    # the caller supplies a test category or -h for help
+    # not perfect param checking but good enough for now
+    sparse = False
     if len(sys.argv) == 2:
         if sys.argv[1] == '-h' or sys.argv[1] == '--help':
             printhelp()
         test_request = sys.argv[1]
+    elif len(sys.argv) == 3 and sys.argv[1] == '-s':
+        sparse = True
+        test_request = sys.argv[2]
     else:
         printhelp()
 
@@ -111,7 +119,11 @@ if __name__ == "__main__":
         printhelp()
 
     avocado = ' avocado run'
-    output_options = ' --show-job-log --html-job-result on'
+    if sparse:
+        output_options = ' --html-job-result on'
+    else:
+        output_options = ' --show-job-log --html-job-result on'
+
     ignore_errors = ' --ignore-missing-references on'
     category = ' --filter-by-tags=' + test_request
 
