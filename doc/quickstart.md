@@ -65,9 +65,14 @@ On Ubuntu and Debian:
     apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
     apt-get install -y curl doxygen pandoc flex patch nasm yasm
     apt-get install -y ninja-build meson libyaml-dev
-    # Additionally required SPDK packages
+    # Required SPDK packages for managing NVMe SSDs
     apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
     apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen libnuma-dev
+    # Required IpmCtl packages for managing SCM Modules
+    add-apt-repository ppa:jhli/libsafec
+    add-apt-repository ppa:jhli/ipmctl
+    apt-get update
+    apt-get install -y libsafec libipmctl-dev
 
 Moreover, please make sure all the auto tools listed below are at the appropriate versions.
 
