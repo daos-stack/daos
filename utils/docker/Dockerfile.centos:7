@@ -24,11 +24,14 @@ RUN yum install -y doxygen pandoc flex patch nasm yasm ninja-build meson
 RUN yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
 RUN yum install -y python clang-analyzer sg3_utils libiscsi-devel
 RUN yum install -y libibverbs-devel numactl-devel doxygen mscgen graphviz
-RUN yum install -y libyaml-devel
+RUN yum install -y libyaml-devel yum-plugin-copr
+RUN yum copr -y enable jhli/ipmctl
+RUN yum copr -y enable jhli/safeclib
+RUN yum install -y libsafec libipmctl-devel
 
 # Dependencies
 # Packages for NVML, PMIx, hwloc and OpenMPI exist in CentOS, but are unfortunately
-# outdated. The DAOS build system will rebuilt those packages.
+# outdated. The DAOS build system will rebuild those packages.
 
 # Add DAOS user
 ENV USER daos
