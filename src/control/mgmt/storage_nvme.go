@@ -31,7 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/utils/handlers"
 	"github.com/daos-stack/daos/src/control/utils/log"
 
-	"github.com/daos-stack/daos/src/control/go-spdk/spdk"
+	"github.com/daos-stack/go-spdk/spdk"
 
 	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 )

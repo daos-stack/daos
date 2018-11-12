@@ -45,7 +45,7 @@ def scons():
         except ImportError:
             print ('Using traditional build')
 
-    env = Environment(TOOLS=['default', 'go'])
+    env = Environment(TOOLS=['default'])
 
     opts_file = os.path.join(Dir('#').abspath, 'daos_m.conf')
     opts = Variables(opts_file)

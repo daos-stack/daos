@@ -54,7 +54,6 @@ func mockModule() DeviceDiscovery {
 	// ID:      int32(12345),
 	// Model:   "ABC",
 	// Serial:  "123ABC",
-	// PCIAddr: "1:2:3.0",
 	// FWRev:   fwrev,
 	// }
 }

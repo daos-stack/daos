@@ -54,9 +54,16 @@
   name = "gopkg.in/yaml.v2"
   version = "2.2.1"
 
-# go-ipmctl: bindings to interact with libipmctl.so
+# go-ipmctl: bindings to interact with libipmctl.so to manage SCM modules
 # maintained within daos-stack
 # pin with commit hash rather than just tip of master until tags exist.
 [[constraint]]
   name = "github.com/daos-stack/go-ipmctl"
   revision = "cb00fdf11001077f5451661448d44e900dfa8489"
+
+# go-spdk: bindings to interact with libspdk.so to manage NVMe SSDs
+# maintained within daos-stack
+# pin with commit hash rather than just tip of master until tags exist.
+[[constraint]]
+  name = "github.com/daos-stack/go-spdk"
+  revision = "af9a447000e00716eeb0d7595dad1d768a700a16"

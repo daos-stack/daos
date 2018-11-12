@@ -269,6 +269,10 @@ func setupShell() *ishell.Shell {
 				return
 			}
 
+			if len(mms) == 0 {
+				c.Println("No SCM modules installed!")
+				return
+			}
 			for _, mm := range mms {
 				c.Printf(
 					"\t- %+v\n", mm)
