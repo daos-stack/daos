@@ -707,6 +707,43 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
 
 /**
+ * Bind bulk handle to local context, to associate the origin address of the
+ * local context to the bulk handle.
+ *
+ * It can be used to forward/share the bulk handle from one server to another
+ * server, in that case the origin address of the bulk handle can be serialized/
+ * de-serialized on-the-fly. The example usage:
+ * client sends a RPC request with a bulk handle embedded to server A,
+ * server A forward the client-side bulk handle to another server B.
+ * For that usage, client should call this API to bind the bulk handle with its
+ * local context before sending the RPC to server A. So when server B gets the
+ * de-serialized bulk handle forwarded by server A, the server B can know the
+ * client-side origin address to do the bulk transferring.
+ *
+ * Users should note that binding a bulk handle adds an extra overhead on
+ * serialization, therefore it is recommended to use it with care.
+ * When binding a bulk handle on origin, crt_bulk_bind_transfer() should be
+ * used since origin address information is embedded in the handle.
+ *
+ * \param[in] bulk_hdl		created bulk handle
+ * \param[in] crt_ctx		CRT transport context
+ *
+ * \return			DER_SUCCESS on success, negative value if error
+ */
+int
+crt_bulk_bind(crt_bulk_t bulk_hdl, crt_context_t crt_ctx);
+
+/**
+ * Add reference of the bulk handle.
+ *
+ * \param[in] bulk_hdl		bulk handle
+ *
+ * \return			DER_SUCCESS on success, negative value if error
+ */
+int
+crt_bulk_addref(crt_bulk_t bulk_hdl);
+
+/**
  * Access local bulk handle to retrieve the sgl (segment list) associated
  * with it.
  *
@@ -735,6 +772,11 @@ int
 crt_bulk_free(crt_bulk_t bulk_hdl);
 
 /**
+ * Decrease reference of the bulk handle.
+ */
+#define crt_bulk_decref(bulk_hdl)	crt_bulk_free(bulk_hdl)
+
+/**
  * Start a bulk transferring (inside an RPC handler).
  *
  * \param[in] bulk_desc        pointer to bulk transferring descriptor
@@ -751,6 +793,28 @@ crt_bulk_free(crt_bulk_t bulk_hdl);
 int
 crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 		  void *arg, crt_bulk_opid_t *opid);
+
+/**
+ * Start a bulk transferring by using the remote bulk handle bound address
+ * rather than the RPC's origin address. It can be used for the case that the
+ * origin address of bulk handle is different with RPC request, for example
+ * DAOS' bulk handle forwarding for server-side I/O dispatching.
+ *
+ * \param[in] bulk_desc        pointer to bulk transferring descriptor
+ *                             it is user's responsibility to allocate and free
+ *                             it. Can free it after the calling returns.
+ * \param[in] complete_cb      completion callback
+ * \param[in] arg              arguments for the \a complete_cb
+ * \param[out] opid            returned bulk opid which can be used to abort
+ *                             the bulk. It is optional, can pass in NULL if
+ *                             don't need it.
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc,
+		       crt_bulk_cb_t complete_cb, void *arg,
+		       crt_bulk_opid_t *opid);
 
 /**
  * Get length (number of bytes) of data abstracted by bulk handle.

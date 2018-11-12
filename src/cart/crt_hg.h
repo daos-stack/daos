@@ -167,6 +167,27 @@ int crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
 int crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data);
 int crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data);
 
+static inline int
+crt_hgret_2_der(int hg_ret)
+{
+	switch (hg_ret) {
+	case HG_SUCCESS:
+		return 0;
+	case HG_TIMEOUT:
+		return -DER_TIMEDOUT;
+	case HG_INVALID_PARAM:
+		return -DER_INVAL;
+	case HG_SIZE_ERROR:
+		return -DER_OVERFLOW;
+	case HG_NOMEM_ERROR:
+		return -DER_NOMEM;
+	case HG_CANCELED:
+		return -DER_CANCELED;
+	default:
+		return -DER_HG;
+	};
+}
+
 /* some simple helper functions */
 typedef hg_rpc_cb_t crt_hg_rpc_cb_t;
 static inline int
@@ -183,7 +204,7 @@ crt_hg_reg(hg_class_t *hg_class, hg_id_t rpcid, crt_proc_cb_t in_proc_cb,
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Register(rpcid: %#lx) failed, hg_ret: %d.\n",
 			rpcid, hg_ret);
-		rc = -DER_HG;
+		rc = crt_hgret_2_der(hg_ret);
 	}
 	return rc;
 }
@@ -192,15 +213,24 @@ static inline int
 crt_hg_bulk_free(crt_bulk_t bulk_hdl)
 {
 	hg_return_t	hg_ret;
-	int		rc = 0;
 
 	hg_ret = HG_Bulk_free(bulk_hdl);
-	if (hg_ret != HG_SUCCESS) {
+	if (hg_ret != HG_SUCCESS)
 		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
-		rc = -DER_HG;
-	}
 
-	return rc;
+	return crt_hgret_2_der(hg_ret);
+}
+
+static inline int
+crt_hg_bulk_addref(crt_bulk_t bulk_hdl)
+{
+	hg_return_t	hg_ret;
+
+	hg_ret = HG_Bulk_ref_incr(bulk_hdl);
+	if (hg_ret != HG_SUCCESS)
+		D_ERROR("HG_Bulk_ref_incr failed, hg_ret: %d.\n", hg_ret);
+
+	return crt_hgret_2_der(hg_ret);
 }
 
 static inline int
@@ -238,35 +268,15 @@ crt_hg_bulk_get_sgnum(crt_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
 
 int crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		       crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
+int crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
 int crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl);
 int crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc,
-			 crt_bulk_cb_t complete_cb,
-			 void *arg, crt_bulk_opid_t *opid);
+			 crt_bulk_cb_t complete_cb, void *arg,
+			 crt_bulk_opid_t *opid, bool bind);
 static inline int
 crt_hg_bulk_cancel(crt_bulk_opid_t opid)
 {
 	return HG_Bulk_cancel(opid);
-}
-
-static inline int
-crt_hgret_2_der(int hg_ret)
-{
-	switch (hg_ret) {
-	case HG_SUCCESS:
-		return 0;
-	case HG_TIMEOUT:
-		return -DER_TIMEDOUT;
-	case HG_INVALID_PARAM:
-		return -DER_INVAL;
-	case HG_SIZE_ERROR:
-		return -DER_OVERFLOW;
-	case HG_NOMEM_ERROR:
-		return -DER_NOMEM;
-	case HG_CANCELED:
-		return -DER_CANCELED;
-	default:
-		return -DER_HG;
-	};
 }
 
 #endif /* __CRT_MERCURY_H__ */

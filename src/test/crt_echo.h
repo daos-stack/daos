@@ -128,7 +128,11 @@ CRT_RPC_DEFINE(crt_echo_noop, CRT_ISEQ_ECHO_NOOP, CRT_OSEQ_ECHO_NOOP)
 #define CRT_ISEQ_ECHO_BULK	/* input fields */		 \
 	((d_string_t)		(bulk_intro_msg)	CRT_VAR) \
 	((d_string_t)		(bulk_md5_ptr)		CRT_VAR) \
-	((crt_bulk_t)		(remote_bulk_hdl)	CRT_VAR)
+	((crt_bulk_t)		(remote_bulk_hdl)	CRT_VAR) \
+	((int32_t)		(bulk_forward)		CRT_VAR) \
+	((int32_t)		(bulk_bind)		CRT_VAR) \
+	((int32_t)		(bulk_forward_rank)	CRT_VAR) \
+	((int32_t)		(completed_cnt)		CRT_VAR)
 
 #define CRT_OSEQ_ECHO_BULK	/* output fields */		 \
 	((d_string_t)		(echo_msg)		CRT_VAR) \

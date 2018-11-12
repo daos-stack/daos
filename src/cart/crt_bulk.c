@@ -141,13 +141,50 @@ out:
 }
 
 int
-crt_bulk_free(crt_bulk_t bulk_hdl)
+crt_bulk_bind(crt_bulk_t bulk_hdl, crt_context_t crt_ctx)
 {
-	int	rc = 0;
+	struct crt_context	*ctx = crt_ctx;
+	int			rc = 0;
+
+	if (ctx == CRT_CONTEXT_NULL || bulk_hdl == CRT_BULK_NULL) {
+		D_ERROR("invalid parameter, NULL crt_ctx or bulk_hdl.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = crt_hg_bulk_bind(bulk_hdl, &ctx->cc_hg_ctx);
+	if (rc != 0)
+		D_ERROR("crt_hg_bulk_bind failed, rc: %d.\n", rc);
+
+out:
+	return rc;
+}
+
+int
+crt_bulk_addref(crt_bulk_t bulk_hdl)
+{
+	int	rc;
 
 	if (bulk_hdl == CRT_BULK_NULL) {
-		D_DEBUG(DB_TRACE, "crt_bulk_free with NULL bulk_hdl.\n");
-		D_GOTO(out, rc);
+		D_ERROR("crt_bulk_addref with NULL bulk_hdl.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = crt_hg_bulk_addref(bulk_hdl);
+	if (rc != 0)
+		D_ERROR("crt_hg_bulk_addref failed, rc: %d.\n", rc);
+
+out:
+	return rc;
+}
+
+int
+crt_bulk_free(crt_bulk_t bulk_hdl)
+{
+	int	rc;
+
+	if (bulk_hdl == CRT_BULK_NULL) {
+		D_ERROR("crt_bulk_free with NULL bulk_hdl.\n");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_hg_bulk_free(bulk_hdl);
@@ -169,7 +206,27 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid);
+	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid, false);
+	if (rc != 0)
+		D_ERROR("crt_hg_bulk_transfer failed, rc: %d.\n", rc);
+
+out:
+	return rc;
+}
+
+int
+crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc,
+		       crt_bulk_cb_t complete_cb, void *arg,
+		       crt_bulk_opid_t *opid)
+{
+	int			rc = 0;
+
+	if (!crt_bulk_desc_valid(bulk_desc)) {
+		D_ERROR("invalid parameter of bulk_desc.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid, true);
 	if (rc != 0)
 		D_ERROR("crt_hg_bulk_transfer failed, rc: %d.\n", rc);
 

@@ -1522,6 +1522,18 @@ out:
 }
 
 int
+crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx)
+{
+	hg_return_t	  hg_ret = HG_SUCCESS;
+
+	hg_ret = HG_Bulk_bind(bulk_hdl, hg_ctx->chc_hgctx);
+	if (hg_ret != HG_SUCCESS)
+		D_ERROR("HG_Bulk_bind failed, hg_ret %d.\n", hg_ret);
+
+	return crt_hgret_2_der(hg_ret);
+}
+
+int
 crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 {
 	unsigned int	  bulk_sgnum;
@@ -1659,7 +1671,7 @@ out:
 
 int
 crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
-		     void *arg, crt_bulk_opid_t *opid)
+		     void *arg, crt_bulk_opid_t *opid, bool bind)
 {
 	struct crt_context		*ctx;
 	struct crt_hg_context		*hg_ctx;
@@ -1696,14 +1708,29 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 		     HG_BULK_PUSH : HG_BULK_PULL;
 	rpc_priv = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv,
 				crp_pub);
-	hg_ret = HG_Bulk_transfer(hg_ctx->chc_bulkctx, crt_hg_bulk_transfer_cb,
-			bulk_cbinfo, hg_bulk_op, rpc_priv->crp_hg_addr,
-			bulk_desc->bd_remote_hdl, bulk_desc->bd_remote_off,
-			bulk_desc->bd_local_hdl, bulk_desc->bd_local_off,
-			bulk_desc->bd_len,
-			opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
+	if (bind)
+		hg_ret = HG_Bulk_bind_transfer(hg_ctx->chc_bulkctx,
+				crt_hg_bulk_transfer_cb, bulk_cbinfo,
+				hg_bulk_op, bulk_desc->bd_remote_hdl,
+				bulk_desc->bd_remote_off,
+				bulk_desc->bd_local_hdl,
+				bulk_desc->bd_local_off,
+				bulk_desc->bd_len,
+				opid != NULL ? (hg_op_id_t *)opid :
+				HG_OP_ID_IGNORE);
+	else
+		hg_ret = HG_Bulk_transfer(hg_ctx->chc_bulkctx,
+				crt_hg_bulk_transfer_cb, bulk_cbinfo,
+				hg_bulk_op, rpc_priv->crp_hg_addr,
+				bulk_desc->bd_remote_hdl,
+				bulk_desc->bd_remote_off,
+				bulk_desc->bd_local_hdl,
+				bulk_desc->bd_local_off,
+				bulk_desc->bd_len,
+				opid != NULL ? (hg_op_id_t *)opid :
+				HG_OP_ID_IGNORE);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_transfer failed, hg_ret: %d.\n", hg_ret);
+		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: %d.\n", hg_ret);
 		D_FREE_PTR(bulk_cbinfo);
 		D_FREE_PTR(bulk_desc_dup);
 		rc = crt_hgret_2_der(hg_ret);

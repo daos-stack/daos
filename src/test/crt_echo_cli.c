@@ -155,89 +155,21 @@ echo_client_send_checkin(d_rank_t src_rank, crt_group_t *dst_grp,
 	return rc;
 }
 
-static void run_client(void)
+static int
+echo_bulk_test(crt_group_t *grp, d_rank_t myrank, bool bulk_bind)
 {
-	crt_group_t			*pri_local_grp = NULL;
-	crt_group_t			*pri_srv_grp = NULL;
-	crt_group_t			*grp_tier1 = NULL;
-	crt_group_t			*grp_tier2 = NULL;
 	crt_endpoint_t			svr_ep = {0};
 	crt_rpc_t			*rpc_req = NULL;
 	d_sg_list_t			sgl, sgl_query;
 	d_iov_t				*iovs = NULL, iovs_query[2];
 	crt_bulk_t			bulk_hdl;
+	struct crt_echo_bulk_in		*e_bulk_req;
 	struct bulk_test_cli_cbinfo	*bulk_req_cbinfo;
 	char				*pchar;
-	d_rank_t			myrank;
-	uint32_t			grp_size_cli = 0;
-	uint32_t			grp_size_srv = 0;
-	struct crt_echo_checkin_in	*e_req;
-	struct crt_echo_bulk_in		*e_bulk_req;
-	int				rc = 0;
-	int				i, j;
+	int				i;
+	int				rc;
 
-	rc = crt_group_rank(NULL, &myrank);
-	D_ASSERT(rc == 0);
-	pri_local_grp = crt_group_lookup(NULL);
-	D_ASSERT(pri_local_grp != NULL);
-	pri_srv_grp = crt_group_lookup("non-existent-grp");
-	D_ASSERT(pri_srv_grp == NULL);
-
-	/* try until success to avoid intermittent failures under valgrind. */
-	do {
-		sleep(1);
-		rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &grp_tier1);
-	} while (rc != 0);
-	D_ASSERT(grp_tier1 != NULL);
-	pri_srv_grp = crt_group_lookup(CRT_DEFAULT_SRV_GRPID);
-	D_ASSERT(pri_srv_grp != NULL);
-
-	rc = crt_group_rank(pri_srv_grp, &myrank);
-	D_ASSERT(rc == -DER_OOG);
-	rc = crt_group_rank(pri_local_grp, &myrank);
-	D_ASSERT(rc == 0);
-	rc = crt_group_size(pri_local_grp, &grp_size_cli);
-	D_ASSERT(rc == 0 && grp_size_cli > 0);
-	rc = crt_group_size(pri_srv_grp, &grp_size_srv);
-	D_ASSERT(rc == 0 && grp_size_srv > 0);
-
-	printf("I'm rank %d in group %s(size %d), srv_group %s with size %d.\n",
-	       myrank, pri_local_grp->cg_grpid, grp_size_cli,
-	       pri_srv_grp->cg_grpid, grp_size_srv);
-
-	/*
-	 * ============= test-1 ============
-	 * send NOOP RPC which without any input or output parameter.
-	 */
-	svr_ep.ep_grp = NULL;
-	svr_ep.ep_rank = 0;
-	svr_ep.ep_tag = 0;
-	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_NOOP, &rpc_req);
-	D_ASSERT(rc == 0);
-	gecho.complete = 0;
-	rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
-	assert(rc == 0);
-	/* wait two minutes (in case of manually starting up clients) */
-	rc = client_wait(120, 1000, &gecho.complete);
-	assert(rc == 0);
-
-	/*
-	 * ============= test-2 ============
-	 * send checkin RPC to different contexts of server
-	 */
-	for (i = 0; i < grp_size_srv; i++) {
-		for (j = 0; j <= ECHO_EXTRA_CONTEXT_NUM; j++) {
-			rc = echo_client_send_checkin(myrank, grp_tier1, i, j);
-			assert(rc == 0);
-		}
-	}
-
-	/*
-	 * ============= test-3 ============
-	 * simple bulk transferring
-	 */
-	rpc_req = NULL;
-	svr_ep.ep_grp = grp_tier1;
+	svr_ep.ep_grp = grp;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_BULK_TEST,
@@ -301,14 +233,26 @@ static void run_client(void)
 
 	D_ALLOC(pchar, 256);
 	assert(pchar != NULL);
-	snprintf(pchar, 256, "simple bulk testing from client(rank %d)...\n",
-		 myrank);
 
 	e_bulk_req = crt_req_get(rpc_req);
 
 	e_bulk_req->bulk_intro_msg = pchar;
 	e_bulk_req->remote_bulk_hdl = bulk_hdl;
 	e_bulk_req->bulk_md5_ptr = md5_str;
+	if (bulk_bind) {
+		rc = crt_bulk_bind(bulk_hdl, gecho.crt_ctx);
+		assert(rc == 0);
+		e_bulk_req->bulk_forward = 1;
+		e_bulk_req->bulk_bind = 1;
+		e_bulk_req->bulk_forward_rank = 1;
+		snprintf(pchar, 256,
+			 "bulk forward testing from client(rank %d)...\n",
+			 myrank);
+	} else {
+		snprintf(pchar, 256,
+			 "simple bulk testing from client(rank %d)...\n",
+			 myrank);
+	}
 
 	printf("client(rank %d) sending bulk_test request, md5_str: %s.\n",
 	       myrank, md5_str);
@@ -332,13 +276,110 @@ static void run_client(void)
 	free(iovs);
 	D_FREE(pchar);
 
-	/* ============= test-4 ============ */
-	/* attach to 2nd tier and send checkin RPC */
+	return rc;
+}
+
+static void run_client(void)
+{
+	crt_group_t			*pri_local_grp = NULL;
+	crt_group_t			*pri_srv_grp = NULL;
+	crt_group_t			*grp_tier1 = NULL;
+	crt_group_t			*grp_tier2 = NULL;
+	crt_endpoint_t			svr_ep = {0};
+	crt_rpc_t			*rpc_req = NULL;
+	d_rank_t			myrank;
+	uint32_t			grp_size_cli = 0;
+	uint32_t			grp_size_srv = 0;
+	uint32_t			grp_size_tier2 = 0;
+	uint32_t			grp_size;
+	struct crt_echo_checkin_in	*e_req;
+	char				*pchar;
+	int				rc = 0;
+	int				i, j;
+
+	rc = crt_group_rank(NULL, &myrank);
+	D_ASSERT(rc == 0);
+	pri_local_grp = crt_group_lookup(NULL);
+	D_ASSERT(pri_local_grp != NULL);
+	pri_srv_grp = crt_group_lookup("non-existent-grp");
+	D_ASSERT(pri_srv_grp == NULL);
+
+	/* try until success to avoid intermittent failures under valgrind. */
+	do {
+		sleep(1);
+		rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &grp_tier1);
+	} while (rc != 0);
+	D_ASSERT(grp_tier1 != NULL);
+	pri_srv_grp = crt_group_lookup(CRT_DEFAULT_SRV_GRPID);
+	D_ASSERT(pri_srv_grp != NULL);
+
+	rc = crt_group_rank(pri_srv_grp, &myrank);
+	D_ASSERT(rc == -DER_OOG);
+	rc = crt_group_rank(pri_local_grp, &myrank);
+	D_ASSERT(rc == 0);
+	rc = crt_group_size(pri_local_grp, &grp_size_cli);
+	D_ASSERT(rc == 0 && grp_size_cli > 0);
+	rc = crt_group_size(pri_srv_grp, &grp_size_srv);
+	D_ASSERT(rc == 0 && grp_size_srv > 0);
+	grp_size = grp_size_srv;
+
+	printf("I'm rank %d in group %s(size %d), srv_group %s with size %d.\n",
+	       myrank, pri_local_grp->cg_grpid, grp_size_cli,
+	       pri_srv_grp->cg_grpid, grp_size_srv);
+
+	/*
+	 * ============= test-1 ============
+	 * send NOOP RPC which without any input or output parameter.
+	 */
+	svr_ep.ep_grp = NULL;
+	svr_ep.ep_rank = 0;
+	svr_ep.ep_tag = 0;
+	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_NOOP, &rpc_req);
+	D_ASSERT(rc == 0);
+	gecho.complete = 0;
+	rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
+	assert(rc == 0);
+	/* wait two minutes (in case of manually starting up clients) */
+	rc = client_wait(120, 1000, &gecho.complete);
+	assert(rc == 0);
+
+	/*
+	 * ============= test-2 ============
+	 * send checkin RPC to different contexts of server
+	 */
+	for (i = 0; i < grp_size_srv; i++) {
+		for (j = 0; j <= ECHO_EXTRA_CONTEXT_NUM; j++) {
+			rc = echo_client_send_checkin(myrank, grp_tier1, i, j);
+			assert(rc == 0);
+		}
+	}
+
+	/*
+	 * ============= test-3 ============
+	 * simple bulk transferring
+	 */
+	rc = echo_bulk_test(grp_tier1, myrank, false);
+	assert(rc == 0);
+
+	/*
+	 * ============= test-4 ============
+	 * test to forward client bulk handle from server A to server B
+	 */
+	if (grp_size_srv >= 2)
+		rc = echo_bulk_test(grp_tier1, myrank, true);
+	assert(rc == 0);
+
+	/*
+	 * ============= test-5 ============
+	 * attach to 2nd tier and send checkin RPC
+	 */
 	if (gecho.multi_tier_test == false)
 		goto send_shutdown;
 
 	rc = crt_group_attach(ECHO_2ND_TIER_GRPID, &grp_tier2);
 	assert(rc == 0 && grp_tier2 != NULL);
+	rc = crt_group_size(grp_tier2, &grp_size_tier2);
+	D_ASSERT(rc == 0 && grp_size_tier2 > 0);
 
 	for (i = 0; i <= ECHO_EXTRA_CONTEXT_NUM; i++) {
 		svr_ep.ep_grp = grp_tier2;
@@ -381,27 +422,30 @@ static void run_client(void)
 	/* send an RPC to kill the server */
 	svr_ep.ep_grp = grp_tier1;
 send_shutdown:
-	printf("client (rank 0) sending shutdown request...\n");
-	gecho.complete = 0;
 	assert(rc == 0);
 	if (myrank != 0)
 		goto out;
+	printf("client (rank 0) sending shutdown request...\n");
 
-	rpc_req = NULL;
-	svr_ep.ep_rank = 0;
-	svr_ep.ep_tag = 0;
-	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_SHUTDOWN,
-			    &rpc_req);
-	assert(rc == 0 && rpc_req != NULL);
+	for (i = 0; i < grp_size; i++) {
+		gecho.complete = 0;
 
-	assert(rpc_req->cr_input == NULL);
-	assert(rpc_req->cr_output == NULL);
+		rpc_req = NULL;
+		svr_ep.ep_rank = i;
+		svr_ep.ep_tag = 0;
+		rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_SHUTDOWN,
+				    &rpc_req);
+		assert(rc == 0 && rpc_req != NULL);
 
-	rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
-	assert(rc == 0);
+		assert(rpc_req->cr_input == NULL);
+		assert(rpc_req->cr_output == NULL);
 
-	rc = client_wait(100, 100, &gecho.complete);
-	assert(rc == 0);
+		rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
+		assert(rc == 0);
+
+		rc = client_wait(100, 100, &gecho.complete);
+		assert(rc == 0);
+	}
 
 	if (svr_ep.ep_grp == grp_tier2 && grp_tier2 != NULL) {
 		rc = crt_group_detach(grp_tier2);
@@ -411,6 +455,7 @@ send_shutdown:
 
 	if (gecho.multi_tier_test == true) {
 		svr_ep.ep_grp = grp_tier2;
+		grp_size = grp_size_tier2;
 		goto send_shutdown;
 	}
 

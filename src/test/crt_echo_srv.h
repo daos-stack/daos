@@ -169,6 +169,8 @@ int bulk_test_cb(const struct crt_bulk_cb_info *cb_info)
 	rpc_req = bulk_desc->bd_rpc;
 	iovs = (d_iov_t *)cb_info->bci_arg;
 	assert(rpc_req != NULL && iovs != NULL);
+	e_req = crt_req_get(rpc_req);
+	D_ASSERT(e_req != NULL);
 
 	local_bulk_hdl = bulk_desc->bd_local_hdl;
 	assert(local_bulk_hdl != NULL);
@@ -197,8 +199,6 @@ int bulk_test_cb(const struct crt_bulk_cb_info *cb_info)
 	assert(rc == 1);
 	echo_md5_to_string(md5, md5_str);
 
-	e_req = crt_req_get(rpc_req);
-	D_ASSERT(e_req != NULL);
 	rc = strcmp(md5_str, e_req->bulk_md5_ptr);
 	if (rc == 0) {
 		printf("data verification success, md5: %s.\n", md5_str);
@@ -220,6 +220,10 @@ out:
 	rc = crt_bulk_free(local_bulk_hdl);
 	assert(rc == 0);
 
+	e_req->completed_cnt++;
+	if (e_req->completed_cnt < 2)
+		return 0;
+
 	/*
 	 * need to call crt_reply_send first and then call crt_req_decref,
 	 * if changing the sequence possibly cause the RPC request be destroyed
@@ -237,6 +241,45 @@ out:
 	return 0;
 }
 
+static void
+bulk_forward_cb(const struct crt_cb_info *cb_info)
+{
+	crt_rpc_t			*rpc_req;
+	crt_rpc_t			*original_rpc;
+	struct crt_echo_bulk_out	*reply;
+	struct crt_echo_bulk_in		*original_req;
+	struct crt_echo_bulk_out	*original_reply;
+	int				rc;
+
+	rpc_req = cb_info->cci_rpc;
+	original_rpc = cb_info->cci_arg;
+
+	printf("in bulk_forward_cb, opc: %#x, cci_rc: %d.\n",
+	       rpc_req->cr_opc, cb_info->cci_rc);
+
+	reply = crt_reply_get(rpc_req);
+	printf("bulk_test_output->bulk_echo_msg: %s. ret %d\n",
+		reply->echo_msg, reply->ret);
+
+	original_req = crt_req_get(original_rpc);
+	D_ASSERT(original_req != NULL);
+	original_reply = crt_reply_get(original_rpc);
+	D_ASSERT(original_req != NULL);
+
+	original_req->completed_cnt++;
+	if (original_req->completed_cnt < 2)
+
+	original_reply->echo_msg = "bulk forward done";
+	rc = crt_reply_send(original_rpc);
+	assert(rc == 0);
+
+	printf("echo_srver sent bulk_test reply, echo_msg: %s.\n",
+	       original_reply->echo_msg);
+
+	rc = crt_req_decref(original_rpc);
+	assert(rc == 0);
+}
+
 void
 echo_srv_bulk_test(crt_rpc_t *rpc_req)
 {
@@ -247,10 +290,37 @@ echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	unsigned int			 bulk_sgnum;
 	struct crt_bulk_desc		 bulk_desc;
 	struct crt_echo_bulk_in		*e_req;
+	crt_rpc_t			*rpc_forward = NULL;
+	struct crt_echo_bulk_in		*rpc_forward_in;
+	crt_endpoint_t			 svr_ep = {0};
 	int				 rc = 0;
 
 	e_req = crt_req_get(rpc_req);
 	D_ASSERT(e_req != NULL);
+
+	if (e_req->bulk_forward == 0) {
+		e_req->completed_cnt++;
+		goto do_bulk;
+	}
+
+	/* forward bulk handle to another server*/
+	svr_ep.ep_grp = NULL;
+	svr_ep.ep_rank = e_req->bulk_forward_rank;
+	svr_ep.ep_tag = 0;
+	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_BULK_TEST,
+			    &rpc_forward);
+	assert(rc == 0 && rpc_forward != NULL);
+
+	rpc_forward_in = crt_req_get(rpc_forward);
+	rpc_forward_in->bulk_intro_msg = e_req->bulk_intro_msg;
+	rpc_forward_in->remote_bulk_hdl = e_req->remote_bulk_hdl;
+	rpc_forward_in->bulk_md5_ptr = e_req->bulk_md5_ptr;
+	rpc_forward_in->bulk_forward = 0;
+	rpc_forward_in->bulk_bind = 1;
+	rc = crt_req_send(rpc_forward, bulk_forward_cb, rpc_req);
+	assert(rc == 0);
+
+do_bulk:
 	rc = crt_bulk_get_len(e_req->remote_bulk_hdl, &bulk_len);
 	assert(rc == 0);
 	rc = crt_bulk_get_sgnum(e_req->remote_bulk_hdl, &bulk_sgnum);
@@ -294,7 +364,11 @@ echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	 *    reference to avoid the RPC request be destroyed by CRT, then need
 	 *    to release the reference at bulk's complete_cb);
 	 */
-	rc = crt_bulk_transfer(&bulk_desc, bulk_test_cb, iovs, NULL);
+	if (e_req->bulk_bind)
+		rc = crt_bulk_bind_transfer(&bulk_desc, bulk_test_cb, iovs,
+					    NULL);
+	else
+		rc = crt_bulk_transfer(&bulk_desc, bulk_test_cb, iovs, NULL);
 	assert(rc == 0);
 }
 
