@@ -73,7 +73,7 @@ On Ubuntu and Debian:
     add-apt-repository ppa:jhli/libsafec
     add-apt-repository ppa:jhli/ipmctl
     apt-get update
-    apt-get install -y libsafec libipmctl-dev
+    apt-get install -y libsafec-dev libipmctl-dev
 
 Moreover, please make sure all the auto tools listed below are at the appropriate versions.
 
