@@ -8,6 +8,8 @@ def scons():
 
     denv.AppendUnique(LIBPATH=['../../client/api'])
 
+    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib/daos_srv')])
+
     test_tgt = denv.SharedObject('place_obj.c')
     pl_test = daos_build.program(denv, 'pl_map', test_tgt + common_tgts,
                                  LIBS=['daos', 'daos_common', 'gurt', 'cart',
