@@ -1983,6 +1983,211 @@ epoch_discard(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+/**
+ * Basic test to insert a few large and small records at different epochs,
+ * commit only the first few epochs, and verfiy that all epochs remain after
+ * container close and non-committed epochs were successfully discarded.
+ */
+static void
+epoch_commit(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	const int	 nakeys = 4;
+	const size_t	 nakeys_strlen = 4 /* "9999" */;
+	char		 dkey[] = "epoch_commit dkey";
+	const char	*akey_fmt = "epoch_commit akey%d";
+	char		*akey[nakeys];
+	char		*rec[nakeys];
+	daos_size_t	 rec_size[nakeys];
+	int		 rx_nr[nakeys];
+	daos_off_t	 offset[nakeys];
+	char		*rec_nvme;
+	char		*rec_scm;
+	char		*val[nakeys];
+	daos_size_t	 val_size[nakeys];
+	char		*rec_verify;
+	daos_epoch_state_t epoch_state;
+	daos_epoch_t	 epoch;
+	daos_epoch_t	 e;
+	int		 i;
+	int		 rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rec_nvme = malloc(IO_SIZE_NVME);
+	assert_non_null(rec_nvme);
+	dts_buf_render(rec_nvme, IO_SIZE_NVME);
+	rec_scm = malloc(IO_SIZE_SCM);
+	assert_non_null(rec_scm);
+	dts_buf_render(rec_scm, IO_SIZE_SCM);
+
+
+	/** Get a hold of an epoch. */
+	if (arg->myrank == 0) {
+		rc = daos_epoch_query(arg->coh, &epoch_state, NULL /* ev */);
+		assert_int_equal(rc, 0);
+		epoch = epoch_state.es_hce + 1;
+		rc = daos_epoch_hold(arg->coh, &epoch, NULL /* state */,
+				     NULL /* ev */);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Bcast(&epoch, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	/** Prepare buffers for a fixed set of d-keys and a-keys. */
+	for (i = 0; i < nakeys; i++) {
+		akey[i] = malloc(strlen(akey_fmt) + nakeys_strlen + 1);
+		assert_non_null(akey[i]);
+		sprintf(akey[i], akey_fmt, i);
+		rec[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
+		assert_non_null(rec[i]);
+		offset[i] = i * 20;
+		val[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
+		assert_non_null(val[i]);
+		if (i % 2 == 0)
+			val_size[i] = IO_SIZE_NVME;
+		else
+			val_size[i] = IO_SIZE_SCM;
+	}
+
+	/** Write LHE, LHE + 1, and LHE + 2. To same set of d-key and a-keys. */
+	for (e = epoch; e < epoch + 3; e++) {
+		print_message("writing to epoch "DF_U64"\n", e);
+		for (i = 0; i < nakeys; i++) {
+			if (i % 2 == 0) {
+				memcpy(rec[i], rec_nvme, IO_SIZE_NVME);
+				rec_size[i] = IO_SIZE_NVME;
+			} else {
+				memcpy(rec[i], rec_scm, IO_SIZE_SCM);
+				rec_size[i] = IO_SIZE_SCM;
+			}
+			rec[i][0] = i + '0'; /* akey */
+			rec[i][1] = e + '0'; /* epoch */
+			rx_nr[i] = 1;
+			print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n",
+				      i, akey[i], (int)rec_size[i], rec[i][0],
+				      rec[i][1]);
+		}
+		insert(dkey, nakeys, (const char **)akey, /*iod_size*/rec_size,
+			rx_nr, offset, (void **)rec, &e, &req);
+	}
+
+	/** Check the three epochs. */
+	for (e = epoch; e < epoch + 3; e++) {
+		print_message("verifying epoch "DF_U64"\n", e);
+		lookup(dkey, nakeys, (const char **)akey, offset,
+		       rec_size, (void **)val, val_size, &e, &req,
+		       false);
+		for (i = 0; i < nakeys; i++) {
+			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
+					    IO_SIZE_SCM, 1);
+			assert_non_null(rec_verify);
+			if (i % 2 == 0)
+				memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
+			else
+				memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
+
+			rec_verify[0] = i + '0'; /*akey*/
+			rec_verify[1] = e + '0'; /*epoch*/
+			assert_int_equal(req.iod[i].iod_size,
+					 strlen(rec_verify) + 1);
+			print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n", i,
+				      akey[i], (int)req.iod[i].iod_size,
+				      val[i][0], val[i][1]);
+			assert_memory_equal(val[i], rec_verify,
+					    req.iod[i].iod_size);
+			free(rec_verify);
+		}
+	}
+
+	/** Commit only the first 2 epochs */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		for (e = epoch; e < epoch + 2; e++) {
+			print_message("committing epoch "DF_U64"\n", e);
+			rc = daos_epoch_commit(arg->coh, e, &epoch_state,
+						NULL/*ev*/);
+			assert_int_equal(rc, 0);
+		}
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** Close and reopen the container and the obj */
+	MPI_Barrier(MPI_COMM_WORLD);
+	close_reopen_coh_oh(arg, &req, oid);
+
+	/** Verify that the three committed epochs are present. */
+	for (e = epoch; e < epoch + 3; e++) {
+		daos_anchor_t	anchor;
+		int		found = 0;
+
+		memset(&anchor, 0, sizeof(anchor));
+		while (!daos_anchor_is_eof(&anchor)) {
+			uint32_t		n = 1;
+			daos_key_desc_t		kd;
+			char			*buf[64];
+
+			rc = enumerate_akey(e, dkey, &n, &kd, &anchor, buf,
+					    sizeof(buf), &req);
+			assert_int_equal(rc, 0);
+			found += n;
+		}
+		assert_int_equal(found, nakeys);
+	}
+
+	/**
+	 * Check the three epochs after container close. Last epoch was not
+	 * committed and should be discarded, therefore epoch + 2 should equal
+	 * epoch + 1.
+	 */
+	for (e = epoch; e < epoch + 3; e++) {
+		print_message("verifying epoch "DF_U64" after commit\n", e);
+		lookup(dkey, nakeys, (const char **)akey, offset,
+		       rec_size, (void **)val, val_size, &e, &req,
+		       false);
+		for (i = 0; i < nakeys; i++) {
+			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
+					    IO_SIZE_SCM, 1);
+			assert_non_null(rec_verify);
+			if (i % 2 == 0)
+				memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
+			else
+				memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
+
+			if (e == epoch + 2) { /* discarded */
+				rec_verify[0] = i + '0'; /*akey*/
+				rec_verify[1] = e - 1 + '0'; /*previous epoch*/
+			} else { /* intact */
+				rec_verify[0] = i + '0';
+				rec_verify[1] = e + '0';
+			}
+			assert_int_equal(req.iod[i].iod_size,
+					 strlen(rec_verify) + 1);
+			print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n", i,
+				      akey[i], (int)req.iod[i].iod_size,
+				      val[i][0], val[i][1]);
+			assert_memory_equal(val[i], rec_verify,
+					    req.iod[i].iod_size);
+			free(rec_verify);
+		}
+	}
+
+	for (i = 0; i < nakeys; i++) {
+		free(val[i]);
+		free(akey[i]);
+		free(rec[i]);
+	}
+	free(rec_nvme);
+	free(rec_scm);
+
+	ioreq_fini(&req);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static void
 io_nospace(void **state)
 {
@@ -2463,32 +2668,34 @@ static const struct CMUnitTest io_tests[] = {
 	  io_simple_update_timeout_single, async_disable, test_case_teardown},
 	{ "IO16: epoch discard", epoch_discard,
 	  async_disable, test_case_teardown},
-	{ "IO17: no space", io_nospace, async_disable, test_case_teardown},
-	{ "IO18: fetch size with NULL sgl", fetch_size, async_disable,
+	{ "IO17: epoch commit", epoch_commit,
+	  async_disable, test_case_teardown},
+	{ "IO18: no space", io_nospace, async_disable, test_case_teardown},
+	{ "IO19: fetch size with NULL sgl", fetch_size, async_disable,
 	  test_case_teardown},
-	{ "IO19: io crt error", io_simple_update_crt_error,
+	{ "IO20: io crt error", io_simple_update_crt_error,
 	  async_disable, test_case_teardown},
-	{ "IO20: io crt error (async)", io_simple_update_crt_error,
+	{ "IO21: io crt error (async)", io_simple_update_crt_error,
 	  async_enable, test_case_teardown},
-	{ "IO21: io crt req create timeout (sync)",
+	{ "IO22: io crt req create timeout (sync)",
 	  io_simple_update_crt_req_error, async_disable, test_case_teardown},
-	{ "IO22: io crt req create timeout (async)",
+	{ "IO23: io crt req create timeout (async)",
 	  io_simple_update_crt_req_error, async_enable, test_case_teardown},
-	{ "IO23: Read from unwritten records", read_empty_records,
+	{ "IO24: Read from unwritten records", read_empty_records,
 	  async_disable, test_case_teardown},
-	{ "IO24: Read from large unwritten records", read_large_empty_records,
+	{ "IO25: Read from large unwritten records", read_large_empty_records,
 	  async_disable, test_case_teardown},
-	{ "IO25: written records repeatly", write_record_multiple_times,
+	{ "IO26: written records repeatly", write_record_multiple_times,
 	  async_disable, test_case_teardown},
-	{ "IO26: echo fetch/update", echo_fetch_update,
+	{ "IO27: echo fetch/update", echo_fetch_update,
 	  async_disable, test_case_teardown},
-	{ "IO27: basic object key query testing",
+	{ "IO28: basic object key query testing",
 	  io_obj_key_query, async_disable, test_case_teardown},
-	{ "IO28: shard target idx change cause retry", tgt_idx_change_retry,
+	{ "IO29: shard target idx change cause retry", tgt_idx_change_retry,
 	  async_enable, test_case_teardown},
-	{ "IO29: fetch when all replicas unavailable", fetch_replica_unavail,
+	{ "IO30: fetch when all replicas unavailable", fetch_replica_unavail,
 	  async_enable, test_case_teardown},
-	{ "IO30: update with overlapped recxs", update_overlapped_recxs,
+	{ "IO31: update with overlapped recxs", update_overlapped_recxs,
 	  async_enable, test_case_teardown},
 };
 
