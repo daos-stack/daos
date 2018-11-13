@@ -119,7 +119,7 @@ TODO: include details of `daos_agent` interaction
 
 ## Development setup
 
-* If updating vendor package versions, edit `src/control/Gopkg.toml` and then run `utils/fetch_go_packages.sh -i .` from daos checkout root directory.
+* If changing vendor package versions, edit `src/control/Gopkg.toml` and then run `dep ensure` from src/control.
 * (Optional) protoc protocol buffer compiler
 
 ### Building the app

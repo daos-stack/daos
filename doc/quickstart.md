@@ -186,7 +186,7 @@ If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on th
 
 ### Golang dependencies
 
-Developers contributing Go code may need to update the external dependencies located in the src/control/vendor directory. The DAOS codebase uses [dep](https://github.com/golang/dep) to manage these dependencies.
+Developers contributing Go code may need to change the external dependencies located in the src/control/vendor directory. The DAOS codebase uses [dep](https://github.com/golang/dep) to manage these dependencies.
 
 On EL7 and later:
 
@@ -203,14 +203,21 @@ On Ubuntu 18.04 and later:
     apt-get install go-dep
 
 For OSes that don't supply a package:
-* Ensure that you have a personal GOPATH (typically $HOME/go) and a GOBIN ($GOPATH/bin) set up and included in your PATH:
+* Ensure that you have a personal GOPATH (see "go env GOPATH", referred to as "$GOPATH" in this document) and a GOBIN ($GOPATH/bin) set up and included in your PATH:
 
-    mkdir -p $HOME/go/bin
-    export PATH=$HOME/go/bin:$PATH
+    mkdir -p $GOPATH/bin
+    export PATH=$GOPATH/bin:$PATH
 
 * Then follow the [installation instructions on Github](https://github.com/golang/dep).
 
-The utils/fetch_go_packages.sh script is provided as a convenience for developers to update the vendor directory using dep after updating Gopkg.toml.
+To update the vendor directory using dep after changing Gopkg.toml, first make sure DAOS is cloned into
+
+    $GOPATH/src/github.com/daos-stack/daos
+
+Then:
+
+    cd $GOPATH/src/github.com/daos-stack/daos/src/control
+    dep ensure
 
 ## DAOS in Docker
 
