@@ -486,13 +486,13 @@ void d_hash_table_debug(struct d_hash_table *htable);
  ******************************************************************************/
 
 #define D_HHASH_BITS		16
-#define D_HTYPE_BITS		3
+#define D_HTYPE_BITS		4
 #define D_HTYPE_MASK		((1ULL << D_HTYPE_BITS) - 1)
 
 /**
- * The handle type, uses the least significant 3-bits in the 64-bits hhash key.
+ * The handle type, uses the least significant 4-bits in the 64-bits hhash key.
  * The bit 0 is only used for D_HYTPE_PTR (pointer type), all other types MUST
- * with bit 0 set as 1.
+ * set bit 0 to 1.
  */
 enum {
 	D_HTYPE_PTR		= 0, /**< pointer type handle */
@@ -500,7 +500,9 @@ enum {
 	D_HTYPE_POOL		= 3, /**< pool */
 	D_HTYPE_CO		= 5, /**< container */
 	D_HTYPE_OBJ		= 7, /**< object */
-	/* Needs to enlarge D_HTYPE_BITS to add more types */
+	D_HTYPE_ARRAY		= 9, /**< object */
+	D_HTYPE_TX		= 11, /**< object */
+	/* Must enlarge D_HTYPE_BITS to add more types */
 };
 
 struct d_hlink;
