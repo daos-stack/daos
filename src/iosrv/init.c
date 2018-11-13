@@ -296,9 +296,9 @@ server_init()
 		D_GOTO(exit_daos_fini, rc);
 	D_INFO("Modules successfully set up\n");
 
-	D_PRINT("DAOS server (v%s) process %u started on rank %u (out of %u) "
-		"with %u xstream(s)\n", DAOS_VERSION, getpid(), rank, size,
-		dss_nxstreams);
+	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
+		"(out of %u) with %u xstream(s)\n", DAOS_VERSION, getpid(),
+		rank, size, dss_nxstreams);
 
 	return 0;
 

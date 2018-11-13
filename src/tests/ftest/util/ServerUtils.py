@@ -95,7 +95,7 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
             result = 0
             expected_data = "Starting Servers\n"
             while True:
-                pattern = "DAOS server"
+                pattern = "DAOS I/O server"
                 output = sessions[setname].read_nonblocking(2, 2)
                 match = re.findall(pattern, output)
                 expected_data = expected_data + output
