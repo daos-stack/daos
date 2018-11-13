@@ -699,8 +699,10 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 
 	rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, &krec, &toh);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to prepare akey tree: %d\n", rc);
 		return rc;
+	}
 
 	if (iod->iod_eprs == NULL)
 		akey_epr.epr_hi = akey_epr.epr_lo = epoch;
@@ -711,6 +713,8 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 
 		rc = akey_update_single(toh, epoch, cookie, pm_ver,
 					iod->iod_size, ioc);
+		if (rc != 0)
+			goto failed;
 		goto out;
 	} /* else: array */
 
@@ -722,13 +726,12 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 		rc = akey_update_recx(toh, epoch, cookie, pm_ver,
 				      &iod->iod_recxs[i], iod->iod_size, ioc);
 		if (rc != 0)
-			goto out;
+			goto failed;
 	}
 out:
-	if (rc == 0) {
-		vos_df_ts_update(ioc->ic_obj, &krec->kr_latest, &akey_epr);
-		update_bounds(dkey_epr, &akey_epr);
-	}
+	rc = vos_df_ts_update(ioc->ic_obj, &krec->kr_latest, &akey_epr);
+	update_bounds(dkey_epr, &akey_epr);
+failed:
 	key_tree_release(toh, is_array);
 	return rc;
 }
@@ -738,6 +741,7 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	    daos_key_t *dkey)
 {
 	struct vos_object	*obj = ioc->ic_obj;
+	struct vos_obj_df	*obj_df;
 	struct vos_krec_df	*krec = NULL;
 	daos_epoch_range_t	 dkey_epr = {ioc->ic_epoch, ioc->ic_epoch};
 	daos_handle_t		 ak_toh, ck_toh;
@@ -761,8 +765,10 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 			rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh,
 					      VOS_BTR_DKEY, dkey, SUBTR_CREATE,
 					      &krec, &ak_toh);
-			if (rc != 0)
+			if (rc != 0) {
+				D_ERROR("Error preparing dkey tree: %d\n", rc);
 				goto out;
+			}
 			subtr_created = true;
 		}
 
@@ -779,21 +785,26 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 		ck_toh = vos_obj2cookie_hdl(obj);
 		rc = vos_cookie_find_update(ck_toh, cookie, dkey_epr.epr_hi,
 					    true, NULL);
-		if (rc) {
+		if (rc)
 			D_ERROR("Failed to record cookie: %d\n", rc);
-			goto out;
-		}
 	}
 out:
-	if (subtr_created) {
-		struct vos_obj_df	*obj_df = obj->obj_df;
+	if (!subtr_created)
+		return rc;
 
-		D_ASSERT(krec != NULL);
-		D_ASSERT(obj_df != NULL);
-		vos_df_ts_update(obj, &krec->kr_latest, &dkey_epr);
-		vos_df_ts_update(obj, &obj_df->vo_latest, &dkey_epr);
-		key_tree_release(ak_toh, false);
-	}
+	if (rc != 0)
+		goto release;
+
+	obj_df = obj->obj_df;
+	D_ASSERT(krec != NULL);
+	D_ASSERT(obj_df != NULL);
+	rc = vos_df_ts_update(obj, &krec->kr_latest, &dkey_epr);
+	if (rc != 0)
+		goto release;
+	rc = vos_df_ts_update(obj, &obj_df->vo_latest, &dkey_epr);
+release:
+	key_tree_release(ak_toh, false);
+
 	return rc;
 }
 

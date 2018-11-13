@@ -1042,7 +1042,9 @@ vos_oi_set_attr_helper(daos_handle_t coh, daos_unit_oid_t oid,
 		/* Need better error handling on this path but will defer til
 		 * using pmemobj API for transactions
 		 */
-		rc = vos_df_ts_update(obj, &obj->obj_df->vo_latest, &epr);
+		if (rc == 0)
+			rc = vos_df_ts_update(obj, &obj->obj_df->vo_latest,
+					      &epr);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DB_IO, "Failed to set attributes on object: %d\n", rc);
