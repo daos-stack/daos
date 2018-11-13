@@ -41,7 +41,7 @@ def scons():
                  "go install %s/src/control/agent" % repopath)
     denv.InstallAs("$PREFIX/bin/daos_agent", agentbin)
 
-    gospdkpath = "%s/go-spdk/spdk" % gosrc
+    gospdkpath = "%s/vendor/github.com/daos-stack/go-spdk/spdk" % gosrc
 
     # CGO prerequisite libs for nvme
     denv.AppendUnique(CPPPATH=['%s/include' % gospdkpath])
