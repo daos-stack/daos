@@ -12,10 +12,11 @@ utils/daos_build.pyc
 hwloc-1.11.5.tar.gz
 mpi4py-2.0.0.tar.gz
 protobuf-all-3.5.1.tar.gz
-/tests/ftest/*/*.pyc
-src/utils/py/*.pyc
+*.pyc
 *.un~
 *.*~
 /pkg/
 Gopkg.lock
-src/control/server/testdata/.*.yml
+/src/control/server/testdata/.*.yml
+/src/control/github.com/daos-stack
+/src/control/vendor/**/*.os
