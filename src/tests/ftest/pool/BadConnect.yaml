@@ -5,82 +5,54 @@ server:
 hosts:
   test_machines:
     - boro-A
+timeout: 700
 connecttests:
    createmode:
      mode: 511
    connectmode: !mux
      testmode1:
           mode:
-             - 1
+             - 0
              - PASS
      testmode2:
            mode:
+             - 1
+             - PASS
+     testmode3:
+           mode:
              - 2
              - PASS
-     #testmode3:
-     #      mode:
-     #        - 4
-     #        - PASS
-     #testmode4:
-     #      mode:
-     #        - 8
-     #        - PASS
-     #testmode5:
-     #      mode:
-     #        - 16
-     #        - PASS
-     #testmode6:
-     #      mode:
-     #        - 32
-     #        - PASS
-     #testmode7:
-     #      mode:
-     #        - 64
-     #        - PASS
-     #testmode9:
-     #      mode:
-     #        - 128
-     #        - PASS
-     #testmode10:
-     #       mode:
-     #        - 256
-     #        - PASS
-     #badmode1:
-     #     mode:
-     #        - 512
-     #        - FAIL
-     #badmode2:
-     #     mode:
-     #        - 0
-     #        - FAIL
+     badmode1:
+          mode:
+             - 512
+             - FAIL
    svrlist: !mux
      goodlist:
           ranklist:
              - VALID
              - PASS
-     #badlist:
-     #     ranklist:
-     #        - NULL
-     #        - FAIL
+     badlist:
+          ranklist:
+             - NULLPTR
+             - FAIL
    connectsetnames: !mux
      goodname:
           setname:
              - scott_server
              - PASS
-     #badname:
-     #     setname:
-     #        - NULL
-     #        - FAIL
+     badname:
+          setname:
+             - NULLPTR
+             - FAIL
    UUID: !mux
      gooduuid:
           uuid:
              - VALID
              - PASS
-     # python api is not letting this test happen right now
-     #nulluuid:
-     #     uuid:
-     #        - NULL
-     #        - FAIL
+     nulluuid:
+          uuid:
+             - NULLPTR
+             - FAIL
      baduuid:
           uuid:
              - JUNK

@@ -112,8 +112,9 @@ class DaosPool(object):
 
     def connect(self, flags, cb_func=None):
         """ connect to this pool. """
-        if not len(self.uuid) == 16:
-            raise ValueError("No existing UUID for pool.")
+        # comment this out for now, so we can test bad data
+        #if not len(self.uuid) == 16:
+        #    raise ValueError("No existing UUID for pool.")
 
         c_flags = ctypes.c_uint(flags)
         c_info = PoolInfo()
@@ -125,6 +126,7 @@ class DaosPool(object):
             rc = func(self.uuid, self.group, ctypes.byref(self.svc), c_flags,
                       ctypes.byref(self.handle), ctypes.byref(c_info), None)
             if rc != 0:
+                self.handle = 0
                 raise ValueError("Pool connect returned non-zero. RC: {0}"
                                  .format(rc))
         else:

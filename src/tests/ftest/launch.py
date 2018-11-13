@@ -136,5 +136,8 @@ if __name__ == "__main__":
             test_cmd = avocado + ignore_errors + output_options +\
                        category + params + ' -- ' + _file
 
+            start_time = int(time.time())
             print("Running: " + test_cmd + "\n\n")
             subprocess.call(test_cmd, shell=True)
+            end_time = int(time.time())
+            print("Total test run-time in seconds: {}".format(end_time - start_time))

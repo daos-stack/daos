@@ -43,7 +43,7 @@ class BadQueryTest(Test):
     Tests pool query calls passing NULL and otherwise inappropriate
     parameters.  This can't be done with daosctl, need to use the python API.
 
-    :avocado: tags=pool,poolquery,badparam,badquery
+
     """
 
     # super wasteful since its doing this for every variation
@@ -73,7 +73,7 @@ class BadQueryTest(Test):
         """
         Pass bad parameters to pool query
 
-        :avocado: tags=pool,poolquery,badparam,badconnect
+        :avocado: tags=pool,poolquery,badparam,badquery
         """
         # parameters used in pool create/connect
         connectmode = self.params.get("mode", '/run/querytests/connectmode/')
