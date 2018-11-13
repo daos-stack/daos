@@ -21,29 +21,20 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt_test
+package mgmt
 
 import (
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/mgmt"
 	. "github.com/daos-stack/daos/src/control/utils/test"
 
 	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 )
 
-func mockFeaturePB() *pb.Feature {
-	return &pb.Feature{
-		Category:    &pb.Category{Category: "nvme"},
-		Fname:       &pb.FeatureName{Name: "burn-name"},
-		Description: "run workloads on device to test",
-	}
-}
-
 func TestGetFeature(t *testing.T) {
 	s := &ControlService{}
 
-	mockFeature := mockFeaturePB()
+	mockFeature := MockFeaturePB()
 	fMap := make(FeatureMap)
 	fMap[mockFeature.Fname.Name] = mockFeature
 	s.SupportedFeatures = fMap

@@ -279,9 +279,8 @@ func checkMgmtSvcReplica(self *net.TCPAddr, accessPoints []string) (isReplica, b
 				// shall bootstrap the MS.
 				if i == 0 {
 					return true, true, nil
-				} else {
-					return true, false, nil
 				}
+				return true, false, nil
 			}
 		}
 	}

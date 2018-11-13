@@ -56,7 +56,7 @@ On CentOS and openSuSE:
     yum install -y yum-plugin-copr epel-release
     yum copr -y enable jhli/ipmctl
     yum copr -y enable jhli/safeclib
-    yum install -y libsafec libipmctl-devel
+    yum install -y libipmctl-devel
 
 On Ubuntu and Debian:
 
@@ -73,7 +73,7 @@ On Ubuntu and Debian:
     add-apt-repository ppa:jhli/libsafec
     add-apt-repository ppa:jhli/ipmctl
     apt-get update
-    apt-get install -y libsafec libipmctl-dev
+    apt-get install -y libipmctl-dev
 
 Moreover, please make sure all the auto tools listed below are at the appropriate versions.
 

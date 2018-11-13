@@ -55,9 +55,6 @@ type SpdkSetup interface {
 // spdkSetup is an implementation of the SpdkSetup interface
 type spdkSetup struct{}
 
-// NsMap is a type alias for protobuf namespace messages
-type NsMap map[int32]*pb.NvmeNamespace
-
 // CtrlrMap is a type alias for protobuf namespace messages
 type CtrlrMap map[int32]*pb.NvmeController
 
@@ -69,7 +66,6 @@ type nvmeStorage struct {
 	env         spdk.ENV  // SPDK ENV interface
 	nvme        spdk.NVME // SPDK NVMe interface
 	setup       SpdkSetup // SPDK shell configuration interface
-	Namespaces  NsMap
 	Controllers CtrlrMap
 	initialised bool
 }
@@ -116,7 +112,10 @@ func (n *nvmeStorage) Init() (err error) {
 	return
 }
 
-// Discover method implementation for nvmeStorage<tab>
+// Discover method implementation for nvmeStorage.
+//
+// Retrieves controllers and namespaces through external interface
+// and populates protobuf representations in struct.
 func (n *nvmeStorage) Discover() error {
 	cs, ns, err := n.nvme.Discover()
 	if err != nil {
@@ -182,7 +181,9 @@ func (n *nvmeStorage) Teardown() (err error) {
 
 // loadControllers converts slice of Controller into protobuf equivalent.
 // Implemented as a pure function.
-func loadControllers(ctrlrs []spdk.Controller) (CtrlrMap, error) {
+func loadControllers(
+	ctrlrs []spdk.Controller, nss []spdk.Namespace) (CtrlrMap, error) {
+
 	pbCtrlrs := make(CtrlrMap)
 	for _, c := range ctrlrs {
 		pbCtrlrs[c.ID] = &pb.NvmeController{
@@ -191,6 +192,8 @@ func loadControllers(ctrlrs []spdk.Controller) (CtrlrMap, error) {
 			Serial:  c.Serial,
 			Pciaddr: c.PCIAddr,
 			Fwrev:   c.FWRev,
+			// repeated pb field
+			Namespace: loadNamespaces(c.ID, nss),
 		}
 	}
 	if len(pbCtrlrs) != len(ctrlrs) {
@@ -201,38 +204,28 @@ func loadControllers(ctrlrs []spdk.Controller) (CtrlrMap, error) {
 
 // loadNamespaces converts slice of Namespace into protobuf equivalent.
 // Implemented as a pure function.
-func loadNamespaces(pbCtrlrs CtrlrMap, nss []spdk.Namespace) (NsMap, error) {
-	pbNamespaces := make(NsMap)
+func loadNamespaces(ctrlrID int32, nss []spdk.Namespace) (_nss []*pb.NvmeNamespace) {
+
 	for _, ns := range nss {
-		c, exists := pbCtrlrs[ns.CtrlrID]
-		if !exists {
-			return nil, fmt.Errorf(
-				"loadNamespaces: missing controller with ID %d", ns.CtrlrID)
-		}
-		pbNamespaces[ns.ID] = &pb.NvmeNamespace{
-			Controller: c,
-			Id:         ns.ID,
-			Capacity:   ns.Size,
+		if ns.CtrlrID == ctrlrID {
+			_nss = append(
+				_nss,
+				&pb.NvmeNamespace{
+					Id:       ns.ID,
+					Capacity: ns.Size,
+				})
 		}
 	}
-	if len(pbNamespaces) != len(nss) {
-		return nil, fmt.Errorf("loadNamespaces: input contained duplicate keys")
-	}
-	return pbNamespaces, nil
+	return
 }
 
 // populate unpacks return type and loads protobuf representations.
 func (n *nvmeStorage) populate(inCtrlrs []spdk.Controller, inNss []spdk.Namespace) error {
-	ctrlrs, err := loadControllers(inCtrlrs)
+	ctrlrs, err := loadControllers(inCtrlrs, inNss)
 	if err != nil {
 		return err
 	}
 	n.Controllers = ctrlrs
-	nss, err := loadNamespaces(n.Controllers, inNss)
-	if err != nil {
-		return err
-	}
-	n.Namespaces = nss
 	n.initialised = true
 	return nil
 }

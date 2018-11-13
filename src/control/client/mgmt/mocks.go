@@ -24,35 +24,39 @@
 package mgmtclient
 
 import (
-	"io"
-	"time"
+	"fmt"
 
 	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
-
-	"golang.org/x/net/context"
 )
 
-// listScmModules prints all discovered Storage Class Memory modules installed.
-func (mc *client) listScmModules() (mms ScmModules, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream, err := mc.client.ListScmModules(ctx, &pb.EmptyParams{})
-	if err != nil {
-		return
-	}
-
-	var mm *pb.ScmModule
-	for {
-		mm, err = stream.Recv()
-		if err == io.EOF {
-			err = nil
-			break
-		} else if err != nil {
-			return
+// NewClientFM provides a mock ClientFeatureMap for testing.
+func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
+	cf := make(ClientFeatureMap)
+	for _, addr := range addrs {
+		fMap := make(FeatureMap)
+		for _, f := range features {
+			fMap[f.Fname.Name] = fmt.Sprintf(
+				"category %s, %s", f.Category.Category, f.Description)
 		}
-		mms = append(mms, mm)
+		cf[addr] = fMap
 	}
+	return cf
+}
 
-	return
+// NewClientNvme provides a mock ClientNvmeMap for testing.
+func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
+	cMap := make(ClientNvmeMap)
+	for _, addr := range addrs {
+		cMap[addr] = ctrlrs
+	}
+	return cMap
+}
+
+// NewClientScm provides a mock ClientScmMap for testing.
+func NewClientScm(mms ScmModules, addrs Addresses) ClientScmMap {
+	cMap := make(ClientScmMap)
+	for _, addr := range addrs {
+		cMap[addr] = mms
+	}
+	return cMap
 }

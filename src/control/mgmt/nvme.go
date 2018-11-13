@@ -70,22 +70,6 @@ func (c *ControlService) ListNvmeCtrlrs(
 	return nil
 }
 
-// ListNvmeNss lists all namespaces discovered on attached NVMe controllers.
-func (c *ControlService) ListNvmeNss(
-	ctrlr *pb.NvmeController, stream pb.MgmtControl_ListNvmeNssServer) error {
-	if err := c.FetchNvme(); err != nil {
-		return err
-	}
-	for _, ns := range c.nvme.Namespaces {
-		if ns.Controller.Id == ctrlr.Id {
-			if err := stream.Send(ns); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 // UpdateNvmeCtrlr updates the firmware on a NVMe controller, verifying that the
 // fwrev reported changes after update.
 func (c *ControlService) UpdateNvmeCtrlr(

@@ -42,11 +42,9 @@ func TestFetchNvme(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	cExpect := mockControllerPB("1.0.0")
-	nsExpect := mockNamespacePB("1.0.0")
+	cExpect := MockControllerPB("1.0.0")
 
 	AssertEqual(t, s.nvme.Controllers[cExpect.Id], cExpect, "unexpected Controller populated")
-	AssertEqual(t, s.nvme.Namespaces[nsExpect.Id], nsExpect, "unexpected Namespace populated")
 }
 
 func TestUpdateNvmeCtrlr(t *testing.T) {
@@ -56,7 +54,7 @@ func TestUpdateNvmeCtrlr(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	cExpect := mockControllerPB("1.0.1")
+	cExpect := MockControllerPB("1.0.1")
 	c := s.nvme.Controllers[cExpect.Id]
 
 	// after fetching controller details, simulate updated firmware
@@ -80,7 +78,7 @@ func TestUpdateNvmeCtrlrFail(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	cExpect := mockControllerPB("1.0.0")
+	cExpect := MockControllerPB("1.0.0")
 	c := s.nvme.Controllers[cExpect.Id]
 
 	// after fetching controller details, simulate the same firmware

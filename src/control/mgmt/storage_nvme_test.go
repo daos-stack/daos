@@ -28,11 +28,9 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/daos-stack/go-spdk/spdk"
 	"github.com/daos-stack/daos/src/control/utils/log"
 	. "github.com/daos-stack/daos/src/control/utils/test"
-
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	. "github.com/daos-stack/go-spdk/spdk"
 )
 
 // mock external interface implementations for go-spdk/spdk package
@@ -46,13 +44,13 @@ type mockSpdkNvme struct {
 }
 
 func (m *mockSpdkNvme) Discover() ([]Controller, []Namespace, error) {
-	c := mockController(m.fwRevBefore)
-	return []Controller{c}, []Namespace{mockNamespace(&c)}, nil
+	c := MockController(m.fwRevBefore)
+	return []Controller{c}, []Namespace{MockNamespace(&c)}, nil
 }
 func (m *mockSpdkNvme) Update(ctrlrID int32, path string, slot int32) (
 	[]Controller, []Namespace, error) {
-	c := mockController(m.fwRevAfter)
-	return []Controller{c}, []Namespace{mockNamespace(&c)}, nil
+	c := MockController(m.fwRevAfter)
+	return []Controller{c}, []Namespace{MockNamespace(&c)}, nil
 }
 func (m *mockSpdkNvme) Cleanup() { return }
 
@@ -71,47 +69,9 @@ func newMockNvmeStorage(fwRevBefore string, fwRevAfter string) *nvmeStorage {
 	}
 }
 
-func mockController(fwrev string) Controller {
-	return Controller{
-		ID:      int32(12345),
-		Model:   "ABC",
-		Serial:  "123ABC",
-		PCIAddr: "1:2:3.0",
-		FWRev:   fwrev,
-	}
-}
-
-func mockNamespace(ctrlr *Controller) Namespace {
-	return Namespace{
-		ID:      ctrlr.ID,
-		Size:    int32(99999),
-		CtrlrID: int32(12345),
-	}
-}
-
-func mockControllerPB(fwRev string) *pb.NvmeController {
-	c := mockController(fwRev)
-	return &pb.NvmeController{
-		Id:      c.ID,
-		Model:   c.Model,
-		Serial:  c.Serial,
-		Pciaddr: c.PCIAddr,
-		Fwrev:   c.FWRev,
-	}
-}
-
-func mockNamespacePB(fwRev string) *pb.NvmeNamespace {
-	c := mockController(fwRev)
-	ns := mockNamespace(&c)
-	return &pb.NvmeNamespace{
-		Controller: mockControllerPB(fwRev),
-		Id:         ns.ID,
-		Capacity:   ns.Size,
-	}
-}
 func TestDiscoveryNvme(t *testing.T) {
 	sn := newMockNvmeStorage("", "")
-	c := mockControllerPB("")
+	c := MockControllerPB("")
 
 	if err := sn.Discover(); err != nil {
 		t.Fatal(err.Error())
@@ -125,7 +85,7 @@ func TestDiscoveryNvme(t *testing.T) {
 
 func TestUpdateNvme(t *testing.T) {
 	sn := newMockNvmeStorage("1.0.0", "1.0.1")
-	c := mockControllerPB("1.0.1")
+	c := MockControllerPB("1.0.1")
 
 	if err := sn.Update(0, "", 0); err != nil {
 		t.Fatal(err.Error())
@@ -142,7 +102,7 @@ func TestUpdateNvme(t *testing.T) {
 // In this case the real NvmeStorage is used as opposed to a mockNvmeStorage.
 func TestBurnInNvme(t *testing.T) {
 	sn := newMockNvmeStorage("", "")
-	c := mockControllerPB("1.0.0")
+	c := MockControllerPB("1.0.0")
 
 	configPath := "/foo/bar/conf.fio"
 	nsID := 1

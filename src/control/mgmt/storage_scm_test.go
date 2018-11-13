@@ -28,7 +28,6 @@ import (
 
 	. "github.com/daos-stack/go-ipmctl/ipmctl"
 
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 	"github.com/daos-stack/daos/src/control/utils/log"
 	. "github.com/daos-stack/daos/src/control/utils/test"
 )
@@ -49,30 +48,9 @@ func newMockScmStorage(mms []DeviceDiscovery) *scmStorage {
 	}
 }
 
-func mockModule() DeviceDiscovery {
-	return DeviceDiscovery{}
-	// ID:      int32(12345),
-	// Model:   "ABC",
-	// Serial:  "123ABC",
-	// FWRev:   fwrev,
-	// }
-}
-
-func mockModulePB() *pb.ScmModule {
-	c := mockModule()
-	return &pb.ScmModule{
-		Physicalid: uint32(c.Physical_id),
-		Channel:    uint32(c.Channel_id),
-		Channelpos: uint32(c.Channel_pos),
-		Memctrlr:   uint32(c.Memory_controller_id),
-		Socket:     uint32(c.Socket_id),
-		Capacity:   c.Capacity,
-	}
-}
-
 func TestDiscoveryScm(t *testing.T) {
-	ss := newMockScmStorage([]DeviceDiscovery{mockModule()})
-	m := mockModulePB()
+	ss := newMockScmStorage([]DeviceDiscovery{MockModule()})
+	m := MockModulePB()
 
 	if err := ss.Discover(); err != nil {
 		t.Fatal(err.Error())

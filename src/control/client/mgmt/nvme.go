@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package mgmtclient
 
 import (
 	"io"
@@ -32,12 +32,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-// ListNvmeCtrlrs returns NVMe controllers in protobuf format.
-func (mc *DAOSMgmtClient) ListNvmeCtrlrs() (cs []*pb.NvmeController, err error) {
-	if mc.Connected() == false {
-		return nil, errConnect
-	}
-
+// listNvmeCtrlrs returns NVMe controllers in protobuf format.
+func (mc *client) listNvmeCtrlrs() (cs NvmeControllers, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -61,42 +57,10 @@ func (mc *DAOSMgmtClient) ListNvmeCtrlrs() (cs []*pb.NvmeController, err error) 
 	return
 }
 
-// ListNvmeNss returns NVMe namespaces in protobuf format.
-func (mc *DAOSMgmtClient) ListNvmeNss(ctrlr *pb.NvmeController) (
-	nss []*pb.NvmeNamespace, err error) {
-	if mc.Connected() == false {
-		return nil, errConnect
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream, err := mc.client.ListNvmeNss(ctx, ctrlr)
-	if err != nil {
-		return
-	}
-	var ns *pb.NvmeNamespace
-	for {
-		ns, err = stream.Recv()
-		if err == io.EOF {
-			err = nil
-			break
-		} else if err != nil {
-			return
-		}
-		nss = append(nss, ns)
-	}
-
-	return
-}
-
 // UpdateNvmeCtrlr updates firmware of a given controller.
 // Returns new firmware revision.
-func (mc *DAOSMgmtClient) UpdateNvmeCtrlr(
+func (mc *client) UpdateNvmeCtrlr(
 	params *pb.UpdateNvmeCtrlrParams) (string, error) {
-	if mc.Connected() == false {
-		return "", errConnect
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -111,11 +75,7 @@ func (mc *DAOSMgmtClient) UpdateNvmeCtrlr(
 
 // FetchFioConfigPaths retrieves absolute file paths for fio configurations
 // residing in spdk fio_plugin directory on server.
-func (mc *DAOSMgmtClient) FetchFioConfigPaths() (paths []string, err error) {
-	if mc.Connected() == false {
-		return nil, errConnect
-	}
-
+func (mc *client) FetchFioConfigPaths() (paths []string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -139,11 +99,8 @@ func (mc *DAOSMgmtClient) FetchFioConfigPaths() (paths []string, err error) {
 
 // BurnInNvme runs burn-in validation on NVMe Namespace and returns cmd output
 // in a stream to the gRPC consumer.
-func (mc *DAOSMgmtClient) BurnInNvme(ctrlrID int32, configPath string) (
+func (mc *client) BurnInNvme(ctrlrID int32, configPath string) (
 	reports []string, err error) {
-	if mc.Connected() == false {
-		return nil, errConnect
-	}
 
 	// Maximum time limit for BurnIn is 2hrs
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)

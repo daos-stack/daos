@@ -32,7 +32,6 @@ service MgmtControl {
 	rpc ListAllFeatures(EmptyParams) returns (stream Feature) {};
 	rpc ListFeatures(Category) returns (stream Feature) {};
 	rpc ListNvmeCtrlrs(EmptyParams) returns (stream NvmeController) {};
-	rpc ListNvmeNss(NvmeController) returns (stream NvmeNamespace) {};
 	rpc UpdateNvmeCtrlr(UpdateNvmeCtrlrParams) returns (NvmeController) {};
 	rpc FetchFioConfigPaths(EmptyParams) returns (stream FioConfigPath) {};
 	rpc BurnInNvme(BurnInNvmeParams) returns (stream BurnInNvmeReport) {};
@@ -59,6 +58,14 @@ message Feature {
 	string description = 3;
 }
 
+// NvmeNamespace represent NVMe namespaces available on controller.
+message NvmeNamespace {
+	// namespace id
+	int32 id = 2;
+	// device capacity in GBytes
+	int32 capacity = 3;
+}
+
 // NvmeController represents an NVMe Controller.
 message NvmeController {
 	// The id of the controller.
@@ -71,16 +78,8 @@ message NvmeController {
 	string pciaddr = 4;
 	// The firmware revision of the controller.
 	string fwrev = 5;
-}
-
-// NvmeNamespace represent NVMe namespaces available on controller.
-message NvmeNamespace {
-	// controller
-	NvmeController controller = 1;
-	// namespace id
-	int32 id = 2;
-	// device capacity in GBytes
-	int32 capacity = 3;
+	// NvmeNamespaces created on this controller.
+	repeated NvmeNamespace namespace = 6;
 }
 
 message UpdateNvmeCtrlrParams {

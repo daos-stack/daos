@@ -49,8 +49,8 @@ func mockScmCS(ss *scmStorage) *ControlService {
 }
 
 func TestListScmModules(t *testing.T) {
-	s := mockScmCS(newMockScmStorage([]DeviceDiscovery{mockModule()}))
-	m := mockModulePB()
+	s := mockScmCS(newMockScmStorage([]DeviceDiscovery{MockModule()}))
+	m := MockModulePB()
 
 	mock := &mockListScmModulesServer{}
 	s.ListScmModules(nil, mock)
