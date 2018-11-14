@@ -254,7 +254,7 @@ class ContainerAsync(Test):
             coh = self.Container1.coh
 
             GLOB_SIGNAL = threading.Event()
-            self.Container1.open(poh, cuuid, 2, coh, cb_func)
+            self.Container1.open(poh, cuuid, 2, cb_func, coh)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
@@ -265,7 +265,7 @@ class ContainerAsync(Test):
             # Checking rc after failure.
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
-            self.Container2.open(None, None, None, None, cb_func)
+            self.Container2.open(None, None, None, cb_func, None)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC != -1003:
