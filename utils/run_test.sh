@@ -1,5 +1,5 @@
-#!/bin/sh
-# Copyright (C) 2016-2018 Intel Corporation
+#!/bin/bash
+# Copyright (C) 2016-2019 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,8 @@ set -x
 # A list of tests to run as a single instance on Jenkins
 JENKINS_TEST_LIST=(scripts/cart_echo_test.yml                   \
                    scripts/cart_echo_test_non_sep.yml           \
+                   scripts/cart_test_corpc_prefwd.yml           \
+                   scripts/cart_test_corpc_prefwd_non_sep.yml   \
                    scripts/cart_test_group.yml                  \
                    scripts/cart_test_group_non_sep.yml          \
                    scripts/cart_test_barrier.yml                \
@@ -52,8 +54,6 @@ JENKINS_TEST_LIST=(scripts/cart_echo_test.yml                   \
                    scripts/cart_test_rpc_error_non_sep.yml      \
                    scripts/cart_test_singleton.yml              \
                    scripts/cart_test_singleton_non_sep.yml      \
-                   scripts/cart_rpc_test.yml                    \
-                   scripts/cart_rpc_test_non_sep.yml            \
                    scripts/cart_test_corpc_version.yml          \
                    scripts/cart_test_corpc_version_non_sep.yml  \
                    scripts/cart_test_cart_ctl.yml               \
@@ -83,20 +83,24 @@ else
 fi
 if [[ "$CART_TEST_MODE" =~ (native|all) ]]; then
   echo "Nothing to do yet, wish we could fail some tests"
-  scons utest
-  cd ${TESTDIR}
+  if ${RUN_UTEST:-true}; then
+      scons utest
+  fi
+  pushd ${TESTDIR}
   python3 test_runner "${JENKINS_TEST_LIST[@]}"
-  cd -
+  popd
 fi
 
 if [[ "$CART_TEST_MODE" =~ (memcheck|all) ]]; then
   echo "Nothing to do yet"
-  scons utest --utest-mode=memcheck
+  if ${RUN_UTEST:-true}; then
+    scons utest --utest-mode=memcheck
+  fi
   export TR_USE_VALGRIND=memcheck
-  cd ${TESTDIR}
+  pushd ${TESTDIR}
   python3 test_runner "${JENKINS_TEST_LIST[@]}"
 
-  cd -
+  popd
   RESULTS="valgrind_results"
   if [[ ! -e ${RESULTS} ]]; then mkdir ${RESULTS}; fi
 
