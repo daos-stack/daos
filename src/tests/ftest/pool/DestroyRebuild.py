@@ -87,9 +87,12 @@ class DestroyRebuild(Test):
     def tearDown(self):
         """ cleanup after the test """
 
-        os.remove(self.hostfile)
-        self.POOL.destroy(1)
-        ServerUtils.stopServer(hosts=self.hostlist)
+        try:
+            os.remove(self.hostfile)
+            if self.POOL:
+                self.POOL.destroy(1)
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
 
     def test_destroy_while_rebuilding(self):

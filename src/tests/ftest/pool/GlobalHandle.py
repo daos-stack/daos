@@ -107,12 +107,14 @@ class GlobalHandle(Test):
         time.sleep(2)
 
     def tearDown(self):
-        ServerUtils.stopServer(hosts=self.hostlist)
-        os.remove(self.hostfile)
+        try:
+            ServerUtils.stopServer()
+            os.remove(self.hostfile)
 
-        # really make sure everything is gone
-        CheckForPool.CleanupPools(self.hostlist)
-        ServerUtils.killServer(self.hostlist)
+            # really make sure everything is gone
+            CheckForPool.CleanupPools(self.hostlist)
+        finally:
+            ServerUtils.killServer(self.hostlist)
 
     def test_global_handle(self):
         """

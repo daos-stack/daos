@@ -69,10 +69,12 @@ class Permission(Test):
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
-        if self.POOL is not None and self.POOL.attached:
-            self.POOL.destroy(1)
-	# stop servers
-        ServerUtils.stopServer(hosts=self.hostlist)
+        try:
+            if self.POOL is not None and self.POOL.attached:
+                self.POOL.destroy(1)
+        finally:
+            # stop servers
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_connectpermission(self):
         """

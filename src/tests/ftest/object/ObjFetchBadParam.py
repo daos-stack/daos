@@ -112,14 +112,18 @@ class ObjFetchBadParam(Test):
 
     def tearDown(self):
 
-        self.container.close()
-        self.container.destroy()
-        self.pool.disconnect()
-        self.pool.destroy(1)
+        try:
+            if self.container:
+                self.container.close()
+                self.container.destroy()
+            if self.pool:
+                self.pool.disconnect()
+                self.pool.destroy(1)
 
-        ServerUtils.stopServer(hosts=self.hostlist)
-        if self.hostfile is not None:
-            os.remove(self.hostfile)
+            if self.hostfile is not None:
+                os.remove(self.hostfile)
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_bad_handle(self):
         """

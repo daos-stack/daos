@@ -93,17 +93,19 @@ class PunchTest(Test):
     def tearDown(self):
 
         try:
-            self.container.close()
+            if self.container:
+                self.container.close()
 
             # wait a few seconds and then destroy
             time.sleep(5)
-            self.container.destroy()
+            if self.container:
+                self.container.destroy()
 
             # cleanup the pool
-            self.pool.disconnect()
-            self.pool.destroy(1)
+            if self.pool:
+                self.pool.disconnect()
+                self.pool.destroy(1)
 
-            ServerUtils.stopServer(hosts=self.hostlist)
             if self.hostfile is not None:
                 os.remove(self.hostfile)
 
@@ -111,6 +113,9 @@ class PunchTest(Test):
             print(e)
             print(traceback.format_exc())
             self.fail("Test failed during teardown.\n")
+
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_dkey_punch(self):
         """

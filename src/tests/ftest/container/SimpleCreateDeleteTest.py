@@ -130,9 +130,11 @@ class SimpleCreateDeleteTest(Test):
         except Exception as e:
             self.fail("Daos code segfaulted most likely, error: %s" % e)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
-            if hostfile is not None:
-                os.remove(hostfile)
+            try:
+                if hostfile is not None:
+                    os.remove(hostfile)
+            finally:
+                ServerUtils.stopServer(hosts=self.hostlist)
 
 if __name__ == "__main__":
     main()

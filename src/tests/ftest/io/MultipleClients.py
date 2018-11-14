@@ -70,14 +70,15 @@ class MultipleClients(Test):
         IorUtils.build_ior(self.basepath)
 
     def tearDown(self):
-        if self.hostfile_clients is not None:
-            os.remove(self.hostfile_clients)
-        if self.hostfile_servers is not None:
-            os.remove(self.hostfile_servers)
-        if self.pool is not None and self.pool.attached:
-            self.pool.destroy(1)
-
-        ServerUtils.stopServer(hosts=self.hostlist)
+        try:
+            if self.hostfile_clients is not None:
+                os.remove(self.hostfile_clients)
+            if self.hostfile_servers is not None:
+                os.remove(self.hostfile_servers)
+            if self.pool is not None and self.pool.attached:
+                self.pool.destroy(1)
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_multipleclients(self):
         """

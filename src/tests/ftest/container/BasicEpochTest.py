@@ -65,9 +65,11 @@ class BasicEpochTest(Test):
         time.sleep(2)
 
     def tearDown(self):
-        ServerUtils.stopServer(hosts=self.hostlist)
-        if self.hostfile is not None:
-            os.remove(self.hostfile)
+        try:
+            if self.hostfile is not None:
+                os.remove(self.hostfile)
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_epoch_basics(self):
         """

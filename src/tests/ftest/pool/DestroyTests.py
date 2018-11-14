@@ -130,8 +130,10 @@ class DestroyTests(Test):
 
         # no matter what happens shutdown the server
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile)
+            try:
+                os.remove(hostfile)
+            finally:
+                ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_delete_doesnt_exist(self):
         """

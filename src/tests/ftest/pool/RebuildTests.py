@@ -214,11 +214,13 @@ class RebuildTests(Test):
             self.fail("Expecting to pass but test has failed.\n")
 
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile)
-            # really make sure everything is gone
-            CheckForPool.CleanupPools(self.hostlist)
-            ServerUtils.killServer(self.hostlist)
+            try:
+                ServerUtils.stopServer()
+                os.remove(hostfile)
+                # really make sure everything is gone
+                CheckForPool.CleanupPools(self.hostlist)
+            finally:
+                ServerUtils.killServer(self.hostlist)
 
 
     def test_multipool_rebuild(self):

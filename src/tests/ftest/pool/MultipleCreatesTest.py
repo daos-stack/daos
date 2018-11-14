@@ -67,8 +67,10 @@ class MultipleCreatesTest(Test):
 
 
     def tearDown(self):
-        os.remove(self.hostfile)
-        ServerUtils.stopServer(hosts=self.hostlist)
+        try:
+            os.remove(self.hostfile)
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_create_one(self):
         """

@@ -121,10 +121,13 @@ class ContainerAttributeTest(Test):
         self.large_data_set = {}
 
     def tearDown(self):
-        if self.hostfile is not None:
-            os.remove(self.hostfile)
-        self.CONTAINER.close()
-        ServerUtils.stopServer(hosts=self.hostlist)
+        try:
+            if self.hostfile is not None:
+                os.remove(self.hostfile)
+            if self.CONTAINER:
+                self.CONTAINER.close()
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def create_data_set(self):
         """

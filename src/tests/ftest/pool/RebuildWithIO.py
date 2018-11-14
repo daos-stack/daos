@@ -176,8 +176,10 @@ class RebuildWithIO(Test):
 
         finally:
             # wait for the I/O process to finish
-            ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile)
-            # really make sure everything is gone
-            CheckForPool.CleanupPools(self.hostlist)
-            ServerUtils.killServer(self.hostlist)
+            try:
+                ServerUtils.stopServer()
+                os.remove(hostfile)
+                # really make sure everything is gone
+                CheckForPool.CleanupPools(self.hostlist)
+            finally:
+                ServerUtils.killServer(self.hostlist)

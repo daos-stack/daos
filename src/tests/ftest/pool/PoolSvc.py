@@ -72,12 +72,13 @@ class PoolSvc(Test):
         time.sleep(5)
 
     def tearDown(self):
-        if self.hostfile is not None:
-            os.remove(self.hostfile)
-        if self.POOL is not None and self.POOL.attached:
-            self.POOL.destroy(1)
-
-        ServerUtils.stopServer(hosts=self.hostlist)
+        try:
+            if self.hostfile is not None:
+                os.remove(self.hostfile)
+            if self.POOL is not None and self.POOL.attached:
+                self.POOL.destroy(1)
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_poolsvc(self):
         """

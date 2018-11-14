@@ -93,15 +93,17 @@ class OpenContainerTest(Test):
         time.sleep(2)
 
     def tearDown(self):
-        if self.CONTAINER1 is not None:
-            self.CONTAINER1.destroy();
-        if self.CONTAINER2 is not None:
-            self.CONTAINER2.destroy();
-        if self.POOL1 is not None and self.POOL1.attached:
-            self.POOL1.destroy(1)
-        if self.POOL2 is not None and self.POOL2.attached:
-            self.POOL2.destroy(1)
-        ServerUtils.stopServer(hosts=self.hostlist)
+        try:
+            if self.CONTAINER1 is not None:
+                self.CONTAINER1.destroy();
+            if self.CONTAINER2 is not None:
+                self.CONTAINER2.destroy();
+            if self.POOL1 is not None and self.POOL1.attached:
+                self.POOL1.destroy(1)
+            if self.POOL2 is not None and self.POOL2.attached:
+                self.POOL2.destroy(1)
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_container_open(self):
         """

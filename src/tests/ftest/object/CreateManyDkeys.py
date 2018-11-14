@@ -71,11 +71,13 @@ class CreateManyDkeys(Test):
         self.pool.connect(1 << 1)
 
     def tearDown(self):
-        if self.hostfile is not None:
-            os.remove(self.hostfile)
-        self.pool.destroy(1)
-        ServerUtils.stopServer(hosts=self.hostlist)
-        ServerUtils.killServer(self.hostlist)
+        try:
+            if self.hostfile is not None:
+                os.remove(self.hostfile)
+            if self.pool:
+                self.pool.destroy(1)
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def write_a_bunch_of_values(self, how_many):
         """

@@ -77,9 +77,11 @@ class DeleteContainerTest(Test):
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
-        ServerUtils.stopServer(hosts=self.hostlist)
-        if self.hostfile is not None:
-            os.remove(self.hostfile)
+        try:
+            if self.hostfile is not None:
+                os.remove(self.hostfile)
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_container_delete(self):
         """

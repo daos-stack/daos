@@ -61,9 +61,12 @@ class InfoTests(Test):
 
     def tearDown(self):
         # shut 'er down
-        self.pool.destroy(1)
-        ServerUtils.stopServer(hosts=self.hostlist)
-        os.remove(self.hostfile)
+        try:
+            if self.pool:
+                self.pool.destroy(1)
+            os.remove(self.hostfile)
+        finally:
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_simple_query(self):
         """
