@@ -130,7 +130,7 @@ dc_task_schedule(tse_task_t *task, bool instant)
 
 	rc = tse_task_schedule(task, instant);
 	if (rc) {
-		tse_task_complete(task, rc);
+		/** user is responsible for completing event with error */
 		D_GOTO(out, rc = 0); /* error has been reported to event */
 	}
 

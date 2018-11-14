@@ -41,6 +41,8 @@
 #define CHUNK_SIZE	"daos_array_chunk_size"
 
 struct dac_array {
+	/** link chain in the global handle hash table */
+	struct d_hlink		hlink;
 	/** DAOS KV object handle */
 	daos_handle_t		daos_oh;
 	/** Array cell size of each element */
@@ -53,10 +55,6 @@ struct dac_array {
 	daos_obj_id_t		oid;
 	/** object handle access mode */
 	unsigned int		mode;
-	/** ref count on array */
-	unsigned int		cob_ref;
-	/** protect ref count */
-	pthread_spinlock_t	cob_lock;
 };
 
 struct md_params {
@@ -81,66 +79,71 @@ struct io_params {
 	struct io_params	*next;
 };
 
+static void
+array_free(struct d_hlink *hlink)
+{
+	struct dac_array *array;
+
+	array = container_of(hlink, struct dac_array, hlink);
+	D_ASSERT(daos_hhash_link_empty(&array->hlink));
+	D_FREE_PTR(array);
+}
+
+static struct d_hlink_ops array_h_ops = {
+	.hop_free	= array_free,
+};
+
 static struct dac_array *
 array_alloc(void)
 {
-	struct dac_array *obj;
-	int rc = 0;
+	struct dac_array *array;
 
-	D_ALLOC_PTR(obj);
-	if (obj == NULL)
+	D_ALLOC_PTR(array);
+	if (array == NULL)
 		return NULL;
 
-	obj->cob_ref = 1;
-	rc = D_SPIN_INIT(&obj->cob_lock, PTHREAD_PROCESS_PRIVATE);
-	if (rc != 0) {
-		D_FREE_PTR(obj);
-		return NULL;
-	}
-	return obj;
+	daos_hhash_hlink_init(&array->hlink, &array_h_ops);
+	return array;
 }
 
 static void
-array_decref(struct dac_array *obj)
+array_decref(struct dac_array *array)
 {
-	D_SPIN_LOCK(&obj->cob_lock);
-	obj->cob_ref--;
-	if (obj->cob_ref == 0) {
-		D_SPIN_UNLOCK(&obj->cob_lock);
-		D_SPIN_DESTROY(&obj->cob_lock);
-		D_FREE_PTR(obj);
-	} else {
-		D_SPIN_UNLOCK(&obj->cob_lock);
-	}
-}
-
-static void
-array_addref(struct dac_array *obj)
-{
-	D_SPIN_LOCK(&obj->cob_lock);
-	obj->cob_ref++;
-	D_SPIN_UNLOCK(&obj->cob_lock);
+	daos_hhash_link_putref(&array->hlink);
 }
 
 static daos_handle_t
-array_ptr2hdl(struct dac_array *obj)
+array_ptr2hdl(struct dac_array *array)
 {
 	daos_handle_t oh;
 
-	oh.cookie = (uint64_t)obj;
+	daos_hhash_link_key(&array->hlink, &oh.cookie);
 	return oh;
 }
 
 static struct dac_array *
 array_hdl2ptr(daos_handle_t oh)
 {
-	struct dac_array *obj;
+	struct d_hlink *hlink;
 
-	obj = (struct dac_array *)oh.cookie;
-	array_addref(obj);
-	return obj;
+	hlink = daos_hhash_link_lookup(oh.cookie);
+	if (hlink == NULL)
+		return NULL;
+
+	return container_of(hlink, struct dac_array, hlink);
 }
 
+static void
+array_hdl_link(struct dac_array *array)
+{
+	daos_hhash_link_insert(&array->hlink, D_HTYPE_ARRAY);
+}
+
+static void
+array_hdl_unlink(struct dac_array *array)
+{
+	daos_hhash_link_delete(&array->hlink);
+}
 
 static int
 free_md_params_cb(tse_task_t *task, void *data)
@@ -211,6 +214,7 @@ create_handle_cb(tse_task_t *task, void *data)
 	array->chunk_size = args->chunk_size;
 	array->daos_oh = *args->oh;
 
+	array_hdl_link(array);
 	*args->oh = array_ptr2hdl(array);
 
 	return 0;
@@ -242,9 +246,7 @@ free_handle_cb(tse_task_t *task, void *data)
 	if (array == NULL)
 		return -DER_NO_HDL;
 
-	/** -1 for hdl2ptr */
-	array_decref(array);
-	/** -1 for array_create/open */
+	array_hdl_unlink(array);
 	array_decref(array);
 
 	return 0;
@@ -403,12 +405,15 @@ dac_array_g2l(daos_handle_t coh, struct dac_array_glob *array_glob,
 		D_ERROR("Failed local object open (%d).\n", rc);
 		D_GOTO(out_array, rc);
 	}
+
 	array->coh = coh;
 	array->cell_size = array_glob->cell_size;
 	array->chunk_size = array_glob->chunk_size;
 	array->oid.hi = array_glob->oid.hi;
 	array->oid.lo = array_glob->oid.lo;
 	array->mode = array_glob->mode;
+
+	array_hdl_link(array);
 	*oh = array_ptr2hdl(array);
 
 out_array:
@@ -642,6 +647,7 @@ open_handle_cb(tse_task_t *task, void *data)
 	array->chunk_size = *args->chunk_size;
 	array->daos_oh = *args->oh;
 
+	array_hdl_link(array);
 	*args->oh = array_ptr2hdl(array);
 
 	D_FREE(magic_val);

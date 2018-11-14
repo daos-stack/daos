@@ -100,7 +100,8 @@ obj_shard_rw_bulk_fini(crt_rpc_t *rpc)
 
 	nr = orw->orw_bulks.ca_count;
 	for (i = 0; i < nr; i++)
-		crt_bulk_free(bulks[i]);
+		if (bulks[i] != CRT_BULK_NULL)
+			crt_bulk_free(bulks[i]);
 
 	D_FREE(bulks);
 	orw->orw_bulks.ca_arrays = NULL;
