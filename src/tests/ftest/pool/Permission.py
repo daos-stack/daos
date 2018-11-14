@@ -60,27 +60,25 @@ class Permission(Test):
         self.POOL = None
 
         # getting hostfile
-        hostfile = None
-        hostlist = self.params.get("test_machines", '/run/hosts/*')
-        hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
-        print ("Host file is: {}".format(hostfile))
+        self.hostfile = None
+        hostlist = self.params.get("test_machines", '/run/hosts/*/')
+        self.hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+        print ("Host file is: {}".format(self.hostfile))
 
         # starting server
-        ServerUtils.runServer(hostfile, self.server_group, self.basepath)
-        # give it time to start
-        time.sleep(2)
+        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
         if self.POOL is not None and self.POOL.attached:
             self.POOL.destroy(1)
-	    # stop servers
+        # stop servers
         ServerUtils.stopServer()
 
     def test_connectpermission(self):
         """
-    	Test pool connections with specific permissions.
-    	:avocado: tags=pool,permission,connectpermission
-    	"""
+        Test pool connections with specific permissions.
+        :avocado: tags=pool,permission,connectpermission
+        """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
         createuid = self.params.get("uid", '/run/createtests/createuid/')
@@ -101,8 +99,8 @@ class Permission(Test):
             expected_result = 'FAIL'
 
         try:
-        	# initialize a python pool object then create the underlying
-        	# daos storage
+            # initialize a python pool object then create the underlying
+            # daos storage
             self.POOL = DaosPool(self.Context)
             print ("Pool initialisation successful")
 
@@ -122,10 +120,9 @@ class Permission(Test):
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
         finally:
-            if hostfile is not None:
-                os.remove(hostfile)
+            if self.hostfile is not None:
+                os.remove(self.hostfile)
             # cleanup the pool
-            self.POOL.disconnect()
             self.POOL.destroy(1)
             self.POOL = None
 
@@ -195,12 +192,9 @@ class Permission(Test):
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
         finally:
-            if hostfile is not None:
-                os.remove(hostfile)
+            if self.hostfile is not None:
+                os.remove(self.hostfile)
             # cleanup the container and pool
-            self.CONTAINER.close()
-            self.CONTAINER.destroy()
-            self.POOL.disconnect()
             self.POOL.destroy(1)
             self.POOL = None
 
