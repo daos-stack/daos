@@ -55,13 +55,14 @@ class DaosPool(object):
     def set_uuid_str(self, uuidstr):
         self.uuid = str_to_c_uuid(uuidstr)
 
-    def create(self, mode, uid, gid, size, group, target_list=None,
-               cb_func=None, svcn=1):
+    def create(self, mode, uid, gid, scm_size, group, target_list=None,
+               cb_func=None, svcn=1, nvme_size=0):
         """ send a pool creation request to the daos server group """
         c_mode = ctypes.c_uint(mode)
         c_uid = ctypes.c_uint(uid)
         c_gid = ctypes.c_uint(gid)
-        c_size = ctypes.c_longlong(size)
+        c_scm_size = ctypes.c_longlong(scm_size)
+        c_nvme_size = ctypes.c_longlong(nvme_size)
         if group is not None:
             self.group = ctypes.create_string_buffer(group)
         else:
@@ -69,7 +70,7 @@ class DaosPool(object):
         self.uuid = (ctypes.c_ubyte * 16)()
         rank_t = ctypes.c_uint * svcn
         # initializing with default values
-        rank = rank_t(*list([999999 for i in range(svcn)]))
+        rank = rank_t(*list([999999 for dummy_i in range(svcn)]))
         rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
         c_whatever = ctypes.create_string_buffer(b"rubbish")
         self.svc = RankList(rl_ranks, svcn)
@@ -88,8 +89,8 @@ class DaosPool(object):
         # create synchronously, if its there then run it in a thread
         if cb_func == None:
             rc = func(c_mode, c_uid, c_gid, self.group, tgt_ptr,
-                      c_whatever, c_size, ctypes.byref(self.svc),
-                      self.uuid, None)
+                      c_whatever, c_scm_size, c_nvme_size,
+                      ctypes.byref(self.svc), self.uuid, None)
             if rc != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
                 raise ValueError("Pool create returned non-zero. RC: {0}"
@@ -99,7 +100,7 @@ class DaosPool(object):
         else:
             event = DaosEvent()
             params = [c_mode, c_uid, c_gid, self.group, tgt_ptr,
-                      c_whatever, c_size,
+                      c_whatever, c_scm_size, c_nvme_size,
                       ctypes.byref(self.svc), self.uuid, event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
@@ -557,7 +558,8 @@ class DaosObj(object):
                                  .format(rc))
         else:
             event = DaosEvent()
-            params = [self.oh, c_epoch, c_len_dkeys, c_dkeys_ptr, event]
+            params = [self.oh, c_epoch, c_len_dkeys, ctypes.byref(c_dkeys),
+                      event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
                                        params,
@@ -610,7 +612,7 @@ class DaosObj(object):
         else:
             event = DaosEvent()
             params = [self.oh, c_epoch, ctypes.byref(c_dkey_iov), c_len_akeys,
-                      c_types.byref(c_akeys), event]
+                      ctypes.byref(c_akeys), event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
                                        params,
@@ -1129,7 +1131,7 @@ class DaosContainer(object):
         else:
             event = DaosEvent()
             params = [self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
-                      ctypes.byref(c_info), event]
+                      ctypes.byref(self.info), event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
                                        params,
@@ -1822,8 +1824,9 @@ if __name__ == '__main__':
         print ("=====Set Attr =====")
         CONTAINER.set_attr(data = data)
         print ("=====List Attr =====")
-        size, buf = CONTAINER.list_attr(data = data)
-        print size, buf
+        # commenting out below line, list_attr has no data param
+        # size, buf = CONTAINER.list_attr(data = data)
+        # print size, buf
         print ("=====Get Attr =====")
         val = CONTAINER.get_attr(data = data)
         for i in range(0, len(data)):
