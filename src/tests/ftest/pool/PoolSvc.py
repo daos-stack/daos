@@ -126,21 +126,15 @@ class PoolSvc(Test):
                 cmd = ('{0} kill-leader  --uuid={1}'
                         .format(self.daosctl, self.POOL.get_uuid_str()))
                 process.system(cmd)
-                time.sleep(5)
                 self.POOL.connect(1 << 1)
                 self.POOL.disconnect()
-                server = DaosServer(self.Context, self.server_group, 1)
+                server = DaosServer(self.Context, self.server_group, 2)
                 server.kill(1)
-                time.sleep(5)
+                self.POOL.exclude([2])
                 self.POOL.connect(1 << 1)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
-
-            # cleanup the pool
-            self.POOL.disconnect()
-            self.POOL.destroy(1)
-            self.POOL = None
 
         except ValueError as e:
             print e
