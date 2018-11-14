@@ -72,6 +72,24 @@ daos_mgmt_params_set(const char *grp, d_rank_t rank, unsigned int key_id,
 	return dc_task_schedule(task, true);
 }
 
+static bool
+valid_pool_create_mode(uint32_t mode)
+{
+	uint32_t mandatory_bits_mask = (DAOS_PC_RW | DAOS_PC_EX) |
+			((DAOS_PC_RW | DAOS_PC_EX) << DAOS_PC_NBITS) |
+			((DAOS_PC_RW | DAOS_PC_EX) << (DAOS_PC_NBITS * 2));
+
+	/* extra bits */
+	if (mode >= 1U << (DAOS_PC_NBITS * 3))
+		return false;
+
+	/* do not allow to create pool with no write perm */
+	if ((mode & mandatory_bits_mask) == 0)
+		return false;
+
+	return true;
+}
+
 int
 daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 		 const d_rank_list_t *tgts, const char *dev,
@@ -83,6 +101,11 @@ daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_CREATE);
+	if (!valid_pool_create_mode(mode)) {
+		D_ERROR("Invalid pool creation mode (%o).\n", mode);
+		return -DER_INVAL;
+	}
+
 	rc = dc_task_create(dc_pool_create, NULL, ev, &task);
 	if (rc)
 		return rc;

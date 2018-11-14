@@ -61,7 +61,7 @@ struct pool_cmd_options {
 	char          *server_list;
 	char          *target_list;
 	unsigned int  force;
-	unsigned int  mode;
+	uint32_t      mode;
 	unsigned int  uid;
 	unsigned int  gid;
 	uint64_t      size;
@@ -78,6 +78,8 @@ parse_pool_args_cb(int key, char *arg,
 		   struct argp_state *state)
 {
 	struct pool_cmd_options *options = state->input;
+	unsigned long int val;
+	char *endptr;
 
 	/* if no uid/gid specified, get them from current user */
 	options->uid = geteuid();
@@ -97,7 +99,14 @@ parse_pool_args_cb(int key, char *arg,
 		options->server_list = arg;
 		break;
 	case 'm':
-		options->mode = atoi(arg);
+		/* use base 0 to interpret 0/octal or 0x/hex prefixes
+		 */
+		val = strtoul(arg, &endptr, 0);
+		if (*arg == '\0' || arg == endptr || val > UINT32_MAX ||
+		    (val == 0 && (errno == EINVAL || errno == ERANGE)) ||
+		     *endptr != '\0')
+			argp_error(state, "Invalid mode");
+		options->mode = (uint32_t)val;
 		break;
 	case 'c':
 		options->replica_count = atoi(arg);

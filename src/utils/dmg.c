@@ -119,6 +119,8 @@ create_hdlr(int argc, char *argv[])
 	uuid_t			pool_uuid;
 	int			i;
 	int			rc;
+	unsigned long int	val;
+	char			*endptr;
 
 	memset(ranks, 0, sizeof(ranks));
 	svc.rl_ranks = ranks;
@@ -133,7 +135,15 @@ create_hdlr(int argc, char *argv[])
 			group = optarg;
 			break;
 		case 'm':
-			mode = strtoul(optarg, NULL /* endptr */, 0 /* base */);
+			val = strtoul(optarg, &endptr, 0 /* base */);
+			if (*optarg == '\0' || optarg == endptr ||
+			    val > UINT32_MAX ||
+			    (val == 0 && (errno == EINVAL ||
+			    errno == ERANGE)) || *endptr != '\0') {
+				fprintf(stderr, "Invalid mode: %s\n", optarg);
+				return 2;
+			}
+			mode = (uint32_t)val;
 			break;
 		case 's':
 			scm_size = tobytes(optarg);

@@ -55,7 +55,7 @@ pool_create_all(void **state)
 	/** create container */
 	print_message("creating pool %ssynchronously ... ",
 		      arg->async ? "a" : "");
-	rc = daos_pool_create(0 /* mode */, 0 /* uid */, 0 /* gid */,
+	rc = daos_pool_create(0700 /* mode */, 0 /* uid */, 0 /* gid */,
 			      arg->group, NULL /* tgts */, "pmem" /* dev */,
 			      0 /* minimal size */, 0 /* nvme size */,
 			      &arg->pool.svc /* svc */, uuid,
