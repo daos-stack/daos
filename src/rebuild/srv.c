@@ -959,9 +959,6 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 	if (rpt->rt_lock)
 		ABT_mutex_free(&rpt->rt_lock);
 
-	if (rpt->rt_fini_lock)
-		ABT_mutex_free(&rpt->rt_fini_lock);
-
 	if (rpt->rt_fini_cond)
 		ABT_cond_free(&rpt->rt_fini_cond);
 
@@ -971,22 +968,26 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 void
 rpt_get(struct rebuild_tgt_pool_tracker	*rpt)
 {
+	ABT_mutex_lock(rpt->rt_lock);
 	D_ASSERT(rpt->rt_refcount >= 0);
 	rpt->rt_refcount++;
 
 	D_DEBUG(DB_REBUILD, "rpt %p ref %d\n", rpt, rpt->rt_refcount);
+	ABT_mutex_unlock(rpt->rt_lock);
 }
 
 void
 rpt_put(struct rebuild_tgt_pool_tracker	*rpt)
 {
+	ABT_mutex_lock(rpt->rt_lock);
 	rpt->rt_refcount--;
 	D_ASSERT(rpt->rt_refcount >= 0);
 	D_DEBUG(DB_REBUILD, "rpt %p ref %d\n", rpt, rpt->rt_refcount);
 	if (rpt->rt_refcount == 1 && rpt->rt_finishing) {
-		ABT_mutex_lock(rpt->rt_fini_lock);
 		ABT_cond_signal(rpt->rt_fini_cond);
-		ABT_mutex_unlock(rpt->rt_fini_lock);
+		ABT_mutex_unlock(rpt->rt_lock);
+	} else {
+		ABT_mutex_unlock(rpt->rt_lock);
 	}
 }
 
@@ -1097,6 +1098,7 @@ rebuild_task_ult(void *arg)
 	uuid_copy(iv.riv_pool_uuid, task->dst_pool_uuid);
 	iv.riv_master_rank	= pool->sp_iv_ns->iv_master_rank;
 	iv.riv_ver		= rgt->rgt_rebuild_ver;
+	iv.riv_global_scan_done = rgt->rgt_scan_done;
 	iv.riv_global_done	= 1;
 	iv.riv_leader_term	= rgt->rgt_leader_term;
 	iv.riv_toberb_obj_count	= rgt->rgt_status.rs_toberb_obj_nr;
@@ -1421,6 +1423,8 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_DEBUG(DB_REBUILD, "Finalize rebuild for "DF_UUID", map_ver=%u\n",
 		DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 
+	ABT_mutex_lock(rpt->rt_lock);
+	D_ASSERT(rpt->rt_refcount > 0);
 	d_list_del_init(&rpt->rt_list);
 	rpt->rt_finishing = 1;
 	/* Wait until all ult/tasks finish and release the rpt.
@@ -1432,9 +1436,10 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	 * to destroy the rpt after this.
 	 */
 	if (rpt->rt_refcount > 1) {
-		ABT_mutex_lock(rpt->rt_fini_lock);
-		ABT_cond_wait(rpt->rt_fini_cond, rpt->rt_fini_lock);
-		ABT_mutex_unlock(rpt->rt_fini_lock);
+		ABT_cond_wait(rpt->rt_fini_cond, rpt->rt_lock);
+		ABT_mutex_unlock(rpt->rt_lock);
+	} else {
+		ABT_mutex_unlock(rpt->rt_lock);
 	}
 
 	/* Check each puller */
@@ -1473,7 +1478,6 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	rc = dss_task_collective(rebuild_fini_one, rpt);
 
 	rpt_put(rpt);
-
 	/* No one should access rpt after we stop puller and call
 	 * rebuild_fini_one.
 	 */
@@ -1540,8 +1544,10 @@ rebuild_tgt_status_check(void *arg)
 					   rpt->rt_reported_rec_cnt;
 		}
 		iv.riv_status = status.status;
-		if (status.scanning == 0 || rpt->rt_abort)
+		if (status.scanning == 0 || rpt->rt_abort) {
 			iv.riv_scan_done = 1;
+			rpt->rt_scan_done = 1;
+		}
 
 		/* Only global scan is done, then pull is trustable */
 		if ((rpt->rt_global_scan_done && !status.rebuilding) ||
@@ -1589,7 +1595,7 @@ rebuild_tgt_status_check(void *arg)
 			"scan done %d pull done %d scan gl done %d"
 			" gl done %d status %d\n",
 			rpt->rt_rebuild_ver, iv.riv_obj_count,
-			iv.riv_rec_count, iv.riv_scan_done, iv.riv_pull_done,
+			iv.riv_rec_count, rpt->rt_scan_done, iv.riv_pull_done,
 			rpt->rt_global_scan_done, rpt->rt_global_done,
 			iv.riv_status);
 
@@ -1652,10 +1658,6 @@ rpt_create(struct ds_pool *pool, d_rank_list_t *svc_list, uint32_t pm_ver,
 
 	D_INIT_LIST_HEAD(&rpt->rt_list);
 	rc = ABT_mutex_create(&rpt->rt_lock);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(free, rc = dss_abterr2der(rc));
-
-	rc = ABT_mutex_create(&rpt->rt_fini_lock);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(free, rc = dss_abterr2der(rc));
 

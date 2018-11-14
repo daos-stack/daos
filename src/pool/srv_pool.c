@@ -2250,6 +2250,14 @@ pool_map_update(crt_context_t ctx, struct pool_svc *svc,
 	uint32_t		size;
 	int			rc;
 
+	/* If iv_ns is NULL, it means the pool is not connected,
+	 * then we do not need distribute pool map to all other
+	 * servers. NB: rebuild will redistribute the pool map
+	 * by itself anyway.
+	 */
+	if (svc->ps_pool->sp_iv_ns == NULL)
+		return 0;
+
 	D_DEBUG(DF_DSMS, DF_UUID": update ver %d pb_nr %d\n",
 		 DP_UUID(svc->ps_uuid), map_version, buf->pb_nr);
 
@@ -2287,7 +2295,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	struct rdb_tx		tx;
 	struct pool_map	       *map;
 	uint32_t		map_version_before;
-	uint32_t		map_version;
+	uint32_t		map_version = 0;
 	struct pool_buf	       *map_buf = NULL;
 	struct pool_map	       *map_tmp;
 	bool			updated = false;

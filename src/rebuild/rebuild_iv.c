@@ -187,7 +187,7 @@ rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc,
 			return 0;
 		}
 
-		D_DEBUG(DB_TRACE, DF_UUID" rebuild finished"
+		D_DEBUG(DB_REBUILD, DF_UUID" rebuild finished"
 			" sgl/gl %d/%d\n",
 			 DP_UUID(src_iv->riv_pool_uuid),
 			 dst_iv->riv_global_scan_done,

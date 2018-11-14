@@ -105,7 +105,6 @@ struct rebuild_tgt_pool_tracker {
 	int			rt_errno;
 	int			rt_refcount;
 	uint64_t		rt_leader_term;
-	ABT_mutex		rt_fini_lock;
 	ABT_cond		rt_fini_cond;
 	/* # to-be-rebuilt objs */
 	uint64_t		rt_toberb_objs;

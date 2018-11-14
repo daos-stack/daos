@@ -576,10 +576,14 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	oeo = crt_reply_get(enum_args->rpc);
 	rc = obj_reply_get_status(enum_args->rpc);
 	if (rc != 0) {
-		D_ERROR("rpc %p RPC %d failed: %d\n", enum_args->rpc,
-			 opc_get(enum_args->rpc->cr_opc), rc);
-		if (rc == -DER_KEY2BIG)
+		if (rc == -DER_KEY2BIG) {
+			D_DEBUG(DB_IO, "key size "DF_U64" too big.\n",
+				oeo->oeo_size);
 			enum_args->eaa_kds[0].kd_key_len = oeo->oeo_size;
+		} else {
+			D_ERROR("rpc %p RPC %d failed: %d\n", enum_args->rpc,
+				 opc_get(enum_args->rpc->cr_opc), rc);
+		}
 		D_GOTO(out, rc);
 	}
 	*enum_args->eaa_map_ver = obj_reply_map_version_get(enum_args->rpc);

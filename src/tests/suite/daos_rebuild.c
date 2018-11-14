@@ -80,7 +80,7 @@ rebuild_test_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank)
 
 static int
 rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
-			daos_epoch_t validate_eph)
+			daos_epoch_t punch_eph, daos_epoch_t validate_eph)
 {
 #define BULK_SIZE	5000
 #define REC_SIZE	64
@@ -141,7 +141,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 
 			/* Punch akey */
 			if (k == akey_punch_idx && !validate)
-				punch_akey(dkey, akey, eph, req);
+				punch_akey(dkey, akey, punch_eph, req);
 		}
 
 		/* large records */
@@ -173,12 +173,12 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 
 			/* Punch akey */
 			if (k == akey_punch_idx && !validate)
-				punch_akey(dkey, akey, eph, req);
+				punch_akey(dkey, akey, punch_eph, req);
 		}
 
 		/* Punch dkey */
 		if (j == dkey_punch_idx && !validate)
-			punch_dkey(dkey, eph, req);
+			punch_dkey(dkey, punch_eph, req);
 
 		/* single record */
 		sprintf(data, "%s_"DF_U64, "single_data", eph);
@@ -226,11 +226,8 @@ rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 		if (i == punch_idx) {
 			punch_obj(eph, &req);
 		} else {
-			rebuild_io_obj_internal((&req), false, eph, -1);
-			/* eph + 1 is discarded, so it should read the data
-			 * of eph
-			 **/
-			rebuild_io_obj_internal((&req), false, eph + 1, -1);
+			rebuild_io_obj_internal((&req), false, eph, eph + 1,
+						-1);
 		}
 
 		ioreq_fini(&req);
@@ -273,10 +270,11 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			ioreq_init(&req, arg->coh, oids[j], DAOS_IOD_ARRAY,
 				   arg);
 
-			/* how to validate punch object */
+			/* how to validate punch object XXX */
 			if (j != punch_idx)
 				/* Validate eph data */
-				rebuild_io_obj_internal((&req), true, eph, eph);
+				rebuild_io_obj_internal((&req), true, -1, eph,
+							eph);
 
 			ioreq_fini(&req);
 		}
