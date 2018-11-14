@@ -65,7 +65,7 @@ class ConnectTest(Test):
        time.sleep(1)
 
     def tearDown(self):
-       ServerUtils.stopServer()
+       ServerUtils.stopServer(hosts=self.hostlist)
        os.remove(self.hostfile)
 
     def test_connect(self):

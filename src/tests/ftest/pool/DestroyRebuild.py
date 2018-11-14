@@ -60,9 +60,9 @@ class DestroyRebuild(Test):
            self.CONTEXT = DaosContext(build_paths['PREFIX'] + '/lib/')
 
            # generate a hostfile
-           self.host_list = self.params.get("test_machines",'/run/hosts/')
+           self.hostlist = self.params.get("test_machines",'/run/hosts/')
            tmp = build_paths['PREFIX'] + '/tmp'
-           self.hostfile = WriteHostFile.WriteHostFile(self.host_list, tmp)
+           self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
            # fire up the DAOS servers
            self.server_group = self.params.get("server_group",'/run/server/',
@@ -89,7 +89,7 @@ class DestroyRebuild(Test):
 
            os.remove(self.hostfile)
            self.POOL.destroy(1)
-           ServerUtils.stopServer()
+           ServerUtils.stopServer(hosts=self.hostlist)
 
 
     def test_destroy_while_rebuilding(self):
@@ -110,7 +110,7 @@ class DestroyRebuild(Test):
             # BUG if you don't connect the rebuild doesn't start correctly
             self.POOL.connect(1 << 1)
             status = self.POOL.pool_query()
-            if not status.pi_ntargets == len(self.host_list):
+            if not status.pi_ntargets == len(self.hostlist):
                 self.fail("target count wrong.\n")
             if not status.pi_ndisabled == 0:
                 self.fail("disabled target count wrong.\n")

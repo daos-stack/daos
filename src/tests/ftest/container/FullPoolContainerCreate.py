@@ -77,8 +77,7 @@ class FullPoolContainerCreate(Test):
         try:
             self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer()
-            ServerUtils.killServer(self.hostlist)
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_no_space_cont_create(self):
         """

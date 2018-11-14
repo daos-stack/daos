@@ -67,7 +67,7 @@ class MultiServerCreateDeleteTest(Test):
        self.daosctl = basepath + '/install/bin/daosctl'
 
     def tearDown(self):
-       ServerUtils.stopServer()
+       ServerUtils.stopServer(hosts=self.hostlist)
        os.remove(self.hostfile)
 
     def test_create(self):

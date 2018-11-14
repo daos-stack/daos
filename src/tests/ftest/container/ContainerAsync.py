@@ -75,8 +75,8 @@ class ContainerAsync(Test):
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.POOL = None
 
-        hostlist = self.params.get("test_machines",'/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+        self.hostlist = self.params.get("test_machines",'/run/hosts/*')
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
         print("Host file is: {}".format(self.hostfile))
 
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
@@ -88,7 +88,7 @@ class ContainerAsync(Test):
         if self.POOL is not None and self.POOL.attached:
             self.POOL.destroy(1)
 
-        ServerUtils.stopServer()
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_createasync(self):
         """

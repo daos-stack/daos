@@ -67,7 +67,7 @@ class BadConnectTest(Test):
         time.sleep(2)
 
     def tearDown(self):
-       ServerUtils.stopServer()
+       ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_connect(self):
         """

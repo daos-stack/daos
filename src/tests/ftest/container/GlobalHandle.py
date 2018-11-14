@@ -130,7 +130,7 @@ class GlobalHandle(Test):
        time.sleep(2)
 
     def tearDown(self):
-        ServerUtils.stopServer()
+        ServerUtils.stopServer(hosts=self.hostlist)
         os.remove(self.hostfile)
 
         # really make sure everything is gone

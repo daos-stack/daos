@@ -101,7 +101,7 @@ class OpenContainerTest(Test):
             self.POOL1.destroy(1)
         if self.POOL2 is not None and self.POOL2.attached:
             self.POOL2.destroy(1)
-        ServerUtils.stopServer()
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_container_open(self):
         """

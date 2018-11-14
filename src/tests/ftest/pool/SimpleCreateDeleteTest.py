@@ -65,7 +65,7 @@ class SimpleCreateDeleteTest(Test):
        time.sleep(2)
 
     def tearDown(self):
-       ServerUtils.stopServer()
+       ServerUtils.stopServer(hosts=self.hostlist)
        os.remove(self.hostfile)
 
     def test_create(self):

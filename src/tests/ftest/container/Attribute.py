@@ -124,8 +124,7 @@ class ContainerAttributeTest(Test):
         if self.hostfile is not None:
             os.remove(self.hostfile)
         self.CONTAINER.close()
-        ServerUtils.stopServer()
-        ServerUtils.killServer(self.hostlist)
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def create_data_set(self):
         """

@@ -77,7 +77,7 @@ class MultipleClients(Test):
         if self.pool is not None and self.pool.attached:
             self.pool.destroy(1)
 
-        ServerUtils.stopServer()
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_multipleclients(self):
         """

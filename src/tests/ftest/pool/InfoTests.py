@@ -62,7 +62,7 @@ class InfoTests(Test):
     def tearDown(self):
         # shut 'er down
         self.pool.destroy(1)
-        ServerUtils.stopServer()
+        ServerUtils.stopServer(hosts=self.hostlist)
         os.remove(self.hostfile)
 
     def test_simple_query(self):

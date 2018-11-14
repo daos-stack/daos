@@ -82,8 +82,8 @@ class DestroyTests(Test):
 
         :avocado: tags=pool,pooldestroy,quick
         """
-        hostlist = self.params.get("test_machines1", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+        self.hostlist = self.params.get("test_machines1", '/run/hosts/')
+        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
@@ -108,7 +108,7 @@ class DestroyTests(Test):
             uuid_str = """{0}""".format(process.system_output(create_cmd))
             print ("uuid is {0}\n".format(uuid_str))
 
-            host = hostlist[0]
+            host = self.hostlist[0]
             exists = CheckForPool.checkForPool(host, uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n"
@@ -130,7 +130,7 @@ class DestroyTests(Test):
 
         # no matter what happens shutdown the server
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
 
     def test_delete_doesnt_exist(self):
@@ -139,8 +139,8 @@ class DestroyTests(Test):
 
         :avocado: tags=pool,pooldestroy
         """
-        hostlist = self.params.get("test_machines1", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+        self.hostlist = self.params.get("test_machines1", '/run/hosts/')
+        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
@@ -174,7 +174,7 @@ class DestroyTests(Test):
 
         # no matter what happens shutdown the server
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
 
 
@@ -185,8 +185,8 @@ class DestroyTests(Test):
         :avocado: tags=pool,pooldestroy
         """
 
-        hostlist = self.params.get("test_machines1", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+        self.hostlist = self.params.get("test_machines1", '/run/hosts/')
+        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
@@ -241,7 +241,7 @@ class DestroyTests(Test):
 
         # no matter what happens shutdown the server
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
 
 
@@ -253,8 +253,8 @@ class DestroyTests(Test):
 
         :avocado: tags=pool,pooldestroy,multiserver
         """
-        hostlist = self.params.get("test_machines2", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+        self.hostlist = self.params.get("test_machines2", '/run/hosts/')
+        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
@@ -278,11 +278,11 @@ class DestroyTests(Test):
             uuid_str = """{0}""".format(process.system_output(create_cmd))
             print ("uuid is {0}\n".format(uuid_str))
 
-            exists = CheckForPool.checkForPool(hostlist[0], uuid_str)
+            exists = CheckForPool.checkForPool(self.hostlist[0], uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n"
-                          .format(uuid_str, hostlist[0]))
-                exists = CheckForPool.checkForPool(hostlist[1], uuid_str)
+                          .format(uuid_str, self.hostlist[0]))
+                exists = CheckForPool.checkForPool(self.hostlist[1], uuid_str)
                 if exists != 0:
                     self.fail("Pool {0} not found on host {1}.\n"
                               .format(uuid_str, host2))
@@ -291,14 +291,14 @@ class DestroyTests(Test):
                               .format(daosctl, uuid_str, setid))
                 process.system(delete_cmd)
 
-                exists = CheckForPool.checkForPool(hostlist[0], uuid_str)
+                exists = CheckForPool.checkForPool(self.hostlist[0], uuid_str)
                 if exists == 0:
                     self.fail("Pool {0} found on host {1} when not"
-                              " expected.\n".format(uuid_str, hostlist[0]))
-                exists = CheckForPool.checkForPool(hostlist[1], uuid_str)
+                              " expected.\n".format(uuid_str, self.hostlist[0]))
+                exists = CheckForPool.checkForPool(self.hostlist[1], uuid_str)
                 if exists == 0:
                     self.fail("Pool {0} found on host {1} when not "
-                              "expected.\n".format(uuid_str, hostlist[1]))
+                              "expected.\n".format(uuid_str, self.hostlist[1]))
 
         except Exception as e:
             print (e)
@@ -307,7 +307,7 @@ class DestroyTests(Test):
 
         # no matter what happens shutdown the server
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
 
     def test_bad_server_group(self):
@@ -321,11 +321,11 @@ class DestroyTests(Test):
         setid2 = self.basepath + self.params.get("setname",
                                                  '/run/setnames/othersetname/')
 
-        hostlist1 = self.params.get("test_machines1", '/run/hosts/')
-        hostfile1 = WriteHostFile.WriteHostFile(hostlist1, self.tmp)
+        self.hostlist1 = self.params.get("test_machines1", '/run/hosts/')
+        hostfile1 = WriteHostFile.WriteHostFile(self.hostlist1, self.tmp)
 
-        hostlist2 = self.params.get("test_machines2a", '/run/hosts/')
-        hostfile2 = WriteHostFile.WriteHostFile(hostlist2, self.tmp)
+        self.hostlist2 = self.params.get("test_machines2a", '/run/hosts/')
+        hostfile2 = WriteHostFile.WriteHostFile(self.hostlist2, self.tmp)
 
 
         # TODO make these params in the yaml
@@ -335,7 +335,7 @@ class DestroyTests(Test):
         ServerUtils.runServer(hostfile1, self.server_group, self.basepath)
         ServerUtils.runServer(hostfile2, setid2, self.basepath)
 
-        host = hostlist1[0]
+        host = self.hostlist1[0]
 
         # not sure I need to do this but ... give it time to start
         time.sleep(1)
@@ -385,7 +385,7 @@ class DestroyTests(Test):
 
         # no matter what happens shutdown the server
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile1)
             os.remove(hostfile2)
 
@@ -400,8 +400,8 @@ class DestroyTests(Test):
         try:
 
             # write out a hostfile and start the servers with it
-            hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+            self.hostlist = self.params.get("test_machines1", '/run/hosts/')
+            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
@@ -442,7 +442,7 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
 
     def test_destroy_recreate(self):
@@ -455,8 +455,8 @@ class DestroyTests(Test):
 
         try:
             # write out a hostfile and start the servers with it
-            hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+            self.hostlist = self.params.get("test_machines1", '/run/hosts/')
+            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
@@ -504,7 +504,7 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
 
     def test_many_servers(self):
@@ -515,8 +515,8 @@ class DestroyTests(Test):
         """
         try:
             # write out a hostfile and start the servers with it
-            hostlist = self.params.get("test_machines6", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+            self.hostlist = self.params.get("test_machines6", '/run/hosts/')
+            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
@@ -552,7 +552,7 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
 
     def test_destroy_withdata(self):
@@ -564,8 +564,8 @@ class DestroyTests(Test):
         """
         try:
             # write out a hostfile and start the servers with it
-            hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+            self.hostlist = self.params.get("test_machines1", '/run/hosts/')
+            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
@@ -616,7 +616,7 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
 
     def test_destroy_async(self):
@@ -631,8 +631,8 @@ class DestroyTests(Test):
 
         try:
             # write out a hostfile and start the servers with it
-            hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+            self.hostlist = self.params.get("test_machines1", '/run/hosts/')
+            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
@@ -670,7 +670,7 @@ class DestroyTests(Test):
                         createsize, createsetid, None)
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             POOL.destroy(1, cb_func)
 
             # wait for callback, expecting a timeout since servers are down
@@ -688,7 +688,7 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
 
 if __name__ == "__main__":

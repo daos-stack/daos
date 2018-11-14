@@ -72,12 +72,12 @@ class DeleteContainerTest(Test):
        self.CONTAINER = None
 
        self.hostfile = None
-       hostlist = self.params.get("test_machines",'/run/hosts/*')
-       self.hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+       self.hostlist = self.params.get("test_machines",'/run/hosts/*')
+       self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
-       ServerUtils.stopServer()
+       ServerUtils.stopServer(hosts=self.hostlist)
        if self.hostfile is not None:
            os.remove(self.hostfile)
 

@@ -74,7 +74,7 @@ class CreateManyDkeys(Test):
         if self.hostfile is not None:
             os.remove(self.hostfile)
         self.pool.destroy(1)
-        ServerUtils.stopServer()
+        ServerUtils.stopServer(hosts=self.hostlist)
         ServerUtils.killServer(self.hostlist)
 
     def write_a_bunch_of_values(self, how_many):

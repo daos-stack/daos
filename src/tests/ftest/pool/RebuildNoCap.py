@@ -61,9 +61,9 @@ class RebuildNoCap(Test):
            self.CONTEXT = DaosContext(build_paths['PREFIX'] + '/lib/')
 
            # generate a hostfile
-           self.host_list = self.params.get("test_machines",'/run/hosts/')
+           self.hostlist = self.params.get("test_machines",'/run/hosts/')
            tmp = build_paths['PREFIX'] + '/tmp'
-           self.hostfile = WriteHostFile.WriteHostFile(self.host_list, tmp)
+           self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
            # fire up the DAOS servers
            self.server_group = self.params.get("server_group",'/run/server/',
@@ -92,7 +92,7 @@ class RebuildNoCap(Test):
                      "/../src/tests/ftest/util/WriteSomeData.py"
            cmd = "export DAOS_POOL={0}; export DAOS_SVCL=1; mpirun"\
                  " --np 1 --host {1} {2} {3} testfile".format(
-                     uuid, self.host_list[0], exepath, how_many_bytes)
+                     uuid, self.hostlist[0], exepath, how_many_bytes)
            subprocess.call(cmd, shell=True)
 
     def tearDown(self):
@@ -100,7 +100,7 @@ class RebuildNoCap(Test):
 
            os.remove(self.hostfile)
            self.POOL.destroy(1)
-           ServerUtils.stopServer()
+           ServerUtils.stopServer(hosts=self.hostlist)
 
 
     def test_rebuild_no_capacity(self):
@@ -125,7 +125,7 @@ class RebuildNoCap(Test):
             # exclude should trigger rebuild, check
             self.POOL.connect(1 << 1)
             status = self.POOL.pool_query()
-            if not status.pi_ntargets == len(self.host_list):
+            if not status.pi_ntargets == len(self.hostlist):
                 self.fail("target count wrong.\n")
             if not status.pi_ndisabled == 1:
                 self.fail("disabled target count wrong.\n")

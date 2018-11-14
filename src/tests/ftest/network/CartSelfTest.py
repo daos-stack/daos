@@ -88,7 +88,7 @@ class CartSelfTest(Test):
                               uri_path=self.uri_file, env_dict=self.env_dict)
 
     def tearDown(self):
-       ServerUtils.stopServer()
+       ServerUtils.stopServer(hosts=self.hostlist)
        os.remove(self.hostfile)
        os.remove(self.uri_file)
 

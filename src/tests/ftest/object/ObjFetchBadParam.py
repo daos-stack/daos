@@ -59,8 +59,8 @@ class ObjFetchBadParam(Test):
        # setup the DAOS python API
        self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
-       hostlist = self.params.get("test_machines",'/run/hosts/*')
-       self.hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+       self.hostlist = self.params.get("test_machines",'/run/hosts/*')
+       self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
        time.sleep(5)
@@ -117,7 +117,7 @@ class ObjFetchBadParam(Test):
         self.pool.disconnect()
         self.pool.destroy(1)
 
-        ServerUtils.stopServer()
+        ServerUtils.stopServer(hosts=self.hostlist)
         if self.hostfile is not None:
             os.remove(self.hostfile)
 

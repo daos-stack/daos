@@ -61,8 +61,8 @@ class Permission(Test):
 
         # getting hostfile
         self.hostfile = None
-        hostlist = self.params.get("test_machines", '/run/hosts/*/')
-        self.hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+        self.hostlist = self.params.get("test_machines", '/run/hosts/*')
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
         print ("Host file is: {}".format(self.hostfile))
 
         # starting server
@@ -71,8 +71,8 @@ class Permission(Test):
     def tearDown(self):
         if self.POOL is not None and self.POOL.attached:
             self.POOL.destroy(1)
-        # stop servers
-        ServerUtils.stopServer()
+	# stop servers
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_connectpermission(self):
         """

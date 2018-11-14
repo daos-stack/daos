@@ -77,7 +77,7 @@ class PoolSvc(Test):
         if self.POOL is not None and self.POOL.attached:
             self.POOL.destroy(1)
 
-        ServerUtils.stopServer()
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_poolsvc(self):
         """

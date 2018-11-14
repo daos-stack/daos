@@ -91,8 +91,8 @@ class RebuildWithIO(Test):
         basepath = os.path.normpath(self.build_paths['PREFIX']  + "/../")
         tmp = self.build_paths['PREFIX'] + '/tmp'
 
-        hostlist = self.params.get("test_machines",'/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(hostlist, tmp)
+        self.hostlist = self.params.get("test_machines",'/run/hosts/')
+        hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
         io_proc = None
 
@@ -176,8 +176,8 @@ class RebuildWithIO(Test):
 
         finally:
             # wait for the I/O process to finish
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
             # really make sure everything is gone
-            CheckForPool.CleanupPools(hostlist)
-            ServerUtils.killServer(hostlist)
+            CheckForPool.CleanupPools(self.hostlist)
+            ServerUtils.killServer(self.hostlist)

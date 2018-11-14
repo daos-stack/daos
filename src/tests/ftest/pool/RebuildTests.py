@@ -82,8 +82,8 @@ class RebuildTests(Test):
         basepath = os.path.normpath(self.build_paths['PREFIX']  + "/../")
         tmp = self.build_paths['PREFIX'] + '/tmp'
 
-        hostlist = self.params.get("test_machines", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(hostlist, tmp)
+        self.hostlist = self.params.get("test_machines", '/run/hosts/')
+        hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
         try:
             ServerUtils.runServer(hostfile, server_group, basepath)
@@ -214,11 +214,11 @@ class RebuildTests(Test):
             self.fail("Expecting to pass but test has failed.\n")
 
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
             # really make sure everything is gone
-            CheckForPool.CleanupPools(hostlist)
-            ServerUtils.killServer(hostlist)
+            CheckForPool.CleanupPools(self.hostlist)
+            ServerUtils.killServer(self.hostlist)
 
 
     def test_multipool_rebuild(self):
@@ -243,8 +243,8 @@ class RebuildTests(Test):
         basepath = os.path.normpath(self.build_paths['PREFIX']  + "/../")
         tmp = self.build_paths['PREFIX'] + '/tmp'
 
-        hostlist = self.params.get("test_machines", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(hostlist, tmp)
+        self.hostlist = self.params.get("test_machines", '/run/hosts/')
+        hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
         try:
             ServerUtils.runServer(hostfile, server_group, basepath)
@@ -416,10 +416,10 @@ class RebuildTests(Test):
             self.fail("Expecting to pass but test has failed.\n")
 
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
-            CheckForPool.CleanupPools(hostlist)
-            ServerUtils.killServer(hostlist)
+            CheckForPool.CleanupPools(self.hostlist)
+            ServerUtils.killServer(self.hostlist)
 
 if __name__ == "__main__":
     main()

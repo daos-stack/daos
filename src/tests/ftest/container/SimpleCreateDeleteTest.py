@@ -74,8 +74,8 @@ class SimpleCreateDeleteTest(Test):
         hostfile = None
 
         try:
-            hostlist = self.params.get("test_machines",'/run/hosts/*')
-            hostfile = WriteHostFile.WriteHostFile(hostlist, self.tmp)
+            self.hostlist = self.params.get("test_machines",'/run/hosts/*')
+            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
@@ -130,7 +130,7 @@ class SimpleCreateDeleteTest(Test):
         except Exception as e:
             self.fail("Daos code segfaulted most likely, error: %s" % e)
         finally:
-            ServerUtils.stopServer()
+            ServerUtils.stopServer(hosts=self.hostlist)
             if hostfile is not None:
                 os.remove(hostfile)
 
