@@ -28,12 +28,8 @@ import traceback
 import sys
 import json
 import uuid
-from avocado import Test
+from apricot       import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import daos_api
@@ -42,6 +38,7 @@ from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 class OpenClose(Test):
     """
     Tests DAOS container open/close function with handle parameter.
+    :avocado: recursive
     """
     def setUp(self):
         # these are first since they are referenced in teardown

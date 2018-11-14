@@ -27,12 +27,9 @@ import traceback
 import sys
 import json
 import logging
-from avocado import Test, main
+from apricot import Test
+from avocado import main
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
@@ -43,6 +40,7 @@ class ObjUpdateBadParam(Test):
     """
     Test Class Description:
     Pass an assortment of bad parameters to the daos_obj_update function.
+    :avocado: recursive
     """
     def setUp(self):
 

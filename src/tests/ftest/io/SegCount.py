@@ -25,12 +25,8 @@
 import os
 import sys
 import json
-from avocado       import Test
+from apricot       import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import IorUtils
@@ -40,6 +36,7 @@ class SegCount(Test):
     """
     Test class Description: Runs IOR with different segment counts.
 
+    :avocado: recursive
     """
 
     def __init__(self, *args, **kwargs):

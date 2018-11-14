@@ -28,12 +28,8 @@ import traceback
 import sys
 import json
 import subprocess
-from avocado import Test, main
-
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
+from apricot import Test
+from avocado import main
 
 import ServerUtils
 import WriteHostFile
@@ -45,7 +41,7 @@ class RebuildNoCap(Test):
     Test Class Description:
     This class contains tests for pool rebuild.
 
-    :avocado: tags=pool,rebuild,nocap
+    :avocado: recursive
     """
 
     build_paths = []

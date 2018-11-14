@@ -27,12 +27,9 @@ import time
 import traceback
 import sys
 import json
-from avocado import Test, main
+from apricot import Test
+from avocado import main
 
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./util')
-sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
@@ -43,7 +40,7 @@ class BadCreateTest(Test):
     Tests pool create API by passing NULL and otherwise inappropriate
     parameters.  This can't be done with daosctl, need to use the python API.
 
-    :avocado: tags=pool,poolcreate,badparam,badcreate
+    :avocado: recursive
     """
 
     # super wasteful since its doing this for every variation

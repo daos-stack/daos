@@ -28,11 +28,10 @@ import traceback
 import sys
 import json
 
-from avocado       import Test
+from apricot       import Test
 from avocado       import main
 from avocado.utils import process
 
-sys.path.append('./util')
 import ServerUtils
 import CheckForPool
 import WriteHostFile
@@ -41,7 +40,7 @@ class MultipleCreatesTest(Test):
     """
     Tests DAOS pool creation, calling it repeatedly one after another
 
-    :avocado: tags=pool,poolcreate,multicreate
+    :avocado: recursive
     """
 
     # super wasteful since its doing this for every variation

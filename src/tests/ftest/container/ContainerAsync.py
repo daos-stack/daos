@@ -30,13 +30,8 @@ import json
 import uuid
 import threading
 
-from avocado       import Test
+from apricot       import Test
 from avocado       import main
-
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
@@ -59,6 +54,7 @@ class ContainerAsync(Test):
     Tests DAOS pool connect permissions (non existing pool handle, bad uuid)
     and close.
 
+    :avocado: recursive
     """
     def setUp(self):
         self.hostlist = None

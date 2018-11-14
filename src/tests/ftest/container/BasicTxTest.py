@@ -26,12 +26,9 @@ import time
 import traceback
 import sys
 import json
-from avocado import Test, main
+from apricot import Test
+from avocado import main
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
@@ -43,6 +40,7 @@ class BasicTxTest(Test):
     A very simple test verifying the use of transactions.  This test was
     butchered in the transition from epoch to transaction.  Need to revisit
     and make more useful when transactions are fully working.
+    :avocado: recursive
     """
     def setUp(self):
 

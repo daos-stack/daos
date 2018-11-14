@@ -26,12 +26,8 @@ import os
 import traceback
 import sys
 import json
-from avocado       import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
+from apricot       import Test
 
 import ServerUtils
 import WriteHostFile
@@ -41,7 +37,7 @@ class SimpleCreateDeleteTest(Test):
     """
     Tests DAOS pool creation, trying both valid and invalid parameters.
 
-    :avocado: tags=pool,poolcreate,simplecreate
+    :avocado: recursive
     """
     # super wasteful since its doing this for every variation
     def setUp(self):

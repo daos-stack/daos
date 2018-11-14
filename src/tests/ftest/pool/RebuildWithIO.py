@@ -32,14 +32,10 @@ import random
 import string
 from multiprocessing import Process, Manager
 
-from avocado import Test
+from apricot import Test
 from avocado import main
 from avocado.utils import process
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import CheckForPool
@@ -51,6 +47,7 @@ class RebuildWithIO(Test):
     """
     This class contains tests for pool rebuild that feature I/O going on
     during the rebuild.
+    :avocado: recursive
     """
     def setUp(self):
         self.hostlist = None
@@ -60,9 +57,6 @@ class RebuildWithIO(Test):
 
         # setup the DAOS python API
         self.Context = DaosContext(self.build_paths['PREFIX'] + '/lib/')
-
-    def tearDown(self):
-        pass
 
     def test_rebuild_with_io(self):
         """

@@ -27,12 +27,8 @@ import time
 import traceback
 import sys
 import json
-from avocado import Test, main
-
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('./../../utils/py')
-sys.path.append('../../../utils/py')
+from apricot import Test
+from avocado import main
 
 import ServerUtils
 import WriteHostFile
@@ -44,7 +40,7 @@ class DestroyRebuild(Test):
     Test Class Description:
     This test verifies destruction of a pool that is rebuilding.
 
-    :avocado: tags=pool,pooldestroy,rebuild,desreb
+    :avocado: recursive
     """
 
     build_paths = []

@@ -27,12 +27,9 @@ import traceback
 import sys
 import json
 import logging
-from avocado import Test, main
+from apricot import Test
+from avocado import main
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
@@ -43,6 +40,7 @@ class ArrayObjTest(Test):
     """
     Test Class Description:
     A very simple test verifying the ability to read/write arrays to an object.
+    :avocado: recursive
     """
     def setUp(self):
 

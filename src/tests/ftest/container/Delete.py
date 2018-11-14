@@ -29,20 +29,16 @@ import time
 import traceback
 import uuid
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
+from apricot       import Test
 
-import daos_api
 import ServerUtils
 import WriteHostFile
-from avocado import Test, main
 from daos_api import DaosContainer, DaosContext, DaosLog, DaosPool, DaosApiError
 
 class DeleteContainerTest(Test):
     """
     Tests DAOS container delete and close.
+    :avocado: recursive
     """
     def setUp(self):
 

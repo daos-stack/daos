@@ -29,12 +29,9 @@ import sys
 import json
 import random
 import string
-from avocado import Test, main
+from apricot import Test
+from avocado import main
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
@@ -47,6 +44,7 @@ class RebuildTests(Test):
     """
     Test Class Description:
     This class contains tests for pool rebuild.
+    :avocado: recursive
     """
 
     def setUp(self):
@@ -57,9 +55,6 @@ class RebuildTests(Test):
 
         # setup the DAOS python API
         self.Context = DaosContext(self.build_paths['PREFIX'] + '/lib/')
-
-    def tearDown(self):
-        pass
 
     def test_simple_rebuild(self):
         """

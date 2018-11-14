@@ -27,12 +27,9 @@ import traceback
 import sys
 import json
 import avocado
-from avocado import Test, main
+from apricot import Test
+from avocado import main
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
@@ -41,6 +38,7 @@ from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 class PunchTest(Test):
     """
     Simple test to verify the 3 different punch calls.
+    :avocado: recursive
     """
     def setUp(self):
 

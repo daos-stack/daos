@@ -29,12 +29,8 @@ import json
 import threading
 import string
 import random
-from avocado       import Test
+from apricot       import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 from GeneralUtils import DaosTestError
@@ -82,6 +78,7 @@ def verify_get_attr(indata, outdata):
 class ContainerAttributeTest(Test):
     """
     Tests DAOS container attribute get/set/list.
+    :avocado: recursive
     """
     def setUp(self):
         self.pool = None

@@ -28,13 +28,10 @@ import traceback
 import sys
 import json
 import threading
-from avocado       import Test, main
+from apricot       import Test
+from avocado       import main
 from avocado.utils import process
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('./../../utils/py')
-sys.path.append('../../../utils/py')
 
 import ServerUtils
 import CheckForPool
@@ -55,6 +52,7 @@ def cb_func(event):
 class DestroyTests(Test):
     """
     Tests DAOS pool removal
+    :avocado: recursive
     """
     # super wasteful since its doing this for every variation
     def setUp(self):
@@ -71,9 +69,6 @@ class DestroyTests(Test):
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
-
-    def tearDown(self):
-        pass
 
     def test_simple_delete(self):
         """

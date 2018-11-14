@@ -28,12 +28,9 @@ import traceback
 import sys
 import json
 import ctypes
-from avocado import Test, main
+from apricot import Test
+from avocado import main
 
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./util')
-sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile

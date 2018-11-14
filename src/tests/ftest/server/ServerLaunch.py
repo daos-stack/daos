@@ -3,7 +3,7 @@
 import os
 import time
 
-from avocado import Test
+from apricot import Test
 from avocado import main
 from avocado.utils import process
 from avocado.utils import git
@@ -21,19 +21,13 @@ class ServerLaunch(Test):
     """
     Tests launching a DAOS server.
 
-    avocado: tags=server
+    :avocado: recursive
     """
 
-    def setUp(self):
-        # not used at present
-        pass
-
-    def tearDown(self):
-        # not used at present
-        pass
-
     def test_launch(self):
-
+        """
+        :avocado: tags=server
+        """
         host = self.params.get("hostname",'/tests/', "localhost")
         hostfile = self.params.get("hostfile1",'/files/',"/tmp/hostfile1")
         urifile = self.params.get("urifile",'/files/',"/tmp/urifile")

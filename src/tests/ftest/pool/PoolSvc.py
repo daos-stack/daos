@@ -29,14 +29,10 @@ import sys
 import json
 import ctypes
 
-from avocado       import Test
+from apricot       import Test
 from avocado       import main
 from avocado.utils import process
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 from daos_api import DaosContext, DaosPool, DaosServer, DaosApiError
@@ -44,6 +40,7 @@ from daos_api import DaosContext, DaosPool, DaosServer, DaosApiError
 class PoolSvc(Test):
     """
     Tests svc argument while pool create.
+    :avocado: recursive
 
     """
     def setUp(self):

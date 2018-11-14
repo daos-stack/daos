@@ -28,12 +28,8 @@ import json
 import ctypes
 import traceback
 import avocado
-from avocado       import Test
+from apricot import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 
@@ -46,6 +42,7 @@ class CreateManyDkeys(Test):
         Tests that create large numbers of keys in objects/containers and then
         destroy the containers and verify the space has been reclaimed.
 
+    :avocado: recursive
     """
     def setUp(self):
         with open('../../../.build_vars.json') as json_f:

@@ -27,14 +27,10 @@ import time
 import random
 import string
 
-from avocado       import Test
+from apricot       import Test
 from avocado       import main
 from avocado.utils import process
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 import ServerUtils
 import CheckForPool
 import WriteHostFile
@@ -45,6 +41,7 @@ from daos_api import DaosApiError, DaosLog
 class FullPoolContainerCreate(Test):
     """
     Class for test to create a container in a pool with no remaining free space.
+    :avocado: recursive
     """
 
     def setUp(self):
