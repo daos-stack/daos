@@ -869,7 +869,6 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	int			opc = opc_get(rpc->cr_opc);
 	unsigned int		map_version = 0;
 	int			rc = 0;
-	int			tag;
 
 	oei = crt_req_get(rpc);
 	D_ASSERT(oei != NULL);
@@ -926,7 +925,6 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	/* keep trying until the key_buffer is fully filled or
 	 * reaching the end of the stream
 	 */
-	tag = dss_get_module_info()->dmi_tid;
 	rc = ds_iter_vos(rpc, &enum_arg, &map_version);
 	if (rc == 1) {
 		/* If the buffer is full, exit and
@@ -938,7 +936,6 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
-	enum_arg.dkey_anchor.da_tag = tag;
 	oeo->oeo_dkey_anchor = enum_arg.dkey_anchor;
 	oeo->oeo_akey_anchor = enum_arg.akey_anchor;
 	oeo->oeo_anchor = enum_arg.recx_anchor;

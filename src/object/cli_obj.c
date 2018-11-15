@@ -916,14 +916,12 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 
 	if (!daos_anchor_is_eof(anchor)) {
 		D_DEBUG(DB_IO, "More keys in shard %d\n", shard);
-	} else if ((shard < obj->cob_shards_nr - grp_size) &&
-		   opc != DAOS_OBJ_RPC_ENUMERATE) {
+	} else if ((shard < obj->cob_shards_nr - grp_size)) {
 		shard += grp_size;
 		D_DEBUG(DB_IO, "next shard %d grp %d nr %u\n",
 			shard, grp_size, obj->cob_shards_nr);
 
 		daos_anchor_set_zero(anchor);
-		anchor->da_tag = 0;
 		dc_obj_shard2anchor(anchor, shard);
 	} else {
 		D_DEBUG(DB_IO, "Enumerated All shards\n");

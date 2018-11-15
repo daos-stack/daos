@@ -97,9 +97,8 @@ typedef enum {
 #define DAOS_ANCHOR_BUF_MAX	120
 typedef struct {
 	uint16_t	da_type; /** daos_anchor_type_t */
-	uint16_t	da_tag;
 	uint16_t	da_shard;
-	uint16_t	da_padding;
+	uint32_t	da_padding;
 	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
 } daos_anchor_t;
 

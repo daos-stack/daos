@@ -258,8 +258,14 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	size = key_ent->ie_key.iov_len;
 
 	if (is_sgl_kds_full(arg, size)) {
-		if (arg->kds_len == 0) {
-			arg->kds[0].kd_key_len = size;
+		/* NB: if it is rebuild object iteration, let's
+		 * check if both dkey & akey was already packed
+		 * (kds_len < 2) before return KEY2BIG.
+		 */
+		if (arg->kds_len == 0 ||
+		    (arg->recursive && arg->kds_len < 2)) {
+			if (arg->kds[0].kd_key_len < size)
+				arg->kds[0].kd_key_len = size;
 			return -DER_KEY2BIG;
 		} else {
 			return 1;
@@ -357,8 +363,18 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		size += data_size;
 	}
 
-	if (is_sgl_kds_full(arg, size))
+	if (is_sgl_kds_full(arg, size)) {
+		/* NB: if it is rebuild object iteration, let's
+		 * check if both dkey & akey was already packed
+		 * (kds_len < 3) before return KEY2BIG.
+		 */
+		if ((arg->recursive && arg->kds_len < 3)) {
+			if (arg->kds[0].kd_key_len < size)
+				arg->kds[0].kd_key_len = size;
+			return -DER_KEY2BIG;
+		}
 		return 1;
+	}
 
 	/* Grow the next new descriptor (instead of creating yet a new one). */
 	arg->kds[arg->kds_len].kd_val_types = type;

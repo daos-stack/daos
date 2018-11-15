@@ -352,9 +352,8 @@ daos_proc_epoch_state(crt_proc_t proc, daos_epoch_state_t *es)
 /**
  * typedef struct {
  *	uint16_t	da_type;
- *	uint16_t	da_tag;
  *	uint16_t	da_shard;
- *	uint16_t	da_padding;
+ *	uint32_t	da_padding;
  *	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
  */
 int
@@ -363,13 +362,10 @@ daos_proc_anchor(crt_proc_t proc, daos_anchor_t *anchor)
 	if (crt_proc_uint16_t(proc, &anchor->da_type) != 0)
 		return -DER_HG;
 
-	if (crt_proc_uint16_t(proc, &anchor->da_tag) != 0)
-		return -DER_HG;
-
 	if (crt_proc_uint16_t(proc, &anchor->da_shard) != 0)
 		return -DER_HG;
 
-	if (crt_proc_uint16_t(proc, &anchor->da_padding) != 0)
+	if (crt_proc_uint32_t(proc, &anchor->da_padding) != 0)
 		return -DER_HG;
 
 	if (crt_proc_raw(proc, anchor->da_buf,

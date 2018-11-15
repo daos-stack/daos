@@ -451,10 +451,10 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" scanning %d/%d rebuilding=%s, "
-		"obj_count="DF_U64", rec_count="DF_U64"\n",
+		"obj_count="DF_U64", tobe_obj="DF_U64" rec_count="DF_U64"\n",
 		DP_UUID(rpt->rt_pool_uuid), status->scanning,
 		status->status, status->rebuilding ? "yes" : "no",
-		status->obj_count, status->rec_count);
+		status->obj_count, rpt->rt_toberb_objs, status->rec_count);
 out:
 	return rc;
 }
@@ -788,6 +788,10 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 				target->ta_comp.co_rank);
 			setbit((*rgt)->rgt_pull_bits,
 				target->ta_comp.co_rank);
+			D_DEBUG(DB_REBUILD, "exclude target fail with %u/%u "
+				"scan bits %u pull bits %u\n",
+				target->ta_comp.co_rank, target->ta_comp.co_id,
+				*(*rgt)->rgt_scan_bits, *(*rgt)->rgt_pull_bits);
 		}
 	}
 
@@ -983,12 +987,9 @@ rpt_put(struct rebuild_tgt_pool_tracker	*rpt)
 	rpt->rt_refcount--;
 	D_ASSERT(rpt->rt_refcount >= 0);
 	D_DEBUG(DB_REBUILD, "rpt %p ref %d\n", rpt, rpt->rt_refcount);
-	if (rpt->rt_refcount == 1 && rpt->rt_finishing) {
+	if (rpt->rt_refcount == 1 && rpt->rt_finishing)
 		ABT_cond_signal(rpt->rt_fini_cond);
-		ABT_mutex_unlock(rpt->rt_lock);
-	} else {
-		ABT_mutex_unlock(rpt->rt_lock);
-	}
+	ABT_mutex_unlock(rpt->rt_lock);
 }
 
 static void
@@ -1435,12 +1436,9 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	 * ULT/task will be created after this check. So it is safe
 	 * to destroy the rpt after this.
 	 */
-	if (rpt->rt_refcount > 1) {
+	if (rpt->rt_refcount > 1)
 		ABT_cond_wait(rpt->rt_fini_cond, rpt->rt_lock);
-		ABT_mutex_unlock(rpt->rt_lock);
-	} else {
-		ABT_mutex_unlock(rpt->rt_lock);
-	}
+	ABT_mutex_unlock(rpt->rt_lock);
 
 	/* Check each puller */
 	for (i = 0; i < rpt->rt_puller_nxs; i++) {

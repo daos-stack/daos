@@ -558,7 +558,6 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	struct obj_enum_args	*enum_args = (struct obj_enum_args *)arg;
 	struct obj_key_enum_in	*oei;
 	struct obj_key_enum_out	*oeo;
-	int			 tgt_tag;
 	int			 ret = task->dt_result;
 	int			 rc = 0;
 
@@ -626,12 +625,9 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	}
 
 	/* Update dkey hash and tag */
-	if (enum_args->eaa_dkey_anchor) {
+	if (enum_args->eaa_dkey_anchor)
 		enum_anchor_copy(enum_args->eaa_dkey_anchor,
 				 &oeo->oeo_dkey_anchor);
-		tgt_tag = oeo->oeo_dkey_anchor.da_tag;
-		enum_args->eaa_dkey_anchor->da_tag = tgt_tag;
-	}
 
 	if (enum_args->eaa_akey_anchor)
 		enum_anchor_copy(enum_args->eaa_akey_anchor,
