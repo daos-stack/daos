@@ -46,10 +46,9 @@ class DaosAddon(object):
         self.info = test_info.info
         self.log_dir_base = log_base_path
         self.logger = logging.getLogger("TestRunnerLogger")
+        testname = self.test_info.get_test_info('testName')
 
-        dir_for_this_test = test_info.get_defaultENV("DAOS_TEST_DIR",
-                                                     "/scratch/daostest")
-        daoslogpath = dir_for_this_test + "/daos.log"
+        daoslogpath = os.path.join(self.log_dir_base, "daos-%s.log" % testname)
 
     def useLogDir(self, log_path):
         """create the log directory name"""
@@ -63,7 +62,7 @@ class DaosAddon(object):
             self.test_info.get_defaultENV('LD_LIBRARY_PATH')
         envlist['CRT_PHY_ADDR_STR']= \
             self.test_info.get_defaultENV('CRT_PHY_ADDR_STR', "ofi+sockets")
-        envlist['DD_LOG']= daoslogpath
+        envlist['D_LOG_FILE']= daoslogpath
         envlist['ABT_ENV_MAX_NUM_XSTREAMS'] = \
             self.test_info.get_defaultENV('ABT_ENV_MAX_NUM_XSTREAMS')
         envlist['ABT_MAX_NUM_XSTREAMS'] = \
@@ -81,8 +80,9 @@ class DaosAddon(object):
     def test_addon(self):
         """ Run daos_addons_test. """
         rc = 1
-        urifilepath = self.test_info.get_defaultENV("DAOS_TEST_DIR", "") +\
-        "/urifile"
+        dir_for_test = self.test_info.get_defaultENV("DAOS_TEST_DIR",
+                                                     "/scratch/daostest")
+        urifilepath  = os.path.join(dir_for_test, "urifile")
 
         self.logger.info("<DAOS ADDON> Starting test.")
         testname = self.test_info.get_test_info('testName')

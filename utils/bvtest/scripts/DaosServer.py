@@ -40,7 +40,6 @@ from paramiko import client
 
 hostcount = 0
 hostfilepath = ""
-urifilepath = ""
 logpath = ""
 
 class DaosServer(object):
@@ -50,7 +49,6 @@ class DaosServer(object):
     def __init__(self, dir_path, test_info, node_control):
         global hostcount
         global hostfilepath
-        global urifilepath
         global logpath
 
         self.dir_path = dir_path
@@ -62,13 +60,13 @@ class DaosServer(object):
         hostlist = test_info.get_subList('hostlist').split(',')
         hostcount = len(hostlist)
 
-        dir_for_this_test = test_info.get_defaultENV("DAOS_TEST_DIR", "")
-        if not os.path.exists(dir_for_this_test):
-            os.makedirs(dir_for_this_test)
-
-        hostfilepath = dir_for_this_test + "/hostfile"
-        urifilepath = dir_for_this_test + "/urifile"
-        logpath = dir_for_this_test + "/daos.log"
+        hostfilepath = os.path.join(self.dir_path, "hostfile")
+        daos_test_dir = test_info.get_defaultENV("DAOS_TEST_DIR",
+                                                 "/scratch/daostest")
+        if not os.path.exists(daos_test_dir):
+            os.makedirs(daos_test_dir)
+        self.urifilepath  = os.path.join(daos_test_dir, "urifile")
+        logpath = os.path.join(self.dir_path, "daos_server.log")
 
         if os.path.exists(hostfilepath):
             os.remove(hostfilepath)
@@ -100,7 +98,7 @@ class DaosServer(object):
             self.test_info.get_defaultENV('LD_LIBRARY_PATH')))
         envlist.append(' -x CRT_PHY_ADDR_STR={!s}'.format(
             self.test_info.get_defaultENV('CRT_PHY_ADDR_STR', "ofi+sockets")))
-        envlist.append(' -x DD_LOG={!s}'.format(logpath))
+        envlist.append(' -x D_LOG_FILE={!s}'.format(logpath))
         envlist.append(' -x ABT_ENV_MAX_NUM_XSTREAMS={!s}'.format(
             self.test_info.get_defaultENV('ABT_ENV_MAX_NUM_XSTREAMS')))
         envlist.append(' -x ABT_MAX_NUM_XSTREAMS={!s}'.format(
@@ -117,7 +115,6 @@ class DaosServer(object):
         """Launch DAOS server."""
         global hostcount
         global hostfilepath
-        global urifilepath
 
         self.logger.info("Server: Launch the DAOS Server")
 
@@ -135,7 +132,7 @@ class DaosServer(object):
             ort_dir, hostcount))
         server_cmd_list.append("--hostfile {0} --enable-recovery ".format(
             hostfilepath))
-        server_cmd_list.append("--report-uri {0} ".format(urifilepath))
+        server_cmd_list.append("--report-uri {0} ".format(self.urifilepath))
         server_cmd_list += envlist
         server_cmd_list.append(" {0}/bin/daos_server -g daos_server -c {1}".
                                format(base_dir, thread_count))

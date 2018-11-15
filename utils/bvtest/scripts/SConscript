@@ -36,14 +36,17 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """install test scripts"""
 
+FILES=["DaosServer.py", "DaosTest.py", "DaosAddon.py", "DaosAddonMulti.yml",
+       "DaosAddon.yml", "DaosTestMulti.yml", "DaosTest.yml"]
+
 def scons():
     """Run scons"""
 
     Import('env')
 
     # move the test files (.py) to the TESTING scripts directory
-    env.Install("$PREFIX/TESTING/scripts", Glob("*.py"))
-    env.Install("$PREFIX/TESTING/scripts", Glob("*.yml"))
+    env.Install("$PREFIX/TESTING/scripts", FILES)
+    env.Install("$PREFIX/TESTING", "sample_config")
 
 if __name__ == 'SCons.Script':
     scons()
