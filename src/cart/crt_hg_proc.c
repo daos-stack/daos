@@ -230,6 +230,12 @@ crt_proc_uuid_t(crt_proc_t proc, uuid_t *data)
 }
 
 int
+crt_proc_d_rank_list_ptr_t(crt_proc_t proc, d_rank_list_t **data)
+{
+	return crt_proc_d_rank_list_t(proc, data);
+}
+
+int
 crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 {
 	d_rank_list_t		*rank_list;
@@ -413,12 +419,12 @@ crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = crt_proc_d_rank_list_t(hg_proc, &hdr->coh_excluded_ranks);
+	rc = crt_proc_d_rank_list_ptr_t(hg_proc, &hdr->coh_excluded_ranks);
 	if (rc != 0) {
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = crt_proc_d_rank_list_t(hg_proc, &hdr->coh_inline_ranks);
+	rc = crt_proc_d_rank_list_ptr_t(hg_proc, &hdr->coh_inline_ranks);
 	if (rc != 0) {
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);
