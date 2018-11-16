@@ -444,6 +444,7 @@ iter_akey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 
 	iter_recx_param = *param;
 	iter_recx_param.ip_akey = key_ent->ie_key;
+	iter_recx_param.ip_ih = ih;
 
 	/* iterate array record */
 	rc = dss_vos_iterate(VOS_ITER_RECX, &iter_recx_param, &arg->recx_anchor,
@@ -518,6 +519,7 @@ iter_dkey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent, vos_iter_type_t type,
 	/* iterate akey */
 	iter_akey_param = *param;
 	iter_akey_param.ip_dkey = key_ent->ie_key;
+	iter_akey_param.ip_ih = ih;
 	rc = dss_vos_iterate(VOS_ITER_AKEY, &iter_akey_param, &arg->akey_anchor,
 			     iter_akey_cb, arg);
 	if (rc) {
@@ -550,6 +552,7 @@ iter_obj_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 
 	iter_dkey_param = *param;
 	iter_dkey_param.ip_oid = entry->ie_oid;
+	iter_dkey_param.ip_ih = ih;
 	rc = dss_vos_iterate(VOS_ITER_DKEY, &iter_dkey_param, &arg->dkey_anchor,
 			     iter_dkey_cb, arg);
 	if (rc != 0) {

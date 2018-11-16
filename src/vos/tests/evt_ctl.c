@@ -381,11 +381,12 @@ ts_find_rect(char *args)
 static int
 ts_list_rect(void)
 {
-	daos_handle_t	ih;
-	int		i;
-	int		rc;
+	daos_epoch_range_t	epr = {0, DAOS_EPOCH_MAX};
+	daos_handle_t		ih;
+	int			i;
+	int			rc;
 
-	rc = evt_iter_prepare(ts_toh, 0, &ih);
+	rc = evt_iter_prepare(ts_toh, 0, epr, &ih);
 	if (rc != 0) {
 		D_PRINT("Failed to prepare iterator: %d\n", rc);
 		return -1;

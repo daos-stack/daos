@@ -45,6 +45,7 @@ static uuid_t			cookie_dict[NUM_UNIQUE_COOKIES];
 
 static struct vts_counter	vts_cntr;
 static uint64_t			update_akey_fixed;
+static bool			vts_nest_iterators;
 
 /**
  * Stores the last key and can be used for
@@ -359,6 +360,8 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 				D_PRINT("dkey[%d]: %s\n", dkey_id, buf);
 		}
 
+		if (vts_nest_iterators)
+			param->ip_ih = ih;
 		rc = io_recx_iterate(arg, param, &ent.ie_key, nr,
 				     recs, print_ent);
 
@@ -436,6 +439,8 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 			goto out;
 		}
 
+		if (vts_nest_iterators)
+			param.ip_ih = ih;
 		rc = io_akey_iterate(arg, &param, &ent.ie_key, nr,
 				     &akeys, &recs, print_ent);
 		if (rc != 0)
@@ -2076,11 +2081,12 @@ static const struct CMUnitTest io_tests[] = {
 };
 
 int
-run_io_test(daos_ofeat_t feats, int keys)
+run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators)
 {
 	char buf[VTS_BUF_SIZE];
 	const char *akey = "hashed";
 	const char *dkey = "hashed";
+	vts_nest_iterators = nest_iterators;
 
 	feats = feats & DAOS_OF_MASK;
 	if ((feats & DAOS_OF_DKEY_UINT64) && (feats & DAOS_OF_DKEY_LEXICAL)) {

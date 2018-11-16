@@ -29,7 +29,8 @@
  * see daos_srv/evtree.h for the details.
  */
 int
-evt_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
+evt_iter_prepare(daos_handle_t toh, unsigned int options,
+		 daos_epoch_range_t epr, daos_handle_t *ih)
 {
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
@@ -190,7 +191,7 @@ evt_iter_move(daos_handle_t ih, bool forward)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	found = evt_move_trace(tcx, forward);
+	found = evt_move_trace(tcx, forward, &iter->it_epr);
 	if (!found) {
 		iter->it_state = EVT_ITER_FINI;
 		D_GOTO(out, rc = -DER_NONEXIST);

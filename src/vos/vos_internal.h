@@ -741,9 +741,38 @@ struct vos_iter_ops;
 
 /** the common part of vos iterators */
 struct vos_iterator {
+	struct vos_iter_ops	*it_ops;
+	struct vos_iterator	*it_parent; /* parent iterator */
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
-	struct vos_iter_ops	*it_ops;
+	bool			 it_from_parent;
+	uint32_t		 it_ref_cnt;
+};
+
+/* Auxiliary structure for passing information between parent and nested
+ * iterator
+ */
+struct vos_iter_info {
+	/* retrieved container handle */
+	daos_handle_t		 ii_hdl;
+	union {
+		/* Pointer to evtree for nested iterator */
+		struct evt_root	*ii_evt;
+		/* Pointer to btree for nested iterator */
+		struct btr_root	*ii_btr;
+		/* oid to hold */
+		daos_unit_oid_t	 ii_oid;
+	};
+	/* needed to open nested tree */
+	struct umem_attr	*ii_uma;
+	/* needed to open nested tree */
+	struct vea_space_info	*ii_vea_info;
+	/* Reference to vos object, set in iop_tree_prepare. */
+	struct vos_object	*ii_obj;
+	d_iov_t			*ii_akey; /* conditional akey */
+	daos_epoch_range_t	 ii_epr;
+	/** epoch logic expression for the iterator. */
+	vos_it_epc_expr_t	 ii_epc_expr;
 };
 
 /** function table for vos iterator */
@@ -751,6 +780,21 @@ struct vos_iter_ops {
 	/** prepare a new iterator with the specified type and parameters */
 	int	(*iop_prepare)(vos_iter_type_t type, vos_iter_param_t *param,
 			       struct vos_iterator **iter_pp);
+	/** fetch the record that the cursor points to and open the subtree
+	 *  corresponding to specified type, return info about the iterator
+	 *  and nested object.   If NULL, it isn't supported for the parent
+	 *  type.
+	 */
+	int	(*iop_nested_tree_fetch)(struct vos_iterator *iter,
+					 vos_iter_type_t type,
+					 struct vos_iter_info *info);
+	/** prepare the nested iterator from state from parent.  Should close
+	 *  the tree handle after preparing the iterator.  If NULL, it isn't
+	 *  supported in the nested iterator.
+	 */
+	int	(*iop_nested_prepare)(vos_iter_type_t type,
+				      struct vos_iter_info *info,
+				      struct vos_iterator **iter_pp);
 	/** finalise a iterator */
 	int	(*iop_finish)(struct vos_iterator *iter);
 	/** Set the iterating cursor to the provided @anchor */

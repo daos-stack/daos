@@ -81,6 +81,7 @@ daos_obj_id_t		 ts_oid;		/* object ID */
 daos_unit_oid_t		 ts_uoid;		/* object shard ID (for VOS) */
 
 struct dts_context	 ts_ctx;
+bool			 ts_nest_iterator;
 
 /* rebuild only with iteration */
 bool			ts_rebuild_only_iteration = false;
@@ -532,6 +533,8 @@ iter_akey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent,
 
 	param->ip_akey = key_ent->ie_key;
 	/* iterate array record */
+	if (ts_nest_iterator)
+		param->ip_ih = ih;
 	rc = ts_iterate_internal(VOS_ITER_RECX, param, NULL);
 
 	ts_iterate_internal(VOS_ITER_SINGLE, param, NULL);
@@ -546,6 +549,8 @@ iter_dkey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent,
 	int	rc;
 
 	param->ip_dkey = key_ent->ie_key;
+	if (ts_nest_iterator)
+		param->ip_ih = ih;
 	/* iterate akey */
 	rc = ts_iterate_internal(VOS_ITER_AKEY, param, iter_akey_cb);
 
@@ -556,13 +561,12 @@ iter_dkey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent,
 static int
 ts_iterate_records_internal(d_rank_t rank)
 {
-	vos_iter_param_t	param;
+	vos_iter_param_t	param = {};
 	int			rc = 0;
 
 	assert_int_equal(ts_class, DAOS_OC_RAW);
 
 	/* prepare iterate parameters */
-	memset(&param, 0, sizeof(param));
 	param.ip_hdl = ts_ctx.tsc_coh;
 	param.ip_oid = ts_uoid;
 
@@ -849,7 +853,10 @@ The options are as follows:\n\
 \n\
 -B	Profile performance of both update and fetch.\n\
 \n\
--I	Only run iterate performance test. This can only in vos mode.\n\
+-I	Only run iterate performance test. Only runs in vos mode.\n\
+\n\
+-n	Only run iterate performance test but with nesting iterator\n\
+	enable.  This can only run in vos mode.\n\
 \n\
 -f pathname\n\
 	Full path name of the VOS file.\n");
@@ -868,6 +875,7 @@ static struct option ts_ops[] = {
 	{ "size",	required_argument,	NULL,	's' },
 	{ "zcopy",	no_argument,		NULL,	'z' },
 	{ "overwrite",	no_argument,		NULL,	't' },
+	{ "nest_iter",	no_argument,		NULL,	'n' },
 	{ "file",	required_argument,	NULL,	'f' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ "verify",	no_argument,		NULL,	'v' },
@@ -976,7 +984,8 @@ main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
-	while ((rc = getopt_long(argc, argv, "P:N:T:C:o:d:a:r:As:ztf:hUFRBvIiu",
+	while ((rc = getopt_long(argc, argv,
+				 "P:N:T:C:o:d:a:r:nAs:ztf:hUFRBvIiu",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1072,6 +1081,8 @@ main(int argc, char **argv)
 		case 'v':
 			ts_verify_fetch = true;
 			break;
+		case 'n':
+			ts_nest_iterator = true;
 		case 'I':
 			perf_tests[ITERATE_TEST] = ts_iterate_perf;
 			break;

@@ -55,7 +55,7 @@ print_usage()
 }
 
 static inline int
-run_all_tests(int keys)
+run_all_tests(int keys, bool nest_iterators)
 {
 	int	failed = 0;
 	int	i;
@@ -63,7 +63,7 @@ run_all_tests(int keys)
 	failed += run_pool_test();
 	failed += run_co_test();
 	for (i = 0; i != DAOS_OF_MASK; i++)
-		failed += run_io_test(i, keys);
+		failed += run_io_test(i, keys, nest_iterators);
 	failed += run_discard_tests(keys);
 	failed += run_aggregate_tests();
 	return failed;
@@ -78,6 +78,7 @@ main(int argc, char **argv)
 	int	index = 0;
 	int	ofeats;
 	int	keys;
+	bool	nest_iterators = false;
 
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
@@ -85,6 +86,7 @@ main(int argc, char **argv)
 		{"container_tests",	no_argument, 0, 'c'},
 		{"io_tests",		required_argument, 0, 'i'},
 		{"discard_tests",	no_argument, 0, 'd'},
+		{"nest_iterators",	no_argument, 0, 'n'},
 		{"aggregate_tests",	no_argument, 0, 'a'},
 		{"help",		no_argument, 0, 'h'},
 	};
@@ -103,9 +105,9 @@ main(int argc, char **argv)
 
 	gc = 0;
 	if (argc < 2) {
-		nr_failed = run_all_tests(0);
+		nr_failed = run_all_tests(0, false);
 	} else {
-		while ((opt = getopt_long(argc, argv, "apcdti:A:h",
+		while ((opt = getopt_long(argc, argv, "apcdnti:A:h",
 				  long_options, &index)) != -1) {
 			switch (opt) {
 			case 'p':
@@ -114,9 +116,13 @@ main(int argc, char **argv)
 			case 'c':
 				nr_failed += run_co_test();
 				break;
+			case 'n':
+				nest_iterators = true;
+				break;
 			case 'i':
 				ofeats = strtol(optarg, NULL, 16);
-				nr_failed += run_io_test(ofeats, 0);
+				nr_failed += run_io_test(ofeats, 0,
+							 nest_iterators);
 				break;
 			case 'a':
 				nr_failed += run_aggregate_tests();
@@ -126,7 +132,7 @@ main(int argc, char **argv)
 				break;
 			case 'A':
 				keys = atoi(optarg);
-				nr_failed = run_all_tests(keys);
+				nr_failed = run_all_tests(keys, nest_iterators);
 				break;
 			case 'h':
 				print_usage();

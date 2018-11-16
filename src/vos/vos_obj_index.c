@@ -380,6 +380,42 @@ oi_iter_fini(struct vos_iterator *iter)
 }
 
 static int
+oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
+			  struct vos_iter_info *info)
+{
+	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	struct vos_obj_df	*obj;
+	daos_iov_t		 rec_iov;
+	int			 rc;
+
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+
+	if (type != VOS_ITER_DKEY) {
+		D_DEBUG(DB_TRACE, "Expected VOS_ITER_DKEY nested iterator type,"
+			" got %d\n", type);
+		return -DER_INVAL;
+	}
+
+	daos_iov_set(&rec_iov, NULL, 0);
+	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
+	if (rc != 0) {
+		D_ERROR("Error while fetching oid info\n");
+		return rc;
+	}
+
+	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	obj = (struct vos_obj_df *)rec_iov.iov_buf;
+
+	info->ii_oid = obj->vo_id;
+	info->ii_epr.epr_lo = oiter->oit_epr.epr_lo;
+	/* Ensures we hold the right object version */
+	info->ii_epr.epr_hi = obj->vo_latest;
+	info->ii_hdl = vos_cont2hdl(oiter->oit_cont);
+
+	return 0;
+}
+
+static int
 oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	   struct vos_iterator **iter_pp)
 {
@@ -576,12 +612,13 @@ oi_iter_delete(struct vos_iterator *iter, void *args)
 }
 
 struct vos_iter_ops vos_oi_iter_ops = {
-	.iop_prepare =	oi_iter_prep,
-	.iop_finish  =  oi_iter_fini,
-	.iop_probe   =	oi_iter_probe,
-	.iop_next    =  oi_iter_next,
-	.iop_fetch   =  oi_iter_fetch,
-	.iop_delete  =	oi_iter_delete,
+	.iop_prepare		= oi_iter_prep,
+	.iop_nested_tree_fetch	= oi_iter_nested_tree_fetch,
+	.iop_finish		= oi_iter_fini,
+	.iop_probe		= oi_iter_probe,
+	.iop_next		= oi_iter_next,
+	.iop_fetch		= oi_iter_fetch,
+	.iop_delete		= oi_iter_delete,
 };
 
 /**

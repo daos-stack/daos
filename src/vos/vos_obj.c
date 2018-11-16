@@ -45,8 +45,6 @@ struct vos_obj_iter {
 	daos_epoch_range_t	 it_epr;
 	/** condition of the iterator: attribute key */
 	daos_key_t		 it_akey;
-	/** previous hkey */
-	uint64_t		 it_hkey_prev[2];
 	/* reference on the object */
 	struct vos_object	*it_obj;
 };
@@ -196,28 +194,38 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * - iterate recx
  */
 static int
+key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_key_bundle *kbund,
+		      struct vos_rec_bundle *rbund, daos_iov_t *keybuf,
+		      daos_anchor_t *anchor)
+{
+	daos_iov_t		kiov;
+	daos_iov_t		kbund_kiov;
+	daos_iov_t		riov;
+	daos_csum_buf_t		csum;
+
+	tree_key_bundle2iov(kbund, &kiov);
+	tree_rec_bundle2iov(rbund, &riov);
+	kbund->kb_key = &kbund_kiov;
+
+	rbund->rb_iov	= keybuf;
+	rbund->rb_csum	= &csum;
+
+	daos_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
+	daos_csum_set(rbund->rb_csum, NULL, 0);
+
+	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
+}
+
+static int
 key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	       daos_anchor_t *anchor)
 {
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
-	daos_iov_t		kiov;
-	daos_iov_t		kbund_kiov;
-	daos_iov_t		riov;
-	daos_csum_buf_t		csum;
 	int			rc;
 
-	tree_key_bundle2iov(&kbund, &kiov);
-	tree_rec_bundle2iov(&rbund, &riov);
-	kbund.kb_key = &kbund_kiov;
+	rc = key_iter_fetch_helper(oiter, &kbund, &rbund, &ent->ie_key, anchor);
 
-	rbund.rb_iov	= &ent->ie_key;
-	rbund.rb_csum	= &csum;
-
-	daos_iov_set(rbund.rb_iov, NULL, 0); /* no copy */
-	daos_csum_set(rbund.rb_csum, NULL, 0);
-
-	rc = dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
 	if (rc == 0) {
 		D_ASSERT(rbund.rb_krec);
 		if (rbund.rb_krec->kr_bmap & KREC_BF_PUNCHED)
@@ -227,6 +235,38 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		ent->ie_earliest = rbund.rb_krec->kr_earliest;
 	}
 	return rc;
+}
+
+static int
+key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
+		    struct vos_iter_info *info)
+{
+	struct vos_object	*obj = oiter->it_obj;
+	struct vos_krec_df	*krec;
+	struct vos_key_bundle	 kbund;
+	struct vos_rec_bundle	 rbund;
+	daos_iov_t		 keybuf;
+	int			 rc;
+
+	rc = key_iter_fetch_helper(oiter, &kbund, &rbund, &keybuf, NULL);
+
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "Could not fetch key: rc = %d\n", rc);
+		return rc;
+	}
+
+	krec = rbund.rb_krec;
+	info->ii_vea_info = obj->obj_cont->vc_pool->vp_vea_info;
+	info->ii_uma = vos_obj2uma(obj);
+
+	if (type == VOS_ITER_RECX) {
+		D_ASSERT(krec->kr_bmap & KREC_BF_EVT);
+		info->ii_evt = &krec->kr_evt[0];
+	} else {
+		info->ii_btr = &krec->kr_btr;
+	}
+
+	return 0;
 }
 
 /**
@@ -265,7 +305,6 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 		/* Key is punched.   Probe to next match */
 		probe = BTR_PROBE_GT;
 		ent->ie_epoch = epr->epr_lo;
-
 	}
 
 	if (probe != 0) {
@@ -699,7 +738,8 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	if (rc != 0)
 		D_GOTO(failed_1, rc);
 
-	rc = evt_iter_prepare(ak_toh, EVT_ITER_EMBEDDED, &oiter->it_hdl);
+	rc = evt_iter_prepare(ak_toh, EVT_ITER_EMBEDDED, oiter->it_epr,
+			      &oiter->it_hdl);
 	if (rc != 0) {
 		D_DEBUG(DB_IO, "Cannot prepare recx iterator : %d\n", rc);
 		D_GOTO(failed_2, rc);
@@ -831,6 +871,155 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	return rc;
 }
 
+int
+vos_obj_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
+			       struct vos_iter_info *info)
+{
+	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
+	int			 rc = 0;
+
+	info->ii_epr		= oiter->it_epr;
+
+	switch (iter->it_type) {
+	default:
+		D_ASSERT(0);
+	case VOS_ITER_RECX:
+	case VOS_ITER_SINGLE:
+		D_ERROR("Iterator type has no subtree\n");
+		return -DER_INVAL;
+	case VOS_ITER_DKEY:
+		if (type != VOS_ITER_AKEY) {
+			D_ERROR("Invalid nested iterator type for "
+				"VOS_ITER_DKEY: %d\n", type);
+			return -DER_INVAL;
+		}
+		break;
+	case VOS_ITER_AKEY:
+		if (type != VOS_ITER_RECX &&
+		    type != VOS_ITER_SINGLE) {
+			D_ERROR("Invalid nested iterator type for "
+				"VOS_ITER_AKEY: %d\n", type);
+			return -DER_INVAL;
+		}
+	};
+
+	rc = key_iter_fetch_root(oiter, type, info);
+
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "Failed to fetch and initialize cursor "
+			"subtree: rc=%d\n", rc);
+		return rc;
+	}
+
+	info->ii_obj = oiter->it_obj;
+
+	return 0;
+}
+
+static int
+nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
+{
+	int	rc;
+
+	/* XXX the condition epoch ranges could cover multiple versions of
+	 * the object/key if it's punched more than once. However, rebuild
+	 * system should guarantee this will never happen.
+	 */
+	rc = vos_obj_hold(vos_obj_cache_current(), info->ii_hdl,
+			  info->ii_oid, info->ii_epr.epr_hi, true,
+			  &oiter->it_obj);
+	if (rc != 0)
+		return rc;
+
+	if (vos_obj_is_empty(oiter->it_obj)) {
+		D_DEBUG(DB_IO, "Empty object, nothing to iterate\n");
+		D_GOTO(failed, rc = -DER_NONEXIST);
+	}
+
+	rc = obj_tree_init(oiter->it_obj);
+
+	if (rc != 0)
+		goto failed;
+
+	rc = dkey_iter_prepare(oiter, info->ii_akey);
+
+	if (rc != 0)
+		goto failed;
+
+	return 0;
+failed:
+	vos_obj_release(vos_obj_cache_current(), oiter->it_obj);
+
+	return rc;
+}
+
+int
+vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
+			 struct vos_iterator **iter_pp)
+{
+	struct vos_obj_iter	*oiter;
+	daos_handle_t		 toh;
+	int			 rc = 0;
+
+	D_ALLOC_PTR(oiter);
+	if (oiter == NULL)
+		return -DER_NOMEM;
+
+	oiter->it_epr = info->ii_epr;
+	if (type != VOS_ITER_DKEY)
+		oiter->it_obj = info->ii_obj;
+
+	switch (type) {
+	default:
+		D_ERROR("unknown iterator type %d.\n", type);
+		rc = -DER_INVAL;
+		goto failed;
+
+	case VOS_ITER_DKEY:
+		rc = nested_dkey_iter_init(oiter, info);
+		if (rc != 0)
+			goto failed;
+		return 0;
+	case VOS_ITER_SINGLE:
+		oiter->it_epc_expr = info->ii_epc_expr;
+	case VOS_ITER_AKEY:
+		rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma,
+					    info->ii_vea_info, &toh);
+		if (rc) {
+			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
+				" rc = %d\n", rc);
+			goto failed;
+		}
+		rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED,
+					 &oiter->it_hdl);
+		break;
+
+	case VOS_ITER_RECX:
+		rc = evt_open_inplace(info->ii_evt, info->ii_uma,
+					 info->ii_vea_info, &toh);
+		if (rc) {
+			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
+				" rc = %d\n", rc);
+			goto failed;
+		}
+		rc = evt_iter_prepare(toh, EVT_ITER_EMBEDDED, info->ii_epr,
+				      &oiter->it_hdl);
+		break;
+	}
+	key_tree_release(toh, type == VOS_ITER_RECX);
+
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "Failed to prepare iterator: rc = %d\n", rc);
+		goto failed;
+	}
+
+	*iter_pp = &oiter->it_iter;
+	return 0;
+failed:
+	D_FREE(oiter);
+	return rc;
+}
+
 /** release the object iterator */
 static int
 vos_obj_iter_fini(struct vos_iterator *iter)
@@ -857,7 +1046,13 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 		break;
 	}
  out:
-	if (oiter->it_obj != NULL)
+	/* Release the object only if we didn't borrow it from the parent
+	 * iterator.   The generic code reference counts the iterators
+	 * to ensure that a parent never gets removed before all nested
+	 * iterators are finalized
+	 */
+	if (oiter->it_obj != NULL &&
+	    (iter->it_type == VOS_ITER_DKEY || !iter->it_from_parent))
 		vos_obj_release(vos_obj_cache_current(), oiter->it_obj);
 
 	D_FREE_PTR(oiter);
@@ -992,13 +1187,15 @@ vos_obj_iter_empty(struct vos_iterator *iter)
 }
 
 struct vos_iter_ops	vos_obj_iter_ops = {
-	.iop_prepare	= vos_obj_iter_prep,
-	.iop_finish	= vos_obj_iter_fini,
-	.iop_probe	= vos_obj_iter_probe,
-	.iop_next	= vos_obj_iter_next,
-	.iop_fetch	= vos_obj_iter_fetch,
-	.iop_delete	= vos_obj_iter_delete,
-	.iop_empty	= vos_obj_iter_empty,
+	.iop_prepare		= vos_obj_iter_prep,
+	.iop_nested_tree_fetch	= vos_obj_iter_nested_tree_fetch,
+	.iop_nested_prepare	= vos_obj_iter_nested_prep,
+	.iop_finish		= vos_obj_iter_fini,
+	.iop_probe		= vos_obj_iter_probe,
+	.iop_next		= vos_obj_iter_next,
+	.iop_fetch		= vos_obj_iter_fetch,
+	.iop_delete		= vos_obj_iter_delete,
+	.iop_empty		= vos_obj_iter_empty,
 };
 /**
  * @} vos_obj_iters

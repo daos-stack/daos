@@ -387,11 +387,11 @@ enum {
  *				handle. It will reduce memory consumption,
  *				but state of iterator could be overwritten
  *				by any other tree operation.
- *
+ * \param epr		[IN]	Selects records where epr_lo < time <= epr_hi
  * \param ih		[OUT]	Returned iterator handle.
  */
 int evt_iter_prepare(daos_handle_t toh, unsigned int options,
-		     daos_handle_t *ih);
+		     daos_epoch_range_t epr, daos_handle_t *ih);
 /**
  * Finalise iterator.
  */

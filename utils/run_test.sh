@@ -57,6 +57,7 @@ if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
     source ./.build_vars.sh
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
+    run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     run_test src/common/tests/btree.sh ukey -s 20000
     run_test src/common/tests/btree.sh direct -s 20000
     run_test src/common/tests/btree.sh -s 20000

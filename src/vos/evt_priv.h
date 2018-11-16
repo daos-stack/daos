@@ -42,6 +42,8 @@ enum evt_iter_state {
 };
 
 struct evt_iterator {
+	/* Epoch range for the iterator */
+	daos_epoch_range_t		it_epr;
 	/** state of the iterator */
 	unsigned short			it_state;
 	/** iterator embedded in open handle */
@@ -143,7 +145,8 @@ evt_tcx_decref(struct evt_context *tcx)
 
 daos_handle_t evt_tcx2hdl(struct evt_context *tcx);
 struct evt_context *evt_hdl2tcx(daos_handle_t toh);
-bool evt_move_trace(struct evt_context *tcx, bool forward);
+bool evt_move_trace(struct evt_context *tcx, bool forward,
+		    daos_epoch_range_t *epr);
 
 struct evt_rect *evt_node_rect_at(struct evt_context *tcx,
 				  TMMID(struct evt_node) nd_mmid,

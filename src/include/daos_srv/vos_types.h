@@ -131,17 +131,23 @@ typedef struct {
  * Parameters for initialising VOS iterator
  */
 typedef struct {
-	/** pool connection handle or container open handle */
+	/** standalone prepare:	pool connection handle or container open handle
+	 *  nested prepare:	DAOS_HDL_INVAL
+	 */
 	daos_handle_t		ip_hdl;
+	/** standalone prepare:	DAOS_HDL_INVAL
+	 *  nested prepare:	parent iterator handle
+	 */
+	daos_handle_t		ip_ih;
 	/** Optional, object ID for VOS_ITER_DKEY */
 	daos_unit_oid_t		ip_oid;
-	/** distribution key for VOS_ITER_AKEY */
+	/** distribution key (VOS_ITER_AKEY, standalone only) */
 	daos_key_t		ip_dkey;
-	/** attribute key for VOS_ITER_DKEY/RECX */
+	/** attribute key (VOS_ITER_DKEY/RECX/SINGLE, standalone only) */
 	daos_key_t		ip_akey;
-	/** epoch validity range for the iterator */
+	/** epoch validity range for the iterator (standalone only) */
 	daos_epoch_range_t	ip_epr;
-	/** epoch logic expression for the iterator */
+	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	ip_epc_expr;
 } vos_iter_param_t;
 

@@ -2047,7 +2047,7 @@ evt_find(daos_handle_t toh, struct evt_rect *rect,
 
 /** move the probing trace forward or backward */
 bool
-evt_move_trace(struct evt_context *tcx, bool forward)
+evt_move_trace(struct evt_context *tcx, bool forward, daos_epoch_range_t *epr)
 {
 	struct evt_trace	*trace;
 	struct evt_node		*nd;
@@ -2057,6 +2057,7 @@ evt_move_trace(struct evt_context *tcx, bool forward)
 		return false;
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+next:
 	while (1) {
 		nd_mmid = trace->tr_node;
 		nd = evt_tmmid2ptr(tcx, nd_mmid);
@@ -2092,6 +2093,15 @@ evt_move_trace(struct evt_context *tcx, bool forward)
 		trace++;
 		trace->tr_at = forward ? 0 : nd->tn_nr - 1;
 		trace->tr_node = tmp;
+	}
+
+	if (epr != NULL) {
+		struct evt_rect *rect;
+
+		rect = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
+		if (rect->rc_epc_lo < epr->epr_lo ||
+		    rect->rc_epc_lo > epr->epr_hi)
+			goto next;
 	}
 
 	return true;

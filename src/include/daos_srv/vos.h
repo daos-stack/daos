@@ -461,14 +461,17 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
 /**
  * Initialise an iterator for VOS
  *
+ * \param type  [IN]	Type of iterator
  * \param param	[IN]	Parameters for the iterator.
- *			For different iterator types:
+ *			For standalone iterator types,  param::ip_ih is
+ *			DAOS_HDL_INVAL:
  *			- VOS_ITER_COUUID : param::ip_hdl is pool open handle
  *
  *			- VOS_ITER_OBJ	  : param::ip_hdl is container handle
  *
  *			- VOS_ITER_DKEY	  : param::ip_hdl is container handle,
  *					    param::ip_oid is ID of KV object.
+ *					    param::ip_akey is akey condition
  *
  *			- VOS_ITER_AKEY	  : param::ip_hdl is container handle,
  *					    param::ip_oid is ID of KV object.
@@ -482,6 +485,23 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
  *					    key of the akeys to be iterated.
  *					    param::ip_akey is the attribute key
  *					    key of the records to be iterated.
+ *
+ *			For nested iterator:
+ *			- VOS_ITER_COUUID and VOS_ITER_OBJ are unsupported
+ *
+ *			- VOS_ITER_DKEY	  : param::ip_ih is VOS_ITER_OBJ handle
+ *					    param::ip_oid is ID of KV object.
+ *					    param::ip_akey is akey condition
+ *
+ *			- VOS_ITER_AKEY	  : param::ip_ih is VOS_ITER_DKEY handle
+ *
+ *			- VOS_ITER_RECX	  : param::ip_ih is VOS_ITER_AKEY handle
+ *			- VOS_ITER_SINGLE
+ *
+ *			Nested iterators use the subtree referenced by the
+ *			current cursor of the parent iterator.  Epoch range
+ *			is inherited from that entry.
+ *
  * \param ih	[OUT]	Returned iterator handle
  *
  * \return		Zero on success, negative value if error

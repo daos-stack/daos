@@ -97,6 +97,64 @@ vos_iter2hdl(struct vos_iterator *iter)
 	return hdl;
 }
 
+static int
+nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
+	       vos_iter_param_t *param, daos_handle_t *cih)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(param->ip_ih);
+	struct vos_iterator	*citer;
+	struct vos_iter_info	 info;
+	int			 rc;
+
+	D_ASSERT(iter->it_ops != NULL);
+
+	if (dict->id_ops->iop_nested_prepare == NULL ||
+	    iter->it_ops->iop_nested_tree_fetch == NULL) {
+		D_ERROR("nested iterator prepare isn't supported for %s",
+			dict->id_name);
+		return -DER_NOSYS;
+	}
+
+	if (iter->it_state == VOS_ITS_NONE) {
+		D_ERROR("Please call vos_iter_probe to initialise cursor\n");
+		return -DER_NO_PERM;
+	}
+
+	if (iter->it_state == VOS_ITS_END) {
+		D_DEBUG(DB_TRACE, "The end of iteration\n");
+		return -DER_NONEXIST;
+	}
+
+	rc = iter->it_ops->iop_nested_tree_fetch(iter, type, &info);
+
+	if (rc != 0) {
+		D_ERROR("Problem fetching nested tree from iterator: %d", rc);
+		return rc;
+	}
+
+	info.ii_epc_expr = param->ip_epc_expr;
+	info.ii_akey = &param->ip_akey;
+
+	rc = dict->id_ops->iop_nested_prepare(type, &info, &citer);
+	if (rc != 0) {
+		D_ERROR("Failed to prepare %s iterator: %d\n", dict->id_name,
+			rc);
+		return rc;
+	}
+
+	iter->it_ref_cnt++;
+
+	citer->it_type		= type;
+	citer->it_ops		= dict->id_ops;
+	citer->it_state		= VOS_ITS_NONE;
+	citer->it_ref_cnt	= 1;
+	citer->it_parent	= iter;
+	citer->it_from_parent	= true;
+
+	*cih = vos_iter2hdl(citer);
+	return 0;
+}
+
 int
 vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		 daos_handle_t *ih)
@@ -104,6 +162,12 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	struct vos_iter_dict	*dict;
 	struct vos_iterator	*iter;
 	int			 rc;
+
+	if (daos_handle_is_inval(param->ip_hdl) &&
+	    daos_handle_is_inval(param->ip_ih)) {
+		D_ERROR("No valid handle specified in vos_iter_param\n");
+		return -DER_INVAL;
+	}
 
 	for (dict = &vos_iterators[0]; dict->id_ops != NULL; dict++) {
 		if (dict->id_type == type)
@@ -114,7 +178,14 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		D_ERROR("Can't find iterator type %d\n", type);
 		return -DER_NOSYS;
 	}
+	if (!daos_handle_is_inval(param->ip_ih)) {
+		D_DEBUG(DB_TRACE, "Preparing nested iterator of type %s\n",
+			dict->id_name);
+		return nested_prepare(type, dict, param, ih);
+	}
 
+	D_DEBUG(DB_TRACE, "Preparing standalone iterator of type %s\n",
+		dict->id_name);
 	rc = dict->id_ops->iop_prepare(type, param, &iter);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -126,21 +197,47 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		return rc;
 	}
 
-	iter->it_type	= type;
-	iter->it_ops	= dict->id_ops;
-	iter->it_state	= VOS_ITS_NONE;
+	iter->it_type		= type;
+	iter->it_ops		= dict->id_ops;
+	iter->it_state		= VOS_ITS_NONE;
+	iter->it_ref_cnt	= 1;
+	iter->it_parent		= NULL;
+	iter->it_from_parent	= false;
 
 	*ih = vos_iter2hdl(iter);
 	return 0;
 }
 
-int
-vos_iter_finish(daos_handle_t ih)
+/* Internal function to ensure parent iterator remains
+ * allocated while any nested iterators are active
+ */
+static int
+iter_decref(struct vos_iterator *iter)
 {
-	struct vos_iterator *iter = vos_hdl2iter(ih);
+	iter->it_ref_cnt--;
+
+	if (iter->it_ref_cnt)
+		return 0;
 
 	D_ASSERT(iter->it_ops != NULL);
 	return iter->it_ops->iop_finish(iter);
+}
+
+int
+vos_iter_finish(daos_handle_t ih)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_iterator	*parent = iter->it_parent;
+	int			 rc = 0;
+	int			 prc = 0;
+
+	iter->it_parent = NULL;
+	rc = iter_decref(iter);
+
+	if (parent)
+		prc = iter_decref(parent);
+
+	return rc || prc;
 }
 
 int
