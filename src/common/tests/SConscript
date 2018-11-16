@@ -20,8 +20,15 @@ def scons():
     daos_build.test(denv, 'abt_perf', 'abt_perf.c',
                     LIBS=['daos_common', 'gurt', 'abt'])
 
-    daos_build.test(denv, 'drpc_tests', 'drpc_tests.c',
-                    LIBS=['daos_common', 'gurt', 'cmocka'])
+    unitEnv = denv.Clone()
+    # Some syscalls are aliased when fortification is enabled, which makes
+    # mocking in unit tests into a headache.
+    # The compiler decides this on its own, but let's force the issue.
+    unitEnv.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
+
+    daos_build.test(unitEnv, 'drpc_tests',
+                    ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c'],
+                    LIBS=['protobuf-c', 'gurt', 'cmocka'])
 
 if __name__ == "SCons.Script":
     scons()

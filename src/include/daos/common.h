@@ -226,16 +226,17 @@ static inline int
 daos_errno2der(int err)
 {
 	switch (err) {
-	case 0:		return 0;
+	case 0:			return 0;
 	case EPERM:
-	case EACCES:	return -DER_NO_PERM;
-	case ENOMEM:	return -DER_NOMEM;
+	case EACCES:		return -DER_NO_PERM;
+	case ENOMEM:		return -DER_NOMEM;
 	case EDQUOT:
-	case ENOSPC:	return -DER_NOSPACE;
-	case EEXIST:	return -DER_EXIST;
-	case ENOENT:	return -DER_NONEXIST;
-	case ECANCELED:	return -DER_CANCELED;
-	default:	return -DER_INVAL;
+	case ENOSPC:		return -DER_NOSPACE;
+	case EEXIST:		return -DER_EXIST;
+	case ENOENT:		return -DER_NONEXIST;
+	case ECANCELED:		return -DER_CANCELED;
+	case EWOULDBLOCK:	return -DER_AGAIN;
+	default:		return -DER_INVAL;
 	}
 }
 
