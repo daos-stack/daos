@@ -27,9 +27,11 @@ import time
 import subprocess
 import json
 import re
-import time
+import resource
+import signal
+import fcntl
+import errno
 
-import aexpect
 from avocado.utils import genio
 
 sessions = {}
@@ -59,8 +61,8 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         # pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
             build_vars = json.load(json_vars)
-        orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin/orterun")
-        daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin/daos_server")
+        orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun")
+        daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_server")
 
         # before any set in env are added to env_args, add any user supplied
         # envirables to environment first
@@ -71,53 +73,71 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'DD_(STDERR|LOG)', 'D_LOG_.*',
                     'OFI_.*']
 
-        env_args = ""
+        env_args = []
         for (env_var, env_val) in os.environ.items():
             for pat in env_vars:
                 if re.match(pat, env_var):
-                    env_args += "-x {}='{}' ".format(env_var, env_val)
+                    env_args.extend(["-x", "{}={}".format(env_var, env_val)])
 
-        initial_cmd = "/bin/sh"
-        server_cmd = orterun_bin + " --np {0} ".format(server_count)
+        server_cmd = [orterun_bin, "--np", str(server_count)]
         if uri_path is not None:
-            server_cmd += "--report-uri {0} ".format(uri_path)
-        server_cmd += "--hostfile {0} --enable-recovery ".format(hostfile)
-        server_cmd += env_args
-        server_cmd += "-x DD_SUBSYS=all -x DD_MASK=all "
-        server_cmd += daos_srv_bin + " -g {0} -c 1 ".format(setname)
-        server_cmd += " -a " + basepath + "/install/tmp/"
-        server_cmd += " -d " + "/var/run/user/{0}".format(os.geteuid())
+            server_cmd.extend(["--report-uri", uri_path])
+        server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
+        server_cmd.extend(env_args)
+        server_cmd.extend(["-x", "DD_SUBSYS=all", "-x", "DD_MASK=all",
+                           daos_srv_bin, "-g", setname, "-c", "1",
+                           "-a", os.path.join(basepath, "install", "tmp"),
+                           "-d", os.path.join(os.sep, "var", "run", "user", str(os.geteuid()))])
 
-        print "Start CMD>>>>{0}".format(server_cmd)
+        print "Start CMD>>>>{0}".format(' '.join(server_cmd))
 
-        sessions[setname] = aexpect.ShellSession(initial_cmd)
-        if sessions[setname].is_responsive():
-            sessions[setname].sendline("ulimit -c unlimited")
-            sessions[setname].sendline(server_cmd)
-            timeout = 300
-            start_time = time.time()
-            result = 0
-            expected_data = "Starting Servers\n"
-            while True:
-                pattern = "DAOS I/O server"
-                output = sessions[setname].read_nonblocking(2, 2)
-                match = re.findall(pattern, output)
-                expected_data = expected_data + output
-                result += len(match)
-                if result == server_count or time.time() - start_time > timeout:
-                    print ("<SERVER>: {}".format(expected_data))
-                    if result != server_count:
-                        raise ServerFailed("Server didn't start!")
-                    break
-            print "<SERVER> server started and took %s seconds to start" % \
-                  (time.time() - start_time)
-    except Exception as e:
-        print "<SERVER> Exception occurred: {0}".format(str(e))
+        resource.setrlimit(
+            resource.RLIMIT_CORE,
+            (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+
+        sessions[setname] = subprocess.Popen(server_cmd,
+                                             stdout=subprocess.PIPE,
+                                             stderr=subprocess.PIPE)
+        fd = sessions[setname].stdout.fileno()
+        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+        timeout = 600
+        start_time = time.time()
+        result = 0
+        pattern = "DAOS I/O server"
+        expected_data = "Starting Servers\n"
+        while True:
+            output = ""
+            try:
+                output = sessions[setname].stdout.read()
+            except IOError as excpn:
+                if excpn.errno != errno.EAGAIN:
+                    raise excpn
+                continue
+            match = re.findall(pattern, output)
+            expected_data += output
+            result += len(match)
+            if not output or result == server_count or \
+               time.time() - start_time > timeout:
+                print("<SERVER>: {}".format(expected_data))
+                if result != server_count:
+                    raise ServerFailed("Server didn't start!")
+                break
+        print "<SERVER> server started and took %s seconds to start" % \
+              (time.time() - start_time)
+    except Exception as excpn:
+        print "<SERVER> Exception occurred: {0}".format(str(excpn))
         # we need to end the session now -- exit the shell
         try:
-            sessions[setname].sendline("exit")
-            # for good measure, try to close it
-            sessions[setname].close()
+            sessions[setname].send_signal(signal.SIGINT)
+            time.sleep(5)
+            # get the stderr
+            error = sessions[setname].stderr.read()
+            if sessions[setname].poll() is None:
+                sessions[setname].kill()
+            retcode = sessions[setname].wait()
+            print "<SERVER> server start return code: {}\n" \
+                  "stderr:\n{}".format(retcode, error)
         except KeyError:
             pass
         raise ServerFailed("Server didn't start!")
@@ -133,17 +153,17 @@ def stopServer(setname=None, hosts=None):
     try:
         if setname == None:
             for k, v in sessions.items():
-                v.sendcontrol("c")
-                v.sendcontrol("c")
-                # we need to end the session now -- exit the shell
-                v.sendline("exit")
-                v.close()
+                v.send_signal(signal.SIGINT)
+                time.sleep(5)
+                if v.poll() == None:
+                    v.kill()
+                v.wait()
         else:
-            sessions[setname].sendcontrol("c")
-            sessions[setname].sendcontrol("c")
-            # we need to end the session now -- exit the shell
-            sessions[setname].sendline("exit")
-            sessions[setname].close()
+            sessions[setname].send_signal(signal.SIGINT)
+            time.sleep(5)
+            if sessions[setname].poll() == None:
+                sessions[setname].kill()
+            sessions[setname].wait()
         print "<SERVER> server stopped"
     except Exception as e:
         print "<SERVER> Exception occurred: {0}".format(str(e))
