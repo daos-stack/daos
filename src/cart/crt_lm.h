@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,14 +57,14 @@ struct lm_grp_priv_t;
  *	1) turn on cart context progress callbacks
  *	2) turn on RAS notification event handlers
  */
-void
+int
 crt_lm_init(void);
 
 /**
  * Finilize the fault tolerance module. This function should be called before
  * crt_finalize().
  */
-void
+int
 crt_lm_finalize(void);
 
 #if defined(__cplusplus)

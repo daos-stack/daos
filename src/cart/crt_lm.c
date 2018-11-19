@@ -1341,7 +1341,7 @@ lm_gdata_destroy(void)
 	return;
 }
 
-void
+int
 crt_lm_init(void)
 {
 	crt_group_t			*grp;
@@ -1350,7 +1350,7 @@ crt_lm_init(void)
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
-		return;
+		return -DER_INVAL;
 	}
 	/* this is the only place we need a grp_priv pointer, since we need to
 	 * retrieve the public struct pointer of the local primary group at
@@ -1366,25 +1366,32 @@ crt_lm_init(void)
 	crt_lm_gdata.clg_refcount++;
 	if (crt_lm_gdata.clg_refcount > 1) {
 		D_RWLOCK_UNLOCK(&crt_lm_gdata.clg_rwlock);
-		return;
+		return 0;
 	}
 	/* from here up to the unlock is only executed once per process */
 	if (crt_is_service()) {
 		rc = crt_lm_grp_init(grp);
 		if (rc != 0) {
 			D_ERROR("crt_lm_grp_init() failed, rc %d.\n", rc);
-			D_RWLOCK_UNLOCK(&crt_lm_gdata.clg_rwlock);
-			return;
+			D_GOTO(err_out, rc);
 		}
 		/* servers register callbacks to manage the liveness map */
 		crt_register_progress_cb(lm_prog_cb, grp);
 	}
-	D_RWLOCK_UNLOCK(&crt_lm_gdata.clg_rwlock);
+	D_GOTO(out, rc);
 
-	return;
+err_out:
+	crt_lm_gdata.clg_refcount--;
+	D_RWLOCK_UNLOCK(&crt_lm_gdata.clg_rwlock);
+	lm_gdata_destroy();
+	lm_gdata_init_once = PTHREAD_ONCE_INIT;
+	return rc;
+out:
+	D_RWLOCK_UNLOCK(&crt_lm_gdata.clg_rwlock);
+	return rc;
 }
 
-void
+int
 crt_lm_finalize(void)
 {
 	struct lm_grp_srv_t		*lm_grp_srv;
@@ -1392,13 +1399,13 @@ crt_lm_finalize(void)
 
 	if (crt_lm_gdata.clg_inited == 0) {
 		D_DEBUG(DB_TRACE, "cannot finalize before crt_lm_init().\n");
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	D_RWLOCK_WRLOCK(&crt_lm_gdata.clg_rwlock);
 	crt_lm_gdata.clg_refcount--;
 	if (crt_lm_gdata.clg_refcount != 0) {
 		D_RWLOCK_UNLOCK(&crt_lm_gdata.clg_rwlock);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = 0);
 	}
 	if (crt_is_service()) {
 		lm_grp_srv = &crt_lm_gdata.clg_lm_grp_srv;
@@ -1413,7 +1420,7 @@ crt_lm_finalize(void)
 	lm_gdata_init_once = PTHREAD_ONCE_INIT;
 
 out:
-	return;
+	return rc;
 }
 
 int

@@ -356,8 +356,12 @@ do_init:
 		D_ASSERT(crt_gdata.cg_opc_map_legacy != NULL);
 
 		crt_gdata.cg_inited = 1;
-		if ((flags & CRT_FLAG_BIT_LM_DISABLE) == 0)
-			crt_lm_init();
+		if ((flags & CRT_FLAG_BIT_LM_DISABLE) == 0) {
+			rc = crt_lm_init();
+			if (rc != 0) {
+				D_GOTO(cleanup, rc);
+			}
+		}
 
 
 	} else {
@@ -380,8 +384,13 @@ cleanup:
 	}
 	if (crt_gdata.cg_grp_inited == 1)
 		crt_grp_fini();
-	if (crt_gdata.cg_opc_map != NULL)
+	if (crt_gdata.cg_opc_map != NULL) {
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
+	}
+	if (crt_gdata.cg_opc_map_legacy != NULL) {
+		crt_opc_map_destroy_legacy(crt_gdata.cg_opc_map_legacy);
+	}
+
 	crt_na_ofi_config_fini();
 
 unlock:
