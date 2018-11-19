@@ -54,11 +54,21 @@ pool_create_cp(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	/**
-	 * report list of targets running the metadata service. CMF_RANK_LIST
-	 * only processes "num".
+	/*
+	 * Report the actual list of pool service replicas. Don't use
+	 * daos_rank_list_copy, since svc->rl_ranks is from the user and may be
+	 * unreallocable.
 	 */
-	rc = daos_rank_list_copy(svc, pc_out->pc_svc);
+	if (pc_out->pc_svc->rl_nr > svc->rl_nr) {
+		D_ERROR("more pool service replicas created (%u) than "
+			"requested (%u)\n", pc_out->pc_svc->rl_nr, svc->rl_nr);
+		rc = -DER_PROTO;
+		goto out;
+	}
+	svc->rl_nr = pc_out->pc_svc->rl_nr;
+	memcpy(svc->rl_ranks, pc_out->pc_svc->rl_ranks,
+	       sizeof(*svc->rl_ranks) * svc->rl_nr);
+
 out:
 	daos_group_detach(arg->rpc->cr_ep.ep_grp);
 	crt_req_decref(arg->rpc);
