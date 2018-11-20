@@ -366,7 +366,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 		    obj->cob_shards[idx].do_rebuilding)
 			continue;
 
-		if (obj->cob_shards[idx].do_shard != -1)
+		if (obj->cob_shards[idx].do_target_id != -1)
 			break;
 	}
 
