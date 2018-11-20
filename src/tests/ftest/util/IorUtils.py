@@ -62,7 +62,8 @@ def build_ior(basepath):
         raise IorFailed("IOR Build process Failed")
 
 def run_ior(client_file, ior_flags, iteration, block_size, transfer_size, pool_uuid, svc_list,
-            record_size, stripe_size, stripe_count, async_io, object_class, basepath, slots=1):
+            record_size, stripe_size, stripe_count, async_io, object_class, basepath, slots=1,
+            seg_count=1):
     """ Running Ior tests
         Function Arguments
         client_file   --client file holding client hostname and slots
@@ -79,6 +80,7 @@ def run_ior(client_file, ior_flags, iteration, block_size, transfer_size, pool_u
         object_class  --object class
         basepath      --Daos basepath
         slots         --slots on each node
+        seg_count     --segment count
     """
 
     with open(os.path.join(basepath, ".build_vars.json")) as f:
@@ -88,11 +90,11 @@ def run_ior(client_file, ior_flags, iteration, block_size, transfer_size, pool_u
     try:
 
         ior_cmd = orterun_bin + " -N {0} --hostfile {1} -x DAOS_SINGLETON_CLI=1 " \
-                  " -x CRT_ATTACH_INFO_PATH={2} ior {3} -i {4} -a DAOS -o `uuidgen` " \
-                  " -b {5} -t {6} -- -p {7} -v {8} -r {9} -s {10} -c {11} -a {12} -o {13} "\
-                  .format(slots, client_file, attach_info_path, ior_flags, iteration, block_size,
-                  transfer_size, pool_uuid, svc_list, record_size, stripe_size, stripe_count,
-                  async_io, object_class)
+                  " -x CRT_ATTACH_INFO_PATH={2} ior {3} -s {4} -i {5} -a DAOS -o `uuidgen` " \
+                  " -b {6} -t {7} -- -p {8} -v {9} -r {10} -s {11} -c {12} -a {13} -o {14} "\
+                  .format(slots, client_file, attach_info_path, ior_flags, seg_count, iteration,
+                  block_size, transfer_size, pool_uuid, svc_list, record_size, stripe_size,
+                  stripe_count, async_io, object_class)
         print ("ior_cmd: {}".format(ior_cmd))
 
         subprocess.check_call(ior_cmd, shell=True)
