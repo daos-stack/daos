@@ -100,7 +100,8 @@ dc_pool_create(tse_task_t *task)
 
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
-	opc = DAOS_RPC_OPCODE(MGMT_POOL_CREATE, DAOS_MGMT_MODULE, 1);
+	opc = DAOS_RPC_OPCODE(MGMT_POOL_CREATE, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_POOL_CREATE) failed, rc: %d.\n",
@@ -195,7 +196,8 @@ dc_pool_destroy(tse_task_t *task)
 
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
-	opc = DAOS_RPC_OPCODE(MGMT_POOL_DESTROY, DAOS_MGMT_MODULE, 1);
+	opc = DAOS_RPC_OPCODE(MGMT_POOL_DESTROY, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_POOL_DESTROY) failed, rc: %d.\n",

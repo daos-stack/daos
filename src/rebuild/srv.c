@@ -1825,22 +1825,26 @@ out:
 	return rc;
 }
 
-/* Note: the rpc input/output parameters is defined in daos_rpc */
-static struct daos_rpc_handler rebuild_handlers[] = {
-	{
-		.dr_opc		= REBUILD_OBJECTS_SCAN,
-		.dr_hdlr	= rebuild_tgt_scan_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate	= rebuild_tgt_scan_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= REBUILD_OBJECTS,
-		.dr_hdlr	= rebuild_obj_handler
-	}, {
-		.dr_opc		= 0
-	}
+static struct crt_corpc_ops rebuild_tgt_scan_co_ops = {
+	.co_aggregate	= rebuild_tgt_scan_aggregator,
+	.co_pre_forward	= NULL,
 };
+
+/* Define for cont_rpcs[] array population below.
+ * See REBUILD_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.dr_opc       = a,	\
+	.dr_hdlr      = d,	\
+	.dr_corpc_ops = e,	\
+}
+
+static struct daos_rpc_handler rebuild_handlers[] = {
+	REBUILD_PROTO_SRV_RPC_LIST,
+};
+
+#undef X
 
 struct dss_module_key rebuild_module_key = {
 	.dmk_tags = DAOS_SERVER_TAG,
@@ -1890,14 +1894,15 @@ rebuild_cleanup(void)
 	return 0;
 }
 
-struct dss_module rebuild_module =  {
+struct dss_module rebuild_module = {
 	.sm_name	= "rebuild",
 	.sm_mod_id	= DAOS_REBUILD_MODULE,
-	.sm_ver		= 1,
+	.sm_ver		= DAOS_REBUILD_VERSION,
 	.sm_init	= init,
 	.sm_fini	= fini,
-	.sm_srv_rpcs	= rebuild_rpcs,
+	.sm_cleanup	= rebuild_cleanup,
+	.sm_proto_fmt	= &rebuild_proto_fmt,
+	.sm_cli_count	= 0,
 	.sm_handlers	= rebuild_handlers,
 	.sm_key		= &rebuild_module_key,
-	.sm_cleanup	= rebuild_cleanup,
 };

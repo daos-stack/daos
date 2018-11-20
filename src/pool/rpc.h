@@ -41,29 +41,83 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
+#define DAOS_POOL_VERSION 1
+/* LIST of internal RPCS in form of:
+ * OPCODE, flags, FMT, handler, corpc_hdlr,
+ */
+#define POOL_PROTO_CLI_RPC_LIST						\
+	X(POOL_CREATE,							\
+		0, &DQF_POOL_CREATE,					\
+		ds_pool_create_handler, NULL),				\
+	X(POOL_CONNECT,							\
+		0, &DQF_POOL_CONNECT,					\
+		ds_pool_connect_handler, NULL),				\
+	X(POOL_DISCONNECT,						\
+		0, &DQF_POOL_DISCONNECT,				\
+		ds_pool_disconnect_handler, NULL),			\
+	X(POOL_QUERY,							\
+		0, &DQF_POOL_QUERY,					\
+		ds_pool_query_handler, NULL),				\
+	X(POOL_EXCLUDE,							\
+		0, &DQF_POOL_EXCLUDE,					\
+		ds_pool_update_handler, NULL),				\
+	X(POOL_EVICT,							\
+		0, &DQF_POOL_EVICT,					\
+		ds_pool_evict_handler, NULL),				\
+	X(POOL_ADD,							\
+		0, &DQF_POOL_ADD,					\
+		ds_pool_update_handler, NULL),				\
+	X(POOL_EXCLUDE_OUT,						\
+		0, &DQF_POOL_EXCLUDE_OUT,				\
+		ds_pool_update_handler, NULL),				\
+	X(POOL_SVC_STOP,						\
+		0, &DQF_POOL_SVC_STOP,					\
+		ds_pool_svc_stop_handler, NULL),			\
+	X(POOL_ATTR_LIST,						\
+		0, &DQF_POOL_ATTR_LIST,					\
+		ds_pool_attr_list_handler, NULL),			\
+	X(POOL_ATTR_GET,						\
+		0, &DQF_POOL_ATTR_GET,					\
+		ds_pool_attr_get_handler, NULL),			\
+	X(POOL_ATTR_SET,						\
+		0, &DQF_POOL_ATTR_SET,					\
+		ds_pool_attr_set_handler, NULL)
+
+#define POOL_PROTO_SRV_RPC_LIST						\
+	X(POOL_TGT_CONNECT,						\
+		0, &DQF_POOL_TGT_CONNECT,				\
+		ds_pool_tgt_connect_handler,				\
+		&ds_pool_tgt_connect_co_ops),				\
+	X(POOL_TGT_DISCONNECT,						\
+		0, &DQF_POOL_TGT_DISCONNECT,				\
+		ds_pool_tgt_disconnect_handler,				\
+		&ds_pool_tgt_disconnect_co_ops),			\
+	X(POOL_TGT_UPDATE_MAP,						\
+		0, &DQF_POOL_TGT_UPDATE_MAP,				\
+		ds_pool_tgt_update_map_handler,				\
+		&ds_pool_tgt_update_map_co_ops),			\
+	X(POOL_RDB_START,						\
+		0, &DQF_POOL_RDB_START,					\
+		ds_pool_rdb_start_handler,				\
+		&ds_pool_rdb_start_co_ops),				\
+	X(POOL_RDB_STOP,						\
+		0, &DQF_POOL_RDB_STOP,					\
+		ds_pool_rdb_stop_handler,				\
+		&ds_pool_rdb_stop_co_ops)
+
+/* Define for RPC enum population below */
+#define X(a, b, c, d, e) a
+
 enum pool_operation {
-	POOL_CREATE		= 1,
-	POOL_DESTROY		= 2,
-	POOL_CONNECT		= 3,
-	POOL_DISCONNECT		= 4,
-	POOL_QUERY		= 5,
-	POOL_EXCLUDE		= 6,
-	POOL_EVICT		= 7,
-	POOL_ADD		= 8,
-	POOL_EXCLUDE_OUT	= 9,
-	POOL_SVC_STOP		= 10,
-
-	POOL_ATTR_LIST		 = 11,
-	POOL_ATTR_GET		 = 12,
-	POOL_ATTR_SET		 = 13,
-
-	POOL_TGT_CONNECT	= 14,
-	POOL_TGT_DISCONNECT	= 15,
-	POOL_TGT_UPDATE_MAP	= 16,
-
-	POOL_RDB_START		= 17,
-	POOL_RDB_STOP		= 18,
+	POOL_PROTO_CLI_RPC_LIST,
+	POOL_PROTO_CLI_COUNT,
+	POOL_PROTO_CLI_LAST = POOL_PROTO_CLI_COUNT - 1,
+	POOL_PROTO_SRV_RPC_LIST,
 };
+
+#undef X
+
+extern struct crt_proto_format pool_proto_fmt;
 
 struct pool_op_in {
 	uuid_t	pi_uuid;	/* pool UUID */
@@ -251,11 +305,16 @@ struct pool_rdb_stop_out {
 	int		doo_rc;
 };
 
-int pool_req_create(crt_context_t dtp_ctx, crt_endpoint_t *tgt_ep,
-		    crt_opcode_t opc, crt_rpc_t **req);
+static inline int
+pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+		crt_rpc_t **req)
+{
+	crt_opcode_t opcode;
 
-extern struct daos_rpc pool_rpcs[];
-extern struct daos_rpc pool_srv_rpcs[];
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_POOL_MODULE, DAOS_POOL_VERSION);
+
+	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
+}
 
 int
 pool_target_addr_list_alloc(unsigned int num,

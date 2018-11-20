@@ -323,164 +323,28 @@ struct crt_req_format DQF_CONT_TGT_EPOCH_AGGREGATE =
 	DEFINE_CRT_REQ_FMT(cont_tgt_epoch_aggregate_in_fields,
 			   cont_tgt_epoch_aggregate_out_fields);
 
-
-int
-cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
-		crt_rpc_t **req)
-{
-	crt_opcode_t opcode;
-
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, 1);
-
-	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
+/* Define for cont_rpcs[] array population below.
+ * See CONT_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.prf_flags   = b,	\
+	.prf_req_fmt = c,	\
+	.prf_hdlr    = NULL,	\
+	.prf_co_ops  = NULL,	\
 }
 
-struct daos_rpc cont_rpcs[] = {
-	{
-		.dr_name	= "CONT_CREATE",
-		.dr_opc		= CONT_CREATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_CREATE
-	}, {
-		.dr_name	= "CONT_DESTROY",
-		.dr_opc		= CONT_DESTROY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_DESTROY
-	}, {
-		.dr_name	= "CONT_OPEN",
-		.dr_opc		= CONT_OPEN,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_OPEN
-	}, {
-		.dr_name	= "CONT_CLOSE",
-		.dr_opc		= CONT_CLOSE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_CLOSE
-	}, {
-		.dr_name	= "CONT_QUERY",
-		.dr_opc		= CONT_QUERY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_QUERY
-	}, {
-		.dr_name	= "CONT_OID_ALLOC",
-		.dr_opc		= CONT_OID_ALLOC,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_OID_ALLOC
-	}, {
-		.dr_name	= "CONT_ATTR_LIST",
-		.dr_opc		= CONT_ATTR_LIST,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_ATTR_LIST
-	}, {
-		.dr_name	= "CONT_ATTR_GET",
-		.dr_opc		= CONT_ATTR_GET,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_ATTR_GET
-	}, {
-		.dr_name	= "CONT_ATTR_SET",
-		.dr_opc		= CONT_ATTR_SET,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_ATTR_SET
-	}, {
-		.dr_name	= "CONT_EPOCH_QUERY",
-		.dr_opc		= CONT_EPOCH_QUERY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_EPOCH_OP
-	}, {
-		.dr_name	= "CONT_EPOCH_HOLD",
-		.dr_opc		= CONT_EPOCH_HOLD,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_EPOCH_OP
-	}, {
-		.dr_name	= "CONT_EPOCH_SLIP",
-		.dr_opc		= CONT_EPOCH_SLIP,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_EPOCH_OP
-	}, {
-		.dr_name	= "CONT_EPOCH_DISCARD",
-		.dr_opc		= CONT_EPOCH_DISCARD,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_EPOCH_OP
-	}, {
-		.dr_name	= "CONT_EPOCH_COMMIT",
-		.dr_opc		= CONT_EPOCH_COMMIT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_EPOCH_OP
-	}, {
-		.dr_name	= "CONT_SNAP_LIST",
-		.dr_opc		= CONT_SNAP_LIST,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_SNAP_LIST_OP
-	}, {
-		.dr_name	= "CONT_SNAP_CREATE",
-		.dr_opc		= CONT_SNAP_CREATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_SNAP_CREATE_OP
-	}, {
-		.dr_name	= "CONT_SNAP_DESTROY",
-		.dr_opc		= CONT_SNAP_DESTROY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_SNAP_DESTROY_OP
-	}, {
-		.dr_opc		= 0
-	}
+static struct crt_proto_rpc_format cont_proto_rpc_fmt[] = {
+	CONT_PROTO_CLI_RPC_LIST,
+	CONT_PROTO_SRV_RPC_LIST,
 };
 
-struct daos_rpc cont_srv_rpcs[] = {
-	{
-		.dr_name	= "CONT_TGT_DESTROY",
-		.dr_opc		= CONT_TGT_DESTROY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_TGT_DESTROY
-	}, {
-		.dr_name	= "CONT_TGT_OPEN",
-		.dr_opc		= CONT_TGT_OPEN,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_TGT_OPEN
-	}, {
-		.dr_name	= "CONT_TGT_CLOSE",
-		.dr_opc		= CONT_TGT_CLOSE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_TGT_CLOSE
-	}, {
-		.dr_name	= "CONT_TGT_QUERY",
-		.dr_opc		= CONT_TGT_QUERY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_TGT_QUERY
-	}, {
-		.dr_name	= "CONT_TGT_EPOCH_DISCARD",
-		.dr_opc		= CONT_TGT_EPOCH_DISCARD,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_TGT_EPOCH_DISCARD
-	}, {
-		.dr_name	= "CONT_TGT_EPOCH_AGGREGATE",
-		.dr_opc		= CONT_TGT_EPOCH_AGGREGATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_CONT_TGT_EPOCH_AGGREGATE
-	}, {
-		.dr_opc		= 0
-	}
+#undef X
+
+struct crt_proto_format cont_proto_fmt = {
+	.cpf_name  = "cont-proto",
+	.cpf_ver   = DAOS_CONT_VERSION,
+	.cpf_count = ARRAY_SIZE(cont_proto_rpc_fmt),
+	.cpf_prf   = cont_proto_rpc_fmt,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_CONT_MODULE, 0)
 };

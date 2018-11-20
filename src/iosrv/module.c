@@ -129,22 +129,14 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 
 	if (smod->sm_key != NULL)
 		dss_register_key(smod->sm_key);
-	/* register client RPC handlers */
-	rc = daos_rpc_register(smod->sm_cl_rpcs, smod->sm_handlers,
-			       smod->sm_mod_id);
+
+	/* register RPC handlers */
+	rc = daos_rpc_register(smod->sm_proto_fmt, smod->sm_cli_count,
+			       smod->sm_handlers, smod->sm_mod_id);
 	if (rc) {
-		D_ERROR("failed to register client RPC for %s: %d\n",
+		D_ERROR("failed to register RPC for %s: %d\n",
 			modname, rc);
 		D_GOTO(err_mod_init, rc);
-	}
-
-	/* register server RPC handlers */
-	rc = daos_rpc_register(smod->sm_srv_rpcs, smod->sm_handlers,
-			       smod->sm_mod_id);
-	if (rc) {
-		D_ERROR("failed to register srv RPC for %s: %d\n",
-			modname, rc);
-		D_GOTO(err_cl_rpc, rc);
 	}
 
 	if (mod_facs != NULL)
@@ -156,8 +148,6 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 	return 0;
 
-err_cl_rpc:
-	daos_rpc_unregister(smod->sm_cl_rpcs);
 err_mod_init:
 	dss_unregister_key(smod->sm_key);
 	smod->sm_fini();
@@ -174,17 +164,10 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	struct dss_module	*smod = lmod->lm_dss_mod;
 	int			 rc;
 
-	/* unregister client RPC handlers */
-	rc = daos_rpc_unregister(smod->sm_cl_rpcs);
+	/* unregister RPC handlers */
+	rc = daos_rpc_unregister(smod->sm_proto_fmt);
 	if (rc) {
-		D_ERROR("failed to unregister client RPC %d\n", rc);
-		return rc;
-	}
-
-	/* unregister server RPC handlers */
-	rc = daos_rpc_unregister(smod->sm_srv_rpcs);
-	if (rc) {
-		D_ERROR("failed to unregister srv RPC: %d\n", rc);
+		D_ERROR("failed to unregister RPC %d\n", rc);
 		return rc;
 	}
 

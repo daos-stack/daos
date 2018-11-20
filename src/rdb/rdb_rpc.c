@@ -215,28 +215,29 @@ static struct crt_req_format DQF_RDB_INSTALLSNAPSHOT =
 	DEFINE_CRT_REQ_FMT(rdb_installsnapshot_in_fields,
 			   rdb_installsnapshot_out_fields);
 
-struct daos_rpc rdb_srv_rpcs[] = {
-	{
-		.dr_name	= "RDB_REQUESTVOTE",
-		.dr_opc		= RDB_REQUESTVOTE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_RDB_REQUESTVOTE
-	}, {
-		.dr_name	= "RDB_APPENDENTRIES",
-		.dr_opc		= RDB_APPENDENTRIES,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_RDB_APPENDENTRIES
-	}, {
-		.dr_name	= "RDB_INSTALLSNAPSHOT",
-		.dr_opc		= RDB_INSTALLSNAPSHOT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_RDB_INSTALLSNAPSHOT
-	}, {
-		.dr_opc		= 0
-	}
+/* Define for cont_rpcs[] array population below.
+ * See RDB_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.prf_flags   = b,	\
+	.prf_req_fmt = c,	\
+	.prf_hdlr    = NULL,	\
+	.prf_co_ops  = NULL,	\
+}
+
+static struct crt_proto_rpc_format rdb_proto_rpc_fmt[] = {
+	RDB_PROTO_SRV_RPC_LIST,
+};
+
+#undef X
+
+struct crt_proto_format rdb_proto_fmt = {
+	.cpf_name  = "rdb-proto",
+	.cpf_ver   = DAOS_RDB_VERSION,
+	.cpf_count = ARRAY_SIZE(rdb_proto_rpc_fmt),
+	.cpf_prf   = rdb_proto_rpc_fmt,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_RDB_MODULE, 0)
 };
 
 int
@@ -247,7 +248,7 @@ rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
 	crt_endpoint_t		ep;
 	struct dss_module_info *info = dss_get_module_info();
 
-	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, 1);
+	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, DAOS_RDB_VERSION);
 	ep.ep_grp = NULL;
 	ep.ep_rank = rdb_node->dn_rank;
 	ep.ep_tag = 0;
@@ -260,7 +261,7 @@ rdb_create_bcast(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
 	struct dss_module_info *info = dss_get_module_info();
 	crt_opcode_t		opc_full;
 
-	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, 1);
+	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, DAOS_RDB_VERSION);
 	return crt_corpc_req_create(info->dmi_ctx, group,
 				    NULL /* excluded_ranks */, opc_full,
 				    NULL /* co_bulk_hdl */, NULL /* priv */,

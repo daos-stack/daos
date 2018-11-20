@@ -292,7 +292,7 @@ bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
 	struct dss_module_info *info = dss_get_module_info();
 	crt_opcode_t		opc_full;
 
-	opc_full = DAOS_RPC_OPCODE(opc, DAOS_POOL_MODULE, 1);
+	opc_full = DAOS_RPC_OPCODE(opc, DAOS_POOL_MODULE, DAOS_POOL_VERSION);
 	return crt_corpc_req_create(info->dmi_ctx, group,
 				    NULL /* excluded_ranks */, opc_full,
 				    NULL /* co_bulk_hdl */, NULL /* priv */,

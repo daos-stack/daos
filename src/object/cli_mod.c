@@ -49,7 +49,11 @@ dc_obj_init(void)
 		cli_bypass_rpc = true;
 	}
 
-	rc = daos_rpc_register(daos_obj_rpcs, NULL, DAOS_OBJ_MODULE);
+	rc = daos_rpc_register(&obj_proto_fmt, OBJ_PROTO_CLI_COUNT,
+				NULL, DAOS_OBJ_MODULE);
+	if (rc != 0)
+		D_ERROR("failed to register daos obj RPCs: %d\n", rc);
+
 	return rc;
 }
 
@@ -59,5 +63,5 @@ dc_obj_init(void)
 void
 dc_obj_fini(void)
 {
-	daos_rpc_unregister(daos_obj_rpcs);
+	daos_rpc_unregister(&obj_proto_fmt);
 }

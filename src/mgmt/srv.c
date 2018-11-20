@@ -35,36 +35,27 @@
 #include "srv_internal.h"
 #include <signal.h>
 
-static struct daos_rpc_handler ds_mgmt_handlers[] = {
-	{
-		.dr_opc		= MGMT_POOL_CREATE,
-		.dr_hdlr	= ds_mgmt_hdlr_pool_create,
-	}, {
-		.dr_opc		= MGMT_POOL_DESTROY,
-		.dr_hdlr	= ds_mgmt_hdlr_pool_destroy,
-	}, {
-		.dr_opc		= MGMT_TGT_CREATE,
-		.dr_hdlr	= ds_mgmt_hdlr_tgt_create,
-		.dr_corpc_ops	= {
-			.co_aggregate	= ds_mgmt_tgt_create_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= MGMT_TGT_DESTROY,
-		.dr_hdlr	= ds_mgmt_hdlr_tgt_destroy,
-	}, {
-		.dr_opc		= MGMT_SVC_RIP,
-		.dr_hdlr	= ds_mgmt_hdlr_svc_rip,
-	}, {
-		.dr_opc		= MGMT_PARAMS_SET,
-		.dr_hdlr	= ds_mgmt_params_set_hdlr,
-	}, {
-		.dr_opc		= MGMT_TGT_PARAMS_SET,
-		.dr_hdlr	= ds_mgmt_tgt_params_set_hdlr,
-	}, {
-		.dr_opc = 0,
-	}
+static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
+	.co_aggregate	= ds_mgmt_tgt_create_aggregator,
+	.co_pre_forward	= NULL,
 };
+
+/* Define for cont_rpcs[] array population below.
+ * See MGMT_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.dr_opc       = a,	\
+	.dr_hdlr      = d,	\
+	.dr_corpc_ops = e,	\
+}
+
+static struct daos_rpc_handler mgmt_handlers[] = {
+	MGMT_PROTO_CLI_RPC_LIST,
+	MGMT_PROTO_SRV_RPC_LIST,
+};
+
+#undef X
 
 /**
  * Set parameter on a single target.
@@ -116,7 +107,8 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	}
 
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_PARAMS_SET, DAOS_MGMT_MODULE, 1);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_PARAMS_SET, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, NULL,
 				  opc, NULL, NULL, 0, topo, &tc_req);
 	if (rc)
@@ -205,10 +197,10 @@ ds_mgmt_fini()
 struct dss_module mgmt_module = {
 	.sm_name	= "mgmt",
 	.sm_mod_id	= DAOS_MGMT_MODULE,
-	.sm_ver		= 1,
+	.sm_ver		= DAOS_MGMT_VERSION,
 	.sm_init	= ds_mgmt_init,
 	.sm_fini	= ds_mgmt_fini,
-	.sm_cl_rpcs	= mgmt_rpcs,
-	.sm_srv_rpcs	= mgmt_srv_rpcs,
-	.sm_handlers	= ds_mgmt_handlers,
+	.sm_proto_fmt	= &mgmt_proto_fmt,
+	.sm_cli_count	= MGMT_PROTO_CLI_COUNT,
+	.sm_handlers	= mgmt_handlers,
 };

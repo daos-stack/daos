@@ -45,18 +45,54 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
+#define DAOS_OBJ_VERSION 1
+/* LIST of internal RPCS in form of:
+ * OPCODE, flags, FMT, handler, corpc_hdlr,
+ */
+#define OBJ_PROTO_CLI_RPC_LIST						\
+	X(DAOS_OBJ_RPC_UPDATE,						\
+		0, &DQF_OBJ_UPDATE,					\
+		ds_obj_rw_handler, NULL),				\
+	X(DAOS_OBJ_RPC_FETCH,						\
+		0, &DQF_OBJ_FETCH,					\
+		ds_obj_rw_handler, NULL),				\
+	X(DAOS_OBJ_DKEY_RPC_ENUMERATE,					\
+		0, &DQF_ENUMERATE,					\
+		ds_obj_enum_handler, NULL),				\
+	X(DAOS_OBJ_AKEY_RPC_ENUMERATE,					\
+		0, &DQF_ENUMERATE,					\
+		ds_obj_enum_handler, NULL),				\
+	X(DAOS_OBJ_RECX_RPC_ENUMERATE,					\
+		0, &DQF_ENUMERATE,					\
+		ds_obj_enum_handler, NULL),				\
+	X(DAOS_OBJ_RPC_ENUMERATE,					\
+		0, &DQF_ENUMERATE,					\
+		ds_obj_enum_handler, NULL),				\
+	X(DAOS_OBJ_RPC_PUNCH,						\
+		0, &DQF_OBJ_PUNCH,					\
+		ds_obj_punch_handler, NULL),				\
+	X(DAOS_OBJ_RPC_PUNCH_DKEYS,					\
+		0, &DQF_OBJ_PUNCH_DKEYS,				\
+		ds_obj_punch_handler, NULL),				\
+	X(DAOS_OBJ_RPC_PUNCH_AKEYS,					\
+		0, &DQF_OBJ_PUNCH_AKEYS,				\
+		ds_obj_punch_handler, NULL),				\
+	X(DAOS_OBJ_RPC_KEY_QUERY,					\
+		0, &DQF_OBJ_KEY_QUERY,					\
+		ds_obj_key_query_handler, NULL)
+
+/* Define for RPC enum population below */
+#define X(a, b, c, d, e) a
+
 enum obj_rpc_opc {
-	DAOS_OBJ_RPC_UPDATE		= 1,
-	DAOS_OBJ_RPC_FETCH		= 2,
-	DAOS_OBJ_DKEY_RPC_ENUMERATE	= 3,
-	DAOS_OBJ_AKEY_RPC_ENUMERATE	= 4,
-	DAOS_OBJ_RECX_RPC_ENUMERATE	= 5,
-	DAOS_OBJ_RPC_ENUMERATE		= 6,
-	DAOS_OBJ_RPC_PUNCH		= 7,
-	DAOS_OBJ_RPC_PUNCH_DKEYS	= 8,
-	DAOS_OBJ_RPC_PUNCH_AKEYS	= 9,
-	DAOS_OBJ_RPC_KEY_QUERY		= 10,
+	OBJ_PROTO_CLI_RPC_LIST,
+	OBJ_PROTO_CLI_COUNT,
+	OBJ_PROTO_CLI_LAST = OBJ_PROTO_CLI_COUNT - 1,
 };
+
+#undef X
+
+extern struct crt_proto_format obj_proto_fmt;
 
 struct obj_rw_in {
 	daos_unit_oid_t		orw_oid;
@@ -157,10 +193,20 @@ struct obj_key_query_out {
 	daos_recx_t             okqo_recx;
 };
 
-extern struct daos_rpc daos_obj_rpcs[];
+static inline int
+obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+	       crt_rpc_t **req)
+{
+	crt_opcode_t opcode;
 
-int obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
-		   crt_opcode_t opc, crt_rpc_t **req);
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_REQ_CREATE_TIMEOUT))
+		return -DER_TIMEDOUT;
+
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE, DAOS_OBJ_VERSION);
+
+	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
+}
+
 void obj_reply_set_status(crt_rpc_t *rpc, int status);
 int obj_reply_get_status(crt_rpc_t *rpc);
 void obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version);

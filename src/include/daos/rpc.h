@@ -93,32 +93,16 @@ enum daos_module_id {
 
 enum daos_rpc_flags {
 	/** flag of reply disabled */
-	DAOS_RPC_NO_REPLY	= (1U << 1),
-};
-
-/**
- * common RPC format definition for both client and server
- */
-struct daos_rpc {
-	/* Name of the RPC */
-	const char	*dr_name;
-	/* Operation code associated with the RPC */
-	crt_opcode_t	 dr_opc;
-	/* RPC version */
-	int		 dr_ver;
-	/* Operation flags, see \a daos_rpc_flags */
-	int		 dr_flags;
-	/* RPC request format */
-	struct crt_req_format *dr_req_fmt;
+	DAOS_RPC_NO_REPLY	= CRT_RPC_FEAT_NO_REPLY,
 };
 
 struct daos_rpc_handler {
 	/* Operation code */
-	crt_opcode_t		dr_opc;
+	crt_opcode_t		 dr_opc;
 	/* Request handler, only relevant on the server side */
-	crt_rpc_cb_t		dr_hdlr;
+	crt_rpc_cb_t		 dr_hdlr;
 	/* CORPC operations (co_aggregate == NULL for point-to-point RPCs) */
-	struct crt_corpc_ops	dr_corpc_ops;
+	struct crt_corpc_ops	*dr_corpc_ops;
 };
 
 static inline struct daos_rpc_handler *
@@ -147,55 +131,33 @@ daos_rpc_handler_find(struct daos_rpc_handler *handlers, crt_opcode_t opc)
  * \retval	negative errno if registration fails.
  */
 static inline int
-daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
-		  int mod_id)
+daos_rpc_register(struct crt_proto_format *proto_fmt, uint32_t cli_count,
+		  struct daos_rpc_handler *handlers, int mod_id)
 {
-	struct daos_rpc	*rpc;
-	uint32_t	 flags;
-	int		 rc = 0;
+	uint32_t i;
 
-	if (rpcs == NULL)
+	if (proto_fmt == NULL)
 		return 0;
 
-	/* walk through the handler list and register each individual RPC */
-	for (rpc = rpcs; rpc->dr_opc != 0; rpc++) {
-		crt_opcode_t opcode;
-
-		flags = 0;
-		if (rpc->dr_flags & DAOS_RPC_NO_REPLY)
-			flags |= CRT_RPC_FEAT_NO_REPLY;
-
-		opcode = DAOS_RPC_OPCODE(rpc->dr_opc, mod_id, rpc->dr_ver);
-		if (handlers != NULL) {
-			struct daos_rpc_handler *handler;
-
-			handler = daos_rpc_handler_find(handlers, rpc->dr_opc);
-			if (handler == NULL) {
-				D_ERROR("failed to find handler for opc %d\n",
-					rpc->dr_opc);
-				return rc;
-			}
-			if (handler->dr_corpc_ops.co_aggregate == NULL)
-				rc = crt_rpc_srv_register(opcode, flags,
-							  rpc->dr_req_fmt,
-							  handler->dr_hdlr);
-			else
-				rc = crt_corpc_register(opcode, rpc->dr_req_fmt,
-							handler->dr_hdlr,
-							&handler->dr_corpc_ops);
-		} else {
-			rc = crt_rpc_register(opcode, flags, rpc->dr_req_fmt);
+	if (handlers != NULL) {
+		/* walk through the RPC list and fill with handlers */
+		for (i = 0; i < proto_fmt->cpf_count; i++) {
+			proto_fmt->cpf_prf[i].prf_hdlr =
+						handlers[i].dr_hdlr;
+			proto_fmt->cpf_prf[i].prf_co_ops =
+						handlers[i].dr_corpc_ops;
 		}
-		if (rc)
-			return rc;
+	} else {
+		proto_fmt->cpf_count = cli_count;
 	}
-	return 0;
+
+	return crt_proto_register(proto_fmt);
 }
 
 static inline int
-daos_rpc_unregister(struct daos_rpc *rpcs)
+daos_rpc_unregister(struct crt_proto_format *proto_fmt)
 {
-	if (rpcs == NULL)
+	if (proto_fmt == NULL)
 		return 0;
 
 	/* no supported for now */

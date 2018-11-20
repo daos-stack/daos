@@ -92,83 +92,47 @@ cleanup(void)
 	return ds_pool_svc_stop_all();
 }
 
-/* Note: the rpc input/output parameters is defined in daos_rpc */
-static struct daos_rpc_handler pool_handlers[] = {
-	{
-		.dr_opc		= POOL_CREATE,
-		.dr_hdlr	= ds_pool_create_handler
-	}, {
-		.dr_opc		= POOL_CONNECT,
-		.dr_hdlr	= ds_pool_connect_handler
-	}, {
-		.dr_opc		= POOL_DISCONNECT,
-		.dr_hdlr	= ds_pool_disconnect_handler
-	}, {
-		.dr_opc		= POOL_QUERY,
-		.dr_hdlr	= ds_pool_query_handler
-	}, {
-		.dr_opc		= POOL_EXCLUDE,
-		.dr_hdlr	= ds_pool_update_handler
-	}, {
-		.dr_opc		= POOL_EVICT,
-		.dr_hdlr	= ds_pool_evict_handler
-	}, {
-		.dr_opc		= POOL_ADD,
-		.dr_hdlr	= ds_pool_update_handler
-	},{
-		.dr_opc		= POOL_EXCLUDE_OUT,
-		.dr_hdlr	= ds_pool_update_handler
-	},{
-		.dr_opc		= POOL_SVC_STOP,
-		.dr_hdlr	= ds_pool_svc_stop_handler
-	}, {
-		.dr_opc		= POOL_ATTR_LIST,
-		.dr_hdlr	= ds_pool_attr_list_handler
-	}, {
-		.dr_opc		= POOL_ATTR_GET,
-		.dr_hdlr	= ds_pool_attr_get_handler
-	}, {
-		.dr_opc		= POOL_ATTR_SET,
-		.dr_hdlr	= ds_pool_attr_set_handler
-	}, {
-		.dr_opc		= POOL_TGT_CONNECT,
-		.dr_hdlr	= ds_pool_tgt_connect_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate	= ds_pool_tgt_connect_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= POOL_TGT_DISCONNECT,
-		.dr_hdlr	= ds_pool_tgt_disconnect_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate	= ds_pool_tgt_disconnect_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= POOL_TGT_UPDATE_MAP,
-		.dr_hdlr	= ds_pool_tgt_update_map_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate	= ds_pool_tgt_update_map_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= POOL_RDB_START,
-		.dr_hdlr	= ds_pool_rdb_start_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate	= ds_pool_rdb_start_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= POOL_RDB_STOP,
-		.dr_hdlr	= ds_pool_rdb_stop_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate	= ds_pool_rdb_stop_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= 0
-	}
+static struct crt_corpc_ops ds_pool_tgt_connect_co_ops = {
+	.co_aggregate	= ds_pool_tgt_connect_aggregator,
+	.co_pre_forward	= NULL,
 };
+
+static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
+	.co_aggregate	= ds_pool_tgt_disconnect_aggregator,
+	.co_pre_forward	= NULL,
+};
+
+static struct crt_corpc_ops ds_pool_tgt_update_map_co_ops = {
+	.co_aggregate	= ds_pool_tgt_update_map_aggregator,
+	.co_pre_forward	= NULL,
+};
+
+static struct crt_corpc_ops ds_pool_rdb_start_co_ops = {
+	.co_aggregate	= ds_pool_rdb_start_aggregator,
+	.co_pre_forward	= NULL,
+};
+
+static struct crt_corpc_ops ds_pool_rdb_stop_co_ops = {
+	.co_aggregate	= ds_pool_rdb_stop_aggregator,
+	.co_pre_forward	= NULL,
+};
+
+/* Define for cont_rpcs[] array population below.
+ * See POOL_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.dr_opc       = a,	\
+	.dr_hdlr      = d,	\
+	.dr_corpc_ops = e,	\
+}
+
+static struct daos_rpc_handler pool_handlers[] = {
+	POOL_PROTO_CLI_RPC_LIST,
+	POOL_PROTO_SRV_RPC_LIST,
+};
+
+#undef X
 
 static void *
 pool_tls_init(const struct dss_thread_local_storage *dtls,
@@ -205,13 +169,13 @@ struct dss_module_key pool_module_key = {
 struct dss_module pool_module =  {
 	.sm_name	= "pool",
 	.sm_mod_id	= DAOS_POOL_MODULE,
-	.sm_ver		= 1,
+	.sm_ver		= DAOS_POOL_VERSION,
 	.sm_init	= init,
 	.sm_fini	= fini,
 	.sm_setup	= setup,
 	.sm_cleanup	= cleanup,
-	.sm_cl_rpcs	= pool_rpcs,
-	.sm_srv_rpcs	= pool_srv_rpcs,
+	.sm_proto_fmt	= &pool_proto_fmt,
+	.sm_cli_count	= POOL_PROTO_CLI_COUNT,
 	.sm_handlers	= pool_handlers,
 	.sm_key		= &pool_module_key,
 };

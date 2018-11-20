@@ -254,7 +254,7 @@ vos_mod_fini(void)
 struct dss_module vos_srv_module =  {
 	.sm_name	= "vos_srv",
 	.sm_mod_id	= DAOS_VOS_MODULE,
-	.sm_ver		= 1,
+	.sm_ver		= DAOS_VOS_VERSION,
 	.sm_init	= vos_mod_init,
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,

@@ -41,39 +41,108 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
+#define DAOS_CONT_VERSION 1
+/* LIST of internal RPCS in form of:
+ * OPCODE, flags, FMT, handler, corpc_hdlr,
+ */
+#define CONT_PROTO_CLI_RPC_LIST						\
+	X(CONT_CREATE,							\
+		0, &DQF_CONT_CREATE,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_DESTROY,							\
+		0, &DQF_CONT_DESTROY,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_OPEN,							\
+		0, &DQF_CONT_OPEN,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_CLOSE,							\
+		0, &DQF_CONT_CLOSE,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_QUERY,							\
+		0, &DQF_CONT_QUERY,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_OID_ALLOC,						\
+		0, &DQF_CONT_OID_ALLOC,					\
+		ds_cont_oid_alloc_handler, NULL),			\
+	X(CONT_ATTR_LIST,						\
+		0, &DQF_CONT_ATTR_LIST,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_ATTR_GET,						\
+		0, &DQF_CONT_ATTR_GET,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_ATTR_SET,						\
+		0, &DQF_CONT_ATTR_SET,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_EPOCH_QUERY,						\
+		0, &DQF_CONT_EPOCH_OP,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_EPOCH_HOLD,						\
+		0, &DQF_CONT_EPOCH_OP,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_EPOCH_SLIP,						\
+		0, &DQF_CONT_EPOCH_OP,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_EPOCH_FLUSH,						\
+		0, &DQF_CONT_EPOCH_OP,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_EPOCH_DISCARD,						\
+		0, &DQF_CONT_EPOCH_OP,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_EPOCH_COMMIT,						\
+		0, &DQF_CONT_EPOCH_OP,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_EPOCH_WAIT,						\
+		0, &DQF_CONT_EPOCH_OP,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_SNAP_LIST,						\
+		0, &DQF_CONT_SNAP_LIST_OP,				\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_SNAP_CREATE,						\
+		0, &DQF_CONT_SNAP_CREATE_OP,				\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_SNAP_DESTROY,						\
+		0, &DQF_CONT_SNAP_DESTROY_OP,				\
+		ds_cont_op_handler, NULL)
+
+#define CONT_PROTO_SRV_RPC_LIST						\
+	X(CONT_TGT_DESTROY,						\
+		0, &DQF_CONT_TGT_DESTROY,				\
+		ds_cont_tgt_destroy_handler,				\
+		&ds_cont_tgt_destroy_co_ops),				\
+	X(CONT_TGT_OPEN,						\
+		0, &DQF_CONT_TGT_OPEN,					\
+		ds_cont_tgt_open_handler,				\
+		&ds_cont_tgt_open_co_ops),				\
+	X(CONT_TGT_CLOSE,						\
+		0, &DQF_CONT_TGT_CLOSE,					\
+		ds_cont_tgt_close_handler,				\
+		&ds_cont_tgt_close_co_ops),				\
+	X(CONT_TGT_QUERY,						\
+		0, &DQF_CONT_TGT_QUERY,					\
+		ds_cont_tgt_query_handler,				\
+		&ds_cont_tgt_query_co_ops),				\
+	X(CONT_TGT_EPOCH_DISCARD,					\
+		0, &DQF_CONT_TGT_EPOCH_DISCARD,				\
+		ds_cont_tgt_epoch_discard_handler,			\
+		&ds_cont_tgt_epoch_discard_co_ops),			\
+	X(CONT_TGT_EPOCH_AGGREGATE,					\
+		0, &DQF_CONT_TGT_EPOCH_AGGREGATE,			\
+		ds_cont_tgt_epoch_aggregate_handler,			\
+		&ds_cont_tgt_epoch_aggregate_co_ops)
+
+/* Define for RPC enum population below */
+#define X(a, b, c, d, e) a
+
 enum cont_operation {
-	CONT_CREATE		 = 1,
-	CONT_DESTROY		 = 2,
-	CONT_OPEN		 = 3,
-	CONT_CLOSE		 = 4,
-	CONT_QUERY		 = 5,
-	CONT_OID_ALLOC		 = 6,
-
-	CONT_ATTR_LIST		 = 10,
-	CONT_ATTR_GET		 = 11,
-	CONT_ATTR_SET		 = 12,
-
-	CONT_EPOCH_QUERY	 = 20,
-	CONT_EPOCH_HOLD		 = 21,
-	CONT_EPOCH_SLIP		 = 22,
-	CONT_EPOCH_FLUSH	 = 23,
-	CONT_EPOCH_DISCARD	 = 24,
-	CONT_EPOCH_COMMIT	 = 25,
-	CONT_EPOCH_WAIT		 = 26,
-
-	CONT_SNAP_LIST		 = 30,
-	CONT_SNAP_CREATE	 = 31,
-	CONT_SNAP_DESTROY	 = 32,
-
-	CONT_TGT_DESTROY	 = 44,
-	CONT_TGT_OPEN		 = 45,
-	CONT_TGT_CLOSE		 = 46,
-	CONT_TGT_QUERY		 = 47,
-
-	CONT_TGT_EPOCH_FLUSH	 = 50,
-	CONT_TGT_EPOCH_DISCARD	 = 51,
-	CONT_TGT_EPOCH_AGGREGATE = 52
+	CONT_PROTO_CLI_RPC_LIST,
+	CONT_PROTO_CLI_COUNT,
+	CONT_PROTO_CLI_LAST = CONT_PROTO_CLI_COUNT - 1,
+	CONT_PROTO_SRV_RPC_LIST,
 };
+
+#undef X
+
+extern struct crt_proto_format cont_proto_fmt;
 
 struct cont_op_in {
 	uuid_t	ci_pool_hdl;	/* pool handle UUID */
@@ -259,10 +328,15 @@ struct cont_tgt_epoch_aggregate_out {
 	int32_t	tao_rc;	/* number of errors */
 };
 
-int cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
-		    crt_opcode_t opc, crt_rpc_t **req);
+static inline int
+cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+		crt_rpc_t **req)
+{
+	crt_opcode_t opcode;
 
-extern struct daos_rpc cont_rpcs[];
-extern struct daos_rpc cont_srv_rpcs[];
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, DAOS_CONT_VERSION);
+
+	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
+}
 
 #endif /* __CONTAINER_RPC_H__ */

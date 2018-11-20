@@ -182,7 +182,7 @@ struct dss_module {
 	/* Module facility bitmask, can be feature bits like DSS_FAC_LOAD_CLI */
 	uint64_t		  sm_facs;
 	/* key of local thread storage */
-	struct dss_module_key	*sm_key;
+	struct dss_module_key	 *sm_key;
 	/* Initialization function, invoked just after successful load */
 	int			(*sm_init)(void);
 	/* Finalization function, invoked just before module unload */
@@ -191,19 +191,15 @@ struct dss_module {
 	int			(*sm_setup)(void);
 	/* Cleanup function, invoked before stopping progressing */
 	int			(*sm_cleanup)(void);
-	/* Array of RPC definition for request sent by client nodes, last entry
-	 * of the array must be empty */
-	struct daos_rpc		 *sm_cl_rpcs;
-	/* Array of RPC definition for request sent by other servers, last entry
-	 * of the array must be empty */
-	struct daos_rpc		 *sm_srv_rpcs;
-
+	/* Whole list of RPC definition for request sent by nodes */
+	struct crt_proto_format	 *sm_proto_fmt;
+	/* The count of RPCs which are dedicated for client nodes only */
+	uint32_t		  sm_cli_count;
 	/* RPC handler of these RPC, last entry of the array must be empty */
 	struct daos_rpc_handler	 *sm_handlers;
 };
 
-int
-dss_parameters_set(unsigned int key_id, uint64_t value);
+int dss_parameters_set(unsigned int key_id, uint64_t value);
 
 typedef ABT_pool (*dss_abt_pool_choose_cb_t)(crt_rpc_t *rpc, ABT_pool *pools);
 

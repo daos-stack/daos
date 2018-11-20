@@ -163,11 +163,31 @@ void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
+#define DAOS_RDB_VERSION 1
+/* LIST of internal RPCS in form of:
+ * OPCODE, flags, FMT, handler, corpc_hdlr,
+ */
+#define RDB_PROTO_SRV_RPC_LIST						\
+	X(RDB_REQUESTVOTE,						\
+		0, &DQF_RDB_REQUESTVOTE,				\
+		rdb_requestvote_handler, NULL),				\
+	X(RDB_APPENDENTRIES,						\
+		0, &DQF_RDB_APPENDENTRIES,				\
+		rdb_appendentries_handler, NULL),			\
+	X(RDB_INSTALLSNAPSHOT,						\
+		0, &DQF_RDB_INSTALLSNAPSHOT,				\
+		rdb_installsnapshot_handler, NULL)
+
+/* Define for RPC enum population below */
+#define X(a, b, c, d, e) a
+
 enum rdb_operation {
-	RDB_REQUESTVOTE		= 1,
-	RDB_APPENDENTRIES	= 2,
-	RDB_INSTALLSNAPSHOT	= 3
+	RDB_PROTO_SRV_RPC_LIST,
 };
+
+#undef X
+
+extern struct crt_proto_format rdb_proto_fmt;
 
 struct rdb_op_in {
 	uuid_t	ri_uuid;
@@ -220,8 +240,6 @@ struct rdb_installsnapshot_out {
 	uint64_t			iso_seq;	/* last seq number */
 	struct rdb_anchor		iso_anchor;	/* last anchor */
 };
-
-extern struct daos_rpc rdb_srv_rpcs[];
 
 int rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc);
 int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node);

@@ -54,52 +54,21 @@ obj_mod_fini(void)
 	return 0;
 }
 
-/* Note: the rpc input/output parameters is defined in daos_rpc */
+/* Define for cont_rpcs[] array population below.
+ * See OBJ_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.dr_opc       = a,	\
+	.dr_hdlr      = d,	\
+	.dr_corpc_ops = e,	\
+}
+
 static struct daos_rpc_handler obj_handlers[] = {
-	{
-		.dr_opc		= DAOS_OBJ_RPC_UPDATE,
-		.dr_hdlr	= ds_obj_rw_handler,
-	},
-	{
-		.dr_opc		= DAOS_OBJ_RPC_FETCH,
-		.dr_hdlr	= ds_obj_rw_handler,
-	},
-	{
-		.dr_opc		= DAOS_OBJ_DKEY_RPC_ENUMERATE,
-		.dr_hdlr	= ds_obj_enum_handler,
-	},
-	{
-		.dr_opc         = DAOS_OBJ_AKEY_RPC_ENUMERATE,
-		.dr_hdlr        = ds_obj_enum_handler,
-	},
-	{
-		.dr_opc         = DAOS_OBJ_RECX_RPC_ENUMERATE,
-		.dr_hdlr        = ds_obj_enum_handler,
-	},
-	{
-		.dr_opc         = DAOS_OBJ_RPC_ENUMERATE,
-		.dr_hdlr        = ds_obj_enum_handler,
-	},
-	{
-		.dr_opc		= DAOS_OBJ_RPC_PUNCH,
-		.dr_hdlr	= ds_obj_punch_handler,
-	},
-	{
-		.dr_opc		= DAOS_OBJ_RPC_PUNCH_DKEYS,
-		.dr_hdlr	= ds_obj_punch_handler,
-	},
-	{
-		.dr_opc		= DAOS_OBJ_RPC_PUNCH_AKEYS,
-		.dr_hdlr	= ds_obj_punch_handler,
-	},
-	{
-		.dr_opc		= DAOS_OBJ_RPC_KEY_QUERY,
-		.dr_hdlr	= ds_obj_key_query_handler,
-	},
-	{
-		.dr_opc		= 0
-	}
+	OBJ_PROTO_CLI_RPC_LIST,
 };
+
+#undef X
 
 static void *
 obj_tls_init(const struct dss_thread_local_storage *dtls,
@@ -133,10 +102,11 @@ struct dss_module_key obj_module_key = {
 struct dss_module obj_module =  {
 	.sm_name	= "obj",
 	.sm_mod_id	= DAOS_OBJ_MODULE,
-	.sm_ver		= 1,
+	.sm_ver		= DAOS_OBJ_VERSION,
 	.sm_init	= obj_mod_init,
 	.sm_fini	= obj_mod_fini,
-	.sm_cl_rpcs	= daos_obj_rpcs,
+	.sm_proto_fmt	= &obj_proto_fmt,
+	.sm_cli_count	= OBJ_PROTO_CLI_COUNT,
 	.sm_handlers	= obj_handlers,
 	.sm_key		= &obj_module_key,
 };

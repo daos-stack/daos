@@ -54,105 +54,52 @@ fini(void)
 	return 0;
 }
 
-/* Note: the rpc input/output parameters is defined in daos_rpc */
-static struct daos_rpc_handler cont_handlers[] = {
-	{
-		.dr_opc		= CONT_CREATE,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_DESTROY,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_OPEN,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_CLOSE,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_QUERY,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_OID_ALLOC,
-		.dr_hdlr	= ds_cont_oid_alloc_handler
-	}, {
-		.dr_opc		= CONT_ATTR_LIST,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_ATTR_GET,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_ATTR_SET,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_EPOCH_QUERY,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_EPOCH_HOLD,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_EPOCH_SLIP,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_EPOCH_DISCARD,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_EPOCH_COMMIT,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_SNAP_LIST,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_SNAP_CREATE,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_SNAP_DESTROY,
-		.dr_hdlr	= ds_cont_op_handler
-	}, {
-		.dr_opc		= CONT_TGT_DESTROY,
-		.dr_hdlr	= ds_cont_tgt_destroy_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate	= ds_cont_tgt_destroy_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= CONT_TGT_OPEN,
-		.dr_hdlr	= ds_cont_tgt_open_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate	= ds_cont_tgt_open_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= CONT_TGT_CLOSE,
-		.dr_hdlr	= ds_cont_tgt_close_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate	= ds_cont_tgt_close_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= CONT_TGT_QUERY,
-		.dr_hdlr	= ds_cont_tgt_query_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate	= ds_cont_tgt_query_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= CONT_TGT_EPOCH_DISCARD,
-		.dr_hdlr	= ds_cont_tgt_epoch_discard_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate	= ds_cont_tgt_epoch_discard_aggregator,
-			.co_pre_forward	= NULL,
-		}
-	}, {
-		.dr_opc		= CONT_TGT_EPOCH_AGGREGATE,
-		.dr_hdlr	= ds_cont_tgt_epoch_aggregate_handler,
-		.dr_corpc_ops	= {
-			.co_aggregate = ds_cont_tgt_epoch_aggregate_aggregator,
-			.co_pre_forward = NULL,
-		}
-	}, {
-		.dr_opc		= 0
-	}
+static struct crt_corpc_ops ds_cont_tgt_destroy_co_ops = {
+	.co_aggregate   = ds_cont_tgt_destroy_aggregator,
+	.co_pre_forward = NULL,
 };
+
+static struct crt_corpc_ops ds_cont_tgt_open_co_ops = {
+	.co_aggregate   = ds_cont_tgt_open_aggregator,
+	.co_pre_forward = NULL,
+};
+
+static struct crt_corpc_ops ds_cont_tgt_close_co_ops = {
+	.co_aggregate   = ds_cont_tgt_close_aggregator,
+	.co_pre_forward = NULL,
+};
+
+static struct crt_corpc_ops ds_cont_tgt_query_co_ops = {
+	.co_aggregate   = ds_cont_tgt_query_aggregator,
+	.co_pre_forward = NULL,
+};
+
+static struct crt_corpc_ops ds_cont_tgt_epoch_discard_co_ops = {
+	.co_aggregate   = ds_cont_tgt_epoch_discard_aggregator,
+	.co_pre_forward = NULL,
+};
+
+static struct crt_corpc_ops ds_cont_tgt_epoch_aggregate_co_ops = {
+	.co_aggregate   = ds_cont_tgt_epoch_aggregate_aggregator,
+	.co_pre_forward = NULL,
+};
+
+/* Define for cont_rpcs[] array population below.
+ * See CONT_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.dr_opc       = a,	\
+	.dr_hdlr      = d,	\
+	.dr_corpc_ops = e,	\
+}
+
+static struct daos_rpc_handler cont_handlers[] = {
+	CONT_PROTO_CLI_RPC_LIST,
+	CONT_PROTO_SRV_RPC_LIST,
+};
+
+#undef X
 
 static void *
 dsm_tls_init(const struct dss_thread_local_storage *dtls,
@@ -206,11 +153,11 @@ struct dss_module_key cont_module_key = {
 struct dss_module cont_module =  {
 	.sm_name	= "cont",
 	.sm_mod_id	= DAOS_CONT_MODULE,
-	.sm_ver		= 1,
+	.sm_ver		= DAOS_CONT_VERSION,
 	.sm_init	= init,
 	.sm_fini	= fini,
-	.sm_cl_rpcs	= cont_rpcs,
-	.sm_srv_rpcs	= cont_srv_rpcs,
+	.sm_proto_fmt	= &cont_proto_fmt,
+	.sm_cli_count	= CONT_PROTO_CLI_COUNT,
 	.sm_handlers	= cont_handlers,
 	.sm_key		= &cont_module_key,
 };

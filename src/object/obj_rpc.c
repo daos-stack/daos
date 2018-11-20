@@ -144,85 +144,30 @@ static struct crt_req_format DQF_OBJ_PUNCH_AKEYS =
 static struct crt_req_format DQF_OBJ_KEY_QUERY =
 	DEFINE_CRT_REQ_FMT(obj_key_query_in_fields, obj_key_query_out_fields);
 
-struct daos_rpc daos_obj_rpcs[] = {
-	{
-		.dr_name	= "DAOS_OBJ_UPDATE",
-		.dr_opc		= DAOS_OBJ_RPC_UPDATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_OBJ_UPDATE,
-	}, {
-		.dr_name	= "DAOS_OBJ_FETCH",
-		.dr_opc		= DAOS_OBJ_RPC_FETCH,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_OBJ_FETCH,
-	}, {
-		.dr_name	= "DAOS_DKEY_ENUM",
-		.dr_opc		= DAOS_OBJ_DKEY_RPC_ENUMERATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_ENUMERATE,
-	}, {
-		.dr_name        = "DAOS_AKEY_ENUM",
-		.dr_opc         = DAOS_OBJ_AKEY_RPC_ENUMERATE,
-		.dr_ver         = 1,
-		.dr_flags       = 0,
-		.dr_req_fmt     = &DQF_ENUMERATE,
-	}, {
-		.dr_name        = "DAOS_REC_ENUM",
-		.dr_opc         = DAOS_OBJ_RECX_RPC_ENUMERATE,
-		.dr_ver         = 1,
-		.dr_flags       = 0,
-		.dr_req_fmt     = &DQF_ENUMERATE,
-	}, {
-		.dr_name        = "DAOS_OBJ_ENUM",
-		.dr_opc         = DAOS_OBJ_RPC_ENUMERATE,
-		.dr_ver         = 1,
-		.dr_flags       = 0,
-		.dr_req_fmt     = &DQF_ENUMERATE,
-	}, {
-		.dr_name	= "DAOS_OBJ_PUNCH",
-		.dr_opc		= DAOS_OBJ_RPC_PUNCH,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_OBJ_PUNCH,
-	}, {
-		.dr_name	= "DAOS_OBJ_PUNCH_DKEYS",
-		.dr_opc		= DAOS_OBJ_RPC_PUNCH_DKEYS,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_OBJ_PUNCH_DKEYS,
-	}, {
-		.dr_name	= "DAOS_OBJ_PUNCH_AKEYS",
-		.dr_opc		= DAOS_OBJ_RPC_PUNCH_AKEYS,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_OBJ_PUNCH_AKEYS,
-	}, {
-		.dr_name	= "DAOS_OBJ_KEY_QUERY",
-		.dr_opc		= DAOS_OBJ_RPC_KEY_QUERY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_OBJ_KEY_QUERY,
-	}, {
-		.dr_opc		= 0
-	}
+/* Define for cont_rpcs[] array population below.
+ * See OBJ_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.prf_flags   = b,	\
+	.prf_req_fmt = c,	\
+	.prf_hdlr    = NULL,	\
+	.prf_co_ops  = NULL,	\
+}
+
+static struct crt_proto_rpc_format obj_proto_rpc_fmt[] = {
+	OBJ_PROTO_CLI_RPC_LIST,
 };
 
-int
-obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
-	       crt_opcode_t opc, crt_rpc_t **req)
-{
-	crt_opcode_t opcode;
+#undef X
 
-	if (DAOS_FAIL_CHECK(DAOS_OBJ_REQ_CREATE_TIMEOUT))
-		return -DER_TIMEDOUT;
-
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE, 1);
-
-	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
-}
+struct crt_proto_format obj_proto_fmt = {
+	.cpf_name  = "daos-obj-proto",
+	.cpf_ver   = DAOS_OBJ_VERSION,
+	.cpf_count = ARRAY_SIZE(obj_proto_rpc_fmt),
+	.cpf_prf   = obj_proto_rpc_fmt,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_OBJ_MODULE, 0)
+};
 
 void
 obj_reply_set_status(crt_rpc_t *rpc, int status)

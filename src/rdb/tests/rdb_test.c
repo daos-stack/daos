@@ -418,28 +418,30 @@ rdbt_test_handler(crt_rpc_t *rpc)
 	crt_reply_send(rpc);
 }
 
+/* Define for cont_rpcs[] array population below.
+ * See RDBT_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.dr_opc       = a,	\
+	.dr_hdlr      = d,	\
+	.dr_corpc_ops = e,	\
+}
+
 static struct daos_rpc_handler rdbt_handlers[] = {
-	{
-		.dr_opc		= RDBT_INIT,
-		.dr_hdlr	= rdbt_init_handler
-	}, {
-		.dr_opc		= RDBT_FINI,
-		.dr_hdlr	= rdbt_fini_handler
-	}, {
-		.dr_opc		= RDBT_TEST,
-		.dr_hdlr	= rdbt_test_handler
-	}, {
-	}
+	RDBT_PROTO_CLI_RPC_LIST,
 };
+
+#undef X
 
 struct dss_module rdbt_module = {
 	.sm_name	= "rdbt",
 	.sm_mod_id	= DAOS_RDBT_MODULE,
-	.sm_ver		= 1,
+	.sm_ver		= DAOS_RDBT_VERSION,
 	.sm_init	= rdbt_module_init,
 	.sm_fini	= rdbt_module_fini,
-	.sm_cl_rpcs	= rdbt_rpcs,
-	.sm_srv_rpcs	= NULL,
+	.sm_proto_fmt	= &rdbt_proto_fmt,
+	.sm_cli_count	= RDBT_PROTO_CLI_COUNT,
 	.sm_handlers	= rdbt_handlers,
 	.sm_key		= NULL
 };

@@ -73,7 +73,8 @@ rpc_cb(const struct crt_cb_info *cb_info)
 static crt_rpc_t *
 create_rpc(crt_opcode_t opc, crt_group_t *group, d_rank_t rank)
 {
-	crt_opcode_t	opcode = DAOS_RPC_OPCODE(opc, DAOS_RDBT_MODULE, 1);
+	crt_opcode_t	opcode = DAOS_RPC_OPCODE(opc, DAOS_RDBT_MODULE,
+						 DAOS_RDBT_VERSION);
 	crt_endpoint_t	ep;
 	crt_rpc_t      *rpc;
 	int		rc;
@@ -305,7 +306,8 @@ main(int argc, char *argv[])
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	rc = crt_context_create(&context);
 	D_ASSERTF(rc == 0, "%d\n", rc);
-	rc = daos_rpc_register(rdbt_rpcs, NULL, DAOS_RDBT_MODULE);
+	rc = daos_rpc_register(&rdbt_proto_fmt, RDBT_PROTO_CLI_COUNT,
+				NULL, DAOS_RDBT_MODULE);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = hdlr(argc, argv);

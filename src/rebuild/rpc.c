@@ -70,31 +70,27 @@ struct crt_req_format DQF_REBUILD_OBJECTS_SCAN =
 struct crt_req_format DQF_REBUILD_OBJECTS =
 	DEFINE_CRT_REQ_FMT(rebuild_objs_in_fields, rebuild_out_fields);
 
-int
-rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
-		   crt_opcode_t opc, crt_rpc_t **req)
-{
-	crt_opcode_t opcode;
-
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_REBUILD_MODULE, 1);
-
-	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
+/* Define for cont_rpcs[] array population below.
+ * See REBUILD_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.prf_flags   = b,	\
+	.prf_req_fmt = c,	\
+	.prf_hdlr    = NULL,	\
+	.prf_co_ops  = NULL,	\
 }
 
-struct daos_rpc rebuild_rpcs[] = {
-	{
-		.dr_name	= "REBUILD_OBJECTS_SCAN",
-		.dr_opc		= REBUILD_OBJECTS_SCAN,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_REBUILD_OBJECTS_SCAN,
-	}, {
-		.dr_name	= "REBUILD_OBJECTS",
-		.dr_opc		= REBUILD_OBJECTS,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_REBUILD_OBJECTS,
-	}, {
-		.dr_opc		= 0
-	}
+static struct crt_proto_rpc_format rebuild_proto_rpc_fmt[] = {
+	REBUILD_PROTO_SRV_RPC_LIST,
+};
+
+#undef X
+
+struct crt_proto_format rebuild_proto_fmt = {
+	.cpf_name  = "rebuild-proto",
+	.cpf_ver   = DAOS_REBUILD_VERSION,
+	.cpf_count = ARRAY_SIZE(rebuild_proto_rpc_fmt),
+	.cpf_prf   = rebuild_proto_rpc_fmt,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_REBUILD_MODULE, 0)
 };

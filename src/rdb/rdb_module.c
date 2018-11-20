@@ -43,30 +43,30 @@ rdb_module_fini(void)
 	rdb_hash_fini();
 	return 0;
 }
+/* Define for cont_rpcs[] array population below.
+ * See RDB_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.dr_opc       = a,	\
+	.dr_hdlr      = d,	\
+	.dr_corpc_ops = e,	\
+}
 
 static struct daos_rpc_handler rdb_handlers[] = {
-	{
-		.dr_opc		= RDB_REQUESTVOTE,
-		.dr_hdlr	= rdb_requestvote_handler
-	}, {
-		.dr_opc		= RDB_APPENDENTRIES,
-		.dr_hdlr	= rdb_appendentries_handler
-	}, {
-		.dr_opc		= RDB_INSTALLSNAPSHOT,
-		.dr_hdlr	= rdb_installsnapshot_handler
-	}, {
-		.dr_opc		= 0
-	}
+	RDB_PROTO_SRV_RPC_LIST,
 };
+
+#undef X
 
 struct dss_module rdb_module = {
 	.sm_name	= "rdb",
 	.sm_mod_id	= DAOS_RDB_MODULE,
-	.sm_ver		= 1,
+	.sm_ver		= DAOS_RDB_VERSION,
 	.sm_init	= rdb_module_init,
 	.sm_fini	= rdb_module_fini,
-	.sm_cl_rpcs	= NULL,
-	.sm_srv_rpcs	= rdb_srv_rpcs,
+	.sm_proto_fmt	= &rdb_proto_fmt,
+	.sm_cli_count	= 0,
 	.sm_handlers	= rdb_handlers,
 	.sm_key		= NULL
 };

@@ -316,129 +316,30 @@ struct crt_req_format DQF_POOL_RDB_START =
 struct crt_req_format DQF_POOL_RDB_STOP =
 	DEFINE_CRT_REQ_FMT(pool_rdb_stop_in_fields, pool_rdb_stop_out_fields);
 
-int
-pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
-	       crt_opcode_t opc, crt_rpc_t **req)
-{
-	crt_opcode_t opcode;
-
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_POOL_MODULE, 1);
-
-	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
+/* Define for cont_rpcs[] array population below.
+ * See POOL_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.prf_flags   = b,	\
+	.prf_req_fmt = c,	\
+	.prf_hdlr    = NULL,	\
+	.prf_co_ops  = NULL,	\
 }
 
-struct daos_rpc pool_rpcs[] = {
-	{
-		.dr_name	= "POOL_CREATE",
-		.dr_opc		= POOL_CREATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_CREATE,
-	}, {
-		.dr_name	= "POOL_CONNECT",
-		.dr_opc		= POOL_CONNECT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_CONNECT,
-	}, {
-		.dr_name	= "POOL_DISCONNECT",
-		.dr_opc		= POOL_DISCONNECT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_DISCONNECT,
-	}, {
-		.dr_name	= "POOL_QUERY",
-		.dr_opc		= POOL_QUERY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_QUERY
-	}, {
-		.dr_name	= "POOL_EXCLUDE",
-		.dr_opc		= POOL_EXCLUDE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_EXCLUDE
-	}, {
-		.dr_name	= "POOL_EVICT",
-		.dr_opc		= POOL_EVICT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_EVICT
-	}, {
-		.dr_name	= "POOL_ADD",
-		.dr_opc		= POOL_ADD,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_ADD,
-	}, {
-		.dr_name	= "POOL_EXCLUDE_OUT",
-		.dr_opc		= POOL_EXCLUDE_OUT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_EXCLUDE_OUT,
-	}, {
-		.dr_name	= "POOL_SVC_STOP",
-		.dr_opc		= POOL_SVC_STOP,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_SVC_STOP,
-	}, {
-		.dr_name	= "POOL_ATTR_LIST",
-		.dr_opc		= POOL_ATTR_LIST,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_ATTR_LIST,
-	}, {
-		.dr_name	= "POOL_ATTR_GET",
-		.dr_opc		= POOL_ATTR_GET,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_ATTR_GET,
-	}, {
-		.dr_name	= "POOL_ATTR_SET",
-		.dr_opc		= POOL_ATTR_SET,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_ATTR_SET,
-	}, {
-		.dr_opc		= 0
-	}
+static struct crt_proto_rpc_format pool_proto_rpc_fmt[] = {
+	POOL_PROTO_CLI_RPC_LIST,
+	POOL_PROTO_SRV_RPC_LIST,
 };
 
-struct daos_rpc pool_srv_rpcs[] = {
-	{
-		.dr_name	= "POOL_TGT_CONNECT",
-		.dr_opc		= POOL_TGT_CONNECT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_TGT_CONNECT
-	}, {
-		.dr_name	= "POOL_TGT_DISCONNECT",
-		.dr_opc		= POOL_TGT_DISCONNECT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_TGT_DISCONNECT
-	}, {
-		.dr_name	= "POOL_TGT_UPDATE_MAP",
-		.dr_opc		= POOL_TGT_UPDATE_MAP,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_TGT_UPDATE_MAP
-	}, {
-		.dr_name	= "POOL_RDB_START",
-		.dr_opc		= POOL_RDB_START,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_RDB_START
-	}, {
-		.dr_name	= "POOL_RDB_STOP",
-		.dr_opc		= POOL_RDB_STOP,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_POOL_RDB_STOP
-	}, {
-		.dr_opc		= 0
-	}
+#undef X
+
+struct crt_proto_format pool_proto_fmt = {
+	.cpf_name  = "pool-proto",
+	.cpf_ver   = DAOS_POOL_VERSION,
+	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt),
+	.cpf_prf   = pool_proto_rpc_fmt,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)
 };
 
 static bool

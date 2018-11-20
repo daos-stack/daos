@@ -44,7 +44,8 @@ dc_pool_init(void)
 {
 	int rc;
 
-	rc = daos_rpc_register(pool_rpcs, NULL, DAOS_POOL_MODULE);
+	rc = daos_rpc_register(&pool_proto_fmt, POOL_PROTO_CLI_COUNT,
+				NULL, DAOS_POOL_MODULE);
 	if (rc != 0)
 		D_ERROR("failed to register pool RPCs: %d\n", rc);
 
@@ -57,7 +58,7 @@ dc_pool_init(void)
 void
 dc_pool_fini(void)
 {
-	daos_rpc_unregister(pool_rpcs);
+	daos_rpc_unregister(&pool_proto_fmt);
 }
 
 static void

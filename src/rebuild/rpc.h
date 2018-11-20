@@ -40,10 +40,29 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-enum pool_operation {
-	REBUILD_OBJECTS_SCAN	= 1,
-	REBUILD_OBJECTS		= 2,
+#define DAOS_REBUILD_VERSION 1
+/* LIST of internal RPCS in form of:
+ * OPCODE, flags, FMT, handler, corpc_hdlr,
+ */
+#define REBUILD_PROTO_SRV_RPC_LIST					\
+	X(REBUILD_OBJECTS_SCAN,						\
+		0, &DQF_REBUILD_OBJECTS_SCAN,				\
+		rebuild_tgt_scan_handler,				\
+		&rebuild_tgt_scan_co_ops),				\
+	X(REBUILD_OBJECTS,						\
+		0, &DQF_REBUILD_OBJECTS,				\
+		rebuild_obj_handler, NULL)
+
+/* Define for RPC enum population below */
+#define X(a, b, c, d, e) a
+
+enum rebuild_operation {
+	REBUILD_PROTO_SRV_RPC_LIST,
 };
+
+#undef X
+
+extern struct crt_proto_format rebuild_proto_fmt;
 
 struct rebuild_scan_in {
 	uuid_t		rsi_pool_uuid;
@@ -79,11 +98,16 @@ struct rebuild_objs_in {
 	struct crt_array	roi_shards;
 };
 
-int rebuild_req_create(crt_context_t dtp_ctx, crt_endpoint_t *tgt_ep,
-		       crt_opcode_t opc, crt_rpc_t **req);
+static inline int
+rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
+		   crt_opcode_t opc, crt_rpc_t **req)
+{
+	crt_opcode_t opcode;
 
-extern struct daos_rpc rebuild_rpcs[];
-extern struct daos_rpc rebuild_cli_rpcs[];
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_REBUILD_MODULE,
+				 DAOS_REBUILD_VERSION);
 
+	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
+}
 
 #endif /* __REBUILD_RPC_H__ */

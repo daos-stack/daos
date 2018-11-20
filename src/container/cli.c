@@ -42,7 +42,14 @@
 int
 dc_cont_init(void)
 {
-	return daos_rpc_register(cont_rpcs, NULL, DAOS_CONT_MODULE);
+	int rc;
+
+	rc = daos_rpc_register(&cont_proto_fmt, CONT_PROTO_CLI_COUNT,
+				NULL, DAOS_CONT_MODULE);
+	if (rc != 0)
+		D_ERROR("failed to register cont RPCs: %d\n", rc);
+
+	return rc;
 }
 
 /**
@@ -51,7 +58,7 @@ dc_cont_init(void)
 void
 dc_cont_fini(void)
 {
-	daos_rpc_unregister(cont_rpcs);
+	daos_rpc_unregister(&cont_proto_fmt);
 }
 
 /*

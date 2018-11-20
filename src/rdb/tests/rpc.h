@@ -24,11 +24,39 @@
 #ifndef RDB_TESTS_RPC_H
 #define RDB_TESTS_RPC_H
 
+/*
+ * RPC operation codes
+ *
+ * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
+ * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
+ */
+#define DAOS_RDBT_VERSION 1
+/* LIST of internal RPCS in form of:
+ * OPCODE, flags, FMT, handler, corpc_hdlr,
+ */
+#define RDBT_PROTO_CLI_RPC_LIST						\
+	X(RDBT_INIT,							\
+		0, &DQF_RDBT_INIT,					\
+		rdbt_init_handler, NULL),				\
+	X(RDBT_FINI,							\
+		0, &DQF_RDBT_FINI,					\
+		rdbt_fini_handler, NULL),				\
+	X(RDBT_TEST,							\
+		0, &DQF_RDBT_TEST,					\
+		rdbt_test_handler, NULL)
+
+/* Define for RPC enum population below */
+#define X(a, b, c, d, e) a
+
 enum rdbt_operation {
-	RDBT_INIT	= 1,
-	RDBT_FINI	= 2,
-	RDBT_TEST	= 3
+	RDBT_PROTO_CLI_RPC_LIST,
+	RDBT_PROTO_CLI_COUNT,
+	RDBT_PROTO_CLI_LAST = RDBT_PROTO_CLI_COUNT - 1,
 };
+
+#undef X
+
+extern struct crt_proto_format rdbt_proto_fmt;
 
 struct rdbt_init_in {
 	uuid_t		tii_uuid;
@@ -53,7 +81,5 @@ struct rdbt_test_in {
 struct rdbt_test_out {
 	int	tto_rc;
 };
-
-extern struct daos_rpc rdbt_rpcs[];
 
 #endif /* RDB_TESTS_RPC_H */

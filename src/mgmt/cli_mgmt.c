@@ -64,7 +64,8 @@ dc_mgmt_svc_rip(tse_task_t *task)
 
 	svr_ep.ep_rank = args->rank;
 	svr_ep.ep_tag = 0;
-	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE, 1);
+	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
@@ -121,7 +122,8 @@ dc_mgmt_params_set(tse_task_t *task)
 	 */
 	ep.ep_rank = args->rank == -1 ? 0 : args->rank;
 	ep.ep_tag = 0;
-	opc = DAOS_RPC_OPCODE(MGMT_PARAMS_SET, DAOS_MGMT_MODULE, 1);
+	opc = DAOS_RPC_OPCODE(MGMT_PARAMS_SET, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
@@ -166,9 +168,10 @@ dc_mgmt_init()
 {
 	int rc;
 
-	rc = daos_rpc_register(mgmt_rpcs, NULL, DAOS_MGMT_MODULE);
+	rc = daos_rpc_register(&mgmt_proto_fmt, MGMT_PROTO_CLI_COUNT,
+				NULL, DAOS_MGMT_MODULE);
 	if (rc != 0)
-		D_ERROR("failed to register rpcs: %d\n", rc);
+		D_ERROR("failed to register mgmt RPCs: %d\n", rc);
 
 	return rc;
 }
@@ -179,7 +182,7 @@ dc_mgmt_init()
 void
 dc_mgmt_fini()
 {
-	daos_rpc_unregister(mgmt_rpcs);
+	daos_rpc_unregister(&mgmt_proto_fmt);
 }
 
 int dc2_mgmt_svc_rip(tse_task_t *task)

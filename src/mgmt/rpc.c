@@ -121,57 +121,28 @@ struct crt_req_format DQF_MGMT_PARAMS_SET =
 struct crt_req_format DQF_MGMT_TGT_PARAMS_SET =
 	DEFINE_CRT_REQ_FMT(mgmt_tgt_params_set_in_fields, mgmt_out_fields);
 
-struct daos_rpc mgmt_rpcs[] = {
-	{
-		.dr_name	= "MGMT_POOL_CREATE",
-		.dr_opc		= MGMT_POOL_CREATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_MGMT_POOL_CREATE,
-	}, {
-		.dr_name	= "MGMT_POOL_DESTROY",
-		.dr_opc		= MGMT_POOL_DESTROY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_MGMT_POOL_DESTROY,
-	}, {
-		.dr_name	= "MGMT_SVC_RIP",
-		.dr_opc		= MGMT_SVC_RIP,
-		.dr_ver		= 1,
-		.dr_flags	= DAOS_RPC_NO_REPLY,
-		.dr_req_fmt	= &DQF_MGMT_SVC_RIP,
-	},  {
-		.dr_name	= "MGMT_PARAMS_SET",
-		.dr_opc		= MGMT_PARAMS_SET,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_MGMT_PARAMS_SET,
-	}, {
-		.dr_opc		= 0
-	}
+/* Define for cont_rpcs[] array population below.
+ * See MGMT_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.prf_flags   = b,	\
+	.prf_req_fmt = c,	\
+	.prf_hdlr    = NULL,	\
+	.prf_co_ops  = NULL,	\
+}
+
+static struct crt_proto_rpc_format mgmt_proto_rpc_fmt[] = {
+	MGMT_PROTO_CLI_RPC_LIST,
+	MGMT_PROTO_SRV_RPC_LIST,
 };
 
-struct daos_rpc mgmt_srv_rpcs[] = {
-	{
-		.dr_name	= "MGMT_TGT_CREATE",
-		.dr_opc		= MGMT_TGT_CREATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_MGMT_TGT_CREATE,
-	}, {
-		.dr_name	= "MGMT_TGT_DESTROY",
-		.dr_opc		= MGMT_TGT_DESTROY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_MGMT_TGT_DESTROY,
-	}, {
-		.dr_name	= "MGMT_TGT_PARAMS_SET",
-		.dr_opc		= MGMT_TGT_PARAMS_SET,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_MGMT_TGT_PARAMS_SET,
-	}, {
-		.dr_opc		= 0
-	}
+#undef X
 
+struct crt_proto_format mgmt_proto_fmt = {
+	.cpf_name  = "mgmt-proto",
+	.cpf_ver   = DAOS_MGMT_VERSION,
+	.cpf_count = ARRAY_SIZE(mgmt_proto_rpc_fmt),
+	.cpf_prf   = mgmt_proto_rpc_fmt,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_MGMT_MODULE, 0)
 };

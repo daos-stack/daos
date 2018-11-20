@@ -35,17 +35,49 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
+#define DAOS_MGMT_VERSION 1
+/* LIST of internal RPCS in form of:
+ * OPCODE, flags, FMT, handler, corpc_hdlr,
+ */
+#define MGMT_PROTO_CLI_RPC_LIST						\
+	X(MGMT_POOL_CREATE,						\
+		0, &DQF_MGMT_POOL_CREATE,				\
+		ds_mgmt_hdlr_pool_create, NULL),			\
+	X(MGMT_POOL_DESTROY,						\
+		0, &DQF_MGMT_POOL_DESTROY,				\
+		ds_mgmt_hdlr_pool_destroy, NULL),			\
+	X(MGMT_SVC_RIP,							\
+		DAOS_RPC_NO_REPLY, &DQF_MGMT_SVC_RIP,			\
+		ds_mgmt_hdlr_svc_rip, NULL),				\
+	X(MGMT_PARAMS_SET,						\
+		0, &DQF_MGMT_PARAMS_SET,				\
+		ds_mgmt_params_set_hdlr, NULL)
+
+#define MGMT_PROTO_SRV_RPC_LIST						\
+	X(MGMT_TGT_CREATE,						\
+		0, &DQF_MGMT_TGT_CREATE,				\
+		ds_mgmt_hdlr_tgt_create,				\
+		&ds_mgmt_hdlr_tgt_create_co_ops),			\
+	X(MGMT_TGT_DESTROY,						\
+		0, &DQF_MGMT_TGT_DESTROY,				\
+		ds_mgmt_hdlr_tgt_destroy, NULL),			\
+	X(MGMT_TGT_PARAMS_SET,						\
+		0, &DQF_MGMT_TGT_PARAMS_SET,				\
+		ds_mgmt_tgt_params_set_hdlr, NULL)
+
+/* Define for RPC enum population below */
+#define X(a, b, c, d, e) a
+
 enum mgmt_operation {
-	MGMT_POOL_CREATE	= 1,
-	MGMT_POOL_DESTROY	= 2,
-	MGMT_POOL_EXTEND	= 3,
-	MGMT_TGT_CREATE		= 4,
-	MGMT_TGT_DESTROY	= 5,
-	MGMT_TGT_EXTEND		= 6,
-	MGMT_SVC_RIP		= 7,
-	MGMT_PARAMS_SET		= 8,
-	MGMT_TGT_PARAMS_SET	= 9,
+	MGMT_PROTO_CLI_RPC_LIST,
+	MGMT_PROTO_CLI_COUNT,
+	MGMT_PROTO_CLI_LAST = MGMT_PROTO_CLI_COUNT - 1,
+	MGMT_PROTO_SRV_RPC_LIST,
 };
+
+#undef X
+
+extern struct crt_proto_format mgmt_proto_fmt;
 
 struct mgmt_svc_rip_in {
 	uint32_t	rip_flags;
@@ -114,8 +146,5 @@ struct mgmt_tgt_params_set_in {
 struct mgmt_srv_out {
 	int	srv_rc;
 };
-
-extern struct daos_rpc mgmt_rpcs[];
-extern struct daos_rpc mgmt_srv_rpcs[];
 
 #endif /* __MGMT_RPC_H__ */

@@ -58,25 +58,27 @@ static struct crt_msg_field *rdbt_test_out_fields[] = {
 static struct crt_req_format DQF_RDBT_TEST =
 	DEFINE_CRT_REQ_FMT(rdbt_test_in_fields, rdbt_test_out_fields);
 
-struct daos_rpc rdbt_rpcs[] = {
-	{
-		.dr_name	= "RDBT_INIT",
-		.dr_opc		= RDBT_INIT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_RDBT_INIT
-	}, {
-		.dr_name	= "RDBT_FINI",
-		.dr_opc		= RDBT_FINI,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_RDBT_FINI
-	}, {
-		.dr_name	= "RDBT_TEST",
-		.dr_opc		= RDBT_TEST,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_RDBT_TEST
-	}, {
-	}
+/* Define for cont_rpcs[] array population below.
+ * See RDBT_PROTO_*_RPC_LIST macro definition
+ */
+#define X(a, b, c, d, e)	\
+{				\
+	.prf_flags   = b,	\
+	.prf_req_fmt = c,	\
+	.prf_hdlr    = NULL,	\
+	.prf_co_ops  = NULL,	\
+}
+
+static struct crt_proto_rpc_format rdbt_proto_rpc_fmt[] = {
+	RDBT_PROTO_CLI_RPC_LIST,
+};
+
+#undef X
+
+struct crt_proto_format rdbt_proto_fmt = {
+	.cpf_name  = "rdbt-proto",
+	.cpf_ver   = DAOS_RDBT_VERSION,
+	.cpf_count = ARRAY_SIZE(rdbt_proto_rpc_fmt),
+	.cpf_prf   = rdbt_proto_rpc_fmt,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_RDBT_MODULE, 0)
 };
