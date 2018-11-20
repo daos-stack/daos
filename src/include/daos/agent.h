@@ -21,13 +21,13 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __AGENT_H__
-#define __AGENT_H__
+#ifndef __DAOS_AGENT_H__
+#define __DAOS_AGENT_H__
 
 /**
  * Default Unix Domain Socket path for the DAOS agent dRPC connection
  */
-#define DEFAULT_DAOS_AGENT_DRPC_SOCK "/var/run/daos_agent.sock"
+#define DEFAULT_DAOS_AGENT_DRPC_SOCK "/var/run/daos_agent/agent.sock"
 
 /**
  * Environment variable for specifying an alternate dRPC socket path
@@ -54,4 +54,4 @@
  */
 #define DRPC_METHOD_SECURITY_AGENT_REQUEST_CREDENTIALS		101
 
-#endif /* __AGENT_H__ */
+#endif /* __DAOS_AGENT_H__ */

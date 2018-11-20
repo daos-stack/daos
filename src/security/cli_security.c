@@ -21,7 +21,6 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include <daos/cli_security.h>
 #include <unistd.h>
 #include <string.h>
 #include <gurt/common.h>
@@ -29,6 +28,8 @@
 #include <daos/drpc.h>
 #include <daos/drpc.pb-c.h>
 #include <daos/agent.h>
+#include <daos/security.h>
+
 #include "security.pb-c.h"
 
 /* Prototypes for static helper functions */
@@ -42,7 +43,7 @@ static int sanity_check_credential_response(Drpc__Response *response);
 
 
 int
-dc_security_request_creds(daos_iov_t *creds)
+dc_sec_request_creds(daos_iov_t *creds)
 {
 	Drpc__Response	*response = NULL;
 	int		rc;
