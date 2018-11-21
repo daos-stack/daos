@@ -160,6 +160,12 @@ static inline long pool_buf_size(unsigned int nr)
 	return offsetof(struct pool_buf, pb_comps[nr]);
 }
 
+static inline unsigned int pool_buf_nr(size_t size)
+{
+	return (size - offsetof(struct pool_buf, pb_comps[0])) /
+		sizeof(struct pool_component);
+}
+
 struct pool_map;
 
 struct pool_buf *pool_buf_alloc(unsigned int nr);

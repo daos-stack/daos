@@ -59,6 +59,8 @@ struct dc_pool {
 	uint32_t		dp_ver;
 	uint32_t		dp_disconnecting:1,
 				dp_slave:1; /* generated via g2l */
+	/* required/allocated pool map size */
+	size_t			dp_map_sz;
 };
 
 struct dc_pool *dc_hdl2pool(daos_handle_t hdl);

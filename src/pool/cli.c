@@ -132,6 +132,9 @@ flags_are_valid(unsigned int flags)
 	       (mode = DAOS_PC_EX);
 }
 
+/* default number of components in pool map */
+#define DC_POOL_DEFAULT_COMPONENTS_NR 128
+
 static struct dc_pool *
 pool_alloc(void)
 {
@@ -162,6 +165,8 @@ pool_alloc(void)
 		goto failed;
 	}
 
+	pool->dp_map_sz = pool_buf_size(DC_POOL_DEFAULT_COMPONENTS_NR);
+
 	return pool;
 
 failed:
@@ -170,14 +175,14 @@ failed:
 }
 
 static int
-map_bulk_create(crt_context_t ctx, crt_bulk_t *bulk, struct pool_buf **buf)
+map_bulk_create(crt_context_t ctx, crt_bulk_t *bulk, struct pool_buf **buf,
+		unsigned int nr)
 {
 	daos_iov_t	iov;
 	daos_sg_list_t	sgl;
 	int		rc;
 
-	/* Use a fixed-size pool buffer until DER_TRUNCs are handled. */
-	*buf = pool_buf_alloc(128);
+	*buf = pool_buf_alloc(nr);
 	if (*buf == NULL)
 		return -DER_NOMEM;
 
@@ -373,9 +378,14 @@ pool_connect_cp(tse_task_t *task, void *data)
 
 	rc = pco->pco_op.po_rc;
 	if (rc == -DER_TRUNC) {
-		/* TODO: Reallocate a larger buffer and reconnect. */
-		D_ERROR("pool map buffer (%ld) < required (%u)\n",
+		/* retry with map buffer size required by server */
+		D_DEBUG(DF_DSMC, "current pool map buffer size (%ld) < size "
+			"required by server (%u), retry after allocating it\n",
 			pool_buf_size(map_buf->pb_nr), pco->pco_map_buf_size);
+		pool->dp_map_sz = pco->pco_map_buf_size;
+		rc = tse_task_reinit(task);
+		if (rc == 0)
+			put_pool = false;
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
 		D_ERROR("failed to connect to pool: %d\n", rc);
@@ -566,7 +576,8 @@ dc_pool_connect(tse_task_t *task)
 	pci->pci_gid = getegid();
 	pci->pci_capas = args->flags;
 
-	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf);
+	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf,
+			     pool_buf_nr(pool->dp_map_sz));
 	if (rc != 0)
 		D_GOTO(out_req, rc);
 
@@ -1207,6 +1218,7 @@ static int
 pool_query_cb(tse_task_t *task, void *data)
 {
 	struct pool_query_arg	       *arg = (struct pool_query_arg *)data;
+	struct pool_buf		       *map_buf = arg->dqa_map_buf;
 	struct pool_query_in	       *in = crt_req_get(arg->rpc);
 	struct pool_query_out	       *out = crt_reply_get(arg->rpc);
 	int				rc = task->dt_result;
@@ -1221,18 +1233,30 @@ pool_query_cb(tse_task_t *task, void *data)
 	D_DEBUG(DF_DSMC, DF_UUID": query rpc done: %d\n",
 		DP_UUID(arg->dqa_pool->dp_pool), rc);
 
-	/* TODO: Upon -DER_TRUNC, reallocate a larger buffer and retry. */
-	if (rc == -DER_TRUNC)
-		D_ERROR(DF_UUID": pool buffer too small: %d\n",
-			DP_UUID(arg->dqa_pool->dp_pool), rc);
-	if (rc)
+	if (rc) {
+		D_ERROR("RPC error while querying pool: %d\n", rc);
 		D_GOTO(out, rc);
+	}
 
 	rc = out->pqo_op.po_rc;
-	if (rc)
-		D_GOTO(out, rc);
+	if (rc == -DER_TRUNC) {
+		struct dc_pool *pool = dc_task_get_priv(task);
 
-	rc = process_query_reply(arg->dqa_pool, arg->dqa_map_buf,
+		D_WARN("pool map buffer size (%ld) < required (%u)\n",
+			pool_buf_size(map_buf->pb_nr), out->pqo_map_buf_size);
+
+		/* retry with map buffer size required by server */
+		D_INFO("retry with map buffer size required by server (%ul)\n",
+		       out->pqo_map_buf_size);
+		pool->dp_map_sz = out->pqo_map_buf_size;
+		rc = tse_task_reinit(task);
+		D_GOTO(out, rc);
+	} else if (rc != 0) {
+		D_ERROR("failed to query pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = process_query_reply(arg->dqa_pool, map_buf,
 				 out->pqo_op.po_map_version,
 				 out->pqo_uid, out->pqo_gid, out->pqo_mode,
 				 out->pqo_op.po_hint.sh_rank,
@@ -1244,7 +1268,7 @@ pool_query_cb(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(arg->dqa_pool);
-	map_bulk_destroy(in->pqi_map_bulk, arg->dqa_map_buf);
+	map_bulk_destroy(in->pqi_map_bulk, map_buf);
 	return rc;
 }
 
@@ -1307,7 +1331,8 @@ dc_pool_query(tse_task_t *task)
 	/** +1 for args */
 	crt_req_addref(rpc);
 
-	rc = map_bulk_create(daos_task2ctx(task), &in->pqi_map_bulk, &map_buf);
+	rc = map_bulk_create(daos_task2ctx(task), &in->pqi_map_bulk, &map_buf,
+			     pool_buf_nr(pool->dp_map_sz));
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
