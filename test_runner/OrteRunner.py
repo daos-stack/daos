@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2016-2017 Intel Corporation
+# Copyright (C) 2016-2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -64,7 +64,7 @@ class OrteRunner():
         self.log_dir_orte = log_path
         self.logger = logging.getLogger("TestRunnerLogger")
         self.cmd_list = []
-        self.cmd_list.append(os.path.join(prefix, "orterun"))
+        self.cmd_list.append(os.path.join(prefix, "prun"))
         if self.test_info.get_defaultENV('TR_USE_URI', ""):
             self.cmd_list.append(" --hnp file:{!s}".format(
                 self.test_info.get_defaultENV('TR_USE_URI')))

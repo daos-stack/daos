@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016-2017 Intel Corporation
+# Copyright (c) 2016-2018 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -56,11 +56,16 @@ class DvmRunner():
         self.hostlist = ",".join(self.info.get_config('host_list'))
         if not self.hostlist:
             self.hostlist = gethostname().split('.')[0]
-        cmd = [os.path.join(ompi_path, 'bin', 'orte-dvm'),
-               '--mca', 'btl', 'self,tcp',
-               '--prefix', ompi_path,
+
+        cmd_arg = ""
+        for host in self.hostlist:
+            cmd_arg = cmd_arg + '"' + host + ':*",'
+
+        cmd = [os.path.join(ompi_path, 'bin', 'prte'),
                '--report-uri', self.report,
-               '--host', self.hostlist]
+               ' --daemonize', '-system-server',
+               '-H', cmd_arg]
+
         cmdstr = ' '.join(cmd)
         with open(self.logfileout, mode='w') as outfile:
             outfile.write("=======================================\n " + \
@@ -91,7 +96,7 @@ class DvmRunner():
         print("TestRunner: stopping orte-dvm process\n")
         if self.ortedvm.poll() is None:
             ompi_path = self.info.get_info('OMPI_PREFIX')
-            orterun = os.path.join(ompi_path, "bin", "orterun")
+            orterun = os.path.join(ompi_path, "bin", "prun")
             cmdstr = "%s --terminate --prefix %s --hnp file:%s --host %s" % \
                      (orterun, ompi_path, self.report, self.hostlist)
             cmdarg = shlex.split(cmdstr)

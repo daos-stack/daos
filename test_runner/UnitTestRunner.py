@@ -33,12 +33,16 @@ from time import time
 import PostRunner
 import GrindRunner
 import ResultsRunner
+from socket import gethostname
+import subprocess
+import signal
 #pylint: enable=import-error
 
 
 class UnitTestRunner(PostRunner.PostRunner,
                      GrindRunner.GrindRunner):
     """Simple test runner"""
+    #pylint: disable=too-many-instance-attributes
     log_dir_base = ""
     last_testlogdir = ""
     loop_number = 0
@@ -46,6 +50,7 @@ class UnitTestRunner(PostRunner.PostRunner,
     subtest_results = []
     info = None
     logger = None
+    #pylint: enable=too-many-instance-attributes
 
     def __init__(self, test_info, log_base_path):
         self.test_info = test_info
@@ -53,6 +58,46 @@ class UnitTestRunner(PostRunner.PostRunner,
         self.test_directives = test_info.get_directives()
         self.log_dir_base = log_base_path
         self.logger = logging.getLogger("TestRunnerLogger")
+        self.prun_dvm = None
+
+    def stop_prte(self):
+        """Stop prte by sending it SIGKILL signal"""
+        print("Killing prte with pid={}".format(self.prun_dvm.pid))
+        os.kill(self.prun_dvm.pid, signal.SIGKILL)
+
+    def start_prte(self):
+        """Start prte with server list"""
+        server_list = []
+        servers = os.getenv('CRT_TEST_SERVER')
+        if servers:
+            server_list = servers.split(',')
+        else:
+            server_list.append(gethostname().split('.')[0])
+
+        cmd = "prte"
+
+        # prte arguments have to be in form of -H 'host1:*,host2:*,..."
+        cmd_arg = " --daemonize -system-server -H "
+        for host in server_list:
+            cmd_arg = cmd_arg + '"' + host + ':*",'
+
+
+        print("Launching {} {}".format(cmd, cmd_arg))
+        self.prun_dvm = subprocess.Popen([cmd, cmd_arg],
+                                         stdout=subprocess.PIPE,
+                                         shell=True)
+
+        # Hack: Wait until stdout prints 9 characters which is
+        # how we know that dvm is ready (it prints DVM ready msg)
+        x = 0
+        while x < 9:
+            output = self.prun_dvm.stdout.read(1)
+            x = x + 1
+
+            # If we hit endline in output exit as well
+            if output == '\n':
+                print("Failed to start {} {}".format(cmd, cmd_arg))
+                break
 
     def setenv(self, testcase):
         """ setup testcase environment """
@@ -60,9 +105,12 @@ class UnitTestRunner(PostRunner.PostRunner,
         if module_env is not None:
             for (key, value) in module_env.items():
                 os.environ[str(key)] = value
+
         setTestPhase = testcase.get('type', self.test_info.get_defaultENV(
             'TR_TEST_PHASE', "TEST")).upper()
         os.environ['TR_TEST_PHASE'] = setTestPhase
+        self.start_prte()
+
 
     def resetenv(self, testcase):
         """ reset testcase environment """
@@ -72,6 +120,7 @@ class UnitTestRunner(PostRunner.PostRunner,
             for key in module_env.keys():
                 value = module_default_env.get(key, "")
                 os.environ[str(key)] = value
+        self.stop_prte()
 
     def settestlog(self, testcase_id):
         """ setup testcase environment """

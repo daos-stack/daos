@@ -34,7 +34,7 @@ def scons():
 
     opts.Add(ListVariable("REQUIRES",
                           "List of libraries to build",
-                          'mercury,ompi',
+                          'mercury,prrte',
                           reqs.get_defined_components()))
     opts.Update(env)
 

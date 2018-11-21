@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016-2017 Intel Corporation
+# Copyright (c) 2016-2018 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -86,7 +86,7 @@ class InfoRunner():
             return 0
 
         print("------------------------------------------------")
-        ompi_path = os.path.join(self.info['OMPI_PREFIX'], "bin")
+        ompi_path = os.path.join(self.info['PRRTE_PREFIX'], "bin")
         path = os.getenv("PATH", "")
         path_list = path.split(":")
         index_list = []
@@ -110,7 +110,7 @@ class InfoRunner():
         print("TestRunner: new path: %s" % newpath)
         print("------------------------------------------------")
         installed_libpath = os.path.join(self.info['PREFIX'], "lib")
-        ompi_libpath = os.path.join(self.info['OMPI_PREFIX'], "lib")
+        ompi_libpath = os.path.join(self.info['PRRTE_PREFIX'], "lib")
         libpath = os.getenv("LD_LIBRARY_PATH")
         if libpath:
             libpath_list = libpath.split(":")
