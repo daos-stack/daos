@@ -26,57 +26,46 @@ package main
 import (
 	"flag"
 	"log"
-	"net"
+	"os"
+	"os/signal"
+	"path/filepath"
 	"syscall"
-
-	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
 var (
-	serverAddr         = flag.String("server_addr", "127.0.0.1:10000", "The server address in the format of host:port")
-	serverHostOverride = flag.String("server_host_override", "", "The server name use to verify the hostname returned by TLS handshake")
-	grpcSocket         = flag.String("grpc_socket", "/var/run/daos_agent.grpc", "The path to the unix socket to be used for receiving local messages")
-	unixSocket         = flag.String("unix_socket", "/var/run/daos_agent.sock", "The path to the unix socket to be used for drpc messages")
+	runtimeDir = flag.String("runtime_dir", "/var/run/daos_agent", "The path to runtime socket directory for daos_agent")
 )
 
 func main() {
 	flag.Parse()
 
-	// Setup our grpc channel with a simple insecure connection
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
-	conn, err := grpc.Dial(*serverAddr, opts...)
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-	defer conn.Close()
+	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
+	signals := make(chan os.Signal, 1)
+	finish := make(chan bool, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	drpcServer, err := drpc.NewDomainSocketServer(*unixSocket)
+	sockPath := filepath.Join(*runtimeDir, "agent.sock")
+	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
 	if err != nil {
 		log.Fatalf("Unable to create socket server: %v", err)
 	}
 
 	err = drpcServer.Start()
 	if err != nil {
-		log.Fatalf("Unable to start socket server on %s: %v", *unixSocket, err)
+		log.Fatalf("Unable to start socket server on %s: %v", sockPath, err)
 	}
 
-	// We need to ensure the socket file does not exist otherwise
-	// listen will fail.
-	syscall.Unlink(*grpcSocket)
-	lis, err := net.Listen("unix", *grpcSocket)
-	if err != nil {
-		log.Fatalf("Unable to listen on unix socket %s: %v", *grpcSocket, err)
-	}
-	// We defer an unlink of the socket for the case where the agent terminates
-	// properly.
-	defer syscall.Unlink(*grpcSocket)
-
-	var serverOpts []grpc.ServerOption
-	grpcServer := grpc.NewServer(serverOpts...)
-	// Nothing to chat with the server about for the moment
-	grpcServer.Serve(lis)
-
+	// Anonymous goroutine to wait on the signals channel and tell the
+	// program to finish when it receives a signal. Since we only notify on
+	// SIGINT and SIGTERM we should only catch this on a kill or ctrl+c
+	// The syntax looks odd but <- Channel means wait on any input on the
+	// channel.
+	go func() {
+		<-signals
+		finish <- true
+	}()
+	<-finish
+	drpcServer.Shutdown()
 }
