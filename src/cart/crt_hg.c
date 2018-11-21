@@ -1719,9 +1719,10 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 				opid != NULL ? (hg_op_id_t *)opid :
 				HG_OP_ID_IGNORE);
 	else
-		hg_ret = HG_Bulk_transfer(hg_ctx->chc_bulkctx,
+		hg_ret = HG_Bulk_transfer_id(hg_ctx->chc_bulkctx,
 				crt_hg_bulk_transfer_cb, bulk_cbinfo,
 				hg_bulk_op, rpc_priv->crp_hg_addr,
+				HG_Get_info(rpc_priv->crp_hg_hdl)->context_id,
 				bulk_desc->bd_remote_hdl,
 				bulk_desc->bd_remote_off,
 				bulk_desc->bd_local_hdl,
