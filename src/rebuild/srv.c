@@ -1463,7 +1463,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		 */
 		d_list_for_each_entry_safe(rdone, tmp, &puller->rp_one_list,
 					   ro_list) {
-			d_list_del(&rdone->ro_list);
+			d_list_del_init(&rdone->ro_list);
 			D_WARN(DF_UUID" left rebuild rdone %*.s\n",
 			       DP_UUID(rpt->rt_pool_uuid),
 			      (int)rdone->ro_dkey.iov_len,
