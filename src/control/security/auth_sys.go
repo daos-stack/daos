@@ -24,29 +24,39 @@
 package security
 
 import (
+	"crypto/sha512"
 	"errors"
 	"fmt"
 	"os"
 	"os/user"
 	"strconv"
 
-	"github.com/daos-stack/daos/src/control/utils/log"
-
 	pb "github.com/daos-stack/daos/src/control/security/proto"
 
 	"github.com/golang/protobuf/proto"
 )
 
+func hashFromToken(token *pb.AuthToken) ([]byte, error) {
+	// Generate our hash (not signed yet just a hash)
+	hash := sha512.New()
+
+	tokenBytes, err := proto.Marshal(token)
+	if err != nil {
+		fmt.Errorf("Unable to marshal AuthToken (%s)", err.Error())
+		return nil, err
+	}
+
+	hash.Write(tokenBytes)
+	hashBytes := hash.Sum(nil)
+	return hashBytes, nil
+}
+
 // AuthSysRequestFromCreds takes the domain info credentials gathered
 // during the gRPC handshake and creates an AuthSys security request to obtain
 // a handle from the management service.
-func AuthSysRequestFromCreds(creds *DomainInfo, logger *log.Logger) (*pb.SecurityCredential, error) {
+func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityCredential, error) {
 	if creds == nil {
 		return nil, errors.New("No credentials supplied")
-	}
-
-	if logger == nil {
-		return nil, errors.New("No logger supplied")
 	}
 
 	uid := strconv.FormatUint(uint64(creds.creds.Uid), 10)
@@ -56,7 +66,6 @@ func AuthSysRequestFromCreds(creds *DomainInfo, logger *log.Logger) (*pb.Securit
 	name, err := os.Hostname()
 	if err != nil {
 		name = "unavailable"
-		logger.Errorf(err.Error())
 	}
 
 	var gids = []uint32{}
@@ -65,7 +74,7 @@ func AuthSysRequestFromCreds(creds *DomainInfo, logger *log.Logger) (*pb.Securit
 	for _, gstr := range groups {
 		gid, err := strconv.Atoi(gstr)
 		if err != nil {
-			logger.Errorf("Was unable to convert %s to an integer\n", gstr)
+			// Skip this group
 			continue
 		}
 		gids = append(gids, uint32(gid))
@@ -83,19 +92,28 @@ func AuthSysRequestFromCreds(creds *DomainInfo, logger *log.Logger) (*pb.Securit
 	// Marshal our AuthSys token into a byte array
 	tokenBytes, err := proto.Marshal(&sys)
 	if err != nil {
-		logger.Errorf("Unable to marshal AuthSys token (%s)", err.Error())
+		fmt.Errorf("Unable to marshal AuthSys token (%s)", err.Error())
 		return nil, err
 	}
 	token := pb.AuthToken{
 		Flavor: pb.AuthFlavor_AUTH_SYS,
 		Data:   tokenBytes}
 
-	action := pb.SecurityCredential{
-		Token: &token,
-		// TODO: Add verifier
+	verifier, err := hashFromToken(&token)
+	if err != nil {
+		fmt.Errorf("Unable to generate verifier (%s)", err.Error())
+		return nil, err
 	}
 
-	return &action, nil
+	verifierToken := pb.AuthToken{
+		Flavor: pb.AuthFlavor_AUTH_SYS,
+		Data:   verifier}
+
+	credential := pb.SecurityCredential{
+		Token:    &token,
+		Verifier: &verifierToken}
+
+	return &credential, nil
 }
 
 // AuthSysFromAuthToken takes an opaque AuthToken and turns it into a

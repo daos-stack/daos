@@ -52,6 +52,9 @@ func main() {
 		log.Fatalf("Unable to create socket server: %v", err)
 	}
 
+	module := &SecurityModule{}
+	drpcServer.RegisterRPCModule(module)
+
 	err = drpcServer.Start()
 	if err != nil {
 		log.Fatalf("Unable to start socket server on %s: %v", sockPath, err)

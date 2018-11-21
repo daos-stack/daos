@@ -24,11 +24,11 @@
 package security_test
 
 import (
+	"testing"
+
 	"github.com/daos-stack/daos/src/control/security"
 	pb "github.com/daos-stack/daos/src/control/security/proto"
-	"github.com/daos-stack/daos/src/control/utils/log"
 	. "github.com/daos-stack/daos/src/control/utils/test"
-	"testing"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -112,22 +112,11 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 // AuthSysRequestFromCreds tests
 
 func TestAuthSysRequestFromCreds_failsIfDomainInfoNil(t *testing.T) {
-	result, err := security.AuthSysRequestFromCreds(nil, log.NewLogger())
+	result, err := security.AuthSysRequestFromCreds(nil)
 
 	if result != nil {
 		t.Error("Expected a nil request")
 	}
 
 	ExpectError(t, err, "No credentials supplied")
-}
-
-func TestAuthSysRequestFromCreds_failsIfLoggerNil(t *testing.T) {
-	result, err := security.AuthSysRequestFromCreds(
-		&security.DomainInfo{}, nil)
-
-	if result != nil {
-		t.Error("Expected a nil request")
-	}
-
-	ExpectError(t, err, "No logger supplied")
 }

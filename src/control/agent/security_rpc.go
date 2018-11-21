@@ -21,45 +21,48 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package hello
+package main
 
 import (
 	"fmt"
 
 	"github.com/daos-stack/daos/src/control/drpc"
-
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/golang/protobuf/proto"
 )
 
-//HelloModule is the RPC Handler for the Hello Module
-type HelloModule struct{}
+// Module id for the Agent security module
+const securityModuleID int32 = 1
 
-//HandleCall is the handler for calls to the hello module
-func (m *HelloModule) HandleCall(client *drpc.Client, function int32, body []byte) ([]byte, error) {
-	if function != int32(Function_GREETING) {
+const (
+	methodRequestCredentials int32 = 101
+)
+
+// SecurityModule is the security drpc module struct
+type SecurityModule struct {
+}
+
+//HandleCall is the handler for calls to the AgentModule
+func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
+	if method != methodRequestCredentials {
 		return nil, fmt.Errorf("Attempt to call unregistered function")
 	}
-	helloMsg := &Hello{}
-	proto.Unmarshal(body, helloMsg)
-
-	greeting := fmt.Sprintf("Hello %s", helloMsg.Name)
-
-	var response HelloResponse
-	response = HelloResponse{
-		Greeting: greeting,
+	response, err := security.AuthSysRequestFromCreds(client.Info)
+	if err != nil {
+		return nil, err
 	}
 
-	responseBytes, mErr := proto.Marshal(&response)
-	if mErr != nil {
-		return nil, mErr
+	responseBytes, err := proto.Marshal(response)
+	if err != nil {
+		return nil, err
 	}
 	return responseBytes, nil
 }
 
 //InitModule is empty for this module
-func (m *HelloModule) InitModule(state drpc.ModuleState) {}
+func (m *SecurityModule) InitModule(state drpc.ModuleState) {}
 
-//ID will return Module_HELLO in int32 form
-func (m *HelloModule) ID() int32 {
-	return int32(Module_HELLO)
+//ID will return Security module ID
+func (m *SecurityModule) ID() int32 {
+	return securityModuleID
 }

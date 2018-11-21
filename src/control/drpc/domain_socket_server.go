@@ -99,7 +99,7 @@ func rpcHandler(client *Client) {
 			break
 		}
 
-		response, err := client.Service.ProcessMessage(buffer[:bytesRead])
+		response, err := client.Service.ProcessMessage(client, buffer[:bytesRead])
 		if err != nil {
 			// The only way we hit here is if buffer[:bytesRead] does not
 			// represent a valid protobuf serialized structure. If the call

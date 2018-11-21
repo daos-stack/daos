@@ -37,7 +37,7 @@ type ModuleState interface{}
 // functionality needed by the rpcService to be able to process
 // requests.
 type Module interface {
-	Call(int32, []byte) ([]byte, error)
+	HandleCall(*Client, int32, []byte) ([]byte, error)
 	InitModule(ModuleState)
 	ID() int32
 }
@@ -103,7 +103,7 @@ func marshalResponse(sequence int64, status Status, body []byte) ([]byte, error)
 // consumers where it can pass the bytes of the drpc.Call instance.
 // That instance is then unmarshaled and processed and a response is
 // returned.
-func (r *Service) ProcessMessage(callBytes []byte) ([]byte, error) {
+func (r *Service) ProcessMessage(client *Client, callBytes []byte) ([]byte, error) {
 	rpcMsg := &Call{}
 
 	err := proto.Unmarshal(callBytes, rpcMsg)
@@ -115,7 +115,7 @@ func (r *Service) ProcessMessage(callBytes []byte) ([]byte, error) {
 		err = fmt.Errorf("Attempted to call unregistered module")
 		return marshalResponse(rpcMsg.GetSequence(), Status_FAILURE, nil)
 	}
-	respBody, err := module.Call(rpcMsg.GetMethod(), rpcMsg.GetBody())
+	respBody, err := module.HandleCall(client, rpcMsg.GetMethod(), rpcMsg.GetBody())
 	if err != nil {
 		return marshalResponse(rpcMsg.GetSequence(), Status_FAILURE, nil)
 	}

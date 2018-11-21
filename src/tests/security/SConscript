@@ -1,0 +1,22 @@
+"""Build addons test"""
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs', 'dc_security_tgts')
+
+    libs = ['gurt', 'daos_common', 'protobuf-c']
+    sources = ['security_test.c', dc_security_tgts]
+
+
+    denv = env.Clone()
+    denv.AppendUnique(CFLAGS=['-std=gnu99'])
+    denv.AppendUnique(CPPDEFINES=['TEST'])
+
+    prereqs.require(denv, 'ompi')
+
+    security_test = denv.Program('security_test', sources, LIBS=libs)
+    env.Install('$PREFIX/bin/', security_test)
+
+if __name__ == "SCons.Script":
+    scons()

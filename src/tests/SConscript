@@ -41,5 +41,8 @@ def scons():
     # Build drpc_test
     SConscript('drpc/SConscript')
 
+    # Build security_test
+    SConscript('security/SConscript')
+
 if __name__ == "SCons.Script":
     scons()
