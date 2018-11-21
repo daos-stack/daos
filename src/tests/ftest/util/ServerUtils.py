@@ -86,6 +86,7 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         server_cmd += "-x DD_SUBSYS=all -x DD_MASK=all "
         server_cmd += daos_srv_bin + " -g {0} -c 1 ".format(setname)
         server_cmd += " -a " + basepath + "/install/tmp/"
+        server_cmd += " -d " + "/var/run/user/{0}".format(os.geteuid())
 
         print "Start CMD>>>>{0}".format(server_cmd)
 
