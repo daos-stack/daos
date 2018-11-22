@@ -527,6 +527,8 @@ crt_ep_abort(crt_endpoint_t *ep);
 	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_ARRAY, CRT_GEN_GET_KIND(seq)),	\
 	{								\
 		struct crt_array *array = &ptr->CRT_GEN_GET_NAME(seq);	\
+		void *array_ptr;					\
+		uint64_t i;						\
 		crt_proc_op_t proc_op;					\
 		rc = crt_proc_get_op(proc, &proc_op);			\
 		if (rc)							\
@@ -551,11 +553,14 @@ crt_ep_abort(crt_endpoint_t *ep);
 				D_GOTO(out, rc = -DER_NOMEM);		\
 		}							\
 		/* process the elements of array */			\
-		rc = crt_proc_memcpy(proc, array->ca_arrays,		\
-				     array->ca_count *			\
-				     sizeof(CRT_GEN_GET_TYPE(seq)));	\
-		if (rc)							\
-			D_GOTO(out, rc);				\
+		array_ptr = array->ca_arrays;				\
+		for (i = 0; i < array->ca_count; i++) {			\
+			rc = CRT_GEN_GET_FUNC(seq)(proc, array_ptr);	\
+			if (rc)						\
+				D_GOTO(out, rc);			\
+			array_ptr = (char *)array_ptr +			\
+				    sizeof(CRT_GEN_GET_TYPE(seq));	\
+		}							\
 		if (proc_op == CRT_PROC_FREE)				\
 			D_FREE(array->ca_arrays);			\
 	}								\
