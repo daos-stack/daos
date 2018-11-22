@@ -1287,7 +1287,7 @@ out:
 void
 rebuild_obj_handler(crt_rpc_t *rpc)
 {
-	struct rebuild_objs_in		*rebuild_in;
+	struct rebuild_in		*rebuild_in;
 	struct rebuild_tgt_pool_tracker *rpt = NULL;
 	struct rebuild_pool_tls		*tls;
 	struct rebuild_out		*rebuild_out;
@@ -1423,6 +1423,6 @@ out:
 	if (rpt)
 		rpt_put(rpt);
 	rebuild_out = crt_reply_get(rpc);
-	rebuild_out->ro_status = rc;
+	rebuild_out->roo_status = rc;
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_OBJ);
 }

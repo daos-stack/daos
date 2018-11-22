@@ -46,11 +46,10 @@
  */
 #define REBUILD_PROTO_SRV_RPC_LIST					\
 	X(REBUILD_OBJECTS_SCAN,						\
-		0, &DQF_REBUILD_OBJECTS_SCAN,				\
-		rebuild_tgt_scan_handler,				\
-		&rebuild_tgt_scan_co_ops),				\
+		0, &CQF_rebuild_scan,					\
+		rebuild_tgt_scan_handler, &rebuild_tgt_scan_co_ops),	\
 	X(REBUILD_OBJECTS,						\
-		0, &DQF_REBUILD_OBJECTS,				\
+		0, &CQF_rebuild,					\
 		rebuild_obj_handler, NULL)
 
 /* Define for RPC enum population below */
@@ -64,39 +63,39 @@ enum rebuild_operation {
 
 extern struct crt_proto_format rebuild_proto_fmt;
 
-struct rebuild_scan_in {
-	uuid_t		rsi_pool_uuid;
-	uuid_t		rsi_pool_hdl_uuid;
-	uuid_t		rsi_cont_hdl_uuid;
-	d_rank_list_t	*rsi_svc_list;
-	daos_iov_t	rsi_ns_iov;
-	uint64_t	rsi_leader_term;
-	uint32_t	rsi_tgts_num;
-	uint32_t	rsi_ns_id;
-	uint32_t	rsi_pool_map_ver;
-	uint32_t	rsi_rebuild_ver;
-	uint32_t	rsi_master_rank;
-	uint32_t	rsi_padding;
-};
+#define DAOS_ISEQ_REBUILD_SCAN	/* input fields */		 \
+	((uuid_t)		(rsi_pool_uuid)		CRT_VAR) \
+	((uuid_t)		(rsi_pool_hdl_uuid)	CRT_VAR) \
+	((uuid_t)		(rsi_cont_hdl_uuid)	CRT_VAR) \
+	((d_rank_list_t)	(rsi_svc_list)		CRT_PTR) \
+	((daos_iov_t)		(rsi_ns_iov)		CRT_VAR) \
+	((uint64_t)		(rsi_leader_term)	CRT_VAR) \
+	((uint32_t)		(rsi_tgts_num)		CRT_VAR) \
+	((uint32_t)		(rsi_ns_id)		CRT_VAR) \
+	((uint32_t)		(rsi_pool_map_ver)	CRT_VAR) \
+	((uint32_t)		(rsi_rebuild_ver)	CRT_VAR) \
+	((uint32_t)		(rsi_master_rank)	CRT_VAR) \
+	((uint32_t)		(rsi_padding)		CRT_VAR)
 
-struct rebuild_scan_out {
-	d_rank_list_t	*rso_ranks_list;
-	int		rso_status;
-};
+#define DAOS_OSEQ_REBUILD_SCAN	/* output fields */		 \
+	((d_rank_list_t)	(rso_ranks_list)	CRT_PTR) \
+	((int32_t)		(rso_status)		CRT_VAR)
 
-struct rebuild_out {
-	int	ro_status;
-};
+CRT_RPC_DECLARE(rebuild_scan, DAOS_ISEQ_REBUILD_SCAN, DAOS_OSEQ_REBUILD_SCAN)
 
-struct rebuild_objs_in {
-	uint32_t                roi_rebuild_ver;
-	uint32_t                roi_tgt_idx;
-	uuid_t			roi_pool_uuid;
-	struct crt_array        roi_oids;
-	struct crt_array        roi_ephs;
-	struct crt_array        roi_uuids;
-	struct crt_array	roi_shards;
-};
+#define DAOS_ISEQ_REBUILD	/* input fields */		 \
+	((uint32_t)		(roi_rebuild_ver)	CRT_VAR) \
+	((uint32_t)		(roi_tgt_idx)		CRT_VAR) \
+	((uuid_t)		(roi_pool_uuid)		CRT_VAR) \
+	((daos_unit_oid_t)	(roi_oids)		CRT_ARRAY) \
+	((uint64_t)		(roi_ephs)		CRT_ARRAY) \
+	((uuid_t)		(roi_uuids)		CRT_ARRAY) \
+	((uint32_t)		(roi_shards)		CRT_ARRAY)
+
+#define DAOS_OSEQ_REBUILD	/* output fields */		 \
+	((int32_t)		(roo_status)		CRT_VAR)
+
+CRT_RPC_DECLARE(rebuild, DAOS_ISEQ_REBUILD, DAOS_OSEQ_REBUILD)
 
 static inline int
 rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,

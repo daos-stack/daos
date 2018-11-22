@@ -143,7 +143,7 @@ static int
 rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		     struct rebuild_scan_arg *scan_arg)
 {
-	struct rebuild_objs_in	*rebuild_in = NULL;
+	struct rebuild_in	*rebuild_in = NULL;
 	struct rebuild_out	*rebuild_out = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = scan_arg->rpt;
 	struct pool_target	*target;
@@ -237,16 +237,16 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		rc = dss_rpc_send(rpc);
 
 		rebuild_out = crt_reply_get(rpc);
-		if (rc == 0 && rebuild_out->ro_status == 0)
+		if (rc == 0 && rebuild_out->roo_status == 0)
 			break;
 
 		/* If it is failed, but no need retry, let's just fail */
 		if ((rc != 0 && rc != -DER_TIMEDOUT &&
 		     !daos_crt_network_error(rc)) ||
-		    (rebuild_out->ro_status != 0 &&
-		     rebuild_out->ro_status != -DER_AGAIN)) {
+		    (rebuild_out->roo_status != 0 &&
+		     rebuild_out->roo_status != -DER_AGAIN)) {
 			if (rc == 0)
-				rc = rebuild_out->ro_status;
+				rc = rebuild_out->roo_status;
 			break;
 		}
 

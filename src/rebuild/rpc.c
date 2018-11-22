@@ -30,45 +30,44 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
-static struct crt_msg_field *rebuild_scan_in_fields[] = {
-	&CMF_UUID,	/* pool uuid */
-	&CMF_UUID,	/* pool hdl uuid */
-	&CMF_UUID,	/* cont hdl uuid */
-	&CMF_RANK_LIST,	/* service list */
-	&CMF_IOVEC,	/* iv ns context */
-	&CMF_UINT64,	/* term of leader */
-	&CMF_UINT32,	/* rebuild target number */
-	&CMF_UINT32,	/* pool iv ns id */
-	&CMF_UINT32,	/* pool map version */
-	&CMF_UINT32,	/* rebuild version */
-	&CMF_UINT32,	/* master rank */
-	&CMF_UINT32,	/* padding */
-};
+static int
+crt_proc_daos_obj_id_t(crt_proc_t proc, daos_obj_id_t *p)
+{
+	int rc;
 
-static struct crt_msg_field *rebuild_scan_out_fields[] = {
-	&CMF_RANK_LIST, /* failed rank list */
-	&CMF_INT,	/* status */
-};
+	rc = crt_proc_uint64_t(proc, &p->lo);
+	if (rc != 0)
+		return -DER_HG;
 
-static struct crt_msg_field *rebuild_out_fields[] = {
-	&CMF_INT,	/* rebuild status */
-};
+	rc = crt_proc_uint64_t(proc, &p->hi);
+	if (rc != 0)
+		return -DER_HG;
 
-static struct crt_msg_field *rebuild_objs_in_fields[] = {
-	&CMF_UINT32,    /* pool map version */
-	&CMF_UINT32,    /* padding */
-	&CMF_UUID,
-	&DMF_OID_ARRAY, /* obj ids to be rebuilt */
-	&DMF_UINT64_ARRAY, /* epochs of obj to be rebuilt */
-	&DMF_UUID_ARRAY, /* cont ids to be rebuilt */
-	&DMF_UINT32_ARRAY, /* obj shards to be rebuilt */
-};
+	return 0;
+}
 
-struct crt_req_format DQF_REBUILD_OBJECTS_SCAN =
-	DEFINE_CRT_REQ_FMT(rebuild_scan_in_fields, rebuild_scan_out_fields);
+static int
+crt_proc_daos_unit_oid_t(crt_proc_t proc, daos_unit_oid_t *p)
+{
+	int rc;
 
-struct crt_req_format DQF_REBUILD_OBJECTS =
-	DEFINE_CRT_REQ_FMT(rebuild_objs_in_fields, rebuild_out_fields);
+	rc = crt_proc_daos_obj_id_t(proc, &p->id_pub);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &p->id_shard);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &p->id_pad_32);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+CRT_RPC_DEFINE(rebuild_scan, DAOS_ISEQ_REBUILD_SCAN, DAOS_OSEQ_REBUILD_SCAN)
+CRT_RPC_DEFINE(rebuild, DAOS_ISEQ_REBUILD, DAOS_OSEQ_REBUILD)
 
 /* Define for cont_rpcs[] array population below.
  * See REBUILD_PROTO_*_RPC_LIST macro definition
