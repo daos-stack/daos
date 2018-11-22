@@ -47,61 +47,61 @@
  */
 #define POOL_PROTO_CLI_RPC_LIST						\
 	X(POOL_CREATE,							\
-		0, &DQF_POOL_CREATE,					\
+		0, &CQF_pool_create,					\
 		ds_pool_create_handler, NULL),				\
 	X(POOL_CONNECT,							\
-		0, &DQF_POOL_CONNECT,					\
+		0, &CQF_pool_connect,					\
 		ds_pool_connect_handler, NULL),				\
 	X(POOL_DISCONNECT,						\
-		0, &DQF_POOL_DISCONNECT,				\
+		0, &CQF_pool_disconnect,				\
 		ds_pool_disconnect_handler, NULL),			\
 	X(POOL_QUERY,							\
-		0, &DQF_POOL_QUERY,					\
+		0, &CQF_pool_query,					\
 		ds_pool_query_handler, NULL),				\
 	X(POOL_EXCLUDE,							\
-		0, &DQF_POOL_EXCLUDE,					\
+		0, &CQF_pool_exclude,					\
 		ds_pool_update_handler, NULL),				\
 	X(POOL_EVICT,							\
-		0, &DQF_POOL_EVICT,					\
+		0, &CQF_pool_evict,					\
 		ds_pool_evict_handler, NULL),				\
 	X(POOL_ADD,							\
-		0, &DQF_POOL_ADD,					\
+		0, &CQF_pool_add,					\
 		ds_pool_update_handler, NULL),				\
 	X(POOL_EXCLUDE_OUT,						\
-		0, &DQF_POOL_EXCLUDE_OUT,				\
+		0, &CQF_pool_exclude_out,				\
 		ds_pool_update_handler, NULL),				\
 	X(POOL_SVC_STOP,						\
-		0, &DQF_POOL_SVC_STOP,					\
+		0, &CQF_pool_svc_stop,					\
 		ds_pool_svc_stop_handler, NULL),			\
 	X(POOL_ATTR_LIST,						\
-		0, &DQF_POOL_ATTR_LIST,					\
+		0, &CQF_pool_attr_list,					\
 		ds_pool_attr_list_handler, NULL),			\
 	X(POOL_ATTR_GET,						\
-		0, &DQF_POOL_ATTR_GET,					\
+		0, &CQF_pool_attr_get,					\
 		ds_pool_attr_get_handler, NULL),			\
 	X(POOL_ATTR_SET,						\
-		0, &DQF_POOL_ATTR_SET,					\
+		0, &CQF_pool_attr_set,					\
 		ds_pool_attr_set_handler, NULL)
 
 #define POOL_PROTO_SRV_RPC_LIST						\
 	X(POOL_TGT_CONNECT,						\
-		0, &DQF_POOL_TGT_CONNECT,				\
+		0, &CQF_pool_tgt_connect,				\
 		ds_pool_tgt_connect_handler,				\
 		&ds_pool_tgt_connect_co_ops),				\
 	X(POOL_TGT_DISCONNECT,						\
-		0, &DQF_POOL_TGT_DISCONNECT,				\
+		0, &CQF_pool_tgt_disconnect,				\
 		ds_pool_tgt_disconnect_handler,				\
 		&ds_pool_tgt_disconnect_co_ops),			\
 	X(POOL_TGT_UPDATE_MAP,						\
-		0, &DQF_POOL_TGT_UPDATE_MAP,				\
+		0, &CQF_pool_tgt_update_map,				\
 		ds_pool_tgt_update_map_handler,				\
 		&ds_pool_tgt_update_map_co_ops),			\
 	X(POOL_RDB_START,						\
-		0, &DQF_POOL_RDB_START,					\
+		0, &CQF_pool_rdb_start,					\
 		ds_pool_rdb_start_handler,				\
 		&ds_pool_rdb_start_co_ops),				\
 	X(POOL_RDB_STOP,						\
-		0, &DQF_POOL_RDB_STOP,					\
+		0, &CQF_pool_rdb_stop,					\
 		ds_pool_rdb_stop_handler,				\
 		&ds_pool_rdb_stop_co_ops)
 
@@ -119,97 +119,101 @@ enum pool_operation {
 
 extern struct crt_proto_format pool_proto_fmt;
 
-struct pool_op_in {
-	uuid_t	pi_uuid;	/* pool UUID */
-	uuid_t	pi_hdl;		/* pool handle UUID */
-};
+#define DAOS_ISEQ_POOL_OP	/* input fields */		 \
+	((uuid_t)		(pi_uuid)		CRT_VAR) \
+	((uuid_t)		(pi_hdl)		CRT_VAR)
 
-struct pool_op_out {
-	int32_t			po_rc;		/* operation return code */
-	uint32_t		po_map_version;	/* latest map version or zero */
-	struct rsvc_hint	po_hint;	/* leadership info */
-};
+#define DAOS_OSEQ_POOL_OP	/* output fields */		 \
+	((int32_t)		(po_rc)			CRT_VAR) \
+	((uint32_t)		(po_map_version)	CRT_VAR) \
+	((struct rsvc_hint)	(po_hint)		CRT_VAR)
 
-struct pool_create_in {
-	struct pool_op_in	pri_op;		/* .pi_hdl unused */
-	uint32_t		pri_uid;
-	uint32_t		pri_gid;
-	uint32_t		pri_mode;
-	uint32_t		pri_ntgts;
-	struct crt_array	pri_tgt_uuids;	/* [pri_ntgts] */
-	d_rank_list_t       *pri_tgt_ranks;	/* [pri_ntgts] */
-	uint32_t		pri_ndomains;
-	uint32_t		pri_padding;
-	struct crt_array	pri_domains;	/* [pri_ndomains] */
-};
+CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 
-struct pool_create_out {
-	struct pool_op_out	pro_op;	/* .map_version unused */
-};
+#define DAOS_ISEQ_POOL_CREATE	/* input fields */		 \
+	((struct pool_op_in)	(pri_op)		CRT_VAR) \
+	((uint32_t)		(pri_uid)		CRT_VAR) \
+	((uint32_t)		(pri_gid)		CRT_VAR) \
+	((uint32_t)		(pri_mode)		CRT_VAR) \
+	((uint32_t)		(pri_ntgts)		CRT_VAR) \
+	((uuid_t)		(pri_tgt_uuids)		CRT_ARRAY) \
+	((d_rank_list_t)	(pri_tgt_ranks)		CRT_PTR) \
+	((uint32_t)		(pri_ndomains)		CRT_VAR) \
+	((uint32_t)		(pri_padding)		CRT_VAR) \
+	((uint32_t)		(pri_domains)		CRT_ARRAY)
 
-struct pool_connect_in {
-	struct pool_op_in	pci_op;
-	uint32_t		pci_uid;
-	uint32_t		pci_gid;
-	uint64_t		pci_capas;
-	crt_bulk_t		pci_map_bulk;
-};
+#define DAOS_OSEQ_POOL_CREATE	/* output fields */		 \
+	((struct pool_op_out)	(pro_op)		CRT_VAR)
 
-struct pool_connect_out {
-	struct pool_op_out		pco_op;
-	uint32_t			pco_uid;
-	uint32_t			pco_gid;
-	uint32_t			pco_mode;
-	/* only set on -DER_TRUNC */
-	uint32_t			pco_map_buf_size;
-	struct daos_rebuild_status	pco_rebuild_st;
-};
+CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 
-struct pool_disconnect_in {
-	struct pool_op_in	pdi_op;
-};
+#define DAOS_ISEQ_POOL_CONNECT	/* input fields */		 \
+	((struct pool_op_in)	(pci_op)		CRT_VAR) \
+	((uint32_t)		(pci_uid)		CRT_VAR) \
+	((uint32_t)		(pci_gid)		CRT_VAR) \
+	((uint64_t)		(pci_capas)		CRT_VAR) \
+	((crt_bulk_t)		(pci_map_bulk)		CRT_VAR)
 
-struct pool_disconnect_out {
-	struct pool_op_out	pdo_op;	/* .po_map_version not set */
-};
+#define DAOS_OSEQ_POOL_CONNECT	/* output fields */		 \
+	((struct pool_op_out)	(pco_op)		CRT_VAR) \
+	((uint32_t)		(pco_uid)		CRT_VAR) \
+	((uint32_t)		(pco_gid)		CRT_VAR) \
+	((uint32_t)		(pco_mode)		CRT_VAR) \
+	/* only set on -DER_TRUNC */				 \
+	((uint32_t)		(pco_map_buf_size)	CRT_VAR) \
+	((struct daos_rebuild_status) (pco_rebuild_st)	CRT_VAR)
 
-struct pool_query_in {
-	struct pool_op_in	pqi_op;
-	crt_bulk_t		pqi_map_bulk;
-};
+CRT_RPC_DECLARE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 
-struct pool_query_out {
-	struct pool_op_out		pqo_op;
-	uint32_t			pqo_uid;
-	uint32_t			pqo_gid;
-	uint32_t			pqo_mode;
-	/* only set on -DER_TRUNC */
-	uint32_t			pqo_map_buf_size;
-	struct daos_rebuild_status	pqo_rebuild_st;
-};
+#define DAOS_ISEQ_POOL_DISCONNECT /* input fields */		 \
+	((struct pool_op_in)	(pdi_op)		CRT_VAR)
 
-struct pool_attr_list_in {
-	struct pool_op_in	pali_op;
-	crt_bulk_t		pali_bulk;
-};
+#define DAOS_OSEQ_POOL_DISCONNECT /* output fields */		 \
+	((struct pool_op_out)	(pdo_op)		CRT_VAR)
 
-struct pool_attr_list_out {
-	struct pool_op_out	palo_op;
-	uint64_t		palo_size;
-};
+CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
+		DAOS_OSEQ_POOL_DISCONNECT)
 
-struct pool_attr_get_in {
-	struct pool_op_in	pagi_op;
-	uint64_t		pagi_count;
-	uint64_t		pagi_key_length;
-	crt_bulk_t		pagi_bulk;
-};
+#define DAOS_ISEQ_POOL_QUERY	/* input fields */		 \
+	((struct pool_op_in)	(pqi_op)		CRT_VAR) \
+	((crt_bulk_t)		(pqi_map_bulk)		CRT_VAR)
 
-struct pool_attr_set_in {
-	struct pool_op_in	pasi_op;
-	uint64_t		pasi_count;
-	crt_bulk_t		pasi_bulk;
-};
+#define DAOS_OSEQ_POOL_QUERY	/* output fields */		 \
+	((struct pool_op_out)	(pqo_op)		CRT_VAR) \
+	((uint32_t)		(pqo_uid)		CRT_VAR) \
+	((uint32_t)		(pqo_gid)		CRT_VAR) \
+	((uint32_t)		(pqo_mode)		CRT_VAR) \
+	/* only set on -DER_TRUNC */				 \
+	((uint32_t)		(pqo_map_buf_size)	CRT_VAR) \
+	((struct daos_rebuild_status) (pqo_rebuild_st)	CRT_VAR)
+
+CRT_RPC_DECLARE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
+
+#define DAOS_ISEQ_POOL_ATTR_LIST /* input fields */		 \
+	((struct pool_op_in)	(pali_op)		CRT_VAR) \
+	((crt_bulk_t)		(pali_bulk)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_ATTR_LIST /* output fields */		 \
+	((struct pool_op_out)	(palo_op)		CRT_VAR) \
+	((uint64_t)		(palo_size)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_attr_list, DAOS_ISEQ_POOL_ATTR_LIST,
+		DAOS_OSEQ_POOL_ATTR_LIST)
+
+#define DAOS_ISEQ_POOL_ATTR_GET	/* input fields */		 \
+	((struct pool_op_in)	(pagi_op)		CRT_VAR) \
+	((uint64_t)		(pagi_count)		CRT_VAR) \
+	((uint64_t)		(pagi_key_length)	CRT_VAR) \
+	((crt_bulk_t)		(pagi_bulk)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
+
+#define DAOS_ISEQ_POOL_ATTR_SET	/* input fields */		 \
+	((struct pool_op_in)	(pasi_op)		CRT_VAR) \
+	((uint64_t)		(pasi_count)		CRT_VAR) \
+	((crt_bulk_t)		(pasi_bulk)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_attr_set, DAOS_ISEQ_POOL_ATTR_SET, DAOS_OSEQ_POOL_OP)
 
 /** Target address for each pool target */
 struct pool_target_addr {
@@ -220,90 +224,101 @@ struct pool_target_addr {
 };
 
 struct pool_target_addr_list {
-	int			pta_number;
+	int			 pta_number;
 	struct pool_target_addr	*pta_addrs;
 };
 
-struct pool_tgt_update_in {
-	struct pool_op_in	pti_op;		/* .pi_hdl unused */
-	struct crt_array	pti_addr_list; /* addr list */
-};
+#define DAOS_ISEQ_POOL_TGT_UPDATE /* input fields */		 \
+	((struct pool_op_in)	(pti_op)		CRT_VAR) \
+	((struct pool_target_addr) (pti_addr_list)	CRT_ARRAY)
 
-struct pool_tgt_update_out {
-	struct pool_op_out	pto_op;
-	struct crt_array	pto_addr_list;
-};
+#define DAOS_OSEQ_POOL_TGT_UPDATE /* output fields */		 \
+	((struct pool_op_out)	(pto_op)		CRT_VAR) \
+	((struct pool_target_addr) (pto_addr_list)	CRT_ARRAY)
 
-struct pool_evict_in {
-	struct pool_op_in	pvi_op;	/* .pi_hdl unused */
-};
+CRT_RPC_DECLARE(pool_tgt_update, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DECLARE(pool_add, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DECLARE(pool_exclude, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DECLARE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
 
-struct pool_evict_out {
-	struct pool_op_out	pvo_op;
-};
+#define DAOS_ISEQ_POOL_EVICT	/* input fields */		 \
+	((struct pool_op_in)	(pvi_op)		CRT_VAR)
 
-struct pool_svc_stop_in {
-	struct pool_op_in	psi_op;	/* .pi_hdl unused */
-};
+#define DAOS_OSEQ_POOL_EVICT	/* output fields */		 \
+	((struct pool_op_out)	(pvo_op)		CRT_VAR)
 
-struct pool_svc_stop_out {
-	struct pool_op_out	pso_op;	/* .po_map_version unused */
-};
+CRT_RPC_DECLARE(pool_evict, DAOS_ISEQ_POOL_EVICT, DAOS_OSEQ_POOL_EVICT)
 
-struct pool_tgt_connect_in {
-	uuid_t		tci_uuid;		/* pool UUID */
-	uuid_t		tci_hdl;
-	uint64_t	tci_capas;
-	uint32_t	tci_map_version;
-	uint32_t	tci_iv_ns_id;
-	uint32_t	tci_master_rank;
-	uint32_t	tci_pad;
-	daos_iov_t	tci_iv_ctxt;
-};
+#define DAOS_ISEQ_POOL_SVC_STOP	/* input fields */		 \
+	((struct pool_op_in)	(psi_op)		CRT_VAR)
 
-struct pool_tgt_connect_out {
-	int32_t	tco_rc;	/* number of errors */
-};
+#define DAOS_OSEQ_POOL_SVC_STOP	/* output fields */		 \
+	((struct pool_op_out)	(pso_op)		CRT_VAR)
 
-struct pool_tgt_disconnect_in {
-	uuid_t			tdi_uuid;	/* pool UUID */
-	struct crt_array	tdi_hdls;
-};
+CRT_RPC_DECLARE(pool_svc_stop, DAOS_ISEQ_POOL_SVC_STOP, DAOS_OSEQ_POOL_SVC_STOP)
 
-struct pool_tgt_disconnect_out {
-	int32_t	tdo_rc;	/* number of errors */
-};
+#define DAOS_ISEQ_POOL_TGT_CONNECT /* input fields */		 \
+	((uuid_t)		(tci_uuid)		CRT_VAR) \
+	((uuid_t)		(tci_hdl)		CRT_VAR) \
+	((uint64_t)		(tci_capas)		CRT_VAR) \
+	((uint32_t)		(tci_map_version)	CRT_VAR) \
+	((uint32_t)		(tci_iv_ns_id)		CRT_VAR) \
+	((uint32_t)		(tci_master_rank)	CRT_VAR) \
+	((uint32_t)		(tci_pad)		CRT_VAR) \
+	((daos_iov_t)		(tci_iv_ctxt)		CRT_VAR)
 
-struct pool_tgt_update_map_in {
-	uuid_t		tui_uuid;		/* pool UUID */
-	uint32_t	tui_map_version;
-};
+#define DAOS_OSEQ_POOL_TGT_CONNECT /* output fields */		 \
+	((int32_t)		(tco_rc)		CRT_VAR)
 
-struct pool_tgt_update_map_out {
-	int32_t	tuo_rc;	/* number of errors */
-};
+CRT_RPC_DECLARE(pool_tgt_connect, DAOS_ISEQ_POOL_TGT_CONNECT,
+		DAOS_OSEQ_POOL_TGT_CONNECT)
 
-struct pool_rdb_start_in {
-	uuid_t		 dai_dbid;
-	uuid_t		 dai_pool;
-	uint32_t	 dai_flags;
-	uint32_t	 dai_padding;
-	uint64_t	 dai_size;
-	d_rank_list_t	*dai_ranks;
-};
+#define DAOS_ISEQ_POOL_TGT_DISCONNECT /* input fields */	 \
+	((uuid_t)		(tdi_uuid)		CRT_VAR) \
+	((uuid_t)		(tdi_hdls)		CRT_ARRAY)
 
-struct pool_rdb_start_out {
-	int		dao_rc;
-};
+#define DAOS_OSEQ_POOL_TGT_DISCONNECT /* output fields */	 \
+	((int32_t)		(tdo_rc)		CRT_VAR)
 
-struct pool_rdb_stop_in {
-	uuid_t		doi_pool;
-	uint32_t	doi_flags;
-};
+CRT_RPC_DECLARE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
+		DAOS_OSEQ_POOL_TGT_DISCONNECT)
 
-struct pool_rdb_stop_out {
-	int		doo_rc;
-};
+#define DAOS_ISEQ_POOL_TGT_UPDATE_MAP /* input fields */	 \
+	((uuid_t)		(tui_uuid)		CRT_VAR) \
+	((uint32_t)		(tui_map_version)	CRT_VAR)
+
+#define DAOS_OSEQ_POOL_TGT_UPDATE_MAP /* output fields */	 \
+	((int32_t)		(tuo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
+		DAOS_OSEQ_POOL_TGT_UPDATE_MAP)
+
+#define DAOS_ISEQ_POOL_RDB_START /* input fields */		 \
+	((uuid_t)		(dai_dbid)		CRT_VAR) \
+	((uuid_t)		(dai_pool)		CRT_VAR) \
+	((uint32_t)		(dai_flags)		CRT_VAR) \
+	((uint32_t)		(dai_padding)		CRT_VAR) \
+	((uint64_t)		(dai_size)		CRT_VAR) \
+	((d_rank_list_t)	(dai_ranks)		CRT_PTR)
+
+#define DAOS_OSEQ_POOL_RDB_START /* output fields */		 \
+	((int32_t)		(dao_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_rdb_start, DAOS_ISEQ_POOL_RDB_START,
+		DAOS_OSEQ_POOL_RDB_START)
+
+#define DAOS_ISEQ_POOL_RDB_STOP /* input fields */		 \
+	((uuid_t)		(doi_pool)		CRT_VAR) \
+	((uint32_t)		(doi_flags)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_RDB_STOP /* output fields */		 \
+	((int32_t)		(doo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_rdb_stop, DAOS_ISEQ_POOL_RDB_STOP, DAOS_OSEQ_POOL_RDB_STOP)
 
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

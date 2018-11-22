@@ -29,7 +29,7 @@
 #include "rpc.h"
 
 static int
-proc_pool_target_addr(crt_proc_t proc, struct pool_target_addr *tgt)
+crt_proc_struct_pool_target_addr(crt_proc_t proc, struct pool_target_addr *tgt)
 {
 	int rc;
 
@@ -44,277 +44,89 @@ proc_pool_target_addr(crt_proc_t proc, struct pool_target_addr *tgt)
 	return 0;
 }
 
-struct crt_msg_field DMF_TGT_ADDR_LIST =
-	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(struct pool_target_addr),
-			proc_pool_target_addr);
+static int
+crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
+{
+	int rc;
 
-struct crt_msg_field *pool_create_in_fields[] = {
-	&CMF_UUID,		/* op.uuid */
-	&CMF_UUID,		/* op.hdl */
-	&CMF_UINT32,		/* uid */
-	&CMF_UINT32,		/* gid */
-	&CMF_UINT32,		/* mode */
-	&CMF_UINT32,		/* ntgts */
-	&DMF_UUID_ARRAY,	/* tgt_uuids */
-	&CMF_RANK_LIST,		/* tgt_ranks */
-	&CMF_UINT32,		/* ndomains */
-	&CMF_UINT32,		/* padding */
-	&DMF_UINT32_ARRAY	/* domains */
-};
+	rc = crt_proc_uint32_t(proc, &hint->sh_flags);
+	if (rc != 0)
+		return -DER_HG;
 
-struct crt_msg_field *pool_create_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.map_version (unused) */
-	&DMF_RSVC_HINT	/* op.hint */
-};
+	rc = crt_proc_uint32_t(proc, &hint->sh_rank);
+	if (rc != 0)
+		return -DER_HG;
 
-struct crt_msg_field *pool_connect_in_fields[] = {
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.handle */
-	&CMF_UINT32,	/* uid */
-	&CMF_UINT32,	/* gid */
-	&CMF_UINT64,	/* capas */
-	&CMF_BULK	/* map_bulk */
-};
+	rc = crt_proc_uint64_t(proc, &hint->sh_term);
+	if (rc != 0)
+		return -DER_HG;
 
-struct crt_msg_field *pool_connect_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.map_version */
-	&DMF_RSVC_HINT,	/* op.hint */
-	&CMF_UINT32,	/* uid */
-	&CMF_UINT32,	/* gid */
-	&CMF_UINT32,	/* mode */
-	&CMF_UINT32,	/* map_buf_size */
-	&CMF_UINT32,	/* rebuild_st.version */
-	&CMF_UINT32,	/* rebuild_st.pad_32 */
-	&CMF_INT,	/* rebuild_st.errno */
-	&CMF_INT,	/* rebuild_st.done */
-	&CMF_UINT64,	/* rebuild_st.toberb_obj_nr */
-	&CMF_UINT64,	/* rebuild_st.obj_nr */
-	&CMF_UINT64,	/* rebuild_st.rec_nr */
-};
+	return 0;
+}
 
-struct crt_msg_field *pool_disconnect_in_fields[] = {
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID	/* op.handle */
-};
+static int
+crt_proc_struct_daos_rebuild_status(crt_proc_t proc,
+				    struct daos_rebuild_status *drs)
+{
+	int rc;
 
-struct crt_msg_field *pool_disconnect_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.map_version */
-	&DMF_RSVC_HINT	/* op.hint */
-};
+	rc = crt_proc_uint32_t(proc, &drs->rs_version);
+	if (rc != 0)
+		return -DER_HG;
 
-struct crt_msg_field *pool_query_in_fields[] = {
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.handle */
-	&CMF_BULK	/* map_bulk */
-};
+	rc = crt_proc_uint32_t(proc, &drs->rs_pad_32);
+	if (rc != 0)
+		return -DER_HG;
 
-struct crt_msg_field *pool_query_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.map_version */
-	&DMF_RSVC_HINT,	/* op.hint */
-	&CMF_UINT32,	/* uid */
-	&CMF_UINT32,	/* gid */
-	&CMF_UINT32,	/* mode */
-	&CMF_UINT32,	/* map_buf_size */
-	&CMF_UINT32,	/* rebuild_st.version */
-	&CMF_UINT32,	/* rebuild_st.pad_32 */
-	&CMF_INT,	/* rebuild_st.errno */
-	&CMF_INT,	/* rebuild_st.done */
-	&CMF_UINT64,	/* rebuild_st.toberb_obj_nr */
-	&CMF_UINT64,	/* rebuild_st.obj_nr */
-	&CMF_UINT64,	/* rebuild_st.rec_nr */
-};
+	rc = crt_proc_int32_t(proc, &drs->rs_errno);
+	if (rc != 0)
+		return -DER_HG;
 
-struct crt_msg_field *pool_attr_list_in_fields[] = {
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.handle */
-	&CMF_BULK	/* attr bulk */
-};
+	rc = crt_proc_int32_t(proc, &drs->rs_done);
+	if (rc != 0)
+		return -DER_HG;
 
-struct crt_msg_field *pool_attr_list_out_fields[] = {
-	&CMF_INT,		/* op.rc */
-	&CMF_UINT32,		/* op.map_version */
-	&DMF_RSVC_HINT,		/* op.hint */
-	&CMF_UINT64		/* names size */
-};
+	rc = crt_proc_uint64_t(proc, &drs->rs_toberb_obj_nr);
+	if (rc != 0)
+		return -DER_HG;
 
-struct crt_msg_field *pool_attr_get_in_fields[] = {
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.handle */
-	&CMF_UINT64,	/* count */
-	&CMF_UINT64,	/* key length */
-	&CMF_BULK	/* attr bulk */
-};
+	rc = crt_proc_uint64_t(proc, &drs->rs_obj_nr);
+	if (rc != 0)
+		return -DER_HG;
 
-struct crt_msg_field *pool_attr_get_out_fields[] = {
-	&CMF_INT,		/* op.rc */
-	&CMF_UINT32,		/* op.map_version */
-	&DMF_RSVC_HINT,		/* op.hint */
-};
+	rc = crt_proc_uint64_t(proc, &drs->rs_rec_nr);
+	if (rc != 0)
+		return -DER_HG;
 
-struct crt_msg_field *pool_attr_set_in_fields[] = {
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.handle */
-	&CMF_UINT64,	/* count */
-	&CMF_BULK	/* bulk */
-};
+	return 0;
+}
 
-struct crt_msg_field *pool_attr_set_out_fields[] = {
-	&CMF_INT,		/* op.rc */
-	&CMF_UINT32,		/* op.map_version */
-	&DMF_RSVC_HINT,		/* op.hint */
-};
-
-struct crt_msg_field *pool_tgt_update_in_fields[] = {
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.handle */
-	&DMF_TGT_ADDR_LIST,	/* tgt addr list */
-};
-
-struct crt_msg_field *pool_tgt_update_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.map_version */
-	&DMF_RSVC_HINT,	/* op.hint */
-	&DMF_TGT_ADDR_LIST,	/* tgt addr list */
-};
-
-struct crt_msg_field *pool_evict_in_fields[] = {
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID	/* op.handle */
-};
-
-struct crt_msg_field *pool_evict_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.map_version */
-	&DMF_RSVC_HINT	/* op.hint */
-};
-
-struct crt_msg_field *pool_svc_stop_in_fields[] = {
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID	/* op.handle */
-};
-
-struct crt_msg_field *pool_svc_stop_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.map_version */
-	&DMF_RSVC_HINT	/* op.hint */
-};
-
-struct crt_msg_field *pool_tgt_connect_in_fields[] = {
-	&CMF_UUID,	/* pool */
-	&CMF_UUID,	/* pool_hdl */
-	&CMF_UINT64,	/* capas */
-	&CMF_UINT32,	/* pool_map_version */
-	&CMF_UINT32,	/* iv class id */
-	&CMF_UINT32,	/* master rank */
-	&CMF_UINT32,	/* padding */
-	&CMF_IOVEC	/* iv context */
-};
-
-struct crt_msg_field *pool_tgt_connect_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-struct crt_msg_field *pool_tgt_disconnect_in_fields[] = {
-	&CMF_UUID,	/* pool */
-	&DMF_UUID_ARRAY	/* hdls */
-};
-
-struct crt_msg_field *pool_tgt_disconnect_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-struct crt_msg_field *pool_tgt_update_map_in_fields[] = {
-	&CMF_UUID,	/* pool */
-	&CMF_UINT32	/* map_version */
-};
-
-struct crt_msg_field *pool_tgt_update_map_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-static struct crt_msg_field *pool_rdb_start_in_fields[] = {
-	&CMF_UUID,	/* dbid */
-	&CMF_UUID,	/* pool */
-	&CMF_UINT32,	/* flags */
-	&CMF_UINT32,	/* padding */
-	&CMF_UINT64,	/* size */
-	&CMF_RANK_LIST	/* ranks */
-};
-
-static struct crt_msg_field *pool_rdb_start_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-static struct crt_msg_field *pool_rdb_stop_in_fields[] = {
-	&CMF_UUID,	/* pool */
-	&CMF_UINT32	/* flags */
-};
-
-static struct crt_msg_field *pool_rdb_stop_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-struct crt_req_format DQF_POOL_CREATE =
-	DEFINE_CRT_REQ_FMT(pool_create_in_fields, pool_create_out_fields);
-
-struct crt_req_format DQF_POOL_CONNECT =
-	DEFINE_CRT_REQ_FMT(pool_connect_in_fields, pool_connect_out_fields);
-
-struct crt_req_format DQF_POOL_DISCONNECT =
-	DEFINE_CRT_REQ_FMT(pool_disconnect_in_fields,
-			   pool_disconnect_out_fields);
-
-struct crt_req_format DQF_POOL_QUERY =
-	DEFINE_CRT_REQ_FMT(pool_query_in_fields, pool_query_out_fields);
-
-struct crt_req_format DQF_POOL_EXCLUDE =
-	DEFINE_CRT_REQ_FMT(pool_tgt_update_in_fields,
-			   pool_tgt_update_out_fields);
-
-struct crt_req_format DQF_POOL_EXCLUDE_OUT =
-	DEFINE_CRT_REQ_FMT(pool_tgt_update_in_fields,
-			   pool_tgt_update_out_fields);
-
-struct crt_req_format DQF_POOL_ADD =
-	DEFINE_CRT_REQ_FMT(pool_tgt_update_in_fields,
-			   pool_tgt_update_out_fields);
-
-struct crt_req_format DQF_POOL_EVICT =
-	DEFINE_CRT_REQ_FMT(pool_evict_in_fields, pool_evict_out_fields);
-
-struct crt_req_format DQF_POOL_SVC_STOP =
-	DEFINE_CRT_REQ_FMT(pool_svc_stop_in_fields, pool_svc_stop_out_fields);
-
-struct crt_req_format DQF_POOL_ATTR_LIST =
-	DEFINE_CRT_REQ_FMT(pool_attr_list_in_fields, pool_attr_list_out_fields);
-
-struct crt_req_format DQF_POOL_ATTR_GET =
-	DEFINE_CRT_REQ_FMT(pool_attr_get_in_fields, pool_attr_get_out_fields);
-
-struct crt_req_format DQF_POOL_ATTR_SET =
-	DEFINE_CRT_REQ_FMT(pool_attr_set_in_fields, pool_attr_set_out_fields);
-
-struct crt_req_format DQF_POOL_TGT_CONNECT =
-	DEFINE_CRT_REQ_FMT(pool_tgt_connect_in_fields,
-			   pool_tgt_connect_out_fields);
-
-struct crt_req_format DQF_POOL_TGT_DISCONNECT =
-	DEFINE_CRT_REQ_FMT(pool_tgt_disconnect_in_fields,
-			   pool_tgt_disconnect_out_fields);
-
-struct crt_req_format DQF_POOL_TGT_UPDATE_MAP =
-	DEFINE_CRT_REQ_FMT(pool_tgt_update_map_in_fields,
-			   pool_tgt_update_map_out_fields);
-
-struct crt_req_format DQF_POOL_RDB_START =
-	DEFINE_CRT_REQ_FMT(pool_rdb_start_in_fields, pool_rdb_start_out_fields);
-
-struct crt_req_format DQF_POOL_RDB_STOP =
-	DEFINE_CRT_REQ_FMT(pool_rdb_stop_in_fields, pool_rdb_stop_out_fields);
+CRT_RPC_DEFINE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
+CRT_RPC_DEFINE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
+CRT_RPC_DEFINE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
+CRT_RPC_DEFINE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
+		DAOS_OSEQ_POOL_DISCONNECT)
+CRT_RPC_DEFINE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
+CRT_RPC_DEFINE(pool_attr_list, DAOS_ISEQ_POOL_ATTR_LIST,
+		DAOS_OSEQ_POOL_ATTR_LIST)
+CRT_RPC_DEFINE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
+CRT_RPC_DEFINE(pool_attr_set, DAOS_ISEQ_POOL_ATTR_SET, DAOS_OSEQ_POOL_OP)
+CRT_RPC_DEFINE(pool_add, DAOS_ISEQ_POOL_TGT_UPDATE, DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DEFINE(pool_exclude, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DEFINE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DEFINE(pool_evict, DAOS_ISEQ_POOL_EVICT, DAOS_OSEQ_POOL_EVICT)
+CRT_RPC_DEFINE(pool_svc_stop, DAOS_ISEQ_POOL_SVC_STOP, DAOS_OSEQ_POOL_SVC_STOP)
+CRT_RPC_DEFINE(pool_tgt_connect, DAOS_ISEQ_POOL_TGT_CONNECT,
+		DAOS_OSEQ_POOL_TGT_CONNECT)
+CRT_RPC_DEFINE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
+		DAOS_OSEQ_POOL_TGT_DISCONNECT)
+CRT_RPC_DEFINE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
+		DAOS_OSEQ_POOL_TGT_UPDATE_MAP)
+CRT_RPC_DEFINE(pool_rdb_start, DAOS_ISEQ_POOL_RDB_START,
+		DAOS_OSEQ_POOL_RDB_START)
+CRT_RPC_DEFINE(pool_rdb_stop, DAOS_ISEQ_POOL_RDB_STOP, DAOS_OSEQ_POOL_RDB_STOP)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition
