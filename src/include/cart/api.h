@@ -516,7 +516,6 @@ crt_ep_abort(crt_endpoint_t *ep);
 	};
 
 /* convert constructed name into proper name */
-#define crt_proc_daos_epoch_range_t daos_proc_epoch_range
 #define crt_proc_struct BOOST_PP_RPAREN() BOOST_PP_CAT BOOST_PP_LPAREN() \
 	crt_proc_struct_,
 
