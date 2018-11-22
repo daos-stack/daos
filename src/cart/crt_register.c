@@ -93,11 +93,10 @@ out:
 int
 crt_opc_map_create(unsigned int bits)
 {
-	struct crt_opc_map	*map = NULL;
+	struct crt_opc_map	*map;
 	uint32_t		 count;
 	int			 rc = 0, i;
 
-	D_DEBUG(DB_TRACE, "sizeof(*map) = %lu\n", sizeof(*map));
 	D_ALLOC_PTR(map);
 	if (map == NULL)
 		return -DER_NOMEM;
@@ -301,9 +300,15 @@ crt_proto_lookup(struct crt_opc_map *map, crt_opcode_t opc, int locked)
 
 	if (L2_idx >= map->com_map[L1_idx].L2_num_slots_total) {
 		D_ERROR("version number %d out of range [0, %d]\n", L2_idx,
-			map->com_map[L1_idx].L2_num_slots_total);
+			map->com_map[L1_idx].L2_num_slots_total - 1);
 		D_GOTO(out, rc = -DER_UNREG);
 	}
+
+	if (map->com_map[L1_idx].L2_map[L2_idx].L3_num_slots_total == 0) {
+		D_ERROR("version number %d has no entries\n", L2_idx);
+		D_GOTO(out, rc = -DER_UNREG);
+	}
+
 out:
 	if (locked == 0)
 		D_RWLOCK_UNLOCK(&map->com_rwlock);
