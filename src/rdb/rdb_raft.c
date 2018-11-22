@@ -589,14 +589,14 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, daos_iov_t *kds,
 	/* Create bulks for the buffers. */
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = &in->isi_kds_iov;
+	sgl.sg_iovs = &in->isi_local.rl_kds_iov;
 	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl), CRT_BULK_RW,
 			     &kds_bulk);
 	if (rc != 0)
 		goto out_data;
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = &in->isi_data_iov;
+	sgl.sg_iovs = &in->isi_local.rl_data_iov;
 	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl), CRT_BULK_RW,
 			     &data_bulk);
 	if (rc != 0)
@@ -818,7 +818,8 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 	}
 
 	/* Save this chunk but do not update the SLC record yet. */
-	rc = rdb_raft_unpack_chunk(*slc, &in->isi_kds_iov, &in->isi_data_iov);
+	rc = rdb_raft_unpack_chunk(*slc, &in->isi_local.rl_kds_iov,
+				   &in->isi_local.rl_data_iov);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to unpack IS chunk %d/"DF_U64": %d\n",
 			DP_DB(db), in->isi_msg.last_idx, in->isi_seq, rc);
@@ -2444,7 +2445,8 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 		rpc->cr_ep.ep_rank);
 
 	/* Receive the bulk data buffers before entering raft. */
-	rc = rdb_raft_recv_is(db, rpc, &in->isi_kds_iov, &in->isi_data_iov);
+	rc = rdb_raft_recv_is(db, rpc, &in->isi_local.rl_kds_iov,
+			      &in->isi_local.rl_data_iov);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to receive INSTALLSNAPSHOT chunk %d/"
 			DF_U64": %d\n", DP_DB(db), in->isi_msg.last_idx,
@@ -2471,8 +2473,8 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 	}
 
 out_is:
-	D_FREE(in->isi_data_iov.iov_buf);
-	D_FREE(in->isi_kds_iov.iov_buf);
+	D_FREE(in->isi_local.rl_data_iov.iov_buf);
+	D_FREE(in->isi_local.rl_kds_iov.iov_buf);
 out_db:
 	rdb_put(db);
 out:

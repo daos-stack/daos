@@ -169,13 +169,13 @@ void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
  */
 #define RDB_PROTO_SRV_RPC_LIST						\
 	X(RDB_REQUESTVOTE,						\
-		0, &DQF_RDB_REQUESTVOTE,				\
+		0, &CQF_rdb_requestvote,				\
 		rdb_requestvote_handler, NULL),				\
 	X(RDB_APPENDENTRIES,						\
-		0, &DQF_RDB_APPENDENTRIES,				\
+		0, &CQF_rdb_appendentries,				\
 		rdb_appendentries_handler, NULL),			\
 	X(RDB_INSTALLSNAPSHOT,						\
-		0, &DQF_RDB_INSTALLSNAPSHOT,				\
+		0, &CQF_rdb_installsnapshot,				\
 		rdb_installsnapshot_handler, NULL)
 
 /* Define for RPC enum population below */
@@ -189,57 +189,70 @@ enum rdb_operation {
 
 extern struct crt_proto_format rdb_proto_fmt;
 
-struct rdb_op_in {
-	uuid_t	ri_uuid;
+#define DAOS_ISEQ_RDB_OP	/* input fields */		 \
+	((uuid_t)		(ri_uuid)		CRT_VAR)
+
+#define DAOS_OSEQ_RDB_OP	/* output fields */		 \
+	((int32_t)		(ro_rc)			CRT_VAR) \
+	((uint32_t)		(ro_padding)		CRT_VAR)
+
+CRT_RPC_DECLARE(rdb_op, DAOS_ISEQ_RDB_OP, DAOS_OSEQ_RDB_OP)
+
+#define DAOS_ISEQ_RDB_REQUESTVOTE /* input fields */		 \
+	((struct rdb_op_in)	(rvi_op)		CRT_VAR) \
+	((msg_requestvote_t)	(rvi_msg)		CRT_VAR)
+
+#define DAOS_OSEQ_RDB_REQUESTVOTE /* output fields */		 \
+	((struct rdb_op_out)	(rvo_op)		CRT_VAR) \
+	((msg_requestvote_response_t) (rvo_msg)		CRT_VAR)
+
+CRT_RPC_DECLARE(rdb_requestvote, DAOS_ISEQ_RDB_REQUESTVOTE,
+		DAOS_OSEQ_RDB_REQUESTVOTE)
+
+#define DAOS_ISEQ_RDB_APPENDENTRIES /* input fields */		 \
+	((struct rdb_op_in)	(aei_op)		CRT_VAR) \
+	((msg_appendentries_t)	(aei_msg)		CRT_VAR)
+
+#define DAOS_OSEQ_RDB_APPENDENTRIES /* output fields */		 \
+	((struct rdb_op_out)	(aeo_op)		CRT_VAR) \
+	((msg_appendentries_response_t) (aeo_msg)	CRT_VAR)
+
+CRT_RPC_DECLARE(rdb_appendentries, DAOS_ISEQ_RDB_APPENDENTRIES,
+		DAOS_OSEQ_RDB_APPENDENTRIES)
+
+struct rdb_local {
+	daos_iov_t		rl_kds_iov;	/* isi_kds buffer */
+	daos_iov_t		rl_data_iov;	/* isi_data buffer */
 };
 
-struct rdb_op_out {
-	int32_t		ro_rc;
-	uint32_t	ro_padding;
-};
+#define DAOS_ISEQ_RDB_INSTALLSNAPSHOT /* input fields */	 \
+	((struct rdb_op_in)	(isi_op)		CRT_VAR) \
+	((msg_installsnapshot_t) (isi_msg)		CRT_VAR) \
+	((uint32_t)		(isi_padding)		CRT_VAR) \
+	/* chunk sequence number */				 \
+	((uint64_t)		(isi_seq)		CRT_VAR) \
+	/* chunk anchor */					 \
+	((struct rdb_anchor)	(isi_anchor)		CRT_VAR) \
+	/* daos_key_desc_t[] */					 \
+	((crt_bulk_t)		(isi_kds)		CRT_VAR) \
+	/* described by isi_kds */				 \
+	((crt_bulk_t)		(isi_data)		CRT_VAR) \
+	/* Local fields (not sent over the network) */		 \
+	((struct rdb_local)	(isi_local)		CRT_VAR)
 
-struct rdb_requestvote_in {
-	struct rdb_op_in	rvi_op;
-	msg_requestvote_t	rvi_msg;
-};
+#define DAOS_OSEQ_RDB_INSTALLSNAPSHOT /* output fields */	 \
+	((struct rdb_op_out)	(iso_op)		CRT_VAR) \
+	((msg_installsnapshot_response_t) (iso_msg)	CRT_VAR) \
+	((uint32_t)		(iso_padding)		CRT_VAR) \
+	/* chunk saved? */					 \
+	((uint64_t)		(iso_success)		CRT_VAR) \
+	/* last seq number */					 \
+	((uint64_t)		(iso_seq)		CRT_VAR) \
+	/* last anchor */					 \
+	((struct rdb_anchor)	(iso_anchor)		CRT_VAR)
 
-struct rdb_requestvote_out {
-	struct rdb_op_out		rvo_op;
-	msg_requestvote_response_t	rvo_msg;
-};
-
-struct rdb_appendentries_in {
-	struct rdb_op_in	aei_op;
-	msg_appendentries_t	aei_msg;
-};
-
-struct rdb_appendentries_out {
-	struct rdb_op_out		aeo_op;
-	msg_appendentries_response_t	aeo_msg;
-};
-
-struct rdb_installsnapshot_in {
-	struct rdb_op_in	isi_op;
-	msg_installsnapshot_t	isi_msg;
-	uint32_t		isi_padding;
-	uint64_t		isi_seq;	/* chunk sequence number */
-	struct rdb_anchor	isi_anchor;	/* chunk anchor */
-	crt_bulk_t		isi_kds;	/* daos_key_desc_t[] */
-	crt_bulk_t		isi_data;	/* described by isi_kds */
-
-	/* Local fields (not sent over the network) */
-	daos_iov_t		isi_kds_iov;	/* isi_kds buffer */
-	daos_iov_t		isi_data_iov;	/* isi_data buffer */
-};
-
-struct rdb_installsnapshot_out {
-	struct rdb_op_out		iso_op;
-	msg_installsnapshot_response_t	iso_msg;
-	uint32_t			iso_padding;
-	uint64_t			iso_success;	/* chunk saved? */
-	uint64_t			iso_seq;	/* last seq number */
-	struct rdb_anchor		iso_anchor;	/* last anchor */
-};
+CRT_RPC_DECLARE(rdb_installsnapshot, DAOS_ISEQ_RDB_INSTALLSNAPSHOT,
+		DAOS_OSEQ_RDB_INSTALLSNAPSHOT)
 
 int rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc);
 int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node);

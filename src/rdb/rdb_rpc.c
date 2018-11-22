@@ -32,188 +32,245 @@
 #include <daos_srv/daos_server.h>
 #include "rdb_internal.h"
 
-static struct crt_msg_field *rdb_requestvote_in_fields[] = {
-	&CMF_UUID,	/* op.uuid */
-	&CMF_INT,	/* msg.term */
-	&CMF_INT,	/* msg.candidate_id */
-	&CMF_INT,	/* msg.last_log_idx */
-	&CMF_INT	/* msg.last_log_term */
-};
+static int
+crt_proc_msg_requestvote_t(crt_proc_t proc, msg_requestvote_t *p)
+{
+	int rc;
 
-static struct crt_msg_field *rdb_requestvote_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.padding */
-	&CMF_INT,	/* msg.term */
-	&CMF_INT	/* msg.vote_granted */
-};
+	rc = crt_proc_int32_t(proc, &p->term);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_int32_t(proc, &p->candidate_id);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_int32_t(proc, &p->last_log_idx);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_int32_t(proc, &p->last_log_term);
+	if (rc != 0)
+		return -DER_HG;
 
-static struct crt_req_format DQF_RDB_REQUESTVOTE =
-	DEFINE_CRT_REQ_FMT(rdb_requestvote_in_fields,
-			   rdb_requestvote_out_fields);
+	return 0;
+}
 
 static int
-rdb_proc_msg_entry_t(crt_proc_t proc, void *data)
+crt_proc_msg_requestvote_response_t(crt_proc_t proc,
+				    msg_requestvote_response_t *p)
 {
-	msg_entry_t    *e = data;
+	int rc;
+
+	rc = crt_proc_int32_t(proc, &p->term);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_int32_t(proc, &p->vote_granted);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_msg_entry_t(crt_proc_t proc, msg_entry_t *p)
+{
 	crt_proc_op_t	proc_op;
 	int		rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &e->term);
+	rc = crt_proc_uint32_t(proc, &p->term);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &e->id);
+	rc = crt_proc_uint32_t(proc, &p->id);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &e->type);
+	rc = crt_proc_int32_t(proc, &p->type);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &e->data.len);
+	rc = crt_proc_uint32_t(proc, &p->data.len);
 	if (rc != 0)
 		return -DER_HG;
 	if (proc_op == CRT_PROC_DECODE) {
-		if (e->data.len > 0) {
-			D_ALLOC(e->data.buf, e->data.len);
-			if (e->data.buf == NULL)
+		if (p->data.len > 0) {
+			D_ALLOC(p->data.buf, p->data.len);
+			if (p->data.buf == NULL)
 				return -DER_NOMEM;
 		} else {
-			e->data.buf = NULL;
+			p->data.buf = NULL;
 		}
 	}
-	if (e->data.len > 0) {
-		rc = crt_proc_memcpy(proc, e->data.buf, e->data.len);
+	if (p->data.len > 0) {
+		rc = crt_proc_memcpy(proc, p->data.buf, p->data.len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D_FREE(e->data.buf);
+				D_FREE(p->data.buf);
 			return -DER_HG;
 		}
 	}
-	if (proc_op == CRT_PROC_FREE && e->data.buf != NULL)
-		D_FREE(e->data.buf);
+	if (proc_op == CRT_PROC_FREE && p->data.buf != NULL)
+		D_FREE(p->data.buf);
+
 	return 0;
 }
 
 static int
-rdb_proc_msg_appendentries_t(crt_proc_t proc, void *data)
+crt_proc_msg_appendentries_t(crt_proc_t proc, msg_appendentries_t *p)
 {
-	msg_appendentries_t    *ae = data;
-	crt_proc_op_t		proc_op;
-	int			i;
-	int			rc;
+	crt_proc_op_t	proc_op;
+	int		i;
+	int		rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &ae->term);
+	rc = crt_proc_int32_t(proc, &p->term);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &ae->prev_log_idx);
+	rc = crt_proc_int32_t(proc, &p->prev_log_idx);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &ae->prev_log_term);
+	rc = crt_proc_int32_t(proc, &p->prev_log_term);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &ae->leader_commit);
+	rc = crt_proc_int32_t(proc, &p->leader_commit);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_int32_t(proc, &ae->n_entries);
+	rc = crt_proc_int32_t(proc, &p->n_entries);
 	if (rc != 0)
 		return -DER_HG;
 	if (proc_op == CRT_PROC_DECODE) {
-		if (ae->n_entries > 0) {
-			D_ALLOC(ae->entries,
-				sizeof(*ae->entries) * ae->n_entries);
-			if (ae->entries == NULL)
+		if (p->n_entries > 0) {
+			D_ALLOC(p->entries,
+				sizeof(*p->entries) * p->n_entries);
+			if (p->entries == NULL)
 				return -DER_NOMEM;
 		} else {
-			ae->entries = NULL;
+			p->entries = NULL;
 		}
 	}
-	for (i = 0; i < ae->n_entries; i++) {
-		rc = rdb_proc_msg_entry_t(proc, &ae->entries[i]);
+	for (i = 0; i < p->n_entries; i++) {
+		rc = crt_proc_msg_entry_t(proc, &p->entries[i]);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D_FREE(ae->entries);
+				D_FREE(p->entries);
 			return -DER_HG;
 		}
 	}
-	if (proc_op == CRT_PROC_FREE && ae->entries != NULL)
-		D_FREE(ae->entries);
+	if (proc_op == CRT_PROC_FREE && p->entries != NULL)
+		D_FREE(p->entries);
+
 	return 0;
 }
 
-static struct crt_msg_field DMF_MSG_APPENDENTRIES_T =
-	DEFINE_CRT_MSG(0, sizeof(msg_appendentries_t),
-		       rdb_proc_msg_appendentries_t);
+static int
+crt_proc_msg_appendentries_response_t(crt_proc_t proc,
+				      msg_appendentries_response_t *p)
+{
+	int rc;
 
-static struct crt_msg_field *rdb_appendentries_in_fields[] = {
-	&CMF_UUID,			/* op.uuid */
-	&DMF_MSG_APPENDENTRIES_T	/* msg */
-};
+	rc = crt_proc_int32_t(proc, &p->term);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_int32_t(proc, &p->success);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_int32_t(proc, &p->current_idx);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_int32_t(proc, &p->first_idx);
+	if (rc != 0)
+		return -DER_HG;
 
-static struct crt_msg_field *rdb_appendentries_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.padding */
-	&CMF_INT,	/* msg.term */
-	&CMF_INT,	/* msg.success */
-	&CMF_INT,	/* msg.current_idx */
-	&CMF_INT	/* msg.first_idx */
-};
-
-static struct crt_req_format DQF_RDB_APPENDENTRIES =
-	DEFINE_CRT_REQ_FMT(rdb_appendentries_in_fields,
-			   rdb_appendentries_out_fields);
+	return 0;
+}
 
 static int
-rdb_proc_local_type(crt_proc_t proc, void *data)
+crt_proc_msg_installsnapshot_t(crt_proc_t proc, msg_installsnapshot_t *p)
+{
+	int rc;
+
+	rc = crt_proc_int32_t(proc, &p->term);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_int32_t(proc, &p->last_idx);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_int32_t(proc, &p->last_term);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_msg_installsnapshot_response_t(crt_proc_t proc,
+					msg_installsnapshot_response_t *p)
+{
+	int rc;
+
+	rc = crt_proc_int32_t(proc, &p->term);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_int32_t(proc, &p->last_idx);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_int32_t(proc, &p->complete);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_daos_anchor_t(crt_proc_t proc, daos_anchor_t *p)
+{
+	int rc;
+
+	rc = crt_proc_uint16_t(proc, &p->da_type);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_uint16_t(proc, &p->da_shard);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_uint32_t(proc, &p->da_padding);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_memcpy(proc, &p->da_buf, sizeof(p->da_buf));
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_struct_rdb_anchor(crt_proc_t proc, struct rdb_anchor *p)
+{
+	int rc;
+
+	rc = crt_proc_daos_anchor_t(proc, &p->da_object);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_daos_anchor_t(proc, &p->da_akey);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_struct_rdb_local(crt_proc_t proc, struct rdb_local *p)
 {
 	/* Ignore this local field. */
 	return 0;
 }
 
-static struct crt_msg_field DMF_LOCAL_POINTER =
-	DEFINE_CRT_MSG(0, sizeof(void *), rdb_proc_local_type);
-
-static struct crt_msg_field DMF_LOCAL_UINT64 =
-	DEFINE_CRT_MSG(0, sizeof(uint64_t), rdb_proc_local_type);
-
-static struct crt_msg_field *rdb_installsnapshot_in_fields[] = {
-	&CMF_UUID,		/* op.uuid */
-	&CMF_INT,		/* msg.term */
-	&CMF_INT,		/* msg.last_idx */
-	&CMF_INT,		/* msg.last_term */
-	&CMF_UINT32,		/* padding */
-	&CMF_UINT64,		/* seq */
-	&DMF_ANCHOR,		/* anchor.object */
-	&DMF_ANCHOR,		/* anchor.akey */
-	&CMF_BULK,		/* kds */
-	&CMF_BULK,		/* data */
-	&DMF_LOCAL_POINTER,	/* kds_iov.iov_buf */
-	&DMF_LOCAL_UINT64,	/* kds_iov.iov_buf_len */
-	&DMF_LOCAL_UINT64,	/* kds_iov.iov_len */
-	&DMF_LOCAL_POINTER,	/* data_iov.iov_buf */
-	&DMF_LOCAL_UINT64,	/* data_iov.iov_buf_len */
-	&DMF_LOCAL_UINT64	/* data_iov.iov_len */
-};
-
-static struct crt_msg_field *rdb_installsnapshot_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.padding */
-	&CMF_INT,	/* msg.term */
-	&CMF_INT,	/* msg.last_idx */
-	&CMF_INT,	/* msg.complete */
-	&CMF_UINT32,	/* padding */
-	&CMF_UINT64,	/* success */
-	&CMF_UINT64,	/* seq */
-	&DMF_ANCHOR,	/* anchor.object */
-	&DMF_ANCHOR	/* anchor.akey */
-};
-
-static struct crt_req_format DQF_RDB_INSTALLSNAPSHOT =
-	DEFINE_CRT_REQ_FMT(rdb_installsnapshot_in_fields,
-			   rdb_installsnapshot_out_fields);
+CRT_RPC_DEFINE(rdb_op, DAOS_ISEQ_RDB_OP, DAOS_OSEQ_RDB_OP)
+CRT_RPC_DEFINE(rdb_requestvote, DAOS_ISEQ_RDB_REQUESTVOTE,
+		DAOS_OSEQ_RDB_REQUESTVOTE)
+CRT_RPC_DEFINE(rdb_appendentries, DAOS_ISEQ_RDB_APPENDENTRIES,
+		DAOS_OSEQ_RDB_APPENDENTRIES)
+CRT_RPC_DEFINE(rdb_installsnapshot, DAOS_ISEQ_RDB_INSTALLSNAPSHOT,
+		DAOS_OSEQ_RDB_INSTALLSNAPSHOT)
 
 /* Define for cont_rpcs[] array population below.
  * See RDB_PROTO_*_RPC_LIST macro definition
