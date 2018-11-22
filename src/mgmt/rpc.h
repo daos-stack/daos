@@ -41,28 +41,28 @@
  */
 #define MGMT_PROTO_CLI_RPC_LIST						\
 	X(MGMT_POOL_CREATE,						\
-		0, &DQF_MGMT_POOL_CREATE,				\
+		0, &CQF_mgmt_pool_create,				\
 		ds_mgmt_hdlr_pool_create, NULL),			\
 	X(MGMT_POOL_DESTROY,						\
-		0, &DQF_MGMT_POOL_DESTROY,				\
+		0, &CQF_mgmt_pool_destroy,				\
 		ds_mgmt_hdlr_pool_destroy, NULL),			\
 	X(MGMT_SVC_RIP,							\
-		DAOS_RPC_NO_REPLY, &DQF_MGMT_SVC_RIP,			\
+		DAOS_RPC_NO_REPLY, &CQF_mgmt_svc_rip,			\
 		ds_mgmt_hdlr_svc_rip, NULL),				\
 	X(MGMT_PARAMS_SET,						\
-		0, &DQF_MGMT_PARAMS_SET,				\
+		0, &CQF_mgmt_params_set,				\
 		ds_mgmt_params_set_hdlr, NULL)
 
 #define MGMT_PROTO_SRV_RPC_LIST						\
 	X(MGMT_TGT_CREATE,						\
-		0, &DQF_MGMT_TGT_CREATE,				\
+		0, &CQF_mgmt_tgt_create,				\
 		ds_mgmt_hdlr_tgt_create,				\
 		&ds_mgmt_hdlr_tgt_create_co_ops),			\
 	X(MGMT_TGT_DESTROY,						\
-		0, &DQF_MGMT_TGT_DESTROY,				\
+		0, &CQF_mgmt_tgt_destroy,				\
 		ds_mgmt_hdlr_tgt_destroy, NULL),			\
 	X(MGMT_TGT_PARAMS_SET,						\
-		0, &DQF_MGMT_TGT_PARAMS_SET,				\
+		0, &CQF_mgmt_tgt_params_set,				\
 		ds_mgmt_tgt_params_set_hdlr, NULL)
 
 /* Define for RPC enum population below */
@@ -79,74 +79,87 @@ enum mgmt_operation {
 
 extern struct crt_proto_format mgmt_proto_fmt;
 
-struct mgmt_svc_rip_in {
-	uint32_t	rip_flags;
-};
+#define DAOS_ISEQ_MGMT_POOL_CREATE /* input fields */		 \
+	((uuid_t)		(pc_pool_uuid)		CRT_VAR) \
+	((d_string_t)		(pc_grp)		CRT_VAR) \
+	((d_string_t)		(pc_tgt_dev)		CRT_VAR) \
+	((d_rank_list_t)	(pc_tgts)		CRT_PTR) \
+	((daos_size_t)		(pc_scm_size)		CRT_VAR) \
+	((daos_size_t)		(pc_nvme_size)		CRT_VAR) \
+	((uint32_t)		(pc_svc_nr)		CRT_VAR) \
+	((uint32_t)		(pc_mode)		CRT_VAR) \
+	((uint32_t)		(pc_uid)		CRT_VAR) \
+	((uint32_t)		(pc_gid)		CRT_VAR)
 
-struct mgmt_pool_create_in {
-	uuid_t			 pc_pool_uuid;
-	d_string_t		 pc_grp;
-	d_string_t		 pc_tgt_dev;
-	d_rank_list_t		*pc_tgts;
-	daos_size_t		 pc_scm_size;
-	daos_size_t		 pc_nvme_size;
-	uint32_t		 pc_svc_nr;
-	uint32_t		 pc_mode;
-	uint32_t		 pc_uid;
-	uint32_t		 pc_gid;
-};
+#define DAOS_OSEQ_MGMT_POOL_CREATE /* output fields */		 \
+	((d_rank_list_t)	(pc_svc)		CRT_PTR) \
+	((int32_t)		(pc_rc)			CRT_VAR)
 
-struct mgmt_pool_create_out {
-	d_rank_list_t	*pc_svc;
-	int			 pc_rc;
-};
+CRT_RPC_DECLARE(mgmt_pool_create, DAOS_ISEQ_MGMT_POOL_CREATE,
+		DAOS_OSEQ_MGMT_POOL_CREATE)
 
-struct mgmt_pool_destroy_in {
-	uuid_t			pd_pool_uuid;
-	d_string_t		pd_grp;
-	int			pd_force;
-};
+#define DAOS_ISEQ_MGMT_POOL_DESTROY /* input fields */		 \
+	((uuid_t)		(pd_pool_uuid)		CRT_VAR) \
+	((d_string_t)		(pd_grp)		CRT_VAR) \
+	((uint32_t)		(pd_force)		CRT_VAR)
 
-struct mgmt_pool_destroy_out {
-	int			pd_rc;
-};
+#define DAOS_OSEQ_MGMT_POOL_DESTROY /* output fields */		 \
+	((int32_t)		(pd_rc)			CRT_VAR)
 
-struct mgmt_tgt_create_in {
-	uuid_t			tc_pool_uuid;
-	d_string_t		tc_tgt_dev;
-	daos_size_t		tc_scm_size;
-	daos_size_t		tc_nvme_size;
-};
+CRT_RPC_DECLARE(mgmt_pool_destroy, DAOS_ISEQ_MGMT_POOL_DESTROY,
+		DAOS_OSEQ_MGMT_POOL_DESTROY)
 
-struct mgmt_tgt_create_out {
-	struct crt_array	tc_tgt_uuids;
-	struct crt_array	tc_ranks;
-	int			tc_rc;
-};
+#define DAOS_ISEQ_MGMT_SVR_RIP	/* input fields */		 \
+	((uint32_t)		(rip_flags)		CRT_VAR)
 
-struct mgmt_tgt_destroy_in {
-	uuid_t			td_pool_uuid;
-};
+#define DAOS_OSEQ_MGMT_SVR_RIP	/* output fields */
 
-struct mgmt_tgt_destroy_out {
-	int			td_rc;
-};
+CRT_RPC_DECLARE(mgmt_svc_rip, DAOS_ISEQ_MGMT_SVR_RIP, DAOS_OSEQ_MGMT_SVR_RIP)
 
-struct mgmt_params_set_in {
-	uint32_t	ps_rank;
-	uint32_t	ps_key_id;
-	uint64_t	ps_value;
-	uint64_t	ps_value_extra;
-};
+#define DAOS_ISEQ_MGMT_PARAMS_SET /* input fields */		 \
+	((uint32_t)		(ps_rank)		CRT_VAR) \
+	((uint32_t)		(ps_key_id)		CRT_VAR) \
+	((uint64_t)		(ps_value)		CRT_VAR) \
+	((uint64_t)		(ps_value_extra)	CRT_VAR)
 
-struct mgmt_tgt_params_set_in {
-	uint64_t	tps_value;
-	uint64_t	tps_value_extra;
-	uint32_t	tps_key_id;
-};
+#define DAOS_OSEQ_MGMT_PARAMS_SET /* output fields */		 \
+	((int32_t)		(srv_rc)		CRT_VAR)
 
-struct mgmt_srv_out {
-	int	srv_rc;
-};
+CRT_RPC_DECLARE(mgmt_params_set, DAOS_ISEQ_MGMT_PARAMS_SET,
+		DAOS_OSEQ_MGMT_PARAMS_SET)
+
+#define DAOS_ISEQ_MGMT_TGT_CREATE /* input fields */		 \
+	((uuid_t)		(tc_pool_uuid)		CRT_VAR) \
+	((d_string_t)		(tc_tgt_dev)		CRT_VAR) \
+	((daos_size_t)		(tc_scm_size)		CRT_VAR) \
+	((daos_size_t)		(tc_nvme_size)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_TGT_CREATE /* output fields */		   \
+	((uuid_t)		(tc_tgt_uuids)		CRT_ARRAY) \
+	((int32_t)		(tc_ranks)		CRT_ARRAY) \
+	((int32_t)		(tc_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_tgt_create, DAOS_ISEQ_MGMT_TGT_CREATE,
+		DAOS_OSEQ_MGMT_TGT_CREATE)
+
+#define DAOS_ISEQ_MGMT_TGT_DESTROY /* input fields */		 \
+	((uuid_t)		(td_pool_uuid)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_TGT_DESTROY /* output fields */		 \
+	((int32_t)		(td_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_tgt_destroy, DAOS_ISEQ_MGMT_TGT_DESTROY,
+		DAOS_OSEQ_MGMT_TGT_DESTROY)
+
+#define DAOS_ISEQ_MGMT_TGT_PARAMS_SET /* input fields */	 \
+	((uint64_t)		(tps_value)		CRT_VAR) \
+	((uint64_t)		(tps_value_extra)	CRT_VAR) \
+	((uint32_t)		(tps_key_id)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_TGT_PARAMS_SET /* output fields */	 \
+	((int32_t)		(srv_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_tgt_params_set, DAOS_ISEQ_MGMT_TGT_PARAMS_SET,
+		DAOS_OSEQ_MGMT_TGT_PARAMS_SET)
 
 #endif /* __MGMT_RPC_H__ */

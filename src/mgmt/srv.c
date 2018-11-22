@@ -64,7 +64,7 @@ void
 ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
 {
 	struct mgmt_tgt_params_set_in	*in;
-	struct mgmt_srv_out		*out;
+	struct mgmt_tgt_params_set_out	*out;
 	int rc;
 
 	in = crt_req_get(rpc);
@@ -95,7 +95,7 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	int				topo;
 	crt_rpc_t			*tc_req;
 	struct mgmt_tgt_params_set_in	*tc_in;
-	struct mgmt_srv_out		*out;
+	struct mgmt_params_set_out	*out;
 	int				rc;
 
 	ps_in = crt_req_get(rpc);

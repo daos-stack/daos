@@ -28,100 +28,21 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
-struct crt_msg_field *mgmt_pool_create_in_fields[] = {
-	&CMF_UUID,		/* pc_pool_uuid */
-	&CMF_STRING,		/* pc_grp */
-	&CMF_STRING,		/* pc_tgt_dev */
-	&CMF_RANK_LIST,		/* pc_tgts */
-	&DMF_DAOS_SIZE,		/* pc_scm_size */
-	&DMF_DAOS_SIZE,		/* pc_nvme_size */
-	&CMF_UINT32,		/* pc_svc_nr */
-	&CMF_UINT32,		/* pc_mode */
-	&CMF_UINT32,		/* pc_uid */
-	&CMF_UINT32,		/* pc_gid */
-};
+#define crt_proc_daos_size_t	crt_proc_uint64_t
 
-struct crt_msg_field *mgmt_pool_create_out_fields[] = {
-	&CMF_RANK_LIST,		/* pc_svc */
-	&CMF_INT,		/* pc_rc */
-};
-
-struct crt_msg_field *mgmt_pool_destroy_in_fields[] = {
-	&CMF_UUID,		/* pd_pool_uuid */
-	&CMF_STRING,		/* pd_grp */
-	&CMF_INT		/* pd_force */
-};
-
-struct crt_msg_field *mgmt_pool_destroy_out_fields[] = {
-	&CMF_INT		/* pd_rc */
-};
-
-struct crt_msg_field *mgmt_tgt_create_in_fields[] = {
-	&CMF_UUID,		/* tc_pool_uuid */
-	&CMF_STRING,		/* tc_tgt_dev */
-	&DMF_DAOS_SIZE,		/* tc_scm_size */
-	&DMF_DAOS_SIZE		/* tc_nvme_size */
-};
-
-struct crt_msg_field *mgmt_tgt_create_out_fields[] = {
-	&DMF_UUID_ARRAY,	/* tc_tgt_uuid */
-	&DMF_UINT32_ARRAY,	/* tc_ranks */
-	&CMF_INT,		/* tc_rc */
-};
-
-struct crt_msg_field *mgmt_tgt_destroy_in_fields[] = {
-	&CMF_UUID		/* td_pool_uuid */
-};
-
-struct crt_msg_field *mgmt_tgt_destroy_out_fields[] = {
-	&CMF_INT		/* td_rc */
-};
-
-struct crt_msg_field *mgmt_svc_rip_in_fields[] = {
-	&CMF_UINT32,		/* rip_flags */
-};
-
-struct crt_msg_field *mgmt_params_set_in_fields[] = {
-	&CMF_UINT32,		/* ps_rank */
-	&CMF_UINT32,		/* ps_key_id */
-	&CMF_UINT64,		/* ps_value */
-	&CMF_UINT64,		/* ps_value_extra */
-};
-
-struct crt_msg_field *mgmt_tgt_params_set_in_fields[] = {
-	&CMF_UINT64,		/* tps_value */
-	&CMF_UINT64,		/* tps_value_extra */
-	&CMF_UINT32,		/* tps_key_id */
-};
-
-struct crt_msg_field *mgmt_out_fields[] = {
-	&CMF_INT,		/* ssp_rc */
-};
-
-struct crt_req_format DQF_MGMT_POOL_CREATE =
-	DEFINE_CRT_REQ_FMT(mgmt_pool_create_in_fields,
-			   mgmt_pool_create_out_fields);
-
-struct crt_req_format DQF_MGMT_POOL_DESTROY =
-	DEFINE_CRT_REQ_FMT(mgmt_pool_destroy_in_fields,
-			   mgmt_pool_destroy_out_fields);
-
-struct crt_req_format DQF_MGMT_TGT_CREATE =
-	DEFINE_CRT_REQ_FMT(mgmt_tgt_create_in_fields,
-			   mgmt_tgt_create_out_fields);
-
-struct crt_req_format DQF_MGMT_TGT_DESTROY =
-	DEFINE_CRT_REQ_FMT(mgmt_tgt_destroy_in_fields,
-			   mgmt_tgt_destroy_out_fields);
-
-struct crt_req_format DQF_MGMT_SVC_RIP =
-	DEFINE_CRT_REQ_FMT(mgmt_svc_rip_in_fields, NULL);
-
-struct crt_req_format DQF_MGMT_PARAMS_SET =
-	DEFINE_CRT_REQ_FMT(mgmt_params_set_in_fields, mgmt_out_fields);
-
-struct crt_req_format DQF_MGMT_TGT_PARAMS_SET =
-	DEFINE_CRT_REQ_FMT(mgmt_tgt_params_set_in_fields, mgmt_out_fields);
+CRT_RPC_DEFINE(mgmt_pool_create, DAOS_ISEQ_MGMT_POOL_CREATE,
+		DAOS_OSEQ_MGMT_POOL_CREATE)
+CRT_RPC_DEFINE(mgmt_pool_destroy, DAOS_ISEQ_MGMT_POOL_DESTROY,
+		DAOS_OSEQ_MGMT_POOL_DESTROY)
+CRT_RPC_DEFINE(mgmt_svc_rip, DAOS_ISEQ_MGMT_SVR_RIP, DAOS_OSEQ_MGMT_SVR_RIP)
+CRT_RPC_DEFINE(mgmt_params_set, DAOS_ISEQ_MGMT_PARAMS_SET,
+		DAOS_OSEQ_MGMT_PARAMS_SET)
+CRT_RPC_DEFINE(mgmt_tgt_create, DAOS_ISEQ_MGMT_TGT_CREATE,
+		DAOS_OSEQ_MGMT_TGT_CREATE)
+CRT_RPC_DEFINE(mgmt_tgt_destroy, DAOS_ISEQ_MGMT_TGT_DESTROY,
+		DAOS_OSEQ_MGMT_TGT_DESTROY)
+CRT_RPC_DEFINE(mgmt_tgt_params_set, DAOS_ISEQ_MGMT_TGT_PARAMS_SET,
+		DAOS_OSEQ_MGMT_TGT_PARAMS_SET)
 
 /* Define for cont_rpcs[] array population below.
  * See MGMT_PROTO_*_RPC_LIST macro definition
