@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,80 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
+#define crt_proc_daos_size_t	crt_proc_uint64_t
+#define crt_proc_daos_epoch_t	crt_proc_uint64_t
+
 static int
-proc_cont_tgt_close_rec(crt_proc_t proc, struct cont_tgt_close_rec *rec)
+crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
+{
+	int rc;
+
+	rc = crt_proc_uint32_t(proc, &hint->sh_flags);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &hint->sh_rank);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &hint->sh_term);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_daos_epoch_range_t(crt_proc_t proc, daos_epoch_range_t *erange)
+{
+	int rc;
+
+	rc = crt_proc_uint64_t(proc, &erange->epr_lo);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &erange->epr_hi);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_daos_epoch_state_t(crt_proc_t proc, daos_epoch_state_t *es)
+{
+	int rc;
+
+	rc = crt_proc_uint64_t(proc, &es->es_hce);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &es->es_lre);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &es->es_lhe);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &es->es_ghce);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &es->es_glre);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &es->es_ghpce);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_struct_cont_tgt_close_rec(crt_proc_t proc,
+				   struct cont_tgt_close_rec *rec)
 {
 	int rc;
 
@@ -44,284 +116,33 @@ proc_cont_tgt_close_rec(crt_proc_t proc, struct cont_tgt_close_rec *rec)
 	return 0;
 }
 
-static struct crt_msg_field DMF_CLOSE_RECS =
-	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(struct cont_tgt_close_rec),
-		       proc_cont_tgt_close_rec);
-
-struct crt_msg_field *cont_op_out_fields[] = {
-	&CMF_INT,		/* rc */
-	&CMF_UINT32,		/* map_version */
-	&DMF_RSVC_HINT		/* hint */
-};
-
-struct crt_msg_field *cont_create_in_fields[] = {
-	&CMF_UUID,	/* op.pool_hdl */
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID	/* op.hdl */
-};
-
-struct crt_msg_field *cont_create_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.map_version */
-	&DMF_RSVC_HINT	/* op.hint */
-};
-
-struct crt_msg_field *cont_destroy_in_fields[] = {
-	&CMF_UUID,	/* op.pool_hdl */
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.hdl */
-	&CMF_UINT32	/* force */
-};
-
-struct crt_msg_field *cont_destroy_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.map_version */
-	&DMF_RSVC_HINT	/* op.hint */
-};
-
-struct crt_msg_field *cont_open_in_fields[] = {
-	&CMF_UUID,	/* op.pool_hdl */
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.hdl */
-	&CMF_UINT64	/* capas */
-};
-
-struct crt_msg_field *cont_open_out_fields[] = {
-	&CMF_INT,		/* op.rc */
-	&CMF_UINT32,		/* op.map_version */
-	&DMF_RSVC_HINT,		/* op.hint */
-	&DMF_EPOCH_STATE	/* epoch_state */
-};
-
-struct crt_msg_field *cont_close_in_fields[] = {
-	&CMF_UUID,	/* op.pool_hdl */
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID	/* op.hdl */
-};
-
-struct crt_msg_field *cont_close_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.map_version */
-	&DMF_RSVC_HINT	/* op.hint */
-};
-
-struct crt_msg_field *cont_query_in_fields[] = {
-	&CMF_UUID,	/* op.pool_hdl */
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID	/* op.hdl */
-};
-
-struct crt_msg_field *cont_query_out_fields[] = {
-	&CMF_INT,		/* op.rc */
-	&CMF_UINT32,		/* op.map_version */
-	&DMF_RSVC_HINT,		/* op.hint */
-	&CMF_UINT64,		/* min slipped epoch */
-	&DMF_EPOCH_STATE	/* epoch state */
-};
-
-struct crt_msg_field *cont_oid_alloc_in_fields[] = {
-	&CMF_UUID,	/* op.pool_hdl */
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.hdl */
-	&CMF_UINT64,	/* num_oids */
-};
-
-struct crt_msg_field *cont_oid_alloc_out_fields[] = {
-	&CMF_INT,	/* op.rc */
-	&CMF_UINT32,	/* op.map_version */
-	&DMF_RSVC_HINT,	/* op.hint */
-	&CMF_UINT64,	/* oid value */
-};
-
-struct crt_msg_field *cont_attr_list_in_fields[] = {
-	&CMF_UUID,	/* op.pool_hdl */
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.hdl */
-	&CMF_BULK	/* attr bulk */
-};
-
-struct crt_msg_field *cont_attr_list_out_fields[] = {
-	&CMF_INT,		/* op.rc */
-	&CMF_UINT32,		/* op.map_version */
-	&DMF_RSVC_HINT,		/* op.hint */
-	&CMF_UINT64		/* names size */
-};
-
-struct crt_msg_field *cont_attr_get_in_fields[] = {
-	&CMF_UUID,	/* op.pool_hdl */
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.hdl */
-	&CMF_UINT64,	/* count */
-	&CMF_UINT64,	/* key length */
-	&CMF_BULK	/* attr bulk */
-};
-
-struct crt_msg_field *cont_attr_get_out_fields[] = {
-	&CMF_INT,		/* op.rc */
-	&CMF_UINT32,		/* op.map_version */
-	&DMF_RSVC_HINT,		/* op.hint */
-};
-
-struct crt_msg_field *cont_attr_set_in_fields[] = {
-	&CMF_UUID,	/* op.pool_hdl */
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.hdl */
-	&CMF_UINT64,	/* count */
-	&CMF_BULK	/* bulk */
-};
-
-struct crt_msg_field *cont_attr_set_out_fields[] = {
-	&CMF_INT,		/* op.rc */
-	&CMF_UINT32,		/* op.map_version */
-	&DMF_RSVC_HINT,		/* op.hint */
-};
-
-struct crt_msg_field *cont_epoch_op_in_fields[] = {
-	&CMF_UUID,	/* op.pool_hdl */
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.hdl */
-	&CMF_UINT64	/* epoch */
-};
-
-struct crt_msg_field *cont_epoch_op_out_fields[] = {
-	&CMF_INT,		/* op.rc */
-	&CMF_UINT32,		/* op.map_version */
-	&DMF_RSVC_HINT,		/* op.hint */
-	&DMF_EPOCH_STATE	/* epoch_state */
-};
-
-struct crt_msg_field *cont_snap_list_in_fields[] = {
-	&CMF_UUID,	/* op.pool_hdl */
-	&CMF_UUID,	/* op.uuid */
-	&CMF_UUID,	/* op.hdl */
-	&CMF_BULK	/* snapshots bulk */
-};
-
-struct crt_msg_field *cont_snap_list_out_fields[] = {
-	&CMF_INT,		/* op.rc */
-	&CMF_UINT32,		/* op.map_version */
-	&DMF_RSVC_HINT,		/* op.hint */
-	&CMF_UINT32		/* list size */
-};
-
-struct crt_msg_field *cont_tgt_destroy_in_fields[] = {
-	&CMF_UUID,	/* pool_uuid */
-	&CMF_UUID	/* uuid */
-};
-
-struct crt_msg_field *cont_tgt_destroy_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-struct crt_msg_field *cont_tgt_open_in_fields[] = {
-	&CMF_UUID,	/* pool_uuid */
-	&CMF_UUID,	/* pool_hdl */
-	&CMF_UUID,	/* uuid */
-	&CMF_UUID,	/* hdl */
-	&CMF_UINT64	/* capas */
-};
-
-struct crt_msg_field *cont_tgt_open_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-struct crt_msg_field *cont_tgt_close_in_fields[] = {
-	&DMF_CLOSE_RECS	/* recs */
-};
-
-struct crt_msg_field *cont_tgt_close_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-struct crt_msg_field *cont_tgt_query_in_fields[] = {
-	&CMF_UUID,	/* pool_uuid */
-	&CMF_UUID,	/* container uuid */
-};
-
-struct crt_msg_field *cont_tgt_query_out_fields[] = {
-	&CMF_INT,	/* rc */
-	&CMF_INT,	/* padding */
-	&CMF_UINT64	/* min purged epoch */
-};
-
-struct crt_msg_field *cont_tgt_epoch_discard_in_fields[] = {
-	&CMF_UUID,	/* hdl */
-	&CMF_UINT64	/* epoch */
-};
-
-struct crt_msg_field *cont_tgt_epoch_discard_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-struct crt_msg_field *cont_tgt_epoch_aggregate_in_fields[] = {
-	&CMF_UUID,	/* container UUID */
-	&CMF_UUID,	/* pool UUID */
-	&DMF_EPR_ARRAY	/* EPR list */
-};
-
-struct crt_msg_field *cont_tgt_epoch_aggregate_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-struct crt_req_format DQF_CONT_CREATE =
-	DEFINE_CRT_REQ_FMT(cont_create_in_fields, cont_create_out_fields);
-
-struct crt_req_format DQF_CONT_DESTROY =
-	DEFINE_CRT_REQ_FMT(cont_destroy_in_fields, cont_destroy_out_fields);
-
-struct crt_req_format DQF_CONT_OPEN =
-	DEFINE_CRT_REQ_FMT(cont_open_in_fields, cont_open_out_fields);
-
-struct crt_req_format DQF_CONT_CLOSE =
-	DEFINE_CRT_REQ_FMT(cont_close_in_fields, cont_close_out_fields);
-
-struct crt_req_format DQF_CONT_QUERY =
-	DEFINE_CRT_REQ_FMT(cont_query_in_fields, cont_query_out_fields);
-
-struct crt_req_format DQF_CONT_OID_ALLOC =
-	DEFINE_CRT_REQ_FMT(cont_oid_alloc_in_fields, cont_oid_alloc_out_fields);
-
-struct crt_req_format DQF_CONT_ATTR_LIST =
-	DEFINE_CRT_REQ_FMT(cont_attr_list_in_fields, cont_attr_list_out_fields);
-
-struct crt_req_format DQF_CONT_ATTR_GET =
-	DEFINE_CRT_REQ_FMT(cont_attr_get_in_fields, cont_attr_get_out_fields);
-
-struct crt_req_format DQF_CONT_ATTR_SET =
-	DEFINE_CRT_REQ_FMT(cont_attr_set_in_fields, cont_attr_set_out_fields);
-
-struct crt_req_format DQF_CONT_EPOCH_OP =
-	DEFINE_CRT_REQ_FMT(cont_epoch_op_in_fields, cont_epoch_op_out_fields);
-
-struct crt_req_format DQF_CONT_SNAP_LIST_OP =
-	DEFINE_CRT_REQ_FMT(cont_snap_list_in_fields, cont_snap_list_out_fields);
-
-struct crt_req_format DQF_CONT_SNAP_CREATE_OP =
-	DEFINE_CRT_REQ_FMT(cont_epoch_op_in_fields, cont_op_out_fields);
-
-struct crt_req_format DQF_CONT_SNAP_DESTROY_OP =
-	DEFINE_CRT_REQ_FMT(cont_epoch_op_in_fields, cont_op_out_fields);
-
-struct crt_req_format DQF_CONT_TGT_DESTROY =
-	DEFINE_CRT_REQ_FMT(cont_tgt_destroy_in_fields,
-			   cont_tgt_destroy_out_fields);
-
-struct crt_req_format DQF_CONT_TGT_OPEN =
-	DEFINE_CRT_REQ_FMT(cont_tgt_open_in_fields, cont_tgt_open_out_fields);
-
-struct crt_req_format DQF_CONT_TGT_CLOSE =
-	DEFINE_CRT_REQ_FMT(cont_tgt_close_in_fields, cont_tgt_close_out_fields);
-
-struct crt_req_format DQF_CONT_TGT_QUERY =
-	DEFINE_CRT_REQ_FMT(cont_tgt_query_in_fields, cont_tgt_query_out_fields);
-
-struct crt_req_format DQF_CONT_TGT_EPOCH_DISCARD =
-	DEFINE_CRT_REQ_FMT(cont_tgt_epoch_discard_in_fields,
-			   cont_tgt_epoch_discard_out_fields);
-
-struct crt_req_format DQF_CONT_TGT_EPOCH_AGGREGATE =
-	DEFINE_CRT_REQ_FMT(cont_tgt_epoch_aggregate_in_fields,
-			   cont_tgt_epoch_aggregate_out_fields);
+CRT_RPC_DEFINE(cont_op, DAOS_ISEQ_CONT_OP, DAOS_OSEQ_CONT_OP)
+CRT_RPC_DEFINE(cont_create, DAOS_ISEQ_CONT_CREATE, DAOS_OSEQ_CONT_CREATE)
+CRT_RPC_DEFINE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
+CRT_RPC_DEFINE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
+CRT_RPC_DEFINE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
+CRT_RPC_DEFINE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
+CRT_RPC_DEFINE(cont_oid_alloc, DAOS_ISEQ_CONT_OID_ALLOC,
+		DAOS_OSEQ_CONT_OID_ALLOC)
+CRT_RPC_DEFINE(cont_attr_list, DAOS_ISEQ_CONT_ATTR_LIST,
+		DAOS_OSEQ_CONT_ATTR_LIST)
+CRT_RPC_DEFINE(cont_attr_get, DAOS_ISEQ_CONT_ATTR_GET, DAOS_OSEQ_CONT_ATTR_GET)
+CRT_RPC_DEFINE(cont_attr_set, DAOS_ISEQ_CONT_ATTR_SET, DAOS_OSEQ_CONT_ATTR_SET)
+CRT_RPC_DEFINE(cont_epoch_op, DAOS_ISEQ_CONT_EPOCH_OP, DAOS_OSEQ_CONT_EPOCH_OP)
+CRT_RPC_DEFINE(cont_snap_list, DAOS_ISEQ_CONT_SNAP_LIST,
+		DAOS_OSEQ_CONT_SNAP_LIST)
+CRT_RPC_DEFINE(cont_snap_create, DAOS_ISEQ_CONT_EPOCH_OP,
+		DAOS_OSEQ_CONT_EPOCH_OP)
+CRT_RPC_DEFINE(cont_snap_destroy, DAOS_ISEQ_CONT_EPOCH_OP,
+		DAOS_OSEQ_CONT_EPOCH_OP)
+CRT_RPC_DEFINE(cont_tgt_destroy, DAOS_ISEQ_TGT_DESTROY, DAOS_OSEQ_TGT_DESTROY)
+CRT_RPC_DEFINE(cont_tgt_open, DAOS_ISEQ_TGT_OPEN, DAOS_OSEQ_TGT_OPEN)
+CRT_RPC_DEFINE(cont_tgt_close, DAOS_ISEQ_TGT_CLOSE, DAOS_OSEQ_TGT_CLOSE)
+CRT_RPC_DEFINE(cont_tgt_query, DAOS_ISEQ_TGT_QUERY, DAOS_OSEQ_TGT_QUERY)
+CRT_RPC_DEFINE(cont_tgt_epoch_discard, DAOS_ISEQ_CONT_TGT_EPOCH_DISCARD,
+		DAOS_OSEQ_CONT_TGT_EPOCH_DISCARD)
+CRT_RPC_DEFINE(cont_tgt_epoch_aggregate, DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE,
+		DAOS_OSEQ_CONT_TGT_EPOCH_AGGREGATE)
 
 /* Define for cont_rpcs[] array population below.
  * See CONT_PROTO_*_RPC_LIST macro definition
