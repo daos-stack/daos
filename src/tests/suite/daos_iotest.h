@@ -192,8 +192,9 @@ struct test_key_record {
 
 struct test_update_fetch_arg {
 	daos_recx_t		*ua_recxs;
+	int			*ua_values;
 	int			 ua_recx_num;
-	int			 ua_expect;
+	int			 ua_single_value;
 	int			 ua_array:1, /* false for single */
 				 ua_verify:1;
 };
@@ -201,6 +202,11 @@ struct test_update_fetch_arg {
 struct test_add_exclude_arg {
 	d_rank_t	ua_rank;
 	int		ua_tgt;
+};
+
+struct test_punch_arg {
+	daos_recx_t	*pa_recxs;
+	int		 pa_recxs_num;
 };
 
 /* one OP record per cmd line in the ioconf file */
@@ -212,6 +218,7 @@ struct test_op_record {
 	enum test_op_type	 or_op;
 	union {
 		struct test_update_fetch_arg	uf_arg;
+		struct test_punch_arg		pu_arg;
 		struct test_add_exclude_arg	ae_arg;
 	};
 };

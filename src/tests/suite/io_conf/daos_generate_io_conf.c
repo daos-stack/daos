@@ -35,11 +35,25 @@ static int tgt_size = 8;
 static int iod_size = 1;
 static int oid_type = DAOS_OC_R3S_SPEC_RANK;
 
+#define MAX_EXT_NUM		5
+#define MAX_DISTANCE		10
+#define MAX_EXTENT_SIZE		50
+#define MAX_OFFSET		1048576
+#define SINGLE_REC_RATE		20
+#define MAX_EPOCH_TIMES		20
+
 enum op {
-	UPDATE,
+	UPDATE_ARRAY,
+	PUNCH_ARRAY,
+	UPDATE_SINGLE,
+	PUNCH_AKEY,
 	FETCH,
-	PUNCH,
 	MAX_OPS,
+};
+
+enum type {
+	SINGLE,
+	ARRAY,
 };
 
 struct current_status {
@@ -55,12 +69,34 @@ enum rec_types {
 	PUNCH_REC = 1 << 1,
 };
 
-#define MAX_REC_NUM		5
-#define MAX_DISTANCE		10
-#define EXTENT_SIZE		10
-#define MAX_OFFSET		1048576
-#define SINGLE_REC_RATE		20
-#define MAX_EPOCH_TIMES		10
+struct extent {
+	daos_off_t	start;
+	daos_off_t	end;
+};
+
+struct array {
+	struct extent	extent;
+	char		value;
+};
+
+struct single {
+	char		value;
+};
+
+struct record {
+	union {
+		struct array	array;
+		struct single	single;
+	};
+	int		rec_size;
+	int		type;
+};
+
+struct records {
+	daos_epoch_t	eph;
+	int		records_num;
+	struct record	records[MAX_EXT_NUM];
+};
 
 static struct option long_ops[] = {
 	{ "obj_num",	required_argument,	NULL,	'o' },
@@ -81,6 +117,228 @@ void print_usage(void)
 		"<file_name>\n");
 }
 
+static void
+extent_twist(struct extent *input, struct extent *output, int off, bool add)
+{
+	*output = *input;
+	if (add) {
+		output->start += off;
+		output->end += off;
+	} else {
+		if (output->start > off) {
+			output->start -= off;
+			output->end -= off;
+		} else {
+			output->end = input->end - input->start;
+			output->start = 0;
+		}
+	}
+}
+
+static int
+update_array_internal(int index, daos_epoch_t eph, struct extent *extents,
+		      int extents_num, int rec_size,
+		      struct records *records, char *output_buf, bool update)
+{
+	char rec_buf[512];
+	int rec_length = 0;
+	bool twist = false;
+	int twist_off = 0;
+	bool twist_add = false;
+	int offset;
+	int num;
+	int j;
+	int i;
+
+	/* Insert extents to records */
+	records[index].eph = eph;
+	if (index == 0) {
+		/* Write the whole extents at first */
+		offset = 0;
+		num = extents_num;
+	} else {
+		offset = rand() % extents_num;
+		num = rand() % (extents_num - offset) + 1;
+	}
+
+	records[index].records_num = num;
+	/* Twist the extent if needed */
+	if (rand() % 2 == 0) {
+		twist = true;
+		twist_off = rand() % MAX_EXTENT_SIZE;
+		twist_add = rand() % 2 == 0 ? true : false;
+	}
+
+	for (i = 0, j = offset; i < num; i++, j++) {
+		struct record *record = &records[index].records[i];
+		char rec[32];
+		struct extent extent;
+		int length;
+
+		if (index != 0 && twist)
+			extent_twist(&extents[j], &extent, twist_off,
+				     twist_add);
+		else
+			extent = extents[j];
+
+		/* Only write the whole extents */
+		record->array.extent = extent;
+		record->rec_size = rec_size;
+		record->type = ARRAY;
+		if (update) {
+			char value = 'a' + rand() % ('z' - 'a');
+
+			records[index].records[i].array.value = value;
+			length = sprintf(rec, "["DF_U64", "DF_U64"]%d",
+					 extent.start, extent.end, value);
+		} else {
+			length = sprintf(rec, "["DF_U64", "DF_U64"]",
+					 extent.start, extent.end);
+		}
+
+		sprintf(rec_buf + rec_length, "%s ", rec);
+		rec_length += length + 1;
+	}
+
+	if (update)
+		sprintf(output_buf, "update --epoch "DF_U64" --recx \"%s\"\n",
+			eph, rec_buf);
+	else
+		sprintf(output_buf, "punch --epoch "DF_U64" --recx \"%s\"\n",
+			eph, rec_buf);
+
+	return 0;
+}
+
+static int
+update_array(int index, daos_epoch_t eph, struct extent *extents,
+	     int extents_num, int rec_size, struct records *records,
+	     char *output_buf)
+{
+	return update_array_internal(index, eph, extents, extents_num,
+				     rec_size, records, output_buf, true);
+}
+
+static int
+punch_array(int index, daos_epoch_t eph, struct extent *extents,
+	    int extents_num, int rec_size, struct records *records,
+	    char *output_buf)
+{
+	return update_array_internal(index, eph, extents, extents_num,
+				     0, records, output_buf, false);
+}
+
+static int
+_punch_akey(int index, daos_epoch_t eph, struct extent *extents,
+	    int extents_num, int rec_size, struct records *records,
+	    char *output_buf)
+{
+	records[index].eph = eph;
+	records[index].records_num = 0;
+	sprintf(output_buf, "punch --epoch "DF_U64"\n", eph);
+	return 0;
+}
+
+/* Update single record */
+static int
+update_single(int index, daos_epoch_t eph, struct extent *extents,
+	      int extents_num, int rec_size, struct records *records,
+	      char *output_buf)
+{
+	char value = 'a' + rand() % ('z' - 'a');
+
+	/* Insert extents to records */
+	records[index].eph = eph;
+	records[index].records_num = 1;
+
+	records[index].records[0].type = SINGLE;
+	records[index].records[0].single.value = value;
+
+	sprintf(output_buf, "update --epoch "DF_U64" --single --value %d\n",
+		eph, value);
+
+	return 0;
+}
+
+static int
+fetch_array(int index, daos_epoch_t eph, struct extent *extents,
+	    int extents_num, int rec_size, struct records *records,
+	    char *output_buf)
+{
+	struct records *record;
+	char rec_buf[512] = { 0 };
+	int fetch_index;
+	int rec_length = 0;
+	int i;
+
+	D_ASSERT(index > 0);
+
+	fetch_index = rand() % index;
+	record = &records[fetch_index];
+	for (i = 0; i < record->records_num; i++) {
+		struct array *array = &record->records[i].array;
+		int length;
+		char rec[64];
+
+		length = sprintf(rec, "["DF_U64", "DF_U64"]%d",
+				 array->extent.start,
+				 array->extent.end, array->value);
+
+		sprintf(rec_buf + rec_length, "%s ", rec);
+		rec_length += length + 1;
+	}
+
+	if (rec_length == 0) {
+		sprintf(output_buf, "fetch --epoch "DF_U64" -s -v --value 0\n",
+			record->eph);
+	} else {
+		if (record->records[0].type == SINGLE)
+			sprintf(output_buf, "fetch --epoch "DF_U64" -v --single"
+				" --value %d\n", record->eph,
+				record->records[0].single.value);
+		else
+			sprintf(output_buf, "fetch --epoch "DF_U64" -v --recx"
+				" \"%s\"\n", record->eph, rec_buf);
+	}
+
+	return 0;
+}
+
+int choose_op(int index)
+{
+	if (index == 0)
+		return UPDATE_ARRAY;
+
+	/* FIXME: it should be able to specify the percentage
+	 * of each operation to generate the special workload.
+	 */
+	return rand() % MAX_OPS;
+}
+
+struct operation {
+	int (*op)(int index, daos_epoch_t eph, struct extent *extents,
+		  int extents_num, int rec_size, struct records *records,
+		  char *output_buf);
+};
+
+struct operation operations[] = {
+	[UPDATE_ARRAY] = {
+		.op = &update_array,
+	},
+	[PUNCH_ARRAY] = {
+		.op = &punch_array,
+	},
+	[UPDATE_SINGLE] = {
+		.op = &update_single,
+	},
+	[PUNCH_AKEY] = {
+		.op = &_punch_akey,
+	},
+	[FETCH] = {
+		.op = &fetch_array,
+	},
+};
+
 /* Generate the ioconf
  *
  * update --epoch 1 --recx "[0, 2] [3, 8] [12, 18]"
@@ -99,13 +357,12 @@ int
 generate_io_conf_rec(int fd, struct current_status *status)
 {
 	char		line[256];
-	char		rec_buf[256];
 	unsigned int	offset = 0;
-	int		rec_type[MAX_EPOCH_TIMES] = { 0 };
+	struct extent	extents[MAX_EXT_NUM] = { 0 };
+	struct records recs[MAX_EPOCH_TIMES] = { 0 };
 	daos_epoch_t	eph;
 	int		dist;
-	int		rec_num;
-	int		rec_length = 0;
+	int		extent_num;
 	int		extent_size;
 	int		epoch_times;
 	int		inject_fail_idx;
@@ -119,108 +376,66 @@ generate_io_conf_rec(int fd, struct current_status *status)
 	if (rc1 <= 0)
 		return -1;
 
-	rec_num = rand() % MAX_REC_NUM + 1;
+	extent_num = rand() % MAX_EXT_NUM + 1;
 	dist = rand() % MAX_DISTANCE;
-	extent_size = (rand() % EXTENT_SIZE + 1) * EXTENT_SIZE;
+	extent_size = (rand() % MAX_EXTENT_SIZE + 1) * MAX_EXTENT_SIZE;
 	offset = rand() % MAX_OFFSET;
 	epoch_times = rand() % MAX_EPOCH_TIMES + 1;
 
 	/* create rec string */
-	for (i = 0; i < rec_num; i++) {
-		char rec[32];
-		int length;
-		int end;
-
-		end = offset + extent_size;
-
-		length = sprintf(rec, "[%d, %d]", offset, end);
-
-		sprintf(rec_buf + rec_length, "%s ", rec);
-		rec_length += length + 1;
-		offset = end + dist;
+	for (i = 0; i < extent_num; i++) {
+		extents[i].start = offset;
+		extents[i].end = offset + extent_size;
+		offset += extent_size + dist;
 	}
 
 	eph = status->cur_eph;
 	inject_fail_idx = rand() % epoch_times;
 	tgt = rand() % tgt_size;
 	for (i = 0; i < epoch_times; i++) {
-		daos_epoch_t	eph_idx;
-		daos_epoch_t	op_eph;
-		char		expect_line[32] = { 0 };
-		int		op;
+		char	buffer[512];
+		int	op = choose_op(i);
 
-		if (rand() % 100 > SINGLE_REC_RATE) {
-			sprintf(line, "update --epoch "DF_U64" --recx \"%s\"\n",
-				eph + i, rec_buf);
-			rec_type[i] |= ARRAY_REC;
-		} else {
-			sprintf(line, "update --epoch "DF_U64" --single\n",
-				eph + i);
-		}
+		rc = (*operations[op].op)(i, eph + i, extents, extent_num,
+					  1, recs, buffer);
+		if (rc)
+			goto out;
 
-		/* Clear punch flags for later epoch */
-		for (eph_idx = i; eph_idx < eph + MAX_EPOCH_TIMES; eph_idx++)
-			rec_type[i] &= ~PUNCH_REC;
-
-		rc1 = write(fd, line, strlen(line));
-		if (rc1 <= 0) {
+		rc = write(fd, buffer, strlen(buffer));
+		if (rc <= 0) {
 			rc = -1;
-			break;
+			goto out;
 		}
-
-		/* Insert other operations */
-		op = rand() % (MAX_OPS - 1) + 1;
-		op_eph = rand() % (i + 1) + eph;
 
 		if (inject_fail_idx == i) {
 			sprintf(line, "exclude --rank %u --tgt %d\n",
 				status->cur_rank, tgt);
-			rc1 = write(fd, line, strlen(line));
-			if (rc1 <= 0) {
+			rc = write(fd, line, strlen(line));
+			if (rc <= 0) {
 				rc = -1;
-				break;
+				goto out;
 			}
-		}
-
-		switch (op) {
-		case FETCH:
-			if (rec_type[op_eph - eph] & PUNCH_REC)
-				sprintf(expect_line, "-x 0");
-
-			if (rec_type[op_eph - eph] & ARRAY_REC) /* ARRAY type */
-				sprintf(line, "fetch --epoch "DF_U64" -v --recx"
-					" \"%s\" %s\n", op_eph, rec_buf,
-					expect_line);
-			else
-				sprintf(line, "fetch --epoch "DF_U64" -v"
-					" --single %s\n", op_eph, expect_line);
-			break;
-		case PUNCH:
-			rec_type[i] |= PUNCH_REC;
-			sprintf(line, "punch --epoch "DF_U64"\n", eph + i);
-			break;
-		default:
-			break;
-		}
-
-		rc1 = write(fd, line, strlen(line));
-		if (rc1 <= 0) {
-			rc = -1;
-			break;
 		}
 	}
 
+	/* Add back the target */
 	sprintf(line, "add --rank %u --tgt %d\n", status->cur_rank, tgt);
 	rc1 = write(fd, line, strlen(line));
-	if (rc1 <= 0)
+	if (rc1 <= 0) {
 		rc = -1;
+		goto out;
+	}
 
 	sprintf(line, "pool --query\n");
-	rc1 = write(fd, line, strlen(line));
-	if (rc1 <= 0)
+	rc = write(fd, line, strlen(line));
+	if (rc <= 0) {
 		rc = -1;
+		goto out;
+	}
+	rc = 0;
 
 	status->cur_eph += i;
+out:
 	return rc;
 }
 
