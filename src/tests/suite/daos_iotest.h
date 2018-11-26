@@ -118,6 +118,12 @@ punch_dkey(const char *dkey, daos_epoch_t epoch, struct ioreq *req);
 void
 punch_akey(const char *dkey, const char *akey, daos_epoch_t epoch,
 	   struct ioreq *req);
+void
+punch_recxs(const char *dkey, const char *akey, daos_recx_t *recxs,
+	    int nr, daos_epoch_t epoch, struct ioreq *req);
+void
+punch_single(const char *dkey, const char *akey, uint64_t idx,
+	     daos_epoch_t epoch, struct ioreq *req);
 
 void
 lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,

@@ -753,13 +753,7 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 		return rc;
 
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
-		daos_iod_t	*iod;
-
 		iod_set_cursor(ioc, i);
-		iod = &ioc->ic_iods[ioc->ic_sgl_at];
-		/* Skip the empty IOD */
-		if (iod->iod_size == 0)
-			continue;
 
 		if (!subtr_created) {
 			rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh,
@@ -1281,9 +1275,11 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		return rc;
 	}
 
-	rc = vos_obj_copy(vos_ioh2ioc(ioh), sgls, iod_nr);
-	if (rc)
-		D_ERROR("Copy "DF_UOID" failed %d\n", DP_UOID(oid), rc);
+	if (sgls) {
+		rc = vos_obj_copy(vos_ioh2ioc(ioh), sgls, iod_nr);
+		if (rc)
+			D_ERROR("Copy "DF_UOID" failed %d\n", DP_UOID(oid), rc);
+	}
 
 	rc = vos_update_end(ioh, cookie, pm_ver, dkey, rc);
 	return rc;

@@ -78,6 +78,8 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 {
 	daos_sg_list_t	sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_iov_t	iov[DSS_ENUM_UNPACK_MAX_IODS];
+	int		iod_cnt = 0;
+	int		start;
 	char		iov_buf[DSS_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
 	bool		fetch = false;
 	int		i;
@@ -85,6 +87,9 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 
 	D_ASSERT(rdone->ro_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < rdone->ro_iod_num; i++) {
+		if (rdone->ro_iods[i].iod_size == 0)
+			continue;
+
 		if (rdone->ro_sgls != NULL && rdone->ro_sgls[i].sg_nr > 0) {
 			sgls[i] = rdone->ro_sgls[i];
 		} else {
@@ -117,10 +122,39 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
 		return -DER_INVAL;
 
-	rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid, rdone->ro_epoch,
-			    rdone->ro_cookie, rdone->ro_version,
-			    &rdone->ro_dkey, rdone->ro_iod_num,
-			    rdone->ro_iods, sgls);
+	for (i = 0, start = 0; i < rdone->ro_iod_num; i++) {
+		if (rdone->ro_iods[i].iod_size > 0) {
+			iod_cnt++;
+			continue;
+		} else {
+			/* skip empty record */
+			if (iod_cnt == 0) {
+				D_DEBUG(DB_REBUILD, "i %d iod_size = 0\n", i);
+				continue;
+			}
+
+			D_DEBUG(DB_REBUILD, "update start %d cnt %d\n",
+				start, iod_cnt);
+			rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
+					    rdone->ro_epoch, rdone->ro_cookie,
+					    rdone->ro_version, &rdone->ro_dkey,
+					    iod_cnt, &rdone->ro_iods[start],
+					    &sgls[start]);
+			if (rc) {
+				D_ERROR("rebuild failed: rc %d\n", rc);
+				break;
+			}
+			iod_cnt = 0;
+			start = i + 1;
+		}
+	}
+
+	if (iod_cnt > 0)
+		rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
+				    rdone->ro_epoch, rdone->ro_cookie,
+				    rdone->ro_version, &rdone->ro_dkey,
+				    iod_cnt, &rdone->ro_iods[start],
+				    &sgls[start]);
 
 	return rc;
 }
@@ -244,12 +278,24 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 		}
 	}
 
+	/* punch records */
+	if (rdone->ro_punch_iod_num > 0) {
+		rc = vos_obj_update(cont->sc_hdl, rdone->ro_oid,
+				    rdone->ro_epoch, rdone->ro_cookie,
+				    rdone->ro_version, &rdone->ro_dkey,
+				    rdone->ro_punch_iod_num,
+				    rdone->ro_punch_iods, NULL);
+		D_DEBUG(DB_REBUILD, DF_UOID" rdone %p punch %d records: %d\n",
+			DP_UOID(rdone->ro_oid), rdone, rdone->ro_punch_iod_num,
+			rc);
+	}
+
 	return rc;
 }
 
 static int
-rebuild_one(struct rebuild_tgt_pool_tracker *rpt,
-	    struct rebuild_one *rdone)
+rebuild_rdone(struct rebuild_tgt_pool_tracker *rpt,
+	      struct rebuild_one *rdone)
 {
 	struct rebuild_pool_tls	*tls;
 	struct ds_cont		*rebuild_cont;
@@ -298,12 +344,14 @@ rebuild_one(struct rebuild_tgt_pool_tracker *rpt,
 		D_GOTO(cont_put, rc);
 
 	data_size = daos_iods_len(rdone->ro_iods, rdone->ro_iod_num);
-	D_ASSERT(data_size != (uint64_t)(-1));
 
+	D_DEBUG(DB_REBUILD, "data size is "DF_U64"\n", data_size);
 	/* DAOS_REBUILD_TGT_NO_REBUILD are for testing purpose */
-	if (data_size > 0 && !DAOS_FAIL_CHECK(DAOS_REBUILD_NO_REBUILD)) {
-		if (data_size < MAX_BUF_SIZE)
-			rc = rebuild_fetch_update_inline(rdone, oh, rebuild_cont);
+	if ((data_size > 0 || data_size == (daos_size_t)(-1)) &&
+	    !DAOS_FAIL_CHECK(DAOS_REBUILD_NO_REBUILD)) {
+		if (data_size < MAX_BUF_SIZE || data_size == (daos_size_t)(-1))
+			rc = rebuild_fetch_update_inline(rdone, oh,
+							 rebuild_cont);
 		else
 			rc = rebuild_fetch_update_bulk(rdone, oh, rebuild_cont);
 	}
@@ -327,21 +375,12 @@ rebuild_one_destroy(struct rebuild_one *rdone)
 	D_ASSERT(d_list_empty(&rdone->ro_list));
 	daos_iov_free(&rdone->ro_dkey);
 
-	if (rdone->ro_iods) {
-		for (i = 0; i < rdone->ro_iod_alloc_num; i++) {
-			daos_iov_free(&rdone->ro_iods[i].iod_name);
+	if (rdone->ro_iods)
+		daos_iods_free(rdone->ro_iods, rdone->ro_iod_alloc_num, true);
 
-			if (rdone->ro_iods[i].iod_recxs)
-				D_FREE(rdone->ro_iods[i].iod_recxs);
-
-			if (rdone->ro_iods[i].iod_eprs)
-				D_FREE(rdone->ro_iods[i].iod_eprs);
-
-			if (rdone->ro_iods[i].iod_csums)
-				D_FREE(rdone->ro_iods[i].iod_csums);
-		}
-		D_FREE(rdone->ro_iods);
-	}
+	if (rdone->ro_punch_iods)
+		daos_iods_free(rdone->ro_punch_iods, rdone->ro_iod_alloc_num,
+			       true);
 
 	if (rdone->ro_ephs) {
 		for (i = 0; i < rdone->ro_ephs_num; i++)
@@ -394,7 +433,7 @@ rebuild_one_ult(void *arg)
 		d_list_for_each_entry_safe(rdone, tmp, &rebuild_list, ro_list) {
 			d_list_del_init(&rdone->ro_list);
 			if (!rpt->rt_abort) {
-				rc = rebuild_one(rpt, rdone);
+				rc = rebuild_rdone(rpt, rdone);
 				D_DEBUG(DB_REBUILD, DF_UOID" rebuild dkey %d %s"
 					" rc %d tag %d rpt %p\n",
 					DP_UOID(rdone->ro_oid),
@@ -467,6 +506,83 @@ rebuild_one_ult(void *arg)
 	rpt_put(rpt);
 }
 
+static int
+rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, daos_sg_list_t *sgls)
+{
+	int idx = rdone->ro_iod_num;
+	int rec_cnt = 0;
+	int i;
+	int rc;
+
+	D_ASSERT(iod->iod_size > 0);
+
+	rc = daos_iod_copy(&rdone->ro_iods[idx], iod);
+	if (rc)
+		return rc;
+
+	for (i = 0; i < iod->iod_nr; i++) {
+		rec_cnt += iod->iod_recxs[i].rx_nr;
+		if (rdone->ro_epoch == 0 ||
+		    iod->iod_eprs[i].epr_lo < rdone->ro_epoch)
+			rdone->ro_epoch = iod->iod_eprs[i].epr_lo;
+	}
+
+	D_DEBUG(DB_REBUILD, "idx %d akey %d %s nr %d size "DF_U64" type %d eph "
+		DF_U64"/"DF_U64"\n", idx, (int)iod->iod_name.iov_len,
+		(char *)iod->iod_name.iov_buf, iod->iod_nr, iod->iod_size,
+		iod->iod_type, iod->iod_eprs->epr_lo, iod->iod_eprs->epr_hi);
+
+	/* Check if data has been retrieved by iteration */
+	if (sgls) {
+		if (rdone->ro_sgls == NULL) {
+			D_ASSERT(rdone->ro_iod_alloc_num > 0);
+			D_ALLOC(rdone->ro_sgls, rdone->ro_iod_alloc_num *
+						sizeof(*rdone->ro_sgls));
+			if (rdone->ro_sgls == NULL)
+				return -DER_NOMEM;
+		}
+
+		rc = daos_sgl_alloc_copy_data(&rdone->ro_sgls[idx], sgls);
+		if (rc)
+			D_GOTO(out, rc);
+	}
+
+	rdone->ro_iod_num++;
+	rdone->ro_rec_num += rec_cnt;
+	iod->iod_recxs = NULL;
+	iod->iod_csums = NULL;
+	iod->iod_eprs = NULL;
+
+out:
+	return 0;
+}
+
+static int
+punch_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod)
+{
+	int idx = rdone->ro_punch_iod_num;
+	int rc;
+
+	D_ASSERT(iod->iod_size == 0);
+
+	if (rdone->ro_punch_iods == NULL) {
+		D_ALLOC(rdone->ro_punch_iods, rdone->ro_iod_alloc_num *
+					      sizeof(*rdone->ro_punch_iods));
+		if (rdone->ro_punch_iods == NULL)
+			return -DER_NOMEM;
+	}
+
+	rc = daos_iod_copy(&rdone->ro_punch_iods[idx], iod);
+	if (rc)
+		return rc;
+
+	rdone->ro_punch_iod_num++;
+	iod->iod_recxs = NULL;
+	iod->iod_csums = NULL;
+	iod->iod_eprs = NULL;
+	return 0;
+}
+
 /*
  * Queue dkey to the rebuild dkey list on each xstream. Note that this function
  * steals the memory of the recx, csum, and epr arrays from iods.
@@ -480,10 +596,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	struct rebuild_puller		*puller;
 	struct rebuild_tgt_pool_tracker *rpt = iter_arg->rpt;
 	struct rebuild_one		*rdone = NULL;
-	unsigned int			iod_cnt = 0;
 	unsigned int			ephs_cnt = 0;
-	unsigned int			rec_cnt = 0;
-	daos_epoch_t			min_epoch = 0;
 	bool				inline_copy = true;
 	int				i;
 	int				rc;
@@ -533,8 +646,6 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	}
 
 	for (i = 0; i < iod_eph_total; i++) {
-		int j;
-
 		if (akey_ephs[i] != DAOS_EPOCH_MAX) {
 			/* Pack punched epoch here */
 			rdone->ro_ephs[ephs_cnt] = akey_ephs[i];
@@ -551,64 +662,19 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 				akey_ephs[i], ephs_cnt);
 		}
 
-		if (iods[i].iod_nr > 0) {
-			rc = daos_iov_copy(&rdone->ro_iods[iod_cnt].iod_name,
-					   &iods[i].iod_name);
-			if (rc)
-				D_GOTO(free, rc);
+		if (iods[i].iod_nr == 0)
+			continue;
 
-			rdone->ro_iods[iod_cnt].iod_kcsum = iods[i].iod_kcsum;
-			rdone->ro_iods[iod_cnt].iod_type = iods[i].iod_type;
-			rdone->ro_iods[iod_cnt].iod_size = iods[i].iod_size;
-			rdone->ro_iods[iod_cnt].iod_nr = iods[i].iod_nr;
-			rdone->ro_iods[iod_cnt].iod_recxs = iods[i].iod_recxs;
-			rdone->ro_iods[iod_cnt].iod_csums = iods[i].iod_csums;
-			rdone->ro_iods[iod_cnt].iod_eprs = iods[i].iod_eprs;
-
-			for (j = 0; j < iods[i].iod_nr; j++) {
-				rec_cnt += iods[i].iod_recxs[j].rx_nr;
-				if (min_epoch == 0 ||
-				    iods[i].iod_eprs[j].epr_lo < min_epoch)
-					min_epoch = iods[i].iod_eprs[j].epr_lo;
-			}
-
-			D_DEBUG(DB_REBUILD, "idx %d akey %d %s nr %d size "
-				DF_U64" type %d eph "DF_U64"/"DF_U64" ephs "
-				DF_U64"\n", i, (int)iods[i].iod_name.iov_len,
-				(char *)iods[i].iod_name.iov_buf,
-				iods[i].iod_nr, iods[i].iod_size,
-				iods[i].iod_type, iods[i].iod_eprs->epr_lo,
-				iods[i].iod_eprs->epr_hi, akey_ephs[i]);
-
-			/* Check if data has been retrieved by iteration */
-			if (inline_copy) {
-				if (rdone->ro_sgls == NULL) {
-					D_ALLOC(rdone->ro_sgls,
-						iod_eph_total *
-						sizeof(*rdone->ro_sgls));
-					if (rdone->ro_sgls == NULL)
-						D_GOTO(free, rc = -DER_NOMEM);
-				}
-
-				rc = daos_sgl_alloc_copy_data(
-					&rdone->ro_sgls[iod_cnt], &sgls[i]);
-				if (rc)
-					D_GOTO(free, rc);
-			}
-
-			iod_cnt++;
-			iods[i].iod_recxs = NULL;
-			iods[i].iod_csums = NULL;
-			iods[i].iod_eprs = NULL;
-		}
+		if (iods[i].iod_size == 0)
+			rc = punch_iod_pack(rdone, &iods[i]);
+		else
+			rc = rw_iod_pack(rdone, &iods[i],
+					 inline_copy ? &sgls[i] : NULL);
 	}
 
-	rdone->ro_iod_num = iod_cnt;
 	rdone->ro_ephs_num = ephs_cnt;
 	rdone->ro_max_eph = dkey_eph;
-	rdone->ro_rec_num = rec_cnt;
 	rdone->ro_version = version;
-	rdone->ro_epoch = min_epoch;
 	uuid_copy(rdone->ro_cookie, cookie);
 	puller = &rpt->rt_pullers[iter_arg->tgt_idx];
 	if (puller->rp_ult == NULL) {

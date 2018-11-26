@@ -241,7 +241,7 @@ daos_sgls_size(daos_sg_list_t *sgls, int nr)
 static daos_size_t
 daos_iod_len(daos_iod_t *iod)
 {
-	uint64_t	len;
+	daos_size_t	len;
 	int		i;
 
 	if (iod->iod_size == DAOS_REC_ANY)
@@ -265,18 +265,60 @@ daos_iod_len(daos_iod_t *iod)
 daos_size_t
 daos_iods_len(daos_iod_t *iods, int nr)
 {
-	uint64_t iod_length = 0;
-	int	 i;
+	daos_size_t iod_length = 0;
+	int	    i;
 
 	for (i = 0; i < nr; i++) {
-		uint64_t len = daos_iod_len(&iods[i]);
+		daos_size_t len = daos_iod_len(&iods[i]);
 
-		if (len == -1) /* unknown */
+		if (len == (daos_size_t)-1) /* unknown */
 			return -1;
 
 		iod_length += len;
 	}
 	return iod_length;
+}
+
+int
+daos_iod_copy(daos_iod_t *dst, daos_iod_t *src)
+{
+	int rc;
+
+	rc = daos_iov_copy(&dst->iod_name, &src->iod_name);
+	if (rc)
+		return rc;
+
+	dst->iod_kcsum = src->iod_kcsum;
+	dst->iod_type = src->iod_type;
+	dst->iod_size = src->iod_size;
+	dst->iod_nr = src->iod_nr;
+	dst->iod_recxs = src->iod_recxs;
+	dst->iod_csums = src->iod_csums;
+	dst->iod_eprs = src->iod_eprs;
+
+	return 0;
+}
+
+void
+daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
+{
+	int i;
+
+	for (i = 0; i < nr; i++) {
+		daos_iov_free(&iods[i].iod_name);
+
+		if (iods[i].iod_recxs)
+			D_FREE(iods[i].iod_recxs);
+
+		if (iods[i].iod_eprs)
+			D_FREE(iods[i].iod_eprs);
+
+		if (iods[i].iod_csums)
+			D_FREE(iods[i].iod_csums);
+	}
+
+	if (need_free)
+		D_FREE(iods);
 }
 
 /**

@@ -143,12 +143,15 @@ daos_test_cb_punch(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 	struct ioreq			 req;
 	struct test_punch_arg		*pu_arg = &op->pu_arg;
 
-	ioreq_init(&req, arg->coh, eio_arg->op_oid, 0, arg);
+	ioreq_init(&req, arg->coh, eio_arg->op_oid, DAOS_IOD_ARRAY, arg);
 
-	/* FIXME add punch records */
 	if (pu_arg->pa_recxs_num == 0)
 		punch_akey(key_rec->or_dkey, key_rec->or_akey,
 			   op->or_epoch, &req);
+	else
+		punch_recxs(key_rec->or_dkey, key_rec->or_akey,
+			    pu_arg->pa_recxs, pu_arg->pa_recxs_num,
+			    op->or_epoch, &req);
 
 	ioreq_fini(&req);
 	return 0;

@@ -688,20 +688,14 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 		 * either it would be single or array, and once it
 		 * is changed, it has to return 1 to finish this IOD.
 		 */
-		if (iod->iod_nr > 0 && iod->iod_type != type) {
+		if (iod->iod_nr > 0 &&
+		    (iod->iod_type != type || rec->rec_size == 0)) {
 			rc = 1;
 			break;
 		}
 
 		if (iod->iod_nr == 0)
 			iod->iod_type = type;
-		else
-			D_ASSERT(iod->iod_type == type);
-
-		if (iod->iod_size != 0 && iod->iod_size != rec->rec_size)
-			D_WARN("rsize "DF_U64" != "DF_U64" are different"
-			       " under one akey\n", iod->iod_size,
-			       rec->rec_size);
 
 		/* If the arrays are full, grow them as if all the remaining
 		 * recxs have no inline data.
@@ -743,8 +737,7 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 		iod->iod_eprs[iod->iod_nr].epr_hi = DAOS_EPOCH_MAX;
 		iod->iod_recxs[iod->iod_nr] = rec->rec_recx;
 		iod->iod_nr++;
-		if (iod->iod_size == 0)
-			iod->iod_size = rec->rec_size;
+		iod->iod_size = rec->rec_size;
 		*data += sizeof(*rec);
 		len -= sizeof(*rec);
 
@@ -777,7 +770,7 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 			sgl != NULL ? sgl->sg_iovs[sgl->sg_nr - 1].iov_len : 0);
 
 		/* Only allow one SINGLE record per IOD, let's close this one */
-		if (iod->iod_type == DAOS_IOD_SINGLE) {
+		if (iod->iod_type == DAOS_IOD_SINGLE || iod->iod_size == 0) {
 			rc = 1;
 			break;
 		}

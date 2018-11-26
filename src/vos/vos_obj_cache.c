@@ -257,8 +257,11 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 
 	if (no_create) {
 		rc = vos_oi_find(cont, oid, epoch, &obj->obj_df);
-		if (rc == -DER_NONEXIST)
+		if (rc == -DER_NONEXIST) {
+			D_DEBUG(DB_TRACE, "non exist oid "DF_UOID"\n",
+				DP_UOID(oid));
 			rc = 0;
+		}
 	} else {
 		rc = vos_oi_find_alloc(cont, oid, epoch, &obj->obj_df);
 		D_ASSERT(rc || obj->obj_df);
@@ -269,8 +272,11 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		goto failed;
 	}
 
-	if (!obj->obj_df)
+	if (!obj->obj_df) {
+		D_DEBUG(DB_TRACE, "nonexistent obj "DF_UOID"\n",
+			DP_UOID(oid));
 		goto out;
+	}
 
 	D_ASSERTF((obj->obj_df->vo_oi_attr & VOS_OI_PUNCHED) == 0 ||
 		  epoch <= obj->obj_df->vo_latest,

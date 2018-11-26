@@ -92,6 +92,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 	char	*large_key;
 	int	akey_punch_idx = 1;
 	int	dkey_punch_idx = 1;
+	int	rec_punch_idx = 2;
 	int	j;
 	int	k;
 	int	l;
@@ -113,7 +114,8 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 				if (validate) {
 					/* How to verify punch? XXX */
 					if (k == akey_punch_idx ||
-					    j == dkey_punch_idx)
+					    j == dkey_punch_idx ||
+					    l == rec_punch_idx)
 						continue;
 					memset(data, 0, REC_SIZE);
 					if (l == 7)
@@ -132,6 +134,9 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 							l, data,
 							strlen(data) + 1,
 							eph, req);
+					else if (l == rec_punch_idx)
+						punch_single(dkey, akey, l, eph,
+							     req);
 					else
 						insert_single(dkey, akey, l,
 							data, strlen(data) + 1,

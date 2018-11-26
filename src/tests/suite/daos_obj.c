@@ -234,8 +234,8 @@ insert_recxs_nowait(const char *dkey, const char *akey, daos_size_t iod_size,
 	ioreq_io_akey_set(req, &akey, 1);
 
 	/* set sgl */
-	assert_int_not_equal(data, NULL);
-	ioreq_sgl_simple_set(req, &data, &data_size, 1);
+	if (data != NULL)
+		ioreq_sgl_simple_set(req, &data, &data_size, 1);
 
 	/* iod, recxs */
 	for (i = 0; i < nr; i++) {
@@ -386,13 +386,20 @@ punch_akey(const char *dkey, const char *akey, daos_epoch_t eph,
 	assert_int_equal(rc, 0);
 }
 
-static void
-punch(const char *dkey, const char *akey, uint64_t idx,
-      daos_epoch_t epoch, struct ioreq *req)
+void
+punch_single(const char *dkey, const char *akey, uint64_t idx,
+	     daos_epoch_t epoch, struct ioreq *req)
 {
 	daos_size_t size = 0;
 
 	insert_single(dkey, akey, idx, NULL, size, epoch, req);
+}
+
+void
+punch_recxs(const char *dkey, const char *akey, daos_recx_t *recxs,
+	    int nr, daos_epoch_t epoch, struct ioreq *req)
+{
+	insert_recxs(dkey, akey, 0, epoch, recxs, nr, NULL, 0, req);
 }
 
 static void
@@ -1362,11 +1369,11 @@ punch_simple(void **state)
 
 	/** punch records */
 	print_message("Punch records\n");
-	punch("punch_test0", "a_key", 0, 1, &req);
-	punch("punch_test1", "a_key", 0, 1, &req);
-	punch("punch_test2", "a_key", 0, 1, &req);
-	punch("punch_test3", "a_key", 0, 1, &req);
-	punch("punch_test4", "a_key", 0, 1, &req);
+	punch_single("punch_test0", "a_key", 0, 1, &req);
+	punch_single("punch_test1", "a_key", 0, 1, &req);
+	punch_single("punch_test2", "a_key", 0, 1, &req);
+	punch_single("punch_test3", "a_key", 0, 1, &req);
+	punch_single("punch_test4", "a_key", 0, 1, &req);
 
 	memset(&anchor_out, 0, sizeof(anchor_out));
 	/** enumerate records */
