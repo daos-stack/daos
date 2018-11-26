@@ -8,7 +8,7 @@
 ## Name associated with the DAOS system.
 ## Immutable after reformat.
 #
-name: daos
+#name: daos
 #
 #
 ## Formatted state defined as any of:
@@ -249,21 +249,6 @@ name: daos
 #  # that should be different across different server instance.
 #  # Colons replaced by dots in PCI identifiers.
 #  bdev_list: [pcie1000.0.0.0.1]
-#
-#  # When bdev_class is set to malloc, bdev_number is the number of devices
-#  # to allocate and bdev_size is the size in GB of each individual device.
-#  bdev_number: 1
-#  bdev_size: 4
-#
-#  # When bdev_class is set to kdev, bdev_list is the list of unique kernel
-#  # block devices that should be different across different server instance.
-#  bdev_list: [/dev/sdc,/dev/sdd]
-#
-#  # When bdev_class is set to file, bdev_list is the list of file paths that
-#  # will be used to emulate NVMe SSDs. The size of each file is specified by
-#  # bdev_size in GB unit.
-#  bdev_list: [/tmp/daos-bdev1,/tmp/daos-bdev2]
-#  bdev_size: 16
 #-
 #  # Rank to be assigned as identifier for server.
 #  # Immutable after reformat.
@@ -286,22 +271,53 @@ name: daos
 #  fabric_iface: qib0
 #  fabric_iface_port: 20000
 #
+#  # Force specific debug mask (D_LOG_MASK) at start up time.
+#  # By default, just use the default debug mask used by DAOS.
+#  # Mask specifies minimum level of message significance to pass to logger.
+#
+#  log_mask: WARN
+#
 #  # Force specific path for DAOS debug logs.
 #
 #  # default: /tmp/daos_server
 #  log_file: /tmp/daos_server2.log
 #
+#  # Pass specific environment variables to the DAOS server
+#  # Empty by default.
+#
+#  env_vars:
+#      - ABT_MAX_NUM_XSTREAMS=200
+#      - CRT_TIMEOUT=100
 #
 #  # Define a pre-configured mountpoint for storage class memory to be used
 #  # by this server.
-#  # Path should be unique to server instance (an use different subdirs).
+#  # Path should be unique to server instance (can use different subdirs).
 #
 #  scm_mount: /mnt/daos/2
 #
-#  # NVMe SSD list. Force specific SSDs to be used by this server instance.
-#  # List of unique NVMe IDs, should be different across different server
-#  # instances.
-#  # Immutable after reformat, colons replaced by dots in PCI identifiers.
+#  # Backend block device type. Force a SPDK driver to be used by this server
+#  # instance.
+#  # Options are:
+#  # - "nvme" for NVMe SSDs (preferred option)
+#  # - "malloc" to emulate a NVMe SSD with memory
+#  # - "file" to emulate a NVMe SSD with a regular file
+#  # - "kdev" to use a kernel block device
+#  # Immutable after reformat.
 #
-#  bdev_list: [pcie1000.0.0.0.2]
+#  # When bdev_class is set to malloc, bdev_number is the number of devices
+#  # to allocate and bdev_size is the size in GB of each individual device.
+#  bdev_class: malloc
+#  bdev_number: 1
+#  bdev_size: 4
 #
+#  # When bdev_class is set to file, bdev_list is the list of file paths that
+#  # will be used to emulate NVMe SSDs. The size of each file is specified by
+#  # bdev_size in GB unit.
+#  bdev_class: file
+#  bdev_list: [/tmp/daos-bdev1,/tmp/daos-bdev2]
+#  bdev_size: 16
+#
+#  # When bdev_class is set to kdev, bdev_list is the list of unique kernel
+#  # block devices that should be different across different server instance.
+#  bdev_class: kdev
+#  bdev_list: [/dev/sdc,/dev/sdd]

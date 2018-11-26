@@ -1,12 +1,9 @@
 name: daos
-format: thrash
-
-name: daos
 servers:
-- rank: 0
+- rank: ""
   cpus:
   - 1-8
-  fabric_iface: eth0
+  fabric_iface: ib0
   fabric_iface_port: 31416
   log_mask: ERR
   log_file: /tmp/server.log
@@ -14,16 +11,15 @@ servers:
   - ABT_MAX_NUM_XSTREAMS=100
   - DAOS_MD_CAP=1024
   - CRT_TIMEOUT=30
-  - FI_SOCKETS_MAX_CONN_RETRY=1
-  - FI_SOCKETS_CONN_TIMEOUT=2000
-  scm_mount: /mnt/daos/1
-  bdev_class: thrash
-  bdev_list:
-  - /tmp/daos-bdev
+  - CRT_CREDIT_EP_CTX=0
+  scm_mount: /mnt/daos
+  bdev_class: nvme
+  bdev_list: []
   bdev_number: 0
-  bdev_size: 16
-provider: ofi+sockets
-socket_dir: /tmp/daos_sockets
+  bdev_size: 0
+  cliopts: []
+provider: ofi+psm2
+socket_dir: /tmp/daos_psm2
 auto: true
 format: safe
 access_points:

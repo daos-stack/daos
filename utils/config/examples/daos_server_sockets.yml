@@ -26,10 +26,10 @@ servers:
 
   # Storage definitions
 
-  scm_mount: /mnt/daos/1	# map to -s /mnt/daos/1
+  scm_mount: /mnt/daos	# map to -s /mnt/daos
 
   # If using NVMe SSD
-  # bdev_class: nvme
+  bdev_class: nvme
   # bdev_list: [pcie1000.0.0.0.1]  # generate regular nvme.conf
 
   # If emulating NVMe SSD with malloc devices
@@ -42,13 +42,13 @@ servers:
 
   # If emulating NVMe SSD over kernel block device
   # bdev_class: kdev		# map to VOS_BDEV_CLASS=AIO
-  # bdev_list: /dev/sdc	# generate nvme.conf as follows:
+  # bdev_list: [/dev/sdc]	# generate nvme.conf as follows:
               # [AIO]
               #   AIO /dev/sdc AIO2
 
   # If emulating NVMe SSD with backend file
-  bdev_class: file		# map to VOS_BDEV_CLASS=AIO
-  bdev_size: 16		# file size in GB. Create file if does not exist.
-  bdev_list: /tmp/daos-bdev	# generate nvme.conf as follows:
+  # bdev_class: file		# map to VOS_BDEV_CLASS=AIO
+  # bdev_size: 16		# file size in GB. Create file if does not exist.
+  # bdev_list: [/tmp/daos-bdev]	# generate nvme.conf as follows:
               # [AIO]
               #   AIO /tmp/aiofile AIO1 4096

@@ -74,6 +74,8 @@ if [ -d "/mnt/daos" ]; then
     # Environment variables specific to the rdb tests
     export PATH=$SL_PREFIX/bin:$PATH
     export OFI_INTERFACE=lo
+    # Satisfy requirement for starting daos_server w/o config file
+    export CRT_PHY_ADDR_STR=ofi+sockets
     # Satisfy CGO Link requirements for go-spdk binding imports
     export LD_LIBRARY_PATH=$SL_PREFIX/lib:${LD_LIBRARY_PATH}
     run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"

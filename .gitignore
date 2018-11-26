@@ -19,4 +19,4 @@ protobuf-all-3.5.1.tar.gz
 Gopkg.lock
 /src/control/server/testdata/.*.yml
 /src/control/github.com/daos-stack
-/src/control/vendor/**/*.os
+*.os

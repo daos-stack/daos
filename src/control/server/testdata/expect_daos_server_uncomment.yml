@@ -1,0 +1,62 @@
+name: daos
+servers:
+- rank: "0"
+  cpus:
+  - 0-20
+  fabric_iface: qib0
+  fabric_iface_port: 20000
+  log_mask: WARN
+  log_file: /tmp/daos_server1.log
+  env_vars:
+  - ABT_MAX_NUM_XSTREAMS=100
+  - CRT_TIMEOUT=30
+  scm_mount: /mnt/daos/1
+  bdev_class: nvme
+  bdev_list:
+  - pcie1000.0.0.0.1
+  bdev_number: 0
+  bdev_size: 0
+  cliopts: []
+- rank: "1"
+  cpus:
+  - 21-40
+  fabric_iface: qib0
+  fabric_iface_port: 20000
+  log_mask: WARN
+  log_file: /tmp/daos_server2.log
+  env_vars:
+  - ABT_MAX_NUM_XSTREAMS=200
+  - CRT_TIMEOUT=100
+  scm_mount: /mnt/daos/2
+  bdev_class: kdev
+  bdev_list:
+  - /dev/sdc
+  - /dev/sdd
+  bdev_number: 1
+  bdev_size: 16
+  cliopts: []
+provider: ofi+verbs;ofi_rxm
+socket_dir: ./.daos/daos_server
+auto: false
+format: continue
+access_points:
+- hostname1
+- hostname2
+- hostname3
+port: 10001
+ca_cert: ./.daos/ca.crt
+cert: ./.daosa/daos_server.crt
+key: ./.daosa/daos_server.key
+fault_path: /vcdu0/rack1/hostname
+fault_cb: ./.daos/fd_callback
+fabric_ifaces:
+- qib0
+- qib1
+scm_mount_path: /mnt/daosa
+bdev_include:
+- pcie1000.0.0.0.1
+- pcie1000.0.0.0.2
+- pcie1000.0.0.0.3
+bdev_exclude:
+- pcie1000.0.0.0.1
+hyperthreads: true

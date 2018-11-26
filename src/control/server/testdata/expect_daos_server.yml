@@ -1,5 +1,7 @@
-name: daos
+name: daos_server
 servers: []
+provider: ""
+socket_dir: /var/run/daos_server
 auto: true
 format: safe
 access_points:
@@ -11,9 +13,7 @@ key: ./.daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
-provider: ""
-mount_path: /mnt/daos
-nvme_include: []
-nvme_exclude: []
+scm_mount_path: /mnt/daos
+bdev_include: []
+bdev_exclude: []
 hyperthreads: false
-socket_dir: /var/run/daos_server

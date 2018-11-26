@@ -87,5 +87,5 @@ func TestUpdateNvmeCtrlrFail(t *testing.T) {
 		Ctrlr: c, Path: "/foo/bar", Slot: 0}
 
 	_, err := s.UpdateNvmeCtrlr(nil, params)
-	ExpectError(t, err, "update failed, firmware revision unchanged")
+	ExpectError(t, err, "update failed, firmware revision unchanged", "")
 }

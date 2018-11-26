@@ -65,13 +65,15 @@ func AssertEqual(
 }
 
 // ExpectError asserts error contains expected message
-func ExpectError(t *testing.T, actualErr error, expectedMessage string) {
+func ExpectError(
+	t *testing.T, actualErr error, expectedMessage string, desc interface{}) {
+
 	if actualErr == nil {
-		t.Error("Expected a non-nil error")
+		t.Errorf("Expected a non-nil error: %v", desc)
 	} else if actualErr.Error() != expectedMessage {
-		t.Errorf("Wrong error message. Expected: %s, Actual: %s",
-			expectedMessage,
-			actualErr.Error())
+		t.Errorf(
+			"Wrong error message. Expected: %s, Actual: %s (%v)",
+			expectedMessage, actualErr.Error(), desc)
 	}
 }
 

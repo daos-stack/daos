@@ -32,11 +32,11 @@ fabric_ifaces:
 - ib0
 - ib1
 provider: ofi+verbs
-mount_path: /tmp/daos
-nvme_include:
+scm_mount_path: /tmp/daos
+bdev_include:
 - pcie1000.0.0.0.8
 - pcie1000.0.0.0.9
-nvme_exclude:
+bdev_exclude:
 - pcie1000.0.0.0.7
 hyperthreads: true
 socket_dir: /tmp/daos_server

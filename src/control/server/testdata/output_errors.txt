@@ -1,5 +1,3 @@
-config should exist and be populated with at least SystemName
+format value thrash not supported in config (safe/continue/force)
 
-config should exist and be populated with at least SystemName
-
-format value thrash not supported in config
+bdev_class value thrash not supported in config (nvme/malloc/kdev/file)

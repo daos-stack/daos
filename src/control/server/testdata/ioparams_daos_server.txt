@@ -1,0 +1,1 @@
+[{Rank: Cpus:[] FabricIface: FabricIfacePort:0 LogMask: LogFile: EnvVars:[] ScmMount:/mnt/daos BdevClass:nvme BdevList:[] BdevNumber:0 BdevSize:0 CliOpts:[-c 0 -g daos_server -s /mnt/daos]}]

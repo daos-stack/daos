@@ -108,3 +108,8 @@ func MockModulePB() *pb.ScmModule {
 		Capacity:   c.Capacity,
 	}
 }
+
+// MockCheckMount mocks CheckMount and always returns nil error.
+func MockCheckMountOk(path string) error {
+	return nil
+}

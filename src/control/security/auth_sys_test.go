@@ -42,7 +42,7 @@ func expectAuthSysErrorForToken(t *testing.T, badToken *pb.AuthToken, expectedEr
 		t.Error("Expected a nil AuthSys")
 	}
 
-	ExpectError(t, err, expectedErrorMessage)
+	ExpectError(t, err, expectedErrorMessage, "")
 }
 
 // AuthSysFromAuthToken tests
@@ -118,5 +118,5 @@ func TestAuthSysRequestFromCreds_failsIfDomainInfoNil(t *testing.T) {
 		t.Error("Expected a nil request")
 	}
 
-	ExpectError(t, err, "No credentials supplied")
+	ExpectError(t, err, "No credentials supplied", "")
 }

@@ -1,5 +1,7 @@
 name: daos
 servers: []
+provider: ""
+socket_dir: /var/run/daos_server
 auto: true
 format: safe
 access_points:
@@ -11,15 +13,15 @@ key: ./.daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
-provider: ""
-mount_path: /mnt/daos
-nvme_include: []
-nvme_exclude: []
+scm_mount_path: /mnt/daos
+bdev_include: []
+bdev_exclude: []
 hyperthreads: false
-socket_dir: /var/run/daos_server
 
 name: daos
 servers: []
+provider: ""
+socket_dir: /var/run/daos_server
 auto: true
 format: safe
 access_points:
@@ -31,15 +33,15 @@ key: ./.daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
-provider: ""
-mount_path: /mnt/daos
-nvme_include: []
-nvme_exclude: []
+scm_mount_path: /mnt/daos
+bdev_include: []
+bdev_exclude: []
 hyperthreads: false
-socket_dir: /var/run/daos_server
 
 name: new_daos
 servers: []
+provider: ""
+socket_dir: /var/run/daos_server
 auto: true
 format: safe
 access_points:
@@ -51,15 +53,15 @@ key: ./.daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
-provider: ""
-mount_path: /mnt/daos
-nvme_include: []
-nvme_exclude: []
+scm_mount_path: /mnt/daos
+bdev_include: []
+bdev_exclude: []
 hyperthreads: false
-socket_dir: /var/run/daos_server
 
 name: daos
 servers: []
+provider: ""
+socket_dir: /var/run/daos_server
 auto: true
 format: safe
 access_points:
@@ -71,15 +73,15 @@ key: ./.daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
-provider: ""
-mount_path: /mnt/daos
-nvme_include: []
-nvme_exclude: []
+scm_mount_path: /mnt/daos
+bdev_include: []
+bdev_exclude: []
 hyperthreads: false
-socket_dir: /var/run/daos_server
 
 name: daos
 servers: []
+provider: ""
+socket_dir: /var/run/daos_server
 auto: true
 format: continue
 access_points:
@@ -91,15 +93,15 @@ key: ./.daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
-provider: ""
-mount_path: /mnt/daos
-nvme_include: []
-nvme_exclude: []
+scm_mount_path: /mnt/daos
+bdev_include: []
+bdev_exclude: []
 hyperthreads: false
-socket_dir: /var/run/daos_server
 
 name: daos
 servers: []
+provider: ""
+socket_dir: /var/run/daos_server
 auto: true
 format: force
 access_points:
@@ -111,15 +113,15 @@ key: ./.daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
-provider: ""
-mount_path: /mnt/daos
-nvme_include: []
-nvme_exclude: []
+scm_mount_path: /mnt/daos
+bdev_include: []
+bdev_exclude: []
 hyperthreads: false
-socket_dir: /var/run/daos_server
 
 name: daos_cust
 servers: []
+provider: ofi+verbs
+socket_dir: /tmp/daos_server
 auto: false
 format: force
 access_points:
@@ -134,12 +136,10 @@ fault_cb: /tmp/daos_fault_cb.sh
 fabric_ifaces:
 - ib0
 - ib1
-provider: ofi+verbs
-mount_path: /tmp/daos
-nvme_include:
+scm_mount_path: /tmp/daos
+bdev_include:
 - pcie1000.0.0.0.8
 - pcie1000.0.0.0.9
-nvme_exclude:
+bdev_exclude:
 - pcie1000.0.0.0.7
 hyperthreads: true
-socket_dir: /tmp/daos_server
