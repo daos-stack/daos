@@ -1491,25 +1491,6 @@ int
 crt_rank_evict(crt_group_t *grp, d_rank_t rank);
 
 typedef void
-(*crt_event_cb) (d_rank_t rank, void *arg);
-
-/**
- * This function registers an event handler for process failures. If the calling
- * process has not yet registered a PMIx event handler for the
- * PMIX_ERR_PROC_ABORTED event, this function will do so.  When the external RAS
- * notifies the current process with a process failure event, event_handler()
- * will be executed. Invocation of event_handler() does not mean the rank has
- * been evicted.
- *
- * \param[in] event_handler    event handler to register
- * \param[in] arg              arg to event_handler
- *
- * \return                     DER_SUCCESS on success, negative value on error
- */
-int
-crt_register_event_cb(crt_event_cb event_handler, void *arg);
-
-typedef void
 (*crt_progress_cb) (crt_context_t ctx, void *arg);
 
 /**

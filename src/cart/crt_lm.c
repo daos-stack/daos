@@ -268,7 +268,8 @@ out:
  * times with the same pmix rank, only the first call takes effect.
  */
 static void
-lm_ras_event_hdlr_internal(d_rank_t crt_rank)
+lm_ras_event_hdlr_internal(d_rank_t crt_rank, enum crt_event_source src,
+			   enum crt_event_type type, void *arg)
 {
 	d_rank_t			 grp_self;
 	struct lm_grp_srv_t		*lm_grp_srv;
@@ -283,14 +284,17 @@ lm_ras_event_hdlr_internal(d_rank_t crt_rank)
 		D_ERROR("crt_group_rank() failed, rc: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	D_DEBUG(DB_TRACE, "ras rank %d got PMIx notification, cart rank: %d.\n",
-		grp_self, crt_rank);
+
+	D_DEBUG(DB_TRACE, "ras rank %d got notification %d from %d, "
+		"cart rank: %d.\n", grp_self, type, src, crt_rank);
+
+	if (type != CRT_EVT_DEAD)
+		D_GOTO(out, rc); /* Ignore all events which are not DEAD */
 
 	rc = crt_rank_evict(lm_grp_srv->lgs_grp, crt_rank);
-	if (rc == -DER_EVICTED)
-		D_GOTO(out, rc);
 	if (rc != 0) {
-		D_ERROR("crt_rank_evict() failed, rc: %d\n", rc);
+		if (rc != -DER_EVICTED)
+			D_ERROR("crt_rank_evict() failed, rc: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -399,7 +403,9 @@ crt_lm_fake_event_notify_fn(d_rank_t crt_rank, bool *dead)
 		*dead = true;
 	if (crt_lm_gdata.clg_lm_grp_srv.lgs_ras == 0)
 		D_GOTO(out, rc);
-	lm_ras_event_hdlr_internal(crt_rank);
+
+	lm_ras_event_hdlr_internal(crt_rank, CRT_EVS_UNKNOWN, CRT_EVT_DEAD,
+				   NULL);
 
 out:
 	return;
@@ -457,12 +463,6 @@ out:
 			rc, rpc_req->cr_opc);
 }
 
-static void
-lm_event_hdlr(d_rank_t crt_rank, void *arg)
-{
-	lm_ras_event_hdlr_internal(crt_rank);
-}
-
 /* compute list of subscribed ranks and sign up for RAS notifications */
 static int
 crt_lm_grp_init(crt_group_t *grp)
@@ -514,8 +514,7 @@ crt_lm_grp_init(crt_group_t *grp)
 	lm_grp_srv->lgs_bcast_list = d_rank_list_alloc(0);
 	if (lm_grp_srv->lgs_bcast_list == NULL) {
 		D_ERROR("d_rank_list_alloc failed.\n");
-		d_rank_list_free(lm_grp_srv->lgs_ras_ranks);
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_free_ranks, rc = -DER_NOMEM);
 	}
 	for (i = 0; i < num_ras_ranks; i++) {
 		/* select ras ranks as evenly distributed as possible */
@@ -528,17 +527,12 @@ crt_lm_grp_init(crt_group_t *grp)
 		if (grp_self != tmp_rank)
 			continue;
 		lm_grp_srv->lgs_ras = 1;
-		crt_register_event_cb(lm_event_hdlr, NULL);
+		crt_register_event_cb(lm_ras_event_hdlr_internal, NULL);
 	}
 
 	rc = D_RWLOCK_INIT(&lm_grp_srv->lgs_rwlock, NULL);
-	if (rc != 0) {
-		d_rank_list_free(lm_grp_srv->lgs_ras_ranks);
-		d_rank_list_free(lm_grp_srv->lgs_bcast_list);
-		if (lm_grp_srv->lgs_ras == 1)
-			crt_unregister_event_cb(lm_event_hdlr, NULL);
-		D_GOTO(out, rc);
-	}
+	if (rc != 0)
+		D_GOTO(out_unregister_event, rc);
 
 	/* every ras rank prints out its list of subscribed ranks */
 	if ((D_LOGFAC | DLOG_DBG) && lm_grp_srv->lgs_ras) {
@@ -547,14 +541,19 @@ crt_lm_grp_init(crt_group_t *grp)
 				     CRT_GROUP_ID_MAX_LEN);
 		if (rc != 0) {
 			D_ERROR("d_rank_list_dump() failed, rc: %d\n", rc);
-			d_rank_list_free(lm_grp_srv->lgs_ras_ranks);
-			d_rank_list_free(lm_grp_srv->lgs_bcast_list);
-			D_RWLOCK_DESTROY(&lm_grp_srv->lgs_rwlock);
-			if (lm_grp_srv->lgs_ras == 1)
-				crt_unregister_event_cb(lm_event_hdlr, NULL);
+			D_GOTO(out_destroy_lock, rc);
 		}
 	}
+	D_GOTO(out, rc);
 
+out_destroy_lock:
+	D_RWLOCK_DESTROY(&lm_grp_srv->lgs_rwlock);
+out_unregister_event:
+	if (lm_grp_srv->lgs_ras == 1)
+		crt_unregister_event_cb(lm_ras_event_hdlr_internal, NULL);
+	d_rank_list_free(lm_grp_srv->lgs_bcast_list);
+out_free_ranks:
+	d_rank_list_free(lm_grp_srv->lgs_ras_ranks);
 out:
 	return rc;
 }

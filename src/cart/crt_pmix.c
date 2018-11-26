@@ -672,11 +672,9 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 	d_list_for_each_entry(event_cb_priv,
 			      &crt_plugin_gdata.cpg_event_cbs, cecp_link) {
-		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 		cb_func = event_cb_priv->cecp_func;
 		arg = event_cb_priv->cecp_args;
-		cb_func(crt_rank, arg);
-		D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+		cb_func(crt_rank, CRT_EVS_PMIX, CRT_EVT_DEAD, arg);
 	}
 	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 
