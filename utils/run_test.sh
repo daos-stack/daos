@@ -23,6 +23,17 @@ if [ -d /work ]; then
     export D_LOG_FILE=/work/daos.log
 fi
 
+lock_test()
+{
+    (
+        # clean up all files except the lock
+        flock 9
+        find /mnt/daos -maxdepth 1 -mindepth 1 \! -name jenkins.lock -print0 | \
+             xargs -0r rm -vrf
+        "$@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
+    ) 9>/mnt/daos/jenkins.lock
+}
+
 run_test()
 {
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
@@ -33,9 +44,9 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    time flock /mnt/daos/jenkins.lock "$@" 2>&1 |
-        grep -v "SUCCESS! NO TEST FAILURE"
-    EXIT_STATUS="${PIPESTATUS[0]}"
+    time lock_test "$@"
+    EXIT_STATUS=${PIPESTATUS[0]}
+
     if [ "${EXIT_STATUS}" -ne 0 ]; then
         echo "Test $* failed with exit status ${EXIT_STATUS}."
         ((failed = failed + 1))
