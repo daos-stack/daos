@@ -136,7 +136,7 @@ class RebuildNoCap(Test):
             # the pool should be too full to start a rebuild so
             # expecting an error
             # not sure yet specifically what error
-            if status.pi_rebuild_st[2] == 0:
+            if status.pi_rebuild_st.rs_errno == 0:
                 self.fail("expecting rebuild to fail but it didn't.\n")
 
         except ValueError as e:
