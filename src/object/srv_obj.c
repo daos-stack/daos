@@ -768,10 +768,12 @@ ds_iter_vos(crt_rpc_t *rpc, struct dss_enum_arg *enum_arg,
 		    oei->oei_akey.iov_len == 0)
 			D_GOTO(out_cont_hdl, rc = -DER_PROTO);
 
-		if (oei->oei_rec_type == DAOS_IOD_ARRAY)
+		if (oei->oei_rec_type == DAOS_IOD_ARRAY) {
+			enum_arg->param.ip_epr.epr_lo = oei->oei_epoch;
 			type = VOS_ITER_RECX;
-		else
+		} else {
 			type = VOS_ITER_SINGLE;
+		}
 
 		enum_arg->param.ip_epc_expr = VOS_IT_EPC_RE;
 		enum_arg->fill_recxs = true;

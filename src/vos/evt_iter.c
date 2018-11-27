@@ -63,6 +63,7 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 	}
 
 	iter->it_state = EVT_ITER_INIT;
+	iter->it_epr = epr;
  out:
 	return rc;
 }

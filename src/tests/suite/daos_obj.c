@@ -1083,6 +1083,7 @@ enumerate_simple(void **state)
 	char		*large_key = NULL;
 	char		*large_buf = NULL;
 	char		*data_buf;
+	daos_epoch_t	 epoch = 1;
 	daos_key_desc_t  kds[ENUM_DESC_NR];
 	daos_anchor_t	 anchor;
 	daos_obj_id_t	 oid;
@@ -1119,11 +1120,11 @@ enumerate_simple(void **state)
 			/* Insert one large dkey (512K "L's") */
 			print_message("Insert (i=%d) dkey=LARGE_KEY\n", i);
 			insert_single(large_key, "a_key", 0, "data",
-				      strlen("data") + 1, 0, &req);
+				      strlen("data") + 1, epoch, &req);
 		} else {
 			/* Insert dkeys 0-999 */
 			insert_single(key, "a_key", 0, "data",
-				      strlen("data") + 1, 0, &req);
+				      strlen("data") + 1, epoch, &req);
 		}
 	}
 
@@ -1140,7 +1141,7 @@ enumerate_simple(void **state)
 		 * Return an array of "number" dkeys to buf, using "kds" for
 		 * index to get the dkey.
 		 */
-		rc = enumerate_dkey(0, &number, kds, &anchor, buf,
+		rc = enumerate_dkey(epoch, &number, kds, &anchor, buf,
 				    buf_len, &req);
 		if (rc == -DER_KEY2BIG) {
 			/**
@@ -1153,7 +1154,7 @@ enumerate_simple(void **state)
 					 ENUM_LARGE_KEY_BUF - 1);
 			buf = large_buf;
 			buf_len = ENUM_LARGE_KEY_BUF * 2;
-			rc = enumerate_dkey(0, &number, kds, &anchor, buf,
+			rc = enumerate_dkey(epoch, &number, kds, &anchor, buf,
 					    buf_len, &req);
 		}
 		assert_int_equal(rc, 0);
@@ -1178,6 +1179,7 @@ enumerate_simple(void **state)
 	}
 	/* Confirm the number of dkeys enumerated equal the number inserted */
 	assert_int_equal(key_nr, ENUM_KEY_REC_NR);
+	epoch++;
 
 	/**
 	 * Insert 1000 akey records, all with the same key value and the same
@@ -1191,11 +1193,11 @@ enumerate_simple(void **state)
 			/* Insert one large akey (512K "L's") */
 			print_message("Insert (i=%d) akey=LARGE_KEY\n", i);
 			insert_single("d_key", large_key, 0, "data",
-				      strlen("data") + 1, 0, &req);
+				      strlen("data") + 1, epoch, &req);
 		} else {
 			/* Insert akeys 0-999 */
 			insert_single("d_key", key, 0, "data",
-				      strlen("data") + 1, 0, &req);
+				      strlen("data") + 1, epoch, &req);
 		}
 	}
 
@@ -1212,7 +1214,7 @@ enumerate_simple(void **state)
 		 * Return an array of "number" akeys to buf, using "kds" for
 		 * index to get the akey.
 		 */
-		rc = enumerate_akey(0, "d_key", &number, kds, &anchor,
+		rc = enumerate_akey(epoch, "d_key", &number, kds, &anchor,
 				    buf, buf_len, &req);
 		if (rc == -DER_KEY2BIG) {
 			/**
@@ -1225,8 +1227,8 @@ enumerate_simple(void **state)
 					 ENUM_LARGE_KEY_BUF - 1);
 			buf = large_buf;
 			buf_len = ENUM_LARGE_KEY_BUF * 2;
-			rc = enumerate_akey(0, "d_key", &number, kds, &anchor,
-					    buf, buf_len, &req);
+			rc = enumerate_akey(epoch, "d_key", &number, kds,
+					    &anchor, buf, buf_len, &req);
 		}
 		assert_int_equal(rc, 0);
 
@@ -1250,6 +1252,7 @@ enumerate_simple(void **state)
 	}
 	/* Confirm the number of akeys enumerated equal the number inserted */
 	assert_int_equal(key_nr, ENUM_KEY_REC_NR);
+	epoch++;
 
 	/**
 	 * Insert 1000 mixed NVMe and SCM records, all with same dkey and akey.
@@ -1264,7 +1267,8 @@ enumerate_simple(void **state)
 		else
 			num_rec_exts = ENUM_NR_NVME; /* rx_nr=5 for NVMe test */
 		insert_single_with_rxnr("d_key", "a_rec", idx, data_buf,
-					ENUM_IOD_SIZE, num_rec_exts, 0, &req);
+					ENUM_IOD_SIZE, num_rec_exts, epoch,
+					&req);
 			idx += num_rec_exts;
 	}
 
@@ -1278,7 +1282,7 @@ enumerate_simple(void **state)
 		daos_size_t	size;
 
 		number = 5;
-		enumerate_rec(0, "d_key", "a_rec", &size,
+		enumerate_rec(epoch, "d_key", "a_rec", &size,
 			      &number, recxs, eprs, &anchor, true, &req);
 		if (number == 0)
 			break; /* loop should break for EOF */
