@@ -716,6 +716,25 @@ singv_iter_next(struct vos_obj_iter *oiter)
 	return rc;
 }
 
+static void
+recx_iter_adjust_epr(struct vos_obj_iter *oiter, vos_it_epc_expr_t expr)
+{
+	switch (expr) {
+	default:
+		D_ASSERT(0);
+		break;
+	case VOS_IT_EPC_EQ:
+		break;
+	case VOS_IT_EPC_GE:
+		oiter->it_epr.epr_hi = DAOS_EPOCH_MAX;
+		break;
+	case VOS_IT_EPC_RR:
+	case VOS_IT_EPC_RE:
+	case VOS_IT_EPC_LE:
+		oiter->it_epr.epr_lo = 0;
+	}
+}
+
 /**
  * Prepare the iterator for the recx tree.
  */
@@ -738,6 +757,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	if (rc != 0)
 		D_GOTO(failed_1, rc);
 
+	recx_iter_adjust_epr(oiter, oiter->it_epc_expr);
 	rc = evt_iter_prepare(ak_toh, EVT_ITER_EMBEDDED, oiter->it_epr,
 			      &oiter->it_hdl);
 	if (rc != 0) {
@@ -817,6 +837,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		return -DER_NOMEM;
 
 	oiter->it_epr = param->ip_epr;
+	oiter->it_epc_expr = param->ip_epc_expr;
 	/* XXX the condition epoch ranges could cover multiple versions of
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
@@ -851,7 +872,6 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		break;
 
 	case VOS_ITER_SINGLE:
-		oiter->it_epc_expr = param->ip_epc_expr;
 		rc = singv_iter_prepare(oiter, &param->ip_dkey,
 					&param->ip_akey);
 		break;
@@ -966,6 +986,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		return -DER_NOMEM;
 
 	oiter->it_epr = info->ii_epr;
+	oiter->it_epc_expr = info->ii_epc_expr;
 	if (type != VOS_ITER_DKEY)
 		oiter->it_obj = info->ii_obj;
 
@@ -981,7 +1002,6 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 			goto failed;
 		return 0;
 	case VOS_ITER_SINGLE:
-		oiter->it_epc_expr = info->ii_epc_expr;
 	case VOS_ITER_AKEY:
 		rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma,
 					    info->ii_vea_info, &toh);
@@ -1002,7 +1022,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 				" rc = %d\n", rc);
 			goto failed;
 		}
-		rc = evt_iter_prepare(toh, EVT_ITER_EMBEDDED, info->ii_epr,
+		recx_iter_adjust_epr(oiter, oiter->it_epc_expr);
+		rc = evt_iter_prepare(toh, EVT_ITER_EMBEDDED, oiter->it_epr,
 				      &oiter->it_hdl);
 		break;
 	}

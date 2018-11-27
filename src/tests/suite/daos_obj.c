@@ -1267,7 +1267,7 @@ enumerate_simple(void **state)
 		else
 			num_rec_exts = ENUM_NR_NVME; /* rx_nr=5 for NVMe test */
 		insert_single_with_rxnr("d_key", "a_rec", idx, data_buf,
-					ENUM_IOD_SIZE, num_rec_exts, epoch,
+					ENUM_IOD_SIZE, num_rec_exts, epoch++,
 					&req);
 			idx += num_rec_exts;
 	}
@@ -1282,7 +1282,7 @@ enumerate_simple(void **state)
 		daos_size_t	size;
 
 		number = 5;
-		enumerate_rec(epoch, "d_key", "a_rec", &size,
+		enumerate_rec(epoch++, "d_key", "a_rec", &size,
 			      &number, recxs, eprs, &anchor, true, &req);
 		if (number == 0)
 			break; /* loop should break for EOF */
