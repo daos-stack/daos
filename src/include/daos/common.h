@@ -222,6 +222,14 @@ daos_env2uint(char *string)
 	return result;
 }
 
+/**
+ * Convert system errno to DER_* variant. Default error code for any non-defined
+ * system errnos is DER_MISC (miscellaneous error).
+ *
+ * \param[in] err	System error code
+ *
+ * \return		Corresponding DER_* error code
+ */
 static inline int
 daos_errno2der(int err)
 {
@@ -235,8 +243,19 @@ daos_errno2der(int err)
 	case EEXIST:		return -DER_EXIST;
 	case ENOENT:		return -DER_NONEXIST;
 	case ECANCELED:		return -DER_CANCELED;
+	case EBUSY:		return -DER_BUSY;
+	case EOVERFLOW:		return -DER_OVERFLOW;
+	case EBADF:		return -DER_NO_HDL;
+	case ENOSYS:		return -DER_NOSYS;
+	case ETIMEDOUT:		return -DER_TIMEDOUT;
 	case EWOULDBLOCK:	return -DER_AGAIN;
-	default:		return -DER_INVAL;
+	case EPROTO:		return -DER_PROTO;
+	case EINVAL:		return -DER_INVAL;
+	case ENOTDIR:		return -DER_NOTDIR;
+	case EFAULT:
+	case ENXIO:
+	case ENODEV:
+	default:		return -DER_MISC;
 	}
 }
 
