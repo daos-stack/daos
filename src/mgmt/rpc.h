@@ -136,10 +136,12 @@ struct mgmt_params_set_in {
 	uint32_t	ps_rank;
 	uint32_t	ps_key_id;
 	uint64_t	ps_value;
+	uint64_t	ps_value_extra;
 };
 
 struct mgmt_tgt_params_set_in {
 	uint64_t	tps_value;
+	uint64_t	tps_value_extra;
 	uint32_t	tps_key_id;
 };
 

@@ -137,6 +137,7 @@ typedef struct {
 	d_rank_t		rank;
 	uint32_t		key_id;
 	uint64_t		value;
+	uint64_t		value_extra;
 } daos_params_set_t;
 
 typedef struct {

@@ -40,7 +40,9 @@ static struct crt_msg_field *obj_rw_in_fields[] = {
 	&CMF_IOVEC,	/* dkey */
 	&DMF_IOD_ARRAY, /* I/O descriptor array */
 	&DMF_SGL_ARRAY, /* scatter/gather array */
-	&CMF_BULK_ARRAY,    /* BULK ARRAY */
+	&CMF_BULK_ARRAY,	/* BULK ARRAY */
+	&DMF_OBJ_SHARD_TGTS,	/* forward shard tgt array */
+	&CMF_UINT32,		/* orw_flags */
 };
 
 static struct crt_msg_field *obj_rw_out_fields[] = {
@@ -87,14 +89,15 @@ static struct crt_msg_field *obj_key_enum_out_fields[] = {
 };
 
 static struct crt_msg_field *obj_punch_in_fields[] = {
-	&CMF_UUID,	/* container handle uuid */
-	&CMF_UUID,	/* container uuid */
-	&DMF_OID,	/* object ID */
-	&CMF_UINT64,	/* epoch */
-	&CMF_UINT32,	/* map_version */
-	&CMF_UINT32,	/* pad  */
-	&DMF_KEY_ARRAY,	/* dkey array */
-	&DMF_KEY_ARRAY,	/* akey array */
+	&CMF_UUID,		/* container handle uuid */
+	&CMF_UUID,		/* container uuid */
+	&DMF_OID,		/* object ID */
+	&CMF_UINT64,		/* epoch */
+	&CMF_UINT32,		/* map_version */
+	&CMF_UINT32,		/* pad  */
+	&DMF_KEY_ARRAY,		/* dkey array */
+	&DMF_KEY_ARRAY,		/* akey array */
+	&DMF_OBJ_SHARD_TGTS,	/* forward shard tgt array */
 };
 
 static struct crt_msg_field *obj_punch_out_fields[] = {
@@ -280,3 +283,28 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	}
 	return 0;
 }
+
+int
+daos_proc_obj_shard_tgt(crt_proc_t proc, struct daos_obj_shard_tgt *st)
+{
+	int rc;
+
+	rc = crt_proc_uint32_t(proc, &st->st_rank);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_uint32_t(proc, &st->st_shard);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_uint32_t(proc, &st->st_tgt_idx);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_uint32_t(proc, &st->st_pad);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+struct crt_msg_field DMF_OBJ_SHARD_TGTS =
+	DEFINE_CRT_MSG(CMF_ARRAY_FLAG, sizeof(struct daos_obj_shard_tgt),
+		       daos_proc_obj_shard_tgt);

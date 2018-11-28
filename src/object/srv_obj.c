@@ -188,7 +188,7 @@ bulk_bypass(daos_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 }
 
 static int
-ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
+ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		 crt_bulk_t *remote_bulks, daos_handle_t ioh,
 		 daos_sg_list_t **sgls, int sgl_nr)
 {
@@ -294,8 +294,12 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			bulk_desc.bd_local_off	= 0;
 
 			arg.bulks_inflight++;
-			rc = crt_bulk_transfer(&bulk_desc, bulk_complete_cb,
-					       &arg, &bulk_opid);
+			if (bulk_bind)
+				rc = crt_bulk_bind_transfer(&bulk_desc,
+					bulk_complete_cb, &arg, &bulk_opid);
+			else
+				rc = crt_bulk_transfer(&bulk_desc,
+					bulk_complete_cb, &arg, &bulk_opid);
 			if (rc < 0) {
 				D_ERROR("crt_bulk_transfer %d error (%d).\n",
 					i, rc);
@@ -491,11 +495,14 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 	daos_iod_t		*iod;
 	daos_sg_list_t		*p_sgl;
 	crt_bulk_op_t		bulk_op;
+	bool			bulk_bind;
 	int			i;
 	int			rc = 0;
 
-	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" tag %d\n", opc_get(rpc->cr_opc),
-		DP_UOID(orw->orw_oid), dss_get_module_info()->dmi_tid);
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d eph "DF_U64".\n",
+		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
+		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
+		dss_get_module_info()->dmi_tid, orw->orw_epoch);
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		rc = ds_obj_update_sizes_in_reply(rpc);
@@ -563,35 +570,163 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 		bulk_op = CRT_BULK_GET;
 	}
 
-	rc = ds_bulk_transfer(rpc, bulk_op, orw->orw_bulks.ca_arrays,
+	bulk_bind = orw->orw_flags & ORW_FLAG_BULK_BIND;
+	rc = ds_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays,
 			      DAOS_HDL_INVAL, &p_sgl, orw->orw_nr);
 
 out:
 	orwo->orw_ret = rc;
 	orwo->orw_map_version = orw->orw_map_ver;
-	rc = crt_reply_send(rpc);
-	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+}
+
+static int
+obj_update_postfw(crt_rpc_t *req, uint32_t shard, void *arg)
+{
+	struct obj_rw_in	*orw_parent = arg;
+	struct obj_rw_out	*orw_out = crt_reply_get(req);
+	int			 rc = 0;
+
+	if (orw_parent->orw_map_ver < orw_out->orw_map_version) {
+		D_DEBUG(DB_IO, DF_UOID": map_ver stale (%d < %d).\n",
+			DP_UOID(orw_parent->orw_oid), orw_parent->orw_map_ver,
+			orw_out->orw_map_version);
+		rc = -DER_STALE;
+	}
+
+	return rc;
+}
+
+static int
+obj_update_prefw(crt_rpc_t *req, uint32_t shard, void *arg)
+{
+	struct obj_rw_in	*orw_parent = arg;
+	struct obj_rw_in	*orw = crt_req_get(req);
+
+	*orw = *orw_parent;
+	orw->orw_oid.id_shard = shard;
+	uuid_copy(orw->orw_co_hdl, orw_parent->orw_co_hdl);
+	uuid_copy(orw->orw_co_uuid, orw_parent->orw_co_uuid);
+	orw->orw_shard_tgts.ca_count	= 0;
+	orw->orw_shard_tgts.ca_arrays	= NULL;
+	orw->orw_flags			= ORW_FLAG_BULK_BIND;
+
+	return 0;
+}
+
+static int
+ds_obj_rw_local_hdlr(crt_rpc_t *rpc, uint32_t tag, struct ds_cont_hdl *cont_hdl,
+		     struct ds_cont *cont, daos_handle_t *ioh, bool update)
+{
+	struct obj_rw_in	*orw = crt_req_get(rpc);
+	struct obj_rw_out	*orwo = crt_reply_get(rpc);
+	struct bio_desc		*biod;
+	crt_bulk_op_t		 bulk_op;
+	bool			 rma;
+	bool			 bulk_bind;
+	int			 rc, err;
+
+	if (daos_oc_echo_type(daos_obj_id2class(orw->orw_oid.id_pub))) {
+		ds_obj_rw_echo_handler(rpc);
+		return 0;
+	}
+
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d eph "DF_U64".\n",
+		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
+		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
+		tag, orw->orw_epoch);
+	rma = (orw->orw_bulks.ca_arrays != NULL ||
+	       orw->orw_bulks.ca_count != 0);
+
+	/* Prepare IO descriptor */
+	if (update) {
+		bulk_op = CRT_BULK_GET;
+		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
+				      orw->orw_epoch, &orw->orw_dkey,
+				      orw->orw_nr, orw->orw_iods.ca_arrays,
+				      ioh);
+		if (rc) {
+			D_ERROR(DF_UOID" Update begin failed: %d\n",
+				DP_UOID(orw->orw_oid), rc);
+			goto out;
+		}
+	} else {
+		bool size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
+
+		bulk_op = CRT_BULK_PUT;
+		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
+				     &orw->orw_dkey, orw->orw_nr,
+				     orw->orw_iods.ca_arrays, size_fetch, ioh);
+		if (rc) {
+			D_ERROR(DF_UOID" Fetch begin failed: %d\n",
+				DP_UOID(orw->orw_oid), rc);
+			goto out;
+		}
+
+		rc = ds_obj_update_sizes_in_reply(rpc);
+		if (rc != 0)
+			goto out;
+
+		if (rma) {
+			orwo->orw_sgls.ca_count = 0;
+			orwo->orw_sgls.ca_arrays = NULL;
+
+			rc = ds_obj_update_nrs_in_reply(rpc, *ioh, NULL);
+			if (rc != 0)
+				goto out;
+		} else {
+			orwo->orw_sgls.ca_count = orw->orw_sgls.ca_count;
+			orwo->orw_sgls.ca_arrays = orw->orw_sgls.ca_arrays;
+		}
+	}
+
+	biod = vos_ioh2desc(*ioh);
+	rc = bio_iod_prep(biod);
+	if (rc) {
+		D_ERROR(DF_UOID" bio_iod_prep failed: %d.\n",
+			DP_UOID(orw->orw_oid), rc);
+		goto out;
+	}
+
+	if (rma) {
+		bulk_bind = orw->orw_flags & ORW_FLAG_BULK_BIND;
+		rc = ds_bulk_transfer(rpc, bulk_op, bulk_bind,
+			orw->orw_bulks.ca_arrays, *ioh, NULL, orw->orw_nr);
+	} else if (orw->orw_sgls.ca_arrays != NULL) {
+		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
+	}
+
+	if (rc == -DER_OVERFLOW) {
+		rc = -DER_REC2BIG;
+		D_ERROR(DF_UOID" ds_bulk_transfer/bio_iod_copy failed, rc %d",
+			DP_UOID(orw->orw_oid), rc);
+	}
+
+	err = bio_iod_post(biod);
+	rc = rc ? : err;
+out:
+	return rc;
 }
 
 void
 ds_obj_rw_handler(crt_rpc_t *rpc)
 {
-	struct ds_cont_hdl	*cont_hdl = NULL;
-	struct ds_cont		*cont = NULL;
-	struct obj_rw_in	*orw;
-	daos_handle_t		 ioh = DAOS_HDL_INVAL;
-	crt_bulk_op_t		 bulk_op;
-	uint32_t		 map_ver = 0;
-	bool			 rma, update;
-	struct bio_desc		*biod;
-	int			 rc, err;
+	struct obj_req_disp_arg		*obj_arg = NULL;
+	struct obj_rw_in		*orw = crt_req_get(rpc);
+	struct obj_rw_out		*orwo = crt_reply_get(rpc);
+	struct ds_cont_hdl		*cont_hdl = NULL;
+	struct ds_cont			*cont = NULL;
+	daos_handle_t			 ioh = DAOS_HDL_INVAL;
+	uint32_t			 map_ver = 0;
+	uint32_t			 tag;
+	bool				 update;
+	bool				 dispatch;
+	int				 dispatch_rc = 0;
+	int				 rc;
 
-	orw = crt_req_get(rpc);
 	D_ASSERT(orw != NULL);
-
-	if (daos_obj_id2class(orw->orw_oid.id_pub) == DAOS_OC_ECHO_RW)
-		return ds_obj_rw_echo_handler(rpc);
+	D_ASSERT(orwo != NULL);
+	update = (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE);
+	dispatch = update && orw->orw_shard_tgts.ca_arrays != NULL;
 
 	rc = ds_check_container(orw->orw_co_hdl, orw->orw_co_uuid,
 				&cont_hdl, &cont);
@@ -611,84 +746,53 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (orw->orw_map_ver < map_ver) {
 		D_DEBUG(DB_IO, "stale version req %d map_version %d\n",
 			orw->orw_map_ver, map_ver);
+		if (update && dispatch)
+			D_GOTO(out, rc = -DER_STALE);
 	}
 
-	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d eph "DF_U64"\n",
-		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
-		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		dss_get_module_info()->dmi_tid, orw->orw_epoch);
+	tag = dss_get_module_info()->dmi_tid;
 
-	rma = (orw->orw_bulks.ca_arrays != NULL ||
-	       orw->orw_bulks.ca_count != 0);
-
-	update = (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE);
-
-	/* Prepare IO descriptor */
-	if (update) {
-		bulk_op = CRT_BULK_GET;
-		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
-				      orw->orw_epoch, &orw->orw_dkey,
-				      orw->orw_nr, orw->orw_iods.ca_arrays,
-				      &ioh);
-		if (rc) {
-			D_ERROR(DF_UOID" Update begin failed: %d\n",
+	/* dispatch to other tgts when needed */
+	if (dispatch) {
+		rc = ds_obj_req_disp_prepare(rpc->cr_opc,
+			orw->orw_shard_tgts.ca_arrays,
+			orw->orw_shard_tgts.ca_count,
+			obj_update_prefw, orw, obj_update_postfw, orw,
+			&obj_arg);
+		if (rc != 0) {
+			D_ERROR(DF_UOID": ds_obj_req_disp_prepare failed %d.\n",
 				DP_UOID(orw->orw_oid), rc);
-			goto out;
+			D_GOTO(out, rc);
 		}
-	} else {
-		struct obj_rw_out *orwo = crt_reply_get(rpc);
-		bool size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
+		D_ASSERT(obj_arg != NULL);
 
-		D_ASSERT(orwo != NULL);
-		bulk_op = CRT_BULK_PUT;
-		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
-				     &orw->orw_dkey, orw->orw_nr,
-				     orw->orw_iods.ca_arrays, size_fetch, &ioh);
-		if (rc) {
-			D_ERROR(DF_UOID" Fetch begin failed: %d\n",
+		/* create a dispatch ULT on neighbour ES to release this ES
+		 * in-time for RPC communication.
+		 * XXX can optimize for better method later.
+		 */
+		rc = dss_ult_create(ds_obj_req_dispatch, obj_arg,
+				    (tag + 1) % dss_nxstreams, 0, NULL);
+		if (rc != 0) {
+			D_ERROR(DF_UOID": ds_obj_update_dispatch failed %d.\n",
 				DP_UOID(orw->orw_oid), rc);
-			goto out;
-		}
-
-		rc = ds_obj_update_sizes_in_reply(rpc);
-		if (rc != 0)
-			goto out;
-
-		if (rma) {
-			orwo->orw_sgls.ca_count = 0;
-			orwo->orw_sgls.ca_arrays = NULL;
-
-			rc = ds_obj_update_nrs_in_reply(rpc, ioh, NULL);
-			if (rc != 0)
-				goto out;
-		} else {
-			orwo->orw_sgls.ca_count = orw->orw_sgls.ca_count;
-			orwo->orw_sgls.ca_arrays = orw->orw_sgls.ca_arrays;
+			ds_obj_req_disp_arg_free(obj_arg);
+			D_GOTO(out, rc);
 		}
 	}
 
-	biod = vos_ioh2desc(ioh);
-	rc = bio_iod_prep(biod);
-	if (rc) {
-		D_ERROR(DF_UOID" bio_iod_prep failed: %d.\n",
+	/* local RPC handler */
+	rc = ds_obj_rw_local_hdlr(rpc, tag, cont_hdl, cont, &ioh, update);
+	if (rc != 0)
+		D_ERROR(DF_UOID": ds_obj_rw_local_hdlr failed %d.\n",
 			DP_UOID(orw->orw_oid), rc);
-		goto out;
-	}
 
-	if (rma)
-		rc = ds_bulk_transfer(rpc, bulk_op, orw->orw_bulks.ca_arrays,
-				      ioh, NULL, orw->orw_nr);
-	else if (orw->orw_sgls.ca_arrays != NULL)
-		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
+	/* wait dispatched IO's completion when needed */
+	if (dispatch)
+		dispatch_rc = ds_obj_req_disp_wait(obj_arg);
 
-	if (rc == -DER_OVERFLOW) {
-		rc = -DER_REC2BIG;
-		D_ERROR(DF_UOID" ds_bulk_transfer/bio_iod_copy failed, rc %d",
-			DP_UOID(orw->orw_oid), rc);
-	}
+	if (rc == 0)
+		rc = dispatch_rc;
 
-	err = bio_iod_post(biod);
-	rc = rc ? : err;
 out:
 	ds_obj_rw_complete(rpc, cont_hdl, ioh, rc, map_ver);
 	if (cont_hdl) {
@@ -844,7 +948,7 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 	if (idx == 0)
 		return 0;
 
-	rc = ds_bulk_transfer(rpc, CRT_BULK_PUT, bulks, DAOS_HDL_INVAL,
+	rc = ds_bulk_transfer(rpc, CRT_BULK_PUT, false, bulks, DAOS_HDL_INVAL,
 			      sgls, idx);
 
 	if (oei->oei_kds_bulk) {
@@ -963,6 +1067,39 @@ out:
 	ds_eu_complete(rpc, rc, map_version);
 }
 
+static int
+obj_punch_postfw(crt_rpc_t *req, uint32_t shard, void *arg)
+{
+	struct obj_punch_in	*opi_parent = arg;
+	struct obj_punch_out	*opo = crt_reply_get(req);
+	int			 rc = 0;
+
+	if (opi_parent->opi_map_ver < opo->opo_map_version) {
+		D_DEBUG(DB_IO, DF_UOID": map_ver stale (%d < %d).\n",
+			DP_UOID(opi_parent->opi_oid), opi_parent->opi_map_ver,
+			opo->opo_map_version);
+		rc = -DER_STALE;
+	}
+
+	return rc;
+}
+
+static int
+obj_punch_prefw(crt_rpc_t *req, uint32_t shard, void *arg)
+{
+	struct obj_punch_in	*opi_parent = arg;
+	struct obj_punch_in	*opi = crt_req_get(req);
+
+	*opi = *opi_parent;
+	opi->opi_oid.id_shard = shard;
+	uuid_copy(opi->opi_co_hdl, opi_parent->opi_co_hdl);
+	uuid_copy(opi->opi_co_uuid, opi_parent->opi_co_uuid);
+	opi->opi_shard_tgts.ca_count = 0;
+	opi->opi_shard_tgts.ca_arrays = NULL;
+
+	return 0;
+}
+
 static void
 obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 {
@@ -976,35 +1113,12 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 		D_ERROR("send reply failed: %d\n", rc);
 }
 
-void
-ds_obj_punch_handler(crt_rpc_t *rpc)
+static int
+ds_obj_punch_local_hdlr(struct obj_punch_in *opi, crt_opcode_t opc,
+			struct ds_cont_hdl *cont_hdl, struct ds_cont *cont)
 {
-	struct obj_punch_in	*opi;
-	struct ds_cont_hdl	*cont_hdl = NULL;
-	struct ds_cont		*cont = NULL;
-	uint32_t		map_version = 0;
-	int			opc;
-	int			i;
-	int			rc;
-
-	opi = crt_req_get(rpc);
-	opc = opc_get(rpc->cr_opc);
-
-	rc = ds_check_container(opi->opi_co_hdl, opi->opi_co_uuid,
-				&cont_hdl, &cont);
-	if (rc)
-		D_GOTO(out, rc);
-
-	if (!(cont_hdl->sch_capas & DAOS_COO_RW))
-		D_GOTO(out, rc = -DER_NO_PERM);
-
-	D_ASSERT(cont_hdl->sch_pool != NULL);
-	map_version = cont_hdl->sch_pool->spc_map_version;
-
-	if (opi->opi_map_ver < map_version) {
-		D_DEBUG(DB_IO, "stale version req %d map_version %d\n",
-			 opi->opi_map_ver, map_version);
-	}
+	int	i;
+	int	rc = 0;
 
 	switch (opc) {
 	default:
@@ -1036,13 +1150,86 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	}
 
 out:
+	return rc;
+}
+
+void
+ds_obj_punch_handler(crt_rpc_t *rpc)
+{
+	struct obj_req_disp_arg		*obj_arg = NULL;
+	struct ds_cont_hdl		*cont_hdl = NULL;
+	struct ds_cont			*cont = NULL;
+	struct obj_punch_in		*opi;
+	uint32_t			 map_version = 0;
+	uint32_t			 tag;
+	bool				 dispatch;
+	int				 dispatch_rc = 0;
+	int				 rc;
+
+	opi = crt_req_get(rpc);
+	D_ASSERT(opi != NULL);
+	dispatch = opi->opi_shard_tgts.ca_arrays != NULL;
+
+	rc = ds_check_container(opi->opi_co_hdl, opi->opi_co_uuid,
+				&cont_hdl, &cont);
+	if (rc)
+		D_GOTO(out, rc);
+
+	if (!(cont_hdl->sch_capas & DAOS_COO_RW))
+		D_GOTO(out, rc = -DER_NO_PERM);
+
+	D_ASSERT(cont_hdl->sch_pool != NULL);
+	map_version = cont_hdl->sch_pool->spc_map_version;
+
+	if (opi->opi_map_ver < map_version) {
+		D_DEBUG(DB_IO, "stale version req %d map_version %d\n",
+			 opi->opi_map_ver, map_version);
+		if (dispatch)
+			D_GOTO(out, rc = -DER_STALE);
+	}
+
+	if (dispatch) {
+		rc = ds_obj_req_disp_prepare(rpc->cr_opc,
+			opi->opi_shard_tgts.ca_arrays,
+			opi->opi_shard_tgts.ca_count,
+			obj_punch_prefw, opi, obj_punch_postfw, opi,
+			&obj_arg);
+		if (rc != 0) {
+			D_ERROR(DF_UOID": ds_obj_req_disp_prepare failed %d.\n",
+				DP_UOID(opi->opi_oid), rc);
+			D_GOTO(out, rc);
+		}
+		D_ASSERT(obj_arg != NULL);
+
+		tag = dss_get_module_info()->dmi_tid;
+		rc = dss_ult_create(ds_obj_req_dispatch, obj_arg,
+				    (tag + 1) % dss_nxstreams, 0, NULL);
+		if (rc != 0) {
+			D_ERROR(DF_UOID": ds_obj_req_dispatch failed %d.\n",
+				DP_UOID(opi->opi_oid), rc);
+			ds_obj_req_disp_arg_free(obj_arg);
+			D_GOTO(out, rc);
+		}
+	}
+
+	rc = ds_obj_punch_local_hdlr(opi, opc_get(rpc->cr_opc), cont_hdl, cont);
+	if (rc != 0)
+		D_ERROR(DF_UOID": ds_obj_punch_local_hdlr failed %d.\n",
+			DP_UOID(opi->opi_oid), rc);
+
+	if (dispatch)
+		dispatch_rc = ds_obj_req_disp_wait(obj_arg);
+
+	if (rc == 0)
+		rc = dispatch_rc;
+
+out:
+	obj_punch_complete(rpc, rc, map_version);
 	if (cont_hdl) {
 		if (!cont_hdl->sch_cont)
 			ds_cont_put(cont); /* -1 for rebuild container */
 		ds_cont_hdl_put(cont_hdl);
 	}
-
-	obj_punch_complete(rpc, rc, map_version);
 }
 
 void
@@ -1117,14 +1304,252 @@ out:
 ABT_pool
 ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools)
 {
-	ABT_pool pool;
+	struct obj_rw_in	*orw;
+	struct obj_punch_in	*opi;
+	ABT_pool		 pool;
 
-	if (opc_get(rpc->cr_opc) == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
-	    opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH ||
-	    opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_ENUMERATE)
+	switch (opc_get(rpc->cr_opc)) {
+	case DAOS_OBJ_RPC_ENUMERATE:
+	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RPC_PUNCH:
 		pool = pools[DSS_POOL_SHARE];
-	else
+		break;
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+		/* if the update/punch need to dispatch to other tgts, schedules
+		 * it in SHARE pool as need other ES to dispatch it.
+		 */
+		opi = crt_req_get(rpc);
+		pool = (opi->opi_shard_tgts.ca_arrays != NULL) ?
+		       pools[DSS_POOL_SHARE] : pools[DSS_POOL_PRIV];
+		break;
+	case DAOS_OBJ_RPC_UPDATE:
+		orw = crt_req_get(rpc);
+		pool = (orw->orw_shard_tgts.ca_arrays != NULL) ?
+		       pools[DSS_POOL_SHARE] : pools[DSS_POOL_PRIV];
+		break;
+	default:
 		pool = pools[DSS_POOL_PRIV];
+		break;
+	};
 
 	return pool;
 }
+
+struct obj_req_disp_arg {
+	ds_iofw_cb_t			 prefw_cb;
+	void				*prefw_arg;
+	ds_iofw_cb_t			 postfw_cb;
+	void				*postfw_arg;
+	ABT_future			 fw_future;
+	crt_opcode_t			 fw_opc;
+	uint32_t			 fw_cnt;
+	int				 fw_result;
+};
+
+struct shard_req_fw_arg {
+	struct daos_obj_shard_tgt	*fw_shard_tgt;
+	struct obj_req_disp_arg		*fw_obj_arg;
+	int				 fw_shard_rc;
+};
+
+static void
+obj_req_dispatch_cb(void **arg)
+{
+	struct shard_req_fw_arg		*shard_arg;
+	struct obj_req_disp_arg		*obj_arg;
+	uint32_t			 i, fw_cnt;
+
+	shard_arg = arg[0];
+	obj_arg = shard_arg->fw_obj_arg;
+	fw_cnt = obj_arg->fw_cnt;
+	D_ASSERT(fw_cnt >= 1);
+	for (i = 0; i < fw_cnt; i++) {
+		shard_arg = arg[i];
+		D_ASSERT(shard_arg->fw_obj_arg == obj_arg);
+		if (obj_arg->fw_result == 0)
+			obj_arg->fw_result = shard_arg->fw_shard_rc;
+	}
+}
+
+static void
+shard_req_fw_cb(const struct crt_cb_info *cb_info)
+{
+	crt_rpc_t		*req = cb_info->cci_rpc;
+	struct shard_req_fw_arg	*shard_arg = cb_info->cci_arg;
+	int			 rc = cb_info->cci_rc;
+
+	if (rc == 0) {
+		rc = shard_arg->fw_obj_arg->postfw_cb(
+				req, shard_arg->fw_shard_tgt->st_shard,
+				shard_arg->fw_obj_arg->postfw_arg);
+		if (rc != 0)
+			D_DEBUG(DB_TRACE, "opc:%#x, postfw_cb failed, rc %d.\n",
+				req->cr_opc, rc);
+	}
+
+	shard_arg->fw_shard_rc = rc;
+	rc = ABT_future_set(shard_arg->fw_obj_arg->fw_future, shard_arg);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
+}
+
+static int
+shard_req_forward(struct shard_req_fw_arg *fw_arg)
+{
+	struct daos_obj_shard_tgt	*shard_tgt = fw_arg->fw_shard_tgt;
+	crt_rpc_t			*req;
+	ABT_future			 future = fw_arg->fw_obj_arg->fw_future;
+	crt_opcode_t			 opc = fw_arg->fw_obj_arg->fw_opc;
+	crt_endpoint_t			 tgt_ep;
+	int				 rc = 0;
+
+	if (opc_get(opc) == DAOS_OBJ_RPC_UPDATE &&
+	    DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE)) {
+		/* to trigger retry on all other shards */
+		if (shard_tgt->st_shard != daos_fail_value_get()) {
+			D_DEBUG(DB_TRACE, "complete shard %d update as "
+				"-DER_TIMEDOUT.\n", shard_tgt->st_shard);
+			rc = -DER_TIMEDOUT;
+		}
+	}
+
+	if (rc != 0 || shard_tgt->st_rank == OBJ_TGTS_IGNORE) {
+		D_DEBUG(DB_TRACE, "opc:%#x, ignore the forward tgt rank %d.\n",
+			opc, shard_tgt->st_rank);
+		fw_arg->fw_shard_rc = rc;
+		rc = ABT_future_set(future, fw_arg);
+		rc = dss_abterr2der(rc);
+		return rc;
+	}
+
+	tgt_ep.ep_grp = NULL;
+	tgt_ep.ep_rank = shard_tgt->st_rank;
+	tgt_ep.ep_tag = shard_tgt->st_tgt_idx;
+	D_DEBUG(DB_TRACE, "opc:%#x, forwarding to rank:%d tag:%d.\n",
+		opc, tgt_ep.ep_rank, tgt_ep.ep_tag);
+	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
+	if (rc != 0) {
+		D_ERROR("opc:%#x, crt_req_create failed, rc %d.\n", opc, rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = fw_arg->fw_obj_arg->prefw_cb(req, shard_tgt->st_shard,
+					  fw_arg->fw_obj_arg->prefw_arg);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "opc:%#x, prefw_cb failed, rc %d.\n",
+			opc, rc);
+		crt_req_decref(req);
+		D_GOTO(out, rc);
+	}
+
+	rc = crt_req_send(req, shard_req_fw_cb, fw_arg);
+	if (rc != 0) {
+		D_ERROR("opc:%#x, crt_req_send failed, rc %d.\n", opc, rc);
+		crt_req_decref(req);
+		D_GOTO(out, rc);
+	}
+
+out:
+	if (rc) {
+		fw_arg->fw_shard_rc = rc;
+		rc = ABT_future_set(future, fw_arg);
+		rc = dss_abterr2der(rc);
+	}
+	return rc;
+}
+
+int
+ds_obj_req_disp_prepare(crt_opcode_t opc,
+			struct daos_obj_shard_tgt *fw_shard_tgts,
+			uint32_t fw_cnt, ds_iofw_cb_t prefw_cb,
+			void *prefw_arg, ds_iofw_cb_t postfw_cb,
+			void *postfw_arg, struct obj_req_disp_arg **arg)
+{
+	struct obj_req_disp_arg		*obj_arg;
+	struct shard_req_fw_arg		*shard_arg;
+	ABT_future			 future;
+	int				 i, rc;
+
+	D_ASSERT(fw_cnt >= 1);
+	D_ALLOC(obj_arg, sizeof(struct obj_req_disp_arg) +
+			 fw_cnt * sizeof(struct shard_req_fw_arg));
+	if (obj_arg == NULL)
+		return -DER_NOMEM;
+
+	rc = ABT_future_create(fw_cnt, obj_req_dispatch_cb, &future);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT_future_create failed %d.\n", rc);
+		D_FREE(obj_arg);
+		return dss_abterr2der(rc);
+	}
+
+	obj_arg->prefw_cb	= prefw_cb;
+	obj_arg->prefw_arg	= prefw_arg;
+	obj_arg->postfw_cb	= postfw_cb;
+	obj_arg->postfw_arg	= postfw_arg;
+	obj_arg->fw_future	= future;
+	obj_arg->fw_opc		= opc;
+	obj_arg->fw_cnt		= fw_cnt;
+
+	shard_arg = (struct shard_req_fw_arg *)(obj_arg + 1);
+	for (i = 0; i < fw_cnt; i++, shard_arg++) {
+		shard_arg->fw_shard_tgt	= fw_shard_tgts + i;
+		shard_arg->fw_obj_arg	= obj_arg;
+	}
+
+	*arg = obj_arg;
+	return 0;
+}
+
+void
+ds_obj_req_dispatch(void *arg)
+{
+	struct obj_req_disp_arg		*obj_arg = arg;
+	ABT_future			 future = obj_arg->fw_future;
+	struct shard_req_fw_arg		*shard_arg;
+	uint32_t			 i, fw_cnt;
+	int				 rc = 0;
+
+	fw_cnt = obj_arg->fw_cnt;
+	D_ASSERT(fw_cnt >= 1);
+	D_ASSERT(future != ABT_FUTURE_NULL);
+	shard_arg = (struct shard_req_fw_arg *)(obj_arg + 1);
+	for (i = 0; i < fw_cnt; i++, shard_arg++) {
+		rc = shard_req_forward(shard_arg);
+		if (rc != 0)
+			break;
+	}
+
+	if (rc != 0) {
+		D_ASSERT(i < fw_cnt);
+		for (i++; i < fw_cnt; i++) {
+			shard_arg++;
+			shard_arg->fw_shard_rc = rc;
+			rc = ABT_future_set(future, shard_arg);
+			D_ASSERTF(rc == ABT_SUCCESS,
+				  "ABT_future_set failed %d.\n", rc);
+		}
+	}
+}
+
+void
+ds_obj_req_disp_arg_free(struct obj_req_disp_arg *obj_arg)
+{
+	ABT_future_free(&obj_arg->fw_future);
+	D_FREE(obj_arg);
+}
+
+int
+ds_obj_req_disp_wait(struct obj_req_disp_arg *obj_arg)
+{
+	ABT_future	future = obj_arg->fw_future;
+	int		rc;
+
+	D_ASSERT(future != ABT_FUTURE_NULL);
+	rc = ABT_future_wait(future);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
+	rc = obj_arg->fw_result;
+	ds_obj_req_disp_arg_free(obj_arg);
+
+	return rc;
+};

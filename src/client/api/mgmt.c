@@ -52,7 +52,7 @@ daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
 
 int
 daos_mgmt_params_set(const char *grp, d_rank_t rank, unsigned int key_id,
-		     uint64_t value, daos_event_t *ev)
+		     uint64_t value, uint64_t value_extra, daos_event_t *ev)
 {
 	daos_params_set_t	*args;
 	tse_task_t		*task;
@@ -64,10 +64,11 @@ daos_mgmt_params_set(const char *grp, d_rank_t rank, unsigned int key_id,
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->grp	= grp;
-	args->rank	= rank;
-	args->key_id	= key_id;
-	args->value	= value;
+	args->grp		= grp;
+	args->rank		= rank;
+	args->key_id		= key_id;
+	args->value		= value;
+	args->value_extra	= value_extra;
 
 	return dc_task_schedule(task, true);
 }

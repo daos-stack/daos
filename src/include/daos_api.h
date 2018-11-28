@@ -760,6 +760,15 @@ daos_obj_id2class(daos_obj_id_t oid)
 	return ocid;
 }
 
+static inline bool
+daos_oc_echo_type(daos_oclass_id_t oc)
+{
+	return oc == DAOS_OC_ECHO_TINY_RW ||
+	       oc == DAOS_OC_ECHO_R2S_RW ||
+	       oc == DAOS_OC_ECHO_R3S_RW ||
+	       oc == DAOS_OC_ECHO_R4S_RW;
+}
+
 static inline daos_ofeat_t
 daos_obj_id2feat(daos_obj_id_t oid)
 {

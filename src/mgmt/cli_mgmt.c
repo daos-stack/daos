@@ -139,6 +139,7 @@ dc_mgmt_params_set(tse_task_t *task)
 	in->ps_rank = args->rank;
 	in->ps_key_id = args->key_id;
 	in->ps_value = args->value;
+	in->ps_value_extra = args->value_extra;
 
 	rc = tse_task_register_comp_cb(task, rip_cp, &rpc, sizeof(rpc));
 	if (rc != 0)

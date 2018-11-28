@@ -181,10 +181,16 @@ dss_sched_run(ABT_sched sched)
 		unit = dss_sched_unit_pop(pools, &pool);
 		if (unit != ABT_UNIT_NULL && pool != ABT_UNIT_NULL)
 			ABT_xstream_run_unit(unit, pool);
-
 		if (++work_count >= p_data->event_freq) {
+			ABT_bool stop;
+
+			ABT_sched_has_to_stop(sched, &stop);
+			if (stop == ABT_TRUE) {
+				D_DEBUG(DB_TRACE, "ABT_sched_has_to_stop!\n");
+				break;
+			}
+			work_count = 0;
 			ABT_xstream_check_events(sched);
-			break;
 		}
 	}
 }
@@ -1275,13 +1281,62 @@ dss_task_comp_cb(tse_task_t *task, void *arg)
 }
 
 /**
- * Call client side API on the server side asynchronously.
+ * Create an eventual which can be used for dss_task_run()/dss_eventual_wait().
  */
 int
-dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb, void *arg)
+dss_eventual_create(ABT_eventual *eventual_ptr)
 {
 	ABT_eventual	eventual;
 	int		*status;
+	int		rc;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != 0)
+		return dss_abterr2der(rc);
+
+	*eventual_ptr = eventual;
+	return 0;
+}
+
+/**
+ * Wait the completion of eventual associated task, the task's result will be
+ * returned by return value.
+ */
+int
+dss_eventual_wait(ABT_eventual eventual)
+{
+	int	*status;
+	int	 rc;
+
+	D_ASSERTF(eventual != ABT_EVENTUAL_NULL, "invalid ABT_EVENTUAL_NULL\n");
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out, rc = dss_abterr2der(rc));
+
+	rc = *status;
+
+out:
+	return rc;
+}
+
+void
+dss_eventual_free(ABT_eventual *eventual)
+{
+	ABT_eventual_free(eventual);
+}
+
+/**
+ * Call client side API on the server side.
+ * If the passed in eventual_in is ABT_EVENTUAL_NULL, then it is a synchronous
+ * call. If the \a eventual_in is non-NULL, then it is an asynchronous call and
+ * caller needs to do dss_eventual_wait() and dss_eventual_free() later if
+ * dss_task_run returns zero.
+ */
+int
+dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb, void *arg,
+	     ABT_eventual eventual_in)
+{
+	ABT_eventual	eventual;
 	int		rc;
 
 	/* Generate the progress task */
@@ -1289,42 +1344,49 @@ dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb, void *arg)
 	if (rc)
 		return rc;
 
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != 0)
-		return dss_abterr2der(rc);
+	if (eventual_in == ABT_EVENTUAL_NULL) {
+		rc = dss_eventual_create(&eventual);
+		if (rc != 0)
+			return rc;
+	} else {
+		eventual = eventual_in;
+	}
 
 	rc = dc_task_reg_comp_cb(task, dss_task_comp_cb, &eventual,
 				 sizeof(eventual));
 	if (rc != 0)
-		D_GOTO(free_eventual, rc = -DER_NOMEM);
+		D_GOTO(err, rc = -DER_NOMEM);
 
 	if (cb != NULL) {
 		rc = dc_task_reg_comp_cb(task, cb, arg, sizeof(arg));
 		if (rc)
-			D_GOTO(free_eventual, rc);
+			D_GOTO(err, rc);
 	}
 
 	/* task will be freed inside scheduler */
-	rc = dc_task_schedule(task, true);
-	if (rc != 0)
-		D_GOTO(free_eventual, rc = -DER_NOMEM);
+	rc = tse_task_schedule(task, true);
+	if (rc != 0) {
+		tse_task_complete(task, rc);
+		D_GOTO(err, rc = -DER_NOMEM);
+	}
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(free_eventual, rc = dss_abterr2der(rc));
+	if (eventual_in == ABT_EVENTUAL_NULL)
+		rc = dss_eventual_wait(eventual);
 
-	rc = *status;
+	return rc;
 
-free_eventual:
-	ABT_eventual_free(&eventual);
+err:
+	if (eventual_in == ABT_EVENTUAL_NULL)
+		dss_eventual_free(&eventual);
 	return rc;
 }
 
 /*
  * Set parameters on the server.
  *
- * param key_id [IN]	key id
- * param value [IN]	the value of the key.
+ * param key_id [IN]		key id
+ * param value [IN]		the value of the key.
+ * param value_extra [IN]	the extra value of the key.
  *
  * return	0 if setting succeeds.
  *              negative errno if fails.
@@ -1337,6 +1399,9 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 	switch (key_id) {
 	case DSS_KEY_FAIL_LOC:
 		daos_fail_loc_set(value);
+		break;
+	case DSS_KEY_FAIL_VALUE:
+		daos_fail_value_set(value);
 		break;
 	case DSS_REBUILD_RES_PERCENTAGE:
 		if (value >= 100) {

@@ -95,6 +95,10 @@ Environment variables in this section only apply to the client side.
 
 Whether to run in the singleton mode, in which the client does not need to be launched by orterun. `BOOL`. Default to false.
 
+### `DAOS_IO_SRV_DISPATCH`
+
+Whether to enable the server-side IO dispatch, in that case the replica IO will be sent to a leader shard which will dispatch to other shards. `BOOL`. Default to true.
+
 ## Debug System (Client & Server)
 
 ### `D_LOG_FILE`

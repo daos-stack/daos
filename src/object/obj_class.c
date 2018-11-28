@@ -157,7 +157,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	}, {
 		.oc_name	= "echo_rw",
-		.oc_id		= DAOS_OC_ECHO_RW,
+		.oc_id		= DAOS_OC_ECHO_TINY_RW,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
@@ -166,8 +166,40 @@ static struct daos_obj_class daos_obj_classes[] = {
 				.r_num		= 1,
 			},
 		},
-	},
-	{
+	}, {
+		.oc_name	= "echo_rw",
+		.oc_id		= DAOS_OC_ECHO_R2S_RW,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.u.repl			= {
+				.r_num		= 2,
+			},
+		},
+	}, {
+		.oc_name	= "echo_rw",
+		.oc_id		= DAOS_OC_ECHO_R3S_RW,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.u.repl			= {
+				.r_num		= 3,
+			},
+		},
+	}, {
+		.oc_name	= "echo_rw",
+		.oc_id		= DAOS_OC_ECHO_R4S_RW,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.u.repl			= {
+				.r_num		= 4,
+			},
+		},
+	}, {
 		.oc_name	= "repl_3_small_rw_spec_rank",
 		.oc_id		= DAOS_OC_R3S_SPEC_RANK,
 		{

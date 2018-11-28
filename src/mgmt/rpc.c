@@ -85,10 +85,12 @@ struct crt_msg_field *mgmt_params_set_in_fields[] = {
 	&CMF_UINT32,		/* ps_rank */
 	&CMF_UINT32,		/* ps_key_id */
 	&CMF_UINT64,		/* ps_value */
+	&CMF_UINT64,		/* ps_value_extra */
 };
 
 struct crt_msg_field *mgmt_tgt_params_set_in_fields[] = {
 	&CMF_UINT64,		/* tps_value */
+	&CMF_UINT64,		/* tps_value_extra */
 	&CMF_UINT32,		/* tps_key_id */
 };
 

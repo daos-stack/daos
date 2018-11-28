@@ -223,7 +223,7 @@ out:
 
 static int
 obj_shard_rw_bulk_prep(crt_rpc_t *rpc, unsigned int nr, daos_sg_list_t *sgls,
-		       tse_task_t *task)
+		       bool forward, tse_task_t *task)
 {
 	struct obj_rw_in	*orw;
 	crt_bulk_t		*bulks;
@@ -237,6 +237,8 @@ obj_shard_rw_bulk_prep(crt_rpc_t *rpc, unsigned int nr, daos_sg_list_t *sgls,
 	if (bulks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	orw = crt_req_get(rpc);
+	D_ASSERT(orw != NULL);
 	/* create bulk transfer for daos_sg_list */
 	for (i = 0; i < nr; i++) {
 		if (sgls != NULL && sgls[i].sg_iovs != NULL &&
@@ -252,11 +254,16 @@ obj_shard_rw_bulk_prep(crt_rpc_t *rpc, unsigned int nr, daos_sg_list_t *sgls,
 
 				D_GOTO(out, rc);
 			}
+			if (!forward)
+				continue;
+			rc = crt_bulk_bind(bulks[i], daos_task2ctx(task));
+			if (rc != 0) {
+				D_ERROR("crt_bulk_bind failed, rc: %d.\n", rc);
+				D_GOTO(out, rc);
+			}
+			orw->orw_flags	= ORW_FLAG_BULK_BIND;
 		}
 	}
-
-	orw = crt_req_get(rpc);
-	D_ASSERT(orw != NULL);
 	orw->orw_bulks.ca_count = nr;
 	orw->orw_bulks.ca_arrays = bulks;
 out:
@@ -282,6 +289,7 @@ static int
 obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	     daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
 	     daos_iod_t *iods, daos_sg_list_t *sgls, unsigned int *map_ver,
+	     struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
 	     tse_task_t *task)
 {
 	struct dc_pool	       *pool;
@@ -326,6 +334,14 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw = crt_req_get(req);
 	D_ASSERT(orw != NULL);
 
+	if (fw_shard_tgts != NULL) {
+		D_ASSERT(fw_cnt >= 1);
+		orw->orw_shard_tgts.ca_count = fw_cnt;
+		orw->orw_shard_tgts.ca_arrays = fw_shard_tgts;
+	} else {
+		orw->orw_shard_tgts.ca_count = 0;
+		orw->orw_shard_tgts.ca_arrays = NULL;
+	}
 	orw->orw_map_ver = *map_ver;
 	orw->orw_oid = shard->do_id;
 	uuid_copy(orw->orw_co_hdl, cont_hdl_uuid);
@@ -373,8 +389,10 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	do_bulk = data_size >= OBJ_BULK_LIMIT;
 	if (do_bulk) {
+		bool forward = fw_shard_tgts != NULL;
+
 		/* Transfer data by bulk */
-		rc = obj_shard_rw_bulk_prep(req, nr, sgls, task);
+		rc = obj_shard_rw_bulk_prep(req, nr, sgls, forward, task);
 		if (rc != 0)
 			D_GOTO(out_req, rc);
 		orw->orw_sgls.ca_count = 0;
@@ -464,7 +482,9 @@ int
 dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc, daos_epoch_t epoch,
 		   daos_key_t *dkey, daos_key_t *akeys, unsigned int akey_nr,
 		   const uuid_t coh_uuid, const uuid_t cont_uuid,
-		   unsigned int *map_ver, tse_task_t *task)
+		   unsigned int *map_ver,
+		   struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
+		   tse_task_t *task)
 {
 	struct dc_pool			*pool;
 	struct obj_punch_in		*opi;
@@ -515,6 +535,14 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc, daos_epoch_t epoch,
 	opi->opi_dkeys.ca_arrays = dkey;
 	opi->opi_akeys.ca_count	 = akey_nr;
 	opi->opi_akeys.ca_arrays = akeys;
+	if (fw_shard_tgts != NULL) {
+		D_ASSERT(fw_cnt >= 1);
+		opi->opi_shard_tgts.ca_count = fw_cnt;
+		opi->opi_shard_tgts.ca_arrays = fw_shard_tgts;
+	} else {
+		opi->opi_shard_tgts.ca_count = 0;
+		opi->opi_shard_tgts.ca_arrays = NULL;
+	}
 	uuid_copy(opi->opi_co_hdl, coh_uuid);
 	uuid_copy(opi->opi_co_uuid, cont_uuid);
 
@@ -536,10 +564,12 @@ int
 dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		    daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		    daos_sg_list_t *sgls, unsigned int *map_ver,
+		    struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
 		    tse_task_t *task)
 {
 	return obj_shard_rw(shard, DAOS_OBJ_RPC_UPDATE, epoch, dkey,
-			    nr, iods, sgls, map_ver, task);
+			    nr, iods, sgls, map_ver, fw_shard_tgts, fw_cnt,
+			    task);
 }
 
 int
@@ -549,7 +579,7 @@ dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		   unsigned int *map_ver, tse_task_t *task)
 {
 	return obj_shard_rw(shard, DAOS_OBJ_RPC_FETCH, epoch, dkey,
-			    nr, iods, sgls, map_ver, task);
+			    nr, iods, sgls, map_ver, NULL, 0, task);
 }
 
 struct obj_enum_args {

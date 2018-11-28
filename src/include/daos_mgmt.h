@@ -209,12 +209,15 @@ daos_pool_tgt_add(const uuid_t uuid, const char *grp,
  * \param rank	[IN]	Ranks to set parameter. -1 means setting on all servers.
  * \param key_id [IN]	key ID of the parameter.
  * \param value [IN]	value of the parameter.
+ * \param value [IN]	optional extra value to set the fail value when
+ *			\a key_id is DSS_KEY_FAIL_LOC and \a value is in
+ *			DAOS_FAIL_VALUE mode.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
 daos_mgmt_params_set(const char *grp, d_rank_t rank, unsigned int key_id,
-		     uint64_t value, daos_event_t *ev);
+		     uint64_t value, uint64_t value_extra, daos_event_t *ev);
 
 /**
  * Exclude completely a set of storage targets from a pool. Compared with

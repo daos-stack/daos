@@ -953,7 +953,7 @@ io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 	lookup_single(dkey, akey, 0, fetch_buf, size, 0, &req);
 
 	/** Verify data consistency */
-	if (daos_obj_id2class(oid) != DAOS_OC_ECHO_RW) {
+	if (!daos_oc_echo_type(daos_obj_id2class(oid))) {
 		assert_int_equal(req.iod[0].iod_size, size);
 		assert_memory_equal(update_buf, fetch_buf, size);
 	}
@@ -2271,10 +2271,10 @@ echo_fetch_update(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 
-	oid = dts_oid_gen(DAOS_OC_ECHO_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_ECHO_TINY_RW, 0, arg->myrank);
 	io_simple_internal(state, oid, 64, "echo_test dkey", "echo_test akey");
 
-	oid = dts_oid_gen(DAOS_OC_ECHO_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_ECHO_TINY_RW, 0, arg->myrank);
 	io_simple_internal(state, oid, 8192, "echo_test_large dkey",
 			   "echo_test_large akey");
 }
@@ -2323,6 +2323,12 @@ tgt_idx_change_retry(void **state)
 	replica = rand() % 3;
 	arg->fail_loc = DAOS_OBJ_TGT_IDX_CHANGE | DAOS_FAIL_VALUE;
 	arg->fail_value = replica;
+	if (arg->myrank == 0) {
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     DAOS_OBJ_TGT_IDX_CHANGE | DAOS_FAIL_VALUE,
+				     replica, NULL);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -2387,6 +2393,11 @@ tgt_idx_change_retry(void **state)
 	}
 
 	daos_fail_loc_set(0);
+	if (arg->myrank == 0) {
+		daos_mgmt_params_set(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
+				     0, NULL);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 	insert_wait(&req);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_VALUE);
@@ -2454,7 +2465,7 @@ fetch_replica_unavail(void **state)
 		assert_int_equal(rc, 0);
 		rc = daos_mgmt_params_set(arg->group, info.pi_leader,
 			DSS_KEY_FAIL_LOC,
-			DAOS_REBUILD_DISABLE | DAOS_FAIL_VALUE,
+			DAOS_REBUILD_DISABLE | DAOS_FAIL_VALUE, 0,
 			NULL);
 		assert_int_equal(rc, 0);
 
@@ -2479,7 +2490,7 @@ fetch_replica_unavail(void **state)
 
 		/* re-enable rebuild */
 		rc = daos_mgmt_params_set(arg->group, info.pi_leader,
-			DSS_KEY_FAIL_LOC, 0, NULL);
+			DSS_KEY_FAIL_LOC, 0, 0, NULL);
 		assert_int_equal(rc, 0);
 	}
 	free(buf);

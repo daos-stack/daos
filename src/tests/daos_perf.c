@@ -53,11 +53,13 @@ enum ts_op_type_t {
 	TS_DO_FETCH
 };
 
-/* Test class, can be:
- *	vos  : pure storage
- *	echo : pure network
- *	daos : full stack
- */
+enum ts_level_t {
+	TS_LVL_VOS,  /* pure storage */
+	TS_LVL_ECHO, /* pure network */
+	TS_LVL_DAOS, /* full stack */
+};
+
+int			 ts_level = TS_LVL_VOS;
 int			 ts_class = DAOS_OC_RAW;
 
 char			 ts_pmem_file[PATH_MAX];
@@ -705,11 +707,11 @@ ts_rebuild_perf(double *start_time, double *end_time)
 	if (ts_rebuild_only_iteration)
 		daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_REBUILD | DAOS_FAIL_VALUE,
-				     NULL);
+				     0, NULL);
 	else if (ts_rebuild_no_update)
 		daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_UPDATE | DAOS_FAIL_VALUE,
-				     NULL);
+				     0, NULL);
 
 	rc = ts_exclude_server(RANK_ZERO);
 	if (rc)
@@ -721,7 +723,7 @@ ts_rebuild_perf(double *start_time, double *end_time)
 
 	rc = ts_add_server(RANK_ZERO);
 
-	daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC, 0, NULL);
+	daos_mgmt_params_set(NULL, -1, DSS_KEY_FAIL_LOC, 0, 0, NULL);
 
 	return rc;
 }
@@ -761,10 +763,22 @@ ts_class_name(void)
 		return "unknown";
 	case DAOS_OC_RAW:
 		return "VOS (storage only)";
-	case DAOS_OC_ECHO_RW:
-		return "ECHO (network only)";
+	case DAOS_OC_ECHO_TINY_RW:
+		return "ECHO TINY (network only, non-replica)";
+	case DAOS_OC_ECHO_R2S_RW:
+		return "ECHO R2S (network only, 2-replica)";
+	case DAOS_OC_ECHO_R3S_RW:
+		return "ECHO R3S (network only, 3-replica)";
+	case DAOS_OC_ECHO_R4S_RW:
+		return "ECHO R4S (network only, 4-replica)";
 	case DAOS_OC_TINY_RW:
-		return "DAOS (full stack)";
+		return "DAOS TINY (full stack, non-replica)";
+	case DAOS_OC_R2S_RW:
+		return "DAOS R2S (full stack, 2 replica)";
+	case DAOS_OC_R3S_RW:
+		return "DAOS R3S (full stack, 3 replica)";
+	case DAOS_OC_R4S_RW:
+		return "DAOS R4S (full stack, 4 replics)";
 	}
 }
 
@@ -812,6 +826,9 @@ The options are as follows:\n\
 	Credits for concurrently asynchronous I/O. It can be value between 1\n\
 	and 64. The utility runs in synchronous mode if credits is set to 0.\n\
 	This option is ignored for mode 'vos'.\n\
+\n\
+-c TINY|R2S|R3S|R4S\n\
+	Object class for DAOS full stack test.\n\
 \n\
 -o number\n\
 	Number of objects are used by the utility.\n\
@@ -985,7 +1002,7 @@ main(int argc, char **argv)
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:o:d:a:r:nAs:ztf:hUFRBvIiu",
+				 "P:N:T:C:c:o:d:a:r:nAs:ztf:hUFRBvIiu",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -996,16 +1013,13 @@ main(int argc, char **argv)
 		case 'T':
 			if (!strcasecmp(optarg, "echo")) {
 				/* just network, no storage */
-				ts_class = DAOS_OC_ECHO_RW;
-
+				ts_level = TS_LVL_ECHO;
 			} else if (!strcasecmp(optarg, "daos")) {
 				/* full stack: network + storage */
-				ts_class = DAOS_OC_TINY_RW;
-
+				ts_level = TS_LVL_DAOS;
 			} else if (!strcasecmp(optarg, "vos")) {
 				/* pure storage */
-				ts_class = DAOS_OC_RAW;
-
+				ts_level = TS_LVL_VOS;
 			} else {
 				if (ts_ctx.tsc_mpi_rank == 0)
 					ts_print_usage();
@@ -1014,6 +1028,21 @@ main(int argc, char **argv)
 			break;
 		case 'C':
 			credits = strtoul(optarg, &endp, 0);
+			break;
+		case 'c':
+			if (!strcasecmp(optarg, "R4S")) {
+				ts_class = DAOS_OC_R4S_RW;
+			} else if (!strcasecmp(optarg, "R3S")) {
+				ts_class = DAOS_OC_R3S_RW;
+			} else if (!strcasecmp(optarg, "R2S")) {
+				ts_class = DAOS_OC_R2S_RW;
+			} else if (!strcasecmp(optarg, "TINY")) {
+				ts_class = DAOS_OC_TINY_RW;
+			} else {
+				if (ts_ctx.tsc_mpi_rank == 0)
+					ts_print_usage();
+				return -1;
+			}
 			break;
 		case 'P':
 			scm_size = strtoul(optarg, &endp, 0);
@@ -1091,6 +1120,21 @@ main(int argc, char **argv)
 				ts_print_usage();
 			return 0;
 		}
+	}
+
+	if (ts_level == TS_LVL_ECHO) {
+		if (ts_class == DAOS_OC_R4S_RW)
+			ts_class = DAOS_OC_ECHO_R4S_RW;
+		else if (ts_class == DAOS_OC_R3S_RW)
+			ts_class = DAOS_OC_ECHO_R3S_RW;
+		else if (ts_class == DAOS_OC_R2S_RW)
+			ts_class = DAOS_OC_ECHO_R2S_RW;
+		else
+			ts_class = DAOS_OC_ECHO_TINY_RW;
+	} else if (ts_level == TS_LVL_VOS) {
+		if (ts_class != DAOS_OC_RAW)
+			fprintf(stderr, "-c option ignored for VOS test.\n");
+		ts_class = DAOS_OC_RAW;
 	}
 
 	/* It will run write tests by default */

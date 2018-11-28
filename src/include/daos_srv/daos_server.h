@@ -295,9 +295,11 @@ dss_thread_collective_reduce(struct dss_coll_ops *ops,
 
 int dss_task_collective(int (*func)(void *), void *arg);
 int dss_thread_collective(int (*func)(void *), void *arg);
-
 int dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb,
-		 void *arg);
+		 void *arg, ABT_eventual eventual);
+int dss_eventual_create(ABT_eventual *eventual_ptr);
+int dss_eventual_wait(ABT_eventual eventual);
+void dss_eventual_free(ABT_eventual *eventual);
 unsigned int dss_get_threads_number(void);
 
 /* Convert Argobots errno to DAOS ones. */
@@ -363,7 +365,7 @@ int dss_acc_offload(struct dss_acc_task *at_args);
  *  DSS_POOL_PRIV     Private pool: I/O requests will be added to this pool.
  *  DSS_POOL_SHARE    Shared pool: Other requests and ULT created during
  *                    processing rpc.
- *  DSS_POOL_REBUILD  Private pool: pools specially for rebuild tasks.
+ *  DSS_POOL_REBUILD  rebuild pool: pools specially for rebuild tasks.
  */
 enum {
 	DSS_POOL_PRIV,

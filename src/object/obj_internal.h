@@ -49,16 +49,15 @@
  * This mode is for client I/O stack performance benchmark.
  */
 extern bool	cli_bypass_rpc;
+/** Switch of server-side IO dispatch */
+extern bool	srv_io_dispatch;
+
 /**
  * Bypass bulk transfer on server side, instead data will be copy from/to
  * dummy buffer.
  * this mode is for performance evaluation on low bandwidth network.
  */
 extern bool	srv_bypass_bulk;
-
-struct dc_obj_shard_tgt {
-	d_rank_t	do_rank;
-};
 
 /** client object shard */
 struct dc_obj_shard {
@@ -125,10 +124,12 @@ int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
 void dc_obj_shard_close(struct dc_obj_shard *shard);
 
+struct daos_obj_shard_tgt;
 int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			daos_key_t *dkey, unsigned int nr,
 			daos_iod_t *iods, daos_sg_list_t *sgls,
-			unsigned int *map_ver, tse_task_t *task);
+			unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
+			uint32_t fw_cnt, tse_task_t *task);
 int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       daos_key_t *dkey, unsigned int nr,
 		       daos_iod_t *iods, daos_sg_list_t *sgls,
@@ -149,7 +150,8 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,
 		       daos_epoch_t epoch, daos_key_t *dkey,
 		       daos_key_t *akeys, unsigned int akey_nr,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
-		       unsigned int *map_ver, tse_task_t *task);
+		       unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
+		       uint32_t fw_cnt, tse_task_t *task);
 
 int dc_obj_shard_key_query(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			   uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
@@ -175,9 +177,19 @@ void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_key_query_handler(crt_rpc_t *rpc);
-
+#define OBJ_TGTS_IGNORE		((d_rank_t)-1)
 ABT_pool
 ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
+typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, uint32_t shard, void *arg);
+struct obj_req_disp_arg;
+int ds_obj_req_disp_prepare(crt_opcode_t opc,
+			struct daos_obj_shard_tgt *fw_shard_tgts,
+			uint32_t fw_cnt, ds_iofw_cb_t prefw_cb,
+			void *prefw_arg, ds_iofw_cb_t postfw_cb,
+			void *postfw_arg, struct obj_req_disp_arg **arg);
+void ds_obj_req_dispatch(void *arg);
+int ds_obj_req_disp_wait(struct obj_req_disp_arg *obj_arg);
+void ds_obj_req_disp_arg_free(struct obj_req_disp_arg *obj_arg);
 
 static inline uint64_t
 obj_dkey2hash(daos_key_t *dkey)

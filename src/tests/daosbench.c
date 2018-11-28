@@ -1681,7 +1681,7 @@ test_init(struct test *test, int argc, char *argv[])
 			} else if (!strcasecmp(optarg, "LARGE")) {
 				obj_class = DAOS_OC_LARGE_RW;
 			} else if (!strcasecmp(optarg, "ECHO")) {
-				obj_class = DAOS_OC_ECHO_RW;
+				obj_class = DAOS_OC_ECHO_TINY_RW;
 			} else if (!strcasecmp(optarg, "R2")) {
 				obj_class = DAOS_OC_R2_RW;
 			} else if (!strcasecmp(optarg, "R2S")) {

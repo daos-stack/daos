@@ -261,6 +261,7 @@ daos_crt_network_error(int err)
  */
 enum {
 	DSS_KEY_FAIL_LOC = 0,
+	DSS_KEY_FAIL_VALUE,
 	DSS_REBUILD_RES_PERCENTAGE,
 	DSS_KEY_NUM,
 };

@@ -33,6 +33,7 @@
 #include "obj_internal.h"
 
 bool	cli_bypass_rpc;
+bool	srv_io_dispatch = true;
 
 /**
  * Initialize object interface
@@ -48,6 +49,12 @@ dc_obj_init(void)
 		D_DEBUG(DB_IO, "All client I/O RPCs will be dropped\n");
 		cli_bypass_rpc = true;
 	}
+
+	d_getenv_bool("DAOS_IO_SRV_DISPATCH", &srv_io_dispatch);
+	if (srv_io_dispatch)
+		D_DEBUG(DB_IO, "Server IO dispatch enabled.\n");
+	else
+		D_DEBUG(DB_IO, "Server IO dispatch disabled.\n");
 
 	rc = daos_rpc_register(&obj_proto_fmt, OBJ_PROTO_CLI_COUNT,
 				NULL, DAOS_OBJ_MODULE);

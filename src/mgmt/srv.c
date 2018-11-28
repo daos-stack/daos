@@ -71,6 +71,9 @@ ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
 	D_ASSERT(in != NULL);
 
 	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
+	if (rc == 0 && in->tps_key_id == DSS_KEY_FAIL_LOC)
+		rc = dss_parameters_set(DSS_KEY_FAIL_VALUE,
+					in->tps_value_extra);
 	if (rc)
 		D_ERROR("Set parameter failed key_id %d: rc %d\n",
 			 in->tps_key_id, rc);
@@ -100,6 +103,9 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	if (ps_in->ps_rank != -1) {
 		/* Only set local parameter */
 		rc = dss_parameters_set(ps_in->ps_key_id, ps_in->ps_value);
+		if (rc == 0 && ps_in->ps_key_id == DSS_KEY_FAIL_LOC)
+			rc = dss_parameters_set(DSS_KEY_FAIL_VALUE,
+						ps_in->ps_value_extra);
 		if (rc)
 			D_ERROR("Set parameter failed key_id %d: rc %d\n",
 				ps_in->ps_key_id, rc);
@@ -119,6 +125,7 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 
 	tc_in->tps_key_id = ps_in->ps_key_id;
 	tc_in->tps_value = ps_in->ps_value;
+	tc_in->tps_value_extra = ps_in->ps_value_extra;
 
 	rc = dss_rpc_send(tc_req);
 	if (rc != 0) {

@@ -496,7 +496,10 @@ enum {
 	DAOS_OC_R4S_RW,		/* temporary class for testing */
 	DAOS_OC_R4_RW,		/* temporary class for testing */
 	DAOS_OC_REPL_MAX_RW,
-	DAOS_OC_ECHO_RW,	/* Echo class */
+	DAOS_OC_ECHO_TINY_RW,	/* Echo class, tiny */
+	DAOS_OC_ECHO_R2S_RW,	/* Echo class, 2 replica single stripe */
+	DAOS_OC_ECHO_R3S_RW,	/* Echo class, 3 replica single stripe */
+	DAOS_OC_ECHO_R4S_RW,	/* Echo class, 4 replica single stripe */
 	DAOS_OC_R1S_SPEC_RANK,	/* 1 replica with specified rank */
 	DAOS_OC_R2S_SPEC_RANK,	/* 2 replica start with specified rank */
 	DAOS_OC_R3S_SPEC_RANK,	/* 3 replica start with specified rank.

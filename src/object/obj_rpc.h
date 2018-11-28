@@ -94,6 +94,9 @@ enum obj_rpc_opc {
 
 extern struct crt_proto_format obj_proto_fmt;
 
+/* rw flags (orw_flags) */
+#define ORW_FLAG_BULK_BIND	(0x1)
+
 struct obj_rw_in {
 	daos_unit_oid_t		orw_oid;
 	uuid_t			orw_co_hdl;
@@ -105,6 +108,8 @@ struct obj_rw_in {
 	struct crt_array	orw_iods;
 	struct crt_array	orw_sgls;
 	struct crt_array	orw_bulks;
+	struct crt_array	orw_shard_tgts;
+	uint32_t		orw_flags;
 };
 
 /* reply for update/fetch */
@@ -161,6 +166,7 @@ struct obj_punch_in {
 	uint32_t		opi_pad32_1;
 	struct crt_array	opi_dkeys;
 	struct crt_array	opi_akeys;
+	struct crt_array	opi_shard_tgts;
 };
 
 /* reply for update/fetch */
@@ -188,9 +194,17 @@ struct obj_key_query_out {
 	uint32_t		okqo_map_version;
 	uint32_t		okqo_flags;
 	uint32_t		okqo_pad32_1;
-	daos_key_t              okqo_dkey;
-	daos_key_t              okqo_akey;
-	daos_recx_t             okqo_recx;
+	daos_key_t		okqo_dkey;
+	daos_key_t		okqo_akey;
+	daos_recx_t		okqo_recx;
+};
+
+/** to identify each obj shard's target */
+struct daos_obj_shard_tgt {
+	uint32_t		st_rank;	/* rank of the shard */
+	uint32_t		st_shard;	/* shard index */
+	uint32_t		st_tgt_idx;	/* target xstream index */
+	uint32_t		st_pad;		/* padding */
 };
 
 static inline int
@@ -211,5 +225,7 @@ void obj_reply_set_status(crt_rpc_t *rpc, int status);
 int obj_reply_get_status(crt_rpc_t *rpc);
 void obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version);
 uint32_t obj_reply_map_version_get(crt_rpc_t *rpc);
+int daos_proc_obj_shard_tgt(crt_proc_t proc, struct daos_obj_shard_tgt *st);
+extern struct crt_msg_field DMF_OBJ_SHARD_TGTS;
 
 #endif /* __DAOS_OBJ_RPC_H__ */

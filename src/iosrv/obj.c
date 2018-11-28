@@ -84,7 +84,8 @@ ds_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	if (rc)
 		return rc;
 
-	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, NULL);
+	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, NULL,
+			    ABT_EVENTUAL_NULL);
 }
 
 int
@@ -97,7 +98,8 @@ ds_obj_close(daos_handle_t oh)
 	if (rc)
 		return rc;
 
-	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh);
+	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh,
+			    ABT_EVENTUAL_NULL);
 }
 
 int
@@ -113,7 +115,8 @@ ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	if (rc)
 		return rc;
 
-	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh);
+	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh,
+			    ABT_EVENTUAL_NULL);
 }
 
 int
@@ -130,7 +133,8 @@ ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 	if (rc)
 		return rc;
 
-	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh);
+	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh,
+			    ABT_EVENTUAL_NULL);
 }
 
 int
@@ -150,5 +154,6 @@ ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	if (rc)
 		return rc;
 
-	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh);
+	return dss_task_run(task, DSS_POOL_REBUILD, ds_obj_retry_cb, &oh,
+			    ABT_EVENTUAL_NULL);
 }
