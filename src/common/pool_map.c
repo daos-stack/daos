@@ -1492,7 +1492,8 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
 	D_ASSERT(sorter->cs_type == type);
 
 	if (id == PO_COMP_ID_ALL) {
-		*domain_pp = tmp;
+		if (domain_pp != NULL)
+			*domain_pp = tmp;
 		return sorter->cs_nr;
 	}
 

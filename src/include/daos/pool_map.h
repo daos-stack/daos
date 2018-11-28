@@ -225,6 +225,12 @@ pool_map_target_nr(struct pool_map *map)
 	return pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
 }
 
+static inline unsigned int
+pool_map_node_nr(struct pool_map *map)
+{
+	return pool_map_find_nodes(map, PO_COMP_ID_ALL, NULL);
+}
+
 static inline bool
 pool_target_unavail(struct pool_target *tgt)
 {

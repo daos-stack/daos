@@ -558,16 +558,22 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 		}
 
 		if (targets != NULL) {
+			struct pool_domain *dom;
 			int i;
 
 			for (i = 0; i < failed_tgts_cnt; i++) {
+				dom = pool_map_find_node_by_rank(pool->sp_map,
+						targets[i].ta_comp.co_rank);
+
+				D_ASSERT(dom != NULL);
 				D_DEBUG(DB_REBUILD, "target %d failed\n",
-					targets[i].ta_comp.co_rank);
+					dom->do_comp.co_rank);
 				setbit(rgt->rgt_scan_bits,
-				       targets[i].ta_comp.co_rank);
+				       dom->do_comp.co_rank);
 				setbit(rgt->rgt_pull_bits,
-				       targets[i].ta_comp.co_rank);
+				       dom->do_comp.co_rank);
 			}
+
 			D_FREE(targets);
 		}
 
@@ -647,21 +653,19 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 				   struct rebuild_global_pool_tracker **p_rgt)
 {
 	struct rebuild_global_pool_tracker *rgt;
-	unsigned int rank_size;
+	unsigned int node_nr;
 	unsigned int array_size;
-	int rc;
+	int rc = 0;
 
 	D_ALLOC_PTR(rgt);
 	if (rgt == NULL)
 		return -DER_NOMEM;
 	D_INIT_LIST_HEAD(&rgt->rgt_list);
 
-	rc = crt_group_size(NULL, &rank_size);
-	if (rc)
-		D_GOTO(out, rc);
+	node_nr = pool_map_node_nr(pool->sp_map);
 
-	array_size = roundup(rank_size, DAOS_BITS_SIZE) / DAOS_BITS_SIZE;
-	rgt->rgt_bits_size = rank_size;
+	array_size = roundup(node_nr, DAOS_BITS_SIZE) / DAOS_BITS_SIZE;
+	rgt->rgt_bits_size = node_nr;
 
 	D_ALLOC_ARRAY(rgt->rgt_scan_bits, array_size);
 	if (rgt->rgt_scan_bits == NULL)
@@ -742,7 +746,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 		uint64_t leader_term,
 		struct pool_target_id_list *exclude_tgts,
 		struct rebuild_global_pool_tracker **rgt)
- {
+{
 	unsigned int	master_rank;
 	int		rc;
 
@@ -768,31 +772,44 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	uuid_generate((*rgt)->rgt_poh_uuid);
 
 	if (exclude_tgts != NULL) {
+		bool excluded = false;
 		int i;
 
-		/* Set excluded targets scan/pull bits */
+		/* Set failed(being rebuilt) targets scan/pull bits.*/
 		for (i = 0; i < exclude_tgts->pti_number; i++) {
 			struct pool_target *target;
+			struct pool_domain *dom;
 			int ret;
 
 			ret = pool_map_find_target(pool->sp_map,
 					exclude_tgts->pti_ids[i].pti_id,
 					&target);
-
 			if (ret <= 0)
-				return -DER_NONEXIST;
+				continue;
 
-			D_ASSERT(target->ta_comp.co_rank <
-				  (*rgt)->rgt_bits_size);
-			setbit((*rgt)->rgt_scan_bits,
-				target->ta_comp.co_rank);
-			setbit((*rgt)->rgt_pull_bits,
-				target->ta_comp.co_rank);
-			D_DEBUG(DB_REBUILD, "exclude target fail with %u/%u "
-				"scan bits %u pull bits %u\n",
-				target->ta_comp.co_rank, target->ta_comp.co_id,
-				*(*rgt)->rgt_scan_bits, *(*rgt)->rgt_pull_bits);
+			dom = pool_map_find_node_by_rank(pool->sp_map,
+						target->ta_comp.co_rank);
+			if (dom && dom->do_comp.co_status == PO_COMP_ST_DOWN) {
+				D_ASSERT(dom->do_comp.co_rank <
+					  (*rgt)->rgt_bits_size);
+				setbit((*rgt)->rgt_scan_bits,
+					dom->do_comp.co_rank);
+				setbit((*rgt)->rgt_pull_bits,
+					dom->do_comp.co_rank);
+				excluded = true;
+				D_DEBUG(DB_REBUILD, "exclude target fail with"
+					" %u scan bits %u pull bits %u\n",
+					target->ta_comp.co_rank,
+					*(*rgt)->rgt_scan_bits,
+					*(*rgt)->rgt_pull_bits);
+			}
 		}
+
+		/* Sigh these failed targets does not exist in the pool
+		 * map anymore. then we need skip this rebuild.
+		 */
+		if (!excluded)
+			rc = -DER_CANCELED;
 	}
 
 	return rc;
@@ -1079,8 +1096,25 @@ rebuild_task_ult(void *arg)
 	rc = rebuild_internal(pool, task->dst_map_ver, &task->dst_tgts,
 			      task->dst_svc_list, &rgt);
 	if (rc != 0) {
+		if (rc == -DER_CANCELED) {
+			D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver %u rebuild is"
+				" canceled.\n", DP_UUID(task->dst_pool_uuid),
+				task->dst_map_ver);
+			rc = 0;
+		}
+
+		if (rgt) {
+			rgt->rgt_abort = 1;
+			rgt->rgt_status.rs_done = 1;
+			rgt->rgt_status.rs_errno = rc;
+		}
+
+		D_PRINT("Rebuild [failed] (pool "DF_UUID" ver=%u status=%d)\n",
+			DP_UUID(task->dst_pool_uuid), task->dst_map_ver, rc);
+
 		D_ERROR(""DF_UUID" (ver=%u) rebuild failed: rc %d\n",
 			DP_UUID(task->dst_pool_uuid), task->dst_map_ver, rc);
+
 		D_GOTO(out, rc);
 	}
 
@@ -1093,9 +1127,9 @@ rebuild_task_ult(void *arg)
 	}
 
 	rc = ds_pool_tgt_exclude_out(pool->sp_uuid, &task->dst_tgts);
-	D_DEBUG(DB_REBUILD, "mark failed target %d of "DF_UUID" as DOWNOUT\n",
-		task->dst_tgts.pti_ids[0].pti_id,
-		DP_UUID(task->dst_pool_uuid));
+	D_DEBUG(DB_REBUILD, "mark failed target %d of "DF_UUID
+		" as DOWNOUT: %d\n", task->dst_tgts.pti_ids[0].pti_id,
+		DP_UUID(task->dst_pool_uuid), rc);
 
 	memset(&iv, 0, sizeof(iv));
 	uuid_copy(iv.riv_pool_uuid, task->dst_pool_uuid);
