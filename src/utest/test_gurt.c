@@ -1022,6 +1022,7 @@ test_gurt_alloc(void **state)
 	int *testint;
 	int *testarray;
 	char *path;
+	int *ptr1, *ptr2;
 	int nr = 10;
 	int rc;
 
@@ -1063,6 +1064,16 @@ test_gurt_alloc(void **state)
 	assert_non_null(testint);
 	D_FREE(testint);
 	assert_null(testint);
+
+	D_ALLOC_ARRAY(ptr1, nr);
+	assert_non_null(ptr1);
+
+	D_REALLOC_ARRAY(ptr2, ptr1, nr*10);
+	assert_non_null(ptr2);
+	assert_null(ptr1);
+
+	D_FREE(ptr2);
+	assert_null(ptr2);
 
 	d_log_fini();
 }

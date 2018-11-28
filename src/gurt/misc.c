@@ -215,7 +215,7 @@ d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size)
 		d_rank_list_free(ptr);
 		return NULL;
 	}
-	D_REALLOC(new_rl_ranks, ptr->rl_ranks, size * sizeof(d_rank_t));
+	D_REALLOC_ARRAY(new_rl_ranks, ptr->rl_ranks, size);
 	if (new_rl_ranks != NULL) {
 		ptr->rl_ranks = new_rl_ranks;
 		ptr->rl_nr = size;

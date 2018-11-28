@@ -126,7 +126,7 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 /* memory allocating macros */
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
-		      on_error)						\
+			on_error)					\
 	do {								\
 		if (D_SHOULD_FAIL(0)) {					\
 			free(ptr);					\
@@ -153,6 +153,7 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 				#func " '" name "': %i)\n",		\
 				(int)(size));				\
 	} while (0)
+
 
 #define D_ALLOC_CORE(ptr, size, count)					\
 	do {								\
@@ -191,21 +192,43 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
  * there is no way to tell the difference between successful and
  * failed realloc.
  */
-#define D_REALLOC(newptr, oldptr, size)					\
+#define D_REALLOC_COMMON(newptr, oldptr, size, cnt)			\
 	do {								\
-		int _sz = (int)(size);					\
+		int _esz = (int)(size);					\
+		int _sz = (int)(size) * cnt;				\
+		/* Compiler check to ensure type match */		\
+		typeof(newptr) optr = oldptr;				\
 		D_ASSERT((void *)&(newptr) != &(oldptr));		\
-		(newptr) =  realloc((oldptr), (_sz));			\
+		(newptr) =  realloc(optr, (_sz));			\
 		if ((newptr) != NULL) {					\
-			D_DEBUG(DB_MEM,					\
-				"realloc '" #newptr "': %i at %p (old '" #oldptr "':%p).\n", \
-				_sz, (newptr), (oldptr));		\
+			if (cnt <= 1)					\
+				D_DEBUG(DB_MEM,				\
+					"realloc '" #newptr "': %i at %p (old '" #oldptr "':%p).\n", \
+					_esz, (newptr), (oldptr));	\
+			else						\
+				D_DEBUG(DB_MEM,				\
+					"realloc '" #newptr "': %i * '" #cnt "':%i at %p (old '" #oldptr "':%p).\n", \
+					_esz, cnt, (newptr), (oldptr));	\
 			(oldptr) = NULL;				\
 			break;						\
 		}							\
-		D_ERROR("out of memory (tried to realloc "		\
-			"'" #newptr "': %i)\n", _sz);			\
+		if (cnt <= 1)						\
+			D_ERROR("out of memory (tried to realloc "	\
+				"'" #newptr "': size=%i)\n",		\
+				_esz);					\
+		else							\
+			D_ERROR("out of memory (tried to realloc "	\
+				"'" #newptr "': size=%i count=%d)\n",	\
+				_esz, cnt);				\
 	} while (0)
+
+
+#define D_REALLOC(newptr, oldptr, size)	\
+	D_REALLOC_COMMON(newptr, oldptr, size, 1)
+
+#define D_REALLOC_ARRAY(newptr, oldptr, count) \
+	D_REALLOC_COMMON(newptr, oldptr, sizeof(*oldptr), count)
+
 
 #define D_FREE(ptr)							\
 	do {								\

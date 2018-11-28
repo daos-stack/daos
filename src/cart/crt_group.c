@@ -3379,7 +3379,7 @@ grp_regen_linear_list(struct crt_grp_priv *grp_priv)
 	int		index;
 	int		i;
 	d_rank_list_t	*linear_list;
-	void		*tmp_ptr;
+	d_rank_t	*tmp_ptr;
 
 	membs = grp_priv->gp_membs.cgm_list;
 	linear_list = grp_priv->gp_membs.cgm_linear_list;
@@ -3387,8 +3387,8 @@ grp_regen_linear_list(struct crt_grp_priv *grp_priv)
 	/* If group size changed - reallocate the list */
 	if (!linear_list->rl_ranks ||
 	    linear_list->rl_nr != grp_priv->gp_size) {
-		D_REALLOC(tmp_ptr, linear_list->rl_ranks,
-			grp_priv->gp_size * sizeof(d_rank_t));
+		D_REALLOC_ARRAY(tmp_ptr, linear_list->rl_ranks,
+			grp_priv->gp_size);
 
 		if (!tmp_ptr)
 			return -DER_NOMEM;
@@ -3448,7 +3448,7 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		first = membs->rl_nr;
 		new_amount = first + RANK_LIST_REALLOC_SIZE;
 
-		D_REALLOC(tmp, membs->rl_ranks, new_amount * sizeof(d_rank_t));
+		D_REALLOC_ARRAY(tmp, membs->rl_ranks, new_amount);
 		if (!tmp)
 			D_GOTO(out, rc = -DER_NOMEM);
 

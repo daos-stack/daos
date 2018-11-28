@@ -85,8 +85,7 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 
 	if (fault_id >= d_fi_gdata.dfg_fa_capacity) {
 		new_capacity = fault_id + 1;
-		D_REALLOC(new_fa_arr, d_fi_gdata.dfg_fa,
-			  sizeof(*new_fa_arr) * new_capacity);
+		D_REALLOC_ARRAY(new_fa_arr, d_fi_gdata.dfg_fa, new_capacity);
 		if (new_fa_arr == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
