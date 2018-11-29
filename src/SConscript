@@ -39,6 +39,7 @@ def scons():
 
     # Build each DAOS component
     SConscript('rdb/SConscript')
+    SConscript('rsvc/SConscript')
     SConscript('mgmt/SConscript')
     SConscript('pool/SConscript')
     SConscript('container/SConscript')

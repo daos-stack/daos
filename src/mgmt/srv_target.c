@@ -216,7 +216,7 @@ ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
  * \param[in]	arg	argument passed to each \a cb call
  */
 int
-ds_mgmt_tgt_pool_iterate(int (*cb)(const uuid_t uuid, void *arg), void *arg)
+ds_mgmt_tgt_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
 {
 	DIR    *storage;
 	int	rc;

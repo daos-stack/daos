@@ -37,6 +37,7 @@ extern int d_vos_logfac;
 extern int d_client_logfac;
 extern int d_server_logfac;
 extern int d_rdb_logfac;
+extern int d_rsvc_logfac;
 extern int d_pool_logfac;
 extern int d_container_logfac;
 extern int d_object_logfac;

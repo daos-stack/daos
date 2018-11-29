@@ -47,6 +47,7 @@ DECLARE_FAC(vos);
 DECLARE_FAC(client);
 DECLARE_FAC(server);
 DECLARE_FAC(rdb);
+DECLARE_FAC(rsvc);
 DECLARE_FAC(pool);
 DECLARE_FAC(container);
 DECLARE_FAC(object);
@@ -99,6 +100,7 @@ static struct d_debug_bit daos_bit_dict[] = {
 	ACTION("client", d_client_logfac)		\
 	ACTION("server", d_server_logfac)		\
 	ACTION("rdb", d_rdb_logfac)			\
+	ACTION("rsvc", d_rsvc_logfac)			\
 	ACTION("pool", d_pool_logfac)			\
 	ACTION("container", d_container_logfac)		\
 	ACTION("object", d_object_logfac)		\

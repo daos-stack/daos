@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2016 Intel Corporation.
+/*
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * ds_pool: Pool Server API
  */
 
@@ -94,13 +96,12 @@ struct ds_pool_child {
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
 void ds_pool_child_put(struct ds_pool_child *child);
 
-int
-ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
-		     enum daos_module_id module, crt_opcode_t opcode,
-		     crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
-		     d_rank_list_t *excluded_list);
-int
-ds_pool_map_buf_get(const uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
+int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
+			 enum daos_module_id module, crt_opcode_t opcode,
+			 crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
+			 d_rank_list_t *excluded_list);
+
+int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
 
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
@@ -141,29 +142,14 @@ typedef int (*obj_iter_cb_t)(uuid_t cont_uuid, daos_unit_oid_t oid,
 			     daos_epoch_t eph, void *arg);
 int ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *arg);
 
-char *ds_pool_svc_rdb_path(const uuid_t pool_uuid);
-int ds_pool_svc_rdb_uuid_store(const uuid_t pool_uuid, const uuid_t uuid);
-int ds_pool_svc_rdb_uuid_load(const uuid_t pool_uuid, uuid_t uuid);
-int ds_pool_svc_rdb_uuid_remove(const uuid_t pool_uuid);
-int ds_pool_svc_start(const uuid_t uuid);
-void ds_pool_svc_stop(const uuid_t uuid);
-
 struct cont_svc;
 struct rsvc_hint;
-int ds_pool_cont_svc_lookup_leader(const uuid_t pool_uuid,
-				   struct cont_svc ***svcpp,
+int ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svc,
 				   struct rsvc_hint *hint);
-void ds_pool_cont_svc_put_leader(struct cont_svc **svcp);
-uint64_t ds_pool_cont_svc_term(struct cont_svc **svcp);
 
-struct rdb;
-void ds_pool_set_hint(struct rdb *db, struct rsvc_hint *hint);
+int ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
+			 d_iov_t *iv_iov, unsigned int iv_ns_id);
 
-int
-ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
-		     d_iov_t *iv_iov, unsigned int iv_ns_id);
-
-int
-ds_pool_svc_term_get(const uuid_t uuid, uint64_t *term);
+int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
 #endif /* __DAOS_SRV_POOL_H__ */

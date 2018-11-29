@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2015, 2016 Intel Corporation.
+/*
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * ds_cont: Container Server API
  */
 
@@ -30,8 +32,7 @@
 #include <daos/common.h>
 #include <daos_types.h>
 #include <daos_srv/pool.h>
-/* For the combined pool/container service */
-#include <daos_srv/rdb.h>
+#include <daos_srv/rsvc.h>
 
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
@@ -39,7 +40,7 @@ void ds_cont_unlock_metadata(struct cont_svc *svc);
 int ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 			  const uuid_t pool_uuid);
 int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
-		     uint64_t id, struct rdb *db);
+		     uint64_t id, struct ds_rsvc *rsvc);
 void ds_cont_svc_fini(struct cont_svc **svcp);
 void ds_cont_svc_step_up(struct cont_svc *svc);
 void ds_cont_svc_step_down(struct cont_svc *svc);
@@ -74,7 +75,7 @@ struct ds_cont_hdl {
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
 void ds_cont_hdl_put(struct ds_cont_hdl *hdl);
 
-int ds_cont_close_by_pool_hdls(const uuid_t pool_uuid, uuid_t *pool_hdls,
+int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,

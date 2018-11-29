@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2016-2018 Intel Corporation.
+/*
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,15 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * /file
+ *
  * ds_cont: Container Operations
  *
  * This file contains the server API methods and the RPC handlers that are both
  * related container metadata.
  */
-#define D_LOGFAC	DD_FAC(container)
+
+#define D_LOGFAC DD_FAC(container)
 
 #include <daos_srv/container.h>
 
@@ -38,16 +41,14 @@
 #include "srv_layout.h"
 
 static int
-cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid, uint64_t id,
-	      struct rdb *db)
+cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
+	      struct ds_rsvc *rsvc)
 {
-	struct cont_svc	       *svc = *svcp;
-	int			rc;
+	int rc;
 
 	uuid_copy(svc->cs_pool_uuid, pool_uuid);
 	svc->cs_id = id;
-	svc->cs_in_pool_svc = svcp;
-	svc->cs_db = db;
+	svc->cs_rsvc = rsvc;
 
 	rc = ABT_rwlock_create(&svc->cs_lock);
 	if (rc != ABT_SUCCESS) {
@@ -102,37 +103,22 @@ cont_svc_fini(struct cont_svc *svc)
 	ABT_rwlock_free(&svc->cs_lock);
 }
 
-static void
-cont_svc_step_up(struct cont_svc *svc)
-{
-	D_ASSERT(svc->cs_pool == NULL);
-	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
-	D_ASSERT(svc->cs_pool != NULL);
-}
-
-static void
-cont_svc_step_down(struct cont_svc *svc)
-{
-	D_ASSERT(svc->cs_pool != NULL);
-	ds_pool_put(svc->cs_pool);
-	svc->cs_pool = NULL;
-}
-
 int
 ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid, uint64_t id,
-		 struct rdb *db)
+		 struct ds_rsvc *rsvc)
 {
-	int rc;
+	struct cont_svc	       *svc;
+	int			rc;
 
-	D_ALLOC_PTR(*svcp);
-	if (*svcp == NULL)
+	D_ALLOC_PTR(svc);
+	if (svc == NULL)
 		return -DER_NOMEM;
-	rc = cont_svc_init(svcp, pool_uuid, id, db);
+	rc = cont_svc_init(svc, pool_uuid, id, rsvc);
 	if (rc != 0) {
-		D_FREE(*svcp);
-		*svcp = NULL;
+		D_FREE(svc);
 		return rc;
 	}
+	*svcp = svc;
 	return 0;
 }
 
@@ -147,43 +133,39 @@ ds_cont_svc_fini(struct cont_svc **svcp)
 void
 ds_cont_svc_step_up(struct cont_svc *svc)
 {
-	cont_svc_step_up(svc);
+	D_ASSERT(svc->cs_pool == NULL);
+	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
+	D_ASSERT(svc->cs_pool != NULL);
 }
 
 void
 ds_cont_svc_step_down(struct cont_svc *svc)
 {
-	cont_svc_step_down(svc);
+	D_ASSERT(svc->cs_pool != NULL);
+	ds_pool_put(svc->cs_pool);
+	svc->cs_pool = NULL;
 }
 
 static int
-cont_svc_lookup_leader(const uuid_t pool_uuid, uint64_t id,
-		       struct cont_svc **svcp, struct rsvc_hint *hint)
+cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id, struct cont_svc **svcp,
+		       struct rsvc_hint *hint)
 {
-	struct cont_svc	      **p;
+	struct cont_svc	       *p;
 	int			rc;
 
 	D_ASSERTF(id == 0, DF_U64"\n", id);
 	rc = ds_pool_cont_svc_lookup_leader(pool_uuid, &p, hint);
 	if (rc != 0)
 		return rc;
-	/* p == &pool_svc->ps_cont_svc */
 	D_ASSERT(p != NULL);
-	D_ASSERT(*p != NULL);
-	*svcp = *p;
+	*svcp = p;
 	return 0;
 }
 
 static void
 cont_svc_put_leader(struct cont_svc *svc)
 {
-	ds_pool_cont_svc_put_leader(svc->cs_in_pool_svc);
-}
-
-static uint64_t
-cont_svc_term(struct cont_svc *svc)
-{
-	return ds_pool_cont_svc_term(svc->cs_in_pool_svc);
+	ds_rsvc_put_leader(svc->cs_rsvc);
 }
 
 int
@@ -763,7 +745,8 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 	for (i = 0; i < nrecs; i++) {
 		struct rdb_tx tx;
 
-		rc = rdb_tx_begin(svc->cs_db, cont_svc_term(svc), &tx);
+		rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term,
+				  &tx);
 		if (rc != 0)
 			break;
 		rc = cont_close_one_hdl(&tx, svc, ctx, recs[i].tcr_hdl);
@@ -1349,8 +1332,8 @@ find_hdls_to_close(struct rdb_tx *tx, struct cont_svc *svc, uuid_t *pool_hdls,
  * and managed by local container services.
  */
 int
-ds_cont_close_by_pool_hdls(const uuid_t pool_uuid, uuid_t *pool_hdls,
-			   int n_pool_hdls, crt_context_t ctx)
+ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls,
+			   crt_context_t ctx)
 {
 	struct cont_svc		       *svc;
 	struct rdb_tx			tx;
@@ -1369,7 +1352,7 @@ ds_cont_close_by_pool_hdls(const uuid_t pool_uuid, uuid_t *pool_hdls,
 	if (rc != 0)
 		return rc;
 
-	rc = rdb_tx_begin(svc->cs_db, cont_svc_term(svc), &tx);
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 
@@ -1487,7 +1470,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	struct cont	       *cont = NULL;
 	int			rc;
 
-	rc = rdb_tx_begin(svc->cs_db, cont_svc_term(svc), &tx);
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1555,7 +1538,7 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 
 	rc = cont_op_with_svc(pool_hdl, svc, rpc);
 
-	ds_pool_set_hint(svc->cs_db, &out->co_hint);
+	ds_rsvc_set_hint(svc->cs_rsvc, &out->co_hint);
 	cont_svc_put_leader(svc);
 out_pool_hdl:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: hdl="DF_UUID
@@ -1597,7 +1580,7 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	if (rc != 0)
 		D_GOTO(out_pool_hdl, rc);
 
-	rc = rdb_tx_begin(svc->cs_db, cont_svc_term(svc), &tx);
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 

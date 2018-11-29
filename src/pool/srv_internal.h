@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2016-2018 Intel Corporation.
+/*
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,9 +61,12 @@ struct pool_iv_entry {
 /*
  * srv_pool.c
  */
-int ds_pool_svc_hash_init(void);
-void ds_pool_svc_hash_fini(void);
+void ds_pool_rsvc_class_register(void);
+void ds_pool_rsvc_class_unregister(void);
+int ds_pool_svc_start(uuid_t uuid, bool create, uuid_t db_uuid, size_t size,
+		      d_rank_list_t *replicas);
 int ds_pool_svc_start_all(void);
+int ds_pool_svc_stop(uuid_t uuid, bool destroy);
 int ds_pool_svc_stop_all(void);
 void ds_pool_create_handler(crt_rpc_t *rpc);
 void ds_pool_connect_handler(crt_rpc_t *rpc);
@@ -106,7 +109,6 @@ int ds_pool_rdb_dist_start(const uuid_t dbid, const uuid_t pool_uuid,
 			   bool bootstrap, size_t size);
 int ds_pool_rdb_dist_stop(const uuid_t pool_uuid, const d_rank_list_t *ranks,
 			  bool destroy);
-
 void ds_pool_rdb_start_handler(crt_rpc_t *rpc);
 int ds_pool_rdb_start_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
@@ -121,9 +123,8 @@ void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 			 crt_group_t **group);
 int ds_pool_group_destroy(const uuid_t pool_uuid, crt_group_t *group);
-int
-ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
-			int opc);
+int ds_pool_map_tgts_update(struct pool_map *map,
+			    struct pool_target_id_list *tgts, int opc);
 
 /*
  * srv_iv.c
@@ -134,4 +135,5 @@ int ds_pool_iv_fini(void);
 int pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
 		   unsigned int shortcut, unsigned int sync_mode);
 int pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv);
+
 #endif /* __POOL_SRV_INTERNAL_H__ */
