@@ -182,6 +182,12 @@ function fetch_job_artifacts {
         #mapfile -t git_file_lines <<< "${git_files}"
         #for git_file in "${get_file_lines[@]}"; do
         git_file="${dest_name}_git_commit"
+        git_tag="${dest_name}_git_tag"
+        art_tag=""
+        if [ -e "${artifact}/${git_tag}" ]; then
+          cp "${artifact}/${git_tag}" "${DEPEND_INFO}"
+          art_tag=$(cat "${DEPEND_INFO}/${git_tag}")
+        fi
         if [ -e "${artifact}/${git_file}" ]; then
           cp "${artifact}/${git_file}" "${DEPEND_INFO}"
           dest_filename=$(basename "${git_file}")
@@ -193,15 +199,17 @@ function fetch_job_artifacts {
             if [ -n "${test_hash}" ] && [ "${test_hash}" != "latest" ]; then
               art_hash=$(cat "${DEPEND_INFO}/${git_file}")
               if [ "${art_hash}" != "${test_hash}" ]; then
-                # mpi4py is using the ompi commit hash for wanted commit
-                # Which will not match any saved mpi4py commit hash.
-                # mpi4py is obtained by the web-retriever, which does not
-                # use a commit hash.
-                if [ "${dest_name}" != "mpi4py" ]; then
-                  printf "###\n%s commit should be '%s' was '%s'\n###\n" \
-                    "${dest_name}" "${test_hash}" "${art_hash}"
-                  printf "%s %s not found\n" "${dest_name}" "${test_hash}">> \
-                    commit_not_found
+                if [ "${art_tag}" != "${test_hash}" ]; then
+                  # mpi4py is using the ompi commit hash for wanted commit
+                  # Which will not match any saved mpi4py commit hash.
+                  # mpi4py is obtained by the web-retriever, which does not
+                  # use a commit hash.
+                  if [ "${dest_name}" != "mpi4py" ]; then
+                    printf "###\n%s commit should be '%s' was '%s'\n###\n" \
+                      "${dest_name}" "${test_hash}" "${art_hash}"
+                    printf "%s %s not found\n" "${dest_name}" "${test_hash}" \
+                      >> commit_not_found
+                  fi
                 fi
               fi
             fi
