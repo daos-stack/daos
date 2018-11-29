@@ -52,7 +52,7 @@ class DvmRunner():
         self.report = os.path.join(log_path, "orted-uri")
         self.info.set_config('setKeyFromConfig', 'TR_USE_URI', self.report)
         self.logfileout = os.path.join(log_path, "orte-dvm.out")
-        ompi_path = self.info.get_info('OMPI_PREFIX')
+        ompi_path = self.info.get_info('PRRTE_PREFIX')
         self.hostlist = ",".join(self.info.get_config('host_list'))
         if not self.hostlist:
             self.hostlist = gethostname().split('.')[0]
@@ -95,7 +95,7 @@ class DvmRunner():
         """stop orted processes """
         print("TestRunner: stopping orte-dvm process\n")
         if self.ortedvm.poll() is None:
-            ompi_path = self.info.get_info('OMPI_PREFIX')
+            ompi_path = self.info.get_info('PRRTE_PREFIX')
             orterun = os.path.join(ompi_path, "bin", "prun")
             cmdstr = "%s --terminate --prefix %s --hnp file:%s --host %s" % \
                      (orterun, ompi_path, self.report, self.hostlist)
