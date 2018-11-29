@@ -142,7 +142,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	if (evt_ent_list_empty(&entl)) {
+	if (entl.el_ent_nr == 0) {
 		if (opc == EVT_ITER_FIND) /* cannot find the same extent */
 			D_GOTO(out, rc = -DER_AGAIN);
 

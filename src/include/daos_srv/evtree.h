@@ -169,8 +169,7 @@ struct evt_entry {
 	struct evt_rect			 en_sel_rect;
 };
 
-#define ERT_ENT_EMBEDDED		32
-
+#define EVT_EMBEDDED_NR 32
 /**
  * list head of \a evt_entry, it contains a few embedded entries to support
  * lightweight allocation of entries.
@@ -178,12 +177,14 @@ struct evt_entry {
 struct evt_entry_list {
 	/** All entries returned by the search */
 	d_list_t			el_list;
-	/** pool of allocated blocks of spare entries */
-	d_list_t			el_pool;
+	/** Array of allocated entries */
+	struct evt_entry		*el_ents;
 	/** total number of entries in the list */
-	unsigned int			el_ent_nr;
-	/** embedded entries (avoid allocation) */
-	struct evt_entry		el_ents[ERT_ENT_EMBEDDED];
+	uint32_t			el_ent_nr;
+	/** total allocated size of array */
+	uint32_t			el_size;
+	/* Small array of embedded entries */
+	struct evt_entry		el_embedded_ents[EVT_EMBEDDED_NR];
 };
 
 /** iterate over all entries of a ent_list */

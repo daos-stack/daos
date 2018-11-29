@@ -42,13 +42,6 @@ enum {
 	RT_OVERLAP_PARTIAL	= (1 << 6),
 };
 
-struct evt_entry_pool {
-	/** link chain of evt_entry_pool */
-	d_list_t		ep_link;
-	/** additional entries, if needed */
-	struct evt_entry	ep_ents[ERT_ENT_EMBEDDED];
-};
-
 static struct evt_policy_ops evt_ssof_pol_ops;
 /**
  * Tree policy table.
@@ -214,44 +207,18 @@ evt_ent_list_init(struct evt_entry_list *ent_list)
 {
 	memset(ent_list, 0, sizeof(*ent_list));
 	D_INIT_LIST_HEAD(&ent_list->el_list);
-	D_INIT_LIST_HEAD(&ent_list->el_pool);
+	ent_list->el_ents = ent_list->el_embedded_ents;
 }
 
 /** Finalize an entry list */
 void
 evt_ent_list_fini(struct evt_entry_list *ent_list)
 {
-	struct evt_entry_pool	*pool;
-	struct evt_entry_pool	*temp;
+	if (ent_list->el_size)
+		D_FREE(ent_list->el_ents);
 
-	/* NB: free any allocated pools of extra entries */
-	d_list_for_each_entry_safe(pool, temp, &ent_list->el_pool, ep_link) {
-		D_FREE(pool);
-	}
-
-	D_INIT_LIST_HEAD(&ent_list->el_pool);
 	D_INIT_LIST_HEAD(&ent_list->el_list);
-	ent_list->el_ent_nr = 0;
-}
-
-static struct evt_entry *
-evt_ent_list_alloc_pool(struct evt_entry_list *ent_list)
-{
-	struct evt_entry_pool	*pool;
-	int		 index	= ent_list->el_ent_nr % ERT_ENT_EMBEDDED;
-
-	if (index == 0) { /* first index of new pool */
-		D_ALLOC_PTR(pool);
-		if (pool == NULL)
-			return NULL;
-		d_list_add_tail(&pool->ep_link, &ent_list->el_pool);
-	} else {
-		/* Get the tail */
-		pool = d_list_entry(ent_list->el_pool.prev,
-				    struct evt_entry_pool, ep_link);
-	}
-
-	return &pool->ep_ents[index];
+	ent_list->el_size = ent_list->el_ent_nr = 0;
 }
 
 /**
@@ -259,26 +226,47 @@ evt_ent_list_alloc_pool(struct evt_entry_list *ent_list)
  * have been taken.
  */
 static struct evt_entry *
-evt_ent_list_alloc(struct evt_entry_list *ent_list, bool add)
+evt_ent_list_alloc(struct evt_context *tcx, struct evt_entry_list *ent_list)
 {
-	struct evt_entry *ent;
+	uint32_t		 size;
+	int			 i;
 
-	if (ent_list->el_ent_nr < ERT_ENT_EMBEDDED) {
-		/* consume a embedded entry */
-		ent = &ent_list->el_ents[ent_list->el_ent_nr];
-
-		memset(ent, 0, sizeof(*ent));
-	} else {
-		ent = evt_ent_list_alloc_pool(ent_list);
-		if (ent == NULL)
+	if (ent_list->el_ent_nr == EVT_EMBEDDED_NR) {
+		D_ASSERT(ent_list->el_size == 0);
+		/* Transition to allocated array.
+		 * Insert enough entries to fit everything in the tree.  Most
+		 * space will be wated in practice but it's just virtual address
+		 * space and it's ephemeral
+		 */
+		size = 1;
+		for (i = 0; i < tcx->tc_depth; i++)
+			size *= tcx->tc_order;
+		/* With splitting, we need 2x the space in worst case.  Each new
+		 * extent inserted can add at most 1 extent to the output. The
+		 * cases are:
+		 * 1. New extent covers existing one:   1 visible, 1 covered
+		 * 2. New extent splits existing one:   3 visible, 0 covered
+		 * 3. New extent overlaps existing one: 2 visible, 0 covered
+		 * 4. New extent covers nothing:        1 visible, 0 covered
+		 *
+		 * So, each new extent can add at most 1 new rectangle (as in
+		 * case #2.   So if we allocate 2x the max entries in the tree,
+		 * we will always have sufficient space to store entries.
+		 */
+		size *= 2;
+		D_ALLOC_ARRAY(ent_list->el_ents, size);
+		if (ent_list->el_ents == NULL)
 			return NULL;
 
+		/* Copy the embedded entries over to new array list */
+		memcpy(ent_list->el_ents, ent_list->el_embedded_ents,
+		       sizeof(ent_list->el_ents[0]) * EVT_EMBEDDED_NR);
+		ent_list->el_size = size;
 	}
-	ent_list->el_ent_nr++;
-	if (add)
-		d_list_add_tail(&ent->en_link, &ent_list->el_list);
+	D_ASSERT(ent_list->el_ent_nr < EVT_EMBEDDED_NR ||
+		 ent_list->el_ent_nr < ent_list->el_size);
 
-	return ent;
+	return &ent_list->el_ents[ent_list->el_ent_nr++];
 }
 
 static int
@@ -311,41 +299,6 @@ int evt_ent_cmp(const void *p1, const void *p2)
 	const struct evt_entry	*ent2	= p2;
 
 	return evt_cmp_rect_helper(&ent1->en_sel_rect, &ent2->en_sel_rect);
-}
-
-static void
-evt_sort_and_merge(struct evt_entry *ents, int count, d_list_t *sorted)
-{
-	d_list_t		*current;
-	struct evt_entry	*ent;
-	int			 index;
-	int			 cmp;
-
-	qsort(ents, count, sizeof(ents[0]), evt_ent_cmp);
-
-	/* Now merge into sorted list */
-	for (index = 0, current = sorted->next; index < count;) {
-		if (current == sorted) {
-			d_list_add_tail(&ents[index].en_link, sorted);
-			index++;
-			continue;
-		}
-
-		ent = d_list_entry(current, struct evt_entry, en_link);
-
-		cmp = evt_cmp_rect_helper(&ents[index].en_sel_rect,
-					       &ent->en_sel_rect);
-		D_ASSERTF(cmp != 0, "Same epoch overwrite detected r1="DF_RECT
-			  " r2="DF_RECT"\n", DP_RECT(&ent->en_rect),
-			  DP_RECT(&ents[index].en_rect));
-		if (cmp < 0) {
-			d_list_add(&ents[index].en_link, current->prev);
-			index++;
-		} else {
-			/* Skip to next entry */
-			current = current->next;
-		}
-	}
 }
 
 /* Use top bit of inob field to temporarily mark a partial rectangle as part
@@ -389,12 +342,13 @@ evt_find_next_uncovered(struct evt_entry *this_ent, d_list_t *head,
 }
 
 static struct evt_entry *
-evt_get_unused_entry(struct evt_entry_list *ent_list, d_list_t *unused)
+evt_get_unused_entry(struct evt_context *tcx, struct evt_entry_list *ent_list,
+		     d_list_t *unused)
 {
 	d_list_t *entry;
 
 	if (d_list_empty(unused))
-		return evt_ent_list_alloc(ent_list, false);
+		return evt_ent_list_alloc(tcx, ent_list);
 
 	entry = unused->next;
 	d_list_del(entry);
@@ -444,7 +398,8 @@ out:
 }
 
 static int
-evt_uncover_entries(struct evt_entry_list *ent_list, d_list_t *covered)
+evt_uncover_entries(struct evt_context *tcx, struct evt_entry_list *ent_list,
+		    d_list_t *covered)
 {
 	struct evt_rect		*this_rect;
 	struct evt_rect		*next_rect;
@@ -527,7 +482,7 @@ evt_uncover_entries(struct evt_entry_list *ent_list, d_list_t *covered)
 			this_rect->rc_off_hi = next_rect->rc_off_lo - 1;
 		} else {
 			/* Case #4, split, insert tail into sorted list */
-			temp_ent = evt_get_unused_entry(ent_list, &unused);
+			temp_ent = evt_get_unused_entry(tcx, ent_list, &unused);
 			if (temp_ent == NULL)
 				return -DER_NOMEM;
 			evt_split_entry(this_ent, next_ent, temp_ent);
@@ -547,38 +502,32 @@ evt_uncover_entries(struct evt_entry_list *ent_list, d_list_t *covered)
  * rectangles.
  */
 static int
-evt_ent_list_sort(struct evt_entry_list *ent_list, d_list_t *covered)
+evt_ent_list_sort(struct evt_context *tcx, struct evt_entry_list *ent_list,
+		  d_list_t *covered)
 {
-	d_list_t		*current = &ent_list->el_pool;
-	struct evt_entry_pool	*pool;
 	struct evt_entry	*ents;
-	int			 count;
-	int			 todo;
+	uint32_t		 i;
 
 	D_INIT_LIST_HEAD(covered);
 
-	if (ent_list->el_ent_nr <= 1)
+	if (ent_list->el_ent_nr == 0)
 		return 0;
 
-	/* First, sort the entries and place all in covered list */
-	todo = ent_list->el_ent_nr;
-	ents = &ent_list->el_ents[0]; /* start with embedded pool */
-
-	for (todo = ent_list->el_ent_nr; todo != 0; todo -= count) {
-		count = min(todo, ERT_ENT_EMBEDDED);
-
-		evt_sort_and_merge(ents, count, covered);
-
-		if (current->next == &ent_list->el_pool)
-			break;
-
-		current = current->next;
-		pool = d_list_entry(current, struct evt_entry_pool, ep_link);
-		ents = &pool->ep_ents[0];
+	ents = ent_list->el_ents;
+	if (ent_list->el_ent_nr == 1) {
+		d_list_add_tail(&ents[0].en_link, &ent_list->el_list);
+		return 0;
 	}
 
+	/* Sort the array first */
+	qsort(ents, ent_list->el_ent_nr, sizeof(ents[0]), evt_ent_cmp);
+
+	/* Now place all entries sorted in covered list */
+	for (i = 0; i < ent_list->el_ent_nr; i++)
+		d_list_add_tail(&ents[i].en_link, covered);
+
 	/* Now separate entries into covered and visible */
-	return evt_uncover_entries(ent_list, covered);
+	return evt_uncover_entries(tcx, ent_list, covered);
 }
 
 daos_handle_t
@@ -1574,7 +1523,8 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 			goto out;
 	}
 
-	if (!d_list_empty(&ent_list.el_list)) {
+	D_ASSERT(ent_list.el_ent_nr <= 1);
+	if (ent_list.el_ent_nr == 1) {
 		/*
 		 * NB: This is part of the current hack to keep "supporting"
 		 * overwrite for same epoch, full overwrite.
@@ -1586,10 +1536,9 @@ evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
 	/* Phase-2: Inserting */
 	rc = evt_insert_entry(tcx, &ent);
 
-	/* At most one entry in ent_list so nothing to deallocate */
-	D_ASSERT(ent_list.el_ent_nr <= 1);
-	D_ASSERT(d_list_empty(&ent_list.el_pool));
-
+	/* No need for evt_find_ent_list_fini as there will be no allocations
+	 * with 1 entry in the list
+	 */
 out:
 	return evt_tx_end(tcx, rc);
 }
@@ -1768,7 +1717,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 				break;
 			}
 
-			ent = evt_ent_list_alloc(ent_list, true);
+			ent = evt_ent_list_alloc(tcx, ent_list);
 			if (ent == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1817,6 +1766,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 out:
 	if (rc != 0)
 		evt_ent_list_fini(ent_list);
+
 	return rc;
 }
 
@@ -2039,7 +1989,7 @@ evt_find(daos_handle_t toh, struct evt_rect *rect,
 	evt_ent_list_init(ent_list);
 	rc = evt_find_ent_list(tcx, EVT_FIND_ALL, rect, ent_list);
 	if (rc == 0 && covered != NULL)
-		rc = evt_ent_list_sort(ent_list, covered);
+		rc = evt_ent_list_sort(tcx, ent_list, covered);
 	if (rc != 0)
 		evt_ent_list_fini(ent_list);
 	return rc;
@@ -2662,16 +2612,12 @@ int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent)
 	if (rc != 0)
 		return rc;
 
-	if (d_list_empty(&ent_list.el_list))
+	if (ent_list.el_ent_nr == 0)
 		return -DER_ENOENT;
 
-	if (ent != NULL) {
-		*ent = *d_list_entry(ent_list.el_list.next, struct evt_entry,
-				     en_link);
-		/* Ensure there is only one entry that matches exactly */
-		d_list_del(&ent->en_link);
-		D_ASSERT(d_list_empty(&ent_list.el_list));
-	}
+	D_ASSERT(ent_list.el_ent_nr == 1);
+	if (ent != NULL)
+		*ent = ent_list.el_ents[0];
 
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
@@ -2679,9 +2625,8 @@ int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent)
 
 	rc = evt_node_delete(tcx);
 
-	/* Only one entry in ent_list so nothing to deallocate */
-	D_ASSERT(ent_list.el_ent_nr == 1);
-	D_ASSERT(d_list_empty(&ent_list.el_pool));
-
+	/* No need for evt_find_ent_list_fini as there will be no allocations
+	 * with 1 entry in the list
+	 */
 	return evt_tx_end(tcx, rc);
 }
