@@ -57,8 +57,10 @@ class DvmRunner():
         if not self.hostlist:
             self.hostlist = gethostname().split('.')[0]
 
+        servers = self.hostlist.split(',')
+
         cmd_arg = ""
-        for host in self.hostlist:
+        for host in servers:
             cmd_arg = cmd_arg + '"' + host + ':*",'
 
         cmd = [os.path.join(ompi_path, 'bin', 'prte'),
