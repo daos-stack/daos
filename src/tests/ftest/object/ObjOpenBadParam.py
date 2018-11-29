@@ -37,6 +37,7 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosLog
+from daos_cref import DaosObjId
 
 class ObjOpenBadParam(Test):
     """
@@ -244,7 +245,6 @@ class ObjOpenBadParam(Test):
         finally:
             self.obj.tgt_rank_list = saved_rl
 
-    @skip('https://jira.hpdd.intel.com/browse/DAOS-1860')
     def test_null_oid(self):
         """
         Test ID: DAOS-1320
@@ -256,7 +256,7 @@ class ObjOpenBadParam(Test):
         """
         # null oid
         saved_oid = self.obj.c_oid
-        self.obj.c_oid = 0
+        self.obj.c_oid = DaosObjId(0, 0)
         try:
             dummy_obj = self.obj.open()
         except ValueError as excep:
