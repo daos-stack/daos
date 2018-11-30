@@ -83,11 +83,13 @@ class UnitTestRunner(PostRunner.PostRunner,
 
         # prte arguments have to be in form of -H 'host1:*,host2:*,..."
         cmd_arg = " --daemonize -system-server -H "
-        for host in server_list:
+
+        #  convert server list to set and back to list to remove duplicates
+        for host in list(set(server_list)):
             cmd_arg = cmd_arg + '"' + host + ':*",'
 
 
-        print("Launching {} {}".format(cmd, cmd_arg))
+        print("UnitTestRunner: Launching {} {}".format(cmd, cmd_arg))
         self.prun_dvm = subprocess.Popen([cmd, cmd_arg],
                                          stdout=subprocess.PIPE,
                                          shell=True)
