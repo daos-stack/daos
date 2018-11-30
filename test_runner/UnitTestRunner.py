@@ -74,6 +74,11 @@ class UnitTestRunner(PostRunner.PostRunner,
         else:
             server_list.append(gethostname().split('.')[0])
 
+        clients = os.getenv('CRT_TEST_CLIENT')
+
+        if clients:
+            server_list = server_list + clients.split(',')
+
         cmd = "prte"
 
         # prte arguments have to be in form of -H 'host1:*,host2:*,..."
