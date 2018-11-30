@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,8 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-func hashFromToken(token *pb.AuthToken) ([]byte, error) {
+// HashFromToken will return a SHA512 hash of the token data
+func HashFromToken(token *pb.AuthToken) ([]byte, error) {
 	// Generate our hash (not signed yet just a hash)
 	hash := sha512.New()
 
@@ -99,7 +100,7 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityCredential, error) 
 		Flavor: pb.AuthFlavor_AUTH_SYS,
 		Data:   tokenBytes}
 
-	verifier, err := hashFromToken(&token)
+	verifier, err := HashFromToken(&token)
 	if err != nil {
 		fmt.Errorf("Unable to generate verifier (%s)", err.Error())
 		return nil, err
