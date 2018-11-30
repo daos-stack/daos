@@ -21,8 +21,6 @@ testparams:
         size: 1073741824
       size3gb:
         size: 3221225472
-      size12gb:
-        size: 12884901888
    connectperms: !mux
       permro:
         perms: 0
