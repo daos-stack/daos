@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,51 +24,60 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
+	pb "github.com/daos-stack/daos/src/control/security/proto"
 	"github.com/golang/protobuf/proto"
 )
 
-// Module id for the Agent security module
+// Module id for the Server security module
 const securityModuleID int32 = 1
 
 const (
-	methodRequestCredentials int32 = 101
+	methodValidateCredentials int32 = 101
 )
 
 // SecurityModule is the security drpc module struct
 type SecurityModule struct {
 }
 
-//HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
-	if method != methodRequestCredentials {
-		return nil, fmt.Errorf("Attempt to call unregistered function")
-	}
-
-	info, err := security.DomainInfoFromUnixConn(client.Conn)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to get credentials for client socket")
-	}
-
-	response, err := security.AuthSysRequestFromCreds(info)
+func processValidateCredentials(body []byte) ([]byte, error) {
+	credential := &pb.SecurityCredential{}
+	err := proto.Unmarshal(body, credential)
 	if err != nil {
 		return nil, err
 	}
 
-	responseBytes, err := proto.Marshal(response)
+	// Check our verifier
+	hash, err := security.HashFromToken(credential.Token)
+	if bytes.Compare(hash, credential.Verifier.Data) != 0 {
+		return nil, fmt.Errorf("Verifier does not match token")
+	}
+
+	responseBytes, err := proto.Marshal(credential.Token)
 	if err != nil {
 		return nil, err
 	}
 	return responseBytes, nil
 }
 
-//InitModule is empty for this module
+// HandleCall is the handler for calls to the SecurityModule
+func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
+	if method != methodValidateCredentials {
+		return nil, fmt.Errorf("Attempt to call unregistered function")
+	}
+
+	responseBytes, err := processValidateCredentials(body)
+	return responseBytes, err
+}
+
+// InitModule is empty for this module
 func (m *SecurityModule) InitModule(state drpc.ModuleState) {}
 
-//ID will return Security module ID
+// ID will return Security module ID
 func (m *SecurityModule) ID() int32 {
 	return securityModuleID
 }
