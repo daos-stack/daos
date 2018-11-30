@@ -1000,7 +1000,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		rc = nested_dkey_iter_init(oiter, info);
 		if (rc != 0)
 			goto failed;
-		return 0;
+		goto success;
 	case VOS_ITER_SINGLE:
 	case VOS_ITER_AKEY:
 		rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma,
@@ -1034,6 +1034,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		goto failed;
 	}
 
+success:
 	*iter_pp = &oiter->it_iter;
 	return 0;
 failed:
