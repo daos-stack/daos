@@ -135,7 +135,7 @@ class FullPoolContainerCreate(Test):
                 akey = ''.join(random.choice(string.lowercase) for i in range(5))
                 try:
                     oid, epoch = self.cont.write_an_obj(my_str, my_str_sz, dkey,
-                                                        akey, obj_cls=1)
+                                                     akey, obj_cls=1)
                     self.d_log.debug("wrote obj {0}, sz {1}".format(write_count,
                                                                     x))
                     write_count += 1

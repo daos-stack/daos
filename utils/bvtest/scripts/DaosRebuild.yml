@@ -1,4 +1,4 @@
-description: "Run the daos_test continous integration test suite."
+description: "Run the daos_test rebuild tests."
 
 defaultENV:
     CRT_PHY_ADDR_STR: "ofi+sockets"
@@ -8,7 +8,7 @@ defaultENV:
     OFI_PORT: "23350"
 
 module:
-    name: "DaosTestMulti"
+    name: "DaosRebuild"
     setKeyFromInfo:
        - [ORT_PATH, OMPI_PREFIX, "/bin"]
        - ["PREFIX","PREFIX",""]
@@ -27,11 +27,11 @@ directives:
     printTestLogPath: "yes"
     usePython: python3.4
 
-passToConfig:
-    DAOS_TEST_FLAGS: "-E dr"
-
 use_daemon:
     name: "DaosServer"
+
+passToConfig:
+    DAOS_TEST_FLAGS: "--rebuild -u subtests=\"0-13\""
 
 execStrategy:
     - name: "DaosTest"

@@ -37,7 +37,8 @@
 """install test scripts"""
 
 FILES=["DaosServer.py", "DaosTest.py", "DaosAddon.py", "DaosAddonMulti.yml",
-       "DaosAddon.yml", "DaosTestMulti.yml", "DaosTest.yml"]
+       "DaosAddon.yml", "DaosTestMulti.yml", "DaosTest.yml", "DaosRebuild.yml",
+       "DaosDegraded.yml"]
 
 def scons():
     """Run scons"""

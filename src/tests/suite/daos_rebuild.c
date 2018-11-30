@@ -1788,7 +1788,7 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 multi_pools_rebuild_concurrently, NULL, test_case_teardown},
 };
 
-#define REBUILD_POOL_SIZE	(10ULL << 30)
+#define REBUILD_POOL_SIZE	(10ULL << 28)
 int
 rebuild_setup(void **state)
 {
