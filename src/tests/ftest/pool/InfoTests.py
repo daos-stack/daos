@@ -76,6 +76,9 @@ class InfoTests(Test):
         """
         # create pool
         mode = self.params.get("mode", '/run/testparams/modes/*', 0731)
+        if mode == 73:
+             self.cancel('Cancel the mode test 73 because of DAOS-1877')
+
         uid = os.geteuid()
         gid = os.getegid()
         size = self.params.get("size", '/run/testparams/sizes/*', 0)

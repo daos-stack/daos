@@ -86,6 +86,10 @@ class MultiServerCreateDeleteTest(Test):
 
         modelist = self.params.get("mode",'/run/tests/modes/*',0731)
         mode = modelist[0]
+
+        if mode == 73:
+            self.cancel('Cancel the mode test 73 because of DAOS-1877')
+
         expected_for_param.append(modelist[1])
 
         uidlist  = self.params.get("uid",'/run/tests/uids/*',os.geteuid())
