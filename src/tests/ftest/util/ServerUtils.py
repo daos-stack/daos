@@ -22,6 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+import traceback
+import sys
 import os
 import time
 import subprocess
@@ -127,6 +129,7 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
               (time.time() - start_time))
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
         # we need to end the session now -- exit the shell
         try:
             sessions[setname].send_signal(signal.SIGINT)
