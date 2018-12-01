@@ -1406,31 +1406,32 @@ punch_simple(void **state)
 	ioreq_fini(&req);
 }
 
+#define MANYREC_NUMRECS	5
 /**
  * Test update/fetch with data verification of multiple records in epoch 0 of
  * varing size and IOD type. Size is either small I/O to SCM or larger (>=4k)
  * I/O to NVMe, and IOD type is either array or single value.
  */
 static void
-io_complex_internal(void **state, daos_obj_id_t oid, unsigned int size,
+io_manyrec_internal(void **state, daos_obj_id_t oid, unsigned int size,
 		    daos_iod_type_t iod_type, const char dkey[],
 		    const char akey[])
 {
 	test_arg_t	*arg = *state;
 	struct ioreq	 req;
-	char		*akeys[5];
-	char		*rec[5];
-	daos_size_t	rec_size[5];
-	int		rx_nr[5];
-	daos_off_t	offset[5];
-	char		*val[5];
-	daos_size_t	val_size[5];
+	char		*akeys[MANYREC_NUMRECS];
+	char		*rec[MANYREC_NUMRECS];
+	daos_size_t	rec_size[MANYREC_NUMRECS];
+	int		rx_nr[MANYREC_NUMRECS];
+	daos_off_t	offset[MANYREC_NUMRECS];
+	char		*val[MANYREC_NUMRECS];
+	daos_size_t	val_size[MANYREC_NUMRECS];
 	daos_epoch_t	epoch = 0;
 	int		i;
 
 	ioreq_init(&req, arg->coh, oid, iod_type, arg);
 
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < MANYREC_NUMRECS; i++) {
 		akeys[i] = calloc(30, 1);
 		assert_non_null(akeys[i]);
 		snprintf(akeys[i], 30, "%s%d", akey, i);
@@ -1446,15 +1447,15 @@ io_complex_internal(void **state, daos_obj_id_t oid, unsigned int size,
 	}
 
 	/** Insert */
-	insert(dkey, 5, (const char **)akeys, /*iod_size*/rec_size, rx_nr,
-	       offset, (void **)rec, &epoch, &req);
+	insert(dkey, MANYREC_NUMRECS, (const char **)akeys,
+	       /*iod_size*/rec_size, rx_nr, offset, (void **)rec, &epoch, &req);
 
 	/** Lookup */
-	lookup(dkey, 5, (const char **)akeys, offset, rec_size,
+	lookup(dkey, MANYREC_NUMRECS, (const char **)akeys, offset, rec_size,
 	       (void **)val, val_size, &epoch, &req, false);
 
 	/** Verify data consistency */
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < MANYREC_NUMRECS; i++) {
 		print_message("\tsize = %lu\n", req.iod[i].iod_size);
 		assert_int_equal(req.iod[i].iod_size, rec_size[i]);
 		assert_memory_equal(val[i], rec[i], rec_size[i]);
@@ -1470,7 +1471,7 @@ io_complex_internal(void **state, daos_obj_id_t oid, unsigned int size,
  * varying record size and IOD type.
  */
 static void
-io_complex(void **state)
+io_manyrec(void **state)
 {
 	daos_obj_id_t	oid;
 
@@ -1478,25 +1479,97 @@ io_complex(void **state)
 	print_message("Insert(e=0)/lookup(e=0)/verify complex kv records:\n");
 
 	print_message("DAOS_IOD_ARRAY:SCM\n");
-	io_complex_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_ARRAY,
-			    "io_complex_scm_array dkey",
-			    "io_complex_scm_array akey");
+	io_manyrec_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_ARRAY,
+			    "io_manyrec_scm_array dkey",
+			    "io_manyrec_scm_array akey");
 
 	print_message("DAOS_IOD_ARRAY:NVME\n");
-	io_complex_internal(state, oid, IO_SIZE_NVME, DAOS_IOD_ARRAY,
-			    "io_complex_nvme_array dkey",
-			    "io_complex_nvme_array akey");
+	io_manyrec_internal(state, oid, IO_SIZE_NVME, DAOS_IOD_ARRAY,
+			    "io_manyrec_nvme_array dkey",
+			    "io_manyrec_array akey");
 
 	print_message("DAOS_IOD_SINGLE:SCM\n");
-	io_complex_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_SINGLE,
-			    "io_complex_scm_single dkey",
-			    "io_complex_scm_single akey");
+	io_manyrec_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_SINGLE,
+			    "io_manyrec_scm_single dkey",
+			    "io_manyrec_scm_single akey");
 
 	print_message("DAOS_IOD_SINGLE:NVME\n");
-	io_complex_internal(state, oid, IO_SIZE_NVME, DAOS_IOD_SINGLE,
-			    "io_complex_nvme_single dkey",
-			    "io_complex_nvme_single akey");
+	io_manyrec_internal(state, oid, IO_SIZE_NVME, DAOS_IOD_SINGLE,
+			    "io_manyrec_nvme_single dkey",
+			    "io_manyrec_nvme_single akey");
 
+}
+
+/**
+ * More complex update/fetch with data verification of multiple records with
+ * mixed record size and IOD type all within a single RPC.
+ */
+static void
+io_complex(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	const char	 dkey[] = "io_complex dkey";
+	const char	 akey[] = "io_complex akey";
+	char		*akeys[4];
+	char		*rec[4];
+	daos_size_t	 rec_size[4];
+	daos_off_t	 offset[4];
+	char		*val[4];
+	daos_epoch_t	 epoch = 0;
+	unsigned int	 size;
+	int		 i;
+
+	oid = dts_oid_gen(dts_obj_class, 0, ((test_arg_t *)state)->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	for (i = 0; i < 4; i++) {
+		D_ASPRINTF(akeys[i], "%s%d", akey, i);
+		if (i % 2 == 0)
+			size = IO_SIZE_SCM;
+		else
+			size = IO_SIZE_NVME;
+		D_ALLOC(rec[i], size);
+		dts_buf_render(rec[i], size);
+		rec_size[i] = size;
+		offset[i] = i * size;
+		D_ALLOC(val[i], size);
+	}
+
+	/** Insert */
+	for (i = 0; i < 4; i++) {
+		if (i == 0 || i == 3)
+			req.iod_type = DAOS_IOD_SINGLE;
+		else
+			req.iod_type = DAOS_IOD_ARRAY;
+		insert_single(dkey, akeys[i], offset[i], rec[i], rec_size[i],
+			      epoch, &req);
+	}
+
+	/** Lookup & verify */
+	for (i = 0; i < 4; i++) {
+		if (i == 0 || i == 3) {
+			req.iod_type = DAOS_IOD_SINGLE;
+			print_message("DAOS_IOD_SINGLE:%s\n", rec_size[i] ==
+				      IO_SIZE_SCM ? "SCM" : "NVME");
+		} else {
+			req.iod_type = DAOS_IOD_ARRAY;
+			print_message("DAOS_IOD_ARRAY:%s\n", rec_size[i] ==
+				      IO_SIZE_SCM ? "SCM" : "NVME");
+		}
+
+		lookup_single(dkey, akeys[i], offset[i], val[i], rec_size[i],
+			      epoch, &req);
+		print_message("\tsize = %lu\n", rec_size[i]);
+		assert_memory_equal(val[i], rec[i], rec_size[i]);
+		D_FREE(val[i]);
+		D_FREE(rec[i]);
+		D_FREE(akeys[i]);
+
+	}
+
+	ioreq_fini(&req);
 }
 
 #define STACK_BUF_LEN		24
@@ -2835,48 +2908,50 @@ static const struct CMUnitTest io_tests[] = {
 	  enumerate_simple, async_disable, test_case_teardown},
 	{ "IO10: simple punch",
 	  punch_simple, async_disable, test_case_teardown},
-	{ "IO11: complex update/fetch/verify",
+	{ "IO11: multiple record update/fetch/verify",
+	  io_manyrec, async_disable, test_case_teardown},
+	{ "IO12: complex update/fetch/verify",
 	  io_complex, async_disable, test_case_teardown},
-	{ "IO12: basic byte array with record size fetching",
+	{ "IO13: basic byte array with record size fetching",
 	  basic_byte_array, async_disable, test_case_teardown},
-	{ "IO13: timeout simple update",
+	{ "IO14: timeout simple update",
 	  io_simple_update_timeout, async_disable, test_case_teardown},
-	{ "IO14: timeout simple fetch",
+	{ "IO15: timeout simple fetch",
 	  io_simple_fetch_timeout, async_disable, test_case_teardown},
-	{ "IO15: timeout on 1 shard simple update",
+	{ "IO16: timeout on 1 shard simple update",
 	  io_simple_update_timeout_single, async_disable, test_case_teardown},
-	{ "IO16: epoch discard",
+	{ "IO17: epoch discard",
 	  epoch_discard, async_disable, test_case_teardown},
-	{ "IO17: epoch commit",
+	{ "IO18: epoch commit",
 	  epoch_commit, async_disable, test_case_teardown},
-	{ "IO18: no space", io_nospace, async_disable, test_case_teardown},
-	{ "IO19: fetch size with NULL sgl",
+	{ "IO19: no space", io_nospace, async_disable, test_case_teardown},
+	{ "IO20: fetch size with NULL sgl",
 	  fetch_size, async_disable, test_case_teardown},
-	{ "IO20: io crt error",
+	{ "IO21: io crt error",
 	  io_simple_update_crt_error, async_disable, test_case_teardown},
-	{ "IO21: io crt error (async)",
+	{ "IO22: io crt error (async)",
 	  io_simple_update_crt_error, async_enable, test_case_teardown},
-	{ "IO22: io crt req create timeout (sync)",
+	{ "IO23: io crt req create timeout (sync)",
 	  io_simple_update_crt_req_error, async_disable, test_case_teardown},
-	{ "IO23: io crt req create timeout (async)",
+	{ "IO24: io crt req create timeout (async)",
 	  io_simple_update_crt_req_error, async_enable, test_case_teardown},
-	{ "IO24: Read from unwritten records",
+	{ "IO25: Read from unwritten records",
 	  read_empty_records, async_disable, test_case_teardown},
-	{ "IO25: Read from large unwritten records",
+	{ "IO26: Read from large unwritten records",
 	  read_large_empty_records, async_disable, test_case_teardown},
-	{ "IO26: written records repeatly",
+	{ "IO27: written records repeatly",
 	  write_record_multiple_times, async_disable, test_case_teardown},
-	{ "IO27: echo fetch/update",
+	{ "IO28: echo fetch/update",
 	  echo_fetch_update, async_disable, test_case_teardown},
-	{ "IO28: basic object key query testing",
+	{ "IO29: basic object key query testing",
 	  io_obj_key_query, async_disable, test_case_teardown},
-	{ "IO29: shard target idx change cause retry",
+	{ "IO30: shard target idx change cause retry",
 	  tgt_idx_change_retry, async_enable, test_case_teardown},
-	{ "IO30: fetch when all replicas unavailable",
+	{ "IO31: fetch when all replicas unavailable",
 	  fetch_replica_unavail, async_enable, test_case_teardown},
-	{ "IO31: update with overlapped recxs",
+	{ "IO32: update with overlapped recxs",
 	  update_overlapped_recxs, async_enable, test_case_teardown},
-	{ "IO31: trigger blob unmap",
+	{ "IO33: trigger blob unmap",
 	  blob_unmap_trigger, async_disable, test_case_teardown},
 };
 
