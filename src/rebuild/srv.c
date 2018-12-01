@@ -878,33 +878,35 @@ retry:
 			struct pool_target_id_list	list;
 			struct pool_target		*targets;
 			int				tgt_nr;
+			struct pool_target_id		*ids;
 			int				j;
 
 			tgt_nr = pool_map_find_target_by_rank_idx(pool->sp_map,
 					rso->rso_ranks_list->rl_ranks[i], -1,
 					&targets);
 
-			for (j = 0; j < tgt_nr; j++) {
-				struct pool_target_id	id;
+			D_ALLOC(ids, tgt_nr * sizeof(*ids));
+			if (ids == NULL)
+				D_GOTO(out_rpc, rc = -DER_NOMEM);
 
-				id.pti_id = targets[j].ta_comp.co_id;
-				list.pti_number = 1;
-				list.pti_ids = &id;
+			for (j = 0; j < tgt_nr; j++)
+				ids[j].pti_id = targets[j].ta_comp.co_id;
+			list.pti_number = tgt_nr;
+			list.pti_ids = ids;
 
-				rc = ds_pool_tgt_exclude(pool->sp_uuid, &list);
-				if (rc) {
-					D_ERROR("Can not exclude rank %d\n",
-						id.pti_id);
-					break;
-				}
+			rc = ds_pool_tgt_exclude(pool->sp_uuid, &list);
+			if (rc) {
+				D_ERROR("Can not exclude targets on rank %d\n",
+					rso->rso_ranks_list->rl_ranks[i]);
+				D_GOTO(out_rpc, rc);
+			}
 
-				rc = ds_rebuild_schedule(pool->sp_uuid,
+			rc = ds_rebuild_schedule(pool->sp_uuid,
 					pool_map_get_version(pool->sp_map),
 					&list, svc_list);
-				if (rc != 0) {
-					D_ERROR("rebuild fails rc %d\n", rc);
-					break;
-				}
+			if (rc != 0) {
+				D_ERROR("rebuild fails rc %d\n", rc);
+				break;
 			}
 		}
 	}

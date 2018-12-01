@@ -719,10 +719,12 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 	} /* else: array */
 
 	for (i = 0; i < iod->iod_nr; i++) {
-		if (iod->iod_eprs)
+		if (iod->iod_eprs) {
 			update_bounds(&akey_epr, &iod->iod_eprs[i]);
+			epoch = iod->iod_eprs[i].epr_lo;
+		}
 
-		D_DEBUG(DB_IO, "fetch %d eph "DF_U64"\n", i, epoch);
+		D_DEBUG(DB_IO, "update %d eph "DF_U64"\n", i, epoch);
 		rc = akey_update_recx(toh, epoch, cookie, pm_ver,
 				      &iod->iod_recxs[i], iod->iod_size, ioc);
 		if (rc != 0)
