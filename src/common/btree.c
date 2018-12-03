@@ -231,7 +231,7 @@ btr_context_decref(struct btr_context *tcx)
 	D_ASSERT(tcx->tc_ref > 0);
 	tcx->tc_ref--;
 	if (tcx->tc_ref == 0)
-		D_FREE_PTR(tcx);
+		D_FREE(tcx);
 }
 
 static void

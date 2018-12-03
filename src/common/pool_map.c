@@ -1410,7 +1410,7 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 	if (tree != NULL)
 		pool_tree_free(tree);
 	if (map != NULL)
-		D_FREE_PTR(map);
+		D_FREE(map);
 	return rc;
 }
 
@@ -1421,7 +1421,7 @@ static void
 pool_map_destroy(struct pool_map *map)
 {
 	pool_map_finalise(map);
-	D_FREE_PTR(map);
+	D_FREE(map);
 }
 
 /** Take a refcount on a pool map */

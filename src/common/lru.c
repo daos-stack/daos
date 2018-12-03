@@ -129,7 +129,7 @@ daos_lru_cache_create(int bits, uint32_t feats,
 	*lcache = lru_cache;
 exit:
 	if (rc != 0)
-		D_FREE_PTR(lru_cache);
+		D_FREE(lru_cache);
 
 	return rc;
 }
@@ -148,7 +148,7 @@ daos_lru_cache_destroy(struct daos_lru_cache *lcache)
 
 	d_hash_table_debug(&lcache->dlc_htable);
 	d_hash_table_destroy_inplace(&lcache->dlc_htable, true);
-	D_FREE_PTR(lcache);
+	D_FREE(lcache);
 }
 
 void

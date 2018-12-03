@@ -77,7 +77,7 @@ unixcomm_close(struct unixcomm *handle)
 	if (!handle)
 		return 0;
 	ret = close(handle->fd);
-	D_FREE_PTR(handle);
+	D_FREE(handle);
 
 	if (ret < 0) {
 		return daos_errno2der(errno);
@@ -263,7 +263,7 @@ drpc_connect(char *sockaddr)
 
 	comms = unixcomm_connect(sockaddr, 0);
 	if (!comms) {
-		D_FREE_PTR(ctx);
+		D_FREE(ctx);
 		return NULL;
 	}
 
@@ -289,6 +289,6 @@ drpc_close(struct drpc *ctx)
 	}
 
 	ret = unixcomm_close(ctx->comm);
-	D_FREE_PTR(ctx);
+	D_FREE(ctx);
 	return ret;
 }

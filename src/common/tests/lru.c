@@ -47,7 +47,7 @@ uint_ref_lru_free(struct daos_llink *llink)
 	D_ASSERT(llink);
 	D_PRINT("Freeing LRU ref from uint_ref cb\n");
 	ref = container_of(llink, struct uint_ref, ur_llink);
-	D_FREE_PTR(ref);
+	D_FREE(ref);
 }
 
 int

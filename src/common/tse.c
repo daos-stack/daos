@@ -242,7 +242,7 @@ tse_task_decref(tse_task_t *task)
 	 * user also free it. This now requires task to be on the heap all the
 	 * time.
 	 */
-	D_FREE_PTR(task);
+	D_FREE(task);
 }
 
 void
@@ -315,7 +315,7 @@ tse_sched_complete_cb(tse_sched_t *sched)
 		rc = dsc->dsc_comp_cb(dsc->dsc_arg, sched->ds_result);
 		if (sched->ds_result == 0)
 			sched->ds_result = rc;
-		D_FREE_PTR(dsc);
+		D_FREE(dsc);
 	}
 	return 0;
 }
@@ -552,7 +552,7 @@ tse_task_post_process(tse_task_t *task)
 		d_list_del(&tlink->tl_link);
 		task_tmp = tlink->tl_task;
 		dtp_tmp = tse_task2priv(task_tmp);
-		D_FREE_PTR(tlink);
+		D_FREE(tlink);
 
 		/* propagate dep task's failure */
 		if (task_tmp->dt_result == 0)
