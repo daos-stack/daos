@@ -61,6 +61,7 @@ class DvmRunner():
 
         cmd_arg = ""
         for host in servers:
+            print("DvmRunner: host = {}".format(host))
             cmd_arg = cmd_arg + '"' + host + ':*",'
 
         cmd = [os.path.join(ompi_path, 'bin', 'prte'),
@@ -71,7 +72,7 @@ class DvmRunner():
         cmdstr = ' '.join(cmd)
         with open(self.logfileout, mode='w') as outfile:
             outfile.write("=======================================\n " + \
-                          " Command: " + str(cmdstr) + \
+                          "DVM start command: " + str(cmdstr) + \
                           "\n======================================\n")
             outfile.flush()
             self.ortedvm = subprocess.Popen(cmd,
