@@ -113,12 +113,12 @@ evt_rect_overlap(struct evt_rect *rt1, struct evt_rect *rt2, int *range,
 		return;
 
 	/* NB: By definition, there is always epoch overlap since all
-	 * updates are from epc_lo to INF.  Determine here what kind
+	 * updates are from epc to INF.  Determine here what kind
 	 * of overlap exists.
 	 */
-	if (rt1->rc_epc_lo == rt2->rc_epc_lo)
+	if (rt1->rc_epc == rt2->rc_epc)
 		*time = RT_OVERLAP_SAME;
-	else if (rt1->rc_epc_lo < rt2->rc_epc_lo)
+	else if (rt1->rc_epc < rt2->rc_epc)
 		*time = RT_OVERLAP_OVER;
 	else
 		*time = RT_OVERLAP_UNDER;
@@ -155,8 +155,8 @@ evt_rect_merge(struct evt_rect *rt1, struct evt_rect *rt2)
 		changed = true;
 	}
 
-	if (rt1->rc_epc_lo > rt2->rc_epc_lo) {
-		rt1->rc_epc_lo = rt2->rc_epc_lo;
+	if (rt1->rc_epc > rt2->rc_epc) {
+		rt1->rc_epc = rt2->rc_epc;
 		changed = true;
 	}
 
@@ -278,10 +278,10 @@ evt_cmp_rect_helper(const struct evt_rect *rt1, const struct evt_rect *rt2)
 	if (rt1->rc_off_lo > rt2->rc_off_lo)
 		return 1;
 
-	if (rt1->rc_epc_lo > rt2->rc_epc_lo)
+	if (rt1->rc_epc > rt2->rc_epc)
 		return -1;
 
-	if (rt1->rc_epc_lo < rt2->rc_epc_lo)
+	if (rt1->rc_epc < rt2->rc_epc)
 		return 1;
 
 	if (rt1->rc_off_hi < rt2->rc_off_hi)
@@ -326,7 +326,7 @@ evt_find_next_uncovered(struct evt_entry *this_ent, d_list_t *head,
 
 		this_rect = &this_ent->en_sel_rect;
 		next_rect = &next_ent->en_sel_rect;
-		if (next_rect->rc_epc_lo > this_rect->rc_epc_lo)
+		if (next_rect->rc_epc > this_rect->rc_epc)
 			return next_ent; /* next_ent is a later update */
 		if (next_rect->rc_off_hi > this_rect->rc_off_hi)
 			return next_ent; /* next_ent extends past end */
@@ -455,7 +455,7 @@ evt_uncover_entries(struct evt_context *tcx, struct evt_entry_list *ent_list,
 		 */
 		if (next_rect->rc_off_lo >= this_rect->rc_off_hi + 1) {
 			/* Case #1, entry already inserted, nothing to do */
-		} else if (next_rect->rc_epc_lo < this_rect->rc_epc_lo) {
+		} else if (next_rect->rc_epc < this_rect->rc_epc) {
 			/* Case #2, next rect is partially under this rect,
 			 * Truncate left end of next_rec, reinsert.
 			 */
@@ -1797,7 +1797,7 @@ saved_rect_is_greater(struct evt_max_rect *saved, struct evt_rect *r2)
 	if (r1->rc_off_hi < r2->rc_off_hi)
 		goto out;
 
-	if (r1->rc_epc_lo > r2->rc_epc_lo)
+	if (r1->rc_epc > r2->rc_epc)
 		is_greater = true;
 
 out:
@@ -1805,12 +1805,12 @@ out:
 	 * selected if the chosen rectangle is partially covered
 	 */
 	if (is_greater) {
-		if (r2->rc_epc_lo > r1->rc_epc_lo) {
+		if (r2->rc_epc > r1->rc_epc) {
 			if (r2->rc_off_hi >= r1->rc_off_lo)
 				r1->rc_off_lo = r2->rc_off_hi + 1;
 		}
 	} else {
-		if (r1->rc_epc_lo > r2->rc_epc_lo) {
+		if (r1->rc_epc > r2->rc_epc) {
 			if (r1->rc_off_hi >= r2->rc_off_lo)
 				r2->rc_off_lo = r1->rc_off_hi + 1;
 		}
@@ -1846,7 +1846,7 @@ evt_get_size(daos_handle_t toh, daos_epoch_t epoch, daos_size_t *size)
 	 */
 	rect.rc_off_lo = 0;
 	rect.rc_off_hi = (daos_off_t)-1;
-	rect.rc_epc_lo = epoch;
+	rect.rc_epc = epoch;
 
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
@@ -2049,8 +2049,8 @@ next:
 		struct evt_rect *rect;
 
 		rect = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
-		if (rect->rc_epc_lo < epr->epr_lo ||
-		    rect->rc_epc_lo > epr->epr_hi)
+		if (rect->rc_epc < epr->epr_lo ||
+		    rect->rc_epc > epr->epr_hi)
 			goto next;
 	}
 
@@ -2414,7 +2414,7 @@ evt_ssof_rect_weight(struct evt_context *tcx, struct evt_rect *rect,
 	/* NB: we don't consider about high epoch for SSOF because it's based
 	 * on assumption there is no overwrite.
 	 */
-	weight->wt_minor = -rect->rc_epc_lo;
+	weight->wt_minor = -rect->rc_epc;
 	return 0;
 }
 
@@ -2561,7 +2561,7 @@ evt_node_delete(struct evt_context *tcx)
 			evt_rect_merge(&mbr, &ne->ne_rect);
 
 		if (evt_rect_same_extent(&node->tn_mbr, &mbr) &&
-		    node->tn_mbr.rc_epc_lo == mbr.rc_epc_lo)
+		    node->tn_mbr.rc_epc == mbr.rc_epc)
 			return 0; /* mbr hasn't changed */
 
 		node->tn_mbr = mbr;

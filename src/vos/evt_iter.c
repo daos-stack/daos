@@ -120,7 +120,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 		/* provide an v-extent which covers everything */
 		rtmp.rc_off_lo = 0;
 		rtmp.rc_off_hi = ~0ULL;
-		rtmp.rc_epc_lo = DAOS_EPOCH_MAX;
+		rtmp.rc_epc = DAOS_EPOCH_MAX;
 		break;
 
 	case EVT_ITER_FIND:

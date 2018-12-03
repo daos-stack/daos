@@ -76,7 +76,7 @@ struct evt_ptr {
 struct evt_rect {
 	daos_off_t			rc_off_lo;	/**< low offset */
 	daos_off_t			rc_off_hi;	/**< high offset */
-	daos_epoch_t			rc_epc_lo;	/**< low epoch */
+	daos_epoch_t			rc_epc;		/**< update epoch */
 };
 
 /** Log format of rectangle */
@@ -85,7 +85,7 @@ struct evt_rect {
 
 /** Expanded rectangle members for debug log */
 #define DP_RECT(r)			\
-	(r)->rc_off_lo, (r)->rc_off_hi, (r)->rc_epc_lo
+	(r)->rc_off_lo, (r)->rc_off_hi, (r)->rc_epc
 
 /** Return the width of a versioned extent */
 static inline daos_size_t

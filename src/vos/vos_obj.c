@@ -797,7 +797,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	memset(it_entry, 0, sizeof(*it_entry));
 
 	rect = &entry.en_rect;
-	it_entry->ie_epoch	 = rect->rc_epc_lo;
+	it_entry->ie_epoch	 = rect->rc_epc;
 	it_entry->ie_recx.rx_idx = rect->rc_off_lo;
 	it_entry->ie_recx.rx_nr	 = rect->rc_off_hi - rect->rc_off_lo + 1;
 	it_entry->ie_rsize	 = entry.en_ptr.pt_inob;

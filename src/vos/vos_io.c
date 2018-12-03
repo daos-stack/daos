@@ -323,7 +323,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 
 	rect.rc_off_lo = index;
 	rect.rc_off_hi = end - 1;
-	rect.rc_epc_lo = epoch;
+	rect.rc_epc = epoch;
 
 	evt_ent_list_init(&ent_list);
 	rc = evt_find(toh, &rect, &ent_list, &covered);
@@ -648,7 +648,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uuid_t cookie,
 	int rc;
 
 	D_ASSERT(recx->rx_nr > 0);
-	rect.rc_epc_lo = epoch;
+	rect.rc_epc = epoch;
 	rect.rc_off_lo = recx->rx_idx;
 	rect.rc_off_hi = recx->rx_idx + recx->rx_nr - 1;
 

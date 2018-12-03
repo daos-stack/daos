@@ -184,7 +184,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p, bool *should_pass)
 	}
 
 	str = tmp + 1;
-	rect->rc_epc_lo = atoi(str);
+	rect->rc_epc = atoi(str);
 
 	if (val_p == NULL) /* called by evt_find */
 		return 0;
@@ -507,7 +507,7 @@ ts_many_add(char *args)
 	for (i = 0; i < nr; i++) {
 		rect.rc_off_lo = offset + seq[i] * size;
 		rect.rc_off_hi = rect.rc_off_lo + size - 1;
-		rect.rc_epc_lo = (seq[i] % TS_VAL_CYCLE) + 1;
+		rect.rc_epc = (seq[i] % TS_VAL_CYCLE) + 1;
 
 		memset(buf, 'a' + seq[i] % TS_VAL_CYCLE, size);
 
