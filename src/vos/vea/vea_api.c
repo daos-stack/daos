@@ -201,7 +201,7 @@ vea_unload(struct vea_space_info *vsi)
 	}
 
 	destroy_free_class(&vsi->vsi_class);
-	D_FREE_PTR(vsi);
+	D_FREE(vsi);
 }
 
 /*
@@ -365,7 +365,7 @@ done:
 
 	return 0;
 error:
-	D_FREE_PTR(resrvd);
+	D_FREE(resrvd);
 	return rc;
 }
 
@@ -430,7 +430,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 error:
 	d_list_for_each_entry_safe(resrvd, tmp, resrvd_list, vre_link) {
 		d_list_del_init(&resrvd->vre_link);
-		D_FREE_PTR(resrvd);
+		D_FREE(resrvd);
 	}
 
 	return rc;
@@ -499,7 +499,7 @@ free_commit_cb(void *data, bool noop)
 		"Aggregated free on vsi:%p rc %d\n",
 		fca->fca_vsi, rc);
 free:
-	D_FREE_PTR(fca);
+	D_FREE(fca);
 }
 
 /*
@@ -559,7 +559,7 @@ done:
 		migrate_free_exts(vsi);
 error:
 	if (fca != NULL)
-		D_FREE_PTR(fca);
+		D_FREE(fca);
 	return rc;
 }
 
@@ -605,7 +605,7 @@ vea_hint_load(struct vea_hint_df *phd, struct vea_hint_context **thc)
 void
 vea_hint_unload(struct vea_hint_context *thc)
 {
-	D_FREE_PTR(thc);
+	D_FREE(thc);
 }
 
 /* Query attributes and statistics */

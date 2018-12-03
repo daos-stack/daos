@@ -88,7 +88,7 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_uma.uma_u.pmem_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_u.pmem_pool);
 
-	D_FREE_PTR(pool);
+	D_FREE(pool);
 }
 
 static struct d_ulink_ops   pool_uuid_hops = {

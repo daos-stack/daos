@@ -115,7 +115,7 @@ obj_lop_free(struct daos_llink *llink)
 		vos_cont_decref(obj->obj_cont);
 
 	obj_tree_fini(obj);
-	D_FREE_PTR(obj);
+	D_FREE(obj);
 }
 
 static void

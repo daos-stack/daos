@@ -358,7 +358,7 @@ cookie_uhash_free(struct d_ulink *uhlink)
 	struct cookie_entry	*entry;
 
 	entry = container_of(uhlink, struct cookie_entry, ulink);
-	D_FREE_PTR(entry);
+	D_FREE(entry);
 }
 
 struct d_ulink_ops	cookie_uh_ops = {
@@ -443,7 +443,7 @@ cookie_table_test(void **state)
 	ret = vos_cookie_tab_destroy(cookie_hdl);
 	if (ret != 0)
 		D_ERROR("Cookie itab destroy error\n");
-	D_FREE_PTR(itab);
+	D_FREE(itab);
 	D_FREE(cookie_array);
 	D_FREE(cookie_entries);
 	D_FREE(epochs);

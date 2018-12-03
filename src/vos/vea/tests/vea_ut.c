@@ -518,7 +518,7 @@ ut_teardown(struct vea_ut_args *test_args)
 	r_list = &test_args->vua_alloc_list;
 	d_list_for_each_entry_safe(ext, tmp, r_list, vre_link) {
 		d_list_del_init(&ext->vre_link);
-		D_FREE_PTR(ext);
+		D_FREE(ext);
 	}
 
 	if (test_args->vua_umm.umm_u.pmem_pool != NULL) {

@@ -182,7 +182,7 @@ cont_free(struct d_ulink *ulink)
 	if (cont->vc_hint_ctxt)
 		vea_hint_unload(cont->vc_hint_ctxt);
 
-	D_FREE_PTR(cont);
+	D_FREE(cont);
 }
 
 struct d_ulink_ops   co_hdl_uh_ops = {
@@ -570,7 +570,7 @@ cont_iter_fini(struct vos_iterator *iter)
 	if (co_iter->cot_pool != NULL)
 		vos_pool_decref(co_iter->cot_pool);
 
-	D_FREE_PTR(co_iter);
+	D_FREE(co_iter);
 	return rc;
 }
 

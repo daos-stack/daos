@@ -139,7 +139,7 @@ evt_tcx_decref(struct evt_context *tcx)
 	tcx->tc_ref--;
 	if (tcx->tc_ref == 0) {
 		tcx->tc_magic = EVT_HDL_DEAD;
-		D_FREE_PTR(tcx);
+		D_FREE(tcx);
 	}
 }
 

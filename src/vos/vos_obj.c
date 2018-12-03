@@ -1077,7 +1077,7 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	    (iter->it_type == VOS_ITER_DKEY || !iter->it_from_parent))
 		vos_obj_release(vos_obj_cache_current(), oiter->it_obj);
 
-	D_FREE_PTR(oiter);
+	D_FREE(oiter);
 	return 0;
 }
 

@@ -148,7 +148,7 @@ vos_ioc_destroy(struct vos_io_context *ioc)
 		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj);
 
 	vos_ioc_reserve_fini(ioc);
-	D_FREE_PTR(ioc);
+	D_FREE(ioc);
 }
 
 static int

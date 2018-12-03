@@ -412,7 +412,7 @@ migrate_end_cb(void *data, bool noop)
 			D_ERROR("Compund free ["DF_U64", %u] error: %d\n",
 				vue->vue_ext.vfe_blk_off,
 				vue->vue_ext.vfe_blk_cnt, rc);
-		D_FREE_PTR(vue);
+		D_FREE(vue);
 	}
 }
 

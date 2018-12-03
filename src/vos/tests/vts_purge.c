@@ -317,7 +317,7 @@ io_simple_one_key_discard(void **state)
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < 4; i++)
-		D_FREE_PTR(req[i]);
+		D_FREE(req[i]);
 }
 
 static int
@@ -674,7 +674,7 @@ io_epoch_range_discard_test(void **state)
 	}
 	/** Cleanup */
 	for (i = 0; i < init_discard_keys; i++)
-		D_FREE_PTR(req[i]);
+		D_FREE(req[i]);
 }
 
 static void

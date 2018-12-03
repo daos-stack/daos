@@ -169,14 +169,14 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 		return NULL;
 
 	if (vos_imem_strts_create(&tls->vtl_imems_inst)) {
-		D_FREE_PTR(tls);
+		D_FREE(tls);
 		return NULL;
 	}
 
 	rc = umem_init_txd(&tls->vtl_txd);
 	if (rc) {
 		vos_imem_strts_destroy(&tls->vtl_imems_inst);
-		D_FREE_PTR(tls);
+		D_FREE(tls);
 		return NULL;
 	}
 
@@ -191,7 +191,7 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
 	umem_fini_txd(&tls->vtl_txd);
-	D_FREE_PTR(tls);
+	D_FREE(tls);
 }
 
 struct dss_module_key vos_module_key = {
@@ -304,7 +304,7 @@ vos_fini(void)
 	D_MUTEX_LOCK(&mutex);
 	if (vsa_imems_inst) {
 		vos_imem_strts_destroy(vsa_imems_inst);
-		D_FREE_PTR(vsa_imems_inst);
+		D_FREE(vsa_imems_inst);
 	}
 	umem_fini_txd(&vsa_txd_inst);
 	vos_nvme_fini();
