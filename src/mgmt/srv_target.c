@@ -551,7 +551,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 
 	D_ALLOC_PTR(rank);
 	if (rank == NULL) {
-		D_FREE_PTR(tmp_tgt_uuid);
+		D_FREE(tmp_tgt_uuid);
 		D_GOTO(free, rc = -DER_NOMEM);
 	}
 
