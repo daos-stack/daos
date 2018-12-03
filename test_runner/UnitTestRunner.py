@@ -28,7 +28,6 @@ test runner class
 import os
 import unittest
 import logging
-from time import time
 #pylint: disable=import-error
 import PostRunner
 import GrindRunner
@@ -36,6 +35,7 @@ import ResultsRunner
 from socket import gethostname
 import subprocess
 import signal
+import time
 #pylint: enable=import-error
 
 
@@ -62,8 +62,14 @@ class UnitTestRunner(PostRunner.PostRunner,
 
     def stop_prte(self):
         """Stop prte by sending it SIGKILL signal"""
-        print("Killing prte with pid={}".format(self.prun_dvm.pid))
+        print("Shutting down prte")
+        ompi_path = self.info.get_info('PRRTE_PREFIX')
+        cmd = [os.path.join(ompi_path, "bin", "prun"), '--terminate']
+        subprocess.Popen(cmd, stdin=subprocess.DEVNULL)
+        time.sleep(2)
+        # Kill pid if prun --terminate did not cleanly shut it down
         os.kill(self.prun_dvm.pid, signal.SIGKILL)
+        print("Killing prte with pid={}".format(self.prun_dvm.pid))
 
     def start_prte(self):
         """Start prte with server list"""
@@ -79,20 +85,30 @@ class UnitTestRunner(PostRunner.PostRunner,
         if clients:
             server_list = server_list + clients.split(',')
 
+        use_uri = os.getenv('TR_USE_URI')
         cmd = "prte"
 
         # prte arguments have to be in form of -H 'host1:*,host2:*,..."
-        cmd_arg = " --daemonize -system-server -H "
+        cmd_arg = ""
 
         #  convert server list to set and back to list to remove duplicates
         for host in list(set(server_list)):
-            cmd_arg = cmd_arg + '"' + host + ':*",'
+            cmd_arg = cmd_arg + host + ':*,'
 
+        ompi_path = self.info.get_info('PRRTE_PREFIX')
 
-        print("UnitTestRunner: Launching {} {}".format(cmd, cmd_arg))
-        self.prun_dvm = subprocess.Popen([cmd, cmd_arg],
+        cmd = [os.path.join(ompi_path, 'bin', 'prte'),
+               '--daemonize', '-system-server', '-H', cmd_arg]
+
+        if use_uri:
+            cmd.append('--report-uri')
+            cmd.append(use_uri)
+
+        print("UnitTestRunner: URI used: {} Launching {}".format(use_uri, cmd))
+        self.prun_dvm = subprocess.Popen(cmd,
+                                         stdin=subprocess.DEVNULL,
                                          stdout=subprocess.PIPE,
-                                         shell=True)
+                                         stderr=subprocess.STDOUT)
 
         # Hack: Wait until stdout prints 9 characters which is
         # how we know that dvm is ready (it prints DVM ready msg)
@@ -105,6 +121,9 @@ class UnitTestRunner(PostRunner.PostRunner,
             if output == '\n':
                 print("Failed to start {} {}".format(cmd, cmd_arg))
                 break
+
+        # Even after 'DVM ready' message, need to wait for few seconds
+        time.sleep(2)
 
     def setenv(self, testcase):
         """ setup testcase environment """
@@ -224,14 +243,14 @@ class UnitTestRunner(PostRunner.PostRunner,
         self.logger.info("***************** %s ***************", testname)
         self.test_info.setup_default_env()
         loop = str(self.test_directives.get('loop', "no"))
-        start_time = time()
+        start_time = time.time()
         if loop.lower() == "no":
             results_info = {}
             self.loop_number = 0
-            start_time = time()
+            start_time = time.time()
             rtn = self.execute_list()
             results_info['name'] = testname
-            results_info['duration'] = '{:.2f}'.format(time() - start_time)
+            results_info['duration'] = '{:.2f}'.format(time.time() - start_time)
             results_info['return_code'] = rtn
             if rtn == 0:
                 results_info['status'] = "PASS"
@@ -245,10 +264,11 @@ class UnitTestRunner(PostRunner.PostRunner,
                 self.logger.info("*************** loop %d ****************", i)
                 self.loop_number = i
                 results.add_test_set("{!s}_loop{!s}".format(testsetname, i))
-                start_time = time()
+                start_time = time.time()
                 rtn |= self.execute_list()
                 results_info['name'] = testname
-                results_info['duration'] = '{:.2f}'.format(time() - start_time)
+                results_info['duration'] = '{:.2f}'.format(time.time() -
+                                                           start_time)
                 results_info['return_code'] = rtn
                 if rtn == 0:
                     results_info['status'] = "PASS"
