@@ -89,7 +89,7 @@ obj_tls_fini(const struct dss_thread_local_storage *dtls,
 	if (tls->ot_echo_sgl.sg_iovs != NULL)
 		daos_sgl_fini(&tls->ot_echo_sgl, true);
 
-	D_FREE_PTR(tls);
+	D_FREE(tls);
 }
 
 struct dss_module_key obj_module_key = {

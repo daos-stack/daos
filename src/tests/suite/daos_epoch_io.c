@@ -804,7 +804,7 @@ cmd_parse_add_exclude(test_arg_t *arg, int argc, char **argv,
 	*op = op_rec;
 out:
 	if (rc && op_rec)
-		D_FREE_PTR(op_rec);
+		D_FREE(op_rec);
 	return rc;
 }
 
@@ -1121,7 +1121,7 @@ cmd_parse_pool(test_arg_t *arg, int argc, char *argv[],
 	*op = op_rec;
 out:
 	if (rc && op_rec)
-		D_FREE_PTR(op_rec);
+		D_FREE(op_rec);
 	return rc;
 
 

@@ -137,7 +137,7 @@ obj_free(struct d_hlink *hlink)
 	obj_layout_free(obj);
 	D_SPIN_DESTROY(&obj->cob_spin);
 	D_RWLOCK_DESTROY(&obj->cob_lock);
-	D_FREE_PTR(obj);
+	D_FREE(obj);
 }
 
 static struct d_hlink_ops obj_h_ops = {
@@ -568,7 +568,7 @@ obj_pool_query_cb(tse_task_t *task, void *data)
 	obj_decref(obj);
 
 	args = dc_task_get_args(task);
-	D_FREE_PTR(args->info);
+	D_FREE(args->info);
 	return 0;
 }
 
@@ -607,7 +607,7 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 err:
 	dc_task_decref(task);
 	if (args->info)
-		D_FREE_PTR(args->info);
+		D_FREE(args->info);
 
 	return rc;
 }

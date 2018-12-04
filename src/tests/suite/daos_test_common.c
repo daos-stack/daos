@@ -434,7 +434,7 @@ test_teardown(void **state)
 		}
 	}
 
-	D_FREE_PTR(arg);
+	D_FREE(arg);
 	return 0;
 }
 

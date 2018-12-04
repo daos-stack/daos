@@ -196,7 +196,7 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 {
 	if (layout->ol_shards != NULL)
 		D_FREE(layout->ol_shards);
-	D_FREE_PTR(layout);
+	D_FREE(layout);
 }
 
 int

@@ -340,7 +340,7 @@ ring_buf_destroy(struct ring_buf *buf)
 		}
 		D_FREE(buf->rb_domains);
 	}
-	D_FREE_PTR(buf);
+	D_FREE(buf);
 }
 
 /**
@@ -710,7 +710,7 @@ ring_map_destroy(struct pl_map *map)
 	if (rimap->rmp_map.pl_poolmap)
 		pool_map_decref(rimap->rmp_map.pl_poolmap);
 
-	D_FREE_PTR(rimap);
+	D_FREE(rimap);
 }
 
 /**
@@ -965,7 +965,7 @@ ring_remap_free_all(d_list_t *remap_list)
 
 	d_list_for_each_entry_safe(f_shard, f_tmp, remap_list, rfs_list) {
 		d_list_del_init(&f_shard->rfs_list);
-		D_FREE_PTR(f_shard);
+		D_FREE(f_shard);
 	}
 }
 
