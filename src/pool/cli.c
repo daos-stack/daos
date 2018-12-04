@@ -86,7 +86,7 @@ pool_free(struct d_hlink *hlink)
 	if (pool->dp_group != NULL)
 		daos_group_detach(pool->dp_group);
 
-	D_FREE_PTR(pool);
+	D_FREE(pool);
 }
 
 static struct d_hlink_ops pool_h_ops = {
@@ -176,7 +176,7 @@ pool_alloc(void)
 	return pool;
 
 failed:
-	D_FREE_PTR(pool);
+	D_FREE(pool);
 	return NULL;
 }
 
@@ -1078,7 +1078,7 @@ out:
 	if (free_state) {
 		rsvc_client_fini(&state->client);
 		daos_group_detach(state->group);
-		D_FREE_PTR(state);
+		D_FREE(state);
 	}
 	return rc;
 }
@@ -1176,7 +1176,7 @@ out_client:
 out_group:
 	daos_group_detach(state->group);
 out_state:
-	D_FREE_PTR(state);
+	D_FREE(state);
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
@@ -1416,7 +1416,7 @@ out:
 	if (free_state) {
 		rsvc_client_fini(&state->client);
 		daos_group_detach(state->group);
-		D_FREE_PTR(state);
+		D_FREE(state);
 	}
 	return rc;
 }
@@ -1490,7 +1490,7 @@ out_client:
 out_group:
 	daos_group_detach(state->group);
 out_state:
-	D_FREE_PTR(state);
+	D_FREE(state);
 out_task:
 	tse_task_complete(task, rc);
 	return rc;

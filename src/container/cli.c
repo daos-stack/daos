@@ -297,7 +297,7 @@ dc_cont_free(struct d_hlink *hlink)
 	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
 	D_ASSERT(d_list_empty(&dc->dc_po_list));
 	D_ASSERT(d_list_empty(&dc->dc_obj_list));
-	D_FREE_PTR(dc);
+	D_FREE(dc);
 }
 
 static struct d_hlink_ops cont_h_ops = {
@@ -881,7 +881,7 @@ pool_query_cb(tse_task_t *task, void *data)
 	daos_pool_query_t	*args;
 
 	args = dc_task_get_args(task);
-	D_FREE_PTR(args->info);
+	D_FREE(args->info);
 	return task->dt_result;
 }
 
@@ -914,21 +914,21 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 
 		rc = dc_task_reg_comp_cb(ptask, pool_query_cb, NULL, 0);
 		if (rc != 0) {
-			D_FREE_PTR(pargs->info);
+			D_FREE(pargs->info);
 			dc_task_decref(ptask);
 			D_GOTO(out, rc);
 		}
 
 		rc = dc_task_resched(task);
 		if (rc != 0) {
-			D_FREE_PTR(pargs->info);
+			D_FREE(pargs->info);
 			dc_task_decref(ptask);
 			D_GOTO(out, rc);
 		}
 
 		rc = dc_task_depend(task, 1, &ptask);
 		if (rc != 0) {
-			D_FREE_PTR(pargs->info);
+			D_FREE(pargs->info);
 			dc_task_decref(ptask);
 			D_GOTO(out, rc);
 		}

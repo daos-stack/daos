@@ -1086,7 +1086,7 @@ pool_svc_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	D_ASSERT(d_hash_rec_unlinked(&svc->ps_entry));
 	D_ASSERTF(svc->ps_ref == 0, "%d\n", svc->ps_ref);
 	pool_svc_fini(svc);
-	D_FREE_PTR(svc);
+	D_FREE(svc);
 }
 
 static d_hash_table_ops_t pool_svc_hash_ops = {
@@ -1314,7 +1314,7 @@ out_ref:
 err_svc_init:
 	pool_svc_fini(svc);
 err_svc:
-	D_FREE_PTR(svc);
+	D_FREE(svc);
 err_lock:
 	ABT_mutex_unlock(pool_svc_hash_lock);
 	D_ERROR(DF_UUID": failed to start pool service\n", DP_UUID(uuid));
@@ -1458,7 +1458,7 @@ stop_one(d_list_t *entry, void *arg)
 	rc = dss_ult_create(pool_svc_stopper, svc, 0, 0, &ult->u_thread);
 	if (rc != 0) {
 		d_hash_rec_decref(&pool_svc_hash, &svc->ps_entry);
-		D_FREE_PTR(ult);
+		D_FREE(ult);
 		return rc;
 	}
 
@@ -1488,7 +1488,7 @@ ds_pool_svc_stop_all(void)
 		d_list_del_init(&ult->u_entry);
 		ABT_thread_join(ult->u_thread);
 		ABT_thread_free(&ult->u_thread);
-		D_FREE_PTR(ult);
+		D_FREE(ult);
 	}
 
 	if (rc != 0)

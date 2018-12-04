@@ -129,7 +129,7 @@ ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid, uint64_t id,
 		return -DER_NOMEM;
 	rc = cont_svc_init(svcp, pool_uuid, id, db);
 	if (rc != 0) {
-		D_FREE_PTR(*svcp);
+		D_FREE(*svcp);
 		*svcp = NULL;
 		return rc;
 	}
@@ -140,7 +140,7 @@ void
 ds_cont_svc_fini(struct cont_svc **svcp)
 {
 	cont_svc_fini(*svcp);
-	D_FREE_PTR(*svcp);
+	D_FREE(*svcp);
 	*svcp = NULL;
 }
 
@@ -536,7 +536,7 @@ err_lres:
 err_attrs:
 	rdb_path_fini(&p->c_attrs);
 err_p:
-	D_FREE_PTR(p);
+	D_FREE(p);
 err:
 	return rc;
 }
@@ -549,7 +549,7 @@ cont_put(struct cont *cont)
 	rdb_path_fini(&cont->c_attrs);
 	rdb_path_fini(&cont->c_snaps);
 	rdb_path_fini(&cont->c_user);
-	D_FREE_PTR(cont);
+	D_FREE(cont);
 }
 
 static int

@@ -246,7 +246,7 @@ oid_iv_ent_put(struct ds_iv_entry *entry, void **_priv)
 	fprintf(stderr, "%u: ON PUT\n", myrank);
 #endif
 
-	D_FREE_PTR(priv);
+	D_FREE(priv);
 	_priv = NULL;
 
 	return 0;

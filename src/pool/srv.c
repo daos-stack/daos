@@ -156,7 +156,7 @@ pool_tls_fini(const struct dss_thread_local_storage *dtls,
 
 	ds_pool_child_purge(tls);
 	D_ASSERT(d_list_empty(&tls->dt_pool_list));
-	D_FREE_PTR(tls);
+	D_FREE(tls);
 }
 
 struct dss_module_key pool_module_key = {

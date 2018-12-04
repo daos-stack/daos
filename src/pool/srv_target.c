@@ -76,7 +76,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 			DP_UUID(child->spc_uuid));
 		D_ASSERT(d_list_empty(&child->spc_list));
 		vos_pool_close(child->spc_hdl);
-		D_FREE_PTR(child);
+		D_FREE(child);
 	}
 }
 
@@ -126,7 +126,7 @@ ds_pool_child_open(uuid_t uuid, unsigned int version)
 
 	rc = ds_mgmt_tgt_file(uuid, VOS_FILE, &info->dmi_tid, &path);
 	if (rc != 0) {
-		D_FREE_PTR(child);
+		D_FREE(child);
 		return rc;
 	}
 
@@ -135,7 +135,7 @@ ds_pool_child_open(uuid_t uuid, unsigned int version)
 	free(path);
 
 	if (rc != 0) {
-		D_FREE_PTR(child);
+		D_FREE(child);
 		return rc;
 	}
 
@@ -254,7 +254,7 @@ err_collective:
 err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_pool:
-	D_FREE_PTR(pool);
+	D_FREE(pool);
 err:
 	return rc;
 }
@@ -293,7 +293,7 @@ pool_free_ref(struct daos_llink *llink)
 		pool_map_decref(pool->sp_map);
 
 	ABT_rwlock_free(&pool->sp_lock);
-	D_FREE_PTR(pool);
+	D_FREE(pool);
 }
 
 static bool
@@ -433,7 +433,7 @@ pool_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	D_ASSERT(d_hash_rec_unlinked(&hdl->sph_entry));
 	D_ASSERTF(hdl->sph_ref == 0, "%d\n", hdl->sph_ref);
 	ds_pool_put(hdl->sph_pool);
-	D_FREE_PTR(hdl);
+	D_FREE(hdl);
 }
 
 static d_hash_table_ops_t pool_hdl_hash_ops = {
@@ -535,7 +535,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 
 	rc = ds_pool_lookup_create(in->tci_uuid, &arg, &pool);
 	if (rc != 0) {
-		D_FREE_PTR(hdl);
+		D_FREE(hdl);
 		D_GOTO(out, rc);
 	}
 

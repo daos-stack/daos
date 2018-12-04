@@ -72,7 +72,7 @@ cont_alloc_ref(void *key, unsigned int ksize, void *varg,
 
 	rc = vos_cont_open(pool->spc_hdl, key, &cont->sc_hdl);
 	if (rc != 0) {
-		D_FREE_PTR(cont);
+		D_FREE(cont);
 		return rc;
 	}
 
@@ -87,7 +87,7 @@ cont_free_ref(struct daos_llink *llink)
 
 	D_DEBUG(DF_DSMS, DF_CONT": freeing\n", DP_CONT(NULL, cont->sc_uuid));
 	vos_cont_close(cont->sc_hdl);
-	D_FREE_PTR(cont);
+	D_FREE(cont);
 }
 
 static bool
@@ -205,7 +205,7 @@ cont_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 		cont_put(tls->dt_cont_cache, hdl->sch_cont);
 	}
 	ds_pool_child_put(hdl->sch_pool);
-	D_FREE_PTR(hdl);
+	D_FREE(hdl);
 }
 
 static d_hash_table_ops_t cont_hdl_hash_ops = {
@@ -538,7 +538,7 @@ err_cont:
 err_pool:
 	ds_pool_child_put(hdl->sch_pool);
 err_hdl:
-	D_FREE_PTR(hdl);
+	D_FREE(hdl);
 err:
 	return rc;
 }
