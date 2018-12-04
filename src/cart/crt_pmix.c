@@ -498,7 +498,7 @@ crt_pmix_uri_lookup(crt_group_id_t srv_grpid, d_rank_t rank, char **uri)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	snprintf(pdata[0].key, PMIX_MAX_NSLEN + 5, "cart-%s-%d-uri",
+	snprintf(pdata[0].key, PMIX_MAX_KEYLEN + 1, "cart-%s-%d-uri",
 		 srv_grpid, rank);
 	rc = PMIx_Lookup(&pdata[0], 1, NULL, 0);
 	if (rc != PMIX_SUCCESS || pdata[0].value.type != PMIX_STRING) {
