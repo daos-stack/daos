@@ -300,7 +300,7 @@ stop_poller(struct spdk_poller *poller, void *ctxt)
 
 	nvme_poller = (struct bio_nvme_poller *)poller;
 	d_list_del_init(&nvme_poller->bnp_link);
-	D_FREE_PTR(nvme_poller);
+	D_FREE(nvme_poller);
 }
 
 /*
@@ -326,7 +326,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	count = spdk_ring_dequeue(ctxt->bxc_msg_ring, (void **)&msg, 1);
 	if (count > 0) {
 		msg->bm_fn(msg->bm_arg);
-		D_FREE_PTR(msg);
+		D_FREE(msg);
 	}
 
 	/* Call all registered poller one by one */
@@ -569,7 +569,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 error:
 	if (d_bdev->bb_desc != NULL)
 		spdk_bdev_close(d_bdev->bb_desc);
-	D_FREE_PTR(d_bdev);
+	D_FREE(d_bdev);
 	return rc;
 }
 
@@ -618,7 +618,7 @@ put_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 
 	if (last) {
 		ABT_mutex_free(&bb->bb_mutex);
-		D_FREE_PTR(bb);
+		D_FREE(bb);
 	}
 }
 
@@ -639,7 +639,7 @@ fini_bio_bdevs(struct bio_xs_context *ctxt)
 		if (d_bdev->bb_blobstore != NULL)
 			put_bio_blobstore(d_bdev->bb_blobstore, ctxt);
 
-		D_FREE_PTR(d_bdev);
+		D_FREE(d_bdev);
 	}
 }
 
@@ -656,7 +656,7 @@ alloc_bio_blobstore(struct bio_xs_context *ctxt)
 
 	rc = ABT_mutex_create(&bb->bb_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_FREE_PTR(bb);
+		D_FREE(bb);
 		return NULL;
 	}
 
@@ -899,7 +899,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		ctxt->bxc_dma_buf = NULL;
 	}
 
-	D_FREE_PTR(ctxt);
+	D_FREE(ctxt);
 }
 
 int

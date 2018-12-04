@@ -35,7 +35,7 @@ dma_free_chunk(struct bio_dma_chunk *chunk)
 	D_ASSERT(d_list_empty(&chunk->bdc_link));
 
 	spdk_dma_free(chunk->bdc_ptr);
-	D_FREE_PTR(chunk);
+	D_FREE(chunk);
 }
 
 static struct bio_dma_chunk *
@@ -54,7 +54,7 @@ dma_alloc_chunk(unsigned int cnt)
 	chunk->bdc_ptr = spdk_dma_malloc(bytes, BIO_DMA_PAGE_SZ, NULL);
 	if (chunk->bdc_ptr == NULL) {
 		D_ERROR("Failed to allocate %u pages DMA buffer\n", cnt);
-		D_FREE_PTR(chunk);
+		D_FREE(chunk);
 		return NULL;
 	}
 	D_INIT_LIST_HEAD(&chunk->bdc_link);
@@ -118,7 +118,7 @@ dma_buffer_destroy(struct bio_dma_buffer *buf)
 	ABT_mutex_free(&buf->bdb_mutex);
 	ABT_cond_free(&buf->bdb_wait_iods);
 
-	D_FREE_PTR(buf);
+	D_FREE(buf);
 }
 
 struct bio_dma_buffer *
@@ -139,14 +139,14 @@ dma_buffer_create(unsigned int init_cnt)
 
 	rc = ABT_mutex_create(&buf->bdb_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_FREE_PTR(buf);
+		D_FREE(buf);
 		return NULL;
 	}
 
 	rc = ABT_cond_create(&buf->bdb_wait_iods);
 	if (rc != ABT_SUCCESS) {
 		ABT_mutex_free(&buf->bdb_mutex);
-		D_FREE_PTR(buf);
+		D_FREE(buf);
 		return NULL;
 	}
 
@@ -192,7 +192,7 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, bool update)
 
 	D_ALLOC(biod->bd_sgls, sizeof(*biod->bd_sgls) * sgl_cnt);
 	if (biod->bd_sgls == NULL) {
-		D_FREE_PTR(biod);
+		D_FREE(biod);
 		return NULL;
 	}
 
@@ -210,7 +210,7 @@ free_mutex:
 	ABT_mutex_free(&biod->bd_mutex);
 free_sgls:
 	D_FREE(biod->bd_sgls);
-	D_FREE_PTR(biod);
+	D_FREE(biod);
 	return NULL;
 }
 
@@ -227,7 +227,7 @@ bio_iod_free(struct bio_desc *biod)
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
 	D_FREE(biod->bd_sgls);
-	D_FREE_PTR(biod);
+	D_FREE(biod);
 }
 
 static inline struct bio_dma_buffer *

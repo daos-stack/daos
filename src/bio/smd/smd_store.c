@@ -181,7 +181,7 @@ smd_obj_destroy()
 	if (sm_obj->sms_uma.uma_u.pmem_pool)
 		pmemobj_close(sm_obj->sms_uma.uma_u.pmem_pool);
 
-	D_FREE_PTR(sm_obj);
+	D_FREE(sm_obj);
 }
 
 static int
@@ -323,7 +323,7 @@ smd_fini(void)
 	D_MUTEX_LOCK(&mutex);
 	if (smd_params_obj) {
 		srv_ndms_params_destroy();
-		D_FREE_PTR(smd_params_obj);
+		D_FREE(smd_params_obj);
 	}
 	ABT_finalize();
 	smd_obj_destroy();

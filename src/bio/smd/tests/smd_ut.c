@@ -80,7 +80,7 @@ smd_ut_teardown(void **state)
 	smd_remove("/mnt/daos", fname);
 	smd_fini();
 	daos_debug_fini();
-	D_FREE_PTR(args);
+	D_FREE(args);
 	return 0;
 }
 

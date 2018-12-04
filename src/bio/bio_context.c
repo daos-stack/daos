@@ -53,14 +53,14 @@ alloc_blob_cp_arg(void)
 
 	rc = ABT_mutex_create(&ba->bca_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_FREE_PTR(ba);
+		D_FREE(ba);
 		return NULL;
 	}
 
 	rc = ABT_cond_create(&ba->bca_done);
 	if (rc != ABT_SUCCESS) {
 		ABT_mutex_free(&ba->bca_mutex);
-		D_FREE_PTR(ba);
+		D_FREE(ba);
 		return NULL;
 	}
 
@@ -72,7 +72,7 @@ free_blob_cp_arg(struct blob_cp_arg *ba)
 {
 	ABT_cond_free(&ba->bca_done);
 	ABT_mutex_free(&ba->bca_mutex);
-	D_FREE_PTR(ba);
+	D_FREE(ba);
 }
 
 static void
@@ -297,7 +297,7 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	free_blob_cp_arg(ba);
 out:
 	if (rc != 0)
-		D_FREE_PTR(ctxt);
+		D_FREE(ctxt);
 	return rc;
 }
 
@@ -345,7 +345,7 @@ bio_ioctxt_close(struct bio_io_context *ctxt)
 
 	free_blob_cp_arg(ba);
 out:
-	D_FREE_PTR(ctxt);
+	D_FREE(ctxt);
 	return rc;
 }
 
