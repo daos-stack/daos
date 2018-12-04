@@ -46,7 +46,7 @@ free_io_params_cb(tse_task_t *task, void *data)
 {
 	struct io_params *params = *((struct io_params **)data);
 
-	D_FREE_PTR(params);
+	D_FREE(params);
 	return 0;
 }
 
@@ -127,9 +127,9 @@ dac_kv_put(tse_task_t *task)
 
 err_task:
 	if (params)
-		D_FREE_PTR(params);
+		D_FREE(params);
 	if (update_task)
-		D_FREE_PTR(update_task);
+		D_FREE(update_task);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -218,9 +218,9 @@ dac_kv_get(tse_task_t *task)
 
 err_task:
 	if (params)
-		D_FREE_PTR(params);
+		D_FREE(params);
 	if (fetch_task)
-		D_FREE_PTR(fetch_task);
+		D_FREE(fetch_task);
 	tse_task_complete(task, rc);
 	return rc;
 }

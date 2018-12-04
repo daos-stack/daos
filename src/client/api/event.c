@@ -178,7 +178,7 @@ daos_eq_free(struct d_hlink *hlink)
 	if (eqx->eqx_lock_init)
 		D_MUTEX_DESTROY(&eqx->eqx_lock);
 
-	D_FREE_PTR(eq);
+	D_FREE(eq);
 }
 
 struct d_hlink_ops	eq_h_ops = {
@@ -319,7 +319,7 @@ daos_event_complete_cb(struct daos_event_private *evx, int rc)
 				   op_comp_list) {
 		d_list_del_init(&ecl->op_comp_list);
 		err = ecl->op_comp_cb(ecl->op_comp_arg, daos_evx2ev(evx), rc);
-		D_FREE_PTR(ecl);
+		D_FREE(ecl);
 		if (ret == 0)
 			ret = err;
 	}
@@ -902,13 +902,13 @@ daos_event_destroy(struct daos_event *ev, bool force)
 
 	if (d_list_empty(&evp->evx_child)) {
 		D_ASSERT(d_list_empty(&evp->evx_link));
-		D_FREE_PTR(ev);
+		D_FREE(ev);
 		return rc;
 	}
 
 	rc = daos_event_destroy_children(ev, force);
 	if (rc == 0)
-		D_FREE_PTR(ev);
+		D_FREE(ev);
 
 	return rc;
 }

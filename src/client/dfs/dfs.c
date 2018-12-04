@@ -1167,7 +1167,7 @@ err_super:
 err_epoch:
 	daos_epoch_discard(coh, dfs->epoch, NULL, NULL);
 err_dfs:
-	D_FREE_PTR(dfs);
+	D_FREE(dfs);
 	return rc;
 }
 
@@ -1195,7 +1195,7 @@ dfs_umount(dfs_t *dfs, bool commit)
 
 	D_MUTEX_UNLOCK(&dfs->lock);
 	D_MUTEX_DESTROY(&dfs->lock);
-	D_FREE_PTR(dfs);
+	D_FREE(dfs);
 	return rc;
 }
 
@@ -1549,12 +1549,12 @@ dfs_lookup_loop:
 				if (rc) {
 					D_ERROR("Invalid Symlink dir %s\n",
 						obj->value);
-					D_FREE_PTR(sym);
+					D_FREE(sym);
 					D_GOTO(err_obj, rc);
 				}
 
 				parent.oh = sym->oh;
-				D_FREE_PTR(sym);
+				D_FREE(sym);
 				free(entry.value);
 				entry.value = NULL;
 				obj->value = NULL;
@@ -1589,7 +1589,7 @@ out:
 	*_obj = obj;
 	return rc;
 err_obj:
-	D_FREE_PTR(obj);
+	D_FREE(obj);
 	obj = NULL;
 	goto out;
 }
@@ -1723,7 +1723,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		rc = open_file(dfs, parent, flags, cid, obj);
 		if (rc) {
 			D_ERROR("Failed to open file (%d)", rc);
-			D_FREE_PTR(obj);
+			D_FREE(obj);
 			return rc;
 		}
 		break;
@@ -1731,7 +1731,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		rc = open_dir(dfs, parent->oh, flags, cid, obj);
 		if (rc) {
 			D_ERROR("Failed to open directory (%d)", rc);
-			D_FREE_PTR(obj);
+			D_FREE(obj);
 			return rc;
 		}
 		break;
@@ -1739,7 +1739,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		rc = open_symlink(dfs, parent, flags, value, obj);
 		if (rc) {
 			D_ERROR("Failed to open symlink (%d)", rc);
-			D_FREE_PTR(obj);
+			D_FREE(obj);
 			return rc;
 		}
 		break;
@@ -1774,7 +1774,7 @@ dfs_release(dfs_obj_t *obj)
 		return rc;
 	}
 
-	D_FREE_PTR(obj);
+	D_FREE(obj);
 	return 0;
 }
 

@@ -86,7 +86,7 @@ array_free(struct d_hlink *hlink)
 
 	array = container_of(hlink, struct dac_array, hlink);
 	D_ASSERT(daos_hhash_link_empty(&array->hlink));
-	D_FREE_PTR(array);
+	D_FREE(array);
 }
 
 static struct d_hlink_ops array_h_ops = {
@@ -150,7 +150,7 @@ free_md_params_cb(tse_task_t *task, void *data)
 {
 	struct md_params *params = *((struct md_params **)data);
 
-	D_FREE_PTR(params);
+	D_FREE(params);
 	return task->dt_result;
 }
 
@@ -183,7 +183,7 @@ free_io_params_cb(tse_task_t *task, void *data)
 		}
 
 		io_list = current->next;
-		D_FREE_PTR(current);
+		D_FREE(current);
 	}
 
 	return rc;
@@ -1413,7 +1413,7 @@ free_get_size_cb(tse_task_t *task, void *data)
 
 	if (props->array)
 		array_decref(props->array);
-	D_FREE_PTR(props);
+	D_FREE(props);
 	return 0;
 }
 
@@ -1632,9 +1632,9 @@ err_enum_task:
 	tse_task_complete(enum_task, rc);
 err_task:
 	if (get_size_props)
-		D_FREE_PTR(get_size_props);
+		D_FREE(get_size_props);
 	if (enum_task)
-		D_FREE_PTR(enum_task);
+		D_FREE(enum_task);
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);
@@ -1669,7 +1669,7 @@ free_set_size_cb(tse_task_t *task, void *data)
 		free(props->val);
 	if (props->array)
 		array_decref(props->array);
-	D_FREE_PTR(props);
+	D_FREE(props);
 	return 0;
 }
 
@@ -1743,7 +1743,7 @@ punch_key(daos_handle_t oh, daos_epoch_t epoch, daos_size_t dkey_val,
 	return rc;
 err:
 	if (params)
-		D_FREE_PTR(params);
+		D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -1822,7 +1822,7 @@ punch_extent(daos_handle_t oh, daos_epoch_t epoch, daos_size_t dkey_val,
 	return rc;
 err:
 	if (params)
-		D_FREE_PTR(params);
+		D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -1897,7 +1897,7 @@ err:
 		tse_task_complete(io_task, rc);
 out:
 	if (params)
-		D_FREE_PTR(params);
+		D_FREE(params);
 	return rc;
 }
 
@@ -1974,7 +1974,7 @@ check_record(daos_handle_t oh, daos_epoch_t epoch, daos_size_t dkey_val,
 	return rc;
 err:
 	if (params)
-		D_FREE_PTR(params);
+		D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2058,7 +2058,7 @@ add_record(daos_handle_t oh, daos_epoch_t epoch, struct set_size_props *props)
 	return rc;
 err:
 	if (params)
-		D_FREE_PTR(params);
+		D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2254,7 +2254,7 @@ err_enum_task:
 	tse_task_complete(enum_task, rc);
 err_task:
 	if (set_size_props)
-		D_FREE_PTR(set_size_props);
+		D_FREE(set_size_props);
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);
