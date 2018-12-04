@@ -112,7 +112,7 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->rebuild_pool_uuid), tls->rebuild_pool_ver);
 	d_list_del(&tls->rebuild_pool_list);
-	D_FREE_PTR(tls);
+	D_FREE(tls);
 }
 
 static void *
@@ -305,7 +305,7 @@ rebuild_status_completed_remove(const uuid_t pool_uuid)
 		if (pool_uuid == NULL ||
 		    uuid_compare(rsc->rsc_pool_uuid, pool_uuid) == 0) {
 			d_list_del(&rsc->rsc_list);
-			D_FREE_PTR(rsc);
+			D_FREE(rsc);
 		}
 	}
 }
@@ -362,7 +362,7 @@ rebuild_tls_fini(const struct dss_thread_local_storage *dtls,
 				   rebuild_pool_list)
 		rebuild_pool_tls_destroy(pool_tls);
 
-	D_FREE_PTR(tls);
+	D_FREE(tls);
 }
 
 struct rebuild_tgt_query_arg {
@@ -639,7 +639,7 @@ rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 	if (rgt->rgt_pull_bits)
 		D_FREE(rgt->rgt_pull_bits);
 
-	D_FREE_PTR(rgt);
+	D_FREE(rgt);
 }
 
 static int
@@ -968,7 +968,7 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 	if (rpt->rt_fini_cond)
 		ABT_cond_free(&rpt->rt_fini_cond);
 
-	D_FREE_PTR(rpt);
+	D_FREE(rpt);
 }
 
 void
@@ -1003,7 +1003,7 @@ rebuild_task_destroy(struct rebuild_task *task)
 	d_list_del(&task->dst_list);
 	pool_target_id_list_free(&task->dst_tgts);
 	daos_rank_list_free(task->dst_svc_list);
-	D_FREE_PTR(task);
+	D_FREE(task);
 }
 
 /**

@@ -393,7 +393,7 @@ rebuild_one_destroy(struct rebuild_one *rdone)
 		D_FREE(rdone->ro_sgls);
 	}
 
-	D_FREE_PTR(rdone);
+	D_FREE(rdone);
 }
 
 static void
@@ -885,7 +885,7 @@ free:
 	D_DEBUG(DB_REBUILD, "stop rebuild obj "DF_UOID" for shard %u rc %d\n",
 		DP_UOID(arg->oid), arg->shard, rc);
 	rpt_put(arg->rpt);
-	D_FREE_PTR(arg);
+	D_FREE(arg);
 }
 
 static int
@@ -917,7 +917,7 @@ rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 				    PULLER_STACK_SIZE, NULL);
 	if (rc) {
 		rpt_put(iter_arg->rpt);
-		D_FREE_PTR(obj_arg);
+		D_FREE(obj_arg);
 	}
 
 	return rc;
@@ -1098,7 +1098,7 @@ rebuild_puller_ult(void *arg)
 		}
 	}
 
-	D_FREE_PTR(iter_arg);
+	D_FREE(iter_arg);
 	rpt->rt_lead_puller_running = 0;
 	rpt_put(rpt);
 }
@@ -1416,7 +1416,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 					    NULL);
 		if (rc) {
 			rpt_put(rpt);
-			D_FREE_PTR(arg);
+			D_FREE(arg);
 			rpt->rt_lead_puller_running = 0;
 			D_GOTO(out, rc);
 		}

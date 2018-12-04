@@ -296,7 +296,7 @@ out:
 	if (ephs != NULL)
 		D_FREE(ephs);
 	if (arg != NULL)
-		D_FREE_PTR(arg);
+		D_FREE(arg);
 
 	return rc;
 }
@@ -368,7 +368,7 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 				   broot, &root.root_hdl);
 	if (rc) {
 		D_ERROR("failed to create rebuild tree: %d\n", rc);
-		D_FREE_PTR(broot);
+		D_FREE(broot);
 		D_GOTO(out, rc);
 	}
 
@@ -738,7 +738,7 @@ out_map:
 	D_DEBUG(DB_REBUILD, DF_UUID"scan leader done %d\n",
 		DP_UUID(rpt->rt_pool_uuid), rc);
 	ABT_mutex_free(&arg->scan_lock);
-	D_FREE_PTR(arg);
+	D_FREE(arg);
 	rpt_put(rpt);
 }
 
@@ -860,7 +860,7 @@ out_tree:
 out_lock:
 	ABT_mutex_free(&scan_arg->scan_lock);
 out_arg:
-	D_FREE_PTR(scan_arg);
+	D_FREE(scan_arg);
 out:
 	if (rpt)
 		rpt_put(rpt);
