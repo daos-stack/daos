@@ -146,7 +146,7 @@ dss_tls_init(int tag)
 	dtls->dtls_tag = tag;
 	rc = dss_thread_local_storage_init(dtls);
 	if (rc != 0) {
-		D_FREE_PTR(dtls);
+		D_FREE(dtls);
 		return NULL;
 	}
 
@@ -154,7 +154,7 @@ dss_tls_init(int tag)
 	if (rc) {
 		D_ERROR("failed to initialize tls: %d\n", rc);
 		dss_thread_local_storage_fini(dtls);
-		D_FREE_PTR(dtls);
+		D_FREE(dtls);
 		return NULL;
 	}
 
@@ -167,5 +167,5 @@ dss_tls_fini(struct dss_thread_local_storage *dtls)
 {
 	pthread_setspecific(dss_tls_key, NULL);
 	dss_thread_local_storage_fini(dtls);
-	D_FREE_PTR(dtls);
+	D_FREE(dtls);
 }

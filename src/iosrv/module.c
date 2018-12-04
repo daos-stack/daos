@@ -152,7 +152,7 @@ err_mod_init:
 	dss_unregister_key(smod->sm_key);
 	smod->sm_fini();
 err_lmod:
-	D_FREE_PTR(lmod);
+	D_FREE(lmod);
 err_hdl:
 	dlclose(handle);
 	return rc;
@@ -206,7 +206,7 @@ dss_module_unload(const char *modname)
 	dss_module_unload_internal(lmod);
 
 	/* free memory used to track this module instance */
-	D_FREE_PTR(lmod);
+	D_FREE(lmod);
 
 	return 0;
 }
@@ -287,6 +287,6 @@ dss_module_unload_all(void)
 	d_list_for_each_entry_safe(mod, tmp, &destroy_list, lm_lk) {
 		d_list_del_init(&mod->lm_lk);
 		dss_module_unload_internal(mod);
-		D_FREE_PTR(mod);
+		D_FREE(mod);
 	}
 }

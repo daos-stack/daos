@@ -201,7 +201,7 @@ dss_sched_free(ABT_sched sched)
 	struct sched_data *p_data;
 
 	ABT_sched_get_data(sched, (void **)&p_data);
-	D_FREE_PTR(p_data);
+	D_FREE(p_data);
 
 	return ABT_SUCCESS;
 }
@@ -472,7 +472,7 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 err_future:
 	ABT_future_free(&dx->dx_shutdown);
 err_free:
-	D_FREE_PTR(dx);
+	D_FREE(dx);
 	return NULL;
 }
 
@@ -480,7 +480,7 @@ static inline void
 dss_xstream_free(struct dss_xstream *dx)
 {
 	hwloc_bitmap_free(dx->dx_cpuset);
-	D_FREE_PTR(dx);
+	D_FREE(dx);
 }
 
 /**
@@ -699,7 +699,7 @@ dss_srv_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct dss_module_info *info = (struct dss_module_info *)data;
 
-	D_FREE_PTR(info);
+	D_FREE(info);
 }
 
 struct dss_module_key daos_srv_modkey = {

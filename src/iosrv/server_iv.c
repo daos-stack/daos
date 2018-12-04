@@ -122,7 +122,7 @@ ds_iv_class_unregister(unsigned int class_id)
 	d_list_for_each_entry(class, &ds_iv_class_list, iv_class_list) {
 		if (class->iv_class_id == class_id) {
 			d_list_del(&class->iv_class_list);
-			D_FREE_PTR(class);
+			D_FREE(class);
 			return 0;
 		}
 	}
@@ -243,7 +243,7 @@ iv_entry_free(struct ds_iv_entry *entry)
 			daos_sgl_fini(&entry->iv_value, true);
 	}
 
-	D_FREE_PTR(entry);
+	D_FREE(entry);
 }
 
 static int
@@ -563,7 +563,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	if (rc)
 		return rc;
 
-	D_FREE_PTR(priv_entry);
+	D_FREE(priv_entry);
 	D_DEBUG(DB_TRACE, "Put entry %p/%d\n", entry, entry->iv_ref - 1);
 	if (--entry->iv_ref > 0)
 		return 0;
@@ -600,7 +600,7 @@ iv_ns_destroy_cb(crt_iv_namespace_t iv_ns, void *arg)
 	}
 
 	ABT_mutex_free(&ns->iv_lock);
-	D_FREE_PTR(ns);
+	D_FREE(ns);
 }
 
 static void
@@ -776,12 +776,12 @@ ds_iv_fini(void)
 	d_list_for_each_entry_safe(class, class_tmp, &ds_iv_class_list,
 				   iv_class_list) {
 		d_list_del(&class->iv_class_list);
-		D_FREE_PTR(class);
+		D_FREE(class);
 	}
 
 	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
 		iv_ns_destroy_internal(ns);
-		D_FREE_PTR(ns);
+		D_FREE(ns);
 	}
 
 	if (crt_iv_class_nr > 0)
