@@ -318,7 +318,7 @@ err_ref_cv:
 err_mutex:
 	ABT_mutex_free(&db->d_mutex);
 err_db:
-	D_FREE_PTR(db);
+	D_FREE(db);
 err:
 	return rc;
 }
@@ -345,7 +345,7 @@ rdb_stop(struct rdb *db)
 	rdb_kvs_cache_destroy(db->d_kvss);
 	ABT_cond_free(&db->d_ref_cv);
 	ABT_mutex_free(&db->d_mutex);
-	D_FREE_PTR(db);
+	D_FREE(db);
 }
 
 int

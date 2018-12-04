@@ -326,7 +326,7 @@ rdb_raft_unload_replicas(struct rdb *db)
 		rdb_node = raft_node_get_udata(node);
 		D_ASSERT(rdb_node != NULL);
 		raft_remove_node(db->d_raft, node);
-		D_FREE_PTR(rdb_node);
+		D_FREE(rdb_node);
 	}
 	daos_rank_list_free(db->d_replicas);
 }
@@ -1775,7 +1775,7 @@ rdb_raft_register_result(struct rdb *db, uint64_t index, void *buf)
 			       sizeof(result->drr_index), &result->drr_entry,
 			       true /* exclusive */);
 	if (rc != 0)
-		D_FREE_PTR(result);
+		D_FREE(result);
 	return rc;
 }
 
@@ -1802,7 +1802,7 @@ rdb_raft_unregister_result(struct rdb *db, uint64_t index)
 	result = rdb_raft_result_obj(entry);
 	deleted = d_hash_rec_delete_at(&db->d_results, entry);
 	D_ASSERT(deleted);
-	D_FREE_PTR(result);
+	D_FREE(result);
 }
 
 /* Append and wait for \a entry to be applied. */

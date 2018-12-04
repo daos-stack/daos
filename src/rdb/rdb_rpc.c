@@ -356,7 +356,7 @@ rdb_free_raft_rpc(struct rdb_raft_rpc *rrpc)
 	rdb_put(rrpc->drc_db);
 	crt_req_decref(rrpc->drc_rpc);
 	D_ASSERT(d_list_empty(&rrpc->drc_entry));
-	D_FREE_PTR(rrpc);
+	D_FREE(rrpc);
 }
 
 /* Daemon ULT for processing RPC replies */
