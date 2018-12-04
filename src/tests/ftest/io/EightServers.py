@@ -23,12 +23,9 @@
     '''
 
 import os
-import traceback
 import sys
 import json
 from avocado       import Test
-from avocado       import main
-from avocado.utils import process
 
 sys.path.append('./util')
 sys.path.append('../util')
@@ -65,90 +62,84 @@ class EightServers(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        workdir = build_paths['PREFIX'] + '/tmp'
 
-        self.server_group = self.params.get("server_group",'/server/','daos_server')
+        self.server_group = self.params.get("server_group", '/server/', 'daos_server')
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.pool = None
 
-        self.hostlist_servers = self.params.get("test_servers",'/run/hosts/test_machines/*')
-        self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, workdir)
+        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/test_machines/*')
+        self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
         print("Host file servers is: {}".format(self.hostfile_servers))
 
-        hostlist_clients = self.params.get("test_clients",'/run/hosts/test_machines/*')
-        self.slots = self.params.get("slots",'/run/ior/clientslots/*')
-        self.hostfile_clients = WriteHostFile.WriteHostFile(hostlist_clients, workdir, self.slots)
+        hostlist_clients = self.params.get("test_clients", '/run/hosts/test_machines/*')
+        self.slots = self.params.get("slots", '/run/ior/clientslots/*')
+        self.hostfile_clients = WriteHostFile.WriteHostFile(hostlist_clients, self.workdir, self.slots)
         print("Host file clients is: {}".format(self.hostfile_clients))
 
         ServerUtils.runServer(self.hostfile_servers, self.server_group, self.basepath)
 
-        #IorUtils.build_ior(self.basepath)
+        if int(str(self.name).split("-")[0]) == 1:
+            IorUtils.build_ior(self.basepath)
 
     def tearDown(self):
         try:
-            if self.hostfile_clients is not None:
-                os.remove(self.hostfile_clients)
-            if self.hostfile_servers is not None:
-                os.remove(self.hostfile_servers)
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
             ServerUtils.stopServer(hosts=self.hostlist_servers)
 
-    def executable(self, iorflags = None):
+    def executable(self, iorflags=None):
         """
         Executable function to run ior for sequential and random order
         """
 
         # parameters used in pool create
-        createmode = self.params.get("mode",'/run/pool/createmode/*/')
-        createuid  = os.geteuid()
-        creategid  = os.getegid()
-        createsetid = self.params.get("setname",'/run/pool/createset/')
-        createsize  = self.params.get("size",'/run/pool/createsize/')
-        createsvc  = self.params.get("svcn",'/run/pool/createsvc/')
-        iteration = self.params.get("iter",'/run/ior/iteration/')
-        block_size = self.params.get("blocksize",'/run/ior/clientslots/*')
-        transfer_size = self.params.get("t",'/run/ior/transfersize_stripesize/*/')
-        record_size = self.params.get("r",'/run/ior/recordsize/*')
-        stripe_size = self.params.get("s",'/run/ior/transfersize_stripesize/*/')
-        stripe_count = self.params.get("c",'/run/ior/stripecount/')
-        async_io = self.params.get("a",'/run/ior/asyncio/')
-        object_class = self.params.get("o",'/run/ior/objectclass/*/')
+        createmode = self.params.get("mode", '/run/pool/createmode/*/')
+        createuid = os.geteuid()
+        creategid = os.getegid()
+        createsetid = self.params.get("setname", '/run/pool/createset/')
+        createsize = self.params.get("size", '/run/pool/createsize/')
+        createsvc = self.params.get("svcn", '/run/pool/createsvc/')
+        iteration = self.params.get("iter", '/run/ior/iteration/')
+        block_size = self.params.get("blocksize", '/run/ior/clientslots/*')
+        transfer_size = self.params.get("t", '/run/ior/transfersize_stripesize/*/')
+        record_size = self.params.get("r", '/run/ior/recordsize/*')
+        stripe_size = self.params.get("s", '/run/ior/transfersize_stripesize/*/')
+        stripe_count = self.params.get("c", '/run/ior/stripecount/')
+        async_io = self.params.get("a", '/run/ior/asyncio/')
+        object_class = self.params.get("o", '/run/ior/objectclass/*/')
         expected_result = 'PASS'
 
         if (record_size == '4k' and transfer_size == '1k'):
-                expected_result = 'FAIL'
-
-
-        # initialize a python pool object then create the underlying
-        # daos storage
-        self.pool = DaosPool(self.Context)
-        self.pool.create(createmode, createuid, creategid,
-                createsize, createsetid, None, None, createsvc)
-
-        pool_uuid = self.pool.get_uuid_str()
-        svc_list = ""
-        for i in range(createsvc):
-            svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
-        svc_list = svc_list[:-1]
-
-        print ("svc_list: {}".format(svc_list))
+            expected_result = 'FAIL'
 
         try:
+            # initialize a python pool object then create the underlying
+            # daos storage
+            self.pool = DaosPool(self.Context)
+            self.pool.create(createmode, createuid, creategid,
+                             createsize, createsetid, None, None, createsvc)
+
+            pool_uuid = self.pool.get_uuid_str()
+            svc_list = ""
+            for i in range(createsvc):
+                svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
+            svc_list = svc_list[:-1]
+
+            print ("svc_list: {}".format(svc_list))
+
             IorUtils.run_ior(self.hostfile_clients, iorflags, iteration, block_size, transfer_size,
                              pool_uuid, svc_list, record_size, stripe_size, stripe_count,
                              async_io, object_class, self.basepath, self.slots)
 
             if expected_result == 'FAIL':
-                   self.fail("Test was expected to fail but it passed.\n")
+                self.fail("Test was expected to fail but it passed.\n")
 
-        except IorUtils.IorFailed as e:
+        except (ValueError, IorUtils.IorFailed) as e:
             print e
             if expected_result != 'FAIL':
-                  self.fail("Test was expected to pass but it failed.\n")
+                self.fail("Test was expected to pass but it failed.\n")
 
     def test_sequential(self):
         """
@@ -159,7 +150,7 @@ class EightServers(Test):
                    and 16 async io.
         :avocado: tags=ior,eightservers,ior_sequential
         """
-        ior_flags = self.params.get("F",'/run/ior/iorflags/sequential/')
+        ior_flags = self.params.get("F", '/run/ior/iorflags/sequential/')
         self.executable(ior_flags)
 
     def test_random(self):
@@ -171,5 +162,5 @@ class EightServers(Test):
                    and 16 async io.
         :avocado: tags=ior,eightservers,ior_random
         """
-        ior_flags = self.params.get("F",'/run/ior/iorflags/random/')
+        ior_flags = self.params.get("F", '/run/ior/iorflags/random/')
         self.executable(ior_flags)

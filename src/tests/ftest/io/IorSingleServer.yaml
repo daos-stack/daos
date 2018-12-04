@@ -16,6 +16,7 @@ hosts:
                     - boro-C
                     - boro-D
                     - boro-E
+timeout: 540
 server:
     server_group: daos_server
 createtests:
@@ -30,9 +31,9 @@ createtests:
         svcn: 1
 ior:
     iteration:
-        iter: 3
+        iter: 1
     iorflags:
-        F: "-v -W -w"
+        F: "-v -W -w -r -R"
     transfersize:
         t: '1m'
     recordsize:

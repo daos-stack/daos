@@ -23,7 +23,6 @@
     '''
 
 import os
-import traceback
 import sys
 import json
 from avocado       import Test
@@ -48,26 +47,26 @@ class MultipleClients(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
 
-        self.server_group = self.params.get("server_group",'/server/','daos_server')
+        self.server_group = self.params.get("server_group", '/server/','daos_server')
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.pool = None
 
-        self.hostlist_servers = self.params.get("test_servers",'/run/hosts/test_machines/*')
-        self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.tmp)
+        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/test_machines/*')
+        self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
         print("Host file servers is: {}".format(self.hostfile_servers))
 
-        self.hostlist_clients = self.params.get("clients",'/run/hosts/test_machines/test_clients/*')
-        self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients, self.tmp)
+        self.hostlist_clients = self.params.get("clients", '/run/hosts/test_machines/test_clients/*')
+        self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir)
         print("Host file clientsis: {}".format(self.hostfile_clients))
 
         ServerUtils.runServer(self.hostfile_servers, self.server_group, self.basepath)
 
-        IorUtils.build_ior(self.basepath)
+        if int(str(self.name).split("-")[0]) == 1:
+            IorUtils.build_ior(self.basepath)
 
     def tearDown(self):
         try:
@@ -78,7 +77,7 @@ class MultipleClients(Test):
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            ServerUtils.stopServer(hosts=self.hostlist_servers)
 
     def test_multipleclients(self):
         """
@@ -90,21 +89,21 @@ class MultipleClients(Test):
         """
 
         # parameters used in pool create
-        createmode = self.params.get("mode",'/run/pool/createmode/*/')
-        createuid  = os.geteuid()
-        creategid  = os.getegid()
-        createsetid = self.params.get("setname",'/run/pool/createset/')
-        createsize  = self.params.get("size",'/run/pool/createsize/')
-        createsvc  = self.params.get("svcn",'/run/pool/createsvc/')
-        iteration = self.params.get("iter",'/run/ior/iteration/')
-        slots = self.params.get("slots",'/run/ior/clientslots/*')
-        ior_flags = self.params.get("F",'/run/ior/iorflags/')
-        transfer_size = self.params.get("t",'/run/ior/transfersize/')
-        record_size = self.params.get("r",'/run/ior/recordsize/*')
-        stripe_size = self.params.get("s",'/run/ior/stripesize/*')
-        stripe_count = self.params.get("c",'/run/ior/stripecount/')
-        async_io = self.params.get("a",'/run/ior/asyncio/')
-        object_class = self.params.get("o",'/run/ior/objectclass/')
+        createmode = self.params.get("mode", '/run/pool/createmode/*/')
+        createuid = os.geteuid()
+        creategid = os.getegid()
+        createsetid = self.params.get("setname", '/run/pool/createset/')
+        createsize = self.params.get("size", '/run/pool/createsize/')
+        createsvc = self.params.get("svcn", '/run/pool/createsvc/')
+        iteration = self.params.get("iter", '/run/ior/iteration/')
+        slots = self.params.get("slots", '/run/ior/clientslots/*')
+        ior_flags = self.params.get("F", '/run/ior/iorflags/')
+        transfer_size = self.params.get("t", '/run/ior/transfersize/')
+        record_size = self.params.get("r", '/run/ior/recordsize/*')
+        stripe_size = self.params.get("s", '/run/ior/stripesize/*')
+        stripe_count = self.params.get("c", '/run/ior/stripecount/')
+        async_io = self.params.get("a", '/run/ior/asyncio/')
+        object_class = self.params.get("o", '/run/ior/objectclass/')
 
         try:
             # initialize a python pool object then create the underlying
@@ -140,6 +139,5 @@ class MultipleClients(Test):
                              pool_uuid, svc_list, record_size, stripe_size, stripe_count,
                              async_io, object_class, self.basepath, slots)
 
-        except IorUtils.IorFailed as e:
-            print e
-            self.fail("Multiple clients test failed")
+        except (ValueError, IorUtils.IorFailed) as e:
+            self.fail("<MultipleClients Test run Failed>\n {}".format(e))

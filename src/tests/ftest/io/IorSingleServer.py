@@ -23,16 +23,10 @@
     '''
 
 import os
-import time
-import traceback
 import sys
 import json
-import ctypes
-import subprocess
 
 from avocado       import Test
-from avocado       import main
-from avocado.utils import process
 
 sys.path.append('./util')
 sys.path.append('../util')
@@ -41,11 +35,8 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import IorUtils
-import daos_api
 from daos_api import DaosContext
 from daos_api import DaosPool
-from daos_api import DaosServer
-from daos_cref import RankList
 
 class IorSingleServer(Test):
     """
@@ -57,26 +48,26 @@ class IorSingleServer(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
 
-        self.server_group = self.params.get("server_group",'/server/','daos_server')
+        self.server_group = self.params.get("server_group", '/server/', 'daos_server')
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.POOL = None
 
-        self.hostlist_servers = self.params.get("test_servers",'/run/hosts/test_machines/*')
-        self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.tmp)
+        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/test_machines/*')
+        self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
         print("Host file servers is: {}".format(self.hostfile_servers))
 
-        self.hostlist_clients = self.params.get("clients",'/run/hosts/test_machines/diff_clients/*')
-        self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients, self.tmp)
+        self.hostlist_clients = self.params.get("clients", '/run/hosts/test_machines/diff_clients/*')
+        self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir)
         print("Host file clientsis: {}".format(self.hostfile_clients))
 
         ServerUtils.runServer(self.hostfile_servers, self.server_group, self.basepath)
 
-        IorUtils.build_ior(self.basepath)
+        if int(str(self.name).split("-")[0]) == 1:
+            IorUtils.build_ior(self.basepath)
 
     def tearDown(self):
         try:
@@ -97,27 +88,27 @@ class IorSingleServer(Test):
         """
 
         # parameters used in pool create
-        createmode = self.params.get("mode",'/run/createtests/createmode/*/')
-        createuid  = os.geteuid()
-        creategid  = os.getegid()
-        createsetid = self.params.get("setname",'/run/createtests/createset/')
-        createsize  = self.params.get("size",'/run/createtests/createsize/')
-        createsvc  = self.params.get("svcn",'/run/createtests/createsvc/')
-        iteration = self.params.get("iter",'/run/ior/iteration/')
-        ior_flags = self.params.get("F",'/run/ior/iorflags/')
-        transfer_size = self.params.get("t",'/run/ior/transfersize/')
-        record_size = self.params.get("r",'/run/ior/recordsize/')
-        segment_count = self.params.get("s",'/run/ior/segmentcount/')
-        stripe_count = self.params.get("c",'/run/ior/stripecount/')
-        async_io = self.params.get("a",'/run/ior/asyncio/')
-        object_class = self.params.get("o",'/run/ior/objectclass/')
+        createmode = self.params.get("mode", '/run/createtests/createmode/*/')
+        createuid = os.geteuid()
+        creategid = os.getegid()
+        createsetid = self.params.get("setname", '/run/createtests/createset/')
+        createsize = self.params.get("size", '/run/createtests/createsize/')
+        createsvc = self.params.get("svcn", '/run/createtests/createsvc/')
+        iteration = self.params.get("iter", '/run/ior/iteration/')
+        ior_flags = self.params.get("F", '/run/ior/iorflags/')
+        transfer_size = self.params.get("t", '/run/ior/transfersize/')
+        record_size = self.params.get("r", '/run/ior/recordsize/')
+        segment_count = self.params.get("s", '/run/ior/segmentcount/')
+        stripe_count = self.params.get("c", '/run/ior/stripecount/')
+        async_io = self.params.get("a", '/run/ior/asyncio/')
+        object_class = self.params.get("o", '/run/ior/objectclass/')
 
         try:
             # initialize a python pool object then create the underlying
             # daos storage
             self.POOL = DaosPool(self.Context)
             self.POOL.create(createmode, createuid, creategid,
-                    createsize, createsetid, None, None, createsvc)
+                             createsize, createsetid, None, None, createsvc)
             pool_uuid = self.POOL.get_uuid_str()
             print ("pool_uuid: {}".format(pool_uuid))
             list = []
@@ -138,7 +129,5 @@ class IorSingleServer(Test):
                              pool_uuid, svc_list, record_size, segment_count, stripe_count,
                              async_io, object_class, self.basepath)
 
-        except ValueError as e:
-            print e
-            print traceback.format_exc()
-
+        except (ValueError, IorUtils.IorFailed) as e:
+            self.fail("<Single Server Test FAILED>\n {}".format(e))

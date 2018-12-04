@@ -27,7 +27,7 @@ ior:
         slots_16:
             slots: 16
     iteration:
-        iter: 5
+        iter: 3
     iorflags:
         F: "-v -W -w -r -R"
     transfersize:

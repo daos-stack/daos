@@ -23,12 +23,9 @@
     '''
 
 import os
-import traceback
 import sys
 import json
 from avocado       import Test
-from avocado       import main
-from avocado.utils import process
 
 sys.path.append('./util')
 sys.path.append('../util')
@@ -63,24 +60,24 @@ class SegCount(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("server_group",'/server/','daos_server')
+        self.server_group = self.params.get("server_group", '/server/', 'daos_server')
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
-        self.hostlist_servers = self.params.get("test_servers",'/run/hosts/*')
+        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/*')
         hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
         print("Host file servers is: {}".format(hostfile_servers))
 
-        hostlist_clients = self.params.get("test_clients",'/run/hosts/*')
-        self.slots = self.params.get("slots",'/run/ior/clientslots/*')
+        hostlist_clients = self.params.get("test_clients", '/run/hosts/*')
+        self.slots = self.params.get("slots", '/run/ior/clientslots/*')
         self.hostfile_clients = WriteHostFile.WriteHostFile(hostlist_clients, self.workdir, self.slots)
         print("Host file clients is: {}".format(self.hostfile_clients))
 
         ServerUtils.runServer(hostfile_servers, self.server_group, self.basepath)
 
-        # Uncomment if need to build IOR.(Temporary solution)
-        #IorUtils.build_ior(self.basepath)
+        if int(str(self.name).split("-")[0]) == 1:
+            IorUtils.build_ior(self.basepath)
 
     def tearDown(self):
         try:
@@ -101,21 +98,21 @@ class SegCount(Test):
         """
 
         # parameters used in pool create
-        createmode = self.params.get("mode",'/run/pool/createmode/*/')
-        createuid  = os.geteuid()
-        creategid  = os.getegid()
-        createsetid = self.params.get("setname",'/run/pool/createset/')
-        createsize  = self.params.get("size",'/run/pool/createsize/')
-        createsvc  = self.params.get("svcn",'/run/pool/createsvc/')
-        iteration = self.params.get("iter",'/run/ior/iteration/')
-        block_size = self.params.get("b",'/run/ior/blocksize_transfersize_stripesize/*/')
-        ior_flags = self.params.get("F",'/run/ior/iorflags/')
-        transfer_size = self.params.get("t",'/run/ior/blocksize_transfersize_stripesize/*/')
-        record_size = self.params.get("r",'/run/ior/recordsize/*')
-        stripe_size = self.params.get("s",'/run/ior/blocksize_transfersize_stripesize/*/')
-        stripe_count = self.params.get("c",'/run/ior/stripecount/')
-        async_io = self.params.get("a",'/run/ior/asyncio/')
-        object_class = self.params.get("o",'/run/ior/objectclass/*/')
+        createmode = self.params.get("mode", '/run/pool/createmode/*/')
+        createuid = os.geteuid()
+        creategid = os.getegid()
+        createsetid = self.params.get("setname", '/run/pool/createset/')
+        createsize = self.params.get("size", '/run/pool/createsize/')
+        createsvc = self.params.get("svcn", '/run/pool/createsvc/')
+        iteration = self.params.get("iter", '/run/ior/iteration/')
+        block_size = self.params.get("b", '/run/ior/blocksize_transfersize_stripesize/*/')
+        ior_flags = self.params.get("F", '/run/ior/iorflags/')
+        transfer_size = self.params.get("t", '/run/ior/blocksize_transfersize_stripesize/*/')
+        record_size = self.params.get("r", '/run/ior/recordsize/*')
+        stripe_size = self.params.get("s", '/run/ior/blocksize_transfersize_stripesize/*/')
+        stripe_count = self.params.get("c", '/run/ior/stripecount/')
+        async_io = self.params.get("a", '/run/ior/asyncio/')
+        object_class = self.params.get("o", '/run/ior/objectclass/*/')
 
         if (block_size == '4k' and self.slots == 16):
             segment_count = 491500
@@ -141,7 +138,7 @@ class SegCount(Test):
             # daos storage
             self.pool = DaosPool(self.Context)
             self.pool.create(createmode, createuid, creategid,
-                    createsize, createsetid, None, None, createsvc)
+                             createsize, createsetid, None, None, createsvc)
 
             pool_uuid = self.pool.get_uuid_str()
             svc_list = ""

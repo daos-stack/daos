@@ -21,7 +21,7 @@
     Any reproduction of computer software, computer software documentation, or
     portions thereof marked with this legend must also reproduce the markings.
     '''
-import os , shutil
+import os, shutil
 from  git import Repo
 import subprocess
 import json
@@ -93,13 +93,21 @@ def run_ior(client_file, ior_flags, iteration, block_size, transfer_size, pool_u
                   " -x CRT_ATTACH_INFO_PATH={2} ior {3} -s {4} -i {5} -a DAOS -o `uuidgen` " \
                   " -b {6} -t {7} -- -p {8} -v {9} -r {10} -s {11} -c {12} -a {13} -o {14} "\
                   .format(slots, client_file, attach_info_path, ior_flags, seg_count, iteration,
-                  block_size, transfer_size, pool_uuid, svc_list, record_size, stripe_size,
-                  stripe_count, async_io, object_class)
+                          block_size, transfer_size, pool_uuid, svc_list, record_size, stripe_size,
+                          stripe_count, async_io, object_class)
         print ("ior_cmd: {}".format(ior_cmd))
 
-        subprocess.check_call(ior_cmd, shell=True)
+        process = subprocess.Popen(ior_cmd, stdout=subprocess.PIPE, shell=True)
+        while True:
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                print output.strip()
+        if process.poll() != 0:
+            raise IorFailed("IOR Run process Failed with non zero exit code:{}".format(process.poll()))
 
-    except subprocess.CalledProcessError as e:
+    except (OSError, ValueError) as e:
         print "<IorRunFailed> Exception occurred: {0}".format(str(e))
         raise IorFailed("IOR Run process Failed")
 
