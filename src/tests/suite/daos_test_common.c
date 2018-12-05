@@ -585,6 +585,25 @@ test_get_leader(test_arg_t *arg, d_rank_t *rank)
 	return 0;
 }
 
+d_rank_t
+test_get_last_svr_rank(test_arg_t *arg)
+{
+	unsigned int tgts_per_node;
+	unsigned int disable_nodes;
+
+	if (arg->srv_ntgts == 0 || arg->srv_nnodes == 0) {
+		print_message("not connected yet?\n");
+		return -1;
+	}
+
+	/* If rank == -1, it means kill the last node */
+	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
+	disable_nodes = (arg->srv_disabled_ntgts +
+			 tgts_per_node - 1) / tgts_per_node;
+
+	return arg->srv_nnodes - disable_nodes - 1;
+}
+
 bool
 test_rebuild_query(test_arg_t **args, int args_cnt)
 {

@@ -33,7 +33,8 @@ static int akey_num = 10;
 static int rank_size = 8;
 static int tgt_size = 8;
 static int iod_size = 1;
-static int oid_type = DAOS_OC_R3S_SPEC_RANK;
+static char *default_class = "repl_3_small_rw_spec_rank";
+static char *obj_class;
 
 #define MAX_EXT_NUM		5
 #define MAX_DISTANCE		10
@@ -105,7 +106,7 @@ static struct option long_ops[] = {
 	{ "rec_size",	required_argument,	NULL,	's' },
 	{ "rank_size",	required_argument,	NULL,	'g' },
 	{ "tgt_size",	required_argument,	NULL,	't' },
-	{ "oid_type",	required_argument,	NULL,	'O' },
+	{ "obj_class",	required_argument,	NULL,	'O' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ NULL,		0,			NULL,	0   },
 };
@@ -408,7 +409,7 @@ generate_io_conf_rec(int fd, struct current_status *status)
 		}
 
 		if (inject_fail_idx == i) {
-			sprintf(line, "exclude --rank %u --tgt %d\n",
+			sprintf(line, "exclude --rank %d --tgt %d\n",
 				status->cur_rank, tgt);
 			rc = write(fd, line, strlen(line));
 			if (rc <= 0) {
@@ -419,7 +420,7 @@ generate_io_conf_rec(int fd, struct current_status *status)
 	}
 
 	/* Add back the target */
-	sprintf(line, "add --rank %u --tgt %d\n", status->cur_rank, tgt);
+	sprintf(line, "add --rank %d --tgt %d\n", status->cur_rank, tgt);
 	rc1 = write(fd, line, strlen(line));
 	if (rc1 <= 0) {
 		rc = -1;
@@ -493,12 +494,10 @@ generate_io_conf_obj(int fd, struct current_status *status)
 	int rc = 0;
 
 	while (status->cur_obj_num < obj_num) {
-		d_rank_t	rank;
-
-		rank = rand() % rank_size;
+		int	rank = -1;
 
 		/* Fill the dkey first */
-		sprintf(oid_buf, "oid --type %d --rank %d\n", oid_type, rank);
+		sprintf(oid_buf, "oid --type %s --rank %d\n", obj_class, rank);
 		rc = write(fd, oid_buf, strlen(oid_buf));
 		if (rc <= 0) {
 			rc = -1;
@@ -551,7 +550,7 @@ main(int argc, char **argv)
 			tgt_size = strtoul(optarg, &endp, 0);
 			break;
 		case 'O':
-			oid_type = strtoul(optarg, &endp, 0);
+			D_STRNDUP(obj_class, optarg, strlen(optarg));
 			break;
 		case 'h':
 			print_usage();
@@ -569,6 +568,9 @@ main(int argc, char **argv)
 		return -1;
 	}
 
+	if (obj_class == NULL)
+		obj_class = default_class;
+
 	fname = argv[optind];
 	fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
 
@@ -583,6 +585,9 @@ main(int argc, char **argv)
 	if (rc)
 		goto out;
 out:
+	if (obj_class && obj_class != default_class)
+		D_FREE(obj_class);
+
 	close(fd);
 	return rc;
 }

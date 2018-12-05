@@ -266,6 +266,21 @@ daos_oclass_attr_find(daos_obj_id_t oid)
 	return &oc->oc_attr;
 }
 
+int
+daos_oclass_name2id(const char *name)
+{
+	struct daos_obj_class	*oc;
+
+	for (oc = &daos_obj_classes[0]; oc->oc_id != DAOS_OC_UNKNOWN; oc++) {
+		if (strncmp(oc->oc_name, name, strlen(name)) == 0)
+			break;
+	}
+	if (oc->oc_id == DAOS_OC_UNKNOWN)
+		return -1;
+
+	return oc->oc_id;
+}
+
 /** Return the redundancy group size of @oc_attr */
 unsigned int
 daos_oclass_grp_size(struct daos_oclass_attr *oc_attr)

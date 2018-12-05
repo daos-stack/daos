@@ -82,6 +82,7 @@ struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
+int daos_oclass_name2id(const char *name);
 
 static inline d_rank_t
 daos_oclass_sr_get_rank(daos_obj_id_t oid)

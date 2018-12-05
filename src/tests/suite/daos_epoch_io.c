@@ -321,6 +321,7 @@ static int
 daos_test_cb_add(test_arg_t *arg, struct test_op_record *op,
 		 char **rbuf, daos_size_t *rbuf_size)
 {
+	print_message("add rank %u\n", op->ae_arg.ua_rank);
 	test_rebuild_wait(&arg, 1);
 	daos_add_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 			op->ae_arg.ua_rank);
@@ -331,6 +332,7 @@ static int
 daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 		     char **rbuf, daos_size_t *rbuf_size)
 {
+	print_message("exclude rank %u\n", op->ae_arg.ua_rank);
 	daos_exclude_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 			    op->ae_arg.ua_rank);
 	return 0;
@@ -793,6 +795,12 @@ cmd_parse_add_exclude(test_arg_t *arg, int argc, char **argv,
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
+
+	if (ae_arg->ua_rank == -1) {
+		ae_arg->ua_rank = test_get_last_svr_rank(arg);
+		D_ASSERT(ae_arg->ua_rank != -1);
+	}
+
 	*op = op_rec;
 out:
 	if (rc && op_rec)
@@ -985,7 +993,8 @@ cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
 {
 	struct epoch_io_args	*eio_arg = &arg->eio_args;
 	int			opt;
-	int			type = -1;
+	char			*obj_class = NULL;
+	int			type;
 	d_rank_t		rank = -1;
 	int			rc = 0;
 
@@ -1002,7 +1011,7 @@ cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
 			rank = atoi(eio_optarg);
 			break;
 		case 't':
-			type = atoi(eio_optarg);
+			D_STRNDUP(obj_class, eio_optarg, strlen(eio_optarg));
 			break;
 		default:
 			print_message("Unknown Option %c\n", opt);
@@ -1010,14 +1019,27 @@ cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
 		}
 	}
 
-	if (type == -1)
+	if (obj_class == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
+	type = daos_oclass_name2id(obj_class);
 	eio_arg->op_oid = dts_oid_gen(type, 0, arg->myrank);
-	if (rank != -1 && (type == DAOS_OC_R2S_SPEC_RANK ||
-			type == DAOS_OC_R3S_SPEC_RANK))
-		eio_arg->op_oid = dts_oid_set_rank(eio_arg->op_oid, rank);
+	if (type == DAOS_OC_R2S_SPEC_RANK || type == DAOS_OC_R3S_SPEC_RANK ||
+	    type == DAOS_OC_R1S_SPEC_RANK) {
+		if (rank == -1) {
+			rank = test_get_last_svr_rank(arg);
+			D_ASSERT(rank != -1);
+			eio_arg->op_oid = dts_oid_set_rank(eio_arg->op_oid,
+							   rank);
+		} else {
+			eio_arg->op_oid = dts_oid_set_rank(eio_arg->op_oid,
+							   rank);
+		}
+	}
 out:
+	if (obj_class)
+		D_FREE(obj_class);
+
 	return rc;
 }
 
