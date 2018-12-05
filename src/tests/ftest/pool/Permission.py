@@ -23,8 +23,6 @@
 	'''
 
 import os
-import time
-import traceback
 import sys
 import json
 from avocado import Test, main
@@ -36,7 +34,7 @@ sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
-from daos_api import DaosContext, DaosPool, DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosLog
 
 class Permission(Test):
     """
@@ -50,19 +48,19 @@ class Permission(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
         self.server_group = self.params.get("server_group",
                                             '/server/',
                                             'daos_server')
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.POOL = None
+        self.pool = None
+        self.d_log = DaosLog(self.Context)
 
         # getting hostfile
         self.hostfile = None
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
         print ("Host file is: {}".format(self.hostfile))
 
         # starting server
@@ -70,8 +68,8 @@ class Permission(Test):
 
     def tearDown(self):
         try:
-            if self.POOL is not None and self.POOL.attached:
-                self.POOL.destroy(1)
+            if self.pool is not None and self.pool.attached:
+                self.pool.destroy(1)
         finally:
             # stop servers
             ServerUtils.stopServer(hosts=self.hostlist)
@@ -83,15 +81,17 @@ class Permission(Test):
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-        createuid = self.params.get("uid", '/run/createtests/createuid/')
-        creategid = self.params.get("gid", '/run/createtests/creategid/')
+        createuid = os.geteuid()
+        creategid = os.getegid()
         createsetid = self.params.get("setname", '/run/createtests/createset/')
         createsize = self.params.get("size", '/run/createtests/createsize/')
 
         # parameters used for pool connect
         permissions = self.params.get("perm", '/run/createtests/permissions/*')
 
-        if (createmode in [73, 511] and permissions == 0):
+        if (createmode == 73):
+            expected_result = 'FAIL'
+        if (createmode == 511 and permissions == 0):
             expected_result = 'PASS'
         elif (createmode in [146, 511] and permissions == 1):
             expected_result = 'PASS'
@@ -103,30 +103,23 @@ class Permission(Test):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.POOL = DaosPool(self.Context)
-            print ("Pool initialisation successful")
+            self.pool = DaosPool(self.Context)
+            self.d_log.debug("Pool initialisation successful")
 
-            self.POOL.create(createmode, createuid, creategid,
+            self.pool.create(createmode, createuid, creategid,
                              createsize, createsetid, None)
-            print ("Pool Creation successful")
+            self.d_log.debug("Pool Creation successful")
 
-            self.POOL.connect(1 << permissions)
-            print ("Pool Connect successful")
+            self.pool.connect(1 << permissions)
+            self.d_log.debug("Pool Connect successful")
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
         except ValueError as e:
             print (e)
-            print (traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
-        finally:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
-            # cleanup the pool
-            self.POOL.destroy(1)
-            self.POOL = None
 
     def test_filemodification(self):
         """
@@ -143,7 +136,6 @@ class Permission(Test):
         createsize = self.params.get("size", '/run/createtests/createsize/')
 
         if createmode == 73:
-            permissions = 0
             expected_result = 'FAIL'
         elif createmode in [146, 511]:
             permissions = 1
@@ -155,50 +147,43 @@ class Permission(Test):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.POOL = DaosPool(self.Context)
-            print ("Pool initialisation successful")
-            self.POOL.create(createmode,
+            self.pool = DaosPool(self.Context)
+            self.d_log.debug("Pool initialisation successful")
+            self.pool.create(createmode,
                              createuid,
                              creategid,
                              createsize,
                              createsetid,
                              None)
-            print ("Pool Creation successful")
+            self.d_log.debug("Pool Creation successful")
 
-            self.POOL.connect(1 << permissions)
-            print ("Pool Connect successful")
+            self.pool.connect(1 << permissions)
+            self.d_log.debug("Pool Connect successful")
 
-            self.CONTAINER = DaosContainer(self.Context)
-            print ("Contianer initialisation successful")
+            self.container = DaosContainer(self.Context)
+            self.d_log.debug("Contianer initialisation successful")
 
-            self.CONTAINER.create(self.POOL.handle)
-            print ("Container create successful")
+            self.container.create(self.pool.handle)
+            self.d_log.debug("Container create successful")
 
             # now open it
-            self.CONTAINER.open()
-            print ("Container open successful")
+            self.container.open()
+            self.d_log.debug("Container open successful")
 
             thedata = "a string that I want to stuff into an object"
             size = 45
             dkey = "this is the dkey"
             akey = "this is the akey"
 
-            self.CONTAINER.write_an_obj(thedata, size, dkey, akey)
-            print ("Container write successful")
+            self.container.write_an_obj(thedata, size, dkey, akey)
+            self.d_log.debug("Container write successful")
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
         except ValueError as e:
             print (e)
-            print (traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
-        finally:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
-            # cleanup the container and pool
-            self.POOL.destroy(1)
-            self.POOL = None
 
 if __name__ == "__main__":
     main()
