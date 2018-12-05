@@ -3,6 +3,7 @@ server:
 hosts:
   test_machines:
     - boro-A
+timeout: 650
 evicttests:
    svrlist: !mux
      goodlist:
@@ -37,10 +38,6 @@ evicttests:
              - FAIL
    createmode:
      mode: 511
-   createuid:
-     uid: 11374638
-   creategid:
-     gid: 11374638
    createset:
      setname: scott_server
    createsize:

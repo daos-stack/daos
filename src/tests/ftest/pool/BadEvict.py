@@ -41,10 +41,9 @@ from daos_api import DaosContext, DaosPool, RankList
 
 class BadEvictTest(Test):
     """
+    Test Class Description:
     Tests pool evict calls passing NULL and otherwise inappropriate
-    parameters.  This can't be done with daosctl, need to use the python API.
-
-    :avocado: tags=pool,badparam,badevict
+    parameters.
     """
 
     def setUp(self):
@@ -53,33 +52,40 @@ class BadEvictTest(Test):
                   "../../../../.build_vars.json")) as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        tmp = build_paths['PREFIX'] + '/tmp'
 
         self.hostlist = self.params.get("test_machines",'/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         server_group = self.params.get("server_group",'/server/','daos_server')
 
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 
-        time.sleep(2)
+        # pause for good luck and let things stabilize
+        time.sleep(3)
 
     def tearDown(self):
-        ServerUtils.stopServer(hosts=self.hostlist)
+        # right now the exception logic in stopServer is too aggresive/broken.
+        # remove this catch later on when working better
+        try:
+            ServerUtils.stopServer(hosts=self.hostlist)
+        except Exception as e:
+            pass
 
     def test_evict(self):
         """
-        Pass bad parameters to the pool evict clients call.
+        Test ID: DAOS-427
+        Test Description: Pass bad parameters to the pool evict clients call.
 
         :avocado: tags=pool,poolevict,badparam,badevict
         """
 
         # parameters used in pool create
         createmode = self.params.get("mode",'/run/evicttests/createmode/')
-        createuid  = self.params.get("uid",'/run/evicttests/createuid/')
-        creategid  = self.params.get("gid",'/run/evicttests/creategid/')
         createsetid = self.params.get("setname",'/run/evicttests/createset/')
         createsize  = self.params.get("size",'/run/evicttests/createsize/')
+
+        createuid = os.geteuid()
+        creategid = os.getegid()
 
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -107,34 +113,47 @@ class BadEvictTest(Test):
                       expected_result = 'FAIL'
                       break
 
+        saveduuid = None
+        savedgroup = None
+        savedsvc = None
+        pool = None
+
         try:
             # setup the DAOS python API
             with open('../../../.build_vars.json') as f:
                 data = json.load(f)
-            CONTEXT = DaosContext(data['PREFIX'] + '/lib/')
+            context = DaosContext(data['PREFIX'] + '/lib/')
 
             # initialize a python pool object then create the underlying
             # daos storage
-            POOL = DaosPool(CONTEXT)
-            POOL.create(createmode, createuid, creategid,
+            pool = DaosPool(context)
+            pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
             # trash the the pool service rank list
             if not svc == 'VALID':
+                savedsvc = pool.svc
                 rl_ranks = ctypes.POINTER(ctypes.c_uint)()
-                POOL.svc = RankList(rl_ranks, 1);
+                pool.svc = RankList(rl_ranks, 1);
 
             # trash the pool group value
             if evictset == None:
-                POOL.group = None
+                savedgroup = pool.group
+                pool.group = None
 
             # trash the UUID value in various ways
             if excludeuuid == None:
-                POOL.uuid = None
+                saveduuid = (ctypes.c_ubyte * 16)(0)
+                for i in range(0,len(saveduuid)):
+                    saveduuid[i] =  pool.uuid[i]
+                pool.uuid[0:] = [0 for i in range(0,len(pool.uuid))]
             if excludeuuid == 'JUNK':
-                POOL.uuid[4] = 244
+                saveduuid = (ctypes.c_ubyte * 16)(0)
+                for i in range(0,len(saveduuid)):
+                    saveduuid[i] =  pool.uuid[i]
+                pool.uuid[4] = 244
 
-            POOL.evict()
+            pool.evict()
 
             if expected_result in ['FAIL']:
                     self.fail("Test was expected to fail but it passed.\n")
@@ -144,9 +163,18 @@ class BadEvictTest(Test):
             print traceback.format_exc()
             if expected_result in ['PASS']:
                     self.fail("Test was expected to pass but it failed.\n")
-        except Exception as e:
-            self.fail("Daos code segfaulted most likely %s" % e)
+        finally:
+            if pool is not None:
+                # if the test trashed some pool parameter, put it back the
+                # way it was
+                if savedgroup is not None:
+                    pool.group = savedgroup
+                if saveduuid is not None:
+                    for i in range(0,len(saveduuid)):
+                        pool.uuid[i] = saveduuid[i]
+                if savedsvc is not None:
+                    pool.svc = savedsvc
+                pool.destroy(1)
 
 if __name__ == "__main__":
     main()
-
