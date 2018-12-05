@@ -56,10 +56,9 @@ import time
 import signal
 import shlex
 
-# If this script is run as part of the Jenkins build using utils/run_tests.sh
-# then SL_OMPI_PREFIX is set and sent into this script as an arg. This is for
-# running the test manually. Change this definition to your situation.
-PREFIX = os.getcwd() + "/install/"
+build_root = os.path.join(sys.path[0], "../../../")
+sys.path.insert(0, os.path.join(build_root, "scons_local"))
+from build_info import BuildInfo
 
 urifile = "/tmp/urifile"
 pid_file = "/tmp/" + str(os.getpid()) + "_output"
@@ -79,15 +78,21 @@ class ServerFailedToStart(Exception):
 class ServerTimedOut(Exception):
         pass
 
-def start_server():
+def start_server(binfo):
     """
     Start the DAOS server with an orterun command as a child process. We use
     subprocess.Popen since it returns control to the calling process and
     provides access to the polling feature.
     """
+    log_file = os.path.join(binfo.get("PREFIX"),
+                            "TESTING",
+                            "daos-rdb-test.log")
     print("Starting DAOS server\n")
-    cmd = PREFIX + "/bin/orterun -N 1 --report-uri {} ".format(urifile)
-    cmd += debug_cmds + " -x LD_LIBRARY_PATH daos_server "
+    cmd = binfo.get("OMPI_PREFIX") + "/bin/orterun "
+    cmd += "-N 1 --report-uri {} ".format(urifile)
+    cmd += "-x D_LOG_FILE=" + log_file + " "
+    cmd += debug_cmds + " -x LD_LIBRARY_PATH "
+    cmd += binfo.get("PREFIX") + "/bin/daos_server "
     cmd += "-d ./ -c 1 -m vos,rdb,rdbt "
     print("Running command:\n{}".format(cmd))
     sys.stdout.flush()
@@ -216,14 +221,11 @@ if __name__ == "__main__":
     """
     print("Running rdb tests")
     rc = 0
-
-    # If there's an arg, it's the path PREFIX
-    if len(sys.argv) > 1:
-        PREFIX = sys.argv[1]
+    binfo = BuildInfo(os.path.join(build_root, ".build_vars.json"));
 
     try:
         # Server operations
-        p = start_server()
+        p = start_server(binfo)
 
         counter = 0
         daos_server = daos_server_pid()
@@ -238,7 +240,8 @@ if __name__ == "__main__":
         print("DAOS server started")
 
         # Client operations
-        client_prefix = PREFIX + "/bin/orterun --ompi-server " \
+        client_prefix = binfo.get("OMPI_PREFIX") + \
+                        "/bin/orterun --ompi-server " \
                         "file:{} {} --np 1 rdbt ".format(
                         urifile, debug_cmds)
         client_suffix = " --group=daos_server"
