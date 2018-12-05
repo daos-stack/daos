@@ -31,6 +31,7 @@ lock_test()
         find /mnt/daos -maxdepth 1 -mindepth 1 \! -name jenkins.lock -print0 | \
              xargs -0r rm -vrf
         "$@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
+        exit "${PIPESTATUS[0]}"
     ) 9>/mnt/daos/jenkins.lock
 }
 
