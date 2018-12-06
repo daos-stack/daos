@@ -1887,6 +1887,9 @@ struct iv_sync_cb_info {
 
 	/* user private data */
 	void				*isc_user_priv;
+
+	/* sync type */
+	crt_iv_sync_t			isc_sync_type;
 };
 
 /* IV_SYNC response handler */
@@ -2013,15 +2016,19 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	input = crt_req_get(corpc_req);
 	D_ASSERT(input != NULL);
 
-	d_iov_set(&input->ivs_nsid, &ivns_internal->cii_gns.gn_ivns_id,
-		  sizeof(struct crt_ivns_id));
-	d_iov_set(&input->ivs_key, iv_key->iov_buf, iv_key->iov_buf_len);
-	d_iov_set(&input->ivs_sync_type, &sync_type, sizeof(crt_iv_sync_t));
-	input->ivs_class_id = class_id;
-
 	D_ALLOC_PTR(iv_sync_cb);
 	if (iv_sync_cb == NULL)
 		D_GOTO(exit, rc = -DER_NOMEM);
+
+	iv_sync_cb->isc_sync_type = sync_type;
+
+	d_iov_set(&input->ivs_nsid, &ivns_internal->cii_gns.gn_ivns_id,
+		  sizeof(struct crt_ivns_id));
+	d_iov_set(&input->ivs_key, iv_key->iov_buf, iv_key->iov_buf_len);
+	d_iov_set(&input->ivs_sync_type, &iv_sync_cb->isc_sync_type,
+		sizeof(crt_iv_sync_t));
+
+	input->ivs_class_id = class_id;
 
 	iv_sync_cb->isc_bulk_hdl = local_bulk;
 	iv_sync_cb->isc_do_callback = delay_completion;
@@ -2360,9 +2367,9 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 	d_iov_set(&input->ivu_nsid, &ivns_internal->cii_gns.gn_ivns_id,
 		 sizeof(struct crt_ivns_id));
 
-	d_iov_set(&input->ivu_sync_type, sync_type, sizeof(crt_iv_sync_t));
-
 	cb_info->uci_sync_type = *sync_type;
+	d_iov_set(&input->ivu_sync_type, &cb_info->uci_sync_type, sizeof(crt_iv_sync_t));
+
 
 	rc = crt_req_send(rpc, handle_ivupdate_response, cb_info);
 	if (rc != 0)
