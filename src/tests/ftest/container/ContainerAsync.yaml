@@ -4,7 +4,7 @@ hosts:
             - boro-A
             - boro-B
             - boro-C
-            - boro-D
+timeout: 80
 server:
     server_group: daos_server
 createtests:

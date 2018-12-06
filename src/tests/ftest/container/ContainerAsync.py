@@ -140,9 +140,9 @@ class ContainerAsync(Test):
             self.Container2.create(poh, None, cb_func)
 
             GLOB_SIGNAL.wait()
-            if GLOB_RC != -1005:
+            if GLOB_RC == 0:
                 self.fail("RC not as expected in async test")
-            print ("RC after Container create failed:", GLOB_RC)
+            print ("RC after unsuccessful Container create: " , GLOB_RC)
 
             # cleanup the Pool and Container
             self.POOL = None
@@ -251,10 +251,9 @@ class ContainerAsync(Test):
 
             str_cuuid = self.Container1.get_uuid_str()
             cuuid = uuid.UUID(str_cuuid)
-            coh = self.Container1.coh
 
             GLOB_SIGNAL = threading.Event()
-            self.Container1.open(poh, cuuid, 2, cb_func, coh)
+            self.Container1.open(poh, cuuid, 2, cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
@@ -265,10 +264,10 @@ class ContainerAsync(Test):
             # Checking rc after failure.
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
-            self.Container2.open(None, None, None, cb_func, None)
+            self.Container2.open(None, None, None, cb_func)
 
             GLOB_SIGNAL.wait()
-            if GLOB_RC != -1003:
+            if GLOB_RC == 0:
                 self.fail("RC not as expected in async test")
             print ("RC after Container destroy failed:", GLOB_RC)
 
@@ -321,9 +320,8 @@ class ContainerAsync(Test):
 
             str_cuuid = self.Container1.get_uuid_str()
             cuuid = uuid.UUID(str_cuuid)
-            coh = self.Container1.coh
 
-            self.Container1.open(poh, cuuid, 2, coh)
+            self.Container1.open(poh, cuuid, 2)
 
             GLOB_SIGNAL = threading.Event()
             self.Container1.close(coh, cb_func)
@@ -340,7 +338,7 @@ class ContainerAsync(Test):
             self.Container2.close(coh, cb_func)
 
             GLOB_SIGNAL.wait()
-            if GLOB_RC != -1002:
+            if GLOB_RC == 0:
                 self.fail("RC not as expected in async test:{0}".format(GLOB_RC))
             print ("RC after Container destroy failed:", GLOB_RC)
 
@@ -391,13 +389,12 @@ class ContainerAsync(Test):
 
             str_cuuid = self.Container1.get_uuid_str()
             cuuid = uuid.UUID(str_cuuid)
-            coh = self.Container1.coh
 
             # Open Container
-            self.Container1.open(poh, None, 2, None, coh)
+            self.Container1.open(poh, None, 2, None)
 
             GLOB_SIGNAL = threading.Event()
-            self.Container1.query(coh, cb_func)
+            self.Container1.query(cb_func=cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
@@ -405,16 +402,16 @@ class ContainerAsync(Test):
             print ("RC after successful Container create: " , GLOB_RC)
 
             # Close opened Container
-            self.Container1.close(coh)
+            self.Container1.close()
 
             # Try to open container2, this should fail, as non-existent.
             # Checking rc after failure.
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
-            self.Container2.query(coh, cb_func)
+            self.Container2.query(cb_func=cb_func)
 
             GLOB_SIGNAL.wait()
-            if GLOB_RC != -1002:
+            if GLOB_RC == 0:
                 self.fail("RC not as expected in async test:{0}".format(GLOB_RC))
             print ("RC after Container destroy failed:", GLOB_RC)
 
