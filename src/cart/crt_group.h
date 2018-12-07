@@ -386,7 +386,6 @@ void crt_hdlr_grp_destroy(crt_rpc_t *rpc_req);
 void crt_hdlr_uri_lookup(crt_rpc_t *rpc_req);
 int crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
 int crt_grp_detach(crt_group_t *attached_grp);
-char *crt_get_tag_uri(const char *base_uri, uint32_t tag);
 int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		      d_rank_t rank, uint32_t tag, crt_phy_addr_t *base_addr,
 		      hg_addr_t *hg_addr);

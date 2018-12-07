@@ -2123,54 +2123,6 @@ out:
 		free(tmp_uri);
 }
 
-/*
- * Given a base URI and a tag number, return the URI of that tag.
- */
-char *
-crt_get_tag_uri(const char *base_uri, uint32_t tag)
-{
-	char		*tag_uri = NULL;
-	char		*pchar;
-	int		 port;
-
-	if (tag >= CRT_SRV_CONTEXT_NUM) {
-		D_ERROR("invalid tag %u (CRT_SRV_CONTEXT_NUM %d).\n",
-			tag, CRT_SRV_CONTEXT_NUM);
-		D_GOTO(out, 0);
-	}
-	D_ALLOC(tag_uri, CRT_ADDR_STR_MAX_LEN);
-	if (tag_uri == NULL)
-		D_GOTO(out, 0);
-	strncpy(tag_uri, base_uri, CRT_ADDR_STR_MAX_LEN - 1);
-
-	/* KW #1461 fix */
-	tag_uri[CRT_ADDR_STR_MAX_LEN - 1] = '\0';
-
-	if (crt_gdata.cg_share_na == true || tag == 0)
-		D_GOTO(out, 0);
-
-	if (crt_gdata.cg_na_plugin == CRT_NA_SM)
-		pchar = strrchr(tag_uri, '/');
-	else
-		pchar = strrchr(tag_uri, ':');
-
-	if (pchar == NULL) {
-		D_ERROR("bad format of base_addr %s.\n", tag_uri);
-		D_FREE(tag_uri);
-		tag_uri = NULL;
-		D_GOTO(out, 0);
-	}
-	pchar++;
-	port = atoi(pchar);
-	port += tag;
-	snprintf(pchar, 16, "%d", port);
-	D_DEBUG(DB_TRACE, "base uri(%s), tag(%d) uri(%s).\n", base_uri, tag,
-		tag_uri);
-
-out:
-	return tag_uri;
-}
-
 int
 crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 {
