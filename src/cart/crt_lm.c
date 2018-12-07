@@ -535,6 +535,8 @@ crt_lm_grp_init(crt_group_t *grp)
 	if (rc != 0) {
 		d_rank_list_free(lm_grp_srv->lgs_ras_ranks);
 		d_rank_list_free(lm_grp_srv->lgs_bcast_list);
+		if (lm_grp_srv->lgs_ras == 1)
+			crt_unregister_event_cb(lm_event_hdlr, NULL);
 		D_GOTO(out, rc);
 	}
 
@@ -548,6 +550,8 @@ crt_lm_grp_init(crt_group_t *grp)
 			d_rank_list_free(lm_grp_srv->lgs_ras_ranks);
 			d_rank_list_free(lm_grp_srv->lgs_bcast_list);
 			D_RWLOCK_DESTROY(&lm_grp_srv->lgs_rwlock);
+			if (lm_grp_srv->lgs_ras == 1)
+				crt_unregister_event_cb(lm_event_hdlr, NULL);
 		}
 	}
 
