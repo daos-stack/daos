@@ -548,7 +548,6 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	/** Updating the cookie for this update */
 	uuid_copy(skey->sv_cookie, rbund->rb_cookie);
 
-	/** XXX: fix this after CSUM is added to iterator */
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
 	irec->ir_size	 = biov->bi_data_len;
@@ -559,8 +558,11 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 		csum->cs_csum = NULL;
 		return 0;
 	}
+	/** at this point, it's assumed that enough was allocated for the irec
+	 *  to hold a checksum of length csum->cs_len
+	 */
+	memcpy(vos_irec2csum(irec), csum->cs_csum, csum->cs_len);
 
-	csum->cs_csum = vos_irec2csum(irec);
 	return 0;
 }
 
@@ -586,10 +588,15 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	biov->bi_addr = irec->ir_ex_addr;
 	biov->bi_buf = NULL;
 
-	if (irec->ir_size != 0) {
-		csum->cs_len	= irec->ir_cs_size;
-		csum->cs_type	= irec->ir_cs_type;
-		csum->cs_csum	= vos_irec2csum(irec);
+	if (irec->ir_size != 0 && csum) {
+		csum->cs_len		= irec->ir_cs_size;
+		csum->cs_buf_len	= irec->ir_cs_size;
+		csum->cs_type		= irec->ir_cs_type;
+		if (csum->cs_csum)
+			memcpy(csum->cs_csum,
+			       vos_irec2csum(irec), csum->cs_len);
+		else
+			csum->cs_csum = vos_irec2csum(irec);
 	}
 
 	rbund->rb_rsize	= irec->ir_size;

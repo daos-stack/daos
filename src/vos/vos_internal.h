@@ -589,6 +589,23 @@ vos_krec2key(struct vos_krec_df *krec)
 	return &payload[vos_size_round(krec->kr_cs_size)];
 }
 
+static inline uint16_t vos_irec2csum_size(struct vos_irec_df *irec)
+{
+	return irec->ir_cs_size;
+}
+
+static inline void vos_irec_init_csum(struct vos_irec_df *irec,
+	daos_csum_buf_t *csum)
+{
+	if (csum) {
+		irec->ir_cs_size = csum->cs_len;
+		irec->ir_cs_type = (uint8_t)csum->cs_type;
+	} else {
+		irec->ir_cs_size = 0;
+		irec->ir_cs_type = 0;
+	}
+}
+
 static inline uint64_t
 vos_irec_size(struct vos_rec_bundle *rbund)
 {
@@ -605,7 +622,7 @@ vos_irec_size_equal(struct vos_irec_df *irec, struct vos_rec_bundle *rbund)
 	if (irec->ir_size != rbund->rb_rsize)
 		return false;
 
-	if (irec->ir_cs_size != rbund->rb_csum->cs_len)
+	if (vos_irec2csum_size(irec) != rbund->rb_csum->cs_len)
 		return false;
 
 	return true;
@@ -620,7 +637,7 @@ vos_irec2csum(struct vos_irec_df *irec)
 static inline char *
 vos_irec2data(struct vos_irec_df *irec)
 {
-	return &irec->ir_body[vos_size_round(irec->ir_cs_size)];
+	return &irec->ir_body[vos_size_round(vos_irec2csum_size(irec))];
 }
 
 static inline bool

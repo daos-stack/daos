@@ -258,20 +258,19 @@ akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
 {
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	daos_csum_buf_t		 csum;
 	daos_iov_t		 kiov; /* iov to carry key bundle */
 	daos_iov_t		 riov; /* iov to carray record bundle */
 	struct bio_iov		 biov; /* iov to return data buffer */
 	int			 rc;
+	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epoch	= epoch;
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_biov	= &biov;
-	rbund.rb_csum	= &csum;
+	rbund.rb_csum	= &iod->iod_csums[0];
 	memset(&biov, 0, sizeof(biov));
-	daos_csum_set(&csum, NULL, 0);
 
 	rc = dbtree_fetch(toh, BTR_PROBE_LE, &kiov, &kiov, &riov);
 	if (rc == -DER_NONEXIST) {
@@ -656,6 +655,7 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch,
 	daos_iov_t		 kiov, riov;
 	struct bio_iov		*biov;
 	umem_id_t		 mmid;
+	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	int			 rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
@@ -670,7 +670,11 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch,
 	biov = iod_update_biov(ioc);
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	rbund.rb_csum	= &csum;
+	if (iod->iod_csums)
+		rbund.rb_csum	= &iod->iod_csums[0];
+	else
+		rbund.rb_csum	= &csum;
+
 	rbund.rb_biov	= biov;
 	rbund.rb_rsize	= rsize;
 	rbund.rb_mmid	= mmid;
@@ -977,6 +981,8 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	struct bio_iov		 biov;
 	uint64_t		 off = 0;
 	int			 rc;
+	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
+
 
 	/*
 	 * TODO:
@@ -986,8 +992,9 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	 * vos_irec_df->ir_ex_addr, small unaligned part will be stored on SCM
 	 * along with vos_irec_df, being referenced by vos_irec_df->ir_body.
 	 */
-	scm_size = (media == BIO_ADDR_SCM) ? vos_recx2irec_size(size, NULL) :
-					     vos_recx2irec_size(0, NULL);
+	scm_size = (media == BIO_ADDR_SCM) ?
+		vos_recx2irec_size(size, iod->iod_csums) :
+		vos_recx2irec_size(0, iod->iod_csums);
 
 	rc = vos_reserve(ioc, BIO_ADDR_SCM, scm_size, &off);
 	if (rc) {
@@ -998,8 +1005,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	D_ASSERT(ioc->ic_mmids_cnt > 0);
 	mmid = ioc->ic_mmids[ioc->ic_mmids_cnt - 1];
 	irec = (struct vos_irec_df *) umem_id2ptr(vos_obj2umm(obj), mmid);
-	irec->ir_cs_size = 0;
-	irec->ir_cs_type = 0;
+	vos_irec_init_csum(irec, iod->iod_csums);
 
 	memset(&biov, 0, sizeof(biov));
 	if (size == 0) { /* punch */

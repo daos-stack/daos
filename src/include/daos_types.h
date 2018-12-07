@@ -659,7 +659,10 @@ typedef struct {
 	 * type of the iod is single, this is ignored.
 	 */
 	daos_recx_t		*iod_recxs;
-	/** Checksum associated with each extent */
+	/*
+	 * Checksum associated with each extent. If the type of the iod is
+	 * single, will only have a single checksum.
+	 */
 	daos_csum_buf_t		*iod_csums;
 	/** Epoch range associated with each extent */
 	daos_epoch_range_t	*iod_eprs;

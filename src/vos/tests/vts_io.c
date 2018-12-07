@@ -73,6 +73,10 @@ static struct io_test_flag io_test_flags[] = {
 		.tf_bits	= TF_REC_EXT,
 	},
 	{
+		.tf_str		= "CSUM",
+		.tf_bits	= TF_USE_CSUM,
+	},
+	{
 		.tf_str		= "ZC + extent",
 		.tf_bits	= TF_ZERO_COPY | TF_REC_EXT,
 	},
@@ -608,12 +612,14 @@ static int
 io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 			 daos_epoch_t fetch_epoch)
 {
-
 	int			rc = 0;
 	daos_iov_t		val_iov;
 	daos_key_t		dkey;
 	daos_key_t		akey;
 	daos_recx_t		rex;
+	daos_csum_buf_t		csum;
+	char			expected_csum_buf[UPDATE_CSUM_SIZE];
+	char			actual_csum_buf[UPDATE_CSUM_SIZE];
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
@@ -636,6 +642,19 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 		iod.iod_type = DAOS_IOD_SINGLE;
 		recx_size = UPDATE_BUF_SIZE;
 		recx_nr   = 1;
+
+		/* currently, checksums only supported for single value */
+		if (arg->ta_flags & TF_USE_CSUM) {
+			memset(&csum, 0, sizeof(csum));
+			memset(&expected_csum_buf, 0,
+			       sizeof(expected_csum_buf));
+			memset(&actual_csum_buf, 0, sizeof(actual_csum_buf));
+			dts_buf_render(expected_csum_buf,
+				       sizeof(expected_csum_buf));
+			daos_csum_set(&csum, expected_csum_buf,
+				      UPDATE_CSUM_SIZE);
+			iod.iod_csums = &csum;
+		}
 	}
 
 	if (!(arg->ta_flags & TF_PUNCH)) {
@@ -700,9 +719,18 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
 	iod.iod_size = DAOS_REC_ANY;
+
+	if (!(arg->ta_flags & TF_REC_EXT) && arg->ta_flags & TF_USE_CSUM)
+		daos_csum_set(&csum, actual_csum_buf, UPDATE_CSUM_SIZE);
+
 	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &iod, &sgl, true);
 	if (rc)
 		goto exit;
+
+	if (!(arg->ta_flags & TF_REC_EXT) && arg->ta_flags & TF_USE_CSUM)
+		assert_memory_equal(expected_csum_buf, actual_csum_buf,
+				    UPDATE_CSUM_SIZE);
+
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 exit:

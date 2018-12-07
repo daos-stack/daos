@@ -189,12 +189,12 @@ D_CASSERT(offsetof(struct vos_krec_df, kr_earliest) ==
 struct vos_irec_df {
 	/** reserved for resolving overwrite race */
 	uint64_t			ir_cookie;
+	/** key checksum size (in bytes) */
+	uint16_t			ir_cs_size;
 	/** key checksum type */
 	uint8_t				ir_cs_type;
-	/** key checksum size (in bytes) */
-	uint8_t				ir_cs_size;
 	/** padding bytes */
-	uint16_t			ir_pad16;
+	uint8_t				ir_pad8;
 	/** pool map version */
 	uint32_t			ir_ver;
 	/** length of value */
