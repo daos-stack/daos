@@ -160,9 +160,6 @@ int crt_hg_unpack_header(hg_handle_t hg_hdl, struct crt_rpc_priv *rpc_priv,
 			 crt_proc_t *proc);
 void crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out);
 void crt_hg_unpack_cleanup(crt_proc_t proc);
-int crt_proc_internal(struct crf_field *drf, crt_proc_t proc, void *data);
-int crt_proc_input(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
-int crt_proc_output(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
 int crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
 int crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data);
 int crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data);

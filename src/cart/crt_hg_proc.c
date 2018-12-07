@@ -580,7 +580,7 @@ crt_hg_unpack_cleanup(crt_proc_t proc)
 		hg_proc_free(proc);
 }
 
-int
+static int
 crt_proc_internal(struct crf_field *crf,
 			 crt_proc_t proc, void *data)
 {
@@ -605,13 +605,6 @@ crt_proc_internal(struct crf_field *crf,
 
 			proc_op = hg_proc_get_op(proc);
 			if (array->ca_count == 0) {
-				hg_ret = hg_proc_memcpy(proc, &array->ca_arrays,
-						      sizeof(array->ca_arrays));
-				if (hg_ret != HG_SUCCESS) {
-					rc = -DER_HG;
-					break;
-				}
-
 				if (proc_op == HG_DECODE)
 					array->ca_arrays = NULL;
 				ptr = (char *)ptr + sizeof(struct crt_array);
@@ -658,7 +651,7 @@ out:
 	return rc;
 }
 
-int
+static int
 crt_proc_input(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 {
 	struct crt_req_format *crf = rpc_priv->crp_opc_info->coi_crf;
@@ -668,7 +661,7 @@ crt_proc_input(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 				 proc, rpc_priv->crp_pub.cr_input);
 }
 
-int
+static int
 crt_proc_output(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 {
 	struct crt_req_format *crf = rpc_priv->crp_opc_info->coi_crf;
