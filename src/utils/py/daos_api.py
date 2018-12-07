@@ -733,7 +733,7 @@ class IORequest(object):
             raise DaosApiError("Object update returned non-zero. RC: {0}"
                              .format(rc))
 
-    def fetch_array(self, dkey, akey, rec_count, rec_size, tx):
+    def fetch_array(self, dkey, akey, rec_count, rec_size, tx=0):
         """
         dkey --1st level key for the array value
         akey --2nd level key for the array value
@@ -850,7 +850,7 @@ class IORequest(object):
             raise DaosApiError("Object update returned non-zero. RC: {0}"
                              .format(rc))
 
-    def single_fetch(self, dkey, akey, size, tx, test_hints=[]):
+    def single_fetch(self, dkey, akey, size, tx=0, test_hints=[]):
         """
         dkey --1st level key for the single value
         akey --2nd level key for the single value
