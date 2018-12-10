@@ -59,14 +59,15 @@ struct evt_ptr {
 	/** cookie to insert this extent */
 	uuid_t				pt_cookie;
 	uint64_t			pt_csum;
-	/** number of indices */
-	uint64_t			pt_inum;
-	/** number of bytes per index */
-	uint32_t			pt_inob;
-	/** Pool map version for the record */
-	uint32_t			pt_ver;
 	/** buffer on SCM or NVMe */
 	bio_addr_t			pt_ex_addr;
+	/** Pool map version for the record */
+	uint32_t			pt_ver;
+};
+
+struct evt_extent {
+	daos_off_t	ex_lo;	/**< low offset */
+	daos_off_t	ex_hi;	/**< high offset */
 };
 
 /** A versioned extent is effectively a rectangle...
@@ -74,24 +75,53 @@ struct evt_ptr {
  *  gives priority to later overwrites within the same epoch.
  */
 struct evt_rect {
-	daos_off_t			rc_off_lo;	/**< low offset */
-	daos_off_t			rc_off_hi;	/**< high offset */
-	daos_epoch_t			rc_epc;		/**< update epoch */
+	struct evt_extent	rc_ex;	/**< extent range */
+	daos_epoch_t		rc_epc;	/**< update epoch */
 };
+
+/** A search rectangle to limit scope of a search */
+struct evt_filter {
+	struct evt_extent	fr_ex;	/**< extent range */
+	daos_epoch_range_t	fr_epr;	/**< epoch range */
+};
+
+/** Log format of extent */
+#define DF_EXT				\
+	DF_U64"-"DF_U64
 
 /** Log format of rectangle */
 #define DF_RECT				\
-	DF_U64"-"DF_U64"@"DF_U64"-INF"
+	DF_EXT"@"DF_U64"-INF"
+
+/** Expanded extent members for debug log */
+#define DP_EXT(ext)			\
+	(ext)->ex_lo, (ext)->ex_hi
 
 /** Expanded rectangle members for debug log */
 #define DP_RECT(r)			\
-	(r)->rc_off_lo, (r)->rc_off_hi, (r)->rc_epc
+	DP_EXT(&(r)->rc_ex), (r)->rc_epc
+
+/** Log format of evtree entry */
+#define DF_ENT				\
+	DF_EXT" from "DF_EXT"@"DF_U64"-INF (%c)"
+
+/** Expanded format of evtree entry */
+#define DP_ENT(ent)			\
+	DP_EXT(&(ent)->en_sel_ext), DP_EXT(&(ent)->en_ext), (ent)->en_epoch, \
+	evt_debug_print_visibility(ent)
+
+/** Return the width of an extent */
+static inline daos_size_t
+evt_extent_width(const struct evt_extent *ext)
+{
+	return ext->ex_hi - ext->ex_lo + 1;
+}
 
 /** Return the width of a versioned extent */
 static inline daos_size_t
-evt_rect_width(struct evt_rect *rect)
+evt_rect_width(const struct evt_rect *rect)
 {
-	return rect->rc_off_hi - rect->rc_off_lo + 1;
+	return evt_extent_width(&rect->rc_ex);
 }
 
 /**
@@ -121,8 +151,6 @@ struct evt_node_entry {
 	char ne_pad[24];
 };
 
-D_CASSERT(sizeof(struct evt_node_entry) == 64);
-
 /** evtree node: */
 struct evt_node {
 	/** the Minimum Bounding Box (MBR) bounds all its children */
@@ -141,9 +169,11 @@ struct evt_root {
 	/** mmid of the root node */
 	TMMID(struct evt_node)		tr_node;
 	/** the current tree depth */
-	uint32_t			tr_depth;
+	uint16_t			tr_depth;
 	/** tree order */
-	uint32_t			tr_order;
+	uint16_t			tr_order;
+	/** number of bytes per index */
+	uint32_t			tr_inob;
 	/** see \a evt_feats */
 	uint64_t			tr_feats;
 };
@@ -155,18 +185,57 @@ enum evt_feats {
 
 #define EVT_FEAT_DEFAULT		EVT_FEAT_SORT_SOFF
 
+/* Information about record to insert */
+struct evt_entry_in {
+	/** Extent to insert */
+	struct evt_rect	ei_rect;
+	/** VOS cookie */
+	uuid_t		ei_cookie;
+	/** checksum of entry */
+	uint64_t	ei_csum;
+	/** pool map version */
+	uint32_t	ei_ver;
+	/** number of bytes per record, zero for punch */
+	uint32_t	ei_inob;
+	/** Address of record to insert */
+	bio_addr_t	ei_addr;
+};
+
+enum evt_visibility {
+	/** It is unknown if entry is covered or visible */
+	EVT_UNKNOWN	= 0,
+	/** Entry is covered at specified epoch */
+	EVT_COVERED	= (1 << 0),
+	/** Entry is visible at specified epoch */
+	EVT_VISIBLE	= (1 << 1),
+	/** Entry is part of larger in-tree extent */
+	EVT_PARTIAL	= (1 << 2),
+};
 /**
  * Data struct to pass in or return a versioned extent and its data block.
  */
 struct evt_entry {
-	/** link chain on evt_entry_list */
-	d_list_t			 en_link;
-	/** Cached information about the data */
-	struct evt_ptr			 en_ptr;
-	/** the input/output versioned extent */
-	struct evt_rect			 en_rect;
-	/** the trimmed rect selected by a search */
-	struct evt_rect			 en_sel_rect;
+	/** Full in-tree extent */
+	struct evt_extent		en_ext;
+	/** Actual extent within selected range */
+	struct evt_extent		en_sel_ext;
+	/** VOS cookie of entry */
+	uuid_t				en_cookie;
+	/** checksum of entry */
+	uint64_t			en_csum;
+	/** pool map version */
+	uint32_t			en_ver;
+	/** Visibility flags for extent */
+	uint32_t			en_visibility;
+	/** Address of record to insert */
+	bio_addr_t			en_addr;
+	/** update epoch of extent */
+	daos_epoch_t			en_epoch;
+};
+
+struct evt_list_entry {
+	d_list_t		le_link;
+	struct evt_entry	le_ent;
 };
 
 #define EVT_EMBEDDED_NR 32
@@ -174,27 +243,75 @@ struct evt_entry {
  * list head of \a evt_entry, it contains a few embedded entries to support
  * lightweight allocation of entries.
  */
-struct evt_entry_list {
-	/** All entries returned by the search */
-	d_list_t			el_list;
+struct evt_entry_array {
 	/** Array of allocated entries */
-	struct evt_entry		*el_ents;
-	/** total number of entries in the list */
-	uint32_t			el_ent_nr;
+	struct evt_list_entry		*ea_ents;
+	/** total number of entries in the array */
+	uint32_t			 ea_ent_nr;
 	/** total allocated size of array */
-	uint32_t			el_size;
+	uint32_t			 ea_size;
+	/** Maximum size of array */
+	uint32_t			 ea_max;
+	/** Number of bytes per index */
+	uint32_t			 ea_inob;
 	/* Small array of embedded entries */
-	struct evt_entry		el_embedded_ents[EVT_EMBEDDED_NR];
+	struct evt_list_entry		 ea_embedded_ents[EVT_EMBEDDED_NR];
 };
 
-/** iterate over all entries of a ent_list */
-#define evt_ent_list_for_each(ent, el)	\
-	d_list_for_each_entry(ent, (&(el)->el_list), en_link)
+static inline char
+evt_debug_print_visibility(const struct evt_entry *ent)
+{
+	int	flags = EVT_VISIBLE | EVT_PARTIAL | EVT_COVERED;
 
-#define evt_ent_list_empty(el)		d_list_empty(&(el)->el_list)
+	switch (ent->en_visibility & flags) {
+	default:
+		D_ASSERT(0);
+	case 0:
+		break;
+	case EVT_VISIBLE:
+		return 'V';
+	case EVT_VISIBLE | EVT_PARTIAL:
+		return 'v';
+	case EVT_COVERED:
+		return 'C';
+	case EVT_COVERED | EVT_PARTIAL:
+		return 'c';
+	}
 
-void evt_ent_list_init(struct evt_entry_list *ent_list);
-void evt_ent_list_fini(struct evt_entry_list *ent_list);
+	return 'U';
+}
+
+static inline struct evt_entry *
+evt_ent_array_get(struct evt_entry_array *ent_array, int index)
+{
+	if (index >= ent_array->ea_ent_nr)
+		return NULL;
+
+	return &ent_array->ea_ents[index].le_ent;
+}
+
+static inline struct evt_entry *
+evt_ent_array_get_next(struct evt_entry_array *ent_array, struct evt_entry *ent)
+{
+	struct evt_list_entry *el;
+
+	el = container_of(ent, struct evt_list_entry, le_ent);
+
+	if ((el + 1) >= &ent_array->ea_ents[ent_array->ea_ent_nr])
+		return NULL;
+
+	return &(el + 1)->le_ent;
+}
+
+/** iterate over all entries of a ent_array */
+#define evt_ent_array_for_each(ent, ea)				\
+	for (ent = evt_ent_array_get(ea, 0); ent != NULL;	\
+	     ent = evt_ent_array_get_next(ea, ent))
+
+#define evt_ent_array_empty(ea)		(ea->ea_ent_nr == 0)
+
+void evt_ent_array_init(struct evt_entry_array *ent_array);
+void evt_ent_array_fini(struct evt_entry_array *ent_array);
 
 struct evt_context;
 
@@ -208,7 +325,7 @@ struct evt_policy_ops {
 	int	(*po_insert)(struct evt_context *tcx,
 			     TMMID(struct evt_node) nd_mmid,
 			     TMMID(struct evt_node) in_mmid,
-			     struct evt_entry *entry);
+			     const struct evt_entry_in *entry);
 	/**
 	 * move half entries of the current node \a src_mmid to the new
 	 * node \a dst_mmid.
@@ -224,7 +341,7 @@ struct evt_policy_ops {
 	 * Calculate weight of a rectangle \a rect and return it to \a weight.
 	 */
 	int	(*po_rect_weight)(struct evt_context *tcx,
-				  struct evt_rect *rect,
+				  const struct evt_rect *rect,
 				  struct evt_weight *weight);
 
 	/** TODO: add more member functions */
@@ -305,15 +422,9 @@ int evt_destroy(daos_handle_t toh);
  * a opened tree.
  *
  * \param toh		[IN]	The tree open handle
- * \param cookie	[IN]	The VOS cookie
- * \param pm_ver	[IN]	Pool map version
- * \param rect		[IN]	The versioned extent to insert
- * \param inob		[IN]	Number of bytes per index in \a rect.  Set to
- *                              zero for punched record
- * \param addr		[IN]	Address of the input data.
+ * \param entry		[IN]	The entry to insert
  */
-int evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
-	       struct evt_rect *rect, uint32_t inob, bio_addr_t addr);
+int evt_insert(daos_handle_t toh, const struct evt_entry_in *entry);
 
 /**
  * Delete an extent \a rect from an opened tree.
@@ -327,27 +438,20 @@ int evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
  * from the tree.   The data in referenced in \a ent is not removed.
  * The user could free the associated bio_addr_t.
  */
-int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent);
+int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
+	       struct evt_entry *ent);
 
 /**
- * Search the tree and return all versioned extents which overlap with \a rect
- * to \a ent_list.
+ * Search the tree and return all visible versioned extents which overlap with
+ * \a rect to \a ent_array.
  *
- * \param toh		[IN]	The tree open handle
- * \param rect		[IN]	The versioned extent to search
- * \param ent_list	[OUT]	The returned entry list
- * \param covered	[OUT]	Optional argument to get list of evt_entries
- *				fully covered at specified epoch
- *
- * If \a covered is NULL, \a ent_list will be unsorted and will contain all
- * history for specified epoch for the range.   If a pointer is passed in,
- * ent_list will be sorted and will only contain visible rectangles and
- * covered will be filled with any rectangles that are entirely covered
- * at the specified epoch for the range.  If the covered rectangle is only
- * partially covered by the range,
+ * \param toh		[IN]		The tree open handle
+ * \param rect		[IN]		The versioned extent to search
+ * \param ent_array	[IN,OUT]	Pass in initialized list, filled in by
+ *					the function
  */
-int evt_find(daos_handle_t toh, struct evt_rect *rect,
-	     struct evt_entry_list *ent_list, d_list_t *covered);
+int evt_find(daos_handle_t toh, const struct evt_rect *rect,
+	     struct evt_entry_array *ent_array);
 
 /** Scan the tree for the non-punched visible rectangle with the highest
  *  end offset and return the offset + 1 as the size.  Size is set to 0
@@ -375,6 +479,23 @@ enum {
 	 * overwritten by other tree operation.
 	 */
 	EVT_ITER_EMBEDDED	= (1 << 0),
+	/** Return extents visible in the search rectangle */
+	EVT_ITER_VISIBLE	= (1 << 1),
+	/** Return extents fully or partially covered in the search rectangle */
+	EVT_ITER_COVERED	= (1 << 2),
+	/** Reverse iterator (ordered iterator only) */
+	EVT_ITER_REVERSE	= (1 << 3),
+	/* If either EVT_ITER_VISIBLE or EVT_ITER_COVERED are set,
+	 * evt_iter_probe will calculate and cache visible extents and iterate
+	 * through the cached extents.   Each rectangle will be marked as
+	 * visible or covered.  The partial bit will be set if the rectangle
+	 * returned differs from what is in the tree.  The state of this type
+	 * of iterator is unaffected by tree insertion or deletion so reprobe
+	 * isn't necessary.  One should probably not use the embedded iterator
+	 * when holding such across yield boundaries.
+	 * If neither flag is set, all rectangles in tree that intersect the
+	 * search rectangle, including punched extents, are returned.
+	 */
 };
 
 /**
@@ -388,11 +509,12 @@ enum {
  *				handle. It will reduce memory consumption,
  *				but state of iterator could be overwritten
  *				by any other tree operation.
- * \param epr		[IN]	Selects records where epr_lo < time <= epr_hi
+ * \param filter	[IN]	Selects only records within the specified
+ *                              search rectangle, NULL for no condition
  * \param ih		[OUT]	Returned iterator handle.
  */
 int evt_iter_prepare(daos_handle_t toh, unsigned int options,
-		     daos_epoch_range_t epr, daos_handle_t *ih);
+		     const struct evt_filter *filter, daos_handle_t *ih);
 /**
  * Finalise iterator.
  */
@@ -417,7 +539,7 @@ enum evt_iter_opc {
  *			is provided.
  */
 int evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
-		   struct evt_rect *rect, daos_anchor_t *anchor);
+		   const struct evt_rect *rect, const daos_anchor_t *anchor);
 
 /**
  * Move the iterator cursor to the next extent in the evtree.
@@ -430,10 +552,11 @@ int evt_iter_next(daos_handle_t ih);
  * Fetch the extent and its data address from the current iterator position.
  *
  * \param ih	[IN]	Iterator open handle.
+ * \param inob	[OUT]	Number of bytes per record in tree
  * \param entry	[OUT]	The returned extent and its data address.
  * \param anchor [OUT]	Returned hash anchor.
  */
-int evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
-		   daos_anchor_t *anchor);
+int evt_iter_fetch(daos_handle_t ih, unsigned int *inob,
+		   struct evt_entry *entry, daos_anchor_t *anchor);
 
 #endif /* __DAOS_EV_TREE_H__ */

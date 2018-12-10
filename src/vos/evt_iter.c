@@ -24,13 +24,16 @@
 
 #include "evt_priv.h"
 
+#define evt_iter_is_sorted(iter) \
+	(((iter)->it_options & (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) != 0)
+
 /**
  * Prepare a iterator based on evtree open handle.
  * see daos_srv/evtree.h for the details.
  */
 int
 evt_iter_prepare(daos_handle_t toh, unsigned int options,
-		 daos_epoch_range_t epr, daos_handle_t *ih)
+		 const struct evt_filter *filter, daos_handle_t *ih)
 {
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
@@ -62,8 +65,18 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 		evt_tcx_decref(tcx); /* -1 for clone */
 	}
 
+
 	iter->it_state = EVT_ITER_INIT;
-	iter->it_epr = epr;
+	iter->it_options = options;
+	iter->it_forward = true;
+	if (evt_iter_is_sorted(iter))
+		iter->it_forward = (options & EVT_ITER_REVERSE) == 0;
+	iter->it_filter.fr_ex.ex_hi = ~(0ULL);
+	iter->it_filter.fr_ex.ex_lo = 0;
+	iter->it_filter.fr_epr.epr_lo = 0;
+	iter->it_filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
+	if (filter)
+		iter->it_filter = *filter;
  out:
 	return rc;
 }
@@ -91,14 +104,129 @@ evt_iter_finish(daos_handle_t ih)
 	return rc;
 }
 
+static int
+evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
+{
+	struct evt_entry_array	*enta;
+	struct evt_rect		 rect2;
+	int			 start;
+	int			 end;
+	int			 mid;
+	int			 cmp;
+
+	enta = &iter->it_entries;
+	start = 0;
+	end = enta->ea_ent_nr - 1;
+
+	if (start == end) {
+		mid = start;
+		evt_ent2rect(&rect2, evt_ent_array_get(enta, mid));
+		cmp = evt_rect_cmp(rect, &rect2);
+	}
+
+	while (start != end) {
+		mid = start + ((end + 1 - start) / 2);
+		evt_ent2rect(&rect2, evt_ent_array_get(enta, mid));
+		cmp = evt_rect_cmp(rect, &rect2);
+
+		if (cmp == 0)
+			break;
+		if (cmp < 0) {
+			if (end == mid) {
+				mid = start;
+				evt_ent2rect(&rect2,
+					     evt_ent_array_get(enta, mid));
+				cmp = evt_rect_cmp(rect, &rect2);
+				break;
+			}
+			end = mid;
+		} else {
+			start = mid;
+		}
+	}
+
+	if (cmp == 0)
+		return mid;
+
+	/* We didn't find the entry.  Find next entry instead */
+	if (iter->it_forward) { /* Grab GT */
+		if (cmp > 0) { /* current is GT mid, so increment */
+			mid++;
+			if (mid == enta->ea_ent_nr)
+				return -1;
+		} /* Otherwise mid is GT */
+	} else { /* Grab LT */
+		if (cmp < 0) /* current is LT mid, so decrement */
+			mid--; /* will be -1 if out of bounds */
+		/* Otherwise mid is LT */
+	}
+
+	return mid;
+}
+
+static int
+evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
+		      int opc, const struct evt_rect *rect,
+		      const daos_anchor_t *anchor)
+{
+	struct evt_entry_array	*enta;
+	struct evt_rect		 rtmp;
+	int			 flags = 0;
+	int			 rc = 0;
+	int			 index;
+
+	if (iter->it_options & EVT_ITER_VISIBLE)
+		flags = EVT_VISIBLE;
+	if (iter->it_options & EVT_ITER_COVERED)
+		flags |= EVT_COVERED;
+
+	rtmp.rc_ex.ex_lo = iter->it_filter.fr_ex.ex_lo;
+	rtmp.rc_ex.ex_hi = iter->it_filter.fr_ex.ex_hi;
+	rtmp.rc_epc = DAOS_EPOCH_MAX;
+
+	enta = &iter->it_entries;
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, &iter->it_filter, &rtmp,
+				enta);
+	if (rc == 0)
+		rc = evt_ent_array_sort(tcx, enta, flags);
+
+	if (rc != 0)
+		return rc;
+
+	if (enta->ea_ent_nr == 0) {
+		iter->it_state = EVT_ITER_FINI;
+		return -DER_NONEXIST;
+	}
+
+	if (opc == EVT_ITER_FIRST) {
+		iter->it_index = iter->it_forward ? 0 : enta->ea_ent_nr - 1;
+		goto out;
+	}
+
+	if (opc != EVT_ITER_FIND) {
+		D_ERROR("Unknown op code for evt iterator: %d\n", opc);
+		return -DER_NOSYS;
+	}
+
+	rect = rect ? rect : (struct evt_rect *)&anchor->da_buf[0];
+	/** If entry doesn't exist, it will return next entry */
+	index = evt_iter_probe_find(iter, rect);
+	if (index == -1)
+		return -DER_NONEXIST;
+	iter->it_index = index;
+out:
+	iter->it_state = EVT_ITER_READY;
+	return 0;
+}
+
 int
-evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
-	       daos_anchor_t *anchor)
+evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
+	       const struct evt_rect *rect, const daos_anchor_t *anchor)
 {
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
+	struct evt_entry_array	*enta;
 	struct evt_rect		 rtmp;
-	struct evt_entry_list	 entl;
 	enum evt_find_opc	 fopc;
 	int			 rc;
 
@@ -110,16 +238,21 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 	if (iter->it_state < EVT_ITER_INIT)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
+	enta = &iter->it_entries;
+
+	if (evt_iter_is_sorted(iter))
+		return evt_iter_probe_sorted(tcx, iter, opc, rect, anchor);
+
 	memset(&rtmp, 0, sizeof(rtmp));
+
 	switch (opc) {
 	default:
 		D_GOTO(out, rc = -DER_NOSYS);
-
 	case EVT_ITER_FIRST:
 		fopc = EVT_FIND_FIRST;
-		/* provide an v-extent which covers everything */
-		rtmp.rc_off_lo = 0;
-		rtmp.rc_off_hi = ~0ULL;
+		/* An extent that covers everything */
+		rtmp.rc_ex.ex_lo = 0;
+		rtmp.rc_ex.ex_hi = ~0ULL;
 		rtmp.rc_epc = DAOS_EPOCH_MAX;
 		break;
 
@@ -137,12 +270,11 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 		rtmp = *rect;
 	}
 
-	evt_ent_list_init(&entl);
-	rc = evt_find_ent_list(tcx, fopc, &rtmp, &entl);
+	rc = evt_ent_array_fill(tcx, fopc, &iter->it_filter, &rtmp, enta);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	if (entl.el_ent_nr == 0) {
+	if (enta->ea_ent_nr == 0) {
 		if (opc == EVT_ITER_FIND) /* cannot find the same extent */
 			D_GOTO(out, rc = -DER_AGAIN);
 
@@ -151,7 +283,6 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 		rc = -DER_NONEXIST;
 	} else {
 		iter->it_state = EVT_ITER_READY;
-		evt_ent_list_fini(&entl);
 	}
  out:
 	return rc;
@@ -176,11 +307,13 @@ evt_iter_is_ready(struct evt_iterator *iter)
 }
 
 static int
-evt_iter_move(daos_handle_t ih, bool forward)
+evt_iter_move(daos_handle_t ih)
 {
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
-	int			 rc;
+	struct evt_rect		*rect;
+	struct evt_trace	*trace;
+	int			 rc = 0;
 	bool			 found;
 
 	tcx = evt_hdl2tcx(ih);
@@ -192,12 +325,32 @@ evt_iter_move(daos_handle_t ih, bool forward)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	found = evt_move_trace(tcx, forward, &iter->it_epr);
+	if (evt_iter_is_sorted(iter)) {
+		iter->it_index +=
+			iter->it_forward ? 1 : -1;
+		if (iter->it_index < 0 ||
+		    iter->it_index == iter->it_entries.ea_ent_nr) {
+			iter->it_state = EVT_ITER_FINI;
+			D_GOTO(out, rc = -DER_NONEXIST);
+		}
+		goto ready;
+	}
+
+	while ((found = evt_move_trace(tcx, iter->it_forward))) {
+		trace = &tcx->tc_trace[tcx->tc_depth - 1];
+		rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
+
+		if (evt_filter_rect(&iter->it_filter, rect))
+			continue;
+		break;
+	}
+
 	if (!found) {
 		iter->it_state = EVT_ITER_FINI;
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
+ready:
 	iter->it_state = EVT_ITER_READY;
  out:
 	return rc;
@@ -210,7 +363,7 @@ evt_iter_move(daos_handle_t ih, bool forward)
 int
 evt_iter_next(daos_handle_t ih)
 {
-	return evt_iter_move(ih, true);
+	return evt_iter_move(ih);
 }
 
 /**
@@ -218,29 +371,41 @@ evt_iter_next(daos_handle_t ih)
  * See daos_srv/evtree.h for the details.
  */
 int
-evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
+evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 	       daos_anchor_t *anchor)
 {
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
 	struct evt_rect		*rect;
 	struct evt_trace	*trace;
+	struct evt_rect		 saved;
 	int			 rc;
 
 	tcx = evt_hdl2tcx(ih);
 	if (tcx == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
+	if (entry == NULL || inob == NULL)
+		D_GOTO(out, rc = -DER_INVAL);
+
 	iter = &tcx->tc_iter;
 	rc = evt_iter_is_ready(iter);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	if (evt_iter_is_sorted(iter)) {
+		*entry = *evt_ent_array_get(&iter->it_entries, iter->it_index);
+		rect = &saved;
+		evt_ent2rect(rect, entry);
+		goto set_anchor;
+	}
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
 
 	if (entry)
-		evt_fill_entry(tcx, trace->tr_node, trace->tr_at, NULL, entry);
+		evt_entry_fill(tcx, trace->tr_node, trace->tr_at, NULL, entry);
+set_anchor:
+	*inob = tcx->tc_inob;
 
 	if (anchor) {
 		struct evt_rect rtmp = *rect;

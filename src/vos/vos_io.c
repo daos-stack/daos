@@ -308,8 +308,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 	/* At present, this is not exposed in interface but passing it toggles
 	 * sorting and clipping of rectangles
 	 */
-	d_list_t		 covered;
-	struct evt_entry_list	 ent_list;
+	struct evt_entry_array	 ent_array;
 	struct evt_rect		 rect;
 	struct bio_iov		 biov = {0};
 	daos_size_t		 holes; /* hole width */
@@ -321,21 +320,20 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 	index = recx->rx_idx;
 	end   = recx->rx_idx + recx->rx_nr;
 
-	rect.rc_off_lo = index;
-	rect.rc_off_hi = end - 1;
+	rect.rc_ex.ex_lo = index;
+	rect.rc_ex.ex_hi = end - 1;
 	rect.rc_epc = epoch;
 
-	evt_ent_list_init(&ent_list);
-	rc = evt_find(toh, &rect, &ent_list, &covered);
+	evt_ent_array_init(&ent_array);
+	rc = evt_find(toh, &rect, &ent_array);
 	if (rc != 0)
 		goto failed;
 
 	rsize = 0;
 	holes = 0;
-	evt_ent_list_for_each(ent, &ent_list) {
-		struct evt_ptr	*ptr = &ent->en_ptr;
-		daos_off_t	 lo = ent->en_sel_rect.rc_off_lo;
-		daos_off_t	 hi = ent->en_sel_rect.rc_off_hi;
+	evt_ent_array_for_each(ent, &ent_array) {
+		daos_off_t	 lo = ent->en_sel_ext.ex_lo;
+		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
 		daos_size_t	 nr;
 
 		D_ASSERT(hi >= lo);
@@ -343,24 +341,24 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 
 		if (lo != index) {
 			D_ASSERTF(lo > index,
-				  DF_U64"/"DF_U64", "DF_RECT", "DF_RECT"\n",
+				  DF_U64"/"DF_U64", "DF_RECT", "DF_ENT"\n",
 				  lo, index, DP_RECT(&rect),
-				  DP_RECT(&ent->en_sel_rect));
+				  DP_ENT(ent));
 			holes += lo - index;
 		}
 
-		if (ptr->pt_inob == 0) { /* hole extent */
+		if (bio_addr_is_hole(&ent->en_addr)) { /* hole extent */
 			index = lo + nr;
 			holes += nr;
 			continue;
 		}
 
 		if (rsize == 0)
-			rsize = ptr->pt_inob;
+			rsize = ent_array.ea_inob;
 
-		if (rsize != ptr->pt_inob) {
+		if (rsize != ent_array.ea_inob) {
 			D_ERROR("Record sizes of all indices must be "
-				"the same: %u/%u\n", rsize, ptr->pt_inob);
+				"the same: %u/%u\n", rsize, ent_array.ea_inob);
 			rc = -DER_IO_INVAL;
 			goto failed;
 		}
@@ -375,7 +373,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 		}
 
 		biov.bi_data_len = nr * rsize;
-		biov.bi_addr = ptr->pt_ex_addr;
+		biov.bi_addr = ent->en_addr;
 		rc = iod_fetch(ioc, &biov);
 		if (rc != 0)
 			goto failed;
@@ -399,7 +397,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 	}
 	*rsize_p = rsize;
 failed:
-	evt_ent_list_fini(&ent_list);
+	evt_ent_array_fini(&ent_array);
 	return rc;
 }
 
@@ -693,17 +691,21 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uuid_t cookie,
 		 uint32_t pm_ver, daos_recx_t *recx, daos_size_t rsize,
 		 struct vos_io_context *ioc)
 {
-	struct evt_rect rect;
+	struct evt_entry_in ent;
 	struct bio_iov *biov;
 	int rc;
 
 	D_ASSERT(recx->rx_nr > 0);
-	rect.rc_epc = epoch;
-	rect.rc_off_lo = recx->rx_idx;
-	rect.rc_off_hi = recx->rx_idx + recx->rx_nr - 1;
+	ent.ei_rect.rc_epc = epoch;
+	ent.ei_rect.rc_ex.ex_lo = recx->rx_idx;
+	ent.ei_rect.rc_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
+	ent.ei_ver = pm_ver;
+	ent.ei_inob = rsize;
+	uuid_copy(ent.ei_cookie, cookie);
 
 	biov = iod_update_biov(ioc);
-	rc = evt_insert(toh, cookie, pm_ver, &rect, rsize, biov->bi_addr);
+	ent.ei_addr = biov->bi_addr;
+	rc = evt_insert(toh, &ent);
 
 	return rc;
 }

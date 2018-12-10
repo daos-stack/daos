@@ -157,17 +157,25 @@ ts_close_destroy(bool destroy)
 }
 
 static int
-ts_parse_rect(char *str, struct evt_rect *rect, char **val_p, bool *should_pass)
+ts_parse_rect(char *str, struct evt_rect *rect, daos_epoch_t *high,
+	      char **val_p, bool *should_pass)
 {
 	char	*tmp;
 
+	if (should_pass == NULL) {
+		if (str[0] == '-') {
+			D_PRINT("should_pass not supported %s\n", str);
+			return -1;
+		}
+		goto parse_rect;
+	}
 	*should_pass = true;
 	if (str[0] == '-') {
 		str++;
 		*should_pass = false;
 	}
-
-	rect->rc_off_lo = atoi(str);
+parse_rect:
+	rect->rc_ex.ex_lo = atoi(str);
 
 	tmp = strchr(str, EVT_SEP_EXT);
 	if (tmp == NULL) {
@@ -176,7 +184,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p, bool *should_pass)
 	}
 
 	str = tmp + 1;
-	rect->rc_off_hi = atoi(str);
+	rect->rc_ex.ex_hi = atoi(str);
 	tmp = strchr(str, EVT_SEP_EPC);
 	if (tmp == NULL) {
 		D_PRINT("Invalid input string %s\n", str);
@@ -186,6 +194,16 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p, bool *should_pass)
 	str = tmp + 1;
 	rect->rc_epc = atoi(str);
 
+	if (high) {
+		*high = DAOS_EPOCH_MAX;
+		tmp = strchr(str, EVT_SEP_EXT);
+		if (tmp == NULL)
+			goto parse_value;
+		str = tmp + 1;
+		*high = atoi(str);
+	}
+
+parse_value:
 	if (val_p == NULL) /* called by evt_find */
 		return 0;
 
@@ -196,6 +214,14 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p, bool *should_pass)
 	}
 
 	str = tmp + 1;
+	if (should_pass == NULL) {
+		if (strlen(str) != 1) {
+			D_PRINT("Expected one of [BbVbCc]: got %s\n", str);
+			return -1;
+		}
+		goto done;
+	}
+
 	if (strlen(str) != evt_rect_width(rect)) {
 		D_PRINT("Length of string cannot match extent size %d/%d "
 			"str=%s rect="DF_RECT"\n",
@@ -203,6 +229,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p, bool *should_pass)
 			DP_RECT(rect));
 		return -1;
 	}
+done:
 	*val_p = str;
 	return 0;
 }
@@ -239,22 +266,22 @@ bio_strdup(bio_addr_t *addr, const char *str)
 static int
 ts_add_rect(char *args)
 {
-	char		*val;
-	bio_addr_t	 bio_addr = {0}; /* Fake bio addr */
-	struct evt_rect	 rect;
-	int		 rc;
-	bool		 should_pass;
-	static int	 total_added;
+	char			*val;
+	bio_addr_t		 bio_addr = {0}; /* Fake bio addr */
+	struct evt_entry_in	 entry;
+	int			 rc;
+	bool			 should_pass;
+	static int		 total_added;
 
 	if (args == NULL)
 		return -1;
 
-	rc = ts_parse_rect(args, &rect, &val, &should_pass);
+	rc = ts_parse_rect(args, &entry.ei_rect, NULL, &val, &should_pass);
 	if (rc != 0)
 		return -1;
 
 	D_PRINT("Insert "DF_RECT": val=%s expect_pass=%s (total in tree=%d)\n",
-		DP_RECT(&rect), val ? val : "<NULL>",
+		DP_RECT(&entry.ei_rect), val ? val : "<NULL>",
 		should_pass ? "true" : "false", total_added);
 
 
@@ -263,9 +290,12 @@ ts_add_rect(char *args)
 		D_FATAL("Insufficient memory for test\n");
 		return rc;
 	}
+	entry.ei_addr = bio_addr;
+	uuid_copy(entry.ei_cookie, ts_uuid);
+	entry.ei_ver = 0;
+	entry.ei_inob = val == NULL ? 0 : 1;
 
-	rc = evt_insert(ts_toh, ts_uuid, 0, &rect, val == NULL ? 0 : 1,
-			bio_addr);
+	rc = evt_insert(ts_toh, &entry);
 	if (rc == 0)
 		total_added++;
 	if (should_pass) {
@@ -295,7 +325,7 @@ ts_delete_rect(char *args)
 	if (args == NULL)
 		return -1;
 
-	rc = ts_parse_rect(args, &rect, &val, &should_pass);
+	rc = ts_parse_rect(args, &rect, NULL, &val, &should_pass);
 	if (rc != 0)
 		return -1;
 
@@ -312,15 +342,15 @@ ts_delete_rect(char *args)
 		if (rc != 0)
 			D_FATAL("Delete rect failed %d\n", rc);
 		else if (evt_rect_width(&rect) !=
-			 evt_rect_width(&ent.en_sel_rect)) {
+			 evt_extent_width(&ent.en_sel_ext)) {
 			rc = 1;
 			D_FATAL("Returned rectangle width doesn't match\n");
 		}
 
-		if (!bio_addr_is_hole(&ent.en_ptr.pt_ex_addr)) {
+		if (!bio_addr_is_hole(&ent.en_addr)) {
 			umem_id_t	mmid;
 
-			mmid.off = ent.en_ptr.pt_ex_addr.ba_off;
+			mmid.off = ent.en_addr.ba_off;
 			mmid.pool_uuid_lo = ts_pool_uuid;
 			umem_free(&ts_umm, mmid);
 		}
@@ -341,52 +371,98 @@ ts_find_rect(char *args)
 	struct evt_entry	*ent;
 	char			*val;
 	bio_addr_t		 addr;
-	d_list_t		 covered;
 	struct evt_rect		 rect;
-	struct evt_entry_list	 enlist;
+	struct evt_entry_array	 ent_array;
 	int			 rc;
 	bool			 should_pass;
 
 	if (args == NULL)
 		return -1;
 
-	rc = ts_parse_rect(args, &rect, &val, &should_pass);
+	rc = ts_parse_rect(args, &rect, NULL, &val, &should_pass);
 	if (rc != 0)
 		return -1;
 
 	D_PRINT("Search rectangle "DF_RECT"\n", DP_RECT(&rect));
 
-	evt_ent_list_init(&enlist);
-	rc = evt_find(ts_toh, &rect, &enlist, &covered);
+	evt_ent_array_init(&ent_array);
+	rc = evt_find(ts_toh, &rect, &ent_array);
 	if (rc != 0)
 		D_FATAL("Add rect failed %d\n", rc);
 
-	evt_ent_list_for_each(ent, &enlist) {
+	evt_ent_array_for_each(ent, &ent_array) {
 		bool punched;
-		addr = ent->en_ptr.pt_ex_addr;
+		addr = ent->en_addr;
 
 		punched = bio_addr_is_hole(&addr);
-		D_PRINT("Find rect "DF_RECT" (sel="DF_RECT") width=%d "
-			"val=%d %s\n", DP_RECT(&ent->en_rect),
-			DP_RECT(&ent->en_sel_rect),
-			(int)evt_rect_width(&ent->en_sel_rect),
-			punched ? 4 : (int)evt_rect_width(&ent->en_sel_rect),
+		D_PRINT("Find rect "DF_ENT" width=%d "
+			"val=%.*s\n", DP_ENT(ent),
+			(int)evt_extent_width(&ent->en_sel_ext),
+			punched ? 4 : (int)evt_extent_width(&ent->en_sel_ext),
 			punched ? "None" : (char *)addr.ba_off);
 	}
 
-	evt_ent_list_fini(&enlist);
+	evt_ent_array_fini(&ent_array);
 	return rc;
 }
 
 static int
-ts_list_rect(void)
+ts_list_rect(char *args)
 {
-	daos_epoch_range_t	epr = {0, DAOS_EPOCH_MAX};
-	daos_handle_t		ih;
-	int			i;
-	int			rc;
+	char			*val;
+	daos_anchor_t		 anchor;
+	struct evt_filter	 filter;
+	struct evt_rect		 rect;
+	daos_epoch_t		 high = DAOS_EPOCH_MAX;
+	daos_handle_t		 ih;
+	int			 i;
+	int			 rc;
+	int			 options = 0;
+	bool			 probe = true;
 
-	rc = evt_iter_prepare(ts_toh, 0, epr, &ih);
+	if (args == NULL) {
+		filter.fr_ex.ex_lo = 0;
+		filter.fr_ex.ex_hi = ~(0ULL);
+		filter.fr_epr.epr_lo = 0;
+		filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
+		goto start;
+	}
+
+	rc = ts_parse_rect(args, &rect, &high, &val, NULL);
+	if (rc != 0)
+		return -1;
+	filter.fr_ex = rect.rc_ex;
+	filter.fr_epr.epr_lo = rect.rc_epc;
+	filter.fr_epr.epr_hi = high;
+	if (!val)
+		goto start;
+
+	switch (val[0]) {
+	case 'V':
+		options = EVT_ITER_EMBEDDED;
+	case 'v':
+		options |= EVT_ITER_VISIBLE;
+		probe = false;
+		break;
+	case 'C':
+		options = EVT_ITER_EMBEDDED;
+	case 'c':
+		options |= EVT_ITER_COVERED;
+		probe = false;
+		break;
+	case 'B':
+		options = EVT_ITER_EMBEDDED;
+	case 'b':
+		options |= (EVT_ITER_VISIBLE | EVT_ITER_COVERED);
+		/* Don't skip the probe in this case just to test that path */
+		break;
+	default:
+		D_PRINT("Unknown iterator type: %c\n", val[0]);
+		return -1;
+	}
+
+start:
+	rc = evt_iter_prepare(ts_toh, options, &filter, &ih);
 	if (rc != 0) {
 		D_PRINT("Failed to prepare iterator: %d\n", rc);
 		return -1;
@@ -403,21 +479,36 @@ ts_list_rect(void)
 
 	for (i = 0;; i++) {
 		struct evt_entry	ent;
-		daos_anchor_t		anchor;
+		unsigned int		inob = 0;
 
-		rc = evt_iter_fetch(ih, &ent, &anchor);
+		rc = evt_iter_fetch(ih, &inob, &ent, &anchor);
 		if (rc == 0) {
-			D_PRINT("%d) "DF_RECT", val_addr="DF_U64"\n",
-				i, DP_RECT(&ent.en_rect),
-				ent.en_ptr.pt_ex_addr.ba_off);
+			if (inob != 1) {
+				D_PRINT("Unexpected value for inob: %d\n",
+					inob);
+				return -1;
+			}
+			D_PRINT("%d) "DF_ENT", val_addr="DF_U64" val=%.*s\n",
+				i, DP_ENT(&ent), ent.en_addr.ba_off,
+				bio_addr_is_hole(&ent.en_addr) ?
+				4 : (int)evt_extent_width(&ent.en_sel_ext),
+				bio_addr_is_hole(&ent.en_addr) ?
+				"None" : (char *)ent.en_addr.ba_off);
 
-			if (i % 3 == 0)
+			if (!probe)
+				goto skip_probe;
+			if (i % 3 == 0) {
+				rect.rc_ex = ent.en_sel_ext;
+				rect.rc_epc = ent.en_epoch;
 				rc = evt_iter_probe(ih, EVT_ITER_FIND,
-						    &ent.en_rect, NULL);
-			if (i % 3 == 1)
+						    &rect, NULL);
+			}
+			if (i % 3 == 1) {
 				rc = evt_iter_probe(ih, EVT_ITER_FIND,
 						    NULL, &anchor);
+			}
 		}
+skip_probe:
 
 		if (rc == -DER_NONEXIST) {
 			D_PRINT("Found %d entries\n", i);
@@ -439,16 +530,17 @@ ts_list_rect(void)
 static int
 ts_many_add(char *args)
 {
-	char		*buf;
-	char		*tmp;
-	int		*seq;
-	struct evt_rect	 rect;
-	bio_addr_t	 bio_addr = {0}; /* Fake bio addr */
-	long		 offset = 0;
-	int		 size;
-	int		 nr;
-	int		 i;
-	int		 rc;
+	char			*buf;
+	char			*tmp;
+	int			*seq;
+	struct evt_rect		*rect;
+	struct evt_entry_in	 entry;
+	bio_addr_t		 bio_addr = {0}; /* Fake bio addr */
+	long			 offset = 0;
+	int			 size;
+	int			 nr;
+	int			 i;
+	int			 rc;
 
 	/* argument format: "s:NUM,e:NUM,n:NUM"
 	 * s: start offset
@@ -504,10 +596,12 @@ ts_many_add(char *args)
 		return -1;
 	}
 
+	rect = &entry.ei_rect;
+
 	for (i = 0; i < nr; i++) {
-		rect.rc_off_lo = offset + seq[i] * size;
-		rect.rc_off_hi = rect.rc_off_lo + size - 1;
-		rect.rc_epc = (seq[i] % TS_VAL_CYCLE) + 1;
+		rect->rc_ex.ex_lo = offset + seq[i] * size;
+		rect->rc_ex.ex_hi = rect->rc_ex.ex_lo + size - 1;
+		rect->rc_epc = (seq[i] % TS_VAL_CYCLE) + 1;
 
 		memset(buf, 'a' + seq[i] % TS_VAL_CYCLE, size);
 
@@ -516,9 +610,12 @@ ts_many_add(char *args)
 			D_FATAL("Insufficient memory for test\n");
 			return rc;
 		}
+		entry.ei_addr = bio_addr;
+		uuid_copy(entry.ei_cookie, ts_uuid);
+		entry.ei_ver = 0;
+		entry.ei_inob = 1;
 
-		rc = evt_insert(ts_toh, ts_uuid, 0, &rect, 1,
-				bio_addr);
+		rc = evt_insert(ts_toh, &entry);
 		if (rc != 0) {
 			D_FATAL("Add rect %d failed %d\n", i, rc);
 			break;
@@ -599,7 +696,7 @@ static struct option ts_ops[] = {
 	{ "many_add",	required_argument,	NULL,	'm'	},
 	{ "find",	required_argument,	NULL,	'f'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
-	{ "list",	no_argument,		NULL,	'l'	},
+	{ "list",	optional_argument,	NULL,	'l'	},
 	{ "get_size",	required_argument,	NULL,	'g'	},
 	{ "debug",	required_argument,	NULL,	'b'	},
 	{ NULL,		0,			NULL,	0	},
@@ -633,7 +730,7 @@ ts_cmd_run(char opc, char *args)
 		rc = ts_find_rect(args);
 		break;
 	case 'l':
-		rc = ts_list_rect();
+		rc = ts_list_rect(args);
 		break;
 	case 'g':
 		rc = ts_get_size(args);
@@ -680,7 +777,7 @@ main(int argc, char **argv)
 	}
 
 	optind = 0;
-	while ((rc = getopt_long(argc, argv, "C:a:m:f:g:d:b:Docl",
+	while ((rc = getopt_long(argc, argv, "C:a:m:f:g:d:b:Docl::",
 				 ts_ops, NULL)) != -1) {
 		rc = ts_cmd_run(rc, optarg);
 		if (rc != 0)

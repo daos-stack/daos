@@ -83,17 +83,17 @@ evt_tx_end(struct evt_context *tcx, int rc)
  * rectangle \a rt2.
  */
 static bool
-evt_rect_is_wider(struct evt_rect *rt1, struct evt_rect *rt2)
+evt_rect_is_wider(const struct evt_rect *rt1, const struct evt_rect *rt2)
 {
-	return (rt1->rc_off_lo <= rt2->rc_off_lo &&
-		rt1->rc_off_hi >= rt2->rc_off_hi);
+	return (rt1->rc_ex.ex_lo <= rt2->rc_ex.ex_lo &&
+		rt1->rc_ex.ex_hi >= rt2->rc_ex.ex_hi);
 }
 
 static bool
-evt_rect_same_extent(struct evt_rect *rt1, struct evt_rect *rt2)
+evt_rect_same_extent(const struct evt_rect *rt1, const struct evt_rect *rt2)
 {
-	return (rt1->rc_off_lo == rt2->rc_off_lo &&
-		rt1->rc_off_hi == rt2->rc_off_hi);
+	return (rt1->rc_ex.ex_lo == rt2->rc_ex.ex_lo &&
+		rt1->rc_ex.ex_hi == rt2->rc_ex.ex_hi);
 }
 /**
  * Check if two rectangles overlap with each other.
@@ -103,13 +103,13 @@ evt_rect_same_extent(struct evt_rect *rt1, struct evt_rect *rt2)
  * second rectangle \a rt2 should be the one being searched/inserted.
  */
 static void
-evt_rect_overlap(struct evt_rect *rt1, struct evt_rect *rt2, int *range,
-		 int *time)
+evt_rect_overlap(const struct evt_rect *rt1, const struct evt_rect *rt2,
+		 int *range, int *time)
 {
 	*time = *range = RT_OVERLAP_NO;
 
-	if (rt1->rc_off_lo > rt2->rc_off_hi || /* no offset overlap */
-	    rt1->rc_off_hi < rt2->rc_off_lo)
+	if (rt1->rc_ex.ex_lo > rt2->rc_ex.ex_hi || /* no offset overlap */
+	    rt1->rc_ex.ex_hi < rt2->rc_ex.ex_lo)
 		return;
 
 	/* NB: By definition, there is always epoch overlap since all
@@ -141,17 +141,17 @@ evt_rect_overlap(struct evt_rect *rt1, struct evt_rect *rt2, int *range,
  * otherwise it returns true.
  */
 static bool
-evt_rect_merge(struct evt_rect *rt1, struct evt_rect *rt2)
+evt_rect_merge(struct evt_rect *rt1, const struct evt_rect *rt2)
 {
 	bool	changed = false;
 
-	if (rt1->rc_off_lo > rt2->rc_off_lo) {
-		rt1->rc_off_lo = rt2->rc_off_lo;
+	if (rt1->rc_ex.ex_lo > rt2->rc_ex.ex_lo) {
+		rt1->rc_ex.ex_lo = rt2->rc_ex.ex_lo;
 		changed = true;
 	}
 
-	if (rt1->rc_off_hi < rt2->rc_off_hi) {
-		rt1->rc_off_hi = rt2->rc_off_hi;
+	if (rt1->rc_ex.ex_hi < rt2->rc_ex.ex_hi) {
+		rt1->rc_ex.ex_hi = rt2->rc_ex.ex_hi;
 		changed = true;
 	}
 
@@ -203,79 +203,121 @@ evt_weight_diff(struct evt_weight *wt1, struct evt_weight *wt2,
 
 /** Initialize an entry list */
 void
-evt_ent_list_init(struct evt_entry_list *ent_list)
+evt_ent_array_init(struct evt_entry_array *ent_array)
 {
-	memset(ent_list, 0, sizeof(*ent_list));
-	D_INIT_LIST_HEAD(&ent_list->el_list);
-	ent_list->el_ents = ent_list->el_embedded_ents;
+	memset(ent_array, 0, sizeof(*ent_array));
+	ent_array->ea_ents = ent_array->ea_embedded_ents;
+	ent_array->ea_size = EVT_EMBEDDED_NR;
 }
 
 /** Finalize an entry list */
 void
-evt_ent_list_fini(struct evt_entry_list *ent_list)
+evt_ent_array_fini(struct evt_entry_array *ent_array)
 {
-	if (ent_list->el_size)
-		D_FREE(ent_list->el_ents);
+	if (ent_array->ea_size > EVT_EMBEDDED_NR)
+		D_FREE(ent_array->ea_ents);
 
-	D_INIT_LIST_HEAD(&ent_list->el_list);
-	ent_list->el_size = ent_list->el_ent_nr = 0;
+	ent_array->ea_size = ent_array->ea_ent_nr = 0;
 }
+
+/** When we go over the embedded limit, set a minimum allocation */
+#define EVT_MIN_ALLOC 4096
+
+static void
+ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
+{
+	size_t size;
+
+	size = sizeof(ent_array->ea_ents[0]) * ent_array->ea_ent_nr;
+	memset(ent_array->ea_ents, 0, size);
+	ent_array->ea_ent_nr = 0;
+	ent_array->ea_inob = tcx->tc_inob;
+}
+
+static bool
+ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
+		 uint32_t new_size)
+{
+	struct evt_list_entry	*ents;
+
+	D_ALLOC_ARRAY(ents, new_size);
+	if (ents == NULL)
+		return -DER_NOMEM;
+
+	if (ent_array->ea_size != EVT_EMBEDDED_NR)
+		D_FREE(ent_array->ea_ents);
+	ent_array->ea_ents = ents;
+	ent_array->ea_size = new_size;
+	return 0;
+}
+
 
 /**
  * Take an embedded entry, or allocate a new entry if all embedded entries
- * have been taken.
+ * have been taken. If notify_realloc is set, it will return -DER_AGAIN
+ * if reallocation was done so callers can revalidate cached references
+ * to entries, if necessary.
  */
-static struct evt_entry *
-evt_ent_list_alloc(struct evt_context *tcx, struct evt_entry_list *ent_list)
+static int
+ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
+		struct evt_entry **entry, bool notify_realloc)
 {
 	uint32_t		 size;
 	int			 i;
+	int			 rc;
 
-	if (ent_list->el_ent_nr == EVT_EMBEDDED_NR) {
-		D_ASSERT(ent_list->el_size == 0);
-		/* Transition to allocated array.
-		 * Insert enough entries to fit everything in the tree.  Most
-		 * space will be wated in practice but it's just virtual address
-		 * space and it's ephemeral
+	if (ent_array->ea_max == 0) {
+		/* Calculate the upper size bound for the array.  Based on the
+		 * size of the evtree, this is an upper limit on the number of
+		 * entries needed to fit all covered and visible extents
+		 * including split extents.
 		 */
 		size = 1;
 		for (i = 0; i < tcx->tc_depth; i++)
 			size *= tcx->tc_order;
-		/* With splitting, we need 2x the space in worst case.  Each new
+		/* With splitting, we need 3x the space in worst case.  Each new
 		 * extent inserted can add at most 1 extent to the output. The
 		 * cases are:
 		 * 1. New extent covers existing one:   1 visible, 1 covered
-		 * 2. New extent splits existing one:   3 visible, 0 covered
-		 * 3. New extent overlaps existing one: 2 visible, 0 covered
+		 * 2. New extent splits existing one:   3 visible, 1 covered
+		 * 3. New extent overlaps existing one: 2 visible, 1 covered
 		 * 4. New extent covers nothing:        1 visible, 0 covered
 		 *
-		 * So, each new extent can add at most 1 new rectangle (as in
-		 * case #2.   So if we allocate 2x the max entries in the tree,
+		 * So, each new extent can add at most 2 new rectangle (as in
+		 * case #2.   So if we allocate 3x the max entries in the tree,
 		 * we will always have sufficient space to store entries.
 		 */
-		size *= 2;
-		D_ALLOC_ARRAY(ent_list->el_ents, size);
-		if (ent_list->el_ents == NULL)
-			return NULL;
-
-		/* Copy the embedded entries over to new array list */
-		memcpy(ent_list->el_ents, ent_list->el_embedded_ents,
-		       sizeof(ent_list->el_ents[0]) * EVT_EMBEDDED_NR);
-		ent_list->el_size = size;
+		size *= 3;
+		ent_array->ea_max = size;
+		ent_array->ea_inob = tcx->tc_inob;
 	}
-	D_ASSERT(ent_list->el_ent_nr < EVT_EMBEDDED_NR ||
-		 ent_list->el_ent_nr < ent_list->el_size);
+	if (ent_array->ea_ent_nr == ent_array->ea_size) {
+		size = ent_array->ea_size * 4;
+		if (size < EVT_MIN_ALLOC)
+			size = EVT_MIN_ALLOC;
+		if (size > ent_array->ea_max)
+			size = ent_array->ea_max;
 
-	return &ent_list->el_ents[ent_list->el_ent_nr++];
+		rc = ent_array_resize(tcx, ent_array, size);
+		if (rc != 0)
+			return rc;
+
+		if (notify_realloc)
+			return -DER_AGAIN; /* Invalidate any cached state */
+	}
+	D_ASSERT(ent_array->ea_ent_nr < ent_array->ea_size);
+
+	*entry = evt_ent_array_get(ent_array, ent_array->ea_ent_nr++);
+	return 0;
 }
 
-static int
-evt_cmp_rect_helper(const struct evt_rect *rt1, const struct evt_rect *rt2)
+int
+evt_rect_cmp(const struct evt_rect *rt1, const struct evt_rect *rt2)
 {
-	if (rt1->rc_off_lo < rt2->rc_off_lo)
+	if (rt1->rc_ex.ex_lo < rt2->rc_ex.ex_lo)
 		return -1;
 
-	if (rt1->rc_off_lo > rt2->rc_off_lo)
+	if (rt1->rc_ex.ex_lo > rt2->rc_ex.ex_lo)
 		return 1;
 
 	if (rt1->rc_epc > rt2->rc_epc)
@@ -284,93 +326,161 @@ evt_cmp_rect_helper(const struct evt_rect *rt1, const struct evt_rect *rt2)
 	if (rt1->rc_epc < rt2->rc_epc)
 		return 1;
 
-	if (rt1->rc_off_hi < rt2->rc_off_hi)
+	if (rt1->rc_ex.ex_hi < rt2->rc_ex.ex_hi)
 		return -1;
 
-	if (rt1->rc_off_hi > rt2->rc_off_hi)
+	if (rt1->rc_ex.ex_hi > rt2->rc_ex.ex_hi)
 		return 1;
 
 	return 0;
 }
 
-int evt_ent_cmp(const void *p1, const void *p2)
-{
-	const struct evt_entry	*ent1	= p1;
-	const struct evt_entry	*ent2	= p2;
+#define PRINT_ENT(ent)							\
+	D_PRINT("%s:%d " #ent ": " DF_ENT " visibility = %"PRIx64"\n",	\
+		__func__, __LINE__, DP_ENT(ent),			\
+		(ent)->en_visibility)
 
-	return evt_cmp_rect_helper(&ent1->en_sel_rect, &ent2->en_sel_rect);
+#define evt_flags_equal(flags, set) \
+	(((flags) & (EVT_COVERED | EVT_VISIBLE)) == (set))
+
+#define evt_flags_get(flags) \
+	((flags) & (EVT_COVERED | EVT_VISIBLE))
+
+static int
+evt_ent_cmp(const struct evt_entry *ent1, const struct evt_entry *ent2,
+	    int flags)
+{
+	struct evt_rect		 rt1;
+	struct evt_rect		 rt2;
+
+	if (!flags)
+		goto cmp_ext;
+
+	/* Ensure we've selected one or the other */
+	D_ASSERT(!evt_flags_equal(flags, (EVT_VISIBLE | EVT_COVERED)));
+	D_ASSERT(!evt_flags_equal(ent1->en_visibility,
+				  (EVT_VISIBLE | EVT_COVERED)));
+	D_ASSERT(!evt_flags_equal(ent2->en_visibility,
+				  (EVT_VISIBLE | EVT_COVERED)));
+	D_ASSERT(evt_flags_get(ent1->en_visibility));
+	D_ASSERT(evt_flags_get(ent2->en_visibility));
+
+	if (evt_flags_get(ent1->en_visibility) ==
+	    evt_flags_get(ent2->en_visibility))
+		goto cmp_ext;
+
+	if (evt_flags_equal(ent1->en_visibility, EVT_VISIBLE))
+		return (flags & EVT_VISIBLE) ? -1 : 1;
+
+	return (flags & EVT_VISIBLE) ? 1 : -1;
+cmp_ext:
+	evt_ent2rect(&rt1, ent1);
+	evt_ent2rect(&rt2, ent2);
+
+	return evt_rect_cmp(&rt1, &rt2);
 }
 
-/* Use top bit of inob field to temporarily mark a partial rectangle as part
- * of another rectangle so we don't return it in the covered list
- */
-#define EVT_PARTIAL_FLAG (1 << 31)
+int evt_ent_list_cmp(const void *p1, const void *p2)
+{
+	const struct evt_list_entry	*le1	= p1;
+	const struct evt_list_entry	*le2	= p2;
+
+	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, 0);
+}
+
+int evt_ent_list_cmp_visible(const void *p1, const void *p2)
+{
+	const struct evt_list_entry	*le1	= p1;
+	const struct evt_list_entry	*le2	= p2;
+
+	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, EVT_VISIBLE);
+}
+
+int evt_ent_list_cmp_covered(const void *p1, const void *p2)
+{
+	const struct evt_list_entry	*le1	= p1;
+	const struct evt_list_entry	*le2	= p2;
+
+	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, EVT_COVERED);
+}
+
+static inline struct evt_entry *
+evt_array_get_list_entry(d_list_t *link)
+{
+	struct evt_list_entry *le = d_list_entry(link, struct evt_list_entry,
+						 le_link);
+
+	return &le->le_ent;
+}
+
+static inline d_list_t *
+evt_array_get_entry_link(struct evt_entry *ent)
+{
+	struct evt_list_entry *le;
+
+	le = container_of(ent, struct evt_list_entry, le_ent);
+
+	return &le->le_link;
+}
 
 static struct evt_entry *
-evt_find_next_uncovered(struct evt_entry *this_ent, d_list_t *head,
-			d_list_t **next, d_list_t *free_list, int *flag_bit)
+evt_find_next_visible(struct evt_entry *this_ent, d_list_t *head,
+		      d_list_t **next)
 {
 	d_list_t		*temp;
-	struct evt_rect		*this_rect;
-	struct evt_rect		*next_rect;
+	struct evt_extent	*this_ext;
+	struct evt_extent	*next_ext;
 	struct evt_entry	*next_ent;
-	struct evt_ptr		*next_ptr;
 
 	while (*next != head) {
-		next_ent = d_list_entry(*next, struct evt_entry, en_link);
-		next_ptr = &next_ent->en_ptr;
+		next_ent = evt_array_get_list_entry(*next);
 
-		/* NB: Flag is set if part of the extent is visible */
-		*flag_bit = next_ptr->pt_inob & EVT_PARTIAL_FLAG;
-		next_ptr->pt_inob &= ~(EVT_PARTIAL_FLAG);
-
-		this_rect = &this_ent->en_sel_rect;
-		next_rect = &next_ent->en_sel_rect;
-		if (next_rect->rc_epc > this_rect->rc_epc)
+		if (next_ent->en_epoch > this_ent->en_epoch)
 			return next_ent; /* next_ent is a later update */
-		if (next_rect->rc_off_hi > this_rect->rc_off_hi)
+		this_ext = &this_ent->en_sel_ext;
+		next_ext = &next_ent->en_sel_ext;
+		if (next_ext->ex_hi > this_ext->ex_hi)
 			return next_ent; /* next_ent extends past end */
 
+		/* next_ent is covered */
+		next_ent->en_visibility |= EVT_COVERED;
 		temp = *next;
 		*next = temp->next;
-		if (*flag_bit) /* NB: part of the extent is visible */
-			d_list_move(temp, free_list);
-
 	}
 
 	return NULL;
 }
 
-static struct evt_entry *
-evt_get_unused_entry(struct evt_context *tcx, struct evt_entry_list *ent_list,
-		     d_list_t *unused)
+static void
+evt_ent_addr_update(struct evt_context *tcx, struct evt_entry *ent,
+		    daos_size_t diff)
 {
-	d_list_t *entry;
+	if (bio_addr_is_hole(&ent->en_addr))
+		return; /* Nothing to do for holes */
 
-	if (d_list_empty(unused))
-		return evt_ent_list_alloc(tcx, ent_list);
-
-	entry = unused->next;
-	d_list_del(entry);
-
-	return d_list_entry(entry, struct evt_entry, en_link);
+	D_ASSERT(tcx->tc_inob != 0);
+	ent->en_addr.ba_off += diff * tcx->tc_inob;
 }
 
 static void
-evt_split_entry(struct evt_entry *current, struct evt_entry *next,
-		struct evt_entry *split)
+evt_split_entry(struct evt_context *tcx, struct evt_entry *current,
+		struct evt_entry *next, struct evt_entry *split,
+		struct evt_entry *covered)
 {
-	struct evt_ptr	*ptr = &split->en_ptr;
 	daos_off_t	 diff;
 
-	*split = *current;
-	diff = next->en_sel_rect.rc_off_hi + 1 - split->en_sel_rect.rc_off_lo;
-	split->en_sel_rect.rc_off_lo = next->en_sel_rect.rc_off_hi + 1;
-	ptr->pt_ex_addr.ba_off += diff * ptr->pt_inob;
-	/* Mark the split entry so we don't keep it in covered list */
-	ptr->pt_inob |= EVT_PARTIAL_FLAG;
-
-	current->en_sel_rect.rc_off_hi = next->en_sel_rect.rc_off_lo - 1;
+	*covered = *split = *current;
+	diff = next->en_sel_ext.ex_hi + 1 - split->en_sel_ext.ex_lo;
+	split->en_sel_ext.ex_lo = next->en_sel_ext.ex_hi + 1;
+	/* mark the entries as partial */
+	split->en_visibility = EVT_PARTIAL;
+	current->en_visibility |= EVT_PARTIAL;
+	covered->en_visibility = EVT_PARTIAL | EVT_COVERED;
+	current->en_sel_ext.ex_hi = next->en_sel_ext.ex_lo - 1;
+	covered->en_sel_ext = next->en_sel_ext;
+	evt_ent_addr_update(tcx, split, diff);
+	evt_ent_addr_update(tcx, covered,
+			    evt_extent_width(&current->en_sel_ext));
 }
 
 static d_list_t *
@@ -378,72 +488,77 @@ evt_insert_sorted(struct evt_entry *this_ent, d_list_t *head, d_list_t *current)
 {
 	d_list_t		*start = current;
 	struct evt_entry	*next_ent;
+	d_list_t		*this_link;
 	int			 cmp;
 
+	this_link = evt_array_get_entry_link(this_ent);
+
 	while (current != head) {
-		next_ent = d_list_entry(current, struct evt_entry, en_link);
-		cmp = evt_cmp_rect_helper(&this_ent->en_sel_rect,
-					       &next_ent->en_sel_rect);
+		next_ent = evt_array_get_list_entry(current);
+		cmp = evt_ent_cmp(this_ent, next_ent, 0);
 		if (cmp < 0) {
-			d_list_add(&this_ent->en_link, current->prev);
+			d_list_add(this_link, current->prev);
 			goto out;
 		}
 		current = current->next;
 	}
-	d_list_add_tail(&this_ent->en_link, head);
+	d_list_add_tail(this_link, head);
 out:
 	if (start == current)
-		return &this_ent->en_link;
+		return this_link;
 	return start;
 }
 
 static int
-evt_uncover_entries(struct evt_context *tcx, struct evt_entry_list *ent_list,
-		    d_list_t *covered)
+evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
+		 int *num_visible)
 {
-	struct evt_rect		*this_rect;
-	struct evt_rect		*next_rect;
+	struct evt_extent	*this_ext;
+	struct evt_extent	*next_ext;
 	struct evt_entry	*this_ent;
 	struct evt_entry	*next_ent;
 	struct evt_entry	*temp_ent;
-	struct evt_ptr		*ptr;
+	struct evt_entry	*split;
+	d_list_t		 covered;
 	d_list_t		*current;
 	d_list_t		*next;
-	d_list_t		 unused;
 	daos_size_t		 diff;
-	int			 flag_bit;
 	bool			 insert;
-
-	D_INIT_LIST_HEAD(&unused);  /* list of entries that can be reclaimed */
+	int			 rc = 0;
 
 	/* reset the linked list.  We'll reconstruct it */
-	D_INIT_LIST_HEAD(&ent_list->el_list);
+	D_INIT_LIST_HEAD(&covered);
+	*num_visible = 0;
 
-	insert = true;
+	/* Now place all entries sorted in covered list */
+	evt_ent_array_for_each(this_ent, ent_array) {
+		next = evt_array_get_entry_link(this_ent);
+		d_list_add_tail(next, &covered);
+	}
+
 	/* Now uncover entries */
-	current = covered->next;
+	current = covered.next;
 	/* Some compilers can't tell that this_ent will be initialized */
-	this_ent = d_list_entry(current, struct evt_entry,
-				en_link);
+	this_ent = evt_array_get_list_entry(current);
+	insert = true;
 	next = current->next;
 
-	while (next != covered) {
+	while (next != &covered) {
 		if (insert) {
-			this_ent = d_list_entry(current, struct evt_entry,
-						en_link);
-			d_list_move_tail(current, &ent_list->el_list);
+			this_ent = evt_array_get_list_entry(current);
+			this_ent->en_visibility |= EVT_VISIBLE;
+			(*num_visible)++;
 		}
 
 		insert = true;
 
-		/* Find next uncovered rectangle */
-		next_ent = evt_find_next_uncovered(this_ent, covered, &next,
-						   &unused, &flag_bit);
+		/* Find next visible rectangle */
+		next_ent = evt_find_next_visible(this_ent, &covered, &next);
 		if (next_ent == NULL)
 			return 0;
 
-		this_rect = &this_ent->en_sel_rect;
-		next_rect = &next_ent->en_sel_rect;
+		this_ext = &this_ent->en_sel_ext;
+		next_ext = &next_ent->en_sel_ext;
 		current = next;
 		next = current->next;
 		/* NB: Three possibilities
@@ -453,45 +568,63 @@ evt_uncover_entries(struct evt_context *tcx, struct evt_entry_list *ent_list,
 		 * 4. Current entry contains next_entry.  Current is split
 		 * in two and both are truncated.
 		 */
-		if (next_rect->rc_off_lo >= this_rect->rc_off_hi + 1) {
+		if (next_ext->ex_lo >= this_ext->ex_hi + 1) {
 			/* Case #1, entry already inserted, nothing to do */
-		} else if (next_rect->rc_epc < this_rect->rc_epc) {
+			continue;
+		}
+
+		/* allocate a record for truncated entry */
+		rc = ent_array_alloc(tcx, ent_array, &temp_ent, true);
+		if (rc != 0)
+			return rc;
+
+		if (next_ent->en_epoch < this_ent->en_epoch) {
 			/* Case #2, next rect is partially under this rect,
 			 * Truncate left end of next_rec, reinsert.
 			 */
-			ptr = &next_ent->en_ptr;
-			diff = this_rect->rc_off_hi + 1 - next_rect->rc_off_lo;
-			next_rect->rc_off_lo = this_rect->rc_off_hi + 1;
-			ptr->pt_ex_addr.ba_off +=
-				diff * ptr->pt_inob;
+			*temp_ent = *next_ent;
+			temp_ent->en_visibility = EVT_COVERED | EVT_PARTIAL;
+			next_ent->en_visibility |= EVT_PARTIAL;
+			diff = this_ext->ex_hi + 1 - next_ext->ex_lo;
+			next_ext->ex_lo = this_ext->ex_hi + 1;
+			temp_ent->en_sel_ext.ex_hi = next_ext->ex_lo - 1;
+			evt_ent_addr_update(tcx, next_ent, diff);
 			/* current now points at next_ent.  Remove it and
 			 * reinsert it in the list in case truncation moved
 			 * it to a new position
 			 */
 			d_list_del(current);
-			next = evt_insert_sorted(next_ent, covered, next);
-			/* Reset the flag bit */
-			ptr->pt_inob |= flag_bit;
+			next = evt_insert_sorted(next_ent, &covered, next);
 
 			/* Now we need to rerun this iteration without
 			 * inserting this_ent again
 			 */
 			insert = false;
-		} else if (next_rect->rc_off_hi >= this_rect->rc_off_hi) {
+		} else if (next_ext->ex_hi >= this_ext->ex_hi) {
 			/* Case #3, truncate entry */
-			this_rect->rc_off_hi = next_rect->rc_off_lo - 1;
+			*temp_ent = *this_ent;
+			temp_ent->en_visibility = EVT_COVERED | EVT_PARTIAL;
+			this_ent->en_visibility |= EVT_PARTIAL;
+			this_ext->ex_hi = next_ext->ex_lo - 1;
+			temp_ent->en_sel_ext.ex_lo = next_ext->ex_lo;
+			evt_ent_addr_update(tcx, temp_ent,
+					    evt_extent_width(this_ext));
 		} else {
+			rc = ent_array_alloc(tcx, ent_array, &split, true);
+			if (rc != 0)
+				return rc;
 			/* Case #4, split, insert tail into sorted list */
-			temp_ent = evt_get_unused_entry(tcx, ent_list, &unused);
-			if (temp_ent == NULL)
-				return -DER_NOMEM;
-			evt_split_entry(this_ent, next_ent, temp_ent);
+			evt_split_entry(tcx, this_ent, next_ent, split,
+					temp_ent);
 			/* Current points at next_ent */
-			next = evt_insert_sorted(temp_ent, covered, next);
+			next = evt_insert_sorted(split, &covered, next);
 		}
 	}
 
-	d_list_move_tail(current, &ent_list->el_list);
+	this_ent = evt_array_get_list_entry(current);
+	D_ASSERT(!evt_flags_equal(this_ent->en_visibility, EVT_COVERED));
+	this_ent->en_visibility |= EVT_VISIBLE;
+	(*num_visible)++;
 
 	return 0;
 }
@@ -501,33 +634,62 @@ evt_uncover_entries(struct evt_context *tcx, struct evt_entry_list *ent_list,
  * and place them in the main list.   Update the selection bounds for visible
  * rectangles.
  */
-static int
-evt_ent_list_sort(struct evt_context *tcx, struct evt_entry_list *ent_list,
-		  d_list_t *covered)
+int
+evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
+		   int flags)
 {
-	struct evt_entry	*ents;
-	uint32_t		 i;
+	struct evt_list_entry	*ents;
+	struct evt_entry	*ent;
+	int			(*compar)(const void *, const void *);
+	int			 total;
+	int			 num_visible;
+	int			 rc;
 
-	D_INIT_LIST_HEAD(covered);
-
-	if (ent_list->el_ent_nr == 0)
+	if (ent_array->ea_ent_nr == 0)
 		return 0;
 
-	ents = ent_list->el_ents;
-	if (ent_list->el_ent_nr == 1) {
-		d_list_add_tail(&ents[0].en_link, &ent_list->el_list);
-		return 0;
+	if (ent_array->ea_ent_nr == 1) {
+		ent = evt_ent_array_get(ent_array, 0);
+		ent->en_visibility = EVT_VISIBLE;
+		num_visible = 1;
+		goto re_sort;
 	}
 
-	/* Sort the array first */
-	qsort(ents, ent_list->el_ent_nr, sizeof(ents[0]), evt_ent_cmp);
+start_over:
+	ents = ent_array->ea_ents;
 
-	/* Now place all entries sorted in covered list */
-	for (i = 0; i < ent_list->el_ent_nr; i++)
-		d_list_add_tail(&ents[i].en_link, covered);
+	/* Sort the array first */
+	qsort(ents, ent_array->ea_ent_nr, sizeof(ents[0]), evt_ent_list_cmp);
 
 	/* Now separate entries into covered and visible */
-	return evt_uncover_entries(tcx, ent_list, covered);
+	rc = evt_find_visible(tcx, ent_array, &num_visible);
+
+	if (rc == -DER_NOMEM)
+		return rc;
+
+	/* Lists invalidated */
+	if (rc == -DER_AGAIN)
+		goto start_over;
+
+re_sort:
+	ents = ent_array->ea_ents;
+	total = ent_array->ea_ent_nr;
+	compar = evt_ent_list_cmp;
+	/* Now re-sort the entries */
+	if (evt_flags_equal(flags, EVT_VISIBLE)) {
+		compar = evt_ent_list_cmp_visible;
+		total = num_visible;
+	} else if (evt_flags_equal(flags, EVT_COVERED)) {
+		compar = evt_ent_list_cmp_covered;
+		total = ent_array->ea_ent_nr - num_visible;
+	}
+
+	if (ent_array->ea_ent_nr != 1)
+		qsort(ents, ent_array->ea_ent_nr, sizeof(ents[0]), compar);
+
+	ent_array->ea_ent_nr = total;
+
+	return 0;
 }
 
 daos_handle_t
@@ -650,11 +812,16 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 	} else {
 		tcx->tc_feats	= root->tr_feats;
 		tcx->tc_order	= root->tr_order;
+		tcx->tc_inob	= root->tr_inob;
 		depth		= root->tr_depth;
 		D_DEBUG(DB_TRACE, "Load tree context from "TMMID_PF"\n",
 			TMMID_P(root_mmid));
 	}
 
+	/* Initialize the embedded iterator entry array.  This is a minor
+	 * optimization if the iterator is used more than once
+	 */
+	evt_ent_array_init(&tcx->tc_iter.it_entries);
 	evt_tcx_set_dep(tcx, depth);
 	*tcx_pp = tcx;
 	return 0;
@@ -680,38 +847,8 @@ evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
 	return rc;
 }
 
-/**
- * Create a data pointer for extent address @mmid. It allocates buffer
- * if @mmid is NULL.
- *
- * \param addr		[IN]	Optional, address of the external buffer
- * \param idx_nob	[IN]	Number Of Bytes per index
- * \param idx_num	[IN]	Indicies within the extent
- * \param ptr_mmid_p	[OUT]	The returned memory ID of extent pointer.
- */
 static int
-evt_ptr_init(struct evt_context *tcx, uuid_t cookie, uint32_t pm_ver,
-	     bio_addr_t addr, uint32_t idx_nob, uint64_t idx_num,
-	     struct evt_ptr *ptr)
-{
-	D_ASSERT(idx_num > 0);
-	D_ASSERTF((idx_nob && !bio_addr_is_hole(&addr)) ||
-		  (!idx_nob && bio_addr_is_hole(&addr)), "nob: %u hole: %d\n",
-		  idx_nob, bio_addr_is_hole(&addr));
-
-	memset(ptr, 0, sizeof(*ptr));
-
-	ptr->pt_inob = idx_nob;
-	ptr->pt_inum = idx_num;
-	uuid_copy(ptr->pt_cookie, cookie);
-	ptr->pt_ver = pm_ver;
-	ptr->pt_ex_addr = addr;
-
-	return 0;
-}
-
-static int
-evt_ptr_free(struct evt_context *tcx, struct evt_ptr *ptr)
+evt_ptr_free(struct evt_context *tcx, struct evt_ptr *ptr, daos_size_t size)
 {
 	bio_addr_t	*addr = &ptr->pt_ex_addr;
 	int		 rc = 0;
@@ -734,7 +871,7 @@ evt_ptr_free(struct evt_context *tcx, struct evt_ptr *ptr)
 		D_ASSERT(vsi != NULL);
 
 		blk_off = vos_byte2blkoff(addr->ba_off);
-		blk_cnt = vos_byte2blkcnt(ptr->pt_inum * ptr->pt_inob);
+		blk_cnt = vos_byte2blkcnt(size);
 
 		rc = vea_free(vsi, blk_off, blk_cnt);
 		if (rc)
@@ -931,6 +1068,7 @@ evt_node_destroy(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 {
 	struct evt_node_entry	*ne;
 	struct evt_node		*nd;
+	struct evt_rect		*rect;
 	bool			 leaf;
 	int			 i;
 	int			 rc = 0;
@@ -943,9 +1081,11 @@ evt_node_destroy(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 
 	for (i = 0; i < nd->tn_nr; i++) {
 		ne = evt_node_entry_at(tcx, nd_mmid, i);
+		rect = evt_node_rect_at(tcx, nd_mmid, i);
 		if (leaf) {
 			/* NB: This will be replaced with a callback */
-			rc = evt_ptr_free(tcx, evt_tmmid2ptr(tcx, ne->ne_ptr));
+			rc = evt_ptr_free(tcx, evt_tmmid2ptr(tcx, ne->ne_ptr),
+					  tcx->tc_inob * evt_rect_width(rect));
 			if (rc != 0)
 				return rc;
 			rc = umem_free_typed(evt_umm(tcx), ne->ne_ptr);
@@ -1023,7 +1163,7 @@ evt_node_split(struct evt_context *tcx, bool leaf,
  */
 static int
 evt_node_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
-		TMMID(struct evt_node) in_mmid, struct evt_entry *ent,
+		TMMID(struct evt_node) in_mmid, const struct evt_entry_in *ent,
 		bool *mbr_changed)
 {
 	struct evt_rect *mbr;
@@ -1035,15 +1175,15 @@ evt_node_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	mbr = evt_node_mbr_get(tcx, nd_mmid);
 
 	D_DEBUG(DB_TRACE, "Insert "DF_RECT" into "DF_RECT"("TMMID_PF")\n",
-		DP_RECT(&ent->en_rect), DP_RECT(mbr), TMMID_P(nd_mmid));
+		DP_RECT(&ent->ei_rect), DP_RECT(mbr), TMMID_P(nd_mmid));
 
 	rc = tcx->tc_ops->po_insert(tcx, nd_mmid, in_mmid, ent);
 	if (rc == 0) {
 		if (nd->tn_nr == 1) {
-			nd->tn_mbr = ent->en_rect;
+			nd->tn_mbr = ent->ei_rect;
 			changed = true;
 		} else {
-			changed = evt_rect_merge(&nd->tn_mbr, &ent->en_rect);
+			changed = evt_rect_merge(&nd->tn_mbr, &ent->ei_rect);
 		}
 		D_DEBUG(DB_TRACE, "New MBR is "DF_RECT", nr=%d\n",
 			DP_RECT(mbr), nd->tn_nr);
@@ -1064,7 +1204,8 @@ evt_node_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
  */
 static void
 evt_node_weight_diff(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
-		     struct evt_rect *rect, struct evt_weight *weight_diff)
+		     const struct evt_rect *rect,
+		     struct evt_weight *weight_diff)
 {
 	struct evt_node	  *nd = evt_tmmid2ptr(tcx, nd_mmid);
 	struct evt_rect	   rtmp;
@@ -1174,7 +1315,7 @@ out:
  * tree depth to one.
  */
 static int
-evt_root_activate(struct evt_context *tcx)
+evt_root_activate(struct evt_context *tcx, uint32_t inob)
 {
 	struct evt_root		*root;
 	TMMID(struct evt_node)	 nd_mmid;
@@ -1196,9 +1337,12 @@ evt_root_activate(struct evt_context *tcx)
 
 	root->tr_node = nd_mmid;
 	root->tr_depth = 1;
+	if (inob != 0)
+		tcx->tc_inob = root->tr_inob = inob;
 
 	evt_tcx_set_dep(tcx, root->tr_depth);
 	evt_tcx_set_trace(tcx, 0, nd_mmid, 0);
+
 	return 0;
 }
 
@@ -1243,7 +1387,7 @@ evt_root_destroy(struct evt_context *tcx)
 
 /** Select a node from two for the rectangle \a rect being inserted */
 static TMMID(struct evt_node)
-evt_select_node(struct evt_context *tcx, struct evt_rect *rect,
+evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
 		TMMID(struct evt_node) nd_mmid1,
 		TMMID(struct evt_node) nd_mmid2)
 {
@@ -1264,11 +1408,11 @@ evt_select_node(struct evt_context *tcx, struct evt_rect *rect,
  * parent is also full.
  */
 static int
-evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
+evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 {
 	TMMID(struct evt_node)	 nm_save  = TMMID_NULL(struct evt_node);
 	struct evt_rect		*mbr	  = NULL;
-	struct evt_entry	 entry	  = *ent_new;
+	struct evt_entry_in	 entry	  = *ent_new;
 	int			 rc	  = 0;
 	int			 level	  = tcx->tc_depth - 1;
 	bool			 mbr_changed = false;
@@ -1343,7 +1487,7 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 		/* choose a node for insert between the current node and the
 		 * new created node.
 		 */
-		nm_ins = evt_select_node(tcx, &entry.en_rect, nm_cur, nm_new);
+		nm_ins = evt_select_node(tcx, &entry.ei_rect, nm_cur, nm_new);
 		rc = evt_node_insert(tcx, nm_ins, nm_save, &entry, NULL);
 		if (rc != 0)
 			D_GOTO(failed, rc);
@@ -1353,7 +1497,7 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 		 * - If the current node is root, create a new root
 		 */
 		nm_save = nm_new;
-		entry.en_rect = *evt_node_mbr_get(tcx, nm_new);
+		entry.ei_rect = *evt_node_mbr_get(tcx, nm_new);
 		if (level != 0) { /* not root */
 			level--;
 			/* After splitting, MBR of the current node has been
@@ -1396,7 +1540,7 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 		/* continue the loop and insert the original root node into
 		 * the new root node.
 		 */
-		entry.en_rect = *evt_node_mbr_get(tcx, nm_cur);
+		entry.ei_rect = *evt_node_mbr_get(tcx, nm_cur);
 		nm_save = nm_cur;
 	}
  out:
@@ -1408,14 +1552,14 @@ evt_insert_or_split(struct evt_context *tcx, struct evt_entry *ent_new)
 
 /** Insert a single entry to evtree */
 static int
-evt_insert_entry(struct evt_context *tcx, struct evt_entry *ent)
+evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 {
 	TMMID(struct evt_node)	 nd_mmid;
 	int			 level;
 	int			 i;
 
 	D_DEBUG(DB_TRACE, "Inserting rectangle "DF_RECT"\n",
-		DP_RECT(&ent->en_rect));
+		DP_RECT(&ent->ei_rect));
 
 	evt_tcx_reset_trace(tcx);
 	nd_mmid = tcx->tc_trace->tr_node; /* NB: trace points at root node */
@@ -1441,7 +1585,7 @@ evt_insert_entry(struct evt_context *tcx, struct evt_entry *ent)
 			if (TMMID_IS_NULL(nm_dst)) {
 				nm_dst = nm_cur;
 			} else {
-				nm_dst = evt_select_node(tcx, &ent->en_rect,
+				nm_dst = evt_select_node(tcx, &ent->ei_rect,
 							 nm_dst, nm_cur);
 			}
 
@@ -1461,24 +1605,27 @@ evt_insert_entry(struct evt_context *tcx, struct evt_entry *ent)
 }
 
 static void
-evt_ptr_copy(struct evt_context *tcx, struct evt_ptr *src_ptr)
+evt_ptr_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 {
 	struct evt_ptr		*dst_ptr;
 	struct evt_trace	*trace;
 	TMMID(struct evt_node)	 nd_mmid;
+	daos_size_t		 size;
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	nd_mmid = trace->tr_node;
 	dst_ptr = evt_node_ptr_at(tcx, nd_mmid, trace->tr_at);
 
-	D_DEBUG(DB_IO, "dst num="DF_U64", nob=%d, src num="DF_U64", nob=%d\n",
-		dst_ptr->pt_inum, dst_ptr->pt_inob,
-		src_ptr->pt_inum, src_ptr->pt_inob);
+	D_ASSERT(ent->ei_inob != 0);
+	size = ent->ei_inob * evt_rect_width(&ent->ei_rect);
 
 	/* Free the pmem that dst_ptr references */
-	evt_ptr_free(tcx, dst_ptr);
+	evt_ptr_free(tcx, dst_ptr, size);
 
-	memcpy(dst_ptr, src_ptr, sizeof(*dst_ptr));
+	uuid_copy(dst_ptr->pt_cookie, ent->ei_cookie);
+	dst_ptr->pt_ex_addr = ent->ei_addr;
+	dst_ptr->pt_ver = ent->ei_ver;
+	dst_ptr->pt_csum = ent->ei_csum;
 }
 
 /**
@@ -1487,56 +1634,59 @@ evt_ptr_copy(struct evt_context *tcx, struct evt_ptr *src_ptr)
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
-	   struct evt_rect *rect, uint32_t inob, bio_addr_t addr)
+evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 {
 	struct evt_context	*tcx;
-	struct evt_entry_list	 ent_list;
-	struct evt_entry	 ent;
+	struct evt_entry_array	 ent_array;
 	int			 rc;
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	evt_ent_list_init(&ent_list);
+	if (tcx->tc_inob && entry->ei_inob && tcx->tc_inob != entry->ei_inob) {
+		D_ERROR("Variable record size not supported in evtree:"
+			" %d != %d\n", entry->ei_inob, tcx->tc_inob);
+		return -DER_INVAL;
+	}
 
-	memset(&ent, 0, sizeof(ent));
-	ent.en_rect = *rect;
+	evt_ent_array_init(&ent_array);
 
 	/* Phase-1: Check for overwrite */
-	rc = evt_find_ent_list(tcx, EVT_FIND_OVERWRITE, &ent.en_rect,
-			       &ent_list);
+	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, NULL, &entry->ei_rect,
+				&ent_array);
 	if (rc != 0)
 		return rc;
-
-	evt_ptr_init(tcx, cookie, pm_ver, addr, inob,
-		     evt_rect_width(&ent.en_rect), &ent.en_ptr);
 
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
 
 	if (tcx->tc_depth == 0) { /* empty tree */
-		rc = evt_root_activate(tcx);
+		rc = evt_root_activate(tcx, entry->ei_inob);
 		if (rc != 0)
 			goto out;
+	} else if (tcx->tc_inob == 0 && entry->ei_inob != 0) {
+		rc = evt_root_tx_add(tcx);
+		if (rc != 0)
+			goto out;
+		tcx->tc_inob = tcx->tc_root->tr_inob = entry->ei_inob;
 	}
 
-	D_ASSERT(ent_list.el_ent_nr <= 1);
-	if (ent_list.el_ent_nr == 1) {
+	D_ASSERT(ent_array.ea_ent_nr <= 1);
+	if (ent_array.ea_ent_nr == 1) {
 		/*
 		 * NB: This is part of the current hack to keep "supporting"
 		 * overwrite for same epoch, full overwrite.
 		 */
-		evt_ptr_copy(tcx, &ent.en_ptr);
+		evt_ptr_copy(tcx, entry);
 		goto out;
 	}
 
 	/* Phase-2: Inserting */
-	rc = evt_insert_entry(tcx, &ent);
+	rc = evt_insert_entry(tcx, entry);
 
-	/* No need for evt_find_ent_list_fini as there will be no allocations
+	/* No need for evt_ent_array_fill as there will be no allocations
 	 * with 1 entry in the list
 	 */
 out:
@@ -1545,8 +1695,8 @@ out:
 
 /** Fill the entry with the extent at the specified position of \a nd_mmid */
 void
-evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
-	       unsigned int at, struct evt_rect *rect_srch,
+evt_entry_fill(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
+	       unsigned int at, const struct evt_rect *rect_srch,
 	       struct evt_entry *entry)
 {
 	struct evt_ptr	   *ptr;
@@ -1561,48 +1711,55 @@ evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	offset = 0;
 	width = evt_rect_width(rect);
 
-	if (rect_srch && rect_srch->rc_off_lo > rect->rc_off_lo) {
-		offset = rect_srch->rc_off_lo - rect->rc_off_lo;
+	entry->en_visibility = 0; /* Unknown */
+
+	if (rect_srch && rect_srch->rc_ex.ex_lo > rect->rc_ex.ex_lo) {
+		offset = rect_srch->rc_ex.ex_lo - rect->rc_ex.ex_lo;
 		D_ASSERTF(width > offset, DF_U64"/"DF_U64"\n", width, offset);
 		width -= offset;
+		entry->en_visibility = EVT_PARTIAL;
 	}
 
-	if (rect_srch && rect_srch->rc_off_hi < rect->rc_off_hi) {
-		nr = rect->rc_off_hi - rect_srch->rc_off_hi;
+	if (rect_srch && rect_srch->rc_ex.ex_hi < rect->rc_ex.ex_hi) {
+		nr = rect->rc_ex.ex_hi - rect_srch->rc_ex.ex_hi;
 		D_ASSERTF(width > nr, DF_U64"/"DF_U64"\n", width, nr);
 		width -= nr;
+		entry->en_visibility = EVT_PARTIAL;
 	}
 
-	entry->en_rect = entry->en_sel_rect = *rect;
-	entry->en_sel_rect.rc_off_lo += offset;
-	entry->en_sel_rect.rc_off_hi = entry->en_sel_rect.rc_off_lo + width - 1;
+	entry->en_epoch = rect->rc_epc;
+	entry->en_ext = entry->en_sel_ext = rect->rc_ex;
+	entry->en_sel_ext.ex_lo += offset;
+	entry->en_sel_ext.ex_hi = entry->en_sel_ext.ex_lo + width - 1;
 
-	entry->en_ptr = *ptr;
-	ptr = &entry->en_ptr; /* We have the data cached, so use it now */
+	entry->en_addr = ptr->pt_ex_addr;
+	uuid_copy(entry->en_cookie, ptr->pt_cookie);
+	entry->en_ver = ptr->pt_ver;
+	entry->en_csum = ptr->pt_csum;
 
-	if (offset != 0 && !bio_addr_is_hole(&ptr->pt_ex_addr)) {
-		D_ASSERT(ptr->pt_inob != 0); /* Ensure not punched */
+	if (offset != 0) {
 		/* Adjust cached pointer since we're only referencing a
 		 * part of the extent
 		 */
-		ptr->pt_ex_addr.ba_off += offset * ptr->pt_inob;
+		evt_ent_addr_update(tcx, entry, offset);
 	}
 }
 
 /**
  * Find all versioned extents which intercept with the input one \a rect.
- * It attaches all found extents and their data pointers on \a ent_list if
+ * It attaches all found extents and their data pointers on \a ent_array if
  * \a no_overlap is false, otherwise returns error if there is any overlapped
  * extent.
  *
  * \param rect		[IN]	Rectangle to check.
  * \param no_overlap	[IN]	Returns error if \a rect overlap with any
  *				existent extent.
- * \param ent_list	[OUT]	The returned entries for overlapped extents.
+ * \param ent_array	[OUT]	The returned entries for overlapped extents.
  */
 int
-evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
-		  struct evt_rect *rect, struct evt_entry_list *ent_list)
+evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
+		   const struct evt_filter *filter, const struct evt_rect *rect,
+		   struct evt_entry_array *ent_array)
 {
 	TMMID(struct evt_node)	 nd_mmid;
 	int			 level;
@@ -1615,6 +1772,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
+	ent_array_reset(tcx, ent_array);
 	evt_tcx_reset_trace(tcx);
 
 	level = at = 0;
@@ -1642,6 +1800,9 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 			rtmp = evt_node_rect_at(tcx, nd_mmid, i);
 			D_DEBUG(DB_TRACE, " rect[%d]="DF_RECT"\n",
 				i, DP_RECT(rtmp));
+
+			if (evt_filter_rect(filter, rtmp))
+				continue; /* Doesn't match the filter */
 
 			evt_rect_overlap(rtmp, rect, &range_overlap,
 					 &time_overlap);
@@ -1717,11 +1878,13 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 				break;
 			}
 
-			ent = evt_ent_list_alloc(tcx, ent_list);
-			if (ent == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
+			rc = ent_array_alloc(tcx, ent_array, &ent, false);
+			if (rc != 0) {
+				D_ASSERT(rc != -DER_AGAIN);
+				goto out;
+			}
 
-			evt_fill_entry(tcx, nd_mmid, i, rect, ent);
+			evt_entry_fill(tcx, nd_mmid, i, rect, ent);
 			switch (find_opc) {
 			default:
 				D_ASSERTF(0, "%d\n", find_opc);
@@ -1752,7 +1915,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 			if (level == 0) { /* done with the root */
 				D_DEBUG(DB_TRACE, "Found total %d rects\n",
-					ent_list ? ent_list->el_ent_nr : 0);
+					ent_array ? ent_array->ea_ent_nr : 0);
 				return 0; /* succeed and return */
 			}
 
@@ -1765,7 +1928,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 	}
 out:
 	if (rc != 0)
-		evt_ent_list_fini(ent_list);
+		evt_ent_array_fini(ent_array);
 
 	return rc;
 }
@@ -1777,7 +1940,7 @@ struct evt_max_rect {
 };
 
 static bool
-saved_rect_is_greater(struct evt_max_rect *saved, struct evt_rect *r2)
+saved_rect_is_greater(struct evt_max_rect *saved, struct evt_entry *ent)
 {
 	struct evt_rect	*r1;
 	bool		 is_greater = false;
@@ -1787,17 +1950,17 @@ saved_rect_is_greater(struct evt_max_rect *saved, struct evt_rect *r2)
 
 	r1 = &saved->mr_rect;
 
-	D_DEBUG(DB_TRACE, "Comparing saved "DF_RECT" to "DF_RECT"\n",
-		DP_RECT(r1), DP_RECT(r2));
-	if (r1->rc_off_hi > r2->rc_off_hi) {
+	D_DEBUG(DB_TRACE, "Comparing saved "DF_RECT" to "DF_ENT"\n",
+		DP_RECT(r1), DP_ENT(ent));
+	if (r1->rc_ex.ex_hi > ent->en_sel_ext.ex_hi) {
 		is_greater = true;
 		goto out;
 	}
 
-	if (r1->rc_off_hi < r2->rc_off_hi)
+	if (r1->rc_ex.ex_hi < ent->en_sel_ext.ex_hi)
 		goto out;
 
-	if (r1->rc_epc > r2->rc_epc)
+	if (r1->rc_epc > ent->en_epoch)
 		is_greater = true;
 
 out:
@@ -1805,14 +1968,14 @@ out:
 	 * selected if the chosen rectangle is partially covered
 	 */
 	if (is_greater) {
-		if (r2->rc_epc > r1->rc_epc) {
-			if (r2->rc_off_hi >= r1->rc_off_lo)
-				r1->rc_off_lo = r2->rc_off_hi + 1;
+		if (ent->en_epoch > r1->rc_epc) {
+			if (ent->en_sel_ext.ex_hi >= r1->rc_ex.ex_lo)
+				r1->rc_ex.ex_lo = ent->en_sel_ext.ex_hi + 1;
 		}
 	} else {
-		if (r1->rc_epc > r2->rc_epc) {
-			if (r1->rc_off_hi >= r2->rc_off_lo)
-				r2->rc_off_lo = r1->rc_off_hi + 1;
+		if (r1->rc_epc > ent->en_epoch) {
+			if (r1->rc_ex.ex_hi >= ent->en_sel_ext.ex_lo)
+				ent->en_sel_ext.ex_lo = r1->rc_ex.ex_hi + 1;
 		}
 	}
 	return is_greater;
@@ -1844,8 +2007,8 @@ evt_get_size(daos_handle_t toh, daos_epoch_t epoch, daos_size_t *size)
 	/* Start with the whole range.  We'll repeat the algorithm until we
 	 * either we find nothing or we find a non-punched rectangle.
 	 */
-	rect.rc_off_lo = 0;
-	rect.rc_off_hi = (daos_off_t)-1;
+	rect.rc_ex.ex_lo = 0;
+	rect.rc_ex.ex_hi = (daos_off_t)-1;
 	rect.rc_epc = epoch;
 
 	if (tcx->tc_root->tr_depth == 0)
@@ -1901,21 +2064,21 @@ try_again:
 			}
 
 			memset(&ent, 0, sizeof(ent));
-			evt_fill_entry(tcx, nd_mmid, i, &rect, &ent);
+			evt_entry_fill(tcx, nd_mmid, i, &rect, &ent);
 
 			/* Ok, now that we've potentially trimmed the rectangle
 			 * in ent, let's do the check again
 			 */
-			if (saved_rect_is_greater(&saved_rect,
-						  &ent.en_sel_rect))
+			if (saved_rect_is_greater(&saved_rect, &ent))
 				continue;
 
 			saved_rect.mr_valid = true;
-			if (bio_addr_is_hole(&ent.en_ptr.pt_ex_addr))
+			if (bio_addr_is_hole(&ent.en_addr))
 				saved_rect.mr_punched = true;
 			else
 				saved_rect.mr_punched = false;
-			saved_rect.mr_rect = ent.en_sel_rect;
+			saved_rect.mr_rect.rc_epc = ent.en_epoch;
+			saved_rect.mr_rect.rc_ex = ent.en_sel_ext;
 
 			D_DEBUG(DB_TRACE, "New saved rectangle "DF_RECT
 				" punched? : %s\n",
@@ -1940,7 +2103,7 @@ try_again:
 				if (!saved_rect.mr_valid)
 					return 0;
 
-				old = saved_rect.mr_rect.rc_off_lo;
+				old = saved_rect.mr_rect.rc_ex.ex_lo;
 
 				if (saved_rect.mr_punched) {
 					D_DEBUG(DB_TRACE,
@@ -1949,11 +2112,11 @@ try_again:
 						DP_RECT(&saved_rect.mr_rect));
 					if (old == 0)
 						return 0;
-					rect.rc_off_hi = old - 1;
+					rect.rc_ex.ex_hi = old - 1;
 
 					goto try_again;
 				}
-				*size = saved_rect.mr_rect.rc_off_hi + 1;
+				*size = saved_rect.mr_rect.rc_ex.ex_hi + 1;
 				break;
 			}
 
@@ -1976,28 +2139,28 @@ try_again:
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_find(daos_handle_t toh, struct evt_rect *rect,
-	 struct evt_entry_list *ent_list, d_list_t *covered)
+evt_find(daos_handle_t toh, const struct evt_rect *rect,
+	 struct evt_entry_array *ent_array)
 {
-	struct evt_context *tcx;
-	int		    rc;
+	struct evt_context	*tcx;
+	int			 rc;
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	evt_ent_list_init(ent_list);
-	rc = evt_find_ent_list(tcx, EVT_FIND_ALL, rect, ent_list);
-	if (rc == 0 && covered != NULL)
-		rc = evt_ent_list_sort(tcx, ent_list, covered);
+	evt_ent_array_init(ent_array);
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, NULL, rect, ent_array);
+	if (rc == 0)
+		rc = evt_ent_array_sort(tcx, ent_array, EVT_VISIBLE);
 	if (rc != 0)
-		evt_ent_list_fini(ent_list);
+		evt_ent_array_fini(ent_array);
 	return rc;
 }
 
 /** move the probing trace forward or backward */
 bool
-evt_move_trace(struct evt_context *tcx, bool forward, daos_epoch_range_t *epr)
+evt_move_trace(struct evt_context *tcx, bool forward)
 {
 	struct evt_trace	*trace;
 	struct evt_node		*nd;
@@ -2007,7 +2170,6 @@ evt_move_trace(struct evt_context *tcx, bool forward, daos_epoch_range_t *epr)
 		return false;
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-next:
 	while (1) {
 		nd_mmid = trace->tr_node;
 		nd = evt_tmmid2ptr(tcx, nd_mmid);
@@ -2043,15 +2205,6 @@ next:
 		trace++;
 		trace->tr_at = forward ? 0 : nd->tn_nr - 1;
 		trace->tr_node = tmp;
-	}
-
-	if (epr != NULL) {
-		struct evt_rect *rect;
-
-		rect = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
-		if (rect->rc_epc < epr->epr_lo ||
-		    rect->rc_epc > epr->epr_hi)
-			goto next;
 	}
 
 	return true;
@@ -2323,12 +2476,12 @@ static int
 evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *rt1,
 		  const struct evt_rect *rt2)
 {
-	return evt_cmp_rect_helper(rt1, rt2);
+	return evt_rect_cmp(rt1, rt2);
 }
 
 static int
 evt_ssof_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
-		TMMID(struct evt_node) in_mmid, struct evt_entry *ent)
+		TMMID(struct evt_node) in_mmid, const struct evt_entry_in *ent)
 {
 	struct evt_node		*nd   = evt_tmmid2ptr(tcx, nd_mmid);
 	struct evt_node_entry	*ne = NULL;
@@ -2345,7 +2498,7 @@ evt_ssof_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		int	nr;
 
 		ne = evt_node_entry_at(tcx, nd_mmid, i);
-		rc = evt_ssof_cmp_rect(tcx, &ne->ne_rect, &ent->en_rect);
+		rc = evt_ssof_cmp_rect(tcx, &ne->ne_rect, &ent->ei_rect);
 		if (rc < 0)
 			continue;
 
@@ -2358,7 +2511,7 @@ evt_ssof_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		ne = evt_node_entry_at(tcx, nd_mmid, nd->tn_nr);
 	}
 
-	ne->ne_rect = ent->en_rect;
+	ne->ne_rect = ent->ei_rect;
 	if (leaf) {
 		struct evt_ptr	*ptr;
 
@@ -2367,7 +2520,10 @@ evt_ssof_insert(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		if (TMMID_IS_NULL(ne->ne_ptr))
 			return -DER_NOMEM;
 		ptr = evt_tmmid2ptr(tcx, ne->ne_ptr);
-		*ptr = ent->en_ptr;
+		ptr->pt_ex_addr = ent->ei_addr;
+		ptr->pt_csum = ent->ei_csum;
+		ptr->pt_ver = ent->ei_ver;
+		uuid_copy(ptr->pt_cookie, ent->ei_cookie);
 	} else {
 		ne->ne_node = in_mmid;
 	}
@@ -2406,11 +2562,11 @@ evt_ssof_split(struct evt_context *tcx, bool leaf,
 }
 
 static int
-evt_ssof_rect_weight(struct evt_context *tcx, struct evt_rect *rect,
+evt_ssof_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
 		     struct evt_weight *weight)
 {
 	memset(weight, 0, sizeof(*weight));
-	weight->wt_major = rect->rc_off_hi - rect->rc_off_lo;
+	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
 	/* NB: we don't consider about high epoch for SSOF because it's based
 	 * on assumption there is no overwrite.
 	 */
@@ -2595,10 +2751,11 @@ evt_node_delete(struct evt_context *tcx)
 	return 0;
 }
 
-int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent)
+int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
+	       struct evt_entry *ent)
 {
 	struct evt_context	*tcx;
-	struct evt_entry_list	 ent_list;
+	struct evt_entry_array	 ent_array;
 	int			 rc;
 
 	tcx = evt_hdl2tcx(toh);
@@ -2606,18 +2763,18 @@ int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent)
 		return -DER_NO_HDL;
 
 	/* NB: This function presently only supports exact match on extent. */
-	evt_ent_list_init(&ent_list);
+	evt_ent_array_init(&ent_array);
 
-	rc = evt_find_ent_list(tcx, EVT_FIND_SAME, rect, &ent_list);
+	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, NULL, rect, &ent_array);
 	if (rc != 0)
 		return rc;
 
-	if (ent_list.el_ent_nr == 0)
+	if (ent_array.ea_ent_nr == 0)
 		return -DER_ENOENT;
 
-	D_ASSERT(ent_list.el_ent_nr == 1);
+	D_ASSERT(ent_array.ea_ent_nr == 1);
 	if (ent != NULL)
-		*ent = ent_list.el_ents[0];
+		*ent = *evt_ent_array_get(&ent_array, 0);
 
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
@@ -2625,7 +2782,7 @@ int evt_delete(daos_handle_t toh, struct evt_rect *rect, struct evt_entry *ent)
 
 	rc = evt_node_delete(tcx);
 
-	/* No need for evt_find_ent_list_fini as there will be no allocations
+	/* No need for evt_ent_array_fill as there will be no allocations
 	 * with 1 entry in the list
 	 */
 	return evt_tx_end(tcx, rc);

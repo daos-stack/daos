@@ -43,11 +43,17 @@ enum evt_iter_state {
 
 struct evt_iterator {
 	/* Epoch range for the iterator */
-	daos_epoch_range_t		it_epr;
+	struct evt_filter		it_filter;
 	/** state of the iterator */
-	unsigned short			it_state;
-	/** iterator embedded in open handle */
-	bool				it_private;
+	unsigned int			it_state;
+	/** options for iterator */
+	unsigned int			it_options;
+	/** true if forward iterator */
+	bool				it_forward;
+	/** index */
+	int				it_index;
+	/** For sorted iterators */
+	struct evt_entry_array		it_entries;
 };
 
 #define EVT_TRACE_MAX                   32
@@ -71,9 +77,11 @@ struct evt_context {
 	/** refcount on the context */
 	unsigned int			 tc_ref;
 	/** cached tree order (reduce PMEM access) */
-	unsigned int			 tc_order;
+	uint16_t			 tc_order;
 	/** cached tree depth (reduce PMEM access) */
-	unsigned int			 tc_depth;
+	uint16_t			 tc_depth;
+	/** cached number of bytes per entry */
+	uint32_t			 tc_inob;
 	/** cached tree feature bits (reduce PMEM access) */
 	uint64_t			 tc_feats;
 	/** memory instance (PMEM or DRAM) */
@@ -121,6 +129,11 @@ enum evt_find_opc {
 	EVT_FIND_SAME,
 };
 
+/** Clone an evtree context
+ *
+ * \param[IN]	tcx	The context to clone
+ * \param[OUT]	tcx_pp	The new context
+ */
 int evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp);
 
 #define EVT_HDL_ALIVE	0xbabecafe
@@ -130,6 +143,8 @@ static inline void
 evt_tcx_addref(struct evt_context *tcx)
 {
 	tcx->tc_ref++;
+	if (tcx->tc_inob == 0)
+		tcx->tc_inob = tcx->tc_root->tr_inob;
 }
 
 static inline void
@@ -139,23 +154,126 @@ evt_tcx_decref(struct evt_context *tcx)
 	tcx->tc_ref--;
 	if (tcx->tc_ref == 0) {
 		tcx->tc_magic = EVT_HDL_DEAD;
+		/* Free any memory allocated by embedded iterator */
+		evt_ent_array_fini(&tcx->tc_iter.it_entries);
 		D_FREE(tcx);
 	}
 }
 
-daos_handle_t evt_tcx2hdl(struct evt_context *tcx);
-struct evt_context *evt_hdl2tcx(daos_handle_t toh);
-bool evt_move_trace(struct evt_context *tcx, bool forward,
-		    daos_epoch_range_t *epr);
+/** Return true if a rectangle doesn't intersect the filter
+ *
+ * \param[IN]	filter	The optional input filter
+ * \param[IN]	rect	The rectangle to check
+ */
+static inline bool
+evt_filter_rect(const struct evt_filter *filter, const struct evt_rect *rect)
+{
+	if (filter == NULL)
+		goto done;
 
+	if (filter->fr_epr.epr_hi < rect->rc_epc ||
+	    filter->fr_epr.epr_lo > rect->rc_epc ||
+	    filter->fr_ex.ex_lo > rect->rc_ex.ex_hi ||
+	    filter->fr_ex.ex_hi < rect->rc_ex.ex_lo)
+		return true; /* Rectangle is outside of filter */
+done:
+	return false;
+}
+
+/** Create an equivalent evt_rect from an evt_entry
+ *
+ * \param[OUT]	rect	The output rectangle
+ * \param[IN]	ent	The input entry
+ */
+static inline void
+evt_ent2rect(struct evt_rect *rect, const struct evt_entry *ent)
+{
+	rect->rc_ex = ent->en_sel_ext;
+	rect->rc_epc = ent->en_epoch;
+}
+
+/** Sort entries in an entry array
+ * \param[IN]		tcx		The evtree context
+ * \param[IN, OUT]	ent_array	The entry array to sort
+ * \param[IN]		flags		Visibility flags
+ *					EVT_VISIBLE: Return visible records
+ *					EVT_COVERED: Return covered records
+ * Returns 0 if successful, error otherwise.   The resulting array will
+ * be sorted by start offset, high epoch
+ */
+int evt_ent_array_sort(struct evt_context *tcx,
+		       struct evt_entry_array *ent_array, int flags);
+/** Scan the tree and select all rectangles that match
+ * \param[IN]		tcx		The evtree context
+ * \param[IN]		opc		The opcode for the scan
+ *					EVT_FIND_FIRST: First record only
+ *					EVT_FIND_SAME:  Same record only
+ *					EVT_FIND_ALL:   All records
+ * \param[IN]		filter		Filters for records
+ * \param[IN]		rect		The specific rectangle to match
+ * \param[IN,OUT]	ent_array	The initialized array to fill
+ *
+ * Returns 0 if successful, error otherwise.  The tree trace will point at last
+ * scanned record.
+ */
+int evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
+		       const struct evt_filter *filter,
+		       const struct evt_rect *rect,
+		       struct evt_entry_array *ent_array);
+
+/** Compare two rectanglesConvert a context to a daos_handle
+ * \param[IN]		rt1	The first rectangle
+ * \param[IN]		rt2	The second rectangle
+ *
+ * Returns < 0 if rt1 < rt2
+ * returns > 0 if rt1 > rt2
+ * returns 0 if equal
+ *
+ * Order is lower high offset, higher epoch, lower high offset
+ */
+int evt_rect_cmp(const struct evt_rect *rt1, const struct evt_rect *rt2);
+
+/** Convert a context to a daos_handle
+ * \param[IN]	tcx	The evtree context
+ *
+ * Returns the converted handle
+ */
+daos_handle_t evt_tcx2hdl(struct evt_context *tcx);
+
+/** Convert a handle to an evtree context
+ * \param[IN]	handle	The daos handle
+ *
+ * Returns the converted handle
+ */
+struct evt_context *evt_hdl2tcx(daos_handle_t toh);
+
+/** Move the trace forward or backward
+ * \param[IN]	tcx	The evtree context
+ * \param[IN]	forward	The direction to move
+ */
+bool evt_move_trace(struct evt_context *tcx, bool forward);
+
+/** Get a pointer to the rectangle corresponding to an index in a tree node
+ * \param[IN]	tcx	The evtree context
+ * \param[IN]	nd_mmid	The tree node
+ * \param[IN]	at	The index in the node
+ *
+ * Returns the rectangle at the index
+ */
 struct evt_rect *evt_node_rect_at(struct evt_context *tcx,
 				  TMMID(struct evt_node) nd_mmid,
 				  unsigned int at);
 
-void evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
-		    unsigned int at, struct evt_rect *rect_srch,
+/** Fill an evt_entry from the record at an index in a tree node
+ * \param[IN]	tcx		The evtree context
+ * \param[IN]	nd_mmid		The tree node
+ * \param[IN]	at		The index in the node
+ * \param[IN]	rect_srch	The original rectangle used for the search
+ * \param[OUT]	entry		The entry to fill
+ *
+ * The selected extent will be trimmed by the search rectangle used.
+ */
+void evt_entry_fill(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
+		    unsigned int at, const struct evt_rect *rect_srch,
 		    struct evt_entry *entry);
-int evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
-		      struct evt_rect *rect, struct evt_entry_list *ent_list);
-
 #endif /* __EVT_PRIV_H__ */

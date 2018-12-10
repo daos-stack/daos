@@ -758,6 +758,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 		  daos_key_t *akey)
 {
 	struct vos_object	*obj = oiter->it_obj;
+	struct evt_filter	 filter;
 	daos_handle_t		 dk_toh;
 	daos_handle_t		 ak_toh;
 	int			 rc;
@@ -773,7 +774,10 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 		D_GOTO(failed_1, rc);
 
 	recx_iter_adjust_epr(oiter, oiter->it_epc_expr);
-	rc = evt_iter_prepare(ak_toh, EVT_ITER_EMBEDDED, oiter->it_epr,
+	filter.fr_ex.ex_lo = 0;
+	filter.fr_ex.ex_hi = ~(0ULL);
+	filter.fr_epr = oiter->it_epr;
+	rc = evt_iter_prepare(ak_toh, EVT_ITER_EMBEDDED, &filter,
 			      &oiter->it_hdl);
 	if (rc != 0) {
 		D_DEBUG(DB_IO, "Cannot prepare recx iterator : %d\n", rc);
@@ -801,28 +805,28 @@ static int
 recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 		daos_anchor_t *anchor)
 {
-	struct evt_rect	 *rect;
-	struct evt_entry  entry;
-	int		  rc;
+	struct evt_extent	*ext;
+	struct evt_entry	 entry;
+	int			 rc;
+	unsigned int		 inob;
 
-	rc = evt_iter_fetch(oiter->it_hdl, &entry, anchor);
+	rc = evt_iter_fetch(oiter->it_hdl, &inob, &entry, anchor);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	memset(it_entry, 0, sizeof(*it_entry));
 
-	rect = &entry.en_rect;
-	it_entry->ie_epoch	 = rect->rc_epc;
-	it_entry->ie_recx.rx_idx = rect->rc_off_lo;
-	it_entry->ie_recx.rx_nr	 = rect->rc_off_hi - rect->rc_off_lo + 1;
-	it_entry->ie_rsize	 = entry.en_ptr.pt_inob;
-	uuid_copy(it_entry->ie_cookie, entry.en_ptr.pt_cookie);
-	it_entry->ie_ver	= entry.en_ptr.pt_ver;
-
+	ext = &entry.en_sel_ext;
+	it_entry->ie_epoch	 = entry.en_epoch;
+	it_entry->ie_recx.rx_idx = ext->ex_lo;
+	it_entry->ie_recx.rx_nr	 = evt_extent_width(ext);
+	it_entry->ie_rsize	 = bio_addr_is_hole(&entry.en_addr) ? 0 : inob;
+	uuid_copy(it_entry->ie_cookie, entry.en_cookie);
+	it_entry->ie_ver	= entry.en_ver;
 	it_entry->ie_biov.bi_buf = NULL;
 	it_entry->ie_biov.bi_data_len = it_entry->ie_recx.rx_nr *
 					it_entry->ie_rsize;
-	it_entry->ie_biov.bi_addr = entry.en_ptr.pt_ex_addr;
+	it_entry->ie_biov.bi_addr = entry.en_addr;
  out:
 	return rc;
 }
@@ -1025,6 +1029,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 			 struct vos_iterator **iter_pp)
 {
 	struct vos_obj_iter	*oiter;
+	struct evt_filter	 filter;
 	daos_handle_t		 toh;
 	int			 rc = 0;
 
@@ -1070,7 +1075,10 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 			goto failed;
 		}
 		recx_iter_adjust_epr(oiter, oiter->it_epc_expr);
-		rc = evt_iter_prepare(toh, EVT_ITER_EMBEDDED, oiter->it_epr,
+		filter.fr_ex.ex_lo = 0;
+		filter.fr_ex.ex_hi = ~(0ULL);
+		filter.fr_epr = oiter->it_epr;
+		rc = evt_iter_prepare(toh, EVT_ITER_EMBEDDED, &filter,
 				      &oiter->it_hdl);
 		break;
 	}
