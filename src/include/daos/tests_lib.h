@@ -63,6 +63,8 @@ daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint8_t ofeats,
 
 /** Set rank into the oid */
 #define dts_oid_set_rank(oid, rank)	daos_oclass_sr_set_rank(oid, rank)
+/** Set target offset into oid */
+#define dts_oid_set_tgt(oid, tgt)	daos_oclass_st_set_tgt(oid, tgt)
 
 /**
  * Create a random ordered integer array with \a nr elements, value of this

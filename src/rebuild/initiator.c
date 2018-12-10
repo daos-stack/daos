@@ -294,8 +294,8 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 }
 
 static int
-rebuild_rdone(struct rebuild_tgt_pool_tracker *rpt,
-	      struct rebuild_one *rdone)
+rebuild_dkey(struct rebuild_tgt_pool_tracker *rpt,
+	     struct rebuild_one *rdone)
 {
 	struct rebuild_pool_tls	*tls;
 	struct ds_cont		*rebuild_cont;
@@ -432,7 +432,7 @@ rebuild_one_ult(void *arg)
 		d_list_for_each_entry_safe(rdone, tmp, &rebuild_list, ro_list) {
 			d_list_del_init(&rdone->ro_list);
 			if (!rpt->rt_abort) {
-				rc = rebuild_rdone(rpt, rdone);
+				rc = rebuild_dkey(rpt, rdone);
 				D_DEBUG(DB_REBUILD, DF_UOID" rebuild dkey %d %s"
 					" rc %d tag %d rpt %p\n",
 					DP_UOID(rdone->ro_oid),

@@ -2129,6 +2129,9 @@ pool_find_all_targets_by_addr(uuid_t pool_uuid,
 			/* Can not locate the target in pool map, let's
 			 * add it to the output list
 			 */
+			D_WARN("Can not find %u/%d , add to out_list\n",
+				list->pta_addrs[i].pta_rank,
+				(int)list->pta_addrs[i].pta_target);
 			ret = pool_target_addr_list_append(out_list,
 						&list->pta_addrs[i]);
 			if (ret) {

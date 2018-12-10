@@ -188,7 +188,7 @@ typedef struct {
 	const uuid_t		uuid;
 	const char		*grp;
 	d_rank_list_t		*svc;
-	d_rank_list_t		*tgts;
+	struct d_tgt_list	*tgts;
 } daos_pool_update_t;
 
 typedef struct {

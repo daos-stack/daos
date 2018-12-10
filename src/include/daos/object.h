@@ -84,6 +84,21 @@ unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
 int daos_oclass_name2id(const char *name);
 
+/** bits for the specified rank */
+#define DAOS_OC_SR_SHIFT	24
+#define DAOS_OC_SR_BITS		8
+#define DAOS_OC_SR_MASK		\
+	(((1ULL << DAOS_OC_SR_BITS) - 1) << DAOS_OC_SR_SHIFT)
+
+/** bits for the specified target, Note: the target here means the target
+ * index inside the rank, and it only reserve 4 bits, so only specify 16th
+ * target maximum.
+ */
+#define DAOS_OC_ST_SHIFT	20
+#define DAOS_OC_ST_BITS		4
+#define DAOS_OC_ST_MASK		\
+	(((1ULL << DAOS_OC_ST_BITS) - 1) << DAOS_OC_ST_SHIFT)
+
 static inline d_rank_t
 daos_oclass_sr_get_rank(daos_obj_id_t oid)
 {
@@ -104,6 +119,29 @@ daos_oclass_sr_set_rank(daos_obj_id_t oid, d_rank_t rank)
 	D_ASSERT((oid.hi & DAOS_OC_SR_MASK) == 0);
 
 	oid.hi |= (uint64_t)rank << DAOS_OC_SR_SHIFT;
+	return oid;
+}
+
+static inline int
+daos_oclass_st_get_tgt(daos_obj_id_t oid)
+{
+	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
+		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
+		 daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK);
+
+	return ((oid.hi & DAOS_OC_ST_MASK) >> DAOS_OC_ST_SHIFT);
+}
+
+static inline daos_obj_id_t
+daos_oclass_st_set_tgt(daos_obj_id_t oid, int tgt)
+{
+	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
+		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
+		 daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK);
+	D_ASSERT(tgt < (1 << DAOS_OC_ST_SHIFT));
+	D_ASSERT((oid.hi & DAOS_OC_ST_MASK) == 0);
+
+	oid.hi |= (uint64_t)tgt << DAOS_OC_ST_SHIFT;
 	return oid;
 }
 

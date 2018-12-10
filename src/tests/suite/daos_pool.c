@@ -169,8 +169,9 @@ pool_exclude(void **state)
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
 	daos_pool_info_t info;
-	d_rank_list_t ranks;
+	struct d_tgt_list tgts;
 	d_rank_t	 rank;
+	int		 tgt = -1;
 	int		 rc;
 
 	if (1) {
@@ -199,17 +200,19 @@ pool_exclude(void **state)
 	print_message("success\n");
 
 	/** exclude last non-svc rank */
-	if (info.pi_ntargets - 1 /* rank 0 */ <= arg->pool.svc.rl_nr) {
+	if (info.pi_nnodes - 1 /* rank 0 */ <= arg->pool.svc.rl_nr) {
 		print_message("not enough non-svc targets; skipping\n");
 		goto disconnect;
 	}
-	rank = info.pi_ntargets - 1;
-	ranks.rl_nr = 1;
-	ranks.rl_ranks = &rank;
+	rank = info.pi_nnodes - 1;
+	tgts.tl_nr = 1;
+	tgts.tl_ranks = &rank;
+	tgts.tl_tgts = &tgt;
 
 	print_message("rank 0 excluding rank %u... ", rank);
-	rc = daos_pool_exclude(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
-			       &ranks, arg->async ? &ev : NULL /* ev */);
+	rc = daos_pool_tgt_exclude(arg->pool.pool_uuid, arg->group,
+				   &arg->pool.svc, &tgts,
+				   arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
