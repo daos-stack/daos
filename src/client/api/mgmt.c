@@ -170,7 +170,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 
 int
 daos_pool_add_tgt(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, d_rank_list_t *tgts,
+		  const d_rank_list_t *svc, struct d_tgt_list *tgts,
 		  daos_event_t *ev)
 {
 	daos_pool_update_t	*args;
@@ -191,9 +191,9 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 }
 
 int
-daos_pool_exclude_out(const uuid_t uuid, const char *grp,
-		      const d_rank_list_t *svc, d_rank_list_t *tgts,
-		      daos_event_t *ev)
+daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
+			  const d_rank_list_t *svc, struct d_tgt_list *tgts,
+			  daos_event_t *ev)
 {
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
@@ -213,9 +213,9 @@ daos_pool_exclude_out(const uuid_t uuid, const char *grp,
 }
 
 int
-daos_pool_exclude(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, d_rank_list_t *tgts,
-		  daos_event_t *ev)
+daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
+		      const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		      daos_event_t *ev)
 {
 	daos_pool_update_t	*args;
 	tse_task_t		*task;

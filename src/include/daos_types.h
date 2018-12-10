@@ -488,12 +488,6 @@ enum {
 				 */
 };
 
-/** bits for the specified rank */
-#define DAOS_OC_SR_SHIFT	24
-#define DAOS_OC_SR_BITS		8
-#define DAOS_OC_SR_MASK		\
-	(((1ULL << DAOS_OC_SR_BITS) - 1) << DAOS_OC_SR_SHIFT)
-
 /** Object class attributes */
 typedef struct daos_oclass_attr {
 	/** Object placement schema */
@@ -778,6 +772,14 @@ typedef enum {
 	DAOS_EVS_COMPLETED,
 	DAOS_EVS_ABORTED,
 } daos_ev_status_t;
+
+/* rank/target list for target */
+struct d_tgt_list {
+	d_rank_t	*tl_ranks;
+	int32_t		*tl_tgts;
+	/** number of ranks & tgts */
+	uint32_t	tl_nr;
+};
 
 struct daos_eq;
 

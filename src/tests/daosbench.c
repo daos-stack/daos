@@ -312,10 +312,11 @@ free_buffers()
 static void
 kill_daos_server(const char *grp)
 {
-	daos_pool_info_t		info;
-	d_rank_t			rank;
-	d_rank_list_t		targets;
-	int				rc;
+	daos_pool_info_t	info;
+	d_rank_t		rank;
+	int			tgt = -1;
+	struct d_tgt_list	targets;
+	int			rc;
 
 	rc = daos_pool_query(poh, NULL, &info, NULL);
 	DBENCH_CHECK(rc, "Error in querying pool\n");
@@ -332,10 +333,11 @@ kill_daos_server(const char *grp)
 	rc  = daos_mgmt_svc_rip(grp, rank, true, NULL);
 	DBENCH_CHECK(rc, "Error in killing server\n");
 
-	targets.rl_nr		= 1;
-	targets.rl_ranks	= &rank;
+	targets.tl_nr		= 1;
+	targets.tl_ranks	= &rank;
+	targets.tl_tgts		= &tgt;
 
-	rc = daos_pool_exclude(pool_uuid, grp, svcl, &targets, NULL);
+	rc = daos_pool_tgt_exclude(pool_uuid, grp, svcl, &targets, NULL);
 	DBENCH_CHECK(rc, "Error in excluding pool from poolmap\n");
 
 	memset(&info, 0, sizeof(daos_pool_info_t));

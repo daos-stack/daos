@@ -300,6 +300,8 @@ pool_op_hdlr(int argc, char *argv[])
 	const char	       *tgt_str = NULL;
 	d_rank_list_t	       *targets;
 	enum pool_op		op = pool_op_parse(argv[1]);
+	struct d_tgt_list	tgt_list = { 0 };
+	int			tgt = -1;
 	int			rc;
 
 	uuid_clear(pool_uuid);
@@ -375,8 +377,12 @@ pool_op_hdlr(int argc, char *argv[])
 		break;
 
 	case POOL_EXCLUDE:
-		targets->rl_nr = 1;
-		rc = daos_pool_exclude(pool_uuid, group, svc, targets,
+		/* Only support exclude single target XXX */
+		D_ASSERT(targets->rl_nr == 1);
+		tgt_list.tl_nr = 1;
+		tgt_list.tl_ranks = targets->rl_ranks;
+		tgt_list.tl_tgts = &tgt;
+		rc = daos_pool_tgt_exclude(pool_uuid, group, svc, &tgt_list,
 				       NULL /* ev */);
 		if (rc != 0)
 			fprintf(stderr, "failed to exclude target: "
@@ -411,7 +417,6 @@ pool_op_hdlr(int argc, char *argv[])
 	daos_rank_list_free(targets);
 	if (rc != 0)
 		return rc;
-
 
 	if (op == POOL_QUERY) {
 		daos_pool_info_t		 pinfo;

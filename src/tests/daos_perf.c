@@ -622,14 +622,16 @@ ts_update_fetch_perf(double *start_time, double *end_time)
 static int
 ts_exclude_server(d_rank_t rank)
 {
-	d_rank_list_t	targets;
-	int		rc;
+	struct d_tgt_list	targets;
+	int			tgt = -1;
+	int			rc;
 
 	/** exclude from the pool */
-	targets.rl_nr = 1;
-	targets.rl_ranks = &rank;
-	rc = daos_pool_exclude(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
-			       &targets, NULL);
+	targets.tl_nr = 1;
+	targets.tl_ranks = &rank;
+	targets.tl_tgts = &tgt;
+	rc = daos_pool_tgt_exclude(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
+				   &targets, NULL);
 
 	return rc;
 }
@@ -637,12 +639,14 @@ ts_exclude_server(d_rank_t rank)
 static int
 ts_add_server(d_rank_t rank)
 {
-	d_rank_list_t	targets;
-	int		rc;
+	struct d_tgt_list	targets;
+	int			tgt = -1;
+	int			rc;
 
 	/** exclude from the pool */
-	targets.rl_nr = 1;
-	targets.rl_ranks = &rank;
+	targets.tl_nr = 1;
+	targets.tl_ranks = &rank;
+	targets.tl_tgts = &tgt;
 	rc = daos_pool_add_tgt(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
 			       &targets, NULL);
 	return rc;

@@ -557,9 +557,13 @@ enum {
 	RB_BCAST_QUERY,
 };
 
+/*
+ * Check rebuild status on the leader. Every other target sends
+ * its own rebuild status by IV.
+ */
 static void
-rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
-		     struct rebuild_global_pool_tracker *rgt)
+rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
+			    struct rebuild_global_pool_tracker *rgt)
 {
 	double		begin = ABT_get_wtime();
 	double		last_print = 0;
@@ -567,8 +571,7 @@ rebuild_status_check(struct ds_pool *pool, uint32_t map_ver,
 	unsigned int	total;
 	int		rc;
 
-	/* FIXME add group later */
-	rc = crt_group_size(NULL, &total);
+	rc = crt_group_size(pool->sp_group, &total);
 	if (rc)
 		return;
 
@@ -703,7 +706,6 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 	D_INIT_LIST_HEAD(&rgt->rgt_list);
 
 	node_nr = pool_map_node_nr(pool->sp_map);
-
 	array_size = roundup(node_nr, DAOS_BITS_SIZE) / DAOS_BITS_SIZE;
 	rgt->rgt_bits_size = node_nr;
 
@@ -827,6 +829,10 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 			if (ret <= 0)
 				continue;
 
+			if (target &&
+			    target->ta_comp.co_status == PO_COMP_ST_DOWN)
+				excluded = true;
+
 			dom = pool_map_find_node_by_rank(pool->sp_map,
 						target->ta_comp.co_rank);
 			if (dom && dom->do_comp.co_status == PO_COMP_ST_DOWN) {
@@ -836,15 +842,14 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 					dom->do_comp.co_rank);
 				setbit((*rgt)->rgt_pull_bits,
 					dom->do_comp.co_rank);
-				excluded = true;
 				D_DEBUG(DB_REBUILD, "exclude target fail with"
-					" %u scan bits %u pull bits %u\n",
+					"%u/%u scan bits 0x%x pull bits 0x%x\n",
 					target->ta_comp.co_rank,
+					target->ta_comp.co_id,
 					*(*rgt)->rgt_scan_bits,
 					*(*rgt)->rgt_pull_bits);
 			}
 		}
-
 		/* Sigh these failed targets does not exist in the pool
 		 * map anymore. then we need skip this rebuild.
 		 */
@@ -859,9 +864,11 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
  * rebuild.
  */
 static int
-rebuild_trigger(struct ds_pool *pool, struct rebuild_global_pool_tracker *rgt,
-		struct pool_target_id_list *tgts_failed,
-		d_rank_list_t *svc_list, uint32_t map_ver, daos_iov_t *map_buf)
+rebuild_scan_broadcast(struct ds_pool *pool,
+		       struct rebuild_global_pool_tracker *rgt,
+		       struct pool_target_id_list *tgts_failed,
+		       d_rank_list_t *svc_list, uint32_t map_ver,
+		       daos_iov_t *map_buf)
 {
 	struct rebuild_scan_in	*rsi;
 	struct rebuild_scan_out	*rso;
@@ -1068,10 +1075,10 @@ rebuild_task_destroy(struct rebuild_task *task)
  * to find out the impacted objects.
  */
 static int
-rebuild_internal(struct ds_pool *pool, uint32_t rebuild_ver,
-		 struct pool_target_id_list *tgts_failed,
-		 d_rank_list_t *svc_list,
-		 struct rebuild_global_pool_tracker **p_rgt)
+rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
+		     struct pool_target_id_list *tgts_failed,
+		     d_rank_list_t *svc_list,
+		     struct rebuild_global_pool_tracker **p_rgt)
 {
 	uint32_t	map_ver;
 	daos_iov_t	map_buf_iov = {0};
@@ -1101,8 +1108,8 @@ rebuild_internal(struct ds_pool *pool, uint32_t rebuild_ver,
 	}
 
 	/* broadcast scan RPC to all targets */
-	rc = rebuild_trigger(pool, *p_rgt, tgts_failed, svc_list, map_ver,
-			     &map_buf_iov);
+	rc = rebuild_scan_broadcast(pool, *p_rgt, tgts_failed, svc_list,
+				    map_ver, &map_buf_iov);
 	if (rc) {
 		D_ERROR("object scan failed: rc %d\n", rc);
 		D_GOTO(out, rc);
@@ -1133,8 +1140,8 @@ rebuild_task_ult(void *arg)
 	D_PRINT("Rebuild [started] (pool "DF_UUID" ver=%u)\n",
 		 DP_UUID(task->dst_pool_uuid), task->dst_map_ver);
 
-	rc = rebuild_internal(pool, task->dst_map_ver, &task->dst_tgts,
-			      task->dst_svc_list, &rgt);
+	rc = rebuild_leader_start(pool, task->dst_map_ver, &task->dst_tgts,
+				  task->dst_svc_list, &rgt);
 	if (rc != 0) {
 		if (rc == -DER_CANCELED) {
 			D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver %u rebuild is"
@@ -1159,7 +1166,7 @@ rebuild_task_ult(void *arg)
 	}
 
 	/* Wait until rebuild finished */
-	rebuild_status_check(pool, task->dst_map_ver, rgt);
+	rebuild_leader_status_check(pool, task->dst_map_ver, rgt);
 	if (!rgt->rgt_done) {
 		D_DEBUG(DB_REBUILD, DF_UUID" rebuild is not done.\n",
 			DP_UUID(task->dst_pool_uuid));
