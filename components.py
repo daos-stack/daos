@@ -132,7 +132,7 @@ REQS.define('hwloc', retriever=WEB_RETRIEVER,
 RETRIEVER = GitRepoRetriever('https://github.com/pmix/master')
 REQS.define('pmix',
             retriever=RETRIEVER,
-            commands=['./autogen.sh',
+            commands=['./autogen.pl',
                       './configure --with-platform=optimized '
                       '--prefix=$PMIX_PREFIX '
                       '--with-hwloc=$HWLOC_PREFIX',
