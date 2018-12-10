@@ -495,6 +495,14 @@ crt_ep_abort(crt_endpoint_t *ep);
  * the macros CRT_RPC_DEFINE(my_rpc, CRT_ISEQ_MY_RPC, CRT_OSEQ_MY_RPC) expands
  * into internal RPC definition which will be used in RPC registration.
  * The content of this macro expansion will be changed in the future.
+ *
+ * To use array types it's possible to define types as above, and then use the
+ * same macros to declare types and proc structs for types, and then reference
+ * the type directly in the RPC definition.
+ *
+ * CRT_GEN_STRUCT(struct, CRT_SEQ_MY_TYPE)
+ # CRT_GEN_PROC_FUNC(struct, CRT_SEQ_MY_TYPE)
+ *
  */
 #define CRT_VAR   0
 #define CRT_PTR   1
@@ -506,7 +514,11 @@ crt_ep_abort(crt_endpoint_t *ep);
 
 #define CRT_GEN_STRUCT_FIELD(r, data, seq)				\
 	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_ARRAY, CRT_GEN_GET_KIND(seq)),	\
-		struct crt_array, CRT_GEN_GET_TYPE(seq))		\
+		struct {						\
+			uint64_t		ca_count;		\
+			CRT_GEN_GET_TYPE(seq)	*ca_arrays;		\
+		},							\
+		CRT_GEN_GET_TYPE(seq))					\
 	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_PTR, CRT_GEN_GET_KIND(seq)),	\
 		*CRT_GEN_GET_NAME(seq), CRT_GEN_GET_NAME(seq));
 
@@ -526,43 +538,38 @@ crt_ep_abort(crt_endpoint_t *ep);
 #define CRT_GEN_PROC_FIELD(r, ptr, seq)					\
 	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_ARRAY, CRT_GEN_GET_KIND(seq)),	\
 	{								\
-		struct crt_array *array = &ptr->CRT_GEN_GET_NAME(seq);	\
-		void *array_ptr;					\
-		uint64_t i;						\
+		uint64_t count = ptr->CRT_GEN_GET_NAME(seq).ca_count;	\
+		CRT_GEN_GET_TYPE(seq)** e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
+		CRT_GEN_GET_TYPE(seq)* e_ptr = ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
+		int i;							\
 		crt_proc_op_t proc_op;					\
 		rc = crt_proc_get_op(proc, &proc_op);			\
 		if (rc)							\
 			D_GOTO(out, rc);				\
 		/* process the count of array first */			\
-		rc = crt_proc_uint64_t(proc, &array->ca_count);		\
+		rc = crt_proc_uint64_t(proc, &count);			\
 		if (rc)							\
 			D_GOTO(out, rc);				\
-		if (array->ca_count == 0) {				\
-			rc = crt_proc_memcpy(proc, &array->ca_arrays,	\
-					     sizeof(array->ca_arrays));	\
-			if (rc)						\
-				D_GOTO(out, rc);			\
+		ptr->CRT_GEN_GET_NAME(seq).ca_count = count;		\
+		if (count == 0) {					\
 			if (proc_op == CRT_PROC_DECODE)			\
-				array->ca_arrays = NULL;		\
+				*e_ptrp = NULL;				\
 			goto next_field_##r;				\
 		}							\
 		if (proc_op == CRT_PROC_DECODE) {			\
-			D_ALLOC(array->ca_arrays, array->ca_count *	\
-				sizeof(CRT_GEN_GET_TYPE(seq)));		\
-			if (array->ca_arrays == NULL)			\
+			D_ALLOC_ARRAY(e_ptr, (int)count);		\
+			if (e_ptr == NULL)				\
 				D_GOTO(out, rc = -DER_NOMEM);		\
+			*e_ptrp = e_ptr;				\
 		}							\
 		/* process the elements of array */			\
-		array_ptr = array->ca_arrays;				\
-		for (i = 0; i < array->ca_count; i++) {			\
-			rc = CRT_GEN_GET_FUNC(seq)(proc, array_ptr);	\
+		for (i = 0; i < count; i++) {				\
+			rc = CRT_GEN_GET_FUNC(seq)(proc, &e_ptr[i]);	\
 			if (rc)						\
 				D_GOTO(out, rc);			\
-			array_ptr = (char *)array_ptr +			\
-				    sizeof(CRT_GEN_GET_TYPE(seq));	\
 		}							\
 		if (proc_op == CRT_PROC_FREE)				\
-			D_FREE(array->ca_arrays);			\
+			D_FREE(e_ptr);					\
 	}								\
 	next_field_##r:,						\
 	rc = CRT_GEN_GET_FUNC(seq)(proc, &ptr->CRT_GEN_GET_NAME(seq));	\
@@ -570,15 +577,18 @@ crt_ep_abort(crt_endpoint_t *ep);
 		D_GOTO(out, rc);					\
 	)
 
-#define CRT_GEN_PROC(type_name, seq)					\
-	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(seq),				\
+#define CRT_GEN_PROC_FUNC(type_name, seq)				\
 	static int crt_proc_struct_##type_name(crt_proc_t proc,		\
 					       struct type_name *ptr) {	\
 		int rc = 0;						\
 		BOOST_PP_SEQ_FOR_EACH(CRT_GEN_PROC_FIELD, ptr, seq)	\
 	out:								\
 		return rc;						\
-	}								\
+	}
+
+#define CRT_GEN_PROC(type_name, seq)					\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(seq),				\
+	CRT_GEN_PROC_FUNC(type_name, seq)				\
 	static struct crt_msg_field CMF_##type_name = {			\
 		.cmf_flags = 0,)					\
 	BOOST_PP_COMMA_IF(BOOST_PP_SEQ_SIZE(seq))			\
