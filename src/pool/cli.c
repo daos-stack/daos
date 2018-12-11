@@ -32,6 +32,7 @@
 #include <daos/event.h>
 #include <daos/placement.h>
 #include <daos/pool.h>
+#include <daos/security.h>
 #include <daos_types.h>
 #include "cli_internal.h"
 #include "rpc.h"
@@ -576,22 +577,27 @@ dc_pool_connect(tse_task_t *task)
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(out_pool, rc);
 	}
-
 	/** for con_argss */
 	crt_req_addref(rpc);
 
 	/** fill in request buffer */
 	pci = crt_req_get(rpc);
+
+	/** request credentials */
+	rc = dc_sec_request_creds(&pci->pci_cred);
+	if (rc != 0) {
+		D_ERROR("failed to obtain security credential: %d\n", rc);
+		D_GOTO(out_req, rc);
+	}
+
 	uuid_copy(pci->pci_op.pi_uuid, args->uuid);
 	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
-	pci->pci_uid = geteuid();
-	pci->pci_gid = getegid();
 	pci->pci_capas = args->flags;
 
 	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf,
 			     pool_buf_nr(pool->dp_map_sz));
 	if (rc != 0)
-		D_GOTO(out_req, rc);
+		D_GOTO(out_cred, rc);
 
 	/** Prepare "con_args" for pool_connect_cp(). */
 	con_args.pca_info = args->info;
@@ -613,6 +619,8 @@ dc_pool_connect(tse_task_t *task)
 
 out_bulk:
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
+out_cred:
+	daos_iov_free(&pci->pci_cred);
 out_req:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc); /* free req */
