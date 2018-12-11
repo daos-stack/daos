@@ -159,7 +159,7 @@ create_hdlr(int argc, char *argv[])
 			targets_str = optarg;
 			break;
 		case 'u':
-			gid = atoi(optarg);
+			uid = atoi(optarg);
 			break;
 		case 'v':
 			svc.rl_nr = atoi(optarg);
