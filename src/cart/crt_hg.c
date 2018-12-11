@@ -1166,7 +1166,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 
 	rpc_pub = &rpc_priv->crp_pub;
 
-	RPC_TRACE(DB_TRACE, rpc_priv, "entered\n");
+	RPC_TRACE(DB_TRACE, rpc_priv, "entered, hg_cbinfo->ret %d.\n",
+		  hg_cbinfo->ret);
 	switch (hg_cbinfo->ret) {
 	case HG_SUCCESS:
 		state = RPC_STATE_COMPLETED;
