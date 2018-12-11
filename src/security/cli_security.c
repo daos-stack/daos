@@ -144,6 +144,7 @@ process_credential_response(Drpc__Response *response,
 
 	if (response->status != DRPC__STATUS__SUCCESS) {
 		/* Recipient could not parse our message */
+		D_ERROR("Response status is: %d\n", response->status);
 		return -DER_MISC;
 	}
 
@@ -177,11 +178,14 @@ sanity_check_credential_response(Drpc__Response *response)
 			response->body.len, response->body.data);
 	if (pb_cred == NULL) {
 		/* Malformed body */
+		D_ERROR("Unable to unmarshal credential: body.len: %zu\n",
+			response->body.len);
 		return -DER_MISC;
 	}
 
 	/* Not super useful if we didn't get a token */
 	if (pb_cred->token == NULL) {
+		D_ERROR("Credential has no token\n");
 		rc = -DER_MISC;
 	}
 
