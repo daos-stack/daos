@@ -58,6 +58,7 @@ DECLARE_FAC(bio);
 DECLARE_FAC(tests);
 DECLARE_FAC(dfs);
 DECLARE_FAC(drpc);
+DECLARE_FAC(security);
 
 uint64_t DB_MD; /* metadata operation */
 uint64_t DB_PL; /* placement */
@@ -65,8 +66,9 @@ uint64_t DB_MGMT; /* pool management */
 uint64_t DB_EPC; /* epoch system */
 uint64_t DB_DF; /* durable format */
 uint64_t DB_REBUILD; /* rebuild process */
+uint64_t DB_SEC; /* Security checks */
 /* debug bit groups */
-#define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD)
+#define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC)
 
 #define DBG_DICT_ENTRY(bit, name, lname)			\
 {								\
@@ -85,6 +87,7 @@ static struct d_debug_bit daos_bit_dict[] = {
 	DBG_DICT_ENTRY(&DB_EPC,		"epc",		"epoch"),
 	DBG_DICT_ENTRY(&DB_DF,		"df",		"durable_format"),
 	DBG_DICT_ENTRY(&DB_REBUILD,	"rebuild",	"rebuild"),
+	DBG_DICT_ENTRY(&DB_SEC,		"sec",		"security")
 };
 
 #define NUM_DBG_BIT_ENTRIES	ARRAY_SIZE(daos_bit_dict)
@@ -110,7 +113,8 @@ static struct d_debug_bit daos_bit_dict[] = {
 	ACTION("tests", d_tests_logfac)			\
 	ACTION("bio", d_bio_logfac)			\
 	ACTION("dfs", d_dfs_logfac)			\
-	ACTION("drpc", d_drpc_logfac)
+	ACTION("drpc", d_drpc_logfac)			\
+	ACTION("security", d_security_logfac)
 
 #define DAOS_SETUP_FAC(name, idp)			\
 	DAOS_INIT_LOG_FAC(name, &idp)

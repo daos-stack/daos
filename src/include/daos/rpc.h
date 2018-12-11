@@ -64,6 +64,7 @@ enum daos_module_id {
 	DAOS_RSVC_MODULE	= 6, /** replicated service server */
 	DAOS_RDB_MODULE		= 7, /** rdb */
 	DAOS_RDBT_MODULE	= 8, /** rdb test */
+	DAOS_SEC_MODULE		= 9, /** security framework */
 	DAOS_MAX_MODULE		= (1 << MOD_ID_BITS) - 1,
 };
 

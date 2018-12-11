@@ -1,4 +1,5 @@
 """Build security library"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -11,6 +12,9 @@ def scons():
 
     # Shared src between server and client
     common_src = denv.SharedObject(['security.pb-c.c'])
+
+    ds_sec = daos_build.library(denv, 'security', ['srv.c'])
+    denv.Install('$PREFIX/lib/daos_srv', ds_sec)
 
     # dc_security: Security Client
     dc_security_tgts = denv.SharedObject(['cli_security.c']) + common_src

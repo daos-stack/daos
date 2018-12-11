@@ -48,6 +48,7 @@ extern int d_bio_logfac;
 extern int d_tests_logfac;
 extern int d_dfs_logfac;
 extern int d_drpc_logfac;
+extern int d_security_logfac;
 
 #include <gurt/debug.h>
 
@@ -57,6 +58,7 @@ extern uint64_t DB_MGMT; /* pool management */
 extern uint64_t DB_EPC; /* epoch system */
 extern uint64_t DB_DF; /* durable format */
 extern uint64_t DB_REBUILD; /* rebuild process */
+extern uint64_t DB_SEC; /* Security checks */
 
 #define DB_DEFAULT	DLOG_DBG
 #define DB_NULL		0
