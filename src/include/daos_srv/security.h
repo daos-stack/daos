@@ -41,12 +41,13 @@
  *
  * \return	0		Success. The access is allowed.
  *		-DER_INVAL	Invalid parameter
- *		-DER_BADPATH	Can't connect to the agent socket at
+ *		-DER_BADPATH	Can't connect to the daos_server socket at
  *				the expected path
  *		-DER_NOMEM	Out of memory
- *		-DER_NOREPLY	No response from agent
- *		-DER_MISC	Invalid response from agent
+ *		-DER_NOREPLY	No response from daos_server
+ *		-DER_MISC	Invalid response from daos_server
+ *		-DER_NO_PERM	Credential does not have access
  */
-int ds_sec_can_pool_connect(const struct pool_prop_ugm *ugm, d_iov_t *cred,
+int ds_sec_check_pool_access(const struct pool_prop_ugm *ugm, d_iov_t *cred,
 				uint64_t access);
 #endif /* __DAOS_SRV_SECURITY_H__ */
