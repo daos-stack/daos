@@ -44,6 +44,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rebuild.h>
+#include <daos_srv/security.h>
 #include <cart/iv.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -1544,31 +1545,6 @@ out:
 }
 
 static int
-permitted(const struct pool_prop_ugm *ugm, uint32_t uid, uint32_t gid,
-	  uint64_t capas)
-{
-	int		shift;
-	uint32_t	capas_permitted;
-
-	/*
-	 * Determine which set of capability bits applies. See also the
-	 * comment/diagram for ds_pool_prop_mode in src/pool/srv_layout.h.
-	 */
-	if (uid == ugm->pp_uid)
-		shift = DAOS_PC_NBITS * 2;	/* user */
-	else if (gid == ugm->pp_gid)
-		shift = DAOS_PC_NBITS;		/* group */
-	else
-		shift = 0;			/* other */
-
-	/* Extract the applicable set of capability bits. */
-	capas_permitted = (ugm->pp_mode >> shift) & DAOS_PC_MASK;
-
-	/* Only if all requested capability bits are permitted... */
-	return (capas & capas_permitted) == capas;
-}
-
-static int
 pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 		   const uuid_t pool_hdl, uint64_t capas,
 		   daos_iov_t *global_ns, struct daos_pool_space *ps,
@@ -1812,10 +1788,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
-	if (!permitted(&ugm, in->pci_uid, in->pci_gid, in->pci_capas)) {
-		D_ERROR(DF_UUID": refusing connect attempt for uid %u gid %u "
-			DF_X64"\n", DP_UUID(in->pci_op.pi_uuid), in->pci_uid,
-			in->pci_gid, in->pci_capas);
+	if (!ds_sec_can_pool_connect(&ugm, &in->pci_cred, in->pci_capas)) {
+		D_ERROR(DF_UUID": refusing connect attempt for "
+			DF_X64"\n", DP_UUID(in->pci_op.pi_uuid), in->pci_capas);
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 

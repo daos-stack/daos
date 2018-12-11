@@ -173,7 +173,7 @@ ds_sec_validate_credentials(daos_iov_t *creds, AuthToken **token)
 }
 
 int
-ds_sec_can_pool_connect(const struct pool_prop_ugm *attr, d_iov_t *cred,
+ds_sec_can_pool_connect(const struct pool_prop_ugm *ugm, d_iov_t *cred,
 				uint64_t access)
 {
 	int		rc;
@@ -182,7 +182,7 @@ ds_sec_can_pool_connect(const struct pool_prop_ugm *attr, d_iov_t *cred,
 	AuthToken	*sec_token = NULL;
 	AuthSys		*sys_creds = NULL;
 
-	if (attr == NULL || cred == NULL) {
+	if (ugm == NULL || cred == NULL) {
 		return -DER_INVAL;
 	}
 
@@ -198,15 +198,15 @@ ds_sec_can_pool_connect(const struct pool_prop_ugm *attr, d_iov_t *cred,
 	 * Determine which set of capability bits applies. See also the
 	 * comment/diagram for ds_pool_attr_mode in src/pool/srv_layout.h.
 	 */
-	if (sys_creds->uid == attr->pp_uid)
+	if (sys_creds->uid == ugm->pp_uid)
 		shift = DAOS_PC_NBITS * 2;	/* user */
-	else if (sys_creds->gid == attr->pp_gid)
+	else if (sys_creds->gid == ugm->pp_gid)
 		shift = DAOS_PC_NBITS;		/* group */
 	else
 		shift = 0;			/* other */
 
 	/* Extract the applicable set of capability bits. */
-	access_permitted = (attr->pp_mode >> shift) & DAOS_PC_MASK;
+	access_permitted = (ugm->pp_mode >> shift) & DAOS_PC_MASK;
 
 	/* Only if all requested capability bits are permitted... */
 	return (access & access_permitted) == access;
