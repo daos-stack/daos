@@ -1,5 +1,5 @@
-#!/bin/sh
-# Copyright (c) 2016-2017 Intel Corporation
+#!/bin/bash
+# Copyright (c) 2016-2018 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,38 +24,51 @@ set -x
 
 if [ "$1" != "utest" ]; then
 
-  option=
-  if [ -n "$WORKSPACE" ]; then
-    prebuilt1=\
-"PREBUILT_PREFIX=${CORAL_ARTIFACTS}/mercury-update-scratch/latest:\
-${CORAL_ARTIFACTS}/ompi-update-scratch/latest"
-    prebuilt2=\
-"HWLOC_PREBUILT=${CORAL_ARTIFACTS}/ompi-update-scratch/latest/hwloc \
-OPENPA_PREBUILT=${CORAL_ARTIFACTS}/mercury-update-scratch/latest/openpa"
+  prebuilt1=()
+  prebuilt2=()
+  if [ -n "$PREBUILT_PREFIX" ]; then
+    prebuilt1=( "PREBUILT_PREFIX=$PREBUILT_PREFIX" )
+    hwloc="${PREBUILT_PREFIX}/hwloc"
+    openpa="${PREBUILT_PREFIX}/openpa"
+    prebuilt2=( "HWLOC_PREBUILT=$hwloc" "OPENPA_PREBUILT=$openpa" )
+  fi
+
+  if [ -n "$SRC_PREFIX" ]; then
+    prebuilt1+=( "SRC_PREFIX=$SRC_PREFIX" )
+    prebuilt2+=( "SRC_PREFIX=$SRC_PREFIX" )
   fi
 
   mkdir -p test/prefix_test
   rm -rf test/prefix_test/*
   rm -f test/sl_test.info
-  scons -C test -f SConstruct $prebuilt1 --build-deps=yes --config=force
+  scons -C test -f SConstruct "${prebuilt1[@]}" --build-deps=yes --config=force
   python test/validate_build_info.py
-  scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force
+  scons -C test -f SConstruct "${prebuilt2[@]}" --build-deps=yes --config=force
   python test/validate_build_info.py
 
   #Test clean
-  scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force -c
+  scons -C test -f SConstruct "${prebuilt2[@]}" --build-deps=yes \
+        --config=force -c
   python test/validate_build_info.py
-  scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force
+  scons -C test -f SConstruct "${prebuilt2[@]}" --build-deps=yes --config=force
   python test/validate_build_info.py
   set +e
-  scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force \
-        --require-optional
-  if [ $? -eq 0 ]; then
+  scons -C test -f SConstruct "${prebuilt2[@]}" --build-deps=yes \
+        --config=force --require-optional
+  if [ "${PIPESTATUS[0]}" -eq 0 ]; then
       echo "Test for --require-optional failed"
       exit 1
   fi
   set -e
 fi
+
+set +e
+command -v clang-format >> /dev/null 2>&1
+if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+    set -e
+    scons -C test/tool -f SConstruct
+fi
+set -e
 
 check_cmd()
 {
@@ -63,26 +76,26 @@ check_cmd()
     issues=$2
     shift
     shift
-    $* > scons_utest_output.txt 2>&1
-    result=$?
+    "$@" > scons_utest_output.txt 2>&1
+    result=${PIPESTATUS[0]}
     if [ "$expected" = "pass" ]; then
-        if [ $result -ne 0 ]; then
-            failed=$[ $failed + 1 ]
+        if [ "$result" -ne 0 ]; then
+            failed=$((failed + 1))
         fi
     else
-        if [ $result -eq 0 ]; then
-            failed=$[ $failed + 1 ]
+        if [ "$result" -eq 0 ]; then
+            failed=$((failed + 1))
         fi
     fi
     grep "Valgrind.*check failed" scons_utest_output.txt
     result=$?
     if [ "$issues" = "clean" ]; then
         if [ $result -eq 0 ]; then
-            failed=$[ $failed + 1 ]
+            failed=$((failed + 1))
         fi
     else
         if [ $result -ne 0 ]; then
-            failed=$[ $failed + 1 ]
+            failed=$((failed + 1))
         fi
     fi
 }

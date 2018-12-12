@@ -51,6 +51,9 @@ fi
                   -P3 "test_runner/NodeRunner.py" \
                   -P3 "test_runner/findTestLogs.py"\
                   -s "utils/SConstruct_info"\
-                  -s "utils/docker/SConstruct_info"
+                  -s "utils/docker/SConstruct_info"\
+                  -s "test/tool/SConstruct"\
+                  -s "test/tool/src/SConscript"\
+                  site_tools/extra/extra.py
 
 exit $?

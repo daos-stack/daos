@@ -1,5 +1,6 @@
 *.pyc
 install/
+test/tool/build/
 _build.external/
 *.log
 .sconsign.dblite
