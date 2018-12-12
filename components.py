@@ -149,6 +149,7 @@ REQS.define('prrte',
             commands=['./autogen.pl',
                       './configure --with-platform=optimized '
                       '--prefix=$PRRTE_PREFIX '
+                      '--enable-orterun-prefix-by-default '
                       '--with-pmix=$PMIX_PREFIX '
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make $JOBS_OPT', 'make install'],
