@@ -185,6 +185,8 @@ unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 	struct msghdr	msg;
 	ssize_t		bsent;
 
+	memset(&msg, 0, sizeof(msg));
+
 	iov[0].iov_base = buffer;
 	iov[0].iov_len = buflen;
 	msg.msg_iov = iov;
@@ -210,6 +212,8 @@ unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 	struct iovec	iov[1];
 	struct msghdr	msg;
 	ssize_t		brcvd;
+
+	memset(&msg, 0, sizeof(msg));
 
 	iov[0].iov_base = buffer;
 	iov[0].iov_len = buflen;
