@@ -1,0 +1,21 @@
+"""Build daos iosrv tests"""
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('denv', 'common_test_utils')
+
+    unitEnv = denv.Clone()
+    unitEnv.AppendUnique(OBJPREFIX='utest_')
+    # Some syscalls are aliased when fortification is enabled, which makes
+    # mocking in unit tests into a headache.
+    # The compiler decides this on its own, but let's force the issue.
+    unitEnv.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
+
+    daos_build.test(unitEnv, 'drpc_progress_tests',
+                ['drpc_progress_tests.c', common_test_utils,
+                '../drpc_progress.c'],
+                LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
+
+if __name__ == "SCons.Script":
+    scons()
