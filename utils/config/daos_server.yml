@@ -305,7 +305,7 @@
 #  # Immutable after reformat.
 #
 #  # When bdev_class is set to malloc, bdev_number is the number of devices
-#  # to allocate and bdev_size is the size in GB of each individual device.
+#  # to allocate and bdev_size is the size in GB of each LUN/device.
 #  bdev_class: malloc
 #  bdev_number: 1
 #  bdev_size: 4

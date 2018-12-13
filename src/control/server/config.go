@@ -289,7 +289,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 		server := &c.Servers[i]
 		// verify scm mount path is valid
 		mntpt := server.ScmMount
-		if err = c.ext.checkMount(mntpt); err != nil {
+		if err = c.checkMount(mntpt); err != nil {
 			return fmt.Errorf(
 				"server%d scm mount path (%s) not mounted: %s",
 				i, mntpt, err.Error())

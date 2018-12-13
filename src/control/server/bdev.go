@@ -49,31 +49,26 @@ const (
     HotplugEnable No
     HotplugPollRate 0
 `
+	// device block size hardcoded to 4096
 	FILE_TEMPL = `[AIO]
-{{$T1 := (mul .BdevSize 1024)}}{{ range $i, $e := .BdevList }}    AIO {{$e}} AIO{{$i}} {{$T1}}
-{{ end }}
-`
+{{ range $i, $e := .BdevList }}    AIO {{$e}} AIO{{$i}} 4096
+{{ end }} `
 	KDEV_TEMPL = `[AIO]
 {{ range $i, $e := .BdevList }}    AIO {{$e}} AIO{{$i}}
-{{ end }}
-`
+{{ end }}`
 	MALLOC_TEMPL = `[Malloc]
 	NumberOfLuns {{.BdevNumber}}
-	LunSizeInMB {{(mul .BdevSize 1024)}}
-
+	LunSizeInMB {{.BdevSize}}000
 `
+	GBYTE   = 1000000000
+	BLKSIZE = 4096
 )
 
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
 func genFromTempl(server *server, templ string) (string, error) {
-	funcMap := template.FuncMap{
-		"mul": func(x int, y int) int {
-			return x * y
-		},
-	}
 	t := template.Must(
-		template.New(CONF_OUT).Funcs(funcMap).Parse(templ))
+		template.New(CONF_OUT).Parse(templ))
 	var out bytes.Buffer
 	if err := t.Execute(&out, server); err != nil {
 		return "", err
@@ -102,40 +97,48 @@ func createConf(ext External, server *server, templ string) error {
 
 func (c *configuration) parseNvme() error {
 	for i, _ := range c.Servers {
-		server := &c.Servers[i]
-		switch server.BdevClass {
+		s := &c.Servers[i]
+		switch s.BdevClass {
 		case NVME:
-			if len(server.BdevList) == 0 {
+			if len(s.BdevList) == 0 {
 				continue
 			}
 			// standard daos_nvme.conf, don't need to set VOS_BDEV_CLASS
-			if err := createConf(c.ext, server, NVME_TEMPL); err != nil {
+			if err := createConf(c.ext, s, NVME_TEMPL); err != nil {
 				return err
 			}
 		case MALLOC:
-			if server.BdevNumber == 0 {
+			if s.BdevNumber == 0 {
 				continue
 			}
-			if err := createConf(c.ext, server, MALLOC_TEMPL); err != nil {
+			if err := createConf(c.ext, s, MALLOC_TEMPL); err != nil {
 				return err
 			}
-			server.EnvVars = append(server.EnvVars, "VOS_BDEV_CLASS=MALLOC")
+			s.EnvVars = append(s.EnvVars, "VOS_BDEV_CLASS=MALLOC")
 		case KDEV:
-			if len(server.BdevList) == 0 {
+			if len(s.BdevList) == 0 {
 				continue
 			}
-			if err := createConf(c.ext, server, KDEV_TEMPL); err != nil {
+			if err := createConf(c.ext, s, KDEV_TEMPL); err != nil {
 				return err
 			}
-			server.EnvVars = append(server.EnvVars, "VOS_BDEV_CLASS=AIO")
+			s.EnvVars = append(s.EnvVars, "VOS_BDEV_CLASS=AIO")
 		case FILE:
-			if len(server.BdevList) == 0 {
+			if len(s.BdevList) == 0 {
 				continue
 			}
-			if err := createConf(c.ext, server, FILE_TEMPL); err != nil {
+			// requested size aligned with block size
+			size := (int64(s.BdevSize*GBYTE) / int64(BLKSIZE)) * int64(BLKSIZE)
+			for _, path := range s.BdevList {
+				err := c.ext.createEmpty(path, size)
+				if err != nil {
+					return err
+				}
+			}
+			if err := createConf(c.ext, s, FILE_TEMPL); err != nil {
 				return err
 			}
-			server.EnvVars = append(server.EnvVars, "VOS_BDEV_CLASS=AIO")
+			s.EnvVars = append(s.EnvVars, "VOS_BDEV_CLASS=AIO")
 		}
 	}
 	return nil

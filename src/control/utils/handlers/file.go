@@ -89,10 +89,15 @@ func SplitFile(path string) (sections [][]string, err error) {
 	return
 }
 
+// OpenNewFile overrides existing or creates new file with default options
+func OpenNewFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+}
+
 // WriteSlice writes string slice to specified file, overwriting and creating
 // if non-existent.
 func WriteSlice(path string, slice []string) (err error) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	file, err := OpenNewFile(path)
 	if err != nil {
 		return
 	}
@@ -105,12 +110,10 @@ func WriteSlice(path string, slice []string) (err error) {
 		}
 	}
 	file.Sync()
-	file.Close()
-
 	return
 }
 
 // WriteString writes string to specified file, wrapper around WriteSlice.
-func WriteString(path string, s string) (err error) {
+func WriteString(path string, s string) error {
 	return WriteSlice(path, []string{s})
 }

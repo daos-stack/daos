@@ -27,7 +27,9 @@ import (
 	"gopkg.in/yaml.v2"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/daos-stack/daos/src/control/utils/handlers"
 )
@@ -98,17 +100,17 @@ func NewDefaultServer() server {
 // External interface provides methods to support various os operations.
 type External interface {
 	getenv(string) string
-	checkMount(string) error
+	runCommand(string) error
 	writeToFile(string, string) error
+	createEmpty(string, int64) error
 }
 
 type ext struct{}
 
-// checkMount verifies that the provided path is listed as a distinct
-// mountpoint using os mount command.
-func (e *ext) checkMount(path string) error {
-	ss := fmt.Sprintf("' %s '", strings.TrimSpace(path))
-	return exec.Command("sh", "-c", "mount | grep "+ss).Run()
+// runCommand executes command in subshell (to allow redirection) and returns
+// error result.
+func (e *ext) runCommand(cmd string) error {
+	return exec.Command("sh", "-c", cmd).Run()
 }
 
 // getEnv wraps around os.GetEnv and implements External.getEnv().
@@ -120,6 +122,33 @@ func (e *ext) getenv(key string) string {
 // string to given file pathk.
 func (e *ext) writeToFile(in string, outPath string) error {
 	return handlers.WriteString(outPath, in)
+}
+
+// createEmpty creates a file (if it doesn't exist) of specified size in bytes
+// at the given path.
+// If Fallocate not supported by kernel or backing fs, fall back to Truncate.
+func (e *ext) createEmpty(path string, size int64) (err error) {
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("please specify absolute path (%s)", path)
+	}
+	if _, err = os.Stat(path); !os.IsNotExist(err) {
+		return
+	}
+	file, err := handlers.OpenNewFile(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	err = syscall.Fallocate(int(file.Fd()), 0, 0, size)
+	if err != nil {
+		e, ok := err.(syscall.Errno)
+		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
+			fmt.Print(
+				"Warning: Fallocate not supported, attempting Truncate: ", e)
+			err = file.Truncate(size)
+		}
+	}
+	return
 }
 
 type configuration struct {
@@ -174,11 +203,25 @@ func (c *configuration) Parse(data []byte) error {
 	return yaml.Unmarshal(data, c)
 }
 
+// checkMount verifies that the provided path or parent directory is listed as
+// a distinct mountpoint in output of os mount command.
+func (c *configuration) checkMount(path string) error {
+	path = strings.TrimSpace(path)
+	f := func(p string) error {
+		return c.ext.runCommand(fmt.Sprintf("mount | grep ' %s '", p))
+	}
+	if err := f(path); err != nil {
+		return f(filepath.Dir(path))
+	}
+	return nil
+}
+
 // NewDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
 func NewDefaultConfiguration(ext External) configuration {
 	return configuration{
 		SystemName:   "daos_server",
+		SocketDir:    "./",
 		Auto:         true,
 		Format:       SAFE,
 		AccessPoints: []string{"localhost"},

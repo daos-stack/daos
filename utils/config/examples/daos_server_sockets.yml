@@ -39,7 +39,7 @@ servers:
   # bdev_number: 1		# generate nvme.conf as follows:
               # [Malloc]
               #   NumberOfLuns 1
-              #   LunSizeInMB 4096
+              #   LunSizeInMB 4000
 
   # If emulating NVMe SSD over kernel block device
   # bdev_class: kdev		# map to VOS_BDEV_CLASS=AIO
@@ -49,7 +49,7 @@ servers:
 
   # If emulating NVMe SSD with backend file
   # bdev_class: file		# map to VOS_BDEV_CLASS=AIO
-  # bdev_size: 16		# file size in GB. Create file if does not exist.
+  # bdev_size: 16           # file size in GB. Create file if does not exist.
   # bdev_list: [/tmp/daos-bdev]	# generate nvme.conf as follows:
               # [AIO]
               #   AIO /tmp/aiofile AIO1 4096

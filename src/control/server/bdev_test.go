@@ -36,95 +36,101 @@ func TestParseBdev(t *testing.T) {
 	tests := []struct {
 		bdevClass  BdClass
 		bdevList   []string
-		bdevSize   int // relevant for MALLOC/FILE
-		bdevNumber int // relevant for MALLOC
-		expected   []string
+		bdevSize   int  // relevant for MALLOC/FILE
+		bdevNumber int  // relevant for MALLOC
+		fileExists bool // mock return value for file exists check
+		expEnvs    []string
+		expFiles   [][]string
 		errMsg     string
 	}{
 		{
-			"",
-			[]string{"0000:81:00.1"},
-			0,
-			0,
-			[]string{`&{checkMountRet:<nil> getenvRet: files:map[]}`},
-			"",
+			bdevClass: "",
+			bdevList:  []string{"0000:81:00.1"},
+		},
+		{},
+		{
+			bdevClass: NVME,
 		},
 		{
-			"",
-			[]string{},
-			0,
-			0,
-			[]string{`&{checkMountRet:<nil> getenvRet: files:map[]}`},
-			"",
+			bdevClass: NVME,
+			bdevList:  []string{"0000:81:00.0", "0000:81:00.1"},
+			expFiles: [][]string{
+				[]string{
+					`/mnt/daos/daos_nvme.conf:[Nvme]`,
+					`TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme0`,
+					`TransportID "trtype:PCIe traddr:0000:81:00.1" Nvme1`,
+					`RetryCount 4`,
+					`TimeoutUsec 0`,
+					`ActionOnTimeout None`,
+					`AdminPollRate 100000`,
+					`HotplugEnable No`,
+					`HotplugPollRate 0`,
+					``,
+				},
+			},
 		},
 		{
-			NVME,
-			[]string{},
-			0,
-			0,
-			[]string{`&{checkMountRet:<nil> getenvRet: files:map[]}`},
-			"",
+			bdevClass: FILE,
+			bdevList:  []string{"/tmp/myfile", "/tmp/myotherfile"},
+			bdevSize:  5, // GB/file
+			expFiles: [][]string{
+				[]string{`/tmp/myfile:empty size 4999999488`},
+				[]string{`/tmp/myotherfile:empty size 4999999488`},
+				[]string{
+					"/mnt/daos/daos_nvme.conf:[AIO]",
+					"AIO /tmp/myfile AIO0 4096",
+					"AIO /tmp/myotherfile AIO1 4096",
+					"",
+				},
+			},
+			expEnvs: []string{"VOS_BDEV_CLASS=AIO"},
 		},
 		{
-			NVME,
-			[]string{"0000:81:00.0", "0000:81:00.1"},
-			0,
-			0,
-			[]string{
-				`&{checkMountRet:<nil> getenvRet: files:map[/mnt/daos/daos_nvme.conf:[Nvme]`,
-				`TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme0`,
-				`TransportID "trtype:PCIe traddr:0000:81:00.1" Nvme1`,
-				`RetryCount 4`,
-				`TimeoutUsec 0`,
-				`ActionOnTimeout None`,
-				`AdminPollRate 100000`,
-				`HotplugEnable No`,
-				`HotplugPollRate 0`,
-				`]}`},
-			"",
+			bdevClass: FILE,
+			bdevList:  []string{"/tmp/myfile", "/tmp/myotherfile"},
+			bdevSize:  5, // GB/file
+			expFiles: [][]string{
+				[]string{
+					"/mnt/daos/daos_nvme.conf:[AIO]",
+					"AIO /tmp/myfile AIO0 4096",
+					"AIO /tmp/myotherfile AIO1 4096",
+					"",
+				},
+			},
+			expEnvs:    []string{"VOS_BDEV_CLASS=AIO"},
+			fileExists: true,
 		},
 		{
-			FILE,
-			[]string{"/tmp/myfile", "/tmp/myotherfile"},
-			4,
-			0,
-			[]string{
-				`&{checkMountRet:<nil> getenvRet: files:map[/mnt/daos/daos_nvme.conf:[AIO]`,
-				`AIO /tmp/myfile AIO0 4096`,
-				`AIO /tmp/myotherfile AIO1 4096`,
-				``,
-				`]}`},
-			"",
+			bdevClass: KDEV,
+			bdevList:  []string{"/dev/sdb", "/dev/sdc"},
+			expFiles: [][]string{
+				[]string{
+					"/mnt/daos/daos_nvme.conf:[AIO]",
+					`AIO /dev/sdb AIO0`,
+					`AIO /dev/sdc AIO1`,
+					"",
+				},
+			},
+			expEnvs: []string{"VOS_BDEV_CLASS=AIO"},
 		},
 		{
-			KDEV,
-			[]string{"/dev/sdb", "/dev/sdc"},
-			0,
-			0,
-			[]string{
-				`&{checkMountRet:<nil> getenvRet: files:map[/mnt/daos/daos_nvme.conf:[AIO]`,
-				`AIO /dev/sdb AIO0`,
-				`AIO /dev/sdc AIO1`,
-				``,
-				`]}`},
-			"",
-		},
-		{
-			MALLOC,
-			[]string{},
-			4,
-			1,
-			[]string{
-				`&{checkMountRet:<nil> getenvRet: files:map[/mnt/daos/daos_nvme.conf:[Malloc]`,
-				`NumberOfLuns 1`,
-				`LunSizeInMB 4096`,
-				``,
-				`]}`},
-			"",
+			bdevClass:  MALLOC,
+			bdevSize:   5, // GB/file
+			bdevNumber: 2, // number of LUNs
+			expFiles: [][]string{
+				[]string{
+					"/mnt/daos/daos_nvme.conf:[Malloc]",
+					"NumberOfLuns 2",
+					"LunSizeInMB 5000",
+					"",
+				},
+			},
+			expEnvs: []string{"VOS_BDEV_CLASS=MALLOC"},
 		},
 	}
 
 	for _, tt := range tests {
+		setupTest(t)
 		// create default config and add server populated with test values
 		server := NewDefaultServer()
 		server.ScmMount = "/mnt/daos"
@@ -132,7 +138,7 @@ func TestParseBdev(t *testing.T) {
 		server.BdevList = tt.bdevList
 		server.BdevSize = tt.bdevSize
 		server.BdevNumber = tt.bdevNumber
-		config := NewDefaultMockConfig()
+		config := NewMockConfig(nil, "", tt.fileExists)
 		config.Servers = append(config.Servers, server)
 		err := config.parseNvme()
 		if tt.errMsg != "" {
@@ -142,13 +148,24 @@ func TestParseBdev(t *testing.T) {
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		actLines := strings.Split(fmt.Sprintf("%+v\n", config.ext), "\n")
-		for i, line := range tt.expected {
+		AssertEqual(
+			t, len(files), len(tt.expFiles),
+			fmt.Sprintf("files returned, got %#v want %#v", files, tt.expFiles))
+		// iterate through entries representing files created
+		for i, file := range files {
+			actLines := strings.Split(file, "\n")
 			AssertEqual(
-				t,
-				strings.TrimSpace(actLines[i]),
-				line,
-				fmt.Sprintf("line %d", i))
+				t, len(actLines), len(tt.expFiles[i]),
+				fmt.Sprintf("lines returned, got %#v want %#v", files, tt.expFiles))
+			// iterate over file contents, trim spaces before comparing
+			for j, line := range actLines {
+				line = strings.TrimSpace(line)
+				AssertEqual(
+					t, line, tt.expFiles[i][j],
+					fmt.Sprintf("line %d, got %s want %s", i, line, tt.expFiles[i][j]))
+			}
 		}
+		// verify VOS_BDEV_CLASS env gets set as expected
+		AssertEqual(t, config.Servers[0].EnvVars, tt.expEnvs, string(tt.bdevClass))
 	}
 }
