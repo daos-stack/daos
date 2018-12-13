@@ -1,15 +1,15 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-    test_machines1:
-      test_machines:
+   test_machines:
         - boro-A
+timeout: 100
 server:
    server_group: daos_server
-conttests:
+pool_params:
    createmode:
-     mode: 511
+        mode: 511
    createset:
-     setname: daos_server
+        setname: daos_server
    createsize:
-     size: 1073741824
+        size: 1073741824

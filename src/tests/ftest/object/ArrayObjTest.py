@@ -52,26 +52,21 @@ class ArrayObjTest(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
 
-        self.server_group = self.params.get("server_group",'/server/',
+        self.server_group = self.params.get("server_group",'/run/server/',
                                            'daos_server')
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
-        self.hostlist = self.params.get("test_machines",'/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostlist = self.params.get("test_machines",'/run/hosts/')
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
         time.sleep(5)
 
     def tearDown(self):
-        try:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
-        finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_array_obj(self):
         """
@@ -84,12 +79,11 @@ class ArrayObjTest(Test):
         """
         try:
             # parameters used in pool create
-            createmode = self.params.get("mode",'/run/conttests/createmode/')
-            createsetid = self.params.get("setname",'/run/conttests/createset/')
-            createsize  = self.params.get("size",'/run/conttests/createsize/')
+            createmode = self.params.get("mode",'/run/pool_params/createmode/')
+            createsetid = self.params.get("setname",'/run/pool_params/createset/')
+            createsize  = self.params.get("size",'/run/pool_params/createsize/')
             createuid  = os.geteuid()
             creategid  = os.getegid()
-            print("uid is {} gid is {}".format(createuid, creategid))
 
             # initialize a python pool object then create the underlying
             # daos storage
@@ -127,7 +121,7 @@ class ArrayObjTest(Test):
 
             self.pl.info("writing array to dkey >%s< akey >%s<.",
                     dkey, akey)
-            oid, epoch = container.write_an_array_value(thedata, dkey, akey)
+            oid, epoch = container.write_an_array_value(thedata, dkey, akey, obj_cls=3)
 
             # read the data back and make sure its correct
             length = len(thedata[0])

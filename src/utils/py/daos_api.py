@@ -628,7 +628,6 @@ class IORequest(object):
     Python object that centralizes details about an I/O
     type is either 1 (single) or 2 (array)
     """
-
     def __init__(self, context, container, obj, rank=None, iotype=1,
                  objtype=13):
         """
@@ -1268,7 +1267,7 @@ class DaosContainer(object):
         c_akey = ctypes.create_string_buffer(akey)
 
         # oid can be None in which case a new one is created
-        ioreq = IORequest(self.context, self, obj, rank, 2, 1, obj_type=obj_cls)
+        ioreq = IORequest(self.context, self, obj, rank, 2, objtype=obj_cls)
         ioreq.insert_array(c_dkey, c_akey, c_values, c_epoch)
         self.commit_epoch(c_epoch)
         return ioreq.obj, c_epoch.value
