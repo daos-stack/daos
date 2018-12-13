@@ -875,7 +875,8 @@ rebuild_obj_ult(void *data)
 free:
 	if (buf != NULL && buf != stack_buf)
 		D_FREE(buf);
-	tls->rebuild_pool_obj_count++;
+	if (arg->epoch == DAOS_EPOCH_MAX)
+		tls->rebuild_pool_obj_count++;
 	if (tls->rebuild_pool_status == 0 && rc < 0)
 		tls->rebuild_pool_status = rc;
 	D_DEBUG(DB_REBUILD, "stop rebuild obj "DF_UOID" for shard %u rc %d\n",
@@ -905,7 +906,8 @@ rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 	uuid_copy(obj_arg->cont_uuid, iter_arg->cont_uuid);
 	rpt_get(iter_arg->rpt);
 	obj_arg->rpt = iter_arg->rpt;
-	obj_arg->rpt->rt_toberb_objs++;
+	if (eph == DAOS_EPOCH_MAX)
+		obj_arg->rpt->rt_toberb_objs++;
 
 	/* Let's iterate the object on different xstream */
 	stream_id = oid.id_pub.lo % dss_get_threads_number();
@@ -1191,7 +1193,7 @@ rebuild_scheduled_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 {
 	struct rebuilt_oid	*roid;
 	struct rebuilt_oid	roid_tmp;
-	struct rebuild_obj_key	key;
+	struct rebuild_obj_key	key = { 0 };
 	uint32_t		req_cnt;
 	daos_iov_t		key_iov;
 	daos_iov_t		val_iov;
@@ -1211,12 +1213,14 @@ rebuild_scheduled_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 	oid.id_shard = shard;
 	key.oid = oid;
 	key.eph = eph;
+	key.tgt_idx = tgt_idx;
 	/* Finally look up the object under the container tree */
 	daos_iov_set(&key_iov, &key, sizeof(key));
 	daos_iov_set(&val_iov, NULL, 0);
 	rc = dbtree_lookup(cont_root->root_hdl, &key_iov, &val_iov);
-	D_DEBUG(DB_REBUILD, "lookup "DF_UOID" in cont "DF_UUID" rc %d\n",
-		DP_UOID(oid), DP_UUID(co_uuid), rc);
+	D_DEBUG(DB_REBUILD, "lookup "DF_UOID" in cont "DF_UUID" eph "
+		DF_U64" tgt_idx %d rc %d\n", DP_UOID(oid), DP_UUID(co_uuid),
+		eph, tgt_idx, rc);
 	if (rc == 0) {
 		roid = val_iov.iov_buf;
 		D_ASSERT(roid != NULL);

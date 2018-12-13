@@ -313,6 +313,9 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt);
 int
 rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt);
 
+bool
+is_current_tgt_up(struct rebuild_tgt_pool_tracker *rpt);
+
 typedef int (*rebuild_obj_insert_cb_t)(struct rebuild_root *cont_root,
 				       uuid_t co_uuid, daos_unit_oid_t oid,
 				       daos_epoch_t epoch, unsigned int shard,

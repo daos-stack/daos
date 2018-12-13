@@ -370,6 +370,36 @@ struct rebuild_tgt_query_arg {
 	struct rebuild_tgt_query_info *status;
 };
 
+bool
+is_current_tgt_up(struct rebuild_tgt_pool_tracker *rpt)
+{
+	struct pool_target	*tgt;
+	unsigned int		idx = dss_get_module_info()->dmi_tid;
+	d_rank_t		rank;
+	int			rc;
+
+	D_ASSERT(rpt != NULL);
+	D_ASSERT(rpt->rt_pool != NULL);
+	D_ASSERT(rpt->rt_pool->sp_map != NULL);
+
+	/* Let's use NULL for now, because subgroup == master group for
+	 * all of test anyway. Once we resolve the race between cart
+	 * group destroy and rebuild, it should use cart group inside
+	 * ds_pool. (DAOS-1943) FIXME
+	 */
+	crt_group_rank(NULL, &rank);
+	rc = pool_map_find_target_by_rank_idx(rpt->rt_pool->sp_map, rank,
+					      idx, &tgt);
+	D_ASSERT(rc == 1);
+	if (tgt->ta_comp.co_status != PO_COMP_ST_UP) {
+		D_DEBUG(DB_REBUILD, "%d/%d target status %d\n",
+			rank, idx, tgt->ta_comp.co_status);
+		return false;
+	}
+
+	return true;
+}
+
 static int
 dss_rebuild_check_one(void *data)
 {
@@ -377,7 +407,10 @@ dss_rebuild_check_one(void *data)
 	struct rebuild_pool_tls		*pool_tls;
 	struct rebuild_tgt_query_info	*status = arg->status;
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
-	unsigned int idx = dss_get_module_info()->dmi_tid;
+	unsigned int			idx = dss_get_module_info()->dmi_tid;
+
+	if (!is_current_tgt_up(rpt))
+		return 0;
 
 	pool_tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 					   rpt->rt_rebuild_ver);

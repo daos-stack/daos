@@ -641,7 +641,8 @@ rebuild_scanner(void *data)
 	struct rebuild_scan_arg	*scan_arg = arg->arg;
 	struct rebuild_tgt_pool_tracker *rpt = scan_arg->rpt;
 
-	D_ASSERT(rpt != NULL);
+	if (!is_current_tgt_up(rpt))
+		return 0;
 
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
 		ABT_thread_yield();
