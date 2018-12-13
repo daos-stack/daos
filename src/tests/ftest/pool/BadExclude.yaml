@@ -1,61 +1,61 @@
 server:
-   server_group: scott_server
+   server_group: test_server
 hosts:
   test_machines:
-    - boro-A
-excludetests:
+    - boro-26
+    - boro-29
+    - boro-30
+timeout: 200
+testparams:
    tgtlist: !mux
      goodlist:
           ranklist:
-             - 3
+             - 2
              - PASS
-     #badlist:
-     #     ranklist:
-     #        - 44
-     #        - FAIL
-     #nulllist:
-     #     ranklist:
-     #        - NULL
-     #        - FAIL
+     badlist:
+          ranklist:
+             - 44
+             - FAIL
+     nulllist:
+          ranklist:
+             - NULLPTR
+             - FAIL
    svrlist: !mux
      goodlist:
           ranklist:
              - VALID
              - PASS
-     #badlist:
-     #     ranklist:
-     #        - NULL
-     #        - FAIL
+     badlist:
+          ranklist:
+             - NULLPTR
+             - FAIL
    connectsetnames: !mux
      goodname:
           setname:
-             - scott_server
+             - test_server
              - PASS
-     #badname:
-     #     setname:
-     #        - NULL
-     #        - FAIL
+     badname:
+          setname:
+             - NULLPTR
+             - FAIL
    UUID: !mux
      gooduuid:
           uuid:
              - VALID
              - PASS
-     #nulluuid:
-     #     uuid:
-     #        - NULL
-     #        - FAIL
-     #baduuid:
-     #     uuid:
-     #        - CRAP
-     #        - FAIL
+     nulluuid:
+          uuid:
+             - NULLPTR
+             - FAIL
+     baduuid:
+          uuid:
+             - CRAP
+             - FAIL
+pool:
    createmode:
      mode: 511
-   createuid:
-     uid: 11374638
-   creategid:
-     gid: 11374638
    createset:
-     setname: scott_server
+     setname: test_server
    createsize:
      size: 1073741824
 

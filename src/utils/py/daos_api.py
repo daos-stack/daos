@@ -203,19 +203,27 @@ class DaosPool(object):
     def exclude(self, tgt_rank_list, cb_func=None):
         """Exclude a set of storage targets from a pool."""
 
-        rl_ranks = DaosPool.__pylist_to_array(tgt_rank_list)
-        c_tgts = RankList(rl_ranks, len(tgt_rank_list))
+        if tgt_rank_list is None:
+            c_tgts = None
+        else:
+            rl_ranks = DaosPool.__pylist_to_array(tgt_rank_list)
+            c_tgts = ctypes.pointer(RankList(rl_ranks, len(tgt_rank_list)))
+
+        if self.svc is None:
+            c_svc = None
+        else:
+            c_svc = ctypes.pointer(self.svc)
 
         func = self.context.get_function('exclude-target')
         if cb_func is None:
-            rc = func(self.uuid, self.group, ctypes.byref(self.svc),
-                      ctypes.byref(c_tgts), None)
+            rc = func(self.uuid, self.group, c_svc,
+                      c_tgts, None)
             if rc != 0:
                 raise ValueError("Pool exclude returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(self.svc),
+            params = [self.uuid, self.group, c_svc,
                       ctypes.byref(c_tgts), event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
