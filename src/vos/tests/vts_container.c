@@ -188,7 +188,7 @@ setup(void **state)
 	struct vc_test_args	*test_arg = NULL;
 	int			ret = 0;
 
-	test_arg = malloc(sizeof(struct vc_test_args));
+	D_ALLOC(test_arg, sizeof(struct vc_test_args));
 	assert_ptr_not_equal(test_arg, NULL);
 
 	uuid_generate_time_safe(test_arg->pool_uuid);
@@ -223,9 +223,9 @@ teardown(void **state)
 	if (vts_file_exists(test_arg->fname))
 		remove(test_arg->fname);
 	if (test_arg->fname)
-		free(test_arg->fname);
+		D_FREE(test_arg->fname);
 
-	free(test_arg);
+	D_FREE(test_arg);
 	return 0;
 }
 
@@ -382,9 +382,9 @@ cookie_table_test(void **state)
 	struct d_ulink			*l_ulink = NULL;
 
 	D_ALLOC_PTR(itab);
-	D_ALLOC(cookie_array, VCT_COOKIES * sizeof(struct d_uuid));
-	D_ALLOC(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
-	D_ALLOC(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
+	D_ALLOC_ARRAY(cookie_array, VCT_COOKIES);
+	D_ALLOC_ARRAY(cookie_entries, VCT_COOKIES);
+	D_ALLOC_ARRAY(epochs, VCT_EPOCHS);
 
 	ret = d_uhash_create(0, 8, &uhtab);
 	if (ret != 0)

@@ -65,10 +65,10 @@ pool_ref_count_setup(void **state)
 	struct vp_test_args	*arg = *state;
 	int			ret = 0;
 
-	arg->fname = (char **) malloc(sizeof(char *));
+	D_ALLOC(arg->fname, sizeof(char *));
 	assert_ptr_not_equal(arg->fname, NULL);
 
-	arg->poh = (daos_handle_t *)malloc(10 * sizeof(daos_handle_t));
+	D_ALLOC_ARRAY(arg->poh, 10);
 	assert_ptr_not_equal(arg->poh, NULL);
 
 	ret = vts_alloc_gen_fname(&arg->fname[0]);
@@ -110,9 +110,9 @@ pool_ref_count_destroy(void **state)
 
 	if (arg->fname[0]) {
 		remove(arg->fname[0]);
-		free(arg->fname[0]);
+		D_FREE(arg->fname[0]);
 	}
-	free(arg->fname);
+	D_FREE(arg->fname);
 	return 0;
 }
 
@@ -182,31 +182,28 @@ static int pool_allocate_params(int nfiles, int ops,
 	int i;
 
 	test_args->nfiles = nfiles;
-	test_args->fname = (char **)malloc(nfiles * sizeof(char *));
+	D_ALLOC_ARRAY(test_args->fname, nfiles);
 	assert_ptr_not_equal(test_args->fname, NULL);
 
-	test_args->seq_cnt = (int *)malloc(nfiles * sizeof(int));
+	D_ALLOC_ARRAY(test_args->seq_cnt, nfiles);
 	assert_ptr_not_equal(test_args->seq_cnt, NULL);
 
-	test_args->ops_seq = (enum vts_ops_type **)malloc
-		(nfiles * sizeof(enum vts_ops_type *));
+	D_ALLOC_ARRAY(test_args->ops_seq, nfiles);
 	assert_ptr_not_equal(test_args->ops_seq, NULL);
 
 	for (i = 0; i < nfiles; i++) {
-		test_args->ops_seq[i] = (enum vts_ops_type *)malloc
-			(ops * sizeof(enum vts_ops_type));
+		D_ALLOC_ARRAY(test_args->ops_seq[i], ops);
 		assert_ptr_not_equal(test_args->ops_seq[i], NULL);
 	}
 
-	test_args->fcreate = (bool *)malloc(nfiles * sizeof(bool));
+	D_ALLOC_ARRAY(test_args->fcreate, nfiles);
 	assert_ptr_not_equal(test_args->fcreate, NULL);
 
-	test_args->poh = (daos_handle_t *)malloc(nfiles *
-						 sizeof(daos_handle_t));
+	D_ALLOC_ARRAY(test_args->poh, nfiles);
 	assert_ptr_not_equal(test_args->poh, NULL);
 
 
-	test_args->uuid = (uuid_t *)malloc(nfiles * sizeof(uuid_t));
+	D_ALLOC_ARRAY(test_args->uuid, nfiles);
 	assert_ptr_not_equal(test_args->uuid, NULL);
 
 	return 0;
@@ -217,7 +214,7 @@ setup(void **state)
 {
 	struct vp_test_args *test_arg = NULL;
 
-	test_arg = malloc(sizeof(struct vp_test_args));
+	D_ALLOC(test_arg, sizeof(struct vp_test_args));
 	assert_ptr_not_equal(test_arg, NULL);
 	*state = test_arg;
 
@@ -235,7 +232,7 @@ teardown(void **state)
 		return 0;
 	}
 
-	free(arg);
+	D_FREE(arg);
 	return 0;
 }
 
@@ -252,23 +249,23 @@ pool_unit_teardown(void **state)
 		if (vts_file_exists(arg->fname[i]))
 			remove(arg->fname[i]);
 		if (arg->fname[i])
-			free(arg->fname[i]);
+			D_FREE(arg->fname[i]);
 		if (arg->ops_seq[i])
-			free(arg->ops_seq[i]);
+			D_FREE(arg->ops_seq[i]);
 	}
 
 	if (arg->fname)
-		free(arg->fname);
+		D_FREE(arg->fname);
 	if (arg->seq_cnt)
-		free(arg->seq_cnt);
+		D_FREE(arg->seq_cnt);
 	if (arg->ops_seq)
-		free(arg->ops_seq);
+		D_FREE(arg->ops_seq);
 	if (arg->fcreate)
-		free(arg->fcreate);
+		D_FREE(arg->fcreate);
 	if (arg->poh)
-		free(arg->poh);
+		D_FREE(arg->poh);
 	if (arg->uuid)
-		free(arg->uuid);
+		D_FREE(arg->uuid);
 
 	return 0;
 }

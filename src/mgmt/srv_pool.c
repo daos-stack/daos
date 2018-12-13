@@ -134,7 +134,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		if (ranks_size > TMP_RANKS_ARRAY_SIZE) {
 			d_rank_t *ranks;
 
-			D_ALLOC(ranks, sizeof(*ranks) * ranks_size);
+			D_ALLOC_ARRAY(ranks, ranks_size);
 			if (ranks == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 			tmp_rank_list.rl_ranks = ranks;
@@ -192,7 +192,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		DP_UUID(pc_in->pc_pool_uuid), tc_out->tc_tgt_uuids.ca_count);
 
 	/** Gather target uuids ranks from collective RPC to start pool svc. */
-	D_ALLOC(tgt_uuids, ranks_size * sizeof(*tgt_uuids));
+	D_ALLOC_ARRAY(tgt_uuids, ranks_size);
 	if (tgt_uuids == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 	tc_out_ranks = tc_out->tc_ranks.ca_arrays;
@@ -223,8 +223,8 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	if (pc_out->pc_svc == NULL)
 		D_GOTO(tgt_pool_create_fail, rc = -DER_NOMEM);
 
-	D_ALLOC(pc_out->pc_svc->rl_ranks,
-		pc_in->pc_svc_nr * sizeof(d_rank_t));
+	D_ALLOC_ARRAY(pc_out->pc_svc->rl_ranks,
+		pc_in->pc_svc_nr);
 	if (pc_out->pc_svc->rl_ranks == NULL)
 		D_GOTO(tgt_pool_create_fail, rc = -DER_NOMEM);
 	pc_out->pc_svc->rl_nr = pc_in->pc_svc_nr;

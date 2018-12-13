@@ -123,14 +123,14 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 		total_acts += iod->iod_nr;
 	}
 
-	D_ALLOC(ioc->ic_mmids, total_acts * sizeof(*ioc->ic_mmids));
+	D_ALLOC_ARRAY(ioc->ic_mmids, total_acts);
 	if (ioc->ic_mmids == NULL)
 		return -DER_NOMEM;
 
 	if (vos_obj2umm(ioc->ic_obj)->umm_ops->mo_reserve == NULL)
 		return 0;
 
-	D_ALLOC(ioc->ic_actv, total_acts * sizeof(*ioc->ic_actv));
+	D_ALLOC_ARRAY(ioc->ic_actv, total_acts);
 	if (ioc->ic_actv == NULL)
 		return -DER_NOMEM;
 
@@ -234,7 +234,7 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	if (iov_at == iov_nr - 1) {
 		struct bio_iov *biovs;
 
-		D_ALLOC(biovs, iov_nr * 2 * sizeof(*biovs));
+		D_ALLOC_ARRAY(biovs, (iov_nr * 2));
 		if (biovs == NULL)
 			return -DER_NOMEM;
 

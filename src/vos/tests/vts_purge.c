@@ -363,8 +363,8 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey, char *akey,
 	assert_true(num/2 >= 0);
 	mid = num/2;
 
-	D_ALLOC(reqs,  (num * sizeof(struct io_req *)));
-	D_ALLOC(punch, (num * sizeof(bool)));
+	D_ALLOC_ARRAY(reqs, num);
+	D_ALLOC_ARRAY(punch, num);
 
 	for (i = 0; i < num; i++) {
 		struct d_uuid l_cookie;
@@ -601,7 +601,7 @@ free_request_list(d_list_t *req_list)
 	/** Free all request */
 	d_list_for_each_entry_safe(req, tmp, req_list, rlist) {
 		d_list_del_init(&req->rlist);
-		free(req);
+		D_FREE(req);
 	}
 }
 

@@ -91,14 +91,14 @@ create_free_class(struct vea_free_class *vfc, struct vea_space_df *md)
 	}
 
 	D_ASSERT(vfc->vfc_lrus == NULL);
-	D_ALLOC(vfc->vfc_lrus, sizeof(*vfc->vfc_lrus) * lru_cnt);
+	D_ALLOC_ARRAY(vfc->vfc_lrus, lru_cnt);
 	if (vfc->vfc_lrus == NULL) {
 		rc = -DER_NOMEM;
 		goto error;
 	}
 
 	D_ASSERT(vfc->vfc_sizes == NULL);
-	D_ALLOC(vfc->vfc_sizes, sizeof(*vfc->vfc_sizes) * lru_cnt);
+	D_ALLOC_ARRAY(vfc->vfc_sizes, lru_cnt);
 	if (vfc->vfc_sizes == NULL) {
 		rc = -DER_NOMEM;
 		goto error;
@@ -114,8 +114,8 @@ create_free_class(struct vea_free_class *vfc, struct vea_space_df *md)
 	vfc->vfc_lru_cnt = lru_cnt;
 
 	D_ASSERT(vfc->vfc_cursor == NULL);
-	size = sizeof(*vfc->vfc_cursor) + lru_cnt * sizeof(struct vea_entry *);
-	D_ALLOC(vfc->vfc_cursor, size);
+	size = lru_cnt * sizeof(struct vea_entry *);
+	D_ALLOC_ARRAY(vfc->vfc_cursor, size);
 	if (vfc->vfc_cursor == NULL) {
 		rc = -DER_NOMEM;
 		goto error;

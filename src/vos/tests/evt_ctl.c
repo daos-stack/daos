@@ -586,13 +586,13 @@ ts_many_add(char *args)
 		return -1;
 	}
 
-	buf = malloc(size);
+	D_ALLOC(buf, size);
 	if (!buf)
 		return -1;
 
 	seq = dts_rand_iarr_alloc(nr, 0);
 	if (!seq) {
-		free(buf);
+		D_FREE(buf);
 		return -1;
 	}
 
@@ -622,8 +622,8 @@ ts_many_add(char *args)
 		}
 	}
 
-	free(buf);
-	free(seq);
+	D_FREE(buf);
+	D_FREE(seq);
 	return rc;
 }
 

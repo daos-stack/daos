@@ -143,9 +143,9 @@ ds_mgmt_tgt_init(void)
 	return 0;
 
 err_zombies:
-	free(zombies_path);
+	D_FREE(zombies_path);
 err_newborns:
-	free(newborns_path);
+	D_FREE(newborns_path);
 err:
 	return rc;
 }
@@ -153,8 +153,8 @@ err:
 void
 ds_mgmt_tgt_fini(void)
 {
-	free(zombies_path);
-	free(newborns_path);
+	D_FREE(zombies_path);
+	D_FREE(newborns_path);
 }
 
 static int
@@ -292,7 +292,7 @@ tgt_vos_create_one(void *varg)
 			DP_UUID(vpa->vpa_uuid), path, rc);
 
 	if (path)
-		free(path);
+		D_FREE(path);
 	return rc;
 }
 
@@ -356,7 +356,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 		}
 	}
 	if (path)
-		free(path);
+		D_FREE(path);
 	if (fd >= 0)
 		(void)close(fd);
 
@@ -424,7 +424,7 @@ out_tree:
 	(void)subtree_destroy(newborn);
 	(void)rmdir(newborn);
 out:
-	free(newborn);
+	D_FREE(newborn);
 	return rc;
 }
 
@@ -463,11 +463,11 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	new_uuids_nr = ret_uuids_nr + tc_uuids_nr;
 
 	/* Append tc_uuids to ret_uuids */
-	D_ALLOC(new_uuids, sizeof(*new_uuids) * new_uuids_nr);
+	D_ALLOC_ARRAY(new_uuids, new_uuids_nr);
 	if (new_uuids == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC(new_ranks, sizeof(*new_ranks) * new_uuids_nr);
+	D_ALLOC_ARRAY(new_ranks, new_uuids_nr);
 	if (new_ranks == NULL) {
 		D_FREE(new_uuids);
 		return -DER_NOMEM;
@@ -561,7 +561,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tc_out->tc_ranks.ca_count = 1;
 
 free:
-	free(path);
+	D_FREE(path);
 out:
 	tc_out->tc_rc = rc;
 	crt_reply_send(tc_req);
@@ -602,7 +602,7 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 	(void)subtree_destroy(zombie);
 	(void)rmdir(zombie);
 out:
-	free(zombie);
+	D_FREE(zombie);
 	return rc;
 }
 
@@ -648,12 +648,12 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		rc = dir_fsync(path);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
-		free(zombie);
+		D_FREE(zombie);
 	} else {
 		rc = daos_errno2der(errno);
 	}
 
-	free(path);
+	D_FREE(path);
 out:
 	td_out->td_rc = rc;
 	crt_reply_send(td_req);
