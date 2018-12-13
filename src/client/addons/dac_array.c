@@ -2089,7 +2089,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			 * Punch the entire dkey since it's in a higher dkey
 			 * group than the intended size.
 			 */
-			D_DEBUG(DB_IO, "Punching key\n");
+			D_DEBUG(DB_IO, "Punching key: "DF_U64"\n", dkey_val);
 			rc = punch_key(args->oh, args->epoch, dkey_val,
 				       props->ptask);
 			if (rc)
@@ -2097,17 +2097,21 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		} else if (dkey_val == props->dkey_val && props->record_i) {
 			props->update_dkey = false;
 
-			D_DEBUG(DB_IO, "Punching extent\n");
-			/*
-			 * Punch all records above record_i, then check if
-			 * record_i exists and insert a record if it doesn't.
-			 */
-			rc = punch_extent(args->oh, args->epoch, dkey_val,
-					  props->record_i, props->num_records,
-					  props->ptask);
-			if (rc)
-				return rc;
+			if (props->record_i + 1 != props->chunk_size) {
+				D_ASSERT(props->record_i + 1 <
+					 props->chunk_size);
+				/** Punch all records above record_i */
+				D_DEBUG(DB_IO, "Punch extent in key "DF_U64"\n",
+					dkey_val);
+				rc = punch_extent(args->oh, args->epoch,
+						  dkey_val, props->record_i,
+						  props->num_records,
+						  props->ptask);
+				if (rc)
+					return rc;
+			}
 
+			/** Check record_i if exists, add one if it doesn't */
 			rc = check_record(args->oh, args->epoch, dkey_val,
 					  props->record_i, props->cell_size,
 					  props->ptask);

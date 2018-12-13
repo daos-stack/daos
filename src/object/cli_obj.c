@@ -1196,7 +1196,7 @@ obj_iod_valid(unsigned int nr, daos_iod_t *iods, bool update)
 			return false;
 
 		case DAOS_IOD_ARRAY:
-			if (iods[i].iod_nr == 0) /* size query */
+			if (!update && iods[i].iod_nr == 0) /* size query */
 				continue;
 
 			if (obj_recx_valid(iods[i].iod_nr, iods[i].iod_recxs,
