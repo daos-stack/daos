@@ -1678,8 +1678,10 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		/*
 		 * NB: This is part of the current hack to keep "supporting"
 		 * overwrite for same epoch, full overwrite.
+		 * No copy for duplicate punch.
 		 */
-		evt_ptr_copy(tcx, entry);
+		if (entry->ei_inob > 0)
+			evt_ptr_copy(tcx, entry);
 		goto out;
 	}
 
