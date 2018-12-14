@@ -58,7 +58,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_obj_id_t oid,
 	rsize = strlen(val_fmt) + nakeys_strlen + strlen(value) + 1;
 
 	for (i = 0; i < nakeys; i++) {
-		akey[i] = malloc(strlen(akey_fmt) + nakeys_strlen + 1);
+		D_ALLOC(akey[i], strlen(akey_fmt) + nakeys_strlen + 1);
 		assert_non_null(akey[i]);
 		sprintf(akey[i], akey_fmt, i);
 		rec_size[i] = rsize;
@@ -81,7 +81,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_obj_id_t oid,
 	} else {	/* op == VERIFY */
 		char *rec_verify;
 
-		rec_verify = calloc(rsize, 1);
+		D_ALLOC_ARRAY(rec_verify, (int)rsize);
 		assert_non_null(rec_verify);
 		print_message("verifying...\n");
 		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
@@ -96,7 +96,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_obj_id_t oid,
 			assert_memory_equal(rec[i], rec_verify,
 					    req.iod[i].iod_size);
 		}
-		free(rec_verify);
+		D_FREE(rec_verify);
 	}
 }
 

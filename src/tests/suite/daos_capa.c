@@ -39,7 +39,7 @@ poh_invalidate_local(daos_handle_t *poh)
 	assert_int_equal(rc, 0);
 
 	/** allocate buffer for global pool handle */
-	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
 	ghdl.iov_len = ghdl.iov_buf_len;
 
 	/** generate global handle */

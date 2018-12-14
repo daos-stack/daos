@@ -202,7 +202,7 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 	}
 
 	if (svc.rl_ranks != NULL)
-		free(svc.rl_ranks);
+		D_FREE(svc.rl_ranks);
 	return rc;
 }
 

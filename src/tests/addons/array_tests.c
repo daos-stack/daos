@@ -64,7 +64,7 @@ array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
 	assert_int_equal(rc, MPI_SUCCESS);
 
 	/** allocate buffer for global pool handle */
-	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
 	ghdl.iov_len = ghdl.iov_buf_len;
 
 	if (rank == 0) {
@@ -83,7 +83,7 @@ array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
 		assert_int_equal(rc, 0);
 	}
 
-	free(ghdl.iov_buf);
+	D_FREE(ghdl.iov_buf);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -300,9 +300,9 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	array_oh_share(arg->coh, arg->myrank, &oh);
 
 	/** Allocate and set buffer */
-	wbuf = malloc(NUM_ELEMS*sizeof(int));
+	D_ALLOC_ARRAY(wbuf, NUM_ELEMS);
 	assert_non_null(wbuf);
-	rbuf = malloc(NUM_ELEMS*sizeof(int));
+	D_ALLOC_ARRAY(rbuf, NUM_ELEMS);
 	assert_non_null(rbuf);
 	for (i = 0; i < NUM_ELEMS; i++)
 		wbuf[i] = i+1;
@@ -368,8 +368,8 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 		assert_int_equal(wbuf[i], rbuf[i]);
 	}
 
-	free(rbuf);
-	free(wbuf);
+	D_FREE(rbuf);
+	D_FREE(wbuf);
 
 	daos_sync_ranks(MPI_COMM_WORLD);
 
@@ -453,16 +453,16 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	array_oh_share(arg->coh, arg->myrank, &oh);
 
 	/** Allocate and set buffer */
-	wbuf = malloc(NUM_ELEMS * sizeof(int));
+	D_ALLOC_ARRAY(wbuf, NUM_ELEMS);
 	assert_non_null(wbuf);
-	rbuf = malloc(NUM_ELEMS * sizeof(int));
+	D_ALLOC_ARRAY(rbuf, NUM_ELEMS);
 	assert_non_null(rbuf);
 	for (i = 0; i < NUM_ELEMS; i++)
 		wbuf[i] = i+1;
 
 	/** set array location */
 	iod.arr_nr = NUM_ELEMS;
-	iod.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) * NUM_ELEMS);
+	D_ALLOC_ARRAY(iod.arr_rgs, NUM_ELEMS);
 	assert_non_null(iod.arr_rgs);
 
 	for (i = 0; i < NUM_ELEMS; i++) {
@@ -525,8 +525,8 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		assert_int_equal(wbuf[i], rbuf[i]);
 	}
 
-	free(rbuf);
-	free(wbuf);
+	D_FREE(rbuf);
+	D_FREE(wbuf);
 
 	daos_sync_ranks(MPI_COMM_WORLD);
 
@@ -574,7 +574,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		assert_int_equal(rc, 0);
 	}
 
-	free(iod.arr_rgs);
+	D_FREE(iod.arr_rgs);
 	MPI_Barrier(MPI_COMM_WORLD);
 } /* End contig_mem_str_arr_io_helper */
 
@@ -610,18 +610,17 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** Allocate and set buffer */
 	for (i = 0; i < NUM_SEGS; i++) {
-		wbuf[i] = malloc((NUM_ELEMS/NUM_SEGS) * sizeof(int));
+		D_ALLOC_ARRAY(wbuf[i], (NUM_ELEMS/NUM_SEGS));
 		assert_non_null(wbuf[i]);
 		for (j = 0; j < NUM_ELEMS/NUM_SEGS; j++)
 			wbuf[i][j] = (i * NUM_ELEMS) + j;
-		rbuf[i] = malloc((NUM_ELEMS/NUM_SEGS) * sizeof(int));
+		D_ALLOC_ARRAY(rbuf[i], (NUM_ELEMS/NUM_SEGS));
 		assert_non_null(rbuf[i]);
 	}
 
 	/** set array location */
 	iod.arr_nr = NUM_ELEMS;
-	iod.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) *
-					       NUM_ELEMS);
+	D_ALLOC_ARRAY(iod.arr_rgs, NUM_ELEMS);
 	assert_non_null(iod.arr_rgs);
 
 	for (i = 0; i < NUM_ELEMS; i++) {
@@ -632,7 +631,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** set memory location */
 	sgl.sg_nr = NUM_SEGS;
-	sgl.sg_iovs = (daos_iov_t *)malloc(sizeof(daos_iov_t) * NUM_SEGS);
+	D_ALLOC_ARRAY(sgl.sg_iovs, NUM_SEGS);
 	assert_non_null(sgl.sg_iovs);
 
 	for (i = 0; i < NUM_SEGS; i++) {
@@ -695,11 +694,11 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	for (i = 0; i < NUM_SEGS; i++) {
-		free(rbuf[i]);
-		free(wbuf[i]);
+		D_FREE(rbuf[i]);
+		D_FREE(wbuf[i]);
 	}
-	free(iod.arr_rgs);
-	free(sgl.sg_iovs);
+	D_FREE(iod.arr_rgs);
+	D_FREE(sgl.sg_iovs);
 
 	daos_sync_ranks(MPI_COMM_WORLD);
 
@@ -767,9 +766,9 @@ read_empty_records(void **state)
 	assert_int_equal(rc, 0);
 
 	/** Allocate and set buffer */
-	wbuf = malloc(NUM_ELEMS * sizeof(int));
+	D_ALLOC_ARRAY(wbuf, NUM_ELEMS);
 	assert_non_null(wbuf);
-	rbuf = malloc(NUM_ELEMS * sizeof(int));
+	D_ALLOC_ARRAY(rbuf, NUM_ELEMS);
 	assert_non_null(rbuf);
 	for (i = 0; i < NUM_ELEMS; i++) {
 		wbuf[i] = i+1;
@@ -783,8 +782,7 @@ read_empty_records(void **state)
 
 	/** set array location */
 	iod.arr_nr = NUM_ELEMS;
-	iod.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) *
-					     NUM_ELEMS);
+	D_ALLOC_ARRAY(iod.arr_rgs, NUM_ELEMS);
 	assert_non_null(iod.arr_rgs);
 
 	/** Read from empty array */
@@ -836,9 +834,9 @@ read_empty_records(void **state)
 	for (i = 1; i < NUM_ELEMS; i++)
 		assert_int_equal(rbuf[i], wbuf[i]);
 
-	free(rbuf);
-	free(wbuf);
-	free(iod.arr_rgs);
+	D_FREE(rbuf);
+	D_FREE(wbuf);
+	D_FREE(iod.arr_rgs);
 
 	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
@@ -872,7 +870,7 @@ strided_array(void **state)
 	assert_int_equal(rc, 0);
 
 	/** Allocate and set buffer */
-	buf = malloc(NUM * sizeof(int) * 2);
+	D_ALLOC_ARRAY(buf, (NUM * 2));
 	assert_non_null(buf);
 
 	for (i = 0; i < NUM * 2; i++)
@@ -880,7 +878,7 @@ strided_array(void **state)
 
 	/** set array location */
 	iod.arr_nr = NUM;
-	iod.arr_rgs = malloc(sizeof(daos_range_t) * NUM);
+	D_ALLOC_ARRAY(iod.arr_rgs, NUM);
 	assert_non_null(iod.arr_rgs);
 
 	j = 0;
@@ -892,7 +890,7 @@ strided_array(void **state)
 
 	/** set memory location */
 	sgl.sg_nr = NUM;
-	sgl.sg_iovs = malloc(sizeof(daos_iov_t) * NUM);
+	D_ALLOC_ARRAY(sgl.sg_iovs, NUM);
 	j = 0;
 	for (i = 0 ; i < NUM; i++) {
 		daos_iov_set(&sgl.sg_iovs[i], &buf[j], sizeof(int));
@@ -928,8 +926,8 @@ strided_array(void **state)
 	if (nerrors)
 		print_message("Data verification found %zu errors\n", nerrors);
 
-	free(buf);
-	free(iod.arr_rgs);
+	D_FREE(buf);
+	D_FREE(iod.arr_rgs);
 
 	assert_int_equal(nerrors, 0);
 	MPI_Barrier(MPI_COMM_WORLD);

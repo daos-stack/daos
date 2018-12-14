@@ -259,7 +259,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	srandom(seed);
 
 	if (arg == NULL) {
-		arg = malloc(sizeof(test_arg_t));
+		D_ALLOC(arg, sizeof(test_arg_t));
 		if (arg == NULL)
 			return -1;
 		*state = arg;
@@ -294,7 +294,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		rc = test_setup_next_step(state, pool);
 
 	 if (rc) {
-		free(arg);
+		D_FREE(arg);
 		*state = NULL;
 	}
 	return rc;

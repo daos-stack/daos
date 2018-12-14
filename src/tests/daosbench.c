@@ -304,9 +304,9 @@ ioreq_fini(struct a_ioreq *ioreq)
 static void
 free_buffers()
 {
-	free(buffers);
-	free(dkbuf);
-	free(akbuf);
+	D_FREE(buffers);
+	D_FREE(dkbuf);
+	D_FREE(akbuf);
 }
 
 static void
@@ -444,7 +444,7 @@ aio_req_init(struct test *test)
 
 	alloc_buffers(test, test->t_naios);
 	for (i = 0; i < test->t_naios; i++) {
-		ioreq = malloc(sizeof(*ioreq));
+		D_ALLOC(ioreq, sizeof(*ioreq));
 		if (ioreq == NULL)
 			DBENCH_ERR(ENOMEM,
 				   "Failed to allocate ioreq array");
@@ -458,7 +458,7 @@ aio_req_init(struct test *test)
 	}
 
 	naios = test->t_naios;
-	events = malloc((sizeof(*events) * test->t_naios));
+	D_ALLOC_ARRAY(events, test->t_naios);
 	DBENCH_CHECK(events == NULL, "Failed in allocating events array\n");
 }
 
@@ -468,7 +468,7 @@ aio_req_fini(struct test *test)
 	struct a_ioreq *ioreq;
 	struct a_ioreq *tmp;
 
-	free(events);
+	D_FREE(events);
 
 	d_list_for_each_entry_safe(ioreq, tmp, &aios, list) {
 		DBENCH_INFO("Freeing AIO %p: buffer %p", ioreq,
@@ -476,7 +476,7 @@ aio_req_fini(struct test *test)
 
 		d_list_del_init(&ioreq->list);
 		ioreq_fini(ioreq);
-		free(ioreq);
+		D_FREE(ioreq);
 	}
 	free_buffers();
 }
@@ -496,7 +496,7 @@ aio_req_wait(struct test *test, int fetch_flag, uint64_t value)
 	assert(rc <= test->t_naios - naios);
 
 	if (fetch_flag && t_validate) {
-		valbuf = malloc(test->t_val_bufsize);
+		D_ALLOC(valbuf, test->t_val_bufsize);
 		if (valbuf == NULL)
 			DBENCH_ERR(ENOMEM,
 				   "Valbuf allocation error\n");
@@ -534,7 +534,7 @@ aio_req_wait(struct test *test, int fetch_flag, uint64_t value)
 			}
 		}
 	}
-	free(valbuf);
+	D_FREE(valbuf);
 	DBENCH_INFO("Found %d completed AIOs (%d free %d busy)",
 		    rc, naios, test->t_naios - naios);
 }
@@ -891,7 +891,7 @@ update_verify(struct test *test, int key_type, uint64_t value)
 	 */
 	counter = (key_type == 2) ? test->t_nindexes : test->t_nkeys;
 
-	valbuf = malloc(test->t_val_bufsize);
+	D_ALLOC(valbuf, test->t_val_bufsize);
 	if (valbuf == NULL)
 		DBENCH_ERR(ENOMEM,
 			   "Error in allocating lookup buf\n");
@@ -923,7 +923,7 @@ update_verify(struct test *test, int key_type, uint64_t value)
 	}
 	ioreq_fini(&ioreq);
 	free_buffers();
-	free(valbuf);
+	D_FREE(valbuf);
 }
 
 static void
@@ -1184,7 +1184,7 @@ kv_dkey_enumerate(struct test *test)
 
 	/* All updates completed. Starting to enumerate */
 	memset(&anchor_out, 0, sizeof(anchor_out));
-	buf = calloc(5 * test->t_dkey_size, 1);
+	D_ALLOC_ARRAY(buf, (int)(5 * test->t_dkey_size));
 	ioreq_init(&e_ioreq, test, 0);
 
 	chrono_record("begin");
@@ -1246,7 +1246,7 @@ next:
 	}
 
 	/* Cleanup */
-	free(buf);
+	D_FREE(buf);
 	kv_test_report(test, 0);
 }
 
@@ -1825,7 +1825,7 @@ test_init(struct test *test, int argc, char *argv[])
 static void
 test_fini(struct test *test)
 {
-	free(test->t_pname);
+	D_FREE(test->t_pname);
 	if (comm_world_rank == 0) {
 		time_t	t = time(NULL);
 

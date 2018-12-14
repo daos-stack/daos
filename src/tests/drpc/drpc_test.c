@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <gurt/common.h>
 #include <daos/drpc.h>
 #include "drpc_test.pb-c.h"
 
@@ -61,7 +62,7 @@ main(int argc, char **argv)
 	body.name = argv[2];
 
 	body_buffer_length = hello__hello__get_packed_size(&body);
-	body_buffer = malloc(body_buffer_length);
+	D_ALLOC(body_buffer, body_buffer_length);
 	if (!body_buffer) {
 		fprintf(stderr, "Unable to allocate buffer for call body\n");
 		exit(1);

@@ -51,11 +51,11 @@ simple_put_get(void **state)
 	int		i;
 	int		rc;
 
-	buf = malloc(buf_size);
+	D_ALLOC(buf, buf_size);
 	assert_non_null(buf);
 	dts_buf_render(buf, buf_size);
 
-	buf_out = malloc(buf_size);
+	D_ALLOC(buf_out, buf_size);
 	assert_non_null(buf_out);
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
@@ -157,8 +157,8 @@ simple_put_get(void **state)
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
-	free(buf_out);
-	free(buf);
+	D_FREE(buf_out);
+	D_FREE(buf);
 
 	if (arg->async) {
 		rc = daos_event_fini(&ev);
@@ -201,16 +201,16 @@ simple_multi_io(void **state)
 	recx.rx_nr	= buf_size;
 
 	for (i = 0; i < NUM_KEYS; i++) {
-		io_array[i].ioa_iods = malloc(sizeof(daos_iod_t));
-		io_array[i].ioa_sgls = malloc(sizeof(daos_sg_list_t));
-		io_array[i].ioa_dkey = malloc(sizeof(daos_key_t));
+		D_ALLOC(io_array[i].ioa_iods, sizeof(daos_iod_t));
+		D_ALLOC(io_array[i].ioa_sgls, sizeof(daos_sg_list_t));
+		D_ALLOC(io_array[i].ioa_dkey, sizeof(daos_key_t));
 		io_array[i].ioa_nr = 1;
 
-		buf[i] = malloc(buf_size);
+		D_ALLOC(buf[i], buf_size);
 		assert_non_null(buf[i]);
 		dts_buf_render(buf[i], buf_size);
 
-		buf_out[i] = malloc(buf_size);
+		D_ALLOC(buf_out[i], buf_size);
 		assert_non_null(buf_out[i]);
 
 		/** init dkey */
@@ -274,11 +274,11 @@ simple_multi_io(void **state)
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
 	for (i = 0; i < NUM_KEYS; i++) {
-		free(io_array[i].ioa_iods);
-		free(io_array[i].ioa_dkey);
-		free(io_array[i].ioa_sgls);
-		free(buf_out[i]);
-		free(buf[i]);
+		D_FREE(io_array[i].ioa_iods);
+		D_FREE(io_array[i].ioa_dkey);
+		D_FREE(io_array[i].ioa_sgls);
+		D_FREE(buf_out[i]);
+		D_FREE(buf[i]);
 	}
 
 	if (arg->async) {

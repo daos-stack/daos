@@ -221,7 +221,7 @@ array(void)
 	int		 k;
 
 	/** allocate and initialize I/O requests */
-	reqs = malloc(sizeof(struct ioreq) * MAX_IOREQS);
+	D_ALLOC_ARRAY(reqs, MAX_IOREQS);
 	ASSERT(reqs != NULL, "malloc of reqs failed");
 	ioreqs_init(reqs);
 
@@ -338,7 +338,7 @@ array(void)
 		ASSERT(rc == 0, "event fini failed with %d", rc);
 	}
 
-	free(reqs);
+	D_FREE(reqs);
 }
 
 /** states of the epoch state machine executed by the transaction manager */

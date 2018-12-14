@@ -532,12 +532,12 @@ recx_parse(char *recx_str, daos_recx_t **recxs, int **values,
 	uint64_t	 rx_end;
 	unsigned int	 idx = 0;
 
-	D_ALLOC(recx_allocated, sizeof(daos_recx_t) * IOREQ_IOD_NR);
+	D_ALLOC_ARRAY(recx_allocated, IOREQ_IOD_NR);
 	if (recx_allocated == NULL)
 		return -DER_NOMEM;
 
 	if (values) {
-		D_ALLOC(value_allocated, sizeof(int) * IOREQ_IOD_NR);
+		D_ALLOC_ARRAY(value_allocated, IOREQ_IOD_NR);
 		if (value_allocated == NULL) {
 			D_FREE(recx_allocated);
 			return -DER_NOMEM;

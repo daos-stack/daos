@@ -43,8 +43,7 @@ parse_rank_list(char *str_rank_list, d_rank_list_t *num_rank_list)
 	if (i >= MAX)
 		printf("rank list exceeded maximum, threw some away");
 	num_rank_list->rl_nr = i;
-	num_rank_list->rl_ranks = (d_rank_t *)calloc(
-		num_rank_list->rl_nr, sizeof(d_rank_t));
+	D_ALLOC_ARRAY(num_rank_list->rl_ranks, num_rank_list->rl_nr);
 	if (num_rank_list->rl_ranks == NULL) {
 		printf("failed allocating pool service rank list");
 		return -1;

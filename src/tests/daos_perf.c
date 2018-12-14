@@ -297,7 +297,7 @@ ts_key_update_or_fetch(enum ts_op_type_t update_or_fetch, daos_epoch_t *epoch,
 	}
 
 failed:
-	free(indices);
+	D_FREE(indices);
 	return rc;
 }
 
@@ -378,7 +378,7 @@ ts_verify_recx_p_akey(char *dkey, daos_epoch_t *epoch)
 		}
 	}
 failed:
-	free(indices);
+	D_FREE(indices);
 	return rc;
 }
 

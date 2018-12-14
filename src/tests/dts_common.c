@@ -154,7 +154,7 @@ credits_init(struct dts_context *tsc)
 		struct dts_io_credit *cred = &tsc->tsc_cred_buf[i];
 
 		memset(cred, 0, sizeof(*cred));
-		cred->tc_vbuf = calloc(1, tsc->tsc_cred_vsize);
+		D_ALLOC(cred->tc_vbuf, tsc->tsc_cred_vsize);
 		if (!cred->tc_vbuf) {
 			fprintf(stderr, "Cannt allocate buffer size=%d\n",
 				tsc->tsc_cred_vsize);
@@ -182,7 +182,7 @@ credits_fini(struct dts_context *tsc)
 		if (!daos_handle_is_inval(tsc->tsc_eqh))
 			daos_event_fini(&tsc->tsc_cred_buf[i].tc_ev);
 
-		free(tsc->tsc_cred_buf[i].tc_vbuf);
+		D_FREE(tsc->tsc_cred_buf[i].tc_vbuf);
 	}
 
 	if (!daos_handle_is_inval(tsc->tsc_eqh))

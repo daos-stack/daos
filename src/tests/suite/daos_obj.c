@@ -27,6 +27,7 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_iotest.h"
+#include <daos_types.h>
 
 #define IO_SIZE_NVME	(5ULL << 10) /* all records  >= 4K */
 #define	IO_SIZE_SCM	64
@@ -600,11 +601,11 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/* Alloc and set buffer to be a sting of all uppercase letters */
-	ow_buf = malloc(size);
+	D_ALLOC(ow_buf, size);
 	assert_non_null(ow_buf);
 	dts_buf_render_uppercase(ow_buf, size);
 	/* Alloc the fetch buffer */
-	fbuf = malloc(size);
+	D_ALLOC(fbuf, size);
 	assert_non_null(fbuf);
 	memset(fbuf, 0, size);
 
@@ -657,8 +658,8 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 		rx_nr++;
 	}
 
-	free(fbuf);
-	free(ow_buf);
+	D_FREE(fbuf);
+	D_FREE(ow_buf);
 	ioreq_fini(&req);
 }
 
@@ -682,11 +683,11 @@ io_epoch_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
 	sprintf(akey, "ep_ow_full akey_%d", (int)size);
 
 	/* Alloc and set buffer to be a sting of all uppercase letters */
-	ow_buf = malloc(size);
+	D_ALLOC(ow_buf, size);
 	assert_non_null(ow_buf);
 	dts_buf_render_uppercase(ow_buf, size);
 	/* Alloc the fetch buffer */
-	fbuf = malloc(size);
+	D_ALLOC(fbuf, size);
 	assert_non_null(fbuf);
 	memset(fbuf, 0, size);
 
@@ -715,8 +716,8 @@ io_epoch_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
 	/* Print message upon successful overwrite */
 	print_message("overwrite size: %lu\n", size);
 
-	free(fbuf);
-	free(ow_buf);
+	D_FREE(fbuf);
+	D_FREE(ow_buf);
 	ioreq_fini(&req);
 }
 
@@ -796,7 +797,7 @@ io_var_akey_size(void **state)
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	key = malloc(max_size + 1);
+	D_ALLOC(key, max_size + 1);
 	assert_non_null(key);
 	memset(key, 'a', max_size);
 
@@ -821,7 +822,7 @@ io_var_akey_size(void **state)
 		key[size] = 'b';
 	}
 
-	free(key);
+	D_FREE(key);
 	ioreq_fini(&req);
 }
 
@@ -839,7 +840,7 @@ io_var_dkey_size(void **state)
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	key = malloc(max_size + 1);
+	D_ALLOC(key, max_size + 1);
 	assert_non_null(key);
 	memset(key, 'a', max_size);
 
@@ -864,7 +865,7 @@ io_var_dkey_size(void **state)
 		key[size] = 'b';
 	}
 
-	free(key);
+	D_FREE(key);
 	ioreq_fini(&req);
 }
 
@@ -886,10 +887,10 @@ io_var_rec_size(void **state)
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	fetch_buf = malloc(max_size);
+	D_ALLOC(fetch_buf, max_size);
 	assert_non_null(fetch_buf);
 
-	update_buf = malloc(max_size);
+	D_ALLOC(update_buf, max_size);
 	assert_non_null(update_buf);
 
 	dts_buf_render(update_buf, max_size);
@@ -915,8 +916,8 @@ io_var_rec_size(void **state)
 		assert_memory_equal(update_buf, fetch_buf, size);
 	}
 
-	free(update_buf);
-	free(fetch_buf);
+	D_FREE(update_buf);
+	D_FREE(fetch_buf);
 	ioreq_fini(&req);
 }
 
@@ -937,9 +938,9 @@ io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 
 	ioreq_init(&req, arg->coh, oid, iod_type, arg);
 
-	fetch_buf = malloc(size);
+	D_ALLOC(fetch_buf, size);
 	assert_non_null(fetch_buf);
-	update_buf = malloc(size);
+	D_ALLOC(update_buf, size);
 	assert_non_null(update_buf);
 	dts_buf_render(update_buf, size);
 
@@ -956,8 +957,8 @@ io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 		assert_int_equal(req.iod[0].iod_size, size);
 		assert_memory_equal(update_buf, fetch_buf, size);
 	}
-	free(update_buf);
-	free(fetch_buf);
+	D_FREE(update_buf);
+	D_FREE(fetch_buf);
 	ioreq_fini(&req);
 }
 
@@ -1179,13 +1180,13 @@ enumerate_simple(void **state)
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	small_buf = malloc(ENUM_DESC_BUF);
-	large_key = malloc(ENUM_LARGE_KEY_BUF);
+	D_ALLOC(small_buf, ENUM_DESC_BUF);
+	D_ALLOC(large_key, ENUM_LARGE_KEY_BUF);
 	memset(large_key, 'L', ENUM_LARGE_KEY_BUF);
 	large_key[ENUM_LARGE_KEY_BUF - 1] = '\0';
-	large_buf = malloc(ENUM_LARGE_KEY_BUF * 2);
+	D_ALLOC(large_buf, ENUM_LARGE_KEY_BUF * 2);
 
-	data_buf = malloc(IO_SIZE_NVME);
+	D_ALLOC(data_buf, IO_SIZE_NVME);
 	assert_non_null(data_buf);
 	dts_buf_render(data_buf, IO_SIZE_NVME);
 
@@ -1358,10 +1359,10 @@ enumerate_simple(void **state)
 	/** Two partial record at start */
 	assert_int_equal(key_nr, ENUM_KEY_REC_NR + 2);
 
-	free(small_buf);
-	free(large_buf);
-	free(large_key);
-	free(data_buf);
+	D_FREE(small_buf);
+	D_FREE(large_buf);
+	D_FREE(large_key);
+	D_FREE(data_buf);
 	/** XXX Verify kds */
 	ioreq_fini(&req);
 }
@@ -1642,7 +1643,7 @@ io_manyrec_internal(void **state, daos_obj_id_t oid, unsigned int size,
 		akeys[i] = calloc(30, 1);
 		assert_non_null(akeys[i]);
 		snprintf(akeys[i], 30, "%s%d", akey, i);
-		rec[i] = malloc(size);
+		D_ALLOC(rec[i], size);
 		assert_non_null(rec[i]);
 		dts_buf_render(rec[i], size);
 		rec_size[i] = size;
@@ -1666,9 +1667,9 @@ io_manyrec_internal(void **state, daos_obj_id_t oid, unsigned int size,
 		print_message("\tsize = %lu\n", req.iod[i].iod_size);
 		assert_int_equal(req.iod[i].iod_size, rec_size[i]);
 		assert_memory_equal(val[i], rec[i], rec_size[i]);
-		free(val[i]);
-		free(akeys[i]);
-		free(rec[i]);
+		D_FREE(val[i]);
+		D_FREE(akeys[i]);
+		D_FREE(rec[i]);
 	}
 	ioreq_fini(&req);
 }
@@ -1927,7 +1928,7 @@ read_empty_records_internal(void **state, unsigned int size)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
-	buf_out = malloc(size * sizeof(*buf_out));
+	D_ALLOC_ARRAY(buf_out, size);
 	assert_non_null(buf_out);
 
 	for (i = 0; i < size; i++)
@@ -1963,7 +1964,7 @@ read_empty_records_internal(void **state, unsigned int size)
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
-	free(buf_out);
+	D_FREE(buf_out);
 }
 
 static void
@@ -2007,10 +2008,10 @@ fetch_size(void **state)
 	daos_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	for (i = 0; i < NUM_AKEYS; i++) {
-		akey[i] = malloc(strlen(akey_fmt) + 1);
+		D_ALLOC(akey[i], strlen(akey_fmt) + 1);
 		sprintf(akey[i], akey_fmt, i);
 
-		buf[i] = malloc(size * (i+1));
+		D_ALLOC(buf[i], size * (i+1));
 		assert_non_null(buf[i]);
 
 		dts_buf_render(buf[i], size * (i+1));
@@ -2052,8 +2053,8 @@ fetch_size(void **state)
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < NUM_AKEYS; i++) {
-		free(akey[i]);
-		free(buf[i]);
+		D_FREE(akey[i]);
+		D_FREE(buf[i]);
 	}
 }
 
@@ -2183,10 +2184,10 @@ epoch_discard(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	rec_nvme = malloc(IO_SIZE_NVME);
+	D_ALLOC(rec_nvme, IO_SIZE_NVME);
 	assert_non_null(rec_nvme);
 	dts_buf_render(rec_nvme, IO_SIZE_NVME);
-	rec_scm = malloc(IO_SIZE_SCM);
+	D_ALLOC(rec_scm, IO_SIZE_SCM);
 	assert_non_null(rec_scm);
 	dts_buf_render(rec_scm, IO_SIZE_SCM);
 
@@ -2195,7 +2196,7 @@ epoch_discard(void **state)
 
 	/** Prepare buffers for a fixed set of d-keys and a-keys. */
 	for (i = 0; i < nakeys; i++) {
-		akey[i] = malloc(strlen(akey_fmt) + nakeys_strlen + 1);
+		D_ALLOC(akey[i], strlen(akey_fmt) + nakeys_strlen + 1);
 		assert_non_null(akey[i]);
 		sprintf(akey[i], akey_fmt, i);
 		rec[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
@@ -2266,7 +2267,7 @@ epoch_discard(void **state)
 				      val[i][0], val[i][1]);
 			assert_memory_equal(val[i], rec_verify,
 					    req.iod[i].iod_size);
-			free(rec_verify);
+			D_FREE(rec_verify);
 		}
 		rc = daos_tx_close(th[e], NULL);
 		assert_int_equal(rc, 0);
@@ -2298,12 +2299,12 @@ epoch_discard(void **state)
 	}
 
 	for (i = 0; i < nakeys; i++) {
-		free(val[i]);
-		free(akey[i]);
-		free(rec[i]);
+		D_FREE(val[i]);
+		D_FREE(akey[i]);
+		D_FREE(rec[i]);
 	}
-	free(rec_nvme);
-	free(rec_scm);
+	D_FREE(rec_nvme);
+	D_FREE(rec_scm);
 
 	ioreq_fini(&req);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -2340,10 +2341,10 @@ epoch_commit(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	rec_nvme = malloc(IO_SIZE_NVME);
+	D_ALLOC(rec_nvme, IO_SIZE_NVME);
 	assert_non_null(rec_nvme);
 	dts_buf_render(rec_nvme, IO_SIZE_NVME);
-	rec_scm = malloc(IO_SIZE_SCM);
+	D_ALLOC(rec_scm, IO_SIZE_SCM);
 	assert_non_null(rec_scm);
 	dts_buf_render(rec_scm, IO_SIZE_SCM);
 
@@ -2352,7 +2353,7 @@ epoch_commit(void **state)
 
 	/** Prepare buffers for a fixed set of d-keys and a-keys. */
 	for (i = 0; i < nakeys; i++) {
-		akey[i] = malloc(strlen(akey_fmt) + nakeys_strlen + 1);
+		D_ALLOC(akey[i], strlen(akey_fmt) + nakeys_strlen + 1);
 		assert_non_null(akey[i]);
 		sprintf(akey[i], akey_fmt, i);
 		rec[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
@@ -2414,7 +2415,7 @@ epoch_commit(void **state)
 				      val[i][0], val[i][1]);
 			assert_memory_equal(val[i], rec_verify,
 					    req.iod[i].iod_size);
-			free(rec_verify);
+			D_FREE(rec_verify);
 		}
 	}
 
@@ -2482,16 +2483,16 @@ epoch_commit(void **state)
 			      val[i][0], val[i][1]);
 		assert_memory_equal(val[i], rec_verify,
 				    req.iod[i].iod_size);
-		free(rec_verify);
+		D_FREE(rec_verify);
 	}
 
 	for (i = 0; i < nakeys; i++) {
-		free(val[i]);
-		free(akey[i]);
-		free(rec[i]);
+		D_FREE(val[i]);
+		D_FREE(akey[i]);
+		D_FREE(rec[i]);
 	}
-	free(rec_nvme);
-	free(rec_scm);
+	D_FREE(rec_nvme);
+	D_FREE(rec_scm);
 
 	ioreq_fini(&req);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -2511,7 +2512,7 @@ io_nospace(void **state)
 	/** choose random object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 
-	large_buf = malloc(buf_size);
+	D_ALLOC(large_buf, buf_size);
 	assert_non_null(large_buf);
 	arg->fail_loc = DAOS_OBJ_UPDATE_NOSPACE;
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -2524,7 +2525,7 @@ io_nospace(void **state)
 		insert_single(key, "akey", 0, large_buf,
 			      buf_size, DAOS_TX_NONE, &req);
 	}
-	free(large_buf);
+	D_FREE(large_buf);
 	ioreq_fini(&req);
 }
 
@@ -2722,9 +2723,9 @@ tgt_idx_change_retry(void **state)
 	}
 
 	for (i = 0; i < 5; i++) {
-		free(val[i]);
-		free(akey[i]);
-		free(rec[i]);
+		D_FREE(val[i]);
+		D_FREE(akey[i]);
+		D_FREE(rec[i]);
 	}
 
 	if (arg->myrank == 0) {
@@ -2799,7 +2800,7 @@ fetch_replica_unavail(void **state)
 			DSS_KEY_FAIL_LOC, 0, 0, NULL);
 		assert_int_equal(rc, 0);
 	}
-	free(buf);
+	D_FREE(buf);
 	MPI_Barrier(MPI_COMM_WORLD);
 	ioreq_fini(&req);
 }
@@ -2990,12 +2991,12 @@ blob_unmap_trigger(void **state)
 	/* Epoch discard only currently supports DAOS_IOD_SINGLE type */
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
-	fetch_buf = malloc(IO_SIZE_NVME);
+	D_ALLOC(fetch_buf, IO_SIZE_NVME);
 	assert_non_null(fetch_buf);
-	update_buf = malloc(IO_SIZE_NVME);
+	D_ALLOC(update_buf, IO_SIZE_NVME);
 	assert_non_null(update_buf);
 	dts_buf_render(update_buf, IO_SIZE_NVME);
-	enum_buf = malloc(512);
+	D_ALLOC(enum_buf, 512);
 	assert_non_null(enum_buf);
 
 	/**
@@ -3053,9 +3054,9 @@ blob_unmap_trigger(void **state)
 		assert_int_equal(rc, 0);
 	}
 
-	free(enum_buf);
-	free(fetch_buf);
-	free(update_buf);
+	D_FREE(enum_buf);
+	D_FREE(fetch_buf);
+	D_FREE(update_buf);
 	ioreq_fini(&req);
 	MPI_Barrier(MPI_COMM_WORLD);
 }

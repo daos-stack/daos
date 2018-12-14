@@ -118,7 +118,7 @@ array_simple(void **state)
 	char		*buf_out;
 	int		 rc;
 
-	buf = malloc(arg->size * arg->nr);
+	D_ALLOC(buf, arg->size * arg->nr);
 	assert_non_null(buf);
 
 	dts_buf_render(buf, arg->size * arg->nr);
@@ -158,7 +158,7 @@ array_simple(void **state)
 
 	/** fetch data back */
 	print_message("reading data back ...\n");
-	buf_out = malloc(arg->size * arg->nr);
+	D_ALLOC(buf_out, arg->size * arg->nr);
 	assert_non_null(buf_out);
 	memset(buf_out, 0, arg->size * arg->nr);
 	daos_iov_set(&sg_iov, buf_out, arg->size * arg->nr);
@@ -177,8 +177,8 @@ array_simple(void **state)
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
-	free(buf_out);
-	free(buf);
+	D_FREE(buf_out);
+	D_FREE(buf);
 	print_message("all good\n");
 }
 
@@ -202,7 +202,7 @@ array_partial(void **state)
 
 	arg->size = 4;
 
-	buf = malloc(arg->size * NUM_RECORDS);
+	D_ALLOC(buf, arg->size * NUM_RECORDS);
 	assert_non_null(buf);
 
 	dts_buf_render(buf, arg->size * NUM_RECORDS);
@@ -241,7 +241,7 @@ array_partial(void **state)
 
 	/** fetch 1/2 of the records back */
 	print_message("reading 1/2 of the records back ...\n");
-	buf_out = malloc(arg->size * NUM_RECORDS/2);
+	D_ALLOC(buf_out, arg->size * NUM_RECORDS/2);
 	assert_non_null(buf_out);
 	memset(buf_out, 0, arg->size * NUM_RECORDS/2);
 	daos_iov_set(&sg_iov, buf_out, arg->size * NUM_RECORDS/2);
@@ -274,8 +274,8 @@ array_partial(void **state)
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
-	free(buf_out);
-	free(buf);
+	D_FREE(buf_out);
+	D_FREE(buf);
 	print_message("all good\n");
 }
 
@@ -438,7 +438,7 @@ read_empty(void **state)
 	int		 rc;
 
 	buf_len = 4194304;
-	buf = malloc(buf_len);
+	D_ALLOC(buf, buf_len);
 	D_ASSERT(buf != NULL);
 
 	/** open object */
@@ -477,7 +477,7 @@ read_empty(void **state)
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
 	print_message("all good\n");
-	free(buf);
+	D_FREE(buf);
 }
 
 static const struct CMUnitTest array_tests[] = {

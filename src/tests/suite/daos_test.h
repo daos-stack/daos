@@ -300,7 +300,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	assert_int_equal(rc, MPI_SUCCESS);
 
 	/** allocate buffer for global pool handle */
-	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
 	ghdl.iov_len = ghdl.iov_buf_len;
 
 	if (rank == 0) {
@@ -346,7 +346,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 			print_message("rank %d global2local success\n", rank);
 	}
 
-	free(ghdl.iov_buf);
+	D_FREE(ghdl.iov_buf);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -436,7 +436,7 @@ test_rmdir(const char *path, bool force)
 
 	dir = opendir(path);
 	if (dir == NULL) {
-		free(fullpath);
+		D_FREE(fullpath);
 		if (errno == ENOENT)
 			D_GOTO(out, rc);
 		D_ERROR("can't open directory %s, %d (%s)",
@@ -471,7 +471,7 @@ test_rmdir(const char *path, bool force)
 		if (rc != 0)
 			rc = errno;
 	}
-	free(fullpath);
+	D_FREE(fullpath);
 
 out:
 	return rc;

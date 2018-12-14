@@ -165,8 +165,8 @@ check_ranges(int *num_oids, uint64_t *oids, int num_rgs, test_arg_t *arg)
 	int i, j;
 	int rc;
 
-	g_num_oids = malloc(sizeof(int) * num_rgs * arg->rank_size);
-	g_oids = malloc(sizeof(uint64_t) * num_rgs * arg->rank_size);
+	D_ALLOC_ARRAY(g_num_oids, num_rgs * arg->rank_size);
+	D_ALLOC_ARRAY(g_oids, num_rgs * arg->rank_size);
 
 	rc = MPI_Gather(num_oids, num_rgs, MPI_INT, g_num_oids, num_rgs,
 			MPI_INT, 0, MPI_COMM_WORLD);

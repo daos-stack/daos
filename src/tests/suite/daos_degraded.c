@@ -162,7 +162,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 			daos_kill_exclude_server(arg, arg->pool.pool_uuid,
 						 arg->group, &arg->pool.svc);
 	}
-	free(rec_verify);
+	D_FREE(rec_verify);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
