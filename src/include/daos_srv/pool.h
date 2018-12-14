@@ -93,6 +93,20 @@ struct ds_pool_child {
 	int		spc_ref;
 };
 
+/*
+ * Pool attributes
+ *
+ * Stores per-pool access control information
+ *
+ * This is only being exposed until the access control attributes are
+ * proper encapsulated in the security module.
+ */
+struct pool_attr {
+	uint32_t	pa_uid;
+	uint32_t	pa_gid;
+	uint32_t	pa_mode;
+};
+
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
 void ds_pool_child_put(struct ds_pool_child *child);
 

@@ -1149,11 +1149,22 @@ bcast_create(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opcode,
 				    rpc, NULL, NULL);
 }
 
-struct pool_attr {
-	uint32_t	pa_uid;
-	uint32_t	pa_gid;
-	uint32_t	pa_mode;
-};
+/**
+ * Retrieve the latest leader hint from \a db and fill it into \a hint.
+ *
+ * \param[in]	db	database
+ * \param[out]	hint	rsvc hint
+ */
+void
+ds_pool_set_hint(struct rdb *db, struct rsvc_hint *hint)
+{
+	int rc;
+
+	rc = rdb_get_leader(db, &hint->sh_term, &hint->sh_rank);
+	if (rc != 0)
+		return;
+	hint->sh_flags |= RSVC_HINT_VALID;
+}
 
 static int
 pool_attr_read(struct rdb_tx *tx, const struct pool_svc *svc,
