@@ -147,7 +147,7 @@
 ## By default, DAOS will use all the NVMe-capable SSDs that don't have active
 ## mount points.
 #
-#bdev_include: [pcie1000.0.0.0.1,pcie1000.0.0.0.2,pcie1000.0.0.0.3]
+#bdev_include: ["0000:81:00.1","0000:81:00.2","0000:81:00.3"]
 #
 #
 ## NVMe SSD blacklist
@@ -156,7 +156,7 @@
 ## listed in nvme_include and forces auto-detection to skip those drives.
 ## Immutable after reformat, colons replaced by dots in PCI identifiers.
 #
-#bdev_exclude: [pcie1000.0.0.0.1]
+#bdev_exclude: ["0000:81:00.1"]
 #
 #
 ## Use Hyperthreads
@@ -248,7 +248,7 @@
 #  # When bdev_class is set to nvme, bdev_list is the list of unique NVMe IDs
 #  # that should be different across different server instance.
 #  # Colons replaced by dots in PCI identifiers.
-#  bdev_list: [pcie1000.0.0.0.1]
+#  bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
 #-
 #  # Rank to be assigned as identifier for server.
 #  # Immutable after reformat.

@@ -187,7 +187,6 @@ func NewDefaultConfiguration(ext External) configuration {
 		Key:          "./.daos/daos_server.key",
 		ScmMountPath: "/mnt/daos",
 		Hyperthreads: false,
-		SocketDir:    "/var/run/daos_server",
 		Path:         "etc/daos_server.yml",
 		ext:          ext,
 	}

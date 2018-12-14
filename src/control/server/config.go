@@ -190,6 +190,9 @@ func (c *configuration) populateCliOpts(i int) error {
 	if c.Servers[i].Rank != "" {
 		server.CliOpts = append(server.CliOpts, "-r", server.Rank)
 	}
+	if c.SocketDir != "" {
+		server.CliOpts = append(server.CliOpts, "-d", c.SocketDir)
+	}
 	return nil
 }
 

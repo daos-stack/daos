@@ -71,15 +71,15 @@ if [ -d "/mnt/daos" ]; then
     run_test src/vos/tests/evt_ctl.sh
     run_test build/src/vos/vea/tests/vea_ut
     run_test src/rdb/raft_tests/raft_tests.py
-    # Environment variables specific to the rdb tests
-    export PATH=$SL_PREFIX/bin:$PATH
-    export OFI_INTERFACE=lo
-    # Satisfy requirement for starting daos_server w/o config file
-    export CRT_PHY_ADDR_STR=ofi+sockets
     # Satisfy CGO Link requirements for go-spdk binding imports
     export LD_LIBRARY_PATH=$SL_PREFIX/lib:${LD_LIBRARY_PATH}
-    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test src/control/run_go_tests.sh
+    # Environment variables specific to the rdb tests
+    export PATH=$SL_PREFIX/bin:$PATH
+    # Satisfy requirement for starting daos_server w/o config file
+    export CRT_PHY_ADDR_STR=ofi+sockets
+    export OFI_INTERFACE=lo
+    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test build/src/security/tests/cli_security_tests
 
     if [ $failed -eq 0 ]; then

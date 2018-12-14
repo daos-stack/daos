@@ -52,6 +52,10 @@ extern const char      *dss_storage_path;
 /** NVMe config file */
 extern const char      *dss_nvme_conf;
 
+/** Socket Directory */
+extern const char      *dss_socket_dir;
+
+
 /**
  * Stackable Module API
  * Provides a modular interface to load and register server-side code on

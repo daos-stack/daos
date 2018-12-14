@@ -1,7 +1,7 @@
 name: daos
 servers: []
 provider: ""
-socket_dir: /var/run/daos_server
+socket_dir: ""
 auto: true
 format: safe
 access_points:
@@ -21,7 +21,7 @@ hyperthreads: false
 name: daos
 servers: []
 provider: ""
-socket_dir: /var/run/daos_server
+socket_dir: ""
 auto: true
 format: safe
 access_points:
@@ -41,7 +41,7 @@ hyperthreads: false
 name: new_daos
 servers: []
 provider: ""
-socket_dir: /var/run/daos_server
+socket_dir: ""
 auto: true
 format: safe
 access_points:
@@ -61,7 +61,7 @@ hyperthreads: false
 name: daos
 servers: []
 provider: ""
-socket_dir: /var/run/daos_server
+socket_dir: ""
 auto: true
 format: safe
 access_points:
@@ -81,7 +81,7 @@ hyperthreads: false
 name: daos
 servers: []
 provider: ""
-socket_dir: /var/run/daos_server
+socket_dir: ""
 auto: true
 format: continue
 access_points:
@@ -101,7 +101,7 @@ hyperthreads: false
 name: daos
 servers: []
 provider: ""
-socket_dir: /var/run/daos_server
+socket_dir: ""
 auto: true
 format: force
 access_points:

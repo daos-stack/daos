@@ -13,7 +13,7 @@ servers:
   scm_mount: /mnt/daos/1
   bdev_class: nvme
   bdev_list:
-  - pcie1000.0.0.0.1
+  - 0000:81:00.0
   bdev_number: 0
   bdev_size: 0
   cliopts: []
@@ -54,9 +54,9 @@ fabric_ifaces:
 - qib1
 scm_mount_path: /mnt/daosa
 bdev_include:
-- pcie1000.0.0.0.1
-- pcie1000.0.0.0.2
-- pcie1000.0.0.0.3
+- 0000:81:00.1
+- 0000:81:00.2
+- 0000:81:00.3
 bdev_exclude:
-- pcie1000.0.0.0.1
+- 0000:81:00.1
 hyperthreads: true

@@ -60,6 +60,9 @@ const char	       *dss_storage_path = "/mnt/daos";
 /** NVMe config file */
 const char	       *dss_nvme_conf = "/etc/daos_nvme.conf";
 
+/** Socket Directory */
+const char	       *dss_socket_dir = "/var/run/daos_server";
+
 /** attach_info path to support singleton client */
 static bool	        save_attach_info;
 const char	       *attach_info_path;
@@ -357,6 +360,8 @@ Options:\n\
       Server group name (default \"%s\")\n\
   --storage=path, -s path\n\
       Storage path (default \"%s\")\n\
+  --socket_dir=socket_dir, -d socket_dir\n\
+      Directory where daos_server sockets are located (default \"%s\")\n\
   --nvme=config, -n config\n\
       NVMe config file (default \"%s\")\n\
   --attach_info=path, -apath\n\
@@ -368,7 +373,7 @@ Options:\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, server_group_id, dss_storage_path,
-		dss_nvme_conf);
+		dss_socket_dir, dss_nvme_conf);
 }
 
 static int
@@ -379,6 +384,7 @@ parse(int argc, char **argv)
 		{ "cores",		required_argument,	NULL,	'c' },
 		{ "group",		required_argument,	NULL,	'g' },
 		{ "storage",		required_argument,	NULL,	's' },
+		{ "socket_dir",		required_argument,	NULL,	'd' },
 		{ "nvme",		required_argument,	NULL,	'n' },
 		{ "attach_info",	required_argument,	NULL,	'a' },
 		{ "map",		required_argument,	NULL,	'y' },
@@ -391,8 +397,8 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:m:g:s:n:a:y:r:h", opts, NULL)) !=
-		-1) {
+	while ((c = getopt_long(argc, argv, "c:m:g:s:d:n:a:y:r:h",
+			opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
@@ -419,6 +425,9 @@ parse(int argc, char **argv)
 			break;
 		case 's':
 			dss_storage_path = optarg;
+			break;
+		case 'd':
+			dss_socket_dir = optarg;
 			break;
 		case 'n':
 			dss_nvme_conf = optarg;
