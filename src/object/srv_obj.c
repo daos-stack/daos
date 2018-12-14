@@ -92,6 +92,8 @@ ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
 
+	D_DEBUG(DB_TRACE, "rpc %p opc %d send reply, status %d.\n",
+		rpc, opc_get(rpc->cr_opc), status);
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: %d\n", rc);
@@ -727,7 +729,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	D_ASSERT(orwo != NULL);
 	update = (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE);
 	dispatch = update && orw->orw_shard_tgts.ca_arrays != NULL;
+	tag = dss_get_module_info()->dmi_tid;
 
+	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag %d eph "
+		DF_U64".\n", rpc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
+		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
+		tag, orw->orw_epoch);
 	rc = ds_check_container(orw->orw_co_hdl, orw->orw_co_uuid,
 				&cont_hdl, &cont);
 	if (rc)
@@ -749,8 +756,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		if (update && dispatch)
 			D_GOTO(out, rc = -DER_STALE);
 	}
-
-	tag = dss_get_module_info()->dmi_tid;
 
 	/* dispatch to other tgts when needed */
 	if (dispatch) {
@@ -1391,6 +1396,9 @@ shard_req_fw_cb(const struct crt_cb_info *cb_info)
 	shard_arg->fw_shard_rc = rc;
 	rc = ABT_future_set(shard_arg->fw_obj_arg->fw_future, shard_arg);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
+	D_DEBUG(DB_TRACE, "forward req got reply from rank %d tag %d, rc %d.\n",
+		shard_arg->fw_shard_tgt->st_rank,
+		shard_arg->fw_shard_tgt->st_tgt_idx, rc);
 }
 
 static int

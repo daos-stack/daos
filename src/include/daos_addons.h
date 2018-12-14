@@ -217,8 +217,8 @@ typedef struct {
  * \param[in]	cell_size
  *			Record size of the array.
  * \param[in]	chunk_size
- *			Contiguous bytes to store per DKey before moving to a
- *			different dkey.
+ *			Number of contiguous records to store per DKey before
+ *			moving to a different dkey.
  * \param[out]	oh	Returned array object open handle.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.

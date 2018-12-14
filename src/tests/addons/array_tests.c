@@ -417,7 +417,6 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** TODO - punch at the end to shrink the size and verify. */
 
-
 	rc = change_array_size(arg, oh, array_size, epoch);
 	assert_int_equal(rc, 0);
 

@@ -76,6 +76,7 @@ struct io_params {
 	daos_sg_list_t		sgl;
 	bool			user_sgl_used;
 	daos_size_t		cell_size;
+	tse_task_t		*task;
 	struct io_params	*next;
 };
 
@@ -961,18 +962,20 @@ compute_dkey(struct dac_array *array, daos_off_t array_idx,
 	     daos_size_t *num_records, daos_off_t *record_i, uint64_t *dkey)
 {
 	daos_size_t	dkey_val;	/* dkey number */
-	daos_off_t	dkey_i;		/* Logical Start IDX of dkey_val */
+	daos_off_t	dkey_i;	/* Logical Start IDX of dkey_val */
+	daos_size_t	rec_i;	/* the record index relative to the dkey */
 
 	D_ASSERT(dkey);
 
 	/* Compute dkey number and starting index relative to the array */
 	dkey_val = array_idx / array->chunk_size;
 	dkey_i = dkey_val * array->chunk_size;
+	rec_i = array_idx - dkey_i;
 
 	if (record_i)
-		*record_i = array_idx - dkey_i;
+		*record_i = rec_i;
 	if (num_records)
-		*num_records = array->chunk_size - *record_i;
+		*num_records = array->chunk_size - rec_i;
 
 	*dkey = dkey_val;
 	return 0;
@@ -1859,6 +1862,9 @@ check_record_cb(tse_task_t *task, void *data)
 	sgl->sg_iovs = malloc(sizeof(daos_iov_t));
 	daos_iov_set(&sgl->sg_iovs[0], val, params->cell_size);
 
+	D_DEBUG(DB_IO, "update record (%zu, %zu), iod_size %zu.\n",
+		iod->iod_recxs[0].rx_idx, iod->iod_recxs[0].rx_nr,
+		iod->iod_size);
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0,
 			      NULL, &io_task);
 	if (rc) {
@@ -1883,7 +1889,12 @@ check_record_cb(tse_task_t *task, void *data)
 	if (rc)
 		D_GOTO(err, rc);
 
-	rc = tse_task_register_deps(task, 1, &io_task);
+	/* params->task is the original task of dac_array_set_size, should make
+	 * io_task as dep task of params->task rather than the passed in task
+	 * (which is the check_record's OBJ_FETCH task) to make sure the io_task
+	 * complete before original task of dac_array_set_size's completion.
+	 */
+	rc = tse_task_register_deps(params->task, 1, &io_task);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -1926,6 +1937,7 @@ check_record(daos_handle_t oh, daos_epoch_t epoch, daos_size_t dkey_val,
 	params->user_sgl_used = false;
 	params->cell_size = cell_size;
 	params->dkey_val = dkey_val;
+	params->task = task;
 	dkey = &params->dkey;
 	daos_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 

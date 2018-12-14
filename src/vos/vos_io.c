@@ -458,9 +458,11 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			return rc;
 		}
 
-		D_DEBUG(DB_IO, "fetch array size for eph "DF_U64"\n", epoch);
 		rc = evt_get_size(toh, epoch, &iod->iod_size);
-		if (rc != 0)
+		if (rc == 0)
+			D_DEBUG(DB_IO, "Array size query eph "DF_U64
+				", size %zu.\n", epoch, iod->iod_size);
+		else
 			D_DEBUG(DB_IO, "Array size query failed %d\n", rc);
 
 		key_tree_release(toh, true);

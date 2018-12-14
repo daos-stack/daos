@@ -128,6 +128,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	int			rc = 0;
 
 	opc = opc_get(rw_args->rpc->cr_opc);
+	D_DEBUG(DB_TRACE, "rpc %p opc:%d completed, dt_result %d.\n",
+		rw_args->rpc, opc, ret);
 	if (opc == DAOS_OBJ_RPC_FETCH &&
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FETCH_TIMEOUT)) {
 		D_ERROR("Inducing -DER_TIMEDOUT error on shard I/O fetch\n");
@@ -293,7 +295,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	     tse_task_t *task)
 {
 	struct dc_pool	       *pool;
-	crt_rpc_t	       *req;
+	crt_rpc_t	       *req = NULL;
 	struct obj_rw_in       *orw;
 	struct obj_rw_args	rw_args;
 	crt_endpoint_t		tgt_ep;
@@ -321,10 +323,10 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out_pool, rc = (int)tgt_ep.ep_rank);
 
-	D_DEBUG(DB_TRACE, "opc:%d "DF_UOID" %d %s rank:%d tag:%d eph"DF_U64"\n",
-		opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
-		(char *)dkey->iov_buf, tgt_ep.ep_rank, tgt_ep.ep_tag, epoch);
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
+	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" %d %s rank:%d tag:%d eph"
+		DF_U64"\n", req, opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
+		(char *)dkey->iov_buf, tgt_ep.ep_rank, tgt_ep.ep_tag, epoch);
 	if (rc != 0)
 		D_GOTO(out_pool, rc);
 
