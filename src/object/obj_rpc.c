@@ -234,22 +234,19 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
 
 	if (proc_op == CRT_PROC_DECODE) {
 		if (existing_flags & IOD_REC_EXIST) {
-			D_ALLOC(dvi->iod_recxs,
-				dvi->iod_nr * sizeof(*dvi->iod_recxs));
+			D_ALLOC_ARRAY(dvi->iod_recxs, dvi->iod_nr);
 			if (dvi->iod_recxs == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
 
 		if (existing_flags & IOD_CSUM_EXIST) {
-			D_ALLOC(dvi->iod_csums,
-				dvi->iod_nr * sizeof(*dvi->iod_csums));
+			D_ALLOC_ARRAY(dvi->iod_csums, dvi->iod_nr);
 			if (dvi->iod_csums == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
 
 		if (existing_flags & IOD_EPRS_EXIST) {
-			D_ALLOC(dvi->iod_eprs,
-				dvi->iod_nr * sizeof(*dvi->iod_eprs));
+			D_ALLOC_ARRAY(dvi->iod_eprs, dvi->iod_nr);
 			if (dvi->iod_eprs == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
@@ -340,7 +337,7 @@ crt_proc_d_sg_list_t(crt_proc_t proc, d_sg_list_t *sgl)
 		return -DER_HG;
 
 	if (proc_op == CRT_PROC_DECODE && sgl->sg_nr > 0) {
-		D_ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr);
+		D_ALLOC_ARRAY(sgl->sg_iovs, sgl->sg_nr);
 		if (sgl->sg_iovs == NULL)
 			return -DER_NOMEM;
 	}

@@ -161,7 +161,7 @@ bulk_bypass(daos_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 	int		  i;
 
 	if (!dummy_buf) {
-		dummy_buf = malloc(dummy_buf_len);
+		D_ALLOC(dummy_buf, dummy_buf_len);
 		if (!dummy_buf)
 			return; /* ignore error */
 	}
@@ -339,8 +339,7 @@ ds_sgls_prep(daos_sg_list_t *dst_sgls, daos_sg_list_t *sgls, int number)
 
 	for (i = 0; i < number; i++) {
 		dst_sgls[i].sg_nr = sgls[i].sg_nr;
-		D_ALLOC(dst_sgls[i].sg_iovs,
-			sgls[i].sg_nr * sizeof(*sgls[i].sg_iovs));
+		D_ALLOC_ARRAY(dst_sgls[i].sg_iovs, sgls[i].sg_nr);
 		if (dst_sgls[i].sg_iovs == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
@@ -377,7 +376,7 @@ ds_obj_update_sizes_in_reply(crt_rpc_t *rpc)
 	size_count = orw->orw_iods.ca_count;
 
 	orwo->orw_sizes.ca_count = size_count;
-	D_ALLOC(sizes, size_count * sizeof(*sizes));
+	D_ALLOC_ARRAY(sizes, size_count);
 	if (sizes == NULL)
 		return -DER_NOMEM;
 
@@ -1270,14 +1269,14 @@ ds_obj_key_query_handler(crt_rpc_t *rpc)
 		uint64_t key_val = (rand()%1000)+1;
 
 		printf("DKEY returned = %d\n", (int)key_val);
-		okqo->okqo_dkey.iov_buf = malloc(sizeof(uint64_t));
+		D_ALLOC((okqo->okqo_dkey.iov_buf), sizeof(uint64_t));
 		daos_iov_set(&okqo->okqo_dkey, &key_val, sizeof(uint64_t));
 	}
 	if (okqi->okqi_flags & DAOS_GET_AKEY) {
 		uint64_t key_val = (rand()%1000)+1;
 
 		printf("AKEY returned = %d\n", (int)key_val);
-		okqo->okqo_akey.iov_buf = malloc(sizeof(uint64_t));
+		D_ALLOC((okqo->okqo_akey.iov_buf), sizeof(uint64_t));
 		daos_iov_set(&okqo->okqo_akey, &key_val, sizeof(uint64_t));
 	}
 	if (okqi->okqi_flags & DAOS_GET_RECX) {

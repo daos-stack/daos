@@ -235,7 +235,7 @@ obj_shard_rw_bulk_prep(crt_rpc_t *rpc, unsigned int nr, daos_sg_list_t *sgls,
 
 	bulk_perm = (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE) ?
 		    CRT_BULK_RO : CRT_BULK_RW;
-	D_ALLOC(bulks, nr * sizeof(*bulks));
+	D_ALLOC_ARRAY(bulks, nr);
 	if (bulks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

@@ -249,8 +249,7 @@ obj_layout_create(struct dc_object *obj)
 	obj->cob_version = layout->ol_ver;
 
 	D_ASSERT(obj->cob_shards == NULL);
-	D_ALLOC(obj->cob_shards,
-		layout->ol_nr * sizeof(*obj->cob_shards));
+	D_ALLOC_ARRAY(obj->cob_shards, layout->ol_nr);
 	if (obj->cob_shards == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
