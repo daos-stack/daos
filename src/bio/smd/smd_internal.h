@@ -168,7 +168,7 @@ pmempool_pop2df(PMEMobjpool *pop)
 static inline PMEMobjpool *
 smd_store_ptr2pop(struct smd_store *sms_obj)
 {
-	return sms_obj->sms_uma.uma_u.pmem_pool;
+	return sms_obj->sms_uma.uma_pool;
 }
 
 static inline struct smd_df *

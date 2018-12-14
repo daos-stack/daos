@@ -291,7 +291,7 @@ vos_pool_pop2df(PMEMobjpool *pop)
 static inline PMEMobjpool *
 vos_pool_ptr2pop(struct vos_pool *pool)
 {
-	return pool->vp_uma.uma_u.pmem_pool;
+	return pool->vp_uma.uma_pool;
 }
 
 static inline struct vos_pool_df *

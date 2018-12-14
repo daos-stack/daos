@@ -85,8 +85,8 @@ pool_hop_free(struct d_ulink *hlink)
 	if (!daos_handle_is_inval(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
-	if (pool->vp_uma.uma_u.pmem_pool)
-		vos_pmemobj_close(pool->vp_uma.uma_u.pmem_pool);
+	if (pool->vp_uma.uma_pool)
+		vos_pmemobj_close(pool->vp_uma.uma_pool);
 
 	D_FREE(pool);
 }
@@ -263,7 +263,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 
 		memset(&uma, 0, sizeof(uma));
 		uma.uma_id = vos_mem_class;
-		uma.uma_u.pmem_pool = ph;
+		uma.uma_pool = ph;
 
 		rc = vos_cont_tab_create(&uma, &pool_df->pd_ctab_df);
 		if (rc != 0)
@@ -463,9 +463,9 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	uma = &pool->vp_uma;
 	uma->uma_id = vos_mem_class;
-	uma->uma_u.pmem_pool = vos_pmemobj_open(path,
+	uma->uma_pool = vos_pmemobj_open(path,
 				   POBJ_LAYOUT_NAME(vos_pool_layout));
-	if (uma->uma_u.pmem_pool == NULL) {
+	if (uma->uma_pool == NULL) {
 		D_ERROR("Error in opening the pool: %s\n", pmemobj_errormsg());
 		D_GOTO(failed, rc = -DER_NO_HDL);
 	}

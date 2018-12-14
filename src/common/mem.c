@@ -34,8 +34,6 @@
 
 #define UMEM_TX_DATA_MAGIC	(0xc01df00d)
 
-#if DAOS_HAS_PMDK
-
 #define TXD_CB_NUM		(1 << 5)	/* 32 callbacks */
 #define TXD_CB_MAX		(1 << 20)	/* 1 million callbacks */
 
@@ -177,10 +175,10 @@ pmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 
 	if (txd != NULL) {
 		D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
-		rc = pmemobj_tx_begin(umm->umm_u.pmem_pool, NULL, TX_PARAM_CB,
+		rc = pmemobj_tx_begin(umm->umm_pool, NULL, TX_PARAM_CB,
 				      pmem_stage_callback, txd, TX_PARAM_NONE);
 	} else {
-		rc = pmemobj_tx_begin(umm->umm_u.pmem_pool, NULL,
+		rc = pmemobj_tx_begin(umm->umm_pool, NULL,
 				      TX_PARAM_NONE);
 	}
 
@@ -210,13 +208,13 @@ static umem_id_t
 pmem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size,
 	     unsigned int type_num)
 {
-	return pmemobj_reserve(umm->umm_u.pmem_pool, act, size, type_num);
+	return pmemobj_reserve(umm->umm_pool, act, size, type_num);
 }
 
 static void
 pmem_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
 {
-	return pmemobj_cancel(umm->umm_u.pmem_pool, actv, actv_cnt);
+	return pmemobj_cancel(umm->umm_pool, actv, actv_cnt);
 }
 
 static int
@@ -331,8 +329,6 @@ umem_tx_errno(int err)
 	return daos_errno2der(err);
 }
 
-#endif /* DAOS_HAS_PMDK */
-
 /* volatile memroy operations */
 
 static void *
@@ -411,13 +407,11 @@ static struct umem_class umem_class_defined[] = {
 		.umc_ops	= &vmem_ops,
 		.umc_name	= "vmem",
 	},
-#if DAOS_HAS_PMDK
 	{
 		.umc_id		= UMEM_CLASS_PMEM,
 		.umc_ops	= &pmem_ops,
 		.umc_name	= "pmem",
 	},
-#endif
 	{
 		.umc_id		= UMEM_CLASS_UNKNOWN,
 		.umc_ops	= NULL,
@@ -456,9 +450,7 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	umm->umm_id	= umc->umc_id;
 	umm->umm_ops	= umc->umc_ops;
 	umm->umm_name	= umc->umc_name;
-#if DAOS_HAS_PMDK
-	umm->umm_u.pmem_pool = uma->uma_u.pmem_pool;
-#endif
+	umm->umm_pool	= uma->uma_pool;
 	return 0;
 }
 
@@ -469,9 +461,7 @@ void
 umem_attr_get(struct umem_instance *umm, struct umem_attr *uma)
 {
 	uma->uma_id = umm->umm_id;
-#if DAOS_HAS_PMDK
-	uma->uma_u.pmem_pool = umm->umm_u.pmem_pool;
-#endif
+	uma->uma_pool = umm->umm_pool;
 }
 
 /**
@@ -485,7 +475,7 @@ umem_get_uuid(struct umem_instance *umm)
 	if (umm->umm_id == UMEM_CLASS_VMEM)
 		return 0; /* empty uuid */
 
-	root_oid = pmemobj_root(umm->umm_u.pmem_pool, 0);
+	root_oid = pmemobj_root(umm->umm_pool, 0);
 	D_ASSERT(!UMMID_IS_NULL(root_oid));
 	return root_oid.pool_uuid_lo;
 }
@@ -503,7 +493,6 @@ umem_init_txd(struct umem_tx_stage_data *txd)
 	memset(txd, 0, sizeof(*txd));
 	txd->txd_magic = UMEM_TX_DATA_MAGIC;
 
-#if DAOS_HAS_PMDK
 	D_ALLOC_ARRAY(txd->txd_commit_vec, TXD_CB_NUM);
 	if (txd->txd_commit_vec == NULL)
 		goto fail;
@@ -523,9 +512,6 @@ umem_init_txd(struct umem_tx_stage_data *txd)
 fail:
 	umem_fini_txd(txd);
 	return -DER_NOMEM;
-#else /* !DAOS_HAS_PMDK */
-	return 0;
-#endif /* DAOS_HAS_PMDK */
 }
 
 void
@@ -534,7 +520,6 @@ umem_fini_txd(struct umem_tx_stage_data *txd)
 	D_ASSERT(txd != NULL);
 	D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
 
-#if DAOS_HAS_PMDK
 	D_ASSERT(txd->txd_commit_cnt == 0);
 	D_ASSERT(txd->txd_abort_cnt == 0);
 	D_ASSERT(txd->txd_end_cnt == 0);
@@ -559,5 +544,4 @@ umem_fini_txd(struct umem_tx_stage_data *txd)
 		txd->txd_end_vec = NULL;
 		txd->txd_end_max = 0;
 	}
-#endif /* DAOS_HAS_PMDK */
 }

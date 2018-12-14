@@ -178,8 +178,8 @@ smd_obj_destroy()
 	if (!daos_handle_is_inval(sm_obj->sms_pool_tab))
 		dbtree_close(sm_obj->sms_pool_tab);
 
-	if (sm_obj->sms_uma.uma_u.pmem_pool)
-		pmemobj_close(sm_obj->sms_uma.uma_u.pmem_pool);
+	if (sm_obj->sms_uma.uma_pool)
+		pmemobj_close(sm_obj->sms_uma.uma_pool);
 
 	D_FREE(sm_obj);
 }
@@ -207,16 +207,16 @@ smd_nvme_obj_create(PMEMobjpool *ph, struct umem_attr *uma,
 	}
 
 	if (ph == NULL) {
-		l_uma->uma_u.pmem_pool =
+		l_uma->uma_pool =
 			pmemobj_open(smd_params_obj->smp_file,
 				     POBJ_LAYOUT_NAME(smd_md_layout));
-			if (l_uma->uma_u.pmem_pool == NULL) {
+			if (l_uma->uma_pool == NULL) {
 				D_ERROR("Error in opening the pool: %s\n",
 					pmemobj_errormsg());
 				D_GOTO(err, rc == -DER_NO_HDL);
 			}
 	} else {
-		l_uma->uma_u.pmem_pool = ph;
+		l_uma->uma_pool = ph;
 	}
 
 	rc = umem_class_init(l_uma, &sm_obj->sms_umm);
@@ -437,7 +437,7 @@ smd_nvme_create_md_store(const char *path, const char *fname,
 
 		memset(&uma, 0, sizeof(uma));
 		uma.uma_id = md_mem_class;
-		uma.uma_u.pmem_pool = ph;
+		uma.uma_pool = ph;
 		l_uma = &uma;
 
 		uuid_parse(pool_uuid, smd_df->smd_id);

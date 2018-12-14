@@ -890,10 +890,10 @@ main(int argc, char **argv)
 			break;
 		case 'm':
 			ik_uma.uma_id = UMEM_CLASS_PMEM;
-			ik_uma.uma_u.pmem_pool = pmemobj_create(POOL_NAME,
+			ik_uma.uma_pool = pmemobj_create(POOL_NAME,
 						"btree-perf-test", POOL_SIZE,
 						0666);
-			if (ik_uma.uma_u.pmem_pool == NULL) {
+			if (ik_uma.uma_pool == NULL) {
 				perror("Btree test pool creation failed");
 				return 1;
 			}
@@ -905,7 +905,7 @@ main(int argc, char **argv)
 	}
 	daos_debug_fini();
 	if (ik_uma.uma_id == UMEM_CLASS_PMEM) {
-		pmemobj_close(ik_uma.uma_u.pmem_pool);
+		pmemobj_close(ik_uma.uma_pool);
 		remove(POOL_NAME);
 	}
 	return 0;

@@ -39,7 +39,6 @@ enum {
 static int
 btr_check_tx(struct btr_attr *attr)
 {
-#if DAOS_HAS_PMDK
 	if (attr->ba_uma.uma_id != UMEM_CLASS_PMEM)
 		return BTR_NO_TX;
 
@@ -47,9 +46,6 @@ btr_check_tx(struct btr_attr *attr)
 		return BTR_IN_TX;
 
 	return BTR_SUPPORT_TX;
-#else
-	return BTR_NO_TX;
-#endif
 }
 
 static int
@@ -154,11 +150,10 @@ destroy_tree(daos_handle_t tree, daos_iov_t *key)
 		if (rc != 0)
 			D_GOTO(out, rc);
 	} else {
-#ifdef DAOS_HAS_PMDK
 		volatile daos_handle_t	hdl_tmp = hdl;
 		volatile int		rc_tmp = 0;
 
-		TX_BEGIN(attr.ba_uma.uma_u.pmem_pool) {
+		TX_BEGIN(attr.ba_uma.uma_pool) {
 			rc_tmp = dbtree_destroy(hdl_tmp);
 			if (rc_tmp != 0)
 				pmemobj_tx_abort(rc_tmp);
@@ -173,7 +168,6 @@ destroy_tree(daos_handle_t tree, daos_iov_t *key)
 				dbtree_close(hdl_tmp);
 			rc = rc_tmp;
 		} TX_END
-#endif
 	}
 out:
 	return rc;

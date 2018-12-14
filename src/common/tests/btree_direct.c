@@ -1113,7 +1113,7 @@ main(int argc, char **argv)
 			break;
 		case 'm':
 			sk_uma.uma_id = UMEM_CLASS_PMEM;
-			sk_uma.uma_u.pmem_pool = pmemobj_create(POOL_NAME,
+			sk_uma.uma_pool = pmemobj_create(POOL_NAME,
 						"btree-perf-test", POOL_SIZE,
 						0666);
 			break;
@@ -1125,7 +1125,7 @@ main(int argc, char **argv)
 	}
 	daos_debug_fini();
 	if (sk_uma.uma_id == UMEM_CLASS_PMEM) {
-		pmemobj_close(sk_uma.uma_u.pmem_pool);
+		pmemobj_close(sk_uma.uma_pool);
 		remove(POOL_NAME);
 	}
 	if (rc != 0)

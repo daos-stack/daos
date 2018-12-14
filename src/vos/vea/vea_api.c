@@ -37,7 +37,7 @@ erase_md(struct umem_instance *umem, struct vea_space_df *md)
 	int rc;
 
 	uma.uma_id = umem->umm_id;
-	uma.uma_u.pmem_pool = umem->umm_u.pmem_pool;
+	uma.uma_pool = umem->umm_pool;
 	rc = dbtree_open_inplace(&md->vsd_free_tree, &uma, &free_btr);
 	if (rc == 0) {
 		rc = dbtree_destroy(free_btr);
@@ -139,7 +139,7 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 
 	/* Create free extent tree */
 	uma.uma_id = umem->umm_id;
-	uma.uma_u.pmem_pool = umem->umm_u.pmem_pool;
+	uma.uma_pool = umem->umm_pool;
 	rc = dbtree_create_inplace(DBTREE_CLASS_IV, 0, VEA_TREE_ODR, &uma,
 				   &md->vsd_free_tree, &free_btr);
 	if (rc != 0)

@@ -58,10 +58,6 @@ def scons():
     prereqs = preload_prereqs(prereqs)
     opts.Save(opts_file, env)
 
-    # Define this now, and then the individual components can import this
-    # through prereqs when they need it.
-    env.Append(CPPDEFINES={'DAOS_HAS_PMDK' : '1'})
-
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
     Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm')

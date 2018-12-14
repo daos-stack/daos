@@ -190,7 +190,7 @@ load_space_info(struct vea_space_info *vsi)
 
 	/* Open SCM free extent tree */
 	uma.uma_id = vsi->vsi_umem->umm_id;
-	uma.uma_u.pmem_pool = vsi->vsi_umem->umm_u.pmem_pool;
+	uma.uma_pool = vsi->vsi_umem->umm_pool;
 
 	D_ASSERT(daos_handle_is_inval(vsi->vsi_md_free_btr));
 	rc = dbtree_open_inplace(&vsi->vsi_md->vsd_free_tree, &uma,

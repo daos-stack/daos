@@ -1652,11 +1652,10 @@ static int
 btr_tx_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	      daos_iov_t *key, daos_iov_t *val)
 {
-#if DAOS_HAS_PMDK
 	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_u.pmem_pool) {
+	TX_BEGIN(umm->umm_pool) {
 		rc = btr_upsert(tcx, probe_opc, key, val);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
@@ -1669,10 +1668,6 @@ btr_tx_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	} TX_END
 
 	return rc;
-#else
-	D_ASSERT(0);
-	return -DER_NO_PERM;
-#endif
 }
 
 /**
@@ -2418,11 +2413,10 @@ btr_delete(struct btr_context *tcx, void *args)
 static int
 btr_tx_delete(struct btr_context *tcx, void *args)
 {
-#if DAOS_HAS_PMDK
 	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_u.pmem_pool) {
+	TX_BEGIN(umm->umm_pool) {
 		rc = btr_delete(tcx, args);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
@@ -2435,10 +2429,6 @@ btr_tx_delete(struct btr_context *tcx, void *args)
 	} TX_END
 
 	return rc;
-#else
-	D_ASSERT(0);
-	return -DER_NO_PERM;
-#endif
 }
 
 /**
@@ -2602,11 +2592,10 @@ btr_tree_alloc(struct btr_context *tcx)
 static int
 btr_tx_tree_alloc(struct btr_context *tcx)
 {
-#if DAOS_HAS_PMDK
 	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_u.pmem_pool) {
+	TX_BEGIN(umm->umm_pool) {
 		rc = btr_tree_alloc(tcx);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
@@ -2619,10 +2608,6 @@ btr_tx_tree_alloc(struct btr_context *tcx)
 	} TX_END
 
 	return rc;
-#else
-	D_ASSERT(0);
-	return -DER_NO_PERM;
-#endif
 }
 
 /**
@@ -2682,11 +2667,10 @@ btr_tree_init(struct btr_context *tcx, struct btr_root *root)
 static int
 btr_tx_tree_init(struct btr_context *tcx, struct btr_root *root)
 {
-#if DAOS_HAS_PMDK
 	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_u.pmem_pool) {
+	TX_BEGIN(umm->umm_pool) {
 		rc = btr_tree_init(tcx, root);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
@@ -2699,10 +2683,6 @@ btr_tx_tree_init(struct btr_context *tcx, struct btr_root *root)
 	} TX_END
 
 	return rc;
-#else
-	D_ASSERT(0);
-	return -DER_NO_PERM;
-#endif
 }
 
 int
@@ -2887,11 +2867,10 @@ btr_tree_destroy(struct btr_context *tcx)
 static int
 btr_tx_tree_destroy(struct btr_context *tcx)
 {
-#if DAOS_HAS_PMDK
 	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_u.pmem_pool) {
+	TX_BEGIN(umm->umm_pool) {
 		rc = btr_tree_destroy(tcx);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
@@ -2904,10 +2883,6 @@ btr_tx_tree_destroy(struct btr_context *tcx)
 	} TX_END
 
 	return rc;
-#else
-	D_ASSERT(0);
-	return -DER_NO_PERM;
-#endif
 }
 
 /**

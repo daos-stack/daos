@@ -440,9 +440,9 @@ ut_setup(struct vea_ut_args *test_args)
 	unlink(pool_file);
 
 	uma.uma_id = UMEM_CLASS_PMEM;
-	uma.uma_u.pmem_pool = pmemobj_create(pool_file, "vea_ut",
+	uma.uma_pool = pmemobj_create(pool_file, "vea_ut",
 					     pool_size, 0666);
-	if (uma.uma_u.pmem_pool == NULL) {
+	if (uma.uma_pool == NULL) {
 		fprintf(stderr, "create pmemobj pool error\n");
 		return -1;
 	}
@@ -453,7 +453,7 @@ ut_setup(struct vea_ut_args *test_args)
 		goto error;
 	}
 
-	root = pmemobj_root(test_args->vua_umm.umm_u.pmem_pool,
+	root = pmemobj_root(test_args->vua_umm.umm_pool,
 			    sizeof(struct vea_space_df) +
 			    sizeof(struct vea_hint_df) * IO_STREAM_CNT);
 	if (OID_IS_NULL(root)) {
@@ -479,8 +479,8 @@ ut_setup(struct vea_ut_args *test_args)
 	umem_init_txd(&test_args->vua_txd);
 	return 0;
 error:
-	pmemobj_close(uma.uma_u.pmem_pool);
-	test_args->vua_umm.umm_u.pmem_pool = NULL;
+	pmemobj_close(uma.uma_pool);
+	test_args->vua_umm.umm_pool = NULL;
 
 	return rc;
 }
@@ -521,9 +521,9 @@ ut_teardown(struct vea_ut_args *test_args)
 		D_FREE(ext);
 	}
 
-	if (test_args->vua_umm.umm_u.pmem_pool != NULL) {
-		pmemobj_close(test_args->vua_umm.umm_u.pmem_pool);
-		test_args->vua_umm.umm_u.pmem_pool = NULL;
+	if (test_args->vua_umm.umm_pool != NULL) {
+		pmemobj_close(test_args->vua_umm.umm_pool);
+		test_args->vua_umm.umm_pool = NULL;
 	}
 	umem_fini_txd(&test_args->vua_txd);
 }

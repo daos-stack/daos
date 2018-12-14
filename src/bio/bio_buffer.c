@@ -774,7 +774,7 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 
 	if (biod->bd_update && media == BIO_ADDR_SCM) {
-		pmemobj_memcpy_persist(umem->umm_u.pmem_pool, media_addr,
+		pmemobj_memcpy_persist(umem->umm_pool, media_addr,
 				       addr, n);
 	} else {
 		if (biod->bd_update)

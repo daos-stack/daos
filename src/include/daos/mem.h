@@ -43,9 +43,6 @@
  * tmmid	Typedef ummid.
  */
 
-/************************** PMDK MACROS **************************************/
-#if DAOS_HAS_PMDK
-
 #include <libpmemobj.h>
 
 /** memory ID without type */
@@ -63,45 +60,6 @@ typedef PMEMoid			umem_id_t;
 #define TMMID_TYPE_NUM(t)	TOID_TYPE_NUM(t)
 
 int umem_tx_errno(int err);
-
-/************************** NON-PMDK MACROS **********************************/
-#else /* !DAOS_HAS_PMDK */
-
-#define _mmid_struct
-#define _mmid_union
-#define _mmid_enum
-
-typedef struct {
-	uint64_t	off;
-} umem_id_t;
-
-struct pobj_action {
-	int		type;
-	uint64_t	off;
-};
-#define POBJ_FLAG_ZERO		(((uint64_t)1) << 0)
-#define POBJ_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
-
-#define UMMID_NULL		((umem_id_t){0})
-#define UMMID_IS_NULL(ummid)	(ummid.off == 0)
-
-#define TMMID_TYPE_NUM(t)	0
-
-#define TMMID(t)					\
-union _mmid_##t##_mmid
-
-#define TMMID_DECLARE(t, i)				\
-TMMID(t)						\
-{							\
-	umem_id_t oid;					\
-	t *_type;					\
-}
-
-#define TMMID_NULL(t)		((TMMID(t))UMMID_NULL)
-#define TMMID_IS_NULL(tmmid)	UMMID_IS_NULL((tmmid).oid)
-
-/************************** PMDK MACROS END *********************************/
-#endif /* !DAOS_HAS_PMDK */
 
 /* print format of ummid and tmmid */
 #define UMMID_PF		DF_X64
@@ -253,22 +211,14 @@ typedef struct {
 /** attributes to initialise an unified memroy class */
 struct umem_attr {
 	umem_class_id_t		 uma_id;
-	union {
-#if DAOS_HAS_PMDK
-		PMEMobjpool	*pmem_pool;
-#endif
-	}			 uma_u;
+	PMEMobjpool		*uma_pool;
 };
 
 /** instance of an unified memory class */
 struct umem_instance {
 	umem_class_id_t		 umm_id;
 	const char		*umm_name;
-	union {
-#if DAOS_HAS_PMDK
-		PMEMobjpool	*pmem_pool;
-#endif
-	}			 umm_u;
+	PMEMobjpool		*umm_pool;
 	/** class member functions */
 	umem_ops_t		*umm_ops;
 };
