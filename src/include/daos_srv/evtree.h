@@ -37,16 +37,16 @@ enum {
 	EVT_UMEM_TYPE	= 150,
 	EVT_UMEM_ROOT	= (EVT_UMEM_TYPE + 0),
 	EVT_UMEM_NODE	= (EVT_UMEM_TYPE + 1),
-	EVT_UMEM_PTR	= (EVT_UMEM_TYPE + 2),
+	EVT_UMEM_DESC	= (EVT_UMEM_TYPE + 2),
 };
 
 struct evt_node;
 struct evt_root;
-struct evt_ptr;
+struct evt_desc;
 
 TMMID_DECLARE(struct evt_root, EVT_UMEM_ROOT);
 TMMID_DECLARE(struct evt_node, EVT_UMEM_NODE);
-TMMID_DECLARE(struct evt_ptr, EVT_UMEM_PTR);
+TMMID_DECLARE(struct evt_desc, EVT_UMEM_DESC);
 
 /** Valid tree order */
 enum {
@@ -55,14 +55,16 @@ enum {
 };
 
 /** EVTree data pointer */
-struct evt_ptr {
+struct evt_desc {
 	/** cookie to insert this extent */
-	uuid_t				pt_cookie;
-	uint64_t			pt_csum;
+	uuid_t				dc_cookie;
+	uint64_t			dc_csum;
 	/** buffer on SCM or NVMe */
-	bio_addr_t			pt_ex_addr;
+	bio_addr_t			dc_ex_addr;
 	/** Pool map version for the record */
-	uint32_t			pt_ver;
+	uint32_t			dc_ver;
+	/** Magic number for validation */
+	uint32_t			dc_magic;
 };
 
 struct evt_extent {
@@ -142,13 +144,11 @@ struct evt_weight {
 struct evt_node_entry {
 	/* Rectangle for the entry */
 	struct evt_rect	ne_rect;
-	union {
-		/* Pointer to child node (in intermediate node) */
-		TMMID(struct evt_node)	ne_node;
-		/* Pointer to data descriptor (in leaf node) */
-		TMMID(struct evt_ptr)	ne_ptr;
-	};
-	char ne_pad[24];
+	/* Offset to child entry
+	 * Intermediate node:	struct evt_node
+	 * Leaf node:		struct evt_desc
+	 */
+	uint64_t	ne_child;
 };
 
 /** evtree node: */
@@ -159,15 +159,17 @@ struct evt_node {
 	uint16_t			tn_flags;
 	/** number of children or leaf records */
 	uint16_t			tn_nr;
-	/** padding for alignment */
-	uint32_t			tn_pad_32;
+	/** Magic number for validation */
+	uint32_t			tn_magic;
 	/** The entries in the node */
 	struct evt_node_entry		tn_rec[0];
 };
 
 struct evt_root {
-	/** mmid of the root node */
-	TMMID(struct evt_node)		tr_node;
+	/** UUID of pmem pool */
+	uint64_t			tr_pool_uuid;
+	/** offset of the root node */
+	uint64_t			tr_node;
 	/** the current tree depth */
 	uint16_t			tr_depth;
 	/** tree order */
@@ -323,19 +325,18 @@ struct evt_policy_ops {
 	 * Add an entry \a entry to a tree node \a nd_mmid.
 	 */
 	int	(*po_insert)(struct evt_context *tcx,
-			     TMMID(struct evt_node) nd_mmid,
-			     TMMID(struct evt_node) in_mmid,
+			     uint64_t nd_off,
+			     uint64_t in_off,
 			     const struct evt_entry_in *entry);
 	/**
 	 * move half entries of the current node \a src_mmid to the new
 	 * node \a dst_mmid.
 	 */
 	int	(*po_split)(struct evt_context *tcx, bool leaf,
-			    TMMID(struct evt_node) src_mmid,
-			    TMMID(struct evt_node) dst_mmid);
+			    uint64_t src_off, uint64_t dst_off);
 	/** Move adjusted \a entry within a node after mbr update */
 	void	(*po_adjust)(struct evt_context *tcx,
-			     TMMID(struct evt_node) nd_mmid,
+			     uint64_t nd_off,
 			     struct evt_node_entry *ne, int at);
 	/**
 	 * Calculate weight of a rectangle \a rect and return it to \a weight.

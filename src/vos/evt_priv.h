@@ -59,8 +59,8 @@ struct evt_iterator {
 #define EVT_TRACE_MAX                   32
 
 struct evt_trace {
-	/** the current node mmid */
-	TMMID(struct evt_node)		tr_node;
+	/** the current node offset */
+	uint64_t			tr_node;
 	/** child position of the searching trace */
 	unsigned int			tr_at;
 	/** Indicates whether node has been added to tx */
@@ -107,9 +107,65 @@ struct evt_context {
 #define EVT_ROOT_NULL			TMMID_NULL(struct evt_root)
 
 #define evt_umm(tcx)			(&(tcx)->tc_umm)
-#define evt_mmid2ptr(tcx, mmid)		umem_id2ptr(evt_umm(tcx), mmid)
 #define evt_tmmid2ptr(tcx, tmmid)	umem_id2ptr_typed(evt_umm(tcx), tmmid)
 #define evt_has_tx(tcx)			umem_has_tx(evt_umm(tcx))
+
+#define evt_off2mmid(tcx, offset)			\
+(							\
+{							\
+	umem_id_t	__ummid;			\
+							\
+	__ummid.pool_uuid_lo = (tcx)->tc_pmempool_uuid;	\
+	__ummid.off = (offset);				\
+	__ummid;					\
+}							\
+)
+
+#define evt_off2tmmid(tcx, offset, type)		\
+	umem_id_u2t(evt_off2mmid(tcx, offset), type)
+
+#define evt_off2ptr(tcx, offset)			\
+	umem_id2ptr(evt_umm(tcx), evt_off2mmid(tcx, offset))
+
+#define evt_off2nodemmid(tcx, offset)			\
+	evt_off2tmmid(tcx, offset, struct evt_node)
+
+#define evt_off2descmmid(tcx, offset)			\
+	evt_off2tmmid(tcx, offset, struct evt_desc)
+
+#define EVT_NODE_MAGIC 0xfefef00d
+#define EVT_DESC_MAGIC 0xbeefdead
+
+/** Convert an offset to a evtree node descriptor
+ * \param[IN]	tcx	Tree context
+ * \param[IN]	offset	The offset in the umem pool
+ */
+static inline struct evt_node *
+evt_off2node(struct evt_context *tcx, uint64_t offset)
+{
+	struct evt_node *node;
+
+	node = evt_off2ptr(tcx, offset);
+	D_ASSERT(node->tn_magic == EVT_NODE_MAGIC);
+
+	return node;
+}
+
+/** Convert an offset to a evtree data descriptor
+ * \param[IN]	tcx	Tree context
+ * \param[IN]	offset	The offset in the umem pool
+ */
+static inline struct evt_desc *
+evt_off2desc(struct evt_context *tcx, uint64_t offset)
+{
+	struct evt_desc *desc;
+
+	desc = evt_off2ptr(tcx, offset);
+	D_ASSERT(desc->dc_magic == EVT_DESC_MAGIC);
+
+	return desc;
+}
+
 
 /* By definition, all rectangles overlap in the epoch range because all
  * are from start to infinity.  However, for common queries, we often only want
@@ -261,8 +317,7 @@ bool evt_move_trace(struct evt_context *tcx, bool forward);
  * Returns the rectangle at the index
  */
 struct evt_rect *evt_node_rect_at(struct evt_context *tcx,
-				  TMMID(struct evt_node) nd_mmid,
-				  unsigned int at);
+				  uint64_t nd_off, unsigned int at);
 
 /** Fill an evt_entry from the record at an index in a tree node
  * \param[IN]	tcx		The evtree context
@@ -273,7 +328,7 @@ struct evt_rect *evt_node_rect_at(struct evt_context *tcx,
  *
  * The selected extent will be trimmed by the search rectangle used.
  */
-void evt_entry_fill(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
+void evt_entry_fill(struct evt_context *tcx, uint64_t nd_off,
 		    unsigned int at, const struct evt_rect *rect_srch,
 		    struct evt_entry *entry);
 #endif /* __EVT_PRIV_H__ */
