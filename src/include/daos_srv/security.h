@@ -25,37 +25,28 @@
  * ds_sec: Security Framework Server Internal Declarations
  */
 
-#ifndef __SECURITY_SRV_INTERNAL_H__
-#define __SECURITY_SRV_INTERNAL_H__
+#ifndef __DAOS_SRV_SECURITY_H__
+#define __DAOS_SRV_SECURITY_H__
 
 #include <daos_types.h>
-#include "security.pb-c.h"
 #include <daos_srv/daos_server.h>
-
-#define DAOS_SEC_VERSION 1
-
-extern char *ds_sec_server_socket_path;
+#include <daos_srv/pool.h>
 
 /**
- * Definitions for DAOS server dRPC modules and their methods.
- * These numeric designations are used in dRPC communications in the Drpc__Call
- * structure.
- */
-
-/**
- *  Module: Security Server
+ * Determine whether the provided credentials can access a pool.
  *
- *  The server module that deals with client security requests.
- */
-#define DRPC_MODULE_SECURITY_SERVER				1
-
-/**
- * Method: Validate Security Credential
+ * \param[in]	attr		Pool attributes
+ * \param[in]	cred		Opaque Credential Data
+ * \param[in]	access		Requested pool access
  *
- * Requests validation of the security credential.
+ * \return	0		Success. The access is allowed.
+ *		-DER_INVAL	Invalid parameter
+ *		-DER_BADPATH	Can't connect to the agent socket at
+ *				the expected path
+ *		-DER_NOMEM	Out of memory
+ *		-DER_NOREPLY	No response from agent
+ *		-DER_MISC	Invalid response from agent
  */
-#define DRPC_METHOD_SECURITY_SERVER_VALIDATE_CREDENTIALS	101
-
-int ds_sec_validate_credentials(daos_iov_t *creds, AuthToken **token);
-
-#endif /* __SECURITY_SRV_INTERNAL_H__ */
+int ds_sec_can_pool_connect(const struct pool_attr *attr, d_iov_t *cred,
+				uint64_t access);
+#endif /* __DAOS_SRV_SECURITY_H__ */

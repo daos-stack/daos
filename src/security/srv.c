@@ -33,15 +33,27 @@
 #include <daos_srv/daos_server.h>
 #include "srv_internal.h"
 
+/** Fully qualified path to daos_server socket */
+char *ds_sec_server_socket_path;
+
 static int
 init(void)
 {
+	int rc;
+
+	rc = asprintf(&ds_sec_server_socket_path, "%s/%s",
+			dss_socket_dir, "daos_server.sock");
+	if (rc < 0) {
+		return rc;
+	}
 	return 0;
 }
 
 static int
 fini(void)
 {
+	free(ds_sec_server_socket_path);
+	ds_sec_server_socket_path = NULL;
 	return 0;
 }
 
