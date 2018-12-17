@@ -130,7 +130,7 @@ main(int argc, char **argv)
 		D_ASSERTF(0, "Error in creating lru cache\n");
 
 	num_keys = atoi(argv[2]);
-	D_ALLOC(keys, ((num_keys + 2) * sizeof(uint64_t)));
+	D_ALLOC_ARRAY(keys, (num_keys + 2));
 	if (keys == NULL)
 		D_ASSERTF(0, "Error in allocating keys_array\n");
 

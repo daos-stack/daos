@@ -1941,7 +1941,7 @@ pool_target_id_list_append(struct pool_target_id_list *id_list,
 	if (pool_target_id_found(id_list, id))
 		return 0;
 
-	new_ids = realloc(id_list->pti_ids, (id_list->pti_number + 1) *
+	D_REALLOC(new_ids, id_list->pti_ids, (id_list->pti_number + 1) *
 			  sizeof(*id_list->pti_ids));
 	if (new_ids == NULL)
 		return -DER_NOMEM;

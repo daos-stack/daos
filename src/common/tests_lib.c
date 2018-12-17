@@ -124,7 +124,7 @@ void
 dts_freeline(char *line)
 {
 #if HAVE_LIB_READLINE
-	free(line);
+	D_FREE(line);
 #else
 	D_FREE(line);
 #endif
@@ -273,7 +273,7 @@ dts_rand_iarr_alloc(int nr, int base)
 	int	*array;
 	int	 i;
 
-	array = malloc(nr * sizeof(*array));
+	D_ALLOC_ARRAY(array, nr);
 	if (!array)
 		return NULL;
 

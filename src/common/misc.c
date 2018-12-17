@@ -40,7 +40,7 @@ daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 	if (nr == 0)
 		return 0;
 
-	D_ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
+	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
 }
@@ -395,7 +395,7 @@ daos_rank_list_parse(const char *str, const char *sep)
 	char		       *p;
 	int			n = 0;
 
-	D_ALLOC(buf, sizeof(*buf) * cap);
+	D_ALLOC_ARRAY(buf, cap);
 	if (buf == NULL)
 		D_GOTO(out, ranks = NULL);
 	s = s_saved = strdup(str);
@@ -409,7 +409,7 @@ daos_rank_list_parse(const char *str, const char *sep)
 
 			/* Double the buffer. */
 			cap_new = cap * 2;
-			D_ALLOC(buf_new, sizeof(*buf_new) * cap_new);
+			D_ALLOC_ARRAY(buf_new, cap_new);
 			if (buf_new == NULL)
 				D_GOTO(out_s, ranks = NULL);
 			memcpy(buf_new, buf, sizeof(*buf_new) * n);
@@ -428,7 +428,7 @@ daos_rank_list_parse(const char *str, const char *sep)
 	memcpy(ranks->rl_ranks, buf, sizeof(*buf) * n);
 
 out_s:
-	free(s_saved);
+	D_FREE(s_saved);
 out_buf:
 	D_FREE(buf);
 out:

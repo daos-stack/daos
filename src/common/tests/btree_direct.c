@@ -762,8 +762,10 @@ sk_btr_gen_keys(struct kv_node *kv, unsigned int key_nr)
 	for (i = 0; i < key_nr; i++) {
 		len = rand() % SK_MAX_KEY_LEN;
 		kv[i].val.iov_len = len + 4; /* space for KEY\0 */
-		key = kv[i].key.iov_buf = malloc(len + INT_LEN);
-		value = kv[i].val.iov_buf = malloc(kv[i].val.iov_len);
+		D_ALLOC(key, len + INT_LEN);
+		kv[i].key.iov_buf = key;
+		D_ALLOC(value, kv[i].val.iov_len);
+		kv[i].val.iov_buf = value;
 		for (j = 0; j < len; j++) {
 			int letter = rand() % (sizeof(valid) - 1);
 
@@ -895,7 +897,7 @@ sk_btr_batch_oper(unsigned int key_nr)
 		return -1;
 	}
 
-	kv = malloc(key_nr * sizeof(*kv));
+	D_ALLOC_ARRAY(kv, key_nr);
 	D_ASSERT(kv != NULL);
 
 	D_PRINT("Batch add %d records.\n", key_nr);
@@ -975,7 +977,7 @@ sk_btr_perf(unsigned int key_nr)
 	D_PRINT("Btree performance test, order=%u, keys=%u\n",
 		sk_order, key_nr);
 
-	kv = malloc(key_nr * sizeof(*kv));
+	D_ALLOC_ARRAY(kv, key_nr);
 	D_ASSERT(kv != NULL);
 
 	/* step-1: Insert performance */
@@ -1031,7 +1033,7 @@ sk_btr_perf(unsigned int key_nr)
 	D_PRINT("delete = %10.2f/sec\n", key_nr / (now - then));
 
 out:
-	free(kv);
+	D_FREE(kv);
 	return rc;
 }
 

@@ -689,7 +689,7 @@ ik_btr_batch_oper(unsigned int key_nr)
 		return -1;
 	}
 
-	arr = malloc(key_nr * sizeof(*arr));
+	D_ALLOC_ARRAY(arr, key_nr);
 	D_ASSERT(arr != NULL);
 
 	D_PRINT("Batch add %d records.\n", key_nr);
@@ -758,7 +758,7 @@ ik_btr_perf(unsigned int key_nr)
 	D_PRINT("Btree performance test, order=%u, keys=%u\n",
 		ik_order, key_nr);
 
-	arr = malloc(key_nr * sizeof(*arr));
+	D_ALLOC_ARRAY(arr, key_nr);
 	D_ASSERT(arr != NULL);
 
 	/* step-1: Insert performance */
@@ -810,7 +810,7 @@ ik_btr_perf(unsigned int key_nr)
 	D_PRINT("delete = %10.2f/sec\n", key_nr / (now - then));
 
 out:
-	free(arr);
+	D_FREE(arr);
 	return rc;
 }
 
