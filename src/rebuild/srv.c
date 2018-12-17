@@ -663,11 +663,11 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 	array_size = roundup(rank_size, DAOS_BITS_SIZE) / DAOS_BITS_SIZE;
 	rgt->rgt_bits_size = rank_size;
 
-	D_ALLOC(rgt->rgt_scan_bits, array_size * sizeof(uint32_t));
+	D_ALLOC_ARRAY(rgt->rgt_scan_bits, array_size);
 	if (rgt->rgt_scan_bits == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC(rgt->rgt_pull_bits, array_size * sizeof(uint32_t));
+	D_ALLOC_ARRAY(rgt->rgt_pull_bits, array_size);
 	if (rgt->rgt_pull_bits == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -710,7 +710,7 @@ rebuild_pool_group_prepare(struct ds_pool *pool)
 	if (rc)
 		return rc;
 
-	D_ALLOC(ranks, sizeof(*ranks) * tgt_cnt);
+	D_ALLOC_ARRAY(ranks, tgt_cnt);
 	if (ranks == NULL)
 		D_GOTO(out, rc);
 
@@ -885,7 +885,7 @@ retry:
 					rso->rso_ranks_list->rl_ranks[i], -1,
 					&targets);
 
-			D_ALLOC(ids, tgt_nr * sizeof(*ids));
+			D_ALLOC_ARRAY(ids, tgt_nr);
 			if (ids == NULL)
 				D_GOTO(out_rpc, rc = -DER_NOMEM);
 
@@ -1432,7 +1432,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	rpt->rt_finishing = 1;
 	/* Wait until all ult/tasks finish and release the rpt.
 	 * NB: Because rebuild_tgt_fini will be only called in
-	 * rebuild_tgt_status_check, which will make sure when 
+	 * rebuild_tgt_status_check, which will make sure when
 	 * rt_refcount reaches to 1, either all rebuild is done or
 	 * all ult/task has been aborted by rt_abort, i.e. no new
 	 * ULT/task will be created after this check. So it is safe
@@ -1667,8 +1667,7 @@ rpt_create(struct ds_pool *pool, d_rank_list_t *svc_list, uint32_t pm_ver,
 
 	/* Initialize per-thread counters */
 	rpt->rt_puller_nxs = dss_get_threads_number();
-	D_ALLOC(rpt->rt_pullers, rpt->rt_puller_nxs *
-				  sizeof(*rpt->rt_pullers));
+	D_ALLOC_ARRAY(rpt->rt_pullers, rpt->rt_puller_nxs);
 	if (!rpt->rt_pullers)
 		D_GOTO(free, rc = -DER_NOMEM);
 

@@ -535,8 +535,7 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, daos_sg_list_t *sgls)
 	if (sgls) {
 		if (rdone->ro_sgls == NULL) {
 			D_ASSERT(rdone->ro_iod_alloc_num > 0);
-			D_ALLOC(rdone->ro_sgls, rdone->ro_iod_alloc_num *
-						sizeof(*rdone->ro_sgls));
+			D_ALLOC_ARRAY(rdone->ro_sgls, rdone->ro_iod_alloc_num);
 			if (rdone->ro_sgls == NULL)
 				return -DER_NOMEM;
 		}
@@ -565,8 +564,7 @@ punch_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod)
 	D_ASSERT(iod->iod_size == 0);
 
 	if (rdone->ro_punch_iods == NULL) {
-		D_ALLOC(rdone->ro_punch_iods, rdone->ro_iod_alloc_num *
-					      sizeof(*rdone->ro_punch_iods));
+		D_ALLOC_ARRAY(rdone->ro_punch_iods, rdone->ro_iod_alloc_num);
 		if (rdone->ro_punch_iods == NULL)
 			return -DER_NOMEM;
 	}
@@ -615,13 +613,12 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	if (rdone == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC(rdone->ro_iods, iod_eph_total * sizeof(*rdone->ro_iods));
+	D_ALLOC_ARRAY(rdone->ro_iods, iod_eph_total);
 	if (rdone->ro_iods == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
-	D_ALLOC(rdone->ro_ephs, iod_eph_total * sizeof(*rdone->ro_ephs));
-	D_ALLOC(rdone->ro_ephs_keys, iod_eph_total *
-				     sizeof(*rdone->ro_ephs_keys));
+	D_ALLOC_ARRAY(rdone->ro_ephs, iod_eph_total);
+	D_ALLOC_ARRAY(rdone->ro_ephs_keys, iod_eph_total);
 	if (rdone->ro_iods == NULL || rdone->ro_ephs == NULL ||
 	    rdone->ro_ephs_keys == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);

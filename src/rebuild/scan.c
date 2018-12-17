@@ -160,19 +160,19 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	if (arg == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC(oids, sizeof(*oids) * REBUILD_SEND_LIMIT);
+	D_ALLOC_ARRAY(oids, REBUILD_SEND_LIMIT);
 	if (oids == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC(uuids, sizeof(*uuids) * REBUILD_SEND_LIMIT);
+	D_ALLOC_ARRAY(uuids, REBUILD_SEND_LIMIT);
 	if (uuids == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC(shards, sizeof(*shards) * REBUILD_SEND_LIMIT);
+	D_ALLOC_ARRAY(shards, REBUILD_SEND_LIMIT);
 	if (shards == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC(ephs, sizeof(*ephs) * REBUILD_SEND_LIMIT);
+	D_ALLOC_ARRAY(ephs, REBUILD_SEND_LIMIT);
 	if (ephs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -575,8 +575,8 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid,
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
 	if (arg->rebuild_tgt_nr > LOCAL_ARRAY_SIZE) {
-		D_ALLOC(tgts, arg->rebuild_tgt_nr * sizeof(*tgts));
-		D_ALLOC(shards, arg->rebuild_tgt_nr * sizeof(*shards));
+		D_ALLOC_ARRAY(tgts, arg->rebuild_tgt_nr);
+		D_ALLOC_ARRAY(shards, arg->rebuild_tgt_nr);
 		if (tgts == NULL || shards == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	} else {
