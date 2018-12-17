@@ -968,9 +968,10 @@ io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 static void
 io_simple(void **state)
 {
+	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 
-	oid = dts_oid_gen(dts_obj_class, 0, ((test_arg_t *)state)->myrank);
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	print_message("Insert(e=0)/lookup(e=0)/verify simple kv record\n");
 
 	/** Test first for SCM, then on NVMe with record size > 4k */
@@ -1565,9 +1566,10 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 static void
 punch_simple(void **state)
 {
+	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 
-	oid = dts_oid_gen(dts_obj_class, 0, ((*(test_arg_t **)state))->myrank);
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 
 	punch_simple_internal(state, oid);
 }
@@ -1637,9 +1639,10 @@ io_manyrec_internal(void **state, daos_obj_id_t oid, unsigned int size,
 static void
 io_manyrec(void **state)
 {
+	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 
-	oid = dts_oid_gen(dts_obj_class, 0, ((test_arg_t *)state)->myrank);
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	print_message("Insert(e=0)/lookup(e=0)/verify complex kv records:\n");
 
 	print_message("DAOS_IOD_ARRAY:SCM\n");
@@ -1684,7 +1687,7 @@ io_complex(void **state)
 	unsigned int	 size;
 	int		 i;
 
-	oid = dts_oid_gen(dts_obj_class, 0, ((test_arg_t *)state)->myrank);
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	for (i = 0; i < 4; i++) {
