@@ -187,9 +187,9 @@ pool_target_addr_list_append(struct pool_target_addr_list *addr_list,
 	if (pool_target_addr_found(addr_list, addr))
 		return 0;
 
-	new_addrs = realloc(addr_list->pta_addrs, (addr_list->pta_number + 1) *
+	D_REALLOC(new_addrs, addr_list->pta_addrs, (addr_list->pta_number + 1) *
 			    sizeof(*addr_list->pta_addrs));
-	if (addr_list == NULL)
+	if (new_addrs == NULL)
 		return -DER_NOMEM;
 
 	new_addrs[addr_list->pta_number] = *addr;
@@ -203,8 +203,7 @@ int
 pool_target_addr_list_alloc(unsigned int num,
 			    struct pool_target_addr_list *addr_list)
 {
-	D_ALLOC(addr_list->pta_addrs,
-		num * sizeof(struct pool_target_addr));
+	D_ALLOC_ARRAY(addr_list->pta_addrs, num);
 	if (addr_list->pta_addrs == NULL)
 		return -DER_NOMEM;
 

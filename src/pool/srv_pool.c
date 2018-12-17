@@ -239,7 +239,7 @@ ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 	if (rc < 0)
 		return -DER_NOMEM;
 	rc = uuid_store(fpath, target_uuid);
-	free(fpath);
+	D_FREE(fpath);
 
 	return rc;
 }
@@ -279,7 +279,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 	 * Make a sorted target UUID array to determine target IDs. See the
 	 * bsearch() call below.
 	 */
-	D_ALLOC(uuids, sizeof(uuid_t) * nnodes);
+	D_ALLOC_ARRAY(uuids, nnodes);
 	if (uuids == NULL)
 		D_GOTO(out_map_buf, rc = -DER_NOMEM);
 	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
@@ -867,7 +867,7 @@ pool_svc_rdb_path_common(const uuid_t pool_uuid, const char *suffix)
 	if (rc < 0)
 		return NULL;
 	rc = ds_mgmt_tgt_file(pool_uuid, name, NULL /* idx */, &path);
-	free(name);
+	D_FREE(name);
 	if (rc != 0)
 		return NULL;
 	return path;
@@ -897,7 +897,7 @@ ds_pool_svc_rdb_uuid_store(const uuid_t pool_uuid, const uuid_t uuid)
 	if (path == NULL)
 		return -DER_NOMEM;
 	rc = uuid_store(path, uuid);
-	free(path);
+	D_FREE(path);
 	return rc;
 }
 
@@ -911,7 +911,7 @@ ds_pool_svc_rdb_uuid_load(const uuid_t pool_uuid, uuid_t uuid)
 	if (path == NULL)
 		return -DER_NOMEM;
 	rc = uuid_load(path, uuid);
-	free(path);
+	D_FREE(path);
 	return rc;
 }
 
@@ -930,7 +930,7 @@ ds_pool_svc_rdb_uuid_remove(const uuid_t pool_uuid)
 			DP_UUID(pool_uuid), path, errno);
 		rc = daos_errno2der(errno);
 	}
-	free(path);
+	D_FREE(path);
 	return rc;
 }
 
@@ -1001,7 +1001,7 @@ pool_svc_init(struct pool_svc *svc, const uuid_t uuid)
 		goto err_handles;
 	}
 	rc = rdb_start(path, rdb_uuid, &pool_svc_rdb_cbs, svc, &svc->ps_db);
-	free(path);
+	D_FREE(path);
 	if (rc != 0)
 		D_GOTO(err_user, rc);
 
@@ -1147,7 +1147,7 @@ pool_svc_lookup(const uuid_t uuid, struct pool_svc **svcp)
 			D_GOTO(out_lock, -DER_NOMEM);
 		}
 		rc = stat(path, &buf);
-		free(path);
+		D_FREE(path);
 		if (rc != 0) {
 			if (errno == ENOENT)
 				nonexist = true;
@@ -1390,7 +1390,7 @@ start_one(const uuid_t uuid, void *arg)
 		return 0;
 	}
 	rc = access(path, R_OK | W_OK);
-	free(path);
+	D_FREE(path);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID": cannot find or access rdb: %d\n",
 			DP_UUID(uuid), errno);
@@ -2995,8 +2995,8 @@ ds_pool_attr_get_handler(crt_rpc_t *rpc)
 	if (data == NULL)
 		D_GOTO(out_lock, rc = -DER_NOMEM);
 
-	D_ALLOC(iovs, (1 /* for output sizes */
-		 + in->pagi_count) * sizeof(*iovs));
+	/* for output sizes */
+	D_ALLOC_ARRAY(iovs, (int)(1 + in->pagi_count));
 	if (iovs == NULL)
 		D_GOTO(out_data, rc = -DER_NOMEM);
 

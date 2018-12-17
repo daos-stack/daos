@@ -1721,7 +1721,7 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 		if (sizes[j] > 0)
 			++sgl.sg_nr;
 
-	D_ALLOC(sgl.sg_iovs, sgl.sg_nr * sizeof(*sgl.sg_iovs));
+	D_ALLOC_ARRAY(sgl.sg_iovs, sgl.sg_nr);
 	if (sgl.sg_iovs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

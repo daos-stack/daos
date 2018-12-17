@@ -132,7 +132,7 @@ ds_pool_child_open(uuid_t uuid, unsigned int version)
 
 	rc = vos_pool_open(path, uuid, &child->spc_hdl);
 
-	free(path);
+	D_FREE(path);
 
 	if (rc != 0) {
 		D_FREE(child);

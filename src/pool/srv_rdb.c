@@ -173,7 +173,7 @@ ds_pool_rdb_start_handler(crt_rpc_t *rpc)
 
 out_path:
 	if (path != NULL)
-		free(path);
+		D_FREE(path);
 out:
 	out->dao_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);
@@ -276,7 +276,7 @@ ds_pool_rdb_stop_handler(crt_rpc_t *rpc)
 			goto out;
 		}
 		rc = rdb_destroy(path, uuid);
-		free(path);
+		D_FREE(path);
 		if (rc == 0)
 			rc = ds_pool_svc_rdb_uuid_remove(in->doi_pool);
 		if (rc == -DER_NONEXIST)

@@ -80,7 +80,7 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 		return 0;
 	}
 
-	D_ALLOC(rs, sizeof(*rs) * n);
+	D_ALLOC_ARRAY(rs, n);
 	if (rs == NULL)
 		return -DER_NOMEM;
 
@@ -126,7 +126,7 @@ map_ranks_merge(d_rank_list_t *src_ranks, d_rank_list_t *ranks_merge)
 		return 0;
 
 	src_num = src_ranks->rl_nr;
-	D_ALLOC(indexes, sizeof(*indexes) * ranks_merge->rl_nr);
+	D_ALLOC_ARRAY(indexes, ranks_merge->rl_nr);
 	if (indexes == NULL)
 		return -DER_NOMEM;
 
@@ -150,7 +150,7 @@ map_ranks_merge(d_rank_list_t *src_ranks, d_rank_list_t *ranks_merge)
 	if (num == 0)
 		D_GOTO(free, rc = 0);
 
-	D_ALLOC(rs, sizeof(*rs) * (num + src_ranks->rl_nr));
+	D_ALLOC_ARRAY(rs, (num + src_ranks->rl_nr));
 	if (rs == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
