@@ -7,6 +7,9 @@ This section provides the details for achieving the aforementioned design goals 
 
 This document contains the following sections:
 
+- <a href="#62">Persistent Memory based Storage</a>
+    - <a href="#63">In-Memory Storage</a>
+    - <a href="#64">Lightweight I/O Stack: NVM Library</a>
 - <a href="#71">VOS Concepts</a>
     - <a href="#711">VOS Indexes</a>
     - <a href="#712">Object Listing</a>
@@ -27,6 +30,29 @@ This document contains the following sections:
     - <a href="#781">Discussions on Transaction Model</a>
 - <a href="#79">VOS Checksum Management</a>
 - <a href="#80">Metadata Overhead</a>
+
+<a id="58"></a>
+## Persistent Memory based Storage
+
+<a id="63"></a>
+### In-Memory Storage
+
+The VOS is designed to use a persistent-memory storage model that takes advantage of byte-granular, sub-√√µsecond storage access possible with new NVRAM technology. This enables a disruptive change in performance compared to conventional storage systems for application and system metadata, and small, fragmented and misaligned I/O. Direct access to byte-addressable low-latency storage opens up new horizons where metadata can be scanned in less than a second without bothering with seek time and alignment.
+
+The VOS relies on a log-based architecture using persistent memory primarily to maintain internal persistent metadata indexes. The actual data can be stored either in persistent memory directly or in block-based storage (via SPDK  for instance). Special care will be taken when developing the VOS layer because any software bug could corrupt data structures in persistent memory. The VOS therefore checksums its persistent data structures despite the presence of hardware ECC.
+
+The VOS provides a lightweight I/O stack fully in user space, leveraging the NVML open source libraries developed to support this programming model.
+
+<a id="64"></a>
+
+### Lightweight I/O Stack: NVM Library
+
+NVML  is an open source collection of libraries for using persistent memory, optimized specifically for NVRAM. NVML is actually a collection of six libraries among which the libpmemobj library implements relocatable persistent heaps called NVML pools. This includes memory allocation, transactions, and general facilities for persistent memory programming. Locks can be embedded with PM-resident data structures, which are reinitialized (i.e. unlocked) automatically every time the NVML pool is opened. This property makes sure that all locks are always released when the NVML pool is opened.
+
+Although persistent memory is accessible via direct load/store, updates go through multiple levels of caches including the processor L1/2/3 caches and the NVRAM controller. Durability is guaranteed only after all those caches have been explicitly flushed. The VOS maintains internal data structures in persistent memory that must retain some level of consistency so that operation may be resumed without loss of durable data after an unexpected crash, or power outage. The processing of a request will typically result in several memory allocations and updates that must be applied atomically.
+
+Consequently, a transactional interface must be implemented on top of persistent memory to guarantee internal VOS consistency. It is worth noting that PM transactions are different from the DAOS epoch mechanism. PM transactions are used to guarantee consistency of VOS internal data structures when processing incoming requests, regardless of their epoch number. Transactions over persistent memory can be implemented in many different ways, e.g., undo logs, redo logs, a combination of both, or copy-on-write. NVML provides transactions that are local to one thread (not multi-threaded) and rely on undo logs.
+
 
 <a id="71"></a>
 ## VOS Concepts
