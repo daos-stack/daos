@@ -41,6 +41,8 @@ struct vos_obj_iter {
 	daos_handle_t		 it_hdl;
 	/** condition of the iterator: epoch logic expression */
 	vos_it_epc_expr_t	 it_epc_expr;
+	/** recx visibility flags */
+	uint32_t		 it_recx_flags;
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
 	/** condition of the iterator: attribute key */
@@ -750,6 +752,33 @@ recx_iter_adjust_epr(struct vos_obj_iter *oiter, vos_it_epc_expr_t expr)
 	}
 }
 
+#define recx_flags_set(flags, setting)	\
+	(((flags) & (setting)) == (setting))
+
+static uint32_t
+recx_get_flags(struct vos_obj_iter *oiter)
+{
+	uint32_t options = EVT_ITER_EMBEDDED;
+
+	if (recx_flags_set(oiter->it_recx_flags,
+			   VOS_IT_RECX_VISIBLE | VOS_IT_RECX_SKIP_HOLES)) {
+		options |= EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES;
+		D_ASSERT(!recx_flags_set(oiter->it_recx_flags,
+					 VOS_IT_RECX_COVERED));
+		goto done;
+	}
+	D_ASSERT(!recx_flags_set(oiter->it_recx_flags, VOS_IT_RECX_SKIP_HOLES));
+	if (oiter->it_recx_flags & VOS_IT_RECX_VISIBLE)
+		options |= EVT_ITER_VISIBLE;
+	if (oiter->it_recx_flags & VOS_IT_RECX_COVERED)
+		options |= EVT_ITER_COVERED;
+
+done:
+	if (oiter->it_epc_expr == VOS_IT_EPC_RR)
+		options |= EVT_ITER_REVERSE;
+	return options;
+}
+
 /**
  * Prepare the iterator for the recx tree.
  */
@@ -762,6 +791,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	daos_handle_t		 dk_toh;
 	daos_handle_t		 ak_toh;
 	int			 rc;
+	uint32_t		 options;
 
 	rc = key_tree_prepare(obj, oiter->it_epr.epr_hi, obj->obj_toh,
 			      VOS_BTR_DKEY, dkey, 0, NULL, &dk_toh);
@@ -777,7 +807,8 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	filter.fr_ex.ex_lo = 0;
 	filter.fr_ex.ex_hi = ~(0ULL);
 	filter.fr_epr = oiter->it_epr;
-	rc = evt_iter_prepare(ak_toh, EVT_ITER_EMBEDDED, &filter,
+	options = recx_get_flags(oiter);
+	rc = evt_iter_prepare(ak_toh, options, &filter,
 			      &oiter->it_hdl);
 	if (rc != 0) {
 		D_DEBUG(DB_IO, "Cannot prepare recx iterator : %d\n", rc);
@@ -889,6 +920,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	oiter->it_epr = param->ip_epr;
 	oiter->it_epc_expr = param->ip_epc_expr;
+	oiter->it_recx_flags = param->ip_recx_flags;
 	/* XXX the condition epoch ranges could cover multiple versions of
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
@@ -1032,6 +1064,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	struct evt_filter	 filter;
 	daos_handle_t		 toh;
 	int			 rc = 0;
+	uint32_t		 options;
 
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
@@ -1039,6 +1072,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 
 	oiter->it_epr = info->ii_epr;
 	oiter->it_epc_expr = info->ii_epc_expr;
+	oiter->it_recx_flags = info->ii_recx_flags;
 	if (type != VOS_ITER_DKEY)
 		oiter->it_obj = info->ii_obj;
 
@@ -1078,8 +1112,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		filter.fr_ex.ex_lo = 0;
 		filter.fr_ex.ex_hi = ~(0ULL);
 		filter.fr_epr = oiter->it_epr;
-		rc = evt_iter_prepare(toh, EVT_ITER_EMBEDDED, &filter,
-				      &oiter->it_hdl);
+		options = recx_get_flags(oiter);
+		rc = evt_iter_prepare(toh, options, &filter, &oiter->it_hdl);
 		break;
 	}
 	key_tree_release(toh, type == VOS_ITER_RECX);

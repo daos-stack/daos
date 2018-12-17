@@ -1084,6 +1084,76 @@ enumerate_rec(daos_handle_t th, char *dkey, char *akey,
 #define ENUM_NR_NVME		5 /* consecutive rec exts in an NVMe extent */
 #define ENUM_NR_SCM		2 /* consecutive rec exts in an SCM extent */
 
+static void
+insert_records(daos_obj_id_t oid, struct ioreq *req, char *data_buf,
+	       uint64_t start_idx)
+{
+	uint64_t	 idx;
+	int		 num_rec_exts;
+	int		 i;
+
+	print_message("Insert %d records from index "DF_U64
+		      " under the same key (obj:"DF_OID")\n", ENUM_KEY_REC_NR,
+		      start_idx, DP_OID(oid));
+	idx = start_idx; /* record extent index */
+	for (i = 0; i < ENUM_KEY_REC_NR; i++) {
+		/* insert alternating SCM (2k) and NVMe (5k) records */
+		if (i % 2 == 0)
+			num_rec_exts = ENUM_NR_SCM; /* rx_nr=2 for SCM test */
+		else
+			num_rec_exts = ENUM_NR_NVME; /* rx_nr=5 for NVMe test */
+		insert_single_with_rxnr("d_key", "a_rec", idx, data_buf,
+					ENUM_IOD_SIZE, num_rec_exts,
+					DAOS_TX_NONE, req);
+		idx += num_rec_exts;
+	}
+}
+
+static int
+iterate_records(struct ioreq *req)
+{
+	daos_anchor_t	anchor;
+	int		key_nr;
+	int		i;
+	uint32_t	number;
+
+	/** Enumerate all mixed NVMe and SCM records */
+	key_nr = 0;
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_epoch_range_t	eprs[5];
+		daos_recx_t		recxs[5];
+		daos_size_t		size;
+
+		number = 5;
+		enumerate_rec(DAOS_TX_NONE, "d_key", "a_rec", &size,
+			      &number, recxs, eprs, &anchor, true, req);
+		if (number == 0)
+			continue;
+
+		for (i = 0; i < number; i++) {
+			assert_true(size == ENUM_IOD_SIZE);
+			/* Print a subset of enumerated records */
+			if ((i + key_nr) % ENUM_PRINT != 0)
+				continue;
+			print_message("i:%d iod_size:%d rx_nr:%d, rx_idx:%d\n",
+				      i + key_nr, (int)size,
+				      (int)recxs[i].rx_nr,
+				      (int)recxs[i].rx_idx);
+			i++; /* print the next record to see both rec sizes */
+			print_message("i:%d iod_size:%d rx_nr:%d, rx_idx:%d\n",
+				      i + key_nr, (int)size,
+				      (int)recxs[i].rx_nr,
+				      (int)recxs[i].rx_idx);
+
+		}
+		key_nr += number;
+	}
+
+	return key_nr;
+}
+
+
 /** very basic enumerate */
 static void
 enumerate_simple(void **state)
@@ -1101,12 +1171,10 @@ enumerate_simple(void **state)
 	daos_anchor_t	 anchor;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
-	uint64_t	 idx;
 	uint32_t	 number;
 	int		 key_nr;
 	int		 i;
 	int		 rc;
-	int		 num_rec_exts;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -1266,55 +1334,29 @@ enumerate_simple(void **state)
 	assert_int_equal(key_nr, ENUM_KEY_REC_NR);
 
 	/**
-	 * Insert 1000 mixed NVMe and SCM records, all with same dkey and akey.
+	 * Insert N mixed NVMe and SCM records, all with same dkey and akey.
 	 */
-	print_message("Insert %d records under the same key (obj:"DF_OID")\n",
-		      ENUM_KEY_REC_NR, DP_OID(oid));
-	idx = 0; /* record extent index */
-	for (i = 0; i < ENUM_KEY_REC_NR; i++) {
-		/* insert alternating SCM (2k) and NVMe (5k) records */
-		if (i % 2 == 0)
-			num_rec_exts = ENUM_NR_SCM; /* rx_nr=2 for SCM test */
-		else
-			num_rec_exts = ENUM_NR_NVME; /* rx_nr=5 for NVMe test */
-		insert_single_with_rxnr("d_key", "a_rec", idx, data_buf,
-					ENUM_IOD_SIZE, num_rec_exts,
-					DAOS_TX_NONE, &req);
-			idx += num_rec_exts;
-	}
+	insert_records(oid, &req, data_buf, 0);
+	key_nr = iterate_records(&req);
+	assert_int_equal(key_nr, ENUM_KEY_REC_NR);
 
-	/** Enumerate all mixed NVMe and SCM records */
-	key_nr = 0;
-	memset(&anchor, 0, sizeof(anchor));
-	while (!daos_anchor_is_eof(&anchor)) {
-		daos_epoch_range_t	eprs[5];
-		daos_recx_t		recxs[5];
-		daos_size_t		size;
+	/**
+	 * Insert N mixed NVMe and SCM records starting at offset 1,
+	 * all with same dkey and akey.
+	 */
+	insert_records(oid, &req, data_buf, 1);
+	key_nr = iterate_records(&req);
+	/** One partial record at start */
+	assert_int_equal(key_nr, ENUM_KEY_REC_NR + 1);
 
-		number = 5;
-		enumerate_rec(DAOS_TX_NONE, "d_key", "a_rec", &size,
-			      &number, recxs, eprs, &anchor, true, &req);
-		if (number == 0)
-			continue;
-
-		for (i = 0; i < number; i++) {
-			assert_true(size == ENUM_IOD_SIZE);
-			/* Print a subset of enumerated records */
-			if ((i + key_nr) % ENUM_PRINT != 0)
-				continue;
-			print_message("i:%d iod_size:%d rx_nr:%d, rx_idx:%d\n",
-				      i + key_nr, (int)size,
-				      (int)recxs[i].rx_nr,
-				      (int)recxs[i].rx_idx);
-			i++; /* print the next record to see both rec sizes */
-			print_message("i:%d iod_size:%d rx_nr:%d, rx_idx:%d\n",
-				      i + key_nr, (int)size,
-				      (int)recxs[i].rx_nr,
-				      (int)recxs[i].rx_idx);
-
-		}
-		key_nr += number;
-	}
+	/**
+	 * Insert N mixed NVMe and SCM records starting at offset 2,
+	 * all with same dkey and akey.
+	 */
+	insert_records(oid, &req, data_buf, 2);
+	key_nr = iterate_records(&req);
+	/** Two partial record at start */
+	assert_int_equal(key_nr, ENUM_KEY_REC_NR + 2);
 
 	free(small_buf);
 	free(large_buf);
@@ -1322,7 +1364,6 @@ enumerate_simple(void **state)
 	free(data_buf);
 	/** XXX Verify kds */
 	ioreq_fini(&req);
-	assert_int_equal(key_nr, ENUM_KEY_REC_NR);
 }
 
 #define PUNCH_NUM_KEYS 5

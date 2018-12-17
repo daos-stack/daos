@@ -127,6 +127,20 @@ typedef struct {
 	daos_unit_oid_t		pa_oid;
 } vos_purge_anchor_t;
 
+enum {
+	/** The absence of any flags means iterate all unsorted extents */
+	VOS_IT_RECX_ALL		= 0,
+	/** Include visible extents in sorted iteration */
+	VOS_IT_RECX_VISIBLE	= (1 << 0),
+	/** Include covered extents in sorted iteration */
+	VOS_IT_RECX_COVERED	= (1 << 1),
+	/** Include hole extents in sorted iteration
+	 * Only applicable if VOS_IT_RECX_VISIBLE is set but
+	 * VOS_IT_RECX_COVERED is not set
+	 */
+	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
+};
+
 /**
  * Parameters for initialising VOS iterator
  */
@@ -149,6 +163,8 @@ typedef struct {
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	ip_epc_expr;
+	/** extent visibility flags for for iterator */
+	uint32_t		ip_recx_flags;
 } vos_iter_param_t;
 
 /**

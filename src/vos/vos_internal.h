@@ -790,6 +790,9 @@ struct vos_iter_info {
 	daos_epoch_range_t	 ii_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
+	/** recx visibility flags */
+	uint32_t		 ii_recx_flags;
+
 };
 
 /** function table for vos iterator */

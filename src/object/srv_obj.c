@@ -876,12 +876,20 @@ ds_iter_vos(crt_rpc_t *rpc, struct dss_enum_arg *enum_arg,
 		    oei->oei_akey.iov_len == 0)
 			D_GOTO(out_cont_hdl, rc = -DER_PROTO);
 
-		if (oei->oei_rec_type == DAOS_IOD_ARRAY)
+		if (oei->oei_rec_type == DAOS_IOD_ARRAY) {
 			type = VOS_ITER_RECX;
-		else
+			/* To capture everything visible, we must search from
+			 * 0 to our epoch
+			 */
+			enum_arg->param.ip_epr.epr_lo = 0;
+		} else {
 			type = VOS_ITER_SINGLE;
+		}
 
 		enum_arg->param.ip_epc_expr = VOS_IT_EPC_RE;
+		/** Only show visible records and skip punches */
+		enum_arg->param.ip_recx_flags = VOS_IT_RECX_VISIBLE |
+			VOS_IT_RECX_SKIP_HOLES;
 		enum_arg->fill_recxs = true;
 	} else if (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
 		type = VOS_ITER_DKEY;

@@ -133,6 +133,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	}
 
 	info.ii_epc_expr = param->ip_epc_expr;
+	info.ii_recx_flags = param->ip_recx_flags;
 	info.ii_akey = &param->ip_akey;
 
 	rc = dict->id_ops->iop_nested_prepare(type, &info, &citer);
