@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -74,7 +74,8 @@ crt_hdlr_ctl_fi_attr_set(crt_rpc_t *rpc_req)
 	out_args_fi_attr = crt_reply_get(rpc_req);
 
 	fa_in.fa_max_faults = in_args_fi_attr->fa_max_faults;
-	fa_in.fa_probability = in_args_fi_attr->fa_probability;
+	fa_in.fa_probability_x = in_args_fi_attr->fa_probability_x;
+	fa_in.fa_probability_y = in_args_fi_attr->fa_probability_y;
 	fa_in.fa_err_code = in_args_fi_attr->fa_err_code;
 	fa_in.fa_interval = in_args_fi_attr->fa_interval;
 

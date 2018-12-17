@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 Intel Corporation
+/* Copyright (C) 2018-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -100,11 +100,15 @@ struct d_fault_attr_t {
 	 */
 	unsigned short		fa_rand_state[3];
 	/**
-	 * the frequency faults should be injected, range is [0, 100].  e.g. 20
-	 * means faults will be injected randomly 20 out of 100 hits of the
-	 * fault id.
+	 * the frequency faults should be injected, calculated by:
+	 *
+	 *	freq = fa_probability_x / fa_probability_y
+	 *
+	 * e.g. fa_probability_x = 123, fa_probability_y = 1000
+	 * means faults will be injected randomly with frequency 12.3%
 	 */
-	uint8_t			fa_probability;
+	uint32_t			fa_probability_x;
+	uint32_t			fa_probability_y;
 };
 
 /**

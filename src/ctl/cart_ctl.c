@@ -246,7 +246,7 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 	token = strtok_r(NULL, ",", &saveptr);
 	if (token == NULL)
 		D_GOTO(error_out, 0);
-	fi_attr_in->fa_probability = (uint8_t) atol(token);
+	fi_attr_in->fa_probability_x = strtoull(token, &endptr, 10);
 
 	token = strtok_r(NULL, ",", &saveptr);
 	if (token == NULL)
@@ -470,7 +470,10 @@ ctl_fill_fi_set_attr_rpc_args(crt_rpc_t *rpc_req)
 
 	in_args_fi_attr->fa_fault_id = ctl_gdata.cg_fi_attr.fa_fault_id;
 	in_args_fi_attr->fa_max_faults = ctl_gdata.cg_fi_attr.fa_max_faults;
-	in_args_fi_attr->fa_probability = ctl_gdata.cg_fi_attr.fa_probability;
+	in_args_fi_attr->fa_probability_x =
+		ctl_gdata.cg_fi_attr.fa_probability_x;
+	in_args_fi_attr->fa_probability_y =
+		ctl_gdata.cg_fi_attr.fa_probability_y;
 	in_args_fi_attr->fa_err_code = ctl_gdata.cg_fi_attr.fa_err_code;
 	in_args_fi_attr->fa_interval = ctl_gdata.cg_fi_attr.fa_interval;
 }

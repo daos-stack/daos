@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 Intel Corporation
+/* Copyright (C) 2018-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -79,12 +79,6 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 	bool			  should_free = true;
 	int			  rc = DER_SUCCESS;
 
-	if (fa_in.fa_probability > 100) {
-		D_ERROR("fault probability (%u) out of range [0, 100]\n",
-			fa_in.fa_probability);
-		return -DER_INVAL;
-	}
-
 	if (fault_id > FI_MAX_FAULT_ID) {
 		D_ERROR("fault_id (%u) out of range [0, %d]\n", fault_id,
 			FI_MAX_FAULT_ID);
@@ -136,7 +130,8 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 
 	/* at this point, global lock is released, per entry lock is held */
 	fault_attr->fa_id = fault_id;
-	fault_attr->fa_probability = fa_in.fa_probability;
+	fault_attr->fa_probability_x = fa_in.fa_probability_x;
+	fault_attr->fa_probability_y = fa_in.fa_probability_y;
 	fault_attr->fa_interval = fa_in.fa_interval;
 	fault_attr->fa_max_faults = fa_in.fa_max_faults;
 	fault_attr->fa_err_code = fa_in.fa_err_code;
@@ -194,12 +189,12 @@ one_fault_attr_parse(yaml_parser_t *parser)
 {
 	yaml_event_t		 first;
 	yaml_event_t		 second;
-	struct d_fault_attr_t	 attr = {.fa_interval = 1,
-					 .fa_probability = 100,
-					 .fa_err_code = 0,
-					 .fa_max_faults = 0};
+	struct d_fault_attr_t	 attr = { .fa_probability_x = 1,
+					  .fa_probability_y = 1,
+					  .fa_interval = 1 };
 	const char		*id = "id";
-	const char		*probability = "probability";
+	const char		*probability_x = "probability_x";
+	const char		*probability_y = "probability_y";
 	const char		*interval = "interval";
 	const char		*max_faults = "max_faults";
 	const char		*err_code = "err_code";
@@ -254,9 +249,12 @@ one_fault_attr_parse(yaml_parser_t *parser)
 			D_DEBUG(DB_ALL, "id: %lu\n", val);
 			attr.fa_id = val;
 			has_id = 1;
-		} else if (!strcmp(key_str, probability)) {
-			attr.fa_probability = val;
-			D_DEBUG(DB_ALL, "probability: %lu\n", val);
+		} else if (!strcmp(key_str, probability_x)) {
+			attr.fa_probability_x = val;
+			D_DEBUG(DB_ALL, "probability_x: %lu\n", val);
+		} else if (!strcmp(key_str, probability_y)) {
+			attr.fa_probability_y = val;
+			D_DEBUG(DB_ALL, "probability_y: %lu\n", val);
 		} else if (!strcmp(key_str, interval)) {
 			attr.fa_interval = val;
 			D_DEBUG(DB_ALL, "interval: %lu\n", val);
@@ -561,6 +559,8 @@ d_fi_initialized()
  *
  * \return                   true if should inject fault, false if should not
  *                           inject fault
+ *
+ *                           support injecting X faults in Y occurances
  */
 bool
 d_should_fail(uint32_t fault_id)
@@ -590,7 +590,7 @@ d_should_fail(uint32_t fault_id)
 	}
 
 	D_SPIN_LOCK(&fault_attr->fa_lock);
-	if (fault_attr->fa_probability == 0)
+	if (fault_attr->fa_probability_x == 0)
 		D_GOTO(out, rc = false);
 
 	if (fault_attr->fa_max_faults != 0 &&
@@ -603,9 +603,9 @@ d_should_fail(uint32_t fault_id)
 			D_GOTO(out, rc = false);
 	}
 
-	if (fault_attr->fa_probability != 100 &&
-	    fault_attr->fa_probability <=
-	    nrand48(fault_attr->fa_rand_state) % 100)
+	if (fault_attr->fa_probability_y != 0 &&
+	    fault_attr->fa_probability_x <=
+	    nrand48(fault_attr->fa_rand_state) % fault_attr->fa_probability_y)
 		D_GOTO(out, rc = false);
 
 	fault_attr->fa_num_faults++;

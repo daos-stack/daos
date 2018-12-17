@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -539,7 +539,8 @@ CRT_RPC_DECLARE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 	((uint32_t)		(fa_interval)		CRT_VAR) \
 	((uint64_t)		(fa_max_faults)		CRT_VAR) \
 	((uint32_t)		(fa_err_code)		CRT_VAR) \
-	((uint32_t)		(fa_probability)	CRT_VAR) \
+	((uint32_t)		(fa_probability_x)	CRT_VAR) \
+	((uint32_t)		(fa_probability_y)	CRT_VAR) \
 	((d_string_t)		(fa_argument)		CRT_VAR)
 
 #define CRT_OSEQ_CTL_FI_ATTR_SET	/* output fields */	 \
