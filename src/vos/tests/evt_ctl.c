@@ -215,8 +215,8 @@ parse_value:
 
 	str = tmp + 1;
 	if (should_pass == NULL) {
-		if (strlen(str) != 1) {
-			D_PRINT("Expected one of [BbVbCc]: got %s\n", str);
+		if (strlen(str) < 1 || strlen(str) > 2) {
+			D_PRINT("Expected one of [-][HhBbVbCc]: got %s\n", str);
 			return -1;
 		}
 		goto done;
@@ -437,21 +437,35 @@ ts_list_rect(char *args)
 	if (!val)
 		goto start;
 
-	switch (val[0]) {
+	i = 0;
+	if (val[0] == '-') {
+		options = EVT_ITER_REVERSE;
+		i = 1;
+	}
+
+	switch (val[i]) {
+	case 'H':
+		options |= EVT_ITER_EMBEDDED | EVT_ITER_VISIBLE |
+			EVT_ITER_SKIP_HOLES;
+		break;
+	case 'h':
+		options |= EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES;
+		probe = false;
+		break;
 	case 'V':
-		options = EVT_ITER_EMBEDDED;
+		options |= EVT_ITER_EMBEDDED;
 	case 'v':
 		options |= EVT_ITER_VISIBLE;
 		probe = false;
 		break;
 	case 'C':
-		options = EVT_ITER_EMBEDDED;
+		options |= EVT_ITER_EMBEDDED;
 	case 'c':
 		options |= EVT_ITER_COVERED;
 		probe = false;
 		break;
 	case 'B':
-		options = EVT_ITER_EMBEDDED;
+		options |= EVT_ITER_EMBEDDED;
 	case 'b':
 		options |= (EVT_ITER_VISIBLE | EVT_ITER_COVERED);
 		/* Don't skip the probe in this case just to test that path */

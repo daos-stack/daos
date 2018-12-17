@@ -27,6 +27,20 @@
 #define evt_iter_is_sorted(iter) \
 	(((iter)->it_options & (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) != 0)
 
+static int
+evt_validate_options(unsigned int options)
+{
+	if ((options & EVT_ITER_SKIP_HOLES) == 0)
+		return 0;
+	if (options & EVT_ITER_COVERED)
+		goto error;
+	if (options & EVT_ITER_VISIBLE)
+		return 0;
+error:
+	D_ERROR("EVT_ITER_SKIP_HOLES is only valid with EVT_ITER_VISIBLE\n");
+	return -DER_INVAL;
+}
+
 /**
  * Prepare a iterator based on evtree open handle.
  * see daos_srv/evtree.h for the details.
@@ -38,6 +52,10 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
 	int			 rc;
+
+	rc = evt_validate_options(options);
+	if (rc != 0)
+		return rc;
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
@@ -165,6 +183,89 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 }
 
 static int
+evt_iter_is_ready(struct evt_iterator *iter)
+{
+	D_DEBUG(DB_TRACE, "iterator state is %d\n", iter->it_state);
+
+	switch (iter->it_state) {
+	default:
+		D_ASSERT(0);
+	case EVT_ITER_NONE:
+	case EVT_ITER_INIT:
+		return -DER_NO_PERM;
+	case EVT_ITER_FINI:
+		return -DER_NONEXIST;
+	case EVT_ITER_READY:
+		return 0;
+	}
+}
+
+static int
+evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
+{
+	struct evt_entry	*entry;
+	struct evt_rect		*rect;
+	struct evt_trace	*trace;
+	int			 rc = 0;
+	bool			 found;
+
+	if (evt_iter_is_sorted(iter)) {
+		for (;;) {
+			iter->it_index +=
+				iter->it_forward ? 1 : -1;
+			if (iter->it_index < 0 ||
+			    iter->it_index == iter->it_entries.ea_ent_nr) {
+				iter->it_state = EVT_ITER_FINI;
+				D_GOTO(out, rc = -DER_NONEXIST);
+			}
+			if (iter->it_options & EVT_ITER_SKIP_HOLES) {
+				entry = evt_ent_array_get(&iter->it_entries,
+							  iter->it_index);
+				if (bio_addr_is_hole(&entry->en_addr))
+					continue;
+			}
+			break;
+		}
+		goto ready;
+	}
+
+	while ((found = evt_move_trace(tcx, iter->it_forward))) {
+		trace = &tcx->tc_trace[tcx->tc_depth - 1];
+		rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
+
+		if (evt_filter_rect(&iter->it_filter, rect))
+			continue;
+		break;
+	}
+
+	if (!found) {
+		iter->it_state = EVT_ITER_FINI;
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+ready:
+	iter->it_state = EVT_ITER_READY;
+ out:
+	return rc;
+}
+
+static int
+evt_iter_skip_holes(struct evt_context *tcx, struct evt_iterator *iter)
+{
+	struct evt_entry_array	*enta;
+	struct evt_entry	*entry;
+
+	if (iter->it_options & EVT_ITER_SKIP_HOLES) {
+		enta = &iter->it_entries;
+		entry = evt_ent_array_get(enta, iter->it_index);
+
+		if (bio_addr_is_hole(&entry->en_addr))
+			return evt_iter_move(tcx, iter);
+	}
+	return 0;
+}
+
+static int
 evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 		      int opc, const struct evt_rect *rect,
 		      const daos_anchor_t *anchor)
@@ -216,7 +317,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	iter->it_index = index;
 out:
 	iter->it_state = EVT_ITER_READY;
-	return 0;
+	return evt_iter_skip_holes(tcx, iter);
 }
 
 int
@@ -288,74 +389,6 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 	return rc;
 }
 
-static int
-evt_iter_is_ready(struct evt_iterator *iter)
-{
-	D_DEBUG(DB_TRACE, "iterator state is %d\n", iter->it_state);
-
-	switch (iter->it_state) {
-	default:
-		D_ASSERT(0);
-	case EVT_ITER_NONE:
-	case EVT_ITER_INIT:
-		return -DER_NO_PERM;
-	case EVT_ITER_FINI:
-		return -DER_NONEXIST;
-	case EVT_ITER_READY:
-		return 0;
-	}
-}
-
-static int
-evt_iter_move(daos_handle_t ih)
-{
-	struct evt_iterator	*iter;
-	struct evt_context	*tcx;
-	struct evt_rect		*rect;
-	struct evt_trace	*trace;
-	int			 rc = 0;
-	bool			 found;
-
-	tcx = evt_hdl2tcx(ih);
-	if (tcx == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	iter = &tcx->tc_iter;
-	rc = evt_iter_is_ready(iter);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	if (evt_iter_is_sorted(iter)) {
-		iter->it_index +=
-			iter->it_forward ? 1 : -1;
-		if (iter->it_index < 0 ||
-		    iter->it_index == iter->it_entries.ea_ent_nr) {
-			iter->it_state = EVT_ITER_FINI;
-			D_GOTO(out, rc = -DER_NONEXIST);
-		}
-		goto ready;
-	}
-
-	while ((found = evt_move_trace(tcx, iter->it_forward))) {
-		trace = &tcx->tc_trace[tcx->tc_depth - 1];
-		rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
-
-		if (evt_filter_rect(&iter->it_filter, rect))
-			continue;
-		break;
-	}
-
-	if (!found) {
-		iter->it_state = EVT_ITER_FINI;
-		D_GOTO(out, rc = -DER_NONEXIST);
-	}
-
-ready:
-	iter->it_state = EVT_ITER_READY;
- out:
-	return rc;
-}
-
 /**
  * Move the iterator cursor to the next extent in the evtree.
  * See daos_srv/evtree.h for the details.
@@ -363,7 +396,20 @@ ready:
 int
 evt_iter_next(daos_handle_t ih)
 {
-	return evt_iter_move(ih);
+	struct evt_iterator	*iter;
+	struct evt_context	*tcx;
+	int			 rc;
+
+	tcx = evt_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	iter = &tcx->tc_iter;
+	rc = evt_iter_is_ready(iter);
+	if (rc != 0)
+		return rc;
+
+	return evt_iter_move(tcx, iter);
 }
 
 /**

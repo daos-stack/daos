@@ -484,8 +484,10 @@ enum {
 	EVT_ITER_VISIBLE	= (1 << 1),
 	/** Return extents fully or partially covered in the search rectangle */
 	EVT_ITER_COVERED	= (1 << 2),
+	/** Skip visible holes (Only valid with EVT_ITER_VISIBLE) */
+	EVT_ITER_SKIP_HOLES	= (1 << 3),
 	/** Reverse iterator (ordered iterator only) */
-	EVT_ITER_REVERSE	= (1 << 3),
+	EVT_ITER_REVERSE	= (1 << 4),
 	/* If either EVT_ITER_VISIBLE or EVT_ITER_COVERED are set,
 	 * evt_iter_probe will calculate and cache visible extents and iterate
 	 * through the cached extents.   Each rectangle will be marked as
