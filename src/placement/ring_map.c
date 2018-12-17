@@ -282,7 +282,7 @@ ring_buf_create(struct pl_ring_map *rimap, struct ring_buf **buf_pp)
 			buf->rb_domain_nr++;
 	}
 
-	D_ALLOC(buf->rb_domains, buf->rb_domain_nr * sizeof(*buf->rb_domains));
+	D_ALLOC_ARRAY(buf->rb_domains, buf->rb_domain_nr);
 	if (buf->rb_domains == NULL) {
 		rc = -DER_NOMEM;
 		goto err_out;
@@ -299,8 +299,7 @@ ring_buf_create(struct pl_ring_map *rimap, struct ring_buf **buf_pp)
 		rdom->rd_comp = &doms[i].do_comp;
 
 		rdom->rd_target_nr = doms[i].do_target_nr;
-		D_ALLOC(rdom->rd_targets, rdom->rd_target_nr *
-					  sizeof(*rdom->rd_targets));
+		D_ALLOC_ARRAY(rdom->rd_targets, rdom->rd_target_nr);
 		if (rdom->rd_targets == NULL) {
 			rc = -DER_NOMEM;
 			goto err_out;
@@ -402,7 +401,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 	int		    j;
 	int		    k;
 
-	D_ALLOC(scratch, buf->rb_domain_nr * sizeof(*scratch));
+	D_ALLOC_ARRAY(scratch, buf->rb_domain_nr);
 	if (scratch == NULL)
 		return -DER_NOMEM;
 
@@ -484,8 +483,7 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 	if (rc < 0)
 		return rc;
 
-	D_ALLOC(ring->ri_targets,
-		rimap->rmp_target_nr * sizeof(struct pl_target));
+	D_ALLOC_ARRAY(ring->ri_targets, rimap->rmp_target_nr);
 	if (ring->ri_targets == NULL)
 		return -DER_NOMEM;
 
@@ -554,7 +552,7 @@ ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 	rimap->rmp_domain  = mia->ia_ring.domain;
 	rimap->rmp_ring_nr = mia->ia_ring.ring_nr;
 
-	D_ALLOC(rimap->rmp_rings, rimap->rmp_ring_nr * sizeof(struct pl_ring));
+	D_ALLOC_ARRAY(rimap->rmp_rings, rimap->rmp_ring_nr);
 	if (rimap->rmp_rings == NULL)
 		return -DER_NOMEM;
 
@@ -604,13 +602,11 @@ ring_map_hash_build(struct pl_ring_map *rimap)
 	unsigned	tg_per_dom;
 
 	D_DEBUG(DB_PL, "Build consistent hash for ring map\n");
-	D_ALLOC(rimap->rmp_target_hashes,
-		rimap->rmp_target_nr * sizeof(*rimap->rmp_target_hashes));
+	D_ALLOC_ARRAY(rimap->rmp_target_hashes, rimap->rmp_target_nr);
 	if (rimap->rmp_target_hashes == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC(rimap->rmp_ring_hashes,
-		rimap->rmp_ring_nr * sizeof(*rimap->rmp_ring_hashes));
+	D_ALLOC_ARRAY(rimap->rmp_ring_hashes, rimap->rmp_ring_nr);
 	if (rimap->rmp_ring_hashes == NULL)
 		return -DER_NOMEM;
 

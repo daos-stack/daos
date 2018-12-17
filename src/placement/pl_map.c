@@ -209,8 +209,7 @@ pl_obj_layout_alloc(unsigned int shard_nr, struct pl_obj_layout **layout_pp)
 		return -DER_NOMEM;
 
 	layout->ol_nr = shard_nr;
-	D_ALLOC(layout->ol_shards,
-		layout->ol_nr * sizeof(*layout->ol_shards));
+	D_ALLOC_ARRAY(layout->ol_shards, layout->ol_nr);
 	if (layout->ol_shards == NULL)
 		goto failed;
 
