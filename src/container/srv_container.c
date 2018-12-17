@@ -1055,8 +1055,8 @@ cont_attr_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (data == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC(iovs, (1 /* for output sizes */
-		 + in->cagi_count) * sizeof(*iovs));
+	/* for output sizes */
+	D_ALLOC_ARRAY(iovs, (int)(1 + in->cagi_count));
 	if (iovs == NULL)
 		D_GOTO(out_data, rc = -DER_NOMEM);
 
