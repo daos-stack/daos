@@ -1231,7 +1231,7 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 	struct pool_target	*tgts;
 	struct pl_target	*plts;
 	unsigned int		 plts_nr, grp_dist, grp_start;
-	unsigned int		 pos, i, j, k, rc;
+	unsigned int		 pos, i, j, k, rc = 0;
 
 	layout->ol_ver = pl_map_version(map);
 
@@ -1276,9 +1276,10 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 
 	obj_layout_dump(md->omd_id, layout);
 out:
-	if (rc)
+	if (rc) {
+		D_ERROR("ring_obj_layout_fill failed, rc %d.\n", rc);
 		ring_remap_free_all(remap_list);
-
+	}
 	return rc;
 }
 
@@ -1294,16 +1295,21 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	int			   rc;
 
 	rc = ring_obj_placement_get(rimap, md, shard_md, &rop);
-	if (rc)
+	if (rc) {
+		D_ERROR("ring_obj_placement_get failed, rc %d.\n", rc);
 		return rc;
+	}
 
 	rc = pl_obj_layout_alloc(rop.rop_grp_size * rop.rop_grp_nr, &layout);
-	if (rc)
+	if (rc) {
+		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
 		return rc;
+	}
 
 	D_INIT_LIST_HEAD(&remap_list);
 	rc = ring_obj_layout_fill(map, md, &rop, layout, &remap_list);
 	if (rc) {
+		D_ERROR("ring_obj_layout_fill failed, rc %d.\n", rc);
 		pl_obj_layout_free(layout);
 		return rc;
 	}
