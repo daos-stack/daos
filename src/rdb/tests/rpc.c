@@ -25,38 +25,9 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
-static struct crt_msg_field *rdbt_init_in_fields[] = {
-	&CMF_UUID,	/* uuid */
-	&CMF_UINT32	/* nreplicas */
-};
-
-static struct crt_msg_field *rdbt_init_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-static struct crt_req_format DQF_RDBT_INIT =
-	DEFINE_CRT_REQ_FMT(rdbt_init_in_fields, rdbt_init_out_fields);
-
-static struct crt_msg_field *rdbt_fini_in_fields[] = {
-};
-
-static struct crt_msg_field *rdbt_fini_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-static struct crt_req_format DQF_RDBT_FINI =
-	DEFINE_CRT_REQ_FMT(rdbt_fini_in_fields, rdbt_fini_out_fields);
-
-static struct crt_msg_field *rdbt_test_in_fields[] = {
-	&CMF_INT	/* update */
-};
-
-static struct crt_msg_field *rdbt_test_out_fields[] = {
-	&CMF_INT	/* rc */
-};
-
-static struct crt_req_format DQF_RDBT_TEST =
-	DEFINE_CRT_REQ_FMT(rdbt_test_in_fields, rdbt_test_out_fields);
+CRT_RPC_DEFINE(rdbt_init, DAOS_ISEQ_RDBT_INIT_OP, DAOS_OSEQ_RDBT_INIT_OP)
+CRT_RPC_DEFINE(rdbt_fini, DAOS_ISEQ_RDBT_FINI_OP, DAOS_OSEQ_RDBT_FINI_OP)
+CRT_RPC_DEFINE(rdbt_test, DAOS_ISEQ_RDBT_TEST_OP, DAOS_OSEQ_RDBT_TEST_OP)
 
 /* Define for cont_rpcs[] array population below.
  * See RDBT_PROTO_*_RPC_LIST macro definition

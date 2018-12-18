@@ -36,13 +36,13 @@
  */
 #define RDBT_PROTO_CLI_RPC_LIST						\
 	X(RDBT_INIT,							\
-		0, &DQF_RDBT_INIT,					\
+		0, &CQF_rdbt_init,					\
 		rdbt_init_handler, NULL),				\
 	X(RDBT_FINI,							\
-		0, &DQF_RDBT_FINI,					\
+		0, &CQF_rdbt_fini,					\
 		rdbt_fini_handler, NULL),				\
 	X(RDBT_TEST,							\
-		0, &DQF_RDBT_TEST,					\
+		0, &CQF_rdbt_test,					\
 		rdbt_test_handler, NULL)
 
 /* Define for RPC enum population below */
@@ -58,28 +58,28 @@ enum rdbt_operation {
 
 extern struct crt_proto_format rdbt_proto_fmt;
 
-struct rdbt_init_in {
-	uuid_t		tii_uuid;
-	uint32_t	tii_nreplicas;
-};
+#define DAOS_ISEQ_RDBT_INIT_OP	/* input fields */		 \
+	((uuid_t)		(tii_uuid)		CRT_VAR) \
+	((uint32_t)		(tii_nreplicas)		CRT_VAR)
 
-struct rdbt_init_out {
-	int	tio_rc;
-};
+#define DAOS_OSEQ_RDBT_INIT_OP	/* output fields */		 \
+	((int32_t)		(tio_rc)		CRT_VAR)
 
-struct rdbt_fini_in {
-};
+CRT_RPC_DECLARE(rdbt_init, DAOS_ISEQ_RDBT_INIT_OP, DAOS_OSEQ_RDBT_INIT_OP)
 
-struct rdbt_fini_out {
-	int	tfo_rc;
-};
+#define DAOS_ISEQ_RDBT_FINI_OP	/* input fields */
 
-struct rdbt_test_in {
-	int	tti_update;
-};
+#define DAOS_OSEQ_RDBT_FINI_OP	/* output fields */		 \
+	((int32_t)		(tfo_rc)		CRT_VAR)
 
-struct rdbt_test_out {
-	int	tto_rc;
-};
+CRT_RPC_DECLARE(rdbt_fini, DAOS_ISEQ_RDBT_FINI_OP, DAOS_OSEQ_RDBT_FINI_OP)
+
+#define DAOS_ISEQ_RDBT_TEST_OP	/* input fields */		 \
+	((int32_t)		(tti_update)		CRT_VAR)
+
+#define DAOS_OSEQ_RDBT_TEST_OP	/* output fields */		 \
+	((int32_t)		(tto_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(rdbt_test, DAOS_ISEQ_RDBT_TEST_OP, DAOS_OSEQ_RDBT_TEST_OP)
 
 #endif /* RDB_TESTS_RPC_H */
