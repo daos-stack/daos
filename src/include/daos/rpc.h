@@ -120,7 +120,8 @@ daos_rpc_handler_find(struct daos_rpc_handler *handlers, crt_opcode_t opc)
 /**
  * Register RPCs for both clients and servers.
  *
- * \param[in] rpcs	RPC list to be registered.
+ * \param[in] proto_fmt	CRT specification of RPC protocol.
+ * \param[in] cli_count	count of RPCs to be registered in client.
  * \param[in] handlers	RPC handlers to be registered, if
  *                      it is NULL, then it is for registering
  *                      client side RPC, otherwise it is for
