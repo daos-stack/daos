@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016-2017 Intel Corporation
+# Copyright (c) 2016-2018 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,21 +28,17 @@ test runner class
 import os
 import unittest
 import logging
+from time import time
 #pylint: disable=import-error
 import PostRunner
 import GrindRunner
 import ResultsRunner
-from socket import gethostname
-import subprocess
-import signal
-import time
 #pylint: enable=import-error
 
 
 class UnitTestRunner(PostRunner.PostRunner,
                      GrindRunner.GrindRunner):
     """Simple test runner"""
-    #pylint: disable=too-many-instance-attributes
     log_dir_base = ""
     last_testlogdir = ""
     loop_number = 0
@@ -50,7 +46,6 @@ class UnitTestRunner(PostRunner.PostRunner,
     subtest_results = []
     info = None
     logger = None
-    #pylint: enable=too-many-instance-attributes
 
     def __init__(self, test_info, log_base_path):
         self.test_info = test_info
@@ -58,72 +53,6 @@ class UnitTestRunner(PostRunner.PostRunner,
         self.test_directives = test_info.get_directives()
         self.log_dir_base = log_base_path
         self.logger = logging.getLogger("TestRunnerLogger")
-        self.prun_dvm = None
-
-    def stop_prte(self):
-        """Stop prte by sending it SIGKILL signal"""
-        print("Shutting down prte")
-        ompi_path = self.info.get_info('PRRTE_PREFIX')
-        cmd = [os.path.join(ompi_path, "bin", "prun"), '--terminate']
-        subprocess.Popen(cmd, stdin=subprocess.DEVNULL)
-        time.sleep(2)
-        # Kill pid if prun --terminate did not cleanly shut it down
-        os.kill(self.prun_dvm.pid, signal.SIGKILL)
-        print("Killing prte with pid={}".format(self.prun_dvm.pid))
-
-    def start_prte(self):
-        """Start prte with server list"""
-        server_list = []
-        servers = os.getenv('CRT_TEST_SERVER')
-        if servers:
-            server_list = servers.split(',')
-        else:
-            server_list.append(gethostname().split('.')[0])
-
-        clients = os.getenv('CRT_TEST_CLIENT')
-
-        if clients:
-            server_list = server_list + clients.split(',')
-
-        use_uri = os.getenv('TR_USE_URI')
-        cmd = "prte"
-
-        # prte arguments have to be in form of -H 'host1:*,host2:*,..."
-        cmd_arg = ""
-
-        #  convert server list to set and back to list to remove duplicates
-        for host in list(set(server_list)):
-            cmd_arg = cmd_arg + host + ':*,'
-
-        ompi_path = self.info.get_info('PRRTE_PREFIX')
-
-        cmd = [os.path.join(ompi_path, 'bin', 'prte'),
-               '--daemonize', '-system-server', '-H', cmd_arg]
-
-        if use_uri:
-            cmd.append('--report-uri')
-            cmd.append(use_uri)
-
-        print("UnitTestRunner: URI used: {} Launching {}".format(use_uri, cmd))
-        self.prun_dvm = subprocess.Popen(cmd,
-                                         stdin=subprocess.DEVNULL,
-                                         stdout=subprocess.PIPE,
-                                         stderr=subprocess.STDOUT)
-
-        # Hack: Wait until stdout prints 9 characters which is
-        # how we know that dvm is ready (it prints DVM ready msg)
-        x = 0
-        while x < 9:
-            output = self.prun_dvm.stdout.read(1)
-            x = x + 1
-
-            # If we hit endline in output exit as well
-            if output == '\n':
-                print("Failed to start {} {}".format(cmd, cmd_arg))
-                break
-
-        # Even after 'DVM ready' message, need to wait for few seconds
-        time.sleep(2)
 
     def setenv(self, testcase):
         """ setup testcase environment """
@@ -131,12 +60,9 @@ class UnitTestRunner(PostRunner.PostRunner,
         if module_env is not None:
             for (key, value) in module_env.items():
                 os.environ[str(key)] = value
-
         setTestPhase = testcase.get('type', self.test_info.get_defaultENV(
             'TR_TEST_PHASE', "TEST")).upper()
         os.environ['TR_TEST_PHASE'] = setTestPhase
-        self.start_prte()
-
 
     def resetenv(self, testcase):
         """ reset testcase environment """
@@ -146,7 +72,6 @@ class UnitTestRunner(PostRunner.PostRunner,
             for key in module_env.keys():
                 value = module_default_env.get(key, "")
                 os.environ[str(key)] = value
-        self.stop_prte()
 
     def settestlog(self, testcase_id):
         """ setup testcase environment """
@@ -243,14 +168,14 @@ class UnitTestRunner(PostRunner.PostRunner,
         self.logger.info("***************** %s ***************", testname)
         self.test_info.setup_default_env()
         loop = str(self.test_directives.get('loop', "no"))
-        start_time = time.time()
+        start_time = time()
         if loop.lower() == "no":
             results_info = {}
             self.loop_number = 0
-            start_time = time.time()
+            start_time = time()
             rtn = self.execute_list()
             results_info['name'] = testname
-            results_info['duration'] = '{:.2f}'.format(time.time() - start_time)
+            results_info['duration'] = '{:.2f}'.format(time() - start_time)
             results_info['return_code'] = rtn
             if rtn == 0:
                 results_info['status'] = "PASS"
@@ -264,11 +189,10 @@ class UnitTestRunner(PostRunner.PostRunner,
                 self.logger.info("*************** loop %d ****************", i)
                 self.loop_number = i
                 results.add_test_set("{!s}_loop{!s}".format(testsetname, i))
-                start_time = time.time()
+                start_time = time()
                 rtn |= self.execute_list()
                 results_info['name'] = testname
-                results_info['duration'] = '{:.2f}'.format(time.time() -
-                                                           start_time)
+                results_info['duration'] = '{:.2f}'.format(time() - start_time)
                 results_info['return_code'] = rtn
                 if rtn == 0:
                     results_info['status'] = "PASS"

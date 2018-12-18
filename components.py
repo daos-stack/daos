@@ -293,8 +293,8 @@ REQS.define('cart',
                       "PREFIX=$CART_PREFIX install"],
             headers=["cart/api.h", "gurt/list.h"],
             libs=["cart", "gurt"],
-            requires=['mercury', 'uuid', 'crypto',
-                      'pmix', 'boost', 'yaml', 'prrte'])
+            requires=['mpi4py', 'mercury', 'uuid', 'crypto', 'ompi',
+                      'pmix', 'boost', 'yaml'])
 
 URL = 'https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-2.0.0.tar.gz'
 WEB_RETRIEVER = WebRetriever(URL)

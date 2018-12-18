@@ -23,7 +23,13 @@
 orte-dvm runner class
 
 """
+
 import os
+import subprocess
+import shlex
+import time
+from socket import gethostname
+
 
 class DvmRunner():
     """Simple test runner"""
@@ -46,11 +52,59 @@ class DvmRunner():
         self.report = os.path.join(log_path, "orted-uri")
         self.info.set_config('setKeyFromConfig', 'TR_USE_URI', self.report)
         self.logfileout = os.path.join(log_path, "orte-dvm.out")
+        ompi_path = self.info.get_info('OMPI_PREFIX')
         self.hostlist = ",".join(self.info.get_config('host_list'))
-
-        return 0
+        if not self.hostlist:
+            self.hostlist = gethostname().split('.')[0]
+        cmd = [os.path.join(ompi_path, 'bin', 'orte-dvm'),
+               '--mca', 'btl', 'self,tcp',
+               '--prefix', ompi_path,
+               '--report-uri', self.report,
+               '--host', self.hostlist]
+        cmdstr = ' '.join(cmd)
+        with open(self.logfileout, mode='w') as outfile:
+            outfile.write("=======================================\n " + \
+                          " Command: " + str(cmdstr) + \
+                          "\n======================================\n")
+            outfile.flush()
+            self.ortedvm = subprocess.Popen(cmd,
+                                            stdin=subprocess.DEVNULL,
+                                            stdout=outfile,
+                                            stderr=subprocess.STDOUT)
+        # wait for DVM to start
+        print("TestRunner: orte-dvm process wait")
+        time.sleep(10)
+        print("TestRunner: orte-dvm process started pid: %d \n" %
+              self.ortedvm.pid)
+        if self.ortedvm.poll() is None:
+            return 0
+        print("TestRunner: orte-dvm failed to start")
+        print("TestRunner: orte-dvm rc: %d\n" % self.ortedvm.returncode)
+        try:
+            os.remove(self.report)
+        except OSError as e:
+            print("TestRunner: orte-dvm error:\n %s" % e)
+        return 1
 
     def stop_process(self):
         """stop orted processes """
-        print("DvmRunner: stopping, report uri was {}".format(self.report))
-        return 0
+        print("TestRunner: stopping orte-dvm process\n")
+        if self.ortedvm.poll() is None:
+            ompi_path = self.info.get_info('OMPI_PREFIX')
+            orterun = os.path.join(ompi_path, "bin", "orterun")
+            cmdstr = "%s --terminate --prefix %s --hnp file:%s --host %s" % \
+                     (orterun, ompi_path, self.report, self.hostlist)
+            cmdarg = shlex.split(cmdstr)
+            try:
+                subprocess.call(cmdarg, timeout=10)
+            except subprocess.TimeoutExpired:
+                self.ortedvm.terminate()
+                try:
+                    self.ortedvm.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    print("TestRunner: orte-dvm termination may have failed")
+        if self.ortedvm.returncode:
+            print("TestRunner: orte-dvm rc: %d\n" % self.ortedvm.returncode)
+        with open(self.logfileout, mode='r') as fd:
+            print("TestRunner: orte-dvm STDOUT/STDERR:\n %s" % fd.read())
+        os.remove(self.report)
