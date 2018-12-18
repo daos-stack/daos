@@ -119,7 +119,7 @@ bio_sgl_init(struct bio_sglist *sgl, unsigned int nr)
 	memset(sgl, 0, sizeof(*sgl));
 
 	sgl->bs_nr = nr;
-	D_ALLOC(sgl->bs_iovs, nr * sizeof(*sgl->bs_iovs));
+	D_ALLOC_ARRAY(sgl->bs_iovs, nr);
 	return sgl->bs_iovs == NULL ? -DER_NOMEM : 0;
 }
 

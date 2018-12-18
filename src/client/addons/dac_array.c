@@ -160,7 +160,7 @@ free_val_cb(tse_task_t *task, void *data)
 	char	*val = *((char **)data);
 	int	rc = task->dt_result;
 
-	free(val);
+	D_FREE(val);
 	return rc;
 }
 
@@ -174,11 +174,11 @@ free_io_params_cb(tse_task_t *task, void *data)
 		struct io_params *current = io_list;
 
 		if (current->iod.iod_recxs) {
-			free(current->iod.iod_recxs);
+			D_FREE(current->iod.iod_recxs);
 			current->iod.iod_recxs = NULL;
 		}
 		if (current->sgl.sg_iovs) {
-			free(current->sgl.sg_iovs);
+			D_FREE(current->sgl.sg_iovs);
 			current->sgl.sg_iovs = NULL;
 		}
 
@@ -1650,7 +1650,7 @@ free_set_size_cb(tse_task_t *task, void *data)
 	struct set_size_props *props = *((struct set_size_props **)data);
 
 	if (props->val)
-		free(props->val);
+		D_FREE(props->val);
 	if (props->array)
 		array_decref(props->array);
 	D_FREE(props);
@@ -1773,7 +1773,7 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	iod->iod_eprs = NULL;
 	iod->iod_size = 0; /* 0 to punch */
 	iod->iod_type = DAOS_IOD_ARRAY;
-	iod->iod_recxs = malloc(sizeof(daos_recx_t));
+	D_ALLOC_PTR(iod->iod_recxs);
 	iod->iod_recxs[0].rx_idx = record_i + 1;
 	iod->iod_recxs[0].rx_nr = num_records;
 
@@ -1838,9 +1838,9 @@ check_record_cb(tse_task_t *task, void *data)
 	iod->iod_size = params->cell_size;
 
 	/** set memory location */
-	val = calloc(1, params->cell_size);
+	D_ALLOC(val, params->cell_size);
 	sgl->sg_nr = 1;
-	sgl->sg_iovs = malloc(sizeof(daos_iov_t));
+	D_ALLOC_PTR(sgl->sg_iovs);
 	daos_iov_set(&sgl->sg_iovs[0], val, params->cell_size);
 
 	D_DEBUG(DB_IO, "update record (%zu, %zu), iod_size %zu.\n",
@@ -1931,7 +1931,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	iod->iod_eprs = NULL;
 	iod->iod_size = DAOS_REC_ANY;
 	iod->iod_type = DAOS_IOD_ARRAY;
-	iod->iod_recxs = malloc(sizeof(daos_recx_t));
+	D_ALLOC_PTR(iod->iod_recxs);
 	iod->iod_recxs[0].rx_idx = record_i;
 	iod->iod_recxs[0].rx_nr = 1;
 
@@ -2004,9 +2004,9 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 	daos_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
 	/** set memory location */
-	props->val = calloc(1, props->cell_size);
+	D_ALLOC(props->val, props->cell_size);
 	sgl->sg_nr = 1;
-	sgl->sg_iovs = malloc(sizeof(daos_iov_t));
+	D_ALLOC_PTR(sgl->sg_iovs);
 	daos_iov_set(&sgl->sg_iovs[0], props->val, props->cell_size);
 
 	/* set descriptor for KV object */
@@ -2017,14 +2017,14 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 	iod->iod_eprs = NULL;
 	iod->iod_size = props->cell_size;
 	iod->iod_type = DAOS_IOD_ARRAY;
-	iod->iod_recxs = malloc(sizeof(daos_recx_t));
+	D_ALLOC_PTR(iod->iod_recxs);
 	iod->iod_recxs[0].rx_idx = props->record_i;
 	iod->iod_recxs[0].rx_nr = 1;
 
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(props->ptask),
 			      0, NULL, &io_task);
 	if (rc) {
-		free(sgl->sg_iovs);
+		D_FREE(sgl->sg_iovs);
 		D_GOTO(err, rc);
 	}
 	io_arg = daos_task_get_args(io_task);
