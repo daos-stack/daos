@@ -178,7 +178,7 @@ modules_load(uint64_t *facs)
 		mod = strsep(&run, ",");
 	}
 
-	free(sep);
+	D_FREE(sep);
 	return rc;
 }
 

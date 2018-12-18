@@ -79,8 +79,8 @@ dss_thread_local_storage_init(struct dss_thread_local_storage *dtls)
 	int i;
 
 	if (dtls->dtls_values == NULL) {
-		D_ALLOC(dtls->dtls_values, ARRAY_SIZE(dss_module_keys) *
-					 sizeof(dtls->dtls_values[0]));
+		D_ALLOC_ARRAY(dtls->dtls_values,
+			      (int)ARRAY_SIZE(dss_module_keys));
 		if (dtls->dtls_values == NULL)
 			return -DER_NOMEM;
 	}

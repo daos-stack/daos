@@ -1002,8 +1002,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	}
 
 	stream_args = &args->ca_stream_args;
-	D_ALLOC(stream_args->csa_streams,
-		(dss_nxstreams) * sizeof(struct dss_stream_arg_type));
+	D_ALLOC_ARRAY(stream_args->csa_streams, dss_nxstreams);
 	if (stream_args->csa_streams == NULL)
 		return -DER_NOMEM;
 
