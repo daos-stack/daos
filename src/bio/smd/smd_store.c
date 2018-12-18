@@ -113,7 +113,7 @@ smd_file_path_create(const char *path, const char *fname,
 	return 0;
 
 free_md_path:
-	free(*smp_path);
+	D_FREE(*smp_path);
 err:
 	return rc;
 }
@@ -158,10 +158,10 @@ static void
 srv_ndms_params_destroy(void)
 {
 	if (smd_params_obj->smp_path)
-		free(smd_params_obj->smp_path);
+		D_FREE(smd_params_obj->smp_path);
 	if (smd_params_obj->smp_file)
-		free(smd_params_obj->smp_file);
-	free(smd_params_obj->smp_pool_id);
+		D_FREE(smd_params_obj->smp_file);
+	D_FREE(smd_params_obj->smp_pool_id);
 	ABT_mutex_free(&smd_params_obj->smp_ptab_mutex);
 	ABT_mutex_free(&smd_params_obj->smp_dtab_mutex);
 }
@@ -355,7 +355,7 @@ smd_remove(const char *path, const char *fname)
 			D_ERROR("Error creating file name: %d\n", rc);
 			return;
 		}
-		free(l_path);
+		D_FREE(l_path);
 	} else {
 		l_fname = smd_params_obj->smp_file;
 	}
@@ -367,7 +367,7 @@ smd_remove(const char *path, const char *fname)
 	if (smd_params_obj != NULL)
 		smd_fini();
 	else
-		free(l_fname);
+		D_FREE(l_fname);
 }
 
 /** DAOS per-server metadata pool creation for PMEM metadata */

@@ -212,7 +212,7 @@ bio_nvme_fini(void)
 	ABT_cond_free(&nvme_glb.bd_barrier);
 	ABT_mutex_free(&nvme_glb.bd_mutex);
 	if (nvme_glb.bd_nvme_conf != NULL) {
-		free(nvme_glb.bd_nvme_conf);
+		D_FREE(nvme_glb.bd_nvme_conf);
 		nvme_glb.bd_nvme_conf = NULL;
 	}
 	D_ASSERT(nvme_glb.bd_xstream_cnt == 0);
@@ -634,7 +634,7 @@ fini_bio_bdevs(struct bio_xs_context *ctxt)
 			spdk_bdev_close(d_bdev->bb_desc);
 
 		if (d_bdev->bb_name != NULL)
-			free(d_bdev->bb_name);
+			D_FREE(d_bdev->bb_name);
 
 		if (d_bdev->bb_blobstore != NULL)
 			put_bio_blobstore(d_bdev->bb_blobstore, ctxt);

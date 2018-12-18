@@ -190,7 +190,7 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, bool update)
 	biod->bd_update = update;
 	biod->bd_sgl_cnt = sgl_cnt;
 
-	D_ALLOC(biod->bd_sgls, sizeof(*biod->bd_sgls) * sgl_cnt);
+	D_ALLOC_ARRAY(biod->bd_sgls, sgl_cnt);
 	if (biod->bd_sgls == NULL) {
 		D_FREE(biod);
 		return NULL;
@@ -429,7 +429,7 @@ iod_add_chunk(struct bio_desc *biod, struct bio_dma_chunk *chk)
 		int size = sizeof(struct bio_dma_chunk *);
 		unsigned new_cnt = cnt + 10;
 
-		D_ALLOC(chunks, new_cnt * size);
+		D_ALLOC_ARRAY(chunks, new_cnt);
 		if (chunks == NULL)
 			return -DER_NOMEM;
 
@@ -463,7 +463,7 @@ iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 		int size = sizeof(struct bio_rsrvd_region);
 		unsigned new_cnt = cnt + 20;
 
-		D_ALLOC(rgs, new_cnt * size);
+		D_ALLOC_ARRAY(rgs, new_cnt);
 		if (rgs == NULL)
 			return -DER_NOMEM;
 
