@@ -28,9 +28,6 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
-#define crt_proc_daos_size_t	crt_proc_uint64_t
-#define crt_proc_daos_epoch_t	crt_proc_uint64_t
-
 static int
 crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
 {

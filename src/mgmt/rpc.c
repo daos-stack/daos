@@ -28,8 +28,6 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
-#define crt_proc_daos_size_t	crt_proc_uint64_t
-
 CRT_RPC_DEFINE(mgmt_pool_create, DAOS_ISEQ_MGMT_POOL_CREATE,
 		DAOS_OSEQ_MGMT_POOL_CREATE)
 CRT_RPC_DEFINE(mgmt_pool_destroy, DAOS_ISEQ_MGMT_POOL_DESTROY,

@@ -54,31 +54,6 @@
 	 (rpc_ver & RPC_VERSION_MASK) << RPC_VERSION_OFFSET |	\
 	 (mod_id & MODID_MASK) << MODID_OFFSET)
 
-/** DAOS-specific RPC format */
-extern struct crt_msg_field DMF_OID;
-extern struct crt_msg_field DMF_IOVEC;
-extern struct crt_msg_field DMF_IOD_ARRAY;
-extern struct crt_msg_field DMF_EPOCH_STATE;
-extern struct crt_msg_field DMF_ANCHOR;
-extern struct crt_msg_field DMF_KEY_DESC_ARRAY;
-extern struct crt_msg_field DMF_REC_SIZE_ARRAY;
-extern struct crt_msg_field DMF_SGL;
-extern struct crt_msg_field DMF_SGL_ARRAY;
-extern struct crt_msg_field DMF_SGL_DESC;
-extern struct crt_msg_field DMF_SGL_DESC_ARRAY;
-extern struct crt_msg_field DMF_NR_ARRAY;
-extern struct crt_msg_field DMF_RECX_ARRAY;
-extern struct crt_msg_field DMF_RECX;
-extern struct crt_msg_field DMF_EPR_ARRAY;
-extern struct crt_msg_field DMF_UUID_ARRAY;
-extern struct crt_msg_field DMF_OID_ARRAY;
-extern struct crt_msg_field DMF_UINT32_ARRAY;
-extern struct crt_msg_field DMF_UINT64_ARRAY;
-extern struct crt_msg_field DMF_RSVC_HINT;
-extern struct crt_msg_field DMF_KEY_ARRAY;
-extern struct crt_msg_field DMF_TGT_ADDR_LIST;
-#define DMF_DAOS_SIZE CMF_UINT64
-
 enum daos_module_id {
 	DAOS_VOS_MODULE		= 0, /** version object store */
 	DAOS_MGMT_MODULE	= 1, /** storage management */

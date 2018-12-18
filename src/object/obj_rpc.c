@@ -30,10 +30,6 @@
 #include <daos/rpc.h>
 #include "obj_rpc.h"
 
-#define crt_proc_daos_size_t	crt_proc_uint64_t
-#define crt_proc_daos_iov_t	crt_proc_d_iov_t
-#define crt_proc_daos_key_t	crt_proc_d_iov_t
-
 static int
 crt_proc_daos_key_desc_t(crt_proc_t proc, daos_key_desc_t *key)
 {
@@ -190,7 +186,7 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
 		return -DER_INVAL;
 	}
 
-	rc = daos_proc_iovec(proc, &dvi->iod_name);
+	rc = crt_proc_d_iov_t(proc, &dvi->iod_name);
 	if (rc != 0)
 		return rc;
 

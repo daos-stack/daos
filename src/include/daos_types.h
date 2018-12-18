@@ -56,8 +56,10 @@ extern "C" {
 typedef uint64_t	daos_size_t;
 typedef uint64_t	daos_off_t;
 
-#define daos_iov_t	d_iov_t
-#define daos_proc_iovec	crt_proc_d_iov_t
+#define daos_iov_t		d_iov_t
+#define crt_proc_daos_key_t	crt_proc_d_iov_t
+#define crt_proc_daos_size_t	crt_proc_uint64_t
+#define crt_proc_daos_epoch_t	crt_proc_uint64_t
 
 static inline void
 daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
