@@ -36,7 +36,7 @@ sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
-from daos_api import DaosContext, DaosPool, DaosContainer, DaosLog
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosLog, DaosApiError
 from daos_cref import DaosObjId
 
 class ObjOpenBadParam(Test):
@@ -121,7 +121,7 @@ class ObjOpenBadParam(Test):
             # setup leaves object in open state, so closing to start clean
             self.obj.close()
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
             print(traceback.format_exc())
             self.fail("Test failed during the initial setup.")
@@ -149,7 +149,7 @@ class ObjOpenBadParam(Test):
 
         try:
             dummy_obj = self.obj.open()
-        except ValueError as excep:
+        except DaosApiError as excep:
             if not "-1002" in str(excep):
                 self.d_log.error("test expected a -1002 but did not get it")
                 self.d_log.error(traceback.format_exc())
@@ -171,7 +171,7 @@ class ObjOpenBadParam(Test):
 
         try:
             dummy_obj = self.obj.open()
-        except ValueError as excep:
+        except DaosApiError as excep:
             if not "-1002" in str(excep):
                 self.d_log.error("test expected a -1002 but did not get it")
                 self.d_log.error(traceback.format_exc())
@@ -192,7 +192,7 @@ class ObjOpenBadParam(Test):
 
         try:
             dummy_obj = self.obj.open()
-        except ValueError as excep:
+        except DaosApiError as excep:
             if not "-1002" in str(excep):
                 self.d_log.error("test expected a -1002 but did not get it")
                 self.d_log.error(traceback.format_exc())
@@ -215,7 +215,7 @@ class ObjOpenBadParam(Test):
 
         try:
             dummy_obj = self.obj.open()
-        except ValueError as excep:
+        except DaosApiError as excep:
             if not "-1002" in str(excep):
                 self.d_log.error("test expected a -1002 but did not get it")
                 self.d_log.error(traceback.format_exc())
@@ -237,7 +237,7 @@ class ObjOpenBadParam(Test):
         self.obj.tgt_rank_list = None
         try:
             dummy_obj = self.obj.open()
-        except ValueError as excep:
+        except DaosApiError as excep:
             if not "-1003" in str(excep):
                 self.d_log.error("test expected a -1003 but did not get it")
                 self.d_log.error(traceback.format_exc())
@@ -259,7 +259,7 @@ class ObjOpenBadParam(Test):
         self.obj.c_oid = DaosObjId(0, 0)
         try:
             dummy_obj = self.obj.open()
-        except ValueError as excep:
+        except DaosApiError as excep:
             if not "-1003" in str(excep):
                 self.d_log.error("Test expected a -1003 but did not get it")
                 self.d_log.error(traceback.format_exc())
@@ -281,7 +281,7 @@ class ObjOpenBadParam(Test):
         self.obj.c_tgts = 0
         try:
             dummy_obj = self.obj.open()
-        except ValueError as excep:
+        except DaosApiError as excep:
             if not "-1003" in str(excep):
                 self.d_log.error("Test expected a -1003 but did not get it")
                 self.d_log.error(traceback.format_exc())
@@ -303,7 +303,7 @@ class ObjOpenBadParam(Test):
         self.obj.attr = 0
         try:
             dummy_obj = self.obj.open()
-        except ValueError as excep:
+        except DaosApiError as excep:
             if not "-1003" in str(excep):
                 self.d_log.error("test expected a -1003 but did not get it")
                 self.d_log.error(traceback.format_exc())

@@ -119,8 +119,8 @@ class SimpleCreateDeleteTest(Test):
                     self.fail("Test was expected to fail but it passed.\n")
 
         except Exception as e:
-            print e
-            print traceback.format_exc()
+            print(e)
+            print(traceback.format_exc())
             if expected_result == 'PASS':
                     self.fail("Test was expected to pass but it failed.\n")
 

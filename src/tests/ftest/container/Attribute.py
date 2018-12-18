@@ -37,8 +37,9 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
+from GeneralUtils import DaosTestError
 
-from daos_api import DaosContext, DaosPool, DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 GLOB_SIGNAL = None
 GLOB_RC = -99000000
@@ -58,15 +59,15 @@ def verify_list_attr(indata, size, buffer, mode="sync"):
     if mode == "async":
         length = length + 1
     if length != size:
-        raise ValueError("FAIL: Size is not matching for Names in list"
-                         "attr, Expected len={0} and received len = {1}"
-                         .format(length, size))
+        raise DaosTestError("FAIL: Size is not matching for Names in list"
+                            "attr, Expected len={0} and received len = {1}"
+                            .format(length, size))
     #verify the Attributes names in list_attr retrieve
     for key in indata.keys():
         if key not in buffer:
-            raise ValueError("FAIL: Name does not match after list attr,"
-                             " Expected buf={0} and received buf = {1}"
-                             .format(key, buffer))
+            raise DaosTestError("FAIL: Name does not match after list attr,"
+                                " Expected buf={0} and received buf = {1}"
+                                .format(key, buffer))
     print ("===== list Attr name = {0} and length = {1}"
            .format(buffer, size))
 
@@ -81,11 +82,11 @@ def verify_get_attr(indata, outdata):
     print ("===== get Attr value ")
     for i in range(0, len(indata)):
         if str(indata.values()[i]) not in final_val:
-            raise ValueError("FAIL: Value does not match after get attr,"
+            raise DaosTestError("FAIL: Value does not match after get attr,"
                              " Expected val={0} and received val = {1}"
                              .format(indata.keys()[i], indata.values()[i]))
         else:
-            print indata.keys()[i], indata.values()[i]
+            print(indata.keys()[i], indata.values()[i])
 
 class ContainerAttributeTest(Test):
     """
@@ -251,8 +252,8 @@ class ContainerAttributeTest(Test):
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except Exception as e:
-            print (e)
-            print (traceback.format_exc())
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")

@@ -35,8 +35,7 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import IorUtils
-from daos_api import DaosContext
-from daos_api import DaosPool
+from daos_api import DaosContext, DaosPool, DaosApiError
 
 class IorSingleServer(Test):
     """
@@ -129,5 +128,5 @@ class IorSingleServer(Test):
                              pool_uuid, svc_list, record_size, segment_count, stripe_count,
                              async_io, object_class, self.basepath)
 
-        except (ValueError, IorUtils.IorFailed) as e:
+        except (DaosApiError, IorUtils.IorFailed) as e:
             self.fail("<Single Server Test FAILED>\n {}".format(e))

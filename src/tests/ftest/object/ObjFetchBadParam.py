@@ -36,7 +36,7 @@ sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
-from daos_api import DaosContext, DaosPool, DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class ObjFetchBadParam(Test):
     """
@@ -105,9 +105,9 @@ class ObjFetchBadParam(Test):
                 self.fail("Error reading back data, test failed during"\
                          " the initial setup.\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
-            print traceback.format_exc()
+            print(traceback.format_exc())
             self.fail("Test failed during the initial setup.\n")
 
     def tearDown(self):
@@ -146,7 +146,7 @@ class ObjFetchBadParam(Test):
             self.container.oh = saved_oh
             self.fail("Test was expected to return a -1002 but it has not.\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             self.container.oh = saved_oh
             if not '-1002' in str(e):
                 print(e)
@@ -172,7 +172,7 @@ class ObjFetchBadParam(Test):
             self.pool.destroy(1)
             self.fail("Test was expected to return a -1003 but it has not.\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             if not '-1003' in str(e):
                 print(e)
                 print(traceback.format_exc())
@@ -189,7 +189,7 @@ class ObjFetchBadParam(Test):
 
             #self.fail("Test was expected to return a -1003 but it has not.\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             if not '-1003' in str(e):
                 print(e)
                 print(traceback.format_exc())
@@ -204,7 +204,7 @@ class ObjFetchBadParam(Test):
             pass
             #self.fail("Test was expected to return a -1003 but it has not.\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             if not '-1003' in str(e):
                 print(e)
                 print(traceback.format_exc())

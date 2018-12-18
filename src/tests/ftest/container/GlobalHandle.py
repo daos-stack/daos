@@ -41,9 +41,7 @@ import WriteHostFile
 import CheckForPool
 import daos_api
 import daos_cref
-from daos_api import DaosContext
-from daos_api import DaosPool
-from daos_api import DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 from daos_cref import *
 
 def CheckHandle(pool_glob_handle, uuidstr, cont_glob_handle, rank):
@@ -94,7 +92,7 @@ def CheckHandle(pool_glob_handle, uuidstr, cont_glob_handle, rank):
         # just try one thing to make sure handle is good
         container.query()
 
-    except ValueError as e:
+    except DaosApiError as e:
         print(e)
         print(traceback.format_exc())
         raise
@@ -200,7 +198,7 @@ class GlobalHandle(Test):
             # the intended use case
             CheckHandle(sct_pool_handle, sct_pool_uuid, sct_cont_handle, 0)
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
             print(traceback.format_exc())
             self.fail("Expecting to pass but test has failed.\n")

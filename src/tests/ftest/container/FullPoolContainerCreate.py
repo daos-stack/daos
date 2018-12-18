@@ -38,13 +38,9 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import CheckForPool
 import WriteHostFile
-from daos_api import DaosContext
-from daos_api import DaosPool
-from daos_api import DaosContainer
-from daos_api import DaosObj
-from daos_api import RankList
-from daos_api import DaosLog
-
+from daos_cref import RankList
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosObj
+from daos_api import DaosApiError, DaosLog
 
 class FullPoolContainerCreate(Test):
     """
@@ -117,7 +113,7 @@ class FullPoolContainerCreate(Test):
             self.cont = DaosContainer(self.context)
             self.cont.create(self.pool.handle)
             self.d_log.debug("created container")
-        except ValueError as e:
+        except DaosApiError as e:
             self.d_log.error("caught exception creating container: "
                              "{0}".format(e))
             self.fail("caught exception creating container: {0}".format(e))
@@ -143,7 +139,7 @@ class FullPoolContainerCreate(Test):
                     self.d_log.debug("wrote obj {0}, sz {1}".format(write_count,
                                                                     x))
                     write_count += 1
-                except ValueError as e:
+                except DaosApiError as e:
                     if not err in repr(e):
                         self.d_log.error("caught exception while writing "
                                          "object: {0}".format(repr(e)))
@@ -171,7 +167,7 @@ class FullPoolContainerCreate(Test):
             self.d_log.debug("writing one more object, write expected to fail")
             self.cont2.write_an_obj(my_str, my_str_sz, dkey, akey, obj_cls=1)
             self.d_log.debug("wrote one more object--this should never print")
-        except ValueError as e:
+        except DaosApiError as e:
             if not err in repr(e):
                     self.d_log.error("caught unexpected exception while "
                                      "writing object: {0}".format(repr(e)))

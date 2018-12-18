@@ -34,8 +34,7 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import IorUtils
-from daos_api import DaosContext
-from daos_api import DaosPool
+from daos_api import DaosContext, DaosPool, DaosApiError
 
 class MultipleClients(Test):
     """
@@ -139,5 +138,5 @@ class MultipleClients(Test):
                              pool_uuid, svc_list, record_size, stripe_size, stripe_count,
                              async_io, object_class, self.basepath, slots)
 
-        except (ValueError, IorUtils.IorFailed) as e:
+        except (DaosApiError, IorUtils.IorFailed) as e:
             self.fail("<MultipleClients Test run Failed>\n {}".format(e))

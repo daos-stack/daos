@@ -40,10 +40,8 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 
-from daos_api import DaosContext
-from daos_api import DaosPool
-from daos_api import DaosContainer
-from daos_api import RankList
+from daos_cref import RankList
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class OpenContainerTest(Test):
     """
@@ -95,9 +93,9 @@ class OpenContainerTest(Test):
     def tearDown(self):
         try:
             if self.CONTAINER1 is not None:
-                self.CONTAINER1.destroy();
+                self.CONTAINER1.destroy()
             if self.CONTAINER2 is not None:
-                self.CONTAINER2.destroy();
+                self.CONTAINER2.destroy()
             if self.POOL1 is not None and self.POOL1.attached:
                 self.POOL1.destroy(1)
             if self.POOL2 is not None and self.POOL2.attached:
@@ -182,9 +180,9 @@ class OpenContainerTest(Test):
             if expected_result in ['FAIL']:
                     self.fail("Test was expected to fail but it passed.\n")
 
-        except Exception as e:
-            print e
-            print traceback.format_exc()
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
         finally:

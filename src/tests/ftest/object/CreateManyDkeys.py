@@ -38,6 +38,7 @@ import ServerUtils
 import WriteHostFile
 
 from daos_api import DaosContext, DaosPool, DaosContainer, IORequest
+from daos_api import DaosApiError
 
 class CreateManyDkeys(Test):
     """
@@ -144,7 +145,7 @@ class CreateManyDkeys(Test):
         self.container.destroy()
         print("destroy complete")
 
-    @avocado.fail_on(ValueError)
+    @avocado.fail_on(DaosApiError)
     @avocado.skip("Skipping until DAOS-1721 is fixed.")
     def test_many_dkeys(self):
         """

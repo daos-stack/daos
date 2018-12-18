@@ -36,7 +36,7 @@ sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
-from daos_api import DaosContext, DaosPool, DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 from conversion import c_uuid_to_str
 
 class SimpleCreateDeleteTest(Test):
@@ -123,9 +123,9 @@ class SimpleCreateDeleteTest(Test):
             POOL.disconnect()
             POOL.destroy(1)
 
-        except ValueError as e:
-            print e
-            print traceback.format_exc()
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())
             self.fail("Test was expected to pass but it failed.\n")
         except Exception as e:
             self.fail("Daos code segfaulted most likely, error: %s" % e)

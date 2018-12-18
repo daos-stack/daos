@@ -42,7 +42,7 @@ class ServerFailed(Exception):
 # a callback function used when there is cmd line I/O, not intended
 # to be used outside of this file
 def printFunc(thestring):
-        print "<SERVER>" + thestring
+        print("<SERVER>" + thestring)
 
 def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
@@ -89,7 +89,7 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
                            "-a", os.path.join(basepath, "install", "tmp"),
                            "-d", os.path.join(os.sep, "var", "run", "user", str(os.geteuid()))])
 
-        print "Start CMD>>>>{0}".format(' '.join(server_cmd))
+        print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
         resource.setrlimit(
             resource.RLIMIT_CORE,
@@ -123,10 +123,10 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
                 if result != server_count:
                     raise ServerFailed("Server didn't start!")
                 break
-        print "<SERVER> server started and took %s seconds to start" % \
-              (time.time() - start_time)
+        print("<SERVER> server started and took %s seconds to start" % \
+              (time.time() - start_time))
     except Exception as excpn:
-        print "<SERVER> Exception occurred: {0}".format(str(excpn))
+        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         # we need to end the session now -- exit the shell
         try:
             sessions[setname].send_signal(signal.SIGINT)
@@ -136,8 +136,8 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
             if sessions[setname].poll() is None:
                 sessions[setname].kill()
             retcode = sessions[setname].wait()
-            print "<SERVER> server start return code: {}\n" \
-                  "stderr:\n{}".format(retcode, error)
+            print("<SERVER> server start return code: {}\n" \
+                  "stderr:\n{}".format(retcode, error))
         except KeyError:
             pass
         raise ServerFailed("Server didn't start!")
@@ -164,9 +164,9 @@ def stopServer(setname=None, hosts=None):
             if sessions[setname].poll() == None:
                 sessions[setname].kill()
             sessions[setname].wait()
-        print "<SERVER> server stopped"
+        print("<SERVER> server stopped")
     except Exception as e:
-        print "<SERVER> Exception occurred: {0}".format(str(e))
+        print("<SERVER> Exception occurred: {0}".format(str(e)))
         raise ServerFailed("Server didn't stop!")
 
     if not hosts:

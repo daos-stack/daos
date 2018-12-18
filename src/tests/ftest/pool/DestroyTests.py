@@ -39,7 +39,7 @@ sys.path.append('../../../utils/py')
 import ServerUtils
 import CheckForPool
 import WriteHostFile
-from daos_api import DaosContainer, DaosContext, DaosPool
+from daos_api import DaosContainer, DaosContext, DaosPool, DaosApiError
 from conversion import c_uuid_to_str
 
 GLOB_SIGNAL = None
@@ -433,7 +433,7 @@ class DestroyTests(Test):
             # should throw an exception and not hit this
             self.fail("Shouldn't hit this line.\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print ("got exception which is expected so long as it is BUSY")
             print (e)
             print (traceback.format_exc())
@@ -496,7 +496,7 @@ class DestroyTests(Test):
             # blow it away immediately
             POOL.destroy(1)
 
-        except ValueError as e:
+        except DaosApiError as e:
             print (e)
             print (traceback.format_exc())
             self.fail("create/destroy/create/destroy test failed.\n")
@@ -544,7 +544,7 @@ class DestroyTests(Test):
             # okay, get rid of it
             POOL.destroy(1)
 
-        except ValueError as e:
+        except DaosApiError as e:
             print (e)
             print (traceback.format_exc())
             self.fail("6 server test failed.\n")
@@ -608,7 +608,7 @@ class DestroyTests(Test):
             # blow it away
             POOL.destroy(1)
 
-        except ValueError as e:
+        except DaosApiError as e:
             print (e)
             print (traceback.format_exc())
             self.fail("create/destroy/create/destroy test failed.\n")
@@ -680,7 +680,7 @@ class DestroyTests(Test):
             if GLOB_RC != -1011:
                 self.fail("RC not as expected in async test")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print (e)
             print (traceback.format_exc())
             self.fail("destroy async test failed.\n")

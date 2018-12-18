@@ -34,8 +34,7 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import IorUtils
-from daos_api import DaosContext
-from daos_api import DaosPool
+from daos_api import DaosContext, DaosPool, DaosApiError
 
 class EightServers(Test):
     """
@@ -136,8 +135,8 @@ class EightServers(Test):
             if expected_result == 'FAIL':
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except (ValueError, IorUtils.IorFailed) as e:
-            print e
+        except (DaosApiError, IorUtils.IorFailed) as e:
+            print(e)
             if expected_result != 'FAIL':
                 self.fail("Test was expected to pass but it failed.\n")
 

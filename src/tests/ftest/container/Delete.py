@@ -36,12 +36,11 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+
 import ServerUtils
 import WriteHostFile
 import daos_api
-from daos_api import DaosContext
-from daos_api import DaosPool
-from daos_api import DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class DeleteContainerTest(Test):
     """
@@ -98,11 +97,11 @@ class DeleteContainerTest(Test):
         poh = pohlist[0]
         expected_for_param.append(pohlist[1])
 
-        openlist = self.params.get("opened", "/run/createtests/ConnectionOpened/*/");
+        openlist = self.params.get("opened", "/run/createtests/ConnectionOpened/*/")
         opened = openlist[0]
         expected_for_param.append(openlist[1])
 
-        forcelist = self.params.get("force", "/run/createtests/ForceDestroy/*/");
+        forcelist = self.params.get("force", "/run/createtests/ForceDestroy/*/")
         force = forcelist[0]
         expected_for_param.append(forcelist[1])
 
@@ -146,7 +145,7 @@ class DeleteContainerTest(Test):
                 poh = self.POOL.handle
             # if container is INVALID, overwrite with non existing UUID
             if contUUID == 'INVALID':
-                contUUID = uuid.uuid4();
+                contUUID = uuid.uuid4()
             self.CONTAINER.destroy(force, poh, contUUID)
             self.CONTAINER = None
 
@@ -158,9 +157,9 @@ class DeleteContainerTest(Test):
             if expected_result in ['FAIL']:
                     self.fail("Test was expected to fail but it passed.\n")
 
-        except Exception as e:
-            print e
-            print traceback.format_exc()
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())
             if expected_result == 'PASS':
                     self.fail("Test was expected to pass but it failed.\n")
 

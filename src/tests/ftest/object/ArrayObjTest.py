@@ -37,7 +37,7 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 from conversion import c_uuid_to_str
-from daos_api import DaosContext, DaosPool, DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class ArrayObjTest(Test):
     """
@@ -150,10 +150,10 @@ class ArrayObjTest(Test):
             pool.destroy(1)
             self.pl.info("Test Complete")
 
-        except ValueError as e:
+        except DaosApiError as e:
             self.pl.error("Test Failed, exception was thrown.")
-            print e
-            print traceback.format_exc()
+            print(e)
+            print(traceback.format_exc())
             self.fail("Test was expected to pass but it failed.\n")
 
 if __name__ == "__main__":

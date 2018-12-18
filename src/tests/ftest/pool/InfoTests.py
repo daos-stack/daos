@@ -34,7 +34,7 @@ sys.path.append('../../../utils/py')
 
 import ServerUtils
 import WriteHostFile
-from daos_api import DaosContext, DaosPool, DaosLog
+from daos_api import DaosContext, DaosPool, DaosLog, DaosApiError
 from conversion import c_uuid_to_str
 
 class InfoTests(Test):

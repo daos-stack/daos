@@ -34,8 +34,7 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import IorUtils
-from daos_api import DaosContext
-from daos_api import DaosPool
+from daos_api import DaosContext, DaosPool, DaosApiError
 
 class SegCount(Test):
     """
@@ -150,5 +149,5 @@ class SegCount(Test):
                              pool_uuid, svc_list, record_size, stripe_size, stripe_count,
                              async_io, object_class, self.basepath, self.slots, segment_count)
 
-        except (IorUtils.IorFailed, ValueError) as e:
+        except (IorUtils.IorFailed, DaosApiError) as e:
             self.fail("<SegCount Test FAILED>.{}".format(e))

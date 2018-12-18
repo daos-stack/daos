@@ -40,6 +40,7 @@ import ServerUtils
 import WriteHostFile
 import CheckForPool
 from daos_api import DaosContext, DaosPool, DaosServer, DaosContainer
+from daos_api import DaosApiError
 
 class RebuildTests(Test):
 
@@ -208,7 +209,7 @@ class RebuildTests(Test):
                 if tup[3] != data2.value:
                     self.fail("after rebuild data didn't check out")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print (e)
             print (traceback.format_exc())
             self.fail("Expecting to pass but test has failed.\n")
@@ -412,7 +413,7 @@ class RebuildTests(Test):
                 if tup[3] != data2.value:
                     self.fail("after rebuild data didn't check out")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print (e)
             print (traceback.format_exc())
             self.fail("Expecting to pass but test has failed.\n")

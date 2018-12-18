@@ -39,10 +39,7 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import CheckForPool
-import daos_api
-from daos_api import DaosContext
-from daos_api import DaosPool
-from daos_api import DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 def CheckHandle(buf_len, iov_len, buf, uuidstr, rank):
     """
@@ -71,7 +68,7 @@ def CheckHandle(buf_len, iov_len, buf, uuidstr, rank):
         container = DaosContainer(context)
         container.create(pool.handle)
 
-    except ValueError as e:
+    except DaosApiError as e:
         print(e)
         print(traceback.format_exc())
         raise
@@ -161,7 +158,7 @@ class GlobalHandle(Test):
             # the intended use case
             CheckHandle(buf_len, iov_len, buf, pool.get_uuid_str(), 0)
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
             print(traceback.format_exc())
             self.fail("Expecting to pass but test has failed.\n")

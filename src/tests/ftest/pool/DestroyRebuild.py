@@ -30,11 +30,13 @@ import json
 from avocado import Test, main
 
 sys.path.append('./util')
-sys.path.append('../../utils/py')
+sys.path.append('../util')
+sys.path.append('./../../utils/py')
+sys.path.append('../../../utils/py')
 
 import ServerUtils
 import WriteHostFile
-from daos_api import DaosContext, DaosPool, DaosServer
+from daos_api import DaosContext, DaosPool, DaosServer, DaosApiError
 
 class DestroyRebuild(Test):
 
@@ -138,7 +140,7 @@ class DestroyRebuild(Test):
             self.POOL.destroy(1)
             print "destroy "
 
-        except ValueError as e:
+        except DaosApiError as e:
                 print(e)
                 print(traceback.format_exc())
                 self.fail("Expecting to pass but test has failed.\n")

@@ -34,7 +34,7 @@ sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
-from daos_api import DaosContext, DaosPool, DaosContainer, DaosLog
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosLog, DaosApiError
 
 class Permission(Test):
     """
@@ -116,7 +116,7 @@ class Permission(Test):
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print (e)
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
@@ -180,7 +180,7 @@ class Permission(Test):
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print (e)
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")

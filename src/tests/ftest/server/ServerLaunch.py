@@ -13,7 +13,7 @@ import aexpect
 from aexpect.client import run_bg
 
 def printFunc(thestring):
-        print thestring
+        print(thestring)
 
 cpu_count = 0
 

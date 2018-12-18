@@ -36,7 +36,7 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 from conversion import c_uuid_to_str
-from daos_api import DaosContext, DaosPool, DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class BasicEpochTest(Test):
     """
@@ -161,9 +161,9 @@ class BasicEpochTest(Test):
             POOL.disconnect()
             POOL.destroy(1)
 
-        except ValueError as e:
-            print e
-            print traceback.format_exc()
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())
             self.fail("Test was expected to pass but it failed.\n")
 
 if __name__ == "__main__":

@@ -36,14 +36,12 @@ sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
-from daos_api import DaosContext, DaosPool
+from daos_api import DaosContext, DaosPool, DaosApiError
 
 class BadQueryTest(Test):
     """
     Tests pool query calls passing NULL and otherwise inappropriate
     parameters.  This can't be done with daosctl, need to use the python API.
-
-
     """
 
     # super wasteful since its doing this for every variation
@@ -130,9 +128,9 @@ class BadQueryTest(Test):
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except ValueError as e:
-            print e
-            print traceback.format_exc()
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())
             if expected_result in ['PASS']:
                 self.fail("Test was expected to pass but it failed.\n")
 

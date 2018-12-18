@@ -36,7 +36,7 @@ sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
-from daos_api import DaosContext, DaosPool, DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class PunchTest(Test):
     """
@@ -85,7 +85,7 @@ class PunchTest(Test):
                 # now open it
                 self.container.open()
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
             print(traceback.format_exc())
             self.fail("Test failed during setup.\n")
@@ -109,7 +109,7 @@ class PunchTest(Test):
             if self.hostfile is not None:
                 os.remove(self.hostfile)
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
             print(traceback.format_exc())
             self.fail("Test failed during teardown.\n")
@@ -181,7 +181,7 @@ class PunchTest(Test):
             # now punch the data from the middle epoch
             obj.punch_dkeys(epoch2, [dkey])
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
             print(traceback.format_exc())
             self.fail("Test failed.\n")
@@ -210,7 +210,7 @@ class PunchTest(Test):
             if thedata != thedata10.value:
                 self.fail("Epoch preceeding the punch should still have data\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
             self.fail("Test failed.\n")
 
@@ -268,7 +268,7 @@ class PunchTest(Test):
                 print("retrieved punched data but it was still there")
                 self.fail("punched data still present")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
             print(traceback.format_exc())
             self.fail("Test failed.\n")
@@ -339,7 +339,7 @@ class PunchTest(Test):
             # now punch the object from the middle epoch
             obj.punch(epoch2)
 
-        except ValueError as e:
+        except DaosApiError as e:
             print (e)
             print (traceback.format_exc())
             self.fail("Test failed.\n")
@@ -352,7 +352,7 @@ class PunchTest(Test):
                 print("data8: {} {}", thedata8.value, len(thedata8.value))
                 self.fail("punch from middle epoch didn't work")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
             self.fail("READ FROM DELETED OBJECT FAILED.\n")
 
@@ -365,7 +365,7 @@ class PunchTest(Test):
                 print("data9: {} {}", thedata8.value, len(thedata8.value))
                 self.fail("after punch data in the last epoch should be gone")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
             self.fail("READ FROM DELETED OBJECT FAILED.\n")
 
@@ -377,7 +377,7 @@ class PunchTest(Test):
             if thedata != thedata10.value:
                 self.fail("Epoch preceeding the punch should still have data\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             print(e)
             self.fail("Test failed.\n")
 

@@ -49,3 +49,8 @@ def get_file_path(bin_name, dir_path=""):
                       .format(bin_name, basepath))
     else:
         return file_path
+
+class DaosTestError(Exception):
+    """
+    DAOS API exception class
+    """

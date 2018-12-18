@@ -93,7 +93,7 @@ class DaosPool(object):
                       ctypes.byref(self.svc), self.uuid, None)
             if rc != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
-                raise ValueError("Pool create returned non-zero. RC: {0}"
+                raise DaosApiError("Pool create returned non-zero. RC: {0}"
                                  .format(rc))
             else:
                 self.attached = 1
@@ -114,7 +114,7 @@ class DaosPool(object):
         """ connect to this pool. """
         # comment this out for now, so we can test bad data
         #if not len(self.uuid) == 16:
-        #    raise ValueError("No existing UUID for pool.")
+        #    raise DaosApiError("No existing UUID for pool.")
 
         c_flags = ctypes.c_uint(flags)
         c_info = PoolInfo()
@@ -127,7 +127,7 @@ class DaosPool(object):
                       ctypes.byref(self.handle), ctypes.byref(c_info), None)
             if rc != 0:
                 self.handle = 0
-                raise ValueError("Pool connect returned non-zero. RC: {0}"
+                raise DaosApiError("Pool connect returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -148,7 +148,7 @@ class DaosPool(object):
         if cb_func is None:
             rc = func(self.handle, None)
             if rc != 0:
-                raise ValueError("Pool disconnect returned non-zero. RC: {0}"
+                raise DaosApiError("Pool disconnect returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -172,7 +172,7 @@ class DaosPool(object):
         func = self.context.get_function("convert-plocal")
         rc = func(self.handle, ctypes.byref(c_glob))
         if rc != 0:
-            raise ValueError("Pool local2global returned non-zero. RC: {0}"
+            raise DaosApiError("Pool local2global returned non-zero. RC: {0}"
                              .format(rc))
         # now call it for real
         c_buf = ctypes.create_string_buffer(c_glob.iov_buf_len)
@@ -195,7 +195,7 @@ class DaosPool(object):
         local_handle = ctypes.c_uint64(0)
         rc = func(c_glob, ctypes.byref(local_handle))
         if rc != 0:
-            raise ValueError("Pool global2local returned non-zero. RC: {0}"
+            raise DaosApiError("Pool global2local returned non-zero. RC: {0}"
                              .format(rc))
         self.handle = local_handle
         return local_handle
@@ -219,7 +219,7 @@ class DaosPool(object):
             rc = func(self.uuid, self.group, c_svc,
                       c_tgts, None)
             if rc != 0:
-                raise ValueError("Pool exclude returned non-zero. RC: {0}"
+                raise DaosApiError("Pool exclude returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -246,7 +246,7 @@ class DaosPool(object):
         if cb_func is None:
             rc = func(self.uuid, self.group, ctypes.byref(self.svc), None)
             if rc != 0:
-                raise ValueError(
+                raise DaosApiError(
                     "Pool evict returned non-zero. RC: {0}".format(rc))
         else:
             event = DaosEvent()
@@ -270,7 +270,7 @@ class DaosPool(object):
             rc = func(self.uuid, self.group, ctypes.byref(self.svc),
                       ctypes.byref(c_tgts), None)
             if rc != 0:
-                raise ValueError("Pool tgt_add returned non-zero. RC: {0}"
+                raise DaosApiError("Pool tgt_add returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -295,7 +295,7 @@ class DaosPool(object):
             rc = func(self.uuid, self.group, ctypes.byref(self.svc),
                       ctypes.byref(c_tgts), None)
             if rc != 0:
-                raise ValueError("Pool exclude_out returned non-zero. RC: {0}"
+                raise DaosApiError("Pool exclude_out returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -317,7 +317,7 @@ class DaosPool(object):
         if cb_func is None:
             rc = func(self.handle, None)
             if rc != 0:
-                raise ValueError("Pool svc_Stop returned non-zero. RC: {0}"
+                raise DaosApiError("Pool svc_Stop returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -338,7 +338,7 @@ class DaosPool(object):
         if cb_func is None:
             rc = func(self.handle, None, ctypes.byref(self.pool_info), None)
             if rc != 0:
-                raise ValueError("Pool query returned non-zero. RC: {0}"
+                raise DaosApiError("Pool query returned non-zero. RC: {0}"
                                  .format(rc))
             return self.pool_info
         else:
@@ -360,7 +360,7 @@ class DaosPool(object):
     def destroy(self, force, cb_func=None):
 
         if not len(self.uuid) == 16 or self.attached == 0:
-            raise ValueError("No existing UUID for pool.")
+            raise DaosApiError("No existing UUID for pool.")
 
         c_force = ctypes.c_uint(force)
         func = self.context.get_function('destroy-pool')
@@ -368,7 +368,7 @@ class DaosPool(object):
         if cb_func is None:
             rc = func(self.uuid, self.group, c_force, None)
             if rc != 0:
-                raise ValueError("Pool destroy returned non-zero. RC: {0}"
+                raise DaosApiError("Pool destroy returned non-zero. RC: {0}"
                                  .format(rc))
             else:
                 self.attached = 0
@@ -396,7 +396,6 @@ class DaosPool(object):
 
         return (ctypes.c_uint32 * len(pylist))(*pylist)
 
-
 class DaosObj(object):
     """ A class representing an object stored in a DAOS container.  """
 
@@ -415,7 +414,7 @@ class DaosObj(object):
             func = self.context.get_function('close-obj')
             rc = func(self.oh, None)
             if rc != 0:
-                raise ValueError("Object close returned non-zero. RC: {0}"
+                raise DaosApiError("Object close returned non-zero. RC: {0}"
                                  .format(rc))
             self.oh = None
 
@@ -439,7 +438,7 @@ class DaosObj(object):
         rc = func(self.container.coh, self.c_oid, c_epoch, c_mode,
                   ctypes.byref(self.oh), None)
         if rc != 0:
-            raise ValueError("Object open returned non-zero. RC: {0}"
+            raise DaosApiError("Object open returned non-zero. RC: {0}"
                              .format(rc))
 
     def close(self):
@@ -448,7 +447,7 @@ class DaosObj(object):
             func = self.context.get_function('close-obj')
             rc = func(self.oh, None)
             if rc != 0:
-                raise ValueError("Object close returned non-zero. RC: {0}"
+                raise DaosApiError("Object close returned non-zero. RC: {0}"
                                  .format(rc))
             self.oh = None
 
@@ -459,7 +458,7 @@ class DaosObj(object):
         """
 
         if self.c_oid is None:
-            raise ValueError("refresh_attr called but object not initialized")
+            raise DaosApiError("refresh_attr called but object not initialized")
         if self.oh is None:
             self.open()
 
@@ -477,7 +476,7 @@ class DaosObj(object):
             NOTE: THIS FUNCTION ISN'T PART OF THE PUBLIC API
         """
         if self.c_oid is None:
-            raise ValueError("get_layout called but object is not initialized")
+            raise DaosApiError("get_layout called but object is not initialized")
         if self.oh is None:
             self.open()
 
@@ -493,7 +492,7 @@ class DaosObj(object):
                 self.tgt_rank_list.append(
                     obj_layout_ptr[0].ol_shards[0][0].os_ranks[i])
         else:
-            raise ValueError("get_layout returned non-zero. RC: {0}".format(rc))
+            raise DaosApiError("get_layout returned non-zero. RC: {0}".format(rc))
 
 
     def punch(self, epoch, cb_func=None):
@@ -515,7 +514,7 @@ class DaosObj(object):
         if cb_func == None:
             rc = func(self.oh, c_epoch, None)
             if rc != 0:
-                raise ValueError("punch-dkeys returned non-zero. RC: {0}"
+                raise DaosApiError("punch-dkeys returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -564,7 +563,7 @@ class DaosObj(object):
             rc = func(self.oh, c_epoch, c_len_dkeys, ctypes.byref(c_dkeys),
                       None)
             if rc != 0:
-                raise ValueError("punch-dkeys returned non-zero. RC: {0}"
+                raise DaosApiError("punch-dkeys returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -617,7 +616,7 @@ class DaosObj(object):
             rc = func(self.oh, c_epoch, ctypes.byref(c_dkey_iov), c_len_akeys,
                       ctypes.byref(c_akeys), None)
             if rc != 0:
-                raise ValueError("punch-akeys returned non-zero. RC: {0}"
+                raise DaosApiError("punch-akeys returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -726,7 +725,7 @@ class IORequest(object):
         rc = func(self.obj.oh, self.epoch_range.epr_lo, ctypes.byref(dkey_iov),
                   1, ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if rc != 0:
-            raise ValueError("Object update returned non-zero. RC: {0}"
+            raise DaosApiError("Object update returned non-zero. RC: {0}"
                              .format(rc))
 
     def fetch_array(self, dkey, akey, rec_count, rec_size, epoch):
@@ -776,7 +775,7 @@ class IORequest(object):
         rc = func(self.obj.oh, epoch, ctypes.byref(dkey_iov), 1,
                   ctypes.byref(self.iod), ctypes.byref(self.sgl), None, None)
         if rc != 0:
-            raise ValueError("Array fetch returned non-zero. RC: {0}"
+            raise DaosApiError("Array fetch returned non-zero. RC: {0}"
                              .format(rc))
 
         # convert the output into a python list rather than return C types
@@ -841,7 +840,7 @@ class IORequest(object):
         rc = func(self.obj.oh, self.epoch_range.epr_lo, dkey_ptr, 1,
                   ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if rc != 0:
-            raise ValueError("Object update returned non-zero. RC: {0}"
+            raise DaosApiError("Object update returned non-zero. RC: {0}"
                              .format(rc))
 
     def single_fetch(self, dkey, akey, size, epoch, test_hints=[]):
@@ -903,7 +902,7 @@ class IORequest(object):
         rc = func(self.obj.oh, self.epoch_range.epr_lo, dkey_ptr,
                   1, iod_ptr, sgl_ptr, None, None)
         if rc != 0:
-            raise ValueError("Object fetch returned non-zero. RC: {0}"
+            raise DaosApiError("Object fetch returned non-zero. RC: {0}"
                              .format(rc))
         return buf
 
@@ -960,7 +959,7 @@ class IORequest(object):
         rc = func(self.obj.oh, epoch, dkey_ptr, c_count,
                   iod_ptr, sgl_ptr, None)
         if rc != 0:
-            raise ValueError("Object update returned non-zero. RC: {0}"
+            raise DaosApiError("Object update returned non-zero. RC: {0}"
                              .format(rc))
 
     def multi_akey_fetch(self, dkey, keys, epoch):
@@ -1017,7 +1016,7 @@ class IORequest(object):
         rc = func(self.obj.oh, epoch, ctypes.byref(dkey_iov),
                   c_count, ctypes.byref(iods), sgl_ptr, None, None)
         if rc != 0:
-            raise ValueError("multikey fetch returned non-zero. RC: {0}"
+            raise DaosApiError("multikey fetch returned non-zero. RC: {0}"
                              .format(rc))
 
         result = {}
@@ -1066,7 +1065,7 @@ class DaosContainer(object):
             rc = func(self.poh, self.uuid, None)
             if rc != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
-                raise ValueError("Container create returned non-zero. RC: {0}"
+                raise DaosApiError("Container create returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -1097,7 +1096,7 @@ class DaosContainer(object):
         if cb_func == None:
             rc = func(self.poh, self.uuid, c_force, None)
             if rc != 0:
-                raise ValueError("Container destroy returned non-zero. RC: {0}"
+                raise DaosApiError("Container destroy returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -1135,7 +1134,7 @@ class DaosContainer(object):
             rc = func(self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
                       ctypes.byref(self.info), None)
             if rc != 0:
-                raise ValueError("Container open returned non-zero. RC: {0}"
+                raise DaosApiError("Container open returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -1164,7 +1163,7 @@ class DaosContainer(object):
         if cb_func == None:
             rc = func(self.coh, None)
             if rc != 0:
-                raise ValueError("Container close returned non-zero. RC: {0}"
+                raise DaosApiError("Container close returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -1189,7 +1188,7 @@ class DaosContainer(object):
         if cb_func is None:
             rc = func(self.coh, ctypes.byref(self.info), None)
             if rc != 0:
-                raise ValueError("Container query returned non-zero. RC: {0}"
+                raise DaosApiError("Container query returned non-zero. RC: {0}"
                                  .format(rc))
             return self.info
         else:
@@ -1209,7 +1208,7 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise ValueError("Container needs to be open.")
+            raise DaosApiError("Container needs to be open.")
 
         epoch = 0
         c_epoch = ctypes.c_uint64(epoch)
@@ -1217,7 +1216,7 @@ class DaosContainer(object):
         func = self.context.get_function('get-epoch')
         rc = func(self.coh, ctypes.byref(c_epoch), None, None)
         if rc != 0:
-            raise ValueError("Epoch hold returned non-zero. RC: {0}"
+            raise DaosApiError("Epoch hold returned non-zero. RC: {0}"
                              .format(rc))
 
         return c_epoch.value;
@@ -1227,12 +1226,12 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise ValueError("Container needs to be open.")
+            raise DaosApiError("Container needs to be open.")
 
         func = self.context.get_function('commit-epoch')
         rc = func(self.coh, epoch, None, None)
         if rc != 0:
-            raise ValueError("Epoch commit returned non-zero. RC: {0}"
+            raise DaosApiError("Epoch commit returned non-zero. RC: {0}"
                              .format(rc))
 
     def consolidate_epochs(self):
@@ -1244,7 +1243,7 @@ class DaosContainer(object):
         func = self.context.get_function('slip-epoch')
         rc = func(self.coh, self.info.es_hce, None, None)
         if rc != 0:
-            raise ValueError("Epoch slip returned non-zero. RC: {0}"
+            raise DaosApiError("Epoch slip returned non-zero. RC: {0}"
                              .format(rc))
 
     def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
@@ -1260,7 +1259,7 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise ValueError("Container needs to be open.")
+            raise DaosApiError("Container needs to be open.")
 
         epoch = self.get_new_epoch()
         c_epoch = ctypes.c_uint64(epoch)
@@ -1291,7 +1290,7 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise ValueError("Container needs to be open.")
+            raise DaosApiError("Container needs to be open.")
 
         epoch = self.get_new_epoch()
         c_epoch = ctypes.c_uint64(epoch)
@@ -1333,7 +1332,7 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise ValueError("Container needs to be open.")
+            raise DaosApiError("Container needs to be open.")
 
         epoch = self.get_new_epoch()
         c_epoch = ctypes.c_uint64(epoch)
@@ -1367,7 +1366,7 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise ValueError("Container needs to be open.")
+            raise DaosApiError("Container needs to be open.")
 
         c_rec_count = ctypes.c_uint(rec_count)
         c_rec_size = ctypes.c_size_t(rec_size)
@@ -1395,7 +1394,7 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise ValueError("Container needs to be open.")
+            raise DaosApiError("Container needs to be open.")
 
         c_dkey = ctypes.create_string_buffer(dkey)
         c_epoch = ctypes.c_uint64(epoch)
@@ -1415,7 +1414,7 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise ValueError("Container needs to be open.")
+            raise DaosApiError("Container needs to be open.")
 
         c_size = ctypes.c_size_t(size)
         if dkey is None:
@@ -1440,7 +1439,7 @@ class DaosContainer(object):
         func = self.context.get_function("convert-clocal")
         rc = func(self.coh, ctypes.byref(c_glob))
         if rc != 0:
-            raise ValueError("Container local2global returned non-zero. RC: {0}"
+            raise DaosApiError("Container local2global returned non-zero. RC: {0}"
                              .format(rc))
         # now call it for real
         c_buf = ctypes.create_string_buffer(c_glob.iov_buf_len)
@@ -1465,7 +1464,7 @@ class DaosContainer(object):
 
         rc = func(self.poh, c_glob, ctypes.byref(local_handle))
         if rc != 0:
-            raise ValueError("Container global2local returned non-zero. RC: {0}"
+            raise DaosApiError("Container global2local returned non-zero. RC: {0}"
                              .format(rc))
         self.coh = local_handle
         return local_handle
@@ -1492,7 +1491,7 @@ class DaosContainer(object):
         t_size = ctypes.pointer(ctypes.c_size_t(100))
         rc = func(self.coh, sbuf, t_size)
         if rc != 0:
-            raise ValueError("Container List-attr returned non-zero. RC:{0}"
+            raise DaosApiError("Container List-attr returned non-zero. RC:{0}"
                              .format(rc))
         buf = t_size[0]
 
@@ -1503,7 +1502,7 @@ class DaosContainer(object):
         if cb_func is None:
             rc = func(self.coh, buffer, total_size, None)
             if rc != 0:
-                raise ValueError("Container List Attribute returned non-zero.\
+                raise DaosApiError("Container List Attribute returned non-zero.\
                 RC: {0}".format(rc))
         else:
             event = DaosEvent()
@@ -1553,7 +1552,7 @@ class DaosContainer(object):
         if cb_func is None:
             rc = func(self.coh, no_of_att, names, values, sizes, None)
             if rc != 0:
-                raise ValueError("Container Set Attribute returned non-zero"
+                raise DaosApiError("Container Set Attribute returned non-zero"
                                  "RC: {0}".format(rc))
         else:
             event = DaosEvent()
@@ -1577,7 +1576,7 @@ class DaosContainer(object):
             buffer[list]:       Requested Attributes value.
         """
         if not data:
-            raise ValueError("Attribute data should not be blank")
+            raise DaosApiError("Attribute data should not be blank")
 
         if coh is not None:
             self.coh = coh
@@ -1603,7 +1602,7 @@ class DaosContainer(object):
             rc = func(self.coh, no_of_att, names, ctypes.byref(buffer), sizes,
                       None)
             if rc != 0:
-                raise ValueError("Container Get Attribute returned non-zero.\
+                raise DaosApiError("Container Get Attribute returned non-zero.\
                 RC: {0}".format(rc))
         else:
             event = DaosEvent()
@@ -1636,7 +1635,7 @@ class DaosServer(object):
         func = self.context.get_function('kill-server')
         rc = func(c_group, c_rank, c_force, None)
         if rc != 0:
-            raise ValueError("Server kill returned non-zero. RC: {0}"
+            raise DaosApiError("Server kill returned non-zero. RC: {0}"
                              .format(rc))
 
 class DaosContext(object):
@@ -1747,12 +1746,18 @@ class DaosLog:
 
         func(c_msg, c_filename, c_caller_func, c_line, c_level)
 
+class DaosApiError(Exception):
+    """
+    DAOS API exception class
+    """
+
 if __name__ == '__main__':
     # this file is not intended to be run in normal circumstances
     # this is strictly unit test code here in main, there is a lot
     # of rubbish but it makes it easy to try stuff out as we expand
     # this interface.  Will eventially be removed or formalized.
 
+    """
     try:
         # this works so long as this file is in its usual place
         with open('../../../.build_vars.json') as f:
@@ -1842,7 +1847,7 @@ if __name__ == '__main__':
         print ("=====Get Attr =====")
         val = CONTAINER.get_attr(data = data)
         for i in range(0, len(data)):
-            print val[i]
+            print(val[i])
 
         CONTAINER.close()
         print ("container closed {}".format(CONTAINER.get_uuid_str()))
@@ -1884,3 +1889,7 @@ if __name__ == '__main__':
         print ("Something horrible happened\n")
         print (traceback.format_exc())
         print (EXCEP)
+    """
+
+    print("running")
+    raise DaosApiError("hit error, all good")

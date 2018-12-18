@@ -37,12 +37,11 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+
 import ServerUtils
 import WriteHostFile
 import daos_api
-from daos_api import DaosContext
-from daos_api import DaosPool
-from daos_api import DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 
 GLOB_SIGNAL = None
@@ -148,9 +147,9 @@ class ContainerAsync(Test):
             # cleanup the Pool and Container
             self.POOL = None
 
-        except ValueError as e:
-            print e
-            print traceback.format_exc()
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())
 
     def test_destroyasync(self):
         """
@@ -211,9 +210,9 @@ class ContainerAsync(Test):
             self.POOL.destroy(1)
             self.POOL = None
 
-        except ValueError as e:
-            print e
-            print traceback.format_exc()
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())
 
     def test_openasync(self):
         """
@@ -280,9 +279,9 @@ class ContainerAsync(Test):
             self.POOL.destroy(1)
             self.POOL = None
 
-        except ValueError as e:
-            print e
-            print traceback.format_exc()
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())
 
     def test_closeasync(self):
         """
@@ -351,9 +350,9 @@ class ContainerAsync(Test):
             self.POOL.destroy(1)
             self.POOL = None
 
-        except ValueError as e:
-            print e
-            print traceback.format_exc()
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())
 
     def test_queryasync(self):
         """
@@ -425,6 +424,6 @@ class ContainerAsync(Test):
             self.POOL.destroy(1)
             self.POOL = None
 
-        except ValueError as e:
-            print e
-            print traceback.format_exc()
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())

@@ -128,8 +128,8 @@ class MultipleCreatesTest(Test):
                       self.fail("Expected to fail but passed.\n")
 
         except Exception as e:
-                print e
-                print traceback.format_exc()
+                print(e)
+                print(traceback.format_exc())
                 if expected_result == 'PASS':
                       self.fail("Expecting to pass but test has failed.\n")
 
@@ -204,8 +204,8 @@ class MultipleCreatesTest(Test):
                       self.fail("Expected to fail but passed.\n")
 
         except Exception as e:
-                print e
-                print traceback.format_exc()
+                print(e)
+                print(traceback.format_exc())
                 if expected_result == 'PASS':
                       self.fail("Expecting to pass but test has failed.\n")
 
@@ -295,8 +295,8 @@ class MultipleCreatesTest(Test):
                       self.fail("Expected to fail but passed.\n")
 
         except Exception as e:
-                print e
-                print traceback.format_exc()
+                print(e)
+                print(traceback.format_exc())
                 if expected_result == 'PASS':
                       self.fail("Expecting to pass but test has failed.\n")
 
@@ -344,8 +344,8 @@ class MultipleCreatesTest(Test):
     #                  self.fail("Expected to fail but passed.\n")
     #
     #    except Exception as e:
-    #           print e
-    #           print traceback.format_exc()
+    #           print(e)
+    #           print(traceback.format_exc())
     #           if expected_result == 'PASS':
     #                  self.fail("Expecting to pass but test has failed.\n")
 

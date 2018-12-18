@@ -37,7 +37,7 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 from conversion import c_uuid_to_str
-from daos_api import DaosContext, DaosPool, DaosContainer
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class ObjUpdateBadParam(Test):
     """
@@ -128,7 +128,7 @@ class ObjUpdateBadParam(Test):
             pool.destroy(1)
             self.fail("Test was expected to return a -1002 but it has not.\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             container.oh = saved_oh
             container.close()
             container.destroy()
@@ -136,8 +136,8 @@ class ObjUpdateBadParam(Test):
             pool.destroy(1)
             self.pl.info("Test Complete")
             if not '-1002' in str(e):
-                print e
-                print traceback.format_exc()
+                print(e)
+                print(traceback.format_exc())
                 self.fail("Test was expected to get -1002 but it has not.\n")
 
     def test_null_values(self):
@@ -178,9 +178,9 @@ class ObjUpdateBadParam(Test):
             thedata = "a string that I want to stuff into an object"
             thedatasize = len(thedata) + 1
 
-        except ValueError as e:
-            print e
-            print traceback.format_exc()
+        except DaosApiError as e:
+            print(e)
+            print(traceback.format_exc())
             self.fail("Test failed during setup .\n")
 
         try:
@@ -197,15 +197,15 @@ class ObjUpdateBadParam(Test):
             self.pl.error("Didn't get expected return code.")
             self.fail("Test was expected to return a -1003 but it has not.\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             if not '-1003' in str(e):
                 container.close()
                 container.destroy()
                 pool.disconnect()
                 pool.destroy(1)
                 self.pl.error("Didn't get expected return code.")
-                print e
-                print traceback.format_exc()
+                print(e)
+                print(traceback.format_exc())
                 self.fail("Test was expected to get -1003 but it has not.\n")
 
         try:
@@ -216,11 +216,11 @@ class ObjUpdateBadParam(Test):
                                                 dkey, akey)
             self.fail("Test was expected to return a -1003 but it has not.\n")
 
-        except ValueError as e:
+        except DaosApiError as e:
             if not '-1003' in str(e):
                 self.pl.error("Didn't get expected return code.")
-                print e
-                print traceback.format_exc()
+                print(e)
+                print(traceback.format_exc())
                 self.fail("Test was expected to get -1003 but it has not.\n")
 
         try:
@@ -233,13 +233,13 @@ class ObjUpdateBadParam(Test):
                                                 dkey, akey)
             self.pl.info("Update with no data worked")
 
-        except ValueError as e:
+        except DaosApiError as e:
             container.close()
             container.destroy()
             pool.disconnect()
             pool.destroy(1)
-            print e
-            print traceback.format_exc()
+            print(e)
+            print(traceback.format_exc())
             self.pl.error("Update with no data failed")
             self.fail("Update with no data failed.\n")
 
