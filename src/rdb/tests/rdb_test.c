@@ -371,7 +371,7 @@ rdbt_init_handler(crt_rpc_t *rpc)
 	ranks.rl_nr = in->tii_nreplicas;
 	if (ranks.rl_nr > group_size)
 		ranks.rl_nr = group_size;
-	D_ALLOC(ranks.rl_ranks, sizeof(*ranks.rl_ranks) * ranks.rl_nr);
+	D_ALLOC_ARRAY(ranks.rl_ranks, ranks.rl_nr);
 	if (ranks.rl_ranks == NULL) {
 		D_ERROR("failed to allocate ranks array\n");
 		D_GOTO(out, rc = -DER_NOMEM);

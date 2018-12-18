@@ -140,7 +140,7 @@ rdb_raft_clone_ae(const msg_appendentries_t *ae, msg_appendentries_t *ae_new)
 	if (ae_new->n_entries == 0)
 		return 0;
 
-	D_ALLOC(ae_new->entries, sizeof(*ae_new->entries) * ae_new->n_entries);
+	D_ALLOC_ARRAY(ae_new->entries, ae_new->n_entries);
 	if (ae_new->entries == NULL)
 		return -DER_NOMEM;
 	for (i = 0; i < ae_new->n_entries; i++) {

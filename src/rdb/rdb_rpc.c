@@ -140,8 +140,7 @@ crt_proc_msg_appendentries_t(crt_proc_t proc, msg_appendentries_t *p)
 		return -DER_HG;
 	if (proc_op == CRT_PROC_DECODE) {
 		if (p->n_entries > 0) {
-			D_ALLOC(p->entries,
-				sizeof(*p->entries) * p->n_entries);
+			D_ALLOC_ARRAY(p->entries, p->n_entries);
 			if (p->entries == NULL)
 				return -DER_NOMEM;
 		} else {
