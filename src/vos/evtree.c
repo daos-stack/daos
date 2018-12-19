@@ -244,6 +244,8 @@ ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	if (ents == NULL)
 		return -DER_NOMEM;
 
+	memcpy(ents, ent_array->ea_ents,
+	       sizeof(ents[0]) * ent_array->ea_ent_nr);
 	if (ent_array->ea_ents != ent_array->ea_embedded_ents)
 		D_FREE(ent_array->ea_ents);
 	ent_array->ea_ents = ents;
