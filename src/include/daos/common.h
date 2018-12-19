@@ -141,7 +141,8 @@ int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
-daos_size_t daos_sgls_size(d_sg_list_t *sgls, int nr);
+daos_size_t daos_sgls_packed_size(daos_sg_list_t *sgls, int nr,
+				  daos_size_t *buf_size);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
 void daos_iods_free(daos_iod_t *iods, int nr, bool free);

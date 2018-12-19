@@ -109,12 +109,11 @@ obj_shard_rw_bulk_fini(crt_rpc_t *rpc)
 }
 
 struct obj_rw_args {
-	crt_rpc_t	*rpc;
-	daos_handle_t	*hdlp;
-	daos_sg_list_t	*rwaa_sgls;
+	crt_rpc_t		*rpc;
+	daos_handle_t		*hdlp;
+	daos_sg_list_t		*rwaa_sgls;
 	struct dc_obj_shard	*dobj;
-	unsigned int	*map_ver;
-	uint32_t	 rwaa_nr;
+	unsigned int		*map_ver;
 };
 
 static int
@@ -171,7 +170,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	if (opc_get(rw_args->rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		daos_iod_t	*iods;
 		uint64_t	*sizes;
-		int		 i;
+		int		 i, j;
 
 		iods = orw->orw_iods.ca_arrays;
 		sizes = orwo->orw_sizes.ca_arrays;
@@ -190,26 +189,58 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		if (orwo->orw_sgls.ca_count > 0) {
 			/* inline transfer */
 			rc = daos_sgls_copy_data_out(rw_args->rwaa_sgls,
-						     rw_args->rwaa_nr,
+						     orw->orw_nr,
 						     orwo->orw_sgls.ca_arrays,
 						     orwo->orw_sgls.ca_count);
 		} else if (rw_args->rwaa_sgls != NULL) {
 			/* for bulk transfer it needs to update sg_nr_out */
-			daos_sg_list_t *sgls = rw_args->rwaa_sgls;
-			uint32_t       *nrs;
-			uint32_t	nrs_count;
+			daos_sg_list_t	*sgls = rw_args->rwaa_sgls;
+			d_iov_t		*iov;
+			uint32_t	*nrs;
+			uint32_t	 nrs_count;
+			daos_size_t	 data_size;
+			daos_size_t	 buf_size;
 
 			nrs = orwo->orw_nrs.ca_arrays;
 			nrs_count = orwo->orw_nrs.ca_count;
-			if (nrs_count != rw_args->rwaa_nr) {
+			if (nrs_count != orw->orw_nr) {
 				D_ERROR("Invalid nrs %u != %u\n", nrs_count,
-					rw_args->rwaa_nr);
+					orw->orw_nr);
 				D_GOTO(out, rc = -DER_PROTO);
 			}
 
-			/* update sgl_nr */
-			for (i = 0; i < nrs_count; i++)
-				sgls[i].sg_nr_out = nrs[i];
+			for (i = 0; i < orw->orw_nr; i++) {
+				/* server returned bs_nr_out is only to check
+				 * if it is empty record in that case just set
+				 * sg_nr_out as zero, or will set sg_nr_out and
+				 * iov_len by checking with iods as server
+				 * filled the buffer from beginning.
+				 */
+				if (nrs[i] == 0) {
+					sgls[i].sg_nr_out = 0;
+					continue;
+				}
+				data_size = daos_iods_len(&iods[i], 1);
+				if (data_size == -1) {
+					/* only for echo mode */
+					sgls[i].sg_nr_out = sgls[i].sg_nr;
+					continue;
+				}
+				buf_size = 0;
+				for (j = 0; j < sgls[i].sg_nr; j++) {
+					iov = &sgls[i].sg_iovs[j];
+					buf_size += iov->iov_buf_len;
+					if (buf_size < data_size) {
+						iov->iov_len = iov->iov_buf_len;
+						continue;
+					}
+
+					iov->iov_len = iov->iov_buf_len -
+						       (buf_size - data_size);
+					sgls[i].sg_nr_out = j + 1;
+					break;
+				}
+			}
 		}
 	}
 out:
@@ -302,6 +333,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_t			cont_hdl_uuid;
 	uuid_t			cont_uuid;
 	daos_size_t		data_size;
+	daos_size_t		buf_size;
 	daos_size_t		sgls_size;
 	uint64_t		dkey_hash;
 	bool			do_bulk = false;
@@ -351,38 +383,27 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	orw->orw_epoch = epoch;
 	orw->orw_nr = nr;
-	/** FIXME: large dkey should be transferred via bulk */
 	orw->orw_dkey = *dkey;
-
-	/* FIXME: if iods is too long, then we needs to do bulk transfer
-	 * as well, but then we also needs to serialize the iods
-	 **/
 	orw->orw_iods.ca_count = nr;
 	orw->orw_iods.ca_arrays = iods;
 
 	data_size = daos_iods_len(iods, nr);
-	sgls_size = daos_sgls_size(sgls, nr);
-	if (data_size == -1) {
-		data_size = sgls_size;
-	} else {
-		/* If the sgl buffer is not big enough, let's return -REC2BIG
-		 * to enlarge the buffer before sending RPC.
-		 */
-		if (data_size > sgls_size) {
-			rc = -DER_REC2BIG;
-			D_ERROR("Object "DF_UOID", iod_size "DF_U64", sg_buf"
-				" "DF_U64", failed %d.\n",
-				DP_UOID(shard->do_id), data_size, sgls_size,
-				rc);
-			D_GOTO(out_req, rc);
-		}
-
-		/* NB: inline fetch needs to pack sgls buffer into RPC, so if
-		 * sgls_size is bigger, let's choose it as the data_size.
-		 */
-		if (data_size < sgls_size)
-			data_size = sgls_size;
+	sgls_size = daos_sgls_packed_size(sgls, nr, &buf_size);
+	/* If the sgl buffer is not big enough, let's return -REC2BIG
+	 * then user can provide appropriate buffer and redo it.
+	 */
+	if (data_size != -1 && data_size > buf_size) {
+		rc = -DER_REC2BIG;
+		D_ERROR("Object "DF_UOID", iod_size "DF_U64", sg_buf"
+			" "DF_U64", failed %d.\n",
+			DP_UOID(shard->do_id), data_size, buf_size,
+			rc);
+		D_GOTO(out_req, rc);
 	}
+	/* inline fetch needs to pack sgls buffer into RPC so uses it to check
+	 * if need bulk transferring.
+	 */
+	data_size = sgls_size;
 
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
 		DF_U64" data_size "DF_U64"\n", opc, DP_UOID(shard->do_id),
@@ -415,15 +436,8 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	rw_args.hdlp = (daos_handle_t *)pool;
 	rw_args.map_ver = map_ver;
 	rw_args.dobj = shard;
-
-	if (opc == DAOS_OBJ_RPC_FETCH) {
-		/* remember the sgl to copyout the data inline for fetch */
-		rw_args.rwaa_nr = nr;
-		rw_args.rwaa_sgls = sgls;
-	} else {
-		rw_args.rwaa_nr = 0;
-		rw_args.rwaa_sgls = NULL;
-	}
+	/* remember the sgl to copyout the data inline for fetch */
+	rw_args.rwaa_sgls = (opc == DAOS_OBJ_RPC_FETCH) ? sgls : NULL;
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_CRT_ERROR))
 		D_GOTO(out_args, rc = -DER_HG);
@@ -770,7 +784,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 
 	if (sgl != NULL) {
 		oei->oei_sgl = *sgl;
-		sgl_size = daos_sgls_size(sgl, 1);
+		sgl_size = daos_sgls_packed_size(sgl, 1, NULL);
 		if (sgl_size >= OBJ_BULK_LIMIT) {
 			/* Create bulk */
 			rc = crt_bulk_create(daos_task2ctx(task),

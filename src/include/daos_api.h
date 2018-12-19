@@ -993,8 +993,8 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, daos_obj_attr_t *oa,
  *			index layouts and their epoch validities. The returned
  *			layout covers the record extents as \a iods.
  *			However, the returned extents could be fragmented if
- *			these extents were partially updated in	different
- *			epochs.	Additionally, the returned extents should also
+ *			these extents were partially updated in different
+ *			epochs. Additionally, the returned extents should also
  *			allow to discriminate punched extents from punched
  *			holes.
  *
@@ -1037,7 +1037,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			ignored.
  *			Checksum of each record extent is stored in
  *			\a iods[]::iod_csums[]. If the record size of an extent
- *			is zero, then it is effectively a punch	for the
+ *			is zero, then it is effectively a punch for the
  *			specified index range.
  *
  * \param[in]	sgls	Scatter/gather list (sgl) to store the input data

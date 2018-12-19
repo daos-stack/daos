@@ -215,24 +215,30 @@ daos_sgls_buf_size(daos_sg_list_t *sgls, int nr)
 	return size;
 }
 
+/**
+ * Query the size of packed sgls, if the \a buf_size != NULL then will set its
+ * value as buffer size as well.
+ */
 daos_size_t
-daos_sgls_size(daos_sg_list_t *sgls, int nr)
+daos_sgls_packed_size(daos_sg_list_t *sgls, int nr, daos_size_t *buf_size)
 {
 	daos_size_t size = 0;
 	int i;
 
-	if (sgls == NULL)
+	if (sgls == NULL) {
+		if (buf_size != NULL)
+			*buf_size = 0;
 		return 0;
+	}
+
+	size = daos_sgls_buf_size(sgls, nr);
+	if (buf_size != NULL)
+		*buf_size = size;
 
 	for (i = 0; i < nr; i++) {
-		int j;
-
 		size += sizeof(sgls[i].sg_nr) + sizeof(sgls[i].sg_nr_out);
-		for (j = 0; j < sgls[i].sg_nr; j++) {
-			size += sizeof(sgls[i].sg_iovs[j].iov_len) +
-				sizeof(sgls[i].sg_iovs[j].iov_buf_len) +
-				sgls[i].sg_iovs[j].iov_buf_len;
-		}
+		size += sgls[i].sg_nr * (sizeof(sgls[i].sg_iovs[0].iov_len) +
+				sizeof(sgls[i].sg_iovs[0].iov_buf_len));
 	}
 
 	return size;

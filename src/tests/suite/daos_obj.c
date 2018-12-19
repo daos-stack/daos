@@ -1791,16 +1791,16 @@ basic_byte_array(void **state)
 	daos_handle_t	 oh;
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
-	daos_iov_t	 sg_iov;
+	daos_iov_t	 sg_iov[2];
 	daos_iod_t	 iod;
-	daos_recx_t	 recx;
+	daos_recx_t	 recx[4];
 	char		 stack_buf_out[STACK_BUF_LEN];
 	char		 stack_buf[STACK_BUF_LEN];
 	char		 *bulk_buf = NULL;
 	char		 *bulk_buf_out = NULL;
 	char		 *buf;
 	char		 *buf_out;
-	int		 buf_len;
+	int		 buf_len, tmp_len;
 	int		 step = 1;
 	int		 rc;
 
@@ -1827,48 +1827,68 @@ next_step:
 	D_ASSERT(step == 1 || step == 2);
 	buf = step == 1 ? stack_buf : bulk_buf;
 	buf_len = step == 1 ? STACK_BUF_LEN : TEST_BULK_BUF_LEN;
-	daos_iov_set(&sg_iov, buf, buf_len);
+	daos_iov_set(&sg_iov[0], buf, buf_len);
 	sgl.sg_nr	= 1;
 	sgl.sg_nr_out	= 0;
-	sgl.sg_iovs	= &sg_iov;
+	sgl.sg_iovs	= sg_iov;
 
 	/** init I/O descriptor */
 	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
-	recx.rx_idx = 0;
-	recx.rx_nr  = buf_len;
+	tmp_len = buf_len / 3;
+	recx[0].rx_idx = 0;
+	recx[0].rx_nr  = tmp_len;
+	recx[1].rx_idx = tmp_len + 111;
+	recx[1].rx_nr = tmp_len;
+	recx[2].rx_idx = buf_len + 333;
+	recx[2].rx_nr = buf_len - 2 * tmp_len;
 
 	iod.iod_size	= 1;
-	iod.iod_nr	= 1;
-	iod.iod_recxs	= &recx;
+	iod.iod_nr	= 3;
+	iod.iod_recxs	= recx;
 	iod.iod_eprs	= NULL;
 	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
-	print_message("writing %d bytes with one recx per byte\n", buf_len);
+	print_message("writing %d bytes in two recxs ...\n", buf_len);
 	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
+	/** fetch */
 	iod.iod_size	= DAOS_REC_ANY;
 	print_message("reading data back with less buffer ...\n");
 	buf_out = step == 1 ? stack_buf_out : bulk_buf_out;
 	memset(buf_out, 0, buf_len);
-	daos_iov_set(&sg_iov, buf_out, buf_len / 2);
+	tmp_len = buf_len / 2;
+	daos_iov_set(&sg_iov[0], buf_out, tmp_len);
+	daos_iov_set(&sg_iov[1], buf_out + tmp_len, (buf_len - tmp_len) / 2);
+	sgl.sg_nr = 2;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
 			    NULL);
 	print_message("fetch with less buffer got %d.\n", rc);
 	assert_int_equal(rc, -DER_REC2BIG);
 
-	/** fetch */
+	print_message("reading un-existed record ...\n");
+	recx[3].rx_idx	= 2 * buf_len + 40960;
+	recx[3].rx_nr	= buf_len;
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx[3];
+	daos_iov_set(&sg_iov[1], buf_out + tmp_len, buf_len - tmp_len);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(sgl.sg_nr_out, 0);
+
 	print_message("reading data back ...\n");
 	memset(buf_out, 0, buf_len);
-	daos_iov_set(&sg_iov, buf_out, buf_len);
-	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
-			    NULL);
+	sgl.sg_nr_out	= 0;
+	iod.iod_nr	= 3;
+	iod.iod_recxs	= recx;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** Verify data consistency */
-	print_message("validating data ...\n");
+	print_message("validating data ... sg_nr_out %d.\n", sgl.sg_nr_out);
+	assert_int_equal(sgl.sg_nr_out, 2);
 	assert_memory_equal(buf, buf_out, sizeof(buf));
 
 	if (step++ == 1)

@@ -43,7 +43,7 @@ struct vos_io_context {
 	struct vos_object	*ic_obj;
 	/** BIO descriptor, has ic_iod_nr SGLs */
 	struct bio_desc		*ic_biod;
-	/** cursor of SGL & IOV in EIO descriptor */
+	/** cursor of SGL & IOV in BIO descriptor */
 	unsigned int		 ic_sgl_at;
 	unsigned int		 ic_iov_at;
 	/** reserved SCM extents */

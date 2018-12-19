@@ -37,7 +37,10 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 
-#define OBJ_BULK_LIMIT	(2 * 1024) /* 2KB bytes */
+/* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
+ * for other RPC fields and cart/HG headers.
+ */
+#define OBJ_BULK_LIMIT	(3584) /* (3K + 512) bytes */
 
 /*
  * RPC operation codes

@@ -796,7 +796,6 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 	D_ASSERT(arg->ca_sgl_idx < arg->ca_sgl_cnt);
 	sgl = &arg->ca_sgls[arg->ca_sgl_idx];
 
-	D_ASSERT(arg->ca_iov_idx < sgl->sg_nr);
 	while (arg->ca_iov_idx < sgl->sg_nr) {
 		d_iov_t *iov;
 		ssize_t nob, buf_len;
@@ -951,7 +950,7 @@ bio_iod_post(struct bio_desc *biod)
 int
 bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 {
-	struct bio_copy_args arg;
+	struct bio_copy_args arg = { 0 };
 
 	if (!biod->bd_buffer_prep)
 		return -DER_INVAL;
@@ -959,7 +958,6 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 	if (biod->bd_sgl_cnt != nr_sgl)
 		return -DER_INVAL;
 
-	memset(&arg, 0, sizeof(arg));
 	arg.ca_sgls = sgls;
 	arg.ca_sgl_cnt = nr_sgl;
 
