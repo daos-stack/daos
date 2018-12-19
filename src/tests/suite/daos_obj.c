@@ -867,7 +867,10 @@ io_var_dkey_size(void **state)
 	ioreq_fini(&req);
 }
 
-/** i/o to variable aligned record size */
+/**
+ * Test I/O and data verification with variable unaligned record sizes for both
+ * NVMe and SCM.
+ */
 static void
 io_var_rec_size(void **state)
 {
@@ -896,6 +899,11 @@ io_var_rec_size(void **state)
 	for (size = 1; size <= max_size; size <<= 1, dkey_num++) {
 		char dkey[30];
 
+		/**
+		 * Adjust size to be unaligned, always include 1 byte test
+		 * (minimal supported size).
+		 */
+		size += (size == 1) ? 0 : (rand() % 10);
 		print_message("Record size: %lu val: \'%c\' dkey: %lu\n",
 			      size, update_buf[0], dkey_num);
 
