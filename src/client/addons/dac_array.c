@@ -62,10 +62,9 @@ struct md_params {
 	uint64_t		dkey_val;
 	char			*akey_str;
 	daos_iod_t		iod;
-	daos_recx_t		recx;
 	daos_sg_list_t		sgl;
-	daos_iov_t		sg_iovs[3];
-	uint64_t		magic_val;
+	daos_iov_t		sg_iov;
+	uint64_t		md_vals[3];
 };
 
 struct io_params {
@@ -193,7 +192,7 @@ free_io_params_cb(tse_task_t *task, void *data)
 static int
 create_handle_cb(tse_task_t *task, void *data)
 {
-	daos_array_create_t *args = *((daos_array_create_t **)data);
+	daos_array_create_t	*args = *((daos_array_create_t **)data);
 	struct dac_array	*array;
 	int			rc = task->dt_result;
 
@@ -467,6 +466,32 @@ out:
 	return rc;
 }
 
+static inline void
+set_md_params(struct md_params *params)
+{
+	/** write metadata to DKEY 0 */
+	params->dkey_val = 0;
+	daos_iov_set(&params->dkey, &params->dkey_val, sizeof(uint64_t));
+
+	/** set SGL */
+	daos_iov_set(&params->sg_iov, params->md_vals, sizeof(params->md_vals));
+	params->sgl.sg_nr	= 1;
+	params->sgl.sg_nr_out	= 0;
+	params->sgl.sg_iovs	= &params->sg_iov;
+
+	/** set IOD */
+	params->akey_str = ARRAY_MD_KEY;
+	daos_iov_set(&params->iod.iod_name, (void *)params->akey_str,
+		     strlen(params->akey_str));
+	daos_csum_set(&params->iod.iod_kcsum, NULL, 0);
+	params->iod.iod_nr	= 1;
+	params->iod.iod_size	= sizeof(params->md_vals);
+	params->iod.iod_recxs	= NULL;
+	params->iod.iod_eprs	= NULL;
+	params->iod.iod_csums	= NULL;
+	params->iod.iod_type	= DAOS_IOD_SINGLE;
+}
+
 static int
 write_md_cb(tse_task_t *task, void *data)
 {
@@ -486,34 +511,11 @@ write_md_cb(tse_task_t *task, void *data)
 		return -DER_NOMEM;
 	}
 
-	/** write metadata to DKEY 0 */
-	params->dkey_val = 0;
-	daos_iov_set(&params->dkey, &params->dkey_val, sizeof(uint64_t));
+	params->md_vals[0] = AKEY_MAGIC_V;
+	params->md_vals[1] = args->cell_size;
+	params->md_vals[2] = args->chunk_size;
 
-	/** set SGL */
-	params->magic_val = AKEY_MAGIC_V;
-	daos_iov_set(&params->sg_iovs[0], &params->magic_val, sizeof(uint64_t));
-	daos_iov_set(&params->sg_iovs[1], &args->cell_size,
-		     sizeof(daos_size_t));
-	daos_iov_set(&params->sg_iovs[2], &args->chunk_size,
-		     sizeof(daos_size_t));
-	params->sgl.sg_nr = 3;
-	params->sgl.sg_nr_out = 0;
-	params->sgl.sg_iovs = params->sg_iovs;
-
-	/** set IOD */
-	params->akey_str = ARRAY_MD_KEY;
-	daos_iov_set(&params->iod.iod_name, (void *)params->akey_str,
-		     strlen(params->akey_str));
-	daos_csum_set(&params->iod.iod_kcsum, NULL, 0);
-	params->iod.iod_nr	= 1;
-	params->iod.iod_size	= sizeof(daos_size_t);
-	params->recx.rx_idx	= 0;
-	params->recx.rx_nr	= 3;
-	params->iod.iod_recxs	= &params->recx;
-	params->iod.iod_eprs	= NULL;
-	params->iod.iod_csums	= NULL;
-	params->iod.iod_type	= DAOS_IOD_ARRAY;
+	set_md_params(params);
 
 	/** Set the args for the update task */
 	update_args = daos_task_get_args(task);
@@ -613,46 +615,49 @@ open_handle_cb(tse_task_t *task, void *data)
 {
 	daos_array_open_t	*args = *((daos_array_open_t **)data);
 	struct dac_array	*array;
-	int64_t			*magic_val;
+	struct md_params	*params;
+	uint64_t		*md_vals;
 	int			rc = task->dt_result;
 
 	if (rc != 0)
 		D_GOTO(err_obj, rc);
 
 	/** Check magic value */
-	magic_val = daos_task_get_priv(task);
-	D_ASSERT(magic_val != NULL);
-	if (*magic_val != AKEY_MAGIC_V) {
-		D_FREE(magic_val);
+	params = daos_task_get_priv(task);
+	D_ASSERT(params != NULL);
+	md_vals = params->md_vals;
+	if (md_vals[0] != AKEY_MAGIC_V) {
 		D_ERROR("DAOS Object is not an array object\n");
 		D_GOTO(err_obj, rc = -DER_NO_PERM);
 	}
 
 	/** If no cell and chunk size, this isn't an array obj. */
-	if (*args->cell_size == 0 || *args->chunk_size == 0) {
+	if (md_vals[1] == 0 || md_vals[2] == 0) {
 		D_ERROR("Failed to retrieve array metadata\n");
 		D_GOTO(err_obj, rc = -DER_NO_PERM);
 	}
+
+	/** Set array open OUT params */
+	*args->cell_size	= md_vals[1];
+	*args->chunk_size	= md_vals[2];
 
 	/** Create an array OH from the DAOS one */
 	array = array_alloc();
 	if (array == NULL)
 		D_GOTO(err_obj, rc = -DER_NOMEM);
 
-	array->coh = args->coh;
-	array->oid.hi = args->oid.hi;
-	array->oid.lo = args->oid.lo;
-	array->mode = args->mode;
-	array->cell_size = *args->cell_size;
-	array->chunk_size = *args->chunk_size;
-	array->daos_oh = *args->oh;
+	array->coh		= args->coh;
+	array->oid.hi		= args->oid.hi;
+	array->oid.lo		= args->oid.lo;
+	array->mode		= args->mode;
+	array->cell_size	= md_vals[1];
+	array->chunk_size	= md_vals[2];
+	array->daos_oh		= *args->oh;
 
 	array_hdl_link(array);
 	*args->oh = array_ptr2hdl(array);
 
-	D_FREE(magic_val);
 	return 0;
-
 err_obj:
 	{
 		daos_obj_close_t *close_args;
@@ -669,51 +674,20 @@ err_obj:
 static int
 fetch_md_cb(tse_task_t *task, void *data)
 {
-	daos_array_open_t *args = *((daos_array_open_t **)data);
-	daos_obj_fetch_t *fetch_args;
-	struct md_params *params;
-	uint64_t *magic_val;
-	int rc = task->dt_result;
+	daos_array_open_t	*args = *((daos_array_open_t **)data);
+	daos_obj_fetch_t	*fetch_args;
+	struct md_params	*params;
+	int			rc = task->dt_result;
 
 	if (rc != 0) {
 		D_ERROR("Failed to open object (%d)\n", rc);
 		return rc;
 	}
 
-	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
-		return -DER_NOMEM;
-	}
+	params = daos_task_get_priv(task);
+	D_ASSERT(params != NULL);
 
-	/** read metadata from DKEY 0 */
-	params->dkey_val = 0;
-	daos_iov_set(&params->dkey, &params->dkey_val, sizeof(uint64_t));
-
-	/** set SGL */
-	magic_val = daos_task_get_priv(task);
-	D_ASSERT(magic_val != NULL);
-	daos_iov_set(&params->sg_iovs[0], magic_val, sizeof(uint64_t));
-	daos_iov_set(&params->sg_iovs[1], args->cell_size, sizeof(daos_size_t));
-	daos_iov_set(&params->sg_iovs[2], args->chunk_size,
-		     sizeof(daos_size_t));
-	params->sgl.sg_nr = 3;
-	params->sgl.sg_nr_out = 0;
-	params->sgl.sg_iovs = params->sg_iovs;
-
-	/** set IOD */
-	params->akey_str = ARRAY_MD_KEY;
-	daos_iov_set(&params->iod.iod_name, (void *)params->akey_str,
-		     strlen(params->akey_str));
-	daos_csum_set(&params->iod.iod_kcsum, NULL, 0);
-	params->iod.iod_nr	= 1;
-	params->iod.iod_size	= sizeof(daos_size_t);
-	params->recx.rx_idx	= 0;
-	params->recx.rx_nr	= 3;
-	params->iod.iod_recxs	= &params->recx;
-	params->iod.iod_eprs	= NULL;
-	params->iod.iod_csums	= NULL;
-	params->iod.iod_type	= DAOS_IOD_ARRAY;
+	set_md_params(params);
 
 	/** Set the args for the fetch task */
 	fetch_args = daos_task_get_args(task);
@@ -724,11 +698,6 @@ fetch_md_cb(tse_task_t *task, void *data)
 	fetch_args->iods	= &params->iod;
 	fetch_args->sgls	= &params->sgl;
 
-	rc = tse_task_register_comp_cb(task, free_md_params_cb, &params,
-				       sizeof(params));
-	if (rc != 0)
-		return rc;
-
 	return 0;
 }
 
@@ -738,7 +707,7 @@ dac_array_open(tse_task_t *task)
 	daos_array_open_t	*args = daos_task_get_args(task);
 	tse_task_t		*open_task, *fetch_task;
 	daos_obj_open_t		*open_args;
-	uint64_t		*magic_val;
+	struct md_params	*params;
 	daos_ofeat_t		ofeat;
 	int			rc;
 
@@ -787,26 +756,40 @@ dac_array_open(tse_task_t *task)
 		D_GOTO(err_put2, rc);
 	}
 
-	/** Add a completion CB on the upper task to generate the array OH */
-	rc = tse_task_register_cbs(task, NULL, NULL, 0, open_handle_cb,
-				   &args, sizeof(args));
+	/*
+	 * Allocate params for fetch task. need to do that here since we use
+	 * that as priv value for upper task to verify metadata before creating
+	 * the open handle.
+	 */
+	D_ALLOC_PTR(params);
+	if (params == NULL) {
+		D_ERROR("Failed memory allocation\n");
+		D_GOTO(err_put2, rc = -DER_NOMEM);
+	}
+
+	rc = tse_task_register_comp_cb(task, free_md_params_cb, &params,
+				       sizeof(params));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion cb\n");
 		D_GOTO(err_put2, rc);
 	}
 
-	D_ALLOC(magic_val, sizeof(uint64_t));
-	if (magic_val == NULL)
+	/** set task private data for fetch and open handle creation */
+	daos_task_set_priv(fetch_task, params);
+	daos_task_set_priv(task, params);
+
+	/** Add a completion CB on the upper task to generate the array OH */
+	rc = tse_task_register_comp_cb(task, open_handle_cb, &args,
+				       sizeof(args));
+	if (rc != 0) {
+		D_ERROR("Failed to register completion cb\n");
 		D_GOTO(err_put2, rc);
-	daos_task_set_priv(fetch_task, magic_val);
-	daos_task_set_priv(task, magic_val);
+	}
 
 	tse_task_schedule(fetch_task, false);
-
 	tse_sched_progress(tse_task2sched(task));
 
 	return rc;
-
 err_put2:
 	tse_task_complete(fetch_task, rc);
 err_put1:
