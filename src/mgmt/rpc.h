@@ -136,7 +136,7 @@ CRT_RPC_DECLARE(mgmt_params_set, DAOS_ISEQ_MGMT_PARAMS_SET,
 
 #define DAOS_OSEQ_MGMT_TGT_CREATE /* output fields */		   \
 	((uuid_t)		(tc_tgt_uuids)		CRT_ARRAY) \
-	((int32_t)		(tc_ranks)		CRT_ARRAY) \
+	((d_rank_t)		(tc_ranks)		CRT_ARRAY) \
 	((int32_t)		(tc_rc)			CRT_VAR)
 
 CRT_RPC_DECLARE(mgmt_tgt_create, DAOS_ISEQ_MGMT_TGT_CREATE,

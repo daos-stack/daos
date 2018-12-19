@@ -513,8 +513,10 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 
 	/* Inline fetch/update */
 	if (orw->orw_bulks.ca_arrays == NULL && orw->orw_bulks.ca_count == 0) {
-		if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH)
-			orwo->orw_sgls = orw->orw_sgls;
+		if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
+			orwo->orw_sgls.ca_count = orw->orw_sgls.ca_count;
+			orwo->orw_sgls.ca_arrays = orw->orw_sgls.ca_arrays;
+		}
 		D_GOTO(out, rc);
 	}
 
