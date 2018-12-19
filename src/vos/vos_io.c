@@ -470,20 +470,18 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t rsize;
+		if (iod->iod_eprs)
+			epoch = iod->iod_eprs[i].epr_lo;
 
 		/* If epoch on each iod_eprs are out of boundary, then it needs
 		 * to re-prepare the key tree.
 		 */
-		if (daos_handle_is_inval(toh) || (iod->iod_eprs &&
-		    (iod->iod_eprs[i].epr_lo > krec->kr_latest ||
-		     iod->iod_eprs[i].epr_lo < krec->kr_earliest))) {
+		if (daos_handle_is_inval(toh) || (epoch > krec->kr_latest ||
+						  epoch < krec->kr_earliest)) {
 			if (!daos_handle_is_inval(toh)) {
 				key_tree_release(toh, true);
 				toh = DAOS_HDL_INVAL;
 			}
-
-			if (iod->iod_eprs)
-				epoch = iod->iod_eprs[i].epr_lo;
 
 			D_DEBUG(DB_IO, "repare the key tree for eph "DF_U64"\n",
 				epoch);
