@@ -613,8 +613,13 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 					    evt_extent_width(this_ext));
 		} else {
 			rc = ent_array_alloc(tcx, ent_array, &split, true);
-			if (rc != 0)
+			if (rc != 0) {
+				/* Decrement ea_ent_nr by 1 to "free" the space
+				 * allocated for temp_ent
+				 */
+				ent_array->ea_ent_nr--;
 				return rc;
+			}
 			/* Case #4, split, insert tail into sorted list */
 			evt_split_entry(tcx, this_ent, next_ent, split,
 					temp_ent);
