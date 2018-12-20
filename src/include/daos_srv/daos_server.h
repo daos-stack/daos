@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,12 +29,12 @@
 #define __DSS_API_H__
 
 #include <daos/common.h>
+#include <daos/drpc.h>
 #include <daos/rpc.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
 #include <daos_event.h>
 #include <daos_task.h>
-
 #include <pthread.h>
 #include <hwloc.h>
 #include <abt.h>
@@ -169,6 +169,19 @@ dss_tse_scheduler(void)
 #define DSS_FAC_LOAD_CLI (0x1ULL)
 
 /**
+ * Any dss_module that accepts dRPC communications over the Unix Domain Socket
+ * must provide one or more dRPC handler functions. The handler is used by the
+ * I/O server to multiplex incoming dRPC messages for processing.
+ *
+ * The dRPC messaging module ID is different from the dss_module's ID. A
+ * dss_module may handle more than one dRPC module ID.
+ */
+struct dss_drpc_handler {
+	int		module_id;	/** dRPC messaging module ID */
+	drpc_handler_t	handler;	/** dRPC handler for the module */
+};
+
+/**
  * Each module should provide a dss_module structure which defines the module
  * interface. The name of the allocated structure must be the library name
  * (without the ".so" extension) suffixed by "module". This symbol will be
@@ -204,6 +217,8 @@ struct dss_module {
 	uint32_t		  sm_cli_count;
 	/* RPC handler of these RPC, last entry of the array must be empty */
 	struct daos_rpc_handler	 *sm_handlers;
+	/* dRPC handlers, for unix socket comm, last entry must be empty */
+	struct dss_drpc_handler	 *sm_drpc_handlers;
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);

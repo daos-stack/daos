@@ -24,6 +24,8 @@
 #ifndef __DAOS_AGENT_H__
 #define __DAOS_AGENT_H__
 
+#include <daos/drpc.h>
+
 /**
  * Default Unix Domain Socket path for the DAOS agent dRPC connection
  */
@@ -35,9 +37,7 @@
 #define DAOS_AGENT_DRPC_SOCK_ENV "DAOS_AGENT_DRPC_SOCK"
 
 /**
- * Definitions for DAOS agent dRPC modules and their methods.
- * These numeric designations are used in dRPC communications in the Drpc__Call
- * structure.
+ * dRPC definitions for DAOS agent.
  */
 
 /**
@@ -45,7 +45,6 @@
  *
  *  The agent module that deals with client security requests.
  */
-#define DRPC_MODULE_SECURITY_AGENT				1
 
 /**
  * Method: Request Credentials

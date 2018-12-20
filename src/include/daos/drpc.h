@@ -42,30 +42,47 @@ struct unixcomm {
 	int flags; /** Flags set on unix domain socket */
 };
 
+typedef void (*drpc_handler_t)(Drpc__Call *, Drpc__Response **);
+
 /**
  * dRPC connection context. This includes all details needed to communicate
  * on the dRPC channel.
  */
 struct drpc {
-	struct unixcomm *comm; /** unix domain socket communication context */
-	int sequence; /** sequence number of latest message sent */
+	struct unixcomm	*comm; /** unix domain socket communication context */
+	int		sequence; /** sequence number of latest message sent */
 
 	/**
 	 * Handler for messages received by a listening drpc context.
 	 * For client contexts, this is NULL.
 	 */
-	void (*handler)(Drpc__Call *, Drpc__Response **);
+	drpc_handler_t	handler;
 };
 
 enum rpcflags {
 	R_SYNC = 1
 };
 
+/**
+ * DAOS dRPC Modules
+ *
+ * dRPC modules are used to multiplex communications over the Unix Domain Socket
+ * to appropriate handlers. They are populated in the Drpc__Call structure.
+ *
+ * dRPC module IDs must be unique. This is a list of all DAOS dRPC modules.
+ */
+
+enum drpc_module {
+	DRPC_MODULE_TEST		= 0,	/* Reserved for testing */
+	DRPC_MODULE_SECURITY_AGENT	= 1,
+
+	NUM_DRPC_MODULES			/* Must be last */
+};
+
 int drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 		Drpc__Response **resp);
 struct drpc *drpc_connect(char *sockaddr);
-struct drpc *drpc_listen(char *sockaddr,
-		void (*handler)(Drpc__Call *, Drpc__Response **));
+struct drpc *drpc_listen(char *sockaddr, drpc_handler_t handler);
 bool drpc_is_valid_listener(struct drpc *ctx);
 struct drpc *drpc_accept(struct drpc *listener_ctx);
 int drpc_recv(struct drpc *ctx);

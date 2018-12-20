@@ -367,7 +367,7 @@ drpc_connect(char *sockaddr)
  *			create one
  */
 struct drpc *
-drpc_listen(char *sockaddr, void (*handler)(Drpc__Call *, Drpc__Response **))
+drpc_listen(char *sockaddr, drpc_handler_t handler)
 {
 	struct drpc *ctx;
 

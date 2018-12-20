@@ -61,6 +61,13 @@ void free_drpc(struct drpc *ctx);
 Drpc__Call *new_drpc_call(void);
 
 /**
+ * Generates a valid Drpc__Call structure with a specific module ID.
+ *
+ * \return	Newly allocated Drpc__Call
+ */
+Drpc__Call *new_drpc_call_with_module(int module_id);
+
+/**
  * Using mocks in test_mocks.h, sets up recvmsg mock to populate a valid
  * serialized Drpc__Call as the message received.
  */

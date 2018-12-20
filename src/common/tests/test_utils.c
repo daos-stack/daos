@@ -55,12 +55,18 @@ free_drpc(struct drpc *ctx)
 Drpc__Call*
 new_drpc_call(void)
 {
+	return new_drpc_call_with_module(1);
+}
+
+Drpc__Call*
+new_drpc_call_with_module(int module_id)
+{
 	Drpc__Call *call;
 
 	D_ALLOC_PTR(call);
 
 	drpc__call__init(call);
-	call->module = 1;
+	call->module = module_id;
 	call->method = 2;
 
 	return call;
