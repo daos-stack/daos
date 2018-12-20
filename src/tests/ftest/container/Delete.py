@@ -102,6 +102,14 @@ class DeleteContainerTest(Test):
         force = forcelist[0]
         expected_for_param.append(forcelist[1])
 
+        if force >= 1:
+            self.cancel("Force >= 1 blocked by issue described in "
+                        "https://jira.hpdd.intel.com/browse/DAOS-689")
+
+        if force == 0:
+            self.cancel("Force = 0 blocked by "
+                        "https://jira.hpdd.intel.com/browse/DAOS-1935")
+
         expected_result = 'PASS'
         for result in expected_for_param:
             if result == 'FAIL':
