@@ -1,4 +1,4 @@
-# DFS Mapping
+# DFS Overview
 
 DFS stands for DAOS File System. The DFS API provides an encapuslated namespace
 with a POSIX like API directly on top of the DAOS API. The namespace is
@@ -9,32 +9,32 @@ The encapsulated namespace will be located in one DAOS Pool and a single DAOS
 Container. The user provides a valid (connected) pool handle and an open
 container handle where the namespace will be located.
 
-## Namespace
+## DFS Namespace
 
 When the file system is created (i.e. when the DAOS container is initialized as
 an encapsulated namespace), a reserved object (with a predefined object ID) will
 be added to the container and will record superblock information about the
-namespace. This will include the root directory, which will be another reserved
-object and will be the same representation as a directory. The oid of the root
-id will be inserted as an entry in the superblock object.
+namespace. The SB object is replicated and has the reserved OID 0.0.
 
-The DAOS container that is hosting the encapsulated namespace will contain the
-superblock object with a reserved oid (0.0) and with object class
-DAOS_OC_REPL_MAX_RW. This object contains an entry with a magic value to
-indicate it's a POSIX filesystem. The SB object will contain also an entry to
-the root directory of the filesystem with oid (0.1) and object class
-DAOS_OC_REPL_MAX_RW. The SB will look like this:
+The SB object contains an entry with a magic value to indicate it's a POSIX
+filesystem. The SB object will contain also an entry to the root directory of
+the filesystem, which will be another reserved object with a predefined oid
+(1.0) and will have the same representation as a directory (see next
+section). The oid of the root id will be inserted as an entry in the superblock
+object.
+
+The SB will look like this:
 
 ~~~~
 D-key: "DFS_SB_DKEY"
 A-key: "DFS_SB_AKEY"
-single-value: SB_MAGIC (0xda05df50da05df50)
+single-value (uint64_t): SB_MAGIC (0xda05df50da05df50)
 
 D-key: "/"
 // rest of akey entries for root are same as in directory entry described below.
 ~~~~~~
 
-## Directories:
+## DFS Directories:
 
 A POSIX directory will map to a DAOS object with multiple dkeys, where each dkey
 will correspond to an entry in that directory (for another subdirectory, regular
@@ -48,15 +48,15 @@ Directory Object
   D-key “entry1_name”
     A-key “mode”	// mode_t (permission bit mask + type of entry)
     A-key “oid”		// object id of entry (bogus if symlink)
-    A-key “value”	// symlink value (akey does not exist if not a symlink)
-    A-key “uid”		// user id
-    A-key “gid”		// group id
+    A-key “syml”	// symlink value (akey does not exist if not a symlink)
     A-key “atime”	// access time
     A-key “mtime”	// modify time
     A-key “ctime”	// change time
-    A-key “xattr1”	// extended attribute name (if any)
-    A-key “xattr2”	// extended attribute name (if any)
+    A-key “x:xattr1”	// extended attribute name (if any)
+    A-key “x:xattr2”	// extended attribute name (if any)
 ~~~~~~
+
+The extended attributes are all prefixed with "x:".
 
 This summarizes the mapping of a directory testdir with a file, directory, and
 symlink:
@@ -79,16 +79,16 @@ Object testdir
   D-key “syml1”
     A-key “mode” , permission bits + S_IFLNK
     A-key “oid” , empty
-    A-key “value”, dir1
+    A-key “syml”, dir1
     …
 ~~~~~~
 
-For files, we can have an optimization in the entry by storing the first 4K of
-data in the entry itself under another akey “data” for the file entry. In this
-case, if the file size is less than or equal to 4K, the object ID akey will be
-empty, and the file data will be in the akey with array type of file_size
-records. Otherwise the akey “data” will be empty and the “oid” akey will contain
-a valid object ID for the file data.
+For files, we will have an optimization in the entry by storing the first 4K of
+data in the entry itself under another akey “file_data” for the file entry. In
+this case, if the file size is less than or equal to 4K, the object ID akey will
+be empty, and the file data will be in the akey with array type of file_size
+records. Otherwise the “oid” akey will contain a valid object ID for the file
+data.
 
 Note that with this mapping, the inode information is stored with the entry that
 it corresponds to in the parent directory object. Thus, hard links won’t be
@@ -106,23 +106,23 @@ DAOS object with some properties being the element size and chunk size. In the
 POSIX file case, the cell size will always be 1 byte. The chunk size can be set
 at create time only, with the default being 1 MB. The array object itself is
 mapped onto a DAOS object with integer dkeys, where each dkey contains
-chunk_size elements. The Object properties are stored under the first dkey (0)
-in a special akey. So for example, if we have an array of 10 elements, and chunk
-size is 3 elements, the array object will contain the following:
+chunk_size elements. So for example, if we have a file with size 10 bytes, and
+chunk size is 3 bytes, the array object will contain the following:
 
 ~~~~
 Object array
   D-key 0
-    A-key “daos_array_metadata”
-    array value with 3 uint64_t records: magic value, element size, chunk size
-    A-key 0 , array elements [0,1,2]
+    A-key NULL , array elements [0,1,2]
   D-key 1
-    A-key 1 , array elements [3,4,5]
+    A-key NULL , array elements [3,4,5]
   D-key 2
-    A-key 2 , array elements [6,7,8]
+    A-key NULL , array elements [6,7,8]
   D-key 3
-    A-key 3 , array elements [9]
+    A-key NULL , array elements [9]
 ~~~~~~
+
+For more information about the array object layout, please refer to the
+README.md file for Array Addons.
 
 Access to that object is done through the DAOS Array API. All read and write
 operations to the file will be translated to DAOS array read and write
@@ -136,3 +136,45 @@ space allocation cannot be supported by a naïve set size operation.
 As mentioned in the directory section, symbolic links will not have an object
 for the symlink itself, but will have a value in the entry itself of the parent
 directory containing the actual value of the symlink.
+
+## Access Permissions
+
+All DFS objects (files, directories, and symlinks) inherit the access
+permissions of the DFS pool that they are created with. So when a user is trying
+to access an object in the DFS namespace, it's real/effective uid/gid are
+compared against those of the pool's uid and gid that are obtained when
+connecting to the pool. The check then is done with the stored object mode and
+depending on the type of access being requested (R, W, X) and the object mode,
+access permission is determined. In the source code, this is implemented in the
+function check_access().
+
+setuid(), setgid() programs, supplementary groups, ACLs are not supported at the
+moment.
+
+## DFUSE
+
+A simple high level fuse plugin (dfuse) is implemented to test the DFS API and
+functionality with existing POSIX tests and benchmarks (IOR, mdtest, etc.). The
+DFS fuse exposes one mounpoint as a single DFS namespace with a single pool and
+container. To test dfuse, the following steps need to be done:
+
+1) Launch DAOS server(s):
+   orterun --mca mtl ^psm2,ofi --enable-recovery -np 1 --report-uri ~/uri.txt daos_server -c 8
+
+2) Create a DAOS Pool with dmg tool:
+   this will return a pool uuid "puuid" and service rank list "svcl"
+
+3) Create an empty directory for the fuse mountpoint. For example let's use /tmp/dfs_test
+
+4) Mount dfuse with the following command:
+   orterun -np 1 --ompi-server file:~/uri.txt dfuse /tmp/dfs_test -s -f -p puuid -l svcl
+   -p specifies the pool uuid and -l specifies the service rank list (from dmg).
+
+5) Other arguments to dfuse:
+   -r: option to destroy the container associated with the namespace when you umount.
+   -d: prints debug messages at the fuse mount terminal
+
+6) Now /tmp/dfs_test can be used as a POSIX file system (can run things like IOR/mdtest on it)
+
+7) when you are done, unmount the file system:
+   fusermount -u /tmp/dfs_test
