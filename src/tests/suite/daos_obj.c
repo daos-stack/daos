@@ -3097,6 +3097,162 @@ blob_unmap_trigger(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+static void
+punch_then_lookup(void **state)
+{
+	daos_obj_id_t	 oid;
+	daos_key_t	dkey;
+	test_arg_t	*arg = *state;
+	d_sg_list_t	sgl;
+	d_iov_t		sg_iovs[10];
+	daos_iod_t	iod;
+	daos_recx_t	recx[10];
+	struct ioreq	req;
+	char		data_buf[10];
+	char		fetch_buf[10] = { 0 };
+	int		rc;
+	int		i;
+
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	print_message("Insert 10 records\n");
+	memset(data_buf, 'a', 10);
+	for (i = 0; i < 10; i++)
+		insert_single_with_rxnr("dkey", "akey", i, &data_buf[i],
+					1, 1, DAOS_TX_NONE, &req);
+
+	print_message("Punch 2nd record:\n");
+	punch_rec_with_rxnr("dkey", "akey", 2, 1, DAOS_TX_NONE, &req);
+
+	print_message("Lookup non-punched records:\n");
+	memset(fetch_buf, 'b', 10);
+	for (i = 0; i < 10; i++) {
+		daos_iov_set(&sg_iovs[i], &fetch_buf[i], 1);
+		recx[i].rx_idx = i;
+		recx[i].rx_nr = 1;
+	}
+	sgl.sg_nr = 10;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = sg_iovs;
+
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 10;
+	iod.iod_size	= 1;
+	iod.iod_recxs	= recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	rc = daos_obj_fetch(req.oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(sgl.sg_nr_out, 10);
+	for (i = 0; i < 9; i++) {
+		if (i == 2)
+			assert_memory_equal(&fetch_buf[i], "b", 1);
+		else
+			assert_memory_equal(&fetch_buf[i], "a", 1);
+	}
+}
+
+static void
+split_sgl_internal(void **state, int size)
+{
+	test_arg_t *arg = *state;
+	char *sbuf1;
+	char *sbuf2;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	daos_iov_t dkey;
+	daos_sg_list_t sgl;
+	daos_iov_t sg_iov[2];
+	daos_iod_t iod;
+	daos_recx_t recx;
+	int i;
+	int rc;
+
+	/** open object */
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	sbuf1 = calloc(size/2, 1);
+	sbuf2 = calloc(size/2, 1);
+
+	/** init dkey */
+	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+	memset(sbuf1, 'a', size/2);
+	memset(sbuf2, 'a', size/2);
+	/** init scatter/gather */
+	daos_iov_set(&sg_iov[0], sbuf1, size/2);
+	daos_iov_set(&sg_iov[1], sbuf2, size/2);
+	sgl.sg_nr = 2;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = sg_iov;
+
+	/** init I/O descriptor */
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
+	iod.iod_size	= size;
+	recx.rx_idx	= 0;
+	recx.rx_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	/** update by split sgls */
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	/** reset sg_iov */
+	memset(sbuf1, 0, size/2);
+	memset(sbuf2, 0, size/2);
+	daos_iov_set(&sg_iov[0], sbuf1, size/2);
+	daos_iov_set(&sg_iov[1], sbuf2, size/2);
+	sgl.sg_nr = 2;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = sg_iov;
+
+	/** Let's use differet iod_size to see if fetch
+	 *  can reset the correct iod_size
+	 */
+	iod.iod_size = size/2;
+	recx.rx_idx = 0;
+	recx.rx_nr = 1;
+	iod.iod_recxs = &recx;
+
+	/* fetch by split sgls */
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(iod.iod_size, size);
+	assert_int_equal(sgl.sg_nr_out, 2);
+
+	for (i = 0 ; i < size/2; i++) {
+		if (sbuf1[i] != 'a' || sbuf2[i] != 'a')
+			print_message("i is %d\n", i);
+		assert_int_equal(sbuf1[i], 'a');
+		assert_int_equal(sbuf2[i], 'a');
+	}
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
+split_sgl_update_fetch(void **state)
+{
+	/* inline transfer */
+	split_sgl_internal(state, 500);
+	/* bulk transfer */
+	split_sgl_internal(state, 10000);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -3163,6 +3319,10 @@ static const struct CMUnitTest io_tests[] = {
 	  update_overlapped_recxs, async_enable, test_case_teardown},
 	{ "IO33: trigger blob unmap",
 	  blob_unmap_trigger, async_disable, test_case_teardown},
+	{ "IO34: punch then lookup",
+	  punch_then_lookup, async_disable, test_case_teardown},
+	{ "IO35: split update fetch",
+	  split_sgl_update_fetch, async_disable, test_case_teardown},
 };
 
 int

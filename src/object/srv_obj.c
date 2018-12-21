@@ -499,10 +499,12 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 	int			i;
 	int			rc = 0;
 
-	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d eph "DF_U64".\n",
-		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tgt/xs %d/%d eph "
+		DF_U64".\n", opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		dss_get_module_info()->dmi_tgt_id, orw->orw_epoch);
+		dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id,
+		orw->orw_epoch);
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		rc = ds_obj_update_sizes_in_reply(rpc);
@@ -731,10 +733,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	dispatch = update && orw->orw_shard_tgts.ca_arrays != NULL;
 	tag = dss_get_module_info()->dmi_tgt_id;
 
-	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag %d eph "
+	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64".\n", rpc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		tag, orw->orw_epoch);
+		tag, dss_get_module_info()->dmi_xs_id, orw->orw_epoch);
 	rc = ds_check_container(orw->orw_co_hdl, orw->orw_co_uuid,
 				&cont_hdl, &cont);
 	if (rc)
