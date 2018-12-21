@@ -307,13 +307,13 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 	/* At present, this is not exposed in interface but passing it toggles
 	 * sorting and clipping of rectangles
 	 */
-	struct evt_entry_array	 ent_array;
+	struct evt_entry_array	 ent_array = { 0 };
 	struct evt_rect		 rect;
 	struct bio_iov		 biov = {0};
 	daos_size_t		 holes; /* hole width */
+	daos_size_t		 rsize;
 	daos_off_t		 index;
 	daos_off_t		 end;
-	unsigned int		 rsize;
 	int			 rc;
 
 	index = recx->rx_idx;
@@ -328,8 +328,8 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 	if (rc != 0)
 		goto failed;
 
-	rsize = 0;
 	holes = 0;
+	rsize = 0;
 	evt_ent_array_for_each(ent, &ent_array) {
 		daos_off_t	 lo = ent->en_sel_ext.ex_lo;
 		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
@@ -352,18 +352,8 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 			continue;
 		}
 
-		if (rsize == 0)
-			rsize = ent_array.ea_inob;
-
-		if (rsize != ent_array.ea_inob) {
-			D_ERROR("Record sizes of all indices must be "
-				"the same: %u/%u\n", rsize, ent_array.ea_inob);
-			rc = -DER_IO_INVAL;
-			goto failed;
-		}
-
 		if (holes != 0) {
-			biov_set_hole(&biov, holes * rsize);
+			biov_set_hole(&biov, holes * ent_array.ea_inob);
 			/* skip the hole */
 			rc = iod_fetch(ioc, &biov);
 			if (rc != 0)
@@ -371,7 +361,17 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 			holes = 0;
 		}
 
-		biov.bi_data_len = nr * rsize;
+		/**
+		 * XXX Let's set iod_size = 0 for non-existent
+		 * records, since client still need this for
+		 * some cases, see check_record_cb().
+		 */
+		if (rsize == 0)
+			rsize = ent_array.ea_inob;
+		else
+			D_ASSERT(rsize == ent_array.ea_inob);
+
+		biov.bi_data_len = nr * ent_array.ea_inob;
 		biov.bi_addr = ent->en_addr;
 		rc = iod_fetch(ioc, &biov);
 		if (rc != 0)
@@ -385,19 +385,40 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 		holes += end - index;
 
 	if (holes != 0) { /* trailing holes */
-		if (rsize == 0) { /* nothing but holes */
-			iod_empty_sgl(ioc, ioc->ic_sgl_at);
-		} else {
-			biov_set_hole(&biov, holes * rsize);
-			rc = iod_fetch(ioc, &biov);
-			if (rc != 0)
-				goto failed;
-		}
+		biov_set_hole(&biov, holes * ent_array.ea_inob);
+		rc = iod_fetch(ioc, &biov);
+		if (rc != 0)
+			goto failed;
 	}
-	*rsize_p = rsize;
+	if (rsize_p)
+		*rsize_p = rsize;
 failed:
 	evt_ent_array_fini(&ent_array);
 	return rc;
+}
+
+/* Trim the tail holes for the current sgl */
+static void
+ioc_trim_tail_holes(struct vos_io_context *ioc)
+{
+	struct bio_sglist *bsgl;
+	struct bio_iov *biov;
+	int i;
+
+	if (ioc->ic_size_fetch)
+		return;
+
+	bsgl = bio_iod_sgl(ioc->ic_biod, ioc->ic_sgl_at);
+	for (i = ioc->ic_iov_at - 1; i >= 0; i--) {
+		biov = &bsgl->bs_iovs[i];
+		if (bio_addr_is_hole(&biov->bi_addr))
+			bsgl->bs_nr_out--;
+		else
+			break;
+	}
+
+	if (bsgl->bs_nr_out == 0)
+		iod_empty_sgl(ioc, ioc->ic_sgl_at);
 }
 
 static int
@@ -468,6 +489,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		return rc;
 	}
 
+	iod->iod_size = 0;
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t rsize;
 		if (iod->iod_eprs)
@@ -493,7 +515,6 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 					D_DEBUG(DB_IO, "Nonexist akey %.*s\n",
 						(int)iod->iod_name.iov_len,
 						(char *)iod->iod_name.iov_buf);
-					iod_empty_sgl(ioc, ioc->ic_sgl_at);
 					rc = 0;
 					continue;
 				}
@@ -509,7 +530,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			goto out;
 		}
 
-		if (rsize == 0) /* nothing but hole */
+		if (rsize == 0) /* empty tree */
 			continue;
 
 		if (iod->iod_size == 0)
@@ -522,6 +543,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			goto out;
 		}
 	}
+
+	ioc_trim_tail_holes(ioc);
 out:
 	if (!daos_handle_is_inval(toh))
 		key_tree_release(toh, true);
