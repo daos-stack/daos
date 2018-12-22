@@ -47,6 +47,7 @@ struct ds_pool {
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	crt_group_t	       *sp_group;
+	ABT_mutex		sp_iv_refresh_lock;
 	struct ds_iv_ns		*sp_iv_ns;
 };
 
@@ -167,4 +168,8 @@ int ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
+int
+ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
+int
+ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
 #endif /* __DAOS_SRV_POOL_H__ */

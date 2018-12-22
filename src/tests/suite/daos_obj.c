@@ -3283,6 +3283,37 @@ split_sgl_update_fetch(void **state)
 	split_sgl_internal(state, 10000);
 }
 
+static void
+io_pool_map_refresh_trigger(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	d_rank_t	leader;
+
+	/** choose random object */
+	test_get_leader(arg, &leader);
+	D_ASSERT(leader > 0);
+	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, leader - 1);
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     DAOS_FORCE_REFRESH_POOL_MAP, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/** Insert */
+	insert_single("dkey", "akey", 0, "data",
+		      strlen("data") + 1, DAOS_TX_NONE, &req);
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     0, 0, NULL);
+
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -3353,6 +3384,8 @@ static const struct CMUnitTest io_tests[] = {
 	  punch_then_lookup, async_disable, test_case_teardown},
 	{ "IO35: split update fetch",
 	  split_sgl_update_fetch, async_disable, test_case_teardown},
+	{ "IO36: trigger server pool map refresh",
+	  io_pool_map_refresh_trigger, async_disable, test_case_teardown},
 };
 
 int

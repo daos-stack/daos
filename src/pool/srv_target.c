@@ -217,6 +217,10 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(err_pool, rc = dss_abterr2der(rc));
 
+	rc = ABT_mutex_create(&pool->sp_iv_refresh_lock);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(err_lock, rc = dss_abterr2der(rc));
+
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 
@@ -230,7 +234,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: %d\n",
 			DP_UUID(key), rc);
-		D_GOTO(err_lock, rc);
+		D_GOTO(err_iv_lock, rc);
 	}
 
 	if (arg->pca_need_group) {
@@ -251,6 +255,8 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 err_collective:
 	rc_tmp = dss_thread_collective(pool_child_delete_one, key, 0);
 	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
+err_iv_lock:
+	ABT_mutex_free(&pool->sp_iv_refresh_lock);
 err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_pool:
@@ -292,6 +298,7 @@ pool_free_ref(struct daos_llink *llink)
 	if (pool->sp_map != NULL)
 		pool_map_decref(pool->sp_map);
 
+	ABT_mutex_free(&pool->sp_iv_refresh_lock);
 	ABT_rwlock_free(&pool->sp_lock);
 	D_FREE(pool);
 }

@@ -58,6 +58,12 @@ struct pool_iv_entry {
 	struct pool_buf	piv_pool_buf;
 };
 
+struct pool_iv_refresh_ult_arg {
+	uint32_t	iua_pool_version;
+	uuid_t		iua_pool_uuid;
+	ABT_eventual	iua_eventual;
+};
+
 /*
  * srv_pool.c
  */
@@ -135,5 +141,5 @@ int ds_pool_iv_fini(void);
 int pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
 		   unsigned int shortcut, unsigned int sync_mode);
 int pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv);
-
+void ds_pool_iv_refresh_ult(void *arg);
 #endif /* __POOL_SRV_INTERNAL_H__ */

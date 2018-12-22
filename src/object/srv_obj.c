@@ -752,6 +752,16 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	map_ver = cont_hdl->sch_pool->spc_map_version;
+	if (map_ver < orw->orw_map_ver ||
+	    DAOS_FAIL_CHECK(DAOS_FORCE_REFRESH_POOL_MAP)) {
+		D_DEBUG(DB_IO, "stale server map_version %d req %d\n",
+			map_ver, orw->orw_map_ver);
+		rc = ds_pool_child_map_refresh_async(cont_hdl->sch_pool);
+		if (rc)
+			D_GOTO(out, rc);
+		D_GOTO(out, rc = -DER_STALE);
+	}
+
 	if (orw->orw_map_ver < map_ver) {
 		D_DEBUG(DB_IO, "stale version req %d map_version %d\n",
 			orw->orw_map_ver, map_ver);
@@ -1314,37 +1324,24 @@ out:
 }
 
 /**
- * Choose abt pools for object RPC. Because dkey enumeration might create ULT
- * on other xstream pools, so we have to put it to the shared pool. For other
- * RPC, it can be put to the private pool. XXX we might just instruct the
- * server create task for inline I/O.
+ * Choose abt pools for object RPC. Because those update RPC might create pool
+ * map refresh ULT, let's put it to share pool. For other RPC, it can be put to
+ * the private pool. XXX we might just instruct the server create task for
+ * inline I/O.
  */
 ABT_pool
 ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools)
 {
-	struct obj_rw_in	*orw;
-	struct obj_punch_in	*opi;
-	ABT_pool		 pool;
+	ABT_pool	pool;
 
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_ENUMERATE:
-	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_RPC_PUNCH:
-		pool = pools[DSS_POOL_SHARE];
-		break;
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
-		/* if the update/punch need to dispatch to other tgts, schedules
-		 * it in SHARE pool as need other ES to dispatch it.
-		 */
-		opi = crt_req_get(rpc);
-		pool = (opi->opi_shard_tgts.ca_arrays != NULL) ?
-		       pools[DSS_POOL_SHARE] : pools[DSS_POOL_PRIV];
-		break;
 	case DAOS_OBJ_RPC_UPDATE:
-		orw = crt_req_get(rpc);
-		pool = (orw->orw_shard_tgts.ca_arrays != NULL) ?
-		       pools[DSS_POOL_SHARE] : pools[DSS_POOL_PRIV];
+	case DAOS_OBJ_RPC_FETCH:
+		pool = pools[DSS_POOL_SHARE];
 		break;
 	default:
 		pool = pools[DSS_POOL_PRIV];

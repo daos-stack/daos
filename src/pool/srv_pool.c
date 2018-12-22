@@ -1399,6 +1399,64 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	return 0;
 }
 
+static int
+pool_map_update_internal(crt_context_t ctx, struct pool_svc *svc,
+			 uint32_t map_version, struct pool_buf *buf,
+			 bool local)
+{
+	struct pool_iv_entry	*iv_entry;
+	uint32_t		size;
+	int			rc;
+
+	/* If iv_ns is NULL, it means the pool is not connected,
+	 * then we do not need distribute pool map to all other
+	 * servers. NB: rebuild will redistribute the pool map
+	 * by itself anyway.
+	 */
+	if (svc->ps_pool->sp_iv_ns == NULL)
+		return 0;
+
+	D_DEBUG(DF_DSMS, DF_UUID": update ver %d pb_nr %d\n",
+		 DP_UUID(svc->ps_uuid), map_version, buf->pb_nr);
+
+	size = pool_iv_ent_size(buf->pb_nr);
+	D_ALLOC(iv_entry, size);
+	if (iv_entry == NULL)
+		return -DER_NOMEM;
+
+	crt_group_rank(svc->ps_pool->sp_group, &iv_entry->piv_master_rank);
+	uuid_copy(iv_entry->piv_pool_uuid, svc->ps_uuid);
+	iv_entry->piv_pool_map_ver = map_version;
+	memcpy(&iv_entry->piv_pool_buf, buf, pool_buf_size(buf->pb_nr));
+	rc = pool_iv_update(svc->ps_pool->sp_iv_ns, iv_entry,
+			    CRT_IV_SHORTCUT_NONE,
+			    local ? CRT_IV_SYNC_NONE : CRT_IV_SYNC_LAZY);
+
+	/* Some nodes ivns does not exist, might because of the disconnection,
+	 * let's ignore it
+	 */
+	if (rc == -DER_NONEXIST)
+		rc = 0;
+
+	D_FREE(iv_entry);
+
+	return rc;
+}
+
+static int
+pool_map_update_local(crt_context_t ctx, struct pool_svc *svc,
+		      uint32_t map_version, struct pool_buf *buf)
+{
+	return pool_map_update_internal(ctx, svc, map_version, buf, true);
+}
+
+static int
+pool_map_update(crt_context_t ctx, struct pool_svc *svc,
+		uint32_t map_version, struct pool_buf *buf)
+{
+	return pool_map_update_internal(ctx, svc, map_version, buf, false);
+}
+
 /*
  * We use this RPC to not only create the pool metadata but also initialize the
  * pool/container service DB.
@@ -1630,12 +1688,11 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
  * map buffer size.
  */
 static int
-transfer_map_buf(struct rdb_tx *tx, struct pool_svc *svc, crt_rpc_t *rpc,
+transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
+		 struct pool_svc *svc, crt_rpc_t *rpc,
 		 crt_bulk_t remote_bulk, uint32_t *required_buf_size)
 {
-	struct pool_buf	       *map_buf;
 	size_t			map_buf_size;
-	uint32_t		map_version;
 	daos_size_t		remote_bulk_size;
 	daos_iov_t		map_iov;
 	daos_sg_list_t		map_sgl;
@@ -1645,13 +1702,6 @@ transfer_map_buf(struct rdb_tx *tx, struct pool_svc *svc, crt_rpc_t *rpc,
 	ABT_eventual		eventual;
 	int		       *status;
 	int			rc;
-
-	rc = read_map_buf(tx, &svc->ps_root, &map_buf, &map_version);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to read pool map: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
-		D_GOTO(out, rc);
-	}
 
 	if (map_version != pool_map_get_version(svc->ps_pool->sp_map)) {
 		D_ERROR(DF_UUID": found different cached and persistent pool "
@@ -1724,6 +1774,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_connect_in	       *in = crt_req_get(rpc);
 	struct pool_connect_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
+	struct pool_buf			*map_buf;
+	uint32_t			map_version;
 	struct rdb_tx			tx;
 	daos_iov_t			key;
 	daos_iov_t			value;
@@ -1805,6 +1857,23 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	out->pco_gid = ugm.pp_gid;
 	out->pco_mode = ugm.pp_mode;
 
+	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to read pool map: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pci_map_bulk,
+			      &out->pco_map_buf_size);
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
+
+	/* Initialize the local pool map buf for IV */
+	rc = pool_map_update_local(rpc->cr_ctx, svc, map_version, map_buf);
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
+
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
@@ -1813,11 +1882,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 * completes, then we simply return the error and the client will throw
 	 * its pool_buf away.
 	 */
-	rc = transfer_map_buf(&tx, svc, rpc, in->pci_map_bulk,
-			      &out->pco_map_buf_size);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
 	if (skip_update)
 		D_GOTO(out_map_version, rc = 0);
 
@@ -2079,6 +2143,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	struct pool_query_in   *in = crt_req_get(rpc);
 	struct pool_query_out  *out = crt_reply_get(rpc);
 	daos_prop_t	       *prop = NULL;
+	struct pool_buf		*map_buf;
+	uint32_t		map_version;
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
 	daos_iov_t		key;
@@ -2134,7 +2200,14 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc);
 	out->pqo_prop = prop;
 
-	rc = transfer_map_buf(&tx, svc, rpc, in->pqi_map_bulk,
+	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to read pool map: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		D_GOTO(out_map_version, rc);
+	}
+
+	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pqi_map_bulk,
 			      &out->pqo_map_buf_size);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
@@ -2157,48 +2230,6 @@ out:
 		DP_UUID(in->pqi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 	daos_prop_free(prop);
-}
-
-static int
-pool_map_update(crt_context_t ctx, struct pool_svc *svc,
-		uint32_t map_version, struct pool_buf *buf)
-{
-	struct pool_iv_entry	*iv_entry;
-	uint32_t		size;
-	int			rc;
-
-	/* If iv_ns is NULL, it means the pool is not connected,
-	 * then we do not need distribute pool map to all other
-	 * servers. NB: rebuild will redistribute the pool map
-	 * by itself anyway.
-	 */
-	if (svc->ps_pool->sp_iv_ns == NULL)
-		return 0;
-
-	D_DEBUG(DF_DSMS, DF_UUID": update ver %d pb_nr %d\n",
-		 DP_UUID(svc->ps_uuid), map_version, buf->pb_nr);
-
-	size = pool_iv_ent_size(buf->pb_nr);
-	D_ALLOC(iv_entry, size);
-	if (iv_entry == NULL)
-		return -DER_NOMEM;
-
-	crt_group_rank(svc->ps_pool->sp_group, &iv_entry->piv_master_rank);
-	uuid_copy(iv_entry->piv_pool_uuid, svc->ps_uuid);
-	iv_entry->piv_pool_map_ver = map_version;
-	memcpy(&iv_entry->piv_pool_buf, buf, pool_buf_size(buf->pb_nr));
-	rc = pool_iv_update(svc->ps_pool->sp_iv_ns, iv_entry,
-			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_LAZY);
-
-	/* Some nodes ivns does not exist, might because of the disconnection,
-	 * let's ignore it
-	 */
-	if (rc == -DER_NONEXIST)
-		rc = 0;
-
-	D_FREE(iv_entry);
-
-	return rc;
 }
 
 /* Callers are responsible for daos_rank_list_free(*replicasp). */
@@ -3190,3 +3221,54 @@ out:
 	out->pmo_rc = rc;
 	crt_reply_send(rpc);
 }
+
+/* Update pool map version for current xstream. */
+int
+ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc)
+{
+	struct pool_iv_refresh_ult_arg	arg;
+	ABT_eventual			eventual;
+	int				*status;
+	int				rc;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	arg.iua_pool_version = dpc->spc_map_version;
+	uuid_copy(arg.iua_pool_uuid, dpc->spc_uuid);
+	arg.iua_eventual = eventual;
+
+	rc = dss_ult_create(ds_pool_iv_refresh_ult, &arg, DSS_ULT_POOL_SRV,
+			    0, 0, NULL);
+	if (rc)
+		D_GOTO(out_eventual, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	if (*status != 0)
+		D_GOTO(out_eventual, rc = *status);
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+	return rc;
+}
+
+int
+ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
+{
+	struct pool_iv_refresh_ult_arg	*arg;
+	int				rc;
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		return -DER_NOMEM;
+	arg->iua_pool_version = dpc->spc_map_version;
+	uuid_copy(arg->iua_pool_uuid, dpc->spc_uuid);
+
+	rc = dss_ult_create(ds_pool_iv_refresh_ult, arg, DSS_ULT_POOL_SRV,
+			    0, 0, NULL);
+	return rc;
+}
+
