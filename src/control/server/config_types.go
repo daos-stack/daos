@@ -24,12 +24,13 @@ package main
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/utils/handlers"
 )
@@ -221,7 +222,7 @@ func (c *configuration) checkMount(path string) error {
 func NewDefaultConfiguration(ext External) configuration {
 	return configuration{
 		SystemName:   "daos_server",
-		SocketDir:    "./",
+		SocketDir:    "/var/run/daos_server",
 		Auto:         true,
 		Format:       SAFE,
 		AccessPoints: []string{"localhost"},

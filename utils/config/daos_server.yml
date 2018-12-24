@@ -129,12 +129,15 @@
 #provider: ofi+verbs;ofi_rxm
 #
 #
-## Mountpoint directory
+## Storage mount directory
 #
-## If no pre-configured mountpoins are specified, DAOS will auto-detect
+## TODO: If no pre-configured mountpoins are specified, DAOS will auto-detect
 ## NVDIMMs, configure them in interleave mode, format with ext4 and
-## mount with the DAX extension. This option allows to specify a
-## preferred path where the mountpoints will be created.
+## mount with the DAX extension creating a subdirectory within scm_mount_path.
+#
+## This option allows to specify a preferred path where the mountpoints will
+## be created. Either the specified directory or its parent must be a mount
+## point.
 #
 ## default: /mnt/daos
 #scm_mount_path: /mnt/daosa
@@ -211,11 +214,12 @@
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
 #
+#  # default: ERR
 #  log_mask: WARN
 #
 #  # Force specific path for DAOS debug logs.
 #
-#  # default: /tmp/daos_server
+#  # default: /tmp/daos.log
 #  log_file: /tmp/daos_server1.log
 #
 #  # Pass specific environment variables to the DAOS server
@@ -228,6 +232,7 @@
 #  # Define a pre-configured mountpoint for storage class memory to be used
 #  # by this server.
 #  # Path should be unique to server instance (can use different subdirs).
+#  # Either the specified directory or its parent must be a mount point.
 #
 #  scm_mount: /mnt/daos/1
 #
@@ -275,11 +280,12 @@
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
 #
+#  # default: ERR
 #  log_mask: WARN
 #
 #  # Force specific path for DAOS debug logs.
 #
-#  # default: /tmp/daos_server
+#  # default: /tmp/daos.log
 #  log_file: /tmp/daos_server2.log
 #
 #  # Pass specific environment variables to the DAOS server

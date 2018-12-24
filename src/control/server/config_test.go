@@ -555,7 +555,12 @@ func TestCmdlineOverride(t *testing.T) {
 			// no provider set but os env set mock getenv returns not empty string
 			inConfig: envExistsConfig(),
 			outCliOpts: [][]string{
-				{"-c", "0", "-g", "daos_server", "-s", "/mnt/daos", "-d", "./"},
+				{
+					"-c", "0",
+					"-g", "daos_server",
+					"-s", "/mnt/daos",
+					"-d", "/var/run/daos_server",
+				},
 			},
 			expNumCmds: 1,
 			desc:       "use defaults, no Provider set but provider env exists",

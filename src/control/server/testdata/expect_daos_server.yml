@@ -1,7 +1,7 @@
 name: daos_server
 servers: []
 provider: ""
-socket_dir: ./
+socket_dir: /var/run/daos_server
 auto: true
 format: safe
 access_points:
