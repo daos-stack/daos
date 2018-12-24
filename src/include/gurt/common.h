@@ -140,14 +140,14 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 			else						\
 				D_DEBUG(DB_MEM,				\
 					"alloc(" #func ") '" name "': %i * '" cname "':%i at %p.\n", \
-					(int)(size), (count), (ptr));	\
+					(int)(size), (int)(count), (ptr)); \
 			break;						\
 		}							\
 		(void)(on_error);					\
 		if (count >= 1)						\
 			D_ERROR("out of memory (tried to "		\
 				#func " '" name "': %i)\n",		\
-				(int)(size) * (count));			\
+				(int)((size) * (count)));		\
 		else							\
 			D_ERROR("out of memory (tried to "		\
 				#func " '" name "': %i)\n",		\
