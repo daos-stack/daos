@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,6 +134,7 @@ destroy_tree(daos_handle_t tree, daos_iov_t *key)
 {
 	daos_handle_t		hdl;
 	struct btr_attr		attr;
+	struct umem_instance	umm;
 	int			rc;
 
 	rc = open_tree(tree, key, &attr, &hdl);
@@ -153,21 +154,27 @@ destroy_tree(daos_handle_t tree, daos_iov_t *key)
 		volatile daos_handle_t	hdl_tmp = hdl;
 		volatile int		rc_tmp = 0;
 
-		TX_BEGIN(attr.ba_uma.uma_pool) {
-			rc_tmp = dbtree_destroy(hdl_tmp);
-			if (rc_tmp != 0)
-				pmemobj_tx_abort(rc_tmp);
+		umem_class_init(&attr.ba_uma, &umm);
 
+		rc_tmp = umem_tx_begin(&umm, NULL);
+		if (rc_tmp != 0 && !daos_handle_is_inval(hdl_tmp)) {
+			dbtree_close(hdl_tmp);
+			return rc_tmp;
+		}
+
+		rc_tmp = dbtree_destroy(hdl_tmp);
+		if (rc_tmp == 0) {
 			hdl_tmp = DAOS_HDL_INVAL;
-
 			rc_tmp = dbtree_delete(tree, key, NULL);
-			if (rc_tmp != 0)
-				pmemobj_tx_abort(rc_tmp);
-		} TX_ONABORT {
-			if (!daos_handle_is_inval(hdl_tmp))
-				dbtree_close(hdl_tmp);
-			rc = rc_tmp;
-		} TX_END
+		}
+
+		if (!daos_handle_is_inval(hdl_tmp))
+			dbtree_close(hdl_tmp);
+
+		if (rc_tmp != 0)
+			return umem_tx_abort(&umm, rc_tmp);
+
+		return umem_tx_commit(&umm);
 	}
 out:
 	return rc;

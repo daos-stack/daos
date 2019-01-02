@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1649,25 +1649,24 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 }
 
 static int
-btr_tx_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	      daos_iov_t *key, daos_iov_t *val)
+btr_tx_begin(struct btr_context *tcx)
 {
-	struct umem_instance *umm = btr_umm(tcx);
-	int		      rc = 0;
+	if (!btr_has_tx(tcx))
+		return 0;
 
-	TX_BEGIN(umm->umm_pool) {
-		rc = btr_upsert(tcx, probe_opc, key, val);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "dbtree_update tx aborted: %d\n", rc);
+	return umem_tx_begin(btr_umm(tcx), NULL);
+}
 
-	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_update tx exited\n");
-	} TX_END
+static int
+btr_tx_end(struct btr_context *tcx, int rc)
+{
+	if (!btr_has_tx(tcx))
+		return rc;
 
-	return rc;
+	if (rc != 0)
+		return umem_tx_abort(btr_umm(tcx), rc);
+
+	return umem_tx_commit(btr_umm(tcx));
 }
 
 /**
@@ -1691,12 +1690,13 @@ dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_upsert(tcx, BTR_PROBE_EQ, key, val);
-	else
-		rc = btr_upsert(tcx, BTR_PROBE_EQ, key, val);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
 
-	return rc;
+	rc = btr_upsert(tcx, BTR_PROBE_EQ, key, val);
+
+	return btr_tx_end(tcx, rc);
 }
 
 /**
@@ -1724,12 +1724,12 @@ dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_upsert(tcx, opc, key, val);
-	else
-		rc = btr_upsert(tcx, opc, key, val);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+	rc = btr_upsert(tcx, opc, key, val);
 
-	return rc;
+	return btr_tx_end(tcx, rc);
 }
 
 /**
@@ -2413,22 +2413,14 @@ btr_delete(struct btr_context *tcx, void *args)
 static int
 btr_tx_delete(struct btr_context *tcx, void *args)
 {
-	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_pool) {
-		rc = btr_delete(tcx, args);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "dbtree_delete tx aborted: %d\n", rc);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+	rc = btr_delete(tcx, args);
 
-	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_delete tx exited\n");
-	} TX_END
-
-	return rc;
+	return btr_tx_end(tcx, rc);
 }
 
 /**
@@ -2457,10 +2449,7 @@ dbtree_delete(daos_handle_t toh, daos_iov_t *key,
 		return -DER_NONEXIST;
 	}
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_delete(tcx, args);
-	else
-		rc = btr_delete(tcx, args);
+	rc = btr_tx_delete(tcx, args);
 
 	tcx->tc_probe_rc = PROBE_RC_UNKNOWN;
 	return rc;
@@ -2592,22 +2581,15 @@ btr_tree_alloc(struct btr_context *tcx)
 static int
 btr_tx_tree_alloc(struct btr_context *tcx)
 {
-	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_pool) {
-		rc = btr_tree_alloc(tcx);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "Failed to create tree root: %d\n", rc);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
 
-	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_create tx exited\n");
-	} TX_END
+	rc = btr_tree_alloc(tcx);
 
-	return rc;
+	return btr_tx_end(tcx, rc);
 }
 
 /**
@@ -2639,10 +2621,7 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 	if (rc != 0)
 		return rc;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_tree_alloc(tcx);
-	else
-		rc = btr_tree_alloc(tcx);
+	rc = btr_tx_tree_alloc(tcx);
 
 	if (rc != 0)
 		goto failed;
@@ -2667,22 +2646,15 @@ btr_tree_init(struct btr_context *tcx, struct btr_root *root)
 static int
 btr_tx_tree_init(struct btr_context *tcx, struct btr_root *root)
 {
-	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_pool) {
-		rc = btr_tree_init(tcx, root);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "Failed to init tree root: %d\n", rc);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
 
-	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_create_inplace tx exited\n");
-	} TX_END
+	rc = btr_tree_init(tcx, root);
 
-	return rc;
+	return btr_tx_end(tcx, rc);
 }
 
 int
@@ -2712,10 +2684,7 @@ dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 	if (rc != 0)
 		return rc;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_tree_init(tcx, root);
-	else
-		rc = btr_tree_init(tcx, root);
+	rc = btr_tx_tree_init(tcx, root);
 
 	if (rc != 0)
 		goto failed;
@@ -2867,22 +2836,14 @@ btr_tree_destroy(struct btr_context *tcx)
 static int
 btr_tx_tree_destroy(struct btr_context *tcx)
 {
-	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_pool) {
-		rc = btr_tree_destroy(tcx);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "Failed to destroy the tree: %d\n", rc);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+	rc = btr_tree_destroy(tcx);
 
-	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_destroy tx exited\n");
-	} TX_END
-
-	return rc;
+	return btr_tx_end(tcx, rc);
 }
 
 /**
@@ -2901,10 +2862,7 @@ dbtree_destroy(daos_handle_t toh)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_tree_destroy(tcx);
-	else
-		rc = btr_tree_destroy(tcx);
+	rc = btr_tx_tree_destroy(tcx);
 
 	btr_context_decref(tcx);
 	return rc;
@@ -3191,10 +3149,7 @@ dbtree_iter_delete(daos_handle_t ih, void *args)
 	if (rc != 0)
 		return rc;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_delete(tcx, args);
-	else
-		rc = btr_delete(tcx, args);
+	rc = btr_tx_delete(tcx, args);
 
 	/* reset iterator */
 	itr->it_state = BTR_ITR_INIT;
