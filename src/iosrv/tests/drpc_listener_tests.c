@@ -48,12 +48,12 @@ static int dss_ult_create_stream_id; /* saved input */
 static size_t dss_ult_create_stack_size; /* saved input */
 static ABT_thread *dss_ult_create_ult_ptr; /* saved ptr addr */
 int
-dss_ult_create(void (*func)(void *), void *arg, int stream_id,
+dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_id,
 		size_t stack_size, ABT_thread *ult)
 {
 	dss_ult_create_func = func;
 	dss_ult_create_arg_ptr = arg;
-	dss_ult_create_stream_id = stream_id;
+	dss_ult_create_stream_id = tgt_id;
 	dss_ult_create_stack_size = stack_size;
 	dss_ult_create_ult_ptr = ult;
 

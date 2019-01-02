@@ -503,7 +503,7 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d eph "DF_U64".\n",
 		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		dss_get_module_info()->dmi_tid, orw->orw_epoch);
+		dss_get_module_info()->dmi_tgt_id, orw->orw_epoch);
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		rc = ds_obj_update_sizes_in_reply(rpc);
@@ -720,7 +720,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct ds_cont			*cont = NULL;
 	daos_handle_t			 ioh = DAOS_HDL_INVAL;
 	uint32_t			 map_ver = 0;
-	uint32_t			 tag;
+	int				 tag;
 	bool				 update;
 	bool				 dispatch;
 	int				 dispatch_rc = 0;
@@ -730,7 +730,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	D_ASSERT(orwo != NULL);
 	update = (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE);
 	dispatch = update && orw->orw_shard_tgts.ca_arrays != NULL;
-	tag = dss_get_module_info()->dmi_tid;
+	tag = dss_get_module_info()->dmi_tgt_id;
 
 	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag %d eph "
 		DF_U64".\n", rpc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
@@ -772,12 +772,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		}
 		D_ASSERT(obj_arg != NULL);
 
-		/* create a dispatch ULT on neighbour ES to release this ES
-		 * in-time for RPC communication.
-		 * XXX can optimize for better method later.
-		 */
 		rc = dss_ult_create(ds_obj_req_dispatch, obj_arg,
-				    (tag + 1) % dss_nxstreams, 0, NULL);
+				    DSS_ULT_IOFW, tag, 0, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": ds_obj_update_dispatch failed %d.\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -911,7 +907,7 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg);
 
 	D_DEBUG(DB_IO, ""DF_UOID" iterate type %d tag %d rc %d\n",
-		DP_UOID(oei->oei_oid), type, dss_get_module_info()->dmi_tid,
+		DP_UOID(oei->oei_oid), type, dss_get_module_info()->dmi_tgt_id,
 		rc);
 out_cont_hdl:
 
@@ -1178,7 +1174,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	struct ds_cont			*cont = NULL;
 	struct obj_punch_in		*opi;
 	uint32_t			 map_version = 0;
-	uint32_t			 tag;
+	int				 tag;
 	bool				 dispatch;
 	int				 dispatch_rc = 0;
 	int				 rc;
@@ -1187,6 +1183,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	D_ASSERT(opi != NULL);
 	dispatch = opi->opi_shard_tgts.ca_arrays != NULL;
 
+	tag = dss_get_module_info()->dmi_tgt_id;
 	rc = ds_check_container(opi->opi_co_hdl, opi->opi_co_uuid,
 				&cont_hdl, &cont);
 	if (rc)
@@ -1218,9 +1215,8 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		}
 		D_ASSERT(obj_arg != NULL);
 
-		tag = dss_get_module_info()->dmi_tid;
 		rc = dss_ult_create(ds_obj_req_dispatch, obj_arg,
-				    (tag + 1) % dss_nxstreams, 0, NULL);
+				    DSS_ULT_IOFW, tag, 0, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": ds_obj_req_dispatch failed %d.\n",
 				DP_UOID(opi->opi_oid), rc);
@@ -1444,7 +1440,7 @@ shard_req_forward(struct shard_req_fw_arg *fw_arg)
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = shard_tgt->st_rank;
-	tgt_ep.ep_tag = shard_tgt->st_tgt_idx;
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_IO, shard_tgt->st_tgt_idx);
 	D_DEBUG(DB_TRACE, "opc:%#x, forwarding to rank:%d tag:%d.\n",
 		opc, tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);

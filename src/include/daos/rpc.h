@@ -80,6 +80,65 @@ struct daos_rpc_handler {
 	struct crt_corpc_ops	*dr_corpc_ops;
 };
 
+/** DAOS RPC request type (to determine the target processing tag/context) */
+enum daos_rpc_type {
+	/** common IO request */
+	DAOS_REQ_IO,
+	/** management request defined/used by mgmt module */
+	DAOS_REQ_MGMT,
+	/** pool request defined/used by pool module */
+	DAOS_REQ_POOL,
+	/** RDB/meta-data request */
+	DAOS_REQ_RDB,
+	/** container request (including the OID allocate) */
+	DAOS_REQ_CONT,
+	/** rebuild request such as REBUILD_OBJECTS_SCAN/REBUILD_OBJECTS */
+	DAOS_REQ_REBUILD,
+	/** the IV/BCAST/SWIM request handled by cart, send/recv by tag 0 */
+	DAOS_REQ_IV,
+	DAOS_REQ_BCAST,
+	DAOS_REQ_SWIM,
+};
+
+/** DAOS_TGT0_OFFSET is target 0's cart context offset */
+#define DAOS_TGT0_OFFSET		(1)
+/** Number of cart context created for each target */
+#define DAOS_CTX_NR_PER_TGT		(2)
+/** The cart context index of target index */
+#define DAOS_IO_CTX_ID(tgt_idx)				\
+	((tgt_idx) * DAOS_CTX_NR_PER_TGT + DAOS_TGT0_OFFSET)
+
+/**
+ * Get the target tag (context ID) for specific request type and target index.
+ *
+ * \param[in]	req_type	RPC request type (enum daos_rpc_type)
+ * \param[in]	tgt_idx		target index (VOS index, main xstream index)
+ *
+ * \return			target tag (context ID) to be used for the RPC
+ */
+static inline int
+daos_rpc_tag(int req_type, int tgt_idx)
+{
+	switch (req_type) {
+	/* for normal IO request, send to the main service thread/context */
+	case DAOS_REQ_IO:
+		return DAOS_IO_CTX_ID(tgt_idx);
+	/* target tag 0 is to handle below requests */
+	case DAOS_REQ_MGMT:
+	case DAOS_REQ_POOL:
+	case DAOS_REQ_RDB:
+	case DAOS_REQ_CONT:
+	case DAOS_REQ_REBUILD:
+	case DAOS_REQ_IV:
+	case DAOS_REQ_BCAST:
+	case DAOS_REQ_SWIM:
+		return 0;
+	default:
+		D_ASSERTF(0, "bad req_type %d.\n", req_type);
+		return -DER_INVAL;
+	};
+}
+
 static inline struct daos_rpc_handler *
 daos_rpc_handler_find(struct daos_rpc_handler *handlers, crt_opcode_t opc)
 {

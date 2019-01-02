@@ -267,7 +267,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 	uuid_t		       *uuids;
 	daos_iov_t		value;
 	struct rdb_kvs_attr	attr;
-	int			ntargets = nnodes * dss_nxstreams;
+	int			ntargets = nnodes * dss_tgt_nr;
 	int			rc;
 	int			i;
 
@@ -314,7 +314,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 		map_comp.co_rank = target_addrs->rl_ranks[i];
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
-		map_comp.co_nr = dss_nxstreams;
+		map_comp.co_nr = dss_tgt_nr;
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0)
@@ -325,11 +325,11 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 	for (i = 0; i < nnodes; i++) {
 		int j;
 
-		for (j = 0; j < dss_nxstreams; j++) {
+		for (j = 0; j < dss_tgt_nr; j++) {
 			map_comp.co_type = PO_COMP_TP_TARGET;
 			map_comp.co_status = PO_COMP_ST_UP;
 			map_comp.co_index = j;
-			map_comp.co_id = i * dss_nxstreams + j;
+			map_comp.co_id = i * dss_tgt_nr + j;
 			map_comp.co_rank = target_addrs->rl_ranks[i];
 			map_comp.co_ver = map_version;
 			map_comp.co_fseq = 1;
@@ -842,7 +842,7 @@ pool_svc_stop_cb(struct rdb *db, int err, void *arg)
 	int			rc;
 
 	pool_svc_get(svc);
-	rc = dss_ult_create(pool_svc_stopper, svc, -1, 0, NULL);
+	rc = dss_ult_create(pool_svc_stopper, svc, DSS_ULT_SELF, 0, 0, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool service stopper: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
@@ -1427,7 +1427,8 @@ ds_pool_svc_start_all(void)
 	int		rc;
 
 	/* Create a ULT to call ds_pool_svc_start() in xstream 0. */
-	rc = dss_ult_create(pool_svc_start_all, NULL, 0, 0, &thread);
+	rc = dss_ult_create(pool_svc_start_all, NULL,
+			    DSS_ULT_POOL_SRV, 0, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("failed to create pool service start ULT: %d\n", rc);
 		return rc;
@@ -1455,7 +1456,8 @@ stop_one(d_list_t *entry, void *arg)
 		return -DER_NOMEM;
 
 	d_hash_rec_addref(&pool_svc_hash, &svc->ps_entry);
-	rc = dss_ult_create(pool_svc_stopper, svc, 0, 0, &ult->u_thread);
+	rc = dss_ult_create(pool_svc_stopper, svc, DSS_ULT_POOL_SRV, 0, 0,
+			    &ult->u_thread);
 	if (rc != 0) {
 		d_hash_rec_decref(&pool_svc_hash, &svc->ps_entry);
 		D_FREE(ult);

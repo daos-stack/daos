@@ -209,13 +209,13 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	 * object handling process for now, for example avoid lock to insert
 	 * objects in the object rebuild tree.
 	 */
-	tgt_ep.ep_tag = 0;
 	while (1) {
 		struct pool_target	*targets = NULL;
 		unsigned int		failed_tgts_cnt;
 		bool			target_failed = false;
 		int			i;
 
+		tgt_ep.ep_tag = 0;
 		rc = rebuild_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 					REBUILD_OBJECTS, &rpc);
 		if (rc)
@@ -697,7 +697,7 @@ rebuild_scan_leader(void *data)
 	iter_arg.arg = arg;
 	iter_arg.callback = placement_check;
 
-	rc = dss_thread_collective(rebuild_scanner, &iter_arg);
+	rc = dss_thread_collective(rebuild_scanner, &iter_arg, 0);
 	if (rc)
 		D_GOTO(put_plmap, rc);
 
@@ -716,7 +716,7 @@ rebuild_scan_leader(void *data)
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_task_collective(rebuild_scan_done, rpt);
+	rc = dss_task_collective(rebuild_scan_done, rpt, 0);
 	ABT_mutex_unlock(rpt->rt_lock);
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
@@ -758,7 +758,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	D_ASSERT(rsi != NULL);
 
 	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d/%d\n",
-		dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
+		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
 		rsi->rsi_pool_map_ver, rsi->rsi_rebuild_ver);
 
 	/* check if the rebuild is already started */
@@ -818,7 +818,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 
 	rpt_get(rpt);
-	rc = dss_rebuild_ult_create(rebuild_tgt_status_check, rpt, -1, 0, NULL);
+	rc = dss_rebuild_ult_create(rebuild_tgt_status_check, rpt,
+				    DSS_ULT_SELF, 0, 0, NULL);
 	if (rc) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
@@ -849,7 +850,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rpt_get(rpt);
 	scan_arg->rpt = rpt;
 	/* step-3: start scann leader */
-	rc = dss_ult_create(rebuild_scan_leader, scan_arg, -1, 0, NULL);
+	rc = dss_ult_create(rebuild_scan_leader, scan_arg, DSS_ULT_SELF, 0, 0,
+			    NULL);
 	if (rc != 0) {
 		rpt_put(rpt);
 		D_GOTO(out_tree, rc);

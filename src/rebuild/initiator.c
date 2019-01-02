@@ -411,7 +411,7 @@ rebuild_one_ult(void *arg)
 				      rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 	D_ASSERT(rpt->rt_pullers != NULL);
-	idx = dss_get_module_info()->dmi_tid;
+	idx = dss_get_module_info()->dmi_tgt_id;
 	puller = &rpt->rt_pullers[idx];
 	puller->rp_ult_running = 1;
 	while (1) {
@@ -686,8 +686,8 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 			iter_arg->tgt_idx);
 		rpt_get(rpt);
 		rc = dss_rebuild_ult_create(rebuild_one_ult, rpt,
-					    iter_arg->tgt_idx,
-					    PULLER_STACK_SIZE, &puller->rp_ult);
+			DSS_ULT_REBUILD, iter_arg->tgt_idx,
+			PULLER_STACK_SIZE, &puller->rp_ult);
 		if (rc) {
 			rpt_put(rpt);
 			D_GOTO(free, rc);
@@ -752,7 +752,7 @@ rebuild_obj_punch_one(void *data)
 static int
 rebuild_obj_punch(struct rebuild_iter_obj_arg *arg)
 {
-	return dss_task_collective(rebuild_obj_punch_one, arg);
+	return dss_task_collective(rebuild_obj_punch_one, arg, 0);
 }
 
 #define KDS_NUM		16
@@ -891,7 +891,6 @@ rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 {
 	struct puller_iter_arg		*iter_arg = data;
 	struct rebuild_iter_obj_arg	*obj_arg;
-	unsigned int			stream_id;
 	int				rc;
 
 	D_ALLOC_PTR(obj_arg);
@@ -910,8 +909,8 @@ rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 		obj_arg->rpt->rt_toberb_objs++;
 
 	/* Let's iterate the object on different xstream */
-	stream_id = oid.id_pub.lo % dss_get_threads_number();
-	rc = dss_rebuild_ult_create(rebuild_obj_ult, obj_arg, stream_id,
+	rc = dss_rebuild_ult_create(rebuild_obj_ult, obj_arg, DSS_ULT_REBUILD,
+				    oid.id_pub.lo % dss_tgt_nr,
 				    PULLER_STACK_SIZE, NULL);
 	if (rc) {
 		rpt_put(iter_arg->rpt);
@@ -1324,7 +1323,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (rebuild_in->roi_tgt_idx >= dss_get_threads_number()) {
+	if (rebuild_in->roi_tgt_idx >= dss_tgt_nr) {
 		D_ERROR("Wrong tgt idx %d\n", rebuild_in->roi_tgt_idx);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -1412,8 +1411,8 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 
 		rpt->rt_lead_puller_running = 1;
 		D_ASSERT(rpt->rt_pullers != NULL);
-		rc = dss_rebuild_ult_create(rebuild_puller_ult, arg, -1, 0,
-					    NULL);
+		rc = dss_rebuild_ult_create(rebuild_puller_ult, arg,
+					    DSS_ULT_SELF, 0, 0, NULL);
 		if (rc) {
 			rpt_put(rpt);
 			D_FREE(arg);

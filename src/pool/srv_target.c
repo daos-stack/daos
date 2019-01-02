@@ -124,7 +124,7 @@ ds_pool_child_open(uuid_t uuid, unsigned int version)
 	if (child == NULL)
 		return -DER_NOMEM;
 
-	rc = ds_mgmt_tgt_file(uuid, VOS_FILE, &info->dmi_tid, &path);
+	rc = ds_mgmt_tgt_file(uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0) {
 		D_FREE(child);
 		return rc;
@@ -226,7 +226,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
 
-	rc = dss_thread_collective(pool_child_add_one, &collective_arg);
+	rc = dss_thread_collective(pool_child_add_one, &collective_arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: %d\n",
 			DP_UUID(key), rc);
@@ -249,7 +249,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	return 0;
 
 err_collective:
-	rc_tmp = dss_thread_collective(pool_child_delete_one, key);
+	rc_tmp = dss_thread_collective(pool_child_delete_one, key, 0);
 	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
 err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
@@ -282,7 +282,7 @@ pool_free_ref(struct daos_llink *llink)
 	if (pool->sp_iv_ns != NULL)
 		ds_iv_ns_destroy(pool->sp_iv_ns);
 
-	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid);
+	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid, 0);
 	if (rc == -DER_CANCELED)
 		D_DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
 	else if (rc != 0)
@@ -566,8 +566,8 @@ pool_query_one(void *vin)
 	struct dss_coll_stream_args	*reduce = vin;
 	struct dss_stream_arg_type	*streams = reduce->csa_streams;
 	struct dss_module_info		*info = dss_get_module_info();
-	int				 xs_id = info->dmi_tid;
-	struct pool_query_xs_arg	*x_arg = streams[xs_id].st_arg;
+	int				 tid = info->dmi_tgt_id;
+	struct pool_query_xs_arg	*x_arg = streams[tid].st_arg;
 	struct ds_pool			*pool = x_arg->qxa_pool;
 	struct ds_pool_child		*pool_child;
 	struct daos_pool_space		*x_ps = &x_arg->qxa_space;
@@ -580,8 +580,8 @@ pool_query_one(void *vin)
 
 	rc = vos_pool_query(pool_child->spc_hdl, &vos_pool_info);
 	if (rc != 0) {
-		D_ERROR("Failed to query pool "DF_UUID", xs_id: %d, rc: %d\n",
-			DP_UUID(pool->sp_uuid), xs_id, rc);
+		D_ERROR("Failed to query pool "DF_UUID", tgt_id: %d, rc: %d\n",
+			DP_UUID(pool->sp_uuid), tid, rc);
 		goto out;
 	}
 
@@ -624,7 +624,7 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	coll_args.ca_aggregator		= &agg_arg;
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args);
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
 	if (rc) {
 		D_ERROR("Pool query on pool "DF_UUID" failed, rc:%d\n",
 			DP_UUID(pool->sp_uuid), rc);
@@ -829,7 +829,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			map_version);
 
 		pool->sp_map_version = map_version;
-		rc = dss_task_collective(update_child_map, pool);
+		rc = dss_task_collective(update_child_map, pool, 0);
 		D_ASSERT(rc == 0);
 	} else if (pool->sp_map != NULL &&
 		   pool_map_get_version(pool->sp_map) < map_version &&

@@ -366,7 +366,7 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
-	rc = dss_thread_collective(cont_destroy_one, in);
+	rc = dss_thread_collective(cont_destroy_one, in, 0);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
@@ -567,7 +567,7 @@ ds_cont_tgt_open_handler(crt_rpc_t *rpc)
 		DP_CONT(in->toi_pool_uuid, in->toi_uuid), rpc,
 		DP_UUID(in->toi_hdl));
 
-	rc = dss_task_collective(cont_open_one, in);
+	rc = dss_task_collective(cont_open_one, in, 0);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	out->too_rc = (rc == 0 ? 0 : 1);
@@ -649,7 +649,7 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 		rpc, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce,
 		in->tci_recs.ca_count);
 
-	rc = dss_thread_collective(cont_close_one, in);
+	rc = dss_thread_collective(cont_close_one, in, 0);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 out:
@@ -680,7 +680,7 @@ cont_query_one(void *vin)
 	struct dss_coll_stream_args	*reduce	   = vin;
 	struct dss_stream_arg_type	*streams   = reduce->csa_streams;
 	struct dss_module_info		*info	   = dss_get_module_info();
-	int				tid	   = info->dmi_tid;
+	int				tid	   = info->dmi_tgt_id;
 	struct xstream_cont_query	*pack_args = streams[tid].st_arg;
 	struct cont_tgt_query_in	*in	   = pack_args->xcq_rpc_in;
 	struct ds_pool_hdl		*pool_hdl;
@@ -788,7 +788,7 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
 
-	rc = dss_task_collective_reduce(&coll_ops, &coll_args);
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
 
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	out->tqo_min_purged_epoch = MIN(out->tqo_min_purged_epoch,
@@ -858,7 +858,7 @@ ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc)
 	else if (in->tii_epoch >= DAOS_EPOCH_MAX)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	rc = dss_thread_collective(cont_epoch_discard_one, in);
+	rc = dss_thread_collective(cont_epoch_discard_one, in, 0);
 
 out:
 	out->tio_rc = (rc == 0 ? 0 : 1);
@@ -1102,7 +1102,7 @@ out:
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_thread_collective(cont_epoch_aggregate_one, &in_copy);
+	rc = dss_thread_collective(cont_epoch_aggregate_one, &in_copy, 0);
 	if (rc != 0)
 		D_ERROR(DF_CONT": Aggregation failed: %d\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rc);

@@ -46,8 +46,8 @@
 static char		modules[MAX_MODULE_OPTIONS + 1];
 
 /**
- * Number of threads the user would like to start
- * 0 means default value, which is one thread per core
+ * Number of target threads the user would like to start
+ * 0 means default value, see dss_tgt_nr_get();
  */
 static unsigned int	nr_threads;
 
@@ -72,6 +72,10 @@ const char	       *attach_info_path;
 
 /** HW topology */
 hwloc_topology_t	dss_topo;
+/** core depth of the topology */
+int			dss_core_depth;
+/** number of physical cores, w/o hyperthreading */
+int			dss_core_nr;
 
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
@@ -185,6 +189,49 @@ modules_load(uint64_t *facs)
 	return rc;
 }
 
+/**
+ * Get the appropriate number of main XS based on the number of cores and
+ * passed in preferred number of threads.
+ */
+static int
+dss_tgt_nr_get(int ncores, int nr)
+{
+	int nr_default;
+
+	D_ASSERT(ncores >= 1);
+	/* Each system XS uses one core, and each main XS with
+	 * dss_tgt_offload_xs_nr offload XS. Calculate the nr_default
+	 * as the number of main XS based on number of cores.
+	 */
+	nr_default = (ncores - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
+	if (nr_default == 0)
+		nr_default = 1;
+
+	/* If user requires less target threads then set it as dss_tgt_nr,
+	 * if user requires more then uses the number calculated above
+	 * as creating more threads than #cores may hurt performance.
+	 */
+	if (nr >= 1 && nr < nr_default)
+		nr_default = nr;
+
+	if (nr_default != nr)
+		D_PRINT("%d target XS(xstream) requested (#cores %d); "
+			"use (%d) target XS\n", nr, ncores, nr_default);
+
+	return nr_default;
+}
+
+static void
+dss_topo_init()
+{
+	hwloc_topology_init(&dss_topo);
+	hwloc_topology_load(dss_topo);
+
+	dss_core_depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_CORE);
+	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
+	dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
+}
+
 static int
 server_init()
 {
@@ -202,8 +249,7 @@ server_init()
 		D_GOTO(exit_debug_init, rc);
 
 	/** initialize server topology data */
-	hwloc_topology_init(&dss_topo);
-	hwloc_topology_load(dss_topo);
+	dss_topo_init();
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
@@ -228,7 +274,7 @@ server_init()
 			D_ERROR("failed to set self rank %u: %d\n", self_rank,
 				rc);
 		rc = dss_sys_map_load(sys_map_path, server_group_id, self_rank,
-				      nr_threads);
+				      DSS_CTX_NR_TOTAL);
 		if (rc) {
 			D_ERROR("failed to load %s: %d\n", sys_map_path, rc);
 			D_GOTO(exit_crt_init, rc);
@@ -272,7 +318,7 @@ server_init()
 	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* start up service */
-	rc = dss_srv_init(nr_threads);
+	rc = dss_srv_init();
 	if (rc) {
 		D_ERROR("DAOS cannot be initialized using the configured "
 			"path (%s).   Please ensure it is on a PMDK compatible "
@@ -306,8 +352,8 @@ server_init()
 	D_INFO("Modules successfully set up\n");
 
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
-		"(out of %u) with %u xstream(s)\n", DAOS_VERSION, getpid(),
-		rank, size, dss_nxstreams);
+		"(out of %u) with %u target xstream set(s).\n",
+		DAOS_VERSION, getpid(), rank, size, dss_tgt_nr);
 
 	return 0;
 
@@ -358,7 +404,7 @@ Options:\n\
   --modules=modules, -m modules\n\
       List of server modules to load (default \"%s\")\n\
   --cores=ncores, -c ncores\n\
-      Number of cores to use (default all)\n\
+      Number of targets to use (default all)\n\
   --group=group, -g group\n\
       Server group name (default \"%s\")\n\
   --storage=path, -s path\n\

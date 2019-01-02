@@ -318,30 +318,30 @@ ts_write_records_internal(d_rank_t rank, bool with_fetch)
 		ts_oid = dts_oid_gen(ts_class, 0, ts_ctx.tsc_mpi_rank);
 		if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 			ts_oid = dts_oid_set_rank(ts_oid, rank);
-		for (j = 0; j < ts_dkey_p_obj; j++) {
-			if (ts_class != DAOS_OC_RAW) {
-				rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid,
-						   DAOS_OO_RW, &ts_oh, NULL);
-				if (rc) {
-					fprintf(stderr, "object open failed\n");
-					return -1;
-				}
-			} else {
-				memset(&ts_uoid, 0, sizeof(ts_uoid));
-				ts_uoid.id_pub = ts_oid;
+		if (ts_class != DAOS_OC_RAW) {
+			rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid,
+					   DAOS_OO_RW, &ts_oh, NULL);
+			if (rc) {
+				fprintf(stderr, "object open failed\n");
+				return -1;
 			}
+		} else {
+			memset(&ts_uoid, 0, sizeof(ts_uoid));
+			ts_uoid.id_pub = ts_oid;
+		}
 
+		for (j = 0; j < ts_dkey_p_obj; j++) {
 			rc = ts_key_update_or_fetch(TS_DO_UPDATE, &epoch,
 						    with_fetch);
 			if (rc)
 				return rc;
+		}
 
-			if (ts_class != DAOS_OC_RAW &&
-				with_fetch == WITHOUT_FETCH) {
-				rc = daos_obj_close(ts_oh, NULL);
-				if (rc)
-					return rc;
-			}
+		if (ts_class != DAOS_OC_RAW &&
+			with_fetch == WITHOUT_FETCH) {
+			rc = daos_obj_close(ts_oh, NULL);
+			if (rc)
+				return rc;
 		}
 	}
 

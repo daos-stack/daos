@@ -40,11 +40,8 @@
 #include <abt.h>
 #include <cart/iv.h>
 
-/** Number of execution streams started or cores used */
-extern unsigned int	dss_nxstreams;
-
-/** Server node topoloby */
-extern hwloc_topology_t	dss_topo;
+/** number of target (XS set) per server */
+extern unsigned int	dss_tgt_nr;
 
 /** Storage path (hack) */
 extern const char      *dss_storage_path;
@@ -140,7 +137,12 @@ struct dss_module_info {
 	crt_context_t		dmi_ctx;
 	struct bio_xs_context	*dmi_nvme_ctxt;
 	struct dss_xstream	*dmi_xstream;
-	int			dmi_tid;
+	/* the xstream id */
+	int			dmi_xs_id;
+	/* the VOS target id */
+	int			dmi_tgt_id;
+	/* the cart context id */
+	int			dmi_ctx_id;
 	tse_sched_t		dmi_sched;
 	uint64_t		dmi_tse_ult_created:1;
 };
@@ -224,20 +226,40 @@ struct dss_module {
 	struct dss_drpc_handler	 *sm_drpc_handlers;
 };
 
+/** ULT types to determine on which XS to schedule the ULT */
+enum dss_ult_type {
+	/** To schedule ULT on caller's self XS */
+	DSS_ULT_SELF = 100,
+	/** forward/dispatch IO request for TX coordinator */
+	DSS_ULT_IOFW,
+	/** EC/checksum/compress computing offload */
+	DSS_ULT_EC,
+	DSS_ULT_CHECKSUM,
+	DSS_ULT_COMPRESS,
+	/** pool service ULT */
+	DSS_ULT_POOL_SRV,
+	/** rebuild ULT such as scanner/puller, status checker etc. */
+	DSS_ULT_REBUILD,
+	/** aggregation ULT */
+	DSS_ULT_AGGREGATE,
+	/** drpc listener ULT */
+	DSS_ULT_DRPC,
+};
+
 int dss_parameters_set(unsigned int key_id, uint64_t value);
 
 typedef ABT_pool (*dss_abt_pool_choose_cb_t)(crt_rpc_t *rpc, ABT_pool *pools);
 
 void dss_abt_pool_choose_cb_register(unsigned int mod_id,
 				     dss_abt_pool_choose_cb_t cb);
-int dss_ult_create(void (*func)(void *), void *arg,
-		   int stream_id, size_t stack_size, ABT_thread *ult);
-int dss_rebuild_ult_create(void (*func)(void *), void *arg,
-			   int stream_id, size_t stack_size, ABT_thread *ult);
+int dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_id,
+		   size_t stack_size, ABT_thread *ult);
+int dss_rebuild_ult_create(void (*func)(void *), void *arg, int ult_type,
+			   int tgt_id, size_t stack_size, ABT_thread *ult);
 int dss_ult_create_all(void (*func)(void *), void *arg);
 int dss_ult_create_execute(int (*func)(void *), void *arg,
 			   void (*user_cb)(void *), void *cb_args,
-			   int stream_id, size_t stack_size);
+			   int ult_type, int tgt_id, size_t stack_size);
 
 /* Pack return codes with additional argument to reduce */
 struct dss_stream_arg_type {
@@ -301,7 +323,8 @@ struct dss_coll_args {
 	struct dss_coll_stream_args	ca_stream_args;
 };
 
-/* Generic dss_collective with custom aggregator
+/**
+ * Generic dss_collective with custom aggregator
  *
  * TODO: rename these functions, thread & task are too generic name and
  * DAOS has already used task for something else.
@@ -310,19 +333,18 @@ struct dss_coll_args {
  */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
-			   struct dss_coll_args *coll_args);
+			   struct dss_coll_args *coll_args, int flag);
 int
 dss_thread_collective_reduce(struct dss_coll_ops *ops,
-			     struct dss_coll_args *coll_args);
+			     struct dss_coll_args *coll_args, int flag);
 
-int dss_task_collective(int (*func)(void *), void *arg);
-int dss_thread_collective(int (*func)(void *), void *arg);
+int dss_task_collective(int (*func)(void *), void *arg, int flag);
+int dss_thread_collective(int (*func)(void *), void *arg, int flag);
 int dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb,
 		 void *arg, ABT_eventual eventual);
 int dss_eventual_create(ABT_eventual *eventual_ptr);
 int dss_eventual_wait(ABT_eventual eventual);
 void dss_eventual_free(ABT_eventual *eventual);
-unsigned int dss_get_threads_number(void);
 
 /* Convert Argobots errno to DAOS ones. */
 static inline int

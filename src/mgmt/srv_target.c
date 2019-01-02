@@ -280,7 +280,7 @@ tgt_vos_create_one(void *varg)
 	char			*path = NULL;
 	int			 rc;
 
-	rc = path_gen(vpa->vpa_uuid, newborns_path, VOS_FILE, &info->dmi_tid,
+	rc = path_gen(vpa->vpa_uuid, newborns_path, VOS_FILE, &info->dmi_tgt_id,
 		      &path);
 	if (rc)
 		return rc;
@@ -307,13 +307,12 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 	 * Create one VOS file per execution stream
 	 * 16MB minimum per pmemobj file (SCM partition)
 	 */
-	D_ASSERT(dss_nxstreams > 0);
-	scm_size = max(tgt_scm_size / dss_nxstreams, 1 << 24);
-	nvme_size = tgt_nvme_size / dss_nxstreams;
+	D_ASSERT(dss_tgt_nr > 0);
+	scm_size = max(tgt_scm_size / dss_tgt_nr, 1 << 24);
+	nvme_size = tgt_nvme_size / dss_tgt_nr;
 	/** tc_in->tc_tgt_dev is assumed to point at PMEM for now */
 
-	for (i = 0; i < dss_nxstreams; i++) {
-
+	for (i = 0; i < dss_tgt_nr; i++) {
 		rc = path_gen(uuid, newborns_path, VOS_FILE, &i, &path);
 		if (rc)
 			break;
@@ -368,7 +367,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 		vpa.vpa_scm_size = 0;
 		vpa.vpa_nvme_size = nvme_size;
 
-		rc = dss_thread_collective(tgt_vos_create_one, &vpa);
+		rc = dss_thread_collective(tgt_vos_create_one, &vpa, 0);
 	}
 
 	/** brute force cleanup to be done by the caller */
@@ -581,7 +580,7 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 		return rc;
 
 	/* destroy blobIDs first */
-	rc = dss_thread_collective(vos_blob_destroy, pool_uuid);
+	rc = dss_thread_collective(vos_blob_destroy, pool_uuid, 0);
 	if (rc)
 		D_GOTO(out, rc);
 

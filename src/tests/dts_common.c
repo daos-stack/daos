@@ -263,12 +263,15 @@ pool_fini(struct dts_context *tsc)
 		rc = vos_pool_destroy(tsc->tsc_pmem_file, tsc->tsc_pool_uuid);
 		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc=%d\n", rc);
 
-	} else if (tsc->tsc_mpi_rank == 0) { /* DAOS mode */
-		/* rank 0 does collective close and destroy */
+	} else { /* DAOS mode */
 		daos_pool_disconnect(tsc->tsc_poh, NULL);
-		rc = daos_pool_destroy(tsc->tsc_pool_uuid, NULL, true, NULL);
-		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST || rc == -DER_TIMEDOUT,
-			  "rc=%d\n", rc);
+		MPI_Barrier(MPI_COMM_WORLD);
+		if (tsc->tsc_mpi_rank == 0) {
+			rc = daos_pool_destroy(tsc->tsc_pool_uuid, NULL, true,
+					       NULL);
+			D_ASSERTF(rc == 0 || rc == -DER_NONEXIST ||
+				  rc == -DER_TIMEDOUT, "rc=%d\n", rc);
+		}
 	}
 }
 
@@ -315,13 +318,11 @@ cont_init(struct dts_context *tsc)
 static void
 cont_fini(struct dts_context *tsc)
 {
-	if (tsc->tsc_pmem_file) { /* VOS mode */
+	if (tsc->tsc_pmem_file) /* VOS mode */
 		vos_cont_close(tsc->tsc_coh);
-
-	} else if (tsc->tsc_mpi_rank == 0) { /* DAOS mode */
-		/* rank 0 does collective close and destroy */
+	else /* DAOS mode */
 		daos_cont_close(tsc->tsc_coh, NULL);
-	}
+
 	/* NB: no container destroy at here, it will be destroyed by pool
 	 * destroy later. This is because container destroy could be too
 	 * expensive after performance tests.

@@ -75,8 +75,8 @@ struct dc_obj_shard {
 	/** list to the container */
 	d_list_t		do_co_list;
 	uint32_t		do_shard;	/* shard index */
-	uint32_t		do_target_id;	/* target id */
-	uint32_t		do_target_idx;	/* target xstream index */
+	uint32_t		do_target_id;	/* target id (unique in pool) */
+	uint32_t		do_target_idx;	/* target VOS index in node */
 	uint32_t		do_target_rank;
 	uint32_t		do_rebuilding:1;
 	/** point back to object */
