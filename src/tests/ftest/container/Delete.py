@@ -53,7 +53,6 @@ class DeleteContainerTest(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
 
         self.server_group = self.params.get("server_group",'/server/',
                                            'daos_server')
@@ -67,26 +66,24 @@ class DeleteContainerTest(Test):
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.POOL = None
-        self.CONTAINER = None
+        self.pool = None
+        self.container = None
 
-        self.hostfile = None
+        self.hostlist = None
         self.hostlist = self.params.get("test_machines",'/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
-        try:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
-        finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_container_delete(self):
         """
         Test basic container delete
-        :avocado: tags=regression,cont,vm
+        :avocado: tags=regression,cont,vm,contdelete
         """
+
+        self.pool = None
 
         expected_for_param = []
         uuidlist  = self.params.get("uuid",'/run/createtests/ContainerUUIDS/*/')
@@ -111,48 +108,38 @@ class DeleteContainerTest(Test):
                 expected_result = 'FAIL'
                 break
 
-        # special expected result for a specific case:
-        # valid pool handle + valid container UUID, container opened, force destroy > 0
-        if opened and force > 0 and not contUUID == 'INVALID' and poh == 'VALID':
-            expected_result = 'PASS'
-
         try:
 
             # initialize a python pool object then create the underlying
             # daos storage
-            self.POOL = DaosPool(self.Context)
-            self.POOL.create(self.createmode, self.createuid, self.creategid,
+            self.pool = DaosPool(self.Context)
+            self.pool.create(self.createmode, self.createuid, self.creategid,
                              self.createsize, self.createsetid, None)
 
             # need a connection to create container
-            self.POOL.connect(1 << 1)
-            self.CONTAINER = DaosContainer(self.Context)
+            self.pool.connect(1 << 1)
+            self.container = DaosContainer(self.Context)
 
             # create should always work (testing destroy)
             if not contUUID == 'INVALID':
                 contUUID = uuid.UUID(uuidlist[0])
-                self.CONTAINER.create(self.POOL.handle, contUUID)
+                self.container.create(self.pool.handle, contUUID)
             else:
-                self.CONTAINER.create(self.POOL.handle)
+                self.container.create(self.pool.handle)
 
             # Opens the container if required
             if opened:
-                self.CONTAINER.open(self.POOL.handle)
+                self.container.open(self.pool.handle)
 
             # wait a few seconds and then attempds to destroy container
             time.sleep(5)
             if poh == 'VALID':
-                poh = self.POOL.handle
+                poh = self.pool.handle
             # if container is INVALID, overwrite with non existing UUID
             if contUUID == 'INVALID':
                 contUUID = uuid.uuid4()
-            self.CONTAINER.destroy(force, poh, contUUID)
-            self.CONTAINER = None
-
-            # cleanup the pool
-            #self.POOL.disconnect()
-            self.POOL.destroy(1)
-            self.POOL = None
+            self.container.destroy(force, poh, contUUID)
+            self.container = None
 
             if expected_result in ['FAIL']:
                     self.fail("Test was expected to fail but it passed.\n")
@@ -162,6 +149,11 @@ class DeleteContainerTest(Test):
             print(traceback.format_exc())
             if expected_result == 'PASS':
                     self.fail("Test was expected to pass but it failed.\n")
+        finally:
+            # cleanup the pool
+            if self.pool is not None:
+                self.pool.destroy(1)
+
 
 if __name__ == "__main__":
     main()

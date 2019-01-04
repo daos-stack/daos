@@ -43,8 +43,6 @@ class SimpleCreateDeleteTest(Test):
     """
     Tests DAOS container basics including create, destroy, open, query
     and close.
-
-    :avocado: tags=container,containercreate,containerdestroy,basecont
     """
     def setUp(self):
 
@@ -52,7 +50,6 @@ class SimpleCreateDeleteTest(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
 
         self.server_group = self.params.get("server_group",'/server/',
                                            'daos_server')
@@ -71,11 +68,12 @@ class SimpleCreateDeleteTest(Test):
         :avocado: tags=container,containercreate,containerdestroy,basecont
         """
 
-        hostfile = None
+        pool = None
+        hostlist = None
 
         try:
-            self.hostlist = self.params.get("test_machines",'/run/hosts/*')
-            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+            hostlist = self.params.get("test_machines",'/run/hosts/*')
+            hostfile = WriteHostFile.WriteHostFile(hostlist, self.workdir)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
@@ -91,37 +89,33 @@ class SimpleCreateDeleteTest(Test):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            POOL = DaosPool(self.Context)
-            POOL.create(createmode, createuid, creategid,
+            pool = DaosPool(self.Context)
+            pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
             # need a connection to create container
-            POOL.connect(1 << 1)
+            pool.connect(1 << 1)
 
             # create a container
-            CONTAINER = DaosContainer(self.Context)
-            CONTAINER.create(POOL.handle)
+            container = DaosContainer(self.Context)
+            container.create(pool.handle)
 
             # now open it
-            CONTAINER.open()
+            container.open()
 
             # do a query and compare the UUID returned from create with
             # that returned by query
-            CONTAINER.query()
+            container.query()
 
-            if CONTAINER.get_uuid_str() != c_uuid_to_str(
-                    CONTAINER.info.ci_uuid):
+            if container.get_uuid_str() != c_uuid_to_str(
+                    container.info.ci_uuid):
                 self.fail("Container UUID did not match the one in info'n")
 
-            CONTAINER.close()
+            container.close()
 
             # wait a few seconds and then destroy
             time.sleep(5)
-            CONTAINER.destroy()
-
-            # cleanup the pool
-            POOL.disconnect()
-            POOL.destroy(1)
+            container.destroy()
 
         except DaosApiError as e:
             print(e)
@@ -130,11 +124,12 @@ class SimpleCreateDeleteTest(Test):
         except Exception as e:
             self.fail("Daos code segfaulted most likely, error: %s" % e)
         finally:
-            try:
-                if hostfile is not None:
-                    os.remove(hostfile)
-            finally:
-                ServerUtils.stopServer(hosts=self.hostlist)
+            # cleanup the pool
+            if pool is not None:
+                pool.disconnect()
+                pool.destroy(1)
+
+            ServerUtils.stopServer(hosts=hostlist)
 
 if __name__ == "__main__":
     main()

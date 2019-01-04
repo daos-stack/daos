@@ -34,10 +34,6 @@ createtests:
       uuid:
         - NULL
         - FAIL
-    misformeduuid:
-      uuid:
-        - MFUUID
-        - FAIL
   handles: !mux
     goodpoh:
       poh:

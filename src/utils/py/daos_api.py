@@ -424,18 +424,18 @@ class DaosObj(object):
 
         func.restype = DaosObjId
         self.c_oid = func(objcls, 0, 0)
+
         if rank is not None:
             self.c_oid.hi |= rank << 24
 
-    def open(self, epoch=0):
+    def open(self):
         """ open the object so we can interact with it """
-        func = self.context.get_function('open-obj')
 
-        c_epoch = ctypes.c_uint64(epoch)
-        c_mode = ctypes.c_uint(4)
+        c_mode = ctypes.c_uint(2)
         self.oh = ctypes.c_uint64(0)
 
-        rc = func(self.container.coh, self.c_oid, c_epoch, c_mode,
+        func = self.context.get_function('open-obj')
+        rc = func(self.container.coh, self.c_oid, c_mode,
                   ctypes.byref(self.oh), None)
         if rc != 0:
             raise DaosApiError("Object open returned non-zero. RC: {0}"
@@ -451,7 +451,7 @@ class DaosObj(object):
                                  .format(rc))
             self.oh = None
 
-    def refresh_attr(self, epoch):
+    def refresh_attr(self, tx):
         """ Get object attributes and save internally
 
             NOTE: THIS FUNCTION ISN'T IMPLEMENTED ON THE DAOS SIDE
@@ -462,13 +462,13 @@ class DaosObj(object):
         if self.oh is None:
             self.open()
 
-        c_epoch = ctypes.c_uint64(epoch)
+        c_tx = ctypes.c_uint64(tx)
         rank_list = ctypes.cast(ctypes.pointer((ctypes.c_uint32 * 5)()),
                                 ctypes.POINTER(ctypes.c_uint32))
         self.c_tgts = RankList(rank_list, 5)
 
         func = self.context.get_function('query-obj')
-        rc = func(self.oh, c_epoch, None, self.c_tgts, None)
+        rc = func(self.oh, c_tx, None, self.c_tgts, None)
 
     def get_layout(self):
         """ Get object target layout info
@@ -476,7 +476,7 @@ class DaosObj(object):
             NOTE: THIS FUNCTION ISN'T PART OF THE PUBLIC API
         """
         if self.c_oid is None:
-            raise DaosApiError("get_layout called but object is not initialized")
+            raise DaosApiError("get_layout object is not initialized")
         if self.oh is None:
             self.open()
 
@@ -492,33 +492,33 @@ class DaosObj(object):
                 self.tgt_rank_list.append(
                     obj_layout_ptr[0].ol_shards[0][0].os_ranks[i])
         else:
-            raise DaosApiError("get_layout returned non-zero. RC: {0}".format(rc))
+            raise DaosApiError("get_layout returned. RC: {0}".format(rc))
 
 
-    def punch(self, epoch, cb_func=None):
-        """ Delete this object but only from the specified epoch
+    def punch(self, tx, cb_func=None):
+        """ Delete this object but only from the specified transaction
 
         Function arguments:
-        epoch    --the epoch from which keys will be deleted.
+        tx    --the tx from which keys will be deleted.
         cb_func  --an optional callback function
         """
 
         if self.oh is None:
             self.open()
 
-        c_epoch = ctypes.c_uint64(epoch)
+        c_tx = ctypes.c_uint64(tx)
 
         # the callback function is optional, if not supplied then run the
         # punch synchronously, if its there then run it in a thread
         func = self.context.get_function('punch-obj')
         if cb_func == None:
-            rc = func(self.oh, c_epoch, None)
+            rc = func(self.oh, c_tx, None)
             if rc != 0:
                 raise DaosApiError("punch-dkeys returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
-            params = [self.oh, c_epoch, event]
+            params = [self.oh, c_tx, event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
                                        params,
@@ -528,19 +528,19 @@ class DaosObj(object):
             t.start()
 
 
-    def punch_dkeys(self, epoch, dkeys, cb_func=None):
+    def punch_dkeys(self, tx, dkeys, cb_func=None):
         """ Deletes dkeys and associated data from an object for a specific
-        epoch.
+        transaction.
 
         Function arguments:
-        epoch    --the epoch from which keys will be deleted.
+        tx    --the transaction from which keys will be deleted.
         dkeys    --the keys to be deleted, None will be passed as NULL
         cb_func  --an optional callback function
         """
         if self.oh is None:
             self.open()
 
-        c_epoch = ctypes.c_uint64(epoch)
+        c_tx = ctypes.c_uint64(tx)
 
         if dkeys is None:
             c_len_dkeys = 0
@@ -560,14 +560,14 @@ class DaosObj(object):
         # create synchronously, if its there then run it in a thread
         func = self.context.get_function('punch-dkeys')
         if cb_func == None:
-            rc = func(self.oh, c_epoch, c_len_dkeys, ctypes.byref(c_dkeys),
+            rc = func(self.oh, c_tx, c_len_dkeys, ctypes.byref(c_dkeys),
                       None)
             if rc != 0:
                 raise DaosApiError("punch-dkeys returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
-            params = [self.oh, c_epoch, c_len_dkeys, ctypes.byref(c_dkeys),
+            params = [self.oh, c_tx, c_len_dkeys, ctypes.byref(c_dkeys),
                       event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
@@ -577,21 +577,21 @@ class DaosObj(object):
                                        self))
             t.start()
 
-    def punch_akeys(self, epoch, dkey, akeys, cb_func=None):
+    def punch_akeys(self, tx, dkey, akeys, cb_func=None):
         """ Deletes akeys and associated data from a dkey/object for a specific
-        epoch.
+        transaction.
 
         Function arguments:
-        epoch    --the epoch from which keys will be deleted.
-        dkey     --the parent dkey from which the akeys will be deleted,
-                   Expecting a string
-        akeys    --a list of akeys (strings) which are to be deleted
-        cb_func  --an optional callback function
+        tx      --the transaction from which keys will be deleted.
+        dkey    --the parent dkey from which the akeys will be deleted,
+                  Expecting a string
+        akeys   --a list of akeys (strings) which are to be deleted
+        cb_func --an optional callback function
         """
         if self.oh is None:
             self.open()
 
-        c_epoch = ctypes.c_uint64(epoch)
+        c_tx = ctypes.c_uint64(tx)
 
         c_dkey_iov = IOV()
         c_dkey = ctypes.create_string_buffer(dkey)
@@ -613,14 +613,14 @@ class DaosObj(object):
         # create synchronously, if its there then run it in a thread
         func = self.context.get_function('punch-akeys')
         if cb_func == None:
-            rc = func(self.oh, c_epoch, ctypes.byref(c_dkey_iov), c_len_akeys,
+            rc = func(self.oh, c_tx, ctypes.byref(c_dkey_iov), c_len_akeys,
                       ctypes.byref(c_akeys), None)
             if rc != 0:
                 raise DaosApiError("punch-akeys returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
-            params = [self.oh, c_epoch, ctypes.byref(c_dkey_iov), c_len_akeys,
+            params = [self.oh, c_tx, ctypes.byref(c_dkey_iov), c_len_akeys,
                       ctypes.byref(c_akeys), event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
@@ -663,7 +663,9 @@ class IORequest(object):
         self.iod = DaosIODescriptor()
         ctypes.memset(ctypes.byref(self.iod.iod_kcsum), 0, 16)
 
+        # epoch range still in IOD for some reason
         self.epoch_range = EpochRange()
+        self.tx = 0
 
         cs = CheckSum()
         cs.cs_sum = ctypes.pointer(ctypes.create_string_buffer(32))
@@ -675,7 +677,7 @@ class IORequest(object):
         """ cleanup this request """
         pass
 
-    def insert_array(self, dkey, akey, c_data, epoch):
+    def insert_array(self, dkey, akey, c_data, tx):
         """
         Setup the I/O Vector and I/O descriptor for an array insertion.
         This function is limited to a single descriptor and a single
@@ -696,8 +698,11 @@ class IORequest(object):
         self.sgl.sg_nr = len(c_data)
         self.sgl.sg_nr_out = len(c_data)
 
-        self.epoch_range.epr_lo = epoch
+        self.epoch_range.epr_lo = 0
         self.epoch_range.epr_hi = ~0
+
+        self.tx = tx
+        c_tx = ctypes.c_uint64(tx)
 
         extent = Extent()
         extent.rx_idx = 0
@@ -722,20 +727,22 @@ class IORequest(object):
         dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
         dkey_iov.iov_len = ctypes.sizeof(dkey)
 
-        rc = func(self.obj.oh, self.epoch_range.epr_lo, ctypes.byref(dkey_iov),
+        rc = func(self.obj.oh, c_tx, ctypes.byref(dkey_iov),
                   1, ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if rc != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
                              .format(rc))
 
-    def fetch_array(self, dkey, akey, rec_count, rec_size, epoch):
+    def fetch_array(self, dkey, akey, rec_count, rec_size, tx):
         """
         dkey --1st level key for the array value
         akey --2nd level key for the array value
         rec_count --how many array indices (records) to retrieve
         rec_size --size in bytes of a single record
-        epoch --which epoch to read the value from
+        tx --which transaction to read the value from
         """
+
+        c_tx = ctypes.c_uint64(tx)
 
         # setup the descriptor, we are only handling a single descriptor that
         # covers an arbitrary number of consecutive array entries
@@ -772,7 +779,7 @@ class IORequest(object):
         # now do it
         func = self.context.get_function('fetch-obj')
 
-        rc = func(self.obj.oh, epoch, ctypes.byref(dkey_iov), 1,
+        rc = func(self.obj.oh, c_tx, ctypes.byref(dkey_iov), 1,
                   ctypes.byref(self.iod), ctypes.byref(self.sgl), None, None)
         if rc != 0:
             raise DaosApiError("Array fetch returned non-zero. RC: {0}"
@@ -786,14 +793,15 @@ class IORequest(object):
                                            rec_size.value))
         return output
 
-    def single_insert(self, dkey, akey, value, size, epoch):
+    def single_insert(self, dkey, akey, value, size, tx):
         """
-        dkey --1st level key for the array value
-        akey --2nd level key for the array value
+        dkey  --1st level key for the array value
+        akey  --2nd level key for the array value
         value --string value to insert
-        size --size of the string
-        epoch --which epoch to write to
+        size  --size of the string
+        tx    --which transaction to write to
         """
+        c_tx = ctypes.c_uint64(tx)
 
         # put the data into the scatter gather list
         sgl_iov = IOV()
@@ -808,7 +816,7 @@ class IORequest(object):
         self.sgl.sg_nr = 1
         self.sgl.sg_nr_out = 1
 
-        self.epoch_range.epr_lo = epoch
+        self.epoch_range.epr_lo = 0
         self.epoch_range.epr_hi = ~0
 
         # setup the descriptor
@@ -826,8 +834,6 @@ class IORequest(object):
             iod_ptr = None
 
         # now do it
-        func = self.context.get_function('update-obj')
-
         if dkey is not None:
             dkey_iov = IOV()
             dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
@@ -837,23 +843,26 @@ class IORequest(object):
         else:
             dkey_ptr = None
 
-        rc = func(self.obj.oh, self.epoch_range.epr_lo, dkey_ptr, 1,
+        func = self.context.get_function('update-obj')
+        rc = func(self.obj.oh, c_tx, dkey_ptr, 1,
                   ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if rc != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
                              .format(rc))
 
-    def single_fetch(self, dkey, akey, size, epoch, test_hints=[]):
+    def single_fetch(self, dkey, akey, size, tx, test_hints=[]):
         """
         dkey --1st level key for the single value
         akey --2nd level key for the single value
         size --size of the string
-        epoch --which epoch to read from
+        tx --which transaction to read from
         test_hints --optional set of values that allow for error injection,
             supported values 'sglnull', 'iodnull'.
 
         a string containing the value is returned
         """
+        c_tx = ctypes.c_uint64(tx)
+
         if any("sglnull" in s for s in test_hints):
             sgl_ptr = None
             buf = ctypes.create_string_buffer(0)
@@ -870,7 +879,7 @@ class IORequest(object):
 
             sgl_ptr = ctypes.pointer(self.sgl)
 
-        self.epoch_range.epr_lo = epoch
+        self.epoch_range.epr_lo = 0
         self.epoch_range.epr_hi = ~0
 
         # setup the descriptor
@@ -899,14 +908,14 @@ class IORequest(object):
 
         # now do it
         func = self.context.get_function('fetch-obj')
-        rc = func(self.obj.oh, self.epoch_range.epr_lo, dkey_ptr,
+        rc = func(self.obj.oh, c_tx, dkey_ptr,
                   1, iod_ptr, sgl_ptr, None, None)
         if rc != 0:
             raise DaosApiError("Object fetch returned non-zero. RC: {0}"
                              .format(rc))
         return buf
 
-    def multi_akey_insert(self, dkey, data, epoch):
+    def multi_akey_insert(self, dkey, data, tx):
         """
         Update object with with multiple values, where each value is tagged
         with an akey.  This is a bit of a mess but need to refactor all the
@@ -914,8 +923,10 @@ class IORequest(object):
 
         dkey  --1st level key for the values
         data  --a list of tuples (akey, value)
-        epoch --which epoch to write to
+        tx --which transaction to write to
         """
+
+        c_tx = ctypes.c_uint64(tx)
 
         # put the data into the scatter gather list
         count = len(data)
@@ -956,13 +967,13 @@ class IORequest(object):
 
         # now do it
         func = self.context.get_function('update-obj')
-        rc = func(self.obj.oh, epoch, dkey_ptr, c_count,
+        rc = func(self.obj.oh, c_tx, dkey_ptr, c_count,
                   iod_ptr, sgl_ptr, None)
         if rc != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
                              .format(rc))
 
-    def multi_akey_fetch(self, dkey, keys, epoch):
+    def multi_akey_fetch(self, dkey, keys, tx):
         """
         Retrieve multiple akeys & associated data.  This is kind of a mess but
         will refactor all the I/O functions at some point.
@@ -970,10 +981,11 @@ class IORequest(object):
         dkey --1st level key for the array value
         keys --a list of tuples where each tuple is an (akey, size), where size
              is the size of the data for that key
-        epoch --which epoch to read from
+        tx --which tx to read from
 
         returns a dictionary containing the akey:value pairs
         """
+        c_tx = ctypes.c_uint64(tx)
 
         # create scatter gather list to hold the returned data also
         # create the descriptor
@@ -1013,12 +1025,11 @@ class IORequest(object):
         # now do it
         func = self.context.get_function('fetch-obj')
 
-        rc = func(self.obj.oh, epoch, ctypes.byref(dkey_iov),
+        rc = func(self.obj.oh, c_tx, ctypes.byref(dkey_iov),
                   c_count, ctypes.byref(iods), sgl_ptr, None, None)
         if rc != 0:
             raise DaosApiError("multikey fetch returned non-zero. RC: {0}"
                              .format(rc))
-
         result = {}
         i = 0
         for sgl in sgl_list:
@@ -1096,7 +1107,7 @@ class DaosContainer(object):
         if cb_func == None:
             rc = func(self.poh, self.uuid, c_force, None)
             if rc != 0:
-                raise DaosApiError("Container destroy returned non-zero. RC: {0}"
+                raise DaosApiError("Cntnr destroy returned non-zero. RC: {0}"
                                  .format(rc))
         else:
             event = DaosEvent()
@@ -1201,47 +1212,37 @@ class DaosContainer(object):
             t.start()
         return None
 
-    def get_new_epoch(self):
-        """ get the next epoch for this container """
+    def get_new_tx(self):
+        """ start a transaction on this container """
 
         # container should be  in the open state
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
 
-        epoch = 0
-        c_epoch = ctypes.c_uint64(epoch)
+        tx = 0
+        c_tx = ctypes.c_uint64(tx)
 
-        func = self.context.get_function('get-epoch')
-        rc = func(self.coh, ctypes.byref(c_epoch), None, None)
+        func = self.context.get_function('open-tx')
+        rc = func(self.coh, ctypes.byref(c_tx), None)
         if rc != 0:
-            raise DaosApiError("Epoch hold returned non-zero. RC: {0}"
+            raise DaosApiError("tx open returned non-zero. RC: {0}"
                              .format(rc))
 
-        return c_epoch.value;
+        return c_tx.value;
 
-    def commit_epoch(self, epoch):
-        """ close out an epoch that is done being modified """
+    def commit_tx(self, tx):
+        """ close out a transaction that is done being modified """
 
         # container should be  in the open state
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
 
-        func = self.context.get_function('commit-epoch')
-        rc = func(self.coh, epoch, None, None)
+        c_tx = ctypes.c_uint64(tx)
+
+        func = self.context.get_function('commit-tx')
+        rc = func(c_tx, None)
         if rc != 0:
-            raise DaosApiError("Epoch commit returned non-zero. RC: {0}"
-                             .format(rc))
-
-    def consolidate_epochs(self):
-        """ consolidate all committed epochs """
-
-        # make sure epoch info is up to date
-        self.query()
-
-        func = self.context.get_function('slip-epoch')
-        rc = func(self.coh, self.info.es_hce, None, None)
-        if rc != 0:
-            raise DaosApiError("Epoch slip returned non-zero. RC: {0}"
+            raise DaosApiError("TX commit returned non-zero. RC: {0}"
                              .format(rc))
 
     def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
@@ -1259,8 +1260,7 @@ class DaosContainer(object):
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
 
-        epoch = self.get_new_epoch()
-        c_epoch = ctypes.c_uint64(epoch)
+        tx = self.get_new_tx()
 
         # build a list of tuples where each tuple contains one of the array
         # values and its length in bytes (characters since really expecting
@@ -1273,9 +1273,9 @@ class DaosContainer(object):
 
         # oid can be None in which case a new one is created
         ioreq = IORequest(self.context, self, obj, rank, 2, objtype=obj_cls)
-        ioreq.insert_array(c_dkey, c_akey, c_values, c_epoch)
-        self.commit_epoch(c_epoch)
-        return ioreq.obj, c_epoch.value
+        ioreq.insert_array(c_dkey, c_akey, c_values, tx)
+        self.commit_tx(tx)
+        return ioreq.obj, tx
 
     def write_an_obj(self, thedata, size, dkey, akey, obj=None, rank=None,
                      obj_cls=13):
@@ -1290,8 +1290,7 @@ class DaosContainer(object):
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
 
-        epoch = self.get_new_epoch()
-        c_epoch = ctypes.c_uint64(epoch)
+        tx = self.get_new_tx()
 
         if thedata is not None:
             c_value = ctypes.create_string_buffer(thedata)
@@ -1310,9 +1309,9 @@ class DaosContainer(object):
 
         # obj can be None in which case a new one is created
         ioreq = IORequest(self.context, self, obj, rank, objtype=obj_cls)
-        ioreq.single_insert(c_dkey, c_akey, c_value, c_size, c_epoch)
-        self.commit_epoch(c_epoch)
-        return ioreq.obj, c_epoch.value
+        ioreq.single_insert(c_dkey, c_akey, c_value, c_size, tx)
+        self.commit_tx(tx)
+        return ioreq.obj, tx
 
     def write_multi_akeys(self, dkey, data, obj=None, rank=None):
         """
@@ -1332,8 +1331,7 @@ class DaosContainer(object):
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
 
-        epoch = self.get_new_epoch()
-        c_epoch = ctypes.c_uint64(epoch)
+        tx = self.get_new_tx()
 
         if dkey is None:
             c_dkey = None
@@ -1349,11 +1347,11 @@ class DaosContainer(object):
         # obj can be None in which case a new one is created
         ioreq = IORequest(self.context, self, obj, rank)
 
-        ioreq.multi_akey_insert(c_dkey, c_data, c_epoch)
-        self.commit_epoch(c_epoch)
-        return ioreq.obj, c_epoch.value
+        ioreq.multi_akey_insert(c_dkey, c_data, tx)
+        self.commit_tx(tx)
+        return ioreq.obj, tx
 
-    def read_an_array(self, rec_count, rec_size, dkey, akey, obj, epoch):
+    def read_an_array(self, rec_count, rec_size, dkey, akey, obj, tx):
         """
         Reads an array value from the specified object.
 
@@ -1370,19 +1368,18 @@ class DaosContainer(object):
         c_rec_size = ctypes.c_size_t(rec_size)
         c_dkey = ctypes.create_string_buffer(dkey)
         c_akey = ctypes.create_string_buffer(akey)
-        c_epoch = ctypes.c_uint64(epoch)
 
         ioreq = IORequest(self.context, self, obj)
         buf = ioreq.fetch_array(c_dkey, c_akey, c_rec_count,
-                                c_rec_size, c_epoch)
+                                c_rec_size, tx)
         return buf
 
-    def read_multi_akeys(self, dkey, data, obj, epoch):
+    def read_multi_akeys(self, dkey, data, obj, tx):
         """ read multiple values as given by their akeys
 
         dkey  --which dkey to read from
         obj   --which object to read from
-        epoch --which epoch to read from
+        tx    --which tx to read from
         data  --a list of tuples (akey, size) where akey is
                 the 2nd level key, size is the maximum data
                 size for the paired akey
@@ -1395,7 +1392,6 @@ class DaosContainer(object):
             raise DaosApiError("Container needs to be open.")
 
         c_dkey = ctypes.create_string_buffer(dkey)
-        c_epoch = ctypes.c_uint64(epoch)
 
         c_data = []
         for tup in data:
@@ -1404,10 +1400,10 @@ class DaosContainer(object):
             c_data.append(newtup)
 
         ioreq = IORequest(self.context, self, obj)
-        buf = ioreq.multi_akey_fetch(c_dkey, c_data, c_epoch)
+        buf = ioreq.multi_akey_fetch(c_dkey, c_data, tx)
         return buf
 
-    def read_an_obj(self, size, dkey, akey, obj, epoch, test_hints=[]):
+    def read_an_obj(self, size, dkey, akey, obj, tx, test_hints=[]):
         """ read a single value from an object in this container """
 
         # container should be  in the open state
@@ -1420,10 +1416,9 @@ class DaosContainer(object):
         else:
             c_dkey = ctypes.create_string_buffer(dkey)
         c_akey = ctypes.create_string_buffer(akey)
-        c_epoch = ctypes.c_uint64(epoch)
 
         ioreq = IORequest(self.context, self, obj)
-        buf = ioreq.single_fetch(c_dkey, c_akey, size, c_epoch, test_hints)
+        buf = ioreq.single_fetch(c_dkey, c_akey, size, tx, test_hints)
         return buf
 
     def local2global(self):
@@ -1437,7 +1432,7 @@ class DaosContainer(object):
         func = self.context.get_function("convert-clocal")
         rc = func(self.coh, ctypes.byref(c_glob))
         if rc != 0:
-            raise DaosApiError("Container local2global returned non-zero. RC: {0}"
+            raise DaosApiError("Cntnr local2global returned non-zero. RC: {0}"
                              .format(rc))
         # now call it for real
         c_buf = ctypes.create_string_buffer(c_glob.iov_buf_len)
@@ -1462,7 +1457,7 @@ class DaosContainer(object):
 
         rc = func(self.poh, c_glob, ctypes.byref(local_handle))
         if rc != 0:
-            raise DaosApiError("Container global2local returned non-zero. RC: {0}"
+            raise DaosApiError("Cntnr global2local returned non-zero. RC: {0}"
                              .format(rc))
         self.coh = local_handle
         return local_handle
@@ -1563,49 +1558,46 @@ class DaosContainer(object):
                                        self))
             t.start()
 
-    def get_attr(self, coh=None, data=None, cb_func=None):
+    def get_attr(self, attr_names, coh=None, cb_func=None):
         """
-        Retrieve a list of user-defined container attribute values.
+        Retrieve a list of user-defined container attribute values.  Note the
+        presumption that no value is larger than 100 chars.
         Args:
+            attr_names[Required]:     Attribute name list
             coh [Optional]:     Container Handler
-            data[Required]:     Dictionary of Attribute name and value.
             cb_func[Optional]:  To run API in Asynchronous mode.
         return:
-            buffer[list]:       Requested Attributes value.
+            dictionary containing the requested attributes as key:value pairs.
         """
-        if not data:
-            raise DaosApiError("Attribute data should not be blank")
+        if not attr_names:
+            raise DaosApiError("Attribute names should not be empty")
 
+        # you can override handle for testing purposes
         if coh is not None:
             self.coh = coh
 
-        func = self.context.get_function('get-attr')
-        att_names = (ctypes.c_char_p * len(data))(*list(data.keys()))
-        names = ctypes.cast(att_names, ctypes.POINTER(ctypes.c_char_p))
+        attr_count = len(attr_names)
+        attr_names_c = (ctypes.c_char_p * attr_count)(*attr_names)
 
-        no_of_att = ctypes.c_int(len(data))
-        buffers = ctypes.c_char_p * len(data)
+        no_of_att = ctypes.c_int(attr_count)
+        buffers = ctypes.c_char_p * attr_count
         buffer = buffers(*[ctypes.c_char_p(ctypes.create_string_buffer(100).raw)
-                           for i in xrange(len(data))])
+                           for i in xrange(attr_count)])
 
-        size_of_att_val = []
-        for key in data.keys():
-            if data[key] is not None:
-                size_of_att_val.append(len(data[key]))
-            else:
-                size_of_att_val.append(0)
-        sizes = (ctypes.c_size_t * len(data))(*size_of_att_val)
+        size_of_att_val = [100] * attr_count
+        sizes = (ctypes.c_size_t * attr_count)(*size_of_att_val)
 
+        func = self.context.get_function('get-attr')
         if cb_func is None:
-            rc = func(self.coh, no_of_att, names, ctypes.byref(buffer), sizes,
-                      None)
+            rc = func(self.coh, no_of_att, ctypes.byref(attr_names_c),
+                      ctypes.byref(buffer), sizes, None)
             if rc != 0:
                 raise DaosApiError("Container Get Attribute returned non-zero.\
                 RC: {0}".format(rc))
         else:
             event = DaosEvent()
-            params = [self.coh, no_of_att, names, ctypes.byref(buffer), sizes,
-                      event]
+            params = [self.coh, no_of_att, ctypes.byref(attr_names_c),
+                      ctypes.byref(buffer), sizes, event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
                                        params,
@@ -1613,7 +1605,14 @@ class DaosContainer(object):
                                        cb_func,
                                        self))
             t.start()
-        return buffer
+
+        results = {}
+        i = 0
+        for attr in attr_names:
+            results[attr] = buffer[i]
+            i += 1
+
+        return results
 
 class DaosServer(object):
     """Represents a DAOS Server"""
@@ -1655,7 +1654,8 @@ class DaosContext(object):
             'add-target'     : self.libdaos.daos_pool_add_tgt,
             'close-cont'     : self.libdaos.daos_cont_close,
             'close-obj'      : self.libdaos.daos_obj_close,
-            #'commit-epoch'   : self.libdaos.daos_epoch_commit,
+            'close-tx'       : self.libdaos.daos_tx_close,
+            'commit-tx'      : self.libdaos.daos_tx_commit,
             'connect-pool'   : self.libdaos.daos_pool_connect,
             'convert-cglobal': self.libdaos.daos_cont_global2local,
             'convert-clocal' : self.libdaos.daos_cont_local2global,
@@ -1668,6 +1668,7 @@ class DaosContext(object):
             'destroy-cont'   : self.libdaos.daos_cont_destroy,
             'destroy-eq'     : self.libdaos.daos_eq_destroy,
             'destroy-pool'   : self.libdaos.daos_pool_destroy,
+            'destroy-tx'     : self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'evict-client'   : self.libdaos.daos_pool_evict,
             'exclude-target' : self.libdaos.daos_pool_exclude,
@@ -1675,7 +1676,6 @@ class DaosContext(object):
             'fetch-obj'      : self.libdaos.daos_obj_fetch,
             'generate-oid'   : self.libtest.dts_oid_gen,
             'get-attr'       : self.libdaos.daos_cont_get_attr,
-            #'get-epoch'      : self.libdaos.daos_epoch_hold,
             'get-layout'     : self.libdaos.daos_obj_layout_get,
             'init-event'     : self.libdaos.daos_event_init,
             'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
@@ -1683,6 +1683,7 @@ class DaosContext(object):
             'list-attr'      : self.libdaos.daos_cont_list_attr,
             'open-cont'      : self.libdaos.daos_cont_open,
             'open-obj'       : self.libdaos.daos_obj_open,
+            'open-tx'        : self.libdaos.daos_tx_open,
             'poll-eq'        : self.libdaos.daos_eq_poll,
             'punch-akeys'    : self.libdaos.daos_obj_punch_akeys,
             'punch-dkeys'    : self.libdaos.daos_obj_punch_dkeys,
@@ -1692,7 +1693,6 @@ class DaosContext(object):
             'query-pool'     : self.libdaos.daos_pool_query,
             'query-target'   : self.libdaos.daos_pool_query_target,
             'set-attr'       : self.libdaos.daos_cont_set_attr,
-            #'slip-epoch'     : self.libdaos.daos_epoch_slip,
             'stop-service'   : self.libdaos.daos_pool_stop_svc,
             'test-event'     : self.libdaos.daos_event_test,
             'update-obj'     : self.libdaos.daos_obj_update}

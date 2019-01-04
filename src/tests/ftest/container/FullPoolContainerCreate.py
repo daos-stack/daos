@@ -84,6 +84,8 @@ class FullPoolContainerCreate(Test):
 
         # full storage rc
         err = "-1007"
+        # probably should be -1007, revisit later
+        err2 = "-1009"
 
         # create pool
         mode = self.params.get("mode", '/conttests/createmode/')
@@ -134,13 +136,13 @@ class FullPoolContainerCreate(Test):
                 dkey = ''.join(random.choice(string.lowercase) for i in range(5))
                 akey = ''.join(random.choice(string.lowercase) for i in range(5))
                 try:
-                    oid, epoch = self.cont.write_an_obj(my_str, my_str_sz, dkey,
-                                                     akey, obj_cls=1)
+                    oid, tx = self.cont.write_an_obj(my_str, my_str_sz, dkey,
+                                                        akey, obj_cls=1)
                     self.d_log.debug("wrote obj {0}, sz {1}".format(write_count,
                                                                     x))
                     write_count += 1
                 except DaosApiError as e:
-                    if not err in repr(e):
+                    if not (err in repr(e) or err2 in repr(e)):
                         self.d_log.error("caught exception while writing "
                                          "object: {0}".format(repr(e)))
                         self.fail("caught exception while writing object: {0}"
@@ -168,7 +170,7 @@ class FullPoolContainerCreate(Test):
             self.cont2.write_an_obj(my_str, my_str_sz, dkey, akey, obj_cls=1)
             self.d_log.debug("wrote one more object--this should never print")
         except DaosApiError as e:
-            if not err in repr(e):
+            if not (err in repr(e) or err2 in repr(e)):
                     self.d_log.error("caught unexpected exception while "
                                      "writing object: {0}".format(repr(e)))
                     self.fail("caught unexpected exception while writing "

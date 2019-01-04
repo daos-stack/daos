@@ -4,7 +4,7 @@ hosts: !mux
     test_machines1:
       test_machines:
         - boro-A
-timeout: 300
+timeout: 50
 server:
   server_group: daos_server
 attrtests:
@@ -72,8 +72,7 @@ attrtests:
       value:
         - "! @#$%^&*()_+{}|:<>?-=[];',./"
         - PASS
-#Defect DAOS-1330, enable after it resolved as server is getting Assert
-#    null:
-#      value:
-#        - NULL
-#        - FAIL
+    null:
+      value:
+        - NULL
+        - FAIL
