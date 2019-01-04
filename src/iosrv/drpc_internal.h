@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,11 @@
  */
 
 /**
- * ds_drpc: dRPC server library internal declarations
+ * drpc_listener: dRPC Listener
+ *
+ * The dRPC listener is a thread that sets up a UNIX Domain Socket to listen for
+ * local client connections and processes dRPC messages from those clients. It
+ * is expected to stay alive for the life of the I/O server.
  */
 
 #ifndef __DAOS_DRPC_INTERNAL_H__
@@ -32,12 +36,17 @@
 #include <gurt/list.h>
 
 /**
+ * Path to the Unix Domain Socket used by the dRPC listener thread
+ */
+extern char *drpc_listener_socket_path;
+
+/**
  * Context for listener's drpc_progress loop. Includes the context for the
  * listener, and a list of contexts for all open sessions.
  */
 struct drpc_progress_context {
-	struct drpc *listener_ctx; /** Just a pointer, not a copy */
-	d_list_t session_ctx_list; /** Head of the session list */
+	struct drpc	*listener_ctx; /** Just a pointer, not a copy */
+	d_list_t	session_ctx_list; /** Head of the session list */
 };
 
 /**
@@ -45,10 +54,28 @@ struct drpc_progress_context {
  * Used for the session_ctx_list in drpc_progress_context.
  */
 struct drpc_list {
-	struct drpc *ctx; /** Just a pointer, not a copy */
-	d_list_t link; /** Linked list metadata */
+	struct drpc	*ctx; /** Just a pointer, not a copy */
+	d_list_t	link; /** Linked list metadata */
 };
 
+/**
+ * Create a new drpc_progress_context using a valid listener that is already
+ * open on a socket.
+ *
+ * \param	listener	Valid drpc listener context
+ *
+ * \return	Newly allocated drpc_progress_context, or NULL if none created
+ */
+struct drpc_progress_context *drpc_progress_context_create(
+		struct drpc *listener);
+
+/**
+ * Close all open drpc contexts in the drpc_progress_context, including the
+ * listener, and free the structure.
+ *
+ * \param	ctx		Valid drpc_progress_context
+ */
+void drpc_progress_context_close(struct drpc_progress_context *ctx);
 
 /**
  * Check drpc contexts for activity, and handle that activity.
@@ -71,5 +98,29 @@ struct drpc_list {
  *		-DER_UNKNOWN		Unexpected error
  */
 int drpc_progress(struct drpc_progress_context *ctx, int timeout);
+
+/**
+ * Start up the dRPC listener thread.
+ *
+ * \return	0	Success
+ *		Error code if failed to start ULT
+ */
+int drpc_listener_init(void);
+
+/**
+ * Shut down the dRPC listener thread and clean up any open connections.
+ *
+ * Waits for the listener thread to complete before returning.
+ *
+ * \return	0	Success
+ */
+int drpc_listener_fini(void);
+
+/**
+ * Fetch the socket path for the dRPC listener.
+ *
+ * @return	The path being used for the socket
+ */
+const char *drpc_listener_get_socket_path(void);
 
 #endif /* __DAOS_DRPC_INTERNAL_H__ */

@@ -88,6 +88,7 @@ cleanup_drpc_list(d_list_t *list)
 
 	d_list_for_each_entry_safe(current, next, list, link) {
 		d_list_del(&current->link);
+		free_drpc(current->ctx);
 		D_FREE(current);
 	}
 }
@@ -95,7 +96,7 @@ cleanup_drpc_list(d_list_t *list)
 void
 cleanup_drpc_progress_context(struct drpc_progress_context *ctx)
 {
-	D_FREE(ctx->listener_ctx);
+	free_drpc(ctx->listener_ctx);
 	cleanup_drpc_list(&ctx->session_ctx_list);
 }
 
@@ -608,6 +609,88 @@ test_drpc_progress_listener_fails_if_pollhup(void **state)
 	cleanup_drpc_progress_context(&ctx);
 }
 
+static void
+test_drpc_progress_context_create_with_bad_input(void **state)
+{
+	assert_null(drpc_progress_context_create(NULL));
+}
+
+static void
+test_drpc_progress_context_create_success(void **state)
+{
+	struct drpc_progress_context	*ctx;
+	struct drpc			*listener = new_drpc_with_fd(16);
+
+	ctx = drpc_progress_context_create(listener);
+
+	assert_non_null(ctx);
+	assert_ptr_equal(ctx->listener_ctx, listener);
+	assert_true(d_list_empty(&ctx->session_ctx_list));
+
+	cleanup_drpc_progress_context(ctx); /* cleans up listener too */
+	D_FREE(ctx);
+}
+
+static void
+test_drpc_progress_context_close_with_null(void **state)
+{
+	drpc_progress_context_close(NULL);
+
+	/* doesn't segfault, but nothing should happen */
+	assert_int_equal(close_call_count, 0);
+}
+
+static void
+test_drpc_progress_context_close_with_listener_only(void **state)
+{
+	struct drpc_progress_context	*ctx;
+	int				listener_fd = 16;
+
+	D_ALLOC_PTR(ctx);
+	init_drpc_progress_context(ctx, new_drpc_with_fd(listener_fd));
+
+	drpc_progress_context_close(ctx); /* should clean up everything */
+
+	/* listener should have been closed */
+	assert_int_equal(close_call_count, 1);
+	assert_int_equal(close_fd, listener_fd);
+}
+
+static void
+test_drpc_progress_context_close_with_one_session(void **state)
+{
+	struct drpc_progress_context	*ctx;
+	int				listener_fd = 29;
+	int				session_fds[] = { 2 };
+
+	D_ALLOC_PTR(ctx);
+	init_drpc_progress_context(ctx, new_drpc_with_fd(listener_fd));
+	add_sessions_to_drpc_progress_context(ctx, session_fds, 1);
+
+	drpc_progress_context_close(ctx); /* should clean up everything */
+
+	/* listener and session should have been closed */
+	assert_int_equal(close_call_count, 2);
+}
+
+static void
+test_drpc_progress_context_close_with_multi_session(void **state)
+{
+	struct drpc_progress_context	*ctx;
+	int				listener_fd = 29;
+	int				session_fds[] = { 2, 3, 4 };
+	int				num_sessions = 3;
+
+	D_ALLOC_PTR(ctx);
+	init_drpc_progress_context(ctx, new_drpc_with_fd(listener_fd));
+	add_sessions_to_drpc_progress_context(ctx, session_fds, num_sessions);
+
+	drpc_progress_context_close(ctx); /* should clean up everything */
+
+	/* listener and all sessions should have been closed */
+	assert_int_equal(close_call_count, num_sessions + 1);
+}
+
 /* Convenience macros for unit tests */
 #define DRPC_UTEST(x)	cmocka_unit_test_setup_teardown(x,	\
 		drpc_progress_test_setup, drpc_progress_test_teardown)
@@ -633,7 +716,13 @@ main(void)
 		DRPC_UTEST(test_drpc_progress_session_cleanup_if_pollerr),
 		DRPC_UTEST(test_drpc_progress_session_cleanup_if_pollhup),
 		DRPC_UTEST(test_drpc_progress_listener_fails_if_pollerr),
-		DRPC_UTEST(test_drpc_progress_listener_fails_if_pollhup)
+		DRPC_UTEST(test_drpc_progress_listener_fails_if_pollhup),
+		DRPC_UTEST(test_drpc_progress_context_create_with_bad_input),
+		DRPC_UTEST(test_drpc_progress_context_create_success),
+		DRPC_UTEST(test_drpc_progress_context_close_with_null),
+		DRPC_UTEST(test_drpc_progress_context_close_with_listener_only),
+		DRPC_UTEST(test_drpc_progress_context_close_with_one_session),
+		DRPC_UTEST(test_drpc_progress_context_close_with_multi_session)
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

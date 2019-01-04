@@ -68,6 +68,7 @@ new_drpc_call_with_module(int module_id)
 	drpc__call__init(call);
 	call->module = module_id;
 	call->method = 2;
+	call->sequence = 3;
 
 	return call;
 }

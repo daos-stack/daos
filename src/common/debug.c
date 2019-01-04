@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,7 @@ DECLARE_FAC(mgmt);
 DECLARE_FAC(bio);
 DECLARE_FAC(tests);
 DECLARE_FAC(dfs);
+DECLARE_FAC(drpc);
 
 uint64_t DB_MD; /* metadata operation */
 uint64_t DB_PL; /* placement */
@@ -106,7 +107,8 @@ static struct d_debug_bit daos_bit_dict[] = {
 	ACTION("mgmt", d_mgmt_logfac)			\
 	ACTION("tests", d_tests_logfac)			\
 	ACTION("bio", d_bio_logfac)			\
-	ACTION("dfs", d_dfs_logfac)
+	ACTION("dfs", d_dfs_logfac)			\
+	ACTION("drpc", d_drpc_logfac)
 
 #define DAOS_SETUP_FAC(name, idp)			\
 	DAOS_INIT_LOG_FAC(name, &idp)

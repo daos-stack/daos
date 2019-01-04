@@ -46,6 +46,8 @@ enum Status {
 	SUCCESS = 0;
 	SUBMITTED = 1;
 	FAILURE = 2;
+	UNKNOWN_MODULE = 3;
+	UNKNOWN_METHOD = 4;
 }
 
 /**

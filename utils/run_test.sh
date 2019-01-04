@@ -85,6 +85,7 @@ if [ -d "/mnt/daos" ]; then
     run_test build/src/security/tests/cli_security_tests
     run_test build/src/iosrv/tests/drpc_progress_tests
     run_test build/src/iosrv/tests/drpc_handler_tests
+    run_test build/src/iosrv/tests/drpc_listener_tests
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for

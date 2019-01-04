@@ -89,12 +89,16 @@ destroy_handler_list(struct dss_drpc_handler *list)
 static int
 drpc_hdlr_test_setup(void **state)
 {
+	mock_drpc_handler_setup();
+
 	return drpc_hdlr_init();
 }
 
 static int
 drpc_hdlr_test_teardown(void **state)
 {
+	mock_drpc_handler_teardown();
+
 	return drpc_hdlr_fini();
 }
 
@@ -338,6 +342,65 @@ drpc_hdlr_unregister_all_with_multiple_items(void **state)
 	destroy_handler_list(handlers);
 }
 
+static void
+drpc_hdlr_process_msg_success(void **state)
+{
+	Drpc__Response	*resp = NULL;
+	Drpc__Call	*request = new_drpc_call();
+
+	/*
+	 * Make sure we have our mock registered as the handler for this msg.
+	 * It should be called by drpc_hdlr_process_msg()
+	 */
+	drpc_hdlr_register(request->module, mock_drpc_handler);
+
+	drpc_hdlr_process_msg(request, &resp);
+
+	/* correct params passed down to the registered handler */
+	assert_int_equal(mock_drpc_handler_call_count, 1);
+	assert_int_equal(mock_drpc_handler_call->module, request->module);
+	assert_int_equal(mock_drpc_handler_call->method, request->method);
+	assert_int_equal(mock_drpc_handler_call->sequence, request->sequence);
+	assert_int_equal(mock_drpc_handler_call->body.len, request->body.len);
+	assert_ptr_equal(mock_drpc_handler_resp_ptr, &resp);
+
+	/* Got back a copy of the mocked response */
+	assert_non_null(resp);
+	assert_int_equal(resp->sequence,
+			mock_drpc_handler_resp_return->sequence);
+	assert_int_equal(resp->status, mock_drpc_handler_resp_return->status);
+	assert_int_equal(resp->body.len,
+			mock_drpc_handler_resp_return->body.len);
+
+	drpc__call__free_unpacked(request, NULL);
+	drpc__response__free_unpacked(resp, NULL);
+}
+
+static void
+drpc_hdlr_process_msg_unregistered_module(void **state)
+{
+	Drpc__Response	*resp = NULL;
+	Drpc__Call	*request = new_drpc_call();
+
+	/*
+	 * Mock is registered for a different module...
+	 */
+	drpc_hdlr_register(request->module + 1, mock_drpc_handler);
+
+	drpc_hdlr_process_msg(request, &resp);
+
+	/* handler wasn't called */
+	assert_int_equal(mock_drpc_handler_call_count, 0);
+
+	/* Response should indicate no handler for the call */
+	assert_non_null(resp);
+	assert_int_equal(resp->status, DRPC__STATUS__UNKNOWN_MODULE);
+	assert_int_equal(resp->sequence, request->sequence);
+
+	drpc__call__free_unpacked(request, NULL);
+	drpc__response__free_unpacked(resp, NULL);
+}
+
 /*
  * Tests for when the registry table is uninitialized.
  * Don't use the standard setup/teardown functions with these.
@@ -411,6 +474,8 @@ main(void)
 		UTEST(drpc_hdlr_unregister_all_with_empty_list),
 		UTEST(drpc_hdlr_unregister_all_with_one_item),
 		UTEST(drpc_hdlr_unregister_all_with_multiple_items),
+		UTEST(drpc_hdlr_process_msg_success),
+		UTEST(drpc_hdlr_process_msg_unregistered_module),
 
 		/* Uninitialized cases */
 		UTEST_NO_INIT(drpc_hdlr_register_uninitialized),

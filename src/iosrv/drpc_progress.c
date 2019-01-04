@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,11 @@
  */
 
 /**
- * ds_drpc: dRPC Listener Progress
+ * drpc_progress: dRPC Listener Progress
  *
- * This file defines the progress loop for a dRPC server listening on a socket.
- * This is part of the drpc library used by the DAOS I/O server.
+ * The listener progress is executed on each poll cycle for a dRPC server
+ * listening on a socket. This file includes the progress method, as well
+ * as functions related to its supporting data structures.
  */
 
 #include <stdlib.h>
@@ -45,9 +46,51 @@ enum unixcomm_activity {
 };
 
 struct unixcomm_poll {
-	struct unixcomm *comm;
-	enum unixcomm_activity activity;
+	struct unixcomm		*comm;
+	enum unixcomm_activity	activity;
 };
+
+struct drpc_progress_context *
+drpc_progress_context_create(struct drpc *listener)
+{
+	struct drpc_progress_context *result;
+
+	if (!drpc_is_valid_listener(listener)) {
+		return NULL;
+	}
+
+	D_ALLOC_PTR(result);
+	if (result == NULL) {
+		return NULL;
+	}
+
+	result->listener_ctx = listener;
+	D_INIT_LIST_HEAD(&result->session_ctx_list);
+
+	return result;
+}
+
+void
+drpc_progress_context_close(struct drpc_progress_context *ctx)
+{
+	struct drpc_list	*current;
+	struct drpc_list	*next;
+
+	if (ctx == NULL) {
+		return;
+	}
+
+	d_list_for_each_entry_safe(current, next, &ctx->session_ctx_list,
+			link) {
+		d_list_del(&current->link);
+		drpc_close(current->ctx);
+		D_FREE(current);
+	}
+
+	drpc_close(ctx->listener_ctx);
+
+	D_FREE(ctx);
+}
 
 static enum unixcomm_activity
 poll_events_to_unixcomm_activity(int event_bits)

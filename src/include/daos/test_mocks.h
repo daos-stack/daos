@@ -34,6 +34,7 @@
 #include <sys/un.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <abt.h>
 #include <daos/drpc.h>
 #include <daos/drpc.pb-c.h>
 
@@ -109,6 +110,10 @@ extern nfds_t poll_nfds; /* saved input */
 extern int poll_timeout; /* saved input */
 extern int poll_revents_return[1024]; /* to be returned in revents struct */
 
+void mock_unlink_setup(void);
+extern int unlink_call_count;
+extern const char *unlink_name;
+
 /* Mock to be used for the drpc->handler function pointer */
 void mock_drpc_handler_setup(void);
 void mock_drpc_handler_teardown(void);
@@ -117,5 +122,21 @@ extern Drpc__Call *mock_drpc_handler_call; /* alloc copy of input param */
 extern void *mock_drpc_handler_resp_ptr; /* saved value of resp ptr */
 extern Drpc__Response *mock_drpc_handler_resp_return; /* returned in *resp */
 void mock_drpc_handler(Drpc__Call *call, Drpc__Response **resp);
+
+void mock_ABT_mutex_create_setup(void);
+extern int ABT_mutex_create_return; /* value to be returned */
+extern ABT_mutex *ABT_mutex_create_newmutex_ptr; /* saved ptr address */
+
+void mock_ABT_mutex_free_setup(void);
+extern int ABT_mutex_free_return; /* value to be returned */
+extern ABT_mutex *ABT_mutex_free_mutex_ptr; /* saved ptr address */
+
+void mock_ABT_thread_join_setup(void);
+extern int ABT_thread_join_return; /* value to be returned */
+extern int ABT_thread_join_call_count; /* number of times called */
+
+void mock_ABT_thread_free_setup(void);
+extern int ABT_thread_free_return;
+extern ABT_thread *ABT_thread_free_thread_ptr;
 
 #endif /* __DAOS_DRPC_MOCKS_INTERNAL_H__ */

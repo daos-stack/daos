@@ -135,9 +135,13 @@ test_drpc_close_fails_if_ctx_null(void **state)
 static void
 test_drpc_close_fails_if_ctx_comm_null(void **state)
 {
-	struct drpc *ctx = calloc(1, sizeof(struct drpc));
+	struct drpc *ctx;
+
+	D_ALLOC_PTR(ctx);
 
 	assert_int_equal(drpc_close(ctx), -DER_INVAL);
+
+	D_FREE(ctx);
 }
 
 static void
@@ -421,6 +425,7 @@ test_drpc_accept_success(void **state)
 	assert_int_equal(session_ctx->comm->fd, accept_return);
 	assert_int_equal(session_ctx->comm->flags, 0);
 	assert_int_equal(session_ctx->sequence, 0);
+	assert_ptr_equal(session_ctx->handler, ctx->handler);
 
 	/* called accept() on parent ctx */
 	assert_int_equal(accept_sockfd, ctx->comm->fd);

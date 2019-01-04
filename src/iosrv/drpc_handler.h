@@ -114,4 +114,16 @@ int drpc_hdlr_unregister(int module_id);
  */
 int drpc_hdlr_unregister_all(struct dss_drpc_handler *handlers);
 
+/**
+ * Process the incoming request using the handler appropriate to its module ID.
+ *
+ * If the request is invalid or has no handler registered, the response reflects
+ * this.
+ *
+ * \param[in]	request		Incoming Drpc__Call
+ * \param[out]	resp		Allocated Drpc__Response - should not be NULL
+ *					unless memory allocation failed
+ */
+void drpc_hdlr_process_msg(Drpc__Call *request, Drpc__Response **resp);
+
 #endif /* __DAOS_DRPC_HANDLER_H__ */

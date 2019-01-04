@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
 #include <gurt/list.h>
+#include "drpc_internal.h"
 #include "srv_internal.h"
 
 #define REBUILD_DEFAULT_SCHEDULE_RATIO 30
@@ -1437,6 +1438,7 @@ enum {
 	XD_INIT_REG_KEY,
 	XD_INIT_NVME,
 	XD_INIT_XSTREAMS,
+	XD_INIT_DRPC,
 };
 
 /**
@@ -1448,6 +1450,9 @@ dss_srv_fini(bool force)
 	switch (xstream_data.xd_init_step) {
 	default:
 		D_ASSERT(0);
+	case XD_INIT_DRPC:
+		drpc_listener_fini();
+		/* fall through */
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);
 		/* fall through */
@@ -1518,6 +1523,12 @@ dss_srv_init(int nr)
 
 	if (rc != 0)
 		D_GOTO(failed, rc);
+
+	/* start up drpc listener */
+	rc = drpc_listener_init();
+	if (rc != 0)
+		D_GOTO(failed, rc);
+	xstream_data.xd_init_step = XD_INIT_DRPC;
 
 	return 0;
 failed:

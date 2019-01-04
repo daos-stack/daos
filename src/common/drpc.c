@@ -436,6 +436,8 @@ drpc_accept(struct drpc *listener_ctx)
 		return NULL;
 	}
 
+	session_ctx->handler = listener_ctx->handler;
+
 	return session_ctx;
 }
 
@@ -464,17 +466,25 @@ static int
 handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
 {
 	int		rc;
-	uint8_t		buffer[UNIXCOMM_MAXMSGSIZE];
+	uint8_t		*buffer;
+	size_t		buffer_size = UNIXCOMM_MAXMSGSIZE;
 	ssize_t		message_len = 0;
 	Drpc__Call	*request;
 
-	rc = unixcomm_recv(ctx->comm, buffer, sizeof(buffer),
+	D_ALLOC(buffer, buffer_size);
+	if (buffer == NULL) {
+		return -DER_NOMEM;
+	}
+
+	rc = unixcomm_recv(ctx->comm, buffer, buffer_size,
 				&message_len);
 	if (rc != DER_SUCCESS) {
+		D_FREE(buffer);
 		return rc;
 	}
 
 	request = drpc__call__unpack(NULL, message_len, buffer);
+	D_FREE(buffer);
 	if (request == NULL) {
 		/* Couldn't unpack into a Drpc__Call */
 		return -DER_MISC;
@@ -483,11 +493,11 @@ handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
 	ctx->handler(request, response);
 	if (*response == NULL) {
 		/* Handler failed to allocate a response */
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
 	}
 
 	drpc__call__free_unpacked(request, NULL);
-	return DER_SUCCESS;
+	return rc;
 }
 
 /**

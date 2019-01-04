@@ -58,6 +58,7 @@ int
 drpc_hdlr_register(int module_id, drpc_handler_t handler)
 {
 	if (registry_table == NULL) {
+		D_ERROR("Table not initialized\n");
 		return -DER_UNINIT;
 	}
 
@@ -67,6 +68,7 @@ drpc_hdlr_register(int module_id, drpc_handler_t handler)
 	}
 
 	if (handler == NULL) {
+		D_ERROR("Tried to register a null handler\n");
 		return -DER_INVAL;
 	}
 
@@ -89,6 +91,7 @@ drpc_hdlr_register_all(struct dss_drpc_handler *handlers)
 	struct dss_drpc_handler	*current;
 
 	if (registry_table == NULL) {
+		D_ERROR("Table not initialized\n");
 		return -DER_UNINIT;
 	}
 
@@ -120,7 +123,7 @@ drpc_hdlr_get_handler(int module_id)
 	drpc_handler_t handler;
 
 	if (registry_table == NULL) {
-		/* Not initialized */
+		D_ERROR("Table not initialized\n");
 		return NULL;
 	}
 
@@ -141,6 +144,7 @@ int
 drpc_hdlr_unregister(int module_id)
 {
 	if (registry_table == NULL) {
+		D_ERROR("Table not initialized\n");
 		return -DER_UNINIT;
 	}
 
@@ -160,6 +164,7 @@ drpc_hdlr_unregister_all(struct dss_drpc_handler *handlers)
 	struct dss_drpc_handler *current;
 
 	if (registry_table == NULL) {
+		D_ERROR("Table not initialized\n");
 		return -DER_UNINIT;
 	}
 
@@ -176,4 +181,45 @@ drpc_hdlr_unregister_all(struct dss_drpc_handler *handlers)
 	}
 
 	return DER_SUCCESS;
+}
+
+Drpc__Response *
+get_bad_module_response(Drpc__Call *request)
+{
+	Drpc__Response *resp;
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		D_ERROR("Failed to allocate response\n");
+		return NULL;
+	}
+
+	drpc__response__init(resp);
+	resp->sequence = request->sequence;
+	resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+
+	return resp;
+}
+
+/*
+ * Top-level handler for incoming dRPC messages. Looks up the appropriate
+ * registered dRPC handler and runs it on the message.
+ */
+void
+drpc_hdlr_process_msg(Drpc__Call *request, Drpc__Response **resp)
+{
+	drpc_handler_t handler;
+
+	D_ASSERT(request != NULL);
+	D_ASSERT(resp != NULL);
+
+	handler = drpc_hdlr_get_handler(request->module);
+	if (handler == NULL) {
+		D_ERROR("Message for unregistered dRPC module: %d\n",
+				request->module);
+		*resp = get_bad_module_response(request);
+		return;
+	}
+
+	handler(request, resp);
 }

@@ -25,7 +25,7 @@
 #include <daos/test_utils.h>
 
 /**
- * Generic mocks for drpc-related tests
+ * Generic mocks for external functions
  */
 
 void
@@ -322,6 +322,22 @@ poll(struct pollfd *fds, nfds_t nfds, int timeout)
 	return poll_return;
 }
 
+void
+mock_unlink_setup(void)
+{
+	unlink_call_count = 0;
+	unlink_name = NULL;
+}
+
+int unlink_call_count;
+const char *unlink_name;
+int
+unlink(const char *__name)
+{
+	unlink_call_count++;
+	unlink_name = __name;
+	return 0;
+}
 
 /* Mock for the drpc->handler function pointer */
 void
@@ -336,7 +352,10 @@ mock_drpc_handler_setup(void)
 void
 mock_drpc_handler_teardown(void)
 {
-	drpc__call__free_unpacked(mock_drpc_handler_call, NULL);
+	if (mock_drpc_handler_call != NULL) {
+		drpc__call__free_unpacked(mock_drpc_handler_call, NULL);
+	}
+
 	drpc__response__free_unpacked(mock_drpc_handler_resp_return, NULL);
 }
 
@@ -356,7 +375,15 @@ mock_drpc_handler(Drpc__Call *call, Drpc__Response **resp)
 	} else {
 		/*
 		 * Caller will free the original so we want to make a copy.
-		 * Easiest way to copy is to pack and unpack.
+		 * Keep only the latest call.
+		 */
+		if (mock_drpc_handler_call != NULL) {
+			drpc__call__free_unpacked(mock_drpc_handler_call, NULL);
+		}
+
+		/*
+		 * Drpc__Call has hierarchy of pointers - easiest way to
+		 * copy is to pack and unpack.
 		 */
 		drpc__call__pack(call, buffer);
 		mock_drpc_handler_call = drpc__call__unpack(NULL,
@@ -378,4 +405,84 @@ mock_drpc_handler(Drpc__Call *call, Drpc__Response **resp)
 		*resp = drpc__response__unpack(NULL, response_size,
 				buffer);
 	}
+}
+
+/* Mocks/stubs for Argobots functions */
+
+/* TODO: implement mock */
+int
+ABT_mutex_lock(ABT_mutex mutex)
+{
+	return 0;
+}
+
+/* TODO: implement mock */
+int
+ABT_mutex_unlock(ABT_mutex mutex)
+{
+	return 0;
+}
+
+void
+mock_ABT_mutex_create_setup(void)
+{
+	ABT_mutex_create_return = 0;
+	ABT_mutex_create_newmutex_ptr = NULL;
+}
+
+int ABT_mutex_create_return;
+ABT_mutex *ABT_mutex_create_newmutex_ptr;
+int
+ABT_mutex_create(ABT_mutex *newmutex)
+{
+	ABT_mutex_create_newmutex_ptr = newmutex;
+	return ABT_mutex_create_return;
+}
+
+void
+mock_ABT_mutex_free_setup(void)
+{
+	ABT_mutex_free_return = 0;
+	ABT_mutex_free_mutex_ptr = NULL;
+}
+
+int ABT_mutex_free_return;
+ABT_mutex *ABT_mutex_free_mutex_ptr;
+int
+ABT_mutex_free(ABT_mutex *mutex)
+{
+	ABT_mutex_free_mutex_ptr = mutex;
+	return ABT_mutex_free_return;
+}
+
+void
+mock_ABT_thread_join_setup(void)
+{
+	ABT_thread_join_return = 0;
+	ABT_thread_join_call_count = 0;
+}
+
+int ABT_thread_join_return;
+int ABT_thread_join_call_count;
+int
+ABT_thread_join(ABT_thread thread)
+{
+	ABT_thread_join_call_count++;
+	return ABT_thread_join_return;
+}
+
+void
+mock_ABT_thread_free_setup(void)
+{
+	ABT_thread_free_return = 0;
+	ABT_thread_free_thread_ptr = NULL;
+}
+
+int ABT_thread_free_return;
+ABT_thread *ABT_thread_free_thread_ptr;
+int
+ABT_thread_free(ABT_thread *thread)
+{
+	ABT_thread_free_thread_ptr = thread;
+	return ABT_thread_free_return;
 }
