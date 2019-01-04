@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -186,7 +186,8 @@ crt_pmix_fence(void)
 	/* PMIx_Commit(); */
 
 	PMIX_PROC_CONSTRUCT(&proc);
-	strncpy(proc.nspace, myproc->nspace, PMIX_MAX_NSLEN);
+	/* nspace has PMIX_MAX_NSLEN + 1 chars.  See pmix_common.h */
+	strncpy(proc.nspace, myproc->nspace, PMIX_MAX_NSLEN + 1);
 	proc.rank = PMIX_RANK_WILDCARD;
 	PMIX_INFO_CREATE(info, 1);
 	if (info == NULL) {
@@ -241,7 +242,8 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	/* get incorrect result (grp_priv->gp_self = -1), so disable it */
 	if (/* pmix_gdata->pg_num_apps == 1 */ 0) {
 		PMIX_PROC_CONSTRUCT(&proc);
-		strncpy(proc.nspace, myproc->nspace, PMIX_MAX_NSLEN);
+		/* nspace has PMIX_MAX_NSLEN + 1 chars.  See pmix_common.h */
+		strncpy(proc.nspace, myproc->nspace, PMIX_MAX_NSLEN + 1);
 		proc.rank = PMIX_RANK_WILDCARD;
 		PMIX_INFO_CREATE(info, 1);
 		PMIX_INFO_LOAD(&info[0], PMIX_IMMEDIATE, &flag, PMIX_BOOL);

@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -608,14 +608,24 @@ crt_ep_abort(crt_endpoint_t *ep);
 		CRT_GEN_STRUCT(rpc_name##_out, fields_out), )		\
 	extern struct crt_req_format CQF_##rpc_name;
 
+#if __GNUC__ >= 8 /* warning was introduced in version 8 of GCC */
+#define CRT_DISABLE_SIZEOF_POINTER_DIV					\
+	_Pragma("GCC diagnostic ignored \"-Wsizeof-pointer-div\"")
+#else /* __GNUC__ < 8 */
+#define CRT_DISABLE_SIZEOF_POINTER_DIV
+#endif /* __GNUC__ >= 8 */
+
 #define CRT_RPC_DEFINE(rpc_name, fields_in, fields_out)			\
 	CRT_GEN_PROC(rpc_name##_in, fields_in)				\
 	CRT_GEN_PROC(rpc_name##_out, fields_out)			\
+	_Pragma("GCC diagnostic push")					\
+	CRT_DISABLE_SIZEOF_POINTER_DIV					\
 	struct crt_req_format CQF_##rpc_name = DEFINE_CRT_REQ_FMT(	\
 		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),		\
 			crt_##rpc_name##_in_fields, NULL),		\
 		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),		\
-			crt_##rpc_name##_out_fields, NULL));
+			crt_##rpc_name##_out_fields, NULL));		\
+	_Pragma("GCC diagnostic pop")
 
 #define CRT_RPC_CORPC_REGISTER(opcode, rpc_name, rpc_handler, co_ops)	\
 	crt_corpc_register(opcode, &CQF_##rpc_name, rpc_handler, co_ops)

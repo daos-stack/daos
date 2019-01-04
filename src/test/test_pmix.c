@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -122,7 +122,8 @@ main()
 	}
 
 	PMIX_PROC_CONSTRUCT(&proc);
-	strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
+	/* nspace has PMIX_MAX_NSLEN + 1 chars.  See pmix_common.h */
+	strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN + 1);
 	proc.rank = PMIX_RANK_WILDCARD;
 
 	rc = PMIx_Get(&proc, PMIX_JOB_SIZE, NULL, 0, &val);
@@ -141,7 +142,8 @@ main()
 
 	/* call fence  to synchronize */
 	PMIX_PROC_CONSTRUCT(&proc);
-	strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
+	/* nspace has PMIX_MAX_NSLEN + 1 chars.  See pmix_common.h */
+	strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN + 1);
 	proc.rank = PMIX_RANK_WILDCARD;
 	rc = PMIx_Fence(&proc, 1, NULL, 0);
 	if (rc != PMIX_SUCCESS) {
