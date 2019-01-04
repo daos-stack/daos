@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018 Intel Corporation.
+    (C) Copyright 2018-2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -63,49 +63,53 @@ def build_ior(basepath):
 
 def run_ior(client_file, ior_flags, iteration, block_size, transfer_size, pool_uuid, svc_list,
             record_size, stripe_size, stripe_count, async_io, object_class, basepath, slots=1,
-            seg_count=1):
+            seg_count=1, filename="`uuidgen`", display_output=True):
     """ Running Ior tests
         Function Arguments
-        client_file   --client file holding client hostname and slots
-        ior_flags     --all ior specific flags
-        iteration     --number of iterations for ior run
-        block_size    --contiguous bytes to write per task
-        transfer_size --size of transfer in bytes
-        pool_uuid     --Daos Pool UUID
-        svc_list      --Daos Pool SVCL
-        record_size   --Daos Record Size
-        stripe_size   --Daos Stripe Size
-        stripe_count  --Daos Stripe Count
-        async_io      --Concurrent Async IOs
-        object_class  --object class
-        basepath      --Daos basepath
-        slots         --slots on each node
-        seg_count     --segment count
+        client_file    --client file holding client hostname and slots
+        ior_flags      --all ior specific flags
+        iteration      --number of iterations for ior run
+        block_size     --contiguous bytes to write per task
+        transfer_size  --size of transfer in bytes
+        pool_uuid      --Daos Pool UUID
+        svc_list       --Daos Pool SVCL
+        record_size    --Daos Record Size
+        stripe_size    --Daos Stripe Size
+        stripe_count   --Daos Stripe Count
+        async_io       --Concurrent Async IOs
+        object_class   --object class
+        basepath       --Daos basepath
+        slots          --slots on each node
+        seg_count      --segment count
+        filename       --Container file name
+        display_output --print IOR output on console.
     """
-
     with open(os.path.join(basepath, ".build_vars.json")) as f:
         build_paths = json.load(f)
     orterun_bin = os.path.join(build_paths["OMPI_PREFIX"], "bin/orterun")
     attach_info_path = basepath + "/install/tmp"
     try:
 
-        ior_cmd = orterun_bin + " -N {0} --hostfile {1} -x DAOS_SINGLETON_CLI=1 " \
-                  " -x CRT_ATTACH_INFO_PATH={2} ior {3} -s {4} -i {5} -a DAOS -o `uuidgen` " \
-                  " -b {6} -t {7} -- -p {8} -v {9} -r {10} -s {11} -c {12} -a {13} -o {14} "\
+        ior_cmd = orterun_bin + " -N {} --hostfile {} -x DAOS_SINGLETON_CLI=1 " \
+                  " -x CRT_ATTACH_INFO_PATH={} ior {} -s {} -i {} -a DAOS -o {} " \
+                  " -b {} -t {} -- -p {} -v {} -r {} -s {} -c {} -a {} -o {} "\
                   .format(slots, client_file, attach_info_path, ior_flags, seg_count, iteration,
-                          block_size, transfer_size, pool_uuid, svc_list, record_size, stripe_size,
+                          filename, block_size, transfer_size, pool_uuid,
+                          svc_list, record_size, stripe_size,
                           stripe_count, async_io, object_class)
-        print ("ior_cmd: {}".format(ior_cmd))
+        if display_output:
+            print ("ior_cmd: {}".format(ior_cmd))
 
         process = subprocess.Popen(ior_cmd, stdout=subprocess.PIPE, shell=True)
         while True:
             output = process.stdout.readline()
             if output == '' and process.poll() is not None:
                 break
-            if output:
+            if output and display_output:
                 print output.strip()
         if process.poll() != 0:
-            raise IorFailed("IOR Run process Failed with non zero exit code:{}".format(process.poll()))
+            raise IorFailed("IOR Run process Failed with non zero exit code:{}"
+                            .format(process.poll()))
 
     except (OSError, ValueError) as e:
         print "<IorRunFailed> Exception occurred: {0}".format(str(e))
