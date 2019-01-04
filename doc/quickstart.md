@@ -179,7 +179,7 @@ Hostfile used here is the same as the ones used by Open MPI. See (https://www.op
 
 > Note:</br>
 > If running clients from a different shell:</br>
-> `source ${daospath}/scons_local/utils/setup_local.sh`</br>
+> `source ${daospath}/scons_local/utils/setup_local.sh # from ${daospath}`</br>
 > `export CRT_PHY_ADDR_STR="ofi+sockets"`</br>
 > `export OFI_INTERFACE=<if>`</br>
 
