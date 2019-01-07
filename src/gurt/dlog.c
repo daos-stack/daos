@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -469,27 +469,28 @@ void d_vlog(int flags, const char *fmt, va_list ap)
  * d_log_str2pri: convert a priority string to an int pri value to allow
  * for more user-friendly programs.  returns -1 (an invalid pri) on error.
  * does not access clog global state.
+ *
+ * len should be the number of characters to evaluate, not including any
+ * termination character.
  */
-int d_log_str2pri(const char *pstr)
+static int d_log_str2pri(const char *pstr, size_t len)
 {
-	char ptmp[11] = {0};
 	int lcv;
 
 	/* make sure we have a valid input */
-	if (strlen(pstr) > 7) {
-		printf("wrong size! ");
+	if (len == 0 || len > 7) {
 		return -1;
 	}
 
-	strncpy(ptmp, pstr, 10);  /* because we may overwrite parts of it */
 	/*
 	 * handle some quirks
 	 */
 
-	if (strcasecmp(ptmp, "ERR") == 0)
+	if (strncasecmp(pstr, "ERR", len) == 0)
 		/* has trailing space in the array */
 		return DLOG_ERR;
-	if (strcasecmp(ptmp, "DEBUG") == 0 || strcasecmp(ptmp, "DBUG") == 0) {
+	if (strncasecmp(pstr, "DEBUG", len) == 0 || \
+		strncasecmp(pstr, "DBUG", len) == 0) {
 		/* check to see is debug mask bits are set */
 		return d_dbglog_data.dd_mask != 0 ?
 		       d_dbglog_data.dd_mask : DLOG_DBG;
@@ -499,7 +500,7 @@ int d_log_str2pri(const char *pstr)
 	 * handle non-debug case
 	 */
 	for (lcv = 1; lcv <= 7; lcv++)
-		if (strcasecmp(ptmp, norm[lcv]) == 0)
+		if (strncasecmp(pstr, norm[lcv], len) == 0)
 			return lcv << DLOG_PRISHIFT;
 	/* bogus! */
 	return -1;
@@ -755,7 +756,7 @@ int d_log_setlogmask(int facility, int mask)
  */
 int d_log_setmasks(char *mstr, int mlen0)
 {
-	char *m, *current, *fac, *pri, pbuf[8];
+	char *m, *current, *fac, *pri;
 	int mlen, facno, clen, elen, prino, rv, tmp;
 	unsigned int faclen, prilen;
 	int log_flags;
@@ -812,13 +813,7 @@ int d_log_setmasks(char *mstr, int mlen0)
 				prilen--;
 		/* parse complete! */
 		/* process priority */
-		if (prilen > 7) { /* we know it can't be longer than this */
-			prino = -1;
-		} else {
-			memset(pbuf, 0, sizeof(pbuf));
-			strncpy(pbuf, pri, prilen);
-			prino = d_log_str2pri(pbuf);
-		}
+		prino = d_log_str2pri(pri, prilen);
 		if (prino == -1) {
 			log_flags = d_log_check(DLOG_ERR);
 

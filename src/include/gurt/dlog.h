@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -442,8 +442,6 @@ int d_log_setmasks(char *mstr, int mlen);
  *				terminated if == len)
  */
 int d_log_getmasks(char *buf, int discard, int len, int unterm);
-
-int d_log_str2pri(const char *pstr);
 
 #if defined(__cplusplus)
 }
