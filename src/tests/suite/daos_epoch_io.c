@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,11 @@
 #include "daos_iotest.h"
 
 /* the temporary IO dir */
-char test_io_dir[PATH_MAX] = { 0 };
+char *test_io_dir;
 /* the temporary IO working dir, will be cleanup for every running */
-char test_io_work_dir[PATH_MAX] = { 0 };
+static char *test_io_work_dir;
 /* the temporary IO fail dir, used to store the failed IO conf files */
-char test_io_fail_dir[PATH_MAX] = { 0 };
+static char *test_io_fail_dir;
 
 /* the IO conf file */
 const char *test_io_conf;
@@ -526,7 +526,7 @@ recx_parse(char *recx_str, daos_recx_t **recxs, int **values,
 {
 	daos_recx_t	*recx_allocated = NULL;
 	int		*value_allocated = NULL;
-	char		 str[CMD_LINE_LEN_MAX] = { 0 };
+	char		 str[CMD_LINE_LEN_MAX + 1] = { 0 };
 	char		*p = str, *tmp;
 	bool		 brace_unmatch = false;
 	uint64_t	 rx_end;
@@ -1203,13 +1203,14 @@ out:
 	return rc;
 }
 
+#define AKEY_PATH_LEN (PATH_MAX - 10)
 /* replay the OPs which epoch <= /a epoch in key_rec's op_queue */
 static int
 test_op_queue_replay(test_arg_t *arg, struct test_key_record *key_rec,
 		     daos_epoch_t epoch)
 {
 	struct test_op_record	*op_rec;
-	char			 akey_dir[PATH_MAX] = { 0 };
+	char			 akey_dir[AKEY_PATH_LEN] = { 0 };
 	char			 array_path[PATH_MAX] = { 0 };
 	char			 single_path[PATH_MAX] = { 0 };
 	int			 rc = 0;
@@ -1235,7 +1236,7 @@ test_op_queue_replay(test_arg_t *arg, struct test_key_record *key_rec,
 	}
 
 	if (key_rec->or_replayed_epoch == 0) {
-		snprintf(akey_dir, PATH_MAX, "%s/%s/%s", test_io_work_dir,
+		snprintf(akey_dir, AKEY_PATH_LEN, "%s/%s/%s", test_io_work_dir,
 			 key_rec->or_dkey, key_rec->or_akey);
 		test_rmdir(akey_dir, true);
 		rc = epoch_io_mkdir(akey_dir);
@@ -1452,30 +1453,43 @@ epoch_io_setup(void **state)
 {
 	test_arg_t		*arg;
 	struct epoch_io_args	*eio_arg;
-	char			 tmp_str[64] = { 0 };
+	char			*tmp_str;
 	int			 rc;
 
 	/* generate the temporary IO dir for epoch IO test */
-	if (test_io_dir[0] == 0)
-		strncpy(test_io_dir, "/tmp", 4);
-	snprintf(tmp_str, 64, "/daos_epoch_io_test/%d/", geteuid());
-	strncat(test_io_dir, tmp_str, 64);
+	if (test_io_dir == NULL) {
+		D_STRNDUP(test_io_dir, "/tmp", 5);
+		if (test_io_dir == NULL)
+			return -DER_NOMEM;
+	}
+	D_ASPRINTF(tmp_str, "%s/daos_epoch_io_test/%d/", test_io_dir,
+		   geteuid());
+	if (tmp_str == NULL)
+		return -DER_NOMEM;
+	D_FREE(test_io_dir);
+	test_io_dir = tmp_str;
 	rc = epoch_io_mkdir(test_io_dir);
 	if (rc)
 		return rc;
 
 	/* cleanup/re-create temporary IO working dir */
-	snprintf(test_io_work_dir, PATH_MAX, "%swork/", test_io_dir);
+	D_ASPRINTF(test_io_work_dir, "%swork/", test_io_dir);
+	if (test_io_work_dir == NULL)
+		return -DER_NOMEM;
 	test_rmdir(test_io_work_dir, true);
 	rc = epoch_io_mkdir(test_io_work_dir);
 	if (rc)
 		return rc;
 
 	/* create IO fail dir */
-	snprintf(test_io_fail_dir, PATH_MAX, "%sfail/", test_io_dir);
+	D_ASPRINTF(test_io_fail_dir, "%sfail/", test_io_dir);
+	if (test_io_fail_dir == NULL) {
+		rc = -DER_NOMEM;
+		D_GOTO(free_work, rc);
+	}
 	rc = epoch_io_mkdir(test_io_fail_dir);
 	if (rc)
-		return rc;
+		D_GOTO(error, rc);
 	print_message("created test_io_dir %s, and subdirs %s, %s.\n",
 		      test_io_dir, test_io_work_dir, test_io_fail_dir);
 
@@ -1488,6 +1502,13 @@ epoch_io_setup(void **state)
 	eio_arg->op_oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 
 	return 0;
+
+error:
+	D_FREE(test_io_fail_dir);
+free_work:
+	D_FREE(test_io_work_dir);
+
+	return rc;
 }
 
 static int
@@ -1498,10 +1519,10 @@ epoch_io_teardown(void **state)
 
 	test_eio_arg_oplist_free(arg);
 
-	if (eio_arg->op_dkey)
-		D_FREE(eio_arg->op_dkey);
-	if (eio_arg->op_akey)
-		D_FREE(eio_arg->op_akey);
+	D_FREE(eio_arg->op_dkey);
+	D_FREE(eio_arg->op_akey);
+	D_FREE(test_io_fail_dir);
+	D_FREE(test_io_work_dir);
 
 	return test_teardown(state);
 }

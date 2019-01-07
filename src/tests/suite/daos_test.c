@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -248,7 +248,10 @@ main(int argc, char **argv)
 			test_io_conf = optarg;
 			break;
 		case 'W':
-			strncpy(test_io_dir, optarg, PATH_MAX);
+			D_FREE(test_io_dir);
+			D_STRNDUP(test_io_dir, optarg, PATH_MAX);
+			if (test_io_dir == NULL)
+				return -1;
 			break;
 		default:
 			daos_test_print(rank, "Unknown Option\n");
@@ -360,6 +363,8 @@ exit:
 	}
 
 	MPI_Finalize();
+
+	D_FREE(test_io_dir);
 
 	return nr_failed;
 }

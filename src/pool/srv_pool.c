@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -258,7 +258,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 		   uint32_t gid, uint32_t mode,
 		   uint32_t nnodes, uuid_t target_uuids[], const char *group,
 		   const d_rank_list_t *target_addrs, uint32_t ndomains,
-		   const int *domains)
+		   const int32_t *domains)
 {
 	struct pool_buf	       *map_buf;
 	struct pool_component	map_comp;

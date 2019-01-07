@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ extern const char *server_group;
 extern unsigned int svc_nreplicas;
 
 /* the temporary IO dir*/
-extern char test_io_dir[];
+extern char *test_io_dir;
 /* the IO conf file*/
 extern const char *test_io_conf;
 

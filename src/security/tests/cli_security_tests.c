@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ char *getenv(const char *name)
 }
 
 static struct drpc *drpc_connect_return; /* value to be returned */
-static char drpc_connect_sockaddr[PATH_MAX]; /* saved copy of input */
+static char drpc_connect_sockaddr[PATH_MAX + 1]; /* saved copy of input */
 struct drpc *
 drpc_connect(char *sockaddr)
 {
