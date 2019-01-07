@@ -539,53 +539,18 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 		  low, high);
 	range.epr_lo = low;
 	range.epr_hi = high;
-	return vos_epoch_discard(cont, &range, rdb_cookie);
-}
 
-static int
-rdb_vos_aggregate_obj(daos_handle_t ih, vos_iter_entry_t *entry,
-		      vos_iter_type_t type, vos_iter_param_t *param,
-		      void *arg, unsigned int *acts)
-{
-	const unsigned int	run_max = 64;
-	unsigned int		total = 0;
-	vos_purge_anchor_t	anchor;
-	int			rc;
-
-	memset(&anchor, 0, sizeof(anchor));
-	for (;;) {
-		unsigned int	c = run_max;
-		bool		finished;
-
-		rc = vos_epoch_aggregate(param->ip_hdl, entry->ie_oid,
-					 &param->ip_epr, &c, &anchor,
-					 &finished);
-		if (rc != 0)
-			break;
-		D_ASSERTF(c <= run_max, "%u <= %u\n", c, run_max);
-		total += run_max - c;
-		D_DEBUG(DB_TRACE, "run=%u total=%u finished=%d\n", run_max - c,
-			total, finished);
-		ABT_thread_yield();
-		if (finished)
-			break;
-	}
-	D_DEBUG(DB_TRACE, DF_UOID": total=%u rc=%d\n", DP_UOID(entry->ie_oid),
-		total, rc);
-	return rc;
+	return vos_discard(cont, &range, rdb_cookie);
 }
 
 int
 rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 {
-	struct vos_iter_anchors	anchors = { 0 };
-	vos_iter_param_t	param = { 0};
+	daos_epoch_range_t	epr;
 
 	D_ASSERTF(high < DAOS_EPOCH_MAX, DF_U64"\n", high);
-	param.ip_hdl = cont;
-	param.ip_epr.epr_hi = high;
-	param.ip_epc_expr = VOS_IT_EPC_LE;
+	epr.epr_lo = 0;
+	epr.epr_hi = high;
 
-	return vos_iterate(&param, VOS_ITER_OBJ, false, &anchors,
-			   rdb_vos_aggregate_obj, NULL /* arg */);
+	return vos_aggregate(cont, &epr);
 }

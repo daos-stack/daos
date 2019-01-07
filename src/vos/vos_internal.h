@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,6 +127,9 @@ struct vos_container {
 	 * durable hint in vos_cont_df
 	 */
 	struct vea_hint_context	*vc_hint_ctxt;
+	/* Various flags */
+	unsigned int		vc_in_aggregation:1,
+				vc_abort_aggregation:1;
 };
 
 struct vos_imem_strts {
@@ -720,17 +723,6 @@ vos_hdl2cont(daos_handle_t coh)
 void vos_cont_addref(struct vos_container *cont);
 void vos_cont_decref(struct vos_container *cont);
 
-static inline void
-vos_cont_set_purged_epoch(daos_handle_t coh, daos_epoch_t update_epoch)
-{
-	struct vos_container	*cont;
-	struct vos_cont_df	*cont_df;
-
-	cont	= vos_hdl2cont(coh);
-	cont_df	= cont->vc_cont_df;
-	cont_df->cd_info.pci_purged_epoch = update_epoch;
-}
-
 /**
  * iterators
  */
@@ -844,17 +836,11 @@ struct vos_iter_ops {
 
 const char *vos_iter_type2name(vos_iter_type_t type);
 
-static  inline struct vos_iterator *
+static inline struct vos_iterator *
 vos_hdl2iter(daos_handle_t hdl)
 {
 	return (struct vos_iterator *)hdl.cookie;
 }
-
-struct vos_obj_iter*
-vos_hdl2oiter(daos_handle_t hdl);
-
-struct vos_oid_iter*
-vos_hdl2oid_iter(daos_handle_t hdl);
 
 /**
  * store a bundle of parameters into a iovec, which is going to be passed

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,8 +90,8 @@ co_ops_run(void **state)
 			case QUERY:
 				ret = vos_cont_query(arg->coh[i], &cinfo);
 				assert_int_equal(ret, 0);
-				assert_int_equal(cinfo.pci_nobjs, 0);
-				assert_int_equal(cinfo.pci_used, 0);
+				assert_int_equal(cinfo.ci_nobjs, 0);
+				assert_int_equal(cinfo.ci_used, 0);
 				break;
 			case DESTROY:
 				ret = vos_cont_destroy(arg->poh,

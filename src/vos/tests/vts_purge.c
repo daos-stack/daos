@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,11 +50,6 @@ static int init_discard_keys = TF_DISCARD_KEYS;
 enum io_aggregate_test_type {
 	IO_AGGREGATE_TEST_DKEY = 0,
 	IO_AGGREGATE_TEST_AKEY = 1
-};
-
-enum multi_recx_overwrite_test_type {
-	MULTI_RECX_OVERWRITE_NO_CREDITS = 0,
-	MULTI_RECX_OVERWRITE_WITH_CREDITS = 1
 };
 
 enum near_epoch_test_type {
@@ -291,7 +286,7 @@ io_simple_one_key_discard(void **state)
 	/* Discard Epoch 1 alone */
 	range.epr_lo = 1;
 	range.epr_hi = 1;
-	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
 	rc = io_fetch(arg, 1, req[0], FETCH_VERBOSE);
@@ -303,7 +298,7 @@ io_simple_one_key_discard(void **state)
 	/** Discard epochs 3 -> INF */
 	range.epr_lo = 3;
 	range.epr_hi = DAOS_EPOCH_MAX;
-	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
 	/**
@@ -390,7 +385,7 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey, char *akey,
 	/** Reset flags here */
 	arg->ta_flags = 0;
 	range.epr_lo = range.epr_hi = epoch[mid];
-	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie[mid].uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie[mid].uuid);
 	if (rc != 0)
 		D_GOTO(exit, rc);
 
@@ -551,7 +546,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 
 	range.epr_lo = epoch1;
 	range.epr_hi = epoch1;
-	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
 	/** Check if the object does not exist? */
@@ -658,7 +653,7 @@ io_epoch_range_discard_test(void **state)
 
 	D_PRINT("Discard from "DF_U64" to "DF_U64" out of %d epochs\n",
 		range.epr_lo, range.epr_hi, init_discard_keys);
-	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
 
@@ -727,7 +722,7 @@ io_multi_akey_discard_test(void **state)
 
 	range.epr_lo = epoch1;
 	range.epr_hi = epoch1;
-	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
 	arg->oid = last_oid;
@@ -800,7 +795,7 @@ io_multi_recx_overwrite_discard_test(void **state)
 	range.epr_lo = discard_epoch;
 	range.epr_hi = discard_epoch;
 
-	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
 	/* Check first init_discard_keys entries in object 1 */
@@ -876,7 +871,7 @@ io_multi_recx_discard_test(void **state)
 
 	range.epr_lo = epoch1;
 	range.epr_hi = epoch1;
-	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
 	arg->oid = last_oid;
@@ -915,9 +910,6 @@ io_multi_aggregate_test(void **state, enum io_aggregate_test_type test_type)
 	char			 dkey_buf[UPDATE_DKEY_SIZE];
 	char			 akey_buf[UPDATE_AKEY_SIZE];
 	int			 idx;
-	unsigned int		 credits = -1;
-	vos_purge_anchor_t	 vp_anchor = {0};
-	bool			 finish;
 
 	arg->ta_flags = 0;
 	cookie = gen_rand_cookie();
@@ -944,10 +936,8 @@ io_multi_aggregate_test(void **state, enum io_aggregate_test_type test_type)
 
 	range.epr_lo = epoch;
 	range.epr_hi = epoch + init_credits_keys - 1;
-	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
-				 &credits, &vp_anchor, &finish);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &range);
 	assert_int_equal(rc, 0);
-	assert_true(finish);
 
 	/** Verifying aggregation */
 	verify_io_fetch(arg);
@@ -977,9 +967,6 @@ io_multi_recx_aggregate_test(void **state)
 	struct vts_counter	cntrs;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
-	vos_purge_anchor_t	vp_anchor;
-	unsigned int		credits = -1;
-	bool			finish;
 
 	if (arg->ta_flags & IF_DISABLED) {
 		print_message("unsupported, skip\n");
@@ -990,7 +977,6 @@ io_multi_recx_aggregate_test(void **state)
 
 	epoch = 1;
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
-	memset(&vp_anchor, 0, sizeof(vos_purge_anchor_t));
 
 	for (i = 0; i < init_credits_keys; i++) {
 		struct io_req	*req = NULL;
@@ -1008,10 +994,8 @@ io_multi_recx_aggregate_test(void **state)
 	range.epr_lo = epoch;
 	range.epr_hi = epoch + init_credits_keys/2;
 
-	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
-				 &credits, &vp_anchor, &finish);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &range);
 	assert_int_equal(rc, 0);
-	assert_true(finish);
 
 	/** Verifying aggregation */
 	verify_io_fetch(arg);
@@ -1051,9 +1035,6 @@ io_recx_overwrite_aggregate(void **state)
 	struct vts_counter	cntrs;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
-	bool			finish;
-	vos_purge_anchor_t	vp_anchor = {0};
-	unsigned int		credits = -1;
 
 	arg->ta_flags = 0;
 	cookie = gen_rand_cookie();
@@ -1077,10 +1058,8 @@ io_recx_overwrite_aggregate(void **state)
 	range.epr_lo = epoch;
 	range.epr_hi = epoch + init_discard_keys  - 1;
 
-	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
-				 &credits, &vp_anchor, &finish);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &range);
 	assert_int_equal(rc, 0);
-	assert_true(finish);
 
 	/** Verifying aggregation */
 	verify_io_fetch_in_epoch_range(arg, range.epr_lo, range.epr_hi,
@@ -1088,83 +1067,9 @@ io_recx_overwrite_aggregate(void **state)
 }
 
 static void
-io_recx_overwrite(struct io_test_args *arg)
+io_multi_recx_overwrite_test(void **state)
 {
-	int			i, index;
-	int			rc = 0;
-	daos_epoch_t		epoch1, epoch2;
-	struct d_uuid		cookie;
-	daos_epoch_range_t	range;
-	struct vts_counter	cntrs;
-	bool			finish;
-	char			dkey_buf[UPDATE_DKEY_SIZE];
-	char			akey_buf[UPDATE_AKEY_SIZE];
-	vos_purge_anchor_t	vp_anchor = {0};
-	int			credits = init_credits_keys + 100;
-	daos_epoch_t		max_epoch = DAOS_EPOCH_MAX;
-
-	cookie = gen_rand_cookie();
-
-	epoch1 = 1000;
-
-	set_key_and_index(&dkey_buf[0], &akey_buf[0], &index);
-
-	for (i = 0; i < init_credits_keys; i++) {
-		struct io_req	*req = NULL;
-
-		max_epoch = epoch1 + i;
-		rc = io_update(arg, max_epoch,
-			       &cookie, &dkey_buf[0], &akey_buf[0],
-			       &cntrs, &req, index, UPDATE_VERBOSE);
-		assert_int_equal(rc, 0);
-		d_list_add(&req->rlist, &arg->req_list);
-		rc = io_fetch(arg, max_epoch, req, FETCH_VERBOSE);
-		assert_int_equal(rc, 0);
-	}
-
-	epoch2 = 500000;
-
-	for (i = 0; i < init_credits_keys; i++) {
-		struct io_req	*req = NULL;
-
-		rc = io_update(arg, epoch2 + i,
-			       &cookie, &dkey_buf[0], &akey_buf[0],
-			       &cntrs, &req, index, UPDATE_VERBOSE);
-		assert_int_equal(rc, 0);
-		d_list_add(&req->rlist, &arg->req_list);
-		rc = io_fetch(arg, epoch2 + i, req, FETCH_VERBOSE);
-		assert_int_equal(rc, 0);
-	}
-
-	range.epr_lo = epoch1;
-	range.epr_hi = epoch1 + init_credits_keys + 10;
-
-	printf("%d keys in range "DF_U64"->"DF_U64",",
-	       init_credits_keys, range.epr_lo, range.epr_hi);
-	printf(" using %d credits\n", credits);
-
-	while (credits > 0) {
-		unsigned int local_credits = 1;
-
-		rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
-					 &local_credits, &vp_anchor, &finish);
-		assert_int_equal(rc, 0);
-		if ((arg->ta_flags & TF_REPORT_AGGREGATION) && finish)
-			break;
-		credits -= 1;
-	}
-	assert_true(finish);
-
-	/** Verifying aggregation */
-	verify_io_fetch_in_epoch_range(arg, range.epr_lo, max_epoch,
-				       &arg->req_list);
-}
-
-#define CREDITS_PER_ITERATION (1)
-static void
-io_multi_recx_overwrite_test(struct io_test_args *arg,
-	enum multi_recx_overwrite_test_type test_type)
-{
+	struct io_test_args     *arg = *state;
 	int			i, index;
 	int			rc = 0;
 	daos_epoch_t		epoch;
@@ -1175,9 +1080,8 @@ io_multi_recx_overwrite_test(struct io_test_args *arg,
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	int			overwrite = 0;
 	d_list_t		agg_entries;
-	unsigned int		l_credits;
-	vos_purge_anchor_t	vp_anchor;
-	bool			finish;
+	vos_cont_info_t		info;
+	daos_handle_t		coh;
 
 	if (arg->ta_flags & IF_DISABLED) {
 		print_message("unsupported, skip\n");
@@ -1188,7 +1092,6 @@ io_multi_recx_overwrite_test(struct io_test_args *arg,
 	epoch = 1;
 
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &index);
-	memset(&vp_anchor, 0, sizeof(vos_purge_anchor_t));
 	D_INIT_LIST_HEAD(&agg_entries);
 
 	for (i = 0; i < init_discard_keys; i++) {
@@ -1217,43 +1120,17 @@ io_multi_recx_overwrite_test(struct io_test_args *arg,
 	range.epr_lo = epoch;
 	range.epr_hi = epoch + init_discard_keys/2;
 
-	if (test_type == MULTI_RECX_OVERWRITE_NO_CREDITS) {
-		l_credits = -1; /* Set all bits to 1, or infinite credits */
-		rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
-					 &l_credits, &vp_anchor, &finish);
-		assert_int_equal(rc, 0);
-	} else {
-		int loop = init_discard_keys + 1000;
-
-		print_message("%d credit(s)/iteration in %d iterations\n",
-			      CREDITS_PER_ITERATION, loop);
-		for (i = 0; i < loop; i++) {
-			l_credits = CREDITS_PER_ITERATION;
-			rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid,
-						 &range, &l_credits,
-						 &vp_anchor, &finish);
-			assert_int_equal(rc, 0);
-		}
-	}
-	assert_true(finish);
-
-	daos_unit_oid_t		oid_tmp;
-	vos_cont_info_t		info;
-	daos_handle_t		coh;
-
-	memset(&oid_tmp, 0, sizeof(daos_unit_oid_t));
-	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, oid_tmp,
-				 &range, &l_credits, &vp_anchor, &finish);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &range);
 	assert_int_equal(rc, 0);
 
 	rc = vos_cont_query(arg->ctx.tc_co_hdl, &info);
-	assert_true(range.epr_hi == info.pci_purged_epoch);
+	assert_true(range.epr_hi == info.ci_hae);
 
 	rc = vos_cont_open(arg->ctx.tc_po_hdl, arg->ctx.tc_co_uuid, &coh);
 	assert_int_equal(rc, 0);
 
 	rc = vos_cont_query(coh, &info);
-	assert_true(range.epr_hi == info.pci_purged_epoch);
+	assert_true(range.epr_hi == info.ci_hae);
 
 	rc = vos_cont_close(coh);
 	assert_int_equal(rc, 0);
@@ -1269,40 +1146,6 @@ io_multi_recx_overwrite_test(struct io_test_args *arg,
 
 	/** Aggregate list is created here locally. cleaning up!*/
 	free_request_list(&agg_entries);
-}
-
-static void
-io_recx_overwrite_credits(void **state)
-{
-	struct io_test_args	*arg = *state;
-
-	arg->ta_flags = 0;
-	io_recx_overwrite(arg);
-}
-
-static void
-io_recx_overwrite_report(void **state)
-{
-	struct io_test_args	*arg = *state;
-
-	arg->ta_flags = TF_REPORT_AGGREGATION;
-	io_recx_overwrite(arg);
-}
-
-static void
-io_multi_recx_overwrite_test_without_credits(void **state)
-{
-	struct io_test_args	*arg = *state;
-
-	io_multi_recx_overwrite_test(arg, MULTI_RECX_OVERWRITE_NO_CREDITS);
-}
-
-static void
-io_multi_recx_overwrite_test_with_credits(void **state)
-{
-	struct io_test_args	*arg = *state;
-
-	io_multi_recx_overwrite_test(arg, MULTI_RECX_OVERWRITE_WITH_CREDITS);
 }
 
 static const struct CMUnitTest discard_tests[] = {
@@ -1350,17 +1193,8 @@ static const struct CMUnitTest aggregate_tests[] = {
 	{ "VOS401.1: VOS recx overwrite aggregate test",
 		io_recx_overwrite_aggregate, io_multikey_discard_setup,
 		io_multikey_discard_teardown},
-	{ "VOS401.2: VOS recx overwrite aggregate with credits",
-		io_recx_overwrite_credits, io_multikey_discard_setup,
-		io_multikey_discard_teardown},
-	{ "VOS401.3: VOS recx overwrite aggregated with completion reporting",
-		io_recx_overwrite_report, io_multikey_discard_setup,
-		io_multikey_discard_teardown},
-	{ "VOS402.1: VOS multi recx overwrite test without credits",
-		io_multi_recx_overwrite_test_without_credits,
-		io_multi_recx_discard_setup, io_multikey_discard_teardown},
-	{ "VOS402.2: VOS multi recx overwrite test with credits",
-		io_multi_recx_overwrite_test_with_credits,
+	{ "VOS402.1: VOS multi recx overwrite aggregate test",
+		io_multi_recx_overwrite_test,
 		io_multi_recx_discard_setup, io_multikey_discard_teardown},
 	{ "VOS403.1: VOS dkey update aggregate test",
 		io_multi_dkey_aggregate_test, io_multikey_discard_setup,

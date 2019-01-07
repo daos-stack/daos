@@ -83,10 +83,6 @@ Whether to start existing pool services when starting a `daos_server`. `BOOL`. D
 
 Whether to aggregate unreferenced epochs. `BOOL`. Default to false.
 
-### `DAOS_PURGE_CREDITS`
-
-Number of credits for probing object trees when aggregating unreferenced epochs. `INTGER`. Default to 1000.
-
 ## Client
 
 Environment variables in this section only apply to the client side.

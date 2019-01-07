@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,9 +63,8 @@ enum vts_test_flags {
 	TF_PUNCH		= (1 << 3),
 	TF_REC_EXT		= (1 << 4),
 	TF_FIXED_AKEY		= (1 << 5),
-	TF_REPORT_AGGREGATION	= (1 << 6),
-	IF_USE_ARRAY		= (1 << 7),
-	TF_USE_CSUM		= (1 << 8),
+	IF_USE_ARRAY		= (1 << 6),
+	TF_USE_CSUM		= (1 << 7),
 	IF_DISABLED		= (1 << 30),
 };
 

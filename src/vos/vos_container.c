@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -416,7 +416,10 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cont_info)
 		return -DER_INVAL;
 	}
 
-	memcpy(cont_info, &cont->vc_cont_df->cd_info, sizeof(*cont_info));
+	cont_info->ci_nobjs = cont->vc_cont_df->cd_nobjs;
+	cont_info->ci_used = cont->vc_cont_df->cd_used;
+	cont_info->ci_hae = cont->vc_cont_df->cd_hae;
+
 	return 0;
 }
 

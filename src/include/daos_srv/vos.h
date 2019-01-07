@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -212,20 +212,12 @@ vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
  * which is kept as aggregation result.
  *
  * \param coh	  [IN]		Container open handle
- * \param oid	  [IN]		Object handle for aggregation
  * \param epr	  [IN]		The epoch range of aggregation
- * \param credits [IN/OUT]	credits for probing object tree
- * \param anchor  [IN/OUT]	anchor returned for preemption.
- * \param finished
- *		  [OUT]		flag returned to notify completion
- *				of aggregation to caller.
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
-		    daos_epoch_range_t *epr, unsigned int *credits,
-		    vos_purge_anchor_t *anchor, bool *finished);
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -252,8 +244,7 @@ vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
  * \return			Zero on success, negative value if error
  */
 int
-vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
-		  uuid_t cookie);
+vos_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie);
 
 /**
  * VOS object API

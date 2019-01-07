@@ -31,6 +31,7 @@
 
 #include <daos/mem.h>
 #include <daos/common.h>
+#include <abt.h>
 
 typedef struct {
 	/*
@@ -360,5 +361,15 @@ int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
  * \return			SG list, or NULL on error
  */
 struct bio_sglist *bio_iod_sgl(struct bio_desc *biod, unsigned int idx);
+
+/*
+ * Wrapper of ABT_thread_yield()
+ */
+static inline void
+bio_yield(void)
+{
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+	ABT_thread_yield();
+}
 
 #endif /* __BIO_API_H__ */

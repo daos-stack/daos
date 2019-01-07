@@ -205,24 +205,6 @@ int daos_first_unset_bit(uint32_t *bits, unsigned int size);
 #define D_SWAP32S(x)	do { *(x) = D_SWAP32(*(x)); } while (0)
 #define D_SWAP64S(x)	do { *(x) = D_SWAP64(*(x)); } while (0)
 
-static inline unsigned int
-daos_env2uint(char *string)
-{
-	unsigned int	result = 0;
-	char		*end;
-	unsigned long	temp;
-
-	if (string == NULL)
-		return 0;
-
-	errno	= 0;
-	temp	= strtoul(string, &end, 0);
-	if (*end == '\0' && errno == 0)
-		result = (unsigned int) temp;
-
-	return result;
-}
-
 /**
  * Convert system errno to DER_* variant. Default error code for any non-defined
  * system errnos is DER_MISC (miscellaneous error).

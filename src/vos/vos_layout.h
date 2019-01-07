@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,7 +136,9 @@ struct vos_obj_table_df {
 /* VOS Container Value */
 struct vos_cont_df {
 	uuid_t				cd_id;
-	vos_cont_info_t			cd_info;
+	uint64_t			cd_nobjs;
+	daos_size_t			cd_used;
+	daos_epoch_t			cd_hae;
 	struct vos_obj_table_df		cd_otab_df;
 	/*
 	 * Allocation hint for block allocator, it can be turned into

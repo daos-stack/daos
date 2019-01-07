@@ -64,7 +64,7 @@ vos_iter2oiter(struct vos_iterator *iter)
 	return container_of(iter, struct vos_obj_iter, it_iter);
 }
 
-struct vos_obj_iter*
+struct vos_obj_iter *
 vos_hdl2oiter(daos_handle_t hdl)
 {
 	return vos_iter2oiter(vos_hdl2iter(hdl));

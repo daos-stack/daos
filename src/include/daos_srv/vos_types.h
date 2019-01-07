@@ -56,12 +56,12 @@ typedef struct {
  * container attributes returned to query
  */
 typedef struct {
-	/** number of objects */
-	unsigned int		pci_nobjs;
-	/** used space */
-	daos_size_t		pci_used;
-	/** aggregated epoch in this container */
-	daos_epoch_t		pci_purged_epoch;
+	/** # of objects in this container */
+	uint64_t		ci_nobjs;
+	/** Used space by container */
+	daos_size_t		ci_used;
+	/** Highest (Last) aggregated epoch */
+	daos_epoch_t		ci_hae;
 	/** TODO */
 } vos_cont_info_t;
 
@@ -107,27 +107,6 @@ enum {
 	/** replay punch (underwrite) */
 	VOS_OF_REPLAY_PC	= (1 << 0),
 };
-
-/**
- * Parameters for returning anchor
- * from aggregation/discard
- */
-typedef struct {
-	/** anchor status mask */
-	unsigned int		pa_mask;
-	/** Anchor for obj */
-	daos_anchor_t		pa_obj;
-	/** Anchor for dkey */
-	daos_anchor_t		pa_dkey;
-	/** Anchor for akey */
-	daos_anchor_t		pa_akey;
-	/** Anchor for recx */
-	daos_anchor_t		pa_recx;
-	/** Anchor for retained recx (max epoch) */
-	daos_anchor_t		pa_recx_max;
-	/** Save OID for aggregation optimization */
-	daos_unit_oid_t		pa_oid;
-} vos_purge_anchor_t;
 
 enum {
 	/** The absence of any flags means iterate all unsorted extents */
