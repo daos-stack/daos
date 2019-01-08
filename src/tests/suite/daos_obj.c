@@ -2232,12 +2232,22 @@ epoch_discard(void **state)
 		}
 		insert(dkey, nakeys, (const char **)akey, rec_size, rx_nr,
 		       offset, (void **)rec, th[e], &req);
+		daos_sync_ranks(MPI_COMM_WORLD);
 	}
 
-	/** Discard second timestamp. */
-	print_message("discarding transaction.\n");
-	rc = daos_tx_abort(th[1], NULL);
-	assert_int_equal(rc, 0);
+	for (e = 0; e < 3; e++) {
+		/** Discard second timestamp. */
+		if (e == 1) {
+			print_message("aborting transaction %d.\n", e);
+			rc = daos_tx_abort(th[e], NULL);
+			assert_int_equal(rc, 0);
+		} else {
+			print_message("committing transaction %d.\n", e);
+			rc = daos_tx_commit(th[e], NULL);
+			assert_int_equal(rc, 0);
+		}
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
 
 	/** Check the three transactions. */
 	for (e = 0; e < 3; e++) {
@@ -2277,25 +2287,27 @@ epoch_discard(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	close_reopen_coh_oh(arg, &req, oid);
 
-	/** Verify that the three uncommitted transactions are discarded. */
-	{
-		daos_anchor_t	anchor;
-		int		found = 0;
+	lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
+	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
+	for (i = 0; i < nakeys; i++) {
+		rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
+				    IO_SIZE_SCM, 1);
+		assert_non_null(rec_verify);
+		if (i % 2 == 0)
+			memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
+		else
+			memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
 
-		print_message("verifying discarded after re-open\n");
-		memset(&anchor, 0, sizeof(anchor));
-		while (!daos_anchor_is_eof(&anchor)) {
-			uint32_t		n = 1;
-			daos_key_desc_t		kd;
-			char			*buf[64];
-
-			rc = enumerate_dkey(DAOS_TX_NONE, &n, &kd, &anchor,
-					    buf, sizeof(buf), &req);
-			assert_int_equal(rc, 0);
-			print_message("\tdkeys:%u\n", n);
-			found += n;
-		}
-		assert_int_equal(found, 0);
+		rec_verify[0] = i + '0';
+		rec_verify[1] = 2 + '0';
+		assert_int_equal(req.iod[i].iod_size,
+				 strlen(rec_verify) + 1);
+		print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n", i,
+			      akey[i], (int)req.iod[i].iod_size,
+			      val[i][0], val[i][1]);
+		assert_memory_equal(val[i], rec_verify,
+				    req.iod[i].iod_size);
+		D_FREE(rec_verify);
 	}
 
 	for (i = 0; i < nakeys; i++) {
@@ -2430,6 +2442,10 @@ epoch_commit(void **state)
 		if (e != 2) {
 			print_message("committing transaction %d\n", e);
 			rc = daos_tx_commit(th[e], NULL);
+			assert_int_equal(rc, 0);
+		} else {
+			print_message("aborting transaction %d\n", e);
+			rc = daos_tx_abort(th[e], NULL);
 			assert_int_equal(rc, 0);
 		}
 		rc = daos_tx_close(th[e], NULL);

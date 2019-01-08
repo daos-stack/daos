@@ -216,7 +216,6 @@ rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
 	struct ioreq	req;
 	daos_epoch_t	eph = arg->hce + arg->index * 2 + 1;
-	int		rc;
 	int		i;
 	int		punch_idx = 1;
 
@@ -230,15 +229,8 @@ rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 		} else {
 			rebuild_io_obj_internal((&req), false, eph, -1);
 		}
-
 		ioreq_fini(&req);
 	}
-
-	/** TODO - should snapshot and rollback on open instead. */
-	rc = daos_cont_sync(arg->coh, NULL);
-	if (rc)
-		print_message("container sync failed "DF_UUIDF
-			      ": %d\n", DP_UUID(arg->co_uuid), rc);
 }
 
 static void

@@ -592,8 +592,6 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 {
 	struct dsm_tls	       *tls = dsm_tls_get();
 	struct ds_cont_hdl     *hdl;
-	daos_epoch_range_t	range;
-	int			rc;
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, rec->tcr_hdl);
 	if (hdl == NULL) {
@@ -607,25 +605,9 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
 		DP_UUID(rec->tcr_hdl), rec->tcr_hce);
 
-	/* All uncommitted epochs of this handle. */
-	range.epr_lo = rec->tcr_hce + 1;
-	range.epr_hi = DAOS_EPOCH_MAX;
-
-	rc = vos_epoch_discard(hdl->sch_cont->sc_hdl, &range, rec->tcr_hdl);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to discard uncommitted epochs ["DF_U64
-			", "DF_X64"): hdl="DF_UUID" rc=%d\n",
-			DP_CONT(hdl->sch_pool->spc_uuid,
-				hdl->sch_cont->sc_uuid), range.epr_lo,
-			range.epr_hi, DP_UUID(rec->tcr_hdl), rc);
-		D_GOTO(out, rc);
-	}
-
 	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
-
-out:
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
-	return rc;
+	return 0;
 }
 
 /* Called via dss_collective() to close the containers belong to this thread. */

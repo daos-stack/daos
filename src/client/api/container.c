@@ -125,23 +125,6 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 }
 
 int
-daos_cont_sync(daos_handle_t coh, daos_event_t *ev)
-{
-	daos_cont_sync_t	*args;
-	tse_task_t		*task;
-	int			rc;
-
-	rc = dc_task_create(dc_cont_sync, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->coh = coh;
-
-	return dc_task_schedule(task, true);
-}
-
-int
 daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 		daos_event_t *ev)
 {

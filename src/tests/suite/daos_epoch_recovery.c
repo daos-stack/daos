@@ -112,6 +112,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	uuid_t		uuid;
 	daos_handle_t	coh;
 	daos_obj_id_t	oid;
+	daos_epoch_t	snap;
 	int		rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -130,9 +131,8 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	/* Every rank updates timestep 1. */
 	io(UPDATE, arg, coh, oid, "timestamp 1");
 
-	/** TODO - should be removed when rollback is implemented. */
-	/** TODO - take snapshot instead. */
-	rc = daos_cont_sync(coh, NULL);
+	/** Take a snapshot at this point to rollback to. */
+	rc = daos_cont_create_snap(coh, &snap, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	/* Every rank updates timestep 2. */
@@ -180,7 +180,8 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	/** TODO - query last snapshot taken and rollback to that */
 
 	/** Verify that timestep 1 is there (not 2). */
-	io(VERIFY, arg, coh, oid, "timestamp 1");
+	/** TODO - since rollback is not supported, verify 2 instead of 1. */
+	io(VERIFY, arg, coh, oid, "timestamp 2");
 
 	rc = daos_cont_close(coh, NULL /* ev */);
 	assert_int_equal(rc, 0);

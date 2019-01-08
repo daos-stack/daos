@@ -58,7 +58,6 @@ int dc_cont_open(tse_task_t *task);
 int dc_cont_close(tse_task_t *task);
 int dc_cont_destroy(tse_task_t *task);
 int dc_cont_query(tse_task_t *task);
-int dc_cont_sync(tse_task_t *task);
 int dc_cont_rollback(tse_task_t *task);
 int dc_cont_subscribe(tse_task_t *task);
 int dc_cont_list_attr(tse_task_t *task);
@@ -77,16 +76,5 @@ int dc_tx_close(tse_task_t *task);
 int dc_tx_rebuild_open(daos_handle_t coh, daos_epoch_t epoch,
 		       daos_handle_t *th);
 int dc_tx_rebuild_close(daos_handle_t th);
-
-typedef struct {
-	daos_handle_t		coh;
-} daos_cont_sync_t;
-
-/**
- * This is a temporary function to commit the current epoch to the container
- * since 2PC and MVCC are not yet implemented. THIS WILL BE REMOVED and SHOULD
- * NOT BE USED.
- */
-int daos_cont_sync(daos_handle_t coh, daos_event_t *ev);
 
 #endif /* __DAOS_CONTAINER_H__ */
