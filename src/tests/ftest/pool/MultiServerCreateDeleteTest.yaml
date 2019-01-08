@@ -14,15 +14,15 @@ tests:
         - PASS
     readonly:
       mode:
-        - 292
-        - PASS
+        - 73
+        - FAIL
     writeonly:
       mode:
         - 146
         - PASS
     execonly:
       mode:
-        - 73
+        - 292
         - PASS
     modebogus:
       mode:
@@ -41,10 +41,6 @@ tests:
       uid:
         - 1001
         - PASS
-    baduid:
-      uid:
-        - 99999999
-        - FAIL
   gids: !mux
     validgid:
       gid:
@@ -58,10 +54,6 @@ tests:
       gid:
         - 1001
         - PASS
-    baduid:
-      gid:
-        - 99999999
-        - FAIL
   setnames: !mux
     validsetname:
       setname:
@@ -76,15 +68,11 @@ tests:
       tgt:
         - "0"
         - PASS
-    secondtgt:
-      tgt:
-        - "1"
-        - PASS
     bothtgt:
       tgt:
-        - "0,1"
+        - "0:1"
         - PASS
     badtgt:
       tgt:
-        - "0,1,2"
+        - "0:1:2"
         - FAIL
