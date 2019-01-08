@@ -40,10 +40,21 @@ type ControlService struct {
 	nvme              *nvmeStorage
 	scm               *scmStorage
 	logger            *log.Logger
-	SupportedFeatures FeatureMap
+	supportedFeatures FeatureMap
 }
 
-// Teardown delegates to Storage implementation's Teardowns
+// Setup delegates to Storage implementation's Setup methods
+func (c *ControlService) Setup() (err error) {
+	if err = c.nvme.Setup(); err != nil {
+		return
+	}
+	if err = c.scm.Setup(); err != nil {
+		return
+	}
+	return
+}
+
+// Teardown delegates to Storage implementation's Teardown methods
 func (c *ControlService) Teardown() (err error) {
 	if err = c.nvme.Teardown(); err != nil {
 		return
@@ -75,8 +86,35 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 	return
 }
 
-// NewControlServer creates a new instance of ControlServer struct.
-func NewControlServer() *ControlService {
+func dumpLocalStorage(name string, i interface{}) {
+	println(name + ":")
+	s, err := handlers.StructsToString(i)
+	if err != nil {
+		println("Unable to YAML encode response: " + err.Error())
+		return
+	}
+	println(s)
+}
+
+// ShowLocalStorage retrieves and prints details of locally attached SCM and
+// NVMe storage to daos_server stdout.
+func (c *ControlService) ShowLocalStorage() error {
+	println("Listing attached storage...")
+	if err := c.nvme.Discover(); err != nil {
+		println("Failure retrieving NVMe details: " + err.Error())
+	} else {
+		dumpLocalStorage("NVMe", c.nvme.Controllers)
+	}
+	if err := c.scm.Discover(); err != nil {
+		println("Failure retrieving SCM details: " + err.Error())
+	} else {
+		dumpLocalStorage("SCM", c.scm.Modules)
+	}
+	return nil
+}
+
+// NewControlServer creates a new instance of ControlService struct.
+func NewControlServer(shmID int) *ControlService {
 	logger := log.NewLogger()
 	logger.SetLevel(log.Debug)
 
@@ -86,9 +124,9 @@ func NewControlServer() *ControlService {
 	}
 
 	return &ControlService{
-		nvme:              newNvmeStorage(logger),
+		nvme:              newNvmeStorage(logger, shmID),
 		scm:               newScmStorage(logger),
 		logger:            logger,
-		SupportedFeatures: fMap,
+		supportedFeatures: fMap,
 	}
 }

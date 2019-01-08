@@ -36,30 +36,10 @@ import (
 	"github.com/daos-stack/daos/src/control/utils/handlers"
 )
 
-// FetchNvme populates controllers and namespaces in ControlService
-// as side effect.
-//
-// todo: presumably we want to be able to detect namespaces added
-//       during the lifetime of the daos_server process, in that case
-//       will need to rerun discover here (currently SPDK throws
-//		 exception if you try to probe a second time).
-func (c *ControlService) FetchNvme() (err error) {
-	if !c.nvme.initialised {
-		// todo: pass shm_id to Init()
-		if err = c.nvme.Init(); err != nil {
-			return
-		}
-		if err = c.nvme.Discover(); err != nil {
-			return
-		}
-	}
-	return
-}
-
 // ListNvmeCtrlrs lists all NVMe controllers.
 func (c *ControlService) ListNvmeCtrlrs(
 	empty *pb.EmptyParams, stream pb.MgmtControl_ListNvmeCtrlrsServer) error {
-	if err := c.FetchNvme(); err != nil {
+	if err := c.nvme.Discover(); err != nil {
 		return err
 	}
 	for _, ctrlr := range c.nvme.Controllers {
@@ -72,20 +52,23 @@ func (c *ControlService) ListNvmeCtrlrs(
 
 // UpdateNvmeCtrlr updates the firmware on a NVMe controller, verifying that the
 // fwrev reported changes after update.
+//
+// Todo: in real life Ctrlr.Id is not guaranteed to be unique, use pciaddr instead
 func (c *ControlService) UpdateNvmeCtrlr(
 	ctx context.Context, params *pb.UpdateNvmeCtrlrParams) (*pb.NvmeController, error) {
 	id := params.Ctrlr.Id
 	if err := c.nvme.Update(id, params.Path, params.Slot); err != nil {
 		return nil, err
 	}
-	ctrlr, exists := c.nvme.Controllers[id]
-	if !exists {
-		return nil, fmt.Errorf("update failed, no matching controller found")
+	for _, ctrlr := range c.nvme.Controllers {
+		if ctrlr.Id == id {
+			if ctrlr.Fwrev == params.Ctrlr.Fwrev {
+				return nil, fmt.Errorf("update failed, firmware revision unchanged")
+			}
+			return ctrlr, nil
+		}
 	}
-	if ctrlr.Fwrev == params.Ctrlr.Fwrev {
-		return nil, fmt.Errorf("update failed, firmware revision unchanged")
-	}
-	return ctrlr, nil
+	return nil, fmt.Errorf("update failed, no matching controller found")
 }
 
 // FetchFioConfigPaths retrieves any configuration files in fio_plugin directory

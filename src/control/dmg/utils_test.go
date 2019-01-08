@@ -28,10 +28,9 @@ import (
 	"fmt"
 	"testing"
 
-	"gopkg.in/yaml.v2"
-
 	. "github.com/daos-stack/daos/src/control/client/mgmt"
 	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	. "github.com/daos-stack/daos/src/control/utils/handlers"
 	. "github.com/daos-stack/daos/src/control/utils/test"
 )
 
@@ -97,8 +96,8 @@ func TestSprintConns(t *testing.T) {
 }
 
 func marshal(i interface{}) string {
-	s, _ := yaml.Marshal(i)
-	return string(s)
+	s, _ := StructsToString(i)
+	return s
 }
 
 func TestCheckSprint(t *testing.T) {

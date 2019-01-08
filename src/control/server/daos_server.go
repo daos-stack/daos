@@ -41,19 +41,25 @@ import (
 )
 
 type cliOptions struct {
-	Port       uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
-	MountPath  string  `short:"s" long:"storage" description:"Storage path"`
-	ConfigPath string  `short:"o" long:"config_path" description:"Server config file path"`
-	Modules    *string `short:"m" long:"modules" description:"List of server modules to load"`
-	Cores      uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
-	Group      string  `short:"g" long:"group" description:"Server group name"`
-	Attach     *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
-	Map        *string `short:"y" long:"map" description:"[Temporary] System map file"`
-	Rank       *uint   `short:"r" long:"rank" description:"[Temporary] Self rank"`
-	SocketDir  string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	Port        uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
+	MountPath   string  `short:"s" long:"storage" description:"Storage path"`
+	ConfigPath  string  `short:"o" long:"config_path" description:"Server config file path"`
+	Modules     *string `short:"m" long:"modules" description:"List of server modules to load"`
+	Cores       uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
+	Group       string  `short:"g" long:"group" description:"Server group name"`
+	Attach      *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
+	Map         *string `short:"y" long:"map" description:"[Temporary] System map file"`
+	Rank        *uint   `short:"r" long:"rank" description:"[Temporary] Self rank"`
+	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	ShowStorage bool    `long:"show-storage" description:"List locally attached SCM and NVMe storage"`
 }
 
-var opts cliOptions
+var (
+	opts cliOptions
+	// shared memory segment ID to enable multiple SPDK application instances to
+	// access the same NVMe controller.
+	shmID = 1
+)
 
 func main() {
 	runtime.GOMAXPROCS(1)
@@ -61,7 +67,20 @@ func main() {
 	// Parse commandline flags which override options loaded from config.
 	_, err := flags.Parse(&opts)
 	if err != nil {
-		log.Fatalf("%s", err)
+		println(err)
+		return
+	}
+
+	mgmtControlServer := mgmt.NewControlServer(shmID)
+	mgmtControlServer.Setup()
+	defer mgmtControlServer.Teardown()
+
+	// If command mode option specified then perform task and exit.
+	if opts.ShowStorage {
+		if err := mgmtControlServer.ShowLocalStorage(); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 
 	// Parse configuration file and load values, then backup active config.
@@ -74,13 +93,11 @@ func main() {
 		log.Fatal("Unable to listen on management interface: ", err)
 	}
 
-	// TODO: This will need to be extended to take certificat information for
+	// TODO: This will need to be extended to take certificate information for
 	// the TLS protected channel. Currently it is an "insecure" channel.
 	var sOpts []grpc.ServerOption
 	grpcServer := grpc.NewServer(sOpts...)
 
-	mgmtControlServer := mgmt.NewControlServer()
-	defer mgmtControlServer.Teardown()
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()

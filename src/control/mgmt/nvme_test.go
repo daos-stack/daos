@@ -35,27 +35,15 @@ func mockNvmeCS(ns *nvmeStorage) *ControlService {
 	return &ControlService{nvme: ns}
 }
 
-func TestFetchNvme(t *testing.T) {
-	s := mockNvmeCS(newMockNvmeStorage("1.0.0", "1.0.1"))
-
-	if err := s.FetchNvme(); err != nil {
-		t.Fatal(err.Error())
-	}
-
-	cExpect := MockControllerPB("1.0.0")
-
-	AssertEqual(t, s.nvme.Controllers[cExpect.Id], cExpect, "unexpected Controller populated")
-}
-
 func TestUpdateNvmeCtrlr(t *testing.T) {
 	s := mockNvmeCS(newMockNvmeStorage("1.0.0", "1.0.1"))
 
-	if err := s.FetchNvme(); err != nil {
+	if err := s.nvme.Discover(); err != nil {
 		t.Fatal(err.Error())
 	}
 
 	cExpect := MockControllerPB("1.0.1")
-	c := s.nvme.Controllers[cExpect.Id]
+	c := s.nvme.Controllers[0]
 
 	// after fetching controller details, simulate updated firmware
 	// version being reported
@@ -67,19 +55,18 @@ func TestUpdateNvmeCtrlr(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	AssertEqual(t, s.nvme.Controllers[cExpect.Id], cExpect, "unexpected Controller populated")
+	AssertEqual(t, s.nvme.Controllers[0], cExpect, "unexpected Controller populated")
 	AssertEqual(t, newC, cExpect, "unexpected Controller returned")
 }
 
 func TestUpdateNvmeCtrlrFail(t *testing.T) {
 	s := mockNvmeCS(newMockNvmeStorage("1.0.0", "1.0.0"))
 
-	if err := s.FetchNvme(); err != nil {
+	if err := s.nvme.Discover(); err != nil {
 		t.Fatal(err.Error())
 	}
 
-	cExpect := MockControllerPB("1.0.0")
-	c := s.nvme.Controllers[cExpect.Id]
+	c := s.nvme.Controllers[0]
 
 	// after fetching controller details, simulate the same firmware
 	// version being reported

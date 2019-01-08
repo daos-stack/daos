@@ -37,7 +37,7 @@ func TestGetFeature(t *testing.T) {
 	mockFeature := MockFeaturePB()
 	fMap := make(FeatureMap)
 	fMap[mockFeature.Fname.Name] = mockFeature
-	s.SupportedFeatures = fMap
+	s.supportedFeatures = fMap
 
 	feature, err := s.GetFeature(nil, mockFeature.Fname)
 	if err != nil {

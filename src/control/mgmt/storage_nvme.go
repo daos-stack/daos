@@ -40,9 +40,6 @@ var (
 	spdkSetupPath    = "share/spdk/scripts/setup.sh"
 	spdkFioPluginDir = "share/spdk/fio_plugin"
 	fioExecPath      = "bin/fio"
-	// shared memory segment ID to enable multiple SPDK instances to
-	// access the same NVMe controller.
-	shmID = 1
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -55,9 +52,6 @@ type SpdkSetup interface {
 // spdkSetup is an implementation of the SpdkSetup interface
 type spdkSetup struct{}
 
-// CtrlrMap is a type alias for protobuf namespace messages
-type CtrlrMap map[int32]*pb.NvmeController
-
 // nvmeStorage gives access to underlying SPDK interfaces
 // for accessing Nvme devices (API) as well as storing device
 // details.
@@ -66,7 +60,8 @@ type nvmeStorage struct {
 	env         spdk.ENV  // SPDK ENV interface
 	nvme        spdk.NVME // SPDK NVMe interface
 	setup       SpdkSetup // SPDK shell configuration interface
-	Controllers CtrlrMap
+	shmID       int       // SPDK init opts param to enable multi-process mode
+	Controllers []*pb.NvmeController
 	initialised bool
 }
 
@@ -96,32 +91,55 @@ func (s *spdkSetup) reset() (err error) {
 	return
 }
 
-// Init method implementation for nvmeStorage.
+// Setup method implementation for nvmeStorage.
 //
-// Setup available NVMe devices to be used by SPDK
-// and initialise SPDK environment before probing controllers.
-//
-// 	Note: shmID specified to enable SPDK multiprocess
-//        mode between Discover and Burn-in.
-func (n *nvmeStorage) Init() (err error) {
+// Perform any setup required to use available NVMe devices.
+func (n *nvmeStorage) Setup() (err error) {
 	if err = n.setup.start(); err != nil {
 		return
 	}
-	// specify shmID to be set as opt in SPDK env init
-	err = n.env.InitSPDKEnv(shmID)
+	return
+}
+
+// Teardown method implementation for nvmeStorage.
+//
+// Perform any teardown to be performed after accessing NVMe devices.
+func (n *nvmeStorage) Teardown() (err error) {
+	// Cleanup references to NVMe devices held by go-spdk bindings
+	n.nvme.Cleanup()
+	// Rebind PCI devices back to their original drivers and cleanup any
+	// leftover spdk files/resources.
+	// err = n.setup.reset()
 	return
 }
 
 // Discover method implementation for nvmeStorage.
 //
-// Retrieves controllers and namespaces through external interface
-// and populates protobuf representations in struct.
+// Initialise SPDK environment before probing controllers then retrieve
+// controller and namespace details through external interface and populate
+// protobuf representations.
+//
+// Note: SPDK multi-process mode can be enabled by supplying shm_id in
+//       spdk_env_opts for all applications accessing SSD with SPDK. This is
+//       specifically used to work around the fact that SPDK throws exceptions
+//       if you try to probe a second time.
+// Todo: this is currently a one-time only discovery for the lifetime of this
+//       process, presumably we want to be able to detect updates during
+//       process lifetime.
 func (n *nvmeStorage) Discover() error {
-	cs, ns, err := n.nvme.Discover()
-	if err != nil {
-		return err
+	if !n.initialised {
+		// specify shmID to be set as opt in SPDK env init
+		if err := n.env.InitSPDKEnv(n.shmID); err != nil {
+			return err
+		}
+		cs, ns, err := n.nvme.Discover()
+		if err != nil {
+			return err
+		}
+		n.Controllers = loadControllers(cs, ns)
+		n.initialised = true
 	}
-	return n.populate(cs, ns)
+	return nil
 }
 
 // Update method implementation for nvmeStorage
@@ -130,7 +148,9 @@ func (n *nvmeStorage) Update(ctrlrID int32, path string, slot int32) error {
 	if err != nil {
 		return err
 	}
-	return n.populate(cs, ns)
+	n.Controllers = loadControllers(cs, ns)
+	n.initialised = true
+	return nil
 }
 
 // BurnIn method implementation for nvmeStorage
@@ -168,44 +188,29 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 	return
 }
 
-// Teardown method implementation for nvmeStorage.
-//
-// Cleanup references to NVMe devices held by go-spdk
-// bindings, rebind PCI devices back to their original drivers
-// and cleanup any leftover spdk files/resources.
-func (n *nvmeStorage) Teardown() (err error) {
-	n.nvme.Cleanup()
-	err = n.setup.reset()
-	return
-}
-
 // loadControllers converts slice of Controller into protobuf equivalent.
 // Implemented as a pure function.
-func loadControllers(
-	ctrlrs []spdk.Controller, nss []spdk.Namespace) (CtrlrMap, error) {
-
-	pbCtrlrs := make(CtrlrMap)
+func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
+	pbCtrlrs []*pb.NvmeController) {
 	for _, c := range ctrlrs {
-		pbCtrlrs[c.ID] = &pb.NvmeController{
-			Id:      c.ID,
-			Model:   c.Model,
-			Serial:  c.Serial,
-			Pciaddr: c.PCIAddr,
-			Fwrev:   c.FWRev,
-			// repeated pb field
-			Namespace: loadNamespaces(c.ID, nss),
-		}
+		pbCtrlrs = append(
+			pbCtrlrs,
+			&pb.NvmeController{
+				Id:      c.ID,
+				Model:   c.Model,
+				Serial:  c.Serial,
+				Pciaddr: c.PCIAddr,
+				Fwrev:   c.FWRev,
+				// repeated pb field
+				Namespace: loadNamespaces(c.ID, nss),
+			})
 	}
-	if len(pbCtrlrs) != len(ctrlrs) {
-		return nil, fmt.Errorf("loadControllers: input contained duplicate keys")
-	}
-	return pbCtrlrs, nil
+	return pbCtrlrs
 }
 
 // loadNamespaces converts slice of Namespace into protobuf equivalent.
 // Implemented as a pure function.
 func loadNamespaces(ctrlrID int32, nss []spdk.Namespace) (_nss []*pb.NvmeNamespace) {
-
 	for _, ns := range nss {
 		if ns.CtrlrID == ctrlrID {
 			_nss = append(
@@ -219,23 +224,13 @@ func loadNamespaces(ctrlrID int32, nss []spdk.Namespace) (_nss []*pb.NvmeNamespa
 	return
 }
 
-// populate unpacks return type and loads protobuf representations.
-func (n *nvmeStorage) populate(inCtrlrs []spdk.Controller, inNss []spdk.Namespace) error {
-	ctrlrs, err := loadControllers(inCtrlrs, inNss)
-	if err != nil {
-		return err
-	}
-	n.Controllers = ctrlrs
-	n.initialised = true
-	return nil
-}
-
 // newNvmeStorage creates a new instance of nvmeStorage struct.
-func newNvmeStorage(logger *log.Logger) *nvmeStorage {
+func newNvmeStorage(logger *log.Logger, shmID int) *nvmeStorage {
 	return &nvmeStorage{
 		logger: logger,
 		env:    &spdk.Env{},
 		nvme:   &spdk.Nvme{},
 		setup:  &spdkSetup{},
+		shmID:  shmID, // required to enable SPDK multi-process mode
 	}
 }

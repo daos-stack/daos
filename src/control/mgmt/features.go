@@ -38,7 +38,7 @@ type FeatureMap map[string]*pb.Feature
 // GetFeature returns the feature from feature name.
 func (s *ControlService) GetFeature(
 	ctx context.Context, name *pb.FeatureName) (*pb.Feature, error) {
-	f, exists := s.SupportedFeatures[name.Name]
+	f, exists := s.supportedFeatures[name.Name]
 	if !exists {
 		return nil, fmt.Errorf("no feature with name %s", name.Name)
 	}
@@ -48,7 +48,7 @@ func (s *ControlService) GetFeature(
 // ListAllFeatures lists all features supported by the management server.
 func (s *ControlService) ListAllFeatures(
 	empty *pb.EmptyParams, stream pb.MgmtControl_ListAllFeaturesServer) error {
-	for _, feature := range s.SupportedFeatures {
+	for _, feature := range s.supportedFeatures {
 		if err := stream.Send(feature); err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func (s *ControlService) ListAllFeatures(
 // ListFeatures lists all features supported by the management server.
 func (s *ControlService) ListFeatures(
 	category *pb.Category, stream pb.MgmtControl_ListFeaturesServer) error {
-	for _, feature := range s.SupportedFeatures {
+	for _, feature := range s.supportedFeatures {
 		if proto.Equal(feature.GetCategory(), category) {
 			if err := stream.Send(feature); err != nil {
 				return err

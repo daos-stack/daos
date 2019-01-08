@@ -29,6 +29,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 // GetAbsInstallPath retrieves absolute path of files in daos install dir
@@ -116,4 +119,20 @@ func WriteSlice(path string, slice []string) (err error) {
 // WriteString writes string to specified file, wrapper around WriteSlice.
 func WriteString(path string, s string) error {
 	return WriteSlice(path, []string{s})
+}
+
+// StructsToStrings returns yaml representation (as a list of strings) of any
+// interface but avoids fields/lines prefixed with xxx_ such as added by
+// protobuf boilerplate.
+func StructsToString(i interface{}) (lines string, err error) {
+	s, err := yaml.Marshal(i)
+	if err != nil {
+		return
+	}
+	for _, l := range strings.Split(string(s), "\n") {
+		if !strings.Contains(l, "xxx_") {
+			lines = lines+l+"\n"
+		}
+	}
+	return
 }

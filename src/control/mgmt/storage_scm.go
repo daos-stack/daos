@@ -87,6 +87,9 @@ func (s *scmStorage) Discover() error {
 // return
 // }
 
+// Setup placeholder implementation for scmStorage
+func (s *scmStorage) Setup() error { return nil }
+
 // Teardown placeholder implementation for scmStorage
 func (s *scmStorage) Teardown() error { return nil }
 

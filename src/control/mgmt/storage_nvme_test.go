@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 	"github.com/daos-stack/daos/src/control/utils/log"
 	. "github.com/daos-stack/daos/src/control/utils/test"
 	. "github.com/daos-stack/go-spdk/spdk"
@@ -79,7 +80,7 @@ func TestDiscoveryNvme(t *testing.T) {
 
 	AssertTrue(t, sn.initialised, "expected NvmeStorage to have been initialised")
 	AssertEqual(
-		t, sn.Controllers, CtrlrMap{c.Id: c},
+		t, sn.Controllers, []*pb.NvmeController{c},
 		"unexpected list of protobuf format controllers")
 }
 
@@ -93,7 +94,7 @@ func TestUpdateNvme(t *testing.T) {
 
 	AssertTrue(t, sn.initialised, "expected NvmeStorage to have been initialised")
 	AssertEqual(
-		t, sn.Controllers, CtrlrMap{c.Id: c},
+		t, sn.Controllers, []*pb.NvmeController{c},
 		"unexpected list of protobuf format controllers")
 }
 
