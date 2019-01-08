@@ -946,6 +946,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
 
 		spdk_env_opts_init(&opts);
 		opts.name = "daos";
+		opts.shm_id = 1;
 		rc = spdk_env_init(&opts);
 		if (rc != 0) {
 			D_ERROR("failed to initialize SPDK env, rc:%d\n", rc);
