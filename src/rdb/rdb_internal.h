@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -303,13 +303,13 @@ void rdb_anchor_set_eof(struct rdb_anchor *anchor);
 bool rdb_anchor_is_eof(const struct rdb_anchor *anchor);
 void rdb_anchor_to_hashes(const struct rdb_anchor *anchor,
 			  daos_anchor_t *obj_anchor, daos_anchor_t *dkey_anchor,
-			  daos_anchor_t *akey_anchor,
-			  daos_anchor_t *recx_anchor);
+			  daos_anchor_t *akey_anchor, daos_anchor_t *ev_anchor,
+			  daos_anchor_t *sv_anchor);
 void rdb_anchor_from_hashes(struct rdb_anchor *anchor,
 			    daos_anchor_t *obj_anchor,
 			    daos_anchor_t *dkey_anchor,
 			    daos_anchor_t *akey_anchor,
-			    daos_anchor_t *recx_anchor);
+			    daos_anchor_t *ev_anchor, daos_anchor_t *sv_anchor);
 
 int rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		  daos_key_t *akey, daos_iov_t *value);

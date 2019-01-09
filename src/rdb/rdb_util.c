@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -215,18 +215,19 @@ rdb_anchor_is_eof(const struct rdb_anchor *anchor)
 void
 rdb_anchor_to_hashes(const struct rdb_anchor *anchor, daos_anchor_t *obj_anchor,
 		     daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor,
-		     daos_anchor_t *recx_anchor)
+		     daos_anchor_t *ev_anchor, daos_anchor_t *sv_anchor)
 {
 	*obj_anchor = anchor->da_object;
 	memset(dkey_anchor, 0, sizeof(*dkey_anchor));
 	*akey_anchor = anchor->da_akey;
-	memset(recx_anchor, 0, sizeof(*recx_anchor));
+	memset(ev_anchor, 0, sizeof(*ev_anchor));
+	memset(sv_anchor, 0, sizeof(*sv_anchor));
 }
 
 void
 rdb_anchor_from_hashes(struct rdb_anchor *anchor, daos_anchor_t *obj_anchor,
 		       daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor,
-		       daos_anchor_t *recx_anchor)
+		       daos_anchor_t *ev_anchor, daos_anchor_t *sv_anchor)
 {
 	anchor->da_object = *obj_anchor;
 	anchor->da_akey = *akey_anchor;
@@ -544,7 +545,7 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 static int
 rdb_vos_aggregate_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 		      vos_iter_type_t type, vos_iter_param_t *param,
-		      void *arg, bool *reprobe)
+		      void *arg, unsigned int *acts)
 {
 	const unsigned int	run_max = 64;
 	unsigned int		total = 0;

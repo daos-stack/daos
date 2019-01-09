@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -362,14 +362,20 @@ type2anchor(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 {
 	switch (type) {
 	case VOS_ITER_OBJ:
+		D_ASSERT(anchors->ia_reprobe_obj == 0);
 		return &anchors->ia_obj;
 	case VOS_ITER_DKEY:
+		D_ASSERT(anchors->ia_reprobe_dkey == 0);
 		return &anchors->ia_dkey;
 	case VOS_ITER_AKEY:
+		D_ASSERT(anchors->ia_reprobe_akey == 0);
 		return &anchors->ia_akey;
-	case VOS_ITER_SINGLE:
 	case VOS_ITER_RECX:
-		return &anchors->ia_recx;
+		D_ASSERT(anchors->ia_reprobe_ev == 0);
+		return &anchors->ia_ev;
+	case VOS_ITER_SINGLE:
+		D_ASSERT(anchors->ia_reprobe_sv == 0);
+		return &anchors->ia_sv;
 	default:
 		D_ASSERTF(false, "invalid iter type %d\n", type);
 		return NULL;
@@ -390,21 +396,95 @@ reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 		D_ASSERT(daos_anchor_is_eof(&anchors->ia_dkey));
 		daos_anchor_set_zero(&anchors->ia_dkey);
 		daos_anchor_set_zero(&anchors->ia_akey);
-		daos_anchor_set_zero(&anchors->ia_recx);
+		daos_anchor_set_zero(&anchors->ia_ev);
+		daos_anchor_set_zero(&anchors->ia_sv);
 		break;
 	case VOS_ITER_AKEY:
 		D_ASSERT(daos_anchor_is_eof(&anchors->ia_akey));
 		daos_anchor_set_zero(&anchors->ia_akey);
-		daos_anchor_set_zero(&anchors->ia_recx);
+		daos_anchor_set_zero(&anchors->ia_ev);
+		daos_anchor_set_zero(&anchors->ia_sv);
 		break;
 	case VOS_ITER_RECX:
-		D_ASSERT(daos_anchor_is_eof(&anchors->ia_recx));
-		daos_anchor_set_zero(&anchors->ia_recx);
+		D_ASSERT(daos_anchor_is_eof(&anchors->ia_ev));
+		daos_anchor_set_zero(&anchors->ia_ev);
+		daos_anchor_set_zero(&anchors->ia_sv);
+		break;
+	case VOS_ITER_SINGLE:
+		D_ASSERT(daos_anchor_is_eof(&anchors->ia_sv));
+		daos_anchor_set_zero(&anchors->ia_sv);
 		break;
 	default:
 		D_ASSERTF(false, "invalid iter type %d\n", type);
 		break;
 	}
+}
+
+static inline void
+set_reprobe(vos_iter_type_t type, unsigned int acts,
+	    struct vos_iter_anchors *anchors)
+{
+	bool yield = (acts & VOS_ITER_CB_YIELD);
+	bool delete = (acts & VOS_ITER_CB_DELETE);
+
+	switch (type) {
+	case VOS_ITER_SINGLE:
+		if (yield || delete)
+			anchors->ia_reprobe_sv = 1;
+		/* fallthrough */
+	case VOS_ITER_RECX:
+		/* evtree doesn't need reprobe on deletion or yield */
+		/* fallthrough */
+	case VOS_ITER_AKEY:
+		if (yield || (delete && (type == VOS_ITER_AKEY)))
+			anchors->ia_reprobe_akey = 1;
+		/* fallthrough */
+	case VOS_ITER_DKEY:
+		if (yield || (delete && (type == VOS_ITER_DKEY)))
+			anchors->ia_reprobe_dkey = 1;
+		/* fallthrough */
+	case VOS_ITER_OBJ:
+		if (yield || (delete && (type == VOS_ITER_OBJ)))
+			anchors->ia_reprobe_obj = 1;
+		break;
+	default:
+		D_ASSERTF(false, "invalid iter type %d\n", type);
+		break;
+	}
+}
+
+static inline bool
+need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
+{
+	bool reprobe;
+
+	switch (type) {
+	case VOS_ITER_OBJ:
+		reprobe = anchors->ia_reprobe_obj;
+		anchors->ia_reprobe_obj = 0;
+		break;
+	case VOS_ITER_DKEY:
+		reprobe = anchors->ia_reprobe_dkey;
+		anchors->ia_reprobe_dkey = 0;
+		break;
+	case VOS_ITER_AKEY:
+		reprobe = anchors->ia_reprobe_akey;
+		anchors->ia_reprobe_akey = 0;
+		break;
+	case VOS_ITER_RECX:
+		reprobe = anchors->ia_reprobe_ev;
+		anchors->ia_reprobe_ev = 0;
+		break;
+	case VOS_ITER_SINGLE:
+		reprobe = anchors->ia_reprobe_sv;
+		anchors->ia_reprobe_sv = 0;
+		break;
+	default:
+		D_ASSERTF(false, "invalid iter type %d\n", type);
+		reprobe = false;
+		break;
+	}
+	return reprobe;
 }
 
 /**
@@ -418,8 +498,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	daos_anchor_t		*anchor, *probe_anchor = NULL;
 	vos_iter_entry_t	iter_ent;
 	daos_handle_t		ih;
+	unsigned int		acts = 0;
 	int			rc;
-	bool			reprobe;
 
 	D_ASSERT(type >= VOS_ITER_OBJ && type <= VOS_ITER_RECX);
 	D_ASSERT(anchors != NULL);
@@ -439,7 +519,6 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	}
 
 probe:
-	reprobe = false;
 	if (!daos_anchor_is_zero(anchor))
 		probe_anchor = anchor;
 
@@ -463,11 +542,14 @@ probe:
 			break;
 		}
 
-		rc = cb(ih, &iter_ent, type, param, arg, &reprobe);
+		rc = cb(ih, &iter_ent, type, param, arg, &acts);
 		if (rc != 0)
 			break;
 
-		if (reprobe) {
+		set_reprobe(type, acts, anchors);
+		acts = 0;
+
+		if (need_reprobe(type, anchors)) {
 			D_ASSERT(!daos_anchor_is_zero(anchor) &&
 				 !daos_anchor_is_eof(anchor));
 			goto probe;
@@ -507,19 +589,20 @@ probe:
 			reset_anchors(child_type, anchors);
 
 			if (child_type == VOS_ITER_RECX) {
-				struct vos_iter_anchors	dummy = { 0 };
-
 				child_type = VOS_ITER_SINGLE;
-				/*
-				 * FIXME: Don't see why anchors->ia_recx
-				 * can't be shared by SV and EV tree in
-				 * rebuild enumeration. A temporary anchor
-				 * is used to pass rebuild test.
-				 */
+
 				rc = vos_iterate(&child_param, child_type,
-						 recursive, &dummy, cb, arg);
+						 recursive, anchors, cb, arg);
 				if (rc != 0)
 					D_GOTO(out, rc);
+
+				reset_anchors(child_type, anchors);
+			}
+
+			if (need_reprobe(type, anchors)) {
+				D_ASSERT(!daos_anchor_is_zero(anchor) &&
+					 !daos_anchor_is_eof(anchor));
+				goto probe;
 			}
 		}
 

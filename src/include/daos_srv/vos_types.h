@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -205,7 +205,15 @@ typedef struct {
  */
 typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
 			     vos_iter_type_t type, vos_iter_param_t *param,
-			     void *cb_arg, bool *reprobe);
+			     void *cb_arg, unsigned int *acts);
+/**
+ * Actions performed in iteration callback
+ */
+enum {
+	VOS_ITER_CB_YIELD	= (1UL << 0),	/* Yield */
+	VOS_ITER_CB_DELETE	= (1UL << 1),	/* Delete entry */
+};
+
 /**
  * Anchors for whole iteration, one for each entry type
  */
@@ -216,8 +224,16 @@ struct vos_iter_anchors {
 	daos_anchor_t	ia_dkey;
 	/** Anchor for akey */
 	daos_anchor_t	ia_akey;
-	/** Anchor for recx (SV tree or EV tree) */
-	daos_anchor_t	ia_recx;
+	/** Anchor for SV tree */
+	daos_anchor_t	ia_sv;
+	/** Anchor for EV tree */
+	daos_anchor_t	ia_ev;
+	/** Triggers for re-probe */
+	unsigned int	ia_reprobe_obj:1,
+			ia_reprobe_dkey:1,
+			ia_reprobe_akey:1,
+			ia_reprobe_sv:1,
+			ia_reprobe_ev:1;
 };
 
 #endif /* __VOS_TYPES_H__ */

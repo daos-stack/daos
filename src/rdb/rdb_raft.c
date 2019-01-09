@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -387,7 +387,7 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, daos_iov_t *kds,
 	 */
 	param.ip_hdl = lc;
 	rdb_anchor_to_hashes(&is->dis_anchor, &anchors.ia_obj, &anchors.ia_dkey,
-			     &anchors.ia_akey, &anchors.ia_recx);
+			     &anchors.ia_akey, &anchors.ia_ev, &anchors.ia_sv);
 	param.ip_epr.epr_lo = is->dis_index;
 	param.ip_epr.epr_hi = is->dis_index;
 	param.ip_epc_expr = VOS_IT_EPC_LE;
@@ -418,7 +418,7 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, daos_iov_t *kds,
 	else /* rc == 1 */
 		rdb_anchor_from_hashes(anchor, &anchors.ia_obj,
 				       &anchors.ia_dkey, &anchors.ia_akey,
-				       &anchors.ia_recx);
+				       &anchors.ia_ev, &anchors.ia_sv);
 
 	/* Report the buffer lengths. data.iov_len is set by dss_enum_pack. */
 	kds->iov_len = sizeof(*arg.kds) * arg.kds_len;
