@@ -160,14 +160,14 @@ class RebuildTests(Test):
                                                  string.digits)
                                    for _ in range(size))
 
-                    obj, epoch = container.write_an_obj(data, len(data),
+                    obj, tx = container.write_an_obj(data, len(data),
                                                         dkey, akey, obj, rank)
 
-                    saved_data.append((obj, dkey, akey, data, epoch))
+                    saved_data.append((obj, dkey, akey, data, tx))
 
                     # read the data back and make sure its correct
                     data2 = container.read_an_obj(size, dkey, akey,
-                                                  obj, epoch)
+                                                  obj, tx)
                     if data != data2.value:
                         self.fail("Write data 1, read it back, didn't match\n")
 
@@ -319,23 +319,23 @@ class RebuildTests(Test):
                                                  string.digits)
                                    for _ in range(size))
 
-                    obj, epoch = container1.write_an_obj(data, len(data),
+                    obj, tx = container1.write_an_obj(data, len(data),
                                                          dkey, akey, obj, rank)
-                    obj, epoch = container2.write_an_obj(data, len(data),
+                    obj, tx = container2.write_an_obj(data, len(data),
                                                          dkey, akey, obj, rank)
 
-                    saved_data.append((obj, dkey, akey, data, epoch))
+                    saved_data.append((obj, dkey, akey, data, tx))
 
                     # read the data back and make sure its correct
                     # containers
                     data2 = container1.read_an_obj(size, dkey, akey,
-                                                   obj, epoch)
+                                                   obj, tx)
                     if data != data2.value:
                         self.fail("Wrote data P1, read it back, didn't match\n")
 
                     # containers
                     data2 = container2.read_an_obj(size, dkey, akey,
-                                                   obj, epoch)
+                                                   obj, tx)
                     if data != data2.value:
                         self.fail("Wrote data P2, read it back, didn't match\n")
 

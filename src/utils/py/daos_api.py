@@ -312,7 +312,7 @@ class DaosPool(object):
     def pool_svc_stop(self, cb_func=None):
         """Stop the current pool service leader."""
 
-        func = self.context.get_function('service-stop')
+        func = self.context.get_function('stop-service')
 
         if cb_func is None:
             rc = func(self.handle, None)

@@ -51,29 +51,25 @@ class PoolSvc(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
 
         self.server_group = self.params.get("server_group",'/server/','daos_server')
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.POOL = None
+        self.pool = None
 
         self.hostfile = None
         self.hostlist = self.params.get("test_machines",'/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
         print("Host file is: {}".format(self.hostfile))
 
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
-        time.sleep(5)
 
     def tearDown(self):
         try:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
-            if self.POOL is not None and self.POOL.attached:
-                self.POOL.destroy(1)
+            if self.pool is not None and self.pool.attached:
+                self.pool.destroy(1)
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
 
@@ -97,39 +93,39 @@ class PoolSvc(Test):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.POOL = DaosPool(self.Context)
-            self.POOL.create(createmode, createuid, creategid,
+            self.pool = DaosPool(self.Context)
+            self.pool.create(createmode, createuid, creategid,
                     createsize, createsetid, None, None, createsvc[0])
-            self.POOL.connect(1 << 1)
+            self.pool.connect(1 << 1)
             # checking returned rank list value for single server
-            if ((len(self.hostlist) == 1) and (int(self.POOL.svc.rl_ranks[i] != 0))):
+            if ((len(self.hostlist) == 1) and (int(self.pool.svc.rl_ranks[i] != 0))):
                 self.fail("Incorrect returned rank list value for single server")
             # checking returned rank list for server more than 1
             i = 0
-            while ((int(self.POOL.svc.rl_ranks[i]) > 0) and \
-                  (int(self.POOL.svc.rl_ranks[i]) <= createsvc[0]) and \
-                  (int(self.POOL.svc.rl_ranks[i]) != 999999)):
+            while ((int(self.pool.svc.rl_ranks[i]) > 0) and \
+                  (int(self.pool.svc.rl_ranks[i]) <= createsvc[0]) and \
+                  (int(self.pool.svc.rl_ranks[i]) != 999999)):
                 i +=1
             if i != createsvc[0]:
                 self.fail("Length of Returned Rank list is not equal to" \
                           " the number of Pool Service members.\n")
             list = []
             for j in range(createsvc[0]):
-                list.append(int(self.POOL.svc.rl_ranks[j]))
+                list.append(int(self.pool.svc.rl_ranks[j]))
                 if len(list) != len(set(list)):
                     self.fail("Duplicate values in returned rank list")
 
             if (createsvc[0] == 3):
-                self.POOL.disconnect()
+                self.pool.disconnect()
                 cmd = ('{0} kill-leader  --uuid={1}'
-                        .format(self.daosctl, self.POOL.get_uuid_str()))
+                        .format(self.daosctl, self.pool.get_uuid_str()))
                 process.system(cmd)
-                self.POOL.connect(1 << 1)
-                self.POOL.disconnect()
+                self.pool.connect(1 << 1)
+                self.pool.disconnect()
                 server = DaosServer(self.Context, self.server_group, 2)
                 server.kill(1)
-                self.POOL.exclude([2])
-                self.POOL.connect(1 << 1)
+                self.pool.exclude([2])
+                self.pool.connect(1 << 1)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
