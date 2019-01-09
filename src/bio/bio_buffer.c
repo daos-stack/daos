@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -680,6 +680,10 @@ dma_rw(struct bio_desc *biod, bool prep)
 	blob = biod->bd_ctxt->bic_blob;
 	channel = xs_ctxt->bxc_io_channel;
 	D_ASSERT(blob != NULL && channel != NULL);
+
+	/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
+	if (nvme_io_bypass)
+		return;
 
 	D_DEBUG(DB_IO, "DMA start, blob:%p, update:%d, rmw:%d\n",
 		blob, biod->bd_update, rmw_read);
