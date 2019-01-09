@@ -2278,7 +2278,8 @@ out_lock:
 	rdb_tx_end(&tx);
 out_svc:
 	ds_pool_set_hint(svc->ps_db, &out->pqo_op.po_hint);
-	if (rc == 0)
+	/* See comment above, rebuild doesn't connect the pool */
+	if (rc == 0 && !is_rebuild_pool(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl))
 		rc = pool_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
 				      &out->pqo_space);
 	pool_svc_put_leader(svc);
