@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2016-2018 Intel Corporation
+# Copyright (c) 2016-2019 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,9 @@
 # SOFTWARE.
 # -*- coding: utf-8 -*-
 """Defines common components used by HPDD projects"""
+
+# This file is deprecated and will be removed!!!!
+# You should edit components/__init__.py instead
 
 from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever

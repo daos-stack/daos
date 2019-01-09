@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2016-2018 Intel Corporation
+# Copyright (c) 2016-2019 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -995,6 +995,8 @@ class PreReqComponent(object):
     def preload(self, script, **kw):
         """Execute a script to define external components
 
+        This function is deprecated and will be removed
+
         Args:
             script -- The script to execute
 
@@ -1002,6 +1004,7 @@ class PreReqComponent(object):
             prebuild -- A list of components to prebuild
         """
 
+        print "preload function is deprecated.  Use load_definitions instead"
         try:
             gvars = {'prereqs': self}
             lvars = {}
@@ -1010,6 +1013,26 @@ class PreReqComponent(object):
             exec(scomp, gvars, lvars)
         except Exception:
             raise BadScript(script, traceback.format_exc())
+
+        # Go ahead and prebuild some components
+
+        prebuild = kw.get("prebuild", [])
+        for comp in prebuild:
+            env = self.__env.Clone()
+            self.require(env, comp)
+
+    def load_definitions(self, **kw):
+        """Load default definitions
+
+        Keyword arguments:
+            prebuild -- A list of components to prebuild
+        """
+
+        try:
+            from components import define_components
+            define_components(self)
+        except Exception:
+            raise BadScript("components", traceback.format_exc())
 
         # Go ahead and prebuild some components
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2016-2018 Intel Corporation
+# Copyright (c) 2016-2019 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -198,24 +198,23 @@ def check_script(fname, *args, **kw):
     else:
         pylint_path = "{path}"
 
-    if os.path.exists('/usr/bin/pylint'):
-        if not kw.get("P3", False):
-            python = find_executable("python2")
-            rc_file = "pylint.rc"
-        else:
-            python = find_executable("python3")
-            rc_file = "pylint3.rc"
-        if not python:
-            print "python{2|3} could not be found in $PATH"
-            return 1
-        pylint = python + " /usr/bin/pylint"
+    if not kw.get("P3", False):
+        python = find_executable("python2")
+        pylint_exe = "pylint-2"
+        rc_file = "pylint.rc"
     else:
-        if not kw.get("P3", False):
-            pylint = "pylint"
-            rc_file = "pylint.rc"
-        else:
-            print "Unable to check python 3 code under pylint on this machine"
-            return 0
+        python = find_executable("python3")
+        pylint_exe = "pylint-3"
+        rc_file = "pylint3.rc"
+    if not python:
+        print "python{2|3} could not be found in $PATH"
+        return 1
+    pylint_exe_path = find_executable(pylint_exe)
+    if pylint_exe_path:
+        pylint = python + " " + pylint_exe_path
+    else:
+        print "Required %s isn't installed on this machine" % pylint_exe
+        return 0
 
     rc_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -276,6 +275,8 @@ def main():
         error_count += check_script("prereq_tools",
                                     "-d", "too-many-lines",
                                     "-d", "unused-argument")
+        print "Checking components"
+        error_count += check_script("components")
         print "Checking build_info"
         error_count += check_script("build_info")
         print "Checking test/build_info validation.py"
@@ -283,9 +284,6 @@ def main():
                                     "-d", "wrong-import-position")
         print "Checking check_script.py"
         error_count += check_script("check_script.py")
-        print "Checking go tool"
-        error_count += check_script("site_tools/go",
-                                    "-d", "too-many-branches")
 
     if args.fname:
         error_count += check_script(args.fname, wrap=args.wrap,
