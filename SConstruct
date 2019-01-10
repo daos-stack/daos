@@ -31,8 +31,7 @@ def preload_prereqs(prereqs):
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal'])
-    prereqs.preload(components, prebuild=reqs)
-    return prereqs
+    prereqs.load_definitions(prebuild=reqs)
 
 def scons():
     """Execute build"""
@@ -55,7 +54,7 @@ def scons():
         commits_file = None
 
     prereqs = PreReqComponent(env, opts, commits_file)
-    prereqs = preload_prereqs(prereqs)
+    preload_prereqs(prereqs)
     opts.Save(opts_file, env)
 
     env.Alias('install', '$PREFIX')
