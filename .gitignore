@@ -20,3 +20,4 @@ Gopkg.lock
 /src/control/server/testdata/.*.yml
 /src/control/github.com/daos-stack
 *.os
+*.o
