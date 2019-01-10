@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -377,7 +377,7 @@ do_init:
 	D_GOTO(unlock, rc);
 
 cleanup:
-
+	crt_gdata.cg_inited = 0;
 	if (crt_gdata.cg_addr != NULL) {
 		crt_hg_fini();
 		D_FREE(crt_gdata.cg_addr);

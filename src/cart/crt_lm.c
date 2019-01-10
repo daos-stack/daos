@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -526,8 +526,10 @@ crt_lm_grp_init(crt_group_t *grp)
 		/* sign myself up for RAS notifications */
 		if (grp_self != tmp_rank)
 			continue;
+		rc = crt_register_event_cb(lm_ras_event_hdlr_internal, NULL);
+		if (rc != 0)
+			D_GOTO(out_unregister_event, rc);
 		lm_grp_srv->lgs_ras = 1;
-		crt_register_event_cb(lm_ras_event_hdlr_internal, NULL);
 	}
 
 	rc = D_RWLOCK_INIT(&lm_grp_srv->lgs_rwlock, NULL);
@@ -563,6 +565,9 @@ crt_lm_grp_fini(struct lm_grp_srv_t *lm_grp_srv)
 {
 	d_rank_list_free(lm_grp_srv->lgs_ras_ranks);
 	d_rank_list_free(lm_grp_srv->lgs_bcast_list);
+	if (lm_grp_srv->lgs_ras == 1) {
+		crt_unregister_event_cb(lm_ras_event_hdlr_internal, NULL);
+	}
 }
 
 static void
@@ -1372,17 +1377,22 @@ crt_lm_init(void)
 		return 0;
 	}
 	/* from here up to the unlock is only executed once per process */
-	if (crt_is_service()) {
+	if (crt_is_service() && !crt_is_singleton()) {
 		rc = crt_lm_grp_init(grp);
 		if (rc != 0) {
 			D_ERROR("crt_lm_grp_init() failed, rc %d.\n", rc);
 			D_GOTO(err_out, rc);
 		}
 		/* servers register callbacks to manage the liveness map */
-		crt_register_progress_cb(lm_prog_cb, grp);
+		rc = crt_register_progress_cb(lm_prog_cb, grp);
+		if (rc != 0) {
+			D_GOTO(err_fini, rc);
+		}
 	}
 	D_GOTO(out, rc);
 
+err_fini:
+	crt_lm_grp_fini(&crt_lm_gdata.clg_lm_grp_srv);
 err_out:
 	crt_lm_gdata.clg_refcount--;
 	D_RWLOCK_UNLOCK(&crt_lm_gdata.clg_rwlock);
