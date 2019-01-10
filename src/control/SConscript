@@ -45,8 +45,8 @@ def scons():
 
     # CGO prerequisite libs for nvme
     denv.AppendUnique(CPPPATH=['%s/include' % gospdkpath])
-    nvmecontrol = daos_build.library(
-        denv, "nvme_control",
+    nvmecontrol = denv.StaticLibrary(
+        "nvme_control",
         '%s/src/nvme_control.c' % gospdkpath,
         LIBS=['spdk'])
     nc_installed = denv.Install('$PREFIX/lib', nvmecontrol)
