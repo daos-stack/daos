@@ -82,7 +82,7 @@ if [ -d "/mnt/daos" ]; then
     run_test src/vos/tests/evt_ctl.sh pmem
     run_test build/src/vos/vea/tests/vea_ut
     run_test src/rdb/raft_tests/raft_tests.py
-    # Satisfy CGO Link requirements for go-spdk binding imports
+    # Satisfy CGO requirements for go-spdk binding and internal daos imports
     LD_LIBRARY_PATH="${SL_PREFIX}/lib:${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
     export LD_LIBRARY_PATH
     export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib -L${SL_PREFIX}/lib"

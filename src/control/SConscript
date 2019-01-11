@@ -77,7 +77,7 @@ def scons():
         denv.subst("-L$SPDK_PREFIX/lib -L$PREFIX/lib $_RPATH"))
     denv.AppendENVPath(
         "CGO_CFLAGS",
-        denv.subst("-I$SPDK_PREFIX/include"))
+        denv.subst("-I$SPDK_PREFIX/include -I%s/../include" % gosrc))
 
     # copy server init files to be used at runtime, explicitly
     # remove first because recursive Delete() on dir fails.
