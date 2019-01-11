@@ -1,5 +1,5 @@
-#!/bin/sh
-# Copyright (c) 2016-2018 Intel Corporation
+#!/bin/bash
+# Copyright (c) 2016-2019 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,8 +21,7 @@
 
 set -e
 
-SCRIPT_DIR=$(dirname "$0")
-export PYTHONPATH="$SCRIPT_DIR:$SCRIPT_DIR"/fake_scons:$PYTHONPATH
+SCRIPT_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" > /dev/null 2>&1 && pwd)
 rm -f pylint.log
 
 fail=0

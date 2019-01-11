@@ -185,6 +185,37 @@ def parse_report(log_file):
                 sys.stdout.write(line)
     return error_count
 
+def find_pylint(version):
+    """find pylint version"""
+    pylint = find_executable("pylint-%d" % version)
+    if pylint:
+        return pylint
+    python = find_executable("python%d" % version)
+    pylint = find_executable("pylint")
+
+    if python and pylint:
+        return "%s %s" % (python, pylint)
+
+    print "No python%d pylint found" % version
+    return None
+
+def create_rc(src_name):
+    """Create a temporary rc file with python path set"""
+    root = os.path.dirname(os.path.realpath(__file__))
+    src_path = os.path.join(root, src_name)
+    name = os.path.join(root, "tmp_%s" % src_name)
+    with open(name, "w") as tmp:
+        tmp.write("[MASTER]\n")
+        tmp.write("init-hook='import sys; ")
+        tmp.write("sys.path.insert(0, \"%s\"); " % root)
+        tmp.write("sys.path.insert(0, \"%s/fake_scons\")'\n" % root)
+        with open(src_path, "r") as src:
+            for line in src.readlines():
+                tmp.write(line)
+
+    return name
+
+
 #pylint: disable=too-many-branches
 def check_script(fname, *args, **kw):
     """Check a python script for errors"""
@@ -199,26 +230,18 @@ def check_script(fname, *args, **kw):
         pylint_path = "{path}"
 
     if not kw.get("P3", False):
-        python = find_executable("python2")
-        pylint_exe = "pylint-2"
-        rc_file = "pylint.rc"
+        pycmd = find_pylint(2)
+        rc_file = "tmp_pylint.rc"
     else:
-        python = find_executable("python3")
-        pylint_exe = "pylint-3"
-        rc_file = "pylint3.rc"
-    if not python:
-        print "python{2|3} could not be found in $PATH"
-        return 1
-    pylint_exe_path = find_executable(pylint_exe)
-    if pylint_exe_path:
-        pylint = python + " " + pylint_exe_path
-    else:
-        print "Required %s isn't installed on this machine" % pylint_exe
+        pycmd = find_pylint(3)
+        rc_file = "tmp_pylint3.rc"
+    if pycmd is None:
+        print "Required pylint isn't installed on this machine"
         return 0
 
     rc_dir = os.path.dirname(os.path.realpath(__file__))
 
-    cmd = pylint.split() + \
+    cmd = pycmd.split() + \
           list(args) + \
           ["--rcfile=%s/%s" % (rc_dir, rc_file),
            "--msg-template",
@@ -263,6 +286,9 @@ def main():
 
     error_count = 0
 
+    pylint_rc = create_rc("pylint.rc")
+    pylint3_rc = create_rc("pylint3.rc")
+
     if args.self_check:
         print "Checking SCons"
         error_count += check_script("SCons",
@@ -288,6 +314,9 @@ def main():
     if args.fname:
         error_count += check_script(args.fname, wrap=args.wrap,
                                     P3=args.P3)
+
+    os.unlink(pylint_rc)
+    os.unlink(pylint3_rc)
 
     if error_count:
         sys.exit(1)
