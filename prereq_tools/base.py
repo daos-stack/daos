@@ -992,35 +992,6 @@ class PreReqComponent(object):
                           **kw)
         self.__defined[name] = comp
 
-    def preload(self, script, **kw):
-        """Execute a script to define external components
-
-        This function is deprecated and will be removed
-
-        Args:
-            script -- The script to execute
-
-        Keyword arguments:
-            prebuild -- A list of components to prebuild
-        """
-
-        print "preload function is deprecated.  Use load_definitions instead"
-        try:
-            gvars = {'prereqs': self}
-            lvars = {}
-            sfile = open(script, 'r')
-            scomp = compile(sfile.read(), '<string>', 'exec')
-            exec(scomp, gvars, lvars)
-        except Exception:
-            raise BadScript(script, traceback.format_exc())
-
-        # Go ahead and prebuild some components
-
-        prebuild = kw.get("prebuild", [])
-        for comp in prebuild:
-            env = self.__env.Clone()
-            self.require(env, comp)
-
     def load_definitions(self, **kw):
         """Load default definitions
 

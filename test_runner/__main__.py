@@ -124,6 +124,13 @@ def clientmain(info=None):
     time.sleep(60)
     return 0
 
+def validate_path(prefix, name):
+    path = os.path.realpath(os.path.join(prefix, name))
+    absprefix = os.path.realpath(prefix)
+    if absprefix == os.path.commonprefix([absprefix, path]):
+        return True
+    return False
+
 def main():
     """ main for test runner """
     rc = 1
@@ -140,8 +147,13 @@ def main():
         if "config" in sys.argv[1]:
             start = 2
             config_file = sys.argv[1].split("=", 1)
-            with open(config_file[1], "r") as config_fd:
-                config = json.load(config_fd)
+            name = config_file[1]
+            if not validate_path(os.getcwd(), name) and \
+               not validate_path("/home/autotest", name):
+                logger.error("Config file in disallowed location %s" % name)
+            else:
+                with open(name, "r") as config_fd:
+                    config = json.load(config_fd)
     else:
         logger.error("No config file given")
 
