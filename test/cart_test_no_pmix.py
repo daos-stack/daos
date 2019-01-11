@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2018 Intel Corporation
+# Copyright (C) 2018-2019 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,7 @@ To use valgrind call (callgrind) profiling
 set TR_USE_VALGRIND in cart_test_no_pmix.yml to callgrind
 
 """
-
+# pylint: disable=fixme
 import os
 import subprocess
 import commontestsuite

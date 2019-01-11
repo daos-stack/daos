@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2018 Intel Corporation
+# Copyright (C) 2018-2019 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -199,7 +199,7 @@ class TestCartCtl(commontestsuite.CommonTestSuite):
             self.fail("cart_ctl disable_fi failed, return codes %d"
                       % procrtn)
 
-        ''' notify the server to shutdown '''
+        # notify the server to shutdown
         procrtn = self.launch_test(testmsg, '1', self.pass_env, \
                                    cli=client, \
                                    cli_arg='tests/test_group' + \

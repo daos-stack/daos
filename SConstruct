@@ -83,7 +83,7 @@ def scons():
     prereqs = PreReqComponent(env, opts,
                               config_file=commits_file, arch=platform)
     prereqs.load_definitions(prebuild=['ompi', 'mercury', 'uuid', 'crypto',
-                              'pmix', 'boost'])
+                                       'pmix', 'boost'])
     opts.Save(opts_file, env)
     env.Alias('install', '$PREFIX')
 

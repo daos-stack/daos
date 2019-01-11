@@ -1,5 +1,5 @@
-#!/bin/sh
-# Copyright (C) 2016-2017 Intel Corporation
+#!/bin/bash
+# Copyright (C) 2016-2019 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -40,6 +40,12 @@ if [ ! -d "scons_local" ];then
   cd ..
 fi
 
+if [ $# -ne 0 ]; then
+  ./scons_local/check_python.sh "$@"
+  exit $?
+fi
+
+
 flist="-s SConstruct -s src/SConscript -s src/cart/SConscript"
 flist+=" -s src/gurt/SConscript -s src/utest/SConscript"
 flist+=" -s src/test/SConscript -s test/SConscript"
@@ -52,7 +58,7 @@ done
 
 ./scons_local/check_python.sh $flist
 
-if [ $? -ne 0 ]; then
+if [ "${PIPESTATUS[0]}" -ne 0 ]; then
   exit 1
 fi
 exit 0
