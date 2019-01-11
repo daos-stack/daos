@@ -165,7 +165,7 @@ def scons():
                 target_name = results['target_name']
                 if not comp in results['target_comps']:
                     msg = "Warning: %s in build.config not a dependency in" \
-                        " components.py for %s" % (comp, target_name)
+                        " components module for %s" % (comp, target_name)
                     print(msg, file=sys.stderr)
                     results['reqs_full'][target_name].append(comp)
         f.write("#\n")

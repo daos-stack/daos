@@ -24,8 +24,7 @@ if [ $# -ne 0 ]; then
   exit $?
 fi
 
-./check_python.sh -c "components.py" \
-                  -s "SConstruct" \
+./check_python.sh -c -s "SConstruct" \
                   -s "test/SConstruct.utest" \
                   -s "test/SConstruct" \
                   -s "test/sl_test/SConscript" \

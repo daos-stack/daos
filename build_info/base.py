@@ -39,9 +39,7 @@ class BuildInfo(object):
             with open(filename, "r") as info_file:
                 self.info = json.load(info_file)
         except ValueError:
-            with open(filename, "r") as info_file:
-                for line in info_file.readlines():
-                    exec(line.strip(), self.info)
+            print "Could not load build_info"
 
     def update(self, var, value):
         """save a variable in the build info"""
