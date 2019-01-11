@@ -64,18 +64,32 @@ class Daos_handle_t(ctypes.Structure):
     """ Structure to represent rebuild status info """
     _fields_ = [("cookie", ctypes.c_uint64)]
 
+class Daos_Space(ctypes.Structure):
+    """ Structure to represent Pool Target Space usage info """
+    _fields_ = [("s_total", ctypes.c_uint64 * 2),
+                ("s_free", ctypes.c_uint64 * 2)]
+
+class PoolSpace(ctypes.Structure):
+    """ Structure to represent Pool space usage info """
+    _fields_ = [("ps_space", Daos_Space),
+                ("ps_free_min", ctypes.c_uint64 * 2),
+                ("ps_free_max", ctypes.c_uint64 * 2),
+                ("ps_free_mean", ctypes.c_uint64 * 2),
+                ("ps_ntargets", ctypes.c_uint32),
+                ("ps_padding", ctypes.c_uint32)]
+
 class PoolInfo(ctypes.Structure):
     """ Structure to represent information about a pool """
     _fields_ = [("pi_uuid", ctypes.c_ubyte * 16),
                 ("pi_ntargets", ctypes.c_uint32),
-		("pi_nnodes", ctypes.c_uint32),
+                ("pi_nnodes", ctypes.c_uint32),
                 ("pi_ndisabled", ctypes.c_uint32),
                 ("pi_map_ver", ctypes.c_uint32),
                 ("pi_uid", ctypes.c_uint32),
                 ("pi_gid", ctypes.c_uint32),
                 ("pi_mode", ctypes.c_uint32),
                 ("pi_leader", ctypes.c_uint32),
-                ("pi_space", ctypes.c_int),
+                ("pi_space", PoolSpace),
                 ("pi_rebuild_st", RebuildStatus)]
 
 class ContInfo(ctypes.Structure):

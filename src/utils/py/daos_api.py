@@ -1754,7 +1754,6 @@ if __name__ == '__main__':
     # this is strictly unit test code here in main, there is a lot
     # of rubbish but it makes it easy to try stuff out as we expand
     # this interface.  Will eventially be removed or formalized.
-
     """
     try:
         # this works so long as this file is in its usual place
@@ -1785,7 +1784,23 @@ if __name__ == '__main__':
         print ("container created {}".format(CONTAINER.get_uuid_str()))
 
         #POOL.pool_svc_stop();
-        #POOL.pool_query()
+        pool_info = POOL.pool_query()
+        print c_uuid_to_str(pool_info.pi_uuid)
+        print pool_info.pi_ntargets
+        print pool_info.pi_nnodes
+        print pool_info.pi_ndisabled
+        print pool_info.pi_gid
+        print pool_info.pi_mode
+        print pool_info.pi_leader
+
+        print "Storage Pool Space information"
+        for i in range(2):
+            print "-----------------{}".format(i)
+            print "Total size: {}".format(pool_info.pi_space.ps_space.s_total[i])
+            print "Free:{}, min:{}, max:{}, mean:{}".format(pool_info.pi_space.ps_space.s_free[i],
+                                                            pool_info.pi_space.ps_free_min[i],
+                                                            pool_info.pi_space.ps_free_max[i],
+                                                            pool_info.pi_space.ps_free_mean[i])
 
         time.sleep(5)
 
@@ -1891,3 +1906,4 @@ if __name__ == '__main__':
 
     print("running")
     raise DaosApiError("hit error, all good")
+
