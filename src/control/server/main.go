@@ -36,6 +36,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	secpb "github.com/daos-stack/daos/src/control/security/proto"
 	"github.com/daos-stack/daos/src/control/log"
 )
 
@@ -152,6 +153,11 @@ func main() {
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
+
+	// Set up security-related gRPC servers
+	secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
+	secpb.RegisterAccessControlServer(grpcServer, secServer)
+
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
 

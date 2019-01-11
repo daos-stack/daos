@@ -7,6 +7,11 @@ import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
 
+import (
+	context "golang.org/x/net/context"
+	grpc "google.golang.org/grpc"
+)
+
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 var _ = fmt.Errorf
@@ -304,6 +309,150 @@ func init() {
 	proto.RegisterEnum("proto.AclPermissions", AclPermissions_name, AclPermissions_value)
 	proto.RegisterEnum("proto.AclEntryType", AclEntryType_name, AclEntryType_value)
 	proto.RegisterEnum("proto.AclFlags", AclFlags_name, AclFlags_value)
+}
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConn
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the grpc package it is being compiled against.
+const _ = grpc.SupportPackageIsVersion4
+
+// AccessControlClient is the client API for AccessControl service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type AccessControlClient interface {
+	// Set the permissions on a given ACE or create it if it doesn't exist
+	SetPermissions(ctx context.Context, in *AclEntryPermissions, opts ...grpc.CallOption) (*AclResponse, error)
+	// Fetch the permissions on a given ACE
+	GetPermissions(ctx context.Context, in *AclEntry, opts ...grpc.CallOption) (*AclResponse, error)
+	// Remove the given ACE completely from the ACL
+	DestroyAclEntry(ctx context.Context, in *AclEntry, opts ...grpc.CallOption) (*AclResponse, error)
+}
+
+type accessControlClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewAccessControlClient(cc *grpc.ClientConn) AccessControlClient {
+	return &accessControlClient{cc}
+}
+
+func (c *accessControlClient) SetPermissions(ctx context.Context, in *AclEntryPermissions, opts ...grpc.CallOption) (*AclResponse, error) {
+	out := new(AclResponse)
+	err := c.cc.Invoke(ctx, "/proto.AccessControl/SetPermissions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessControlClient) GetPermissions(ctx context.Context, in *AclEntry, opts ...grpc.CallOption) (*AclResponse, error) {
+	out := new(AclResponse)
+	err := c.cc.Invoke(ctx, "/proto.AccessControl/GetPermissions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessControlClient) DestroyAclEntry(ctx context.Context, in *AclEntry, opts ...grpc.CallOption) (*AclResponse, error) {
+	out := new(AclResponse)
+	err := c.cc.Invoke(ctx, "/proto.AccessControl/DestroyAclEntry", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AccessControlServer is the server API for AccessControl service.
+type AccessControlServer interface {
+	// Set the permissions on a given ACE or create it if it doesn't exist
+	SetPermissions(context.Context, *AclEntryPermissions) (*AclResponse, error)
+	// Fetch the permissions on a given ACE
+	GetPermissions(context.Context, *AclEntry) (*AclResponse, error)
+	// Remove the given ACE completely from the ACL
+	DestroyAclEntry(context.Context, *AclEntry) (*AclResponse, error)
+}
+
+func RegisterAccessControlServer(s *grpc.Server, srv AccessControlServer) {
+	s.RegisterService(&_AccessControl_serviceDesc, srv)
+}
+
+func _AccessControl_SetPermissions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AclEntryPermissions)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessControlServer).SetPermissions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.AccessControl/SetPermissions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessControlServer).SetPermissions(ctx, req.(*AclEntryPermissions))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessControl_GetPermissions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AclEntry)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessControlServer).GetPermissions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.AccessControl/GetPermissions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessControlServer).GetPermissions(ctx, req.(*AclEntry))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessControl_DestroyAclEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AclEntry)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessControlServer).DestroyAclEntry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.AccessControl/DestroyAclEntry",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessControlServer).DestroyAclEntry(ctx, req.(*AclEntry))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _AccessControl_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "proto.AccessControl",
+	HandlerType: (*AccessControlServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SetPermissions",
+			Handler:    _AccessControl_SetPermissions_Handler,
+		},
+		{
+			MethodName: "GetPermissions",
+			Handler:    _AccessControl_GetPermissions_Handler,
+		},
+		{
+			MethodName: "DestroyAclEntry",
+			Handler:    _AccessControl_DestroyAclEntry_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "acl.proto",
 }
 
 func init() { proto.RegisterFile("acl.proto", fileDescriptor_acl_08c19ec25d13204d) }
