@@ -1,4 +1,4 @@
-# Copyright (C) 2017 Intel Corporation
+# Copyright (C) 2017-2019 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -36,9 +36,9 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """install test scripts"""
 
-FILES=["DaosServer.py", "DaosTest.py", "DaosAddon.py", "DaosAddonMulti.yml",
-       "DaosAddon.yml", "DaosTestMulti.yml", "DaosTest.yml", "DaosRebuild.yml",
-       "DaosDegraded.yml"]
+FILES = ["DaosServer.py", "DaosTest.py", "DaosAddon.py", "DaosAddonMulti.yml",
+         "DaosAddon.yml", "DaosTestMulti.yml", "DaosTest.yml",
+         "DaosRebuild.yml", "DaosDegraded.yml"]
 
 def scons():
     """Run scons"""

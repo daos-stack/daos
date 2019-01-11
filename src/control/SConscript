@@ -1,10 +1,8 @@
 #!/bin/env python
 """Build DAOS Control Plane"""
-#pylint: disable=no-member
-#pylint: disable=invalid-sequence-index
+#pylint: disable=too-many-locals
 from SCons.Script import Literal
 import os
-import daos_build
 
 def scons():
     """Execute build"""
@@ -84,7 +82,7 @@ def scons():
     drpcbin = "%s/bin/drpc_test" % gopath
     drpcsrc = "%s/drpc_test/drpc_test_server.go" % gosrc
     denv.Command(drpcbin, drpcsrc,
-			"go install %s/src/control/drpc_test" % repopath)
+                 "go install %s/src/control/drpc_test" % repopath)
     denv.InstallAs("$PREFIX/bin/drpc_test_server", drpcbin)
 
     AlwaysBuild([agentbin, serverbin, shellbin, drpcbin])

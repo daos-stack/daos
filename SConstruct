@@ -26,7 +26,6 @@ def preload_prereqs(prereqs):
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
-    components = os.path.join(Dir('#').abspath, 'scons_local', 'components.py')
     reqs = ['cart', 'argobots', 'pmdk', 'cmocka',
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
