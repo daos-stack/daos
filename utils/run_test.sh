@@ -72,10 +72,12 @@ if [ -d "/mnt/daos" ]; then
     run_test build/src/vos/vea/tests/vea_ut
     run_test src/rdb/raft_tests/raft_tests.py
     # Satisfy CGO Link requirements for go-spdk binding imports
-    export LD_LIBRARY_PATH=$SL_PREFIX/lib:${LD_LIBRARY_PATH}
+    export LD_LIBRARY_PATH="${SL_PREFIX}/lib:${LD_LIBRARY_PATH}"
+    export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib"
+    export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include"
     run_test src/control/run_go_tests.sh
     # Environment variables specific to the rdb tests
-    export PATH=$SL_PREFIX/bin:$PATH
+    export PATH="${SL_PREFIX}/bin:${PATH}"
     # Satisfy requirement for starting daos_server w/o config file
     export CRT_PHY_ADDR_STR=ofi+sockets
     export OFI_INTERFACE=lo
