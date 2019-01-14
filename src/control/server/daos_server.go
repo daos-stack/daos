@@ -103,7 +103,6 @@ func main() {
 		syscall.SIGTERM,
 		syscall.SIGINT,
 		syscall.SIGQUIT,
-		syscall.SIGKILL,
 		syscall.SIGHUP)
 
 	// Process configurations parameters for Nvme.
@@ -126,9 +125,9 @@ func main() {
 		log.Fatal("DAOS I/O env vars could not be populated: ", err)
 	}
 
-	// I/O server should get a SIGTERM if this process dies.
+	// I/O server should get a SIGKILL if this process dies.
 	srv.SysProcAttr = &syscall.SysProcAttr{
-		Pdeathsig: syscall.SIGTERM,
+		Pdeathsig: syscall.SIGKILL,
 	}
 
 	// Start the DAOS I/O server.
