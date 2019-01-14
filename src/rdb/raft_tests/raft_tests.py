@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -32,7 +32,7 @@ import os
 #pylint: disable=C0325
 
 TEST_NOT_RUN = -1
-DIR = os.path.join(os.path.dirname(__file__), '../raft')
+DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'raft')
 
 def number_of_failures():
     """
@@ -42,14 +42,14 @@ def number_of_failures():
     """
     failures = 0
     successes = 0
-    if not os.path.isfile(os.path.join(DIR, "tests_main")):
+    if not os.path.isfile(os.path.join("build", DIR, "src", "tests_main")):
         try:
             res = subprocess.check_output(['make', '-C', DIR, 'tests'])
         except Exception as e:
             print("Building Raft Tests failed due to\n{}".format(e))
             return TEST_NOT_RUN
     else:
-        os.chdir(DIR)
+        os.chdir(os.path.join("build", DIR, "src"))
         res = subprocess.check_output("./tests_main", shell=True)
 
     for line in res.split('\n'):

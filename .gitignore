@@ -13,6 +13,7 @@ hwloc-1.11.5.tar.gz
 mpi4py-2.0.0.tar.gz
 protobuf-all-3.5.1.tar.gz
 *.pyc
+src/tests/ftest/*/*.yaml.dist
 *.un~
 *.*~
 /pkg/
@@ -21,3 +22,5 @@ Gopkg.lock
 /src/control/github.com/daos-stack
 *.os
 *.o
+/src/control/vendor/**/*.os
+*.xml
