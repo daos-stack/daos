@@ -407,9 +407,9 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 
 	info->ii_oid = obj->vo_id;
-	info->ii_epr.epr_lo = oiter->oit_epr.epr_lo;
-	/* Ensures we hold the right object version */
-	info->ii_epr.epr_hi = obj->vo_latest;
+	/* Limit the bounds to this object incarnation */
+	info->ii_epr.epr_lo = MAX(obj->vo_earliest, oiter->oit_epr.epr_lo);
+	info->ii_epr.epr_hi = MIN(obj->vo_latest, oiter->oit_epr.epr_hi);
 	info->ii_hdl = vos_cont2hdl(oiter->oit_cont);
 
 	return 0;

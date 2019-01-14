@@ -261,6 +261,10 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	info->ii_vea_info = obj->obj_cont->vc_pool->vp_vea_info;
 	info->ii_uma = vos_obj2uma(obj);
 
+	/* Limit the nested iterator to the bounds of this key */
+	info->ii_epr.epr_lo = MAX(oiter->it_epr.epr_lo, krec->kr_earliest);
+	info->ii_epr.epr_hi = MIN(oiter->it_epr.epr_hi, krec->kr_latest);
+
 	if (type == VOS_ITER_RECX) {
 		D_ASSERT(krec->kr_bmap & KREC_BF_EVT);
 		info->ii_evt = &krec->kr_evt[0];
@@ -980,8 +984,6 @@ vos_obj_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 {
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
 	int			 rc = 0;
-
-	info->ii_epr		= oiter->it_epr;
 
 	switch (iter->it_type) {
 	default:
