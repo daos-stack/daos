@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018 Intel Corporation.
+    (C) Copyright 2018-2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -44,6 +44,9 @@ class DaosCoreTest(Test):
     Runs the daos_test subtests with multiple servers.
 
     """
+    # pylint: disable=too-many-instance-attributes
+    subtest_name = None
+
     def setUp(self):
         self.subtest_name = self.params.get("test_name", '/run/daos_tests/Tests/*')
 
@@ -68,20 +71,21 @@ class DaosCoreTest(Test):
 
         # collect up a debug log so that we have a separate one for each
         # subtest
-        try:
-            logfile = os.environ['D_LOG_FILE']
-            dirname, filename = os.path.split(logfile)
-            new_logfile = os.path.join(dirname, self.subtest_name + "_" + \
-                                                filename)
-            # rename on each of the servers
-            for host in self.hostlist:
-                subprocess.check_call(['ssh', host,
-                                       '[ -f \"{0}\" ] && '
-                                       '    mv \"{0}\" '
-                                       '    \"{1}\"'.format(logfile,
-                                                            new_logfile)])
-        except KeyError:
-            pass
+        if self.subtest_name:
+            try:
+                logfile = os.environ['D_LOG_FILE']
+                dirname, filename = os.path.split(logfile)
+                new_logfile = os.path.join(dirname, self.subtest_name + "_" + \
+                                                    filename)
+                # rename on each of the servers
+                for host in self.hostlist:
+                    subprocess.check_call(['ssh', host,
+                                           '[ -f \"{0}\" ] && '
+                                           '    mv \"{0}\" '
+                                           '    \"{1}\"'.format(logfile,
+                                                                new_logfile)])
+            except KeyError:
+                pass
 
     def test_subtest(self):
         """
@@ -91,7 +95,7 @@ class DaosCoreTest(Test):
 
         Use Cases: core tests for daos_test
 
-        :avocado: tags=all,daos_test,multiserver,vm
+        :avocado: tags=daos_test,multiserver,vm,regression
         """
 
         subtest = self.params.get("daos_test", '/run/daos_tests/Tests/*')
@@ -99,10 +103,13 @@ class DaosCoreTest(Test):
                                       '/run/daos_tests/num_clients/*')
         num_replicas = self.params.get("num_replicas",
                                        '/run/daos_tests/num_replicas/*')
+        args = self.params.get("args", '/run/daos_tests/Tests/*')
+        if not args:
+            args = ""
 
-        cmd = "{0} -n {1} {2} -s {3} -{4}".format(self.orterun, num_clients,
-                                                  self.daos_test, num_replicas,
-                                                  subtest)
+        cmd = "{} -n {} {} -s {} -{} {}".format(self.orterun, num_clients,
+                                                self.daos_test, num_replicas,
+                                                subtest, args)
 
         env = {}
         env['CMOCKA_XML_FILE'] = self.tmp + "/%g_results.xml"

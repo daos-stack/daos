@@ -14,10 +14,14 @@ server:
   server_group: daos_server
 daos_tests:
   num_clients:
-    num_clients: 2
+    num_clients: 1
   num_replicas:
-    num_replicas: 3
+    num_replicas: 1
   Tests: !mux
+    test_r:
+      daos_test: r
+      test_name: rebuild tests
+      args: -u subtests="0-13"
     test_d:
       daos_test: d
       test_name: DAOS degraded-mode tests
@@ -51,6 +55,3 @@ daos_tests:
     test_O:
       daos_test: O
       test_name: OID Allocator tests
-    test_r:
-      daos_test: r
-      test_name: rebuild tests
