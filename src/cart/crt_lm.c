@@ -650,11 +650,6 @@ lm_grp_priv_find(crt_group_t *grp)
 	return NULL;
 }
 
-struct sample_item {
-	d_list_t	ri_link;
-	d_rank_t	ri_rank;
-};
-
 /* unmark the pending sample flag for all entries in the PSR candidate list */
 static void
 lm_sample_flag_unmark(struct lm_grp_priv_t *lm_grp_priv)
