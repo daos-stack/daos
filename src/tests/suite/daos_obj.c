@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -526,10 +526,10 @@ lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
 }
 
 /**
- * Very basic test for overwrites in different epochs.
+ * Very basic test for overwrites in different transactions.
  */
 static void
-io_epoch_overwrite_small(void **state, daos_obj_id_t oid)
+io_overwrite_small(void **state, daos_obj_id_t oid)
 {
 	test_arg_t	*arg = *state;
 	struct ioreq	 req;
@@ -542,8 +542,7 @@ io_epoch_overwrite_small(void **state, daos_obj_id_t oid)
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	size = strlen(ow_buf);
 
-	print_message("Test: overwrite in different epochs (rec size: %lu)\n",
-		      size);
+	print_message("Test: small overwrite (rec size: %lu)\n", size);
 
 	daos_tx_open(arg->coh, &th1, NULL);
 	for (i = 0; i < size; i++)
@@ -575,12 +574,12 @@ io_epoch_overwrite_small(void **state, daos_obj_id_t oid)
 
 #define OW_IOD_SIZE	1024 /* used for mixed record overwrite */
 /**
- * Test mixed SCM & NVMe overwrites in different epochs with a large
+ * Test mixed SCM & NVMe overwrites in different transactions with a large
  * record size. Iod size is needed for insert/lookup since the same akey is
  * being used.
  */
 static void
-io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
+io_overwrite_large(void **state, daos_obj_id_t oid)
 {
 	test_arg_t	*arg = *state;
 	struct ioreq	 req;
@@ -609,11 +608,10 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 	assert_non_null(fbuf);
 	memset(fbuf, 0, size);
 
-	/* Overwrite a variable number of chars to lowercase at a new epoch */
-	print_message("Test: overwrite in different epochs (rec size: %lu)\n",
-		      size);
+	/* Overwrite a variable number of chars to lowercase in different txs*/
+	print_message("Test: large overwrite (rec size: %lu)\n", size);
 
-	/* Set and verify the full initial string as epoch 0 */
+	/* Set and verify the full initial string in first transaction */
 	rx_nr = size / OW_IOD_SIZE;
 	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, OW_IOD_SIZE,
 				rx_nr, DAOS_TX_NONE, &req);
@@ -639,7 +637,7 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 			ow_buf[i] += 32; /* overwrite to lowercase */
 
 		/**
-		 * Insert overwrite at a new epoch. Overwrite will be an
+		 * Insert overwrite in a new transaction. Overwrite will be an
 		 * increasing number of rec extents (rx_nr) with the same
 		 * iod_size, all inserted contiguously at the next index.
 		 */
@@ -664,11 +662,11 @@ io_epoch_overwrite_large(void **state, daos_obj_id_t oid)
 }
 
 /**
- * Very basic test for full overwrite within the same epoch for both large and
- * small record sizes.
+ * Very basic test for full overwrite in separate transactions for both large
+ * and small record sizes.
  */
 static void
-io_epoch_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
+io_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
 {
 	test_arg_t	*arg = *state;
 	struct ioreq	 req;
@@ -691,10 +689,9 @@ io_epoch_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
 	assert_non_null(fbuf);
 	memset(fbuf, 0, size);
 
-	print_message("Test: full overwrite in same epoch (rec size: %lu)\n",
-		      size);
+	print_message("Test: full overwrite (rec size: %lu)\n", size);
 
-	/* Set and verify the full initial string as epoch 0 */
+	/* Set and verify the full initial string */
 	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, /*iod_size*/size,
 				/*rx_nr*/1, DAOS_TX_NONE, &req);
 	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf, /*iod_size*/size,
@@ -706,7 +703,7 @@ io_epoch_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
 		ow_buf[i] += 32;
 
 	memset(fbuf, 0, size);
-	/* Insert full record overwrite at the same epoch. */
+	/* Insert full record overwrite */
 	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, /*iod_size*/size,
 				/*rx_nr*/1, DAOS_TX_NONE, &req);
 	/* Fetch entire record with new overwrite for comparison */
@@ -722,10 +719,11 @@ io_epoch_overwrite_full(void **state, daos_obj_id_t oid, daos_size_t size)
 }
 
 /**
- * Test overwrite in both different epochs and full overwrite in the same epoch.
+ * Test overwrite in both different transactions and full overwrite in the same
+ * transaction.
  */
 static void
-io_epoch_overwrite(void **state)
+io_overwrite(void **state)
 {
 	daos_obj_id_t	 oid;
 	test_arg_t	*arg = *state;
@@ -733,17 +731,17 @@ io_epoch_overwrite(void **state)
 	/** choose random object */
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 
-	/* Full overwrite of a SCM record in the same epoch */
-	io_epoch_overwrite_full(state, oid, IO_SIZE_SCM);
+	/* Full overwrite of a SCM record */
+	io_overwrite_full(state, oid, IO_SIZE_SCM);
 
-	/* Full overwrite of an NVMe record in the same epoch */
-	io_epoch_overwrite_full(state, oid, IO_SIZE_NVME);
+	/* Full overwrite of an NVMe record */
+	io_overwrite_full(state, oid, IO_SIZE_NVME);
 
-	/* Small 'DAOS' buffer used to show 1 char overwrites*/
-	io_epoch_overwrite_small(state, oid);
+	/* Small 'DAOS' buffer used to show 1 char overwrites */
+	io_overwrite_small(state, oid);
 
 	/** Large record with mixed SCM/NVMe overwrites */
-	io_epoch_overwrite_large(state, oid);
+	io_overwrite_large(state, oid);
 }
 
 /** i/o to variable idx offset */
@@ -922,8 +920,8 @@ io_var_rec_size(void **state)
 }
 
 /**
- * Test update/fetch with data verification in epoch 0 of varing size and IOD
- * type. Size is either small I/O to SCM or larger (>=4k) I/O to NVMe, and IOD
+ * Test update/fetch with data verification of varing size and IOD type.
+ * Size is either small I/O to SCM or larger (>=4k) I/O to NVMe, and IOD
  * type is either array or single value.
  */
 static void
@@ -2175,19 +2173,20 @@ close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid)
 }
 
 /**
- * Basic test to insert a few large and small records, then discarding and
- * verify records in epochs both prior to and after the discarded transaction.
+ * Basic test to insert a few large and small records in different transactions,
+ * discard one of the transactions and commit the rest, then verify records both
+ * prior to and after the discarded transaction.
  */
 static void
-epoch_discard(void **state)
+tx_discard(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	const int	 nakeys = 4;
 	const size_t	 nakeys_strlen = 4 /* "9999" */;
-	const char	 dkey[] = "epoch_discard dkey";
-	const char	*akey_fmt = "epoch_discard akey%d";
+	const char	 dkey[] = "tx_discard dkey";
+	const char	*akey_fmt = "tx_discard akey%d";
 	char		*akey[nakeys];
 	char		*rec[nakeys];
 	daos_size_t	 rec_size[nakeys];
@@ -2199,7 +2198,7 @@ epoch_discard(void **state)
 	daos_size_t	 val_size[nakeys];
 	char		*rec_verify;
 	daos_handle_t	 th[3];
-	int		 i, e;
+	int		 i, t;
 	int		 rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -2231,10 +2230,11 @@ epoch_discard(void **state)
 	}
 
 	/** Write three timestamps to same set of d-key and a-keys. */
-	for (e = 0; e < 3; e++) {
-		rc = daos_tx_open(arg->coh, &th[e], NULL);
+	for (t = 0; t < 3; t++) {
+		rc = daos_tx_open(arg->coh, &th[t], NULL);
 		assert_int_equal(rc, 0);
 
+		print_message("writing to transaction %d\n", t);
 		for (i = 0; i < nakeys; i++) {
 			if (i % 2 == 0) {
 				memcpy(rec[i], rec_nvme, IO_SIZE_NVME);
@@ -2244,36 +2244,35 @@ epoch_discard(void **state)
 				rec_size[i] = IO_SIZE_SCM;
 			}
 			rec[i][0] = i + '0'; /* akey */
-			rec[i][1] = e + '0'; /* epoch */
+			rec[i][1] = t + '0'; /*  tx handle */
 			rx_nr[i] = 1;
-			print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n",
-				      i, akey[i], (int)rec_size[i], rec[i][0],
-				      rec[i][1]);
+			print_message("\takey[%d], val(%d):'%c%c'\n", i,
+				      (int)rec_size[i], rec[i][0], rec[i][1]);
 		}
 		insert(dkey, nakeys, (const char **)akey, rec_size, rx_nr,
-		       offset, (void **)rec, th[e], &req);
+		       offset, (void **)rec, th[t], &req);
 		daos_sync_ranks(MPI_COMM_WORLD);
 	}
 
-	for (e = 0; e < 3; e++) {
+	for (t = 0; t < 3; t++) {
 		/** Discard second timestamp. */
-		if (e == 1) {
-			print_message("aborting transaction %d.\n", e);
-			rc = daos_tx_abort(th[e], NULL);
+		if (t == 1) {
+			print_message("aborting transaction %d.\n", t);
+			rc = daos_tx_abort(th[t], NULL);
 			assert_int_equal(rc, 0);
 		} else {
-			print_message("committing transaction %d.\n", e);
-			rc = daos_tx_commit(th[e], NULL);
+			print_message("committing transaction %d.\n", t);
+			rc = daos_tx_commit(th[t], NULL);
 			assert_int_equal(rc, 0);
 		}
 		MPI_Barrier(MPI_COMM_WORLD);
 	}
 
 	/** Check the three transactions. */
-	for (e = 0; e < 3; e++) {
-		print_message("verifying transaction %d\n", e);
+	for (t = 0; t < 3; t++) {
+		print_message("verifying transaction %d\n", t);
 		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
-		       (void **)val, val_size, th[e], &req, false);
+		       (void **)val, val_size, th[t], &req, false);
 		for (i = 0; i < nakeys; i++) {
 			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
 					    IO_SIZE_SCM, 1);
@@ -2283,23 +2282,23 @@ epoch_discard(void **state)
 			else
 				memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
 
-			if (e == 1) { /* discarded */
+			if (t == 1) { /* discarded */
 				rec_verify[0] = i + '0'; /*akey*/
-				rec_verify[1] = e - 1 + '0'; /*previous epoch*/
+				rec_verify[1] = t - 1 + '0'; /*previous tx*/
 			} else { /* intact */
 				rec_verify[0] = i + '0';
-				rec_verify[1] = e + '0';
+				rec_verify[1] = t + '0';
 			}
 			assert_int_equal(req.iod[i].iod_size,
 					 strlen(rec_verify) + 1);
-			print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n", i,
-				      akey[i], (int)req.iod[i].iod_size,
-				      val[i][0], val[i][1]);
+			print_message("\takey[%d], val(%d):'%c%c'\n",
+				      i, (int)req.iod[i].iod_size, val[i][0],
+				      val[i][1]);
 			assert_memory_equal(val[i], rec_verify,
 					    req.iod[i].iod_size);
 			D_FREE(rec_verify);
 		}
-		rc = daos_tx_close(th[e], NULL);
+		rc = daos_tx_close(th[t], NULL);
 		assert_int_equal(rc, 0);
 	}
 
@@ -2307,8 +2306,10 @@ epoch_discard(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	close_reopen_coh_oh(arg, &req, oid);
 
+	/** Verify record is the same as the last commited transaction. */
 	lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
 	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
+	print_message("verifying transaction after container re-open\n");
 	for (i = 0; i < nakeys; i++) {
 		rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
 				    IO_SIZE_SCM, 1);
@@ -2322,9 +2323,8 @@ epoch_discard(void **state)
 		rec_verify[1] = 2 + '0';
 		assert_int_equal(req.iod[i].iod_size,
 				 strlen(rec_verify) + 1);
-		print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n", i,
-			      akey[i], (int)req.iod[i].iod_size,
-			      val[i][0], val[i][1]);
+		print_message("\takey[%d], val(%d):'%c%c'\n", i,
+			      (int)req.iod[i].iod_size, val[i][0], val[i][1]);
 		assert_memory_equal(val[i], rec_verify,
 				    req.iod[i].iod_size);
 		D_FREE(rec_verify);
@@ -2343,20 +2343,20 @@ epoch_discard(void **state)
 }
 
 /**
- * Basic test to insert a few large and small records at different epochs,
- * commit only the first few epochs, and verfiy that all epochs remain after
- * container close and non-committed epochs were successfully discarded.
+ * Basic test to insert a few large and small records at different transactions,
+ * commit only the first few TXs, and verfiy that all TXs remain after
+ * container close and non-committed TXs were successfully discarded.
  */
 static void
-epoch_commit(void **state)
+tx_commit(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	const int	 nakeys = 4;
 	const size_t	 nakeys_strlen = 4 /* "9999" */;
-	char		 dkey[] = "epoch_commit dkey";
-	const char	*akey_fmt = "epoch_commit akey%d";
+	char		 dkey[] = "tx_commit dkey";
+	const char	*akey_fmt = "tx_commit akey%d";
 	char		*akey[nakeys];
 	char		*rec[nakeys];
 	daos_size_t	 rec_size[nakeys];
@@ -2368,7 +2368,7 @@ epoch_commit(void **state)
 	daos_size_t	 val_size[nakeys];
 	char		*rec_verify;
 	daos_handle_t	 th[3];
-	int		 i, e;
+	int		 i, t;
 	int		 rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -2400,10 +2400,10 @@ epoch_commit(void **state)
 	}
 
 	/** Write at 3 different txs to same set of d-key and a-keys. */
-	for (e = 0; e < 3; e++) {
-		rc = daos_tx_open(arg->coh, &th[e], NULL);
+	for (t = 0; t < 3; t++) {
+		rc = daos_tx_open(arg->coh, &th[t], NULL);
 		assert_int_equal(rc, 0);
-		print_message("writing to TX %d\n", e);
+		print_message("writing to transaction %d\n", t);
 		for (i = 0; i < nakeys; i++) {
 			if (i % 2 == 0) {
 				memcpy(rec[i], rec_nvme, IO_SIZE_NVME);
@@ -2413,22 +2413,21 @@ epoch_commit(void **state)
 				rec_size[i] = IO_SIZE_SCM;
 			}
 			rec[i][0] = i + '0'; /* akey */
-			rec[i][1] = e + '0'; /* epoch */
+			rec[i][1] = t + '0'; /* tx handle */
 			rx_nr[i] = 1;
-			print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n",
-				      i, akey[i], (int)rec_size[i], rec[i][0],
-				      rec[i][1]);
+			print_message("\takey[%d], val(%d):'%c%c'\n", i,
+				      (int)rec_size[i], rec[i][0], rec[i][1]);
 		}
 		insert(dkey, nakeys, (const char **)akey, /*iod_size*/rec_size,
-			rx_nr, offset, (void **)rec, th[e], &req);
+			rx_nr, offset, (void **)rec, th[t], &req);
 		daos_sync_ranks(MPI_COMM_WORLD);
 	}
 
 	/** Check the three transactions. */
-	for (e = 0; e < 3; e++) {
-		print_message("verifying TX %d\n", e);
+	for (t = 0; t < 3; t++) {
+		print_message("verifying transaction %d\n", t);
 		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
-		       (void **)val, val_size, th[e], &req, false);
+		       (void **)val, val_size, th[t], &req, false);
 		for (i = 0; i < nakeys; i++) {
 			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
 					    IO_SIZE_SCM, 1);
@@ -2438,13 +2437,10 @@ epoch_commit(void **state)
 			else
 				memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
 
-			rec_verify[0] = i + '0'; /*akey*/
-			rec_verify[1] = e + '0'; /*epoch*/
+			rec_verify[0] = i + '0'; /* akey */
+			rec_verify[1] = t + '0'; /* tx handle*/
 			assert_int_equal(req.iod[i].iod_size,
 					 strlen(rec_verify) + 1);
-			print_message("\ta-key[%d]:'%s' val:(%d) '%c%c'\n", i,
-				      akey[i], (int)req.iod[i].iod_size,
-				      val[i][0], val[i][1]);
 			assert_memory_equal(val[i], rec_verify,
 					    req.iod[i].iod_size);
 			D_FREE(rec_verify);
@@ -2454,21 +2450,17 @@ epoch_commit(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** Commit only the first 2 transactions */
-	for (e = 0; e < 3; e++) {
-		daos_epoch_t epoch;
-
-		daos_tx_hdl2epoch(th[e], &epoch);
-
-		if (e != 2) {
-			print_message("committing transaction %d\n", e);
-			rc = daos_tx_commit(th[e], NULL);
+	for (t = 0; t < 3; t++) {
+		if (t != 2) {
+			print_message("committing transaction %d\n", t);
+			rc = daos_tx_commit(th[t], NULL);
 			assert_int_equal(rc, 0);
 		} else {
-			print_message("aborting transaction %d\n", e);
-			rc = daos_tx_abort(th[e], NULL);
+			print_message("aborting transaction %d\n", t);
+			rc = daos_tx_abort(th[t], NULL);
 			assert_int_equal(rc, 0);
 		}
-		rc = daos_tx_close(th[e], NULL);
+		rc = daos_tx_close(th[t], NULL);
 		assert_int_equal(rc, 0);
 		MPI_Barrier(MPI_COMM_WORLD);
 	}
@@ -2499,10 +2491,10 @@ epoch_commit(void **state)
 	 * Check data after container close. Last tx was not committed and
 	 * should be discarded, therefore data should be from transaciton 2.
 	 */
-	print_message("verifying after container re-open.\n");
+	print_message("verifying transaction after container re-open\n");
 	lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
 	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
-	e = 1;
+	t = 1;
 	for (i = 0; i < nakeys; i++) {
 		rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
 		assert_non_null(rec_verify);
@@ -2512,10 +2504,10 @@ epoch_commit(void **state)
 			memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
 
 		rec_verify[0] = i + '0';
-		rec_verify[1] = e + '0';
+		rec_verify[1] = t + '0';
 		assert_int_equal(req.iod[i].iod_size, strlen(rec_verify) + 1);
-		print_message("\trank %d: a-key[%d]:'%s' val:(%d) '%c%c'\n",
-			      arg->myrank, i, akey[i], (int)req.iod[i].iod_size,
+		print_message("\trank %d, akey[%d], val(%d):'%c%c'\n",
+			      arg->myrank, i, (int)req.iod[i].iod_size,
 			      val[i][0], val[i][1]);
 		assert_memory_equal(val[i], rec_verify,
 				    req.iod[i].iod_size);
@@ -3001,8 +2993,8 @@ io_obj_key_query(void **state)
 
 /**
  * Simple test to trigger the blob unmap callback. This is done by inserting
- * a few NVMe records all at epoch 0, deleting the records by using
- * daos_epoch_discard() at epoch 0, waiting a long enough time for the free
+ * a few NVMe records, deleting some of the NVMe records by discarding one of
+ * the transactions, waiting a long enough time for the free
  * extents to expire, and then inserting another record to trigger the callback.
  */
 static void
@@ -3018,13 +3010,13 @@ blob_unmap_trigger(void **state)
 	char		 akey[20];
 	int		 nvme_recs = 2;
 	daos_handle_t	 th[3];
-	int		 i, e;
+	int		 i, t;
 	int		 rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
-	/* Epoch discard only currently supports DAOS_IOD_SINGLE type */
+	/* Tx discard only currently supports DAOS_IOD_SINGLE type */
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
 	D_ALLOC(fetch_buf, IO_SIZE_NVME);
@@ -3036,23 +3028,23 @@ blob_unmap_trigger(void **state)
 	assert_non_null(enum_buf);
 
 	/**
-	 * Insert a few NVMe records. Write LHE, LHE + 1, and LHE + 2 at
-	 * different akeys and the same dkey.
+	 * Insert a few NVMe records. Write all three transactions at different
+	 * akeys and the same dkey.
 	 */
-	for (e = 0; e < 3; e++) {
-		rc = daos_tx_open(arg->coh, &th[e], NULL);
+	for (t = 0; t < 3; t++) {
+		rc = daos_tx_open(arg->coh, &th[t], NULL);
 		assert_int_equal(rc, 0);
 
 		for (i = 0; i < nvme_recs; i++) {
 			sprintf(akey, "blob_unmap_akey%d", i);
-			print_message("insert dkey:'%s', akey:'%s', eph:%d\n",
-				      dkey, akey, (int)e);
+			print_message("insert dkey:'%s', akey:'%s', tx:%d\n",
+				      dkey, akey, t);
 			insert_single(dkey, akey, 0, update_buf, IO_SIZE_NVME,
-				      th[e], &req);
+				      th[t], &req);
 			/* Verify record was inserted */
 			memset(fetch_buf, 0, IO_SIZE_NVME);
 			lookup_single(dkey, akey, 0, fetch_buf, IO_SIZE_NVME,
-				      th[e], &req);
+				      th[t], &req);
 			assert_memory_equal(update_buf, fetch_buf,
 					    IO_SIZE_NVME);
 		}
@@ -3083,10 +3075,10 @@ blob_unmap_trigger(void **state)
 	lookup_single(dkey, akey, 0, fetch_buf, IO_SIZE_NVME, th[1], &req);
 	assert_memory_equal(update_buf, fetch_buf, IO_SIZE_NVME);
 
-	print_message("blob unmap callback triggered\n");
+	print_message("Blob unmap callback triggered\n");
 
-	for (e = 0; e < 3; e++) {
-		rc = daos_tx_close(th[e], NULL);
+	for (t = 0; t < 3; t++) {
+		rc = daos_tx_close(th[t], NULL);
 		assert_int_equal(rc, 0);
 	}
 
@@ -3113,7 +3105,7 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO7: i/o with variable index",
 	  io_var_idx_offset, async_enable, test_case_teardown},
 	{ "IO8: variable size record overwrite",
-	  io_epoch_overwrite, async_enable, test_case_teardown},
+	  io_overwrite, async_enable, test_case_teardown},
 	{ "IO9: simple enumerate",
 	  enumerate_simple, async_disable, test_case_teardown},
 	{ "IO10: simple punch",
@@ -3130,10 +3122,10 @@ static const struct CMUnitTest io_tests[] = {
 	  io_simple_fetch_timeout, async_disable, test_case_teardown},
 	{ "IO16: timeout on 1 shard simple update",
 	  io_simple_update_timeout_single, async_disable, test_case_teardown},
-	{ "IO17: epoch discard",
-	  epoch_discard, async_disable, test_case_teardown},
-	{ "IO18: epoch commit",
-	  epoch_commit, async_disable, test_case_teardown},
+	{ "IO17: transaction discard",
+	  tx_discard, async_disable, test_case_teardown},
+	{ "IO18: transaction commit",
+	  tx_commit, async_disable, test_case_teardown},
 	{ "IO19: no space", io_nospace, async_disable, test_case_teardown},
 	{ "IO20: fetch size with NULL sgl",
 	  fetch_size, async_disable, test_case_teardown},
