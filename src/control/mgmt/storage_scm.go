@@ -43,9 +43,9 @@ type ScmmMap map[int32]*pb.ScmModule
 // Memory modules through libipmctl via go-ipmctl bindings.
 type scmStorage struct {
 	logger      *log.Logger
-	IpmCtl      ipmctl.IpmCtl // ipmctl NVM API interface
+	ipmCtl      ipmctl.IpmCtl // ipmctl NVM API interface
 	Modules     ScmmMap
-	initialised bool
+	initialized bool
 }
 
 func loadModules(mms []ipmctl.DeviceDiscovery) (ScmmMap, error) {
@@ -68,17 +68,19 @@ func loadModules(mms []ipmctl.DeviceDiscovery) (ScmmMap, error) {
 
 // Discover method implementation for scmStorage
 func (s *scmStorage) Discover() error {
-	mms, err := s.IpmCtl.Discover()
-	if err != nil {
-		return err
+	if s.initialized {
+		mms, err := s.ipmCtl.Discover()
+		if err != nil {
+			return err
+		}
+		pbMms, err := loadModules(mms)
+		if err != nil {
+			return err
+		}
+		s.Modules = pbMms
+		return nil
 	}
-	pbMms, err := loadModules(mms)
-	if err != nil {
-		return err
-	}
-	s.Modules = pbMms
-	s.initialised = true
-	return nil
+	return fmt.Errorf("scm storage not initialized")
 }
 
 // todo: implement remaining methods for scmStorage
@@ -88,16 +90,22 @@ func (s *scmStorage) Discover() error {
 // }
 
 // Setup placeholder implementation for scmStorage
-func (s *scmStorage) Setup() error { return nil }
+func (s *scmStorage) Setup() error {
+	s.initialized = true
+	return nil
+}
 
 // Teardown placeholder implementation for scmStorage
-func (s *scmStorage) Teardown() error { return nil }
+func (s *scmStorage) Teardown() error {
+	s.initialized = false
+	return nil
+}
 
 // newScmStorage creates a new instance of ScmStorage struct.
 func newScmStorage(logger *log.Logger) *scmStorage {
 	return &scmStorage{
 		logger: logger,
 		// NvmMgmt is the implementation of IpmCtl interface in go-ipmctl
-		IpmCtl: &ipmctl.NvmMgmt{},
+		ipmCtl: &ipmctl.NvmMgmt{},
 	}
 }

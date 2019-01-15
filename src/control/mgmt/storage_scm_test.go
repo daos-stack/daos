@@ -41,22 +41,42 @@ func (m *mockIpmCtl) Discover() ([]DeviceDiscovery, error) {
 }
 
 // mockScmStorage factory
-func newMockScmStorage(mms []DeviceDiscovery) *scmStorage {
+func newMockScmStorage(mms []DeviceDiscovery, inited bool) *scmStorage {
 	return &scmStorage{
-		logger: log.NewLogger(),
-		IpmCtl: &mockIpmCtl{modules: mms},
+		logger:      log.NewLogger(),
+		ipmCtl:      &mockIpmCtl{modules: mms},
+		initialized: inited,
 	}
 }
 
 func TestDiscoveryScm(t *testing.T) {
-	ss := newMockScmStorage([]DeviceDiscovery{MockModule()})
-	m := MockModulePB()
-
-	if err := ss.Discover(); err != nil {
-		t.Fatal(err.Error())
+	tests := []struct {
+		inited bool
+		errMsg string
+	}{
+		{
+			true,
+			"",
+		},
+		{
+			false,
+			"scm storage not initialized",
+		},
 	}
 
-	AssertTrue(t, ss.initialised, "expected ScmStorage to have been initialised")
-	AssertEqual(t, len(ss.Modules), 1, "unexpected number of modules")
-	AssertEqual(t, ss.Modules, ScmmMap{0: m}, "unexpected list of modules")
+	m := MockModulePB()
+
+	for _, tt := range tests {
+		ss := newMockScmStorage([]DeviceDiscovery{MockModule()}, tt.inited)
+
+		if err := ss.Discover(); err != nil {
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, "")
+				continue
+			}
+			t.Fatal(err.Error())
+		}
+
+		AssertEqual(t, ss.Modules, ScmmMap{0: m}, "unexpected list of modules")
+	}
 }

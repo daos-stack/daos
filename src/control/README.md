@@ -1,6 +1,6 @@
-# daos_server
+# DAOS Control Plane (daos_server)
 
-DAOS operates over two, closely integrated planes, Control and Data. The Data plane handles the heavy lifting transport operations whilst the Control plane orchestrates process and storage management facilitating the operation of the Data plane.
+DAOS operates over two, closely integrated planes, Control and Data. The Data plane handles the heavy lifting transport operations while the Control plane orchestrates process and storage management, facilitating the operation of the Data plane.
 
 [DAOS Server](server/daos_server.go) implements the DAOS Control Plane and is written in Golang. It is tasked with network and storage hardware provisioning and allocation in addition to instantiation and management of the DAOS IO Servers (Data Plane written in C) running on the same host. Users of DAOS will interact directly only with the Control Plane in the form of the DAOS Server and associated tools.
 
@@ -8,7 +8,7 @@ The DAOS Server implements the [gRPC protocol](https://grpc.io/) to communicate 
 
 Multiple gRPC server modules are loaded by the control server. Currently included modules are security and management.
 
-The Control Plane implements a replicated management service as part of DAOS Server, responsible for handling distributed operations across the DAOS System.
+The Control Plane implements a replicated management service as part of the DAOS Server, responsible for handling distributed operations across the DAOS System.
 
 The [shell](dmg/daos_shell) is an example client application which can connect to both the [agent](agent/daos_agent.go) to perform security functions (such as providing credentials and retrieving security contexts) and to the local management server to perform management functions (such as storage device discovery).
 
