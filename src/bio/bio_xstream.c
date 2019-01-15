@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,6 +83,7 @@ struct bio_nvme_data {
 	/* All bdevs can be used by DAOS server */
 	d_list_t		 bd_bdevs;
 	char			*bd_nvme_conf;
+	int			 bd_shm_id;
 };
 
 static struct bio_nvme_data nvme_glb;
@@ -124,7 +125,7 @@ print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 }
 
 int
-bio_nvme_init(const char *storage_path, const char *nvme_conf)
+bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id)
 {
 	char		*env;
 	int		rc, fd;
@@ -192,6 +193,8 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf)
 	env = getenv("IO_STAT_PERIOD");
 	io_stat_period = env ? atoi(env) : 0;
 	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
+
+	nvme_glb.bd_shm_id = shm_id;
 
 	return 0;
 
@@ -946,6 +949,9 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
 
 		spdk_env_opts_init(&opts);
 		opts.name = "daos";
+		if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
+			opts.shm_id = nvme_glb.bd_shm_id;
+
 		rc = spdk_env_init(&opts);
 		if (rc != 0) {
 			D_ERROR("failed to initialize SPDK env, rc:%d\n", rc);

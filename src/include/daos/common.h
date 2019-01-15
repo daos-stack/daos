@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -393,5 +393,8 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define DAOS_RECX_PTR_OVERLAP(recx_1, recx_2)				\
 	(((recx_1)->rx_idx < (recx_2)->rx_idx + (recx_2)->rx_nr) &&	\
 	 ((recx_2)->rx_idx < (recx_1)->rx_idx + (recx_1)->rx_nr))
+
+/* NVMe shared constants */
+#define DAOS_NVME_SHMID_NONE	-1
 
 #endif /* __DAOS_COMMON_H__ */

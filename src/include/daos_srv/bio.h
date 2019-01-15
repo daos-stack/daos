@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -162,10 +162,11 @@ bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
  *
  * \param[IN] storage_path	daos storage directory path
  * \param[IN] nvme_conf		NVMe config file
+ * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *storage_path, const char *nvme_conf);
+int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id);
 
 /**
  * Global NVMe finilization.

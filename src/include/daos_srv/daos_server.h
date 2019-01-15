@@ -55,6 +55,9 @@ extern const char      *dss_nvme_conf;
 /** Socket Directory */
 extern const char      *dss_socket_dir;
 
+/** NVMe shm_id for enabling SPDK multi-process mode */
+extern int		dss_nvme_shm_id;
+
 
 /**
  * Stackable Module API

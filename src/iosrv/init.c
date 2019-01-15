@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,9 @@ const char	       *dss_nvme_conf = "/etc/daos_nvme.conf";
 
 /** Socket Directory */
 const char	       *dss_socket_dir = "/var/run/daos_server";
+
+/** NVMe shm_id for enabling SPDK multi-process mode */
+int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 
 /** attach_info path to support singleton client */
 static bool	        save_attach_info;
@@ -364,6 +367,8 @@ Options:\n\
       Directory where daos_server sockets are located (default \"%s\")\n\
   --nvme=config, -n config\n\
       NVMe config file (default \"%s\")\n\
+  --shm_id=shm_id, -i shm_id\n\
+      Shared segment ID (enable multi-process mode in SPDK, default none)\n\
   --attach_info=path, -apath\n\
       Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
   --map=path, -y path\n\
@@ -386,6 +391,7 @@ parse(int argc, char **argv)
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "socket_dir",		required_argument,	NULL,	'd' },
 		{ "nvme",		required_argument,	NULL,	'n' },
+		{ "shm_id",		required_argument,	NULL,	'i' },
 		{ "attach_info",	required_argument,	NULL,	'a' },
 		{ "map",		required_argument,	NULL,	'y' },
 		{ "rank",		required_argument,	NULL,	'r' },
@@ -397,7 +403,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:m:g:s:d:n:a:y:r:h",
+	while ((c = getopt_long(argc, argv, "c:m:g:s:d:n:i:a:y:r:h",
 			opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
@@ -431,6 +437,9 @@ parse(int argc, char **argv)
 			break;
 		case 'n':
 			dss_nvme_conf = optarg;
+			break;
+		case 'i':
+			dss_nvme_shm_id = atoi(optarg);
 			break;
 		case 'h':
 			usage(argv[0], stdout);
