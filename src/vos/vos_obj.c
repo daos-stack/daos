@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -737,25 +737,6 @@ singv_iter_next(struct vos_obj_iter *oiter)
 	return rc;
 }
 
-static void
-recx_iter_adjust_epr(struct vos_obj_iter *oiter, vos_it_epc_expr_t expr)
-{
-	switch (expr) {
-	default:
-		D_ASSERT(0);
-		break;
-	case VOS_IT_EPC_EQ:
-		break;
-	case VOS_IT_EPC_GE:
-		oiter->it_epr.epr_hi = DAOS_EPOCH_MAX;
-		break;
-	case VOS_IT_EPC_RR:
-	case VOS_IT_EPC_RE:
-	case VOS_IT_EPC_LE:
-		oiter->it_epr.epr_lo = 0;
-	}
-}
-
 #define recx_flags_set(flags, setting)	\
 	(((flags) & (setting)) == (setting))
 
@@ -778,7 +759,7 @@ recx_get_flags(struct vos_obj_iter *oiter)
 		options |= EVT_ITER_COVERED;
 
 done:
-	if (oiter->it_epc_expr == VOS_IT_EPC_RR)
+	if (oiter->it_recx_flags & VOS_IT_RECX_REVERSE)
 		options |= EVT_ITER_REVERSE;
 	return options;
 }
@@ -807,7 +788,6 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	if (rc != 0)
 		D_GOTO(failed_1, rc);
 
-	recx_iter_adjust_epr(oiter, oiter->it_epc_expr);
 	filter.fr_ex.ex_lo = 0;
 	filter.fr_ex.ex_hi = ~(0ULL);
 	filter.fr_epr = oiter->it_epr;
@@ -1110,7 +1090,6 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 				" rc = %d\n", rc);
 			goto failed;
 		}
-		recx_iter_adjust_epr(oiter, oiter->it_epc_expr);
 		filter.fr_ex.ex_lo = 0;
 		filter.fr_ex.ex_hi = ~(0ULL);
 		filter.fr_epr = oiter->it_epr;

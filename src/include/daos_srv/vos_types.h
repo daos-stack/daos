@@ -92,7 +92,7 @@ typedef enum {
 	VOS_ITER_RECX,
 } vos_iter_type_t;
 
-/** epoch logic expression for the iterator */
+/** epoch logic expression for the single value iterator */
 typedef enum {
 	VOS_IT_EPC_LE		= 0,
 	VOS_IT_EPC_GE,
@@ -141,6 +141,8 @@ enum {
 	 * VOS_IT_RECX_COVERED is not set
 	 */
 	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
+	/** When sorted iteration is enabled, iterate in reverse */
+	VOS_IT_RECX_REVERSE	= (1 << 3),
 };
 
 /**
