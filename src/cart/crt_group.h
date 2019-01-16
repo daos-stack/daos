@@ -148,6 +148,10 @@ struct crt_grp_priv {
 	crt_phy_addr_t		 gp_psr_phy_addr;
 	/* address lookup cache, only valid for primary group */
 	struct d_hash_table	 *gp_lookup_cache;
+
+	/* uri lookup cache, only valid for primary group */
+	struct d_hash_table	 gp_uri_lookup_cache;
+
 	enum crt_grp_status	 gp_status; /* group status */
 	/* set of variables only valid in primary service groups */
 	uint32_t		 gp_primary:1, /* flag of primary group */
@@ -336,6 +340,28 @@ grp_priv_set_default_failed_ranks(struct crt_grp_priv *priv,
 	priv->gp_failed_ranks = def->gp_failed_ranks;
 }
 
+/* uri info for each remote rank */
+struct crt_uri_item {
+	/* link to crt_grp_priv::gp_uri_lookup_cache */
+	d_list_t	ui_link;
+
+	/* URI string for each remote tag */
+	/* TODO: in phase2 change this to hash table */
+	crt_phy_addr_t	ui_uri[CRT_SRV_CONTEXT_NUM];
+
+	/* remote rank; used as a hash key */
+	d_rank_t	ui_rank;
+
+	/* reference count */
+	uint32_t	ui_ref;
+
+	/* flag indicating whether initialized */
+	uint32_t	ui_initialized;
+
+	/* mutex for protection of ui_ref */
+	pthread_mutex_t ui_mutex;
+};
+
 /* lookup cache item for one target */
 struct crt_lookup_item {
 	/* link to crt_grp_priv::gp_lookup_cache[ctx_idx] */
@@ -344,17 +370,16 @@ struct crt_lookup_item {
 	struct crt_grp_priv	*li_grp_priv;
 	/* rank of the target */
 	d_rank_t		 li_rank;
-	/* base phy addr published through PMIx */
-	crt_phy_addr_t		 li_base_phy_addr;
 	/* connected HG addr */
 	hg_addr_t		 li_tag_addr[CRT_SRV_CONTEXT_NUM];
-	crt_phy_addr_t		 li_uri[CRT_SRV_CONTEXT_NUM];
+
 	/* reference count */
 	uint32_t		 li_ref;
 	uint32_t		 li_initialized:1,
 				 li_evicted:1;
 	pthread_mutex_t		 li_mutex;
 };
+
 
 /* structure of global group data */
 struct crt_grp_gdata {

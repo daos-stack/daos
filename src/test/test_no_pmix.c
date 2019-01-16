@@ -64,11 +64,11 @@ static crt_group_t	*g_group;
 
 static bool g_do_shutdown;
 static int issue_test_ping(d_rank_t target_rank, int target_tag);
-
+static pid_t mypid;
 
 #define DBG_PRINT(x...) \
 	do { \
-		fprintf(stderr, "[rank=%d]\t", opts.self_rank); \
+		fprintf(stderr, "[rank=%d pid=%d]\t", opts.self_rank, mypid); \
 		fprintf(stderr, x); \
 	} while (0)
 
@@ -750,6 +750,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	mypid = getpid();
 	opts.self_rank = atoi(argv[1]);
 
 	if (parse_options(argc-1, argv+1) != 0) {
@@ -1099,7 +1100,8 @@ int main(int argc, char **argv)
 
 	pthread_join(progress_thread, NULL);
 
-	DBG_PRINT("Progress joined\n");
+	DBG_PRINT("---------------------------------\n");
+	DBG_PRINT("progress_thread joined. Destroying Context\n");
 
 	rc = crt_context_destroy(aux_ctx, 1);
 	if (rc != 0) {
@@ -1107,7 +1109,7 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	D_INFO("Finished the test\n");
+	DBG_PRINT("Context destroyed. Finalizing\n");
 
 	rc = crt_finalize();
 	if (rc != 0) {
@@ -1115,12 +1117,16 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
+	DBG_PRINT("Finalized. Destroying semaphore\n");
+
 	rc = sem_destroy(&token_to_proceed);
 	if (rc != 0) {
 		D_ERROR("sem_destroy() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
+	DBG_PRINT("Destroyed semaphore. Exiting\n");
+	DBG_PRINT("---------------------------------\n");
 	return 0;
 }
 
