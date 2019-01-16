@@ -96,10 +96,10 @@ def scons():
     denv.InstallAs("$PREFIX/bin/daos_shell", shellbin)
 
     drpcbin = "%s/bin/drpc_test" % gopath
-    drpcsrc = "%s/drpc_test/drpc_test_server.go" % gosrc
+    drpcsrc = "%s/drpc_test/hello_drpc.go" % gosrc
     denv.Command(drpcbin, drpcsrc,
                  "go install %s/src/control/drpc_test" % repopath)
-    denv.InstallAs("$PREFIX/bin/drpc_test_server", drpcbin)
+    denv.InstallAs("$PREFIX/bin/hello_drpc", drpcbin)
 
     AlwaysBuild([agentbin, serverbin, shellbin, drpcbin])
 if __name__ == "SCons.Script":

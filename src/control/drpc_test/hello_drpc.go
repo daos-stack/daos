@@ -32,15 +32,25 @@ import (
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/drpc_test/hello"
+	"github.com/golang/protobuf/proto"
 )
 
 var (
 	unixSocket = flag.String("unix_socket", "./drpc_test.sock", "The path to the unix socket to be used for drpc messages")
+	server     = flag.Bool("server", false, "Start up a dRPC test server. Otherwise, will run in client mode")
 )
 
 func main() {
 	flag.Parse()
 
+	if *server {
+		runDrpcServer()
+	} else {
+		runDrpcClient()
+	}
+}
+
+func runDrpcServer() {
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal, 1)
 	finish := make(chan bool, 1)
@@ -69,4 +79,46 @@ func main() {
 		finish <- true
 	}()
 	<-finish
+}
+
+func runDrpcClient() {
+	client := drpc.NewClientConnection(*unixSocket)
+
+	err := client.Connect()
+	if err != nil {
+		log.Fatalf("Failed to connect to socket: %v", err)
+	}
+
+	message := &drpc.Call{
+		Module: int32(hello.Module_HELLO),
+		Method: int32(hello.Function_GREETING),
+	}
+
+	body := &hello.Hello{
+		Name: "Friend",
+	}
+	message.Body, err = proto.Marshal(body)
+	if err != nil {
+		log.Fatalf("Failed to marshal the Call body: %v", err)
+	}
+
+	resp, err := client.SendMsg(message)
+	if err != nil {
+		log.Fatalf("Failed to send message: %v", err)
+	}
+
+	log.Printf("Response:")
+	log.Printf("\tSequence: %v", resp.Sequence)
+	log.Printf("\tStatus: %v", resp.Status)
+	log.Printf("\tBody: %v bytes", len(resp.Body))
+
+	respBody := &hello.HelloResponse{}
+	err = proto.Unmarshal(resp.Body, respBody)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal HelloResponse: %v", err)
+	}
+
+	log.Printf("\tGreeting: %v", respBody.Greeting)
+
+	log.Printf("Done.")
 }
