@@ -1,6 +1,6 @@
 [MESSAGES CONTROL]
 disable=locally-disabled,locally-enabled,star-args,wrong-import-order,
-        unused-wildcard-import,wrong-import-position
+        unused-wildcard-import,wrong-import-position,bad-option-value
 
 [FORMAT]
 max-line-length=80
