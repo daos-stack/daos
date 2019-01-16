@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package mgmt
 
 import (
 	"bytes"
@@ -34,10 +34,10 @@ import (
 type BdClass string
 
 const (
-	NVME   BdClass = "nvme"
-	MALLOC BdClass = "malloc"
-	KDEV   BdClass = "kdev"
-	FILE   BdClass = "file"
+	BD_NVME   BdClass = "nvme"
+	BD_MALLOC BdClass = "malloc"
+	BD_KDEV   BdClass = "kdev"
+	BD_FILE   BdClass = "file"
 
 	CONF_OUT   = "daos_nvme.conf"
 	NVME_TEMPL = `[Nvme]
@@ -95,11 +95,11 @@ func createConf(ext External, server *server, templ string) error {
 	return nil
 }
 
-func (c *configuration) parseNvme() error {
+func (c *configuration) ParseNvme() error {
 	for i, _ := range c.Servers {
 		s := &c.Servers[i]
 		switch s.BdevClass {
-		case NVME:
+		case BD_NVME:
 			if len(s.BdevList) == 0 {
 				continue
 			}
@@ -107,7 +107,7 @@ func (c *configuration) parseNvme() error {
 			if err := createConf(c.ext, s, NVME_TEMPL); err != nil {
 				return err
 			}
-		case MALLOC:
+		case BD_MALLOC:
 			if s.BdevNumber == 0 {
 				continue
 			}
@@ -115,7 +115,7 @@ func (c *configuration) parseNvme() error {
 				return err
 			}
 			s.EnvVars = append(s.EnvVars, "VOS_BDEV_CLASS=MALLOC")
-		case KDEV:
+		case BD_KDEV:
 			if len(s.BdevList) == 0 {
 				continue
 			}
@@ -123,7 +123,7 @@ func (c *configuration) parseNvme() error {
 				return err
 			}
 			s.EnvVars = append(s.EnvVars, "VOS_BDEV_CLASS=AIO")
-		case FILE:
+		case BD_FILE:
 			if len(s.BdevList) == 0 {
 				continue
 			}

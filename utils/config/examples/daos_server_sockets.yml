@@ -4,6 +4,7 @@ name: daos_server           # map to -g daos_server
 port: 10001                 # mgmt port
 provider: ofi+sockets       # map to CRT_PHY_ADDR_STR=ofi+sockets
 socket_dir: /tmp/daos_sockets
+nr_hugepages: 4096
 
 # single server instance per config file for now
 servers:

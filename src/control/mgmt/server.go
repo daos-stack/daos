@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,8 +110,8 @@ func (c *ControlService) ShowLocalStorage() {
 	}
 }
 
-// NewControlServer creates a new instance of ControlService struct.
-func NewControlServer(shmID int) *ControlService {
+// NewControlService creates a new instance of ControlService struct.
+func NewControlService(config *configuration) *ControlService {
 	logger := log.NewLogger()
 	logger.SetLevel(log.Debug)
 
@@ -120,8 +120,14 @@ func NewControlServer(shmID int) *ControlService {
 		panic(err)
 	}
 
+	nvmeStorage, err := newNvmeStorage(
+		logger, config.NvmeShmID, config.NrHugepages)
+	if err != nil {
+		panic(err)
+	}
+
 	return &ControlService{
-		nvme:              newNvmeStorage(logger, shmID),
+		nvme:              nvmeStorage,
 		scm:               newScmStorage(logger),
 		logger:            logger,
 		supportedFeatures: fMap,

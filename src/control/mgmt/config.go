@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package mgmt
 
 import (
 	"fmt"
@@ -60,9 +60,9 @@ func (c *configuration) saveConfig(filename string) error {
 	return ioutil.WriteFile(filename, bytes, 0644)
 }
 
-// loadConfigOpts derives file location and parses configuration options
+// LoadConfigOpts derives file location and parses configuration options
 // from both config file and commandline flags.
-func loadConfigOpts(cliOpts *cliOptions) configuration {
+func LoadConfigOpts(cliOpts *CliOptions) configuration {
 	config := NewConfiguration()
 	if cliOpts.ConfigPath != "" {
 		config.Path = cliOpts.ConfigPath
@@ -89,8 +89,8 @@ func loadConfigOpts(cliOpts *cliOptions) configuration {
 	return config
 }
 
-// saveActiveConfig saves read-only active config, tries config dir then /tmp/
-func saveActiveConfig(config configuration) configuration {
+// SaveActiveConfig saves read-only active config, tries config dir then /tmp/
+func SaveActiveConfig(config configuration) configuration {
 	activeConfig := filepath.Join(filepath.Dir(config.Path), CONFIG_OUT)
 	eMsg := "Warning: active config could not be saved (%s)"
 	err := config.saveConfig(activeConfig)
@@ -193,6 +193,14 @@ func (c *configuration) populateCliOpts(i int) error {
 	if c.SocketDir != "" {
 		server.CliOpts = append(server.CliOpts, "-d", c.SocketDir)
 	}
+	if c.NvmeShmID > 0 {
+		// Add shm_id so io_server can share spdk access to controllers
+		// with mgmtControlServer process. Currently not user
+		// configurable when starting daos_server, use default.
+		server.CliOpts = append(
+			server.CliOpts, "-i", strconv.Itoa(c.NvmeShmID))
+	}
+
 	return nil
 }
 
@@ -203,7 +211,7 @@ func (c *configuration) populateCliOpts(i int) error {
 //   port, mount path, cores, group, rank, socket dir
 // Current cli opts to be passed to be stored by daos_server:
 //   modules, attach, map
-func (c *configuration) cmdlineOverride(opts *cliOptions) {
+func (c *configuration) cmdlineOverride(opts *CliOptions) {
 	// Populate options that can be provided on both the commandline and config.
 	if opts.Port > 0 {
 		c.Port = int(opts.Port)
@@ -267,7 +275,7 @@ func (c *configuration) validateConfig() (bool, error) {
 
 // getIOParams builds lists of commandline options and environment variables
 // to pass when invoking I/O server instances.
-func (c *configuration) getIOParams(cliOpts *cliOptions) error {
+func (c *configuration) getIOParams(cliOpts *CliOptions) error {
 	// if config doesn't specify server and/or provider we need to
 	// attempt to check if at least some of the envs exist and
 	// notify that IO server will run with user set env vars
@@ -319,8 +327,8 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 	return nil
 }
 
-// populateEnv adds envs from config options
-func (c *configuration) populateEnv(ioIdx int, envs *[]string) error {
+// PopulateEnv adds envs from config options
+func (c *configuration) PopulateEnv(ioIdx int, envs *[]string) error {
 	for _, env := range c.Servers[ioIdx].EnvVars {
 		kv := strings.Split(env, "=")
 		if kv[1] == "" {

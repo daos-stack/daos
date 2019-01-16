@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,18 +72,15 @@ func newMockNvmeStorage(
 	}
 }
 
-func TestSetupNvme(t *testing.T) {
+func TestDiscoveryNvme(t *testing.T) {
 	tests := []struct {
 		inited bool
-		errMsg string
 	}{
 		{
 			true,
-			"nvme storage already initialized",
 		},
 		{
 			false,
-			"",
 		},
 	}
 
@@ -92,51 +89,15 @@ func TestSetupNvme(t *testing.T) {
 	for _, tt := range tests {
 		sn := newMockNvmeStorage("", "", tt.inited)
 
-		if err := sn.Setup(); err != nil {
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, "")
-				continue
-			}
-			t.Fatal(err.Error())
-		}
-
-		AssertEqual(
-			t, sn.Controllers, []*pb.NvmeController{c},
-			"unexpected list of protobuf format controllers")
-	}
-}
-
-func TestDiscoveryNvme(t *testing.T) {
-	tests := []struct {
-		inited bool
-		errMsg string
-	}{
-		{
-			true,
-			"",
-		},
-		{
-			false,
-			"nvme storage not initialized",
-		},
-	}
-
-	c := MockControllerPB("")
-
-	for _, tt := range tests {
-		sn := newMockNvmeStorage("", "", false)
-		if tt.inited {
-			if err := sn.Setup(); err != nil {
-				t.Fatal(err.Error())
-			}
-		}
-
 		if err := sn.Discover(); err != nil {
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, "")
-				continue
-			}
 			t.Fatal(err.Error())
+		}
+
+		if tt.inited {
+			AssertEqual(
+				t, sn.Controllers, []*pb.NvmeController(nil),
+				"unexpected list of protobuf format controllers")
+			continue
 		}
 
 		AssertEqual(
@@ -165,7 +126,7 @@ func TestUpdateNvme(t *testing.T) {
 	for _, tt := range tests {
 		sn := newMockNvmeStorage("1.0.0", "1.0.1", false)
 		if tt.inited {
-			if err := sn.Setup(); err != nil {
+			if err := sn.Discover(); err != nil {
 				t.Fatal(err.Error())
 			}
 		}
@@ -218,7 +179,7 @@ func TestBurnInNvme(t *testing.T) {
 	for _, tt := range tests {
 		sn := newMockNvmeStorage("", "", false)
 		if tt.inited {
-			if err := sn.Setup(); err != nil {
+			if err := sn.Discover(); err != nil {
 				t.Fatal(err.Error())
 			}
 		}

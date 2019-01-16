@@ -1,4 +1,4 @@
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package mgmt
 
 import (
 	"fmt"
@@ -50,6 +50,21 @@ const (
 	// todo: implement LogMask discriminated union
 )
 
+// CliOptions struct defined flags that can be used when invoking daos_server.
+type CliOptions struct {
+	Port        uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
+	MountPath   string  `short:"s" long:"storage" description:"Storage path"`
+	ConfigPath  string  `short:"o" long:"config_path" description:"Server config file path"`
+	Modules     *string `short:"m" long:"modules" description:"List of server modules to load"`
+	Cores       uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
+	Group       string  `short:"g" long:"group" description:"Server group name"`
+	Attach      *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
+	Map         *string `short:"y" long:"map" description:"[Temporary] System map file"`
+	Rank        *uint   `short:"r" long:"rank" description:"[Temporary] Self rank"`
+	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	ShowStorage bool    `long:"show-storage" description:"List locally attached SCM and NVMe storage"`
+}
+
 //Server defines configuration options for DAOS IO Server instances
 type server struct {
 	// Rank parsed as string to allow zero value
@@ -78,7 +93,7 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	bdevClass := BdClass(class)
 	switch bdevClass {
-	case NVME, MALLOC, KDEV, FILE:
+	case BD_NVME, BD_MALLOC, BD_KDEV, BD_FILE:
 		*b = bdevClass
 	default:
 		return fmt.Errorf(
@@ -94,7 +109,7 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // populated with defaults.
 func NewDefaultServer() server {
 	return server{
-		BdevClass: NVME,
+		BdevClass: BD_NVME,
 	}
 }
 
@@ -171,12 +186,18 @@ type configuration struct {
 	BdevInclude  []string `yaml:"bdev_include"`
 	BdevExclude  []string `yaml:"bdev_exclude"`
 	Hyperthreads bool     `yaml:"hyperthreads"`
+	NrHugepages  int      `yaml:"nr_hugepages"`
 	// development (subject to change) config fields
 	Modules   string
 	Attach    string
 	SystemMap string
 	Path      string
 	ext       External
+	// Shared memory segment ID to enable SPDK multiprocess mode,
+	// SPDK application processes can then access the same shared
+	// memory and therefore NVMe controllers.
+	// TODO: Is it also necessary to provide distinct coremask args?
+	NvmeShmID int
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler on Format struct
@@ -231,7 +252,9 @@ func NewDefaultConfiguration(ext External) configuration {
 		Key:          "./.daos/daos_server.key",
 		ScmMountPath: "/mnt/daos",
 		Hyperthreads: false,
+		NrHugepages:  1024,
 		Path:         "etc/daos_server.yml",
+		NvmeShmID:    0, // currently disabled by default
 		ext:          ext,
 	}
 }

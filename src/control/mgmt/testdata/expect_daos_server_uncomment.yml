@@ -60,3 +60,9 @@ bdev_include:
 bdev_exclude:
 - 0000:81:00.1
 hyperthreads: true
+nr_hugepages: 4096
+modules: ""
+attach: ""
+systemmap: ""
+path: testdata/.daos_server_uncomment.yml
+nvmeshmid: 0

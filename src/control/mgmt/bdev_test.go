@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package main
+package mgmt
 
 import (
 	"fmt"
@@ -49,10 +49,10 @@ func TestParseBdev(t *testing.T) {
 		},
 		{},
 		{
-			bdevClass: NVME,
+			bdevClass: BD_NVME,
 		},
 		{
-			bdevClass: NVME,
+			bdevClass: BD_NVME,
 			bdevList:  []string{"0000:81:00.0", "0000:81:00.1"},
 			expFiles: [][]string{
 				[]string{
@@ -70,7 +70,7 @@ func TestParseBdev(t *testing.T) {
 			},
 		},
 		{
-			bdevClass: FILE,
+			bdevClass: BD_FILE,
 			bdevList:  []string{"/tmp/myfile", "/tmp/myotherfile"},
 			bdevSize:  5, // GB/file
 			expFiles: [][]string{
@@ -86,7 +86,7 @@ func TestParseBdev(t *testing.T) {
 			expEnvs: []string{"VOS_BDEV_CLASS=AIO"},
 		},
 		{
-			bdevClass: FILE,
+			bdevClass: BD_FILE,
 			bdevList:  []string{"/tmp/myfile", "/tmp/myotherfile"},
 			bdevSize:  5, // GB/file
 			expFiles: [][]string{
@@ -101,7 +101,7 @@ func TestParseBdev(t *testing.T) {
 			fileExists: true,
 		},
 		{
-			bdevClass: KDEV,
+			bdevClass: BD_KDEV,
 			bdevList:  []string{"/dev/sdb", "/dev/sdc"},
 			expFiles: [][]string{
 				[]string{
@@ -114,7 +114,7 @@ func TestParseBdev(t *testing.T) {
 			expEnvs: []string{"VOS_BDEV_CLASS=AIO"},
 		},
 		{
-			bdevClass:  MALLOC,
+			bdevClass:  BD_MALLOC,
 			bdevSize:   5, // GB/file
 			bdevNumber: 2, // number of LUNs
 			expFiles: [][]string{
@@ -140,7 +140,7 @@ func TestParseBdev(t *testing.T) {
 		server.BdevNumber = tt.bdevNumber
 		config := NewMockConfig(nil, "", tt.fileExists)
 		config.Servers = append(config.Servers, server)
-		err := config.parseNvme()
+		err := config.ParseNvme()
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, "")
 			continue

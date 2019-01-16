@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package mgmt
 
 import (
 	"log"
@@ -31,7 +31,7 @@ import (
 	"strings"
 )
 
-func checkReplica(lis net.Listener, accessPoints []string, srv *exec.Cmd) string {
+func CheckReplica(lis net.Listener, accessPoints []string, srv *exec.Cmd) string {
 	// If this server is supposed to host an MS replica, format and start
 	// the MS replica. Only performing the check and print the result for now.
 	isReplica, bootstrap, err := checkMgmtSvcReplica(lis.Addr().(*net.TCPAddr), accessPoints)

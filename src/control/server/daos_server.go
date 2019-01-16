@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
 package main
 
 import (
@@ -40,29 +39,10 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/mgmt/proto"
 )
 
-type cliOptions struct {
-	Port        uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
-	MountPath   string  `short:"s" long:"storage" description:"Storage path"`
-	ConfigPath  string  `short:"o" long:"config_path" description:"Server config file path"`
-	Modules     *string `short:"m" long:"modules" description:"List of server modules to load"`
-	Cores       uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
-	Group       string  `short:"g" long:"group" description:"Server group name"`
-	Attach      *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
-	Map         *string `short:"y" long:"map" description:"[Temporary] System map file"`
-	Rank        *uint   `short:"r" long:"rank" description:"[Temporary] Self rank"`
-	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
-	ShowStorage bool    `long:"show-storage" description:"List locally attached SCM and NVMe storage"`
-}
-
-var (
-	opts cliOptions
-	// Shared memory segment ID to enable multiple SPDK application instances to
-	// access the same NVMe controller.
-	shmID = 1
-)
-
 func main() {
 	runtime.GOMAXPROCS(1)
+
+	var opts mgmt.CliOptions
 
 	// Parse commandline flags which override options loaded from config.
 	_, err := flags.Parse(&opts)
@@ -71,23 +51,18 @@ func main() {
 		return
 	}
 
-	// Pass shm_id to mgmtControlServer (PRIMARY SPDK process) and later
-	// share with io_server (SECONDARY SPDK process) to facilitate
-	// concurrent SPDK access to controllers on same host from multiple
-	// processes.
-	// TODO: Is it also necessary to provide distinct coremask args?
-	mgmtControlServer := mgmt.NewControlServer(shmID)
-	// TODO: initialize spdk in setup working in multiprocess mod
-	//mgmtControlServer.Setup() //defer mgmtControlServer.Teardown()
+	// Parse configuration file and load values, then backup active config.
+	config := mgmt.SaveActiveConfig(mgmt.LoadConfigOpts(&opts))
+
+	mgmtControlServer := mgmt.NewControlService(&config)
+	mgmtControlServer.Setup()
+	defer mgmtControlServer.Teardown()
 
 	// If command mode option specified then perform task and exit.
 	if opts.ShowStorage {
 		mgmtControlServer.ShowLocalStorage()
 		return
 	}
-
-	// Parse configuration file and load values, then backup active config.
-	config := saveActiveConfig(loadConfigOpts(&opts))
 
 	// Create a new server register our service and listen for connections.
 	addr := fmt.Sprintf("0.0.0.0:%d", config.Port)
@@ -118,7 +93,7 @@ func main() {
 		syscall.SIGHUP)
 
 	// Process configurations parameters for Nvme.
-	if err = config.parseNvme(); err != nil {
+	if err = config.ParseNvme(); err != nil {
 		log.Fatal("NVMe config could not be processed: ", err)
 	}
 
@@ -126,19 +101,14 @@ func main() {
 	// TODO: Extend to start two io_servers per host.
 	ioIdx := 0
 
-	// Add shm_id to CliOpts/ioArgs so io_server can share spdk access
-	// to controllers with mgmtControlServer process (see comment above).
-	ioArgs := config.Servers[ioIdx].CliOpts
-	// TODO: enable io_server to run as secondary spdk process
-	//ioArgs := append(config.Servers[ioIdx].CliOpts, "-i", strconv.Itoa(shmID))
-
-	srv := exec.Command("daos_io_server", ioArgs...)
+	// Exec io_server with generated cli opts from config context.
+	srv := exec.Command("daos_io_server", config.Servers[ioIdx].CliOpts...)
 	srv.Stdout = os.Stdout
 	srv.Stderr = os.Stderr
 	srv.Env = os.Environ()
 
 	// Populate I/O server environment with values from config before starting.
-	if err = config.populateEnv(ioIdx, &srv.Env); err != nil {
+	if err = config.PopulateEnv(ioIdx, &srv.Env); err != nil {
 		log.Fatal("DAOS I/O env vars could not be populated: ", err)
 	}
 
@@ -163,7 +133,7 @@ func main() {
 
 	log.Printf(
 		"DAOS server listening on %s%s", addr,
-		checkReplica(lis, config.AccessPoints, srv))
+		mgmt.CheckReplica(lis, config.AccessPoints, srv))
 
 	// Wait for I/O server to return.
 	err = srv.Wait()

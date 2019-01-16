@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package main
+package mgmt
 
 import (
 	"errors"
@@ -281,17 +281,28 @@ func TestProvidedConfigs(t *testing.T) {
 					expectedFile, err.Error()))
 		}
 
-		for i, line := range outExpectYamls[0] {
-			AssertEqual(
-				t, outYamls[0][i], line,
+		// verify the generated yaml is of expected size
+		outExpectYaml := outExpectYamls[0]
+		outYaml := outYamls[0]
+		if len(outExpectYaml) != len(outYaml) {
+			t.Fatal(
 				fmt.Sprintf(
-					"line %d parsed %s config doesn't match fixture %s:\n\thave %#v\n\twant %#v\n",
-					i, tt.inPath, expectedFile, outYamls[0][i], line))
+					"number of lines unexpected in %s", expectedFile))
 		}
 
-		// compute file path containing expected output to compare with
+		// verify the generated yaml is of expected content
+		for i, line := range outExpectYaml {
+			AssertEqual(
+				t, outYaml[i], line,
+				fmt.Sprintf(
+					"line %d parsed %s config doesn't match fixture %s:\n\thave %#v\n\twant %#v\n",
+					i, tt.inPath, expectedFile, outYaml[i], line))
+		}
+
+		// retrieve expected and actual io parameters
 		expectedFile = fmt.Sprintf(
-			"testdata/ioparams_%s.txt", strings.TrimSuffix(filename, filepath.Ext(tt.inPath)))
+			"testdata/ioparams_%s.txt",
+			strings.TrimSuffix(filename, filepath.Ext(tt.inPath)))
 		outExpect, err := SplitFile(expectedFile)
 		if err != nil {
 			t.Fatal(
@@ -299,8 +310,7 @@ func TestProvidedConfigs(t *testing.T) {
 					"problem reading expected output file %s: %s",
 					expectedFile, err.Error()))
 		}
-		// now verify expected IO server parameters are generated
-		err = config.getIOParams(&cliOptions{})
+		err = config.getIOParams(&CliOptions{})
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
@@ -310,7 +320,8 @@ func TestProvidedConfigs(t *testing.T) {
 				"problem retrieving IO params using conf %s: %s",
 				filename, err.Error())
 		}
-		// should only ever be one line in expected output
+		// should only ever be one line in expected output, compare
+		// string representations of config.Servers
 		AssertEqual(
 			t, fmt.Sprintf("%+v", config.Servers), outExpect[0][0],
 			fmt.Sprintf("parameters don't match %s", expectedFile))
@@ -396,13 +407,13 @@ func TestCmdlineOverride(t *testing.T) {
 	}
 
 	tests := []struct {
-		inCliOpts  cliOptions
+		inCliOpts  CliOptions
 		inConfig   configuration
 		outCliOpts [][]string
-		expNumCmds int
+		expNumCmds int // number of commands expected to have been run as side effect
 		desc       string
 		errMsg     string
-		expCmds    []string
+		expCmds    []string // list of expected commands to have been run
 	}{
 		{
 			inConfig: newC(t),
@@ -436,7 +447,7 @@ func TestCmdlineOverride(t *testing.T) {
 			},
 		},
 		{
-			inCliOpts: cliOptions{MountPath: "/foo/bar"},
+			inCliOpts: CliOptions{MountPath: "/foo/bar"},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
@@ -458,7 +469,7 @@ func TestCmdlineOverride(t *testing.T) {
 			desc:       "MountPath",
 		},
 		{
-			inCliOpts: cliOptions{Group: "testing123"},
+			inCliOpts: CliOptions{Group: "testing123"},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
@@ -480,7 +491,7 @@ func TestCmdlineOverride(t *testing.T) {
 			desc:       "Group",
 		},
 		{
-			inCliOpts: cliOptions{Cores: 2},
+			inCliOpts: CliOptions{Cores: 2},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
@@ -502,7 +513,7 @@ func TestCmdlineOverride(t *testing.T) {
 			desc:       "Cores",
 		},
 		{
-			inCliOpts: cliOptions{Rank: &r},
+			inCliOpts: CliOptions{Rank: &r},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
@@ -524,7 +535,36 @@ func TestCmdlineOverride(t *testing.T) {
 			desc:       "Rank",
 		},
 		{
-			inCliOpts: cliOptions{SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
+			// currently not provided as config or cli option, set
+			// directly in configuration
+			inConfig: func() configuration {
+				c := NewDefaultMockConfig()
+				c.NvmeShmID = 1
+				return populateMockConfig(t, c, sConfigUncomment)
+			}(),
+			outCliOpts: [][]string{
+				{
+					"-c", "21",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+					"-i", "1",
+				},
+				{
+					"-c", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+					"-i", "1",
+				},
+			},
+			expNumCmds: 2,
+			desc:       "NvmeShmID",
+		},
+		{
+			inCliOpts: CliOptions{SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
@@ -567,7 +607,7 @@ func TestCmdlineOverride(t *testing.T) {
 		},
 		{
 			// no provider set but os env set mock getenv returns not empty string
-			inCliOpts: cliOptions{
+			inCliOpts: CliOptions{
 				Cores: 2, Group: "bob", MountPath: "/foo/bar",
 				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
 			inConfig: envExistsConfig(),
@@ -587,7 +627,7 @@ func TestCmdlineOverride(t *testing.T) {
 		},
 		{
 			// no provider set and no os env set mock getenv returns empty string
-			inCliOpts: cliOptions{
+			inCliOpts: CliOptions{
 				Cores: 2, Group: "bob", MountPath: "/foo/bar",
 				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
 			inConfig: NewDefaultMockConfig(),
@@ -608,7 +648,7 @@ func TestCmdlineOverride(t *testing.T) {
 		{
 			// no provider set but os env set mock getenv returns not empty string
 			// mount set and returns invalid
-			inCliOpts: cliOptions{MountPath: "/foo/bar"},
+			inCliOpts: CliOptions{MountPath: "/foo/bar"},
 			inConfig:  NewMockConfig(errors.New("exit status 1"), "somevalue", false),
 			desc:      "override MountPath, mount check fails with new value",
 			errMsg:    "server0 scm mount path (/foo/bar) not mounted: exit status 1",
@@ -625,7 +665,8 @@ func TestCmdlineOverride(t *testing.T) {
 		err := config.getIOParams(&tt.inCliOpts)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
-			// when mount check fails, verify looking in parent dir
+			// when mount check fails, verify looking in parent dir,
+			// verify captured commands match those expected
 			if len(tt.expCmds) != len(commands) {
 				t.Fatalf(
 					"%s: unexpected commands got %#v, want %#v",
@@ -810,15 +851,15 @@ func TestPopulateEnv(t *testing.T) {
 			server := NewDefaultServer()
 			config.Servers = append(config.Servers, server)
 		}
-		// optionally add to server EnvVars from config (with empty cliOptions)
+		// optionally add to server EnvVars from config (with empty CliOptions)
 		if tt.getParams == true {
-			err := config.getIOParams(&cliOptions{})
+			err := config.getIOParams(&CliOptions{})
 			if err != nil {
 				t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err.Error())
 			}
 		}
 		// pass in env and verify output envs is as expected
-		err := config.populateEnv(tt.ioIdx, &inEnvs)
+		err := config.PopulateEnv(tt.ioIdx, &inEnvs)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,9 @@ package mgmt
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/utils/handlers"
@@ -40,6 +42,7 @@ var (
 	spdkSetupPath    = "share/spdk/scripts/setup.sh"
 	spdkFioPluginDir = "share/spdk/fio_plugin"
 	fioExecPath      = "bin/fio"
+	NR_HUGEPAGES_ENV = "NRHUGE"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -50,7 +53,10 @@ type SpdkSetup interface {
 }
 
 // spdkSetup is an implementation of the SpdkSetup interface
-type spdkSetup struct{}
+type spdkSetup struct {
+	scriptPath  string
+	nrHugePages int
+}
 
 // nvmeStorage gives access to underlying SPDK interfaces
 // for accessing Nvme devices (API) as well as storing device
@@ -69,13 +75,13 @@ type nvmeStorage struct {
 // (that don't have active mountpoints) to generic kernel driver.
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
-func (s *spdkSetup) start() (err error) {
-	absSetupPath, err := handlers.GetAbsInstallPath(spdkSetupPath)
-	if err != nil {
-		return
+func (s *spdkSetup) start() error {
+	srv := exec.Command(s.scriptPath)
+	if s.nrHugePages != 0 {
+		srv.Env = os.Environ()
+		srv.Env = append(srv.Env, NR_HUGEPAGES_ENV+"="+strconv.Itoa(s.nrHugePages))
 	}
-	err = exec.Command(absSetupPath).Run()
-	return
+	return srv.Run()
 }
 
 // reset executes setup script to deallocate hugepages & return PCI devices
@@ -83,44 +89,17 @@ func (s *spdkSetup) start() (err error) {
 //
 // NOTE: will make the controller reappear in /dev.
 func (s *spdkSetup) reset() (err error) {
-	absSetupPath, err := handlers.GetAbsInstallPath(spdkSetupPath)
-	if err != nil {
-		return
-	}
-	err = exec.Command(absSetupPath, "reset").Run()
+	err = exec.Command(s.scriptPath, "reset").Run()
 	return
 }
 
 // Setup method implementation for nvmeStorage.
 //
-// Initialise SPDK environment before probing controllers then retrieve
-// controller and namespace details through external interface and populate
-// protobuf representations.
-//
-// Note: SPDK multi-process mode can be enabled by supplying shm_id in
-//       spdk_env_opts for all applications accessing SSD with SPDK. This is
-//       specifically used to work around the fact that SPDK throws exceptions
-//       if you try to probe a second time.
-// Todo: this is currently a one-time only discovery for the lifetime of this
-//       process, presumably we want to be able to detect updates during
-//       process lifetime.
+// Perform any setup to be performed before accessing NVMe devices.
 func (n *nvmeStorage) Setup() (err error) {
-	if n.initialized {
-		return fmt.Errorf("nvme storage already initialized")
-	}
 	if err = n.setup.start(); err != nil {
 		return
 	}
-	// specify shmID to be set as opt in SPDK env init
-	if err = n.env.InitSPDKEnv(n.shmID); err != nil {
-		return
-	}
-	cs, ns, err := n.nvme.Discover()
-	if err != nil {
-		return err
-	}
-	n.Controllers = loadControllers(cs, ns)
-	n.initialized = true
 	return
 }
 
@@ -139,13 +118,32 @@ func (n *nvmeStorage) Teardown() (err error) {
 
 // Discover method implementation for nvmeStorage.
 //
-// Currently a placeholder verifying devices have been retrieved during Setup()
-// In future may retrieve a more up-to-date view.
+// Initialise SPDK environment before probing controllers then retrieve
+// controller and namespace details through external interface and populate
+// protobuf representations.
+//
+// Init NVMe subsystem with shm_id in ControlService (PRIMARY SPDK process) and
+// later share with io_server (SECONDARY SPDK process) to facilitate concurrent
+// SPDK access to controllers on same host from multiple processes.
+//
+// TODO: This is currently a one-time only discovery for the lifetime of this
+//       process, presumably we want to be able to detect updates during
+//       process lifetime.
 func (n *nvmeStorage) Discover() error {
 	if n.initialized {
 		return nil
 	}
-	return fmt.Errorf("nvme storage not initialized")
+	// specify shmID to be set as opt in SPDK env init
+	if err := n.env.InitSPDKEnv(n.shmID); err != nil {
+		return err
+	}
+	cs, ns, err := n.nvme.Discover()
+	if err != nil {
+		return err
+	}
+	n.Controllers = loadControllers(cs, ns)
+	n.initialized = true
+	return nil
 }
 
 // Update method implementation for nvmeStorage
@@ -237,12 +235,18 @@ func loadNamespaces(ctrlrID int32, nss []spdk.Namespace) (_nss []*pb.NvmeNamespa
 }
 
 // newNvmeStorage creates a new instance of nvmeStorage struct.
-func newNvmeStorage(logger *log.Logger, shmID int) *nvmeStorage {
+func newNvmeStorage(
+	logger *log.Logger, shmID int, nrHugePages int) (*nvmeStorage, error) {
+
+	scriptPath, err := handlers.GetAbsInstallPath(spdkSetupPath)
+	if err != nil {
+		return nil, err
+	}
 	return &nvmeStorage{
 		logger: logger,
 		env:    &spdk.Env{},
 		nvme:   &spdk.Nvme{},
-		setup:  &spdkSetup{},
+		setup:  &spdkSetup{scriptPath, nrHugePages},
 		shmID:  shmID, // required to enable SPDK multi-process mode
-	}
+	}, nil
 }

@@ -36,3 +36,9 @@ scm_mount_path: /mnt/daos
 bdev_include: []
 bdev_exclude: []
 hyperthreads: false
+nr_hugepages: 4096
+modules: ""
+attach: ""
+systemmap: ""
+path: ../../../utils/config/examples/daos_server_psm2.yml
+nvmeshmid: 0
