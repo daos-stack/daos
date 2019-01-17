@@ -112,6 +112,14 @@ struct evt_filter {
 	DP_EXT(&(ent)->en_sel_ext), DP_EXT(&(ent)->en_ext), (ent)->en_epoch, \
 	evt_debug_print_visibility(ent)
 
+/** Log format of evtree filter */
+#define DF_FILTER			\
+	DF_EXT "@" DF_U64"-"DF_U64
+
+#define DP_FILTER(filter)					\
+	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
+	(filter)->fr_epr.epr_hi
+
 /** Return the width of an extent */
 static inline daos_size_t
 evt_extent_width(const struct evt_extent *ext)
@@ -272,6 +280,8 @@ evt_debug_print_visibility(const struct evt_entry *ent)
 		D_ASSERT(0);
 	case 0:
 		break;
+	case EVT_PARTIAL:
+		return 'p';
 	case EVT_VISIBLE:
 		return 'V';
 	case EVT_VISIBLE | EVT_PARTIAL:
@@ -336,8 +346,10 @@ struct evt_policy_ops {
 	 */
 	int	(*po_split)(struct evt_context *tcx, bool leaf,
 			    uint64_t src_off, uint64_t dst_off);
-	/** Move adjusted \a entry within a node after mbr update */
-	void	(*po_adjust)(struct evt_context *tcx,
+	/** Move adjusted \a entry within a node after mbr update.
+	 * Returns the offset from at to where the entry was moved
+	 */
+	int	(*po_adjust)(struct evt_context *tcx,
 			     uint64_t nd_off,
 			     struct evt_node_entry *ne, int at);
 	/**
@@ -541,7 +553,7 @@ enum evt_iter_opc {
  *
  * \param opc	[IN]	Probe opcode, see evt_iter_opc for the details.
  * \param rect	[IN]	The extent to probe, it will be ignored if opc is
- *			EVT_PROBE_FIRST.
+ *			EVT_ITER_FIRST.
  * \param anchor [IN]	The anchor to probe, it will be ignored if \a rect
  *			is provided.
  */
@@ -554,6 +566,34 @@ int evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
  * \param ih	[IN]	Iterator handle.
  */
 int evt_iter_next(daos_handle_t ih);
+
+/**
+ * Is the evtree iterator empty or not
+ *
+ * \return	0	Not empty
+ *		1	Empty
+ *		-ve	error code
+ */
+int evt_iter_empty(daos_handle_t ih);
+
+/**
+ * Delete the record at the current cursor. This function will set the
+ * iterator to the next cursor so a subsequent probe is unnecessary.
+ * This isn't implemented for sorted iterator.  Deleting a rectangle
+ * while iterating a sorted iterator can be done with evt_delete.  This
+ * doesn't require a reprobe either.   Implementing this for sorted
+ * iterator can help avoid some of the pitfalls and potentially can
+ * be more optimal but it is reserved future work.
+ *
+ * Any time an entry is deleted from an unsorted iterator, it may
+ * result in some entries being visited more than once as existing
+ * entries can move around in the tree.
+ *
+ * \param ih		[IN]	Iterator open handle.
+ * \param value_out	[OUT]	Optional, buffer to preserve value while
+ *				deleting evtree node.
+ */
+int evt_iter_delete(daos_handle_t ih, void *value_out);
 
 /**
  * Fetch the extent and its data address from the current iterator position.
