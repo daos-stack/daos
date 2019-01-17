@@ -1286,7 +1286,7 @@ vos_obj_iter_delete(struct vos_iterator *iter, void *args)
 		return obj_iter_delete(oiter, args);
 
 	case VOS_ITER_RECX:
-		return -DER_NOSYS;
+		return evt_iter_delete(oiter->it_hdl, args);
 	}
 }
 
@@ -1307,7 +1307,7 @@ vos_obj_iter_empty(struct vos_iterator *iter)
 	case VOS_ITER_SINGLE:
 		return dbtree_iter_empty(oiter->it_hdl);
 	case VOS_ITER_RECX:
-		return -DER_NOSYS;
+		return evt_iter_empty(oiter->it_hdl);
 	}
 }
 

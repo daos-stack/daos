@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,29 +54,6 @@ static struct evt_policy_ops *evt_policies[] = {
 
 static struct evt_rect *evt_node_mbr_get(struct evt_context *tcx,
 					 uint64_t nd_off);
-
-/** Helper function for starting a PMDK transaction, if applicable */
-static inline int
-evt_tx_begin(struct evt_context *tcx)
-{
-	if (!evt_has_tx(tcx))
-		return 0;
-
-	return umem_tx_begin(evt_umm(tcx), NULL);
-}
-
-/** Helper function for ending a PMDK transaction, if applicable */
-static inline int
-evt_tx_end(struct evt_context *tcx, int rc)
-{
-	if (!evt_has_tx(tcx))
-		return rc;
-
-	if (rc != 0)
-		return umem_tx_abort(evt_umm(tcx), rc);
-
-	return umem_tx_commit(evt_umm(tcx));
-}
 
 /**
  * Returns true if the first rectangle \a rt1 is at least as wide as the second
@@ -728,7 +705,7 @@ static void
 evt_tcx_set_dep(struct evt_context *tcx, unsigned int depth)
 {
 	tcx->tc_depth = depth;
-	tcx->tc_trace = &tcx->tc_traces[EVT_TRACE_MAX - depth];
+	tcx->tc_trace = &tcx->tc_trace_scratch[EVT_TRACE_MAX - depth];
 }
 
 static struct evt_trace *
@@ -736,7 +713,7 @@ evt_tcx_trace(struct evt_context *tcx, int level)
 {
 	D_ASSERT(tcx->tc_depth > 0);
 	D_ASSERT(level >= 0 && level < tcx->tc_depth);
-	D_ASSERT(&tcx->tc_trace[level] < &tcx->tc_traces[EVT_TRACE_MAX]);
+	D_ASSERT(&tcx->tc_trace[level] < &tcx->tc_trace_scratch[EVT_TRACE_MAX]);
 
 	return &tcx->tc_trace[level];
 }
@@ -752,6 +729,7 @@ evt_tcx_set_trace(struct evt_context *tcx, int level, uint64_t nd_off, int at)
 
 	trace = evt_tcx_trace(tcx, level);
 	trace->tr_node = nd_off;
+	trace->tr_tx_added = false;
 	trace->tr_at = at;
 }
 
@@ -759,8 +737,8 @@ evt_tcx_set_trace(struct evt_context *tcx, int level, uint64_t nd_off, int at)
 static void
 evt_tcx_reset_trace(struct evt_context *tcx)
 {
-	memset(&tcx->tc_traces[0], 0,
-	       sizeof(tcx->tc_traces[0]) * EVT_TRACE_MAX);
+	memset(&tcx->tc_trace_scratch[0], 0,
+	       sizeof(tcx->tc_trace_scratch[0]) * EVT_TRACE_MAX);
 	evt_tcx_set_dep(tcx, tcx->tc_root->tr_depth);
 	evt_tcx_set_trace(tcx, 0, tcx->tc_root->tr_node, 0);
 }
@@ -1513,6 +1491,12 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 			 * its MBR stored in its parent.
 			 */
 			trace = &tcx->tc_trace[level];
+			if (!trace->tr_tx_added) {
+				rc = evt_node_tx_add(tcx, trace->tr_node);
+				if (rc != 0)
+					return rc;
+				trace->tr_tx_added = true;
+			}
 			mbr_changed = evt_node_rect_update(tcx,
 						trace->tr_node, trace->tr_at,
 						evt_node_mbr_get(tcx, nm_cur));
@@ -1810,8 +1794,11 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			D_DEBUG(DB_TRACE, " rect[%d]="DF_RECT"\n",
 				i, DP_RECT(rtmp));
 
-			if (evt_filter_rect(filter, rtmp))
+			if (evt_filter_rect(filter, rtmp, leaf)) {
+				D_DEBUG(DB_TRACE, "Filtered "DF_FILTER"\n",
+					DP_FILTER(filter));
 				continue; /* Doesn't match the filter */
+			}
 
 			evt_rect_overlap(rtmp, rect, &range_overlap,
 					 &time_overlap);
@@ -2167,9 +2154,9 @@ evt_find(daos_handle_t toh, const struct evt_rect *rect,
 	return rc;
 }
 
-/** move the probing trace forward or backward */
+/** move the probing trace forward */
 bool
-evt_move_trace(struct evt_context *tcx, bool forward)
+evt_move_trace(struct evt_context *tcx)
 {
 	struct evt_trace	*trace;
 	struct evt_node		*nd;
@@ -2183,9 +2170,8 @@ evt_move_trace(struct evt_context *tcx, bool forward)
 		nd_off = trace->tr_node;
 		nd = evt_off2node(tcx, nd_off);
 
-		/* already reach at the begin or end of this node */
-		if ((trace->tr_at == (nd->tn_nr - 1) && forward) ||
-		    (trace->tr_at == 0 && !forward)) {
+		/* We reached the end of this node */
+		if (trace->tr_at == (nd->tn_nr - 1)) {
 			if (evt_node_is_root(tcx, nd_off)) {
 				D_ASSERT(trace == tcx->tc_trace);
 				D_DEBUG(DB_TRACE, "End\n");
@@ -2196,10 +2182,7 @@ evt_move_trace(struct evt_context *tcx, bool forward)
 			continue;
 		} /* else: not yet */
 
-		if (forward)
-			trace->tr_at++;
-		else
-			trace->tr_at--;
+		trace->tr_at++;
 		break;
 	}
 
@@ -2212,7 +2195,7 @@ evt_move_trace(struct evt_context *tcx, bool forward)
 		D_ASSERTF(nd->tn_nr != 0, "%d\n", nd->tn_nr);
 
 		trace++;
-		trace->tr_at = forward ? 0 : nd->tn_nr - 1;
+		trace->tr_at = 0;
 		trace->tr_node = tmp;
 	}
 
@@ -2587,7 +2570,7 @@ evt_ssof_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
 	return 0;
 }
 
-static void
+static int
 evt_ssof_adjust(struct evt_context *tcx, uint64_t nd_off,
 		struct evt_node_entry *ne, int at)
 {
@@ -2598,6 +2581,7 @@ evt_ssof_adjust(struct evt_context *tcx, uint64_t nd_off,
 	struct evt_node_entry	 cached_entry;
 	int			 count;
 	int			 i;
+	int			 offset;
 
 	D_ASSERT(!evt_node_is_leaf(tcx, nd_off));
 
@@ -2616,6 +2600,7 @@ evt_ssof_adjust(struct evt_context *tcx, uint64_t nd_off,
 		cached_entry = *ne;
 
 		count = at - i;
+		offset = -count;
 		goto move;
 	}
 
@@ -2633,14 +2618,17 @@ evt_ssof_adjust(struct evt_context *tcx, uint64_t nd_off,
 		dst_entry = ne;
 		src_entry = dst_entry + 1;
 		cached_entry = *ne;
+		offset = count;
 		goto move;
 	}
 
-	return;
+	return 0;
 move:
 	/* Execute the move */
 	memmove(dst_entry, src_entry, sizeof(*dst_entry) * count);
 	*etmp = cached_entry;
+
+	return offset;
 }
 
 static struct evt_policy_ops evt_ssof_pol_ops = {
@@ -2650,17 +2638,66 @@ static struct evt_policy_ops evt_ssof_pol_ops = {
 	.po_rect_weight		= evt_ssof_rect_weight,
 };
 
-/* Delete the node pointed to by current trace */
+/** After the current cursor is deleted, the trace
+ *  needs to be fixed between the changed level
+ *  and the leaf.   This function sets it to the
+ *  next entry in the tree, the one that was after
+ *  the entry that was deleted.  Note that it may
+ *  have been adjusted to be before the deleted
+ *  entry.  In such a case, some entries may be
+ *  visited more than one.
+ */
 static int
-evt_node_delete(struct evt_context *tcx)
+evt_tcx_fix_trace(struct evt_context *tcx, int level)
+{
+	struct evt_trace	*trace;
+	struct evt_node		*pn;
+	struct evt_node_entry	*ne;
+	int			 index;
+
+	/* Go up if we have no more entries at this level. */
+	trace = &tcx->tc_trace[level];
+	for (;;) {
+		pn = evt_off2node(tcx, trace->tr_node);
+		if (trace->tr_at < pn->tn_nr)
+			break;
+		if (level == 0) /* No more entries */
+			return -DER_NONEXIST;
+		level--;
+		trace = &tcx->tc_trace[level];
+		trace->tr_at++;
+	}
+
+	if (level == tcx->tc_depth - 1)
+		return 0;
+
+	/* The trace will already be correct if no node is deleted or we haven't
+	 * reached the end of the current node.   It will be such at the current
+	 * level.   So this just resets it to the left most child of the tree
+	 * below the current level.
+	 */
+	for (index = level + 1; index < tcx->tc_depth; index++) {
+		trace = &tcx->tc_trace[index - 1];
+		ne = evt_node_entry_at(tcx, trace->tr_node, trace->tr_at);
+		evt_tcx_set_trace(tcx, index, ne->ne_child, 0);
+	}
+
+	return 0;
+}
+
+/* Delete the node pointed to by current trace */
+int
+evt_node_delete(struct evt_context *tcx, bool remove)
 {
 	struct evt_trace	*trace;
 	struct evt_node		*node;
 	struct evt_node_entry	*ne;
 	uint64_t		 nm_cur;
+	uint64_t		 old_cur = 0;
 	bool			 leaf;
 	int			 level	= tcx->tc_depth - 1;
 	int			 rc;
+	int			 changed_level;
 
 	/* We take a simple approach here which may be refined later.
 	 * We simply remove the record, and if it's the last record, we
@@ -2677,13 +2714,27 @@ evt_node_delete(struct evt_context *tcx)
 		node = evt_off2node(tcx, nm_cur);
 
 		ne = evt_node_entry_at(tcx, nm_cur, trace->tr_at);
+
+		if (old_cur)
+			D_ASSERT(old_cur == ne->ne_child);
 		if (leaf) {
+			struct evt_rect	*rect;
+			struct evt_desc	*desc;
+			size_t		 width;
+
 			/* Free the evt_desc */
-			rc = umem_free(evt_umm(tcx),
-				       evt_off2mmid(tcx, ne->ne_child));
+			if (remove) {
+				rect = evt_node_rect_at(tcx, nm_cur,
+							trace->tr_at);
+				width = tcx->tc_inob * evt_rect_width(rect);
+				desc = evt_off2desc(tcx, ne->ne_child);
+				rc = evt_desc_free(tcx, desc, width);
+			} else {
+				rc = umem_free(evt_umm(tcx),
+					       evt_off2mmid(tcx, ne->ne_child));
+			}
 			if (rc != 0)
 				return rc;
-			ne->ne_child = 0;
 		}
 
 		if (node->tn_nr == 1) {
@@ -2693,6 +2744,7 @@ evt_node_delete(struct evt_context *tcx)
 				return 0;
 			}
 
+			old_cur = nm_cur;
 			rc = umem_free(evt_umm(tcx), evt_off2mmid(tcx, nm_cur));
 			if (rc != 0)
 				return rc;
@@ -2707,6 +2759,9 @@ evt_node_delete(struct evt_context *tcx)
 			trace->tr_tx_added = true;
 		}
 
+		/* If it's not a leaf, it will already have been deleted */
+		ne->ne_child = 0;
+
 		/* Ok, remove the rect at the current trace */
 		count = node->tn_nr - trace->tr_at - 1;
 		node->tn_nr--;
@@ -2719,10 +2774,13 @@ evt_node_delete(struct evt_context *tcx)
 		break;
 	};
 
+	changed_level = level;
+
 	/* Update MBR and bubble up */
 	while (1) {
 		struct evt_rect	mbr;
 		int		i;
+		int		offset;
 
 		ne -= trace->tr_at;
 		mbr = ne->ne_rect;
@@ -2732,25 +2790,18 @@ evt_node_delete(struct evt_context *tcx)
 
 		if (evt_rect_same_extent(&node->tn_mbr, &mbr) &&
 		    node->tn_mbr.rc_epc == mbr.rc_epc)
-			return 0; /* mbr hasn't changed */
+			goto fix_trace; /* mbr hasn't changed */
 
 		node->tn_mbr = mbr;
 
 		if (level == 0)
-			return 0;
+			goto fix_trace;
 
 		level--;
 
 		trace = &tcx->tc_trace[level];
 		nm_cur = trace->tr_node;
 		node = evt_off2node(tcx, nm_cur);
-
-		ne = evt_node_entry_at(tcx, nm_cur, trace->tr_at);
-		ne->ne_rect = mbr;
-
-		/* make adjustments to the position of the rectangle */
-		if (!tcx->tc_ops->po_adjust)
-			continue;
 
 		if (!trace->tr_tx_added) {
 			rc = evt_node_tx_add(tcx, nm_cur);
@@ -2759,10 +2810,23 @@ evt_node_delete(struct evt_context *tcx)
 			trace->tr_tx_added = true;
 		}
 
-		tcx->tc_ops->po_adjust(tcx, nm_cur, ne, trace->tr_at);
+		ne = evt_node_entry_at(tcx, nm_cur, trace->tr_at);
+		ne->ne_rect = mbr;
+
+		/* make adjustments to the position of the rectangle */
+		if (!tcx->tc_ops->po_adjust)
+			continue;
+		offset = tcx->tc_ops->po_adjust(tcx, nm_cur, ne, trace->tr_at);
+		if (offset == 0)
+			continue;
+
+		changed_level = level;
+		if (offset < 0)
+			trace->tr_at += offset;
 	}
 
-	return 0;
+fix_trace:
+	return evt_tcx_fix_trace(tcx, changed_level);
 }
 
 int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
@@ -2794,7 +2858,14 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	if (rc != 0)
 		return rc;
 
-	rc = evt_node_delete(tcx);
+	rc = evt_node_delete(tcx, ent == NULL);
+
+	/* We return NON_EXIST from evt_node_delete if there
+	 * are no subsequent nodes in the tree.  We can
+	 *  ignore this error here
+	 */
+	if (rc == -DER_NONEXIST)
+		rc = 0;
 
 	/* No need for evt_ent_array_fill as there will be no allocations
 	 * with 1 entry in the list

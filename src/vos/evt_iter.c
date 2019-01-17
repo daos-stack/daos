@@ -229,11 +229,11 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 		goto ready;
 	}
 
-	while ((found = evt_move_trace(tcx, iter->it_forward))) {
+	while ((found = evt_move_trace(tcx))) {
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
 		rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
 
-		if (evt_filter_rect(&iter->it_filter, rect))
+		if (evt_filter_rect(&iter->it_filter, rect, true))
 			continue;
 		break;
 	}
@@ -415,6 +415,90 @@ evt_iter_next(daos_handle_t ih)
 		return rc;
 
 	return evt_iter_move(tcx, iter);
+}
+
+int
+evt_iter_empty(daos_handle_t ih)
+{
+	struct evt_context	*tcx;
+
+	tcx = evt_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	return tcx->tc_depth == 0;
+}
+
+int evt_iter_delete(daos_handle_t ih, void *value_out)
+{
+	struct evt_context	*tcx;
+	struct evt_iterator	*iter;
+	struct evt_entry	 entry;
+	struct evt_rect		*rect;
+	struct evt_trace	*trace;
+	int			 rc;
+	int			 i;
+	unsigned int		 inob;
+	bool			 reset = false;
+
+	tcx = evt_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	iter = &tcx->tc_iter;
+
+	if (evt_iter_is_sorted(iter))
+		return -DER_NOSYS;
+
+	rc = evt_iter_is_ready(iter);
+	if (rc != 0)
+		return rc;
+
+	rc = evt_iter_fetch(ih, &inob, &entry, NULL);
+
+	if (value_out != NULL)
+		*(bio_addr_t *)value_out = entry.en_addr;
+
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	for (i = 0; i < tcx->tc_depth; i++) {
+		trace->tr_tx_added = false;
+		trace--;
+	}
+
+	rc = evt_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+
+	rc = evt_node_delete(tcx, value_out == NULL);
+
+	if (rc == -DER_NONEXIST) {
+		rc = 0;
+		reset = true;
+	}
+
+	rc = evt_tx_end(tcx, rc);
+
+	if (rc != 0)
+		goto out;
+
+	/** Ok, now check the trace */
+	if (tcx->tc_depth == 0 || reset) {
+		iter->it_state = EVT_ITER_FINI;
+		goto out;
+	}
+
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
+	if (!evt_filter_rect(&iter->it_filter, rect, true))
+		goto out;
+
+	D_DEBUG(DB_TRACE, "Skipping to next unfiltered entry\n");
+
+	/* Skip to first unfiltered entry */
+	evt_iter_move(tcx, iter);
+
+out:
+	return rc;
 }
 
 /**

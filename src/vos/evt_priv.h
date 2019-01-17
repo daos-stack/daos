@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,8 +96,8 @@ struct evt_context {
 	/** embedded iterator */
 	struct evt_iterator		 tc_iter;
 	/** space to store tree search path */
-	struct evt_trace		 tc_traces[EVT_TRACE_MAX];
-	/** trace root which points to &tc_traces[EVT_TRACE_MAX - depth] */
+	struct evt_trace		 tc_trace_scratch[EVT_TRACE_MAX];
+	/** points to &tc_trace_scratch[EVT_TRACE_MAX - depth] */
 	struct evt_trace		*tc_trace;
 	/** customized operation table for different tree policies */
 	struct evt_policy_ops		*tc_ops;
@@ -168,6 +168,28 @@ evt_off2desc(struct evt_context *tcx, uint64_t offset)
 	return desc;
 }
 
+/** Helper function for starting a PMDK transaction, if applicable */
+static inline int
+evt_tx_begin(struct evt_context *tcx)
+{
+	if (!evt_has_tx(tcx))
+		return 0;
+
+	return umem_tx_begin(evt_umm(tcx), NULL);
+}
+
+/** Helper function for ending a PMDK transaction, if applicable */
+static inline int
+evt_tx_end(struct evt_context *tcx, int rc)
+{
+	if (!evt_has_tx(tcx))
+		return rc;
+
+	if (rc != 0)
+		return umem_tx_abort(evt_umm(tcx), rc);
+
+	return umem_tx_commit(evt_umm(tcx));
+}
 
 /* By definition, all rectangles overlap in the epoch range because all
  * are from start to infinity.  However, for common queries, we often only want
@@ -193,6 +215,17 @@ enum evt_find_opc {
  * \param[OUT]	tcx_pp	The new context
  */
 int evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp);
+
+/** Remove the leaf node at the current trace
+ *
+ * \param[IN]	tcx	The context to use for delete
+ * \param[IN]	remove	If true, payload is free'd internally
+ *
+ *  The trace is set as if evt_move_trace were called.
+ *
+ * Returns -DER_NONEXIST if it's the last item in the trace
+ */
+int evt_node_delete(struct evt_context *tcx, bool remove);
 
 #define EVT_HDL_ALIVE	0xbabecafe
 #define EVT_HDL_DEAD	0xdeadbeef
@@ -222,17 +255,28 @@ evt_tcx_decref(struct evt_context *tcx)
  *
  * \param[IN]	filter	The optional input filter
  * \param[IN]	rect	The rectangle to check
+ * \param[IN]	leaf	Indicates if the rectangle is a leaf entry
  */
 static inline bool
-evt_filter_rect(const struct evt_filter *filter, const struct evt_rect *rect)
+evt_filter_rect(const struct evt_filter *filter, const struct evt_rect *rect,
+		bool leaf)
 {
 	if (filter == NULL)
 		goto done;
 
-	if (filter->fr_epr.epr_hi < rect->rc_epc ||
-	    filter->fr_epr.epr_lo > rect->rc_epc ||
-	    filter->fr_ex.ex_lo > rect->rc_ex.ex_hi ||
-	    filter->fr_ex.ex_hi < rect->rc_ex.ex_lo)
+	if (filter->fr_ex.ex_lo > rect->rc_ex.ex_hi ||
+	    filter->fr_ex.ex_hi < rect->rc_ex.ex_lo ||
+	    filter->fr_epr.epr_hi < rect->rc_epc)
+		return true; /* Rectangle is outside of filter */
+
+	/* In tree rectangle only includes lower bound.  For intermediate
+	 * nodes, we can't filter based on lower bound.  For leaf nodes,
+	 * we can because it represents a point in time.
+	 */
+	if (!leaf)
+		goto done;
+
+	if (filter->fr_epr.epr_lo > rect->rc_epc)
 		return true; /* Rectangle is outside of filter */
 done:
 	return false;
@@ -305,11 +349,10 @@ daos_handle_t evt_tcx2hdl(struct evt_context *tcx);
  */
 struct evt_context *evt_hdl2tcx(daos_handle_t toh);
 
-/** Move the trace forward or backward
+/** Move the trace forward.
  * \param[IN]	tcx	The evtree context
- * \param[IN]	forward	The direction to move
  */
-bool evt_move_trace(struct evt_context *tcx, bool forward);
+bool evt_move_trace(struct evt_context *tcx);
 
 /** Get a pointer to the rectangle corresponding to an index in a tree node
  * \param[IN]	tcx	The evtree context

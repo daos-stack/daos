@@ -158,7 +158,7 @@ EOF
 cmd+=" -b -2 -D"
 echo "$cmd"
 
-$cmd
+$cmd -t
 
 result=$?
 echo Test returned $result
