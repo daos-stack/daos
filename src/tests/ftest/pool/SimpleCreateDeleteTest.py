@@ -58,7 +58,7 @@ class SimpleCreateDeleteTest(Test):
 
         server_group = self.params.get("server_group", '/server/', 'daos_server')
 
-        ServerUtils.runServer(hostfile, server_group, basepath)
+        ServerUtils.runServer(self.hostfile, server_group, basepath)
 
     def tearDown(self):
         try:

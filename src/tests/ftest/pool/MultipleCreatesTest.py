@@ -60,8 +60,6 @@ class MultipleCreatesTest(Test):
         server_group = self.params.get("server_group",'/server/','daos_server')
 
         ServerUtils.runServer(self.hostfile, server_group, basepath)
-        # not sure I need to do this but ... give it time to start
-        time.sleep(2)
 
         self.daosctl = basepath + '/install/bin/daosctl'
 
@@ -348,6 +346,3 @@ class MultipleCreatesTest(Test):
     #           print(traceback.format_exc())
     #           if expected_result == 'PASS':
     #                  self.fail("Expecting to pass but test has failed.\n")
-
-if __name__ == "__main__":
-    main()

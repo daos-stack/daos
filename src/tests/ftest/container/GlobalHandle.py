@@ -125,7 +125,6 @@ class GlobalHandle(Test):
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
         ServerUtils.runServer(self.hostfile, server_group, basepath)
-        time.sleep(2)
 
     def tearDown(self):
         try:

@@ -66,8 +66,6 @@ class BadCreateTest(Test):
 
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 
-        time.sleep(2)
-
     def tearDown(self):
         ServerUtils.stopServer(hosts=self.hostlist)
 
@@ -161,6 +159,3 @@ class BadCreateTest(Test):
         finally:
             if pool is not None and pool.attached:
                 pool.destroy(1)
-
-if __name__ == "__main__":
-    main()
