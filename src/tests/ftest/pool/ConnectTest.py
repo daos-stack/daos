@@ -52,21 +52,16 @@ class ConnectTest(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        tmp = build_paths['PREFIX'] + '/tmp'
 
         self.hostlist = self.params.get("test_machines",'/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         server_group = self.params.get("server_group",'/server/','daos_server')
 
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 
-        # not sure I need to do this but ... give it time to start
-        time.sleep(1)
-
     def tearDown(self):
         ServerUtils.stopServer(hosts=self.hostlist)
-        os.remove(self.hostfile)
 
     def test_connect(self):
         """
@@ -131,6 +126,3 @@ class ConnectTest(Test):
                 print traceback.format_exc()
                 if expected_result == 'PASS':
                       self.fail("Expecting to pass but test has failed.\n")
-
-if __name__ == "__main__":
-    main()

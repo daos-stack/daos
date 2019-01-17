@@ -184,6 +184,3 @@ class Permission(Test):
             print (e)
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
-
-if __name__ == "__main__":
-    main()

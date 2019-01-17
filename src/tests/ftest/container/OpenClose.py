@@ -63,8 +63,6 @@ class OpenClose(Test):
 
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
-        time.sleep(5)
-
     def tearDown(self):
         try:
             if self.pool is not None and self.pool.attached:

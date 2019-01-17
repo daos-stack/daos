@@ -65,8 +65,6 @@ class BadExcludeTest(Test):
 
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 
-        time.sleep(2)
-
     def tearDown(self):
         try:
             ServerUtils.stopServer(hosts=self.hostlist)
@@ -180,6 +178,3 @@ class BadExcludeTest(Test):
                     ctypes.memmove(pool.uuid,saved_uuid,16)
 
                 pool.destroy(1)
-
-if __name__ == "__main__":
-    main()

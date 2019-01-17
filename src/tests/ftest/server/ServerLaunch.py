@@ -60,7 +60,3 @@ class ServerLaunch(Test):
                 self.fail("Server did not start.\n")
 
         session.sendcontrol("c")
-
-if __name__ == "__main__":
-    main()
-

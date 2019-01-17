@@ -72,7 +72,6 @@ class RebuildNoCap(Test):
                                             'daos_server')
         ServerUtils.runServer(self.hostfile, self.server_group,
                               build_paths['PREFIX'] + '/../')
-        time.sleep(3)
 
         # create a pool to test with
         createmode = self.params.get("mode",'/run/pool/createmode/')
@@ -145,6 +144,3 @@ class RebuildNoCap(Test):
                 print(e)
                 print(traceback.format_exc())
                 self.fail("Expecting to pass but test has failed.\n")
-
-if __name__ == "__main__":
-    main()

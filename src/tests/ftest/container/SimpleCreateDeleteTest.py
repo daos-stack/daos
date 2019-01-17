@@ -57,9 +57,6 @@ class SimpleCreateDeleteTest(Test):
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
-    def tearDown(self):
-        pass
-
     def test_container_basics(self):
         """
         Test basic container create/destroy/open/close/query.  Nothing fancy

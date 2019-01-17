@@ -38,7 +38,3 @@ class RepoTest(Test):
     def test_build(self):
         cmd = 'cd ' + repoloc + '; scons --build-deps=yes install'
         process.system(cmd, shell=True)
-
-if __name__ == "__main__":
-    main()
-

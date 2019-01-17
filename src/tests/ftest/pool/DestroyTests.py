@@ -87,9 +87,6 @@ class DestroyTests(Test):
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
-        # not sure I need to do this but ... give it time to start
-        time.sleep(1)
-
         setid = self.params.get("setname",
                                 '/run/setnames/validsetname/')
 
@@ -146,9 +143,6 @@ class DestroyTests(Test):
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
-        # not sure I need to do this but ... give it time to start
-        time.sleep(1)
-
         setid = self.params.get("setname",
                                 '/run/setnames/validsetname/')
 
@@ -191,9 +185,6 @@ class DestroyTests(Test):
         hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
-
-        # not sure I need to do this but ... give it time to start
-        time.sleep(1)
 
         # need both a good and bad set
         goodsetid = self.params.get("setname",
@@ -259,9 +250,6 @@ class DestroyTests(Test):
         hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
         ServerUtils.runServer(hostfile, self.server_group, self.basepath)
-
-        # not sure I need to do this but ... give it time to start
-        time.sleep(1)
 
         setid = self.params.get("setname",
                                 '/run/setnames/validsetname/')
@@ -339,9 +327,6 @@ class DestroyTests(Test):
 
         host = self.hostlist1[0]
 
-        # not sure I need to do this but ... give it time to start
-        time.sleep(1)
-
         uuid_str = ""
 
         try:
@@ -407,9 +392,6 @@ class DestroyTests(Test):
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
-            # give it time to reach steady state
-            time.sleep(1)
-
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/poolparams/createmode/')
             createuid = self.params.get("uid", '/run/poolparams/createuid/')
@@ -461,9 +443,6 @@ class DestroyTests(Test):
             hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
-
-            # give it time to reach steady state
-            time.sleep(1)
 
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/poolparams/createmode/')
@@ -522,9 +501,6 @@ class DestroyTests(Test):
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
-            # give it time to reach steady state
-            time.sleep(1)
-
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/poolparams/createmode/')
             createuid = self.params.get("uid", '/run/poolparams/createuid/')
@@ -570,9 +546,6 @@ class DestroyTests(Test):
             hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
-
-            # give it time to reach steady state
-            time.sleep(1)
 
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/poolparams/createmode/')
@@ -638,9 +611,6 @@ class DestroyTests(Test):
 
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
-            # give it time to reach steady state
-            time.sleep(1)
-
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/poolparams/createmode/')
             createuid = self.params.get("uid", '/run/poolparams/createuid/')
@@ -692,6 +662,3 @@ class DestroyTests(Test):
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
-
-if __name__ == "__main__":
-    main()
