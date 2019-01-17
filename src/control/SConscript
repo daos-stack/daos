@@ -1,8 +1,9 @@
 #!/bin/env python
 """Build DAOS Control Plane"""
 #pylint: disable=too-many-locals
-from SCons.Script import Literal
 import os
+from SCons.Script import Literal
+from os.path import join, isdir
 
 def scons():
     """Execute build"""
@@ -12,6 +13,18 @@ def scons():
 
     denv = env.Clone()
     prereqs.require(denv, 'spdk')
+
+    # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
+    # runtime
+    if denv.subst("$SPDK_PREFIX") != denv.subst("$PREFIX"):
+        for d in ["include", "scripts", "fio_plugin"]:
+            sharedir = join("share", "spdk", d)
+            tpath = join(denv.subst("$PREFIX"), sharedir)
+            if not isdir(tpath):
+                denv.Command(
+                    tpath,
+                    join(denv.subst("$SPDK_PREFIX"), sharedir),
+                    Copy("$TARGET", "$SOURCE"))
 
     # GOPATH for SCons builds in the build directory
     gopath = Dir('.').abspath
@@ -23,10 +36,10 @@ def scons():
     # Link the version-controlled DAOS Go source directory src/control into
     # GOPATH/src/REPOPATH/src/control in the build directory.
     path = "%s/src/%s/src" % (gopath, repopath)
-    if os.path.isdir(path) is False:
+    if isdir(path) is False:
         os.makedirs(path)
     path += "/control"
-    if os.path.isdir(path) is False:
+    if isdir(path) is False:
         os.symlink(gosrc, path)
 
     denv.Append(GOPATH=[gopath])
@@ -57,16 +70,20 @@ def scons():
         "CGO_CFLAGS",
         denv.subst("-I$SPDK_PREFIX/include"))
 
-    # install management server db
-    modulemgmt = "%s/mgmt" % gosrc
+    # copy server init files to be used at runtime
+    modulemgmt = join(gosrc, "mgmt")
     mgmtinitdb = "mgmtinit_db.json"
-    denv.InstallAs(
-        os.path.join("$PREFIX/share/control", mgmtinitdb),
-        os.path.join(modulemgmt, mgmtinitdb))
-    denv.Install(
-        "$PREFIX/share/spdk/fio_plugin",
-        [os.path.join(modulemgmt, n) for n in
-         ['fio/example_config.fio', 'fio/full_bench.fio']])
+    denv.Command(
+        join("$PREFIX", "share", "control", mgmtinitdb),
+        join(modulemgmt, mgmtinitdb),
+        Copy("$TARGET", "$SOURCE"))
+
+    # TODO: copy fio sample configurations for use at runtime
+#    for f in ["example_config.fio", "full_bench.fio"]:
+#        denv.Command(
+#            "$PREFIX/share/spdk/fio_plugin/" + f,
+#            join(modulemgmt, "fio", f),
+#            Copy("$TARGET", "$SOURCE"))
 
     serverbin = "%s/bin/server" % gopath
     serversrc = "%s/server/daos_server.go" % gosrc
