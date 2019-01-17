@@ -163,7 +163,7 @@ cmd_create_container(int argc, const char **argv, void *ctx)
 			goto done;
 	}
 
-	rc = daos_cont_create(poh, cont_uuid, NULL);
+	rc = daos_cont_create(poh, cont_uuid, NULL, NULL);
 
 	if (rc) {
 		printf("Container create fail, result: %d\n", rc);
@@ -324,7 +324,7 @@ cmd_query_container(int argc, const char **argv, void *ctx)
 		goto done2;
 	}
 
-	rc = daos_cont_query(coh, &cont_info, NULL);
+	rc = daos_cont_query(coh, &cont_info, NULL, NULL);
 
 	if (rc) {
 		printf("Container query failed, result: %d\n", rc);

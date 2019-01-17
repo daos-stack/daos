@@ -84,8 +84,8 @@ daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 }
 
 int
-daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts,
-		daos_pool_info_t *info, daos_event_t *ev)
+daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
+		daos_prop_t *pool_prop, daos_event_t *ev)
 {
 	daos_pool_query_t	*args;
 	tse_task_t		*task;

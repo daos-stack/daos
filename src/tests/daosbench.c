@@ -317,7 +317,7 @@ kill_daos_server(const char *grp)
 	d_rank_list_t		targets;
 	int				rc;
 
-	rc = daos_pool_query(poh, NULL, &info, NULL);
+	rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
 	DBENCH_CHECK(rc, "Error in querying pool\n");
 
 	if (info.pi_ntargets - info.pi_ndisabled <= 1)
@@ -339,7 +339,7 @@ kill_daos_server(const char *grp)
 	DBENCH_CHECK(rc, "Error in excluding pool from poolmap\n");
 
 	memset(&info, 0, sizeof(daos_pool_info_t));
-	rc = daos_pool_query(poh, NULL, &info, NULL);
+	rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
 	DBENCH_CHECK(rc, "Error in query pool\n");
 
 	printf("Target Rank: %d Killed successfully, (%d targets disabled)\n\n",
@@ -704,7 +704,7 @@ container_open(int rank, char *uuid_str, int create)
 		}
 
 		if (create) {
-			rc = daos_cont_create(poh, cont_uuid, NULL);
+			rc = daos_cont_create(poh, cont_uuid, NULL, NULL);
 			DBENCH_CHECK(rc, "Container create failed\n");
 		}
 

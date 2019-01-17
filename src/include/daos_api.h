@@ -179,6 +179,20 @@ daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
  * \param[in]	poh	Pool connection handle.
  * \param[out]	tgts	Optional, returned storage targets in this pool.
  * \param[out]	info	Optional, returned pool information.
+ * \param[out]	pool_prop
+ *			Optional, returned pool properties.
+ *			If it is NULL, then needs not query the properties.
+ *			If pool_prop is non-NULL but its dpp_entries is NULL,
+ *			will query all pool properties, DAOS internally
+ *			allocates the needed buffers and assign pointer to
+ *			dpp_entries.
+ *			If pool_prop's dpp_nr > 0 and dpp_entries is non-NULL,
+ *			will query the properties for specific dpe_type(s), DAOS
+ *			internally allocates the needed buffer for dpe_str or
+ *			dpe_val_ptr, if the dpe_type with immediate value then
+ *			will directly assign it to dpe_val.
+ *			User can free the associated buffer by calling
+ *			daos_prop_free().
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -190,8 +204,8 @@ daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
  *			-DER_NO_HDL	Invalid pool handle
  */
 int
-daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts,
-		daos_pool_info_t *info, daos_event_t *ev);
+daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
+		daos_prop_t *pool_prop, daos_event_t *ev);
 
 /**
  * Query information of storage targets within a DAOS pool.
@@ -288,6 +302,8 @@ daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
  *
  * \param[in]	poh	Pool connection handle.
  * \param[in]	uuid	UUID of the new Container.
+ * \param[in]	cont_prop
+ *			Optional, container properties pointer
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -300,7 +316,8 @@ daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
  *			-DER_UNREACH	network is unreachable
  */
 int
-daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev);
+daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
+		 daos_event_t *ev);
 
 /**
  * Open an existing container identified by UUID \a uuid. Upon successful
@@ -384,6 +401,20 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
  *			snapshots will be stored in it.
  *			If \a info::ci_snapshots is NULL, number of snapshots
  *			will be returned by \a info::ci_nsnapshots.
+ * \param[out]	cont_prop
+ *			Optional, returned container properties
+ *			If it is NULL, then needs not query the properties.
+ *			If cont_prop is non-NULL but its dpp_entries is NULL,
+ *			will query all pool properties, DAOS internally
+ *			allocates the needed buffers and assign pointer to
+ *			dpp_entries.
+ *			If cont_prop's dpp_nr > 0 and dpp_entries is non-NULL,
+ *			will query the properties for specific dpe_type(s), DAOS
+ *			internally allocates the needed buffer for dpe_str or
+ *			dpe_val_ptr, if the dpe_type with immediate value then
+ *			will directly assign it to dpe_val.
+ *			User can free the associated buffer by calling
+ *			daos_prop_free().
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -396,7 +427,7 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
  */
 int
 daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
-		daos_event_t *ev);
+		daos_prop_t *cont_prop, daos_event_t *ev);
 
 /**
  * List the names of all user-defined container attributes.

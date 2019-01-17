@@ -151,6 +151,7 @@ pool_create(void)
 			      NULL /* storage type to use, use default */,
 			      10ULL << 30 /* target SCM size, 10G */,
 			      40ULL << 30 /* target NVMe size, 40G */,
+			      NULL, /* pool properties */
 			      &svcl /* pool service nodes, used for connect */,
 			      pool_uuid, /* the uuid of the pool created */
 			      NULL /* event, use blocking call for now */);
@@ -504,7 +505,8 @@ main(int argc, char **argv)
 		uuid_generate(co_uuid);
 
 		/** create container */
-		rc = daos_cont_create(poh, co_uuid, NULL /* event */);
+		rc = daos_cont_create(poh, co_uuid, NULL /* properties */,
+				      NULL /* event */);
 		ASSERT(rc == 0, "container create failed with %d", rc);
 
 		/** open container */

@@ -59,6 +59,7 @@ extern "C" {
  *			consume) in bytes. Passing 0 will use the minimal
  *			supported target size.
  * \param nvme_size[IN]	Target NVMe (Non-Volatile Memory express) size in bytes.
+ * \param pool_prop[IN]	Optional, pool properties.
  * \param svc	[IN]	Number of desired pool service replicas. Callers must
  *			speicfy svc->rl_nr and allocate a matching
  *			svc->rl_ranks; svc->rl_nr and svc->rl_ranks
@@ -76,7 +77,8 @@ int
 daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 		 const d_rank_list_t *tgts, const char *dev,
 		 daos_size_t scm_size, daos_size_t nvme_size,
-		 d_rank_list_t *svc, uuid_t uuid, daos_event_t *ev);
+		 daos_prop_t *pool_prop, d_rank_list_t *svc, uuid_t uuid,
+		 daos_event_t *ev);
 
 /**
  * Destroy a pool with \a uuid. If there is at least one connection to this

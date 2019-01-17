@@ -89,7 +89,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL);
+	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
 	assert_int_equal(rc, 0);
 	if (info.pi_ntargets - info.pi_ndisabled < 2) {
 		if (rank == 0)

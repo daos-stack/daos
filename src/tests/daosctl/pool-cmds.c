@@ -181,7 +181,7 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 
 	rc = daos_pool_create(cp_options.mode, cp_options.uid,
 			      cp_options.gid, cp_options.server_group,
-			      NULL, "rubbish", cp_options.size, 0, &svc,
+			      NULL, "rubbish", cp_options.size, 0, NULL, &svc,
 			      uuid, NULL);
 
 	if (rc) {
