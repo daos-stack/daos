@@ -113,7 +113,7 @@ multi_cont_oid_allocator(void **state)
 
 		uuid_clear(co_uuid);
 		uuid_generate(co_uuid);
-		rc = daos_cont_create(arg->pool.poh, co_uuid, NULL);
+		rc = daos_cont_create(arg->pool.poh, co_uuid, NULL, NULL);
 		if (rc) {
 			print_message("Cont create failed\n");
 			goto verify_rc;
@@ -247,7 +247,8 @@ oid_allocator_checker(void **state)
 			daos_pool_info_t info;
 
 			MPI_Barrier(MPI_COMM_WORLD);
-			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL);
+			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL,
+					     NULL);
 			assert_int_equal(rc, 0);
 			if (info.pi_ntargets - info.pi_ndisabled >= 2) {
 				if (arg->myrank == 0)

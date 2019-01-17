@@ -85,7 +85,7 @@ pool_connect(void **state)
 
 		print_message("rank 0 querying pool info... ");
 		memset(&info, 'D', sizeof(info));
-		rc = daos_pool_query(poh, NULL /* tgts */, &info,
+		rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL,
 				     arg->async ? &ev : NULL /* ev */);
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
@@ -219,7 +219,7 @@ pool_exclude(void **state)
 
 	print_message("rank 0 querying pool info... ");
 	memset(&info, 'D', sizeof(info));
-	rc = daos_pool_query(poh, NULL /* tgts */, &info,
+	rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL,
 			     arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);

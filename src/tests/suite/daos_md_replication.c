@@ -42,7 +42,7 @@ mdr_stop_pool_svc(void **argv)
 	if (arg->myrank == 0) {
 		print_message("creating pool\n");
 		rc = daos_pool_create(0731, geteuid(), getegid(), arg->group,
-				      NULL, "pmem", 128*1024*1024, 0,
+				      NULL, "pmem", 128*1024*1024, 0, NULL,
 				      &arg->pool.svc, uuid, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -85,6 +85,7 @@ mdr_stop_pool_svc(void **argv)
 		print_message("querying pool info\n");
 		memset(&info, 'D', sizeof(info));
 		rc = daos_pool_query(poh, NULL /* tgts */, &info,
+				     NULL /* properties */,
 				     NULL /* ev */);
 		assert_int_equal(rc, 0);
 	} else {
@@ -96,6 +97,7 @@ mdr_stop_pool_svc(void **argv)
 		for (i = 0; i < n; i++) {
 			memset(&info, 'D', sizeof(info));
 			rc = daos_pool_query(poh, NULL /* tgts */, &info,
+					     NULL /* properties */,
 					     NULL /* ev */);
 			assert_int_equal(rc, 0);
 		}
@@ -133,7 +135,7 @@ mdr_stop_cont_svc(void **argv)
 
 	print_message("creating pool\n");
 	rc = daos_pool_create(0731, geteuid(), getegid(), arg->group, NULL,
-			      "pmem", 128*1024*1024, 0, &arg->pool.svc,
+			      "pmem", 128*1024*1024, 0, NULL, &arg->pool.svc,
 			      pool_uuid, NULL);
 	assert_int_equal(rc, 0);
 
@@ -150,7 +152,7 @@ mdr_stop_cont_svc(void **argv)
 	assert_int_equal(rc, 0);
 	print_message("creating container\n");
 	uuid_generate(uuid);
-	rc = daos_cont_create(poh, uuid, NULL);
+	rc = daos_cont_create(poh, uuid, NULL, NULL);
 	assert_int_equal(rc, 0);
 	print_message("opening container\n");
 	rc = daos_cont_open(poh, uuid, DAOS_COO_RW, &coh, NULL, NULL);

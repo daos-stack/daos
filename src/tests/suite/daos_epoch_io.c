@@ -345,7 +345,7 @@ daos_test_cb_query(test_arg_t *arg, struct test_op_record *op,
 	daos_pool_info_t pinfo = { 0 };
 	int rc;
 
-	rc = daos_pool_query(arg->pool.poh, NULL, &pinfo, NULL);
+	rc = daos_pool_query(arg->pool.poh, NULL, &pinfo, NULL, NULL);
 	if (rc != 0)
 		print_message("pool query failed %d\n", rc);
 

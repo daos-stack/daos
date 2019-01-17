@@ -194,7 +194,7 @@ cmd_connect_pool(int argc, const char **argv, void *ctx)
 
 	daos_pool_info_t pool_info;
 
-	rc = daos_pool_query(poh, NULL, &pool_info, NULL);
+	rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
 
 	/* TODO not ready for this test yet */
 	/* the info returned by connect should match query */
@@ -284,9 +284,9 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 		/* TODO do a better job with failure return */
 		return rc;
 
-	rc = daos_pool_create(cp_options.mode,
-			cp_options.uid, cp_options.gid, cp_options.server_group,
-			      NULL, "rubbish", cp_options.size, 0,
+	rc = daos_pool_create(cp_options.mode, cp_options.uid, cp_options.gid,
+			      cp_options.server_group, NULL, "rubbish",
+			      cp_options.size, 0, NULL,
 			      &pool_service_list, uuid, NULL);
 	if (rc) {
 		printf("<<<daosctl>>> Pool create fail, result: %d\n", rc);
@@ -317,7 +317,7 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 	} else {
 		daos_pool_info_t pool_info;
 
-		rc = daos_pool_query(poh, NULL, &pool_info, NULL);
+		rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
 
 		/* TODO not ready for this test yet */
 		/* the info returned by connect should match query */
@@ -419,8 +419,8 @@ cmd_test_create_pool(int argc, const char **argv, void *ctx)
 
 	rc = daos_pool_create(cp_options.mode, cp_options.uid, cp_options.gid,
 			      cp_options.server_group, NULL, "rubbish",
-			      cp_options.size, 0, &pool_service_list, uuid,
-			      NULL);
+			      cp_options.size, 0, NULL, &pool_service_list,
+			      uuid, NULL);
 	if (rc) {
 		printf("<<<daosctl>>> Pool create fail, result: %d\n", rc);
 	} else {
@@ -499,9 +499,9 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 			     &pool_service_list);
 
 	rc = daos_pool_create(ep_options.mode, ep_options.uid, ep_options.gid,
-			      ep_options.server_group,
-			      NULL, "rubbish", ep_options.size, 0,
-			      &pool_service_list, uuid, NULL);
+			      ep_options.server_group, NULL, "rubbish",
+			      ep_options.size, 0, NULL, &pool_service_list,
+			      uuid, NULL);
 	if (rc) {
 		printf("<<<daosctl>>> Pool create fail, result: %d\n", rc);
 	} else {
@@ -532,7 +532,7 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 	} else {
 		daos_pool_info_t pool_info;
 
-		rc = daos_pool_query(poh, NULL, &pool_info, NULL);
+		rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
 
 		/* TODO not ready for this test yet */
 		/* the info returned by connect should match query */
@@ -556,7 +556,7 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 		/* connection should be invalid, test by running
 		 * a query
 		 */
-		rc = daos_pool_query(poh, NULL, &pool_info, NULL);
+		rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
 		if (!rc) {
 			printf("npool connection used successfully, "
 			       "but it should be invalid.\n");
@@ -609,7 +609,7 @@ cmd_test_query_pool(int argc, const char **argv, void *ctx)
 	 */
 	poh.cookie = strtoull(qp_options.handle, NULL, 10);
 
-	rc = daos_pool_query(poh, NULL, &pool_info, NULL);
+	rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
 
 	return rc;
 }

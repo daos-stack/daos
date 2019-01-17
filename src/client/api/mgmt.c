@@ -95,7 +95,8 @@ int
 daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 		 const d_rank_list_t *tgts, const char *dev,
 		 daos_size_t scm_size, daos_size_t nvme_size,
-		 d_rank_list_t *svc, uuid_t uuid, daos_event_t *ev)
+		 daos_prop_t *pool_prop, d_rank_list_t *svc,
+		 uuid_t uuid, daos_event_t *ev)
 {
 	daos_pool_create_t	*args;
 	tse_task_t		*task;

@@ -85,7 +85,7 @@ test_setup_pool_create(void **state, struct test_pool *pool)
 			      (arg->pool.pool_size >> 30), nvme_size >> 30);
 		rc = daos_pool_create(arg->mode, arg->uid, arg->gid, arg->group,
 				      NULL, "pmem", arg->pool.pool_size,
-				      nvme_size, &arg->pool.svc,
+				      nvme_size, NULL, &arg->pool.svc,
 				      arg->pool.pool_uuid, NULL);
 		if (rc)
 			print_message("daos_pool_create failed, rc: %d\n", rc);
@@ -144,7 +144,8 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 				      arg->pool.pool_info.pi_ntargets);
 
 		if (rc == 0) {
-			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL);
+			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL,
+					     NULL);
 
 			if (rc == 0) {
 				arg->srv_ntgts = info.pi_ntargets;
@@ -180,7 +181,7 @@ test_setup_cont_create(void **state)
 		uuid_generate(arg->co_uuid);
 		print_message("setup: creating container "DF_UUIDF"\n",
 			      DP_UUID(arg->co_uuid));
-		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL);
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL, NULL);
 		if (rc)
 			print_message("daos_cont_create failed, rc: %d\n", rc);
 	}
@@ -325,7 +326,7 @@ pool_destroy_safe(test_arg_t *arg)
 		struct daos_rebuild_status *rstat = &pinfo.pi_rebuild_st;
 
 		memset(&pinfo, 0, sizeof(pinfo));
-		rc = daos_pool_query(poh, NULL, &pinfo, NULL);
+		rc = daos_pool_query(poh, NULL, &pinfo, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "pool query failed: %d\n", rc);
 			return rc;
@@ -523,7 +524,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 		connect_pool = true;
 	}
 
-	rc = daos_pool_query(arg->pool.poh, NULL, pinfo, NULL);
+	rc = daos_pool_query(arg->pool.poh, NULL, pinfo, NULL, NULL);
 	if (rc != 0)
 		print_message("pool query failed %d\n", rc);
 

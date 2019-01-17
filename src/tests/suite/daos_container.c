@@ -54,7 +54,7 @@ co_create(void **state)
 	if (arg->myrank == 0) {
 		print_message("creating container %ssynchronously ...\n",
 			      arg->async ? "a" : "");
-		rc = daos_cont_create(arg->pool.poh, uuid,
+		rc = daos_cont_create(arg->pool.poh, uuid, NULL,
 				      arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);

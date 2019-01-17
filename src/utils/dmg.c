@@ -187,7 +187,7 @@ create_hdlr(int argc, char *argv[])
 	}
 
 	rc = daos_pool_create(mode, uid, gid, group, targets, "pmem", scm_size,
-			      nvme_size, &svc, pool_uuid, NULL /* ev */);
+			      nvme_size, NULL, &svc, pool_uuid, NULL /* ev */);
 	if (targets != NULL)
 		daos_rank_list_free(targets);
 	if (rc != 0) {
@@ -424,7 +424,7 @@ pool_op_hdlr(int argc, char *argv[])
 		struct daos_rebuild_status	*rstat = &pinfo.pi_rebuild_st;
 		int				 i;
 
-		rc = daos_pool_query(pool, NULL, &pinfo, NULL);
+		rc = daos_pool_query(pool, NULL, &pinfo, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "pool query failed: %d\n", rc);
 			return rc;

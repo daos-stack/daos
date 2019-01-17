@@ -40,7 +40,8 @@ daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 }
 
 int
-daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
+daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
+		 daos_event_t *ev)
 {
 	daos_cont_create_t	*args;
 	tse_task_t		*task;
@@ -126,7 +127,7 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 
 int
 daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
-		daos_event_t *ev)
+		daos_prop_t *cont_prop, daos_event_t *ev)
 {
 	daos_cont_query_t	*args;
 	tse_task_t		*task;

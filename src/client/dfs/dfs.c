@@ -986,7 +986,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (rc != 0)
 		return rc;
 
-	rc = daos_pool_query(poh, NULL, &pool_info, NULL);
+	rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
 	if (rc) {
 		D_ERROR("daos_pool_query() Failed (%d)\n", rc);
 		D_GOTO(err_dfs, rc);

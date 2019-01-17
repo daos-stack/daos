@@ -116,7 +116,7 @@ cont_create(test_arg_t *arg, uuid_t uuid)
 {
 	uuid_generate(uuid);
 	print_message("creating container "DF_UUIDF"\n", DP_UUID(uuid));
-	return daos_cont_create(arg->pool.poh, uuid, NULL);
+	return daos_cont_create(arg->pool.poh, uuid, NULL, NULL);
 }
 
 static int
@@ -147,7 +147,7 @@ static int
 cont_query(test_arg_t *arg, daos_handle_t coh, daos_cont_info_t *info)
 {
 	print_message(".");
-	return daos_cont_query(coh, info, NULL);
+	return daos_cont_query(coh, info, NULL, NULL);
 }
 
 static void

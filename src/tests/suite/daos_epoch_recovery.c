@@ -120,7 +120,8 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	uuid_generate(uuid);
 	print_message("creating and opening container "DF_UUIDF"\n",
 		      DP_UUID(uuid));
-	rc = daos_cont_create(arg->pool.poh, uuid, NULL /* ev */);
+	rc = daos_cont_create(arg->pool.poh, uuid, NULL /* properties */,
+			      NULL /* ev */);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh,
 			    NULL /* info */, NULL /* ev */);

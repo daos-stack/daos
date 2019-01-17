@@ -782,6 +782,203 @@ struct d_tgt_list {
 };
 
 struct daos_eq;
+/**
+ * DAOS pool property types
+ * valid in range (DAOS_PROP_PO_MIN, DAOS_PROP_PO_MAX)
+ */
+enum daos_pool_prop_type {
+	DAOS_PROP_PO_MIN = 0,
+	/**
+	 * Label - a string that a user can associated with a pool.
+	 * default = ""
+	 */
+	DAOS_PROP_PO_LABEL,
+	/**
+	 * ACL: access control list for pool
+	 * A list of uid/gid that can access the pool RO
+	 * A list of uid/gid that can access the pool RW
+	 * default RW gid = gid of pool create invoker
+	 */
+	DAOS_PROP_PO_ACL,
+	/**
+	 * Reserve space ratio: amount of space to be reserved on each target
+	 * for rebuild purpose. default = 0%.
+	 */
+	DAOS_PROP_PO_SPACE_RB,
+	/**
+	 * Automatic/manual self-healing. default = auto
+	 * auto/manual exclusion
+	 * auto/manual rebuild
+	 */
+	DAOS_PROP_PO_SELF_HEAL,
+	/**
+	 * Space reclaim strategy = time|batched|snapshot. default = snapshot
+	 * time interval
+	 * batched commits
+	 * snapshot creation
+	 */
+	DAOS_PROP_PO_RECLAIM,
+	DAOS_PROP_PO_MAX,
+};
+
+/** DAOS space reclaim strategy */
+enum {
+	DAOS_RECLAIM_SNAPSHOT,
+	DAOS_RECLAIM_BATCH,
+	DAOS_RECLAIM_TIME,
+};
+
+/** bits of ae_tag entry in struct daos_acl_entry */
+enum {
+	/** access rights for the pool/container/obj's owner */
+	DAOS_ACL_USER_OBJ	= (1U << 0),
+	/** access rights for user identified by the entry's ae_id */
+	DAOS_ACL_USER		= (1U << 1),
+	/** access rights for the pool/container/obj's group */
+	DAOS_ACL_GROUP_OBJ	= (1U << 2),
+	/** access rights for group identified by the entry's ae_id */
+	DAOS_ACL_GROUP		= (1U << 3),
+	/**
+	 * the maximum access rights that can be granted by entries of ae_tag
+	 * DAOS_ACL_USER, DAOS_ACL_GROUP_OBJ, or DAOS_ACL_GROUP.
+	 */
+	DAOS_ACL_MASK		= (1U << 4),
+	/**
+	 * access rights for processes that do not match any other entry
+	 * in the ACL.
+	 */
+	DAOS_ACL_OTHER		= (1U << 5),
+};
+
+struct daos_acl_entry {
+	/** DAOS_ACL_USER/GROUP/MASK/OTHER */
+	uint16_t		ae_tag;
+	/** permissions DAOS_PC_RO/RW */
+	uint16_t		ae_perm;
+	/** uid or gid, meaningful only when ae_tag is DAOS_ACL_USER/GROUP */
+	uint32_t		ae_id;
+};
+
+struct daos_acl {
+	/** number of acl entries */
+	uint32_t		 da_nr;
+	/** reserved for future usage (for 64 bits alignment now) */
+	uint32_t		 da_reserv;
+	/** acl entries array */
+	struct daos_acl_entry	*da_entries;
+};
+
+/**
+ * DAOS container property types
+ * valid in rage (DAOS_PROP_CO_MIN, DAOS_PROP_CO_MAX).
+ */
+enum daos_cont_prop_type {
+	DAOS_PROP_CO_MIN = 0x1000,
+	/**
+	 * Label - a string that a user can associated with a container.
+	 * default = ""
+	 */
+	DAOS_PROP_CO_LABEL,
+	/**
+	 * Layout type: unknown, POSIX, MPI-IO, HDF5, Apache Arrow, ...
+	 * default value = DAOS_PROP_CO_LAYOUT_UNKOWN
+	 */
+	DAOS_PROP_CO_LAYOUT_TYPE,
+	/**
+	 * Layout version: specific to middleware for interop.
+	 * default = 1
+	 */
+	DAOS_PROP_CO_LAYOUT_VER,
+	/**
+	 * Checksum on/off + checksum type (CRC16, CRC32, SHA-1 & SHA-2).
+	 * default = DAOS_PROP_CO_CSUM_OFF
+	 */
+	DAOS_PROP_CO_CHECKSUM,
+	/**
+	 * Redundancy factor:
+	 * RF1: no data protection. scratched data.
+	 * RF3: 3-way replication, EC 4+2, 8+2, 16+2
+	 * default = RF1 (DAOS_PROP_CO_REDUN_RF1)
+	 */
+	DAOS_PROP_CO_REDUN_FAC,
+	/**
+	 * Redundancy level: default fault domain level for placement.
+	 * default = rack (DAOS_PROP_CO_REDUN_RACK)
+	 */
+	DAOS_PROP_CO_REDUN_LVL,
+	/**
+	 * Maximum number of snapshots to retain.
+	 */
+	DAOS_PROP_CO_SNAPSHOT_MAX,
+	/** ACL: access control list for container */
+	DAOS_PROP_CO_ACL,
+	/** Compression on/off + compression type */
+	DAOS_PROP_CO_COMPRESS,
+	/** Encryption on/off + encryption type */
+	DAOS_PROP_CO_ENCRYP,
+	DAOS_PROP_CO_MAX,
+};
+
+/** container layout type */
+enum {
+	DAOS_PROP_CO_LAYOUT_UNKOWN,
+	DAOS_PROP_CO_LAYOUT_POSIX,
+	DAOS_PROP_CO_LAYOUT_MPIIO,
+	DAOS_PROP_CO_LAYOUT_HDF5,
+	DAOS_PROP_CO_LAYOUT_ARROW,
+};
+
+/** container checksum type */
+enum {
+	DAOS_PROP_CO_CSUM_OFF,
+	DAOS_PROP_CO_CSUM_CRC16,
+	DAOS_PROP_CO_CSUM_CRC32,
+	DAOS_PROP_CO_CSUM_SHA1,
+	DAOS_PROP_CO_CSUM_SHA2,
+};
+
+/** container compress type */
+enum {
+	DAOS_PROP_CO_COMPRESS_OFF,
+};
+
+/** container encryption type */
+enum {
+	DAOS_PROP_CO_ENCRYP_OFF,
+};
+
+/** container redundancy factor */
+enum {
+	DAOS_PROP_CO_REDUN_RF1,
+	DAOS_PROP_CO_REDUN_RF3,
+};
+
+enum {
+	DAOS_PROP_CO_REDUN_RACK,
+	DAOS_PROP_CO_REDUN_NODE,
+};
+
+struct daos_prop_entry {
+	/** property type, see enum daos_pool_prop_type/daos_cont_prop_type */
+	uint32_t		 dpe_type;
+	/** reserved for future usage (for 64 bits alignment now) */
+	uint32_t		 dpe_reserv;
+	/**
+	 * value can be either a uint64_t, or a string, or any other type
+	 * data such as the struct daos_acl pointer.
+	 */
+	union {
+		uint64_t	 dpe_val;
+		d_string_t	 dpe_str;
+		void		*dpe_val_ptr;
+	};
+};
+
+/** daos properties, for pool or container */
+typedef struct {
+	uint32_t		 dpp_nr;
+	struct daos_prop_entry	*dpp_entries;
+} daos_prop_t;
 
 #if defined(__cplusplus)
 }

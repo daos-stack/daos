@@ -2804,7 +2804,7 @@ fetch_replica_unavail(void **state)
 
 	if (arg->myrank == 0) {
 		/** disable rebuild */
-		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL);
+		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
 		assert_int_equal(rc, 0);
 		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
 			DSS_KEY_FAIL_LOC,

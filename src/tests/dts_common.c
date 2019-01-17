@@ -229,7 +229,7 @@ pool_init(struct dts_context *tsc)
 		rc = daos_pool_create(0731, geteuid(), getegid(),
 				      NULL, NULL, "pmem",
 				      tsc->tsc_scm_size, tsc->tsc_nvme_size,
-				      svc, tsc->tsc_pool_uuid, NULL);
+				      NULL, svc, tsc->tsc_pool_uuid, NULL);
 		if (rc)
 			goto bcast;
 
@@ -291,7 +291,8 @@ cont_init(struct dts_context *tsc)
 			goto out;
 
 	} else if (tsc->tsc_mpi_rank == 0) { /* DAOS mode and rank zero */
-		rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid, NULL);
+		rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid, NULL,
+				      NULL);
 		if (rc != 0)
 			goto bcast;
 
