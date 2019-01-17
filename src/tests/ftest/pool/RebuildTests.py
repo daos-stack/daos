@@ -93,7 +93,7 @@ class RebuildTests(Test):
           -- single pool rebuild, single client, various reord/object
              counts
 
-        :avocado: tags=pool,rebuild1,rebuildsimple
+        :avocado: tags=pool,rebuild,rebuildsimple
         """
         try:
 
@@ -206,7 +206,7 @@ class RebuildTests(Test):
         Use Cases:
           -- multipool rebuild, single client, various object and record counds
 
-        :avocado: tags=pool,rebuild1,rebuildmulti
+        :avocado: tags=pool,rebuild,rebuildmulti
         """
         try:
             # initialize python pool object then create the underlying
