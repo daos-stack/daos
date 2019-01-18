@@ -33,6 +33,13 @@
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
 
+/** Ensure the values of recx flags map to those exported by evtree */
+D_CASSERT((uint32_t)VOS_RECX_FLAG_UNKNOWN == (uint32_t)EVT_UNKNOWN);
+D_CASSERT((uint32_t)VOS_RECX_FLAG_COVERED == (uint32_t)EVT_COVERED);
+D_CASSERT((uint32_t)VOS_RECX_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
+D_CASSERT((uint32_t)VOS_RECX_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
+D_CASSERT((uint32_t)VOS_RECX_FLAG_LAST == (uint32_t)EVT_LAST);
+
 /** iterator for dkey/akey/recx */
 struct vos_obj_iter {
 	/* public part of the iterator */
@@ -835,6 +842,11 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_epoch	 = entry.en_epoch;
 	it_entry->ie_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_recx.rx_nr	 = evt_extent_width(ext);
+	ext = &entry.en_ext;
+	/* Also export the original extent and the visibility flags */
+	it_entry->ie_orig_recx.rx_idx = ext->ex_lo;
+	it_entry->ie_orig_recx.rx_nr	 = evt_extent_width(ext);
+	it_entry->ie_recx_flags = entry.en_visibility;
 	it_entry->ie_rsize	 = bio_addr_is_hole(&entry.en_addr) ? 0 : inob;
 	uuid_copy(it_entry->ie_cookie, entry.en_cookie);
 	it_entry->ie_ver	= entry.en_ver;

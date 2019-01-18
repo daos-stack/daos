@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -271,6 +271,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 		      const daos_anchor_t *anchor)
 {
 	struct evt_entry_array	*enta;
+	struct evt_entry	*entry;
 	struct evt_rect		 rtmp;
 	int			 flags = 0;
 	int			 rc = 0;
@@ -300,7 +301,11 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	}
 
 	if (opc == EVT_ITER_FIRST) {
-		iter->it_index = iter->it_forward ? 0 : enta->ea_ent_nr - 1;
+		index = iter->it_forward ? 0 : enta->ea_ent_nr - 1;
+		iter->it_index = index;
+		/* Mark the last entry */
+		entry = evt_ent_array_get(enta, enta->ea_ent_nr - 1 - index);
+		entry->en_visibility |= EVT_LAST;
 		goto out;
 	}
 

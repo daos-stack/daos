@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -212,6 +212,8 @@ enum evt_visibility {
 	EVT_VISIBLE	= (1 << 1),
 	/** Entry is part of larger in-tree extent */
 	EVT_PARTIAL	= (1 << 2),
+	/** In sorted iterator, marks final entry */
+	EVT_LAST	= (1 << 3),
 };
 /**
  * Data struct to pass in or return a versioned extent and its data block.

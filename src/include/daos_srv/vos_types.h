@@ -171,6 +171,19 @@ typedef struct {
 	uint32_t		ip_recx_flags;
 } vos_iter_param_t;
 
+enum {
+	/** It is unknown if the extent is covered or visible */
+	VOS_RECX_FLAG_UNKNOWN = 0,
+	/** The extent is not visible at at the requested epoch (epr_hi) */
+	VOS_RECX_FLAG_COVERED = (1 << 0),
+	/** The extent is not visible at at the requested epoch (epr_hi) */
+	VOS_RECX_FLAG_VISIBLE = (1 << 1),
+	/** The extent represents only a portion of the in-tree extent */
+	VOS_RECX_FLAG_PARTIAL = (1 << 2),
+	/** In sorted iterator, marks final entry */
+	VOS_RECX_FLAG_LAST    = (1 << 3),
+};
+
 /**
  * Returned entry of a VOS iterator
  */
@@ -189,7 +202,10 @@ typedef struct {
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
+			/** record extent */
 			daos_recx_t		ie_recx;
+			/* original in-tree extent */
+			daos_recx_t		ie_orig_recx;
 			/** biov to return address for single value or recx */
 			struct bio_iov		ie_biov;
 			/** update cookie */
@@ -198,6 +214,8 @@ typedef struct {
 			daos_csum_buf_t		ie_csum;
 			/** pool map version */
 			uint32_t		ie_ver;
+			/** Flags to describe the extent */
+			uint32_t		ie_recx_flags;
 		};
 	};
 } vos_iter_entry_t;
