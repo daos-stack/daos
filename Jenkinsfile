@@ -521,7 +521,9 @@ pipeline {
                                                sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
                                                sudo mkdir -p $DAOS_BASE
                                                trap 'set +e; set -x
+                                                     pwd
                                                      cd
+                                                     pwd
                                                      sudo umount /mnt/daos
                                                      sudo umount \"$DAOS_BASE\" || {
                                                          echo "Failed to unmount $DASO_BASE"
