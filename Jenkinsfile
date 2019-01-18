@@ -523,7 +523,13 @@ pipeline {
                                                trap 'set +e; set -x; sudo umount /mnt/daos; sudo umount \"$DAOS_BASE\"' EXIT
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
                                                cd $DAOS_BASE
-                                               OLD_CI=false utils/run_test.sh"''',
+                                               OLD_CI=false utils/run_test.sh
+                                               # servers can sometimes take a while to stop when the test is done
+                                               x=0
+                                               while [ \"\\\$x\" -lt \"10\" ] && pgrep '(daos_server|daos_io_server)'; do
+                                                   sleep 1
+                                                   let x=\\\$x+1
+                                               done"''',
                               junit_files: null
                     }
                     post {
