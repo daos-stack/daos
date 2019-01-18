@@ -562,3 +562,57 @@ daos_hhash_link_delete(struct d_hlink *hlink)
 	return d_hhash_link_delete(daos_ht.dht_hhash, hlink);
 }
 
+
+#define CRT_SOCKET_PROV		"ofi+sockets"
+/**
+ * a helper to get the needed crt_init_opt.
+ * When using SEP (scalable endpoint), if user set un-reasonable CRT_CTX_NUM it
+ * possibly cause failure when creating cart context. So in this helper it will
+ * check the ENV setting, if SEP is used then will set the crt_init_opttions_t
+ * and the caller can pass it to crt_init_opt().
+ *
+ * \param server [IN]	true for server
+ * \param ctx_nr [IN]	number of contexts
+ *
+ * \return		the pointer to crt_init_options_t (NULL if not needed)
+ */
+crt_init_options_t daos_crt_init_opt;
+crt_init_options_t *
+daos_crt_init_opt_get(bool server, int ctx_nr)
+{
+	crt_phy_addr_t	addr_env;
+	bool		sep = false;
+
+	d_getenv_bool("CRT_CTX_SHARE_ADDR", &sep);
+	if (!sep)
+		return NULL;
+
+	daos_crt_init_opt.cio_crt_timeout = 0;
+	daos_crt_init_opt.cio_sep_override = 1;
+
+	/* for socket provider, force it to use regular EP rather than SEP for:
+	 * 1) now sockets provider cannot create more than 16 contexts for SEP
+	 * 2) some problems if SEP communicates with regular EP.
+	 */
+	addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
+	if (addr_env != NULL &&
+	    strncmp(addr_env, CRT_SOCKET_PROV, strlen(CRT_SOCKET_PROV)) == 0) {
+		D_INFO("for sockets provider force it to use regular EP.\n");
+		daos_crt_init_opt.cio_use_sep = 0;
+		return &daos_crt_init_opt;
+	}
+
+	/* for psm2 provider, set a reasonable cio_ctx_max_num for cart */
+	daos_crt_init_opt.cio_use_sep = 1;
+	if (!server) {
+		/* to workaround a bug in mercury/ofi, that the basic EP cannot
+		 * communicate with SEP. Setting 2 for client to make it to use
+		 * SEP for client.
+		 */
+		daos_crt_init_opt.cio_ctx_max_num = 2;
+	} else {
+		daos_crt_init_opt.cio_ctx_max_num = ctx_nr;
+	}
+
+	return &daos_crt_init_opt;
+}
