@@ -520,7 +520,13 @@ pipeline {
                                                trap 'set +e; set -x; sudo umount /mnt/daos' EXIT
                                                sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
                                                sudo mkdir -p $DAOS_BASE
-                                               trap 'set +e; set -x; sudo umount /mnt/daos; sudo umount \"$DAOS_BASE\"' EXIT
+                                               trap 'set +e; set -x
+                                                     cd
+                                                     sudo umount /mnt/daos
+                                                     sudo umount \"$DAOS_BASE\" || {
+                                                         echo "Failed to unmount $DASO_BASE"
+                                                         ps axf
+                                                     }' EXIT
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
                                                cd $DAOS_BASE
                                                OLD_CI=false utils/run_test.sh
