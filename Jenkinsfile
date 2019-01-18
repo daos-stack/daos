@@ -532,6 +532,7 @@ pipeline {
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
                                                cd $DAOS_BASE
                                                OLD_CI=false utils/run_test.sh
+                                               hostname; pwd
                                                rm -rf run_test.sh/
                                                mkdir run_test.sh/
                                                [ -f /tmp/daos.log ] && mv /tmp/daos.log run_test.sh/
