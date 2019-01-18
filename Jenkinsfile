@@ -449,7 +449,7 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs '$BUILDARGS'
-                            args '-v /opt:/opt'
+                            args '-v /opt/intel:/opt/intel'
                         }
                     }
                     steps {
