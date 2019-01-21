@@ -165,13 +165,19 @@ pipeline {
                                           result: ${currentBuild.currentResult}
                         */
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         success {
+                            sh '''rm -rf daos-devel/
+                                  mkdir daos-devel/
+                                  mv install/{lib,include} daos-devel/'''
+                            archiveArtifacts artifacts: 'daos-devel/**'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'SUCCESS'
+                            */
                         }
+                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
