@@ -170,6 +170,7 @@ pipeline {
                                   mkdir daos-devel/
                                   mv install/{lib,include} daos-devel/'''
                             archiveArtifacts artifacts: 'daos-devel/**'
+                            sh "rm -rf _build.external${arch}"
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -177,20 +178,22 @@ pipeline {
                                          status: 'SUCCESS'
                             */
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'FAILURE'
+                            */
                         }
                         failure {
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'ERROR'
+                            */
                         }
-                        */
                     }
                 }
                 stage('Build on CentOS 7 with Clang') {
@@ -221,13 +224,16 @@ pipeline {
                                           result: ${currentBuild.currentResult}
                         */
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         success {
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'SUCCESS'
+                            */
+                            sh "rm -rf _build.external${arch}"
                         }
+                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -271,13 +277,16 @@ pipeline {
                                           result: ${currentBuild.currentResult}
                         */
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         success {
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'SUCCESS'
+                            */
+                            sh "rm -rf _build.external${arch}"
                         }
+                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -320,13 +329,16 @@ pipeline {
                                           result: ${currentBuild.currentResult}
                         */
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         success {
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'SUCCESS'
+                            */
+                            sh "rm -rf _build.external${arch}"
                         }
+                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -370,13 +382,16 @@ pipeline {
                                           result: ${currentBuild.currentResult}
                         */
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         success {
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'SUCCESS'
+                            */
+                            sh "rm -rf _build.external${arch}"
                         }
+                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -420,13 +435,16 @@ pipeline {
                                           result: ${currentBuild.currentResult}
                         */
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         success {
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'SUCCESS'
+                            */
+                            sh "rm -rf _build.external${arch}"
                         }
+                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -470,13 +488,16 @@ pipeline {
                                           result: ${currentBuild.currentResult}
                         */
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         success {
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'SUCCESS'
+                            */
+                            sh "rm -rf _build.external${arch}"
                         }
+                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
