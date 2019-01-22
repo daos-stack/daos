@@ -31,7 +31,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime"
-	"strconv"
 	"syscall"
 
 	flags "github.com/jessevdk/go-flags"
@@ -78,8 +77,8 @@ func main() {
 	// processes.
 	// TODO: Is it also necessary to provide distinct coremask args?
 	mgmtControlServer := mgmt.NewControlServer(shmID)
-	mgmtControlServer.Setup()
-	defer mgmtControlServer.Teardown()
+	// TODO: initialize spdk in setup working in multiprocess mod
+	//mgmtControlServer.Setup() //defer mgmtControlServer.Teardown()
 
 	// If command mode option specified then perform task and exit.
 	if opts.ShowStorage {
@@ -129,7 +128,9 @@ func main() {
 
 	// Add shm_id to CliOpts/ioArgs so io_server can share spdk access
 	// to controllers with mgmtControlServer process (see comment above).
-	ioArgs := append(config.Servers[ioIdx].CliOpts, "-i", strconv.Itoa(shmID))
+	ioArgs := config.Servers[ioIdx].CliOpts
+	// TODO: enable io_server to run as secondary spdk process
+	//ioArgs := append(config.Servers[ioIdx].CliOpts, "-i", strconv.Itoa(shmID))
 
 	srv := exec.Command("daos_io_server", ioArgs...)
 	srv.Stdout = os.Stdout
