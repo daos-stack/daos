@@ -136,7 +136,27 @@ wq
 EOF
 sudo mount $DAOS_BASE
 rm -rf /tmp/Functional_$TEST_TAG/
-mkdir -p /tmp/Functional_$TEST_TAG/" 2>&1 | dshbak -c; then
+mkdir -p /tmp/Functional_$TEST_TAG/
+sudo bash -c 'set -ex
+yum -y install yum-utils
+pkgs=\"ior-hpc\"
+repo_file_base=\"*_job_${JOB_NAME%%/*}_job_\"
+#for ext in \$pkgs; do
+#    rm -f /etc/yum.repos.d/\${repo_file_base}\${ext}_job_*.repo
+#    yum-config-manager --add-repo=${JENKINS_URL}job/${JOB_NAME%%/*}/job/\${ext}/job/master/lastSuccessfulBuild/artifact/artifacts/
+#    echo \"gpgcheck = False\" >> /etc/yum.repos.d/\${repo_file_base}\${ext}_job_master_lastSuccessfulBuild_artifact_artifacts_.repo
+#done
+# for testing with a PR for a dependency:
+depname=ior-hpc     # i.e. depname=mercury
+pr_num=2            # set to which PR number your PR is
+if [ -n \"\$depname\" ]; then
+    rm -f /etc/yum.repos.d/\${repo_file_base}\${depname}_job_PR-\${pr_num}_lastSuccessfulBuild_artifact_artifacts_.repo
+    yum-config-manager --add-repo=${JENKINS_URL}job/${JOB_NAME%%/*}/job/\${depname}/job/PR-\${pr_num}/lastSuccessfulBuild/artifact/artifacts/
+    echo \"gpgcheck = False\" >> /etc/yum.repos.d/\${repo_file_base}\${depname}_job_PR-\${pr_num}_lastSuccessfulBuild_artifact_artifacts_.repo
+    pkgs+=\" \${depname}\"
+fi
+yum -y erase \$pkgs
+yum -y install \$pkgs'" 2>&1 | dshbak -c; then
     echo "Cluster setup (i.e. provisioning) failed"
     exit 1
 fi

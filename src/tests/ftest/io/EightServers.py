@@ -34,6 +34,7 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import IorUtils
+import distutils.spawn
 from daos_api import DaosContext, DaosPool, DaosApiError
 
 class EightServers(Test):
@@ -78,7 +79,8 @@ class EightServers(Test):
 
         ServerUtils.runServer(self.hostfile_servers, self.server_group, self.basepath)
 
-        if int(str(self.name).split("-")[0]) == 1:
+        if not distutils.spawn.find_executable("ior") and \
+           int(str(self.name).split("-")[0]) == 1:
             IorUtils.build_ior(self.basepath)
 
     def tearDown(self):
