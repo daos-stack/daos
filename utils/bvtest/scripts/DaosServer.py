@@ -211,9 +211,9 @@ class DaosServer(object):
 
         hosts -- list of host names where servers are running
         """
-        kill_cmds = ["pkill \"(daos_server|daos_io_server)\" --signal INT",
+        kill_cmds = ["pkill '(daos_server|daos_io_server)' --signal INT",
                      "sleep 5",
-                     "pkill \"(daos_server|daos_io_server)\" --signal KILL"]
+                     "pkill '(daos_server|daos_io_server)' --signal KILL"]
         rm_cmd = "find /mnt/daos -maxdepth 1 -print0 | xargs -0r rm -rf"
 
         for host in hosts:
