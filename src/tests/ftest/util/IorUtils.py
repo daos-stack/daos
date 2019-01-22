@@ -22,7 +22,6 @@
     portions thereof marked with this legend must also reproduce the markings.
     '''
 import os, shutil
-from  git import Repo
 import subprocess
 import json
 
@@ -30,6 +29,7 @@ class IorFailed(Exception):
     """Raise if Ior failed"""
 
 def build_ior(basepath):
+    from  git import Repo
     """ Pulls the DAOS branch of IOR and builds it """
 
     HOME = os.path.expanduser("~")
