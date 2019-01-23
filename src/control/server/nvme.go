@@ -74,7 +74,7 @@ func (c *controlService) UpdateNvmeCtrlr(
 // FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
 func (c *controlService) FetchFioConfigPaths(
 	empty *pb.EmptyParams, stream pb.MgmtControl_FetchFioConfigPathsServer) error {
-	pluginDir, err := handlers.GetAbsInstallPath(spdkFioPluginDir)
+	pluginDir, err := handlers.GetAbsInstallPath(SPDK_FIO_PLUGIN_DIR)
 	if err != nil {
 		return err
 	}

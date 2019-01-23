@@ -24,11 +24,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/utils/handlers"
 	"github.com/daos-stack/daos/src/control/utils/log"
@@ -39,10 +42,11 @@ import (
 )
 
 var (
-	spdkSetupPath    = "share/spdk/scripts/setup.sh"
-	spdkFioPluginDir = "share/spdk/fio_plugin"
-	fioExecPath      = "bin/fio"
-	NR_HUGEPAGES_ENV = "NRHUGE"
+	SPDK_SETUP_PATH     = "share/control/setup_spdk.sh"
+	SPDK_FIO_PLUGIN_DIR = "share/spdk/fio_plugin"
+	FIO_EXEC_PATH       = "bin/fio"
+	NR_HUGEPAGES_ENV    = "_NRHUGE"
+	TARGET_USER_ENV     = "_TARGET_USER"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -76,12 +80,31 @@ type nvmeStorage struct {
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetup) start() error {
-	srv := exec.Command(s.scriptPath)
-	if s.nrHugePages != 0 {
-		srv.Env = os.Environ()
-		srv.Env = append(srv.Env, NR_HUGEPAGES_ENV+"="+strconv.Itoa(s.nrHugePages))
+	if err := s.reset(); err != nil {
+		return err
 	}
-	return srv.Run()
+
+	srv := exec.Command(s.scriptPath)
+	srv.Env = os.Environ()
+	var stderr bytes.Buffer
+	srv.Stderr = &stderr
+	var hp, tUsr string
+
+	if s.nrHugePages != 0 {
+		hp = NR_HUGEPAGES_ENV + "=" + strconv.Itoa(s.nrHugePages)
+		srv.Env = append(srv.Env, hp)
+	}
+	usr := os.Getenv("USER")
+	if usr == "" {
+		return errors.New("missing USER envar")
+	}
+	tUsr = TARGET_USER_ENV + "=" + usr
+	srv.Env = append(srv.Env, tUsr)
+
+	return errors.Wrapf(
+		srv.Run(),
+		"spdk setup failed (%s, %s, %s), is no-password sudo enabled?",
+		hp, tUsr, stderr.String())
 }
 
 // reset executes setup script to deallocate hugepages & return PCI devices
@@ -89,8 +112,13 @@ func (s *spdkSetup) start() error {
 //
 // NOTE: will make the controller reappear in /dev.
 func (s *spdkSetup) reset() (err error) {
-	err = exec.Command(s.scriptPath, "reset").Run()
-	return
+	srv := exec.Command(s.scriptPath, "reset")
+	var stderr bytes.Buffer
+	srv.Stderr = &stderr
+	return errors.Wrapf(
+		srv.Run(),
+		"spdk reset failed (%s), is no-password sudo enabled?",
+		stderr.String())
 }
 
 // Setup method implementation for nvmeStorage.
@@ -165,11 +193,11 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 	fioPath string, cmds []string, env string, err error) {
 	if n.initialized {
 		pluginDir := ""
-		pluginDir, err = handlers.GetAbsInstallPath(spdkFioPluginDir)
+		pluginDir, err = handlers.GetAbsInstallPath(SPDK_FIO_PLUGIN_DIR)
 		if err != nil {
 			return
 		}
-		fioPath, err = handlers.GetAbsInstallPath(fioExecPath)
+		fioPath, err = handlers.GetAbsInstallPath(FIO_EXEC_PATH)
 		if err != nil {
 			return
 		}
@@ -238,7 +266,7 @@ func loadNamespaces(ctrlrID int32, nss []spdk.Namespace) (_nss []*pb.NvmeNamespa
 func newNvmeStorage(
 	logger *log.Logger, shmID int, nrHugePages int) (*nvmeStorage, error) {
 
-	scriptPath, err := handlers.GetAbsInstallPath(spdkSetupPath)
+	scriptPath, err := handlers.GetAbsInstallPath(SPDK_SETUP_PATH)
 	if err != nil {
 		return nil, err
 	}
