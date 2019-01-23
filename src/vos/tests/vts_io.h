@@ -52,6 +52,8 @@
 #define	UPDATE_BUF_SIZE		64
 #define UPDATE_REC_SIZE		16
 #define UPDATE_CSUM_SIZE	32
+#define UPDATE_CSUM_MAX_COUNT	2
+#define UPDATE_CSUM_BUF_SIZE	(UPDATE_CSUM_SIZE * UPDATE_CSUM_MAX_COUNT)
 #define VTS_IO_OIDS		1
 #define VTS_IO_KEYS		100000
 
@@ -138,6 +140,7 @@ int			setup_io_int_dkey(void **state);
 int			setup_io_lex_akey(void **state);
 int			setup_io_lex_dkey(void **state);
 int			teardown_io(void **state);
+void			set_iov(daos_iov_t *iov, char *buf, int int_flag);
 
 #endif
 

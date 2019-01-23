@@ -1624,7 +1624,6 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 
 	dst_desc->dc_ex_addr = ent->ei_addr;
 	dst_desc->dc_ver = ent->ei_ver;
-	dst_desc->dc_csum = ent->ei_csum;
 
 	return 0;
 }
@@ -1700,6 +1699,40 @@ out:
 	return evt_tx_end(tcx, rc);
 }
 
+/**
+ * Fill the entry's checksum from the evt_desc. It is expected that the entry's
+ * full and requested extent are already filled
+ */
+void
+evt_entry_csum_fill(struct evt_entry *entry, struct evt_desc *desc)
+{
+	if (desc->pt_csum_count > 0) {
+		D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
+		daos_off_t lo_offset = evt_entry_selected_offset(entry);
+		/*
+		 * assumption right now is that requests (sel_ext) are in
+		 * appropriate "chunks" if using checksums
+		 */
+		daos_size_t chunk_len = evt_extent_width(&entry->en_ext) /
+					desc->pt_csum_count;
+		D_ASSERT(chunk_len * desc->pt_csum_count ==
+			 evt_extent_width(&entry->en_ext));
+
+		uint32_t csum_nr = (uint32_t)
+			(evt_extent_width(&entry->en_sel_ext) / chunk_len);
+
+		uint64_t csum_start = lo_offset / chunk_len;
+
+		entry->en_csum.cs_type = desc->pt_csum_type;
+		entry->en_csum.cs_nr = csum_nr;
+		entry->en_csum.cs_buf_len = csum_nr * desc->pt_csum_len;
+		entry->en_csum.cs_len = desc->pt_csum_len;
+		entry->en_csum.cs_chunksize = chunk_len;
+		entry->en_csum.cs_csum =
+			&desc->pt_csum[0] + csum_start * desc->pt_csum_len;
+	}
+}
+
 /** Fill the entry with the extent at the specified position of \a node */
 void
 evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
@@ -1741,7 +1774,7 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 
 	entry->en_addr = desc->dc_ex_addr;
 	entry->en_ver = desc->dc_ver;
-	entry->en_csum = desc->dc_csum;
+	evt_entry_csum_fill(entry, desc);
 
 	if (offset != 0) {
 		/* Adjust cached pointer since we're only referencing a
@@ -2518,15 +2551,28 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		TMMID(struct evt_desc)	 desc_mmid;
 		struct evt_desc		*desc;
 
+		/** Don't just trust the csum_buf_len. Buffer itself could be
+		 * larger than the length of checksums. Instead calculate
+		 * needed length to store the checksums.
+		 */
+		uint32_t csum_size =
+			ent->ei_csum.cs_nr * ent->ei_csum.cs_len;
+
+		if (csum_size > 0)
+			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
+						"for checksum", csum_size);
+
+		size_t allocation_size = sizeof(struct evt_desc) + csum_size;
+
 		desc_mmid = umem_zalloc_typed(evt_umm(tcx), struct evt_desc,
-					     sizeof(struct evt_desc));
+					     allocation_size);
 		if (TMMID_IS_NULL(desc_mmid))
 			return -DER_NOMEM;
 		ne->ne_child = desc_mmid.oid.off;
 		desc = evt_tmmid2ptr(tcx, desc_mmid);
 		desc->dc_magic = EVT_DESC_MAGIC;
 		desc->dc_ex_addr = ent->ei_addr;
-		desc->dc_csum = ent->ei_csum;
+		evt_desc_csum_set(desc, &ent->ei_csum);
 		desc->dc_ver = ent->ei_ver;
 	} else {
 		ne->ne_child = in_off;
