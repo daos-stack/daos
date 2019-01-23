@@ -162,6 +162,7 @@ pr_num=      # set to which PR number your PR is
 if [ -n \"\$depname\" ]; then
     rm -f /etc/yum.repos.d/\${repo_file_base}\${depname}_job_PR-\${pr_num}_lastSuccessfulBuild_artifact_artifacts_.repo
     yum-config-manager --add-repo=${JENKINS_URL}job/${JOB_NAME%%/*}/job/\${depname}/job/PR-\${pr_num}/lastSuccessfulBuild/artifact/artifacts/
+    ls /etc/yum.repos.d/ || true
     echo \"gpgcheck = False\" >> /etc/yum.repos.d/\${repo_file_base}\${depname}_job_PR-\${pr_num}_lastSuccessfulBuild_artifact_artifacts_.repo
     install_pkgs+=\" \${depname}\"
 fi
