@@ -78,7 +78,7 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	bdevClass := BdClass(class)
 	switch bdevClass {
-	case BD_NVME, BD_MALLOC, BD_KDEV, BD_FILE:
+	case bdNvme, bdMalloc, bdKdev, bdFile:
 		*b = bdevClass
 	default:
 		return fmt.Errorf(
@@ -94,7 +94,7 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // populated with defaults.
 func newDefaultServer() server {
 	return server{
-		BdevClass: BD_NVME,
+		BdevClass: bdNvme,
 	}
 }
 

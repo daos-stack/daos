@@ -26,6 +26,8 @@ package main
 import (
 	"encoding/json"
 
+	"github.com/pkg/errors"
+
 	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/utils/handlers"
 	"github.com/daos-stack/daos/src/control/utils/log"
@@ -46,20 +48,25 @@ type controlService struct {
 // Setup delegates to Storage implementation's Setup methods
 func (c *controlService) Setup() {
 	if err := c.nvme.Setup(); err != nil {
-		println("Failed NVMe subsystem setup: " + err.Error())
+		c.logger.Debugf(
+			"%s\n", errors.Wrap(err, "Warning, NVMe Setup"))
 	}
+
 	if err := c.scm.Setup(); err != nil {
-		println("Failed SCM subsystem setup: " + err.Error())
+		c.logger.Debugf(
+			"%s\n", errors.Wrap(err, "Warning, SCM Setup"))
 	}
 }
 
 // Teardown delegates to Storage implementation's Teardown methods
 func (c *controlService) Teardown() {
 	if err := c.nvme.Teardown(); err != nil {
-		println("Failed NVMe subsystem teardown: " + err.Error())
+		c.logger.Debugf(
+			"%s\n", errors.Wrap(err, "Warning, NVMe Teardown"))
 	}
 	if err := c.scm.Teardown(); err != nil {
-		println("Failed SCM subsystem teardown: " + err.Error())
+		c.logger.Debugf(
+			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
 	}
 }
 

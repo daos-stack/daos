@@ -49,13 +49,13 @@ func TestParseBdev(t *testing.T) {
 		},
 		{},
 		{
-			bdevClass: BD_NVME,
+			bdevClass: bdNvme,
 		},
 		{
-			bdevClass: BD_NVME,
+			bdevClass: bdNvme,
 			bdevList:  []string{"0000:81:00.0", "0000:81:00.1"},
 			expFiles: [][]string{
-				[]string{
+				{
 					`/mnt/daos/daos_nvme.conf:[Nvme]`,
 					`TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme0`,
 					`TransportID "trtype:PCIe traddr:0000:81:00.1" Nvme1`,
@@ -70,13 +70,13 @@ func TestParseBdev(t *testing.T) {
 			},
 		},
 		{
-			bdevClass: BD_FILE,
+			bdevClass: bdFile,
 			bdevList:  []string{"/tmp/myfile", "/tmp/myotherfile"},
 			bdevSize:  5, // GB/file
 			expFiles: [][]string{
-				[]string{`/tmp/myfile:empty size 4999999488`},
-				[]string{`/tmp/myotherfile:empty size 4999999488`},
-				[]string{
+				{`/tmp/myfile:empty size 4999999488`},
+				{`/tmp/myotherfile:empty size 4999999488`},
+				{
 					"/mnt/daos/daos_nvme.conf:[AIO]",
 					"AIO /tmp/myfile AIO0 4096",
 					"AIO /tmp/myotherfile AIO1 4096",
@@ -86,11 +86,11 @@ func TestParseBdev(t *testing.T) {
 			expEnvs: []string{"VOS_BDEV_CLASS=AIO"},
 		},
 		{
-			bdevClass: BD_FILE,
+			bdevClass: bdFile,
 			bdevList:  []string{"/tmp/myfile", "/tmp/myotherfile"},
 			bdevSize:  5, // GB/file
 			expFiles: [][]string{
-				[]string{
+				{
 					"/mnt/daos/daos_nvme.conf:[AIO]",
 					"AIO /tmp/myfile AIO0 4096",
 					"AIO /tmp/myotherfile AIO1 4096",
@@ -101,10 +101,10 @@ func TestParseBdev(t *testing.T) {
 			fileExists: true,
 		},
 		{
-			bdevClass: BD_KDEV,
+			bdevClass: bdKdev,
 			bdevList:  []string{"/dev/sdb", "/dev/sdc"},
 			expFiles: [][]string{
-				[]string{
+				{
 					"/mnt/daos/daos_nvme.conf:[AIO]",
 					`AIO /dev/sdb AIO0`,
 					`AIO /dev/sdc AIO1`,
@@ -114,11 +114,11 @@ func TestParseBdev(t *testing.T) {
 			expEnvs: []string{"VOS_BDEV_CLASS=AIO"},
 		},
 		{
-			bdevClass:  BD_MALLOC,
+			bdevClass:  bdMalloc,
 			bdevSize:   5, // GB/file
 			bdevNumber: 2, // number of LUNs
 			expFiles: [][]string{
-				[]string{
+				{
 					"/mnt/daos/daos_nvme.conf:[Malloc]",
 					"NumberOfLuns 2",
 					"LunSizeInMB 5000",

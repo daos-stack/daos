@@ -59,8 +59,8 @@ func main() {
 	var opts cliOptions
 
 	// Parse commandline flags which override options loaded from config.
-	_, err := flags.Parse(&opts)
-	if err != nil {
+	if _, err := flags.Parse(&opts); err != nil {
+		// don't log failure just return usage info
 		println(err)
 		return
 	}

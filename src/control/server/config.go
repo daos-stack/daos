@@ -31,14 +31,13 @@ import (
 	"strconv"
 	"strings"
 
-	"gopkg.in/yaml.v2"
-
 	"github.com/daos-stack/daos/src/control/utils/handlers"
+	yaml "gopkg.in/yaml.v2"
 )
 
 const (
-	PROVIDER_ENV_KEY = "CRT_PHY_ADDR_STR"
-	CONFIG_OUT       = ".daos_server.active.yml"
+	providerEnvKey = "CRT_PHY_ADDR_STR"
+	configOut      = ".daos_server.active.yml"
 )
 
 func (c *configuration) loadConfig() (err error) {
@@ -91,13 +90,13 @@ func loadConfigOpts(cliOpts *cliOptions) configuration {
 
 // saveActiveConfig saves read-only active config, tries config dir then /tmp/
 func saveActiveConfig(config configuration) configuration {
-	activeConfig := filepath.Join(filepath.Dir(config.Path), CONFIG_OUT)
+	activeConfig := filepath.Join(filepath.Dir(config.Path), configOut)
 	eMsg := "Warning: active config could not be saved (%s)"
 	err := config.saveConfig(activeConfig)
 	if err != nil {
 		log.Printf(eMsg, err.Error())
 
-		activeConfig = filepath.Join("/tmp", CONFIG_OUT)
+		activeConfig = filepath.Join("/tmp", configOut)
 		err = config.saveConfig(activeConfig)
 		if err != nil {
 			log.Printf(eMsg, err.Error())
@@ -136,7 +135,7 @@ func getNumCores(rs []string) (num int, err error) {
 			if _, err = strconv.Atoi(limits[0]); err != nil {
 				return
 			}
-			num += 1
+			num++
 			continue
 		}
 		if len(limits) == 2 {
@@ -217,7 +216,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		c.Port = int(opts.Port)
 	}
 	// override each per-server config
-	for i, _ := range c.Servers {
+	for i := range c.Servers {
 		if opts.MountPath != "" {
 			// override each per-server config in addition to global value
 			c.ScmMountPath = opts.MountPath
@@ -257,7 +256,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 // in the case of missing config file info attempts to detect external
 // os environment variables (returns true to skip following env creation)
 func (c *configuration) validateConfig() (bool, error) {
-	if c.ext.getenv(PROVIDER_ENV_KEY) != "" {
+	if c.ext.getenv(providerEnvKey) != "" {
 		if len(c.Servers) == 0 {
 			c.Servers = append(c.Servers, newDefaultServer())
 		}
@@ -268,7 +267,7 @@ func (c *configuration) validateConfig() (bool, error) {
 	if (c.Provider == "") || (len(c.Servers) == 0) {
 		return false, fmt.Errorf(
 			"required parameters missing from config and os environment (%s)",
-			PROVIDER_ENV_KEY)
+			providerEnvKey)
 	}
 	return false, nil
 }
@@ -291,7 +290,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 	// paramaters, perform this after initial validation
 	c.cmdlineOverride(cliOpts)
 
-	for i, _ := range c.Servers {
+	for i := range c.Servers {
 		// avoid mutating subject during iteration, instead access through
 		// config/parent object
 		server := &c.Servers[i]
@@ -309,7 +308,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 			// add to existing config file EnvVars
 			server.EnvVars = append(
 				server.EnvVars,
-				PROVIDER_ENV_KEY+"="+c.Provider,
+				providerEnvKey+"="+c.Provider,
 				"OFI_INTERFACE="+server.FabricIface,
 				"OFI_PORT="+strconv.Itoa(server.FabricIfacePort),
 				"D_LOG_MASK="+server.LogMask,

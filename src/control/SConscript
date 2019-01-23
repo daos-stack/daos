@@ -72,10 +72,9 @@ def scons():
 
     # copy server init files to be used at runtime
     moduleserver = join(gosrc, "server")
-    mgmtinitdb = "mgmtinit_db.json"
     denv.Command(
-        join("$PREFIX", "share", "control", mgmtinitdb),
-        join(moduleserver, mgmtinitdb),
+        join("$PREFIX", "share", "control"),
+        join(moduleserver, "init"),
         Copy("$TARGET", "$SOURCE"))
 
     # TODO: copy fio sample configurations for use at runtime

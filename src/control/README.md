@@ -31,6 +31,23 @@ For convenience, active parsed config values are written to either directory whe
 
 If user shell executing `daos_server` has environment variable `CRT_PHY_ADDR_STR` set, user os environment will be used when spawning `daos_io_server` instances. In this situation a "Warning: using os env vars..." message will be printed to the console and no environment variables will be added as specified in the `env_vars` list within the per-server section of the server config file. This behaviour provides backward compatibility with historic mechanism of specifying all parameters through environment variables.
 
+## Prerequisites
+
+In addition to editing the configuration files prior to starting `daos_server`, an administrator needs to set passwordless sudo for the specific commands listed in `src/control/mgmt/init/setup_spdk.sh` (script is installed as `install/share/setup_spdk.sh`) in order for `daos_server` to enable access to the NVMe SSDs through SPDK when run as an unprivileged user.
+
+The sudoers file can be accessed with command `visudo` and the simplest way to achieve the necessary access is to grant no-password sudo permissions to a user:
+```
+linuxuser ALL=(ALL) NOPASSWD: ALL
+```
+alternatively more fine-grained permissions can be granted e.g.:
+```
+linuxuser        ALL = NOPASSWD:SETENV: /home/linuxuser/projects/daos_m/install/share/spdk/scripts/setup.sh
+linuxuser        ALL = NOPASSWD: /bin/chmod 777 /dev/hugepages
+linuxuser        ALL = NOPASSWD: /bin/chmod 666 /dev/uio*
+linuxuser        ALL = NOPASSWD: /bin/chmod 666 /sys/class/uio/uio*/device/config
+linuxuser        ALL = NOPASSWD: /bin/chmod 666 /sys/class/uio/uio*/device/resource*
+```
+
 ## Shell Usage
 
 In order to run the shell to perform administrative tasks, build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md).

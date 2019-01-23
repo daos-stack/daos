@@ -34,13 +34,13 @@ import (
 type BdClass string
 
 const (
-	BD_NVME   BdClass = "nvme"
-	BD_MALLOC BdClass = "malloc"
-	BD_KDEV   BdClass = "kdev"
-	BD_FILE   BdClass = "file"
+	bdNvme   BdClass = "nvme"
+	bdMalloc BdClass = "malloc"
+	bdKdev   BdClass = "kdev"
+	bdFile   BdClass = "file"
 
-	CONF_OUT   = "daos_nvme.conf"
-	NVME_TEMPL = `[Nvme]
+	confOut   = "daos_nvme.conf"
+	nvmeTempl = `[Nvme]
 {{ range $i, $e := .BdevList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme{{$i}}
 {{ end }}    RetryCount 4
     TimeoutUsec 0
@@ -50,25 +50,25 @@ const (
     HotplugPollRate 0
 `
 	// device block size hardcoded to 4096
-	FILE_TEMPL = `[AIO]
+	fileTempl = `[AIO]
 {{ range $i, $e := .BdevList }}    AIO {{$e}} AIO{{$i}} 4096
 {{ end }} `
-	KDEV_TEMPL = `[AIO]
+	kdevTempl = `[AIO]
 {{ range $i, $e := .BdevList }}    AIO {{$e}} AIO{{$i}}
 {{ end }}`
-	MALLOC_TEMPL = `[Malloc]
+	mallocTempl = `[Malloc]
 	NumberOfLuns {{.BdevNumber}}
 	LunSizeInMB {{.BdevSize}}000
 `
-	GBYTE   = 1000000000
-	BLKSIZE = 4096
+	gbyte   = 1000000000
+	blkSize = 4096
 )
 
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
 func genFromTempl(server *server, templ string) (string, error) {
 	t := template.Must(
-		template.New(CONF_OUT).Parse(templ))
+		template.New(confOut).Parse(templ))
 	var out bytes.Buffer
 	if err := t.Execute(&out, server); err != nil {
 		return "", err
@@ -84,7 +84,7 @@ func createConf(ext External, server *server, templ string) error {
 	if out == "" {
 		return errors.New("generated NVMe config unexpectedly empty")
 	}
-	confPath := filepath.Join(server.ScmMount, CONF_OUT)
+	confPath := filepath.Join(server.ScmMount, confOut)
 	// write NVMe config file for this I/O Server located in
 	// server-local SCM mount dir
 	if err := ext.writeToFile(out, confPath); err != nil {
@@ -96,46 +96,46 @@ func createConf(ext External, server *server, templ string) error {
 }
 
 func (c *configuration) parseNvme() error {
-	for i, _ := range c.Servers {
+	for i := range c.Servers {
 		s := &c.Servers[i]
 		switch s.BdevClass {
-		case BD_NVME:
+		case bdNvme:
 			if len(s.BdevList) == 0 {
 				continue
 			}
 			// standard daos_nvme.conf, don't need to set VOS_BDEV_CLASS
-			if err := createConf(c.ext, s, NVME_TEMPL); err != nil {
+			if err := createConf(c.ext, s, nvmeTempl); err != nil {
 				return err
 			}
-		case BD_MALLOC:
+		case bdMalloc:
 			if s.BdevNumber == 0 {
 				continue
 			}
-			if err := createConf(c.ext, s, MALLOC_TEMPL); err != nil {
+			if err := createConf(c.ext, s, mallocTempl); err != nil {
 				return err
 			}
 			s.EnvVars = append(s.EnvVars, "VOS_BDEV_CLASS=MALLOC")
-		case BD_KDEV:
+		case bdKdev:
 			if len(s.BdevList) == 0 {
 				continue
 			}
-			if err := createConf(c.ext, s, KDEV_TEMPL); err != nil {
+			if err := createConf(c.ext, s, kdevTempl); err != nil {
 				return err
 			}
 			s.EnvVars = append(s.EnvVars, "VOS_BDEV_CLASS=AIO")
-		case BD_FILE:
+		case bdFile:
 			if len(s.BdevList) == 0 {
 				continue
 			}
 			// requested size aligned with block size
-			size := (int64(s.BdevSize*GBYTE) / int64(BLKSIZE)) * int64(BLKSIZE)
+			size := (int64(s.BdevSize*gbyte) / int64(blkSize)) * int64(blkSize)
 			for _, path := range s.BdevList {
 				err := c.ext.createEmpty(path, size)
 				if err != nil {
 					return err
 				}
 			}
-			if err := createConf(c.ext, s, FILE_TEMPL); err != nil {
+			if err := createConf(c.ext, s, fileTempl); err != nil {
 				return err
 			}
 			s.EnvVars = append(s.EnvVars, "VOS_BDEV_CLASS=AIO")

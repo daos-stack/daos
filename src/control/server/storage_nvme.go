@@ -24,11 +24,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/utils/handlers"
 	"github.com/daos-stack/daos/src/control/utils/log"
@@ -39,10 +42,11 @@ import (
 )
 
 var (
-	spdkSetupPath    = "share/spdk/scripts/setup.sh"
+	spdkSetupPath    = "share/control/setup_spdk.sh"
 	spdkFioPluginDir = "share/spdk/fio_plugin"
 	fioExecPath      = "bin/fio"
-	NR_HUGEPAGES_ENV = "NRHUGE"
+	nrHugepagesEnv   = "_NRHUGE"
+	targetUserEnv    = "_TARGET_USER"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -76,12 +80,31 @@ type nvmeStorage struct {
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetup) start() error {
-	srv := exec.Command(s.scriptPath)
-	if s.nrHugePages != 0 {
-		srv.Env = os.Environ()
-		srv.Env = append(srv.Env, NR_HUGEPAGES_ENV+"="+strconv.Itoa(s.nrHugePages))
+	if err := s.reset(); err != nil {
+		return err
 	}
-	return srv.Run()
+
+	srv := exec.Command(s.scriptPath)
+	srv.Env = os.Environ()
+	var stderr bytes.Buffer
+	srv.Stderr = &stderr
+	var hp, tUsr string
+
+	if s.nrHugePages != 0 {
+		hp = nrHugepagesEnv + "=" + strconv.Itoa(s.nrHugePages)
+		srv.Env = append(srv.Env, hp)
+	}
+	usr := os.Getenv("USER")
+	if usr == "" {
+		return errors.New("missing USER envar")
+	}
+	tUsr = targetUserEnv + "=" + usr
+	srv.Env = append(srv.Env, tUsr)
+
+	return errors.Wrapf(
+		srv.Run(),
+		"spdk setup failed (%s, %s, %s), is no-password sudo enabled?",
+		hp, tUsr, stderr.String())
 }
 
 // reset executes setup script to deallocate hugepages & return PCI devices
@@ -89,8 +112,13 @@ func (s *spdkSetup) start() error {
 //
 // NOTE: will make the controller reappear in /dev.
 func (s *spdkSetup) reset() (err error) {
-	err = exec.Command(s.scriptPath, "reset").Run()
-	return
+	srv := exec.Command(s.scriptPath, "reset")
+	var stderr bytes.Buffer
+	srv.Stderr = &stderr
+	return errors.Wrapf(
+		srv.Run(),
+		"spdk reset failed (%s), is no-password sudo enabled?",
+		stderr.String())
 }
 
 // Setup method implementation for nvmeStorage.
