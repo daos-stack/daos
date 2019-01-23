@@ -203,15 +203,6 @@ func main() {
 		return
 	}
 
-	// Catch signals raised by I/O server.
-	go func() {
-		<-sigchan
-		if err := srv.Process.Kill(); err != nil {
-			log.Errorf("Failed to kill DAOS I/O server: %s", err)
-			return
-		}
-	}()
-
 	extraText, err := CheckReplica(lis, config.AccessPoints, srv)
 	if err != nil {
 		log.Errorf(
