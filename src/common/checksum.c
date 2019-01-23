@@ -122,7 +122,7 @@ daos_csum_free(daos_csum_t *cs_obj)
 }
 
 inline daos_size_t
-daos_csum_get_size(daos_csum_t *csum)
+daos_csum_get_size(const daos_csum_t *csum)
 {
 #if defined(__x86_64__)
 	return csum_dict[csum->dc_csum].cs_size;

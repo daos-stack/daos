@@ -71,22 +71,62 @@ daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
 
-/** buffer to store checksum */
+/** buffer to store an array of checksums */
 typedef struct {
-	/* TODO: typedef enum for it */
-	unsigned int	 cs_type;
-	unsigned short	 cs_len;
-	unsigned short	 cs_buf_len;
-	void		*cs_csum;
+	/** buffer to store the checksums */
+	uint8_t		*cs_csum;
+	/** number of checksums stored in buffer */
+	uint32_t	 cs_nr;
+	/** type of checksum */
+	uint16_t	 cs_type;
+	/** length of each checksum in bytes*/
+	uint16_t	 cs_len;
+	/** length of entire buffer (cs_csum). buf_len can be larger than
+	 *  nr * len, but never smaller
+	 */
+	uint32_t	 cs_buf_len;
+	/** bytes of data each checksum verifies (if value type is array) */
+	uint32_t	 cs_chunksize;
 } daos_csum_buf_t;
+
+static inline void daos_csum_set_multiple(daos_csum_buf_t *csum_buf, void *buf,
+					  uint32_t csum_buf_size,
+					  uint16_t csum_size,
+					  uint32_t csum_count,
+					  uint32_t chunksize)
+{
+	D_ASSERT(csum_size * csum_count <= csum_buf_size);
+	csum_buf->cs_csum = buf;
+	csum_buf->cs_len = csum_size;
+	csum_buf->cs_buf_len = csum_buf_size;
+	csum_buf->cs_nr = csum_count;
+	csum_buf->cs_chunksize = chunksize;
+}
 
 static inline void
 daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
 {
-	csum->cs_csum = buf;
-	csum->cs_len = csum->cs_buf_len = size;
+	daos_csum_set_multiple(csum, buf, size, size, 1, 0);
 }
 
+static inline uint32_t
+daos_csum_idx_from_off(daos_csum_buf_t *csum, uint32_t offset_bytes)
+{
+	return offset_bytes / csum->cs_chunksize;
+}
+
+static inline uint8_t *
+daos_csum_from_idx(daos_csum_buf_t *csum, uint32_t idx)
+{
+	return csum->cs_csum + csum->cs_len * idx;
+}
+
+static inline uint8_t *
+daos_csum_from_offset(daos_csum_buf_t *csum, uint32_t offset_bytes)
+{
+	return daos_csum_from_idx(csum,
+				  daos_csum_idx_from_off(csum, offset_bytes));
+}
 
 typedef enum {
 	DAOS_ANCHOR_TYPE_ZERO	= 0,
@@ -641,6 +681,13 @@ typedef struct {
 	/** Epoch range associated with each extent */
 	daos_epoch_range_t	*iod_eprs;
 } daos_iod_t;
+
+/** Get a specific checksum given an index */
+static inline daos_csum_buf_t *
+daos_iod_csum(daos_iod_t *iod, int csum_index)
+{
+	return iod->iod_csums ? &iod->iod_csums[csum_index] : NULL;
+}
 
 /**
  * A I/O map represents the physical extent mapping inside an array for a
