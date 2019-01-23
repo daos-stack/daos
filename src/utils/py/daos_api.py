@@ -1064,6 +1064,8 @@ class DaosContainer(object):
         self.uuid = (ctypes.c_ubyte * 16)()
         if con_uuid is None:
             c_uuid(uuid.uuid4(), self.uuid)
+        elif con_uuid == "NULLPTR":
+            self.uuid = None
         else:
             c_uuid(con_uuid, self.uuid)
 
