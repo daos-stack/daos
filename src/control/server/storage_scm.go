@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"fmt"
@@ -30,7 +30,7 @@ import (
 
 	"github.com/daos-stack/go-ipmctl/ipmctl"
 
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
 )
 
 // ScmmMap is a type alias for info on Storage Class Memory Modules

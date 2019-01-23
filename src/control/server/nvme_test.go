@@ -21,18 +21,18 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/utils/test"
 
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
 )
 
-func mockNvmeCS(t *testing.T, ns *nvmeStorage) *ControlService {
-	cs := ControlService{nvme: ns}
+func mockNvmeCS(t *testing.T, ns *nvmeStorage) *controlService {
+	cs := controlService{nvme: ns}
 	if err := cs.nvme.Setup(); err != nil {
 		t.Fatal(err.Error())
 	}

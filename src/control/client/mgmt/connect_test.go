@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"testing"
 
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
 	. "github.com/daos-stack/daos/src/control/utils/test"
 
 	"google.golang.org/grpc/connectivity"

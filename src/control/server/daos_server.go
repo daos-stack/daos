@@ -35,14 +35,28 @@ import (
 	flags "github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
 
-	"github.com/daos-stack/daos/src/control/mgmt"
-	mgmtpb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	mgmtpb "github.com/daos-stack/daos/src/control/proto/mgmt"
 )
+
+// cliOptions struct defined flags that can be used when invoking daos_server.
+type cliOptions struct {
+	Port        uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
+	MountPath   string  `short:"s" long:"storage" description:"Storage path"`
+	ConfigPath  string  `short:"o" long:"config_path" description:"Server config file path"`
+	Modules     *string `short:"m" long:"modules" description:"List of server modules to load"`
+	Cores       uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
+	Group       string  `short:"g" long:"group" description:"Server group name"`
+	Attach      *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
+	Map         *string `short:"y" long:"map" description:"[Temporary] System map file"`
+	Rank        *uint   `short:"r" long:"rank" description:"[Temporary] Self rank"`
+	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	ShowStorage bool    `long:"show-storage" description:"List locally attached SCM and NVMe storage"`
+}
 
 func main() {
 	runtime.GOMAXPROCS(1)
 
-	var opts mgmt.CliOptions
+	var opts cliOptions
 
 	// Parse commandline flags which override options loaded from config.
 	_, err := flags.Parse(&opts)
@@ -52,15 +66,15 @@ func main() {
 	}
 
 	// Parse configuration file and load values, then backup active config.
-	config := mgmt.SaveActiveConfig(mgmt.LoadConfigOpts(&opts))
+	config := saveActiveConfig(loadConfigOpts(&opts))
 
-	mgmtControlServer := mgmt.NewControlService(&config)
+	mgmtControlServer := newControlService(&config)
 	mgmtControlServer.Setup()
 	defer mgmtControlServer.Teardown()
 
 	// If command mode option specified then perform task and exit.
 	if opts.ShowStorage {
-		mgmtControlServer.ShowLocalStorage()
+		mgmtControlServer.showLocalStorage()
 		return
 	}
 
@@ -93,7 +107,7 @@ func main() {
 		syscall.SIGHUP)
 
 	// Process configurations parameters for Nvme.
-	if err = config.ParseNvme(); err != nil {
+	if err = config.parseNvme(); err != nil {
 		log.Fatal("NVMe config could not be processed: ", err)
 	}
 
@@ -108,7 +122,7 @@ func main() {
 	srv.Env = os.Environ()
 
 	// Populate I/O server environment with values from config before starting.
-	if err = config.PopulateEnv(ioIdx, &srv.Env); err != nil {
+	if err = config.populateEnv(ioIdx, &srv.Env); err != nil {
 		log.Fatal("DAOS I/O env vars could not be populated: ", err)
 	}
 
@@ -133,7 +147,7 @@ func main() {
 
 	log.Printf(
 		"DAOS server listening on %s%s", addr,
-		mgmt.CheckReplica(lis, config.AccessPoints, srv))
+		checkReplica(lis, config.AccessPoints, srv))
 
 	// Wait for I/O server to return.
 	err = srv.Wait()

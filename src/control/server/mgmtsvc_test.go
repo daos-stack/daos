@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"net"
@@ -48,7 +48,7 @@ func TestHasPort(t *testing.T) {
 }
 
 func TestCheckMgmtSvcReplica(t *testing.T) {
-	defaultPort := strconv.Itoa(NewDefaultMockConfig().Port)
+	defaultPort := strconv.Itoa(newDefaultMockConfig().Port)
 
 	tests := []struct {
 		self              string

@@ -71,18 +71,18 @@ def scons():
         denv.subst("-I$SPDK_PREFIX/include"))
 
     # copy server init files to be used at runtime
-    modulemgmt = join(gosrc, "mgmt")
+    moduleserver = join(gosrc, "server")
     mgmtinitdb = "mgmtinit_db.json"
     denv.Command(
         join("$PREFIX", "share", "control", mgmtinitdb),
-        join(modulemgmt, mgmtinitdb),
+        join(moduleserver, mgmtinitdb),
         Copy("$TARGET", "$SOURCE"))
 
     # TODO: copy fio sample configurations for use at runtime
 #    for f in ["example_config.fio", "full_bench.fio"]:
 #        denv.Command(
 #            "$PREFIX/share/spdk/fio_plugin/" + f,
-#            join(modulemgmt, "fio", f),
+#            join(moduleserver, "fio", f),
 #            Copy("$TARGET", "$SOURCE"))
 
     serverbin = "%s/bin/server" % gopath

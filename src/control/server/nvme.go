@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"bufio"
@@ -32,12 +32,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/utils/handlers"
 )
 
 // ListNvmeCtrlrs lists all NVMe controllers.
-func (c *ControlService) ListNvmeCtrlrs(
+func (c *controlService) ListNvmeCtrlrs(
 	empty *pb.EmptyParams, stream pb.MgmtControl_ListNvmeCtrlrsServer) error {
 	if err := c.nvme.Discover(); err != nil {
 		return err
@@ -54,7 +54,7 @@ func (c *ControlService) ListNvmeCtrlrs(
 // fwrev reported changes after update.
 //
 // Todo: in real life Ctrlr.Id is not guaranteed to be unique, use pciaddr instead
-func (c *ControlService) UpdateNvmeCtrlr(
+func (c *controlService) UpdateNvmeCtrlr(
 	ctx context.Context, params *pb.UpdateNvmeCtrlrParams) (*pb.NvmeController, error) {
 	id := params.Ctrlr.Id
 	if err := c.nvme.Update(id, params.Path, params.Slot); err != nil {
@@ -72,7 +72,7 @@ func (c *ControlService) UpdateNvmeCtrlr(
 }
 
 // FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
-func (c *ControlService) FetchFioConfigPaths(
+func (c *controlService) FetchFioConfigPaths(
 	empty *pb.EmptyParams, stream pb.MgmtControl_FetchFioConfigPathsServer) error {
 	pluginDir, err := handlers.GetAbsInstallPath(spdkFioPluginDir)
 	if err != nil {
@@ -92,7 +92,7 @@ func (c *ControlService) FetchFioConfigPaths(
 
 // BurnInNvme runs burn-in validation on NVMe Namespace and returns cmd output
 // in a stream to the gRPC consumer.
-func (c *ControlService) BurnInNvme(
+func (c *controlService) BurnInNvme(
 	params *pb.BurnInNvmeParams, stream pb.MgmtControl_BurnInNvmeServer) error {
 	// retrieve command components
 	cmdName, args, env, err := c.nvme.BurnIn(

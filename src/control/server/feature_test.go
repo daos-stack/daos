@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,20 +21,33 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
-import pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+import (
+	"testing"
 
-// ListScmModules lists all Storage Class Memory modules installed.
-func (c *ControlService) ListScmModules(
-	empty *pb.EmptyParams, stream pb.MgmtControl_ListScmModulesServer) error {
-	if err := c.scm.Discover(); err != nil {
-		return err
+	. "github.com/daos-stack/daos/src/control/utils/test"
+
+	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
+)
+
+func TestGetFeature(t *testing.T) {
+	s := &controlService{}
+
+	mockFeature := MockFeaturePB()
+	fMap := make(FeatureMap)
+	fMap[mockFeature.Fname.Name] = mockFeature
+	s.supportedFeatures = fMap
+
+	feature, err := s.GetFeature(nil, mockFeature.Fname)
+	if err != nil {
+		t.Fatal(err.Error())
 	}
-	for _, module := range c.scm.Modules {
-		if err := stream.Send(module); err != nil {
-			return err
-		}
+
+	AssertEqual(t, feature, mockFeature, "")
+
+	feature, err = s.GetFeature(nil, &pb.FeatureName{Name: "non-existent"})
+	if err == nil {
+		t.Fatal(err.Error())
 	}
-	return nil
 }

@@ -20,7 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package mgmt
+package main
 
 import (
 	"fmt"
@@ -132,15 +132,15 @@ func TestParseBdev(t *testing.T) {
 	for _, tt := range tests {
 		setupTest(t)
 		// create default config and add server populated with test values
-		server := NewDefaultServer()
+		server := newDefaultServer()
 		server.ScmMount = "/mnt/daos"
 		server.BdevClass = tt.bdevClass
 		server.BdevList = tt.bdevList
 		server.BdevSize = tt.bdevSize
 		server.BdevNumber = tt.bdevNumber
-		config := NewMockConfig(nil, "", tt.fileExists)
+		config := newMockConfig(nil, "", tt.fileExists)
 		config.Servers = append(config.Servers, server)
-		err := config.ParseNvme()
+		err := config.parseNvme()
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, "")
 			continue

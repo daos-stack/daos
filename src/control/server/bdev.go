@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"bytes"
@@ -95,7 +95,7 @@ func createConf(ext External, server *server, templ string) error {
 	return nil
 }
 
-func (c *configuration) ParseNvme() error {
+func (c *configuration) parseNvme() error {
 	for i, _ := range c.Servers {
 		s := &c.Servers[i]
 		switch s.BdevClass {

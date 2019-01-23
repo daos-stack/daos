@@ -20,7 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package mgmt
+package main
 
 import (
 	"errors"
@@ -106,25 +106,25 @@ func (m *mockExt) createEmpty(path string, size int64) error {
 	return nil
 }
 
-// NewMockConfig returns default configuration with mocked external interface
-func NewMockConfig(
+// newMockConfig returns default configuration with mocked external interface
+func newMockConfig(
 	cmdRet error, getenvRet string, existsRet bool) configuration {
-	return NewDefaultConfiguration(
+	return newDefaultConfiguration(
 		&mockExt{cmdRet, getenvRet, existsRet})
 }
 
-// NewDefaultMockConfig returns MockConfig with default mock return values
-func NewDefaultMockConfig() configuration {
-	return NewMockConfig(nil, "", false)
+// newDefaultMockConfig returns MockConfig with default mock return values
+func newDefaultMockConfig() configuration {
+	return newMockConfig(nil, "", false)
 }
 func cmdFailsConfig() configuration {
-	return NewMockConfig(errors.New("exit status 1"), "", false)
+	return newMockConfig(errors.New("exit status 1"), "", false)
 }
 func envExistsConfig() configuration {
-	return NewMockConfig(nil, "somevalue", false)
+	return newMockConfig(nil, "somevalue", false)
 }
 func fileExistsConfig() configuration {
-	return NewMockConfig(nil, "", true)
+	return newMockConfig(nil, "", true)
 }
 
 func populateMockConfig(t *testing.T, c configuration, path string) configuration {
@@ -154,7 +154,7 @@ func TestParseConfigSucceed(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 		// verify decoding of config from written file
-		config := NewDefaultMockConfig()
+		config := newDefaultMockConfig()
 		config.Path = tmpIn
 		err = config.loadConfig()
 		if err != nil {
@@ -199,7 +199,7 @@ func TestParseConfigFail(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 
-		config := NewDefaultMockConfig()
+		config := newDefaultMockConfig()
 		config.Path = tmpIn
 		err = config.loadConfig()
 		// output error messages will always be first entry in a slice.
@@ -219,25 +219,25 @@ func TestProvidedConfigs(t *testing.T) {
 		errMsg   string
 	}{
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			sConfigUncomment,
 			"uncommented default config",
 			"",
 		},
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			socketsExample,
 			"socket example config",
 			"",
 		},
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			psm2Example,
 			"psm2 example config",
 			"",
 		},
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			defaultConfig,
 			"default empty config",
 			"required parameters missing from config and os environment (CRT_PHY_ADDR_STR)",
@@ -310,7 +310,7 @@ func TestProvidedConfigs(t *testing.T) {
 					"problem reading expected output file %s: %s",
 					expectedFile, err.Error()))
 		}
-		err = config.getIOParams(&CliOptions{})
+		err = config.getIOParams(&cliOptions{})
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
@@ -403,11 +403,11 @@ func TestCmdlineOverride(t *testing.T) {
 	// test-local function to generate configuration
 	// (mock with default behaviours populated with uncommented daos_server.yml)
 	newC := func(t *testing.T) configuration {
-		return populateMockConfig(t, NewDefaultMockConfig(), sConfigUncomment)
+		return populateMockConfig(t, newDefaultMockConfig(), sConfigUncomment)
 	}
 
 	tests := []struct {
-		inCliOpts  CliOptions
+		inCliOpts  cliOptions
 		inConfig   configuration
 		outCliOpts [][]string
 		expNumCmds int // number of commands expected to have been run as side effect
@@ -447,7 +447,7 @@ func TestCmdlineOverride(t *testing.T) {
 			},
 		},
 		{
-			inCliOpts: CliOptions{MountPath: "/foo/bar"},
+			inCliOpts: cliOptions{MountPath: "/foo/bar"},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
@@ -469,7 +469,7 @@ func TestCmdlineOverride(t *testing.T) {
 			desc:       "MountPath",
 		},
 		{
-			inCliOpts: CliOptions{Group: "testing123"},
+			inCliOpts: cliOptions{Group: "testing123"},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
@@ -491,7 +491,7 @@ func TestCmdlineOverride(t *testing.T) {
 			desc:       "Group",
 		},
 		{
-			inCliOpts: CliOptions{Cores: 2},
+			inCliOpts: cliOptions{Cores: 2},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
@@ -513,7 +513,7 @@ func TestCmdlineOverride(t *testing.T) {
 			desc:       "Cores",
 		},
 		{
-			inCliOpts: CliOptions{Rank: &r},
+			inCliOpts: cliOptions{Rank: &r},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
@@ -538,7 +538,7 @@ func TestCmdlineOverride(t *testing.T) {
 			// currently not provided as config or cli option, set
 			// directly in configuration
 			inConfig: func() configuration {
-				c := NewDefaultMockConfig()
+				c := newDefaultMockConfig()
 				c.NvmeShmID = 1
 				return populateMockConfig(t, c, sConfigUncomment)
 			}(),
@@ -564,7 +564,7 @@ func TestCmdlineOverride(t *testing.T) {
 			desc:       "NvmeShmID",
 		},
 		{
-			inCliOpts: CliOptions{SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
+			inCliOpts: cliOptions{SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
@@ -607,7 +607,7 @@ func TestCmdlineOverride(t *testing.T) {
 		},
 		{
 			// no provider set but os env set mock getenv returns not empty string
-			inCliOpts: CliOptions{
+			inCliOpts: cliOptions{
 				Cores: 2, Group: "bob", MountPath: "/foo/bar",
 				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
 			inConfig: envExistsConfig(),
@@ -627,17 +627,17 @@ func TestCmdlineOverride(t *testing.T) {
 		},
 		{
 			// no provider set and no os env set mock getenv returns empty string
-			inCliOpts: CliOptions{
+			inCliOpts: cliOptions{
 				Cores: 2, Group: "bob", MountPath: "/foo/bar",
 				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
-			inConfig: NewDefaultMockConfig(),
+			inConfig: newDefaultMockConfig(),
 			desc:     "override defaults, no Provider set and no provider env exists",
 			errMsg:   "required parameters missing from config and os environment (CRT_PHY_ADDR_STR)",
 		},
 		{
 			// no provider set but os env set mock getenv returns not empty string
 			// mount not set and returns invalid
-			inConfig: NewMockConfig(errors.New("exit status 1"), "somevalue", false),
+			inConfig: newMockConfig(errors.New("exit status 1"), "somevalue", false),
 			desc:     "use defaults, mount check fails with default",
 			errMsg:   "server0 scm mount path (/mnt/daos) not mounted: exit status 1",
 			expCmds: []string{
@@ -648,8 +648,8 @@ func TestCmdlineOverride(t *testing.T) {
 		{
 			// no provider set but os env set mock getenv returns not empty string
 			// mount set and returns invalid
-			inCliOpts: CliOptions{MountPath: "/foo/bar"},
-			inConfig:  NewMockConfig(errors.New("exit status 1"), "somevalue", false),
+			inCliOpts: cliOptions{MountPath: "/foo/bar"},
+			inConfig:  newMockConfig(errors.New("exit status 1"), "somevalue", false),
 			desc:      "override MountPath, mount check fails with new value",
 			errMsg:    "server0 scm mount path (/foo/bar) not mounted: exit status 1",
 			expCmds: []string{
@@ -712,7 +712,7 @@ func TestPopulateEnv(t *testing.T) {
 		errMsg    string
 	}{
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			0,
 			[]string{},
 			[]string{},
@@ -721,7 +721,7 @@ func TestPopulateEnv(t *testing.T) {
 			"",
 		},
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			0,
 			[]string{"FOO=bar"},
 			[]string{"FOO=bar"},
@@ -730,7 +730,7 @@ func TestPopulateEnv(t *testing.T) {
 			"",
 		},
 		{
-			populateMockConfig(t, NewDefaultMockConfig(), socketsExample),
+			populateMockConfig(t, newDefaultMockConfig(), socketsExample),
 			0,
 			[]string{"FOO=bar"},
 			[]string{
@@ -786,7 +786,7 @@ func TestPopulateEnv(t *testing.T) {
 			"",
 		},
 		{
-			populateMockConfig(t, NewDefaultMockConfig(), psm2Example),
+			populateMockConfig(t, newDefaultMockConfig(), psm2Example),
 			0,
 			[]string{"FOO=bar"},
 			[]string{
@@ -848,18 +848,18 @@ func TestPopulateEnv(t *testing.T) {
 		config := tt.inConfig
 		inEnvs := tt.inEnvs
 		if len(config.Servers) == 0 {
-			server := NewDefaultServer()
+			server := newDefaultServer()
 			config.Servers = append(config.Servers, server)
 		}
-		// optionally add to server EnvVars from config (with empty CliOptions)
+		// optionally add to server EnvVars from config (with empty cliOptions)
 		if tt.getParams == true {
-			err := config.getIOParams(&CliOptions{})
+			err := config.getIOParams(&cliOptions{})
 			if err != nil {
 				t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err.Error())
 			}
 		}
 		// pass in env and verify output envs is as expected
-		err := config.PopulateEnv(tt.ioIdx, &inEnvs)
+		err := config.populateEnv(tt.ioIdx, &inEnvs)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue

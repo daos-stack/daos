@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"log"
@@ -31,7 +31,7 @@ import (
 	"strings"
 )
 
-func CheckReplica(lis net.Listener, accessPoints []string, srv *exec.Cmd) string {
+func checkReplica(lis net.Listener, accessPoints []string, srv *exec.Cmd) string {
 	// If this server is supposed to host an MS replica, format and start
 	// the MS replica. Only performing the check and print the result for now.
 	isReplica, bootstrap, err := checkMgmtSvcReplica(lis.Addr().(*net.TCPAddr), accessPoints)
@@ -93,7 +93,7 @@ func checkMgmtSvcReplica(self *net.TCPAddr, accessPoints []string) (isReplica, b
 // resolveAccessPoints resolves the strings in accessPoints into addresses in
 // addrs. If a port isn't specified, assume the default port.
 func resolveAccessPoints(accessPoints []string) (addrs []*net.TCPAddr, err error) {
-	defaultPort := NewConfiguration().Port
+	defaultPort := newConfiguration().Port
 	for _, ap := range accessPoints {
 		if !hasPort(ap) {
 			ap = net.JoinHostPort(ap, strconv.Itoa(defaultPort))

@@ -21,12 +21,12 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"encoding/json"
 
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/utils/handlers"
 	"github.com/daos-stack/daos/src/control/utils/log"
 
@@ -35,8 +35,8 @@ import (
 
 var jsonDBRelPath = "share/control/mgmtinit_db.json"
 
-// ControlService type is the data container for the service.
-type ControlService struct {
+// controlService type is the data container for the service.
+type controlService struct {
 	nvme              *nvmeStorage
 	scm               *scmStorage
 	logger            *log.Logger
@@ -44,7 +44,7 @@ type ControlService struct {
 }
 
 // Setup delegates to Storage implementation's Setup methods
-func (c *ControlService) Setup() {
+func (c *controlService) Setup() {
 	if err := c.nvme.Setup(); err != nil {
 		println("Failed NVMe subsystem setup: " + err.Error())
 	}
@@ -54,7 +54,7 @@ func (c *ControlService) Setup() {
 }
 
 // Teardown delegates to Storage implementation's Teardown methods
-func (c *ControlService) Teardown() {
+func (c *controlService) Teardown() {
 	if err := c.nvme.Teardown(); err != nil {
 		println("Failed NVMe subsystem teardown: " + err.Error())
 	}
@@ -96,7 +96,7 @@ func dumpLocalStorage(name string, i interface{}) {
 
 // ShowLocalStorage retrieves and prints details of locally attached SCM and
 // NVMe storage to daos_server stdout.
-func (c *ControlService) ShowLocalStorage() {
+func (c *controlService) showLocalStorage() {
 	println("Listing attached storage...")
 	if err := c.nvme.Discover(); err != nil {
 		println("Failure retrieving NVMe details: " + err.Error())
@@ -110,8 +110,8 @@ func (c *ControlService) ShowLocalStorage() {
 	}
 }
 
-// NewControlService creates a new instance of ControlService struct.
-func NewControlService(config *configuration) *ControlService {
+// newcontrolService creates a new instance of controlService struct.
+func newControlService(config *configuration) *controlService {
 	logger := log.NewLogger()
 	logger.SetLevel(log.Debug)
 
@@ -126,7 +126,7 @@ func NewControlService(config *configuration) *ControlService {
 		panic(err)
 	}
 
-	return &ControlService{
+	return &controlService{
 		nvme:              nvmeStorage,
 		scm:               newScmStorage(logger),
 		logger:            logger,

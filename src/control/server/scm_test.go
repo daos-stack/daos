@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"testing"
@@ -31,7 +31,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/utils/test"
 
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
 )
 
 type mockListScmModulesServer struct {
@@ -44,8 +44,8 @@ func (m *mockListScmModulesServer) Send(module *pb.ScmModule) error {
 	return nil
 }
 
-func mockScmCS(ss *scmStorage) *ControlService {
-	return &ControlService{scm: ss}
+func mockScmCS(ss *scmStorage) *controlService {
+	return &controlService{scm: ss}
 }
 
 func TestListScmModules(t *testing.T) {

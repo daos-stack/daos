@@ -26,7 +26,7 @@ package mgmtclient
 import (
 	"fmt"
 
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
 	"google.golang.org/grpc/connectivity"
 )
 

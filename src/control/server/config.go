@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"fmt"
@@ -46,7 +46,7 @@ func (c *configuration) loadConfig() (err error) {
 	if err != nil {
 		return
 	}
-	if err = c.Parse(bytes); err != nil {
+	if err = c.parse(bytes); err != nil {
 		return
 	}
 	return
@@ -60,10 +60,10 @@ func (c *configuration) saveConfig(filename string) error {
 	return ioutil.WriteFile(filename, bytes, 0644)
 }
 
-// LoadConfigOpts derives file location and parses configuration options
+// loadConfigOpts derives file location and parses configuration options
 // from both config file and commandline flags.
-func LoadConfigOpts(cliOpts *CliOptions) configuration {
-	config := NewConfiguration()
+func loadConfigOpts(cliOpts *cliOptions) configuration {
+	config := newConfiguration()
 	if cliOpts.ConfigPath != "" {
 		config.Path = cliOpts.ConfigPath
 	}
@@ -89,8 +89,8 @@ func LoadConfigOpts(cliOpts *CliOptions) configuration {
 	return config
 }
 
-// SaveActiveConfig saves read-only active config, tries config dir then /tmp/
-func SaveActiveConfig(config configuration) configuration {
+// saveActiveConfig saves read-only active config, tries config dir then /tmp/
+func saveActiveConfig(config configuration) configuration {
 	activeConfig := filepath.Join(filepath.Dir(config.Path), CONFIG_OUT)
 	eMsg := "Warning: active config could not be saved (%s)"
 	err := config.saveConfig(activeConfig)
@@ -211,7 +211,7 @@ func (c *configuration) populateCliOpts(i int) error {
 //   port, mount path, cores, group, rank, socket dir
 // Current cli opts to be passed to be stored by daos_server:
 //   modules, attach, map
-func (c *configuration) cmdlineOverride(opts *CliOptions) {
+func (c *configuration) cmdlineOverride(opts *cliOptions) {
 	// Populate options that can be provided on both the commandline and config.
 	if opts.Port > 0 {
 		c.Port = int(opts.Port)
@@ -259,7 +259,7 @@ func (c *configuration) cmdlineOverride(opts *CliOptions) {
 func (c *configuration) validateConfig() (bool, error) {
 	if c.ext.getenv(PROVIDER_ENV_KEY) != "" {
 		if len(c.Servers) == 0 {
-			c.Servers = append(c.Servers, NewDefaultServer())
+			c.Servers = append(c.Servers, newDefaultServer())
 		}
 		return true, nil
 	}
@@ -275,7 +275,7 @@ func (c *configuration) validateConfig() (bool, error) {
 
 // getIOParams builds lists of commandline options and environment variables
 // to pass when invoking I/O server instances.
-func (c *configuration) getIOParams(cliOpts *CliOptions) error {
+func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 	// if config doesn't specify server and/or provider we need to
 	// attempt to check if at least some of the envs exist and
 	// notify that IO server will run with user set env vars
@@ -328,7 +328,7 @@ func (c *configuration) getIOParams(cliOpts *CliOptions) error {
 }
 
 // PopulateEnv adds envs from config options
-func (c *configuration) PopulateEnv(ioIdx int, envs *[]string) error {
+func (c *configuration) populateEnv(ioIdx int, envs *[]string) error {
 	for _, env := range c.Servers[ioIdx].EnvVars {
 		kv := strings.Split(env, "=")
 		if kv[1] == "" {

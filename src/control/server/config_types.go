@@ -20,7 +20,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"fmt"
@@ -49,21 +49,6 @@ const (
 	// todo: implement Provider discriminated union
 	// todo: implement LogMask discriminated union
 )
-
-// CliOptions struct defined flags that can be used when invoking daos_server.
-type CliOptions struct {
-	Port        uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
-	MountPath   string  `short:"s" long:"storage" description:"Storage path"`
-	ConfigPath  string  `short:"o" long:"config_path" description:"Server config file path"`
-	Modules     *string `short:"m" long:"modules" description:"List of server modules to load"`
-	Cores       uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
-	Group       string  `short:"g" long:"group" description:"Server group name"`
-	Attach      *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
-	Map         *string `short:"y" long:"map" description:"[Temporary] System map file"`
-	Rank        *uint   `short:"r" long:"rank" description:"[Temporary] Self rank"`
-	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
-	ShowStorage bool    `long:"show-storage" description:"List locally attached SCM and NVMe storage"`
-}
 
 //Server defines configuration options for DAOS IO Server instances
 type server struct {
@@ -105,9 +90,9 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // todo: implement UnMarshal for LogMask discriminated union
 
-// NewDefaultServer creates a new instance of server struct
+// newDefaultServer creates a new instance of server struct
 // populated with defaults.
-func NewDefaultServer() server {
+func newDefaultServer() server {
 	return server{
 		BdevClass: BD_NVME,
 	}
@@ -220,8 +205,8 @@ func (f *Format) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // todo: implement UnMarshal for Provider discriminated union
 
-// Parse decodes YAML representation of configure struct and checks for Group
-func (c *configuration) Parse(data []byte) error {
+// parse decodes YAML representation of configure struct and checks for Group
+func (c *configuration) parse(data []byte) error {
 	return yaml.Unmarshal(data, c)
 }
 
@@ -238,9 +223,9 @@ func (c *configuration) checkMount(path string) error {
 	return nil
 }
 
-// NewDefaultConfiguration creates a new instance of configuration struct
+// newDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
-func NewDefaultConfiguration(ext External) configuration {
+func newDefaultConfiguration(ext External) configuration {
 	return configuration{
 		SystemName:   "daos_server",
 		SocketDir:    "/var/run/daos_server",
@@ -259,8 +244,8 @@ func NewDefaultConfiguration(ext External) configuration {
 	}
 }
 
-// NewConfiguration creates a new instance of configuration struct
+// newConfiguration creates a new instance of configuration struct
 // populated with defaults and default external interface.
-func NewConfiguration() configuration {
-	return NewDefaultConfiguration(&ext{})
+func newConfiguration() configuration {
+	return newDefaultConfiguration(&ext{})
 }

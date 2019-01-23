@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"fmt"
@@ -29,14 +29,14 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
 )
 
 // FeatureMap is a type alias
 type FeatureMap map[string]*pb.Feature
 
 // GetFeature returns the feature from feature name.
-func (s *ControlService) GetFeature(
+func (s *controlService) GetFeature(
 	ctx context.Context, name *pb.FeatureName) (*pb.Feature, error) {
 	f, exists := s.supportedFeatures[name.Name]
 	if !exists {
@@ -46,7 +46,7 @@ func (s *ControlService) GetFeature(
 }
 
 // ListAllFeatures lists all features supported by the management server.
-func (s *ControlService) ListAllFeatures(
+func (s *controlService) ListAllFeatures(
 	empty *pb.EmptyParams, stream pb.MgmtControl_ListAllFeaturesServer) error {
 	for _, feature := range s.supportedFeatures {
 		if err := stream.Send(feature); err != nil {
@@ -57,7 +57,7 @@ func (s *ControlService) ListAllFeatures(
 }
 
 // ListFeatures lists all features supported by the management server.
-func (s *ControlService) ListFeatures(
+func (s *controlService) ListFeatures(
 	category *pb.Category, stream pb.MgmtControl_ListFeaturesServer) error {
 	for _, feature := range s.supportedFeatures {
 		if proto.Equal(feature.GetCategory(), category) {

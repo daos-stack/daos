@@ -25,7 +25,7 @@
 package testutils
 
 import (
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
 	"github.com/daos-stack/go-ipmctl/ipmctl"
 	"github.com/daos-stack/go-spdk/spdk"
 )

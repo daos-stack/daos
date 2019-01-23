@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmt
+package main
 
 import (
 	"fmt"
@@ -35,7 +35,7 @@ import (
 
 	"github.com/daos-stack/go-spdk/spdk"
 
-	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
+	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
 )
 
 var (
@@ -122,7 +122,7 @@ func (n *nvmeStorage) Teardown() (err error) {
 // controller and namespace details through external interface and populate
 // protobuf representations.
 //
-// Init NVMe subsystem with shm_id in ControlService (PRIMARY SPDK process) and
+// Init NVMe subsystem with shm_id in controlService (PRIMARY SPDK process) and
 // later share with io_server (SECONDARY SPDK process) to facilitate concurrent
 // SPDK access to controllers on same host from multiple processes.
 //
