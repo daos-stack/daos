@@ -92,7 +92,7 @@ trap 'set +e
 restore_dist_files "${yaml_files[@]}"
 i=5
 while [ $i -gt 0 ]; do
-    pdsh -R ssh -S -w "$(IFS=','; echo "${nodes[*]}")" "sudo umount /mnt/daos
+    pdsh -l jenkins -R ssh -S -w "$(IFS=','; echo "${nodes[*]}")" "sudo umount /mnt/daos
     x=0
     while [ \$x -lt 30 ] &&
           grep $DAOS_BASE /proc/mounts &&
@@ -109,7 +109,7 @@ while [ $i -gt 0 ]; do
 done' EXIT
 
 DAOS_BASE=${SL_PREFIX%/install}
-if ! pdsh -R ssh -S -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
+if ! pdsh -l jenkins -R ssh -S -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
 ulimit -c unlimited
 if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
     if grep /mnt/daos\\  /proc/mounts; then
@@ -142,7 +142,7 @@ mkdir -p /tmp/Functional_$TEST_TAG/" 2>&1 | dshbak -c; then
 fi
 
 # shellcheck disable=SC2029
-if ! ssh -i ci_key "${nodes[0]}" "set -ex
+if ! ssh -i ci_key jenkins@"${nodes[0]}" "set -ex
 ulimit -c unlimited
 rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
@@ -223,7 +223,7 @@ else
 fi
 
 # collect the logs
-if ! rpdcp -R ssh -w "$(IFS=','; echo "${nodes[*]}")" \
+if ! rpdcp -l jenkins -R ssh -w "$(IFS=','; echo "${nodes[*]}")" \
     /tmp/Functional_"$TEST_TAG"/\*daos.log "$PWD"/; then
     echo "Copying daos.logs from remote nodes failed"
     # pass
