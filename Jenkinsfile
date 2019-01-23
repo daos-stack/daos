@@ -57,10 +57,10 @@ def singleNodeTest() {
                            sudo mount -t nfs \$HOSTNAME:\$PWD \$CART_BASE
                            cd \$CART_BASE
                            if RUN_UTEST=false bash -x utils/run_test.sh; then
-                               echo \"run_test.sh exited successfully with \${PIPESTATUS[0]}\"
+                               echo \"run_test.sh exited successfully with \\\${PIPESTATUS[0]}\"
                            else
-                               rc=\${PIPESTATUS[0]}
-                               echo \"run_test.sh exited failure with \$rc\"
+                               rc=\\\${PIPESTATUS[0]}
+                               echo \"run_test.sh exited failure with \\\$rc\"
                            fi"
                        mkdir -p install/Linux/TESTING/
                        scp -i ci_key -r jenkins@\$NODE:\$CART_BASE/install/Linux/TESTING/testLogs \
