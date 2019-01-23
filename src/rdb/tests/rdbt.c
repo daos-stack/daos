@@ -302,7 +302,8 @@ main(int argc, char *argv[])
 		return hdlr == NULL ? 2 : 0;
 	}
 
-	rc = crt_init(NULL, 0 /* client-only */);
+	rc = crt_init_opt(NULL, 0 /* client-only */,
+			  daos_crt_init_opt_get(false, 1));
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	rc = crt_context_create(&context);
 	D_ASSERTF(rc == 0, "%d\n", rc);

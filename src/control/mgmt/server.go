@@ -44,25 +44,23 @@ type ControlService struct {
 }
 
 // Setup delegates to Storage implementation's Setup methods
-func (c *ControlService) Setup() (err error) {
-	if err = c.nvme.Setup(); err != nil {
-		return
+func (c *ControlService) Setup() {
+	if err := c.nvme.Setup(); err != nil {
+		println("Failed NVMe subsystem setup: " + err.Error())
 	}
-	if err = c.scm.Setup(); err != nil {
-		return
+	if err := c.scm.Setup(); err != nil {
+		println("Failed SCM subsystem setup: " + err.Error())
 	}
-	return
 }
 
 // Teardown delegates to Storage implementation's Teardown methods
-func (c *ControlService) Teardown() (err error) {
-	if err = c.nvme.Teardown(); err != nil {
-		return
+func (c *ControlService) Teardown() {
+	if err := c.nvme.Teardown(); err != nil {
+		println("Failed NVMe subsystem teardown: " + err.Error())
 	}
-	if err = c.scm.Teardown(); err != nil {
-		return
+	if err := c.scm.Teardown(); err != nil {
+		println("Failed SCM subsystem teardown: " + err.Error())
 	}
-	return
 }
 
 // loadInitData retrieves initial data from relative file path.
@@ -98,7 +96,7 @@ func dumpLocalStorage(name string, i interface{}) {
 
 // ShowLocalStorage retrieves and prints details of locally attached SCM and
 // NVMe storage to daos_server stdout.
-func (c *ControlService) ShowLocalStorage() error {
+func (c *ControlService) ShowLocalStorage() {
 	println("Listing attached storage...")
 	if err := c.nvme.Discover(); err != nil {
 		println("Failure retrieving NVMe details: " + err.Error())
@@ -110,7 +108,6 @@ func (c *ControlService) ShowLocalStorage() error {
 	} else {
 		dumpLocalStorage("SCM", c.scm.Modules)
 	}
-	return nil
 }
 
 // NewControlServer creates a new instance of ControlService struct.

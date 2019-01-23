@@ -49,13 +49,13 @@ func mockScmCS(ss *scmStorage) *ControlService {
 }
 
 func TestListScmModules(t *testing.T) {
-	s := mockScmCS(newMockScmStorage([]DeviceDiscovery{MockModule()}))
+	s := mockScmCS(
+		newMockScmStorage([]DeviceDiscovery{MockModule()}, true))
 	m := MockModulePB()
 
 	mock := &mockListScmModulesServer{}
 	s.ListScmModules(nil, mock)
 
-	AssertTrue(t, s.scm.initialised, "expected ScmStorage to have been initialised")
 	AssertEqual(t, len(s.scm.Modules), 1, "unexpected number of modules")
 	AssertEqual(t, s.scm.Modules, ScmmMap{0: m}, "unexpected list of modules")
 	AssertEqual(t, len(mock.Results), 1, "unexpected number of modules sent")

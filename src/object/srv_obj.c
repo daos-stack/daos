@@ -904,7 +904,22 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 		enum_arg->chk_key2big = true;
 	}
 
+	/*
+	 * FIXME: enumeration RPC uses one anchor for both SV and EV,
+	 * that won't be able to support recursive iteration in our
+	 * current data model (one akey can have both SV tree and EV
+	 * tree).
+	 *
+	 * Need to use separate anchors for SV and EV, or return a
+	 * 'type' to indicate the anchor is on SV tree or EV tree.
+	 */
+	if (type == VOS_ITER_SINGLE)
+		anchors->ia_sv = anchors->ia_ev;
+
 	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg);
+
+	if (type == VOS_ITER_SINGLE)
+		anchors->ia_ev = anchors->ia_sv;
 
 	D_DEBUG(DB_IO, ""DF_UOID" iterate type %d tag %d rc %d\n",
 		DP_UOID(oei->oei_oid), type, dss_get_module_info()->dmi_tgt_id,
@@ -995,7 +1010,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 
 	anchors.ia_dkey = oei->oei_dkey_anchor;
 	anchors.ia_akey = oei->oei_akey_anchor;
-	anchors.ia_recx = oei->oei_anchor;
+	anchors.ia_ev = oei->oei_anchor;
 
 	/* TODO: Transfer the inline_thres from enumerate RPC */
 	enum_arg.inline_thres = 32;
@@ -1055,7 +1070,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 
 	oeo->oeo_dkey_anchor = anchors.ia_dkey;
 	oeo->oeo_akey_anchor = anchors.ia_akey;
-	oeo->oeo_anchor = anchors.ia_recx;
+	oeo->oeo_anchor = anchors.ia_ev;
 
 	if (enum_arg.eprs)
 		oeo->oeo_eprs.ca_count = enum_arg.eprs_len;

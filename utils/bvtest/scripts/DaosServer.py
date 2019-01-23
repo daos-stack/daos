@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017 Intel Corporation
+# Copyright (c) 2017-2019 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -88,7 +88,7 @@ class DaosServer(object):
                         alldata += stdout.channel.recv(1024)
                     print(str(alldata, "utf8", "backslashreplace"))
             stdin, stdout, stderr = sshclient.exec_command(
-                "find /mnt/daos -maxdepth 1 -print0 | xargs -0r rm -rf")
+                "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf")
             while not stdout.channel.exit_status_ready():
                 if stdout.channel.recv_ready():
                     alldata = stdout.channel.recv(1024)
@@ -211,10 +211,10 @@ class DaosServer(object):
 
         hosts -- list of host names where servers are running
         """
-        kill_cmds = ["pkill \"(daos_server|daos_io_server)\" --signal INT",
+        kill_cmds = ["pkill '(daos_server|daos_io_server)' --signal INT",
                      "sleep 5",
-                     "pkill \"(daos_server|daos_io_server)\" --signal KILL"]
-        rm_cmd = "find /mnt/daos -maxdepth 1 -print0 | xargs -0r rm -rf"
+                     "pkill '(daos_server|daos_io_server)' --signal KILL"]
+        rm_cmd = "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf"
 
         for host in hosts:
             subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)), shell=True)

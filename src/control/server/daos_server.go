@@ -56,7 +56,7 @@ type cliOptions struct {
 
 var (
 	opts cliOptions
-	// shared memory segment ID to enable multiple SPDK application instances to
+	// Shared memory segment ID to enable multiple SPDK application instances to
 	// access the same NVMe controller.
 	shmID = 1
 )
@@ -71,15 +71,18 @@ func main() {
 		return
 	}
 
+	// Pass shm_id to mgmtControlServer (PRIMARY SPDK process) and later
+	// share with io_server (SECONDARY SPDK process) to facilitate
+	// concurrent SPDK access to controllers on same host from multiple
+	// processes.
+	// TODO: Is it also necessary to provide distinct coremask args?
 	mgmtControlServer := mgmt.NewControlServer(shmID)
-	mgmtControlServer.Setup()
-	defer mgmtControlServer.Teardown()
+	// TODO: initialize spdk in setup working in multiprocess mod
+	//mgmtControlServer.Setup() //defer mgmtControlServer.Teardown()
 
 	// If command mode option specified then perform task and exit.
 	if opts.ShowStorage {
-		if err := mgmtControlServer.ShowLocalStorage(); err != nil {
-			log.Fatal(err)
-		}
+		mgmtControlServer.ShowLocalStorage()
 		return
 	}
 
@@ -119,9 +122,16 @@ func main() {
 		log.Fatal("NVMe config could not be processed: ", err)
 	}
 
-	// Only start single server for now.
+	// Only start single io_server for now.
+	// TODO: Extend to start two io_servers per host.
 	ioIdx := 0
+
+	// Add shm_id to CliOpts/ioArgs so io_server can share spdk access
+	// to controllers with mgmtControlServer process (see comment above).
 	ioArgs := config.Servers[ioIdx].CliOpts
+	// TODO: enable io_server to run as secondary spdk process
+	//ioArgs := append(config.Servers[ioIdx].CliOpts, "-i", strconv.Itoa(shmID))
+
 	srv := exec.Command("daos_io_server", ioArgs...)
 	srv.Stdout = os.Stdout
 	srv.Stderr = os.Stderr

@@ -31,12 +31,17 @@ import (
 	pb "github.com/daos-stack/daos/src/control/mgmt/proto"
 )
 
-func mockNvmeCS(ns *nvmeStorage) *ControlService {
-	return &ControlService{nvme: ns}
+func mockNvmeCS(t *testing.T, ns *nvmeStorage) *ControlService {
+	cs := ControlService{nvme: ns}
+	if err := cs.nvme.Setup(); err != nil {
+		t.Fatal(err.Error())
+	}
+	return &cs
+
 }
 
 func TestUpdateNvmeCtrlr(t *testing.T) {
-	s := mockNvmeCS(newMockNvmeStorage("1.0.0", "1.0.1"))
+	s := mockNvmeCS(t, newMockNvmeStorage("1.0.0", "1.0.1", false))
 
 	if err := s.nvme.Discover(); err != nil {
 		t.Fatal(err.Error())
@@ -60,7 +65,7 @@ func TestUpdateNvmeCtrlr(t *testing.T) {
 }
 
 func TestUpdateNvmeCtrlrFail(t *testing.T) {
-	s := mockNvmeCS(newMockNvmeStorage("1.0.0", "1.0.0"))
+	s := mockNvmeCS(t, newMockNvmeStorage("1.0.0", "1.0.0", false))
 
 	if err := s.nvme.Discover(); err != nil {
 		t.Fatal(err.Error())

@@ -261,7 +261,8 @@ server_init()
 	/* initialize the network layer */
 	if (sys_map_path != NULL)
 		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
-	rc = crt_init(server_group_id, flags);
+	rc = crt_init_opt(server_group_id, flags,
+			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	if (sys_map_path != NULL) {

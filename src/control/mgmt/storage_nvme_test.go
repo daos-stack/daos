@@ -61,50 +61,148 @@ func (m *mockSpdkSetup) start() error { return nil }
 func (m *mockSpdkSetup) reset() error { return nil }
 
 // mockNvmeStorage factory
-func newMockNvmeStorage(fwRevBefore string, fwRevAfter string) *nvmeStorage {
+func newMockNvmeStorage(
+	fwRevBefore string, fwRevAfter string, inited bool) *nvmeStorage {
 	return &nvmeStorage{
-		logger: log.NewLogger(),
-		env:    &mockSpdkEnv{},
-		nvme:   &mockSpdkNvme{fwRevBefore, fwRevAfter},
-		setup:  &mockSpdkSetup{},
+		logger:      log.NewLogger(),
+		env:         &mockSpdkEnv{},
+		nvme:        &mockSpdkNvme{fwRevBefore, fwRevAfter},
+		setup:       &mockSpdkSetup{},
+		initialized: inited,
+	}
+}
+
+func TestSetupNvme(t *testing.T) {
+	tests := []struct {
+		inited bool
+		errMsg string
+	}{
+		{
+			true,
+			"nvme storage already initialized",
+		},
+		{
+			false,
+			"",
+		},
+	}
+
+	c := MockControllerPB("")
+
+	for _, tt := range tests {
+		sn := newMockNvmeStorage("", "", tt.inited)
+
+		if err := sn.Setup(); err != nil {
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, "")
+				continue
+			}
+			t.Fatal(err.Error())
+		}
+
+		AssertEqual(
+			t, sn.Controllers, []*pb.NvmeController{c},
+			"unexpected list of protobuf format controllers")
 	}
 }
 
 func TestDiscoveryNvme(t *testing.T) {
-	sn := newMockNvmeStorage("", "")
-	c := MockControllerPB("")
-
-	if err := sn.Discover(); err != nil {
-		t.Fatal(err.Error())
+	tests := []struct {
+		inited bool
+		errMsg string
+	}{
+		{
+			true,
+			"",
+		},
+		{
+			false,
+			"nvme storage not initialized",
+		},
 	}
 
-	AssertTrue(t, sn.initialised, "expected NvmeStorage to have been initialised")
-	AssertEqual(
-		t, sn.Controllers, []*pb.NvmeController{c},
-		"unexpected list of protobuf format controllers")
+	c := MockControllerPB("")
+
+	for _, tt := range tests {
+		sn := newMockNvmeStorage("", "", false)
+		if tt.inited {
+			if err := sn.Setup(); err != nil {
+				t.Fatal(err.Error())
+			}
+		}
+
+		if err := sn.Discover(); err != nil {
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, "")
+				continue
+			}
+			t.Fatal(err.Error())
+		}
+
+		AssertEqual(
+			t, sn.Controllers, []*pb.NvmeController{c},
+			"unexpected list of protobuf format controllers")
+	}
 }
 
 func TestUpdateNvme(t *testing.T) {
-	sn := newMockNvmeStorage("1.0.0", "1.0.1")
-	c := MockControllerPB("1.0.1")
-
-	if err := sn.Update(0, "", 0); err != nil {
-		t.Fatal(err.Error())
+	tests := []struct {
+		inited bool
+		errMsg string
+	}{
+		{
+			true,
+			"",
+		},
+		{
+			false,
+			"nvme storage not initialized",
+		},
 	}
 
-	AssertTrue(t, sn.initialised, "expected NvmeStorage to have been initialised")
-	AssertEqual(
-		t, sn.Controllers, []*pb.NvmeController{c},
-		"unexpected list of protobuf format controllers")
+	c := MockControllerPB("1.0.1")
+
+	for _, tt := range tests {
+		sn := newMockNvmeStorage("1.0.0", "1.0.1", false)
+		if tt.inited {
+			if err := sn.Setup(); err != nil {
+				t.Fatal(err.Error())
+			}
+		}
+
+		if err := sn.Update(0, "", 0); err != nil {
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, "")
+				continue
+			}
+			t.Fatal(err.Error())
+		}
+
+		AssertEqual(
+			t, sn.Controllers, []*pb.NvmeController{c},
+			"unexpected list of protobuf format controllers")
+	}
 }
 
 // TestBurnInNvme verifies a corner case because BurnIn does not call out
 // to SPDK via bindings.
 // In this case the real NvmeStorage is used as opposed to a mockNvmeStorage.
 func TestBurnInNvme(t *testing.T) {
-	sn := newMockNvmeStorage("", "")
-	c := MockControllerPB("1.0.0")
+	tests := []struct {
+		inited bool
+		errMsg string
+	}{
+		{
+			true,
+			"",
+		},
+		{
+			false,
+			"nvme storage not initialized",
+		},
+	}
 
+	c := MockControllerPB("1.0.0")
 	configPath := "/foo/bar/conf.fio"
 	nsID := 1
 	expectedArgs := []string{
@@ -117,13 +215,26 @@ func TestBurnInNvme(t *testing.T) {
 		configPath,
 	}
 
-	cmdName, args, env, err := sn.BurnIn(c.Pciaddr, int32(nsID), configPath)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	for _, tt := range tests {
+		sn := newMockNvmeStorage("", "", false)
+		if tt.inited {
+			if err := sn.Setup(); err != nil {
+				t.Fatal(err.Error())
+			}
+		}
 
-	AssertTrue(t, strings.HasSuffix(cmdName, "bin/fio"), "unexpected fio executable path")
-	AssertEqual(t, args, expectedArgs, "unexpected list of command arguments")
-	AssertTrue(t, strings.HasPrefix(env, "LD_PRELOAD="), "unexpected LD_PRELOAD fio_plugin executable path")
-	AssertTrue(t, strings.HasSuffix(env, "spdk/fio_plugin/fio_plugin"), "unexpected LD_PRELOAD fio_plugin executable path")
+		cmdName, args, env, err := sn.BurnIn(c.Pciaddr, int32(nsID), configPath)
+		if err != nil {
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, "")
+				continue
+			}
+			t.Fatal(err.Error())
+		}
+
+		AssertTrue(t, strings.HasSuffix(cmdName, "bin/fio"), "unexpected fio executable path")
+		AssertEqual(t, args, expectedArgs, "unexpected list of command arguments")
+		AssertTrue(t, strings.HasPrefix(env, "LD_PRELOAD="), "unexpected LD_PRELOAD fio_plugin executable path")
+		AssertTrue(t, strings.HasSuffix(env, "spdk/fio_plugin/fio_plugin"), "unexpected LD_PRELOAD fio_plugin executable path")
+	}
 }

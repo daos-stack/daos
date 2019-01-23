@@ -62,7 +62,7 @@ type nvmeStorage struct {
 	setup       SpdkSetup // SPDK shell configuration interface
 	shmID       int       // SPDK init opts param to enable multi-process mode
 	Controllers []*pb.NvmeController
-	initialised bool
+	initialized bool
 }
 
 // start executes setup script to allocate hugepages and bind PCI devices
@@ -93,11 +93,34 @@ func (s *spdkSetup) reset() (err error) {
 
 // Setup method implementation for nvmeStorage.
 //
-// Perform any setup required to use available NVMe devices.
+// Initialise SPDK environment before probing controllers then retrieve
+// controller and namespace details through external interface and populate
+// protobuf representations.
+//
+// Note: SPDK multi-process mode can be enabled by supplying shm_id in
+//       spdk_env_opts for all applications accessing SSD with SPDK. This is
+//       specifically used to work around the fact that SPDK throws exceptions
+//       if you try to probe a second time.
+// Todo: this is currently a one-time only discovery for the lifetime of this
+//       process, presumably we want to be able to detect updates during
+//       process lifetime.
 func (n *nvmeStorage) Setup() (err error) {
+	if n.initialized {
+		return fmt.Errorf("nvme storage already initialized")
+	}
 	if err = n.setup.start(); err != nil {
 		return
 	}
+	// specify shmID to be set as opt in SPDK env init
+	if err = n.env.InitSPDKEnv(n.shmID); err != nil {
+		return
+	}
+	cs, ns, err := n.nvme.Discover()
+	if err != nil {
+		return err
+	}
+	n.Controllers = loadControllers(cs, ns)
+	n.initialized = true
 	return
 }
 
@@ -110,81 +133,70 @@ func (n *nvmeStorage) Teardown() (err error) {
 	// Rebind PCI devices back to their original drivers and cleanup any
 	// leftover spdk files/resources.
 	// err = n.setup.reset()
+	n.initialized = false
 	return
 }
 
 // Discover method implementation for nvmeStorage.
 //
-// Initialise SPDK environment before probing controllers then retrieve
-// controller and namespace details through external interface and populate
-// protobuf representations.
-//
-// Note: SPDK multi-process mode can be enabled by supplying shm_id in
-//       spdk_env_opts for all applications accessing SSD with SPDK. This is
-//       specifically used to work around the fact that SPDK throws exceptions
-//       if you try to probe a second time.
-// Todo: this is currently a one-time only discovery for the lifetime of this
-//       process, presumably we want to be able to detect updates during
-//       process lifetime.
+// Currently a placeholder verifying devices have been retrieved during Setup()
+// In future may retrieve a more up-to-date view.
 func (n *nvmeStorage) Discover() error {
-	if !n.initialised {
-		// specify shmID to be set as opt in SPDK env init
-		if err := n.env.InitSPDKEnv(n.shmID); err != nil {
-			return err
-		}
-		cs, ns, err := n.nvme.Discover()
-		if err != nil {
-			return err
-		}
-		n.Controllers = loadControllers(cs, ns)
-		n.initialised = true
+	if n.initialized {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("nvme storage not initialized")
 }
 
 // Update method implementation for nvmeStorage
 func (n *nvmeStorage) Update(ctrlrID int32, path string, slot int32) error {
-	cs, ns, err := n.nvme.Update(ctrlrID, path, slot)
-	if err != nil {
-		return err
+	if n.initialized {
+		cs, ns, err := n.nvme.Update(ctrlrID, path, slot)
+		if err != nil {
+			return err
+		}
+		n.Controllers = loadControllers(cs, ns)
+		return nil
 	}
-	n.Controllers = loadControllers(cs, ns)
-	n.initialised = true
-	return nil
+	return fmt.Errorf("nvme storage not initialized")
 }
 
 // BurnIn method implementation for nvmeStorage
 // Doesn't call through go-spdk, returns cmds to be issued over shell
 func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 	fioPath string, cmds []string, env string, err error) {
-	pluginDir := ""
-	pluginDir, err = handlers.GetAbsInstallPath(spdkFioPluginDir)
-	if err != nil {
+	if n.initialized {
+		pluginDir := ""
+		pluginDir, err = handlers.GetAbsInstallPath(spdkFioPluginDir)
+		if err != nil {
+			return
+		}
+		fioPath, err = handlers.GetAbsInstallPath(fioExecPath)
+		if err != nil {
+			return
+		}
+		// run fio with spdk plugin specified in LD_PRELOAD env
+		env = fmt.Sprintf("LD_PRELOAD=%s/fio_plugin", pluginDir)
+		// limitation of fio_plugin for spdk is that traddr needs
+		// to not contain colon chars, convert to full-stops
+		// https://github.com/spdk/spdk/tree/master/examples/nvme/fio_plugin .
+		// shm_id specified within fio configs to enable spdk multiprocess
+		// mode required to perform burn-in from Go process.
+		// eta options provided to trigger periodic client responses.
+		cmds = []string{
+			fmt.Sprintf(
+				"--filename=\"trtype=PCIe traddr=%s ns=%d\"",
+				strings.Replace(pciAddr, ":", ".", -1), nsID),
+			"--ioengine=spdk",
+			"--eta=always",
+			"--eta-newline=10",
+			configPath,
+		}
+		n.logger.Debugf(
+			"BurnIn command string: %s %s %v", env, fioPath, cmds)
 		return
 	}
-	fioPath, err = handlers.GetAbsInstallPath(fioExecPath)
-	if err != nil {
-		return
-	}
-	// run fio with spdk plugin specified in LD_PRELOAD env
-	env = fmt.Sprintf("LD_PRELOAD=%s/fio_plugin", pluginDir)
-	// limitation of fio_plugin for spdk is that traddr needs
-	// to not contain colon chars, convert to full-stops
-	// https://github.com/spdk/spdk/tree/master/examples/nvme/fio_plugin .
-	// shm_id specified within fio configs to enable spdk multiprocess
-	// mode required to perform burn-in from Go process.
-	// eta options provided to trigger periodic client responses.
-	cmds = []string{
-		fmt.Sprintf(
-			"--filename=\"trtype=PCIe traddr=%s ns=%d\"",
-			strings.Replace(pciAddr, ":", ".", -1), nsID),
-		"--ioengine=spdk",
-		"--eta=always",
-		"--eta-newline=10",
-		configPath,
-	}
-	n.logger.Debugf(
-		"BurnIn command string: %s %s %v", env, fioPath, cmds)
+	err = fmt.Errorf("nvme storage not initialized")
 	return
 }
 

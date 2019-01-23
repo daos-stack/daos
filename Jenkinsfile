@@ -165,13 +165,19 @@ pipeline {
                                           result: ${currentBuild.currentResult}
                         */
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         success {
+                            sh '''rm -rf daos-devel/
+                                  mkdir daos-devel/
+                                  mv install/{lib,include} daos-devel/'''
+                            archiveArtifacts artifacts: 'daos-devel/**'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'SUCCESS'
+                            */
                         }
+                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -520,10 +526,25 @@ pipeline {
                                                trap 'set +e; set -x; sudo umount /mnt/daos' EXIT
                                                sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
                                                sudo mkdir -p $DAOS_BASE
-                                               trap 'set +e; set -x; sudo umount /mnt/daos; sudo umount \"$DAOS_BASE\"' EXIT
+                                               trap 'set +e; set -x
+                                                     cd
+                                                     sudo umount /mnt/daos
+                                                     sudo umount \"$DAOS_BASE\" || {
+                                                         echo "Failed to unmount $DAOS_BASE"
+                                                         ps axf
+                                                     }' EXIT
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
                                                cd $DAOS_BASE
-                                               OLD_CI=false utils/run_test.sh"''',
+                                               OLD_CI=false utils/run_test.sh
+                                               rm -rf run_test.sh/
+                                               mkdir run_test.sh/
+                                               [ -f /tmp/daos.log ] && mv /tmp/daos.log run_test.sh/
+                                               # servers can sometimes take a while to stop when the test is done
+                                               x=0
+                                               while [ \"\\\$x\" -lt \"10\" ] && pgrep '(daos_server|daos_io_server)'; do
+                                                   sleep 1
+                                                   let x=\\\$x+1
+                                               done"''',
                               junit_files: null
                     }
                     post {
@@ -548,9 +569,6 @@ pipeline {
                         }
                         */
                         always {
-                            sh '''rm -rf run_test.sh/
-                                  mkdir run_test.sh/
-                                  [ -f /tmp/daos.log ] && mv /tmp/daos.log run_test.sh/ || true'''
                             archiveArtifacts artifacts: 'run_test.sh/**'
                         }
                     }

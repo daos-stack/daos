@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,7 +206,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 /* Callers are responsible for incrementing arg->kds_len. See iter_akey_cb. */
 static int
 fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
-	 vos_iter_type_t type, vos_iter_param_t *param)
+	 vos_iter_type_t type, vos_iter_param_t *param, unsigned int *acts)
 {
 	daos_iov_t		*iovs = arg->sgl->sg_iovs;
 	struct obj_enum_rec	*rec;
@@ -272,6 +272,9 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	if (inline_data && data_size > 0) {
 		daos_iov_t iov_out;
 
+		/* inline packing for the small recx located on SCM */
+		D_ASSERT(key_ent->ie_biov.bi_addr.ba_type == DAOS_MEDIA_SCM);
+
 		daos_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
 				       iovs[arg->sgl_idx].iov_len, data_size);
 		rc = vos_iter_copy(ih, key_ent, &iov_out);
@@ -318,7 +321,7 @@ out:
 
 static int
 enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
-	     vos_iter_param_t *param, void *cb_arg, bool *reprobe)
+	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
 	int	rc;
 
@@ -335,14 +338,13 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		if (((struct dss_enum_arg *)cb_arg)->fill_recxs)
 			rc = fill_recxs(ih, entry, cb_arg, type);
 		else
-			rc = fill_rec(ih, entry, cb_arg, type, param);
+			rc = fill_rec(ih, entry, cb_arg, type, param, acts);
 		break;
 	default:
 		D_ASSERTF(false, "unknown/unsupported type %d\n", type);
 		rc = -DER_INVAL;
 	}
 
-	*reprobe = false;
 	return rc;
 }
 

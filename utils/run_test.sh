@@ -18,6 +18,7 @@
 
 #check for existence of /mnt/daos first:
 failed=0
+failures=()
 
 if [ -d /work ]; then
     export D_LOG_FILE=/work/daos.log
@@ -53,6 +54,7 @@ run_test()
     if ! time $lock_test "$@"; then
         echo "Test $* failed with exit status ${PIPESTATUS[0]}."
         ((failed = failed + 1))
+        failures+=("$*")
     fi
 }
 
@@ -99,7 +101,10 @@ if [ -d "/mnt/daos" ]; then
         # spit out the magic string that the post build script looks for
         echo "SUCCESS! NO TEST FAILURES"
     else
-        echo "FAILURE: $failed tests failed"
+        echo "FAILURE: $failed tests failed (listed below)"
+        for ((i = 0; i < ${#failures[@]}; i++)); do
+            echo "    ${failures[$i]}"
+        done
         if ! ${OLD_CI:-true}; then
             exit 1
         fi
