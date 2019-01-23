@@ -25,7 +25,9 @@ package main
 
 import (
 	"fmt"
+	"hash/fnv"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -64,6 +66,7 @@ func (c *configuration) saveConfig(filename string) error {
 // from both config file and commandline flags.
 func loadConfigOpts(cliOpts *cliOptions) (configuration, error) {
 	config := newConfiguration()
+
 	if cliOpts.ConfigPath != "" {
 		config.Path = cliOpts.ConfigPath
 	}
@@ -74,11 +77,20 @@ func loadConfigOpts(cliOpts *cliOptions) (configuration, error) {
 		}
 		config.Path = newPath
 	}
+
 	err := config.loadConfig()
 	if err != nil {
 		return config, errors.Wrap(err, "failed to read config file")
 	}
 	log.Debugf("DAOS config read from %s", config.Path)
+
+	host, err := os.Hostname()
+	if err != nil {
+		return config, errors.Wrap(err, "failed to get hostname")
+	}
+
+	// get unique identifier to activate SPDK multiprocess mode
+	config.NvmeShmID = hash(host + strconv.Itoa(os.Getpid()))
 
 	if err = config.getIOParams(cliOpts); err != nil {
 		return config, errors.Wrap(
@@ -87,6 +99,7 @@ func loadConfigOpts(cliOpts *cliOptions) (configuration, error) {
 	if len(config.Servers) == 0 {
 		return config, errors.New("missing I/O server params")
 	}
+
 	return config, nil
 }
 
@@ -107,6 +120,14 @@ func saveActiveConfig(config *configuration) {
 	if err == nil {
 		log.Debugf("Active config saved to %s (read-only)", activeConfig)
 	}
+}
+
+// hash produces unique int from string, mask MSB on conversion to signed int
+func hash(s string) int {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	// mask MSB of uint32 as this will be sign bit
+	return int(h.Sum32() & 0x7FFFFFFF)
 }
 
 // setNumCores takes number of cores and converts to list of ranges
