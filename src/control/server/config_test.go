@@ -735,8 +735,10 @@ func TestPopulateEnv(t *testing.T) {
 			[]string{"FOO=bar"},
 			[]string{
 				"FOO=bar",
+				"ABT_ENV_MAX_NUM_XSTREAMS=100",
 				"ABT_MAX_NUM_XSTREAMS=100",
 				"DAOS_MD_CAP=1024",
+				"CRT_CTX_SHARE_ADDR=0",
 				"CRT_TIMEOUT=30",
 				"FI_SOCKETS_MAX_CONN_RETRY=1",
 				"FI_SOCKETS_CONN_TIMEOUT=2000",
@@ -791,8 +793,10 @@ func TestPopulateEnv(t *testing.T) {
 			[]string{"FOO=bar"},
 			[]string{
 				"FOO=bar",
+				"ABT_ENV_MAX_NUM_XSTREAMS=100",
 				"ABT_MAX_NUM_XSTREAMS=100",
 				"DAOS_MD_CAP=1024",
+				"CRT_CTX_SHARE_ADDR=0",
 				"CRT_TIMEOUT=30",
 				"CRT_CREDIT_EP_CTX=0",
 				"CRT_PHY_ADDR_STR=ofi+psm2",

@@ -21,13 +21,15 @@ The [shell](dmg/daos_shell) is an example client application which can connect t
 
 ## Configuration
 
-daos_server configuration file is parsed when starting daos_server process, it's location can be specified on the commandline (daos_server -h for usage) or default location (install/etc/daos_server.yml).
+`daos_server` configuration file is parsed when starting `daos_server` process, it's location can be specified on the commandline (`daos_server -h` for usage) or default location (`<daos install dir>/install/etc/daos_server.yml`).
 
-Parameters will be parsed and populated with defaults (hardcoded in source) if not present in configuration.
+Parameters will be parsed and populated with defaults (located in `config_types.go`) if not present in configuration.
 
 Commandline parameters take precedence over configuration file values but if not specified on commandline, configuration file values will be applied (or parsed defaults).
 
-For convenience, active parsed config values are written to either directory where config file was read from or /tmp/ if that fails.
+For convenience, active parsed config values are written to either directory where config file was read from or `/tmp/` if that fails.
+
+If user shell executing `daos_server` has environment variable `CRT_PHY_ADDR_STR` set, user os environment will be used when spawning `daos_io_server` instances. In this situation a "Warning: using os env vars..." message will be printed to the console and no environment variables will be added as specified in the `env_vars` list within the per-server section of the server config file. This behaviour provides backward compatibility with historic mechanism of specifying all parameters through environment variables.
 
 ## Shell Usage
 
