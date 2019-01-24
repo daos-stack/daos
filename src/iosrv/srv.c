@@ -577,6 +577,7 @@ static int
 dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 {
 	struct dss_xstream	*dx;
+	ABT_thread_attr		attr = ABT_THREAD_ATTR_NULL;
 	int			rc = 0;
 	bool			comm; /* true to create cart ctx for RPC */
 	int			xs_offset;
@@ -628,9 +629,21 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 		D_GOTO(out_sched, rc = dss_abterr2der(rc));
 	}
 
+	rc = ABT_thread_attr_create(&attr);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT_thread_attr_create fails %d\n", rc);
+		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
+	}
+
+	rc = ABT_thread_attr_set_stacksize(attr, 65536);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT_thread_attr_set_stacksize fails %d\n", rc);
+		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
+	}
+
 	/** start progress ULT */
 	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE],
-			       dss_srv_handler, dx, ABT_THREAD_ATTR_NULL,
+			       dss_srv_handler, dx, attr,
 			       &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create xstream failed: %d\n", rc);
@@ -649,6 +662,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	}
 	xstream_data.xd_xs_ptrs[xstream_data.xd_xs_nr++] = dx;
 	ABT_mutex_unlock(xstream_data.xd_mutex);
+	ABT_thread_attr_free(&attr);
 
 	D_DEBUG(DB_TRACE, "created xstream xs_id(%d)/tgt_id(%d)/"
 		"ctx_id(%d)/comm(%d)/is_main_xs(%d).\n",
@@ -657,6 +671,8 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 
 	return 0;
 out_xstream:
+	if (attr != ABT_THREAD_ATTR_NULL)
+		ABT_thread_attr_free(&attr);
 	ABT_xstream_join(dx->dx_xstream);
 	ABT_xstream_free(&dx->dx_xstream);
 	dss_xstream_free(dx);
