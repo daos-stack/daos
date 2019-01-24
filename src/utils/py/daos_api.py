@@ -414,8 +414,9 @@ class DaosObj(object):
             func = self.context.get_function('close-obj')
             rc = func(self.oh, None)
             if rc != 0:
-                raise DaosApiError("Object close returned non-zero. RC: {0}"
-                                 .format(rc))
+                raise DaosApiError(
+                    "Object close returned non-zero. RC: {0} handle: {1}"
+                    .format(rc, self.oh))
             self.oh = None
 
     def create(self, rank=None, objcls=13):
@@ -1313,7 +1314,7 @@ class DaosContainer(object):
         self.commit_tx(tx)
         return ioreq.obj, tx
 
-    def write_multi_akeys(self, dkey, data, obj=None, rank=None):
+    def write_multi_akeys(self, dkey, data, obj=None, rank=None, obj_cls=13):
         """
         Write multiple values to an object, each tagged with a unique akey.
         If an object isn't supplied a new one is created.  The update
@@ -1345,7 +1346,7 @@ class DaosContainer(object):
             c_data.append(newtup)
 
         # obj can be None in which case a new one is created
-        ioreq = IORequest(self.context, self, obj, rank)
+        ioreq = IORequest(self.context, self, obj, rank, objtype=obj_cls)
 
         ioreq.multi_akey_insert(c_dkey, c_data, tx)
         self.commit_tx(tx)

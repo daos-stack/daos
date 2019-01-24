@@ -5,7 +5,7 @@ hosts:
       test_machines:
         - boro-A
         - boro-B
-timeout: 5000
+timeout: 100
 server:
    server_group: daos_server
 pool:

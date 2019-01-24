@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -49,7 +49,6 @@ class PunchTest(Test):
             with open('../../../.build_vars.json') as f:
                 build_paths = json.load(f)
                 self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
-                self.tmp = build_paths['PREFIX'] + '/tmp'
 
                 self.server_group = self.params.get("server_group",'/server/',
                                                     'daos_server')
@@ -58,7 +57,8 @@ class PunchTest(Test):
                 self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
                 self.hostlist = self.params.get("test_machines",'/run/hosts/*')
-                self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+                self.hostfile = WriteHostFile.WriteHostFile(self.hostlist,
+                                                            self.workdir)
 
                 ServerUtils.runServer(self.hostfile, self.server_group,
                                       self.basepath)
@@ -123,96 +123,47 @@ class PunchTest(Test):
 
         :avocado: tags=object,punch,dkeypunch,regression,vm,small
         """
-        try:
 
+        try:
             # create an object and write some data into it
             thedata = "a string that I want to stuff into an object"
             dkey = "this is the dkey"
             akey = "this is the akey"
 
-            obj, epoch = self.container.write_an_obj(thedata, len(thedata)+1,
-                                                     dkey, akey)
+            obj, tx = self.container.write_an_obj(thedata, len(thedata)+1,
+                                                     dkey, akey, obj_cls=1)
 
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
-                                                  obj, epoch)
+                                                  obj, tx)
             if thedata != thedata2.value:
                 print("data I wrote:" + thedata)
                 print("data I read back" + thedata2.value)
                 self.fail("Wrote data, read it back, didn't match\n")
 
-            # repeat above, but know that the write_an_obj call is advancing
-            # the epoch so the original copy remains and the new copy is in
-            # a new epoch.
-            thedata3 = "a different string"
-            # note using the same keys so writing to the same spot
-            obj, epoch2 = self.container.write_an_obj(thedata3, len(thedata3)+1,
-                                                      dkey, akey, obj)
+            # now punch this data, should fail, can't punch committed data
+            obj.punch_dkeys(tx, [dkey])
 
-            # read the data back and make sure its correct
-            thedata4 = self.container.read_an_obj(len(thedata3)+1, dkey, akey,
-                                             obj, epoch2)
-            if thedata3 != thedata4.value:
-                print("data I wrote:" + thedata3)
-                print("data I read back" + thedata4.value)
-                self.fail("wrote in new epoch, read it back, didn't match\n")
+            # expecting punch of commit data above to fail
+            self.fail("Punch should have failed but it didn't.\n")
 
-            # the original data should still be there too
-            thedata5 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
-                                             obj, epoch)
-            if thedata != thedata5.value:
-                self.fail("original data isn't there any more\n")
-
-            # repeat, so there will be 3 epochs
-            thedata6 = "a really different string"
-
-            # note using the same keys so writing to the same spot
-            obj, epoch3 = self.container.write_an_obj(thedata6, len(thedata6)+1,
-                                                      dkey, akey, obj)
-
-            # read the data back and make sure its correct
-            thedata7 = self.container.read_an_obj(len(thedata6)+1, dkey, akey,
-                                                  obj, epoch3)
-            if thedata6 != thedata7.value:
-                print("data I wrote:" + thedata6)
-                print("data I read back" + thedata7.value)
-                self.fail("wrote in new epoch, read it back, didn't match\n")
-
-            # now punch the data from the middle epoch
-            obj.punch_dkeys(epoch2, [dkey])
-
+        # expecting an exception so do nothing
         except DaosApiError as e:
-            print(e)
-            print(traceback.format_exc())
-            self.fail("Test failed.\n")
+            pass
 
         try:
-            # read the data from the middle epoch
-            thedata8 = self.container.read_an_obj(len(thedata3)+1, dkey, akey,
-                                                  obj, epoch2)
+            # now punch this data
+            obj.punch_dkeys(0, [dkey])
 
-            if len(thedata8.value) is not 0:
-                print("data8: {} {}", thedata8.value, len(thedata8.value))
-                self.fail("punch from middle epoch didn't work")
-
-            # read the data from the last epoch
-            thedata9 = self.container.read_an_obj(len(thedata6)+1, dkey, akey,
-                                                  obj, epoch3)
-
-            if len(thedata9.value) is not 0:
-                print("data9: {} {}", thedata9.value, len(thedata9.value))
-                self.fail("after punch data in the last epoch should be gone")
-
-            # lastly check the first epoch
-            thedata10 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
-                                                  obj, epoch)
-
-            if thedata != thedata10.value:
-                self.fail("Epoch preceeding the punch should still have data\n")
-
+        # this one should work so error if exception occurs
         except DaosApiError as e:
-            print(e)
-            self.fail("Test failed.\n")
+            self.fail("Punch should have worked.\n")
+
+
+        # there are a bunch of other cases to test here,
+        #    --test punching the same updating and punching the same data in
+        #    the same tx, should fail
+        #    --test non updated data in an open tx, should work
 
     def test_akey_punch(self):
         """
@@ -220,27 +171,14 @@ class PunchTest(Test):
 
         :avocado: tags=object,punch,akeypunch,regression,vm,small
         """
+
         try:
             # create an object and write some data into it
             dkey = "this is the dkey"
             data1 = [("this is akey 1", "this is data value 1"),
                     ("this is akey 2", "this is data value 2"),
                     ("this is akey 3", "this is data value 3")]
-            obj, epoch1 = self.container.write_multi_akeys(dkey, data1)
-
-            # do this again, note that the epoch has been advanced by
-            # the write_multi_akeys function
-            data2 = [("this is akey 1", "this is data value 4"),
-                     ("this is akey 2", "this is data value 5"),
-                     ("this is akey 3", "this is data value 6")]
-            obj, epoch2 = self.container.write_multi_akeys(dkey, data2, obj)
-
-            # do this again, note that the epoch has been advanced by
-            # the write_multi_akeys function
-            data3 = [("this is akey 1", "this is data value 7"),
-                     ("this is akey 2", "this is data value 8"),
-                     ("this is akey 3", "this is data value 9")]
-            obj, epoch3 = self.container.write_multi_akeys(dkey, data3, obj)
+            obj, tx = self.container.write_multi_akeys(dkey, data1, obj_cls=1)
 
             # read back the 1st epoch's data and check 1 value just to make sure
             # everything is on the up and up
@@ -248,32 +186,31 @@ class PunchTest(Test):
                        (data1[1][0], len(data1[1][1]) + 1),
                        (data1[2][0], len(data1[2][1]) + 1)]
             retrieved_data = self.container.read_multi_akeys(dkey, readbuf, obj,
-                                                             epoch1)
+                                                             tx)
             if retrieved_data[data1[1][0]] != data1[1][1]:
-                print("middle akey, 1st epoch {}".format(
+                print("middle akey: {}".format(
                         retrieved_data[data1[1][0]]))
                 self.fail("data retrieval failure")
 
-            # now punch one akey from the middle epoch
-            print("punching: {}".format([data2[1][0]]))
-            obj.punch_akeys(epoch2, dkey, [data2[1][0]])
+            # now punch one akey from this data
+            obj.punch_akeys(tx, dkey, [data1[1][0]])
 
-            # verify its gone from the epoch where it was punched
-            readbuf = [(data2[1][0], len(data2[1][1]) + 1)]
-            retrieved_data = self.container.read_multi_akeys(dkey, readbuf, obj,
-                                                             epoch2)
+            # expecting punch of commit data above to fail
+            self.fail("Punch should have failed but it didn't.\n")
 
-            if len(retrieved_data[data2[1][0]]) != 0:
-                print("retrieved: {}".format(retrieved_data))
-                print("retrieved punched data but it was still there")
-                self.fail("punched data still present")
-
+        # expecting an exception so do nothing
         except DaosApiError as e:
             print(e)
-            print(traceback.format_exc())
-            self.fail("Test failed.\n")
+            pass
 
-    @avocado.skip('Currently this test fails')
+        try:
+            # now punch the object without a tx
+            obj.punch_akeys(0, dkey, [data1[1][0]])
+
+        # expecting it to work this time so error
+        except DaosApiError as e:
+            self.fail("Punch should have worked.\n")
+
     def test_obj_punch(self):
         """
         The most basic test of the object punch function.  Really similar
@@ -281,6 +218,7 @@ class PunchTest(Test):
 
         :avocado: tags=object,punch,objpunch,regression,vm,small
         """
+
         try:
 
             # create an object and write some data into it
@@ -288,98 +226,32 @@ class PunchTest(Test):
             dkey = "this is the dkey"
             akey = "this is the akey"
 
-            obj, epoch = self.container.write_an_obj(thedata, len(thedata)+1,
-                                                     dkey, akey)
+            obj, tx = self.container.write_an_obj(thedata, len(thedata)+1,
+                                                     dkey, akey, obj_cls=1)
 
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
-                                                  obj, epoch)
+                                                  obj, tx)
             if thedata != thedata2.value:
                 print("data I wrote:" + thedata)
                 print("data I read back" + thedata2.value)
                 self.fail("Wrote data, read it back, didn't match\n")
 
-            # repeat above, but know that the write_an_obj call is advancing
-            # the epoch so the original copy remains and the new copy is in
-            # a new epoch.
-            thedata3 = "a different string"
-            # note using the same keys so writing to the same spot
-            obj, epoch2 = self.container.write_an_obj(thedata3, len(thedata3)+1,
-                                                      dkey, akey, obj)
+            # now punch the object, commited so not expecting it to work
+            obj.punch(tx)
 
-            # read the data back and make sure its correct
-            thedata4 = self.container.read_an_obj(len(thedata3)+1, dkey, akey,
-                                             obj, epoch2)
-            if thedata3 != thedata4.value:
-                print("data I wrote:" + thedata3)
-                print("data I read back" + thedata4.value)
-                self.fail("wrote in new epoch, read it back, didn't match\n")
+            # expecting punch of commit data above to fail
+            self.fail("Punch should have failed but it didn't.\n")
 
-            # the original data should still be there too
-            thedata5 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
-                                             obj, epoch)
-            if thedata != thedata5.value:
-                self.fail("original data isn't there any more\n")
-
-            # repeat, so there will be 3 epochs
-            thedata6 = "a really different string"
-
-            # note using the same keys so writing to the same spot
-            obj, epoch3 = self.container.write_an_obj(thedata6, len(thedata6)+1,
-                                                      dkey, akey, obj)
-
-            # read the data back and make sure its correct
-            thedata7 = self.container.read_an_obj(len(thedata6)+1, dkey, akey,
-                                                  obj, epoch3)
-            if thedata6 != thedata7.value:
-                print("data I wrote:" + thedata6)
-                print("data I read back" + thedata7.value)
-                self.fail("wrote in new epoch, read it back, didn't match\n")
-
-            # now punch the object from the middle epoch
-            obj.punch(epoch2)
-
-        except DaosApiError as e:
-            print (e)
-            print (traceback.format_exc())
-            self.fail("Test failed.\n")
-
-        try:
-            # read the data from the middle epoch, should be gone
-            thedata8 = self.container.read_an_obj(len(thedata3)+1, dkey, akey,
-                                                  obj, epoch2)
-            if len(thedata8.value) is not 0:
-                print("data8: {} {}", thedata8.value, len(thedata8.value))
-                self.fail("punch from middle epoch didn't work")
-
+        # expecting an exception so do nothing
         except DaosApiError as e:
             print(e)
-            self.fail("READ FROM DELETED OBJECT FAILED.\n")
+            pass
 
         try:
-            # read the data from the last epoch
-            thedata9 = self.container.read_an_obj(len(thedata6)+1, dkey, akey,
-                                                  obj, epoch3)
+            obj.punch(0)
 
-            if len(thedata9.value) is not 0:
-                print("data9: {} {}", thedata8.value, len(thedata8.value))
-                self.fail("after punch data in the last epoch should be gone")
-
+        # expecting it to work without a tx
         except DaosApiError as e:
             print(e)
-            self.fail("READ FROM DELETED OBJECT FAILED.\n")
-
-        try:
-            # lastly check the first epoch, this one should still be there
-            thedata10 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
-                                                  obj, epoch)
-
-            if thedata != thedata10.value:
-                self.fail("Epoch preceeding the punch should still have data\n")
-
-        except DaosApiError as e:
-            print(e)
-            self.fail("Test failed.\n")
-
-if __name__ == "__main__":
-    main()
+            self.fail("Punch should have worked.\n")
