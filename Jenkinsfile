@@ -50,8 +50,8 @@ def singleNodeTest() {
                        CART_BASE=\${SL_PREFIX%/install*}
                        NODELIST=$nodelist
                        NODE=\${NODELIST%%,*}
-                       trap 'set +e; set -x; ssh \$NODE "set -ex; sudo umount \$CART_BASE"' EXIT
-                       ssh -i ci_key \$NODE "set -x
+                       trap 'set +e; set -x; ssh -i ci_key jenkins@\$NODE "set -ex; sudo umount \$CART_BASE"' EXIT
+                       ssh -i ci_key jenkins@\$NODE "set -x
                            set -e
                            sudo mkdir -p \$CART_BASE
                            sudo mount -t nfs \$HOSTNAME:\$PWD \$CART_BASE
@@ -63,7 +63,7 @@ def singleNodeTest() {
                                echo \"run_test.sh exited failure with \$rc\"
                            fi"
                        mkdir -p install/Linux/TESTING/
-                       scp -i ci_key -r \$NODE:\$CART_BASE/install/Linux/TESTING/testLogs \
+                       scp -i ci_key -r jenkins@\$NODE:\$CART_BASE/install/Linux/TESTING/testLogs \
                                         install/Linux/TESTING/
                        exit \$rc""",
           junit_files: null

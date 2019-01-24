@@ -99,7 +99,7 @@ rm -f results_1.yml CART_[235]-node_junit.xml
 trap 'set +e
 i=5
 while [ $i -gt 0 ]; do
-    pdsh -R ssh -S \
+    pdsh -l jenkins -R ssh -S \
          -w "$(IFS=','; echo ${nodes[*]:0:$1})" "set -x
     x=0
     rc=0
@@ -128,7 +128,7 @@ while [ $i -gt 0 ]; do
 done' EXIT
 
 CART_BASE=${SL_OMPI_PREFIX%/install/*}
-if ! pdsh -R ssh -S \
+if ! pdsh -l jenkins -R ssh -S \
           -w "$(IFS=','; echo "${nodes[*]:0:$1}")" "set -ex
 ulimit -c unlimited
 sudo mkdir -p $CART_BASE
@@ -149,7 +149,7 @@ df -h" 2>&1 | dshbak -c; then
 fi
 
 # shellcheck disable=SC2029
-if ! ssh -i ci_key "${nodes[0]}" "set -ex
+if ! ssh -i ci_key jenkins@"${nodes[0]}" "set -ex
 ulimit -c unlimited
 cd $CART_BASE
 
@@ -235,7 +235,7 @@ else
     rc=0
 fi
 
-scp -i ci_key -r "${nodes[0]}:\
+scp -i ci_key -r jenkins@"${nodes[0]}:\
 $CART_BASE/install/Linux/TESTING/$log_base_path" install/Linux/TESTING/
 {
     cat <<EOF
