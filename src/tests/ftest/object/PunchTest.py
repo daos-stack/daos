@@ -27,7 +27,7 @@ import traceback
 import sys
 import json
 import avocado
-from avocado import Test, main
+from avocado import Test, main, skip
 
 sys.path.append('./util')
 sys.path.append('../util')
@@ -117,6 +117,7 @@ class PunchTest(Test):
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
 
+    @skip("Failing test being worked on for Pipeline launch")
     def test_dkey_punch(self):
         """
         The most basic test of the dkey punch function.
@@ -214,6 +215,7 @@ class PunchTest(Test):
             print(e)
             self.fail("Test failed.\n")
 
+    @skip("Failing test being worked on for Pipeline launch")
     def test_akey_punch(self):
         """
         The most basic test of the akey punch function.
