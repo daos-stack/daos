@@ -4,7 +4,7 @@ import os
 
 HEADERS = ['daos.h', 'daos_api.h', 'daos_types.h', 'daos_errno.h',
            'daos_event.h', 'daos_mgmt.h', 'daos_types.h', 'daos_addons.h',
-           'daos_task.h', 'daos_fs.h']
+           'daos_task.h', 'daos_fs.h', 'daos_uns.h']
 HEADERS_SRV = ['vos.h', 'vos_types.h']
 
 def scons():

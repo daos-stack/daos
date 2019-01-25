@@ -919,13 +919,13 @@ enum daos_cont_prop_type {
 	DAOS_PROP_CO_MAX,
 };
 
+typedef uint16_t daos_cont_layout_t;
+
 /** container layout type */
 enum {
 	DAOS_PROP_CO_LAYOUT_UNKOWN,
 	DAOS_PROP_CO_LAYOUT_POSIX,
-	DAOS_PROP_CO_LAYOUT_MPIIO,
 	DAOS_PROP_CO_LAYOUT_HDF5,
-	DAOS_PROP_CO_LAYOUT_ARROW,
 };
 
 /** container checksum type */

@@ -56,6 +56,7 @@
 	ACTION(bio,       bio,       arg)	\
 	ACTION(tests,     tests,     arg)	\
 	ACTION(dfs,       dfs,       arg)	\
+	ACTION(duns,      duns,      arg)	\
 	ACTION(drpc,      drpc,      arg)	\
 	ACTION(security,  security,  arg)
 
