@@ -91,7 +91,7 @@ def scons():
     denv.InstallAs("$PREFIX/bin/daos_server", serverbin)
 
     shellbin = "%s/bin/dmg" % gopath
-    shellsrc = "%s/dmg/daos_shell.go" % gosrc
+    shellsrc = "%s/dmg/cli.go" % gosrc
     denv.Command(shellbin, shellsrc, "go install %s/src/control/dmg" % repopath)
     denv.InstallAs("$PREFIX/bin/daos_shell", shellbin)
 

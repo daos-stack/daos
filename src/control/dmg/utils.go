@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,9 @@ package main
 import (
 	"fmt"
 	"sort"
-	"github.com/daos-stack/daos/src/control/utils/handlers"
+
 	"github.com/daos-stack/daos/src/control/client/mgmt"
+	"github.com/daos-stack/daos/src/control/utils/handlers"
 )
 
 func hasConnections(addrs mgmtclient.Addresses, eMap mgmtclient.ErrorMap) (

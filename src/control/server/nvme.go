@@ -42,7 +42,7 @@ func (c *controlService) ListNvmeCtrlrs(
 	if err := c.nvme.Discover(); err != nil {
 		return err
 	}
-	for _, ctrlr := range c.nvme.Controllers {
+	for _, ctrlr := range c.nvme.controllers {
 		if err := stream.Send(ctrlr); err != nil {
 			return err
 		}
@@ -60,7 +60,7 @@ func (c *controlService) UpdateNvmeCtrlr(
 	if err := c.nvme.Update(id, params.Path, params.Slot); err != nil {
 		return nil, err
 	}
-	for _, ctrlr := range c.nvme.Controllers {
+	for _, ctrlr := range c.nvme.controllers {
 		if ctrlr.Id == id {
 			if ctrlr.Fwrev == params.Ctrlr.Fwrev {
 				return nil, fmt.Errorf("update failed, firmware revision unchanged")
@@ -96,7 +96,7 @@ func (c *controlService) BurnInNvme(
 	params *pb.BurnInNvmeParams, stream pb.MgmtControl_BurnInNvmeServer) error {
 	// retrieve command components
 	cmdName, args, env, err := c.nvme.BurnIn(
-		c.nvme.Controllers[params.Ctrlrid].Pciaddr,
+		c.nvme.controllers[params.Ctrlrid].Pciaddr,
 		// hardcode first Namespace on controller for the moment
 		1,
 		params.Path.Path)

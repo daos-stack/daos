@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,8 +131,20 @@ func StructsToString(i interface{}) (lines string, err error) {
 	}
 	for _, l := range strings.Split(string(s), "\n") {
 		if !strings.Contains(l, "xxx_") {
-			lines = lines+l+"\n"
+			lines = lines + l + "\n"
 		}
 	}
 	return
+}
+
+// PrintStructs dumps friendly YAML representation of structs to stdout
+// proceeded with "name" identifier.
+func PrintStructs(name string, i interface{}) {
+	println(name + ":")
+	s, err := StructsToString(i)
+	if err != nil {
+		println("Unable to YAML encode response: ", err.Error())
+		return
+	}
+	println(s)
 }

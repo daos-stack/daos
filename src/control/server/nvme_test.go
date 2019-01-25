@@ -48,7 +48,7 @@ func TestUpdateNvmeCtrlr(t *testing.T) {
 	}
 
 	cExpect := MockControllerPB("1.0.1")
-	c := s.nvme.Controllers[0]
+	c := s.nvme.controllers[0]
 
 	// after fetching controller details, simulate updated firmware
 	// version being reported
@@ -60,7 +60,7 @@ func TestUpdateNvmeCtrlr(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	AssertEqual(t, s.nvme.Controllers[0], cExpect, "unexpected Controller populated")
+	AssertEqual(t, s.nvme.controllers[0], cExpect, "unexpected Controller populated")
 	AssertEqual(t, newC, cExpect, "unexpected Controller returned")
 }
 
@@ -71,7 +71,7 @@ func TestUpdateNvmeCtrlrFail(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	c := s.nvme.Controllers[0]
+	c := s.nvme.controllers[0]
 
 	// after fetching controller details, simulate the same firmware
 	// version being reported
