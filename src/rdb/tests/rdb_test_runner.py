@@ -237,6 +237,9 @@ if __name__ == "__main__":
             time.sleep(1)
             daos_server = daos_server_pid()
 
+        # Give daos_io_server some time to get ready.
+        time.sleep(10)
+
         print("DAOS server started")
 
         # Client operations
