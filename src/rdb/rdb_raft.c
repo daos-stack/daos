@@ -1481,8 +1481,20 @@ rdb_raft_queue_event(struct rdb *db, enum rdb_raft_event_type type,
 		switch (type) {
 		case RDB_RAFT_STEP_UP:
 			D_ASSERT(tail->dre_type == RDB_RAFT_STEP_DOWN);
+#if 0
 			D_ASSERTF(tail->dre_term < term, DF_U64" < "DF_U64"\n",
 				  tail->dre_term, term);
+#else
+			/*
+			 * Because raft handles the self-only case (i.e.,
+			 * there's only one voting node) specially, without
+			 * elections, it's possible that this only replica
+			 * becomes leader without incrementing the term. This
+			 * special handling in raft will be removed.
+			 */
+			D_ASSERTF(tail->dre_term <= term,
+				  DF_U64" <= "DF_U64"\n", tail->dre_term, term);
+#endif
 			break;
 		case RDB_RAFT_STEP_DOWN:
 			D_ASSERT(tail->dre_type == RDB_RAFT_STEP_UP);
@@ -2436,6 +2448,8 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	if (term != raft_get_current_term(db->d_raft) ||
 	    !raft_is_leader(db->d_raft))
 		return;
+	D_DEBUG(DB_MD, DF_DB": resigning from term "DF_U64"\n", DP_DB(db),
+		term);
 	rdb_raft_save_state(db, &state);
 	raft_become_follower(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
