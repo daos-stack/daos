@@ -91,29 +91,19 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 	return
 }
 
-func dumpLocalStorage(name string, i interface{}) {
-	println(name + ":")
-	s, err := handlers.StructsToString(i)
-	if err != nil {
-		println("Unable to YAML encode response: " + err.Error())
-		return
-	}
-	println(s)
-}
-
-// ShowLocalStorage retrieves and prints details of locally attached SCM and
+// showLocalStorage retrieves and prints details of locally attached SCM and
 // NVMe storage to daos_server stdout.
 func (c *controlService) showLocalStorage() {
 	println("Listing attached storage...")
 	if err := c.nvme.Discover(); err != nil {
-		println("Failure retrieving NVMe details: " + err.Error())
+		println("Failure retrieving NVMe details: ", err.Error())
 	} else {
-		dumpLocalStorage("NVMe", c.nvme.Controllers)
+		handlers.PrintStructs("NVMe", c.nvme.controllers)
 	}
 	if err := c.scm.Discover(); err != nil {
-		println("Failure retrieving SCM details: " + err.Error())
+		println("Failure retrieving SCM details: ", err.Error())
 	} else {
-		dumpLocalStorage("SCM", c.scm.Modules)
+		handlers.PrintStructs("SCM", c.scm.modules)
 	}
 }
 

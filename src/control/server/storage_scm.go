@@ -44,7 +44,7 @@ type ScmmMap map[int32]*pb.ScmModule
 type scmStorage struct {
 	logger      *log.Logger
 	ipmCtl      ipmctl.IpmCtl // ipmctl NVM API interface
-	Modules     ScmmMap
+	modules     ScmmMap
 	initialized bool
 }
 
@@ -77,7 +77,7 @@ func (s *scmStorage) Discover() error {
 		if err != nil {
 			return err
 		}
-		s.Modules = pbMms
+		s.modules = pbMms
 		return nil
 	}
 	return fmt.Errorf("scm storage not initialized")

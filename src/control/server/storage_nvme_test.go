@@ -55,9 +55,10 @@ func (m *mockSpdkNvme) Update(ctrlrID int32, path string, slot int32) (
 }
 func (m *mockSpdkNvme) Cleanup() { return }
 
+// mock external interface implementations for spdk setup script
 type mockSpdkSetup struct{}
 
-func (m *mockSpdkSetup) start() error { return nil }
+func (m *mockSpdkSetup) prep() error  { return nil }
 func (m *mockSpdkSetup) reset() error { return nil }
 
 // mockNvmeStorage factory
@@ -67,7 +68,7 @@ func newMockNvmeStorage(
 		logger:      log.NewLogger(),
 		env:         &mockSpdkEnv{},
 		nvme:        &mockSpdkNvme{fwRevBefore, fwRevAfter},
-		setup:       &mockSpdkSetup{},
+		spdk:        &mockSpdkSetup{},
 		initialized: inited,
 	}
 }
@@ -95,13 +96,13 @@ func TestDiscoveryNvme(t *testing.T) {
 
 		if tt.inited {
 			AssertEqual(
-				t, sn.Controllers, []*pb.NvmeController(nil),
+				t, sn.controllers, []*pb.NvmeController(nil),
 				"unexpected list of protobuf format controllers")
 			continue
 		}
 
 		AssertEqual(
-			t, sn.Controllers, []*pb.NvmeController{c},
+			t, sn.controllers, []*pb.NvmeController{c},
 			"unexpected list of protobuf format controllers")
 	}
 }
@@ -140,7 +141,7 @@ func TestUpdateNvme(t *testing.T) {
 		}
 
 		AssertEqual(
-			t, sn.Controllers, []*pb.NvmeController{c},
+			t, sn.controllers, []*pb.NvmeController{c},
 			"unexpected list of protobuf format controllers")
 	}
 }

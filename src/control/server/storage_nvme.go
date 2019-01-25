@@ -52,7 +52,7 @@ var (
 // SpdkSetup is an interface to configure spdk prerequisites via a
 // shell script
 type SpdkSetup interface {
-	start() error
+	prep() error
 	reset() error
 }
 
@@ -69,21 +69,17 @@ type nvmeStorage struct {
 	logger      *log.Logger
 	env         spdk.ENV  // SPDK ENV interface
 	nvme        spdk.NVME // SPDK NVMe interface
-	setup       SpdkSetup // SPDK shell configuration interface
+	spdk        SpdkSetup // SPDK shell configuration interface
 	shmID       int       // SPDK init opts param to enable multi-process mode
-	Controllers []*pb.NvmeController
+	controllers []*pb.NvmeController
 	initialized bool
 }
 
-// start executes setup script to allocate hugepages and bind PCI devices
+// prep executes setup script to allocate hugepages and bind PCI devices
 // (that don't have active mountpoints) to generic kernel driver.
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
-func (s *spdkSetup) start() error {
-	if err := s.reset(); err != nil {
-		return err
-	}
-
+func (s *spdkSetup) prep() error {
 	srv := exec.Command(s.scriptPath)
 	srv.Env = os.Environ()
 	var stderr bytes.Buffer
@@ -111,10 +107,11 @@ func (s *spdkSetup) start() error {
 // to previous driver bindings.
 //
 // NOTE: will make the controller reappear in /dev.
-func (s *spdkSetup) reset() (err error) {
+func (s *spdkSetup) reset() error {
 	srv := exec.Command(s.scriptPath, "reset")
 	var stderr bytes.Buffer
 	srv.Stderr = &stderr
+
 	return errors.Wrapf(
 		srv.Run(),
 		"spdk reset failed (%s), is no-password sudo enabled?",
@@ -125,7 +122,10 @@ func (s *spdkSetup) reset() (err error) {
 //
 // Perform any setup to be performed before accessing NVMe devices.
 func (n *nvmeStorage) Setup() (err error) {
-	if err = n.setup.start(); err != nil {
+	if err = n.spdk.reset(); err != nil {
+		return
+	}
+	if err = n.spdk.prep(); err != nil {
 		return
 	}
 	return
@@ -137,8 +137,8 @@ func (n *nvmeStorage) Setup() (err error) {
 func (n *nvmeStorage) Teardown() (err error) {
 	// Cleanup references to NVMe devices held by go-spdk bindings
 	n.nvme.Cleanup()
-	// Rebind PCI devices back to their original drivers and cleanup any
-	// leftover spdk files/resources.
+	// TODO: Decide whether to rebind PCI devices back to their original
+	// drivers and release hugepages here.
 	// err = n.setup.reset()
 	n.initialized = false
 	return
@@ -169,7 +169,7 @@ func (n *nvmeStorage) Discover() error {
 	if err != nil {
 		return err
 	}
-	n.Controllers = loadControllers(cs, ns)
+	n.controllers = loadControllers(cs, ns)
 	n.initialized = true
 	return nil
 }
@@ -181,7 +181,7 @@ func (n *nvmeStorage) Update(ctrlrID int32, path string, slot int32) error {
 		if err != nil {
 			return err
 		}
-		n.Controllers = loadControllers(cs, ns)
+		n.controllers = loadControllers(cs, ns)
 		return nil
 	}
 	return fmt.Errorf("nvme storage not initialized")
@@ -274,7 +274,7 @@ func newNvmeStorage(
 		logger: logger,
 		env:    &spdk.Env{},
 		nvme:   &spdk.Nvme{},
-		setup:  &spdkSetup{scriptPath, nrHugePages},
+		spdk:   &spdkSetup{scriptPath, nrHugePages},
 		shmID:  shmID, // required to enable SPDK multi-process mode
 	}, nil
 }
