@@ -57,6 +57,7 @@ DECLARE_FAC(mgmt);
 DECLARE_FAC(bio);
 DECLARE_FAC(tests);
 DECLARE_FAC(dfs);
+DECLARE_FAC(duns);
 DECLARE_FAC(drpc);
 DECLARE_FAC(security);
 
@@ -113,6 +114,7 @@ static struct d_debug_bit daos_bit_dict[] = {
 	ACTION("tests", d_tests_logfac)			\
 	ACTION("bio", d_bio_logfac)			\
 	ACTION("dfs", d_dfs_logfac)			\
+	ACTION("duns", d_duns_logfac)			\
 	ACTION("drpc", d_drpc_logfac)			\
 	ACTION("security", d_security_logfac)
 

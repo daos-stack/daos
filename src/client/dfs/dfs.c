@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,13 +25,8 @@
 
 #include <dirent.h>
 #include <fcntl.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
-
 #include <daos/common.h>
 #include <daos/debug.h>
 #include <daos/container.h>
@@ -2697,10 +2692,6 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 		return -DER_INVAL;
 	if (obj == NULL)
 		return -DER_INVAL;
-	if (*size == 0)
-		return 0;
-	if (list == NULL)
-		return -DER_INVAL;
 
 	/** Open parent object and list from entry */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
@@ -2741,14 +2732,18 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 				continue;
 			}
 
-			if (list_size < kds[i].kd_key_len - 2)
-				break;
+			ret_size += kds[i].kd_key_len - 1;
 
-			snprintf(ptr_list, kds[i].kd_key_len - 2 + 1, "%s",
+			if (list == NULL)
+				continue;
+			if (list_size < kds[i].kd_key_len - 2)
+				continue;
+
+			snprintf(ptr_list, kds[i].kd_key_len - 1, "%s",
 				 ptr + 2);
-			list_size -= kds[i].kd_key_len - 2;
-			ret_size += kds[i].kd_key_len - 2;
-			ptr_list += kds[i].kd_key_len - 2 + 1;
+
+			list_size -= kds[i].kd_key_len - 1;
+			ptr_list += kds[i].kd_key_len - 1;
 			ptr += kds[i].kd_key_len;
 		}
 	}
@@ -2757,4 +2752,72 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 out:
 	daos_obj_close(oh, NULL);
 	return rc;
+}
+
+#define DFS_ROOT_UUID "ffffffff-ffff-ffff-ffff-ffffffffffff"
+
+int
+dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs)
+{
+	uuid_t			co_uuid;
+	daos_cont_info_t	co_info;
+	daos_handle_t		coh;
+	bool			cont_created = false;
+	int			rc;
+
+	/** Use special UUID for root container */
+	rc = uuid_parse(DFS_ROOT_UUID, co_uuid);
+	if (rc) {
+		D_ERROR("Invalid Container uuid\n");
+		return rc;
+	}
+
+	/** Try to open the DAOS container first (the mountpoint) */
+	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	/* If NOEXIST we create it */
+	if (rc == -DER_NONEXIST) {
+		rc = daos_cont_create(poh, co_uuid, NULL, NULL);
+		if (rc == 0) {
+			cont_created = true;
+			rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh,
+					    &co_info, NULL);
+		}
+	}
+	if (rc) {
+		fprintf(stderr, "Failed to create/open container (%d)\n", rc);
+		D_GOTO(out_del, rc);
+	}
+
+	rc = dfs_mount(poh, coh, O_RDWR, dfs);
+	if (rc) {
+		fprintf(stderr, "dfs_mount failed (%d)\n", rc);
+		D_GOTO(out_cont, rc);
+	}
+
+	return 0;
+
+out_cont:
+	daos_cont_close(coh, NULL);
+out_del:
+	if (cont_created)
+		daos_cont_destroy(poh, co_uuid, 1, NULL);
+	return rc;
+}
+
+int
+dfs_umount_root_cont(dfs_t *dfs)
+{
+	daos_handle_t	coh;
+	int		rc;
+
+	if (dfs == NULL)
+		return -DER_INVAL;
+
+	coh.cookie = dfs->coh.cookie;
+
+	rc = dfs_umount(dfs);
+	if (rc)
+		return rc;
+
+	return daos_cont_close(coh, NULL);
 }

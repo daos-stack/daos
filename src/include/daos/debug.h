@@ -47,6 +47,7 @@ extern int d_mgmt_logfac;
 extern int d_bio_logfac;
 extern int d_tests_logfac;
 extern int d_dfs_logfac;
+extern int d_duns_logfac;
 extern int d_drpc_logfac;
 extern int d_security_logfac;
 

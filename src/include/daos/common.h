@@ -381,4 +381,77 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
+static inline void
+daos_parse_oclass(const char *string, daos_oclass_id_t *objectClass)
+{
+	if (strcasecmp(string, "tiny") == 0)
+		*objectClass = DAOS_OC_TINY_RW;
+	else if (strcasecmp(string, "small") == 0)
+		*objectClass = DAOS_OC_SMALL_RW;
+	else if (strcasecmp(string, "large") == 0)
+		*objectClass = DAOS_OC_LARGE_RW;
+	else if (strcasecmp(string, "R2") == 0)
+		*objectClass = DAOS_OC_R2_RW;
+	else if (strcasecmp(string, "R2S") == 0)
+		*objectClass = DAOS_OC_R2S_RW;
+	else if (strcasecmp(string, "repl_max") == 0)
+		*objectClass = DAOS_OC_REPL_MAX_RW;
+	else
+		*objectClass = DAOS_OC_UNKNOWN;
+}
+
+static inline void
+daos_unparse_oclass(daos_oclass_id_t objectClass, char *string)
+{
+	switch (objectClass) {
+	case DAOS_OC_TINY_RW:
+		strcpy(string, "tiny");
+		break;
+	case DAOS_OC_SMALL_RW:
+		strcpy(string, "small");
+		break;
+	case DAOS_OC_LARGE_RW:
+		strcpy(string, "large");
+		break;
+	case DAOS_OC_R2_RW:
+		strcpy(string, "R2");
+		break;
+	case DAOS_OC_R2S_RW:
+	       strcpy(string, "R2S");
+	       break;
+	case DAOS_OC_REPL_MAX_RW:
+	       strcpy(string, "repl_max");
+	       break;
+	default:
+		strcpy(string, "unknown");
+		break;
+	}
+}
+
+static inline void
+daos_parse_ctype(const char *string, daos_cont_layout_t *type)
+{
+	if (strcasecmp(string, "HDF5") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_HDF5;
+	else if (strcasecmp(string, "POSIX") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_POSIX;
+	else
+		*type = DAOS_PROP_CO_LAYOUT_UNKOWN;
+}
+
+static inline void
+daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
+{
+	switch (ctype) {
+	case DAOS_PROP_CO_LAYOUT_POSIX:
+		strcpy(string, "POSIX");
+		break;
+	case DAOS_PROP_CO_LAYOUT_HDF5:
+		strcpy(string, "HDF5");
+		break;
+	default:
+		D_ASSERT(0);
+	}
+}
+
 #endif /* __DAOS_COMMON_H__ */
