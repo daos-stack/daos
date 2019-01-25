@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -281,13 +281,13 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL && (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL));
 
-	if (!crt_is_service()) {
-		D_ERROR("corpc invalid on client-side.\n");
-		D_GOTO(out, rc = -DER_NO_PERM);
-	}
 	if (!crt_initialized()) {
 		D_ERROR("CaRT not initialized yet.\n");
 		D_GOTO(out, rc = -DER_UNINIT);
+	}
+	if (!crt_is_service()) {
+		D_ERROR("corpc invalid on client-side.\n");
+		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
 	/* handle possible chained bulk first and then initiate the corpc */
@@ -371,13 +371,13 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	if (!crt_is_service()) {
-		D_ERROR("corpc invalid on client-side.\n");
-		D_GOTO(out, rc = -DER_NO_PERM);
-	}
 	if (!crt_initialized()) {
 		D_ERROR("CaRT not initialized yet.\n");
 		D_GOTO(out, rc = -DER_UNINIT);
+	}
+	if (!crt_is_service()) {
+		D_ERROR("corpc invalid on client-side.\n");
+		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 	if (!crt_tree_topo_valid(tree_topo)) {
 		D_ERROR("invalid parameter of tree_topo: %#x.\n", tree_topo);

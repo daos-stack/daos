@@ -1271,15 +1271,15 @@ grp_create_corpc_cb(const struct crt_cb_info *cb_info)
 	struct crt_grp_priv		*grp_priv;
 	crt_rpc_t			*gc_req;
 	struct crt_grp_create_out	*gc_out;
-	int				 rc = 0;
+	int				 rc;
 
 	gc_req = cb_info->cci_rpc;
 	D_ASSERT(gc_req != NULL);
 	gc_out = crt_reply_get(gc_req);
 	grp_priv = (struct crt_grp_priv *)cb_info->cci_arg;
 	D_ASSERT(gc_out != NULL && grp_priv != NULL);
-	if (cb_info->cci_rc != 0)
-		D_ERROR("RPC error, rc: %d.\n", rc);
+	if (cb_info->cci_rc)
+		D_ERROR("RPC error, rc: %d.\n", cb_info->cci_rc);
 	if (gc_out->gc_rc)
 		D_ERROR("group create failed, rc: %d.\n", gc_out->gc_rc);
 	rc = cb_info->cci_rc;
