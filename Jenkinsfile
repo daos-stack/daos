@@ -60,6 +60,7 @@ pipeline {
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
+        timestamps ()
     }
 
     stages {
