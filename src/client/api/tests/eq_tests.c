@@ -28,6 +28,13 @@
  * Author: Liang Zhen  <liang.zhen@intel.com>
  */
 #define D_LOGFAC	DD_FAC(tests)
+#if !defined(__has_warning)  /* gcc */
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#else
+	#if __has_warning("-Wframe-larger-than=") /* valid clang warning */
+		#pragma GCC diagnostic ignored "-Wframe-larger-than="
+	#endif
+#endif
 
 #include <pthread.h>
 #include <stdarg.h>
