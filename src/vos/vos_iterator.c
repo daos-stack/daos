@@ -422,7 +422,7 @@ reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 
 static inline void
 set_reprobe(vos_iter_type_t type, unsigned int acts,
-	    struct vos_iter_anchors *anchors)
+	    struct vos_iter_anchors *anchors, bool unsorted)
 {
 	bool yield = (acts & VOS_ITER_CB_YIELD);
 	bool delete = (acts & VOS_ITER_CB_DELETE);
@@ -433,7 +433,9 @@ set_reprobe(vos_iter_type_t type, unsigned int acts,
 			anchors->ia_reprobe_sv = 1;
 		/* fallthrough */
 	case VOS_ITER_RECX:
-		/* evtree doesn't need reprobe on deletion or yield */
+		/* evtree only need reprobe on yield for unsorted iteration */
+		if (unsorted && yield && (type == VOS_ITER_RECX))
+			anchors->ia_reprobe_ev = 1;
 		/* fallthrough */
 	case VOS_ITER_AKEY:
 		if (yield || (delete && (type == VOS_ITER_AKEY)))
@@ -546,7 +548,8 @@ probe:
 		if (rc != 0)
 			break;
 
-		set_reprobe(type, acts, anchors);
+		set_reprobe(type, acts, anchors,
+			    param->ip_recx_flags == VOS_IT_RECX_ALL);
 		acts = 0;
 
 		if (need_reprobe(type, anchors)) {

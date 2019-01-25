@@ -40,36 +40,6 @@ D_CASSERT((uint32_t)VOS_RECX_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_RECX_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_RECX_FLAG_LAST == (uint32_t)EVT_LAST);
 
-/** iterator for dkey/akey/recx */
-struct vos_obj_iter {
-	/* public part of the iterator */
-	struct vos_iterator	 it_iter;
-	/** handle of iterator */
-	daos_handle_t		 it_hdl;
-	/** condition of the iterator: epoch logic expression */
-	vos_it_epc_expr_t	 it_epc_expr;
-	/** recx visibility flags */
-	uint32_t		 it_recx_flags;
-	/** condition of the iterator: epoch range */
-	daos_epoch_range_t	 it_epr;
-	/** condition of the iterator: attribute key */
-	daos_key_t		 it_akey;
-	/* reference on the object */
-	struct vos_object	*it_obj;
-};
-
-static struct vos_obj_iter *
-vos_iter2oiter(struct vos_iterator *iter)
-{
-	return container_of(iter, struct vos_obj_iter, it_iter);
-}
-
-struct vos_obj_iter *
-vos_hdl2oiter(daos_handle_t hdl)
-{
-	return vos_iter2oiter(vos_hdl2iter(hdl));
-}
-
 /**
  * @} vos_tree_helper
  */

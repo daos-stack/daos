@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1072,13 +1072,12 @@ done:
  * A simple media selection policy embedded in VOS, which select media by
  * akey type and record size.
  */
-static uint16_t
-akey_media_select(struct vos_io_context *ioc, daos_iod_type_t type,
-		  daos_size_t size)
+uint16_t
+vos_media_select(struct vos_object *obj, daos_iod_type_t type,
+		 daos_size_t size)
 {
-	struct vea_space_info *vsi;
+	struct vea_space_info *vsi = obj->obj_cont->vc_pool->vp_vea_info;
 
-	vsi = ioc->ic_obj->obj_cont->vc_pool->vp_vea_info;
 	if (vsi == NULL)
 		return DAOS_MEDIA_SCM;
 	else
@@ -1103,7 +1102,7 @@ akey_update_begin(struct vos_io_context *ioc)
 		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-		media = akey_media_select(ioc, iod->iod_type, size);
+		media = vos_media_select(ioc->ic_obj, iod->iod_type, size);
 
 		if (iod->iod_type == DAOS_IOD_SINGLE)
 			rc = vos_reserve_single(ioc, media, size);
@@ -1131,23 +1130,23 @@ dkey_update_begin(struct vos_io_context *ioc, daos_key_t *dkey)
 }
 
 /* Publish or cancel the NVMe block reservations */
-static int
-process_blocks(struct vos_io_context *ioc, bool publish)
+int
+vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish)
 {
 	struct vea_space_info	*vsi;
 	struct vea_hint_context	*hint_ctxt;
 	int			 rc;
 
-	if (d_list_empty(&ioc->ic_blk_exts))
+	if (d_list_empty(blk_list))
 		return 0;
 
-	vsi = ioc->ic_obj->obj_cont->vc_pool->vp_vea_info;
+	vsi = obj->obj_cont->vc_pool->vp_vea_info;
 	D_ASSERT(vsi);
-	hint_ctxt = ioc->ic_obj->obj_cont->vc_hint_ctxt;
+	hint_ctxt = obj->obj_cont->vc_hint_ctxt;
 	D_ASSERT(hint_ctxt);
 
-	rc = publish ? vea_tx_publish(vsi, hint_ctxt, &ioc->ic_blk_exts) :
-		       vea_cancel(vsi, hint_ctxt, &ioc->ic_blk_exts);
+	rc = publish ? vea_tx_publish(vsi, hint_ctxt, blk_list) :
+		       vea_cancel(vsi, hint_ctxt, blk_list);
 	if (rc)
 		D_ERROR("Error on %s NVMe reservations. %d\n",
 			publish ? "publish" : "cancel", rc);
@@ -1188,7 +1187,7 @@ update_cancel(struct vos_io_context *ioc)
 	}
 
 	/* Cancel NVMe reservations */
-	process_blocks(ioc, false);
+	vos_publish_blocks(ioc->ic_obj, &ioc->ic_blk_exts, false);
 }
 
 int
@@ -1232,7 +1231,7 @@ vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
 	}
 
 	/* Publish NVMe reservations */
-	err = process_blocks(ioc, true);
+	err = vos_publish_blocks(ioc->ic_obj, &ioc->ic_blk_exts, true);
 
 abort:
 	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
