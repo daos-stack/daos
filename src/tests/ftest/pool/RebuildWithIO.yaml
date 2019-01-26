@@ -10,7 +10,7 @@ hosts:
     - boro-F
 timeout: 5000
 server:
-  server_group: daos_server
+  name: daos_server
 testparams:
   ranks:
     rank5:

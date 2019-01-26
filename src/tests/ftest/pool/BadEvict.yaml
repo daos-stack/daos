@@ -1,5 +1,5 @@
 server:
-   server_group: scott_server
+   name: scott_server
 hosts:
   test_machines:
     - boro-A

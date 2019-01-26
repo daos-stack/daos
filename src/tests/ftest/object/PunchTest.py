@@ -50,8 +50,7 @@ class PunchTest(Test):
                 build_paths = json.load(f)
                 self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
-                self.server_group = self.params.get("server_group",'/server/',
-                                                    'daos_server')
+                self.server_group = self.params.get("name", '/server/', 'daos_server')
 
                 # setup the DAOS python API
                 self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
@@ -60,8 +59,7 @@ class PunchTest(Test):
                 self.hostfile = WriteHostFile.WriteHostFile(self.hostlist,
                                                             self.workdir)
 
-                ServerUtils.runServer(self.hostfile, self.server_group,
-                                      self.basepath)
+                ServerUtils.runServer(self, self.server_group)
 
                 # parameters used in pool create
                 createmode = self.params.get("mode",'/run/pool/createmode/')
@@ -105,9 +103,6 @@ class PunchTest(Test):
             if self.pool:
                 self.pool.disconnect()
                 self.pool.destroy(1)
-
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
 
         except DaosApiError as e:
             print(e)

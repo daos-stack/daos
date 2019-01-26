@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -61,8 +61,7 @@ class ObjOpenBadParam(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("server_group",'/server/',
-                                            'daos_server')
+        self.server_group = self.params.get("name", '/server/', 'daos_server')
 
         # setup the DAOS python API
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
@@ -71,7 +70,7 @@ class ObjOpenBadParam(Test):
         self.hostlist = self.params.get("test_machines",'/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
         try:
             # parameters used in pool create
             createmode = self.params.get("mode",'/run/pool/createmode/')

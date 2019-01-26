@@ -1,7 +1,7 @@
 # Note that stuff that is commented out represents tests that presently
 # cause issues and will be uncommented as the daos code is fixed
 server:
-   server_group: scott_server
+   name: scott_server
 hosts:
   test_machines:
     - boro-A

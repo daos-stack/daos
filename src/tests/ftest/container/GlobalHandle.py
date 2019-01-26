@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -115,24 +115,18 @@ class GlobalHandle(Test):
         # setup the DAOS python API
         self.Context = DaosContext(self.build_paths['PREFIX'] + '/lib/')
 
-        server_group = self.params.get("server_group",'/server/',
-                                           'daos_server')
+        server_group = self.params.get("name", '/server/', 'daos_server')
 
-        basepath = os.path.normpath(self.build_paths['PREFIX']  + "/../")
-        tmp = self.build_paths['PREFIX'] + '/tmp'
+        self.basepath = os.path.normpath(self.build_paths['PREFIX']  + "/../")
 
         self.hostlist = self.params.get("test_machines",'/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        ServerUtils.runServer(self.hostfile, server_group, basepath)
+        ServerUtils.runServer(self, server_group)
         time.sleep(2)
 
     def tearDown(self):
-        try:
-            os.remove(self.hostfile)
-        finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
-
+        ServerUtils.stopServer(hosts=self.hostlist)
         # really make sure everything is gone
         CheckForPool.CleanupPools(self.hostlist)
 

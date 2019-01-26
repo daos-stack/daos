@@ -5,7 +5,7 @@ hosts:
         - boro-A
 timeout: 100
 server:
-   server_group: daos_server
+   name: daos_server
 pool_params:
    createmode:
         mode: 511

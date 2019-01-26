@@ -47,13 +47,13 @@ class MultiServerCreateDeleteTest(Test):
         self.hostlist = None
         with open('../../../.build_vars.json') as f_open:
             build_paths = json.load(f_open)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
-        server_group = self.params.get("server_group", '/server/', 'daos_server')
+        server_group = self.params.get("name", '/server/', 'daos_server')
 
-        ServerUtils.runServer(self.hostfile, server_group, basepath)
-        self.dmg = basepath + '/install/bin/dmg'
+        ServerUtils.runServer(self, server_group)
+        self.dmg = self.basepath + '/install/bin/dmg'
 
     def tearDown(self):
         ServerUtils.stopServer(hosts=self.hostlist)

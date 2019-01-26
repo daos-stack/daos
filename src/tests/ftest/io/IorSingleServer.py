@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018 Intel Corporation.
+    (C) Copyright 2018-2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ class IorSingleServer(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("server_group", '/server/', 'daos_server')
+        self.server_group = self.params.get("name", '/server/', 'daos_server')
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
         # setup the DAOS python API
@@ -56,24 +56,20 @@ class IorSingleServer(Test):
         self.POOL = None
 
         self.hostlist_servers = self.params.get("test_servers", '/run/hosts/test_machines/*')
-        self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
-        print("Host file servers is: {}".format(self.hostfile_servers))
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
+        print("Host file servers is: {}".format(self.hostfile))
 
         self.hostlist_clients = self.params.get("clients", '/run/hosts/test_machines/diff_clients/*')
         self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir)
         print("Host file clientsis: {}".format(self.hostfile_clients))
 
-        ServerUtils.runServer(self.hostfile_servers, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
         if int(str(self.name).split("-")[0]) == 1:
             IorUtils.build_ior(self.basepath)
 
     def tearDown(self):
         try:
-            if self.hostfile_clients is not None:
-                os.remove(self.hostfile_clients)
-            if self.hostfile_servers is not None:
-                os.remove(self.hostfile_servers)
             if self.POOL is not None and self.POOL.attached:
                 self.POOL.destroy(1)
         finally:

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -50,17 +50,16 @@ class CreateManyDkeys(Test):
     def setUp(self):
         with open('../../../.build_vars.json') as json_f:
             build_paths = json.load(json_f)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        tmp = build_paths['PREFIX'] + '/tmp'
-        server_group = self.params.get("server_group",
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        server_group = self.params.get("name",
                                        '/server/',
                                        'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        ServerUtils.runServer(self.hostfile, server_group, basepath)
+        ServerUtils.runServer(self, server_group)
 
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
@@ -73,8 +72,6 @@ class CreateManyDkeys(Test):
 
     def tearDown(self):
         try:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
             if self.pool:
                 self.pool.destroy(1)
         finally:

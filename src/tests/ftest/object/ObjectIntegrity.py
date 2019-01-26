@@ -60,8 +60,8 @@ class ObjectDataValidation(avocado.Test):
 
         with open('../../../.build_vars.json') as json_f:
             build_paths = json.load(json_f)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        server_group = self.params.get("server_group",
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        server_group = self.params.get("name",
                                        '/server/',
                                        'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
@@ -73,7 +73,7 @@ class ObjectDataValidation(avocado.Test):
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
 
-        ServerUtils.runServer(self.hostfile, server_group, basepath)
+        ServerUtils.runServer(self, server_group)
 
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),

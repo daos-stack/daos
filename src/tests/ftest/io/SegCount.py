@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018 Intel Corporation.
+    (C) Copyright 2018-2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -59,21 +59,21 @@ class SegCount(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("server_group", '/server/', 'daos_server')
+        self.server_group = self.params.get("name", '/server/', 'daos_server')
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist_servers = self.params.get("test_servers", '/run/hosts/*')
-        hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
-        print("Host file servers is: {}".format(hostfile_servers))
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
+        print("Host file servers is: {}".format(self.hostfile))
 
         hostlist_clients = self.params.get("test_clients", '/run/hosts/*')
         self.slots = self.params.get("slots", '/run/ior/clientslots/*')
         self.hostfile_clients = WriteHostFile.WriteHostFile(hostlist_clients, self.workdir, self.slots)
         print("Host file clients is: {}".format(self.hostfile_clients))
 
-        ServerUtils.runServer(hostfile_servers, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
         if int(str(self.name).split("-")[0]) == 1:
             IorUtils.build_ior(self.basepath)

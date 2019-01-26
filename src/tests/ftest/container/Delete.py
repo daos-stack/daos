@@ -51,8 +51,7 @@ class DeleteContainerTest(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.server_group = self.params.get("server_group",'/server/',
-                                           'daos_server')
+        self.server_group = self.params.get("name", '/server/', 'daos_server')
 
         # parameters used in pool create
         self.createmode = self.params.get("mode",'/run/createtests/createmode/')
@@ -70,7 +69,7 @@ class DeleteContainerTest(Test):
         self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("test_machines",'/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
     def tearDown(self):
         ServerUtils.stopServer(hosts=self.hostlist)

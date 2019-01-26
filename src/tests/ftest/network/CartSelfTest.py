@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -50,10 +50,9 @@ class CartSelfTest(Test):
                                "../../../../.build_vars.json")) as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        tmp = build_paths['PREFIX'] + '/tmp'
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.d_log = DaosLog(context)
@@ -81,15 +80,13 @@ class CartSelfTest(Test):
             self.env_list.append("{0}={1}".format(k, v))
 
         # daos server params
-        self.server_group = self.params.get("server", 'server_group',
-                                            'daos_server')
+        self.server_group = self.params.get("name", 'server_group', 'daos_server')
         self.uri_file = os.path.join(self.basepath, "install", "tmp", "uri.txt")
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath,
+        ServerUtils.runServer(self, self.server_group,
                               uri_path=self.uri_file, env_dict=self.env_dict)
 
     def tearDown(self):
         try:
-            os.remove(self.hostfile)
             os.remove(self.uri_file)
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)

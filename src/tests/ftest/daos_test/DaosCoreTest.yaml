@@ -13,7 +13,7 @@ hosts:
 # rebuild alone takes about 2hrs
 timeout: 9000
 server:
-  server_group: daos_server
+  name: daos_server
 daos_tests:
   num_clients:
     num_clients: 1

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -56,10 +56,8 @@ class OpenContainerTest(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
 
-        self.server_group = self.params.get("server_group",'/server/',
-                                           'daos_server')
+        self.server_group = self.params.get("name", '/server/', 'daos_server')
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
@@ -70,7 +68,7 @@ class OpenContainerTest(Test):
 
         self.hostfile = None
         self.hostlist = self.params.get("test_machines",'/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         # common parameters used in pool create
         self.createmode = self.params.get("mode",'/run/createtests/createmode/')
@@ -85,7 +83,7 @@ class OpenContainerTest(Test):
         self.createuid2  = self.params.get("uid",'/run/createtests/createuid2/')
         self.creategid2  = self.params.get("gid",'/run/createtests/creategid2/')
 
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
         # give it time to start
         time.sleep(2)
@@ -185,9 +183,6 @@ class OpenContainerTest(Test):
             print(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
-        finally:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
 
 if __name__ == "__main__":
     main()

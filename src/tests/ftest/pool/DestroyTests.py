@@ -1,6 +1,6 @@
 #!/usr/bin/python2
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -60,12 +60,12 @@ class DestroyTests(Test):
     def setUp(self):
         # there is a presumption that this test lives in a specific
         # spot in the repo
+        self.hostfile = None
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
 
-        self.server_group = self.params.get("server_group",
+        self.server_group = self.params.get("name",
                                             '/server/',
                                             'daos_server')
 
@@ -83,9 +83,9 @@ class DestroyTests(Test):
         :avocado: tags=pool,pooldestroy,quick
         """
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
         # not sure I need to do this but ... give it time to start
         time.sleep(1)
@@ -130,10 +130,7 @@ class DestroyTests(Test):
 
         # no matter what happens shutdown the server
         finally:
-            try:
-                os.remove(hostfile)
-            finally:
-                ServerUtils.stopServer(hosts=self.hostlist)
+            ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_delete_doesnt_exist(self):
         """
@@ -142,9 +139,9 @@ class DestroyTests(Test):
         :avocado: tags=pool,pooldestroy
         """
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
         # not sure I need to do this but ... give it time to start
         time.sleep(1)
@@ -177,8 +174,6 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile)
-
 
     def test_delete_wrong_servers(self):
         """
@@ -188,9 +183,9 @@ class DestroyTests(Test):
         """
 
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
         # not sure I need to do this but ... give it time to start
         time.sleep(1)
@@ -244,8 +239,6 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile)
-
 
     def test_multi_server_delete(self):
         """
@@ -256,9 +249,9 @@ class DestroyTests(Test):
         :avocado: tags=pool,pooldestroy,multiserver
         """
         self.hostlist = self.params.get("test_machines2", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
         # not sure I need to do this but ... give it time to start
         time.sleep(1)
@@ -310,7 +303,6 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile)
 
     def test_bad_server_group(self):
         """
@@ -323,19 +315,18 @@ class DestroyTests(Test):
         setid2 = self.basepath + self.params.get("setname",
                                                  '/run/setnames/othersetname/')
 
+        # start 1st set of servers
         self.hostlist1 = self.params.get("test_machines1", '/run/hosts/')
-        hostfile1 = WriteHostFile.WriteHostFile(self.hostlist1, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist1, self.workdir)
+        ServerUtils.runServer(self, self.server_group)
 
+        # start 2nd set of servers
         self.hostlist2 = self.params.get("test_machines2a", '/run/hosts/')
-        hostfile2 = WriteHostFile.WriteHostFile(self.hostlist2, self.tmp)
-
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist2, self.workdir)
+        ServerUtils.runServer(self, setid2)
 
         # TODO make these params in the yaml
         daosctl = self.basepath + '/install/bin/daosctl'
-
-        # start 2 different sets of servers,
-        ServerUtils.runServer(hostfile1, self.server_group, self.basepath)
-        ServerUtils.runServer(hostfile2, setid2, self.basepath)
 
         host = self.hostlist1[0]
 
@@ -388,8 +379,6 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile1)
-            os.remove(hostfile2)
 
     def test_destroy_connect(self):
         """
@@ -403,9 +392,9 @@ class DestroyTests(Test):
 
             # write out a hostfile and start the servers with it
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+            self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+            ServerUtils.runServer(self, self.server_group)
 
             # give it time to reach steady state
             time.sleep(1)
@@ -445,7 +434,6 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile)
 
     def test_destroy_recreate(self):
         """
@@ -458,9 +446,9 @@ class DestroyTests(Test):
         try:
             # write out a hostfile and start the servers with it
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+            self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+            ServerUtils.runServer(self, self.server_group)
 
             # give it time to reach steady state
             time.sleep(1)
@@ -507,7 +495,6 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile)
 
     def test_many_servers(self):
         """
@@ -518,9 +505,9 @@ class DestroyTests(Test):
         try:
             # write out a hostfile and start the servers with it
             self.hostlist = self.params.get("test_machines6", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+            self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+            ServerUtils.runServer(self, self.server_group)
 
             # give it time to reach steady state
             time.sleep(1)
@@ -555,7 +542,6 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile)
 
     def test_destroy_withdata(self):
         """
@@ -567,9 +553,9 @@ class DestroyTests(Test):
         try:
             # write out a hostfile and start the servers with it
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+            self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+            ServerUtils.runServer(self, self.server_group)
 
             # give it time to reach steady state
             time.sleep(1)
@@ -619,7 +605,6 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile)
 
     def test_destroy_async(self):
         """
@@ -634,9 +619,9 @@ class DestroyTests(Test):
         try:
             # write out a hostfile and start the servers with it
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+            self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+            ServerUtils.runServer(self, self.server_group)
 
             # give it time to reach steady state
             time.sleep(1)
@@ -691,7 +676,6 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(hostfile)
 
 if __name__ == "__main__":
     main()

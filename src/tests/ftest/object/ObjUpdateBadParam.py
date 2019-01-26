@@ -53,8 +53,7 @@ class ObjUpdateBadParam(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("server_group",'/server/',
-                                           'daos_server')
+        self.server_group = self.params.get("name", '/server/', 'daos_server')
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
@@ -62,7 +61,7 @@ class ObjUpdateBadParam(Test):
         self.hostlist = self.params.get("test_machines",'/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
         time.sleep(5)
 
     def tearDown(self):

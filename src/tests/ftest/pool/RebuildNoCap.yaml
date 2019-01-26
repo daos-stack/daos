@@ -9,7 +9,7 @@ hosts:
     - boro-E
     - boro-F
 server:
-   server_group: daos_server
+   name: daos_server
 pool:
    createmode:
      mode: 511

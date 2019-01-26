@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -48,8 +48,7 @@ class InfoTests(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
         self.tmp = build_paths['PREFIX'] + '/tmp'
-        self.server_group = self.params.get("server_group", '/server/',
-                                            'daos_server')
+        self.server_group = self.params.get("name", '/server/', 'daos_server')
 
         context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
@@ -57,14 +56,13 @@ class InfoTests(Test):
         self.d_log = DaosLog(context)
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
     def tearDown(self):
         # shut 'er down
         try:
             if self.pool:
                 self.pool.destroy(1)
-            os.remove(self.hostfile)
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
 

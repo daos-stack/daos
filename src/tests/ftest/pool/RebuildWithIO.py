@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -80,19 +80,15 @@ class RebuildWithIO(Test):
         # the rebuild tests need to redo this stuff each time so not in setup
         # as it usually would be
         setid = self.params.get("setname", '/run/testparams/setnames/')
-        server_group = self.params.get("server_group",'/server/',
-                                          'daos_server')
+        server_group = self.params.get("name", '/server/', 'daos_server')
 
-        basepath = os.path.normpath(self.build_paths['PREFIX']  + "/../")
-        tmp = self.build_paths['PREFIX'] + '/tmp'
-
-        self.hostlist = self.params.get("test_machines",'/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.basepath = os.path.normpath(self.build_paths['PREFIX']  + "/../")
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         io_proc = None
 
         try:
-            ServerUtils.runServer(hostfile, server_group, basepath)
+            ServerUtils.runServer(self, server_group)
 
             # use the uid/gid of the user running the test, these should
             # be perfectly valid
@@ -173,7 +169,6 @@ class RebuildWithIO(Test):
             # wait for the I/O process to finish
             try:
                 ServerUtils.stopServer()
-                os.remove(hostfile)
                 # really make sure everything is gone
                 CheckForPool.CleanupPools(self.hostlist)
             finally:

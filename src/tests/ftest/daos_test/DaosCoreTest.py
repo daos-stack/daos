@@ -54,20 +54,18 @@ class DaosCoreTest(Test):
         with open('../../../.build_vars.json') as build_vars:
             build_paths = json.load(build_vars)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
 
-        self.server_group = self.params.get("server_group", '/server/', 'daos_server')
+        self.server_group = self.params.get("name", '/server/', 'daos_server')
         self.daos_test = self.basepath + '/install/bin/daos_test'
         self.orterun = self.basepath + '/install/bin/orterun'
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
 
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        ServerUtils.runServer(self, self.server_group)
 
     def tearDown(self):
         if self.hostfile is not None:
             ServerUtils.stopServer(hosts=self.hostlist)
-            os.remove(self.hostfile)
 
         # collect up a debug log so that we have a separate one for each
         # subtest
@@ -112,7 +110,7 @@ class DaosCoreTest(Test):
                                                 subtest, args)
 
         env = {}
-        env['CMOCKA_XML_FILE'] = self.tmp + "/%g_results.xml"
+        env['CMOCKA_XML_FILE'] = self.workdir + "/%g_results.xml"
         env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
 
         try:
@@ -120,7 +118,7 @@ class DaosCoreTest(Test):
         except process.CmdError as result:
             if result.result.exit_status is not 0:
                 # fake a JUnit failure output
-                with open(self.tmp + "/" + self.subtest_name +
+                with open(self.workdir + "/" + self.subtest_name +
                           "_results.xml", "w") as results_xml:
                     results_xml.write('''<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="{0}" errors="1" failures="0" skipped="0" tests="1" time="0.0">

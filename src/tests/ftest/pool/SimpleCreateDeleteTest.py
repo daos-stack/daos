@@ -50,15 +50,15 @@ class SimpleCreateDeleteTest(Test):
 
         with open('../../../.build_vars.json') as filep:
             build_paths = json.load(filep)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        server_group = self.params.get("server_group", '/server/', 'daos_server')
+        server_group = self.params.get("name", '/server/', 'daos_server')
 
-        ServerUtils.runServer(hostfile, server_group, basepath)
+        ServerUtils.runServer(self, server_group)
 
     def tearDown(self):
         try:

@@ -52,15 +52,15 @@ class CreateContainerTest(Test):
        with open('../../../.build_vars.json') as f:
            build_paths = json.load(f)
        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-       self.server_group = self.params.get("server_group",'/server/')
+       self.server_group = self.params.get("name",'/server/')
 
        # setup the DAOS python API
        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
        self.hostlist = self.params.get("test_machines",'/run/hosts/*')
-       hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+       self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-       ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+       ServerUtils.runServer(self, self.server_group)
 
     def tearDown(self):
         ServerUtils.stopServer(None, self.hostlist)

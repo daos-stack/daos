@@ -49,7 +49,7 @@ class Romio(Test):
         self.server_group = None
         self.Context = None
         self.hostlist_servers = None
-        self.hostfile_servers = None
+        self.hostfile = None
         self.hostlist_clients = None
         self.hostfile_clients = None
 
@@ -59,21 +59,21 @@ class Romio(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("server_group", '/server/', 'daos_server')
+        self.server_group = self.params.get("name", '/server/', 'daos_server')
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
-        self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
-        print("Host file servers is: {}".format(self.hostfile_servers))
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
+        print("Host file servers is: {}".format(self.hostfile))
 
         self.hostlist_clients = self.params.get("test_clients", '/run/hosts/')
         self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir)
         print("Host file clients is: {}".format(self.hostfile_clients))
 
         # start servers
-        ServerUtils.runServer(self.hostfile_servers, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
     def tearDown(self):
         ServerUtils.stopServer(hosts=self.hostlist_servers)

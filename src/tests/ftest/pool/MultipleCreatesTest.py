@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -51,26 +51,22 @@ class MultipleCreatesTest(Test):
         # spot in the repo
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        tmp = build_paths['PREFIX'] + '/tmp'
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
         self.hostlist = self.params.get("test_machines",'/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        server_group = self.params.get("server_group",'/server/','daos_server')
+        server_group = self.params.get("name",'/server/','daos_server')
 
-        ServerUtils.runServer(self.hostfile, server_group, basepath)
+        ServerUtils.runServer(self, server_group)
         # not sure I need to do this but ... give it time to start
         time.sleep(2)
 
-        self.daosctl = basepath + '/install/bin/daosctl'
+        self.daosctl = self.basepath + '/install/bin/daosctl'
 
 
     def tearDown(self):
-        try:
-            os.remove(self.hostfile)
-        finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_create_one(self):
         """

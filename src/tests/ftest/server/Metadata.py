@@ -112,7 +112,7 @@ class ObjectMetadata(avocado.Test):
             build_paths = json.load(json_f)
 
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.server_group = self.params.get("server_group",
+        self.server_group = self.params.get("name",
                                             '/server/',
                                             'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
@@ -122,7 +122,7 @@ class ObjectMetadata(avocado.Test):
         hostlist_clients = self.params.get("clients", '/run/hosts/*')
         self.hostfile_clients = WriteHostFile.WriteHostFile(hostlist_clients,
                                                             self.workdir)
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
@@ -259,7 +259,7 @@ class ObjectMetadata(avocado.Test):
 
         #Server Restart
         ServerUtils.stopServer(hosts=self.hostlist)
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        ServerUtils.runServer(self, self.server_group)
 
         #Read IOR with verification with same number of threads
         threads = []

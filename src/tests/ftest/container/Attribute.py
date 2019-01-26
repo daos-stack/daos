@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -91,16 +91,14 @@ class ContainerAttributeTest(Test):
 
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        server_group = self.params.get("server_group",
-                                       '/server/',
-                                       'daos_server')
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        server_group = self.params.get("name", '/server/', 'daos_server')
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        ServerUtils.runServer(self.hostfile, server_group, basepath)
+        ServerUtils.runServer(self, server_group)
 
         self.pool = DaosPool(self.Context)
         self.pool.create(self.params.get("mode", '/run/attrtests/createmode/*'),

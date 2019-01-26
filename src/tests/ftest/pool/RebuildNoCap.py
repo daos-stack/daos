@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -52,7 +52,6 @@ class RebuildNoCap(Test):
     server_group = ""
     CONTEXT = None
     POOL = None
-    hostfile = ""
 
     def setUp(self):
         """ setup for the test """
@@ -61,17 +60,16 @@ class RebuildNoCap(Test):
         with open('../../../.build_vars.json') as f:
               build_paths = json.load(f)
         self.CONTEXT = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
         # generate a hostfile
         self.hostlist = self.params.get("test_machines",'/run/hosts/')
-        tmp = build_paths['PREFIX'] + '/tmp'
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         # fire up the DAOS servers
-        self.server_group = self.params.get("server_group",'/run/server/',
-                                            'daos_server')
-        ServerUtils.runServer(self.hostfile, self.server_group,
-                              build_paths['PREFIX'] + '/../')
+        self.server_group = self.params.get("name", '/run/server/', 'daos_server')
+        ServerUtils.runServer(self, self.server_group)
         time.sleep(3)
 
         # create a pool to test with
@@ -101,7 +99,6 @@ class RebuildNoCap(Test):
         """ cleanup after the test """
 
         try:
-            os.remove(self.hostfile)
             if self.POOL:
                 self.POOL.destroy(1)
         finally:
