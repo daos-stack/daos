@@ -203,6 +203,70 @@ co_attribute(void **state)
 	}
 }
 
+static void
+co_properties(void **state)
+{
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
+	char			*label = "test_cont_properties";
+	uint64_t		 snapshot_max = 128;
+	daos_prop_t		*prop;
+	daos_prop_t		*prop_query;
+	struct daos_prop_entry	*entry;
+	int			 rc;
+
+	print_message("create container with properties, and query/verify.\n");
+	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
+			DEFAULT_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	prop = daos_prop_alloc(2);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+	prop->dpp_entries[0].dpe_str = strdup(label);
+	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+	prop->dpp_entries[1].dpe_val = snapshot_max;
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
+	assert_int_equal(rc, 0);
+
+	prop_query = daos_prop_alloc(4);
+	prop_query->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+	prop_query->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
+	prop_query->dpp_entries[2].dpe_type = DAOS_PROP_CO_ENCRYPT;
+	prop_query->dpp_entries[3].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+	rc = daos_cont_query(arg->coh, NULL, prop_query, NULL);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(prop_query->dpp_nr, 4);
+	/* set properties should get the value user set */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LABEL);
+	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
+		print_message("label verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SNAPSHOT_MAX);
+	if (entry == NULL || entry->dpe_val != snapshot_max) {
+		print_message("snapshot_max verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	/* not set properties should get default value */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_OFF) {
+		print_message("csum verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ENCRYPT);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_ENCRYPT_OFF) {
+		print_message("encrypt verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	daos_prop_free(prop);
+	daos_prop_free(prop_query);
+	test_teardown((void **)&arg);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -237,6 +301,8 @@ static const struct CMUnitTest co_tests[] = {
 	  co_attribute, co_setup_sync, test_case_teardown},
 	{ "CONT5: set/get/list user-defined container attributes (async)",
 	  co_attribute, co_setup_async, test_case_teardown},
+	{ "CONT6: create container with properties and query",
+	  co_properties, NULL, test_case_teardown},
 };
 
 int
