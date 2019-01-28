@@ -62,12 +62,25 @@ static struct daos_rpc_handler mgmt_handlers[] = {
 static void
 mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 {
-	D_DEBUG(DB_MGMT, "call received by mgmt drpc handler\n");
+	Drpc__Response *resp;
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		D_ERROR("Failed to allocate response\n");
+		return
+	}
+
+	drpc__response__init(resp);
+	resp->sequence = request->sequence;
+	resp->status = DRPC__STATUS__SUCCESS;
+
+	*response = resp;
+	D_DEBUG(DB_MGMT, "empty successful response set in mgmt drpc hdlr\n");
 }
 
 static struct dss_drpc_handler mgmt_drpc_handlers[] = {
 	{
-		.module_id = DRPC_MODULE_MGMT_SERVER,
+		.module_id = DRPC_MODULE_MGMT,
 		.handler = mgmt_drpc_handler
 	},
 	{

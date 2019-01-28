@@ -24,6 +24,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/daos-stack/ishell"
 )
 
@@ -88,7 +90,27 @@ func setupShell() *ishell.Shell {
 		},
 	})
 
-	// todo: implement shell commands for features other than discovery on
+	shell.AddCmd(&ishell.Cmd{
+		Name: "killrank",
+		Help: "Command to terminate server running as specific rank on a DAOS pool",
+		Func: func(c *ishell.Context) {
+			if len(c.Args) != 2 {
+				c.Println(c.HelpText())
+				return
+			}
+			c.Println(hasConnections(conns.GetActiveConns(nil)))
+			rank, err := strconv.Atoi(c.Args[1])
+			if err != nil {
+				c.Println("bad rank")
+				return
+			}
+			c.Printf(
+				"Kill Rank returned: %s\n",
+				conns.KillRank(c.Args[0], uint32(rank)))
+		},
+	})
+
+	// todo: implement shell commands for feature other than discovery on
 	// multiple nodes
 
 	//			// record strings that make up the option list
