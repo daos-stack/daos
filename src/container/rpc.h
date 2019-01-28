@@ -149,7 +149,8 @@ CRT_RPC_DECLARE(cont_op, DAOS_ISEQ_CONT_OP, DAOS_OSEQ_CONT_OP)
 
 #define DAOS_ISEQ_CONT_CREATE	/* input fields */		 \
 				/* .ci_hdl unused */		 \
-	((struct cont_op_in)	(cci_op)		CRT_VAR)
+	((struct cont_op_in)	(cci_op)		CRT_VAR) \
+	((daos_prop_t)		(cci_prop)		CRT_PTR)
 
 #define DAOS_OSEQ_CONT_CREATE	/* output fields */		 \
 	((struct cont_op_out)	(cco_op)		CRT_VAR)
@@ -184,12 +185,29 @@ CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
 
 CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 
+/** container query request bits */
+#define DAOS_CO_QUERY_PROP_LABEL	(1ULL << 0)
+#define DAOS_CO_QUERY_PROP_LAYOUT_TYPE	(1ULL << 1)
+#define DAOS_CO_QUERY_PROP_LAYOUT_VER	(1ULL << 2)
+#define DAOS_CO_QUERY_PROP_CSUM		(1ULL << 3)
+#define DAOS_CO_QUERY_PROP_REDUN_FAC	(1ULL << 4)
+#define DAOS_CO_QUERY_PROP_REDUN_LVL	(1ULL << 5)
+#define DAOS_CO_QUERY_PROP_SNAPSHOT_MAX	(1ULL << 6)
+#define DAOS_CO_QUERY_PROP_COMPRESS	(1ULL << 7)
+#define DAOS_CO_QUERY_PROP_ENCRYPT	(1ULL << 8)
+
+#define DAOS_CO_QUERY_PROP_BITS_NR	(9)
+#define DAOS_CO_QUERY_PROP_ALL					\
+	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
+
 #define DAOS_ISEQ_CONT_QUERY	/* input fields */		 \
-	((struct cont_op_in)	(cqi_op)		CRT_VAR)
+	((struct cont_op_in)	(cqi_op)		CRT_VAR) \
+	((uint64_t)		(cqi_bits)		CRT_VAR)
 
 /** Add more items to query when needed */
 #define DAOS_OSEQ_CONT_QUERY	/* output fields */		 \
-	((struct cont_op_out)	(cqo_op)		CRT_VAR)
+	((struct cont_op_out)	(cqo_op)		CRT_VAR) \
+	((daos_prop_t)		(cqo_prop)		CRT_PTR)
 
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
 

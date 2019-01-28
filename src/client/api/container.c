@@ -48,6 +48,10 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
+	if (cont_prop != NULL && !daos_prop_valid(cont_prop, false, true)) {
+		D_ERROR("Invalid container properties.\n");
+		return -DER_INVAL;
+	}
 
 	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
 	if (rc)
@@ -56,6 +60,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
 	args = dc_task_get_args(task);
 	args->poh = poh;
 	uuid_copy((unsigned char *)args->uuid, uuid);
+	args->prop = cont_prop;
 
 	return dc_task_schedule(task, true);
 }
@@ -134,6 +139,10 @@ daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_QUERY);
+	if (cont_prop != NULL && !daos_prop_valid(cont_prop, false, false)) {
+		D_ERROR("invalid cont_prop parameter.\n");
+		return -DER_INVAL;
+	}
 
 	rc = dc_task_create(dc_cont_query, NULL, ev, &task);
 	if (rc)
@@ -142,6 +151,7 @@ daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 	args = dc_task_get_args(task);
 	args->coh	= coh;
 	args->info	= info;
+	args->prop	= cont_prop;
 
 	return dc_task_schedule(task, true);
 }
