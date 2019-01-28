@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,42 +21,15 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package client
+package main
 
 import (
-	"fmt"
-
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
-// NewClientFM provides a mock ClientFeatureMap for testing.
-func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
-	cf := make(ClientFeatureMap)
-	for _, addr := range addrs {
-		fMap := make(FeatureMap)
-		for _, f := range features {
-			fMap[f.Fname.Name] = fmt.Sprintf(
-				"category %s, %s", f.Category.Category, f.Description)
-		}
-		cf[addr] = fMap
-	}
-	return cf
-}
-
-// NewClientNvme provides a mock ClientNvmeMap for testing.
-func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
-	cMap := make(ClientNvmeMap)
-	for _, addr := range addrs {
-		cMap[addr] = ctrlrs
-	}
-	return cMap
-}
-
-// NewClientScm provides a mock ClientScmMap for testing.
-func NewClientScm(mms ScmModules, addrs Addresses) ClientScmMap {
-	cMap := make(ClientScmMap)
-	for _, addr := range addrs {
-		cMap[addr] = mms
-	}
-	return cMap
+func (c *controlService) KillRank(
+	ctx context.Context, rank *pb.DaosRank) (*pb.DaosResponse, error) {
+	return nil, errors.New("KillRank not yet implemented")
 }

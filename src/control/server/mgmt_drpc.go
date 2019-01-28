@@ -23,57 +23,31 @@
 
 package main
 
+// #cgo CFLAGS: -I../../include
+// #include <daos/drpc_modules.h>
+import "C"
 import (
-	"os"
-	"path/filepath"
-
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/pkg/errors"
 )
 
-var sockFileName = "daos_server.sock"
+const (
+	mgmtModuleID   int32 = C.DRPC_MODULE_MGMT_SERVER
+	methodKillRank int32 = C.DRPC_METHOD_MGMT_SERVER_KILL_RANK
+)
 
-func getDrpcClientSocket(sockDir string) string {
-	return filepath.Join(sockDir, "daos_io_server.sock")
+// MgmtModule is the management drpc module struct
+type MgmtModule struct{}
+
+// InitModule is empty for this module
+func (m *MgmtModule) InitModule(state drpc.ModuleState) {}
+
+// ID will return Mgmt module ID
+func (m *MgmtModule) ID() int32 {
+	return mgmtModuleID
 }
 
-func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
-	clientSock := getDrpcClientSocket(sockDir)
-	return drpc.NewClientConnection(clientSock)
-}
-
-// drpcSetup creates socket directory, specifies socket path and then
-// starts drpc server.
-func drpcSetup(sockDir string) error {
-	// Create our socket directory if it doesn't exist
-	_, err := os.Stat(sockDir)
-	if err != nil && os.IsPermission(err) {
-		return errors.Wrap(
-			err, "user does not have permission to access "+sockDir)
-	} else if err != nil && os.IsNotExist(err) {
-		err = os.MkdirAll(sockDir, 0755)
-		if err != nil {
-			return errors.Wrap(
-				err,
-				"unable to create socket directory "+sockDir)
-		}
-	}
-
-	sockPath := filepath.Join(sockDir, sockFileName)
-	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
-	if err != nil {
-		return errors.Wrap(err, "unable to create socket server")
-	}
-
-	// Create and add our modules
-	secmodule := &SecurityModule{}
-	drpcServer.RegisterRPCModule(secmodule)
-
-	err = drpcServer.Start()
-	if err != nil {
-		return errors.Wrap(
-			err, "unable to start socket server on "+sockPath)
-	}
-
-	return nil
+// HandleCall is the handler for calls to the MgmtModule
+func (m *MgmtModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
+	return nil, errors.New("mgmt module handler is not implemented")
 }

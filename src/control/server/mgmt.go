@@ -26,14 +26,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
-
-	"io/ioutil"
 )
 
 var jsonDBRelPath = "share/control/mgmtinit_db.json"
@@ -43,6 +43,7 @@ type controlService struct {
 	nvme              *nvmeStorage
 	scm               *scmStorage
 	supportedFeatures FeatureMap
+	drpc              drpc.DomainSocketClient
 }
 
 // Setup delegates to Storage implementation's Setup methods
@@ -108,7 +109,10 @@ func (c *controlService) showLocalStorage() {
 }
 
 // newcontrolService creates a new instance of controlService struct.
-func newControlService(config *configuration) (cs *controlService, err error) {
+func newControlService(
+	config *configuration, client drpc.DomainSocketClient) (
+	cs *controlService, err error) {
+
 	fMap, err := loadInitData(jsonDBRelPath)
 	if err != nil {
 		return
@@ -124,6 +128,7 @@ func newControlService(config *configuration) (cs *controlService, err error) {
 		nvme:              nvmeStorage,
 		scm:               newScmStorage(),
 		supportedFeatures: fMap,
+		drpc:              client,
 	}
 	return
 }

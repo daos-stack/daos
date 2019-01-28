@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmtclient
+package client
 
 import (
 	"fmt"
@@ -50,11 +50,14 @@ type Addresses []string
 
 // ConnFactory is an interface providing capability to create clients.
 type ConnFactory interface {
-	createConn(string) MgmtClient
+	createConn(string) Control
 }
 
 // Connections is an interface providing functionality across multiple
 // connected clients.
+//
+// TODO: find a way to not have to repeat client API here, maybe List(typeEnum)
+//       Provision() Daos(typeEnum, args...)?
 type Connections interface {
 	// ConnectClients attempts to connect a list of addresses, returns
 	// list of connected clients and map of any errors.
@@ -66,20 +69,21 @@ type Connections interface {
 	ListFeatures() (ClientFeatureMap, error)
 	ListNvme() (ClientNvmeMap, error)
 	ListScm() (ClientScmMap, error)
+	KillRank(uuid string, rank int16) error
 }
 
 // connList is an implementation of Connections, a collection of connected
 // client instances, one per target server.
 type connList struct {
 	factory ConnFactory
-	clients []MgmtClient
+	clients []Control
 }
 
 // connFactory as an implementation of ConnFactory.
 type connFactory struct{}
 
 // createConn instantiates and connects a client to server at given address.
-func (c *connFactory) createConn(address string) MgmtClient {
+func (c *connFactory) createConn(address string) Control {
 	return &client{}
 }
 
@@ -191,6 +195,6 @@ func (c *connList) ListScm() (ClientScmMap, error) {
 // NewConnections is a factory for Connections interface to operate over
 // multiple clients.
 func NewConnections() Connections {
-	var clients []MgmtClient
+	var clients []Control
 	return &connList{factory: &connFactory{}, clients: clients}
 }

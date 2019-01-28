@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 package client
 
 import (
+	"fmt"
 	"io"
 	"time"
 
@@ -32,27 +33,64 @@ import (
 	"golang.org/x/net/context"
 )
 
-// listScmModules prints all discovered Storage Class Memory modules installed.
-func (mc *client) listScmModules() (mms ScmModules, err error) {
+// getFeature returns a feature from a requested name.
+func (mc *client) getFeature(name string) (*pb.Feature, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream, err := mc.client.ListScmModules(ctx, &pb.EmptyParams{})
+	return mc.client.GetFeature(ctx, &pb.FeatureName{Name: name})
+}
+
+// listAllFeatures returns map of all supported management features.
+func (mc *client) listAllFeatures() (fm FeatureMap, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	stream, err := mc.client.ListAllFeatures(ctx, &pb.EmptyParams{})
 	if err != nil {
 		return
 	}
 
-	var mm *pb.ScmModule
+	fm = make(FeatureMap)
+	var f *pb.Feature
 	for {
-		mm, err = stream.Recv()
+		f, err = stream.Recv()
 		if err == io.EOF {
 			err = nil
 			break
 		} else if err != nil {
 			return
 		}
-		mms = append(mms, mm)
+		fm[f.Fname.Name] = fmt.Sprintf(
+			"category %s, %s", f.Category.Category, f.Description)
 	}
 
+	return
+}
+
+// listFeatures returns supported management features for a given category.
+func (mc *client) listFeatures(category string) (
+	fm FeatureMap, err error) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	stream, err := mc.client.ListFeatures(ctx, &pb.Category{Category: category})
+	if err != nil {
+		return
+	}
+
+	fm = make(FeatureMap)
+	var f *pb.Feature
+	for {
+		f, err = stream.Recv()
+		if err == io.EOF {
+			err = nil
+			break
+		} else if err != nil {
+			return
+		}
+		fm[f.Fname.Name] = f.Description
+	}
 	return
 }
