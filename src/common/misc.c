@@ -805,7 +805,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_ACL:
 		case DAOS_PROP_CO_COMPRESS:
-		case DAOS_PROP_CO_ENCRYP:
+		case DAOS_PROP_CO_ENCRYPT:
 			break;
 		default:
 			D_ERROR("invaid dpe_type %d.\n", type);
@@ -815,7 +815,10 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 	return true;
 }
 
-/** duplicate the properties */
+/**
+ * duplicate the properties
+ * \a pool true for pool properties, false for container properties.
+ */
 daos_prop_t *
 daos_prop_dup(daos_prop_t *prop, bool pool)
 {
