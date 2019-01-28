@@ -394,8 +394,9 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	}
 
 	umem_attr_get(&tins->ti_umm, &uma);
-	rc = dbtree_create_inplace(ta->ta_class, tree_feats, ta->ta_order,
-				   &uma, &krec->kr_btr, &btr_oh);
+	rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats, ta->ta_order,
+				      &uma, &krec->kr_btr, tins->ti_coh,
+				      &btr_oh);
 	if (rc != 0) {
 		D_ERROR("Failed to create btree: %d\n", rc);
 		return rc;
@@ -407,7 +408,8 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 		krec->kr_bmap |= KREC_BF_EVT;
 		rc = evt_create_inplace(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, &uma,
-					&krec->kr_evt[0], &evt_oh);
+					&krec->kr_evt[0], tins->ti_coh,
+					&evt_oh);
 		if (rc != 0) {
 			D_ERROR("Failed to create evtree: %d\n", rc);
 			D_GOTO(out, rc);
@@ -440,7 +442,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	/* has subtree? */
 	if (krec->kr_btr.tr_order) {
-		rc = dbtree_open_inplace_ex(&krec->kr_btr, &uma,
+		rc = dbtree_open_inplace_ex(&krec->kr_btr, &uma, tins->ti_coh,
 					    tins->ti_blks_info, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open btree: %d\n", rc);
@@ -449,7 +451,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	}
 
 	if ((krec->kr_bmap & KREC_BF_EVT) && krec->kr_evt[0].tr_order) {
-		rc = evt_open_inplace(&krec->kr_evt[0], &uma,
+		rc = evt_open_inplace(&krec->kr_evt[0], &uma, tins->ti_coh,
 				      tins->ti_blks_info, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open evtree: %d\n", rc);
@@ -878,11 +880,15 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 
 	info = obj->obj_cont->vc_pool->vp_vea_info;
 	if (flags & SUBTR_EVT) {
-		rc = evt_open_inplace(&krec->kr_evt[0], uma, info, sub_toh);
+		rc = evt_open_inplace(&krec->kr_evt[0], uma,
+				      vos_cont2hdl(obj->obj_cont),
+				      info, sub_toh);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	} else {
-		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, info, sub_toh);
+		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma,
+					    vos_cont2hdl(obj->obj_cont),
+					    info, sub_toh);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -1008,14 +1014,17 @@ obj_tree_init(struct vos_object *obj)
 		else if (obj_feats & DAOS_OF_DKEY_LEXICAL)
 			tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
 
-		rc = dbtree_create_inplace(ta->ta_class, tree_feats,
-					   ta->ta_order, vos_obj2uma(obj),
-					   &obj->obj_df->vo_tree,
-					   &obj->obj_toh);
+		rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats,
+					      ta->ta_order, vos_obj2uma(obj),
+					      &obj->obj_df->vo_tree,
+					      vos_cont2hdl(obj->obj_cont),
+					      &obj->obj_toh);
 	} else {
 		D_DEBUG(DB_DF, "Open btree for object\n");
-		rc = dbtree_open_inplace(&obj->obj_df->vo_tree,
-					 vos_obj2uma(obj), &obj->obj_toh);
+		rc = dbtree_open_inplace_ex(&obj->obj_df->vo_tree,
+					    vos_obj2uma(obj),
+					    vos_cont2hdl(obj->obj_cont),
+					    NULL, &obj->obj_toh);
 	}
 	return rc;
 }

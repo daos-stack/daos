@@ -109,7 +109,8 @@ ts_open_create(bool create, char *args)
 			ts_order, inplace ? " inplace" : "");
 		if (inplace) {
 			rc = evt_create_inplace(EVT_FEAT_DEFAULT, ts_order,
-						&ts_uma, &ts_root, &ts_toh);
+						&ts_uma, &ts_root,
+						DAOS_HDL_INVAL, &ts_toh);
 		} else {
 			rc = evt_create(EVT_FEAT_DEFAULT, ts_order, &ts_uma,
 					&ts_root_mmid, &ts_toh);
@@ -117,7 +118,8 @@ ts_open_create(bool create, char *args)
 	} else {
 		D_PRINT("Open evtree %s\n", inplace ? " inplace" : "");
 		if (inplace)
-			rc = evt_open_inplace(&ts_root, &ts_uma, NULL, &ts_toh);
+			rc = evt_open_inplace(&ts_root, &ts_uma, DAOS_HDL_INVAL,
+					      NULL, &ts_toh);
 		else
 			rc = evt_open(ts_root_mmid, &ts_uma, &ts_toh);
 	}

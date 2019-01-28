@@ -493,6 +493,10 @@ struct btr_instance {
 	 * alloc & free.
 	 */
 	void				*ti_blks_info;
+	/**
+	 * The container open handle.
+	 */
+	daos_handle_t			 ti_coh;
 	/** root mmid */
 	TMMID(struct btr_root)		 ti_root_mmid;
 	/** root pointer */
@@ -539,12 +543,16 @@ int  dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 int  dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 			   unsigned int tree_order, struct umem_attr *uma,
 			   struct btr_root *root, daos_handle_t *toh);
+int  dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
+			      unsigned int tree_order, struct umem_attr *uma,
+			      struct btr_root *root, daos_handle_t coh,
+			      daos_handle_t *toh);
 int  dbtree_open(TMMID(struct btr_root) root_mmid, struct umem_attr *uma,
 		 daos_handle_t *toh);
 int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
 int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
-			    void *info, daos_handle_t *toh);
+			    daos_handle_t coh, void *info, daos_handle_t *toh);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh);
 int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out);

@@ -773,13 +773,14 @@ evt_tcx_reset_trace(struct evt_context *tcx)
  * \param feats		[IN]	Optional, feature bits for create
  * \param order		[IN]	Optional, tree order for create
  * \param uma		[IN]	Memory attribute for the tree
+ * \param coh		[IN]	The container open handle
  * \param info		[IN]	NVMe free space info
  * \param tcx_pp	[OUT]	The returned tree context
  */
 static int
 evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 	       uint64_t feats, unsigned int order, struct umem_attr *uma,
-	       void *info, struct evt_context **tcx_pp)
+	       daos_handle_t coh, void *info, struct evt_context **tcx_pp)
 {
 	struct evt_context	*tcx;
 	int			 depth;
@@ -809,6 +810,7 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 			root = umem_id2ptr_typed(&tcx->tc_umm, root_mmid);
 	}
 	tcx->tc_root = root;
+	tcx->tc_coh = coh;
 
 	if (root == NULL || root->tr_feats == 0) { /* tree creation */
 		tcx->tc_feats	= feats;
@@ -856,7 +858,7 @@ evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
 		return -DER_INVAL;
 
 	rc = evt_tcx_create(tcx->tc_root_mmid, tcx->tc_root, -1, -1, &uma,
-			    tcx->tc_blks_info, tcx_pp);
+			    tcx->tc_coh, tcx->tc_blks_info, tcx_pp);
 	return rc;
 }
 
@@ -2228,7 +2230,8 @@ evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
 	struct evt_context *tcx;
 	int		    rc;
 
-	rc = evt_tcx_create(root_mmid, NULL, -1, -1, uma, NULL, &tcx);
+	rc = evt_tcx_create(root_mmid, NULL, -1, -1, uma, DAOS_HDL_INVAL,
+			    NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2243,7 +2246,7 @@ evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
  */
 int
 evt_open_inplace(struct evt_root *root, struct umem_attr *uma,
-		 void *info, daos_handle_t *toh)
+		 daos_handle_t coh, void *info, daos_handle_t *toh)
 {
 	struct evt_context *tcx;
 	int		    rc;
@@ -2253,7 +2256,7 @@ evt_open_inplace(struct evt_root *root, struct umem_attr *uma,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(EVT_ROOT_NULL, root, -1, -1, uma, info, &tcx);
+	rc = evt_tcx_create(EVT_ROOT_NULL, root, -1, -1, uma, coh, info, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2300,7 +2303,8 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(EVT_ROOT_NULL, NULL, feats, order, uma, NULL, &tcx);
+	rc = evt_tcx_create(EVT_ROOT_NULL, NULL, feats, order, uma,
+			    DAOS_HDL_INVAL, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2328,7 +2332,7 @@ err:
  */
 int
 evt_create_inplace(uint64_t feats, unsigned int order, struct umem_attr *uma,
-		   struct evt_root *root, daos_handle_t *toh)
+		   struct evt_root *root, daos_handle_t coh, daos_handle_t *toh)
 {
 	struct evt_context *tcx;
 	int		    rc;
@@ -2343,7 +2347,8 @@ evt_create_inplace(uint64_t feats, unsigned int order, struct umem_attr *uma,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(EVT_ROOT_NULL, root, feats, order, uma, NULL, &tcx);
+	rc = evt_tcx_create(EVT_ROOT_NULL, root, feats, order, uma,
+			    coh, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 

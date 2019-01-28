@@ -1084,7 +1084,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	case VOS_ITER_SINGLE:
 	case VOS_ITER_AKEY:
 		rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma,
-					    info->ii_vea_info, &toh);
+					vos_cont2hdl(info->ii_obj->obj_cont),
+					info->ii_vea_info, &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
 				" rc = %d\n", rc);
@@ -1096,7 +1097,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 
 	case VOS_ITER_RECX:
 		rc = evt_open_inplace(info->ii_evt, info->ii_uma,
-					 info->ii_vea_info, &toh);
+				      vos_cont2hdl(info->ii_obj->obj_cont),
+				      info->ii_vea_info, &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
 				" rc = %d\n", rc);

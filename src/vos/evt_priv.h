@@ -101,6 +101,8 @@ struct evt_context {
 	struct evt_trace		*tc_trace;
 	/** customized operation table for different tree policies */
 	struct evt_policy_ops		*tc_ops;
+	/* The container open handle */
+	daos_handle_t			 tc_coh;
 };
 
 #define EVT_NODE_NULL			TMMID_NULL(struct evt_node)

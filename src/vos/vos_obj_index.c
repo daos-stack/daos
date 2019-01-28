@@ -159,7 +159,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		daos_handle_t	 toh;
 
 		umem_attr_get(&tins->ti_umm, &uma);
-		rc = dbtree_open_inplace_ex(&obj->vo_tree, &uma,
+		rc = dbtree_open_inplace_ex(&obj->vo_tree, &uma, tins->ti_coh,
 					    tins->ti_blks_info, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open OI tree: %d\n", rc);
@@ -680,7 +680,8 @@ vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 	}
 
 	rc = dbtree_open_inplace_ex(&otab_df->obt_btr, &pool->vp_uma,
-				    pool->vp_vea_info, &btr_hdl);
+				    DAOS_HDL_INVAL, pool->vp_vea_info,
+				    &btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
 		D_GOTO(exit, rc = -DER_NONEXIST);

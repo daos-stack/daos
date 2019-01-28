@@ -372,6 +372,7 @@ int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
  * \param order		[IN]	Tree order
  * \param uma		[IN]	Memory class attributes
  * \param root		[IN]	The address to create the tree.
+ * \param coh		[IN]	The container open handle
  * \param toh		[OUT]	The returned tree open handle
  *
  * \return		0	Success
@@ -379,7 +380,7 @@ int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
  */
 int evt_create_inplace(uint64_t feats, unsigned int order,
 		       struct umem_attr *uma, struct evt_root *root,
-		       daos_handle_t *toh);
+		       daos_handle_t coh, daos_handle_t *toh);
 /**
  * Open a tree by its memory ID \a root_mmid
  *
@@ -397,6 +398,7 @@ int evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
  *
  * \param root		[IN]	Root address of the tree
  * \param uma		[IN]	Memory class attributes
+ * \param coh		[IN]	The container open handle
  * \param info		[IN]	NVMe free space information
  * \param toh		[OUT]	The returned tree open handle
  *
@@ -404,7 +406,7 @@ int evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
  *			-ve	error code
  */
 int evt_open_inplace(struct evt_root *root, struct umem_attr *uma,
-		     void *info, daos_handle_t *toh);
+		     daos_handle_t coh, void *info, daos_handle_t *toh);
 
 /**
  * Close a opened tree
