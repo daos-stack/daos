@@ -173,6 +173,7 @@ export CRT_CTX_SHARE_ADDR=1
 export CRT_PHY_ADDR_STR=ofi+sockets
 export ABT_ENV_MAX_NUM_XSTREAMS=64
 export ABT_MAX_NUM_XSTREAMS=64
+export ABT_THREAD_STACKSIZE=65536
 export OFI_INTERFACE=eth0
 export OFI_PORT=23350
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
