@@ -36,8 +36,15 @@
 enum drpc_module {
 	DRPC_MODULE_TEST		= 0,	/* Reserved for testing */
 	DRPC_MODULE_SECURITY_AGENT	= 1,
+	DRPC_MODULE_MGMT_SERVER		= 2,
 
 	NUM_DRPC_MODULES			/* Must be last */
+};
+
+enum drpc_mgmt_server_method {
+	DRPC_METHOD_MGMT_SERVER_KILL_RANK	= 201,
+
+	NUM_DRPC_MGMT_SERVER_METHODS			/* Must be last */
 };
 
 #endif /* __DAOS_DRPC_MODULES_H__ */
