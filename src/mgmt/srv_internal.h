@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@
 #include "rpc.h"
 
 /** srv.c */
+extern char *ds_mgmt_server_socket_path;
 void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
 void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
@@ -52,4 +53,25 @@ void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv);
+
+/**
+ * Definitions for DAOS server dRPC modules and their methods.
+ * These numeric designations are used in dRPC communications in the Drpc__Call
+ * structure.
+ */
+
+/**
+ *  Module: Mgmt Server
+ *
+ *  The server module that deals with client mgmt requests.
+ */
+#define DRPC_MODULE_MGMT_SERVER				2
+
+/**
+ * Method: Kill Rank
+ *
+ * Kill server of given rank.
+ */
+#define DRPC_METHOD_MGMT_SERVER_KILL_RANK	201
+
 #endif /* __SRV_MGMT_INTERNAL_H__ */

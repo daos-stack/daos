@@ -36,6 +36,7 @@
 enum drpc_module {
 	DRPC_MODULE_TEST		= 0,	/* Reserved for testing */
 	DRPC_MODULE_SECURITY_AGENT	= 1,
+	DRPC_MODULE_MGMT_SERVER		= 2,
 
 	NUM_DRPC_MODULES			/* Must be last */
 };
