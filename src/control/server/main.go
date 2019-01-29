@@ -162,6 +162,12 @@ func main() {
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
 
+	// Format the unformatted servers.
+	if err = formatIosrvs(&config, false); err != nil {
+		log.Errorf("Failed to format servers: %s", err)
+		return
+	}
+
 	// Init socket and start drpc server to communicate with DAOS I/O servers.
 	if err = drpcSetup(config.SocketDir); err != nil {
 		log.Errorf("Failed to set up dRPC: %s", err)

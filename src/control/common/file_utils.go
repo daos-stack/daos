@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -152,4 +153,69 @@ func PrintStructs(name string, i interface{}) {
 		return
 	}
 	fmt.Println(s)
+}
+
+// WriteFileAtomic mimics ioutil.WriteFile, but it makes sure the file is
+// either successfully written persistently or untouched.
+func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
+	// Write a staging file.
+	staging := path + ".staging"
+	if err := writeFile(staging, data, perm); err != nil {
+		return errors.WithStack(err)
+	}
+
+	// Rename the staging file to the destination.
+	if err := os.Rename(staging, path); err != nil {
+		os.Remove(staging)
+		return errors.WithStack(err)
+	}
+
+	// Sync the rename.
+	return SyncDir(filepath.Dir(path))
+}
+
+// writeFile mimics ioutil.WriteFile, but syncs the file before returning. The
+// error is one from the standard library.
+func writeFile(path string, data []byte, perm os.FileMode) (err error) {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return
+	}
+	defer func() {
+		if tmperr := f.Close(); tmperr != nil && err == nil {
+			err = tmperr
+		}
+		if err != nil {
+			os.Remove(path)
+		}
+	}()
+
+	n, err := f.Write(data)
+	if err != nil {
+		return
+	} else if n < len(data) {
+		return fmt.Errorf("write %s: only wrote %d/%d", path, n, len(data))
+	}
+
+	return f.Sync()
+}
+
+// SyncDir flushes all prior modifications to a directory. This is required if
+// one modifies a directory (e.g., by creating a new file in it) and needs to
+// wait for this modification to become persistent.
+func SyncDir(path string) (err error) {
+	defer func() { err = errors.WithStack(err) }()
+
+	// Since a directory can't be opened for writing, os.Open suffices.
+	d, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer func() {
+		if tmperr := d.Close(); tmperr != nil && err == nil {
+			err = tmperr
+		}
+	}()
+
+	return d.Sync()
 }
