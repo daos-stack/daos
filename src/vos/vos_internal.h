@@ -71,14 +71,6 @@ static inline uint64_t vos_byte2blkoff(uint64_t bytes)
 }
 
 /**
- * VOS cookie table
- * In-memory btree to hold all cookies and max epoch updated
- */
-struct vos_cookie_table {
-	struct btr_root		cit_btr;
-};
-
-/**
  * VOS pool (DRAM)
  */
 struct vos_pool {
@@ -94,10 +86,6 @@ struct vos_pool {
 	struct umem_instance	vp_umm;
 	/** btr handle for the container table */
 	daos_handle_t		vp_cont_th;
-	/** cookie table (DRAM only) */
-	struct vos_cookie_table	vp_cookie_tab;
-	/** btr handle for the cookie table \a vp_cookie_tab */
-	daos_handle_t		vp_cookie_th;
 	/** I/O context */
 	struct bio_io_context	*vp_io_ctxt;
 	/** In-memory free space tracking for NVMe device */
@@ -357,70 +345,6 @@ vos_cont_tab_create(struct umem_attr *p_umem_attr,
 		    struct vos_cont_table_df *ctab_df);
 
 /**
- * VOS cookie index class register for btree
- * to be called withing vos_init()
- *
- * \return		0 on success and negative on
- *			failure
- */
-
-int
-vos_cookie_tab_register();
-
-/**
- * create a VOS Cookie index table.
- *
- * \param uma		[IN]	universal memory attributes
- * \param cookie_index	[IN]	vos cookie index
- * \param cookie_handle [OUT]	cookie_btree handle
- *
- * \return		0 on success and negative on
- *			failure
- */
-int
-vos_cookie_tab_create(struct umem_attr *uma, struct vos_cookie_table *ctab,
-		       daos_handle_t *cookie_handle);
-
-
-/**
- * Destroy the cookie index table
- *
- * \param th	[IN]	cookie index handle
- */
-int
-vos_cookie_tab_destroy(daos_handle_t th);
-
-/**
- * VOS cookie update
- *
- * \param th		[IN]	cookie index handle
- * \param cookie	[IN]	cookie
- * \param epoch		[IN]	epoch
- *
- * \return		0 on success -DER_NONEXIST when
- *			not found and -DER_INVAL if
- *			invalid handle
- */
-int
-vos_cookie_update(daos_handle_t th, uuid_t cookie, daos_epoch_t epoch);
-
-/**
- * VOS cookie find and update
- * Find cookie if it exists update the
- * max_epoch, if not found add the entry
- * if less than max_epoch do nothing
- *
- * \param th		[IN]	cookie index handle
- * \param cookie	[IN]	cookie
- * \param epoch		[IN]	epoch to update
- * \param update_flag	[IN]	flag to update/lookup
- * \param epoch_ret	[OUT]	max_epoch returned
- */
-int
-vos_cookie_find_update(daos_handle_t th, uuid_t cookie, daos_epoch_t epoch,
-		       bool update_flag, daos_epoch_t *epoch_ret);
-
-/**
  * VOS object index class register for btree
  * Called with vos_init()
  *
@@ -472,8 +396,6 @@ enum vos_tree_class {
 	VOS_BTR_OBJ_TABLE	= (VOS_BTR_BEGIN + 3),
 	/** container index table */
 	VOS_BTR_CONT_TABLE	= (VOS_BTR_BEGIN + 4),
-	/** tree type for cookie index table */
-	VOS_BTR_COOKIE		= (VOS_BTR_BEGIN + 5),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
@@ -516,8 +438,6 @@ struct vos_rec_bundle {
 	struct vos_krec_df	*rb_krec;
 	/** input record size */
 	daos_size_t		 rb_rsize;
-	/** update cookie of this recx (input for update, output for fetch) */
-	uuid_t			 rb_cookie;
 	/** pool map version */
 	uint32_t		 rb_ver;
 	/** tree class */
@@ -670,12 +590,6 @@ static inline PMEMobjpool *
 vos_obj2pop(struct vos_object *obj)
 {
 	return vos_cont2pop(obj->obj_cont);
-}
-
-static inline daos_handle_t
-vos_obj2cookie_hdl(struct vos_object *obj)
-{
-	return obj->obj_cont->vc_pool->vp_cookie_th;
 }
 
 static inline struct umem_attr *

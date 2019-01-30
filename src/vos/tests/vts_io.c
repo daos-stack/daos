@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,9 +39,6 @@
 static unsigned int		vts_key_gen;
 /** epoch generator */
 static daos_epoch_t		vts_epoch_gen;
-
-/** Create dictionary of unique cookies */
-static uuid_t			cookie_dict[NUM_UNIQUE_COOKIES];
 
 static struct vts_counter	vts_cntr;
 static uint64_t			update_akey_fixed;
@@ -94,12 +91,6 @@ hash_key(d_iov_t *key, int flag)
 	return d_hash_string_u32((char *)key->iov_buf, key->iov_len);
 }
 
-/**
- * Stores the last cookie ID to verify
- * while updating
- */
-uuid_t	last_cookie;
-
 static void
 set_iov(daos_iov_t *iov, char *buf, int int_flag)
 {
@@ -114,30 +105,6 @@ gen_rand_epoch(void)
 {
 	vts_epoch_gen += rand() % 100;
 	return vts_epoch_gen;
-}
-
-struct d_uuid
-gen_rand_cookie(void)
-{
-	struct d_uuid		uuid_val;
-	int			i;
-
-	i = rand() % NUM_UNIQUE_COOKIES;
-	uuid_copy(last_cookie, cookie_dict[i]);
-	uuid_copy(uuid_val.uuid, cookie_dict[i]);
-
-	return uuid_val;
-}
-
-bool
-is_found(uuid_t cookie)
-{
-	int i;
-
-	for (i = 0; i < NUM_UNIQUE_COOKIES; i++)
-		if (!uuid_compare(cookie, cookie_dict[i]))
-			return true;
-	return false;
 }
 
 daos_unit_oid_t
@@ -178,7 +145,7 @@ void
 test_args_init(struct io_test_args *args,
 	       uint64_t pool_size)
 {
-	int	rc, i;
+	int	rc;
 
 	memset(args, 0, sizeof(*args));
 	memset(&vts_cntr, 0, sizeof(vts_cntr));
@@ -186,13 +153,9 @@ test_args_init(struct io_test_args *args,
 	vts_key_gen = 0;
 	vts_epoch_gen = 1;
 
-	for (i = 0; i < NUM_UNIQUE_COOKIES; i++)
-		uuid_generate_random(cookie_dict[i]);
-
 	rc = vts_ctx_init(&args->ctx, pool_size);
 	assert_int_equal(rc, 0);
 	args->oid = gen_oid(init_ofeats);
-	args->cookie_flag = false;
 	args->ofeat = init_ofeats;
 	args->dkey = UPDATE_DKEY;
 	args->akey = UPDATE_AKEY;
@@ -293,13 +256,6 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		if (rc != 0) {
 			print_error("Failed to copy recx: %d\n", rc);
 			goto out;
-		}
-
-		if (arg->cookie_flag) {
-			assert_true(is_found(ent.ie_cookie));
-			if (print_ent)
-				D_PRINT("Cookie : %s\n",
-					DP_UUID(ent.ie_cookie));
 		}
 
 		nr++;
@@ -500,8 +456,7 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 
 int
 io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
-		   daos_iod_t *iod, daos_sg_list_t *sgl,
-		   struct d_uuid *dsm_cookie, bool verbose)
+		   daos_iod_t *iod, daos_sg_list_t *sgl, bool verbose)
 {
 	struct bio_sglist	*bsgl;
 	struct bio_iov		*biov;
@@ -513,8 +468,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
 		rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
-				    dsm_cookie->uuid, 0, dkey, 1, iod,
-				    sgl);
+				    0, dkey, 1, iod, sgl);
 		if (rc != 0 && verbose)
 			print_error("Failed to update: %d\n", rc);
 		return rc;
@@ -546,7 +500,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
-	rc = vos_update_end(ioh, dsm_cookie->uuid, 0, dkey, rc);
+	rc = vos_update_end(ioh, 0, dkey, rc);
 	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
@@ -626,7 +580,6 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
-	struct d_uuid		dsm_cookie;
 	unsigned int		recx_size;
 	unsigned int		recx_nr;
 
@@ -706,10 +659,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	iod.iod_recxs	= &rex;
 	iod.iod_nr	= 1;
 
-	uuid_copy(dsm_cookie.uuid, cookie_dict[(rand() % NUM_UNIQUE_COOKIES)]);
-
-	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
-				&dsm_cookie, true);
+	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl, true);
 	if (rc)
 		goto exit;
 
@@ -933,7 +883,6 @@ io_iter_test_with_anchor(void **state)
 	struct io_test_args	*arg = *state;
 
 	arg->ta_flags = TF_IT_ANCHOR | TF_REC_EXT;
-	arg->cookie_flag = false;
 	io_iter_test_base(arg);
 }
 
@@ -950,7 +899,6 @@ io_iter_test_dkey_cond(void **state)
 
 	skip(); /* Disable so we can enable failure detection */
 	arg->ta_flags = TF_FIXED_AKEY;
-	arg->cookie_flag = false;
 	epr.epr_lo = gen_rand_epoch();
 	epr.epr_hi = DAOS_EPOCH_MAX;
 
@@ -1139,7 +1087,6 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
-	struct d_uuid		dsm_cookie;
 
 	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
@@ -1167,9 +1114,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	iod.iod_nr	= 1;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
-	uuid_copy(dsm_cookie.uuid, cookie_dict[rand() % NUM_UNIQUE_COOKIES]);
-	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
-				&dsm_cookie, true);
+	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl, true);
 	if (rc)
 		goto exit;
 
@@ -1415,7 +1360,6 @@ pool_cont_same_uuid(void **state)
 	char			update_buf[UPDATE_BUF_SIZE];
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
-	uuid_t			cookie;
 	daos_unit_oid_t		oid;
 	int			ret = 0;
 
@@ -1462,9 +1406,8 @@ pool_cont_same_uuid(void **state)
 	iod.iod_nr	= 1;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
-	uuid_generate(cookie);
 	oid = gen_oid(arg->ofeat);
-	ret = vos_obj_update(coh, oid, 10, cookie, 0, &dkey, 1, &iod, &sgl);
+	ret = vos_obj_update(coh, oid, 10, 0, &dkey, 1, &iod, &sgl);
 	assert_int_equal(ret, 0);
 
 	ret = vos_cont_close(coh);
@@ -1564,7 +1507,6 @@ io_simple_one_key_cross_container(void **state)
 	daos_key_t		akey;
 	daos_epoch_t		epoch = gen_rand_epoch();
 	daos_unit_oid_t		l_oid;
-	struct d_uuid		cookie;
 
 	/* Creating an additional container */
 	uuid_generate_time_safe(arg->addn_co_uuid);
@@ -1612,17 +1554,15 @@ io_simple_one_key_cross_container(void **state)
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	l_oid = gen_oid(arg->ofeat);
-	cookie = gen_rand_cookie();
 	rc  = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
-			     cookie.uuid, 0, &dkey, 1, &iod, &sgl);
+			     0, &dkey, 1, &iod, &sgl);
 	if (rc) {
 		print_error("Failed to update %d\n", rc);
 		goto failed;
 	}
 
-	cookie = gen_rand_cookie();
-	rc = vos_obj_update(arg->addn_co, l_oid, epoch, cookie.uuid,
-			    0, &dkey, 1, &iod, &sgl);
+	rc = vos_obj_update(arg->addn_co, l_oid, epoch, 0, &dkey, 1, &iod,
+			    &sgl);
 	if (rc) {
 		print_error("Failed to update %d\n", rc);
 		goto failed;
@@ -1714,7 +1654,6 @@ io_sgl_update(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
-	struct d_uuid		dsm_cookie;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			*update_buffs[SGL_TEST_BUF_COUNT];
@@ -1760,9 +1699,8 @@ io_sgl_update(void **state)
 	}
 
 	/* Write/Update */
-	uuid_copy(dsm_cookie.uuid, cookie_dict[(rand() % NUM_UNIQUE_COOKIES)]);
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, dsm_cookie.uuid,
-				0, &dkey, 1, &iod, &sgl);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, &dkey, 1, &iod,
+			    &sgl);
 	daos_sgl_fini(&sgl, true);
 
 	if (rc) {
@@ -1803,7 +1741,6 @@ io_sgl_fetch(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
-	struct d_uuid		dsm_cookie;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			*fetch_buffs[SGL_TEST_BUF_COUNT];
@@ -1841,9 +1778,8 @@ io_sgl_fetch(void **state)
 		     SGL_TEST_BUF_SIZE);
 
 	/* Write/Update */
-	uuid_copy(dsm_cookie.uuid, cookie_dict[(rand() % NUM_UNIQUE_COOKIES)]);
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, dsm_cookie.uuid,
-				0, &dkey, 1, &iod, &sgl);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, &dkey, 1, &iod,
+			    &sgl);
 	if (rc)
 		goto exit;
 	daos_sgl_fini(&sgl, false);
@@ -1887,7 +1823,6 @@ io_fetch_hole(void **state)
 	daos_recx_t		rexs[3];
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
-	struct d_uuid		dsm_cookie;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			update_buf[3 * 1024];
@@ -1929,9 +1864,8 @@ io_fetch_hole(void **state)
 	sgl.sg_nr = 1;
 
 	/* Write/Update */
-	uuid_copy(dsm_cookie.uuid, cookie_dict[(rand() % NUM_UNIQUE_COOKIES)]);
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, dsm_cookie.uuid,
-				0, &dkey, 1, &iod, &sgl);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, &dkey, 1, &iod,
+			    &sgl);
 	assert_int_equal(rc, 0);
 	inc_cntr(arg->ta_flags);
 
@@ -1959,8 +1893,8 @@ io_fetch_hole(void **state)
 	daos_iov_set(&val_iov, &update_buf[0], 2 * 1024);
 	sgl.sg_iovs = &val_iov;
 	/* Update using epoch 2 */
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 2, dsm_cookie.uuid,
-				0, &dkey, 1, &iod, &sgl);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 2, 0, &dkey, 1, &iod,
+			    &sgl);
 	assert_int_equal(rc, 0);
 
 	/* Now fetch all three and test that the "hole" is untouched */
@@ -1975,15 +1909,6 @@ io_fetch_hole(void **state)
 
 	/* Test if ground truth matches fetch_buf */
 	assert_memory_equal(ground_truth, fetch_buf, 3 * 1024);
-}
-
-static int
-io_iter_cookie_test(void **state)
-{
-	struct io_test_args	*arg = *state;
-
-	arg->cookie_flag = true;
-	return 0;
 }
 
 static void
@@ -2081,9 +2006,6 @@ static const struct CMUnitTest io_tests[] = {
 		io_idx_overwrite, NULL, NULL},
 	{ "VOS240.0: KV Iter tests (for dkey)",
 		io_iter_test, NULL, NULL},
-	{ "VOS240.1: KV Iter tests fetch cookie (for dkey)",
-		io_iter_test, io_iter_cookie_test, NULL},
-
 	{ "VOS240.1: KV Iter tests with anchor (for dkey)",
 		io_iter_test_with_anchor, NULL, NULL},
 	{ "VOS240.2: d-key enumeration with condition (akey)",

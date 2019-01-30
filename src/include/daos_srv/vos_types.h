@@ -187,8 +187,6 @@ typedef struct {
 			daos_recx_t		ie_orig_recx;
 			/** biov to return address for single value or recx */
 			struct bio_iov		ie_biov;
-			/** update cookie */
-			uuid_t			ie_cookie;
 			/** checksum */
 			daos_csum_buf_t		ie_csum;
 			/** pool map version */

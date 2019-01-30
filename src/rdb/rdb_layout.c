@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,9 +31,6 @@
 #include "rdb_layout.h"
 
 RDB_STRING_KEY(rdb_, dkey);
-
-/* Cookie for all VOS calls taking a cookie argument */
-uuid_t rdb_cookie;
 
 RDB_STRING_KEY(rdb_mc_, uuid);
 RDB_STRING_KEY(rdb_mc_, term);

@@ -50,7 +50,6 @@ struct vos_cont_table_df;
 struct vos_cont_df;
 struct vos_obj_table_df;
 struct vos_obj_df;
-struct vos_cookie_rec_df;
 struct vos_epoch_index;
 struct vos_krec_df;
 struct vos_irec_df;
@@ -73,7 +72,6 @@ POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_table_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_table_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_rec_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_irec_df);
 POBJ_LAYOUT_END(vos_pool_layout);
@@ -85,16 +83,6 @@ POBJ_LAYOUT_END(vos_pool_layout);
  */
 struct vos_cont_table_df {
 	struct btr_root		ctb_btree;
-};
-
-/**
- * tree record stored in cookie index table
- * NB: it is actually stored in DRAM for now, but might switch to PMEM in
- * the future.
- */
-struct vos_cookie_rec_df {
-	/** max updated epoch of a cookie(upper level open handle) */
-	daos_epoch_t		cr_max_epoch;
 };
 
 /**
@@ -193,8 +181,6 @@ D_CASSERT(offsetof(struct vos_krec_df, kr_earliest) ==
  * of btree VOS_BTR_IDX.
  */
 struct vos_irec_df {
-	/** reserved for resolving overwrite race */
-	uint64_t			ir_cookie;
 	/** key checksum size (in bytes) */
 	uint16_t			ir_cs_size;
 	/** key checksum type */

@@ -1613,7 +1613,6 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 	/* Free the pmem that dst_desc references */
 	evt_desc_free(tcx, dst_desc, size);
 
-	uuid_copy(dst_desc->dc_cookie, ent->ei_cookie);
 	dst_desc->dc_ex_addr = ent->ei_addr;
 	dst_desc->dc_ver = ent->ei_ver;
 	dst_desc->dc_csum = ent->ei_csum;
@@ -1726,7 +1725,6 @@ evt_entry_fill(struct evt_context *tcx, uint64_t nd_off,
 	entry->en_sel_ext.ex_hi = entry->en_sel_ext.ex_lo + width - 1;
 
 	entry->en_addr = desc->dc_ex_addr;
-	uuid_copy(entry->en_cookie, desc->dc_cookie);
 	entry->en_ver = desc->dc_ver;
 	entry->en_csum = desc->dc_csum;
 
@@ -2520,7 +2518,6 @@ evt_ssof_insert(struct evt_context *tcx, uint64_t nd_off,
 		desc->dc_ex_addr = ent->ei_addr;
 		desc->dc_csum = ent->ei_csum;
 		desc->dc_ver = ent->ei_ver;
-		uuid_copy(desc->dc_cookie, ent->ei_cookie);
 	} else {
 		ne->ne_child = in_off;
 	}

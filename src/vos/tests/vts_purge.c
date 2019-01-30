@@ -61,15 +61,13 @@ enum near_epoch_test_type {
 
 static int
 io_update(struct io_test_args *arg, daos_epoch_t update_epoch,
-	  struct d_uuid *cookie, char *dkey, char *akey,
-	  struct vts_counter *cntrs, struct io_req **io_req,
-	  int idx, bool verbose)
+	  char *dkey, char *akey, struct vts_counter *cntrs,
+	  struct io_req **io_req, int idx, bool verbose)
 {
 	int			rc  = 0;
 	struct io_req		*ioreq;
 
 	D_ALLOC_PTR(ioreq);
-	uuid_copy(ioreq->cookie.uuid, cookie->uuid);
 	memset(&ioreq->iod, 0, sizeof(ioreq->iod));
 	memset(&ioreq->rex, 0, sizeof(ioreq->rex));
 	memset(&ioreq->sgl, 0, sizeof(ioreq->sgl));
@@ -111,7 +109,7 @@ io_update(struct io_test_args *arg, daos_epoch_t update_epoch,
 				  DAOS_IOD_ARRAY : DAOS_IOD_SINGLE;
 
 	rc = io_test_obj_update(arg, update_epoch, &ioreq->dkey, &ioreq->iod,
-				&ioreq->sgl, &ioreq->cookie, verbose);
+				&ioreq->sgl, verbose);
 	if (rc)
 		D_GOTO(exit, rc);
 
@@ -244,8 +242,8 @@ io_create_object(struct vos_container *cont)
 }
 
 static inline int
-io_simple_update(struct io_test_args *arg, struct d_uuid *cookie,
-		 uint64_t epoch, struct io_req **req)
+io_simple_update(struct io_test_args *arg, uint64_t epoch,
+		 struct io_req **req)
 {
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
@@ -253,7 +251,7 @@ io_simple_update(struct io_test_args *arg, struct d_uuid *cookie,
 	int			idx, rc;
 
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &idx);
-	rc = io_update(arg, epoch, cookie, &dkey_buf[0], &akey_buf[0],
+	rc = io_update(arg, epoch, &dkey_buf[0], &akey_buf[0],
 		       &cntrs, req, idx, UPDATE_VERBOSE);
 	return rc;
 }
@@ -264,7 +262,6 @@ io_simple_one_key_discard(void **state)
 	struct io_test_args	*arg = *state;
 	int			i, rc;
 	struct io_req		*req[4];
-	struct d_uuid		cookie;
 	daos_epoch_range_t	range;
 
 	arg->ta_flags = 0;
@@ -274,9 +271,8 @@ io_simple_one_key_discard(void **state)
 	io_create_object(vos_hdl2cont(arg->ctx.tc_co_hdl));
 	assert_int_equal(rc, 0);
 
-	cookie = gen_rand_cookie();
 	for (i = 0; i < 4; i++) {
-		rc = io_simple_update(arg, &cookie, i+1, &req[i]);
+		rc = io_simple_update(arg, i+1, &req[i]);
 		assert_int_equal(rc, 0);
 
 		rc = io_fetch(arg, i+1, req[i], FETCH_VERBOSE);
@@ -286,7 +282,7 @@ io_simple_one_key_discard(void **state)
 	/* Discard Epoch 1 alone */
 	range.epr_lo = 1;
 	range.epr_hi = 1;
-	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range);
 	assert_int_equal(rc, 0);
 
 	rc = io_fetch(arg, 1, req[0], FETCH_VERBOSE);
@@ -298,7 +294,7 @@ io_simple_one_key_discard(void **state)
 	/** Discard epochs 3 -> INF */
 	range.epr_lo = 3;
 	range.epr_hi = DAOS_EPOCH_MAX;
-	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range);
 	assert_int_equal(rc, 0);
 
 	/**
@@ -346,8 +342,8 @@ io_multi_recx_discard_setup(void **state)
 
 static int
 io_near_epoch_tests(struct io_test_args *arg, char *dkey, char *akey,
-		    daos_epoch_t *epoch, struct d_uuid *cookie, int *idx,
-		    int num, unsigned long *flags)
+		    daos_epoch_t *epoch, int *idx, int num,
+		    unsigned long *flags)
 {
 	int			i, mid, rc = 0;
 	struct vts_counter	cntrs;
@@ -362,7 +358,6 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey, char *akey,
 	D_ALLOC_ARRAY(punch, num);
 
 	for (i = 0; i < num; i++) {
-		struct d_uuid l_cookie;
 
 		if (flags != NULL) {
 			arg->ta_flags = flags[i];
@@ -371,21 +366,16 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey, char *akey,
 			else
 				punch[i] = false;
 		}
-		if (i == num - 1)
-			uuid_copy(l_cookie.uuid, cookie[mid].uuid);
-		else
-			uuid_copy(l_cookie.uuid, cookie[i].uuid);
 
-		rc = io_update(arg, epoch[i], &l_cookie, dkey,
-			       akey, &cntrs, &reqs[i], idx[i],
-			       UPDATE_VERBOSE);
+		rc = io_update(arg, epoch[i], dkey, akey, &cntrs,
+			       &reqs[i], idx[i], UPDATE_VERBOSE);
 		if (rc != 0)
 			D_GOTO(exit, rc);
 	}
 	/** Reset flags here */
 	arg->ta_flags = 0;
 	range.epr_lo = range.epr_hi = epoch[mid];
-	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie[mid].uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range);
 	if (rc != 0)
 		D_GOTO(exit, rc);
 
@@ -400,9 +390,8 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey, char *akey,
 	if (flags != NULL)
 		arg->ta_flags = flags[mid];
 
-	rc = io_update(arg, epoch[mid], &cookie[mid], dkey,
-		       akey, &cntrs, &reqs[mid], idx[mid],
-		       UPDATE_VERBOSE);
+	rc = io_update(arg, epoch[mid], dkey, akey, &cntrs, &reqs[mid],
+		       idx[mid], UPDATE_VERBOSE);
 	if (rc != 0)
 		D_GOTO(exit, rc);
 
@@ -423,13 +412,11 @@ exit:
 }
 
 static inline void
-set_near_epoch_tests(struct d_uuid *cookie, daos_epoch_t *epochs, int *idx,
-		     int num)
+set_near_epoch_tests(daos_epoch_t *epochs, int *idx, int num)
 {
 	int	i = 0;
 
 	for (i = 0; i < num; i++) {
-		cookie[i] = gen_rand_cookie();
 		epochs[i] = (i + 1) * 1000;
 		if (i > 0)
 			idx[i] = idx[i - 1];
@@ -442,15 +429,13 @@ io_near_epoch_test_base(void **state, enum near_epoch_test_type test_type)
 {
 	struct io_test_args	*arg = *state;
 	daos_epoch_t		epoch[ARRAY_SIZE_NEAR_EPOCH_TEST];
-	struct d_uuid		cookie[ARRAY_SIZE_NEAR_EPOCH_TEST];
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	int			idx[ARRAY_SIZE_NEAR_EPOCH_TEST], i, rc = 0;
 	unsigned long		flags[ARRAY_SIZE_NEAR_EPOCH_TEST];
 
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &idx[0]);
-	set_near_epoch_tests(&cookie[0], &epoch[0], &idx[0],
-			     ARRAY_SIZE_NEAR_EPOCH_TEST);
+	set_near_epoch_tests(&epoch[0], &idx[0], ARRAY_SIZE_NEAR_EPOCH_TEST);
 
 	if (test_type == NEAR_EPOCH_PUNCH ||
 		test_type == NEAR_EPOCH_DISCARD_PUNCH) {
@@ -458,8 +443,8 @@ io_near_epoch_test_base(void **state, enum near_epoch_test_type test_type)
 		       sizeof(unsigned long));
 		flags[test_type] = TF_PUNCH;
 		rc = io_near_epoch_tests(arg, &dkey_buf[0], &akey_buf[0],
-				&epoch[0], &cookie[0], &idx[0],
-				ARRAY_SIZE_NEAR_EPOCH_TEST, &flags[0]);
+				&epoch[0], &idx[0], ARRAY_SIZE_NEAR_EPOCH_TEST,
+				&flags[0]);
 	} else {
 		/* NEAR_EPOCH_FETCH and NEAR_EPOCH_OVERWRITE_FETCH */
 		if (test_type == NEAR_EPOCH_FETCH) {
@@ -467,8 +452,8 @@ io_near_epoch_test_base(void **state, enum near_epoch_test_type test_type)
 				idx[i] = idx[i - 1] + 1;
 		}
 		rc = io_near_epoch_tests(arg, &dkey_buf[0], &akey_buf[0],
-				&epoch[0], &cookie[0], &idx[0],
-				ARRAY_SIZE_NEAR_EPOCH_TEST, NULL);
+				&epoch[0], &idx[0], ARRAY_SIZE_NEAR_EPOCH_TEST,
+				NULL);
 	}
 	assert_int_equal(rc, 0);
 }
@@ -503,7 +488,6 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	int			i;
 	int			rc = 0;
 	daos_epoch_t		epoch1, epoch2;
-	struct d_uuid		cookie;
 	daos_epoch_range_t	range;
 	struct vts_counter	cntrs;
 	struct io_req		*search_req;
@@ -512,7 +496,6 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	int			idx;
 
 	arg->ta_flags = flags;
-	cookie = gen_rand_cookie();
 
 	epoch1 = 1000;
 	epoch2 = 2000;
@@ -521,8 +504,8 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 
 		set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
 		idx = i + 1;
-		rc = io_update(arg, epoch1, &cookie, &dkey_buf[0],
-			&akey_buf[0], &cntrs, &req, idx, UPDATE_VERBOSE);
+		rc = io_update(arg, epoch1, &dkey_buf[0], &akey_buf[0],
+			       &cntrs, &req, idx, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
 		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch1, req, FETCH_VERBOSE);
@@ -535,9 +518,8 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 
 		set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
 		idx = i + 1;
-		rc = io_update(arg, epoch2, &cookie, &dkey_buf[0],
-			       &akey_buf[0], &cntrs, &req,
-			       idx, UPDATE_VERBOSE);
+		rc = io_update(arg, epoch2, &dkey_buf[0], &akey_buf[0],
+			       &cntrs, &req, idx, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
 		d_list_add(&req->rlist, &arg->req_list);
 		rc  = io_fetch(arg, epoch2, req, FETCH_VERBOSE);
@@ -546,7 +528,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 
 	range.epr_lo = epoch1;
 	range.epr_hi = epoch1;
-	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range);
 	assert_int_equal(rc, 0);
 
 	/** Check if the object does not exist? */
@@ -617,7 +599,6 @@ io_epoch_range_discard_test(void **state)
 	int			i;
 	int			rc = 0;
 	daos_epoch_t		epochs[init_discard_keys];
-	struct d_uuid		cookie;
 	daos_epoch_range_t	range;
 	struct vts_counter	cntrs;
 	struct io_req		*req[init_discard_keys];
@@ -626,7 +607,6 @@ io_epoch_range_discard_test(void **state)
 	int			idx;
 
 	arg->ta_flags = 0;
-	cookie = gen_rand_cookie();
 
 	/** Need atleast 3 keys for this test */
 	assert_true(init_discard_keys >= 11);
@@ -639,9 +619,8 @@ io_epoch_range_discard_test(void **state)
 	/* Write to the same dkey-akey-idx on different epochs */
 	for (i = 0; i < init_discard_keys; i++) {
 
-		rc = io_update(arg, epochs[i], &cookie, &dkey_buf[0],
-			       &akey_buf[0], &cntrs, &req[i], idx,
-			       UPDATE_VERBOSE);
+		rc = io_update(arg, epochs[i], &dkey_buf[0], &akey_buf[0],
+			       &cntrs, &req[i], idx, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
 		rc = io_fetch(arg, epochs[i], req[i], FETCH_VERBOSE);
 		assert_int_equal(rc, 0);
@@ -653,7 +632,7 @@ io_epoch_range_discard_test(void **state)
 
 	D_PRINT("Discard from "DF_U64" to "DF_U64" out of %d epochs\n",
 		range.epr_lo, range.epr_hi, init_discard_keys);
-	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range);
 	assert_int_equal(rc, 0);
 
 
@@ -679,7 +658,6 @@ io_multi_akey_discard_test(void **state)
 	int			i;
 	int			rc = 0;
 	daos_epoch_t		epoch1, epoch2;
-	struct d_uuid		cookie;
 	daos_epoch_range_t	range;
 	struct vts_counter	cntrs;
 	struct io_req		*search_req;
@@ -688,7 +666,6 @@ io_multi_akey_discard_test(void **state)
 	int			idx;
 
 	arg->ta_flags = 0;
-	cookie = gen_rand_cookie();
 
 	epoch1 = 1213;
 	epoch2 = 8911;
@@ -698,7 +675,7 @@ io_multi_akey_discard_test(void **state)
 	for (i = 0; i < init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
-		rc = io_update(arg, epoch1, &cookie, &dkey_buf[0], &akey_buf[0],
+		rc = io_update(arg, epoch1, &dkey_buf[0], &akey_buf[0],
 			       &cntrs, &req, idx, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
 		d_list_add(&req->rlist, &arg->req_list);
@@ -710,9 +687,8 @@ io_multi_akey_discard_test(void **state)
 	for (i = init_discard_keys; i < 2 * init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
-		rc = io_update(arg, epoch2, &cookie, &dkey_buf[0],
-			       &akey_buf[0],  &cntrs, &req, idx,
-			       UPDATE_VERBOSE);
+		rc = io_update(arg, epoch2, &dkey_buf[0], &akey_buf[0],
+			       &cntrs, &req, idx, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
 		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch2, req, FETCH_VERBOSE);
@@ -722,7 +698,7 @@ io_multi_akey_discard_test(void **state)
 
 	range.epr_lo = epoch1;
 	range.epr_hi = epoch1;
-	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range);
 	assert_int_equal(rc, 0);
 
 	arg->oid = last_oid;
@@ -744,7 +720,6 @@ io_multi_recx_overwrite_discard_test(void **state)
 	int			rc = 0;
 	daos_epoch_t		epoch_start, discard_epoch;
 	int			index_start;
-	struct d_uuid		cookie;
 	daos_epoch_range_t	range;
 	struct vts_counter	cntrs;
 	struct io_req		*search_req;
@@ -757,7 +732,6 @@ io_multi_recx_overwrite_discard_test(void **state)
 	}
 
 	arg->ta_flags = 0;
-	cookie = gen_rand_cookie();
 
 	epoch_start = 1234;
 	discard_epoch = 1310;
@@ -774,10 +748,9 @@ io_multi_recx_overwrite_discard_test(void **state)
 	for (i = 0; i < init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
-		rc = io_update(arg, epoch_start + j,
-			       &cookie, &dkey_buf[0], &akey_buf[0],
-			       &cntrs, &req,
-			       index_start, UPDATE_VERBOSE);
+		rc = io_update(arg, epoch_start + j, &dkey_buf[0],
+			       &akey_buf[0], &cntrs, &req, index_start,
+			       UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
 		d_list_add_tail(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch_start + j, req, FETCH_VERBOSE);
@@ -795,7 +768,7 @@ io_multi_recx_overwrite_discard_test(void **state)
 	range.epr_lo = discard_epoch;
 	range.epr_hi = discard_epoch;
 
-	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range);
 	assert_int_equal(rc, 0);
 
 	/* Check first init_discard_keys entries in object 1 */
@@ -827,7 +800,6 @@ io_multi_recx_discard_test(void **state)
 	int			i;
 	int			rc = 0;
 	daos_epoch_t		epoch1, epoch2;
-	struct d_uuid		cookie;
 	daos_epoch_range_t	range;
 	struct vts_counter	cntrs;
 	struct io_req		*search_req;
@@ -840,7 +812,6 @@ io_multi_recx_discard_test(void **state)
 	}
 
 	arg->ta_flags = 0;
-	cookie = gen_rand_cookie();
 
 	epoch1 = 1234;
 	epoch2 = 4567;
@@ -850,7 +821,7 @@ io_multi_recx_discard_test(void **state)
 	for (i = 0; i < init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
-		rc = io_update(arg, epoch1, &cookie, &dkey_buf[0], &akey_buf[0],
+		rc = io_update(arg, epoch1, &dkey_buf[0], &akey_buf[0],
 			       &cntrs, &req, i, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
 		d_list_add(&req->rlist, &arg->req_list);
@@ -861,8 +832,8 @@ io_multi_recx_discard_test(void **state)
 	for (i = init_discard_keys; i < 2 * init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
-		rc = io_update(arg, epoch2, &cookie, &dkey_buf[0],
-			       &akey_buf[0],  &cntrs, &req, i, UPDATE_VERBOSE);
+		rc = io_update(arg, epoch2, &dkey_buf[0], &akey_buf[0],
+			       &cntrs, &req, i, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
 		d_list_add(&req->rlist, &arg->req_list);
 		rc = io_fetch(arg, epoch2, req, FETCH_VERBOSE);
@@ -871,7 +842,7 @@ io_multi_recx_discard_test(void **state)
 
 	range.epr_lo = epoch1;
 	range.epr_hi = epoch1;
-	rc = vos_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	rc = vos_discard(arg->ctx.tc_co_hdl, &range);
 	assert_int_equal(rc, 0);
 
 	arg->oid = last_oid;
@@ -904,7 +875,6 @@ io_multi_aggregate_test(void **state, enum io_aggregate_test_type test_type)
 	int			 i;
 	int			 rc = 0;
 	daos_epoch_t		 epoch;
-	struct d_uuid		 cookie;
 	daos_epoch_range_t	 range;
 	struct vts_counter	 cntrs;
 	char			 dkey_buf[UPDATE_DKEY_SIZE];
@@ -912,14 +882,13 @@ io_multi_aggregate_test(void **state, enum io_aggregate_test_type test_type)
 	int			 idx;
 
 	arg->ta_flags = 0;
-	cookie = gen_rand_cookie();
 	epoch = 1024;
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &idx);
 
 	for (i = 0; i < 2 * init_credits_keys; i++) {
 		struct io_req	*req = NULL;
 
-		rc = io_update(arg, epoch + i, &cookie, &dkey_buf[0],
+		rc = io_update(arg, epoch + i, &dkey_buf[0],
 			       &akey_buf[0], &cntrs, &req, idx,
 			       UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
@@ -962,7 +931,6 @@ io_multi_recx_aggregate_test(void **state)
 	int			i;
 	int			rc = 0;
 	daos_epoch_t		epoch;
-	struct d_uuid		cookie;
 	daos_epoch_range_t	range;
 	struct vts_counter	cntrs;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
@@ -973,7 +941,6 @@ io_multi_recx_aggregate_test(void **state)
 		return;
 	}
 	arg->ta_flags = 0;
-	cookie = gen_rand_cookie();
 
 	epoch = 1;
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
@@ -981,8 +948,7 @@ io_multi_recx_aggregate_test(void **state)
 	for (i = 0; i < init_credits_keys; i++) {
 		struct io_req	*req = NULL;
 
-		rc = io_update(arg, epoch + i,
-			       &cookie, &dkey_buf[0], &akey_buf[0],
+		rc = io_update(arg, epoch + i, &dkey_buf[0], &akey_buf[0],
 			       &cntrs, &req, i + 1, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
 		d_list_add(&req->rlist, &arg->req_list);
@@ -1030,14 +996,12 @@ io_recx_overwrite_aggregate(void **state)
 	int			i, index;
 	int			rc = 0;
 	daos_epoch_t		epoch;
-	struct d_uuid		cookie;
 	daos_epoch_range_t	range;
 	struct vts_counter	cntrs;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 
 	arg->ta_flags = 0;
-	cookie = gen_rand_cookie();
 
 	epoch = 1234;
 
@@ -1046,8 +1010,7 @@ io_recx_overwrite_aggregate(void **state)
 	for (i = 0; i < 2 * init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
-		rc = io_update(arg, epoch + i,
-			       &cookie, &dkey_buf[0], &akey_buf[0],
+		rc = io_update(arg, epoch + i, &dkey_buf[0], &akey_buf[0],
 			       &cntrs, &req, index, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
 		d_list_add(&req->rlist, &arg->req_list);
@@ -1073,7 +1036,6 @@ io_multi_recx_overwrite_test(void **state)
 	int			i, index;
 	int			rc = 0;
 	daos_epoch_t		epoch;
-	struct d_uuid		cookie;
 	daos_epoch_range_t	range;
 	struct vts_counter	cntrs;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
@@ -1088,7 +1050,6 @@ io_multi_recx_overwrite_test(void **state)
 		return;
 	}
 	arg->ta_flags = 0;
-	cookie = gen_rand_cookie();
 	epoch = 1;
 
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &index);
@@ -1097,8 +1058,7 @@ io_multi_recx_overwrite_test(void **state)
 	for (i = 0; i < init_discard_keys; i++) {
 		struct io_req	*req = NULL;
 
-		rc = io_update(arg, epoch + i,
-			       &cookie, &dkey_buf[0], &akey_buf[0],
+		rc = io_update(arg, epoch + i, &dkey_buf[0], &akey_buf[0],
 			       &cntrs, &req, index, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
 

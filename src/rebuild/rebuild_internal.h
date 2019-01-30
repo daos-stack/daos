@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,6 @@ struct rebuild_one {
 	unsigned int	ro_punch_iod_num;
 	unsigned int	ro_iod_alloc_num;
 	unsigned int	ro_rec_num;
-	uuid_t		ro_cookie;
 	uint64_t	ro_version;
 };
 

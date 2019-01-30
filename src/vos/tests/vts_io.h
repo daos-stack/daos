@@ -54,7 +54,6 @@
 #define UPDATE_CSUM_SIZE	32
 #define VTS_IO_OIDS		1
 #define VTS_IO_KEYS		100000
-#define NUM_UNIQUE_COOKIES	20
 
 enum vts_test_flags {
 	TF_IT_ANCHOR		= (1 << 0),
@@ -85,7 +84,6 @@ struct io_test_args {
 	int			 akey_size;
 	int			 dkey_size;
 	int			 co_create_step;
-	bool			 cookie_flag;
 };
 
 /** test counters */
@@ -110,7 +108,6 @@ struct io_req {
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
-	struct d_uuid		cookie;
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
 	daos_epoch_t		epoch;
@@ -118,9 +115,7 @@ struct io_req {
 
 
 daos_epoch_t		gen_rand_epoch(void);
-struct d_uuid		gen_rand_cookie(void);
 void			gen_rand_key(char *rkey, char *key, int ksize);
-bool			is_found(uuid_t cookie);
 daos_unit_oid_t		gen_oid(daos_ofeat_t ofeats);
 void			inc_cntr(unsigned long op_flags);
 void			inc_cntr_manual(unsigned long op_flags,
@@ -131,7 +126,6 @@ int			io_test_obj_update(struct io_test_args *arg,
 					   int epoch, daos_key_t *dkey,
 					   daos_iod_t *iod,
 					   daos_sg_list_t *sgl,
-					   struct d_uuid *cookie,
 					   bool verbose);
 int			io_test_obj_fetch(struct io_test_args *arg,
 					  int epoch, daos_key_t *dkey,

@@ -221,7 +221,6 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
- * and \a cookie id.
  *
  * If a single epoch needs to be discarded then \a epr::epr_lo
  * and \a epr::hi must be set to the same epoch.
@@ -233,18 +232,15 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
  *
  * Note: \a epr::epr_lo must never be set to DAOS_EPOCH_MAX by
  * the caller.
- * \a cookie is a uuid assigned by the user during each update
- * call to tag updates that have to be grouped together.
  *
  * \param coh		[IN]	Container open handle
  * \param epr		[IN]	The epoch range to discard
- * \param cookie	[IN]	Cookie ID to identify records,
  *				keys to discard
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie);
+vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
 
 /**
  * VOS object API
@@ -290,9 +286,6 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param oid	[IN]	object ID
  * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
  *			range is provided by \a iods (kvl::kv_epr).
- * \param cookie [IN]	Cookie ID to tag this update to identify during
- *			discard. This tag is used to group all updates
- *			that might in future be discarded together.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param dkey	[IN]	Distribution key.
@@ -309,8 +302,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uuid_t cookie, uint32_t pm_ver, daos_key_t *dkey,
-	       unsigned int iod_nr, daos_iod_t *iods, daos_sg_list_t *sgls);
+	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
+	       daos_iod_t *iods, daos_sg_list_t *sgls);
 
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
@@ -319,9 +312,6 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param oid	[IN]	object ID, the full object will be punched if \a dkey
  *			and \a akeys are not provided.
  * \param epoch	[IN]	Epoch for the punch.
- * \param cookie [IN]	Cookie ID to tag this punch to identify during
- *			discard. This tag is used to group all updates
- *			that might in future be discarded together.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param flags [IN]	Object punch flags, VOS_OF_REPLAY_PC is the only
@@ -334,8 +324,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      uuid_t cookie, uint32_t pm_ver, uint32_t flags,
-	      daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys);
+	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
+	      unsigned int akey_nr, daos_key_t *akeys);
 
 /**
  * I/O APIs
@@ -409,9 +399,6 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * Finish the current update and release the responding resources.
  *
  * \param ioh	[IN]	The I/O handle created by \a vos_update_begin
- * \param cookie [IN]	Cookie ID to tag this update to identify during
- *			discard. This tag is used to group all updates
- *			that might in future be discarded together.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param dkey	[IN]	Distribution key.
@@ -422,8 +409,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \return		Zero on success, negative value if error
  */
 int
-vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
-	       daos_key_t *dkey, int err);
+vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err);
 
 /**
  * Get the I/O descriptor.

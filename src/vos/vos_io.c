@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -643,9 +643,8 @@ iod_update_biov(struct vos_io_context *ioc)
 }
 
 static int
-akey_update_single(daos_handle_t toh, daos_epoch_t epoch,
-		   uuid_t cookie, uint32_t pm_ver, daos_size_t rsize,
-		   struct vos_io_context *ioc)
+akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
+		   daos_size_t rsize, struct vos_io_context *ioc)
 {
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
@@ -676,7 +675,6 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch,
 	rbund.rb_biov	= biov;
 	rbund.rb_rsize	= rsize;
 	rbund.rb_mmid	= mmid;
-	uuid_copy(rbund.rb_cookie, cookie);
 	rbund.rb_ver	= pm_ver;
 
 	rc = dbtree_update(toh, &kiov, &riov);
@@ -691,8 +689,8 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch,
  * See comment of vos_recx_fetch for explanation of @off_p.
  */
 static int
-akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uuid_t cookie,
-		 uint32_t pm_ver, daos_recx_t *recx, daos_size_t rsize,
+akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
+		 daos_recx_t *recx, daos_size_t rsize,
 		 struct vos_io_context *ioc)
 {
 	struct evt_entry_in ent;
@@ -705,7 +703,6 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uuid_t cookie,
 	ent.ei_rect.rc_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
-	uuid_copy(ent.ei_cookie, cookie);
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
@@ -733,8 +730,8 @@ update_bounds(daos_epoch_range_t *epr_bound,
 }
 
 static int
-akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
-	    daos_handle_t ak_toh, daos_epoch_range_t *dkey_epr)
+akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
+	    daos_epoch_range_t *dkey_epr)
 {
 	struct vos_object  *obj = ioc->ic_obj;
 	struct vos_krec_df *krec = NULL;
@@ -768,8 +765,7 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 			return rc;
 
 		D_DEBUG(DB_IO, "Single update eph "DF_U64"\n", epoch);
-		rc = akey_update_single(toh, epoch, cookie, pm_ver,
-					iod->iod_size, ioc);
+		rc = akey_update_single(toh, epoch, pm_ver, iod->iod_size, ioc);
 		if (rc)
 			goto failed;
 		goto out;
@@ -797,8 +793,8 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 		}
 
 		D_DEBUG(DB_IO, "Array update %d eph "DF_U64"\n", i, epoch);
-		rc = akey_update_recx(toh, epoch, cookie, pm_ver,
-				      &iod->iod_recxs[i], iod->iod_size, ioc);
+		rc = akey_update_recx(toh, epoch, pm_ver, &iod->iod_recxs[i],
+				      iod->iod_size, ioc);
 		if (rc != 0)
 			goto failed;
 	}
@@ -813,14 +809,13 @@ failed:
 }
 
 static int
-dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
-	    daos_key_t *dkey)
+dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 {
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_obj_df	*obj_df;
 	struct vos_krec_df	*krec = NULL;
 	daos_epoch_range_t	 dkey_epr = {ioc->ic_epoch, ioc->ic_epoch};
-	daos_handle_t		 ak_toh, ck_toh;
+	daos_handle_t		 ak_toh;
 	bool			 subtr_created = false;
 	int			 i, rc;
 
@@ -842,22 +837,11 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 			subtr_created = true;
 		}
 
-		rc = akey_update(ioc, cookie, pm_ver, ak_toh, &dkey_epr);
+		rc = akey_update(ioc, pm_ver, ak_toh, &dkey_epr);
 		if (rc != 0)
 			goto out;
 	}
 
-	/** If dkey update is successful update the cookie tree */
-	/** XXX Note: if there are different epochs for akeys during rebuild,
-	 * we might use minium epoch, instead of the ic_epoch?
-	 */
-	if (subtr_created) {
-		ck_toh = vos_obj2cookie_hdl(obj);
-		rc = vos_cookie_find_update(ck_toh, cookie, dkey_epr.epr_hi,
-					    true, NULL);
-		if (rc)
-			D_ERROR("Failed to record cookie: %d\n", rc);
-	}
 out:
 	if (!subtr_created)
 		return rc;
@@ -1192,8 +1176,7 @@ update_cancel(struct vos_io_context *ioc)
 }
 
 int
-vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
-	       daos_key_t *dkey, int err)
+vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err)
 {
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 	struct umem_instance *umem;
@@ -1225,7 +1208,7 @@ vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
 	}
 
 	/* Update tree index */
-	err = dkey_update(ioc, cookie, pm_ver, dkey);
+	err = dkey_update(ioc, pm_ver, dkey);
 	if (err) {
 		D_ERROR("Failed to update tree index: %d\n", err);
 		goto abort;
@@ -1281,7 +1264,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	*ioh = vos_ioc2ioh(ioc);
 	return 0;
 error:
-	vos_update_end(vos_ioc2ioh(ioc), 0, 0, dkey, rc);
+	vos_update_end(vos_ioc2ioh(ioc), 0, dkey, rc);
 	return rc;
 }
 
@@ -1338,14 +1321,14 @@ vos_obj_copy(struct vos_io_context *ioc, daos_sg_list_t *sgls,
 
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uuid_t cookie, uint32_t pm_ver, daos_key_t *dkey,
-	       unsigned int iod_nr, daos_iod_t *iods, daos_sg_list_t *sgls)
+	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
+	       daos_iod_t *iods, daos_sg_list_t *sgls)
 {
 	daos_handle_t ioh;
 	int rc;
 
-	D_DEBUG(DB_IO, "Update "DF_UOID", desc_nr %d, cookie "DF_UUID" epoch "
-		DF_U64"\n", DP_UOID(oid), iod_nr, DP_UUID(cookie), epoch);
+	D_DEBUG(DB_IO, "Update "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
+		DP_UOID(oid), iod_nr, epoch);
 
 	rc = vos_update_begin(coh, oid, epoch, dkey, iod_nr, iods, &ioh);
 	if (rc) {
@@ -1359,7 +1342,7 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			D_ERROR("Copy "DF_UOID" failed %d\n", DP_UOID(oid), rc);
 	}
 
-	rc = vos_update_end(ioh, cookie, pm_ver, dkey, rc);
+	rc = vos_update_end(ioh, pm_ver, dkey, rc);
 	return rc;
 }
 

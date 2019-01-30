@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,9 +79,6 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_vea_info != NULL)
 		vea_unload(pool->vp_vea_info);
 
-	if (!daos_handle_is_inval(pool->vp_cookie_th))
-		vos_cookie_tab_destroy(pool->vp_cookie_th);
-
 	if (!daos_handle_is_inval(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
@@ -101,7 +98,6 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 {
 	struct vos_pool		*pool;
 	struct umem_attr	 uma;
-	int			 rc;
 
 	D_ALLOC_PTR(pool);
 	if (pool == NULL)
@@ -112,18 +108,8 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
-	/* Create a cookie index table in DRAM */
-	rc = vos_cookie_tab_create(&uma, &pool->vp_cookie_tab,
-				    &pool->vp_cookie_th);
-	if (rc != 0) {
-		D_ERROR("Cookie tree create failed: %d\n", rc);
-		D_GOTO(failed, rc);
-	}
 	*pool_p = pool;
 	return 0;
-failed:
-	pool_hop_free(&pool->vp_hlink);
-	return rc;
 }
 
 static int

@@ -38,7 +38,6 @@
 struct obj_enum_rec {
 	daos_recx_t		rec_recx;
 	daos_epoch_range_t	rec_epr;
-	uuid_t			rec_cookie;
 	uint64_t		rec_size;
 	uint32_t		rec_version;
 	uint32_t		rec_flags;
@@ -260,7 +259,6 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	rec->rec_size = key_ent->ie_rsize;
 	rec->rec_epr.epr_lo = key_ent->ie_epoch;
 	rec->rec_epr.epr_hi = DAOS_EPOCH_MAX;
-	uuid_copy(rec->rec_cookie, key_ent->ie_cookie);
 	rec->rec_version = key_ent->ie_ver;
 	rec->rec_flags = 0;
 	iovs[arg->sgl_idx].iov_len += sizeof(*rec);
@@ -288,11 +286,10 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	}
 
 	D_DEBUG(DB_IO, "Pack rec "DF_U64"/"DF_U64
-		" rsize "DF_U64" cookie "DF_UUID" ver %u"
-		" kd_len "DF_U64" type %d sgl_idx %d kds_len %d inline "DF_U64
-		" epr "DF_U64"/"DF_U64"\n", key_ent->ie_recx.rx_idx,
-		key_ent->ie_recx.rx_nr, key_ent->ie_rsize,
-		DP_UUID(rec->rec_cookie), rec->rec_version,
+		" rsize "DF_U64" ver %u kd_len "DF_U64" type %d sgl_idx %d "
+		"kds_len %d inline "DF_U64" epr "DF_U64"/"DF_U64"\n",
+		key_ent->ie_recx.rx_idx, key_ent->ie_recx.rx_nr,
+		key_ent->ie_rsize, rec->rec_version,
 		arg->kds[arg->kds_len].kd_key_len, type, arg->sgl_idx,
 		arg->kds_len, rec->rec_flags & RECX_INLINE ? data_size : 0,
 		rec->rec_epr.epr_lo, rec->rec_epr.epr_hi);
@@ -400,7 +397,7 @@ grow_array(void **arrayp, size_t elem_size, int old_len, int new_len)
 static int
 unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 	     daos_key_t *akey, daos_key_desc_t *kds, void **data,
-	     daos_size_t len, uuid_t cookie, uint32_t *version)
+	     daos_size_t len, uint32_t *version)
 {
 	int rc = 0;
 	int type;
@@ -430,15 +427,11 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 			break;
 		}
 
-		/* Check if the cookie or the version is changing. */
-		if (uuid_is_null(cookie)) {
-			uuid_copy(cookie, rec->rec_cookie);
+		/* Check if the version is changing. */
+		if (*version == 0) {
 			*version = rec->rec_version;
-		} else if (uuid_compare(cookie, rec->rec_cookie) != 0 ||
-			   *version != rec->rec_version) {
-			D_DEBUG(DB_REBUILD, "different cookie or version"
-				DF_UUIDF" "DF_UUIDF" %u != %u\n",
-				DP_UUID(cookie), DP_UUID(rec->rec_cookie),
+		} else if (*version != rec->rec_version) {
+			D_DEBUG(DB_REBUILD, "different version %u != %u\n",
 				*version, rec->rec_version);
 			rc = 1;
 			break;
@@ -536,9 +529,8 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, "pack nr %d cookie/version/type "DF_UUID
-		"/%u/%d rc %d\n", iod->iod_nr, DP_UUID(cookie), *version,
-		iod->iod_type, rc);
+	D_DEBUG(DB_REBUILD, "pack nr %d version/type /%u/%d rc %d\n",
+		iod->iod_nr, *version, iod->iod_type, rc);
 	return rc;
 }
 
@@ -585,7 +577,6 @@ dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
 		ephs[i] = DAOS_EPOCH_MAX;
 
 	io->ui_akey_ephs = ephs;
-	uuid_clear(io->ui_cookie);
 }
 
 static void
@@ -629,7 +620,6 @@ dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io)
 
 	io->ui_dkey_eph = DAOS_EPOCH_MAX;
 	io->ui_iods_len = 0;
-	uuid_clear(io->ui_cookie);
 	io->ui_version = 0;
 }
 
@@ -828,7 +818,7 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 
 			rc = unpack_recxs(&io.ui_iods[io.ui_iods_len],
 					  NULL, NULL, &akey, NULL, NULL,
-					  0, NULL, NULL);
+					  0, NULL);
 			if (rc < 0)
 				goto out;
 
@@ -850,9 +840,8 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 				int		j = io.ui_iods_len;
 
 				/* Because vos_obj_update only accept single
-				 * cookie/version, let's go through the records
-				 * to check different cookie and version, and
-				 * queue rebuild.
+				 * version, let's go through the records to
+				 * check different version, and* queue rebuild.
 				 */
 				len = ptr + arg->kds[i].kd_key_len - data;
 				rc = unpack_recxs(&io.ui_iods[j],
@@ -860,7 +849,6 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 						  io.ui_sgls == NULL ?
 						  NULL : &io.ui_sgls[j], &akey,
 						  &arg->kds[i], &data, len,
-						  io.ui_cookie,
 						  &io.ui_version);
 				if (rc < 0)
 					goto out;

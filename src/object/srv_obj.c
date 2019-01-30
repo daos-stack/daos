@@ -64,8 +64,7 @@ ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	if (!daos_handle_is_inval(ioh)) {
 		bool update = (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE);
 
-		rc = update ? vos_update_end(ioh, cont_hdl->sch_uuid,
-					     map_version, &orwi->orw_dkey,
+		rc = update ? vos_update_end(ioh, map_version, &orwi->orw_dkey,
 					     status) :
 			      vos_fetch_end(ioh, status);
 
@@ -1155,8 +1154,8 @@ ds_obj_punch_local_hdlr(struct obj_punch_in *opi, crt_opcode_t opc,
 
 	case DAOS_OBJ_RPC_PUNCH:
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
-				   opi->opi_epoch, cont_hdl->sch_uuid,
-				   opi->opi_map_ver, 0, NULL, 0, NULL);
+				   opi->opi_epoch, opi->opi_map_ver, 0,
+				   NULL, 0, NULL);
 		break;
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -1167,7 +1166,6 @@ ds_obj_punch_local_hdlr(struct obj_punch_in *opi, crt_opcode_t opc,
 			rc = vos_obj_punch(cont->sc_hdl,
 					   opi->opi_oid,
 					   opi->opi_epoch,
-					   cont_hdl->sch_uuid,
 					   opi->opi_map_ver, 0, dkey,
 					   opi->opi_akeys.ca_count,
 					   opi->opi_akeys.ca_arrays);

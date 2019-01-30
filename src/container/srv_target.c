@@ -830,7 +830,7 @@ cont_epoch_discard_one(void *vin)
 	epr.epr_lo = in->tii_epoch;
 	epr.epr_hi = in->tii_epoch;
 
-	rc = vos_discard(hdl->sch_cont->sc_hdl, &epr, in->tii_hdl);
+	rc = vos_discard(hdl->sch_cont->sc_hdl, &epr);
 	if (rc > 0)	/* Aborted */
 		rc = -DER_CANCELED;
 

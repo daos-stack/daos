@@ -31,7 +31,6 @@
 #define VOS_AGG_CREDITS_MAX	10000
 struct vos_agg_param {
 	struct umem_instance	*ap_umm;
-	uuid_t		ap_cookie;	/* update cookie, used by discard */
 	uint32_t	ap_credits_max; /* # of tight loops to yield */
 	uint32_t	ap_credits;	/* # of tight loops */
 	bool		ap_discard;	/* discard or not */
@@ -173,12 +172,9 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(agg_param != NULL);
 	D_ASSERT(entry->ie_epoch != 0);
 
-	/* Discard: only delete recx with matched update cookie */
-	if (agg_param->ap_discard) {
-		if (uuid_compare(entry->ie_cookie, agg_param->ap_cookie))
-			return 0;
+	/* Discard */
+	if (agg_param->ap_discard)
 		goto delete;
-	}
 
 	/* Aggregate: preserve the first recx which has highest epoch */
 	if (agg_param->ap_max_epoch == 0) {
@@ -349,10 +345,9 @@ exit:
 }
 
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie)
+vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
-	daos_epoch_t		 max_epoch;
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_agg_param	 agg_param = { 0 };
 	struct vos_iter_anchors	 anchors = { 0 };
@@ -367,22 +362,8 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie)
 	if (rc != 0)
 		return rc;
 
-	rc = vos_cookie_find_update(cont->vc_pool->vp_cookie_th, cookie,
-				    epr->epr_lo, false, &max_epoch);
-	if (rc) {
-		if (rc == -DER_NONEXIST)
-			rc = 0;
-		goto exit;
-	}
-
-	D_DEBUG(DB_EPC, "Max epoch of "DF_UUID" is "DF_U64"\n",
-		DP_UUID(cookie), max_epoch);
-
-	/** If this is the max epoch skip discard */
-	if (max_epoch < epr->epr_lo) {
-		D_DEBUG(DB_EPC, "Max Epoch < epr_lo.. skip discard\n");
-		goto exit;
-	}
+	D_DEBUG(DB_EPC, "Discard epr "DF_U64"-"DF_U64"\n",
+		epr->epr_lo, epr->epr_hi);
 
 	/* Set iteration parameters */
 	iter_param.ip_hdl = coh;
@@ -396,14 +377,13 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie)
 
 	/* Set aggregation parameters */
 	agg_param.ap_umm = &cont->vc_pool->vp_umm;
-	uuid_copy(agg_param.ap_cookie, cookie);
 	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	agg_param.ap_credits = 0;
 	agg_param.ap_discard = true;
 
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 vos_aggregate_cb, &agg_param);
-exit:
+
 	aggregate_exit(cont, true);
 	return rc;
 }

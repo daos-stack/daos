@@ -499,7 +499,6 @@ struct dss_enum_unpack_io {
 	daos_epoch_t	ui_dkey_eph;
 	daos_epoch_t   *ui_akey_ephs;
 	daos_sg_list_t *ui_sgls;	/**< optional */
-	uuid_t		ui_cookie;
 	uint32_t	ui_version;
 };
 
