@@ -25,14 +25,16 @@ package main
 
 import (
 	"flag"
-	"log"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/drpc_test/hello"
+	"github.com/daos-stack/daos/src/control/utils/log"
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -41,16 +43,26 @@ var (
 )
 
 func main() {
+	// Set default global logger for application.
+	log.NewDefaultLogger(log.Debug, "", os.Stderr)
+
 	flag.Parse()
 
+	err := errors.New("")
 	if *server {
-		runDrpcServer()
+		err = runDrpcServer()
 	} else {
-		runDrpcClient()
+		err = runDrpcClient()
 	}
+	status := 0
+	if err != nil {
+		log.Errorf(err.Error())
+		status = 1
+	}
+	os.Exit(status)
 }
 
-func runDrpcServer() {
+func runDrpcServer() error {
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal, 1)
 	finish := make(chan bool, 1)
@@ -58,7 +70,7 @@ func runDrpcServer() {
 
 	drpcServer, err := drpc.NewDomainSocketServer(*unixSocket)
 	if err != nil {
-		log.Fatalf("Unable to create socket server: %v", err)
+		return errors.Wrap(err, "creating socket server")
 	}
 
 	module := &hello.HelloModule{}
@@ -66,7 +78,8 @@ func runDrpcServer() {
 
 	err = drpcServer.Start()
 	if err != nil {
-		log.Fatalf("Unable to start socket server on %s: %v", *unixSocket, err)
+		return errors.Wrapf(
+			err, "starting socket server on %s", *unixSocket)
 	}
 
 	// Anonymous goroutine to wait on the signals channel and tell the
@@ -79,14 +92,16 @@ func runDrpcServer() {
 		finish <- true
 	}()
 	<-finish
+
+	return nil
 }
 
-func runDrpcClient() {
+func runDrpcClient() error {
 	client := drpc.NewClientConnection(*unixSocket)
 
 	err := client.Connect()
 	if err != nil {
-		log.Fatalf("Failed to connect to socket: %v", err)
+		return errors.Wrap(err, "connecting to socket")
 	}
 
 	message := &drpc.Call{
@@ -99,26 +114,27 @@ func runDrpcClient() {
 	}
 	message.Body, err = proto.Marshal(body)
 	if err != nil {
-		log.Fatalf("Failed to marshal the Call body: %v", err)
+		return errors.Wrap(err, "marshalling the Call body")
 	}
 
 	resp, err := client.SendMsg(message)
 	if err != nil {
-		log.Fatalf("Failed to send message: %v", err)
+		return errors.Wrap(err, "sending message")
 	}
 
-	log.Printf("Response:")
-	log.Printf("\tSequence: %v", resp.Sequence)
-	log.Printf("\tStatus: %v", resp.Status)
-	log.Printf("\tBody: %v bytes", len(resp.Body))
+	fmt.Printf("Response:")
+	fmt.Printf("\tSequence: %v", resp.Sequence)
+	fmt.Printf("\tStatus: %v", resp.Status)
+	fmt.Printf("\tBody: %v bytes", len(resp.Body))
 
 	respBody := &hello.HelloResponse{}
 	err = proto.Unmarshal(resp.Body, respBody)
 	if err != nil {
-		log.Fatalf("Failed to unmarshal HelloResponse: %v", err)
+		return errors.Wrap(err, "unmarshalling HelloResponse")
 	}
 
-	log.Printf("\tGreeting: %v", respBody.Greeting)
+	log.Debugf("\tGreeting: %v", respBody.Greeting)
 
-	log.Printf("Done.")
+	log.Debugf("Done.")
+	return nil
 }

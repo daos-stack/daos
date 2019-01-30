@@ -25,13 +25,13 @@ package main
 
 import (
 	"flag"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/utils/log"
 )
 
 var (
@@ -48,6 +48,9 @@ func main() {
 		os.Exit(status)
 	}()
 
+	// Set default global logger for application.
+	log.NewDefaultLogger(log.Debug, "", os.Stderr)
+
 	flag.Parse()
 
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
@@ -58,7 +61,8 @@ func main() {
 	sockPath := filepath.Join(*runtimeDir, "agent.sock")
 	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
 	if err != nil {
-		log.Fatalf("Unable to create socket server: %v", err)
+		log.Errorf("Unable to create socket server: %v", err)
+		return
 	}
 
 	module := &SecurityModule{}
@@ -66,7 +70,8 @@ func main() {
 
 	err = drpcServer.Start()
 	if err != nil {
-		log.Fatalf("Unable to start socket server on %s: %v", sockPath, err)
+		log.Errorf("Unable to start socket server on %s: %v", sockPath, err)
+		return
 	}
 
 	// Anonymous goroutine to wait on the signals channel and tell the

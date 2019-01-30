@@ -66,7 +66,6 @@ type spdkSetup struct {
 // for accessing Nvme devices (API) as well as storing device
 // details.
 type nvmeStorage struct {
-	logger      *log.Logger
 	env         spdk.ENV  // SPDK ENV interface
 	nvme        spdk.NVME // SPDK NVMe interface
 	spdk        SpdkSetup // SPDK shell configuration interface
@@ -218,7 +217,7 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 			"--eta-newline=10",
 			configPath,
 		}
-		n.logger.Debugf(
+		log.Debugf(
 			"BurnIn command string: %s %s %v", env, fioPath, cmds)
 		return
 	}
@@ -263,18 +262,16 @@ func loadNamespaces(ctrlrID int32, nss []spdk.Namespace) (_nss []*pb.NvmeNamespa
 }
 
 // newNvmeStorage creates a new instance of nvmeStorage struct.
-func newNvmeStorage(
-	logger *log.Logger, shmID int, nrHugePages int) (*nvmeStorage, error) {
+func newNvmeStorage(shmID int, nrHugePages int) (*nvmeStorage, error) {
 
 	scriptPath, err := handlers.GetAbsInstallPath(spdkSetupPath)
 	if err != nil {
 		return nil, err
 	}
 	return &nvmeStorage{
-		logger: logger,
-		env:    &spdk.Env{},
-		nvme:   &spdk.Nvme{},
-		spdk:   &spdkSetup{scriptPath, nrHugePages},
-		shmID:  shmID, // required to enable SPDK multi-process mode
+		env:   &spdk.Env{},
+		nvme:  &spdk.Nvme{},
+		spdk:  &spdkSetup{scriptPath, nrHugePages},
+		shmID: shmID, // required to enable SPDK multi-process mode
 	}, nil
 }

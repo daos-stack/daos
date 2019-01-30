@@ -26,8 +26,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/daos-stack/daos/src/control/utils/log"
-
 	"github.com/daos-stack/go-ipmctl/ipmctl"
 
 	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
@@ -42,7 +40,6 @@ type ScmmMap map[int32]*pb.ScmModule
 // IpmCtl provides necessary methods to interact with Storage Class
 // Memory modules through libipmctl via go-ipmctl bindings.
 type scmStorage struct {
-	logger      *log.Logger
 	ipmCtl      ipmctl.IpmCtl // ipmctl NVM API interface
 	modules     ScmmMap
 	initialized bool
@@ -102,10 +99,8 @@ func (s *scmStorage) Teardown() error {
 }
 
 // newScmStorage creates a new instance of ScmStorage struct.
-func newScmStorage(logger *log.Logger) *scmStorage {
-	return &scmStorage{
-		logger: logger,
-		// NvmMgmt is the implementation of IpmCtl interface in go-ipmctl
-		ipmCtl: &ipmctl.NvmMgmt{},
-	}
+//
+// NvmMgmt is the implementation of IpmCtl interface in go-ipmctl
+func newScmStorage() *scmStorage {
+	return &scmStorage{ipmCtl: &ipmctl.NvmMgmt{}}
 }

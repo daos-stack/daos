@@ -24,29 +24,33 @@
 package main
 
 import (
-	"log"
 	"net"
 	"os/exec"
 	"strconv"
 	"strings"
 )
 
-func checkReplica(lis net.Listener, accessPoints []string, srv *exec.Cmd) string {
-	// If this server is supposed to host an MS replica, format and start
-	// the MS replica. Only performing the check and print the result for now.
-	isReplica, bootstrap, err := checkMgmtSvcReplica(lis.Addr().(*net.TCPAddr), accessPoints)
+// CheckReplica verifies if this server is supposed to host an MS replica,
+// only performing the check and printing the result for now.
+//
+// TODO: format and start the MS replica
+func CheckReplica(
+	lis net.Listener, accessPoints []string, srv *exec.Cmd) (
+	msReplicaCheck string, err error) {
+
+	isReplica, bootstrap, err := checkMgmtSvcReplica(
+		lis.Addr().(*net.TCPAddr), accessPoints)
 	if err != nil {
 		srv.Process.Kill()
-		log.Fatal("Failed to check management service replica: ", err)
+		return
 	}
-	var msReplicaCheck string
 	if isReplica {
 		msReplicaCheck = " as access point"
 		if bootstrap {
 			msReplicaCheck += " (bootstrap)"
 		}
 	}
-	return msReplicaCheck
+	return
 }
 
 // getInterfaceAddrs enables TestCheckMgmtSvcReplica to replace the real

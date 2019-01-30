@@ -23,16 +23,18 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/utils/handlers"
+	"github.com/daos-stack/daos/src/control/utils/log"
 	. "github.com/daos-stack/daos/src/control/utils/test"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -49,6 +51,10 @@ var (
 	files    = []string{}
 	commands = []string{}
 )
+
+func init() {
+	log.NewDefaultLogger(log.Error, "config_test: ", os.Stderr)
+}
 
 func setupTest(t *testing.T) {
 	files = []string{}
@@ -72,7 +78,9 @@ func uncommentServerConfig(t *testing.T) {
 		}
 
 		slurp, _ := ioutil.ReadAll(stderr)
-		fmt.Printf("%s", slurp)
+		if string(slurp) != "" {
+			t.Error(slurp)
+		}
 
 		if err := cmd.Wait(); err != nil {
 			t.Fatal(err)
@@ -131,7 +139,7 @@ func populateMockConfig(t *testing.T, c configuration, path string) configuratio
 	c.Path = path
 	err := c.loadConfig()
 	if err != nil {
-		t.Fatalf("Configuration could not be read (%s)", err.Error())
+		t.Fatalf("Configuration could not be read (%s)", err)
 	}
 	return c
 }
@@ -144,31 +152,31 @@ func TestParseConfigSucceed(t *testing.T) {
 	inputYamls, outputYamls, err := LoadTestFiles(
 		"testdata/input_good.txt", "testdata/output_success.txt")
 	if err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	for i, y := range inputYamls {
 		// write input yaml config to temporary file
 		err := WriteSlice(tmpIn, y)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		// verify decoding of config from written file
 		config := newDefaultMockConfig()
 		config.Path = tmpIn
 		err = config.loadConfig()
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		// encode decoded config to temporary output file
 		err = config.saveConfig(tmpOut)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		// use SplitFile (just for convenience) to read output file contents
 		outputs, err := SplitFile(tmpOut)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		// compare encoded output (first element of output from SplitFile)
 		// with expected outputYaml
@@ -190,13 +198,13 @@ func TestParseConfigFail(t *testing.T) {
 	inputYamls, outputErrorMsgs, err := LoadTestFiles(
 		"testdata/input_bad.txt", "testdata/output_errors.txt")
 	if err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	for i, y := range inputYamls {
 		err := WriteSlice(tmpIn, y)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 
 		config := newDefaultMockConfig()
@@ -260,34 +268,33 @@ func TestProvidedConfigs(t *testing.T) {
 		// encode decoded config to temporary output file to verify parser
 		err := config.saveConfig(tmpOut)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		// use SplitFile (just for convenience) to read what has been output
 		outYamls, err := SplitFile(tmpOut)
 		if err != nil {
 			t.Fatal(
-				fmt.Sprintf(
-					"problem reading processed output file %s: %s",
-					tmpOut, err.Error()))
-			t.Fatal(err.Error())
+				errors.Wrapf(
+					err,
+					"reading processed output file %s",
+					tmpOut))
 		}
 		// read and compare output file contents with expected file contents
 		// (outFile), (extract first element of output from SplitFile for each)
 		outExpectYamls, err := SplitFile(expectedFile)
 		if err != nil {
 			t.Fatal(
-				fmt.Sprintf(
-					"problem reading expected output file %s: %s",
-					expectedFile, err.Error()))
+				errors.Wrapf(
+					err,
+					"reading expected output file %s",
+					expectedFile))
 		}
 
 		// verify the generated yaml is of expected size
 		outExpectYaml := outExpectYamls[0]
 		outYaml := outYamls[0]
 		if len(outExpectYaml) != len(outYaml) {
-			t.Fatal(
-				fmt.Sprintf(
-					"number of lines unexpected in %s", expectedFile))
+			t.Fatalf("number of lines unexpected in %s", expectedFile)
 		}
 
 		// verify the generated yaml is of expected content
@@ -306,9 +313,10 @@ func TestProvidedConfigs(t *testing.T) {
 		outExpect, err := SplitFile(expectedFile)
 		if err != nil {
 			t.Fatal(
-				fmt.Sprintf(
-					"problem reading expected output file %s: %s",
-					expectedFile, err.Error()))
+				errors.Wrapf(
+					err,
+					"reading expected output file %s",
+					expectedFile))
 		}
 		err = config.getIOParams(&cliOptions{})
 		if tt.errMsg != "" {
@@ -316,9 +324,11 @@ func TestProvidedConfigs(t *testing.T) {
 			continue
 		}
 		if err != nil {
-			t.Fatalf(
-				"problem retrieving IO params using conf %s: %s",
-				filename, err.Error())
+			t.Fatal(
+				errors.Wrapf(
+					err,
+					"retrieving IO params using conf %s",
+					filename))
 		}
 		// should only ever be one line in expected output, compare
 		// string representations of config.Servers
@@ -356,7 +366,7 @@ func TestGetNumCores(t *testing.T) {
 			continue
 		}
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		AssertEqual(t, num, tt.cores, "unexpected number of cores calculated")
 	}
@@ -384,7 +394,7 @@ func TestSetNumCores(t *testing.T) {
 		AssertEqual(t, cpus, tt.cpus, "failed to convert number to range")
 		num, err := getNumCores(cpus)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		AssertEqual(t, num, tt.num, "failed to convert to expected number")
 	}
@@ -679,7 +689,7 @@ func TestCmdlineOverride(t *testing.T) {
 			continue
 		}
 		if err != nil {
-			t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err.Error())
+			t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err)
 		}
 		if len(config.Servers) != len(tt.outCliOpts) {
 			t.Fatalf(
@@ -859,7 +869,7 @@ func TestPopulateEnv(t *testing.T) {
 		if tt.getParams == true {
 			err := config.getIOParams(&cliOptions{})
 			if err != nil {
-				t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err.Error())
+				t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err)
 			}
 		}
 		// pass in env and verify output envs is as expected
@@ -869,7 +879,7 @@ func TestPopulateEnv(t *testing.T) {
 			continue
 		}
 		if err != nil {
-			t.Fatalf("Envs could not be populated (%s: %s)", tt.desc, err.Error())
+			t.Fatalf("Envs could not be populated (%s: %s)", tt.desc, err)
 		}
 		AssertEqual(t, inEnvs, tt.outEnvs, tt.desc)
 	}
