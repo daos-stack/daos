@@ -239,7 +239,7 @@ io_create_object(struct vos_container *cont)
 	struct vos_obj_df	*obj;
 
 	oid = dts_unit_oid_gen(0, 0, 0);
-	rc = vos_oi_find_alloc(cont, oid, 1, &obj);
+	rc = vos_oi_find_alloc(cont, oid, 1, DAOS_INTENT_UPDATE, &obj);
 	return rc;
 }
 
@@ -553,7 +553,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	struct vos_obj_df	*obj_res = NULL;
 
 	rc = vos_oi_find(vos_hdl2cont(arg->ctx.tc_co_hdl), last_oid, 1,
-			 &obj_res);
+			 DAOS_INTENT_DEFAULT, &obj_res);
 	assert_int_equal(rc, -DER_NONEXIST);
 	assert_ptr_equal(obj_res, NULL);
 

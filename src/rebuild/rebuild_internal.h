@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,6 +70,27 @@ struct rebuild_obj_key {
 	uint32_t	tgt_idx;
 };
 
+struct rebuild_dtx_entry {
+	d_list_t		rte_link;
+	struct daos_tx_id	rte_xid;
+	daos_unit_oid_t		rte_oid;
+	uint32_t		rte_state;
+	uint32_t		rte_intent;
+	uint64_t		rte_hash;
+};
+
+struct rebuild_dtx_head {
+	d_list_t		rth_list;
+	int			rth_count;
+};
+
+struct rebuild_dtx_args {
+	uuid_t				 po_uuid;
+	uint64_t			 start;
+	uint32_t			 version;
+	struct rebuild_dtx_head		*tables;
+};
+
 /* Track the pool rebuild status on each target, which exists on
  * all server targets. Then each target will report its rebuild
  * status to the global pool tracker(see below) on the master node,
@@ -114,6 +135,7 @@ struct rebuild_tgt_pool_tracker {
 	/* reported # rebuilt objs */
 	uint64_t		rt_reported_obj_cnt;
 	uint64_t		rt_reported_rec_cnt;
+	struct rebuild_dtx_args	rt_dtx_args;
 
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,

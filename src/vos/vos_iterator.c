@@ -70,6 +70,11 @@ static struct vos_iter_dict vos_iterators[] = {
 		.id_ops		= &vos_obj_iter_ops,
 	},
 	{
+		.id_type	= VOS_ITER_DTX,
+		.id_name	= "dtx",
+		.id_ops		= &vos_dtx_iter_ops,
+	},
+	{
 		.id_type	= VOS_ITER_NONE,
 		.id_name	= "unknown",
 		.id_ops		= NULL,
@@ -133,7 +138,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	}
 
 	info.ii_epc_expr = param->ip_epc_expr;
-	info.ii_recx_flags = param->ip_recx_flags;
+	info.ii_flags = param->ip_flags;
 	info.ii_akey = &param->ip_akey;
 
 	rc = dict->id_ops->iop_nested_prepare(type, &info, &citer);
@@ -150,7 +155,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	citer->it_state		= VOS_ITS_NONE;
 	citer->it_ref_cnt	= 1;
 	citer->it_parent	= iter;
-	citer->it_from_parent	= true;
+	citer->it_from_parent	= 1;
 
 	*cih = vos_iter2hdl(citer);
 	return 0;
@@ -203,7 +208,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	iter->it_state		= VOS_ITS_NONE;
 	iter->it_ref_cnt	= 1;
 	iter->it_parent		= NULL;
-	iter->it_from_parent	= false;
+	iter->it_from_parent	= 0;
 
 	*ih = vos_iter2hdl(iter);
 	return 0;

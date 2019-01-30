@@ -45,6 +45,7 @@
 
 extern struct dss_module_key vos_module_key;
 extern umem_class_id_t vos_mem_class;
+extern double vos_start_time;
 
 #define VOS_POOL_HHASH_BITS 10 /* Upto 1024 pools */
 #define VOS_CONT_HHASH_BITS 20 /* Upto 1048576 containers */
@@ -114,8 +115,22 @@ struct vos_container {
 	struct vos_pool		*vc_pool;
 	/* Unique UID of VOS container */
 	uuid_t			vc_id;
+	/* The handle for active DTX table */
+	daos_handle_t		vc_dtx_active_hdl;
+	/* The handle for committed DTX table */
+	daos_handle_t		vc_dtx_committed_hdl;
 	/* DAOS handle for object index btree */
 	daos_handle_t		vc_btr_hdl;
+	/* The objects with committable DTXs in DRAM. */
+	daos_handle_t		vc_dtx_cos_hdl;
+	/* The DTX COS-btree. */
+	struct btr_root		vc_dtx_cos_btr;
+	/* The global list for commiitable DTXs. */
+	d_list_t		vc_dtx_committable;
+	/* The count of commiitable DTXs. */
+	uint32_t		vc_dtx_committable_count;
+	/** The time in second when last commit the DTXs. */
+	double			vc_dtx_time_last_commit;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
@@ -149,6 +164,7 @@ struct vos_imem_strts {
 struct vos_imem_strts		*vsa_imems_inst;
 struct bio_xs_context		*vsa_xsctxt_inst;
 struct umem_tx_stage_data	 vsa_txd_inst;
+struct daos_tx_handle		*vsa_dth;
 bool vsa_nvme_init;
 
 static inline struct bio_xs_context *
@@ -172,6 +188,18 @@ enum {
 #define VOS_OFEAT_SHIFT		48
 #define VOS_OFEAT_MASK		(0x0ffULL   << VOS_OFEAT_SHIFT)
 #define VOS_OFEAT_BITS		(0x0ffffULL << VOS_OFEAT_SHIFT)
+
+#if DAOS_HAS_PMDK
+static const PMEMoid DTX_UMMID_ABORTED = { .pool_uuid_lo = -1,
+					   .off = -1,
+};
+static const PMEMoid DTX_UMMID_UNKNOWN = { .pool_uuid_lo = -1,
+					   .off = -2,
+};
+#else
+# define DTX_UMMID_ABORTED	((umem_id_t){ .pool_uuid_lo = -1, .off = -1, })
+# define DTX_UMMID_UNKNOWN	((umem_id_t){ .pool_uuid_lo = -1, .off = -2, })
+#endif
 
 /**
  * A cached object (DRAM data structure).
@@ -199,13 +227,27 @@ struct vos_object {
 extern struct vos_iter_ops vos_oi_iter_ops;
 extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_cont_iter_ops;
+extern struct vos_iter_ops vos_dtx_iter_ops;
 
 /** VOS thread local storage structure */
 struct vos_tls {
 	/* in-memory structures TLS instance */
-	struct vos_imem_strts		vtl_imems_inst;
+	struct vos_imem_strts		 vtl_imems_inst;
 	/* PMDK transaction stage callback data */
-	struct umem_tx_stage_data	vtl_txd;
+	struct umem_tx_stage_data	 vtl_txd;
+	/** XXX: The DTX handle.
+	 *
+	 *	 Transferring DTX handle via TLS can avoid much changing
+	 *	 of existing functions' interfaces, and avoid the corner
+	 *	 cases that someone may miss to set the DTX handle when
+	 *	 operate related tree.
+	 *
+	 *	 But honestly, it is some hack to pass the DTX handle via
+	 *	 the TLS. It requires that there is no CPU yield during the
+	 *	 processing. Otherwise, the vtl_dth may be changed by other
+	 *	 ULTs. The user needs to guarantee that by itself.
+	 */
+	struct daos_tx_handle		*vtl_dth;
 };
 
 static inline struct vos_tls *
@@ -246,6 +288,30 @@ vos_txd_get(void)
 	return &vsa_txd_inst;
 #else
 	return &(vos_tls_get()->vtl_txd);
+#endif
+}
+
+static inline struct daos_tx_handle *
+vos_dth_get(void)
+{
+#ifdef VOS_STANDALONE
+	return vsa_dth;
+#else
+	return vos_tls_get()->vtl_dth;
+#endif
+}
+
+static inline void
+vos_dth_set(struct daos_tx_handle *dth)
+{
+#ifdef VOS_STANDALONE
+	D_ASSERT(dth == NULL || vsa_dth == NULL);
+
+	vsa_dth = dth;
+#else
+	D_ASSERT(dth == NULL || vos_tls_get()->vtl_dth == NULL);
+
+	vos_tls_get()->vtl_dth = dth;
 #endif
 }
 
@@ -459,6 +525,154 @@ vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
 int
 vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
 
+/**
+ * DTX table create
+ * Called from cont_df_rec_alloc.
+ *
+ * \param pool		[IN]	vos pool
+ * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_create(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
+
+/**
+ * DTX table destroy
+ * Called from vos_cont_destroy
+ *
+ * \param pool		[IN]	vos pool
+ * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
+
+/**
+ * Register dbtree class for DTX table, it is called within vos_init().
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_register(void);
+
+/**
+ * Check whether the record (to be accessible) is visible to outside or not.
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param coh		[IN]	The container open handle.
+ * \param entry		[IN]	Address of the DTX to be checked.
+ * \param intent	[IN]	The request intent.
+ * \param type		[IN]	The record type, see vos_dtx_record_types.
+ *
+ * \return	positive value	If visible to outside.
+ *		zero		If invisible to outside.
+ *		-DER_INPROGRESS If the target record is in some
+ *				uncommitted DTX, the caller
+ *				needs to retry some time later.
+ *				Or the caller is not sure about whether
+ *				related DTX is committable or not, need
+ *				to check with leader replica.
+ *		negative value	For error cases.
+ */
+int
+vos_dtx_check_visibility(struct umem_instance *umm,
+			 daos_handle_t coh, umem_id_t entry,
+			 uint32_t intent, uint32_t type);
+
+/**
+ * Register the record (to be modified) to the DTX entry.
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param record	[IN]	Address of the record (in SCM) to be modified.
+ * \param type		[IN]	The record type, see vos_dtx_record_types.
+ * \param flags		[IN]	The record flags, see vos_dtx_record_flags.
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_register_record(struct umem_instance *umm, umem_id_t record,
+			uint32_t type, uint32_t flags);
+
+/**
+ * Degister the record from the DTX entry.
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param entry		[IN]	The DTX entry address.
+ * \param record	[IN]	Address of the record to be degistered.
+ * \param type		[IN]	The record type, vos_dtx_record_types.
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_degister_record(struct umem_instance *umm,
+			umem_id_t entry, umem_id_t record, uint32_t type);
+
+/**
+ * Mark the DTX as prepared locally.
+ *
+ * \param dth	[IN]	Pointer to the DTX handle.
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_prepared(struct daos_tx_handle *dth);
+
+/**
+ * Register dbtree class for DTX CoS, it is called within vos_init().
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_cos_register(void);
+
+/**
+ * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
+ *
+ * \param cont	[IN]	Pointer to the container.
+ * \param oid	[IN]	The target object (shard) ID.
+ * \param dti	[IN]	The DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return		Zero on success and need not additional actions.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_add_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+		struct daos_tx_id *dti, uint64_t dkey, bool punch);
+
+/**
+ * Remove the DTX from the CoS cache.
+ *
+ * \param cont	[IN]	Pointer to the container.
+ * \param oid	[IN]	Pointer to the object ID.
+ * \param xid	[IN]	Pointer to the DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ */
+void
+vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+		struct daos_tx_id *xid, uint64_t dkey, bool punch);
+
+/**
+ * Search the specified DTX is in the CoS cache or not.
+ *
+ * \param cont	[IN]	Pointer to the container.
+ * \param oid	[IN]	Pointer to the object ID.
+ * \param xid	[IN]	Pointer to the DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return	0 if the DTX exists in the CoS cache.
+ * \return	-DER_NONEXIST if not in the CoS cache.
+ * \return	Other negative values on error.
+ */
+int
+__vos_dtx_lookup_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+		     struct daos_tx_id *xid, uint64_t dkey, bool punch);
+
 enum vos_tree_class {
 	/** the first reserved tree class */
 	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
@@ -474,6 +688,10 @@ enum vos_tree_class {
 	VOS_BTR_CONT_TABLE	= (VOS_BTR_BEGIN + 4),
 	/** tree type for cookie index table */
 	VOS_BTR_COOKIE		= (VOS_BTR_BEGIN + 5),
+	/** DAOS two-phase commit transation table */
+	VOS_BTR_DTX_TABLE	= (VOS_BTR_BEGIN + 6),
+	/** The objects with committable DTXs in DRAM */
+	VOS_BTR_DTX_COS		= (VOS_BTR_BEGIN + 7),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
@@ -754,8 +972,10 @@ struct vos_iterator {
 	struct vos_iterator	*it_parent; /* parent iterator */
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
-	bool			 it_from_parent;
 	uint32_t		 it_ref_cnt;
+	uint32_t		 it_from_parent:1,
+				 it_for_purge:1,
+				 it_for_rebuild:1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -782,8 +1002,8 @@ struct vos_iter_info {
 	daos_epoch_range_t	 ii_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
-	/** recx visibility flags */
-	uint32_t		 ii_recx_flags;
+	/** iterator flags */
+	uint32_t		 ii_flags;
 
 };
 
@@ -874,8 +1094,8 @@ enum {
 int
 key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, struct vos_krec_df **krec,
-		 daos_handle_t *sub_toh);
+		 daos_key_t *key, int flags, uint32_t intent,
+		 struct vos_krec_df **krec, daos_handle_t *sub_toh);
 void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
@@ -931,6 +1151,16 @@ vos_df_ts_update(struct vos_object *obj, daos_epoch_t *latest_df,
 		*earliest_df = epr->epr_lo;
 out:
 	return rc;
+}
+
+static inline uint32_t
+vos_iter_intent(struct vos_iterator *iter)
+{
+	if (iter->it_for_purge)
+		return DAOS_INTENT_PURGE;
+	if (iter->it_for_rebuild)
+		return DAOS_INTENT_REBUILD;
+	return DAOS_INTENT_DEFAULT;
 }
 
 #endif /* __VOS_INTERNAL_H__ */

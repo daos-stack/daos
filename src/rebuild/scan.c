@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,7 +94,8 @@ rebuild_obj_fill_buf(daos_handle_t ih, daos_iov_t *key_iov,
 		arg->count, root->count);
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 
@@ -116,8 +117,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	uuid_copy(arg->current_uuid, *(uuid_t *)key_iov->iov_buf);
 
 	while (!dbtree_is_empty(root->root_hdl)) {
-		rc = dbtree_iterate(root->root_hdl, false, rebuild_obj_fill_buf,
-				    data);
+		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
+				    rebuild_obj_fill_buf, data);
 		if (rc < 0)
 			return rc;
 
@@ -132,7 +133,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 
@@ -184,8 +186,8 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	arg->ephs = ephs;
 
 	while (!dbtree_is_empty(root->root_hdl)) {
-		rc = dbtree_iterate(root->root_hdl, false, rebuild_cont_iter_cb,
-				    arg);
+		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
+				    rebuild_cont_iter_cb, arg);
 		if (rc < 0)
 			D_GOTO(out, rc);
 
@@ -326,7 +328,8 @@ rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 
 	/* Some one might insert new record to the tree let's reprobe */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_REBUILD, key_iov,
+			       NULL);
 	if (rc)
 		return rc;
 
@@ -335,7 +338,8 @@ rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 
@@ -541,16 +545,339 @@ out:
 	return rc;
 }
 
-#define LOCAL_ARRAY_SIZE	128
 static int
-placement_check(uuid_t co_uuid, daos_unit_oid_t oid,
-		daos_epoch_t epoch, void *data)
+rebuild_dtx_check_committable(uuid_t po_uuid, uuid_t co_uuid,
+			      struct daos_tx_id *dti, daos_unit_oid_t *oid,
+			      struct pl_obj_layout *layout)
+{
+	struct daos_tx_entry	dte;
+
+	dte.dte_xid = *dti;
+	dte.dte_oid = *oid;
+
+	return dtx_check(po_uuid, co_uuid, &dte, layout);
+}
+
+static int
+rebuild_dtx_commit(uuid_t po_uuid, uuid_t co_uuid,
+		   struct rebuild_dtx_head *rth, int count, uint32_t version)
+{
+	struct daos_tx_entry		*dte;
+	struct rebuild_dtx_entry	*rte;
+	int				 rc;
+	int				 i = 0;
+
+	D_ASSERT(rth->rth_count >= count);
+
+	D_ALLOC_ARRAY(dte, count);
+	if (dte == NULL)
+		return -DER_NOMEM;
+
+	do {
+		rte = d_list_entry(rth->rth_list.next,
+				   struct rebuild_dtx_entry, rte_link);
+		d_list_del(&rte->rte_link);
+		rth->rth_count--;
+
+		dte[i].dte_xid = rte->rte_xid;
+		dte[i].dte_oid = rte->rte_oid;
+		D_FREE_PTR(rte);
+	} while (++i < count);
+
+	rc = dtx_commit(po_uuid, co_uuid, dte, count, version);
+	D_FREE(dte);
+
+	if (rc < 0)
+		D_ERROR("Failed to commit the DTX: rc = %d\n", rc);
+
+	return rc > 0 ? 0 : rc;
+}
+
+static int
+rebuild_dtx_abort(uuid_t po_uuid, struct ds_cont *cont,
+		  struct rebuild_dtx_head *rth,
+		  struct rebuild_dtx_entry *rte,
+		  uint32_t version, bool force)
+{
+	struct daos_tx_entry	 dte;
+	int			 rc;
+
+	/* If we abort multiple non-ready DTXs together, then there is race that
+	 * one DTX may become committable when we abort some other DTX. To avoid
+	 * complex rollback logic, let's abort the DTXs one by one.
+	 */
+
+	if (!force) {
+		rc = vos_dtx_lookup_cos(cont->sc_hdl, &rte->rte_oid,
+			&rte->rte_xid, rte->rte_hash,
+			rte->rte_intent == DAOS_INTENT_PUNCH ? true : false);
+		if (rc == 0)
+			/* The DTX become committable, should NOT abort it. */
+			return 1;
+
+		if (rc != -DER_NONEXIST)
+			goto out;
+	}
+
+	dte.dte_xid = rte->rte_xid;
+	dte.dte_oid = rte->rte_oid;
+	rc = dtx_abort(po_uuid, cont->sc_uuid, &dte, 1, version);
+
+out:
+	if (rc < 0)
+		D_ERROR("Failed to abort the DTX "DF_UOID"/"DF_DTI": rc = %d\n",
+			DP_UOID(rte->rte_oid), DP_DTI(&rte->rte_xid), rc);
+
+	d_list_del(&rte->rte_link);
+	rth->rth_count--;
+	D_FREE_PTR(rte);
+
+	return rc > 0 ? 0 : rc;
+}
+
+static int
+placement_dtx_handle(struct rebuild_dtx_args *rda, uuid_t co_uuid)
+{
+	struct ds_cont			*cont = NULL;
+	struct pl_obj_layout		*layout = NULL;
+	struct daos_oclass_attr		*oc_attr;
+	struct rebuild_dtx_head		*rth;
+	struct rebuild_dtx_entry	*rte;
+	struct rebuild_dtx_entry	*next;
+	int				 count = 0;
+	int				 err = 0;
+	int				 idx;
+	int				 rc = 0;
+
+	idx = dss_get_module_info()->dmi_tgt_id;
+	D_ASSERT(idx >= 0);
+
+	rth = &rda->tables[idx];
+	if (rth->rth_count == 0)
+		return 0;
+
+	rc = ds_cont_lookup(rda->po_uuid, co_uuid, &cont);
+	if (rc != 0)
+		return rc;
+
+	d_list_for_each_entry_safe(rte, next, &rth->rth_list, rte_link) {
+		if (layout != NULL) {
+			pl_obj_layout_free(layout);
+			layout = NULL;
+		}
+
+		rc = ds_pool_check_leader(rda->po_uuid, &rte->rte_oid,
+					  rda->version, &layout);
+		if (rc <= 0) {
+			if (rc < 0)
+				D_WARN("Not sure about the leader for the DTX "
+				       DF_UOID"/"DF_DTI" (ver = %u): rc = %d, "
+				       "skip it.\n",
+				       DP_UOID(rte->rte_oid),
+				       DP_DTI(&rte->rte_xid), rda->version, rc);
+			else
+				D_DEBUG(DB_TRACE, "Not the leader for the DTX "
+					DF_UOID"/"DF_DTI" (ver = %u) skip it\n",
+					DP_UOID(rte->rte_oid),
+					DP_DTI(&rte->rte_xid), rda->version);
+
+			d_list_del(&rte->rte_link);
+			rth->rth_count--;
+			D_FREE_PTR(rte);
+			continue;
+		}
+
+		if (rte->rte_state == DTX_ST_INIT) {
+			rc = vos_dtx_check_committable(cont->sc_hdl,
+						       &rte->rte_xid);
+			switch (rc) {
+			case DTX_ST_PREPARED:
+				break;
+			case DTX_ST_INIT:
+				/* I am the leader, and if the DTX it in INIT
+				 * state, then it must be non-committable case,
+				 * unnecessary to check with others. Abort it.
+				 */
+				rc = rebuild_dtx_abort(rda->po_uuid, cont,
+						rth, rte, rda->version, true);
+				if (rc > 0)
+					goto committable;
+				if (rc < 0)
+					err = rc;
+				continue;
+			default:
+				D_WARN("Not sure about the leader for the DTX "
+				       DF_UOID"/"DF_DTI": rc = %d, skip it.\n",
+				       DP_UOID(rte->rte_oid),
+				       DP_DTI(&rte->rte_xid), rc);
+				/* Fall through. */
+			case DTX_ST_COMMITTED:
+				d_list_del(&rte->rte_link);
+				rth->rth_count--;
+				D_FREE_PTR(rte);
+				continue;
+			}
+		}
+
+		oc_attr = daos_oclass_attr_find(rte->rte_oid.id_pub);
+		D_ASSERT(oc_attr->ca_resil == DAOS_RES_REPL);
+
+		rc = rebuild_dtx_check_committable(rda->po_uuid, co_uuid,
+					&rte->rte_xid, &rte->rte_oid, layout);
+		if (rc == DTX_ST_INIT) {
+			rc = rebuild_dtx_abort(rda->po_uuid, cont,
+					       rth, rte, rda->version, false);
+			if (rc > 0)
+				goto committable;
+			if (rc < 0)
+				err = rc;
+			continue;
+		}
+
+		if (rc != DTX_ST_COMMITTED && rc != DTX_ST_PREPARED) {
+			/* We are not sure about whether the DTX can be
+			 * committed or not, then we have to skip it.
+			 */
+			D_WARN("Not sure about whether the DTX "DF_UOID
+			       "/"DF_DTI" can be committed or not: rc = %d\n",
+			       DP_UOID(rte->rte_oid),
+			       DP_DTI(&rte->rte_xid), rc);
+
+			d_list_del(&rte->rte_link);
+			rth->rth_count--;
+			D_FREE_PTR(rte);
+			continue;
+		}
+
+committable:
+		if (++count >= DTX_THRESHOLD_COUNT) {
+			rc = rebuild_dtx_commit(rda->po_uuid, co_uuid,
+						rth, count, rda->version);
+			if (rc < 0)
+				err = rc;
+			count = 0;
+		}
+	}
+
+	if (count > 0) {
+		rc = rebuild_dtx_commit(rda->po_uuid, co_uuid, rth, count,
+					rda->version);
+		if (rc < 0)
+			err = rc;
+	}
+
+	if (layout != NULL)
+		pl_obj_layout_free(layout);
+
+	if (cont != NULL)
+		ds_cont_put(cont);
+
+	return err;
+}
+
+static int
+do_placement_check_dtx(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
+{
+	struct rebuild_dtx_args		*rda = args;
+	struct rebuild_dtx_entry	*rte;
+	int				 idx;
+
+	/* The end of the iteration. */
+	if (ent == NULL)
+		return placement_dtx_handle(rda, co_uuid);
+
+	/* Ignore new DTX after the rebuild/recovery start */
+	if (ent->ie_dtx_sec > rda->start)
+		return 0;
+
+	/* We commit the DTXs periodically, there will be not too many DTXs
+	 * to be checked when rebuild. So we can load all those uncommitted
+	 * DTXs in RAM firstly, then check the state one by one. That avoid
+	 * the race trouble between iteration of active-DTX tree and commit
+	 * (or abort) the DTXs (that will change the active-DTX tree).
+	 */
+
+	idx = dss_get_module_info()->dmi_tgt_id;
+	D_ASSERT(idx >= 0);
+
+	D_ALLOC_PTR(rte);
+	if (rte == NULL)
+		return -DER_NOMEM;
+
+	rte->rte_xid = ent->ie_xid;
+	rte->rte_oid = ent->ie_oid;
+	rte->rte_state = ent->ie_dtx_state;
+	rte->rte_intent = ent->ie_dtx_intent;
+	rte->rte_hash = ent->ie_dtx_hash;
+	d_list_add_tail(&rte->rte_link, &rda->tables[idx].rth_list);
+	rda->tables[idx].rth_count++;
+
+	return 0;
+}
+
+static int
+placement_check_dtx(uuid_t co_uuid, vos_iter_entry_t *ent, void *data)
+{
+	struct rebuild_scan_arg			*arg = data;
+	struct rebuild_tgt_pool_tracker		*rpt = arg->rpt;
+
+	if (rpt->rt_abort)
+		return 1;
+
+	return do_placement_check_dtx(co_uuid, ent, &rpt->rt_dtx_args);
+}
+
+void
+resync_dtx(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
+	   uint32_t version)
+{
+	struct rebuild_dtx_args		 rda = { 0 };
+	struct rebuild_dtx_head		*tables;
+	struct rebuild_dtx_entry	*rte;
+	struct rebuild_dtx_entry	*next;
+	int				 i;
+
+	D_ALLOC_ARRAY(tables, dss_tgt_nr);
+	if (tables == NULL) {
+		D_ERROR(DF_UUID"/"DF_UUID" not enough DRAM for resync DTX.\n",
+			DP_UUID(po_uuid), DP_UUID(co_uuid));
+		return;
+	}
+
+	for (i = 0; i < dss_tgt_nr; i++) {
+		D_INIT_LIST_HEAD(&tables[i].rth_list);
+		tables[i].rth_count = 0;
+	}
+
+	uuid_copy(rda.po_uuid, po_uuid);
+	rda.start = time(NULL);
+	rda.version = version;
+	rda.tables = tables;
+
+	ds_cont_rebuild_iter(po_hdl, co_uuid, do_placement_check_dtx, &rda,
+			     VOS_ITER_DTX);
+
+	for (i = 0; i < dss_tgt_nr; i++) {
+		d_list_for_each_entry_safe(rte, next,
+					   &tables[i].rth_list, rte_link) {
+			d_list_del(&rte->rte_link);
+			D_FREE_PTR(rte);
+		}
+	}
+
+	D_FREE(tables);
+}
+
+#define LOCAL_ARRAY_SIZE	128
+
+static int
+placement_check_obj(uuid_t co_uuid, vos_iter_entry_t *ent, void *data)
 {
 	struct rebuild_scan_arg	*arg = data;
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
-	struct pl_obj_layout	*layout = NULL;
 	struct pl_map		*map = NULL;
 	struct daos_obj_md	md;
+	daos_unit_oid_t		oid;
 	unsigned int		tgt_array[LOCAL_ARRAY_SIZE];
 	unsigned int		shard_array[LOCAL_ARRAY_SIZE];
 	unsigned int		*tgts = NULL;
@@ -563,6 +890,11 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid,
 	if (rpt->rt_abort)
 		return 1;
 
+	/* The end of the iteration. */
+	if (ent == NULL)
+		return 0;
+
+	oid = ent->ie_oid;
 	map = pl_map_find(rpt->rt_pool_uuid, oid.id_pub);
 	if (map == NULL) {
 		D_ERROR(DF_UOID"Cannot find valid placement map"
@@ -603,9 +935,26 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid,
 		 * myrank should always not equal to tgt_rebuild. XXX
 		 */
 		if (myrank != tgts[i]) {
+			daos_unit_oid_t		tmp = oid;
+
+			tmp.id_shard = shards[i];
+			rc = ds_pool_check_leader(rpt->rt_pool_uuid, &tmp,
+						  rpt->rt_rebuild_ver, NULL);
+			if (rc == 0) {
+				/* The leader shard is not on current server,
+				 * then current server does not know whether
+				 * related DTX(s) for current shard have been
+				 * or not. Skip the shard that will be handled
+				 * by the leader on another server.
+				 */
+				D_DEBUG(DB_REBUILD, "Skip non-leader replica "
+					DF_UOID".\n", DP_UOID(tmp));
+				continue;
+			}
+
 			rc = rebuild_object_insert(arg, tgts[i], shards[i],
 						   rpt->rt_pool_uuid, co_uuid,
-						   oid, epoch);
+						   oid, ent->ie_epoch);
 			if (rc)
 				D_GOTO(out, rc);
 		} else {
@@ -614,9 +963,6 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid,
 		}
 	}
 out:
-	if (layout != NULL)
-		pl_obj_layout_free(layout);
-
 	if (tgts != tgt_array && tgts != NULL)
 		D_FREE(tgts);
 
@@ -632,6 +978,7 @@ out:
 struct rebuild_iter_arg {
 	cont_iter_cb_t	callback;
 	void		*arg;
+	uint32_t	 type;
 };
 
 int
@@ -647,8 +994,8 @@ rebuild_scanner(void *data)
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
 		ABT_thread_yield();
 
-	return ds_pool_obj_iter(rpt->rt_pool_uuid, arg->callback,
-				arg->arg);
+	return ds_pool_rebuild_iter(rpt->rt_pool_uuid, arg->callback,
+				    arg->arg, arg->type);
 }
 
 static int
@@ -694,14 +1041,34 @@ rebuild_scan_leader(void *data)
 	}
 	ABT_mutex_unlock(rpt->rt_lock);
 
+	rpt->rt_dtx_args.start = time(NULL);
+	rpt->rt_dtx_args.version = rpt->rt_rebuild_ver;
 	iter_arg.arg = arg;
-	iter_arg.callback = placement_check;
+	iter_arg.type = VOS_ITER_DTX;
+	iter_arg.callback = placement_check_dtx;
 
+	D_DEBUG(DB_REBUILD, "rebuild DTX scan collective "DF_UUID" start.\n",
+		DP_UUID(rpt->rt_pool_uuid));
+
+	/** Re-sync uncommitted DTX before rebuilding objects. */
 	rc = dss_thread_collective(rebuild_scanner, &iter_arg, 0);
-	if (rc)
+	if (rc != 0)
 		D_GOTO(put_plmap, rc);
 
-	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
+	D_DEBUG(DB_REBUILD, "rebuild DTX scan collective "DF_UUID" done.\n",
+		DP_UUID(rpt->rt_pool_uuid));
+
+	iter_arg.type = VOS_ITER_OBJ;
+	iter_arg.callback = placement_check_obj;
+
+	D_DEBUG(DB_REBUILD, "rebuild obj scan collective "DF_UUID" done.\n",
+		DP_UUID(rpt->rt_pool_uuid));
+
+	rc = dss_thread_collective(rebuild_scanner, &iter_arg, 0);
+	if (rc != 0)
+		D_GOTO(put_plmap, rc);
+
+	D_DEBUG(DB_REBUILD, "rebuild obj scan collective "DF_UUID" done.\n",
 		DP_UUID(rpt->rt_pool_uuid));
 
 	/* NB: only leading xstream will operate the scan tree since then,
@@ -709,8 +1076,8 @@ rebuild_scan_leader(void *data)
 	 */
 	while (!dbtree_is_empty(arg->rebuild_tree_hdl)) {
 		/* walk through the rebuild tree and send the rebuild objects */
-		rc = dbtree_iterate(arg->rebuild_tree_hdl, false,
-				    rebuild_tgt_fini_obj_send_cb, arg);
+		rc = dbtree_iterate(arg->rebuild_tree_hdl, DAOS_INTENT_REBUILD,
+				    false, rebuild_tgt_fini_obj_send_cb, arg);
 		if (rc)
 			D_GOTO(put_plmap, rc);
 	}

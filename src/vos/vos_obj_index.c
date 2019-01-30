@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -112,11 +112,20 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	struct oi_key		 *key;
 	struct oi_hkey		 *hkey;
 	TMMID(struct vos_obj_df)  obj_mmid;
+	int			  rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
 	obj_mmid = umem_znew_typed(&tins->ti_umm, struct vos_obj_df);
 	if (TMMID_IS_NULL(obj_mmid))
 		return -DER_NOMEM;
+
+	rc = vos_dtx_register_record(&tins->ti_umm, umem_id_t2u(obj_mmid),
+				     DTX_RT_OBJ, 0);
+	if (rc != 0)
+		/* It is unnecessary to free the PMEM that will be dropped
+		 * automatically when the PMDK transaction is aborted.
+		 */
+		return rc;
 
 	obj = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
 
@@ -152,6 +161,17 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	obj_mmid = umem_id_u2t(rec->rec_mmid, struct vos_obj_df);
 	obj = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
+
+	rc = vos_dtx_degister_record(umm, obj->vo_dtx, rec->rec_mmid,
+				     DTX_RT_OBJ);
+	if (rc != 0)
+		return rc;
+
+	if (obj->vo_dtx_shares > 0) {
+		D_ERROR("There are some unknown DTXs (%d) share the obj rec\n",
+			obj->vo_dtx_shares);
+		return -DER_BUSY;
+	}
 
 	/** Free the KV tree within this object */
 	if (obj->vo_tree.tr_class != 0) {
@@ -193,14 +213,23 @@ oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static int
+oi_check_visibility(struct btr_instance *tins, struct btr_record *rec,
+		    uint32_t intent)
+{
+	return vos_dtx_check_visibility(&tins->ti_umm, tins->ti_coh,
+					rec->rec_mmid, intent, DTX_RT_OBJ);
+}
+
 static btr_ops_t oi_btr_ops = {
-	.to_hkey_size	= oi_hkey_size,
-	.to_hkey_gen	= oi_hkey_gen,
-	.to_hkey_cmp	= oi_hkey_cmp,
-	.to_rec_alloc	= oi_rec_alloc,
-	.to_rec_free	= oi_rec_free,
-	.to_rec_fetch	= oi_rec_fetch,
-	.to_rec_update	= oi_rec_update,
+	.to_hkey_size		= oi_hkey_size,
+	.to_hkey_gen		= oi_hkey_gen,
+	.to_hkey_cmp		= oi_hkey_cmp,
+	.to_rec_alloc		= oi_rec_alloc,
+	.to_rec_free		= oi_rec_free,
+	.to_rec_fetch		= oi_rec_fetch,
+	.to_rec_update		= oi_rec_update,
+	.to_check_visibility	= oi_check_visibility,
 };
 
 /**
@@ -208,7 +237,7 @@ static btr_ops_t oi_btr_ops = {
  */
 int
 vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
-	    daos_epoch_t epoch, struct vos_obj_df **obj_p)
+	    daos_epoch_t epoch, uint32_t intent, struct vos_obj_df **obj_p)
 {
 	struct oi_hkey	hkey;
 	daos_iov_t	key_iov;
@@ -226,7 +255,7 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	daos_iov_set(&val_iov, NULL, 0);
 
 	rc = dbtree_fetch(cont->vc_btr_hdl, BTR_PROBE_GE | BTR_PROBE_MATCHED,
-			  &key_iov, NULL, &val_iov);
+			  intent, &key_iov, NULL, &val_iov);
 	if (rc == 0) {
 		struct vos_obj_df *obj = val_iov.iov_buf;
 
@@ -241,7 +270,8 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
  */
 int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
-		  daos_epoch_t epoch, struct vos_obj_df **obj_p)
+		  daos_epoch_t epoch, uint32_t intent,
+		  struct vos_obj_df **obj_p)
 {
 	struct oi_hkey	*hkey;
 	struct oi_key	 key;
@@ -252,7 +282,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
 		DP_UOID(oid));
 
-	rc = vos_oi_find(cont, oid, epoch, obj_p);
+	rc = vos_oi_find(cont, oid, epoch, intent, obj_p);
 	if (rc == 0 || rc != -DER_NONEXIST)
 		return rc;
 
@@ -265,9 +295,9 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	hkey->oi_epc = DAOS_EPOCH_MAX; /* max as incarnation */
 	key.oi_epc_lo = epoch;
 	daos_iov_set(&key_iov, &key, sizeof(key));
-	daos_iov_set(&val_iov, NULL, 0);
 
-	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, &val_iov);
+	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, intent, &key_iov,
+			   &val_iov);
 	if (rc) {
 		D_ERROR("Failed to update Key for Object index\n");
 		return rc;
@@ -315,9 +345,9 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	if (!replay) /* We steal the subtree from the max epoch */
 		key.oi_epc_lo = obj->vo_earliest;
 	daos_iov_set(&key_iov, &key, sizeof(key));
-	daos_iov_set(&val_iov, NULL, 0);
 
-	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, &val_iov);
+	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_PUNCH,
+			   &key_iov, &val_iov);
 	if (rc != 0)
 		goto out;
 
@@ -441,6 +471,11 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->oit_cont = cont;
 	vos_cont_addref(cont);
 
+	if (param->ip_flags & VOS_IT_FOR_PURGE)
+		oiter->oit_iter.it_for_purge = 1;
+	if (param->ip_flags & VOS_IT_FOR_REBUILD)
+		oiter->oit_iter.it_for_rebuild = 1;
+
 	rc = dbtree_iter_prepare(cont->vc_btr_hdl, 0, &oiter->oit_hdl);
 	if (rc)
 		D_GOTO(exit, rc);
@@ -508,7 +543,8 @@ oi_iter_match_probe(struct vos_iterator *iter)
 
 		hkey.oi_oid = obj->vo_id;
 		daos_iov_set(&iov, &hkey, sizeof(hkey));
-		rc = dbtree_iter_probe(oiter->oit_hdl, probe, &iov, NULL);
+		rc = dbtree_iter_probe(oiter->oit_hdl, probe,
+				       vos_iter_intent(iter), &iov, NULL);
 		if (rc != 0) {
 			str = "probe";
 			goto failed;
@@ -534,7 +570,8 @@ oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
 	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
-	rc = dbtree_iter_probe(oiter->oit_hdl, opc, NULL, anchor);
+	rc = dbtree_iter_probe(oiter->oit_hdl, opc, vos_iter_intent(iter), NULL,
+			       anchor);
 	if (rc)
 		D_GOTO(out, rc);
 

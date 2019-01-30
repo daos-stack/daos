@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -896,6 +896,30 @@ evt_desc_free(struct evt_context *tcx, struct evt_desc *desc, daos_size_t size)
 	return rc;
 }
 
+static int
+evt_desc_free_all(struct evt_context *tcx, struct evt_node_entry *ne)
+{
+	struct evt_desc	*desc;
+	int		 rc;
+
+	if (ne->ne_child == 0)
+		return 0;
+
+	desc = evt_off2desc(tcx, ne->ne_child);
+	rc = vos_dtx_degister_record(evt_umm(tcx), desc->dc_dtx,
+				     umem_ptr2id(evt_umm(tcx), desc),
+				     DTX_RT_EVT);
+	if (rc != 0)
+		return rc;
+
+	rc = evt_desc_free(tcx, desc,
+			   tcx->tc_inob * evt_rect_width(&ne->ne_rect));
+	if (rc == 0)
+		rc = umem_free(evt_umm(tcx), evt_off2mmid(tcx, ne->ne_child));
+
+	return rc;
+}
+
 /** check if a node is full */
 static bool
 evt_node_is_full(struct evt_context *tcx, uint64_t nd_off)
@@ -1070,7 +1094,6 @@ evt_node_destroy(struct evt_context *tcx, uint64_t nd_off, int level)
 {
 	struct evt_node_entry	*ne;
 	struct evt_node		*nd;
-	struct evt_rect		*rect;
 	bool			 leaf;
 	int			 i;
 	int			 rc = 0;
@@ -1083,22 +1106,13 @@ evt_node_destroy(struct evt_context *tcx, uint64_t nd_off, int level)
 
 	for (i = 0; i < nd->tn_nr; i++) {
 		ne = evt_node_entry_at(tcx, nd_off, i);
-		rect = evt_node_rect_at(tcx, nd_off, i);
-		if (leaf) {
+		if (leaf)
 			/* NB: This will be replaced with a callback */
-			rc = evt_desc_free(tcx, evt_off2desc(tcx, ne->ne_child),
-					   tcx->tc_inob * evt_rect_width(rect));
-			if (rc != 0)
-				return rc;
-			rc = umem_free(evt_umm(tcx),
-				       evt_off2mmid(tcx, ne->ne_child));
-			if (rc != 0)
-				return rc;
-		} else {
+			rc = evt_desc_free_all(tcx, ne);
+		else
 			rc = evt_node_destroy(tcx, ne->ne_child, level + 1);
-			if (rc != 0)
-				return rc;
-		}
+		if (rc != 0)
+			return rc;
 	}
 	return evt_node_free(tcx, nd_off);
 }
@@ -1113,6 +1127,15 @@ evt_node_mbr_get(struct evt_context *tcx, uint64_t nd_off)
 	return &node->tn_mbr;
 }
 
+static inline int
+evt_dtx_check_visibility(struct evt_context *tcx, struct evt_desc *desc,
+			 uint32_t intent)
+{
+	return vos_dtx_check_visibility(evt_umm(tcx), tcx->tc_coh,
+					umem_ptr2id(evt_umm(tcx), desc), intent,
+					DTX_RT_EVT);
+}
+
 /** (Re)compute MBR for a tree node */
 static void
 evt_node_mbr_cal(struct evt_context *tcx, uint64_t nd_off)
@@ -1120,14 +1143,37 @@ evt_node_mbr_cal(struct evt_context *tcx, uint64_t nd_off)
 	struct evt_node	*node;
 	struct evt_rect *mbr;
 	int		 i;
+	bool		 leaf;
 
 	node = evt_off2node(tcx, nd_off);
 	D_ASSERT(node->tn_nr != 0);
 
 	mbr = &node->tn_mbr;
 	*mbr = *evt_node_rect_at(tcx, nd_off, 0);
+	leaf = evt_node_is_leaf(tcx, nd_off);
 	for (i = 1; i < node->tn_nr; i++) {
 		struct evt_rect *rect;
+
+		if (leaf) {
+			struct evt_desc	*desc;
+			int		 rc;
+
+			desc = evt_node_desc_at(tcx, nd_off, i);
+			rc = evt_dtx_check_visibility(tcx, desc,
+						      DAOS_INTENT_DEFAULT);
+			/* Skip the invisible record. */
+			if (rc == 0)
+				continue;
+
+			/* DER_INPROGRESS means that we are not sure about the
+			 * record visibility, then count it. If related record
+			 * is aborted later, then it can be excluded next time.
+			 */
+			if (rc < 0 && rc != -DER_INPROGRESS) {
+				D_ERROR("Unknown record visiblity, skip it\n");
+				continue;
+			}
+		}
 
 		rect = evt_node_rect_at(tcx, nd_off, i);
 		evt_rect_merge(mbr, rect);
@@ -1660,8 +1706,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 	evt_ent_array_init(&ent_array);
 
 	/* Phase-1: Check for overwrite */
-	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, NULL, &entry->ei_rect,
-				&ent_array);
+	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
+				NULL, &entry->ei_rect, &ent_array);
 	if (rc != 0)
 		return rc;
 
@@ -1755,19 +1801,12 @@ evt_entry_fill(struct evt_context *tcx, uint64_t nd_off,
 }
 
 /**
- * Find all versioned extents which intercept with the input one \a rect.
- * It attaches all found extents and their data pointers on \a ent_array if
- * \a no_overlap is false, otherwise returns error if there is any overlapped
- * extent.
- *
- * \param rect		[IN]	Rectangle to check.
- * \param no_overlap	[IN]	Returns error if \a rect overlap with any
- *				existent extent.
- * \param ent_array	[OUT]	The returned entries for overlapped extents.
+ * See the description in evt_priv.h
  */
 int
 evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
-		   const struct evt_filter *filter, const struct evt_rect *rect,
+		   uint32_t intent, const struct evt_filter *filter,
+		   const struct evt_rect *rect,
 		   struct evt_entry_array *ent_array)
 {
 	uint64_t	nd_off;
@@ -1803,6 +1842,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 		for (i = at; i < node->tn_nr; i++) {
 			struct evt_entry	*ent;
 			struct evt_rect		*rtmp;
+			struct evt_desc		*desc;
 			int			 time_overlap;
 			int			 range_overlap;
 
@@ -1848,6 +1888,12 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			}
 			D_DEBUG(DB_TRACE, "Found overlapped leaf rect\n");
 
+			desc = evt_node_desc_at(tcx, nd_off, i);
+			rc = evt_dtx_check_visibility(tcx, desc, intent);
+			/* Skip the invisible record. */
+			if (rc == 0)
+				continue;
+
 			/* early check */
 			switch (find_opc) {
 			default:
@@ -1855,6 +1901,11 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			case EVT_FIND_OVERWRITE:
 				if (time_overlap != RT_OVERLAP_SAME)
 					continue; /* not same epoch, skip */
+
+				/* If the visibility is unknown, then go out. */
+				if (rc < 0)
+					D_GOTO(out, rc);
+
 				/* NB: This is temporary to allow full overwrite
 				 * in same epoch to avoid breaking rebuild.
 				 * Without some sequence number and client
@@ -1881,8 +1932,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 					continue;
 				if (time_overlap != RT_OVERLAP_SAME)
 					continue;
+
+				/* If the visibility is unknown, then go out. */
+				if (rc < 0)
+					D_GOTO(out, rc);
+
 				break;
 			case EVT_FIND_FIRST:
+				/* If the visibility is unknown, then go out. */
+				if (rc < 0)
+					D_GOTO(out, rc);
 			case EVT_FIND_ALL:
 				break;
 			}
@@ -2049,8 +2108,10 @@ try_again:
 
 		for (i = at; i < node->tn_nr; i++) {
 			struct evt_rect		*rtmp;
+			struct evt_desc		*desc;
 			int			 time_overlap;
 			int			 range_overlap;
+			int			 rc;
 
 			rtmp = evt_node_rect_at(tcx, nd_off, i);
 			D_DEBUG(DB_TRACE, "Checking rect[%d]="DF_RECT"\n",
@@ -2071,6 +2132,19 @@ try_again:
 				 */
 				break;
 			}
+
+			desc = evt_node_desc_at(tcx, nd_off, i);
+			rc = evt_dtx_check_visibility(tcx, desc,
+						      DAOS_INTENT_DEFAULT);
+			/* Skip the invisible record. */
+			if (rc == 0)
+				continue;
+
+			/* Including the -DER_INPROGRESS case, then the call
+			 * will retry with leader.
+			 */
+			if (rc < 0)
+				return rc;
 
 			memset(&ent, 0, sizeof(ent));
 			evt_entry_fill(tcx, nd_off, i, &rect, &ent);
@@ -2159,7 +2233,8 @@ evt_find(daos_handle_t toh, const struct evt_rect *rect,
 		return -DER_NO_HDL;
 
 	evt_ent_array_init(ent_array);
-	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, NULL, rect, ent_array);
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT, NULL,
+				rect, ent_array);
 	if (rc == 0)
 		rc = evt_ent_array_sort(tcx, ent_array, EVT_VISIBLE);
 	if (rc != 0)
@@ -2169,16 +2244,20 @@ evt_find(daos_handle_t toh, const struct evt_rect *rect,
 
 /** move the probing trace forward or backward */
 bool
-evt_move_trace(struct evt_context *tcx, bool forward)
+evt_move_trace(struct evt_context *tcx, uint32_t intent, bool forward)
 {
 	struct evt_trace	*trace;
 	struct evt_node		*nd;
+	struct evt_desc		*desc;
 	uint64_t		 nd_off;
+	int			 rc;
 
 	if (evt_root_empty(tcx))
 		return false;
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+
+again:
 	while (1) {
 		nd_off = trace->tr_node;
 		nd = evt_off2node(tcx, nd_off);
@@ -2216,7 +2295,27 @@ evt_move_trace(struct evt_context *tcx, bool forward)
 		trace->tr_node = tmp;
 	}
 
-	return true;
+	if (!evt_node_is_leaf(tcx, trace->tr_node))
+		return true;
+
+	nd = evt_off2node(tcx, trace->tr_node);
+	while (1) {
+		desc = evt_node_desc_at(tcx, trace->tr_node, trace->tr_at);
+		rc = evt_dtx_check_visibility(tcx, desc, intent);
+		if (rc > 0)
+			return true;
+
+		/* Skip invisible/uncertain record and error cases */
+
+		if ((trace->tr_at == (nd->tn_nr - 1) && forward) ||
+		    (trace->tr_at == 0 && !forward))
+			goto again;
+
+		if (forward)
+			trace->tr_at++;
+		else
+			trace->tr_at--;
+	}
 }
 
 /**
@@ -2496,9 +2595,11 @@ evt_ssof_insert(struct evt_context *tcx, uint64_t nd_off,
 {
 	struct evt_node		*nd   = evt_off2node(tcx, nd_off);
 	struct evt_node_entry	*ne = NULL;
+	struct evt_desc		*desc = NULL;
 	int			 i;
 	int			 rc;
 	bool			 leaf;
+	bool			 reuse = false;
 
 	D_ASSERT(!evt_node_is_full(tcx, nd_off));
 
@@ -2513,26 +2614,79 @@ evt_ssof_insert(struct evt_context *tcx, uint64_t nd_off,
 		if (rc < 0)
 			continue;
 
-		nr = nd->tn_nr - i;
-		memmove(ne + 1, ne, nr * sizeof(*ne));
+		if (!leaf) {
+			nr = nd->tn_nr - i;
+			memmove(ne + 1, ne, nr * sizeof(*ne));
+			break;
+		}
+
+		desc = evt_off2desc(tcx, ne->ne_child);
+		rc = evt_dtx_check_visibility(tcx, desc, DAOS_INTENT_PROBE);
+		if (rc != 0) {
+			nr = nd->tn_nr - i;
+			memmove(ne + 1, ne, nr * sizeof(*ne));
+		} else {
+			rc = evt_desc_free(tcx, desc,
+				   tcx->tc_inob * evt_rect_width(&ne->ne_rect));
+			if (rc != 0)
+				return rc;
+
+			memset(desc, 0, sizeof(*desc));
+			reuse = true;
+		}
+
 		break;
 	}
 
 	if (i == nd->tn_nr) { /* attach at the end */
-		ne = evt_node_entry_at(tcx, nd_off, nd->tn_nr);
+		/* Check whether the previous one is an aborted one. */
+		if (i != 0 && leaf) {
+			ne = evt_node_entry_at(tcx, nd_off, i - 1);
+			desc = evt_off2desc(tcx, ne->ne_child);
+			rc = evt_dtx_check_visibility(tcx, desc,
+						      DAOS_INTENT_PROBE);
+			if (rc == 0) {
+				rc = evt_desc_free(tcx, desc, tcx->tc_inob *
+						evt_rect_width(&ne->ne_rect));
+				if (rc != 0)
+					return rc;
+
+				memset(desc, 0, sizeof(*desc));
+				reuse = true;
+			}
+		}
+
+		if (!reuse)
+			ne = evt_node_entry_at(tcx, nd_off, nd->tn_nr);
+	}
+
+	if (leaf) {
+		if (!reuse) {
+			TMMID(struct evt_desc)	desc_mmid;
+
+			desc_mmid = umem_zalloc_typed(evt_umm(tcx),
+						      struct evt_desc,
+						      sizeof(struct evt_desc));
+			if (TMMID_IS_NULL(desc_mmid))
+				return -DER_NOMEM;
+
+			ne->ne_child = desc_mmid.oid.off;
+			desc = evt_tmmid2ptr(tcx, desc_mmid);
+		}
+
+		rc = vos_dtx_register_record(evt_umm(tcx),
+					     umem_ptr2id(evt_umm(tcx), desc),
+					     DTX_RT_EVT, 0);
+		if (rc != 0)
+			/* It is unnecessary to free the PMEM that will be
+			 * dropped automatically when the PMDK transaction
+			 * is aborted.
+			 */
+			return rc;
 	}
 
 	ne->ne_rect = ent->ei_rect;
 	if (leaf) {
-		TMMID(struct evt_desc)	 desc_mmid;
-		struct evt_desc		*desc;
-
-		desc_mmid = umem_zalloc_typed(evt_umm(tcx), struct evt_desc,
-					     sizeof(struct evt_desc));
-		if (TMMID_IS_NULL(desc_mmid))
-			return -DER_NOMEM;
-		ne->ne_child = desc_mmid.oid.off;
-		desc = evt_tmmid2ptr(tcx, desc_mmid);
 		desc->dc_magic = EVT_DESC_MAGIC;
 		desc->dc_ex_addr = ent->ei_addr;
 		desc->dc_csum = ent->ei_csum;
@@ -2542,7 +2696,9 @@ evt_ssof_insert(struct evt_context *tcx, uint64_t nd_off,
 		ne->ne_child = in_off;
 	}
 
-	nd->tn_nr++;
+	if (!reuse)
+		nd->tn_nr++;
+
 	return 0;
 }
 
@@ -2683,6 +2839,7 @@ evt_node_delete(struct evt_context *tcx)
 				       evt_off2mmid(tcx, ne->ne_child));
 			if (rc != 0)
 				return rc;
+
 			ne->ne_child = 0;
 		}
 
@@ -2727,8 +2884,29 @@ evt_node_delete(struct evt_context *tcx)
 		ne -= trace->tr_at;
 		mbr = ne->ne_rect;
 		ne++;
-		for (i = 1; i < node->tn_nr; i++, ne++)
+		leaf = evt_node_is_leaf(tcx, trace->tr_node);
+		for (i = 1; i < node->tn_nr; i++, ne++) {
+			if (leaf) {
+				struct evt_desc	*desc;
+
+				desc = evt_off2desc(tcx, ne->ne_child);
+				rc = evt_dtx_check_visibility(tcx, desc,
+							DAOS_INTENT_DEFAULT);
+				/* Skip the invisible record. */
+				if (rc == 0)
+					continue;
+
+				/* DER_INPROGRESS means that we are not sure
+				 * about the record visibility, then count it.
+				 * If related record is aborted later, then it
+				 * can be excluded next time.
+				 */
+				if (rc < 0 && rc != -DER_INPROGRESS)
+					return rc;
+			}
+
 			evt_rect_merge(&mbr, &ne->ne_rect);
+		}
 
 		if (evt_rect_same_extent(&node->tn_mbr, &mbr) &&
 		    node->tn_mbr.rc_epc == mbr.rc_epc)
@@ -2779,7 +2957,8 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	/* NB: This function presently only supports exact match on extent. */
 	evt_ent_array_init(&ent_array);
 
-	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, NULL, rect, &ent_array);
+	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PUNCH, NULL,
+				rect, &ent_array);
 	if (rc != 0)
 		return rc;
 

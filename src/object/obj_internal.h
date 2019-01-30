@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@
 #include <daos/placement.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
+#include <daos/dtx.h>
 #include <daos_srv/daos_server.h>
 #include <daos_types.h>
 
@@ -78,6 +79,7 @@ struct dc_obj_shard {
 	uint32_t		do_target_id;	/* target id (unique in pool) */
 	uint32_t		do_target_idx;	/* target VOS index in node */
 	uint32_t		do_target_rank;
+	uint32_t		do_fseq;	/* failure sequence */
 	uint32_t		do_rebuilding:1;
 	/** point back to object */
 	struct dc_object	*do_obj;
@@ -129,7 +131,9 @@ int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			daos_key_t *dkey, unsigned int nr,
 			daos_iod_t *iods, daos_sg_list_t *sgls,
 			unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
-			uint32_t fw_cnt, tse_task_t *task);
+			uint32_t fw_cnt, tse_task_t *task,
+			struct daos_tx_id *dti, uint32_t flags);
+
 int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       daos_key_t *dkey, unsigned int nr,
 		       daos_iod_t *iods, daos_sg_list_t *sgls,
@@ -151,7 +155,8 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,
 		       daos_key_t *akeys, unsigned int akey_nr,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
 		       unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
-		       uint32_t fw_cnt, tse_task_t *task);
+		       uint32_t fw_cnt, tse_task_t *task,
+		       struct daos_tx_id *dti, uint32_t flags);
 
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			   uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
@@ -163,7 +168,7 @@ static inline bool
 obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
-	       daos_crt_network_error(err);
+	       err == -DER_INPROGRESS || daos_crt_network_error(err);
 }
 
 void obj_shard_decref(struct dc_obj_shard *shard);
@@ -185,8 +190,9 @@ struct obj_req_disp_arg;
 int ds_obj_req_disp_prepare(crt_opcode_t opc,
 			struct daos_obj_shard_tgt *fw_shard_tgts,
 			uint32_t fw_cnt, ds_iofw_cb_t prefw_cb,
-			void *prefw_arg, ds_iofw_cb_t postfw_cb,
-			void *postfw_arg, struct obj_req_disp_arg **arg);
+			ds_iofw_cb_t postfw_cb, void *cb_data,
+			int dti_cos_count, struct daos_tx_id *dti_cos,
+			struct obj_req_disp_arg **arg);
 void ds_obj_req_dispatch(void *arg);
 int ds_obj_req_disp_wait(struct obj_req_disp_arg *obj_arg);
 void ds_obj_req_disp_arg_free(struct obj_req_disp_arg *obj_arg);

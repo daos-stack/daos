@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,7 +170,7 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 	D_ASSERT(rdone->ro_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, rdone->ro_oid, rdone->ro_epoch,
 			      &rdone->ro_dkey, rdone->ro_iod_num,
-			      rdone->ro_iods, &ioh);
+			      rdone->ro_iods, &ioh, NULL, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
 			DP_UOID(rdone->ro_oid), rc);
@@ -224,7 +224,7 @@ post:
 
 end:
 	vos_update_end(ioh, rdone->ro_cookie, rdone->ro_version,
-		       &rdone->ro_dkey, rc);
+		       &rdone->ro_dkey, NULL, rc, 0, NULL);
 	return rc;
 }
 
@@ -246,7 +246,7 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
 				   rdone->ro_max_eph, rpt->rt_coh_uuid,
 				   rpt->rt_rebuild_ver, VOS_OF_REPLAY_PC,
-				   &rdone->ro_dkey, 0, NULL);
+				   &rdone->ro_dkey, 0, NULL, NULL, 0, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch dkey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -270,7 +270,8 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
 				   rdone->ro_ephs[i], rpt->rt_coh_uuid,
 				   rpt->rt_rebuild_ver, VOS_OF_REPLAY_PC,
-				   &rdone->ro_dkey, 1, &rdone->ro_ephs_keys[i]);
+				   &rdone->ro_dkey, 1, &rdone->ro_ephs_keys[i],
+				   NULL, 0, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch akey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -740,7 +741,7 @@ rebuild_obj_punch_one(void *data)
 
 	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->epoch,
 			   arg->rpt->rt_coh_uuid, arg->rpt->rt_rebuild_ver,
-			   0, NULL, 0, NULL);
+			   0, NULL, 0, NULL, NULL, 0, NULL);
 	ds_cont_put(cont);
 	if (rc)
 		D_ERROR(DF_UOID" rebuild punch failed rc %d\n",
@@ -797,7 +798,9 @@ rebuild_obj_ult(void *data)
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
-	dc_obj_shard2anchor(&anchor, arg->shard);
+	dc_obj_shard2anchor(&dkey_anchor, arg->shard);
+	daos_anchor_set_flags(&dkey_anchor,
+			      DAOS_ANCHOR_FLAGS_TO_LEADER);
 
 	/* Initialize enum_arg for VOS_ITER_DKEY. */
 	memset(&enum_arg, 0, sizeof(enum_arg));
@@ -971,7 +974,8 @@ puller_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		}
 
 		/* re-probe the dbtree after deletion */
-		rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+		rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD,
+				       NULL, NULL);
 		if (rc == 0) {
 			arg->re_iter = true;
 			return 0;
@@ -1035,7 +1039,7 @@ puller_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 
 	do {
 		arg->re_iter = false;
-		rc = dbtree_iterate(root->root_hdl, false,
+		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
 				    puller_obj_iter_cb, arg);
 		if (rc) {
 			if (tls->rebuild_pool_status == 0 && rc < 0)
@@ -1055,7 +1059,8 @@ puller_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 
 	if (arg->yielded) {
 		/* Some one might insert new record to the tree let's reprobe */
-		rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
+		rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_REBUILD,
+				       key_iov, NULL);
 		if (rc) {
 			D_ASSERT(rc != -DER_NONEXIST);
 			return rc;
@@ -1067,7 +1072,8 @@ puller_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD,
+			       NULL, NULL);
 	if (rc == -DER_NONEXIST || rpt->rt_abort)
 		return 1;
 
@@ -1085,7 +1091,8 @@ rebuild_puller_ult(void *arg)
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 	while (!dbtree_is_empty(rpt->rt_tobe_rb_root_hdl)) {
-		rc = dbtree_iterate(rpt->rt_tobe_rb_root_hdl, false,
+		rc = dbtree_iterate(rpt->rt_tobe_rb_root_hdl,
+				    DAOS_INTENT_REBUILD, false,
 				    puller_cont_iter_cb, iter_arg);
 		if (rc) {
 			D_ERROR("dbtree iterate fails %d\n", rc);
@@ -1120,7 +1127,8 @@ rebuilt_btr_destroy(daos_handle_t btr_hdl)
 {
 	int	rc;
 
-	rc = dbtree_iterate(btr_hdl, false, rebuilt_btr_destory_cb, NULL);
+	rc = dbtree_iterate(btr_hdl, DAOS_INTENT_REBUILD, false,
+			    rebuilt_btr_destory_cb, NULL);
 	if (rc) {
 		D_ERROR("dbtree iterate fails %d\n", rc);
 		goto out;

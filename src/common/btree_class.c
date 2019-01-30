@@ -762,7 +762,8 @@ dbtree_uv_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 	daos_iov_set(&key_out, uuid_out, sizeof(uuid_t));
 	daos_iov_set(&val, value, size);
 
-	rc = dbtree_fetch(tree, opc, &key_in, &key_out, &val);
+	rc = dbtree_fetch(tree, opc, DAOS_INTENT_DEFAULT, &key_in, &key_out,
+			  &val);
 	if (rc == -DER_NONEXIST)
 		D_DEBUG(DB_TRACE, "cannot find opc=%d in="DF_UUID"\n", opc,
 			DP_UUID(uuid_in));
@@ -1021,7 +1022,8 @@ dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 	daos_iov_set(&key_out, epoch_out, sizeof(*epoch_out));
 	daos_iov_set(&val, (void *)count, sizeof(*count));
 
-	rc = dbtree_fetch(tree, opc, &key_in, &key_out, &val);
+	rc = dbtree_fetch(tree, opc, DAOS_INTENT_DEFAULT, &key_in, &key_out,
+			  &val);
 	if (rc == -DER_NONEXIST)
 		D_DEBUG(DB_TRACE, "cannot find opc=%d in="DF_U64"\n",
 			opc, epoch_in == NULL ? -1 : *epoch_in);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 #include <daos_types.h>
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
+#include "evt_priv.h"
 
 /** I/O context */
 struct vos_io_context {
@@ -171,6 +172,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_size_fetch = size_fetch;
 
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, read_only,
+			  read_only ? DAOS_INTENT_DEFAULT : DAOS_INTENT_UPDATE,
 			  &ioc->ic_obj);
 	if (rc != 0)
 		goto error;
@@ -272,7 +274,8 @@ akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
 	rbund.rb_csum	= &iod->iod_csums[0];
 	memset(&biov, 0, sizeof(biov));
 
-	rc = dbtree_fetch(toh, BTR_PROBE_LE, &kiov, &kiov, &riov);
+	rc = dbtree_fetch(toh, BTR_PROBE_LE, DAOS_INTENT_DEFAULT, &kiov, &kiov,
+			  &riov);
 	if (rc == -DER_NONEXIST) {
 		rbund.rb_rsize = 0;
 		bio_addr_set_hole(&biov.bi_addr, 1);
@@ -423,7 +426,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			epoch = iod->iod_eprs[0].epr_lo;
 
 		rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
-				      &iod->iod_name, flags, NULL, &toh);
+				      &iod->iod_name, flags,
+				      DAOS_INTENT_DEFAULT, NULL, &toh);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
 				D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
@@ -445,7 +449,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	/* array size query */
 	if (iod->iod_nr == 0) {
 		rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
-				      &iod->iod_name, flags, NULL, &toh);
+				      &iod->iod_name, flags,
+				      DAOS_INTENT_DEFAULT, NULL, &toh);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
 				D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
@@ -487,7 +492,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 				epoch);
 			rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh,
 					      VOS_BTR_AKEY, &iod->iod_name,
-					      flags, &krec, &toh);
+					      flags, DAOS_INTENT_DEFAULT,
+					      &krec, &toh);
 			if (rc != 0) {
 				if (rc == -DER_NONEXIST) {
 					D_DEBUG(DB_IO, "Nonexist akey %.*s\n",
@@ -550,7 +556,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 		return rc;
 
 	rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh, VOS_BTR_DKEY,
-			      dkey, 0, NULL, &toh);
+			      dkey, 0, DAOS_INTENT_DEFAULT, NULL, &toh);
 	if (rc == -DER_NONEXIST) {
 		for (i = 0; i < ioc->ic_iod_nr; i++)
 			iod_empty_sgl(ioc, i);
@@ -763,7 +769,8 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 			update_bounds(&akey_epr, &iod->iod_eprs[0]);
 		}
 		rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
-				      &iod->iod_name, flags, &krec, &toh);
+				      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
+				      &krec, &toh);
 		if (rc != 0)
 			return rc;
 
@@ -790,8 +797,8 @@ akey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 
 			/* re-prepare the tree if epoch is different */
 			rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
-					      &iod->iod_name, flags, &krec,
-					      &toh);
+					      &iod->iod_name, flags,
+					      DAOS_INTENT_UPDATE, &krec, &toh);
 			if (rc != 0)
 				return rc;
 		}
@@ -834,6 +841,7 @@ dkey_update(struct vos_io_context *ioc, uuid_t cookie, uint32_t pm_ver,
 		if (!subtr_created) {
 			rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh,
 					      VOS_BTR_DKEY, dkey, SUBTR_CREATE,
+					      DAOS_INTENT_UPDATE,
 					      &krec, &ak_toh);
 			if (rc != 0) {
 				D_ERROR("Error preparing dkey tree: %d\n", rc);
@@ -1193,7 +1201,8 @@ update_cancel(struct vos_io_context *ioc)
 
 int
 vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
-	       daos_key_t *dkey, int err)
+	       daos_key_t *dkey, struct daos_tx_handle *dth, int err,
+	       int dti_cos_count, struct daos_tx_id *dti_cos)
 {
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 	struct umem_instance *umem;
@@ -1204,15 +1213,25 @@ vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
 	if (err != 0)
 		goto out;
 
-	err = vos_obj_revalidate(vos_obj_cache_current(), ioc->ic_epoch,
-				 &ioc->ic_obj);
-	if (err)
-		goto out;
-
 	umem = vos_obj2umm(ioc->ic_obj);
 	err = umem_tx_begin(umem, vos_txd_get());
 	if (err)
 		goto out;
+
+	vos_dth_set(dth);
+	if (dti_cos_count > 0) {
+		/* Commit the CoS DTXs via the IO PMDK transaction. */
+		err = vos_dtx_commit(vos_cont2hdl(ioc->ic_obj->obj_cont),
+				     dti_cos, dti_cos_count);
+		if (err != 0)
+			goto abort;
+	}
+
+again:
+	err = vos_obj_revalidate(vos_obj_cache_current(), ioc->ic_epoch,
+				 &ioc->ic_obj);
+	if (err != 0)
+		goto abort;
 
 	/* Publish SCM reservations */
 	if (ioc->ic_actv_at != 0) {
@@ -1235,26 +1254,66 @@ vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
 	err = process_blocks(ioc, true);
 
 abort:
-	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
+	if (err == -DER_INPROGRESS && dth != NULL &&
+	    (dth->dth_flags & DTX_F_AOC) && dth->dth_conflict.dti_sec != 0) {
+		int	rc;
+
+		/* Abort the conflict DTX by force, then try again. */
+		rc = vos_dtx_abort(vos_cont2hdl(ioc->ic_obj->obj_cont),
+				   &dth->dth_conflict, 1, true);
+		if (rc == 0) {
+			memset(&dth->dth_conflict, 0,
+			       sizeof(struct daos_tx_id));
+			goto again;
+		}
+	}
+
+	if (err == 0 && dth != NULL)
+		err = vos_dtx_prepared(dth);
+
+	if (err == 0)
+		umem_tx_commit(umem);
+	else
+		umem_tx_abort(umem, err);
+
 out:
 	if (err != 0)
 		update_cancel(ioc);
 	vos_ioc_destroy(ioc);
-
+	vos_dth_set(NULL);
 	return err;
 }
 
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-		 daos_handle_t *ioh)
+		 daos_handle_t *ioh, struct daos_tx_handle *dth,
+		 int *dti_cos_count, struct daos_tx_id *dti_cos)
 {
 	struct vos_io_context *ioc;
 	int rc;
 
+	vos_dth_set(dth);
+
+again:
 	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, false, &ioc);
-	if (rc != 0)
-		return rc;
+	if (rc != 0) {
+		if (rc == -DER_INPROGRESS && *dti_cos_count > 0) {
+			/* Only commit the DTXs when we are not sure about the
+			 * target object's visibility. Because committing DTXs
+			 * will cause additional PMDK transaction, if possible
+			 * we prefer to commit them when vos_update_end().
+			 */
+			rc = vos_dtx_commit(coh, dti_cos, *dti_cos_count);
+			if (rc < 0)
+				D_GOTO(reset, rc);
+
+			*dti_cos_count = 0;
+			goto again;
+		}
+
+		D_GOTO(reset, rc);
+	}
 
 	if (ioc->ic_actv_cnt != 0) {
 		rc = dkey_update_begin(ioc, dkey);
@@ -1279,9 +1338,12 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	D_DEBUG(DB_IO, "Prepared io context for updating %d iods\n", iod_nr);
 	*ioh = vos_ioc2ioh(ioc);
-	return 0;
+	D_GOTO(reset, rc = 0);
+
 error:
-	vos_update_end(vos_ioc2ioh(ioc), 0, 0, dkey, rc);
+	vos_update_end(vos_ioc2ioh(ioc), 0, 0, dkey, dth, rc, 0, NULL);
+reset:
+	vos_dth_set(NULL);
 	return rc;
 }
 
@@ -1347,7 +1409,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Update "DF_UOID", desc_nr %d, cookie "DF_UUID" epoch "
 		DF_U64"\n", DP_UOID(oid), iod_nr, DP_UUID(cookie), epoch);
 
-	rc = vos_update_begin(coh, oid, epoch, dkey, iod_nr, iods, &ioh);
+	rc = vos_update_begin(coh, oid, epoch, dkey, iod_nr, iods, &ioh,
+			      NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Update "DF_UOID" failed %d\n", DP_UOID(oid), rc);
 		return rc;
@@ -1359,7 +1422,7 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			D_ERROR("Copy "DF_UOID" failed %d\n", DP_UOID(oid), rc);
 	}
 
-	rc = vos_update_end(ioh, cookie, pm_ver, dkey, rc);
+	rc = vos_update_end(ioh, cookie, pm_ver, dkey, NULL, rc, 0, NULL);
 	return rc;
 }
 

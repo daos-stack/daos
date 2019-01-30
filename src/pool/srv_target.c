@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -220,8 +220,16 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 
-	if (arg->pca_map != NULL)
+	if (arg->pca_map != NULL) {
+		rc = ds_pool_create_pl_map(pool, arg->pca_map);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to create pl_map: %d\n",
+				DP_UUID(key), rc);
+			D_GOTO(err_lock, rc);
+		}
+
 		pool->sp_map = arg->pca_map;
+	}
 
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
@@ -254,6 +262,7 @@ err_collective:
 err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_pool:
+	ds_pool_destroy_pl_map(pool);
 	D_FREE(pool);
 err:
 	return rc;
@@ -289,8 +298,10 @@ pool_free_ref(struct daos_llink *llink)
 		D_ERROR(DF_UUID": failed to delete ES pool caches: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
 
-	if (pool->sp_map != NULL)
+	if (pool->sp_map != NULL) {
+		ds_pool_destroy_pl_map(pool);
 		pool_map_decref(pool->sp_map);
+	}
 
 	ABT_rwlock_free(&pool->sp_lock);
 	D_FREE(pool);
@@ -638,12 +649,13 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 void
 ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 {
-	struct pool_tgt_connect_in     *in = crt_req_get(rpc);
-	struct pool_tgt_connect_out    *out = crt_reply_get(rpc);
-	struct ds_pool		       *pool;
-	struct ds_pool_hdl	       *hdl;
-	struct ds_pool_create_arg	arg;
-	int				rc;
+	struct pool_tgt_connect_in	*in = crt_req_get(rpc);
+	struct pool_tgt_connect_out	*out = crt_reply_get(rpc);
+	struct pool_map			*map = NULL;
+	struct ds_pool			*pool;
+	struct ds_pool_hdl		*hdl;
+	struct ds_pool_create_arg	 arg;
+	int				 rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->tci_uuid), rpc, DP_UUID(in->tci_hdl));
@@ -671,7 +683,33 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	if (hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	arg.pca_map = NULL;
+	/* Init the pool map */
+	if (rpc->cr_co_bulk_hdl != NULL) {
+		struct pool_buf		*buf;
+		daos_iov_t		 iov = { 0 };
+		daos_sg_list_t		 sgl;
+
+		sgl.sg_nr = 1;
+		sgl.sg_nr_out = 1;
+		sgl.sg_iovs = &iov;
+		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
+		if (rc != 0) {
+			D_ERROR(DF_UUID": crt_bulk_access failed, rc %d.\n",
+				DP_UUID(in->tci_uuid), rc);
+			D_GOTO(out, rc);
+		}
+
+		buf = iov.iov_buf;
+		D_ASSERT(buf != NULL);
+		rc = pool_map_create(buf, in->tci_map_version, &map);
+		if (rc != 0) {
+			D_ERROR(DF_UUID" failed to create pool map: %d\n",
+				DP_UUID(in->tci_uuid), rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	arg.pca_map = map;
 	arg.pca_map_version = in->tci_map_version;
 	arg.pca_need_group = 0;
 
@@ -703,6 +741,9 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 
 	rc = pool_tgt_query(pool, &out->tco_space);
 out:
+	if (rc != 0 && map != NULL)
+		pool_map_decref(map);
+
 	out->tco_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->tci_uuid), rpc, out->tco_rc, rc);
@@ -819,6 +860,14 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		if (map != NULL) {
 			struct pool_map *tmp = pool->sp_map;
 
+			rc = ds_pool_create_pl_map(pool, map);
+			if (rc != 0) {
+				D_ERROR(DF_UUID
+					": failed to create pl_map: %d\n",
+					DP_UUID(pool->sp_uuid), rc);
+				D_GOTO(out, rc);
+			}
+
 			pool->sp_map = map;
 			map = tmp;
 		}
@@ -835,6 +884,13 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		   pool_map_get_version(pool->sp_map) < map_version &&
 		   map != NULL) {
 		struct pool_map *tmp = pool->sp_map;
+
+		rc = ds_pool_create_pl_map(pool, map);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to create pl_map: %d\n",
+				DP_UUID(pool->sp_uuid), rc);
+			D_GOTO(out, rc);
+		}
 
 		/* drop the stale map */
 		pool->sp_map = map;
@@ -955,6 +1011,7 @@ ds_pool_cont_iter(daos_handle_t ph, pool_iter_cb_t callback, void *arg)
 
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl = ph;
+	param.ip_flags = VOS_IT_FOR_REBUILD;
 
 	rc = vos_iter_prepare(VOS_ITER_COUUID, &param, &iter_h);
 	if (rc != 0) {
@@ -1001,35 +1058,39 @@ iter_fini:
 	return rc;
 }
 
-struct obj_iter_arg {
+struct cont_rebuild_iter_arg {
 	cont_iter_cb_t	callback;
 	void		*arg;
+	uint32_t	 type;
 };
 
 static int
-cont_obj_iter_cb(uuid_t cont_uuid, daos_unit_oid_t oid, daos_epoch_t eph,
-		 void *data)
+cont_rebuild_iter_cb(uuid_t cont_uuid, vos_iter_entry_t *ent, void *data)
 {
-	struct obj_iter_arg *arg = data;
+	struct cont_rebuild_iter_arg *arg = data;
 
-	return arg->callback(cont_uuid, oid, eph, arg->arg);
+	return arg->callback(cont_uuid, ent, arg->arg);
 }
 
 static int
-pool_obj_iter_cb(daos_handle_t ph, uuid_t co_uuid, void *data)
+pool_rebuild_iter_cb(daos_handle_t ph, uuid_t co_uuid, void *data)
 {
-	return ds_cont_obj_iter(ph, co_uuid, cont_obj_iter_cb, data);
+	struct cont_rebuild_iter_arg *arg = data;
+
+	return ds_cont_rebuild_iter(ph, co_uuid, cont_rebuild_iter_cb, data,
+				    arg->type);
 }
 
 /**
- * Iterate all of the objects in the pool.
+ * Iterate all of the objects or DTXs in the pool.
  **/
 int
-ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *data)
+ds_pool_rebuild_iter(uuid_t pool_uuid, rebuild_iter_cb_t callback,
+		     void *data, uint32_t type)
 {
-	struct obj_iter_arg	arg;
-	struct ds_pool_child	*child;
-	int			rc;
+	struct cont_rebuild_iter_arg	 arg;
+	struct ds_pool_child		*child;
+	int				 rc;
 
 	child = ds_pool_child_lookup(pool_uuid);
 	if (child == NULL)
@@ -1037,7 +1098,8 @@ ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *data)
 
 	arg.callback = callback;
 	arg.arg = data;
-	rc = ds_pool_cont_iter(child->spc_hdl, pool_obj_iter_cb, &arg);
+	arg.type = type;
+	rc = ds_pool_cont_iter(child->spc_hdl, pool_rebuild_iter_cb, &arg);
 
 	ds_pool_child_put(child);
 

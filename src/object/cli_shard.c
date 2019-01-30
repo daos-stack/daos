@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -294,7 +294,7 @@ obj_shard_rw_bulk_prep(crt_rpc_t *rpc, unsigned int nr, daos_sg_list_t *sgls,
 				D_ERROR("crt_bulk_bind failed, rc: %d.\n", rc);
 				D_GOTO(out, rc);
 			}
-			orw->orw_flags	= ORW_FLAG_BULK_BIND;
+			orw->orw_flags |= ORF_BULK_BIND;
 		}
 	}
 	orw->orw_bulks.ca_count = nr;
@@ -323,7 +323,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	     daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
 	     daos_iod_t *iods, daos_sg_list_t *sgls, unsigned int *map_ver,
 	     struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
-	     tse_task_t *task)
+	     tse_task_t *task, struct daos_tx_id *dti, uint32_t flags)
 {
 	struct dc_pool	       *pool;
 	crt_rpc_t	       *req = NULL;
@@ -380,6 +380,10 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_oid = shard->do_id;
 	uuid_copy(orw->orw_co_hdl, cont_hdl_uuid);
 	uuid_copy(orw->orw_co_uuid, cont_uuid);
+	daos_copy_dti(&orw->orw_dti, dti);
+	orw->orw_flags = flags;
+	orw->orw_dti_cos.ca_count = 0;
+	orw->orw_dti_cos.ca_arrays = NULL;
 
 	orw->orw_epoch = epoch;
 	orw->orw_nr = nr;
@@ -406,9 +410,10 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	data_size = sgls_size;
 
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
-		DF_U64" data_size "DF_U64"\n", opc, DP_UOID(shard->do_id),
-		(int)dkey->iov_len, (char *)dkey->iov_buf, tgt_ep.ep_rank,
-		tgt_ep.ep_tag, epoch, data_size);
+		DF_U64" data_size "DF_U64", DTI = "DF_DTI"\n",
+		opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
+		(char *)dkey->iov_buf, tgt_ep.ep_rank,
+		tgt_ep.ep_tag, epoch, data_size, DP_DTI(&orw->orw_dti));
 
 	do_bulk = data_size >= OBJ_BULK_LIMIT;
 	if (do_bulk) {
@@ -500,7 +505,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc, daos_epoch_t epoch,
 		   const uuid_t coh_uuid, const uuid_t cont_uuid,
 		   unsigned int *map_ver,
 		   struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
-		   tse_task_t *task)
+		   tse_task_t *task, struct daos_tx_id *dti, uint32_t flags)
 {
 	struct dc_pool			*pool;
 	struct obj_punch_in		*opi;
@@ -561,6 +566,10 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc, daos_epoch_t epoch,
 	}
 	uuid_copy(opi->opi_co_hdl, coh_uuid);
 	uuid_copy(opi->opi_co_uuid, cont_uuid);
+	daos_copy_dti(&opi->opi_dti, dti);
+	opi->opi_flags = flags;
+	opi->opi_dti_cos.ca_count = 0;
+	opi->opi_dti_cos.ca_arrays = NULL;
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
@@ -581,11 +590,11 @@ dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		    daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		    daos_sg_list_t *sgls, unsigned int *map_ver,
 		    struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
-		    tse_task_t *task)
+		    tse_task_t *task, struct daos_tx_id *dti, uint32_t flags)
 {
 	return obj_shard_rw(shard, DAOS_OBJ_RPC_UPDATE, epoch, dkey,
 			    nr, iods, sgls, map_ver, fw_shard_tgts, fw_cnt,
-			    task);
+			    task, dti, flags);
 }
 
 int
@@ -595,7 +604,7 @@ dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		   unsigned int *map_ver, tse_task_t *task)
 {
 	return obj_shard_rw(shard, DAOS_OBJ_RPC_FETCH, epoch, dkey,
-			    nr, iods, sgls, map_ver, NULL, 0, task);
+			    nr, iods, sgls, map_ver, NULL, 0, task, NULL, 0);
 }
 
 struct obj_enum_args {

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -112,7 +112,7 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		if (update_or_fetch == TS_DO_UPDATE)
 			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					      &cred->tc_dkey, 1, &cred->tc_iod,
-					      &ioh);
+					      &ioh, NULL, NULL, NULL);
 		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					     &cred->tc_dkey, 1, &cred->tc_iod,
@@ -143,7 +143,7 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 end:
 		if (update_or_fetch == TS_DO_UPDATE)
 			rc = vos_update_end(ioh, ts_cookie, 0, &cred->tc_dkey,
-					    rc);
+					    NULL, rc, 0, NULL);
 		else
 			rc = vos_fetch_end(ioh, rc);
 	}

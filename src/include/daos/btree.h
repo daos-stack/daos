@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -221,6 +221,9 @@ enum btr_key_cmp_rc {
 	BTR_CMP_MATCHED	= (1 << 2),
 	BTR_CMP_UNKNOWN	= (1 << 3),	/* unset */
 	BTR_CMP_ERR	= (1 << 4),	/* error */
+
+	/* The target is in some uncommitted DTX */
+	BTR_CMP_INPROGRESS	= (1 << 5),
 };
 
 /**
@@ -480,6 +483,25 @@ typedef struct {
 	 */
 	int		(*to_node_tx_add)(struct btr_instance *tins,
 					  TMMID(struct btr_node) nd_mmid);
+	/**
+	 * Optional:
+	 * Check whether the given record is visible to outside or not.
+	 *
+	 * \param tins	[IN]	Tree instance which contains the root mmid
+	 *			and memory class etc.
+	 * \param rec	[IN]	Record to be checked.
+	 * \parem intent [IN]	The intent for why check the record.
+	 *
+	 * \a return		Positive value for visible case.
+	 *			Zero for invisible case.
+	 *			-DER_INPROGRESS if the target record is in
+	 *			some uncommitted DTX, the caller needs to
+	 *			retry related operation some time later.
+	 *			Other negative values on error.
+	 */
+	int		(*to_check_visibility)(struct btr_instance *tins,
+					       struct btr_record *rec,
+					       uint32_t intent);
 } btr_ops_t;
 
 /**
@@ -557,14 +579,15 @@ int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh);
 int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out);
 int  dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val);
-int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc,
+int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		  daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out);
-int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc,
+int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		   daos_iov_t *key, daos_iov_t *val);
 int  dbtree_delete(daos_handle_t toh, daos_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
+struct umem_instance *btr_hdl2umm(daos_handle_t toh);
 
 /******* iterator API ******************************************************/
 
@@ -581,7 +604,7 @@ int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
 			daos_handle_t *ih);
 int dbtree_iter_finish(daos_handle_t ih);
 int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
-		      daos_iov_t *key, daos_anchor_t *anchor);
+		      uint32_t intent, daos_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
 int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
@@ -598,8 +621,8 @@ int dbtree_iter_empty(daos_handle_t ih);
  */
 typedef int (*dbtree_iterate_cb_t)(daos_handle_t ih, daos_iov_t *key,
 				   daos_iov_t *val, void *arg);
-int dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
-		   void *arg);
+int dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
+		   dbtree_iterate_cb_t cb, void *arg);
 
 enum {
 	DBTREE_VOS_BEGIN	= 10,

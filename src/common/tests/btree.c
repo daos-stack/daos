@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -575,7 +575,8 @@ ik_btr_iterate(char *args)
 		uint64_t	key;
 
 		if (i == 0 || (del != 0 && d <= del)) {
-			rc = dbtree_iter_probe(ih, opc, NULL, NULL);
+			rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT,
+					       NULL, NULL);
 			if (rc == -DER_NONEXIST)
 				break;
 

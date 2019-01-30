@@ -381,4 +381,13 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
+enum daos_ops_intent {
+	DAOS_INTENT_DEFAULT	= 0,	/* fetch/enumerate/query */
+	DAOS_INTENT_PURGE	= 1,	/* purge/aggregation */
+	DAOS_INTENT_UPDATE	= 2,	/* write/insert */
+	DAOS_INTENT_PUNCH	= 3,	/* punch/delete */
+	DAOS_INTENT_REBUILD	= 4,	/* for rebuild related scan */
+	DAOS_INTENT_PROBE	= 5,	/* check aborted or not */
+};
+
 #endif /* __DAOS_COMMON_H__ */

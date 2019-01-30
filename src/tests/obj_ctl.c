@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,7 +137,8 @@ ctl_punch(struct dts_io_credit *cred)
 		}
 
 		rc = vos_obj_punch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
-				   ctl_cookie, 0, flags, dkey, 1, akey);
+				   ctl_cookie, 0, flags, dkey, 1, akey,
+				   NULL, 0, NULL);
 		if (rc == -DER_NO_PERM) {
 			D_PRINT("permission denied\n");
 			rc = 0; /* ignore it */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -670,15 +670,15 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 		int			 i, rc;
 
 		stat->vs_free_persistent = 0;
-		rc = dbtree_iterate(vsi->vsi_md_free_btr, false,
-				    count_free_persistent,
+		rc = dbtree_iterate(vsi->vsi_md_free_btr, DAOS_INTENT_DEFAULT,
+				    false, count_free_persistent,
 				    (void *)&stat->vs_free_persistent);
 		if (rc != 0)
 			return rc;
 
 		stat->vs_free_transient = 0;
-		rc = dbtree_iterate(vsi->vsi_free_btr, false,
-				    count_free_transient,
+		rc = dbtree_iterate(vsi->vsi_free_btr, DAOS_INTENT_DEFAULT,
+				    false, count_free_transient,
 				    (void *)&stat->vs_free_transient);
 		if (rc != 0)
 			return rc;

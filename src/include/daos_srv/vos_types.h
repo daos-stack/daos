@@ -26,6 +26,7 @@
 
 #include <daos_types.h>
 #include <daos_srv/bio.h>
+#include <daos/dtx.h>
 
 enum vos_oi_attr {
 	/** Marks object as failed */
@@ -90,6 +91,8 @@ typedef enum {
 	VOS_ITER_SINGLE,
 	/** iterate record extents and epoch validities of these extents */
 	VOS_ITER_RECX,
+	/** iterate VOS active-DTX table */
+	VOS_ITER_DTX,
 } vos_iter_type_t;
 
 /** epoch logic expression for the single value iterator */
@@ -122,6 +125,10 @@ enum {
 	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
 	/** When sorted iteration is enabled, iterate in reverse */
 	VOS_IT_RECX_REVERSE	= (1 << 3),
+	/** The iterator is for purge operation */
+	VOS_IT_FOR_PURGE	= (1 << 4),
+	/** The iterator is for rebuild scan */
+	VOS_IT_FOR_REBUILD	= (1 << 5),
 };
 
 /**
@@ -146,8 +153,8 @@ typedef struct {
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	ip_epc_expr;
-	/** extent visibility flags for for iterator */
-	uint32_t		ip_recx_flags;
+	/** flags for for iterator */
+	uint32_t		ip_flags;
 } vos_iter_param_t;
 
 enum {
@@ -167,17 +174,33 @@ enum {
  * Returned entry of a VOS iterator
  */
 typedef struct {
-	/** Returned epoch. It is ignored for container iteration. */
-	daos_epoch_t		ie_epoch;
-	/** Returned earliest update epoch for a key */
-	daos_epoch_t		ie_earliest;
+	union {
+		/** Returned epoch. It is ignored for container iteration. */
+		daos_epoch_t			ie_epoch;
+		/** Return the DTX identifier. */
+		struct daos_tx_id		ie_xid;
+	};
+	union {
+		/** Returned earliest update epoch for a key */
+		daos_epoch_t			ie_earliest;
+		/** Return the DTX handled time for DTX iteration. */
+		uint64_t			ie_dtx_sec;
+	};
 	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;
 		/** dkey or akey */
 		daos_key_t			ie_key;
-		/** oid */
-		daos_unit_oid_t			ie_oid;
+		struct {
+			/** oid */
+			daos_unit_oid_t		ie_oid;
+			/* The DTX state for DTX iteration. */
+			uint32_t		ie_dtx_state;
+			/* The DTX intent for DTX iteration. */
+			uint32_t		ie_dtx_intent;
+			/* The DTX dkey hash for DTX iteration. */
+			uint64_t		ie_dtx_hash;
+		};
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;

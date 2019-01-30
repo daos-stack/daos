@@ -65,6 +65,8 @@ struct evt_desc {
 	uint32_t			dc_ver;
 	/** Magic number for validation */
 	uint32_t			dc_magic;
+	/** The DTX entry in SCM. */
+	umem_id_t			dc_dtx;
 };
 
 struct evt_extent {
@@ -269,7 +271,8 @@ evt_debug_print_visibility(const struct evt_entry *ent)
 
 	switch (ent->en_visibility & flags) {
 	default:
-		D_ASSERT(0);
+		D_ASSERTF(0, "Unexpected visibility flags %x\n",
+			  ent->en_visibility);
 	case 0:
 		break;
 	case EVT_VISIBLE:
@@ -280,6 +283,8 @@ evt_debug_print_visibility(const struct evt_entry *ent)
 		return 'C';
 	case EVT_COVERED | EVT_PARTIAL:
 		return 'c';
+	case EVT_PARTIAL:
+		return 'P';
 	}
 
 	return 'U';
@@ -503,6 +508,11 @@ enum {
 	 * If neither flag is set, all rectangles in tree that intersect the
 	 * search rectangle, including punched extents, are returned.
 	 */
+
+	/** The iterator is for purge operation */
+	EVT_ITER_FOR_PURGE	= (1 << 5),
+	/** The iterator is for rebuild scan */
+	EVT_ITER_FOR_REBUILD	= (1 << 6),
 };
 
 /**

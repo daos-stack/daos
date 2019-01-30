@@ -35,6 +35,13 @@
 #include <daos/lru.h>
 #include <daos/btree_class.h>
 
+/**
+ * The vos_start_time records the timestamp when server starts the serive.
+ * Via comparing with the DTX entry's timestamp, we can know whether
+ * the DTX happened before the server restarting its service or not.
+ */
+double vos_start_time;
+
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 /**
  * Object cache based on mode of instantiation
@@ -180,6 +187,8 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 		return NULL;
 	}
 
+	tls->vtl_dth = NULL;
+
 	return tls;
 }
 
@@ -219,6 +228,18 @@ vos_mod_init(void)
 	rc = vos_cont_tab_register();
 	if (rc) {
 		D_ERROR("VOS CI btree initialization error\n");
+		return rc;
+	}
+
+	rc = vos_dtx_table_register();
+	if (rc) {
+		D_ERROR("DTX btree initialization error\n");
+		return rc;
+	}
+
+	rc = vos_dtx_cos_register();
+	if (rc != 0) {
+		D_ERROR("DTX CoS btree initialization error\n");
 		return rc;
 	}
 
@@ -342,12 +363,13 @@ vos_init(void)
 		return rc;
 	}
 
+	vsa_dth = NULL;
 	vsa_xsctxt_inst = NULL;
 	vsa_nvme_init = false;
 
 	D_ALLOC_PTR(vsa_imems_inst);
 	if (vsa_imems_inst == NULL)
-		D_GOTO(exit, rc);
+		D_GOTO(exit, rc = -DER_NOMEM);
 
 	rc = vos_imem_strts_create(vsa_imems_inst);
 	if (rc)
@@ -361,6 +383,7 @@ vos_init(void)
 	if (rc)
 		D_GOTO(exit, rc);
 
+	vos_start_time = ABT_get_wtime();
 	is_init = 1;
 exit:
 	D_MUTEX_UNLOCK(&mutex);
