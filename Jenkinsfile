@@ -43,7 +43,7 @@
 def arch=""
 
 pipeline {
-    agent any
+    agent none
 
     triggers {
         cron(env.BRANCH_NAME == 'master' ? '0 0 * * *' : '')
@@ -153,18 +153,20 @@ pipeline {
                     }
                     post {
                         always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-centos7",
-                                         tools: [ gcc4(), cppCheck() ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
-                        /* when JENKINS-39203 is resolved, can probably use stepResult
-                           here and remove the remaining post conditions
+                            node('lightweight') {
+                                recordIssues enabledForFailure: true,
+                                             aggregatingResults: true,
+                                             id: "analysis-centos7",
+                                             tools: [ gcc4(), cppCheck() ],
+                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                       excludeFile('_build\\.external\\/.*')]
+                            }
+                            /* when JENKINS-39203 is resolved, can probably use stepResult
+                               here and remove the remaining post conditions
                                stepResult name: env.STAGE_NAME,
                                           context: 'build/' + env.STAGE_NAME,
                                           result: ${currentBuild.currentResult}
-                        */
+                            */
                         }
                         success {
                             sh '''rm -rf daos-devel/
@@ -210,18 +212,20 @@ pipeline {
                     }
                     post {
                         always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-centos7-clang",
-                                         tools: [ clang(), cppCheck() ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
-                        /* when JENKINS-39203 is resolved, can probably use stepResult
-                           here and remove the remaining post conditions
+                            node('lightweight') {
+                                recordIssues enabledForFailure: true,
+                                             aggregatingResults: true,
+                                             id: "analysis-centos7-clang",
+                                             tools: [ clang(), cppCheck() ],
+                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                       excludeFile('_build\\.external\\/.*')]
+                            }
+                            /* when JENKINS-39203 is resolved, can probably use stepResult
+                               here and remove the remaining post conditions
                                stepResult name: env.STAGE_NAME,
                                           context: 'build/' + env.STAGE_NAME,
                                           result: ${currentBuild.currentResult}
-                        */
+                            */
                         }
                         success {
                             /* temporarily moved into stepResult due to JENKINS-39203
@@ -263,18 +267,20 @@ pipeline {
                     }
                     post {
                         always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-ubuntu18",
-                                         tools: [ gcc4(), cppCheck() ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
-                        /* when JENKINS-39203 is resolved, can probably use stepResult
-                           here and remove the remaining post conditions
+                            node('lightweight') {
+                                recordIssues enabledForFailure: true,
+                                             aggregatingResults: true,
+                                             id: "analysis-ubuntu18",
+                                             tools: [ gcc4(), cppCheck() ],
+                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                       excludeFile('_build\\.external\\/.*')]
+                            }
+                            /* when JENKINS-39203 is resolved, can probably use stepResult
+                               here and remove the remaining post conditions
                                stepResult name: env.STAGE_NAME,
                                           context: 'build/' + env.STAGE_NAME,
                                           result: ${currentBuild.currentResult}
-                        */
+                            */
                         }
                         success {
                             /* temporarily moved into stepResult due to JENKINS-39203
@@ -315,18 +321,20 @@ pipeline {
                     }
                     post {
                         always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-ubuntu18-clang",
-                                         tools: [ clang(), cppCheck() ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
-                        /* when JENKINS-39203 is resolved, can probably use stepResult
-                           here and remove the remaining post conditions
+                            node('lightweight') {
+                                recordIssues enabledForFailure: true,
+                                             aggregatingResults: true,
+                                             id: "analysis-ubuntu18-clang",
+                                             tools: [ clang(), cppCheck() ],
+                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                       excludeFile('_build\\.external\\/.*')]
+                            }
+                            /* when JENKINS-39203 is resolved, can probably use stepResult
+                               here and remove the remaining post conditions
                                stepResult name: env.STAGE_NAME,
                                           context: 'build/' + env.STAGE_NAME,
                                           result: ${currentBuild.currentResult}
-                        */
+                            */
                         }
                         success {
                             /* temporarily moved into stepResult due to JENKINS-39203
@@ -368,18 +376,20 @@ pipeline {
                     }
                     post {
                         always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-leap15",
-                                         tools: [ gcc4(), cppCheck() ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
-                        /* when JENKINS-39203 is resolved, can probably use stepResult
-                           here and remove the remaining post conditions
+                            node('lightweight') {
+                                recordIssues enabledForFailure: true,
+                                             aggregatingResults: true,
+                                             id: "analysis-leap15",
+                                             tools: [ gcc4(), cppCheck() ],
+                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                       excludeFile('_build\\.external\\/.*')]
+                            }
+                            /* when JENKINS-39203 is resolved, can probably use stepResult
+                               here and remove the remaining post conditions
                                stepResult name: env.STAGE_NAME,
                                           context: 'build/' + env.STAGE_NAME,
                                           result: ${currentBuild.currentResult}
-                        */
+                            */
                         }
                         success {
                             /* temporarily moved into stepResult due to JENKINS-39203
@@ -421,18 +431,20 @@ pipeline {
                     }
                     post {
                         always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-leap15-clang",
-                                         tools: [ clang(), cppCheck() ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
-                        /* when JENKINS-39203 is resolved, can probably use stepResult
-                           here and remove the remaining post conditions
+                            node('lightweight') {
+                                recordIssues enabledForFailure: true,
+                                             aggregatingResults: true,
+                                             id: "analysis-leap15-clang",
+                                             tools: [ clang(), cppCheck() ],
+                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                       excludeFile('_build\\.external\\/.*')]
+                            }
+                            /* when JENKINS-39203 is resolved, can probably use stepResult
+                               here and remove the remaining post conditions
                                stepResult name: env.STAGE_NAME,
                                           context: 'build/' + env.STAGE_NAME,
                                           result: ${currentBuild.currentResult}
-                        */
+                            */
                         }
                         success {
                             /* temporarily moved into stepResult due to JENKINS-39203
@@ -474,18 +486,20 @@ pipeline {
                     }
                     post {
                         always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-leap15-intelc",
-                                         tools: [ intel(), cppCheck() ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
-                        /* when JENKINS-39203 is resolved, can probably use stepResult
-                           here and remove the remaining post conditions
+                            node('lightweight') {
+                                recordIssues enabledForFailure: true,
+                                             aggregatingResults: true,
+                                             id: "analysis-leap15-intelc",
+                                             tools: [ intel(), cppCheck() ],
+                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                       excludeFile('_build\\.external\\/.*')]
+                            }
+                            /* when JENKINS-39203 is resolved, can probably use stepResult
+                               here and remove the remaining post conditions
                                stepResult name: env.STAGE_NAME,
                                           context: 'build/' + env.STAGE_NAME,
                                           result: ${currentBuild.currentResult}
-                        */
+                            */
                         }
                         success {
                             /* temporarily moved into stepResult due to JENKINS-39203
@@ -561,7 +575,8 @@ pipeline {
                                                [ -f /tmp/daos.log ] && mv /tmp/daos.log run_test.sh/
                                                # servers can sometimes take a while to stop when the test is done
                                                x=0
-                                               while [ \"\\\$x\" -lt \"10\" ] && pgrep '(daos_server|daos_io_server)'; do
+                                               while [ \"\\\$x\" -lt \"10\" ] && 
+                                                     pgrep '(orterun|daos_server|daos_io_server)'; do
                                                    sleep 1
                                                    let x=\\\$x+1
                                                done"''',
