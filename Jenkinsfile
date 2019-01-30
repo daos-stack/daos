@@ -43,7 +43,7 @@
 def arch=""
 
 pipeline {
-    agent none
+    agent { label 'lightweight' }
 
     triggers {
         cron(env.BRANCH_NAME == 'master' ? '0 0 * * *' : '')
