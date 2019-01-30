@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,9 +136,9 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 			D_DEBUG(DB_REBUILD, "update start %d cnt %d\n",
 				start, iod_cnt);
 			rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
-					    rdone->ro_epoch, rdone->ro_cookie,
-					    rdone->ro_version, &rdone->ro_dkey,
-					    iod_cnt, &rdone->ro_iods[start],
+					    rdone->ro_epoch, rdone->ro_version,
+					    &rdone->ro_dkey, iod_cnt,
+					    &rdone->ro_iods[start],
 					    &sgls[start]);
 			if (rc) {
 				D_ERROR("rebuild failed: rc %d\n", rc);
@@ -151,10 +151,9 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 
 	if (iod_cnt > 0)
 		rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
-				    rdone->ro_epoch, rdone->ro_cookie,
-				    rdone->ro_version, &rdone->ro_dkey,
-				    iod_cnt, &rdone->ro_iods[start],
-				    &sgls[start]);
+				    rdone->ro_epoch, rdone->ro_version,
+				    &rdone->ro_dkey, iod_cnt,
+				    &rdone->ro_iods[start], &sgls[start]);
 
 	return rc;
 }
@@ -223,8 +222,7 @@ post:
 	}
 
 end:
-	vos_update_end(ioh, rdone->ro_cookie, rdone->ro_version,
-		       &rdone->ro_dkey, rc);
+	vos_update_end(ioh, rdone->ro_version, &rdone->ro_dkey, rc);
 	return rc;
 }
 
@@ -244,9 +242,8 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 			DP_UOID(rdone->ro_oid), (int)rdone->ro_dkey.iov_len,
 			(char *)rdone->ro_dkey.iov_buf, rdone->ro_max_eph);
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
-				   rdone->ro_max_eph, rpt->rt_coh_uuid,
-				   rpt->rt_rebuild_ver, VOS_OF_REPLAY_PC,
-				   &rdone->ro_dkey, 0, NULL);
+				   rdone->ro_max_eph, rpt->rt_rebuild_ver,
+				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 0, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch dkey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -268,9 +265,9 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 			rdone->ro_ephs[i]);
 		D_ASSERT(rdone->ro_ephs[i] != DAOS_EPOCH_MAX);
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
-				   rdone->ro_ephs[i], rpt->rt_coh_uuid,
-				   rpt->rt_rebuild_ver, VOS_OF_REPLAY_PC,
-				   &rdone->ro_dkey, 1, &rdone->ro_ephs_keys[i]);
+				   rdone->ro_ephs[i], rpt->rt_rebuild_ver,
+				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 1,
+				   &rdone->ro_ephs_keys[i]);
 		if (rc) {
 			D_ERROR(DF_UOID" punch akey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -281,9 +278,8 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 	/* punch records */
 	if (rdone->ro_punch_iod_num > 0) {
 		rc = vos_obj_update(cont->sc_hdl, rdone->ro_oid,
-				    rdone->ro_epoch, rdone->ro_cookie,
-				    rdone->ro_version, &rdone->ro_dkey,
-				    rdone->ro_punch_iod_num,
+				    rdone->ro_epoch, rdone->ro_version,
+				    &rdone->ro_dkey, rdone->ro_punch_iod_num,
 				    rdone->ro_punch_iods, NULL);
 		D_DEBUG(DB_REBUILD, DF_UOID" rdone %p punch %d records: %d\n",
 			DP_UOID(rdone->ro_oid), rdone, rdone->ro_punch_iod_num,
@@ -588,7 +584,7 @@ static int
 rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 		  daos_key_t *dkey, daos_epoch_t dkey_eph, daos_iod_t *iods,
 		  daos_epoch_t *akey_ephs, int iod_eph_total,
-		  daos_sg_list_t *sgls, uuid_t cookie, uint32_t version)
+		  daos_sg_list_t *sgls, uint32_t version)
 {
 	struct rebuild_puller		*puller;
 	struct rebuild_tgt_pool_tracker *rpt = iter_arg->rpt;
@@ -675,7 +671,6 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	rdone->ro_ephs_num = ephs_cnt;
 	rdone->ro_max_eph = dkey_eph;
 	rdone->ro_version = version;
-	uuid_copy(rdone->ro_cookie, cookie);
 	puller = &rpt->rt_pullers[iter_arg->tgt_idx];
 	if (puller->rp_ult == NULL) {
 		/* Create puller ULT thread, and destroy ULT until
@@ -724,7 +719,7 @@ rebuild_one_queue_cb(struct dss_enum_unpack_io *io, void *arg)
 	return rebuild_one_queue(arg, &io->ui_oid, &io->ui_dkey,
 				 io->ui_dkey_eph, io->ui_iods,
 				 io->ui_akey_ephs, io->ui_iods_len,
-				 io->ui_sgls, io->ui_cookie, io->ui_version);
+				 io->ui_sgls, io->ui_version);
 }
 
 static int
@@ -739,8 +734,7 @@ rebuild_obj_punch_one(void *data)
 	D_ASSERT(rc == 0);
 
 	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->epoch,
-			   arg->rpt->rt_coh_uuid, arg->rpt->rt_rebuild_ver,
-			   0, NULL, 0, NULL);
+			   arg->rpt->rt_rebuild_ver, 0, NULL, 0, NULL);
 	ds_cont_put(cont);
 	if (rc)
 		D_ERROR(DF_UOID" rebuild punch failed rc %d\n",

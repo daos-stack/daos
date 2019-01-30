@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,6 @@ bool			 ts_zero_copy;
 /* verify the output of fetch */
 bool			 ts_verify_fetch;
 
-uuid_t			 ts_cookie;		/* update cookie for VOS */
 daos_handle_t		 ts_oh;			/* object open handle */
 daos_obj_id_t		 ts_oid;		/* object ID */
 daos_unit_oid_t		 ts_uoid;		/* object shard ID (for VOS) */
@@ -99,8 +98,8 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 	if (!ts_zero_copy) {
 		if (update_or_fetch == TS_DO_UPDATE)
 			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoid, epoch,
-				ts_cookie, 0, &cred->tc_dkey, 1,
-				&cred->tc_iod, &cred->tc_sgl);
+				0, &cred->tc_dkey, 1, &cred->tc_iod,
+				&cred->tc_sgl);
 		else
 			rc = vos_obj_fetch(ts_ctx.tsc_coh, ts_uoid, epoch,
 				&cred->tc_dkey, 1, &cred->tc_iod,
@@ -142,8 +141,7 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
 		if (update_or_fetch == TS_DO_UPDATE)
-			rc = vos_update_end(ioh, ts_cookie, 0, &cred->tc_dkey,
-					    rc);
+			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc);
 		else
 			rc = vos_fetch_end(ioh, rc);
 	}
@@ -1163,7 +1161,6 @@ main(int argc, char **argv)
 	}
 
 	if (ts_class == DAOS_OC_RAW) {
-		uuid_generate(ts_cookie);
 		ts_ctx.tsc_cred_nr = -1; /* VOS can only support sync mode */
 		if (strlen(ts_pmem_file) == 0)
 			strcpy(ts_pmem_file, "/mnt/daos/vos_perf.pmem");

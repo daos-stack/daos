@@ -232,12 +232,6 @@ vos_mod_init(void)
 		return rc;
 	}
 
-	rc = vos_cookie_tab_register();
-	if (rc) {
-		D_ERROR("VOS cookie btree initialization error\n");
-		return rc;
-	}
-
 	rc = obj_tree_register();
 	if (rc)
 		D_ERROR("Failed to register vos trees\n");

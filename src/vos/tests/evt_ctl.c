@@ -60,7 +60,6 @@ static int			ts_order = ORDER_DEF;
 static TMMID(struct evt_root)	ts_root_mmid;
 static struct evt_root		ts_root;
 static daos_handle_t		ts_toh;
-static uuid_t			ts_uuid;
 static struct umem_instance	ts_umm;
 static uint64_t			ts_pool_uuid;
 
@@ -331,7 +330,6 @@ ts_add_rect(char *args)
 		return rc;
 	}
 	entry.ei_addr = bio_addr;
-	uuid_copy(entry.ei_cookie, ts_uuid);
 	entry.ei_ver = 0;
 	entry.ei_inob = val == NULL ? 0 : 1;
 
@@ -665,7 +663,6 @@ ts_many_add(char *args)
 			return rc;
 		}
 		entry.ei_addr = bio_addr;
-		uuid_copy(entry.ei_cookie, ts_uuid);
 		entry.ei_ver = 0;
 		entry.ei_inob = 1;
 
@@ -856,7 +853,6 @@ test_evt_iter_delete(void **state)
 			entry.ei_rect.rc_ex.ex_hi = offset;
 			entry.ei_rect.rc_epc = epoch;
 			entry.ei_csum = 0;
-			uuid_copy(entry.ei_cookie, ts_uuid);
 			entry.ei_ver = 0;
 			entry.ei_inob = sizeof(offset);
 			sum = offset - epoch + 1;
@@ -992,7 +988,6 @@ test_evt_iter_delete_internal(void **state)
 			entry.ei_rect.rc_ex.ex_hi = offset;
 			entry.ei_rect.rc_epc = epoch;
 			entry.ei_csum = 0;
-			uuid_copy(entry.ei_cookie, ts_uuid);
 			entry.ei_ver = 0;
 			entry.ei_inob = sizeof(offset);
 			rc = bio_alloc_init(&umm, &entry.ei_addr, &offset,

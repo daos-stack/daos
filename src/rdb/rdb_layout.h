@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,8 +98,6 @@ typedef uint64_t rdb_oid_t;
 
 /* D-key for all a-keys */
 extern daos_iov_t rdb_dkey;
-
-extern uuid_t rdb_cookie;
 
 /* pm_ver for all VOS calls taking a pm_ver argument */
 #define RDB_PM_VER 0

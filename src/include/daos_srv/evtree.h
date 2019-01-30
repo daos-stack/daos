@@ -56,8 +56,6 @@ enum {
 
 /** EVTree data pointer */
 struct evt_desc {
-	/** cookie to insert this extent */
-	uuid_t				dc_cookie;
 	uint64_t			dc_csum;
 	/** buffer on SCM or NVMe */
 	bio_addr_t			dc_ex_addr;
@@ -199,8 +197,6 @@ enum evt_feats {
 struct evt_entry_in {
 	/** Extent to insert */
 	struct evt_rect	ei_rect;
-	/** VOS cookie */
-	uuid_t		ei_cookie;
 	/** checksum of entry */
 	uint64_t	ei_csum;
 	/** pool map version */
@@ -231,8 +227,6 @@ struct evt_entry {
 	struct evt_extent		en_ext;
 	/** Actual extent within selected range */
 	struct evt_extent		en_sel_ext;
-	/** VOS cookie of entry */
-	uuid_t				en_cookie;
 	/** checksum of entry */
 	uint64_t			en_csum;
 	/** pool map version */

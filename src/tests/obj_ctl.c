@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,6 @@ static bool			 daos_mode = true;
 
 static long			 ctl_epoch;
 static daos_unit_oid_t		 ctl_oid;
-static uuid_t			 ctl_cookie;
 static daos_handle_t		 ctl_oh;	/* object open handle */
 static unsigned int		 ctl_abits;	/* see CTL_ARG_* */
 static d_rank_t			 ctl_svc_rank;	/* pool service leader */
@@ -80,8 +79,8 @@ ctl_update(struct dts_io_credit *cred)
 				     &cred->tc_iod, &cred->tc_sgl, NULL);
 	} else {
 		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
-				    ctl_cookie, 0xcafe, &cred->tc_dkey, 1,
-				    &cred->tc_iod, &cred->tc_sgl);
+				    0xcafe, &cred->tc_dkey, 1, &cred->tc_iod,
+				    &cred->tc_sgl);
 	}
 	return rc;
 }
@@ -137,7 +136,7 @@ ctl_punch(struct dts_io_credit *cred)
 		}
 
 		rc = vos_obj_punch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
-				   ctl_cookie, 0, flags, dkey, 1, akey);
+				   0, flags, dkey, 1, akey);
 		if (rc == -DER_NO_PERM) {
 			D_PRINT("permission denied\n");
 			rc = 0; /* ignore it */
@@ -504,7 +503,6 @@ main(int argc, char **argv)
 		goto out_usage;
 	}
 
-	uuid_generate(ctl_cookie);
 	uuid_generate(ctl_ctx.tsc_pool_uuid);
 	uuid_generate(ctl_ctx.tsc_cont_uuid);
 

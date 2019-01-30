@@ -75,9 +75,9 @@ vos_hdl2oiter(daos_handle_t hdl)
  */
 
 static int
-key_punch(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
-	  uint32_t pm_ver, daos_key_t *dkey, unsigned int akey_nr,
-	  daos_key_t *akeys, uint32_t flags)
+key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
+	  daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys,
+	  uint32_t flags)
 {
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
@@ -94,7 +94,6 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 	kbund.kb_epoch = epoch;
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	uuid_copy(rbund.rb_cookie, cookie);
 	rbund.rb_mmid	= UMMID_NULL;
 	rbund.rb_ver	= pm_ver;
 	rbund.rb_csum	= &csum;
@@ -137,7 +136,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 
 static int
 obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
-	  uuid_t cookie, uint32_t flags)
+	  uint32_t flags)
 {
 	struct vos_container	*cont;
 	int			 rc;
@@ -160,15 +159,15 @@ failed:
  */
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      uuid_t cookie, uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
+	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys)
 {
 	PMEMobjpool	  *pop;
 	struct vos_object *obj;
 	int		   rc;
 
-	D_DEBUG(DB_IO, "Punch "DF_UOID", cookie "DF_UUID" epoch "
-		DF_U64"\n", DP_UOID(oid), DP_UUID(cookie), epoch);
+	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
+		DP_UOID(oid), epoch);
 
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch,
@@ -179,10 +178,10 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	pop = vos_obj2pop(obj);
 	TX_BEGIN(pop) {
 		if (dkey) { /* key punch */
-			rc = key_punch(obj, epoch, cookie, pm_ver, dkey,
+			rc = key_punch(obj, epoch, pm_ver, dkey,
 				       akey_nr, akeys, flags);
 		} else { /* object punch */
-			rc = obj_punch(coh, obj, epoch, cookie, flags);
+			rc = obj_punch(coh, obj, epoch, flags);
 		}
 
 	} TX_ONABORT {
@@ -704,7 +703,6 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	if (rc)
 		D_GOTO(out, rc);
 
-	uuid_copy(it_entry->ie_cookie, rbund.rb_cookie);
 	it_entry->ie_epoch	 = kbund.kb_epoch;
 	it_entry->ie_rsize	 = rbund.rb_rsize;
 	it_entry->ie_ver	 = rbund.rb_ver;
@@ -848,7 +846,6 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_orig_recx.rx_nr	 = evt_extent_width(ext);
 	it_entry->ie_recx_flags = entry.en_visibility;
 	it_entry->ie_rsize	 = bio_addr_is_hole(&entry.en_addr) ? 0 : inob;
-	uuid_copy(it_entry->ie_cookie, entry.en_cookie);
 	it_entry->ie_ver	= entry.en_ver;
 	it_entry->ie_biov.bi_buf = NULL;
 	it_entry->ie_biov.bi_data_len = it_entry->ie_recx.rx_nr *

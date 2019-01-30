@@ -690,7 +690,6 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 	int i;
 
 	D_ASSERT(daos_key_match(&io->ui_dkey, &rdb_dkey));
-	D_ASSERT(uuid_compare(io->ui_cookie, rdb_cookie) == 0);
 	D_ASSERTF(io->ui_version == RDB_PM_VER, "%u\n", io->ui_version);
 	for (i = 0; i < io->ui_iods_len; i++) {
 		D_ASSERT(io->ui_iods[i].iod_type == DAOS_IOD_SINGLE);
@@ -709,9 +708,9 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 	}
 #endif
 
-	return vos_obj_update(*slc, io->ui_oid, 0 /* epoch */, io->ui_cookie,
-			      io->ui_version, &io->ui_dkey, io->ui_iods_len,
-			      io->ui_iods, io->ui_sgls);
+	return vos_obj_update(*slc, io->ui_oid, 0 /* epoch */, io->ui_version,
+			      &io->ui_dkey, io->ui_iods_len, io->ui_iods,
+			      io->ui_sgls);
 }
 
 static int

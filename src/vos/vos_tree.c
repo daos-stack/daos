@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -526,8 +526,6 @@ static btr_ops_t key_btr_ops = {
 struct svt_hkey {
 	/** */
 	uint64_t	sv_epoch;
-	/** cookie ID tag for this update */
-	uuid_t		sv_cookie;
 };
 
 /**
@@ -541,14 +539,9 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
-	struct svt_hkey		*skey;
 
 	if (biov->bi_data_len != rbund->rb_rsize)
 		return -DER_IO_INVAL;
-
-	skey = (struct svt_hkey *)&rec->rec_hkey[0];
-	/** Updating the cookie for this update */
-	uuid_copy(skey->sv_cookie, rbund->rb_cookie);
 
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
@@ -582,8 +575,6 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 
 	if (kbund != NULL) /* called from iterator */
 		kbund->kb_epoch = skey->sv_epoch;
-
-	uuid_copy(rbund->rb_cookie, skey->sv_cookie);
 
 	/* NB: return record address, caller should copy/rma data for it */
 	biov->bi_data_len = irec->ir_size;

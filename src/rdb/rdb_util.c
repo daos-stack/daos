@@ -514,8 +514,8 @@ rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_UPDATE, n, akeys, values, iods);
 	rdb_vos_set_sgls(RDB_VOS_UPDATE, n, values, sgls);
-	return vos_obj_update(cont, uoid, epoch, rdb_cookie, RDB_PM_VER,
-			      &rdb_dkey, n, iods, sgls);
+	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, &rdb_dkey, n,
+			      iods, sgls);
 }
 
 int
@@ -525,7 +525,7 @@ rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 	daos_unit_oid_t	uoid;
 
 	rdb_oid_to_uoid(oid, &uoid);
-	return vos_obj_punch(cont, uoid, epoch, rdb_cookie, RDB_PM_VER, 0,
+	return vos_obj_punch(cont, uoid, epoch, RDB_PM_VER, 0,
 			     n == 0 ? NULL : &rdb_dkey, n,
 			     n == 0 ? NULL : akeys);
 }
@@ -540,7 +540,7 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 	range.epr_lo = low;
 	range.epr_hi = high;
 
-	return vos_discard(cont, &range, rdb_cookie);
+	return vos_discard(cont, &range);
 }
 
 int
