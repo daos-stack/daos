@@ -117,7 +117,7 @@ pipeline {
         stage('Build') {
             // abort other builds if/when one fails to avoid wasting time
             // and resources
-            failFast true
+            //failFast true
             parallel {
                 stage('Build on CentOS 7') {
                     agent {
