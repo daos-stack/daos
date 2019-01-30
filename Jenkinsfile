@@ -41,6 +41,7 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 def arch=""
+def sanitized_JOB_NAME = JOB_NAME.replaceAll('/', '-').toLowerCase()
 
 pipeline {
     agent { label 'lightweight' }
@@ -54,7 +55,7 @@ pipeline {
         BAHTTPS_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTP_PROXY="' + env.HTTP_PROXY + '" --build-arg http_proxy="' + env.HTTP_PROXY + '"' : ''}"
         BAHTTP_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '" --build-arg https_proxy="' + env.HTTPS_PROXY + '"' : ''}"
         UID=sh(script: "id -u", returnStdout: true)
-        BUILDARGS = "-t $JOB_NAME.replaceAll('/', '-') --build-arg NOBUILD=1 --build-arg UID=$env.UID $env.BAHTTP_PROXY $env.BAHTTPS_PROXY"
+        BUILDARGS = "--build-arg NOBUILD=1 --build-arg UID=$env.UID $env.BAHTTP_PROXY $env.BAHTTPS_PROXY"
     }
 
     options {
@@ -72,7 +73,7 @@ pipeline {
                             filename 'Dockerfile.centos:7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs '$BUILDARGS'
+                            additionalBuildArgs '-t $sanitized_JOB_NAME-centos7 $BUILDARGS'
                         }
                     }
                     steps {
@@ -125,7 +126,7 @@ pipeline {
                             filename 'Dockerfile.centos:7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs '$BUILDARGS'
+                            additionalBuildArgs '-t $sanitized_JOB_NAME-centos7 $BUILDARGS'
                         }
                     }
                     steps {
@@ -204,7 +205,7 @@ pipeline {
                             filename 'Dockerfile.centos:7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs '$BUILDARGS'
+                            additionalBuildArgs '-t $sanitized_JOB_NAME-centos7 $BUILDARGS'
                         }
                     }
                     steps {
@@ -259,7 +260,7 @@ pipeline {
                             filename 'Dockerfile.ubuntu:18.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs '$BUILDARGS'
+                            additionalBuildArgs '-t $sanitized_JOB_NAME-ubuntu18.04 $BUILDARGS'
                         }
                     }
                     steps {
@@ -313,7 +314,7 @@ pipeline {
                             filename 'Dockerfile.ubuntu:18.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs '$BUILDARGS'
+                            additionalBuildArgs '-t $sanitized_JOB_NAME-ubuntu18.04 $BUILDARGS'
                         }
                     }
                     steps {
@@ -368,7 +369,7 @@ pipeline {
                             filename 'Dockerfile.leap:15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs '$BUILDARGS'
+                            additionalBuildArgs '-t $sanitized_JOB_NAME-leap15 $BUILDARGS'
                         }
                     }
                     steps {
@@ -423,7 +424,7 @@ pipeline {
                             filename 'Dockerfile.leap:15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs '$BUILDARGS'
+                            additionalBuildArgs '-t $sanitized_JOB_NAME-leap15 $BUILDARGS'
                         }
                     }
                     steps {
@@ -477,7 +478,7 @@ pipeline {
                             filename 'Dockerfile.leap:15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs '$BUILDARGS'
+                            additionalBuildArgs '-t $sanitized_JOB_NAME-leap15 $BUILDARGS'
                             args '-v /opt/intel:/opt/intel'
                         }
                     }
