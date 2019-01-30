@@ -73,7 +73,7 @@ pipeline {
                             filename 'Dockerfile.centos:7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 ${BUILDARGS}"
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
                         }
                     }
                     steps {
@@ -126,7 +126,7 @@ pipeline {
                             filename 'Dockerfile.centos:7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 ${BUILDARGS}"
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
                         }
                     }
                     steps {
@@ -205,7 +205,7 @@ pipeline {
                             filename 'Dockerfile.centos:7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 ${BUILDARGS}"
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
                         }
                     }
                     steps {
@@ -260,7 +260,7 @@ pipeline {
                             filename 'Dockerfile.ubuntu:18.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 ${BUILDARGS}"
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 " + '$BUILDARGS'
                         }
                     }
                     steps {
@@ -314,7 +314,7 @@ pipeline {
                             filename 'Dockerfile.ubuntu:18.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 ${BUILDARGS}"
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 " + '$BUILDARGS'
                         }
                     }
                     steps {
@@ -369,7 +369,7 @@ pipeline {
                             filename 'Dockerfile.leap:15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 ${BUILDARGS}"
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
                         }
                     }
                     steps {
@@ -424,7 +424,7 @@ pipeline {
                             filename 'Dockerfile.leap:15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 ${BUILDARGS}"
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
                         }
                     }
                     steps {
@@ -478,7 +478,7 @@ pipeline {
                             filename 'Dockerfile.leap:15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 ${BUILDARGS}"
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
                             args '-v /opt/intel:/opt/intel'
                         }
                     }
