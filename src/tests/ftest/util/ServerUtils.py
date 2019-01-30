@@ -73,7 +73,7 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
                 os.environ[k] = v
 
         env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'D_LOG_.*',
-                    'DD_(STDERR|LOG|SUBSYS|MASK)', 'OFI_.*']
+                    'DD_(STDERR|LOG|SUBSYS|MASK)', 'OFI_.*', 'D_FI_CONFIG']
 
         env_args = []
         for (env_var, env_val) in os.environ.items():
@@ -212,4 +212,5 @@ def killServer(hosts):
                  "sleep 5",
                  "pkill '(daos_server|daos_io_server)' --signal KILL"]
     for host in hosts:
-        subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)), shell=True)
+        subprocess.call("ssh {0} \"{1}\"".format(host,
+            '; '.join(kill_cmds)), shell=True)

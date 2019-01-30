@@ -6,9 +6,19 @@ hosts:
         - boro-A
         - boro-B
 timeout: 100
+faults: !mux
+    two_faults:
+      fault_list:
+        - obj_update_timeout
+        - bogus_2nd_fault
+    just_one:
+      fault_list:
+        - obj_update_timeout
+    no_faults:
+      fault_list: []
 server:
    server_group: daos_server
-conttests:
+poolparams:
    createmode:
      mode: 511
    createuid:

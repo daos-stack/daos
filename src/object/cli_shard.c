@@ -145,6 +145,13 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		D_GOTO(out, rc = -DER_NOSPACE);
 	}
 
+	/* try out Cart style fault injection */
+	if (D_SHOULD_FAIL(50)) {
+		if (opc == DAOS_OBJ_RPC_UPDATE) {
+			D_GOTO(out, rc = -DER_TIMEDOUT);
+		}
+	}
+
 	orw = crt_req_get(rw_args->rpc);
 	D_ASSERT(orw != NULL);
 	if (ret != 0) {

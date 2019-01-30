@@ -589,6 +589,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 
 	daos_crt_init_opt.cio_crt_timeout = 0;
 	daos_crt_init_opt.cio_sep_override = 1;
+	daos_crt_init_opt.cio_fault_inject = 1;
 
 	/* for socket provider, force it to use regular EP rather than SEP for:
 	 * 1) now sockets provider cannot create more than 16 contexts for SEP
