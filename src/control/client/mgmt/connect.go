@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/utils/functional"
-	"github.com/daos-stack/daos/src/control/utils/log"
 )
 
 // ClientFeatureMap is an alias for management features supported on server
@@ -81,7 +80,7 @@ type connFactory struct{}
 
 // createConn instantiates and connects a client to server at given address.
 func (c *connFactory) createConn(address string) MgmtClient {
-	return &client{logger: log.NewLogger()}
+	return &client{}
 }
 
 // ConnectClients populates collection of client-server connections.

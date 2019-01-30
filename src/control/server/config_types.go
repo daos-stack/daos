@@ -33,6 +33,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/utils/handlers"
+	"github.com/daos-stack/daos/src/control/utils/log"
 )
 
 // Format represents enum specifying formatting behaviour
@@ -135,7 +136,7 @@ func (e *ext) createEmpty(path string, size int64) (err error) {
 	if _, err = os.Stat(path); !os.IsNotExist(err) {
 		return
 	}
-	file, err := handlers.OpenNewFile(path)
+	file, err := handlers.TruncFile(path)
 	if err != nil {
 		return
 	}
@@ -144,7 +145,7 @@ func (e *ext) createEmpty(path string, size int64) (err error) {
 	if err != nil {
 		e, ok := err.(syscall.Errno)
 		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
-			fmt.Print(
+			log.Debugf(
 				"Warning: Fallocate not supported, attempting Truncate: ", e)
 			err = file.Truncate(size)
 		}

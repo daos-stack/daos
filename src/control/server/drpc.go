@@ -24,32 +24,36 @@
 package main
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/pkg/errors"
 )
+
+var sockFileName = "daos_server.sock"
 
 // drpcSetup creates socket directory, specifies socket path and then
 // starts drpc server.
-func drpcSetup(sockDir string) {
+func drpcSetup(sockDir string) error {
 	// Create our socket directory if it doesn't exist
 	_, err := os.Stat(sockDir)
 	if err != nil && os.IsPermission(err) {
-		log.Fatalf("User does not have permission to access %s", sockDir)
+		return errors.Wrap(
+			err, "user does not have permission to access "+sockDir)
 	} else if err != nil && os.IsNotExist(err) {
 		err = os.MkdirAll(sockDir, 0755)
 		if err != nil {
-			log.Fatalf(
-				"Unable to create socket directory %s: %v", sockDir, err)
+			return errors.Wrap(
+				err,
+				"unable to create socket directory "+sockDir)
 		}
 	}
 
-	sockPath := filepath.Join(sockDir, "daos_server.sock")
+	sockPath := filepath.Join(sockDir, sockFileName)
 	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
 	if err != nil {
-		log.Fatalf("Unable to create socket server: %v", err)
+		return errors.Wrap(err, "unable to create socket server")
 	}
 
 	// Create and add our modules
@@ -58,6 +62,9 @@ func drpcSetup(sockDir string) {
 
 	err = drpcServer.Start()
 	if err != nil {
-		log.Fatalf("Unable to start socket server on %s: %v", sockPath, err)
+		return errors.Wrap(
+			err, "unable to start socket server on "+sockPath)
 	}
+
+	return nil
 }

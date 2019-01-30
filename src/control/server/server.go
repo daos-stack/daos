@@ -25,6 +25,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/pkg/errors"
 
@@ -41,19 +42,18 @@ var jsonDBRelPath = "share/control/mgmtinit_db.json"
 type controlService struct {
 	nvme              *nvmeStorage
 	scm               *scmStorage
-	logger            *log.Logger
 	supportedFeatures FeatureMap
 }
 
 // Setup delegates to Storage implementation's Setup methods
 func (c *controlService) Setup() {
 	if err := c.nvme.Setup(); err != nil {
-		c.logger.Debugf(
+		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, NVMe Setup"))
 	}
 
 	if err := c.scm.Setup(); err != nil {
-		c.logger.Debugf(
+		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, SCM Setup"))
 	}
 }
@@ -61,11 +61,11 @@ func (c *controlService) Setup() {
 // Teardown delegates to Storage implementation's Teardown methods
 func (c *controlService) Teardown() {
 	if err := c.nvme.Teardown(); err != nil {
-		c.logger.Debugf(
+		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, NVMe Teardown"))
 	}
 	if err := c.scm.Teardown(); err != nil {
-		c.logger.Debugf(
+		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
 	}
 }
@@ -74,7 +74,7 @@ func (c *controlService) Teardown() {
 func loadInitData(relPath string) (m FeatureMap, err error) {
 	absPath, err := handlers.GetAbsInstallPath(relPath)
 	if err != nil {
-		panic(err)
+		return
 	}
 	m = make(FeatureMap)
 	file, err := ioutil.ReadFile(absPath)
@@ -94,39 +94,36 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 // showLocalStorage retrieves and prints details of locally attached SCM and
 // NVMe storage to daos_server stdout.
 func (c *controlService) showLocalStorage() {
-	println("Listing attached storage...")
+	fmt.Println("Listing attached storage...")
 	if err := c.nvme.Discover(); err != nil {
-		println("Failure retrieving NVMe details: ", err.Error())
+		fmt.Println("Failure retrieving NVMe details: ", err.Error())
 	} else {
 		handlers.PrintStructs("NVMe", c.nvme.controllers)
 	}
 	if err := c.scm.Discover(); err != nil {
-		println("Failure retrieving SCM details: ", err.Error())
+		fmt.Println("Failure retrieving SCM details: ", err.Error())
 	} else {
 		handlers.PrintStructs("SCM", c.scm.modules)
 	}
 }
 
 // newcontrolService creates a new instance of controlService struct.
-func newControlService(config *configuration) *controlService {
-	logger := log.NewLogger()
-	logger.SetLevel(log.Debug)
-
+func newControlService(config *configuration) (cs *controlService, err error) {
 	fMap, err := loadInitData(jsonDBRelPath)
 	if err != nil {
-		panic(err)
+		return
 	}
 
 	nvmeStorage, err := newNvmeStorage(
-		logger, config.NvmeShmID, config.NrHugepages)
+		config.NvmeShmID, config.NrHugepages)
 	if err != nil {
-		panic(err)
+		return
 	}
 
-	return &controlService{
+	cs = &controlService{
 		nvme:              nvmeStorage,
-		scm:               newScmStorage(logger),
-		logger:            logger,
+		scm:               newScmStorage(),
 		supportedFeatures: fMap,
 	}
+	return
 }

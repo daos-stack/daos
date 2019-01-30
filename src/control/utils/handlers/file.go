@@ -92,15 +92,20 @@ func SplitFile(path string) (sections [][]string, err error) {
 	return
 }
 
-// OpenNewFile overrides existing or creates new file with default options
-func OpenNewFile(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+// TruncFile overrides existing or creates new file with default options
+func TruncFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0664)
+}
+
+// AppendFile appends to existing or creates new file with default options
+func AppendFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0664)
 }
 
 // WriteSlice writes string slice to specified file, overwriting and creating
 // if non-existent.
 func WriteSlice(path string, slice []string) (err error) {
-	file, err := OpenNewFile(path)
+	file, err := TruncFile(path)
 	if err != nil {
 		return
 	}
@@ -140,11 +145,11 @@ func StructsToString(i interface{}) (lines string, err error) {
 // PrintStructs dumps friendly YAML representation of structs to stdout
 // proceeded with "name" identifier.
 func PrintStructs(name string, i interface{}) {
-	println(name + ":")
+	fmt.Println(name + ":")
 	s, err := StructsToString(i)
 	if err != nil {
-		println("Unable to YAML encode response: ", err.Error())
+		fmt.Println("Unable to YAML encode response: ", err.Error())
 		return
 	}
-	println(s)
+	fmt.Println(s)
 }

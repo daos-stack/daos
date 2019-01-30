@@ -24,6 +24,7 @@
 package mgmtclient
 
 import (
+	"fmt"
 	"io"
 	"time"
 
@@ -123,7 +124,7 @@ func (mc *client) BurnInNvme(ctrlrID int32, configPath string) (
 		} else if err != nil {
 			return
 		}
-		println(report.Report)
+		fmt.Println(report.Report)
 		reports = append(reports, report.Report)
 	}
 	return

@@ -26,10 +26,8 @@ package main
 import (
 	"testing"
 
-	. "github.com/daos-stack/go-ipmctl/ipmctl"
-
-	"github.com/daos-stack/daos/src/control/utils/log"
 	. "github.com/daos-stack/daos/src/control/utils/test"
+	. "github.com/daos-stack/go-ipmctl/ipmctl"
 )
 
 type mockIpmCtl struct {
@@ -43,7 +41,6 @@ func (m *mockIpmCtl) Discover() ([]DeviceDiscovery, error) {
 // mockScmStorage factory
 func newMockScmStorage(mms []DeviceDiscovery, inited bool) *scmStorage {
 	return &scmStorage{
-		logger:      log.NewLogger(),
 		ipmCtl:      &mockIpmCtl{modules: mms},
 		initialized: inited,
 	}

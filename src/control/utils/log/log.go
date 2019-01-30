@@ -25,18 +25,11 @@ package log
 
 import (
 	"fmt"
+	"io"
 	"log"
-	"os"
-	"runtime"
 
-	"google.golang.org/grpc/status"
+	"github.com/pkg/errors"
 )
-
-// Logger struct contains reference and level
-type Logger struct {
-	logger *log.Logger
-	level  int
-}
 
 // Log levels.
 const (
@@ -44,47 +37,76 @@ const (
 	Debug
 )
 
-// NewLogger instantiates Logger and returns reference
-func NewLogger() *Logger {
+// global default logger
+var logger *Logger
+
+// NewLogger creates a Logger instance and returns reference
+//
+// level represents the minimum logging level to be written,
+// name is prefixed to any log entry and writer the target
+// io.Writer interface to be written to.
+func NewLogger(level int, name string, writer io.Writer) *Logger {
 	var l Logger
-	l.logger = log.New(os.Stderr, "", log.LstdFlags|log.Lshortfile)
-	l.level = Error
+	l.logger = log.New(writer, name, log.LstdFlags|log.Lshortfile)
+	l.level = level
 	return &l
 }
 
-// SetLevel configures maximum logging resolution
-func (l *Logger) SetLevel(level int) {
-	if level < Error || level > Debug {
-		panic(level)
-	}
-	l.level = level
+// NewDefaultLogger instantiates default Logger
+func NewDefaultLogger(level int, name string, writer io.Writer) {
+	logger = NewLogger(level, name, writer)
+}
+
+// Errorf logs an error message to the default logger
+func Errorf(format string, v ...interface{}) {
+	logger.Errordf(3, format, v...)
+}
+
+// Debugf logs a debug message to the default logger
+func Debugf(format string, v ...interface{}) {
+	logger.Debugdf(3, format, v...)
+}
+
+// WrapAndLogErr is a utility function that wraps and logs an error to the
+// default logger.
+func WrapAndLogErr(err error, msg string) error {
+	err = errors.Wrap(err, msg)
+	logger.Errordf(3, err.Error())
+	return err
+}
+
+// Logger struct contains reference and level
+type Logger struct {
+	logger *log.Logger
+	level  int
 }
 
 // Errorf logs an error message
-func (l Logger) Errorf(format string, v ...interface{}) {
+func (l *Logger) Errorf(format string, v ...interface{}) {
 	if l.level >= Error {
 		l.logger.Output(2, fmt.Sprintf("error: "+format, v...))
 	}
 }
 
+// Errordf logs an error messagae, calldepth is the count of the number of
+// frames to skip when computing the file name and line number
+func (l *Logger) Errordf(calldepth int, format string, v ...interface{}) {
+	if l.level >= Error {
+		l.logger.Output(calldepth, fmt.Sprintf("error: "+format, v...))
+	}
+}
+
 // Debugf logs a debug message
-func (l Logger) Debugf(format string, v ...interface{}) {
+func (l *Logger) Debugf(format string, v ...interface{}) {
 	if l.level >= Debug {
 		l.logger.Output(2, fmt.Sprintf("debug: "+format, v...))
 	}
 }
 
-// LogGrpcErr is a decorator that adds function name to gRPC error context.
-func (l Logger) LogGrpcErr(err error) error {
-	errStatus, _ := status.FromError(err)
-	function, _, _, _ := runtime.Caller(1)
-	msg := fmt.Sprintf(
-		"%v(_): %v",
-		runtime.FuncForPC(function).Name(),
-		errStatus.Message())
-
-	// replace with new elaborated error
-	err = status.Errorf(errStatus.Code(), msg)
-	l.Errorf(msg)
-	return err
+// Debugdf logs a debug messagae, calldepth is the count of the number of
+// frames to skip when computing the file name and line number
+func (l *Logger) Debugdf(calldepth int, format string, v ...interface{}) {
+	if l.level >= Debug {
+		l.logger.Output(calldepth, fmt.Sprintf("debug: "+format, v...))
+	}
 }

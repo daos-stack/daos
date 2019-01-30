@@ -29,24 +29,14 @@ import (
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/client/mgmt"
+	"github.com/daos-stack/daos/src/control/utils/log"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 )
 
+// ShowStorageCommand is the struct representing the command to list storage.
 type ShowStorageCommand struct{}
-
-type cliOptions struct {
-	Hostlist    string             `short:"l" long:"hostlist" default:"localhost:10001" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
-	Hostfile    string             `short:"f" long:"hostfile" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
-	ConfigPath  string             `short:"o" long:"config-path" description:"Client config file path"`
-	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
-}
-
-var (
-	opts  = new(cliOptions)
-	conns = mgmtclient.NewConnections()
-)
 
 // Execute is run when ShowStorageCommand activates
 func (s *ShowStorageCommand) Execute(args []string) error {
@@ -61,10 +51,23 @@ func (s *ShowStorageCommand) Execute(args []string) error {
 		checkAndFormat(conns.ListNvme()),
 		"NVMe SSD controller and constituent namespace")
 	fmt.Printf(checkAndFormat(conns.ListScm()), "SCM module")
+	// exit immediately to avoid continuation of main
 	os.Exit(0)
 	// never reached
 	return nil
 }
+
+type cliOptions struct {
+	Hostlist    string             `short:"l" long:"hostlist" default:"localhost:10001" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	Hostfile    string             `short:"f" long:"hostfile" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
+	ConfigPath  string             `short:"o" long:"config-path" description:"Client config file path"`
+	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
+}
+
+var (
+	opts  = new(cliOptions)
+	conns = mgmtclient.NewConnections()
+)
 
 func connectHosts() error {
 	if opts.Hostfile != "" {
@@ -79,25 +82,41 @@ func connectHosts() error {
 }
 
 func main() {
+	var err error
+	defer func() {
+		status := 0
+		if err != nil {
+			status = 1
+		}
+		os.Exit(status)
+	}()
+
+	// Set default global logger for application.
+	log.NewDefaultLogger(log.Debug, "", os.Stderr)
+
 	p := flags.NewParser(opts, flags.Default)
-	// make command optional and drop into shell by default
+	// Continue with main if no subcommand is executed.
 	p.SubcommandsOptional = true
 
-	_, err := p.Parse()
+	_, err = p.Parse()
 	if err != nil {
 		return
 	}
 
 	// TODO: implement configuration file parsing
 	if opts.ConfigPath != "" {
-		println("config-path option not implemented")
+		err = errors.New("config-path option not implemented")
+		log.Errorf(err.Error())
 		return
 	}
-	if err := connectHosts(); err != nil {
-		println(errors.Wrap(err, "unable to connect to hosts").Error())
+	err = connectHosts()
+	if err != nil {
+		log.Errorf("unable to connect to hosts: %v", err)
+		return
 	}
-	// by default, interactive shell is started with expected
-	// functionality (tab expansion and utility commands)
+
+	// If no subcommand is specified, interactive shell is started
+	// with expected functionality (tab expansion and utility commands)
 	shell := setupShell()
 	shell.Println("DAOS Management Shell")
 	shell.Run()

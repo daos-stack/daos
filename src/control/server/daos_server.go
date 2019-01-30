@@ -24,7 +24,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -36,21 +35,43 @@ import (
 	"google.golang.org/grpc"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/utils/log"
 )
+
+// ShowStorageCommand is the struct representing the command to list storage.
+type ShowStorageCommand struct{}
+
+// Execute is run when ShowStorageCommand activates
+//
+// Perform task then exit immediately. No config parsing performed.
+func (s *ShowStorageCommand) Execute(args []string) error {
+	config := newConfiguration()
+	mgmtControlServer, err := newControlService(&config)
+	if err != nil {
+		return log.WrapAndLogErr(err, "initialising ControlService")
+	}
+	mgmtControlServer.Setup()
+	mgmtControlServer.showLocalStorage()
+	mgmtControlServer.Teardown()
+	// exit immediately to avoid continuation of main
+	os.Exit(0)
+	// never reached
+	return nil
+}
 
 // cliOptions struct defined flags that can be used when invoking daos_server.
 type cliOptions struct {
-	Port        uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
-	MountPath   string  `short:"s" long:"storage" description:"Storage path"`
-	ConfigPath  string  `short:"o" long:"config_path" description:"Server config file path"`
-	Modules     *string `short:"m" long:"modules" description:"List of server modules to load"`
-	Cores       uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
-	Group       string  `short:"g" long:"group" description:"Server group name"`
-	Attach      *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
-	Map         *string `short:"y" long:"map" description:"[Temporary] System map file"`
-	Rank        *uint   `short:"r" long:"rank" description:"[Temporary] Self rank"`
-	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
-	ShowStorage bool    `long:"show-storage" description:"List locally attached SCM and NVMe storage"`
+	Port        uint16             `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
+	MountPath   string             `short:"s" long:"storage" description:"Storage path"`
+	ConfigPath  string             `short:"o" long:"config_path" description:"Server config file path"`
+	Modules     *string            `short:"m" long:"modules" description:"List of server modules to load"`
+	Cores       uint16             `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
+	Group       string             `short:"g" long:"group" description:"Server group name"`
+	Attach      *string            `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
+	Map         *string            `short:"y" long:"map" description:"[Temporary] System map file"`
+	Rank        *uint              `short:"r" long:"rank" description:"[Temporary] Self rank"`
+	SocketDir   string             `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
 }
 
 func main() {
@@ -65,33 +86,42 @@ func main() {
 
 	runtime.GOMAXPROCS(1)
 
-	var opts cliOptions
+	// Set default global logger for application.
+	log.NewDefaultLogger(log.Debug, "", os.Stderr)
+
+	opts := new(cliOptions)
+	p := flags.NewParser(opts, flags.Default)
+	// Continue with main if no subcommand is executed.
+	p.SubcommandsOptional = true
 
 	// Parse commandline flags which override options loaded from config.
-	if _, err = flags.Parse(&opts); err != nil {
-		// don't log failure just return usage info
-		println(err.Error())
+	_, err = p.Parse()
+	if err != nil {
 		return
 	}
 
 	// Parse configuration file and load values, then backup active config.
-	config := saveActiveConfig(loadConfigOpts(&opts))
-
-	mgmtControlServer := newControlService(&config)
-	mgmtControlServer.Setup()
-	defer mgmtControlServer.Teardown()
-
-	// If command mode option specified then perform task and exit.
-	if opts.ShowStorage {
-		mgmtControlServer.showLocalStorage()
+	config, err := loadConfigOpts(opts)
+	if err != nil {
+		log.Errorf("Failed to load config options: %s", err)
 		return
 	}
+	saveActiveConfig(&config)
+
+	mgmtControlServer, err := newControlService(&config)
+	if err != nil {
+		log.Errorf("Failed to init ControlService: %s", err)
+		return
+	}
+	mgmtControlServer.Setup()
+	defer mgmtControlServer.Teardown()
 
 	// Create a new server register our service and listen for connections.
 	addr := fmt.Sprintf("0.0.0.0:%d", config.Port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatal("Unable to listen on management interface: ", err)
+		log.Errorf("Unable to listen on management interface: %s", err)
+		return
 	}
 
 	// TODO: This will need to be extended to take certificate information for
@@ -104,7 +134,10 @@ func main() {
 	defer grpcServer.GracefulStop()
 
 	// Init socket and start drpc server to communicate with DAOS I/O servers.
-	drpcSetup(config.SocketDir)
+	if err = drpcSetup(config.SocketDir); err != nil {
+		log.Errorf("Failed to set up dRPC: %s", err)
+		return
+	}
 
 	// Create a channel to retrieve signals.
 	sigchan := make(chan os.Signal, 2)
@@ -116,7 +149,8 @@ func main() {
 
 	// Process configurations parameters for Nvme.
 	if err = config.parseNvme(); err != nil {
-		log.Fatal("NVMe config could not be processed: ", err)
+		log.Errorf("NVMe config could not be processed: %s", err)
+		return
 	}
 
 	// Only start single io_server for now.
@@ -131,7 +165,8 @@ func main() {
 
 	// Populate I/O server environment with values from config before starting.
 	if err = config.populateEnv(ioIdx, &srv.Env); err != nil {
-		log.Fatal("DAOS I/O env vars could not be populated: ", err)
+		log.Errorf("DAOS I/O env vars could not be populated: %s", err)
+		return
 	}
 
 	// I/O server should get a SIGKILL if this process dies.
@@ -142,24 +177,31 @@ func main() {
 	// Start the DAOS I/O server.
 	err = srv.Start()
 	if err != nil {
-		log.Fatal("DAOS I/O server failed to start: ", err)
+		log.Errorf("DAOS I/O server failed to start: %s", err)
+		return
 	}
 
 	// Catch signals raised by I/O server.
 	go func() {
 		<-sigchan
 		if err := srv.Process.Kill(); err != nil {
-			log.Fatal("Failed to kill DAOS I/O server: ", err)
+			log.Errorf("Failed to kill DAOS I/O server: %s", err)
+			return
 		}
 	}()
 
-	log.Printf(
-		"DAOS server listening on %s%s", addr,
-		checkReplica(lis, config.AccessPoints, srv))
+	extraText, err := CheckReplica(lis, config.AccessPoints, srv)
+	if err != nil {
+		log.Errorf(
+			"Unable to determine if management service replica: %s",
+			err)
+		return
+	}
+	log.Debugf("DAOS server listening on %s%s", addr, extraText)
 
 	// Wait for I/O server to return.
 	err = srv.Wait()
 	if err != nil {
-		log.Fatal("DAOS I/O server exited with error: ", err)
+		log.Errorf("DAOS I/O server exited with error: %s", err)
 	}
 }

@@ -29,7 +29,6 @@ import (
 	"testing"
 
 	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/utils/log"
 	. "github.com/daos-stack/daos/src/control/utils/test"
 	. "github.com/daos-stack/go-spdk/spdk"
 )
@@ -65,7 +64,6 @@ func (m *mockSpdkSetup) reset() error { return nil }
 func newMockNvmeStorage(
 	fwRevBefore string, fwRevAfter string, inited bool) *nvmeStorage {
 	return &nvmeStorage{
-		logger:      log.NewLogger(),
 		env:         &mockSpdkEnv{},
 		nvme:        &mockSpdkNvme{fwRevBefore, fwRevAfter},
 		spdk:        &mockSpdkSetup{},
