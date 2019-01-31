@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,11 +53,13 @@
 #include <semaphore.h>
 #include <openssl/md5.h>
 
-#define ECHO_OPC_NOOP       (0xA0)
-#define ECHO_OPC_CHECKIN    (0xA1)
-#define ECHO_OPC_BULK_TEST  (0xA2)
-#define ECHO_OPC_SHUTDOWN   (0x100)
-#define ECHO_CORPC_EXAMPLE  (0x886)
+#define ECHO_PROTO_BASE 0x01000000
+
+#define ECHO_OPC_NOOP		CRT_PROTO_OPC(ECHO_PROTO_BASE, 0, 0)
+#define ECHO_OPC_CHECKIN	CRT_PROTO_OPC(ECHO_PROTO_BASE, 0, 1)
+#define ECHO_OPC_BULK_TEST	CRT_PROTO_OPC(ECHO_PROTO_BASE, 0, 2)
+#define ECHO_OPC_SHUTDOWN	CRT_PROTO_OPC(ECHO_PROTO_BASE, 0, 3)
+#define ECHO_CORPC_EXAMPLE	CRT_PROTO_OPC(ECHO_PROTO_BASE, 0, 4)
 
 #define ECHO_EXTRA_CONTEXT_NUM (3)
 
@@ -190,6 +192,22 @@ echo_init(int server, bool tier2)
 	d_rank_t	my_rank;
 	uint32_t	flags;
 	int		rc = 0, i;
+	struct crt_proto_format *cpf;
+	char *name;
+
+	/* Put the protocol name into a char * to avoid compiler warnings about
+	 * const use
+	 */
+	D_STRNDUP(name, "TEST", 10);
+	assert(name);
+
+	D_ALLOC_PTR(cpf);
+	assert(cpf);
+	D_ALLOC_ARRAY(cpf->cpf_prf, 5);
+	assert(cpf->cpf_prf);
+	cpf->cpf_name = name;
+	cpf->cpf_base = ECHO_PROTO_BASE;
+	cpf->cpf_count = 5;
 
 	rc = sem_init(&gecho.token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -237,49 +255,32 @@ echo_init(int server, bool tier2)
 		}
 	}
 
-	/* Just show the case that the client does not know the rpc handler,
-	 * then client side can use crt_rpc_register, and server side can use
-	 * crt_rpc_srv_register.
-	 * If both client and server side know the rpc handler, they can call
-	 * the same crt_rpc_srv_register.
+	/* Only register the prf_handler on the server side, as the client
+	 * cannot receive RPCs.
+	 *
+	 * Technically this could be two protocols, one for client-server
+	 * communication and one for server-server but it's only the shutdown
+	 * RPC that is server-server so make it part of the client protocol.
 	 */
-	if (server == 0) {
-		rc = CRT_RPC_REGISTER(ECHO_OPC_NOOP, 0, crt_echo_noop);
-		assert(rc == 0);
-		rc = CRT_RPC_REGISTER(ECHO_OPC_CHECKIN, 0, crt_echo_checkin);
-		assert(rc == 0);
-		rc = CRT_RPC_REGISTER(ECHO_OPC_BULK_TEST, 0, crt_echo_bulk);
-		assert(rc == 0);
-		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN,
-					    CRT_RPC_FEAT_NO_REPLY,
-					    NULL);
-		assert(rc == 0);
-	} else {
-		rc = CRT_RPC_SRV_REGISTER(ECHO_OPC_NOOP,
-					  0,
-					  crt_echo_noop,
-					  echo_srv_noop);
-		assert(rc == 0);
-		rc = CRT_RPC_SRV_REGISTER(ECHO_OPC_CHECKIN,
-					  0,
-					  crt_echo_checkin,
-					  echo_srv_checkin);
-		assert(rc == 0);
-		rc = CRT_RPC_SRV_REGISTER(ECHO_OPC_BULK_TEST,
-					  0,
-					  crt_echo_bulk,
-					  echo_srv_bulk_test);
-		assert(rc == 0);
-		rc = crt_rpc_srv_register(ECHO_OPC_SHUTDOWN,
-					  CRT_RPC_FEAT_NO_REPLY, NULL,
-					  echo_srv_shutdown);
-		assert(rc == 0);
-		rc = CRT_RPC_CORPC_REGISTER(ECHO_CORPC_EXAMPLE,
-					    crt_echo_corpc_example,
-					    echo_srv_corpc_example,
-					    &echo_co_ops);
-		assert(rc == 0);
+	cpf->cpf_prf[0].prf_req_fmt = &CQF_crt_echo_noop;
+	cpf->cpf_prf[1].prf_req_fmt = &CQF_crt_echo_checkin;
+	cpf->cpf_prf[2].prf_req_fmt = &CQF_crt_echo_bulk;
+	cpf->cpf_prf[3].prf_flags = CRT_RPC_FEAT_NO_REPLY;
+	/* cpf_prf[3] has no prf_req_fmt as the RPC transmits no data */
+	cpf->cpf_prf[4].prf_req_fmt = &CQF_crt_echo_corpc_example;
+	if (server) {
+		cpf->cpf_prf[0].prf_hdlr = echo_srv_noop;
+		cpf->cpf_prf[1].prf_hdlr = echo_srv_checkin;
+		cpf->cpf_prf[2].prf_hdlr = echo_srv_bulk_test;
+		cpf->cpf_prf[3].prf_hdlr = echo_srv_shutdown;
+		cpf->cpf_prf[4].prf_hdlr = echo_srv_corpc_example;
+		cpf->cpf_prf[4].prf_co_ops = &echo_co_ops;
 	}
+	rc = crt_proto_register(cpf);
+	assert(rc == 0);
+	D_FREE(cpf->cpf_prf);
+	D_FREE(name);
+	D_FREE(cpf);
 }
 
 static inline void
