@@ -325,23 +325,6 @@ out:
 	return rc;
 }
 
-static hg_return_t
-hg_addr_lookup_cb(const struct hg_cb_info *callback_info)
-{
-	hg_addr_t	*addr_ptr = callback_info->arg;
-	hg_return_t	ret = HG_SUCCESS;
-
-	if (callback_info->ret != HG_SUCCESS) {
-		D_ERROR("Return from callback with %s error code",
-			HG_Error_to_string(callback_info->ret));
-		return ret;
-	}
-
-	*addr_ptr = callback_info->info.lookup.addr;
-
-	return ret;
-}
-
 int
 crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
 {
@@ -354,80 +337,6 @@ crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
 	}
 
 	return 0;
-}
-
-/* connection timeout 10 second */
-#define CRT_CONNECT_TIMEOUT_SEC		(10)
-
-int
-crt_hg_addr_lookup_wait(hg_class_t *hg_class, hg_context_t *hg_context,
-			const char *name, hg_addr_t *addr)
-{
-	hg_addr_t		new_addr = NULL;
-	uint64_t		now;
-	uint64_t		end;
-	unsigned int		prog_msec;
-	hg_return_t		ret = HG_SUCCESS;
-	int			rc = 0;
-
-	D_ASSERT(hg_context != NULL);
-	D_ASSERT(hg_class != NULL);
-	D_ASSERT(name != NULL);
-	D_ASSERT(addr != NULL);
-
-	ret = HG_Addr_lookup(hg_context, &hg_addr_lookup_cb, &new_addr, name,
-			HG_OP_ID_IGNORE);
-	if (ret != HG_SUCCESS) {
-		D_ERROR("Could not start HG_Addr_lookup");
-		D_GOTO(done, rc = -DER_HG);
-	}
-
-	end = d_timeus_secdiff(CRT_CONNECT_TIMEOUT_SEC);
-	prog_msec = 1;
-
-	while (1) {
-		hg_return_t	trigger_ret;
-		unsigned int	actual_count = 0;
-
-		do {
-			trigger_ret = HG_Trigger(hg_context, 0, 1,
-						 &actual_count);
-		} while ((trigger_ret == HG_SUCCESS) && actual_count);
-
-		if (new_addr != NULL) {
-			*addr = new_addr;
-			break;
-		}
-
-		ret = HG_Progress(hg_context, prog_msec);
-		if (ret != HG_SUCCESS && ret != HG_TIMEOUT) {
-			D_ERROR("Could not make progress");
-			rc = -DER_HG;
-			break;
-		}
-
-		now = d_timeus_secdiff(0);
-		if (now >= end) {
-			char		my_host[CRT_ADDR_STR_MAX_LEN] = {'\0'};
-			d_rank_t	my_rank;
-
-			crt_group_rank(NULL, &my_rank);
-			gethostname(my_host, CRT_ADDR_STR_MAX_LEN);
-
-			D_ERROR("Could not connect to %s within %d second "
-				"(rank %d, host %s).\n", name,
-				CRT_CONNECT_TIMEOUT_SEC, my_rank, my_host);
-			rc = -DER_TIMEDOUT;
-			break;
-		}
-
-		if (prog_msec <= 512)
-			prog_msec = prog_msec << 1;
-	}
-
-done:
-	D_ASSERT(new_addr != NULL || rc != 0);
-	return rc;
 }
 
 int
