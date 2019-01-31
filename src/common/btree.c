@@ -733,7 +733,7 @@ btr_root_free(struct btr_context *tcx)
 }
 
 static int
-btr_root_init(struct btr_context *tcx, struct btr_root *root)
+btr_root_init(struct btr_context *tcx, struct btr_root *root, bool in_place)
 {
 	struct btr_instance *tins = &tcx->tc_tins;
 	int		     rc;
@@ -746,6 +746,8 @@ btr_root_init(struct btr_context *tcx, struct btr_root *root)
 			return rc;
 	}
 
+	if (in_place)
+		memset(root, 0, sizeof(*root));
 	root->tr_class	= tcx->tc_class;
 	root->tr_feats	= tcx->tc_feats;
 	root->tr_order	= tcx->tc_order;
@@ -776,7 +778,7 @@ btr_root_alloc(struct btr_context *tcx)
 	}
 
 	root = btr_mmid2ptr(tcx, tins->ti_root_mmid);
-	return btr_root_init(tcx, root);
+	return btr_root_init(tcx, root, false);
 }
 
 static int
@@ -1069,6 +1071,9 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 		    struct btr_record *rec)
 {
 	int	rc = 0;
+
+	if (btr_has_tx(tcx))
+		btr_node_tx_add(tcx, trace->tr_node);
 
 	if (btr_node_is_full(tcx, trace->tr_node))
 		rc = btr_node_split_and_insert(tcx, trace, rec);
@@ -1584,9 +1589,6 @@ btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 		/* trace for the leaf */
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
 		btr_trace_debug(tcx, trace, "try to insert\n");
-
-		if (btr_has_tx(tcx))
-			btr_node_tx_add(tcx, trace->tr_node);
 
 		rc = btr_node_insert_rec(tcx, trace, rec);
 		if (rc != 0) {
@@ -2642,8 +2644,7 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 static int
 btr_tree_init(struct btr_context *tcx, struct btr_root *root)
 {
-	memset(root, 0, sizeof(*root));
-	return btr_root_init(tcx, root);
+	return btr_root_init(tcx, root, true);
 }
 
 static int

@@ -529,14 +529,21 @@ static inline void vos_irec_init_csum(struct vos_irec_df *irec,
 	}
 }
 
+/** Size of metadata without user payload */
 static inline uint64_t
-vos_irec_size(struct vos_rec_bundle *rbund)
+vos_irec_msize(struct vos_rec_bundle *rbund)
 {
 	uint64_t size = 0;
 
 	if (rbund->rb_csum != NULL)
 		size = vos_size_round(rbund->rb_csum->cs_len);
-	return size + sizeof(struct vos_irec_df) + rbund->rb_rsize;
+	return size + sizeof(struct vos_irec_df);
+}
+
+static inline uint64_t
+vos_irec_size(struct vos_rec_bundle *rbund)
+{
+	return vos_irec_msize(rbund) + rbund->rb_rsize;
 }
 
 static inline bool
@@ -845,6 +852,22 @@ vos_df_ts_update(struct vos_object *obj, daos_epoch_t *latest_df,
 		*earliest_df = epr->epr_lo;
 out:
 	return rc;
+}
+
+static inline int
+vos_tx_begin(struct vos_pool *vpool)
+{
+	return umem_tx_begin(&vpool->vp_umm, NULL);
+}
+
+static inline int
+vos_tx_end(struct vos_pool *vpool, int rc)
+{
+	if (rc != 0)
+		return umem_tx_abort(&vpool->vp_umm, rc);
+
+	return umem_tx_commit(&vpool->vp_umm);
+
 }
 
 #endif /* __VOS_INTERNAL_H__ */

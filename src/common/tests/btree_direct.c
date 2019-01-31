@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@
 #include <daos/btree.h>
 #include <daos/tests_lib.h>
 #include <gurt/common.h>
+#include "utest_common.h"
 
 /**
  * An example for string key
@@ -60,7 +61,15 @@ struct sk_rec {
 #define POOL_NAME "/mnt/daos/btree-direct-test"
 #define POOL_SIZE ((1024 * 1024  * 1024ULL))
 
-struct umem_attr sk_uma;
+#define SK_ORDER_DEF	16
+
+static int sk_order = SK_ORDER_DEF;
+
+struct utest_context		*sk_utx;
+struct umem_attr		*sk_uma;
+static TMMID(struct btr_root)	sk_root_mmid;
+static struct btr_root		*sk_root;
+static daos_handle_t		sk_toh;
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
@@ -280,14 +289,6 @@ static btr_ops_t sk_ops = {
 	.to_rec_stat	= sk_rec_stat,
 };
 
-#define SK_ORDER_DEF	16
-
-static int sk_order = SK_ORDER_DEF;
-
-static TMMID(struct btr_root)	sk_root_mmid;
-static struct btr_root		sk_root;
-static daos_handle_t		sk_toh;
-
 #define SK_SEP		','
 #define SK_SEP_VAL	':'
 
@@ -324,7 +325,7 @@ sk_btr_open_create(bool create, char *args)
 			return -1;
 		}
 	} else if (!create) {
-		inplace = (sk_root.tr_class != 0);
+		inplace = (sk_root->tr_class != 0);
 		if (TMMID_IS_NULL(sk_root_mmid) && !inplace) {
 			D_ERROR("Please create tree first\n");
 			return -1;
@@ -336,18 +337,18 @@ sk_btr_open_create(bool create, char *args)
 			sk_order, inplace ? " inplace" : "", feats);
 		if (inplace) {
 			rc = dbtree_create_inplace(SK_TREE_CLASS, feats,
-						   sk_order, &sk_uma, &sk_root,
+						   sk_order, sk_uma, sk_root,
 						   &sk_toh);
 		} else {
 			rc = dbtree_create(SK_TREE_CLASS, feats, sk_order,
-					   &sk_uma, &sk_root_mmid, &sk_toh);
+					   sk_uma, &sk_root_mmid, &sk_toh);
 		}
 	} else {
 		D_PRINT("Open btree%s\n", inplace ? " inplace" : "");
 		if (inplace)
-			rc = dbtree_open_inplace(&sk_root, &sk_uma, &sk_toh);
+			rc = dbtree_open_inplace(sk_root, sk_uma, &sk_toh);
 		else
-			rc = dbtree_open(sk_root_mmid, &sk_uma, &sk_toh);
+			rc = dbtree_open(sk_root_mmid, sk_uma, &sk_toh);
 	}
 	if (rc != 0) {
 		D_ERROR("Tree %s failed: %d\n", create ? "create" : "open",
@@ -388,18 +389,13 @@ static int
 btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 {
 	TMMID(struct sk_rec)	srec_mmid;
-	struct umem_instance	umm;
+	struct umem_instance	*umm;
 	struct sk_rec		*srec;
-	int			rc;
 
-	rc = umem_class_init(&sk_uma, &umm);
-	if (rc != 0) {
-		D_ERROR("Failed to instantiate umem while vefify: %d\n", rc);
-		return -1;
-	}
+	umm = utest_utx2umm(sk_utx);
 
 	srec_mmid = umem_id_u2t(*rec, struct sk_rec);
-	srec	  = umem_id2ptr_typed(&umm, srec_mmid);
+	srec	  = umem_id2ptr_typed(umm, srec_mmid);
 
 	if ((srec->sr_key_len != key->iov_len) ||
 	    (memcmp(srec->sr_key, key->iov_buf, key->iov_len) != 0)) {
@@ -407,8 +403,8 @@ btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 		return -1;
 	}
 
-	umem_free(&umm, srec->sr_val_mmid);
-	umem_free_typed(&umm, srec_mmid);
+	utest_free(sk_utx, srec->sr_val_mmid);
+	utest_free_typed(sk_utx, srec_mmid);
 
 	return 0;
 }
@@ -1056,12 +1052,11 @@ static struct option btr_ops[] = {
 int
 main(int argc, char **argv)
 {
-	int parse_loc;
+	int	opt;
 	int	rc;
 
 	sk_toh = DAOS_HDL_INVAL;
 	sk_root_mmid = TMMID_NULL(struct btr_root);
-	sk_root.tr_class = 0;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -1071,11 +1066,35 @@ main(int argc, char **argv)
 	D_ASSERT(rc == 0);
 
 	optind = 0;
-	sk_uma.uma_id = UMEM_CLASS_VMEM;
+
+	/* Check for -m option first */
+	while ((opt = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:", btr_ops,
+				  NULL)) != -1) {
+		if (opt == 'm') {
+			D_PRINT("Using pmem\n");
+			rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
+					       sizeof(*sk_root), &sk_utx);
+			D_ASSERT(rc == 0);
+			break;
+		}
+	}
+
+	if (sk_utx == NULL) {
+		D_PRINT("Using vmem\n");
+		rc = utest_vmem_create(sizeof(*sk_root), &sk_utx);
+		D_ASSERT(rc == 0);
+	}
+
+	sk_root = utest_utx2root(sk_utx);
+	sk_uma = utest_utx2uma(sk_utx);
+
+	/* start over */
+	optind = 0;
+
 	D_PRINT("--------------------------------------\n");
-	while ((parse_loc = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:",
-				 btr_ops, NULL)) != -1) {
-		switch (parse_loc) {
+	while ((opt = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:", btr_ops,
+				  NULL)) != -1) {
+		switch (opt) {
 		case 'C':
 			rc = sk_btr_open_create(true, optarg);
 			break;
@@ -1113,23 +1132,19 @@ main(int argc, char **argv)
 		case 'p':
 			rc = sk_btr_perf(atoi(optarg));
 			break;
-		case 'm':
-			sk_uma.uma_id = UMEM_CLASS_PMEM;
-			sk_uma.uma_pool = pmemobj_create(POOL_NAME,
-						"btree-perf-test", POOL_SIZE,
-						0666);
-			break;
 		default:
-			D_PRINT("Unsupported command %c\n", rc);
+			D_PRINT("Unsupported command %c\n", opt);
+		case 'm':
+			rc = 0;
+			/* already handled */
 			break;
 		}
+		if (rc != 0)
+			break;
 		D_PRINT("--------------------------------------\n");
 	}
 	daos_debug_fini();
-	if (sk_uma.uma_id == UMEM_CLASS_PMEM) {
-		pmemobj_close(sk_uma.uma_pool);
-		remove(POOL_NAME);
-	}
+	rc += utest_utx_destroy(sk_utx);
 	if (rc != 0)
 		printf("Error: %d\n", rc);
 

@@ -653,6 +653,8 @@ svt_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		if (UMMID_IS_NULL(rec->rec_mmid))
 			return -DER_NOMEM;
 	} else {
+		umem_tx_add(&tins->ti_umm, rbund->rb_mmid,
+			    vos_irec_msize(rbund));
 		rec->rec_mmid = rbund->rb_mmid;
 		rbund->rb_mmid = UMMID_NULL; /* taken over by btree */
 	}

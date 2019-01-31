@@ -79,6 +79,7 @@ if [ -d "/mnt/daos" ]; then
     run_test build/src/common/tests/drpc_tests
     run_test build/src/client/api/tests/eq_tests
     run_test src/vos/tests/evt_ctl.sh
+    run_test src/vos/tests/evt_ctl.sh pmem
     run_test build/src/vos/vea/tests/vea_ut
     run_test src/rdb/raft_tests/raft_tests.py
     # Satisfy CGO Link requirements for go-spdk binding imports
