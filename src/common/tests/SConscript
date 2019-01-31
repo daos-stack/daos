@@ -8,9 +8,12 @@ def scons():
     common_test_utils = denv.SharedObject(['test_mocks.c', 'test_utils.c'])
     Export('common_test_utils')
 
-    daos_build.test(denv, 'btree', 'btree.c',
+    utest_utils = denv.SharedObject('utest_common.c')
+    Export('utest_utils')
+
+    daos_build.test(denv, 'btree', ['btree.c', utest_utils],
                     LIBS=['daos_common', 'gurt', 'cart', 'pmemobj'])
-    daos_build.test(denv, 'btree_direct', 'btree_direct.c',
+    daos_build.test(denv, 'btree_direct', ['btree_direct.c', utest_utils],
                     LIBS=['daos_common', 'gurt', 'cart', 'pmemobj'])
     daos_build.test(denv, 'other', 'other.c',
                     LIBS=['daos_common', 'gurt', 'cart'])

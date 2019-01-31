@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs')
+    Import('denv', 'prereqs', 'utest_utils')
 
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common', 'daos_tests',
                  'gurt', 'cart', 'uuid', 'pthread', 'pmemobj', 'cmocka', 'gomp']
@@ -17,7 +17,9 @@ def scons():
                     denv.Object("vts_common.c"), 'vts_purge.c']
     vos_tests = daos_build.program(denv, 'vos_tests', vos_test_src,
                                    LIBS=libraries)
-    evt_ctl = daos_build.program(denv, 'evt_ctl', 'evt_ctl.c', LIBS=libraries)
+    denv.AppendUnique(CPPPATH=["../../common/tests"])
+    evt_ctl = daos_build.program(denv, 'evt_ctl', ['evt_ctl.c', utest_utils],
+                                 LIBS=libraries)
 
     denv.Install('$PREFIX/bin/', vos_tests)
     denv.Install('$PREFIX/bin/', evt_ctl)

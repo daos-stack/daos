@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -425,7 +425,8 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 			goto error;
 	}
 
-	rc = publish ? hint_tx_publish(hint, off_p, seq_min, seq_max) :
+	rc = publish ? hint_tx_publish(vsi->vsi_umem, hint, off_p, seq_min,
+				       seq_max) :
 		       hint_cancel(hint, off_c, seq_min, seq_max);
 error:
 	d_list_for_each_entry_safe(resrvd, tmp, resrvd_list, vre_link) {

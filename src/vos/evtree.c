@@ -1595,13 +1595,14 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 	return evt_insert_or_split(tcx, ent);
 }
 
-static void
+static int
 evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 {
 	struct evt_desc		*dst_desc;
 	struct evt_trace	*trace;
 	uint64_t		 nd_off;
 	daos_size_t		 size;
+	int			 rc;
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	nd_off = trace->tr_node;
@@ -1611,11 +1612,19 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 	size = ent->ei_inob * evt_rect_width(&ent->ei_rect);
 
 	/* Free the pmem that dst_desc references */
-	evt_desc_free(tcx, dst_desc, size);
+	rc = evt_desc_free(tcx, dst_desc, size);
+	if (rc != 0)
+		return rc;
+
+	rc = umem_tx_add_ptr(evt_umm(tcx), dst_desc, sizeof(*dst_desc));
+	if (rc != 0)
+		return rc;
 
 	dst_desc->dc_ex_addr = ent->ei_addr;
 	dst_desc->dc_ver = ent->ei_ver;
 	dst_desc->dc_csum = ent->ei_csum;
+
+	return 0;
 }
 
 /**
@@ -1671,7 +1680,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		 * No copy for duplicate punch.
 		 */
 		if (entry->ei_inob > 0)
-			evt_desc_copy(tcx, entry);
+			rc = evt_desc_copy(tcx, entry);
 		goto out;
 	}
 

@@ -256,6 +256,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 	struct vos_pool		*vpool = NULL;
 	struct cont_df_args	 args;
 	struct d_uuid		 ukey;
+	daos_iov_t		 key, value;
 	int			 rc = 0;
 
 	vpool = vos_hdl2pool(poh);
@@ -275,22 +276,16 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc = -DER_EXIST);
 	}
 
-	TX_BEGIN(vos_pool_ptr2pop(vpool)) {
-		daos_iov_t key, value;
+	rc = vos_tx_begin(vpool);
+	if (rc != 0)
+		goto exit;
 
-		daos_iov_set(&key, &ukey, sizeof(ukey));
-		daos_iov_set(&value, &args, sizeof(args));
+	daos_iov_set(&key, &ukey, sizeof(ukey));
+	daos_iov_set(&value, &args, sizeof(args));
 
-		rc = dbtree_update(vpool->vp_cont_th, &key, &value);
-		if (rc) {
-			D_ERROR("Creating a container entry: %d\n", rc);
-			pmemobj_tx_abort(ENOMEM);
-		}
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_ERROR("Creating a container entry: %d\n", rc);
-	} TX_END;
+	rc = dbtree_update(vpool->vp_cont_th, &key, &value);
 
+	rc = vos_tx_end(vpool, rc);
 exit:
 	return rc;
 }
