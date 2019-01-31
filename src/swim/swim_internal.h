@@ -57,17 +57,8 @@
 #include <gurt/common.h>
 
 /* Use debug capability from CaRT */
-#define SWIM_GOTO	D_GOTO
-#define SWIM_DEBUG	D_DEBUG
-#define SWIM_ALLOC	D_ALLOC
-#define SWIM_FREE	D_FREE
-
-#define SWIM_INFO(fmt, ...)	SWIM_DEBUG(DLOG_INFO,  fmt, ##__VA_ARGS__)
-#define SWIM_NOTE(fmt, ...)	SWIM_DEBUG(DLOG_NOTE,  fmt, ##__VA_ARGS__)
-#define SWIM_WARN(fmt, ...)	SWIM_DEBUG(DLOG_WARN,  fmt, ##__VA_ARGS__)
-#define SWIM_ERROR(fmt, ...)	SWIM_DEBUG(DLOG_ERR,   fmt, ##__VA_ARGS__)
-#define SWIM_CRIT(fmt, ...)	SWIM_DEBUG(DLOG_CRIT,  fmt, ##__VA_ARGS__)
-#define SWIM_FATAL(fmt, ...)	SWIM_DEBUG(DLOG_EMERG, fmt, ##__VA_ARGS__)
+#define SWIM_INFO(fmt, ...)	D_DEBUG(DLOG_INFO, fmt, ##__VA_ARGS__)
+#define SWIM_ERROR(fmt, ...)	D_DEBUG(DLOG_ERR,  fmt, ##__VA_ARGS__)
 
 #ifdef _USE_ABT_SYNC_
 #define SWIM_MUTEX_T		ABT_mutex

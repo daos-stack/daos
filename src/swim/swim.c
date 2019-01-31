@@ -54,22 +54,20 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 
 	if (id == SWIM_ID_INVALID || to == SWIM_ID_INVALID) {
 		SWIM_ERROR("member id is invalid\n");
-		SWIM_GOTO(out, rc = -EINVAL);
+		D_GOTO(out, rc = -EINVAL);
 	}
 
 	nupds = SWIM_PIGGYBACK_ENTRIES + (id != self_id ? 2 : 1);
 	D_ALLOC_ARRAY(upds, nupds);
-	if (upds == NULL) {
-		SWIM_ERROR("No memory for SWIM updates\n");
-		SWIM_GOTO(out, rc = -ENOMEM);
-	}
+	if (upds == NULL)
+		D_GOTO(out, rc = -ENOMEM);
 
 	swim_ctx_lock(ctx);
 
 	rc = ctx->sc_ops->get_member_state(ctx, id, &upds[i].smu_state);
 	if (rc) {
 		SWIM_ERROR("get_member_state() failed rc=%d\n", rc);
-		SWIM_GOTO(out_unlock, rc);
+		D_GOTO(out_unlock, rc);
 	}
 	upds[i++].smu_id = id;
 
@@ -79,7 +77,7 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 						   &upds[i].smu_state);
 		if (rc) {
 			SWIM_ERROR("get_member_state() failed rc=%d\n", rc);
-			SWIM_GOTO(out_unlock, rc);
+			D_GOTO(out_unlock, rc);
 		}
 		upds[i++].smu_id = self_id;
 	}
@@ -91,7 +89,7 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 		/* delete entries that are too many */
 		if (i >= nupds) {
 			TAILQ_REMOVE(&ctx->sc_updates, item, si_link);
-			SWIM_FREE(item);
+			D_FREE(item);
 			item = next;
 			continue;
 		}
@@ -103,14 +101,14 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 			if (rc) {
 				SWIM_ERROR("get_member_state() failed rc=%d\n",
 					   rc);
-				SWIM_GOTO(out_unlock, rc);
+				D_GOTO(out_unlock, rc);
 			}
 			upds[i++].smu_id = item->si_id;
 		}
 
 		if (++item->u.si_count > ctx->sc_piggyback_tx_max) {
 			TAILQ_REMOVE(&ctx->sc_updates, item, si_link);
-			SWIM_FREE(item);
+			D_FREE(item);
 		}
 
 		item = next;
@@ -140,18 +138,15 @@ swim_updates_notify(struct swim_context *ctx, swim_id_t from, swim_id_t id,
 		if (item->si_id == id) {
 			item->si_from = from;
 			item->u.si_count = 0;
-			SWIM_GOTO(update, 0);
+			D_GOTO(update, 0);
 		}
 	}
 
 	/* add this update to recent update list so it will be
 	 * piggybacked on future protocol messages
 	 */
-	SWIM_ALLOC(item, sizeof(*item));
-	if (item == NULL) {
-		SWIM_ERROR("No memory for swim update\n");
-		/* Just ignore this update */
-	} else {
+	D_ALLOC_PTR(item);
+	if (item != NULL) {
 		item->si_id   = id;
 		item->si_from = from;
 		item->u.si_count = 0;
@@ -172,17 +167,17 @@ swim_member_alive(struct swim_context *ctx, swim_id_t from,
 	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
 	if (rc) {
 		SWIM_ERROR("get_member_state() failed rc=%d\n", rc);
-		SWIM_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	if (nr > id_state.sms_incarnation)
-		SWIM_GOTO(update, rc);
+		D_GOTO(update, rc);
 
 	/* ignore old updates or updates for dead members */
 	if (id_state.sms_status == SWIM_MEMBER_DEAD ||
 	    id_state.sms_status == SWIM_MEMBER_ALIVE ||
 	    id_state.sms_incarnation > nr)
-		SWIM_GOTO(out, rc = -EALREADY);
+		D_GOTO(out, rc = -EALREADY);
 
 update:
 	/* if member is suspected, remove from suspect list */
@@ -190,7 +185,7 @@ update:
 		if (item->si_id == id) {
 			/* remove this member from suspect list */
 			TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
-			SWIM_FREE(item);
+			D_FREE(item);
 			break;
 		}
 	}
@@ -213,16 +208,16 @@ swim_member_dead(struct swim_context *ctx, swim_id_t from,
 	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
 	if (rc) {
 		SWIM_ERROR("get_member_state() failed rc=%d\n", rc);
-		SWIM_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	if (nr > id_state.sms_incarnation)
-		SWIM_GOTO(update, rc);
+		D_GOTO(update, rc);
 
 	/* ignore old updates or updates for dead members */
 	if (id_state.sms_status == SWIM_MEMBER_DEAD ||
 	    id_state.sms_incarnation > nr)
-		SWIM_GOTO(out, rc = -EALREADY);
+		D_GOTO(out, rc = -EALREADY);
 
 update:
 	/* if member is suspected, remove it from suspect list */
@@ -230,7 +225,7 @@ update:
 		if (item->si_id == id) {
 			/* remove this member from suspect list */
 			TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
-			SWIM_FREE(item);
+			D_FREE(item);
 			break;
 		}
 	}
@@ -257,31 +252,29 @@ swim_member_suspect(struct swim_context *ctx, swim_id_t from,
 	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
 	if (rc) {
 		SWIM_ERROR("get_member_state() failed rc=%d\n", rc);
-		SWIM_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	if (nr > id_state.sms_incarnation)
-		SWIM_GOTO(search, rc);
+		D_GOTO(search, rc);
 
 	/* ignore old updates or updates for dead members */
 	if (id_state.sms_status == SWIM_MEMBER_DEAD ||
 	    id_state.sms_status == SWIM_MEMBER_SUSPECT ||
 	    id_state.sms_incarnation > nr)
-		SWIM_GOTO(out, rc = -EALREADY);
+		D_GOTO(out, rc = -EALREADY);
 
 search:
 	/* determine if this member is already suspected */
 	TAILQ_FOREACH(item, &ctx->sc_suspects, si_link) {
 		if (item->si_id == id)
-			SWIM_GOTO(update, rc);
+			D_GOTO(update, rc);
 	}
 
 	/* add to end of suspect list */
-	SWIM_ALLOC(item, sizeof(*item));
-	if (item == NULL) {
-		SWIM_ERROR("No memory for swim_item\n");
-		SWIM_GOTO(out, rc = -ENOMEM);
-	}
+	D_ALLOC_PTR(item);
+	if (item == NULL)
+		D_GOTO(out, rc = -ENOMEM);
 	item->si_id = id;
 	item->si_from = from;
 	item->u.si_deadline = swim_now_ms() + SWIM_SUSPECT_TIMEOUT;
@@ -324,11 +317,9 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now)
 				item->si_from = self_id;
 				item->u.si_deadline += SWIM_PING_TIMEOUT;
 
-				SWIM_ALLOC(item, sizeof(*item));
-				if (item == NULL) {
-					SWIM_ERROR("No memory for swim_item\n");
-					SWIM_GOTO(next_item, rc = -ENOMEM);
-				}
+				D_ALLOC_PTR(item);
+				if (item == NULL)
+					D_GOTO(next_item, rc = -ENOMEM);
 				item->si_id   = id;
 				item->si_from = from;
 				TAILQ_INSERT_TAIL(&targets, item, si_link);
@@ -346,7 +337,7 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now)
 					swim_member_dead(ctx, item->si_from,
 							item->si_id,
 						      id_state.sms_incarnation);
-					SWIM_FREE(item);
+					D_FREE(item);
 				}
 			}
 		}
@@ -366,7 +357,7 @@ next_item:
 		if (rc)
 			SWIM_ERROR("swim_updates_send() failed rc=%d\n", rc);
 
-		SWIM_FREE(item);
+		D_FREE(item);
 		item = next;
 	}
 
@@ -385,7 +376,7 @@ swim_ipings_update(struct swim_context *ctx, uint64_t now)
 		next = TAILQ_NEXT(item, si_link);
 		if (now > item->u.si_deadline) {
 			TAILQ_REMOVE(&ctx->sc_ipings, item, si_link);
-			SWIM_FREE(item);
+			D_FREE(item);
 		}
 		item = next;
 	}
@@ -404,14 +395,11 @@ swim_subgroup_init(struct swim_context *ctx)
 	for (i = 0; i < SWIM_SUBGROUP_SIZE; i++) {
 		id = ctx->sc_ops->get_iping_target(ctx);
 		if (id == SWIM_ID_INVALID)
-			SWIM_GOTO(out, rc = 0);
+			D_GOTO(out, rc = 0);
 
-		SWIM_ALLOC(item, sizeof(*item));
-		if (item == NULL) {
-			SWIM_ERROR("No memory for swim_item\n");
-			SWIM_GOTO(out, rc = -ENOMEM);
-		}
-
+		D_ALLOC_PTR(item);
+		if (item == NULL)
+			D_GOTO(out, rc = -ENOMEM);
 		item->si_id = id;
 		TAILQ_INSERT_TAIL(&ctx->sc_subgroup, item, si_link);
 	}
@@ -451,22 +439,20 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	    swim_ops->get_member_state == NULL ||
 	    swim_ops->set_member_state == NULL) {
 		SWIM_ERROR("there are no proper callbacks specified\n");
-		SWIM_GOTO(out, ctx = NULL);
+		D_GOTO(out, ctx = NULL);
 	}
 
 	/* allocate structure for storing swim context */
-	SWIM_ALLOC(ctx, sizeof(*ctx));
-	if (ctx == NULL) {
-		SWIM_ERROR("malloc() failed errno=%d\n", -errno);
-		SWIM_GOTO(out, ctx = NULL);
-	}
+	D_ALLOC_PTR(ctx);
+	if (ctx == NULL)
+		D_GOTO(out, ctx = NULL);
 	memset(ctx, 0, sizeof(*ctx));
 
 	rc = SWIM_MUTEX_CREATE(ctx->sc_mutex, NULL);
 	if (rc != 0) {
-		SWIM_FREE(ctx);
+		D_FREE(ctx);
 		SWIM_ERROR("SWIM_MUTEX_CREATE() failed rc=%d\n", rc);
-		SWIM_GOTO(out, ctx = NULL);
+		D_GOTO(out, ctx = NULL);
 	}
 
 	ctx->sc_self = self_id;
@@ -498,7 +484,7 @@ swim_fini(struct swim_context *ctx)
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
 		TAILQ_REMOVE(&ctx->sc_ipings, item, si_link);
-		SWIM_FREE(item);
+		D_FREE(item);
 		item = next;
 	}
 
@@ -506,7 +492,7 @@ swim_fini(struct swim_context *ctx)
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
 		TAILQ_REMOVE(&ctx->sc_updates, item, si_link);
-		SWIM_FREE(item);
+		D_FREE(item);
 		item = next;
 	}
 
@@ -514,7 +500,7 @@ swim_fini(struct swim_context *ctx)
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
 		TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
-		SWIM_FREE(item);
+		D_FREE(item);
 		item = next;
 	}
 
@@ -522,13 +508,13 @@ swim_fini(struct swim_context *ctx)
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
 		TAILQ_REMOVE(&ctx->sc_subgroup, item, si_link);
-		SWIM_FREE(item);
+		D_FREE(item);
 		item = next;
 	}
 
 	SWIM_MUTEX_DESTROY(ctx->sc_mutex);
 
-	SWIM_FREE(ctx);
+	D_FREE(ctx);
 }
 
 int
@@ -545,11 +531,11 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 	/* validate input parameters */
 	if (ctx == NULL) {
 		SWIM_ERROR("invalid parameter (ctx is NULL)\n");
-		SWIM_GOTO(out, rc = -EINVAL);
+		D_GOTO(out, rc = -EINVAL);
 	}
 
 	if (ctx->sc_self == SWIM_ID_INVALID) /* not initialized yet */
-		SWIM_GOTO(out, rc = 0); /* Ignore this update */
+		D_GOTO(out, rc = 0); /* Ignore this update */
 
 	now = swim_now_ms();
 	if (timeout > 0)
@@ -560,13 +546,13 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 		if (rc) {
 			SWIM_ERROR("swim_member_update_suspected() failed "
 				   "rc=%d\n", rc);
-			SWIM_GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
 		rc = swim_ipings_update(ctx, now);
 		if (rc) {
 			SWIM_ERROR("swim_ipings_update() failed rc=%d\n", rc);
-			SWIM_GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
 		swim_ctx_lock(ctx);
@@ -608,7 +594,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 					swim_ctx_unlock(ctx);
 					SWIM_ERROR("get_member_state() "
 						   "failed rc=%d\n", rc);
-					SWIM_GOTO(out, rc);
+					D_GOTO(out, rc);
 				}
 
 				swim_member_suspect(ctx, ctx->sc_self,
@@ -636,7 +622,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 					swim_ctx_unlock(ctx);
 					SWIM_ERROR("get_member_state() "
 						   "failed rc=%d\n", rc);
-					SWIM_GOTO(out, rc);
+					D_GOTO(out, rc);
 				}
 
 				swim_member_dead(ctx, ctx->sc_self,
@@ -657,7 +643,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 					swim_ctx_unlock(ctx);
 					SWIM_ERROR("swim_subgroup_init() "
 						   "failed rc=%d\n", rc);
-					SWIM_GOTO(out, rc);
+					D_GOTO(out, rc);
 				}
 				item = TAILQ_FIRST(&ctx->sc_subgroup);
 			}
@@ -672,7 +658,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 
 				TAILQ_REMOVE(&ctx->sc_subgroup,
 					     item, si_link);
-				SWIM_FREE(item);
+				D_FREE(item);
 
 				item = TAILQ_FIRST(&ctx->sc_subgroup);
 				if (item == NULL) {
@@ -688,7 +674,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			ctx->sc_target = ctx->sc_ops->get_dping_target(ctx);
 			if (ctx->sc_target == SWIM_ID_INVALID) {
 				swim_ctx_unlock(ctx);
-				SWIM_GOTO(out, rc = -ESHUTDOWN);
+				D_GOTO(out, rc = -ESHUTDOWN);
 			}
 
 			ctx_state = SCS_BEGIN;
@@ -703,7 +689,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			if (rc) {
 				SWIM_ERROR("swim_updates_send() failed rc=%d\n",
 					   rc);
-				SWIM_GOTO(out, rc);
+				D_GOTO(out, rc);
 			}
 			send_updates = false;
 		}
@@ -737,8 +723,8 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 
 	for (i = 0; i < nupds; i++) {
 		SWIM_INFO("%lu: update: %lu %c %lu\n", self_id, upds[i].smu_id,
-				"ASD"[upds[i].smu_state.sms_status],
-				upds[i].smu_state.sms_incarnation);
+			  "ASD"[upds[i].smu_state.sms_status],
+			  upds[i].smu_state.sms_incarnation);
 
 		if (to == SWIM_ID_INVALID)
 			to = upds[i].smu_id; /* save first index from update */
@@ -768,7 +754,7 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 					swim_ctx_unlock(ctx);
 					SWIM_ERROR("get_member_state() failed "
 						   "rc=%d\n", rc);
-					SWIM_GOTO(out, rc);
+					D_GOTO(out, rc);
 				}
 
 				if (self_state.sms_incarnation >
@@ -776,7 +762,7 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 					break; /* already incremented */
 
 				self_state.sms_incarnation++;
-				SWIM_WARN("%lu: self SUSPECT received "
+				SWIM_INFO("%lu: self SUSPECT received "
 					  "(new incarnation=%lu)\n", self_id,
 					  self_state.sms_incarnation);
 				rc = swim_updates_notify(ctx, self_id, self_id,
@@ -785,7 +771,7 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 					swim_ctx_unlock(ctx);
 					SWIM_ERROR("swim_updates_notify() "
 						   "failed rc=%d\n", rc);
-					SWIM_GOTO(out, rc);
+					D_GOTO(out, rc);
 				}
 				break;
 			}
@@ -798,10 +784,10 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 			 * just shut down
 			 */
 			if (upds[i].smu_id == self_id) {
-				SWIM_WARN("%lu: self confirmed DEAD "
+				SWIM_INFO("%lu: self confirmed DEAD "
 					  "(incarnation=%lu)\n", self_id,
 					  upds[i].smu_state.sms_incarnation);
-				SWIM_GOTO(out, rc = -ESHUTDOWN);
+				D_GOTO(out, rc = -ESHUTDOWN);
 			}
 
 			swim_member_dead(ctx, from, upds[i].smu_id,
@@ -830,13 +816,13 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 
 				TAILQ_REMOVE(&ctx->sc_ipings, item,
 					     si_link);
-				SWIM_FREE(item);
+				D_FREE(item);
 				break;
 			}
 		}
 	} else { /* iping request or response */
 		if (to != ctx->sc_target) {
-			SWIM_ALLOC(item, sizeof(*item));
+			D_ALLOC_PTR(item);
 			if (item != NULL) {
 				item->si_id   = to;
 				item->si_from = from;
@@ -853,7 +839,6 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 				SWIM_INFO("%lu: iping %lu => %lu\n",
 					  self_id, from, id_sendto);
 			} else {
-				SWIM_ERROR("No memory for swim_item\n");
 				rc = -ENOMEM;
 			}
 		}

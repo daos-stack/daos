@@ -48,8 +48,10 @@ LIBPATH = [Dir('../cart'), Dir('../gurt')]
 def scons():
     """Scons function"""
 
+    # pylint: disable=too-many-locals
     Import('env', 'prereqs', 'cart_targets', 'swim_targets', 'gurt_targets')
     Import('cart_lib')
+    # pylint: enable=too-many-locals
 
     #Use full path to wrap_cmocka.h for configure test.  Since standalone
     #cmocka header can't be included without including other headers,
