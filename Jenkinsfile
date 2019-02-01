@@ -576,7 +576,7 @@ pipeline {
                                                [ -f /tmp/daos.log ] && mv /tmp/daos.log run_test.sh/
                                                # servers can sometimes take a while to stop when the test is done
                                                x=0
-                                               while [ \"\\\$x\" -lt \"10\" ] && 
+                                               while [ \"\\\$x\" -lt \"10\" ] &&
                                                      pgrep '(orterun|daos_server|daos_io_server)'; do
                                                    sleep 1
                                                    let x=\\\$x+1

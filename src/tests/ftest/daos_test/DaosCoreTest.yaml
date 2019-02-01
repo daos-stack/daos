@@ -23,7 +23,7 @@ daos_tests:
     test_r:
       daos_test: r
       test_name: rebuild tests
-      args: -u subtests="0-13"
+      args: -u subtests="0-1"
     test_d:
       daos_test: d
       test_name: DAOS degraded-mode tests
