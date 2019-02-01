@@ -54,12 +54,21 @@ type cliOptions struct {
 }
 
 func main() {
+	var err error
+	defer func() {
+		status := 0
+		if err != nil {
+			status = 1
+		}
+		os.Exit(status)
+	}()
+
 	runtime.GOMAXPROCS(1)
 
 	var opts cliOptions
 
 	// Parse commandline flags which override options loaded from config.
-	if _, err := flags.Parse(&opts); err != nil {
+	if _, err = flags.Parse(&opts); err != nil {
 		// don't log failure just return usage info
 		println(err.Error())
 		return

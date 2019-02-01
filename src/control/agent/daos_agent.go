@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,6 +39,15 @@ var (
 )
 
 func main() {
+	var err error
+	defer func() {
+		status := 0
+		if err != nil {
+			status = 1
+		}
+		os.Exit(status)
+	}()
+
 	flag.Parse()
 
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM

@@ -154,3 +154,9 @@ TODO: include details of `daos_agent` interaction
 ### Testing the app
 
 * Run the tests `go test` within each directory containing tests
+
+## Coding Guidelines
+
+### daos_server and daos_agent
+
+* Avoid calling `os.Exit` (or `log.Fatal`, `log.Fatalf`, etc.), except for assertion purposes. Fatal errors shall be returned back to `main`, who determines the exit status based on its `err` and calls `os.Exit`, in its last deferred function call.
