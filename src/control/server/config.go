@@ -187,8 +187,8 @@ func (c *configuration) populateCliOpts(i int) error {
 	if c.SystemMap != "" {
 		server.CliOpts = append(server.CliOpts, "-y", c.SystemMap)
 	}
-	if c.Servers[i].Rank != "" {
-		server.CliOpts = append(server.CliOpts, "-r", server.Rank)
+	if server.Rank != nil {
+		server.CliOpts = append(server.CliOpts, "-r", server.Rank.String())
 	}
 	if c.SocketDir != "" {
 		server.CliOpts = append(server.CliOpts, "-d", c.SocketDir)
@@ -232,7 +232,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		if opts.Rank != nil {
 			// override first per-server config (doesn't make sense
 			// to reply to more than one server)
-			c.Servers[0].Rank = strconv.Itoa(int(*opts.Rank))
+			c.Servers[0].Rank = opts.Rank
 		}
 	}
 	if opts.Group != "" {

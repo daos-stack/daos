@@ -70,7 +70,7 @@ type cliOptions struct {
 	Group       string             `short:"g" long:"group" description:"Server group name"`
 	Attach      *string            `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
 	Map         *string            `short:"y" long:"map" description:"[Temporary] System map file"`
-	Rank        *uint              `short:"r" long:"rank" description:"[Temporary] Self rank"`
+	Rank        *rank              `short:"r" long:"rank" description:"[Temporary] Self rank"`
 	SocketDir   string             `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
 	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
 }
