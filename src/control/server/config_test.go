@@ -403,7 +403,7 @@ func TestSetNumCores(t *testing.T) {
 // TestCmdlineOverride verified that cliOpts take precedence over existing
 // configs resulting in overrides appearing in ioparams
 func TestCmdlineOverride(t *testing.T) {
-	r := uint(9)
+	r := rank(9)
 	m := "moduleA moduleB"
 	a := "/some/file"
 	y := "/another/different/file"

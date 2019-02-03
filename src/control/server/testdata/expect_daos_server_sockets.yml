@@ -1,6 +1,6 @@
 name: daos_server
 servers:
-- rank: ""
+- rank: null
   cpus:
   - 0-7
   fabric_iface: eth0

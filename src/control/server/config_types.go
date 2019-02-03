@@ -24,9 +24,11 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -57,10 +59,52 @@ const (
 	// todo: implement LogMask discriminated union
 )
 
-//Server defines configuration options for DAOS IO Server instances
+// rank represents a rank of an I/O server or a nil rank.
+type rank uint32
+
+const (
+	maxRank rank = math.MaxUint32 - 1
+	nilRank rank = math.MaxUint32
+)
+
+func (r rank) String() string {
+	return strconv.FormatUint(uint64(r), 10)
+}
+
+func (r *rank) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var i uint32
+	if err := unmarshal(&i); err != nil {
+		return err
+	}
+	if err := checkRank(rank(i)); err != nil {
+		return err
+	}
+	*r = rank(i)
+	return nil
+}
+
+func (r *rank) UnmarshalFlag(value string) error {
+	i, err := strconv.ParseUint(value, 0, 32)
+	if err != nil {
+		return err
+	}
+	if err = checkRank(rank(i)); err != nil {
+		return err
+	}
+	*r = rank(i)
+	return nil
+}
+
+func checkRank(r rank) error {
+	if r == nilRank {
+		return fmt.Errorf("rank %d out of range [0, %d]", r, maxRank)
+	}
+	return nil
+}
+
+// server defines configuration options for DAOS IO Server instances
 type server struct {
-	// Rank parsed as string to allow zero value
-	Rank            string   `yaml:"rank"`
+	Rank            *rank    `yaml:"rank"`
 	Cpus            []string `yaml:"cpus"`
 	FabricIface     string   `yaml:"fabric_iface"`
 	FabricIfacePort int      `yaml:"fabric_iface_port"`
