@@ -53,8 +53,9 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	}
 
 	arg->expect_result = 0;
-	daos_fail_loc_set(arg->fail_loc);
+	daos_fail_num_set(arg->fail_num);
 	daos_fail_value_set(arg->fail_value);
+	daos_fail_loc_set(arg->fail_loc);
 
 	/* init sgl */
 	for (i = 0; i < IOREQ_SG_IOD_NR; i++) {
@@ -116,6 +117,7 @@ ioreq_fini(struct ioreq *req)
 
 	req->arg->fail_loc = 0;
 	req->arg->fail_value = 0;
+	req->arg->fail_num = 0;
 	daos_fail_loc_set(0);
 	if (req->arg->async) {
 		rc = daos_event_fini(&req->ev);
@@ -2091,7 +2093,7 @@ io_simple_update_timeout(void **state)
 	daos_obj_id_t	 oid;
 
 	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT | DAOS_FAIL_SOME;
-	arg->fail_value = 5;
+	arg->fail_num = 5;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	io_simple_internal(state, oid, 64, DAOS_IOD_ARRAY, "test_update dkey",
@@ -2106,7 +2108,7 @@ io_simple_fetch_timeout(void **state)
 	daos_obj_id_t	 oid;
 
 	arg->fail_loc = DAOS_SHARD_OBJ_FETCH_TIMEOUT | DAOS_FAIL_SOME;
-	arg->fail_value = 5;
+	arg->fail_num = 5;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	io_simple_internal(state, oid, 64, DAOS_IOD_ARRAY, "test_fetch dkey",
@@ -2550,7 +2552,7 @@ io_nospace(void **state)
 
 	D_ALLOC(large_buf, buf_size);
 	assert_non_null(large_buf);
-	arg->fail_loc = DAOS_OBJ_UPDATE_NOSPACE;
+	arg->fail_loc = DAOS_OBJ_UPDATE_NOSPACE | DAOS_FAIL_ALWAYS;
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	for (i = 0; i < 5; i++) {
 		sprintf(key, "dkey%d", i);
@@ -2663,11 +2665,11 @@ tgt_idx_change_retry(void **state)
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, 2);
 	replica = rand() % 3;
-	arg->fail_loc = DAOS_OBJ_TGT_IDX_CHANGE | DAOS_FAIL_VALUE;
-	arg->fail_value = replica;
+	arg->fail_loc = DAOS_OBJ_TGT_IDX_CHANGE;
+	arg->fail_num = replica;
 	if (arg->myrank == 0) {
 		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
-				     DAOS_OBJ_TGT_IDX_CHANGE | DAOS_FAIL_VALUE,
+				     DAOS_OBJ_TGT_IDX_CHANGE,
 				     replica, NULL);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -2742,10 +2744,10 @@ tgt_idx_change_retry(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	insert_wait(&req);
 
-	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_VALUE);
+	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
 	/** lookup through each replica and verify data */
 	for (replica = 0; replica < 3; replica++) {
-		daos_fail_value_set(replica);
+		daos_fail_num_set(replica);
 		for (i = 0; i < 5; i++)
 			memset(val[i], 0, 64);
 
@@ -2807,8 +2809,7 @@ fetch_replica_unavail(void **state)
 		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
 		assert_int_equal(rc, 0);
 		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
-			DSS_KEY_FAIL_LOC,
-			DAOS_REBUILD_DISABLE | DAOS_FAIL_VALUE, 0,
+			DSS_KEY_FAIL_LOC, DAOS_REBUILD_DISABLE, 0,
 			NULL);
 		assert_int_equal(rc, 0);
 
