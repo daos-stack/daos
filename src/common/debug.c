@@ -133,6 +133,7 @@ debug_fini_locked(void)
 				    daos_bit_dict[i].db_name);
 	}
 
+	daos_fail_fini();
 	/* Unregister DAOS debug bit groups */
 	rc = d_log_dbg_grp_dealloc("daos_default");
 	if (rc < 0)
@@ -189,9 +190,10 @@ daos_debug_init(char *logfile)
 					 daos_bit_dict[i].db_name,
 					 daos_bit_dict[i].db_lname);
 		if (rc < 0) {
-			D_PRINT_ERR("Error allocating daos debug bit for %s\n",
-				    daos_bit_dict[i].db_name);
-			return -DER_UNINIT;
+			D_PRINT_ERR("Error allocating debug bit for %s:%d\n",
+				    daos_bit_dict[i].db_name, rc);
+			rc = -DER_UNINIT;
+			goto failed_unlock;
 		}
 
 		*daos_bit_dict[i].db_bit = allocd_dbg_bit;
@@ -200,12 +202,19 @@ daos_debug_init(char *logfile)
 	/* Register DAOS debug bit groups */
 	rc = d_log_dbg_grp_alloc(DB_GRP1, "daos_default");
 	if (rc < 0) {
-		D_PRINT_ERR("Error allocating daos debug group\n");
-		return -DER_UNINIT;
+		D_PRINT_ERR("Error allocating daos debug group: %d\n", rc);
+		rc = -DER_UNINIT;
+		goto failed_unlock;
 	}
 
 	/* Sync DAOS debug env with libgurt */
 	d_log_sync_mask();
+
+	rc = daos_fail_init();
+	if (rc) {
+		D_PRINT_ERR("Failed to init DAOS fail injection: %d\n", rc);
+		goto failed_unlock;
+	}
 
 	dd_ref = 1;
 	D_MUTEX_UNLOCK(&dd_lock);

@@ -682,11 +682,11 @@ ts_rebuild_perf(double *start_time, double *end_time)
 
 	if (ts_rebuild_only_iteration)
 		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_REBUILD | DAOS_FAIL_VALUE,
+				     DAOS_REBUILD_NO_REBUILD,
 				     0, NULL);
 	else if (ts_rebuild_no_update)
 		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_UPDATE | DAOS_FAIL_VALUE,
+				     DAOS_REBUILD_NO_UPDATE,
 				     0, NULL);
 
 	rc = ts_exclude_server(RANK_ZERO);

@@ -124,6 +124,7 @@ typedef struct {
 	bool			async;
 	bool			hdl_share;
 	uint64_t		fail_loc;
+	uint64_t		fail_num;
 	uint64_t		fail_value;
 	bool			overlap;
 	int			expect_result;
