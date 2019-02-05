@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -31,21 +31,34 @@ from SCons.Script import Dir
 # pylint: enable=no-name-in-module
 # pylint: enable=import-error
 
+def find_indent():
+    """find indent or clang-format"""
+    indent = find_executable("indent")
+    if indent is not None:
+        return "%s -st -linux" % (indent)
+
+    indent = find_executable("clang-format")
+    if indent is not None:
+        style = "Mozilla" # fallback
+        root = Dir("#").abspath
+        while root != "/":
+            if os.path.exists(os.path.join(root, ".clang-format")):
+                style = "file"
+            root = os.path.dirname(root)
+        return "%s --style=%s" % (indent, style)
+
+    return None
+
 # pylint: disable=unused-argument
 def preprocess_generator(source, target, env, for_signature):
     """generate commands for preprocessor builder"""
     action = []
-    style = "Mozilla" # fallback
-    root = Dir("#").abspath
-    while root != "/":
-        if os.path.exists(os.path.join(root, ".clang-format")):
-            style = "file"
-        root = os.path.dirname(root)
+    indent = find_indent()
     nenv = env.Clone()
     cccom = nenv.subst("$CCCOM").replace(" -o ", " ")
     for src, tgt in zip(source, target):
         action.append("%s -E -P %s > %s_raw" % (cccom, src, tgt))
-        action.append("clang-format --style=%s %s_raw > %s" % (style, tgt, tgt))
+        action.append("%s %s_raw > %s 2> /dev/null" % (indent, tgt, tgt))
     return action
 
 def preprocess_emitter(source, target, env):
@@ -60,9 +73,10 @@ def preprocess_emitter(source, target, env):
 
 def generate(env):
     """Setup the our custom tools"""
-    #Only handle C for now
-    if find_executable("clang-format") is None:
-        raise StopError("clang-format must be installed for Preprocess builder")
+    # Only handle C for now
+    if find_indent() is None:
+        raise StopError(
+            "indent or clang-format must be installed for Preprocess builder")
 
     preprocess = Builder(generator=preprocess_generator, suffix="_pp.c",
                          emitter=preprocess_emitter, src_suffix=".c")
