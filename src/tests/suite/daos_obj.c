@@ -2918,6 +2918,10 @@ io_obj_key_query(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
+	daos_iod_t	iod = {0};
+	daos_sg_list_t	sgl = {0};
+	uint32_t	update_var = 0xdeadbeef;
+	daos_iov_t	val_iov;
 	daos_iov_t	dkey;
 	daos_iov_t	akey;
 	daos_recx_t	recx;
@@ -2980,18 +2984,41 @@ io_obj_key_query(void **state)
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
+	dkey_val = 5;
+	akey_val = 10;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_name = akey;
+	iod.iod_recxs = &recx;
+	iod.iod_nr = 1;
+	iod.iod_size = sizeof(update_var);
+
+	daos_iov_set(&val_iov, &update_var, sizeof(update_var));
+	sgl.sg_iovs = &val_iov;
+	sgl.sg_nr = 1;
+
+	recx.rx_idx = 5;
+	recx.rx_nr = 1;
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	dkey_val = 10;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	recx.rx_idx = 50;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
 	flags = 0;
-	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MIN;
+	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
 	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx,
 				NULL);
 	assert_int_equal(rc, 0);
-
-	dkey_val = *((uint64_t *)dkey.iov_buf);
-	print_message("DKEY Query = %"PRIu64"\n", dkey_val);
-	akey_val = *((uint64_t *)akey.iov_buf);
-	print_message("AKEY Query = %"PRIu64"\n", akey_val);
-	print_message("RECX Query (idx = %"PRIu64"); (nr = %"PRIu64")\n",
-		      recx.rx_idx, recx.rx_nr);
+	assert_int_equal(*(uint64_t *)dkey.iov_buf, 10);
+	assert_int_equal(*(uint64_t *)akey.iov_buf, 10);
+	assert_int_equal(recx.rx_idx, 50);
+	assert_int_equal(recx.rx_nr, 1);
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);

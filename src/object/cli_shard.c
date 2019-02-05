@@ -891,8 +891,10 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	okqo = crt_reply_get(cb_args->rpc);
 	rc = obj_reply_get_status(rpc);
 	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			D_GOTO(out, rc = 0);
 		D_ERROR("rpc %p RPC %d failed: %d\n", cb_args->rpc,
-			 opc_get(cb_args->rpc->cr_opc), rc);
+			opc_get(cb_args->rpc->cr_opc), rc);
 		D_GOTO(out, rc);
 	}
 	*cb_args->map_ver = obj_reply_map_version_get(rpc);
