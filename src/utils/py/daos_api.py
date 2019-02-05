@@ -84,12 +84,11 @@ class DaosPool(object):
             tgt_ptr = None
 
         func = self.context.get_function('create-pool')
-
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func == None:
             rc = func(c_mode, c_uid, c_gid, self.group, tgt_ptr,
-                      c_whatever, c_scm_size, c_nvme_size,
+                      c_whatever, c_scm_size, c_nvme_size, None,
                       ctypes.byref(self.svc), self.uuid, None)
             if rc != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
@@ -336,7 +335,7 @@ class DaosPool(object):
         func = self.context.get_function('query-pool')
 
         if cb_func is None:
-            rc = func(self.handle, None, ctypes.byref(self.pool_info), None)
+            rc = func(self.handle, None, ctypes.byref(self.pool_info), None, None)
             if rc != 0:
                 raise DaosApiError("Pool query returned non-zero. RC: {0}"
                                  .format(rc))
@@ -1076,7 +1075,7 @@ class DaosContainer(object):
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func == None:
-            rc = func(self.poh, self.uuid, None)
+            rc = func(self.poh, self.uuid, None, None)
             if rc != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
                 raise DaosApiError("Container create returned non-zero. RC: {0}"
@@ -1198,7 +1197,7 @@ class DaosContainer(object):
         func = self.context.get_function('query-cont')
 
         if cb_func is None:
-            rc = func(self.coh, ctypes.byref(self.info), None)
+            rc = func(self.coh, ctypes.byref(self.info), None, None)
             if rc != 0:
                 raise DaosApiError("Container query returned non-zero. RC: {0}"
                                  .format(rc))
@@ -1674,7 +1673,7 @@ class DaosContext(object):
             'destroy-tx'     : self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'evict-client'   : self.libdaos.daos_pool_evict,
-            'exclude-target' : self.libdaos.daos_pool_exclude,
+            'exclude-target' : self.libdaos.daos_pool_tgt_exclude,
             'extend-pool'    : self.libdaos.daos_pool_extend,
             'fetch-obj'      : self.libdaos.daos_obj_fetch,
             'generate-oid'   : self.libtest.dts_oid_gen,
@@ -1682,7 +1681,7 @@ class DaosContext(object):
             'get-layout'     : self.libdaos.daos_obj_layout_get,
             'init-event'     : self.libdaos.daos_event_init,
             'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
-            'kill-target'    : self.libdaos.daos_pool_exclude_out,
+            'kill-target'    : self.libdaos.daos_pool_tgt_exclude_out,
             'list-attr'      : self.libdaos.daos_cont_list_attr,
             'open-cont'      : self.libdaos.daos_cont_open,
             'open-obj'       : self.libdaos.daos_obj_open,
