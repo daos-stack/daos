@@ -71,7 +71,7 @@ func TestDiscoveryScm(t *testing.T) {
 				ExpectError(t, err, tt.errMsg, "")
 				continue
 			}
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 
 		AssertEqual(t, ss.modules, ScmmMap{0: m}, "unexpected list of modules")

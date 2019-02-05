@@ -118,7 +118,7 @@ func setupShell() *ishell.Shell {
 	//
 	//			featureMap, err := mgmtClient.ListFeatures("nvme")
 	//			if err != nil {
-	//				c.Println("Unable to retrieve nvme features", err.Error())
+	//				c.Println("Unable to retrieve nvme features", err)
 	//				return
 	//			}
 	//
@@ -144,7 +144,7 @@ func setupShell() *ishell.Shell {
 	//			c.Println("")
 	//
 	//			if err := nvmeTaskLookup(c, ctrlrs, taskHandlers[taskIdx]); err != nil {
-	//				c.Println("Problem running task: ", err.Error())
+	//				c.Println("Problem running task: ", err)
 	//			}
 	//		},
 	//	})

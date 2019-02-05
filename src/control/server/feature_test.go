@@ -41,13 +41,13 @@ func TestGetFeature(t *testing.T) {
 
 	feature, err := s.GetFeature(nil, mockFeature.Fname)
 	if err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	AssertEqual(t, feature, mockFeature, "")
 
 	feature, err = s.GetFeature(nil, &pb.FeatureName{Name: "non-existent"})
 	if err == nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 }

@@ -104,7 +104,7 @@ package main
 //	case "nvme-fw-update":
 //		params, err := getUpdateParams(c)
 //		if err != nil {
-//			c.Println("Problem reading user inputs: ", err.Error())
+//			c.Println("Problem reading user inputs: ", err)
 //			return err
 //		}
 //
@@ -128,7 +128,7 @@ package main
 //	case "nvme-burn-in":
 //		configPath, err := getFioConfig(c)
 //		if err != nil {
-//			c.Println("Problem reading user inputs: ", err.Error())
+//			c.Println("Problem reading user inputs: ", err)
 //			return err
 //		}
 //

@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/utils/handlers"
 	"github.com/daos-stack/daos/src/control/utils/log"
 )
 
@@ -100,12 +101,33 @@ func main() {
 		return
 	}
 
-	// Parse configuration file and load values, then backup active config.
+	// Parse configuration file and load values.
 	config, err := loadConfigOpts(opts)
 	if err != nil {
 		log.Errorf("Failed to load config options: %s", err)
 		return
 	}
+
+	// Set log level mask for default logger from config.
+	switch config.ControlLogMask {
+	case cLogDebug:
+		log.SetLevel(log.Debug)
+	case cLogError:
+		log.SetLevel(log.Error)
+	}
+
+	// Set log file for default logger if specified in config.
+	if config.ControlLogFile != "" {
+		f, err := handlers.AppendFile(config.ControlLogFile)
+		if err != nil {
+			err = log.WrapAndLogErr(err, "creating log file")
+			return
+		}
+		defer f.Close()
+		log.SetOutput(f)
+	}
+
+	// Backup active config.
 	saveActiveConfig(&config)
 
 	mgmtControlServer, err := newControlService(&config)

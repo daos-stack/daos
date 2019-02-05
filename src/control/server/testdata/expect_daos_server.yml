@@ -18,6 +18,8 @@ bdev_include: []
 bdev_exclude: []
 hyperthreads: false
 nr_hugepages: 1024
+control_log_mask: DEBUG
+control_log_file: ""
 modules: ""
 attach: ""
 systemmap: ""

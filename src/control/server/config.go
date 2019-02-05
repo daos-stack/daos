@@ -171,7 +171,7 @@ func (c *configuration) populateCliOpts(i int) error {
 	var numCores int
 	numCores, err := getNumCores(server.Cpus)
 	if err != nil {
-		return fmt.Errorf("server%d cpus invalid: %s", i, err.Error())
+		return fmt.Errorf("server%d cpus invalid: %s", i, err)
 	}
 	server.CliOpts = append(
 		server.CliOpts,
@@ -300,7 +300,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 		if err = c.checkMount(mntpt); err != nil {
 			return fmt.Errorf(
 				"server%d scm mount path (%s) not mounted: %s",
-				i, mntpt, err.Error())
+				i, mntpt, err)
 		}
 		if err = c.populateCliOpts(i); err != nil {
 			return err

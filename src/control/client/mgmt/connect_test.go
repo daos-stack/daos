@@ -144,7 +144,7 @@ func TestListFeatures(t *testing.T) {
 
 	clientFeatures, err := cc.ListFeatures()
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 
 	AssertEqual(
@@ -157,7 +157,7 @@ func TestListNvme(t *testing.T) {
 
 	clientNvme, err := cc.ListNvme()
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 
 	AssertEqual(
@@ -170,7 +170,7 @@ func TestListScm(t *testing.T) {
 
 	clientScm, err := cc.ListScm()
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 
 	AssertEqual(

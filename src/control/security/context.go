@@ -77,7 +77,7 @@ func (s *ContextMap) AddToken(requestor string, token *pb.AuthToken) (*uuid.UUID
 	key, err := uuid.NewV4()
 
 	if err != nil {
-		return nil, fmt.Errorf("Unable to generate UUIDv4 UUID: %s", err.Error())
+		return nil, fmt.Errorf("Unable to generate UUIDv4 UUID: %s", err)
 	}
 	s.ctxmap[key] = NewContext(requestor, token)
 	return &key, nil

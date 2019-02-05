@@ -89,7 +89,7 @@ func TestDiscoveryNvme(t *testing.T) {
 		sn := newMockNvmeStorage("", "", tt.inited)
 
 		if err := sn.Discover(); err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 
 		if tt.inited {
@@ -126,7 +126,7 @@ func TestUpdateNvme(t *testing.T) {
 		sn := newMockNvmeStorage("1.0.0", "1.0.1", false)
 		if tt.inited {
 			if err := sn.Discover(); err != nil {
-				t.Fatal(err.Error())
+				t.Fatal(err)
 			}
 		}
 
@@ -135,7 +135,7 @@ func TestUpdateNvme(t *testing.T) {
 				ExpectError(t, err, tt.errMsg, "")
 				continue
 			}
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 
 		AssertEqual(
@@ -179,7 +179,7 @@ func TestBurnInNvme(t *testing.T) {
 		sn := newMockNvmeStorage("", "", false)
 		if tt.inited {
 			if err := sn.Discover(); err != nil {
-				t.Fatal(err.Error())
+				t.Fatal(err)
 			}
 		}
 
@@ -189,7 +189,7 @@ func TestBurnInNvme(t *testing.T) {
 				ExpectError(t, err, tt.errMsg, "")
 				continue
 			}
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 
 		AssertTrue(t, strings.HasSuffix(cmdName, "bin/fio"), "unexpected fio executable path")

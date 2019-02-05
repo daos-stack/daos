@@ -148,7 +148,7 @@ func PrintStructs(name string, i interface{}) {
 	fmt.Println(name + ":")
 	s, err := StructsToString(i)
 	if err != nil {
-		fmt.Println("Unable to YAML encode response: ", err.Error())
+		fmt.Println("Unable to YAML encode response: ", err)
 		return
 	}
 	fmt.Println(s)

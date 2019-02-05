@@ -43,7 +43,7 @@ func HashFromToken(token *pb.AuthToken) ([]byte, error) {
 
 	tokenBytes, err := proto.Marshal(token)
 	if err != nil {
-		fmt.Errorf("Unable to marshal AuthToken (%s)", err.Error())
+		fmt.Errorf("Unable to marshal AuthToken (%s)", err)
 		return nil, err
 	}
 
@@ -93,7 +93,7 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityCredential, error) 
 	// Marshal our AuthSys token into a byte array
 	tokenBytes, err := proto.Marshal(&sys)
 	if err != nil {
-		fmt.Errorf("Unable to marshal AuthSys token (%s)", err.Error())
+		fmt.Errorf("Unable to marshal AuthSys token (%s)", err)
 		return nil, err
 	}
 	token := pb.AuthToken{
@@ -102,7 +102,7 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityCredential, error) 
 
 	verifier, err := HashFromToken(&token)
 	if err != nil {
-		fmt.Errorf("Unable to generate verifier (%s)", err.Error())
+		fmt.Errorf("Unable to generate verifier (%s)", err)
 		return nil, err
 	}
 

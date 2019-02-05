@@ -96,12 +96,12 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 func (c *controlService) showLocalStorage() {
 	fmt.Println("Listing attached storage...")
 	if err := c.nvme.Discover(); err != nil {
-		fmt.Println("Failure retrieving NVMe details: ", err.Error())
+		fmt.Println("Failure retrieving NVMe details: ", err)
 	} else {
 		handlers.PrintStructs("NVMe", c.nvme.controllers)
 	}
 	if err := c.scm.Discover(); err != nil {
-		fmt.Println("Failure retrieving SCM details: ", err.Error())
+		fmt.Println("Failure retrieving SCM details: ", err)
 	} else {
 		handlers.PrintStructs("SCM", c.scm.modules)
 	}

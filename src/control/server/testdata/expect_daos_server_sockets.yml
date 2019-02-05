@@ -40,6 +40,8 @@ bdev_include: []
 bdev_exclude: []
 hyperthreads: false
 nr_hugepages: 4096
+control_log_mask: DEBUG
+control_log_file: /tmp/daos_control.log
 modules: ""
 attach: ""
 systemmap: ""

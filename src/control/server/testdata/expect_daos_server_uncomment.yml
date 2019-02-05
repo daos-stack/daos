@@ -61,6 +61,8 @@ bdev_exclude:
 - 0000:81:00.1
 hyperthreads: true
 nr_hugepages: 4096
+control_log_mask: ERROR
+control_log_file: /tmp/daos_control.log
 modules: ""
 attach: ""
 systemmap: ""

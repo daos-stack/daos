@@ -39,6 +39,9 @@ import (
 // Format represents enum specifying formatting behaviour
 type Format string
 
+// ControlLogLevel is a type that specifies log levels
+type ControlLogLevel string
+
 const (
 	// SAFE state defines cautionary behaviour where formatted devices will not be overwritten.
 	SAFE Format = "safe"
@@ -46,6 +49,9 @@ const (
 	CONTINUE Format = "continue"
 	// FORCE state defines aggressive/potentially resulting data loss formatting behaviour.
 	FORCE Format = "force"
+
+	cLogDebug ControlLogLevel = "DEBUG"
+	cLogError ControlLogLevel = "ERROR"
 
 	// todo: implement Provider discriminated union
 	// todo: implement LogMask discriminated union
@@ -154,25 +160,27 @@ func (e *ext) createEmpty(path string, size int64) (err error) {
 }
 
 type configuration struct {
-	SystemName   string   `yaml:"name"`
-	Servers      []server `yaml:"servers"`
-	Provider     string   `yaml:"provider"`
-	SocketDir    string   `yaml:"socket_dir"`
-	Auto         bool     `yaml:"auto"`
-	Format       Format   `yaml:"format"`
-	AccessPoints []string `yaml:"access_points"`
-	Port         int      `yaml:"port"`
-	CaCert       string   `yaml:"ca_cert"`
-	Cert         string   `yaml:"cert"`
-	Key          string   `yaml:"key"`
-	FaultPath    string   `yaml:"fault_path"`
-	FaultCb      string   `yaml:"fault_cb"`
-	FabricIfaces []string `yaml:"fabric_ifaces"`
-	ScmMountPath string   `yaml:"scm_mount_path"`
-	BdevInclude  []string `yaml:"bdev_include"`
-	BdevExclude  []string `yaml:"bdev_exclude"`
-	Hyperthreads bool     `yaml:"hyperthreads"`
-	NrHugepages  int      `yaml:"nr_hugepages"`
+	SystemName     string          `yaml:"name"`
+	Servers        []server        `yaml:"servers"`
+	Provider       string          `yaml:"provider"`
+	SocketDir      string          `yaml:"socket_dir"`
+	Auto           bool            `yaml:"auto"`
+	Format         Format          `yaml:"format"`
+	AccessPoints   []string        `yaml:"access_points"`
+	Port           int             `yaml:"port"`
+	CaCert         string          `yaml:"ca_cert"`
+	Cert           string          `yaml:"cert"`
+	Key            string          `yaml:"key"`
+	FaultPath      string          `yaml:"fault_path"`
+	FaultCb        string          `yaml:"fault_cb"`
+	FabricIfaces   []string        `yaml:"fabric_ifaces"`
+	ScmMountPath   string          `yaml:"scm_mount_path"`
+	BdevInclude    []string        `yaml:"bdev_include"`
+	BdevExclude    []string        `yaml:"bdev_exclude"`
+	Hyperthreads   bool            `yaml:"hyperthreads"`
+	NrHugepages    int             `yaml:"nr_hugepages"`
+	ControlLogMask ControlLogLevel `yaml:"control_log_mask"`
+	ControlLogFile string          `yaml:"control_log_file"`
 	// development (subject to change) config fields
 	Modules   string
 	Attach    string
@@ -204,6 +212,24 @@ func (f *Format) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// UnmarshalYAML implements yaml.Unmarshaler on ControlLogMask struct
+func (c *ControlLogLevel) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var level string
+	if err := unmarshal(&level); err != nil {
+		return err
+	}
+	logLevel := ControlLogLevel(level)
+	switch logLevel {
+	case cLogDebug, cLogError:
+		*c = logLevel
+	default:
+		return fmt.Errorf(
+			"control_log_mask value %v not supported in config (DEBUG/ERROR)",
+			logLevel)
+	}
+	return nil
+}
+
 // todo: implement UnMarshal for Provider discriminated union
 
 // parse decodes YAML representation of configure struct and checks for Group
@@ -228,20 +254,21 @@ func (c *configuration) checkMount(path string) error {
 // populated with defaults.
 func newDefaultConfiguration(ext External) configuration {
 	return configuration{
-		SystemName:   "daos_server",
-		SocketDir:    "/var/run/daos_server",
-		Auto:         true,
-		Format:       SAFE,
-		AccessPoints: []string{"localhost"},
-		Port:         10000,
-		Cert:         "./.daos/daos_server.crt",
-		Key:          "./.daos/daos_server.key",
-		ScmMountPath: "/mnt/daos",
-		Hyperthreads: false,
-		NrHugepages:  1024,
-		Path:         "etc/daos_server.yml",
-		NvmeShmID:    0, // currently disabled by default
-		ext:          ext,
+		SystemName:     "daos_server",
+		SocketDir:      "/var/run/daos_server",
+		Auto:           true,
+		Format:         SAFE,
+		AccessPoints:   []string{"localhost"},
+		Port:           10000,
+		Cert:           "./.daos/daos_server.crt",
+		Key:            "./.daos/daos_server.key",
+		ScmMountPath:   "/mnt/daos",
+		Hyperthreads:   false,
+		NrHugepages:    1024,
+		Path:           "etc/daos_server.yml",
+		NvmeShmID:      0, // currently disabled by default
+		ControlLogMask: cLogDebug,
+		ext:            ext,
 	}
 }
 

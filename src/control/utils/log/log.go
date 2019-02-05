@@ -67,6 +67,16 @@ func Debugf(format string, v ...interface{}) {
 	logger.Debugdf(3, format, v...)
 }
 
+// SetLevel sets the log mask for the default logger
+func SetLevel(level int) {
+	logger.level = level
+}
+
+// SetOutput sets the output destination for the default logger
+func SetOutput(w io.Writer) {
+	logger.logger.SetOutput(w)
+}
+
 // WrapAndLogErr is a utility function that wraps and logs an error to the
 // default logger.
 func WrapAndLogErr(err error, msg string) error {

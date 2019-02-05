@@ -146,7 +146,7 @@ func TestParseBdev(t *testing.T) {
 			continue
 		}
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		AssertEqual(
 			t, len(files), len(tt.expFiles),

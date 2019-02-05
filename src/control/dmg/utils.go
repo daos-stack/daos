@@ -53,19 +53,19 @@ func sprintConns(addrs mgmtclient.Addresses, eMap mgmtclient.ErrorMap) (
 
 	for _, key := range keys {
 		out = fmt.Sprintf(
-			"%sfailed to connect to %s (%s)\n", out, key, eMap[key].Error())
+			"%sfailed to connect to %s (%s)\n", out, key, eMap[key])
 	}
 	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
 }
 
 func checkAndFormat(i interface{}, err error) string {
 	if err != nil {
-		return fmt.Sprintf("Unable to retrieve %%[1]ss (%s)\n", err.Error())
+		return fmt.Sprintf("Unable to retrieve %%[1]ss (%s)\n", err)
 	}
 	s, err := handlers.StructsToString(i)
 	if err != nil {
 		return fmt.Sprintf(
-			"Unable to YAML encode response for %%[1]ss! (%s)\n", err.Error())
+			"Unable to YAML encode response for %%[1]ss! (%s)\n", err)
 	}
 	out := "Listing %[1]ss on connected storage servers:\n"
 	return fmt.Sprintf("%s%s\n", out, s)

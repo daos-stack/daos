@@ -193,6 +193,22 @@
 #nr_hugepages: 4096
 #
 #
+## Force specific debug mask for daos_server (control plane).
+## By default, just use the default debug mask used by daos_server.
+## Mask specifies minimum level of message significance to pass to logger.
+## Currently supported values are DEBUG and ERROR.
+#
+## default: DEBUG
+#control_log_mask: ERROR
+#
+#
+## Force specific path for daos_server (control plane) logs.
+#
+## default: print to stderr
+#control_log_file: /tmp/daos_control.log
+#
+#
+##
 ## When per-server definitions exist, auto-allocation of resources is not
 ## performed. Without per-server definitions, node resources will
 ## automatically be assigned to servers based on NUMA ratings, there will

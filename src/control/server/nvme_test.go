@@ -34,7 +34,7 @@ import (
 func mockNvmeCS(t *testing.T, ns *nvmeStorage) *controlService {
 	cs := controlService{nvme: ns}
 	if err := cs.nvme.Setup(); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 	return &cs
 
@@ -44,7 +44,7 @@ func TestUpdateNvmeCtrlr(t *testing.T) {
 	s := mockNvmeCS(t, newMockNvmeStorage("1.0.0", "1.0.1", false))
 
 	if err := s.nvme.Discover(); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	cExpect := MockControllerPB("1.0.1")
@@ -57,7 +57,7 @@ func TestUpdateNvmeCtrlr(t *testing.T) {
 
 	newC, err := s.UpdateNvmeCtrlr(nil, params)
 	if err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	AssertEqual(t, s.nvme.controllers[0], cExpect, "unexpected Controller populated")
@@ -68,7 +68,7 @@ func TestUpdateNvmeCtrlrFail(t *testing.T) {
 	s := mockNvmeCS(t, newMockNvmeStorage("1.0.0", "1.0.0", false))
 
 	if err := s.nvme.Discover(); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	c := s.nvme.controllers[0]
