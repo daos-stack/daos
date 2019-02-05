@@ -660,4 +660,55 @@ vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		uint64_t *attr);
+
+/**
+ * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
+ * object. If object does not have an array value, 0 is returned in extent. User
+ * has to specify what is being queried (dkey, akey, and/or recx) along with the
+ * query type (max or min) in flags. If one of those is not provided the
+ * function will fail. If the dkey or akey are not being queried, there value
+ * must be provided by the user.
+ *
+ * If searching in a particular dkey for the max akey and max offset in that
+ * akey, user would supply the dkey value and a flag of: DAOS_GET_MAX |
+ * DAOS_GET_AKEY | DAOS_GET_RECX.
+ *
+ * If more than one entity is being queried, the innermost entry must exist.
+ * For example, if a user requests DAOS_GET_DKEY and DAOS_GET_RECX and no
+ * recx exists for a matched dkey, the search will try the next dkey until
+ * a recx is found or no more dkeys exist in which case -DER_NONEXIST is
+ * returned.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object id
+ * \param[in]	flags	mask with the following options:
+ *			DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
+ *			DAOS_GET_MAX, DAOS_GET_MIN
+ *			User has to indicate whether to query the MAX or MIN, in
+ *			addition to what needs to be queried. Providing
+ *			(MAX | MIN) in any combination will return an error.
+ *			i.e. user can only query MAX or MIN in one call.
+ * \param[in,out]
+ *		dkey	[in]: allocated integer dkey. User can provide the dkey
+ *			if not querying the max or min dkey.
+ *			[out]: max or min dkey (if flag includes dkey query).
+ * \param[in,out]
+ *		akey	[in]: allocated integer akey. User can provide the akey
+ *			if not querying the max or min akey.
+ *			[out]: max or min akey (if flag includes akey query).
+ * \param[out]	recx	max or min offset in dkey/akey, and the size of the
+ *			extent at the offset. If there are no visible array
+ *			records, the size in the recx returned will be 0.
+ *
+ * \return
+ *			0		Success
+ *			-DER_NO_HDL	Invalid handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NONEXIST	No suitable key/recx found
+ */
+int
+vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
+		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
+		  daos_recx_t *recx);
+
 #endif /* __VOS_API_H */
