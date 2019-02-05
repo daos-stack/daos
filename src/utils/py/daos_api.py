@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -35,10 +35,13 @@ from daos_cref import *
 from conversion import *
 
 class DaosPool(object):
-    """ A python object representing a DAOS pool."""
-
+    """
+    A python object representing a DAOS pool.
+    """
     def __init__(self, context):
-        """ setup the python pool object, not the real pool. """
+        """
+        setup the python pool object, not the real pool.
+        """
         self.attached = 0
         self.context = context
         self.uuid = (ctypes.c_ubyte * 1)(0)
@@ -50,14 +53,22 @@ class DaosPool(object):
         self.target_info = None
 
     def get_uuid_str(self):
+        """
+        Pool UUID getter function.
+        """
         return c_uuid_to_str(self.uuid)
 
     def set_uuid_str(self, uuidstr):
+        """
+        UUID setter function.
+        """
         self.uuid = str_to_c_uuid(uuidstr)
 
     def create(self, mode, uid, gid, scm_size, group, target_list=None,
                cb_func=None, svcn=1, nvme_size=0):
-        """ send a pool creation request to the daos server group """
+        """
+        Send a pool creation request to the DAOS server group
+        """
         c_mode = ctypes.c_uint(mode)
         c_uid = ctypes.c_uint(uid)
         c_gid = ctypes.c_uint(gid)
@@ -111,7 +122,9 @@ class DaosPool(object):
             t.start()
 
     def connect(self, flags, cb_func=None):
-        """ connect to this pool. """
+        """
+        Connect to this pool.
+        """
         # comment this out for now, so we can test bad data
         #if not len(self.uuid) == 16:
         #    raise DaosApiError("No existing UUID for pool.")
@@ -142,8 +155,9 @@ class DaosPool(object):
             t.start()
 
     def disconnect(self, cb_func=None):
-        """ undoes the fine work done by the connect function above """
-
+        """
+        Disconnect from this pool.
+        """
         func = self.context.get_function('disconnect-pool')
         if cb_func is None:
             rc = func(self.handle, None)
@@ -162,8 +176,9 @@ class DaosPool(object):
             t.start()
 
     def local2global(self):
-        """ Create a global pool handle that can be shared. """
-
+        """
+        Create a global pool handle that can be shared.
+        """
         c_glob = IOV()
         c_glob.iov_len = 0
         c_glob.iov_buf_len = 0
@@ -183,7 +198,9 @@ class DaosPool(object):
         return c_glob.iov_len, c_glob.iov_buf_len, buf
 
     def global2local(self, context, iov_len, buf_len, buf):
-
+        """
+        Convert a global handle to a local handle.
+        """
         func = self.context.get_function("convert-pglobal")
 
         c_glob = IOV()
@@ -201,8 +218,9 @@ class DaosPool(object):
         return local_handle
 
     def exclude(self, tgt_rank_list, cb_func=None):
-        """Exclude a set of storage targets from a pool."""
-
+        """
+        Exclude a set of storage targets from a pool.
+        """
         if tgt_rank_list is None:
             c_tgts = None
         else:
@@ -234,13 +252,15 @@ class DaosPool(object):
             t.start()
 
     def extend(self):
-        """Extend the pool to more targets."""
-
+        """
+        Extend the pool to more targets.
+        """
         raise NotImplementedError("Extend not implemented in C API yet.")
 
     def evict(self, cb_func=None):
-        """Evict all connections to a pool."""
-
+        """
+        Evict all connections to a pool.
+        """
         func = self.context.get_function('evict-client')
 
         if cb_func is None:
@@ -260,8 +280,9 @@ class DaosPool(object):
             t.start()
 
     def tgt_add(self, tgt_rank_list, cb_func=None):
-        """add a set of storage targets to a pool."""
-
+        """
+        Add a set of storage targets to a pool.
+        """
         rl_ranks = DaosPool.__pylist_to_array(tgt_rank_list)
         c_tgts = RankList(rl_ranks, len(tgt_rank_list))
         func = self.context.get_function("add-target")
@@ -285,8 +306,9 @@ class DaosPool(object):
             t.start()
 
     def exclude_out(self, tgt_rank_list, cb_func=None):
-        """Exclude completely a set of storage targets from a pool."""
-
+        """
+        Exclude completely a set of storage targets from a pool.
+        """
         rl_ranks = DaosPool.__pylist_to_array(tgt_rank_list)
         c_tgts = RankList(rl_ranks, len(tgt_rank_list))
         func = self.context.get_function('kill-target')
@@ -310,8 +332,9 @@ class DaosPool(object):
             t.start()
 
     def pool_svc_stop(self, cb_func=None):
-        """Stop the current pool service leader."""
-
+        """
+        Stop the current pool service leader.
+        """
         func = self.context.get_function('stop-service')
 
         if cb_func is None:
@@ -330,8 +353,9 @@ class DaosPool(object):
             t.start()
 
     def pool_query(self, cb_func=None):
-        """Query pool information."""
-
+        """
+        Query pool information.
+        """
         self.pool_info = PoolInfo()
         func = self.context.get_function('query-pool')
 
@@ -354,11 +378,15 @@ class DaosPool(object):
         return None
 
     def target_query(self, tgt):
-        """Query information of storage targets within a DAOS pool."""
+        """
+        Query information of storage targets within a DAOS pool.
+        """
         raise NotImplementedError("Target_query not yet implemented in C API.")
 
     def destroy(self, force, cb_func=None):
-
+        """
+        Destroy this pool.
+        """
         if not len(self.uuid) == 16 or self.attached == 0:
             raise DaosApiError("No existing UUID for pool.")
 
@@ -385,7 +413,7 @@ class DaosPool(object):
 
     def set_svc(self, rank):
          """
-         note support for a single rank only
+         Note support for a single rank only.
          """
          svc_rank = ctypes.c_uint(rank)
          rl_ranks = ctypes.POINTER(ctypes.c_uint)(svc_rank)
@@ -393,13 +421,19 @@ class DaosPool(object):
 
     @staticmethod
     def __pylist_to_array(pylist):
-
+        """
+        Internal function to convert a Python list-type to a C array.
+        """
         return (ctypes.c_uint32 * len(pylist))(*pylist)
 
 class DaosObj(object):
-    """ A class representing an object stored in a DAOS container.  """
-
+    """
+    A class representing an object stored in a DAOS container.
+    """
     def __init__(self, context, container, c_oid=None):
+        """
+        Create a DAOS object.
+        """
         self.context = context
         self.container = container
         self.c_oid = c_oid
@@ -409,7 +443,9 @@ class DaosObj(object):
         self.tgt_rank_list = []
 
     def __del__(self):
-        """ clean up this object """
+        """
+        Clean up this DAOS object.
+        """
         if self.oh is not None:
             func = self.context.get_function('close-obj')
             rc = func(self.oh, None)
@@ -420,7 +456,9 @@ class DaosObj(object):
             self.oh = None
 
     def create(self, rank=None, objcls=13):
-        """ generate a random oid """
+        """
+        Generate a random oid.
+        """
         func = self.context.get_function('generate-oid')
 
         func.restype = DaosObjId
@@ -430,8 +468,9 @@ class DaosObj(object):
             self.c_oid.hi |= rank << 24
 
     def open(self):
-        """ open the object so we can interact with it """
-
+        """
+        Open this DAOS object.
+        """
         c_mode = ctypes.c_uint(2)
         self.oh = ctypes.c_uint64(0)
 
@@ -443,7 +482,9 @@ class DaosObj(object):
                              .format(rc))
 
     def close(self):
-        """ close this object """
+        """
+        Close this DAOS object.
+        """
         if self.oh is not None:
             func = self.context.get_function('close-obj')
             rc = func(self.oh, None)
@@ -453,11 +494,10 @@ class DaosObj(object):
             self.oh = None
 
     def refresh_attr(self, tx):
-        """ Get object attributes and save internally
-
-            NOTE: THIS FUNCTION ISN'T IMPLEMENTED ON THE DAOS SIDE
         """
-
+        Get object attributes and save internally.
+        NOTE: This function is not implemented in the DAOS C API.
+        """
         if self.c_oid is None:
             raise DaosApiError("refresh_attr called but object not initialized")
         if self.oh is None:
@@ -472,9 +512,9 @@ class DaosObj(object):
         rc = func(self.oh, c_tx, None, self.c_tgts, None)
 
     def get_layout(self):
-        """ Get object target layout info
-
-            NOTE: THIS FUNCTION ISN'T PART OF THE PUBLIC API
+        """
+        Get object target layout info.
+        NOTE: This function is not part of the public DAOS API.
         """
         if self.c_oid is None:
             raise DaosApiError("get_layout object is not initialized")
@@ -497,13 +537,12 @@ class DaosObj(object):
 
 
     def punch(self, tx, cb_func=None):
-        """ Delete this object but only from the specified transaction
-
-        Function arguments:
-        tx    --the tx from which keys will be deleted.
-        cb_func  --an optional callback function
         """
+        Delete this object but only from the specified transaction.
 
+        :param tx: The tx from which keys will be deleted.
+        :param cb_func:  An optional callback function.
+        """
         if self.oh is None:
             self.open()
 
@@ -530,13 +569,13 @@ class DaosObj(object):
 
 
     def punch_dkeys(self, tx, dkeys, cb_func=None):
-        """ Deletes dkeys and associated data from an object for a specific
+        """
+        Deletes dkeys and associated data from an object for a specific
         transaction.
 
-        Function arguments:
-        tx    --the transaction from which keys will be deleted.
-        dkeys    --the keys to be deleted, None will be passed as NULL
-        cb_func  --an optional callback function
+        :param tx: The transaction from which keys will be deleted.
+        :param dkeys: The keys to be deleted. None will be passed as NULL.
+        :param cb_func: An optional callback function.
         """
         if self.oh is None:
             self.open()
@@ -579,15 +618,15 @@ class DaosObj(object):
             t.start()
 
     def punch_akeys(self, tx, dkey, akeys, cb_func=None):
-        """ Deletes akeys and associated data from a dkey/object for a specific
+        """
+        Deletes akeys and associated data from a dkey/object for a specific
         transaction.
 
-        Function arguments:
-        tx      --the transaction from which keys will be deleted.
-        dkey    --the parent dkey from which the akeys will be deleted,
-                  Expecting a string
-        akeys   --a list of akeys (strings) which are to be deleted
-        cb_func --an optional callback function
+        :param tx: The transaction from which keys will be deleted.
+        :param dkey: The parent dkey from which the akeys will be deleted. Must
+                     be a string.
+        :param akeys: A list of akeys (strings) which are to be deleted.
+        :param cb_func: An optional callback function.
         """
         if self.oh is None:
             self.open()
@@ -634,17 +673,18 @@ class DaosObj(object):
 class IORequest(object):
     """
     Python object that centralizes details about an I/O
-    type is either 1 (single) or 2 (array)
     """
     def __init__(self, context, container, obj, rank=None, iotype=1,
                  objtype=13):
         """
-        container --which container the object is (or will be) in
-        obj --None to create a new object or the OID of an existing obj
-        rank --utilize with certain object types to force obj to a specific
-               server
-        iotype --1 for single, 2 for array
-        objtype --specifies the attributes for the object
+        Create an IO request.
+
+        :param container: Container the object is (or will be) in.
+        :param obj: None to create a new object or the OID of an existing obj.
+        :param rank: Utilize with certain object types to force obj to a
+                     specific server.
+        :param iotype: 1 for single, 2 for array.
+        :param objtype: Specifies the attributes for the object.
         """
         self.context = context
         self.container = container
@@ -675,7 +715,9 @@ class IORequest(object):
         self.iod.iod_csums = ctypes.pointer(cs)
 
     def __del__(self):
-        """ cleanup this request """
+        """
+        Cleanup this request.
+        """
         pass
 
     def insert_array(self, dkey, akey, c_data, tx):
@@ -685,7 +727,6 @@ class IORequest(object):
         scatter gather list.  The single SGL can have any number of
         entries as dictated by the c_data parameter.
         """
-
         sgl_iov_list = (IOV * len(c_data))()
         idx = 0
         for item in c_data:
@@ -736,13 +777,14 @@ class IORequest(object):
 
     def fetch_array(self, dkey, akey, rec_count, rec_size, tx=0):
         """
-        dkey --1st level key for the array value
-        akey --2nd level key for the array value
-        rec_count --how many array indices (records) to retrieve
-        rec_size --size in bytes of a single record
-        tx --which transaction to read the value from
-        """
+        Retrieve an array and return to the caller.
 
+        :param dkey: 1st level key for the array value.
+        :param akey: 2nd level key for the array value.
+        :param rec_count: How many array indices (records) to retrieve.
+        :param rec_size: Size in bytes of a single record.
+        :param tx: The transaction from which the value is to be read.
+        """
         c_tx = ctypes.c_uint64(tx)
 
         # setup the descriptor, we are only handling a single descriptor that
@@ -796,11 +838,13 @@ class IORequest(object):
 
     def single_insert(self, dkey, akey, value, size, tx):
         """
-        dkey  --1st level key for the array value
-        akey  --2nd level key for the array value
-        value --string value to insert
-        size  --size of the string
-        tx    --which transaction to write to
+        Insert a 'single' type object.
+
+        :param dkey: 1st level key for the array value.
+        :param akey:  2nd level key for the array value.
+        :param value: String value to insert.
+        :param size: Size of the 'value' string.
+        :param tx: Transaction to which to write.
         """
         c_tx = ctypes.c_uint64(tx)
 
@@ -853,14 +897,16 @@ class IORequest(object):
 
     def single_fetch(self, dkey, akey, size, tx=0, test_hints=[]):
         """
-        dkey --1st level key for the single value
-        akey --2nd level key for the single value
-        size --size of the string
-        tx --which transaction to read from
-        test_hints --optional set of values that allow for error injection,
-            supported values 'sglnull', 'iodnull'.
+        Fetch a 'single' type object and return it to the caller.
 
-        a string containing the value is returned
+        :param dkey: 1st level key for the single value.
+        :param akey: 2nd level key for the single value.
+        :param size: Size of the string.
+        :param tx: From which transaction to read.
+        :param test_hints: Optional set of values that allow for error
+                           injection.
+                           Supported values 'sglnull', 'iodnull'.
+        :return: A string containing the value is returned.
         """
         c_tx = ctypes.c_uint64(tx)
 
@@ -884,7 +930,6 @@ class IORequest(object):
         self.epoch_range.epr_hi = ~0
 
         # setup the descriptor
-
         if any("iodnull" in s for s in test_hints):
             iod_ptr = None
         else:
@@ -922,11 +967,10 @@ class IORequest(object):
         with an akey.  This is a bit of a mess but need to refactor all the
         I/O functions as a group at some point.
 
-        dkey  --1st level key for the values
-        data  --a list of tuples (akey, value)
-        tx --which transaction to write to
+        :param dkey: 1st level key for the values.
+        :param data: A list of tuples (akey, value).
+        :param tx: To which transaction to write.
         """
-
         c_tx = ctypes.c_uint64(tx)
 
         # put the data into the scatter gather list
@@ -979,12 +1023,11 @@ class IORequest(object):
         Retrieve multiple akeys & associated data.  This is kind of a mess but
         will refactor all the I/O functions at some point.
 
-        dkey --1st level key for the array value
-        keys --a list of tuples where each tuple is an (akey, size), where size
-             is the size of the data for that key
-        tx --which tx to read from
-
-        returns a dictionary containing the akey:value pairs
+        :param dkey: 1st level key for the array value.
+        :param keys: A list of tuples where each tuple is an (akey, size),
+                     where size is the size of the data for that key.
+        :param tx: From which transaction to read.
+        :return: A dictionary containing the akey:value pairs.
         """
         c_tx = ctypes.c_uint64(tx)
 
@@ -1041,25 +1084,31 @@ class IORequest(object):
         return result
 
 class DaosContainer(object):
-    """ A python object representing a DAOS container."""
-
+    """
+    A python object representing a DAOS container.
+    """
     def __init__(self, context, cuuid=None, poh=None, coh=None):
-        """ setup the python container object, not the real container. """
+        """
+        Setup the Python container object, not the real container.
+        """
         self.context = context
 
         # ignoring caller parameters for now
-
         self.uuid = (ctypes.c_ubyte * 1)(0)
         self.coh = ctypes.c_uint64(0)
         self.poh = ctypes.c_uint64(0)
         self.info = ContInfo()
 
     def get_uuid_str(self):
+        """
+        Container UUID getter function.
+        """
         return c_uuid_to_str(self.uuid)
 
     def create(self, poh, con_uuid=None, cb_func=None):
-        """ send a container creation request to the daos server group """
-
+        """
+        Send a container creation request to the DAOS server group.
+        """
         # create a random uuid if none is provided
         self.uuid = (ctypes.c_ubyte * 16)()
         if con_uuid is None:
@@ -1093,8 +1142,9 @@ class DaosContainer(object):
             t.start()
 
     def destroy(self, force=1, poh=None, con_uuid=None, cb_func=None):
-        """ send a container destroy request to the daos server group """
-
+        """
+        Send a container destroy request to the DAOS server group.
+        """
         # caller can override pool handle and uuid
         if poh is not None:
             self.poh = poh
@@ -1124,8 +1174,9 @@ class DaosContainer(object):
             t.start()
 
     def open(self, poh=None, cuuid=None, flags=None, cb_func=None):
-        """ send a container open request to the daos server group """
-
+        """
+        Send a container open request to the DAOS server group.
+        """
         # parameters can be used to associate this python object with a
         # DAOS container or they may already have been set
         if poh is not None:
@@ -1161,8 +1212,9 @@ class DaosContainer(object):
             t.start()
 
     def close(self, coh=None, cb_func=None):
-        """ send a container close request to the daos server group """
-
+        """
+        Send a container close request to the DAOS server group.
+        """
         # parameters can be used to associate this python object with a
         # DAOS container or they may already have been set
         if coh is not None:
@@ -1189,8 +1241,9 @@ class DaosContainer(object):
             t.start()
 
     def query(self, coh=None, cb_func=None):
-        """Query container information."""
-
+        """
+        Query container information.
+        """
         # allow caller to override the handle
         if coh is not None:
             self.coh = coh
@@ -1216,8 +1269,9 @@ class DaosContainer(object):
         return None
 
     def get_new_tx(self):
-        """ start a transaction on this container """
-
+        """
+        Start a transaction on this container.
+        """
         # container should be  in the open state
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
@@ -1231,11 +1285,12 @@ class DaosContainer(object):
             raise DaosApiError("tx open returned non-zero. RC: {0}"
                              .format(rc))
 
-        return c_tx.value;
+        return c_tx.value
 
     def commit_tx(self, tx):
-        """ close out a transaction that is done being modified """
-
+        """
+        Close out a transaction that is done being modified.
+        """
         # container should be  in the open state
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
@@ -1249,16 +1304,15 @@ class DaosContainer(object):
                              .format(rc))
 
     def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
-			     obj_cls=13):
+                             obj_cls=13):
         """
-        Write an array of data to an object.  If an object is not supplied
+        Write an array of data to an object.  If an object is not supplied,
         a new one is created.  The update occurs in its own epoch and the epoch
         is committed once the update is complete.
 
         As a simplification I'm expecting the datalist values, dkey and akey
         to be strings.  The datalist values should all be the same size.
         """
-
         # container should be  in the open state
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
@@ -1283,12 +1337,11 @@ class DaosContainer(object):
     def write_an_obj(self, thedata, size, dkey, akey, obj=None, rank=None,
                      obj_cls=13):
         """
-        Write a single value to an object, if an object isn't supplied a new
+        Write a single value to an object, if an object isn't supplied, a new
         one is created.  The update occurs in its own epoch and the epoch is
         committed once the update is complete. The default object class
         specified here, 13, means replication.
         """
-
         # container should be  in the open state
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
@@ -1323,13 +1376,12 @@ class DaosContainer(object):
         occurs in its own epoch and the epoch is committed once the update is
         complete.
 
-        dkey --the first level key under which all the data is stored.
-        data --a list of tuples where each tuple is (akey, data)
-        obj  --the object to insert the data into, if None then a new object
-               is created.
-        rank --the rank to send the update request to
+        :param dkey: The first level key under which all the data is stored.
+        :param data: A list of tuples where each tuple is (akey, data).
+        :param obj: The object to insert the data into, if None then a new
+                    object is created.
+        :param rank: The rank to which to send the update request.
         """
-
         # container should be  in the open state
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
@@ -1358,11 +1410,9 @@ class DaosContainer(object):
         """
         Reads an array value from the specified object.
 
-        rec_count --number of records (array indicies) to read
-        rec_size --each value in the array must be this size
-
+        :param rec_count: Number of records (array indicies) to read.
+        :param rec_size: Each value in the array must be this size.
         """
-
         # container should be  in the open state
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
@@ -1378,18 +1428,16 @@ class DaosContainer(object):
         return buf
 
     def read_multi_akeys(self, dkey, data, obj, tx):
-        """ read multiple values as given by their akeys
-
-        dkey  --which dkey to read from
-        obj   --which object to read from
-        tx    --which tx to read from
-        data  --a list of tuples (akey, size) where akey is
-                the 2nd level key, size is the maximum data
-                size for the paired akey
-
-        returns a dictionary of akey:data pairs
         """
+        Read multiple values as given by their akeys.
 
+        :param dkey: From which dkey to read.
+        :param obj: From which object to read.
+        :param tx: From which tx to read.
+        :param data: A list of tuples (akey, size) where akey is the 2nd level
+                     key, size is the maximum data size for the paired akey.
+        :return: A dictionary of akey:data pairs.
+        """
         # container should be  in the open state
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
@@ -1407,9 +1455,10 @@ class DaosContainer(object):
         return buf
 
     def read_an_obj(self, size, dkey, akey, obj, tx, test_hints=[]):
-        """ read a single value from an object in this container """
-
-        # container should be  in the open state
+        """
+        Read a single value from an object in this container.
+        """
+        # container should be in the open state
         if self.coh == 0:
             raise DaosApiError("Container needs to be open.")
 
@@ -1425,8 +1474,9 @@ class DaosContainer(object):
         return buf
 
     def local2global(self):
-        """ Create a global container handle that can be shared. """
-
+        """
+        Create a global container handle that can be shared.
+        """
         c_glob = IOV()
         c_glob.iov_len = 0
         c_glob.iov_buf_len = 0
@@ -1446,8 +1496,9 @@ class DaosContainer(object):
         return c_glob.iov_len, c_glob.iov_buf_len, buf
 
     def global2local(self, context, iov_len, buf_len, buf):
-        """ Convert a global container handle to a local handle. """
-
+        """
+        Convert a global container handle to a local handle.
+        """
         func = self.context.get_function("convert-cglobal")
 
         c_glob = IOV()
@@ -1468,21 +1519,19 @@ class DaosContainer(object):
     def list_attr(self, coh=None, cb_func=None):
         """
         Retrieve a list of user-defined container attribute values.
-        Args:
-            coh [Optional]:     Container Handler.
-            cb_func[Optional]:  To run API in Asynchronous mode.
-        return:
-            total_size[int]: Total aggregate size of attributes names.
-            buffer[String]: Complete aggregated attributes names.
+
+        :param coh: Container handle.
+        :param cb_func: Optional callback function for asynchronous mode.
+        :returns:
+            - total_size - Total aggregate size of attributes names.
+            - buffer - Complete aggregated attributes names.
         """
         if coh is not None:
             self.coh = coh
         func = self.context.get_function('list-attr')
 
-        '''
-        This is for getting the Aggregate size of all attributes names first
-        if it's not passed as a dictionary.
-        '''
+        # This is for getting the Aggregate size of all attributes names first
+        # if it's not passed as a dictionary.
         sbuf = ctypes.create_string_buffer(100).raw
         t_size = ctypes.pointer(ctypes.c_size_t(100))
         rc = func(self.coh, sbuf, t_size)
@@ -1494,7 +1543,7 @@ class DaosContainer(object):
         buffer = ctypes.create_string_buffer(buf  + 1).raw
         total_size = ctypes.pointer(ctypes.c_size_t(buf + 1))
 
-        #This will retrieve the list of attributes names.
+        # This will retrieve the list of attributes names.
         if cb_func is None:
             rc = func(self.coh, buffer, total_size, None)
             if rc != 0:
@@ -1515,12 +1564,10 @@ class DaosContainer(object):
     def set_attr(self, data, coh=None, cb_func=None):
         """
         Set a list of user-defined container attributes.
-        Args:
-            data[Required]:     Dictionary of Attribute name and value.
-            coh [Optional]:     Container Handler
-            cb_func[Optional]:  To run API in Asynchronous mode.
-        return:
-            None
+
+        :param data: Dictionary of attribute name and value.
+        :param coh: Container handle.
+        :param cb_func: Optional callback function to run in asynchronous mode.
         """
         if coh is not None:
             self.coh = coh
@@ -1565,12 +1612,12 @@ class DaosContainer(object):
         """
         Retrieve a list of user-defined container attribute values.  Note the
         presumption that no value is larger than 100 chars.
-        Args:
-            attr_names[Required]:     Attribute name list
-            coh [Optional]:     Container Handler
-            cb_func[Optional]:  To run API in Asynchronous mode.
-        return:
-            dictionary containing the requested attributes as key:value pairs.
+
+        :param attr_names: Attribute name list.
+        :param coh: Container handle.
+        :param cb_func: Optional callback function to run in asynchronous mode.
+        :return: Dictionary containing the requested attributes as key:value
+                 pairs.
         """
         if not attr_names:
             raise DaosApiError("Attribute names should not be empty")
@@ -1618,16 +1665,21 @@ class DaosContainer(object):
         return results
 
 class DaosServer(object):
-    """Represents a DAOS Server"""
-
+    """
+    Represents a DAOS server.
+    """
     def __init__(self, context, group, rank):
-        """ setup the python pool object, not the real pool. """
+        """
+        Setup the Python server object.
+        """
         self.context = context
         self.group_name = group
         self.rank = rank
 
     def kill(self, force):
-        """ send a pool creation request to the daos server group """
+        """
+        Send a pool creation request to the DAOS server group.
+        """
         c_group = ctypes.create_string_buffer(self.group_name)
         c_force = ctypes.c_int(force)
         c_rank = ctypes.c_uint(self.rank)
@@ -1639,11 +1691,13 @@ class DaosServer(object):
                              .format(rc))
 
 class DaosContext(object):
-    """Provides environment and other info for a DAOS client."""
-
+    """
+    Provides environment and other info for a DAOS client.
+    """
     def __init__(self, path):
-        """ setup the DAOS API and MPI """
-
+        """
+        Setup the DAOS API and MPI.
+        """
         self.libdaos = ctypes.CDLL(path+"libdaos.so.0.0.2",
                                    mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(path+"libdaos_common.so",
@@ -1701,38 +1755,71 @@ class DaosContext(object):
             'update-obj'     : self.libdaos.daos_obj_update}
 
     def __del__(self):
-        """ cleanup the DAOS API """
+        """
+        Cleanup the DAOS API.
+        """
         self.libdaos.daos_fini()
 
     def get_function(self, function):
-        """ call a function through the API """
+        """
+        Call a function through the C API.
+        """
         return self.ftable[function]
 
 class DaosLog:
-
+    """
+    A class to expose DAOS client logging facilities to the Python API.
+    """
     def __init__(self, context):
-        """ setup the log object """
+        """
+        Setup the log object.
+
+        :param context: Provide the same context used to initialize the DAOS
+                        Python API.
+        """
         self.context = context
 
     def debug(self, msg):
-        """ entry point for debug msgs """
+        """
+        Log a given message as DEBUG log level in DAOS client log.
+
+        :param msg: The string to write to DAOS log.
+        """
         self.daos_log(msg, Logfac.DEBUG)
 
     def info(self, msg):
-        """ entry point for info msgs """
+        """
+        Log a given message as INFO log level in DAOS client log.
+
+        :param msg: The string to write to DAOS log.
+        """
         self.daos_log(msg, Logfac.INFO)
 
     def warning(self, msg):
-        """ entry point for warning msgs """
+        """
+        Log a given message as WARNING log level in DAOS client log.
+
+        :param msg: The string to write to DAOS log.
+        """
         self.daos_log(msg, Logfac.WARNING)
 
     def error(self, msg):
-        """ entry point for error msgs """
+        """
+        Log a given message as ERROR log level in DAOS client log.
+
+        :param msg: The string to write to DAOS log.
+        """
         self.daos_log(msg, Logfac.ERROR)
 
     def daos_log(self, msg, level):
-        """ write specified message to client daos.log """
+        """
+        Write specified message to client daos.log. Only intended for internal
+        Python API usage.
 
+        :param msg: The string to write to DAOS log.
+        :param level: Log level for the given string. Levels are defined
+                      in daos_cref.py as a Python enum.
+        """
         func = self.context.get_function("d_log")
 
         caller = inspect.getframeinfo(inspect.stack()[2][0])
@@ -1909,4 +1996,3 @@ if __name__ == '__main__':
 
     print("running")
     raise DaosApiError("hit error, all good")
-
