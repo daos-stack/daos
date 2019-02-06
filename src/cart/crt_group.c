@@ -788,6 +788,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		rank = grp_priv_get_primary_rank(grp_priv, rank);
 	}
 
+
 	D_RWLOCK_RDLOCK(&default_grp_priv->gp_rwlock);
 	rlink = d_hash_rec_find(&default_grp_priv->gp_lookup_cache[ctx_idx],
 				(void *)&rank, sizeof(rank));
@@ -821,9 +822,11 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	}
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
 
-	/* target rank not in cache */
-	rc = crt_grp_lc_uri_insert(default_grp_priv,
-				ctx_idx, rank, tag, NULL);
+	if (uri)
+		*uri = NULL;
+	if (hg_addr)
+		*hg_addr = NULL;
+
 	return rc;
 
 out:
