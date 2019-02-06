@@ -44,38 +44,39 @@ message AclResponse {
 
 // Bits representing access permissions
 enum AclPermissions {
-	NONE = 0;
+	NO_ACCESS = 0;
 	READ = 1;
 	WRITE = 2;
 }
 
-// Types of principals that can have access
-enum AclPrincipalType {
-	USER = 0;
-	GROUP = 1;
-	EVERYONE = 2;
+// A given user/group may have multiple different types of entries
+enum AclEntryType {
+	ALLOW = 0;
+	AUDIT = 1;
+	ALARM = 2;
 }
 
-// Represents a user or group who could access an entity.
-// If it is "everyone" we can ignore the identifying information.
-message AclPrincipal {
-	AclPrincipalType type = 1;
-	oneof identifier {
-		uint32 id = 2;	// uid or gid
-		string name = 3;
-	}
+// Bits representing flags on a given ACL entry
+enum AclFlags {
+	NO_FLAGS = 0;
+	GROUP = 1;		// This entry is for a group not a user
+	ACCESS_SUCCESS = 2;	// audit/alarm on successful access
+	ACCESS_FAILURE = 4;	// audit/alarm on failed access
+	POOL_INHERIT = 8;	// entry should be inherited by pool's containers
 }
 
-// Identifier for an Access Control Entry
+// Identifier for a specific Access Control Entry
 message AclEntry {
-	string uuid = 1;		// UUID of the entity (such as a pool)
-	AclPrincipal principal = 2;	// User/group who accesses the entity
+	AclEntryType type = 1;
+	uint32 flags = 2;	// bitmask of AclFlags
+	string entity = 3;	// UUID of the entity (such as a pool)
+	string identity = 4;	// User/group who accesses the entity
 }
 
 // Permissions for the given entry
 message AclEntryPermissions {
 	AclEntry entry = 1;
-	uint32 permission_bits = 2;	// Bitmask of AclPermissions
+	uint64 permission_bits = 2;	// Bitmask of AclPermissions
 }
 
 // gRPC API for ACL service
