@@ -52,51 +52,6 @@ void   proto__acl_response__free_unpacked
   assert(message->base.descriptor == &proto__acl_response__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   proto__acl_principal__init
-                     (Proto__AclPrincipal         *message)
-{
-  static const Proto__AclPrincipal init_value = PROTO__ACL_PRINCIPAL__INIT;
-  *message = init_value;
-}
-size_t proto__acl_principal__get_packed_size
-                     (const Proto__AclPrincipal *message)
-{
-  assert(message->base.descriptor == &proto__acl_principal__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t proto__acl_principal__pack
-                     (const Proto__AclPrincipal *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &proto__acl_principal__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t proto__acl_principal__pack_to_buffer
-                     (const Proto__AclPrincipal *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &proto__acl_principal__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Proto__AclPrincipal *
-       proto__acl_principal__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Proto__AclPrincipal *)
-     protobuf_c_message_unpack (&proto__acl_principal__descriptor,
-                                allocator, len, data);
-}
-void   proto__acl_principal__free_unpacked
-                     (Proto__AclPrincipal *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &proto__acl_principal__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
 void   proto__acl_entry__init
                      (Proto__AclEntry         *message)
 {
@@ -238,7 +193,7 @@ const ProtobufCMessageDescriptor proto__acl_response__descriptor =
   (ProtobufCMessageInit) proto__acl_response__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor proto__acl_principal__field_descriptors[3] =
+static const ProtobufCFieldDescriptor proto__acl_entry__field_descriptors[4] =
 {
   {
     "type",
@@ -246,97 +201,59 @@ static const ProtobufCFieldDescriptor proto__acl_principal__field_descriptors[3]
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
-    offsetof(Proto__AclPrincipal, type),
-    &proto__acl_principal_type__descriptor,
+    offsetof(Proto__AclEntry, type),
+    &proto__acl_entry_type__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "id",
+    "flags",
     2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
-    offsetof(Proto__AclPrincipal, identifier_case),
-    offsetof(Proto__AclPrincipal, id),
+    0,   /* quantifier_offset */
+    offsetof(Proto__AclEntry, flags),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "name",
+    "entity",
     3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
-    offsetof(Proto__AclPrincipal, identifier_case),
-    offsetof(Proto__AclPrincipal, name),
-    NULL,
-    &protobuf_c_empty_string,
-    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned proto__acl_principal__field_indices_by_name[] = {
-  1,   /* field[1] = id */
-  2,   /* field[2] = name */
-  0,   /* field[0] = type */
-};
-static const ProtobufCIntRange proto__acl_principal__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 3 }
-};
-const ProtobufCMessageDescriptor proto__acl_principal__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "proto.AclPrincipal",
-  "AclPrincipal",
-  "Proto__AclPrincipal",
-  "proto",
-  sizeof(Proto__AclPrincipal),
-  3,
-  proto__acl_principal__field_descriptors,
-  proto__acl_principal__field_indices_by_name,
-  1,  proto__acl_principal__number_ranges,
-  (ProtobufCMessageInit) proto__acl_principal__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCFieldDescriptor proto__acl_entry__field_descriptors[2] =
-{
-  {
-    "uuid",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Proto__AclEntry, uuid),
+    offsetof(Proto__AclEntry, entity),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "principal",
-    2,
+    "identity",
+    4,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
+    PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Proto__AclEntry, principal),
-    &proto__acl_principal__descriptor,
+    offsetof(Proto__AclEntry, identity),
     NULL,
+    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned proto__acl_entry__field_indices_by_name[] = {
-  1,   /* field[1] = principal */
-  0,   /* field[0] = uuid */
+  2,   /* field[2] = entity */
+  1,   /* field[1] = flags */
+  3,   /* field[3] = identity */
+  0,   /* field[0] = type */
 };
 static const ProtobufCIntRange proto__acl_entry__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor proto__acl_entry__descriptor =
 {
@@ -346,7 +263,7 @@ const ProtobufCMessageDescriptor proto__acl_entry__descriptor =
   "Proto__AclEntry",
   "proto",
   sizeof(Proto__AclEntry),
-  2,
+  4,
   proto__acl_entry__field_descriptors,
   proto__acl_entry__field_indices_by_name,
   1,  proto__acl_entry__number_ranges,
@@ -371,7 +288,7 @@ static const ProtobufCFieldDescriptor proto__acl_entry_permissions__field_descri
     "permission_bits",
     2,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
     offsetof(Proto__AclEntryPermissions, permission_bits),
     NULL,
@@ -442,7 +359,7 @@ const ProtobufCEnumDescriptor proto__acl_request_status__descriptor =
 };
 static const ProtobufCEnumValue proto__acl_permissions__enum_values_by_number[3] =
 {
-  { "NONE", "PROTO__ACL_PERMISSIONS__NONE", 0 },
+  { "NO_ACCESS", "PROTO__ACL_PERMISSIONS__NO_ACCESS", 0 },
   { "READ", "PROTO__ACL_PERMISSIONS__READ", 1 },
   { "WRITE", "PROTO__ACL_PERMISSIONS__WRITE", 2 },
 };
@@ -451,7 +368,7 @@ static const ProtobufCIntRange proto__acl_permissions__value_ranges[] = {
 };
 static const ProtobufCEnumValueIndex proto__acl_permissions__enum_values_by_name[3] =
 {
-  { "NONE", 0 },
+  { "NO_ACCESS", 0 },
   { "READ", 1 },
   { "WRITE", 2 },
 };
@@ -470,34 +387,68 @@ const ProtobufCEnumDescriptor proto__acl_permissions__descriptor =
   proto__acl_permissions__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCEnumValue proto__acl_principal_type__enum_values_by_number[3] =
+static const ProtobufCEnumValue proto__acl_entry_type__enum_values_by_number[3] =
 {
-  { "USER", "PROTO__ACL_PRINCIPAL_TYPE__USER", 0 },
-  { "GROUP", "PROTO__ACL_PRINCIPAL_TYPE__GROUP", 1 },
-  { "EVERYONE", "PROTO__ACL_PRINCIPAL_TYPE__EVERYONE", 2 },
+  { "ALLOW", "PROTO__ACL_ENTRY_TYPE__ALLOW", 0 },
+  { "AUDIT", "PROTO__ACL_ENTRY_TYPE__AUDIT", 1 },
+  { "ALARM", "PROTO__ACL_ENTRY_TYPE__ALARM", 2 },
 };
-static const ProtobufCIntRange proto__acl_principal_type__value_ranges[] = {
+static const ProtobufCIntRange proto__acl_entry_type__value_ranges[] = {
 {0, 0},{0, 3}
 };
-static const ProtobufCEnumValueIndex proto__acl_principal_type__enum_values_by_name[3] =
+static const ProtobufCEnumValueIndex proto__acl_entry_type__enum_values_by_name[3] =
 {
-  { "EVERYONE", 2 },
-  { "GROUP", 1 },
-  { "USER", 0 },
+  { "ALARM", 2 },
+  { "ALLOW", 0 },
+  { "AUDIT", 1 },
 };
-const ProtobufCEnumDescriptor proto__acl_principal_type__descriptor =
+const ProtobufCEnumDescriptor proto__acl_entry_type__descriptor =
 {
   PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-  "proto.AclPrincipalType",
-  "AclPrincipalType",
-  "Proto__AclPrincipalType",
+  "proto.AclEntryType",
+  "AclEntryType",
+  "Proto__AclEntryType",
   "proto",
   3,
-  proto__acl_principal_type__enum_values_by_number,
+  proto__acl_entry_type__enum_values_by_number,
   3,
-  proto__acl_principal_type__enum_values_by_name,
+  proto__acl_entry_type__enum_values_by_name,
   1,
-  proto__acl_principal_type__value_ranges,
+  proto__acl_entry_type__value_ranges,
+  NULL,NULL,NULL,NULL   /* reserved[1234] */
+};
+static const ProtobufCEnumValue proto__acl_flags__enum_values_by_number[5] =
+{
+  { "NO_FLAGS", "PROTO__ACL_FLAGS__NO_FLAGS", 0 },
+  { "GROUP", "PROTO__ACL_FLAGS__GROUP", 1 },
+  { "ACCESS_SUCCESS", "PROTO__ACL_FLAGS__ACCESS_SUCCESS", 2 },
+  { "ACCESS_FAILURE", "PROTO__ACL_FLAGS__ACCESS_FAILURE", 4 },
+  { "POOL_INHERIT", "PROTO__ACL_FLAGS__POOL_INHERIT", 8 },
+};
+static const ProtobufCIntRange proto__acl_flags__value_ranges[] = {
+{0, 0},{4, 3},{8, 4},{0, 5}
+};
+static const ProtobufCEnumValueIndex proto__acl_flags__enum_values_by_name[5] =
+{
+  { "ACCESS_FAILURE", 3 },
+  { "ACCESS_SUCCESS", 2 },
+  { "GROUP", 1 },
+  { "NO_FLAGS", 0 },
+  { "POOL_INHERIT", 4 },
+};
+const ProtobufCEnumDescriptor proto__acl_flags__descriptor =
+{
+  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
+  "proto.AclFlags",
+  "AclFlags",
+  "Proto__AclFlags",
+  "proto",
+  5,
+  proto__acl_flags__enum_values_by_number,
+  5,
+  proto__acl_flags__enum_values_by_name,
+  3,
+  proto__acl_flags__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
 static const ProtobufCMethodDescriptor proto__access_control__method_descriptors[3] =
