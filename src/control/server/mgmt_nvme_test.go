@@ -26,9 +26,9 @@ package main
 import (
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/utils/test"
+	. "github.com/daos-stack/daos/src/control/common"
 
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 func mockNvmeCS(t *testing.T, ns *nvmeStorage) *controlService {

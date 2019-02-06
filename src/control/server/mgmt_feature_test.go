@@ -21,42 +21,33 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmtclient
+package main
 
 import (
-	"fmt"
+	"testing"
 
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-// NewClientFM provides a mock ClientFeatureMap for testing.
-func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
-	cf := make(ClientFeatureMap)
-	for _, addr := range addrs {
-		fMap := make(FeatureMap)
-		for _, f := range features {
-			fMap[f.Fname.Name] = fmt.Sprintf(
-				"category %s, %s", f.Category.Category, f.Description)
-		}
-		cf[addr] = fMap
-	}
-	return cf
-}
+func TestGetFeature(t *testing.T) {
+	s := &controlService{}
 
-// NewClientNvme provides a mock ClientNvmeMap for testing.
-func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
-	cMap := make(ClientNvmeMap)
-	for _, addr := range addrs {
-		cMap[addr] = ctrlrs
-	}
-	return cMap
-}
+	mockFeature := MockFeaturePB()
+	fMap := make(FeatureMap)
+	fMap[mockFeature.Fname.Name] = mockFeature
+	s.supportedFeatures = fMap
 
-// NewClientScm provides a mock ClientScmMap for testing.
-func NewClientScm(mms ScmModules, addrs Addresses) ClientScmMap {
-	cMap := make(ClientScmMap)
-	for _, addr := range addrs {
-		cMap[addr] = mms
+	feature, err := s.GetFeature(nil, mockFeature.Fname)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return cMap
+
+	AssertEqual(t, feature, mockFeature, "")
+
+	feature, err = s.GetFeature(nil, &pb.FeatureName{Name: "non-existent"})
+	if err == nil {
+		t.Fatal(err)
+	}
 }

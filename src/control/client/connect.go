@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/utils/functional"
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 // ClientFeatureMap is an alias for management features supported on server
@@ -120,7 +120,7 @@ func (c *connList) GetActiveConns(failures ErrorMap) (
 	clients := c.clients[:0]
 	for _, mc := range c.clients {
 		address := mc.getAddress()
-		if functional.Include(addresses, address) {
+		if common.Include(addresses, address) {
 			eMap[address] = fmt.Errorf("duplicate connection to %s", address)
 			continue
 		}

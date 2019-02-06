@@ -23,18 +23,41 @@
 
 package main
 
-import pb "github.com/daos-stack/daos/src/control/proto/mgmt"
+import (
+	"testing"
 
-// ListScmModules lists all Storage Class Memory modules installed.
-func (c *controlService) ListScmModules(
-	empty *pb.EmptyParams, stream pb.MgmtControl_ListScmModulesServer) error {
-	if err := c.scm.Discover(); err != nil {
-		return err
-	}
-	for _, module := range c.scm.modules {
-		if err := stream.Send(module); err != nil {
-			return err
-		}
-	}
+	. "github.com/daos-stack/go-ipmctl/ipmctl"
+	"google.golang.org/grpc"
+
+	. "github.com/daos-stack/daos/src/control/common"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+)
+
+type mockListScmModulesServer struct {
+	grpc.ServerStream
+	Results []*pb.ScmModule
+}
+
+func (m *mockListScmModulesServer) Send(module *pb.ScmModule) error {
+	m.Results = append(m.Results, module)
 	return nil
+}
+
+func mockScmCS(ss *scmStorage) *controlService {
+	return &controlService{scm: ss}
+}
+
+func TestListScmModules(t *testing.T) {
+	s := mockScmCS(
+		newMockScmStorage([]DeviceDiscovery{MockModule()}, true))
+	m := MockModulePB()
+
+	mock := &mockListScmModulesServer{}
+	s.ListScmModules(nil, mock)
+
+	AssertEqual(t, len(s.scm.modules), 1, "unexpected number of modules")
+	AssertEqual(t, s.scm.modules, ScmmMap{0: m}, "unexpected list of modules")
+	AssertEqual(t, len(mock.Results), 1, "unexpected number of modules sent")
+	AssertEqual(t, mock.Results, []*pb.ScmModule{m}, "unexpected list of modules sent")
 }

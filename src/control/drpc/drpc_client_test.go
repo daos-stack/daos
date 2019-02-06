@@ -24,7 +24,7 @@ package drpc
 
 import (
 	"fmt"
-	. "github.com/daos-stack/daos/src/control/utils/test"
+	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/golang/protobuf/proto"
 	"net"
 	"testing"

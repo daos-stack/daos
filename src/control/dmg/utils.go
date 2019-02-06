@@ -27,8 +27,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/daos-stack/daos/src/control/client/mgmt"
-	"github.com/daos-stack/daos/src/control/utils/handlers"
+	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 func hasConnections(addrs mgmtclient.Addresses, eMap mgmtclient.ErrorMap) (
@@ -62,7 +62,7 @@ func checkAndFormat(i interface{}, err error) string {
 	if err != nil {
 		return fmt.Sprintf("Unable to retrieve %%[1]ss (%s)\n", err)
 	}
-	s, err := handlers.StructsToString(i)
+	s, err := common.StructsToString(i)
 	if err != nil {
 		return fmt.Sprintf(
 			"Unable to YAML encode response for %%[1]ss! (%s)\n", err)

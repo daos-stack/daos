@@ -28,7 +28,7 @@ import (
 	"io"
 	"time"
 
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

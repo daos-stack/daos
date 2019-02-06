@@ -21,15 +21,12 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-// Package testutils contains utility functions for unit tests
-package testutils
+package common
 
 import (
 	"fmt"
 	"reflect"
 	"testing"
-
-	"github.com/daos-stack/daos/src/control/utils/handlers"
 )
 
 // AssertTrue asserts b is true
@@ -83,11 +80,11 @@ func ExpectError(
 func LoadTestFiles(inFile string, outFile string) (
 	inputs [][]string, outputs [][]string, err error) {
 
-	inputs, err = handlers.SplitFile(inFile)
+	inputs, err = SplitFile(inFile)
 	if err != nil {
 		return
 	}
-	outputs, err = handlers.SplitFile(outFile)
+	outputs, err = SplitFile(outFile)
 	if err != nil {
 		return
 	}
