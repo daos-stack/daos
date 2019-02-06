@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/utils/test"
+	. "github.com/daos-stack/daos/src/control/common"
 )
 
 // TestParseBdev verifies config parameters for bdev get converted into nvme

@@ -34,8 +34,8 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"github.com/daos-stack/daos/src/control/utils/handlers"
-	"github.com/daos-stack/daos/src/control/utils/log"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 // Format represents enum specifying formatting behaviour
@@ -170,10 +170,10 @@ func (e *ext) getenv(key string) string {
 	return os.Getenv(key)
 }
 
-// writeToFile wraps around handlers.WriteString and writes input
+// writeToFile wraps around common.WriteString and writes input
 // string to given file pathk.
 func (e *ext) writeToFile(in string, outPath string) error {
-	return handlers.WriteString(outPath, in)
+	return common.WriteString(outPath, in)
 }
 
 // createEmpty creates a file (if it doesn't exist) of specified size in bytes
@@ -186,7 +186,7 @@ func (e *ext) createEmpty(path string, size int64) (err error) {
 	if _, err = os.Stat(path); !os.IsNotExist(err) {
 		return
 	}
-	file, err := handlers.TruncFile(path)
+	file, err := common.TruncFile(path)
 	if err != nil {
 		return
 	}

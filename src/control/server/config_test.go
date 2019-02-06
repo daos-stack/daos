@@ -31,9 +31,8 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/utils/handlers"
-	"github.com/daos-stack/daos/src/control/utils/log"
-	. "github.com/daos-stack/daos/src/control/utils/test"
+	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 )
 

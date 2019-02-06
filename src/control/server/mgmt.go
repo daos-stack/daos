@@ -29,9 +29,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/utils/handlers"
-	"github.com/daos-stack/daos/src/control/utils/log"
+	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
 
 	"io/ioutil"
 )
@@ -72,7 +72,7 @@ func (c *controlService) Teardown() {
 
 // loadInitData retrieves initial data from relative file path.
 func loadInitData(relPath string) (m FeatureMap, err error) {
-	absPath, err := handlers.GetAbsInstallPath(relPath)
+	absPath, err := common.GetAbsInstallPath(relPath)
 	if err != nil {
 		return
 	}
@@ -98,12 +98,12 @@ func (c *controlService) showLocalStorage() {
 	if err := c.nvme.Discover(); err != nil {
 		fmt.Println("Failure retrieving NVMe details: ", err)
 	} else {
-		handlers.PrintStructs("NVMe", c.nvme.controllers)
+		common.PrintStructs("NVMe", c.nvme.controllers)
 	}
 	if err := c.scm.Discover(); err != nil {
 		fmt.Println("Failure retrieving SCM details: ", err)
 	} else {
-		handlers.PrintStructs("SCM", c.scm.modules)
+		common.PrintStructs("SCM", c.scm.modules)
 	}
 }
 

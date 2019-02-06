@@ -34,9 +34,9 @@ import (
 	flags "github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
 
-	mgmtpb "github.com/daos-stack/daos/src/control/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/utils/handlers"
-	"github.com/daos-stack/daos/src/control/utils/log"
+	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 // ShowStorageCommand is the struct representing the command to list storage.
@@ -118,7 +118,7 @@ func main() {
 
 	// Set log file for default logger if specified in config.
 	if config.ControlLogFile != "" {
-		f, err := handlers.AppendFile(config.ControlLogFile)
+		f, err := common.AppendFile(config.ControlLogFile)
 		if err != nil {
 			err = log.WrapAndLogErr(err, "creating log file")
 			return

@@ -47,7 +47,7 @@ def scons():
     denv['ENV']['GOBIN'] = "%s/bin" % gopath
 
     agentbin = "%s/bin/agent" % gopath
-    agentsrc = "%s/agent/daos_agent.go" % gosrc
+    agentsrc = "%s/agent/main.go" % gosrc
     denv.Command(agentbin, agentsrc,
                  "go install %s/src/control/agent" % repopath)
     denv.InstallAs("$PREFIX/bin/daos_agent", agentbin)
@@ -70,12 +70,17 @@ def scons():
         "CGO_CFLAGS",
         denv.subst("-I$SPDK_PREFIX/include"))
 
-    # copy server init files to be used at runtime
+    # copy server init files to be used at runtime, explicitly
+    # remove first because recursive Delete() on dir fails.
     moduleserver = join(gosrc, "server")
-    denv.Command(
-        join("$PREFIX", "share", "control"),
-        join(moduleserver, "init"),
-        Copy("$TARGET", "$SOURCE"))
+    for f in ["mgmtinit_db.json", "setup_spdk.sh"]:
+        denv.Command(
+            join("$PREFIX", "share", "control", f),
+            join(moduleserver, "init", f),
+            [
+                Delete("$TARGET"),
+                Copy("$TARGET", "$SOURCE")
+            ])
 
     # TODO: copy fio sample configurations for use at runtime
 #    for f in ["example_config.fio", "full_bench.fio"]:
@@ -85,18 +90,18 @@ def scons():
 #            Copy("$TARGET", "$SOURCE"))
 
     serverbin = "%s/bin/server" % gopath
-    serversrc = "%s/server/daos_server.go" % gosrc
+    serversrc = "%s/server/main.go" % gosrc
     denv.Command(serverbin, [serversrc, nc_installed],
                  "go install %s/src/control/server" % repopath)
     denv.InstallAs("$PREFIX/bin/daos_server", serverbin)
 
     shellbin = "%s/bin/dmg" % gopath
-    shellsrc = "%s/dmg/cli.go" % gosrc
+    shellsrc = "%s/dmg/main.go" % gosrc
     denv.Command(shellbin, shellsrc, "go install %s/src/control/dmg" % repopath)
     denv.InstallAs("$PREFIX/bin/daos_shell", shellbin)
 
     drpcbin = "%s/bin/drpc_test" % gopath
-    drpcsrc = "%s/drpc_test/hello_drpc.go" % gosrc
+    drpcsrc = "%s/drpc_test/main.go" % gosrc
     denv.Command(drpcbin, drpcsrc,
                  "go install %s/src/control/drpc_test" % repopath)
     denv.InstallAs("$PREFIX/bin/hello_drpc", drpcbin)

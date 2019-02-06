@@ -26,7 +26,7 @@ package main
 import (
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/utils/test"
+	. "github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/go-ipmctl/ipmctl"
 )
 

@@ -28,10 +28,9 @@ import (
 	"fmt"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/client/mgmt"
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
-	. "github.com/daos-stack/daos/src/control/utils/handlers"
-	. "github.com/daos-stack/daos/src/control/utils/test"
+	. "github.com/daos-stack/daos/src/control/client"
+	. "github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 var (

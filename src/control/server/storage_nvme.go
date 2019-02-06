@@ -33,12 +33,12 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/utils/handlers"
-	"github.com/daos-stack/daos/src/control/utils/log"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
 
 	"github.com/daos-stack/go-spdk/spdk"
 
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 var (
@@ -192,11 +192,11 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 	fioPath string, cmds []string, env string, err error) {
 	if n.initialized {
 		pluginDir := ""
-		pluginDir, err = handlers.GetAbsInstallPath(spdkFioPluginDir)
+		pluginDir, err = common.GetAbsInstallPath(spdkFioPluginDir)
 		if err != nil {
 			return
 		}
-		fioPath, err = handlers.GetAbsInstallPath(fioExecPath)
+		fioPath, err = common.GetAbsInstallPath(fioExecPath)
 		if err != nil {
 			return
 		}
@@ -264,7 +264,7 @@ func loadNamespaces(ctrlrID int32, nss []spdk.Namespace) (_nss []*pb.NvmeNamespa
 // newNvmeStorage creates a new instance of nvmeStorage struct.
 func newNvmeStorage(shmID int, nrHugePages int) (*nvmeStorage, error) {
 
-	scriptPath, err := handlers.GetAbsInstallPath(spdkSetupPath)
+	scriptPath, err := common.GetAbsInstallPath(spdkSetupPath)
 	if err != nil {
 		return nil, err
 	}

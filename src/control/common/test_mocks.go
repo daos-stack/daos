@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,11 +21,10 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-// Package testutils contains utility functions for unit tests
-package testutils
+package common
 
 import (
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/go-ipmctl/ipmctl"
 	"github.com/daos-stack/go-spdk/spdk"
 )

@@ -32,8 +32,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/utils/handlers"
+	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // ListNvmeCtrlrs lists all NVMe controllers.
@@ -74,11 +74,11 @@ func (c *controlService) UpdateNvmeCtrlr(
 // FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
 func (c *controlService) FetchFioConfigPaths(
 	empty *pb.EmptyParams, stream pb.MgmtControl_FetchFioConfigPathsServer) error {
-	pluginDir, err := handlers.GetAbsInstallPath(spdkFioPluginDir)
+	pluginDir, err := common.GetAbsInstallPath(spdkFioPluginDir)
 	if err != nil {
 		return err
 	}
-	paths, err := handlers.GetFilePaths(pluginDir, "fio")
+	paths, err := common.GetFilePaths(pluginDir, "fio")
 	if err != nil {
 		return err
 	}

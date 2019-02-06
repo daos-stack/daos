@@ -28,7 +28,7 @@ import (
 
 	"github.com/daos-stack/go-ipmctl/ipmctl"
 
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // ScmmMap is a type alias for info on Storage Class Memory Modules

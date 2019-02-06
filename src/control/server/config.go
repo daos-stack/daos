@@ -30,8 +30,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/utils/handlers"
-	"github.com/daos-stack/daos/src/control/utils/log"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -68,7 +68,7 @@ func loadConfigOpts(cliOpts *cliOptions) (configuration, error) {
 		config.Path = cliOpts.ConfigPath
 	}
 	if !filepath.IsAbs(config.Path) {
-		newPath, err := handlers.GetAbsInstallPath(config.Path)
+		newPath, err := common.GetAbsInstallPath(config.Path)
 		if err != nil {
 			return config, err
 		}
@@ -316,7 +316,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 				"D_LOG_FILE="+server.LogFile)
 			continue
 		}
-		examplesPath, _ := handlers.GetAbsInstallPath("utils/config/examples/")
+		examplesPath, _ := common.GetAbsInstallPath("utils/config/examples/")
 		// user environment variable detected for provider, assume all
 		// necessary environment already exists and clear server config EnvVars
 		log.Debugf(
