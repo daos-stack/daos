@@ -330,23 +330,23 @@ struct evt_context;
  */
 struct evt_policy_ops {
 	/**
-	 * Add an entry \a entry to a tree node \a nd_mmid.
+	 * Add an entry \a entry to a tree node \a node.
 	 */
 	int	(*po_insert)(struct evt_context *tcx,
-			     uint64_t nd_off,
+			     struct evt_node *node,
 			     uint64_t in_off,
 			     const struct evt_entry_in *entry);
 	/**
-	 * move half entries of the current node \a src_mmid to the new
-	 * node \a dst_mmid.
+	 * move half entries of the current node \a nd_src to the new
+	 * node \a nd_dst.
 	 */
 	int	(*po_split)(struct evt_context *tcx, bool leaf,
-			    uint64_t src_off, uint64_t dst_off);
+			    struct evt_node *nd_src, struct evt_node *nd_dst);
 	/** Move adjusted \a entry within a node after mbr update.
 	 * Returns the offset from at to where the entry was moved
 	 */
 	int	(*po_adjust)(struct evt_context *tcx,
-			     uint64_t nd_off,
+			     struct evt_node *node,
 			     struct evt_node_entry *ne, int at);
 	/**
 	 * Calculate weight of a rectangle \a rect and return it to \a weight.

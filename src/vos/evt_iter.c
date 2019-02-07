@@ -231,7 +231,7 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 
 	while ((found = evt_move_trace(tcx))) {
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
-		rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
+		rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
 
 		if (evt_filter_rect(&iter->it_filter, rect, true))
 			continue;
@@ -488,7 +488,7 @@ int evt_iter_delete(daos_handle_t ih, void *value_out)
 	}
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-	rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
+	rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
 	if (!evt_filter_rect(&iter->it_filter, rect, true))
 		goto out;
 
@@ -511,6 +511,7 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 {
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
+	struct evt_node		*node;
 	struct evt_rect		*rect;
 	struct evt_trace	*trace;
 	struct evt_rect		 saved;
@@ -535,10 +536,11 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 		goto set_anchor;
 	}
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-	rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
+	node = evt_off2node(tcx, trace->tr_node);
+	rect  = evt_node_rect_at(tcx, node, trace->tr_at);
 
 	if (entry)
-		evt_entry_fill(tcx, trace->tr_node, trace->tr_at, NULL, entry);
+		evt_entry_fill(tcx, node, trace->tr_at, NULL, entry);
 set_anchor:
 	*inob = tcx->tc_inob;
 
