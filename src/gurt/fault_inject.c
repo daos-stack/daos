@@ -379,6 +379,8 @@ d_fi_gdata_destroy(void)
 	D_RWLOCK_DESTROY(&d_fi_gdata.dfg_rwlock);
 	d_fi_gdata.dfg_refcount = 0;
 	d_fi_gdata.dfg_inited = 0;
+	d_fi_gdata.dfg_fa_capacity = 0;
+	d_fi_gdata.dfg_fa = NULL;
 }
 /**
  * parse config file
