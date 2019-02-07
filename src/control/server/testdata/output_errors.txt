@@ -1,3 +1,2 @@
-format value thrash not supported in config (safe/continue/force)
-
 bdev_class value thrash not supported in config (nvme/malloc/kdev/file)
+

@@ -38,22 +38,17 @@ import (
 	"github.com/daos-stack/daos/src/control/log"
 )
 
-// Format represents enum specifying formatting behaviour
-type Format string
-
-// ControlLogLevel is a type that specifies log levels
-type ControlLogLevel string
-
 const (
-	// SAFE state defines cautionary behaviour where formatted devices will not be overwritten.
-	SAFE Format = "safe"
-	// CONTINUE state defines ehaviour which results in reuse of formatted devices.
-	CONTINUE Format = "continue"
-	// FORCE state defines aggressive/potentially resulting data loss formatting behaviour.
-	FORCE Format = "force"
+	maxRank rank = math.MaxUint32 - 1
+	nilRank rank = math.MaxUint32
 
 	cLogDebug ControlLogLevel = "DEBUG"
 	cLogError ControlLogLevel = "ERROR"
+
+	bdNvme   BdClass = "nvme"
+	bdMalloc BdClass = "malloc"
+	bdKdev   BdClass = "kdev"
+	bdFile   BdClass = "file"
 
 	// todo: implement Provider discriminated union
 	// todo: implement LogMask discriminated union
@@ -61,11 +56,6 @@ const (
 
 // rank represents a rank of an I/O server or a nil rank.
 type rank uint32
-
-const (
-	maxRank rank = math.MaxUint32 - 1
-	nilRank rank = math.MaxUint32
-)
 
 func (r rank) String() string {
 	return strconv.FormatUint(uint64(r), 10)
@@ -102,24 +92,29 @@ func checkRank(r rank) error {
 	return nil
 }
 
-// server defines configuration options for DAOS IO Server instances
-type server struct {
-	Rank            *rank    `yaml:"rank"`
-	Cpus            []string `yaml:"cpus"`
-	FabricIface     string   `yaml:"fabric_iface"`
-	FabricIfacePort int      `yaml:"fabric_iface_port"`
-	LogMask         string   `yaml:"log_mask"`
-	LogFile         string   `yaml:"log_file"`
-	EnvVars         []string `yaml:"env_vars"`
-	ScmMount        string   `yaml:"scm_mount"`
-	BdevClass       BdClass  `yaml:"bdev_class"`
-	BdevList        []string `yaml:"bdev_list"`
-	BdevNumber      int      `yaml:"bdev_number"`
-	BdevSize        int      `yaml:"bdev_size"`
-	// ioParams represents commandline options and environment variables
-	// to be passed on I/O server invocation.
-	CliOpts []string // tuples (short option, value) e.g. ["-p", "10000"...]
+// ControlLogLevel is a type that specifies log levels
+type ControlLogLevel string
+
+// UnmarshalYAML implements yaml.Unmarshaler on ControlLogMask struct
+func (c *ControlLogLevel) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var level string
+	if err := unmarshal(&level); err != nil {
+		return err
+	}
+	logLevel := ControlLogLevel(level)
+	switch logLevel {
+	case cLogDebug, cLogError:
+		*c = logLevel
+	default:
+		return fmt.Errorf(
+			"control_log_mask value %v not supported in config (DEBUG/ERROR)",
+			logLevel)
+	}
+	return nil
 }
+
+// BdClass enum specifing block device type for storage
+type BdClass string
 
 // UnmarshalYAML implements yaml.Unmarshaler on BdClass struct
 func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -140,6 +135,25 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 // todo: implement UnMarshal for LogMask discriminated union
+
+// server defines configuration options for DAOS IO Server instances
+type server struct {
+	Rank            *rank    `yaml:"rank"`
+	Cpus            []string `yaml:"cpus"`
+	FabricIface     string   `yaml:"fabric_iface"`
+	FabricIfacePort int      `yaml:"fabric_iface_port"`
+	LogMask         string   `yaml:"log_mask"`
+	LogFile         string   `yaml:"log_file"`
+	EnvVars         []string `yaml:"env_vars"`
+	ScmMount        string   `yaml:"scm_mount"`
+	BdevClass       BdClass  `yaml:"bdev_class"`
+	BdevList        []string `yaml:"bdev_list"`
+	BdevNumber      int      `yaml:"bdev_number"`
+	BdevSize        int      `yaml:"bdev_size"`
+	// ioParams represents commandline options and environment variables
+	// to be passed on I/O server invocation.
+	CliOpts []string // tuples (short option, value) e.g. ["-p", "10000"...]
+}
 
 // newDefaultServer creates a new instance of server struct
 // populated with defaults.
@@ -208,8 +222,6 @@ type configuration struct {
 	Servers        []server        `yaml:"servers"`
 	Provider       string          `yaml:"provider"`
 	SocketDir      string          `yaml:"socket_dir"`
-	Auto           bool            `yaml:"auto"`
-	Format         Format          `yaml:"format"`
 	AccessPoints   []string        `yaml:"access_points"`
 	Port           int             `yaml:"port"`
 	CaCert         string          `yaml:"ca_cert"`
@@ -238,42 +250,6 @@ type configuration struct {
 	NvmeShmID int
 }
 
-// UnmarshalYAML implements yaml.Unmarshaler on Format struct
-func (f *Format) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var fm string
-	if err := unmarshal(&fm); err != nil {
-		return err
-	}
-	format := Format(fm)
-	switch format {
-	case SAFE, CONTINUE, FORCE:
-		*f = format
-	default:
-		return fmt.Errorf(
-			"format value %v not supported in config (safe/continue/force)",
-			format)
-	}
-	return nil
-}
-
-// UnmarshalYAML implements yaml.Unmarshaler on ControlLogMask struct
-func (c *ControlLogLevel) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var level string
-	if err := unmarshal(&level); err != nil {
-		return err
-	}
-	logLevel := ControlLogLevel(level)
-	switch logLevel {
-	case cLogDebug, cLogError:
-		*c = logLevel
-	default:
-		return fmt.Errorf(
-			"control_log_mask value %v not supported in config (DEBUG/ERROR)",
-			logLevel)
-	}
-	return nil
-}
-
 // todo: implement UnMarshal for Provider discriminated union
 
 // parse decodes YAML representation of configure struct and checks for Group
@@ -300,8 +276,6 @@ func newDefaultConfiguration(ext External) configuration {
 	return configuration{
 		SystemName:     "daos_server",
 		SocketDir:      "/var/run/daos_server",
-		Auto:           true,
-		Format:         SAFE,
 		AccessPoints:   []string{"localhost"},
 		Port:           10000,
 		Cert:           "./.daos/daos_server.crt",

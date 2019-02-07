@@ -1,7 +1,4 @@
 name: daos
-format: thrash
-
-name: daos
 servers:
 - rank: 0
   cpus:
@@ -24,8 +21,6 @@ servers:
   bdev_size: 16
 provider: ofi+sockets
 socket_dir: /tmp/daos_sockets
-auto: true
-format: safe
 access_points:
 - localhost
 port: 10001
@@ -39,3 +34,4 @@ scm_mount_path: /mnt/daos
 bdev_include: []
 bdev_exclude: []
 hyperthreads: false
+
