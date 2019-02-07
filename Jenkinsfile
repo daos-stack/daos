@@ -77,9 +77,11 @@ pipeline {
                         }
                     }
                     steps {
+                        sh "curl -s --user \"${GITHUB_USER_USR}:${GITHUB_USER_PSW}\" -X GET https://api.github.com/rate_limit | grep -m 1 remaining || true"
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*"
+                        sh "curl -s --user \"${GITHUB_USER_USR}:${GITHUB_USER_PSW}\" -X GET https://api.github.com/rate_limit | grep -m 1 remaining || true"
                     }
                     post {
                         always {
@@ -130,7 +132,9 @@ pipeline {
                         }
                     }
                     steps {
+                        sh "curl -s --user \"${GITHUB_USER_USR}:${GITHUB_USER_PSW}\" -X GET https://api.github.com/rate_limit | grep -m 1 remaining || true"
                         sconsBuild clean: "_build.external${arch}"
+                        sh "curl -s --user \"${GITHUB_USER_USR}:${GITHUB_USER_PSW}\" -X GET https://api.github.com/rate_limit | grep -m 1 remaining || true"
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
                         stash name: 'CentOS-tests',
@@ -318,7 +322,9 @@ pipeline {
                         }
                     }
                     steps {
+                        sh "curl -s --user \"${GITHUB_USER_USR}:${GITHUB_USER_PSW}\" -X GET https://api.github.com/rate_limit | grep -m 1 remaining || true"
                         sconsBuild clean: "_build.external${arch}", COMPILER: "clang"
+                        sh "curl -s --user \"${GITHUB_USER_USR}:${GITHUB_USER_PSW}\" -X GET https://api.github.com/rate_limit | grep -m 1 remaining || true"
                     }
                     post {
                         always {
@@ -539,6 +545,7 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true
+                        sh "curl -s --user \"${GITHUB_USER_USR}:${GITHUB_USER_PSW}\" -X GET https://api.github.com/rate_limit | grep -m 1 remaining || true"
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
                                            # JENKINS-52781 tar function is breaking symlinks
@@ -582,6 +589,7 @@ pipeline {
                                                    let x=\\\$x+1
                                                done"''',
                               junit_files: null
+                      sh "curl -s --user \"${GITHUB_USER_USR}:${GITHUB_USER_PSW}\" -X GET https://api.github.com/rate_limit | grep -m 1 remaining || true"
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -621,6 +629,7 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true
+                        sh "curl -s --user \"${GITHUB_USER_USR}:${GITHUB_USER_PSW}\" -X GET https://api.github.com/rate_limit | grep -m 1 remaining || true"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
@@ -629,6 +638,7 @@ pipeline {
                                            fi
                                            ./ftest.sh "$test_tag" ''' + env.NODELIST,
                                 junit_files: "src/tests/ftest/avocado/job-results/*/*.xml"
+                        sh "curl -s --user \"${GITHUB_USER_USR}:${GITHUB_USER_PSW}\" -X GET https://api.github.com/rate_limit | grep -m 1 remaining || true"
                     }
                     post {
                         always {
