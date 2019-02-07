@@ -37,8 +37,6 @@ servers:
   cliopts: []
 provider: ofi+verbs;ofi_rxm
 socket_dir: ./.daos/daos_server
-auto: false
-format: continue
 access_points:
 - hostname1
 - hostname2

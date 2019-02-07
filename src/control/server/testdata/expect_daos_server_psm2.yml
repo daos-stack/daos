@@ -23,8 +23,6 @@ servers:
   cliopts: []
 provider: ofi+psm2
 socket_dir: /tmp/daos_psm2
-auto: true
-format: safe
 access_points:
 - localhost
 port: 10001

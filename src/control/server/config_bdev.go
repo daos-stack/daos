@@ -30,15 +30,7 @@ import (
 	"text/template"
 )
 
-// BdClass enum specifing block device type for storage
-type BdClass string
-
 const (
-	bdNvme   BdClass = "nvme"
-	bdMalloc BdClass = "malloc"
-	bdKdev   BdClass = "kdev"
-	bdFile   BdClass = "file"
-
 	confOut   = "daos_nvme.conf"
 	nvmeTempl = `[Nvme]
 {{ range $i, $e := .BdevList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme{{$i}}
