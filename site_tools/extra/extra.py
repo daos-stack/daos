@@ -61,9 +61,16 @@ def preprocess_emitter(source, target, env):
     for src in source:
         basename = os.path.basename(src.abspath)
         (base, _ext) = os.path.splitext(basename)
-        pre = env.subst("$OBJ_PREFIX")
-        suf = env.subst("$OBJ_SUFFIX")
-        target.append(pre + base + suf + "_pp.c")
+        prefix = ""
+        for var in ["OBJPREFIX", "OBJSUFFIX", "SHOBJPREFIX", "SHOBJSUFFIX"]:
+            mod = env.subst("$%s" % var)
+            if var == "OBJSUFFIX" and mod == ".o":
+                continue
+            if var == "SHOBJSUFFIX" and mod == ".os":
+                continue
+            if mod != "":
+                prefix = prefix + "_" + mod
+        target.append(prefix + base + "_pp.c")
     return target, source
 # pylint: enable=unused-argument
 

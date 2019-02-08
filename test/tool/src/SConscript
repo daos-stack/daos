@@ -23,8 +23,10 @@ def scons():
     """Run Preprocess tool"""
     Import('env')
 
-    envs = [env, env.Clone(OBJ_PREFIX="f"), env.Clone(OBJ_SUFFIX="_y.o"),
-            env.Clone(OBJ_PREFIX="x", OBJ_SUFFIX="_z.o")]
+    envs = [env, env.Clone(OBJPREFIX="f"), env.Clone(OBJSUFFIX="_y.o"),
+            env.Clone(OBJPREFIX="x", OBJSUFFIX="_z.o"),
+            env.Clone(SHOBJPREFIX="z"), env.Clone(SHOBJSUFFIX="_f.os"),
+            env.Clone(OBJPREFIX="x", SHOBJPREFIX="z")]
 
     for denv in envs:
         # pylint: disable=no-member
