@@ -817,7 +817,7 @@ int
 crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_context	*crt_ctx = rpc_priv->crp_pub.cr_ctx;
-	struct crt_ep_inflight	*epi;
+	struct crt_ep_inflight	*epi = NULL;
 	d_list_t		*rlink;
 	d_rank_t		 ep_rank;
 	int			 rc = 0;
@@ -838,10 +838,8 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 				sizeof(ep_rank));
 	if (rlink == NULL) {
 		D_ALLOC_PTR(epi);
-		if (epi == NULL) {
-			D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
+		if (epi == NULL)
+			D_GOTO(out_unlock, rc = -DER_NOMEM);
 
 		/* init the epi fields */
 		D_INIT_LIST_HEAD(&epi->epi_link);
@@ -857,24 +855,22 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 		epi->epi_ref = 1;
 		epi->epi_initialized = 1;
 		rc = D_MUTEX_INIT(&epi->epi_mutex, NULL);
-		if (rc != 0) {
-			D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-			D_GOTO(out, rc);
-		}
+		if (rc != 0)
+			D_GOTO(out_unlock, rc);
 
 		rc = d_hash_rec_insert(&crt_ctx->cc_epi_table, &ep_rank,
 				       sizeof(ep_rank), &epi->epi_link,
 				       true /* exclusive */);
-		if (rc != 0)
+		if (rc != 0) {
 			D_ERROR("d_hash_rec_insert failed, rc: %d.\n", rc);
+			D_MUTEX_DESTROY(&epi->epi_mutex);
+			D_GOTO(out_unlock, rc);
+		}
 	} else {
 		epi = epi_link2ptr(rlink);
 		D_ASSERT(epi->epi_ctx == crt_ctx);
 	}
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-
-	if (rc != 0)
-		D_GOTO(out, rc);
 
 	/* add the RPC req to crt_ep_inflight */
 	D_MUTEX_LOCK(&epi->epi_mutex);
@@ -905,7 +901,6 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 			RPC_DECREF(rpc_priv);
 		}
 	}
-
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* reference taken by d_hash_rec_find or "epi->epi_ref = 1" above */
@@ -914,6 +909,12 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 out:
+	return rc;
+
+out_unlock:
+	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+	if (epi != NULL)
+		D_FREE(epi);
 	return rc;
 }
 
