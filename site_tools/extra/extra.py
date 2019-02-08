@@ -26,17 +26,12 @@ import os
 # pylint: disable=import-error
 from distutils.spawn import find_executable
 from SCons.Builder import Builder
-from SCons.Errors import StopError
 from SCons.Script import Dir
 # pylint: enable=no-name-in-module
 # pylint: enable=import-error
 
 def find_indent():
-    """find indent or clang-format"""
-    indent = find_executable("indent")
-    if indent is not None:
-        return "%s -st -linux" % (indent)
-
+    """find clang-format"""
     indent = find_executable("clang-format")
     if indent is not None:
         style = "Mozilla" # fallback
@@ -47,7 +42,7 @@ def find_indent():
             root = os.path.dirname(root)
         return "%s --style=%s" % (indent, style)
 
-    return None
+    return "cat"
 
 # pylint: disable=unused-argument
 def preprocess_generator(source, target, env, for_signature):
@@ -57,8 +52,7 @@ def preprocess_generator(source, target, env, for_signature):
     nenv = env.Clone()
     cccom = nenv.subst("$CCCOM").replace(" -o ", " ")
     for src, tgt in zip(source, target):
-        action.append("%s -E -P %s > %s_raw" % (cccom, src, tgt))
-        action.append("%s %s_raw > %s 2> /dev/null" % (indent, tgt, tgt))
+        action.append("%s -E -P %s | %s > %s" % (cccom, src, indent, tgt))
     return action
 
 def preprocess_emitter(source, target, env):
@@ -74,10 +68,6 @@ def preprocess_emitter(source, target, env):
 def generate(env):
     """Setup the our custom tools"""
     # Only handle C for now
-    if find_indent() is None:
-        raise StopError(
-            "indent or clang-format must be installed for Preprocess builder")
-
     preprocess = Builder(generator=preprocess_generator, suffix="_pp.c",
                          emitter=preprocess_emitter, src_suffix=".c")
 
