@@ -23,10 +23,14 @@ def scons():
     """Run Preprocess tool"""
     Import('env')
 
-    # pylint: disable=no-member
-    buildfoo = env.Preprocess("foo.c")
-    # pylint: enable=no-member
-    env.Program(buildfoo)
+    envs = [env, env.Clone(OBJ_PREFIX="f"), env.Clone(OBJ_SUFFIX="_y.o"),
+            env.Clone(OBJ_PREFIX="x", OBJ_SUFFIX="_z.o")]
+
+    for denv in envs:
+        # pylint: disable=no-member
+        buildfoo = denv.Preprocess("foo.c")
+        # pylint: enable=no-member
+        denv.Program(buildfoo)
 
 if __name__ == 'SCons.Script':
     scons()
