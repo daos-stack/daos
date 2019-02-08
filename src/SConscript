@@ -31,11 +31,7 @@ def scons():
     SConscript('common/SConscript')
     SConscript('bio/SConscript')
 
-    # VOS comes with two flavors
-    # A standalone library mostly used for testing
     SConscript('vos/SConscript')
-    VariantDir('vos_srv', 'vos', duplicate=0)
-    SConscript('vos_srv/SConscript')
 
     # Build each DAOS component
     SConscript('rdb/SConscript')

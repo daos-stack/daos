@@ -852,7 +852,10 @@ The options are as follows:\n\
 	enable.  This can only run in vos mode.\n\
 \n\
 -f pathname\n\
-	Full path name of the VOS file.\n");
+	Full path name of the VOS file.\n\
+\n\
+-w	Pause after initialization for attaching debugger or analysis\n\
+	tool.\n");
 }
 
 static struct option ts_ops[] = {
@@ -872,6 +875,7 @@ static struct option ts_ops[] = {
 	{ "file",	required_argument,	NULL,	'f' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ "verify",	no_argument,		NULL,	'v' },
+	{ "wait",	no_argument,		NULL,	'w' },
 	{ NULL,		0,			NULL,	0   },
 };
 
@@ -971,6 +975,7 @@ main(int argc, char **argv)
 	double		now;
 	int		rc;
 	int		i;
+	bool		pause = false;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
@@ -978,7 +983,7 @@ main(int argc, char **argv)
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nAs:ztf:hUFRBvIiu",
+				 "P:N:T:C:c:o:d:a:r:nAs:ztf:hUFRBvIiuw",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -986,6 +991,9 @@ main(int argc, char **argv)
 		default:
 			fprintf(stderr, "Unknown option %c\n", rc);
 			return -1;
+		case 'w':
+			pause = true;
+			break;
 		case 'T':
 			if (!strcasecmp(optarg, "echo")) {
 				/* just network, no storage */
@@ -1212,8 +1220,15 @@ main(int argc, char **argv)
 	if (rc)
 		return -1;
 
-	if (ts_ctx.tsc_mpi_rank == 0)
+	if (ts_ctx.tsc_mpi_rank == 0) {
+		if (pause) {
+			fprintf(stdout, "Ready to start...If you wish to"
+				" attach a tool, do so now and then hit"
+				" enter.\n");
+			getc(stdin);
+		}
 		fprintf(stdout, "Started...\n");
+	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
