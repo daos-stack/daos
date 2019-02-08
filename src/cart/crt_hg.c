@@ -583,24 +583,32 @@ crt_hg_fini()
 {
 	na_class_t	*na_class;
 	hg_class_t	*hg_class;
-	hg_return_t	hg_ret = HG_SUCCESS;
-	na_return_t	na_ret = NA_SUCCESS;
+	hg_return_t	hg_ret;
+	na_return_t	na_ret;
+	int		rc = DER_SUCCESS;
 
 	na_class = crt_gdata.cg_hg->chg_nacla;
 	hg_class = crt_gdata.cg_hg->chg_hgcla;
 	D_ASSERT(na_class != NULL);
 	D_ASSERT(hg_class != NULL);
 
-	hg_ret = HG_Finalize(hg_class);
-	if (hg_ret != HG_SUCCESS)
-		D_WARN("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
+	D_DEBUG(DB_NET, "Calling HG_Finalize\n");
 
+	hg_ret = HG_Finalize(hg_class);
+	if (hg_ret != HG_SUCCESS) {
+		D_WARN("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
+		rc = -DER_HG;
+	}
+
+	D_DEBUG(DB_NET, "Calling NA_Finalize\n");
 	na_ret = NA_Finalize(na_class);
-	if (na_ret != NA_SUCCESS)
+	if (na_ret != NA_SUCCESS) {
 		D_WARN("Could not finalize NA class, na_ret: %d.\n", na_ret);
+		rc = -DER_HG;
+	}
 
 	D_FREE(crt_gdata.cg_hg);
-	return 0;
+	return rc;
 }
 
 int
