@@ -44,11 +44,9 @@ def find_indent():
 
     return "cat"
 
-# pylint: disable=unused-argument
-def preprocess_generator(source, target, env, for_signature):
+def pp_gen(source, target, env, indent):
     """generate commands for preprocessor builder"""
     action = []
-    indent = find_indent()
     nenv = env.Clone()
     cccom = nenv.subst("$CCCOM").replace(" -o ", " ")
     for src, tgt in zip(source, target):
@@ -72,12 +70,18 @@ def preprocess_emitter(source, target, env):
                 prefix = prefix + "_" + mod
         target.append(prefix + base + "_pp.c")
     return target, source
-# pylint: enable=unused-argument
 
 def generate(env):
     """Setup the our custom tools"""
+
+    indent = find_indent()
+
+    generator = lambda source, target, env, for_signature: pp_gen(source,
+                                                                  target,
+                                                                  env, indent)
+
     # Only handle C for now
-    preprocess = Builder(generator=preprocess_generator, suffix="_pp.c",
+    preprocess = Builder(generator=generator, suffix="_pp.c",
                          emitter=preprocess_emitter, src_suffix=".c")
 
     env.Append(BUILDERS={"Preprocess":preprocess})
