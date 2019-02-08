@@ -5,6 +5,21 @@ import os
 from SCons.Script import Literal
 from os.path import join, isdir
 
+def do_build(env, path, gosrc, cmd):
+    """execute a build command"""
+    # Link the version-controlled DAOS Go source directory src/control into
+    # GOPATH/src/REPOPATH/src/control in the build directory.
+    if isdir(path) is False:
+        os.makedirs(path)
+    path += "/control"
+    if isdir(path) is False:
+        os.symlink(gosrc, path)
+    return env.Execute(cmd)
+
+def cmd_build(gopath, repopath, cmd):
+    """create a command that ensure paths exist before execution"""
+    return lambda target, source, env: do_build(env, gopath, repopath, cmd)
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
@@ -33,23 +48,17 @@ def scons():
     # Repository path shared by DAOS Go package import paths
     repopath = "github.com/daos-stack/daos"
 
-    # Link the version-controlled DAOS Go source directory src/control into
-    # GOPATH/src/REPOPATH/src/control in the build directory.
-    path = "%s/src/%s/src" % (gopath, repopath)
-    if isdir(path) is False:
-        os.makedirs(path)
-    path += "/control"
-    if isdir(path) is False:
-        os.symlink(gosrc, path)
-
     denv.Append(GOPATH=[gopath])
     denv.AppendENVPath('GOPATH', denv['GOPATH'])
     denv['ENV']['GOBIN'] = "%s/bin" % gopath
 
+    path = "%s/src/%s/src" % (gopath, repopath)
+
     agentbin = "%s/bin/agent" % gopath
     agentsrc = "%s/agent/main.go" % gosrc
     denv.Command(agentbin, agentsrc,
-                 "go install %s/src/control/agent" % repopath)
+                 cmd_build(path, gosrc,
+                           "go install %s/src/control/agent" % repopath))
     denv.InstallAs("$PREFIX/bin/daos_agent", agentbin)
 
     gospdkpath = "%s/vendor/github.com/daos-stack/go-spdk/spdk" % gosrc
@@ -92,18 +101,22 @@ def scons():
     serverbin = "%s/bin/server" % gopath
     serversrc = "%s/server/main.go" % gosrc
     denv.Command(serverbin, [serversrc, nc_installed],
-                 "go install %s/src/control/server" % repopath)
+                 cmd_build(path, gosrc,
+                           "go install %s/src/control/server" % repopath))
     denv.InstallAs("$PREFIX/bin/daos_server", serverbin)
 
     shellbin = "%s/bin/dmg" % gopath
     shellsrc = "%s/dmg/main.go" % gosrc
-    denv.Command(shellbin, shellsrc, "go install %s/src/control/dmg" % repopath)
+    denv.Command(shellbin, shellsrc,
+                 cmd_build(path, gosrc,
+                           "go install %s/src/control/dmg" % repopath))
     denv.InstallAs("$PREFIX/bin/daos_shell", shellbin)
 
     drpcbin = "%s/bin/drpc_test" % gopath
     drpcsrc = "%s/drpc_test/main.go" % gosrc
     denv.Command(drpcbin, drpcsrc,
-                 "go install %s/src/control/drpc_test" % repopath)
+                 cmd_build(path, gosrc,
+                           "go install %s/src/control/drpc_test" % repopath))
     denv.InstallAs("$PREFIX/bin/hello_drpc", drpcbin)
 
     AlwaysBuild([agentbin, serverbin, shellbin, drpcbin])
