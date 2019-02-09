@@ -44,11 +44,11 @@
 
 #include <stdlib.h>
 #include <pmix.h>
-#include <cart/api.h>
-#include <gurt/dlog.h>
+#include <gurt/debug.h>
 #include <gurt/hash.h>
 #include <gurt/common.h>
 #include <gurt/list.h>
+#include <cart/api.h>
 #include "utest_cmocka.h"
 
 using namespace std;

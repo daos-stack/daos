@@ -126,7 +126,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
  *
  *  User should define D_LOGFAC for the file
  */
-#define D_DEBUG(mask, fmt, ...)	\
+#define D_DEBUG_V1(mask, fmt, ...)	\
 	_D_LOG(_D_LOG_NOCHECK, (mask) | D_LOGFAC, fmt, ## __VA_ARGS__)
 
 /* Log a pointer value and message conditionally upon resolving the mask
@@ -140,8 +140,63 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
  *
  *  User should define D_LOGFAC for the file
  */
-#define D_TRACE_DEBUG(mask, ptr, fmt, ...) \
+#define D_TRACE_DEBUG_V1(mask, ptr, fmt, ...) \
 	_D_LOG(_D_TRACE_NOCHECK, (mask) | D_LOGFAC, ptr, fmt, ## __VA_ARGS__)
+
+#ifdef D_LOG_USE_V2
+#define D_DEBUG D_DEBUG_V2
+#define D_TRACE_DEBUG D_TRACE_DEBUG_V2
+
+#define _D_DEBUG_V2(func, flag, ...)					   \
+	do {								   \
+		if (__builtin_expect(DD_FLAG(flag, D_LOGFAC), 0)) {	   \
+			if (DD_FLAG(flag, D_LOGFAC) == (int)DLOG_UNINIT) { \
+				_D_LOG_CHECK(func,			   \
+					     DD_FLAG(flag, D_LOGFAC),	   \
+					     (flag) | D_LOGFAC,		   \
+					     ##__VA_ARGS__);		   \
+				break;					   \
+			}						   \
+			func(DD_FLAG(flag, D_LOGFAC), ##__VA_ARGS__);	   \
+		}							   \
+	} while (0)
+/**
+ * New version of D_DEBUG which utilizes the facility cache to optimize
+ * both negative and postive debug lookups
+ */
+#define D_DEBUG_V2(flag, fmt, ...)				\
+	_D_DEBUG_V2(_D_LOG_NOCHECK, flag, fmt, ##__VA_ARGS__)
+
+/**
+ * New version of D_DEBUG which utilizes the facility cache to optimize
+ * both negative and postive debug lookups
+ */
+#define D_TRACE_DEBUG_V2(flag, ptr, fmt, ...)				\
+	_D_DEBUG_V2(_D_TRACE_NOCHECK, flag, ptr, fmt, ##__VA_ARGS__)
+
+#else /* !D_LOG_USE_V2 */
+#define D_DEBUG D_DEBUG_V1
+#define D_TRACE_DEBUG D_TRACE_DEBUG_V1
+#ifdef D_LOG_V1_TEST
+/** Define the new macro to a sane value so tests still work.  Otherwise, leave
+ * it undefined as users shouldn't be using it without defining D_LOG_V2
+ */
+#define D_DEBUG_V2 D_DEBUG_V1
+#define D_TRACE_DEBUG_V2 D_TRACE_DEBUG_V1
+#endif /* D_LOG_TEST_V1 */
+#endif /* D_LOG_USE_V2 */
+
+/** Special conditional debug so we can pass different flags to base routine
+ *  based on a condition.   With V2, things like cond ? flag1 : flag2 don't
+ *  work natively.
+ */
+#define D_CDEBUG(cond, flag_true, flag_false, ...)		\
+	do {							\
+		if (cond)					\
+			D_DEBUG(flag_true, __VA_ARGS__);	\
+		else						\
+			D_DEBUG(flag_false, __VA_ARGS__);	\
+	} while (0)
 
 /** Helper macros to conditionally output logs conditionally based on
  *  the message priority and the current log level.  See D_DEBUG and

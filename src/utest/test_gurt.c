@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -566,6 +566,18 @@ test_binheap(void **state)
 			d_log(d_log_check((fac) | DLOG_INFO), __VA_ARGS__);\
 	} while (0)
 
+#define FOREACH_TEST_FAC(ACTION, arg)	\
+	ACTION(sn, ln, arg)		\
+	ACTION(foo, foobar, arg)
+
+#define FOREACH_TEST_DB(ACTION, arg)			\
+	ACTION(DB_TEST1, test1, test1_long, 0, arg)	\
+	ACTION(DB_TEST2, test2, test2_long, 0, arg)
+
+FOREACH_TEST_DB(D_LOG_INSTANTIATE_DB, D_NOOP);
+FOREACH_TEST_FAC(D_LOG_DECLARE_FAC, FOREACH_TEST_DB);
+FOREACH_TEST_FAC(D_LOG_INSTANTIATE_FAC, FOREACH_TEST_DB);
+
 static void
 test_log(void **state)
 {
@@ -666,7 +678,7 @@ test_log(void **state)
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
-	current_dbgmask = dbg_mask;
+	current_dbgmask = dbg_mask & ~DLOG_DBG;
 	rc_dbgbit = d_log_getdbgbit(&dbg_mask, "test");
 	if (rc_dbgbit < 0)
 		D_ERROR("Unable to get debug bit mask for test\n");
@@ -677,6 +689,47 @@ test_log(void **state)
 	rc = d_log_getmasks(retbuf, 0, 200, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
+
+	rc = D_LOG_REGISTER_DB(FOREACH_TEST_DB);
+	assert_int_equal(rc, 0);
+
+	rc = D_LOG_REGISTER_FAC(FOREACH_TEST_FAC);
+	assert_int_equal(rc, 0);
+#undef D_LOGFAC
+#define D_LOGFAC	DD_FAC(sn)
+	setenv("D_LOG_MASK", "sn=DEBUG", 1);
+	setenv("DD_MASK", "test1", 1);
+	d_log_sync_mask();
+
+	D_INFO("V2: This message should appear\n");
+	D_DEBUG_V2(DB_TEST1, "V2: This message should appear\n");
+	D_DEBUG_V1(DB_TEST1, "V1: This message should appear\n");
+	D_DEBUG_V2(DB_TEST2, "V2: This message should NOT appear\n");
+	D_DEBUG_V1(DB_TEST2, "V1: This message should NOT appear\n");
+#undef D_LOGFAC
+#define D_LOGFAC	DD_FAC(foo)
+	D_DEBUG_V2(DB_TEST1, "V2: This message should NOT appear\n");
+	D_DEBUG_V1(DB_TEST1, "V1: This message should NOT appear\n");
+	d_log_sync_mask();
+	setenv("D_LOG_MASK", "foobar=DEBUG", 1);
+	setenv("DD_MASK", "test2_long", 1);
+	d_log_sync_mask();
+	D_DEBUG_V2(DB_TEST2, "V2: This message should appear\n");
+	D_DEBUG_V1(DB_TEST2, "V1: This message should appear\n");
+	D_DEBUG_V2(DB_TEST1, "V2: This message should NOT appear\n");
+	D_DEBUG_V1(DB_TEST1, "V1: This message should NOT appear\n");
+	D_CDEBUG(0, DB_TEST1, DB_TEST2, "V2: This message should appear\n");
+	D_CDEBUG(1, DB_TEST1, DB_TEST2, "V2: This message should NOT appear\n");
+	D_CDEBUG(0, DB_TEST2, DB_TEST1, "V2: This message should NOT appear\n");
+	D_CDEBUG(1, DB_TEST2, DB_TEST1, "V2: This message should appear\n");
+	D_TRACE_INFO(&DB_TEST2, "This message should appear\n");
+	D_TRACE_DEBUG(DB_TEST1, &DB_TEST1, "This message should NOT appear\n");
+	D_TRACE_DEBUG(DB_TEST2, &DB_TEST1, "This message should appear\n");
+#undef D_LOGFAC
+#define D_LOGFAC	DD_FAC(misc)
+
+	rc = D_LOG_DEREGISTER_DB(FOREACH_TEST_DB);
+	assert_int_equal(rc, 0);
 
 	if (oldmask)
 		d_log_setmasks(oldmask, -1);

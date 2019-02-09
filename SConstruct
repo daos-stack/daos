@@ -93,7 +93,7 @@ def scons():
 
     # Compiler options
     env.Append(CCFLAGS=['-g3', '-Wshadow', '-Wall', '-Werror', '-fpic',
-                        '-D_GNU_SOURCE'])
+                        '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-O2', '-pthread'])
     env.Append(CFLAGS=['-std=gnu99'])
     if not GetOption('clean'):

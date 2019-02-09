@@ -95,6 +95,7 @@
 
 #include <gurt/dlog.h>
 #include <gurt/common.h>
+#include <gurt/list.h>
 
 /* extra tag bytes to alloc for a pid */
 #define DLOG_TAGPAD 16
@@ -118,13 +119,21 @@ struct clog_state {
 #endif
 };
 
+struct cache_entry {
+	int		*ce_cache;
+	d_list_t	 ce_link;
+	int		 ce_nr;
+};
+
 /*
- * global data.  this sets d_log_xst.tag to 0, meaning the log is not open.
+ * global data. Zero initialization means the log is not open.
  * this is global so clog_filter() in dlog.h can get at it.
  */
-struct d_log_xstate d_log_xst = { 0, 0, 0, 0 };
+struct d_log_xstate d_log_xst;
 
 static struct clog_state mst;
+static d_list_t	d_log_caches;
+
 
 /* default name for facility 0 */
 static const char *default_fac0name = "CLOG";
@@ -251,6 +260,36 @@ static void clog_bput(char **bpp, int *skippy, int *residp, int *totcp,
 	}
 }
 
+static void
+reset_caches(void)
+{
+	struct cache_entry	*ce;
+	int			 i;
+
+	d_list_for_each_entry(ce, &d_log_caches, ce_link) {
+		for (i = 0; i < ce->ce_nr; i++)
+			ce->ce_cache[i] = DLOG_UNINIT;
+	}
+}
+
+void
+d_log_add_cache(int *cache, int nr)
+{
+	struct cache_entry	*ce;
+
+	/* Can't use D_ALLOC yet */
+	ce = malloc(sizeof(*ce));
+	if (ce == NULL)
+		return;
+
+	clog_lock();
+	ce->ce_cache = cache;
+	ce->ce_nr = nr;
+	d_list_add(&ce->ce_link, &d_log_caches);
+	clog_unlock();
+}
+
+
 /**
  * dlog_cleanout: release previously allocated resources (e.g. from a
  * close or during a failed open).  this function assumes the clogmux
@@ -263,7 +302,8 @@ static void clog_bput(char **bpp, int *skippy, int *residp, int *totcp,
  */
 static void dlog_cleanout(void)
 {
-	int lcv;
+	struct cache_entry	*ce;
+	int			 lcv;
 
 	clog_lock();
 	if (mst.logfile) {
@@ -290,6 +330,11 @@ static void dlog_cleanout(void)
 		d_log_xst.dlog_facs = NULL;
 		d_log_xst.fac_cnt = mst.fac_alloc = 0;
 	}
+
+	reset_caches(); /* Since the log is going away, reset cached masks */
+	while ((ce = d_list_pop_entry(&d_log_caches,
+				      struct cache_entry, ce_link)))
+		free(ce);
 	clog_unlock();
 #ifdef DLOG_MUTEX
 	D_MUTEX_DESTROY(&mst.clogmux);
@@ -551,6 +596,9 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	/* it is now safe to use dlog_cleanout() for error handling */
 
 	clog_lock();		/* now locked */
+
+	D_INIT_LIST_HEAD(&d_log_caches);
+
 	if (flags & DLOG_FLV_LOGPID)
 		snprintf(newtag, tagblen, "%s[%d]", tag, getpid());
 	else
@@ -844,6 +892,7 @@ int d_log_setmasks(char *mstr, int mlen0)
 					break;
 				}
 			}
+			reset_caches();
 			clog_unlock();
 			if (facno >= d_log_xst.fac_cnt) {
 				/* Sometimes a user wants to allocate a facility

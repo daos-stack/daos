@@ -76,6 +76,7 @@ static d_dbug_t DB_OPT10;
 	DBG_DICT_ENTRY(&bit, #name, #longname),
 
 struct d_debug_bit d_dbg_bit_dict[] = {
+	/* load common debug bits into dict */
 	D_FOREACH_GURT_DB(D_INIT_DB, D_NOOP)
 	/* set by d_log_dbg_bit_alloc() */
 	DBG_DICT_ENTRY(&DB_OPT1, NULL, NULL),
@@ -387,6 +388,7 @@ debug_mask_load_env(void)
 	}
 
 	cur = strtok(mask_str, DD_SEP);
+	d_dbglog_data.dd_mask = 0;
 	while (cur != NULL) {
 		for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
 			d = &d_dbg_bit_dict[i];
