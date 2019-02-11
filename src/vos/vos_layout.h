@@ -35,6 +35,7 @@
 #include <daos_srv/vos_types.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
+#include <daos_srv/dtx_srv.h>
 
 /**
  * VOS metadata structure declarations
@@ -42,15 +43,18 @@
  *
  * opaque structure expanded inside implementation
  * Container table for holding container UUIDs
+ * DAOS two-phase commit transaction table (DTX)
  * Object table for holding object IDs
  * B-Tree for Key Value stores
  * EV-Tree for Byte array stores
  */
 struct vos_cont_table_df;
 struct vos_cont_df;
+struct vos_dtx_table_df;
+struct vos_dtx_entry_df;
+struct vos_dtx_record_df;
 struct vos_obj_table_df;
 struct vos_obj_df;
-struct vos_epoch_index;
 struct vos_krec_df;
 struct vos_irec_df;
 
@@ -70,6 +74,9 @@ POBJ_LAYOUT_BEGIN(vos_pool_layout);
 POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_table_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_df);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_dtx_table_df);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_dtx_entry_df);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_dtx_record_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_table_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec_df);
@@ -109,8 +116,107 @@ struct vos_pool_df {
 	struct vea_space_df			pd_vea_df;
 };
 
-struct vos_epoch_index {
-	struct btr_root		ehtable;
+/**
+ * A DTX record is the object, {a,d}key, single-value or
+ * array value that is changed in the transaction (DTX).
+ */
+enum vos_dtx_record_types {
+	DTX_RT_OBJ	= 1,
+	DTX_RT_KEY	= 2,
+	DTX_RT_SVT	= 3,
+	DTX_RT_EVT	= 4,
+};
+
+enum vos_dtx_record_flags {
+	/* We make some special handling for the punch of object/key.
+	 * The basic idea is that:
+	 *
+	 * Firstly, we insert a new record for the target (object/key)
+	 * to be punched with the given epoch.
+	 *
+	 * Then exchange the sub-tree(s) under the original record that
+	 * has DAOS_EPOCH_MAX for the target to be punched and the new
+	 * created record.
+	 *
+	 * And then remove the original record that has DAOS_EPOCH_MAX
+	 * for the target to be punched.
+	 */
+
+	/* The source of exchange the record that has the DAOS_EPOCH_MAX. */
+	DTX_RF_EXCHANGE_SRC	= 1,
+
+	/* The target of exchange the record that has the given epoch. */
+	DTX_RF_EXCHANGE_TGT	= 2,
+};
+
+/**
+ * The agent of the record being modified via the DTX.
+ */
+struct vos_dtx_record_df {
+	/** The DTX record type, see enum vos_dtx_record_types. */
+	uint32_t			tr_type;
+	/** The DTX record flags, see enum vos_dtx_record_flags. */
+	uint32_t			tr_flags;
+	/** The record in the related tree in SCM. */
+	umem_id_t			tr_record;
+	/** The next vos_dtx_record_df for the same DTX. */
+	umem_id_t			tr_next;
+};
+
+enum vos_dtx_entry_flags {
+	/* The DTX contains exchange of some record(s). */
+	DTX_EF_EXCHANGE_PENDING		= (1 << 0),
+	/* The DTX shares something with other DTX(s). */
+	DTX_EF_SHARES			= (1 << 1),
+};
+
+/**
+ * Persisted DTX entry, it is referenced by btr_record::rec_mmid
+ * of btree VOS_BTR_DTX_TABLE.
+ */
+struct vos_dtx_entry_df {
+	/** The DTX identifier. */
+	struct daos_tx_id		te_xid;
+	/** The identifier of the modified object (shard). */
+	daos_unit_oid_t			te_oid;
+	/** The hashed dkey if applicable. */
+	uint64_t			te_dkey_hash[2];
+	/** The epoch# for the DTX. */
+	daos_epoch_t			te_epoch;
+	/** Pool map version. */
+	uint32_t			te_ver;
+	/** DTX status, see enum dtx_status. */
+	uint32_t			te_state;
+	/** DTX flags, see enum vos_dtx_entry_flags. */
+	uint32_t			te_flags;
+	/** The intent of related modification. */
+	uint32_t			te_intent;
+	/** The second timestamp when handles the transaction. */
+	uint64_t			te_sec;
+	/** The list of vos_dtx_record_df in SCM. */
+	umem_id_t			te_records;
+	/** The next committed DTX in global list. */
+	umem_id_t			te_next;
+	/** The prev committed DTX in global list. */
+	umem_id_t			te_prev;
+};
+
+/**
+ * DAOS two-phase commit transaction table.
+ */
+struct vos_dtx_table_df {
+	/** The count of committed DTXs in the table. */
+	uint64_t			tt_count;
+	/** The time in second when last aggregate the DTXs. */
+	uint64_t			tt_time_last_shrink;
+	/** The list head of committed DTXs. */
+	umem_id_t			tt_entry_head;
+	/** The list tail of committed DTXs. */
+	umem_id_t			tt_entry_tail;
+	/** The root of the B+ tree for committed DTXs. */
+	struct btr_root			tt_committed_btr;
+	/** The root of the B+ tree for active (prepared) DTXs. */
+	struct btr_root			tt_active_btr;
 };
 
 /**
@@ -128,6 +234,8 @@ struct vos_cont_df {
 	daos_size_t			cd_used;
 	daos_epoch_t			cd_hae;
 	struct vos_obj_table_df		cd_otab_df;
+	/** The DTXs table. */
+	struct vos_dtx_table_df		cd_dtx_table_df;
 	/*
 	 * Allocation hint for block allocator, it can be turned into
 	 * a hint vector when we need to support multiple active epochs.
@@ -162,6 +270,12 @@ struct vos_krec_df {
 	daos_epoch_t			kr_latest;
 	/* Earliest known modification timestamp */
 	daos_epoch_t			kr_earliest;
+	/** The DTX entry in SCM. */
+	umem_id_t			kr_dtx;
+	/** The count of uncommitted DTXs that share the object. */
+	uint32_t			kr_dtx_shares;
+	/** For 64-bits alignment. */
+	uint32_t			kr_padding;
 	/** btree root under the key */
 	struct btr_root			kr_btr;
 	/** evtree root, which is only used by akey */
@@ -189,6 +303,8 @@ struct vos_irec_df {
 	uint8_t				ir_pad8;
 	/** pool map version */
 	uint32_t			ir_ver;
+	/** The DTX entry in SCM. */
+	umem_id_t			ir_dtx;
 	/** length of value */
 	uint64_t			ir_size;
 	/** external payload address */
@@ -209,10 +325,14 @@ struct vos_obj_df {
 	daos_epoch_t			vo_latest;
 	/** Earliest known update timestamp */
 	daos_epoch_t			vo_earliest;
-	/**
-	 * Incarnation of the object, it's increased each time it's punched.
-	 */
+	/** Incarnation of the object, it's increased each time it's punched. */
 	uint64_t			vo_incarnation;
+	/** The DTX entry in SCM. */
+	umem_id_t			vo_dtx;
+	/** The count of uncommitted DTXs that share the object. */
+	uint32_t			vo_dtx_shares;
+	/** For 64-bits alignment. */
+	uint32_t			vo_padding;
 	/** VOS object btree root */
 	struct btr_root			vo_tree;
 };

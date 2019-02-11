@@ -222,6 +222,12 @@ vos_mod_init(void)
 		return rc;
 	}
 
+	rc = vos_dtx_table_register();
+	if (rc) {
+		D_ERROR("DTX btree initialization error\n");
+		return rc;
+	}
+
 	/**
 	 * Registering the class for OI btree
 	 * and KV btree

@@ -102,6 +102,10 @@ struct vos_container {
 	struct vos_pool		*vc_pool;
 	/* Unique UID of VOS container */
 	uuid_t			vc_id;
+	/* The handle for active DTX table */
+	daos_handle_t		vc_dtx_active_hdl;
+	/* The handle for committed DTX table */
+	daos_handle_t		vc_dtx_committed_hdl;
 	/* DAOS handle for object index btree */
 	daos_handle_t		vc_btr_hdl;
 	/* Direct pointer to VOS object index
@@ -383,6 +387,38 @@ vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
 int
 vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
 
+/**
+ * DTX table create
+ * Called from cont_df_rec_alloc.
+ *
+ * \param pool		[IN]	vos pool
+ * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_create(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
+
+/**
+ * DTX table destroy
+ * Called from vos_cont_destroy
+ *
+ * \param pool		[IN]	vos pool
+ * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
+
+/**
+ * Register dbtree class for DTX table, it is called within vos_init().
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_register(void);
+
 enum vos_tree_class {
 	/** the first reserved tree class */
 	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
@@ -396,6 +432,8 @@ enum vos_tree_class {
 	VOS_BTR_OBJ_TABLE	= (VOS_BTR_BEGIN + 3),
 	/** container index table */
 	VOS_BTR_CONT_TABLE	= (VOS_BTR_BEGIN + 4),
+	/** DAOS two-phase commit transation table */
+	VOS_BTR_DTX_TABLE	= (VOS_BTR_BEGIN + 5),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
