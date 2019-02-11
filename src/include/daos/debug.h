@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ extern int d_rdb_logfac;
 extern int d_rsvc_logfac;
 extern int d_pool_logfac;
 extern int d_container_logfac;
+extern int d_dtx_logfac;
 extern int d_object_logfac;
 extern int d_placement_logfac;
 extern int d_rebuild_logfac;
