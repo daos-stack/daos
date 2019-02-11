@@ -389,6 +389,69 @@ init_fini_conn(void **state)
 	assert_int_equal(rc, 0);
 }
 
+/** create pool with properties and query */
+static void
+pool_properties(void **state)
+{
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
+	char			*label = "test_pool_properties";
+	uint64_t		 space_rb = 36;
+	daos_prop_t		*prop;
+	daos_prop_t		*prop_query;
+	struct daos_prop_entry *entry;
+	int			 rc;
+
+	print_message("create pool with properties, and query it to verify.\n");
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			DEFAULT_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	prop = daos_prop_alloc(2);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
+	prop->dpp_entries[0].dpe_str = strdup(label);
+	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SPACE_RB;
+	prop->dpp_entries[1].dpe_val = space_rb;
+
+	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, prop);
+	assert_int_equal(rc, 0);
+
+	prop_query = daos_prop_alloc(0);
+	rc = daos_pool_query(arg->pool.poh, NULL, NULL, prop_query, NULL);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(prop_query->dpp_nr, 4);
+	/* set properties should get the value user set */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
+	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
+		print_message("label verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SPACE_RB);
+	if (entry == NULL || entry->dpe_val != space_rb) {
+		print_message("space_rb verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	/* not set properties should get default value */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SELF_HEAL);
+	if (entry == NULL ||
+	    entry->dpe_val != (DAOS_SELF_HEAL_AUTO_EXCLUDE |
+			       DAOS_SELF_HEAL_AUTO_REBUILD)) {
+		print_message("self-heal verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_RECLAIM);
+	if (entry == NULL || entry->dpe_val != DAOS_RECLAIM_SNAPSHOT) {
+		print_message("reclaim verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	daos_prop_free(prop);
+	daos_prop_free(prop_query);
+	test_teardown((void **)&arg);
+}
+
 static int
 pool_setup_sync(void **state)
 {
@@ -432,6 +495,8 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_attribute, pool_setup_async, test_case_teardown},
 	{ "POOL9: pool reconnect after daos re-init",
 	  init_fini_conn, NULL, test_case_teardown},
+	{ "POOL10: pool create with properties and query",
+	  pool_properties, NULL, test_case_teardown},
 };
 
 int

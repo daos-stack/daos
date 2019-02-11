@@ -35,7 +35,7 @@
 /**
  * Determine whether the provided credentials can access a pool.
  *
- * \param[in]	attr		Pool attributes
+ * \param[in]	ugm		Pool properties uid/gid/mode
  * \param[in]	cred		Opaque Credential Data
  * \param[in]	access		Requested pool access
  *
@@ -47,6 +47,6 @@
  *		-DER_NOREPLY	No response from agent
  *		-DER_MISC	Invalid response from agent
  */
-int ds_sec_can_pool_connect(const struct pool_attr *attr, d_iov_t *cred,
+int ds_sec_can_pool_connect(const struct pool_prop_ugm *ugm, d_iov_t *cred,
 				uint64_t access);
 #endif /* __DAOS_SRV_SECURITY_H__ */

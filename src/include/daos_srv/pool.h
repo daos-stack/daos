@@ -94,17 +94,17 @@ struct ds_pool_child {
 };
 
 /*
- * Pool attributes
+ * Pool properties uid/gid/mode
  *
  * Stores per-pool access control information
  *
  * This is only being exposed until the access control attributes are
  * proper encapsulated in the security module.
  */
-struct pool_attr {
-	uint32_t	pa_uid;
-	uint32_t	pa_gid;
-	uint32_t	pa_mode;
+struct pool_prop_ugm {
+	uint32_t	pp_uid;
+	uint32_t	pp_gid;
+	uint32_t	pp_mode;
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
@@ -135,7 +135,8 @@ int ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid,
 		       unsigned int gid, unsigned int mode, int ntargets,
 		       uuid_t target_uuids[], const char *group,
 		       const d_rank_list_t *target_addrs, int ndomains,
-		       const int *domains, d_rank_list_t *svc_addrs);
+		       const int *domains, daos_prop_t *prop,
+		       d_rank_list_t *svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid);
 
 /*
