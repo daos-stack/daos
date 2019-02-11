@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,22 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 #include "obj_rpc.h"
+
+static int
+crt_proc_struct_daos_tx_id(crt_proc_t proc, struct daos_tx_id *dti)
+{
+	int rc;
+
+	rc = crt_proc_uuid_t(proc, &dti->dti_uuid);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &dti->dti_sec);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
 
 static int
 crt_proc_daos_key_desc_t(crt_proc_t proc, daos_key_desc_t *key)
@@ -304,7 +320,7 @@ crt_proc_daos_anchor_t(crt_proc_t proc, daos_anchor_t *anchor)
 	if (crt_proc_uint16_t(proc, &anchor->da_shard) != 0)
 		return -DER_HG;
 
-	if (crt_proc_uint32_t(proc, &anchor->da_padding) != 0)
+	if (crt_proc_uint32_t(proc, &anchor->da_flags) != 0)
 		return -DER_HG;
 
 	if (crt_proc_raw(proc, anchor->da_buf, sizeof(anchor->da_buf)) != 0)
