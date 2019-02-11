@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -275,7 +275,7 @@ struct d_hash_table	pl_htable = {
 
 #define DSR_RING_DOMAIN		PO_COMP_TP_RACK
 
-static void
+void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		 struct pl_map_init_attr *mia)
 {
@@ -380,18 +380,20 @@ pl_htable_init()
  */
 int
 pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
-	      struct pl_map **pl_mapp)
+	      struct pl_map **pl_mapp, bool hash)
 {
-	int rc = 0;
+	if (hash) {
+		int rc = 0;
 
-	D_RWLOCK_WRLOCK(&pl_rwlock);
-	if (!pl_htable.ht_ops)
-		rc = pl_htable_init();
-	D_RWLOCK_UNLOCK(&pl_rwlock);
+		D_RWLOCK_WRLOCK(&pl_rwlock);
+		if (!pl_htable.ht_ops)
+			rc = pl_htable_init();
+		D_RWLOCK_UNLOCK(&pl_rwlock);
 
-	if (rc) {
-		D_ERROR("pl_htable_init failed, rc %d.\n", rc);
-		return rc;
+		if (rc != 0) {
+			D_ERROR("pl_htable_init failed, rc %d.\n", rc);
+			return rc;
+		}
 	}
 
 	return pl_map_create_inited(pool_map, mia, pl_mapp);
