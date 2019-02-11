@@ -308,6 +308,7 @@ int evt_ent_array_sort(struct evt_context *tcx,
 /** Scan the tree and select all rectangles that match
  * \param[IN]		tcx		The evtree context
  * \param[IN]		opc		The opcode for the scan
+ * \param[IN]		intent		The operation intent
  *					EVT_FIND_FIRST: First record only
  *					EVT_FIND_SAME:  Same record only
  *					EVT_FIND_ALL:   All records
@@ -319,7 +320,7 @@ int evt_ent_array_sort(struct evt_context *tcx,
  * scanned record.
  */
 int evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
-		       const struct evt_filter *filter,
+		       uint32_t intent, const struct evt_filter *filter,
 		       const struct evt_rect *rect,
 		       struct evt_entry_array *ent_array);
 
@@ -351,8 +352,9 @@ struct evt_context *evt_hdl2tcx(daos_handle_t toh);
 
 /** Move the trace forward.
  * \param[IN]	tcx	The evtree context
+ * \param IN]	intent	The operation intent
  */
-bool evt_move_trace(struct evt_context *tcx);
+bool evt_move_trace(struct evt_context *tcx, uint32_t intent);
 
 /** Get a pointer to the rectangle corresponding to an index in a tree node
  * \param[IN]	tcx	The evtree context

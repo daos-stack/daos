@@ -706,8 +706,10 @@ struct vos_iterator {
 	struct vos_iterator	*it_parent; /* parent iterator */
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
-	bool			 it_from_parent;
 	uint32_t		 it_ref_cnt;
+	uint32_t		 it_from_parent:1,
+				 it_for_purge:1,
+				 it_for_rebuild:1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -734,8 +736,8 @@ struct vos_iter_info {
 	daos_epoch_range_t	 ii_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
-	/** recx visibility flags */
-	uint32_t		 ii_recx_flags;
+	/** iterator flags */
+	uint32_t		 ii_flags;
 
 };
 
@@ -826,8 +828,8 @@ enum {
 int
 key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, struct vos_krec_df **krec,
-		 daos_handle_t *sub_toh);
+		 daos_key_t *key, int flags, uint32_t intent,
+		 struct vos_krec_df **krec, daos_handle_t *sub_toh);
 void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
@@ -883,6 +885,16 @@ vos_df_ts_update(struct vos_object *obj, daos_epoch_t *latest_df,
 		*earliest_df = epr->epr_lo;
 out:
 	return rc;
+}
+
+static inline uint32_t
+vos_iter_intent(struct vos_iterator *iter)
+{
+	if (iter->it_for_purge)
+		return DAOS_INTENT_PURGE;
+	if (iter->it_for_rebuild)
+		return DAOS_INTENT_REBUILD;
+	return DAOS_INTENT_DEFAULT;
 }
 
 #endif /* __VOS_INTERNAL_H__ */

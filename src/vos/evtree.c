@@ -1643,8 +1643,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 	evt_ent_array_init(&ent_array);
 
 	/* Phase-1: Check for overwrite */
-	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, NULL, &entry->ei_rect,
-				&ent_array);
+	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
+				NULL, &entry->ei_rect, &ent_array);
 	if (rc != 0)
 		return rc;
 
@@ -1737,19 +1737,12 @@ evt_entry_fill(struct evt_context *tcx, uint64_t nd_off,
 }
 
 /**
- * Find all versioned extents which intercept with the input one \a rect.
- * It attaches all found extents and their data pointers on \a ent_array if
- * \a no_overlap is false, otherwise returns error if there is any overlapped
- * extent.
- *
- * \param rect		[IN]	Rectangle to check.
- * \param no_overlap	[IN]	Returns error if \a rect overlap with any
- *				existent extent.
- * \param ent_array	[OUT]	The returned entries for overlapped extents.
+ * See the description in evt_priv.h
  */
 int
 evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
-		   const struct evt_filter *filter, const struct evt_rect *rect,
+		   uint32_t intent, const struct evt_filter *filter,
+		   const struct evt_rect *rect,
 		   struct evt_entry_array *ent_array)
 {
 	uint64_t	nd_off;
@@ -2144,7 +2137,8 @@ evt_find(daos_handle_t toh, const struct evt_rect *rect,
 		return -DER_NO_HDL;
 
 	evt_ent_array_init(ent_array);
-	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, NULL, rect, ent_array);
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT, NULL,
+				rect, ent_array);
 	if (rc == 0)
 		rc = evt_ent_array_sort(tcx, ent_array, EVT_VISIBLE);
 	if (rc != 0)
@@ -2154,7 +2148,7 @@ evt_find(daos_handle_t toh, const struct evt_rect *rect,
 
 /** move the probing trace forward */
 bool
-evt_move_trace(struct evt_context *tcx)
+evt_move_trace(struct evt_context *tcx, uint32_t intent)
 {
 	struct evt_trace	*trace;
 	struct evt_node		*nd;
@@ -2840,7 +2834,8 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	/* NB: This function presently only supports exact match on extent. */
 	evt_ent_array_init(&ent_array);
 
-	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, NULL, rect, &ent_array);
+	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PUNCH, NULL,
+				rect, &ent_array);
 	if (rc != 0)
 		return rc;
 

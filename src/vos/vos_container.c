@@ -688,7 +688,11 @@ cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
 	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
-	return dbtree_iter_probe(co_iter->cot_hdl, opc, NULL, anchor);
+	/* The container tree will not be affected by the iterator intent,
+	 * just set it as DAOS_INTENT_DEFAULT.
+	 */
+	return dbtree_iter_probe(co_iter->cot_hdl, opc, DAOS_INTENT_DEFAULT,
+				 NULL, anchor);
 }
 
 static int

@@ -511,6 +511,11 @@ enum {
 	 * If neither flag is set, all rectangles in tree that intersect the
 	 * search rectangle, including punched extents, are returned.
 	 */
+
+	/** The iterator is for purge operation */
+	EVT_ITER_FOR_PURGE	= (1 << 5),
+	/** The iterator is for rebuild scan */
+	EVT_ITER_FOR_REBUILD	= (1 << 6),
 };
 
 /**
