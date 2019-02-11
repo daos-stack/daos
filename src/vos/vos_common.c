@@ -35,6 +35,13 @@
 #include <daos/lru.h>
 #include <daos/btree_class.h>
 
+/**
+ * The vos_start_time records the timestamp when server starts the serive.
+ * Via comparing with the DTX entry's timestamp, we can know whether
+ * the DTX happened before the server restarting its service or not.
+ */
+double vos_start_time;
+
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 /**
  * Object cache based on mode of instantiation
@@ -367,6 +374,7 @@ vos_init(void)
 	if (rc)
 		D_GOTO(exit, rc);
 
+	vos_start_time = ABT_get_wtime();
 	is_init = 1;
 exit:
 	D_MUTEX_UNLOCK(&mutex);

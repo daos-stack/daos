@@ -31,6 +31,19 @@
 #include "vos_layout.h"
 #include "vos_internal.h"
 
+#define DTX_RETURN_INPROGRESS(dtx, pos)					 \
+do {									 \
+	if ((dtx) != NULL)						 \
+		D_DEBUG(DB_TRACE, "Hit uncommitted DTX "DF_DTI		 \
+			" with state %u, time %lu at %d\n",		 \
+			DP_DTI(&(dtx)->te_xid), (dtx)->te_state,	 \
+			(dtx)->te_sec, (pos));				 \
+	else								 \
+		D_DEBUG(DB_TRACE, "Hit uncommitted DTX at %d\n", (pos)); \
+									 \
+	return -DER_INPROGRESS;						 \
+} while (0)
+
 struct dtx_rec_bundle {
 	umem_id_t	trb_ummid;
 };
@@ -589,6 +602,66 @@ vos_dtx_abort_one(struct vos_container *cont, struct daos_tx_id *dti,
 		rc = 0;
 
 	return rc;
+}
+
+int
+vos_dtx_handle_resend(daos_handle_t coh, struct daos_tx_id *dti)
+{
+	struct vos_container	*cont;
+	struct vos_dtx_entry_df	*dtx;
+	daos_iov_t		 kiov;
+	daos_iov_t		 riov;
+	int			 rc;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	daos_iov_set(&kiov, dti, sizeof(*dti));
+	daos_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc == -DER_NONEXIST)
+		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
+
+	if (rc == -DER_NONEXIST) {
+		/* If the resent RPC is too old, then we cannot know whether
+		 * the RPC has ever been executed before or not. Then return
+		 * -DER_TIMEDOUT to the RPC sponsor. Means that modification
+		 * for such RPC may have been executed, but nobody guarantee
+		 * that. It is the caller's duty to check related record(s).
+		 */
+		if ((uint64_t)ABT_get_wtime() - dti->dti_sec >
+		    DTX_AGGREGATION_THRESHOLD_TIME) {
+			D_DEBUG(DB_IO, "Not sure about whether the RPC "
+				DF_DTI" is resend or not.\n", DP_DTI(dti));
+			return -DER_TIMEDOUT;
+		}
+	}
+
+	if (rc != 0)
+		return rc;
+
+	dtx = (struct vos_dtx_entry_df *)riov.iov_buf;
+	switch (dtx->te_state) {
+	case DTX_ST_INIT:
+		/* New DTX after the leader (re)start that is not
+		 * completed yet, retry related RPC some time later.
+		 */
+		if (dtx->te_sec >= (uint64_t)vos_start_time)
+			DTX_RETURN_INPROGRESS(dtx, 1);
+
+		/* The INIT DTX in PRAM must be for an in-update object/key
+		 * that was waiting for the bulk transfer (or remote abort)
+		 * before the VOS restart. So here, it should be the case
+		 * that client resends RPC after server restart.
+		 */
+		return 0;
+	case DTX_ST_PREPARED:
+		return 0;
+	case DTX_ST_COMMITTED:
+		return -DER_ALREADY;
+	default:
+		return -DER_INVAL;
+	}
 }
 
 int
