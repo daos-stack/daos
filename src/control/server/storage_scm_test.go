@@ -30,6 +30,19 @@ import (
 	. "github.com/daos-stack/go-ipmctl/ipmctl"
 )
 
+// MockModule returns a mock SCM module of type exported from go-ipmctl.
+func MockModule() DeviceDiscovery {
+	m := MockModulePB()
+	dd := DeviceDiscovery{}
+	dd.Physical_id = uint16(m.Physicalid)
+	dd.Channel_id = uint16(m.Channel)
+	dd.Channel_pos = uint16(m.Channelpos)
+	dd.Memory_controller_id = uint16(m.Memctrlr)
+	dd.Socket_id = uint16(m.Socket)
+	dd.Capacity = m.Capacity
+	return dd
+}
+
 type mockIpmCtl struct {
 	modules []DeviceDiscovery
 }
@@ -61,10 +74,11 @@ func TestDiscoveryScm(t *testing.T) {
 		},
 	}
 
-	m := MockModulePB()
+	mPB := MockModulePB()
+	m := MockModule()
 
 	for _, tt := range tests {
-		ss := newMockScmStorage([]DeviceDiscovery{MockModule()}, tt.inited)
+		ss := newMockScmStorage([]DeviceDiscovery{m}, tt.inited)
 
 		if err := ss.Discover(); err != nil {
 			if tt.errMsg != "" {
@@ -74,6 +88,7 @@ func TestDiscoveryScm(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		AssertEqual(t, ss.modules, ScmmMap{0: m}, "unexpected list of modules")
+		AssertEqual(t, len(ss.modules), 1, "unexpected number of modules")
+		AssertEqual(t, ss.modules[int32(mPB.Physicalid)], mPB, "unexpected module values")
 	}
 }
