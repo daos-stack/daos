@@ -62,9 +62,19 @@ func Errorf(format string, v ...interface{}) {
 	logger.Errordf(3, format, v...)
 }
 
+// Errordf logs a debug message to the default logger at given call depth
+func Errordf(calldepth int, format string, v ...interface{}) {
+	logger.Errordf(calldepth, format, v...)
+}
+
 // Debugf logs a debug message to the default logger
 func Debugf(format string, v ...interface{}) {
 	logger.Debugdf(3, format, v...)
+}
+
+// Debugdf logs a debug message to the default logger at given call depth
+func Debugdf(calldepth int, format string, v ...interface{}) {
+	logger.Debugdf(calldepth, format, v...)
 }
 
 // SetLevel sets the log mask for the default logger

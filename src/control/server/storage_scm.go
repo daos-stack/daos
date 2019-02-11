@@ -48,6 +48,9 @@ type scmStorage struct {
 func loadModules(mms []ipmctl.DeviceDiscovery) (ScmmMap, error) {
 	pbMms := make(ScmmMap)
 	for _, c := range mms {
+		// can cast Physical_id to int32 (as is required to be a map
+		// index) because originally is uint16 so no possibility of
+		// sign bit corruption.
 		pbMms[int32(c.Physical_id)] = &pb.ScmModule{
 			Physicalid: uint32(c.Physical_id),
 			Channel:    uint32(c.Channel_id),

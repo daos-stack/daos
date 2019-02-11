@@ -27,19 +27,25 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 // AssertTrue asserts b is true
 func AssertTrue(t *testing.T, b bool, message string) {
 	if !b {
-		t.Fatal(message)
+		// set log calldepth so context refers to caller
+		log.Errordf(4, message)
+		t.FailNow()
 	}
 }
 
 // AssertFalse asserts b is false
 func AssertFalse(t *testing.T, b bool, message string) {
 	if b {
-		t.Fatal(message)
+		// set log calldepth so context refers to caller
+		log.Errordf(4, message)
+		t.FailNow()
 	}
 }
 
@@ -57,8 +63,9 @@ func AssertEqual(
 	if len(message) > 0 {
 		message += ", "
 	}
-	message += fmt.Sprintf("%#v != %#v", a, b)
-	t.Fatal(message)
+	// set log calldepth so context refers to caller
+	log.Errordf(4, "%#v != %#v", a, b)
+	t.FailNow()
 }
 
 // ExpectError asserts error contains expected message
@@ -66,11 +73,16 @@ func ExpectError(
 	t *testing.T, actualErr error, expectedMessage string, desc interface{}) {
 
 	if actualErr == nil {
-		t.Errorf("Expected a non-nil error: %v", desc)
+		// set log calldepth so context refers to caller
+		log.Errordf(4, "Expected a non-nil error: %v", desc)
+		t.FailNow()
 	} else if actualErr.Error() != expectedMessage {
-		t.Errorf(
+		// set log calldepth so context refers to caller
+		log.Errordf(
+			4,
 			"Wrong error message. Expected: %s, Actual: %s (%v)",
 			expectedMessage, actualErr.Error(), desc)
+		t.FailNow()
 	}
 }
 

@@ -33,6 +33,28 @@ import (
 	. "github.com/daos-stack/go-spdk/spdk"
 )
 
+// MockController is a mock NVMe SSD controller of type exported from go-spdk.
+func MockController(fwrev string) Controller {
+	c := MockControllerPB(fwrev)
+	return Controller{
+		ID:      c.Id,
+		Model:   c.Model,
+		Serial:  c.Serial,
+		PCIAddr: c.Pciaddr,
+		FWRev:   fwrev,
+	}
+}
+
+// MockNamespace is a mock NVMe SSD namespace of type exported from go-spdk.
+func MockNamespace(ctrlr *Controller) Namespace {
+	n := MockNamespacePB()
+	return Namespace{
+		ID:      n.Id,
+		Size:    n.Capacity,
+		CtrlrID: ctrlr.ID,
+	}
+}
+
 // mock external interface implementations for go-spdk/spdk package
 type mockSpdkEnv struct{}
 
