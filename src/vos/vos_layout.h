@@ -251,6 +251,11 @@ enum vos_krec_bf {
 	KREC_BF_PUNCHED			= (1 << 1),
 };
 
+enum vos_kerc_flags {
+	/* The record is (or to be) deleted. */
+	VKF_DELETED	= 1,
+};
+
 /**
  * Persisted VOS (d)key record, it is referenced by btr_record::rec_mmid
  * of btree VOS_BTR_KEY.
@@ -262,8 +267,8 @@ struct vos_krec_df {
 	uint8_t				kr_cs_type;
 	/** key checksum size (in bytes) */
 	uint8_t				kr_cs_size;
-	/** padding bytes */
-	uint8_t				kr_pad_8;
+	/** See enum vos_kerc_flags. */
+	uint8_t				kr_flags;
 	/** key length */
 	uint32_t			kr_size;
 	/* Latest known update timestamp or punched timestamp */

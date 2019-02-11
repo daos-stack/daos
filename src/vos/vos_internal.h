@@ -116,6 +116,8 @@ struct vos_container {
 	d_list_t		vc_dtx_committable;
 	/* The count of commiitable DTXs. */
 	uint32_t		vc_dtx_committable_count;
+	/** The time in second when last commit the DTXs. */
+	double			vc_dtx_time_last_commit;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
@@ -172,6 +174,18 @@ enum {
 #define VOS_OFEAT_SHIFT		48
 #define VOS_OFEAT_MASK		(0x0ffULL   << VOS_OFEAT_SHIFT)
 #define VOS_OFEAT_BITS		(0x0ffffULL << VOS_OFEAT_SHIFT)
+
+#if DAOS_HAS_PMDK
+static const PMEMoid DTX_UMMID_ABORTED = { .pool_uuid_lo = -1,
+					   .off = -1,
+};
+static const PMEMoid DTX_UMMID_UNKNOWN = { .pool_uuid_lo = -1,
+					   .off = -2,
+};
+#else
+# define DTX_UMMID_ABORTED	((umem_id_t){ .pool_uuid_lo = -1, .off = -1, })
+# define DTX_UMMID_UNKNOWN	((umem_id_t){ .pool_uuid_lo = -1, .off = -2, })
+#endif
 
 /**
  * A cached object (DRAM data structure).
