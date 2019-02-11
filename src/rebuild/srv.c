@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -991,6 +991,9 @@ out_rpc:
 static void
 rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 {
+	struct rebuild_dtx_args	*rda = &rpt->rt_dtx_args;
+	int			 i;
+
 	D_ASSERT(rpt->rt_refcount == 0);
 	D_ASSERT(d_list_empty(&rpt->rt_list));
 	if (!daos_handle_is_inval(rpt->rt_tobe_rb_root_hdl)) {
@@ -1010,8 +1013,6 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 		ds_pool_put(rpt->rt_pool);
 
 	if (rpt->rt_pullers) {
-		int i;
-
 		for (i = 0; i < rpt->rt_puller_nxs; i++) {
 			struct rebuild_puller *puller;
 
@@ -1031,6 +1032,21 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 
 	if (rpt->rt_fini_cond)
 		ABT_cond_free(&rpt->rt_fini_cond);
+
+	if (rda->tables != NULL) {
+		for (i = 0; i < dss_tgt_nr; i++) {
+			struct rebuild_dtx_entry	*rte;
+			struct rebuild_dtx_entry	*next;
+
+			d_list_for_each_entry_safe(rte, next,
+					&rda->tables[i].rth_list, rte_link) {
+				d_list_del(&rte->rte_link);
+				D_FREE_PTR(rte);
+			}
+		}
+
+		D_FREE(rda->tables);
+	}
 
 	D_FREE(rpt);
 }
@@ -1721,7 +1737,7 @@ rebuild_prepare_one(void *data)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	/* Create ds_container locally on main XS */
 	rc = ds_cont_local_open(rpt->rt_pool_uuid, rpt->rt_coh_uuid,
-				NULL, 0, NULL);
+				NULL, 0, NULL, false);
 	if (rc)
 		pool_tls->rebuild_pool_status = rc;
 
@@ -1735,6 +1751,7 @@ rpt_create(struct ds_pool *pool, d_rank_list_t *svc_list, uint32_t pm_ver,
 	   uint64_t leader_term, struct rebuild_tgt_pool_tracker **p_rpt)
 {
 	struct rebuild_tgt_pool_tracker	*rpt;
+	struct rebuild_dtx_args		*rda;
 	d_rank_t	rank;
 	int		i;
 	int		rc;
@@ -1742,6 +1759,16 @@ rpt_create(struct ds_pool *pool, d_rank_list_t *svc_list, uint32_t pm_ver,
 	D_ALLOC_PTR(rpt);
 	if (rpt == NULL)
 		return -DER_NOMEM;
+
+	rda = &rpt->rt_dtx_args;
+	D_ALLOC_ARRAY(rda->tables, dss_tgt_nr);
+	if (rda->tables == NULL)
+		D_GOTO(free, rc = -DER_NOMEM);
+
+	for (i = 0; i < dss_tgt_nr; i++) {
+		D_INIT_LIST_HEAD(&rda->tables[i].rth_list);
+		rda->tables[i].rth_count = 0;
+	}
 
 	D_INIT_LIST_HEAD(&rpt->rt_list);
 	rc = ABT_mutex_create(&rpt->rt_lock);
@@ -1773,6 +1800,7 @@ rpt_create(struct ds_pool *pool, d_rank_list_t *svc_list, uint32_t pm_ver,
 	}
 
 	uuid_copy(rpt->rt_pool_uuid, pool->sp_uuid);
+	uuid_copy(rda->po_uuid, pool->sp_uuid);
 	daos_rank_list_dup(&rpt->rt_svc_list, svc_list);
 	rpt->rt_lead_puller_running = 0;
 	rpt->rt_toberb_objs = 0;
