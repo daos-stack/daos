@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,6 +110,8 @@ int  umem_init_txd(struct umem_tx_stage_data *txd);
 void umem_fini_txd(struct umem_tx_stage_data *txd);
 
 typedef struct {
+	/** convert directly accessible address to ummid */
+	umem_id_t	 (*mo_id)(struct umem_instance *umm, void *addr);
 	/** convert ummid to directly accessible address */
 	void		*(*mo_addr)(struct umem_instance *umm,
 				    umem_id_t ummid);
@@ -358,6 +360,12 @@ static inline void *
 umem_id2ptr(struct umem_instance *umm, umem_id_t ummid)
 {
 	return umm->umm_ops->mo_addr(umm, ummid);
+}
+
+static inline umem_id_t
+umem_ptr2id(struct umem_instance *umm, void *ptr)
+{
+	return umm->umm_ops->mo_id(umm, ptr);
 }
 
 #define umem_id2ptr_typed(umm, tmmid)					\

@@ -45,6 +45,11 @@ enum daos_tx_flags {
 	DTX_F_AOC		= 1,
 };
 
+enum dtx_cos_list_types {
+	DCLT_UPDATE		= (1 << 0),
+	DCLT_PUNCH		= (1 << 1),
+};
+
 /**
  * DAOS two-phase commit transaction handle in DRAM.
  */

@@ -33,7 +33,53 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
+#include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
+
+/**
+ * Search the specified DTX is in the CoS cache or not.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	Pointer to the object ID.
+ * \param xid	[IN]	Pointer to the DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return	0 if the DTX exists in the CoS cache.
+ * \return	-DER_NONEXIST if not in the CoS cache.
+ * \return	Other negative values on error.
+ */
+int
+vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
+		   struct daos_tx_id *xid, uint64_t dkey, bool punch);
+
+/**
+ * Fetch the list of the DTXs to be committed because of (potential) share.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param oid		[IN]	The target object (shard) ID.
+ * \param dkey		[IN]	The target dkey to be modified.
+ * \param types		[IN]	The DTX types to be listed.
+ * \param dtis		[OUT]	The DTX IDs array to be committed for share.
+ *
+ * \return			The count of DTXs to be committed for share
+ *				on success, negative value if error.
+ */
+int
+vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid,
+		 daos_key_t *dkey, uint32_t types, struct daos_tx_id **dtis);
+
+/**
+ * Fetch the list of the DTXs that can be committed.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param dtes	[OUT]	The array for DTX entries can be committed.
+ *
+ * \return		The count of DTXs can be committed on success,
+ *			negative value if error.
+ */
+int
+vos_dtx_list_committable(daos_handle_t coh, struct daos_tx_entry **dtes);
 
 /**
  * Initialize the environment for a VOS instance

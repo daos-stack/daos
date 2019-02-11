@@ -108,6 +108,14 @@ struct vos_container {
 	daos_handle_t		vc_dtx_committed_hdl;
 	/* DAOS handle for object index btree */
 	daos_handle_t		vc_btr_hdl;
+	/* The objects with committable DTXs in DRAM. */
+	daos_handle_t		vc_dtx_cos_hdl;
+	/* The DTX COS-btree. */
+	struct btr_root		vc_dtx_cos_btr;
+	/* The global list for commiitable DTXs. */
+	d_list_t		vc_dtx_committable;
+	/* The count of commiitable DTXs. */
+	uint32_t		vc_dtx_committable_count;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
@@ -419,6 +427,60 @@ vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
 int
 vos_dtx_table_register(void);
 
+/**
+ * Register dbtree class for DTX CoS, it is called within vos_init().
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_cos_register(void);
+
+/**
+ * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
+ *
+ * \param cont	[IN]	Pointer to the container.
+ * \param oid	[IN]	The target object (shard) ID.
+ * \param dti	[IN]	The DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return		Zero on success and need not additional actions.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_add_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+		struct daos_tx_id *dti, uint64_t dkey, bool punch);
+
+/**
+ * Remove the DTX from the CoS cache.
+ *
+ * \param cont	[IN]	Pointer to the container.
+ * \param oid	[IN]	Pointer to the object ID.
+ * \param xid	[IN]	Pointer to the DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ */
+void
+vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+		struct daos_tx_id *xid, uint64_t dkey, bool punch);
+
+/**
+ * Search the specified DTX is in the CoS cache or not.
+ *
+ * \param cont	[IN]	Pointer to the container.
+ * \param oid	[IN]	Pointer to the object ID.
+ * \param xid	[IN]	Pointer to the DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return	0 if the DTX exists in the CoS cache.
+ * \return	-DER_NONEXIST if not in the CoS cache.
+ * \return	Other negative values on error.
+ */
+int
+__vos_dtx_lookup_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+		     struct daos_tx_id *xid, uint64_t dkey, bool punch);
+
 enum vos_tree_class {
 	/** the first reserved tree class */
 	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
@@ -434,6 +496,8 @@ enum vos_tree_class {
 	VOS_BTR_CONT_TABLE	= (VOS_BTR_BEGIN + 4),
 	/** DAOS two-phase commit transation table */
 	VOS_BTR_DTX_TABLE	= (VOS_BTR_BEGIN + 5),
+	/** The objects with committable DTXs in DRAM */
+	VOS_BTR_DTX_COS		= (VOS_BTR_BEGIN + 6),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
