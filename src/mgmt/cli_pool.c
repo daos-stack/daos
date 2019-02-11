@@ -123,6 +123,7 @@ dc_pool_create(tse_task_t *task)
 	pc_in->pc_tgts = (d_rank_list_t *)args->tgts;
 	pc_in->pc_scm_size = args->scm_size;
 	pc_in->pc_nvme_size = args->nvme_size;
+	pc_in->pc_prop = args->prop;
 	pc_in->pc_svc_nr = args->svc->rl_nr;
 
 	crt_req_addref(rpc_req);

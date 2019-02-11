@@ -71,7 +71,7 @@ static int
 ds_mgmt_pool_svc_create(uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 			unsigned int mode, int ntargets, uuid_t target_uuids[],
 			const char *group, d_rank_list_t *ranks,
-			d_rank_list_t *svc_list)
+			daos_prop_t *prop, d_rank_list_t *svc_list)
 {
 	int	doms[ntargets];
 	int	rc;
@@ -87,9 +87,9 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	 * TODO: fetch domain list from external source
 	 * Report 1 domain per target for now
 	 */
-	rc = ds_pool_svc_create(pool_uuid, uid, gid, mode,
-				ranks->rl_nr, target_uuids, group,
-				ranks, ARRAY_SIZE(doms), doms, svc_list);
+	rc = ds_pool_svc_create(pool_uuid, uid, gid, mode, ranks->rl_nr,
+				target_uuids, group, ranks, ARRAY_SIZE(doms),
+				doms, prop, svc_list);
 
 	return rc;
 }
@@ -232,7 +232,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	rc = ds_mgmt_pool_svc_create(pc_in->pc_pool_uuid, pc_in->pc_uid,
 				     pc_in->pc_gid, pc_in->pc_mode,
 				     ranks_size, tgt_uuids, pc_in->pc_grp,
-				     rank_list, pc_out->pc_svc);
+				     rank_list, pc_in->pc_prop, pc_out->pc_svc);
 	if (rc)
 		D_ERROR("create pool "DF_UUID" svc failed: rc %d\n",
 			DP_UUID(pc_in->pc_pool_uuid), rc);

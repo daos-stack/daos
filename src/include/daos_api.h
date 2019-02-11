@@ -208,6 +208,24 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 		daos_prop_t *pool_prop, daos_event_t *ev);
 
 /**
+ * Allocate DAOS properties.
+ *
+ * \param[in]	entries_nr	number of entries
+ *
+ * \return	allocated daos_prop_t pointer, NULL if failed.
+ */
+daos_prop_t *
+daos_prop_alloc(uint32_t entries_nr);
+
+/**
+ * Free the DAOS properties.
+ *
+ * \param[int]	prop	properties to be freed.
+ */
+void
+daos_prop_free(daos_prop_t *prop);
+
+/**
  * Query information of storage targets within a DAOS pool.
  *
  * \param[in]	poh	Pool connection handle.

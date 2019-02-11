@@ -260,14 +260,16 @@ out:
 
 /*
  * Using "map_buf", "map_version", and "mode", update "pool->dp_map" and fill
- * "tgts" and/or "info" if not NULL.
+ * "tgts" and/or "info", "prop" if not NULL.
  */
 static int
 process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		    uint32_t map_version, uint32_t uid, uint32_t gid,
 		    uint32_t mode, uint32_t leader_rank,
 		    struct daos_pool_space *ps, struct daos_rebuild_status *rs,
-		    d_rank_list_t *tgts, daos_pool_info_t *info, bool connect)
+		    d_rank_list_t *tgts, daos_pool_info_t *info,
+		    daos_prop_t *prop_req, daos_prop_t *prop_reply,
+		    bool connect)
 {
 	struct pool_map	       *map;
 	int			rc;
@@ -307,6 +309,9 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
 out_unlock:
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+
+	if (prop_req != NULL && rc == 0)
+		rc = daos_prop_copy(prop_req, prop_reply);
 
 	if (info != NULL && rc == 0) {
 		D_ASSERT(ps != NULL);
@@ -407,7 +412,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 				 pco->pco_uid, pco->pco_gid, pco->pco_mode,
 				 pco->pco_op.po_hint.sh_rank,
 				 &pco->pco_space, &pco->pco_rebuild_st,
-				 NULL /* tgts */, info, true);
+				 NULL /* tgts */, info, NULL, NULL, true);
 	if (rc != 0) {
 		/* TODO: What do we do about the remote connection state? */
 		D_ERROR("failed to create local pool map: %d\n", rc);
@@ -1215,11 +1220,12 @@ dc_pool_exclude_out(tse_task_t *task)
 }
 
 struct pool_query_arg {
-	struct dc_pool	       *dqa_pool;
-	d_rank_list_t       *dqa_tgts;
-	daos_pool_info_t       *dqa_info;
-	struct pool_buf	       *dqa_map_buf;
-	crt_rpc_t	       *rpc;
+	struct dc_pool		*dqa_pool;
+	d_rank_list_t		*dqa_tgts;
+	daos_pool_info_t	*dqa_info;
+	daos_prop_t		*dqa_prop;
+	struct pool_buf		*dqa_map_buf;
+	crt_rpc_t		*rpc;
 };
 
 static int
@@ -1269,12 +1275,48 @@ pool_query_cb(tse_task_t *task, void *data)
 				 out->pqo_uid, out->pqo_gid, out->pqo_mode,
 				 out->pqo_op.po_hint.sh_rank,
 				 &out->pqo_space, &out->pqo_rebuild_st,
-				 arg->dqa_tgts, arg->dqa_info, false);
+				 arg->dqa_tgts, arg->dqa_info,
+				 arg->dqa_prop, out->pqo_prop, false);
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(arg->dqa_pool);
 	map_bulk_destroy(in->pqi_map_bulk, map_buf);
 	return rc;
+}
+
+static uint64_t
+pool_query_bits(daos_prop_t *prop)
+{
+	struct daos_prop_entry	*entry;
+	uint64_t		 bits = 0;
+	int			 i;
+
+	if (prop == NULL)
+		return 0;
+	if (prop->dpp_entries == NULL)
+		return DAOS_PO_QUERY_PROP_ALL;
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		switch (entry->dpe_type) {
+		case DAOS_PROP_PO_LABEL:
+			bits |= DAOS_PO_QUERY_PROP_LABEL;
+			break;
+		case DAOS_PROP_PO_SPACE_RB:
+			bits |= DAOS_PO_QUERY_PROP_SPACE_RB;
+			break;
+		case DAOS_PROP_PO_SELF_HEAL:
+			bits |= DAOS_PO_QUERY_PROP_SELF_HEAL;
+			break;
+		case DAOS_PROP_PO_RECLAIM:
+			bits |= DAOS_PO_QUERY_PROP_RECLAIM;
+			break;
+		default:
+			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
+			break;
+		}
+	}
+	return bits;
 }
 
 /**
@@ -1332,6 +1374,7 @@ dc_pool_query(tse_task_t *task)
 	in = crt_req_get(rpc);
 	uuid_copy(in->pqi_op.pi_uuid, pool->dp_pool);
 	uuid_copy(in->pqi_op.pi_hdl, pool->dp_pool_hdl);
+	in->pqi_query_bits = pool_query_bits(args->prop);
 
 	/** +1 for args */
 	crt_req_addref(rpc);
@@ -1343,6 +1386,7 @@ dc_pool_query(tse_task_t *task)
 
 	query_args.dqa_pool = pool;
 	query_args.dqa_info = args->info;
+	query_args.dqa_prop = args->prop;
 	query_args.dqa_map_buf = map_buf;
 	query_args.rpc = rpc;
 
