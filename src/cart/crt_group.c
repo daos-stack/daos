@@ -478,15 +478,14 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 		return -DER_INVAL;
 	}
 
-	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[ctx_idx],
 				(void *)&rank, sizeof(rank));
 	if (rlink == NULL) {
-		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 		/* target rank not in cache */
 		D_ALLOC_PTR(li);
 		if (li == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(unlock, rc = -DER_NOMEM);
 
 		rc = D_MUTEX_INIT(&li->li_mutex, NULL);
 		if (rc != 0)
@@ -505,7 +504,6 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 		li->li_initialized = 1;
 		li->li_evicted = 0;
 
-		D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 		rc = d_hash_rec_insert(&grp_priv->gp_lookup_cache[ctx_idx],
 				       &rank, sizeof(rank), &li->li_link,
 				       true /* exclusive */);
@@ -552,7 +550,6 @@ decref:
 
 unlock:
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-out:
 	return rc;
 
 err_destroy_mutex:
@@ -560,6 +557,7 @@ err_destroy_mutex:
 err_free_li:
 	D_FREE(li);
 
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 	return rc;
 }
 
