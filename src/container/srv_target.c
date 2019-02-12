@@ -1056,6 +1056,7 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags = VOS_IT_FOR_REBUILD;
 
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_h);
 	if (rc != 0) {

@@ -48,8 +48,8 @@ struct vos_obj_iter {
 	daos_handle_t		 it_hdl;
 	/** condition of the iterator: epoch logic expression */
 	vos_it_epc_expr_t	 it_epc_expr;
-	/** recx visibility flags */
-	uint32_t		 it_recx_flags;
+	/** iterator flags */
+	uint32_t		 it_flags;
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
 	/** condition of the iterator: attribute key */
@@ -113,7 +113,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		int		i;
 
 		rc = key_tree_prepare(obj, epoch, obj->obj_toh, VOS_BTR_DKEY,
-				      dkey, SUBTR_CREATE, NULL, &toh);
+				      dkey, SUBTR_CREATE, DAOS_INTENT_PUNCH,
+				      NULL, &toh);
 		if (rc) {
 			/* If the key is punched, then do nothing */
 			if (rc == -DER_NONEXIST)
@@ -171,7 +172,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch,
-			  false, &obj);
+			  false, DAOS_INTENT_PUNCH, &obj);
 	if (rc != 0)
 		return rc;
 
@@ -352,7 +353,8 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 	}
 
 	rc = key_tree_prepare(obj, ent->ie_epoch, obj->obj_toh, VOS_BTR_DKEY,
-			      &ent->ie_key, 0, NULL, &toh);
+			      &ent->ie_key, 0, vos_iter_intent(&oiter->it_iter),
+			      NULL, &toh);
 	if (rc != 0) {
 		D_DEBUG(DB_IO, "can't load the akey tree: %d\n", rc);
 		return rc;
@@ -364,8 +366,8 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 	kbund.kb_key = &oiter->it_akey;
 	kbund.kb_epoch = epr->epr_lo;
 
-	rc = dbtree_fetch(toh, BTR_PROBE_GT | BTR_PROBE_MATCHED, &kiov, NULL,
-			  &riov);
+	rc = dbtree_fetch(toh, BTR_PROBE_GT | BTR_PROBE_MATCHED,
+			  vos_iter_intent(&oiter->it_iter), &kiov, NULL, &riov);
 	key_tree_release(toh, false);
 	if (rc == 0)
 		return IT_OPC_NOOP; /* match the condition (akey), done */
@@ -409,7 +411,9 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 			tree_key_bundle2iov(&kbund, &kiov);
 			kbund.kb_key	= &entry.ie_key;
 			kbund.kb_epoch	= entry.ie_epoch;
-			rc = dbtree_iter_probe(oiter->it_hdl, opc, &kiov, NULL);
+			rc = dbtree_iter_probe(oiter->it_hdl, opc,
+					       vos_iter_intent(&oiter->it_iter),
+					       &kiov, NULL);
 			if (rc)
 				goto out;
 			break;
@@ -433,6 +437,7 @@ key_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 
 	rc = dbtree_iter_probe(oiter->it_hdl,
 			       anchor ? BTR_PROBE_GE : BTR_PROBE_FIRST,
+			       vos_iter_intent(&oiter->it_iter),
 			       NULL, anchor);
 	if (rc)
 		D_GOTO(out, rc);
@@ -483,7 +488,8 @@ akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
 	int			 rc;
 
 	rc = key_tree_prepare(obj, oiter->it_epr.epr_lo, obj->obj_toh,
-			      VOS_BTR_DKEY, dkey, 0, NULL, &toh);
+			      VOS_BTR_DKEY, dkey, 0,
+			      vos_iter_intent(&oiter->it_iter), NULL, &toh);
 	if (rc != 0) {
 		D_ERROR("Cannot load the akey tree: %d\n", rc);
 		return rc;
@@ -522,12 +528,14 @@ singv_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	int			 rc;
 
 	rc = key_tree_prepare(obj, oiter->it_epr.epr_hi, obj->obj_toh,
-			      VOS_BTR_DKEY, dkey, 0, NULL, &dk_toh);
+			      VOS_BTR_DKEY, dkey, 0,
+			      vos_iter_intent(&oiter->it_iter), NULL, &dk_toh);
 	if (rc != 0)
 		D_GOTO(failed_0, rc);
 
 	rc = key_tree_prepare(obj, oiter->it_epr.epr_hi, dk_toh,
-			      VOS_BTR_AKEY, akey, 0, NULL, &ak_toh);
+			      VOS_BTR_AKEY, akey, 0,
+			      vos_iter_intent(&oiter->it_iter), NULL, &ak_toh);
 	if (rc != 0)
 		D_GOTO(failed_1, rc);
 
@@ -560,7 +568,8 @@ singv_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epoch = entry->ie_epoch;
 
-	rc = dbtree_iter_probe(oiter->it_hdl, opc, &kiov, NULL);
+	rc = dbtree_iter_probe(oiter->it_hdl, opc,
+			       vos_iter_intent(&oiter->it_iter), &kiov, NULL);
 	if (rc != 0)
 		return rc;
 
@@ -655,7 +664,8 @@ singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 	else
 		opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
 
-	rc = dbtree_iter_probe(oiter->it_hdl, opc, NULL, anchor);
+	rc = dbtree_iter_probe(oiter->it_hdl, opc,
+			       vos_iter_intent(&oiter->it_iter), NULL, anchor);
 	if (rc != 0)
 		return rc;
 
@@ -750,22 +760,25 @@ recx_get_flags(struct vos_obj_iter *oiter)
 {
 	uint32_t options = EVT_ITER_EMBEDDED;
 
-	if (recx_flags_set(oiter->it_recx_flags,
+	if (recx_flags_set(oiter->it_flags,
 			   VOS_IT_RECX_VISIBLE | VOS_IT_RECX_SKIP_HOLES)) {
 		options |= EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES;
-		D_ASSERT(!recx_flags_set(oiter->it_recx_flags,
-					 VOS_IT_RECX_COVERED));
+		D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_COVERED));
 		goto done;
 	}
-	D_ASSERT(!recx_flags_set(oiter->it_recx_flags, VOS_IT_RECX_SKIP_HOLES));
-	if (oiter->it_recx_flags & VOS_IT_RECX_VISIBLE)
+	D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_SKIP_HOLES));
+	if (oiter->it_flags & VOS_IT_RECX_VISIBLE)
 		options |= EVT_ITER_VISIBLE;
-	if (oiter->it_recx_flags & VOS_IT_RECX_COVERED)
+	if (oiter->it_flags & VOS_IT_RECX_COVERED)
 		options |= EVT_ITER_COVERED;
 
 done:
-	if (oiter->it_recx_flags & VOS_IT_RECX_REVERSE)
+	if (oiter->it_flags & VOS_IT_RECX_REVERSE)
 		options |= EVT_ITER_REVERSE;
+	if (oiter->it_flags & VOS_IT_FOR_PURGE)
+		options |= EVT_ITER_FOR_PURGE;
+	if (oiter->it_flags & VOS_IT_FOR_REBUILD)
+		options |= EVT_ITER_FOR_REBUILD;
 	return options;
 }
 
@@ -784,12 +797,14 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	uint32_t		 options;
 
 	rc = key_tree_prepare(obj, oiter->it_epr.epr_hi, obj->obj_toh,
-			      VOS_BTR_DKEY, dkey, 0, NULL, &dk_toh);
+			      VOS_BTR_DKEY, dkey, 0,
+			      vos_iter_intent(&oiter->it_iter), NULL, &dk_toh);
 	if (rc != 0)
 		D_GOTO(failed_0, rc);
 
 	rc = key_tree_prepare(obj, oiter->it_epr.epr_hi, dk_toh,
-			      VOS_BTR_AKEY, akey, SUBTR_EVT, NULL, &ak_toh);
+			      VOS_BTR_AKEY, akey, SUBTR_EVT,
+			      vos_iter_intent(&oiter->it_iter), NULL, &ak_toh);
 	if (rc != 0)
 		D_GOTO(failed_1, rc);
 
@@ -913,14 +928,19 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	oiter->it_epr = param->ip_epr;
 	oiter->it_epc_expr = param->ip_epc_expr;
-	oiter->it_recx_flags = param->ip_recx_flags;
+	oiter->it_flags = param->ip_flags;
+	if (param->ip_flags & VOS_IT_FOR_PURGE)
+		oiter->it_iter.it_for_purge = 1;
+	if (param->ip_flags & VOS_IT_FOR_REBUILD)
+		oiter->it_iter.it_for_rebuild = 1;
+
 	/* XXX the condition epoch ranges could cover multiple versions of
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
 	rc = vos_obj_hold(vos_obj_cache_current(), param->ip_hdl,
 			  param->ip_oid, param->ip_epr.epr_hi, true,
-			  &oiter->it_obj);
+			  vos_iter_intent(&oiter->it_iter), &oiter->it_obj);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
@@ -1021,7 +1041,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 	 */
 	rc = vos_obj_hold(vos_obj_cache_current(), info->ii_hdl,
 			  info->ii_oid, info->ii_epr.epr_hi, true,
-			  &oiter->it_obj);
+			  vos_iter_intent(&oiter->it_iter), &oiter->it_obj);
 	if (rc != 0)
 		return rc;
 
@@ -1063,9 +1083,13 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 
 	oiter->it_epr = info->ii_epr;
 	oiter->it_epc_expr = info->ii_epc_expr;
-	oiter->it_recx_flags = info->ii_recx_flags;
+	oiter->it_flags = info->ii_flags;
 	if (type != VOS_ITER_DKEY)
 		oiter->it_obj = info->ii_obj;
+	if (info->ii_flags & VOS_IT_FOR_PURGE)
+		oiter->it_iter.it_for_purge = 1;
+	if (info->ii_flags & VOS_IT_FOR_REBUILD)
+		oiter->it_iter.it_for_rebuild = 1;
 
 	switch (type) {
 	default:
@@ -1334,7 +1358,7 @@ vos_oi_set_attr_helper(daos_handle_t coh, daos_unit_oid_t oid,
 	int			 rc;
 
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, false,
-			  &obj);
+			  DAOS_INTENT_UPDATE, &obj);
 	if (rc != 0)
 		return rc;
 
@@ -1408,7 +1432,7 @@ vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, true,
-			  &obj);
+			  DAOS_INTENT_DEFAULT, &obj);
 	if (rc != 0)
 		return rc;
 

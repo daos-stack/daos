@@ -35,6 +35,7 @@
 #include <getopt.h>
 
 #include <daos/btree.h>
+#include <daos/dtx.h>
 #include <daos/tests_lib.h>
 #include "utest_common.h"
 
@@ -574,7 +575,8 @@ ik_btr_iterate(char *args)
 		uint64_t	key;
 
 		if (i == 0 || (del != 0 && d <= del)) {
-			rc = dbtree_iter_probe(ih, opc, NULL, NULL);
+			rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT,
+					       NULL, NULL);
 			if (rc == -DER_NONEXIST)
 				break;
 

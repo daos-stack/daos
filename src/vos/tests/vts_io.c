@@ -694,7 +694,8 @@ hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
 	int i = 0, rc = 0;
 
 	for (i = start; i < end; i++) {
-		rc = vos_obj_hold(occ, *coh, *oid, 1, true, &objs[i]);
+		rc = vos_obj_hold(occ, *coh, *oid, 1, true, DAOS_INTENT_DEFAULT,
+				  &objs[i]);
 		assert_int_equal(rc, 0);
 	}
 
@@ -715,10 +716,10 @@ io_oi_test(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(cont, NULL);
 
-	rc = vos_oi_find_alloc(cont, oid, 1, &obj[0]);
+	rc = vos_oi_find_alloc(cont, oid, 1, DAOS_INTENT_UPDATE, &obj[0]);
 	assert_int_equal(rc, 0);
 
-	rc = vos_oi_find_alloc(cont, oid, 1, &obj[1]);
+	rc = vos_oi_find_alloc(cont, oid, 1, DAOS_INTENT_UPDATE, &obj[1]);
 	assert_int_equal(rc, 0);
 }
 
@@ -763,7 +764,8 @@ io_obj_cache_test(void **state)
 	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 10, 15);
 	assert_int_equal(rc, 0);
 
-	rc = vos_obj_hold(occ, l_coh, oids[1], 1, true, &objs[16]);
+	rc = vos_obj_hold(occ, l_coh, oids[1], 1, true, DAOS_INTENT_DEFAULT,
+			  &objs[16]);
 	assert_int_equal(rc, 0);
 	vos_obj_release(occ, objs[16]);
 
@@ -1273,7 +1275,7 @@ io_set_attribute_setup(void **state)
 
 	arg->oid = gen_oid(arg->ofeat);
 
-	rc = vos_oi_find_alloc(cont, arg->oid, 1, &obj_df);
+	rc = vos_oi_find_alloc(cont, arg->oid, 1, DAOS_INTENT_UPDATE, &obj_df);
 	assert_int_equal(rc, 0);
 
 	return 0;
@@ -1954,7 +1956,8 @@ oid_iter_test_setup(void **state)
 	for (i = 0; i < VTS_IO_OIDS; i++) {
 		oids[i] = gen_oid(arg->ofeat);
 
-		rc = vos_oi_find_alloc(cont, oids[i], 1, &obj_df);
+		rc = vos_oi_find_alloc(cont, oids[i], 1, DAOS_INTENT_UPDATE,
+				       &obj_df);
 		assert_int_equal(rc, 0);
 	}
 	return 0;
