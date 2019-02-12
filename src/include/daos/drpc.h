@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,22 +61,6 @@ struct drpc {
 
 enum rpcflags {
 	R_SYNC = 1
-};
-
-/**
- * DAOS dRPC Modules
- *
- * dRPC modules are used to multiplex communications over the Unix Domain Socket
- * to appropriate handlers. They are populated in the Drpc__Call structure.
- *
- * dRPC module IDs must be unique. This is a list of all DAOS dRPC modules.
- */
-
-enum drpc_module {
-	DRPC_MODULE_TEST		= 0,	/* Reserved for testing */
-	DRPC_MODULE_SECURITY_AGENT	= 1,
-
-	NUM_DRPC_MODULES			/* Must be last */
 };
 
 int drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
