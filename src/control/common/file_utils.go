@@ -126,7 +126,7 @@ func WriteString(path string, s string) error {
 	return WriteSlice(path, []string{s})
 }
 
-// StructsToStrings returns yaml representation (as a list of strings) of any
+// StructsToString returns yaml representation (as a list of strings) of any
 // interface but avoids fields/lines prefixed with xxx_ such as added by
 // protobuf boilerplate.
 func StructsToString(i interface{}) (lines string, err error) {

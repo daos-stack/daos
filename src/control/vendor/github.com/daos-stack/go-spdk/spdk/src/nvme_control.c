@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -151,7 +151,10 @@ collect(struct ret_t *ret)
 	struct ns_entry				*ns_entry;
 	struct ctrlr_entry			*ctrlr_entry;
 	const struct spdk_nvme_ctrlr_data	*cdata;
+	struct spdk_pci_device			*pci_dev;
+	struct spdk_pci_addr			pci_addr;
 	int					written;
+	int					rc;
 
 	ns_entry = g_namespaces;
 	ctrlr_entry = g_controllers;
@@ -170,8 +173,23 @@ collect(struct ret_t *ret)
 
 		ns_tmp->id = spdk_nvme_ns_get_id(ns_entry->ns);
 		// capacity in GBytes
-		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) / 1000000000;
-		ns_tmp->ctrlr_id = cdata->cntlid;
+		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) / \
+			       NVMECONTROL_GBYTE_BYTES;
+
+		pci_dev = spdk_nvme_ctrlr_get_pci_device(ns_entry->ctrlr);
+		if (!pci_dev) {
+			perror("get_pci_device");
+			exit(1);
+		}
+		pci_addr = spdk_pci_device_get_addr(pci_dev);
+		rc = spdk_pci_addr_fmt(ns_tmp->ctrlr_pci_addr,
+				sizeof(ns_tmp->ctrlr_pci_addr),
+				&pci_addr);
+		if (rc != 0) {
+			perror("pci_addr_fmt");
+			exit(1);
+		}
+
 		ns_tmp->next = ret->nss;
 		ret->nss = ns_tmp;
 
@@ -292,7 +310,7 @@ nvme_discover(void)
 }
 
 struct ret_t *
-nvme_fwupdate(unsigned int ctrlr_id, char *path, unsigned int slot)
+nvme_fwupdate(char * ctrlr_pci_addr, char *path, unsigned int slot)
 {
 	int					rc = 1;
 	int					fd = -1;
@@ -301,24 +319,26 @@ nvme_fwupdate(unsigned int ctrlr_id, char *path, unsigned int slot)
 	void					*fw_image;
 	enum spdk_nvme_fw_commit_action		commit_action;
 	struct spdk_nvme_status			status;
-	const struct spdk_nvme_ctrlr_data	*cdata;
+	//const struct spdk_nvme_ctrlr_data	*cdata;
 	struct ctrlr_entry			*ctrlr_entry;
 	struct ret_t				*ret;
 
 	ctrlr_entry = g_controllers;
 	ret = init_ret();
 
+	// TODO: receive controller pci address instead of ID, parse string
+	// buffer as addr type then compare with spdk_pci_addr_compare
 	while (ctrlr_entry) {
-		cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
+		//cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
 
-		if (cdata->cntlid == ctrlr_id)
-			break;
+//		if (cdata->cntlid == ctrlr_id)
+//			break;
 
 		ctrlr_entry = ctrlr_entry->next;
 	}
 
 	if (ctrlr_entry == NULL) {
-		sprintf(ret->err, "specified controller not found (%d)", ctrlr_id);
+		sprintf(ret->err, "specified controller not found"); //, ctrlr_id)
 		ret->rc = 1;
 
 		return ret;

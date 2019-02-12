@@ -61,7 +61,7 @@ func (mc *client) listNvmeCtrlrs() (cs NvmeControllers, err error) {
 // UpdateNvmeCtrlr updates firmware of a given controller.
 // Returns new firmware revision.
 func (mc *client) UpdateNvmeCtrlr(
-	params *pb.UpdateNvmeCtrlrParams) (string, error) {
+	params *pb.UpdateNvmeParams) (string, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -100,7 +100,7 @@ func (mc *client) FetchFioConfigPaths() (paths []string, err error) {
 
 // BurnInNvme runs burn-in validation on NVMe Namespace and returns cmd output
 // in a stream to the gRPC consumer.
-func (mc *client) BurnInNvme(ctrlrID int32, configPath string) (
+func (mc *client) BurnInNvme(pciAddr string, configPath string) (
 	reports []string, err error) {
 
 	// Maximum time limit for BurnIn is 2hrs
@@ -108,7 +108,7 @@ func (mc *client) BurnInNvme(ctrlrID int32, configPath string) (
 	defer cancel()
 
 	params := &pb.BurnInNvmeParams{
-		Ctrlrid: ctrlrID,
+		Pciaddr: pciAddr,
 		Path:    &pb.FioConfigPath{Path: configPath},
 	}
 	stream, err := mc.client.BurnInNvme(ctx, params)
