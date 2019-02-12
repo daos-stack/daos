@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/dtx_srv.h>
 #include "rpc.h"
 #include "rebuild_internal.h"
 
@@ -94,7 +95,8 @@ rebuild_obj_fill_buf(daos_handle_t ih, daos_iov_t *key_iov,
 		arg->count, root->count);
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 
@@ -116,8 +118,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	uuid_copy(arg->current_uuid, *(uuid_t *)key_iov->iov_buf);
 
 	while (!dbtree_is_empty(root->root_hdl)) {
-		rc = dbtree_iterate(root->root_hdl, false, rebuild_obj_fill_buf,
-				    data);
+		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
+				    rebuild_obj_fill_buf, data);
 		if (rc < 0)
 			return rc;
 
@@ -132,7 +134,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 
@@ -184,8 +187,8 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	arg->ephs = ephs;
 
 	while (!dbtree_is_empty(root->root_hdl)) {
-		rc = dbtree_iterate(root->root_hdl, false, rebuild_cont_iter_cb,
-				    arg);
+		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
+				    rebuild_cont_iter_cb, arg);
 		if (rc < 0)
 			D_GOTO(out, rc);
 
@@ -326,7 +329,8 @@ rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 
 	/* Some one might insert new record to the tree let's reprobe */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_REBUILD, key_iov,
+			       NULL);
 	if (rc)
 		return rc;
 
@@ -335,7 +339,8 @@ rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 
@@ -709,8 +714,8 @@ rebuild_scan_leader(void *data)
 	 */
 	while (!dbtree_is_empty(arg->rebuild_tree_hdl)) {
 		/* walk through the rebuild tree and send the rebuild objects */
-		rc = dbtree_iterate(arg->rebuild_tree_hdl, false,
-				    rebuild_tgt_fini_obj_send_cb, arg);
+		rc = dbtree_iterate(arg->rebuild_tree_hdl, DAOS_INTENT_REBUILD,
+				    false, rebuild_tgt_fini_obj_send_cb, arg);
 		if (rc)
 			D_GOTO(put_plmap, rc);
 	}

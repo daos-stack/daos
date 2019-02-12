@@ -32,6 +32,7 @@
 #include <daos_types.h>
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
+#include "evt_priv.h"
 
 /** I/O context */
 struct vos_io_context {
@@ -171,6 +172,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_size_fetch = size_fetch;
 
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, read_only,
+			  read_only ? DAOS_INTENT_DEFAULT : DAOS_INTENT_UPDATE,
 			  &ioc->ic_obj);
 	if (rc != 0)
 		goto error;
@@ -272,7 +274,8 @@ akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
 	rbund.rb_csum	= &iod->iod_csums[0];
 	memset(&biov, 0, sizeof(biov));
 
-	rc = dbtree_fetch(toh, BTR_PROBE_LE, &kiov, &kiov, &riov);
+	rc = dbtree_fetch(toh, BTR_PROBE_LE, DAOS_INTENT_DEFAULT, &kiov, &kiov,
+			  &riov);
 	if (rc == -DER_NONEXIST) {
 		rbund.rb_rsize = 0;
 		bio_addr_set_hole(&biov.bi_addr, 1);
@@ -444,7 +447,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			epoch = iod->iod_eprs[0].epr_lo;
 
 		rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
-				      &iod->iod_name, flags, NULL, &toh);
+				      &iod->iod_name, flags,
+				      DAOS_INTENT_DEFAULT, NULL, &toh);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
 				D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
@@ -466,7 +470,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	/* array size query */
 	if (iod->iod_nr == 0) {
 		rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
-				      &iod->iod_name, flags, NULL, &toh);
+				      &iod->iod_name, flags,
+				      DAOS_INTENT_DEFAULT, NULL, &toh);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
 				D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
@@ -509,7 +514,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 				epoch);
 			rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh,
 					      VOS_BTR_AKEY, &iod->iod_name,
-					      flags, &krec, &toh);
+					      flags, DAOS_INTENT_DEFAULT,
+					      &krec, &toh);
 			if (rc != 0) {
 				if (rc == -DER_NONEXIST) {
 					D_DEBUG(DB_IO, "Nonexist akey %.*s\n",
@@ -573,7 +579,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 		return rc;
 
 	rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh, VOS_BTR_DKEY,
-			      dkey, 0, NULL, &toh);
+			      dkey, 0, DAOS_INTENT_DEFAULT, NULL, &toh);
 	if (rc == -DER_NONEXIST) {
 		for (i = 0; i < ioc->ic_iod_nr; i++)
 			iod_empty_sgl(ioc, i);
@@ -783,7 +789,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 			update_bounds(&akey_epr, &iod->iod_eprs[0]);
 		}
 		rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
-				      &iod->iod_name, flags, &krec, &toh);
+				      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
+				      &krec, &toh);
 		if (rc != 0)
 			return rc;
 
@@ -809,8 +816,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 
 			/* re-prepare the tree if epoch is different */
 			rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
-					      &iod->iod_name, flags, &krec,
-					      &toh);
+					      &iod->iod_name, flags,
+					      DAOS_INTENT_UPDATE, &krec, &toh);
 			if (rc != 0)
 				return rc;
 		}
@@ -852,6 +859,7 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 		if (!subtr_created) {
 			rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh,
 					      VOS_BTR_DKEY, dkey, SUBTR_CREATE,
+					      DAOS_INTENT_UPDATE,
 					      &krec, &ak_toh);
 			if (rc != 0) {
 				D_ERROR("Error preparing dkey tree: %d\n", rc);

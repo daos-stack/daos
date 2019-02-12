@@ -23,6 +23,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include "evt_priv.h"
+#include "vos_internal.h"
 
 #define evt_iter_is_sorted(iter) \
 	(((iter)->it_options & (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) != 0)
@@ -200,12 +201,23 @@ evt_iter_is_ready(struct evt_iterator *iter)
 	}
 }
 
+static uint32_t
+evt_iter_intent(struct evt_iterator *iter)
+{
+	if (iter->it_options & EVT_ITER_FOR_PURGE)
+		return DAOS_INTENT_PURGE;
+	if (iter->it_options & EVT_ITER_FOR_REBUILD)
+		return DAOS_INTENT_REBUILD;
+	return DAOS_INTENT_DEFAULT;
+}
+
 static int
 evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 {
 	struct evt_entry	*entry;
 	struct evt_rect		*rect;
 	struct evt_trace	*trace;
+	uint32_t		 intent;
 	int			 rc = 0;
 	bool			 found;
 
@@ -229,7 +241,8 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 		goto ready;
 	}
 
-	while ((found = evt_move_trace(tcx))) {
+	intent = evt_iter_intent(iter);
+	while ((found = evt_move_trace(tcx, intent))) {
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
 		rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
 
@@ -273,6 +286,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	struct evt_entry_array	*enta;
 	struct evt_entry	*entry;
 	struct evt_rect		 rtmp;
+	uint32_t		 intent;
 	int			 flags = 0;
 	int			 rc = 0;
 	int			 index;
@@ -287,8 +301,9 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	rtmp.rc_epc = DAOS_EPOCH_MAX;
 
 	enta = &iter->it_entries;
-	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, &iter->it_filter, &rtmp,
-				enta);
+	intent = evt_iter_intent(iter);
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, intent, &iter->it_filter,
+				&rtmp, enta);
 	if (rc == 0)
 		rc = evt_ent_array_sort(tcx, enta, flags);
 
@@ -329,6 +344,7 @@ int
 evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 	       const struct evt_rect *rect, const daos_anchor_t *anchor)
 {
+	struct vos_iterator	*oiter = vos_hdl2iter(ih);
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
 	struct evt_entry_array	*enta;
@@ -376,7 +392,8 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 		rtmp = *rect;
 	}
 
-	rc = evt_ent_array_fill(tcx, fopc, &iter->it_filter, &rtmp, enta);
+	rc = evt_ent_array_fill(tcx, fopc, vos_iter_intent(oiter),
+				&iter->it_filter, &rtmp, enta);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

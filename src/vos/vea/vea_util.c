@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
+#include <daos/dtx.h>
 #include "vea_internal.h"
 
 int
@@ -145,7 +146,7 @@ vea_dump(struct vea_space_info *vsi, bool transient)
 	if (rc)
 		return rc;
 
-	rc = dbtree_iter_probe(ih, opc, NULL, NULL);
+	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, NULL, NULL);
 
 	while (rc == 0) {
 		daos_iov_set(&key, NULL, 0);
@@ -244,7 +245,8 @@ repeat:
 	daos_iov_set(&key_out, NULL, 0);
 	daos_iov_set(&val, NULL, 0);
 
-	rc = dbtree_fetch(btr_hdl, opc, &key, &key_out, &val);
+	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_DEFAULT, &key, &key_out,
+			  &val);
 	if (rc == -DER_NONEXIST && opc == BTR_PROBE_LE) {
 		opc = BTR_PROBE_GE;
 		goto repeat;
