@@ -223,7 +223,7 @@ update_or_fetch_internal(char *dkey, char *akey, daos_epoch_t *epoch,
 		iod->iod_type = DAOS_IOD_ARRAY;
 		iod->iod_size = 1;
 		recx->rx_nr  = vsize;
-		recx->rx_idx = ts_overwrite ? 0 : indices[idx];
+		recx->rx_idx = ts_overwrite ? 0 : indices[idx] * vsize;
 	}
 
 	iod->iod_nr    = 1;
