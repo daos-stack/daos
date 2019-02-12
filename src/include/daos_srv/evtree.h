@@ -63,6 +63,8 @@ struct evt_desc {
 	uint32_t			dc_ver;
 	/** Magic number for validation */
 	uint32_t			dc_magic;
+	/** The DTX entry in SCM. */
+	umem_id_t			dc_dtx;
 };
 
 struct evt_extent {
