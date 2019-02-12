@@ -31,7 +31,7 @@
 #include <cmocka.h>
 
 #include <daos/drpc.pb-c.h>
-#include <daos/drpc.h>
+#include <daos/drpc_modules.h>
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
 #include "../drpc_handler.h"

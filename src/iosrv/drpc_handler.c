@@ -22,6 +22,7 @@
  */
 
 #include "drpc_handler.h"
+#include <daos/drpc_modules.h>
 
 static drpc_handler_t *registry_table;
 
