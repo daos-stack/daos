@@ -220,6 +220,14 @@ btr_hdl2tcx(daos_handle_t toh)
 	return (struct btr_context *)toh.cookie;
 }
 
+struct umem_instance *
+btr_hdl2umm(daos_handle_t toh)
+{
+	struct btr_context *tcx = btr_hdl2tcx(toh);
+
+	return tcx != NULL ? &tcx->tc_tins.ti_umm : NULL;
+}
+
 void
 btr_context_addref(struct btr_context *tcx)
 {
