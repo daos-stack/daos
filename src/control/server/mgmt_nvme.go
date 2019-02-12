@@ -55,16 +55,18 @@ func (c *controlService) ListNvmeCtrlrs(
 //
 // Todo: in real life Ctrlr.Id is not guaranteed to be unique, use pciaddr instead
 func (c *controlService) UpdateNvmeCtrlr(
-	ctx context.Context, params *pb.UpdateNvmeCtrlrParams) (*pb.NvmeController, error) {
-	id := params.Ctrlr.Id
-	if err := c.nvme.Update(id, params.Path, params.Slot); err != nil {
+	ctx context.Context, params *pb.UpdateNvmeParams) (*pb.NvmeController, error) {
+	pciAddr := params.GetPciaddr()
+	//fwRev := params.GetFwrev()
+	if err := c.nvme.Update(pciAddr, params.Path, params.Slot); err != nil {
 		return nil, err
 	}
 	for _, ctrlr := range c.nvme.controllers {
-		if ctrlr.Id == id {
-			if ctrlr.Fwrev == params.Ctrlr.Fwrev {
-				return nil, fmt.Errorf("update failed, firmware revision unchanged")
-			}
+		if ctrlr.Pciaddr == pciAddr {
+			// TODO: verify at caller
+			//			if ctrlr.Fwrev == fwRev {
+			//				return nil, fmt.Errorf("update failed, firmware revision unchanged")
+			//			}
 			return ctrlr, nil
 		}
 	}
@@ -96,7 +98,7 @@ func (c *controlService) BurnInNvme(
 	params *pb.BurnInNvmeParams, stream pb.MgmtControl_BurnInNvmeServer) error {
 	// retrieve command components
 	cmdName, args, env, err := c.nvme.BurnIn(
-		c.nvme.controllers[params.Ctrlrid].Pciaddr,
+		params.GetPciaddr(),
 		// hardcode first Namespace on controller for the moment
 		1,
 		params.Path.Path)
