@@ -97,16 +97,27 @@ cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	cont_df = umem_id2ptr_typed(&tins->ti_umm, cont_mmid);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
 	args->ca_cont_df = cont_df;
+	rec->rec_mmid = umem_id_t2u(cont_mmid);
 
 	rc = vos_obj_tab_create(args->ca_pool, &cont_df->cd_otab_df);
 	if (rc) {
 		D_ERROR("VOS object index create failure\n");
 		D_GOTO(exit, rc);
 	}
-	rec->rec_mmid = umem_id_t2u(cont_mmid);
+
+	rc = vos_dtx_table_create(args->ca_pool, &cont_df->cd_dtx_table_df);
+	if (rc) {
+		D_ERROR("Failed to create DTX table: rc = %d\n", rc);
+		D_GOTO(exit, rc);
+	}
+
+	return 0;
+
 exit:
-	if (rc != 0)
-		cont_df_rec_free(tins, rec, NULL);
+	vos_dtx_table_destroy(args->ca_pool, &cont_df->cd_dtx_table_df);
+	if (cont_df->cd_otab_df.obt_btr.tr_class != 0)
+		vos_obj_tab_destroy(args->ca_pool, &cont_df->cd_otab_df);
+	cont_df_rec_free(tins, rec, NULL);
 
 	return rc;
 }
@@ -178,6 +189,8 @@ cont_free(struct d_ulink *ulink)
 	struct vos_container *cont;
 
 	cont = container_of(ulink, struct vos_container, vc_uhlink);
+	dbtree_close(cont->vc_dtx_active_hdl);
+	dbtree_close(cont->vc_dtx_committed_hdl);
 	dbtree_close(cont->vc_btr_hdl);
 	if (cont->vc_hint_ctxt)
 		vea_hint_unload(cont->vc_hint_ctxt);
@@ -351,6 +364,22 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				    &cont->vc_btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
+		D_GOTO(exit, rc);
+	}
+
+	rc = dbtree_open_inplace(
+			&cont->vc_cont_df->cd_dtx_table_df.tt_committed_btr,
+			&vpool->vp_uma, &cont->vc_dtx_committed_hdl);
+	if (rc) {
+		D_ERROR("Failed to open committed DTX table: rc = %d\n", rc);
+		D_GOTO(exit, rc);
+	}
+
+	rc = dbtree_open_inplace(
+			&cont->vc_cont_df->cd_dtx_table_df.tt_active_btr,
+			&vpool->vp_uma, &cont->vc_dtx_active_hdl);
+	if (rc) {
+		D_ERROR("Failed to open active DTX table: rc = %d\n", rc);
 		D_GOTO(exit, rc);
 	}
 
