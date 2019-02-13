@@ -31,6 +31,8 @@ extern hwloc_topology_t	dss_topo;
 extern int		dss_core_depth;
 /** number of physical cores, w/o hyper-threading */
 extern int		dss_core_nr;
+/** start offset index of the first core for service XS */
+extern int		dss_core_offset;
 
 /** Number of offload XS per target (1 or 2)*/
 extern unsigned int	dss_tgt_offload_xs_nr;
@@ -70,11 +72,6 @@ int dss_sys_map_load(const char *path, crt_group_id_t grpid, d_rank_t self_rank,
 /** Total number of XS */
 #define DSS_XS_NR_TOTAL						\
 	(dss_tgt_nr * DSS_XS_NR_PER_TGT + dss_sys_xs_nr)
-/** Number of cart contexts for each VOS target */
-#define DSS_CTX_NR_PER_TGT	DAOS_CTX_NR_PER_TGT
-/** Total number of cart contexts created */
-#define DSS_CTX_NR_TOTAL					\
-	(dss_tgt_nr * DSS_CTX_NR_PER_TGT + dss_sys_xs_nr)
 /** main XS id of (vos) tgt_id */
 #define DSS_MAIN_XS_ID(tgt_id)					\
 	(((tgt_id) * DSS_XS_NR_PER_TGT) + dss_sys_xs_nr)
@@ -103,7 +100,7 @@ dss_tgt2xs(int ult_type, int tgt_id)
 	case DSS_ULT_SELF:
 		return DSS_XS_SELF;
 	case DSS_ULT_IOFW:
-		return DSS_MAIN_XS_ID(tgt_id) + 1;
+		return (DSS_MAIN_XS_ID(tgt_id) + 1) % DSS_XS_NR_TOTAL;
 	case DSS_ULT_EC:
 	case DSS_ULT_CHECKSUM:
 	case DSS_ULT_COMPRESS:

@@ -106,11 +106,8 @@ enum daos_rpc_type {
 
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
 #define DAOS_TGT0_OFFSET		(1)
-/** Number of cart context created for each target */
-#define DAOS_CTX_NR_PER_TGT		(2)
 /** The cart context index of target index */
-#define DAOS_IO_CTX_ID(tgt_idx)				\
-	((tgt_idx) * DAOS_CTX_NR_PER_TGT + DAOS_TGT0_OFFSET)
+#define DAOS_IO_CTX_ID(tgt_idx)		((tgt_idx) + DAOS_TGT0_OFFSET)
 
 /**
  * Get the target tag (context ID) for specific request type and target index.
