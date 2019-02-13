@@ -75,8 +75,8 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	D_ASSERT(md != NULL);
 	/* Can't reformat without 'force' specified */
 	if (md->vsd_magic == VEA_MAGIC) {
-		D_DEBUG(force ? DLOG_WARN : DLOG_ERR,
-			"reformat %p force=%d\n", md, force);
+		D_CDEBUG(force, DLOG_WARN, DLOG_ERR, "reformat %p force=%d\n",
+			 md, force);
 		if (!force)
 			return -DER_EXIST;
 
@@ -497,9 +497,8 @@ free_commit_cb(void *data, bool noop)
 	 */
 	rc = aggregated_free(fca->fca_vsi, &fca->fca_vfe);
 
-	D_DEBUG(rc ? DLOG_ERR : DB_IO,
-		"Aggregated free on vsi:%p rc %d\n",
-		fca->fca_vsi, rc);
+	D_CDEBUG(rc, DLOG_ERR, DB_IO, "Aggregated free on vsi:%p rc %d\n",
+		 fca->fca_vsi, rc);
 free:
 	D_FREE(fca);
 }
