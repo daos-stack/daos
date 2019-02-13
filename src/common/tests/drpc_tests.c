@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,9 +38,8 @@
 #include <cmocka.h>
 #include <string.h>
 #include <stdlib.h>
-#include <gurt/errno.h>
-#include <gurt/common.h>
 #include <errno.h>
+#include <daos_errno.h>
 #include <daos/drpc.h>
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
