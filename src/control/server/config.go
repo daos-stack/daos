@@ -205,6 +205,10 @@ func (c *configuration) populateCliOpts(i int) error {
 	if c.Attach != "" {
 		server.CliOpts = append(server.CliOpts, "-a", c.Attach)
 	}
+	server.CliOpts = append(server.CliOpts, "-x", strconv.Itoa(c.XShelpernr))
+	if c.Firstcore > 0 {
+		server.CliOpts = append(server.CliOpts, "-f", strconv.Itoa(c.Firstcore))
+	}
 	if c.SystemMap != "" {
 		server.CliOpts = append(server.CliOpts, "-y", c.SystemMap)
 	}
@@ -255,6 +259,16 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 			// to reply to more than one server)
 			c.Servers[0].Rank = opts.Rank
 		}
+	}
+	if opts.XShelpernr > 2 {
+		log.Errorf("invalid XShelpernr %d exceed [0, 2], use default value of 1",
+			   opts.XShelpernr)
+		c.XShelpernr = 1
+	} else {
+		c.XShelpernr = opts.XShelpernr
+	}
+	if opts.Firstcore > 0 {
+		c.Firstcore = opts.Firstcore
 	}
 	if opts.Group != "" {
 		c.SystemName = opts.Group

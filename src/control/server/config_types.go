@@ -240,6 +240,8 @@ type configuration struct {
 	// development (subject to change) config fields
 	Modules   string
 	Attach    string
+	XShelpernr int
+	Firstcore int
 	SystemMap string
 	Path      string
 	ext       External
