@@ -284,7 +284,7 @@ func newDefaultConfiguration(ext External) configuration {
 		Hyperthreads:   false,
 		NrHugepages:    1024,
 		Path:           "etc/daos_server.yml",
-		NvmeShmID:      0, // currently disabled by default
+		NvmeShmID:      0,
 		ControlLogMask: cLogDebug,
 		ext:            ext,
 	}

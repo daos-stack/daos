@@ -796,8 +796,8 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 int
 key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, struct vos_krec_df **krecp,
-		 daos_handle_t *sub_toh)
+		 daos_key_t *key, int flags, uint32_t intent,
+		 struct vos_krec_df **krecp, daos_handle_t *sub_toh)
 {
 	struct umem_attr	*uma = vos_obj2uma(obj);
 	struct vos_krec_df	*krec;
@@ -835,8 +835,8 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 	 *   create the root for the subtree, or just return it if it's already
 	 *   there.
 	 */
-	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED, &kiov, NULL,
-			  &riov);
+	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED, intent, &kiov,
+			  NULL, &riov);
 	switch (rc) {
 	default:
 		D_ERROR("fetch failed: %d\n", rc);
@@ -849,7 +849,7 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		kbund.kb_epoch	= DAOS_EPOCH_MAX;
 		rbund.rb_iov	= key;
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, &kiov, &riov);
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, &kiov, &riov);
 		if (rc) {
 			D_ERROR("Failed to upsert: %d\n", rc);
 			goto out;
@@ -916,12 +916,16 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	int			 rc;
 	bool			 replay = (flags & VOS_OF_REPLAY_PC);
 
-	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED, key_iov,
-			  NULL, val_iov);
+	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED,
+			  DAOS_INTENT_PUNCH, key_iov, NULL, val_iov);
 	if (rc != 0) {
+		if (rc == -DER_INPROGRESS)
+			return rc;
+
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, key_iov, val_iov);
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_PUNCH,
+				   key_iov, val_iov);
 		if (rc)
 			D_ERROR("Failed to add new punch, rc=%d\n", rc);
 
@@ -947,7 +951,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	}
 
 	/* PROBE_EQ == insert in this case */
-	rc = dbtree_upsert(toh, BTR_PROBE_EQ, key_iov, val_iov);
+	rc = dbtree_upsert(toh, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key_iov,
+			   val_iov);
 	if (rc)
 		return rc;
 

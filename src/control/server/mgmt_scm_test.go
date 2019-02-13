@@ -57,7 +57,6 @@ func TestListScmModules(t *testing.T) {
 	s.ListScmModules(nil, mock)
 
 	AssertEqual(t, len(s.scm.modules), 1, "unexpected number of modules")
-	AssertEqual(t, s.scm.modules, ScmmMap{0: m}, "unexpected list of modules")
 	AssertEqual(t, len(mock.Results), 1, "unexpected number of modules sent")
 	AssertEqual(t, mock.Results, []*pb.ScmModule{m}, "unexpected list of modules sent")
 }

@@ -36,6 +36,7 @@
 #include <getopt.h>
 
 #include <daos/btree.h>
+#include <daos/dtx.h>
 #include <daos/tests_lib.h>
 #include <gurt/common.h>
 #include "utest_common.h"
@@ -619,7 +620,8 @@ sk_btr_iterate(char *args)
 		daos_iov_t	 val_iov;
 
 		if (i == 0 || (del != 0 && d <= del)) {
-			rc = dbtree_iter_probe(ih, opc, NULL, &anchor);
+			rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT,
+					       NULL, &anchor);
 			if (rc == -DER_NONEXIST)
 				break;
 
@@ -796,7 +798,8 @@ sk_btr_check_order(struct kv_node *kv, unsigned int key_nr)
 		goto failed;
 	}
 
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_DEFAULT, NULL,
+			       NULL);
 	if (rc == -DER_NONEXIST) {
 		err = "nonexist";
 		goto failed;

@@ -57,4 +57,13 @@ daos_copy_dti(struct daos_tx_id *des, struct daos_tx_id *src)
 #define DF_DTI		DF_UUID
 #define DP_DTI(dti)	DP_UUID((dti)->dti_uuid)
 
+enum daos_ops_intent {
+	DAOS_INTENT_DEFAULT	= 0,	/* fetch/enumerate/query */
+	DAOS_INTENT_PURGE	= 1,	/* purge/aggregation */
+	DAOS_INTENT_UPDATE	= 2,	/* write/insert */
+	DAOS_INTENT_PUNCH	= 3,	/* punch/delete */
+	DAOS_INTENT_REBUILD	= 4,	/* for rebuild related scan */
+	DAOS_INTENT_PROBE	= 5,	/* check aborted or not */
+};
+
 #endif /* __DAOS_DTX_H__ */

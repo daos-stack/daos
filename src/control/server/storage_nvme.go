@@ -127,6 +127,9 @@ func (n *nvmeStorage) Setup() (err error) {
 	if err = n.spdk.prep(); err != nil {
 		return
 	}
+	if err = n.Discover(); err != nil {
+		return
+	}
 	return
 }
 

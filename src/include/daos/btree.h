@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -557,9 +557,9 @@ int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh);
 int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out);
 int  dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val);
-int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc,
+int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		  daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out);
-int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc,
+int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		   daos_iov_t *key, daos_iov_t *val);
 int  dbtree_delete(daos_handle_t toh, daos_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
@@ -581,7 +581,7 @@ int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
 			daos_handle_t *ih);
 int dbtree_iter_finish(daos_handle_t ih);
 int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
-		      daos_iov_t *key, daos_anchor_t *anchor);
+		      uint32_t intent, daos_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
 int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
@@ -598,8 +598,8 @@ int dbtree_iter_empty(daos_handle_t ih);
  */
 typedef int (*dbtree_iterate_cb_t)(daos_handle_t ih, daos_iov_t *key,
 				   daos_iov_t *val, void *arg);
-int dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
-		   void *arg);
+int dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
+		   dbtree_iterate_cb_t cb, void *arg);
 
 enum {
 	DBTREE_VOS_BEGIN	= 10,
