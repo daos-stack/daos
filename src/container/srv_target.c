@@ -567,7 +567,7 @@ ds_cont_tgt_open_handler(crt_rpc_t *rpc)
 		DP_CONT(in->toi_pool_uuid, in->toi_uuid), rpc,
 		DP_UUID(in->toi_hdl));
 
-	rc = dss_task_collective(cont_open_one, in, 0);
+	rc = dss_thread_collective(cont_open_one, in, 0);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	out->too_rc = (rc == 0 ? 0 : 1);
