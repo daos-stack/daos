@@ -35,6 +35,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 import IorUtils
@@ -119,9 +120,12 @@ class ObjectMetadata(avocado.Test):
         self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("servers", '/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
-        hostlist_clients = self.params.get("clients", '/run/hosts/*')
-        self.hostfile_clients = WriteHostFile.WriteHostFile(hostlist_clients,
-                                                            self.workdir)
+        self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
+        self.hostfile_clients = WriteHostFile.WriteHostFile(
+            self.hostlist_clients, self.workdir
+        )
+        AgentUtils.run_agent(self.basepath, self.hostlist,
+                             self.hostlist_clients)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
         self.pool = DaosPool(self.context)
@@ -140,6 +144,7 @@ class ObjectMetadata(avocado.Test):
             if self.pool:
                 self.pool.destroy(1)
         finally:
+            AgentUtils.stop_agent(self.hostlist_clients)
             ServerUtils.stopServer(hosts=self.hostlist)
 
     @avocado.skip("Skipping until DAOS-1936/DAOS-1946 is fixed.")
@@ -258,7 +263,10 @@ class ObjectMetadata(avocado.Test):
             self.fail(" IOR write Thread FAIL")
 
         #Server Restart
+        AgentUtils.stop_agent(self.hostlist_clients)
         ServerUtils.stopServer(hosts=self.hostlist)
+        AgentUtils.run_agent(self.basepath, self.hostlist_clients,
+                             self.hostlist)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
         #Read IOR with verification with same number of threads

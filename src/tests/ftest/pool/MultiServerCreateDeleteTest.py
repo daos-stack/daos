@@ -31,6 +31,7 @@ from avocado       import Test
 from avocado.utils import process
 
 sys.path.append('./util')
+import AgentUtils
 import ServerUtils
 import CheckForPool
 import WriteHostFile
@@ -52,10 +53,12 @@ class MultiServerCreateDeleteTest(Test):
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
         server_group = self.params.get("server_group", '/server/', 'daos_server')
 
+        AgentUtils.run_agent(basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, server_group, basepath)
         self.dmg = basepath + '/install/bin/dmg'
 
     def tearDown(self):
+        AgentUtils.stop_agent(self.hostlist)
         ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_create(self):

@@ -34,6 +34,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./util')
 sys.path.append('./../../utils/py')
 
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 from daos_api import DaosContext, DaosPool, DaosApiError
@@ -64,9 +65,11 @@ class BadCreateTest(Test):
                                        '/server/',
                                        'daos_server')
 
+        AgentUtils.run_agent(self.basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):
+        AgentUtils.stop_agent(self.hostlist)
         ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_create(self):

@@ -31,6 +31,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 from MpioUtils import MpioUtils, MpioFailed
@@ -73,9 +74,12 @@ class Romio(Test):
         print("Host file clients is: {}".format(self.hostfile_clients))
 
         # start servers
+        AgentUtils.run_agent(self.basepath, self.hostlist_servers,
+                             self.hostlist_clients)
         ServerUtils.runServer(self.hostfile_servers, self.server_group, self.basepath)
 
     def tearDown(self):
+        AgentUtils.stop_agent(self.hostlist_clients)
         ServerUtils.stopServer(hosts=self.hostlist_servers)
 
     def test_romio(self):

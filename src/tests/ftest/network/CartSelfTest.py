@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./util')
 sys.path.append('./../../utils/py')
 
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 from daos_api import DaosContext, DaosLog
@@ -84,6 +85,8 @@ class CartSelfTest(Test):
         self.server_group = self.params.get("server", 'server_group',
                                             'daos_server')
         self.uri_file = os.path.join(self.basepath, "install", "tmp", "uri.txt")
+
+        AgentUtils.run_agent(self.basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath,
                               uri_path=self.uri_file, env_dict=self.env_dict)
 
@@ -92,6 +95,7 @@ class CartSelfTest(Test):
             os.remove(self.hostfile)
             os.remove(self.uri_file)
         finally:
+            AgentUtils.stop_agent(self.hostlist)
             ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_self_test(self):

@@ -34,6 +34,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
@@ -60,6 +61,7 @@ class PunchTest(Test):
                 self.hostfile = WriteHostFile.WriteHostFile(self.hostlist,
                                                             self.workdir)
 
+                AgentUtils.run_agent(self.basepath, self.hostlist)
                 ServerUtils.runServer(self.hostfile, self.server_group,
                                       self.basepath)
 
@@ -115,6 +117,7 @@ class PunchTest(Test):
             self.fail("Test failed during teardown.\n")
 
         finally:
+            AgentUtils.stop_agent(self.hostlist)
             ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_dkey_punch(self):

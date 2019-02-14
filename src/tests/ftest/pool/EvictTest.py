@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ from avocado       import main
 from avocado.utils import process
 
 sys.path.append('./util')
+import AgentUtils
 import ServerUtils
 import CheckForPool
 import WriteHostFile
@@ -61,9 +62,11 @@ class EvictTest(Test):
         server_group = self.params.get("server_group",'/server/',
                                        'daos_server')
 
+        AgentUtils.run_agent(self.basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):
+        AgentUtils.stop_agent(self.hostlist)
         ServerUtils.stopServer(hosts=self.hostlist)
         os.remove(self.hostfile)
 
