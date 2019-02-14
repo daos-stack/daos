@@ -486,12 +486,19 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *			provided.
  * \param akey_nr [IN]	Number of akeys in \a akeys.
  * \param akeys [IN]	Array of akeys to be punched.
-
+ * \param dth	[IN]	Pointer to the DTX handle.
+ * \param dti_cos_count [IN] The count for the DTXs that can be commitited
+ *			because of shared.
+ * \param dti_cos [IN]	The ID array of DTXis to be committed because of shared.
+ *
+ * \return		Zero on success, negative value if error
  */
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
-	      unsigned int akey_nr, daos_key_t *akeys);
+	      unsigned int akey_nr, daos_key_t *akeys,
+	      struct daos_tx_handle *dth, int dti_cos_count,
+	      struct daos_tx_id *dti_cos);
 
 /**
  * I/O APIs
@@ -553,13 +560,18 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * \param nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
  * \param ioh	[OUT]	The returned handle for the I/O.
+ * \param dth	[IN]	Pointer to the DTX handle.
+ * \param dti_cos_count [IN,OUT] The count for the DTXs that can be commitited
+ *			because of shared.
+ * \param dti_cos [IN]	The DTX IDs array to be committed because of shared.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-		 daos_handle_t *ioh);
+		 daos_handle_t *ioh, struct daos_tx_handle *dth,
+		 int *dti_cos_count, struct daos_tx_id *dti_cos);
 
 /**
  * Finish the current update and release the responding resources.
@@ -568,14 +580,20 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param dkey	[IN]	Distribution key.
+ * \param dth	[IN]	Pointer to the DTX handle.
  * \param err	[IN]	Errno of the current update, zero if there is no error.
  *			All updates will be dropped if this function is called
  *			for \a vos_update_begin with a non-zero error code.
+ * \param dti_cos_count [IN] The count for the DTXs that can be commitited
+ *			because of shared.
+ * \param dti_cos [IN]	The DTX IDs array to be committed because of shared.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err);
+vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey,
+	       struct daos_tx_handle *dth, int err, int dti_cos_count,
+	       struct daos_tx_id *dti_cos);
 
 /**
  * Get the I/O descriptor.

@@ -527,7 +527,7 @@ rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 	rdb_oid_to_uoid(oid, &uoid);
 	return vos_obj_punch(cont, uoid, epoch, RDB_PM_VER, 0,
 			     n == 0 ? NULL : &rdb_dkey, n,
-			     n == 0 ? NULL : akeys);
+			     n == 0 ? NULL : akeys, NULL, 0, NULL);
 }
 
 int
