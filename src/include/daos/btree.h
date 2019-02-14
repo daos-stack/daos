@@ -221,6 +221,9 @@ enum btr_key_cmp_rc {
 	BTR_CMP_MATCHED	= (1 << 2),
 	BTR_CMP_UNKNOWN	= (1 << 3),	/* unset */
 	BTR_CMP_ERR	= (1 << 4),	/* error */
+
+	/* The target is in some uncommitted DTX */
+	BTR_CMP_INPROGRESS	= (1 << 5),
 };
 
 /**
@@ -480,6 +483,25 @@ typedef struct {
 	 */
 	int		(*to_node_tx_add)(struct btr_instance *tins,
 					  TMMID(struct btr_node) nd_mmid);
+	/**
+	 * Optional:
+	 * Check whether the given record is visible to outside or not.
+	 *
+	 * \param tins	[IN]	Tree instance which contains the root mmid
+	 *			and memory class etc.
+	 * \param rec	[IN]	Record to be checked.
+	 * \parem intent [IN]	The intent for why check the record.
+	 *
+	 * \a return		Positive value for visible case.
+	 *			Zero for invisible case.
+	 *			-DER_INPROGRESS if the target record is in
+	 *			some uncommitted DTX, the caller needs to
+	 *			retry related operation some time later.
+	 *			Other negative values on error.
+	 */
+	int		(*to_check_visibility)(struct btr_instance *tins,
+					       struct btr_record *rec,
+					       uint32_t intent);
 } btr_ops_t;
 
 /**

@@ -613,6 +613,9 @@ struct vos_dtx_share {
 	umem_id_t		vds_record;
 };
 
+static int (*vos_dtx_check_leader)(uuid_t, daos_unit_oid_t *,
+				   uint32_t, struct pl_obj_layout **) = NULL;
+
 static bool
 vos_dtx_is_normal_entry(struct umem_instance *umm, umem_id_t entry)
 {
@@ -622,6 +625,215 @@ vos_dtx_is_normal_entry(struct umem_instance *umm, umem_id_t entry)
 		return false;
 
 	return true;
+}
+
+static int
+vos_dtx_check_shares(struct daos_tx_handle *dth, struct vos_dtx_entry_df *dtx,
+		     umem_id_t record, uint32_t intent, uint32_t type)
+{
+	struct vos_dtx_share	*vds;
+
+	if (dtx != NULL)
+		D_ASSERT(dtx->te_intent == DAOS_INTENT_UPDATE);
+
+	/* PUNCH cannot share with others. */
+	if (intent == DAOS_INTENT_PUNCH) {
+		/* XXX: One corner case: if some DTXs share the same
+		 *	object/key, and the original DTX that create
+		 *	the object/key is aborted, then when we come
+		 *	here, we do not know which DTX conflict with
+		 *	me, so we can NOT set dth::dth_conflict that
+		 *	is used by AoC (Abort-on-Conflict) if leader
+		 *	thinks the conflict DTX as corrupted one. So
+		 *	under such case, we cannot make AoC that may
+		 *	fail current modification until the corrupted
+		 *	DTX is cleanup via aggregation or DTX-rebuild.
+		 */
+		if (dth != NULL && dtx != NULL)
+			dth->dth_conflict = dtx->te_xid;
+
+		DTX_RETURN_INPROGRESS(dtx, 5);
+	}
+
+	D_ASSERT(intent == DAOS_INTENT_UPDATE);
+
+	/* Only OBJ/KEY record can be shared by new update. */
+	if (type != DTX_RT_OBJ && type != DTX_RT_KEY) {
+		if (dth != NULL && dtx != NULL)
+			dth->dth_conflict = dtx->te_xid;
+
+		DTX_RETURN_INPROGRESS(dtx, 6);
+	}
+
+	if (dth == NULL)
+		DTX_RETURN_INPROGRESS(dtx, 7);
+
+	D_ALLOC_PTR(vds);
+	if (vds == NULL)
+		return -DER_NOMEM;
+
+	vds->vds_type = type;
+	vds->vds_record = record;
+	d_list_add_tail(&vds->vds_link, &dth->dth_shares);
+
+	return 1;
+}
+
+int
+vos_dtx_check_visibility(struct umem_instance *umm, daos_handle_t coh,
+			 umem_id_t record, uint32_t intent, uint32_t type)
+{
+	struct daos_tx_handle		*dth = vos_dth_get();
+	struct vos_dtx_entry_df		*dtx = NULL;
+	umem_id_t			 entry;
+	bool				 hidden = false;
+
+	/* Everything is visible to PURGE, even if it belongs to some
+	 * uncommitted DTX that may be garbage because of corruption.
+	 */
+	if (intent == DAOS_INTENT_PURGE)
+		return 1;
+
+	switch (type) {
+	case DTX_RT_OBJ: {
+		struct vos_obj_df	*obj;
+
+		obj = umem_id2ptr(umm, record);
+		entry = obj->vo_dtx;
+		break;
+	}
+	case DTX_RT_KEY: {
+		struct vos_krec_df	*key;
+
+		key = umem_id2ptr(umm, record);
+		entry = key->kr_dtx;
+		if (key->kr_flags & VKF_DELETED)
+			hidden = true;
+		break;
+	}
+	case DTX_RT_SVT: {
+		struct vos_irec_df	*svt;
+
+		svt = umem_id2ptr(umm, record);
+		entry = svt->ir_dtx;
+		break;
+	}
+	case DTX_RT_EVT: {
+		struct evt_desc		*evt;
+
+		evt = umem_id2ptr(umm, record);
+		entry = evt->dc_dtx;
+		break;
+	}
+	default:
+		D_ERROR("Unexpected DTX type %u\n", type);
+		return -DER_INVAL;
+	}
+
+	if (intent == DAOS_INTENT_PROBE) {
+		/* Check whether the DTX is aborted or not. */
+		if (umem_id_equal(umm, entry, DTX_UMMID_ABORTED))
+			return 0;
+		else
+			return 1;
+	}
+
+	/* Committed, visible. */
+	if (UMMID_IS_NULL(entry))
+		return hidden ? 0 : 1;
+
+	/* The DTX owner can always see the DTX. */
+	if (dth != NULL && umem_id_equal(umm, entry, dth->dth_ent))
+		return 1;
+
+	/* Aborted, invisible. */
+	if (umem_id_equal(umm, entry, DTX_UMMID_ABORTED))
+		return hidden ? 1 : 0;
+
+	if (umem_id_equal(umm, entry, DTX_UMMID_UNKNOWN)) {
+		/* The original DTX must be with DAOS_INTENT_UPDATE, then
+		 * it has been shared by other UPDATE DTXs. And then the
+		 * original DTX was aborted, but other DTXs still are not
+		 * 'committable' yet.
+		 */
+
+		if (intent == DAOS_INTENT_DEFAULT ||
+		    intent == DAOS_INTENT_REBUILD)
+			return hidden ? 1 : 0;
+
+		return vos_dtx_check_shares(dth, NULL, record, intent, type);
+	}
+
+	dtx = umem_id2ptr(umm, entry);
+	switch (dtx->te_state) {
+	case DTX_ST_COMMITTED:
+		return hidden ? 0 : 1;
+	case DTX_ST_PREPARED: {
+		int	rc;
+
+		rc = vos_dtx_lookup_cos(coh, &dtx->te_oid, &dtx->te_xid,
+			dtx->te_dkey_hash[0],
+			dtx->te_intent == DAOS_INTENT_PUNCH ? true : false);
+		if (rc == 0)
+			return hidden ? 0 : 1;
+		if (rc != -DER_NONEXIST)
+			return rc;
+
+		/* The followings are for non-committable cases. */
+
+		if (intent == DAOS_INTENT_DEFAULT ||
+		    intent == DAOS_INTENT_REBUILD) {
+			struct vos_container	*cont = vos_hdl2cont(coh);
+
+			rc = vos_dtx_check_leader(cont->vc_pool->vp_id,
+						  &dtx->te_oid,
+						  dtx->te_ver, NULL);
+			if (rc < 0)
+				return rc;
+
+			if (rc == 0) {
+				/* Invisible for rebuild case. */
+				if (intent == DAOS_INTENT_REBUILD)
+					return hidden ? 1 : 0;
+
+				/* Non-leader and non-rebuild case,
+				 * return -DER_INPROGRESS, then the
+				 * caller will retry the RPC with
+				 * leader replica.
+				 */
+				DTX_RETURN_INPROGRESS(dtx, 3);
+			}
+
+			/* For leader, non-committed DTX is invisible. */
+			return hidden ? 1 : 0;
+		}
+
+		/* PUNCH DTX cannot be shared by others. */
+		if (dtx->te_intent == DAOS_INTENT_PUNCH) {
+			if (dth != NULL)
+				dth->dth_conflict = dtx->te_xid;
+
+			DTX_RETURN_INPROGRESS(dtx, 4);
+		}
+
+		/* Fall through. */
+	}
+	case DTX_ST_INIT:
+		if (dtx->te_intent != DAOS_INTENT_UPDATE) {
+			D_ERROR("Unexpected DTX intent %u\n", dtx->te_intent);
+			return -DER_INVAL;
+		}
+
+		if ((intent == DAOS_INTENT_DEFAULT ||
+		     intent == DAOS_INTENT_REBUILD) &&
+		    dtx->te_state == DTX_ST_INIT)
+			return hidden ? 1 : 0;
+
+		return vos_dtx_check_shares(dth, dtx, record, intent, type);
+	default:
+		D_ERROR("Unexpected DTX state %u\n", dtx->te_state);
+		return -DER_INVAL;
+	}
 }
 
 /* The caller has started PMDK transaction. */
@@ -1152,6 +1364,13 @@ vos_dtx_handle_resend(daos_handle_t coh, struct daos_tx_id *dti)
 	default:
 		return -DER_INVAL;
 	}
+}
+
+void
+vos_dtx_register_check_leader(int (*checker)(uuid_t, daos_unit_oid_t *,
+			      uint32_t, struct pl_obj_layout **))
+{
+	vos_dtx_check_leader = checker;
 }
 
 int
