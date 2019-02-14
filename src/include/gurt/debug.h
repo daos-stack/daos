@@ -55,10 +55,11 @@
  * @{
  */
 
-extern int DD_FAC(swim);
-extern int DD_FAC(misc);
-extern int DD_FAC(mem);
-extern int DD_FAC(fi);
+#define D_FOREACH_GURT_FAC(ACTION, arg)                                 \
+	ACTION(misc, misc, arg)  /* misc debug messages */              \
+	ACTION(mem,  mem,  arg)  /* memory debug messages */            \
+	ACTION(swim, swim, arg)  /* swim debug messages (move ?) */     \
+	ACTION(fi,   fi,   arg)  /* fault injection debug messages */
 
 /**
  * d_alt_assert is a pointer to an alternative assert function, meaning an
@@ -165,6 +166,10 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 	D_TRACE_DEBUG(DLOG_CRIT, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_FATAL(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_EMERG, ptr, fmt, ## __VA_ARGS__)
+
+D_FOREACH_GURT_FAC(D_LOG_DECLARE_FAC, D_NOOP)
+
+D_FOREACH_GURT_DB(D_LOG_DECLARE_DB, D_NOOP)
 
 /**
  * D_PRINT_ERR must be used for any error logging before clog is enabled or

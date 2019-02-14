@@ -173,7 +173,8 @@ static void *progress_thread(void *arg)
 		sched_yield();
 	} while (1);
 
-	D_ASSERT(rc == 0 || rc == -DER_TIMEDOUT);
+	D_ASSERTF(rc == 0 || rc == -DER_TIMEDOUT,
+		  "Failure exiting progress loop: rc: %d\n", rc);
 	fprintf(stderr, "progress_thread: progress thread exit ...\n");
 
 	pthread_exit(NULL);

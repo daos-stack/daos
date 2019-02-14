@@ -39,18 +39,21 @@
 #ifndef __CRT_DEBUG_H__
 #define __CRT_DEBUG_H__
 #include <gurt/dlog.h>
-#include <gurt/debug.h>
+#include <gurt/debug_setup.h>
 
-extern int DD_FAC(rpc);
-extern int DD_FAC(bulk);
-extern int DD_FAC(corpc);
-extern int DD_FAC(grp);
-extern int DD_FAC(lm);
-extern int DD_FAC(hg);
-extern int DD_FAC(pmix);
-extern int DD_FAC(self_test);
-extern int DD_FAC(iv);
-extern int DD_FAC(ctl);
+#define CRT_FOREACH_LOG_FAC(ACTION, arg)	\
+	ACTION(rpc,   rpc,         arg)	\
+	ACTION(bulk,  bulk,        arg)	\
+	ACTION(corpc, corpc,       arg)	\
+	ACTION(grp,   group,       arg)	\
+	ACTION(lm,    livenessmap, arg)	\
+	ACTION(hg,    mercury,     arg)	\
+	ACTION(pmix,  pmix,        arg)	\
+	ACTION(st,    self_test,   arg)	\
+	ACTION(iv,    iv,          arg)	\
+	ACTION(ctl,   ctl,         arg)
+
+CRT_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, D_NOOP)
 
 int crt_setup_log_fac(void);
 

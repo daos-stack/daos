@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,43 +39,16 @@
 
 #define CART_FAC_MAX_LEN (128)
 
-#define DECLARE_FAC(name) int DD_FAC(name)
-
-DECLARE_FAC(rpc);
-DECLARE_FAC(bulk);
-DECLARE_FAC(corpc);
-DECLARE_FAC(grp);
-DECLARE_FAC(lm);
-DECLARE_FAC(hg);
-DECLARE_FAC(pmix);
-DECLARE_FAC(self_test);
-DECLARE_FAC(iv);
-DECLARE_FAC(ctl);
-DECLARE_FAC(swim);
-
-#define D_INIT_LOG_FAC(name, lname, idp)	\
-	d_init_log_facility(idp, name, lname);
-
-#define FOREACH_CART_LOG_FAC(ACTION)			\
-	ACTION("RPC", "rpc", d_rpc_logfac)		\
-	ACTION("BULK", "bulk", d_bulk_logfac)		\
-	ACTION("CORPC", "corpc", d_corpc_logfac)	\
-	ACTION("GRP", "group", d_grp_logfac)		\
-	ACTION("LM", "livenessmap", d_lm_logfac)	\
-	ACTION("HG", "mercury", d_hg_logfac)		\
-	ACTION("PMIX", "pmix", d_pmix_logfac)		\
-	ACTION("ST", "self_test", d_self_test_logfac)	\
-	ACTION("IV", "iv", d_iv_logfac)			\
-	ACTION("CTL", "ctl", d_ctl_logfac)		\
-	ACTION("SWIM", "swim", d_swim_logfac)
-
-#define CART_SETUP_FAC(name, lname, idp)		\
-	D_INIT_LOG_FAC(name, lname, &idp)
+CRT_FOREACH_LOG_FAC(D_LOG_INSTANTIATE_FAC, D_NOOP)
 
 int
 crt_setup_log_fac(void)
 {
-	FOREACH_CART_LOG_FAC(CART_SETUP_FAC)
+	int rc = D_LOG_REGISTER_FAC(CRT_FOREACH_LOG_FAC);
+
+	if (rc != 0)
+		return rc;
+
 	d_log_sync_mask();
 
 	return 0;

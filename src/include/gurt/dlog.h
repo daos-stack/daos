@@ -103,17 +103,25 @@ typedef uint64_t d_dbug_t;
 #define DLOG_STDOUT     0x10000000	/**< always log to stdout */
 
 #define DLOG_PRIMASK    0x07ffff00	/**< priority mask */
-#define DLOG_EMERG      0x07000000	/**< emergency */
-#define DLOG_ALERT      0x06000000	/**< alert */
-#define DLOG_CRIT       0x05000000	/**< critical */
-#define DLOG_ERR        0x04000000	/**< error */
-#define DLOG_WARN       0x03000000	/**< warning */
-#define DLOG_NOTE       0x02000000	/**< notice */
-#define DLOG_INFO       0x01000000	/**< info */
+#define D_FOREACH_PRIO_MASK(ACTION, arg)				    \
+	ACTION(DLOG_EMERG, fatal, fatal, 0x07000000, arg) /**< emergency */ \
+	ACTION(DLOG_ALERT, alert, alert, 0x06000000, arg) /**< alert */	    \
+	ACTION(DLOG_CRIT,  crit,  crit,  0x05000000, arg) /**< critical */  \
+	ACTION(DLOG_ERR,   err,   err,   0x04000000, arg) /**< error */	    \
+	ACTION(DLOG_WARN,  warn,  warn,  0x03000000, arg) /**< warning */   \
+	ACTION(DLOG_NOTE,  note,  note,  0x02000000, arg) /**< notice */    \
+	ACTION(DLOG_INFO,  info,  info,  0x01000000, arg) /**< info */	    \
+	ACTION(DLOG_DBG,   debug, debug, 0x00ffff00, arg) /**< debug mask */
+
+#define D_NOOP(...)
+
+#define D_PRIO_ENUM(name, id, longid, mask, arg)	name = mask,
+enum {
+	D_FOREACH_PRIO_MASK(D_PRIO_ENUM, D_NOOP)
+};
 
 #define DLOG_PRISHIFT   24		/**< to get non-debug level */
 #define DLOG_DPRISHIFT  8		/**< to get debug level */
-#define DLOG_DBG        0x00ffff00	/**< all debug streams */
 #define DLOG_FACMASK    0x000000ff	/**< facility mask */
 
 /** The environment variable for the default debug bit-mask */

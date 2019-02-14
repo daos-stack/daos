@@ -47,28 +47,13 @@
 static pthread_mutex_t d_log_lock = PTHREAD_MUTEX_INITIALIZER;
 static int d_log_refcount;
 
-int d_misc_logfac;
-int d_mem_logfac;
-int d_fi_logfac;
+D_FOREACH_GURT_FAC(D_LOG_INSTANTIATE_FAC, D_NOOP)
 
 /* An alternative assert function. Set with d_register_alt_assert() */
 void (*d_alt_assert)(const int, const char*, const char*, const int);
 
-/*
- * Debug bits for common logic paths, can only have up to 16 different bits.
- */
-d_dbug_t DB_ANY; /** generic messages, no classification */
-/** function trace, tree/hash/lru operations, a very expensive one */
-d_dbug_t DB_TRACE;
-d_dbug_t DB_MEM; /**< memory operation */
-d_dbug_t DB_NET; /**< network operation */
-d_dbug_t DB_IO;	/**< object I/O */
-d_dbug_t DB_TEST; /**< test programs */
-/**
- * all of masks - can be used to set all streams, or used to log specific
- * messages by default.
- */
-d_dbug_t DB_ALL; /** < = DLOG_DBG */
+D_FOREACH_GURT_DB(D_LOG_INSTANTIATE_DB, D_NOOP)
+
 /** Configurable debug bits (project-specific) */
 static d_dbug_t DB_OPT1;
 static d_dbug_t DB_OPT2;
@@ -83,31 +68,26 @@ static d_dbug_t DB_OPT10;
 
 #define DBG_ENV_MAX_LEN	(32)
 
-#define DBG_DICT_ENTRY(bit, name)					\
+#define DBG_DICT_ENTRY(bit, name, longname)				\
 	{ .db_bit = bit, .db_name = name, .db_name_size = sizeof(name),	\
-	  .db_lname = NULL, .db_lname_size = 0 }
+	  .db_lname = longname, .db_lname_size = sizeof(longname) }
+
+#define D_INIT_DB(bit, name, longname, mask, arg)	\
+	DBG_DICT_ENTRY(&bit, #name, #longname),
 
 struct d_debug_bit d_dbg_bit_dict[] = {
-	/* load common debug bits into dict */
-	DBG_DICT_ENTRY(&DB_ANY, "any"),
-	DBG_DICT_ENTRY(&DB_ALL, "all"),
-	DBG_DICT_ENTRY(&DB_MEM, "mem"),
-	DBG_DICT_ENTRY(&DB_NET, "net"),
-	DBG_DICT_ENTRY(&DB_IO, "io"),
-	DBG_DICT_ENTRY(&DB_TRACE, "trace"),
-	DBG_DICT_ENTRY(&DB_TEST, "test"),
+	D_FOREACH_GURT_DB(D_INIT_DB, D_NOOP)
 	/* set by d_log_dbg_bit_alloc() */
-	DBG_DICT_ENTRY(&DB_OPT1, NULL),
-	DBG_DICT_ENTRY(&DB_OPT2, NULL),
-	DBG_DICT_ENTRY(&DB_OPT3, NULL),
-	DBG_DICT_ENTRY(&DB_OPT4, NULL),
-	DBG_DICT_ENTRY(&DB_OPT5, NULL),
-	DBG_DICT_ENTRY(&DB_OPT6, NULL),
-	DBG_DICT_ENTRY(&DB_OPT7, NULL),
-	DBG_DICT_ENTRY(&DB_OPT8, NULL),
-	DBG_DICT_ENTRY(&DB_OPT9, NULL),
-	DBG_DICT_ENTRY(&DB_OPT10, NULL),
-
+	DBG_DICT_ENTRY(&DB_OPT1, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT2, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT3, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT4, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT5, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT6, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT7, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT8, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT9, NULL, NULL),
+	DBG_DICT_ENTRY(&DB_OPT10, NULL, NULL),
 };
 
 #define NUM_DBG_BIT_ENTRIES	ARRAY_SIZE(d_dbg_bit_dict)
@@ -130,16 +110,11 @@ struct d_debug_grp d_dbg_grp_dict[] = {
 
 #define NUM_DBG_GRP_ENTRIES	ARRAY_SIZE(d_dbg_grp_dict)
 
-#define PRI_DICT_ENTRY(prio, name)	\
-	{ .dd_prio = prio, .dd_name = name, .dd_name_size = sizeof(name) }
+#define PRI_DICT_ENTRY(prio, name, longname, mask, arg)	\
+	{ .dd_prio = prio, .dd_name = #name, .dd_name_size = sizeof(#name) },
 
 static struct d_debug_priority d_dbg_prio_dict[] = {
-	PRI_DICT_ENTRY(DLOG_INFO, "info"),
-	PRI_DICT_ENTRY(DLOG_NOTE, "note"),
-	PRI_DICT_ENTRY(DLOG_WARN, "warn"),
-	PRI_DICT_ENTRY(DLOG_ERR, "err"),
-	PRI_DICT_ENTRY(DLOG_CRIT, "crit"),
-	PRI_DICT_ENTRY(DLOG_EMERG, "fatal"),
+	D_FOREACH_PRIO_MASK(PRI_DICT_ENTRY, D_NOOP)
 };
 
 #define NUM_DBG_PRIO_ENTRIES	ARRAY_SIZE(d_dbg_prio_dict)
@@ -464,21 +439,6 @@ d_log_sync_mask(void)
 	D_MUTEX_UNLOCK(&d_log_lock);
 }
 
-/* this macro contains a return statement */
-#define D_ADD_LOG_FAC(name, aname, lname)				\
-	do {								\
-		d_##name##_logfac = d_add_log_facility(aname, lname);	\
-		if (d_##name##_logfac < 0) {				\
-			D_ERROR("d_add_log_facility failed, "		\
-				"d_##name##__logfac: %d.\n",		\
-				 d_##name##_logfac);			\
-			return -DER_UNINIT;				\
-		}							\
-	} while (0)
-
-#define D_INIT_LOG_FAC(name, aname, lname)				\
-	d_init_log_facility(&d_##name##_logfac, aname, lname)
-
 /**
  * Setup the clog facility names and mask.
  *
@@ -488,28 +448,7 @@ d_log_sync_mask(void)
 static inline int
 setup_clog_facnamemask(void)
 {
-	int rc;
-
-	/* add gurt internally used log facilities */
-	rc = D_INIT_LOG_FAC(misc, "MISC", "misc");
-	if (rc != 0) {
-		D_PRINT_ERR("MISC log facility failed to init; rc=%d\n", rc);
-		return rc;
-	}
-
-	rc = D_INIT_LOG_FAC(mem, "MEM", "memory");
-	if (rc != 0) {
-		D_PRINT_ERR("MEM log facility failed to init; rc=%d\n", rc);
-		return rc;
-	}
-
-	rc = D_INIT_LOG_FAC(fi, "FI", "fault_inject");
-	if (rc != 0) {
-		D_PRINT_ERR("FI log facility failed to init; rc=%d\n", rc);
-		return rc;
-	}
-
-	return 0;
+	return D_LOG_REGISTER_FAC(D_FOREACH_GURT_FAC);
 }
 
 /**
