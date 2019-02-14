@@ -816,6 +816,79 @@ array_recx_punch_enumerate(void **state)
 	print_message("all good\n");
 }
 
+#define NUM_AKEYS 10
+
+static void
+dfs_replicator(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	daos_iov_t	 dkey;
+	const char	*dkey_fmt = "file_%d";
+	char		 dkey_str[10];
+	const char	*akey_fmt = "meta_%d";
+	char		 akey[NUM_AKEYS][10];
+	daos_sg_list_t	 sgls[NUM_AKEYS];
+	daos_iov_t	 sg_iovs[NUM_AKEYS];
+	daos_iod_t	 iods[NUM_AKEYS];
+	uint64_t	 val[NUM_AKEYS];
+	int		 i;
+	int		 rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** init dkey */
+	sprintf(dkey_str, dkey_fmt, arg->myrank);
+	daos_iov_set(&dkey, dkey_str, strlen(dkey_str));
+
+	/** Init 10 Akeys with single value */
+	for (i = 0; i < NUM_AKEYS; i++) {
+		sprintf(akey[i], akey_fmt, i);
+		daos_iov_set(&iods[i].iod_name, akey[i], strlen(akey[i]));
+		daos_iov_set(&sg_iovs[i], &val[i], sizeof(uint64_t));
+		iods[i].iod_size = sizeof(uint64_t);
+
+		sgls[i].sg_nr		= 1;
+		sgls[i].sg_nr_out	= 0;
+		sgls[i].sg_iovs		= &sg_iovs[i];
+
+		daos_csum_set(&iods[i].iod_kcsum, NULL, 0);
+		iods[i].iod_nr		= 1;
+		iods[i].iod_recxs	= NULL;
+		iods[i].iod_eprs	= NULL;
+		iods[i].iod_csums	= NULL;
+		iods[i].iod_type	= DAOS_IOD_SINGLE;
+	}
+
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, 0);
+
+	for (i = 0; i < 10; i++) {
+		/** open object */
+		rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+		assert_int_equal(rc, 0);
+
+		/** update */
+		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, NUM_AKEYS, iods,
+				     sgls, NULL);
+		assert_int_equal(rc, 0);
+
+		/** punch dkey */
+		rc = daos_obj_punch_dkeys(oh, DAOS_TX_NONE, 1, &dkey, NULL);
+		if (rc)
+			fprintf(stderr, "Failed punch on iteration %d (%d)\n",
+				i, rc);
+		assert_int_equal(rc, 0);
+
+		/** close object */
+		rc = daos_obj_close(oh, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	if (arg->myrank == 0)
+		print_message("all good\n");
+}
+
 static const struct CMUnitTest array_tests[] = {
 	{ "ARRAY1: byte array with buffer on stack",
 	  byte_array_simple_stack, NULL, test_case_teardown},
@@ -843,12 +916,14 @@ static const struct CMUnitTest array_tests[] = {
 	  array_akey_punch_enumerate, NULL, test_case_teardown},
 	{ "ARRAY13: Array RECX punch/enumerate",
 	  array_recx_punch_enumerate, NULL, test_case_teardown},
+	{ "DFS_REPLICATOR: create / punch entries",
+	  dfs_replicator, NULL, test_case_teardown},
 };
 
 int
 array_setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, false, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
 			  NULL);
 }
 
@@ -857,10 +932,9 @@ run_daos_array_test(int rank, int size)
 {
 	int rc = 0;
 
-	if (rank == 0)
-		rc = cmocka_run_group_tests_name("DAOS Array tests",
-						 array_tests, array_setup,
-						 test_teardown);
+	rc = cmocka_run_group_tests_name("DAOS Array tests",
+					 array_tests, array_setup,
+					 test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }
