@@ -548,14 +548,13 @@ out:
 
 #define LOCAL_ARRAY_SIZE	128
 static int
-placement_check(uuid_t co_uuid, daos_unit_oid_t oid,
-		daos_epoch_t epoch, void *data)
+placement_check(uuid_t co_uuid, vos_iter_entry_t *ent, void *data)
 {
 	struct rebuild_scan_arg	*arg = data;
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
-	struct pl_obj_layout	*layout = NULL;
 	struct pl_map		*map = NULL;
 	struct daos_obj_md	md;
+	daos_unit_oid_t		oid;
 	unsigned int		tgt_array[LOCAL_ARRAY_SIZE];
 	unsigned int		shard_array[LOCAL_ARRAY_SIZE];
 	unsigned int		*tgts = NULL;
@@ -568,6 +567,11 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid,
 	if (rpt->rt_abort)
 		return 1;
 
+	/* The end of the iteration. */
+	if (ent == NULL)
+		return 0;
+
+	oid = ent->ie_oid;
 	map = pl_map_find(rpt->rt_pool_uuid, oid.id_pub);
 	if (map == NULL) {
 		D_ERROR(DF_UOID"Cannot find valid placement map"
@@ -608,9 +612,26 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid,
 		 * myrank should always not equal to tgt_rebuild. XXX
 		 */
 		if (myrank != tgts[i]) {
+			daos_unit_oid_t		tmp = oid;
+
+			tmp.id_shard = shards[i];
+			rc = ds_pool_check_leader(rpt->rt_pool_uuid, &tmp,
+						  rpt->rt_rebuild_ver, NULL);
+			if (rc == 0) {
+				/* The leader shard is not on current server,
+				 * then current server does not know whether
+				 * related DTX(s) for current shard have been
+				 * committed or not. Skip the shard that will
+				 * be handled by the leader on another server.
+				 */
+				D_DEBUG(DB_REBUILD, "Skip non-leader replica "
+					DF_UOID".\n", DP_UOID(tmp));
+				continue;
+			}
+
 			rc = rebuild_object_insert(arg, tgts[i], shards[i],
 						   rpt->rt_pool_uuid, co_uuid,
-						   oid, epoch);
+						   oid, ent->ie_epoch);
 			if (rc)
 				D_GOTO(out, rc);
 		} else {
@@ -619,9 +640,6 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid,
 		}
 	}
 out:
-	if (layout != NULL)
-		pl_obj_layout_free(layout);
-
 	if (tgts != tgt_array && tgts != NULL)
 		D_FREE(tgts);
 
@@ -652,8 +670,8 @@ rebuild_scanner(void *data)
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
 		ABT_thread_yield();
 
-	return ds_pool_obj_iter(rpt->rt_pool_uuid, arg->callback,
-				arg->arg);
+	return ds_pool_rebuild_iter(rpt->rt_pool_uuid, arg->callback,
+				    arg->arg, VOS_ITER_OBJ);
 }
 
 static int
@@ -698,6 +716,16 @@ rebuild_scan_leader(void *data)
 		D_GOTO(out_map, rc = -DER_NOMEM);
 	}
 	ABT_mutex_unlock(rpt->rt_lock);
+
+	/** Re-sync uncommitted DTX before rebuilding objects. */
+	rc = dtx_resync(DAOS_HDL_INVAL, rpt->rt_pool_uuid, rpt->rt_coh_uuid,
+			rpt->rt_rebuild_ver, true);
+
+	D_DEBUG(DB_REBUILD, "resync DTX collective "DF_UUID" done: rc = %d\n",
+		DP_UUID(rpt->rt_pool_uuid), rc);
+
+	if (rc != 0)
+		D_GOTO(put_plmap, rc);
 
 	iter_arg.arg = arg;
 	iter_arg.callback = placement_check;
