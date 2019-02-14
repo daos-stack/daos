@@ -189,6 +189,9 @@ cont_free(struct d_ulink *ulink)
 	struct vos_container *cont;
 
 	cont = container_of(ulink, struct vos_container, vc_uhlink);
+	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
+		dbtree_destroy(cont->vc_dtx_cos_hdl);
+	D_ASSERT(d_list_empty(&cont->vc_dtx_committable));
 	dbtree_close(cont->vc_dtx_active_hdl);
 	dbtree_close(cont->vc_dtx_committed_hdl);
 	dbtree_close(cont->vc_btr_hdl);
@@ -316,6 +319,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	struct d_uuid			pkey;
 	struct cont_df_args		args;
 	struct vos_container		*cont = NULL;
+	struct umem_attr		uma;
 
 	D_DEBUG(DB_TRACE, "Open container "DF_UUID"\n", DP_UUID(co_uuid));
 
@@ -355,6 +359,9 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_pool	 = vpool;
 	cont->vc_cont_df = args.ca_cont_df;
 	cont->vc_otab_df = &args.ca_cont_df->cd_otab_df;
+	cont->vc_dtx_cos_hdl = DAOS_HDL_INVAL;
+	D_INIT_LIST_HEAD(&cont->vc_dtx_committable);
+	cont->vc_dtx_committable_count = 0;
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_otab_df->obt_btr,
@@ -380,6 +387,17 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 			&vpool->vp_uma, &cont->vc_dtx_active_hdl);
 	if (rc) {
 		D_ERROR("Failed to open active DTX table: rc = %d\n", rc);
+		D_GOTO(exit, rc);
+	}
+
+	memset(&uma, 0, sizeof(uma));
+	uma.uma_id = UMEM_CLASS_VMEM;
+	memset(&cont->vc_dtx_cos_btr, 0, sizeof(cont->vc_dtx_cos_btr));
+	rc = dbtree_create_inplace(VOS_BTR_DTX_COS, 0, OT_BTREE_ORDER, &uma,
+				   &cont->vc_dtx_cos_btr,
+				   &cont->vc_dtx_cos_hdl);
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX CoS btree: rc = %d\n", rc);
 		D_GOTO(exit, rc);
 	}
 
