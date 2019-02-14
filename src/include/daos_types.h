@@ -87,6 +87,10 @@ daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
 	csum->cs_len = csum->cs_buf_len = size;
 }
 
+enum daos_anchor_flags {
+	/* The RPC will be sent to leader replica. */
+	DAOS_ANCHOR_FLAGS_TO_LEADER	= 1,
+};
 
 typedef enum {
 	DAOS_ANCHOR_TYPE_ZERO	= 0,
@@ -100,10 +104,21 @@ typedef enum {
 typedef struct {
 	uint16_t	da_type; /** daos_anchor_type_t */
 	uint16_t	da_shard;
-	uint32_t	da_padding;
+	uint32_t	da_flags;
 	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
 } daos_anchor_t;
 
+static inline void
+daos_anchor_set_flags(daos_anchor_t *anchor, uint32_t flags)
+{
+	anchor->da_flags |= flags;
+}
+
+static inline uint32_t
+daos_anchor_get_flags(daos_anchor_t *anchor)
+{
+	return anchor->da_flags;
+}
 
 static inline void
 daos_anchor_set_zero(daos_anchor_t *anchor)

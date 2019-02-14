@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@
 #include <uuid/uuid.h>
 #include <daos/event.h>
 #include <daos/rpc.h>
+#include <daos/dtx.h>
 
 /* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
  * for other RPC fields and cart/HG headers.
@@ -97,8 +98,15 @@ enum obj_rpc_opc {
 
 extern struct crt_proto_format obj_proto_fmt;
 
-/* rw flags (orw_flags) */
-#define ORW_FLAG_BULK_BIND	(0x1)
+enum obj_rpc_flags {
+	ORF_BULK_BIND		= (1 << 0),
+	/** It is a resent RPC. */
+	ORF_RESEND		= (1 << 1),
+	/** The request is from leader server (replica). */
+	ORF_FROM_LEADER		= (1 << 2),
+	/** Abort the (dead) DTX by force on conflict. */
+	ORF_DTX_AOC		= (1 << 3),
+};
 
 /** to identify each obj shard's target */
 struct daos_obj_shard_tgt {
@@ -110,6 +118,7 @@ struct daos_obj_shard_tgt {
 
 /* common for update/fetch */
 #define DAOS_ISEQ_OBJ_RW	/* input fields */		 \
+	((struct daos_tx_id)	(orw_dti)		CRT_VAR) \
 	((daos_unit_oid_t)	(orw_oid)		CRT_VAR) \
 	((uuid_t)		(orw_co_hdl)		CRT_VAR) \
 	((uuid_t)		(orw_co_uuid)		CRT_VAR) \
@@ -117,6 +126,7 @@ struct daos_obj_shard_tgt {
 	((uint32_t)		(orw_map_ver)		CRT_VAR) \
 	((uint32_t)		(orw_nr)		CRT_VAR) \
 	((daos_key_t)		(orw_dkey)		CRT_VAR) \
+	((struct daos_tx_id)	(orw_dti_cos)		CRT_ARRAY) \
 	((daos_iod_t)		(orw_iods)		CRT_ARRAY) \
 	((daos_sg_list_t)	(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
@@ -171,12 +181,14 @@ CRT_RPC_DECLARE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 
 #define DAOS_ISEQ_OBJ_PUNCH	/* input fields */		 \
+	((struct daos_tx_id)	(opi_dti)		CRT_VAR) \
 	((uuid_t)		(opi_co_hdl)		CRT_VAR) \
 	((uuid_t)		(opi_co_uuid)		CRT_VAR) \
 	((daos_unit_oid_t)	(opi_oid)		CRT_VAR) \
 	((uint64_t)		(opi_epoch)		CRT_VAR) \
 	((uint32_t)		(opi_map_ver)		CRT_VAR) \
-	((uint32_t)		(opi_pad32_1)		CRT_VAR) \
+	((uint32_t)		(opi_flags)		CRT_VAR) \
+	((struct daos_tx_id)	(opi_dti_cos)		CRT_ARRAY) \
 	((daos_iov_t)		(opi_dkeys)		CRT_ARRAY) \
 	((daos_iov_t)		(opi_akeys)		CRT_ARRAY) \
 	((struct daos_obj_shard_tgt) (opi_shard_tgts)	CRT_ARRAY)
