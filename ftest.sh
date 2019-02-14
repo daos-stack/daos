@@ -119,6 +119,16 @@ if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
             sudo mkdir -p /mnt/daos
         fi
     fi
+
+    # make sure to set up for daos_agent
+    current_username=\$(whoami)
+    sudo mkdir /var/run/daos_agent
+    sudo mkdir /var/run/daos_server
+    sudo chown \${current_username} -R /var/run/daos_agent
+    sudo chown \${current_username} -R /var/run/daos_server
+    sudo chmod u+w /var/run/daos_agent
+    sudo chmod u+w /var/run/daos_server
+
     sudo ed <<EOF /etc/fstab
 \\\$a
 tmpfs /mnt/daos tmpfs rw,relatime,size=16777216k 0 0 # added by ftest.sh

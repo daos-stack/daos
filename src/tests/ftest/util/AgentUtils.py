@@ -27,6 +27,7 @@ import time
 import subprocess
 import json
 import signal
+import getpass
 
 sessions = {}
 
@@ -59,15 +60,17 @@ def node_setup_okay(node_list, node_server_type):
         raise AgentFailed("Unknown node type, exiting")
 
     okay = True
+    failed_node = None
     for node in node_list:
         cmd = "test -d " + socket_dir
         resp = subprocess.call(["ssh", node, cmd])
         if resp != 0:
             okay = False
+            failed_node = node
             break
-    return okay
+    return okay, failed_node, socket_dir
 
-def run_agent(basepath, client_list, server_list):
+def run_agent(basepath, server_list, client_list=None):
     """
     Makes sure the environment is setup for the security agent and then launches
     it on the compute nodes.
@@ -80,11 +83,22 @@ def run_agent(basepath, client_list, server_list):
     server_list --those nodes that are acting as server nodes in the test
 
     """
-    if not node_setup_okay(client_list, NodeListType.CLIENT):
-        raise AgentFailed("A compute node isn't configured properly")
+    user = getpass.getuser()
 
-    if not node_setup_okay(server_list, NodeListType.SERVER):
-        raise AgentFailed("A server node isn't configured properly")
+    rc, node, agent_dir = node_setup_okay(server_list, NodeListType.SERVER)
+    if not rc:
+        raise AgentFailed("Server node " + node + " does not have directory "
+                          + agent_dir + " set up correctly for user "
+                          + user + ".")
+
+    if client_list is None:
+        return
+
+    rc, node, agent_dir = node_setup_okay(client_list, NodeListType.CLIENT)
+    if not rc:
+        raise AgentFailed("Client node " + node + " does not have directory "
+                        + agent_dir + " set up correctly for user "
+                        + user + ".")
 
     with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
         build_vars = json.load(json_vars)

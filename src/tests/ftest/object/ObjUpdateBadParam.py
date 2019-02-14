@@ -34,6 +34,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 from conversion import c_uuid_to_str
@@ -62,10 +63,12 @@ class ObjUpdateBadParam(Test):
         self.hostlist = self.params.get("test_machines",'/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
+        AgentUtils.run_agent(self.basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
         time.sleep(5)
 
     def tearDown(self):
+        AgentUtils.stop_agent(self.hostlist)
         ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_bad_handle(self):
