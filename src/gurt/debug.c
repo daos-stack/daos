@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,29 +57,29 @@ void (*d_alt_assert)(const int, const char*, const char*, const int);
 /*
  * Debug bits for common logic paths, can only have up to 16 different bits.
  */
-uint64_t DB_ANY; /** generic messages, no classification */
+d_dbug_t DB_ANY; /** generic messages, no classification */
 /** function trace, tree/hash/lru operations, a very expensive one */
-uint64_t DB_TRACE;
-uint64_t DB_MEM; /**< memory operation */
-uint64_t DB_NET; /**< network operation */
-uint64_t DB_IO;	/**< object I/O */
-uint64_t DB_TEST; /**< test programs */
+d_dbug_t DB_TRACE;
+d_dbug_t DB_MEM; /**< memory operation */
+d_dbug_t DB_NET; /**< network operation */
+d_dbug_t DB_IO;	/**< object I/O */
+d_dbug_t DB_TEST; /**< test programs */
 /**
  * all of masks - can be used to set all streams, or used to log specific
  * messages by default.
  */
-uint64_t DB_ALL; /** < = DLOG_DBG */
+d_dbug_t DB_ALL; /** < = DLOG_DBG */
 /** Configurable debug bits (project-specific) */
-static uint64_t DB_OPT1;
-static uint64_t DB_OPT2;
-static uint64_t DB_OPT3;
-static uint64_t DB_OPT4;
-static uint64_t DB_OPT5;
-static uint64_t DB_OPT6;
-static uint64_t DB_OPT7;
-static uint64_t DB_OPT8;
-static uint64_t DB_OPT9;
-static uint64_t DB_OPT10;
+static d_dbug_t DB_OPT1;
+static d_dbug_t DB_OPT2;
+static d_dbug_t DB_OPT3;
+static d_dbug_t DB_OPT4;
+static d_dbug_t DB_OPT5;
+static d_dbug_t DB_OPT6;
+static d_dbug_t DB_OPT7;
+static d_dbug_t DB_OPT8;
+static d_dbug_t DB_OPT9;
+static d_dbug_t DB_OPT10;
 
 #define DBG_ENV_MAX_LEN	(32)
 
@@ -209,12 +209,12 @@ d_log_dbg_bit_dealloc(char *name)
  * \return		0 on success, -1 on error
  */
 int
-d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname)
+d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname)
 {
 	size_t		   name_sz;
 	size_t		   lname_sz;
 	int		   i;
-	uint64_t	   bit = 0;
+	d_dbug_t	   bit = 0;
 	struct d_debug_bit *d;
 
 	if (name == NULL || dbgbit == NULL)
@@ -330,7 +330,7 @@ d_log_dbg_grp_dealloc(char *name)
  * \return			0 on success, -1 on error
  */
 int
-d_log_dbg_grp_alloc(uint64_t dbgmask, char *grpname)
+d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname)
 {
 	int		   i;
 	size_t		   name_sz;
@@ -550,7 +550,7 @@ static inline int
 setup_dbg_namebit(void)
 {
 	struct d_debug_bit *d;
-	uint64_t	    allocd_dbg_bit;
+	d_dbug_t	    allocd_dbg_bit;
 	int		    i;
 	int		    rc;
 
@@ -577,7 +577,7 @@ setup_dbg_namebit(void)
 
 int
 d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
-		 uint64_t def_mask, uint64_t err_mask)
+		 d_dbug_t def_mask, d_dbug_t err_mask)
 {
 	int rc = 0;
 
@@ -652,7 +652,7 @@ void d_log_fini(void)
  *
  * \return		0 on success, -1 on error
  */
-int d_log_getdbgbit(uint64_t *dbgbit, char *bitname)
+int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname)
 {
 	int		   i;
 	int		   num_dbg_bit_entries;

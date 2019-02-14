@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -198,6 +198,9 @@ int main(int argc, char **argv)
 	int			 status = RESET;
 	int			 i;
 
+	saved_rc = d_log_init();
+	assert(saved_rc == 0);
+
 	saved_rc = crt_init(NULL, 0);
 	if (saved_rc != 0) {
 		printf("Could not start server, rc = %d", saved_rc);
@@ -268,6 +271,8 @@ int main(int argc, char **argv)
 	check_return(crt_group_detach(grp), saved_rc);
 	check_return(crt_context_destroy(crt_ctx, false), saved_rc);
 	check_return(crt_finalize(), saved_rc);
+
+	d_log_fini();
 
 	return saved_rc;
 }

@@ -195,6 +195,9 @@ echo_init(int server, bool tier2)
 	struct crt_proto_format *cpf;
 	char *name;
 
+	rc = d_log_init();
+	assert(rc == 0);
+
 	/* Put the protocol name into a char * to avoid compiler warnings about
 	 * const use
 	 */
@@ -321,6 +324,8 @@ echo_fini(void)
 
 	rc = crt_finalize();
 	assert(rc == 0);
+
+	d_log_fini();
 }
 
 /* convert to string just to facilitate the pack/unpack */

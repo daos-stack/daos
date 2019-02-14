@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -574,6 +574,9 @@ test_init(void)
 	int		rc = 0;
 	uint32_t	flag;
 
+	rc = d_log_init();
+	assert(rc == 0);
+
 	D_DEBUG(DB_TEST, "local group: %s, target group: %s\n",
 		test.t_local_group_name,
 		test.t_target_group_name ? test.t_target_group_name : "NULL\n");
@@ -658,6 +661,8 @@ test_fini()
 	D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
+
+	d_log_fini();
 }
 
 int main(int argc, char **argv)

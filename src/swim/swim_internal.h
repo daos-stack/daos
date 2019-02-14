@@ -1,5 +1,5 @@
 /* Copyright (c) 2016 UChicago Argonne, LLC
- * Copyright (C) 2018 Intel Corporation
+ * Copyright (C) 2018-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,6 +54,7 @@
 #include <time.h>
 
 #include <cart/swim.h>
+#include <gurt/debug.h>
 #include <gurt/common.h>
 
 /* Use debug capability from CaRT */

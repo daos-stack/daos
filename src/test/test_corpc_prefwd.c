@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 Intel Corporation
+/* Copyright (C) 2018-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -125,6 +125,9 @@ int main(void)
 	excluded_membs.rl_nr = 1;
 	excluded_membs.rl_ranks = &excluded_ranks;
 
+	rc = d_log_init();
+	assert(rc == 0);
+
 	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
 	assert(rc == 0);
 
@@ -171,6 +174,8 @@ int main(void)
 
 	rc = crt_finalize();
 	assert(rc == 0);
+
+	d_log_fini();
 
 	return 0;
 }

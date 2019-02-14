@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,8 +38,8 @@
 
 #ifndef __CRT_DEBUG_H__
 #define __CRT_DEBUG_H__
-
-#define DD_FAC(name)	(d_##name##_logfac)
+#include <gurt/dlog.h>
+#include <gurt/debug.h>
 
 extern int DD_FAC(rpc);
 extern int DD_FAC(bulk);

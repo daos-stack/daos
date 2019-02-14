@@ -68,19 +68,26 @@ JENKINS_TEST_LIST=(scripts/cart_echo_test.yml                   \
 # Check for symbol names in the library.
 if [ -d "utils" ]; then
   utils/test_cart_lib.sh
+  build_vars="./.build_vars-Linux.sh"
 else
   ./test_cart_lib.sh
+  build_vars="../.build_vars-Linux.sh"
 fi
 # Run the tests from the install TESTING directory
 if [ -z "$CART_TEST_MODE"  ]; then
   CART_TEST_MODE="native"
 fi
 
-if [ -n "$COMP_PREFIX"  ]; then
-  TESTDIR=${COMP_PREFIX}/TESTING
-else
-  TESTDIR="install/Linux/TESTING"
+if [ -z "$COMP_PREFIX"  ]; then
+  COMP_PREFIX="install/Linux"
+  if [ -f "${build_vars}" ]; then
+    source "${build_vars}"
+    COMP_PREFIX="$SL_PREFIX"
+  fi
 fi
+
+TESTDIR=${COMP_PREFIX}/TESTING
+
 if [[ "$CART_TEST_MODE" =~ (native|all) ]]; then
   echo "Nothing to do yet, wish we could fail some tests"
   if ${RUN_UTEST:-true}; then

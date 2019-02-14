@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -195,6 +195,9 @@ rpc_err_init(void)
 		rpc_err.re_local_group_name,
 		rpc_err.re_target_group_name);
 
+	rc = d_log_init();
+	assert(rc == 0);
+
 	flag = rpc_err.re_is_service ? CRT_FLAG_BIT_SERVER : 0;
 	rc = crt_init(rpc_err.re_local_group_name, flag);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
@@ -238,6 +241,8 @@ rpc_err_fini()
 	D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
+
+	d_log_fini();
 }
 
 static void

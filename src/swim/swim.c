@@ -36,9 +36,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#define DD_FAC(name)	(d_##name##_logfac)
 #define D_LOGFAC	DD_FAC(swim)
-extern int DD_FAC(swim);
 
 #include "swim_internal.h"
 #include <assert.h>

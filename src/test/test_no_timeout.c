@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 Intel Corporation
+/* Copyright (C) 2018-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -192,6 +192,9 @@ test_init(void)
 	fprintf(stderr, "local group: %s remote group: %s\n",
 		test_g.t_local_group_name, test_g.t_remote_group_name);
 
+	rc = d_log_init();
+	assert(rc == 0);
+
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
@@ -365,6 +368,7 @@ test_fini()
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 	D_DEBUG(DB_TEST, "exiting.\n");
 
+	d_log_fini();
 }
 
 int

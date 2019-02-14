@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -122,6 +122,9 @@ int main(int argc, char **argv)
 	int			rc;
 	int			i;
 
+	rc = d_log_init();
+	assert(rc == 0);
+
 	rc = crt_init("manyserver", CRT_FLAG_BIT_SERVER);
 	if (rc != 0) {
 		printf("Could not start server, rc = %d", rc);
@@ -161,6 +164,8 @@ int main(int argc, char **argv)
 
 	crt_context_destroy(crt_ctx, false);
 	crt_finalize();
+
+	d_log_fini();
 
 	return 0;
 }

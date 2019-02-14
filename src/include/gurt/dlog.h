@@ -81,6 +81,14 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+/** Define a typedef for the debug bits.   The log mask is only 32-bits but
+ *  for whatever reason, the debug mask is 64-bits.   In order to maintain
+ *  compatibility, redefine it to a 64-bit type which we can change to 32
+ *  once downstream libraries have upgraded.  Also, choose a type that is
+ *  the same length as the original.
+ */
+typedef uint64_t d_dbug_t;
+
 /* clog open flavor */
 #define DLOG_FLV_LOGPID	(1 << 0)	/**< include pid in log tag */
 #define DLOG_FLV_FQDN	(1 << 1)	/**< log fully quallified domain name */
@@ -137,15 +145,15 @@ struct d_log_xstate {
 	char			*tag; /**< tag string */
 	/* note that tag is NULL if clog is not open/inited */
 	struct dlog_fac		*dlog_facs; /**< array of facility */
-	int			 fac_cnt; /**< # of facilities */
 	char			*nodename; /**< pointer to our utsname */
+	int			 fac_cnt; /**< # of facilities */
 };
 
 struct d_debug_data {
 	/** debug bitmask, e.g. DB_IO */
-	uint64_t		dd_mask;
+	d_dbug_t		dd_mask;
 	/** priority level that should be output to stderr */
-	uint64_t		dd_prio_err;
+	d_dbug_t		dd_prio_err;
 	/** alloc'd debug bit count */
 	int			dbg_bit_cnt;
 	/** alloc'd debug group count */
@@ -162,7 +170,7 @@ struct d_debug_data {
  */
 struct d_debug_priority {
 	char			*dd_name;
-	uint64_t		 dd_prio;
+	d_dbug_t		 dd_prio;
 	size_t			 dd_name_size;
 };
 
@@ -171,7 +179,7 @@ struct d_debug_priority {
  * of the system, e.g. DB_MEM, DB_IO, DB_TRACE...
  */
 struct d_debug_bit {
-	uint64_t		*db_bit;
+	d_dbug_t		*db_bit;
 	char			*db_name;
 	char			*db_lname;
 	size_t			 db_name_size;
@@ -185,7 +193,7 @@ struct d_debug_bit {
 struct d_debug_grp {
 	char			*dg_name;
 	size_t			 dg_name_size;
-	uint64_t		 dg_mask;
+	d_dbug_t		 dg_mask;
 };
 
 #if defined(__cplusplus)
@@ -214,7 +222,7 @@ int d_log_dbg_bit_dealloc(char *name);
  * \return		0 on success, -1 on error
  *
  */
-int d_log_dbg_bit_alloc(uint64_t *dbgbit, char *name, char *lname);
+int d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname);
 
 /**
  * Reset optional debug group
@@ -233,7 +241,7 @@ int d_log_dbg_grp_dealloc(char *grpname);
  *
  * \return		0 on success, -1 on error
  */
-int d_log_dbg_grp_alloc(uint64_t dbgmask, char *grpname);
+int d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname);
 
 /**
  * log a message using stdarg list without checking filtering
@@ -365,7 +373,7 @@ int d_log_init(void);
  * \return			0 on success, -1 on failure
  */
 int d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
-		     uint64_t def_mask, uint64_t err_mask);
+		     d_dbug_t def_mask, d_dbug_t err_mask);
 
 /**
  * Remove a reference on the default cart log.  Calls d_log_close

@@ -39,10 +39,11 @@
 #ifndef __GURT_DEBUG_H__
 #define __GURT_DEBUG_H__
 
+#include <stdio.h>
 #include <stddef.h>
 #include <assert.h>
 
-#include <gurt/dlog.h>
+#include <gurt/debug_setup.h>
 #include <gurt/errno.h>
 
 /**
@@ -53,24 +54,11 @@
 /** @addtogroup GURT_DEBUG
  * @{
  */
-#define DD_FAC(name)	(d_##name##_logfac)
 
 extern int DD_FAC(swim);
 extern int DD_FAC(misc);
 extern int DD_FAC(mem);
 extern int DD_FAC(fi);
-
-#ifndef D_LOGFAC
-#define D_LOGFAC	DD_FAC(misc)
-#endif
-
-extern uint64_t DB_ANY;
-extern uint64_t DB_TRACE;
-extern uint64_t DB_MEM;
-extern uint64_t DB_NET;
-extern uint64_t DB_IO;
-extern uint64_t DB_TEST;
-extern uint64_t DB_ALL;
 
 /**
  * d_alt_assert is a pointer to an alternative assert function, meaning an
@@ -95,31 +83,68 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
  */
 #pragma GCC diagnostic warning "-Wshadow"
 
-/**
- * The D_LOG checks the specified mask and, if enabled, it logs the
- * message, prependng the file, line, and function name.  This function
- * can be used directly by users or by user defined macros if the provided
- * log level macros are not flexible enough.
- */
-#define D_LOG(mask, fmt, ...)						\
+/** Internal macro for printing the message using resolved mask */
+#define _D_LOG_NOCHECK(mask, fmt, ...)				\
+	d_log(mask, "%s:%d %s() " fmt, __FILE__, __LINE__,	\
+	      __func__, ##__VA_ARGS__)
+
+/** Internal macro for printing trace message with resolved mask */
+#define _D_TRACE_NOCHECK(mask, ptr, fmt, ...)			\
+	d_log(mask, "%s:%d %s(%p) " fmt, __FILE__, __LINE__,	\
+	      __func__, ptr, ##__VA_ARGS__)
+
+/** Internal macro for saving the log, checking it, and printing, if enabled */
+#define _D_LOG_CHECK(func, saved_mask, mask, ...)			\
 	do {								\
-		int __tmp_mask = d_log_check(mask);			\
+		(saved_mask) = d_log_check(mask);			\
 									\
-		if (__tmp_mask)						\
-			d_log(__tmp_mask,				\
-			      "%s:%d %s() " fmt, __FILE__, __LINE__,	\
-			      __func__, ##__VA_ARGS__);			\
+		if (saved_mask)						\
+			func(saved_mask, ##__VA_ARGS__);		\
 	} while (0)
 
 /**
- * The D_DEBUG macro takes a mask as the first parameter allowing the user
- * to use specific debug bits.  It assumes the user has defined D_LOGFAC
- * for the current file.
+ * The _D_LOG internal macro checks the specified mask and, if enabled, it
+ * logs the message, prependng the file, line, and function name.  This
+ * function can be used directly by users or by user defined macros if the
+ * provided log level macros are not flexible enough.
  */
-#define D_DEBUG(mask, fmt, ...)	D_LOG((mask) | D_LOGFAC, fmt, ## __VA_ARGS__)
+#define _D_LOG(func, mask, ...)						\
+	do {								\
+		int __tmp_mask;						\
+									\
+		_D_LOG_CHECK(func, __tmp_mask, mask, ##__VA_ARGS__);	\
+	} while (0)
 
-/** macros to output logs which are more important than D_DEBUG.  These
- *  assume user has defined D_LOGFAC for the file
+/* Log a message conditionally upon resolving the mask
+ *
+ * The mask is combined with D_LOGFAC which the user should define before
+ * including debug headers
+ *
+ * \param mask	The debug bits or priority mask
+ * \param fmt	The format string to print
+ *
+ *  User should define D_LOGFAC for the file
+ */
+#define D_DEBUG(mask, fmt, ...)	\
+	_D_LOG(_D_LOG_NOCHECK, (mask) | D_LOGFAC, fmt, ## __VA_ARGS__)
+
+/* Log a pointer value and message conditionally upon resolving the mask
+ *
+ * The mask is combined with D_LOGFAC which the user should define before
+ * including debug headers
+ *
+ * \param mask	The debug bits or priority mask
+ * \param ptr	A pointer value that is put into the message
+ * \param fmt	The format string to print
+ *
+ *  User should define D_LOGFAC for the file
+ */
+#define D_TRACE_DEBUG(mask, ptr, fmt, ...) \
+	_D_LOG(_D_TRACE_NOCHECK, (mask) | D_LOGFAC, ptr, fmt, ## __VA_ARGS__)
+
+/** Helper macros to conditionally output logs conditionally based on
+ *  the message priority and the current log level.  See D_DEBUG and
+ *  D_TRACE_DEBUG
  */
 #define D_INFO(fmt, ...)	D_DEBUG(DLOG_INFO, fmt, ## __VA_ARGS__)
 #define D_NOTE(fmt, ...)	D_DEBUG(DLOG_NOTE, fmt, ## __VA_ARGS__)
@@ -128,22 +153,6 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define D_CRIT(fmt, ...)	D_DEBUG(DLOG_CRIT, fmt, ## __VA_ARGS__)
 #define D_FATAL(fmt, ...)	D_DEBUG(DLOG_EMERG, fmt, ## __VA_ARGS__)
 
-/**
- * The D_TRACE macro is like the D_LOG macro except it prints the
- * address of the supplied pointer in the message
- */
-#define D_TRACE(mask, ptr, fmt, ...)					\
-	do {								\
-		int __tmp_mask = d_log_check(mask);			\
-									\
-		if (__tmp_mask)						\
-			d_log(__tmp_mask,				\
-			      "%s:%d %s(%p) " fmt, __FILE__, __LINE__,	\
-			      __func__, ptr, ##__VA_ARGS__);		\
-	} while (0)
-
-#define D_TRACE_DEBUG(mask, ptr, fmt, ...) \
-	D_TRACE((mask) | D_LOGFAC, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_INFO(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_INFO, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_NOTE(ptr, fmt, ...)	\
@@ -156,6 +165,17 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 	D_TRACE_DEBUG(DLOG_CRIT, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_FATAL(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_EMERG, ptr, fmt, ## __VA_ARGS__)
+
+/**
+ * D_PRINT_ERR must be used for any error logging before clog is enabled or
+ * after it is disabled
+ */
+#define D_PRINT_ERR(fmt, ...)					\
+	do {							\
+		fprintf(stderr, "%s:%d:%s() " fmt, __FILE__,	\
+			__LINE__, __func__, ## __VA_ARGS__);	\
+		fflush(stderr);					\
+	} while (0)
 
 /**
  * Add a new log facility.
@@ -187,7 +207,7 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
 
 	*fac = d_add_log_facility(aname, lname);
 	if (*fac < 0) {
-		D_ERROR("d_add_log_facility failed, *fac: %d\n", *fac);
+		D_PRINT_ERR("d_add_log_facility failed, *fac: %d\n", *fac);
 		return -DER_UNINIT;
 	}
 
@@ -202,7 +222,7 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
  *
  * \return		0 on success, -1 on error
  */
-int d_log_getdbgbit(uint64_t *dbgbit, char *bitname);
+int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname);
 
 /**
  * Set an alternative assert function. This is useful in unit testing when you
@@ -215,17 +235,6 @@ int d_log_getdbgbit(uint64_t *dbgbit, char *bitname);
  */
 int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 			  const char*, const int));
-
-/**
- * D_PRINT_ERR must be used for any error logging before clog is enabled or
- * after it is disabled
- */
-#define D_PRINT_ERR(fmt, ...)						\
-	do {								\
-		fprintf(stderr, "%s:%d:%d:%s() " fmt, __FILE__,		\
-			getpid(), __LINE__, __func__, ## __VA_ARGS__);	\
-		fflush(stderr);						\
-	} while (0)
 
 /**
  * D_PRINT can be used for output to stdout with or without clog being enabled

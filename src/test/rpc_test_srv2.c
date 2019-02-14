@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -253,6 +253,7 @@ main(int argc, char *argv[])
 {
 	int	ch;
 
+	assert(d_log_init() == 0);
 	dbg("---%s--->", __func__);
 
 	dbg("srv2_pid:=%d", getpid());
@@ -291,6 +292,7 @@ main(int argc, char *argv[])
 	srv_rpc_finalize();
 
 	dbg("<---%s---", __func__);
+	d_log_fini();
 
 	return 0;
 } /*main*/

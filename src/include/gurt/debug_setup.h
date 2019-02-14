@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2019 Intel Corporation
+/* Copyright (C) 2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,92 +35,33 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include <semaphore.h>
 
-#include <gurt/common.h>
-#include <cart/api.h>
+#ifndef __GURT_DEBUG_SETUP_H__
+#define __GURT_DEBUG_SETUP_H__
 
-#include "test_proto_common.h"
+#include <gurt/dlog.h>
+/**
+ * \file
+ * Debug macros and functions
+ */
 
-static void
-test_init()
-{
-	uint32_t	flag;
-	int		rc;
+/** @addtogroup GURT_DEBUG
+ * @{
+ */
+#define DD_FAC(name)	(d_##name##_logfac)
 
-	fprintf(stderr, "local group: %s remote group: %s\n",
-		test.tg_local_group_name, test.tg_remote_group_name);
+#ifndef D_LOGFAC
+#define D_LOGFAC	DD_FAC(misc)
+#endif
 
-	rc = d_log_init();
-	assert(rc == 0);
+extern d_dbug_t DB_ANY;
+extern d_dbug_t DB_TRACE;
+extern d_dbug_t DB_MEM;
+extern d_dbug_t DB_NET;
+extern d_dbug_t DB_IO;
+extern d_dbug_t DB_TEST;
+extern d_dbug_t DB_ALL;
 
-	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
-	D_ASSERTF(rc == 0, "sem_init() failed.\n");
-
-	flag = test.tg_is_service ? CRT_FLAG_BIT_SERVER : 0;
-	rc = crt_init(test.tg_local_group_name, flag);
-	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
-
-	rc = crt_group_rank(NULL, &test.tg_my_rank);
-	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
-
-	rc = crt_proto_register(&my_proto_fmt_0);
-	D_ASSERT(rc == 0);
-	rc = crt_proto_register(&my_proto_fmt_1);
-	D_ASSERT(rc == 0);
-
-	rc = crt_context_create(&test.tg_crt_ctx);
-	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
-
-	rc = pthread_create(&test.tg_tid, NULL, progress_thread,
-			    &test.tg_thread_id);
-	D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
-}
-
-static void
-test_run()
-{
-	D_DEBUG(DB_TRACE, "test_run\n");
-}
-
-/************************************************/
-static void
-test_fini()
-{
-	int	rc;
-
-	rc = pthread_join(test.tg_tid, NULL);
-	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
-	D_DEBUG(DB_TRACE, "joined progress thread.\n");
-
-
-	rc = crt_context_destroy(test.tg_crt_ctx, 0);
-	D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
-
-	rc = sem_destroy(&test.tg_token_to_proceed);
-	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
-
-	rc = crt_finalize();
-	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
-	D_DEBUG(DB_TRACE, "exiting.\n");
-
-	d_log_fini();
-}
-
-int
-main(int argc, char **argv)
-{
-	int	rc;
-
-	rc = test_parse_args(argc, argv);
-	if (rc != 0) {
-		fprintf(stderr, "test_parse_args() failed, rc: %d.\n", rc);
-		return rc;
-	}
-
-	test_init();
-	test_run();
-	test_fini();
-
-	return rc;
-}
+/** @}
+ */
+#endif /* __GURT_DEBUG_SETUP_H__ */

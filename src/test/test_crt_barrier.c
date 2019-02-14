@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -127,6 +127,9 @@ int main(int argc, char **argv)
 	int			i;
 	pthread_t		tid;
 
+	rc = d_log_init();
+	assert(rc == 0);
+
 	printf("Calling crt_init()\n");
 	rc = crt_init("crt_barrier_group", CRT_FLAG_BIT_SERVER);
 	D_ASSERTF(rc == 0, "Failed in crt_init, rc = %d\n", rc);
@@ -174,6 +177,8 @@ int main(int argc, char **argv)
 	crt_context_destroy(crt_ctx, 0);
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "Failed in crt_finalize, rc = %d\n", rc);
+
+	d_log_fini();
 
 	free(info);
 

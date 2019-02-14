@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 Intel Corporation
+/* Copyright (C) 2018-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -758,6 +758,9 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	rc = d_log_init();
+	assert(rc == 0);
+
 	DBG_PRINT("Self rank = %d\n", opts.self_rank);
 
 	rc = sem_init(&token_to_proceed, 0, 0);
@@ -1124,6 +1127,8 @@ int main(int argc, char **argv)
 		D_ERROR("sem_destroy() failed; rc=%d\n", rc);
 		assert(0);
 	}
+
+	d_log_fini();
 
 	DBG_PRINT("Destroyed semaphore. Exiting\n");
 	DBG_PRINT("---------------------------------\n");

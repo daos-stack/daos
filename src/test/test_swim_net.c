@@ -436,6 +436,8 @@ int main(int argc, char *argv[])
 	enum swim_member_status s;
 	int t, j;
 
+	assert(d_log_init() == 0);
+
 	dbg("---%s--->", __func__);
 
 	/* default value */
@@ -464,5 +466,6 @@ int main(int argc, char *argv[])
 	srv_fini();
 
 	dbg("<---%s---", __func__);
+	d_log_fini();
 	return 0;
 }
