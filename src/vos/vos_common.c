@@ -228,6 +228,12 @@ vos_mod_init(void)
 		return rc;
 	}
 
+	rc = vos_dtx_cos_register();
+	if (rc != 0) {
+		D_ERROR("DTX CoS btree initialization error\n");
+		return rc;
+	}
+
 	/**
 	 * Registering the class for OI btree
 	 * and KV btree
