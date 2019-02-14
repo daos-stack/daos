@@ -40,6 +40,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 import CheckForPool
@@ -92,6 +93,7 @@ class RebuildWithIO(Test):
         io_proc = None
 
         try:
+            AgentUtils.run_agent(basepath, self.hostlist)
             ServerUtils.runServer(hostfile, server_group, basepath)
 
             # use the uid/gid of the user running the test, these should
@@ -177,4 +179,5 @@ class RebuildWithIO(Test):
                 # really make sure everything is gone
                 CheckForPool.CleanupPools(self.hostlist)
             finally:
+                AgentUtils.stop_agent(self.hostlist)
                 ServerUtils.killServer(self.hostlist)

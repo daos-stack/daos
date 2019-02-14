@@ -35,6 +35,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
 import daos_api
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 from avocado import Test, main
@@ -70,9 +71,12 @@ class DeleteContainerTest(Test):
         self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("test_machines",'/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+
+        AgentUtils.run_agent(self.basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
+        AgentUtils.stop_agent(self.hostlist)
         ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_container_delete(self):

@@ -36,6 +36,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 import CheckForPool
@@ -76,6 +77,7 @@ class RebuildTests(Test):
         basepath = os.path.normpath(self.build_paths['PREFIX']  + "/../")
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
         hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        AgentUtils.run_agent(basepath, self.hostlist)
         ServerUtils.runServer(hostfile, self.server_group, basepath)
 
     def tearDown(self):
@@ -83,6 +85,7 @@ class RebuildTests(Test):
 	    ServerUtils.stopServer(hosts=self.hostlist)
         finally:
             # really make sure everything is gone
+            AgentUtils.stop_agent(self.hostlist)
             CheckForPool.CleanupPools(self.hostlist)
 
     def test_simple_rebuild(self):

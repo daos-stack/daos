@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018 Intel Corporation.
+    (C) Copyright 2018-2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 import IorUtils
@@ -62,6 +63,8 @@ class MultipleClients(Test):
         self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir)
         print("Host file clientsis: {}".format(self.hostfile_clients))
 
+        AgentUtils.run_agent(self.basepath, self.hostlist_servers,
+                             self.hostlist_clients)
         ServerUtils.runServer(self.hostfile_servers, self.server_group, self.basepath)
 
         if int(str(self.name).split("-")[0]) == 1:
@@ -76,6 +79,7 @@ class MultipleClients(Test):
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
+            AgentUtils.stop_agent(self.hostlist_clients)
             ServerUtils.stopServer(hosts=self.hostlist_servers)
 
     def test_multipleclients(self):

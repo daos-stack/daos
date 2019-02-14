@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 import CheckForPool
@@ -124,12 +125,14 @@ class GlobalHandle(Test):
         self.hostlist = self.params.get("test_machines",'/run/hosts/')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
+        AgentUtils.run_agent(basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, server_group, basepath)
 
     def tearDown(self):
         try:
             os.remove(self.hostfile)
         finally:
+            AgentUtils.stop_agent(self.hostlist)
             ServerUtils.stopServer(hosts=self.hostlist)
 
         # really make sure everything is gone

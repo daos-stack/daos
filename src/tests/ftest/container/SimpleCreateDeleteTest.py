@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2017 Intel Corporation.
+  (C) Copyright 2017-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
@@ -72,6 +73,7 @@ class SimpleCreateDeleteTest(Test):
             hostlist = self.params.get("test_machines",'/run/hosts/*')
             hostfile = WriteHostFile.WriteHostFile(hostlist, self.workdir)
 
+            AgentUtils.run_agent(self.basepath, hostlist)
             ServerUtils.runServer(hostfile, self.server_group, self.basepath)
 
             # give it time to start
@@ -126,6 +128,7 @@ class SimpleCreateDeleteTest(Test):
                 pool.disconnect()
                 pool.destroy(1)
 
+            AgentUtils.stop_agent(hostlist)
             ServerUtils.stopServer(hosts=hostlist)
 
 if __name__ == "__main__":

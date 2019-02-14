@@ -31,6 +31,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 import IorUtils
@@ -54,7 +55,7 @@ class EightServers(Test):
         self.slots = None
         self.hostlist_servers = None
         self.hostfile_servers = None
-        hostlist_clients = None
+        self.hostlist_clients = None
         self.hostfile_clients = None
 
     def setUp(self):
@@ -72,11 +73,16 @@ class EightServers(Test):
         self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
         print("Host file servers is: {}".format(self.hostfile_servers))
 
-        hostlist_clients = self.params.get("test_clients", '/run/hosts/test_machines/*')
+        self.hostlist_clients = self.params.get("test_clients",
+                                                '/run/hosts/test_machines/*')
         self.slots = self.params.get("slots", '/run/ior/clientslots/*')
-        self.hostfile_clients = WriteHostFile.WriteHostFile(hostlist_clients, self.workdir, self.slots)
+        self.hostfile_clients = WriteHostFile.WriteHostFile(
+            self.hostlist_clients, self.workdir, self.slots
+        )
         print("Host file clients is: {}".format(self.hostfile_clients))
 
+        AgentUtils.run_agent(self.basepath, self.hostlist_servers,
+                             self.hostlist_clients)
         ServerUtils.runServer(self.hostfile_servers, self.server_group, self.basepath)
 
         if not distutils.spawn.find_executable("ior") and \
@@ -88,6 +94,7 @@ class EightServers(Test):
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
+            AgentUtils.stop_agent(self.hostlist_clients)
             ServerUtils.stopServer(hosts=self.hostlist_servers)
 
     def executable(self, iorflags=None):
