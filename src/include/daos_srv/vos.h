@@ -37,6 +37,45 @@
 #include <daos_srv/vos_types.h>
 
 /**
+ * Prepare the DTX handle in DRAM.
+ *
+ * XXX: Currently, we only support to prepare the DTX against single DAOS
+ *	object and single dkey.
+ *
+ * \param dti		[IN]	The DTX identifier.
+ * \param oid		[IN]	The target object (shard) ID.
+ * \param dkey		[IN]	The target dkey to be modified.
+ * \param coh		[IN]	Container open handle.
+ * \param epoch		[IN]	Epoch for the DTX.
+ * \param pm_ver	[IN]	Pool map version for the DTX.
+ * \param intent	[IN]	The intent of related modification.
+ * \param flags		[IN]	The flags for the DTX, see daos_tx_flags.
+ * \param dth		[OUT]	Pointer to the DTX handle.
+ *
+ * \return			Zero on success, negative value if error.
+ */
+int
+vos_dtx_begin(struct daos_tx_id *dti, daos_unit_oid_t *oid, daos_key_t *dkey,
+	      daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver,
+	      uint32_t intent, uint32_t flags, struct daos_tx_handle **dth);
+
+/**
+ * Release the DTX handle in DRAM.
+ *
+ * \param dth		[IN]	Pointer to the DTX handle.
+ * \param result	[IN]	The modification result.
+ * \param leader	[IN]	Whether is leader for current DTX or not.
+ *
+ * \return			+3 if current DTX needs to be committed.
+ * \return			+2 if need to commit some old DTXs.
+ * \return			+1 if need to aggregate some old DTXs.
+ * \return			Zero on success and need not additional actions.
+ * \return			Negative value if error.
+ */
+int
+vos_dtx_end(struct daos_tx_handle *dth, int result, bool leader);
+
+/**
  * Search the specified DTX is in the CoS cache or not.
  *
  * \param coh	[IN]	Container open handle.
@@ -80,6 +119,59 @@ vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid,
  */
 int
 vos_dtx_list_committable(daos_handle_t coh, struct daos_tx_entry **dtes);
+
+/**
+ * Check whether the specified DTX can be committed or not.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param dti	[IN]	The DTX identifier.
+ *
+ * \return		See enum dtx_status for kinds of cases.
+ *			Negative value if error.
+ */
+int
+vos_dtx_check_committable(daos_handle_t coh, struct daos_tx_id *dti);
+
+/**
+ * Commit the specified DTXs.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param dti	[IN]	The array for DTX identifiers to be committed.
+ * \param count [IN]	The count of DTXs to be committed.
+ *
+ * \return		Positive value if need to aggregate some old DTXs.
+ * \return		Zero on success and need not additional actions.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_commit(daos_handle_t coh, struct daos_tx_id *dti, int count);
+
+/**
+ * Abort the specified DTXs.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param dti	[IN]	The array for DTX identifiers to be aborted.
+ * \param count [IN]	The count of DTXs to be aborted.
+ * \param force [IN]	Force abort even if someone does not exist.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_dtx_abort(daos_handle_t coh, struct daos_tx_id *dti, int count, bool force);
+
+/**
+ * Aggregate the committed DTXs.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param max	[IN]	The maximum count of DTXs to be aggregated at most.
+ *			0 is the default: DTX_AGGREGATION_THRESHOLD_COUNT
+ *			(1 << 27), -1ULL is for all if @age is also -1ULL.
+ * \param age	[IN]	Aggregate the DTXs that are older than the give age
+ *			(in second). 0 means DTX_AGGREGATION_THRESHOLD_TIME
+ *			(3600 seconds). -1ULL means ignore the age factor.
+ */
+void
+vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age);
 
 /**
  * Initialize the environment for a VOS instance
