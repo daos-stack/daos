@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 import CheckForPool
@@ -88,6 +89,7 @@ class RebuildTests(Test):
         hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
         try:
+            AgentUtils.run_agent(basepath, self.hostlist)
             ServerUtils.runServer(hostfile, server_group, basepath)
 
             # use the uid/gid of the user running the test, these should
@@ -222,6 +224,7 @@ class RebuildTests(Test):
                 # really make sure everything is gone
                 CheckForPool.CleanupPools(self.hostlist)
             finally:
+                AgentUtils.stop_agent(self.hostlist)
                 ServerUtils.killServer(self.hostlist)
 
 
@@ -251,6 +254,7 @@ class RebuildTests(Test):
         hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
         try:
+            AgentUtils.run_agent(basepath, self.hostlist)
             ServerUtils.runServer(hostfile, server_group, basepath)
 
             # use the uid/gid of the user running the test, these should
@@ -420,6 +424,7 @@ class RebuildTests(Test):
             self.fail("Expecting to pass but test has failed.\n")
 
         finally:
+            AgentUtils.stop_agent(self.hostlist)
             ServerUtils.stopServer(hosts=self.hostlist)
             os.remove(hostfile)
             CheckForPool.CleanupPools(self.hostlist)

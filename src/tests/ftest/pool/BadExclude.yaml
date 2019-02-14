@@ -2,9 +2,9 @@ server:
    server_group: test_server
 hosts:
   test_machines:
-    - boro-26
-    - boro-29
-    - boro-30
+    - boro-A
+    - boro-B
+    - boro-C
 timeout: 200
 testparams:
    tgtlist: !mux

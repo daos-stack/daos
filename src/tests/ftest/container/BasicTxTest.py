@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
+import AgentUtils
 from conversion import c_uuid_to_str
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
@@ -62,12 +63,14 @@ class BasicTxTest(Test):
         self.hostlist = self.params.get("test_machines",'/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
+        AgentUtils.run_agent(self.basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
         # give it time to start
         time.sleep(2)
 
     def tearDown(self):
+        AgentUtils.stop_agent(self.hostlist)
         ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_tx_basics(self):

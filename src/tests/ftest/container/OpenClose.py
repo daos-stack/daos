@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018 Intel Corporation.
+    (C) Copyright 2018-2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 import daos_api
@@ -61,6 +62,7 @@ class OpenClose(Test):
 
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
+        AgentUtils.run_agent(self.basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
@@ -69,6 +71,7 @@ class OpenClose(Test):
                 self.pool.destroy(1)
         finally:
             try:
+                AgentUtils.stop_agent(self.hostlist)
                 ServerUtils.stopServer(hosts=self.hostlist)
             except ServerFailed as e:
                 pass
