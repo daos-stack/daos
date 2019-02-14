@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import ServerUtils
 import CheckForPool
 import WriteHostFile
@@ -62,6 +63,8 @@ class FullPoolContainerCreate(Test):
         self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("test_machines1", '/hosts/')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+
+        AgentUtils.run_agent(self.basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
@@ -73,6 +76,7 @@ class FullPoolContainerCreate(Test):
         try:
             self.pool.destroy(1)
         finally:
+            AgentUtils.stop_agent(self.hostlist)
             ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_no_space_cont_create(self):

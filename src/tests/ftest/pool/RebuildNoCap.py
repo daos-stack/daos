@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 from daos_api import DaosContext, DaosPool, DaosServer, DaosApiError
@@ -61,6 +62,7 @@ class RebuildNoCap(Test):
         with open('../../../.build_vars.json') as f:
               build_paths = json.load(f)
         self.CONTEXT = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
         # generate a hostfile
         self.hostlist = self.params.get("test_machines",'/run/hosts/')
@@ -70,8 +72,9 @@ class RebuildNoCap(Test):
         # fire up the DAOS servers
         self.server_group = self.params.get("server_group",'/run/server/',
                                             'daos_server')
-        ServerUtils.runServer(self.hostfile, self.server_group,
-                              build_paths['PREFIX'] + '/../')
+
+        AgentUtils.run_agent(self.basepath, self.hostlist)
+        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
         # create a pool to test with
         createmode = self.params.get("mode",'/run/pool/createmode/')
@@ -104,6 +107,7 @@ class RebuildNoCap(Test):
             if self.POOL:
                 self.POOL.destroy(1)
         finally:
+            AgentUtils.stop_agent(self.hostlist)
             ServerUtils.stopServer(hosts=self.hostlist)
 
 
