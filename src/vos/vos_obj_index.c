@@ -112,11 +112,20 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	struct oi_key		 *key;
 	struct oi_hkey		 *hkey;
 	TMMID(struct vos_obj_df)  obj_mmid;
+	int			  rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
 	obj_mmid = umem_znew_typed(&tins->ti_umm, struct vos_obj_df);
 	if (TMMID_IS_NULL(obj_mmid))
 		return -DER_NOMEM;
+
+	rc = vos_dtx_register_record(&tins->ti_umm, umem_id_t2u(obj_mmid),
+				     DTX_RT_OBJ, 0);
+	if (rc != 0)
+		/* It is unnecessary to free the PMEM that will be dropped
+		 * automatically when the PMDK transaction is aborted.
+		 */
+		return rc;
 
 	obj = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
 
@@ -152,6 +161,17 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	obj_mmid = umem_id_u2t(rec->rec_mmid, struct vos_obj_df);
 	obj = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
+
+	rc = vos_dtx_degister_record(umm, obj->vo_dtx, rec->rec_mmid,
+				     DTX_RT_OBJ);
+	if (rc != 0)
+		return rc;
+
+	if (obj->vo_dtx_shares > 0) {
+		D_ERROR("There are some unknown DTXs (%d) share the obj rec\n",
+			obj->vo_dtx_shares);
+		return -DER_BUSY;
+	}
 
 	/** Free the KV tree within this object */
 	if (obj->vo_tree.tr_class != 0) {
