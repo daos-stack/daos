@@ -75,7 +75,6 @@ struct io_test_args {
 	/* Optional addn container create params */
 	uuid_t			 addn_co_uuid;
 	daos_handle_t		 addn_co;
-	d_list_t		 req_list;
 	/* testing flags, see vts_test_flags */
 	unsigned long		 ta_flags;
 	const char		*dkey;
@@ -98,28 +97,9 @@ struct vts_counter {
 	unsigned long		cn_punch;
 };
 
-struct io_req {
-	d_list_t		rlist;
-	daos_iov_t		val_iov;
-	daos_key_t		dkey;
-	daos_key_t		akey;
-	daos_recx_t		rex;
-	char			dkey_buf[UPDATE_DKEY_SIZE];
-	char			akey_buf[UPDATE_AKEY_SIZE];
-	char			update_buf[UPDATE_BUF_SIZE];
-	char			fetch_buf[UPDATE_BUF_SIZE];
-	daos_iod_t		iod;
-	daos_sg_list_t		sgl;
-	daos_epoch_t		epoch;
-};
-
-
 daos_epoch_t		gen_rand_epoch(void);
-void			gen_rand_key(char *rkey, char *key, int ksize);
 daos_unit_oid_t		gen_oid(daos_ofeat_t ofeats);
 void			inc_cntr(unsigned long op_flags);
-void			inc_cntr_manual(unsigned long op_flags,
-					struct vts_counter *cntr);
 void			test_args_reset(struct io_test_args *args,
 					uint64_t pool_size);
 int			io_test_obj_update(struct io_test_args *arg,
@@ -133,10 +113,6 @@ int			io_test_obj_fetch(struct io_test_args *arg,
 					  daos_sg_list_t *sgl,
 					  bool verbose);
 int			setup_io(void **state);
-int			setup_io_int_akey(void **state);
-int			setup_io_int_dkey(void **state);
-int			setup_io_lex_akey(void **state);
-int			setup_io_lex_dkey(void **state);
 int			teardown_io(void **state);
 
 #endif
