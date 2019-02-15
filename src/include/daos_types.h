@@ -795,9 +795,9 @@ enum daos_pool_prop_type {
 	DAOS_PROP_PO_LABEL,
 	/**
 	 * ACL: access control list for pool
-	 * A list of uid/gid that can access the pool RO
-	 * A list of uid/gid that can access the pool RW
-	 * default RW gid = gid of pool create invoker
+	 * An ordered list of access control entries detailing user and group
+	 * access privileges.
+	 * Expected to be in the order: Owner, User(s), Group(s), Everyone
 	 */
 	DAOS_PROP_PO_ACL,
 	/**
@@ -818,6 +818,14 @@ enum daos_pool_prop_type {
 	 * snapshot creation
 	 */
 	DAOS_PROP_PO_RECLAIM,
+	/**
+	 * User that owns the pool
+	 */
+	DAOS_PROP_PO_OWNER,
+	/**
+	 * Pool's assigned group
+	 */
+	DAOS_PROP_PO_GROUP,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -832,44 +840,116 @@ enum {
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
 
-/** bits of ae_tag entry in struct daos_acl_entry */
-enum {
-	/** access rights for the pool/container/obj's owner */
-	DAOS_ACL_USER_OBJ	= (1U << 0),
-	/** access rights for user identified by the entry's ae_id */
-	DAOS_ACL_USER		= (1U << 1),
-	/** access rights for the pool/container/obj's group */
-	DAOS_ACL_GROUP_OBJ	= (1U << 2),
-	/** access rights for group identified by the entry's ae_id */
-	DAOS_ACL_GROUP		= (1U << 3),
-	/**
-	 * the maximum access rights that can be granted by entries of ae_tag
-	 * DAOS_ACL_USER, DAOS_ACL_GROUP_OBJ, or DAOS_ACL_GROUP.
-	 */
-	DAOS_ACL_MASK		= (1U << 4),
-	/**
-	 * access rights for processes that do not match any other entry
-	 * in the ACL.
-	 */
-	DAOS_ACL_OTHER		= (1U << 5),
+/**
+ * Type of ACL entry table, used for walking the list of entries
+ */
+enum daos_acl_table_type {
+	DAOS_SEC_TABLE_ACE,		/** Access Control Entry */
+	DAOS_SEC_TABLE_IDENTITY		/** Identity of the principal */
 };
 
-struct daos_acl_entry {
-	/** DAOS_ACL_USER/GROUP/MASK/OTHER */
-	uint16_t		ae_tag;
-	/** permissions DAOS_PC_RO/RW */
-	uint16_t		ae_perm;
-	/** uid or gid, meaningful only when ae_tag is DAOS_ACL_USER/GROUP */
-	uint32_t		ae_id;
+/**
+ * Header of each ACL table - all the tables have the same header so we can
+ * figure out what table it is and overlay structures accordingly
+ */
+struct daos_acl_table_header {
+	/** daos_sec_table_type */
+	uint32_t dsh_table_type;
+	/** length of the overall table (and its sub-tables) in bytes */
+	uint32_t dsh_length;
 };
 
-struct daos_acl {
-	/** number of acl entries */
-	uint32_t		 da_nr;
+/**
+ * Table for variable-length identity.
+ * Length is determined in the header, and must be aligned to 64 bits.
+ */
+struct daos_acl_identity_table {
+	struct daos_acl_table_header	dai_header;
+	/**
+	 * Null-terminated string indicating the user/group. Padded out with
+	 * zeroes to 64-bit alignment.
+	 */
+	char				*dai_who;
+};
+
+/**
+ * Type of identity provided. Special types OWNER, OWNER_GROUP and EVERYONE
+ * should not provide an identity table.
+ */
+enum daos_acl_principal_type {
+	DAOS_ACL_OWNER,		/** Owner of the object */
+	DAOS_ACL_USER,		/** Individual user */
+	DAOS_ACL_OWNER_GROUP,	/** Owning group */
+	DAOS_ACL_GROUP,		/** Group */
+	DAOS_ACL_EVERYONE	/** Anyone else */
+};
+
+/**
+ * Bits representing access types to set permissions for
+ */
+enum daos_acl_access_type {
+	DAOS_ACL_ACCESS_ALLOW = (1U << 0),	/** allow access */
+	DAOS_ACL_ACCESS_AUDIT = (1U << 1),	/** log the access for review */
+	DAOS_ACL_ACCESS_ALARM = (1U << 2)	/** notify of the access */
+};
+
+/**
+ * Bits representing access flags
+ */
+enum daos_acl_flags {
+	/** This represents a group, not a user */
+	DAOS_ACL_FLAG_GROUP		= (1U << 0),
+	/** Containers should inherit access controls from this pool */
+	DAOS_ACL_FLAG_POOL_INHERIT	= (1U << 1),
+	/** Audit/alarm should occur on failed access */
+	DAOS_ACL_FLAG_ACCESS_FAIL	= (1U << 2),
+	/** Audit/alarm should occur on successful access */
+	DAOS_ACL_FLAG_ACCESS_SUCCESS	= (1U << 3)
+};
+
+/**
+ * Bits representing the specific permissions that may be set
+ */
+enum daos_acl_permissions {
+	DAOS_ACL_PERMISSIONS_READ	= (1U << 0),
+	DAOS_ACL_PERMISSIONS_WRITE	= (1U << 1)
+};
+
+/**
+ * Table representing a specific ACL entry.
+ * Length in the header indicates the length of this table, plus the companion
+ * identity table if present.
+ */
+struct daos_acl_entry_table {
+	struct daos_acl_table_header	dat_header;
+	/** daos_acl_principal_type */
+	uint16_t			dat_principal_type;
+	/** Bitmap of daos_acl_access_type */
+	uint16_t			dat_access_types;
+	/** Bitmap of daos_acl_flags */
+	uint16_t			dat_access_flags;
+	/** for 64-bit alignment */
+	uint16_t			dat_reserv;
+	/** Bitmap of daos_acl_permissions for the ALLOW access */
+	uint64_t			dat_allow_perms;
+	/** Bitmap of daos_acl_permissions for AUDIT access */
+	uint64_t			dat_audit_perms;
+	/** Bitmap of daos_acl_permissions for ALARM access */
+	uint64_t			dat_alarm_perms;
+};
+
+/**
+ * Top level header of the ACL tables, followed by the flat table of entries.
+ * This is expected to be a contiguous blob of data, which is walked by
+ * inspecting the length of each entry.
+ */
+struct daos_acl_table {
+	/** overall length of entries list in bytes */
+	uint32_t			 da_length;
 	/** reserved for future usage (for 64 bits alignment now) */
-	uint32_t		 da_reserv;
-	/** acl entries array */
-	struct daos_acl_entry	*da_entries;
+	uint32_t			 da_reserv;
+	/** flat table of variable-length ACL entries */
+	struct daos_acl_entry_table	*da_entries;
 };
 
 /**
@@ -920,6 +1000,10 @@ enum daos_cont_prop_type {
 	DAOS_PROP_CO_COMPRESS,
 	/** Encryption on/off + encryption type */
 	DAOS_PROP_CO_ENCRYP,
+	/** User who owns the container */
+	DAOS_PROP_CO_OWNER,
+	/** Container's assigned group */
+	DAOS_PROP_CO_GROUP,
 	DAOS_PROP_CO_MAX,
 };
 
