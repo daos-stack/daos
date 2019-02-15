@@ -32,7 +32,6 @@
 #include "vts_io.h"
 #include <daos_api.h>
 
-#define SETUP_RANDOM_SEED  (10)
 #define NO_FLAGS	    (0)
 
 /* key generator */
@@ -187,7 +186,7 @@ static struct io_test_args	test_args;
 int
 setup_io(void **state)
 {
-	srand(SETUP_RANDOM_SEED);
+	srand(time(NULL));
 	test_args_init(&test_args, VPOOL_SIZE);
 
 	*state = &test_args;
