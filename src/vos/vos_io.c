@@ -443,7 +443,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		flags |= SUBTR_EVT;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		if (iod->iod_eprs)
+		if (iod->iod_eprs && iod->iod_eprs[0].epr_lo != 0)
 			epoch = iod->iod_eprs[0].epr_lo;
 
 		rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
@@ -497,7 +497,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	iod->iod_size = 0;
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t rsize;
-		if (iod->iod_eprs)
+		if (iod->iod_eprs && iod->iod_eprs[i].epr_lo)
 			epoch = iod->iod_eprs[i].epr_lo;
 
 		/* If epoch on each iod_eprs are out of boundary, then it needs
@@ -784,7 +784,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		akey_epr.epr_hi = akey_epr.epr_lo = epoch;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		if (iod->iod_eprs) {
+		if (iod->iod_eprs && iod->iod_eprs[0].epr_lo != 0) {
 			epoch = iod->iod_eprs[0].epr_lo;
 			update_bounds(&akey_epr, &iod->iod_eprs[0]);
 		}
@@ -802,7 +802,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	} /* else: array */
 
 	for (i = 0; i < iod->iod_nr; i++) {
-		if (iod->iod_eprs) {
+		if (iod->iod_eprs && iod->iod_eprs[i].epr_lo != 0) {
 			update_bounds(&akey_epr, &iod->iod_eprs[i]);
 			epoch = iod->iod_eprs[i].epr_lo;
 		}
