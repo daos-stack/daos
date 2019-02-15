@@ -1366,34 +1366,21 @@ dac_array_punch(tse_task_t *task)
 #define ENUM_DESC_BUF	512
 #define ENUM_DESC_NR	5
 
-struct get_size_props {
+struct key_query_props {
 	struct dac_array	*array;
-	char			buf[ENUM_DESC_BUF];
-	daos_key_desc_t		kds[ENUM_DESC_NR];
-	daos_iov_t		iov;
-	daos_sg_list_t		sgl;
-	uint32_t		nr;
-	bool			found_dkey;
-	daos_anchor_t		anchor;
-	daos_size_t		dkey_val;
+	daos_key_t		dkey;
+	uint64_t		dkey_val;
+	daos_key_t		akey;
+	char			akey_str;
+	daos_recx_t		recx;
 	daos_size_t		*size;
 	tse_task_t		*ptask;
 };
 
-struct array_size_params {
-	daos_size_t		*size;
-	tse_task_t		*task;
-	daos_size_t		chunk_size;
-	daos_key_t		dkey;
-	daos_iod_t		iod;
-	uint64_t		dkey_val;
-	char			akey_str;
-};
-
 static int
-free_get_size_cb(tse_task_t *task, void *data)
+free_query_cb(tse_task_t *task, void *data)
 {
-	struct get_size_props *props = *((struct get_size_props **)data);
+	struct key_query_props *props = *((struct key_query_props **)data);
 
 	if (props->array)
 		array_decref(props->array);
@@ -1402,137 +1389,21 @@ free_get_size_cb(tse_task_t *task, void *data)
 }
 
 static int
-array_size_query_cb(tse_task_t *task, void *data)
-{
-	daos_obj_fetch_t *args = daos_task_get_args(task);
-	struct array_size_params *params = *((struct array_size_params **)data);
-	daos_size_t dkey_val;
-	int rc = task->dt_result;
-
-	if (rc != 0)
-		goto out;
-
-	dkey_val = params->dkey_val;
-	D_DEBUG(DB_IO, "array_size_query got size %zu for dkey %zu\n",
-		args->iods[0].iod_size, dkey_val);
-	*params->size = params->chunk_size * dkey_val +
-		args->iods[0].iod_size;
-
-out:
-	D_FREE(params);
-	return rc;
-}
-
-static int
 get_array_size_cb(tse_task_t *task, void *data)
 {
-	daos_obj_list_dkey_t *args = daos_task_get_args(task);
-	struct get_size_props *props = *((struct get_size_props **)data);
-	struct dac_array *array = props->array;
-	char		*ptr;
-	uint32_t	i;
-	int		rc = task->dt_result;
+	struct key_query_props	*props = *((struct key_query_props **)data);
+	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Array DKEY enumermation Failed (%d)\n", rc);
+		D_ERROR("Array size query Failed (%d)\n", rc);
 		return rc;
 	}
 
-	/** track the highest dkey from the ones currently enumerated */
-	for (ptr = props->buf, i = 0; i < props->nr; i++) {
-		daos_size_t dkey_val;
+	D_DEBUG(DB_IO, "Key Query: dkey %zu, IDX %"PRIu64", NR %"PRIu64"\n",
+		props->dkey_val, props->recx.rx_idx, props->recx.rx_nr);
+	*props->size = props->array->chunk_size * props->dkey_val +
+		props->recx.rx_idx + props->recx.rx_nr;
 
-		memcpy(&dkey_val, ptr, args->kds[i].kd_key_len);
-		ptr += args->kds[i].kd_key_len;
-
-		props->found_dkey = true;
-		if (dkey_val > props->dkey_val)
-			props->dkey_val = dkey_val;
-	}
-
-	/** if enumeration is not done, re-init this task to continue */
-	if (!daos_anchor_is_eof(args->anchor)) {
-		props->nr = ENUM_DESC_NR;
-		memset(props->buf, 0, ENUM_DESC_BUF);
-		args->sgl->sg_nr = 1;
-		daos_iov_set(&args->sgl->sg_iovs[0], props->buf, ENUM_DESC_BUF);
-
-		rc = tse_task_reinit(task);
-		if (rc != 0) {
-			D_ERROR("FAILED to continue enumrating task\n");
-			return rc;
-		}
-
-		rc = tse_task_register_cbs(task, NULL, NULL, 0,
-					   get_array_size_cb, &props,
-					   sizeof(props));
-		if (rc) {
-			tse_task_complete(task, rc);
-			return rc;
-		}
-
-		return rc;
-	}
-
-	if (!props->found_dkey)
-		return 0;
-
-	/** retrieve the highest index from the highest key */
-	props->nr = ENUM_DESC_NR;
-
-	tse_task_t *io_task = NULL;
-	struct array_size_params *params;
-	daos_key_t *dkey;
-	daos_obj_fetch_t *fetch_args;
-
-	D_ALLOC_PTR(params);
-	if (params == NULL)
-		return -DER_NOMEM;
-
-
-	dkey = &params->dkey;
-
-	params->akey_str = '0';
-	params->dkey_val = props->dkey_val;
-	daos_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
-	daos_iov_set(&params->iod.iod_name, &params->akey_str, 1);
-	params->chunk_size = array->chunk_size;
-	params->size = props->size;
-	params->iod.iod_type = DAOS_IOD_ARRAY;
-	/* D_ALLOC handles iod_nr = 0 for size query */
-
-	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),
-			      0, NULL, &io_task);
-	if (rc != 0) {
-		D_ERROR("get array size failed (%d)\n", rc);
-		D_GOTO(err, rc);
-	}
-
-	fetch_args = daos_task_get_args(io_task);
-	fetch_args->oh		= args->oh;
-	fetch_args->th		= args->th;
-	fetch_args->dkey	= dkey;
-	fetch_args->nr		= 1;
-	fetch_args->iods	= &params->iod;
-	fetch_args->sgls	= NULL;
-	fetch_args->maps	= NULL;
-
-	rc = tse_task_register_comp_cb(io_task, array_size_query_cb, &params,
-				       sizeof(params));
-	if (rc != 0)
-		D_GOTO(err, rc);
-
-	rc = tse_task_register_deps(props->ptask, 1, &io_task);
-	if (rc != 0)
-		D_GOTO(err, rc);
-
-	tse_task_schedule(io_task, false);
-	return rc;
-
-err:
-	if (io_task)
-		tse_task_complete(io_task, rc);
-	D_FREE(params);
 	return rc;
 }
 
@@ -1541,9 +1412,9 @@ dac_array_get_size(tse_task_t *task)
 {
 	daos_array_get_size_t	*args = daos_task_get_args(task);
 	struct dac_array	*array;
-	daos_obj_list_dkey_t	*enum_args;
-	struct get_size_props	*get_size_props = NULL;
-	tse_task_t		*enum_task = NULL;
+	daos_obj_query_key_t	*query_args;
+	struct key_query_props	*kqp = NULL;
+	tse_task_t		*query_task = NULL;
 	daos_handle_t		oh;
 	int			rc;
 
@@ -1553,72 +1424,61 @@ dac_array_get_size(tse_task_t *task)
 
 	oh = array->daos_oh;
 
-	D_ALLOC_PTR(get_size_props);
-	if (get_size_props == NULL)
+	D_ALLOC_PTR(kqp);
+	if (kqp == NULL)
 		D_GOTO(err_task, rc = -DER_NOMEM);
 
 	*args->size = 0;
 
-	/** List all DKEYS to determine the highest dkey */
-	get_size_props->dkey_val = 0;
-	get_size_props->found_dkey = false;
-	get_size_props->nr = ENUM_DESC_NR;
-	get_size_props->ptask = task;
-	get_size_props->size = args->size;
-	get_size_props->array = array;
-	memset(get_size_props->buf, 0, ENUM_DESC_BUF);
-	memset(&get_size_props->anchor, 0, sizeof(get_size_props->anchor));
-	get_size_props->sgl.sg_nr = 1;
-	get_size_props->sgl.sg_iovs = &get_size_props->iov;
-	daos_iov_set(&get_size_props->sgl.sg_iovs[0], get_size_props->buf,
-		     ENUM_DESC_BUF);
+	kqp->akey_str	= '0';
+	daos_iov_set(&kqp->akey, &kqp->akey_str, 1);
+	kqp->dkey_val	= 0;
+	daos_iov_set(&kqp->dkey, &kqp->dkey_val, sizeof(uint64_t));
+	kqp->ptask	= task;
+	kqp->size	= args->size;
+	kqp->array	= array;
 
-	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task),
-			      0, NULL, &enum_task);
+	rc = daos_task_create(DAOS_OPC_OBJ_QUERY_KEY, tse_task2sched(task),
+			      0, NULL, &query_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	enum_args		= daos_task_get_args(enum_task);
-	enum_args->oh		= oh;
-	enum_args->th		= args->th;
-	enum_args->nr		= &get_size_props->nr;
-	enum_args->kds		= get_size_props->kds;
-	enum_args->sgl		= &get_size_props->sgl;
-	enum_args->anchor	= &get_size_props->anchor;
+	query_args		= daos_task_get_args(query_task);
+	query_args->oh		= oh;
+	query_args->th		= args->th;
+	query_args->flags	= DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX;
+	query_args->dkey	= &kqp->dkey;
+	query_args->akey	= &kqp->akey;
+	query_args->recx	= &kqp->recx;
 
-	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0, get_array_size_cb,
-				   &get_size_props, sizeof(get_size_props));
-	if (rc != 0) {
-		D_ERROR("Failed to register completion cb\n");
-		D_GOTO(err_enum_task, rc);
-	}
-
-	rc = tse_task_register_deps(task, 1, &enum_task);
-	if (rc != 0) {
-		D_ERROR("Failed to register dependency\n");
-		D_GOTO(err_enum_task, rc);
-	}
-
-	rc = tse_task_register_comp_cb(task, free_get_size_cb, &get_size_props,
-				       sizeof(get_size_props));
+	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp,
+				       sizeof(kqp));
 	if (rc != 0)
-		D_GOTO(err_enum_task, rc);
+		D_GOTO(err_query_task, rc);
 
-	rc = tse_task_schedule(enum_task, false);
+	rc = tse_task_register_deps(task, 1, &query_task);
 	if (rc != 0)
-		D_GOTO(err_enum_task, rc);
+		D_GOTO(err_query_task, rc);
+
+	rc = tse_task_register_comp_cb(task, free_query_cb, &kqp, sizeof(kqp));
+	if (rc != 0)
+		D_GOTO(err_query_task, rc);
+
+	rc = tse_task_schedule(query_task, false);
+	if (rc != 0)
+		D_GOTO(err_query_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
 
 	return 0;
 
-err_enum_task:
-	tse_task_complete(enum_task, rc);
+err_query_task:
+	tse_task_complete(query_task, rc);
 err_task:
-	if (get_size_props)
-		D_FREE(get_size_props);
-	if (enum_task)
-		D_FREE(enum_task);
+	if (kqp)
+		D_FREE(kqp);
+	if (query_task)
+		D_FREE(query_task);
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);
