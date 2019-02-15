@@ -645,12 +645,8 @@ ik_btr_iterate(char *args)
 void
 ik_btr_gen_keys(unsigned int *arr, unsigned int key_nr)
 {
-	struct timeval	tv;
 	int		nr;
 	int		i;
-
-	gettimeofday(&tv, NULL);
-	srand(tv.tv_usec);
 
 	for (i = 0; i < key_nr; i++)
 		arr[i] = i + 1;
@@ -834,8 +830,12 @@ static struct option btr_ops[] = {
 int
 main(int argc, char **argv)
 {
-	int	rc = 0;
-	int	opt;
+	struct timeval	tv;
+	int		rc = 0;
+	int		opt;
+
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
 
 	ik_toh = DAOS_HDL_INVAL;
 	ik_root_mmid = TMMID_NULL(struct btr_root);

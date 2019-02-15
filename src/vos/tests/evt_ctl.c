@@ -1084,7 +1084,11 @@ ts_cmd_run(char opc, char *args)
 int
 main(int argc, char **argv)
 {
-	int	rc;
+	struct timeval	tv;
+	int		rc;
+
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
 
 	ts_toh = DAOS_HDL_INVAL;
 
