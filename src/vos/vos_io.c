@@ -364,15 +364,9 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 			holes = 0;
 		}
 
-		/**
-		 * XXX Let's set iod_size = 0 for non-existent
-		 * records, since client still need this for
-		 * some cases, see check_record_cb().
-		 */
 		if (rsize == 0)
 			rsize = ent_array.ea_inob;
-		else
-			D_ASSERT(rsize == ent_array.ea_inob);
+		D_ASSERT(rsize == ent_array.ea_inob);
 
 		biov.bi_data_len = nr * ent_array.ea_inob;
 		biov.bi_addr = ent->en_addr;
@@ -536,7 +530,11 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			goto out;
 		}
 
-		if (rsize == 0) /* empty tree */
+		/*
+		 * Empty tree or all holes, DAOS array API relies on zero
+		 * iod_size to see if an array cell is empty.
+		 */
+		if (rsize == 0)
 			continue;
 
 		if (iod->iod_size == 0)

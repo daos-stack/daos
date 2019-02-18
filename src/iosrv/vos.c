@@ -209,15 +209,21 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 {
 	daos_iov_t		*iovs = arg->sgl->sg_iovs;
 	struct obj_enum_rec	*rec;
-	daos_size_t		 data_size;
+	daos_size_t		 data_size, iod_size;
 	daos_size_t		 size = sizeof(*rec);
 	bool			 inline_data = false, bump_kds_len = false;
 	int			 rc = 0;
 
 	D_ASSERT(type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
 
+	/* Client needs zero iod_size to tell a punched record */
+	if (bio_addr_is_hole(&key_ent->ie_biov.bi_addr))
+		iod_size = 0;
+	else
+		iod_size = key_ent->ie_rsize;
+
 	/* Inline the data? A 0 threshold disables this completely. */
-	data_size = key_ent->ie_rsize * key_ent->ie_recx.rx_nr;
+	data_size = iod_size * key_ent->ie_recx.rx_nr;
 	if (arg->inline_thres > 0 && data_size <= arg->inline_thres &&
 	    data_size > 0) {
 		inline_data = true;
@@ -256,7 +262,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		 iovs[arg->sgl_idx].iov_buf_len);
 	rec = iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len;
 	rec->rec_recx = key_ent->ie_recx;
-	rec->rec_size = key_ent->ie_rsize;
+	rec->rec_size = iod_size;
 	rec->rec_epr.epr_lo = key_ent->ie_epoch;
 	rec->rec_epr.epr_hi = DAOS_EPOCH_MAX;
 	rec->rec_version = key_ent->ie_ver;

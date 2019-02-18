@@ -860,7 +860,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_orig_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_orig_recx.rx_nr	 = evt_extent_width(ext);
 	it_entry->ie_recx_flags = entry.en_visibility;
-	it_entry->ie_rsize	 = bio_addr_is_hole(&entry.en_addr) ? 0 : inob;
+	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;
 	it_entry->ie_biov.bi_buf = NULL;
 	it_entry->ie_biov.bi_data_len = it_entry->ie_recx.rx_nr *
