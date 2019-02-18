@@ -28,7 +28,9 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"syscall"
 
 	"github.com/pkg/errors"
 	"github.com/satori/go.uuid"
@@ -147,4 +149,92 @@ func writeIosrvSuper(path string, super *iosrvSuper) error {
 	}
 
 	return common.WriteFileAtomic(path, data, 0600)
+}
+
+// iosrv represents an I/O server.
+//
+// NOTE: The superblock supercedes the format-time configuration in config.
+type iosrv struct {
+	super  *iosrvSuper
+	config *configuration
+	index  int
+	cmd    *exec.Cmd
+}
+
+func newIosrv(config *configuration, i int) (*iosrv, error) {
+	super, err := readIosrvSuper(iosrvSuperPath(config.Servers[i].ScmMount))
+	if err != nil {
+		return nil, err
+	}
+
+	srv := &iosrv{
+		super:  super,
+		config: config,
+		index:  i,
+	}
+
+	return srv, nil
+}
+
+func (srv *iosrv) start() (err error) {
+	defer func() { err = errors.WithMessagef(err, "start server %s", srv.config.Servers[srv.index].ScmMount) }()
+
+	if err = srv.startCmd(); err != nil {
+		return
+	}
+	defer func() {
+		if err != nil {
+			srv.stopCmd()
+		}
+	}()
+
+	// TODO:
+	//   1 Get the rank and send a SetRank request to the I/O server.
+	//   2 If CreateMs, send a CreateMs request to the I/O server.
+	//   3 Clear CreateMs and BootstrapMs in the superblock.
+	//   4 Send a StartMs request to the I/O server.
+
+	return
+}
+
+func (srv *iosrv) wait() error {
+	if err := srv.cmd.Wait(); err != nil {
+		return errors.Wrapf(err, "wait server %s", srv.config.Servers[srv.index].ScmMount)
+	}
+	return nil
+}
+
+func (srv *iosrv) startCmd() error {
+	// Exec io_server with generated cli opts from config context.
+	srv.cmd = exec.Command("daos_io_server", srv.config.Servers[srv.index].CliOpts...)
+	srv.cmd.Stdout = os.Stdout
+	srv.cmd.Stderr = os.Stderr
+	srv.cmd.Env = os.Environ()
+
+	// Populate I/O server environment with values from config before starting.
+	srv.config.populateEnv(srv.index, &srv.cmd.Env)
+
+	// I/O server should get a SIGKILL if this process dies.
+	srv.cmd.SysProcAttr = &syscall.SysProcAttr{
+		Pdeathsig: syscall.SIGKILL,
+	}
+
+	// Start the DAOS I/O server.
+	err := srv.cmd.Start()
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func (srv *iosrv) stopCmd() error {
+	// Ignore potential errors, as the I/O server may have already died.
+	srv.cmd.Process.Kill()
+
+	if err := srv.cmd.Wait(); err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
 }

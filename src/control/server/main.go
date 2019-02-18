@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime"
 	"syscall"
@@ -190,30 +189,17 @@ func main() {
 
 	// Only start single io_server for now.
 	// TODO: Extend to start two io_servers per host.
-	ioIdx := 0
-
-	// Exec io_server with generated cli opts from config context.
-	srv := exec.Command("daos_io_server", config.Servers[ioIdx].CliOpts...)
-	srv.Stdout = os.Stdout
-	srv.Stderr = os.Stderr
-	srv.Env = os.Environ()
-
-	// Populate I/O server environment with values from config before starting.
-	config.populateEnv(ioIdx, &srv.Env)
-
-	// I/O server should get a SIGKILL if this process dies.
-	srv.SysProcAttr = &syscall.SysProcAttr{
-		Pdeathsig: syscall.SIGKILL,
-	}
-
-	// Start the DAOS I/O server.
-	err = srv.Start()
+	iosrv, err := newIosrv(&config, 0)
 	if err != nil {
-		log.Errorf("DAOS I/O server failed to start: %s", err)
+		log.Errorf("Failed to load server: %s", err)
+		return
+	}
+	if err = iosrv.start(); err != nil {
+		log.Errorf("Failed to start server: %s", err)
 		return
 	}
 
-	extraText, err := CheckReplica(lis, config.AccessPoints, srv)
+	extraText, err := CheckReplica(lis, config.AccessPoints, iosrv.cmd)
 	if err != nil {
 		log.Errorf(
 			"Unable to determine if management service replica: %s",
@@ -223,7 +209,7 @@ func main() {
 	log.Debugf("DAOS server listening on %s%s", addr, extraText)
 
 	// Wait for I/O server to return.
-	err = srv.Wait()
+	err = iosrv.wait()
 	if err != nil {
 		log.Errorf("DAOS I/O server exited with error: %s", err)
 	}
