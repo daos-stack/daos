@@ -349,7 +349,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 }
 
 // PopulateEnv adds envs from config options
-func (c *configuration) populateEnv(ioIdx int, envs *[]string) error {
+func (c *configuration) populateEnv(ioIdx int, envs *[]string) {
 	for _, env := range c.Servers[ioIdx].EnvVars {
 		kv := strings.Split(env, "=")
 		if kv[1] == "" {
@@ -357,5 +357,4 @@ func (c *configuration) populateEnv(ioIdx int, envs *[]string) error {
 		}
 		*envs = append(*envs, env)
 	}
-	return nil
 }
