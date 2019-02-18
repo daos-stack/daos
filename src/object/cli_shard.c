@@ -145,6 +145,11 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		D_GOTO(out, rc = -DER_NOSPACE);
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_DROP_REPLY)) {
+		D_ERROR("Drop RPC for shard I/O update\n");
+		D_GOTO(out, rc = -DER_HG);
+	}
+
 	orw = crt_req_get(rw_args->rpc);
 	D_ASSERT(orw != NULL);
 	if (ret != 0) {

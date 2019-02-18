@@ -71,7 +71,8 @@ daos_fail_check(uint64_t fail_loc)
 void
 daos_fail_loc_set(uint64_t fail_loc)
 {
-	struct d_fault_attr_t attr_in = { 0 };
+	struct d_fault_attr_t	attr_in = { 0 };
+	bool			attr_set = false;
 
 	/* If fail_loc is 0, let's assume it will reset unit test fail loc */
 	if (fail_loc == 0)
@@ -83,15 +84,20 @@ daos_fail_loc_set(uint64_t fail_loc)
 	D_ASSERT(attr_in.fa_id < DAOS_FAIL_MAX_GROUP);
 	if (fail_loc & DAOS_FAIL_ONCE) {
 		attr_in.fa_max_faults = 1;
+		attr_set = true;
 	} else if (fail_loc & DAOS_FAIL_SOME) {
 		D_ASSERT(daos_fail_num > 0);
 		attr_in.fa_max_faults = daos_fail_num;
+		attr_set = true;
 	} else if (fail_loc & DAOS_FAIL_ALWAYS) {
 		attr_in.fa_probability_x = 1;
 		attr_in.fa_probability_y = 1;
+		attr_set = true;
 	}
 
-	d_fault_attr_set(attr_in.fa_id, attr_in);
+	if (attr_set)
+		d_fault_attr_set(attr_in.fa_id, attr_in);
+
 	daos_fail_loc = fail_loc;
 	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
 }
