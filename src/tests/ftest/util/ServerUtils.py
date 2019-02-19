@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -56,6 +56,12 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         servers = [line.split(' ')[0]
                    for line in genio.read_all_lines(hostfile)]
         server_count = len(servers)
+
+        # clean the tmpfs on the servers
+        for server in servers:
+            subprocess.check_call(['ssh', server,
+                "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
+                "xargs -0r rm -rf"])
 
         # first make sure there are no existing servers running
         killServer(servers)
