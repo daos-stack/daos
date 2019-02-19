@@ -194,7 +194,8 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *iod_size, bool lookup,
 			iod[i].iod_recxs[0].rx_idx = idx[i] + i * SEGMENT_SIZE;
 			iod[i].iod_recxs[0].rx_nr = rx_nr[i];
 		}
-		iod[i].iod_eprs = NULL;
+		/** Try I/O with invalid epoch, which then suould be ignored */
+		iod[i].iod_eprs = &req->erange[i][0]; /* [ 0 - MAX_EPOCH ] */
 		iod[i].iod_nr = 1;
 	}
 }
@@ -965,6 +966,7 @@ io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 		assert_int_equal(req.iod[0].iod_size, size);
 		assert_memory_equal(update_buf, fetch_buf, size);
 	}
+	punch_dkey(dkey, DAOS_TX_NONE, &req);
 	D_FREE(update_buf);
 	D_FREE(fetch_buf);
 	ioreq_fini(&req);
