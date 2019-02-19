@@ -77,6 +77,9 @@ class DaosCoreTest(Test):
                                                     filename)
                 # rename on each of the servers
                 for host in self.hostlist:
+                    print "On host {}, renaming {} -> {}".format(host,
+                                                                 logfile,
+                                                                 new_logfile)
                     subprocess.check_call(['ssh', host,
                                            '[ -f \"{0}\" ] && '
                                            '    mv \"{0}\" '
@@ -84,6 +87,8 @@ class DaosCoreTest(Test):
                                                                 new_logfile)])
             except KeyError:
                 pass
+        else:
+            print "No subtest_name, not renaming server debug log files"
 
     def test_subtest(self):
         """

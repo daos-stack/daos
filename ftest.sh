@@ -255,6 +255,7 @@ fi
 # collect the logs
 if ! rpdcp -l jenkins -R ssh -w "$(IFS=','; echo "${nodes[*]}")" \
     /tmp/Functional_"$TEST_TAG"/\*daos.log "$PWD"/; then
+    ls -l ./*daos.log*
     echo "Copying daos.logs from remote nodes failed"
     # pass
 fi

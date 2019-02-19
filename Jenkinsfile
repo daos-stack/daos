@@ -634,7 +634,7 @@ pipeline {
                         always {
                             sh '''rm -rf src/tests/ftest/avocado/job-results/*/html/ Functional/
                                   mkdir Functional/
-                                  ls *daos.log* >/dev/null && mv *daos.log* Functional/
+                                  ls ./*daos.log* && mv *daos.log* Functional/
                                   mv src/tests/ftest/avocado/job-results/* \
                                      $(ls src/tests/ftest/*.stacktrace || true) Functional/'''
                             junit 'Functional/*/results.xml'
