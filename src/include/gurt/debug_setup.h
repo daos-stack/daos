@@ -51,12 +51,17 @@
 /** @addtogroup GURT_DEBUG
  * @{
  */
-#define DD_FAC(name)	d_##name##_logfac
+#define DD_GURT_FAC(name)	d_##name##_logfac
+#ifndef DD_FAC
+/** User definable facility name to variable name macro */
+#define DD_FAC	DD_GURT_FAC
+#define D_USE_GURT_FAC
+#endif /* !DD_FAC */
 
 #define DD_FAC_DECL(name)	DD_FAC(name)
 
 #ifndef D_LOGFAC
-#define D_LOGFAC	DD_FAC(misc)
+#define D_LOGFAC	DD_GURT_FAC(misc)
 #endif
 
 /** Arguments to priority bit macros are

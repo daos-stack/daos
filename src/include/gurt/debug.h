@@ -230,7 +230,9 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define D_TRACE_FATAL(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_EMERG, ptr, fmt, ## __VA_ARGS__)
 
+#ifdef D_USE_GURT_FAC
 D_FOREACH_GURT_FAC(D_LOG_DECLARE_FAC, D_NOOP)
+#endif /* D_USE_GURT_FAC */
 
 D_FOREACH_GURT_DB(D_LOG_DECLARE_DB, D_NOOP)
 
