@@ -70,10 +70,7 @@ EOF
  -a 3-28@$np4:abcdefghijklmnopqrstuvwxyz	\
  -a 31-56@$nm3:abcdefghijklmnopqrstuvwxyz	\
  -f 0-100@$np4          \
- -d -0-100@$np4         \
- -g $np4,100            \
- -g $n,100              \
- -g 0:0
+ -d -0-100@$np4
 EOF
 )
 }
@@ -91,11 +88,7 @@ function check_max {
     -a 1-360@$third             \
     -a 0-0@$fourth              \
     -f 0-355@$first             \
-    -f 0-355@$fourth            \
-    -g $first,356               \
-    -g $second,355              \
-    -g $third,1                 \
-    -g $fourth:0
+    -f 0-355@$fourth
 EOF
 )
 }

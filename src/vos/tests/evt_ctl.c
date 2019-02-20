@@ -658,56 +658,6 @@ ts_many_add(char *args)
 }
 
 static int
-ts_get_size(char *args)
-{
-	char		*tok;
-	daos_epoch_t	 epoch;
-	daos_size_t	 size;
-	daos_size_t	 expected_size;
-	int		 expected_rc = 0;
-	int		 rc;
-	bool		 check_size = true;
-	bool		 check_rc = true;
-
-	epoch = strtoull(args, NULL, 10);
-
-	tok = strchr(args, EVT_SEP);
-	if (tok == NULL) {
-		check_size = false;
-	} else {
-		tok++;
-		expected_size = strtoull(tok, NULL, 10);
-	}
-
-	tok = strchr(args, EVT_SEP_VAL);
-	if (tok == NULL) {
-		check_rc = false;
-	} else {
-		tok++;
-		expected_rc = atoi(tok);
-		D_PRINT("Expecting rc %d\n", expected_rc);
-	}
-
-	rc = evt_get_size(ts_toh, epoch, &size);
-
-	D_PRINT("evt_get_size returns %s at epoch "DF_U64"\n", d_errstr(rc),
-		epoch);
-	if (rc == 0)
-		D_PRINT("   size is "DF_U64"\n", size);
-
-	if (check_rc && expected_rc != rc) {
-		D_PRINT("Expected rc == %s\n", d_errstr(expected_rc));
-		return 1;
-	}
-	if (check_size && expected_size != size) {
-		D_PRINT("Expected size "DF_U64"\n", expected_size);
-		return 1;
-	}
-
-	return 0;
-}
-
-static int
 ts_tree_debug(char *args)
 {
 	int	level;
@@ -1022,7 +972,6 @@ static struct option ts_ops[] = {
 	{ "find",	required_argument,	NULL,	'f'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
 	{ "list",	optional_argument,	NULL,	'l'	},
-	{ "get_size",	required_argument,	NULL,	'g'	},
 	{ "debug",	required_argument,	NULL,	'b'	},
 	{ "test",	required_argument,	NULL,	't'	},
 	{ NULL,		0,			NULL,	0	},
@@ -1057,9 +1006,6 @@ ts_cmd_run(char opc, char *args)
 		break;
 	case 'l':
 		rc = ts_list_rect(args);
-		break;
-	case 'g':
-		rc = ts_get_size(args);
 		break;
 	case 'd':
 		rc = ts_delete_rect(args);
