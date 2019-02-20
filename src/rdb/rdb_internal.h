@@ -141,7 +141,10 @@ int rdb_raft_start(struct rdb *db);
 void rdb_raft_stop(struct rdb *db);
 void rdb_raft_resign(struct rdb *db, uint64_t term);
 int rdb_raft_verify_leadership(struct rdb *db);
-int rdb_raft_append_apply(struct rdb *db, msg_entry_t *mentry, void *result);
+int rdb_raft_add_replica(struct rdb *db, d_rank_t rank);
+int rdb_raft_remove_replica(struct rdb *db, d_rank_t rank);
+int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,
+			  void *result);
 int rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term);
 void rdb_requestvote_handler(crt_rpc_t *rpc);
 void rdb_appendentries_handler(crt_rpc_t *rpc);

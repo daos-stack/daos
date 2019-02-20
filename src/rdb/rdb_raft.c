@@ -57,8 +57,7 @@ static int rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc,
 			       daos_iov_t *key, uuid_t uuid,
 			       struct rdb_lc_record *record);
 static void *rdb_raft_lookup_result(struct rdb *db, uint64_t index);
-static int rdb_raft_add_node(struct rdb *db, d_rank_t rank, bool is_self,
-			     bool is_voting);
+static int rdb_raft_add_node(struct rdb *db, d_rank_t rank);
 static void rdb_raft_unload_replicas(struct rdb *db);
 
 /* Translate a raft error into an rdb error. */
@@ -230,25 +229,25 @@ rdb_lc_store_replicas(daos_handle_t lc, uint64_t index,
 }
 
 static int
-rdb_raft_add_node(struct rdb *db, d_rank_t rank, bool is_self, bool is_voting)
+rdb_raft_add_node(struct rdb *db, d_rank_t rank)
 {
 	struct rdb_raft_node	*dnode;
 	raft_node_t		*node;
+	d_rank_t		 self;
 	int			 rc = 0;
 
 	D_ALLOC_PTR(dnode);
 	if (dnode == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	rc = crt_group_rank(NULL, &self);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	dnode->dn_rank = rank;
-	node = raft_add_node(db->d_raft, dnode, rank, is_self);
+	node = raft_add_node(db->d_raft, dnode, rank, (rank == self));
 	if (node == NULL) {
 		D_ERROR(DF_DB": failed to add node %u\n", DP_DB(db), rank);
 		D_FREE_PTR(dnode);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
-	raft_node_set_active(node, 1);
-	if (!is_voting)
-		raft_node_set_voting(node, 0);
 out:
 	return rc;
 }
@@ -271,8 +270,6 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 {
 	daos_iov_t	value;
 	uint8_t		nreplicas;
-	d_rank_t	self;
-	int		i;
 	int		rc;
 
 	rc = rdb_raft_get_nreplicas(db, index, &nreplicas);
@@ -282,7 +279,7 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 
 	db->d_replicas = daos_rank_list_alloc(nreplicas);
 	if (db->d_replicas == NULL)
-		goto err;
+		D_GOTO(err, rc = -DER_NOMEM);
 	daos_iov_set(&value, db->d_replicas->rl_ranks,
 		     sizeof(*db->d_replicas->rl_ranks) * nreplicas);
 	rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
@@ -291,22 +288,10 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 		D_ERROR(DF_DB": failed to read replicas: %d\n", DP_DB(db), rc);
 		goto err_replicas;
 	}
-
-	/* Add the corresponding nodes to raft. */
-	rc = crt_group_rank(NULL, &self);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	for (i = 0; i < db->d_replicas->rl_nr; i++) {
-		d_rank_t	rank = db->d_replicas->rl_ranks[i];
-
-		rc = rdb_raft_add_node(db, rank, rank == self, true);
-		if (rc != 0)
-			goto err_replicas;
-	}
-
 	return 0;
 
 err_replicas:
-	rdb_raft_unload_replicas(db);
+	daos_rank_list_free(db->d_replicas);
 err:
 	return rc;
 }
@@ -336,6 +321,7 @@ static int
 rdb_raft_load_snapshot(struct rdb *db)
 {
 	int rc;
+	int i;
 
 	D_DEBUG(DB_MD, DF_DB": loading snapshot: base="DF_U64" term="DF_U64"\n",
 		DP_DB(db), db->d_lc_record.dlr_base,
@@ -357,6 +343,15 @@ rdb_raft_load_snapshot(struct rdb *db)
 	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_base);
 	/* TODO: If rc != 0, shut down this replica. */
 	D_ASSERTF(rc == 0, "%d\n", rc);
+
+	/* Add the corresponding nodes to raft. */
+	for (i = 0; i < db->d_replicas->rl_nr; i++) {
+		rc = rdb_raft_add_node(db, db->d_replicas->rl_ranks[i]);
+		if (rc != 0) {
+			rdb_raft_unload_replicas(db);
+			return rc;
+		}
+	}
 
 	rc = raft_end_load_snapshot(db->d_raft);
 	D_ASSERTF(rc == 0, "%d\n", rc);
@@ -1014,18 +1009,17 @@ rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, int term, int vote)
 static int
 rdb_raft_append_node(struct rdb *db, uint64_t index, d_rank_t rank)
 {
-	d_rank_t	 self;
 	void		*result;
 	int		 rc = 0;
 
-	if (daos_rank_list_find(db->d_replicas, rank, NULL))
+	if (daos_rank_list_find(db->d_replicas, rank, NULL)) {
+		D_WARN(DF_DB": Rank %d already exists\n", DP_DB(db), rank);
 		goto out;
-	rc = crt_group_rank(NULL, &self);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	}
 	rc = daos_rank_list_append(db->d_replicas, rank);
 	if (rc != 0)
 		goto out;
-	rc = rdb_raft_add_node(db, rank, rank == self, false);
+	rc = rdb_raft_add_node(db, rank);
 out:
 	result = rdb_raft_lookup_result(db, index);
 	if (result != NULL)
@@ -1146,7 +1140,7 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 				DP_DB(db), index, rc);
 			goto err_discard;
 		}
-	} else {
+	} else if (raft_entry_is_cfg_change(entry)) {
 		rc = rdb_raft_update_node(db, index, entry);
 		if (rc != 0)
 			goto err_discard;
@@ -1817,13 +1811,38 @@ rdb_raft_unregister_result(struct rdb *db, uint64_t index)
 	D_FREE(result);
 }
 
-/* Append and wait for \a entry to be applied. */
-int
-rdb_raft_append_apply(struct rdb *db, msg_entry_t *mentry, void *result)
+static int
+rdb_raft_append_internal(struct rdb *db, msg_entry_t *mentry, uint64_t *term)
 {
 	msg_entry_response_t	mresponse;
 	struct rdb_raft_state	state;
 	uint64_t		index;
+	int			rc;
+
+	index = raft_get_current_idx(db->d_raft) + 1;
+	rdb_raft_save_state(db, &state);
+	rc = raft_recv_entry(db->d_raft, mentry, &mresponse);
+	rc = rdb_raft_check_state(db, &state, rc);
+	if (rc != 0 && rc != -DER_NOTLEADER) {
+		D_ERROR(DF_DB": failed to append entry: %d\n", DP_DB(db), rc);
+		goto out;
+	}
+	/* The actual index must match the expected index. */
+	D_ASSERTF(mresponse.idx == index, "%d == "DF_U64"\n", mresponse.idx,
+		  index);
+	if (term != NULL)
+		*term = mresponse.term;
+out:
+	return rc;
+}
+
+/* Append and wait for \a entry to be applied. */
+static int
+rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
+			       void *result)
+{
+	uint64_t		index;
+	uint64_t		term;
 	int			rc;
 
 	/*
@@ -1837,43 +1856,89 @@ rdb_raft_append_apply(struct rdb *db, msg_entry_t *mentry, void *result)
 			goto out;
 	}
 
-	rdb_raft_save_state(db, &state);
-	rc = raft_recv_entry(db->d_raft, mentry, &mresponse);
-	rc = rdb_raft_check_state(db, &state, rc);
-	if (rc != 0) {
-		if (rc != -DER_NOTLEADER)
-			D_ERROR(DF_DB": failed to append entry: %d\n",
-				DP_DB(db), rc);
+	rc = rdb_raft_append_internal(db, mentry, &term);
+	if (rc != 0)
 		goto out_result;
-	}
-
-	/* The actual index must match the expected index. */
-	D_ASSERTF(mresponse.idx == index, "%d == "DF_U64"\n", mresponse.idx,
-		  index);
-
-	rc = rdb_raft_wait_applied(db, mresponse.idx, mresponse.term);
+	rc = rdb_raft_wait_applied(db, index, term);
 
 out_result:
 	if (result != NULL)
-		rdb_raft_unregister_result(db, mresponse.idx);
+		rdb_raft_unregister_result(db, index);
 out:
 	return rc;
+}
+
+int
+rdb_raft_add_replica(struct rdb *db, d_rank_t rank)
+{
+	msg_entry_t	 entry = {};
+	int		 result;
+	int		 rc;
+
+	D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n", DP_DB(db), rank);
+
+	/* TODO: Check if rank exists and not a replica before adding */
+	/* Add non voting rank */
+	entry.type = RAFT_LOGTYPE_ADD_NONVOTING_NODE;
+	entry.data.buf = &rank;
+	entry.data.len = sizeof(d_rank_t);
+	rc = rdb_raft_append_internal(db, &entry, NULL /* term */);
+	if (rc != 0)
+		goto out;
+
+	/* Promote to voting rank */
+	entry.type = RAFT_LOGTYPE_ADD_NODE;
+	rc = rdb_raft_append_apply_internal(db, &entry, &result);
+	rc = (rc != 0) ? rc : result;
+	if (rc != 0)
+		goto out;
+
+	raft_apply_all(db->d_raft);
+out:
+	return rc;
+}
+
+int
+rdb_raft_remove_replica(struct rdb *db, d_rank_t rank)
+{
+	msg_entry_t	 entry = {};
+	int		 result;
+	int		 rc;
+
+	D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n", DP_DB(db), rank);
+
+	/* TODO: Check if replica with rank exists before removing */
+	entry.type = RAFT_LOGTYPE_REMOVE_NODE;
+	entry.data.buf = &rank;
+	entry.data.len = sizeof(d_rank_t);
+	rc = rdb_raft_append_apply_internal(db, &entry, &result);
+	rc = (rc != 0) ? rc : result;
+	if (rc == 0)
+		raft_apply_all(db->d_raft);
+	return rc;
+}
+
+int
+rdb_raft_append_apply(struct rdb *db, void *entry, size_t size, void *result)
+{
+	msg_entry_t	 mentry = {};
+
+	mentry.type = RAFT_LOGTYPE_NORMAL;
+	mentry.data.buf = entry;
+	mentry.data.len = size;
+	return rdb_raft_append_apply_internal(db, &mentry, result);
 }
 
 /* Verify the leadership with a quorum. */
 int
 rdb_raft_verify_leadership(struct rdb *db)
 {
-	msg_entry_t		entry = {};
-
-	entry.type = RAFT_LOGTYPE_NORMAL;
-	entry.data.buf = NULL;
-	entry.data.len = 0;
 	/*
 	 * raft does not provide this functionality yet; append an empty entry
 	 * as a (slower) workaround.
 	 */
-	return rdb_raft_append_apply(db, &entry, NULL /* result */);
+	return rdb_raft_append_apply(db, NULL /* entry */, 0 /* size */,
+				     NULL /* result */);
 }
 
 /* Generate a random double in [0.0, 1.0]. */
@@ -2087,11 +2152,18 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 		entry.data.buf = NULL;
 	}
 
-	/* Process membership change entries */
-	if (entry.type != RAFT_LOGTYPE_NORMAL) {
-		rc = rdb_raft_update_node(db, index, &entry);
-		if (rc != 0)
-			return rc;
+	/*
+	 * Raft requires that every node affected by a membership change entry
+	 * be present in the node list when that entry gets applied
+	 */
+	if (raft_entry_is_cfg_change(&entry)) {
+		d_rank_t rank = *(d_rank_t *)entry.data.buf;
+
+		if (raft_get_node(db->d_raft, rank) == NULL) {
+			rc = rdb_raft_add_node(db, rank);
+			if (rc != 0)
+				return rc;
+		}
 	}
 
 	/*
@@ -2319,6 +2391,11 @@ rdb_raft_start(struct rdb *db)
 	rc = rdb_raft_load_lc(db);
 	if (rc != 0)
 		goto err_raft;
+
+	daos_rank_list_free(db->d_replicas);
+	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_tail - 1);
+	if (rc != 0 && rc != -DER_NONEXIST)
+		goto err_lc;
 
 	/* Must be done after loading the persistent state. */
 	raft_set_callbacks(db->d_raft, &rdb_raft_cbs, db);
