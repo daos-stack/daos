@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,8 +51,7 @@
 #define __CRT_TYPES_H__
 
 #include <stdint.h>
-#include <gurt/common.h>
-#include <gurt/list.h>
+#include <gurt/types.h>
 
 #include <boost/preprocessor.hpp>
 

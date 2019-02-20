@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,7 @@
 #include <stdbool.h>
 
 #include <gurt/list.h>
-#include <gurt/common.h> /* for d_uuid */
+#include <gurt/types.h> /* for d_uuid */
 
 /**
  * Hash table keeps and prints extra debugging information

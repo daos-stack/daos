@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2019 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,34 +36,87 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * Common code for threaded_client/threaded_server testing multiple threads
- * using a single context
+ * \file
+ * GURT types.
  */
-#ifndef __COMMON_H__
-#define __COMMON_H__
 
+/** @defgroup GURT GURT */
+/** @defgroup GURT_LOG Gurt Log */
+/** @defgroup GURT_DEBUG Gurt Debug */
+#ifndef __GURT_TYPES_H__
+#define __GURT_TYPES_H__
+
+#include <uuid/uuid.h>
+#include <unistd.h>
+#include <stdbool.h>
+#include <string.h>
+#include <errno.h>
+#include <inttypes.h>
+#include <time.h>
+#include <limits.h>
+#include <stdlib.h>
 #include <stdio.h>
-#include <gurt/common.h>
+#include <pthread.h>
+#include <byteswap.h>
 
-static inline int drain_queue(crt_context_t ctx)
+/** @addtogroup GURT
+ * @{
+ */
+
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
+/**
+ * hide the dark secret that uuid_t is an array not a structure.
+ */
+struct d_uuid {
+	uuid_t		uuid;
+};
+
+/** iovec for memory buffer */
+typedef struct {
+	/** buffer address */
+	void		*iov_buf;
+	/** buffer length */
+	size_t		iov_buf_len;
+	/** data length */
+	size_t		iov_len;
+} d_iov_t;
+
+/** Server identification */
+typedef uint32_t	d_rank_t;
+
+typedef struct {
+	/** list of ranks */
+	d_rank_t	*rl_ranks;
+	/** number of ranks */
+	uint32_t	rl_nr;
+} d_rank_list_t;
+
+typedef d_rank_list_t	*d_rank_list_ptr_t;
+
+typedef char		*d_string_t;
+typedef const char	*d_const_string_t;
+
+/** Scatter/gather list for memory buffers */
+typedef struct {
+	uint32_t	sg_nr;
+	uint32_t	sg_nr_out;
+	d_iov_t		*sg_iovs;
+} d_sg_list_t;
+
+static inline void
+d_iov_set(d_iov_t *iov, void *buf, size_t size)
 {
-	int	rc;
-	/* Drain the queue. Progress until 1 second timeout.  We need
-	 * a more robust method
-	 */
-	do {
-		rc = crt_progress(ctx, 1000000, NULL, NULL);
-		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			printf("crt_progress failed rc: %d.\n", rc);
-			return rc;
-		}
-
-		if (rc == -DER_TIMEDOUT)
-			break;
-	} while (1);
-
-	printf("Done draining queue\n");
-	return 0;
+	iov->iov_buf = buf;
+	iov->iov_len = iov->iov_buf_len = size;
 }
 
-#endif /* __COMMON_H__ */
+#if defined(__cplusplus)
+}
+#endif
+
+/** @}
+ */
+#endif /* __GURT_TYPES_H__ */

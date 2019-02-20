@@ -40,7 +40,8 @@ import os
 
 HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h']
 HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
-                'heap.h', 'errno.h', 'fault_inject.h', 'debug_setup.h']
+                'heap.h', 'errno.h', 'fault_inject.h', 'debug_setup.h',
+                'types.h']
 
 def scons():
     """Scons function"""

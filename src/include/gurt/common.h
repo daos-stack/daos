@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,7 @@
 #include <pthread.h>
 #include <byteswap.h>
 
+#include <gurt/types.h>
 #include <gurt/errno.h>
 #include <gurt/debug.h>
 #include <gurt/fault_inject.h>
@@ -76,52 +77,6 @@ extern "C" {
  * param[out] ts A timespec structure for the result
  */
 #define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
-
-/**
- * hide the dark secret that uuid_t is an array not a structure.
- */
-struct d_uuid {
-	uuid_t		uuid;
-};
-
-/** iovec for memory buffer */
-typedef struct {
-	/** buffer address */
-	void		*iov_buf;
-	/** buffer length */
-	size_t		iov_buf_len;
-	/** data length */
-	size_t		iov_len;
-} d_iov_t;
-
-/** Server identification */
-typedef uint32_t	d_rank_t;
-
-typedef struct {
-	/** list of ranks */
-	d_rank_t	*rl_ranks;
-	/** number of ranks */
-	uint32_t	rl_nr;
-} d_rank_list_t;
-
-typedef d_rank_list_t	*d_rank_list_ptr_t;
-
-typedef char		*d_string_t;
-typedef const char	*d_const_string_t;
-
-/** Scatter/gather list for memory buffers */
-typedef struct {
-	uint32_t	sg_nr;
-	uint32_t	sg_nr_out;
-	d_iov_t		*sg_iovs;
-} d_sg_list_t;
-
-static inline void
-d_iov_set(d_iov_t *iov, void *buf, size_t size)
-{
-	iov->iov_buf = buf;
-	iov->iov_len = iov->iov_buf_len = size;
-}
 
 /* memory allocating macros */
 
