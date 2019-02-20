@@ -316,7 +316,8 @@ crt_hg_addr_lookup(struct crt_hg_context *hg_ctx, const char *name,
 	cb_args->al_arg = arg;
 	rc = HG_Addr_lookup(hg_ctx->chc_hgctx, crt_hg_addr_lookup_cb,
 			    cb_args, name, HG_OP_ID_IGNORE);
-	if (rc != 0) {
+	if (rc != HG_SUCCESS) {
+		D_FREE(cb_args);
 		D_ERROR("HG_Addr_lookup() failed.\n");
 		rc = -DER_HG;
 	}
