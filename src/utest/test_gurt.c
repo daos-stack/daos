@@ -706,14 +706,20 @@ test_log(void **state)
 	D_DEBUG_V1(DB_TEST1, "V1: This message should appear\n");
 	D_DEBUG_V2(DB_TEST2, "V2: This message should NOT appear\n");
 	D_DEBUG_V1(DB_TEST2, "V1: This message should NOT appear\n");
+	assert_int_not_equal(D_LOG_ENABLED(DB_TEST1), 0);
+	assert_int_equal(D_LOG_ENABLED(DB_TEST2), 0);
 #undef D_LOGFAC
 #define D_LOGFAC	DD_FAC(foo)
 	D_DEBUG_V2(DB_TEST1, "V2: This message should NOT appear\n");
 	D_DEBUG_V1(DB_TEST1, "V1: This message should NOT appear\n");
+	assert_int_equal(D_LOG_ENABLED(DB_TEST2), 0);
+	assert_int_equal(D_LOG_ENABLED(DB_TEST1), 0);
 	d_log_sync_mask();
 	setenv("D_LOG_MASK", "foobar=DEBUG", 1);
 	setenv("DD_MASK", "test2_long", 1);
 	d_log_sync_mask();
+	assert_int_equal(D_LOG_ENABLED(DB_TEST1), 0);
+	assert_int_not_equal(D_LOG_ENABLED(DB_TEST2), 0);
 	D_DEBUG_V2(DB_TEST2, "V2: This message should appear\n");
 	D_DEBUG_V1(DB_TEST2, "V1: This message should appear\n");
 	D_DEBUG_V2(DB_TEST1, "V2: This message should NOT appear\n");

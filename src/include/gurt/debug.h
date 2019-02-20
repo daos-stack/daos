@@ -160,6 +160,12 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 			func(DD_FLAG(flag, D_LOGFAC), ##__VA_ARGS__);	   \
 		}							   \
 	} while (0)
+
+#define D_LOG_ENABLED(flag)					\
+	({							\
+		_D_DEBUG_V2(D_NOOP, flag);			\
+		__builtin_expect(DD_FLAG(flag, D_LOGFAC), 0);	\
+	})
 /**
  * New version of D_DEBUG which utilizes the facility cache to optimize
  * both negative and postive debug lookups
@@ -177,6 +183,8 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #else /* !D_LOG_USE_V2 */
 #define D_DEBUG D_DEBUG_V1
 #define D_TRACE_DEBUG D_TRACE_DEBUG_V1
+#define D_LOG_ENABLED(flag)			\
+	d_log_check((flag) | D_LOGFAC)
 #ifdef D_LOG_V1_TEST
 /** Define the new macro to a sane value so tests still work.  Otherwise, leave
  * it undefined as users shouldn't be using it without defining D_LOG_V2
