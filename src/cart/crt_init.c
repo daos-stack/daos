@@ -364,7 +364,7 @@ do_init:
 		}
 
 		if (crt_is_service()) {
-			rc = crt_swim_init(CRT_DETAULT_PROGRESS_CTX_IDX);
+			rc = crt_swim_init(CRT_DEFAULT_PROGRESS_CTX_IDX);
 			if (rc) {
 				D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
 				crt_lm_finalize();

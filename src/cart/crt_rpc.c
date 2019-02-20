@@ -508,16 +508,18 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 	rank = rpc_priv->crp_pub.cr_ep.ep_rank;
 	tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	if (rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) {
 		RPC_ERROR(rpc_priv,
 			  "opc: %#x with status of FWD_UNREACH\n",
 			  rpc_priv->crp_pub.cr_opc);
+		/* Valid hg_addr gets passed despite unreachable state */
+		crt_hg_addr_free(&crt_ctx->cc_hg_ctx, hg_addr);
 		D_GOTO(unreach, rc);
 	}
 
 	grp_priv = crt_grp_pub2priv(rpc_priv->crp_pub.cr_ep.ep_grp);
 
-	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	ctx_idx = crt_ctx->cc_idx;
 
 	rc = crt_grp_lc_addr_insert(grp_priv, crt_ctx, rank, tag, &hg_addr);
