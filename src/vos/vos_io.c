@@ -461,33 +461,6 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		return rc;
 	}
 
-	/* array size query */
-	if (iod->iod_nr == 0) {
-		rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
-				      &iod->iod_name, flags,
-				      DAOS_INTENT_DEFAULT, NULL, &toh);
-		if (rc != 0) {
-			if (rc == -DER_NONEXIST) {
-				D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
-					(int)iod->iod_name.iov_len,
-					(char *)iod->iod_name.iov_buf);
-				iod_empty_sgl(ioc, ioc->ic_sgl_at);
-				rc = 0;
-			}
-			return rc;
-		}
-
-		rc = evt_get_size(toh, epoch, &iod->iod_size);
-		if (rc == 0)
-			D_DEBUG(DB_IO, "Array size query eph "DF_U64
-				", size %zu.\n", epoch, iod->iod_size);
-		else
-			D_DEBUG(DB_IO, "Array size query failed %d\n", rc);
-
-		key_tree_release(toh, true);
-		return rc;
-	}
-
 	iod->iod_size = 0;
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t rsize;

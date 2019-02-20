@@ -616,15 +616,11 @@ typedef struct {
 	 * value. The idx is ignored and the rx_nr is also required to be 1.
 	 */
 	daos_iod_type_t		iod_type;
-	/* DAOS_IOD_SINGLE:	Size of the value
-	 * DAOS_IOD_ARRAY:	iod_nr > 0:  Record size
-	 *			iod_nr == 0: Array size
-	 */
+	/** Size of the single value or the record size of the array */
 	daos_size_t		iod_size;
 	/*
 	 * Number of entries in the \a iod_recxs, \a iod_csums, and \a iod_eprs
-	 * arrays, should be 1 if single value,
-	 * 0 for array size query
+	 * arrays, should be 1 if single value.
 	 */
 	unsigned int		iod_nr;
 	/*
