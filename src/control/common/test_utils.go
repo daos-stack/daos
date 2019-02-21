@@ -31,11 +31,14 @@ import (
 	"github.com/daos-stack/daos/src/control/log"
 )
 
+// utilLogDepth signifies stack depth, set calldepth on calls to logger so
+// log message context refers to caller not callee.
+const utilLogDepth = 4
+
 // AssertTrue asserts b is true
 func AssertTrue(t *testing.T, b bool, message string) {
 	if !b {
-		// set log calldepth so context refers to caller
-		log.Errordf(4, message)
+		log.Errordf(utilLogDepth, message)
 		t.FailNow()
 	}
 }
@@ -43,8 +46,7 @@ func AssertTrue(t *testing.T, b bool, message string) {
 // AssertFalse asserts b is false
 func AssertFalse(t *testing.T, b bool, message string) {
 	if b {
-		// set log calldepth so context refers to caller
-		log.Errordf(4, message)
+		log.Errordf(utilLogDepth, message)
 		t.FailNow()
 	}
 }
@@ -63,8 +65,7 @@ func AssertEqual(
 	if len(message) > 0 {
 		message += ", "
 	}
-	// set log calldepth so context refers to caller
-	log.Errordf(4, "%#v != %#v", a, b)
+	log.Errordf(utilLogDepth, "%#v != %#v", a, b)
 	t.FailNow()
 }
 
@@ -73,13 +74,11 @@ func ExpectError(
 	t *testing.T, actualErr error, expectedMessage string, desc interface{}) {
 
 	if actualErr == nil {
-		// set log calldepth so context refers to caller
-		log.Errordf(4, "Expected a non-nil error: %v", desc)
+		log.Errordf(utilLogDepth, "Expected a non-nil error: %v", desc)
 		t.FailNow()
 	} else if actualErr.Error() != expectedMessage {
-		// set log calldepth so context refers to caller
 		log.Errordf(
-			4,
+			utilLogDepth,
 			"Wrong error message. Expected: %s, Actual: %s (%v)",
 			expectedMessage, actualErr.Error(), desc)
 		t.FailNow()

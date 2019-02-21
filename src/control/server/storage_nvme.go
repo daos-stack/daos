@@ -177,9 +177,9 @@ func (n *nvmeStorage) Discover() error {
 }
 
 // Update method implementation for nvmeStorage
-func (n *nvmeStorage) Update(ctrlrID int32, path string, slot int32) error {
+func (n *nvmeStorage) Update(pciAddr string, path string, slot int32) error {
 	if n.initialized {
-		cs, ns, err := n.nvme.Update(ctrlrID, path, slot)
+		cs, ns, err := n.nvme.Update(pciAddr, path, slot)
 		if err != nil {
 			return err
 		}
@@ -242,7 +242,7 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 				Pciaddr: c.PCIAddr,
 				Fwrev:   c.FWRev,
 				// repeated pb field
-				Namespace: loadNamespaces(c.ID, nss),
+				Namespace: loadNamespaces(c.PCIAddr, nss),
 			})
 	}
 	return pbCtrlrs
@@ -250,9 +250,11 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 
 // loadNamespaces converts slice of Namespace into protobuf equivalent.
 // Implemented as a pure function.
-func loadNamespaces(ctrlrID int32, nss []spdk.Namespace) (_nss []*pb.NvmeNamespace) {
+func loadNamespaces(
+	ctrlrPciAddr string, nss []spdk.Namespace) (_nss []*pb.NvmeNamespace) {
+
 	for _, ns := range nss {
-		if ns.CtrlrID == ctrlrID {
+		if ns.CtrlrPciAddr == ctrlrPciAddr {
 			_nss = append(
 				_nss,
 				&pb.NvmeNamespace{

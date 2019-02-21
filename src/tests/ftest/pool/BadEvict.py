@@ -66,13 +66,8 @@ class BadEvictTest(Test):
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):
-        # right now the exception logic in stopServer is too aggresive/broken.
-        # remove this catch later on when working better
-        try:
-            AgentUtils.stop_agent(self.hostlist)
-            ServerUtils.stopServer(hosts=self.hostlist)
-        except Exception as e:
-            pass
+        AgentUtils.stop_agent(self.hostlist)
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_evict(self):
         """

@@ -41,7 +41,7 @@ func mockNvmeCS(t *testing.T, ns *nvmeStorage) *controlService {
 }
 
 func TestUpdateNvmeCtrlr(t *testing.T) {
-	s := mockNvmeCS(t, newMockNvmeStorage("1.0.0", "1.0.1", false))
+	s := mockNvmeCS(t, defaultMockNvmeStorage())
 
 	if err := s.nvme.Discover(); err != nil {
 		t.Fatal(err)
@@ -52,8 +52,8 @@ func TestUpdateNvmeCtrlr(t *testing.T) {
 
 	// after fetching controller details, simulate updated firmware
 	// version being reported
-	params := &pb.UpdateNvmeCtrlrParams{
-		Ctrlr: c, Path: "/foo/bar", Slot: 0}
+	params := &pb.UpdateNvmeParams{
+		Pciaddr: c.Pciaddr, Path: "/foo/bar", Slot: 0}
 
 	newC, err := s.UpdateNvmeCtrlr(nil, params)
 	if err != nil {
@@ -64,20 +64,22 @@ func TestUpdateNvmeCtrlr(t *testing.T) {
 	AssertEqual(t, newC, cExpect, "unexpected Controller returned")
 }
 
-func TestUpdateNvmeCtrlrFail(t *testing.T) {
-	s := mockNvmeCS(t, newMockNvmeStorage("1.0.0", "1.0.0", false))
-
-	if err := s.nvme.Discover(); err != nil {
-		t.Fatal(err)
-	}
-
-	c := s.nvme.controllers[0]
-
-	// after fetching controller details, simulate the same firmware
-	// version being reported
-	params := &pb.UpdateNvmeCtrlrParams{
-		Ctrlr: c, Path: "/foo/bar", Slot: 0}
-
-	_, err := s.UpdateNvmeCtrlr(nil, params)
-	ExpectError(t, err, "update failed, firmware revision unchanged", "")
-}
+// TODO: this test should be moved to client, where the change in fwrev will be
+// verified
+//func TestUpdateNvmeCtrlrFail(t *testing.T) {
+//	s := mockNvmeCS(t, newMockNvmeStorage("1.0.0", "1.0.0", false))
+//
+//	if err := s.nvme.Discover(); err != nil {
+//		t.Fatal(err)
+//	}
+//
+//	c := s.nvme.controllers[0]
+//
+//	// after fetching controller details, simulate the same firmware
+//	// version being reported
+//	params := &pb.UpdateNvmeParams{
+//		Pciaddr: c.Pciaddr, Path: "/foo/bar", Slot: 0}
+//
+//	_, err := s.UpdateNvmeCtrlr(nil, params)
+//	ExpectError(t, err, "update failed, firmware revision unchanged", "")
+//}

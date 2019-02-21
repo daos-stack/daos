@@ -966,6 +966,7 @@ char	*perf_tests_name[] = {
 int
 main(int argc, char **argv)
 {
+	struct timeval	tv;
 	daos_size_t	scm_size = (2ULL << 30); /* default pool SCM size */
 	daos_size_t	nvme_size = (8ULL << 30); /* default pool NVMe size */
 	int		credits   = -1;	/* sync mode */
@@ -980,6 +981,9 @@ main(int argc, char **argv)
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
+
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,

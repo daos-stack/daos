@@ -194,6 +194,7 @@ small_io(void **state)
 	daos_size_t	array_size;
 	int		rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, arg->myrank);
 
 	/** create the array */
@@ -232,6 +233,7 @@ small_io(void **state)
 
 	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
 } /* End str_mem_str_arr_io */
 
 static int
@@ -320,6 +322,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_event_t	ev, *evp;
 	int		rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, 0);
@@ -469,9 +472,11 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_sg_list_t	sgl;
 	daos_iov_t	iov;
 	int		*wbuf = NULL, *rbuf = NULL;
-	daos_size_t	i;
+	daos_size_t	len, i;
 	daos_event_t	ev, *evp;
 	int		rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
@@ -495,10 +500,11 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	D_ALLOC_ARRAY(iod.arr_rgs, NUM_ELEMS);
 	assert_non_null(iod.arr_rgs);
 
+	len = sizeof(int) / cell_size;
 	for (i = 0; i < NUM_ELEMS; i++) {
-		iod.arr_rgs[i].rg_len = sizeof(int) / cell_size;
-		iod.arr_rgs[i].rg_idx = i * arg->rank_size * 4 +
-			arg->myrank * 4 + i * chunk_size;
+		iod.arr_rgs[i].rg_len = len;
+		iod.arr_rgs[i].rg_idx = i * arg->rank_size * len +
+			arg->myrank * len;
 	}
 
 	/** set memory location */
@@ -563,11 +569,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_size_t expected_size;
 	daos_size_t array_size = 0;
 
-	expected_size = ((NUM_ELEMS - 1) * arg->rank_size * 4) +
-		((arg->rank_size - 1) * 4) +
-		((NUM_ELEMS - 1) * chunk_size) +
-		(sizeof(int) / cell_size);
-
+	expected_size = NUM_ELEMS * arg->rank_size * len;
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
 	assert_int_equal(rc, 0);
 
@@ -625,10 +627,11 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_array_iod_t iod;
 	daos_sg_list_t	sgl;
 	int		*wbuf[NUM_SEGS], *rbuf[NUM_SEGS];
-	daos_size_t	i, j;
+	daos_size_t	i, j, len;
 	daos_event_t	ev, *evp;
 	int		rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, 0);
@@ -653,10 +656,11 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	D_ALLOC_ARRAY(iod.arr_rgs, NUM_ELEMS);
 	assert_non_null(iod.arr_rgs);
 
+	len = sizeof(int) / cell_size;
 	for (i = 0; i < NUM_ELEMS; i++) {
-		iod.arr_rgs[i].rg_len = sizeof(int) / cell_size;
-		iod.arr_rgs[i].rg_idx = i * arg->rank_size * 4 +
-			arg->myrank * 4 + i * chunk_size;
+		iod.arr_rgs[i].rg_len = len;
+		iod.arr_rgs[i].rg_idx = i * arg->rank_size * len +
+			arg->myrank * len;
 	}
 
 	/** set memory location */
@@ -735,11 +739,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_size_t array_size;
 	daos_size_t expected_size;
 
-	expected_size = ((NUM_ELEMS - 1) * arg->rank_size * 4) +
-		((arg->rank_size - 1) * 4) +
-		(NUM_ELEMS - 1) * chunk_size +
-		sizeof(int) / cell_size;
-
+	expected_size = NUM_ELEMS * arg->rank_size * len;
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
 	assert_int_equal(rc, 0);
 
@@ -784,6 +784,7 @@ read_empty_records(void **state)
 	daos_event_t	ev;
 	int		rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, arg->myrank);
 
 	if (arg->async) {
@@ -893,6 +894,7 @@ strided_array(void **state)
 	daos_size_t	i, j, nerrors = 0;
 	int		rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, arg->myrank);
 
 	/** create the array */
