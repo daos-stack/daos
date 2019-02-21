@@ -356,7 +356,8 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 {
 #define DLOG_TBSIZ    1024	/* bigger than any line should be */
 	int fac, lvl;
-	char b[DLOG_TBSIZ], *b_nopt1hdr;
+	static __thread char b[DLOG_TBSIZ];
+	char *b_nopt1hdr;
 	char facstore[16], *facstr;
 	struct timeval tv;
 	struct tm *tm;
@@ -398,6 +399,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	tm = localtime(&tv.tv_sec);
 	if (tm == NULL) {
 		fprintf(stderr, "clog: localtime returned NULL\n");
+		clog_unlock();
 		return;
 	}
 
