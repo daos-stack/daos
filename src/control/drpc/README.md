@@ -10,7 +10,7 @@ The DAOS dRPC implementation is dependent on Protocol Buffers to define the stru
 
 ## Go API
 
-In Go, the drpc package includes both client and server functionality, which is outlined below. For documentation of the C API, see [/src/common/README.md].
+In Go, the drpc package includes both client and server functionality, which is outlined below. For documentation of the C API, see [here](/src/common/README.md).
 
 The dRPC call and response are represented by the Protobuf-generated `drpc.Call` and `drpc.Response` structures.
 
@@ -41,7 +41,7 @@ The dRPC client is represented by the `drpc.ClientConnection` object.
     conn.Close()
     ```
 
-### Go Server 
+### Go Server
 
 The dRPC server is represented by the `drpc.DomainSocketServer` object.
 
