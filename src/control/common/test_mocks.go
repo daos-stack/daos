@@ -72,7 +72,7 @@ func MockModulePB() *pb.ScmModule {
 	}
 }
 
-// MockCheckMount mocks CheckMount and always returns nil error.
+// MockCheckMountOk mocks CheckMount and always returns nil error.
 func MockCheckMountOk(path string) error {
 	return nil
 }

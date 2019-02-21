@@ -694,11 +694,7 @@ struct kv_node {
 static void
 sk_btr_mix_keys(struct kv_node *kv, unsigned int key_nr)
 {
-	struct timeval	tv;
-	int		nr;
-
-	gettimeofday(&tv, NULL);
-	srand(tv.tv_usec);
+	int	nr;
 
 	for (nr = key_nr; nr > 0; nr--) {
 		struct kv_node	tmp;
@@ -749,13 +745,9 @@ sk_btr_gen_keys(struct kv_node *kv, unsigned int key_nr)
 {
 	char		*key;
 	char		*value;
-	struct timeval	tv;
 	int		len;
 	int		i;
 	int		j;
-
-	gettimeofday(&tv, NULL);
-	srand(tv.tv_usec);
 
 	for (i = 0; i < key_nr; i++) {
 		len = rand() % SK_MAX_KEY_LEN;
@@ -1055,8 +1047,12 @@ static struct option btr_ops[] = {
 int
 main(int argc, char **argv)
 {
-	int	opt;
-	int	rc;
+	struct timeval	tv;
+	int		opt;
+	int		rc;
+
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
 
 	sk_toh = DAOS_HDL_INVAL;
 	sk_root_mmid = TMMID_NULL(struct btr_root);

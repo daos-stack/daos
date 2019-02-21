@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,8 +41,6 @@ dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed)
 {
 	daos_obj_id_t	oid;
 	uint64_t	hdr;
-
-	srand(time(NULL));
 
 	if (oclass == 0)
 		oclass = DTS_OCLASS_DEF;
@@ -88,7 +86,6 @@ dts_buf_render(char *buf, unsigned int buf_len)
 	int	nr = 'z' - 'a' + 1;
 	int	i;
 
-	srand(time(NULL));
 	for (i = 0; i < buf_len - 1; i++) {
 		int randv = rand() % (2 * nr);
 
@@ -106,7 +103,6 @@ dts_buf_render_uppercase(char *buf, unsigned int buf_len)
 	int	nr = 'z' - 'a' + 1;
 	int	i;
 
-	srand(time(NULL));
 	for (i = 0; i < buf_len - 1; i++) {
 		int randv = rand() % (2 * nr);
 

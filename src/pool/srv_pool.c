@@ -34,6 +34,7 @@
 #include <daos_srv/pool.h>
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <daos_api.h> /* for daos_prop_alloc/_free() */
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
@@ -1192,12 +1193,32 @@ ds_pool_svc_stop(uuid_t uuid, bool destroy)
 static int
 start_one(uuid_t uuid, void *arg)
 {
-	int rc;
+	char	       *path;
+	struct stat	st;
+	int		rc;
+
+	/*
+	 * Check if an RDB file exists, to avoid unnecessary error messages
+	 * from the ds_pool_svc_start() call.
+	 */
+	path = pool_svc_rdb_path(uuid);
+	if (path == NULL) {
+		D_ERROR(DF_UUID": failed allocate rdb path\n", DP_UUID(uuid));
+		return 0;
+	}
+	rc = stat(path, &st);
+	D_FREE(path);
+	if (rc != 0) {
+		if (errno != ENOENT)
+			D_ERROR(DF_UUID": failed to check rdb existence: %d\n",
+				DP_UUID(uuid), errno);
+		return 0;
+	}
 
 	rc = ds_pool_svc_start(uuid, false /* create */, NULL /* db_uuid */,
 			       0 /* size */, NULL /* replicas */);
 	if (rc != 0) {
-		D_ERROR("not starting pool service "DF_UUID": %d\n",
+		D_ERROR("failed to start pool service "DF_UUID": %d\n",
 			DP_UUID(uuid), rc);
 		return 0;
 	}

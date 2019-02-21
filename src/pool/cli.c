@@ -1104,12 +1104,12 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	if (state == NULL) {
 		if (args->tgts == NULL || args->tgts->tl_nr == 0) {
 			D_ERROR("NULL tgts or tgts->tl_nr is zero\n");
-			return -DER_INVAL;
+			D_GOTO(out_task, rc = -DER_INVAL);
 		} else if ((opc == POOL_EXCLUDE || opc == POOL_EXCLUDE_OUT) &&
 			   args->tgts->tl_nr > 1) {
 			D_ERROR("pool exclude can only work with "
 				"(tgts->tl_nr == 1) for now.\n");
-			return -DER_INVAL;
+			D_GOTO(out_task, rc = -DER_INVAL);
 		}
 
 		D_DEBUG(DF_DSMC, DF_UUID": excluding %u targets:"

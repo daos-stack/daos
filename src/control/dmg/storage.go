@@ -26,7 +26,7 @@ package main
 // todo: implement shell commands for features other than discovery on
 // multiple nodes
 
-//func getUpdateParams(c *ishell.Context) (*pb.UpdateNvmeCtrlrParams, error) {
+//func getUpdateParams(c *ishell.Context) (*pb.UpdateNvmeParams, error) {
 //	// disable the '>>>' for cleaner same line input.
 //	c.ShowPrompt(false)
 //	defer c.ShowPrompt(true) // revert after user input.
@@ -50,7 +50,7 @@ package main
 //		}
 //	}
 //
-//	return &pb.UpdateNvmeCtrlrParams{
+//	return &pb.UpdateNvmeParams{
 //		Ctrlr: nil, Path: strings.TrimSpace(path), Slot: slot}, nil
 //}
 
