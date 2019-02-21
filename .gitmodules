@@ -1,3 +1,3 @@
 [submodule "scons_local"]
 	path = scons_local
-	url = https://review.hpdd.intel.com/coral/scons_local
+	url = https://github.com/daos-stack/scons_local
