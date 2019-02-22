@@ -948,6 +948,17 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	D_INIT_LIST_HEAD(&submit_list);
 
 	D_MUTEX_LOCK(&epi->epi_mutex);
+
+	/* Prevent simultaneous untrack from progress thread and
+	 * main rpc execution thread.
+	 */
+	if (rpc_priv->crp_in_binheap == 0) {
+		RPC_TRACE(DB_NET, rpc_priv,
+			"rpc is not tracked already.\n");
+		D_MUTEX_UNLOCK(&epi->epi_mutex);
+		return;
+	}
+
 	/* remove from inflight queue */
 	d_list_del_init(&rpc_priv->crp_epi_link);
 	if (rpc_priv->crp_state == RPC_STATE_COMPLETED)
