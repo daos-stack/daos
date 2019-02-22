@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,12 +31,7 @@
 
 #include <daos/mem.h>
 #include <daos/common.h>
-
-/* Address types for various medias */
-enum {
-	BIO_ADDR_SCM	= 0,
-	BIO_ADDR_NVME,
-};
+#include <abt.h>
 
 typedef struct {
 	/*
@@ -44,7 +39,7 @@ typedef struct {
 	 * Byte offset within SPDK blob for NVMe.
 	 */
 	uint64_t	ba_off;
-	/* BIO_ADDR_SCM or BIO_ADDR_NVME */
+	/* DAOS_MEDIA_SCM or DAOS_MEDIA_NVME */
 	uint16_t	ba_type;
 	/* Is the address a hole ? */
 	uint16_t	ba_hole;
@@ -168,10 +163,11 @@ bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
  *
  * \param[IN] storage_path	daos storage directory path
  * \param[IN] nvme_conf		NVMe config file
+ * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *storage_path, const char *nvme_conf);
+int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id);
 
 /**
  * Global NVMe finilization.
@@ -365,5 +361,15 @@ int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
  * \return			SG list, or NULL on error
  */
 struct bio_sglist *bio_iod_sgl(struct bio_desc *biod, unsigned int idx);
+
+/*
+ * Wrapper of ABT_thread_yield()
+ */
+static inline void
+bio_yield(void)
+{
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+	ABT_thread_yield();
+}
 
 #endif /* __BIO_API_H__ */

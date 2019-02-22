@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@
 #include <daos_srv/container.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/dtx_srv.h>
 #include "rpc.h"
 #include "rebuild_internal.h"
 
@@ -136,9 +137,9 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 			D_DEBUG(DB_REBUILD, "update start %d cnt %d\n",
 				start, iod_cnt);
 			rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
-					    rdone->ro_epoch, rdone->ro_cookie,
-					    rdone->ro_version, &rdone->ro_dkey,
-					    iod_cnt, &rdone->ro_iods[start],
+					    rdone->ro_epoch, rdone->ro_version,
+					    &rdone->ro_dkey, iod_cnt,
+					    &rdone->ro_iods[start],
 					    &sgls[start]);
 			if (rc) {
 				D_ERROR("rebuild failed: rc %d\n", rc);
@@ -151,10 +152,9 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 
 	if (iod_cnt > 0)
 		rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
-				    rdone->ro_epoch, rdone->ro_cookie,
-				    rdone->ro_version, &rdone->ro_dkey,
-				    iod_cnt, &rdone->ro_iods[start],
-				    &sgls[start]);
+				    rdone->ro_epoch, rdone->ro_version,
+				    &rdone->ro_dkey, iod_cnt,
+				    &rdone->ro_iods[start], &sgls[start]);
 
 	return rc;
 }
@@ -223,8 +223,7 @@ post:
 	}
 
 end:
-	vos_update_end(ioh, rdone->ro_cookie, rdone->ro_version,
-		       &rdone->ro_dkey, rc);
+	vos_update_end(ioh, rdone->ro_version, &rdone->ro_dkey, rc);
 	return rc;
 }
 
@@ -244,9 +243,8 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 			DP_UOID(rdone->ro_oid), (int)rdone->ro_dkey.iov_len,
 			(char *)rdone->ro_dkey.iov_buf, rdone->ro_max_eph);
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
-				   rdone->ro_max_eph, rpt->rt_coh_uuid,
-				   rpt->rt_rebuild_ver, VOS_OF_REPLAY_PC,
-				   &rdone->ro_dkey, 0, NULL);
+				   rdone->ro_max_eph, rpt->rt_rebuild_ver,
+				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 0, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch dkey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -268,9 +266,9 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 			rdone->ro_ephs[i]);
 		D_ASSERT(rdone->ro_ephs[i] != DAOS_EPOCH_MAX);
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
-				   rdone->ro_ephs[i], rpt->rt_coh_uuid,
-				   rpt->rt_rebuild_ver, VOS_OF_REPLAY_PC,
-				   &rdone->ro_dkey, 1, &rdone->ro_ephs_keys[i]);
+				   rdone->ro_ephs[i], rpt->rt_rebuild_ver,
+				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 1,
+				   &rdone->ro_ephs_keys[i]);
 		if (rc) {
 			D_ERROR(DF_UOID" punch akey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -281,9 +279,8 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 	/* punch records */
 	if (rdone->ro_punch_iod_num > 0) {
 		rc = vos_obj_update(cont->sc_hdl, rdone->ro_oid,
-				    rdone->ro_epoch, rdone->ro_cookie,
-				    rdone->ro_version, &rdone->ro_dkey,
-				    rdone->ro_punch_iod_num,
+				    rdone->ro_epoch, rdone->ro_version,
+				    &rdone->ro_dkey, rdone->ro_punch_iod_num,
 				    rdone->ro_punch_iods, NULL);
 		D_DEBUG(DB_REBUILD, DF_UOID" rdone %p punch %d records: %d\n",
 			DP_UOID(rdone->ro_oid), rdone, rdone->ro_punch_iod_num,
@@ -294,8 +291,8 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 }
 
 static int
-rebuild_rdone(struct rebuild_tgt_pool_tracker *rpt,
-	      struct rebuild_one *rdone)
+rebuild_dkey(struct rebuild_tgt_pool_tracker *rpt,
+	     struct rebuild_one *rdone)
 {
 	struct rebuild_pool_tls	*tls;
 	struct ds_cont		*rebuild_cont;
@@ -411,7 +408,7 @@ rebuild_one_ult(void *arg)
 				      rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 	D_ASSERT(rpt->rt_pullers != NULL);
-	idx = dss_get_module_info()->dmi_tid;
+	idx = dss_get_module_info()->dmi_tgt_id;
 	puller = &rpt->rt_pullers[idx];
 	puller->rp_ult_running = 1;
 	while (1) {
@@ -432,7 +429,7 @@ rebuild_one_ult(void *arg)
 		d_list_for_each_entry_safe(rdone, tmp, &rebuild_list, ro_list) {
 			d_list_del_init(&rdone->ro_list);
 			if (!rpt->rt_abort) {
-				rc = rebuild_rdone(rpt, rdone);
+				rc = rebuild_dkey(rpt, rdone);
 				D_DEBUG(DB_REBUILD, DF_UOID" rebuild dkey %d %s"
 					" rc %d tag %d rpt %p\n",
 					DP_UOID(rdone->ro_oid),
@@ -588,7 +585,7 @@ static int
 rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 		  daos_key_t *dkey, daos_epoch_t dkey_eph, daos_iod_t *iods,
 		  daos_epoch_t *akey_ephs, int iod_eph_total,
-		  daos_sg_list_t *sgls, uuid_t cookie, uint32_t version)
+		  daos_sg_list_t *sgls, uint32_t version)
 {
 	struct rebuild_puller		*puller;
 	struct rebuild_tgt_pool_tracker *rpt = iter_arg->rpt;
@@ -675,7 +672,6 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	rdone->ro_ephs_num = ephs_cnt;
 	rdone->ro_max_eph = dkey_eph;
 	rdone->ro_version = version;
-	uuid_copy(rdone->ro_cookie, cookie);
 	puller = &rpt->rt_pullers[iter_arg->tgt_idx];
 	if (puller->rp_ult == NULL) {
 		/* Create puller ULT thread, and destroy ULT until
@@ -686,8 +682,8 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 			iter_arg->tgt_idx);
 		rpt_get(rpt);
 		rc = dss_rebuild_ult_create(rebuild_one_ult, rpt,
-					    iter_arg->tgt_idx,
-					    PULLER_STACK_SIZE, &puller->rp_ult);
+			DSS_ULT_REBUILD, iter_arg->tgt_idx,
+			PULLER_STACK_SIZE, &puller->rp_ult);
 		if (rc) {
 			rpt_put(rpt);
 			D_GOTO(free, rc);
@@ -724,7 +720,7 @@ rebuild_one_queue_cb(struct dss_enum_unpack_io *io, void *arg)
 	return rebuild_one_queue(arg, &io->ui_oid, &io->ui_dkey,
 				 io->ui_dkey_eph, io->ui_iods,
 				 io->ui_akey_ephs, io->ui_iods_len,
-				 io->ui_sgls, io->ui_cookie, io->ui_version);
+				 io->ui_sgls, io->ui_version);
 }
 
 static int
@@ -739,8 +735,7 @@ rebuild_obj_punch_one(void *data)
 	D_ASSERT(rc == 0);
 
 	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->epoch,
-			   arg->rpt->rt_coh_uuid, arg->rpt->rt_rebuild_ver,
-			   0, NULL, 0, NULL);
+			   arg->rpt->rt_rebuild_ver, 0, NULL, 0, NULL);
 	ds_cont_put(cont);
 	if (rc)
 		D_ERROR(DF_UOID" rebuild punch failed rc %d\n",
@@ -752,7 +747,7 @@ rebuild_obj_punch_one(void *data)
 static int
 rebuild_obj_punch(struct rebuild_iter_obj_arg *arg)
 {
-	return dss_task_collective(rebuild_obj_punch_one, arg);
+	return dss_task_collective(rebuild_obj_punch_one, arg, 0);
 }
 
 #define KDS_NUM		16
@@ -801,9 +796,8 @@ rebuild_obj_ult(void *data)
 
 	/* Initialize enum_arg for VOS_ITER_DKEY. */
 	memset(&enum_arg, 0, sizeof(enum_arg));
-	enum_arg.param.ip_hdl = arg->cont_hdl;
-	enum_arg.param.ip_oid = arg->oid;
-	enum_arg.recursive = true;
+	enum_arg.oid = arg->oid;
+	enum_arg.chk_key2big = true;
 
 	buf = stack_buf;
 	buf_len = ITER_BUF_SIZE;
@@ -876,7 +870,8 @@ rebuild_obj_ult(void *data)
 free:
 	if (buf != NULL && buf != stack_buf)
 		D_FREE(buf);
-	tls->rebuild_pool_obj_count++;
+	if (arg->epoch == DAOS_EPOCH_MAX)
+		tls->rebuild_pool_obj_count++;
 	if (tls->rebuild_pool_status == 0 && rc < 0)
 		tls->rebuild_pool_status = rc;
 	D_DEBUG(DB_REBUILD, "stop rebuild obj "DF_UOID" for shard %u rc %d\n",
@@ -891,7 +886,6 @@ rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 {
 	struct puller_iter_arg		*iter_arg = data;
 	struct rebuild_iter_obj_arg	*obj_arg;
-	unsigned int			stream_id;
 	int				rc;
 
 	D_ALLOC_PTR(obj_arg);
@@ -906,11 +900,12 @@ rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 	uuid_copy(obj_arg->cont_uuid, iter_arg->cont_uuid);
 	rpt_get(iter_arg->rpt);
 	obj_arg->rpt = iter_arg->rpt;
-	obj_arg->rpt->rt_toberb_objs++;
+	if (eph == DAOS_EPOCH_MAX)
+		obj_arg->rpt->rt_toberb_objs++;
 
 	/* Let's iterate the object on different xstream */
-	stream_id = oid.id_pub.lo % dss_get_threads_number();
-	rc = dss_rebuild_ult_create(rebuild_obj_ult, obj_arg, stream_id,
+	rc = dss_rebuild_ult_create(rebuild_obj_ult, obj_arg, DSS_ULT_REBUILD,
+				    oid.id_pub.lo % dss_tgt_nr,
 				    PULLER_STACK_SIZE, NULL);
 	if (rc) {
 		rpt_put(iter_arg->rpt);
@@ -971,7 +966,8 @@ puller_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		}
 
 		/* re-probe the dbtree after deletion */
-		rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+		rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD,
+				       NULL, NULL);
 		if (rc == 0) {
 			arg->re_iter = true;
 			return 0;
@@ -1035,7 +1031,7 @@ puller_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 
 	do {
 		arg->re_iter = false;
-		rc = dbtree_iterate(root->root_hdl, false,
+		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
 				    puller_obj_iter_cb, arg);
 		if (rc) {
 			if (tls->rebuild_pool_status == 0 && rc < 0)
@@ -1055,7 +1051,8 @@ puller_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 
 	if (arg->yielded) {
 		/* Some one might insert new record to the tree let's reprobe */
-		rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
+		rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_REBUILD,
+				       key_iov, NULL);
 		if (rc) {
 			D_ASSERT(rc != -DER_NONEXIST);
 			return rc;
@@ -1067,7 +1064,8 @@ puller_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD,
+			       NULL, NULL);
 	if (rc == -DER_NONEXIST || rpt->rt_abort)
 		return 1;
 
@@ -1085,7 +1083,8 @@ rebuild_puller_ult(void *arg)
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 	while (!dbtree_is_empty(rpt->rt_tobe_rb_root_hdl)) {
-		rc = dbtree_iterate(rpt->rt_tobe_rb_root_hdl, false,
+		rc = dbtree_iterate(rpt->rt_tobe_rb_root_hdl,
+				    DAOS_INTENT_REBUILD, false,
 				    puller_cont_iter_cb, iter_arg);
 		if (rc) {
 			D_ERROR("dbtree iterate fails %d\n", rc);
@@ -1120,7 +1119,8 @@ rebuilt_btr_destroy(daos_handle_t btr_hdl)
 {
 	int	rc;
 
-	rc = dbtree_iterate(btr_hdl, false, rebuilt_btr_destory_cb, NULL);
+	rc = dbtree_iterate(btr_hdl, DAOS_INTENT_REBUILD, false,
+			    rebuilt_btr_destory_cb, NULL);
 	if (rc) {
 		D_ERROR("dbtree iterate fails %d\n", rc);
 		goto out;
@@ -1192,7 +1192,7 @@ rebuild_scheduled_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 {
 	struct rebuilt_oid	*roid;
 	struct rebuilt_oid	roid_tmp;
-	struct rebuild_obj_key	key;
+	struct rebuild_obj_key	key = { 0 };
 	uint32_t		req_cnt;
 	daos_iov_t		key_iov;
 	daos_iov_t		val_iov;
@@ -1212,12 +1212,14 @@ rebuild_scheduled_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 	oid.id_shard = shard;
 	key.oid = oid;
 	key.eph = eph;
+	key.tgt_idx = tgt_idx;
 	/* Finally look up the object under the container tree */
 	daos_iov_set(&key_iov, &key, sizeof(key));
 	daos_iov_set(&val_iov, NULL, 0);
 	rc = dbtree_lookup(cont_root->root_hdl, &key_iov, &val_iov);
-	D_DEBUG(DB_REBUILD, "lookup "DF_UOID" in cont "DF_UUID" rc %d\n",
-		DP_UOID(oid), DP_UUID(co_uuid), rc);
+	D_DEBUG(DB_REBUILD, "lookup "DF_UOID" in cont "DF_UUID" eph "
+		DF_U64" tgt_idx %d rc %d\n", DP_UOID(oid), DP_UUID(co_uuid),
+		eph, tgt_idx, rc);
 	if (rc == 0) {
 		roid = val_iov.iov_buf;
 		D_ASSERT(roid != NULL);
@@ -1321,7 +1323,7 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (rebuild_in->roi_tgt_idx >= dss_get_threads_number()) {
+	if (rebuild_in->roi_tgt_idx >= dss_tgt_nr) {
 		D_ERROR("Wrong tgt idx %d\n", rebuild_in->roi_tgt_idx);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -1409,8 +1411,8 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 
 		rpt->rt_lead_puller_running = 1;
 		D_ASSERT(rpt->rt_pullers != NULL);
-		rc = dss_rebuild_ult_create(rebuild_puller_ult, arg, -1, 0,
-					    NULL);
+		rc = dss_rebuild_ult_create(rebuild_puller_ult, arg,
+					    DSS_ULT_SELF, 0, 0, NULL);
 		if (rc) {
 			rpt_put(rpt);
 			D_FREE(arg);

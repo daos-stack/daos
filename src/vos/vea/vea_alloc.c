@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
+#include <daos/dtx.h>
 #include "vea_internal.h"
 
 void
@@ -98,7 +99,8 @@ reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 	daos_iov_set(&val, NULL, 0);
 
 	D_ASSERT(!daos_handle_is_inval(vsi->vsi_free_btr));
-	rc = dbtree_fetch(vsi->vsi_free_btr, BTR_PROBE_EQ, &key, NULL, &val);
+	rc = dbtree_fetch(vsi->vsi_free_btr, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
+			  &key, NULL, &val);
 	if (rc)
 		return (rc == -DER_NONEXIST) ? 0 : rc;
 
@@ -385,7 +387,8 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	daos_iov_set(&key_out, &blk_off, sizeof(blk_off));
 	daos_iov_set(&val, &found, sizeof(found));
 
-	rc = dbtree_fetch(btr_hdl, opc, &key_in, &key_out, &val);
+	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_PUNCH, &key_in, &key_out,
+			  &val);
 	if (rc) {
 		D_ERROR("failed to find extent ["DF_U64", %u]\n",
 			vfe->vfe_blk_off, vfe->vfe_blk_cnt);

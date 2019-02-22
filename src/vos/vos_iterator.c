@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,7 +133,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	}
 
 	info.ii_epc_expr = param->ip_epc_expr;
-	info.ii_recx_flags = param->ip_recx_flags;
+	info.ii_flags = param->ip_flags;
 	info.ii_akey = &param->ip_akey;
 
 	rc = dict->id_ops->iop_nested_prepare(type, &info, &citer);
@@ -150,7 +150,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	citer->it_state		= VOS_ITS_NONE;
 	citer->it_ref_cnt	= 1;
 	citer->it_parent	= iter;
-	citer->it_from_parent	= true;
+	citer->it_from_parent	= 1;
 
 	*cih = vos_iter2hdl(citer);
 	return 0;
@@ -203,7 +203,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	iter->it_state		= VOS_ITS_NONE;
 	iter->it_ref_cnt	= 1;
 	iter->it_parent		= NULL;
-	iter->it_from_parent	= false;
+	iter->it_from_parent	= 0;
 
 	*ih = vos_iter2hdl(iter);
 	return 0;
@@ -355,4 +355,274 @@ vos_iter_empty(daos_handle_t ih)
 		return -DER_NOSYS;
 
 	return iter->it_ops->iop_empty(iter);
+}
+
+static inline daos_anchor_t *
+type2anchor(vos_iter_type_t type, struct vos_iter_anchors *anchors)
+{
+	switch (type) {
+	case VOS_ITER_OBJ:
+		D_ASSERT(anchors->ia_reprobe_obj == 0);
+		return &anchors->ia_obj;
+	case VOS_ITER_DKEY:
+		D_ASSERT(anchors->ia_reprobe_dkey == 0);
+		return &anchors->ia_dkey;
+	case VOS_ITER_AKEY:
+		D_ASSERT(anchors->ia_reprobe_akey == 0);
+		return &anchors->ia_akey;
+	case VOS_ITER_RECX:
+		D_ASSERT(anchors->ia_reprobe_ev == 0);
+		return &anchors->ia_ev;
+	case VOS_ITER_SINGLE:
+		D_ASSERT(anchors->ia_reprobe_sv == 0);
+		return &anchors->ia_sv;
+	default:
+		D_ASSERTF(false, "invalid iter type %d\n", type);
+		return NULL;
+	}
+}
+
+static inline bool
+is_last_level(vos_iter_type_t type)
+{
+	return (type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
+}
+
+static inline void
+reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
+{
+	switch (type) {
+	case VOS_ITER_DKEY:
+		D_ASSERT(daos_anchor_is_eof(&anchors->ia_dkey));
+		daos_anchor_set_zero(&anchors->ia_dkey);
+		daos_anchor_set_zero(&anchors->ia_akey);
+		daos_anchor_set_zero(&anchors->ia_ev);
+		daos_anchor_set_zero(&anchors->ia_sv);
+		break;
+	case VOS_ITER_AKEY:
+		D_ASSERT(daos_anchor_is_eof(&anchors->ia_akey));
+		daos_anchor_set_zero(&anchors->ia_akey);
+		daos_anchor_set_zero(&anchors->ia_ev);
+		daos_anchor_set_zero(&anchors->ia_sv);
+		break;
+	case VOS_ITER_RECX:
+		D_ASSERT(daos_anchor_is_eof(&anchors->ia_ev));
+		daos_anchor_set_zero(&anchors->ia_ev);
+		daos_anchor_set_zero(&anchors->ia_sv);
+		break;
+	case VOS_ITER_SINGLE:
+		D_ASSERT(daos_anchor_is_eof(&anchors->ia_sv));
+		daos_anchor_set_zero(&anchors->ia_sv);
+		break;
+	default:
+		D_ASSERTF(false, "invalid iter type %d\n", type);
+		break;
+	}
+}
+
+static inline void
+set_reprobe(vos_iter_type_t type, unsigned int acts,
+	    struct vos_iter_anchors *anchors)
+{
+	bool yield = (acts & VOS_ITER_CB_YIELD);
+	bool delete = (acts & VOS_ITER_CB_DELETE);
+
+	switch (type) {
+	case VOS_ITER_SINGLE:
+		if (yield || delete)
+			anchors->ia_reprobe_sv = 1;
+		/* fallthrough */
+	case VOS_ITER_RECX:
+		/* evtree doesn't need reprobe on deletion or yield */
+		/* fallthrough */
+	case VOS_ITER_AKEY:
+		if (yield || (delete && (type == VOS_ITER_AKEY)))
+			anchors->ia_reprobe_akey = 1;
+		/* fallthrough */
+	case VOS_ITER_DKEY:
+		if (yield || (delete && (type == VOS_ITER_DKEY)))
+			anchors->ia_reprobe_dkey = 1;
+		/* fallthrough */
+	case VOS_ITER_OBJ:
+		if (yield || (delete && (type == VOS_ITER_OBJ)))
+			anchors->ia_reprobe_obj = 1;
+		break;
+	default:
+		D_ASSERTF(false, "invalid iter type %d\n", type);
+		break;
+	}
+}
+
+static inline bool
+need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
+{
+	bool reprobe;
+
+	switch (type) {
+	case VOS_ITER_OBJ:
+		reprobe = anchors->ia_reprobe_obj;
+		anchors->ia_reprobe_obj = 0;
+		break;
+	case VOS_ITER_DKEY:
+		reprobe = anchors->ia_reprobe_dkey;
+		anchors->ia_reprobe_dkey = 0;
+		break;
+	case VOS_ITER_AKEY:
+		reprobe = anchors->ia_reprobe_akey;
+		anchors->ia_reprobe_akey = 0;
+		break;
+	case VOS_ITER_RECX:
+		reprobe = anchors->ia_reprobe_ev;
+		anchors->ia_reprobe_ev = 0;
+		break;
+	case VOS_ITER_SINGLE:
+		reprobe = anchors->ia_reprobe_sv;
+		anchors->ia_reprobe_sv = 0;
+		break;
+	default:
+		D_ASSERTF(false, "invalid iter type %d\n", type);
+		reprobe = false;
+		break;
+	}
+	return reprobe;
+}
+
+/**
+ * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
+ * cb(\a arg) for each entry.
+ */
+int
+vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg)
+{
+	daos_anchor_t		*anchor, *probe_anchor = NULL;
+	vos_iter_entry_t	iter_ent;
+	daos_handle_t		ih;
+	unsigned int		acts = 0;
+	int			rc;
+
+	D_ASSERT(type >= VOS_ITER_OBJ && type <= VOS_ITER_RECX);
+	D_ASSERT(anchors != NULL);
+
+	anchor = type2anchor(type, anchors);
+
+	rc = vos_iter_prepare(type, param, &ih);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST) {
+			daos_anchor_set_eof(anchor);
+			rc = 0;
+		} else {
+			D_ERROR("failed to prepare iterator (type=%d): %d\n",
+				type, rc);
+		}
+		return rc;
+	}
+
+probe:
+	if (!daos_anchor_is_zero(anchor))
+		probe_anchor = anchor;
+
+	rc = vos_iter_probe(ih, probe_anchor);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST || rc == -DER_AGAIN) {
+			daos_anchor_set_eof(anchor);
+			rc = 0;
+		} else {
+			D_ERROR("failed to probe iterator (type=%d anchor=%p): "
+				"%d\n", type, probe_anchor, rc);
+		}
+		D_GOTO(out, rc);
+	}
+
+	while (1) {
+		rc = vos_iter_fetch(ih, &iter_ent, anchor);
+		if (rc != 0) {
+			D_ERROR("failed to fetch iterator (type=%d): %d\n",
+				type, rc);
+			break;
+		}
+
+		rc = cb(ih, &iter_ent, type, param, arg, &acts);
+		if (rc != 0)
+			break;
+
+		set_reprobe(type, acts, anchors);
+		acts = 0;
+
+		if (need_reprobe(type, anchors)) {
+			D_ASSERT(!daos_anchor_is_zero(anchor) &&
+				 !daos_anchor_is_eof(anchor));
+			goto probe;
+		}
+
+		if (recursive && !is_last_level(type)) {
+			vos_iter_param_t	child_param = *param;
+			vos_iter_type_t		child_type;
+
+			child_param.ip_ih = ih;
+
+			switch (type) {
+			case VOS_ITER_OBJ:
+				child_type = VOS_ITER_DKEY;
+				child_param.ip_oid = iter_ent.ie_oid;
+				break;
+			case VOS_ITER_DKEY:
+				child_type = VOS_ITER_AKEY;
+				child_param.ip_dkey = iter_ent.ie_key;
+				break;
+			case VOS_ITER_AKEY:
+				child_type = VOS_ITER_RECX;
+				child_param.ip_akey = iter_ent.ie_key;
+				break;
+			default:
+				D_ASSERTF(false, "invalid iter type:%d\n",
+					  type);
+				rc = -DER_INVAL;
+				goto out;
+			}
+
+			rc = vos_iterate(&child_param, child_type, recursive,
+					 anchors, cb, arg);
+			if (rc != 0)
+				D_GOTO(out, rc);
+
+			reset_anchors(child_type, anchors);
+
+			if (child_type == VOS_ITER_RECX) {
+				child_type = VOS_ITER_SINGLE;
+
+				rc = vos_iterate(&child_param, child_type,
+						 recursive, anchors, cb, arg);
+				if (rc != 0)
+					D_GOTO(out, rc);
+
+				reset_anchors(child_type, anchors);
+			}
+
+			if (need_reprobe(type, anchors)) {
+				D_ASSERT(!daos_anchor_is_zero(anchor) &&
+					 !daos_anchor_is_eof(anchor));
+				goto probe;
+			}
+		}
+
+		rc = vos_iter_next(ih);
+		if (rc) {
+			if (rc != -DER_NONEXIST)
+				D_ERROR("failed to iterate next (type=%d): "
+					"%d\n", type, rc);
+			break;
+		}
+	}
+
+	if (rc == -DER_NONEXIST) {
+		daos_anchor_set_eof(anchor);
+		rc = 0;
+	}
+out:
+	if (rc < 0)
+		D_ERROR("abort iteration type:%d, rc:%d\n", type, rc);
+
+	vos_iter_finish(ih);
+	return rc;
 }

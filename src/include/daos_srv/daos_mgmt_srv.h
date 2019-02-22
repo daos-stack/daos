@@ -41,6 +41,6 @@ int
 ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
 		 char **fpath);
 int
-ds_mgmt_tgt_pool_iterate(int (*cb)(const uuid_t uuid, void *arg), void *arg);
+ds_mgmt_tgt_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg);
 
 #endif /* __MGMT_SRV_H__ */

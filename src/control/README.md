@@ -1,29 +1,52 @@
-# daos_server
+# DAOS Control Plane (daos_server)
 
-This Go package provides a [control server](server/daos_server.go) that implements the DAOS control-plane. The control server is a Go process responsible for the initialisation and management of the DAOS IO servers mainly through a Unix domain socket.
+DAOS operates over two, closely integrated planes, Control and Data. The Data plane handles the heavy lifting transport operations while the Control plane orchestrates process and storage management, facilitating the operation of the Data plane.
 
-The control server implements the [gRPC protocol](https://grpc.io/) to communicate with client gRPC applications.
+[DAOS Server](server/daos_server.go) implements the DAOS Control Plane and is written in Golang. It is tasked with network and storage hardware provisioning and allocation in addition to instantiation and management of the DAOS IO Servers (Data Plane written in C) running on the same host. Users of DAOS will interact directly only with the Control Plane in the form of the DAOS Server and associated tools.
+
+The DAOS Server implements the [gRPC protocol](https://grpc.io/) to communicate with client gRPC applications and interacts with DAOS IO Servers through Unix domain sockets.
 
 Multiple gRPC server modules are loaded by the control server. Currently included modules are security and management.
+
+The Control Plane implements a replicated management service as part of the DAOS Server, responsible for handling distributed operations across the DAOS System.
 
 The [shell](dmg/daos_shell) is an example client application which can connect to both the [agent](agent/daos_agent.go) to perform security functions (such as providing credentials and retrieving security contexts) and to the local management server to perform management functions (such as storage device discovery).
 
 ## Documentation
 
-- [Management API](https://godoc.org/github.com/daos-stack/daos/src/control/client/mgmt)
-- [Management internals](https://godoc.org/github.com/daos-stack/daos/src/control/mgmt)
+- [Management API](https://godoc.org/github.com/daos-stack/daos/src/control/client)
+- [Management internals](https://godoc.org/github.com/daos-stack/daos/src/control/server)
 - [Agent API](https://godoc.org/github.com/daos-stack/daos/src/control/client/agent)
 - [Agent internals](https://godoc.org/github.com/daos-stack/daos/src/control/security)
 
 ## Configuration
 
-daos_server configuration file is parsed when starting daos_server process, it's location can be specified on the commandline (daos_server -h for usage) or default location (install/etc/daos_server.yml).
+`daos_server` configuration file is parsed when starting `daos_server` process, it's location can be specified on the commandline (`daos_server -h` for usage) or default location (`<daos install dir>/install/etc/daos_server.yml`).
 
-Parameters will be parsed and populated with defaults (hardcoded in source) if not present in configuration.
+Parameters will be parsed and populated with defaults (located in `config_types.go`) if not present in configuration.
 
 Commandline parameters take precedence over configuration file values but if not specified on commandline, configuration file values will be applied (or parsed defaults).
 
-For convenience, active parsed config values are written to either directory where config file was read from or /tmp/ if that fails.
+For convenience, active parsed config values are written to either directory where config file was read from or `/tmp/` if that fails.
+
+If user shell executing `daos_server` has environment variable `CRT_PHY_ADDR_STR` set, user os environment will be used when spawning `daos_io_server` instances. In this situation a "Warning: using os env vars..." message will be printed to the console and no environment variables will be added as specified in the `env_vars` list within the per-server section of the server config file. This behaviour provides backward compatibility with historic mechanism of specifying all parameters through environment variables.
+
+## Prerequisites
+
+In addition to editing the configuration files prior to starting `daos_server`, an administrator needs to set passwordless sudo for the specific commands listed in `src/control/mgmt/init/setup_spdk.sh` (script is installed as `install/share/setup_spdk.sh`) in order for `daos_server` to enable access to the NVMe SSDs through SPDK when run as an unprivileged user.
+
+The sudoers file can be accessed with command `visudo` and the simplest way to achieve the necessary access is to grant no-password sudo permissions to a user:
+```
+linuxuser ALL=(ALL) NOPASSWD: ALL
+```
+alternatively more fine-grained permissions can be granted e.g.:
+```
+linuxuser        ALL = NOPASSWD:SETENV: /home/linuxuser/projects/daos_m/install/share/spdk/scripts/setup.sh
+linuxuser        ALL = NOPASSWD: /bin/chmod 777 /dev/hugepages
+linuxuser        ALL = NOPASSWD: /bin/chmod 666 /dev/uio*
+linuxuser        ALL = NOPASSWD: /bin/chmod 666 /sys/class/uio/uio*/device/config
+linuxuser        ALL = NOPASSWD: /bin/chmod 666 /sys/class/uio/uio*/device/resource*
+```
 
 ## Shell Usage
 
@@ -131,3 +154,9 @@ TODO: include details of `daos_agent` interaction
 ### Testing the app
 
 * Run the tests `go test` within each directory containing tests
+
+## Coding Guidelines
+
+### daos_server and daos_agent
+
+* Avoid calling `os.Exit` (or `log.Fatal`, `log.Fatalf`, etc.), except for assertion purposes. Fatal errors shall be returned back to `main`, who determines the exit status based on its `err` and calls `os.Exit`, in its last deferred function call.

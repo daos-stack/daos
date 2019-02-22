@@ -58,8 +58,8 @@ pool_create_all(void **state)
 	rc = daos_pool_create(0700 /* mode */, 0 /* uid */, 0 /* gid */,
 			      arg->group, NULL /* tgts */, "pmem" /* dev */,
 			      0 /* minimal size */, 0 /* nvme size */,
-			      &arg->pool.svc /* svc */, uuid,
-			      arg->async ? &ev : NULL);
+			      NULL /* properties */, &arg->pool.svc /* svc */,
+			      uuid, arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {

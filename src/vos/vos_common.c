@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -222,6 +222,18 @@ vos_mod_init(void)
 		return rc;
 	}
 
+	rc = vos_dtx_table_register();
+	if (rc) {
+		D_ERROR("DTX btree initialization error\n");
+		return rc;
+	}
+
+	rc = vos_dtx_cos_register();
+	if (rc != 0) {
+		D_ERROR("DTX CoS btree initialization error\n");
+		return rc;
+	}
+
 	/**
 	 * Registering the class for OI btree
 	 * and KV btree
@@ -229,12 +241,6 @@ vos_mod_init(void)
 	rc = vos_obj_tab_register();
 	if (rc) {
 		D_ERROR("VOS OI btree initialization error\n");
-		return rc;
-	}
-
-	rc = vos_cookie_tab_register();
-	if (rc) {
-		D_ERROR("VOS cookie btree initialization error\n");
 		return rc;
 	}
 
@@ -273,9 +279,10 @@ vos_nvme_fini(void)
 	}
 }
 
-/* Storage path & NVMe config used by standalone VOS */
+/* Storage path, NVMe config & shm_id used by standalone VOS */
 #define VOS_STORAGE_PATH	"/mnt/daos"
 #define VOS_NVME_CONF		"/etc/daos_nvme.conf"
+#define VOS_NVME_SHM_ID		DAOS_NVME_SHMID_NONE
 
 static int
 vos_nvme_init(void)
@@ -289,7 +296,7 @@ vos_nvme_init(void)
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF);
+	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF, VOS_NVME_SHM_ID);
 	if (rc)
 		return rc;
 	vsa_nvme_init = true;

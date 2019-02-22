@@ -1717,19 +1717,6 @@ out:
 }
 
 int
-dc_cont_sync(tse_task_t *task)
-{
-	daos_cont_sync_t	*args;
-	daos_epoch_t		epoch;
-
-	args = dc_task_get_args(task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
-	epoch = daos_ts2epoch();
-	return dc_epoch_op(args->coh, CONT_EPOCH_COMMIT, &epoch, task);
-}
-
-int
 dc_cont_rollback(tse_task_t *task)
 {
 	D_ERROR("Unsupported API\n");

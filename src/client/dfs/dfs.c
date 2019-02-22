@@ -986,7 +986,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (rc != 0)
 		return rc;
 
-	rc = daos_pool_query(poh, NULL, &pool_info, NULL);
+	rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
 	if (rc) {
 		D_ERROR("daos_pool_query() Failed (%d)\n", rc);
 		D_GOTO(err_dfs, rc);
@@ -1143,24 +1143,15 @@ err_dfs:
 int
 dfs_umount(dfs_t *dfs)
 {
-	int rc;
-
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
-
-	if (dfs->amode == O_RDWR) {
-		rc = daos_cont_sync(dfs->coh, NULL);
-		if (rc) {
-			D_ERROR("daos_cont_sync() Failed (%d)\n", rc);
-			return rc;
-		}
-	}
 
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
+
 	return 0;
 }
 
@@ -2439,20 +2430,14 @@ out:
 int
 dfs_sync(dfs_t *dfs)
 {
-	int		rc;
-
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
 	if (dfs->amode != O_RDWR)
 		return -DER_NO_PERM;
 
-	rc = daos_cont_sync(dfs->coh, NULL);
-	if (rc) {
-		D_ERROR("Failed daos_cont_sync (rc = %d).\n", rc);
-		return rc;
-	}
+	/** Take a snapshot here and allow rollover to that when supported. */
 
-	return rc;
+	return 0;
 }
 
 static char *

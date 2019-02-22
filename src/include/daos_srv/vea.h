@@ -131,6 +131,8 @@ struct vea_attr {
 
 /* VEA statistics */
 struct vea_stat {
+	uint64_t	vs_free_persistent;	/* Persistent free blocks */
+	uint64_t	vs_free_transient;	/* Transient free blocks */
 	uint64_t	vs_large_frags;	/* Large free frags */
 	uint64_t	vs_small_frags;	/* Small free frags */
 	uint64_t	vs_resrv_hint;	/* Number of hint reserve */

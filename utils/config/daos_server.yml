@@ -11,48 +11,6 @@
 #name: daos
 #
 #
-## Formatted state defined as any of:
-##   * ext4 filesystem on IPMMs
-##   * IPMMs in unexpected configuration
-##   * NVMe device contains a blobstore with uuid in label
-#
-#
-## Automatic provisioning
-#
-## If set to "true" then when daos_server starts it will try to perform
-## provision and start servers automatically.
-## During provision, if anything fails or a device is found to be in a
-## "formatted state" then administrator is alerted (with hints as to why and
-## what to do next) and no formatting is performed (behaviour is also
-## dependent on the "format" parameter setting).
-## When provision has been cancelled, administrator has to manually intervene,
-## perform remediation and subsequently call provision API manually.
-#
-## If set to "false", administrator is in full control and performs workflow
-## manually through client API (burn-in/fw-update/provision).
-#
-## default: true
-#auto: false
-#
-#
-## Formatting flow control
-#
-## Defines resultant behaviour when device is found to be in a formatted state.
-## If set to "safe" and a device is found to be in a "formatted state", then
-## administrator is alerted (with hints as to why/what to do next) and no
-## formatting is performed.
-#
-## If set to "continue" and device is found to be in a "formatted state",
-## continue to use those devices without reformatting.
-#
-## If set to "force" then automatically reformat and continue regardless of
-## whether device is found to be in a "formatted state".
-## Note: this may result in devices being formatted on reboot
-#
-## default: safe
-#format: continue
-#
-#
 ## Access points
 #
 ## To operate, DAOS will need a quorum of access point nodes to be available.
@@ -129,12 +87,15 @@
 #provider: ofi+verbs;ofi_rxm
 #
 #
-## Mountpoint directory
+## Storage mount directory
 #
-## If no pre-configured mountpoins are specified, DAOS will auto-detect
+## TODO: If no pre-configured mountpoins are specified, DAOS will auto-detect
 ## NVDIMMs, configure them in interleave mode, format with ext4 and
-## mount with the DAX extension. This option allows to specify a
-## preferred path where the mountpoints will be created.
+## mount with the DAX extension creating a subdirectory within scm_mount_path.
+#
+## This option allows to specify a preferred path where the mountpoints will
+## be created. Either the specified directory or its parent must be a mount
+## point.
 #
 ## default: /mnt/daos
 #scm_mount_path: /mnt/daosa
@@ -169,12 +130,6 @@
 #hyperthreads: true
 #
 #
-## When per-server definitions exist, auto-allocation of resources is not
-## performed. Without per-server definitions, node resources will
-## automatically be assigned to servers based on NUMA ratings, there will
-## be a one-to-one relationship between servers and sockets.
-#
-#
 ## Use the given directory for creating unix domain sockets
 #
 ## DAOS Agent and DAOS Server both use unix domain sockets for communication
@@ -183,6 +138,39 @@
 #
 ## default: /var/run/daos_server
 #socket_dir: ./.daos/daos_server
+#
+#
+## Number of hugepages to allocate for use by NVMe SSDs
+#
+## Specifies the number (not size) of hugepages to allocate for use by NVMe
+## through SPDK. This indicates the total number to be used by any spawned
+## servers. Default system hugepage size will be used and hugepages will be
+## evenly distributed between CPU nodes.
+#
+## default: 1024
+#nr_hugepages: 4096
+#
+#
+## Force specific debug mask for daos_server (control plane).
+## By default, just use the default debug mask used by daos_server.
+## Mask specifies minimum level of message significance to pass to logger.
+## Currently supported values are DEBUG and ERROR.
+#
+## default: DEBUG
+#control_log_mask: ERROR
+#
+#
+## Force specific path for daos_server (control plane) logs.
+#
+## default: print to stderr
+#control_log_file: /tmp/daos_control.log
+#
+#
+##
+## When per-server definitions exist, auto-allocation of resources is not
+## performed. Without per-server definitions, node resources will
+## automatically be assigned to servers based on NUMA ratings, there will
+## be a one-to-one relationship between servers and sockets.
 #
 #servers:
 #-
@@ -211,11 +199,12 @@
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
 #
+#  # default: ERR
 #  log_mask: WARN
 #
 #  # Force specific path for DAOS debug logs.
 #
-#  # default: /tmp/daos_server
+#  # default: /tmp/daos.log
 #  log_file: /tmp/daos_server1.log
 #
 #  # Pass specific environment variables to the DAOS server
@@ -228,6 +217,7 @@
 #  # Define a pre-configured mountpoint for storage class memory to be used
 #  # by this server.
 #  # Path should be unique to server instance (can use different subdirs).
+#  # Either the specified directory or its parent must be a mount point.
 #
 #  scm_mount: /mnt/daos/1
 #
@@ -275,11 +265,12 @@
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
 #
+#  # default: ERR
 #  log_mask: WARN
 #
 #  # Force specific path for DAOS debug logs.
 #
-#  # default: /tmp/daos_server
+#  # default: /tmp/daos.log
 #  log_file: /tmp/daos_server2.log
 #
 #  # Pass specific environment variables to the DAOS server

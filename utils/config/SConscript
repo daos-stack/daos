@@ -1,5 +1,4 @@
 """Build DAOS config"""
-import daos_build
 import os
 
 def scons():

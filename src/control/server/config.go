@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,31 +25,33 @@ package main
 
 import (
 	"fmt"
+	"hash/fnv"
 	"io/ioutil"
-	"log"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"gopkg.in/yaml.v2"
-
-	"github.com/daos-stack/daos/src/control/utils/handlers"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
+	"github.com/pkg/errors"
+	yaml "gopkg.in/yaml.v2"
 )
 
 const (
-	PROVIDER_ENV_KEY = "CRT_PHY_ADDR_STR"
-	CONFIG_OUT       = ".daos_server.active.yml"
+	providerEnvKey = "CRT_PHY_ADDR_STR"
+	configOut      = ".daos_server.active.yml"
 )
 
-func (c *configuration) loadConfig() (err error) {
+func (c *configuration) loadConfig() error {
 	bytes, err := ioutil.ReadFile(c.Path)
 	if err != nil {
-		return
+		return err
 	}
-	if err = c.Parse(bytes); err != nil {
-		return
+	if err = c.parse(bytes); err != nil {
+		return err
 	}
-	return
+	return nil
 }
 
 func (c *configuration) saveConfig(filename string) error {
@@ -62,51 +64,70 @@ func (c *configuration) saveConfig(filename string) error {
 
 // loadConfigOpts derives file location and parses configuration options
 // from both config file and commandline flags.
-func loadConfigOpts(cliOpts *cliOptions) configuration {
-	config := NewConfiguration()
+func loadConfigOpts(cliOpts *cliOptions) (configuration, error) {
+	config := newConfiguration()
+
 	if cliOpts.ConfigPath != "" {
 		config.Path = cliOpts.ConfigPath
 	}
 	if !filepath.IsAbs(config.Path) {
-		newPath, err := handlers.GetAbsInstallPath(config.Path)
+		newPath, err := common.GetAbsInstallPath(config.Path)
 		if err != nil {
-			log.Fatalf("%s", err.Error())
+			return config, err
 		}
 		config.Path = newPath
 	}
+
 	err := config.loadConfig()
 	if err != nil {
-		log.Printf(
-			"Configuration could not be read (%s), proceeding without",
-			err.Error())
-	} else {
-		log.Printf("DAOS config read from %s", config.Path)
+		return config, errors.Wrap(err, "failed to read config file")
 	}
-	err = config.getIOParams(cliOpts)
-	if (err != nil) || (len(config.Servers) == 0) {
-		log.Fatalf("Failed to retrieve parameters for I/O servers (%s)", err)
+	log.Debugf("DAOS config read from %s", config.Path)
+
+	host, err := os.Hostname()
+	if err != nil {
+		return config, errors.Wrap(err, "failed to get hostname")
 	}
-	return config
+
+	// get unique identifier to activate SPDK multiprocess mode
+	config.NvmeShmID = hash(host + strconv.Itoa(os.Getpid()))
+
+	if err = config.getIOParams(cliOpts); err != nil {
+		return config, errors.Wrap(
+			err, "failed to retrieve I/O server params")
+	}
+	if len(config.Servers) == 0 {
+		return config, errors.New("missing I/O server params")
+	}
+
+	return config, nil
 }
 
 // saveActiveConfig saves read-only active config, tries config dir then /tmp/
-func saveActiveConfig(config configuration) configuration {
-	activeConfig := filepath.Join(filepath.Dir(config.Path), CONFIG_OUT)
+func saveActiveConfig(config *configuration) {
+	activeConfig := filepath.Join(filepath.Dir(config.Path), configOut)
 	eMsg := "Warning: active config could not be saved (%s)"
 	err := config.saveConfig(activeConfig)
 	if err != nil {
-		log.Printf(eMsg, err.Error())
+		log.Debugf(eMsg, err)
 
-		activeConfig = filepath.Join("/tmp", CONFIG_OUT)
+		activeConfig = filepath.Join("/tmp", configOut)
 		err = config.saveConfig(activeConfig)
 		if err != nil {
-			log.Printf(eMsg, err.Error())
+			log.Debugf(eMsg, err)
 		}
 	}
 	if err == nil {
-		log.Printf("Active config saved to %s (read-only)", activeConfig)
+		log.Debugf("Active config saved to %s (read-only)", activeConfig)
 	}
-	return config
+}
+
+// hash produces unique int from string, mask MSB on conversion to signed int
+func hash(s string) int {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	// mask MSB of uint32 as this will be sign bit
+	return int(h.Sum32() & 0x7FFFFFFF)
 }
 
 // setNumCores takes number of cores and converts to list of ranges
@@ -136,7 +157,7 @@ func getNumCores(rs []string) (num int, err error) {
 			if _, err = strconv.Atoi(limits[0]); err != nil {
 				return
 			}
-			num += 1
+			num++
 			continue
 		}
 		if len(limits) == 2 {
@@ -171,7 +192,7 @@ func (c *configuration) populateCliOpts(i int) error {
 	var numCores int
 	numCores, err := getNumCores(server.Cpus)
 	if err != nil {
-		return fmt.Errorf("server%d cpus invalid: %s", i, err.Error())
+		return fmt.Errorf("server%d cpus invalid: %s", i, err)
 	}
 	server.CliOpts = append(
 		server.CliOpts,
@@ -187,12 +208,20 @@ func (c *configuration) populateCliOpts(i int) error {
 	if c.SystemMap != "" {
 		server.CliOpts = append(server.CliOpts, "-y", c.SystemMap)
 	}
-	if c.Servers[i].Rank != "" {
-		server.CliOpts = append(server.CliOpts, "-r", server.Rank)
+	if server.Rank != nil {
+		server.CliOpts = append(server.CliOpts, "-r", server.Rank.String())
 	}
 	if c.SocketDir != "" {
 		server.CliOpts = append(server.CliOpts, "-d", c.SocketDir)
 	}
+	if c.NvmeShmID > 0 {
+		// Add shm_id so io_server can share spdk access to controllers
+		// with mgmtControlServer process. Currently not user
+		// configurable when starting daos_server, use default.
+		server.CliOpts = append(
+			server.CliOpts, "-i", strconv.Itoa(c.NvmeShmID))
+	}
+
 	return nil
 }
 
@@ -209,7 +238,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		c.Port = int(opts.Port)
 	}
 	// override each per-server config
-	for i, _ := range c.Servers {
+	for i := range c.Servers {
 		if opts.MountPath != "" {
 			// override each per-server config in addition to global value
 			c.ScmMountPath = opts.MountPath
@@ -224,7 +253,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		if opts.Rank != nil {
 			// override first per-server config (doesn't make sense
 			// to reply to more than one server)
-			c.Servers[0].Rank = strconv.Itoa(int(*opts.Rank))
+			c.Servers[0].Rank = opts.Rank
 		}
 	}
 	if opts.Group != "" {
@@ -249,9 +278,9 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 // in the case of missing config file info attempts to detect external
 // os environment variables (returns true to skip following env creation)
 func (c *configuration) validateConfig() (bool, error) {
-	if c.ext.getenv(PROVIDER_ENV_KEY) != "" {
+	if c.ext.getenv(providerEnvKey) != "" {
 		if len(c.Servers) == 0 {
-			c.Servers = append(c.Servers, NewDefaultServer())
+			c.Servers = append(c.Servers, newDefaultServer())
 		}
 		return true, nil
 	}
@@ -260,7 +289,7 @@ func (c *configuration) validateConfig() (bool, error) {
 	if (c.Provider == "") || (len(c.Servers) == 0) {
 		return false, fmt.Errorf(
 			"required parameters missing from config and os environment (%s)",
-			PROVIDER_ENV_KEY)
+			providerEnvKey)
 	}
 	return false, nil
 }
@@ -283,7 +312,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 	// paramaters, perform this after initial validation
 	c.cmdlineOverride(cliOpts)
 
-	for i, _ := range c.Servers {
+	for i := range c.Servers {
 		// avoid mutating subject during iteration, instead access through
 		// config/parent object
 		server := &c.Servers[i]
@@ -292,7 +321,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 		if err = c.checkMount(mntpt); err != nil {
 			return fmt.Errorf(
 				"server%d scm mount path (%s) not mounted: %s",
-				i, mntpt, err.Error())
+				i, mntpt, err)
 		}
 		if err = c.populateCliOpts(i); err != nil {
 			return err
@@ -301,17 +330,17 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 			// add to existing config file EnvVars
 			server.EnvVars = append(
 				server.EnvVars,
-				PROVIDER_ENV_KEY+"="+c.Provider,
+				providerEnvKey+"="+c.Provider,
 				"OFI_INTERFACE="+server.FabricIface,
 				"OFI_PORT="+strconv.Itoa(server.FabricIfacePort),
 				"D_LOG_MASK="+server.LogMask,
 				"D_LOG_FILE="+server.LogFile)
 			continue
 		}
-		examplesPath, _ := handlers.GetAbsInstallPath("utils/config/examples/")
+		examplesPath, _ := common.GetAbsInstallPath("utils/config/examples/")
 		// user environment variable detected for provider, assume all
 		// necessary environment already exists and clear server config EnvVars
-		log.Print(
+		log.Debugf(
 			"Warning: using os env vars, specify params in config instead: ",
 			examplesPath)
 		server.EnvVars = []string{}
@@ -319,12 +348,12 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 	return nil
 }
 
-// populateEnv adds envs from config options
+// PopulateEnv adds envs from config options
 func (c *configuration) populateEnv(ioIdx int, envs *[]string) error {
 	for _, env := range c.Servers[ioIdx].EnvVars {
 		kv := strings.Split(env, "=")
 		if kv[1] == "" {
-			log.Printf("Warning: empty value for env %s detected", kv[0])
+			log.Debugf("Warning: empty value for env %s detected", kv[0])
 		}
 		*envs = append(*envs, env)
 	}

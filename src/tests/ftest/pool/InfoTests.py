@@ -145,6 +145,3 @@ class InfoTests(Test):
                       	     "gid {1}".format(pool_info.pi_gid, gid))
             self.fail("found actual pool gid {0} does not match expected gid "
                       "{1}".format(pool_info.pi_gid, gid))
-
-if __name__ == "__main__":
-    main()

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,13 @@
  */
 #ifndef __DAOS_TEST_H
 #define __DAOS_TEST_H
+#if !defined(__has_warning)  /* gcc */
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#else
+	#if __has_warning("-Wframe-larger-than=") /* valid clang warning */
+		#pragma GCC diagnostic ignored "-Wframe-larger-than="
+	#endif
+#endif
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -68,7 +75,7 @@ extern const char *server_group;
 extern unsigned int svc_nreplicas;
 
 /* the temporary IO dir*/
-extern char test_io_dir[];
+extern char *test_io_dir;
 /* the IO conf file*/
 extern const char *test_io_conf;
 
@@ -117,6 +124,7 @@ typedef struct {
 	bool			async;
 	bool			hdl_share;
 	uint64_t		fail_loc;
+	uint64_t		fail_num;
 	uint64_t		fail_value;
 	bool			overlap;
 	int			expect_result;
@@ -181,6 +189,8 @@ test_teardown(void **state);
 int
 test_setup(void **state, unsigned int step, bool multi_rank,
 	   daos_size_t pool_size, struct test_pool *pool);
+int
+test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *prop);
 
 static inline int
 async_enable(void **state)
@@ -249,12 +259,8 @@ int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
-void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-			 const d_rank_list_t *svc, d_rank_t rank);
 void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 			      const char *grp, d_rank_list_t *svc);
-void daos_add_server(const uuid_t pool_uuid, const char *grp,
-		     const d_rank_list_t *svc, d_rank_t rank);
 typedef int (*test_setup_cb_t)(void **state);
 typedef int (*test_teardown_cb_t)(void **state);
 
@@ -263,10 +269,16 @@ int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo);
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
+void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
+			 const d_rank_list_t *svc, d_rank_t rank, int tgt);
+void daos_add_target(const uuid_t pool_uuid, const char *grp,
+		     const d_rank_list_t *svc, d_rank_t rank, int tgt);
+
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 			 const d_rank_list_t *svc, d_rank_t rank);
 void daos_add_server(const uuid_t pool_uuid, const char *grp,
 		     const d_rank_list_t *svc, d_rank_t rank);
+
 int run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 		       daos_size_t pool_size, int *sub_tests,
 		       int sub_tests_size, test_setup_cb_t setup_cb,

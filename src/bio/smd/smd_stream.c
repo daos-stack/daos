@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include <daos/mem.h>
 #include <gurt/hash.h>
 #include <daos/btree.h>
+#include <daos/dtx.h>
 #include <daos_types.h>
 
 #include "smd_internal.h"
@@ -265,7 +266,7 @@ smd_nvme_list_streams(uint32_t *nr, struct smd_nvme_stream_bond *streams,
 		probe_hash = anchor;
 
 	opc = probe_hash == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GT;
-	rc = dbtree_iter_probe(sti_hdl, opc, NULL, anchor);
+	rc = dbtree_iter_probe(sti_hdl, opc, DAOS_INTENT_DEFAULT, NULL, anchor);
 	if (rc != 0)
 		D_GOTO(out_eof, rc);
 

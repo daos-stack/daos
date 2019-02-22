@@ -307,7 +307,7 @@ rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
 	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, DAOS_RDB_VERSION);
 	ep.ep_grp = NULL;
 	ep.ep_rank = rdb_node->dn_rank;
-	ep.ep_tag = 0;
+	ep.ep_tag = daos_rpc_tag(DAOS_REQ_RDB, 0);
 	return crt_req_create(info->dmi_ctx, &ep, opc_full, rpc);
 }
 

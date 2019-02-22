@@ -68,65 +68,57 @@ def verify_list_attr(indata, size, buffer, mode="sync"):
             raise DaosTestError("FAIL: Name does not match after list attr,"
                                 " Expected buf={0} and received buf = {1}"
                                 .format(key, buffer))
-    print ("===== list Attr name = {0} and length = {1}"
-           .format(buffer, size))
 
 def verify_get_attr(indata, outdata):
     """
     verify the Attributes value after get_attr
     """
-    final_val = []
-    for j in range(0, len(indata)):
-        final_val.append(outdata[j])
-
-    print ("===== get Attr value ")
-    for i in range(0, len(indata)):
-        if str(indata.values()[i]) not in final_val:
+    for attr, value in indata.iteritems():
+        if value != outdata[attr]:
             raise DaosTestError("FAIL: Value does not match after get attr,"
                              " Expected val={0} and received val = {1}"
-                             .format(indata.keys()[i], indata.values()[i]))
-        else:
-            print(indata.keys()[i], indata.values()[i])
+                                .format(value, outdata[attr]))
 
 class ContainerAttributeTest(Test):
     """
     Tests DAOS container attribute get/set/list.
     """
     def setUp(self):
+        self.pool = None
+        self.container = None
+        self.hostlist = None
+        self.large_data_set = {}
+
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        tmp = build_paths['PREFIX'] + '/tmp'
         server_group = self.params.get("server_group",
                                        '/server/',
                                        'daos_server')
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         ServerUtils.runServer(self.hostfile, server_group, basepath)
 
-        self.POOL = DaosPool(self.Context)
-        self.POOL.create(self.params.get("mode", '/run/attrtests/createmode/*'),
+        self.pool = DaosPool(self.Context)
+        self.pool.create(self.params.get("mode", '/run/attrtests/createmode/*'),
                          os.geteuid(),
                          os.getegid(),
                          self.params.get("size", '/run/attrtests/createsize/*'),
                          self.params.get("setname", '/run/attrtests/createset/*'),
                          None)
-        self.POOL.connect(1 << 1)
-        poh = self.POOL.handle
-        self.CONTAINER = DaosContainer(self.Context)
-        self.CONTAINER.create(poh)
-        self.CONTAINER.open()
-        self.large_data_set = {}
+        self.pool.connect(1 << 1)
+        poh = self.pool.handle
+        self.container = DaosContainer(self.Context)
+        self.container.create(poh)
+        self.container.open()
 
     def tearDown(self):
         try:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
-            if self.CONTAINER:
-                self.CONTAINER.close()
+            if self.container:
+                self.container.close()
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
 
@@ -150,16 +142,12 @@ class ContainerAttributeTest(Test):
         value = self.params.get("value", '/run/attrtests/value_handles/*/')
         expected_for_param.append(value[1])
 
-        attr_dict = dict(zip(name, value))
+        attr_dict = {name[0]:value[0]}
         if name[0] is not None:
             if "largenumberofattr" in name[0]:
                 self.create_data_set()
                 attr_dict = self.large_data_set
-
-        if 'PASS' in attr_dict:
-            del attr_dict['PASS']
-        if 'FAIL' in attr_dict:
-            del attr_dict['FAIL']
+                attr_dict[name[0]] = value[0]
 
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -167,18 +155,26 @@ class ContainerAttributeTest(Test):
                 expected_result = 'FAIL'
                 break
         try:
-            print ("===== Set Attr")
-            self.CONTAINER.set_attr(data=attr_dict)
-            size, buf = self.CONTAINER.list_attr()
+            self.container.set_attr(data=attr_dict)
+            size, buf = self.container.list_attr()
 
             verify_list_attr(attr_dict, size, buf)
 
-            ##This is for requesting the name which is not exist.
-            if "Negative" in name[0]:
-                attr_dict["Wrong_Value"] = attr_dict.pop(name[0])
+            # Request something that doesn't exist
+            if name[0] is not None and "Negative" in name[0]:
+                name[0] = "rubbish"
 
-            val = self.CONTAINER.get_attr(data=attr_dict)
-            verify_get_attr(attr_dict, val)
+            results = {}
+            results = self.container.get_attr([name[0]])
+
+            # for this test the dictionary has been altered, need to just
+            # set it to what we are expecting to get back
+            if name[0] is not None:
+               if "largenumberofattr" in name[0]:
+                   attr_dict.clear()
+                   attr_dict[name[0]] = value[0]
+
+            verify_get_attr(attr_dict, results)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
@@ -204,16 +200,12 @@ class ContainerAttributeTest(Test):
         value = self.params.get("value", '/run/attrtests/value_handles/*/')
         expected_for_param.append(value[1])
 
-        attr_dict = dict(zip(name, value))
+        attr_dict = {name[0]:value[0]}
         if name[0] is not None:
             if "largenumberofattr" in name[0]:
                 self.create_data_set()
                 attr_dict = self.large_data_set
-
-        if 'PASS' in attr_dict:
-            del attr_dict['PASS']
-        if 'FAIL' in attr_dict:
-            del attr_dict['FAIL']
+                attr_dict[name[0]] = value[0]
 
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -221,36 +213,40 @@ class ContainerAttributeTest(Test):
                 expected_result = 'FAIL'
                 break
         try:
-            print ("===== Set Attr")
             GLOB_SIGNAL = threading.Event()
-            self.CONTAINER.set_attr(data=attr_dict, cb_func=cb_func)
+            self.container.set_attr(data=attr_dict, cb_func=cb_func)
             GLOB_SIGNAL.wait()
-            if GLOB_RC != 0:
+            if GLOB_RC != 0 and expected_result in ['PASS']:
                 self.fail("RC not as expected after set_attr First {0}"
                           .format(GLOB_RC))
 
             GLOB_SIGNAL = threading.Event()
-            size, buf = self.CONTAINER.list_attr(cb_func=cb_func)
+            size, buf = self.container.list_attr(cb_func=cb_func)
             GLOB_SIGNAL.wait()
-            if GLOB_RC != 0:
+            if GLOB_RC != 0 and expected_result in ['PASS']:
                 self.fail("RC not as expected after list_attr First {0}"
                           .format(GLOB_RC))
-            verify_list_attr(attr_dict, size, buf, mode="async")
+            if expected_result in ['PASS']:
+                verify_list_attr(attr_dict, size, buf, mode="async")
 
-            #This is for requesting the name which is not exist.
-            if "Negative" in name[0]:
-                attr_dict["Wrong_Value"] = attr_dict.pop(name[0])
+            # Request something that doesn't exist
+            if name[0] is not None and "Negative" in name[0]:
+                name[0] = "rubbish"
 
             GLOB_SIGNAL = threading.Event()
-            val = self.CONTAINER.get_attr(data=attr_dict, cb_func=cb_func)
+            self.container.get_attr([name[0]], cb_func=cb_func)
+
             GLOB_SIGNAL.wait()
-            if GLOB_RC != 0:
+
+            if GLOB_RC != 0 and expected_result in ['PASS']:
                 self.fail("RC not as expected after get_attr {0}"
                           .format(GLOB_RC))
-            verify_get_attr(attr_dict, val)
 
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
+            # not verifying the get_attr since its not available asynchronously
+
+            if value[0] != None:
+                if GLOB_RC == 0 and expected_result in ['FAIL']:
+                    self.fail("Test was expected to fail but it passed.\n")
 
         except DaosApiError as e:
             print(e)

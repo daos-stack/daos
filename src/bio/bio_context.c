@@ -430,8 +430,8 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 		 * TODO: Let's simply return success for this moment, the
 		 * pool create & destroy code needs be re-organized later to
 		 * handle various middle failure cases, then we should
-		 * improve this by checking the pif_blob_sz and avoid calling
-		 * into this function when 'pif_blob_sz == 0'.
+		 * improve this by checking the 'pd_nvme_sz' and avoid
+		 * calling into this function when 'pd_nvme_sz' == 0.
 		 */
 		return 0;
 	}
@@ -567,7 +567,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	daos_iov_t			iov;
 	bio_addr_t			addr;
 	uint64_t			off = 0; /* byte offset in SPDK blob */
-	uint16_t			dev_type = BIO_ADDR_NVME;
+	uint16_t			dev_type = DAOS_MEDIA_NVME;
 	int				rc = 0;
 
 	D_DEBUG(DB_MGMT, "Writing header blob:%p, xs:%p\n",

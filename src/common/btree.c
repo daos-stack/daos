@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 
 #include <daos_errno.h>
 #include <daos/btree.h>
+#include <daos/dtx.h>
 
 /**
  * Tree node types.
@@ -145,7 +146,8 @@ struct btr_context {
 static int btr_class_init(TMMID(struct btr_root) root_mmid,
 			  struct btr_root *root, unsigned int tree_class,
 			  uint64_t *tree_feats, struct umem_attr *uma,
-			  void *info, struct btr_instance *tins);
+			  daos_handle_t coh, void *info,
+			  struct btr_instance *tins);
 static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 					  TMMID(struct btr_node) nd_mmid,
 					  unsigned int at);
@@ -256,6 +258,7 @@ btr_ops(struct btr_context *tcx)
  *			features for different library versions).
  * \param tree_order	Tree order.
  * \param uma		Memory class attributes.
+ * \param coh		The container open handle.
  * \param info		NVMe free space information
  * \param tcxp		Returned context.
  */
@@ -263,7 +266,7 @@ static int
 btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 		   unsigned int tree_class, uint64_t tree_feats,
 		   unsigned int tree_order, struct umem_attr *uma,
-		   void *info, struct btr_context **tcxp)
+		   daos_handle_t coh, void *info, struct btr_context **tcxp)
 {
 	struct btr_context	*tcx;
 	unsigned int		 depth;
@@ -275,7 +278,7 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 
 	tcx->tc_ref = 1; /* for the caller */
 	rc = btr_class_init(root_mmid, root, tree_class, &tree_feats, uma,
-			    info, &tcx->tc_tins);
+			    coh, info, &tcx->tc_tins);
 	if (rc != 0) {
 		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
 		D_GOTO(failed, rc);
@@ -317,6 +320,7 @@ btr_context_clone(struct btr_context *tcx, struct btr_context **tcx_p)
 	umem_attr_get(&tcx->tc_tins.ti_umm, &uma);
 	rc = btr_context_create(tcx->tc_tins.ti_root_mmid,
 				tcx->tc_tins.ti_root, -1, -1, -1, &uma,
+				tcx->tc_tins.ti_coh,
 				tcx->tc_tins.ti_blks_info, tcx_p);
 	return rc;
 }
@@ -730,7 +734,7 @@ btr_root_free(struct btr_context *tcx)
 }
 
 static int
-btr_root_init(struct btr_context *tcx, struct btr_root *root)
+btr_root_init(struct btr_context *tcx, struct btr_root *root, bool in_place)
 {
 	struct btr_instance *tins = &tcx->tc_tins;
 	int		     rc;
@@ -743,6 +747,8 @@ btr_root_init(struct btr_context *tcx, struct btr_root *root)
 			return rc;
 	}
 
+	if (in_place)
+		memset(root, 0, sizeof(*root));
 	root->tr_class	= tcx->tc_class;
 	root->tr_feats	= tcx->tc_feats;
 	root->tr_order	= tcx->tc_order;
@@ -773,7 +779,7 @@ btr_root_alloc(struct btr_context *tcx)
 	}
 
 	root = btr_mmid2ptr(tcx, tins->ti_root_mmid);
-	return btr_root_init(tcx, root);
+	return btr_root_init(tcx, root, false);
 }
 
 static int
@@ -1067,6 +1073,9 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 {
 	int	rc = 0;
 
+	if (btr_has_tx(tcx))
+		btr_node_tx_add(tcx, trace->tr_node);
+
 	if (btr_node_is_full(tcx, trace->tr_node))
 		rc = btr_node_split_and_insert(tcx, trace, rec);
 	else
@@ -1132,7 +1141,7 @@ btr_probe_valid(dbtree_probe_opc_t opc)
  */
 static enum btr_probe_rc
 btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	  daos_iov_t *key, char hkey[DAOS_HKEY_MAX])
+	  uint32_t intent, daos_iov_t *key, char hkey[DAOS_HKEY_MAX])
 {
 	int			 start;
 	int			 end;
@@ -1335,12 +1344,12 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 
 static enum btr_probe_rc
 btr_probe_key(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	       daos_iov_t *key)
+	      uint32_t intent, daos_iov_t *key)
 {
 	char hkey[DAOS_HKEY_MAX];
 
 	btr_hkey_gen(tcx, key, hkey);
-	return btr_probe(tcx, probe_opc, key, hkey);
+	return btr_probe(tcx, probe_opc, intent, key, hkey);
 }
 
 static bool
@@ -1470,6 +1479,7 @@ btr_probe_prev(struct btr_context *tcx)
  * \param toh	[IN]		Tree open handle.
  * \param opc	[IN]		Probe opcode, see dbtree_probe_opc_t for the
  *				details.
+ * \param intent [IN]		The operation intent.
  * \param key	[IN]		Key to search
  * \param key_out [OUT]		Return the actual matched key if \a opc is
  *				not BTR_PROBE_EQ.
@@ -1480,8 +1490,8 @@ btr_probe_prev(struct btr_context *tcx)
  *			-ve	error code
  */
 int
-dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
-	     daos_iov_t *key_out, daos_iov_t *val_out)
+dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
+	     daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out)
 {
 	struct btr_record  *rec;
 	struct btr_context *tcx;
@@ -1491,7 +1501,7 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = btr_probe_key(tcx, opc, key);
+	rc = btr_probe_key(tcx, opc, intent, key);
 	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
@@ -1518,7 +1528,8 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
 int
 dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out)
 {
-	return dbtree_fetch(toh, BTR_PROBE_EQ, key, NULL, val_out);
+	return dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, key, NULL,
+			    val_out);
 }
 
 static int
@@ -1582,9 +1593,6 @@ btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
 		btr_trace_debug(tcx, trace, "try to insert\n");
 
-		if (btr_has_tx(tcx))
-			btr_node_tx_add(tcx, trace->tr_node);
-
 		rc = btr_node_insert_rec(tcx, trace, rec);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE,
@@ -1610,14 +1618,14 @@ btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 
 static int
 btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	   daos_iov_t *key, daos_iov_t *val)
+	   uint32_t intent, daos_iov_t *key, daos_iov_t *val)
 {
 	int	rc;
 
 	if (probe_opc == BTR_PROBE_BYPASS)
 		rc = tcx->tc_probe_rc; /* trust previous probe... */
 	else
-		rc = btr_probe_key(tcx, probe_opc, key);
+		rc = btr_probe_key(tcx, probe_opc, intent, key);
 
 	switch (rc) {
 	default:
@@ -1649,25 +1657,24 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 }
 
 static int
-btr_tx_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	      daos_iov_t *key, daos_iov_t *val)
+btr_tx_begin(struct btr_context *tcx)
 {
-	struct umem_instance *umm = btr_umm(tcx);
-	int		      rc = 0;
+	if (!btr_has_tx(tcx))
+		return 0;
 
-	TX_BEGIN(umm->umm_pool) {
-		rc = btr_upsert(tcx, probe_opc, key, val);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "dbtree_update tx aborted: %d\n", rc);
+	return umem_tx_begin(btr_umm(tcx), NULL);
+}
 
-	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_update tx exited\n");
-	} TX_END
+static int
+btr_tx_end(struct btr_context *tcx, int rc)
+{
+	if (!btr_has_tx(tcx))
+		return rc;
 
-	return rc;
+	if (rc != 0)
+		return umem_tx_abort(btr_umm(tcx), rc);
+
+	return umem_tx_commit(btr_umm(tcx));
 }
 
 /**
@@ -1691,12 +1698,13 @@ dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_upsert(tcx, BTR_PROBE_EQ, key, val);
-	else
-		rc = btr_upsert(tcx, BTR_PROBE_EQ, key, val);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
 
-	return rc;
+	rc = btr_upsert(tcx, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key, val);
+
+	return btr_tx_end(tcx, rc);
 }
 
 /**
@@ -1714,7 +1722,7 @@ dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val)
  *			-ve	error code
  */
 int
-dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc,
+dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	      daos_iov_t *key, daos_iov_t *val)
 {
 	struct btr_context *tcx;
@@ -1724,12 +1732,12 @@ dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_upsert(tcx, opc, key, val);
-	else
-		rc = btr_upsert(tcx, opc, key, val);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+	rc = btr_upsert(tcx, opc, intent, key, val);
 
-	return rc;
+	return btr_tx_end(tcx, rc);
 }
 
 /**
@@ -2413,22 +2421,14 @@ btr_delete(struct btr_context *tcx, void *args)
 static int
 btr_tx_delete(struct btr_context *tcx, void *args)
 {
-	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_pool) {
-		rc = btr_delete(tcx, args);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "dbtree_delete tx aborted: %d\n", rc);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+	rc = btr_delete(tcx, args);
 
-	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_delete tx exited\n");
-	} TX_END
-
-	return rc;
+	return btr_tx_end(tcx, rc);
 }
 
 /**
@@ -2451,16 +2451,13 @@ dbtree_delete(daos_handle_t toh, daos_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = btr_probe_key(tcx, BTR_PROBE_EQ, key);
+	rc = btr_probe_key(tcx, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key);
 	if (rc != PROBE_RC_OK) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
 	}
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_delete(tcx, args);
-	else
-		rc = btr_delete(tcx, args);
+	rc = btr_tx_delete(tcx, args);
 
 	tcx->tc_probe_rc = PROBE_RC_UNKNOWN;
 	return rc;
@@ -2592,22 +2589,15 @@ btr_tree_alloc(struct btr_context *tcx)
 static int
 btr_tx_tree_alloc(struct btr_context *tcx)
 {
-	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_pool) {
-		rc = btr_tree_alloc(tcx);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "Failed to create tree root: %d\n", rc);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
 
-	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_create tx exited\n");
-	} TX_END
+	rc = btr_tree_alloc(tcx);
 
-	return rc;
+	return btr_tx_end(tcx, rc);
 }
 
 /**
@@ -2635,14 +2625,11 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 	}
 
 	rc = btr_context_create(BTR_ROOT_NULL, NULL, tree_class, tree_feats,
-				tree_order, uma, NULL, &tcx);
+				tree_order, uma, DAOS_HDL_INVAL, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_tree_alloc(tcx);
-	else
-		rc = btr_tree_alloc(tcx);
+	rc = btr_tx_tree_alloc(tcx);
 
 	if (rc != 0)
 		goto failed;
@@ -2660,35 +2647,37 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 static int
 btr_tree_init(struct btr_context *tcx, struct btr_root *root)
 {
-	memset(root, 0, sizeof(*root));
-	return btr_root_init(tcx, root);
+	return btr_root_init(tcx, root, true);
 }
 
 static int
 btr_tx_tree_init(struct btr_context *tcx, struct btr_root *root)
 {
-	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_pool) {
-		rc = btr_tree_init(tcx, root);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "Failed to init tree root: %d\n", rc);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
 
-	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_create_inplace tx exited\n");
-	} TX_END
+	rc = btr_tree_init(tcx, root);
 
-	return rc;
+	return btr_tx_end(tcx, rc);
 }
 
 int
 dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 		      unsigned int tree_order, struct umem_attr *uma,
 		      struct btr_root *root, daos_handle_t *toh)
+{
+	return dbtree_create_inplace_ex(tree_class, tree_feats, tree_order,
+					uma, root, DAOS_HDL_INVAL, toh);
+}
+
+int
+dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
+			 unsigned int tree_order, struct umem_attr *uma,
+			 struct btr_root *root, daos_handle_t coh,
+			 daos_handle_t *toh)
 {
 	struct btr_context *tcx;
 	int		    rc;
@@ -2708,14 +2697,11 @@ dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 	}
 
 	rc = btr_context_create(BTR_ROOT_NULL, root, tree_class, tree_feats,
-				tree_order, uma, NULL, &tcx);
+				tree_order, uma, coh, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_tree_init(tcx, root);
-	else
-		rc = btr_tree_init(tcx, root);
+	rc = btr_tx_tree_init(tcx, root);
 
 	if (rc != 0)
 		goto failed;
@@ -2741,7 +2727,8 @@ dbtree_open(TMMID(struct btr_root) root_mmid, struct umem_attr *uma,
 	struct btr_context *tcx;
 	int		    rc;
 
-	rc = btr_context_create(root_mmid, NULL, -1, -1, -1, uma, NULL, &tcx);
+	rc = btr_context_create(root_mmid, NULL, -1, -1, -1, uma,
+				DAOS_HDL_INVAL, NULL, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2754,12 +2741,13 @@ dbtree_open(TMMID(struct btr_root) root_mmid, struct umem_attr *uma,
  *
  * \param root		[IN]	Address of the tree root.
  * \param uma		[IN]	Memory class attributes.
+ * \param coh		[IN]	The container open handle.
  * \param info		[IN]	NVMe free space information.
  * \param toh		[OUT]	Returned tree open handle.
  */
 int
 dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
-		       void *info, daos_handle_t *toh)
+		       daos_handle_t coh, void *info, daos_handle_t *toh)
 {
 	struct btr_context *tcx;
 	int		    rc;
@@ -2770,7 +2758,7 @@ dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 	}
 
 	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma,
-				info, &tcx);
+				coh, info, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2789,7 +2777,7 @@ int
 dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 		    daos_handle_t *toh)
 {
-	return dbtree_open_inplace_ex(root, uma, NULL, toh);
+	return dbtree_open_inplace_ex(root, uma, DAOS_HDL_INVAL, NULL, toh);
 }
 
 /**
@@ -2867,22 +2855,14 @@ btr_tree_destroy(struct btr_context *tcx)
 static int
 btr_tx_tree_destroy(struct btr_context *tcx)
 {
-	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
-	TX_BEGIN(umm->umm_pool) {
-		rc = btr_tree_destroy(tcx);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "Failed to destroy the tree: %d\n", rc);
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+	rc = btr_tree_destroy(tcx);
 
-	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_destroy tx exited\n");
-	} TX_END
-
-	return rc;
+	return btr_tx_end(tcx, rc);
 }
 
 /**
@@ -2901,10 +2881,7 @@ dbtree_destroy(daos_handle_t toh)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_tree_destroy(tcx);
-	else
-		rc = btr_tree_destroy(tcx);
+	rc = btr_tx_tree_destroy(tcx);
 
 	btr_context_decref(tcx);
 	return rc;
@@ -2994,7 +2971,9 @@ dbtree_iter_finish(daos_handle_t ih)
  * This function must be called after dbtree_iter_prepare, it can be called
  * for arbitrary times for the same iterator.
  *
+ * \param ih	[IN]	The iterator handle.
  * \param opc	[IN]	Probe opcode, see dbtree_probe_opc_t for the details.
+ * \param intent [IN]	The operation intent.
  * \param key	[IN]	The key to probe, it will be ignored if opc is
  *			BTR_PROBE_FIRST or BTR_PROBE_LAST.
  * \param anchor [IN]	the anchor point to probe, it will be ignored if
@@ -3003,7 +2982,7 @@ dbtree_iter_finish(daos_handle_t ih)
  *			key or anchor is required.
  */
 int
-dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
+dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 		  daos_iov_t *key, daos_anchor_t *anchor)
 {
 	struct btr_iterator *itr;
@@ -3021,16 +3000,16 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 		return -DER_NO_HDL;
 
 	if (opc == BTR_PROBE_FIRST || opc == BTR_PROBE_LAST)
-		rc = btr_probe(tcx, opc, NULL, NULL);
+		rc = btr_probe(tcx, opc, intent, NULL, NULL);
 	else if (btr_is_direct_key(tcx)) {
 		D_ASSERT(key != NULL || anchor != NULL);
 		if (key)
-			rc = btr_probe(tcx, opc, key, NULL);
+			rc = btr_probe(tcx, opc, intent, key, NULL);
 		else {
 			daos_iov_t direct_key;
 
 			btr_key_decode(tcx, &direct_key, anchor);
-			rc = btr_probe(tcx, opc, &direct_key, NULL);
+			rc = btr_probe(tcx, opc, intent, &direct_key, NULL);
 		}
 	} else {
 		D_ASSERT(key != NULL || anchor != NULL);
@@ -3040,7 +3019,7 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 			btr_hkey_gen(tcx, key, hkey);
 		else
 			btr_hkey_copy(tcx, hkey, (char *)&anchor->da_buf[0]);
-		rc = btr_probe(tcx, opc, key, hkey);
+		rc = btr_probe(tcx, opc, intent, key, hkey);
 	}
 
 	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
@@ -3191,10 +3170,7 @@ dbtree_iter_delete(daos_handle_t ih, void *args)
 	if (rc != 0)
 		return rc;
 
-	if (btr_has_tx(tcx))
-		rc = btr_tx_delete(tcx, args);
-	else
-		rc = btr_delete(tcx, args);
+	rc = btr_tx_delete(tcx, args);
 
 	/* reset iterator */
 	itr->it_state = BTR_ITR_INIT;
@@ -3227,13 +3203,14 @@ dbtree_iter_empty(daos_handle_t ih)
  * dbtree_iterate_cb_t.
  *
  * \param toh		[IN]	Tree open handle
+ * \param intent	[IN]	The operation intent
  * \param backward	[IN]	If true, iterate from last to first
  * \param cb		[IN]	Callback function (see dbtree_iterate_cb_t)
  * \param arg		[IN]	Callback argument
  */
 int
-dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
-	       void *arg)
+dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
+	       dbtree_iterate_cb_t cb, void *arg)
 {
 	daos_handle_t	ih;
 	int		niterated = 0;
@@ -3246,7 +3223,7 @@ dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 	}
 
 	rc = dbtree_iter_probe(ih, backward ? BTR_PROBE_LAST : BTR_PROBE_FIRST,
-			       NULL /* key */, NULL /* anchor */);
+			       intent, NULL /* key */, NULL /* anchor */);
 	if (rc == -DER_NONEXIST) {
 		D_GOTO(out_iter, rc = 0);
 	} else if (rc != 0) {
@@ -3310,7 +3287,8 @@ static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 static int
 btr_class_init(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	       unsigned int tree_class, uint64_t *tree_feats,
-	       struct umem_attr *uma, void *info, struct btr_instance *tins)
+	       struct umem_attr *uma, daos_handle_t coh, void *info,
+	       struct btr_instance *tins)
 {
 	struct btr_class	*tc;
 	uint64_t		 special_feat;
@@ -3322,6 +3300,7 @@ btr_class_init(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 		return rc;
 
 	tins->ti_blks_info = info;
+	tins->ti_coh = coh;
 
 	if (!TMMID_IS_NULL(root_mmid)) {
 		tins->ti_root_mmid = root_mmid;

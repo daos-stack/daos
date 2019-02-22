@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,11 +41,6 @@
 #include <daos_srv/vos.h>
 
 #define VCT_CONTAINERS	100
-/*
- * Constants for cookie test
- */
-#define VCT_COOKIES	100
-#define VCT_EPOCHS	200
 
 struct vc_test_args {
 	char			*fname;
@@ -56,12 +51,6 @@ struct vc_test_args {
 	daos_handle_t		coh[VCT_CONTAINERS];
 	struct d_uuid		uuid[VCT_CONTAINERS];
 	bool			anchor_flag;
-};
-
-struct cookie_entry {
-	struct d_ulink		ulink;
-	uuid_t			cookie;
-	daos_epoch_t		max_epoch;
 };
 
 static void
@@ -90,8 +79,8 @@ co_ops_run(void **state)
 			case QUERY:
 				ret = vos_cont_query(arg->coh[i], &cinfo);
 				assert_int_equal(ret, 0);
-				assert_int_equal(cinfo.pci_nobjs, 0);
-				assert_int_equal(cinfo.pci_used, 0);
+				assert_int_equal(cinfo.ci_nobjs, 0);
+				assert_int_equal(cinfo.ci_used, 0);
 				break;
 			case DESTROY:
 				ret = vos_cont_destroy(arg->poh,
@@ -352,103 +341,6 @@ co_iter_test_with_anchor(void **state)
 	assert_true(rc == 0 || rc == -DER_NONEXIST);
 }
 
-void
-cookie_uhash_free(struct d_ulink *uhlink)
-{
-	struct cookie_entry	*entry;
-
-	entry = container_of(uhlink, struct cookie_entry, ulink);
-	D_FREE(entry);
-}
-
-struct d_ulink_ops	cookie_uh_ops = {
-	.uop_free	= cookie_uhash_free,
-};
-
-static void
-cookie_table_test(void **state)
-{
-	int				ret = 0;
-	int				i = 0, j = 0, k = 0;
-	struct vos_cookie_table		*itab;
-	struct d_uuid			*cookie_array;
-	daos_epoch_t			*epochs;
-	struct umem_attr		uma;
-	uint64_t			epoch_ret;
-	daos_handle_t			cookie_hdl;
-	/* static uuid hash for verification */
-	struct cookie_entry		*cookie_entries, *l_entry = NULL;
-	struct d_hash_table		*uhtab = NULL;
-	struct d_ulink			*l_ulink = NULL;
-
-	D_ALLOC_PTR(itab);
-	D_ALLOC_ARRAY(cookie_array, VCT_COOKIES);
-	D_ALLOC_ARRAY(cookie_entries, VCT_COOKIES);
-	D_ALLOC_ARRAY(epochs, VCT_EPOCHS);
-
-	ret = d_uhash_create(0, 8, &uhtab);
-	if (ret != 0)
-		print_error("Error creating daos Uhash  for verification\n");
-
-	/** Generate cookies for test */
-	for (i = 0; i < VCT_COOKIES; i++)
-		uuid_generate_random(cookie_array[i].uuid);
-
-	memset(&uma, 0, sizeof(uma));
-	uma.uma_id = UMEM_CLASS_VMEM;
-	ret = vos_cookie_tab_create(&uma, itab, &cookie_hdl);
-	if (ret != 0)
-		print_error("Failed to create cookie itab\n");
-
-	for (i = 0; i < VCT_EPOCHS; i++) {
-
-		j = (rand()%VCT_COOKIES) - 1;
-		epochs[i] = rand()%100;
-
-		l_ulink = d_uhash_link_lookup(uhtab, &cookie_array[j], NULL);
-		if (l_ulink != NULL) {
-			l_entry = container_of(l_ulink, struct cookie_entry,
-					       ulink);
-			if (l_entry->max_epoch < epochs[i])
-				l_entry->max_epoch = epochs[i];
-		} else {
-			/* Create a new cookie entry and add it to uhash */
-			uuid_copy(cookie_entries[k].cookie,
-				  cookie_array[j].uuid);
-			cookie_entries[k].max_epoch = epochs[i];
-			d_uhash_ulink_init(&cookie_entries[k].ulink,
-					   &cookie_uh_ops);
-			ret = d_uhash_link_insert(uhtab, &cookie_array[j], NULL,
-						  &cookie_entries[k].ulink);
-			if (ret != 0)
-				D_ERROR("Inserting handle to UUID hash\n");
-			l_entry = &cookie_entries[k];
-			k++;
-		}
-
-		ret = vos_cookie_find_update(cookie_hdl, cookie_array[j].uuid,
-					     epochs[i], true, &epoch_ret);
-		if (ret != 0)
-			print_error("find and update error\n");
-
-		D_DEBUG(DB_TRACE, "Cookie: "DF_UUID" Epoch :%"PRIu64"\t",
-			DP_UUID(cookie_array[j].uuid), epochs[i]);
-		D_DEBUG(DB_TRACE, "Returned max_epoch: %"PRIu64"\n",
-			epoch_ret);
-		assert_true(epoch_ret == l_entry->max_epoch);
-
-	}
-	/* Cleanup allocations */
-	d_uhash_destroy(uhtab);
-	ret = vos_cookie_tab_destroy(cookie_hdl);
-	if (ret != 0)
-		D_ERROR("Cookie itab destroy error\n");
-	D_FREE(itab);
-	D_FREE(cookie_array);
-	D_FREE(cookie_entries);
-	D_FREE(epochs);
-}
-
 static int
 co_tests(void **state)
 {
@@ -478,8 +370,6 @@ static const struct CMUnitTest vos_co_tests[] = {
 		co_unit_teardown},
 	{ "VOS104: container handle ref count tests", co_ref_count_test,
 		co_ref_count_setup, NULL},
-	{ "VOS105: cookie table tests", cookie_table_test,
-		NULL, NULL},
 };
 
 int

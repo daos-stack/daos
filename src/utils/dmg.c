@@ -187,7 +187,7 @@ create_hdlr(int argc, char *argv[])
 	}
 
 	rc = daos_pool_create(mode, uid, gid, group, targets, "pmem", scm_size,
-			      nvme_size, &svc, pool_uuid, NULL /* ev */);
+			      nvme_size, NULL, &svc, pool_uuid, NULL /* ev */);
 	if (targets != NULL)
 		daos_rank_list_free(targets);
 	if (rc != 0) {
@@ -300,6 +300,8 @@ pool_op_hdlr(int argc, char *argv[])
 	const char	       *tgt_str = NULL;
 	d_rank_list_t	       *targets;
 	enum pool_op		op = pool_op_parse(argv[1]);
+	struct d_tgt_list	tgt_list = { 0 };
+	int			tgt = -1;
 	int			rc;
 
 	uuid_clear(pool_uuid);
@@ -375,8 +377,12 @@ pool_op_hdlr(int argc, char *argv[])
 		break;
 
 	case POOL_EXCLUDE:
-		targets->rl_nr = 1;
-		rc = daos_pool_exclude(pool_uuid, group, svc, targets,
+		/* Only support exclude single target XXX */
+		D_ASSERT(targets->rl_nr == 1);
+		tgt_list.tl_nr = 1;
+		tgt_list.tl_ranks = targets->rl_ranks;
+		tgt_list.tl_tgts = &tgt;
+		rc = daos_pool_tgt_exclude(pool_uuid, group, svc, &tgt_list,
 				       NULL /* ev */);
 		if (rc != 0)
 			fprintf(stderr, "failed to exclude target: "
@@ -412,12 +418,13 @@ pool_op_hdlr(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
-
 	if (op == POOL_QUERY) {
-		daos_pool_info_t		pinfo;
-		struct daos_rebuild_status     *rstat = &pinfo.pi_rebuild_st;
+		daos_pool_info_t		 pinfo;
+		struct daos_pool_space		*ps = &pinfo.pi_space;
+		struct daos_rebuild_status	*rstat = &pinfo.pi_rebuild_st;
+		int				 i;
 
-		rc = daos_pool_query(pool, NULL, &pinfo, NULL);
+		rc = daos_pool_query(pool, NULL, &pinfo, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "pool query failed: %d\n", rc);
 			return rc;
@@ -425,6 +432,19 @@ pool_op_hdlr(int argc, char *argv[])
 		D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u\n",
 			DP_UUID(pinfo.pi_uuid), pinfo.pi_ntargets,
 			pinfo.pi_ndisabled);
+
+		D_PRINT("Pool space info:\n");
+		D_PRINT("- Target(VOS) count:%d\n", ps->ps_ntargets);
+		for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
+			D_PRINT("- %s:\n",
+				i == DAOS_MEDIA_SCM ? "SCM" : "NVMe");
+			D_PRINT("  Total size: "DF_U64"\n",
+				ps->ps_space.s_total[i]);
+			D_PRINT("  Free: "DF_U64", min:"DF_U64", max:"DF_U64", "
+				"mean:"DF_U64"\n", ps->ps_space.s_free[i],
+				ps->ps_free_min[i], ps->ps_free_max[i],
+				ps->ps_free_mean[i]);
+		}
 
 		if (rstat->rs_errno == 0) {
 			char	*sstr;

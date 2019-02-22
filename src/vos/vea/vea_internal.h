@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -199,7 +199,7 @@ void hint_get(struct vea_hint_context *hint, uint64_t *off);
 void hint_update(struct vea_hint_context *hint, uint64_t off, uint64_t *seq);
 int hint_cancel(struct vea_hint_context *hint, uint64_t off, uint64_t seq_min,
 		uint64_t seq_max);
-int hint_tx_publish(struct vea_hint_context *hint, uint64_t off,
-		    uint64_t seq_min, uint64_t seq_max);
+int hint_tx_publish(struct umem_instance *umm, struct vea_hint_context *hint,
+		    uint64_t off, uint64_t seq_min, uint64_t seq_max);
 
 #endif /* __VEA_INTERNAL_H__ */

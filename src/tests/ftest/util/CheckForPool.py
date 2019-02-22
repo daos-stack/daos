@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2017 Intel Corporation.
+  (C) Copyright 2017-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,26 +21,33 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-
-import os
-import sys
 import subprocess
-import pipes
-
 
 def checkForPool(host, uuid):
-
-    cmd="test -e /mnt/daos/" + uuid
+    """
+    Function to check if pool folder exist on server
+    Args:
+        host: Server host name
+        uuid: Pool uuid to check if exists
+    return:
+        resp: subprocess return code
+    """
+    cmd = "test -e /mnt/daos/" + uuid
     resp = subprocess.call(["ssh", host, cmd])
-
     if resp == 0:
-        print ('%s exists' % file)
+        print ('%s exists' %uuid)
     else:
-        print ('%s does not exist' % file)
+        print ('%s does not exist' %uuid)
     return resp
 
 def CleanupPools(hosts):
-
+    """
+    To cleanup the pool and content from /mnt/daps/
+    Args:
+        hosts[list]: Lists of servers name
+    return"
+        None
+    """
     for host in hosts:
-        cmd="rm -rf /mnt/daos/*"
-        resp = subprocess.call(["ssh", host, cmd])
+        cmd = "rm -rf /mnt/daos/*"
+        subprocess.call(["ssh", host, cmd])

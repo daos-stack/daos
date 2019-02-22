@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,9 +85,11 @@ hint_cancel(struct vea_hint_context *hint, uint64_t off, uint64_t seq_min,
 }
 
 int
-hint_tx_publish(struct vea_hint_context *hint, uint64_t off,
-		uint64_t seq_min, uint64_t seq_max)
+hint_tx_publish(struct umem_instance *umm, struct vea_hint_context *hint,
+		uint64_t off, uint64_t seq_min, uint64_t seq_max)
 {
+	int	rc;
+
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
 
 	if (hint == NULL)
@@ -98,6 +100,10 @@ hint_tx_publish(struct vea_hint_context *hint, uint64_t off,
 		/* Subsequent reserve is already published */
 		return 0;
 	} else if (hint->vhc_pd->vhd_seq < seq_min) {
+		rc = umem_tx_add_ptr(umm, hint->vhc_pd, sizeof(*hint->vhc_pd));
+		if (rc != 0)
+			return rc;
+
 		hint->vhc_pd->vhd_off = off;
 		hint->vhc_pd->vhd_seq = seq_max;
 		return 0;

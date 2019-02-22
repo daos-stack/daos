@@ -9,7 +9,11 @@ sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
                  '-Wno-gnu-zero-variadic-macro-arguments',
-                 '-Wno-tautological-constant-out-of-range-compare']
+                 '-Wno-tautological-constant-out-of-range-compare',
+                 '-Wframe-larger-than=4096']
+
+PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
+                 '-Wno-unused-function']
 
 DAOS_VERSION = "0.0.2"
 
@@ -21,18 +25,32 @@ def is_platform_arm():
         return True
     return False
 
+def set_defaults(env):
+    """set compiler defaults"""
+    AddOption('--preprocess',
+              dest='preprocess',
+              action='store_true',
+              default=False,
+              help='Preprocess selected files for profiling')
+
+    env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
+                        '-fpic', '-D_GNU_SOURCE'])
+    env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+    if GetOption("preprocess"):
+        #could refine this but for now, just assume these warnings are ok
+        env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
+
 def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
-    components = os.path.join(Dir('#').abspath, 'scons_local', 'components.py')
     reqs = ['cart', 'argobots', 'pmdk', 'cmocka',
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal'])
-    prereqs.preload(components, prebuild=reqs)
-    return prereqs
+    prereqs.load_definitions(prebuild=reqs)
 
 def scons():
     """Execute build"""
@@ -45,7 +63,7 @@ def scons():
         except ImportError:
             print ('Using traditional build')
 
-    env = Environment(TOOLS=['default'])
+    env = Environment(TOOLS=['extra', 'default'])
 
     opts_file = os.path.join(Dir('#').abspath, 'daos_m.conf')
     opts = Variables(opts_file)
@@ -55,7 +73,7 @@ def scons():
         commits_file = None
 
     prereqs = PreReqComponent(env, opts, commits_file)
-    prereqs = preload_prereqs(prereqs)
+    preload_prereqs(prereqs)
     opts.Save(opts_file, env)
 
     env.Alias('install', '$PREFIX')
@@ -66,11 +84,7 @@ def scons():
         # generate .so on OSX instead of .dylib
         env.Replace(SHLIBSUFFIX='.so')
 
-    # Compiler options
-    env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
-                        '-fpic', '-D_GNU_SOURCE'])
-    env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
-    env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+    set_defaults(env)
 
     # generate targets in specific build dir to avoid polluting the source code
     VariantDir('build', '.', duplicate=0)

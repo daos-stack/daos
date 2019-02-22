@@ -76,7 +76,7 @@ query(void **state)
 
 	/** query pool info with valid handle */
 	print_message("querying pool with valid handle ...\n");
-	rc = daos_pool_query(poh, NULL, &info, NULL);
+	rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	/** invalidate local pool handle */
@@ -84,7 +84,7 @@ query(void **state)
 
 	/** query pool info with invalid handle */
 	print_message("querying pool with invalid handle ...\n");
-	rc = daos_pool_query(poh, NULL, &info, NULL);
+	rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
 	assert_int_equal(rc, -DER_NO_HDL);
 
 	/** close local handle */
@@ -114,7 +114,7 @@ create(void **state)
 	/** create container with read-only handle */
 	print_message("creating container with read-only pool handle ...\n");
 	uuid_generate(uuid);
-	rc = daos_cont_create(poh, uuid, NULL);
+	rc = daos_cont_create(poh, uuid, NULL, NULL);
 	assert_int_equal(rc, -DER_NO_PERM);
 
 	/** close local RO handle */
@@ -134,7 +134,7 @@ create(void **state)
 	/** create container with invalid handle */
 	print_message("creating container with stale pool handle ...\n");
 	uuid_generate(uuid);
-	rc = daos_cont_create(poh, uuid, NULL);
+	rc = daos_cont_create(poh, uuid, NULL, NULL);
 	assert_int_equal(rc, -DER_NO_HDL);
 
 	/** close local handle */
@@ -163,7 +163,7 @@ destroy(void **state)
 
 	/** create container */
 	uuid_generate(uuid);
-	rc = daos_cont_create(poh, uuid, NULL);
+	rc = daos_cont_create(poh, uuid, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	/** invalidate local pool handle */

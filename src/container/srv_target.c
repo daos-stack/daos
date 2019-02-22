@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -366,7 +366,7 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
-	rc = dss_thread_collective(cont_destroy_one, in);
+	rc = dss_thread_collective(cont_destroy_one, in, 0);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
@@ -567,7 +567,7 @@ ds_cont_tgt_open_handler(crt_rpc_t *rpc)
 		DP_CONT(in->toi_pool_uuid, in->toi_uuid), rpc,
 		DP_UUID(in->toi_hdl));
 
-	rc = dss_task_collective(cont_open_one, in);
+	rc = dss_task_collective(cont_open_one, in, 0);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	out->too_rc = (rc == 0 ? 0 : 1);
@@ -592,8 +592,6 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 {
 	struct dsm_tls	       *tls = dsm_tls_get();
 	struct ds_cont_hdl     *hdl;
-	daos_epoch_range_t	range;
-	int			rc;
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, rec->tcr_hdl);
 	if (hdl == NULL) {
@@ -607,25 +605,9 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
 		DP_UUID(rec->tcr_hdl), rec->tcr_hce);
 
-	/* All uncommitted epochs of this handle. */
-	range.epr_lo = rec->tcr_hce + 1;
-	range.epr_hi = DAOS_EPOCH_MAX;
-
-	rc = vos_epoch_discard(hdl->sch_cont->sc_hdl, &range, rec->tcr_hdl);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to discard uncommitted epochs ["DF_U64
-			", "DF_X64"): hdl="DF_UUID" rc=%d\n",
-			DP_CONT(hdl->sch_pool->spc_uuid,
-				hdl->sch_cont->sc_uuid), range.epr_lo,
-			range.epr_hi, DP_UUID(rec->tcr_hdl), rc);
-		D_GOTO(out, rc);
-	}
-
 	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
-
-out:
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
-	return rc;
+	return 0;
 }
 
 /* Called via dss_collective() to close the containers belong to this thread. */
@@ -667,7 +649,7 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 		rpc, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce,
 		in->tci_recs.ca_count);
 
-	rc = dss_thread_collective(cont_close_one, in);
+	rc = dss_thread_collective(cont_close_one, in, 0);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 out:
@@ -698,7 +680,7 @@ cont_query_one(void *vin)
 	struct dss_coll_stream_args	*reduce	   = vin;
 	struct dss_stream_arg_type	*streams   = reduce->csa_streams;
 	struct dss_module_info		*info	   = dss_get_module_info();
-	int				tid	   = info->dmi_tid;
+	int				tid	   = info->dmi_tgt_id;
 	struct xstream_cont_query	*pack_args = streams[tid].st_arg;
 	struct cont_tgt_query_in	*in	   = pack_args->xcq_rpc_in;
 	struct ds_pool_hdl		*pool_hdl;
@@ -735,7 +717,7 @@ cont_query_one(void *vin)
 			rc);
 		D_GOTO(out, rc);
 	}
-	pack_args->xcq_purged_epoch = vos_cinfo.pci_purged_epoch;
+	pack_args->xcq_purged_epoch = vos_cinfo.ci_hae;
 
 out:
 	vos_cont_close(vos_chdl);
@@ -806,7 +788,7 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
 
-	rc = dss_task_collective_reduce(&coll_ops, &coll_args);
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
 
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	out->tqo_min_purged_epoch = MIN(out->tqo_min_purged_epoch,
@@ -838,23 +820,23 @@ cont_epoch_discard_one(void *vin)
 	struct cont_tgt_epoch_discard_in       *in = vin;
 	struct dsm_tls			       *tls = dsm_tls_get();
 	struct ds_cont_hdl		       *hdl;
-	daos_epoch_range_t			range;
+	daos_epoch_range_t			epr;
 	int					rc;
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, in->tii_hdl);
 	if (hdl == NULL)
 		return -DER_NO_PERM;
 
-	range.epr_lo = in->tii_epoch;
-	range.epr_hi = in->tii_epoch;
+	epr.epr_lo = in->tii_epoch;
+	epr.epr_hi = in->tii_epoch;
 
-	rc = vos_epoch_discard(hdl->sch_cont->sc_hdl, &range, in->tii_hdl);
-	if (rc != 0)
-		D_ERROR(DF_CONT": failed to discard epoch "DF_U64": hdl="DF_UUID
-			" rc=%d\n",
-			DP_CONT(hdl->sch_pool->spc_uuid,
-				hdl->sch_cont->sc_uuid), in->tii_epoch,
-			DP_UUID(in->tii_hdl), rc);
+	rc = vos_discard(hdl->sch_cont->sc_hdl, &epr);
+	if (rc > 0)	/* Aborted */
+		rc = -DER_CANCELED;
+
+	D_DEBUG(DB_EPC, DF_CONT": Discard epoch "DF_U64", hdl="DF_UUID": %d\n",
+		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
+		in->tii_epoch, DP_UUID(in->tii_hdl), rc);
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return rc;
@@ -876,7 +858,7 @@ ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc)
 	else if (in->tii_epoch >= DAOS_EPOCH_MAX)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	rc = dss_thread_collective(cont_epoch_discard_one, in);
+	rc = dss_thread_collective(cont_epoch_discard_one, in, 0);
 
 out:
 	out->tio_rc = (rc == 0 ? 0 : 1);
@@ -898,166 +880,79 @@ ds_cont_tgt_epoch_discard_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	return 0;
 }
 
-static void
-set_container_purged_epoch(daos_handle_t vos_chdl,
-			   struct cont_tgt_epoch_aggregate_in *in,
-			   daos_epoch_range_t *range)
-{
-	daos_unit_oid_t		oid_tmp;
-	bool			finish;
-
-	D_DEBUG(DF_DSMS, DF_CONT" Setting aggregated epoch as "DF_U64"\n",
-		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
-		range->epr_hi);
-	memset(&oid_tmp, 0, sizeof(oid_tmp));
-	vos_epoch_aggregate(vos_chdl, oid_tmp, range, NULL,
-			    NULL, &finish);
-}
-
 static int
 cont_epoch_aggregate_one(void *vin)
 {
 	struct cont_tgt_epoch_aggregate_in	*in  = vin;
-	unsigned int				credits;
-	vos_iter_param_t			param;
 	struct ds_pool_child			*pool_child;
-	daos_handle_t				iter_hdl;
-	daos_handle_t				vos_chdl;
-	char					*purge_credits;
-	char					*opstr;
-	int					aggregated;
-	int					found;
-	int					rc;
-	bool					finish;
-	size_t					i;
-
-	purge_credits = getenv("DAOS_PURGE_CREDITS");
-	credits = daos_env2uint(purge_credits);
-	if (credits == 0)
-		credits = DAOS_PURGE_CREDITS_MAX;
+	daos_handle_t				 cont_hdl;
+	vos_cont_info_t				 cont_info;
+	daos_epoch_range_t			 epr, epr_prev = { 0 };
+	uint64_t				 i;
+	int					 rc;
 
 	pool_child = ds_pool_child_lookup(in->tai_pool_uuid);
 	if (pool_child == NULL) {
-		D_ERROR(DF_CONT": pool child is NULL\n",
-			DP_CONT(in->tai_pool_uuid,
-				in->tai_cont_uuid));
+		D_ERROR(DF_CONT": Lookup pool child failed\n",
+			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid));
 		return -DER_NO_HDL;
 	}
 
-	opstr = "opening vos container handle\n";
 	rc = vos_cont_open(pool_child->spc_hdl, in->tai_cont_uuid,
-			   &vos_chdl);
+			   &cont_hdl);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed %s : %d",
-			DP_CONT(in->tai_pool_uuid,
-				in->tai_cont_uuid), opstr, rc);
-		/*
-		 * Aggregate ULT is run in background so ignore return values
-		 * further more aggregation is idempotent.
-		 */
+		D_ERROR(DF_CONT": Open container failed: %d\n",
+			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rc);
 		goto pool_child;
 	}
 
-	memset(&param, 0, sizeof(param));
-	param.ip_hdl = vos_chdl;
-	found = 0;
-	aggregated = 0;
-	for (i = 0; i < in->tai_epr_list.ca_count; i++) {
-		param.ip_epr = ((daos_epoch_range_t *)
-				 in->tai_epr_list.ca_arrays)[i];
-		D_DEBUG(DF_DSMS, DF_CONT": epr[%lu]="DF_U64"->"DF_U64"\n",
-			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
-			i, param.ip_epr.epr_lo, param.ip_epr.epr_hi);
-
-		opstr = "preparing vos obj iterator ";
-		rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_hdl);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed %s : %d",
-				DP_CONT(in->tai_pool_uuid,
-					in->tai_cont_uuid), opstr, rc);
-			goto cont_close;
-		}
-
-		opstr = "setting first probe for vos obj iterator";
-		rc = vos_iter_probe(iter_hdl, NULL);
-		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DF_DSMS, DF_CONT": No objects to iterate\n",
-				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid));
-			/* empty container then set highest epoch and exit */
-			set_container_purged_epoch(vos_chdl, in, &param.ip_epr);
-			rc = 0;
-			goto end_loop;
-		}
-
-		if (rc != 0) {
-			D_ERROR("failed %s : %d\n", opstr, rc);
-			goto end_loop;
-		}
-
-		while (true) {
-			vos_iter_entry_t	ent;
-			vos_purge_anchor_t	anchor;
-
-			if (rc == 0) {
-				opstr = "iter fetch with vos obj iterator";
-				rc = vos_iter_fetch(iter_hdl, &ent, NULL);
-			}
-
-			if (rc == -DER_NONEXIST) {
-				D_DEBUG(DF_DSMS, DF_CONT
-					": Finish obj iteration\n",
-					DP_CONT(in->tai_pool_uuid,
-						in->tai_cont_uuid));
-				set_container_purged_epoch(vos_chdl, in,
-							   &param.ip_epr);
-				rc = 0;
-				break;
-			}
-
-			if (rc != 0) {
-				D_ERROR("obj iterator in "DF_CONT
-					" failed to %s: %d",
-					DP_CONT(in->tai_pool_uuid,
-						in->tai_cont_uuid), opstr, rc);
-				goto end_loop;
-			}
-			found++;
-
-			memset(&anchor, 0, sizeof(vos_purge_anchor_t));
-			while (true) {
-				unsigned int	l_credits = credits;
-
-				finish = false;
-				rc = vos_epoch_aggregate(vos_chdl, ent.ie_oid,
-							 &param.ip_epr,
-							 &l_credits,
-							 &anchor, &finish);
-				if (rc != 0)
-					goto end_loop;
-
-				if (finish) {
-					D_DEBUG(DB_EPC, "Finished "
-						DF_U64"->"DF_U64")\n",
-						param.ip_epr.epr_lo,
-						param.ip_epr.epr_hi);
-					break;
-				}
-				ABT_thread_yield();
-			}
-			aggregated++;
-			opstr = "iter next with vos obj iterator";
-			rc = vos_iter_next(iter_hdl);
-		}
-end_loop:
-		vos_iter_finish(iter_hdl);
-		if (rc != 0)
-			goto cont_close;
+	rc = vos_cont_query(cont_hdl, &cont_info);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": Query container failed: %d\n",
+			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rc);
+		goto cont_close;
 	}
-	D_DEBUG(DF_DSMS, DF_CONT": aggregated %d/%d objects\n",
-		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
-			aggregated, found);
+
+	for (i = 0; i < in->tai_epr_list.ca_count; i++) {
+		bool snap_delete = false;
+
+		epr = ((daos_epoch_range_t *)in->tai_epr_list.ca_arrays)[i];
+
+		D_ASSERTF(epr_prev.epr_hi == 0 || epr_prev.epr_hi < epr.epr_lo,
+			  "Previous epr_hi:"DF_U64" >= epr_lo:"DF_U64"\n",
+			  epr_prev.epr_hi, epr.epr_lo);
+
+		epr_prev = epr;
+		D_DEBUG(DB_EPC, DF_CONT": epr["DF_U64"]("DF_U64"->"DF_U64")\n",
+			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
+			i, epr.epr_lo, epr.epr_hi);
+		/*
+		 * TODO: Aggregation RPC will have a bit to indicate if the
+		 * aggregation is triggered for snapshot deletion.
+		 */
+		if (!snap_delete && cont_info.ci_hae >= epr.epr_hi) {
+			D_DEBUG(DB_EPC, DF_CONT": LAE:"DF_U64">="DF_U64"\n",
+				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
+				cont_info.ci_hae, epr.epr_hi);
+			continue;
+		}
+
+		rc = vos_aggregate(cont_hdl, &epr);
+		if (rc < 0) {
+			D_ERROR(DF_CONT": Agg "DF_U64"->"DF_U64" failed: %d\n",
+				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
+				epr.epr_lo, epr.epr_hi, rc);
+			break;
+		} else if (rc) {
+			D_DEBUG(DB_EPC, DF_CONT": Aggregation aborted\n",
+				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid));
+			rc = -DER_CANCELED;
+			break;
+		}
+	}
+
 cont_close:
-	vos_cont_close(vos_chdl);
+	vos_cont_close(cont_hdl);
 pool_child:
 	ds_pool_child_put(pool_child);
 	return rc;
@@ -1120,7 +1015,7 @@ out:
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_thread_collective(cont_epoch_aggregate_one, &in_copy);
+	rc = dss_thread_collective(cont_epoch_aggregate_one, &in_copy, 0);
 	if (rc != 0)
 		D_ERROR(DF_CONT": Aggregation failed: %d\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rc);
@@ -1161,6 +1056,7 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags = VOS_IT_FOR_REBUILD;
 
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_h);
 	if (rc != 0) {

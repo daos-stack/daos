@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,12 +41,14 @@ enum vos_oi_attr {
 typedef struct {
 	/** # of containers in this pool */
 	uint64_t		pif_cont_nr;
-	/** Total space available on SCM */
+	/** Total SCM space in bytes */
 	daos_size_t		pif_scm_sz;
-	/** Total space available on NVMe */
-	daos_size_t		pif_blob_sz;
-	/** Current available space */
-	daos_size_t		pif_avail;
+	/** Total NVMe space in bytes */
+	daos_size_t		pif_nvme_sz;
+	/** Current SCM free space in bytes */
+	daos_size_t		pif_scm_free;
+	/** Current NVMe free space in bytes */
+	daos_size_t		pif_nvme_free;
 	/** TODO */
 } vos_pool_info_t;
 
@@ -54,12 +56,12 @@ typedef struct {
  * container attributes returned to query
  */
 typedef struct {
-	/** number of objects */
-	unsigned int		pci_nobjs;
-	/** used space */
-	daos_size_t		pci_used;
-	/** aggregated epoch in this container */
-	daos_epoch_t		pci_purged_epoch;
+	/** # of objects in this container */
+	uint64_t		ci_nobjs;
+	/** Used space by container */
+	daos_size_t		ci_used;
+	/** Highest (Last) aggregated epoch */
+	daos_epoch_t		ci_hae;
 	/** TODO */
 } vos_cont_info_t;
 
@@ -90,7 +92,7 @@ typedef enum {
 	VOS_ITER_RECX,
 } vos_iter_type_t;
 
-/** epoch logic expression for the iterator */
+/** epoch logic expression for the single value iterator */
 typedef enum {
 	VOS_IT_EPC_LE		= 0,
 	VOS_IT_EPC_GE,
@@ -106,27 +108,6 @@ enum {
 	VOS_OF_REPLAY_PC	= (1 << 0),
 };
 
-/**
- * Parameters for returning anchor
- * from aggregation/discard
- */
-typedef struct {
-	/** anchor status mask */
-	unsigned int		pa_mask;
-	/** Anchor for obj */
-	daos_anchor_t		pa_obj;
-	/** Anchor for dkey */
-	daos_anchor_t		pa_dkey;
-	/** Anchor for akey */
-	daos_anchor_t		pa_akey;
-	/** Anchor for recx */
-	daos_anchor_t		pa_recx;
-	/** Anchor for retained recx (max epoch) */
-	daos_anchor_t		pa_recx_max;
-	/** Save OID for aggregation optimization */
-	daos_unit_oid_t		pa_oid;
-} vos_purge_anchor_t;
-
 enum {
 	/** The absence of any flags means iterate all unsorted extents */
 	VOS_IT_RECX_ALL		= 0,
@@ -139,6 +120,12 @@ enum {
 	 * VOS_IT_RECX_COVERED is not set
 	 */
 	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
+	/** When sorted iteration is enabled, iterate in reverse */
+	VOS_IT_RECX_REVERSE	= (1 << 3),
+	/** The iterator is for purge operation */
+	VOS_IT_FOR_PURGE	= (1 << 4),
+	/** The iterator is for rebuild scan */
+	VOS_IT_FOR_REBUILD	= (1 << 5),
 };
 
 /**
@@ -163,9 +150,22 @@ typedef struct {
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	ip_epc_expr;
-	/** extent visibility flags for for iterator */
-	uint32_t		ip_recx_flags;
+	/** flags for for iterator */
+	uint32_t		ip_flags;
 } vos_iter_param_t;
+
+enum {
+	/** It is unknown if the extent is covered or visible */
+	VOS_RECX_FLAG_UNKNOWN = 0,
+	/** The extent is not visible at at the requested epoch (epr_hi) */
+	VOS_RECX_FLAG_COVERED = (1 << 0),
+	/** The extent is not visible at at the requested epoch (epr_hi) */
+	VOS_RECX_FLAG_VISIBLE = (1 << 1),
+	/** The extent represents only a portion of the in-tree extent */
+	VOS_RECX_FLAG_PARTIAL = (1 << 2),
+	/** In sorted iterator, marks final entry */
+	VOS_RECX_FLAG_LAST    = (1 << 3),
+};
 
 /**
  * Returned entry of a VOS iterator
@@ -185,17 +185,56 @@ typedef struct {
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
+			/** record extent */
 			daos_recx_t		ie_recx;
+			/* original in-tree extent */
+			daos_recx_t		ie_orig_recx;
 			/** biov to return address for single value or recx */
 			struct bio_iov		ie_biov;
-			/** update cookie */
-			uuid_t			ie_cookie;
 			/** checksum */
 			daos_csum_buf_t		ie_csum;
 			/** pool map version */
 			uint32_t		ie_ver;
+			/** Flags to describe the extent */
+			uint32_t		ie_recx_flags;
 		};
 	};
 } vos_iter_entry_t;
+
+/**
+ * Iteration callback function
+ */
+typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
+			     vos_iter_type_t type, vos_iter_param_t *param,
+			     void *cb_arg, unsigned int *acts);
+/**
+ * Actions performed in iteration callback
+ */
+enum {
+	VOS_ITER_CB_YIELD	= (1UL << 0),	/* Yield */
+	VOS_ITER_CB_DELETE	= (1UL << 1),	/* Delete entry */
+};
+
+/**
+ * Anchors for whole iteration, one for each entry type
+ */
+struct vos_iter_anchors {
+	/** Anchor for obj */
+	daos_anchor_t	ia_obj;
+	/** Anchor for dkey */
+	daos_anchor_t	ia_dkey;
+	/** Anchor for akey */
+	daos_anchor_t	ia_akey;
+	/** Anchor for SV tree */
+	daos_anchor_t	ia_sv;
+	/** Anchor for EV tree */
+	daos_anchor_t	ia_ev;
+	/** Triggers for re-probe */
+	unsigned int	ia_reprobe_obj:1,
+			ia_reprobe_dkey:1,
+			ia_reprobe_akey:1,
+			ia_reprobe_sv:1,
+			ia_reprobe_ev:1;
+};
 
 #endif /* __VOS_TYPES_H__ */

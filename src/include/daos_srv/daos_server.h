@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,22 +29,19 @@
 #define __DSS_API_H__
 
 #include <daos/common.h>
+#include <daos/drpc.h>
 #include <daos/rpc.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
 #include <daos_event.h>
 #include <daos_task.h>
-
 #include <pthread.h>
 #include <hwloc.h>
 #include <abt.h>
 #include <cart/iv.h>
 
-/** Number of execution streams started or cores used */
-extern unsigned int	dss_nxstreams;
-
-/** Server node topoloby */
-extern hwloc_topology_t	dss_topo;
+/** number of target (XS set) per server */
+extern unsigned int	dss_tgt_nr;
 
 /** Storage path (hack) */
 extern const char      *dss_storage_path;
@@ -54,6 +51,9 @@ extern const char      *dss_nvme_conf;
 
 /** Socket Directory */
 extern const char      *dss_socket_dir;
+
+/** NVMe shm_id for enabling SPDK multi-process mode */
+extern int		dss_nvme_shm_id;
 
 
 /**
@@ -137,7 +137,12 @@ struct dss_module_info {
 	crt_context_t		dmi_ctx;
 	struct bio_xs_context	*dmi_nvme_ctxt;
 	struct dss_xstream	*dmi_xstream;
-	int			dmi_tid;
+	/* the xstream id */
+	int			dmi_xs_id;
+	/* the VOS target id */
+	int			dmi_tgt_id;
+	/* the cart context id */
+	int			dmi_ctx_id;
 	tse_sched_t		dmi_sched;
 	uint64_t		dmi_tse_ult_created:1;
 };
@@ -167,6 +172,19 @@ dss_tse_scheduler(void)
  * DSS_FAC_LOAD_CLI - the module requires loading client stack.
  */
 #define DSS_FAC_LOAD_CLI (0x1ULL)
+
+/**
+ * Any dss_module that accepts dRPC communications over the Unix Domain Socket
+ * must provide one or more dRPC handler functions. The handler is used by the
+ * I/O server to multiplex incoming dRPC messages for processing.
+ *
+ * The dRPC messaging module ID is different from the dss_module's ID. A
+ * dss_module may handle more than one dRPC module ID.
+ */
+struct dss_drpc_handler {
+	int		module_id;	/** dRPC messaging module ID */
+	drpc_handler_t	handler;	/** dRPC handler for the module */
+};
 
 /**
  * Each module should provide a dss_module structure which defines the module
@@ -204,6 +222,28 @@ struct dss_module {
 	uint32_t		  sm_cli_count;
 	/* RPC handler of these RPC, last entry of the array must be empty */
 	struct daos_rpc_handler	 *sm_handlers;
+	/* dRPC handlers, for unix socket comm, last entry must be empty */
+	struct dss_drpc_handler	 *sm_drpc_handlers;
+};
+
+/** ULT types to determine on which XS to schedule the ULT */
+enum dss_ult_type {
+	/** To schedule ULT on caller's self XS */
+	DSS_ULT_SELF = 100,
+	/** forward/dispatch IO request for TX coordinator */
+	DSS_ULT_IOFW,
+	/** EC/checksum/compress computing offload */
+	DSS_ULT_EC,
+	DSS_ULT_CHECKSUM,
+	DSS_ULT_COMPRESS,
+	/** pool service ULT */
+	DSS_ULT_POOL_SRV,
+	/** rebuild ULT such as scanner/puller, status checker etc. */
+	DSS_ULT_REBUILD,
+	/** aggregation ULT */
+	DSS_ULT_AGGREGATE,
+	/** drpc listener ULT */
+	DSS_ULT_DRPC,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -212,14 +252,14 @@ typedef ABT_pool (*dss_abt_pool_choose_cb_t)(crt_rpc_t *rpc, ABT_pool *pools);
 
 void dss_abt_pool_choose_cb_register(unsigned int mod_id,
 				     dss_abt_pool_choose_cb_t cb);
-int dss_ult_create(void (*func)(void *), void *arg,
-		   int stream_id, size_t stack_size, ABT_thread *ult);
-int dss_rebuild_ult_create(void (*func)(void *), void *arg,
-			   int stream_id, size_t stack_size, ABT_thread *ult);
+int dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_id,
+		   size_t stack_size, ABT_thread *ult);
+int dss_rebuild_ult_create(void (*func)(void *), void *arg, int ult_type,
+			   int tgt_id, size_t stack_size, ABT_thread *ult);
 int dss_ult_create_all(void (*func)(void *), void *arg);
 int dss_ult_create_execute(int (*func)(void *), void *arg,
 			   void (*user_cb)(void *), void *cb_args,
-			   int stream_id, size_t stack_size);
+			   int ult_type, int tgt_id, size_t stack_size);
 
 /* Pack return codes with additional argument to reduce */
 struct dss_stream_arg_type {
@@ -283,7 +323,8 @@ struct dss_coll_args {
 	struct dss_coll_stream_args	ca_stream_args;
 };
 
-/* Generic dss_collective with custom aggregator
+/**
+ * Generic dss_collective with custom aggregator
  *
  * TODO: rename these functions, thread & task are too generic name and
  * DAOS has already used task for something else.
@@ -292,19 +333,18 @@ struct dss_coll_args {
  */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
-			   struct dss_coll_args *coll_args);
+			   struct dss_coll_args *coll_args, int flag);
 int
 dss_thread_collective_reduce(struct dss_coll_ops *ops,
-			     struct dss_coll_args *coll_args);
+			     struct dss_coll_args *coll_args, int flag);
 
-int dss_task_collective(int (*func)(void *), void *arg);
-int dss_thread_collective(int (*func)(void *), void *arg);
+int dss_task_collective(int (*func)(void *), void *arg, int flag);
+int dss_thread_collective(int (*func)(void *), void *arg, int flag);
 int dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb,
 		 void *arg, ABT_eventual eventual);
 int dss_eventual_create(ABT_eventual *eventual_ptr);
 int dss_eventual_wait(ABT_eventual eventual);
 void dss_eventual_free(ABT_eventual *eventual);
-unsigned int dss_get_threads_number(void);
 
 /* Convert Argobots errno to DAOS ones. */
 static inline int
@@ -398,26 +438,13 @@ int ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		d_sg_list_t *sgl, daos_anchor_t *anchor,
 		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor);
 
-typedef int (*dss_vos_iterate_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
-				    vos_iter_type_t type,
-				    vos_iter_param_t *param, void *arg);
-
-int dss_vos_iterate(vos_iter_type_t type, vos_iter_param_t *param,
-		    daos_anchor_t *anchor, dss_vos_iterate_cb_t cb,
-		    void *arg);
-
 struct dss_enum_arg {
-	/* Iteration fields */
-	vos_iter_param_t	param;
-	bool			recursive;	/* enumerate lower levels */
 	bool			fill_recxs;	/* type == S||R */
-	daos_anchor_t		obj_anchor;	/* type == OBJ (<= if recur) */
-	daos_anchor_t		dkey_anchor;	/* type == DKEY (<= if recur) */
-	daos_anchor_t		akey_anchor;	/* type == AKEY (<= if recur) */
-	daos_anchor_t		recx_anchor;	/* type == S||R (<= if recur) */
+	bool			chk_key2big;
 	daos_epoch_range_t     *eprs;
 	int			eprs_cap;
 	int			eprs_len;
+	int			last_type;	/* hack for tweaking kds_len */
 
 	/* Buffer fields */
 	union {
@@ -434,12 +461,15 @@ struct dss_enum_arg {
 			int			recxs_len;
 		};
 	};
-	daos_size_t		inline_thres;	/* type == S||R || recursive */
+	daos_size_t		inline_thres;	/* type == S||R || chk_key2big*/
 	int			rnum;		/* records num (type == S||R) */
 	daos_size_t		rsize;		/* record size (type == S||R) */
+	daos_unit_oid_t		oid;		/* for unpack */
 };
 
-int dss_enum_pack(vos_iter_type_t type, struct dss_enum_arg *arg);
+int
+dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	      struct vos_iter_anchors *anchors, struct dss_enum_arg *arg);
 
 /** Maximal number of iods (i.e., akeys) in dss_enum_unpack_io.ui_iods */
 #define DSS_ENUM_UNPACK_MAX_IODS 16
@@ -469,7 +499,6 @@ struct dss_enum_unpack_io {
 	daos_epoch_t	ui_dkey_eph;
 	daos_epoch_t   *ui_akey_ephs;
 	daos_sg_list_t *ui_sgls;	/**< optional */
-	uuid_t		ui_cookie;
 	uint32_t	ui_version;
 };
 

@@ -1,4 +1,4 @@
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,35 +24,121 @@ package main
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v2"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
-	"github.com/daos-stack/daos/src/control/utils/handlers"
+	"gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
-// Format represents enum specifying formatting behaviour
-type Format string
-
 const (
-	// SAFE state defines cautionary behaviour where formatted devices will not be overwritten.
-	SAFE Format = "safe"
-	// CONTINUE state defines ehaviour which results in reuse of formatted devices.
-	CONTINUE Format = "continue"
-	// FORCE state defines aggressive/potentially resulting data loss formatting behaviour.
-	FORCE Format = "force"
+	maxRank rank = math.MaxUint32 - 1
+	nilRank rank = math.MaxUint32
+
+	cLogDebug ControlLogLevel = "DEBUG"
+	cLogError ControlLogLevel = "ERROR"
+
+	bdNvme   BdClass = "nvme"
+	bdMalloc BdClass = "malloc"
+	bdKdev   BdClass = "kdev"
+	bdFile   BdClass = "file"
 
 	// todo: implement Provider discriminated union
 	// todo: implement LogMask discriminated union
 )
 
-//Server defines configuration options for DAOS IO Server instances
+// rank represents a rank of an I/O server or a nil rank.
+type rank uint32
+
+func (r rank) String() string {
+	return strconv.FormatUint(uint64(r), 10)
+}
+
+func (r *rank) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var i uint32
+	if err := unmarshal(&i); err != nil {
+		return err
+	}
+	if err := checkRank(rank(i)); err != nil {
+		return err
+	}
+	*r = rank(i)
+	return nil
+}
+
+func (r *rank) UnmarshalFlag(value string) error {
+	i, err := strconv.ParseUint(value, 0, 32)
+	if err != nil {
+		return err
+	}
+	if err = checkRank(rank(i)); err != nil {
+		return err
+	}
+	*r = rank(i)
+	return nil
+}
+
+func checkRank(r rank) error {
+	if r == nilRank {
+		return fmt.Errorf("rank %d out of range [0, %d]", r, maxRank)
+	}
+	return nil
+}
+
+// ControlLogLevel is a type that specifies log levels
+type ControlLogLevel string
+
+// UnmarshalYAML implements yaml.Unmarshaler on ControlLogMask struct
+func (c *ControlLogLevel) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var level string
+	if err := unmarshal(&level); err != nil {
+		return err
+	}
+	logLevel := ControlLogLevel(level)
+	switch logLevel {
+	case cLogDebug, cLogError:
+		*c = logLevel
+	default:
+		return fmt.Errorf(
+			"control_log_mask value %v not supported in config (DEBUG/ERROR)",
+			logLevel)
+	}
+	return nil
+}
+
+// BdClass enum specifing block device type for storage
+type BdClass string
+
+// UnmarshalYAML implements yaml.Unmarshaler on BdClass struct
+func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var class string
+	if err := unmarshal(&class); err != nil {
+		return err
+	}
+	bdevClass := BdClass(class)
+	switch bdevClass {
+	case bdNvme, bdMalloc, bdKdev, bdFile:
+		*b = bdevClass
+	default:
+		return fmt.Errorf(
+			"bdev_class value %v not supported in config (nvme/malloc/kdev/file)",
+			bdevClass)
+	}
+	return nil
+}
+
+// todo: implement UnMarshal for LogMask discriminated union
+
+// server defines configuration options for DAOS IO Server instances
 type server struct {
-	// Rank parsed as string to allow zero value
-	Rank            string   `yaml:"rank"`
+	Rank            *rank    `yaml:"rank"`
 	Cpus            []string `yaml:"cpus"`
 	FabricIface     string   `yaml:"fabric_iface"`
 	FabricIfacePort int      `yaml:"fabric_iface_port"`
@@ -69,31 +155,11 @@ type server struct {
 	CliOpts []string // tuples (short option, value) e.g. ["-p", "10000"...]
 }
 
-// UnmarshalYAML implements yaml.Unmarshaler on BdClass struct
-func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var class string
-	if err := unmarshal(&class); err != nil {
-		return err
-	}
-	bdevClass := BdClass(class)
-	switch bdevClass {
-	case NVME, MALLOC, KDEV, FILE:
-		*b = bdevClass
-	default:
-		return fmt.Errorf(
-			"bdev_class value %v not supported in config (nvme/malloc/kdev/file)",
-			bdevClass)
-	}
-	return nil
-}
-
-// todo: implement UnMarshal for LogMask discriminated union
-
-// NewDefaultServer creates a new instance of server struct
+// newDefaultServer creates a new instance of server struct
 // populated with defaults.
-func NewDefaultServer() server {
+func newDefaultServer() server {
 	return server{
-		BdevClass: NVME,
+		BdevClass: bdNvme,
 	}
 }
 
@@ -118,10 +184,10 @@ func (e *ext) getenv(key string) string {
 	return os.Getenv(key)
 }
 
-// writeToFile wraps around handlers.WriteString and writes input
+// writeToFile wraps around common.WriteString and writes input
 // string to given file pathk.
 func (e *ext) writeToFile(in string, outPath string) error {
-	return handlers.WriteString(outPath, in)
+	return common.WriteString(outPath, in)
 }
 
 // createEmpty creates a file (if it doesn't exist) of specified size in bytes
@@ -134,7 +200,7 @@ func (e *ext) createEmpty(path string, size int64) (err error) {
 	if _, err = os.Stat(path); !os.IsNotExist(err) {
 		return
 	}
-	file, err := handlers.OpenNewFile(path)
+	file, err := common.TruncFile(path)
 	if err != nil {
 		return
 	}
@@ -143,7 +209,7 @@ func (e *ext) createEmpty(path string, size int64) (err error) {
 	if err != nil {
 		e, ok := err.(syscall.Errno)
 		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
-			fmt.Print(
+			log.Debugf(
 				"Warning: Fallocate not supported, attempting Truncate: ", e)
 			err = file.Truncate(size)
 		}
@@ -152,54 +218,42 @@ func (e *ext) createEmpty(path string, size int64) (err error) {
 }
 
 type configuration struct {
-	SystemName   string   `yaml:"name"`
-	Servers      []server `yaml:"servers"`
-	Provider     string   `yaml:"provider"`
-	SocketDir    string   `yaml:"socket_dir"`
-	Auto         bool     `yaml:"auto"`
-	Format       Format   `yaml:"format"`
-	AccessPoints []string `yaml:"access_points"`
-	Port         int      `yaml:"port"`
-	CaCert       string   `yaml:"ca_cert"`
-	Cert         string   `yaml:"cert"`
-	Key          string   `yaml:"key"`
-	FaultPath    string   `yaml:"fault_path"`
-	FaultCb      string   `yaml:"fault_cb"`
-	FabricIfaces []string `yaml:"fabric_ifaces"`
-	ScmMountPath string   `yaml:"scm_mount_path"`
-	BdevInclude  []string `yaml:"bdev_include"`
-	BdevExclude  []string `yaml:"bdev_exclude"`
-	Hyperthreads bool     `yaml:"hyperthreads"`
+	SystemName     string          `yaml:"name"`
+	Servers        []server        `yaml:"servers"`
+	Provider       string          `yaml:"provider"`
+	SocketDir      string          `yaml:"socket_dir"`
+	AccessPoints   []string        `yaml:"access_points"`
+	Port           int             `yaml:"port"`
+	CaCert         string          `yaml:"ca_cert"`
+	Cert           string          `yaml:"cert"`
+	Key            string          `yaml:"key"`
+	FaultPath      string          `yaml:"fault_path"`
+	FaultCb        string          `yaml:"fault_cb"`
+	FabricIfaces   []string        `yaml:"fabric_ifaces"`
+	ScmMountPath   string          `yaml:"scm_mount_path"`
+	BdevInclude    []string        `yaml:"bdev_include"`
+	BdevExclude    []string        `yaml:"bdev_exclude"`
+	Hyperthreads   bool            `yaml:"hyperthreads"`
+	NrHugepages    int             `yaml:"nr_hugepages"`
+	ControlLogMask ControlLogLevel `yaml:"control_log_mask"`
+	ControlLogFile string          `yaml:"control_log_file"`
 	// development (subject to change) config fields
 	Modules   string
 	Attach    string
 	SystemMap string
 	Path      string
 	ext       External
-}
-
-// UnmarshalYAML implements yaml.Unmarshaler on Format struct
-func (f *Format) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var fm string
-	if err := unmarshal(&fm); err != nil {
-		return err
-	}
-	format := Format(fm)
-	switch format {
-	case SAFE, CONTINUE, FORCE:
-		*f = format
-	default:
-		return fmt.Errorf(
-			"format value %v not supported in config (safe/continue/force)",
-			format)
-	}
-	return nil
+	// Shared memory segment ID to enable SPDK multiprocess mode,
+	// SPDK application processes can then access the same shared
+	// memory and therefore NVMe controllers.
+	// TODO: Is it also necessary to provide distinct coremask args?
+	NvmeShmID int
 }
 
 // todo: implement UnMarshal for Provider discriminated union
 
-// Parse decodes YAML representation of configure struct and checks for Group
-func (c *configuration) Parse(data []byte) error {
+// parse decodes YAML representation of configure struct and checks for Group
+func (c *configuration) parse(data []byte) error {
 	return yaml.Unmarshal(data, c)
 }
 
@@ -216,27 +270,28 @@ func (c *configuration) checkMount(path string) error {
 	return nil
 }
 
-// NewDefaultConfiguration creates a new instance of configuration struct
+// newDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
-func NewDefaultConfiguration(ext External) configuration {
+func newDefaultConfiguration(ext External) configuration {
 	return configuration{
-		SystemName:   "daos_server",
-		SocketDir:    "./",
-		Auto:         true,
-		Format:       SAFE,
-		AccessPoints: []string{"localhost"},
-		Port:         10000,
-		Cert:         "./.daos/daos_server.crt",
-		Key:          "./.daos/daos_server.key",
-		ScmMountPath: "/mnt/daos",
-		Hyperthreads: false,
-		Path:         "etc/daos_server.yml",
-		ext:          ext,
+		SystemName:     "daos_server",
+		SocketDir:      "/var/run/daos_server",
+		AccessPoints:   []string{"localhost"},
+		Port:           10000,
+		Cert:           "./.daos/daos_server.crt",
+		Key:            "./.daos/daos_server.key",
+		ScmMountPath:   "/mnt/daos",
+		Hyperthreads:   false,
+		NrHugepages:    1024,
+		Path:           "etc/daos_server.yml",
+		NvmeShmID:      0,
+		ControlLogMask: cLogDebug,
+		ext:            ext,
 	}
 }
 
-// NewConfiguration creates a new instance of configuration struct
+// newConfiguration creates a new instance of configuration struct
 // populated with defaults and default external interface.
-func NewConfiguration() configuration {
-	return NewDefaultConfiguration(&ext{})
+func newConfiguration() configuration {
+	return newDefaultConfiguration(&ext{})
 }

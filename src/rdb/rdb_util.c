@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -215,18 +215,19 @@ rdb_anchor_is_eof(const struct rdb_anchor *anchor)
 void
 rdb_anchor_to_hashes(const struct rdb_anchor *anchor, daos_anchor_t *obj_anchor,
 		     daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor,
-		     daos_anchor_t *recx_anchor)
+		     daos_anchor_t *ev_anchor, daos_anchor_t *sv_anchor)
 {
 	*obj_anchor = anchor->da_object;
 	memset(dkey_anchor, 0, sizeof(*dkey_anchor));
 	*akey_anchor = anchor->da_akey;
-	memset(recx_anchor, 0, sizeof(*recx_anchor));
+	memset(ev_anchor, 0, sizeof(*ev_anchor));
+	memset(sv_anchor, 0, sizeof(*sv_anchor));
 }
 
 void
 rdb_anchor_from_hashes(struct rdb_anchor *anchor, daos_anchor_t *obj_anchor,
 		       daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor,
-		       daos_anchor_t *recx_anchor)
+		       daos_anchor_t *ev_anchor, daos_anchor_t *sv_anchor)
 {
 	anchor->da_object = *obj_anchor;
 	anchor->da_akey = *akey_anchor;
@@ -358,7 +359,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		D_ASSERTF(iod.iod_size == biov->bi_data_len,
 			  DF_U64" == "DF_U64"\n", iod.iod_size,
 			  biov->bi_data_len);
-		D_ASSERT(biov->bi_addr.ba_type == BIO_ADDR_SCM);
+		D_ASSERT(biov->bi_addr.ba_type == DAOS_MEDIA_SCM);
 
 		value->iov_buf = biov->bi_buf;
 		value->iov_buf_len = biov->bi_data_len;
@@ -513,8 +514,8 @@ rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_UPDATE, n, akeys, values, iods);
 	rdb_vos_set_sgls(RDB_VOS_UPDATE, n, values, sgls);
-	return vos_obj_update(cont, uoid, epoch, rdb_cookie, RDB_PM_VER,
-			      &rdb_dkey, n, iods, sgls);
+	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, &rdb_dkey, n,
+			      iods, sgls);
 }
 
 int
@@ -524,7 +525,7 @@ rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 	daos_unit_oid_t	uoid;
 
 	rdb_oid_to_uoid(oid, &uoid);
-	return vos_obj_punch(cont, uoid, epoch, rdb_cookie, RDB_PM_VER, 0,
+	return vos_obj_punch(cont, uoid, epoch, RDB_PM_VER, 0,
 			     n == 0 ? NULL : &rdb_dkey, n,
 			     n == 0 ? NULL : akeys);
 }
@@ -538,53 +539,18 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 		  low, high);
 	range.epr_lo = low;
 	range.epr_hi = high;
-	return vos_epoch_discard(cont, &range, rdb_cookie);
-}
 
-static int
-rdb_vos_aggregate_obj(daos_handle_t ih, vos_iter_entry_t *entry,
-		      vos_iter_type_t type, vos_iter_param_t *param, void *arg)
-{
-	const unsigned int	run_max = 64;
-	unsigned int		total = 0;
-	vos_purge_anchor_t	anchor;
-	int			rc;
-
-	memset(&anchor, 0, sizeof(anchor));
-	for (;;) {
-		unsigned int	c = run_max;
-		bool		finished;
-
-		rc = vos_epoch_aggregate(param->ip_hdl, entry->ie_oid,
-					 &param->ip_epr, &c, &anchor,
-					 &finished);
-		if (rc != 0)
-			break;
-		D_ASSERTF(c <= run_max, "%u <= %u\n", c, run_max);
-		total += run_max - c;
-		D_DEBUG(DB_TRACE, "run=%u total=%u finished=%d\n", run_max - c,
-			total, finished);
-		ABT_thread_yield();
-		if (finished)
-			break;
-	}
-	D_DEBUG(DB_TRACE, DF_UOID": total=%u rc=%d\n", DP_UOID(entry->ie_oid),
-		total, rc);
-	return rc;
+	return vos_discard(cont, &range);
 }
 
 int
 rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 {
-	vos_iter_param_t	param;
-	daos_anchor_t		anchor;
+	daos_epoch_range_t	epr;
 
 	D_ASSERTF(high < DAOS_EPOCH_MAX, DF_U64"\n", high);
-	memset(&param, 0, sizeof(param));
-	param.ip_hdl = cont;
-	param.ip_epr.epr_hi = high;
-	param.ip_epc_expr = VOS_IT_EPC_LE;
-	daos_anchor_set_zero(&anchor);
-	return dss_vos_iterate(VOS_ITER_OBJ, &param, &anchor,
-			       rdb_vos_aggregate_obj, NULL /* arg */);
+	epr.epr_lo = 0;
+	epr.epr_hi = high;
+
+	return vos_aggregate(cont, &epr);
 }

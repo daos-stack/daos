@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include "evt_priv.h"
+#include "vos_internal.h"
 
 #define evt_iter_is_sorted(iter) \
 	(((iter)->it_options & (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) != 0)
@@ -200,12 +201,23 @@ evt_iter_is_ready(struct evt_iterator *iter)
 	}
 }
 
+static uint32_t
+evt_iter_intent(struct evt_iterator *iter)
+{
+	if (iter->it_options & EVT_ITER_FOR_PURGE)
+		return DAOS_INTENT_PURGE;
+	if (iter->it_options & EVT_ITER_FOR_REBUILD)
+		return DAOS_INTENT_REBUILD;
+	return DAOS_INTENT_DEFAULT;
+}
+
 static int
 evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 {
 	struct evt_entry	*entry;
 	struct evt_rect		*rect;
 	struct evt_trace	*trace;
+	uint32_t		 intent;
 	int			 rc = 0;
 	bool			 found;
 
@@ -229,11 +241,12 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 		goto ready;
 	}
 
-	while ((found = evt_move_trace(tcx, iter->it_forward))) {
+	intent = evt_iter_intent(iter);
+	while ((found = evt_move_trace(tcx, intent))) {
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
-		rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
+		rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
 
-		if (evt_filter_rect(&iter->it_filter, rect))
+		if (evt_filter_rect(&iter->it_filter, rect, true))
 			continue;
 		break;
 	}
@@ -271,7 +284,9 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 		      const daos_anchor_t *anchor)
 {
 	struct evt_entry_array	*enta;
+	struct evt_entry	*entry;
 	struct evt_rect		 rtmp;
+	uint32_t		 intent;
 	int			 flags = 0;
 	int			 rc = 0;
 	int			 index;
@@ -286,8 +301,9 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	rtmp.rc_epc = DAOS_EPOCH_MAX;
 
 	enta = &iter->it_entries;
-	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, &iter->it_filter, &rtmp,
-				enta);
+	intent = evt_iter_intent(iter);
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, intent, &iter->it_filter,
+				&rtmp, enta);
 	if (rc == 0)
 		rc = evt_ent_array_sort(tcx, enta, flags);
 
@@ -300,7 +316,11 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	}
 
 	if (opc == EVT_ITER_FIRST) {
-		iter->it_index = iter->it_forward ? 0 : enta->ea_ent_nr - 1;
+		index = iter->it_forward ? 0 : enta->ea_ent_nr - 1;
+		iter->it_index = index;
+		/* Mark the last entry */
+		entry = evt_ent_array_get(enta, enta->ea_ent_nr - 1 - index);
+		entry->en_visibility |= EVT_LAST;
 		goto out;
 	}
 
@@ -324,6 +344,7 @@ int
 evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 	       const struct evt_rect *rect, const daos_anchor_t *anchor)
 {
+	struct vos_iterator	*oiter = vos_hdl2iter(ih);
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
 	struct evt_entry_array	*enta;
@@ -371,7 +392,8 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 		rtmp = *rect;
 	}
 
-	rc = evt_ent_array_fill(tcx, fopc, &iter->it_filter, &rtmp, enta);
+	rc = evt_ent_array_fill(tcx, fopc, vos_iter_intent(oiter),
+				&iter->it_filter, &rtmp, enta);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -412,6 +434,90 @@ evt_iter_next(daos_handle_t ih)
 	return evt_iter_move(tcx, iter);
 }
 
+int
+evt_iter_empty(daos_handle_t ih)
+{
+	struct evt_context	*tcx;
+
+	tcx = evt_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	return tcx->tc_depth == 0;
+}
+
+int evt_iter_delete(daos_handle_t ih, void *value_out)
+{
+	struct evt_context	*tcx;
+	struct evt_iterator	*iter;
+	struct evt_entry	 entry;
+	struct evt_rect		*rect;
+	struct evt_trace	*trace;
+	int			 rc;
+	int			 i;
+	unsigned int		 inob;
+	bool			 reset = false;
+
+	tcx = evt_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	iter = &tcx->tc_iter;
+
+	if (evt_iter_is_sorted(iter))
+		return -DER_NOSYS;
+
+	rc = evt_iter_is_ready(iter);
+	if (rc != 0)
+		return rc;
+
+	rc = evt_iter_fetch(ih, &inob, &entry, NULL);
+
+	if (value_out != NULL)
+		*(bio_addr_t *)value_out = entry.en_addr;
+
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	for (i = 0; i < tcx->tc_depth; i++) {
+		trace->tr_tx_added = false;
+		trace--;
+	}
+
+	rc = evt_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+
+	rc = evt_node_delete(tcx, value_out == NULL);
+
+	if (rc == -DER_NONEXIST) {
+		rc = 0;
+		reset = true;
+	}
+
+	rc = evt_tx_end(tcx, rc);
+
+	if (rc != 0)
+		goto out;
+
+	/** Ok, now check the trace */
+	if (tcx->tc_depth == 0 || reset) {
+		iter->it_state = EVT_ITER_FINI;
+		goto out;
+	}
+
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
+	if (!evt_filter_rect(&iter->it_filter, rect, true))
+		goto out;
+
+	D_DEBUG(DB_TRACE, "Skipping to next unfiltered entry\n");
+
+	/* Skip to first unfiltered entry */
+	evt_iter_move(tcx, iter);
+
+out:
+	return rc;
+}
+
 /**
  * Fetch the extent and its data address from the current iterator position.
  * See daos_srv/evtree.h for the details.
@@ -422,6 +528,7 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 {
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
+	struct evt_node		*node;
 	struct evt_rect		*rect;
 	struct evt_trace	*trace;
 	struct evt_rect		 saved;
@@ -446,10 +553,11 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 		goto set_anchor;
 	}
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-	rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
+	node = evt_off2node(tcx, trace->tr_node);
+	rect  = evt_node_rect_at(tcx, node, trace->tr_at);
 
 	if (entry)
-		evt_entry_fill(tcx, trace->tr_node, trace->tr_at, NULL, entry);
+		evt_entry_fill(tcx, node, trace->tr_at, NULL, entry);
 set_anchor:
 	*inob = tcx->tc_inob;
 

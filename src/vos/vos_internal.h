@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,14 +71,6 @@ static inline uint64_t vos_byte2blkoff(uint64_t bytes)
 }
 
 /**
- * VOS cookie table
- * In-memory btree to hold all cookies and max epoch updated
- */
-struct vos_cookie_table {
-	struct btr_root		cit_btr;
-};
-
-/**
  * VOS pool (DRAM)
  */
 struct vos_pool {
@@ -94,10 +86,6 @@ struct vos_pool {
 	struct umem_instance	vp_umm;
 	/** btr handle for the container table */
 	daos_handle_t		vp_cont_th;
-	/** cookie table (DRAM only) */
-	struct vos_cookie_table	vp_cookie_tab;
-	/** btr handle for the cookie table \a vp_cookie_tab */
-	daos_handle_t		vp_cookie_th;
 	/** I/O context */
 	struct bio_io_context	*vp_io_ctxt;
 	/** In-memory free space tracking for NVMe device */
@@ -114,8 +102,20 @@ struct vos_container {
 	struct vos_pool		*vc_pool;
 	/* Unique UID of VOS container */
 	uuid_t			vc_id;
+	/* The handle for active DTX table */
+	daos_handle_t		vc_dtx_active_hdl;
+	/* The handle for committed DTX table */
+	daos_handle_t		vc_dtx_committed_hdl;
 	/* DAOS handle for object index btree */
 	daos_handle_t		vc_btr_hdl;
+	/* The objects with committable DTXs in DRAM. */
+	daos_handle_t		vc_dtx_cos_hdl;
+	/* The DTX COS-btree. */
+	struct btr_root		vc_dtx_cos_btr;
+	/* The global list for commiitable DTXs. */
+	d_list_t		vc_dtx_committable;
+	/* The count of commiitable DTXs. */
+	uint32_t		vc_dtx_committable_count;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
@@ -127,6 +127,9 @@ struct vos_container {
 	 * durable hint in vos_cont_df
 	 */
 	struct vea_hint_context	*vc_hint_ctxt;
+	/* Various flags */
+	unsigned int		vc_in_aggregation:1,
+				vc_abort_aggregation:1;
 };
 
 struct vos_imem_strts {
@@ -354,70 +357,6 @@ vos_cont_tab_create(struct umem_attr *p_umem_attr,
 		    struct vos_cont_table_df *ctab_df);
 
 /**
- * VOS cookie index class register for btree
- * to be called withing vos_init()
- *
- * \return		0 on success and negative on
- *			failure
- */
-
-int
-vos_cookie_tab_register();
-
-/**
- * create a VOS Cookie index table.
- *
- * \param uma		[IN]	universal memory attributes
- * \param cookie_index	[IN]	vos cookie index
- * \param cookie_handle [OUT]	cookie_btree handle
- *
- * \return		0 on success and negative on
- *			failure
- */
-int
-vos_cookie_tab_create(struct umem_attr *uma, struct vos_cookie_table *ctab,
-		       daos_handle_t *cookie_handle);
-
-
-/**
- * Destroy the cookie index table
- *
- * \param th	[IN]	cookie index handle
- */
-int
-vos_cookie_tab_destroy(daos_handle_t th);
-
-/**
- * VOS cookie update
- *
- * \param th		[IN]	cookie index handle
- * \param cookie	[IN]	cookie
- * \param epoch		[IN]	epoch
- *
- * \return		0 on success -DER_NONEXIST when
- *			not found and -DER_INVAL if
- *			invalid handle
- */
-int
-vos_cookie_update(daos_handle_t th, uuid_t cookie, daos_epoch_t epoch);
-
-/**
- * VOS cookie find and update
- * Find cookie if it exists update the
- * max_epoch, if not found add the entry
- * if less than max_epoch do nothing
- *
- * \param th		[IN]	cookie index handle
- * \param cookie	[IN]	cookie
- * \param epoch		[IN]	epoch to update
- * \param update_flag	[IN]	flag to update/lookup
- * \param epoch_ret	[OUT]	max_epoch returned
- */
-int
-vos_cookie_find_update(daos_handle_t th, uuid_t cookie, daos_epoch_t epoch,
-		       bool update_flag, daos_epoch_t *epoch_ret);
-
-/**
  * VOS object index class register for btree
  * Called with vos_init()
  *
@@ -456,6 +395,75 @@ vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
 int
 vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
 
+/**
+ * DTX table create
+ * Called from cont_df_rec_alloc.
+ *
+ * \param pool		[IN]	vos pool
+ * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_create(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
+
+/**
+ * DTX table destroy
+ * Called from vos_cont_destroy
+ *
+ * \param pool		[IN]	vos pool
+ * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
+
+/**
+ * Register dbtree class for DTX table, it is called within vos_init().
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_register(void);
+
+/**
+ * Register dbtree class for DTX CoS, it is called within vos_init().
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_cos_register(void);
+
+/**
+ * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
+ *
+ * \param cont	[IN]	Pointer to the container.
+ * \param oid	[IN]	The target object (shard) ID.
+ * \param dti	[IN]	The DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return		Zero on success and need not additional actions.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_add_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+		struct daos_tx_id *dti, uint64_t dkey, bool punch);
+
+/**
+ * Remove the DTX from the CoS cache.
+ *
+ * \param cont	[IN]	Pointer to the container.
+ * \param oid	[IN]	Pointer to the object ID.
+ * \param xid	[IN]	Pointer to the DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ */
+void
+vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+		struct daos_tx_id *xid, uint64_t dkey, bool punch);
+
 enum vos_tree_class {
 	/** the first reserved tree class */
 	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
@@ -469,8 +477,10 @@ enum vos_tree_class {
 	VOS_BTR_OBJ_TABLE	= (VOS_BTR_BEGIN + 3),
 	/** container index table */
 	VOS_BTR_CONT_TABLE	= (VOS_BTR_BEGIN + 4),
-	/** tree type for cookie index table */
-	VOS_BTR_COOKIE		= (VOS_BTR_BEGIN + 5),
+	/** DAOS two-phase commit transation table */
+	VOS_BTR_DTX_TABLE	= (VOS_BTR_BEGIN + 5),
+	/** The objects with committable DTXs in DRAM */
+	VOS_BTR_DTX_COS		= (VOS_BTR_BEGIN + 6),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
@@ -513,8 +523,6 @@ struct vos_rec_bundle {
 	struct vos_krec_df	*rb_krec;
 	/** input record size */
 	daos_size_t		 rb_rsize;
-	/** update cookie of this recx (input for update, output for fetch) */
-	uuid_t			 rb_cookie;
 	/** pool map version */
 	uint32_t		 rb_ver;
 	/** tree class */
@@ -606,14 +614,21 @@ static inline void vos_irec_init_csum(struct vos_irec_df *irec,
 	}
 }
 
+/** Size of metadata without user payload */
 static inline uint64_t
-vos_irec_size(struct vos_rec_bundle *rbund)
+vos_irec_msize(struct vos_rec_bundle *rbund)
 {
 	uint64_t size = 0;
 
 	if (rbund->rb_csum != NULL)
 		size = vos_size_round(rbund->rb_csum->cs_len);
-	return size + sizeof(struct vos_irec_df) + rbund->rb_rsize;
+	return size + sizeof(struct vos_irec_df);
+}
+
+static inline uint64_t
+vos_irec_size(struct vos_rec_bundle *rbund)
+{
+	return vos_irec_msize(rbund) + rbund->rb_rsize;
 }
 
 static inline bool
@@ -669,12 +684,6 @@ vos_obj2pop(struct vos_object *obj)
 	return vos_cont2pop(obj->obj_cont);
 }
 
-static inline daos_handle_t
-vos_obj2cookie_hdl(struct vos_object *obj)
-{
-	return obj->obj_cont->vc_pool->vp_cookie_th;
-}
-
 static inline struct umem_attr *
 vos_obj2uma(struct vos_object *obj)
 {
@@ -720,17 +729,6 @@ vos_hdl2cont(daos_handle_t coh)
 void vos_cont_addref(struct vos_container *cont);
 void vos_cont_decref(struct vos_container *cont);
 
-static inline void
-vos_cont_set_purged_epoch(daos_handle_t coh, daos_epoch_t update_epoch)
-{
-	struct vos_container	*cont;
-	struct vos_cont_df	*cont_df;
-
-	cont	= vos_hdl2cont(coh);
-	cont_df	= cont->vc_cont_df;
-	cont_df->cd_info.pci_purged_epoch = update_epoch;
-}
-
 /**
  * iterators
  */
@@ -762,8 +760,10 @@ struct vos_iterator {
 	struct vos_iterator	*it_parent; /* parent iterator */
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
-	bool			 it_from_parent;
 	uint32_t		 it_ref_cnt;
+	uint32_t		 it_from_parent:1,
+				 it_for_purge:1,
+				 it_for_rebuild:1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -790,8 +790,8 @@ struct vos_iter_info {
 	daos_epoch_range_t	 ii_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
-	/** recx visibility flags */
-	uint32_t		 ii_recx_flags;
+	/** iterator flags */
+	uint32_t		 ii_flags;
 
 };
 
@@ -844,17 +844,11 @@ struct vos_iter_ops {
 
 const char *vos_iter_type2name(vos_iter_type_t type);
 
-static  inline struct vos_iterator *
+static inline struct vos_iterator *
 vos_hdl2iter(daos_handle_t hdl)
 {
 	return (struct vos_iterator *)hdl.cookie;
 }
-
-struct vos_obj_iter*
-vos_hdl2oiter(daos_handle_t hdl);
-
-struct vos_oid_iter*
-vos_hdl2oid_iter(daos_handle_t hdl);
 
 /**
  * store a bundle of parameters into a iovec, which is going to be passed
@@ -888,8 +882,8 @@ enum {
 int
 key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, struct vos_krec_df **krec,
-		 daos_handle_t *sub_toh);
+		 daos_key_t *key, int flags, uint32_t intent,
+		 struct vos_krec_df **krec, daos_handle_t *sub_toh);
 void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
@@ -945,6 +939,32 @@ vos_df_ts_update(struct vos_object *obj, daos_epoch_t *latest_df,
 		*earliest_df = epr->epr_lo;
 out:
 	return rc;
+}
+
+static inline int
+vos_tx_begin(struct vos_pool *vpool)
+{
+	return umem_tx_begin(&vpool->vp_umm, NULL);
+}
+
+static inline int
+vos_tx_end(struct vos_pool *vpool, int rc)
+{
+	if (rc != 0)
+		return umem_tx_abort(&vpool->vp_umm, rc);
+
+	return umem_tx_commit(&vpool->vp_umm);
+
+}
+
+static inline uint32_t
+vos_iter_intent(struct vos_iterator *iter)
+{
+	if (iter->it_for_purge)
+		return DAOS_INTENT_PURGE;
+	if (iter->it_for_rebuild)
+		return DAOS_INTENT_REBUILD;
+	return DAOS_INTENT_DEFAULT;
 }
 
 #endif /* __VOS_INTERNAL_H__ */

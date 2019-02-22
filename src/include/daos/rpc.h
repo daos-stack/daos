@@ -54,31 +54,6 @@
 	 (rpc_ver & RPC_VERSION_MASK) << RPC_VERSION_OFFSET |	\
 	 (mod_id & MODID_MASK) << MODID_OFFSET)
 
-/** DAOS-specific RPC format */
-extern struct crt_msg_field DMF_OID;
-extern struct crt_msg_field DMF_IOVEC;
-extern struct crt_msg_field DMF_IOD_ARRAY;
-extern struct crt_msg_field DMF_EPOCH_STATE;
-extern struct crt_msg_field DMF_ANCHOR;
-extern struct crt_msg_field DMF_KEY_DESC_ARRAY;
-extern struct crt_msg_field DMF_REC_SIZE_ARRAY;
-extern struct crt_msg_field DMF_SGL;
-extern struct crt_msg_field DMF_SGL_ARRAY;
-extern struct crt_msg_field DMF_SGL_DESC;
-extern struct crt_msg_field DMF_SGL_DESC_ARRAY;
-extern struct crt_msg_field DMF_NR_ARRAY;
-extern struct crt_msg_field DMF_RECX_ARRAY;
-extern struct crt_msg_field DMF_RECX;
-extern struct crt_msg_field DMF_EPR_ARRAY;
-extern struct crt_msg_field DMF_UUID_ARRAY;
-extern struct crt_msg_field DMF_OID_ARRAY;
-extern struct crt_msg_field DMF_UINT32_ARRAY;
-extern struct crt_msg_field DMF_UINT64_ARRAY;
-extern struct crt_msg_field DMF_RSVC_HINT;
-extern struct crt_msg_field DMF_KEY_ARRAY;
-extern struct crt_msg_field DMF_TGT_ADDR_LIST;
-#define DMF_DAOS_SIZE CMF_UINT64
-
 enum daos_module_id {
 	DAOS_VOS_MODULE		= 0, /** version object store */
 	DAOS_MGMT_MODULE	= 1, /** storage management */
@@ -86,8 +61,10 @@ enum daos_module_id {
 	DAOS_CONT_MODULE	= 3, /** container service */
 	DAOS_OBJ_MODULE		= 4, /** object service */
 	DAOS_REBUILD_MODULE	= 5, /** rebuild **/
-	DAOS_RDB_MODULE		= 6, /** rdb */
-	DAOS_RDBT_MODULE	= 7, /** rdb test */
+	DAOS_RSVC_MODULE	= 6, /** replicated service server */
+	DAOS_RDB_MODULE		= 7, /** rdb */
+	DAOS_RDBT_MODULE	= 8, /** rdb test */
+	DAOS_SEC_MODULE		= 9, /** security framework */
 	DAOS_MAX_MODULE		= (1 << MOD_ID_BITS) - 1,
 };
 
@@ -104,6 +81,65 @@ struct daos_rpc_handler {
 	/* CORPC operations (co_aggregate == NULL for point-to-point RPCs) */
 	struct crt_corpc_ops	*dr_corpc_ops;
 };
+
+/** DAOS RPC request type (to determine the target processing tag/context) */
+enum daos_rpc_type {
+	/** common IO request */
+	DAOS_REQ_IO,
+	/** management request defined/used by mgmt module */
+	DAOS_REQ_MGMT,
+	/** pool request defined/used by pool module */
+	DAOS_REQ_POOL,
+	/** RDB/meta-data request */
+	DAOS_REQ_RDB,
+	/** container request (including the OID allocate) */
+	DAOS_REQ_CONT,
+	/** rebuild request such as REBUILD_OBJECTS_SCAN/REBUILD_OBJECTS */
+	DAOS_REQ_REBUILD,
+	/** the IV/BCAST/SWIM request handled by cart, send/recv by tag 0 */
+	DAOS_REQ_IV,
+	DAOS_REQ_BCAST,
+	DAOS_REQ_SWIM,
+};
+
+/** DAOS_TGT0_OFFSET is target 0's cart context offset */
+#define DAOS_TGT0_OFFSET		(1)
+/** Number of cart context created for each target */
+#define DAOS_CTX_NR_PER_TGT		(2)
+/** The cart context index of target index */
+#define DAOS_IO_CTX_ID(tgt_idx)				\
+	((tgt_idx) * DAOS_CTX_NR_PER_TGT + DAOS_TGT0_OFFSET)
+
+/**
+ * Get the target tag (context ID) for specific request type and target index.
+ *
+ * \param[in]	req_type	RPC request type (enum daos_rpc_type)
+ * \param[in]	tgt_idx		target index (VOS index, main xstream index)
+ *
+ * \return			target tag (context ID) to be used for the RPC
+ */
+static inline int
+daos_rpc_tag(int req_type, int tgt_idx)
+{
+	switch (req_type) {
+	/* for normal IO request, send to the main service thread/context */
+	case DAOS_REQ_IO:
+		return DAOS_IO_CTX_ID(tgt_idx);
+	/* target tag 0 is to handle below requests */
+	case DAOS_REQ_MGMT:
+	case DAOS_REQ_POOL:
+	case DAOS_REQ_RDB:
+	case DAOS_REQ_CONT:
+	case DAOS_REQ_REBUILD:
+	case DAOS_REQ_IV:
+	case DAOS_REQ_BCAST:
+	case DAOS_REQ_SWIM:
+		return 0;
+	default:
+		D_ASSERTF(0, "bad req_type %d.\n", req_type);
+		return -DER_INVAL;
+	};
+}
 
 static inline struct daos_rpc_handler *
 daos_rpc_handler_find(struct daos_rpc_handler *handlers, crt_opcode_t opc)

@@ -84,14 +84,20 @@ daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 }
 
 int
-daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts,
-		daos_pool_info_t *info, daos_event_t *ev)
+daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
+		daos_prop_t *pool_prop, daos_event_t *ev)
 {
 	daos_pool_query_t	*args;
 	tse_task_t		*task;
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_QUERY);
+
+	if (pool_prop != NULL && !daos_prop_valid(pool_prop, true, false)) {
+		D_ERROR("invalid pool_prop parameter.\n");
+		return -DER_INVAL;
+	}
+
 	rc = dc_task_create(dc_pool_query, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -100,6 +106,7 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts,
 	args->poh	= poh;
 	args->tgts	= tgts;
 	args->info	= info;
+	args->prop	= pool_prop;
 
 	return dc_task_schedule(task, true);
 }

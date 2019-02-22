@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,12 +119,8 @@ daos_array_find(void *array, unsigned int len, uint64_t key,
 void
 daos_array_shuffle(void *array, unsigned int len, daos_sort_ops_t *ops)
 {
-	struct timeval	tv;
 	int		n;
 	int		i;
-
-	gettimeofday(&tv, NULL);
-	srand(tv.tv_usec);
 
 	for (n = len; n > 0; n--) {
 		i = rand() % n;

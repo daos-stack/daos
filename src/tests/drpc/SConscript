@@ -1,5 +1,4 @@
 """Build addons test"""
-import daos_build
 
 def scons():
     """Execute build"""
@@ -7,7 +6,6 @@ def scons():
 
     libs = ['gurt', 'daos_common', 'protobuf-c']
     sources = ['drpc_test.c', 'drpc_test.pb-c.c']
-
 
     denv = env.Clone()
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
@@ -17,6 +15,10 @@ def scons():
 
     drpc_test = denv.Program('drpc_test', sources, LIBS=libs)
     env.Install('$PREFIX/bin/', drpc_test)
+
+    drpc_iosrv_test = denv.Program('drpc_iosrv_test',
+            ['drpc_iosrv_test.c'], LIBS=libs)
+    env.Install('$PREFIX/bin/', drpc_iosrv_test)
 
 if __name__ == "SCons.Script":
     scons()

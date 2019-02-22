@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,6 +141,7 @@ struct bio_desc {
 };
 
 /* bio_xstream.c */
+extern bool		nvme_io_bypass;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);

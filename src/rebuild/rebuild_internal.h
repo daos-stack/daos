@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,6 @@ struct rebuild_one {
 	unsigned int	ro_punch_iod_num;
 	unsigned int	ro_iod_alloc_num;
 	unsigned int	ro_rec_num;
-	uuid_t		ro_cookie;
 	uint64_t	ro_version;
 };
 
@@ -312,6 +311,9 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt);
 
 int
 rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt);
+
+bool
+is_current_tgt_up(struct rebuild_tgt_pool_tracker *rpt);
 
 typedef int (*rebuild_obj_insert_cb_t)(struct rebuild_root *cont_root,
 				       uuid_t co_uuid, daos_unit_oid_t oid,

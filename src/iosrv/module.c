@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@
 #include <daos/common.h>
 #include <gurt/list.h>
 #include <daos/rpc.h>
-
+#include "drpc_handler.h"
 #include "srv_internal.h"
 
 /* Loaded module instance */
@@ -139,6 +139,14 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 		D_GOTO(err_mod_init, rc);
 	}
 
+	/* register dRPC handlers */
+	rc = drpc_hdlr_register_all(smod->sm_drpc_handlers);
+	if (rc) {
+		D_ERROR("failed to register dRPC for %s: %d\n",
+			modname, rc);
+		D_GOTO(err_rpc, rc);
+	}
+
 	if (mod_facs != NULL)
 		*mod_facs = smod->sm_facs;
 
@@ -148,6 +156,8 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
 	return 0;
 
+err_rpc:
+	daos_rpc_unregister(smod->sm_proto_fmt);
 err_mod_init:
 	dss_unregister_key(smod->sm_key);
 	smod->sm_fini();
@@ -169,6 +179,11 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	if (rc) {
 		D_ERROR("failed to unregister RPC %d\n", rc);
 		return rc;
+	}
+
+	rc = drpc_hdlr_unregister_all(smod->sm_drpc_handlers);
+	if (rc != 0) {
+		D_ERROR("Failed to unregister dRPC %d\n", rc);
 	}
 
 	dss_unregister_key(smod->sm_key);
@@ -260,13 +275,13 @@ dss_module_cleanup_all(void)
 int
 dss_module_init(void)
 {
-	return 0;
+	return drpc_hdlr_init();
 }
 
 int
 dss_module_fini(bool force)
 {
-	return 0;
+	return drpc_hdlr_fini();
 }
 
 void

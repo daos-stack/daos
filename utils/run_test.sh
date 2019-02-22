@@ -18,11 +18,14 @@
 
 #check for existence of /mnt/daos first:
 failed=0
+failures=()
 
 if [ -d /work ]; then
     export D_LOG_FILE=/work/daos.log
 fi
 
+# this can be rmeoved once we are no longer using the old CI system
+if ${OLD_CI:-true}; then
 lock_test()
 {
     (
@@ -35,6 +38,9 @@ lock_test()
     ) 9>/mnt/daos/jenkins.lock
 }
 
+lock_test="lock_test"
+fi
+
 run_test()
 {
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
@@ -45,18 +51,22 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    time lock_test "$@"
-    EXIT_STATUS=${PIPESTATUS[0]}
-
-    if [ "${EXIT_STATUS}" -ne 0 ]; then
-        echo "Test $* failed with exit status ${EXIT_STATUS}."
+    if ! time $lock_test "$@"; then
+        echo "Test $* failed with exit status ${PIPESTATUS[0]}."
         ((failed = failed + 1))
+        failures+=("$*")
     fi
 }
 
 if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
     source ./.build_vars.sh
+    if ! ${OLD_CI:-true}; then
+        # fix up paths so they are relative to $PWD since we might not
+        # be in the same path as the software was built
+        SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
+        SL_OMPI_PREFIX=$PWD/${SL_OMPI_PREFIX/*\/install/install}
+    fi
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     run_test src/common/tests/btree.sh ukey -s 20000
@@ -69,24 +79,37 @@ if [ -d "/mnt/daos" ]; then
     run_test build/src/common/tests/drpc_tests
     run_test build/src/client/api/tests/eq_tests
     run_test src/vos/tests/evt_ctl.sh
+    run_test src/vos/tests/evt_ctl.sh pmem
     run_test build/src/vos/vea/tests/vea_ut
     run_test src/rdb/raft_tests/raft_tests.py
-    # Satisfy CGO Link requirements for go-spdk binding imports
-    export LD_LIBRARY_PATH=$SL_PREFIX/lib:${LD_LIBRARY_PATH}
+    # Satisfy CGO requirements for go-spdk binding and internal daos imports
+    LD_LIBRARY_PATH="${SL_PREFIX}/lib:${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH
+    export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib -L${SL_PREFIX}/lib"
+    export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include"
     run_test src/control/run_go_tests.sh
     # Environment variables specific to the rdb tests
-    export PATH=$SL_PREFIX/bin:$PATH
+    export PATH="${SL_PREFIX}/bin:${PATH}"
     # Satisfy requirement for starting daos_server w/o config file
     export CRT_PHY_ADDR_STR=ofi+sockets
     export OFI_INTERFACE=lo
     run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test build/src/security/tests/cli_security_tests
+    run_test build/src/iosrv/tests/drpc_progress_tests
+    run_test build/src/iosrv/tests/drpc_handler_tests
+    run_test build/src/iosrv/tests/drpc_listener_tests
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for
         echo "SUCCESS! NO TEST FAILURES"
     else
-        echo "FAILURE: $failed tests failed"
+        echo "FAILURE: $failed tests failed (listed below)"
+        for ((i = 0; i < ${#failures[@]}; i++)); do
+            echo "    ${failures[$i]}"
+        done
+        if ! ${OLD_CI:-true}; then
+            exit 1
+        fi
     fi
 else
     echo "/mnt/daos isn't present for unit tests"

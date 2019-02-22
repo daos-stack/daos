@@ -3,9 +3,11 @@
 
 package drpc
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -23,27 +25,35 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 type Status int32
 
 const (
-	Status_SUCCESS   Status = 0
-	Status_SUBMITTED Status = 1
-	Status_FAILURE   Status = 2
+	Status_SUCCESS        Status = 0
+	Status_SUBMITTED      Status = 1
+	Status_FAILURE        Status = 2
+	Status_UNKNOWN_MODULE Status = 3
+	Status_UNKNOWN_METHOD Status = 4
 )
 
 var Status_name = map[int32]string{
 	0: "SUCCESS",
 	1: "SUBMITTED",
 	2: "FAILURE",
+	3: "UNKNOWN_MODULE",
+	4: "UNKNOWN_METHOD",
 }
+
 var Status_value = map[string]int32{
-	"SUCCESS":   0,
-	"SUBMITTED": 1,
-	"FAILURE":   2,
+	"SUCCESS":        0,
+	"SUBMITTED":      1,
+	"FAILURE":        2,
+	"UNKNOWN_MODULE": 3,
+	"UNKNOWN_METHOD": 4,
 }
 
 func (x Status) String() string {
 	return proto.EnumName(Status_name, int32(x))
 }
+
 func (Status) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_87613dfd702de481, []int{0}
+	return fileDescriptor_e4c8b3f839895dc3, []int{0}
 }
 
 // *
@@ -68,16 +78,17 @@ func (m *Call) Reset()         { *m = Call{} }
 func (m *Call) String() string { return proto.CompactTextString(m) }
 func (*Call) ProtoMessage()    {}
 func (*Call) Descriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_87613dfd702de481, []int{0}
+	return fileDescriptor_e4c8b3f839895dc3, []int{0}
 }
+
 func (m *Call) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Call.Unmarshal(m, b)
 }
 func (m *Call) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Call.Marshal(b, m, deterministic)
 }
-func (dst *Call) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Call.Merge(dst, src)
+func (m *Call) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Call.Merge(m, src)
 }
 func (m *Call) XXX_Size() int {
 	return xxx_messageInfo_Call.Size(m)
@@ -135,16 +146,17 @@ func (m *Response) Reset()         { *m = Response{} }
 func (m *Response) String() string { return proto.CompactTextString(m) }
 func (*Response) ProtoMessage()    {}
 func (*Response) Descriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_87613dfd702de481, []int{1}
+	return fileDescriptor_e4c8b3f839895dc3, []int{1}
 }
+
 func (m *Response) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Response.Unmarshal(m, b)
 }
 func (m *Response) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Response.Marshal(b, m, deterministic)
 }
-func (dst *Response) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Response.Merge(dst, src)
+func (m *Response) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Response.Merge(m, src)
 }
 func (m *Response) XXX_Size() int {
 	return xxx_messageInfo_Response.Size(m)
@@ -177,15 +189,15 @@ func (m *Response) GetBody() []byte {
 }
 
 func init() {
+	proto.RegisterEnum("drpc.Status", Status_name, Status_value)
 	proto.RegisterType((*Call)(nil), "drpc.Call")
 	proto.RegisterType((*Response)(nil), "drpc.Response")
-	proto.RegisterEnum("drpc.Status", Status_name, Status_value)
 }
 
-func init() { proto.RegisterFile("drpc.proto", fileDescriptor_drpc_87613dfd702de481) }
+func init() { proto.RegisterFile("drpc.proto", fileDescriptor_e4c8b3f839895dc3) }
 
-var fileDescriptor_drpc_87613dfd702de481 = []byte{
-	// 212 bytes of a gzipped FileDescriptorProto
+var fileDescriptor_e4c8b3f839895dc3 = []byte{
+	// 241 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4a, 0x29, 0x2a, 0x48,
 	0xd6, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x01, 0xb1, 0x95, 0xd2, 0xb8, 0x58, 0x9c, 0x13,
 	0x73, 0x72, 0x84, 0xc4, 0xb8, 0xd8, 0x72, 0xf3, 0x53, 0x4a, 0x73, 0x52, 0x25, 0x18, 0x15, 0x18,
@@ -195,9 +207,11 @@ var fileDescriptor_drpc_87613dfd702de481 = []byte{
 	0x14, 0x18, 0x35, 0x78, 0x82, 0xc0, 0x6c, 0xa5, 0x04, 0x2e, 0x8e, 0xa0, 0xd4, 0xe2, 0x82, 0xfc,
 	0xbc, 0xe2, 0x54, 0x14, 0xbd, 0x8c, 0x68, 0x7a, 0x55, 0xb8, 0xd8, 0x8a, 0x4b, 0x12, 0x4b, 0x4a,
 	0x8b, 0xc1, 0xf6, 0xf1, 0x19, 0xf1, 0xe8, 0x81, 0x9d, 0x1c, 0x0c, 0x16, 0x0b, 0x82, 0xca, 0xc1,
-	0x6d, 0x60, 0x46, 0xd8, 0xa0, 0x65, 0xc8, 0xc5, 0x06, 0x51, 0x25, 0xc4, 0xcd, 0xc5, 0x1e, 0x1c,
+	0x6d, 0x60, 0x46, 0xd8, 0xa0, 0x15, 0xc9, 0xc5, 0x06, 0x51, 0x25, 0xc4, 0xcd, 0xc5, 0x1e, 0x1c,
 	0xea, 0xec, 0xec, 0x1a, 0x1c, 0x2c, 0xc0, 0x20, 0xc4, 0xcb, 0xc5, 0x19, 0x1c, 0xea, 0xe4, 0xeb,
 	0x19, 0x12, 0xe2, 0xea, 0x22, 0xc0, 0x08, 0x92, 0x73, 0x73, 0xf4, 0xf4, 0x09, 0x0d, 0x72, 0x15,
-	0x60, 0x4a, 0x62, 0x03, 0x87, 0x84, 0x31, 0x20, 0x00, 0x00, 0xff, 0xff, 0x85, 0x65, 0x11, 0x45,
-	0x17, 0x01, 0x00, 0x00,
+	0x60, 0x12, 0x12, 0xe2, 0xe2, 0x0b, 0xf5, 0xf3, 0xf6, 0xf3, 0x0f, 0xf7, 0x8b, 0xf7, 0xf5, 0x77,
+	0x09, 0xf5, 0x71, 0x15, 0x60, 0x46, 0x11, 0x73, 0x0d, 0xf1, 0xf0, 0x77, 0x11, 0x60, 0x49, 0x62,
+	0x03, 0x87, 0x98, 0x31, 0x20, 0x00, 0x00, 0xff, 0xff, 0x25, 0xe4, 0xe4, 0x71, 0x3f, 0x01, 0x00,
+	0x00,
 }

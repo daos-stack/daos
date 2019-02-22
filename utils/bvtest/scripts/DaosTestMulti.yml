@@ -27,6 +27,9 @@ directives:
     printTestLogPath: "yes"
     usePython: python3.4
 
+passToConfig:
+    DAOS_TEST_FLAGS: "-E dr"
+
 use_daemon:
     name: "DaosServer"
 

@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2016 Intel Corporation.
+/*
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rdb.h>
+#include <daos_srv/rsvc.h>
 
 /* To avoid including srv_layout.h for everybody. */
 struct container_hdl;
@@ -65,8 +66,7 @@ dsm_tls_get()
 struct cont_svc {
 	uuid_t			cs_pool_uuid;
 	uint64_t		cs_id;
-	struct cont_svc	      **cs_in_pool_svc;	/* address in pool_svc */
-	struct rdb	       *cs_db;
+	struct ds_rsvc	       *cs_rsvc;
 	ABT_rwlock		cs_lock;
 	rdb_path_t		cs_root;	/* root KVS */
 	rdb_path_t		cs_conts;	/* container KVS */

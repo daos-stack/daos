@@ -35,7 +35,7 @@ const char *server_group;
 unsigned int svc_nreplicas = 1;
 
 static int
-test_setup_pool_create(void **state, struct test_pool *pool)
+test_setup_pool_create(void **state, struct test_pool *pool, daos_prop_t *prop)
 {
 	test_arg_t *arg = *state;
 	int rc;
@@ -85,7 +85,7 @@ test_setup_pool_create(void **state, struct test_pool *pool)
 			      (arg->pool.pool_size >> 30), nvme_size >> 30);
 		rc = daos_pool_create(arg->mode, arg->uid, arg->gid, arg->group,
 				      NULL, "pmem", arg->pool.pool_size,
-				      nvme_size, &arg->pool.svc,
+				      nvme_size, prop, &arg->pool.svc,
 				      arg->pool.pool_uuid, NULL);
 		if (rc)
 			print_message("daos_pool_create failed, rc: %d\n", rc);
@@ -144,7 +144,8 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 				      arg->pool.pool_info.pi_ntargets);
 
 		if (rc == 0) {
-			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL);
+			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL,
+					     NULL);
 
 			if (rc == 0) {
 				arg->srv_ntgts = info.pi_ntargets;
@@ -180,7 +181,7 @@ test_setup_cont_create(void **state)
 		uuid_generate(arg->co_uuid);
 		print_message("setup: creating container "DF_UUIDF"\n",
 			      DP_UUID(arg->co_uuid));
-		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL);
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL, NULL);
 		if (rc)
 			print_message("daos_cont_create failed, rc: %d\n", rc);
 	}
@@ -221,7 +222,7 @@ test_setup_cont_open(void **state)
 }
 
 int
-test_setup_next_step(void **state, struct test_pool *pool)
+test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *prop)
 {
 	test_arg_t *arg = *state;
 
@@ -231,7 +232,7 @@ test_setup_next_step(void **state, struct test_pool *pool)
 		return daos_eq_create(&arg->eq);
 	case SETUP_EQ:
 		arg->setup_state = SETUP_POOL_CREATE;
-		return test_setup_pool_create(state, pool);
+		return test_setup_pool_create(state, pool, prop);
 	case SETUP_POOL_CREATE:
 		arg->setup_state = SETUP_POOL_CONNECT;
 		return test_setup_pool_connect(state, pool);
@@ -291,7 +292,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	while (!rc && step != arg->setup_state)
-		rc = test_setup_next_step(state, pool);
+		rc = test_setup_next_step(state, pool, NULL);
 
 	 if (rc) {
 		D_FREE(arg);
@@ -325,7 +326,7 @@ pool_destroy_safe(test_arg_t *arg)
 		struct daos_rebuild_status *rstat = &pinfo.pi_rebuild_st;
 
 		memset(&pinfo, 0, sizeof(pinfo));
-		rc = daos_pool_query(poh, NULL, &pinfo, NULL);
+		rc = daos_pool_query(poh, NULL, &pinfo, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "pool query failed: %d\n", rc);
 			return rc;
@@ -523,7 +524,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 		connect_pool = true;
 	}
 
-	rc = daos_pool_query(arg->pool.poh, NULL, pinfo, NULL);
+	rc = daos_pool_query(arg->pool.poh, NULL, pinfo, NULL, NULL);
 	if (rc != 0)
 		print_message("pool query failed %d\n", rc);
 
@@ -675,35 +676,52 @@ run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 }
 
 void
-daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-		    const d_rank_list_t *svc, d_rank_t rank)
+daos_exclude_target(const uuid_t pool_uuid, const char *grp,
+		    const d_rank_list_t *svc, d_rank_t rank,
+		    int tgt_idx)
 {
-	int		rc;
-	d_rank_list_t	targets;
+	struct d_tgt_list	targets;
+	int			rc;
 
 	/** exclude from the pool */
-	targets.rl_nr = 1;
-	targets.rl_ranks = &rank;
-	rc = daos_pool_exclude(pool_uuid, grp, svc, &targets, NULL);
+	targets.tl_nr = 1;
+	targets.tl_ranks = &rank;
+	targets.tl_tgts = &tgt_idx;
+	rc = daos_pool_tgt_exclude(pool_uuid, grp, svc, &targets, NULL);
 	if (rc)
 		print_message("exclude pool failed rc %d\n", rc);
 	assert_int_equal(rc, 0);
 }
 
 void
-daos_add_server(const uuid_t pool_uuid, const char *grp,
-		const d_rank_list_t *svc, d_rank_t rank)
+daos_add_target(const uuid_t pool_uuid, const char *grp,
+		const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
 {
-	int		rc;
-	d_rank_list_t	targets;
+	struct d_tgt_list	targets;
+	int			rc;
 
 	/** add tgt to the pool */
-	targets.rl_nr = 1;
-	targets.rl_ranks = &rank;
+	targets.tl_nr = 1;
+	targets.tl_ranks = &rank;
+	targets.tl_tgts = &tgt_idx;
 	rc = daos_pool_add_tgt(pool_uuid, grp, svc, &targets, NULL);
 	if (rc)
 		print_message("add pool failed rc %d\n", rc);
 	assert_int_equal(rc, 0);
+}
+
+void
+daos_exclude_server(const uuid_t pool_uuid, const char *grp,
+		    const d_rank_list_t *svc, d_rank_t rank)
+{
+	daos_exclude_target(pool_uuid, grp, svc, rank, -1);
+}
+
+void
+daos_add_server(const uuid_t pool_uuid, const char *grp,
+		const d_rank_list_t *svc, d_rank_t rank)
+{
+	daos_add_target(pool_uuid, grp, svc, rank, -1);
 }
 
 void

@@ -5,9 +5,15 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    daos_build.test(denv, 'btree', 'btree.c',
+    common_test_utils = denv.SharedObject(['test_mocks.c', 'test_utils.c'])
+    Export('common_test_utils')
+
+    utest_utils = denv.SharedObject('utest_common.c')
+    Export('utest_utils')
+
+    daos_build.test(denv, 'btree', ['btree.c', utest_utils],
                     LIBS=['daos_common', 'gurt', 'cart', 'pmemobj'])
-    daos_build.test(denv, 'btree_direct', 'btree_direct.c',
+    daos_build.test(denv, 'btree_direct', ['btree_direct.c', utest_utils],
                     LIBS=['daos_common', 'gurt', 'cart', 'pmemobj'])
     daos_build.test(denv, 'other', 'other.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
@@ -20,14 +26,15 @@ def scons():
     daos_build.test(denv, 'abt_perf', 'abt_perf.c',
                     LIBS=['daos_common', 'gurt', 'abt'])
 
-    unitEnv = denv.Clone()
+    unit_env = denv.Clone()
     # Some syscalls are aliased when fortification is enabled, which makes
     # mocking in unit tests into a headache.
     # The compiler decides this on its own, but let's force the issue.
-    unitEnv.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
+    unit_env.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
 
-    daos_build.test(unitEnv, 'drpc_tests',
-                    ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c'],
+    daos_build.test(unit_env, 'drpc_tests',
+                    ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c',
+                     common_test_utils],
                     LIBS=['protobuf-c', 'gurt', 'cmocka'])
 
 if __name__ == "SCons.Script":

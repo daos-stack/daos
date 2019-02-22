@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -196,7 +196,7 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj)
 int
 vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	     daos_unit_oid_t oid, daos_epoch_t epoch,
-	     bool no_create, struct vos_object **obj_p)
+	     bool no_create, uint32_t intent, struct vos_object **obj_p)
 {
 
 	struct vos_object	*obj;
@@ -256,14 +256,14 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		no_create ? "find" : "find/create", DP_UOID(oid), epoch);
 
 	if (no_create) {
-		rc = vos_oi_find(cont, oid, epoch, &obj->obj_df);
+		rc = vos_oi_find(cont, oid, epoch, intent, &obj->obj_df);
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_TRACE, "non exist oid "DF_UOID"\n",
 				DP_UOID(oid));
 			rc = 0;
 		}
 	} else {
-		rc = vos_oi_find_alloc(cont, oid, epoch, &obj->obj_df);
+		rc = vos_oi_find_alloc(cont, oid, epoch, intent, &obj->obj_df);
 		D_ASSERT(rc || obj->obj_df);
 	}
 
@@ -315,7 +315,7 @@ vos_obj_revalidate(struct daos_lru_cache *occ, daos_epoch_t epoch,
 		return 0;
 
 	rc = vos_obj_hold(occ, vos_cont2hdl(obj->obj_cont), obj->obj_id,
-			  epoch, !obj->obj_df, obj_p);
+			  epoch, !obj->obj_df, DAOS_INTENT_UPDATE, obj_p);
 	if (rc == 0) {
 		D_ASSERT(*obj_p != obj);
 		vos_obj_release(occ, obj);

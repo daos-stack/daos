@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,11 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
+#include <stdlib.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include <cmocka.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
@@ -38,26 +43,22 @@
 #include <daos_srv/evtree.h>
 #include <daos_srv/bio.h>
 #include <daos/tests_lib.h>
+#include <utest_common.h>
 
 /**
  * An example for integer key evtree .
  */
 
-static struct umem_attr	ts_uma = {
-	/* XXX pmem */
-	.uma_id			= UMEM_CLASS_VMEM,
-};
+static struct utest_context	*ts_utx;
+static struct umem_attr		*ts_uma;
 
 #define ORDER_DEF		16
 
 static int			ts_order = ORDER_DEF;
 
 static TMMID(struct evt_root)	ts_root_mmid;
-static struct evt_root		ts_root;
+static struct evt_root		*ts_root;
 static daos_handle_t		ts_toh;
-static uuid_t			ts_uuid;
-static struct umem_instance	ts_umm;
-static uint64_t			ts_pool_uuid;
 
 #define EVT_SEP			','
 #define EVT_SEP_VAL		':'
@@ -97,7 +98,7 @@ ts_open_create(bool create, char *args)
 		}
 
 	} else if (!create) {
-		inplace = (ts_root.tr_feats != 0);
+		inplace = (ts_root->tr_feats != 0);
 		if (TMMID_IS_NULL(ts_root_mmid) && !inplace) {
 			D_PRINT("Please create tree first\n");
 			return -1;
@@ -109,17 +110,19 @@ ts_open_create(bool create, char *args)
 			ts_order, inplace ? " inplace" : "");
 		if (inplace) {
 			rc = evt_create_inplace(EVT_FEAT_DEFAULT, ts_order,
-						&ts_uma, &ts_root, &ts_toh);
+						ts_uma, ts_root,
+						DAOS_HDL_INVAL, &ts_toh);
 		} else {
-			rc = evt_create(EVT_FEAT_DEFAULT, ts_order, &ts_uma,
+			rc = evt_create(EVT_FEAT_DEFAULT, ts_order, ts_uma,
 					&ts_root_mmid, &ts_toh);
 		}
 	} else {
 		D_PRINT("Open evtree %s\n", inplace ? " inplace" : "");
 		if (inplace)
-			rc = evt_open_inplace(&ts_root, &ts_uma, NULL, &ts_toh);
+			rc = evt_open_inplace(ts_root, ts_uma, DAOS_HDL_INVAL,
+					      NULL, &ts_toh);
 		else
-			rc = evt_open(ts_root_mmid, &ts_uma, &ts_toh);
+			rc = evt_open(ts_root_mmid, ts_uma, &ts_toh);
 	}
 
 	if (rc != 0) {
@@ -234,33 +237,44 @@ done:
 	return 0;
 }
 
-static int
-bio_strdup(bio_addr_t *addr, const char *str)
+static void
+init_mem(void *ptr, size_t size, const void *src_mem)
 {
+	memcpy(ptr, src_mem, size);
+}
+
+static inline int
+bio_alloc_init(struct utest_context *utx, bio_addr_t *addr, const void *src,
+	       size_t size)
+{
+	int		rc;
 	umem_id_t	mmid;
-	int		len;
 
-	/* This should probably be transactional but it's just a test and not
-	 * really the point of the test.
-	 */
-	addr->ba_type = BIO_ADDR_SCM;
-
-	if (str == NULL) {
+	addr->ba_type = DAOS_MEDIA_SCM;
+	if (src == NULL) {
 		addr->ba_hole = 1;
 		return 0;
 	}
 
-	len = strlen(str) + 1;
-	mmid = umem_alloc(&ts_umm, len);
+	rc = utest_alloc(utx, &mmid, size, init_mem, src);
 
-	if (UMMID_IS_NULL(mmid))
-		return -DER_NOMEM;
-
-	memcpy(umem_id2ptr(&ts_umm, mmid), str, len);
+	if (rc != 0)
+		goto end;
 
 	addr->ba_off = mmid.off;
+end:
+	return rc;
+}
 
-	return 0;
+static int
+bio_strdup(struct utest_context *utx, bio_addr_t *addr, const char *str)
+{
+	size_t len = 0;
+
+	if (str != NULL)
+		len = strlen(str) + 1;
+
+	return bio_alloc_init(utx, addr, str, len);
 }
 
 static int
@@ -285,13 +299,12 @@ ts_add_rect(char *args)
 		should_pass ? "true" : "false", total_added);
 
 
-	rc = bio_strdup(&bio_addr, val);
+	rc = bio_strdup(ts_utx, &bio_addr, val);
 	if (rc != 0) {
 		D_FATAL("Insufficient memory for test\n");
 		return rc;
 	}
 	entry.ei_addr = bio_addr;
-	uuid_copy(entry.ei_cookie, ts_uuid);
 	entry.ei_ver = 0;
 	entry.ei_inob = val == NULL ? 0 : 1;
 
@@ -350,9 +363,8 @@ ts_delete_rect(char *args)
 		if (!bio_addr_is_hole(&ent.en_addr)) {
 			umem_id_t	mmid;
 
-			mmid.off = ent.en_addr.ba_off;
-			mmid.pool_uuid_lo = ts_pool_uuid;
-			umem_free(&ts_umm, mmid);
+			mmid = utest_off2mmid(ts_utx, ent.en_addr.ba_off);
+			utest_free(ts_utx, mmid);
 		}
 	} else {
 		if (rc == 0) {
@@ -399,7 +411,8 @@ ts_find_rect(char *args)
 			"val=%.*s\n", DP_ENT(ent),
 			(int)evt_extent_width(&ent->en_sel_ext),
 			punched ? 4 : (int)evt_extent_width(&ent->en_sel_ext),
-			punched ? "None" : (char *)addr.ba_off);
+			punched ? "None" : (char *)utest_off2ptr(ts_utx,
+								 addr.ba_off));
 	}
 
 	evt_ent_array_fini(&ent_array);
@@ -503,11 +516,15 @@ start:
 				return -1;
 			}
 			D_PRINT("%d) "DF_ENT", val_addr="DF_U64" val=%.*s\n",
-				i, DP_ENT(&ent), ent.en_addr.ba_off,
+				i, DP_ENT(&ent),
+				(uint64_t)utest_off2ptr(ts_utx,
+							ent.en_addr.ba_off),
 				bio_addr_is_hole(&ent.en_addr) ?
 				4 : (int)evt_extent_width(&ent.en_sel_ext),
 				bio_addr_is_hole(&ent.en_addr) ?
-				"None" : (char *)ent.en_addr.ba_off);
+				"None" :
+				(char *)utest_off2ptr(ts_utx,
+						      ent.en_addr.ba_off));
 
 			if (!probe)
 				goto skip_probe;
@@ -619,13 +636,12 @@ ts_many_add(char *args)
 
 		memset(buf, 'a' + seq[i] % TS_VAL_CYCLE, size);
 
-		rc = bio_strdup(&bio_addr, buf);
+		rc = bio_strdup(ts_utx, &bio_addr, buf);
 		if (rc != 0) {
 			D_FATAL("Insufficient memory for test\n");
 			return rc;
 		}
 		entry.ei_addr = bio_addr;
-		uuid_copy(entry.ei_cookie, ts_uuid);
 		entry.ei_ver = 0;
 		entry.ei_inob = 1;
 
@@ -701,6 +717,301 @@ ts_tree_debug(char *args)
 	return 0;
 }
 
+#define POOL_NAME "/mnt/daos/evtree-utest"
+#define POOL_SIZE ((1024 * 1024  * 1024ULL))
+
+struct test_arg {
+	struct utest_context	*ta_utx;
+	struct umem_attr	*ta_uma;
+	struct evt_root		*ta_root;
+	char			*ta_pool_name;
+};
+
+int
+teardown_builtin(void **state)
+{
+	struct test_arg *arg = *state;
+	int		 rc;
+
+	if (arg == NULL) {
+		print_message("state not set, likely due to group-setup"
+			      " issue\n");
+		return 0;
+	}
+
+	rc = utest_utx_destroy(arg->ta_utx);
+
+	D_FREE(arg->ta_pool_name);
+
+	return rc;
+}
+int
+setup_builtin(void **state)
+{
+	struct test_arg	*arg = *state;
+	static int	 tnum;
+	int		 rc = 0;
+
+	D_ASPRINTF(arg->ta_pool_name, "/mnt/daos/evtree-test-%d", tnum++);
+	if (arg->ta_pool_name == NULL) {
+		print_message("Failed to allocate test struct\n");
+		return 1;
+	}
+
+	rc = utest_pmem_create(arg->ta_pool_name, POOL_SIZE,
+			       sizeof(*arg->ta_root), &arg->ta_utx);
+	if (rc != 0) {
+		perror("Evtree internal test couldn't create pool");
+		rc = 1;
+		goto failed;
+	}
+
+	arg->ta_root = utest_utx2root(arg->ta_utx);
+	arg->ta_uma = utest_utx2uma(arg->ta_utx);
+
+	return 0;
+failed:
+	D_FREE(arg->ta_pool_name);
+	return rc;
+}
+
+static int
+global_setup(void **state)
+{
+	struct test_arg	*arg;
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL) {
+		print_message("Failed to allocate test struct\n");
+		return 1;
+	}
+
+	*state = arg;
+
+	return 0;
+}
+
+static int
+global_teardown(void **state)
+{
+	struct test_arg	*arg = *state;
+
+	D_FREE(arg);
+
+	return 0;
+}
+
+#define NUM_EPOCHS 100
+#define NUM_PARTIAL 11
+#define NUM_EXTENTS 30
+
+static void
+test_evt_iter_delete(void **state)
+{
+	TMMID(struct evt_root)	 root_mmid;
+	struct test_arg		*arg = *state;
+	int			*value;
+	umem_id_t		 mmid;
+	daos_handle_t		 toh;
+	daos_handle_t		 ih;
+	struct evt_entry_in	 entry = {0};
+	struct evt_entry	 ent;
+	int			 rc;
+	int			 epoch;
+	int			 offset;
+	int			 sum, expected_sum;
+	struct evt_filter	 filter;
+	uint32_t		 inob;
+
+	root_mmid = TMMID_NULL(struct evt_root);
+
+	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, &root_mmid, &toh);
+	assert_int_equal(rc, 0);
+
+	/* Insert a bunch of entries */
+	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
+		for (offset = epoch; offset < NUM_EXTENTS + epoch; offset++) {
+			entry.ei_rect.rc_ex.ex_lo = offset;
+			entry.ei_rect.rc_ex.ex_hi = offset;
+			entry.ei_rect.rc_epc = epoch;
+			entry.ei_csum = 0;
+			entry.ei_ver = 0;
+			entry.ei_inob = sizeof(offset);
+			sum = offset - epoch + 1;
+			rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr, &sum,
+					    sizeof(sum));
+			assert_int_equal(rc, 0);
+
+			rc = evt_insert(toh, &entry);
+			assert_int_equal(rc, 0);
+		}
+	}
+
+	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE, NULL, &ih);
+	assert_int_equal(rc, 0);
+	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+	assert_int_equal(rc, 0);
+	sum = 0;
+	for (;;) {
+		rc = evt_iter_fetch(ih, &inob, &ent, NULL);
+		if (rc == -DER_NONEXIST)
+			break;
+		assert_int_equal(rc, 0);
+		assert_int_equal(inob, sizeof(sum));
+
+		value = utest_off2ptr(arg->ta_utx, ent.en_addr.ba_off);
+		sum += *value;
+
+		rc = evt_iter_next(ih);
+		if (rc == -DER_NONEXIST)
+			break;
+		assert_int_equal(rc, 0);
+	}
+	expected_sum = NUM_EPOCHS + (NUM_EXTENTS * (NUM_EXTENTS + 1) / 2) - 1;
+	assert_int_equal(expected_sum, sum);
+	rc = evt_iter_finish(ih);
+	assert_int_equal(rc, 0);
+
+
+	filter.fr_ex.ex_lo = 0;
+	filter.fr_ex.ex_hi = NUM_EPOCHS + NUM_EXTENTS;
+	filter.fr_epr.epr_lo = NUM_EPOCHS - NUM_PARTIAL + 1;
+	filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
+	rc = evt_iter_prepare(toh, 0, &filter, &ih);
+	assert_int_equal(rc, 0);
+
+	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	sum = 0;
+
+	/* Delete some of the entries */
+	for (;;) {
+		bio_addr_t addr;
+
+		rc = evt_iter_delete(ih, &addr);
+		if (rc == -DER_NONEXIST)
+			break;
+
+		assert_int_equal(rc, 0);
+
+		assert_false(bio_addr_is_hole(&addr));
+
+		mmid = utest_off2mmid(arg->ta_utx, addr.ba_off);
+		value = utest_off2ptr(arg->ta_utx, addr.ba_off);
+
+		sum += *value;
+		utest_free(arg->ta_utx, mmid);
+	}
+	expected_sum = NUM_PARTIAL * (NUM_EXTENTS * (NUM_EXTENTS + 1) / 2);
+	assert_int_equal(expected_sum, sum);
+
+	rc = evt_iter_finish(ih);
+	assert_int_equal(rc, 0);
+
+	/* No filter so delete everything */
+	rc = evt_iter_prepare(toh, 0, NULL, &ih);
+	assert_int_equal(rc, 0);
+
+	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Ok, delete the rest */
+	while (!evt_iter_empty(ih)) {
+		bio_addr_t addr;
+
+		rc = evt_iter_delete(ih, &addr);
+		assert_int_equal(rc, 0);
+
+		assert_false(bio_addr_is_hole(&addr));
+
+		mmid = utest_off2mmid(arg->ta_utx, addr.ba_off);
+		value = utest_off2ptr(arg->ta_utx, addr.ba_off);
+
+		sum += *value;
+		utest_free(arg->ta_utx, mmid);
+	}
+	rc = evt_iter_finish(ih);
+	assert_int_equal(rc, 0);
+
+	expected_sum = NUM_EPOCHS * (NUM_EXTENTS * (NUM_EXTENTS + 1) / 2);
+	assert_int_equal(expected_sum, sum);
+
+	rc = evt_destroy(toh);
+	assert_int_equal(rc, 0);
+}
+
+static void
+test_evt_iter_delete_internal(void **state)
+{
+	TMMID(struct evt_root)	 root_mmid;
+	struct test_arg		*arg = *state;
+	daos_handle_t		 toh;
+	daos_handle_t		 ih;
+	struct evt_entry_in	 entry = {0};
+	int			 rc;
+	int			 epoch;
+	int			 offset;
+
+	root_mmid = TMMID_NULL(struct evt_root);
+
+	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, &root_mmid, &toh);
+	assert_int_equal(rc, 0);
+
+	/* Insert a bunch of entries */
+	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
+		for (offset = epoch; offset < NUM_EXTENTS + epoch; offset++) {
+			entry.ei_rect.rc_ex.ex_lo = offset;
+			entry.ei_rect.rc_ex.ex_hi = offset;
+			entry.ei_rect.rc_epc = epoch;
+			entry.ei_csum = 0;
+			entry.ei_ver = 0;
+			entry.ei_inob = sizeof(offset);
+			rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
+					    &offset, sizeof(offset));
+			assert_int_equal(rc, 0);
+
+			rc = evt_insert(toh, &entry);
+			assert_int_equal(rc, 0);
+		}
+	}
+
+	/* No filter so delete everything */
+	rc = evt_iter_prepare(toh, 0, NULL, &ih);
+	assert_int_equal(rc, 0);
+
+	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Ok, delete the rest */
+	while (!evt_iter_empty(ih)) {
+		rc = evt_iter_delete(ih, NULL);
+		assert_int_equal(rc, 0);
+	}
+	rc = evt_iter_finish(ih);
+	assert_int_equal(rc, 0);
+
+	rc = evt_destroy(toh);
+	assert_int_equal(rc, 0);
+}
+
+static int
+run_internal_tests(void)
+{
+	static const struct CMUnitTest evt_builtin[] = {
+		{ "EVT001: evt_iter_delete", test_evt_iter_delete,
+			setup_builtin, teardown_builtin},
+		{ "EVT002: evt_iter_delete_internal",
+			test_evt_iter_delete_internal,
+			setup_builtin, teardown_builtin},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("evtree built-in tests", evt_builtin,
+					   global_setup, global_teardown);
+}
+
+
 static struct option ts_ops[] = {
 	{ "create",	required_argument,	NULL,	'C'	},
 	{ "destroy",	no_argument,		NULL,	'D'	},
@@ -713,6 +1024,7 @@ static struct option ts_ops[] = {
 	{ "list",	optional_argument,	NULL,	'l'	},
 	{ "get_size",	required_argument,	NULL,	'g'	},
 	{ "debug",	required_argument,	NULL,	'b'	},
+	{ "test",	required_argument,	NULL,	't'	},
 	{ NULL,		0,			NULL,	0	},
 };
 
@@ -755,6 +1067,9 @@ ts_cmd_run(char opc, char *args)
 	case 'b':
 		rc = ts_tree_debug(args);
 		break;
+	case 't':
+		rc = run_internal_tests();
+		break;
 	default:
 		D_PRINT("Unsupported command %c\n", opc);
 		rc = 0;
@@ -769,29 +1084,41 @@ ts_cmd_run(char opc, char *args)
 int
 main(int argc, char **argv)
 {
-	int	rc;
+	struct timeval	tv;
+	int		rc;
+
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
 
 	ts_toh = DAOS_HDL_INVAL;
 
-	ts_root.tr_feats = 0;
 	ts_root_mmid = TMMID_NULL(struct evt_root);
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
 		return rc;
-	rc = umem_class_init(&ts_uma, &ts_umm);
+
+	optind = 0;
+	if (argc > 1 && strcmp(argv[1], "pmem") == 0) {
+		optind = 1;
+		rc = utest_pmem_create(POOL_NAME, POOL_SIZE, sizeof(*ts_root),
+				       &ts_utx);
+	} else {
+		rc = utest_vmem_create(sizeof(*ts_root), &ts_utx);
+	}
+
 	if (rc != 0)
 		return rc;
 
-	ts_pool_uuid = umem_get_uuid(&ts_umm);
+	ts_root = utest_utx2root(ts_utx);
+	ts_uma = utest_utx2uma(ts_utx);
 
-	if (argc == 1) {
+	if ((argc - optind) == 1) {
 		rc = dts_cmd_parser(ts_ops, "$ > ", ts_cmd_run);
 		goto out;
 	}
 
-	optind = 0;
-	while ((rc = getopt_long(argc, argv, "C:a:m:f:g:d:b:Docl::",
+	while ((rc = getopt_long(argc, argv, "C:a:m:f:g:d:b:Docl::t",
 				 ts_ops, NULL)) != -1) {
 		rc = ts_cmd_run(rc, optarg);
 		if (rc != 0)
@@ -800,5 +1127,6 @@ main(int argc, char **argv)
 	rc = 0;
  out:
 	daos_debug_fini();
+	rc += utest_utx_destroy(ts_utx);
 	return rc;
 }

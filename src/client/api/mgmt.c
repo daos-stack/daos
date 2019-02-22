@@ -95,7 +95,8 @@ int
 daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 		 const d_rank_list_t *tgts, const char *dev,
 		 daos_size_t scm_size, daos_size_t nvme_size,
-		 d_rank_list_t *svc, uuid_t uuid, daos_event_t *ev)
+		 daos_prop_t *pool_prop, d_rank_list_t *svc,
+		 uuid_t uuid, daos_event_t *ev)
 {
 	daos_pool_create_t	*args;
 	tse_task_t		*task;
@@ -104,6 +105,10 @@ daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 	DAOS_API_ARG_ASSERT(*args, POOL_CREATE);
 	if (!valid_pool_create_mode(mode)) {
 		D_ERROR("Invalid pool creation mode (%o).\n", mode);
+		return -DER_INVAL;
+	}
+	if (pool_prop != NULL && !daos_prop_valid(pool_prop, true, true)) {
+		D_ERROR("Invalid pool properties.\n");
 		return -DER_INVAL;
 	}
 
@@ -120,6 +125,7 @@ daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 	args->dev	= dev;
 	args->scm_size	= scm_size;
 	args->nvme_size	= nvme_size;
+	args->prop	= pool_prop;
 	args->svc	= svc;
 	args->uuid	= uuid;
 
@@ -170,7 +176,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 
 int
 daos_pool_add_tgt(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, d_rank_list_t *tgts,
+		  const d_rank_list_t *svc, struct d_tgt_list *tgts,
 		  daos_event_t *ev)
 {
 	daos_pool_update_t	*args;
@@ -191,9 +197,9 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 }
 
 int
-daos_pool_exclude_out(const uuid_t uuid, const char *grp,
-		      const d_rank_list_t *svc, d_rank_list_t *tgts,
-		      daos_event_t *ev)
+daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
+			  const d_rank_list_t *svc, struct d_tgt_list *tgts,
+			  daos_event_t *ev)
 {
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
@@ -213,9 +219,9 @@ daos_pool_exclude_out(const uuid_t uuid, const char *grp,
 }
 
 int
-daos_pool_exclude(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, d_rank_list_t *tgts,
-		  daos_event_t *ev)
+daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
+		      const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		      daos_event_t *ev)
 {
 	daos_pool_update_t	*args;
 	tse_task_t		*task;

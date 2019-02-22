@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2018 Intel Corporation.
+/*
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@
  */
 /**
  * ds_pool: RDB Operations
- *
  */
+
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos_srv/pool.h>
@@ -36,7 +36,6 @@
 #include <daos_srv/rebuild.h>
 #include "rpc.h"
 #include "srv_internal.h"
-
 
 enum rdb_start_flag {
 	RDB_AF_CREATE		= 0x1,
@@ -115,13 +114,12 @@ out:
 void
 ds_pool_rdb_start_handler(crt_rpc_t *rpc)
 {
-	struct pool_rdb_start_in    *in = crt_req_get(rpc);
-	struct pool_rdb_start_out   *out = crt_reply_get(rpc);
-	bool			     created = false;
-	char			    *path = NULL;
-	int			     rc;
+	struct pool_rdb_start_in       *in = crt_req_get(rpc);
+	struct pool_rdb_start_out      *out = crt_reply_get(rpc);
+	bool				create = in->dai_flags & RDB_AF_CREATE;
+	int				rc;
 
-	if (in->dai_flags & RDB_AF_CREATE && in->dai_ranks == NULL)
+	if (create && in->dai_ranks == NULL)
 		D_GOTO(out, rc = -DER_PROTO);
 
 	if (in->dai_ranks != NULL) {
@@ -135,45 +133,13 @@ ds_pool_rdb_start_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = 0);
 	}
 
-	if (in->dai_flags & RDB_AF_CREATE) {
-		path = ds_pool_svc_rdb_path(in->dai_pool);
-		if (path == NULL) {
-			rc = -DER_NOMEM;
-			goto out;
-		}
-		rc = rdb_create(path, in->dai_dbid, in->dai_size,
-				(in->dai_flags & RDB_AF_BOOTSTRAP) ?
-				 in->dai_ranks : NULL);
-		if (rc == 0) {
-			rc = ds_pool_svc_rdb_uuid_store(in->dai_pool,
-							in->dai_dbid);
-			if (rc != 0) {
-				rdb_destroy(path, in->dai_dbid);
-				goto out_path;
-			}
-			created = true;
-		} else if (rc != -DER_EXIST) {
-			D_ERROR(DF_UUID": failed to create replica: %d\n",
-				DP_UUID(in->dai_dbid), rc);
-			D_GOTO(out_path, rc);
-		}
+	rc = ds_pool_svc_start(in->dai_pool, create, in->dai_dbid, in->dai_size,
+			       (in->dai_flags & RDB_AF_BOOTSTRAP) ?
+			       in->dai_ranks : NULL);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to start pool service: %d\n",
+			DP_UUID(in->dai_dbid), rc);
 
-	}
-
-	rc = ds_pool_svc_start(in->dai_pool);
-	if (rc != 0) {
-		if ((in->dai_flags & RDB_AF_CREATE) || rc != -DER_NONEXIST)
-			D_ERROR(DF_UUID": failed to start replica: %d\n",
-				DP_UUID(in->dai_dbid), rc);
-		if (created) {
-			ds_pool_svc_rdb_uuid_remove(in->dai_pool);
-			rdb_destroy(path, in->dai_dbid);
-		}
-	}
-
-out_path:
-	if (path != NULL)
-		D_FREE(path);
 out:
 	out->dao_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);
@@ -258,33 +224,10 @@ ds_pool_rdb_stop_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = 0);
 	}
 
-	ds_pool_svc_stop(in->doi_pool);
-
-	if (in->doi_flags & RDB_OF_DESTROY) {
-		uuid_t	uuid;
-		char   *path;
-
-		rc = ds_pool_svc_rdb_uuid_load(in->doi_pool, uuid);
-		if (rc != 0) {
-			if (rc == -DER_NONEXIST)
-				rc = 0;
-			goto out;
-		}
-		path = ds_pool_svc_rdb_path(in->doi_pool);
-		if (path == NULL) {
-			rc = -DER_NOMEM;
-			goto out;
-		}
-		rc = rdb_destroy(path, uuid);
-		D_FREE(path);
-		if (rc == 0)
-			rc = ds_pool_svc_rdb_uuid_remove(in->doi_pool);
-		if (rc == -DER_NONEXIST)
-			rc = 0;
-		else if (rc != 0)
-			D_ERROR(DF_UUID": failed to destroy replica: %d\n",
-				DP_UUID(uuid), rc);
-	}
+	rc = ds_pool_svc_stop(in->doi_pool, in->doi_flags & RDB_OF_DESTROY);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to stop pool service: %d\n",
+			DP_UUID(in->doi_pool), rc);
 
 out:
 	out->doo_rc = (rc == 0 ? 0 : 1);

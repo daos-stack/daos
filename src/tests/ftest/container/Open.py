@@ -87,9 +87,6 @@ class OpenContainerTest(Test):
 
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
-        # give it time to start
-        time.sleep(2)
-
     def tearDown(self):
         try:
             if self.CONTAINER1 is not None:

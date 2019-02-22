@@ -39,13 +39,9 @@ init(void)
 {
 	int rc;
 
-	rc = ds_pool_svc_hash_init();
-	if (rc != 0)
-		D_GOTO(err, rc);
-
 	rc = ds_pool_cache_init();
 	if (rc != 0)
-		D_GOTO(err_pool_svc, rc);
+		D_GOTO(err, rc);
 
 	rc = ds_pool_hdl_hash_init();
 	if (rc != 0)
@@ -54,13 +50,15 @@ init(void)
 	rc = ds_pool_iv_init();
 	if (rc)
 		D_GOTO(err_hdl_hash, rc);
+
+	ds_pool_rsvc_class_register();
+
 	return 0;
+
 err_hdl_hash:
 	ds_pool_hdl_hash_fini();
 err_pool_cache:
 	ds_pool_cache_fini();
-err_pool_svc:
-	ds_pool_svc_hash_fini();
 err:
 	return rc;
 }
@@ -68,10 +66,10 @@ err:
 static int
 fini(void)
 {
+	ds_pool_rsvc_class_unregister();
 	ds_pool_iv_fini();
 	ds_pool_hdl_hash_fini();
 	ds_pool_cache_fini();
-	ds_pool_svc_hash_fini();
 	return 0;
 }
 
@@ -99,6 +97,11 @@ static struct crt_corpc_ops ds_pool_tgt_connect_co_ops = {
 
 static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
 	.co_aggregate	= ds_pool_tgt_disconnect_aggregator,
+	.co_pre_forward	= NULL,
+};
+
+static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
+	.co_aggregate	= ds_pool_tgt_query_aggregator,
 	.co_pre_forward	= NULL,
 };
 

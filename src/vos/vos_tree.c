@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -394,8 +394,9 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	}
 
 	umem_attr_get(&tins->ti_umm, &uma);
-	rc = dbtree_create_inplace(ta->ta_class, tree_feats, ta->ta_order,
-				   &uma, &krec->kr_btr, &btr_oh);
+	rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats, ta->ta_order,
+				      &uma, &krec->kr_btr, tins->ti_coh,
+				      &btr_oh);
 	if (rc != 0) {
 		D_ERROR("Failed to create btree: %d\n", rc);
 		return rc;
@@ -407,7 +408,8 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 		krec->kr_bmap |= KREC_BF_EVT;
 		rc = evt_create_inplace(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, &uma,
-					&krec->kr_evt[0], &evt_oh);
+					&krec->kr_evt[0], tins->ti_coh,
+					&evt_oh);
 		if (rc != 0) {
 			D_ERROR("Failed to create evtree: %d\n", rc);
 			D_GOTO(out, rc);
@@ -440,7 +442,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	/* has subtree? */
 	if (krec->kr_btr.tr_order) {
-		rc = dbtree_open_inplace_ex(&krec->kr_btr, &uma,
+		rc = dbtree_open_inplace_ex(&krec->kr_btr, &uma, tins->ti_coh,
 					    tins->ti_blks_info, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open btree: %d\n", rc);
@@ -449,7 +451,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	}
 
 	if ((krec->kr_bmap & KREC_BF_EVT) && krec->kr_evt[0].tr_order) {
-		rc = evt_open_inplace(&krec->kr_evt[0], &uma,
+		rc = evt_open_inplace(&krec->kr_evt[0], &uma, tins->ti_coh,
 				      tins->ti_blks_info, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open evtree: %d\n", rc);
@@ -524,8 +526,6 @@ static btr_ops_t key_btr_ops = {
 struct svt_hkey {
 	/** */
 	uint64_t	sv_epoch;
-	/** cookie ID tag for this update */
-	uuid_t		sv_cookie;
 };
 
 /**
@@ -539,14 +539,9 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
-	struct svt_hkey		*skey;
 
 	if (biov->bi_data_len != rbund->rb_rsize)
 		return -DER_IO_INVAL;
-
-	skey = (struct svt_hkey *)&rec->rec_hkey[0];
-	/** Updating the cookie for this update */
-	uuid_copy(skey->sv_cookie, rbund->rb_cookie);
 
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
@@ -580,8 +575,6 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 
 	if (kbund != NULL) /* called from iterator */
 		kbund->kb_epoch = skey->sv_epoch;
-
-	uuid_copy(rbund->rb_cookie, skey->sv_cookie);
 
 	/* NB: return record address, caller should copy/rma data for it */
 	biov->bi_data_len = irec->ir_size;
@@ -660,6 +653,8 @@ svt_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		if (UMMID_IS_NULL(rec->rec_mmid))
 			return -DER_NOMEM;
 	} else {
+		umem_tx_add(&tins->ti_umm, rbund->rb_mmid,
+			    vos_irec_msize(rbund));
 		rec->rec_mmid = rbund->rb_mmid;
 		rbund->rb_mmid = UMMID_NULL; /* taken over by btree */
 	}
@@ -684,7 +679,7 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec,
 		return 0;
 	}
 
-	if (addr->ba_type == BIO_ADDR_NVME && !bio_addr_is_hole(addr)) {
+	if (addr->ba_type == DAOS_MEDIA_NVME && !bio_addr_is_hole(addr)) {
 		struct vea_space_info *vsi = tins->ti_blks_info;
 		uint64_t blk_off;
 		uint32_t blk_cnt;
@@ -801,8 +796,8 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 int
 key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, struct vos_krec_df **krecp,
-		 daos_handle_t *sub_toh)
+		 daos_key_t *key, int flags, uint32_t intent,
+		 struct vos_krec_df **krecp, daos_handle_t *sub_toh)
 {
 	struct umem_attr	*uma = vos_obj2uma(obj);
 	struct vos_krec_df	*krec;
@@ -840,8 +835,8 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 	 *   create the root for the subtree, or just return it if it's already
 	 *   there.
 	 */
-	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED, &kiov, NULL,
-			  &riov);
+	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED, intent, &kiov,
+			  NULL, &riov);
 	switch (rc) {
 	default:
 		D_ERROR("fetch failed: %d\n", rc);
@@ -854,7 +849,7 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		kbund.kb_epoch	= DAOS_EPOCH_MAX;
 		rbund.rb_iov	= key;
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, &kiov, &riov);
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, &kiov, &riov);
 		if (rc) {
 			D_ERROR("Failed to upsert: %d\n", rc);
 			goto out;
@@ -878,11 +873,15 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 
 	info = obj->obj_cont->vc_pool->vp_vea_info;
 	if (flags & SUBTR_EVT) {
-		rc = evt_open_inplace(&krec->kr_evt[0], uma, info, sub_toh);
+		rc = evt_open_inplace(&krec->kr_evt[0], uma,
+				      vos_cont2hdl(obj->obj_cont),
+				      info, sub_toh);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	} else {
-		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, info, sub_toh);
+		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma,
+					    vos_cont2hdl(obj->obj_cont),
+					    info, sub_toh);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -917,12 +916,16 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	int			 rc;
 	bool			 replay = (flags & VOS_OF_REPLAY_PC);
 
-	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED, key_iov,
-			  NULL, val_iov);
+	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED,
+			  DAOS_INTENT_PUNCH, key_iov, NULL, val_iov);
 	if (rc != 0) {
+		if (rc == -DER_INPROGRESS)
+			return rc;
+
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, key_iov, val_iov);
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_PUNCH,
+				   key_iov, val_iov);
 		if (rc)
 			D_ERROR("Failed to add new punch, rc=%d\n", rc);
 
@@ -948,7 +951,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	}
 
 	/* PROBE_EQ == insert in this case */
-	rc = dbtree_upsert(toh, BTR_PROBE_EQ, key_iov, val_iov);
+	rc = dbtree_upsert(toh, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key_iov,
+			   val_iov);
 	if (rc)
 		return rc;
 
@@ -1008,14 +1012,17 @@ obj_tree_init(struct vos_object *obj)
 		else if (obj_feats & DAOS_OF_DKEY_LEXICAL)
 			tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
 
-		rc = dbtree_create_inplace(ta->ta_class, tree_feats,
-					   ta->ta_order, vos_obj2uma(obj),
-					   &obj->obj_df->vo_tree,
-					   &obj->obj_toh);
+		rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats,
+					      ta->ta_order, vos_obj2uma(obj),
+					      &obj->obj_df->vo_tree,
+					      vos_cont2hdl(obj->obj_cont),
+					      &obj->obj_toh);
 	} else {
 		D_DEBUG(DB_DF, "Open btree for object\n");
-		rc = dbtree_open_inplace(&obj->obj_df->vo_tree,
-					 vos_obj2uma(obj), &obj->obj_toh);
+		rc = dbtree_open_inplace_ex(&obj->obj_df->vo_tree,
+					    vos_obj2uma(obj),
+					    vos_cont2hdl(obj->obj_cont),
+					    NULL, &obj->obj_toh);
 	}
 	return rc;
 }

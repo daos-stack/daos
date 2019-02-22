@@ -1,12 +1,16 @@
 #!/bin/bash
 
+if [ "$USE_VALGRIND" = "yes" ]; then
+    VCMD="valgrind --tool=pmemcheck "
+fi
+
 cwd=$(dirname "$0")
 DAOS_DIR=$(cd "${cwd}/../../.." && echo "$PWD")
 #shellcheck disable=SC1090
 source "$DAOS_DIR/.build_vars.sh"
 EVT_CTL="$SL_PREFIX/bin/evt_ctl"
 
-cmd="$EVT_CTL -C o:4"
+cmd="$VCMD $EVT_CTL $* -C o:4"
 
 function word_set {
     ((flag = $1 % 2))
@@ -23,6 +27,7 @@ function word_set {
  -a 20-24@$n:black		\
  -a 90-95@$np2:coffee	\
  -a 50-56@$n:scarlet	\
+ -a 57-61@$n:witch		\
  -a 57-61@$n:witch		\
  -a 96-99@$n:blue		\
  -a 78-82@$np2:hello	\
@@ -158,7 +163,7 @@ EOF
 cmd+=" -b -2 -D"
 echo "$cmd"
 
-$cmd
+$cmd -t
 
 result=$?
 echo Test returned $result

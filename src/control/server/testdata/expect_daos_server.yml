@@ -1,9 +1,7 @@
 name: daos_server
 servers: []
 provider: ""
-socket_dir: ./
-auto: true
-format: safe
+socket_dir: /var/run/daos_server
 access_points:
 - localhost
 port: 10000
@@ -17,3 +15,11 @@ scm_mount_path: /mnt/daos
 bdev_include: []
 bdev_exclude: []
 hyperthreads: false
+nr_hugepages: 1024
+control_log_mask: DEBUG
+control_log_file: ""
+modules: ""
+attach: ""
+systemmap: ""
+path: ../../../utils/config/daos_server.yml
+nvmeshmid: 0

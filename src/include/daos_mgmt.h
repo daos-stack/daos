@@ -59,6 +59,7 @@ extern "C" {
  *			consume) in bytes. Passing 0 will use the minimal
  *			supported target size.
  * \param nvme_size[IN]	Target NVMe (Non-Volatile Memory express) size in bytes.
+ * \param pool_prop[IN]	Optional, pool properties.
  * \param svc	[IN]	Number of desired pool service replicas. Callers must
  *			speicfy svc->rl_nr and allocate a matching
  *			svc->rl_ranks; svc->rl_nr and svc->rl_ranks
@@ -76,7 +77,8 @@ int
 daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 		 const d_rank_list_t *tgts, const char *dev,
 		 daos_size_t scm_size, daos_size_t nvme_size,
-		 d_rank_list_t *svc, uuid_t uuid, daos_event_t *ev);
+		 daos_prop_t *pool_prop, d_rank_list_t *svc, uuid_t uuid,
+		 daos_event_t *ev);
 
 /**
  * Destroy a pool with \a uuid. If there is at least one connection to this
@@ -116,8 +118,10 @@ daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
  * \param svc	[IN]	list of pool service ranks
- * \param tgts	[IN]	Target rank array to be excluded from the pool.
- *			Now can-only exclude one target per API calling.
+ * \param tgts	[IN]	Target to be excluded from the pool.
+ *			Now can-only exclude one target per API calling. If
+ *			tl_tgts = -1, it means it will exclude all targets
+ *			on the rank.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -129,9 +133,9 @@ daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
  *			-DER_NONEXIST	Pool is nonexistent
  */
 int
-daos_pool_exclude(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, d_rank_list_t *tgts,
-		  daos_event_t *ev);
+daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
+		      const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		      daos_event_t *ev);
 
 /**
  * Extend the pool to more targets. If \a tgts is NULL, this function
@@ -186,7 +190,9 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
  * \param svc	[IN]	list of pool service ranks
- * \param tgts	[IN]	Target rank array to be added from the pool.
+ * \param tgts	[IN]	Target array to be added from the pool.  If
+ *			tl_tgts = -1, it means it will add all targets
+ *			on the rank.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -199,7 +205,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
  */
 int
 daos_pool_add_tgt(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, d_rank_list_t *tgts,
+		  const d_rank_list_t *svc, struct d_tgt_list *tgts,
 		  daos_event_t *ev);
 
 /**
@@ -221,15 +227,17 @@ daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 
 /**
  * Exclude completely a set of storage targets from a pool. Compared with
- * daos_pool_exclude(), this API will mark the targets to be DOWNOUT, i.e.
- * the rebuilding for this target is done, while daos_pool_exclude() only
+ * daos_pool_tgt_exclude(), this API will mark the targets to be DOWNOUT, i.e.
+ * the rebuilding for this target is done, while daos_pool_tgt_exclude() only
  * mark the target to be DOWN, i.e. the rebuilding might not finished yet.
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
  * \param svc	[IN]	list of pool service ranks
- * \param tgts	[IN]	Target rank array to be excluded from the pool.
- *			Now can-only exclude one target per API calling.
+ * \param tgts	[IN]	Target array to be excluded from the pool.
+ *			Now can-only exclude out one target per API calling. If
+ *			tl_tgts = -1, it means it will exclude out all targets
+ *			on the rank.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -241,9 +249,9 @@ daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
  *			-DER_NO_PERM	Permission denied
  */
 int
-daos_pool_exclude_out(const uuid_t uuid, const char *grp,
-		      const d_rank_list_t *svc, d_rank_list_t *tgts,
-		      daos_event_t *ev);
+daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
+			  const d_rank_list_t *svc, struct d_tgt_list *tgts,
+			  daos_event_t *ev);
 
 /**
  * Stop the current pool service leader.

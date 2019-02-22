@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,16 +97,27 @@ cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	cont_df = umem_id2ptr_typed(&tins->ti_umm, cont_mmid);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
 	args->ca_cont_df = cont_df;
+	rec->rec_mmid = umem_id_t2u(cont_mmid);
 
 	rc = vos_obj_tab_create(args->ca_pool, &cont_df->cd_otab_df);
 	if (rc) {
 		D_ERROR("VOS object index create failure\n");
 		D_GOTO(exit, rc);
 	}
-	rec->rec_mmid = umem_id_t2u(cont_mmid);
+
+	rc = vos_dtx_table_create(args->ca_pool, &cont_df->cd_dtx_table_df);
+	if (rc) {
+		D_ERROR("Failed to create DTX table: rc = %d\n", rc);
+		D_GOTO(exit, rc);
+	}
+
+	return 0;
+
 exit:
-	if (rc != 0)
-		cont_df_rec_free(tins, rec, NULL);
+	vos_dtx_table_destroy(args->ca_pool, &cont_df->cd_dtx_table_df);
+	if (cont_df->cd_otab_df.obt_btr.tr_class != 0)
+		vos_obj_tab_destroy(args->ca_pool, &cont_df->cd_otab_df);
+	cont_df_rec_free(tins, rec, NULL);
 
 	return rc;
 }
@@ -178,6 +189,11 @@ cont_free(struct d_ulink *ulink)
 	struct vos_container *cont;
 
 	cont = container_of(ulink, struct vos_container, vc_uhlink);
+	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
+		dbtree_destroy(cont->vc_dtx_cos_hdl);
+	D_ASSERT(d_list_empty(&cont->vc_dtx_committable));
+	dbtree_close(cont->vc_dtx_active_hdl);
+	dbtree_close(cont->vc_dtx_committed_hdl);
 	dbtree_close(cont->vc_btr_hdl);
 	if (cont->vc_hint_ctxt)
 		vea_hint_unload(cont->vc_hint_ctxt);
@@ -256,6 +272,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 	struct vos_pool		*vpool = NULL;
 	struct cont_df_args	 args;
 	struct d_uuid		 ukey;
+	daos_iov_t		 key, value;
 	int			 rc = 0;
 
 	vpool = vos_hdl2pool(poh);
@@ -275,22 +292,16 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc = -DER_EXIST);
 	}
 
-	TX_BEGIN(vos_pool_ptr2pop(vpool)) {
-		daos_iov_t key, value;
+	rc = vos_tx_begin(vpool);
+	if (rc != 0)
+		goto exit;
 
-		daos_iov_set(&key, &ukey, sizeof(ukey));
-		daos_iov_set(&value, &args, sizeof(args));
+	daos_iov_set(&key, &ukey, sizeof(ukey));
+	daos_iov_set(&value, &args, sizeof(args));
 
-		rc = dbtree_update(vpool->vp_cont_th, &key, &value);
-		if (rc) {
-			D_ERROR("Creating a container entry: %d\n", rc);
-			pmemobj_tx_abort(ENOMEM);
-		}
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_ERROR("Creating a container entry: %d\n", rc);
-	} TX_END;
+	rc = dbtree_update(vpool->vp_cont_th, &key, &value);
 
+	rc = vos_tx_end(vpool, rc);
 exit:
 	return rc;
 }
@@ -308,6 +319,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	struct d_uuid			pkey;
 	struct cont_df_args		args;
 	struct vos_container		*cont = NULL;
+	struct umem_attr		uma;
 
 	D_DEBUG(DB_TRACE, "Open container "DF_UUID"\n", DP_UUID(co_uuid));
 
@@ -347,14 +359,45 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_pool	 = vpool;
 	cont->vc_cont_df = args.ca_cont_df;
 	cont->vc_otab_df = &args.ca_cont_df->cd_otab_df;
+	cont->vc_dtx_cos_hdl = DAOS_HDL_INVAL;
+	D_INIT_LIST_HEAD(&cont->vc_dtx_committable);
+	cont->vc_dtx_committable_count = 0;
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_otab_df->obt_btr,
 				    &cont->vc_pool->vp_uma,
+				    vos_cont2hdl(cont),
 				    cont->vc_pool->vp_vea_info,
 				    &cont->vc_btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
+		D_GOTO(exit, rc);
+	}
+
+	rc = dbtree_open_inplace(
+			&cont->vc_cont_df->cd_dtx_table_df.tt_committed_btr,
+			&vpool->vp_uma, &cont->vc_dtx_committed_hdl);
+	if (rc) {
+		D_ERROR("Failed to open committed DTX table: rc = %d\n", rc);
+		D_GOTO(exit, rc);
+	}
+
+	rc = dbtree_open_inplace(
+			&cont->vc_cont_df->cd_dtx_table_df.tt_active_btr,
+			&vpool->vp_uma, &cont->vc_dtx_active_hdl);
+	if (rc) {
+		D_ERROR("Failed to open active DTX table: rc = %d\n", rc);
+		D_GOTO(exit, rc);
+	}
+
+	memset(&uma, 0, sizeof(uma));
+	uma.uma_id = UMEM_CLASS_VMEM;
+	memset(&cont->vc_dtx_cos_btr, 0, sizeof(cont->vc_dtx_cos_btr));
+	rc = dbtree_create_inplace(VOS_BTR_DTX_COS, 0, OT_BTREE_ORDER, &uma,
+				   &cont->vc_dtx_cos_btr,
+				   &cont->vc_dtx_cos_hdl);
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX CoS btree: rc = %d\n", rc);
 		D_GOTO(exit, rc);
 	}
 
@@ -416,7 +459,10 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cont_info)
 		return -DER_INVAL;
 	}
 
-	memcpy(cont_info, &cont->vc_cont_df->cd_info, sizeof(*cont_info));
+	cont_info->ci_nobjs = cont->vc_cont_df->cd_nobjs;
+	cont_info->ci_used = cont->vc_cont_df->cd_used;
+	cont_info->ci_hae = cont->vc_cont_df->cd_hae;
+
 	return 0;
 }
 
@@ -655,7 +701,11 @@ cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
 	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
-	return dbtree_iter_probe(co_iter->cot_hdl, opc, NULL, anchor);
+	/* The container tree will not be affected by the iterator intent,
+	 * just set it as DAOS_INTENT_DEFAULT.
+	 */
+	return dbtree_iter_probe(co_iter->cot_hdl, opc, DAOS_INTENT_DEFAULT,
+				 NULL, anchor);
 }
 
 static int

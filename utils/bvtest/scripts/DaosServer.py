@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017 Intel Corporation
+# Copyright (c) 2017-2019 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -57,8 +57,8 @@ class DaosServer(object):
         self.logger = logging.getLogger("TestRunnerLogger")
         self.proc = None
 
-        hostlist = test_info.get_subList('hostlist').split(',')
-        hostcount = len(hostlist)
+        self.hostlist = test_info.get_subList('hostlist').split(',')
+        hostcount = len(self.hostlist)
 
         hostfilepath = os.path.join(self.dir_path, "hostfile")
         daos_test_dir = test_info.get_defaultENV("DAOS_TEST_DIR",
@@ -71,16 +71,24 @@ class DaosServer(object):
         if os.path.exists(hostfilepath):
             os.remove(hostfilepath)
         with open(hostfilepath, mode='w') as hostfile:
-                for host in hostlist:
+                for host in self.hostlist:
                     hostfile.write(host)
                     hostfile.write(' slots=1\n')
                 hostfile.flush()
-        for host in hostlist:
+        for host in self.hostlist:
             sshclient = client.SSHClient()
             sshclient.set_missing_host_key_policy(client.AutoAddPolicy())
             sshclient.connect(host)
             stdin, stdout, stderr = sshclient.exec_command(
                 "sudo mount -t tmpfs -o size=16g tmpfs /mnt/daos")
+            while not stdout.channel.exit_status_ready():
+                if stdout.channel.recv_ready():
+                    alldata = stdout.channel.recv(1024)
+                    while stdout.channel.recv_ready():
+                        alldata += stdout.channel.recv(1024)
+                    print(str(alldata, "utf8", "backslashreplace"))
+            stdin, stdout, stderr = sshclient.exec_command(
+                "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf")
             while not stdout.channel.exit_status_ready():
                 if stdout.channel.recv_ready():
                     alldata = stdout.channel.recv(1024)
@@ -99,6 +107,8 @@ class DaosServer(object):
         envlist.append(' -x CRT_PHY_ADDR_STR={!s}'.format(
             self.test_info.get_defaultENV('CRT_PHY_ADDR_STR', "ofi+sockets")))
         envlist.append(' -x D_LOG_FILE={!s}'.format(logpath))
+        envlist.append(' -x DD_SUBSYS=all')
+        envlist.append(' -x DD_MASK=all')
         envlist.append(' -x ABT_ENV_MAX_NUM_XSTREAMS={!s}'.format(
             self.test_info.get_defaultENV('ABT_ENV_MAX_NUM_XSTREAMS')))
         envlist.append(' -x ABT_MAX_NUM_XSTREAMS={!s}'.format(
@@ -122,7 +132,7 @@ class DaosServer(object):
         self.proc = None
 
         # hard-coded for now, but likely to become test parameters
-        thread_count = 2
+        thread_count = 1
 
         base_dir = self.test_info.get_defaultENV('PREFIX', '')
         ort_dir = self.test_info.get_defaultENV('ORT_PATH', '')
@@ -163,6 +173,53 @@ class DaosServer(object):
             outfile.flush()
         return 0
 
+    def dump_leftovers(self, hosts):
+        """
+        If there is something left running or data left dump out info on it.
+        """
+        dump_cmds = ["ps -ef | grep daos",
+                     "ls -l /mnt/daos | tail -n +2"]
+
+        for host in hosts:
+            try:
+                # look for left over daos processes
+                outstr = subprocess.check_output("ssh {0} {1}".format(host, dump_cmds[0]),
+                                                 shell=True)
+
+                outlist = outstr.splitlines()
+                for line in outlist:
+                    self.logger.error(">>>>>DAOS process wasn't killed on %s: %s", host, line)
+            except:
+                pass
+
+            try:
+                # look for stuff in tmpfs
+                outstr = subprocess.check_output("ssh {0} {1}".format(host, dump_cmds[1]),
+                                                 shell=True)
+
+                outlist = outstr.splitlines()
+                for line in outlist:
+                    self.logger.error(">>>>>Leftover cruft in tmpfs on %s: %s", host, line)
+            except:
+                pass
+
+
+    def kill_server(self, hosts):
+        """
+        Sometimes stop doesn't get everything.  Really whack everything
+        with this.
+
+        hosts -- list of host names where servers are running
+        """
+        kill_cmds = ["pkill '(daos_server|daos_io_server)' --signal INT",
+                     "sleep 5",
+                     "pkill '(daos_server|daos_io_server)' --signal KILL"]
+        rm_cmd = "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf"
+
+        for host in hosts:
+            subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)), shell=True)
+            subprocess.call("ssh {0} \"{1}\"".format(host, rm_cmd), shell=True)
+
     def stop_process(self):
         """ Wait for processes to terminate and terminate them after
         the wait period. """
@@ -172,7 +229,7 @@ class DaosServer(object):
         self.proc.poll()
         rc = self.proc.returncode
         if rc is None:
-            rc = -1
+            self.logger.info("Server is still running")
             try:
                 self.proc.terminate()
                 self.proc.wait(2)
@@ -183,7 +240,10 @@ class DaosServer(object):
                 self.logger.error("Killing processes: %s", self.proc.pid)
                 self.proc.kill()
 
-        self.logger.info("<DAOS Server> - return code: %s\n", rc)
+        # now just double check and blow away anything that is left
+        self.kill_server(self.hostlist)
+
+        self.dump_leftovers(self.hostlist)
 
         # Always return success for now
         return 0

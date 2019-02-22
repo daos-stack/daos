@@ -25,5 +25,7 @@ def scons():
                                LIBS=libraries)
     denv.Install('$PREFIX/bin', iosrv)
 
+    SConscript('tests/SConscript', exports='denv')
+
 if __name__ == "SCons.Script":
     scons()

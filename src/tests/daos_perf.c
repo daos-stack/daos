@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,6 @@ bool			 ts_zero_copy;
 /* verify the output of fetch */
 bool			 ts_verify_fetch;
 
-uuid_t			 ts_cookie;		/* update cookie for VOS */
 daos_handle_t		 ts_oh;			/* object open handle */
 daos_obj_id_t		 ts_oid;		/* object ID */
 daos_unit_oid_t		 ts_uoid;		/* object shard ID (for VOS) */
@@ -99,8 +98,8 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 	if (!ts_zero_copy) {
 		if (update_or_fetch == TS_DO_UPDATE)
 			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoid, epoch,
-				ts_cookie, 0, &cred->tc_dkey, 1,
-				&cred->tc_iod, &cred->tc_sgl);
+				0, &cred->tc_dkey, 1, &cred->tc_iod,
+				&cred->tc_sgl);
 		else
 			rc = vos_obj_fetch(ts_ctx.tsc_coh, ts_uoid, epoch,
 				&cred->tc_dkey, 1, &cred->tc_iod,
@@ -142,8 +141,7 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
 		if (update_or_fetch == TS_DO_UPDATE)
-			rc = vos_update_end(ioh, ts_cookie, 0, &cred->tc_dkey,
-					    rc);
+			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc);
 		else
 			rc = vos_fetch_end(ioh, rc);
 	}
@@ -225,7 +223,7 @@ update_or_fetch_internal(char *dkey, char *akey, daos_epoch_t *epoch,
 		iod->iod_type = DAOS_IOD_ARRAY;
 		iod->iod_size = 1;
 		recx->rx_nr  = vsize;
-		recx->rx_idx = ts_overwrite ? 0 : indices[idx];
+		recx->rx_idx = ts_overwrite ? 0 : indices[idx] * vsize;
 	}
 
 	iod->iod_nr    = 1;
@@ -318,30 +316,30 @@ ts_write_records_internal(d_rank_t rank, bool with_fetch)
 		ts_oid = dts_oid_gen(ts_class, 0, ts_ctx.tsc_mpi_rank);
 		if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 			ts_oid = dts_oid_set_rank(ts_oid, rank);
-		for (j = 0; j < ts_dkey_p_obj; j++) {
-			if (ts_class != DAOS_OC_RAW) {
-				rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid,
-						   DAOS_OO_RW, &ts_oh, NULL);
-				if (rc) {
-					fprintf(stderr, "object open failed\n");
-					return -1;
-				}
-			} else {
-				memset(&ts_uoid, 0, sizeof(ts_uoid));
-				ts_uoid.id_pub = ts_oid;
+		if (ts_class != DAOS_OC_RAW) {
+			rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid,
+					   DAOS_OO_RW, &ts_oh, NULL);
+			if (rc) {
+				fprintf(stderr, "object open failed\n");
+				return -1;
 			}
+		} else {
+			memset(&ts_uoid, 0, sizeof(ts_uoid));
+			ts_uoid.id_pub = ts_oid;
+		}
 
+		for (j = 0; j < ts_dkey_p_obj; j++) {
 			rc = ts_key_update_or_fetch(TS_DO_UPDATE, &epoch,
 						    with_fetch);
 			if (rc)
 				return rc;
+		}
 
-			if (ts_class != DAOS_OC_RAW &&
-				with_fetch == WITHOUT_FETCH) {
-				rc = daos_obj_close(ts_oh, NULL);
-				if (rc)
-					return rc;
-			}
+		if (ts_class != DAOS_OC_RAW &&
+			with_fetch == WITHOUT_FETCH) {
+			rc = daos_obj_close(ts_oh, NULL);
+			if (rc)
+				return rc;
 		}
 	}
 
@@ -622,14 +620,16 @@ ts_update_fetch_perf(double *start_time, double *end_time)
 static int
 ts_exclude_server(d_rank_t rank)
 {
-	d_rank_list_t	targets;
-	int		rc;
+	struct d_tgt_list	targets;
+	int			tgt = -1;
+	int			rc;
 
 	/** exclude from the pool */
-	targets.rl_nr = 1;
-	targets.rl_ranks = &rank;
-	rc = daos_pool_exclude(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
-			       &targets, NULL);
+	targets.tl_nr = 1;
+	targets.tl_ranks = &rank;
+	targets.tl_tgts = &tgt;
+	rc = daos_pool_tgt_exclude(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
+				   &targets, NULL);
 
 	return rc;
 }
@@ -637,12 +637,14 @@ ts_exclude_server(d_rank_t rank)
 static int
 ts_add_server(d_rank_t rank)
 {
-	d_rank_list_t	targets;
-	int		rc;
+	struct d_tgt_list	targets;
+	int			tgt = -1;
+	int			rc;
 
 	/** exclude from the pool */
-	targets.rl_nr = 1;
-	targets.rl_ranks = &rank;
+	targets.tl_nr = 1;
+	targets.tl_ranks = &rank;
+	targets.tl_tgts = &tgt;
 	rc = daos_pool_add_tgt(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
 			       &targets, NULL);
 	return rc;
@@ -657,7 +659,7 @@ ts_rebuild_wait()
 
 	while (1) {
 		memset(&pinfo, 0, sizeof(pinfo));
-		rc = daos_pool_query(ts_ctx.tsc_poh, NULL, &pinfo, NULL);
+		rc = daos_pool_query(ts_ctx.tsc_poh, NULL, &pinfo, NULL, NULL);
 		if (rst->rs_done || rc != 0) {
 			fprintf(stderr, "Rebuild (ver=%d) is done %d/%d\n",
 				rst->rs_version, rc, rst->rs_errno);
@@ -680,11 +682,11 @@ ts_rebuild_perf(double *start_time, double *end_time)
 
 	if (ts_rebuild_only_iteration)
 		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_REBUILD | DAOS_FAIL_VALUE,
+				     DAOS_REBUILD_NO_REBUILD,
 				     0, NULL);
 	else if (ts_rebuild_no_update)
 		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_UPDATE | DAOS_FAIL_VALUE,
+				     DAOS_REBUILD_NO_UPDATE,
 				     0, NULL);
 
 	rc = ts_exclude_server(RANK_ZERO);
@@ -850,7 +852,10 @@ The options are as follows:\n\
 	enable.  This can only run in vos mode.\n\
 \n\
 -f pathname\n\
-	Full path name of the VOS file.\n");
+	Full path name of the VOS file.\n\
+\n\
+-w	Pause after initialization for attaching debugger or analysis\n\
+	tool.\n");
 }
 
 static struct option ts_ops[] = {
@@ -870,6 +875,7 @@ static struct option ts_ops[] = {
 	{ "file",	required_argument,	NULL,	'f' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ "verify",	no_argument,		NULL,	'v' },
+	{ "wait",	no_argument,		NULL,	'w' },
 	{ NULL,		0,			NULL,	0   },
 };
 
@@ -960,6 +966,7 @@ char	*perf_tests_name[] = {
 int
 main(int argc, char **argv)
 {
+	struct timeval	tv;
 	daos_size_t	scm_size = (2ULL << 30); /* default pool SCM size */
 	daos_size_t	nvme_size = (8ULL << 30); /* default pool NVMe size */
 	int		credits   = -1;	/* sync mode */
@@ -969,14 +976,18 @@ main(int argc, char **argv)
 	double		now;
 	int		rc;
 	int		i;
+	bool		pause = false;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
+
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nAs:ztf:hUFRBvIiu",
+				 "P:N:T:C:c:o:d:a:r:nAs:ztf:hUFRBvIiuw",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -984,6 +995,9 @@ main(int argc, char **argv)
 		default:
 			fprintf(stderr, "Unknown option %c\n", rc);
 			return -1;
+		case 'w':
+			pause = true;
+			break;
 		case 'T':
 			if (!strcasecmp(optarg, "echo")) {
 				/* just network, no storage */
@@ -1159,7 +1173,6 @@ main(int argc, char **argv)
 	}
 
 	if (ts_class == DAOS_OC_RAW) {
-		uuid_generate(ts_cookie);
 		ts_ctx.tsc_cred_nr = -1; /* VOS can only support sync mode */
 		if (strlen(ts_pmem_file) == 0)
 			strcpy(ts_pmem_file, "/mnt/daos/vos_perf.pmem");
@@ -1211,8 +1224,15 @@ main(int argc, char **argv)
 	if (rc)
 		return -1;
 
-	if (ts_ctx.tsc_mpi_rank == 0)
+	if (ts_ctx.tsc_mpi_rank == 0) {
+		if (pause) {
+			fprintf(stdout, "Ready to start...If you wish to"
+				" attach a tool, do so now and then hit"
+				" enter.\n");
+			getc(stdin);
+		}
 		fprintf(stdout, "Started...\n");
+	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

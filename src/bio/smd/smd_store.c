@@ -1,5 +1,5 @@
 /**
- * (C) COPYRIGHT 2018 INTEL CORPORATION.
+ * (C) COPYRIGHT 2018-2019 INTEL CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,11 +141,16 @@ smd_params_create(void)
 		D_GOTO(free_ptab_mutex, rc);
 	}
 
-	D_ALLOC(smd_params_obj->smp_pool_id, (strlen(pool_uuid) + 1));
-	strncpy(smd_params_obj->smp_pool_id, pool_uuid, strlen(pool_uuid));
+	smd_params_obj->smp_pool_id = strdup(pool_uuid);
+	if (smd_params_obj->smp_pool_id == NULL) {
+		rc = -DER_NOMEM;
+		D_GOTO(free_stab_mutex, rc);
+	}
 	smd_params_obj->smp_mem_class = UMEM_CLASS_PMEM;
 	return 0;
 
+free_stab_mutex:
+	ABT_mutex_free(&smd_params_obj->smp_stab_mutex);
 free_ptab_mutex:
 	ABT_mutex_free(&smd_params_obj->smp_ptab_mutex);
 free_dtab_mutex:

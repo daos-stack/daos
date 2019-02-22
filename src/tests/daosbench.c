@@ -312,12 +312,13 @@ free_buffers()
 static void
 kill_daos_server(const char *grp)
 {
-	daos_pool_info_t		info;
-	d_rank_t			rank;
-	d_rank_list_t		targets;
-	int				rc;
+	daos_pool_info_t	info;
+	d_rank_t		rank;
+	int			tgt = -1;
+	struct d_tgt_list	targets;
+	int			rc;
 
-	rc = daos_pool_query(poh, NULL, &info, NULL);
+	rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
 	DBENCH_CHECK(rc, "Error in querying pool\n");
 
 	if (info.pi_ntargets - info.pi_ndisabled <= 1)
@@ -332,14 +333,15 @@ kill_daos_server(const char *grp)
 	rc  = daos_mgmt_svc_rip(grp, rank, true, NULL);
 	DBENCH_CHECK(rc, "Error in killing server\n");
 
-	targets.rl_nr		= 1;
-	targets.rl_ranks	= &rank;
+	targets.tl_nr		= 1;
+	targets.tl_ranks	= &rank;
+	targets.tl_tgts		= &tgt;
 
-	rc = daos_pool_exclude(pool_uuid, grp, svcl, &targets, NULL);
+	rc = daos_pool_tgt_exclude(pool_uuid, grp, svcl, &targets, NULL);
 	DBENCH_CHECK(rc, "Error in excluding pool from poolmap\n");
 
 	memset(&info, 0, sizeof(daos_pool_info_t));
-	rc = daos_pool_query(poh, NULL, &info, NULL);
+	rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
 	DBENCH_CHECK(rc, "Error in query pool\n");
 
 	printf("Target Rank: %d Killed successfully, (%d targets disabled)\n\n",
@@ -704,7 +706,7 @@ container_open(int rank, char *uuid_str, int create)
 		}
 
 		if (create) {
-			rc = daos_cont_create(poh, cont_uuid, NULL);
+			rc = daos_cont_create(poh, cont_uuid, NULL, NULL);
 			DBENCH_CHECK(rc, "Container create failed\n");
 		}
 
@@ -927,15 +929,15 @@ update_verify(struct test *test, int key_type, uint64_t value)
 }
 
 static void
-kv_flush_and_commit(struct test *test)
+kv_snapshot(struct test *test)
 {
-	int	rc = 0;
+	daos_epoch_t	snap;
+	int		rc = 0;
 
-	/** TODO - should create snapshot instead and rollback on open. */
 	if (comm_world_rank == 0) {
-		DBENCH_INFO("Container Sync...");
-		rc = daos_cont_sync(coh, NULL);
-		DBENCH_CHECK(rc, "Failed to commit object write\n");
+		DBENCH_INFO("Creating Snapshot...");
+		rc = daos_cont_create_snap(coh, &snap, NULL, NULL);
+		DBENCH_CHECK(rc, "Failed to create snapshot.\n");
 	}
 
 }
@@ -957,7 +959,7 @@ kv_multi_dkey_update_run(struct test *test)
 			0/* enum_flag */, value, true);
 	MPI_Barrier(MPI_COMM_WORLD);
 	DBENCH_INFO("completed %d inserts\n", test->t_nkeys);
-	kv_flush_and_commit(test);
+	kv_snapshot(test);
 	chrono_record("end");
 	DBENCH_PRINT("Done!\n");
 
@@ -992,7 +994,7 @@ kv_multi_akey_update_run(struct test *test)
 	kv_update_async(test, 1, 0, value, true);
 	MPI_Barrier(MPI_COMM_WORLD);
 	DBENCH_INFO("completed %d inserts\n", test->t_nkeys);
-	kv_flush_and_commit(test);
+	kv_snapshot(test);
 	chrono_record("end");
 	DBENCH_PRINT("Done!\n");
 
@@ -1035,7 +1037,7 @@ kv_multi_dkey_fetch_run(struct test *test)
 	kv_update_async(test, 0, 0, value, update);
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (update) {
-		kv_flush_and_commit(test);
+		kv_snapshot(test);
 		DBENCH_PRINT("Done!\n");
 	}
 
@@ -1100,7 +1102,7 @@ kv_multi_akey_fetch_run(struct test *test)
 	kv_update_async(test, 1, 0, value, update);
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (update) {
-		kv_flush_and_commit(test);
+		kv_snapshot(test);
 		DBENCH_PRINT("Done!\n");
 	}
 
@@ -1171,7 +1173,7 @@ kv_dkey_enumerate(struct test *test)
 	kv_update_async(test, 0, 1, value, true);
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	kv_flush_and_commit(test);
+	kv_snapshot(test);
 	DBENCH_PRINT("Done!\n");
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -1266,7 +1268,7 @@ kv_multi_idx_update_run(struct test *test)
 	kv_update_async(test, 2, 0, value, true);
 	DBENCH_INFO("completed %d inserts\n", test->t_nindexes);
 
-	kv_flush_and_commit(test);
+	kv_snapshot(test);
 	chrono_record("end");
 	DBENCH_PRINT("Done!\n");
 
@@ -1411,8 +1413,8 @@ kv_simul(struct test *test)
 			kv_simul_rw_step(test, WRITE, &step);
 
 		MPI_Barrier(MPI_COMM_WORLD);
-		DBENCH_PRINT("Step %d: committing\n", step);
-		kv_flush_and_commit(test);
+		DBENCH_PRINT("Step %d: snapshoting\n", step);
+		kv_snapshot(test);
 
 		step++;
 		DBENCH_PRINT("Sleep "DF_U64" seconds before the next step\n",

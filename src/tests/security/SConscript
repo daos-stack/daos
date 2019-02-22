@@ -1,12 +1,11 @@
 """Build addons test"""
-import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'dc_security_tgts')
+    Import('env', 'prereqs', 'dc_security_tgts', 'dc_sectest_tgts')
 
     libs = ['gurt', 'daos_common', 'protobuf-c']
-    sources = ['security_test.c', dc_security_tgts]
+    sources = ['security_test.c', dc_sectest_tgts]
 
 
     denv = env.Clone()

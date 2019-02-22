@@ -25,7 +25,6 @@
 #include <daos/drpc.h>
 #include <daos/drpc.pb-c.h>
 #include <gurt/errno.h>
-#include <gurt/list.h>
 
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -35,23 +34,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <poll.h>
-
-/**
- * Interesting activities that could be seen on a unix domain socket.
- * Used in polling for activity.
- */
-enum unixcomm_activity {
-	UNIXCOMM_ACTIVITY_NONE,
-	UNIXCOMM_ACTIVITY_DATA_IN,
-	UNIXCOMM_ACTIVITY_PEER_DISCONNECTED,
-	UNIXCOMM_ACTIVITY_ERROR
-};
-
-struct unixcomm_poll {
-	struct unixcomm *comm;
-	enum unixcomm_activity activity;
-};
 
 static int unixcomm_close(struct unixcomm *handle);
 
@@ -232,53 +214,6 @@ unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 	return ret;
 }
 
-static enum unixcomm_activity
-poll_events_to_unixcomm_activity(int event_bits)
-{
-	enum unixcomm_activity activity = UNIXCOMM_ACTIVITY_NONE;
-
-	if (event_bits & POLLHUP) {
-		activity = UNIXCOMM_ACTIVITY_PEER_DISCONNECTED;
-	} else if (event_bits & POLLERR) {
-		activity = UNIXCOMM_ACTIVITY_ERROR;
-	} else if (event_bits & POLLIN) {
-		activity = UNIXCOMM_ACTIVITY_DATA_IN;
-	}
-
-	return activity;
-}
-
-static int
-unixcomm_poll(struct unixcomm_poll *comms, size_t num_comms, int timeout_ms)
-{
-	struct pollfd	fds[num_comms];
-	int		poll_rc;
-	size_t		i;
-
-	memset(fds, 0, sizeof(fds));
-
-	for (i = 0; i < num_comms; i++) {
-		fds[i].fd = comms[i].comm->fd;
-		fds[i].events = POLLIN | POLLPRI;
-	}
-
-	poll_rc = poll(fds, num_comms, timeout_ms);
-	if (poll_rc == 0) { /* timeout */
-		return -DER_TIMEDOUT;
-	}
-
-	if (poll_rc < 0) { /* failure */
-		return daos_errno2der(errno);
-	}
-
-	for (i = 0; i < num_comms; i++) {
-		comms[i].activity = poll_events_to_unixcomm_activity(
-				fds[i].revents);
-	}
-
-	return poll_rc;
-}
-
 static Drpc__Response *
 rpc_reply_create(int sequence, int status, int body_length, uint8_t *body)
 {
@@ -432,7 +367,7 @@ drpc_connect(char *sockaddr)
  *			create one
  */
 struct drpc *
-drpc_listen(char *sockaddr, void (*handler)(Drpc__Call *, Drpc__Response **))
+drpc_listen(char *sockaddr, drpc_handler_t handler)
 {
 	struct drpc *ctx;
 
@@ -456,8 +391,15 @@ drpc_listen(char *sockaddr, void (*handler)(Drpc__Call *, Drpc__Response **))
 	return ctx;
 }
 
-static bool
-is_valid_listener_ctx(struct drpc *ctx)
+/**
+ * Determines if the drpc ctx is set up as a listener.
+ *
+ * \param	ctx	Active drpc context
+ *
+ * \return	True if a valid listener, false otherwise
+ */
+bool
+drpc_is_valid_listener(struct drpc *ctx)
 {
 	/*
 	 * Listener needs a handler or else it's pretty useless
@@ -479,7 +421,7 @@ drpc_accept(struct drpc *listener_ctx)
 {
 	struct drpc *session_ctx;
 
-	if (!is_valid_listener_ctx(listener_ctx)) {
+	if (!drpc_is_valid_listener(listener_ctx)) {
 		return NULL;
 	}
 
@@ -493,6 +435,8 @@ drpc_accept(struct drpc *listener_ctx)
 		D_FREE(session_ctx);
 		return NULL;
 	}
+
+	session_ctx->handler = listener_ctx->handler;
 
 	return session_ctx;
 }
@@ -522,17 +466,25 @@ static int
 handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
 {
 	int		rc;
-	uint8_t		buffer[UNIXCOMM_MAXMSGSIZE];
+	uint8_t		*buffer;
+	size_t		buffer_size = UNIXCOMM_MAXMSGSIZE;
 	ssize_t		message_len = 0;
 	Drpc__Call	*request;
 
-	rc = unixcomm_recv(ctx->comm, buffer, sizeof(buffer),
+	D_ALLOC(buffer, buffer_size);
+	if (buffer == NULL) {
+		return -DER_NOMEM;
+	}
+
+	rc = unixcomm_recv(ctx->comm, buffer, buffer_size,
 				&message_len);
 	if (rc != DER_SUCCESS) {
+		D_FREE(buffer);
 		return rc;
 	}
 
 	request = drpc__call__unpack(NULL, message_len, buffer);
+	D_FREE(buffer);
 	if (request == NULL) {
 		/* Couldn't unpack into a Drpc__Call */
 		return -DER_MISC;
@@ -541,11 +493,11 @@ handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
 	ctx->handler(request, response);
 	if (*response == NULL) {
 		/* Handler failed to allocate a response */
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
 	}
 
 	drpc__call__free_unpacked(request, NULL);
-	return DER_SUCCESS;
+	return rc;
 }
 
 /**
@@ -567,7 +519,7 @@ drpc_recv(struct drpc *session_ctx)
 	int		rc;
 	Drpc__Response	*response = NULL;
 
-	if (!is_valid_listener_ctx(session_ctx)) {
+	if (!drpc_is_valid_listener(session_ctx)) {
 		return -DER_INVAL;
 	}
 
@@ -579,259 +531,6 @@ drpc_recv(struct drpc *session_ctx)
 	rc = send_response(session_ctx, response);
 
 	drpc__response__free_unpacked(response, NULL);
-	return rc;
-}
-
-/*
- * Count the valid drpc contexts in the drpc_progress_context session list.
- * Returns error if an invalid drpc session context is found.
- */
-static int
-get_open_drpc_session_count(struct drpc_progress_context *ctx)
-{
-	struct drpc_list	*current;
-	int			num_comms = 0;
-
-	d_list_for_each_entry(current, &ctx->session_ctx_list, link) {
-		if (!is_valid_listener_ctx(current->ctx)) {
-			return -DER_INVAL;
-		}
-
-		num_comms++;
-	}
-
-	return num_comms;
-}
-
-/*
- * Convert a drpc_progress context to an array of unixcomm_poll structs.
- */
-static int
-drpc_progress_context_to_unixcomms(struct drpc_progress_context *ctx,
-		struct unixcomm_poll **comms)
-{
-	struct drpc_list	*current;
-	struct unixcomm_poll	*new_comms;
-	int			num_comms;
-	int			i;
-
-	num_comms = get_open_drpc_session_count(ctx);
-	if (num_comms < 0) {
-		return num_comms;
-	}
-
-	/* include the listener in the count */
-	num_comms += 1;
-
-	D_ALLOC_ARRAY(new_comms, num_comms);
-	if (new_comms == NULL) {
-		return -DER_NOMEM;
-	}
-
-	i = 0;
-	d_list_for_each_entry(current, &ctx->session_ctx_list, link) {
-		new_comms[i].comm = current->ctx->comm;
-		i++;
-	}
-
-	/* The listener should always be in the list */
-	new_comms[i].comm = ctx->listener_ctx->comm;
-
-	*comms = new_comms;
-	return num_comms;
-}
-
-static bool
-drpc_progress_context_is_valid(struct drpc_progress_context *ctx)
-{
-	return (ctx != NULL) && is_valid_listener_ctx(ctx->listener_ctx);
-}
-
-static int
-drpc_progress_context_accept(struct drpc_progress_context *ctx)
-{
-	struct drpc		*session;
-	struct drpc_list	*session_node;
-
-	session = drpc_accept(ctx->listener_ctx);
-	if (session == NULL) {
-		/*
-		 * Any failure to accept is weird and surprising
-		 */
-		return -DER_UNKNOWN;
-	}
-
-	D_ALLOC_PTR(session_node);
-	if (session_node == NULL) {
-		D_FREE(session);
-		return -DER_NOMEM;
-	}
-
-	session_node->ctx = session;
-	d_list_add(&session_node->link, &ctx->session_ctx_list);
-
-	return DER_SUCCESS;
-}
-
-static int
-process_listener_activity(struct drpc_progress_context *ctx,
-		struct unixcomm_poll *comms, size_t num_comms)
-{
-	int			rc = DER_SUCCESS;
-	size_t			last_idx = num_comms - 1;
-	struct unixcomm_poll	*listener_comm = &(comms[last_idx]);
-	/* Last comm is the listener */
-
-	D_ASSERT(listener_comm->comm->fd == ctx->listener_ctx->comm->fd);
-
-	switch (listener_comm->activity) {
-	case UNIXCOMM_ACTIVITY_DATA_IN:
-		rc = drpc_progress_context_accept(ctx);
-		break;
-
-	case UNIXCOMM_ACTIVITY_ERROR:
-	case UNIXCOMM_ACTIVITY_PEER_DISCONNECTED:
-		/* Unexpected - don't do anything */
-		rc = -DER_UNKNOWN;
-		break;
-
-	default:
-		break;
-	}
-
-	return rc;
-}
-
-static void
-destroy_session_node(struct drpc_list *session_node)
-{
-	drpc_close(session_node->ctx);
-	d_list_del(&session_node->link);
-	D_FREE(session_node);
-}
-
-static int
-process_session_activity(struct drpc_list *session_node,
-		struct unixcomm_poll *session_comm)
-{
-	int rc = DER_SUCCESS;
-
-	D_ASSERT(session_comm->comm->fd == session_node->ctx->comm->fd);
-
-	switch (session_comm->activity) {
-	case UNIXCOMM_ACTIVITY_DATA_IN:
-		rc = drpc_recv(session_node->ctx);
-		if (rc != DER_SUCCESS && rc != -DER_AGAIN) {
-			destroy_session_node(session_node);
-
-			/* No further action needed */
-			rc = DER_SUCCESS;
-		}
-		break;
-
-	case UNIXCOMM_ACTIVITY_ERROR:
-	case UNIXCOMM_ACTIVITY_PEER_DISCONNECTED:
-		/* connection is dead */
-		destroy_session_node(session_node);
-		break;
-
-	default:
-		break;
-	}
-
-	return rc;
-}
-
-static int
-process_all_session_activities(struct drpc_progress_context *ctx,
-		struct unixcomm_poll *comms, size_t num_comms)
-{
-	int			rc = DER_SUCCESS;
-	struct drpc_list	*current;
-	struct drpc_list	*next;
-	size_t			i = 0;
-
-	d_list_for_each_entry_safe(current, next,
-			&ctx->session_ctx_list, link) {
-		int session_rc;
-
-		session_rc = process_session_activity(current, &(comms[i]));
-
-		/*
-		 * Only overwrite with first error.
-		 * Keep trying other sessions.
-		 */
-		if (rc == DER_SUCCESS) {
-			rc = session_rc;
-		}
-
-		i++;
-	}
-
-	return rc;
-}
-
-static int
-process_activity(struct drpc_progress_context *ctx,
-		struct unixcomm_poll *comms, size_t num_comms)
-{
-	int	rc;
-	int	listener_rc;
-
-	rc = process_all_session_activities(ctx, comms, num_comms);
-
-	listener_rc = process_listener_activity(ctx, comms, num_comms);
-	if (rc == DER_SUCCESS) {
-		/* Only overwrite if there wasn't a session error */
-		rc = listener_rc;
-	}
-
-	return rc;
-}
-
-/**
- * Check drpc contexts for activity, and handle that activity.
- *
- * Incoming messages are processed using the dRPC handler.
- * Incoming connections are added to the ctx session list.
- * Failed or closed connections are cleaned up and removed from the session
- *	list.
- *
- * \param[in][out]	ctx		Progress context, which includes the
- *						listener and all open sessions.
- * \param[in]		timeout_ms	Timeout in milliseconds. Negative value
- *						blocks forever.
- *
- * \return	DER_SUCCESS		Successfully processed activity
- *		-DER_INVAL		Invalid ctx
- *		-DER_TIMEDOUT		No activity
- *		-DER_AGAIN		Couldn't process activity, try again
- *		-DER_NOMEM		Out of memory
- *		-DER_UNKNOWN		Unexpected error
- */
-int
-drpc_progress(struct drpc_progress_context *ctx, int timeout_ms)
-{
-	size_t			num_comms;
-	struct unixcomm_poll	*comms;
-	int			rc;
-
-	if (!drpc_progress_context_is_valid(ctx)) {
-		return -DER_INVAL;
-	}
-
-	rc = drpc_progress_context_to_unixcomms(ctx, &comms);
-	if (rc < 0) {
-		return rc;
-	}
-
-	num_comms = rc;
-	rc = unixcomm_poll(comms, num_comms, timeout_ms);
-	if (rc > 0) {
-		rc = process_activity(ctx, comms, num_comms);
-	}
-
-	D_FREE(comms);
 	return rc;
 }
 

@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2017-2018 Intel Corporation.
+/*
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,11 @@
  * provided in Contract No. B609815.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
+ */
+/**
+ * \file
+ *
+ * rsvc: Replicated Service Client
  */
 
 #ifndef DAOS_RSVC_H
@@ -40,12 +45,12 @@ struct rsvc_hint {
 
 /** Replicated service client (opaque) */
 struct rsvc_client {
-	d_rank_list_t		*sc_ranks;		/* of rsvc replicas */
-	bool			sc_leader_known;	/* cache nonempty */
-	unsigned int		sc_leader_aliveness;	/* 0 means dead */
-	uint64_t		sc_leader_term;
-	int			sc_leader_index;	/* in sc_ranks */
-	int			sc_next;		/* in sc_ranks */
+	d_rank_list_t  *sc_ranks;		/* of rsvc replicas */
+	bool		sc_leader_known;	/* cache nonempty */
+	unsigned int	sc_leader_aliveness;	/* 0 means dead */
+	uint64_t	sc_leader_term;
+	int		sc_leader_index;	/* in sc_ranks */
+	int		sc_next;		/* in sc_ranks */
 };
 
 /** Return code of rsvc_client_complete_rpc() */

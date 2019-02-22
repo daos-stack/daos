@@ -181,7 +181,7 @@ cmd_create_pool(int argc, const char **argv, void *ctx)
 
 	rc = daos_pool_create(cp_options.mode, cp_options.uid,
 			      cp_options.gid, cp_options.server_group,
-			      NULL, "rubbish", cp_options.size, 0, &svc,
+			      NULL, "rubbish", cp_options.size, 0, NULL, &svc,
 			      uuid, NULL);
 
 	if (rc) {
@@ -265,7 +265,9 @@ cmd_exclude_target(int argc, const char **argv, void *ctx)
 	uuid_t uuid;
 	int    rc;
 	d_rank_list_t pool_service_list = {NULL, 0};
-	d_rank_list_t pool_target_list = {NULL, 0};
+	d_rank_list_t pool_rank_list = {NULL, 0};
+	struct d_tgt_list pool_target_list = {NULL, 0};
+	int	i;
 
 	struct argp_option options[] = {
 		{"server-group",   's',   "SERVER-GROUP",     0,
@@ -303,12 +305,22 @@ cmd_exclude_target(int argc, const char **argv, void *ctx)
 
 	/* put the ascii list of target ranks into the right format */
 	rc = parse_rank_list(et_options.target_list,
-			     &pool_target_list);
+			     &pool_rank_list);
 	if (rc < 0)
 		/* TODO do a better job with failure return */
 		return rc;
 
-	rc = daos_pool_exclude(uuid, et_options.server_group,
+	pool_target_list.tl_nr = pool_rank_list.rl_nr;
+	pool_target_list.tl_ranks = pool_rank_list.rl_ranks;
+	pool_target_list.tl_tgts = calloc(pool_target_list.tl_nr,
+					  sizeof(int32_t));
+	if (pool_target_list.tl_tgts == NULL)
+		return -1;
+
+	for (i = 0; i < pool_target_list.tl_nr; i++)
+		pool_target_list.tl_tgts[i] = -1;
+
+	rc = daos_pool_tgt_exclude(uuid, et_options.server_group,
 			       &pool_service_list,
 			       &pool_target_list, NULL);
 
@@ -317,6 +329,8 @@ cmd_exclude_target(int argc, const char **argv, void *ctx)
 	else
 		printf("Target excluded.\n");
 	fflush(stdout);
+
+	free(pool_target_list.tl_tgts);
 
 	return rc;
 }

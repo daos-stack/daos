@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ DECLARE_FAC(vos);
 DECLARE_FAC(client);
 DECLARE_FAC(server);
 DECLARE_FAC(rdb);
+DECLARE_FAC(rsvc);
 DECLARE_FAC(pool);
 DECLARE_FAC(container);
 DECLARE_FAC(object);
@@ -56,6 +57,8 @@ DECLARE_FAC(mgmt);
 DECLARE_FAC(bio);
 DECLARE_FAC(tests);
 DECLARE_FAC(dfs);
+DECLARE_FAC(drpc);
+DECLARE_FAC(security);
 
 uint64_t DB_MD; /* metadata operation */
 uint64_t DB_PL; /* placement */
@@ -63,8 +66,9 @@ uint64_t DB_MGMT; /* pool management */
 uint64_t DB_EPC; /* epoch system */
 uint64_t DB_DF; /* durable format */
 uint64_t DB_REBUILD; /* rebuild process */
+uint64_t DB_SEC; /* Security checks */
 /* debug bit groups */
-#define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD)
+#define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC)
 
 #define DBG_DICT_ENTRY(bit, name, lname)			\
 {								\
@@ -83,6 +87,7 @@ static struct d_debug_bit daos_bit_dict[] = {
 	DBG_DICT_ENTRY(&DB_EPC,		"epc",		"epoch"),
 	DBG_DICT_ENTRY(&DB_DF,		"df",		"durable_format"),
 	DBG_DICT_ENTRY(&DB_REBUILD,	"rebuild",	"rebuild"),
+	DBG_DICT_ENTRY(&DB_SEC,		"sec",		"security")
 };
 
 #define NUM_DBG_BIT_ENTRIES	ARRAY_SIZE(daos_bit_dict)
@@ -98,6 +103,7 @@ static struct d_debug_bit daos_bit_dict[] = {
 	ACTION("client", d_client_logfac)		\
 	ACTION("server", d_server_logfac)		\
 	ACTION("rdb", d_rdb_logfac)			\
+	ACTION("rsvc", d_rsvc_logfac)			\
 	ACTION("pool", d_pool_logfac)			\
 	ACTION("container", d_container_logfac)		\
 	ACTION("object", d_object_logfac)		\
@@ -106,7 +112,9 @@ static struct d_debug_bit daos_bit_dict[] = {
 	ACTION("mgmt", d_mgmt_logfac)			\
 	ACTION("tests", d_tests_logfac)			\
 	ACTION("bio", d_bio_logfac)			\
-	ACTION("dfs", d_dfs_logfac)
+	ACTION("dfs", d_dfs_logfac)			\
+	ACTION("drpc", d_drpc_logfac)			\
+	ACTION("security", d_security_logfac)
 
 #define DAOS_SETUP_FAC(name, idp)			\
 	DAOS_INIT_LOG_FAC(name, &idp)
@@ -125,6 +133,7 @@ debug_fini_locked(void)
 				    daos_bit_dict[i].db_name);
 	}
 
+	daos_fail_fini();
 	/* Unregister DAOS debug bit groups */
 	rc = d_log_dbg_grp_dealloc("daos_default");
 	if (rc < 0)
@@ -181,9 +190,10 @@ daos_debug_init(char *logfile)
 					 daos_bit_dict[i].db_name,
 					 daos_bit_dict[i].db_lname);
 		if (rc < 0) {
-			D_PRINT_ERR("Error allocating daos debug bit for %s\n",
-				    daos_bit_dict[i].db_name);
-			return -DER_UNINIT;
+			D_PRINT_ERR("Error allocating debug bit for %s:%d\n",
+				    daos_bit_dict[i].db_name, rc);
+			rc = -DER_UNINIT;
+			goto failed_unlock;
 		}
 
 		*daos_bit_dict[i].db_bit = allocd_dbg_bit;
@@ -192,12 +202,19 @@ daos_debug_init(char *logfile)
 	/* Register DAOS debug bit groups */
 	rc = d_log_dbg_grp_alloc(DB_GRP1, "daos_default");
 	if (rc < 0) {
-		D_PRINT_ERR("Error allocating daos debug group\n");
-		return -DER_UNINIT;
+		D_PRINT_ERR("Error allocating daos debug group: %d\n", rc);
+		rc = -DER_UNINIT;
+		goto failed_unlock;
 	}
 
 	/* Sync DAOS debug env with libgurt */
 	d_log_sync_mask();
+
+	rc = daos_fail_init();
+	if (rc) {
+		D_PRINT_ERR("Failed to init DAOS fail injection: %d\n", rc);
+		goto failed_unlock;
+	}
 
 	dd_ref = 1;
 	D_MUTEX_UNLOCK(&dd_lock);

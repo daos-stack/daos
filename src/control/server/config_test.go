@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,19 +20,21 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/utils/handlers"
-	. "github.com/daos-stack/daos/src/control/utils/test"
+	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -49,6 +51,10 @@ var (
 	files    = []string{}
 	commands = []string{}
 )
+
+func init() {
+	log.NewDefaultLogger(log.Error, "config_test: ", os.Stderr)
+}
 
 func setupTest(t *testing.T) {
 	files = []string{}
@@ -72,7 +78,9 @@ func uncommentServerConfig(t *testing.T) {
 		}
 
 		slurp, _ := ioutil.ReadAll(stderr)
-		fmt.Printf("%s", slurp)
+		if string(slurp) != "" {
+			t.Error(slurp)
+		}
 
 		if err := cmd.Wait(); err != nil {
 			t.Fatal(err)
@@ -106,32 +114,32 @@ func (m *mockExt) createEmpty(path string, size int64) error {
 	return nil
 }
 
-// NewMockConfig returns default configuration with mocked external interface
-func NewMockConfig(
+// newMockConfig returns default configuration with mocked external interface
+func newMockConfig(
 	cmdRet error, getenvRet string, existsRet bool) configuration {
-	return NewDefaultConfiguration(
+	return newDefaultConfiguration(
 		&mockExt{cmdRet, getenvRet, existsRet})
 }
 
-// NewDefaultMockConfig returns MockConfig with default mock return values
-func NewDefaultMockConfig() configuration {
-	return NewMockConfig(nil, "", false)
+// newDefaultMockConfig returns MockConfig with default mock return values
+func newDefaultMockConfig() configuration {
+	return newMockConfig(nil, "", false)
 }
 func cmdFailsConfig() configuration {
-	return NewMockConfig(errors.New("exit status 1"), "", false)
+	return newMockConfig(errors.New("exit status 1"), "", false)
 }
 func envExistsConfig() configuration {
-	return NewMockConfig(nil, "somevalue", false)
+	return newMockConfig(nil, "somevalue", false)
 }
 func fileExistsConfig() configuration {
-	return NewMockConfig(nil, "", true)
+	return newMockConfig(nil, "", true)
 }
 
 func populateMockConfig(t *testing.T, c configuration, path string) configuration {
 	c.Path = path
 	err := c.loadConfig()
 	if err != nil {
-		t.Fatalf("Configuration could not be read (%s)", err.Error())
+		t.Fatalf("Configuration could not be read (%s)", err)
 	}
 	return c
 }
@@ -144,31 +152,31 @@ func TestParseConfigSucceed(t *testing.T) {
 	inputYamls, outputYamls, err := LoadTestFiles(
 		"testdata/input_good.txt", "testdata/output_success.txt")
 	if err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	for i, y := range inputYamls {
 		// write input yaml config to temporary file
 		err := WriteSlice(tmpIn, y)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		// verify decoding of config from written file
-		config := NewDefaultMockConfig()
+		config := newDefaultMockConfig()
 		config.Path = tmpIn
 		err = config.loadConfig()
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		// encode decoded config to temporary output file
 		err = config.saveConfig(tmpOut)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		// use SplitFile (just for convenience) to read output file contents
 		outputs, err := SplitFile(tmpOut)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		// compare encoded output (first element of output from SplitFile)
 		// with expected outputYaml
@@ -190,16 +198,16 @@ func TestParseConfigFail(t *testing.T) {
 	inputYamls, outputErrorMsgs, err := LoadTestFiles(
 		"testdata/input_bad.txt", "testdata/output_errors.txt")
 	if err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	for i, y := range inputYamls {
 		err := WriteSlice(tmpIn, y)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 
-		config := NewDefaultMockConfig()
+		config := newDefaultMockConfig()
 		config.Path = tmpIn
 		err = config.loadConfig()
 		// output error messages will always be first entry in a slice.
@@ -219,25 +227,25 @@ func TestProvidedConfigs(t *testing.T) {
 		errMsg   string
 	}{
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			sConfigUncomment,
 			"uncommented default config",
 			"",
 		},
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			socketsExample,
 			"socket example config",
 			"",
 		},
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			psm2Example,
 			"psm2 example config",
 			"",
 		},
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			defaultConfig,
 			"default empty config",
 			"required parameters missing from config and os environment (CRT_PHY_ADDR_STR)",
@@ -260,57 +268,70 @@ func TestProvidedConfigs(t *testing.T) {
 		// encode decoded config to temporary output file to verify parser
 		err := config.saveConfig(tmpOut)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		// use SplitFile (just for convenience) to read what has been output
 		outYamls, err := SplitFile(tmpOut)
 		if err != nil {
 			t.Fatal(
-				fmt.Sprintf(
-					"problem reading processed output file %s: %s",
-					tmpOut, err.Error()))
-			t.Fatal(err.Error())
+				errors.Wrapf(
+					err,
+					"reading processed output file %s",
+					tmpOut))
 		}
 		// read and compare output file contents with expected file contents
 		// (outFile), (extract first element of output from SplitFile for each)
 		outExpectYamls, err := SplitFile(expectedFile)
 		if err != nil {
 			t.Fatal(
-				fmt.Sprintf(
-					"problem reading expected output file %s: %s",
-					expectedFile, err.Error()))
+				errors.Wrapf(
+					err,
+					"reading expected output file %s",
+					expectedFile))
 		}
 
-		for i, line := range outExpectYamls[0] {
+		// verify the generated yaml is of expected size
+		outExpectYaml := outExpectYamls[0]
+		outYaml := outYamls[0]
+		if len(outExpectYaml) != len(outYaml) {
+			t.Fatalf("number of lines unexpected in %s", expectedFile)
+		}
+
+		// verify the generated yaml is of expected content
+		for i, line := range outExpectYaml {
 			AssertEqual(
-				t, outYamls[0][i], line,
+				t, outYaml[i], line,
 				fmt.Sprintf(
 					"line %d parsed %s config doesn't match fixture %s:\n\thave %#v\n\twant %#v\n",
-					i, tt.inPath, expectedFile, outYamls[0][i], line))
+					i, tt.inPath, expectedFile, outYaml[i], line))
 		}
 
-		// compute file path containing expected output to compare with
+		// retrieve expected and actual io parameters
 		expectedFile = fmt.Sprintf(
-			"testdata/ioparams_%s.txt", strings.TrimSuffix(filename, filepath.Ext(tt.inPath)))
+			"testdata/ioparams_%s.txt",
+			strings.TrimSuffix(filename, filepath.Ext(tt.inPath)))
 		outExpect, err := SplitFile(expectedFile)
 		if err != nil {
 			t.Fatal(
-				fmt.Sprintf(
-					"problem reading expected output file %s: %s",
-					expectedFile, err.Error()))
+				errors.Wrapf(
+					err,
+					"reading expected output file %s",
+					expectedFile))
 		}
-		// now verify expected IO server parameters are generated
 		err = config.getIOParams(&cliOptions{})
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
 		}
 		if err != nil {
-			t.Fatalf(
-				"problem retrieving IO params using conf %s: %s",
-				filename, err.Error())
+			t.Fatal(
+				errors.Wrapf(
+					err,
+					"retrieving IO params using conf %s",
+					filename))
 		}
-		// should only ever be one line in expected output
+		// should only ever be one line in expected output, compare
+		// string representations of config.Servers
 		AssertEqual(
 			t, fmt.Sprintf("%+v", config.Servers), outExpect[0][0],
 			fmt.Sprintf("parameters don't match %s", expectedFile))
@@ -345,7 +366,7 @@ func TestGetNumCores(t *testing.T) {
 			continue
 		}
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		AssertEqual(t, num, tt.cores, "unexpected number of cores calculated")
 	}
@@ -373,7 +394,7 @@ func TestSetNumCores(t *testing.T) {
 		AssertEqual(t, cpus, tt.cpus, "failed to convert number to range")
 		num, err := getNumCores(cpus)
 		if err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 		AssertEqual(t, num, tt.num, "failed to convert to expected number")
 	}
@@ -382,7 +403,7 @@ func TestSetNumCores(t *testing.T) {
 // TestCmdlineOverride verified that cliOpts take precedence over existing
 // configs resulting in overrides appearing in ioparams
 func TestCmdlineOverride(t *testing.T) {
-	r := uint(9)
+	r := rank(9)
 	m := "moduleA moduleB"
 	a := "/some/file"
 	y := "/another/different/file"
@@ -392,17 +413,17 @@ func TestCmdlineOverride(t *testing.T) {
 	// test-local function to generate configuration
 	// (mock with default behaviours populated with uncommented daos_server.yml)
 	newC := func(t *testing.T) configuration {
-		return populateMockConfig(t, NewDefaultMockConfig(), sConfigUncomment)
+		return populateMockConfig(t, newDefaultMockConfig(), sConfigUncomment)
 	}
 
 	tests := []struct {
 		inCliOpts  cliOptions
 		inConfig   configuration
 		outCliOpts [][]string
-		expNumCmds int
+		expNumCmds int // number of commands expected to have been run as side effect
 		desc       string
 		errMsg     string
-		expCmds    []string
+		expCmds    []string // list of expected commands to have been run
 	}{
 		{
 			inConfig: newC(t),
@@ -524,6 +545,35 @@ func TestCmdlineOverride(t *testing.T) {
 			desc:       "Rank",
 		},
 		{
+			// currently not provided as config or cli option, set
+			// directly in configuration
+			inConfig: func() configuration {
+				c := newDefaultMockConfig()
+				c.NvmeShmID = 1
+				return populateMockConfig(t, c, sConfigUncomment)
+			}(),
+			outCliOpts: [][]string{
+				{
+					"-c", "21",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+					"-i", "1",
+				},
+				{
+					"-c", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+					"-i", "1",
+				},
+			},
+			expNumCmds: 2,
+			desc:       "NvmeShmID",
+		},
+		{
 			inCliOpts: cliOptions{SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
@@ -555,7 +605,12 @@ func TestCmdlineOverride(t *testing.T) {
 			// no provider set but os env set mock getenv returns not empty string
 			inConfig: envExistsConfig(),
 			outCliOpts: [][]string{
-				{"-c", "0", "-g", "daos_server", "-s", "/mnt/daos", "-d", "./"},
+				{
+					"-c", "0",
+					"-g", "daos_server",
+					"-s", "/mnt/daos",
+					"-d", "/var/run/daos_server",
+				},
 			},
 			expNumCmds: 1,
 			desc:       "use defaults, no Provider set but provider env exists",
@@ -585,14 +640,14 @@ func TestCmdlineOverride(t *testing.T) {
 			inCliOpts: cliOptions{
 				Cores: 2, Group: "bob", MountPath: "/foo/bar",
 				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
-			inConfig: NewDefaultMockConfig(),
+			inConfig: newDefaultMockConfig(),
 			desc:     "override defaults, no Provider set and no provider env exists",
 			errMsg:   "required parameters missing from config and os environment (CRT_PHY_ADDR_STR)",
 		},
 		{
 			// no provider set but os env set mock getenv returns not empty string
 			// mount not set and returns invalid
-			inConfig: NewMockConfig(errors.New("exit status 1"), "somevalue", false),
+			inConfig: newMockConfig(errors.New("exit status 1"), "somevalue", false),
 			desc:     "use defaults, mount check fails with default",
 			errMsg:   "server0 scm mount path (/mnt/daos) not mounted: exit status 1",
 			expCmds: []string{
@@ -604,7 +659,7 @@ func TestCmdlineOverride(t *testing.T) {
 			// no provider set but os env set mock getenv returns not empty string
 			// mount set and returns invalid
 			inCliOpts: cliOptions{MountPath: "/foo/bar"},
-			inConfig:  NewMockConfig(errors.New("exit status 1"), "somevalue", false),
+			inConfig:  newMockConfig(errors.New("exit status 1"), "somevalue", false),
 			desc:      "override MountPath, mount check fails with new value",
 			errMsg:    "server0 scm mount path (/foo/bar) not mounted: exit status 1",
 			expCmds: []string{
@@ -620,7 +675,8 @@ func TestCmdlineOverride(t *testing.T) {
 		err := config.getIOParams(&tt.inCliOpts)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
-			// when mount check fails, verify looking in parent dir
+			// when mount check fails, verify looking in parent dir,
+			// verify captured commands match those expected
 			if len(tt.expCmds) != len(commands) {
 				t.Fatalf(
 					"%s: unexpected commands got %#v, want %#v",
@@ -633,7 +689,7 @@ func TestCmdlineOverride(t *testing.T) {
 			continue
 		}
 		if err != nil {
-			t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err.Error())
+			t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err)
 		}
 		if len(config.Servers) != len(tt.outCliOpts) {
 			t.Fatalf(
@@ -666,7 +722,7 @@ func TestPopulateEnv(t *testing.T) {
 		errMsg    string
 	}{
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			0,
 			[]string{},
 			[]string{},
@@ -675,7 +731,7 @@ func TestPopulateEnv(t *testing.T) {
 			"",
 		},
 		{
-			NewDefaultMockConfig(),
+			newDefaultMockConfig(),
 			0,
 			[]string{"FOO=bar"},
 			[]string{"FOO=bar"},
@@ -684,13 +740,15 @@ func TestPopulateEnv(t *testing.T) {
 			"",
 		},
 		{
-			populateMockConfig(t, NewDefaultMockConfig(), socketsExample),
+			populateMockConfig(t, newDefaultMockConfig(), socketsExample),
 			0,
 			[]string{"FOO=bar"},
 			[]string{
 				"FOO=bar",
+				"ABT_ENV_MAX_NUM_XSTREAMS=100",
 				"ABT_MAX_NUM_XSTREAMS=100",
 				"DAOS_MD_CAP=1024",
+				"CRT_CTX_SHARE_ADDR=0",
 				"CRT_TIMEOUT=30",
 				"FI_SOCKETS_MAX_CONN_RETRY=1",
 				"FI_SOCKETS_CONN_TIMEOUT=2000",
@@ -740,13 +798,15 @@ func TestPopulateEnv(t *testing.T) {
 			"",
 		},
 		{
-			populateMockConfig(t, NewDefaultMockConfig(), psm2Example),
+			populateMockConfig(t, newDefaultMockConfig(), psm2Example),
 			0,
 			[]string{"FOO=bar"},
 			[]string{
 				"FOO=bar",
+				"ABT_ENV_MAX_NUM_XSTREAMS=100",
 				"ABT_MAX_NUM_XSTREAMS=100",
 				"DAOS_MD_CAP=1024",
+				"CRT_CTX_SHARE_ADDR=0",
 				"CRT_TIMEOUT=30",
 				"CRT_CREDIT_EP_CTX=0",
 				"CRT_PHY_ADDR_STR=ofi+psm2",
@@ -802,14 +862,14 @@ func TestPopulateEnv(t *testing.T) {
 		config := tt.inConfig
 		inEnvs := tt.inEnvs
 		if len(config.Servers) == 0 {
-			server := NewDefaultServer()
+			server := newDefaultServer()
 			config.Servers = append(config.Servers, server)
 		}
 		// optionally add to server EnvVars from config (with empty cliOptions)
 		if tt.getParams == true {
 			err := config.getIOParams(&cliOptions{})
 			if err != nil {
-				t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err.Error())
+				t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err)
 			}
 		}
 		// pass in env and verify output envs is as expected
@@ -819,7 +879,7 @@ func TestPopulateEnv(t *testing.T) {
 			continue
 		}
 		if err != nil {
-			t.Fatalf("Envs could not be populated (%s: %s)", tt.desc, err.Error())
+			t.Fatalf("Envs could not be populated (%s: %s)", tt.desc, err)
 		}
 		AssertEqual(t, inEnvs, tt.outEnvs, tt.desc)
 	}

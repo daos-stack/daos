@@ -260,13 +260,16 @@ out:
 
 /*
  * Using "map_buf", "map_version", and "mode", update "pool->dp_map" and fill
- * "tgts" and/or "info" if not NULL.
+ * "tgts" and/or "info", "prop" if not NULL.
  */
 static int
 process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		    uint32_t map_version, uint32_t uid, uint32_t gid,
-		    uint32_t mode, uint32_t leader_rank, d_rank_list_t *tgts,
-		    daos_pool_info_t *info, bool connect)
+		    uint32_t mode, uint32_t leader_rank,
+		    struct daos_pool_space *ps, struct daos_rebuild_status *rs,
+		    d_rank_list_t *tgts, daos_pool_info_t *info,
+		    daos_prop_t *prop_req, daos_prop_t *prop_reply,
+		    bool connect)
 {
 	struct pool_map	       *map;
 	int			rc;
@@ -307,7 +310,12 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 out_unlock:
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
+	if (prop_req != NULL && rc == 0)
+		rc = daos_prop_copy(prop_req, prop_reply);
+
 	if (info != NULL && rc == 0) {
+		D_ASSERT(ps != NULL);
+		D_ASSERT(rs != NULL);
 		uuid_copy(info->pi_uuid, pool->dp_pool);
 		info->pi_ntargets	= map_buf->pb_target_nr;
 		info->pi_nnodes		= map_buf->pb_node_nr;
@@ -316,6 +324,8 @@ out_unlock:
 		info->pi_gid		= gid;
 		info->pi_mode		= mode;
 		info->pi_leader		= leader_rank;
+		info->pi_space		= *ps;
+		info->pi_rebuild_st	= *rs;
 	}
 
 	return rc;
@@ -401,16 +411,12 @@ pool_connect_cp(tse_task_t *task, void *data)
 	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
 				 pco->pco_uid, pco->pco_gid, pco->pco_mode,
 				 pco->pco_op.po_hint.sh_rank,
-				 NULL /* tgts */, info, true);
+				 &pco->pco_space, &pco->pco_rebuild_st,
+				 NULL /* tgts */, info, NULL, NULL, true);
 	if (rc != 0) {
 		/* TODO: What do we do about the remote connection state? */
 		D_ERROR("failed to create local pool map: %d\n", rc);
 		D_GOTO(out, rc);
-	}
-
-	if (arg->pca_info != NULL) {
-		memcpy(&arg->pca_info->pi_rebuild_st, &pco->pco_rebuild_st,
-		       sizeof(pco->pco_rebuild_st));
 	}
 
 	/* add pool to hhash */
@@ -1096,19 +1102,20 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	int				rc;
 
 	if (state == NULL) {
-		if (args->tgts == NULL || args->tgts->rl_nr == 0) {
-			D_ERROR("NULL tgts or tgts->rl_nr is zero\n");
-			return -DER_INVAL;
+		if (args->tgts == NULL || args->tgts->tl_nr == 0) {
+			D_ERROR("NULL tgts or tgts->tl_nr is zero\n");
+			D_GOTO(out_task, rc = -DER_INVAL);
 		} else if ((opc == POOL_EXCLUDE || opc == POOL_EXCLUDE_OUT) &&
-			   args->tgts->rl_nr > 1) {
+			   args->tgts->tl_nr > 1) {
 			D_ERROR("pool exclude can only work with "
-				"(tgts->rl_nr == 1) for now.\n");
-			return -DER_INVAL;
+				"(tgts->tl_nr == 1) for now.\n");
+			D_GOTO(out_task, rc = -DER_INVAL);
 		}
 
-		D_DEBUG(DF_DSMC, DF_UUID": excluding %u targets: tgts[0]=%u\n",
-			DP_UUID(args->uuid), args->tgts->rl_nr,
-			args->tgts->rl_ranks[0]);
+		D_DEBUG(DF_DSMC, DF_UUID": excluding %u targets:"
+			" tgts[0]=%u/%d\n", DP_UUID(args->uuid),
+			args->tgts->tl_nr, args->tgts->tl_ranks[0],
+			args->tgts->tl_tgts[0]);
 
 		D_ALLOC_PTR(state);
 		if (state == NULL) {
@@ -1138,16 +1145,16 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	in = crt_req_get(rpc);
 	uuid_copy(in->pti_op.pi_uuid, args->uuid);
 
-	rc = pool_target_addr_list_alloc(args->tgts->rl_nr, &list);
+	rc = pool_target_addr_list_alloc(args->tgts->tl_nr, &list);
 	if (rc) {
 		crt_req_decref(rpc);
 		D_GOTO(out_client, rc);
 	}
 
 	/* XXX Let's update all targets on the node */
-	for (i = 0; i < args->tgts->rl_nr; i++) {
-		list.pta_addrs[i].pta_rank = args->tgts->rl_ranks[i];
-		list.pta_addrs[i].pta_target = -1;
+	for (i = 0; i < args->tgts->tl_nr; i++) {
+		list.pta_addrs[i].pta_rank = args->tgts->tl_ranks[i];
+		list.pta_addrs[i].pta_target = args->tgts->tl_tgts[i];
 	}
 	in->pti_addr_list.ca_arrays = list.pta_addrs;
 	in->pti_addr_list.ca_count = (size_t)list.pta_number;
@@ -1213,11 +1220,12 @@ dc_pool_exclude_out(tse_task_t *task)
 }
 
 struct pool_query_arg {
-	struct dc_pool	       *dqa_pool;
-	d_rank_list_t       *dqa_tgts;
-	daos_pool_info_t       *dqa_info;
-	struct pool_buf	       *dqa_map_buf;
-	crt_rpc_t	       *rpc;
+	struct dc_pool		*dqa_pool;
+	d_rank_list_t		*dqa_tgts;
+	daos_pool_info_t	*dqa_info;
+	daos_prop_t		*dqa_prop;
+	struct pool_buf		*dqa_map_buf;
+	crt_rpc_t		*rpc;
 };
 
 static int
@@ -1266,16 +1274,49 @@ pool_query_cb(tse_task_t *task, void *data)
 				 out->pqo_op.po_map_version,
 				 out->pqo_uid, out->pqo_gid, out->pqo_mode,
 				 out->pqo_op.po_hint.sh_rank,
-				 arg->dqa_tgts, arg->dqa_info, false);
-	if (arg->dqa_info != NULL) {
-		memcpy(&arg->dqa_info->pi_rebuild_st, &out->pqo_rebuild_st,
-		       sizeof(out->pqo_rebuild_st));
-	}
+				 &out->pqo_space, &out->pqo_rebuild_st,
+				 arg->dqa_tgts, arg->dqa_info,
+				 arg->dqa_prop, out->pqo_prop, false);
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(arg->dqa_pool);
 	map_bulk_destroy(in->pqi_map_bulk, map_buf);
 	return rc;
+}
+
+static uint64_t
+pool_query_bits(daos_prop_t *prop)
+{
+	struct daos_prop_entry	*entry;
+	uint64_t		 bits = 0;
+	int			 i;
+
+	if (prop == NULL)
+		return 0;
+	if (prop->dpp_entries == NULL)
+		return DAOS_PO_QUERY_PROP_ALL;
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		switch (entry->dpe_type) {
+		case DAOS_PROP_PO_LABEL:
+			bits |= DAOS_PO_QUERY_PROP_LABEL;
+			break;
+		case DAOS_PROP_PO_SPACE_RB:
+			bits |= DAOS_PO_QUERY_PROP_SPACE_RB;
+			break;
+		case DAOS_PROP_PO_SELF_HEAL:
+			bits |= DAOS_PO_QUERY_PROP_SELF_HEAL;
+			break;
+		case DAOS_PROP_PO_RECLAIM:
+			bits |= DAOS_PO_QUERY_PROP_RECLAIM;
+			break;
+		default:
+			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
+			break;
+		}
+	}
+	return bits;
 }
 
 /**
@@ -1333,6 +1374,7 @@ dc_pool_query(tse_task_t *task)
 	in = crt_req_get(rpc);
 	uuid_copy(in->pqi_op.pi_uuid, pool->dp_pool);
 	uuid_copy(in->pqi_op.pi_hdl, pool->dp_pool_hdl);
+	in->pqi_query_bits = pool_query_bits(args->prop);
 
 	/** +1 for args */
 	crt_req_addref(rpc);
@@ -1344,6 +1386,7 @@ dc_pool_query(tse_task_t *task)
 
 	query_args.dqa_pool = pool;
 	query_args.dqa_info = args->info;
+	query_args.dqa_prop = args->prop;
 	query_args.dqa_map_buf = map_buf;
 	query_args.rpc = rpc;
 

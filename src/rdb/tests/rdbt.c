@@ -81,7 +81,7 @@ create_rpc(crt_opcode_t opc, crt_group_t *group, d_rank_t rank)
 
 	ep.ep_grp = group;
 	ep.ep_rank = rank;
-	ep.ep_tag = 0;
+	ep.ep_tag = daos_rpc_tag(DAOS_REQ_RDB, 0);
 	rc = crt_req_create(context, &ep, opcode, &rpc);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	return rpc;
@@ -302,7 +302,8 @@ main(int argc, char *argv[])
 		return hdlr == NULL ? 2 : 0;
 	}
 
-	rc = crt_init(NULL, 0 /* client-only */);
+	rc = crt_init_opt(NULL, 0 /* client-only */,
+			  daos_crt_init_opt_get(false, 1));
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	rc = crt_context_create(&context);
 	D_ASSERTF(rc == 0, "%d\n", rc);

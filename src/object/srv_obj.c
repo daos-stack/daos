@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,8 +64,7 @@ ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	if (!daos_handle_is_inval(ioh)) {
 		bool update = (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE);
 
-		rc = update ? vos_update_end(ioh, cont_hdl->sch_uuid,
-					     map_version, &orwi->orw_dkey,
+		rc = update ? vos_update_end(ioh, map_version, &orwi->orw_dkey,
 					     status) :
 			      vos_fetch_end(ioh, status);
 
@@ -500,10 +499,12 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 	int			i;
 	int			rc = 0;
 
-	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d eph "DF_U64".\n",
-		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tgt/xs %d/%d eph "
+		DF_U64".\n", opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		dss_get_module_info()->dmi_tid, orw->orw_epoch);
+		dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id,
+		orw->orw_epoch);
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		rc = ds_obj_update_sizes_in_reply(rpc);
@@ -513,8 +514,10 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 
 	/* Inline fetch/update */
 	if (orw->orw_bulks.ca_arrays == NULL && orw->orw_bulks.ca_count == 0) {
-		if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH)
-			orwo->orw_sgls = orw->orw_sgls;
+		if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
+			orwo->orw_sgls.ca_count = orw->orw_sgls.ca_count;
+			orwo->orw_sgls.ca_arrays = orw->orw_sgls.ca_arrays;
+		}
 		D_GOTO(out, rc);
 	}
 
@@ -718,7 +721,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct ds_cont			*cont = NULL;
 	daos_handle_t			 ioh = DAOS_HDL_INVAL;
 	uint32_t			 map_ver = 0;
-	uint32_t			 tag;
+	int				 tag;
 	bool				 update;
 	bool				 dispatch;
 	int				 dispatch_rc = 0;
@@ -728,12 +731,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	D_ASSERT(orwo != NULL);
 	update = (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE);
 	dispatch = update && orw->orw_shard_tgts.ca_arrays != NULL;
-	tag = dss_get_module_info()->dmi_tid;
+	tag = dss_get_module_info()->dmi_tgt_id;
 
-	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag %d eph "
+	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64".\n", rpc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		tag, orw->orw_epoch);
+		tag, dss_get_module_info()->dmi_xs_id, orw->orw_epoch);
 	rc = ds_check_container(orw->orw_co_hdl, orw->orw_co_uuid,
 				&cont_hdl, &cont);
 	if (rc)
@@ -770,12 +773,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		}
 		D_ASSERT(obj_arg != NULL);
 
-		/* create a dispatch ULT on neighbour ES to release this ES
-		 * in-time for RPC communication.
-		 * XXX can optimize for better method later.
-		 */
 		rc = dss_ult_create(ds_obj_req_dispatch, obj_arg,
-				    (tag + 1) % dss_nxstreams, 0, NULL);
+				    DSS_ULT_IOFW, tag, 0, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": ds_obj_update_dispatch failed %d.\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -838,15 +837,17 @@ ds_eu_complete(crt_rpc_t *rpc, int status, int map_version)
 }
 
 static int
-ds_iter_vos(crt_rpc_t *rpc, struct dss_enum_arg *enum_arg,
-	    uint32_t *map_version)
+ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
+	    struct dss_enum_arg *enum_arg, uint32_t *map_version)
 {
+	vos_iter_param_t	param = { 0 };
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
 	int			opc = opc_get(rpc->cr_opc);
 	struct ds_cont_hdl	*cont_hdl;
 	struct ds_cont		*cont;
 	int			type;
 	int			rc;
+	bool			recursive = false;
 
 	rc = ds_check_container(oei->oei_co_hdl, oei->oei_co_uuid,
 				&cont_hdl, &cont);
@@ -860,16 +861,15 @@ ds_iter_vos(crt_rpc_t *rpc, struct dss_enum_arg *enum_arg,
 			oei->oei_map_ver, *map_version);
 
 	/* prepare enumeration parameters */
-	memset(&enum_arg->param, 0, sizeof(enum_arg->param));
-	enum_arg->param.ip_hdl = cont->sc_hdl;
-	enum_arg->param.ip_oid = oei->oei_oid;
+	param.ip_hdl = cont->sc_hdl;
+	param.ip_oid = oei->oei_oid;
 	if (oei->oei_dkey.iov_len > 0)
-		enum_arg->param.ip_dkey = oei->oei_dkey;
+		param.ip_dkey = oei->oei_dkey;
 	if (oei->oei_akey.iov_len > 0)
-		enum_arg->param.ip_akey = oei->oei_akey;
-	enum_arg->param.ip_epr.epr_lo = oei->oei_epoch;
-	enum_arg->param.ip_epr.epr_hi = oei->oei_epoch;
-	enum_arg->param.ip_epc_expr = VOS_IT_EPC_LE;
+		param.ip_akey = oei->oei_akey;
+	param.ip_epr.epr_lo = oei->oei_epoch;
+	param.ip_epr.epr_hi = oei->oei_epoch;
+	param.ip_epc_expr = VOS_IT_EPC_LE;
 
 	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		if (oei->oei_dkey.iov_len == 0 ||
@@ -881,15 +881,14 @@ ds_iter_vos(crt_rpc_t *rpc, struct dss_enum_arg *enum_arg,
 			/* To capture everything visible, we must search from
 			 * 0 to our epoch
 			 */
-			enum_arg->param.ip_epr.epr_lo = 0;
+			param.ip_epr.epr_lo = 0;
 		} else {
 			type = VOS_ITER_SINGLE;
 		}
 
-		enum_arg->param.ip_epc_expr = VOS_IT_EPC_RE;
+		param.ip_epc_expr = VOS_IT_EPC_RE;
 		/** Only show visible records and skip punches */
-		enum_arg->param.ip_recx_flags = VOS_IT_RECX_VISIBLE |
-			VOS_IT_RECX_SKIP_HOLES;
+		param.ip_flags = VOS_IT_RECX_VISIBLE | VOS_IT_RECX_SKIP_HOLES;
 		enum_arg->fill_recxs = true;
 	} else if (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
 		type = VOS_ITER_DKEY;
@@ -899,15 +898,31 @@ ds_iter_vos(crt_rpc_t *rpc, struct dss_enum_arg *enum_arg,
 		/* object iteration for rebuild */
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
-		enum_arg->param.ip_epr.epr_lo = 0;
-		enum_arg->param.ip_epc_expr = VOS_IT_EPC_RE;
-		enum_arg->recursive = true;
+		param.ip_epr.epr_lo = 0;
+		param.ip_epc_expr = VOS_IT_EPC_RE;
+		recursive = true;
+		enum_arg->chk_key2big = true;
 	}
 
-	rc = dss_enum_pack(type, enum_arg);
+	/*
+	 * FIXME: enumeration RPC uses one anchor for both SV and EV,
+	 * that won't be able to support recursive iteration in our
+	 * current data model (one akey can have both SV tree and EV
+	 * tree).
+	 *
+	 * Need to use separate anchors for SV and EV, or return a
+	 * 'type' to indicate the anchor is on SV tree or EV tree.
+	 */
+	if (type == VOS_ITER_SINGLE)
+		anchors->ia_sv = anchors->ia_ev;
+
+	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg);
+
+	if (type == VOS_ITER_SINGLE)
+		anchors->ia_ev = anchors->ia_sv;
 
 	D_DEBUG(DB_IO, ""DF_UOID" iterate type %d tag %d rc %d\n",
-		DP_UOID(oei->oei_oid), type, dss_get_module_info()->dmi_tid,
+		DP_UOID(oei->oei_oid), type, dss_get_module_info()->dmi_tgt_id,
 		rc);
 out_cont_hdl:
 
@@ -980,6 +995,7 @@ void
 ds_obj_enum_handler(crt_rpc_t *rpc)
 {
 	struct dss_enum_arg	enum_arg = { 0 };
+	struct vos_iter_anchors	anchors = { 0 };
 	struct obj_key_enum_in	*oei;
 	struct obj_key_enum_out	*oeo;
 	int			opc = opc_get(rpc->cr_opc);
@@ -992,9 +1008,9 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	D_ASSERT(oeo != NULL);
 	/* prepare buffer for enumerate */
 
-	enum_arg.dkey_anchor = oei->oei_dkey_anchor;
-	enum_arg.akey_anchor = oei->oei_akey_anchor;
-	enum_arg.recx_anchor = oei->oei_anchor;
+	anchors.ia_dkey = oei->oei_dkey_anchor;
+	anchors.ia_akey = oei->oei_akey_anchor;
+	anchors.ia_ev = oei->oei_anchor;
 
 	/* TODO: Transfer the inline_thres from enumerate RPC */
 	enum_arg.inline_thres = 32;
@@ -1041,7 +1057,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	/* keep trying until the key_buffer is fully filled or
 	 * reaching the end of the stream
 	 */
-	rc = ds_iter_vos(rpc, &enum_arg, &map_version);
+	rc = ds_iter_vos(rpc, &anchors, &enum_arg, &map_version);
 	if (rc == 1) {
 		/* If the buffer is full, exit and
 		 * reset failure.
@@ -1052,9 +1068,9 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
-	oeo->oeo_dkey_anchor = enum_arg.dkey_anchor;
-	oeo->oeo_akey_anchor = enum_arg.akey_anchor;
-	oeo->oeo_anchor = enum_arg.recx_anchor;
+	oeo->oeo_dkey_anchor = anchors.ia_dkey;
+	oeo->oeo_akey_anchor = anchors.ia_akey;
+	oeo->oeo_anchor = anchors.ia_ev;
 
 	if (enum_arg.eprs)
 		oeo->oeo_eprs.ca_count = enum_arg.eprs_len;
@@ -1139,8 +1155,8 @@ ds_obj_punch_local_hdlr(struct obj_punch_in *opi, crt_opcode_t opc,
 
 	case DAOS_OBJ_RPC_PUNCH:
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
-				   opi->opi_epoch, cont_hdl->sch_uuid,
-				   opi->opi_map_ver, 0, NULL, 0, NULL);
+				   opi->opi_epoch, opi->opi_map_ver, 0,
+				   NULL, 0, NULL);
 		break;
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -1151,7 +1167,6 @@ ds_obj_punch_local_hdlr(struct obj_punch_in *opi, crt_opcode_t opc,
 			rc = vos_obj_punch(cont->sc_hdl,
 					   opi->opi_oid,
 					   opi->opi_epoch,
-					   cont_hdl->sch_uuid,
 					   opi->opi_map_ver, 0, dkey,
 					   opi->opi_akeys.ca_count,
 					   opi->opi_akeys.ca_arrays);
@@ -1173,7 +1188,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	struct ds_cont			*cont = NULL;
 	struct obj_punch_in		*opi;
 	uint32_t			 map_version = 0;
-	uint32_t			 tag;
+	int				 tag;
 	bool				 dispatch;
 	int				 dispatch_rc = 0;
 	int				 rc;
@@ -1182,6 +1197,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	D_ASSERT(opi != NULL);
 	dispatch = opi->opi_shard_tgts.ca_arrays != NULL;
 
+	tag = dss_get_module_info()->dmi_tgt_id;
 	rc = ds_check_container(opi->opi_co_hdl, opi->opi_co_uuid,
 				&cont_hdl, &cont);
 	if (rc)
@@ -1213,9 +1229,8 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		}
 		D_ASSERT(obj_arg != NULL);
 
-		tag = dss_get_module_info()->dmi_tid;
 		rc = dss_ult_create(ds_obj_req_dispatch, obj_arg,
-				    (tag + 1) % dss_nxstreams, 0, NULL);
+				    DSS_ULT_IOFW, tag, 0, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": ds_obj_req_dispatch failed %d.\n",
 				DP_UOID(opi->opi_oid), rc);
@@ -1251,6 +1266,8 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	struct obj_query_key_out	*okqo;
 	struct ds_cont_hdl		*cont_hdl = NULL;
 	struct ds_cont			*cont = NULL;
+	daos_key_t			*dkey;
+	daos_key_t			*akey;
 	uint32_t			map_version = 0;
 	int				rc;
 
@@ -1270,28 +1287,17 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	map_version = cont_hdl->sch_pool->spc_map_version;
 
-	okqo->okqo_dkey.iov_buf = NULL;
-	okqo->okqo_akey.iov_buf = NULL;
-	/* MSC - remove, just temp set before server side implementation */
-	if (okqi->okqi_flags & DAOS_GET_DKEY) {
-		uint64_t key_val = (rand()%1000)+1;
+	dkey = &okqi->okqi_dkey;
+	akey = &okqi->okqi_akey;
+	d_iov_set(&okqo->okqo_akey, NULL, 0);
+	d_iov_set(&okqo->okqo_dkey, NULL, 0);
+	if (okqi->okqi_flags & DAOS_GET_DKEY)
+		dkey = &okqo->okqo_dkey;
+	if (okqi->okqi_flags & DAOS_GET_AKEY)
+		akey = &okqo->okqo_akey;
 
-		printf("DKEY returned = %d\n", (int)key_val);
-		D_ALLOC((okqo->okqo_dkey.iov_buf), sizeof(uint64_t));
-		daos_iov_set(&okqo->okqo_dkey, &key_val, sizeof(uint64_t));
-	}
-	if (okqi->okqi_flags & DAOS_GET_AKEY) {
-		uint64_t key_val = (rand()%1000)+1;
-
-		printf("AKEY returned = %d\n", (int)key_val);
-		D_ALLOC((okqo->okqo_akey.iov_buf), sizeof(uint64_t));
-		daos_iov_set(&okqo->okqo_akey, &key_val, sizeof(uint64_t));
-	}
-	if (okqi->okqi_flags & DAOS_GET_RECX) {
-		okqo->okqo_recx.rx_idx = (rand()%1000)+1;
-		printf("RECX returned = %d\n", (int)okqo->okqo_recx.rx_idx);
-		okqo->okqo_recx.rx_nr = 1048576;
-	}
+	rc = vos_obj_query_key(cont->sc_hdl, okqi->okqi_oid, okqi->okqi_flags,
+			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx);
 out:
 	if (cont_hdl) {
 		if (!cont_hdl->sch_cont)
@@ -1439,7 +1445,7 @@ shard_req_forward(struct shard_req_fw_arg *fw_arg)
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = shard_tgt->st_rank;
-	tgt_ep.ep_tag = shard_tgt->st_tgt_idx;
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_IO, shard_tgt->st_tgt_idx);
 	D_DEBUG(DB_TRACE, "opc:%#x, forwarding to rank:%d tag:%d.\n",
 		opc, tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);

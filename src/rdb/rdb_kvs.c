@@ -125,7 +125,7 @@ rdb_kvs_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto err;
 	}
 
-	D_ALLOC_ARRAY(kvs, ksize);
+	D_ALLOC(kvs, sizeof(*kvs) + ksize);
 	if (kvs == NULL) {
 		rc = -DER_NOMEM;
 		goto err;

@@ -1,40 +1,48 @@
 # DAOS Quick Start Guide
 
-DAOS runs on both x86 and ARM platforms and has been successfully tested on CentOS7, openSuSE 42.2 and Ubuntu 18.04 distributions.
+This guide provides basic instructions on how to install and run DAOS. More in-depth details on how to deploy, administer and monitor a DAOS installation are provided in the [DAOS operations manual](https://wiki.hpdd.intel.com/display/DC/Operations+Manual).
+
+DAOS runs on both x86 and ARM platforms and has been successfully tested on CentOS7, openSuSE 42.2 and Ubuntu 18.04 distributions. [Recipes](/utils/docker/) and [instructions](/utils/docker/README.md) to build Docker images (Singularity support to come soon) for each of these Linux distributions are available. To set up a DAOS development environment, please check this extra [information](development.md)
 
 ## Hardware Support
 
-DAOS requires a 64-bit processor architecture and is primarily developed on x64-64 and AArch64 platforms. Apart from using a popular linux distribution, no special considerations are necessary to build DAOS on 64-bit ARM processors. The same instructions that are used in Xeon are applicable for ARM builds as well, DAOS and its dependencies will make the necessary adjustments automatically in their respective build systems for ARM platforms.
+DAOS requires a 64-bit processor architecture and is primarily developed on x64-64 and AArch64 platforms. Apart from using a popular Linux distribution, no special considerations are necessary to build DAOS on 64-bit ARM processors. The same instructions that are used in Xeon are applicable for ARM builds as well, DAOS and its dependencies will make the necessary adjustments automatically in their respective build systems for ARM platforms.
 
 Storage-class memory (SCM) can be emulated with DRAM by creating tmpfs mountpoints on the DAOS servers.
 
 ## Software Dependencies
 
-DAOS requires a C99-capable compiler, a golang compiler and the scons build tool. Moreover, the DAOS stack leverages the following open source projects:
+DAOS requires a C99-capable compiler, a golang compiler, and the scons build tool. Moreover, the DAOS stack leverages the following open source projects:
 - [CaRT](https://github.com/daos-stack/cart) that relies on both [Mercury](https://mercury-hpc.github.io) and [Libfabric](https://ofiwg.github.io/libfabric/) for lightweight network transport and [PMIx](https://github.com/pmix/master) for process set management. See the CaRT repository for more information on how to build the CaRT library.
 - [PMDK](https://github.com/pmem/pmdk.git) for persistent memory programming.
-- [FIO](https://github.com/axboe/fio) for flexible testing of Linux I/O subsystems, specifically enabling validation of userspace NVMe device performance through fio-spdk plugin.
 - [SPDK](http://spdk.io) for userspace NVMe device access and management.
+- [FIO](https://github.com/axboe/fio) for flexible testing of Linux I/O subsystems, specifically enabling validation of userspace NVMe device performance through fio-spdk plugin.
 - [ISA-L](https://github.com/01org/isa-l) for checksum and erasure code computation.
 - [Argobots](https://github.com/pmodels/argobots) for thread management.
 
 The DAOS build system can be configured to download and build any missing dependencies automatically.
 
-## DAOS Source Code
+## DAOS Packages
 
-To check out the DAOS source code, run the following command:
+### RPMs
 
-    git clone https://github.com/daos-stack/daos.git
+TODO
 
-This clones the DAOS git repository (path referred as \${daospath} below). Then initialize the submodules with:
+### deb
 
-    cd ${daospath}
-    git submodule init
-    git submodule update
+TODO
+
+### Spack
+
+TODO
+
+### Snaps
+
+TODO
 
 ## DAOS from Scratch
 
-The below instructions have been verified with CentOS. Installations on other Linux distributions might be similar with some variations. Developers of DAOS may want to check additional sections below before beginning for suggestions related specifically to development. Please contact us in our [forum](https://daos.groups.io/g/daos) if running into issues.
+The following instructions have been verified with CentOS. Installations on other Linux distributions might be similar with some variations. Developers of DAOS may want to check additional sections below before beginning for suggestions related specifically to development. Please contact us in our [forum](https://daos.groups.io/g/daos) if running into issues.
 
 ### Build Prerequisites
 
@@ -42,6 +50,7 @@ Please install the following software packages (or equivalent for other distros)
 
 On CentOS and openSuSE:
 
+```
     yum install -y epel-release
     yum install -y git gcc gcc-c++ make cmake golang libtool scons boost-devel
     yum install -y libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel
@@ -57,14 +66,16 @@ On CentOS and openSuSE:
     yum copr -y enable jhli/ipmctl
     yum copr -y enable jhli/safeclib
     yum install -y libipmctl-devel
+```
 
 On Ubuntu and Debian:
 
+```
     apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
     apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev libltdl-dev
     apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev libreadline6-dev
     apt-get install -y curl doxygen pandoc flex patch nasm yasm
-    apt-get install -y ninja-build meson libyaml-dev
+    apt-get install -y ninja-build meson libyaml-dev python2.7-dev
     # Required SPDK packages for managing NVMe SSDs
     apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
     apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen libnuma-dev
@@ -74,60 +85,83 @@ On Ubuntu and Debian:
     add-apt-repository ppa:jhli/ipmctl
     apt-get update
     apt-get install -y libipmctl-dev
+```
 
-Moreover, please make sure all the auto tools listed below are at the appropriate versions.
+Moreover, please make sure the autotools packages listed below are at the appropriate versions:
+- m4 (GNU M4) 1.4.16
+- flex 2.5.37
+- autoconf (GNU Autoconf) 2.69
+- automake (GNU automake) 1.13.4
+- libtool (GNU libtool) 2.4.2
 
-    m4 (GNU M4) 1.4.16
-    flex 2.5.37
-    autoconf (GNU Autoconf) 2.69
-    automake (GNU automake) 1.13.4
-    libtool (GNU libtool) 2.4.2
+### DAOS Source Code
 
+To check out the DAOS source code, run the following command:
 
-### Protobuf Compiler
+```
+    git clone https://github.com/daos-stack/daos.git
+```
 
-The DAOS control plane infrastructure will be using protobuf as the data serialization format for its RPC requests. The DAOS proto files use protobuf 3 syntax which is not supported by the platform protobuf compiler in all cases. Not all developers will need to build the proto files into the various source files. However if changes are made to the proto files they will need to be regenerated with a protobuf 3.* or higher compiler. To setup support for compiling protobuf files download the following precompiled package for Linux and install it somewhere accessible by your PATH variable.
+This clones the DAOS git repository (path referred as \${daospath} below). Then initialize the submodules with:
 
-    https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip
+```
+    cd ${daospath}
+    git submodule init
+    git submodule update
+```
 
-### Building DAOS & Dependencies
+### Building DAOS and Dependencies
 
-If all the software dependencies listed previously are already satisfied, then just type the following command in the top source directory to build the DAOS stack:
+If all the software dependencies listed previously are already satisfied, type the following command in the top source directory to build the DAOS stack:
 
+```
     scons --config=force install
+```
 
 If you are a developer of DAOS, we recommend following the instructions in the [DAOS for Developers](#daos-for-development) section below.
 
 Otherwise, the missing dependencies can be built automatically by invoking scons with the following parameters:
 
+```
     scons --config=force --build-deps=yes USE_INSTALLED=all install
+```
 
-By default, DAOS and its dependencies are installed under \${daospath}/install. The installation path can be modified by adding the PREFIX= option to the above command line (e.g. PREFIX=/usr/local).
+By default, DAOS and its dependencies are installed under \${daospath}/install. The installation path can be modified by adding the PREFIX= option to the above command line (e.g., PREFIX=/usr/local).
 
 ### Environment setup
 
-Once built, the environment must be modified to search for binaries and header files in the installation path. This step is not required if standard locations (e.g. /bin, /sbin, /usr/lib, ...) are used.
+Configuration files can be used to specify options to run DAOS with. Pass location of config when starting daos_server with -o option and examples/explanations can be found in YAML files located in utils/config/ within DAOS source.
 
+Once built, the environment must be modified to search for binaries and header files in the installation path. This step is not required if standard locations (e.g., /bin, /sbin, /usr/lib, ...) are used.
+
+```
     CPATH=${daospath}/install/include/:$CPATH
     PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
     export CPATH PATH
+```
 
-If using bash, PATH can be setup for you after a build by sourcing the script scons_local/utils/setup_local.sh from the daos root.   This script utilizes a file generated by the build to determine the location of daos and its dependencies.
+If using bash, PATH can be setup for you after a build by sourcing the script scons_local/utils/setup_local.sh from the DAOS root.   This script utilizes a file generated by the build to determine the location of DAOS and its dependencies.
 
 If required, \${daospath}/install must be replaced with the alternative path specified through PREFIX. The network type to use as well the debug log location can be selected as follows:
 
+```
     export CRT_PHY_ADDR_STR="ofi+sockets",
 	OFI_INTERFACE=eth0, where eth0 is the network device you want to use.
-	for infiniband you could use ib0 or whichever else pointing to IB device.
+	For InfiniBand you could use ib0 or whichever else pointing to IB device.
+```
+
+## Running DAOS
 
 ### Runtime Directory Setup
 
-DAOS uses a series of Unix Domain Sockets to communicate between its various components. On modern Linux systems Unix Domain Sockets are typically stored under /run or /var/run (usually a symlink to /run) and are a mounted tmpfs file system. There are several methods for ensuring the necessary directories are setup.
+DAOS uses a series of Unix Domain Sockets to communicate between its various components. On modern Linux systems, Unix Domain Sockets are typically stored under /run or /var/run (usually a symlink to /run) and are a mounted tmpfs file system. There are several methods for ensuring the necessary directories are setup.
 
 A sign that this step may have missed is when starting daos_server or daos_agent you may see the message:
 
+```
 	mkdir /var/run/daos_server: permission denied
 	Unable to create socket directory: /var/run/daos_server
+```
 
 #### Non-default Directory
 
@@ -135,7 +169,7 @@ By default daos_server and daos_agent will use the directories /var/run/daos_ser
 
 #### Default Directory (non-persistent)
 
-Files and directories created in /run and /var/run only survive until the next reboot. However if reboots are infrequent an easy solution while still utilizing the default locations is to manually create the required directories. To do this execute the following commands.
+Files and directories created in /run and /var/run only survive until the next reboot. However, if reboots are infrequent an easy solution while still utilizing the default locations is to manually create the required directories. To do this execute the following commands.
 
 daos_server:
 - mkdir /var/run/daos_server
@@ -149,160 +183,69 @@ daos_agent:
 
 #### Default Directory (persistent)
 
-If the server hosting daos_server or daos_agent will be rebooted often systemd provides a persistent mechanism for creating the required directories called tmpfiles.d. This mechanism will be required every time the system is provisioned and require a reboot to take effect.
+If the server hosting daos_server or daos_agent will be rebooted often, systemd provides a persistent mechanism for creating the required directories called tmpfiles.d. This mechanism will be required every time the system is provisioned and require a reboot to take effect.
 
 To tell Systemd to create the necessary directories for daos:
 - Copy the file utils/systemd/daosfiles.conf to /etc/tmpfiles.d (cp utils/systemd/daosfiles.conf /etc/tmpfiles.d)
 - Modify the copied file to change the user and group fields (currently daos) to the user daos will be run as
 - Reboot the system and the directories will be created automatically on all subsequent reboots.
 
-### Running DAOS
+### Starting DAOS server
 
-DAOS uses orterun(1) for scalable process launch. The list of storage nodes can be specified in an host file (referred as \${hostfile}). The DAOS server and the application can be started seperately, but must share an URI file (referred as \${urifile}) to connect to each other. The \${urifile} is generated by orterun using (\-\-report-uri filename) at server and used at application with (\-\-ompi-server file:filename). In addition, the DAOS server must be started with the \-\-enable-recovery option to support server failure. See the orterun(1) man page for additional options.
+DAOS uses orterun(1) for scalable process launch. The list of storage nodes can be specified in a host file (referred as \${hostfile}). The DAOS server and the application can be started separately, but must share a URI file (referred as \${urifile}) to connect to each other. The \${urifile} is generated by orterun using (\-\-report-uri filename) at server and used at application with (\-\-ompi-server file:filename). Also, the DAOS server must be started with the \-\-enable-recovery option to support server failure. See the orterun(1) man page for additional options.
 
-(a) Starting the DAOS server
+On each storage node, the DAOS server will use a storage path (specified either in the server configuration file or by --storage or -s cli options) that must be a directory in a tmpfs filesystem, for the time being. If not specified, it is assumed to be /mnt/daos. To configure the storage:
 
-On each storage node, the DAOS server will use a storage path (specified by --storage or -s) that must be a directory in a tmpfs filesystem, for the time being. If not specified, it is assumed to be /mnt/daos. To configure the storage:
 
-> Note:</br>
-> A minimum size of 512M required
+Note:</br>
+A minimum size of 512M required
 
+```
     mount -t tmpfs -o size=<bytes> tmpfs /mnt/daos
-
+```
 
 To start the DAOS server, run:
 
+```
     orterun -np <num_servers> --hostfile ${hostfile} --enable-recovery --report-uri ${urifile} daos_server --socket_dir=/tmp
+```
 
-By default, the DAOS server will use all the cores available on the storage server. You can limit the number of execution streams with the -c #cores\_to\_use option.
+By default, the DAOS server will use all the cores available on the storage server. You can limit the number of execution streams in the configuration file (cpus) or with the -c #cores\_to\_use cli option.
 Hostfile used here is the same as the ones used by Open MPI. See (https://www.open-mpi.org/faq/?category=running#mpirun-hostfile) for additional details.
 
-> Note:</br>
-> If running clients from a different shell:</br>
-> `source ${daospath}/scons_local/utils/setup_local.sh # from ${daospath}`</br>
-> `export CRT_PHY_ADDR_STR="ofi+sockets"`</br>
-> `export OFI_INTERFACE=<if>`</br>
 
-(b) Creating/destroy a DAOS pool
+Note:</br>
+If running clients from a different shell:</br>
+`source ${daospath}/scons_local/utils/setup_local.sh # from ${daospath}`</br>
+`export CRT_PHY_ADDR_STR="ofi+sockets"`</br>
+`export OFI_INTERFACE=<if>`</br>
 
-A DAOS pool can be created and destroyed through the DAOS management API (see  daos\_mgmt.h). We also provide an utility called dmg to manage storage pools from the command line.
+### DAOS Pool Management
+
+A DAOS pool can be created and destroyed through the DAOS management API (see  daos\_mgmt.h). A utility called dmg to manage storage pools from the command line is also provided.
 
 To create a pool:
 
+```
     orterun -np 1 --ompi-server file:${urifile} dmg create --size=xxG --nvme=yyG
+```
 
-This creates a pool distributed across the DAOS servers with a target size on each server of xxGB SCM (mandatory option) and yyGB NVMe (optional). The UUID allocated to the newly created pool is printed to stdout (referred as \${pooluuid}).
+This creates a pool distributed across the DAOS servers with a target size on each server of xxGB SCM (mandatory option) and yyGB NVMe (optional). The UUID allocated to the newly created pool is printed to stdout (referred to as \${pooluuid}).
 
 To destroy a pool:
 
+```
     orterun -np 1 --ompi-server file:${urifile} dmg destroy --pool=${pooluuid}
+```
 
-(c) Building applications or I/O middleware against the DAOS library
+### Testing DAOS
 
-Include the daos.h header file in your program and link with -Ldaos. Examples are available under src/tests.
+To build applications or I/O middleware against the DAOS library, include the daos.h header file in your program and link with -Ldaos. Examples are available under src/tests.
 
-(d) Running applications
+To run the applications:
 
+```
     orterun -np <num_clients> --hostfile ${hostfile_cli} --ompi-server file:$urifile ${application} eg., ./daos_test
+```
 
-## DAOS for Development
-
-For development, it is recommended to build and install each dependency in a unique subdirectory. The DAOS build system supports this through the TARGET\_PREFIX variable. Once the submodules have been initialized and updated, run the following:
-
-    scons PREFIX=${daos_prefix_path} TARGET_PREFIX=${daos_prefix_path}/opt install --build-deps=yes --config=force
-
-Installing the components into seperate directories allow to upgrade the components individually replacing --build-deps=yes with --update-prereq={component\_name}. This requires change to the environment configuration from before. For automated environment setup, source scons_local/utils/setup_local.sh.
-
-    ARGOBOTS=${daos_prefix_path}/opt/argobots
-    CART=${daos_prefix_path}/opt/cart
-    HWLOC=${daos_prefix_path}/opt/hwloc
-    MERCURY=${daos_prefix_path}/opt/mercury
-    PMDK=${daos_prefix_path}/opt/pmdk
-    OMPI=${daos_prefix_path}/opt/ompi
-    OPA=${daos_prefix_path}/opt/openpa
-    PMIX=${daos_prefix_path}/opt/pmix
-    FIO=${daos_prefix_path}/opt/fio
-    SPDK=${daos_prefix_path}/opt/spdk
-
-    PATH=$CART/bin/:$OMPI/bin/:${daos_prefix_path}/bin/:$PATH
-
-With this approach DAOS would get built using the prebuilt dependencies in ${daos_prefix_path}/opt and required options are saved for future compilations. So, after the first time, during development, a mere "scons --config=force" and "scons --config=force install" would suffice for compiling changes to daos source code.
-
-If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on the scons command line.   This option is also saved for future compilations.
-
-### Golang dependencies
-
-Developers contributing Go code may need to change the external dependencies located in the src/control/vendor directory. The DAOS codebase uses [dep](https://github.com/golang/dep) to manage these dependencies.
-
-On EL7 and later:
-
-    yum install yum-plugin-copr
-    yum copr enable hnakamur/golang-dep
-    yum install golang-dep
-
-On Fedora 27 and later:
-
-    dnf install dep
-
-On Ubuntu 18.04 and later:
-
-    apt-get install go-dep
-
-For OSes that don't supply a package:
-* Ensure that you have a personal GOPATH (see "go env GOPATH", referred to as "$GOPATH" in this document) and a GOBIN ($GOPATH/bin) set up and included in your PATH:
-
-    mkdir -p $GOPATH/bin
-    export PATH=$GOPATH/bin:$PATH
-
-* Then follow the [installation instructions on Github](https://github.com/golang/dep).
-
-To update the vendor directory using dep after changing Gopkg.toml, first make sure DAOS is cloned into
-
-    $GOPATH/src/github.com/daos-stack/daos
-
-Then:
-
-    cd $GOPATH/src/github.com/daos-stack/daos/src/control
-    dep ensure
-
-## DAOS in Docker
-
-Docker is the fastest way to build, install and run DAOS on a non-Linux system.
-
-### Building DAOS in a Container
-
-To build the Docker image directly from GitHub, run the following command:
-
-    $ docker build -t daos -f Dockerfile.centos\:7 github.com/daos-stack/daos#:utils/docker
-
-This creates a CentOS7 image, fetches the latest DAOS version from GitHub and  builds it in the container.
-For Ubuntu, replace Dockerfile.centos\:7 with Dockerfile.ubuntu\:18.04.
-
-To build from a local tree stored on the host, a volume must be created to share the source tree with the Docker container. To do so, execute the following command to create a docker image without checking out the DAOS source tree:
-
-    $ docker build -t daos -f utils/docker/Dockerfile.centos\:7 --build-arg NOBUILD=1 .
-
-And then the following command to export the DAOS source tree to the docker container and build it:
-
-    $ docker run -v ${daospath}:/home/daos/daos:Z daos /bin/bash -c "scons --build-deps=yes USE_INSTALLED=all install"
-
-### Running DAOS in a Container
-
-Let's first create a container that will run the DAOS service:
-
-    $ docker run -it -d --name server --tmpfs /mnt/daos:rw,uid=1000,size=1G -v /tmp/uri:/tmp/uri daos
-
-Add "-v \${daospath}:/home/daos/daos:Z" to this command line if DAOS source tree is stored on the host.
-
-This allocates 1GB of DRAM for DAOS storage. The more, the better.
-
-To start the DAOS service in this newly created container, execute the following command:
-
-    $ docker exec server orterun -H localhost -np 1 --report-uri /tmp/uri/uri.txt daos_server
-
-Once the DAOS server is started, the integration tests can be run as follows:
-
-    $ docker run -v /tmp/uri:/tmp/uri daos \
-      orterun -H localhost -np 1 --ompi-server file:/tmp/uri/uri.txt daos_test
-
-Again, "-v \${daospath}:/home/daos/daos:Z" must be added if the DAOS source tree is shared with the host.
+An exhaustive list of DAOS-aware I/O middleware is available [here](middleware.md)

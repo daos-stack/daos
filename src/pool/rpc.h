@@ -102,6 +102,10 @@
 		0, &CQF_pool_tgt_update_map,				\
 		ds_pool_tgt_update_map_handler,				\
 		&ds_pool_tgt_update_map_co_ops),			\
+	X(POOL_TGT_QUERY,						\
+		0, &CQF_pool_tgt_query,					\
+		ds_pool_tgt_query_handler,				\
+		&ds_pool_tgt_query_co_ops),				\
 	X(POOL_RDB_START,						\
 		0, &CQF_pool_rdb_start,					\
 		ds_pool_rdb_start_handler,				\
@@ -144,9 +148,10 @@ CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 	((uint32_t)		(pri_ntgts)		CRT_VAR) \
 	((uuid_t)		(pri_tgt_uuids)		CRT_ARRAY) \
 	((d_rank_list_t)	(pri_tgt_ranks)		CRT_PTR) \
+	((daos_prop_t)		(pri_prop)		CRT_PTR) \
 	((uint32_t)		(pri_ndomains)		CRT_VAR) \
 	((uint32_t)		(pri_padding)		CRT_VAR) \
-	((uint32_t)		(pri_domains)		CRT_ARRAY)
+	((int32_t)		(pri_domains)		CRT_ARRAY)
 
 #define DAOS_OSEQ_POOL_CREATE	/* output fields */		 \
 	((struct pool_op_out)	(pro_op)		CRT_VAR)
@@ -167,6 +172,7 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 	((uint32_t)		(pco_mode)		CRT_VAR) \
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pco_map_buf_size)	CRT_VAR) \
+	((struct daos_pool_space) (pco_space)		CRT_VAR) \
 	((struct daos_rebuild_status) (pco_rebuild_st)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
@@ -180,9 +186,20 @@ CRT_RPC_DECLARE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 		DAOS_OSEQ_POOL_DISCONNECT)
 
+/** pool query request bits */
+#define DAOS_PO_QUERY_PROP_LABEL	(1ULL << 0)
+#define DAOS_PO_QUERY_PROP_SPACE_RB	(1ULL << 1)
+#define DAOS_PO_QUERY_PROP_SELF_HEAL	(1ULL << 2)
+#define DAOS_PO_QUERY_PROP_RECLAIM	(1ULL << 3)
+
+#define DAOS_PO_QUERY_PROP_ALL						\
+	(DAOS_PO_QUERY_PROP_LABEL | DAOS_PO_QUERY_PROP_SPACE_RB |	\
+	 DAOS_PO_QUERY_PROP_SELF_HEAL | DAOS_PO_QUERY_PROP_RECLAIM)
+
 #define DAOS_ISEQ_POOL_QUERY	/* input fields */		 \
 	((struct pool_op_in)	(pqi_op)		CRT_VAR) \
-	((crt_bulk_t)		(pqi_map_bulk)		CRT_VAR)
+	((crt_bulk_t)		(pqi_map_bulk)		CRT_VAR) \
+	((uint64_t)		(pqi_query_bits)	CRT_VAR)
 
 #define DAOS_OSEQ_POOL_QUERY	/* output fields */		 \
 	((struct pool_op_out)	(pqo_op)		CRT_VAR) \
@@ -191,6 +208,8 @@ CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 	((uint32_t)		(pqo_mode)		CRT_VAR) \
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pqo_map_buf_size)	CRT_VAR) \
+	((daos_prop_t)		(pqo_prop)		CRT_PTR) \
+	((struct daos_pool_space) (pqo_space)		CRT_VAR) \
 	((struct daos_rebuild_status) (pqo_rebuild_st)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
@@ -294,6 +313,7 @@ CRT_RPC_DECLARE(pool_svc_stop, DAOS_ISEQ_POOL_SVC_STOP, DAOS_OSEQ_POOL_SVC_STOP)
 	((daos_iov_t)		(tci_iv_ctxt)		CRT_VAR)
 
 #define DAOS_OSEQ_POOL_TGT_CONNECT /* output fields */		 \
+	((struct daos_pool_space) (tco_space)		CRT_VAR) \
 	((int32_t)		(tco_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_tgt_connect, DAOS_ISEQ_POOL_TGT_CONNECT,
@@ -308,6 +328,16 @@ CRT_RPC_DECLARE(pool_tgt_connect, DAOS_ISEQ_POOL_TGT_CONNECT,
 
 CRT_RPC_DECLARE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 		DAOS_OSEQ_POOL_TGT_DISCONNECT)
+
+#define DAOS_ISEQ_POOL_TGT_QUERY	/* input fields */	 \
+	((struct pool_op_in)	(tqi_op)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_TGT_QUERY	/* output fields */	 \
+	((struct daos_pool_space) (tqo_space)		CRT_VAR) \
+	((uint32_t)		(tqo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
+		DAOS_OSEQ_POOL_TGT_QUERY)
 
 #define DAOS_ISEQ_POOL_TGT_UPDATE_MAP /* input fields */	 \
 	((uuid_t)		(tui_uuid)		CRT_VAR) \
@@ -351,6 +381,8 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	crt_opcode_t opcode;
 
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_POOL_MODULE, DAOS_POOL_VERSION);
+	/* call daos_rpc_tag to get the target tag/context idx */
+	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_POOL, tgt_ep->ep_tag);
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
 }

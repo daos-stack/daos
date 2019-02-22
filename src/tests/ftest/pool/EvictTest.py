@@ -62,8 +62,6 @@ class EvictTest(Test):
                                        'daos_server')
 
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
-        # not sure I need to do this but ... give it time to start
-        time.sleep(1)
 
     def tearDown(self):
         ServerUtils.stopServer(hosts=self.hostlist)
@@ -162,6 +160,3 @@ class EvictTest(Test):
                 print e
                 print traceback.format_exc()
                 self.fail("Expecting to pass but test has failed.\n")
-
-if __name__ == "__main__":
-    main()

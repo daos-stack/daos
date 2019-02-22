@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -376,21 +376,22 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, daos_iov_t *kds,
 		    daos_iov_t *data, struct rdb_anchor *anchor)
 {
 	daos_sg_list_t		sgl;
-	struct dss_enum_arg	arg;
+	struct dss_enum_arg	arg = { 0 };
+	struct vos_iter_anchors	anchors = { 0 };
+	vos_iter_param_t	param = { 0 };
 	int			rc;
 
 	/*
 	 * Set up the iteration for everything in the log container at
 	 * is->dis_index.
 	 */
-	memset(&arg, 0, sizeof(arg));
-	arg.param.ip_hdl = lc;
-	rdb_anchor_to_hashes(&is->dis_anchor, &arg.obj_anchor, &arg.dkey_anchor,
-			     &arg.akey_anchor, &arg.recx_anchor);
-	arg.param.ip_epr.epr_lo = is->dis_index;
-	arg.param.ip_epr.epr_hi = is->dis_index;
-	arg.param.ip_epc_expr = VOS_IT_EPC_LE;
-	arg.recursive = true;
+	param.ip_hdl = lc;
+	rdb_anchor_to_hashes(&is->dis_anchor, &anchors.ia_obj, &anchors.ia_dkey,
+			     &anchors.ia_akey, &anchors.ia_ev, &anchors.ia_sv);
+	param.ip_epr.epr_lo = is->dis_index;
+	param.ip_epr.epr_hi = is->dis_index;
+	param.ip_epc_expr = VOS_IT_EPC_LE;
+	arg.chk_key2big = true;	/* see fill_key() & fill_rec() */
 
 	/* Set up the buffers. */
 	arg.kds = kds->iov_buf;
@@ -404,7 +405,7 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, daos_iov_t *kds,
 	arg.inline_thres = 1 * 1024 * 1024;
 
 	/* Enumerate from the object level. */
-	rc = dss_enum_pack(VOS_ITER_OBJ, &arg);
+	rc = dss_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg);
 	if (rc < 0)
 		return rc;
 
@@ -415,9 +416,9 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, daos_iov_t *kds,
 	if (rc == 0)
 		rdb_anchor_set_eof(anchor);
 	else /* rc == 1 */
-		rdb_anchor_from_hashes(anchor, &arg.obj_anchor,
-				       &arg.dkey_anchor, &arg.akey_anchor,
-				       &arg.recx_anchor);
+		rdb_anchor_from_hashes(anchor, &anchors.ia_obj,
+				       &anchors.ia_dkey, &anchors.ia_akey,
+				       &anchors.ia_ev, &anchors.ia_sv);
 
 	/* Report the buffer lengths. data.iov_len is set by dss_enum_pack. */
 	kds->iov_len = sizeof(*arg.kds) * arg.kds_len;
@@ -689,7 +690,6 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 	int i;
 
 	D_ASSERT(daos_key_match(&io->ui_dkey, &rdb_dkey));
-	D_ASSERT(uuid_compare(io->ui_cookie, rdb_cookie) == 0);
 	D_ASSERTF(io->ui_version == RDB_PM_VER, "%u\n", io->ui_version);
 	for (i = 0; i < io->ui_iods_len; i++) {
 		D_ASSERT(io->ui_iods[i].iod_type == DAOS_IOD_SINGLE);
@@ -708,9 +708,9 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 	}
 #endif
 
-	return vos_obj_update(*slc, io->ui_oid, 0 /* epoch */, io->ui_cookie,
-			      io->ui_version, &io->ui_dkey, io->ui_iods_len,
-			      io->ui_iods, io->ui_sgls);
+	return vos_obj_update(*slc, io->ui_oid, 0 /* epoch */, io->ui_version,
+			      &io->ui_dkey, io->ui_iods_len, io->ui_iods,
+			      io->ui_sgls);
 }
 
 static int
@@ -721,7 +721,7 @@ rdb_raft_unpack_chunk(daos_handle_t slc, daos_iov_t *kds, daos_iov_t *data)
 
 	/* Set up the same iteration as rdb_raft_pack_chunk. */
 	memset(&arg, 0, sizeof(arg));
-	arg.recursive = true;
+	arg.chk_key2big = true;
 
 	/* Set up the buffers. */
 	arg.kds = kds->iov_buf;
@@ -1480,8 +1480,20 @@ rdb_raft_queue_event(struct rdb *db, enum rdb_raft_event_type type,
 		switch (type) {
 		case RDB_RAFT_STEP_UP:
 			D_ASSERT(tail->dre_type == RDB_RAFT_STEP_DOWN);
+#if 0
 			D_ASSERTF(tail->dre_term < term, DF_U64" < "DF_U64"\n",
 				  tail->dre_term, term);
+#else
+			/*
+			 * Because raft handles the self-only case (i.e.,
+			 * there's only one voting node) specially, without
+			 * elections, it's possible that this only replica
+			 * becomes leader without incrementing the term. This
+			 * special handling in raft will be removed.
+			 */
+			D_ASSERTF(tail->dre_term <= term,
+				  DF_U64" <= "DF_U64"\n", tail->dre_term, term);
+#endif
 			break;
 		case RDB_RAFT_STEP_DOWN:
 			D_ASSERT(tail->dre_type == RDB_RAFT_STEP_UP);
@@ -2316,16 +2328,18 @@ rdb_raft_start(struct rdb *db)
 	raft_set_election_timeout(db->d_raft, election_timeout);
 	raft_set_request_timeout(db->d_raft, request_timeout);
 
-	rc = dss_ult_create(rdb_recvd, db, -1, 0, &db->d_recvd);
+	rc = dss_ult_create(rdb_recvd, db, DSS_ULT_SELF, 0, 0, &db->d_recvd);
 	if (rc != 0)
 		goto err_lc;
-	rc = dss_ult_create(rdb_timerd, db, -1, 0, &db->d_timerd);
+	rc = dss_ult_create(rdb_timerd, db, DSS_ULT_SELF, 0, 0, &db->d_timerd);
 	if (rc != 0)
 		goto err_recvd;
-	rc = dss_ult_create(rdb_callbackd, db, -1, 0, &db->d_callbackd);
+	rc = dss_ult_create(rdb_callbackd, db, DSS_ULT_SELF, 0, 0,
+			    &db->d_callbackd);
 	if (rc != 0)
 		goto err_timerd;
-	rc = dss_ult_create(rdb_compactd, db, -1, 0, &db->d_compactd);
+	rc = dss_ult_create(rdb_compactd, db, DSS_ULT_SELF, 0, 0,
+			    &db->d_compactd);
 	if (rc != 0)
 		goto err_callbackd;
 
@@ -2433,6 +2447,8 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	if (term != raft_get_current_term(db->d_raft) ||
 	    !raft_is_leader(db->d_raft))
 		return;
+	D_DEBUG(DB_MD, DF_DB": resigning from term "DF_U64"\n", DP_DB(db),
+		term);
 	rdb_raft_save_state(db, &state);
 	raft_become_follower(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);

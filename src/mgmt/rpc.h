@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,6 +86,7 @@ extern struct crt_proto_format mgmt_proto_fmt;
 	((d_rank_list_t)	(pc_tgts)		CRT_PTR) \
 	((daos_size_t)		(pc_scm_size)		CRT_VAR) \
 	((daos_size_t)		(pc_nvme_size)		CRT_VAR) \
+	((daos_prop_t)		(pc_prop)		CRT_PTR) \
 	((uint32_t)		(pc_svc_nr)		CRT_VAR) \
 	((uint32_t)		(pc_mode)		CRT_VAR) \
 	((uint32_t)		(pc_uid)		CRT_VAR) \
@@ -136,7 +137,7 @@ CRT_RPC_DECLARE(mgmt_params_set, DAOS_ISEQ_MGMT_PARAMS_SET,
 
 #define DAOS_OSEQ_MGMT_TGT_CREATE /* output fields */		   \
 	((uuid_t)		(tc_tgt_uuids)		CRT_ARRAY) \
-	((int32_t)		(tc_ranks)		CRT_ARRAY) \
+	((d_rank_t)		(tc_ranks)		CRT_ARRAY) \
 	((int32_t)		(tc_rc)			CRT_VAR)
 
 CRT_RPC_DECLARE(mgmt_tgt_create, DAOS_ISEQ_MGMT_TGT_CREATE,

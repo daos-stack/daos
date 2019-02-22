@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,10 +28,6 @@ import (
 	"net"
 	"os"
 	"syscall"
-
-	"github.com/daos-stack/daos/src/control/security"
-
-	"golang.org/x/sys/unix"
 )
 
 // MAXMSGSIZE is the maximum drpc message size that may be sent.
@@ -58,29 +54,8 @@ type DomainSocketServer struct {
 // from an individual endpoint that has dialed into the socket server over
 // the Unix domain socket.
 type Client struct {
-	Info    *security.DomainInfo
 	Conn    *net.UnixConn
 	Service *Service
-}
-
-// does the hard work of extracting credentials from a unix socket.
-func domainInfoFromUnixConn(sock *net.UnixConn) (*security.DomainInfo, error) {
-	f, err := sock.File()
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	fd := int(f.Fd())
-	creds, err := syscall.GetsockoptUcred(fd, syscall.SOL_SOCKET, syscall.SO_PEERCRED)
-	if err != nil {
-		return nil, err
-	}
-	ctx, err := unix.GetsockoptString(fd, syscall.SOL_SOCKET, syscall.SO_PEERSEC)
-	if err != nil {
-		return nil, err
-	}
-	return security.InitDomainInfo(creds, ctx), nil
 }
 
 // RPCHandler is the go routine used to process incoming messages
@@ -141,12 +116,8 @@ func ConnReceiver(d *DomainSocketServer) error {
 				return fmt.Errorf("Unable to accept connection on unix socket %s: %s", d.sockFile, err)
 			}
 		}
-		info, err := domainInfoFromUnixConn(conn)
-		if err != nil {
-			return fmt.Errorf("Unable to get credentials for client socket")
-		}
 
-		c := &Client{info, conn, d.service}
+		c := &Client{conn, d.service}
 		d.clients[conn] = c
 		go rpcHandler(c)
 	}

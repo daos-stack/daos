@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -52,7 +52,6 @@ class ObjUpdateBadParam(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
 
         self.server_group = self.params.get("server_group",'/server/',
                                            'daos_server')
@@ -61,17 +60,13 @@ class ObjUpdateBadParam(Test):
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist = self.params.get("test_machines",'/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
         time.sleep(5)
 
     def tearDown(self):
-        try:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
-        finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_bad_handle(self):
         """
@@ -112,14 +107,14 @@ class ObjUpdateBadParam(Test):
             thedatasize = len(thedata) + 1
             dkey = "this is the dkey"
             akey = "this is the akey"
-            obj, epoch = container.write_an_obj(thedata, thedatasize,
-                                                dkey, akey)
+            obj, tx = container.write_an_obj(thedata, thedatasize,
+                                                dkey, akey, None, None, 2)
 
             saved_oh = obj.oh
             obj.oh = 99999
 
-            obj, epoch = container.write_an_obj(thedata, thedatasize,
-                                                dkey, akey, obj)
+            obj, tx = container.write_an_obj(thedata, thedatasize,
+                                                dkey, akey, obj, None, 2)
 
             container.oh = saved_oh
             container.close()
@@ -187,8 +182,9 @@ class ObjUpdateBadParam(Test):
             # try using a null dkey
             dkey = None
             akey = "this is the akey"
-            obj, epoch = container.write_an_obj(thedata, thedatasize,
-                                                dkey, akey)
+
+            obj, tx = container.write_an_obj(thedata, thedatasize,
+                                                dkey, akey, None, None, 2)
 
             container.close()
             container.destroy()
@@ -212,8 +208,8 @@ class ObjUpdateBadParam(Test):
             # try using a null akey/io descriptor
             dkey = "this is the dkey"
             akey = None
-            obj, epoch = container.write_an_obj(thedata, thedatasize,
-                                                dkey, akey)
+            obj, tx = container.write_an_obj(thedata, thedatasize,
+                                                dkey, akey, None, None, 2)
             self.fail("Test was expected to return a -1003 but it has not.\n")
 
         except DaosApiError as e:
@@ -229,8 +225,9 @@ class ObjUpdateBadParam(Test):
             thedatasize = 0
             dkey = "this is the dkey"
             akey = "this is the akey"
-            obj, epoch = container.write_an_obj(thedata, thedatasize,
-                                                dkey, akey)
+
+            obj, tx = container.write_an_obj(thedata, thedatasize,
+                                                dkey, akey, None, None, 2)
             self.pl.info("Update with no data worked")
 
         except DaosApiError as e:

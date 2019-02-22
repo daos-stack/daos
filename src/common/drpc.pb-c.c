@@ -238,20 +238,24 @@ const ProtobufCMessageDescriptor drpc__response__descriptor =
   (ProtobufCMessageInit) drpc__response__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue drpc__status__enum_values_by_number[3] =
+static const ProtobufCEnumValue drpc__status__enum_values_by_number[5] =
 {
   { "SUCCESS", "DRPC__STATUS__SUCCESS", 0 },
   { "SUBMITTED", "DRPC__STATUS__SUBMITTED", 1 },
   { "FAILURE", "DRPC__STATUS__FAILURE", 2 },
+  { "UNKNOWN_MODULE", "DRPC__STATUS__UNKNOWN_MODULE", 3 },
+  { "UNKNOWN_METHOD", "DRPC__STATUS__UNKNOWN_METHOD", 4 },
 };
 static const ProtobufCIntRange drpc__status__value_ranges[] = {
-{0, 0},{0, 3}
+{0, 0},{0, 5}
 };
-static const ProtobufCEnumValueIndex drpc__status__enum_values_by_name[3] =
+static const ProtobufCEnumValueIndex drpc__status__enum_values_by_name[5] =
 {
   { "FAILURE", 2 },
   { "SUBMITTED", 1 },
   { "SUCCESS", 0 },
+  { "UNKNOWN_METHOD", 4 },
+  { "UNKNOWN_MODULE", 3 },
 };
 const ProtobufCEnumDescriptor drpc__status__descriptor =
 {
@@ -260,9 +264,9 @@ const ProtobufCEnumDescriptor drpc__status__descriptor =
   "Status",
   "Drpc__Status",
   "drpc",
-  3,
+  5,
   drpc__status__enum_values_by_number,
-  3,
+  5,
   drpc__status__enum_values_by_name,
   1,
   drpc__status__value_ranges,

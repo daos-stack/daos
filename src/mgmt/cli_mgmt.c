@@ -63,7 +63,7 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	}
 
 	svr_ep.ep_rank = args->rank;
-	svr_ep.ep_tag = 0;
+	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
 	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc);
@@ -121,7 +121,7 @@ dc_mgmt_set_params(tse_task_t *task)
 	 * send it to 0 temporarily.
 	 */
 	ep.ep_rank = args->rank == -1 ? 0 : args->rank;
-	ep.ep_tag = 0;
+	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
 	opc = DAOS_RPC_OPCODE(MGMT_PARAMS_SET, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);

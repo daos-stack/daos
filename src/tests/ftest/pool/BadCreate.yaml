@@ -1,10 +1,11 @@
 # if something is commented out it is because that test causes problems but it
 # should be addedded back when daos code is fixed
-server:
-   server_group: daos_server
 hosts:
   test_machines:
     - boro-A
+server:
+   server_group: daos_server
+timeout: 50
 createtests:
    modes: !mux
       badmode1:
@@ -20,22 +21,14 @@ createtests:
              - 473
              - PASS
    uids: !mux
-      baduid:
-         uid:
-             - 99999999
-             - FAIL
       gooduid:
          uid:
-             - 11374638
+             - 12374638
              - PASS
    gids: !mux
-      badgid:
-         gid:
-             - 99999999
-             - FAIL
       goodgid:
          gid:
-             - 11374638
+             - 12374638
              - PASS
    setnames: !mux
       badstring:
@@ -44,7 +37,7 @@ createtests:
              - FAIL
       nullptr:
           setname:
-             - NULL
+             - NULLPTR
              - FAIL
       goodset:
           setname:
@@ -63,7 +56,7 @@ createtests:
       nullptr:
          devptr:
              - NULL
-             - PASS
+             - FAIL
       #badstr:
       #   devptr:
       #       - complete_rubbish

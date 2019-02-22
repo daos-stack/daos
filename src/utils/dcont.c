@@ -147,7 +147,7 @@ cont_op_hdlr(int argc, char *argv[])
 	}
 
 	if (op == CONT_CREATE) {
-		rc = daos_cont_create(pool, cont_uuid, NULL);
+		rc = daos_cont_create(pool, cont_uuid, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to create container: %d\n", rc);
 			return rc;

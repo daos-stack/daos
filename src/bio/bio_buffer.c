@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -504,7 +504,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 		return 0;
 	}
 
-	if (biov->bi_addr.ba_type == BIO_ADDR_SCM) {
+	if (biov->bi_addr.ba_type == DAOS_MEDIA_SCM) {
 		struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 		umem_id_t ummid;
 
@@ -515,7 +515,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 		return 0;
 	}
 
-	D_ASSERT(biov->bi_addr.ba_type == BIO_ADDR_NVME);
+	D_ASSERT(biov->bi_addr.ba_type == DAOS_MEDIA_NVME);
 	bdb = iod_dma_buf(biod);
 
 	off = bio_iov2off(biov);
@@ -681,6 +681,10 @@ dma_rw(struct bio_desc *biod, bool prep)
 	channel = xs_ctxt->bxc_io_channel;
 	D_ASSERT(blob != NULL && channel != NULL);
 
+	/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
+	if (nvme_io_bypass)
+		return;
+
 	D_DEBUG(DB_IO, "DMA start, blob:%p, update:%d, rmw:%d\n",
 		blob, biod->bd_update, rmw_read);
 
@@ -773,7 +777,7 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 {
 	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 
-	if (biod->bd_update && media == BIO_ADDR_SCM) {
+	if (biod->bd_update && media == DAOS_MEDIA_SCM) {
 		pmemobj_memcpy_persist(umem->umm_pool, media_addr,
 				       addr, n);
 	} else {
@@ -796,7 +800,6 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 	D_ASSERT(arg->ca_sgl_idx < arg->ca_sgl_cnt);
 	sgl = &arg->ca_sgls[arg->ca_sgl_idx];
 
-	D_ASSERT(arg->ca_iov_idx < sgl->sg_nr);
 	while (arg->ca_iov_idx < sgl->sg_nr) {
 		d_iov_t *iov;
 		ssize_t nob, buf_len;
@@ -951,7 +954,7 @@ bio_iod_post(struct bio_desc *biod)
 int
 bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 {
-	struct bio_copy_args arg;
+	struct bio_copy_args arg = { 0 };
 
 	if (!biod->bd_buffer_prep)
 		return -DER_INVAL;
@@ -959,7 +962,6 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 	if (biod->bd_sgl_cnt != nr_sgl)
 		return -DER_INVAL;
 
-	memset(&arg, 0, sizeof(arg));
 	arg.ca_sgls = sgls;
 	arg.ca_sgl_cnt = nr_sgl;
 

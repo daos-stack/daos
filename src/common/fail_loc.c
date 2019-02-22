@@ -28,45 +28,78 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
+#include <gurt/fault_inject.h>
 
 uint64_t daos_fail_loc;
 uint64_t daos_fail_value;
+uint64_t daos_fail_num;
 
 void
 daos_reset_fail_loc()
 {
-	daos_fail_loc = 0;
+	daos_fail_loc_set(0);
 	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
 }
 
 int
-daos_fail_check(uint64_t id)
+daos_fail_check(uint64_t fail_loc)
 {
+	int	grp;
+
 	if (daos_fail_loc == 0)
 		return 0;
 
 	if ((daos_fail_loc & DAOS_FAIL_MASK_LOC) !=
-	    (id & DAOS_FAIL_MASK_LOC))
+		(fail_loc & DAOS_FAIL_MASK_LOC))
 		return 0;
 
-	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64" value="DF_U64", id ="DF_X64
-		"***\n", daos_fail_loc, daos_fail_value, id);
-
-	if (daos_fail_loc & DAOS_FAIL_ONCE) {
-		daos_reset_fail_loc();
-	} else if (daos_fail_loc & DAOS_FAIL_SOME) {
-		daos_fail_value--;
-		if (daos_fail_value <= 0)
-			daos_reset_fail_loc();
+	/**
+	 * TODO reset fail_loc to save some cycles once the
+	 * current fail_loc finish the job.
+	 */
+	grp = DAOS_FAIL_GROUP_GET(fail_loc);
+	if (d_should_fail(grp)) {
+		D_DEBUG(DB_ANY, "*** fail_loc="DF_X64" value="DF_U64
+			", input_loc ="DF_X64" idx %d\n", daos_fail_loc,
+			daos_fail_value, fail_loc, grp);
+		return 1;
 	}
-	return 1;
+
+	return 0;
 }
 
 void
-daos_fail_loc_set(uint64_t id)
+daos_fail_loc_set(uint64_t fail_loc)
 {
-	daos_fail_loc = id;
+	struct d_fault_attr_t attr_in = { 0 };
+
+	/* If fail_loc is 0, let's assume it will reset unit test fail loc */
+	if (fail_loc == 0)
+		attr_in.fa_id = DAOS_FAIL_UNIT_TEST_GROUP;
+	else
+		attr_in.fa_id = DAOS_FAIL_GROUP_GET(fail_loc);
+
+	D_ASSERT(attr_in.fa_id > 0);
+	D_ASSERT(attr_in.fa_id < DAOS_FAIL_MAX_GROUP);
+	if (fail_loc & DAOS_FAIL_ONCE) {
+		attr_in.fa_max_faults = 1;
+	} else if (fail_loc & DAOS_FAIL_SOME) {
+		D_ASSERT(daos_fail_num > 0);
+		attr_in.fa_max_faults = daos_fail_num;
+	} else if (fail_loc & DAOS_FAIL_ALWAYS) {
+		attr_in.fa_probability_x = 1;
+		attr_in.fa_probability_y = 1;
+	}
+
+	d_fault_attr_set(attr_in.fa_id, attr_in);
+	daos_fail_loc = fail_loc;
 	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
+}
+
+void
+daos_fail_num_set(uint64_t value)
+{
+	daos_fail_num = value;
 }
 
 void
@@ -79,4 +112,27 @@ uint64_t
 daos_fail_value_get(void)
 {
 	return daos_fail_value;
+}
+
+int
+daos_fail_init(void)
+{
+	struct d_fault_attr_t	attr = { 0 };
+	int rc;
+
+	rc = d_fault_inject_init();
+	if (rc)
+		return rc;
+
+	rc = d_fault_attr_set(DAOS_FAIL_UNIT_TEST_GROUP, attr);
+	if (rc)
+		d_fault_inject_fini();
+
+	return rc;
+}
+
+void
+daos_fail_fini()
+{
+	d_fault_inject_fini();
 }

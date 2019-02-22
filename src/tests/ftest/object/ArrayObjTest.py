@@ -63,7 +63,6 @@ class ArrayObjTest(Test):
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
-        time.sleep(5)
 
     def tearDown(self):
         ServerUtils.stopServer(hosts=self.hostlist)

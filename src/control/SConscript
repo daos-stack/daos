@@ -1,10 +1,24 @@
 #!/bin/env python
 """Build DAOS Control Plane"""
-#pylint: disable=no-member
-#pylint: disable=invalid-sequence-index
-from SCons.Script import Literal
+#pylint: disable=too-many-locals
 import os
-import daos_build
+from SCons.Script import Literal
+from os.path import join, isdir
+
+def do_build(env, path, gosrc, cmd):
+    """execute a build command"""
+    # Link the version-controlled DAOS Go source directory src/control into
+    # GOPATH/src/REPOPATH/src/control in the build directory.
+    if isdir(path) is False:
+        os.makedirs(path)
+    path += "/control"
+    if isdir(path) is False:
+        os.symlink(gosrc, path)
+    return env.Execute(cmd)
+
+def cmd_build(gopath, repopath, cmd):
+    """create a command that ensure paths exist before execution"""
+    return lambda target, source, env: do_build(env, gopath, repopath, cmd)
 
 def scons():
     """Execute build"""
@@ -15,6 +29,18 @@ def scons():
     denv = env.Clone()
     prereqs.require(denv, 'spdk')
 
+    # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
+    # runtime
+    if denv.subst("$SPDK_PREFIX") != denv.subst("$PREFIX"):
+        for d in ["include", "scripts", "fio_plugin"]:
+            sharedir = join("share", "spdk", d)
+            tpath = join(denv.subst("$PREFIX"), sharedir)
+            if not isdir(tpath):
+                denv.Command(
+                    tpath,
+                    join(denv.subst("$SPDK_PREFIX"), sharedir),
+                    Copy("$TARGET", "$SOURCE"))
+
     # GOPATH for SCons builds in the build directory
     gopath = Dir('.').abspath
     # Version-controlled DAOS Go source directory src/control
@@ -22,31 +48,25 @@ def scons():
     # Repository path shared by DAOS Go package import paths
     repopath = "github.com/daos-stack/daos"
 
-    # Link the version-controlled DAOS Go source directory src/control into
-    # GOPATH/src/REPOPATH/src/control in the build directory.
-    path = "%s/src/%s/src" % (gopath, repopath)
-    if os.path.isdir(path) is False:
-        os.makedirs(path)
-    path += "/control"
-    if os.path.isdir(path) is False:
-        os.symlink(gosrc, path)
-
     denv.Append(GOPATH=[gopath])
     denv.AppendENVPath('GOPATH', denv['GOPATH'])
     denv['ENV']['GOBIN'] = "%s/bin" % gopath
 
+    path = "%s/src/%s/src" % (gopath, repopath)
+
     agentbin = "%s/bin/agent" % gopath
-    agentsrc = "%s/agent/daos_agent.go" % gosrc
+    agentsrc = "%s/agent/main.go" % gosrc
     denv.Command(agentbin, agentsrc,
-                 "go install %s/src/control/agent" % repopath)
+                 cmd_build(path, gosrc,
+                           "go install %s/src/control/agent" % repopath))
     denv.InstallAs("$PREFIX/bin/daos_agent", agentbin)
 
     gospdkpath = "%s/vendor/github.com/daos-stack/go-spdk/spdk" % gosrc
 
     # CGO prerequisite libs for nvme
     denv.AppendUnique(CPPPATH=['%s/include' % gospdkpath])
-    nvmecontrol = daos_build.library(
-        denv, "nvme_control",
+    nvmecontrol = denv.StaticLibrary(
+        "nvme_control",
         '%s/src/nvme_control.c' % gospdkpath,
         LIBS=['spdk'])
     nc_installed = denv.Install('$PREFIX/lib', nvmecontrol)
@@ -57,35 +77,47 @@ def scons():
         denv.subst("-L$SPDK_PREFIX/lib -L$PREFIX/lib $_RPATH"))
     denv.AppendENVPath(
         "CGO_CFLAGS",
-        denv.subst("-I$SPDK_PREFIX/include"))
+        denv.subst("-I$SPDK_PREFIX/include -I%s/../include" % gosrc))
 
-    # install management server db
-    modulemgmt = "%s/mgmt" % gosrc
-    mgmtinitdb = "mgmtinit_db.json"
-    denv.InstallAs(
-        os.path.join("$PREFIX/share/control", mgmtinitdb),
-        os.path.join(modulemgmt, mgmtinitdb))
-    denv.Install(
-        "$PREFIX/share/spdk/fio_plugin",
-        [os.path.join(modulemgmt, n) for n in
-         ['fio/example_config.fio', 'fio/full_bench.fio']])
+    # copy server init files to be used at runtime, explicitly
+    # remove first because recursive Delete() on dir fails.
+    moduleserver = join(gosrc, "server")
+    for f in ["mgmtinit_db.json", "setup_spdk.sh"]:
+        denv.Command(
+            join("$PREFIX", "share", "control", f),
+            join(moduleserver, "init", f),
+            [
+                Delete("$TARGET"),
+                Copy("$TARGET", "$SOURCE")
+            ])
+
+    # TODO: copy fio sample configurations for use at runtime
+#    for f in ["example_config.fio", "full_bench.fio"]:
+#        denv.Command(
+#            "$PREFIX/share/spdk/fio_plugin/" + f,
+#            join(moduleserver, "fio", f),
+#            Copy("$TARGET", "$SOURCE"))
 
     serverbin = "%s/bin/server" % gopath
-    serversrc = "%s/server/daos_server.go" % gosrc
+    serversrc = "%s/server/main.go" % gosrc
     denv.Command(serverbin, [serversrc, nc_installed],
-                 "go install %s/src/control/server" % repopath)
+                 cmd_build(path, gosrc,
+                           "go install %s/src/control/server" % repopath))
     denv.InstallAs("$PREFIX/bin/daos_server", serverbin)
 
     shellbin = "%s/bin/dmg" % gopath
-    shellsrc = "%s/dmg/daos_shell.go" % gosrc
-    denv.Command(shellbin, shellsrc, "go install %s/src/control/dmg" % repopath)
+    shellsrc = "%s/dmg/main.go" % gosrc
+    denv.Command(shellbin, shellsrc,
+                 cmd_build(path, gosrc,
+                           "go install %s/src/control/dmg" % repopath))
     denv.InstallAs("$PREFIX/bin/daos_shell", shellbin)
 
     drpcbin = "%s/bin/drpc_test" % gopath
-    drpcsrc = "%s/drpc_test/drpc_test_server.go" % gosrc
+    drpcsrc = "%s/drpc_test/main.go" % gosrc
     denv.Command(drpcbin, drpcsrc,
-			"go install %s/src/control/drpc_test" % repopath)
-    denv.InstallAs("$PREFIX/bin/drpc_test_server", drpcbin)
+                 cmd_build(path, gosrc,
+                           "go install %s/src/control/drpc_test" % repopath))
+    denv.InstallAs("$PREFIX/bin/hello_drpc", drpcbin)
 
     AlwaysBuild([agentbin, serverbin, shellbin, drpcbin])
 if __name__ == "SCons.Script":

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/dtx_srv.h>
 #include "rpc.h"
 #include "rebuild_internal.h"
 
@@ -94,7 +95,8 @@ rebuild_obj_fill_buf(daos_handle_t ih, daos_iov_t *key_iov,
 		arg->count, root->count);
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 
@@ -116,8 +118,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	uuid_copy(arg->current_uuid, *(uuid_t *)key_iov->iov_buf);
 
 	while (!dbtree_is_empty(root->root_hdl)) {
-		rc = dbtree_iterate(root->root_hdl, false, rebuild_obj_fill_buf,
-				    data);
+		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
+				    rebuild_obj_fill_buf, data);
 		if (rc < 0)
 			return rc;
 
@@ -132,7 +134,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 
@@ -184,8 +187,8 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	arg->ephs = ephs;
 
 	while (!dbtree_is_empty(root->root_hdl)) {
-		rc = dbtree_iterate(root->root_hdl, false, rebuild_cont_iter_cb,
-				    arg);
+		rc = dbtree_iterate(root->root_hdl, DAOS_INTENT_REBUILD, false,
+				    rebuild_cont_iter_cb, arg);
 		if (rc < 0)
 			D_GOTO(out, rc);
 
@@ -209,13 +212,13 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	 * object handling process for now, for example avoid lock to insert
 	 * objects in the object rebuild tree.
 	 */
-	tgt_ep.ep_tag = 0;
 	while (1) {
 		struct pool_target	*targets = NULL;
 		unsigned int		failed_tgts_cnt;
 		bool			target_failed = false;
 		int			i;
 
+		tgt_ep.ep_tag = 0;
 		rc = rebuild_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 					REBUILD_OBJECTS, &rpc);
 		if (rc)
@@ -326,7 +329,8 @@ rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 
 	/* Some one might insert new record to the tree let's reprobe */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_REBUILD, key_iov,
+			       NULL);
 	if (rc)
 		return rc;
 
@@ -335,7 +339,8 @@ rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		return rc;
 
 	/* re-probe the dbtree after delete */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_REBUILD, NULL,
+			       NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 
@@ -641,7 +646,8 @@ rebuild_scanner(void *data)
 	struct rebuild_scan_arg	*scan_arg = arg->arg;
 	struct rebuild_tgt_pool_tracker *rpt = scan_arg->rpt;
 
-	D_ASSERT(rpt != NULL);
+	if (!is_current_tgt_up(rpt))
+		return 0;
 
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
 		ABT_thread_yield();
@@ -696,7 +702,7 @@ rebuild_scan_leader(void *data)
 	iter_arg.arg = arg;
 	iter_arg.callback = placement_check;
 
-	rc = dss_thread_collective(rebuild_scanner, &iter_arg);
+	rc = dss_thread_collective(rebuild_scanner, &iter_arg, 0);
 	if (rc)
 		D_GOTO(put_plmap, rc);
 
@@ -708,14 +714,14 @@ rebuild_scan_leader(void *data)
 	 */
 	while (!dbtree_is_empty(arg->rebuild_tree_hdl)) {
 		/* walk through the rebuild tree and send the rebuild objects */
-		rc = dbtree_iterate(arg->rebuild_tree_hdl, false,
-				    rebuild_tgt_fini_obj_send_cb, arg);
+		rc = dbtree_iterate(arg->rebuild_tree_hdl, DAOS_INTENT_REBUILD,
+				    false, rebuild_tgt_fini_obj_send_cb, arg);
 		if (rc)
 			D_GOTO(put_plmap, rc);
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_task_collective(rebuild_scan_done, rpt);
+	rc = dss_task_collective(rebuild_scan_done, rpt, 0);
 	ABT_mutex_unlock(rpt->rt_lock);
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
@@ -757,7 +763,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	D_ASSERT(rsi != NULL);
 
 	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d/%d\n",
-		dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
+		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
 		rsi->rsi_pool_map_ver, rsi->rsi_rebuild_ver);
 
 	/* check if the rebuild is already started */
@@ -817,7 +823,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 
 	rpt_get(rpt);
-	rc = dss_rebuild_ult_create(rebuild_tgt_status_check, rpt, -1, 0, NULL);
+	rc = dss_rebuild_ult_create(rebuild_tgt_status_check, rpt,
+				    DSS_ULT_SELF, 0, 0, NULL);
 	if (rc) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
@@ -848,7 +855,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rpt_get(rpt);
 	scan_arg->rpt = rpt;
 	/* step-3: start scann leader */
-	rc = dss_ult_create(rebuild_scan_leader, scan_arg, -1, 0, NULL);
+	rc = dss_ult_create(rebuild_scan_leader, scan_arg, DSS_ULT_SELF, 0, 0,
+			    NULL);
 	if (rc != 0) {
 		rpt_put(rpt);
 		D_GOTO(out_tree, rc);

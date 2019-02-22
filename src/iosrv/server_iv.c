@@ -472,7 +472,7 @@ ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 {
 	int rc;
 
-	rc = dss_ult_create(cb_func, cb_arg, -1, 0, NULL);
+	rc = dss_ult_create(cb_func, cb_arg, DSS_ULT_SELF, 0, 0, NULL);
 	if (rc)
 		D_ERROR("dss_ult_create failed, rc %d.\n", rc);
 }

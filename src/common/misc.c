@@ -215,24 +215,30 @@ daos_sgls_buf_size(daos_sg_list_t *sgls, int nr)
 	return size;
 }
 
+/**
+ * Query the size of packed sgls, if the \a buf_size != NULL then will set its
+ * value as buffer size as well.
+ */
 daos_size_t
-daos_sgls_size(daos_sg_list_t *sgls, int nr)
+daos_sgls_packed_size(daos_sg_list_t *sgls, int nr, daos_size_t *buf_size)
 {
 	daos_size_t size = 0;
 	int i;
 
-	if (sgls == NULL)
+	if (sgls == NULL) {
+		if (buf_size != NULL)
+			*buf_size = 0;
 		return 0;
+	}
+
+	size = daos_sgls_buf_size(sgls, nr);
+	if (buf_size != NULL)
+		*buf_size = size;
 
 	for (i = 0; i < nr; i++) {
-		int j;
-
 		size += sizeof(sgls[i].sg_nr) + sizeof(sgls[i].sg_nr_out);
-		for (j = 0; j < sgls[i].sg_nr; j++) {
-			size += sizeof(sgls[i].sg_iovs[j].iov_len) +
-				sizeof(sgls[i].sg_iovs[j].iov_buf_len) +
-				sgls[i].sg_iovs[j].iov_buf_len;
-		}
+		size += sgls[i].sg_nr * (sizeof(sgls[i].sg_iovs[0].iov_len) +
+				sizeof(sgls[i].sg_iovs[0].iov_buf_len));
 	}
 
 	return size;
@@ -556,3 +562,384 @@ daos_hhash_link_delete(struct d_hlink *hlink)
 	return d_hhash_link_delete(daos_ht.dht_hhash, hlink);
 }
 
+
+#define CRT_SOCKET_PROV		"ofi+sockets"
+/**
+ * a helper to get the needed crt_init_opt.
+ * When using SEP (scalable endpoint), if user set un-reasonable CRT_CTX_NUM it
+ * possibly cause failure when creating cart context. So in this helper it will
+ * check the ENV setting, if SEP is used then will set the crt_init_opttions_t
+ * and the caller can pass it to crt_init_opt().
+ *
+ * \param server [IN]	true for server
+ * \param ctx_nr [IN]	number of contexts
+ *
+ * \return		the pointer to crt_init_options_t (NULL if not needed)
+ */
+crt_init_options_t daos_crt_init_opt;
+crt_init_options_t *
+daos_crt_init_opt_get(bool server, int ctx_nr)
+{
+	crt_phy_addr_t	addr_env;
+	bool		sep = false;
+
+	d_getenv_bool("CRT_CTX_SHARE_ADDR", &sep);
+	if (!sep)
+		return NULL;
+
+	daos_crt_init_opt.cio_crt_timeout = 0;
+	daos_crt_init_opt.cio_sep_override = 1;
+
+	/* for socket provider, force it to use regular EP rather than SEP for:
+	 * 1) now sockets provider cannot create more than 16 contexts for SEP
+	 * 2) some problems if SEP communicates with regular EP.
+	 */
+	addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
+	if (addr_env != NULL &&
+	    strncmp(addr_env, CRT_SOCKET_PROV, strlen(CRT_SOCKET_PROV)) == 0) {
+		D_INFO("for sockets provider force it to use regular EP.\n");
+		daos_crt_init_opt.cio_use_sep = 0;
+		return &daos_crt_init_opt;
+	}
+
+	/* for psm2 provider, set a reasonable cio_ctx_max_num for cart */
+	daos_crt_init_opt.cio_use_sep = 1;
+	if (!server) {
+		/* to workaround a bug in mercury/ofi, that the basic EP cannot
+		 * communicate with SEP. Setting 2 for client to make it to use
+		 * SEP for client.
+		 */
+		daos_crt_init_opt.cio_ctx_max_num = 2;
+	} else {
+		daos_crt_init_opt.cio_ctx_max_num = ctx_nr;
+	}
+
+	return &daos_crt_init_opt;
+}
+
+daos_prop_t *
+daos_prop_alloc(uint32_t entries_nr)
+{
+	daos_prop_t	*prop;
+
+	if (entries_nr > DAOS_PROP_ENTRIES_MAX_NR) {
+		D_ERROR("cannot create daos_prop_t with %d entries(> %d).\n",
+			entries_nr, DAOS_PROP_ENTRIES_MAX_NR);
+		return NULL;
+	}
+
+	D_ALLOC_PTR(prop);
+	if (prop == NULL)
+		return NULL;
+
+	if (entries_nr > 0) {
+		D_ALLOC_ARRAY(prop->dpp_entries, entries_nr);
+		if (prop->dpp_entries == NULL) {
+			D_FREE_PTR(prop);
+			return NULL;
+		}
+	}
+	prop->dpp_nr = entries_nr;
+	return prop;
+}
+
+void
+daos_prop_free(daos_prop_t *prop)
+{
+	int i;
+
+	if (prop == NULL)
+		return;
+	if (prop->dpp_nr == 0 || prop->dpp_entries == NULL) {
+		D_FREE_PTR(prop);
+		return;
+	}
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		struct daos_prop_entry *entry;
+
+		entry = &prop->dpp_entries[i];
+		switch (entry->dpe_type) {
+		case DAOS_PROP_PO_LABEL:
+		case DAOS_PROP_CO_LABEL:
+			if (entry->dpe_str)
+				D_FREE(entry->dpe_str);
+			break;
+		default:
+			break;
+		};
+	}
+
+	D_FREE(prop->dpp_entries);
+	D_FREE_PTR(prop);
+}
+
+/**
+ * Check if the input daos_prop_t parameter is valid
+ * \a pool true for pool properties, false for container properties.
+ * \a input true for input properties that should with reasonable value,
+ *          false for output that need not check the value.
+ */
+bool
+daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
+{
+	uint32_t	type;
+	uint64_t	val;
+	int		i;
+
+	if (prop == NULL) {
+		D_ERROR("NULL properties\n");
+		return false;
+	}
+	if (prop->dpp_nr > DAOS_PROP_ENTRIES_MAX_NR) {
+		D_ERROR("invalid ddp_nr %d (> %d).\n",
+			prop->dpp_nr, DAOS_PROP_ENTRIES_MAX_NR);
+		return false;
+	}
+	if (prop->dpp_nr == 0) {
+		if (prop->dpp_entries != NULL)
+			D_ERROR("invalid properties, NON-NULL dpp_entries with "
+				"zero dpp_nr.\n");
+		return prop->dpp_entries == NULL;
+	}
+	if (prop->dpp_entries == NULL) {
+		D_ERROR("invalid properties, NULL dpp_entries with non-zero "
+			"dpp_nr.\n");
+		return false;
+	}
+	for (i = 0; i < prop->dpp_nr; i++) {
+		type = prop->dpp_entries[i].dpe_type;
+		if (pool) {
+			if (type <= DAOS_PROP_PO_MIN ||
+			    type >= DAOS_PROP_PO_MAX) {
+				D_ERROR("invalid type %d for pool.\n", type);
+				return false;
+			}
+		} else {
+			if (type <= DAOS_PROP_CO_MIN ||
+			    type >= DAOS_PROP_CO_MAX) {
+				D_ERROR("invalid type %d for container.\n",
+					type);
+				return false;
+			}
+		}
+		/* for output parameter need not check entry value */
+		if (!input)
+			continue;
+		switch (type) {
+		/* pool properties */
+		case DAOS_PROP_PO_LABEL:
+			if (!daos_prop_label_valid(
+				prop->dpp_entries[i].dpe_str))
+				return false;
+			break;
+		case DAOS_PROP_PO_ACL:
+			break;
+		case DAOS_PROP_PO_SPACE_RB:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val > 100) {
+				D_ERROR("invalid space_rb "DF_U64".\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_SELF_HEAL:
+			break;
+		case DAOS_PROP_PO_RECLAIM:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_RECLAIM_SNAPSHOT &&
+			    val != DAOS_RECLAIM_BATCH &&
+			    val != DAOS_RECLAIM_TIME) {
+				D_ERROR("invalid reclaim "DF_U64".\n", val);
+				return false;
+			}
+			break;
+		/* container properties */
+		case DAOS_PROP_CO_LABEL:
+			if (!daos_prop_label_valid(
+				prop->dpp_entries[i].dpe_str))
+				return false;
+			break;
+		case DAOS_PROP_CO_LAYOUT_TYPE:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_PROP_CO_LAYOUT_UNKOWN &&
+			    val != DAOS_PROP_CO_LAYOUT_POSIX &&
+			    val != DAOS_PROP_CO_LAYOUT_MPIIO &&
+			    val != DAOS_PROP_CO_LAYOUT_HDF5 &&
+			    val != DAOS_PROP_CO_LAYOUT_ARROW) {
+				D_ERROR("invalid layout type "DF_U64".\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_CO_LAYOUT_VER:
+			break;
+		case DAOS_PROP_CO_CSUM:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_PROP_CO_CSUM_OFF &&
+			    val != DAOS_PROP_CO_CSUM_CRC16 &&
+			    val != DAOS_PROP_CO_CSUM_CRC32 &&
+			    val != DAOS_PROP_CO_CSUM_SHA1 &&
+			    val != DAOS_PROP_CO_CSUM_SHA2) {
+				D_ERROR("invalid checksum type "DF_U64".\n",
+					val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_CO_REDUN_FAC:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_PROP_CO_REDUN_RF1 &&
+			    val != DAOS_PROP_CO_REDUN_RF3) {
+				D_ERROR("invalid redundancy factor "DF_U64".\n",
+					val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_CO_REDUN_LVL:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_PROP_CO_REDUN_RACK &&
+			    val != DAOS_PROP_CO_REDUN_NODE) {
+				D_ERROR("invalid redundancy level "DF_U64".\n",
+					val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_CO_SNAPSHOT_MAX:
+		case DAOS_PROP_CO_ACL:
+		case DAOS_PROP_CO_COMPRESS:
+		case DAOS_PROP_CO_ENCRYP:
+			break;
+		default:
+			D_ERROR("invaid dpe_type %d.\n", type);
+			return false;
+		}
+	}
+	return true;
+}
+
+/** duplicate the properties */
+daos_prop_t *
+daos_prop_dup(daos_prop_t *prop, bool pool)
+{
+	daos_prop_t		*prop_dup;
+	struct daos_prop_entry	*entry, *entry_dup;
+	int			 i;
+
+	if (!daos_prop_valid(prop, pool, true))
+		return NULL;
+
+	prop_dup = daos_prop_alloc(prop->dpp_nr);
+	if (prop_dup == NULL)
+		return NULL;
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		entry_dup = &prop_dup->dpp_entries[i];
+		entry_dup->dpe_type = entry->dpe_type;
+		switch (entry->dpe_type) {
+		case DAOS_PROP_PO_LABEL:
+		case DAOS_PROP_CO_LABEL:
+			entry_dup->dpe_str = strndup(entry->dpe_str,
+						     DAOS_PROP_LABEL_MAX_LEN);
+			if (entry_dup->dpe_str == NULL) {
+				D_ERROR("failed to dup label.\n");
+				daos_prop_free(prop_dup);
+				return NULL;
+			}
+			break;
+		default:
+			entry_dup->dpe_val = entry->dpe_val;
+			break;
+		}
+	}
+
+	return prop_dup;
+}
+
+/**
+ * Get the property entry of \a type in \a prop
+ * return NULL if not found.
+ */
+struct daos_prop_entry *
+daos_prop_entry_get(daos_prop_t *prop, uint32_t type)
+{
+	int i;
+
+	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
+		return NULL;
+	for (i = 0; i < prop->dpp_nr; i++) {
+		if (prop->dpp_entries[i].dpe_type == type)
+			return &prop->dpp_entries[i];
+	}
+	return NULL;
+}
+
+/**
+ * Copy properties from \a prop_reply to \a prop_req.
+ * Used to copy the properties from pool query or container query to user's
+ * properties. If user provided \a prop_req with zero dpp_nr (and NULL
+ * dpp_entries), it will allocate needed buffer and assign to user's daos_prop_t
+ * struct, the needed buffer to store label will be allocated as well.
+ * User can free properties buffer by calling daos_prop_free().
+ */
+int
+daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
+{
+	struct daos_prop_entry	*entry_req, *entry_reply;
+	struct daos_prop_entry	*entries_alloc = NULL;
+	d_string_t		 label_alloc = NULL;
+	uint32_t		 type;
+	int			 i;
+	int			 rc = 0;
+
+	if (prop_reply == NULL || prop_reply->dpp_nr == 0 ||
+	    prop_reply->dpp_entries == NULL) {
+		D_ERROR("no prop or empty prop in reply.\n");
+		return -DER_PROTO;
+	}
+	if (prop_req->dpp_nr == 0) {
+		prop_req->dpp_nr = prop_reply->dpp_nr;
+		D_ALLOC_ARRAY(prop_req->dpp_entries, prop_req->dpp_nr);
+		if (prop_req->dpp_entries == NULL)
+			return -DER_NOMEM;
+		entries_alloc = prop_req->dpp_entries;
+	}
+
+	for (i = 0; i < prop_req->dpp_nr; i++) {
+		entry_req = &prop_req->dpp_entries[i];
+		type = entry_req->dpe_type;
+		if (type == 0) {
+			/* this is the case that dpp_entries allocated above */
+			D_ASSERT(prop_req->dpp_nr == prop_reply->dpp_nr);
+			type = prop_reply->dpp_entries[i].dpe_type;
+			entry_req->dpe_type = type;
+		}
+		entry_reply = daos_prop_entry_get(prop_reply, type);
+		if (entry_reply == NULL) {
+			D_ERROR("cannot find prop entry for type %d.\n", type);
+			D_GOTO(out, rc = -DER_PROTO);
+		}
+		if (type == DAOS_PROP_PO_LABEL || type == DAOS_PROP_CO_LABEL) {
+			entry_req->dpe_str = strndup(entry_reply->dpe_str,
+						     DAOS_PROP_LABEL_MAX_LEN);
+			if (entry_req->dpe_str == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			label_alloc = entry_req->dpe_str;
+		} else {
+			entry_req->dpe_val = entry_reply->dpe_val;
+		}
+	}
+
+out:
+	if (rc) {
+		if (entries_alloc) {
+			D_FREE(entries_alloc);
+			prop_req->dpp_entries = NULL;
+		}
+		if (label_alloc) {
+			D_FREE(label_alloc);
+			entry_req = daos_prop_entry_get(prop_req,
+							DAOS_PROP_PO_LABEL);
+			entry_req->dpe_str = NULL;
+		}
+	}
+	return rc;
+}

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,12 +42,18 @@ const (
 type SecurityModule struct {
 }
 
-//HandleCall is the handler for calls to the AgentModule
+//HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
 	if method != methodRequestCredentials {
 		return nil, fmt.Errorf("Attempt to call unregistered function")
 	}
-	response, err := security.AuthSysRequestFromCreds(client.Info)
+
+	info, err := security.DomainInfoFromUnixConn(client.Conn)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get credentials for client socket")
+	}
+
+	response, err := security.AuthSysRequestFromCreds(info)
 	if err != nil {
 		return nil, err
 	}

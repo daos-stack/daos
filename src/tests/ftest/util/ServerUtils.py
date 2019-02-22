@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+import traceback
+import sys
 import os
 import time
 import subprocess
@@ -58,6 +60,12 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         # first make sure there are no existing servers running
         killServer(servers)
 
+        # clean the tmpfs on the servers
+        for server in servers:
+            subprocess.check_call(['ssh', server,
+                "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
+                "xargs -0r rm -rf"])
+
         # pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
             build_vars = json.load(json_vars)
@@ -70,8 +78,8 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
             for k, v in env_dict.items():
                 os.environ[k] = v
 
-        env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'DD_(STDERR|LOG)', 'D_LOG_.*',
-                    'OFI_.*']
+        env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'D_LOG_.*',
+                    'DD_(STDERR|LOG|SUBSYS|MASK)', 'OFI_.*']
 
         env_args = []
         for (env_var, env_val) in os.environ.items():
@@ -84,10 +92,10 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
             server_cmd.extend(["--report-uri", uri_path])
         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
         server_cmd.extend(env_args)
-        server_cmd.extend(["-x", "DD_SUBSYS=all", "-x", "DD_MASK=all",
-                           daos_srv_bin, "-g", setname, "-c", "1",
+        server_cmd.extend([daos_srv_bin, "-g", setname, "-c", "1",
                            "-a", os.path.join(basepath, "install", "tmp"),
-                           "-d", os.path.join(os.sep, "var", "run", "user", str(os.geteuid()))])
+                           "-d", os.path.join(os.sep, "var", "run", "user",
+                           str(os.geteuid()))])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
@@ -127,6 +135,7 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
               (time.time() - start_time))
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
         # we need to end the session now -- exit the shell
         try:
             sessions[setname].send_signal(signal.SIGINT)

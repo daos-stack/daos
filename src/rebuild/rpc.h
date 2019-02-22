@@ -105,6 +105,8 @@ rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_REBUILD_MODULE,
 				 DAOS_REBUILD_VERSION);
+	/* call daos_rpc_tag to get the target tag/context idx */
+	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_REBUILD, tgt_ep->ep_tag);
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
 }

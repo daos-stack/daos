@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,53 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
+#include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
+
+/**
+ * Search the specified DTX is in the CoS cache or not.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	Pointer to the object ID.
+ * \param xid	[IN]	Pointer to the DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return	0 if the DTX exists in the CoS cache.
+ * \return	-DER_NONEXIST if not in the CoS cache.
+ * \return	Other negative values on error.
+ */
+int
+vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
+		   struct daos_tx_id *xid, uint64_t dkey, bool punch);
+
+/**
+ * Fetch the list of the DTXs to be committed because of (potential) share.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param oid		[IN]	The target object (shard) ID.
+ * \param dkey		[IN]	The target dkey to be modified.
+ * \param types		[IN]	The DTX types to be listed.
+ * \param dtis		[OUT]	The DTX IDs array to be committed for share.
+ *
+ * \return			The count of DTXs to be committed for share
+ *				on success, negative value if error.
+ */
+int
+vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid,
+		 daos_key_t *dkey, uint32_t types, struct daos_tx_id **dtis);
+
+/**
+ * Fetch the list of the DTXs that can be committed.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param dtes	[OUT]	The array for DTX entries can be committed.
+ *
+ * \return		The count of DTXs can be committed on success,
+ *			negative value if error.
+ */
+int
+vos_dtx_list_committable(daos_handle_t coh, struct daos_tx_entry **dtes);
 
 /**
  * Initialize the environment for a VOS instance
@@ -212,24 +258,15 @@ vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
  * which is kept as aggregation result.
  *
  * \param coh	  [IN]		Container open handle
- * \param oid	  [IN]		Object handle for aggregation
  * \param epr	  [IN]		The epoch range of aggregation
- * \param credits [IN/OUT]	credits for probing object tree
- * \param anchor  [IN/OUT]	anchor returned for preemption.
- * \param finished
- *		  [OUT]		flag returned to notify completion
- *				of aggregation to caller.
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
-		    daos_epoch_range_t *epr, unsigned int *credits,
-		    vos_purge_anchor_t *anchor, bool *finished);
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
- * and \a cookie id.
  *
  * If a single epoch needs to be discarded then \a epr::epr_lo
  * and \a epr::hi must be set to the same epoch.
@@ -241,19 +278,15 @@ vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
  *
  * Note: \a epr::epr_lo must never be set to DAOS_EPOCH_MAX by
  * the caller.
- * \a cookie is a uuid assigned by the user during each update
- * call to tag updates that have to be grouped together.
  *
  * \param coh		[IN]	Container open handle
  * \param epr		[IN]	The epoch range to discard
- * \param cookie	[IN]	Cookie ID to identify records,
  *				keys to discard
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
-		  uuid_t cookie);
+vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
 
 /**
  * VOS object API
@@ -299,9 +332,6 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param oid	[IN]	object ID
  * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
  *			range is provided by \a iods (kvl::kv_epr).
- * \param cookie [IN]	Cookie ID to tag this update to identify during
- *			discard. This tag is used to group all updates
- *			that might in future be discarded together.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param dkey	[IN]	Distribution key.
@@ -318,8 +348,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uuid_t cookie, uint32_t pm_ver, daos_key_t *dkey,
-	       unsigned int iod_nr, daos_iod_t *iods, daos_sg_list_t *sgls);
+	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
+	       daos_iod_t *iods, daos_sg_list_t *sgls);
 
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
@@ -328,9 +358,6 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param oid	[IN]	object ID, the full object will be punched if \a dkey
  *			and \a akeys are not provided.
  * \param epoch	[IN]	Epoch for the punch.
- * \param cookie [IN]	Cookie ID to tag this punch to identify during
- *			discard. This tag is used to group all updates
- *			that might in future be discarded together.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param flags [IN]	Object punch flags, VOS_OF_REPLAY_PC is the only
@@ -343,8 +370,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      uuid_t cookie, uint32_t pm_ver, uint32_t flags,
-	      daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys);
+	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
+	      unsigned int akey_nr, daos_key_t *akeys);
 
 /**
  * I/O APIs
@@ -418,9 +445,6 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * Finish the current update and release the responding resources.
  *
  * \param ioh	[IN]	The I/O handle created by \a vos_update_begin
- * \param cookie [IN]	Cookie ID to tag this update to identify during
- *			discard. This tag is used to group all updates
- *			that might in future be discarded together.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param dkey	[IN]	Distribution key.
@@ -431,8 +455,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \return		Zero on success, negative value if error
  */
 int
-vos_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
-	       daos_key_t *dkey, int err);
+vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err);
 
 /**
  * Get the I/O descriptor.
@@ -611,6 +634,31 @@ int
 vos_iter_empty(daos_handle_t ih);
 
 /**
+ * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
+ * cb(\a arg) for each entry.
+ *
+ * If \a cb returns a nonzero (either > 0 or < 0) value that is not
+ * -DER_NONEXIST, this function stops the iteration and returns that nonzero
+ * value from \a cb. If \a cb returns -DER_NONEXIST, this function completes
+ * the iteration and returns 0. If \a cb returns 0, the iteration continues.
+ *
+ * \param[in]		param		iteration parameters
+ * \param[in]		type		entry type of starting level
+ * \param[in]		recursive	iterate in lower level recursively
+ * \param[in]		anchors		array of anchors, one for each
+ *					iteration level
+ * \param[in]		cb		iteration callback
+ * \param[in]		arg		callback argument
+ *
+ * \retval		0	iteration complete
+ * \retval		> 0	callback return value
+ * \retval		-DER_*	error (but never -DER_NONEXIST)
+ */
+int
+vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg);
+
+/**
  * VOS object index set attributes
  * Add a new object ID entry in the object index table
  * Creates an empty tree for the object
@@ -658,4 +706,55 @@ vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		uint64_t *attr);
+
+/**
+ * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
+ * object. If object does not have an array value, 0 is returned in extent. User
+ * has to specify what is being queried (dkey, akey, and/or recx) along with the
+ * query type (max or min) in flags. If one of those is not provided the
+ * function will fail. If the dkey or akey are not being queried, there value
+ * must be provided by the user.
+ *
+ * If searching in a particular dkey for the max akey and max offset in that
+ * akey, user would supply the dkey value and a flag of: DAOS_GET_MAX |
+ * DAOS_GET_AKEY | DAOS_GET_RECX.
+ *
+ * If more than one entity is being queried, the innermost entry must exist.
+ * For example, if a user requests DAOS_GET_DKEY and DAOS_GET_RECX and no
+ * recx exists for a matched dkey, the search will try the next dkey until
+ * a recx is found or no more dkeys exist in which case -DER_NONEXIST is
+ * returned.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object id
+ * \param[in]	flags	mask with the following options:
+ *			DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
+ *			DAOS_GET_MAX, DAOS_GET_MIN
+ *			User has to indicate whether to query the MAX or MIN, in
+ *			addition to what needs to be queried. Providing
+ *			(MAX | MIN) in any combination will return an error.
+ *			i.e. user can only query MAX or MIN in one call.
+ * \param[in,out]
+ *		dkey	[in]: allocated integer dkey. User can provide the dkey
+ *			if not querying the max or min dkey.
+ *			[out]: max or min dkey (if flag includes dkey query).
+ * \param[in,out]
+ *		akey	[in]: allocated integer akey. User can provide the akey
+ *			if not querying the max or min akey.
+ *			[out]: max or min akey (if flag includes akey query).
+ * \param[out]	recx	max or min offset in dkey/akey, and the size of the
+ *			extent at the offset. If there are no visible array
+ *			records, the size in the recx returned will be 0.
+ *
+ * \return
+ *			0		Success
+ *			-DER_NO_HDL	Invalid handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NONEXIST	No suitable key/recx found
+ */
+int
+vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
+		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
+		  daos_recx_t *recx);
+
 #endif /* __VOS_API_H */

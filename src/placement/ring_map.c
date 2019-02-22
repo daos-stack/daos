@@ -785,6 +785,7 @@ ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid,
 	unsigned int		tgts_nr;
 	struct pl_target	*plts;
 	d_rank_t		rank;
+	int			tgt;
 	unsigned int		pos;
 	unsigned int		i;
 
@@ -797,8 +798,10 @@ ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid,
 	tgts_nr = pool_map_target_nr(rimap->rmp_map.pl_poolmap);
 	/* locate rank in the pool map targets */
 	rank = daos_oclass_sr_get_rank(oid);
+	tgt = daos_oclass_st_get_tgt(oid);
 	for (pos = 0; pos < tgts_nr; pos++) {
-		if (rank == tgts[pos].ta_comp.co_rank)
+		if (rank == tgts[pos].ta_comp.co_rank &&
+		    (tgt == tgts[pos].ta_comp.co_index))
 			break;
 	}
 	if (pos == tgts_nr)
@@ -814,7 +817,8 @@ ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid,
 		return -DER_INVAL;
 
 
-	D_DEBUG(DB_PL, "create obj with rank %d pl pos %d\n", rank, i);
+	D_DEBUG(DB_PL, "create obj with rank/tgt %d/%d pl pos %d\n",
+		rank, tgt, i);
 	*begin = i;
 
 	return 0;

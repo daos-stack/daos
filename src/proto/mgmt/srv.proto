@@ -32,7 +32,7 @@ service MgmtControl {
 	rpc ListAllFeatures(EmptyParams) returns (stream Feature) {};
 	rpc ListFeatures(Category) returns (stream Feature) {};
 	rpc ListNvmeCtrlrs(EmptyParams) returns (stream NvmeController) {};
-	rpc UpdateNvmeCtrlr(UpdateNvmeCtrlrParams) returns (NvmeController) {};
+	rpc UpdateNvmeCtrlr(UpdateNvmeParams) returns (NvmeController) {};
 	rpc FetchFioConfigPaths(EmptyParams) returns (stream FioConfigPath) {};
 	rpc BurnInNvme(BurnInNvmeParams) returns (stream BurnInNvmeReport) {};
 	rpc ListScmModules(EmptyParams) returns (stream ScmModule) {};
@@ -82,8 +82,9 @@ message NvmeController {
 	repeated NvmeNamespace namespace = 6;
 }
 
-message UpdateNvmeCtrlrParams {
-	NvmeController ctrlr = 1;
+message UpdateNvmeParams {
+	// The pci address of the controller to update firmware on.
+	string pciaddr = 1;
 	// Filesystem path containing firmware image
 	string path = 2;
 	// Firmware slot (register) to update
@@ -96,7 +97,9 @@ message FioConfigPath {
 }
 
 message BurnInNvmeParams {
-	int32 ctrlrid = 1;
+	// The pci address of the controller to perform burn-in on.
+	string pciaddr = 1;
+	// FIO workload configuration file path
 	FioConfigPath path = 2;
 }
 

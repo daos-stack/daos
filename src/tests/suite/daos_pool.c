@@ -85,7 +85,7 @@ pool_connect(void **state)
 
 		print_message("rank 0 querying pool info... ");
 		memset(&info, 'D', sizeof(info));
-		rc = daos_pool_query(poh, NULL /* tgts */, &info,
+		rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL,
 				     arg->async ? &ev : NULL /* ev */);
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
@@ -169,8 +169,9 @@ pool_exclude(void **state)
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
 	daos_pool_info_t info;
-	d_rank_list_t ranks;
+	struct d_tgt_list tgts;
 	d_rank_t	 rank;
+	int		 tgt = -1;
 	int		 rc;
 
 	if (1) {
@@ -199,24 +200,26 @@ pool_exclude(void **state)
 	print_message("success\n");
 
 	/** exclude last non-svc rank */
-	if (info.pi_ntargets - 1 /* rank 0 */ <= arg->pool.svc.rl_nr) {
+	if (info.pi_nnodes - 1 /* rank 0 */ <= arg->pool.svc.rl_nr) {
 		print_message("not enough non-svc targets; skipping\n");
 		goto disconnect;
 	}
-	rank = info.pi_ntargets - 1;
-	ranks.rl_nr = 1;
-	ranks.rl_ranks = &rank;
+	rank = info.pi_nnodes - 1;
+	tgts.tl_nr = 1;
+	tgts.tl_ranks = &rank;
+	tgts.tl_tgts = &tgt;
 
 	print_message("rank 0 excluding rank %u... ", rank);
-	rc = daos_pool_exclude(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
-			       &ranks, arg->async ? &ev : NULL /* ev */);
+	rc = daos_pool_tgt_exclude(arg->pool.pool_uuid, arg->group,
+				   &arg->pool.svc, &tgts,
+				   arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
 
 	print_message("rank 0 querying pool info... ");
 	memset(&info, 'D', sizeof(info));
-	rc = daos_pool_query(poh, NULL /* tgts */, &info,
+	rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL,
 			     arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -386,6 +389,69 @@ init_fini_conn(void **state)
 	assert_int_equal(rc, 0);
 }
 
+/** create pool with properties and query */
+static void
+pool_properties(void **state)
+{
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
+	char			*label = "test_pool_properties";
+	uint64_t		 space_rb = 36;
+	daos_prop_t		*prop;
+	daos_prop_t		*prop_query;
+	struct daos_prop_entry *entry;
+	int			 rc;
+
+	print_message("create pool with properties, and query it to verify.\n");
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			DEFAULT_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	prop = daos_prop_alloc(2);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
+	prop->dpp_entries[0].dpe_str = strdup(label);
+	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SPACE_RB;
+	prop->dpp_entries[1].dpe_val = space_rb;
+
+	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, prop);
+	assert_int_equal(rc, 0);
+
+	prop_query = daos_prop_alloc(0);
+	rc = daos_pool_query(arg->pool.poh, NULL, NULL, prop_query, NULL);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(prop_query->dpp_nr, 4);
+	/* set properties should get the value user set */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
+	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
+		print_message("label verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SPACE_RB);
+	if (entry == NULL || entry->dpe_val != space_rb) {
+		print_message("space_rb verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	/* not set properties should get default value */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SELF_HEAL);
+	if (entry == NULL ||
+	    entry->dpe_val != (DAOS_SELF_HEAL_AUTO_EXCLUDE |
+			       DAOS_SELF_HEAL_AUTO_REBUILD)) {
+		print_message("self-heal verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_RECLAIM);
+	if (entry == NULL || entry->dpe_val != DAOS_RECLAIM_SNAPSHOT) {
+		print_message("reclaim verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	daos_prop_free(prop);
+	daos_prop_free(prop_query);
+	test_teardown((void **)&arg);
+}
+
 static int
 pool_setup_sync(void **state)
 {
@@ -429,6 +495,8 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_attribute, pool_setup_async, test_case_teardown},
 	{ "POOL9: pool reconnect after daos re-init",
 	  init_fini_conn, NULL, test_case_teardown},
+	{ "POOL10: pool create with properties and query",
+	  pool_properties, NULL, test_case_teardown},
 };
 
 int

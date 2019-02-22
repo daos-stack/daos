@@ -71,8 +71,6 @@ class BadConnectTest(Test):
         server_group = self.params.get("server_group",'/server/','daos_server')
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 
-        time.sleep(2)
-
     def tearDown(self):
         ServerUtils.stopServer(hosts=self.hostlist)
 
@@ -180,6 +178,3 @@ class BadConnectTest(Test):
                     print("pool uuid after restore {}".format(
                         pool.get_uuid_str()))
                     pool.destroy(1)
-
-if __name__ == "__main__":
-    main()

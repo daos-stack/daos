@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,11 @@
 
 package security
 
-import "syscall"
+import (
+	"golang.org/x/sys/unix"
+	"net"
+	"syscall"
+)
 
 // DomainInfo holds our socket credentials to be used by the DomainSocketServer
 type DomainInfo struct {
@@ -34,4 +38,24 @@ type DomainInfo struct {
 // InitDomainInfo returns an initialized DomainInfo structure
 func InitDomainInfo(creds *syscall.Ucred, ctx string) *DomainInfo {
 	return &DomainInfo{creds, ctx}
+}
+
+// DomainInfoFromUnixConn determines credentials from a unix socket.
+func DomainInfoFromUnixConn(sock *net.UnixConn) (*DomainInfo, error) {
+	f, err := sock.File()
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	fd := int(f.Fd())
+	creds, err := syscall.GetsockoptUcred(fd, syscall.SOL_SOCKET, syscall.SO_PEERCRED)
+	if err != nil {
+		return nil, err
+	}
+	ctx, err := unix.GetsockoptString(fd, syscall.SOL_SOCKET, syscall.SO_PEERSEC)
+	if err != nil {
+		return nil, err
+	}
+	return InitDomainInfo(creds, ctx), nil
 }

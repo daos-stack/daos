@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,8 +56,6 @@ enum {
 
 /** EVTree data pointer */
 struct evt_desc {
-	/** cookie to insert this extent */
-	uuid_t				dc_cookie;
 	uint64_t			dc_csum;
 	/** buffer on SCM or NVMe */
 	bio_addr_t			dc_ex_addr;
@@ -65,6 +63,8 @@ struct evt_desc {
 	uint32_t			dc_ver;
 	/** Magic number for validation */
 	uint32_t			dc_magic;
+	/** The DTX entry in SCM. */
+	umem_id_t			dc_dtx;
 };
 
 struct evt_extent {
@@ -111,6 +111,14 @@ struct evt_filter {
 #define DP_ENT(ent)			\
 	DP_EXT(&(ent)->en_sel_ext), DP_EXT(&(ent)->en_ext), (ent)->en_epoch, \
 	evt_debug_print_visibility(ent)
+
+/** Log format of evtree filter */
+#define DF_FILTER			\
+	DF_EXT "@" DF_U64"-"DF_U64
+
+#define DP_FILTER(filter)					\
+	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
+	(filter)->fr_epr.epr_hi
 
 /** Return the width of an extent */
 static inline daos_size_t
@@ -191,8 +199,6 @@ enum evt_feats {
 struct evt_entry_in {
 	/** Extent to insert */
 	struct evt_rect	ei_rect;
-	/** VOS cookie */
-	uuid_t		ei_cookie;
 	/** checksum of entry */
 	uint64_t	ei_csum;
 	/** pool map version */
@@ -212,6 +218,8 @@ enum evt_visibility {
 	EVT_VISIBLE	= (1 << 1),
 	/** Entry is part of larger in-tree extent */
 	EVT_PARTIAL	= (1 << 2),
+	/** In sorted iterator, marks final entry */
+	EVT_LAST	= (1 << 3),
 };
 /**
  * Data struct to pass in or return a versioned extent and its data block.
@@ -221,8 +229,6 @@ struct evt_entry {
 	struct evt_extent		en_ext;
 	/** Actual extent within selected range */
 	struct evt_extent		en_sel_ext;
-	/** VOS cookie of entry */
-	uuid_t				en_cookie;
 	/** checksum of entry */
 	uint64_t			en_csum;
 	/** pool map version */
@@ -270,6 +276,8 @@ evt_debug_print_visibility(const struct evt_entry *ent)
 		D_ASSERT(0);
 	case 0:
 		break;
+	case EVT_PARTIAL:
+		return 'p';
 	case EVT_VISIBLE:
 		return 'V';
 	case EVT_VISIBLE | EVT_PARTIAL:
@@ -322,21 +330,23 @@ struct evt_context;
  */
 struct evt_policy_ops {
 	/**
-	 * Add an entry \a entry to a tree node \a nd_mmid.
+	 * Add an entry \a entry to a tree node \a node.
 	 */
 	int	(*po_insert)(struct evt_context *tcx,
-			     uint64_t nd_off,
+			     struct evt_node *node,
 			     uint64_t in_off,
 			     const struct evt_entry_in *entry);
 	/**
-	 * move half entries of the current node \a src_mmid to the new
-	 * node \a dst_mmid.
+	 * move half entries of the current node \a nd_src to the new
+	 * node \a nd_dst.
 	 */
 	int	(*po_split)(struct evt_context *tcx, bool leaf,
-			    uint64_t src_off, uint64_t dst_off);
-	/** Move adjusted \a entry within a node after mbr update */
-	void	(*po_adjust)(struct evt_context *tcx,
-			     uint64_t nd_off,
+			    struct evt_node *nd_src, struct evt_node *nd_dst);
+	/** Move adjusted \a entry within a node after mbr update.
+	 * Returns the offset from at to where the entry was moved
+	 */
+	int	(*po_adjust)(struct evt_context *tcx,
+			     struct evt_node *node,
 			     struct evt_node_entry *ne, int at);
 	/**
 	 * Calculate weight of a rectangle \a rect and return it to \a weight.
@@ -370,6 +380,7 @@ int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
  * \param order		[IN]	Tree order
  * \param uma		[IN]	Memory class attributes
  * \param root		[IN]	The address to create the tree.
+ * \param coh		[IN]	The container open handle
  * \param toh		[OUT]	The returned tree open handle
  *
  * \return		0	Success
@@ -377,7 +388,7 @@ int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
  */
 int evt_create_inplace(uint64_t feats, unsigned int order,
 		       struct umem_attr *uma, struct evt_root *root,
-		       daos_handle_t *toh);
+		       daos_handle_t coh, daos_handle_t *toh);
 /**
  * Open a tree by its memory ID \a root_mmid
  *
@@ -395,6 +406,7 @@ int evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
  *
  * \param root		[IN]	Root address of the tree
  * \param uma		[IN]	Memory class attributes
+ * \param coh		[IN]	The container open handle
  * \param info		[IN]	NVMe free space information
  * \param toh		[OUT]	The returned tree open handle
  *
@@ -402,7 +414,7 @@ int evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
  *			-ve	error code
  */
 int evt_open_inplace(struct evt_root *root, struct umem_attr *uma,
-		     void *info, daos_handle_t *toh);
+		     daos_handle_t coh, void *info, daos_handle_t *toh);
 
 /**
  * Close a opened tree
@@ -499,6 +511,11 @@ enum {
 	 * If neither flag is set, all rectangles in tree that intersect the
 	 * search rectangle, including punched extents, are returned.
 	 */
+
+	/** The iterator is for purge operation */
+	EVT_ITER_FOR_PURGE	= (1 << 5),
+	/** The iterator is for rebuild scan */
+	EVT_ITER_FOR_REBUILD	= (1 << 6),
 };
 
 /**
@@ -537,7 +554,7 @@ enum evt_iter_opc {
  *
  * \param opc	[IN]	Probe opcode, see evt_iter_opc for the details.
  * \param rect	[IN]	The extent to probe, it will be ignored if opc is
- *			EVT_PROBE_FIRST.
+ *			EVT_ITER_FIRST.
  * \param anchor [IN]	The anchor to probe, it will be ignored if \a rect
  *			is provided.
  */
@@ -550,6 +567,34 @@ int evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
  * \param ih	[IN]	Iterator handle.
  */
 int evt_iter_next(daos_handle_t ih);
+
+/**
+ * Is the evtree iterator empty or not
+ *
+ * \return	0	Not empty
+ *		1	Empty
+ *		-ve	error code
+ */
+int evt_iter_empty(daos_handle_t ih);
+
+/**
+ * Delete the record at the current cursor. This function will set the
+ * iterator to the next cursor so a subsequent probe is unnecessary.
+ * This isn't implemented for sorted iterator.  Deleting a rectangle
+ * while iterating a sorted iterator can be done with evt_delete.  This
+ * doesn't require a reprobe either.   Implementing this for sorted
+ * iterator can help avoid some of the pitfalls and potentially can
+ * be more optimal but it is reserved future work.
+ *
+ * Any time an entry is deleted from an unsorted iterator, it may
+ * result in some entries being visited more than once as existing
+ * entries can move around in the tree.
+ *
+ * \param ih		[IN]	Iterator open handle.
+ * \param value_out	[OUT]	Optional, buffer to preserve value while
+ *				deleting evtree node.
+ */
+int evt_iter_delete(daos_handle_t ih, void *value_out);
 
 /**
  * Fetch the extent and its data address from the current iterator position.

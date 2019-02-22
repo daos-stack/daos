@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,13 +36,14 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-func hashFromToken(token *pb.AuthToken) ([]byte, error) {
+// HashFromToken will return a SHA512 hash of the token data
+func HashFromToken(token *pb.AuthToken) ([]byte, error) {
 	// Generate our hash (not signed yet just a hash)
 	hash := sha512.New()
 
 	tokenBytes, err := proto.Marshal(token)
 	if err != nil {
-		fmt.Errorf("Unable to marshal AuthToken (%s)", err.Error())
+		fmt.Errorf("Unable to marshal AuthToken (%s)", err)
 		return nil, err
 	}
 
@@ -92,16 +93,16 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityCredential, error) 
 	// Marshal our AuthSys token into a byte array
 	tokenBytes, err := proto.Marshal(&sys)
 	if err != nil {
-		fmt.Errorf("Unable to marshal AuthSys token (%s)", err.Error())
+		fmt.Errorf("Unable to marshal AuthSys token (%s)", err)
 		return nil, err
 	}
 	token := pb.AuthToken{
 		Flavor: pb.AuthFlavor_AUTH_SYS,
 		Data:   tokenBytes}
 
-	verifier, err := hashFromToken(&token)
+	verifier, err := HashFromToken(&token)
 	if err != nil {
-		fmt.Errorf("Unable to generate verifier (%s)", err.Error())
+		fmt.Errorf("Unable to generate verifier (%s)", err)
 		return nil, err
 	}
 

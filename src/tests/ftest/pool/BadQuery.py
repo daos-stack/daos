@@ -62,8 +62,6 @@ class BadQueryTest(Test):
 
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 
-        time.sleep(2)
-
     def tearDown(self):
         ServerUtils.stopServer(hosts=self.hostlist)
 
@@ -133,7 +131,3 @@ class BadQueryTest(Test):
             print(traceback.format_exc())
             if expected_result in ['PASS']:
                 self.fail("Test was expected to pass but it failed.\n")
-
-
-if __name__ == "__main__":
-    main()

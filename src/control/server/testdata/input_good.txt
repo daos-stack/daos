@@ -3,22 +3,8 @@ name: daos
 name: daos
 servers: []
 
-name: new_daos
-auto: true
-
-name: daos
-format: safe
-
-name: daos
-format: continue
-
-name: daos
-format: force
-
 name: daos_cust
 servers: []
-auto: false
-format: force
 access_points:
 - foo1.com:9999
 - bar1.com:1111
@@ -40,3 +26,4 @@ bdev_exclude:
 - pcie1000.0.0.0.7
 hyperthreads: true
 socket_dir: /tmp/daos_server
+
