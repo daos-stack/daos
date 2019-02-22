@@ -14,11 +14,11 @@ The [shell](dmg/daos_shell) is an example client application which can connect t
 
 ## Documentation
 
-- [Management API](/src/control/client)
-- [Management internals](/src/control/server)
-- [Agent API](/src/control/client/agent)
-- [Agent internals](/src/control/security)
-- [dRPC API](/src/control/drpc)
+- [Management API](https://godoc.org/github.com/daos-stack/daos/src/control/client)
+- [Management internals](https://godoc.org/github.com/daos-stack/daos/src/control/server)
+- [Agent API](https://godoc.org/github.com/daos-stack/daos/src/control/client/agent)
+- [Agent internals](https://godoc.org/github.com/daos-stack/daos/src/control/security)
+- [dRPC](https://godoc.org/github.com/daos-stack/daos/src/control/drpc)
 
 ## Configuration
 
