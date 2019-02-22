@@ -527,6 +527,8 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 		D_ERROR("crt_grp_lc_addr_insert() failed. rc %d "
 			"grp_priv %p ctx_idx %d, rank: %d, tag %d.\n",
 			rc, grp_priv, ctx_idx, rank, tag);
+		/* Mark as unreachable for crt_context_req_untrack() */
+		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 		D_GOTO(out, rc);
 	}
 	rpc_priv->crp_hg_addr = hg_addr;
